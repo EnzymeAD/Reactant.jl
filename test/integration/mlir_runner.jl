@@ -58,9 +58,9 @@ module @multi_arg attributes {mhlo.num_partitions = 1 : i64, mhlo.num_replicas =
 
         @test length(info.inputs) == 1
         @test length(info.outputs) == 1
-        @test info.inputs[1].eltype == "Float32"
+        @test info.inputs[1].eltype == Float32
         @test info.inputs[1].mlir_shape == [4, 4]
-        @test info.outputs[1].eltype == "Float32"
+        @test info.outputs[1].eltype == Float32
         @test info.outputs[1].mlir_shape == [4, 4]
         @test isempty(info.alias_map)
         @test info.num_partitions == 1
@@ -78,9 +78,9 @@ module @multi_arg attributes {mhlo.num_partitions = 1 : i64, mhlo.num_replicas =
         IR.deactivate(ctx)
 
         @test length(info.inputs) == 2
-        @test info.inputs[1].eltype == "Float32"
+        @test info.inputs[1].eltype == Float32
         @test info.inputs[1].mlir_shape == [3, 4]
-        @test info.inputs[2].eltype == "Float32"
+        @test info.inputs[2].eltype == Float32
         @test info.inputs[2].mlir_shape == [4, 5]
         @test length(info.outputs) == 1
         @test info.outputs[1].mlir_shape == [3, 5]
@@ -99,15 +99,15 @@ module @multi_arg attributes {mhlo.num_partitions = 1 : i64, mhlo.num_replicas =
         @test length(info.outputs) == 2
 
         # arg0: grid (no alias) — constant
-        @test info.inputs[1].eltype == "Float32"
+        @test info.inputs[1].eltype == Float32
         @test info.inputs[1].mlir_shape == [4]
 
         # arg1: dt, tf.aliasing_output=0 → output 1 maps to input 2
-        @test info.inputs[2].eltype == "Float32"
+        @test info.inputs[2].eltype == Float32
         @test info.inputs[2].mlir_shape == Int[]  # scalar
 
         # arg2: state, tf.aliasing_output=1 → output 2 maps to input 3
-        @test info.inputs[3].eltype == "Float32"
+        @test info.inputs[3].eltype == Float32
         @test info.inputs[3].mlir_shape == [4]
 
         # Alias map: output 1 (0-based 0) → input 2, output 2 (0-based 1) → input 3
@@ -127,7 +127,7 @@ module @multi_arg attributes {mhlo.num_partitions = 1 : i64, mhlo.num_replicas =
         @test length(info.outputs) == 2
 
         # arg3: ninner (Int64 scalar, no alias)
-        @test info.inputs[4].eltype == "Int64"
+        @test info.inputs[4].eltype == Int64
         @test info.inputs[4].mlir_shape == Int[]
 
         # Same alias pattern as first
@@ -150,13 +150,15 @@ module @multi_arg attributes {mhlo.num_partitions = 1 : i64, mhlo.num_replicas =
 
             script = read(out_path, String)
             @test contains(script, "ConcreteRArray")
-            @test contains(script, "compile_module")
+            @test contains(script, "RT.compile_module")
             @test contains(script, "MLIR_PATH_1")
             @test contains(script, "N_IN_1")
             @test contains(script, "N_OUT_1")
             @test contains(script, "main()")
             # Single module: no marshaling
             @test !contains(script, "MLIR_PATH_2")
+            # Runtime calls go through RT alias
+            @test contains(script, "const RT = Reactant.Serialization.MLIRRunner")
         end
     end
 
@@ -186,14 +188,15 @@ module @multi_arg attributes {mhlo.num_partitions = 1 : i64, mhlo.num_replicas =
             @test contains(script, "ALIAS_MAP_1")
             @test contains(script, "ALIAS_MAP_2")
 
-            # Marshaling code
-            @test contains(script, "marshal_next_inputs")
+            # Marshaling via RT
+            @test contains(script, "RT.marshal_next_inputs")
+            @test contains(script, "RT.marshal_bufs")
             @test contains(script, "CONST_INDICES")
 
             # Extra inputs for loop (ninner)
             @test contains(script, "create_extra_inputs_2")
 
-            # Not hardcoded n_grid_const
+            # No hardcoded n_grid_const
             @test !contains(script, "N_GRID_CONST")
         end
     end
@@ -226,18 +229,18 @@ module @multi_arg attributes {mhlo.num_partitions = 1 : i64, mhlo.num_replicas =
     end
 
     @testset "julia_shape_str / julia_sharding_expr helpers" begin
-        sig_scalar = MLIRRunner.TensorSig("Float32", Int[], Symbol[])
+        sig_scalar = MLIRRunner.TensorSig(Float32, Int[], Symbol[])
         @test MLIRRunner.julia_shape_str(sig_scalar) == "()"
         @test MLIRRunner.julia_sharding_expr(sig_scalar) == "Sharding.Replicated(mesh)"
 
-        sig_vec = MLIRRunner.TensorSig("Float32", [4], Symbol[:_none])
+        sig_vec = MLIRRunner.TensorSig(Float32, [4], Symbol[:_none])
         @test MLIRRunner.julia_shape_str(sig_vec) == "(4,)"
 
-        sig_mat = MLIRRunner.TensorSig("Float64", [3, 5], Symbol[:_none, :_none])
+        sig_mat = MLIRRunner.TensorSig(Float64, [3, 5], Symbol[:_none, :_none])
         @test MLIRRunner.julia_shape_str(sig_mat) == "(5, 3)"
         @test MLIRRunner.julia_sharding_expr(sig_mat) == "Sharding.Replicated(mesh)"
 
-        sig_sharded = MLIRRunner.TensorSig("Float32", [4, 8], Symbol[:x, :_none])
+        sig_sharded = MLIRRunner.TensorSig(Float32, [4, 8], Symbol[:x, :_none])
         @test MLIRRunner.julia_sharding_expr(sig_sharded) == "Sharding.NamedSharding(mesh, (nothing, :x,))"
     end
 

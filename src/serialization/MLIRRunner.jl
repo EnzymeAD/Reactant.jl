@@ -18,9 +18,20 @@ using ..Reactant.MLIR: IR
 # ──────────────────────────────────────────────────────────────
 
 struct TensorSig
-    eltype::String
+    eltype::Type
     mlir_shape::Vector{Int}
     mlir_sharding::Vector{Symbol}  # per Julia dim: :_none = replicated, :x/:y = axis
+end
+
+"""Result of [`analyze_module`](@ref)."""
+struct ModuleInfo
+    inputs::Vector{TensorSig}
+    outputs::Vector{TensorSig}
+    alias_map::Dict{Int,Int}       # output_idx (1-based) → input_idx (1-based)
+    num_partitions::Int
+    num_replicas::Int
+    mesh_axes::Vector{Symbol}
+    mesh_sizes::Vector{Int}
 end
 
 """Get a named element from a dictionary attribute, returning `nothing` if absent."""
@@ -100,7 +111,7 @@ function analyze_module(mlir_string::String)
 
     for i in 1:n_in
         mlir_type = IR.input(ftype, i)
-        T = string(IR.julia_type(IR.eltype(mlir_type)))
+        T = IR.julia_type(IR.eltype(mlir_type))
         shape = IR.istensor(mlir_type) && IR.ndims(mlir_type) > 0 ?
             collect(Int, IR.size(mlir_type)) : Int[]
 
@@ -126,7 +137,7 @@ function analyze_module(mlir_string::String)
     n_out = IR.nresults(ftype)
     outputs = [begin
         t = IR.result(ftype, i)
-        T = string(IR.julia_type(IR.eltype(t)))
+        T = IR.julia_type(IR.eltype(t))
         shape = IR.istensor(t) && IR.ndims(t) > 0 ? collect(Int, IR.size(t)) : Int[]
         TensorSig(T, shape, Symbol[])
     end for i in 1:n_out]
@@ -141,8 +152,172 @@ function analyze_module(mlir_string::String)
     # Mesh spec
     mesh_axes, mesh_sizes = extract_mesh_spec(mod)
 
-    return (; inputs, outputs, alias_map, num_partitions, num_replicas,
-              mesh_axes, mesh_sizes)
+    return ModuleInfo(inputs, outputs, alias_map, num_partitions, num_replicas,
+                      mesh_axes, mesh_sizes)
+end
+
+# ──────────────────────────────────────────────────────────────
+# Runtime helpers — called by generated scripts via
+#   Reactant.Serialization.MLIRRunner.<func>(...)
+# ──────────────────────────────────────────────────────────────
+
+function get_buf_ptr(x, is_ifrt::Bool)
+    if is_ifrt
+        return Reactant.XLA.synced_buffer(x.data).buffer
+    else
+        return Reactant.XLA.synced_buffer(only(x.data)).buffer
+    end
+end
+
+function xla_execute(exec, inputs, n_outs::Int;
+                     device=nothing, is_sharded::Bool, is_ifrt::Bool, ndevices::Int)
+    n = length(inputs)
+    if !is_sharded
+        bufs = ntuple(i -> get_buf_ptr(inputs[i], is_ifrt), n)
+        donated = ntuple(Returns(UInt8(0)), n)
+        GC.@preserve inputs begin
+            return Reactant.XLA.execute_sharded(exec, device, bufs, donated, Val(n_outs))
+        end
+    else
+        if is_ifrt
+            bufs = ntuple(i -> get_buf_ptr(inputs[i], is_ifrt), n)
+            donated = ntuple(Returns(UInt8(0)), n)
+        else
+            ptrs = Ptr{Cvoid}[]
+            for j in 1:ndevices
+                for arg in inputs
+                    push!(ptrs, Reactant.XLA.synced_buffer(arg.data[j]).buffer)
+                end
+            end
+            np = length(ptrs)
+            bufs = ntuple(i -> ptrs[i], np)
+            donated = ntuple(Returns(UInt8(0)), np)
+        end
+        GC.@preserve inputs begin
+            return Reactant.XLA.execute(exec, bufs, donated, Val(n_outs), Val(ndevices))
+        end
+    end
+end
+
+function sync_results(results)
+    for r in results
+        Reactant.XLA.synced_buffer(r isa Tuple ? r[1] : r)
+    end
+end
+
+function compile_module(client, mlir_path;
+                        num_parameters, num_outputs, device=nothing,
+                        is_sharded::Bool, num_replicas::Int, num_partitions::Int,
+                        ndevices::Int)
+    ctx = Reactant.ReactantContext()
+    MLIR.IR.activate(ctx)
+    try
+        mod = parse(MLIR.IR.Module, read(mlir_path, String))
+
+        device_id = is_sharded ? Int64(-1) : Int64(Reactant.XLA.device_ordinal(device))
+        compile_opts = Reactant.XLA.make_compile_options(;
+            device_id,
+            num_replicas=Int64(num_replicas),
+            num_partitions=Int64(num_partitions),
+            mesh_ids=is_sharded ? collect(Int64, 0:(ndevices - 1)) : nothing,
+            xla_executable_build_options=(;
+                use_shardy_partitioner=is_sharded,
+                use_spmd_partitioning=is_sharded,
+            ),
+        )
+        return Reactant.XLA.compile(client, mod;
+            compile_options=compile_opts,
+            num_parameters=Int64(num_parameters),
+            num_outputs=Int64(num_outputs),
+            is_sharded,
+            num_replicas=Int64(num_replicas),
+            num_partitions=Int64(num_partitions),
+        )
+    finally
+        MLIR.IR.deactivate(ctx)
+    end
+end
+
+"""
+    marshal_next_inputs(mock_inputs, prev_results, alias_map, const_indices, extra_inputs; n_in)
+
+Build the input vector for the next module by:
+1. Copying constants from `mock_inputs` at `const_indices`
+2. Wiring `prev_results[out_idx]` → slot `in_idx` per `alias_map`
+3. Appending `extra_inputs` beyond the first module's arg count
+"""
+function marshal_next_inputs(
+    mock_inputs, prev_results, alias_map, const_indices, extra_inputs;
+    n_in,
+)
+    next = Vector{Any}(undef, n_in)
+    n_base = length(mock_inputs)
+
+    for idx in const_indices
+        if idx <= n_base
+            next[idx] = mock_inputs[idx]
+        end
+    end
+
+    for (out_idx, in_idx) in alias_map
+        if in_idx <= n_in
+            next[in_idx] = prev_results[out_idx]
+        end
+    end
+
+    for (j, extra) in enumerate(extra_inputs)
+        next[n_base + j] = extra
+    end
+
+    # Verify all slots were filled
+    for i in 1:n_in
+        isassigned(next, i) || error(
+            "marshal_next_inputs: slot $i was not filled. " *
+            "Check alias_map, const_indices, and extra_inputs coverage.")
+    end
+
+    return next
+end
+
+const _ConcreteRData = Union{Reactant.ConcreteRArray, Reactant.ConcreteRNumber}
+
+function marshal_bufs(next_inputs, is_ifrt::Bool, is_sharded::Bool, ndevices::Int)
+    if !is_sharded || is_ifrt
+        n = length(next_inputs)
+        lp = Vector{Ptr{Cvoid}}(undef, n)
+        for i in 1:n
+            v = next_inputs[i]
+            if v isa _ConcreteRData
+                lp[i] = get_buf_ptr(v, is_ifrt)
+            else
+                buf = v isa Tuple ? v[1] : v
+                lp[i] = Reactant.XLA.synced_buffer(buf).buffer
+            end
+        end
+        return ntuple(i -> lp[i], n), ntuple(Returns(UInt8(0)), n)
+    else
+        ptrs = Ptr{Cvoid}[]
+        for j in 1:ndevices
+            for v in next_inputs
+                if v isa _ConcreteRData
+                    push!(ptrs, Reactant.XLA.synced_buffer(v.data[j]).buffer)
+                else
+                    push!(ptrs, Reactant.XLA.synced_buffer(v[j]).buffer)
+                end
+            end
+        end
+        n = length(ptrs)
+        return ntuple(i -> ptrs[i], n), ntuple(Returns(UInt8(0)), n)
+    end
+end
+
+function xla_execute_raw(exec, bufs, donated, n_outs::Int;
+                         device=nothing, is_sharded::Bool, ndevices::Int)
+    if !is_sharded
+        return Reactant.XLA.execute_sharded(exec, device, bufs, donated, Val(n_outs))
+    else
+        return Reactant.XLA.execute(exec, bufs, donated, Val(n_outs), Val(ndevices))
+    end
 end
 
 # ──────────────────────────────────────────────────────────────
@@ -166,12 +341,38 @@ function codegen_create_input(i::Int, sig::TensorSig; is_sharded::Bool)
     T = sig.eltype
     shard_kw = is_sharded ? "; sharding=$(julia_sharding_expr(sig))" : ""
     if isempty(sig.mlir_shape)
-        default_val = T in ("Float32", "Float64", "Float16") ? "$T(60)" : "$T(0)"
+        default_val = T <: AbstractFloat ? "$T(60)" : "$T(0)"
         return "    ConcreteRNumber{$T}($default_val$shard_kw)"
     else
         shape = julia_shape_str(sig)
         return "    ConcreteRArray(randn($T, $shape...)$shard_kw)"
     end
+end
+
+"""
+    codegen_input_constructor(name, sigs, is_sharded; mesh_arg=is_sharded)
+
+Generate a `function <name>(...) ... end` block that returns a vector of mock inputs.
+"""
+function codegen_input_constructor(name::String, sigs::Vector{TensorSig},
+                                   is_sharded::Bool; start_idx::Int=1)
+    lines = String[]
+    if is_sharded
+        push!(lines, "function $name(mesh)")
+        push!(lines, "    Sharding = Reactant.Sharding")
+    else
+        push!(lines, "function $name()")
+    end
+    push!(lines, "    ConcreteRArray  = Reactant.ConcreteRArray")
+    push!(lines, "    ConcreteRNumber = Reactant.ConcreteRNumber")
+    push!(lines, "    return [")
+    for (j, sig) in enumerate(sigs)
+        idx = start_idx + j - 1
+        push!(lines, codegen_create_input(idx, sig; is_sharded) * ",  # arg$(idx-1)")
+    end
+    push!(lines, "    ]")
+    push!(lines, "end")
+    return lines
 end
 
 # ──────────────────────────────────────────────────────────────
@@ -196,30 +397,23 @@ function generate_mlir_runner(
     isempty(mlir_files) && error("At least one MLIR file is required")
     output_dir = dirname(abspath(output_path))
 
-    # Analyze all modules
-    ctx = Reactant.ReactantContext()
-    IR.activate(ctx)
-
-    modules = []
-    for path in mlir_files
-        info = analyze_module(read(path, String))
-        push!(modules, (; path=abspath(path), info...))
+    modules = MLIR.IR.@dispose ctx = Reactant.ReactantContext() begin
+        IR.activate(ctx)
+        try
+            [(; path=abspath(p), info=analyze_module(read(p, String))) for p in mlir_files]
+        finally
+            IR.deactivate(ctx)
+        end
     end
 
-    IR.deactivate(ctx)
-
-    # Use first module for mesh/partition info
-    first_mod = modules[1]
-    mesh_axes = first_mod.mesh_axes
-    mesh_sizes = first_mod.mesh_sizes
-    num_partitions = first_mod.num_partitions
-    num_replicas = first_mod.num_replicas
-    ndevices = max(1, prod(mesh_sizes))
-    is_sharded = num_partitions > 1
+    first_info = modules[1].info
+    ndevices = prod(first_info.mesh_sizes; init=1)
+    is_sharded = first_info.num_partitions > 1
 
     script = _generate_script(
         modules, output_dir;
-        mesh_axes, mesh_sizes, num_partitions, num_replicas,
+        first_info.mesh_axes, first_info.mesh_sizes,
+        first_info.num_partitions, first_info.num_replicas,
         ndevices, is_sharded,
     )
 
@@ -235,33 +429,41 @@ function _generate_script(
     io = IOBuffer()
     W(s) = println(io, s)
 
-    first_mod = modules[1]
-    first_in = first_mod.inputs
+    first_info = modules[1].info
+    first_in = first_info.inputs
+    n_modules = length(modules)
 
     mesh_names_str = "($(join([":" * string(a) for a in mesh_axes], ", ")),)"
     mesh_shape_str = join(mesh_sizes, ", ")
 
-    input_lines = [codegen_create_input(i, sig; is_sharded) * ",  # arg$(i-1)"
-                   for (i, sig) in enumerate(first_in)]
+    # Precompute extra-input info for modules 2..N
+    extra_info = Dict{Int,Vector{TensorSig}}()
+    for k in 2:n_modules
+        m_in = modules[k].info.inputs
+        n_extra = length(m_in) - length(first_in)
+        if n_extra > 0
+            extra_info[k] = m_in[length(first_in)+1:end]
+        end
+    end
 
-    # Header
+    # ── Header ──
     W("#!/usr/bin/env julia")
     W("#")
     W("# Generated by Reactant.Serialization.generate_mlir_runner — do not edit by hand.")
     W("#")
-    W("# Standalone XLA compile + execute for $(length(modules)) pre-XLA MLIR module(s).")
+    W("# Standalone XLA compile + execute for $n_modules pre-XLA MLIR module(s).")
     W("# Requires $ndevices device(s) (num_partitions=$num_partitions, num_replicas=$num_replicas).")
     W("#")
     W("# Pass --cpu to run on $ndevices virtual CPU devices instead of GPUs:")
     W("#   julia --project=Reactant.jl <script>.jl --cpu")
     W("#")
     for (k, m) in enumerate(modules)
-        W("# Module $k: $(length(m.inputs)) inputs → $(length(m.outputs)) outputs")
+        W("# Module $k: $(length(m.info.inputs)) inputs → $(length(m.info.outputs)) outputs")
     end
     W("#")
     W("")
 
-    # CPU mode
+    # ── CPU mode ──
     W("const USE_CPU = \"--cpu\" in ARGS")
     W("if USE_CPU")
     W("    ENV[\"CUDA_VISIBLE_DEVICES\"] = \"\"")
@@ -270,41 +472,36 @@ function _generate_script(
     W("end")
     W("")
     W("using Reactant")
-    W("using Reactant.MLIR")
+    W("const RT = Reactant.Serialization.MLIRRunner")
     W("")
     W("if USE_CPU")
     W("    Reactant.set_default_backend(\"cpu\")")
     W("end")
     W("")
-    W("const IS_IFRT = Reactant.XLA.REACTANT_XLA_RUNTIME == \"IFRT\"")
+
+    # ── Constants ──
+    W("const IS_IFRT    = Reactant.XLA.REACTANT_XLA_RUNTIME == \"IFRT\"")
+    W("const IS_SHARDED = $(is_sharded)")
+    W("const NDEVICES   = $ndevices")
+    W("const NUM_PARTITIONS = $num_partitions")
+    W("const NUM_REPLICAS   = $num_replicas")
     W("")
 
-    # MLIR file paths
-    W("# MLIR file paths (relative to this script)")
     for (k, m) in enumerate(modules)
         rel = relpath(m.path, output_dir)
         W("const MLIR_PATH_$k = joinpath(@__DIR__, $(repr(rel)))")
     end
     W("")
 
-    # Module constants
-    W("const NUM_PARTITIONS = $num_partitions")
-    W("const NUM_REPLICAS   = $num_replicas")
-    W("const NDEVICES       = $ndevices")
-    W("const IS_SHARDED = $(is_sharded)")
-    W("")
-
-    # Per-module info
     for (k, m) in enumerate(modules)
-        W("const N_IN_$k  = $(length(m.inputs))")
-        W("const N_OUT_$k = $(length(m.outputs))")
+        W("const N_IN_$k  = $(length(m.info.inputs))")
+        W("const N_OUT_$k = $(length(m.info.outputs))")
     end
     W("")
 
-    # Alias maps
     for (k, m) in enumerate(modules)
-        if !isempty(m.alias_map)
-            pairs = sort(collect(m.alias_map))
+        if !isempty(m.info.alias_map)
+            pairs = sort(collect(m.info.alias_map))
             W("const ALIAS_MAP_$k = Dict{Int,Int}($(join(["$o => $i" for (o,i) in pairs], ", ")))")
         else
             W("const ALIAS_MAP_$k = Dict{Int,Int}()")
@@ -312,219 +509,35 @@ function _generate_script(
     end
     W("")
 
-    # Constant indices: inputs of first module that are NOT aliased targets
-    aliased_inputs_1 = Set(values(first_mod.alias_map))
+    aliased_inputs_1 = Set(values(first_info.alias_map))
     const_indices = [i for i in 1:length(first_in) if i ∉ aliased_inputs_1]
     W("const CONST_INDICES = $(const_indices)")
     W("")
 
-    # Mesh & mock data
+    # ── Input constructors ──
     if is_sharded
         W("function create_mesh(devs)")
         W("    Sharding = Reactant.Sharding")
         W("    return Sharding.Mesh(reshape(devs[1:NDEVICES], $mesh_shape_str), $mesh_names_str)")
         W("end")
         W("")
-        W("function create_inputs(mesh)")
-        W("    Sharding = Reactant.Sharding")
-    else
-        W("function create_inputs()")
     end
-    W("    ConcreteRArray  = Reactant.ConcreteRArray")
-    W("    ConcreteRNumber = Reactant.ConcreteRNumber")
-    W("    return [")
-    for l in input_lines; W(l); end
-    W("    ]")
-    W("end")
+
+    for line in codegen_input_constructor("create_inputs", first_in, is_sharded)
+        W(line)
+    end
     W("")
 
-    # Extra inputs for later modules (args beyond what the first module has)
-    for (k, m) in enumerate(modules)
-        k == 1 && continue
-        n_extra = length(m.inputs) - length(first_in)
-        if n_extra > 0
-            extra_sigs = m.inputs[length(first_in)+1:end]
-            if is_sharded
-                W("function create_extra_inputs_$k(mesh)")
-                W("    Sharding = Reactant.Sharding")
-            else
-                W("function create_extra_inputs_$k()")
-            end
-            W("    ConcreteRArray  = Reactant.ConcreteRArray")
-            W("    ConcreteRNumber = Reactant.ConcreteRNumber")
-            W("    return [")
-            for (j, sig) in enumerate(extra_sigs)
-                idx = length(first_in) + j
-                W(codegen_create_input(idx, sig; is_sharded) * ",  # extra arg$(idx-1)")
-            end
-            W("    ]")
-            W("end")
-            W("")
+    for (k, sigs) in sort(collect(extra_info))
+        for line in codegen_input_constructor(
+                "create_extra_inputs_$k", sigs, is_sharded;
+                start_idx=length(first_in) + 1)
+            W(line)
         end
+        W("")
     end
 
-    # Static runtime code
-    print(io, raw"""
-# ── Buffer helpers ──
-
-function get_buf_ptr(x)
-    if IS_IFRT
-        return Reactant.XLA.synced_buffer(x.data).buffer
-    else
-        return Reactant.XLA.synced_buffer(only(x.data)).buffer
-    end
-end
-
-function build_inputs_unsharded(inputs)
-    n = length(inputs)
-    bufs = ntuple(i -> get_buf_ptr(inputs[i]), n)
-    donated = ntuple(Returns(UInt8(0)), n)
-    return bufs, donated
-end
-
-function build_ifrt_inputs(inputs)
-    n = length(inputs)
-    bufs = ntuple(i -> Reactant.XLA.synced_buffer(inputs[i].data).buffer, n)
-    donated = ntuple(Returns(UInt8(0)), n)
-    return bufs, donated
-end
-
-function build_pjrt_inputs(inputs, ndevices)
-    ptrs = Ptr{Cvoid}[]
-    for j in 1:ndevices
-        for arg in inputs
-            push!(ptrs, Reactant.XLA.synced_buffer(arg.data[j]).buffer)
-        end
-    end
-    n = length(ptrs)
-    return ntuple(i -> ptrs[i], n), ntuple(Returns(UInt8(0)), n)
-end
-
-function xla_execute(exec, inputs, n_outs::Int; device=nothing)
-    if !IS_SHARDED
-        bufs, donated = build_inputs_unsharded(inputs)
-        GC.@preserve inputs begin
-            return Reactant.XLA.execute_sharded(exec, device, bufs, donated, Val(n_outs))
-        end
-    elseif IS_IFRT
-        bufs, donated = build_ifrt_inputs(inputs)
-        GC.@preserve inputs begin
-            return Reactant.XLA.execute(exec, bufs, donated, Val(n_outs), Val(NDEVICES))
-        end
-    else
-        bufs, donated = build_pjrt_inputs(inputs, NDEVICES)
-        GC.@preserve inputs begin
-            return Reactant.XLA.execute(exec, bufs, donated, Val(n_outs), Val(NDEVICES))
-        end
-    end
-end
-
-function sync_results(results)
-    for r in results
-        Reactant.XLA.synced_buffer(r isa Tuple ? r[1] : r)
-    end
-end
-
-# ── Compile ──
-
-function compile_module(client, mlir_path; num_parameters, num_outputs, device=nothing)
-    ctx = Reactant.ReactantContext()
-    MLIR.IR.activate(ctx)
-    mod = parse(MLIR.IR.Module, read(mlir_path, String))
-
-    device_id = IS_SHARDED ? Int64(-1) : Int64(Reactant.XLA.device_ordinal(device))
-    compile_opts = Reactant.XLA.make_compile_options(;
-        device_id,
-        num_replicas=Int64(NUM_REPLICAS),
-        num_partitions=Int64(NUM_PARTITIONS),
-        mesh_ids=IS_SHARDED ? collect(Int64, 0:(NDEVICES - 1)) : nothing,
-        xla_executable_build_options=(;
-            use_shardy_partitioner=IS_SHARDED,
-            use_spmd_partitioning=IS_SHARDED,
-        ),
-    )
-    exec = Reactant.XLA.compile(client, mod;
-        compile_options=compile_opts,
-        num_parameters=Int64(num_parameters),
-        num_outputs=Int64(num_outputs),
-        is_sharded=IS_SHARDED,
-        num_replicas=Int64(NUM_REPLICAS),
-        num_partitions=Int64(NUM_PARTITIONS),
-    )
-    MLIR.IR.deactivate(ctx)
-    return exec
-end
-
-# ── Marshal between modules using alias maps ──
-
-function marshal_next_inputs(
-    mock_inputs, prev_results, alias_map, const_indices, extra_inputs;
-    n_in,
-)
-    next = Vector{Any}(undef, n_in)
-    n_base = length(mock_inputs)
-
-    # Constants from first module carry forward
-    for idx in const_indices
-        if idx <= n_base
-            next[idx] = mock_inputs[idx]
-        end
-    end
-
-    # Aliased: output K → input J
-    for (out_idx, in_idx) in alias_map
-        if in_idx <= n_in
-            buf = prev_results[out_idx]
-            next[in_idx] = buf
-        end
-    end
-
-    # Extra inputs beyond first module's arg count
-    for (j, extra) in enumerate(extra_inputs)
-        next[n_base + j] = extra
-    end
-
-    return next
-end
-
-function marshal_bufs(next_inputs, mock_inputs; is_raw_result=false)
-    if !IS_SHARDED || IS_IFRT
-        n = length(next_inputs)
-        lp = Vector{Ptr{Cvoid}}(undef, n)
-        for i in 1:n
-            v = next_inputs[i]
-            if is_raw_result && !(v isa Reactant.ConcreteRArray || v isa Reactant.ConcreteRNumber)
-                buf = v isa Tuple ? v[1] : v
-                lp[i] = IS_SHARDED ?
-                    Reactant.XLA.synced_buffer(buf).buffer :
-                    Reactant.XLA.synced_buffer(buf).buffer
-            else
-                lp[i] = get_buf_ptr(v)
-            end
-        end
-        return ntuple(i -> lp[i], n), ntuple(Returns(UInt8(0)), n)
-    else
-        ptrs = Ptr{Cvoid}[]
-        for j in 1:NDEVICES
-            for v in next_inputs
-                if !(v isa Reactant.ConcreteRArray || v isa Reactant.ConcreteRNumber)
-                    push!(ptrs, Reactant.XLA.synced_buffer(v[j]).buffer)
-                else
-                    push!(ptrs, Reactant.XLA.synced_buffer(v.data[j]).buffer)
-                end
-            end
-        end
-        n = length(ptrs)
-        return ntuple(i -> ptrs[i], n), ntuple(Returns(UInt8(0)), n)
-    end
-end
-
-""")
-
-    # Main function
-    W("")
-    W("# ── Main ──")
-    W("")
+    # ── Main ──
     W("function main()")
     W("    println(\"=== MLIR → XLA compile → execute ===\")")
     W("    println(\"Runtime:  \$(Reactant.XLA.REACTANT_XLA_RUNTIME)\")")
@@ -538,15 +551,7 @@ end
     W("")
     W("    device = IS_SHARDED ? nothing : Reactant.XLA.default_device(client)")
     W("")
-    W("    # Smoke test")
-    W("    print(\"Smoke test... \")")
-    W("    x = Reactant.ConcreteRArray(ones(Float32, 4))")
-    W("    y = @jit identity(x)")
-    W("    @assert Array(y) ≈ ones(Float32, 4)")
-    W("    println(\"OK\")")
-    W("")
 
-    # Create mock data
     W("    println(\"\\nCreating mock data...\")")
     if is_sharded
         W("    mesh = create_mesh(devs)")
@@ -557,11 +562,8 @@ end
     W("    println(\"  \$(length(mock_inputs)) inputs for module 1\")")
     W("")
 
-    # Create extra inputs for later modules
-    for (k, m) in enumerate(modules)
-        k == 1 && continue
-        n_extra = length(m.inputs) - length(first_in)
-        if n_extra > 0
+    for k in 2:n_modules
+        if haskey(extra_info, k)
             if is_sharded
                 W("    extra_$k = create_extra_inputs_$k(mesh)")
             else
@@ -571,60 +573,50 @@ end
             W("    extra_$k = []")
         end
     end
-    W("")
+    if n_modules > 1
+        W("")
+    end
 
-    # Compile all modules
-    for (k, m) in enumerate(modules)
+    for k in 1:n_modules
         W("    println(\"Compiling module $k...\")")
         W("    t0 = time()")
-        W("    exec_$k = compile_module(client, MLIR_PATH_$k;")
-        W("        num_parameters=N_IN_$k, num_outputs=N_OUT_$k, device)")
+        W("    exec_$k = RT.compile_module(client, MLIR_PATH_$k;")
+        W("        num_parameters=N_IN_$k, num_outputs=N_OUT_$k, device,")
+        W("        is_sharded=IS_SHARDED, num_replicas=NUM_REPLICAS,")
+        W("        num_partitions=NUM_PARTITIONS, ndevices=NDEVICES)")
         W("    println(\"  done (\$(round(time() - t0; digits=1))s)\")")
         W("")
     end
 
-    # Execute module 1
     W("    println(\"\\nExecuting module 1...\")")
     W("    t0 = time()")
-    W("    results_1 = xla_execute(exec_1, mock_inputs, N_OUT_1; device)")
-    W("    sync_results(results_1)")
+    W("    results_1 = RT.xla_execute(exec_1, mock_inputs, N_OUT_1;")
+    W("        device, is_sharded=IS_SHARDED, is_ifrt=IS_IFRT, ndevices=NDEVICES)")
+    W("    RT.sync_results(results_1)")
     W("    println(\"  \$(N_OUT_1) outputs (\$(round(time() - t0; digits=1))s)\")")
     W("")
 
-    # Execute subsequent modules with marshaling
-    for k in 2:length(modules)
+    for k in 2:n_modules
         prev_k = k - 1
         W("    println(\"\\nMarshaling → module $k...\")")
-        W("    next_inputs_$k = marshal_next_inputs(")
+        W("    next_$k = RT.marshal_next_inputs(")
         W("        mock_inputs, results_$prev_k, ALIAS_MAP_$k, CONST_INDICES, extra_$k;")
         W("        n_in=N_IN_$k)")
-        W("    bufs_$k, donated_$k = marshal_bufs(next_inputs_$k, mock_inputs; is_raw_result=true)")
+        W("    bufs_$k, donated_$k = RT.marshal_bufs(next_$k, IS_IFRT, IS_SHARDED, NDEVICES)")
         W("    println(\"  \$(length(bufs_$k)) buffer pointers\")")
         W("")
         W("    println(\"Executing module $k...\")")
         W("    t0 = time()")
         W("    GC.@preserve mock_inputs results_$prev_k extra_$k begin")
-        if is_sharded
-            W("        if IS_IFRT")
-            W("            results_$k = Reactant.XLA.execute(")
-            W("                exec_$k, bufs_$k, donated_$k,")
-            W("                Val(N_OUT_$k), Val(NDEVICES))")
-            W("        else")
-            W("            results_$k = Reactant.XLA.execute(")
-            W("                exec_$k, bufs_$k, donated_$k,")
-            W("                Val(N_OUT_$k), Val(NDEVICES))")
-            W("        end")
-        else
-            W("        results_$k = Reactant.XLA.execute_sharded(")
-            W("            exec_$k, device, bufs_$k, donated_$k, Val(N_OUT_$k))")
-        end
+        W("        results_$k = RT.xla_execute_raw(exec_$k, bufs_$k, donated_$k, N_OUT_$k;")
+        W("            device, is_sharded=IS_SHARDED, ndevices=NDEVICES)")
         W("    end")
-        W("    sync_results(results_$k)")
+        W("    RT.sync_results(results_$k)")
         W("    println(\"  \$(N_OUT_$k) outputs (\$(round(time() - t0; digits=1))s)\")")
         W("")
     end
 
-    last_k = length(modules)
+    last_k = n_modules
     W("    println(\"\\n=== SUCCESS ===\")")
     W("    return results_$last_k")
     W("end")
