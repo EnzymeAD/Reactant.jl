@@ -75,6 +75,15 @@ mutable struct TracedTrace
 end
 TracedTrace() = TracedTrace(TraceEntry[], 0, Symbol[])
 
+struct MCMCState
+    position::Any
+    gradient::Any
+    potential_energy::Any
+    step_size::Any
+    inverse_mass_matrix::Any
+    rng::Any
+end
+
 get_choices(trace::Trace) = trace.choices
 
 function select(addrs::Address...)
