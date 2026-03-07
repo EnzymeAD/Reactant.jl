@@ -1,5 +1,5 @@
 using Reactant, Test, Random
-using Statistics
+using Statistics, Serialization
 using Reactant: ProbProg, ReactantRNG, ConcreteRNumber, ConcreteRArray
 
 function standard_normal_logpdf(x)
@@ -483,10 +483,17 @@ end
         total_samples = 8
 
         samples, state = ProbProg.run_chain(
-            fresh_rng(), standard_normal_logpdf, initial_position;
-            algorithm=:NUTS, num_warmup, num_samples=total_samples,
-            chunk_size=3, step_size, inverse_mass_matrix,
-            progress_bar=false, max_tree_depth=10,
+            fresh_rng(),
+            standard_normal_logpdf,
+            initial_position;
+            algorithm=:NUTS,
+            num_warmup,
+            num_samples=total_samples,
+            chunk_size=3,
+            step_size,
+            inverse_mass_matrix,
+            progress_bar=false,
+            max_tree_depth=10,
         )
 
         @test size(samples) == (total_samples, pos_size)
@@ -518,15 +525,22 @@ end
 
     @testset "run_chain continuation from state" begin
         _, warmup_state = ProbProg.run_chain(
-            fresh_rng(), standard_normal_logpdf, initial_position;
-            num_warmup, num_samples=num_samples_warmup,
-            chunk_size=num_samples_warmup, step_size, inverse_mass_matrix,
+            fresh_rng(),
+            standard_normal_logpdf,
+            initial_position;
+            num_warmup,
+            num_samples=num_samples_warmup,
+            chunk_size=num_samples_warmup,
+            step_size,
+            inverse_mass_matrix,
             progress_bar=false,
         )
 
         samples2, state2 = ProbProg.run_chain(
-            warmup_state, standard_normal_logpdf;
-            num_samples=num_samples_continue, chunk_size=2,
+            warmup_state,
+            standard_normal_logpdf;
+            num_samples=num_samples_continue,
+            chunk_size=2,
             progress_bar=false,
         )
 
@@ -537,9 +551,14 @@ end
 
     @testset "run_chain save/load round-trip" begin
         _, state = ProbProg.run_chain(
-            fresh_rng(), standard_normal_logpdf, initial_position;
-            num_warmup, num_samples=num_samples_warmup,
-            chunk_size=num_samples_warmup, step_size, inverse_mass_matrix,
+            fresh_rng(),
+            standard_normal_logpdf,
+            initial_position;
+            num_warmup,
+            num_samples=num_samples_warmup,
+            chunk_size=num_samples_warmup,
+            step_size,
+            inverse_mass_matrix,
             progress_bar=false,
         )
 
@@ -549,19 +568,81 @@ end
             loaded = ProbProg.load_state(tmpfile)
 
             samples_orig, _ = ProbProg.run_chain(
-                state, standard_normal_logpdf;
-                num_samples=num_samples_continue, chunk_size=num_samples_continue,
+                state,
+                standard_normal_logpdf;
+                num_samples=num_samples_continue,
+                chunk_size=num_samples_continue,
                 progress_bar=false,
             )
             samples_loaded, _ = ProbProg.run_chain(
-                loaded, standard_normal_logpdf;
-                num_samples=num_samples_continue, chunk_size=num_samples_continue,
+                loaded,
+                standard_normal_logpdf;
+                num_samples=num_samples_continue,
+                chunk_size=num_samples_continue,
                 progress_bar=false,
             )
 
             @test samples_orig == samples_loaded
         finally
             rm(tmpfile; force=true)
+        end
+    end
+
+    @testset "chunked disk workflow" begin
+        tmpdir = mktempdir()
+        try
+            num_chunks = 3
+            chunk_sz = 2
+
+            _, state = ProbProg.run_chain(
+                fresh_rng(),
+                standard_normal_logpdf,
+                initial_position;
+                num_warmup,
+                num_samples=num_samples_warmup,
+                chunk_size=num_samples_warmup,
+                step_size,
+                inverse_mass_matrix,
+                progress_bar=false,
+            )
+
+            for i in 1:num_chunks
+                chunk_samples, state = ProbProg.run_chain(
+                    state,
+                    standard_normal_logpdf;
+                    num_samples=chunk_sz,
+                    chunk_size=chunk_sz,
+                    progress_bar=false,
+                )
+                open(
+                    io -> Serialization.serialize(io, chunk_samples),
+                    joinpath(tmpdir, "chunk_$i.jls"),
+                    "w",
+                )
+                ProbProg.save_state(joinpath(tmpdir, "state.jls"), state)
+            end
+
+            loaded_chunks = [
+                open(Serialization.deserialize, joinpath(tmpdir, "chunk_$i.jls")) for
+                i in 1:num_chunks
+            ]
+            all_samples = vcat(loaded_chunks...)
+
+            loaded_state = ProbProg.load_state(joinpath(tmpdir, "state.jls"))
+            more_samples, _ = ProbProg.run_chain(
+                loaded_state,
+                standard_normal_logpdf;
+                num_samples=2,
+                chunk_size=2,
+                progress_bar=false,
+            )
+
+            @test size(all_samples) == (num_chunks * chunk_sz, pos_size)
+            @test all(isfinite, all_samples)
+            @test size(more_samples) == (2, pos_size)
+            @test all(isfinite, more_samples)
+        finally
+            rm(tmpdir; recursive=true)
         end
     end
 end
