@@ -59,6 +59,34 @@ function continuation_program(
     return samples, diagnostics
 end
 
+function continuation_with_state_program(
+    state_rng,
+    logpdf_fn,
+    state_position,
+    state_gradient,
+    state_potential_energy,
+    state_step_size,
+    state_inverse_mass_matrix,
+    num_samples::Int,
+)
+    samples, diagnostics, _, state = ProbProg.mcmc_logpdf(
+        ReactantRNG(state_rng),
+        logpdf_fn,
+        state_position;
+        algorithm=:NUTS,
+        step_size=state_step_size,
+        inverse_mass_matrix=state_inverse_mass_matrix,
+        initial_gradient=state_gradient,
+        initial_potential_energy=state_potential_energy,
+        max_tree_depth=10,
+        num_warmup=0,
+        num_samples,
+        adapt_step_size=false,
+        adapt_mass_matrix=false,
+    )
+    return samples, diagnostics, state
+end
+
 function combined_program(
     rng,
     logpdf_fn,
@@ -302,5 +330,238 @@ end
 
         @test samples1_arr == combined_arr[1:num_samples_warmup, :]
         @test samples2_arr == combined_arr[(num_samples_warmup + 1):total_samples, :]
+    end
+
+    @testset "save and load state" begin
+        compiled_warmup = @compile optimize = :probprog warmup_program(
+            rng,
+            standard_normal_logpdf,
+            initial_position,
+            step_size,
+            inverse_mass_matrix,
+            num_warmup,
+            num_samples_warmup,
+        )
+
+        _, _, state = compiled_warmup(
+            rng,
+            standard_normal_logpdf,
+            initial_position,
+            step_size,
+            inverse_mass_matrix,
+            num_warmup,
+            num_samples_warmup,
+        )
+
+        tmpfile = tempname()
+        try
+            ProbProg.save_state(tmpfile, state)
+            loaded = ProbProg.load_state(tmpfile)
+
+            @test Array(loaded.position) == Array(state.position)
+            @test Array(loaded.gradient) == Array(state.gradient)
+            @test Array(loaded.potential_energy) == Array(state.potential_energy)
+            @test Array(loaded.step_size) == Array(state.step_size)
+            @test Array(loaded.inverse_mass_matrix) == Array(state.inverse_mass_matrix)
+            @test Array(loaded.rng) == Array(state.rng)
+
+            compiled_continue = @compile optimize = :probprog continuation_program(
+                loaded.rng,
+                standard_normal_logpdf,
+                loaded.position,
+                loaded.gradient,
+                loaded.potential_energy,
+                loaded.step_size,
+                loaded.inverse_mass_matrix,
+                num_samples_continue,
+            )
+
+            samples_from_loaded, _ = compiled_continue(
+                loaded.rng,
+                standard_normal_logpdf,
+                loaded.position,
+                loaded.gradient,
+                loaded.potential_energy,
+                loaded.step_size,
+                loaded.inverse_mass_matrix,
+                num_samples_continue,
+            )
+
+            samples_from_orig, _ = compiled_continue(
+                state.rng,
+                standard_normal_logpdf,
+                state.position,
+                state.gradient,
+                state.potential_energy,
+                state.step_size,
+                state.inverse_mass_matrix,
+                num_samples_continue,
+            )
+
+            @test Array(samples_from_loaded) == Array(samples_from_orig)
+        finally
+            rm(tmpfile; force=true)
+        end
+    end
+
+    @testset "chunked sampling loop" begin
+        num_chunks = 3
+        chunk_size = 2
+        total_samples = num_samples_warmup + num_chunks * chunk_size
+
+        compiled_warmup = @compile optimize = :probprog warmup_program(
+            rng,
+            standard_normal_logpdf,
+            initial_position,
+            step_size,
+            inverse_mass_matrix,
+            num_warmup,
+            num_samples_warmup,
+        )
+
+        samples1, _, state = compiled_warmup(
+            fresh_rng(),
+            standard_normal_logpdf,
+            initial_position,
+            step_size,
+            inverse_mass_matrix,
+            num_warmup,
+            num_samples_warmup,
+        )
+
+        compiled_chunk = @compile optimize = :probprog continuation_with_state_program(
+            state.rng,
+            standard_normal_logpdf,
+            state.position,
+            state.gradient,
+            state.potential_energy,
+            state.step_size,
+            state.inverse_mass_matrix,
+            chunk_size,
+        )
+
+        all_chunks = [Array(samples1)]
+        for i in 1:num_chunks
+            chunk_samples, _, state = compiled_chunk(
+                state.rng,
+                standard_normal_logpdf,
+                state.position,
+                state.gradient,
+                state.potential_energy,
+                state.step_size,
+                state.inverse_mass_matrix,
+                chunk_size,
+            )
+            push!(all_chunks, Array(chunk_samples))
+        end
+        chunked_result = vcat(all_chunks...)
+
+        compiled_combined = @compile optimize = :probprog combined_program(
+            rng,
+            standard_normal_logpdf,
+            initial_position,
+            step_size,
+            inverse_mass_matrix,
+            num_warmup,
+            total_samples,
+        )
+
+        combined_samples, _ = compiled_combined(
+            fresh_rng(),
+            standard_normal_logpdf,
+            initial_position,
+            step_size,
+            inverse_mass_matrix,
+            num_warmup,
+            total_samples,
+        )
+
+        @test chunked_result == Array(combined_samples)
+    end
+
+    @testset "run_chain fresh start" begin
+        total_samples = 8
+
+        samples, state = ProbProg.run_chain(
+            fresh_rng(), standard_normal_logpdf, initial_position;
+            algorithm=:NUTS, num_warmup, num_samples=total_samples,
+            chunk_size=3, step_size, inverse_mass_matrix,
+            progress_bar=false, max_tree_depth=10,
+        )
+
+        @test size(samples) == (total_samples, pos_size)
+        @test all(isfinite, samples)
+        @test size(Array(state.position)) == (1, pos_size)
+
+        compiled_combined = @compile optimize = :probprog combined_program(
+            rng,
+            standard_normal_logpdf,
+            initial_position,
+            step_size,
+            inverse_mass_matrix,
+            num_warmup,
+            total_samples,
+        )
+
+        combined_samples, _ = compiled_combined(
+            fresh_rng(),
+            standard_normal_logpdf,
+            initial_position,
+            step_size,
+            inverse_mass_matrix,
+            num_warmup,
+            total_samples,
+        )
+
+        @test samples == Array(combined_samples)
+    end
+
+    @testset "run_chain continuation from state" begin
+        _, warmup_state = ProbProg.run_chain(
+            fresh_rng(), standard_normal_logpdf, initial_position;
+            num_warmup, num_samples=num_samples_warmup,
+            chunk_size=num_samples_warmup, step_size, inverse_mass_matrix,
+            progress_bar=false,
+        )
+
+        samples2, state2 = ProbProg.run_chain(
+            warmup_state, standard_normal_logpdf;
+            num_samples=num_samples_continue, chunk_size=2,
+            progress_bar=false,
+        )
+
+        @test size(samples2) == (num_samples_continue, pos_size)
+        @test all(isfinite, samples2)
+        @test size(Array(state2.position)) == (1, pos_size)
+    end
+
+    @testset "run_chain save/load round-trip" begin
+        _, state = ProbProg.run_chain(
+            fresh_rng(), standard_normal_logpdf, initial_position;
+            num_warmup, num_samples=num_samples_warmup,
+            chunk_size=num_samples_warmup, step_size, inverse_mass_matrix,
+            progress_bar=false,
+        )
+
+        tmpfile = tempname()
+        try
+            ProbProg.save_state(tmpfile, state)
+            loaded = ProbProg.load_state(tmpfile)
+
+            samples_orig, _ = ProbProg.run_chain(
+                state, standard_normal_logpdf;
+                num_samples=num_samples_continue, chunk_size=num_samples_continue,
+                progress_bar=false,
+            )
+            samples_loaded, _ = ProbProg.run_chain(
+                loaded, standard_normal_logpdf;
+                num_samples=num_samples_continue, chunk_size=num_samples_continue,
+                progress_bar=false,
+            )
+
+            @test samples_orig == samples_loaded
+        finally
+            rm(tmpfile; force=true)
+        end
     end
 end
