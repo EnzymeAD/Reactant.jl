@@ -12,7 +12,7 @@ include("MH.jl")
 include("MCMC.jl")
 
 # Types.
-export Trace, Constraint, Selection, Address, TraceEntry, TracedTrace
+export Trace, Constraint, Selection, Address, TraceEntry, TracedTrace, MCMCState
 
 # Distributions.
 export Distribution, Normal, Exponential, LogNormal, Bernoulli

@@ -19,7 +19,7 @@ function logpdf_nuts_program(
     adapt_step_size::Bool,
     adapt_mass_matrix::Bool,
 )
-    samples, diagnostics, rng = ProbProg.mcmc_logpdf(
+    samples, diagnostics, rng, _ = ProbProg.mcmc_logpdf(
         rng,
         logpdf_fn,
         initial_position;

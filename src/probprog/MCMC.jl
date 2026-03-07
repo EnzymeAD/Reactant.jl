@@ -1,4 +1,4 @@
-using ..Reactant: TracedRArray
+using ..Reactant: TracedRArray, ReactantRNG
 
 function mcmc(
     rng::AbstractRNG,
@@ -76,6 +76,9 @@ function mcmc(
         MLIR.IR.TensorType([Int64(collection_size)], MLIR.IR.Type(Bool))
     end
 
+    position_type = MLIR.IR.TensorType([1, selection_pos_size], MLIR.IR.Type(Float64))
+    scalar_type = MLIR.IR.TensorType(Int64[], MLIR.IR.Type(Float64))
+
     hmc_config_attr = nothing
     nuts_config_attr = nothing
 
@@ -110,6 +113,12 @@ function mcmc(
     end
     step_size_val = isnothing(step_size) ? nothing : TracedUtils.get_mlir_data(step_size)
 
+    inv_mass_type = if isnothing(inverse_mass_matrix_val)
+        position_type
+    else
+        MLIR.IR.type(inverse_mass_matrix_val)
+    end
+
     trace_val = TracedUtils.get_mlir_data(original_trace)
 
     mcmc_op = MLIR.Dialects.enzyme.mcmc(
@@ -120,6 +129,11 @@ function mcmc(
         trace=trace_type,
         diagnostics=diagnostics_type,
         output_rng_state=mlir_result_types[1],
+        final_position=position_type,
+        final_gradient=position_type,
+        final_potential_energy=scalar_type,
+        final_step_size=scalar_type,
+        final_inverse_mass_matrix=inv_mass_type,
         fn=fn_attr,
         selection=MLIR.IR.Attribute(selection_attr),
         all_addresses=all_addresses_attr,
@@ -152,7 +166,19 @@ function mcmc(
         TracedRArray{Bool,1}((), MLIR.IR.result(mcmc_op, 2), (collection_size,))
     end
 
-    return new_trace, diagnostics, traced_result
+    inv_mass_shape =
+        isnothing(inverse_mass_matrix) ? (1, selection_pos_size) : size(inverse_mass_matrix)
+
+    state = MCMCState(
+        TracedRArray{Float64,2}((), MLIR.IR.result(mcmc_op, 4), (1, selection_pos_size)),
+        TracedRArray{Float64,2}((), MLIR.IR.result(mcmc_op, 5), (1, selection_pos_size)),
+        TracedRArray{Float64,0}((), MLIR.IR.result(mcmc_op, 6), ()),
+        TracedRArray{Float64,0}((), MLIR.IR.result(mcmc_op, 7), ()),
+        TracedRArray{Float64,2}((), MLIR.IR.result(mcmc_op, 8), inv_mass_shape),
+        TracedRArray{UInt64,1}((), MLIR.IR.result(mcmc_op, 3), size(rng.seed)),
+    )
+
+    return new_trace, diagnostics, traced_result, state
 end
 
 function mcmc_logpdf(
@@ -163,6 +189,8 @@ function mcmc_logpdf(
     algorithm::Symbol=:NUTS,
     inverse_mass_matrix=nothing,
     step_size=nothing,
+    initial_gradient=nothing,
+    initial_potential_energy=nothing,
     max_tree_depth::Int=10,
     max_delta_energy::Float64=1000.0,
     num_warmup::Int=0,
@@ -218,6 +246,13 @@ function mcmc_logpdf(
     end
     step_size_val = isnothing(step_size) ? nothing : TracedUtils.get_mlir_data(step_size)
     initial_position_val = TracedUtils.get_mlir_data(initial_position)
+    initial_gradient_val =
+        isnothing(initial_gradient) ? nothing : TracedUtils.get_mlir_data(initial_gradient)
+    initial_pe_val = if isnothing(initial_potential_energy)
+        nothing
+    else
+        TracedUtils.get_mlir_data(initial_potential_energy)
+    end
 
     collection_size = num_samples ÷ thinning
     trace_type = MLIR.IR.TensorType([collection_size, pos_size], MLIR.IR.Type(Float64))
@@ -227,14 +262,30 @@ function mcmc_logpdf(
         MLIR.IR.TensorType([Int64(collection_size)], MLIR.IR.Type(Bool))
     end
 
+    position_type = MLIR.IR.TensorType([1, pos_size], MLIR.IR.Type(Float64))
+    scalar_type = MLIR.IR.TensorType(Int64[], MLIR.IR.Type(Float64))
+
+    inv_mass_type = if isnothing(inverse_mass_matrix_val)
+        position_type
+    else
+        MLIR.IR.type(inverse_mass_matrix_val)
+    end
+
     mcmc_op = MLIR.Dialects.enzyme.mcmc(
         mlir_caller_args;
         inverse_mass_matrix=inverse_mass_matrix_val,
         step_size=step_size_val,
         initial_position=initial_position_val,
+        initial_gradient=initial_gradient_val,
+        initial_potential_energy=initial_pe_val,
         trace=trace_type,
         diagnostics=diagnostics_type,
         output_rng_state=mlir_result_types[1],
+        final_position=position_type,
+        final_gradient=position_type,
+        final_potential_energy=scalar_type,
+        final_step_size=scalar_type,
+        final_inverse_mass_matrix=inv_mass_type,
         logpdf_fn=logpdf_fn_attr,
         selection=MLIR.IR.Attribute(MLIR.IR.Attribute[]),
         all_addresses=MLIR.IR.Attribute(MLIR.IR.Attribute[]),
@@ -267,5 +318,74 @@ function mcmc_logpdf(
         TracedRArray{Bool,1}((), MLIR.IR.result(mcmc_op, 2), (collection_size,))
     end
 
-    return new_trace, diagnostics, traced_result
+    inv_mass_shape =
+        isnothing(inverse_mass_matrix) ? (1, pos_size) : size(inverse_mass_matrix)
+
+    state = MCMCState(
+        TracedRArray{Float64,2}((), MLIR.IR.result(mcmc_op, 4), (1, pos_size)),
+        TracedRArray{Float64,2}((), MLIR.IR.result(mcmc_op, 5), (1, pos_size)),
+        TracedRArray{Float64,0}((), MLIR.IR.result(mcmc_op, 6), ()),
+        TracedRArray{Float64,0}((), MLIR.IR.result(mcmc_op, 7), ()),
+        TracedRArray{Float64,2}((), MLIR.IR.result(mcmc_op, 8), inv_mass_shape),
+        TracedRArray{UInt64,1}((), MLIR.IR.result(mcmc_op, 3), size(rng.seed)),
+    )
+
+    return new_trace, diagnostics, traced_result, state
+end
+
+function mcmc(
+    state::MCMCState,
+    original_trace,
+    f::Function,
+    args::Vararg{Any,Nargs};
+    selection::Selection,
+    inverse_mass_matrix=state.inverse_mass_matrix,
+    step_size=state.step_size,
+    num_warmup::Int=0,
+    adapt_step_size::Bool=false,
+    adapt_mass_matrix::Bool=false,
+    kwargs...,
+) where {Nargs}
+    return mcmc(
+        ReactantRNG(state.rng),
+        original_trace,
+        f,
+        args...;
+        selection,
+        inverse_mass_matrix,
+        step_size,
+        num_warmup,
+        adapt_step_size,
+        adapt_mass_matrix,
+        kwargs...,
+    )
+end
+
+function mcmc_logpdf(
+    state::MCMCState,
+    logdensity_fn::Function,
+    args::Vararg{Any,Nargs};
+    inverse_mass_matrix=state.inverse_mass_matrix,
+    step_size=state.step_size,
+    initial_gradient=state.gradient,
+    initial_potential_energy=state.potential_energy,
+    num_warmup::Int=0,
+    adapt_step_size::Bool=false,
+    adapt_mass_matrix::Bool=false,
+    kwargs...,
+) where {Nargs}
+    return mcmc_logpdf(
+        ReactantRNG(state.rng),
+        logdensity_fn,
+        state.position,
+        args...;
+        inverse_mass_matrix,
+        step_size,
+        initial_gradient,
+        initial_potential_energy,
+        num_warmup,
+        adapt_step_size,
+        adapt_mass_matrix,
+        kwargs...,
+    )
 end
