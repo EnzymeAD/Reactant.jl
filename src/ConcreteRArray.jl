@@ -286,6 +286,23 @@ function Base.show(io::IO, X::Union{ConcretePJRTScalar,ConcreteIFRTScalar})
     return nothing
 end
 
+function Base.showarg(io::IO, ::RArraySpec{T,N}, toplevel) where {T,N}
+    toplevel || print(io, "::")
+    print(io, "RArraySpec{$T,$N}")
+    # TODO: Add sharding info
+    return nothing
+end
+
+function Base.print_array(io::IO, ::RArraySpec)
+    print(io, "<RArraySpec has no data>")
+    return nothing
+end
+
+function Base.show(io::IO, X::RArraySpec)
+    print(io, "$(typeof(X))()")
+    return nothing
+end
+
 function Base.print_array(io::IO, X::Union{AnyConcretePJRTArray,AnyConcreteIFRTArray})
     if isempty(X)
         print(io, "<Empty Buffer eltype $(eltype(X)) of size $(size(X))>")

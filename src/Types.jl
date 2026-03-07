@@ -146,6 +146,91 @@ const AnyTracedRVector{T} = AnyTracedRArray{T,1}
 const AnyTracedRMatrix{T} = AnyTracedRArray{T,2}
 const AnyTracedRVecOrMat{T} = Union{AnyTracedRVector{T},AnyTracedRMatrix{T}}
 
+## RArraySpec
+"""
+    RArraySpec{T,N}(shape::NTuple{N,Int})
+    RArraySpec{T}(shape::NTuple{N,Int})
+
+Lightweight structure that specifies the shape and element type (dtype) of an array
+without allocating the actual array data. Similar to JAX's `RArraySpec`.
+
+This is useful for compiling functions without constructing the full `ConcreteRArray`,
+which can save memory and improve compilation performance.
+
+# Examples
+```julia
+# Specify shape and dtype for a 2D array
+spec = Reactant.RArraySpec{Float32}((10, 20))
+
+# Compile a function using just the spec
+f(x) = sum(x)
+compiled_f = Reactant.compile(f, (spec,))
+
+# Execute with actual data
+x = Reactant.ConcreteRArray(rand(Float32, 10, 20))
+result = compiled_f(x)
+```
+
+See also: [`compile`](@ref), [`ConcreteRArray`](@ref)
+"""
+struct RArraySpec{T,N} <: RArray{T,N}
+    shape::NTuple{N,Int}
+    # TODO: Sharding
+
+    function RArraySpec{T,N}(
+        shape::NTuple{N,Int}; sharding=Sharding.NoShardInfo()
+    ) where {T,N}
+        return new{T,N}(shape)
+    end
+end
+
+function RArraySpec{T}(shape::NTuple{N,Int}; sharding=Sharding.NoShardInfo()) where {T,N}
+    return RArraySpec{T,N}(shape; sharding)
+end
+
+Base.size(x::RArraySpec) = x.shape
+Base.ndims(::RArraySpec{T,N}) where {T,N} = N
+Base.eltype(::RArraySpec{T}) where {T} = T
+
+@leaf RArraySpec
+
+"""
+    RNumberSpec{T}()
+
+Lightweight structure that specifies the element type (dtype) of a number
+without allocating the actual number data. Similar to JAX's `RNumberSpec`.
+
+This is useful for compiling functions without constructing the full `ConcreteRNumber`,
+which can save memory and improve compilation performance.
+
+# Examples
+```julia
+# Specify dtype for a number
+spec = Reactant.RNumberSpec{Float32}()
+
+# Compile a function using just the spec
+f(x) = x + 1
+compiled_f = Reactant.compile(f, (spec,))
+
+# Execute with actual data
+x = Reactant.ConcreteRNumber(1.0f0)
+result = compiled_f(x)
+```
+
+See also: [`compile`](@ref), [`ConcreteRNumber`](@ref)
+"""
+struct RNumberSpec{T} <: RNumber{T}
+    # TODO: Sharding
+
+    function RNumberSpec{T}(; sharding=Sharding.NoShardInfo()) where {T}
+        return new{T}()
+    end
+end
+
+Base.eltype(::RNumberSpec{T}) where {T} = T
+
+@leaf RNumberSpec
+
 # Concrete Types
 ## ConcretePJRTNumber
 mutable struct ConcretePJRTNumber{T,D} <: AbstractConcreteNumber{T}
