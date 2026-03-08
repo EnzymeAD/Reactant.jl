@@ -257,6 +257,19 @@ end
 Reactant.aos_to_soa(x::Tridiagonal{TracedRNumber{T}}) where {T} = x
 
 # Core functions
+function overloaded_mul(
+    A::AbstractVecOrMat, B::AbstractVecOrMat, α::Number=true, β::Number=false
+)
+    T = Base.promote_op(
+        *, Reactant.unwrapped_eltype(eltype(A)), Reactant.unwrapped_eltype(eltype(B))
+    )
+    A = call_with_reactant(Reactant.promote_to, TracedRArray{T}, A)
+    B = call_with_reactant(Reactant.promote_to, TracedRArray{T}, B)
+    C = ndims(B) == 1 ? similar(A, T, size(A, 1)) : similar(A, T, size(A, 1), size(B, 2))
+    overloaded_mul!(C, A, B, α, β)
+    return C
+end
+
 function overloaded_mul!(
     C::AbstractVecOrMat,
     A::AbstractVecOrMat,

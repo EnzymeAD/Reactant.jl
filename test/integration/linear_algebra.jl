@@ -500,3 +500,16 @@ end
         @test @jit(uscale2(x_ra, y_ra)) ≈ uscale2(x, y)
     end
 end
+
+# See https://github.com/EnzymeAD/Reactant.jl/issues/2130
+diagonal_3_arg_mul(x, y) = y' * Diagonal(x) * y
+
+@testset "diagonal 3 arg matmul" begin
+    x = Reactant.TestUtils.construct_test_array(Float32, 2)
+    y = Reactant.TestUtils.construct_test_array(Float32, 2, 2)
+
+    x_ra = Reactant.to_rarray(x)
+    y_ra = Reactant.to_rarray(y)
+
+    @test @jit(diagonal_3_arg_mul(x_ra, y_ra)) ≈ diagonal_3_arg_mul(x, y)
+end
