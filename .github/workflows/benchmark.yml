@@ -126,7 +126,7 @@ jobs:
       - uses: julia-actions/setup-julia@v2
         with:
           version: "1.11"
-      - uses: julia-actions/cache@v2
+      - uses: julia-actions/cache@v3
       - name: "Instantiate benchmarks environment"
         run: |
           julia --color=yes --project=benchmark/${{ matrix.suite }} -e 'using Pkg; Pkg.instantiate()'
@@ -151,7 +151,7 @@ jobs:
       - uses: julia-actions/setup-julia@v2
         with:
           version: "1"
-      - uses: julia-actions/cache@v2
+      - uses: julia-actions/cache@v3
       - uses: actions/download-artifact@v8
         with:
           pattern: benchmark-results-*

@@ -67,7 +67,7 @@ jobs:
         if: ${{ ! inputs.assertions }}
         with:
           version: ${{ inputs.julia_version }}
-      - uses: julia-actions/cache@v2
+      - uses: julia-actions/cache@v3
         id: julia-cache
         with:
           cache-name: julia-cache;workflow=${{ inputs.julia_version }}-${{ inputs.os }}-${{ inputs.runtime }}-assertions=${{ inputs.assertions }}-${{ github.event_name }}-${{ inputs.test_args }}-${{ inputs.downgrade_testing }}-${{ inputs.localjll }}
