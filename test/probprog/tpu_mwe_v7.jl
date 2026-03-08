@@ -1,14 +1,14 @@
 using Reactant, Test
 using Reactant: MLIR, XLA
 
-# v6: Few while args + Threefry + stablehlo.if with 8 results (81 lines)
-const MWE_MODULE = read(joinpath(@__DIR__, "mwe_v6.mlir"), String)
+# v7: many args + Threefry + stablehlo.if(16 results) + rng in else (145 lines)
+const MWE_MODULE = read(joinpath(@__DIR__, "mwe_v7.mlir"), String)
 
 client = XLA.default_backend()
 device = XLA.default_device()
-@info "v6 test on $(lowercase(XLA.platform_name(client)))"
+@info "v7 test on $(lowercase(XLA.platform_name(client)))"
 
-@testset "TPU MWE v6 - few args + Threefry + stablehlo.if" begin
+@testset "TPU MWE v7 - many args + Threefry + if + rng" begin
     ctx = Reactant.ReactantContext()
     MLIR.IR.activate(ctx)
     mod = parse(MLIR.IR.Module, MWE_MODULE)
