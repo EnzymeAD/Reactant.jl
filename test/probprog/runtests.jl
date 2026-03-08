@@ -12,7 +12,9 @@ delete!(testsuite, "common")
 include("../test_helpers.jl")
 
 if NTPUs > 0 || BACKEND == "tpu"
-    empty!(testsuite)
+    # On TPU, only run the MWE reproducer for the XLA crash
+    tpu_tests = Set(["tpu_mwe"])
+    filter!(p -> p.first in tpu_tests, testsuite)
 end
 
 custom_test_worker = NTPUs > 0 || BACKEND == "tpu"
