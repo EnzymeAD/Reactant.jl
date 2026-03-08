@@ -13,7 +13,7 @@ include("../test_helpers.jl")
 
 if NTPUs > 0 || BACKEND == "tpu"
     # On TPU, run all MWE variants to find which complexity level triggers the crash
-    tpu_tests = Set(["tpu_mwe", "tpu_mwe_v3", "tpu_mwe_v4", "tpu_mwe_b2"])
+    tpu_tests = Set(["tpu_mwe_v5", "tpu_mwe_v6", "tpu_mwe_b2"])
     filter!(p -> p.first in tpu_tests, testsuite)
 end
 
