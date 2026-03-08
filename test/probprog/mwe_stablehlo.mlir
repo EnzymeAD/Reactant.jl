@@ -1,1036 +1,316 @@
 module @mwe attributes {mhlo.num_partitions = 1 : i64, mhlo.num_replicas = 1 : i64} {
-func.func @main(%arg0: tensor<2xui64> {tf.aliasing_output = 1 : i32}, %arg1: tensor<2x1xf64>, %arg2: tensor<f64>, %arg3: tensor<2x2xf64>) -> (tensor<2x1xf64>, tensor<2xui64>) {
-    %cst = stablehlo.constant dense<-5.000000e-01> : tensor<1x2xf64>
-    %cst_16 = stablehlo.constant dense<5.000000e-01> : tensor<1x2xf64>
-    %c_17 = stablehlo.constant dense<8> : tensor<3xui32>
-    %c_18 = stablehlo.constant dense<19> : tensor<3xui32>
-    %c_19 = stablehlo.constant dense<[0, 1, 2]> : tensor<3xui32>
-    %c_22 = stablehlo.constant dense<8> : tensor<2xui32>
-    %c_23 = stablehlo.constant dense<19> : tensor<2xui32>
-    %c_24 = stablehlo.constant dense<[0, 1]> : tensor<2xui32>
-    %c_25 = stablehlo.constant dense<4607182418800017408> : tensor<ui64>
-    %c_26 = stablehlo.constant dense<12> : tensor<ui64>
-    %c_32 = stablehlo.constant dense<5> : tensor<3xui32>
-    %c_33 = stablehlo.constant dense<4> : tensor<3xui32>
-    %c_34 = stablehlo.constant dense<3> : tensor<3xui32>
-    %c_35 = stablehlo.constant dense<2> : tensor<3xui32>
-    %c_36 = stablehlo.constant dense<24> : tensor<3xui32>
-    %c_37 = stablehlo.constant dense<16> : tensor<3xui32>
-    %c_38 = stablehlo.constant dense<29> : tensor<3xui32>
-    %c_39 = stablehlo.constant dense<17> : tensor<3xui32>
-    %c_40 = stablehlo.constant dense<1> : tensor<3xui32>
-    %c_41 = stablehlo.constant dense<6> : tensor<3xui32>
-    %c_42 = stablehlo.constant dense<26> : tensor<3xui32>
-    %c_43 = stablehlo.constant dense<15> : tensor<3xui32>
-    %c_44 = stablehlo.constant dense<13> : tensor<3xui32>
-    %c_45 = stablehlo.constant dense<466688986> : tensor<3xui32>
-    %c_46 = stablehlo.constant dense<5> : tensor<2xui32>
-    %c_47 = stablehlo.constant dense<4> : tensor<2xui32>
-    %c_48 = stablehlo.constant dense<3> : tensor<2xui32>
-    %c_49 = stablehlo.constant dense<2> : tensor<2xui32>
-    %c_50 = stablehlo.constant dense<24> : tensor<2xui32>
-    %c_51 = stablehlo.constant dense<16> : tensor<2xui32>
-    %c_52 = stablehlo.constant dense<29> : tensor<2xui32>
-    %c_53 = stablehlo.constant dense<17> : tensor<2xui32>
-    %c_54 = stablehlo.constant dense<1> : tensor<2xui32>
-    %c_55 = stablehlo.constant dense<6> : tensor<2xui32>
-    %c_56 = stablehlo.constant dense<26> : tensor<2xui32>
-    %c_57 = stablehlo.constant dense<15> : tensor<2xui32>
-    %c_58 = stablehlo.constant dense<13> : tensor<2xui32>
-    %c_59 = stablehlo.constant dense<466688986> : tensor<2xui32>
-    %cst_60 = stablehlo.constant dense<0x7FF0000000000000> : tensor<f64>
-    %cst_61 = stablehlo.constant dense<0.000000e+00> : tensor<3x2xf64>
-    %c_62 = stablehlo.constant dense<3> : tensor<i64>
-    %c_63 = stablehlo.constant dense<false> : tensor<i1>
-    %cst_64 = stablehlo.constant dense<5.000000e-01> : tensor<f64>
-    %cst_65 = stablehlo.constant dense<0.000000e+00> : tensor<f64>
-    %c_66 = stablehlo.constant dense<1> : tensor<i64>
-    %c_67 = stablehlo.constant dense<0> : tensor<i64>
-    %cst_68 = stablehlo.constant dense<1.000000e+00> : tensor<f64>
-    %cst_71 = stablehlo.constant dense<1.000000e+03> : tensor<f64>
-// Init constants for outer while
-%init_1x2 = stablehlo.constant dense<0.0> : tensor<1x2xf64>
-%init_f64 = stablehlo.constant dense<0.0> : tensor<f64>
-%init_i1 = stablehlo.constant dense<false> : tensor<i1>
-%6 = stablehlo.constant dense<[[1.0, 0.0], [0.0, 1.0]]> : tensor<2x2xf64>
-%814 = stablehlo.constant dense<0.0> : tensor<f64>
-%1067 = stablehlo.constant dense<0> : tensor<2xui64>
-%1094 = stablehlo.constant dense<0.0> : tensor<f64>
-
-    %1096:17 = stablehlo.while(%iterArg = %init_1x2, %iterArg_72 = %init_1x2, %iterArg_73 = %init_1x2, %iterArg_74 = %init_1x2, %iterArg_75 = %init_1x2, %iterArg_76 = %init_1x2, %iterArg_77 = %init_1x2, %iterArg_78 = %init_1x2, %iterArg_79 = %init_f64, %iterArg_80 = %init_f64, %iterArg_81 = %c_67, %iterArg_82 = %init_f64, %iterArg_83 = %init_i1, %iterArg_84 = %init_i1, %iterArg_85 = %init_f64, %iterArg_86 = %init_1x2, %iterArg_87 = %arg0) : tensor<1x2xf64>, tensor<1x2xf64>, tensor<1x2xf64>, tensor<1x2xf64>, tensor<1x2xf64>, tensor<1x2xf64>, tensor<1x2xf64>, tensor<1x2xf64>, tensor<f64>, tensor<f64>, tensor<i64>, tensor<f64>, tensor<i1>, tensor<i1>, tensor<f64>, tensor<1x2xf64>, tensor<2xui64>
+  func.func @main(%arg0: tensor<2xui64> {tf.aliasing_output = 1 : i32}, %arg1: tensor<2x1xf64>, %arg2: tensor<f64>, %arg3: tensor<2x2xf64>) -> (tensor<2x1xf64>, tensor<2xui64>) {
+    %cst_neg_half = stablehlo.constant dense<-5.000000e-01> : tensor<1x2xf64>
+    %cst_half_1x2 = stablehlo.constant dense<5.000000e-01> : tensor<1x2xf64>
+    %c_magic = stablehlo.constant dense<4607182418800017408> : tensor<ui64>
+    %c_shift12 = stablehlo.constant dense<12> : tensor<ui64>
+    %cst_inf = stablehlo.constant dense<0x7FF0000000000000> : tensor<f64>
+    %cst_3x2 = stablehlo.constant dense<0.0> : tensor<3x2xf64>
+    %c_3 = stablehlo.constant dense<3> : tensor<i64>
+    %c_false = stablehlo.constant dense<false> : tensor<i1>
+    %cst_half = stablehlo.constant dense<5.000000e-01> : tensor<f64>
+    %cst_zero = stablehlo.constant dense<0.000000e+00> : tensor<f64>
+    %c_1 = stablehlo.constant dense<1> : tensor<i64>
+    %c_0 = stablehlo.constant dense<0> : tensor<i64>
+    %cst_one = stablehlo.constant dense<1.000000e+00> : tensor<f64>
+    %cst_1000 = stablehlo.constant dense<1.000000e+03> : tensor<f64>
+    %cst_1x2 = stablehlo.constant dense<0.0> : tensor<1x2xf64>
+    %cst_f64 = stablehlo.constant dense<0.0> : tensor<f64>
+    // Initial RNG call
+    %rng0, %rng0_out = stablehlo.rng_bit_generator %arg0, algorithm = DEFAULT
+      : (tensor<2xui64>) -> (tensor<2xui64>, tensor<ui64>)
+    // Outer while: 17 args matching NUTS tree state
+    %outer:17 = stablehlo.while(
+      %o0 = %cst_1x2, %o1 = %cst_1x2, %o2 = %cst_1x2,
+      %o3 = %cst_1x2, %o4 = %cst_1x2, %o5 = %cst_1x2,
+      %o6 = %cst_1x2, %o7 = %cst_1x2,
+      %o8 = %cst_f64, %o9 = %cst_f64,
+      %o10 = %c_0, %o11 = %cst_f64,
+      %o12 = %c_false, %o13 = %c_false,
+      %o14 = %cst_f64, %o15 = %cst_1x2,
+      %o16 = %rng0
+    ) : tensor<1x2xf64>, tensor<1x2xf64>, tensor<1x2xf64>,
+        tensor<1x2xf64>, tensor<1x2xf64>, tensor<1x2xf64>,
+        tensor<1x2xf64>, tensor<1x2xf64>,
+        tensor<f64>, tensor<f64>, tensor<i64>, tensor<f64>,
+        tensor<i1>, tensor<i1>, tensor<f64>,
+        tensor<1x2xf64>, tensor<2xui64>
     cond {
-      %1098 = stablehlo.compare  LT, %iterArg_81, %c_62,  SIGNED : (tensor<i64>, tensor<i64>) -> tensor<i1>
-      %1099 = stablehlo.not %iterArg_83 : tensor<i1>
-      %1100 = stablehlo.not %iterArg_84 : tensor<i1>
-      %1101 = stablehlo.and %1098, %1099 : tensor<i1>
-      %1102 = stablehlo.and %1101, %1100 : tensor<i1>
-      stablehlo.return %1102 : tensor<i1>
+      %cmp = stablehlo.compare LT, %o10, %c_3, SIGNED : (tensor<i64>, tensor<i64>) -> tensor<i1>
+      %n12 = stablehlo.not %o12 : tensor<i1>
+      %n13 = stablehlo.not %o13 : tensor<i1>
+      %a1 = stablehlo.and %cmp, %n12 : tensor<i1>
+      %a2 = stablehlo.and %a1, %n13 : tensor<i1>
+      stablehlo.return %a2 : tensor<i1>
     } do {
-      %1098 = stablehlo.bitcast_convert %iterArg_87 : (tensor<2xui64>) -> tensor<2x2xui32>
-      %1099 = stablehlo.reshape %1098 : (tensor<2x2xui32>) -> tensor<4xui32>
-      %1100 = stablehlo.slice %1099 [0:1] : (tensor<4xui32>) -> tensor<1xui32>
-      %1101 = stablehlo.slice %1099 [1:2] : (tensor<4xui32>) -> tensor<1xui32>
-      %1102 = stablehlo.slice %1099 [2:3] : (tensor<4xui32>) -> tensor<1xui32>
-      %1103 = stablehlo.slice %1099 [3:4] : (tensor<4xui32>) -> tensor<1xui32>
-      %1104 = stablehlo.broadcast_in_dim %1100, dims = [0] : (tensor<1xui32>) -> tensor<3xui32>
-      %1105 = stablehlo.broadcast_in_dim %1101, dims = [0] : (tensor<1xui32>) -> tensor<3xui32>
-      %1106 = stablehlo.broadcast_in_dim %1102, dims = [0] : (tensor<1xui32>) -> tensor<3xui32>
-      %1107 = stablehlo.broadcast_in_dim %1103, dims = [0] : (tensor<1xui32>) -> tensor<3xui32>
-      %1108 = stablehlo.xor %1104, %1105 : tensor<3xui32>
-      %1109 = stablehlo.xor %1108, %c_45 : tensor<3xui32>
-      %1110 = stablehlo.add %c_19, %1105 : tensor<3xui32>
-      %1111 = stablehlo.add %1104, %1110 : tensor<3xui32>
-      %1112 = stablehlo.shift_left %1110, %c_44 : tensor<3xui32>
-      %1113 = stablehlo.shift_right_logical %1110, %c_18 : tensor<3xui32>
-      %1114 = stablehlo.or %1112, %1113 : tensor<3xui32>
-      %1115 = stablehlo.xor %1111, %1114 : tensor<3xui32>
-      %1116 = stablehlo.add %1111, %1115 : tensor<3xui32>
-      %1117 = stablehlo.shift_left %1115, %c_43 : tensor<3xui32>
-      %1118 = stablehlo.shift_right_logical %1115, %c_39 : tensor<3xui32>
-      %1119 = stablehlo.or %1117, %1118 : tensor<3xui32>
-      %1120 = stablehlo.xor %1116, %1119 : tensor<3xui32>
-      %1121 = stablehlo.add %1116, %1120 : tensor<3xui32>
-      %1122 = stablehlo.shift_left %1120, %c_42 : tensor<3xui32>
-      %1123 = stablehlo.shift_right_logical %1120, %c_41 : tensor<3xui32>
-      %1124 = stablehlo.or %1122, %1123 : tensor<3xui32>
-      %1125 = stablehlo.xor %1121, %1124 : tensor<3xui32>
-      %1126 = stablehlo.add %1121, %1125 : tensor<3xui32>
-      %1127 = stablehlo.shift_left %1125, %c_41 : tensor<3xui32>
-      %1128 = stablehlo.shift_right_logical %1125, %c_42 : tensor<3xui32>
-      %1129 = stablehlo.or %1127, %1128 : tensor<3xui32>
-      %1130 = stablehlo.xor %1126, %1129 : tensor<3xui32>
-      %1131 = stablehlo.add %1126, %1105 : tensor<3xui32>
-      %1132 = stablehlo.add %1130, %1109 : tensor<3xui32>
-      %1133 = stablehlo.add %1132, %c_40 : tensor<3xui32>
-      %1134 = stablehlo.add %1131, %1133 : tensor<3xui32>
-      %1135 = stablehlo.shift_left %1133, %c_39 : tensor<3xui32>
-      %1136 = stablehlo.shift_right_logical %1133, %c_43 : tensor<3xui32>
-      %1137 = stablehlo.or %1135, %1136 : tensor<3xui32>
-      %1138 = stablehlo.xor %1134, %1137 : tensor<3xui32>
-      %1139 = stablehlo.add %1134, %1138 : tensor<3xui32>
-      %1140 = stablehlo.shift_left %1138, %c_38 : tensor<3xui32>
-      %1141 = stablehlo.shift_right_logical %1138, %c_34 : tensor<3xui32>
-      %1142 = stablehlo.or %1140, %1141 : tensor<3xui32>
-      %1143 = stablehlo.xor %1139, %1142 : tensor<3xui32>
-      %1144 = stablehlo.add %1139, %1143 : tensor<3xui32>
-      %1145 = stablehlo.shift_left %1143, %c_37 : tensor<3xui32>
-      %1146 = stablehlo.shift_right_logical %1143, %c_37 : tensor<3xui32>
-      %1147 = stablehlo.or %1145, %1146 : tensor<3xui32>
-      %1148 = stablehlo.xor %1144, %1147 : tensor<3xui32>
-      %1149 = stablehlo.add %1144, %1148 : tensor<3xui32>
-      %1150 = stablehlo.shift_left %1148, %c_36 : tensor<3xui32>
-      %1151 = stablehlo.shift_right_logical %1148, %c_17 : tensor<3xui32>
-      %1152 = stablehlo.or %1150, %1151 : tensor<3xui32>
-      %1153 = stablehlo.xor %1149, %1152 : tensor<3xui32>
-      %1154 = stablehlo.add %1149, %1109 : tensor<3xui32>
-      %1155 = stablehlo.add %1153, %1104 : tensor<3xui32>
-      %1156 = stablehlo.add %1155, %c_35 : tensor<3xui32>
-      %1157 = stablehlo.add %1154, %1156 : tensor<3xui32>
-      %1158 = stablehlo.shift_left %1156, %c_44 : tensor<3xui32>
-      %1159 = stablehlo.shift_right_logical %1156, %c_18 : tensor<3xui32>
-      %1160 = stablehlo.or %1158, %1159 : tensor<3xui32>
-      %1161 = stablehlo.xor %1157, %1160 : tensor<3xui32>
-      %1162 = stablehlo.add %1157, %1161 : tensor<3xui32>
-      %1163 = stablehlo.shift_left %1161, %c_43 : tensor<3xui32>
-      %1164 = stablehlo.shift_right_logical %1161, %c_39 : tensor<3xui32>
-      %1165 = stablehlo.or %1163, %1164 : tensor<3xui32>
-      %1166 = stablehlo.xor %1162, %1165 : tensor<3xui32>
-      %1167 = stablehlo.add %1162, %1166 : tensor<3xui32>
-      %1168 = stablehlo.shift_left %1166, %c_42 : tensor<3xui32>
-      %1169 = stablehlo.shift_right_logical %1166, %c_41 : tensor<3xui32>
-      %1170 = stablehlo.or %1168, %1169 : tensor<3xui32>
-      %1171 = stablehlo.xor %1167, %1170 : tensor<3xui32>
-      %1172 = stablehlo.add %1167, %1171 : tensor<3xui32>
-      %1173 = stablehlo.shift_left %1171, %c_41 : tensor<3xui32>
-      %1174 = stablehlo.shift_right_logical %1171, %c_42 : tensor<3xui32>
-      %1175 = stablehlo.or %1173, %1174 : tensor<3xui32>
-      %1176 = stablehlo.xor %1172, %1175 : tensor<3xui32>
-      %1177 = stablehlo.add %1172, %1104 : tensor<3xui32>
-      %1178 = stablehlo.add %1176, %1105 : tensor<3xui32>
-      %1179 = stablehlo.add %1178, %c_34 : tensor<3xui32>
-      %1180 = stablehlo.add %1177, %1179 : tensor<3xui32>
-      %1181 = stablehlo.shift_left %1179, %c_39 : tensor<3xui32>
-      %1182 = stablehlo.shift_right_logical %1179, %c_43 : tensor<3xui32>
-      %1183 = stablehlo.or %1181, %1182 : tensor<3xui32>
-      %1184 = stablehlo.xor %1180, %1183 : tensor<3xui32>
-      %1185 = stablehlo.add %1180, %1184 : tensor<3xui32>
-      %1186 = stablehlo.shift_left %1184, %c_38 : tensor<3xui32>
-      %1187 = stablehlo.shift_right_logical %1184, %c_34 : tensor<3xui32>
-      %1188 = stablehlo.or %1186, %1187 : tensor<3xui32>
-      %1189 = stablehlo.xor %1185, %1188 : tensor<3xui32>
-      %1190 = stablehlo.add %1185, %1189 : tensor<3xui32>
-      %1191 = stablehlo.shift_left %1189, %c_37 : tensor<3xui32>
-      %1192 = stablehlo.shift_right_logical %1189, %c_37 : tensor<3xui32>
-      %1193 = stablehlo.or %1191, %1192 : tensor<3xui32>
-      %1194 = stablehlo.xor %1190, %1193 : tensor<3xui32>
-      %1195 = stablehlo.add %1190, %1194 : tensor<3xui32>
-      %1196 = stablehlo.shift_left %1194, %c_36 : tensor<3xui32>
-      %1197 = stablehlo.shift_right_logical %1194, %c_17 : tensor<3xui32>
-      %1198 = stablehlo.or %1196, %1197 : tensor<3xui32>
-      %1199 = stablehlo.xor %1195, %1198 : tensor<3xui32>
-      %1200 = stablehlo.add %1195, %1105 : tensor<3xui32>
-      %1201 = stablehlo.add %1199, %1109 : tensor<3xui32>
-      %1202 = stablehlo.add %1201, %c_33 : tensor<3xui32>
-      %1203 = stablehlo.add %1200, %1202 : tensor<3xui32>
-      %1204 = stablehlo.shift_left %1202, %c_44 : tensor<3xui32>
-      %1205 = stablehlo.shift_right_logical %1202, %c_18 : tensor<3xui32>
-      %1206 = stablehlo.or %1204, %1205 : tensor<3xui32>
-      %1207 = stablehlo.xor %1203, %1206 : tensor<3xui32>
-      %1208 = stablehlo.add %1203, %1207 : tensor<3xui32>
-      %1209 = stablehlo.shift_left %1207, %c_43 : tensor<3xui32>
-      %1210 = stablehlo.shift_right_logical %1207, %c_39 : tensor<3xui32>
-      %1211 = stablehlo.or %1209, %1210 : tensor<3xui32>
-      %1212 = stablehlo.xor %1208, %1211 : tensor<3xui32>
-      %1213 = stablehlo.add %1208, %1212 : tensor<3xui32>
-      %1214 = stablehlo.shift_left %1212, %c_42 : tensor<3xui32>
-      %1215 = stablehlo.shift_right_logical %1212, %c_41 : tensor<3xui32>
-      %1216 = stablehlo.or %1214, %1215 : tensor<3xui32>
-      %1217 = stablehlo.xor %1213, %1216 : tensor<3xui32>
-      %1218 = stablehlo.add %1213, %1217 : tensor<3xui32>
-      %1219 = stablehlo.shift_left %1217, %c_41 : tensor<3xui32>
-      %1220 = stablehlo.shift_right_logical %1217, %c_42 : tensor<3xui32>
-      %1221 = stablehlo.or %1219, %1220 : tensor<3xui32>
-      %1222 = stablehlo.xor %1218, %1221 : tensor<3xui32>
-      %1223 = stablehlo.add %1218, %1109 : tensor<3xui32>
-      %1224 = stablehlo.add %1222, %1104 : tensor<3xui32>
-      %1225 = stablehlo.add %1224, %c_32 : tensor<3xui32>
-      %1226 = stablehlo.xor %1106, %1107 : tensor<3xui32>
-      %1227 = stablehlo.xor %1226, %c_45 : tensor<3xui32>
-      %1228 = stablehlo.add %c_19, %1107 : tensor<3xui32>
-      %1229 = stablehlo.add %1106, %1228 : tensor<3xui32>
-      %1230 = stablehlo.shift_left %1228, %c_44 : tensor<3xui32>
-      %1231 = stablehlo.shift_right_logical %1228, %c_18 : tensor<3xui32>
-      %1232 = stablehlo.or %1230, %1231 : tensor<3xui32>
-      %1233 = stablehlo.xor %1229, %1232 : tensor<3xui32>
-      %1234 = stablehlo.add %1229, %1233 : tensor<3xui32>
-      %1235 = stablehlo.shift_left %1233, %c_43 : tensor<3xui32>
-      %1236 = stablehlo.shift_right_logical %1233, %c_39 : tensor<3xui32>
-      %1237 = stablehlo.or %1235, %1236 : tensor<3xui32>
-      %1238 = stablehlo.xor %1234, %1237 : tensor<3xui32>
-      %1239 = stablehlo.add %1234, %1238 : tensor<3xui32>
-      %1240 = stablehlo.shift_left %1238, %c_42 : tensor<3xui32>
-      %1241 = stablehlo.shift_right_logical %1238, %c_41 : tensor<3xui32>
-      %1242 = stablehlo.or %1240, %1241 : tensor<3xui32>
-      %1243 = stablehlo.xor %1239, %1242 : tensor<3xui32>
-      %1244 = stablehlo.add %1239, %1243 : tensor<3xui32>
-      %1245 = stablehlo.shift_left %1243, %c_41 : tensor<3xui32>
-      %1246 = stablehlo.shift_right_logical %1243, %c_42 : tensor<3xui32>
-      %1247 = stablehlo.or %1245, %1246 : tensor<3xui32>
-      %1248 = stablehlo.xor %1244, %1247 : tensor<3xui32>
-      %1249 = stablehlo.add %1244, %1107 : tensor<3xui32>
-      %1250 = stablehlo.add %1248, %1227 : tensor<3xui32>
-      %1251 = stablehlo.add %1250, %c_40 : tensor<3xui32>
-      %1252 = stablehlo.add %1249, %1251 : tensor<3xui32>
-      %1253 = stablehlo.shift_left %1251, %c_39 : tensor<3xui32>
-      %1254 = stablehlo.shift_right_logical %1251, %c_43 : tensor<3xui32>
-      %1255 = stablehlo.or %1253, %1254 : tensor<3xui32>
-      %1256 = stablehlo.xor %1252, %1255 : tensor<3xui32>
-      %1257 = stablehlo.add %1252, %1256 : tensor<3xui32>
-      %1258 = stablehlo.shift_left %1256, %c_38 : tensor<3xui32>
-      %1259 = stablehlo.shift_right_logical %1256, %c_34 : tensor<3xui32>
-      %1260 = stablehlo.or %1258, %1259 : tensor<3xui32>
-      %1261 = stablehlo.xor %1257, %1260 : tensor<3xui32>
-      %1262 = stablehlo.add %1257, %1261 : tensor<3xui32>
-      %1263 = stablehlo.shift_left %1261, %c_37 : tensor<3xui32>
-      %1264 = stablehlo.shift_right_logical %1261, %c_37 : tensor<3xui32>
-      %1265 = stablehlo.or %1263, %1264 : tensor<3xui32>
-      %1266 = stablehlo.xor %1262, %1265 : tensor<3xui32>
-      %1267 = stablehlo.add %1262, %1266 : tensor<3xui32>
-      %1268 = stablehlo.shift_left %1266, %c_36 : tensor<3xui32>
-      %1269 = stablehlo.shift_right_logical %1266, %c_17 : tensor<3xui32>
-      %1270 = stablehlo.or %1268, %1269 : tensor<3xui32>
-      %1271 = stablehlo.xor %1267, %1270 : tensor<3xui32>
-      %1272 = stablehlo.add %1267, %1227 : tensor<3xui32>
-      %1273 = stablehlo.add %1271, %1106 : tensor<3xui32>
-      %1274 = stablehlo.add %1273, %c_35 : tensor<3xui32>
-      %1275 = stablehlo.add %1272, %1274 : tensor<3xui32>
-      %1276 = stablehlo.shift_left %1274, %c_44 : tensor<3xui32>
-      %1277 = stablehlo.shift_right_logical %1274, %c_18 : tensor<3xui32>
-      %1278 = stablehlo.or %1276, %1277 : tensor<3xui32>
-      %1279 = stablehlo.xor %1275, %1278 : tensor<3xui32>
-      %1280 = stablehlo.add %1275, %1279 : tensor<3xui32>
-      %1281 = stablehlo.shift_left %1279, %c_43 : tensor<3xui32>
-      %1282 = stablehlo.shift_right_logical %1279, %c_39 : tensor<3xui32>
-      %1283 = stablehlo.or %1281, %1282 : tensor<3xui32>
-      %1284 = stablehlo.xor %1280, %1283 : tensor<3xui32>
-      %1285 = stablehlo.add %1280, %1284 : tensor<3xui32>
-      %1286 = stablehlo.shift_left %1284, %c_42 : tensor<3xui32>
-      %1287 = stablehlo.shift_right_logical %1284, %c_41 : tensor<3xui32>
-      %1288 = stablehlo.or %1286, %1287 : tensor<3xui32>
-      %1289 = stablehlo.xor %1285, %1288 : tensor<3xui32>
-      %1290 = stablehlo.add %1285, %1289 : tensor<3xui32>
-      %1291 = stablehlo.shift_left %1289, %c_41 : tensor<3xui32>
-      %1292 = stablehlo.shift_right_logical %1289, %c_42 : tensor<3xui32>
-      %1293 = stablehlo.or %1291, %1292 : tensor<3xui32>
-      %1294 = stablehlo.xor %1290, %1293 : tensor<3xui32>
-      %1295 = stablehlo.add %1290, %1106 : tensor<3xui32>
-      %1296 = stablehlo.add %1294, %1107 : tensor<3xui32>
-      %1297 = stablehlo.add %1296, %c_34 : tensor<3xui32>
-      %1298 = stablehlo.add %1295, %1297 : tensor<3xui32>
-      %1299 = stablehlo.shift_left %1297, %c_39 : tensor<3xui32>
-      %1300 = stablehlo.shift_right_logical %1297, %c_43 : tensor<3xui32>
-      %1301 = stablehlo.or %1299, %1300 : tensor<3xui32>
-      %1302 = stablehlo.xor %1298, %1301 : tensor<3xui32>
-      %1303 = stablehlo.add %1298, %1302 : tensor<3xui32>
-      %1304 = stablehlo.shift_left %1302, %c_38 : tensor<3xui32>
-      %1305 = stablehlo.shift_right_logical %1302, %c_34 : tensor<3xui32>
-      %1306 = stablehlo.or %1304, %1305 : tensor<3xui32>
-      %1307 = stablehlo.xor %1303, %1306 : tensor<3xui32>
-      %1308 = stablehlo.add %1303, %1307 : tensor<3xui32>
-      %1309 = stablehlo.shift_left %1307, %c_37 : tensor<3xui32>
-      %1310 = stablehlo.shift_right_logical %1307, %c_37 : tensor<3xui32>
-      %1311 = stablehlo.or %1309, %1310 : tensor<3xui32>
-      %1312 = stablehlo.xor %1308, %1311 : tensor<3xui32>
-      %1313 = stablehlo.add %1308, %1312 : tensor<3xui32>
-      %1314 = stablehlo.shift_left %1312, %c_36 : tensor<3xui32>
-      %1315 = stablehlo.shift_right_logical %1312, %c_17 : tensor<3xui32>
-      %1316 = stablehlo.or %1314, %1315 : tensor<3xui32>
-      %1317 = stablehlo.xor %1313, %1316 : tensor<3xui32>
-      %1318 = stablehlo.add %1313, %1107 : tensor<3xui32>
-      %1319 = stablehlo.add %1317, %1227 : tensor<3xui32>
-      %1320 = stablehlo.add %1319, %c_33 : tensor<3xui32>
-      %1321 = stablehlo.add %1318, %1320 : tensor<3xui32>
-      %1322 = stablehlo.shift_left %1320, %c_44 : tensor<3xui32>
-      %1323 = stablehlo.shift_right_logical %1320, %c_18 : tensor<3xui32>
-      %1324 = stablehlo.or %1322, %1323 : tensor<3xui32>
-      %1325 = stablehlo.xor %1321, %1324 : tensor<3xui32>
-      %1326 = stablehlo.add %1321, %1325 : tensor<3xui32>
-      %1327 = stablehlo.shift_left %1325, %c_43 : tensor<3xui32>
-      %1328 = stablehlo.shift_right_logical %1325, %c_39 : tensor<3xui32>
-      %1329 = stablehlo.or %1327, %1328 : tensor<3xui32>
-      %1330 = stablehlo.xor %1326, %1329 : tensor<3xui32>
-      %1331 = stablehlo.add %1326, %1330 : tensor<3xui32>
-      %1332 = stablehlo.shift_left %1330, %c_42 : tensor<3xui32>
-      %1333 = stablehlo.shift_right_logical %1330, %c_41 : tensor<3xui32>
-      %1334 = stablehlo.or %1332, %1333 : tensor<3xui32>
-      %1335 = stablehlo.xor %1331, %1334 : tensor<3xui32>
-      %1336 = stablehlo.add %1331, %1335 : tensor<3xui32>
-      %1337 = stablehlo.shift_left %1335, %c_41 : tensor<3xui32>
-      %1338 = stablehlo.shift_right_logical %1335, %c_42 : tensor<3xui32>
-      %1339 = stablehlo.or %1337, %1338 : tensor<3xui32>
-      %1340 = stablehlo.xor %1336, %1339 : tensor<3xui32>
-      %1341 = stablehlo.add %1336, %1227 : tensor<3xui32>
-      %1342 = stablehlo.add %1340, %1106 : tensor<3xui32>
-      %1343 = stablehlo.add %1342, %c_32 : tensor<3xui32>
-      %1344 = stablehlo.slice %1223 [0:1] : (tensor<3xui32>) -> tensor<1xui32>
-      %1345 = stablehlo.slice %1225 [0:1] : (tensor<3xui32>) -> tensor<1xui32>
-      %1346 = stablehlo.slice %1341 [0:1] : (tensor<3xui32>) -> tensor<1xui32>
-      %1347 = stablehlo.slice %1343 [0:1] : (tensor<3xui32>) -> tensor<1xui32>
-      %1348 = stablehlo.concatenate %1344, %1345, %1346, %1347, dim = 0 : (tensor<1xui32>, tensor<1xui32>, tensor<1xui32>, tensor<1xui32>) -> tensor<4xui32>
-      %1349 = stablehlo.reshape %1348 : (tensor<4xui32>) -> tensor<2x2xui32>
-      %1350 = stablehlo.bitcast_convert %1349 : (tensor<2x2xui32>) -> tensor<2xui64>
-      %1351 = stablehlo.slice %1223 [1:2] : (tensor<3xui32>) -> tensor<1xui32>
-      %1352 = stablehlo.slice %1225 [1:2] : (tensor<3xui32>) -> tensor<1xui32>
-      %1353 = stablehlo.slice %1341 [1:2] : (tensor<3xui32>) -> tensor<1xui32>
-      %1354 = stablehlo.slice %1343 [1:2] : (tensor<3xui32>) -> tensor<1xui32>
-      %1355 = stablehlo.concatenate %1351, %1352, %1353, %1354, dim = 0 : (tensor<1xui32>, tensor<1xui32>, tensor<1xui32>, tensor<1xui32>) -> tensor<4xui32>
-      %1356 = stablehlo.reshape %1355 : (tensor<4xui32>) -> tensor<2x2xui32>
-      %1357 = stablehlo.bitcast_convert %1356 : (tensor<2x2xui32>) -> tensor<2xui64>
-      %1358 = stablehlo.slice %1223 [2:3] : (tensor<3xui32>) -> tensor<1xui32>
-      %1359 = stablehlo.slice %1225 [2:3] : (tensor<3xui32>) -> tensor<1xui32>
-      %1360 = stablehlo.slice %1341 [2:3] : (tensor<3xui32>) -> tensor<1xui32>
-      %1361 = stablehlo.slice %1343 [2:3] : (tensor<3xui32>) -> tensor<1xui32>
-      %1362 = stablehlo.concatenate %1358, %1359, %1360, %1361, dim = 0 : (tensor<1xui32>, tensor<1xui32>, tensor<1xui32>, tensor<1xui32>) -> tensor<4xui32>
-      %1363 = stablehlo.reshape %1362 : (tensor<4xui32>) -> tensor<2x2xui32>
-      %1364 = stablehlo.bitcast_convert %1363 : (tensor<2x2xui32>) -> tensor<2xui64>
-      %output_state_88, %output_89 = stablehlo.rng_bit_generator %1357, algorithm =  DEFAULT : (tensor<2xui64>) -> (tensor<2xui64>, tensor<ui64>)
-      %1365 = stablehlo.shift_right_logical %output_89, %c_26 : tensor<ui64>
-      %1366 = stablehlo.or %1365, %c_25 : tensor<ui64>
-      %1367 = stablehlo.bitcast_convert %1366 : (tensor<ui64>) -> tensor<f64>
-      %1368 = stablehlo.subtract %1367, %cst_68 : tensor<f64>
-      %1369 = stablehlo.compare  LT, %1368, %cst_64,  FLOAT : (tensor<f64>, tensor<f64>) -> tensor<i1>
-      %1370 = stablehlo.bitcast_convert %1364 : (tensor<2xui64>) -> tensor<2x2xui32>
-      %1371 = stablehlo.reshape %1370 : (tensor<2x2xui32>) -> tensor<4xui32>
-      %1372 = stablehlo.slice %1371 [0:1] : (tensor<4xui32>) -> tensor<1xui32>
-      %1373 = stablehlo.slice %1371 [1:2] : (tensor<4xui32>) -> tensor<1xui32>
-      %1374 = stablehlo.slice %1371 [2:3] : (tensor<4xui32>) -> tensor<1xui32>
-      %1375 = stablehlo.slice %1371 [3:4] : (tensor<4xui32>) -> tensor<1xui32>
-      %1376 = stablehlo.broadcast_in_dim %1372, dims = [0] : (tensor<1xui32>) -> tensor<2xui32>
-      %1377 = stablehlo.broadcast_in_dim %1373, dims = [0] : (tensor<1xui32>) -> tensor<2xui32>
-      %1378 = stablehlo.broadcast_in_dim %1374, dims = [0] : (tensor<1xui32>) -> tensor<2xui32>
-      %1379 = stablehlo.broadcast_in_dim %1375, dims = [0] : (tensor<1xui32>) -> tensor<2xui32>
-      %1380 = stablehlo.xor %1376, %1377 : tensor<2xui32>
-      %1381 = stablehlo.xor %1380, %c_59 : tensor<2xui32>
-      %1382 = stablehlo.add %c_24, %1377 : tensor<2xui32>
-      %1383 = stablehlo.add %1376, %1382 : tensor<2xui32>
-      %1384 = stablehlo.shift_left %1382, %c_58 : tensor<2xui32>
-      %1385 = stablehlo.shift_right_logical %1382, %c_23 : tensor<2xui32>
-      %1386 = stablehlo.or %1384, %1385 : tensor<2xui32>
-      %1387 = stablehlo.xor %1383, %1386 : tensor<2xui32>
-      %1388 = stablehlo.add %1383, %1387 : tensor<2xui32>
-      %1389 = stablehlo.shift_left %1387, %c_57 : tensor<2xui32>
-      %1390 = stablehlo.shift_right_logical %1387, %c_53 : tensor<2xui32>
-      %1391 = stablehlo.or %1389, %1390 : tensor<2xui32>
-      %1392 = stablehlo.xor %1388, %1391 : tensor<2xui32>
-      %1393 = stablehlo.add %1388, %1392 : tensor<2xui32>
-      %1394 = stablehlo.shift_left %1392, %c_56 : tensor<2xui32>
-      %1395 = stablehlo.shift_right_logical %1392, %c_55 : tensor<2xui32>
-      %1396 = stablehlo.or %1394, %1395 : tensor<2xui32>
-      %1397 = stablehlo.xor %1393, %1396 : tensor<2xui32>
-      %1398 = stablehlo.add %1393, %1397 : tensor<2xui32>
-      %1399 = stablehlo.shift_left %1397, %c_55 : tensor<2xui32>
-      %1400 = stablehlo.shift_right_logical %1397, %c_56 : tensor<2xui32>
-      %1401 = stablehlo.or %1399, %1400 : tensor<2xui32>
-      %1402 = stablehlo.xor %1398, %1401 : tensor<2xui32>
-      %1403 = stablehlo.add %1398, %1377 : tensor<2xui32>
-      %1404 = stablehlo.add %1402, %1381 : tensor<2xui32>
-      %1405 = stablehlo.add %1404, %c_54 : tensor<2xui32>
-      %1406 = stablehlo.add %1403, %1405 : tensor<2xui32>
-      %1407 = stablehlo.shift_left %1405, %c_53 : tensor<2xui32>
-      %1408 = stablehlo.shift_right_logical %1405, %c_57 : tensor<2xui32>
-      %1409 = stablehlo.or %1407, %1408 : tensor<2xui32>
-      %1410 = stablehlo.xor %1406, %1409 : tensor<2xui32>
-      %1411 = stablehlo.add %1406, %1410 : tensor<2xui32>
-      %1412 = stablehlo.shift_left %1410, %c_52 : tensor<2xui32>
-      %1413 = stablehlo.shift_right_logical %1410, %c_48 : tensor<2xui32>
-      %1414 = stablehlo.or %1412, %1413 : tensor<2xui32>
-      %1415 = stablehlo.xor %1411, %1414 : tensor<2xui32>
-      %1416 = stablehlo.add %1411, %1415 : tensor<2xui32>
-      %1417 = stablehlo.shift_left %1415, %c_51 : tensor<2xui32>
-      %1418 = stablehlo.shift_right_logical %1415, %c_51 : tensor<2xui32>
-      %1419 = stablehlo.or %1417, %1418 : tensor<2xui32>
-      %1420 = stablehlo.xor %1416, %1419 : tensor<2xui32>
-      %1421 = stablehlo.add %1416, %1420 : tensor<2xui32>
-      %1422 = stablehlo.shift_left %1420, %c_50 : tensor<2xui32>
-      %1423 = stablehlo.shift_right_logical %1420, %c_22 : tensor<2xui32>
-      %1424 = stablehlo.or %1422, %1423 : tensor<2xui32>
-      %1425 = stablehlo.xor %1421, %1424 : tensor<2xui32>
-      %1426 = stablehlo.add %1421, %1381 : tensor<2xui32>
-      %1427 = stablehlo.add %1425, %1376 : tensor<2xui32>
-      %1428 = stablehlo.add %1427, %c_49 : tensor<2xui32>
-      %1429 = stablehlo.add %1426, %1428 : tensor<2xui32>
-      %1430 = stablehlo.shift_left %1428, %c_58 : tensor<2xui32>
-      %1431 = stablehlo.shift_right_logical %1428, %c_23 : tensor<2xui32>
-      %1432 = stablehlo.or %1430, %1431 : tensor<2xui32>
-      %1433 = stablehlo.xor %1429, %1432 : tensor<2xui32>
-      %1434 = stablehlo.add %1429, %1433 : tensor<2xui32>
-      %1435 = stablehlo.shift_left %1433, %c_57 : tensor<2xui32>
-      %1436 = stablehlo.shift_right_logical %1433, %c_53 : tensor<2xui32>
-      %1437 = stablehlo.or %1435, %1436 : tensor<2xui32>
-      %1438 = stablehlo.xor %1434, %1437 : tensor<2xui32>
-      %1439 = stablehlo.add %1434, %1438 : tensor<2xui32>
-      %1440 = stablehlo.shift_left %1438, %c_56 : tensor<2xui32>
-      %1441 = stablehlo.shift_right_logical %1438, %c_55 : tensor<2xui32>
-      %1442 = stablehlo.or %1440, %1441 : tensor<2xui32>
-      %1443 = stablehlo.xor %1439, %1442 : tensor<2xui32>
-      %1444 = stablehlo.add %1439, %1443 : tensor<2xui32>
-      %1445 = stablehlo.shift_left %1443, %c_55 : tensor<2xui32>
-      %1446 = stablehlo.shift_right_logical %1443, %c_56 : tensor<2xui32>
-      %1447 = stablehlo.or %1445, %1446 : tensor<2xui32>
-      %1448 = stablehlo.xor %1444, %1447 : tensor<2xui32>
-      %1449 = stablehlo.add %1444, %1376 : tensor<2xui32>
-      %1450 = stablehlo.add %1448, %1377 : tensor<2xui32>
-      %1451 = stablehlo.add %1450, %c_48 : tensor<2xui32>
-      %1452 = stablehlo.add %1449, %1451 : tensor<2xui32>
-      %1453 = stablehlo.shift_left %1451, %c_53 : tensor<2xui32>
-      %1454 = stablehlo.shift_right_logical %1451, %c_57 : tensor<2xui32>
-      %1455 = stablehlo.or %1453, %1454 : tensor<2xui32>
-      %1456 = stablehlo.xor %1452, %1455 : tensor<2xui32>
-      %1457 = stablehlo.add %1452, %1456 : tensor<2xui32>
-      %1458 = stablehlo.shift_left %1456, %c_52 : tensor<2xui32>
-      %1459 = stablehlo.shift_right_logical %1456, %c_48 : tensor<2xui32>
-      %1460 = stablehlo.or %1458, %1459 : tensor<2xui32>
-      %1461 = stablehlo.xor %1457, %1460 : tensor<2xui32>
-      %1462 = stablehlo.add %1457, %1461 : tensor<2xui32>
-      %1463 = stablehlo.shift_left %1461, %c_51 : tensor<2xui32>
-      %1464 = stablehlo.shift_right_logical %1461, %c_51 : tensor<2xui32>
-      %1465 = stablehlo.or %1463, %1464 : tensor<2xui32>
-      %1466 = stablehlo.xor %1462, %1465 : tensor<2xui32>
-      %1467 = stablehlo.add %1462, %1466 : tensor<2xui32>
-      %1468 = stablehlo.shift_left %1466, %c_50 : tensor<2xui32>
-      %1469 = stablehlo.shift_right_logical %1466, %c_22 : tensor<2xui32>
-      %1470 = stablehlo.or %1468, %1469 : tensor<2xui32>
-      %1471 = stablehlo.xor %1467, %1470 : tensor<2xui32>
-      %1472 = stablehlo.add %1467, %1377 : tensor<2xui32>
-      %1473 = stablehlo.add %1471, %1381 : tensor<2xui32>
-      %1474 = stablehlo.add %1473, %c_47 : tensor<2xui32>
-      %1475 = stablehlo.add %1472, %1474 : tensor<2xui32>
-      %1476 = stablehlo.shift_left %1474, %c_58 : tensor<2xui32>
-      %1477 = stablehlo.shift_right_logical %1474, %c_23 : tensor<2xui32>
-      %1478 = stablehlo.or %1476, %1477 : tensor<2xui32>
-      %1479 = stablehlo.xor %1475, %1478 : tensor<2xui32>
-      %1480 = stablehlo.add %1475, %1479 : tensor<2xui32>
-      %1481 = stablehlo.shift_left %1479, %c_57 : tensor<2xui32>
-      %1482 = stablehlo.shift_right_logical %1479, %c_53 : tensor<2xui32>
-      %1483 = stablehlo.or %1481, %1482 : tensor<2xui32>
-      %1484 = stablehlo.xor %1480, %1483 : tensor<2xui32>
-      %1485 = stablehlo.add %1480, %1484 : tensor<2xui32>
-      %1486 = stablehlo.shift_left %1484, %c_56 : tensor<2xui32>
-      %1487 = stablehlo.shift_right_logical %1484, %c_55 : tensor<2xui32>
-      %1488 = stablehlo.or %1486, %1487 : tensor<2xui32>
-      %1489 = stablehlo.xor %1485, %1488 : tensor<2xui32>
-      %1490 = stablehlo.add %1485, %1489 : tensor<2xui32>
-      %1491 = stablehlo.shift_left %1489, %c_55 : tensor<2xui32>
-      %1492 = stablehlo.shift_right_logical %1489, %c_56 : tensor<2xui32>
-      %1493 = stablehlo.or %1491, %1492 : tensor<2xui32>
-      %1494 = stablehlo.xor %1490, %1493 : tensor<2xui32>
-      %1495 = stablehlo.add %1490, %1381 : tensor<2xui32>
-      %1496 = stablehlo.add %1494, %1376 : tensor<2xui32>
-      %1497 = stablehlo.add %1496, %c_46 : tensor<2xui32>
-      %1498 = stablehlo.xor %1378, %1379 : tensor<2xui32>
-      %1499 = stablehlo.xor %1498, %c_59 : tensor<2xui32>
-      %1500 = stablehlo.add %c_24, %1379 : tensor<2xui32>
-      %1501 = stablehlo.add %1378, %1500 : tensor<2xui32>
-      %1502 = stablehlo.shift_left %1500, %c_58 : tensor<2xui32>
-      %1503 = stablehlo.shift_right_logical %1500, %c_23 : tensor<2xui32>
-      %1504 = stablehlo.or %1502, %1503 : tensor<2xui32>
-      %1505 = stablehlo.xor %1501, %1504 : tensor<2xui32>
-      %1506 = stablehlo.add %1501, %1505 : tensor<2xui32>
-      %1507 = stablehlo.shift_left %1505, %c_57 : tensor<2xui32>
-      %1508 = stablehlo.shift_right_logical %1505, %c_53 : tensor<2xui32>
-      %1509 = stablehlo.or %1507, %1508 : tensor<2xui32>
-      %1510 = stablehlo.xor %1506, %1509 : tensor<2xui32>
-      %1511 = stablehlo.add %1506, %1510 : tensor<2xui32>
-      %1512 = stablehlo.shift_left %1510, %c_56 : tensor<2xui32>
-      %1513 = stablehlo.shift_right_logical %1510, %c_55 : tensor<2xui32>
-      %1514 = stablehlo.or %1512, %1513 : tensor<2xui32>
-      %1515 = stablehlo.xor %1511, %1514 : tensor<2xui32>
-      %1516 = stablehlo.add %1511, %1515 : tensor<2xui32>
-      %1517 = stablehlo.shift_left %1515, %c_55 : tensor<2xui32>
-      %1518 = stablehlo.shift_right_logical %1515, %c_56 : tensor<2xui32>
-      %1519 = stablehlo.or %1517, %1518 : tensor<2xui32>
-      %1520 = stablehlo.xor %1516, %1519 : tensor<2xui32>
-      %1521 = stablehlo.add %1516, %1379 : tensor<2xui32>
-      %1522 = stablehlo.add %1520, %1499 : tensor<2xui32>
-      %1523 = stablehlo.add %1522, %c_54 : tensor<2xui32>
-      %1524 = stablehlo.add %1521, %1523 : tensor<2xui32>
-      %1525 = stablehlo.shift_left %1523, %c_53 : tensor<2xui32>
-      %1526 = stablehlo.shift_right_logical %1523, %c_57 : tensor<2xui32>
-      %1527 = stablehlo.or %1525, %1526 : tensor<2xui32>
-      %1528 = stablehlo.xor %1524, %1527 : tensor<2xui32>
-      %1529 = stablehlo.add %1524, %1528 : tensor<2xui32>
-      %1530 = stablehlo.shift_left %1528, %c_52 : tensor<2xui32>
-      %1531 = stablehlo.shift_right_logical %1528, %c_48 : tensor<2xui32>
-      %1532 = stablehlo.or %1530, %1531 : tensor<2xui32>
-      %1533 = stablehlo.xor %1529, %1532 : tensor<2xui32>
-      %1534 = stablehlo.add %1529, %1533 : tensor<2xui32>
-      %1535 = stablehlo.shift_left %1533, %c_51 : tensor<2xui32>
-      %1536 = stablehlo.shift_right_logical %1533, %c_51 : tensor<2xui32>
-      %1537 = stablehlo.or %1535, %1536 : tensor<2xui32>
-      %1538 = stablehlo.xor %1534, %1537 : tensor<2xui32>
-      %1539 = stablehlo.add %1534, %1538 : tensor<2xui32>
-      %1540 = stablehlo.shift_left %1538, %c_50 : tensor<2xui32>
-      %1541 = stablehlo.shift_right_logical %1538, %c_22 : tensor<2xui32>
-      %1542 = stablehlo.or %1540, %1541 : tensor<2xui32>
-      %1543 = stablehlo.xor %1539, %1542 : tensor<2xui32>
-      %1544 = stablehlo.add %1539, %1499 : tensor<2xui32>
-      %1545 = stablehlo.add %1543, %1378 : tensor<2xui32>
-      %1546 = stablehlo.add %1545, %c_49 : tensor<2xui32>
-      %1547 = stablehlo.add %1544, %1546 : tensor<2xui32>
-      %1548 = stablehlo.shift_left %1546, %c_58 : tensor<2xui32>
-      %1549 = stablehlo.shift_right_logical %1546, %c_23 : tensor<2xui32>
-      %1550 = stablehlo.or %1548, %1549 : tensor<2xui32>
-      %1551 = stablehlo.xor %1547, %1550 : tensor<2xui32>
-      %1552 = stablehlo.add %1547, %1551 : tensor<2xui32>
-      %1553 = stablehlo.shift_left %1551, %c_57 : tensor<2xui32>
-      %1554 = stablehlo.shift_right_logical %1551, %c_53 : tensor<2xui32>
-      %1555 = stablehlo.or %1553, %1554 : tensor<2xui32>
-      %1556 = stablehlo.xor %1552, %1555 : tensor<2xui32>
-      %1557 = stablehlo.add %1552, %1556 : tensor<2xui32>
-      %1558 = stablehlo.shift_left %1556, %c_56 : tensor<2xui32>
-      %1559 = stablehlo.shift_right_logical %1556, %c_55 : tensor<2xui32>
-      %1560 = stablehlo.or %1558, %1559 : tensor<2xui32>
-      %1561 = stablehlo.xor %1557, %1560 : tensor<2xui32>
-      %1562 = stablehlo.add %1557, %1561 : tensor<2xui32>
-      %1563 = stablehlo.shift_left %1561, %c_55 : tensor<2xui32>
-      %1564 = stablehlo.shift_right_logical %1561, %c_56 : tensor<2xui32>
-      %1565 = stablehlo.or %1563, %1564 : tensor<2xui32>
-      %1566 = stablehlo.xor %1562, %1565 : tensor<2xui32>
-      %1567 = stablehlo.add %1562, %1378 : tensor<2xui32>
-      %1568 = stablehlo.add %1566, %1379 : tensor<2xui32>
-      %1569 = stablehlo.add %1568, %c_48 : tensor<2xui32>
-      %1570 = stablehlo.add %1567, %1569 : tensor<2xui32>
-      %1571 = stablehlo.shift_left %1569, %c_53 : tensor<2xui32>
-      %1572 = stablehlo.shift_right_logical %1569, %c_57 : tensor<2xui32>
-      %1573 = stablehlo.or %1571, %1572 : tensor<2xui32>
-      %1574 = stablehlo.xor %1570, %1573 : tensor<2xui32>
-      %1575 = stablehlo.add %1570, %1574 : tensor<2xui32>
-      %1576 = stablehlo.shift_left %1574, %c_52 : tensor<2xui32>
-      %1577 = stablehlo.shift_right_logical %1574, %c_48 : tensor<2xui32>
-      %1578 = stablehlo.or %1576, %1577 : tensor<2xui32>
-      %1579 = stablehlo.xor %1575, %1578 : tensor<2xui32>
-      %1580 = stablehlo.add %1575, %1579 : tensor<2xui32>
-      %1581 = stablehlo.shift_left %1579, %c_51 : tensor<2xui32>
-      %1582 = stablehlo.shift_right_logical %1579, %c_51 : tensor<2xui32>
-      %1583 = stablehlo.or %1581, %1582 : tensor<2xui32>
-      %1584 = stablehlo.xor %1580, %1583 : tensor<2xui32>
-      %1585 = stablehlo.add %1580, %1584 : tensor<2xui32>
-      %1586 = stablehlo.shift_left %1584, %c_50 : tensor<2xui32>
-      %1587 = stablehlo.shift_right_logical %1584, %c_22 : tensor<2xui32>
-      %1588 = stablehlo.or %1586, %1587 : tensor<2xui32>
-      %1589 = stablehlo.xor %1585, %1588 : tensor<2xui32>
-      %1590 = stablehlo.add %1585, %1379 : tensor<2xui32>
-      %1591 = stablehlo.add %1589, %1499 : tensor<2xui32>
-      %1592 = stablehlo.add %1591, %c_47 : tensor<2xui32>
-      %1593 = stablehlo.add %1590, %1592 : tensor<2xui32>
-      %1594 = stablehlo.shift_left %1592, %c_58 : tensor<2xui32>
-      %1595 = stablehlo.shift_right_logical %1592, %c_23 : tensor<2xui32>
-      %1596 = stablehlo.or %1594, %1595 : tensor<2xui32>
-      %1597 = stablehlo.xor %1593, %1596 : tensor<2xui32>
-      %1598 = stablehlo.add %1593, %1597 : tensor<2xui32>
-      %1599 = stablehlo.shift_left %1597, %c_57 : tensor<2xui32>
-      %1600 = stablehlo.shift_right_logical %1597, %c_53 : tensor<2xui32>
-      %1601 = stablehlo.or %1599, %1600 : tensor<2xui32>
-      %1602 = stablehlo.xor %1598, %1601 : tensor<2xui32>
-      %1603 = stablehlo.add %1598, %1602 : tensor<2xui32>
-      %1604 = stablehlo.shift_left %1602, %c_56 : tensor<2xui32>
-      %1605 = stablehlo.shift_right_logical %1602, %c_55 : tensor<2xui32>
-      %1606 = stablehlo.or %1604, %1605 : tensor<2xui32>
-      %1607 = stablehlo.xor %1603, %1606 : tensor<2xui32>
-      %1608 = stablehlo.add %1603, %1607 : tensor<2xui32>
-      %1609 = stablehlo.shift_left %1607, %c_55 : tensor<2xui32>
-      %1610 = stablehlo.shift_right_logical %1607, %c_56 : tensor<2xui32>
-      %1611 = stablehlo.or %1609, %1610 : tensor<2xui32>
-      %1612 = stablehlo.xor %1608, %1611 : tensor<2xui32>
-      %1613 = stablehlo.add %1608, %1499 : tensor<2xui32>
-      %1614 = stablehlo.add %1612, %1378 : tensor<2xui32>
-      %1615 = stablehlo.add %1614, %c_46 : tensor<2xui32>
-      %1616 = stablehlo.slice %1495 [0:1] : (tensor<2xui32>) -> tensor<1xui32>
-      %1617 = stablehlo.slice %1497 [0:1] : (tensor<2xui32>) -> tensor<1xui32>
-      %1618 = stablehlo.slice %1613 [0:1] : (tensor<2xui32>) -> tensor<1xui32>
-      %1619 = stablehlo.slice %1615 [0:1] : (tensor<2xui32>) -> tensor<1xui32>
-      %1620 = stablehlo.concatenate %1616, %1617, %1618, %1619, dim = 0 : (tensor<1xui32>, tensor<1xui32>, tensor<1xui32>, tensor<1xui32>) -> tensor<4xui32>
-      %1621 = stablehlo.reshape %1620 : (tensor<4xui32>) -> tensor<2x2xui32>
-      %1622 = stablehlo.bitcast_convert %1621 : (tensor<2x2xui32>) -> tensor<2xui64>
-      %1623 = stablehlo.slice %1495 [1:2] : (tensor<2xui32>) -> tensor<1xui32>
-      %1624 = stablehlo.slice %1497 [1:2] : (tensor<2xui32>) -> tensor<1xui32>
-      %1625 = stablehlo.slice %1613 [1:2] : (tensor<2xui32>) -> tensor<1xui32>
-      %1626 = stablehlo.slice %1615 [1:2] : (tensor<2xui32>) -> tensor<1xui32>
-      %1627 = stablehlo.concatenate %1623, %1624, %1625, %1626, dim = 0 : (tensor<1xui32>, tensor<1xui32>, tensor<1xui32>, tensor<1xui32>) -> tensor<4xui32>
-      %1628 = stablehlo.reshape %1627 : (tensor<4xui32>) -> tensor<2x2xui32>
-      %1629 = stablehlo.bitcast_convert %1628 : (tensor<2x2xui32>) -> tensor<2xui64>
-      %1630 = stablehlo.shift_left %c_66, %iterArg_81 : tensor<i64>
-      %1631:21 = stablehlo.while(%iterArg_92 = %iterArg, %iterArg_93 = %iterArg_72, %iterArg_94 = %iterArg_73, %iterArg_95 = %iterArg_74, %iterArg_96 = %iterArg_75, %iterArg_97 = %iterArg_76, %iterArg_98 = %iterArg_77, %iterArg_99 = %iterArg_78, %iterArg_100 = %iterArg_79, %iterArg_101 = %iterArg_80, %iterArg_102 = %iterArg_81, %iterArg_103 = %iterArg_82, %iterArg_104 = %iterArg_83, %iterArg_105 = %iterArg_84, %iterArg_106 = %iterArg_85, %iterArg_107 = %c_67, %iterArg_108 = %iterArg_86, %iterArg_109 = %1622, %iterArg_110 = %cst_61, %iterArg_111 = %cst_61, %iterArg_112 = %c_67) : tensor<1x2xf64>, tensor<1x2xf64>, tensor<1x2xf64>, tensor<1x2xf64>, tensor<1x2xf64>, tensor<1x2xf64>, tensor<1x2xf64>, tensor<1x2xf64>, tensor<f64>, tensor<f64>, tensor<i64>, tensor<f64>, tensor<i1>, tensor<i1>, tensor<f64>, tensor<i64>, tensor<1x2xf64>, tensor<2xui64>, tensor<3x2xf64>, tensor<3x2xf64>, tensor<i64>
+      // Direction sampling via rng_bit_generator (replaces ~270 lines of Threefry)
+      %rng1, %rng1_out = stablehlo.rng_bit_generator %o16, algorithm = DEFAULT
+        : (tensor<2xui64>) -> (tensor<2xui64>, tensor<ui64>)
+      %ds = stablehlo.shift_right_logical %rng1_out, %c_shift12 : tensor<ui64>
+      %do2 = stablehlo.or %ds, %c_magic : tensor<ui64>
+      %df = stablehlo.bitcast_convert %do2 : (tensor<ui64>) -> tensor<f64>
+      %dv = stablehlo.subtract %df, %cst_one : tensor<f64>
+      %dir = stablehlo.compare LT, %dv, %cst_half, FLOAT : (tensor<f64>, tensor<f64>) -> tensor<i1>
+      // Additional RNG keys (replaces ~270 lines of Threefry)
+      %rng2, %rng2_out = stablehlo.rng_bit_generator %rng1, algorithm = DEFAULT
+        : (tensor<2xui64>) -> (tensor<2xui64>, tensor<ui64>)
+      %rng3, %rng3_out = stablehlo.rng_bit_generator %rng2, algorithm = DEFAULT
+        : (tensor<2xui64>) -> (tensor<2xui64>, tensor<ui64>)
+      %depth_lim = stablehlo.shift_left %c_1, %o10 : tensor<i64>
+      // Middle while: 21 args matching NUTS doubling state
+      %mid:21 = stablehlo.while(
+        %m0 = %o0, %m1 = %o1, %m2 = %o2,
+        %m3 = %o3, %m4 = %o4, %m5 = %o5,
+        %m6 = %o6, %m7 = %o7,
+        %m8 = %o8, %m9 = %o9, %m10 = %o10, %m11 = %o11,
+        %m12 = %o12, %m13 = %o13, %m14 = %o14,
+        %m15 = %c_0, %m16 = %o15,
+        %m17 = %rng2, %m18 = %cst_3x2, %m19 = %cst_3x2, %m20 = %c_0
+      ) : tensor<1x2xf64>, tensor<1x2xf64>, tensor<1x2xf64>,
+          tensor<1x2xf64>, tensor<1x2xf64>, tensor<1x2xf64>,
+          tensor<1x2xf64>, tensor<1x2xf64>,
+          tensor<f64>, tensor<f64>, tensor<i64>, tensor<f64>,
+          tensor<i1>, tensor<i1>, tensor<f64>,
+          tensor<i64>, tensor<1x2xf64>,
+          tensor<2xui64>, tensor<3x2xf64>, tensor<3x2xf64>, tensor<i64>
       cond {
-        %1677 = stablehlo.compare  LT, %iterArg_107, %1630,  SIGNED : (tensor<i64>, tensor<i64>) -> tensor<i1>
-        %1678 = stablehlo.not %iterArg_104 : tensor<i1>
-        %1679 = stablehlo.not %iterArg_105 : tensor<i1>
-        %1680 = stablehlo.and %1677, %1678 : tensor<i1>
-        %1681 = stablehlo.and %1680, %1679 : tensor<i1>
-        stablehlo.return %1681 : tensor<i1>
+        %mc = stablehlo.compare LT, %m15, %depth_lim, SIGNED : (tensor<i64>, tensor<i64>) -> tensor<i1>
+        %mn1 = stablehlo.not %m12 : tensor<i1>
+        %mn2 = stablehlo.not %m13 : tensor<i1>
+        %ma1 = stablehlo.and %mc, %mn1 : tensor<i1>
+        %ma2 = stablehlo.and %ma1, %mn2 : tensor<i1>
+        stablehlo.return %ma2 : tensor<i1>
       } do {
-        %1677 = stablehlo.select %1369, %iterArg_95, %iterArg_92 : tensor<i1>, tensor<1x2xf64>
-        %1678 = stablehlo.select %1369, %iterArg_96, %iterArg_93 : tensor<i1>, tensor<1x2xf64>
-        %1679 = stablehlo.select %1369, %iterArg_97, %iterArg_94 : tensor<i1>, tensor<1x2xf64>
-        %1680 = stablehlo.bitcast_convert %iterArg_109 : (tensor<2xui64>) -> tensor<2x2xui32>
-        %1681 = stablehlo.reshape %1680 : (tensor<2x2xui32>) -> tensor<4xui32>
-        %1682 = stablehlo.slice %1681 [0:1] : (tensor<4xui32>) -> tensor<1xui32>
-        %1683 = stablehlo.slice %1681 [1:2] : (tensor<4xui32>) -> tensor<1xui32>
-        %1684 = stablehlo.slice %1681 [2:3] : (tensor<4xui32>) -> tensor<1xui32>
-        %1685 = stablehlo.slice %1681 [3:4] : (tensor<4xui32>) -> tensor<1xui32>
-        %1686 = stablehlo.broadcast_in_dim %1682, dims = [0] : (tensor<1xui32>) -> tensor<2xui32>
-        %1687 = stablehlo.broadcast_in_dim %1683, dims = [0] : (tensor<1xui32>) -> tensor<2xui32>
-        %1688 = stablehlo.broadcast_in_dim %1684, dims = [0] : (tensor<1xui32>) -> tensor<2xui32>
-        %1689 = stablehlo.broadcast_in_dim %1685, dims = [0] : (tensor<1xui32>) -> tensor<2xui32>
-        %1690 = stablehlo.xor %1686, %1687 : tensor<2xui32>
-        %1691 = stablehlo.xor %1690, %c_59 : tensor<2xui32>
-        %1692 = stablehlo.add %c_24, %1687 : tensor<2xui32>
-        %1693 = stablehlo.add %1686, %1692 : tensor<2xui32>
-        %1694 = stablehlo.shift_left %1692, %c_58 : tensor<2xui32>
-        %1695 = stablehlo.shift_right_logical %1692, %c_23 : tensor<2xui32>
-        %1696 = stablehlo.or %1694, %1695 : tensor<2xui32>
-        %1697 = stablehlo.xor %1693, %1696 : tensor<2xui32>
-        %1698 = stablehlo.add %1693, %1697 : tensor<2xui32>
-        %1699 = stablehlo.shift_left %1697, %c_57 : tensor<2xui32>
-        %1700 = stablehlo.shift_right_logical %1697, %c_53 : tensor<2xui32>
-        %1701 = stablehlo.or %1699, %1700 : tensor<2xui32>
-        %1702 = stablehlo.xor %1698, %1701 : tensor<2xui32>
-        %1703 = stablehlo.add %1698, %1702 : tensor<2xui32>
-        %1704 = stablehlo.shift_left %1702, %c_56 : tensor<2xui32>
-        %1705 = stablehlo.shift_right_logical %1702, %c_55 : tensor<2xui32>
-        %1706 = stablehlo.or %1704, %1705 : tensor<2xui32>
-        %1707 = stablehlo.xor %1703, %1706 : tensor<2xui32>
-        %1708 = stablehlo.add %1703, %1707 : tensor<2xui32>
-        %1709 = stablehlo.shift_left %1707, %c_55 : tensor<2xui32>
-        %1710 = stablehlo.shift_right_logical %1707, %c_56 : tensor<2xui32>
-        %1711 = stablehlo.or %1709, %1710 : tensor<2xui32>
-        %1712 = stablehlo.xor %1708, %1711 : tensor<2xui32>
-        %1713 = stablehlo.add %1708, %1687 : tensor<2xui32>
-        %1714 = stablehlo.add %1712, %1691 : tensor<2xui32>
-        %1715 = stablehlo.add %1714, %c_54 : tensor<2xui32>
-        %1716 = stablehlo.add %1713, %1715 : tensor<2xui32>
-        %1717 = stablehlo.shift_left %1715, %c_53 : tensor<2xui32>
-        %1718 = stablehlo.shift_right_logical %1715, %c_57 : tensor<2xui32>
-        %1719 = stablehlo.or %1717, %1718 : tensor<2xui32>
-        %1720 = stablehlo.xor %1716, %1719 : tensor<2xui32>
-        %1721 = stablehlo.add %1716, %1720 : tensor<2xui32>
-        %1722 = stablehlo.shift_left %1720, %c_52 : tensor<2xui32>
-        %1723 = stablehlo.shift_right_logical %1720, %c_48 : tensor<2xui32>
-        %1724 = stablehlo.or %1722, %1723 : tensor<2xui32>
-        %1725 = stablehlo.xor %1721, %1724 : tensor<2xui32>
-        %1726 = stablehlo.add %1721, %1725 : tensor<2xui32>
-        %1727 = stablehlo.shift_left %1725, %c_51 : tensor<2xui32>
-        %1728 = stablehlo.shift_right_logical %1725, %c_51 : tensor<2xui32>
-        %1729 = stablehlo.or %1727, %1728 : tensor<2xui32>
-        %1730 = stablehlo.xor %1726, %1729 : tensor<2xui32>
-        %1731 = stablehlo.add %1726, %1730 : tensor<2xui32>
-        %1732 = stablehlo.shift_left %1730, %c_50 : tensor<2xui32>
-        %1733 = stablehlo.shift_right_logical %1730, %c_22 : tensor<2xui32>
-        %1734 = stablehlo.or %1732, %1733 : tensor<2xui32>
-        %1735 = stablehlo.xor %1731, %1734 : tensor<2xui32>
-        %1736 = stablehlo.add %1731, %1691 : tensor<2xui32>
-        %1737 = stablehlo.add %1735, %1686 : tensor<2xui32>
-        %1738 = stablehlo.add %1737, %c_49 : tensor<2xui32>
-        %1739 = stablehlo.add %1736, %1738 : tensor<2xui32>
-        %1740 = stablehlo.shift_left %1738, %c_58 : tensor<2xui32>
-        %1741 = stablehlo.shift_right_logical %1738, %c_23 : tensor<2xui32>
-        %1742 = stablehlo.or %1740, %1741 : tensor<2xui32>
-        %1743 = stablehlo.xor %1739, %1742 : tensor<2xui32>
-        %1744 = stablehlo.add %1739, %1743 : tensor<2xui32>
-        %1745 = stablehlo.shift_left %1743, %c_57 : tensor<2xui32>
-        %1746 = stablehlo.shift_right_logical %1743, %c_53 : tensor<2xui32>
-        %1747 = stablehlo.or %1745, %1746 : tensor<2xui32>
-        %1748 = stablehlo.xor %1744, %1747 : tensor<2xui32>
-        %1749 = stablehlo.add %1744, %1748 : tensor<2xui32>
-        %1750 = stablehlo.shift_left %1748, %c_56 : tensor<2xui32>
-        %1751 = stablehlo.shift_right_logical %1748, %c_55 : tensor<2xui32>
-        %1752 = stablehlo.or %1750, %1751 : tensor<2xui32>
-        %1753 = stablehlo.xor %1749, %1752 : tensor<2xui32>
-        %1754 = stablehlo.add %1749, %1753 : tensor<2xui32>
-        %1755 = stablehlo.shift_left %1753, %c_55 : tensor<2xui32>
-        %1756 = stablehlo.shift_right_logical %1753, %c_56 : tensor<2xui32>
-        %1757 = stablehlo.or %1755, %1756 : tensor<2xui32>
-        %1758 = stablehlo.xor %1754, %1757 : tensor<2xui32>
-        %1759 = stablehlo.add %1754, %1686 : tensor<2xui32>
-        %1760 = stablehlo.add %1758, %1687 : tensor<2xui32>
-        %1761 = stablehlo.add %1760, %c_48 : tensor<2xui32>
-        %1762 = stablehlo.add %1759, %1761 : tensor<2xui32>
-        %1763 = stablehlo.shift_left %1761, %c_53 : tensor<2xui32>
-        %1764 = stablehlo.shift_right_logical %1761, %c_57 : tensor<2xui32>
-        %1765 = stablehlo.or %1763, %1764 : tensor<2xui32>
-        %1766 = stablehlo.xor %1762, %1765 : tensor<2xui32>
-        %1767 = stablehlo.add %1762, %1766 : tensor<2xui32>
-        %1768 = stablehlo.shift_left %1766, %c_52 : tensor<2xui32>
-        %1769 = stablehlo.shift_right_logical %1766, %c_48 : tensor<2xui32>
-        %1770 = stablehlo.or %1768, %1769 : tensor<2xui32>
-        %1771 = stablehlo.xor %1767, %1770 : tensor<2xui32>
-        %1772 = stablehlo.add %1767, %1771 : tensor<2xui32>
-        %1773 = stablehlo.shift_left %1771, %c_51 : tensor<2xui32>
-        %1774 = stablehlo.shift_right_logical %1771, %c_51 : tensor<2xui32>
-        %1775 = stablehlo.or %1773, %1774 : tensor<2xui32>
-        %1776 = stablehlo.xor %1772, %1775 : tensor<2xui32>
-        %1777 = stablehlo.add %1772, %1776 : tensor<2xui32>
-        %1778 = stablehlo.shift_left %1776, %c_50 : tensor<2xui32>
-        %1779 = stablehlo.shift_right_logical %1776, %c_22 : tensor<2xui32>
-        %1780 = stablehlo.or %1778, %1779 : tensor<2xui32>
-        %1781 = stablehlo.xor %1777, %1780 : tensor<2xui32>
-        %1782 = stablehlo.add %1777, %1687 : tensor<2xui32>
-        %1783 = stablehlo.add %1781, %1691 : tensor<2xui32>
-        %1784 = stablehlo.add %1783, %c_47 : tensor<2xui32>
-        %1785 = stablehlo.add %1782, %1784 : tensor<2xui32>
-        %1786 = stablehlo.shift_left %1784, %c_58 : tensor<2xui32>
-        %1787 = stablehlo.shift_right_logical %1784, %c_23 : tensor<2xui32>
-        %1788 = stablehlo.or %1786, %1787 : tensor<2xui32>
-        %1789 = stablehlo.xor %1785, %1788 : tensor<2xui32>
-        %1790 = stablehlo.add %1785, %1789 : tensor<2xui32>
-        %1791 = stablehlo.shift_left %1789, %c_57 : tensor<2xui32>
-        %1792 = stablehlo.shift_right_logical %1789, %c_53 : tensor<2xui32>
-        %1793 = stablehlo.or %1791, %1792 : tensor<2xui32>
-        %1794 = stablehlo.xor %1790, %1793 : tensor<2xui32>
-        %1795 = stablehlo.add %1790, %1794 : tensor<2xui32>
-        %1796 = stablehlo.shift_left %1794, %c_56 : tensor<2xui32>
-        %1797 = stablehlo.shift_right_logical %1794, %c_55 : tensor<2xui32>
-        %1798 = stablehlo.or %1796, %1797 : tensor<2xui32>
-        %1799 = stablehlo.xor %1795, %1798 : tensor<2xui32>
-        %1800 = stablehlo.add %1795, %1799 : tensor<2xui32>
-        %1801 = stablehlo.shift_left %1799, %c_55 : tensor<2xui32>
-        %1802 = stablehlo.shift_right_logical %1799, %c_56 : tensor<2xui32>
-        %1803 = stablehlo.or %1801, %1802 : tensor<2xui32>
-        %1804 = stablehlo.xor %1800, %1803 : tensor<2xui32>
-        %1805 = stablehlo.add %1800, %1691 : tensor<2xui32>
-        %1806 = stablehlo.add %1804, %1686 : tensor<2xui32>
-        %1807 = stablehlo.add %1806, %c_46 : tensor<2xui32>
-        %1808 = stablehlo.xor %1688, %1689 : tensor<2xui32>
-        %1809 = stablehlo.xor %1808, %c_59 : tensor<2xui32>
-        %1810 = stablehlo.add %c_24, %1689 : tensor<2xui32>
-        %1811 = stablehlo.add %1688, %1810 : tensor<2xui32>
-        %1812 = stablehlo.shift_left %1810, %c_58 : tensor<2xui32>
-        %1813 = stablehlo.shift_right_logical %1810, %c_23 : tensor<2xui32>
-        %1814 = stablehlo.or %1812, %1813 : tensor<2xui32>
-        %1815 = stablehlo.xor %1811, %1814 : tensor<2xui32>
-        %1816 = stablehlo.add %1811, %1815 : tensor<2xui32>
-        %1817 = stablehlo.shift_left %1815, %c_57 : tensor<2xui32>
-        %1818 = stablehlo.shift_right_logical %1815, %c_53 : tensor<2xui32>
-        %1819 = stablehlo.or %1817, %1818 : tensor<2xui32>
-        %1820 = stablehlo.xor %1816, %1819 : tensor<2xui32>
-        %1821 = stablehlo.add %1816, %1820 : tensor<2xui32>
-        %1822 = stablehlo.shift_left %1820, %c_56 : tensor<2xui32>
-        %1823 = stablehlo.shift_right_logical %1820, %c_55 : tensor<2xui32>
-        %1824 = stablehlo.or %1822, %1823 : tensor<2xui32>
-        %1825 = stablehlo.xor %1821, %1824 : tensor<2xui32>
-        %1826 = stablehlo.add %1821, %1825 : tensor<2xui32>
-        %1827 = stablehlo.shift_left %1825, %c_55 : tensor<2xui32>
-        %1828 = stablehlo.shift_right_logical %1825, %c_56 : tensor<2xui32>
-        %1829 = stablehlo.or %1827, %1828 : tensor<2xui32>
-        %1830 = stablehlo.xor %1826, %1829 : tensor<2xui32>
-        %1831 = stablehlo.add %1826, %1689 : tensor<2xui32>
-        %1832 = stablehlo.add %1830, %1809 : tensor<2xui32>
-        %1833 = stablehlo.add %1832, %c_54 : tensor<2xui32>
-        %1834 = stablehlo.add %1831, %1833 : tensor<2xui32>
-        %1835 = stablehlo.shift_left %1833, %c_53 : tensor<2xui32>
-        %1836 = stablehlo.shift_right_logical %1833, %c_57 : tensor<2xui32>
-        %1837 = stablehlo.or %1835, %1836 : tensor<2xui32>
-        %1838 = stablehlo.xor %1834, %1837 : tensor<2xui32>
-        %1839 = stablehlo.add %1834, %1838 : tensor<2xui32>
-        %1840 = stablehlo.shift_left %1838, %c_52 : tensor<2xui32>
-        %1841 = stablehlo.shift_right_logical %1838, %c_48 : tensor<2xui32>
-        %1842 = stablehlo.or %1840, %1841 : tensor<2xui32>
-        %1843 = stablehlo.xor %1839, %1842 : tensor<2xui32>
-        %1844 = stablehlo.add %1839, %1843 : tensor<2xui32>
-        %1845 = stablehlo.shift_left %1843, %c_51 : tensor<2xui32>
-        %1846 = stablehlo.shift_right_logical %1843, %c_51 : tensor<2xui32>
-        %1847 = stablehlo.or %1845, %1846 : tensor<2xui32>
-        %1848 = stablehlo.xor %1844, %1847 : tensor<2xui32>
-        %1849 = stablehlo.add %1844, %1848 : tensor<2xui32>
-        %1850 = stablehlo.shift_left %1848, %c_50 : tensor<2xui32>
-        %1851 = stablehlo.shift_right_logical %1848, %c_22 : tensor<2xui32>
-        %1852 = stablehlo.or %1850, %1851 : tensor<2xui32>
-        %1853 = stablehlo.xor %1849, %1852 : tensor<2xui32>
-        %1854 = stablehlo.add %1849, %1809 : tensor<2xui32>
-        %1855 = stablehlo.add %1853, %1688 : tensor<2xui32>
-        %1856 = stablehlo.add %1855, %c_49 : tensor<2xui32>
-        %1857 = stablehlo.add %1854, %1856 : tensor<2xui32>
-        %1858 = stablehlo.shift_left %1856, %c_58 : tensor<2xui32>
-        %1859 = stablehlo.shift_right_logical %1856, %c_23 : tensor<2xui32>
-        %1860 = stablehlo.or %1858, %1859 : tensor<2xui32>
-        %1861 = stablehlo.xor %1857, %1860 : tensor<2xui32>
-        %1862 = stablehlo.add %1857, %1861 : tensor<2xui32>
-        %1863 = stablehlo.shift_left %1861, %c_57 : tensor<2xui32>
-        %1864 = stablehlo.shift_right_logical %1861, %c_53 : tensor<2xui32>
-        %1865 = stablehlo.or %1863, %1864 : tensor<2xui32>
-        %1866 = stablehlo.xor %1862, %1865 : tensor<2xui32>
-        %1867 = stablehlo.add %1862, %1866 : tensor<2xui32>
-        %1868 = stablehlo.shift_left %1866, %c_56 : tensor<2xui32>
-        %1869 = stablehlo.shift_right_logical %1866, %c_55 : tensor<2xui32>
-        %1870 = stablehlo.or %1868, %1869 : tensor<2xui32>
-        %1871 = stablehlo.xor %1867, %1870 : tensor<2xui32>
-        %1872 = stablehlo.add %1867, %1871 : tensor<2xui32>
-        %1873 = stablehlo.shift_left %1871, %c_55 : tensor<2xui32>
-        %1874 = stablehlo.shift_right_logical %1871, %c_56 : tensor<2xui32>
-        %1875 = stablehlo.or %1873, %1874 : tensor<2xui32>
-        %1876 = stablehlo.xor %1872, %1875 : tensor<2xui32>
-        %1877 = stablehlo.add %1872, %1688 : tensor<2xui32>
-        %1878 = stablehlo.add %1876, %1689 : tensor<2xui32>
-        %1879 = stablehlo.add %1878, %c_48 : tensor<2xui32>
-        %1880 = stablehlo.add %1877, %1879 : tensor<2xui32>
-        %1881 = stablehlo.shift_left %1879, %c_53 : tensor<2xui32>
-        %1882 = stablehlo.shift_right_logical %1879, %c_57 : tensor<2xui32>
-        %1883 = stablehlo.or %1881, %1882 : tensor<2xui32>
-        %1884 = stablehlo.xor %1880, %1883 : tensor<2xui32>
-        %1885 = stablehlo.add %1880, %1884 : tensor<2xui32>
-        %1886 = stablehlo.shift_left %1884, %c_52 : tensor<2xui32>
-        %1887 = stablehlo.shift_right_logical %1884, %c_48 : tensor<2xui32>
-        %1888 = stablehlo.or %1886, %1887 : tensor<2xui32>
-        %1889 = stablehlo.xor %1885, %1888 : tensor<2xui32>
-        %1890 = stablehlo.add %1885, %1889 : tensor<2xui32>
-        %1891 = stablehlo.shift_left %1889, %c_51 : tensor<2xui32>
-        %1892 = stablehlo.shift_right_logical %1889, %c_51 : tensor<2xui32>
-        %1893 = stablehlo.or %1891, %1892 : tensor<2xui32>
-        %1894 = stablehlo.xor %1890, %1893 : tensor<2xui32>
-        %1895 = stablehlo.add %1890, %1894 : tensor<2xui32>
-        %1896 = stablehlo.shift_left %1894, %c_50 : tensor<2xui32>
-        %1897 = stablehlo.shift_right_logical %1894, %c_22 : tensor<2xui32>
-        %1898 = stablehlo.or %1896, %1897 : tensor<2xui32>
-        %1899 = stablehlo.xor %1895, %1898 : tensor<2xui32>
-        %1900 = stablehlo.add %1895, %1689 : tensor<2xui32>
-        %1901 = stablehlo.add %1899, %1809 : tensor<2xui32>
-        %1902 = stablehlo.add %1901, %c_47 : tensor<2xui32>
-        %1903 = stablehlo.add %1900, %1902 : tensor<2xui32>
-        %1904 = stablehlo.shift_left %1902, %c_58 : tensor<2xui32>
-        %1905 = stablehlo.shift_right_logical %1902, %c_23 : tensor<2xui32>
-        %1906 = stablehlo.or %1904, %1905 : tensor<2xui32>
-        %1907 = stablehlo.xor %1903, %1906 : tensor<2xui32>
-        %1908 = stablehlo.add %1903, %1907 : tensor<2xui32>
-        %1909 = stablehlo.shift_left %1907, %c_57 : tensor<2xui32>
-        %1910 = stablehlo.shift_right_logical %1907, %c_53 : tensor<2xui32>
-        %1911 = stablehlo.or %1909, %1910 : tensor<2xui32>
-        %1912 = stablehlo.xor %1908, %1911 : tensor<2xui32>
-        %1913 = stablehlo.add %1908, %1912 : tensor<2xui32>
-        %1914 = stablehlo.shift_left %1912, %c_56 : tensor<2xui32>
-        %1915 = stablehlo.shift_right_logical %1912, %c_55 : tensor<2xui32>
-        %1916 = stablehlo.or %1914, %1915 : tensor<2xui32>
-        %1917 = stablehlo.xor %1913, %1916 : tensor<2xui32>
-        %1918 = stablehlo.add %1913, %1917 : tensor<2xui32>
-        %1919 = stablehlo.shift_left %1917, %c_55 : tensor<2xui32>
-        %1920 = stablehlo.shift_right_logical %1917, %c_56 : tensor<2xui32>
-        %1921 = stablehlo.or %1919, %1920 : tensor<2xui32>
-        %1922 = stablehlo.xor %1918, %1921 : tensor<2xui32>
-        %1923 = stablehlo.add %1918, %1809 : tensor<2xui32>
-        %1924 = stablehlo.add %1922, %1688 : tensor<2xui32>
-        %1925 = stablehlo.add %1924, %c_46 : tensor<2xui32>
-        %1926 = stablehlo.slice %1805 [0:1] : (tensor<2xui32>) -> tensor<1xui32>
-        %1927 = stablehlo.slice %1807 [0:1] : (tensor<2xui32>) -> tensor<1xui32>
-        %1928 = stablehlo.slice %1923 [0:1] : (tensor<2xui32>) -> tensor<1xui32>
-        %1929 = stablehlo.slice %1925 [0:1] : (tensor<2xui32>) -> tensor<1xui32>
-        %1930 = stablehlo.concatenate %1926, %1927, %1928, %1929, dim = 0 : (tensor<1xui32>, tensor<1xui32>, tensor<1xui32>, tensor<1xui32>) -> tensor<4xui32>
-        %1931 = stablehlo.reshape %1930 : (tensor<4xui32>) -> tensor<2x2xui32>
-        %1932 = stablehlo.bitcast_convert %1931 : (tensor<2x2xui32>) -> tensor<2xui64>
-        %1933 = stablehlo.slice %1805 [1:2] : (tensor<2xui32>) -> tensor<1xui32>
-        %1934 = stablehlo.slice %1807 [1:2] : (tensor<2xui32>) -> tensor<1xui32>
-        %1935 = stablehlo.slice %1923 [1:2] : (tensor<2xui32>) -> tensor<1xui32>
-        %1936 = stablehlo.slice %1925 [1:2] : (tensor<2xui32>) -> tensor<1xui32>
-        %1937 = stablehlo.concatenate %1933, %1934, %1935, %1936, dim = 0 : (tensor<1xui32>, tensor<1xui32>, tensor<1xui32>, tensor<1xui32>) -> tensor<4xui32>
-        %1938 = stablehlo.reshape %1937 : (tensor<4xui32>) -> tensor<2x2xui32>
-        %1939 = stablehlo.bitcast_convert %1938 : (tensor<2x2xui32>) -> tensor<2xui64>
-        %1940 = stablehlo.select %1369, %arg2, %814 : tensor<i1>, tensor<f64>
-        %1941 = stablehlo.broadcast_in_dim %1940, dims = [] : (tensor<f64>) -> tensor<1x2xf64>
-        %1942 = stablehlo.multiply %1940, %cst_64 : tensor<f64>
-        %1943 = stablehlo.broadcast_in_dim %1942, dims = [] : (tensor<f64>) -> tensor<1x2xf64>
-        %1944 = stablehlo.multiply %1943, %1679 : tensor<1x2xf64>
-        %1945 = stablehlo.subtract %1678, %1944 : tensor<1x2xf64>
-        %1946 = stablehlo.dot_general %1945, %arg3, contracting_dims = [1] x [1] : (tensor<1x2xf64>, tensor<2x2xf64>) -> tensor<1x2xf64>
-        %1947 = stablehlo.multiply %1941, %1946 : tensor<1x2xf64>
-        %1948 = stablehlo.add %1677, %1947 : tensor<1x2xf64>
-        %1949 = stablehlo.dot_general %1948, %1948, contracting_dims = [0, 1] x [0, 1] : (tensor<1x2xf64>, tensor<1x2xf64>) -> tensor<f64>
-        %1950 = stablehlo.multiply %cst_64, %1949 : tensor<f64>
-        %1951 = stablehlo.add %1948, %1948 : tensor<1x2xf64>
-        %1952 = stablehlo.multiply %cst_16, %1951 : tensor<1x2xf64>
-        %1953 = stablehlo.multiply %1943, %1952 : tensor<1x2xf64>
-        %1954 = stablehlo.subtract %1945, %1953 : tensor<1x2xf64>
-        %1955 = stablehlo.dot_general %1954, %arg3, contracting_dims = [1] x [1] : (tensor<1x2xf64>, tensor<2x2xf64>) -> tensor<1x2xf64>
-        %1956 = stablehlo.dot_general %1954, %1955, contracting_dims = [0, 1] x [0, 1] : (tensor<1x2xf64>, tensor<1x2xf64>) -> tensor<f64>
-        %1957 = stablehlo.add %1949, %1956 : tensor<f64>
-        %1958 = stablehlo.multiply %cst_64, %1957 : tensor<f64>
-        %1959 = stablehlo.subtract %1957, %1094 : tensor<f64>
-        %1960 = stablehlo.multiply %cst_64, %1959 : tensor<f64>
-        %1961 = stablehlo.compare  NE, %1960, %1960,  FLOAT : (tensor<f64>, tensor<f64>) -> tensor<i1>
-        %1962 = stablehlo.select %1961, %cst_60, %1960 : tensor<i1>, tensor<f64>
-        %1963 = stablehlo.negate %1962 : tensor<f64>
-        %1964 = stablehlo.compare  GT, %1962, %cst_71,  FLOAT : (tensor<f64>, tensor<f64>) -> tensor<i1>
-        %1965 = stablehlo.exponential %1963 : tensor<f64>
-        %1966 = stablehlo.minimum %1965, %cst_68 : tensor<f64>
-        %1967 = stablehlo.compare  EQ, %iterArg_107, %c_67,  SIGNED : (tensor<i64>, tensor<i64>) -> tensor<i1>
-        %1968:16 = "stablehlo.if"(%1967) ({
-          stablehlo.return %1948, %1954, %1952, %1948, %1954, %1952, %1948, %1952, %1950, %1958, %c_67, %1963, %1964, %1966, %c_66, %1954 : tensor<1x2xf64>, tensor<1x2xf64>, tensor<1x2xf64>, tensor<1x2xf64>, tensor<1x2xf64>, tensor<1x2xf64>, tensor<1x2xf64>, tensor<1x2xf64>, tensor<f64>, tensor<f64>, tensor<i64>, tensor<f64>, tensor<i1>, tensor<f64>, tensor<i64>, tensor<1x2xf64>
+        // Select leaf based on direction
+        %lq = stablehlo.select %dir, %m3, %m0 : tensor<i1>, tensor<1x2xf64>
+        %lp = stablehlo.select %dir, %m4, %m1 : tensor<i1>, tensor<1x2xf64>
+        %lg = stablehlo.select %dir, %m5, %m2 : tensor<i1>, tensor<1x2xf64>
+        // RNG in middle while (replaces ~260 lines of Threefry)
+        %mr1, %mr1o = stablehlo.rng_bit_generator %m17, algorithm = DEFAULT
+          : (tensor<2xui64>) -> (tensor<2xui64>, tensor<ui64>)
+        %mr2, %mr2o = stablehlo.rng_bit_generator %mr1, algorithm = DEFAULT
+          : (tensor<2xui64>) -> (tensor<2xui64>, tensor<ui64>)
+        // Leapfrog integration step
+        %ss = stablehlo.select %dir, %arg2, %cst_f64 : tensor<i1>, tensor<f64>
+        %hs = stablehlo.multiply %ss, %cst_half : tensor<f64>
+        %hsb = stablehlo.broadcast_in_dim %hs, dims = [] : (tensor<f64>) -> tensor<1x2xf64>
+        %ssb = stablehlo.broadcast_in_dim %ss, dims = [] : (tensor<f64>) -> tensor<1x2xf64>
+        %gs = stablehlo.multiply %hsb, %lg : tensor<1x2xf64>
+        %ph = stablehlo.subtract %lp, %gs : tensor<1x2xf64>
+        %vel = stablehlo.dot_general %ph, %arg3, contracting_dims = [1] x [1] : (tensor<1x2xf64>, tensor<2x2xf64>) -> tensor<1x2xf64>
+        %qs = stablehlo.multiply %ssb, %vel : tensor<1x2xf64>
+        %qn = stablehlo.add %lq, %qs : tensor<1x2xf64>
+        %ke = stablehlo.dot_general %qn, %qn, contracting_dims = [0, 1] x [0, 1] : (tensor<1x2xf64>, tensor<1x2xf64>) -> tensor<f64>
+        %kh = stablehlo.multiply %cst_half, %ke : tensor<f64>
+        %qs2 = stablehlo.add %qn, %qn : tensor<1x2xf64>
+        %ng = stablehlo.multiply %cst_half_1x2, %qs2 : tensor<1x2xf64>
+        %ngs = stablehlo.multiply %hsb, %ng : tensor<1x2xf64>
+        %pn = stablehlo.subtract %ph, %ngs : tensor<1x2xf64>
+        %pv = stablehlo.dot_general %pn, %arg3, contracting_dims = [1] x [1] : (tensor<1x2xf64>, tensor<2x2xf64>) -> tensor<1x2xf64>
+        %pk = stablehlo.dot_general %pn, %pv, contracting_dims = [0, 1] x [0, 1] : (tensor<1x2xf64>, tensor<1x2xf64>) -> tensor<f64>
+        %te = stablehlo.add %ke, %pk : tensor<f64>
+        %H2 = stablehlo.multiply %cst_half, %te : tensor<f64>
+        %de = stablehlo.subtract %te, %cst_f64 : tensor<f64>
+        %hd = stablehlo.multiply %cst_half, %de : tensor<f64>
+        %isn = stablehlo.compare NE, %hd, %hd, FLOAT : (tensor<f64>, tensor<f64>) -> tensor<i1>
+        %saf = stablehlo.select %isn, %cst_inf, %hd : tensor<i1>, tensor<f64>
+        %ns = stablehlo.negate %saf : tensor<f64>
+        %idv = stablehlo.compare GT, %saf, %cst_1000, FLOAT : (tensor<f64>, tensor<f64>) -> tensor<i1>
+        %en = stablehlo.exponential %ns : tensor<f64>
+        %ap = stablehlo.minimum %en, %cst_one : tensor<f64>
+        // Base tree vs combine trees
+        %is1 = stablehlo.compare EQ, %m15, %c_0, SIGNED : (tensor<i64>, tensor<i64>) -> tensor<i1>
+        %ifr:16 = "stablehlo.if"(%is1) ({
+          stablehlo.return %qn, %pn, %ng, %qn, %pn, %ng,
+            %qn, %ng, %kh, %H2, %c_0, %ns, %idv, %ap, %c_1, %pn
+            : tensor<1x2xf64>, tensor<1x2xf64>, tensor<1x2xf64>,
+              tensor<1x2xf64>, tensor<1x2xf64>, tensor<1x2xf64>,
+              tensor<1x2xf64>, tensor<1x2xf64>, tensor<f64>, tensor<f64>,
+              tensor<i64>, tensor<f64>, tensor<i1>, tensor<f64>,
+              tensor<i64>, tensor<1x2xf64>
         }, {
-          %1983 = stablehlo.select %1369, %iterArg_92, %1948 : tensor<i1>, tensor<1x2xf64>
-          %1984 = stablehlo.select %1369, %iterArg_93, %1954 : tensor<i1>, tensor<1x2xf64>
-          %1985 = stablehlo.select %1369, %iterArg_94, %1952 : tensor<i1>, tensor<1x2xf64>
-          %1986 = stablehlo.select %1369, %1948, %iterArg_95 : tensor<i1>, tensor<1x2xf64>
-          %1987 = stablehlo.select %1369, %1954, %iterArg_96 : tensor<i1>, tensor<1x2xf64>
-          %1988 = stablehlo.select %1369, %1952, %iterArg_97 : tensor<i1>, tensor<1x2xf64>
-          %1989 = stablehlo.maximum %iterArg_103, %1963 : tensor<f64>
-          %1990 = stablehlo.subtract %iterArg_103, %1963 : tensor<f64>
-          %1991 = stablehlo.compare  NE, %1990, %1990 : (tensor<f64>, tensor<f64>) -> tensor<i1>
-          %1992 = stablehlo.add %iterArg_103, %1963 : tensor<f64>
-          %1993 = stablehlo.abs %1990 : tensor<f64>
-          %1994 = stablehlo.negate %1993 : tensor<f64>
-          %1995 = stablehlo.exponential %1994 : tensor<f64>
-          %1996 = stablehlo.log_plus_one %1995 : tensor<f64>
-          %1997 = stablehlo.add %1989, %1996 : tensor<f64>
-          %1998 = stablehlo.select %1991, %1992, %1997 : tensor<i1>, tensor<f64>
-          %1999 = stablehlo.subtract %1963, %iterArg_103 : tensor<f64>
-          %2000 = stablehlo.logistic %1999 : tensor<f64>
-          %output_state_113, %output_114 = stablehlo.rng_bit_generator %1939, algorithm =  DEFAULT : (tensor<2xui64>) -> (tensor<2xui64>, tensor<ui64>)
-          %2001 = stablehlo.shift_right_logical %output_114, %c_26 : tensor<ui64>
-          %2002 = stablehlo.or %2001, %c_25 : tensor<ui64>
-          %2003 = stablehlo.bitcast_convert %2002 : (tensor<ui64>) -> tensor<f64>
-          %2004 = stablehlo.subtract %2003, %cst_68 : tensor<f64>
-          %2005 = stablehlo.compare  LT, %2004, %2000,  FLOAT : (tensor<f64>, tensor<f64>) -> tensor<i1>
-          %2006 = stablehlo.select %2005, %1948, %iterArg_98 : tensor<i1>, tensor<1x2xf64>
-          %2007 = stablehlo.select %2005, %1952, %iterArg_99 : tensor<i1>, tensor<1x2xf64>
-          %2008 = stablehlo.select %2005, %1950, %iterArg_100 : tensor<i1>, tensor<f64>
-          %2009 = stablehlo.select %2005, %1958, %iterArg_101 : tensor<i1>, tensor<f64>
-          %2010 = stablehlo.add %iterArg_102, %c_66 : tensor<i64>
-          %2011 = stablehlo.or %iterArg_105, %1964 : tensor<i1>
-          %2012 = stablehlo.add %iterArg_106, %1966 : tensor<f64>
-          %2013 = stablehlo.add %iterArg_107, %c_66 : tensor<i64>
-          %2014 = stablehlo.add %iterArg_108, %1954 : tensor<1x2xf64>
-          stablehlo.return %1983, %1984, %1985, %1986, %1987, %1988, %2006, %2007, %2008, %2009, %2010, %1998, %2011, %2012, %2013, %2014 : tensor<1x2xf64>, tensor<1x2xf64>, tensor<1x2xf64>, tensor<1x2xf64>, tensor<1x2xf64>, tensor<1x2xf64>, tensor<1x2xf64>, tensor<1x2xf64>, tensor<f64>, tensor<f64>, tensor<i64>, tensor<f64>, tensor<i1>, tensor<f64>, tensor<i64>, tensor<1x2xf64>
-        }) : (tensor<i1>) -> (tensor<1x2xf64>, tensor<1x2xf64>, tensor<1x2xf64>, tensor<1x2xf64>, tensor<1x2xf64>, tensor<1x2xf64>, tensor<1x2xf64>, tensor<1x2xf64>, tensor<f64>, tensor<f64>, tensor<i64>, tensor<f64>, tensor<i1>, tensor<f64>, tensor<i64>, tensor<1x2xf64>)
-        %1969 = stablehlo.shift_right_logical %iterArg_112, %c_66 : tensor<i64>
-        %1970 = stablehlo.popcnt %1969 : tensor<i64>
-        %1971 = stablehlo.add %iterArg_112, %c_66 : tensor<i64>
-        %1972 = stablehlo.not %iterArg_112 : tensor<i64>
-        %1973 = stablehlo.and %1972, %1971 : tensor<i64>
-        %1974 = stablehlo.subtract %1973, %c_66 : tensor<i64>
-        %1975 = stablehlo.popcnt %1974 : tensor<i64>
-        %1976 = stablehlo.subtract %1970, %1975 : tensor<i64>
-        %1977 = stablehlo.add %1976, %c_66 : tensor<i64>
-        %1978 = stablehlo.and %iterArg_112, %c_66 : tensor<i64>
-        %1979 = stablehlo.compare  EQ, %1978, %c_67,  SIGNED : (tensor<i64>, tensor<i64>) -> tensor<i1>
-        %1980:2 = "stablehlo.if"(%1979) ({
-          %1983 = stablehlo.dynamic_update_slice %iterArg_110, %1954, %1970, %c_67 : (tensor<3x2xf64>, tensor<1x2xf64>, tensor<i64>, tensor<i64>) -> tensor<3x2xf64>
-          %1984 = stablehlo.dynamic_update_slice %iterArg_111, %1968#15, %1970, %c_67 : (tensor<3x2xf64>, tensor<1x2xf64>, tensor<i64>, tensor<i64>) -> tensor<3x2xf64>
-          stablehlo.return %1983, %1984 : tensor<3x2xf64>, tensor<3x2xf64>
+          %xl = stablehlo.select %dir, %m0, %qn : tensor<i1>, tensor<1x2xf64>
+          %xpl = stablehlo.select %dir, %m1, %pn : tensor<i1>, tensor<1x2xf64>
+          %xgl = stablehlo.select %dir, %m2, %ng : tensor<i1>, tensor<1x2xf64>
+          %xr = stablehlo.select %dir, %qn, %m3 : tensor<i1>, tensor<1x2xf64>
+          %xpr = stablehlo.select %dir, %pn, %m4 : tensor<i1>, tensor<1x2xf64>
+          %xgr = stablehlo.select %dir, %ng, %m5 : tensor<i1>, tensor<1x2xf64>
+          // Log-sum-exp weight combination
+          %mw = stablehlo.maximum %m11, %ns : tensor<f64>
+          %dw = stablehlo.subtract %m11, %ns : tensor<f64>
+          %nw = stablehlo.compare NE, %dw, %dw : (tensor<f64>, tensor<f64>) -> tensor<i1>
+          %sw = stablehlo.add %m11, %ns : tensor<f64>
+          %aw = stablehlo.abs %dw : tensor<f64>
+          %naw = stablehlo.negate %aw : tensor<f64>
+          %ew = stablehlo.exponential %naw : tensor<f64>
+          %lw = stablehlo.log_plus_one %ew : tensor<f64>
+          %lsw = stablehlo.add %mw, %lw : tensor<f64>
+          %wt = stablehlo.select %nw, %sw, %lsw : tensor<i1>, tensor<f64>
+          // Uniform transition probability
+          %td = stablehlo.subtract %ns, %m11 : tensor<f64>
+          %tp = stablehlo.logistic %td : tensor<f64>
+          // Accept/reject RNG inside stablehlo.if
+          %ar, %aro = stablehlo.rng_bit_generator %mr2, algorithm = DEFAULT
+            : (tensor<2xui64>) -> (tensor<2xui64>, tensor<ui64>)
+          %ars = stablehlo.shift_right_logical %aro, %c_shift12 : tensor<ui64>
+          %aro2 = stablehlo.or %ars, %c_magic : tensor<ui64>
+          %arf = stablehlo.bitcast_convert %aro2 : (tensor<ui64>) -> tensor<f64>
+          %arv = stablehlo.subtract %arf, %cst_one : tensor<f64>
+          %da = stablehlo.compare LT, %arv, %tp, FLOAT : (tensor<f64>, tensor<f64>) -> tensor<i1>
+          %xq = stablehlo.select %da, %qn, %m6 : tensor<i1>, tensor<1x2xf64>
+          %xg2 = stablehlo.select %da, %ng, %m7 : tensor<i1>, tensor<1x2xf64>
+          %xu = stablehlo.select %da, %kh, %m8 : tensor<i1>, tensor<f64>
+          %xh = stablehlo.select %da, %H2, %m9 : tensor<i1>, tensor<f64>
+          %xd = stablehlo.add %m10, %c_1 : tensor<i64>
+          %xdv = stablehlo.or %m13, %idv : tensor<i1>
+          %xac = stablehlo.add %m14, %ap : tensor<f64>
+          %xid = stablehlo.add %m15, %c_1 : tensor<i64>
+          %xps = stablehlo.add %m16, %pn : tensor<1x2xf64>
+          stablehlo.return %xl, %xpl, %xgl, %xr, %xpr, %xgr,
+            %xq, %xg2, %xu, %xh, %xd, %wt, %xdv, %xac, %xid, %xps
+            : tensor<1x2xf64>, tensor<1x2xf64>, tensor<1x2xf64>,
+              tensor<1x2xf64>, tensor<1x2xf64>, tensor<1x2xf64>,
+              tensor<1x2xf64>, tensor<1x2xf64>, tensor<f64>, tensor<f64>,
+              tensor<i64>, tensor<f64>, tensor<i1>, tensor<f64>,
+              tensor<i64>, tensor<1x2xf64>
+        }) : (tensor<i1>) -> (tensor<1x2xf64>, tensor<1x2xf64>, tensor<1x2xf64>,
+              tensor<1x2xf64>, tensor<1x2xf64>, tensor<1x2xf64>,
+              tensor<1x2xf64>, tensor<1x2xf64>, tensor<f64>, tensor<f64>,
+              tensor<i64>, tensor<f64>, tensor<i1>, tensor<f64>,
+              tensor<i64>, tensor<1x2xf64>)
+        // Checkpoint index computation
+        %cshr = stablehlo.shift_right_logical %m20, %c_1 : tensor<i64>
+        %cpop = stablehlo.popcnt %cshr : tensor<i64>
+        %lp1 = stablehlo.add %m20, %c_1 : tensor<i64>
+        %lnot = stablehlo.not %m20 : tensor<i64>
+        %lnd = stablehlo.and %lnot, %lp1 : tensor<i64>
+        %lsub = stablehlo.subtract %lnd, %c_1 : tensor<i64>
+        %lpop = stablehlo.popcnt %lsub : tensor<i64>
+        %idiff = stablehlo.subtract %cpop, %lpop : tensor<i64>
+        %imax = stablehlo.add %idiff, %c_1 : tensor<i64>
+        %iev = stablehlo.and %m20, %c_1 : tensor<i64>
+        %ieve = stablehlo.compare EQ, %iev, %c_0, SIGNED : (tensor<i64>, tensor<i64>) -> tensor<i1>
+        // Update checkpoints at even leaf indices
+        %ck:2 = "stablehlo.if"(%ieve) ({
+          %up = stablehlo.dynamic_update_slice %m18, %pn, %cpop, %c_0
+            : (tensor<3x2xf64>, tensor<1x2xf64>, tensor<i64>, tensor<i64>) -> tensor<3x2xf64>
+          %ups = stablehlo.dynamic_update_slice %m19, %ifr#15, %cpop, %c_0
+            : (tensor<3x2xf64>, tensor<1x2xf64>, tensor<i64>, tensor<i64>) -> tensor<3x2xf64>
+          stablehlo.return %up, %ups : tensor<3x2xf64>, tensor<3x2xf64>
         }, {
-          stablehlo.return %iterArg_110, %iterArg_111 : tensor<3x2xf64>, tensor<3x2xf64>
+          stablehlo.return %m18, %m19 : tensor<3x2xf64>, tensor<3x2xf64>
         }) : (tensor<i1>) -> (tensor<3x2xf64>, tensor<3x2xf64>)
-        %1981:2 = stablehlo.while(%iterArg_113 = %1970, %iterArg_114 = %c_63) : tensor<i64>, tensor<i1>
+        // Inner turning-check while (3rd level of nesting)
+        %tw:2 = stablehlo.while(%ti = %cpop, %tt = %c_false) : tensor<i64>, tensor<i1>
         cond {
-          %1983 = stablehlo.compare  GE, %iterArg_113, %1977,  SIGNED : (tensor<i64>, tensor<i64>) -> tensor<i1>
-          %1984 = stablehlo.not %iterArg_114 : tensor<i1>
-          %1985 = stablehlo.and %1983, %1984 : tensor<i1>
-          stablehlo.return %1985 : tensor<i1>
+          %tge = stablehlo.compare GE, %ti, %imax, SIGNED : (tensor<i64>, tensor<i64>) -> tensor<i1>
+          %tnt = stablehlo.not %tt : tensor<i1>
+          %ta = stablehlo.and %tge, %tnt : tensor<i1>
+          stablehlo.return %ta : tensor<i1>
         } do {
-          %1983 = stablehlo.dynamic_slice %1980#0, %iterArg_113, %c_67, sizes = [1, 2] : (tensor<3x2xf64>, tensor<i64>, tensor<i64>) -> tensor<1x2xf64>
-          %1984 = stablehlo.dynamic_slice %1980#1, %iterArg_113, %c_67, sizes = [1, 2] : (tensor<3x2xf64>, tensor<i64>, tensor<i64>) -> tensor<1x2xf64>
-          %1985 = stablehlo.subtract %1968#15, %1984 : tensor<1x2xf64>
-          %1986 = stablehlo.add %1985, %1983 : tensor<1x2xf64>
-          %1987 = stablehlo.dot_general %1983, %arg3, contracting_dims = [1] x [1] : (tensor<1x2xf64>, tensor<2x2xf64>) -> tensor<1x2xf64>
-          %1988 = stablehlo.add %1983, %1954 : tensor<1x2xf64>
-          %1989 = stablehlo.multiply %cst, %1988 : tensor<1x2xf64>
-          %1990 = stablehlo.add %1986, %1989 : tensor<1x2xf64>
-          %1991 = stablehlo.dot_general %1987, %1990, contracting_dims = [0, 1] x [0, 1] : (tensor<1x2xf64>, tensor<1x2xf64>) -> tensor<f64>
-          %1992 = stablehlo.dot_general %1955, %1990, contracting_dims = [0, 1] x [0, 1] : (tensor<1x2xf64>, tensor<1x2xf64>) -> tensor<f64>
-          %1993 = stablehlo.compare  LE, %1991, %cst_65,  FLOAT : (tensor<f64>, tensor<f64>) -> tensor<i1>
-          %1994 = stablehlo.compare  LE, %1992, %cst_65,  FLOAT : (tensor<f64>, tensor<f64>) -> tensor<i1>
-          %1995 = stablehlo.or %1993, %1994 : tensor<i1>
-          %1996 = stablehlo.subtract %iterArg_113, %c_66 : tensor<i64>
-          stablehlo.return %1996, %1995 : tensor<i64>, tensor<i1>
+          %tcp = stablehlo.dynamic_slice %ck#0, %ti, %c_0, sizes = [1, 2]
+            : (tensor<3x2xf64>, tensor<i64>, tensor<i64>) -> tensor<1x2xf64>
+          %tcs = stablehlo.dynamic_slice %ck#1, %ti, %c_0, sizes = [1, 2]
+            : (tensor<3x2xf64>, tensor<i64>, tensor<i64>) -> tensor<1x2xf64>
+          %td1 = stablehlo.subtract %ifr#15, %tcs : tensor<1x2xf64>
+          %ts1 = stablehlo.add %td1, %tcp : tensor<1x2xf64>
+          %tv1 = stablehlo.dot_general %tcp, %arg3, contracting_dims = [1] x [1]
+            : (tensor<1x2xf64>, tensor<2x2xf64>) -> tensor<1x2xf64>
+          %tps = stablehlo.add %tcp, %pn : tensor<1x2xf64>
+          %tc = stablehlo.multiply %cst_neg_half, %tps : tensor<1x2xf64>
+          %targ = stablehlo.add %ts1, %tc : tensor<1x2xf64>
+          %td2 = stablehlo.dot_general %tv1, %targ, contracting_dims = [0, 1] x [0, 1]
+            : (tensor<1x2xf64>, tensor<1x2xf64>) -> tensor<f64>
+          %td3 = stablehlo.dot_general %pv, %targ, contracting_dims = [0, 1] x [0, 1]
+            : (tensor<1x2xf64>, tensor<1x2xf64>) -> tensor<f64>
+          %tl1 = stablehlo.compare LE, %td2, %cst_zero, FLOAT : (tensor<f64>, tensor<f64>) -> tensor<i1>
+          %tl2 = stablehlo.compare LE, %td3, %cst_zero, FLOAT : (tensor<f64>, tensor<f64>) -> tensor<i1>
+          %ttr = stablehlo.or %tl1, %tl2 : tensor<i1>
+          %tni = stablehlo.subtract %ti, %c_1 : tensor<i64>
+          stablehlo.return %tni, %ttr : tensor<i64>, tensor<i1>
         }
-        %1982 = stablehlo.select %1967, %c_63, %1981#1 : tensor<i1>, tensor<i1>
-        stablehlo.return %1968#0, %1968#1, %1968#2, %1968#3, %1968#4, %1968#5, %1968#6, %1968#7, %1968#8, %1968#9, %1968#10, %1968#11, %1982, %1968#12, %1968#13, %1968#14, %1968#15, %1932, %1980#0, %1980#1, %1971 : tensor<1x2xf64>, tensor<1x2xf64>, tensor<1x2xf64>, tensor<1x2xf64>, tensor<1x2xf64>, tensor<1x2xf64>, tensor<1x2xf64>, tensor<1x2xf64>, tensor<f64>, tensor<f64>, tensor<i64>, tensor<f64>, tensor<i1>, tensor<i1>, tensor<f64>, tensor<i64>, tensor<1x2xf64>, tensor<2xui64>, tensor<3x2xf64>, tensor<3x2xf64>, tensor<i64>
+        %tfn = stablehlo.select %is1, %c_false, %tw#1 : tensor<i1>, tensor<i1>
+        // Middle while return: 21 values
+        stablehlo.return %ifr#0, %ifr#1, %ifr#2, %ifr#3, %ifr#4, %ifr#5,
+          %ifr#6, %ifr#7, %ifr#8, %ifr#9, %ifr#10, %ifr#11,
+          %tfn, %ifr#12, %ifr#13, %ifr#14, %ifr#15,
+          %mr1, %ck#0, %ck#1, %lp1
+          : tensor<1x2xf64>, tensor<1x2xf64>, tensor<1x2xf64>,
+            tensor<1x2xf64>, tensor<1x2xf64>, tensor<1x2xf64>,
+            tensor<1x2xf64>, tensor<1x2xf64>, tensor<f64>, tensor<f64>,
+            tensor<i64>, tensor<f64>, tensor<i1>, tensor<i1>,
+            tensor<f64>, tensor<i64>, tensor<1x2xf64>,
+            tensor<2xui64>, tensor<3x2xf64>, tensor<3x2xf64>, tensor<i64>
       }
-      %1632 = stablehlo.select %1369, %iterArg, %1631#0 : tensor<i1>, tensor<1x2xf64>
-      %1633 = stablehlo.select %1369, %iterArg_72, %1631#1 : tensor<i1>, tensor<1x2xf64>
-      %1634 = stablehlo.select %1369, %iterArg_73, %1631#2 : tensor<i1>, tensor<1x2xf64>
-      %1635 = stablehlo.select %1369, %1631#3, %iterArg_74 : tensor<i1>, tensor<1x2xf64>
-      %1636 = stablehlo.select %1369, %1631#4, %iterArg_75 : tensor<i1>, tensor<1x2xf64>
-      %1637 = stablehlo.select %1369, %1631#5, %iterArg_76 : tensor<i1>, tensor<1x2xf64>
-      %1638 = stablehlo.maximum %iterArg_82, %1631#11 : tensor<f64>
-      %1639 = stablehlo.subtract %iterArg_82, %1631#11 : tensor<f64>
-      %1640 = stablehlo.compare  NE, %1639, %1639 : (tensor<f64>, tensor<f64>) -> tensor<i1>
-      %1641 = stablehlo.add %iterArg_82, %1631#11 : tensor<f64>
-      %1642 = stablehlo.abs %1639 : tensor<f64>
-      %1643 = stablehlo.negate %1642 : tensor<f64>
-      %1644 = stablehlo.exponential %1643 : tensor<f64>
-      %1645 = stablehlo.log_plus_one %1644 : tensor<f64>
-      %1646 = stablehlo.add %1638, %1645 : tensor<f64>
-      %1647 = stablehlo.select %1640, %1641, %1646 : tensor<i1>, tensor<f64>
-      %1648 = stablehlo.subtract %1631#11, %iterArg_82 : tensor<f64>
-      %1649 = stablehlo.exponential %1648 : tensor<f64>
-      %1650 = stablehlo.minimum %1649, %cst_68 : tensor<f64>
-      %1651 = stablehlo.or %1631#12, %1631#13 : tensor<i1>
-      %1652 = stablehlo.select %1651, %cst_65, %1650 : tensor<i1>, tensor<f64>
-      %output_state_90, %output_91 = stablehlo.rng_bit_generator %1629, algorithm =  DEFAULT : (tensor<2xui64>) -> (tensor<2xui64>, tensor<ui64>)
-      %1653 = stablehlo.shift_right_logical %output_91, %c_26 : tensor<ui64>
-      %1654 = stablehlo.or %1653, %c_25 : tensor<ui64>
-      %1655 = stablehlo.bitcast_convert %1654 : (tensor<ui64>) -> tensor<f64>
-      %1656 = stablehlo.subtract %1655, %cst_68 : tensor<f64>
-      %1657 = stablehlo.compare  LT, %1656, %1652,  FLOAT : (tensor<f64>, tensor<f64>) -> tensor<i1>
-      %1658 = stablehlo.select %1657, %1631#6, %iterArg_77 : tensor<i1>, tensor<1x2xf64>
-      %1659 = stablehlo.select %1657, %1631#7, %iterArg_78 : tensor<i1>, tensor<1x2xf64>
-      %1660 = stablehlo.select %1657, %1631#8, %iterArg_79 : tensor<i1>, tensor<f64>
-      %1661 = stablehlo.select %1657, %1631#9, %iterArg_80 : tensor<i1>, tensor<f64>
-      %1662 = stablehlo.add %iterArg_81, %c_66 : tensor<i64>
-      %1663 = stablehlo.add %iterArg_86, %1631#16 : tensor<1x2xf64>
-      %1664 = stablehlo.dot_general %1633, %arg3, contracting_dims = [1] x [1] : (tensor<1x2xf64>, tensor<2x2xf64>) -> tensor<1x2xf64>
-      %1665 = stablehlo.dot_general %1636, %arg3, contracting_dims = [1] x [1] : (tensor<1x2xf64>, tensor<2x2xf64>) -> tensor<1x2xf64>
-      %1666 = stablehlo.add %1633, %1636 : tensor<1x2xf64>
-      %1667 = stablehlo.multiply %cst, %1666 : tensor<1x2xf64>
-      %1668 = stablehlo.add %1663, %1667 : tensor<1x2xf64>
-      %1669 = stablehlo.dot_general %1664, %1668, contracting_dims = [0, 1] x [0, 1] : (tensor<1x2xf64>, tensor<1x2xf64>) -> tensor<f64>
-      %1670 = stablehlo.dot_general %1665, %1668, contracting_dims = [0, 1] x [0, 1] : (tensor<1x2xf64>, tensor<1x2xf64>) -> tensor<f64>
-      %1671 = stablehlo.compare  LE, %1669, %cst_65,  FLOAT : (tensor<f64>, tensor<f64>) -> tensor<i1>
-      %1672 = stablehlo.compare  LE, %1670, %cst_65,  FLOAT : (tensor<f64>, tensor<f64>) -> tensor<i1>
-      %1673 = stablehlo.or %1671, %1672 : tensor<i1>
-      %1674 = stablehlo.or %1631#12, %1673 : tensor<i1>
-      %1675 = stablehlo.or %iterArg_84, %1631#13 : tensor<i1>
-      %1676 = stablehlo.add %iterArg_85, %1631#14 : tensor<f64>
-      stablehlo.return %1632, %1633, %1634, %1635, %1636, %1637, %1658, %1659, %1660, %1661, %1662, %1647, %1674, %1675, %1676, %1663, %1350 : tensor<1x2xf64>, tensor<1x2xf64>, tensor<1x2xf64>, tensor<1x2xf64>, tensor<1x2xf64>, tensor<1x2xf64>, tensor<1x2xf64>, tensor<1x2xf64>, tensor<f64>, tensor<f64>, tensor<i64>, tensor<f64>, tensor<i1>, tensor<i1>, tensor<f64>, tensor<1x2xf64>, tensor<2xui64>
+      // Post-doubling: biased transition for outer tree combination
+      %pl = stablehlo.select %dir, %o0, %mid#0 : tensor<i1>, tensor<1x2xf64>
+      %ppl = stablehlo.select %dir, %o1, %mid#1 : tensor<i1>, tensor<1x2xf64>
+      %pgl = stablehlo.select %dir, %o2, %mid#2 : tensor<i1>, tensor<1x2xf64>
+      %pr = stablehlo.select %dir, %mid#3, %o3 : tensor<i1>, tensor<1x2xf64>
+      %ppr = stablehlo.select %dir, %mid#4, %o4 : tensor<i1>, tensor<1x2xf64>
+      %pgr = stablehlo.select %dir, %mid#5, %o5 : tensor<i1>, tensor<1x2xf64>
+      // Log-sum-exp weight combination
+      %pmw = stablehlo.maximum %o11, %mid#11 : tensor<f64>
+      %pdw = stablehlo.subtract %o11, %mid#11 : tensor<f64>
+      %pnw = stablehlo.compare NE, %pdw, %pdw : (tensor<f64>, tensor<f64>) -> tensor<i1>
+      %psw = stablehlo.add %o11, %mid#11 : tensor<f64>
+      %paw = stablehlo.abs %pdw : tensor<f64>
+      %pnaw = stablehlo.negate %paw : tensor<f64>
+      %pew = stablehlo.exponential %pnaw : tensor<f64>
+      %plw = stablehlo.log_plus_one %pew : tensor<f64>
+      %plsw = stablehlo.add %pmw, %plw : tensor<f64>
+      %pwt = stablehlo.select %pnw, %psw, %plsw : tensor<i1>, tensor<f64>
+      // Biased transition probability
+      %ptd = stablehlo.subtract %mid#11, %o11 : tensor<f64>
+      %pte = stablehlo.exponential %ptd : tensor<f64>
+      %ptp = stablehlo.minimum %pte, %cst_one : tensor<f64>
+      %pfl = stablehlo.or %mid#12, %mid#13 : tensor<i1>
+      %ptp2 = stablehlo.select %pfl, %cst_zero, %ptp : tensor<i1>, tensor<f64>
+      // Post-doubling accept/reject RNG
+      %prng, %prng_out = stablehlo.rng_bit_generator %rng3, algorithm = DEFAULT
+        : (tensor<2xui64>) -> (tensor<2xui64>, tensor<ui64>)
+      %prs = stablehlo.shift_right_logical %prng_out, %c_shift12 : tensor<ui64>
+      %pro = stablehlo.or %prs, %c_magic : tensor<ui64>
+      %prf = stablehlo.bitcast_convert %pro : (tensor<ui64>) -> tensor<f64>
+      %prv = stablehlo.subtract %prf, %cst_one : tensor<f64>
+      %pra = stablehlo.compare LT, %prv, %ptp2, FLOAT : (tensor<f64>, tensor<f64>) -> tensor<i1>
+      // Select proposal
+      %pq = stablehlo.select %pra, %mid#6, %o6 : tensor<i1>, tensor<1x2xf64>
+      %pg = stablehlo.select %pra, %mid#7, %o7 : tensor<i1>, tensor<1x2xf64>
+      %pu = stablehlo.select %pra, %mid#8, %o8 : tensor<i1>, tensor<f64>
+      %ph2 = stablehlo.select %pra, %mid#9, %o9 : tensor<i1>, tensor<f64>
+      // Update outer state
+      %pnd = stablehlo.add %o10, %c_1 : tensor<i64>
+      %pps = stablehlo.add %o15, %mid#16 : tensor<1x2xf64>
+      // Outer turning check
+      %ov1 = stablehlo.dot_general %ppl, %arg3, contracting_dims = [1] x [1]
+        : (tensor<1x2xf64>, tensor<2x2xf64>) -> tensor<1x2xf64>
+      %ov2 = stablehlo.dot_general %ppr, %arg3, contracting_dims = [1] x [1]
+        : (tensor<1x2xf64>, tensor<2x2xf64>) -> tensor<1x2xf64>
+      %osum = stablehlo.add %ppl, %ppr : tensor<1x2xf64>
+      %octr = stablehlo.multiply %cst_neg_half, %osum : tensor<1x2xf64>
+      %oarg = stablehlo.add %pps, %octr : tensor<1x2xf64>
+      %od1 = stablehlo.dot_general %ov1, %oarg, contracting_dims = [0, 1] x [0, 1]
+        : (tensor<1x2xf64>, tensor<1x2xf64>) -> tensor<f64>
+      %od2 = stablehlo.dot_general %ov2, %oarg, contracting_dims = [0, 1] x [0, 1]
+        : (tensor<1x2xf64>, tensor<1x2xf64>) -> tensor<f64>
+      %ol1 = stablehlo.compare LE, %od1, %cst_zero, FLOAT : (tensor<f64>, tensor<f64>) -> tensor<i1>
+      %ol2 = stablehlo.compare LE, %od2, %cst_zero, FLOAT : (tensor<f64>, tensor<f64>) -> tensor<i1>
+      %otr = stablehlo.or %ol1, %ol2 : tensor<i1>
+      %otrn = stablehlo.or %mid#12, %otr : tensor<i1>
+      %odiv = stablehlo.or %o13, %mid#13 : tensor<i1>
+      %oacc = stablehlo.add %o14, %mid#14 : tensor<f64>
+      // Outer while return: 17 values
+      stablehlo.return %pl, %ppl, %pgl, %pr, %ppr, %pgr,
+        %pq, %pg, %pu, %ph2, %pnd, %pwt,
+        %otrn, %odiv, %oacc, %pps, %rng1
+        : tensor<1x2xf64>, tensor<1x2xf64>, tensor<1x2xf64>,
+          tensor<1x2xf64>, tensor<1x2xf64>, tensor<1x2xf64>,
+          tensor<1x2xf64>, tensor<1x2xf64>, tensor<f64>, tensor<f64>,
+          tensor<i64>, tensor<f64>, tensor<i1>, tensor<i1>,
+          tensor<f64>, tensor<1x2xf64>, tensor<2xui64>
     }
-    %1097 = stablehlo.reshape %1096#6 : (tensor<1x2xf64>) -> tensor<2x1xf64>
-    return %1097, %1067 : tensor<2x1xf64>, tensor<2xui64>
+    %result = stablehlo.transpose %outer#6, dims = [1, 0] : (tensor<1x2xf64>) -> tensor<2x1xf64>
+    return %result, %outer#16 : tensor<2x1xf64>, tensor<2xui64>
   }
 }
