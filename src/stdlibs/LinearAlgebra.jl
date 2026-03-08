@@ -12,13 +12,13 @@ using ..TracedUtils: TracedUtils, get_mlir_data, set_mlir_data!
 using ..Ops: @opcall
 
 using LinearAlgebra: LinearAlgebra, BLAS
-using LinearAlgebra:
-    Adjoint, Transpose, Factorization, RowMaximum, NoPivot, Hermitian, Symmetric
+using LinearAlgebra: Adjoint, Transpose, Factorization, Hermitian, Symmetric
 using LinearAlgebra: SymTridiagonal, Symmetric, Bidiagonal, Diagonal, Tridiagonal
 using LinearAlgebra: LowerTriangular, UnitLowerTriangular, UpperTriangular
+using LinearAlgebra: ColumnNorm, RowMaximum, NoPivot
 using LinearAlgebra: I, diag, diagm, ldiv!, det, logabsdet, istriu, istril, triu!, tril!
 using LinearAlgebra: inv!, rmul!, normalize
-using LinearAlgebra: svd, lu
+using LinearAlgebra: svd, lu, qr
 using Libdl: Libdl
 using GPUArraysCore: @allowscalar
 
