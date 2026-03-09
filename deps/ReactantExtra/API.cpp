@@ -779,6 +779,14 @@ REACTANT_ABI int32_t ReactantCudaDriverGetVersion() {
   return data;
 }
 
+#if CUDA_VERSION == 13000
+// This stub satisfies the linker for cuFFT's RDC callback requirements
+// without requiring an nvcc device-link step.
+extern "C" {
+    void __cudaRegisterLinkedBinary_28b8d6c6_20_separate_callback_cu_a85cd5ea_29231() {}
+}
+#endif
+
 REACTANT_ABI int32_t ReactantHermeticCudaGetVersion() { return CUDA_VERSION; }
 
 REACTANT_ABI int32_t ReactantCudaDeviceGetComputeCapalilityMajor() {
