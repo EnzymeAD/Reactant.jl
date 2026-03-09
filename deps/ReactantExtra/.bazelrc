@@ -66,7 +66,6 @@ common:cuda12 --repo_env HERMETIC_CUDA_COMPUTE_CAPABILITIES="sm_50,sm_60,sm_70,s
 
 
 common:cuda13 --config=cuda
-common:cuda13 --config=cuda_static
 common:cuda13 --repo_env=HERMETIC_CUDA_VERSION="13.1.1"
 common:cuda13 --repo_env=HERMETIC_CUDNN_VERSION="9.19.1"
 common:cuda13 --repo_env=HERMETIC_NVSHMEM_VERSION="3.5.21"
