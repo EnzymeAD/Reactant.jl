@@ -1146,8 +1146,10 @@ REACTANT_ABI PjRtBuffer *CopyBufferToDevice(PjRtBuffer *buffer,
 // This is the safe way to transfer data from e.g. a CUDA.jl CuArray into XLA:
 // it creates an ephemeral non-owning view of the external memory, then copies
 // into a new PJRT-managed buffer using XLA's internal D2D stream infrastructure.
-// The `stream` parameter (pass 0 if unknown) tells PJRT which external CUDA
-// stream produced the data, enabling correct cross-stream synchronization.
+// The `stream` parameter tells PJRT which external CUDA stream produced the
+// data, enabling correct cross-stream synchronization. Pass 0 only if the
+// data at device_ptr is already fully written and synchronized — 0 means
+// "no stream to wait on," not "unknown stream."
 REACTANT_ABI PjRtBuffer *BufferFromDevicePointer(PjRtClient *client,
                                                  void *device_ptr,
                                                  uint64_t ptype, size_t dim,

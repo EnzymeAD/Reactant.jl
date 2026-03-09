@@ -261,6 +261,18 @@ end
         @test Array(cu_back) == Float32[42.0]
     end
 
+    @testset "Empty array" begin
+        cu = CuArray(Float32[])
+        ra = ConcretePJRTArray(cu)
+        @test size(ra) == (0,)
+        @test Array(ra) == Float32[]
+
+        ra_empty = Reactant.to_rarray(Float32[])
+        cu_back = CuArray(ra_empty)
+        @test size(cu_back) == (0,)
+        @test Array(cu_back) == Float32[]
+    end
+
     @testset "Large array (100MB)" begin
         cu = CUDA.rand(Float32, 25_000_000)  # 100MB
         CUDA.synchronize()
