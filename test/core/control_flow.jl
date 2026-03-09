@@ -709,9 +709,12 @@ end
     @test for_no_track_numbers_ra(x_ra, n_ra) == for_no_track_numbers(x, n)
 
     ir = @code_hlo optimize = "enzyme-batch" for_no_track_numbers(x_ra, n_ra)
-    @test contains(repr(ir), "enzyme.disable_mincut")
-    @test contains(repr(ir), "enzymexla.enable_checkpointing")
-    @test contains(repr(ir), "enzymexla.checkpoints = 3")
+    @test @filecheck begin
+        @check "enzyme.disable_mincut"
+        @check "enzymexla.enable_checkpointing"
+        @check "enzymexla.checkpoints = 3"
+        ir
+    end
 end
 
 function for_explicit_checkpoints(x, n)
@@ -737,8 +740,10 @@ end
     ir = sprint(
         show, @code_hlo optimize = "enzyme-batch" for_explicit_checkpoints(x_ra, n_ra)
     )
-    @test contains(repr(ir), "enzymexla.enable_checkpointing")
-    @test contains(repr(ir), "enzymexla.checkpoints = 5")
+    @test @filecheck begin
+        @check "enzymexla.enable_checkpointing"
+        @check "enzymexla.checkpoints = 5"
+    end
 end
 
 function while_explicit_checkpoints(x, n)
@@ -760,8 +765,11 @@ end
     @test while_explicit_checkpoints(x, n) == while_explicit_checkpoints(x_ra, n_ra)
 
     ir = sprint(show, @code_hlo while_explicit_checkpoints(x_ra, n_ra))
-    @test contains(repr(ir), "enzymexla.enable_checkpointing")
-    @test contains(repr(ir), "enzymexla.checkpoints = 5")
+    @test @filecheck begin
+        @check "enzymexla.enable_checkpointing"
+        @check "enzymexla.checkpoints = 5"
+        ir
+    end
 end
 
 function for_default_checkpoints(x)
@@ -782,9 +790,11 @@ end
     @test for_default_checkpoints_ra(x_ra) == for_default_checkpoints(x)
 
     ir = sprint(show, @code_hlo optimize = "enzyme-batch" for_default_checkpoints(x_ra))
-    @test contains(repr(ir), "enzymexla.enable_checkpointing")
-    # isqrt(100) = 10
-    @test contains(repr(ir), "enzymexla.checkpoints = 10")
+    @test @filecheck begin
+        @check "enzymexla.enable_checkpointing"
+        @check "enzymexla.checkpoints = 10"
+        ir
+    end
 end
 
 _call1(a, b) = a
