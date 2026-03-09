@@ -14,6 +14,7 @@ using Adapt: Adapt, adapt
 using CUDA: CUDA, CuDim, DenseCuArray, unsafe_cached_load
 
 using GPUCompiler: GPUCompiler
+using GPUArraysCore: @allowscalar
 using KernelAbstractions: KernelAbstractions
 using LLVM: LLVM
 
@@ -961,17 +962,11 @@ function compile(job)
         # This is a bit weird since we're taking a module from julia's llvm into reactant's llvm version
         # it is probably safer to reparse a string using the right llvm module api, so we will do that.
         mmod = MLIR.IR.Module(
-            @ccall MLIR.API.mlir_c.ConvertLLVMStrToMLIR(
-                modstr::Cstring, MLIR.IR.current_context()::MLIR.API.MlirContext
-            )::MLIR.API.MlirModule
+            MLIR.API.ConvertLLVMStrToMLIR(modstr, MLIR.IR.current_context())
         )
         @assert mmod != C_NULL
 
-        linkRes = @ccall MLIR.API.mlir_c.LinkInModule(
-            MLIR.IR.current_module()::MLIR.API.MlirModule,
-            mmod::MLIR.API.MlirModule,
-            entryname::Cstring,
-        )::MLIR.API.MlirOperation
+        linkRes = MLIR.API.LinkInModule(MLIR.IR.current_module(), mmod, entryname)
 
         String(Reactant.TracedUtils.get_attribute_by_name(linkRes, "sym_name"))
     end
@@ -1118,12 +1113,12 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     wrapbody = MLIR.IR.Block(wrapper_tys, [MLIR.IR.Location() for _ in wrapper_tys])
     push!(MLIR.IR.region(wrapfunc, 1), wrapbody)
     for i in 1:length(wrapper_tys)
-        @ccall MLIR.API.mlir_c.ReactantFuncSetArgAttr(
-            wrapfunc::MLIR.API.MlirOperation,
-            (i - 1)::Csize_t,
-            "llvm.noalias"::MLIR.API.MlirStringRef,
-            MLIR.IR.UnitAttribute()::MLIR.API.MlirAttribute,
-        )::Cvoid
+        MLIR.API.ReactantFuncSetArgAttr(
+            wrapfunc,
+            (i - 1),
+            Base.unsafe_convert(MLIR.API.MlirStringRef, "llvm.noalias"),
+            MLIR.IR.UnitAttribute(),
+        )
     end
 
     wrapargs = MLIR.IR.Value[]
@@ -1429,6 +1424,15 @@ function Reactant.make_tracer(
     return newa
 end
 
+@inline function Reactant.Ops.__construct_cuda_julia_buffer(::Type{T}, shape, ptr) where {T}
+    return unsafe_wrap(CUDA.CuArray, reinterpret(CUDA.CuPtr{T}, UInt(ptr)), shape)
+end
+@inline function Reactant.Ops.__construct_cuda_julia_buffer(
+    ::Type{T}, ::Tuple{}, ptr
+) where {T}
+    return @allowscalar Reactant.Ops.__construct_cuda_julia_buffer(T, (1,), ptr)[1]
+end
+
 # In Julia v1.11.3 precompiling this module caches bad code:
 # <https://github.com/EnzymeAD/Reactant.jl/issues/614>.
 @static if !Sys.isapple()
@@ -1436,9 +1440,9 @@ end
         Reactant.initialize_dialect()
 
         if Reactant.XLA.REACTANT_XLA_RUNTIME == "PJRT"
-            client = Reactant.XLA.PJRT.CPUClient(; checkcount=false)
+            client = Reactant.Accelerators.CPU.make_pjrt_client()
         elseif Reactant.XLA.REACTANT_XLA_RUNTIME == "IFRT"
-            client = Reactant.XLA.IFRT.CPUClient(; checkcount=false)
+            client = Reactant.Accelerators.CPU.make_ifrt_client()
         else
             error("Unsupported runtime: $(Reactant.XLA.REACTANT_XLA_RUNTIME)")
         end

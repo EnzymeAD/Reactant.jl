@@ -18,10 +18,10 @@ end
 PB.default_values(::Type{PrecisionStats}) = (;compute_16bit_ps = zero(UInt64), compute_32bit_ps = zero(UInt64))
 PB.field_numbers(::Type{PrecisionStats}) = (;compute_16bit_ps = 1, compute_32bit_ps = 2)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:PrecisionStats})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:PrecisionStats}, _endpos::Int=0, _group::Bool=false)
     compute_16bit_ps = zero(UInt64)
     compute_32bit_ps = zero(UInt64)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             compute_16bit_ps = PB.decode(d, UInt64)
@@ -67,11 +67,11 @@ end
 PB.default_values(::Type{var"PerformanceInfo.MemoryAccessed"}) = (;is_read = false, memory_space = var"PerformanceInfo.MemoryAccessed.MemorySpace".UNKNOWN, bytes_accessed = zero(Int64))
 PB.field_numbers(::Type{var"PerformanceInfo.MemoryAccessed"}) = (;is_read = 1, memory_space = 2, bytes_accessed = 3)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"PerformanceInfo.MemoryAccessed"})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"PerformanceInfo.MemoryAccessed"}, _endpos::Int=0, _group::Bool=false)
     is_read = false
     memory_space = var"PerformanceInfo.MemoryAccessed.MemorySpace".UNKNOWN
     bytes_accessed = zero(Int64)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             is_read = PB.decode(d, Bool)
@@ -109,11 +109,11 @@ end
 PB.default_values(::Type{var"LayoutAnalysis.Dimension"}) = (;size = zero(Int32), alignment = zero(Int32), semantics = LayoutDimensionSemantics.UNKNOWN_SEMANTICS)
 PB.field_numbers(::Type{var"LayoutAnalysis.Dimension"}) = (;size = 1, alignment = 2, semantics = 3)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"LayoutAnalysis.Dimension"})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"LayoutAnalysis.Dimension"}, _endpos::Int=0, _group::Bool=false)
     size = zero(Int32)
     alignment = zero(Int32)
     semantics = LayoutDimensionSemantics.UNKNOWN_SEMANTICS
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             size = PB.decode(d, Int32)
@@ -151,11 +151,11 @@ end
 PB.default_values(::Type{var"OpMetrics.MemoryAccessed"}) = (;operation_type = var"OpMetrics.MemoryAccessed.OperationType".UNKNOWN, memory_space = zero(UInt64), bytes_accessed = zero(UInt64))
 PB.field_numbers(::Type{var"OpMetrics.MemoryAccessed"}) = (;operation_type = 1, memory_space = 2, bytes_accessed = 3)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"OpMetrics.MemoryAccessed"})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"OpMetrics.MemoryAccessed"}, _endpos::Int=0, _group::Bool=false)
     operation_type = var"OpMetrics.MemoryAccessed.OperationType".UNKNOWN
     memory_space = zero(UInt64)
     bytes_accessed = zero(UInt64)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             operation_type = PB.decode(d, var"OpMetrics.MemoryAccessed.OperationType".T)
@@ -194,11 +194,11 @@ PB.reserved_fields(::Type{PerformanceInfo}) = (names = String[], numbers = Union
 PB.default_values(::Type{PerformanceInfo}) = (;flops = zero(Int64), bytes_accessed = zero(Int64), memory_accessed_breakdown = Vector{var"PerformanceInfo.MemoryAccessed"}())
 PB.field_numbers(::Type{PerformanceInfo}) = (;flops = 1, bytes_accessed = 2, memory_accessed_breakdown = 3)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:PerformanceInfo})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:PerformanceInfo}, _endpos::Int=0, _group::Bool=false)
     flops = zero(Int64)
     bytes_accessed = zero(Int64)
     memory_accessed_breakdown = PB.BufferedVector{var"PerformanceInfo.MemoryAccessed"}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             flops = PB.decode(d, Int64)
@@ -234,9 +234,9 @@ end
 PB.default_values(::Type{LayoutAnalysis}) = (;dimensions = Vector{var"LayoutAnalysis.Dimension"}())
 PB.field_numbers(::Type{LayoutAnalysis}) = (;dimensions = 1)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:LayoutAnalysis})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:LayoutAnalysis}, _endpos::Int=0, _group::Bool=false)
     dimensions = PB.BufferedVector{var"LayoutAnalysis.Dimension"}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, dimensions)
@@ -264,9 +264,9 @@ end
 PB.default_values(::Type{MemoryAccessBreakdown}) = (;memory_accessed = Vector{var"OpMetrics.MemoryAccessed"}())
 PB.field_numbers(::Type{MemoryAccessBreakdown}) = (;memory_accessed = 1)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:MemoryAccessBreakdown})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:MemoryAccessBreakdown}, _endpos::Int=0, _group::Bool=false)
     memory_accessed = PB.BufferedVector{var"OpMetrics.MemoryAccessed"}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, memory_accessed)
@@ -303,6 +303,8 @@ struct var"##Stub#OpMetrics"{T1<:var"##Abstract#OpMetricsDb"} <: var"##Abstract#
     self_time_ps::UInt64
     flops::UInt64
     model_flops::UInt64
+    flops_v2::Float64
+    model_flops_v2::Float64
     fingerprint::UInt64
     bytes_accessed::UInt64
     memory_accessed_breakdown::Vector{var"OpMetrics.MemoryAccessed"}
@@ -331,10 +333,10 @@ end
 
 const OpMetrics = var"##Stub#OpMetrics"{var"##Stub#OpMetricsDb"}
 PB.reserved_fields(::Type{OpMetrics}) = (names = String[], numbers = Union{Int,UnitRange{Int}}[4, 8, 9])
-PB.default_values(::Type{OpMetrics}) = (;hlo_module_id = zero(UInt64), name = "", long_name = "", category = "", provenance = "", is_eager = false, occurrences = zero(UInt32), time_ps = zero(UInt64), normalized_time_ps = zero(UInt64), min_time_ps = zero(UInt64), self_time_ps = zero(UInt64), flops = zero(UInt64), model_flops = zero(UInt64), fingerprint = zero(UInt64), bytes_accessed = zero(UInt64), memory_accessed_breakdown = Vector{var"OpMetrics.MemoryAccessed"}(), dma_stall_ps = zero(UInt64), layout = nothing, deduplicated_name = "", children = nothing, num_cores = zero(UInt32), computation_primitive_size = zero(UInt32), autotuned = false, source_info = nothing, core_type = var"OpMetrics.TpuCoreType".UNKNOWN)
-PB.field_numbers(::Type{OpMetrics}) = (;hlo_module_id = 13, name = 6, long_name = 20, category = 11, provenance = 12, is_eager = 18, occurrences = 3, time_ps = 7, normalized_time_ps = 27, min_time_ps = 17, self_time_ps = 1, flops = 2, model_flops = 24, fingerprint = 25, bytes_accessed = 5, memory_accessed_breakdown = 19, dma_stall_ps = 10, layout = 14, deduplicated_name = 15, children = 16, num_cores = 21, computation_primitive_size = 22, autotuned = 23, source_info = 26, core_type = 28)
+PB.default_values(::Type{OpMetrics}) = (;hlo_module_id = zero(UInt64), name = "", long_name = "", category = "", provenance = "", is_eager = false, occurrences = zero(UInt32), time_ps = zero(UInt64), normalized_time_ps = zero(UInt64), min_time_ps = zero(UInt64), self_time_ps = zero(UInt64), flops = zero(UInt64), model_flops = zero(UInt64), flops_v2 = zero(Float64), model_flops_v2 = zero(Float64), fingerprint = zero(UInt64), bytes_accessed = zero(UInt64), memory_accessed_breakdown = Vector{var"OpMetrics.MemoryAccessed"}(), dma_stall_ps = zero(UInt64), layout = nothing, deduplicated_name = "", children = nothing, num_cores = zero(UInt32), computation_primitive_size = zero(UInt32), autotuned = false, source_info = nothing, core_type = var"OpMetrics.TpuCoreType".UNKNOWN)
+PB.field_numbers(::Type{OpMetrics}) = (;hlo_module_id = 13, name = 6, long_name = 20, category = 11, provenance = 12, is_eager = 18, occurrences = 3, time_ps = 7, normalized_time_ps = 27, min_time_ps = 17, self_time_ps = 1, flops = 2, model_flops = 24, flops_v2 = 29, model_flops_v2 = 30, fingerprint = 25, bytes_accessed = 5, memory_accessed_breakdown = 19, dma_stall_ps = 10, layout = 14, deduplicated_name = 15, children = 16, num_cores = 21, computation_primitive_size = 22, autotuned = 23, source_info = 26, core_type = 28)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OpMetrics})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OpMetrics}, _endpos::Int=0, _group::Bool=false)
     hlo_module_id = zero(UInt64)
     name = ""
     long_name = ""
@@ -348,6 +350,8 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OpMetrics})
     self_time_ps = zero(UInt64)
     flops = zero(UInt64)
     model_flops = zero(UInt64)
+    flops_v2 = zero(Float64)
+    model_flops_v2 = zero(Float64)
     fingerprint = zero(UInt64)
     bytes_accessed = zero(UInt64)
     memory_accessed_breakdown = PB.BufferedVector{var"OpMetrics.MemoryAccessed"}()
@@ -360,7 +364,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OpMetrics})
     autotuned = false
     source_info = Ref{Union{Nothing,SourceInfo}}(nothing)
     core_type = var"OpMetrics.TpuCoreType".UNKNOWN
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 13
             hlo_module_id = PB.decode(d, UInt64)
@@ -388,6 +392,10 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OpMetrics})
             flops = PB.decode(d, UInt64)
         elseif field_number == 24
             model_flops = PB.decode(d, UInt64)
+        elseif field_number == 29
+            flops_v2 = PB.decode(d, Float64)
+        elseif field_number == 30
+            model_flops_v2 = PB.decode(d, Float64)
         elseif field_number == 25
             fingerprint = PB.decode(d, UInt64)
         elseif field_number == 5
@@ -416,7 +424,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OpMetrics})
             Base.skip(d, wire_type)
         end
     end
-    return OpMetrics(hlo_module_id, name, long_name, category, provenance, is_eager, occurrences, time_ps, normalized_time_ps, min_time_ps, self_time_ps, flops, model_flops, fingerprint, bytes_accessed, memory_accessed_breakdown[], dma_stall_ps, layout[], deduplicated_name, children[], num_cores, computation_primitive_size, autotuned, source_info[], core_type)
+    return OpMetrics(hlo_module_id, name, long_name, category, provenance, is_eager, occurrences, time_ps, normalized_time_ps, min_time_ps, self_time_ps, flops, model_flops, flops_v2, model_flops_v2, fingerprint, bytes_accessed, memory_accessed_breakdown[], dma_stall_ps, layout[], deduplicated_name, children[], num_cores, computation_primitive_size, autotuned, source_info[], core_type)
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::OpMetrics)
@@ -434,6 +442,8 @@ function PB.encode(e::PB.AbstractProtoEncoder, x::OpMetrics)
     x.self_time_ps != zero(UInt64) && PB.encode(e, 1, x.self_time_ps)
     x.flops != zero(UInt64) && PB.encode(e, 2, x.flops)
     x.model_flops != zero(UInt64) && PB.encode(e, 24, x.model_flops)
+    x.flops_v2 !== zero(Float64) && PB.encode(e, 29, x.flops_v2)
+    x.model_flops_v2 !== zero(Float64) && PB.encode(e, 30, x.model_flops_v2)
     x.fingerprint != zero(UInt64) && PB.encode(e, 25, x.fingerprint)
     x.bytes_accessed != zero(UInt64) && PB.encode(e, 5, x.bytes_accessed)
     !isempty(x.memory_accessed_breakdown) && PB.encode(e, 19, x.memory_accessed_breakdown)
@@ -463,6 +473,8 @@ function PB._encoded_size(x::OpMetrics)
     x.self_time_ps != zero(UInt64) && (encoded_size += PB._encoded_size(x.self_time_ps, 1))
     x.flops != zero(UInt64) && (encoded_size += PB._encoded_size(x.flops, 2))
     x.model_flops != zero(UInt64) && (encoded_size += PB._encoded_size(x.model_flops, 24))
+    x.flops_v2 !== zero(Float64) && (encoded_size += PB._encoded_size(x.flops_v2, 29))
+    x.model_flops_v2 !== zero(Float64) && (encoded_size += PB._encoded_size(x.model_flops_v2, 30))
     x.fingerprint != zero(UInt64) && (encoded_size += PB._encoded_size(x.fingerprint, 25))
     x.bytes_accessed != zero(UInt64) && (encoded_size += PB._encoded_size(x.bytes_accessed, 5))
     !isempty(x.memory_accessed_breakdown) && (encoded_size += PB._encoded_size(x.memory_accessed_breakdown, 19))
@@ -483,7 +495,7 @@ PB.reserved_fields(::Type{OpMetricsDb}) = (names = String[], numbers = Union{Int
 PB.default_values(::Type{OpMetricsDb}) = (;metrics_db = Vector{OpMetrics}(), total_host_infeed_enq_duration_ps = zero(UInt64), total_host_infeed_enq_start_timestamp_ps_diff = zero(UInt64), total_time_ps = zero(UInt64), total_op_time_ps = zero(UInt64), normalized_total_op_time_ps = zero(UInt64), precision_stats = nothing, idle_time_ps = zero(UInt64), busy_time_ps = zero(UInt64))
 PB.field_numbers(::Type{OpMetricsDb}) = (;metrics_db = 10, total_host_infeed_enq_duration_ps = 2, total_host_infeed_enq_start_timestamp_ps_diff = 3, total_time_ps = 11, total_op_time_ps = 12, normalized_total_op_time_ps = 16, precision_stats = 13, idle_time_ps = 14, busy_time_ps = 15)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OpMetricsDb})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OpMetricsDb}, _endpos::Int=0, _group::Bool=false)
     metrics_db = PB.BufferedVector{OpMetrics}()
     total_host_infeed_enq_duration_ps = zero(UInt64)
     total_host_infeed_enq_start_timestamp_ps_diff = zero(UInt64)
@@ -493,7 +505,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OpMetricsDb})
     precision_stats = Ref{Union{Nothing,PrecisionStats}}(nothing)
     idle_time_ps = zero(UInt64)
     busy_time_ps = zero(UInt64)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 10
             PB.decode!(d, metrics_db)

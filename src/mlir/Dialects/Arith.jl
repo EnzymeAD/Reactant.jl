@@ -725,6 +725,11 @@ width M and an integer destination type of width N. The destination
 bit-width must be larger than the input bit-width (N > M).
 The top-most (N - M) bits of the output are filled with zeros.
 
+When the `nneg` flag is present, the operand is assumed to have
+the most significant bit set to 0. In this case, zero extension is
+equivalent to sign extension. When this assumption is violated, the
+result is poison.
+
 # Example
 
 ```mlir
@@ -734,14 +739,18 @@ The top-most (N - M) bits of the output are filled with zeros.
   %4 = arith.extui %3 : i3 to i6  // %4 is 0b000010
 
   %5 = arith.extui %0 : vector<2 x i32> to vector<2 x i64>
+
+  // Zero extension with nneg flag.
+  %6 = arith.extui %3 nneg : i3 to i6
 ```
 """
-function extui(in::Value; out::IR.Type, location=Location())
+function extui(in::Value; out::IR.Type, nonNeg=nothing, location=Location())
     op_ty_results = IR.Type[out,]
     operands = Value[in,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(nonNeg) && push!(attributes, NamedAttribute("nonNeg", nonNeg))
 
     return create_operation(
         "arith.extui",
@@ -854,13 +863,27 @@ Casts between scalar or vector integers and corresponding \'index\' scalar or
 vectors. Index is an integer of platform-specific bit width. If casting to
 a wider integer, the value is sign-extended. If casting to a narrower
 integer, the value is truncated.
+
+If the `exact` attribute is present, it is assumed that the operand
+contains a value that fits in the destination\'s representation, therefore
+the cast does not lose any information. When this assumption is violated,
+the result is poison.
+
+# Example
+
+```mlir
+  %0 = arith.index_cast %a : index to i64
+  %1 = arith.index_cast %a exact : index to i64
+  %2 = arith.index_cast %b exact : i32 to index
+```
 """
-function index_cast(in::Value; out::IR.Type, location=Location())
+function index_cast(in::Value; out::IR.Type, isExact=nothing, location=Location())
     op_ty_results = IR.Type[out,]
     operands = Value[in,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(isExact) && push!(attributes, NamedAttribute("isExact", isExact))
 
     return create_operation(
         "arith.index_cast",
@@ -881,13 +904,36 @@ Casts between scalar or vector integers and corresponding \'index\' scalar or
 vectors. Index is an integer of platform-specific bit width. If casting to
 a wider integer, the value is zero-extended. If casting to a narrower
 integer, the value is truncated.
+
+When the `nneg` flag is present, the operand is assumed to have
+the most significant bit set to 0. In this case, zero extension
+is equivalent to sign extension. When this assumption is violated,
+the result is poison.
+
+If the `exact` attribute is present, it is assumed that the operand
+contains a value that fits in the destination\'s representation, therefore
+the cast does not lose any information. When this assumption is violated,
+the result is poison.
+
+# Example
+
+```mlir
+  %0 = arith.index_castui %a : i32 to index
+  %1 = arith.index_castui %a nneg : i32 to index
+  %2 = arith.index_castui %b nneg : index to i64
+  %3 = arith.index_castui %a nneg exact : i64 to index
+```
 """
-function index_castui(in::Value; out::IR.Type, location=Location())
+function index_castui(
+    in::Value; out::IR.Type, nonNeg=nothing, isExact=nothing, location=Location()
+)
     op_ty_results = IR.Type[out,]
     operands = Value[in,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(nonNeg) && push!(attributes, NamedAttribute("nonNeg", nonNeg))
+    !isnothing(isExact) && push!(attributes, NamedAttribute("isExact", isExact))
 
     return create_operation(
         "arith.index_castui",
@@ -2103,13 +2149,29 @@ Cast from a value interpreted as unsigned integer to the corresponding
 floating-point value. If the value cannot be exactly represented, it is
 rounded using the default rounding mode. When operating on vectors, casts
 elementwise.
+
+When the `nneg` flag is present, the operand is assumed to have
+the most significant bit set to 0. In this case, zero extension is
+equivalent to sign extension. When this assumption is violated, the
+result is poison.
+
+# Example
+
+```mlir
+  // Without nneg flag.
+  %0 = arith.uitofp %a : i32 to f64
+
+  // With nneg flag.
+  %1 = arith.uitofp %a nneg : i32 to f64
+```
 """
-function uitofp(in::Value; out::IR.Type, location=Location())
+function uitofp(in::Value; out::IR.Type, nonNeg=nothing, location=Location())
     op_ty_results = IR.Type[out,]
     operands = Value[in,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(nonNeg) && push!(attributes, NamedAttribute("nonNeg", nonNeg))
 
     return create_operation(
         "arith.uitofp",

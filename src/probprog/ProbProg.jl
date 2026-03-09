@@ -15,7 +15,7 @@ include("MCMC.jl")
 export Trace, Constraint, Selection, Address, TraceEntry, TracedTrace
 
 # Distributions.
-export Distribution, Normal, Exponential, LogNormal
+export Distribution, Normal, Exponential, LogNormal, Bernoulli
 
 # Utility functions.
 export get_choices, select, unflatten_trace, filter_entries_by_selection, with_trace

@@ -12,12 +12,13 @@ using ..TracedUtils: TracedUtils, get_mlir_data, set_mlir_data!
 using ..Ops: @opcall
 
 using LinearAlgebra: LinearAlgebra, BLAS
-using LinearAlgebra: Adjoint, Transpose, Factorization, RowMaximum, NoPivot
+using LinearAlgebra: Adjoint, Transpose, Factorization, Hermitian, Symmetric
 using LinearAlgebra: SymTridiagonal, Symmetric, Bidiagonal, Diagonal, Tridiagonal
 using LinearAlgebra: LowerTriangular, UnitLowerTriangular, UpperTriangular
+using LinearAlgebra: ColumnNorm, RowMaximum, NoPivot
 using LinearAlgebra: I, diag, diagm, ldiv!, det, logabsdet, istriu, istril, triu!, tril!
 using LinearAlgebra: inv!, rmul!, normalize
-using LinearAlgebra: svd, lu
+using LinearAlgebra: svd, lu, qr
 using Libdl: Libdl
 using GPUArraysCore: @allowscalar
 
@@ -62,10 +63,9 @@ function __init__()
             (BLAS.@blasfunc(csymm_), :enzymexla_blas_csymm_),
             (BLAS.@blasfunc(zsymm_), :enzymexla_blas_zsymm_),
         ]
-            sym = Libdl.dlsym(libblastrampoline_handle, cname)
-            @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(
-                enzymexla_name::Cstring, sym::Ptr{Cvoid}
-            )::Cvoid
+            MLIR.API.EnzymeJaXMapSymbol(
+                enzymexla_name, Libdl.dlsym(libblastrampoline_handle, cname)
+            )
         end
     end
 
@@ -131,6 +131,19 @@ for (AT, comp) in ((:LowerTriangular, "GE"), (:UpperTriangular, "LE"))
             return @opcall select(nondiag_indicator, x, one.(x))
         end
     end
+end
+
+function ReactantCore.materialize_traced_array(
+    x::Hermitian{TracedRNumber{T},<:AnyTracedRMatrix}
+) where {T}
+    m, n = size(x)
+    row_idxs = @opcall iota(Int, [m, n]; iota_dimension=1)
+    col_idxs = @opcall iota(Int, [m, n]; iota_dimension=2)
+    indicator = @opcall compare(
+        row_idxs, col_idxs; comparison_direction=x.uplo == 'L' ? "GT" : "LT"
+    )
+    x_adj = @opcall conj(@opcall transpose(parent(x), [2, 1]))
+    return @opcall select(indicator, parent(x), x_adj)
 end
 
 function ReactantCore.materialize_traced_array(
@@ -210,6 +223,17 @@ for (AT, dcomp, ocomp) in (
 end
 
 function TracedUtils.set_mlir_data!(
+    x::Hermitian{TracedRNumber{T},<:AnyTracedRMatrix}, data
+) where {T}
+    if x.uplo == 'L'
+        set_mlir_data!(LowerTriangular(parent(x)), data)
+    else
+        set_mlir_data!(UpperTriangular(parent(x)), data)
+    end
+    return x
+end
+
+function TracedUtils.set_mlir_data!(
     x::Symmetric{TracedRNumber{T},<:AnyTracedRMatrix}, data
 ) where {T}
     if x.uplo == 'L'
@@ -233,71 +257,74 @@ end
 Reactant.aos_to_soa(x::Tridiagonal{TracedRNumber{T}}) where {T} = x
 
 # Core functions
-function overloaded_mul!(
-    @nospecialize(C::TracedRArray{T,1}),
-    @nospecialize(A::AbstractMatrix),
-    @nospecialize(B::AbstractVector),
-    α::Number=true,
-    β::Number=false,
-) where {T}
-    # TODO: The reshape operations are not getting optimized, we should directly call
-    #       dot_general
-    rC = @opcall reshape(C, length(C), 1)
-    overloaded_mul!(rC, A, reshape(B, :, 1), α, β)
-    C.mlir_data = get_mlir_data(vec(rC))
+function overloaded_mul(
+    A::AbstractVecOrMat, B::AbstractVecOrMat, α::Number=true, β::Number=false
+)
+    T = Base.promote_op(
+        *, Reactant.unwrapped_eltype(eltype(A)), Reactant.unwrapped_eltype(eltype(B))
+    )
+    A = call_with_reactant(Reactant.promote_to, TracedRArray{T}, A)
+    B = call_with_reactant(Reactant.promote_to, TracedRArray{T}, B)
+    C = ndims(B) == 1 ? similar(A, T, size(A, 1)) : similar(A, T, size(A, 1), size(B, 2))
+    overloaded_mul!(C, A, B, α, β)
     return C
 end
 
 function overloaded_mul!(
-    @nospecialize(C::TracedRArray{T,2}),
-    @nospecialize(A::AbstractMatrix),
-    @nospecialize(B::AbstractVector),
-    α::Number=true,
-    β::Number=false,
-) where {T}
-    overloaded_mul!(C, A, reshape(B, :, 1), α, β)
-    return C
-end
-
-function overloaded_mul!(
-    @nospecialize(C::TracedRArray{T,2} where {T}),
-    @nospecialize(A::AbstractMatrix),
-    @nospecialize(B::AbstractMatrix),
+    C::AbstractVecOrMat,
+    A::AbstractVecOrMat,
+    B::AbstractVecOrMat,
     α::Number=true,
     β::Number=false,
 )
-    A = call_with_reactant(Reactant.promote_to, TracedRArray, A)
-    B = call_with_reactant(Reactant.promote_to, TracedRArray, B)
+    T = unwrapped_eltype(C)
+    A = call_with_reactant(Reactant.promote_to, TracedRArray{T}, A)
+    B = call_with_reactant(Reactant.promote_to, TracedRArray{T}, B)
 
-    if size(C) != (size(A, 1), size(B, 2))
-        throw(
-            DimensionMismatch(
-                "C has size $(size(C)), A has size $(size(A)), B has size $(size(B))"
-            ),
-        )
-    end
-    if size(A, 2) != size(B, 1)
+    size(A, 2) == size(B, 1) ||
         throw(DimensionMismatch("A has size $(size(A)), B has size $(size(B))"))
+    size(C, 1) == size(A, 1) ||
+        throw(DimensionMismatch("C has size $(size(C)), A has size $(size(A))"))
+    size(C, 2) == size(B, 2) ||
+        throw(DimensionMismatch("C has size $(size(C)), B has size $(size(B))"))
+
+    if ndims(C) == 1
+        @assert ndims(B) == 1 "B must be a vector if C is a vector"
     end
 
-    T = Reactant.unwrapped_eltype(C)
-    tmp = @opcall dot_general(
-        T.(materialize_traced_array(A)),
-        T.(materialize_traced_array(B));
-        contracting_dimensions=([2], [1]),
-    )
+    tmp = @opcall dot_general(A, B, contracting_dimensions=([2], [1]))
 
-    res = if iszero(β)
-        if isone(α)
+    β_is_zero = !(β isa TracedRNumber) && iszero(β)
+    α_is_one = !(α isa TracedRNumber) && isone(α)
+
+    if α_is_one && β_is_zero
+        res = tmp
+    else
+        α_res = if α_is_one
             tmp
         else
-            @opcall(multiply(tmp, Reactant.broadcast_to_size(T(α), size(C))))
+            @opcall(
+                multiply(
+                    tmp,
+                    @opcall(fill(Reactant.promote_to(TracedRNumber{T}, α), size(tmp)))
+                )
+            )
         end
-    else
-        α_res = @opcall multiply(tmp, Reactant.broadcast_to_size(T(α), size(C)))
-        β_C = @opcall multiply(C, Reactant.broadcast_to_size(T(β), size(C)))
-        @opcall add(α_res, β_C)
+        if β_is_zero
+            res = α_res
+        else
+            β_C = @opcall multiply(
+                C, @opcall(fill(Reactant.promote_to(TracedRNumber{T}, β), size(C)))
+            )
+            res = @opcall add(α_res, β_C)
+        end
     end
+
+    if ndims(C) == 2 && size(C, 2) == 1 && ndims(res) == 1
+        res = reshape(res, size(C))
+    end
+
+    @assert size(C) == size(res) "C has size $(size(C)), res has size $(size(res))"
     set_mlir_data!(C, get_mlir_data(res))
     return C
 end

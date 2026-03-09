@@ -1,4 +1,4 @@
-using Reactant, Test
+using Reactant, Test, FileCheck
 using LinearAlgebra
 using Reactant.ReactantCore
 using Reactant: MLIR
@@ -791,8 +791,8 @@ end
 
     ir = sprint(show, @code_hlo optimize = "enzyme-batch" for_default_checkpoints(x_ra))
     @test @filecheck begin
-        @check "enzymexla.enable_checkpointing"
-        @check "enzymexla.checkpoints = 10"
+        @check_dag "enzyme.disable_mincut"
+        @check_dag "enzymexla.enable_checkpointing"
         ir
     end
 end

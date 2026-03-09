@@ -78,6 +78,10 @@ mutable struct TracedRArray{T,N} <: RArray{TracedRNumber{T},N}
         end
         return new{T,N}(paths, mlir_data, shape)
     end
+
+    function TracedRArray{T,N}(::UndefInitializer, shape::Integer...) where {T,N}
+        return similar(TracedRArray{T,N}, shape...)
+    end
 end
 
 function repath(x::TracedRArray{T,N}, paths) where {T,N}
@@ -125,6 +129,17 @@ end
 
 @leaf TracedUnitRange
 Adapt.parent_type(::Type{TracedUnitRange{T}}) where {T} = TracedUnitRange{T}
+
+## TracedRational
+struct TracedRational{
+    T<:Union{<:Integer,<:AbstractConcreteNumber{<:Integer},TracedRNumber{<:Integer}}
+} <: Real
+    num::T
+    den::T
+end
+
+@leaf TracedRational
+Adapt.parent_type(::Type{TracedRational{T}}) where {T} = TracedRational{T}
 
 const AnyTracedRArray{T,N} = AbstractArray{TracedRNumber{T},N}
 const AnyTracedRVector{T} = AnyTracedRArray{T,1}

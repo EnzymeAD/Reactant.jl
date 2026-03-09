@@ -30,7 +30,7 @@ function main(; output_dir::String=DEFAULT_OUTPUT_DIR, force::Bool=false)
     )
 end
 
-if abspath(PROGRAM_FILE) == @__FILE__
+if (abspath(PROGRAM_FILE) == @__FILE__) || isinteractive()
     # Parse command line arguments
     force = "--force" in ARGS || "-f" in ARGS
 

@@ -1137,7 +1137,16 @@ function elem_apply_via_while_loop(f, args::Vararg{Any,Nargs}) where {Nargs}
 
     # This wont be a mutating function so we can safely execute it once
     res_tmp = @allowscalar(f([@allowscalar(arg[1]) for arg in flat_args]...))
-    result = similar(first(flat_args), Reactant.unwrapped_eltype(res_tmp), L)
+
+    # TODO: perhaps instead of this logic, we should have
+    # `similar(::TracedRArray, TracedRNumber{T}) where T = similar(::TracedRArray, T)`
+    # and just not unwrap here?
+    T_res = if typeof(res_tmp) <: TracedRNumber
+        Reactant.unwrapped_eltype(res_tmp)
+    else
+        typeof(res_tmp)
+    end
+    result = similar(first(flat_args), T_res, L)
 
     ind_var = Ref(0)
     f_ref = Ref(f)

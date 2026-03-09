@@ -1,4 +1,4 @@
-using Test, Reactant, Enzyme, NNlib, Statistics
+using Test, Reactant, Enzyme, NNlib, Statistics, FileCheck
 using Reactant.MLIR
 
 @noinline function no(@nospecialize(x))
@@ -86,6 +86,27 @@ end
     @test @jit(custom_ln(x_ra)) ≈ custom_ln(x)
 end
 
+struct Unstable
+    x
+end
+
+@testset "Extruded broadcasting" begin
+    x = Reactant.TestUtils.construct_test_array(Float32, 10)
+    y = Reactant.TestUtils.construct_test_array(Float32, 10)
+    x_ra = Reactant.to_rarray(x)
+    y_ra = Reactant.to_rarray(y)
+
+    a = Unstable(ConcreteRNumber(3.0f0))
+    f(a, x, y) = x * y + a.x
+    fb(out_ra, a, x_ra, y_ra) = (out_ra .= f.(Ref(a), x_ra, y_ra) .* 5.0f0)
+    out_ra = similar(x_ra, 10, 10)
+    @jit fb(out_ra, a, reshape(x_ra, :, 1), reshape(y_ra, 1, :))
+
+    out = similar(x, 10, 10)
+    fb(out, a, reshape(x, :, 1), reshape(y, 1, :))
+    @test out_ra ≈ out
+end
+
 pow(x, n) = x .^ n
 
 @testset "Pow" begin
@@ -119,8 +140,11 @@ end
     x = Reactant.TestUtils.construct_test_array(Float32, 2, 3)
     a = ConcreteRNumber(0.3f0)
     hlo = @code_hlo bcast_scalar_with_jlarray(x, a)
-    @test !occursin("stablehlo.slice", repr(hlo))
-    @test occursin("stablehlo.broadcast_in_dim", repr(hlo))
+    @test @filecheck begin
+        @check_not "stablehlo.slice"
+        @check "stablehlo.broadcast_in_dim"
+        repr(hlo)
+    end
 
     @test @jit(bcast_scalar_with_jlarray(x, a)) ≈
         bcast_scalar_with_jlarray(Array(x), Float32(a))
@@ -224,4 +248,33 @@ end
     res_ra = @jit K.(x)
     res_jl = K.(x_inner)
     @test res_ra ≈ res_jl
+end
+
+@testset "@views broadcast with captured Matrix columns: #2569" begin
+    # When @views creates SubArray wrappers around both a TracedRArray and a
+    # captured regular Matrix, broadcast alias-checking calls _parentsmatch
+    # which fell through to the DenseArray method that calls pointer().
+    M = rand(2, 4)
+
+    function views_bcast!(du, u)
+        du .= 0.0
+        @views for comp in 1:4
+            is = (comp - 1) * 2 + 1
+            ie = comp * 2
+            du[is:ie] .+= M[:, comp] .* u[is:ie]
+        end
+        return nothing
+    end
+
+    u_ra = Reactant.ConcreteRArray(ones(8))
+    du_ra = Reactant.ConcreteRArray(zeros(8))
+
+    compiled = Reactant.compile(views_bcast!, (du_ra, u_ra))
+    compiled(du_ra, u_ra)
+
+    # Verify correctness: should match non-Reactant version
+    u_jl = ones(8)
+    du_jl = zeros(8)
+    views_bcast!(du_jl, u_jl)
+    @test Array(du_ra) ≈ du_jl
 end

@@ -66,11 +66,13 @@ Base.collect(x::TracedRArray) = copy(x)
 Base.copy(A::TracedRArray{T,N}) where {T,N} = TracedRArray{T,N}((), A.mlir_data, size(A))
 
 function Base.similar(::TracedRArray, ::Type{T}, dims::Dims{N}) where {T,N}
-    return @opcall fill(zero(unwrapped_eltype(T)), dims)
+    return (@opcall fill(
+        zero(unwrapped_eltype(T)), dims
+    ))::TracedRArray{unwrapped_eltype(T),N}
 end
 
 function Base.similar(::Type{<:TracedRArray{T}}, dims::Dims{N}) where {T,N}
-    return @opcall fill(zero(T), dims)
+    return (@opcall fill(zero(T), dims))::TracedRArray{T,N}
 end
 
 function Base.show(io::IOty, X::AnyTracedRArray) where {IOty<:Union{IO,IOContext}}
@@ -96,6 +98,17 @@ end
 # Override _parentsmatch to avoid pointer comparisons during tracing
 # Direct TracedRArray comparisons - they don't alias unless they're the same object
 Base._parentsmatch(A::TracedRArray, B::TracedRArray) = A === B
+# A TracedRArray and a regular Array can never share memory, so they never alias.
+# Without this, the default DenseArray/StridedArray methods call pointer() which
+# isn't defined for TracedRArray, causing "conversion to pointer not defined"
+# errors when @views creates SubArray wrappers that trigger broadcast alias checking.
+Base._parentsmatch(::TracedRArray, ::AbstractArray) = false
+Base._parentsmatch(::AbstractArray, ::TracedRArray) = false
+# Resolve method ambiguities with Base's DenseArray and StridedArray specializations
+Base._parentsmatch(::TracedRArray, ::DenseArray) = false
+Base._parentsmatch(::DenseArray, ::TracedRArray) = false
+Base._parentsmatch(::TracedRArray, ::StridedArray) = false
+Base._parentsmatch(::StridedArray, ::TracedRArray) = false
 # ReshapedArray comparisons - check if they share the same parent (more specific than StridedArray)
 function Base._parentsmatch(
     A::Base.ReshapedArray{
@@ -261,14 +274,14 @@ function Base.similar(
     ::Broadcasted{AbstractReactantArrayStyle{N}}, ::Type{T}, dims
 ) where {T<:Reactant.ReactantPrimitive,N}
     @assert N isa Int
-    return @opcall fill(zero(unwrapped_eltype(T)), dims)
+    return (@opcall fill(zero(unwrapped_eltype(T)), dims))::TracedRArray{T,N}
 end
 
 function Base.similar(
     ::Broadcasted{AbstractReactantArrayStyle{N}}, ::Type{TracedRNumber{T}}, dims
 ) where {T<:Reactant.ReactantPrimitive,N}
     @assert N isa Int
-    return @opcall fill(zero(T), dims)
+    return (@opcall fill(zero(T), dims))::TracedRArray{T,N}
 end
 
 function Base.copy(bc::Broadcasted{<:AbstractReactantArrayStyle{0}})
@@ -280,10 +293,11 @@ end
 Base.eltype(::Broadcast.Extruded{T}) where {T} = eltype(T)
 
 first_scalar(x) = @allowscalar first(x)
+first_scalar(x::Broadcast.Extruded) = first_scalar(x.x)
 
 # we need to override the outer copy method to make sure we never fall back to scalar
 # iteration (see, e.g., CUDA.jl#145)
-function Base.copy(bc::Broadcasted{<:AbstractReactantArrayStyle})
+function _copy(bc)
     fn = if bc.f isa Type && bc.f <: Reactant.ReactantPrimitive
         TracedUtils.TypeCast{bc.f}()
     else
@@ -299,6 +313,10 @@ function Base.copy(bc::Broadcasted{<:AbstractReactantArrayStyle})
     end
     sim = similar(bc, ElType)
     return copyto!(sim, bc)
+end
+
+@noinline function Base.copy(bc::Broadcasted{<:AbstractReactantArrayStyle})
+    return _copy(bc)
 end
 
 function Base.materialize!(

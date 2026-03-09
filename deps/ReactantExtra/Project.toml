@@ -9,3 +9,4 @@ ProtoBuf = "1"
 
 [sources]
 Clang = {url = "https://github.com/wsmoses/Clang.jl", rev = "patch-1"}
+ProtoBuf = {url = "https://github.com/avik-pal/ProtoBuf.jl", rev = "ap/reactant_gen_patches"}

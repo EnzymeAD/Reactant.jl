@@ -22,6 +22,12 @@ within_compile
 Periodic
 ```
 
+## Converting Data
+
+```@docs
+Reactant.to_rarray
+```
+
 ## Reactant data types
 
 ```@docs

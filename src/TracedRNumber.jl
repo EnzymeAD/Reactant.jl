@@ -292,6 +292,19 @@ for op in (:mod, :mod1, :rem)
     end
 end
 
+Base.flipsign(x::TracedRNumber, y::TracedRNumber) = ifelse(y < 0, -x, x)
+
+function Base.div(
+    x::TracedRNumber{<:Reactant.ReactantSInt}, y::TracedRNumber{<:Reactant.ReactantUInt}
+)
+    return flipsign(signed(div(unsigned(abs(x)), y)), x)
+end
+function Base.div(
+    x::TracedRNumber{<:Reactant.ReactantUInt}, y::TracedRNumber{<:Reactant.ReactantSInt}
+)
+    return unsigned(flipsign(signed(div(x, unsigned(abs(y)))), y))
+end
+
 function Base.div(
     @nospecialize(lhs::TracedRNumber{T}), rhs, r::Base.RoundingMode
 ) where {T<:Integer}
@@ -671,7 +684,9 @@ for (jlop, hloop) in (
     (:(Base.abs), :abs),
     (:(Base.:-), :negate),
     (:(Base.sin), :sine),
+    (:(Base.sinh), :sinh),
     (:(Base.cos), :cosine),
+    (:(Base.cosh), :cosh),
     (:(Base.tan), :tan),
     (:(Base.tanh), :tanh),
     (:(Base.FastMath.tanh_fast), :tanh),
@@ -720,7 +735,9 @@ Base.acotd(x::TracedRNumber) = rad2deg(atan(1 / x))
 
 for (jlop, hloop) in (
     (:(Base.sin), :sine),
+    (:(Base.sinh), :sinh),
     (:(Base.cos), :cosine),
+    (:(Base.cosh), :cosh),
     (:(Base.tan), :tan),
     (:(Base.tanh), :tanh),
     (:(Base.FastMath.tanh_fast), :tanh),

@@ -289,10 +289,7 @@ function set_act!(inp, path, reverse, tostore; emptypath=false, width=1)
 end
 
 function act_attr(val)
-    val = @ccall MLIR.API.mlir_c.enzymeActivityAttrGet(
-        MLIR.IR.current_context()::MLIR.API.MlirContext, val::Int32
-    )::MLIR.API.MlirAttribute
-    return MLIR.IR.Attribute(val)
+    return MLIR.IR.Attribute(MLIR.API.enzymeActivityAttrGet(MLIR.IR.current_context(), val))
 end
 
 function infer_activity(
@@ -348,11 +345,28 @@ function overload_autodiff(
     activity = Int32[]
     ad_inputs = MLIR.IR.Value[]
 
+    reverse_seeds = Dict{Tuple,MLIR.IR.Value}()
+
     for a in linear_args
         idx, path = TracedUtils.get_argidx(a, argprefix)
         arg = idx == 1 && fnwrap ? f : args[idx - fnwrap]
         push!(activity, act_from_type(arg, reverse))
         push_acts!(ad_inputs, arg, path[3:end], reverse)
+
+        if CMode <: ReverseMode && act_from_type(arg, false) == enzyme_dup
+            x = if width == 1
+                arg.dval
+            elseif arg.dval isa AbstractArray
+                arg.dval
+            else
+                call_with_reactant(stack, arg.dval)
+            end
+            for p in path[3:end]
+                x = Compiler.traced_getfield(x, p)
+            end
+            x = TracedUtils.get_mlir_data(x)
+            reverse_seeds[path] = x
+        end
     end
 
     outtys = MLIR.IR.Type[]
@@ -380,14 +394,40 @@ function overload_autodiff(
             end
 
             act = act_from_type(A, reverse, EnzymeCore.needs_primal(CMode))
-            push!(ret_activity, act)
+            cst = nothing
             if act == enzyme_out || act == enzyme_outnoneed
                 if width == 1
                     cst = @opcall fill(one(unwrapped_eltype(a)), size(a))
                 else
                     cst = @opcall fill(one(unwrapped_eltype(a)), (size(a)..., width))
                 end
-                push!(ad_inputs, cst.mlir_data)
+                cst = cst.mlir_data
+            end
+
+            if CMode <: ReverseMode && TracedUtils.has_idx(a, argprefix)
+                idx, path = TracedUtils.get_argidx(a, argprefix)
+                arg = idx == 1 && fnwrap ? f : args[idx - fnwrap]
+                if act_from_type(arg, false) == enzyme_dup
+                    seed = reverse_seeds[path]
+                    if cst == nothing
+                        if act == enzyme_const
+                            act = enzyme_out
+                        elseif act == enzyme_constnoneed
+                            act = enzyme_outnoneed
+                        else
+                            @assert false
+                        end
+                        cst = seed
+                    else
+                        @assert act == enzyme_out || act == enzyme_outnoneed
+                        cst = MLIR.IR.result(MLIR.Dialects.stablehlo.add(cst, seed), 1)
+                    end
+                end
+            end
+
+            push!(ret_activity, act)
+            if cst != nothing
+                push!(ad_inputs, cst)
             end
         else
             if TracedUtils.has_idx(a, argprefix)
@@ -398,15 +438,8 @@ function overload_autodiff(
                 push!(ret_activity, act)
 
                 if act == enzyme_out || act == enzyme_outnoneed
-                    if width == 1
-                        TracedUtils.push_val!(ad_inputs, arg.dval, path[3:end])
-                    elseif arg.dval isa AbstractArray
-                        TracedUtils.push_val!(ad_inputs, arg.dval, path[3:end])
-                    else
-                        TracedUtils.push_val!(
-                            ad_inputs, call_with_reactant(stack, arg.dval), path[3:end]
-                        )
-                    end
+                    seed = reverse_seeds[path]
+                    push!(ad_inputs, seed)
                 end
             else
                 act = act_from_type(Const, reverse, true)
