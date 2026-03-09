@@ -2503,7 +2503,10 @@ ifrt_sharding_is_fully_replicated(HeldIfrtSharding *sharding) {
 }
 
 REACTANT_ABI const char *ifrt_sharding_to_string(HeldIfrtSharding *sharding) {
-  return cstr_from_string(absl::StrCat(sharding->obj()));
+  std::string str;
+  std::stringstream ss(str);
+  ss << sharding->obj();
+  return cstr_from_string(ss.str());
 }
 
 REACTANT_ABI int32_t ifrt_sharding_devices_size(HeldIfrtSharding *sharding) {
