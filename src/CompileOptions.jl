@@ -24,6 +24,7 @@ communication.
     wrap_to_rotate::Int = 0
     updatewithoutcorners_to_select::Int = 1
     multirotate_custom_call::Int = 1
+    multislice_custom_call::Int = 1
     wrap_custom_call::Int = 1
 end
 
