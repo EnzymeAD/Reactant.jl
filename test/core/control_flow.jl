@@ -741,6 +741,29 @@ end
     @test contains(repr(ir), "enzymexla.checkpoints = 5")
 end
 
+function while_explicit_checkpoints(x, n)
+    i = zero(n)
+    @trace mincut = false checkpointing = Periodic(5) track_numbers = false while i <= n
+        x = 2 .* x
+        i += one(i)
+    end
+    return x
+end
+
+@testset "while explicit checkpoints" begin
+    n = 10
+    n_ra = Reactant.ConcreteRNumber(n)
+    x = Float32[1, 2, 3]
+    x_ra = Reactant.to_rarray(x)
+
+    while_explicit_checkpoints_ra = @compile while_explicit_checkpoints(x_ra, n_ra)
+    @test while_explicit_checkpoints(x, n) == while_explicit_checkpoints(x_ra, n_ra)
+
+    ir = sprint(show, @code_hlo while_explicit_checkpoints(x_ra, n_ra))
+    @test contains(repr(ir), "enzymexla.enable_checkpointing")
+    @test contains(repr(ir), "enzymexla.checkpoints = 5")
+end
+
 function for_default_checkpoints(x)
     @trace checkpointing = true track_numbers = false for i in 1:100
         x = x .+ 1
