@@ -74,6 +74,58 @@ end
         end
     end
 
+    @testset "Cross-period conversions: Dates.Source → TracedRTarget" begin
+        # All cross-period pairs that Dates.convert supports natively
+        cross_pairs = (
+            # DatePeriod → DatePeriod
+            (Dates.Year, Dates.Quarter, RDExt.TracedRQuarter),
+            (Dates.Year, Dates.Month, RDExt.TracedRMonth),
+            (Dates.Quarter, Dates.Month, RDExt.TracedRMonth),
+            (Dates.Week, Dates.Day, RDExt.TracedRDay),
+            # DatePeriod → TimePeriod
+            (Dates.Week, Dates.Hour, RDExt.TracedRHour),
+            (Dates.Week, Dates.Minute, RDExt.TracedRMinute),
+            (Dates.Week, Dates.Second, RDExt.TracedRSecond),
+            (Dates.Week, Dates.Millisecond, RDExt.TracedRMillisecond),
+            (Dates.Week, Dates.Microsecond, RDExt.TracedRMicrosecond),
+            (Dates.Week, Dates.Nanosecond, RDExt.TracedRNanosecond),
+            (Dates.Day, Dates.Hour, RDExt.TracedRHour),
+            (Dates.Day, Dates.Minute, RDExt.TracedRMinute),
+            (Dates.Day, Dates.Second, RDExt.TracedRSecond),
+            (Dates.Day, Dates.Millisecond, RDExt.TracedRMillisecond),
+            (Dates.Day, Dates.Microsecond, RDExt.TracedRMicrosecond),
+            (Dates.Day, Dates.Nanosecond, RDExt.TracedRNanosecond),
+            # TimePeriod → TimePeriod
+            (Dates.Hour, Dates.Minute, RDExt.TracedRMinute),
+            (Dates.Hour, Dates.Second, RDExt.TracedRSecond),
+            (Dates.Hour, Dates.Millisecond, RDExt.TracedRMillisecond),
+            (Dates.Hour, Dates.Microsecond, RDExt.TracedRMicrosecond),
+            (Dates.Hour, Dates.Nanosecond, RDExt.TracedRNanosecond),
+            (Dates.Minute, Dates.Second, RDExt.TracedRSecond),
+            (Dates.Minute, Dates.Millisecond, RDExt.TracedRMillisecond),
+            (Dates.Minute, Dates.Microsecond, RDExt.TracedRMicrosecond),
+            (Dates.Minute, Dates.Nanosecond, RDExt.TracedRNanosecond),
+            (Dates.Second, Dates.Millisecond, RDExt.TracedRMillisecond),
+            (Dates.Second, Dates.Microsecond, RDExt.TracedRMicrosecond),
+            (Dates.Second, Dates.Nanosecond, RDExt.TracedRNanosecond),
+            (Dates.Millisecond, Dates.Microsecond, RDExt.TracedRMicrosecond),
+            (Dates.Millisecond, Dates.Nanosecond, RDExt.TracedRNanosecond),
+            (Dates.Microsecond, Dates.Nanosecond, RDExt.TracedRNanosecond),
+        )
+        for (SrcT, DstT, TracedT) in cross_pairs
+            src = SrcT(1)
+            expected = convert(DstT, src)
+            traced = convert(TracedT, src)
+            @test traced isa TracedT
+            @test value(traced) == value(expected)
+
+            # Parametric variant
+            traced_p = convert(TracedT{Int64}, src)
+            @test traced_p isa TracedT{Int64}
+            @test value(traced_p) == value(expected)
+        end
+    end
+
     @testset "DateTime conversion: DateTime → TracedRDateTime → DateTime" begin
         dt = DateTime(2000, 1, 1)
         traced = convert(RDExt.TracedRDateTime, dt)

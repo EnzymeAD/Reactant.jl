@@ -24,6 +24,55 @@ for (S, T) in (
     @eval Base.convert(::Type{$T{I}}, x::$T{J}) where {I,J} = $T(convert(I, value(x)))
 end
 
+# Cross-period conversions: Dates.Source → TracedRTarget (where Source ≠ Target)
+# Uses Dates' own conversion logic first, then converts to the TracedR type.
+# This covers all pairs that Dates.convert supports natively.
+const _CROSS_PERIOD_PAIRS = (
+    # DatePeriod → DatePeriod
+    (:Year, :Quarter, :TracedRQuarter),
+    (:Year, :Month, :TracedRMonth),
+    (:Quarter, :Month, :TracedRMonth),
+    (:Week, :Day, :TracedRDay),
+    # DatePeriod → TimePeriod
+    (:Week, :Hour, :TracedRHour),
+    (:Week, :Minute, :TracedRMinute),
+    (:Week, :Second, :TracedRSecond),
+    (:Week, :Millisecond, :TracedRMillisecond),
+    (:Week, :Microsecond, :TracedRMicrosecond),
+    (:Week, :Nanosecond, :TracedRNanosecond),
+    (:Day, :Hour, :TracedRHour),
+    (:Day, :Minute, :TracedRMinute),
+    (:Day, :Second, :TracedRSecond),
+    (:Day, :Millisecond, :TracedRMillisecond),
+    (:Day, :Microsecond, :TracedRMicrosecond),
+    (:Day, :Nanosecond, :TracedRNanosecond),
+    # TimePeriod → TimePeriod
+    (:Hour, :Minute, :TracedRMinute),
+    (:Hour, :Second, :TracedRSecond),
+    (:Hour, :Millisecond, :TracedRMillisecond),
+    (:Hour, :Microsecond, :TracedRMicrosecond),
+    (:Hour, :Nanosecond, :TracedRNanosecond),
+    (:Minute, :Second, :TracedRSecond),
+    (:Minute, :Millisecond, :TracedRMillisecond),
+    (:Minute, :Microsecond, :TracedRMicrosecond),
+    (:Minute, :Nanosecond, :TracedRNanosecond),
+    (:Second, :Millisecond, :TracedRMillisecond),
+    (:Second, :Microsecond, :TracedRMicrosecond),
+    (:Second, :Nanosecond, :TracedRNanosecond),
+    (:Millisecond, :Microsecond, :TracedRMicrosecond),
+    (:Millisecond, :Nanosecond, :TracedRNanosecond),
+    (:Microsecond, :Nanosecond, :TracedRNanosecond),
+)
+
+for (S, T, TR) in _CROSS_PERIOD_PAIRS
+    @eval function Base.convert(::Type{$TR}, x::Dates.$S)
+        return convert($TR, convert(Dates.$T, x))
+    end
+    @eval function Base.convert(::Type{$TR{I}}, x::Dates.$S) where {I}
+        return convert($TR{I}, convert(Dates.$T, x))
+    end
+end
+
 # DateTime conversion
 function Base.convert(::Type{TracedRDateTime}, dt::Dates.DateTime)
     return TracedRDateTime(UTInstant(TracedRMillisecond(value(dt))))
