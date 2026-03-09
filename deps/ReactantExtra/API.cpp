@@ -1184,7 +1184,7 @@ REACTANT_ABI void *AwaitBufferReady(PjRtBuffer *buffer) {
   auto ready = buffer->GetReadyFuture();
   auto status = ready.Await();
   if (!status.ok()) {
-    printf("error awaiting buffer: %s\n", status.ToString().c_str());
+    ReactantThrowError(status.ToString().c_str());
   }
   auto unsafe = MyValueOrThrow(buffer->client()->UnsafeBufferPointer(buffer));
   return (void *)unsafe;

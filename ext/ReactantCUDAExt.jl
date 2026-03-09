@@ -1491,6 +1491,14 @@ end
 
 # CuArray -> ConcreteRArray: D2D copy via CreateViewOfDeviceBuffer + CopyToMemorySpace.
 # Uses XLA's internal stream infrastructure for correct synchronization.
+# The CUDA stream handle is passed to PJRT so it can synchronize against any
+# pending CUDA.jl operations on the source CuArray.
+#
+# Safety: BufferFromDevicePointer creates an ephemeral PJRT view of cu's memory,
+# then does a D2D copy via CopyToMemorySpace. The view's destructor (called inside
+# the C++ function before it returns) waits for usage events, ensuring the D2D copy
+# completes before the function returns. So cu's memory is no longer being read by
+# the time we leave GC.@preserve.
 function Reactant.ConcretePJRTArray(
     cu::DenseCuArray{T,N};
     client::Union{Nothing,Reactant.XLA.PJRT.Client}=nothing,
@@ -1501,7 +1509,7 @@ function Reactant.ConcretePJRTArray(
 
     sizear = collect(Int64, reverse(size(cu)))
     stream_handle = Int64(CUDA.stream().handle)
-    GC.@preserve cu theclient thedevice begin
+    GC.@preserve cu sizear theclient thedevice begin
         buf = MLIR.API.BufferFromDevicePointer(
             theclient.client,
             Ptr{Cvoid}(UInt(pointer(cu))),
@@ -1518,15 +1526,16 @@ function Reactant.ConcretePJRTArray(
 end
 
 # ConcreteRArray -> CuArray: D2D copy using AwaitBufferReady for synchronization.
-# AwaitBufferReady waits for all PJRT definition events to resolve, then returns
-# the raw device pointer. We then D2D copy to a new CuArray.
+# AwaitBufferReady calls GetReadyFuture().Await() to wait for all PJRT definition
+# events to resolve, then returns the raw device pointer. We then D2D copy into
+# a new CuArray.
 function CUDA.CuArray(ra::Reactant.ConcretePJRTArray{T,N}) where {T,N}
     buf = Reactant.get_buffer(ra)
-    # AwaitBufferReady: waits for definition events, returns synchronized device pointer
-    src_ptr = MLIR.API.AwaitBufferReady(buf.buffer)
     cu = CUDA.CuArray{T}(undef, size(ra))
     nbytes = length(ra) * sizeof(T)
     GC.@preserve ra begin
+        # AwaitBufferReady: waits for definition events, returns synchronized device ptr
+        src_ptr = MLIR.API.AwaitBufferReady(buf.buffer)
         CUDA.cuMemcpyDtoD_v2(pointer(cu), CUDA.CuPtr{Nothing}(UInt(src_ptr)), nbytes)
     end
     CUDA.synchronize()
