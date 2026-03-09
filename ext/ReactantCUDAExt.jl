@@ -1485,6 +1485,54 @@ end
     end
 end
 
+# ============================================================
+# Device-to-device CuArray <-> ConcreteRArray conversions
+# ============================================================
+
+# CuArray -> ConcreteRArray: D2D copy via CreateViewOfDeviceBuffer + CopyToMemorySpace.
+# Uses XLA's internal stream infrastructure for correct synchronization.
+function Reactant.ConcretePJRTArray(
+    cu::DenseCuArray{T,N};
+    client::Union{Nothing,Reactant.XLA.PJRT.Client}=nothing,
+    device::Union{Nothing,Reactant.XLA.PJRT.Device}=nothing,
+) where {T,N}
+    theclient = client === nothing ? Reactant.XLA.default_backend() : client
+    thedevice = device === nothing ? Reactant.XLA.default_device(theclient) : device
+
+    sizear = collect(Int64, reverse(size(cu)))
+    stream_handle = Int64(CUDA.stream().handle)
+    GC.@preserve cu theclient thedevice begin
+        buf = MLIR.API.BufferFromDevicePointer(
+            theclient.client,
+            Ptr{Cvoid}(UInt(pointer(cu))),
+            Reactant.XLA.primitive_type(T),
+            N,
+            sizear,
+            thedevice.device,
+            stream_handle,
+        )
+    end
+    async_buf = Reactant.XLA.PJRT.AsyncBuffer(Reactant.XLA.PJRT.Buffer(buf), nothing)
+    shardinfo = Reactant.Sharding.ShardInfo(Reactant.Sharding.NoSharding(), nothing)
+    return Reactant.ConcretePJRTArray{T,N,1}((async_buf,), size(cu), shardinfo)
+end
+
+# ConcreteRArray -> CuArray: D2D copy using AwaitBufferReady for synchronization.
+# AwaitBufferReady waits for all PJRT definition events to resolve, then returns
+# the raw device pointer. We then D2D copy to a new CuArray.
+function CUDA.CuArray(ra::Reactant.ConcretePJRTArray{T,N}) where {T,N}
+    buf = Reactant.get_buffer(ra)
+    # AwaitBufferReady: waits for definition events, returns synchronized device pointer
+    src_ptr = MLIR.API.AwaitBufferReady(buf.buffer)
+    cu = CUDA.CuArray{T}(undef, size(ra))
+    nbytes = length(ra) * sizeof(T)
+    GC.@preserve ra begin
+        CUDA.cuMemcpyDtoD_v2(pointer(cu), CUDA.CuPtr{Nothing}(UInt(src_ptr)), nbytes)
+    end
+    CUDA.synchronize()
+    return cu
+end
+
 function __init__()
     # Required to unbreak with_profile
     delete!(ENV, "NVTX_INJECTION64_PATH")

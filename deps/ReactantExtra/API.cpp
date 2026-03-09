@@ -1142,6 +1142,54 @@ REACTANT_ABI PjRtBuffer *CopyBufferToDevice(PjRtBuffer *buffer,
   return res.release();
 }
 
+// Create a new PJRT-owned buffer by D2D-copying from an external device pointer.
+// This is the safe way to transfer data from e.g. a CUDA.jl CuArray into XLA:
+// it creates an ephemeral non-owning view of the external memory, then copies
+// into a new PJRT-managed buffer using XLA's internal D2D stream infrastructure.
+// The `stream` parameter (pass 0 if unknown) tells PJRT which external CUDA
+// stream produced the data, enabling correct cross-stream synchronization.
+REACTANT_ABI PjRtBuffer *BufferFromDevicePointer(PjRtClient *client,
+                                                 void *device_ptr,
+                                                 uint64_t ptype, size_t dim,
+                                                 const int64_t *cshape,
+                                                 PjRtDevice *device,
+                                                 int64_t stream) {
+  xla::Shape shape((xla::PrimitiveType)ptype,
+                   absl::Span<const int64_t>(cshape, dim));
+
+  // stream_opt: if non-zero, synchronize with external CUDA stream
+  std::optional<std::intptr_t> stream_opt;
+  if (stream != 0)
+    stream_opt = stream;
+
+  // Step 1: Create ephemeral non-owning view of external device memory.
+  // on_delete_callback is empty because we don't own the source memory.
+  auto view = MyValueOrThrow(client->CreateViewOfDeviceBuffer(
+      device_ptr, shape, *device->default_memory_space(),
+      /*on_delete_callback=*/{}, stream_opt));
+
+  // Step 2: D2D copy to a new PJRT-owned buffer.
+  // Uses XLA's internal stream infrastructure with proper event tracking.
+  auto owned = MyValueOrThrow(
+      view->CopyToMemorySpace(*device->default_memory_space()));
+
+  // view is destroyed here; source memory is unaffected.
+  return owned.release();
+}
+
+// Wait for a PJRT buffer's data to be ready (all definition events resolved).
+// Returns the raw device pointer after synchronization, ensuring the data
+// is safe to read from an external CUDA context.
+REACTANT_ABI void *AwaitBufferReady(PjRtBuffer *buffer) {
+  auto ready = buffer->GetReadyFuture();
+  auto status = ready.Await();
+  if (!status.ok()) {
+    printf("error awaiting buffer: %s\n", status.ToString().c_str());
+  }
+  auto unsafe = MyValueOrThrow(buffer->client()->UnsafeBufferPointer(buffer));
+  return (void *)unsafe;
+}
+
 REACTANT_ABI void FreeClient(PjRtClient *client) { delete client; }
 
 REACTANT_ABI int64_t PjRtDeviceGetLocalDeviceId(PjRtDevice *device) {
