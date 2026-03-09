@@ -710,9 +710,9 @@ end
 
     ir = @code_hlo optimize = "enzyme-batch" for_no_track_numbers(x_ra, n_ra)
     @test @filecheck begin
-        @check "enzyme.disable_mincut"
-        @check "enzymexla.enable_checkpointing"
-        @check "enzymexla.checkpoints = 3"
+        @check_dag "enzyme.disable_mincut"
+        @check_dag "enzymexla.enable_checkpointing"
+        @check_dag "enzymexla.checkpoints = 3"
         ir
     end
 end
@@ -741,8 +741,9 @@ end
         show, @code_hlo optimize = "enzyme-batch" for_explicit_checkpoints(x_ra, n_ra)
     )
     @test @filecheck begin
-        @check "enzymexla.enable_checkpointing"
-        @check "enzymexla.checkpoints = 5"
+        @check_dag "enzymexla.enable_checkpointing"
+        @check_dag "enzymexla.checkpoints = 5"
+        ir
     end
 end
 
@@ -766,8 +767,8 @@ end
 
     ir = sprint(show, @code_hlo while_explicit_checkpoints(x_ra, n_ra))
     @test @filecheck begin
-        @check "enzymexla.enable_checkpointing"
-        @check "enzymexla.checkpoints = 5"
+        @check_dag "enzymexla.enable_checkpointing"
+        @check_dag "enzymexla.checkpoints = 5"
         ir
     end
 end
