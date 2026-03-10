@@ -149,8 +149,10 @@ end
     st = stacktrace()
     deleteat!(st, 1)
     return mapfoldl(MLIR.IR.Location, st) do stackframe
+        line = stackframe.line
+        line = line == -1 ? 0 : line
         return MLIR.IR.Location(
-            string(stackframe.func), MLIR.IR.Location(stackframe.file, stackframe.line, 0)
+            string(stackframe.func), MLIR.IR.Location(stackframe.file, line, 0)
         )
     end
 end
@@ -3420,7 +3422,7 @@ end
         init_values::TracedRNumber{T},
         dimensions::Vector{Int},
         fn::Function,
-        location=mlir_stacktrace("rand", @__FILE__, @__LINE__),
+        location=mlir_stacktrace("reduce", @__FILE__, @__LINE__),
     )
 
 Applies a reduction function `fn` along the specified `dimensions` of input `x`, starting from `init_values`.

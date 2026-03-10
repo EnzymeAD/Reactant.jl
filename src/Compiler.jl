@@ -1581,6 +1581,7 @@ function __get_compile_options_and_kwargs(;
     xla_debug_options=(;),
     xla_executable_build_options=(;),
     xla_compile_options=(;),
+    strip=:all,
     kwargs...,
 )
     return (
@@ -1606,6 +1607,7 @@ function __get_compile_options_and_kwargs(;
             xla_debug_options,
             xla_executable_build_options,
             xla_compile_options,
+            strip,
         ),
         kwargs,
     )
@@ -2634,15 +2636,16 @@ function compile_mlir!(
         run_pass_pipeline!(mod, "mark-func-memory-effects", "mark-func-memory-effects")
     end
 
-    if compile_options.strip isa Symbol
-        @assert compile_options.strip == :all
+    if compile_options.strip === :all
         run_pass_pipeline!(mod, "strip-debuginfo", "strip-debuginfo")
-    elseif length(compile_options.strip) != 0
+    elseif compile_options.strip isa Vector && length(compile_options.strip) != 0
         run_pass_pipeline!(
             mod,
             "trim-callsites{to_trim=$(join(compile_options.strip, ";"))}",
             "trim-callsites",
         )
+    else
+        @assert compile_options.strip === :none
     end
 
     func_op = MLIR.IR.@dispose sym_table = MLIR.IR.SymbolTable(mod) begin
@@ -2840,9 +2843,9 @@ const SYNC_DOCS = """
 struct TextualModule
     ir::String
 
-    function TextualModule(mod::MLIR.IR.Module)
+    function TextualModule(mod::MLIR.IR.Module; debug=false)
         io = IOBuffer()
-        show(io, mod)
+        show(IOContext(io, :debug => debug), mod)
         return new(String(take!(io)))
     end
 end
@@ -2883,11 +2886,19 @@ See also [`@code_xla`](@ref), [`@code_mhlo`](@ref).
 """
 macro code_hlo(args...)
     (; f, args, kwargs, options) = parse_call_expr(
-        merge(get_common_compile_options(), Dict{Symbol,Any}(:shardy_passes => :(:none))),
+        merge(
+            get_common_compile_options(),
+            Dict{Symbol,Any}(
+                :shardy_passes => :(:none), :debug => false, :strip => :(:none)
+            ),
+        ),
         args...,
     )
+    debug = get(() -> Expr(:kw, :debug, false), options, something(findfirst(opt -> opt.args[1] === :debug, options), -1)).args[2]
+    options = filter(opt -> opt.args[1] !== :debug, options)
     return quote
         $MLIR.IR.@dispose ctx = $Reactant.ReactantContext() begin
+            debug = $(esc(debug))
             mod = $code_hlo(
                 ctx,
                 $(esc(f)),
@@ -2896,7 +2907,7 @@ macro code_hlo(args...)
                 $(esc.(options)...),
             )
             try
-                $TextualModule(mod)
+                $TextualModule(mod; debug)
             finally
                 $MLIR.IR.dispose(mod)
             end
@@ -2937,13 +2948,19 @@ macro code_mhlo(args...)
         merge(
             get_common_compile_options(),
             Dict{Symbol,Any}(
-                :legalize_stablehlo_to_mhlo => true, :shardy_passes => :(:to_mhlo_shardings)
+                :legalize_stablehlo_to_mhlo => true,
+                :shardy_passes => :(:to_mhlo_shardings),
+                :debug => false,
+                :strip => :(:none),
             ),
         ),
         args...,
     )
+    debug = get(() -> Expr(:kw, :debug, false), options, something(findfirst(opt -> opt.args[1] === :debug, options), -1)).args[2]
+    options = filter(opt -> opt.args[1] !== :debug, options)
     return quote
         $MLIR.IR.@dispose ctx = $Reactant.ReactantContext() begin
+            debug = $(esc(debug))
             mod = $code_mhlo(
                 ctx,
                 $(esc(f)),
@@ -2952,7 +2969,7 @@ macro code_mhlo(args...)
                 $(esc.(options)...),
             )
             try
-                $TextualModule(mod)
+                $TextualModule(mod; debug)
             finally
                 $MLIR.IR.dispose(mod)
             end
