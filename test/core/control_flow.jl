@@ -2,6 +2,7 @@ using Reactant, Test, FileCheck
 using LinearAlgebra
 using Reactant.ReactantCore
 using Reactant: MLIR
+using Reactant: Periodic
 
 function condition1(x)
     y = sum(x)
@@ -687,7 +688,8 @@ end
 end
 
 function for_no_track_numbers(x, n)
-    @trace mincut = false checkpointing = true track_numbers = false for i in n:16
+    # Periodic(n) required for dynamic bounds (n:16 where n is traced)
+    @trace mincut = false checkpointing = Periodic(3) track_numbers = false for i in n:16
         x = x .+ 1
     end
     return x
@@ -710,7 +712,89 @@ end
     @test @filecheck begin
         @check_dag "enzyme.disable_mincut"
         @check_dag "enzymexla.enable_checkpointing"
-        repr(ir)
+        @check_dag "enzymexla.checkpoints = 3"
+        ir
+    end
+end
+
+function for_explicit_checkpoints(x, n)
+    @trace mincut = false checkpointing = Periodic(5) track_numbers = false for i in n:16
+        x = x .+ 1
+    end
+    return x
+end
+
+@testset "for: explicit checkpoints" begin
+    x = [1, 2, 3]
+    x_ra = Reactant.to_rarray(x)
+
+    n = 12
+    n_ra = Reactant.ConcreteRNumber(n)
+
+    # set optimize to only do enzyme-batch to prevent crash in opt
+    for_explicit_checkpoints_ra = @compile optimize = "enzyme-batch" for_explicit_checkpoints(
+        x_ra, n_ra
+    )
+    @test for_explicit_checkpoints_ra(x_ra, n_ra) == for_explicit_checkpoints(x, n)
+
+    ir = sprint(
+        show, @code_hlo optimize = "enzyme-batch" for_explicit_checkpoints(x_ra, n_ra)
+    )
+    @test @filecheck begin
+        @check_dag "enzymexla.enable_checkpointing"
+        @check_dag "enzymexla.checkpoints = 5"
+        ir
+    end
+end
+
+function while_explicit_checkpoints(x, n)
+    i = zero(n)
+    @trace mincut = false checkpointing = Periodic(5) track_numbers = false while i <= n
+        x = 2 .* x
+        i += one(i)
+    end
+    return x
+end
+
+@testset "while explicit checkpoints" begin
+    n = 10
+    n_ra = Reactant.ConcreteRNumber(n)
+    x = Float32[1, 2, 3]
+    x_ra = Reactant.to_rarray(x)
+
+    while_explicit_checkpoints_ra = @compile while_explicit_checkpoints(x_ra, n_ra)
+    @test while_explicit_checkpoints(x, n) == while_explicit_checkpoints(x_ra, n_ra)
+
+    ir = sprint(show, @code_hlo while_explicit_checkpoints(x_ra, n_ra))
+    @test @filecheck begin
+        @check_dag "enzymexla.enable_checkpointing"
+        @check_dag "enzymexla.checkpoints = 5"
+        ir
+    end
+end
+
+function for_default_checkpoints(x)
+    @trace checkpointing = true track_numbers = false for i in 1:100
+        x = x .+ 1
+    end
+    return x
+end
+
+@testset "for: default checkpoints (sqrt)" begin
+    x = [1, 2, 3]
+    x_ra = Reactant.to_rarray(x)
+
+    # set optimize to only do enzyme-batch to prevent crash in opt
+    for_default_checkpoints_ra = @compile optimize = "enzyme-batch" for_default_checkpoints(
+        x_ra
+    )
+    @test for_default_checkpoints_ra(x_ra) == for_default_checkpoints(x)
+
+    ir = sprint(show, @code_hlo optimize = "enzyme-batch" for_default_checkpoints(x_ra))
+    @test @filecheck begin
+        @check_dag "enzyme.disable_mincut"
+        @check_dag "enzymexla.enable_checkpointing"
+        ir
     end
 end
 
