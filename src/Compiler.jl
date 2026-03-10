@@ -1581,6 +1581,7 @@ function __get_compile_options_and_kwargs(;
     xla_debug_options=(;),
     xla_executable_build_options=(;),
     xla_compile_options=(;),
+    strip=:all,
     kwargs...,
 )
     return (
@@ -1606,6 +1607,7 @@ function __get_compile_options_and_kwargs(;
             xla_debug_options,
             xla_executable_build_options,
             xla_compile_options,
+            strip,
         ),
         kwargs,
     )
@@ -2634,15 +2636,16 @@ function compile_mlir!(
         run_pass_pipeline!(mod, "mark-func-memory-effects", "mark-func-memory-effects")
     end
 
-    if compile_options.strip isa Symbol
-        @assert compile_options.strip == :all
+    if compile_options.strip === :all
         run_pass_pipeline!(mod, "strip-debuginfo", "strip-debuginfo")
-    elseif length(compile_options.strip) != 0
+    elseif compile_options.strip isa Vector && length(compile_options.strip) != 0
         run_pass_pipeline!(
             mod,
             "trim-callsites{to_trim=$(join(compile_options.strip, ";"))}",
             "trim-callsites",
         )
+    else
+        @assert compile_options.strip === :none
     end
 
     func_op = MLIR.IR.@dispose sym_table = MLIR.IR.SymbolTable(mod) begin
@@ -2885,7 +2888,9 @@ macro code_hlo(args...)
     (; f, args, kwargs, options) = parse_call_expr(
         merge(
             get_common_compile_options(),
-            Dict{Symbol,Any}(:shardy_passes => :(:none), :debug => false),
+            Dict{Symbol,Any}(
+                :shardy_passes => :(:none), :debug => false, :strip => :(:none)
+            ),
         ),
         args...,
     )
@@ -2949,6 +2954,7 @@ macro code_mhlo(args...)
                 :legalize_stablehlo_to_mhlo => true,
                 :shardy_passes => :(:to_mhlo_shardings),
                 :debug => false,
+                :strip => :(:none),
             ),
         ),
         args...,
