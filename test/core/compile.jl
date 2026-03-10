@@ -645,7 +645,7 @@ end
     x = Reactant.to_rarray([1, 2, 3])
     ir = sprint(show, @code_hlo debug = true sum(x))
     @test @filecheck begin
-        @check_dag "loc("arg1 (path=(:args, 1))")"
+        @check_dag "loc(\"arg1 (path=(:args, 1))\")"
         ir
     end
 end
