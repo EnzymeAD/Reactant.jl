@@ -2840,9 +2840,9 @@ const SYNC_DOCS = """
 struct TextualModule
     ir::String
 
-    function TextualModule(mod::MLIR.IR.Module)
+    function TextualModule(mod::MLIR.IR.Module; debug=false)
         io = IOBuffer()
-        show(io, mod)
+        show(IOContext(io, :debug => debug), mod)
         return new(String(take!(io)))
     end
 end
@@ -2883,11 +2883,19 @@ See also [`@code_xla`](@ref), [`@code_mhlo`](@ref).
 """
 macro code_hlo(args...)
     (; f, args, kwargs, options) = parse_call_expr(
-        merge(get_common_compile_options(), Dict{Symbol,Any}(:shardy_passes => :(:none))),
+        merge(
+            get_common_compile_options(),
+            Dict{Symbol,Any}(:shardy_passes => :(:none), :debug => false),
+        ),
         args...,
     )
+    debug = get(() -> Expr(:kw, :debug, false), options, something(findfirst(opt -> opt.args[1] === :debug, options), -1)).args[2]
+    options = filter(opt -> opt.args[1] !== :debug, options)
     return quote
         $MLIR.IR.@dispose ctx = $Reactant.ReactantContext() begin
+            debug = $(esc(debug))
+            old = $(Reactant.Ops.DEBUG_MODE)[]
+            $(Reactant.Ops.DEBUG_MODE)[] = debug
             mod = $code_hlo(
                 ctx,
                 $(esc(f)),
@@ -2895,8 +2903,9 @@ macro code_hlo(args...)
                 fn_kwargs=(; $(esc.(kwargs)...)),
                 $(esc.(options)...),
             )
+            $(Reactant.Ops.DEBUG_MODE)[] = old
             try
-                $TextualModule(mod)
+                $TextualModule(mod; debug)
             finally
                 $MLIR.IR.dispose(mod)
             end
