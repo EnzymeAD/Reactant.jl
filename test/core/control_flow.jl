@@ -1197,3 +1197,21 @@ end
     @test a_ra ≈ a
     @test b_ra ≈ b
 end
+
+function f_not_traced_conditional(cond, x)
+    @trace if cond
+        x = x .* 2
+    else
+        x = x .* 3
+    end
+    return x
+end
+
+@testset "not traced conditional" begin
+    cond = false
+    x = [1, 2, 3]
+    x_ra = Reactant.to_rarray(x)
+    cond = false
+
+    @test f_not_traced_conditional(cond, x) == @jit(f_not_traced_conditional(cond, x_ra))
+end

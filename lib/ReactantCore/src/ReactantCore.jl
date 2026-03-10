@@ -754,7 +754,7 @@ end
 
 # Generate this dummy function and later we remove it during tracing
 function traced_if(cond, true_fn, false_fn, args; track_numbers)
-    return cond ? true_fn(args) : false_fn(args)
+    return cond ? true_fn(args...) : false_fn(args...)
 end
 
 function traced_while end # defined inside Reactant.jl
