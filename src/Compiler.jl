@@ -2899,8 +2899,6 @@ macro code_hlo(args...)
     return quote
         $MLIR.IR.@dispose ctx = $Reactant.ReactantContext() begin
             debug = $(esc(debug))
-            old = $(Reactant.Ops.DEBUG_MODE)[]
-            $(Reactant.Ops.DEBUG_MODE)[] = debug
             mod = $code_hlo(
                 ctx,
                 $(esc(f)),
@@ -2908,7 +2906,6 @@ macro code_hlo(args...)
                 fn_kwargs=(; $(esc.(kwargs)...)),
                 $(esc.(options)...),
             )
-            $(Reactant.Ops.DEBUG_MODE)[] = old
             try
                 $TextualModule(mod; debug)
             finally
@@ -2964,8 +2961,6 @@ macro code_mhlo(args...)
     return quote
         $MLIR.IR.@dispose ctx = $Reactant.ReactantContext() begin
             debug = $(esc(debug))
-            old = $(Reactant.Ops.DEBUG_MODE)[]
-            $(Reactant.Ops.DEBUG_MODE)[] = debug
             mod = $code_mhlo(
                 ctx,
                 $(esc(f)),
@@ -2973,7 +2968,6 @@ macro code_mhlo(args...)
                 fn_kwargs=(; $(esc.(kwargs)...)),
                 $(esc.(options)...),
             )
-            $(Reactant.Ops.DEBUG_MODE)[] = old
             try
                 $TextualModule(mod; debug)
             finally
