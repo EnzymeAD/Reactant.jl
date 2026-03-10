@@ -2946,13 +2946,20 @@ macro code_mhlo(args...)
         merge(
             get_common_compile_options(),
             Dict{Symbol,Any}(
-                :legalize_stablehlo_to_mhlo => true, :shardy_passes => :(:to_mhlo_shardings)
+                :legalize_stablehlo_to_mhlo => true,
+                :shardy_passes => :(:to_mhlo_shardings),
+                :debug => false,
             ),
         ),
         args...,
     )
+    debug = get(() -> Expr(:kw, :debug, false), options, something(findfirst(opt -> opt.args[1] === :debug, options), -1)).args[2]
+    options = filter(opt -> opt.args[1] !== :debug, options)
     return quote
         $MLIR.IR.@dispose ctx = $Reactant.ReactantContext() begin
+            debug = $(esc(debug))
+            old = $(Reactant.Ops.DEBUG_MODE)[]
+            $(Reactant.Ops.DEBUG_MODE)[] = debug
             mod = $code_mhlo(
                 ctx,
                 $(esc(f)),
@@ -2960,8 +2967,9 @@ macro code_mhlo(args...)
                 fn_kwargs=(; $(esc.(kwargs)...)),
                 $(esc.(options)...),
             )
+            $(Reactant.Ops.DEBUG_MODE)[] = old
             try
-                $TextualModule(mod)
+                $TextualModule(mod; debug)
             finally
                 $MLIR.IR.dispose(mod)
             end
