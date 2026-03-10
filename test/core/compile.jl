@@ -647,5 +647,5 @@ end
     @test @filecheck begin
         @check_dag "loc(\"arg1 (path=(:args, 1))\")"
         ir
-    end
+    end skip = RunningOnTPU
 end
