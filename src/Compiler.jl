@@ -3945,7 +3945,12 @@ function __resolve_device_and_client(client, seen_args, linear_args, is_sharded)
     if length(linear_args) > 0
         devices_list = []
         for (k, v) in seen_args
-            !(v isa TracedRArray || v isa TracedRNumber) && continue
+            if (
+                !(v isa TracedRArray || v isa TracedRNumber) ||
+                (k isa Reactant.RArraySpec || k isa Reactant.RNumberSpec)
+            )
+                continue
+            end
             buffer = k.data isa Tuple ? only(k.data) : k.data
             push!(devices_list, XLA.device(buffer))
         end

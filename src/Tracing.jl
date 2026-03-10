@@ -7,6 +7,7 @@
     TracedToTypes = 6
     NoStopTracedTrack = 7
     TracedToJAX = 8
+    ArrayToSpec = 9
 end
 
 function convert_to_jax_dtype_struct end
@@ -69,6 +70,8 @@ Base.@nospecializeinfer function traced_type_inner(
         else
             error("Unsupported runtime $runtime")
         end
+    elseif mode == ArrayToSpec && T <: track_numbers
+        return RNumberSpec{T}
     elseif (mode == NoStopTracedTrack || mode == TracedTrack || mode == TracedSetPath) &&
         T <: track_numbers
         return TracedRNumber{T}
@@ -238,7 +241,7 @@ Base.@nospecializeinfer function traced_type_inner(
     elseif mode == ArrayToConcrete
         @assert runtime isa Val{:PJRT}
         if T0 isa UnionAll
-            return ConcretePJRTNumbe{T,_unwrap_val(ndevices)} where {T}
+            return ConcretePJRTNumber{T,_unwrap_val(ndevices)} where {T}
         else
             return ConcretePJRTNumber{T,_unwrap_val(ndevices)}
         end
@@ -324,6 +327,45 @@ Base.@nospecializeinfer function traced_type_inner(
         A_ret = N isa Core.TypeVar ? UnionAll(N, A´´) : A´´
         A_ret2 = T isa Core.TypeVar ? UnionAll(T, A_ret) : A_ret
         return A_ret2
+    else
+        throw("Unsupported mode: $mode")
+    end
+end
+
+Base.@nospecializeinfer function traced_type_inner(
+    @nospecialize(T::Type{<:RArraySpec}),
+    seen,
+    @nospecialize(mode::TraceMode),
+    @nospecialize(track_numbers::Type),
+    @nospecialize(ndevices),
+    @nospecialize(runtime)
+)
+    if mode == ConcreteToTraced
+        T´ = Base.unwrap_unionall(T)
+        T, N = T´.parameters
+        T´´ = TracedRArray{T,N}
+        T_ret = N isa Core.TypeVar ? UnionAll(N, T´´) : T´´
+        T_ret2 = T isa Core.TypeVar ? UnionAll(T, T_ret) : T_ret
+        return T_ret2
+    else
+        throw("Unsupported mode: $mode")
+    end
+end
+
+Base.@nospecializeinfer function traced_type_inner(
+    @nospecialize(T::Type{<:RNumberSpec}),
+    seen,
+    @nospecialize(mode::TraceMode),
+    @nospecialize(track_numbers::Type),
+    @nospecialize(ndevices),
+    @nospecialize(runtime)
+)
+    if mode == ConcreteToTraced
+        T´ = Base.unwrap_unionall(T)
+        T = T´.parameters
+        T´´ = TracedRNumber{T}
+        T_ret = T isa Core.TypeVar ? UnionAll(T, T´´) : T´´
+        return T_ret
     else
         throw("Unsupported mode: $mode")
     end
@@ -482,6 +524,8 @@ Base.@nospecializeinfer function traced_type_inner(
             else
                 error("Unsupported runtime $runtime")
             end
+        elseif mode == ArrayToSpec && T <: ReactantPrimitive
+            A_wrapper = RArraySpec
         end
 
         # WARN replacing typevars first is required to construct the UnionAlls correctly
@@ -504,6 +548,8 @@ Base.@nospecializeinfer function traced_type_inner(
                 end
             end
             error("Unsupported runtime $runtime")
+        elseif mode == ArrayToSpec && T <: ReactantPrimitive
+            return RArraySpec{T,N}
         else
             return Array{
                 traced_type_inner(T, seen, mode, track_numbers, ndevices, runtime),N
@@ -520,7 +566,7 @@ Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(ndevices),
     @nospecialize(runtime)
 )
-    if mode == ArrayToConcrete
+    if mode == ArrayToConcrete || mode == ArrayToSpec
         A´ = A isa UnionAll ? Array{Bool} : Array{Bool,ndims(A)}
         return traced_type_inner(A´, seen, mode, track_numbers, ndevices, runtime)
     else
@@ -617,7 +663,7 @@ Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(ndevices),
     @nospecialize(runtime)
 )
-    if mode == ArrayToConcrete
+    if mode == ArrayToConcrete || mode == ArrayToSpec
         return ReactantRNG{
             traced_type_inner(Array{UInt64,1}, seen, mode, track_numbers, ndevices, runtime)
         }
@@ -1408,6 +1454,38 @@ Base.@nospecializeinfer function make_tracer(
 end
 
 Base.@nospecializeinfer function make_tracer(
+    seen, @nospecialize(prev::RArraySpec{T,N}), @nospecialize(path), mode; kwargs...
+) where {T,N}
+    if mode != ConcreteToTraced
+        throw(
+            ArgumentError(
+                "RArraySpec can only be used with ConcreteToTraced mode, got $mode"
+            ),
+        )
+    end
+    haskey(seen, prev) && return seen[prev]::TracedRArray{T,N}
+    res = TracedRArray{T,N}((path,), nothing, size(prev))
+    seen[prev] = res
+    return res
+end
+
+Base.@nospecializeinfer function make_tracer(
+    seen, @nospecialize(prev::RNumberSpec{T}), @nospecialize(path), mode; kwargs...
+) where {T}
+    if mode != ConcreteToTraced
+        throw(
+            ArgumentError(
+                "RNumberSpec can only be used with ConcreteToTraced mode, got $mode"
+            ),
+        )
+    end
+    haskey(seen, prev) && return seen[prev]::TracedRNumber{T}
+    res = TracedRNumber{T}((path,), nothing)
+    seen[prev] = res
+    return res
+end
+
+Base.@nospecializeinfer function make_tracer(
     seen,
     prev::ConcretePJRTNumber{T},
     @nospecialize(path),
@@ -1688,6 +1766,8 @@ Base.@nospecializeinfer function make_tracer(
             runtime isa Val{:IFRT} &&
                 return ConcreteIFRTNumber(prev; sharding, device, client)
             error("Unsupported runtime $runtime")
+        elseif mode == ArrayToSpec
+            return RNumberSpec{RT}(; sharding)
         else
             if mode == TracedTrack || mode == NoStopTracedTrack
                 res = TracedRNumber{RT}((path,), broadcast_to_size(prev, ()).mlir_data)
@@ -1787,6 +1867,8 @@ Base.@nospecializeinfer function make_tracer(
             runtime isa Val{:IFRT} &&
                 (return seen[prev] = ConcreteIFRTArray(prev; sharding, device, client))
             error("Unsupported runtime $runtime")
+        elseif mode == ArrayToSpec
+            return seen[prev] = RArraySpec{eltype(RT),ndims(RT)}(size(prev); sharding)
         elseif mode == TracedToTypes
             # Original array can get mutated so we store a copy:
             push!(path, copy(prev))
@@ -1849,7 +1931,7 @@ end
 Base.@nospecializeinfer function make_tracer(
     seen, @nospecialize(prev::BitArray), @nospecialize(path), mode; kwargs...
 )
-    if mode == ArrayToConcrete
+    if mode == ArrayToConcrete || mode == ArrayToSpec
         return make_tracer(seen, Array(prev), path, mode; kwargs...)
     else
         return prev
@@ -1884,6 +1966,8 @@ Base.@nospecializeinfer function make_tracer(
             runtime isa Val{:IFRT} &&
                 (return seen[prev] = ConcreteIFRTArray(prev; sharding, device, client))
             error("Unsupported runtime $runtime")
+        elseif mode == ArrayToSpec
+            return seen[prev] = RArraySpec{eltype(prev),ndims(prev)}(size(prev); sharding)
         elseif mode == TracedToTypes
             # Original array can get mutated so we store a copy:
             push!(path, copy(prev))
@@ -2091,7 +2175,7 @@ end
 Base.@nospecializeinfer function make_tracer(
     seen, @nospecialize(prev::Random.AbstractRNG), @nospecialize(path), mode; kwargs...
 )
-    if mode == ArrayToConcrete
+    if mode == ArrayToConcrete || mode == ArrayToSpec
         TracedRandom.should_warn_if_not_natively_supported(prev)
         return ReactantRNG(
             make_tracer(seen, TracedRandom.make_seed(prev), (path..., 1), mode; kwargs...),
@@ -2102,7 +2186,14 @@ Base.@nospecializeinfer function make_tracer(
 end
 
 """
-    to_rarray(x; track_numbers=false, sharding=NoSharding(), device=nothing, client=nothing, runtime=nothing)
+    to_rarray(
+        x;
+        track_numbers=false,
+        sharding=NoSharding(),
+        device=nothing,
+        client=nothing,
+        runtime=nothing,
+    )
 
 Convert a Julia value `x` into its Reactant equivalent by tracing through the structure.
 Arrays are converted to `ConcreteRArray`, and (optionally) scalar numbers are converted
@@ -2121,6 +2212,9 @@ to `ConcreteRNumber`.
 - `device`: Target device for the resulting array.
 - `client`: XLA client to use.
 - `runtime`: Backend runtime to use (`Val(:PJRT)` or `Val(:IFRT)`).
+- `convert_to_specification::Union{Val{true},Val{false}}=Val{false}()`: Whether to convert
+  the arrays to a specification (RArraySpec/RNumberSpec) instead of a concrete array.
+  This enables AoT compiling reactant functions without allocating the actual arrays.
 
 ## Examples
 
@@ -2149,13 +2243,17 @@ become compile-time constants.
     sharding=Sharding.Sharding.NoSharding(),
     device=nothing,
     client=nothing,
+    convert_to_specification::Union{Val{true},Val{false}}=Val{false}(),
 )
     runtime === nothing && (runtime = XLA.runtime())
     track_numbers isa Bool && (track_numbers = track_numbers ? Number : Union{})
-    return to_rarray_internal(x, track_numbers, sharding, runtime, device, client)
+    return to_rarray_internal(
+        convert_to_specification, x, track_numbers, sharding, runtime, device, client
+    )
 end
 
 @inline function to_rarray_internal(
+    @nospecialize(convert_to_specification),
     @nospecialize(x),
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
@@ -2167,7 +2265,7 @@ end
         OrderedIdDict(),
         x,
         (),
-        ArrayToConcrete;
+        convert_to_specification isa Val{true} ? ArrayToSpec : ArrayToConcrete;
         track_numbers,
         sharding,
         runtime,
@@ -2178,6 +2276,7 @@ end
 
 # fast paths avoiding make_tracer
 function to_rarray_internal(
+    @nospecialize(convert_to_specification),
     @nospecialize(::TracedRArray),
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
@@ -2189,6 +2288,7 @@ function to_rarray_internal(
 end
 
 @inline function to_rarray_internal(
+    @nospecialize(convert_to_specification),
     @nospecialize(x::ConcretePJRTArray),
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
@@ -2200,6 +2300,7 @@ end
 end
 
 @inline function to_rarray_internal(
+    @nospecialize(convert_to_specification),
     @nospecialize(x::ConcreteIFRTArray),
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
@@ -2211,6 +2312,7 @@ end
 end
 
 @inline function to_rarray_internal(
+    @nospecialize(convert_to_specification),
     @nospecialize(x::Array{<:ReactantPrimitive}),
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
@@ -2218,12 +2320,15 @@ end
     @nospecialize(device),
     @nospecialize(client)
 )
+    convert_to_specification isa Val{true} &&
+        return RArraySpec{eltype(x),ndims(x)}(size(x); sharding)
     runtime isa Val{:PJRT} && return ConcretePJRTArray(x; sharding, device, client)
     runtime isa Val{:IFRT} && return ConcreteIFRTArray(x; sharding, device, client)
     return error("Unsupported runtime $runtime")
 end
 
 @inline function to_rarray_internal(
+    @nospecialize(convert_to_specification),
     @nospecialize(x::Array{T}),
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
@@ -2232,6 +2337,8 @@ end
     @nospecialize(client)
 ) where {T<:Number}
     if reactant_primitive(T) !== nothing
+        convert_to_specification isa Val{true} &&
+            return RArraySpec{to_reactant_primitive(T),ndims(x)}(size(x); sharding)
         if runtime isa Val{:PJRT}
             return ConcretePJRTArray(to_reactant_primitive.(x); sharding, device, client)
         elseif runtime isa Val{:IFRT}
@@ -2240,11 +2347,18 @@ end
         error("Unsupported runtime $runtime")
     end
     return @invoke to_rarray_internal(
-        x::Any, track_numbers::Type, sharding, runtime, device, client
+        convert_to_specification,
+        x::Any,
+        track_numbers::Type,
+        sharding,
+        runtime,
+        device,
+        client,
     )
 end
 
 @inline function to_rarray_internal(
+    @nospecialize(convert_to_specification),
     @nospecialize(x::ConcretePJRTNumber),
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
@@ -2256,6 +2370,7 @@ end
 end
 
 @inline function to_rarray_internal(
+    @nospecialize(convert_to_specification),
     @nospecialize(x::ConcreteIFRTNumber),
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
@@ -2267,6 +2382,7 @@ end
 end
 
 @inline function to_rarray_internal(
+    @nospecialize(convert_to_specification),
     @nospecialize(x::ReactantPrimitive),
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
@@ -2275,6 +2391,7 @@ end
     @nospecialize(client)
 )
     if typeof(x) <: track_numbers
+        convert_to_specification isa Val{true} && return RNumberSpec{eltype(x)}(; sharding)
         runtime isa Val{:PJRT} && return ConcretePJRTNumber(x; sharding, device, client)
         runtime isa Val{:IFRT} && return ConcreteIFRTNumber(x; sharding, device, client)
         error("Unsupported runtime $runtime")
@@ -2283,6 +2400,7 @@ end
 end
 
 @inline function to_rarray_internal(
+    @nospecialize(convert_to_specification),
     @nospecialize(x::Number),
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
@@ -2291,14 +2409,22 @@ end
     @nospecialize(client)
 )
     if reactant_primitive(typeof(x)) !== nothing
+        convert_to_specification isa Val{true} &&
+            return RNumberSpec{to_reactant_primitive(eltype(x))}(; sharding)
         runtime isa Val{:PJRT} &&
-            return ConcretePJRTArray(to_reactant_primitive(x); sharding, device, client)
+            return ConcretePJRTNumber(to_reactant_primitive(x); sharding, device, client)
         runtime isa Val{:IFRT} &&
-            return ConcreteIFRTArray(to_reactant_primitive(x); sharding, device, client)
+            return ConcreteIFRTNumber(to_reactant_primitive(x); sharding, device, client)
         error("Unsupported runtime $runtime")
     end
     return @invoke to_rarray_internal(
-        x::Any, track_numbers::Type, sharding, runtime, device, client
+        convert_to_specification,
+        x::Any,
+        track_numbers::Type,
+        sharding,
+        runtime,
+        device,
+        client,
     )
 end
 

@@ -32,6 +32,8 @@ Reactant.to_rarray
 ```@docs
 ConcreteRArray
 ConcreteRNumber
+RArraySpec
+RNumberSpec
 ```
 
 ## Inspect Generated HLO
