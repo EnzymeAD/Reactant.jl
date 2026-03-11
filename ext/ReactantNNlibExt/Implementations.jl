@@ -25,23 +25,6 @@ else
     NNlib.gelu(x::TracedRNumber) = @opcall ml_gelu(x, "TANH")
 end
 
-# See https://github.com/EnzymeAD/Reactant.jl/issues/1420
-# Without this we will never fuse the gelu into gemm
-if isdefined(NNlib, :gelu_tanh)
-    if isdefined(NNlib, :gelu_sigmoid)
-        NNlib.gelu_sigmoid(x::TracedRNumber) = @opcall gelu(x, "TANH")
-        NNlib.gelu_tanh(x::TracedRNumber) = @opcall gelu(x, "TANH")
-    else
-        # In this version NNlib used sigmoid approximation in the tanh variant
-        NNlib.gelu_tanh(x::TracedRNumber) = @opcall gelu(x, "SIGMOID")
-    end
-
-    NNlib.gelu_erf(x::TracedRNumber) = @opcall gelu(x, "NONE")
-else
-    # Older versions of NNlib do not have gelu_tanh (gelu refers to the tanh version)
-    NNlib.gelu(x::TracedRNumber) = @opcall gelu(x, "TANH")
-end
-
 function NNlib.softmax!(out::AnyTracedRArray{T,N}, x::AbstractArray; dims=1) where {T,N}
     x = T.(materialize_traced_array(x))
     max_ = maximum(x; dims)
