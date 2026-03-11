@@ -954,6 +954,7 @@ function optimization_passes(
         "add_complex_simplify",
         "sub_complex_simplify",
         "exponential_minus_one_fuse",
+        "scatter_of_scatter_simplify",
     ]
 
     if !is_sharded
@@ -2021,6 +2022,13 @@ function compile_mlir!(
 
     legal_to_run_shardy_passes = compile_options.optimization_passes === :all
 
+    # Raise any triton kernel that might exist as a custom call
+    # We will lower them back later on, but having the full triton IR enables
+    # optimizations / differentiation, so we unconditionally do it
+    if compile_options.raise_triton_custom_call
+        run_pass_pipeline!(mod, "raise-triton-custom-call", "raise_triton_custom_call")
+    end
+
     if compile_options.optimization_passes === :all
         run_pass_pipeline!(
             mod,
@@ -2378,6 +2386,10 @@ function compile_mlir!(
 
     if backend == "cuda" && compile_options.cudnn_hlo_optimize
         run_pass_pipeline!(mod, "enzymexla-cudnn-hlo-opt", "cudnn-hlo-opt")
+    end
+
+    if compile_options.lower_triton
+        run_pass_pipeline!(mod, "lower-triton", "lower_triton")
     end
 
     # Now we resolve paddings if `optimize_then_pad`

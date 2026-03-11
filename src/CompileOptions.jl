@@ -211,6 +211,9 @@ struct CompileOptions
     shardy_passes::Union{Symbol,ShardyPropagationOptions}
     optimize_then_pad::Bool
     optimize_communications::Union{Bool,OptimizeCommunicationOptions}
+    # triton_options
+    raise_triton_custom_call::Bool
+    lower_triton::Bool
     # julia codegen options
     assert_nonallocating::Bool
     donated_args::Symbol
@@ -265,6 +268,8 @@ function CompileOptions(;
     disable_structured_tensors_passes::Bool=false,
     strip_llvm_debuginfo::Bool=false,
     strip::Union{Symbol,Vector{String}}=:all,
+    raise_triton_custom_call::Bool=true,
+    lower_triton::Bool=true,
 )
     optimization_passes isa Bool &&
         (optimization_passes = ifelse(optimization_passes, :all, :none))
@@ -308,6 +313,8 @@ function CompileOptions(;
         shardy_passes,
         optimize_then_pad,
         optimize_communications,
+        raise_triton_custom_call,
+        lower_triton,
         assert_nonallocating,
         donated_args,
         sync,
@@ -360,6 +367,8 @@ function __compile_options_with_reversed_propagation(compile_options::CompileOpt
         compile_options.shardy_passes,
         compile_options.optimize_then_pad,
         compile_options.optimize_communications,
+        compile_options.raise_triton_custom_call,
+        compile_options.lower_triton,
         compile_options.assert_nonallocating,
         compile_options.donated_args,
         compile_options.sync,
@@ -399,6 +408,8 @@ function __compile_options_with_updated_sync(compile_options::CompileOptions, sy
         compile_options.shardy_passes,
         compile_options.optimize_then_pad,
         compile_options.optimize_communications,
+        compile_options.raise_triton_custom_call,
+        compile_options.lower_triton,
         compile_options.assert_nonallocating,
         compile_options.donated_args,
         sync,
