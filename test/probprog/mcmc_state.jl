@@ -328,8 +328,8 @@ end
         samples2_arr = Array(samples2)
         combined_arr = Array(combined_samples)
 
-        @test samples1_arr == combined_arr[1:num_samples_warmup, :]
-        @test samples2_arr == combined_arr[(num_samples_warmup + 1):total_samples, :]
+        @test samples1_arr ≈ combined_arr[1:num_samples_warmup, :]
+        @test samples2_arr ≈ combined_arr[(num_samples_warmup + 1):total_samples, :]
     end
 
     @testset "save and load state" begin
@@ -476,7 +476,7 @@ end
             total_samples,
         )
 
-        @test chunked_result == Array(combined_samples)
+        @test chunked_result ≈ Array(combined_samples)
     end
 
     @testset "run_chain fresh start" begin

@@ -1,6 +1,6 @@
 import ..Reactant
 using ..Reactant: TracedRArray, ReactantRNG
-using Serialization
+using Serialization: Serialization
 
 function mcmc(
     rng::AbstractRNG,
@@ -24,7 +24,7 @@ function mcmc(
 
     tt = TracedTrace()
     ppf = ScopedValues.with(TRACING_TRACE => tt) do
-        process_probprog_function(f, args, "mcmc")
+        return process_probprog_function(f, args, "mcmc")
     end
 
     (;
