@@ -302,8 +302,11 @@ export ConcreteRArray,
     @code_xla,
     @jit,
     @trace,
-    within_compile,
-    Periodic
+    within_compile
+
+if VERSION ≥ v"1.11"
+    @eval $(Expr(:public, :Periodic))
+end
 
 const registry = Ref{Union{Nothing,MLIR.IR.DialectRegistry}}()
 
