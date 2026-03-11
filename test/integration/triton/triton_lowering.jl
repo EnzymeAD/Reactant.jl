@@ -46,6 +46,15 @@ vector_add_triton(x, y) = Reactant.Ops.hlo_call(vector_add_kernel, x, y)[1]
 
     # TODO: ROCM should also work, but needs testing
     if RunningOnCUDA
-        @test @jit(vector_add_triton(x_ra, y_ra)) ≈ .+(x_ra, y_ra)
+        props = Reactant.XLA.device_properties(
+            Reactant.XLA.default_device(Reactant.XLA.client(Reactant.devices()[1]))
+        )
+
+        if props.major ≥ 8
+            @test @jit(vector_add_triton(x_ra, y_ra)) ≈ .+(x_ra, y_ra)
+        else
+            @warn "TTIR lowering test skipped: requires NVIDIA Ampere (SM 8.0) or later, \
+                   found SM $(props.major).$(props.minor)"
+        end
     end
 end

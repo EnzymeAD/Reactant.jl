@@ -954,6 +954,7 @@ function optimization_passes(
         "add_complex_simplify",
         "sub_complex_simplify",
         "exponential_minus_one_fuse",
+        "scatter_of_scatter_simplify",
     ]
 
     if !is_sharded
