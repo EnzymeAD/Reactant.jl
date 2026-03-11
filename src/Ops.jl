@@ -4057,10 +4057,10 @@ end
 end
 
 @noinline function gelu(
-    x::Union{TracedRArray{T,N},TracedRNumber{T}},
+    x::Union{TracedRArray,TracedRNumber},
     approximation::String;
     location=mlir_stacktrace("gelu", @__FILE__, @__LINE__),
-) where {T,N}
+)
     approx = if approximation == "NONE"
         0
     elseif approximation == "TANH"
@@ -4079,9 +4079,9 @@ end
     )
 
     if x isa TracedRArray
-        return TracedRArray{T,N}((), res, size(x))
+        return TracedRArray{unwrapped_eltype(x),ndims(x)}((), res, size(x))
     else
-        return TracedRNumber{T}((), res)
+        return TracedRNumber{unwrapped_eltype(x)}((), res)
     end
 end
 
