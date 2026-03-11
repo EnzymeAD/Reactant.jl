@@ -700,6 +700,14 @@ end
 function get_aggregate_metrics(xplane_file::String, nrepeat::Int)
     data = JSON.parse(xspace_to_tools_data([xplane_file], "op_profile")[1])
     if !haskey(data, :byProgram) || !haskey(data[:byProgram], :metrics)
+        data_available_keys = keys(data)
+        by_program_available_keys =
+            haskey(data, :byProgram) ? keys(data[:byProgram]) : nothing
+        @debug(
+            "`op_profile` data missing keys for metrics",
+            data_available_keys,
+            by_program_available_keys
+        )
         return nothing
     end
 

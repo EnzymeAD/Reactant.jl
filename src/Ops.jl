@@ -149,8 +149,10 @@ end
     st = stacktrace()
     deleteat!(st, 1)
     return mapfoldl(MLIR.IR.Location, st) do stackframe
+        line = stackframe.line
+        line = line == -1 ? 0 : line
         return MLIR.IR.Location(
-            string(stackframe.func), MLIR.IR.Location(stackframe.file, stackframe.line, 0)
+            string(stackframe.func), MLIR.IR.Location(stackframe.file, line, 0)
         )
     end
 end
@@ -189,7 +191,7 @@ end
             )
         else
             location = with_debug() do
-                mlir_stacktrace("constant", @__FILE__, @__LINE__)
+                return mlir_stacktrace("constant", @__FILE__, @__LINE__)
             end
         end
     end
@@ -546,7 +548,7 @@ for (dialect, op) in
             res = MLIR.IR.result(
                 $(:($dialect.$op))(
                     x.mlir_data;
-                    $(result)=mlir_type(TracedRArray{Bool,N}, size(x)),
+                    ($(result))=mlir_type(TracedRArray{Bool,N}, size(x)),
                     location,
                 ),
             )
@@ -559,7 +561,7 @@ for (dialect, op) in
         ) where {T}
             res = MLIR.IR.result(
                 $(:($dialect.$op))(
-                    x.mlir_data; $(result)=mlir_type(TracedRArray{Bool,0}, ()), location
+                    x.mlir_data; ($(result))=mlir_type(TracedRArray{Bool,0}, ()), location
                 ),
             )
             return TracedRNumber{Bool}((), res)
@@ -1215,7 +1217,7 @@ end
         MLIR.IR.Attribute(is_host_transfer)
     end
     result_0 = map(results) do (typ, shape)
-        MLIR.IR.TensorType(shape, mlir_type(typ))
+        return MLIR.IR.TensorType(shape, mlir_type(typ))
     end
     op = stablehlo.recv(
         token.mlir_data; result_0, channel_handle, is_host_transfer, location
@@ -2337,14 +2339,21 @@ end
         MLIR.IR.setattr!(while_op, "enzyme.disable_mincut", MLIR.IR.UnitAttribute())
     end
 
-    if checkpointing
+    if checkpointing isa ReactantCore.Periodic
+        MLIR.IR.setattr!(
+            while_op, "enzymexla.enable_checkpointing", MLIR.IR.Attribute(true)
+        )
+        MLIR.IR.setattr!(
+            while_op, "enzymexla.checkpoints", MLIR.IR.Attribute(checkpointing.n)
+        )
+    elseif checkpointing === true
         MLIR.IR.setattr!(
             while_op, "enzymexla.enable_checkpointing", MLIR.IR.Attribute(true)
         )
     end
 
     return map(enumerate(linear_args)) do (i, arg)
-        Reactant.TracedUtils.set_mlir_data!(arg, MLIR.IR.result(while_op, i))
+        return Reactant.TracedUtils.set_mlir_data!(arg, MLIR.IR.result(while_op, i))
     end
 end
 
@@ -3286,7 +3295,7 @@ end
     @assert ndevices == length(logical_device_ids) "length(logical_device_ids) should be \
                                                     same as prod(last, mesh_axes)"
     @assert all(Base.Fix2(≥, 0), logical_device_ids) "logical_device_ids must be \
-                                                      non-negative"
+                                                  non-negative"
 
     sorted_logical_device_ids = Base.sort(logical_device_ids)
     @assert sorted_logical_device_ids == 0:(ndevices - 1) "sorted logical_device_ids \
@@ -3413,7 +3422,7 @@ end
         init_values::TracedRNumber{T},
         dimensions::Vector{Int},
         fn::Function,
-        location=mlir_stacktrace("rand", @__FILE__, @__LINE__),
+        location=mlir_stacktrace("reduce", @__FILE__, @__LINE__),
     )
 
 Applies a reduction function `fn` along the specified `dimensions` of input `x`, starting from `init_values`.
@@ -3517,14 +3526,14 @@ function standardize_start_index(
     if (start_index isa Integer && start_index ≤ typemax(Int32)) || sz ≤ typemax(Int32)
         if start_index isa Integer && update_sz !== nothing
             @assert start_index + update_sz - 1 ≤ sz "Index $(idx) out of bounds: \
-                                                      start_index=$(start_index), \
-                                                      update_sz=$(update_sz), sz=$(sz)"
+                                                  start_index=$(start_index), \
+                                                  update_sz=$(update_sz), sz=$(sz)"
         end
         start_index = Reactant.promote_to(TracedRNumber{Int32}, start_index)
     elseif start_index isa Integer && update_sz !== nothing
         @assert start_index + update_sz - 1 ≤ sz "Index $(idx) out of bounds: \
-                                                  start_index=$(start_index), \
-                                                  update_sz=$(update_sz), sz=$(sz)"
+                                              start_index=$(start_index), \
+                                              update_sz=$(update_sz), sz=$(sz)"
         start_index = Reactant.promote_to(TracedRNumber, start_index)
     end
 
@@ -3775,7 +3784,7 @@ Compute the row maximum pivoted LU factorization of `x` and return the factors `
 """
 @noinline function lu(
     x::TracedRArray{T},
-    ::Type{pT}=Int32;
+    (::Type{pT})=Int32;
     location=mlir_stacktrace("lu", @__FILE__, @__LINE__),
 ) where {T,pT}
     @assert ndims(x) >= 2
@@ -3809,7 +3818,7 @@ end
 
 @noinline function svd(
     x::TracedRArray{T,N},
-    ::Type{iT}=Int32;
+    (::Type{iT})=Int32;
     full::Bool=false,
     algorithm::String="DEFAULT",
     location=mlir_stacktrace("svd", @__FILE__, @__LINE__),
@@ -4056,9 +4065,9 @@ end
 ) where {T,N}
     @assert 1 ≤ dimension ≤ N "dimension must be between 1 and $(N) (got $(dimension))"
     @assert 0 ≤ lhs ≤ size(input, dimension) "lhs must be between 0 and \
-                                              $(size(input, dimension)) (got $(lhs))"
+                                      $(size(input, dimension)) (got $(lhs))"
     @assert 0 ≤ rhs ≤ size(input, dimension) "rhs must be between 0 and \
-                                              $(size(input, dimension)) (got $(rhs))"
+                                      $(size(input, dimension)) (got $(rhs))"
 
     sz = collect(Int64, size(input))
     sz[dimension] = sz[dimension] + lhs + rhs
@@ -4081,9 +4090,9 @@ end
 ) where {T,N}
     @assert 1 ≤ dimension ≤ N "dimension must be between 1 and $(N) (got $(dimension))"
     @assert 0 ≤ lhs ≤ size(input, dimension) "lhs must be between 0 and \
-                                              $(size(input, dimension)) (got $(lhs))"
+                                      $(size(input, dimension)) (got $(lhs))"
     @assert 0 ≤ rhs ≤ size(input, dimension) "rhs must be between 0 and \
-                                              $(size(input, dimension)) (got $(rhs))"
+                                      $(size(input, dimension)) (got $(rhs))"
     sz = collect(Int64, size(input))
     sz[dimension] = sz[dimension] + lhs + rhs
     return TracedRArray{T,N}(
@@ -4104,7 +4113,7 @@ end
 ) where {T,N}
     @assert 1 ≤ dimension ≤ N "dimension must be between 1 and $(N) (got $(dimension))"
     @assert 0 ≤ amount ≤ size(input, dimension) "amount must be between 0 and \
-                                                 $(size(input, dimension)) (got $(amount))"
+                                         $(size(input, dimension)) (got $(amount))"
     return TracedRArray{T,N}(
         (),
         MLIR.IR.result(

@@ -6724,10 +6724,6 @@ function mlirAMDGPUTDMGatherBaseTypeGetName()
     @ccall mlir_c.mlirAMDGPUTDMGatherBaseTypeGetName()::MlirStringRef
 end
 
-function mlirGetDialectHandle__amx__()
-    @ccall mlir_c.mlirGetDialectHandle__amx__()::MlirDialectHandle
-end
-
 function mlirGetDialectHandle__affine__()
     @ccall mlir_c.mlirGetDialectHandle__affine__()::MlirDialectHandle
 end
@@ -10235,6 +10231,19 @@ function mlirConversionPatternRewriterAsPatternRewriter(rewriter)
     @ccall mlir_c.mlirConversionPatternRewriterAsPatternRewriter(
         rewriter::MlirConversionPatternRewriter
     )::MlirPatternRewriter
+end
+
+"""
+    mlirConversionPatternRewriterConvertRegionTypes(rewriter, region, typeConverter)
+
+Apply a signature conversion to each block in the given region.
+"""
+function mlirConversionPatternRewriterConvertRegionTypes(rewriter, region, typeConverter)
+    @ccall mlir_c.mlirConversionPatternRewriterConvertRegionTypes(
+        rewriter::MlirConversionPatternRewriter,
+        region::MlirRegion,
+        typeConverter::MlirTypeConverter,
+    )::MlirLogicalResult
 end
 
 """
