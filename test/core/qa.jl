@@ -120,6 +120,7 @@ end
                 :code_hlo,
                 :code_mhlo,
                 :code_xla,
+                :Periodic,
             ),
         ),
         all_qualified_accesses_via_owners=true,

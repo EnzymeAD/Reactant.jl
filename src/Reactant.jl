@@ -304,7 +304,7 @@ export ConcreteRArray,
     @trace,
     within_compile
 
-if VERSION ≥ v"1.11"
+@static if VERSION ≥ v"1.11"
     @eval $(Expr(:public, :Periodic))
 end
 
