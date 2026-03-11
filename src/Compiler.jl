@@ -1197,6 +1197,9 @@ function optimization_passes(
             "sign_const_prop",
             "floor_const_prop",
             "tan_const_prop",
+            "relu_const_prop",
+            "gelu_const_prop",
+            "softplus_const_prop",
             # binary constant propagation
             "add_const_prop",
             "and_const_prop",
