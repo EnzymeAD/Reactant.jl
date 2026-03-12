@@ -36,9 +36,8 @@ function Distributed.get_local_process_id(::Distributed.MPIEnvDetector)
 end
 
 function __init__()
-    libmpi_handle = MPI.API.libmpi_handle
-
     # register MPI routines
+    #! explicit-imports: off
     for name in [
         :MPI_Init,
         :MPI_Finalize,
@@ -52,8 +51,9 @@ function __init__()
         :MPI_Wait,
         :MPI_Request_free,
     ]
-        MLIR.API.EnzymeJaXMapSymbol(name, Libdl.dlsym(libmpi_handle, name))
+        MLIR.API.EnzymeJaXMapSymbol(name, Libdl.dlsym(MPI.API.libmpi_handle, name))
     end
+    #! explicit-imports: on
 
     # register MPI constants
     # NOTE these symbols are not ABI-stable until MPI 5.0, but in practice, they are represented as word-size values (i.e. `int` or ptr)
@@ -319,7 +319,10 @@ end
 #     return result_cache[tocopy]
 # end
 
+#! explicit-imports: off
 include("Ops.jl")
+#! explicit-imports: on
+
 include("Overrides.jl")
 
 end # module
