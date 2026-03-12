@@ -1,18 +1,18 @@
-# Straight conversions from Dates.jl types to TracedR* types
+# Straight conversions from Dates.jl types to Reactant* types
 
 # Period conversions
 for (S, T) in (
-    (:Year, :TracedRYear),
-    (:Quarter, :TracedRQuarter),
-    (:Month, :TracedRMonth),
-    (:Week, :TracedRWeek),
-    (:Day, :TracedRDay),
-    (:Hour, :TracedRHour),
-    (:Minute, :TracedRMinute),
-    (:Second, :TracedRSecond),
-    (:Millisecond, :TracedRMillisecond),
-    (:Microsecond, :TracedRMicrosecond),
-    (:Nanosecond, :TracedRNanosecond),
+    (:Year, :ReactantYear),
+    (:Quarter, :ReactantQuarter),
+    (:Month, :ReactantMonth),
+    (:Week, :ReactantWeek),
+    (:Day, :ReactantDay),
+    (:Hour, :ReactantHour),
+    (:Minute, :ReactantMinute),
+    (:Second, :ReactantSecond),
+    (:Millisecond, :ReactantMillisecond),
+    (:Microsecond, :ReactantMicrosecond),
+    (:Nanosecond, :ReactantNanosecond),
 )
     @eval Base.convert(::Type{$T}, x::Dates.$S) = $T(value(x))
     @eval Base.convert(::Type{$T{Int64}}, x::Dates.$S) = $T(value(x))
@@ -24,44 +24,44 @@ for (S, T) in (
     @eval Base.convert(::Type{$T{I}}, x::$T{J}) where {I,J} = $T(convert(I, value(x)))
 end
 
-# Cross-period conversions: Dates.Source → TracedRTarget (where Source ≠ Target)
-# Uses Dates' own conversion logic first, then converts to the TracedR type.
+# Cross-period conversions: Dates.Source → ReactantTarget (where Source ≠ Target)
+# Uses Dates' own conversion logic first, then converts to the Reactant type.
 # This covers all pairs that Dates.convert supports natively.
 const _CROSS_PERIOD_PAIRS = (
     # DatePeriod → DatePeriod
-    (:Year, :Quarter, :TracedRQuarter),
-    (:Year, :Month, :TracedRMonth),
-    (:Quarter, :Month, :TracedRMonth),
-    (:Week, :Day, :TracedRDay),
+    (:Year, :Quarter, :ReactantQuarter),
+    (:Year, :Month, :ReactantMonth),
+    (:Quarter, :Month, :ReactantMonth),
+    (:Week, :Day, :ReactantDay),
     # DatePeriod → TimePeriod
-    (:Week, :Hour, :TracedRHour),
-    (:Week, :Minute, :TracedRMinute),
-    (:Week, :Second, :TracedRSecond),
-    (:Week, :Millisecond, :TracedRMillisecond),
-    (:Week, :Microsecond, :TracedRMicrosecond),
-    (:Week, :Nanosecond, :TracedRNanosecond),
-    (:Day, :Hour, :TracedRHour),
-    (:Day, :Minute, :TracedRMinute),
-    (:Day, :Second, :TracedRSecond),
-    (:Day, :Millisecond, :TracedRMillisecond),
-    (:Day, :Microsecond, :TracedRMicrosecond),
-    (:Day, :Nanosecond, :TracedRNanosecond),
+    (:Week, :Hour, :ReactantHour),
+    (:Week, :Minute, :ReactantMinute),
+    (:Week, :Second, :ReactantSecond),
+    (:Week, :Millisecond, :ReactantMillisecond),
+    (:Week, :Microsecond, :ReactantMicrosecond),
+    (:Week, :Nanosecond, :ReactantNanosecond),
+    (:Day, :Hour, :ReactantHour),
+    (:Day, :Minute, :ReactantMinute),
+    (:Day, :Second, :ReactantSecond),
+    (:Day, :Millisecond, :ReactantMillisecond),
+    (:Day, :Microsecond, :ReactantMicrosecond),
+    (:Day, :Nanosecond, :ReactantNanosecond),
     # TimePeriod → TimePeriod
-    (:Hour, :Minute, :TracedRMinute),
-    (:Hour, :Second, :TracedRSecond),
-    (:Hour, :Millisecond, :TracedRMillisecond),
-    (:Hour, :Microsecond, :TracedRMicrosecond),
-    (:Hour, :Nanosecond, :TracedRNanosecond),
-    (:Minute, :Second, :TracedRSecond),
-    (:Minute, :Millisecond, :TracedRMillisecond),
-    (:Minute, :Microsecond, :TracedRMicrosecond),
-    (:Minute, :Nanosecond, :TracedRNanosecond),
-    (:Second, :Millisecond, :TracedRMillisecond),
-    (:Second, :Microsecond, :TracedRMicrosecond),
-    (:Second, :Nanosecond, :TracedRNanosecond),
-    (:Millisecond, :Microsecond, :TracedRMicrosecond),
-    (:Millisecond, :Nanosecond, :TracedRNanosecond),
-    (:Microsecond, :Nanosecond, :TracedRNanosecond),
+    (:Hour, :Minute, :ReactantMinute),
+    (:Hour, :Second, :ReactantSecond),
+    (:Hour, :Millisecond, :ReactantMillisecond),
+    (:Hour, :Microsecond, :ReactantMicrosecond),
+    (:Hour, :Nanosecond, :ReactantNanosecond),
+    (:Minute, :Second, :ReactantSecond),
+    (:Minute, :Millisecond, :ReactantMillisecond),
+    (:Minute, :Microsecond, :ReactantMicrosecond),
+    (:Minute, :Nanosecond, :ReactantNanosecond),
+    (:Second, :Millisecond, :ReactantMillisecond),
+    (:Second, :Microsecond, :ReactantMicrosecond),
+    (:Second, :Nanosecond, :ReactantNanosecond),
+    (:Millisecond, :Microsecond, :ReactantMicrosecond),
+    (:Millisecond, :Nanosecond, :ReactantNanosecond),
+    (:Microsecond, :Nanosecond, :ReactantNanosecond),
 )
 
 for (S, T, TR) in _CROSS_PERIOD_PAIRS
@@ -74,49 +74,51 @@ for (S, T, TR) in _CROSS_PERIOD_PAIRS
 end
 
 # DateTime conversion
-function Base.convert(::Type{TracedRDateTime}, dt::Dates.DateTime)
-    return TracedRDateTime(UTInstant(TracedRMillisecond(value(dt))))
+function Base.convert(::Type{ReactantDateTime}, dt::Dates.DateTime)
+    return ReactantDateTime(UTInstant(ReactantMillisecond(value(dt))))
 end
-function Base.convert(::Type{DateTime}, x::TracedRDateTime)
+function Base.convert(::Type{DateTime}, x::ReactantDateTime)
     return DateTime(UTInstant(Dates.Millisecond(value(x))))
 end
-TracedRDateTime(dt::DateTime) = convert(TracedRDateTime, dt)
-function TracedRDateTime{I}(dt::DateTime) where {I}
-    return TracedRDateTime{I}(UTInstant(TracedRMillisecond(convert(I, value(dt)))))
+ReactantDateTime(dt::DateTime) = convert(ReactantDateTime, dt)
+function ReactantDateTime{I}(dt::DateTime) where {I}
+    return ReactantDateTime{I}(UTInstant(ReactantMillisecond(convert(I, value(dt)))))
 end
-function Base.convert(::Type{TracedRDateTime{I}}, dt::Dates.DateTime) where {I}
-    return TracedRDateTime{I}(dt)
+function Base.convert(::Type{ReactantDateTime{I}}, dt::Dates.DateTime) where {I}
+    return ReactantDateTime{I}(dt)
 end
 
 # Date conversion
-function Base.convert(::Type{TracedRDate}, dt::Dates.Date)
-    return TracedRDate(UTInstant(TracedRDay(value(dt))))
+function Base.convert(::Type{ReactantDate}, dt::Dates.Date)
+    return ReactantDate(UTInstant(ReactantDay(value(dt))))
 end
-function Base.convert(::Type{Date}, x::TracedRDate)
+function Base.convert(::Type{Date}, x::ReactantDate)
     return Date(UTInstant(Dates.Day(value(x))))
 end
-TracedRDate(dt::Date) = convert(TracedRDate, dt)
-function TracedRDate{I}(dt::Date) where {I}
-    return TracedRDate{I}(UTInstant(TracedRDay(convert(I, value(dt)))))
+ReactantDate(dt::Date) = convert(ReactantDate, dt)
+function ReactantDate{I}(dt::Date) where {I}
+    return ReactantDate{I}(UTInstant(ReactantDay(convert(I, value(dt)))))
 end
-function Base.convert(::Type{TracedRDate{I}}, dt::Dates.Date) where {I}
-    return TracedRDate{I}(dt)
+function Base.convert(::Type{ReactantDate{I}}, dt::Dates.Date) where {I}
+    return ReactantDate{I}(dt)
 end
 
 # Time conversion
-function Base.convert(::Type{TracedRTime}, t::Time)
-    return TracedRTime(TracedRNanosecond(value(t)))
+function Base.convert(::Type{ReactantTime}, t::Time)
+    return ReactantTime(ReactantNanosecond(value(t)))
 end
-Base.convert(::Type{Time}, x::TracedRTime) = Dates.Time(Dates.Nanosecond(value(x)))
-TracedRTime(t::Time) = convert(TracedRTime, t)
-TracedRTime{I}(t::Time) where {I} = TracedRTime{I}(TracedRNanosecond(convert(I, value(t))))
-Base.convert(::Type{TracedRTime{I}}, t::Dates.Time) where {I} = TracedRTime{I}(t)
+Base.convert(::Type{Time}, x::ReactantTime) = Dates.Time(Dates.Nanosecond(value(x)))
+ReactantTime(t::Time) = convert(ReactantTime, t)
+function ReactantTime{I}(t::Time) where {I}
+    return ReactantTime{I}(ReactantNanosecond(convert(I, value(t))))
+end
+Base.convert(::Type{ReactantTime{I}}, t::Dates.Time) where {I} = ReactantTime{I}(t)
 
 # converting e.g. Int64 to ConcretePJRTNumber
 function Base.convert(
     ::Type{UTInstant{P}}, uti::UTInstant{Q}
-) where {P<:TracedRMillisecond,Q<:TracedRMillisecond}
+) where {P<:ReactantMillisecond,Q<:ReactantMillisecond}
     return UTInstant{P}(uti.periods)
 end
 
-Dates.datetime2julian(dt::TracedRDateTime) = (value(dt) - Dates.JULIANEPOCH) / 86400000.0
+Dates.datetime2julian(dt::ReactantDateTime) = (value(dt) - Dates.JULIANEPOCH) / 86400000.0

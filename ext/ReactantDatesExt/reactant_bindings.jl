@@ -1,6 +1,6 @@
 # Bindings to automatically convert Dates.jl types to traced version
 
-reactant_type_prefix = "TracedR"
+reactant_type_prefix = "Reactant"
 
 for T in (
     :Year,

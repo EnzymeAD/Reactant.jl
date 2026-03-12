@@ -39,20 +39,20 @@ end
 
 @testset "ReactantDatesExt" begin
 
-    # --- Conversions: Dates ↔ TracedR roundtrips ---
-    @testset "Period conversions: Dates → TracedR → Dates" begin
+    # --- Conversions: Dates ↔ Reactant roundtrips ---
+    @testset "Period conversions: Dates → Reactant → Dates" begin
         for (DatesT, TracedT) in (
-            (Dates.Year, RDExt.TracedRYear),
-            (Dates.Quarter, RDExt.TracedRQuarter),
-            (Dates.Month, RDExt.TracedRMonth),
-            (Dates.Week, RDExt.TracedRWeek),
-            (Dates.Day, RDExt.TracedRDay),
-            (Dates.Hour, RDExt.TracedRHour),
-            (Dates.Minute, RDExt.TracedRMinute),
-            (Dates.Second, RDExt.TracedRSecond),
-            (Dates.Millisecond, RDExt.TracedRMillisecond),
-            (Dates.Microsecond, RDExt.TracedRMicrosecond),
-            (Dates.Nanosecond, RDExt.TracedRNanosecond),
+            (Dates.Year, RDExt.ReactantYear),
+            (Dates.Quarter, RDExt.ReactantQuarter),
+            (Dates.Month, RDExt.ReactantMonth),
+            (Dates.Week, RDExt.ReactantWeek),
+            (Dates.Day, RDExt.ReactantDay),
+            (Dates.Hour, RDExt.ReactantHour),
+            (Dates.Minute, RDExt.ReactantMinute),
+            (Dates.Second, RDExt.ReactantSecond),
+            (Dates.Millisecond, RDExt.ReactantMillisecond),
+            (Dates.Microsecond, RDExt.ReactantMicrosecond),
+            (Dates.Nanosecond, RDExt.ReactantNanosecond),
         )
             for v in (0, 42)
                 orig = DatesT(v)
@@ -74,43 +74,43 @@ end
         end
     end
 
-    @testset "Cross-period conversions: Dates.Source → TracedRTarget" begin
+    @testset "Cross-period conversions: Dates.Source → ReactantTarget" begin
         # All cross-period pairs that Dates.convert supports natively
         cross_pairs = (
             # DatePeriod → DatePeriod
-            (Dates.Year, Dates.Quarter, RDExt.TracedRQuarter),
-            (Dates.Year, Dates.Month, RDExt.TracedRMonth),
-            (Dates.Quarter, Dates.Month, RDExt.TracedRMonth),
-            (Dates.Week, Dates.Day, RDExt.TracedRDay),
+            (Dates.Year, Dates.Quarter, RDExt.ReactantQuarter),
+            (Dates.Year, Dates.Month, RDExt.ReactantMonth),
+            (Dates.Quarter, Dates.Month, RDExt.ReactantMonth),
+            (Dates.Week, Dates.Day, RDExt.ReactantDay),
             # DatePeriod → TimePeriod
-            (Dates.Week, Dates.Hour, RDExt.TracedRHour),
-            (Dates.Week, Dates.Minute, RDExt.TracedRMinute),
-            (Dates.Week, Dates.Second, RDExt.TracedRSecond),
-            (Dates.Week, Dates.Millisecond, RDExt.TracedRMillisecond),
-            (Dates.Week, Dates.Microsecond, RDExt.TracedRMicrosecond),
-            (Dates.Week, Dates.Nanosecond, RDExt.TracedRNanosecond),
-            (Dates.Day, Dates.Hour, RDExt.TracedRHour),
-            (Dates.Day, Dates.Minute, RDExt.TracedRMinute),
-            (Dates.Day, Dates.Second, RDExt.TracedRSecond),
-            (Dates.Day, Dates.Millisecond, RDExt.TracedRMillisecond),
-            (Dates.Day, Dates.Microsecond, RDExt.TracedRMicrosecond),
-            (Dates.Day, Dates.Nanosecond, RDExt.TracedRNanosecond),
+            (Dates.Week, Dates.Hour, RDExt.ReactantHour),
+            (Dates.Week, Dates.Minute, RDExt.ReactantMinute),
+            (Dates.Week, Dates.Second, RDExt.ReactantSecond),
+            (Dates.Week, Dates.Millisecond, RDExt.ReactantMillisecond),
+            (Dates.Week, Dates.Microsecond, RDExt.ReactantMicrosecond),
+            (Dates.Week, Dates.Nanosecond, RDExt.ReactantNanosecond),
+            (Dates.Day, Dates.Hour, RDExt.ReactantHour),
+            (Dates.Day, Dates.Minute, RDExt.ReactantMinute),
+            (Dates.Day, Dates.Second, RDExt.ReactantSecond),
+            (Dates.Day, Dates.Millisecond, RDExt.ReactantMillisecond),
+            (Dates.Day, Dates.Microsecond, RDExt.ReactantMicrosecond),
+            (Dates.Day, Dates.Nanosecond, RDExt.ReactantNanosecond),
             # TimePeriod → TimePeriod
-            (Dates.Hour, Dates.Minute, RDExt.TracedRMinute),
-            (Dates.Hour, Dates.Second, RDExt.TracedRSecond),
-            (Dates.Hour, Dates.Millisecond, RDExt.TracedRMillisecond),
-            (Dates.Hour, Dates.Microsecond, RDExt.TracedRMicrosecond),
-            (Dates.Hour, Dates.Nanosecond, RDExt.TracedRNanosecond),
-            (Dates.Minute, Dates.Second, RDExt.TracedRSecond),
-            (Dates.Minute, Dates.Millisecond, RDExt.TracedRMillisecond),
-            (Dates.Minute, Dates.Microsecond, RDExt.TracedRMicrosecond),
-            (Dates.Minute, Dates.Nanosecond, RDExt.TracedRNanosecond),
-            (Dates.Second, Dates.Millisecond, RDExt.TracedRMillisecond),
-            (Dates.Second, Dates.Microsecond, RDExt.TracedRMicrosecond),
-            (Dates.Second, Dates.Nanosecond, RDExt.TracedRNanosecond),
-            (Dates.Millisecond, Dates.Microsecond, RDExt.TracedRMicrosecond),
-            (Dates.Millisecond, Dates.Nanosecond, RDExt.TracedRNanosecond),
-            (Dates.Microsecond, Dates.Nanosecond, RDExt.TracedRNanosecond),
+            (Dates.Hour, Dates.Minute, RDExt.ReactantMinute),
+            (Dates.Hour, Dates.Second, RDExt.ReactantSecond),
+            (Dates.Hour, Dates.Millisecond, RDExt.ReactantMillisecond),
+            (Dates.Hour, Dates.Microsecond, RDExt.ReactantMicrosecond),
+            (Dates.Hour, Dates.Nanosecond, RDExt.ReactantNanosecond),
+            (Dates.Minute, Dates.Second, RDExt.ReactantSecond),
+            (Dates.Minute, Dates.Millisecond, RDExt.ReactantMillisecond),
+            (Dates.Minute, Dates.Microsecond, RDExt.ReactantMicrosecond),
+            (Dates.Minute, Dates.Nanosecond, RDExt.ReactantNanosecond),
+            (Dates.Second, Dates.Millisecond, RDExt.ReactantMillisecond),
+            (Dates.Second, Dates.Microsecond, RDExt.ReactantMicrosecond),
+            (Dates.Second, Dates.Nanosecond, RDExt.ReactantNanosecond),
+            (Dates.Millisecond, Dates.Microsecond, RDExt.ReactantMicrosecond),
+            (Dates.Millisecond, Dates.Nanosecond, RDExt.ReactantNanosecond),
+            (Dates.Microsecond, Dates.Nanosecond, RDExt.ReactantNanosecond),
         )
         for (SrcT, DstT, TracedT) in cross_pairs
             src = SrcT(1)
@@ -126,42 +126,42 @@ end
         end
     end
 
-    @testset "DateTime conversion: DateTime → TracedRDateTime → DateTime" begin
+    @testset "DateTime conversion: DateTime → ReactantDateTime → DateTime" begin
         dt = DateTime(2000, 1, 1)
-        traced = convert(RDExt.TracedRDateTime, dt)
-        @test traced isa RDExt.TracedRDateTime
+        traced = convert(RDExt.ReactantDateTime, dt)
+        @test traced isa RDExt.ReactantDateTime
         @test value(traced) == value(dt)
         back = convert(DateTime, traced)
         @test back == dt
 
         # Direct constructors
         dt = DateTime(2002, 6, 15)
-        @test value(RDExt.TracedRDateTime(dt)) == value(dt)
-        @test value(RDExt.TracedRDateTime{Int64}(dt)) == value(dt)
+        @test value(RDExt.ReactantDateTime(dt)) == value(dt)
+        @test value(RDExt.ReactantDateTime{Int64}(dt)) == value(dt)
     end
 
-    @testset "Date conversion: Date → TracedRDate → Date" begin
+    @testset "Date conversion: Date → ReactantDate → Date" begin
         d = Date(2000, 1, 1)
-        traced = convert(RDExt.TracedRDate, d)
-        @test traced isa RDExt.TracedRDate
+        traced = convert(RDExt.ReactantDate, d)
+        @test traced isa RDExt.ReactantDate
         @test value(traced) == value(d)
         back = convert(Date, traced)
         @test back == d
     end
 
-    @testset "Time conversion: Time → TracedRTime → Time" begin
+    @testset "Time conversion: Time → ReactantTime → Time" begin
         t = Time(12, 30, 45, 500, 250, 100)
-        traced = convert(RDExt.TracedRTime, t)
-        @test traced isa RDExt.TracedRTime
+        traced = convert(RDExt.ReactantTime, t)
+        @test traced isa RDExt.ReactantTime
         @test value(traced) == value(t)
         back = convert(Time, traced)
         @test back == t
     end
 
-    @testset "Time conversion: Time → TracedRTime → Time" begin
+    @testset "Time conversion: Time → ReactantTime → Time" begin
         t = Time(12, 30)
-        @test value(RDExt.TracedRTime(t)) == value(t)
-        @test value(RDExt.TracedRTime{Int64}(t)) == value(t)
+        @test value(RDExt.ReactantTime(t)) == value(t)
+        @test value(RDExt.ReactantTime{Int64}(t)) == value(t)
     end
 
     # --- Accessors via @jit ---

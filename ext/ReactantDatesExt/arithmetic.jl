@@ -15,140 +15,144 @@ import Dates:
     totaldays
 
 # toms (to milliseconds) for traced period types
-toms(c::TracedRNanosecond) = div(value(c), 1000000, RoundNearest)
-toms(c::TracedRMicrosecond) = div(value(c), 1000, RoundNearest)
-toms(c::TracedRMillisecond) = value(c)
-toms(c::TracedRSecond) = 1000 * value(c)
-toms(c::TracedRMinute) = 60000 * value(c)
-toms(c::TracedRHour) = 3600000 * value(c)
-toms(c::TracedRDay) = 86400000 * value(c)
-toms(c::TracedRWeek) = 604800000 * value(c)
+toms(c::ReactantNanosecond) = div(value(c), 1000000, RoundNearest)
+toms(c::ReactantMicrosecond) = div(value(c), 1000, RoundNearest)
+toms(c::ReactantMillisecond) = value(c)
+toms(c::ReactantSecond) = 1000 * value(c)
+toms(c::ReactantMinute) = 60000 * value(c)
+toms(c::ReactantHour) = 3600000 * value(c)
+toms(c::ReactantDay) = 86400000 * value(c)
+toms(c::ReactantWeek) = 604800000 * value(c)
 
 # tons (to nanoseconds) for traced period types
-tons(c::TracedRNanosecond) = value(c)
-tons(c::TracedRMicrosecond) = value(c) * 1000
-tons(c::TracedRMillisecond) = value(c) * 1000000
-tons(c::TracedRSecond) = value(c) * 1000000000
-tons(c::TracedRMinute) = value(c) * 60000000000
-tons(c::TracedRHour) = value(c) * 3600000000000
+tons(c::ReactantNanosecond) = value(c)
+tons(c::ReactantMicrosecond) = value(c) * 1000
+tons(c::ReactantMillisecond) = value(c) * 1000000
+tons(c::ReactantSecond) = value(c) * 1000000000
+tons(c::ReactantMinute) = value(c) * 60000000000
+tons(c::ReactantHour) = value(c) * 3600000000000
 
 # days for traced period types
-days(c::TracedRDay) = value(c)
-days(c::TracedRWeek) = 7 * value(c)
+days(c::ReactantDay) = value(c)
+days(c::ReactantWeek) = 7 * value(c)
 
-# TracedRDateTime/TracedRDate-TracedRYear arithmetic
-function (+)(dt::TracedRDateTime, y::TracedRYear)
+# ReactantDateTime/ReactantDate-ReactantYear arithmetic
+function (+)(dt::ReactantDateTime, y::ReactantYear)
     oy, m, d = yearmonthday(dt)
     ny = oy + value(y)
     ld = daysinmonth(ny, m)
-    return TracedRDateTime(
+    return ReactantDateTime(
         UTInstant(
-            TracedRMillisecond(
-                value(dt) - toms(TracedRDay(totaldays(oy, m, d))) +
-                toms(TracedRDay(totaldays(ny, m, d <= ld ? d : ld))),
+            ReactantMillisecond(
+                value(dt) - toms(ReactantDay(totaldays(oy, m, d))) +
+                toms(ReactantDay(totaldays(ny, m, d <= ld ? d : ld))),
             ),
         ),
     )
 end
-function (+)(dt::TracedRDate, y::TracedRYear)
+function (+)(dt::ReactantDate, y::ReactantYear)
     oy, m, d = yearmonthday(dt)
     ny = oy + value(y)
     ld = daysinmonth(ny, m)
-    return TracedRDate(UTInstant(TracedRDay(totaldays(ny, m, d <= ld ? d : ld))))
+    return ReactantDate(UTInstant(ReactantDay(totaldays(ny, m, d <= ld ? d : ld))))
 end
-function (-)(dt::TracedRDateTime, y::TracedRYear)
+function (-)(dt::ReactantDateTime, y::ReactantYear)
     oy, m, d = yearmonthday(dt)
     ny = oy - value(y)
     ld = daysinmonth(ny, m)
-    return TracedRDateTime(
+    return ReactantDateTime(
         UTInstant(
-            TracedRMillisecond(
-                value(dt) - toms(TracedRDay(totaldays(oy, m, d))) +
-                toms(TracedRDay(totaldays(ny, m, d <= ld ? d : ld))),
+            ReactantMillisecond(
+                value(dt) - toms(ReactantDay(totaldays(oy, m, d))) +
+                toms(ReactantDay(totaldays(ny, m, d <= ld ? d : ld))),
             ),
         ),
     )
 end
-function (-)(dt::TracedRDate, y::TracedRYear)
+function (-)(dt::ReactantDate, y::ReactantYear)
     oy, m, d = yearmonthday(dt)
     ny = oy - value(y)
     ld = daysinmonth(ny, m)
-    return TracedRDate(UTInstant(TracedRDay(totaldays(ny, m, d <= ld ? d : ld))))
+    return ReactantDate(UTInstant(ReactantDay(totaldays(ny, m, d <= ld ? d : ld))))
 end
 
-# TracedRDateTime/TracedRDate-TracedRMonth arithmetic
-function (+)(dt::TracedRDateTime, z::TracedRMonth)
+# ReactantDateTime/ReactantDate-ReactantMonth arithmetic
+function (+)(dt::ReactantDateTime, z::ReactantMonth)
     y, m, d = yearmonthday(dt)
     ny = yearwrap(y, m, value(z))
     mm = monthwrap(m, value(z))
     ld = daysinmonth(ny, mm)
-    return TracedRDateTime(
+    return ReactantDateTime(
         UTInstant(
-            TracedRMillisecond(
-                value(dt) - toms(TracedRDay(totaldays(y, m, d))) +
-                toms(TracedRDay(totaldays(ny, mm, d <= ld ? d : ld))),
+            ReactantMillisecond(
+                value(dt) - toms(ReactantDay(totaldays(y, m, d))) +
+                toms(ReactantDay(totaldays(ny, mm, d <= ld ? d : ld))),
             ),
         ),
     )
 end
-function (+)(dt::TracedRDate, z::TracedRMonth)
+function (+)(dt::ReactantDate, z::ReactantMonth)
     y, m, d = yearmonthday(dt)
     ny = yearwrap(y, m, value(z))
     mm = monthwrap(m, value(z))
     ld = daysinmonth(ny, mm)
-    return TracedRDate(UTInstant(TracedRDay(totaldays(ny, mm, d <= ld ? d : ld))))
+    return ReactantDate(UTInstant(ReactantDay(totaldays(ny, mm, d <= ld ? d : ld))))
 end
-function (-)(dt::TracedRDateTime, z::TracedRMonth)
+function (-)(dt::ReactantDateTime, z::ReactantMonth)
     y, m, d = yearmonthday(dt)
     ny = yearwrap(y, m, -value(z))
     mm = monthwrap(m, -value(z))
     ld = daysinmonth(ny, mm)
-    return TracedRDateTime(
+    return ReactantDateTime(
         UTInstant(
-            TracedRMillisecond(
-                value(dt) - toms(TracedRDay(totaldays(y, m, d))) +
-                toms(TracedRDay(totaldays(ny, mm, d <= ld ? d : ld))),
+            ReactantMillisecond(
+                value(dt) - toms(ReactantDay(totaldays(y, m, d))) +
+                toms(ReactantDay(totaldays(ny, mm, d <= ld ? d : ld))),
             ),
         ),
     )
 end
-function (-)(dt::TracedRDate, z::TracedRMonth)
+function (-)(dt::ReactantDate, z::ReactantMonth)
     y, m, d = yearmonthday(dt)
     ny = yearwrap(y, m, -value(z))
     mm = monthwrap(m, -value(z))
     ld = daysinmonth(ny, mm)
-    return TracedRDate(UTInstant(TracedRDay(totaldays(ny, mm, d <= ld ? d : ld))))
+    return ReactantDate(UTInstant(ReactantDay(totaldays(ny, mm, d <= ld ? d : ld))))
 end
 
-# TracedRDateTime/TracedRDate-TracedRQuarter arithmetic (delegates to Month)
-(+)(x::TracedRDate, y::TracedRQuarter) = x + TracedRMonth(3 * value(y))
-(-)(x::TracedRDate, y::TracedRQuarter) = x - TracedRMonth(3 * value(y))
-(+)(x::TracedRDateTime, y::TracedRQuarter) = x + TracedRMonth(3 * value(y))
-(-)(x::TracedRDateTime, y::TracedRQuarter) = x - TracedRMonth(3 * value(y))
+# ReactantDateTime/ReactantDate-ReactantQuarter arithmetic (delegates to Month)
+(+)(x::ReactantDate, y::ReactantQuarter) = x + ReactantMonth(3 * value(y))
+(-)(x::ReactantDate, y::ReactantQuarter) = x - ReactantMonth(3 * value(y))
+(+)(x::ReactantDateTime, y::ReactantQuarter) = x + ReactantMonth(3 * value(y))
+(-)(x::ReactantDateTime, y::ReactantQuarter) = x - ReactantMonth(3 * value(y))
 
-# TracedRDate-TracedRWeek/TracedRDay arithmetic
-function (+)(x::TracedRDate, y::TracedRWeek)
-    return TracedRDate(UTInstant(TracedRDay(value(x) + 7 * value(y))))
+# ReactantDate-ReactantWeek/ReactantDay arithmetic
+function (+)(x::ReactantDate, y::ReactantWeek)
+    return ReactantDate(UTInstant(ReactantDay(value(x) + 7 * value(y))))
 end
-function (-)(x::TracedRDate, y::TracedRWeek)
-    return TracedRDate(UTInstant(TracedRDay(value(x) - 7 * value(y))))
+function (-)(x::ReactantDate, y::ReactantWeek)
+    return ReactantDate(UTInstant(ReactantDay(value(x) - 7 * value(y))))
 end
-(+)(x::TracedRDate, y::TracedRDay) = TracedRDate(UTInstant(TracedRDay(value(x) + value(y))))
-(-)(x::TracedRDate, y::TracedRDay) = TracedRDate(UTInstant(TracedRDay(value(x) - value(y))))
-
-# TracedRDateTime + any Period (via toms)
-function (+)(x::TracedRDateTime, y::Period)
-    return TracedRDateTime(UTInstant(TracedRMillisecond(value(x) + toms(y))))
+function (+)(x::ReactantDate, y::ReactantDay)
+    return ReactantDate(UTInstant(ReactantDay(value(x) + value(y))))
 end
-function (-)(x::TracedRDateTime, y::Period)
-    return TracedRDateTime(UTInstant(TracedRMillisecond(value(x) - toms(y))))
+function (-)(x::ReactantDate, y::ReactantDay)
+    return ReactantDate(UTInstant(ReactantDay(value(x) - value(y))))
 end
 
-# TracedRTime + any TimePeriod (via tons)
-(+)(x::TracedRTime, y::TimePeriod) = TracedRTime(TracedRNanosecond(value(x) + tons(y)))
-(-)(x::TracedRTime, y::TimePeriod) = TracedRTime(TracedRNanosecond(value(x) - tons(y)))
+# ReactantDateTime + any Period (via toms)
+function (+)(x::ReactantDateTime, y::Period)
+    return ReactantDateTime(UTInstant(ReactantMillisecond(value(x) + toms(y))))
+end
+function (-)(x::ReactantDateTime, y::Period)
+    return ReactantDateTime(UTInstant(ReactantMillisecond(value(x) - toms(y))))
+end
+
+# ReactantTime + any TimePeriod (via tons)
+(+)(x::ReactantTime, y::TimePeriod) = ReactantTime(ReactantNanosecond(value(x) + tons(y)))
+(-)(x::ReactantTime, y::TimePeriod) = ReactantTime(ReactantNanosecond(value(x) - tons(y)))
 
 # Commutativity
-(+)(y::Period, x::TracedRDateTime) = x + y
-(+)(y::Period, x::TracedRDate) = x + y
-(+)(y::TimePeriod, x::TracedRTime) = x + y
+(+)(y::Period, x::ReactantDateTime) = x + y
+(+)(y::Period, x::ReactantDate) = x + y
+(+)(y::TimePeriod, x::ReactantTime) = x + y

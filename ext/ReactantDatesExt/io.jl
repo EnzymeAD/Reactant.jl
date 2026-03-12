@@ -1,5 +1,5 @@
-# TracedRDate: same output as Base.print(io::IO, dt::Date) in stdlib Dates
-function Base.print(io::IO, dt::TracedRDate)
+# ReactantDate: same output as Base.print(io::IO, dt::Date) in stdlib Dates
+function Base.print(io::IO, dt::ReactantDate)
     y, m, d = yearmonthday(dt)
     yy = y < 0 ? string("-", lpad(-y, 4, "0")) : lpad(y, 4, "0")
     mm = lpad(m, 2, "0")
@@ -7,8 +7,8 @@ function Base.print(io::IO, dt::TracedRDate)
     return print(io, "$yy-$mm-$dd")
 end
 
-# TracedRDateTime: same output as Base.print(io::IO, dt::DateTime) in stdlib Dates
-function Base.print(io::IO, dt::TracedRDateTime)
+# ReactantDateTime: same output as Base.print(io::IO, dt::DateTime) in stdlib Dates
+function Base.print(io::IO, dt::ReactantDateTime)
     y, m, d = yearmonthday(dt)
     yy = y < 0 ? string("-", lpad(-y, 4, "0")) : lpad(y, 4, "0")
     mm = lpad(m, 2, "0")
@@ -25,8 +25,8 @@ function Base.print(io::IO, dt::TracedRDateTime)
     end
 end
 
-# TracedRTime: same output as Base.string(t::Time) in stdlib Dates
-function Base.string(t::TracedRTime)
+# ReactantTime: same output as Base.string(t::Time) in stdlib Dates
+function Base.string(t::ReactantTime)
     h, mi, s = hour(t), minute(t), second(t)
     hh = lpad(h, 2, "0")
     mii = lpad(mi, 2, "0")
@@ -36,10 +36,10 @@ function Base.string(t::TracedRTime)
     return "$hh:$mii:$ss$ns"
 end
 
-Base.show(io::IO, ::MIME"text/plain", t::TracedRTime) = print(io, t)
-Base.print(io::IO, t::TracedRTime) = print(io, string(t))
+Base.show(io::IO, ::MIME"text/plain", t::ReactantTime) = print(io, t)
+Base.print(io::IO, t::ReactantTime) = print(io, string(t))
 
-function Base.show(io::IO, t::TracedRTime)
+function Base.show(io::IO, t::ReactantTime)
     return if get(io, :compact, false)::Bool
         print(io, t)
     else
@@ -53,7 +53,7 @@ function Base.show(io::IO, t::TracedRTime)
         ]
         index = something(findlast(!iszero, values), 1)
 
-        print(io, TracedRTime, "(")
+        print(io, ReactantTime, "(")
         for i in 1:index
             show(io, values[i])
             i != index && print(io, ", ")
@@ -62,9 +62,9 @@ function Base.show(io::IO, t::TracedRTime)
     end
 end
 
-for date_type in (:TracedRDate, :TracedRDateTime)
+for date_type in (:ReactantDate, :ReactantDateTime)
     # Human readable output (i.e. "2012-01-01")
     @eval Base.show(io::IO, ::MIME"text/plain", dt::$date_type) = print(io, dt)
-    # Parsable output (i.e. TracedRDate("2012-01-01"))
+    # Parsable output (i.e. ReactantDate("2012-01-01"))
     @eval Base.show(io::IO, dt::$date_type) = print(io, typeof(dt), "(\"", dt, "\")")
 end
