@@ -1,6 +1,7 @@
 module ProbProg
 
-using ..Reactant: MLIR, TracedUtils, AbstractRNG
+using ..Reactant: MLIR, TracedUtils, AbstractRNG, Ops
+using ReactantCore: @trace
 
 include("Types.jl")
 include("Distributions.jl")
@@ -15,7 +16,18 @@ include("MCMC.jl")
 export Trace, Constraint, Selection, Address, TraceEntry, TracedTrace, MCMCState
 
 # Distributions.
-export Distribution, Normal, Exponential, LogNormal, Bernoulli
+export Distribution,
+    Normal,
+    Exponential,
+    HalfNormal,
+    LogNormal,
+    Bernoulli,
+    Poisson,
+    MultivariateNormal,
+    MultiNormal,
+    Gamma,
+    StudentT,
+    HalfCauchy
 
 # Utility functions.
 export get_choices, select, unflatten_trace, filter_entries_by_selection, with_trace
