@@ -34,6 +34,10 @@ module API
         @ccall mlir_c.RegisterEnzymeXLAGPUHandler()::Cvoid
     end
 
+    function registerEnzymeJaXXLAFFI()
+        @ccall mlir_c.registerEnzymeJaXXLAFFI()::Cvoid
+    end
+
     function ifrt_compile_with_proto(
         client, cmod, compile_options_proto::Vector{UInt8}, compile_options_proto_size
     )

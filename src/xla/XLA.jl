@@ -201,6 +201,7 @@ function __init__()
 
         MLIR.API.RegisterEnzymeXLACPUHandler()
         MLIR.API.RegisterEnzymeXLAGPUHandler()
+        MLIR.API.registerEnzymeJaXXLAFFI()
         MLIR.API.registerReactantXLAFFI()
 
         @static if !Sys.isapple()
