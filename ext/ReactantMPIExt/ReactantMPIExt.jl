@@ -3,7 +3,7 @@ module ReactantMPIExt
 using Reactant
 using Reactant: Reactant, Distributed, MLIR
 using MPI: MPI
-using Libdl
+using Libdl: Libdl
 
 # https://github.com/jax-ml/jax/blob/b0117366686ab084d38ad2657d9a2ae3a581ca7e/jax/_src/clusters/mpi4py_cluster.py
 Distributed.is_env_present(::Distributed.MPIEnvDetector) = MPI.Initialized()
