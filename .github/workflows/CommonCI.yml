@@ -141,7 +141,7 @@ jobs:
           import Pkg
           Pkg.Registry.update()
           Pkg.add("Preferences")
-        shell: julia --color=yes --project=@preferences
+        shell: julia --color=yes --project=@preferences {0}
 
       # Run the tests (pjrt or ifrt or both)
       - name: "Setup Runtime Preferences (PJRT)"
