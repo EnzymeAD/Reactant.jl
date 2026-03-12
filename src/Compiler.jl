@@ -2877,6 +2877,13 @@ Compile the function `f` with arguments `args` and return the compiled MLIR modu
 See also: [`@code_hlo`](@ref).
 """
 function code_hlo(ctx, f, args; fn_kwargs=NamedTuple(), kwargs...)
+    if f isa Thunk
+        FTy = thunk_fn_type(f)
+        error(
+            "`@code_hlo` expects the original function, not a compiled `Thunk`. " *
+            "Pass the original function directly (of type `$FTy`), e.g. `@code_hlo my_function(args...)`.",
+        )
+    end
     options = Dict(
         k => v isa QuoteNode ? v.value : v for (k, v) in get_common_compile_options()
     )
@@ -4278,6 +4285,8 @@ struct Thunk{FTy,tag,IsClosure,ArgTypes,ExecTy,DeviceTy,ClientTy,GD,DAM}
     donated_args_mask::DAM
     compiled_with_sync::Bool
 end
+
+thunk_fn_type(::Thunk{FTy}) where {FTy} = FTy
 
 for fn in (:get_tag, :get_isclosure, :get_compiled_argtypes)
     @eval $fn(thunk::Thunk) = $fn(typeof(thunk))
