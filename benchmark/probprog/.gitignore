@@ -1,0 +1,22 @@
+# Benchmark run outputs
+outputs/
+logs/
+transcripts/
+results/
+
+# Debug dumps
+sicm_debug_dumps*/
+motivating/dump/
+
+# Generated data
+*.log
+paper_data.json
+sicm_data.json
+scaling_results.json
+
+# Environments
+.CondaPkg/
+__pycache__/
+
+# Julia generated
+Manifest.toml

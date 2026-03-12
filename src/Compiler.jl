@@ -2217,8 +2217,12 @@ function compile_mlir!(
         if !DEBUG_PROBPROG_DISABLE_OPT[]
             run_pass_pipeline!(mod, "inline-mcmc-regions", "inline_mcmc")
             _dump("post_inline_mcmc")
+            run_pass_pipeline!(mod, "canonicalize,cse", "pre_sicm_cleanup")
+            _dump("post_pre_sicm_cleanup")
             run_pass_pipeline!(mod, "sicm", "sicm")
             _dump("post_sicm")
+            run_pass_pipeline!(mod, "canonicalize,cse", "post_sicm_cleanup")
+            _dump("post_sicm_cleanup")
             run_pass_pipeline!(mod, "outline-mcmc-regions", "outline_mcmc")
             _dump("post_outline_mcmc")
         end
