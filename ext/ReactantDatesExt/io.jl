@@ -1,55 +1,22 @@
-# ReactantDate: same output as Base.print(io::IO, dt::Date) in stdlib Dates
-function Base.print(io::IO, dt::ReactantDate)
-    y, m, d = yearmonthday(dt)
-    yy = y < 0 ? string("-", lpad(-y, 4, "0")) : lpad(y, 4, "0")
-    mm = lpad(m, 2, "0")
-    dd = lpad(d, 2, "0")
-    return print(io, "$yy-$mm-$dd")
-end
+Base.print(io::IO, dt::ReactantDate) = print(io, convert(Dates.Date, dt))
+Base.print(io::IO, dt::ReactantDateTime) = print(io, convert(Dates.DateTime, dt))
 
-# ReactantDateTime: same output as Base.print(io::IO, dt::DateTime) in stdlib Dates
-function Base.print(io::IO, dt::ReactantDateTime)
-    y, m, d = yearmonthday(dt)
-    yy = y < 0 ? string("-", lpad(-y, 4, "0")) : lpad(y, 4, "0")
-    mm = lpad(m, 2, "0")
-    dd = lpad(d, 2, "0")
-    hh = lpad(hour(dt), 2, "0")
-    mii = lpad(minute(dt), 2, "0")
-    ss = lpad(second(dt), 2, "0")
-    ms = millisecond(dt)
-    return if ms == 0
-        print(io, "$yy-$mm-$dd", 'T', "$hh:$mii:$ss")
-    else
-        msss = lpad(ms, 3, "0")
-        print(io, "$yy-$mm-$dd", 'T', "$hh:$mii:$ss.$msss")
-    end
-end
-
-# ReactantTime: same output as Base.string(t::Time) in stdlib Dates
-function Base.string(t::ReactantTime)
-    h, mi, s = hour(t), minute(t), second(t)
-    hh = lpad(h, 2, "0")
-    mii = lpad(mi, 2, "0")
-    ss = lpad(s, 2, "0")
-    nss = millisecond(t) * 1000000 + microsecond(t) * 1000 + nanosecond(t)
-    ns = nss == 0 ? "" : "." * rstrip(lpad(nss, 9, "0"), '0')
-    return "$hh:$mii:$ss$ns"
-end
-
-Base.show(io::IO, ::MIME"text/plain", t::ReactantTime) = print(io, t)
+Base.string(t::ReactantTime) = string(convert(Dates.Time, t))
 Base.print(io::IO, t::ReactantTime) = print(io, string(t))
+Base.show(io::IO, ::MIME"text/plain", t::ReactantTime) = print(io, t)
 
 function Base.show(io::IO, t::ReactantTime)
     return if get(io, :compact, false)::Bool
         print(io, t)
     else
+        t_dates = convert(Dates.Time, t)
         values = [
-            hour(t)
-            minute(t)
-            second(t)
-            millisecond(t)
-            microsecond(t)
-            nanosecond(t)
+            Dates.hour(t_dates)
+            Dates.minute(t_dates)
+            Dates.second(t_dates)
+            Dates.millisecond(t_dates)
+            Dates.microsecond(t_dates)
+            Dates.nanosecond(t_dates)
         ]
         index = something(findlast(!iszero, values), 1)
 
