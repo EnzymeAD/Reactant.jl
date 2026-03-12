@@ -150,7 +150,8 @@ jobs:
           using Preferences, UUIDs
           Preferences.set_preferences!(
             (UUID("3c362404-f566-11ee-1572-e11a4b42c853"), "Reactant"),
-            "xla_runtime" => "PJRT"
+            "xla_runtime" => "PJRT";
+            force=true
           )
         shell: julia --color=yes --project=@preferences {0}
       - name: "Set test arguments and other environment variables"
@@ -191,7 +192,8 @@ jobs:
           using Preferences, UUIDs
           Preferences.set_preferences!(
             (UUID("3c362404-f566-11ee-1572-e11a4b42c853"), "Reactant"),
-            "xla_runtime" => "IFRT"
+            "xla_runtime" => "IFRT";
+            force=true
           )
         shell: julia --color=yes --project=@preferences {0}
       - name: "Run Tests (IFRT)"
