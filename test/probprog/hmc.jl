@@ -38,7 +38,7 @@ function hmc_program(
         rng, constraint_tensor, model, xs; constrained_addresses
     )
 
-    trace, diagnostics, _ = ProbProg.mcmc(
+    trace, diagnostics, _, _ = ProbProg.mcmc(
         rng,
         trace,
         model,
