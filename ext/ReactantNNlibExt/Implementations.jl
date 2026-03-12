@@ -12,7 +12,7 @@ end
 # Without this we will never fuse the gelu into gemm
 if isdefined(NNlib, :gelu_tanh)
     if isdefined(NNlib, :gelu_sigmoid)
-        NNlib.gelu_sigmoid(x::TracedRNumber) = @opcall ml_gelu(x, "TANH")
+        NNlib.gelu_sigmoid(x::TracedRNumber) = @opcall ml_gelu(x, "SIGMOID")
         NNlib.gelu_tanh(x::TracedRNumber) = @opcall ml_gelu(x, "TANH")
     else
         # In this version NNlib used sigmoid approximation in the tanh variant
