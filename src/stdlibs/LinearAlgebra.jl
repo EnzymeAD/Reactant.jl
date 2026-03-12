@@ -47,6 +47,9 @@ function __init__()
             (BLAS.@blasfunc(dgesvj_), :enzymexla_lapack_dgesvj_),
             (BLAS.@blasfunc(cgesvj_), :enzymexla_lapack_cgesvj_),
             (BLAS.@blasfunc(zgesvj_), :enzymexla_lapack_zgesvj_),
+            # Symmetric Eigenvalue Decomposition (Divide and Conquer)
+            (BLAS.@blasfunc(ssyevd_), :enzymexla_lapack_ssyevd_),
+            (BLAS.@blasfunc(dsyevd_), :enzymexla_lapack_dsyevd_),
             # syrk
             (BLAS.@blasfunc(ssyrk_), :enzymexla_blas_ssyrk_),
             (BLAS.@blasfunc(dsyrk_), :enzymexla_blas_dsyrk_),

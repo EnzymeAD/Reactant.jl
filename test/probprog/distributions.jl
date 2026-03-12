@@ -1,4 +1,4 @@
-using Reactant, Test
+using Reactant, Test, LinearAlgebra
 using Reactant: ProbProg, ReactantRNG, ConcreteRNumber, ConcreteRArray
 
 include(joinpath(@__DIR__, "common.jl"))
@@ -16,7 +16,6 @@ include(joinpath(@__DIR__, "common.jl"))
             @test ProbProg.params(d3) == (0.0, 1.0, (3, 4))
 
             @test ProbProg.support(ProbProg.Normal) == :real
-            @test_throws ArgumentError ProbProg.Normal(0.0, 1.0, ())
         end
 
         @testset "Exponential" begin
@@ -30,7 +29,6 @@ include(joinpath(@__DIR__, "common.jl"))
             @test ProbProg.params(d3) == (0.5, (5,))
 
             @test ProbProg.support(ProbProg.Exponential) == :positive
-            @test_throws ArgumentError ProbProg.Exponential(1.0, ())
         end
 
         @testset "LogNormal" begin
@@ -41,15 +39,60 @@ include(joinpath(@__DIR__, "common.jl"))
             @test ProbProg.params(d2) == (1.0, 0.5, (1,))
 
             @test ProbProg.support(ProbProg.LogNormal) == :positive
-            @test_throws ArgumentError ProbProg.LogNormal(0.0, 1.0, ())
         end
 
         @testset "Bernoulli" begin
             d = ProbProg.Bernoulli(0.5, (1,))
             @test ProbProg.params(d) == (0.5, (1,))
-
             @test ProbProg.support(ProbProg.Bernoulli) == :real
-            @test_throws ArgumentError ProbProg.Bernoulli(0.5, ())
+        end
+
+        @testset "Poisson" begin
+            d = ProbProg.Poisson(3.0)
+            @test ProbProg.params(d) == (3.0, (1,))
+
+            d2 = ProbProg.Poisson(2.0, (5,))
+            @test ProbProg.params(d2) == (2.0, (5,))
+
+            @test ProbProg.support(ProbProg.Poisson) == :real
+        end
+
+        @testset "MultiNormal" begin
+            μ = zeros(3)
+            Σ = Matrix{Float64}(I, 3, 3)
+            d = ProbProg.MultiNormal(μ, Σ, (3,))
+            @test ProbProg.params(d) == (μ, Σ, (3,))
+            @test ProbProg.support(ProbProg.MultiNormal) == :real
+        end
+
+        @testset "Gamma" begin
+            d = ProbProg.Gamma(2.0, 0.1)
+            @test ProbProg.params(d) == (2.0, 0.1, (1,))
+
+            d2 = ProbProg.Gamma(3.0, 1.0, (5,))
+            @test ProbProg.params(d2) == (3.0, 1.0, (5,))
+
+            @test ProbProg.support(ProbProg.Gamma) == :positive
+        end
+
+        @testset "StudentT" begin
+            d = ProbProg.StudentT(3.0, 0.0, 1.0)
+            @test ProbProg.params(d) == (3.0, 0.0, 1.0, (1,))
+
+            d2 = ProbProg.StudentT(5.0, 1.0, 2.0, (10,))
+            @test ProbProg.params(d2) == (5.0, 1.0, 2.0, (10,))
+
+            @test ProbProg.support(ProbProg.StudentT) == :real
+        end
+
+        @testset "HalfCauchy" begin
+            d = ProbProg.HalfCauchy(1.0)
+            @test ProbProg.params(d) == (1.0, (1,))
+
+            d2 = ProbProg.HalfCauchy(2.5, (3,))
+            @test ProbProg.params(d2) == (2.5, (3,))
+
+            @test ProbProg.support(ProbProg.HalfCauchy) == :positive
         end
     end
 
@@ -70,17 +113,14 @@ include(joinpath(@__DIR__, "common.jl"))
         reactant_lp = Reactant.to_number(lp)
 
         if check_numpyro_available()
-            jax_random = pyimport("jax.random")
             jnp = pyimport("jax.numpy")
             dist = pyimport("numpyro.distributions")
 
             key = seed_to_rbg_key(UInt64[0, 42])
-            jax_vals = pyconvert(
-                Vector{Float64}, jax_random.normal(key, (5,); dtype=jnp.float64).tolist()
-            )
+            d = dist.Normal(0.0, 1.0)
+            jax_vals = pyconvert(Vector{Float64}, d.sample(key, (5,)).tolist())
             @test reactant_vals ≈ jax_vals atol = 1e-10
 
-            d = dist.Normal(0.0, 1.0)
             x_jnp = jnp.array(pylist([0.5, 1.0, -0.3, 2.1, -1.5]))
             numpyro_lp = pyconvert(Float64, d.log_prob(x_jnp).sum().item())
             @test reactant_lp ≈ numpyro_lp atol = 1e-10
@@ -104,17 +144,37 @@ include(joinpath(@__DIR__, "common.jl"))
         reactant_lp = Reactant.to_number(lp)
 
         if check_numpyro_available()
-            jax_random = pyimport("jax.random")
             jnp = pyimport("jax.numpy")
             dist = pyimport("numpyro.distributions")
 
             key = seed_to_rbg_key(UInt64[1, 4])
-            z = jax_random.normal(key, (10,); dtype=jnp.float64)
-            jax_vals = pyconvert(Vector{Float64}, (2.0 + 0.5 * z).tolist())
+            d = dist.Normal(2.0, 0.5)
+            jax_vals = pyconvert(Vector{Float64}, d.sample(key, (10,)).tolist())
             @test reactant_vals ≈ jax_vals atol = 1e-10
 
-            d = dist.Normal(2.0, 0.5)
             x_jnp = jnp.array(pylist([0.5, 1.0, -0.3]))
+            numpyro_lp = pyconvert(Float64, d.log_prob(x_jnp).sum().item())
+            @test reactant_lp ≈ numpyro_lp atol = 1e-10
+        end
+    end
+
+    @testset "Normal(0, vector σ) [heteroscedastic]" begin
+        logpdf_fn = ProbProg.logpdf_fn(ProbProg.Normal)
+
+        x = ConcreteRArray([0.5, 1.0, -0.3, 2.1, -1.5])
+        μ = ConcreteRNumber(0.0)
+        σ = ConcreteRArray([0.5, 1.0, 2.0, 0.3, 1.5])
+
+        lp = @jit logpdf_fn(x, μ, σ, nothing)
+        reactant_lp = Reactant.to_number(lp)
+
+        if check_numpyro_available()
+            jnp = pyimport("jax.numpy")
+            dist = pyimport("numpyro.distributions")
+
+            x_jnp = jnp.array(pylist([0.5, 1.0, -0.3, 2.1, -1.5]))
+            σ_jnp = jnp.array(pylist([0.5, 1.0, 2.0, 0.3, 1.5]))
+            d = dist.Normal(0.0, σ_jnp)
             numpyro_lp = pyconvert(Float64, d.log_prob(x_jnp).sum().item())
             @test reactant_lp ≈ numpyro_lp atol = 1e-10
         end
@@ -137,16 +197,14 @@ include(joinpath(@__DIR__, "common.jl"))
         reactant_lp = Reactant.to_number(lp)
 
         if check_numpyro_available()
-            jax_random = pyimport("jax.random")
             jnp = pyimport("jax.numpy")
             dist = pyimport("numpyro.distributions")
 
             key = seed_to_rbg_key(UInt64[1, 4])
-            exp1 = jax_random.exponential(key, (10,); dtype=jnp.float64)
-            jax_vals = pyconvert(Vector{Float64}, (exp1 / 2.0).tolist())
+            d = dist.Exponential(; rate=2.0)
+            jax_vals = pyconvert(Vector{Float64}, d.sample(key, (10,)).tolist())
             @test reactant_vals ≈ jax_vals atol = 1e-10
 
-            d = dist.Exponential(; rate=2.0)
             x_jnp = jnp.array(pylist([0.5, 1.0, 2.0, 0.1]))
             numpyro_lp = pyconvert(Float64, d.log_prob(x_jnp).sum().item())
             @test reactant_lp ≈ numpyro_lp atol = 1e-10
@@ -170,16 +228,14 @@ include(joinpath(@__DIR__, "common.jl"))
         reactant_lp = Reactant.to_number(lp)
 
         if check_numpyro_available()
-            jax_random = pyimport("jax.random")
             jnp = pyimport("jax.numpy")
             dist = pyimport("numpyro.distributions")
 
             key = seed_to_rbg_key(UInt64[0, 42])
-            exp1 = jax_random.exponential(key, (5,); dtype=jnp.float64)
-            jax_vals = pyconvert(Vector{Float64}, (exp1 / 0.5).tolist())
+            d = dist.Exponential(; rate=0.5)
+            jax_vals = pyconvert(Vector{Float64}, d.sample(key, (5,)).tolist())
             @test reactant_vals ≈ jax_vals atol = 1e-10
 
-            d = dist.Exponential(; rate=0.5)
             x_jnp = jnp.array(pylist([1.0, 3.0, 5.0]))
             numpyro_lp = pyconvert(Float64, d.log_prob(x_jnp).sum().item())
             @test reactant_lp ≈ numpyro_lp atol = 1e-10
@@ -204,16 +260,14 @@ include(joinpath(@__DIR__, "common.jl"))
         reactant_lp = Reactant.to_number(lp)
 
         if check_numpyro_available()
-            jax_random = pyimport("jax.random")
             jnp = pyimport("jax.numpy")
             dist = pyimport("numpyro.distributions")
 
             key = seed_to_rbg_key(UInt64[1, 4])
-            z = jax_random.normal(key, (10,); dtype=jnp.float64)
-            jax_vals = pyconvert(Vector{Float64}, jnp.exp(z).tolist())
+            d = dist.LogNormal(0.0, 1.0)
+            jax_vals = pyconvert(Vector{Float64}, d.sample(key, (10,)).tolist())
             @test reactant_vals ≈ jax_vals atol = 1e-10
 
-            d = dist.LogNormal(0.0, 1.0)
             x_jnp = jnp.array(pylist([0.5, 1.0, 2.0, 3.0]))
             numpyro_lp = pyconvert(Float64, d.log_prob(x_jnp).sum().item())
             @test reactant_lp ≈ numpyro_lp atol = 1e-10
@@ -238,16 +292,14 @@ include(joinpath(@__DIR__, "common.jl"))
         reactant_lp = Reactant.to_number(lp)
 
         if check_numpyro_available()
-            jax_random = pyimport("jax.random")
             jnp = pyimport("jax.numpy")
             dist = pyimport("numpyro.distributions")
 
             key = seed_to_rbg_key(UInt64[0, 42])
-            z = jax_random.normal(key, (5,); dtype=jnp.float64)
-            jax_vals = pyconvert(Vector{Float64}, jnp.exp(1.0 + 0.5 * z).tolist())
+            d = dist.LogNormal(1.0, 0.5)
+            jax_vals = pyconvert(Vector{Float64}, d.sample(key, (5,)).tolist())
             @test reactant_vals ≈ jax_vals atol = 1e-10
 
-            d = dist.LogNormal(1.0, 0.5)
             x_jnp = jnp.array(pylist([1.0, 2.0, 5.0]))
             numpyro_lp = pyconvert(Float64, d.log_prob(x_jnp).sum().item())
             @test reactant_lp ≈ numpyro_lp atol = 1e-10
@@ -272,15 +324,13 @@ include(joinpath(@__DIR__, "common.jl"))
         reactant_lp = Reactant.to_number(lp)
 
         if check_numpyro_available()
-            jax_random = pyimport("jax.random")
             jnp = pyimport("jax.numpy")
             dist = pyimport("numpyro.distributions")
 
             key = seed_to_rbg_key(UInt64[1, 4])
-            probs = jnp.full(10, 0.5; dtype=jnp.float64)
+            d = dist.Bernoulli(; logits=jnp.zeros(10; dtype=jnp.float64))
             jax_vals = pyconvert(
-                Vector{Float64},
-                jax_random.bernoulli(key, probs).astype(jnp.float64).tolist(),
+                Vector{Float64}, d.sample(key).astype(jnp.float64).tolist()
             )
             @test reactant_vals ≈ jax_vals atol = 1e-10
 
@@ -309,23 +359,367 @@ include(joinpath(@__DIR__, "common.jl"))
         reactant_lp = Reactant.to_number(lp)
 
         if check_numpyro_available()
-            jax_random = pyimport("jax.random")
-            jax_nn = pyimport("jax.nn")
             jnp = pyimport("jax.numpy")
             dist = pyimport("numpyro.distributions")
 
             key = seed_to_rbg_key(UInt64[1, 4])
-            logits_jax = jnp.array(pylist([-2.0, 0.0, 2.0]))
-            probs = jax_nn.sigmoid(logits_jax)
+            d = dist.Bernoulli(; logits=jnp.array(pylist([-2.0, 0.0, 2.0])))
             jax_vals = pyconvert(
-                Vector{Float64},
-                jax_random.bernoulli(key, probs).astype(jnp.float64).tolist(),
+                Vector{Float64}, d.sample(key).astype(jnp.float64).tolist()
             )
             @test reactant_vals ≈ jax_vals atol = 1e-10
 
             d = dist.Bernoulli(; logits=-2.0)
             y_jnp = jnp.array(pylist([0.0, 0.0, 1.0]))
             numpyro_lp = pyconvert(Float64, d.log_prob(y_jnp).sum().item())
+            @test reactant_lp ≈ numpyro_lp atol = 1e-10
+        end
+    end
+
+    @testset "Poisson(rate=3.0)" begin
+        sample_fn = ProbProg.sampler(ProbProg.Poisson)
+        logpdf_fn = ProbProg.logpdf_fn(ProbProg.Poisson)
+
+        rng = ReactantRNG(Reactant.to_rarray(UInt64[0, 42]))
+        rate = ConcreteRNumber(3.0)
+
+        result = @jit sample_fn(rng, rate, (5,))
+        reactant_vals = Array(result)
+        @test length(reactant_vals) == 5
+        @test all(reactant_vals .>= 0.0)
+        @test all(x -> x ≈ round(x), reactant_vals)
+
+        k = ConcreteRArray([0.0, 1.0, 2.0, 5.0, 10.0])
+        rate_vec = ConcreteRArray([3.0, 3.0, 3.0, 3.0, 3.0])
+
+        lp = @jit logpdf_fn(k, rate_vec, nothing)
+        reactant_lp = Reactant.to_number(lp)
+
+        if check_numpyro_available()
+            jnp = pyimport("jax.numpy")
+            dist = pyimport("numpyro.distributions")
+
+            d = dist.Poisson(; rate=3.0)
+            k_jnp = jnp.array(pylist([0.0, 1.0, 2.0, 5.0, 10.0]))
+            numpyro_lp = pyconvert(Float64, d.log_prob(k_jnp).sum().item())
+            @test reactant_lp ≈ numpyro_lp atol = 1e-10
+        end
+    end
+
+    @testset "Poisson(rate=25.0)" begin
+        sample_fn = ProbProg.sampler(ProbProg.Poisson)
+        logpdf_fn = ProbProg.logpdf_fn(ProbProg.Poisson)
+
+        rng = ReactantRNG(Reactant.to_rarray(UInt64[1, 4]))
+        rate = ConcreteRNumber(25.0)
+
+        result = @jit sample_fn(rng, rate, (10,))
+        reactant_vals = Array(result)
+        @test length(reactant_vals) == 10
+        @test all(reactant_vals .>= 0.0)
+        @test all(x -> x ≈ round(x), reactant_vals)
+
+        k = ConcreteRArray([0.0, 1.0, 3.0])
+        rate_vec = ConcreteRArray([0.5, 0.5, 0.5])
+
+        lp = @jit logpdf_fn(k, rate_vec, nothing)
+        reactant_lp = Reactant.to_number(lp)
+
+        if check_numpyro_available()
+            jnp = pyimport("jax.numpy")
+            dist = pyimport("numpyro.distributions")
+
+            d = dist.Poisson(; rate=0.5)
+            k_jnp = jnp.array(pylist([0.0, 1.0, 3.0]))
+            numpyro_lp = pyconvert(Float64, d.log_prob(k_jnp).sum().item())
+            @test reactant_lp ≈ numpyro_lp atol = 1e-10
+        end
+    end
+
+    @testset "Poisson(rate=vector)" begin
+        sample_fn = ProbProg.sampler(ProbProg.Poisson)
+        logpdf_fn = ProbProg.logpdf_fn(ProbProg.Poisson)
+
+        rng = ReactantRNG(Reactant.to_rarray(UInt64[0, 42]))
+        rate = ConcreteRArray([2.0, 5.0, 0.1, 10.0])
+
+        result = @jit sample_fn(rng, rate, (4,))
+        reactant_vals = Array(result)
+        @test length(reactant_vals) == 4
+        @test all(reactant_vals .>= 0.0)
+        @test all(x -> x ≈ round(x), reactant_vals)
+
+        k = ConcreteRArray([3.0, 7.0, 0.0, 15.0])
+
+        lp = @jit logpdf_fn(k, rate, nothing)
+        reactant_lp = Reactant.to_number(lp)
+
+        if check_numpyro_available()
+            jnp = pyimport("jax.numpy")
+            dist = pyimport("numpyro.distributions")
+
+            rate_jnp = jnp.array(pylist([2.0, 5.0, 0.1, 10.0]))
+            d = dist.Poisson(; rate=rate_jnp)
+            k_jnp = jnp.array(pylist([3.0, 7.0, 0.0, 15.0]))
+            numpyro_lp = pyconvert(Float64, d.log_prob(k_jnp).sum().item())
+            @test reactant_lp ≈ numpyro_lp atol = 1e-10
+        end
+    end
+
+    @testset "MultiNormal (identity cov)" begin
+        sample_fn = ProbProg.sampler(ProbProg.MultiNormal)
+        logpdf_fn = ProbProg.logpdf_fn(ProbProg.MultiNormal)
+
+        n = 3
+        rng = ReactantRNG(Reactant.to_rarray(UInt64[0, 42]))
+        μ = ConcreteRArray(zeros(n))
+        Σ = ConcreteRArray(Matrix{Float64}(LinearAlgebra.I, n, n))
+
+        result = @jit sample_fn(rng, μ, Σ, (n,))
+        reactant_vals = Array(result)
+        @test length(reactant_vals) == n
+
+        x = ConcreteRArray([0.5, -0.3, 1.2])
+        lp = @jit logpdf_fn(x, μ, Σ, (n,))
+        reactant_lp = Reactant.to_number(lp)
+
+        if check_numpyro_available()
+            jnp = pyimport("jax.numpy")
+            dist = pyimport("numpyro.distributions")
+
+            key = seed_to_rbg_key(UInt64[0, 42])
+            d = dist.MultivariateNormal(
+                jnp.zeros(n; dtype=jnp.float64), jnp.eye(n; dtype=jnp.float64)
+            )
+            jax_vals = pyconvert(Vector{Float64}, d.sample(key).tolist())
+            @test reactant_vals ≈ jax_vals atol = 1e-10
+
+            x_jnp = jnp.array(pylist([0.5, -0.3, 1.2]); dtype=jnp.float64)
+            numpyro_lp = pyconvert(Float64, d.log_prob(x_jnp).item())
+            @test reactant_lp ≈ numpyro_lp atol = 1e-10
+        end
+    end
+
+    @testset "MultiNormal (non-trivial cov)" begin
+        sample_fn = ProbProg.sampler(ProbProg.MultiNormal)
+        logpdf_fn = ProbProg.logpdf_fn(ProbProg.MultiNormal)
+
+        n = 3
+        rng = ReactantRNG(Reactant.to_rarray(UInt64[1, 4]))
+        μ = ConcreteRArray([1.0, -0.5, 2.0])
+        A = [0.5 0.1 0.0; 0.2 0.8 0.3; 0.0 0.1 0.6]
+        Σ_val = A' * A + Matrix{Float64}(LinearAlgebra.I, n, n)
+        Σ = ConcreteRArray(Σ_val)
+
+        result = @jit sample_fn(rng, μ, Σ, (n,))
+        reactant_vals = Array(result)
+        @test length(reactant_vals) == n
+
+        x = ConcreteRArray([0.8, 0.2, 1.5])
+        lp = @jit logpdf_fn(x, μ, Σ, (n,))
+        reactant_lp = Reactant.to_number(lp)
+
+        if check_numpyro_available()
+            jnp = pyimport("jax.numpy")
+            dist = pyimport("numpyro.distributions")
+
+            key = seed_to_rbg_key(UInt64[1, 4])
+            μ_jnp = jnp.array(pylist([1.0, -0.5, 2.0]); dtype=jnp.float64)
+            d = dist.MultivariateNormal(μ_jnp, jnp.array(Σ_val; dtype=jnp.float64))
+            jax_vals = pyconvert(Vector{Float64}, d.sample(key).tolist())
+            @test reactant_vals ≈ jax_vals atol = 1e-10
+
+            x_jnp = jnp.array(pylist([0.8, 0.2, 1.5]); dtype=jnp.float64)
+            numpyro_lp = pyconvert(Float64, d.log_prob(x_jnp).item())
+            @test reactant_lp ≈ numpyro_lp atol = 1e-10
+        end
+    end
+
+    @testset "Gamma(2, 0.1)" begin
+        sample_fn = ProbProg.sampler(ProbProg.Gamma)
+        logpdf_fn = ProbProg.logpdf_fn(ProbProg.Gamma)
+
+        rng = ReactantRNG(Reactant.to_rarray(UInt64[0, 42]))
+        α = ConcreteRNumber(2.0)
+        β = ConcreteRNumber(0.1)
+
+        result = @jit sample_fn(rng, α, β, (10,))
+        reactant_vals = Array(result)
+        @test length(reactant_vals) == 10
+        @test all(reactant_vals .> 0)
+
+        x = ConcreteRArray([1.0, 5.0, 20.0, 50.0])
+        lp = @jit logpdf_fn(x, α, β, nothing)
+        reactant_lp = Reactant.to_number(lp)
+
+        if check_numpyro_available()
+            jnp = pyimport("jax.numpy")
+            dist = pyimport("numpyro.distributions")
+
+            d = dist.Gamma(2.0, 0.1)
+            x_jnp = jnp.array(pylist([1.0, 5.0, 20.0, 50.0]))
+            numpyro_lp = pyconvert(Float64, d.log_prob(x_jnp).sum().item())
+            @test reactant_lp ≈ numpyro_lp atol = 1e-10
+        end
+    end
+
+    @testset "Gamma(5, 2)" begin
+        sample_fn = ProbProg.sampler(ProbProg.Gamma)
+        logpdf_fn = ProbProg.logpdf_fn(ProbProg.Gamma)
+
+        rng = ReactantRNG(Reactant.to_rarray(UInt64[1, 4]))
+        α = ConcreteRNumber(5.0)
+        β = ConcreteRNumber(2.0)
+
+        result = @jit sample_fn(rng, α, β, (10,))
+        reactant_vals = Array(result)
+        @test length(reactant_vals) == 10
+        @test all(reactant_vals .> 0)
+
+        x = ConcreteRArray([0.5, 1.0, 3.0])
+        lp = @jit logpdf_fn(x, α, β, nothing)
+        reactant_lp = Reactant.to_number(lp)
+
+        if check_numpyro_available()
+            jnp = pyimport("jax.numpy")
+            dist = pyimport("numpyro.distributions")
+
+            d = dist.Gamma(5.0, 2.0)
+            x_jnp = jnp.array(pylist([0.5, 1.0, 3.0]))
+            numpyro_lp = pyconvert(Float64, d.log_prob(x_jnp).sum().item())
+            @test reactant_lp ≈ numpyro_lp atol = 1e-10
+        end
+    end
+
+    @testset "Gamma(0.5, 1) [alpha < 1 boost]" begin
+        sample_fn = ProbProg.sampler(ProbProg.Gamma)
+
+        rng = ReactantRNG(Reactant.to_rarray(UInt64[2, 7]))
+        α = ConcreteRNumber(0.5)
+        β = ConcreteRNumber(1.0)
+
+        result = @jit sample_fn(rng, α, β, (10,))
+        reactant_vals = Array(result)
+        @test length(reactant_vals) == 10
+        @test all(reactant_vals .> 0)
+    end
+
+    @testset "StudentT(3, 0, 1)" begin
+        sample_fn = ProbProg.sampler(ProbProg.StudentT)
+        logpdf_fn = ProbProg.logpdf_fn(ProbProg.StudentT)
+
+        rng = ReactantRNG(Reactant.to_rarray(UInt64[0, 42]))
+        df = ConcreteRNumber(3.0)
+        loc = ConcreteRNumber(0.0)
+        scale = ConcreteRNumber(1.0)
+
+        result = @jit sample_fn(rng, df, loc, scale, (10,))
+        reactant_vals = Array(result)
+        @test length(reactant_vals) == 10
+        @test all(isfinite.(reactant_vals))
+
+        x = ConcreteRArray([0.0, 1.0, -2.0, 5.0, -0.5])
+        lp = @jit logpdf_fn(x, df, loc, scale, nothing)
+        reactant_lp = Reactant.to_number(lp)
+
+        if check_numpyro_available()
+            jnp = pyimport("jax.numpy")
+            dist = pyimport("numpyro.distributions")
+
+            d = dist.StudentT(3.0, 0.0, 1.0)
+            x_jnp = jnp.array(pylist([0.0, 1.0, -2.0, 5.0, -0.5]))
+            numpyro_lp = pyconvert(Float64, d.log_prob(x_jnp).sum().item())
+            @test reactant_lp ≈ numpyro_lp atol = 1e-10
+        end
+    end
+
+    @testset "StudentT(10, 2.5, 0.3)" begin
+        sample_fn = ProbProg.sampler(ProbProg.StudentT)
+        logpdf_fn = ProbProg.logpdf_fn(ProbProg.StudentT)
+
+        rng = ReactantRNG(Reactant.to_rarray(UInt64[1, 4]))
+        df = ConcreteRNumber(10.0)
+        loc = ConcreteRNumber(2.5)
+        scale = ConcreteRNumber(0.3)
+
+        result = @jit sample_fn(rng, df, loc, scale, (10,))
+        reactant_vals = Array(result)
+        @test length(reactant_vals) == 10
+        @test all(isfinite.(reactant_vals))
+
+        x = ConcreteRArray([2.0, 2.5, 3.0, 1.5])
+        lp = @jit logpdf_fn(x, df, loc, scale, nothing)
+        reactant_lp = Reactant.to_number(lp)
+
+        if check_numpyro_available()
+            jnp = pyimport("jax.numpy")
+            dist = pyimport("numpyro.distributions")
+
+            d = dist.StudentT(10.0, 2.5, 0.3)
+            x_jnp = jnp.array(pylist([2.0, 2.5, 3.0, 1.5]))
+            numpyro_lp = pyconvert(Float64, d.log_prob(x_jnp).sum().item())
+            @test reactant_lp ≈ numpyro_lp atol = 1e-10
+        end
+    end
+
+    @testset "HalfCauchy(1)" begin
+        sample_fn = ProbProg.sampler(ProbProg.HalfCauchy)
+        logpdf_fn = ProbProg.logpdf_fn(ProbProg.HalfCauchy)
+
+        rng = ReactantRNG(Reactant.to_rarray(UInt64[0, 42]))
+        scale = ConcreteRNumber(1.0)
+
+        result = @jit sample_fn(rng, scale, (5,))
+        reactant_vals = Array(result)
+        @test length(reactant_vals) == 5
+        @test all(reactant_vals .> 0)
+
+        x = ConcreteRArray([0.1, 0.5, 1.0, 5.0, 10.0])
+        lp = @jit logpdf_fn(x, scale, nothing)
+        reactant_lp = Reactant.to_number(lp)
+
+        if check_numpyro_available()
+            jnp = pyimport("jax.numpy")
+            dist = pyimport("numpyro.distributions")
+
+            key = seed_to_rbg_key(UInt64[0, 42])
+            d = dist.HalfCauchy(1.0)
+            jax_vals = pyconvert(Vector{Float64}, d.sample(key, (5,)).tolist())
+            @test reactant_vals ≈ jax_vals atol = 1e-10
+
+            x_jnp = jnp.array(pylist([0.1, 0.5, 1.0, 5.0, 10.0]))
+            numpyro_lp = pyconvert(Float64, d.log_prob(x_jnp).sum().item())
+            @test reactant_lp ≈ numpyro_lp atol = 1e-10
+        end
+    end
+
+    @testset "HalfCauchy(2.5)" begin
+        sample_fn = ProbProg.sampler(ProbProg.HalfCauchy)
+        logpdf_fn = ProbProg.logpdf_fn(ProbProg.HalfCauchy)
+
+        rng = ReactantRNG(Reactant.to_rarray(UInt64[1, 4]))
+        scale = ConcreteRNumber(2.5)
+
+        result = @jit sample_fn(rng, scale, (5,))
+        reactant_vals = Array(result)
+        @test length(reactant_vals) == 5
+        @test all(reactant_vals .> 0)
+
+        x = ConcreteRArray([0.1, 1.0, 3.0])
+        lp = @jit logpdf_fn(x, scale, nothing)
+        reactant_lp = Reactant.to_number(lp)
+
+        if check_numpyro_available()
+            jnp = pyimport("jax.numpy")
+            dist = pyimport("numpyro.distributions")
+
+            key = seed_to_rbg_key(UInt64[1, 4])
+            d = dist.HalfCauchy(2.5)
+            jax_vals = pyconvert(Vector{Float64}, d.sample(key, (5,)).tolist())
+            @test reactant_vals ≈ jax_vals atol = 1e-10
+
+            x_jnp = jnp.array(pylist([0.1, 1.0, 3.0]))
+            numpyro_lp = pyconvert(Float64, d.log_prob(x_jnp).sum().item())
             @test reactant_lp ≈ numpyro_lp atol = 1e-10
         end
     end

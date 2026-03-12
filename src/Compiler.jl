@@ -34,6 +34,7 @@ const DEBUG_DISABLE_RESHARDING = Ref(false)
 const DEBUG_ALIASED_BUFFER_ASSIGNMENT_ERROR = Ref(false)
 const DEBUG_PROBPROG_DUMP_VALUE = Ref(false)
 const DEBUG_PROBPROG_DISABLE_OPT = Ref(true)
+const DEBUG_PROBPROG_DUMP_PASSES = Ref(false)
 
 const DEBUG_BUFFER_POINTERS_STORE_DICT = Base.IdDict()
 
@@ -1469,10 +1470,15 @@ function probprog_pass(;
     debug_dump::Bool=DEBUG_PROBPROG_DUMP_VALUE[],
     disable_optimizations::Bool=DEBUG_PROBPROG_DISABLE_OPT[],
 )
+    passes = String[]
     if !disable_optimizations
-        # TODO(#2063): Add probprog optimization passes
+        append!(passes, ["inline-mcmc-regions", "sicm", "outline-mcmc-regions"])
     end
-    return "probprog{debug-dump=$debug_dump postpasses=\"arith-raise{stablehlo=true}\"}"
+    push!(
+        passes,
+        "probprog{debug-dump=$debug_dump postpasses=\"arith-raise{stablehlo=true}\"}",
+    )
+    return join(passes, ",")
 end
 
 function run_pass_pipeline!(mod, pass_pipeline, key=""; enable_verifier=true)
@@ -2190,22 +2196,101 @@ function compile_mlir!(
             "no_enzyme",
         )
     elseif compile_options.optimization_passes === :probprog
+        dump_passes = DEBUG_PROBPROG_DUMP_PASSES[]
+        _dump(label) = dump_passes && MLIR.IR.dump_mlir(mod, nothing, label)
+
+        pre_probprog = if compile_options.raise_first
+            [
+                "mark-func-memory-effects",
+                opt_passes,
+                kern,
+                raise_passes,
+                "enzyme-batch",
+                opt_passes2,
+            ]
+        else
+            ["mark-func-memory-effects", opt_passes, "enzyme-batch", opt_passes2]
+        end
+        run_pass_pipeline!(mod, join(pre_probprog, ","), "probprog_pre")
+
+        _dump("pre_probprog")
+        if !DEBUG_PROBPROG_DISABLE_OPT[]
+            run_pass_pipeline!(mod, "inline-mcmc-regions", "inline_mcmc")
+            _dump("post_inline_mcmc")
+            run_pass_pipeline!(mod, "canonicalize,cse", "pre_sicm_cleanup")
+            _dump("post_pre_sicm_cleanup")
+            run_pass_pipeline!(mod, "sicm", "sicm")
+            _dump("post_sicm")
+            run_pass_pipeline!(mod, "canonicalize,cse", "post_sicm_cleanup")
+            _dump("post_sicm_cleanup")
+            run_pass_pipeline!(mod, "outline-mcmc-regions", "outline_mcmc")
+            _dump("post_outline_mcmc")
+        end
+        run_pass_pipeline!(
+            mod,
+            "probprog{debug-dump=$(DEBUG_PROBPROG_DUMP_VALUE[]) postpasses=\"arith-raise{stablehlo=true}\"}",
+            "probprog_lower",
+        )
+        _dump("post_probprog")
+
+        run_pass_pipeline!(
+            mod, "lower-probprog-to-stablehlo{backend=$backend}", "lower_to_stablehlo"
+        )
+        _dump("post_lower_stablehlo")
+        run_pass_pipeline!(mod, "hoist-enzyme-regions", "hoist_enzyme")
+        run_pass_pipeline!(mod, "outline-enzyme-regions", "outline_enzyme")
+        run_pass_pipeline!(mod, enzyme_pass, "enzyme")
+        _dump("post_enzyme")
+
+        legalize_chlo = if compile_options.legalize_chlo_to_stablehlo
+            ",func.func(chlo-legalize-to-stablehlo)"
+        else
+            ""
+        end
+        post_enzyme = if compile_options.raise_first
+            [
+                opt_passes2,
+                "canonicalize",
+                "remove-unnecessary-enzyme-ops",
+                "enzyme-simplify-math" * legalize_chlo,
+                opt_passes2,
+                lower_enzymexla_linalg_pass,
+                "lower-probprog-trace-ops{backend=$backend}",
+                jit,
+            ]
+        else
+            [
+                opt_passes2,
+                "canonicalize",
+                "remove-unnecessary-enzyme-ops",
+                "enzyme-simplify-math" * legalize_chlo,
+                opt_passes2,
+                kern,
+                raise_passes,
+                lower_enzymexla_linalg_pass,
+                "lower-probprog-trace-ops{backend=$backend}",
+                jit,
+            ]
+        end
+        run_pass_pipeline!(mod, join(post_enzyme, ","), "probprog_post")
+    elseif compile_options.optimization_passes === :probprog_no_opt
+        _noopt = "canonicalize,cse"
         run_pass_pipeline!(
             mod,
             join(
                 if compile_options.raise_first
                     [
                         "mark-func-memory-effects",
-                        opt_passes,
+                        _noopt,
                         kern,
                         raise_passes,
                         "enzyme-batch",
-                        opt_passes2,
+                        _noopt,
                         probprog_pass(),
                         "lower-probprog-to-stablehlo{backend=$backend}",
                         "outline-enzyme-regions",
                         enzyme_pass,
-                        opt_passes2,
+                        _noopt,
                         "canonicalize",
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
@@ -2216,7 +2301,7 @@ function compile_mlir!(
                                 []
                             end
                         )...,
-                        opt_passes2,
+                        _noopt,
                         lower_enzymexla_linalg_pass,
                         "lower-probprog-trace-ops{backend=$backend}",
                         jit,
@@ -2224,14 +2309,14 @@ function compile_mlir!(
                 else
                     [
                         "mark-func-memory-effects",
-                        opt_passes,
+                        _noopt,
                         "enzyme-batch",
-                        opt_passes2,
+                        _noopt,
                         probprog_pass(),
                         "lower-probprog-to-stablehlo{backend=$backend}",
                         "outline-enzyme-regions",
                         enzyme_pass,
-                        opt_passes2,
+                        _noopt,
                         "canonicalize",
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
@@ -2242,7 +2327,7 @@ function compile_mlir!(
                                 []
                             end
                         )...,
-                        opt_passes2,
+                        _noopt,
                         kern,
                         raise_passes,
                         lower_enzymexla_linalg_pass,
@@ -2252,7 +2337,7 @@ function compile_mlir!(
                 end,
                 ",",
             ),
-            "probprog",
+            "probprog_no_opt",
         )
     elseif compile_options.optimization_passes === :only_enzyme
         run_pass_pipeline!(
