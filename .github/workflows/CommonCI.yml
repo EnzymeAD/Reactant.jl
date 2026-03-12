@@ -149,7 +149,7 @@ jobs:
         run: |
           using Preferences, UUIDs
           Preferences.set_preferences!(
-            ("Reactant", UUID("3c362404-f566-11ee-1572-e11a4b42c853")),
+            (UUID("3c362404-f566-11ee-1572-e11a4b42c853"), "Reactant"),
             "xla_runtime" => "PJRT"
           )
         shell: julia --color=yes --project=@preferences {0}
@@ -190,7 +190,7 @@ jobs:
         run: |
           using Preferences, UUIDs
           Preferences.set_preferences!(
-            ("Reactant", UUID("3c362404-f566-11ee-1572-e11a4b42c853")),
+            (UUID("3c362404-f566-11ee-1572-e11a4b42c853"), "Reactant"),
             "xla_runtime" => "IFRT"
           )
         shell: julia --color=yes --project=@preferences {0}
