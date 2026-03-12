@@ -1197,6 +1197,9 @@ function optimization_passes(
             "sign_const_prop",
             "floor_const_prop",
             "tan_const_prop",
+            "relu_const_prop",
+            "gelu_const_prop",
+            "softplus_const_prop",
             # binary constant propagation
             "add_const_prop",
             "and_const_prop",
@@ -2004,14 +2007,20 @@ function compile_mlir!(
     end
 
     blas_int_width = sizeof(BlasInt) * 8
-    lower_enzymexla_linalg_pass = "lower-enzymexla-linalg{backend=$backend \
-                                   blas_int_width=$blas_int_width},\
-                                   lower-enzymexla-blas{backend=$backend \
-                                   blas_int_width=$blas_int_width},\
-                                   lower-enzymexla-lapack{backend=$backend \
-                                   blas_int_width=$blas_int_width}"
-
+    lower_enzymexla_linalg_pass = join(
+        [
+            "lower-enzymexla-linalg{backend=$backend blas_int_width=$blas_int_width}",
+            "lower-enzymexla-blas{backend=$backend blas_int_width=$blas_int_width}",
+            "lower-enzymexla-lapack{backend=$backend blas_int_width=$blas_int_width}",
+        ],
+        ",",
+    )
+    lower_enzymexla_ml_pass = "lower-enzymexla-ml"
     lower_enzymexla_mpi_pass = "lower-enzymexla-mpi{backend=$backend}"
+    lower_enzymexla_passes = join(
+        [lower_enzymexla_linalg_pass, lower_enzymexla_ml_pass, lower_enzymexla_mpi_pass],
+        ",",
+    )
 
     legalize_chlo_to_stablehlo =
         if legalize_stablehlo_to_mhlo || compile_options.legalize_chlo_to_stablehlo
@@ -2048,8 +2057,7 @@ function compile_mlir!(
                         "enzyme-simplify-math",
                         legalize_chlo_to_stablehlo...,
                         opt_passes2,
-                        lower_enzymexla_linalg_pass,
-                        lower_enzymexla_mpi_pass,
+                        lower_enzymexla_passes,
                         jit,
                     ]
                 else
@@ -2067,8 +2075,7 @@ function compile_mlir!(
                         opt_passes2,
                         kern,
                         raise_passes,
-                        lower_enzymexla_linalg_pass,
-                        lower_enzymexla_mpi_pass,
+                        lower_enzymexla_passes,
                         jit,
                     ]
                 end,
@@ -2217,7 +2224,7 @@ function compile_mlir!(
                             end
                         )...,
                         opt_passes2,
-                        lower_enzymexla_linalg_pass,
+                        lower_enzymexla_passes,
                         "lower-probprog-trace-ops{backend=$backend}",
                         jit,
                     ]
@@ -2245,7 +2252,7 @@ function compile_mlir!(
                         opt_passes2,
                         kern,
                         raise_passes,
-                        lower_enzymexla_linalg_pass,
+                        lower_enzymexla_passes,
                         "lower-probprog-trace-ops{backend=$backend}",
                         jit,
                     ]
@@ -2286,8 +2293,7 @@ function compile_mlir!(
                         "enzyme-simplify-math",
                         legalize_chlo_to_stablehlo...,
                         opt_passes2,
-                        lower_enzymexla_linalg_pass,
-                        lower_enzymexla_mpi_pass,
+                        lower_enzymexla_passes,
                         jit,
                     ]
                 else
@@ -2302,8 +2308,7 @@ function compile_mlir!(
                         opt_passes2,
                         kern,
                         raise_passes,
-                        lower_enzymexla_linalg_pass,
-                        lower_enzymexla_mpi_pass,
+                        lower_enzymexla_passes,
                         jit,
                     ]
                 end,
@@ -2325,8 +2330,7 @@ function compile_mlir!(
                         opt_passes2,
                         enzyme_pass,
                         "canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math",
-                        lower_enzymexla_linalg_pass,
-                        lower_enzymexla_mpi_pass,
+                        lower_enzymexla_passes,
                         jit,
                     ]
                 else
@@ -2339,8 +2343,7 @@ function compile_mlir!(
                         "canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math",
                         kern,
                         raise_passes,
-                        lower_enzymexla_linalg_pass,
-                        lower_enzymexla_mpi_pass,
+                        lower_enzymexla_passes,
                         jit,
                     ]
                 end,
@@ -2531,7 +2534,7 @@ function compile_mlir!(
                             "cse",
                             "canonicalize",
                             opt_passes2,
-                            lower_enzymexla_linalg_pass,
+                            lower_enzymexla_passes,
                             jit,
                         ],
                         ",",

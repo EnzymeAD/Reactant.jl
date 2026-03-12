@@ -393,8 +393,7 @@ end
 
         @jit test1!(x_ra, z_ra)
 
-        # FIXME: 
-        @test_broken @filecheck begin
+        @test @filecheck begin
             @check "SingleDeviceSharding"
             string(Reactant.XLA.sharding(z_ra.data.buffer))
         end
