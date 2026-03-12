@@ -191,6 +191,7 @@ Fine-grained control over the compilation options for the Reactant compiler.
     passes. (Default `true`).
   - `disable_structured_tensors_passes`: Disables structured tensors optimization passes.
     (Default `false`).
+  - `strip_llvm_debuginfo`: Removes LLVM debug info from the generated IR.
 """
 struct CompileOptions
     optimization_passes::Union{Symbol,String}
@@ -335,7 +336,7 @@ function CompileOptions(;
     )
 end
 
-function __compile_options_from_kwags(;
+function __compile_options_from_kwargs(;
     compile_options::Union{Missing,CompileOptions}=missing,
     optimize::Union{Bool,Symbol,String}=true,
     kwargs...,

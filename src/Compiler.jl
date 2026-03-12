@@ -1586,10 +1586,11 @@ function __get_compile_options_and_kwargs(;
     xla_executable_build_options=(;),
     xla_compile_options=(;),
     strip=:all,
+    strip_llvm_debuginfo=false,
     kwargs...,
 )
     return (
-        Reactant.__compile_options_from_kwags(;
+        Reactant.__compile_options_from_kwargs(;
             compile_options,
             optimize,
             no_nan,
@@ -2835,6 +2836,7 @@ function get_common_compile_options()
         :cudnn_hlo_optimize => false,
         :legalize_chlo_to_stablehlo => false,
         :compile_options => missing,
+        :strip_llvm_debuginfo => false,
     )
 end
 
