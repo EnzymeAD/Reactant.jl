@@ -780,6 +780,14 @@ REACTANT_ABI int32_t ReactantCudaDriverGetVersion() {
   return data;
 }
 
+#if CUDA_VERSION >= 13000
+// This stub satisfies the linker for cuFFT's RDC callback requirements
+// without requiring an nvcc device-link step.
+extern "C" {
+    void __cudaRegisterLinkedBinary_28b8d6c6_20_separate_callback_cu_a85cd5ea_29231() {}
+}
+#endif
+
 REACTANT_ABI int32_t ReactantHermeticCudaGetVersion() { return CUDA_VERSION; }
 
 REACTANT_ABI int32_t ReactantCudaDeviceGetComputeCapalilityMajor() {
@@ -2557,7 +2565,10 @@ ifrt_sharding_is_fully_replicated(HeldIfrtSharding *sharding) {
 }
 
 REACTANT_ABI const char *ifrt_sharding_to_string(HeldIfrtSharding *sharding) {
-  return cstr_from_string(sharding->obj()->DebugString());
+  std::string str;
+  std::stringstream ss(str);
+  ss << *sharding->obj();
+  return cstr_from_string(ss.str());
 }
 
 REACTANT_ABI int32_t ifrt_sharding_devices_size(HeldIfrtSharding *sharding) {

@@ -2449,3 +2449,14 @@ function make_tracer(
         return TracedRational(newnum, newden)
     end
 end
+
+function make_tracer(
+    seen,
+    prev::IOStream,
+    @nospecialize(path),
+    mode;
+    @nospecialize(sharding = Sharding.NoSharding()),
+    kwargs...,
+)
+    return prev
+end

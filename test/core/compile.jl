@@ -640,3 +640,22 @@ end
     @test Array(y[:Mhalo]) ≈ [1.0f0, 2.0f0]
     @test Array(y[:x]) ≈ [2.0f0, 3.0f0]
 end
+
+@testset "debug = true" begin
+    x = Reactant.to_rarray([1, 2, 3])
+    ir = sprint(show, @code_hlo debug = true sum(x))
+    if !RunningOnTPU
+        @test @filecheck begin
+            @check_dag "loc(\"arg1 (path=(:args, 1))\")"
+            ir
+        end
+    end
+end
+
+@testset "code_hlo throws when passed a thunk" begin
+    x = Reactant.to_rarray([1, 2, 3])
+    rsum = @compile sync = true sum(x)
+    @test_throws "`@code_hlo` expects the original function, not a compiled `Thunk`." (@code_hlo rsum(
+        x
+    ))
+end
