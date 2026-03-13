@@ -327,8 +327,8 @@ function trace_while(expr; track_numbers, mincut, checkpointing, first_arg=nothi
     if checkpointing === true && first_arg === nothing
         # This is a raw while loop (not from trace_for), require Periodic(n)
         error(
-            "Periodic(n) must be used for while loops when checkpointing is enabled. " *
-            "Use `@trace checkpointing=Periodic(n) while ...` where n is the number of checkpoints.",
+            "Reactant.Periodic(n) must be used for while loops when checkpointing is enabled. " *
+            "Use `@trace checkpointing=Reactant.Periodic(n) while ...` where n is the number of checkpoints.",
         )
     end
 

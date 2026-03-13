@@ -729,10 +729,16 @@ Two modes of operation:
 The `selection` attribute determines which addresses to sample via HMC/NUTS.
 All sample addresses are included in the trace tensor for consistency.
 
-Returns: (trace, diagnostics, rng)
+Returns: (trace, diagnostics, rng, final_position, final_gradient,
+          final_potential_energy, final_step_size, final_inverse_mass_matrix)
 - trace: tensor<num_samples x position_size x f64>
 - diagnostics: tensor<num_samples x i1> - placeholder for future expansion
 - rng: updated RNG state
+- final_position: tensor<1 x position_size x f64> - position after last sample
+- final_gradient: tensor<1 x position_size x f64> - gradient at final position
+- final_potential_energy: tensor<f64> - potential energy at final position
+- final_step_size: tensor<f64> - adapted step size (after warmup)
+- final_inverse_mass_matrix: tensor - adapted inverse mass matrix (after warmup)
 """
 function mcmc(
     inputs::Vector{Value},
@@ -740,9 +746,16 @@ function mcmc(
     inverse_mass_matrix=nothing::Union{Nothing,Value},
     step_size=nothing::Union{Nothing,Value},
     initial_position=nothing::Union{Nothing,Value},
+    initial_gradient=nothing::Union{Nothing,Value},
+    initial_potential_energy=nothing::Union{Nothing,Value},
     trace::IR.Type,
     diagnostics::IR.Type,
     output_rng_state::IR.Type,
+    final_position::IR.Type,
+    final_gradient::IR.Type,
+    final_potential_energy::IR.Type,
+    final_step_size::IR.Type,
+    final_inverse_mass_matrix::IR.Type,
     fn=nothing,
     selection,
     all_addresses,
@@ -755,7 +768,16 @@ function mcmc(
     name=nothing,
     location=Location(),
 )
-    op_ty_results = IR.Type[trace, diagnostics, output_rng_state]
+    op_ty_results = IR.Type[
+        trace,
+        diagnostics,
+        output_rng_state,
+        final_position,
+        final_gradient,
+        final_potential_energy,
+        final_step_size,
+        final_inverse_mass_matrix,
+    ]
     operands = Value[inputs...,]
     owned_regions = Region[]
     successors = Block[]
@@ -767,6 +789,8 @@ function mcmc(
     !isnothing(inverse_mass_matrix) && push!(operands, inverse_mass_matrix)
     !isnothing(step_size) && push!(operands, step_size)
     !isnothing(initial_position) && push!(operands, initial_position)
+    !isnothing(initial_gradient) && push!(operands, initial_gradient)
+    !isnothing(initial_potential_energy) && push!(operands, initial_potential_energy)
     push!(
         attributes,
         operandsegmentsizes([
@@ -775,6 +799,8 @@ function mcmc(
             Int(!isnothing(inverse_mass_matrix)),
             Int(!isnothing(step_size)),
             Int(!isnothing(initial_position)),
+            Int(!isnothing(initial_gradient)),
+            Int(!isnothing(initial_potential_energy)),
         ]),
     )
     !isnothing(fn) && push!(attributes, NamedAttribute("fn", fn))

@@ -407,6 +407,8 @@ for (dialect, op) in [
     (:chlo, :erfc),
     (:chlo, :lgamma),
     (:chlo, :sinh),
+    (:enzymexla, :ml_softplus),
+    (:enzymexla, :ml_relu),
 ]
     @eval begin
         @noinline function $op(
@@ -433,6 +435,31 @@ for (dialect, op) in [
             return TracedRNumber{T}((), res)
         end
     end
+end
+
+# These are only defined for floating point types. So integers are typecast
+for op in (:ml_softplus,)
+    @eval begin
+        @noinline function $op(
+            x::TracedRArray{T,N};
+            location=mlir_stacktrace($(string(op)), @__FILE__, @__LINE__),
+        ) where {T<:Integer,N}
+            return $(op)(float(x); location=location)
+        end
+
+        @noinline function $op(
+            x::TracedRNumber{T};
+            location=mlir_stacktrace($(string(op)), @__FILE__, @__LINE__),
+        ) where {T<:Integer}
+            return $(op)(float(x); location=location)
+        end
+    end
+end
+
+@noinline function log1pexp(
+    x::TracedRNumber{T}; location=mlir_stacktrace("log1pexp", @__FILE__, @__LINE__)
+) where {T<:Real}
+    return ml_softplus(x; location)
 end
 
 # stablehlo doesn't allow unsigned integers should should anyways produce a no-op
@@ -4056,6 +4083,35 @@ end
     end
 end
 
+@noinline function ml_gelu(
+    x::Union{TracedRArray,TracedRNumber},
+    approximation::String;
+    location=mlir_stacktrace("ml.gelu", @__FILE__, @__LINE__),
+)
+    approx = if approximation == "NONE"
+        0
+    elseif approximation == "TANH"
+        1
+    elseif approximation == "SIGMOID"
+        2
+    else
+        error("Invalid gelu approximation: $approximation")
+    end
+    approx = MLIR.API.enzymexlaGeluApproximationAttrGet(
+        MLIR.IR.current_context(), Int32(approx)
+    )
+
+    res = MLIR.IR.result(
+        enzymexla.ml_gelu(x.mlir_data; gelu_approximation=approx, location), 1
+    )
+
+    if x isa TracedRArray
+        return TracedRArray{unwrapped_eltype(x),ndims(x)}((), res, size(x))
+    else
+        return TracedRNumber{unwrapped_eltype(x)}((), res)
+    end
+end
+
 @noinline function wrap(
     input::TracedRArray{T,N},
     lhs::Integer,
@@ -4221,26 +4277,6 @@ end
     end
 
     return nothing
-end
-
-# log1pexp based on log1pexp from LogExpFunctions.jl
-@noinline function log1pexp(
-    x::TracedRNumber{T}; location=mlir_stacktrace("log1pexp", @__FILE__, @__LINE__)
-) where {T<:Real}
-    prec = precision(x)
-    logtwo = oftype(x, Base.log(BigFloat(2)))
-    x1 = (exponent(nextfloat(zero(T))) - 1) * logtwo
-    x2 = -prec * logtwo
-    x3 = (prec - 1) * logtwo / 2
-    # approximate root of e^-x == x * ϵ/2 via asymptotics of Lambert's W function
-    x4 = -x2 - log(-x2) * (1 + 1 / x2)
-    return ifelse(
-        x < x1,
-        zero(x),
-        ifelse(
-            x < x2, exp(x), ifelse(x < x3, log1p(exp(x)), ifelse(x < x4, x + exp(-x), x))
-        ),
-    )
 end
 
 const _CALLBACK_REGISTRY = Dict{UInt,Any}()

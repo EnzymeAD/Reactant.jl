@@ -651,3 +651,11 @@ end
         end
     end
 end
+
+@testset "code_hlo throws when passed a thunk" begin
+    x = Reactant.to_rarray([1, 2, 3])
+    rsum = @compile sync = true sum(x)
+    @test_throws "`@code_hlo` expects the original function, not a compiled `Thunk`." (@code_hlo rsum(
+        x
+    ))
+end

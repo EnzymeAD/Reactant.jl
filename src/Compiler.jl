@@ -954,6 +954,7 @@ function optimization_passes(
         "add_complex_simplify",
         "sub_complex_simplify",
         "exponential_minus_one_fuse",
+        "scatter_of_scatter_simplify",
     ]
 
     if !is_sharded
@@ -1196,6 +1197,9 @@ function optimization_passes(
             "sign_const_prop",
             "floor_const_prop",
             "tan_const_prop",
+            "relu_const_prop",
+            "gelu_const_prop",
+            "softplus_const_prop",
             # binary constant propagation
             "add_const_prop",
             "and_const_prop",
@@ -1582,10 +1586,11 @@ function __get_compile_options_and_kwargs(;
     xla_executable_build_options=(;),
     xla_compile_options=(;),
     strip=:all,
+    strip_llvm_debuginfo=false,
     kwargs...,
 )
     return (
-        Reactant.__compile_options_from_kwags(;
+        Reactant.__compile_options_from_kwargs(;
             compile_options,
             optimize,
             no_nan,
@@ -2003,14 +2008,20 @@ function compile_mlir!(
     end
 
     blas_int_width = sizeof(BlasInt) * 8
-    lower_enzymexla_linalg_pass = "lower-enzymexla-linalg{backend=$backend \
-                                   blas_int_width=$blas_int_width},\
-                                   lower-enzymexla-blas{backend=$backend \
-                                   blas_int_width=$blas_int_width},\
-                                   lower-enzymexla-lapack{backend=$backend \
-                                   blas_int_width=$blas_int_width}"
-
+    lower_enzymexla_linalg_pass = join(
+        [
+            "lower-enzymexla-linalg{backend=$backend blas_int_width=$blas_int_width}",
+            "lower-enzymexla-blas{backend=$backend blas_int_width=$blas_int_width}",
+            "lower-enzymexla-lapack{backend=$backend blas_int_width=$blas_int_width}",
+        ],
+        ",",
+    )
+    lower_enzymexla_ml_pass = "lower-enzymexla-ml"
     lower_enzymexla_mpi_pass = "lower-enzymexla-mpi{backend=$backend}"
+    lower_enzymexla_passes = join(
+        [lower_enzymexla_linalg_pass, lower_enzymexla_ml_pass, lower_enzymexla_mpi_pass],
+        ",",
+    )
 
     legalize_chlo_to_stablehlo =
         if legalize_stablehlo_to_mhlo || compile_options.legalize_chlo_to_stablehlo
@@ -2020,6 +2031,13 @@ function compile_mlir!(
         end
 
     legal_to_run_shardy_passes = compile_options.optimization_passes === :all
+
+    # Raise any triton kernel that might exist as a custom call
+    # We will lower them back later on, but having the full triton IR enables
+    # optimizations / differentiation, so we unconditionally do it
+    if compile_options.raise_triton_custom_call
+        run_pass_pipeline!(mod, "raise-triton-custom-call", "raise_triton_custom_call")
+    end
 
     if compile_options.optimization_passes === :all
         run_pass_pipeline!(
@@ -2040,8 +2058,7 @@ function compile_mlir!(
                         "enzyme-simplify-math",
                         legalize_chlo_to_stablehlo...,
                         opt_passes2,
-                        lower_enzymexla_linalg_pass,
-                        lower_enzymexla_mpi_pass,
+                        lower_enzymexla_passes,
                         jit,
                     ]
                 else
@@ -2059,8 +2076,7 @@ function compile_mlir!(
                         opt_passes2,
                         kern,
                         raise_passes,
-                        lower_enzymexla_linalg_pass,
-                        lower_enzymexla_mpi_pass,
+                        lower_enzymexla_passes,
                         jit,
                     ]
                 end,
@@ -2209,7 +2225,7 @@ function compile_mlir!(
                             end
                         )...,
                         opt_passes2,
-                        lower_enzymexla_linalg_pass,
+                        lower_enzymexla_passes,
                         "lower-probprog-trace-ops{backend=$backend}",
                         jit,
                     ]
@@ -2237,7 +2253,7 @@ function compile_mlir!(
                         opt_passes2,
                         kern,
                         raise_passes,
-                        lower_enzymexla_linalg_pass,
+                        lower_enzymexla_passes,
                         "lower-probprog-trace-ops{backend=$backend}",
                         jit,
                     ]
@@ -2278,8 +2294,7 @@ function compile_mlir!(
                         "enzyme-simplify-math",
                         legalize_chlo_to_stablehlo...,
                         opt_passes2,
-                        lower_enzymexla_linalg_pass,
-                        lower_enzymexla_mpi_pass,
+                        lower_enzymexla_passes,
                         jit,
                     ]
                 else
@@ -2294,8 +2309,7 @@ function compile_mlir!(
                         opt_passes2,
                         kern,
                         raise_passes,
-                        lower_enzymexla_linalg_pass,
-                        lower_enzymexla_mpi_pass,
+                        lower_enzymexla_passes,
                         jit,
                     ]
                 end,
@@ -2317,8 +2331,7 @@ function compile_mlir!(
                         opt_passes2,
                         enzyme_pass,
                         "canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math",
-                        lower_enzymexla_linalg_pass,
-                        lower_enzymexla_mpi_pass,
+                        lower_enzymexla_passes,
                         jit,
                     ]
                 else
@@ -2331,8 +2344,7 @@ function compile_mlir!(
                         "canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math",
                         kern,
                         raise_passes,
-                        lower_enzymexla_linalg_pass,
-                        lower_enzymexla_mpi_pass,
+                        lower_enzymexla_passes,
                         jit,
                     ]
                 end,
@@ -2378,6 +2390,10 @@ function compile_mlir!(
 
     if backend == "cuda" && compile_options.cudnn_hlo_optimize
         run_pass_pipeline!(mod, "enzymexla-cudnn-hlo-opt", "cudnn-hlo-opt")
+    end
+
+    if compile_options.lower_triton
+        run_pass_pipeline!(mod, "lower-triton", "lower_triton")
     end
 
     # Now we resolve paddings if `optimize_then_pad`
@@ -2519,7 +2535,7 @@ function compile_mlir!(
                             "cse",
                             "canonicalize",
                             opt_passes2,
-                            lower_enzymexla_linalg_pass,
+                            lower_enzymexla_passes,
                             jit,
                         ],
                         ",",
@@ -2820,6 +2836,7 @@ function get_common_compile_options()
         :cudnn_hlo_optimize => false,
         :legalize_chlo_to_stablehlo => false,
         :compile_options => missing,
+        :strip_llvm_debuginfo => false,
     )
 end
 
@@ -2865,6 +2882,13 @@ Compile the function `f` with arguments `args` and return the compiled MLIR modu
 See also: [`@code_hlo`](@ref).
 """
 function code_hlo(ctx, f, args; fn_kwargs=NamedTuple(), kwargs...)
+    if f isa Thunk
+        FTy = thunk_fn_type(f)
+        error(
+            "`@code_hlo` expects the original function, not a compiled `Thunk`. " *
+            "Pass the original function directly (of type `$FTy`), e.g. `@code_hlo my_function(args...)`.",
+        )
+    end
     options = Dict(
         k => v isa QuoteNode ? v.value : v for (k, v) in get_common_compile_options()
     )
@@ -4266,6 +4290,8 @@ struct Thunk{FTy,tag,IsClosure,ArgTypes,ExecTy,DeviceTy,ClientTy,GD,DAM}
     donated_args_mask::DAM
     compiled_with_sync::Bool
 end
+
+thunk_fn_type(::Thunk{FTy}) where {FTy} = FTy
 
 for fn in (:get_tag, :get_isclosure, :get_compiled_argtypes)
     @eval $fn(thunk::Thunk) = $fn(typeof(thunk))
