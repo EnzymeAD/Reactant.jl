@@ -1,6 +1,10 @@
 using Reactant, Test, CUDA
 using Reactant: ConcretePJRTArray, Sharding, XLA, MLIR
 
+if !CUDA.functional()
+    @info "CUDA not functional — skipping D2D CuArray interop tests"
+else # CUDA.functional()
+
 # ============================================================
 # 1. Basic correctness: CuArray -> ConcreteRArray
 # ============================================================
@@ -334,3 +338,5 @@ end
         @test Array(cu_back) ≈ data
     end
 end
+
+end # if CUDA.functional()
