@@ -716,7 +716,9 @@ function handle_scatter(ctx, op)
                 haskey(ctx.const_ir_data, op2_val) &&
                 haskey(ctx.const_ir_data, op3_val)
 
+    @info "handle_scatter: all_const=$all_const" haskey1=haskey(ctx.const_ir_data, op1_val) haskey2=haskey(ctx.const_ir_data, op2_val) haskey3=haskey(ctx.const_ir_data, op3_val)
     if all_const
+        @info "handle_scatter: taking constant-folding path"
         base_shape, base_flat = ctx.const_ir_data[op1_val]
         idx_shape, idx_flat = ctx.const_ir_data[op2_val]
         upd_shape, upd_flat = ctx.const_ir_data[op3_val]
