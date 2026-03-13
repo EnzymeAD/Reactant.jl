@@ -136,6 +136,7 @@
 #include "xla/python/ifrt/ir/ifrt_ir_program.h"
 #include "xla/python/ifrt/memory.h"
 #include "xla/python/ifrt/shape.h"
+#include "xla/layout_util.h"
 #include "xla/python/ifrt/sharding.h"
 #include "xla/python/ifrt/topology.h"
 #include "xla/python/ifrt/tuple.h"
@@ -1158,6 +1159,9 @@ REACTANT_ABI PjRtBuffer *BufferFromDevicePointer(PjRtClient *client,
                                                  int64_t stream) {
   xla::Shape shape((xla::PrimitiveType)ptype,
                    absl::Span<const int64_t>(cshape, dim));
+  // GPU buffers require an explicit memory layout. Use default row-major
+  // (descending) layout, matching the dimension order passed from Julia.
+  *shape.mutable_layout() = xla::LayoutUtil::MakeDescendingLayout(dim);
 
   // stream_opt: if non-zero, synchronize with external CUDA stream
   std::optional<std::intptr_t> stream_opt;
@@ -1165,10 +1169,10 @@ REACTANT_ABI PjRtBuffer *BufferFromDevicePointer(PjRtClient *client,
     stream_opt = stream;
 
   // Step 1: Create ephemeral non-owning view of external device memory.
-  // on_delete_callback is empty because we don't own the source memory.
+  // on_delete_callback is a no-op because we don't own the source memory.
   auto view = MyValueOrThrow(client->CreateViewOfDeviceBuffer(
       device_ptr, shape, *device->default_memory_space(),
-      /*on_delete_callback=*/{}, stream_opt));
+      /*on_delete_callback=*/[]() {}, stream_opt));
 
   // Step 2: D2D copy to a new PJRT-owned buffer.
   // Uses XLA's internal stream infrastructure with proper event tracking.

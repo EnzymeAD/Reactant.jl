@@ -1490,9 +1490,9 @@ end
 # ============================================================
 
 # CuArray -> ConcreteRArray: D2D copy via CreateViewOfDeviceBuffer + CopyToMemorySpace.
-# Uses XLA's internal stream infrastructure for correct synchronization.
-# The CUDA stream handle is passed to PJRT so it can synchronize against any
-# pending CUDA.jl operations on the source CuArray.
+# We synchronize the CUDA stream before calling into PJRT to ensure all pending
+# CUDA.jl writes to the source CuArray are complete. Then we pass stream=0 to
+# BufferFromDevicePointer (meaning "data is already ready, no stream to wait on").
 #
 # Safety: BufferFromDevicePointer creates an ephemeral PJRT view of cu's memory,
 # then does a D2D copy via CopyToMemorySpace. The view's destructor (called inside
@@ -1507,8 +1507,11 @@ function Reactant.ConcretePJRTArray(
     theclient = client === nothing ? Reactant.XLA.default_backend() : client
     thedevice = device === nothing ? Reactant.XLA.default_device(theclient) : device
 
+    # Synchronize CUDA stream to ensure all writes to cu are complete before
+    # PJRT reads from this memory.
+    CUDA.synchronize()
+
     sizear = collect(Int64, reverse(size(cu)))
-    stream_handle = Int64(CUDA.stream().handle)
     GC.@preserve cu sizear theclient thedevice begin
         buf = MLIR.API.BufferFromDevicePointer(
             theclient.client,
@@ -1517,7 +1520,7 @@ function Reactant.ConcretePJRTArray(
             N,
             sizear,
             thedevice.device,
-            stream_handle,
+            Int64(0),  # stream=0: data already synchronized
         )
     end
     async_buf = Reactant.XLA.PJRT.AsyncBuffer(Reactant.XLA.PJRT.Buffer(buf), nothing)
