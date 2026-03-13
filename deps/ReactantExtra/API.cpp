@@ -72,6 +72,8 @@
 
 #include "llvm-c/TargetMachine.h"
 
+#include "xla/pjrt/maybe_owning_mlir_module.h"
+
 // PJRT
 #include "xla/pjrt/cpu/cpu_client.h"
 #include "xla/pjrt/distributed/client.h"
@@ -1347,7 +1349,7 @@ xla::PjRtLoadedExecutable *ClientCompileInternal(PjRtClient *client,
     }
   }
 
-  auto exec_err = client->CompileAndLoad(cmod_op, options);
+  auto exec_err = client->CompileAndLoad(MaybeOwningMlirModule(cmod_op), options);
 
   if (!exec_err.ok()) {
     std::string err_str;
