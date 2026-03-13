@@ -1325,7 +1325,7 @@ macro profile(args...)
                 nrepeat=$(nrepeat),
                 warmup=$(warmup),
                 compile_options=$(compile_options),
-		profile_dir=$(profile_dir),
+                profile_dir=$(profile_dir),
                 $(kwargs...),
             )
 
