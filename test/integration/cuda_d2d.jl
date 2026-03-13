@@ -292,6 +292,17 @@ end
         @test Array(cu_back) == data
     end
 
+    @testset "BFloat16" begin
+        data = Core.BFloat16[1.0, 2.0, 3.5, 4.25, 5.0]
+        cu = CuArray(data)
+        ra = ConcretePJRTArray(cu)
+        @test Array(ra) == data
+        @test eltype(ra) == Core.BFloat16
+
+        cu_back = CuArray(ra)
+        @test Array(cu_back) == data
+    end
+
     @testset "Bool arrays" begin
         data = Bool[true, false, true, true, false]
         cu = CuArray(data)
