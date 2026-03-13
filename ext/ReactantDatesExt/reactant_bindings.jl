@@ -50,7 +50,9 @@ for T in (
     )
         if mode == Reactant.ArrayToConcrete
             # all Dates types are hard coded to have Int64 fields
-            NF = Reactant.traced_type_inner(Int64, seen, mode, track_numbers, ndevices, runtime)
+            NF = Reactant.traced_type_inner(
+                Int64, seen, mode, track_numbers, ndevices, runtime
+            )
             return $(reactant_type){NF}
         else
             return T
