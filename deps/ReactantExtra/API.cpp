@@ -72,6 +72,8 @@
 
 #include "llvm-c/TargetMachine.h"
 
+#include "xla/pjrt/maybe_owning_mlir_module.h"
+
 // PJRT
 #include "xla/pjrt/cpu/cpu_client.h"
 #include "xla/pjrt/distributed/client.h"
@@ -1347,7 +1349,7 @@ xla::PjRtLoadedExecutable *ClientCompileInternal(PjRtClient *client,
     }
   }
 
-  auto exec_err = client->CompileAndLoad(cmod_op, options);
+  auto exec_err = client->CompileAndLoad(MaybeOwningMlirModule(cmod_op), options);
 
   if (!exec_err.ok()) {
     std::string err_str;
@@ -2513,7 +2515,7 @@ ifrt_sharding_is_fully_replicated(HeldIfrtSharding *sharding) {
 REACTANT_ABI const char *ifrt_sharding_to_string(HeldIfrtSharding *sharding) {
   std::string str;
   std::stringstream ss(str);
-  ss << sharding->obj();
+  ss << *sharding->obj();
   return cstr_from_string(ss.str());
 }
 
