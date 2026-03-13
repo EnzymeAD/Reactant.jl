@@ -162,6 +162,8 @@ end
 
 function __init__()
     if Reactant_jll.is_available()
+        @debug "Using libReactantExtra from $(Reactant_jll.libReactantExtra_path)"
+
         # This must be the very first thing initialized (otherwise we can't throw errors)
         errptr = cglobal((:ReactantThrowError, MLIR.API.mlir_c), Ptr{Ptr{Cvoid}})
         unsafe_store!(errptr, @cfunction(reactant_err, Cvoid, (Cstring,)))
@@ -201,6 +203,7 @@ function __init__()
 
         MLIR.API.RegisterEnzymeXLACPUHandler()
         MLIR.API.RegisterEnzymeXLAGPUHandler()
+        MLIR.API.registerEnzymeJaXXLAFFI()
         MLIR.API.registerReactantXLAFFI()
 
         @static if !Sys.isapple()
