@@ -121,6 +121,8 @@ jobs:
           echo $PWD/julia/usr/bin >> $GITHUB_PATH
 
       # Install dependencies (specifically ReactantCore subdirectory for 1.10)
+      # Disable precompile here, since it will be invalidated based on change
+      # to xla_runtime preference in the next step.
       - name: "Install Dependencies"
         run: |
           import Pkg
@@ -134,14 +136,18 @@ jobs:
         shell: julia --color=yes --code-coverage=user --depwarn=yes --project=. {0}
         # Only in Julia v1.10 we need to install `ReactantCore` manually.
         if: ${{ inputs.julia_version == '1.10' || inputs.julia_version == 'lts' }}
+        env:
+          JULIA_PKG_PRECOMPILE_AUTO: 0
 
-      # Setup Preferences
-      - name: "Instantiate"
+      - name: "Install Dependencies (1.11+)"
         run: |
           import Pkg
           Pkg.Registry.update()
           Pkg.instantiate()
-        shell: JULIA_PKG_PRECOMPILE_AUTO=0 julia --color=yes --project=. {0}
+        shell: julia --color=yes --project=. {0}
+        if: ${{ inputs.julia_version != '1.10' && inputs.julia_version != 'lts' }}
+        env:
+          JULIA_PKG_PRECOMPILE_AUTO: 0
 
       # Run the tests (pjrt or ifrt or both)
       - name: "Setup Runtime Preferences (PJRT)"
