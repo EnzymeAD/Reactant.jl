@@ -1183,11 +1183,24 @@ REACTANT_ABI PjRtBuffer *BufferFromDevicePointer(PjRtClient *client,
       /*on_delete_callback=*/[]() {}, stream_opt));
 
   // Step 2: D2D copy to a new PJRT-owned buffer.
-  // Uses XLA's internal stream infrastructure with proper event tracking.
+  // CopyToMemorySpace schedules an async copy and returns immediately.
   auto owned = MyValueOrThrow(
       view->CopyToMemorySpace(*device->default_memory_space()));
 
-  // view is destroyed here; source memory is unaffected.
+  // Step 3: Wait for the copy to complete before returning.
+  // CopyToMemorySpace is async (ScheduleCopyTo returns immediately), so the
+  // source memory at device_ptr may still be being read. We must block until
+  // the copy finishes so that the caller's GC.@preserve on the source CuArray
+  // covers the entire read. Without this, GC could free the source memory
+  // while the async copy is still in flight.
+  auto ready = owned->GetReadyFuture();
+  auto status = ready.Await();
+  if (!status.ok()) {
+    ReactantThrowError(status.ToString().c_str());
+  }
+
+  // Now the copy is complete. The view can be safely destroyed (it holds a
+  // non-owning pointer to source memory, but the copy no longer needs it).
   return owned.release();
 }
 

@@ -95,13 +95,14 @@ end
 end
 
 # ============================================================
-# 4. Race condition stress tests: forward direction
-#    (CuArray -> ConcreteRArray)
+# 4. Stress tests: forward direction (CuArray -> ConcreteRArray)
 #
 #    Strategy: launch async CUDA.jl operations that write to a
 #    CuArray, then immediately convert to ConcreteRArray without
-#    explicit CUDA.synchronize(). The stream handle passed to
-#    BufferFromDevicePointer must ensure XLA waits for the write.
+#    an explicit CUDA.synchronize() at the call site.
+#    ConcretePJRTArray internally synchronizes the CUDA stream
+#    before the D2D copy, so these tests verify that the internal
+#    synchronization correctly captures all pending writes.
 # ============================================================
 @testset "Forward: convert immediately after async CUDA write" begin
     n = 100_000
@@ -109,8 +110,7 @@ end
         cu = CUDA.zeros(Float32, n)
         # Async kernel that fills the array (runs on CUDA.jl's stream)
         cu .= Float32(trial)
-        # Do NOT call CUDA.synchronize() -- the stream handle should
-        # ensure BufferFromDevicePointer waits for the write to complete
+        # No explicit sync here -- ConcretePJRTArray handles it internally
         ra = ConcretePJRTArray(cu)
         result = Array(ra)
         @test all(result .== Float32(trial))
@@ -125,7 +125,7 @@ end
         # Multi-step async computation on CUDA.jl's stream
         c = a .* b .+ Float32(trial)
         expected = Array(a) .* Array(b) .+ Float32(trial)
-        # Immediate conversion -- no explicit sync
+        # No explicit sync here -- ConcretePJRTArray handles it internally
         ra = ConcretePJRTArray(c)
         @test Array(ra) ≈ expected
     end
@@ -279,5 +279,47 @@ end
         expected = Array(cu)
         ra = ConcretePJRTArray(cu)
         @test Array(ra) == expected
+    end
+
+    @testset "Float16" begin
+        data = Float16[1.0, 2.0, 3.5, 4.25, 5.0]
+        cu = CuArray(data)
+        ra = ConcretePJRTArray(cu)
+        @test Array(ra) == data
+        @test eltype(ra) == Float16
+
+        cu_back = CuArray(ra)
+        @test Array(cu_back) == data
+    end
+
+    @testset "Bool arrays" begin
+        data = Bool[true, false, true, true, false]
+        cu = CuArray(data)
+        ra = ConcretePJRTArray(cu)
+        @test Array(ra) == data
+        @test eltype(ra) == Bool
+
+        cu_back = CuArray(ra)
+        @test Array(cu_back) == data
+    end
+
+    @testset "Non-contiguous view (materializes contiguous copy)" begin
+        # Non-contiguous views dispatch to a convenience method that
+        # materializes a contiguous CuArray before the D2D copy.
+        cu_full = CuArray(reshape(collect(Float32, 1:100), 10, 10))
+        cu_view = @view cu_full[1:2:end, :]  # stride-2 view, not contiguous
+        ra = ConcretePJRTArray(cu_view)
+        @test Array(ra) == Array(cu_view)
+    end
+
+    @testset "High-dimensional array (5D)" begin
+        data = Float32.(randn(2, 3, 4, 5, 6))
+        cu = CuArray(data)
+        ra = ConcretePJRTArray(cu)
+        @test size(ra) == (2, 3, 4, 5, 6)
+        @test Array(ra) ≈ data
+
+        cu_back = CuArray(ra)
+        @test Array(cu_back) ≈ data
     end
 end
