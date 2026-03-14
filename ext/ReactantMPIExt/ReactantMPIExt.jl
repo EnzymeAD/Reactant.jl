@@ -3,7 +3,7 @@ module ReactantMPIExt
 using Reactant
 using Reactant: Reactant, Distributed, MLIR
 using MPI: MPI
-using Libdl
+using Libdl: Libdl
 
 # https://github.com/jax-ml/jax/blob/b0117366686ab084d38ad2657d9a2ae3a581ca7e/jax/_src/clusters/mpi4py_cluster.py
 Distributed.is_env_present(::Distributed.MPIEnvDetector) = MPI.Initialized()
@@ -36,9 +36,8 @@ function Distributed.get_local_process_id(::Distributed.MPIEnvDetector)
 end
 
 function __init__()
-    libmpi_handle = MPI.API.libmpi_handle
-
     # register MPI routines
+    #! explicit-imports: off
     for name in [
         :MPI_Init,
         :MPI_Finalize,
@@ -52,8 +51,9 @@ function __init__()
         :MPI_Wait,
         :MPI_Request_free,
     ]
-        MLIR.API.EnzymeJaXMapSymbol(name, Libdl.dlsym(libmpi_handle, name))
+        MLIR.API.EnzymeJaXMapSymbol(name, Libdl.dlsym(MPI.API.libmpi_handle, name))
     end
+    #! explicit-imports: on
 
     # register MPI constants
     # NOTE these symbols are not ABI-stable until MPI 5.0, but in practice, they are represented as word-size values (i.e. `int` or ptr)

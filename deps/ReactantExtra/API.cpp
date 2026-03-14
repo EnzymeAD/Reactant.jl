@@ -785,7 +785,8 @@ REACTANT_ABI int32_t ReactantCudaDriverGetVersion() {
 // This stub satisfies the linker for cuFFT's RDC callback requirements
 // without requiring an nvcc device-link step.
 extern "C" {
-    void __cudaRegisterLinkedBinary_28b8d6c6_20_separate_callback_cu_a85cd5ea_29231() {}
+void __cudaRegisterLinkedBinary_28b8d6c6_20_separate_callback_cu_a85cd5ea_29231() {
+}
 }
 #endif
 
