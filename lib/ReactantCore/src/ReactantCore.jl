@@ -593,7 +593,7 @@ function trace_if(expr; store_last_line=nothing, depth=0, track_numbers)
         end
     elseif length(expr.args) == 2
         tmp_expr = []
-        for var in true_branch_assignments
+        for var in setdiff(true_branch_assignments, discard_vars_from_expansion)
             push!(tmp_expr, :($(var) = $(var)))
         end
         Expr(:block, tmp_expr...), [], nothing
@@ -632,6 +632,7 @@ function trace_if(expr; store_last_line=nothing, depth=0, track_numbers)
     false_branch_fn_name = gensym(:false_branch)
 
     all_input_vars = true_branch_input_list ∪ false_branch_input_list
+    filter!(x -> x ∉ discard_vars, all_input_vars)
     all_output_vars = all_true_branch_vars ∪ all_false_branch_vars
     discard_vars !== nothing && setdiff!(all_output_vars, discard_vars)
 
@@ -700,7 +701,7 @@ function trace_if(expr; store_last_line=nothing, depth=0, track_numbers)
             $(cond_name) = $(cond_expr)
             $(reactant_code_block)
         end,
-        (true_branch_fn_name, false_branch_fn_name),
+        (cond_name, true_branch_fn_name, false_branch_fn_name),
         all_check_vars,
     )
 
