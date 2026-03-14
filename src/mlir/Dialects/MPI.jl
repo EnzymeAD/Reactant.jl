@@ -449,6 +449,47 @@ function recv(
 end
 
 """
+`reduce_scatter_block`
+
+MPI_Reduce_scatter_block first performs an element-wise reduction on the
+sendbuf across all processes in the communicator, then scatters the result
+by distributing equal-sized blocks to each process into recvbuf.
+
+The `op` attribute specifies the reduction operation to be performed.
+Currently only the `MPI_Op` predefined in the standard (e.g. `MPI_SUM`) are
+supported.
+
+This operation can optionally return an `!mpi.retval` value that can be used
+to check for errors.
+"""
+function reduce_scatter_block(
+    sendbuf::Value,
+    recvbuf::Value,
+    comm::Value;
+    retval=nothing::Union{Nothing,IR.Type},
+    op,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[sendbuf, recvbuf, comm]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[NamedAttribute("op", op),]
+    !isnothing(retval) && push!(op_ty_results, retval)
+
+    return create_operation(
+        "mpi.reduce_scatter_block",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
 `retval_check`
 
 This operation compares MPI status codes to known error class

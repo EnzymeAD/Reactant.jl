@@ -598,6 +598,7 @@ function call(
     allocsize=nothing,
     optsize=nothing,
     minsize=nothing,
+    builtin=nothing,
     nobuiltin=nothing,
     save_reg_params=nothing,
     zero_call_used_regs=nothing,
@@ -656,6 +657,7 @@ function call(
     !isnothing(allocsize) && push!(attributes, NamedAttribute("allocsize", allocsize))
     !isnothing(optsize) && push!(attributes, NamedAttribute("optsize", optsize))
     !isnothing(minsize) && push!(attributes, NamedAttribute("minsize", minsize))
+    !isnothing(builtin) && push!(attributes, NamedAttribute("builtin", builtin))
     !isnothing(nobuiltin) && push!(attributes, NamedAttribute("nobuiltin", nobuiltin))
     !isnothing(save_reg_params) &&
         push!(attributes, NamedAttribute("save_reg_params", save_reg_params))

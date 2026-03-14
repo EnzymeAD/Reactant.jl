@@ -7657,7 +7657,7 @@ function mlirLLVMDICompositeTypeAttrGetName()
 end
 
 """
-    mlirLLVMDIDerivedTypeAttrGet(ctx, tag, name, baseType, sizeInBits, alignInBits, offsetInBits, dwarfAddressSpace, flags, extraData)
+    mlirLLVMDIDerivedTypeAttrGet(ctx, tag, name, file, line, scope, baseType, sizeInBits, alignInBits, offsetInBits, dwarfAddressSpace, flags, extraData)
 
 Creates a LLVM DIDerivedType attribute. Note that `dwarfAddressSpace` is an optional field, where [`MLIR_CAPI_DWARF_ADDRESS_SPACE_NULL`](@ref) indicates null and non-negative values indicate a value present.
 """
@@ -7665,6 +7665,9 @@ function mlirLLVMDIDerivedTypeAttrGet(
     ctx,
     tag,
     name,
+    file,
+    line,
+    scope,
     baseType,
     sizeInBits,
     alignInBits,
@@ -7677,6 +7680,9 @@ function mlirLLVMDIDerivedTypeAttrGet(
         ctx::MlirContext,
         tag::Cuint,
         name::MlirAttribute,
+        file::MlirAttribute,
+        line::UInt32,
+        scope::MlirAttribute,
         baseType::MlirAttribute,
         sizeInBits::UInt64,
         alignInBits::UInt32,
@@ -10468,6 +10474,15 @@ function mlirRewritePatternSetCreate(context)
 end
 
 """
+    mlirRewritePatternSetGetContext(set)
+
+Get the context associated with a [`MlirRewritePatternSet`](@ref).
+"""
+function mlirRewritePatternSetGetContext(set)
+    @ccall mlir_c.mlirRewritePatternSetGetContext(set::MlirRewritePatternSet)::MlirContext
+end
+
+"""
     mlirRewritePatternSetDestroy(set)
 
 Destruct the given [`MlirRewritePatternSet`](@ref).
@@ -10756,6 +10771,48 @@ function mlirTransformOpInterfaceAttachFallbackModel(ctx, opName, callbacks)
         ctx::MlirContext,
         opName::MlirStringRef,
         callbacks::MlirTransformOpInterfaceCallbacks,
+    )::Cvoid
+end
+
+"""
+    mlirPatternDescriptorOpInterfaceTypeID()
+
+Returns the interface TypeID of the PatternDescriptorOpInterface.
+"""
+function mlirPatternDescriptorOpInterfaceTypeID()
+    @ccall mlir_c.mlirPatternDescriptorOpInterfaceTypeID()::MlirTypeID
+end
+
+"""
+    MlirPatternDescriptorOpInterfaceCallbacks
+
+Callbacks for implementing PatternDescriptorOpInterface from external code.
+
+| Field                     | Note                                                                                                                                             |
+| :------------------------ | :----------------------------------------------------------------------------------------------------------------------------------------------- |
+| construct                 | Optional constructor for the user data. Set to nullptr to disable it.                                                                            |
+| destruct                  | Optional destructor for the user data. Set to nullptr to disable it.                                                                             |
+| populatePatterns          | Callback to populate rewrite patterns into the given pattern set.                                                                                |
+| populatePatternsWithState | Optional callback to populate rewrite patterns with transform state. Set to nullptr to use the default implementation (calls populatePatterns).  |
+"""
+struct MlirPatternDescriptorOpInterfaceCallbacks
+    construct::Ptr{Cvoid}
+    destruct::Ptr{Cvoid}
+    populatePatterns::Ptr{Cvoid}
+    populatePatternsWithState::Ptr{Cvoid}
+    userData::Ptr{Cvoid}
+end
+
+"""
+    mlirPatternDescriptorOpInterfaceAttachFallbackModel(ctx, opName, callbacks)
+
+Attach PatternDescriptorOpInterface to the operation with the given name using the provided callbacks.
+"""
+function mlirPatternDescriptorOpInterfaceAttachFallbackModel(ctx, opName, callbacks)
+    @ccall mlir_c.mlirPatternDescriptorOpInterfaceAttachFallbackModel(
+        ctx::MlirContext,
+        opName::MlirStringRef,
+        callbacks::MlirPatternDescriptorOpInterfaceCallbacks,
     )::Cvoid
 end
 

@@ -13,6 +13,50 @@ import ...IR:
 import ..Dialects: operandsegmentsizes, resultsegmentsizes
 import ...API
 
+"""
+`addf`
+
+The `nvvm.addf` operation performs floating point addition of two floating 
+point operands of the same type.
+
+The rounding mode is specified by the `rnd` attribute, saturation mode by 
+the `sat` attribute, and flush-to-zero by the `ftz` attribute.
+
+For more information, see PTX ISA:
+- [floating point addition](https://docs.nvidia.com/cuda/parallel-thread-execution/#floating-point-instructions-add)
+- [half-precision floating point addition](https://docs.nvidia.com/cuda/parallel-thread-execution/#half-precision-floating-point-instructions-add)
+"""
+function addf(
+    lhs::Value,
+    rhs::Value;
+    res=nothing::Union{Nothing,IR.Type},
+    rnd=nothing,
+    sat=nothing,
+    ftz=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[lhs, rhs]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
+    !isnothing(rnd) && push!(attributes, NamedAttribute("rnd", rnd))
+    !isnothing(sat) && push!(attributes, NamedAttribute("sat", sat))
+    !isnothing(ftz) && push!(attributes, NamedAttribute("ftz", ftz))
+
+    return create_operation(
+        "nvvm.addf",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
 function read_ptx_sreg_aggr_smem_size(; res::IR.Type, location=Location())
     op_ty_results = IR.Type[res,]
     operands = Value[]
@@ -2994,6 +3038,58 @@ function fence_sync_restrict(; order, location=Location())
     )
 end
 
+"""
+`fma`
+
+The `nvvm.fma` operation performs floating point fused multiply-add of 
+three operands of the same type.
+
+The rounding mode is specified by the `rnd` attribute, saturation mode by 
+the `sat` attribute, flush-to-zero by the `ftz` attribute, and ReLU by the 
+`relu` attribute.
+
+Out-of-bounds (OOB) behavior is controlled by the `oob` attribute. `oob` 
+clamps the result to 0 if either of the operands is `OOB NaN` (see [Tensors](https://docs.nvidia.com/cuda/parallel-thread-execution/#tensors)).
+
+For more information, see PTX ISA:
+- [floating point fused multiply-add](https://docs.nvidia.com/cuda/parallel-thread-execution/#floating-point-instructions-fma)
+- [half-precision floating point fused multiply-add](https://docs.nvidia.com/cuda/parallel-thread-execution/#half-precision-floating-point-instructions-fma)
+"""
+function fma(
+    a::Value,
+    b::Value,
+    c::Value;
+    res=nothing::Union{Nothing,IR.Type},
+    rnd,
+    sat=nothing,
+    ftz=nothing,
+    relu=nothing,
+    oob=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[a, b, c]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[NamedAttribute("rnd", rnd),]
+    !isnothing(res) && push!(op_ty_results, res)
+    !isnothing(sat) && push!(attributes, NamedAttribute("sat", sat))
+    !isnothing(ftz) && push!(attributes, NamedAttribute("ftz", ftz))
+    !isnothing(relu) && push!(attributes, NamedAttribute("relu", relu))
+    !isnothing(oob) && push!(attributes, NamedAttribute("oob", oob))
+
+    return create_operation(
+        "nvvm.fma",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
 function read_ptx_sreg_globaltimer_lo(; res::IR.Type, location=Location())
     op_ty_results = IR.Type[res,]
     operands = Value[]
@@ -4941,6 +5037,50 @@ function stmatrix(
 end
 
 """
+`subf`
+
+The `nvvm.subf` operation performs floating point subtraction of two 
+operands.
+
+It supports the same type combinations and modifiers as `nvvm.addf`.
+This is equivalent to `nvvm.addf(lhs, -rhs)`.
+
+For more information, see PTX ISA:
+- [floating point subtraction](https://docs.nvidia.com/cuda/parallel-thread-execution/#floating-point-instructions-sub) 
+- [half-precision floating point subtraction](https://docs.nvidia.com/cuda/parallel-thread-execution/#half-precision-floating-point-instructions-sub)
+"""
+function subf(
+    lhs::Value,
+    rhs::Value;
+    res=nothing::Union{Nothing,IR.Type},
+    rnd=nothing,
+    sat=nothing,
+    ftz=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[lhs, rhs]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
+    !isnothing(rnd) && push!(attributes, NamedAttribute("rnd", rnd))
+    !isnothing(sat) && push!(attributes, NamedAttribute("sat", sat))
+    !isnothing(ftz) && push!(attributes, NamedAttribute("ftz", ftz))
+
+    return create_operation(
+        "nvvm.subf",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
 `bar_warp_sync`
 
 The `nvvm.bar.warp.sync` operation performs barrier synchronization for threads 
@@ -5344,7 +5484,7 @@ The `shared memory descriptor` can be generated using `tcgen05.mma_smem_desc` Op
 - `idesc` is a 32 bit value representing the [Instruction Descriptor](https://docs.nvidia.com/cuda/parallel-thread-execution/#tcgen05-instruction-descriptor)
 
 Required Attributes:
-- `kind` is a MMABlockScaleKind attribute
+- `kind` is a Tcgen05MMAKind attribute restricted to mxf8f6f4, mxf4, or mxf4nvf4
 
 - `ctaGroup` specifies CTA group configuration
   * cta_1: MMA will be performed on the current thread\'s CTA
