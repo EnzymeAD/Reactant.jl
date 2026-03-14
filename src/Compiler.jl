@@ -1864,9 +1864,7 @@ function compile_mlir!(
     legalize_stablehlo_to_mhlo::Bool=false,
     client=nothing,
     kwargs...,
-)
-    @show "compile_mlir!", compile_options.shardy_passes
-    
+)    
     @assert MLIR.IR.current_context() == MLIR.IR.context(mod)
     client = client !== nothing ? client : XLA.default_backend()
 
@@ -4048,16 +4046,12 @@ function compile_xla(
         backend = "cpu"
     end
 
-    @show "compile_xla", kwargs
-
     MLIR.IR.activate(ctx)
     try
         # compile function to MLIR module
         mod = MLIR.IR.Module(MLIR.IR.Location())
 
         compile_options, kwargs = __get_compile_options_and_kwargs(; kwargs...)
-
-        @show "compile_xla", compile_options, kwargs
 
         mlir_fn_res = compile_mlir!(
             mod,
