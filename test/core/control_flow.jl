@@ -1229,6 +1229,9 @@ end
     @test f_no_else_with_assert(1, false) === nothing
     @test f_no_else_with_assert(1, true) === nothing
 
+    # Verify the assertion actually triggers when expected
+    @test_throws AssertionError f_no_else_with_assert(2, true)
+
     # Same test but run via @jit with constant (non-traced) condition
     x = 1
     @test @jit(f_no_else_with_assert(x, false)) === nothing
