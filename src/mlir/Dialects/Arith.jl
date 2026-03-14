@@ -863,27 +863,13 @@ Casts between scalar or vector integers and corresponding \'index\' scalar or
 vectors. Index is an integer of platform-specific bit width. If casting to
 a wider integer, the value is sign-extended. If casting to a narrower
 integer, the value is truncated.
-
-If the `exact` attribute is present, it is assumed that the operand
-contains a value that fits in the destination\'s representation, therefore
-the cast does not lose any information. When this assumption is violated,
-the result is poison.
-
-# Example
-
-```mlir
-  %0 = arith.index_cast %a : index to i64
-  %1 = arith.index_cast %a exact : index to i64
-  %2 = arith.index_cast %b exact : i32 to index
-```
 """
-function index_cast(in::Value; out::IR.Type, isExact=nothing, location=Location())
+function index_cast(in::Value; out::IR.Type, location=Location())
     op_ty_results = IR.Type[out,]
     operands = Value[in,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
-    !isnothing(isExact) && push!(attributes, NamedAttribute("isExact", isExact))
 
     return create_operation(
         "arith.index_cast",
@@ -910,30 +896,21 @@ the most significant bit set to 0. In this case, zero extension
 is equivalent to sign extension. When this assumption is violated,
 the result is poison.
 
-If the `exact` attribute is present, it is assumed that the operand
-contains a value that fits in the destination\'s representation, therefore
-the cast does not lose any information. When this assumption is violated,
-the result is poison.
-
 # Example
 
 ```mlir
   %0 = arith.index_castui %a : i32 to index
   %1 = arith.index_castui %a nneg : i32 to index
   %2 = arith.index_castui %b nneg : index to i64
-  %3 = arith.index_castui %a nneg exact : i64 to index
 ```
 """
-function index_castui(
-    in::Value; out::IR.Type, nonNeg=nothing, isExact=nothing, location=Location()
-)
+function index_castui(in::Value; out::IR.Type, nonNeg=nothing, location=Location())
     op_ty_results = IR.Type[out,]
     operands = Value[in,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(nonNeg) && push!(attributes, NamedAttribute("nonNeg", nonNeg))
-    !isnothing(isExact) && push!(attributes, NamedAttribute("isExact", isExact))
 
     return create_operation(
         "arith.index_castui",
