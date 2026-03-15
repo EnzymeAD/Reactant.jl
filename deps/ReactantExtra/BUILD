@@ -623,7 +623,7 @@ cc_toolchain_config(
     compile_flags = [
         "-stdlib=libc++",
     ],
-    compiler = "compiler",
+    compiler = "clang",
     coverage_compile_flags = ["--coverage"],
     coverage_link_flags = ["--coverage"],
     cpu = "k8",
@@ -743,7 +743,7 @@ cc_toolchain_config(
     compile_flags = [
         "-stdlib=libc++",
     ],
-    compiler = "compiler",
+    compiler = "clang",
     coverage_compile_flags = ["--coverage"],
     coverage_link_flags = ["--coverage"],
     cpu = "arm64",
