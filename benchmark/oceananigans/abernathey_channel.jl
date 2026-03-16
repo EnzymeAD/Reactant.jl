@@ -447,7 +447,6 @@ function run_abernathey_channel_benchmark!(
         else
             prof_result.profiling_result.metrics_data.raw_flops_rate / 1e12
         end
-    =#
     return nothing
 end
 
