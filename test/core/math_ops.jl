@@ -249,9 +249,9 @@ end
 end
 
 @testset "div" begin
-    @test @jit(div(ConcreteRNumber(7), ConcreteRNumber(3))) == div(7, 3)
-    @test @jit(div(ConcreteRNumber(7), 3)) == div(7, 3)
-    @test @jit(div(7, ConcreteRNumber(3))) == div(7, 3)
+    @test div(ConcreteRNumber(7), ConcreteRNumber(3)) == div(7, 3)
+    @test div(ConcreteRNumber(7), 3) == div(7, 3)
+    @test div(7, ConcreteRNumber(3)) == div(7, 3)
 end
 
 @testset "log10" begin
