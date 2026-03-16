@@ -623,7 +623,7 @@ cc_toolchain_config(
     compile_flags = [
         "-stdlib=libc++",
     ],
-    compiler = "compiler",
+    compiler = "clang",
     coverage_compile_flags = ["--coverage"],
     coverage_link_flags = ["--coverage"],
     cpu = "k8",
@@ -743,7 +743,7 @@ cc_toolchain_config(
     compile_flags = [
         "-stdlib=libc++",
     ],
-    compiler = "compiler",
+    compiler = "clang",
     coverage_compile_flags = ["--coverage"],
     coverage_link_flags = ["--coverage"],
     cpu = "arm64",
@@ -1089,6 +1089,7 @@ cc_library(
     ) + [
         "@enzyme_ad//src/enzyme_ad/jax:gpu.cc",
         "@enzyme_ad//src/enzyme_ad/jax:cpu.cc",
+        "@enzyme_ad//src/enzyme_ad/jax:xla_ffi/register.cc",
         # "@xla//xla/service/gpu:backend_configs.pb.cc",
         # "@xla//xla:autotuning.pb.cc",
         # "@xla//xla:autotune_results.pb.cc",
@@ -1166,6 +1167,7 @@ cc_library(
             "-Wl,-exported_symbol,_RegisterCustomCallTarget",
             "-Wl,-exported_symbol,_ConvertLLVMToMLIR",
             "-Wl,-exported_symbol,_RegisterEnzymeXLAGPUHandler",
+            "-Wl,-exported_symbol,_registerEnzymeJaXXLAFFI",
             "-Wl,-exported_symbol,_ReactantThrowError",
             "-Wl,-exported_symbol,_ReactantHandleCuResult",
             "-Wl,-exported_symbol,_CreateProfilerSession",
@@ -1299,6 +1301,7 @@ cc_library(
         "@enzyme_ad//src/enzyme_ad/jax:TransformOps",
         "@enzyme_ad//src/enzyme_ad/jax:XLADerivatives",
         "@enzyme_ad//src/enzyme_ad/jax:CInterface",
+        "@enzyme_ad//src/enzyme_ad/jax:xla_ffi",
         # "@enzyme_ad//src/enzyme_ad/jax:gpu",
         "@xla//xla/ffi/api:ffi",
         "@xla//xla/ffi:ffi_api",

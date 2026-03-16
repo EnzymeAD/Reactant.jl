@@ -6,6 +6,7 @@ module API
     using CEnum: @cenum
     using Preferences: Preferences
     using Reactant_jll: Reactant_jll
+    using Libdl: Libdl
 
     const mlir_c = if Reactant_jll.is_available()
         Reactant_jll.libReactantExtra
@@ -32,6 +33,19 @@ module API
 
     function RegisterEnzymeXLAGPUHandler()
         @ccall mlir_c.RegisterEnzymeXLAGPUHandler()::Cvoid
+    end
+
+    function registerEnzymeJaXXLAFFI()
+        if Libdl.dlsym(
+            Reactant_jll.libReactantExtra_handle,
+            :registerEnzymeJaXXLAFFI;
+            throw_error=false,
+        ) === nothing
+            @debug "registerEnzymeJaXXLAFFI not found in libReactantExtra, skipping \
+                    registration of EnzymeJaXXLAFFI. Update Reactant_jll to resolve this."
+            return nothing
+        end
+        @ccall mlir_c.registerEnzymeJaXXLAFFI()::Cvoid
     end
 
     function ifrt_compile_with_proto(

@@ -711,6 +711,7 @@ function optimization_passes(
     backend::String="gpu",
     is_sharded::Bool=false,
     raise_shlo_to_blas_lapack::Bool=true,
+    self_to_convolution::Bool=false,
 )
     (; max_constant_threshold) = compile_options
 
@@ -918,9 +919,6 @@ function optimization_passes(
         # "compare_mul",
         "compare_convert",
         "add_selects",
-        "self_subtract_to_convolution_like(0)",
-        "self_add_to_convolution_like(0)",
-        "self_mul_to_convolution_like(0)",
         "subtract_multiply_const_to_add_mul_const",
         "trivial_reduce_window_to_reduce_op",
         "case_to_if",
@@ -956,6 +954,17 @@ function optimization_passes(
         "exponential_minus_one_fuse",
         "scatter_of_scatter_simplify",
     ]
+
+    if self_to_convolution
+        append!(
+            transform_passes_list,
+            [
+                "self_subtract_to_convolution_like(0)",
+                "self_add_to_convolution_like(0)",
+                "self_mul_to_convolution_like(0)",
+            ],
+        )
+    end
 
     if !is_sharded
         # these passes don't have optimized sharding implementations
@@ -1407,6 +1416,7 @@ function optimization_passes(
                 "lower_wrap",
                 "lower_rotate",
                 "lower_multirotate",
+                "lower_multislice",
                 "lower_updatewithoutcorners",
             ],
         )
@@ -1820,11 +1830,11 @@ function get_optimize_comms_passes(options::OptimizeCommunicationOptions)
         "enzyme-hlo-generate-td{patterns=concat_to_onedim_dus;concat_to_onedim_dusslice;concatreshape_to_onedim_dus}",
         "transform-interpreter",
         "enzyme-hlo-remove-transform",
-        "enzyme-hlo-generate-td{patterns=reshape_to_broadcast;recognize_multirotate;use_multirotate_neutral_result}",
+        "enzyme-hlo-generate-td{patterns=reshape_to_broadcast;recognize_multirotate;use_multirotate_neutral_result;recognize_multislice}",
         "transform-interpreter",
         "enzyme-hlo-remove-transform",
         options_str,
-        "enzyme-hlo-generate-td{patterns=lower_rotate;lower_wrap;lower_extend;lower_updatewithoutcorners}",
+        "enzyme-hlo-generate-td{patterns=lower_rotate;lower_wrap;lower_extend;lower_updatewithoutcorners;lower_multislice}",
         "transform-interpreter",
         "enzyme-hlo-remove-transform",
         options_str,
@@ -4051,6 +4061,7 @@ function compile_xla(
         mod = MLIR.IR.Module(MLIR.IR.Location())
 
         compile_options, kwargs = __get_compile_options_and_kwargs(; kwargs...)
+
         mlir_fn_res = compile_mlir!(
             mod,
             f,

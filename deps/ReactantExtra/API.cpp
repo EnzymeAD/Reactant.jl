@@ -72,6 +72,8 @@
 
 #include "llvm-c/TargetMachine.h"
 
+#include "xla/pjrt/maybe_owning_mlir_module.h"
+
 // PJRT
 #include "xla/pjrt/cpu/cpu_client.h"
 #include "xla/pjrt/distributed/client.h"
@@ -783,7 +785,8 @@ REACTANT_ABI int32_t ReactantCudaDriverGetVersion() {
 // This stub satisfies the linker for cuFFT's RDC callback requirements
 // without requiring an nvcc device-link step.
 extern "C" {
-    void __cudaRegisterLinkedBinary_28b8d6c6_20_separate_callback_cu_a85cd5ea_29231() {}
+void __cudaRegisterLinkedBinary_28b8d6c6_20_separate_callback_cu_a85cd5ea_29231() {
+}
 }
 #endif
 
@@ -1347,7 +1350,7 @@ xla::PjRtLoadedExecutable *ClientCompileInternal(PjRtClient *client,
     }
   }
 
-  auto exec_err = client->CompileAndLoad(cmod_op, options);
+  auto exec_err = client->CompileAndLoad(MaybeOwningMlirModule(cmod_op), options);
 
   if (!exec_err.ok()) {
     std::string err_str;

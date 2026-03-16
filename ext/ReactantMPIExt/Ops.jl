@@ -2,8 +2,7 @@ module Ops
 using Reactant: Reactant, TracedRArray, TracedRNumber
 using Reactant: MLIR
 using Reactant.MLIR: IR
-using Reactant.MLIR.IR: @mlir_str
-using Reactant.MLIR.Dialects: mpi, func, llvm, enzymexla
+using Reactant.MLIR.Dialects: enzymexla
 using Reactant.Ops: mlir_stacktrace, mlir_type
 using MPI: MPI
 
