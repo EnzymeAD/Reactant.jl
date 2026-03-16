@@ -28,12 +28,17 @@ end
 # Uses Dates' own conversion logic first, then converts to the Reactant type.
 # This covers all pairs that Dates.convert supports natively.
 const _CROSS_PERIOD_PAIRS = (
-    # DatePeriod → DatePeriod
+    # DatePeriod → DatePeriod (downward: larger → smaller)
     (:Year, :Quarter, :ReactantQuarter),
     (:Year, :Month, :ReactantMonth),
     (:Quarter, :Month, :ReactantMonth),
     (:Week, :Day, :ReactantDay),
-    # DatePeriod → TimePeriod
+    # DatePeriod → DatePeriod (upward: smaller → larger)
+    (:Month, :Quarter, :ReactantQuarter),
+    (:Month, :Year, :ReactantYear),
+    (:Quarter, :Year, :ReactantYear),
+    (:Day, :Week, :ReactantWeek),
+    # DatePeriod → TimePeriod (downward)
     (:Week, :Hour, :ReactantHour),
     (:Week, :Minute, :ReactantMinute),
     (:Week, :Second, :ReactantSecond),
@@ -46,7 +51,20 @@ const _CROSS_PERIOD_PAIRS = (
     (:Day, :Millisecond, :ReactantMillisecond),
     (:Day, :Microsecond, :ReactantMicrosecond),
     (:Day, :Nanosecond, :ReactantNanosecond),
-    # TimePeriod → TimePeriod
+    # TimePeriod → DatePeriod (upward)
+    (:Hour, :Day, :ReactantDay),
+    (:Hour, :Week, :ReactantWeek),
+    (:Minute, :Day, :ReactantDay),
+    (:Minute, :Week, :ReactantWeek),
+    (:Second, :Day, :ReactantDay),
+    (:Second, :Week, :ReactantWeek),
+    (:Millisecond, :Day, :ReactantDay),
+    (:Millisecond, :Week, :ReactantWeek),
+    (:Microsecond, :Day, :ReactantDay),
+    (:Microsecond, :Week, :ReactantWeek),
+    (:Nanosecond, :Day, :ReactantDay),
+    (:Nanosecond, :Week, :ReactantWeek),
+    # TimePeriod → TimePeriod (downward: larger → smaller)
     (:Hour, :Minute, :ReactantMinute),
     (:Hour, :Second, :ReactantSecond),
     (:Hour, :Millisecond, :ReactantMillisecond),
@@ -62,6 +80,22 @@ const _CROSS_PERIOD_PAIRS = (
     (:Millisecond, :Microsecond, :ReactantMicrosecond),
     (:Millisecond, :Nanosecond, :ReactantNanosecond),
     (:Microsecond, :Nanosecond, :ReactantNanosecond),
+    # TimePeriod → TimePeriod (upward: smaller → larger)
+    (:Nanosecond, :Microsecond, :ReactantMicrosecond),
+    (:Nanosecond, :Millisecond, :ReactantMillisecond),
+    (:Nanosecond, :Second, :ReactantSecond),
+    (:Nanosecond, :Minute, :ReactantMinute),
+    (:Nanosecond, :Hour, :ReactantHour),
+    (:Microsecond, :Millisecond, :ReactantMillisecond),
+    (:Microsecond, :Second, :ReactantSecond),
+    (:Microsecond, :Minute, :ReactantMinute),
+    (:Microsecond, :Hour, :ReactantHour),
+    (:Millisecond, :Second, :ReactantSecond),
+    (:Millisecond, :Minute, :ReactantMinute),
+    (:Millisecond, :Hour, :ReactantHour),
+    (:Second, :Minute, :ReactantMinute),
+    (:Second, :Hour, :ReactantHour),
+    (:Minute, :Hour, :ReactantHour),
 )
 
 for (S, T, TR) in _CROSS_PERIOD_PAIRS

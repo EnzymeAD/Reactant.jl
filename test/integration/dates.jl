@@ -76,7 +76,8 @@ end
 
     @testset "Cross-period conversions: Dates.Source → ReactantTarget" begin
         # All cross-period pairs that Dates.convert supports natively
-        cross_pairs = (
+        # Downward (larger → smaller) cross-period pairs
+        cross_pairs_down = (
             # DatePeriod → DatePeriod
             (Dates.Year, Dates.Quarter, RDExt.ReactantQuarter),
             (Dates.Year, Dates.Month, RDExt.ReactantMonth),
@@ -112,8 +113,59 @@ end
             (Dates.Millisecond, Dates.Nanosecond, RDExt.ReactantNanosecond),
             (Dates.Microsecond, Dates.Nanosecond, RDExt.ReactantNanosecond),
         )
-        for (SrcT, DstT, TracedT) in cross_pairs
+        for (SrcT, DstT, TracedT) in cross_pairs_down
             src = SrcT(1)
+            expected = convert(DstT, src)
+            traced = convert(TracedT, src)
+            @test traced isa TracedT
+            @test value(traced) == value(expected)
+
+            # Parametric variant
+            traced_p = convert(TracedT{Int64}, src)
+            @test traced_p isa TracedT{Int64}
+            @test value(traced_p) == value(expected)
+        end
+
+        # Upward (smaller → larger) cross-period pairs
+        # These require exact multiples, so each entry is (SrcT, value, DstT, TracedT)
+        cross_pairs_up = (
+            # DatePeriod → DatePeriod (upward)
+            (Dates.Month, 3, Dates.Quarter, RDExt.ReactantQuarter),
+            (Dates.Month, 12, Dates.Year, RDExt.ReactantYear),
+            (Dates.Quarter, 4, Dates.Year, RDExt.ReactantYear),
+            (Dates.Day, 7, Dates.Week, RDExt.ReactantWeek),
+            # TimePeriod → DatePeriod (upward)
+            (Dates.Hour, 24, Dates.Day, RDExt.ReactantDay),
+            (Dates.Hour, 168, Dates.Week, RDExt.ReactantWeek),
+            (Dates.Minute, 1440, Dates.Day, RDExt.ReactantDay),
+            (Dates.Minute, 10080, Dates.Week, RDExt.ReactantWeek),
+            (Dates.Second, 86400, Dates.Day, RDExt.ReactantDay),
+            (Dates.Second, 604800, Dates.Week, RDExt.ReactantWeek),
+            (Dates.Millisecond, 86400000, Dates.Day, RDExt.ReactantDay),
+            (Dates.Millisecond, 604800000, Dates.Week, RDExt.ReactantWeek),
+            (Dates.Microsecond, 86400000000, Dates.Day, RDExt.ReactantDay),
+            (Dates.Microsecond, 604800000000, Dates.Week, RDExt.ReactantWeek),
+            (Dates.Nanosecond, 86400000000000, Dates.Day, RDExt.ReactantDay),
+            (Dates.Nanosecond, 604800000000000, Dates.Week, RDExt.ReactantWeek),
+            # TimePeriod → TimePeriod (upward)
+            (Dates.Nanosecond, 1000, Dates.Microsecond, RDExt.ReactantMicrosecond),
+            (Dates.Nanosecond, 1000000, Dates.Millisecond, RDExt.ReactantMillisecond),
+            (Dates.Nanosecond, 1000000000, Dates.Second, RDExt.ReactantSecond),
+            (Dates.Nanosecond, 60000000000, Dates.Minute, RDExt.ReactantMinute),
+            (Dates.Nanosecond, 3600000000000, Dates.Hour, RDExt.ReactantHour),
+            (Dates.Microsecond, 1000, Dates.Millisecond, RDExt.ReactantMillisecond),
+            (Dates.Microsecond, 1000000, Dates.Second, RDExt.ReactantSecond),
+            (Dates.Microsecond, 60000000, Dates.Minute, RDExt.ReactantMinute),
+            (Dates.Microsecond, 3600000000, Dates.Hour, RDExt.ReactantHour),
+            (Dates.Millisecond, 1000, Dates.Second, RDExt.ReactantSecond),
+            (Dates.Millisecond, 60000, Dates.Minute, RDExt.ReactantMinute),
+            (Dates.Millisecond, 3600000, Dates.Hour, RDExt.ReactantHour),
+            (Dates.Second, 60, Dates.Minute, RDExt.ReactantMinute),
+            (Dates.Second, 3600, Dates.Hour, RDExt.ReactantHour),
+            (Dates.Minute, 60, Dates.Hour, RDExt.ReactantHour),
+        )
+        for (SrcT, v, DstT, TracedT) in cross_pairs_up
+            src = SrcT(v)
             expected = convert(DstT, src)
             traced = convert(TracedT, src)
             @test traced isa TracedT
