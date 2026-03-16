@@ -1587,6 +1587,7 @@ function __get_compile_options_and_kwargs(;
     xla_compile_options=(;),
     strip=:all,
     strip_llvm_debuginfo=false,
+    store_args_res_path::Bool=false,
     kwargs...,
 )
     return (
@@ -1613,6 +1614,7 @@ function __get_compile_options_and_kwargs(;
             xla_executable_build_options,
             xla_compile_options,
             strip,
+            store_args_res_path,
         ),
         kwargs,
     )
@@ -1922,6 +1924,10 @@ function compile_mlir!(
         is_sharded,
     ) = mlir_fn_res
     compiled_f = mlir_fn_res.f
+
+    if compile_options.store_args_res_path
+        __attach_arg_res_path_attrs!(compiled_f, linear_args, linear_results)
+    end
 
     # Custom Kernels without Raising will lead to suboptimal codegen for is_sharded, force
     # raising
@@ -2913,7 +2919,8 @@ macro code_hlo(args...)
         merge(
             get_common_compile_options(),
             Dict{Symbol,Any}(
-                :shardy_passes => :(:none), :debug => false, :strip => :(:none)
+                :shardy_passes => :(:none), :debug => false, :strip => :(:none),
+                :store_args_res_path => false, :do_transpose => true,
             ),
         ),
         args...,
@@ -3951,6 +3958,32 @@ function codegen_shard_info(
         linear_result_shard_info[i] = var_name
     end
     return shard_info_code, optional_shard_info_code, linear_result_shard_info
+end
+
+function __path_to_mlir_attr(path)
+    elems = MLIR.IR.Attribute[
+        elem isa Integer ? MLIR.IR.Attribute(Int64(elem)) : MLIR.IR.Attribute(repr(elem))
+        for elem in path
+    ]
+    return MLIR.IR.Attribute(elems)
+end
+
+function __attach_arg_res_path_attrs!(func_op, linear_args, linear_results)
+    for (i, arg) in enumerate(linear_args)
+        paths = Reactant.TracedUtils.get_paths(arg)
+        path_attrs = MLIR.IR.Attribute[__path_to_mlir_attr(p) for p in paths]
+        MLIR.API.mlirFuncSetArgAttr(
+            func_op, i - 1, "reactant.path", MLIR.IR.Attribute(path_attrs)
+        )
+    end
+    for (i, res) in enumerate(linear_results)
+        paths = Reactant.TracedUtils.get_paths(res)
+        path_attrs = MLIR.IR.Attribute[__path_to_mlir_attr(p) for p in paths]
+        MLIR.API.mlirFuncSetResultAttr(
+            func_op, i - 1, "reactant.path", MLIR.IR.Attribute(path_attrs)
+        )
+    end
+    return nothing
 end
 
 function __add_mhlo_attributes_and_name!(mod::MLIR.IR.Module, f; kwargs...)

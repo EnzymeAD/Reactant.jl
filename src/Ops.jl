@@ -2079,6 +2079,191 @@ module @reactant_hlo_call attributes {mhlo.num_partitions = 1 : i64, mhlo.num_re
     end
 end
 
+# ---- structured_hlo_call helpers ----------------------------------------
+
+# Convert a single reactant.path inner ArrayAttr element to a Julia Tuple.
+# String elements were encoded with repr(): Symbols → ":name", Strings → "\"value\"".
+function _path_attr_to_tuple(path_attr::MLIR.IR.Attribute)
+    n = Int(MLIR.API.mlirArrayAttrGetNumElements(path_attr))
+    return ntuple(n) do j
+        elem = MLIR.IR.Attribute(MLIR.API.mlirArrayAttrGetElement(path_attr, j - 1))
+        if MLIR.IR.isinteger(elem)
+            Int(MLIR.IR.Int64(elem))
+        else
+            s = MLIR.IR.String(elem)
+            if length(s) >= 2 && s[1] == ':'
+                Symbol(s[2:end])          # repr(:foo) == ":foo" → Symbol
+            elseif length(s) >= 2 && s[1] == '"' && s[end] == '"'
+                s[2:(end - 1)]            # repr("foo") == "\"foo\"" → String
+            else
+                Symbol(s)                 # fallback
+            end
+        end
+    end
+end
+
+# Read all reactant.path entries from arg_attrs or res_attrs of a func op,
+# returning a Vector of path tuples (one per argument/result), keeping only
+# the first path whose first element is one of `prefixes`.
+# `prefixes` may be a single Symbol or a Tuple of Symbols.
+function _read_reactant_paths(
+    fn::MLIR.IR.Operation,
+    attrs_name::String,
+    prefixes::Union{Symbol,NTuple{N,Symbol} where N},
+)
+    _prefix_match(sym, p::Symbol) = sym === p
+    _prefix_match(sym, ps::Tuple) = sym ∈ ps
+    all_attrs = MLIR.IR.getattr(fn, attrs_name)
+    isnothing(all_attrs) && error(
+        "structured_hlo_call: no $(attrs_name) on function; " *
+        "did you compile with store_args_res_path=true?",
+    )
+    n = length(all_attrs)
+    paths = Vector{Tuple}(undef, n)
+    for i in 1:n
+        dict_attr = all_attrs[i - 1]  # 0-based indexing into the outer ArrayAttr
+        raw = MLIR.API.mlirDictionaryAttrGetElementByName(dict_attr, "reactant.path")
+        if raw.ptr == C_NULL
+            error(
+                "structured_hlo_call: missing reactant.path on $(attrs_name)[$(i)]; " *
+                "did you compile with store_args_res_path=true?",
+            )
+        end
+        paths_array = MLIR.IR.Attribute(raw)  # outer ArrayAttr: one entry per path
+        found = nothing
+        for j in 0:(length(paths_array) - 1)
+            p = _path_attr_to_tuple(paths_array[j])
+            if !isempty(p) && _prefix_match(p[1], prefixes)
+                found = p
+                break
+            end
+        end
+        isnothing(found) && error(
+            "structured_hlo_call: no path with prefix $(prefixes) in $(attrs_name)[$(i)]",
+        )
+        paths[i] = found
+    end
+    return paths
+end
+
+# Extract the linear TracedRArray / TracedRNumber leaf from `args` tuple
+# following `path`.  Path format: (:args, arg_index, field_or_index...).
+# Integer components: first level (args tuple) → getindex; subsequent levels
+# (struct fields) → getfield(val, i) since make_tracer uses field indices.
+function _eval_path(args::Tuple, path::Tuple)
+    @assert !isempty(path) && path[1] === :args "expected path starting with :args, got $path"
+    val = args  # Tuple: first integer is an arg index
+    first_int = true
+    for p in path[2:end]
+        if p isa Integer
+            if first_int
+                val = val[p]        # getindex into the args Tuple (1-based)
+                first_int = false
+            else
+                val = getfield(val, p)  # struct field by index (from make_tracer)
+            end
+        else
+            val = Reactant.Compiler.traced_getfield(val, p)
+            first_int = false
+        end
+    end
+    return val
+end
+
+# Reconstruct a nested Julia value from a flat tuple of results and their paths.
+# paths is a Vector of Tuples; each starts with :result.
+# Returns:
+#   - a single value if there is one result at path (:result, 1) with no further nesting
+#   - a Tuple if top-level indices are integers
+#   - a NamedTuple if top-level keys are symbols
+function _delinearize_results(paths::Vector{<:Tuple}, results)
+    # Strip the leading :result from all paths
+    stripped = [p[2:end] for p in paths]
+    return _build_nested(stripped, collect(results))
+end
+
+function _build_nested(paths::Vector, values::Vector)
+    # Base case: all paths are empty → single leaf
+    if all(isempty, paths)
+        @assert length(values) == 1 "delinearize_results: multiple values map to the same path"
+        return values[1]
+    end
+
+    # Group by the first path component
+    first_keys = unique(p[1] for p in paths)
+
+    if first_keys[1] isa Integer
+        # Sort numerically; build a tuple
+        sorted_keys = sort(first_keys)
+        parts = map(sorted_keys) do k
+            mask = [p[1] == k for p in paths]
+            sub_paths = [p[2:end] for (p, m) in zip(paths, mask) if m]
+            sub_vals  = [v        for (v, m) in zip(values, mask) if m]
+            _build_nested(sub_paths, sub_vals)
+        end
+        return length(parts) == 1 ? parts[1] : Tuple(parts)
+    else
+        # Symbol keys → NamedTuple
+        nt_keys = Tuple(Symbol(k) for k in first_keys)
+        nt_vals = map(first_keys) do k
+            mask = [p[1] == k for p in paths]
+            sub_paths = [p[2:end] for (p, m) in zip(paths, mask) if m]
+            sub_vals  = [v        for (v, m) in zip(values, mask) if m]
+            _build_nested(sub_paths, sub_vals)
+        end
+        return NamedTuple{nt_keys}(Tuple(nt_vals))
+    end
+end
+
+"""
+    structured_hlo_call(ir::String, args...; func_name="main")
+
+Like [`hlo_call`](@ref), but uses `reactant.path` attributes embedded in the IR
+(produced by `CompileOptions(; store_args_res_path=true)`) to automatically:
+
+1. **Linearize** the (possibly nested-struct) `args` by extracting the
+   `TracedRArray`/`TracedRNumber` leaves indicated by the arg-path attributes.
+2. **Call** the embedded HLO function via [`hlo_call`](@ref).
+3. **Delinearize** the flat tuple of results back into a nested structure according
+   to the result-path attributes.
+
+Integer path components produce `Tuple`s; symbol path components produce
+`NamedTuple`s.  A single top-level result is returned unwrapped.
+
+## Example
+
+```julia
+# Compile once, storing path metadata
+ir = sprint(show, @code_hlo store_args_res_path=true forward(model, x))
+
+# Replay on concrete Reactant arrays (same or different values)
+result = @jit structured_hlo_call(ir, model, x)
+```
+"""
+@noinline function structured_hlo_call(ir::String, args...; func_name::String="main")
+    # Parse a temporary copy of the IR to read path metadata, then discard it.
+    # (hlo_call will parse the same IR again and merge it into the active module.)
+    temp_mod = parse(MLIR.IR.Module, ir)
+    arg_paths, result_paths = try
+        fn = MLIR.IR.@dispose sym_table = MLIR.IR.SymbolTable(temp_mod) begin
+            MLIR.IR.lookup(sym_table, func_name)
+        end
+        isnothing(fn) &&
+            error("structured_hlo_call: function '$(func_name)' not found in IR")
+        _read_reactant_paths(fn, "arg_attrs", :args),
+        # Results may be new values (:result) or returned/mutated input args (:resargs)
+        _read_reactant_paths(fn, "res_attrs", (:result, :resargs))
+    finally
+        MLIR.IR.dispose(temp_mod)
+    end
+
+    linear_args = [_eval_path(args, p) for p in arg_paths]
+    linear_results = hlo_call(ir, linear_args...; func_name)
+    return _delinearize_results(result_paths, collect(linear_results))
+end
+
+# ---- end structured_hlo_call --------------------------------------------
+
 """
     scatter_setindex(dest, scatter_indices, updates)
 
