@@ -1366,10 +1366,12 @@ struct PJRT_Device_PoisonExecution_Args
     error_message::Cstring
     error_message_size::Csize_t
     poisoned::Bool
+    payload::Ptr{PJRT_NamedValue}
+    num_payload::Csize_t
 end
 
 @cenum __JL_Ctag_71::UInt32 begin
-    PJRT_Device_PoisonExecution_Args_STRUCT_SIZE = 0x0000000000000031
+    PJRT_Device_PoisonExecution_Args_STRUCT_SIZE = 0x0000000000000048
 end
 
 # typedef PJRT_Error * PJRT_Device_PoisonExecution ( PJRT_Device_PoisonExecution_Args * args )
@@ -4053,7 +4055,7 @@ end
 
 const PJRT_API_MAJOR = 0
 
-const PJRT_API_MINOR = 99
+const PJRT_API_MINOR = 100
 
 const _PJRT_API_STRUCT_FIELD = fn_type(fn_type) * fn_type
 
