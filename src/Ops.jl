@@ -2257,9 +2257,19 @@ result = @jit structured_hlo_call(ir, model, x)
         MLIR.IR.dispose(temp_mod)
     end
 
-    linear_args = [_eval_path(args, p) for p in arg_paths]
-    linear_results = hlo_call(ir, linear_args...; func_name)
-    return _delinearize_results(result_paths, collect(linear_results))
+    # The IR is always compiled with do_transpose=true (column-major layout).
+    # During @jit tracing, make_mlir_fn applies transpose_val to every block
+    # argument so that TracedRArrays inside the trace store Julia (row-major)
+    # shaped MLIR values.  We therefore transpose 2-D+ args before hlo_call and
+    # transpose the results back, so the outer @jit sees Julia-shaped tensors.
+    _tr(arg) =
+        arg isa TracedRArray && ndims(arg) >= 2 ?
+        TracedRArray(Reactant.TracedUtils.transpose_val(Reactant.TracedUtils.get_mlir_data(arg))) :
+        arg
+
+    linear_args = map(_tr, [_eval_path(args, p) for p in arg_paths])
+    linear_results = map(_tr, collect(hlo_call(ir, linear_args...; func_name)))
+    return _delinearize_results(result_paths, linear_results)
 end
 
 # ---- end structured_hlo_call --------------------------------------------

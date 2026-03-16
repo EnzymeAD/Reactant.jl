@@ -1889,6 +1889,13 @@ function compile_mlir!(
     is_raising = raise isa String || raise
     activate_raising!(is_raising)
 
+    if compile_options.store_args_res_path && !get(kwargs, :do_transpose, true)
+        error(
+            "store_args_res_path=true requires do_transpose=true (the default); " *
+            "structured_hlo_call always assumes column-major IR layout",
+        )
+    end
+
     fnname = string(f)
     mlir_fn_res = try
         Reactant.TracedUtils.make_mlir_fn(
@@ -2923,7 +2930,6 @@ macro code_hlo(args...)
                 :debug => false,
                 :strip => :(:none),
                 :store_args_res_path => false,
-                :do_transpose => true,
             ),
         ),
         args...,

@@ -50,11 +50,7 @@ end
 
     @testset "structured_hlo_call round-trip" begin
         # Compile with path metadata; do_transpose=false so shapes in the IR match
-        # the Julia-shaped TracedRArrays that hlo_call receives during @jit tracing.
-        ir = sprint(
-            show,
-            @code_hlo do_transpose = false store_args_res_path = true forward(model, x)
-        )
+        ir = sprint(show, @code_hlo store_args_res_path = true forward(model, x))
 
         # Replay via structured_hlo_call: it should auto-extract the 5 leaf arrays
         # (encoder.weight, encoder.bias, decoder.weight, decoder.bias, x) and return
@@ -78,12 +74,7 @@ end
             Reactant.to_rarray(ones(Float32, 3, 4)), Reactant.to_rarray(ones(Float32, 3))
         )
         delta = Reactant.to_rarray(ones(Float32, 3, 4))
-        ir = sprint(
-            show,
-            @code_hlo do_transpose = false store_args_res_path = true add_to_weight!(
-                layer1, delta
-            )
-        )
+        ir = sprint(show, @code_hlo store_args_res_path = true add_to_weight!(layer1, delta))
 
         # Struct fields are navigated by integer index; Inner has two fields
         # so weight=field 1, bias=field 2 → paths like [":args", 1, 1] and [":args", 1, 2]
