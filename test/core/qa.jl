@@ -1,4 +1,6 @@
-using Reactant, Test, Aqua, ExplicitImports, MethodAnalysis
+using Reactant, Test, Aqua, ExplicitImports, MethodAnalysis, MPI
+
+const ReactantMPIExt = Base.get_extension(Reactant, :ReactantMPIExt)
 
 function get_all_submodules(base_module::Module)
     mods = Module[]
@@ -93,6 +95,7 @@ end
                 Reactant.XLA.OpShardingType,
                 Reactant.Accelerators.TPU.TPUVersion,
                 Reactant.PrecisionConfig,
+                ReactantMPIExt.Ops,
             ),
             ignore=(Reactant.Proto,),
         ),
@@ -107,6 +110,7 @@ end
                 Reactant.XLA.OpShardingType,
                 Reactant.Accelerators.TPU.TPUVersion,
                 Reactant.PrecisionConfig,
+                ReactantMPIExt.Ops,
             ),
             ignore=(
                 Reactant.Proto,
@@ -120,6 +124,7 @@ end
                 :code_hlo,
                 :code_mhlo,
                 :code_xla,
+                :Periodic,
             ),
         ),
         all_qualified_accesses_via_owners=true,

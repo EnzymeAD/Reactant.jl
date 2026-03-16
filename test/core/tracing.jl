@@ -213,6 +213,8 @@ end
             Dict{Int,TracedRArray{Float64,0}},
             Dict{Int,TracedRArray{Float64,0}},
         ),
+
+        # others
         (Dict{Int}, Dict{Int}, Dict{Int}),
         (Dict, Dict, Dict),
         (
@@ -252,6 +254,7 @@ end
             Base.RefValue{A} where {A},
             Base.RefValue{A} where {A},
         ),
+        (IOStream, IOStream, IOStream),
         (Wrapper{Symbol,Symbol}, Wrapper{Symbol,Symbol}, Wrapper{Symbol,Symbol}),
         (
             Wrapper{Float64,Vector{Float64}},

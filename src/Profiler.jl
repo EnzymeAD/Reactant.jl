@@ -700,6 +700,14 @@ end
 function get_aggregate_metrics(xplane_file::String, nrepeat::Int)
     data = JSON.parse(xspace_to_tools_data([xplane_file], "op_profile")[1])
     if !haskey(data, :byProgram) || !haskey(data[:byProgram], :metrics)
+        data_available_keys = keys(data)
+        by_program_available_keys =
+            haskey(data, :byProgram) ? keys(data[:byProgram]) : nothing
+        @debug(
+            "`op_profile` data missing keys for metrics",
+            data_available_keys,
+            by_program_available_keys
+        )
         return nothing
     end
 
@@ -807,11 +815,12 @@ function _extract_kwargs_from_expr(args...)
     nrepeat = 1
     warmup = 1
     compile_options = nothing
+    profile_dir = nothing
     while length(args) > 1
         if Meta.isexpr(args[1], :(=))
             tn_expr = args[1]
             key, val = tn_expr.args
-            key ∈ (:nrepeat, :warmup, :compile_options) || error(
+            key ∈ (:nrepeat, :warmup, :compile_options, :profile_dir) || error(
                 "@timed supports setting nrepeat, warmup, or compile_options, but got $(tn_expr)",
             )
 
@@ -821,6 +830,8 @@ function _extract_kwargs_from_expr(args...)
                 warmup = val
             elseif key === :compile_options
                 compile_options = val
+            elseif key === :profile_dir
+                profile_dir = val
             end
             args = args[2:end]
         else
@@ -844,18 +855,18 @@ function _extract_kwargs_from_expr(args...)
     kwargs = (kwargs..., args[kw_idxs]...)
     args = args[arg_idxs]
 
-    return fname, args, kwargs, nrepeat, warmup, compile_options
+    return fname, args, kwargs, nrepeat, warmup, compile_options, profile_dir
 end
 
 """
-    @timed [nrepeat=1] [warmup=1] [compile_options=nothing] fn(args...; kwargs...)
+    @timed [nrepeat=1] [warmup=1] [compile_options=nothing] [profile_dir=nothing] fn(args...; kwargs...)
 
 Profiles the given function and returns the runtime, compile time, and memory data.
 `fn` will be compiled with `compile_options` if it is not already a reactant
 compiled function.
 """
 macro timed(args...)
-    fname, args, kwargs, nrepeat, warmup, compile_options = _extract_kwargs_from_expr(
+    fname, args, kwargs, nrepeat, warmup, compile_options, profile_dir = _extract_kwargs_from_expr(
         args...
     )
 
@@ -867,6 +878,7 @@ macro timed(args...)
                 nrepeat=$(nrepeat),
                 warmup=$(warmup),
                 compile_options=$(compile_options),
+                profile_dir=$(profile_dir),
                 $(kwargs...),
             ).profiling_result
         end,
@@ -874,14 +886,14 @@ macro timed(args...)
 end
 
 """
-    @time [nrepeat=1] [warmup=1] [compile_options=nothing] fn(args...; kwargs...)
+    @time [nrepeat=1] [warmup=1] [compile_options=nothing] [profile_dir=nothing] fn(args...; kwargs...)
 
 Profiles the given function and prints the runtime and compile time.
 `fn` will be compiled with `compile_options` if it is not already a reactant
 compiled function.
 """
 macro time(args...)
-    fname, args, kwargs, nrepeat, warmup, compile_options = _extract_kwargs_from_expr(
+    fname, args, kwargs, nrepeat, warmup, compile_options, profile_dir = _extract_kwargs_from_expr(
         args...
     )
 
@@ -893,6 +905,7 @@ macro time(args...)
                 nrepeat=$(nrepeat),
                 warmup=$(warmup),
                 compile_options=$(compile_options),
+                profile_dir=$(profile_dir),
                 $(kwargs...),
             )
             println("  runtime: $($(_timestr)(timed_data.profiling_result.runtime_ns))s")
@@ -1291,7 +1304,7 @@ function _print_summary_header(header::String)
 end
 
 """
-    @profile [nrepeat=1] [warmup=1] [compile_options=nothing] fn(args...; kwargs...)
+    @profile [nrepeat=1] [warmup=1] [compile_options=nothing] [profile_dir=nothing] fn(args...; kwargs...)
 
 Profiles the given function and prints detailed kernel and framework op statistics.
 `fn` will be compiled with `compile_options` if it is not already a reactant
@@ -1300,7 +1313,7 @@ compiled function.
 Returns the result of the function call.
 """
 macro profile(args...)
-    fname, args, kwargs, nrepeat, warmup, compile_options = _extract_kwargs_from_expr(
+    fname, args, kwargs, nrepeat, warmup, compile_options, profile_dir = _extract_kwargs_from_expr(
         args...
     )
 
@@ -1312,6 +1325,7 @@ macro profile(args...)
                 nrepeat=$(nrepeat),
                 warmup=$(warmup),
                 compile_options=$(compile_options),
+                profile_dir=$(profile_dir),
                 $(kwargs...),
             )
 

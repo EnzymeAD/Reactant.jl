@@ -442,11 +442,10 @@ function run_abernathey_channel_benchmark!(
     )
     results["Runtime (s)"]["Oceananigans/DifferentiateTracerError/$(backend)/Reverse"] =
         prof_result.profiling_result.runtime_ns / 1e9
-    #=results["TFLOP/s"]["Oceananigans/DifferentiateTracerError/$(backend)/Reverse"] =
         if prof_result.profiling_result.flops_data === nothing
             -1
         else
-            prof_result.profiling_result.flops_data.RawFlopsRate / 1e12
+            prof_result.profiling_result.metrics_data.raw_flops_rate / 1e12
         end
     =#
     return nothing

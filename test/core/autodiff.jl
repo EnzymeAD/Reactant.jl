@@ -193,8 +193,14 @@ end
         x
     )
     @test @filecheck begin
-        @check "%cst = stablehlo.constant dense<0.000000e+00> : tensor<12x12xf64>"
-        @check "%cst_0 = stablehlo.constant dense<1.000000e+00> : tensor<12xf64>"
+        @check "%cst = stablehlo.constant dense<1.000000e+00> : tensor<f64>"
+        @check "%cst_0 = stablehlo.constant dense<0.000000e+00> : tensor<12x12xf64>"
+        @check "%cst_1 = stablehlo.constant dense<1.000000e+00> : tensor<12xf64>"
+        @check "%0 = stablehlo.iota dim = 0 : tensor<12x2xi64>"
+        @check "%1 = \"stablehlo.scatter\"(%cst_0, %0, %cst_1) <{indices_are_sorted = false, scatter_dimension_numbers = #stablehlo.scatter<inserted_window_dims = [0, 1], scatter_dims_to_operand_dims = [0, 1], index_vector_dim = 1>, unique_indices = true}> ({"
+        @check "^bb0(%arg1: tensor<f64>, %arg2: tensor<f64>):"
+        @check "stablehlo.return %cst : tensor<f64>"
+        @check "}) : (tensor<12x12xf64>, tensor<12x2xi64>, tensor<12xf64>) -> tensor<12x12xf64>"
         @check_not "stablehlo.constant"
         hlo
     end
