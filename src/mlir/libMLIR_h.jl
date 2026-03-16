@@ -4179,12 +4179,12 @@ function mlirSymbolRefAttrGetTypeID()
 end
 
 """
-    mlirDisctinctAttrCreate(referencedAttr)
+    mlirDistinctAttrCreate(referencedAttr)
 
-Creates a DisctinctAttr with the referenced attribute.
+Creates a DistinctAttr with the referenced attribute.
 """
-function mlirDisctinctAttrCreate(referencedAttr)
-    @ccall mlir_c.mlirDisctinctAttrCreate(referencedAttr::MlirAttribute)::MlirAttribute
+function mlirDistinctAttrCreate(referencedAttr)
+    @ccall mlir_c.mlirDistinctAttrCreate(referencedAttr::MlirAttribute)::MlirAttribute
 end
 
 """
