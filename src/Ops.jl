@@ -2198,7 +2198,7 @@ function _build_nested(paths::Vector, values::Vector)
         parts = map(sorted_keys) do k
             mask = [p[1] == k for p in paths]
             sub_paths = [p[2:end] for (p, m) in zip(paths, mask) if m]
-            sub_vals  = [v        for (v, m) in zip(values, mask) if m]
+            sub_vals = [v for (v, m) in zip(values, mask) if m]
             _build_nested(sub_paths, sub_vals)
         end
         return length(parts) == 1 ? parts[1] : Tuple(parts)
@@ -2208,7 +2208,7 @@ function _build_nested(paths::Vector, values::Vector)
         nt_vals = map(first_keys) do k
             mask = [p[1] == k for p in paths]
             sub_paths = [p[2:end] for (p, m) in zip(paths, mask) if m]
-            sub_vals  = [v        for (v, m) in zip(values, mask) if m]
+            sub_vals = [v for (v, m) in zip(values, mask) if m]
             _build_nested(sub_paths, sub_vals)
         end
         return NamedTuple{nt_keys}(Tuple(nt_vals))

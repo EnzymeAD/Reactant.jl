@@ -2919,8 +2919,11 @@ macro code_hlo(args...)
         merge(
             get_common_compile_options(),
             Dict{Symbol,Any}(
-                :shardy_passes => :(:none), :debug => false, :strip => :(:none),
-                :store_args_res_path => false, :do_transpose => true,
+                :shardy_passes => :(:none),
+                :debug => false,
+                :strip => :(:none),
+                :store_args_res_path => false,
+                :do_transpose => true,
             ),
         ),
         args...,
