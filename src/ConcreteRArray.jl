@@ -235,12 +235,10 @@ for T in (AbstractConcreteNumber, AbstractConcreteArray{<:Number,0})
     @eval Base.div(x::Number, y::$(T), r::RoundingMode=RoundToZero) =
         div(x, to_number(y), r)
 
-    @eval function Base.div(x::$(T), y::TracedRNumber, r::RoundingMode=RoundToZero)
-        throw(MethodError(Base.div, (x, y)))
-    end
-    @eval function Base.div(x::TracedRNumber, y::$(T), r::RoundingMode=RoundToZero)
-        throw(MethodError(Base.div, (x, y)))
-    end
+    @eval Base.div(x::$(T), y::TracedRNumber, r::RoundingMode=RoundToZero) =
+        div(to_number(x), y, r)
+    @eval Base.div(x::TracedRNumber, y::$(T), r::RoundingMode=RoundToZero) =
+        div(x, to_number(y), r)
 end
 
 for T in (Integer, Rational)
