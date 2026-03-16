@@ -227,6 +227,12 @@ for jlop in (
     end
 end
 
+for T in (AbstractConcreteNumber, AbstractConcreteArray{<:Number,0})
+    @eval Base.div(x::$(T), y::$(T), r::RoundingMode=RoundToZero) = div(to_number(x), to_number(y), r)
+    @eval Base.div(x::$(T), y::Number, r::RoundingMode=RoundToZero) = div(to_number(x), y, r)
+    @eval Base.div(x::Number, y::$(T), r::RoundingMode=RoundToZero) = div(x, to_number(y), r)
+end
+
 for T in (Integer, Rational)
     @eval Base.:^(x::AbstractConcreteNumber, y::$(T)) = ^(to_number(x), y)
 end

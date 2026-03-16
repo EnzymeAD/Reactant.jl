@@ -248,6 +248,12 @@ end
     @test @jit(/(2, ConcreteRNumber(Int32(4)))) ≈ 0.5
 end
 
+@testset "div" begin
+    @test @jit(div(ConcreteRNumber(7), ConcreteRNumber(3))) == div(7, 3)
+    @test @jit(div(ConcreteRNumber(7), 3)) == div(7, 3)
+    @test @jit(div(7, ConcreteRNumber(3))) == div(7, 3)
+end
+
 @testset "log10" begin
     x = collect(Float64, 1:10)
     x_ra = Reactant.to_rarray(x)
