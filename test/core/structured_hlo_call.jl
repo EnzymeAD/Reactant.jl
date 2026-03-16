@@ -37,16 +37,12 @@ end
     @testset "reactant.path present with the option" begin
         hlo = @code_hlo store_args_res_path = true forward(model, x)
 
-        # Paths are rooted at :args / :result; repr(sym) keeps the leading colon.
-        # Struct fields are navigated by integer index (from make_tracer):
-        #   [":args", 1, 1, 1] → model.encoder.weight
-        #   [":args", 1, 2, 1] → model.decoder.weight
         @test @filecheck begin
-            @check "reactant.path"
+            @check "reactant.path ="
             @check "\":args\""
-            @check "\":result\""
             @check "1, 1, 1"
             @check "1, 2, 1"
+            @check "\":result\""
             repr(hlo)
         end
     end
