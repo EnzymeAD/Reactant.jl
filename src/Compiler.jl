@@ -711,7 +711,7 @@ function optimization_passes(
     backend::String="gpu",
     is_sharded::Bool=false,
     raise_shlo_to_blas_lapack::Bool=true,
-    self_to_convolution::Bool=false
+    self_to_convolution::Bool=false,
 )
     (; max_constant_threshold) = compile_options
 
@@ -957,11 +957,12 @@ function optimization_passes(
 
     if self_to_convolution
         append!(
-            transform_passes_list, [
+            transform_passes_list,
+            [
                 "self_subtract_to_convolution_like(0)",
                 "self_add_to_convolution_like(0)",
                 "self_mul_to_convolution_like(0)",
-            ]
+            ],
         )
     end
 
@@ -1872,7 +1873,7 @@ function compile_mlir!(
     legalize_stablehlo_to_mhlo::Bool=false,
     client=nothing,
     kwargs...,
-)    
+)
     @assert MLIR.IR.current_context() == MLIR.IR.context(mod)
     client = client !== nothing ? client : XLA.default_backend()
 
