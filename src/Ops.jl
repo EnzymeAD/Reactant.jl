@@ -2262,15 +2262,7 @@ result = @jit structured_hlo_call(ir, model, x)
     # argument so that TracedRArrays inside the trace store Julia (row-major)
     # shaped MLIR values.  We therefore transpose 2-D+ args before hlo_call and
     # transpose the results back, so the outer @jit sees Julia-shaped tensors.
-    function _tr(arg)
-        return if arg isa TracedRArray && ndims(arg) >= 2
-            TracedRArray(
-                Reactant.TracedUtils.transpose_val(Reactant.TracedUtils.get_mlir_data(arg))
-            )
-        else
-            arg
-        end
-    end
+    _tr(arg) = ndims(arg) >= 2 ? transpose(arg, collect(ndims(arg):-1:1)) : arg
 
     linear_args = map(_tr, [_eval_path(args, p) for p in arg_paths])
     linear_results = map(_tr, collect(hlo_call(ir, linear_args...; func_name)))
