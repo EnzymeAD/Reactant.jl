@@ -711,6 +711,7 @@ function optimization_passes(
     backend::String="gpu",
     is_sharded::Bool=false,
     raise_shlo_to_blas_lapack::Bool=true,
+    self_to_convolution::Bool=false
 )
     (; max_constant_threshold) = compile_options
 
@@ -918,9 +919,6 @@ function optimization_passes(
         # "compare_mul",
         "compare_convert",
         "add_selects",
-        "self_subtract_to_convolution_like(0)",
-        "self_add_to_convolution_like(0)",
-        "self_mul_to_convolution_like(0)",
         "subtract_multiply_const_to_add_mul_const",
         "trivial_reduce_window_to_reduce_op",
         "case_to_if",
@@ -956,6 +954,16 @@ function optimization_passes(
         "exponential_minus_one_fuse",
         "scatter_of_scatter_simplify",
     ]
+
+    if self_to_convolution
+        append!(
+            transform_passes_list, [
+                "self_subtract_to_convolution_like(0)",
+                "self_add_to_convolution_like(0)",
+                "self_mul_to_convolution_like(0)",
+            ]
+        )
+    end
 
     if !is_sharded
         # these passes don't have optimized sharding implementations
