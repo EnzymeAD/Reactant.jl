@@ -235,7 +235,7 @@ end
 
 function spinup_loop!(model)
     Δt = model.clock.last_Δt
-    @trace mincut = true track_numbers = false for i in 1:10
+    @trace mincut = true track_numbers = false for i in 1:1000
         time_step!(model, Δt)
     end
     return nothing
@@ -267,7 +267,7 @@ end
 
 function loop!(model)
     Δt = model.clock.last_Δt
-    @trace mincut = true checkpointing = true track_numbers = false for i in 1:100
+    @trace mincut = true checkpointing = true track_numbers = false for i in 1:25
         time_step!(model, Δt)
     end
     return nothing
@@ -378,6 +378,14 @@ function run_abernathey_channel_benchmark!(
     mld = Field{Center,Center,Nothing}(model.grid) # Not used for now
     Δz_ra = Reactant.to_rarray(Δz)
 
+    rspinup_reentrant_channel_model! = @compile raise_first = true raise = true sync = true spinup_reentrant_channel_model!(
+        model, Tᵢ, Sᵢ, u_wind_stress, v_wind_stress, temp_flux
+    )
+
+    rspinup_reentrant_channel_model!(model, Tᵢ, Sᵢ, u_wind_stress, v_wind_stress, T_flux, Δz_ra)
+    @allowscalar set!(Tᵢ, model.tracers.T)
+    @allowscalar set!(Sᵢ, model.tracers.S)
+
     # Profile and time the spinup_reentrant_channel_model!
     prof_result = Reactant.Profiler.profile_with_xprof(
         estimate_tracer_error,
@@ -392,15 +400,25 @@ function run_abernathey_channel_benchmark!(
         warmup=1,
         compile_options=CompileOptions(; raise=true, raise_first=true),
     )
-    results["Runtime (s)"]["Oceananigans/SpinUpReentrantChannelModel/$(backend)/Primal"] =
+    results["Runtime (s)"]["Oceananigans/EstimateTracerError/$(backend)/Primal"] =
         prof_result.profiling_result.runtime_ns / 1e9
-    #=results["TFLOP/s"]["Oceananigans/SpinUpReentrantChannelModel/$(backend)/Primal"] =
+    #=results["TFLOP/s"]["Oceananigans/EstimateTracerError/$(backend)/Primal"] =
         if prof_result.profiling_result.flops_data === nothing
             -1
         else
             prof_result.profiling_result.flops_data.RawFlopsRate / 1e12
         end
     =#
+
+    # Now AD test, make the grid again:
+    grid = make_grid(architecture, Nx, Ny, Nz, z_faces)
+    model = build_model(grid, Δt₀, parameters)
+    T_flux = T_flux_init(model.grid, parameters)
+    u_wind_stress = u_wind_stress_init(model.grid, parameters)
+    v_wind_stress = v_wind_stress_init(model.grid, parameters)
+    Tᵢ, Sᵢ = temperature_salinity_init(model.grid, parameters)
+    mld = Field{Center,Center,Nothing}(model.grid) # Not used for now
+    Δz_ra = Reactant.to_rarray(Δz)
 
     dmodel = Enzyme.make_zero(model)
     dTᵢ = Field{Center,Center,Center}(model.grid)
@@ -412,10 +430,7 @@ function run_abernathey_channel_benchmark!(
     dΔz_ra = Enzyme.make_zero(Δz_ra)
 
     # Spinup the model for a sufficient amount of time, save the T and S from this state:
-    restimate_tracer_error = @compile raise_first = true raise = true sync = true estimate_tracer_error(
-        model, Tᵢ, Sᵢ, u_wind_stress, v_wind_stress, T_flux, Δz_ra
-    )
-    restimate_tracer_error(model, Tᵢ, Sᵢ, u_wind_stress, v_wind_stress, T_flux, Δz_ra)
+    rspinup_reentrant_channel_model!(model, Tᵢ, Sᵢ, u_wind_stress, v_wind_stress, T_flux, Δz_ra)
     @allowscalar set!(Tᵢ, model.tracers.T)
     @allowscalar set!(Sᵢ, model.tracers.S)
 
