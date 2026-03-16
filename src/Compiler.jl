@@ -1890,10 +1890,7 @@ function compile_mlir!(
     activate_raising!(is_raising)
 
     if compile_options.store_args_res_path && !get(kwargs, :do_transpose, true)
-        error(
-            "store_args_res_path=true requires do_transpose=true (the default); " *
-            "structured_hlo_call always assumes column-major IR layout",
-        )
+        error("store_args_res_path=true requires do_transpose=true (the default)")
     end
 
     fnname = string(f)

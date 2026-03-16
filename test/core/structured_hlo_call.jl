@@ -74,7 +74,9 @@ end
             Reactant.to_rarray(ones(Float32, 3, 4)), Reactant.to_rarray(ones(Float32, 3))
         )
         delta = Reactant.to_rarray(ones(Float32, 3, 4))
-        ir = sprint(show, @code_hlo store_args_res_path = true add_to_weight!(layer1, delta))
+        ir = sprint(
+            show, @code_hlo store_args_res_path = true add_to_weight!(layer1, delta)
+        )
 
         # Struct fields are navigated by integer index; Inner has two fields
         # so weight=field 1, bias=field 2 → paths like [":args", 1, 1] and [":args", 1, 2]
