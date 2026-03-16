@@ -2269,8 +2269,6 @@ result = @jit structured_hlo_call(ir, model, x)
     return _delinearize_results(result_paths, linear_results)
 end
 
-# ---- end structured_hlo_call --------------------------------------------
-
 """
     scatter_setindex(dest, scatter_indices, updates)
 
