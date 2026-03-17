@@ -387,28 +387,7 @@ function run_abernathey_channel_benchmark!(
     @allowscalar set!(Sᵢ, model.tracers.S)
 
     # Profile and time the spinup_reentrant_channel_model!
-    prof_result = Reactant.Profiler.profile_with_xprof(
-        estimate_tracer_error,
-        model,
-        Tᵢ,
-        Sᵢ,
-        u_wind_stress,
-        v_wind_stress,
-        T_flux,
-        Δz_ra;
-        nrepeat=10,
-        warmup=1,
-        compile_options=CompileOptions(; raise=true, raise_first=true),
-    )
-    results["Runtime (s)"]["Oceananigans/EstimateTracerError/$(backend)/Primal"] =
-        prof_result.profiling_result.runtime_ns / 1e9
-    #=results["TFLOP/s"]["Oceananigans/EstimateTracerError/$(backend)/Primal"] =
-        if prof_result.profiling_result.flops_data === nothing
-            -1
-        else
-            prof_result.profiling_result.flops_data.RawFlopsRate / 1e12
-        end
-    =#
+    Reactant.Profiler.@profile restimate_tracer_error(model, Tᵢ, Sᵢ, u_wind_stress, v_wind_stress, T_flux, Δz, mld)
 
     # Now AD test, make the grid again:
     grid = make_grid(architecture, Nx, Ny, Nz, z_faces)
@@ -435,35 +414,8 @@ function run_abernathey_channel_benchmark!(
     @allowscalar set!(Sᵢ, model.tracers.S)
 
     # Profile and time the differentiate_tracer_error
-    prof_result = Reactant.Profiler.profile_with_xprof(
-        differentiate_tracer_error,
-        model,
-        Tᵢ,
-        Sᵢ,
-        u_wind_stress,
-        v_wind_stress,
-        T_flux,
-        Δz_ra,
-        dmodel,
-        dTᵢ,
-        dSᵢ,
-        du_wind_stress,
-        dv_wind_stress,
-        dT_flux,
-        dΔz_ra;
-        nrepeat=10,
-        warmup=1,
-        compile_options=CompileOptions(; raise=true, raise_first=true),
-    )
-    results["Runtime (s)"]["Oceananigans/DifferentiateTracerError/$(backend)/Reverse"] =
-        prof_result.profiling_result.runtime_ns / 1e9
-    #=
-    if prof_result.profiling_result.flops_data === nothing
-        -1
-    else
-        prof_result.profiling_result.metrics_data.raw_flops_rate / 1e12
-    end
-    =#
+    Reactant.Profiler.@profile rdifferentiate_tracer_error(model, Tᵢ, Sᵢ, u_wind_stress, v_wind_stress, T_flux, Δz, mld, dmodel, dTᵢ, dSᵢ, du_wind_stress, dv_wind_stress, dT_flux, dΔz, dmld)
+
     return nothing
 end
 
