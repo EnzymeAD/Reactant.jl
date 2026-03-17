@@ -392,6 +392,7 @@ function run_abernathey_channel_benchmark!(
     # Profile and time the spinup_reentrant_channel_model!
     Reactant.Profiler.@profile restimate_tracer_error(model, Tᵢ, Sᵢ, u_wind_stress, v_wind_stress, T_flux, Δz)
 
+    #=
     # Now AD test, make the grid again:
     grid = make_grid(architecture, Nx, Ny, Nz, z_faces)
     model = build_model(grid, Δt₀, parameters)
@@ -420,7 +421,7 @@ function run_abernathey_channel_benchmark!(
 
     # Profile and time the differentiate_tracer_error
     Reactant.Profiler.@profile rdifferentiate_tracer_error(model, Tᵢ, Sᵢ, u_wind_stress, v_wind_stress, T_flux, Δz_ra, dmodel, dTᵢ, dSᵢ, du_wind_stress, dv_wind_stress, dT_flux, dΔz_ra)
-
+    =#
     return nothing
 end
 
