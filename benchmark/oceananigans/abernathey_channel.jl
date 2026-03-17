@@ -375,7 +375,6 @@ function run_abernathey_channel_benchmark!(
     u_wind_stress = u_wind_stress_init(model.grid, parameters)
     v_wind_stress = v_wind_stress_init(model.grid, parameters)
     Tᵢ, Sᵢ = temperature_salinity_init(model.grid, parameters)
-    mld = Field{Center,Center,Nothing}(model.grid) # Not used for now
     Δz_ra = Reactant.to_rarray(Δz)
 
     rspinup_reentrant_channel_model! = @compile raise_first = true raise = true sync = true spinup_reentrant_channel_model!(
@@ -383,7 +382,7 @@ function run_abernathey_channel_benchmark!(
     )
 
     restimate_tracer_error = @compile raise_first=true raise=true sync=true estimate_tracer_error(
-        model, Tᵢ, Sᵢ, u_wind_stress, v_wind_stress, T_flux, Δz, mld
+        model, Tᵢ, Sᵢ, u_wind_stress, v_wind_stress, T_flux, Δz
     )
 
     rspinup_reentrant_channel_model!(model, Tᵢ, Sᵢ, u_wind_stress, v_wind_stress, T_flux)
@@ -391,7 +390,7 @@ function run_abernathey_channel_benchmark!(
     @allowscalar set!(Sᵢ, model.tracers.S)
 
     # Profile and time the spinup_reentrant_channel_model!
-    Reactant.Profiler.@profile restimate_tracer_error(model, Tᵢ, Sᵢ, u_wind_stress, v_wind_stress, T_flux, Δz, mld)
+    Reactant.Profiler.@profile restimate_tracer_error(model, Tᵢ, Sᵢ, u_wind_stress, v_wind_stress, T_flux, Δz)
 
     # Now AD test, make the grid again:
     grid = make_grid(architecture, Nx, Ny, Nz, z_faces)
@@ -400,7 +399,6 @@ function run_abernathey_channel_benchmark!(
     u_wind_stress = u_wind_stress_init(model.grid, parameters)
     v_wind_stress = v_wind_stress_init(model.grid, parameters)
     Tᵢ, Sᵢ = temperature_salinity_init(model.grid, parameters)
-    mld = Field{Center,Center,Nothing}(model.grid) # Not used for now
     Δz_ra = Reactant.to_rarray(Δz)
 
     dmodel = Enzyme.make_zero(model)
@@ -409,7 +407,6 @@ function run_abernathey_channel_benchmark!(
     du_wind_stress = Field{Face,Center,Nothing}(model.grid)
     dv_wind_stress = Field{Center,Face,Nothing}(model.grid)
     dT_flux = Field{Center,Center,Nothing}(model.grid)
-    dmld = Field{Center,Center,Nothing}(model.grid)
     dΔz_ra = Enzyme.make_zero(Δz_ra)
 
     # Spinup the model for a sufficient amount of time, save the T and S from this state:
@@ -417,8 +414,12 @@ function run_abernathey_channel_benchmark!(
     @allowscalar set!(Tᵢ, model.tracers.T)
     @allowscalar set!(Sᵢ, model.tracers.S)
 
+    rdifferentiate_tracer_error = @compile raise_first=true raise=true sync=true differentiate_tracer_error(
+        model, Tᵢ, Sᵢ, u_wind_stress, v_wind_stress, T_flux, Δz_ra, dmodel, dTᵢ, dSᵢ, du_wind_stress, dv_wind_stress, dT_flux, dΔz_ra
+    )
+
     # Profile and time the differentiate_tracer_error
-    Reactant.Profiler.@profile rdifferentiate_tracer_error(model, Tᵢ, Sᵢ, u_wind_stress, v_wind_stress, T_flux, Δz, mld, dmodel, dTᵢ, dSᵢ, du_wind_stress, dv_wind_stress, dT_flux, dΔz, dmld)
+    Reactant.Profiler.@profile rdifferentiate_tracer_error(model, Tᵢ, Sᵢ, u_wind_stress, v_wind_stress, T_flux, Δz_ra, dmodel, dTᵢ, dSᵢ, du_wind_stress, dv_wind_stress, dT_flux, dΔz_ra)
 
     return nothing
 end
