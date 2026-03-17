@@ -235,7 +235,7 @@ end
 
 function spinup_loop!(model)
     Δt = model.clock.last_Δt
-    @trace mincut = true track_numbers = false for i in 1:1000
+    @trace mincut = true track_numbers = false for i in 1:10
         time_step!(model, Δt)
     end
     return nothing
@@ -379,10 +379,10 @@ function run_abernathey_channel_benchmark!(
     Δz_ra = Reactant.to_rarray(Δz)
 
     rspinup_reentrant_channel_model! = @compile raise_first = true raise = true sync = true spinup_reentrant_channel_model!(
-        model, Tᵢ, Sᵢ, u_wind_stress, v_wind_stress, temp_flux
+        model, Tᵢ, Sᵢ, u_wind_stress, v_wind_stress, T_flux
     )
 
-    rspinup_reentrant_channel_model!(model, Tᵢ, Sᵢ, u_wind_stress, v_wind_stress, T_flux, Δz_ra)
+    rspinup_reentrant_channel_model!(model, Tᵢ, Sᵢ, u_wind_stress, v_wind_stress, T_flux)
     @allowscalar set!(Tᵢ, model.tracers.T)
     @allowscalar set!(Sᵢ, model.tracers.S)
 
@@ -430,7 +430,7 @@ function run_abernathey_channel_benchmark!(
     dΔz_ra = Enzyme.make_zero(Δz_ra)
 
     # Spinup the model for a sufficient amount of time, save the T and S from this state:
-    rspinup_reentrant_channel_model!(model, Tᵢ, Sᵢ, u_wind_stress, v_wind_stress, T_flux, Δz_ra)
+    rspinup_reentrant_channel_model!(model, Tᵢ, Sᵢ, u_wind_stress, v_wind_stress, T_flux)
     @allowscalar set!(Tᵢ, model.tracers.T)
     @allowscalar set!(Sᵢ, model.tracers.S)
 
