@@ -382,6 +382,10 @@ function run_abernathey_channel_benchmark!(
         model, Tᵢ, Sᵢ, u_wind_stress, v_wind_stress, T_flux
     )
 
+    restimate_tracer_error = @compile raise_first=true raise=true sync=true estimate_tracer_error(
+        model, Tᵢ, Sᵢ, u_wind_stress, v_wind_stress, T_flux, Δz, mld
+    )
+
     rspinup_reentrant_channel_model!(model, Tᵢ, Sᵢ, u_wind_stress, v_wind_stress, T_flux)
     @allowscalar set!(Tᵢ, model.tracers.T)
     @allowscalar set!(Sᵢ, model.tracers.S)
