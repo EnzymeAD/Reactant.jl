@@ -290,7 +290,7 @@ function CompileOptions(;
             :just_batch,
             :none,
             :probprog,
-            :noopt
+            :noopt,
         ]
     end
 
