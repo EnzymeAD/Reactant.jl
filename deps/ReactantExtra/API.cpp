@@ -1239,6 +1239,9 @@ GenerateCompileOptions(int64_t device_id, const int64_t *mesh_ids,
 
   debug_options->set_xla_gpu_cuda_data_dir(xla_gpu_cuda_data_dir);
   debug_options->set_xla_enable_enzyme_comms_opt(true);
+  #if defined(REACTANT_CUDA) || defined(REACTANT_ROCM)
+  debug_options->set_xla_gpu_predict_fusion_spills(true);
+  #endif
   debug_options->set_xla_gpu_experimental_use_raft_select_k(true);
 
   if (kernel_cache_enabled) {
@@ -1332,6 +1335,13 @@ xla::CompileOptions GenerateCompileOptions(const char *compile_options_proto,
   if (!options_or.ok()) {
     ReactantThrowError(options_or.status().ToString().c_str());
   }
+  
+  auto debug_options = options_or->executable_build_options.mutable_debug_options();
+  debug_options->set_xla_enable_enzyme_comms_opt(true);
+  #if defined(REACTANT_CUDA) || defined(REACTANT_ROCM)
+  debug_options->set_xla_gpu_predict_fusion_spills(true);
+  #endif
+  debug_options->set_xla_gpu_experimental_use_raft_select_k(true);
 
   return std::move(options_or).value();
 }
