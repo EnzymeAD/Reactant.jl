@@ -4,7 +4,7 @@ NSYNC_COMMIT = "82b118aa7ace3132e517e2c467f8732978cf4023"
 
 NSYNC_SHA256 = ""
 
-ENZYMEXLA_COMMIT = "dae3a074fb624d569cdc8d701d3404388fc3c9aa"
+ENZYMEXLA_COMMIT = "de57b8259cd17d0f080f4917da5a12e3dde3f619"
 
 ENZYMEXLA_SHA256 = ""
 
@@ -240,6 +240,35 @@ load("@jax//:test_shard_count.bzl", "test_shard_count_repository")
 
 test_shard_count_repository(
     name = "test_shard_count",
+)
+
+load("@jax_wheel//:wheel.bzl", "WHEEL_VERSION")
+load("@python_version_repo//:py_version.bzl", "HERMETIC_PYTHON_VERSION")
+load("@jax//third_party/rocm_wheels:workspace.bzl", "rocm_wheels_repository")
+
+# Pre-built ROCm wheels from a GitHub release (ROCm/rocm-jax).
+rocm_wheels_repository(
+    name = "rocm_wheels",
+    jaxlib_version = WHEEL_VERSION,
+    python_version = HERMETIC_PYTHON_VERSION,
+    # rocm_version = "7.2.0",  # Optional: pick a specific ROCm version.
+)
+
+# Used for --//jax:build_jaxlib=false (pre-built wheels from GitHub).
+external_deps_repository(
+    name = "rocm_prebuilt_test_deps",
+    deps = [
+        "@rocm_wheels//:rocm_pjrt_py_import",
+        "@rocm_wheels//:rocm_plugin_py_import",
+    ],
+)
+
+load("@jax//jaxlib:jax_python_wheel.bzl", "jax_python_wheel_repository")
+
+jax_python_wheel_repository(
+    name = "jax_wheel",
+    version_key = "_version",
+    version_source = "@jax//jax:version.py",
 )
 
 load(
