@@ -290,6 +290,7 @@ function CompileOptions(;
             :just_batch,
             :none,
             :probprog,
+            :noopt
         ]
     end
 
@@ -449,7 +450,7 @@ function DefaultXLACompileOptions(;
     donated_args=:auto, sync=false, optimize_then_pad=true, assert_nonallocating=false
 )
     return CompileOptions(;
-        optimization_passes=:only_enzyme,
+        optimization_passes=:noopt,
         inline=false,
         donated_args,
         sync,
