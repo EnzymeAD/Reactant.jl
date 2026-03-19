@@ -2288,6 +2288,24 @@ function compile_mlir!(
             ),
             "only_enzyme",
         )
+    elseif compile_options.optimization_passes === :noopt
+        run_pass_pipeline!(
+            mod,
+            join(
+                [
+                    "mark-func-memory-effects",
+                    "enzyme-batch",
+                    enzyme_pass,
+                    "canonicalize",
+                    "remove-unnecessary-enzyme-ops",
+                    "enzyme-simplify-math",
+                    lower_enzymexla_passes,
+                    jit,
+                ],
+                ',',
+            ),
+            "only_enzyme",
+        )
     elseif compile_options.optimization_passes === :after_enzyme
         run_pass_pipeline!(
             mod,
