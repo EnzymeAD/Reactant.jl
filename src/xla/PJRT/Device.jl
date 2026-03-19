@@ -35,7 +35,7 @@ end
 
 function XLA.is_addressable(device::Device)
     GC.@preserve device begin
-        return MLIR.API.PjRtDeviceIsAddressable(device.device)
+        return MLIR.API.pjrt_device_is_addressable(device.device)
     end
 end
 
