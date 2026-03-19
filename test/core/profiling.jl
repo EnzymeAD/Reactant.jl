@@ -34,7 +34,7 @@ linear(x, W, b) = (W * x) .+ b
             @test length(framework_stats) > 0
         end
 
-        metrics = Reactant.Profiler.get_aggregate_metrics(file, 1)
+        metrics = Reactant.Profiler.get_aggregate_metrics(file)
         if !RunningOnCPU
             @test metrics isa Reactant.Proto.tensorflow.profiler.op_profile.Metrics
             @test metrics.raw_flops_rate > 0

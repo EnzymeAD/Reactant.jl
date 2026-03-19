@@ -697,7 +697,7 @@ function Base.show(io::IO, flops::Proto.tensorflow.profiler.op_profile.Metrics)
     return nothing
 end
 
-function get_aggregate_metrics(xplane_file::String, nrepeat::Int)
+function get_aggregate_metrics(xplane_file::String)
     data = JSON.parse(xspace_to_tools_data([xplane_file], "op_profile")[1])
     if !haskey(data, :byProgram) || !haskey(data[:byProgram], :metrics)
         data_available_keys = keys(data)
@@ -793,7 +793,7 @@ function profile_thunk_with_xprof(
         fn, args...; nrepeat, warmup, profile_dir, kwargs...
     )
     memory_data = get_aggregate_memory_statistics(xplane_file)
-    metrics_data = get_aggregate_metrics(xplane_file, nrepeat)
+    metrics_data = get_aggregate_metrics(xplane_file)
     runtime_ns = extract_mean_step_time(xplane_file, nrepeat)
     return (;
         val,
@@ -806,7 +806,7 @@ end
 
 function load_xplane_file(xplane_file::String; nrepeat::Int=1, compile_time_ns::Int64=0)
     memory_data = get_aggregate_memory_statistics(xplane_file)
-    metrics_data = get_aggregate_metrics(xplane_file, nrepeat)
+    metrics_data = get_aggregate_metrics(xplane_file)
     runtime_ns = extract_mean_step_time(xplane_file, nrepeat)
     return AggregateProfilingResult(runtime_ns, compile_time_ns, memory_data, metrics_data)
 end
