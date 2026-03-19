@@ -22,11 +22,11 @@ Checks if two type ids are equal.
 Base.:(==)(a::TypeID, b::TypeID) = API.mlirTypeIDEqual(a, b)
 
 """
-    hash(typeID)
+    hash(typeID, h)
 
 Returns the hash value of the type id.
 """
-Base.hash(typeid::TypeID) = API.mlirTypeIDHashValue(typeid.ref)
+Base.hash(typeid::TypeID, h::UInt) = hash(API.mlirTypeIDHashValue(typeid.ref), h)
 
 mutable struct TypeIDAllocator
     ref::API.MlirTypeIDAllocator
