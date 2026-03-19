@@ -1251,7 +1251,7 @@ end
     @testset "assign static" begin
         x = [1.0, 2.0, 3.0]
         x_ra = Reactant.to_rarray(x)
-        
+
         cond_true = ConcreteRNumber{Bool}(true)
         @test @jit(condition_assign_static(cond_true, x_ra)) ≈ sum(x)
         @test condition_assign_static(true, x) ≈ sum(x)
@@ -1292,3 +1292,26 @@ end
     end
 end
 
+function _isreal2(num)  # 2686
+    ren, imn = reim(num)
+    ren2 = ren^2
+    imn2 = imn^2
+    return Base.:&(1, (imn2 / (imn2 + ren2)) < eps(real(num)))
+end
+
+function test(b)
+    numreals = sum(_isreal2, b)
+    ans = 0.0
+    @trace if numreals == 4
+        ans = sum(Base.real, b)
+        nothing
+    end
+    return ans
+end
+
+@testset "Issue #2686" begin
+    a = [rand(4) .+ rand(4)im, [-5.0 + 0.0im, 1.0 + 2.0im, 1.0 - 2.0im, -5.0 + 0.0im]]
+    b = Reactant.to_rarray(a)
+    testr = @compile test.(b)
+    @test testr(b) == test.(a)
+end

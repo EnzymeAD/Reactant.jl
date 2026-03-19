@@ -2398,7 +2398,9 @@ end
     )
     if length(args) == 1 && args[1] isa NamedTuple
         named_args = args[1]
-        filtered_keys = Tuple(k for k in keys(named_args) if !isa(getfield(named_args, k), MissingTracedValue))
+        filtered_keys = Tuple(
+            k for k in keys(named_args) if !isa(getfield(named_args, k), MissingTracedValue)
+        )
         filtered_values = Tuple(getfield(named_args, r) for r in filtered_keys)
         args = (NamedTuple{filtered_keys}(filtered_values),)
     end
@@ -2805,7 +2807,8 @@ end
             for p in path[2:end]
                 target = Reactant.Compiler.traced_getfield(target, p)
             end
-            if target isa Union{Reactant.ConcreteRArray,Reactant.ConcreteRNumber,Reactant.TracedType}
+            if target isa
+                Union{Reactant.ConcreteRArray,Reactant.ConcreteRNumber,Reactant.TracedType}
                 Reactant.TracedUtils.set!(
                     args, path[2:end], MLIR.IR.result(if_compiled, residx)
                 )
