@@ -32,14 +32,16 @@ end
     @test all(Array(B) .≈ (oA .* 100))
 end
 
-@testset "Square BF16 raised Kernel" begin
-    oA = collect(BFloat16, 1:1:64)
-    A = Reactant.to_rarray(oA)
-    B = Reactant.to_rarray(100 .* oA)
-    println(@code_hlo raise=true square!(A, B))
-    @jit raise=true square!(A, B)
-    @test all(Array(A) .≈ (oA .* oA .* 100))
-    @test all(Array(B) .≈ (oA .* 100))
+@static if VERSION >= v"1.12"
+    @testset "Square BF16 raised Kernel" begin
+        oA = collect(BFloat16, 1:1:64)
+        A = Reactant.to_rarray(oA)
+        B = Reactant.to_rarray(100 .* oA)
+        println(@code_hlo raise=true square!(A, B))
+        @jit raise=true square!(A, B)
+        @test all(Array(A) .≈ (oA .* oA .* 100))
+        @test all(Array(B) .≈ (oA .* 100))
+    end
 end
 
 function sin_kernel!(x, y)
