@@ -1215,3 +1215,80 @@ end
 
     @test f_not_traced_conditional(cond, x) == @jit(f_not_traced_conditional(cond, x_ra))
 end
+
+function condition_assign_static(cond, x)
+    ans = 0.0
+    @trace if cond
+        ans = sum(x)
+        nothing
+    end
+    return ans
+end
+
+function condition_assign_multiple(cond, x)
+    a = 1.0
+    b = 2.0
+    @trace if cond
+        a = sum(x)
+        b = a * 2
+    else
+        a = -sum(x)
+    end
+    return a, b
+end
+
+function condition_assign_else_only(cond, x)
+    ans = 0.0
+    @trace if cond
+        # nothing
+    else
+        ans = sum(x)
+    end
+    return ans
+end
+
+@testset "@trace if assignment to static/local variables" begin
+    @testset "assign static" begin
+        x = [1.0, 2.0, 3.0]
+        x_ra = Reactant.to_rarray(x)
+        
+        cond_true = ConcreteRNumber{Bool}(true)
+        @test @jit(condition_assign_static(cond_true, x_ra)) ≈ sum(x)
+        @test condition_assign_static(true, x) ≈ sum(x)
+
+        cond_false = ConcreteRNumber{Bool}(false)
+        @test @jit(condition_assign_static(cond_false, x_ra)) ≈ 0.0
+        @test condition_assign_static(false, x) ≈ 0.0
+    end
+
+    @testset "assign multiple" begin
+        x = [1.0, 2.0, 3.0]
+        x_ra = Reactant.to_rarray(x)
+
+        cond_true = ConcreteRNumber{Bool}(true)
+        res_ra = @jit(condition_assign_multiple(cond_true, x_ra))
+        res = condition_assign_multiple(true, x)
+        @test res_ra[1] ≈ res[1]
+        @test res_ra[2] ≈ res[2]
+
+        cond_false = ConcreteRNumber{Bool}(false)
+        res_ra = @jit(condition_assign_multiple(cond_false, x_ra))
+        res = condition_assign_multiple(false, x)
+        @test res_ra[1] ≈ res[1]
+        @test res_ra[2] ≈ res[2]
+    end
+
+    @testset "assign else only" begin
+        x = [1.0, 2.0, 3.0]
+        x_ra = Reactant.to_rarray(x)
+
+        cond_true = ConcreteRNumber{Bool}(true)
+        @test @jit(condition_assign_else_only(cond_true, x_ra)) ≈ 0.0
+        @test condition_assign_else_only(true, x) ≈ 0.0
+
+        cond_false = ConcreteRNumber{Bool}(false)
+        @test @jit(condition_assign_else_only(cond_false, x_ra)) ≈ sum(x)
+        @test condition_assign_else_only(false, x) ≈ sum(x)
+    end
+end
+
