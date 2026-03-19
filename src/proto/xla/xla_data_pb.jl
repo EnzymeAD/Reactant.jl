@@ -10,17 +10,17 @@ export var"WhileLoopBackendConfig.KnownTripCount", CollectiveOpGroupMode, Primit
 export ParameterReplication, CompilationEvent, var"ChannelHandle.ChannelType", SortOptions
 export ReplicaGroup, var"ResultAccuracy.Tolerance", TileProto, ScatterDimensionNumbers
 export SourceTarget, ExecutionHandle, GlobalDataHandle, FftType, ProfileSource
-export DotDimensionNumbers, DeviceHandle, var"OpSharding.Type", WindowDimension
-export ConvolutionDimensionNumbers, IotaReplicaGroupListProto, OriginalArrayProto
-export ComputationStats, ProfileType, AsyncStreamKind, FrontendAttributes
-export var"WhileLoopBackendConfig.KnownInductionVariable"
+export DotDimensionNumbers, DeviceHandle, var"OpSharding.Type", var"CubScanOptions.Kind"
+export WindowDimension, ConvolutionDimensionNumbers, IotaReplicaGroupListProto
+export OriginalArrayProto, ComputationStats, ProfileType, AsyncStreamKind
+export FrontendAttributes, var"WhileLoopBackendConfig.KnownInductionVariable"
 export var"PaddingConfig.PaddingConfigDimension", GemmPerfTableEntry, OutputOperandAliasing
 export var"PrecisionConfig.Precision", ExecutionProfile, var"AxisRefProto.SubAxis"
 export var"SparsityConfig.TensorSparsityConfig", ProfileGenerationStrategy, PaddingType
 export var"MeshProto.MeshAxis", var"OpSharding.ShardGroupType", CholeskyOptions
 export StatisticsViz, TriangularSolveOptions, DeviceAssignmentProto, ChannelHandle
-export CollectiveDeviceListProto, ResultAccuracy, RaggedDotDimensionNumbers, Window
-export OriginalValueElementProto, WhileLoopBackendConfig, PaddingConfig
+export CollectiveDeviceListProto, ResultAccuracy, RaggedDotDimensionNumbers, CubScanOptions
+export Window, OriginalValueElementProto, WhileLoopBackendConfig, PaddingConfig
 export GemmPerfTableEntryValues, PrecisionConfig, AxisRefProto, SparsityConfig
 export var"OpMetadata.ProfileInfo", MeshProto, OriginalValueProto, GemmPerfTable
 export var"NamedShardingProto.DimensionSharding", OpMetadata, MeshAxesReplicaGroupListProto
@@ -688,6 +688,8 @@ function PB._encoded_size(x::DeviceHandle)
 end
 
 @enumx var"OpSharding.Type" REPLICATED=0 MAXIMAL=1 TUPLE=2 OTHER=3 MANUAL=4 UNKNOWN=5 UNREDUCED=6
+
+@enumx var"CubScanOptions.Kind" KIND_INVALID=0 SUM=1
 
 struct WindowDimension
     size::Int64
@@ -1662,6 +1664,60 @@ function PB._encoded_size(x::RaggedDotDimensionNumbers)
     !isnothing(x.dot_dimension_numbers) && (encoded_size += PB._encoded_size(x.dot_dimension_numbers, 1))
     !isempty(x.lhs_ragged_dimensions) && (encoded_size += PB._encoded_size(x.lhs_ragged_dimensions, 2))
     !isempty(x.rhs_group_dimensions) && (encoded_size += PB._encoded_size(x.rhs_group_dimensions, 3))
+    return encoded_size
+end
+
+struct CubScanOptions
+    vector_length::Int64
+    row_length::Int64
+    column_length::Int64
+    kind::var"CubScanOptions.Kind".T
+    is_reverse::Bool
+end
+PB.default_values(::Type{CubScanOptions}) = (;vector_length = zero(Int64), row_length = zero(Int64), column_length = zero(Int64), kind = var"CubScanOptions.Kind".KIND_INVALID, is_reverse = false)
+PB.field_numbers(::Type{CubScanOptions}) = (;vector_length = 1, row_length = 2, column_length = 3, kind = 4, is_reverse = 5)
+
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:CubScanOptions}, _endpos::Int=0, _group::Bool=false)
+    vector_length = zero(Int64)
+    row_length = zero(Int64)
+    column_length = zero(Int64)
+    kind = var"CubScanOptions.Kind".KIND_INVALID
+    is_reverse = false
+    while !PB.message_done(d, _endpos, _group)
+        field_number, wire_type = PB.decode_tag(d)
+        if field_number == 1
+            vector_length = PB.decode(d, Int64)
+        elseif field_number == 2
+            row_length = PB.decode(d, Int64)
+        elseif field_number == 3
+            column_length = PB.decode(d, Int64)
+        elseif field_number == 4
+            kind = PB.decode(d, var"CubScanOptions.Kind".T)
+        elseif field_number == 5
+            is_reverse = PB.decode(d, Bool)
+        else
+            Base.skip(d, wire_type)
+        end
+    end
+    return CubScanOptions(vector_length, row_length, column_length, kind, is_reverse)
+end
+
+function PB.encode(e::PB.AbstractProtoEncoder, x::CubScanOptions)
+    initpos = position(e.io)
+    x.vector_length != zero(Int64) && PB.encode(e, 1, x.vector_length)
+    x.row_length != zero(Int64) && PB.encode(e, 2, x.row_length)
+    x.column_length != zero(Int64) && PB.encode(e, 3, x.column_length)
+    x.kind != var"CubScanOptions.Kind".KIND_INVALID && PB.encode(e, 4, x.kind)
+    x.is_reverse != false && PB.encode(e, 5, x.is_reverse)
+    return position(e.io) - initpos
+end
+function PB._encoded_size(x::CubScanOptions)
+    encoded_size = 0
+    x.vector_length != zero(Int64) && (encoded_size += PB._encoded_size(x.vector_length, 1))
+    x.row_length != zero(Int64) && (encoded_size += PB._encoded_size(x.row_length, 2))
+    x.column_length != zero(Int64) && (encoded_size += PB._encoded_size(x.column_length, 3))
+    x.kind != var"CubScanOptions.Kind".KIND_INVALID && (encoded_size += PB._encoded_size(x.kind, 4))
+    x.is_reverse != false && (encoded_size += PB._encoded_size(x.is_reverse, 5))
     return encoded_size
 end
 
