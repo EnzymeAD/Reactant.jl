@@ -32,7 +32,7 @@ for T in (
         @nospecialize(runtime),
         kwargs...,
     )
-        if mode == Reactant.ArrayToConcrete
+        if mode == Reactant.ArrayToConcrete && Int64 <: track_numbers
             RT = Reactant.traced_type(Dates.$T, Val(mode), track_numbers, sharding, runtime)
             return RT(prev)
         else
@@ -48,7 +48,7 @@ for T in (
         @nospecialize(ndevices),
         @nospecialize(runtime)
     )
-        if mode == Reactant.ArrayToConcrete
+        if mode == Reactant.ArrayToConcrete && Int64 <: track_numbers
             # all Dates types are hard coded to have Int64 fields
             NF = Reactant.traced_type_inner(
                 Int64, seen, mode, track_numbers, ndevices, runtime
