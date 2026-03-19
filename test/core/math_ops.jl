@@ -190,6 +190,15 @@ end
     for a in (true, false), b in (true, false)
         @test @jit(xor(ConcreteRNumber(a), ConcreteRNumber(b))) == xor(a, b)
     end
+
+    for (a, b) in Iterators.product((3, 0), (true, false))
+        at = Reactant.to_rarray(a; track_numbers=Number)
+        bt = Reactant.to_rarray(b; track_numbers=Number)
+
+        @test @jit(xor(at, b)) == xor(a, b)
+        @test @jit(xor(a, bt)) == xor(a, b)
+        @test @jit(xor(at, bt)) == xor(a, b)
+    end
 end
 
 @testset "signbit" begin
@@ -364,4 +373,20 @@ mulpi(x) = π * x
     x = Reactant.to_rarray(ones(2))
     y = @jit mulpi(x)
     @test all(Array(y) .≈ π)
+end
+
+@testset "gcd" begin
+    x = Reactant.to_rarray(UInt64(8); track_numbers=Integer)
+    y = Reactant.to_rarray(UInt64(32); track_numbers=Integer)
+    z = @jit gcd(x, y)
+    @test z isa ConcreteRNumber{UInt64}
+    @test z == 8
+    @test y == 32
+    @test x == 8
+
+    xd, yd = @jit Base.divgcd(x, y)
+    @test xd isa ConcreteRNumber{UInt64}
+    @test yd isa ConcreteRNumber{UInt64}
+    @test xd == 1
+    @test yd == 4
 end

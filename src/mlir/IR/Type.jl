@@ -1,10 +1,5 @@
-struct Type
+@checked struct Type
     ref::API.MlirType
-
-    function Type(type)
-        @assert !mlirIsNull(type) "cannot create Type with null MlirType"
-        return new(type)
-    end
 end
 
 Base.cconvert(::Core.Type{API.MlirType}, type::Type) = type

@@ -10,18 +10,20 @@ struct var"SourceStats.Metric"
     self_time_ps::UInt64
     time_ps::UInt64
     flops::UInt64
+    flops_v2::Float64
     flops_utilization::Float64
 end
-PB.default_values(::Type{var"SourceStats.Metric"}) = (;occurrences = zero(UInt64), self_time_ps = zero(UInt64), time_ps = zero(UInt64), flops = zero(UInt64), flops_utilization = zero(Float64))
-PB.field_numbers(::Type{var"SourceStats.Metric"}) = (;occurrences = 1, self_time_ps = 2, time_ps = 3, flops = 4, flops_utilization = 5)
+PB.default_values(::Type{var"SourceStats.Metric"}) = (;occurrences = zero(UInt64), self_time_ps = zero(UInt64), time_ps = zero(UInt64), flops = zero(UInt64), flops_v2 = zero(Float64), flops_utilization = zero(Float64))
+PB.field_numbers(::Type{var"SourceStats.Metric"}) = (;occurrences = 1, self_time_ps = 2, time_ps = 3, flops = 4, flops_v2 = 6, flops_utilization = 5)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"SourceStats.Metric"})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"SourceStats.Metric"}, _endpos::Int=0, _group::Bool=false)
     occurrences = zero(UInt64)
     self_time_ps = zero(UInt64)
     time_ps = zero(UInt64)
     flops = zero(UInt64)
+    flops_v2 = zero(Float64)
     flops_utilization = zero(Float64)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             occurrences = PB.decode(d, UInt64)
@@ -31,13 +33,15 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"SourceStats.Metric"}
             time_ps = PB.decode(d, UInt64)
         elseif field_number == 4
             flops = PB.decode(d, UInt64)
+        elseif field_number == 6
+            flops_v2 = PB.decode(d, Float64)
         elseif field_number == 5
             flops_utilization = PB.decode(d, Float64)
         else
             Base.skip(d, wire_type)
         end
     end
-    return var"SourceStats.Metric"(occurrences, self_time_ps, time_ps, flops, flops_utilization)
+    return var"SourceStats.Metric"(occurrences, self_time_ps, time_ps, flops, flops_v2, flops_utilization)
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::var"SourceStats.Metric")
@@ -46,6 +50,7 @@ function PB.encode(e::PB.AbstractProtoEncoder, x::var"SourceStats.Metric")
     x.self_time_ps != zero(UInt64) && PB.encode(e, 2, x.self_time_ps)
     x.time_ps != zero(UInt64) && PB.encode(e, 3, x.time_ps)
     x.flops != zero(UInt64) && PB.encode(e, 4, x.flops)
+    x.flops_v2 !== zero(Float64) && PB.encode(e, 6, x.flops_v2)
     x.flops_utilization !== zero(Float64) && PB.encode(e, 5, x.flops_utilization)
     return position(e.io) - initpos
 end
@@ -55,6 +60,7 @@ function PB._encoded_size(x::var"SourceStats.Metric")
     x.self_time_ps != zero(UInt64) && (encoded_size += PB._encoded_size(x.self_time_ps, 2))
     x.time_ps != zero(UInt64) && (encoded_size += PB._encoded_size(x.time_ps, 3))
     x.flops != zero(UInt64) && (encoded_size += PB._encoded_size(x.flops, 4))
+    x.flops_v2 !== zero(Float64) && (encoded_size += PB._encoded_size(x.flops_v2, 6))
     x.flops_utilization !== zero(Float64) && (encoded_size += PB._encoded_size(x.flops_utilization, 5))
     return encoded_size
 end
@@ -65,9 +71,9 @@ end
 PB.default_values(::Type{var"SourceStats.FileMetrics"}) = (;line_number_to_metric = Dict{Int32,var"SourceStats.Metric"}())
 PB.field_numbers(::Type{var"SourceStats.FileMetrics"}) = (;line_number_to_metric = 1)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"SourceStats.FileMetrics"})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"SourceStats.FileMetrics"}, _endpos::Int=0, _group::Bool=false)
     line_number_to_metric = Dict{Int32,var"SourceStats.Metric"}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, line_number_to_metric)
@@ -95,9 +101,9 @@ end
 PB.default_values(::Type{SourceStats}) = (;file_name_to_metrics = Dict{String,var"SourceStats.FileMetrics"}())
 PB.field_numbers(::Type{SourceStats}) = (;file_name_to_metrics = 1)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:SourceStats})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:SourceStats}, _endpos::Int=0, _group::Bool=false)
     file_name_to_metrics = Dict{String,var"SourceStats.FileMetrics"}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, file_name_to_metrics)

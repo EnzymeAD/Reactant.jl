@@ -61,7 +61,11 @@ end
 
 const ReactantComplexFloat = Union{Complex{Float32},Complex{Float64}}
 
-const ReactantInt = Union{Int8,UInt8,Int16,UInt16,Int32,UInt32,Int64,UInt64}
+const ReactantSInt = Union{Int8,Int16,Int32,Int64}
+
+const ReactantUInt = Union{UInt8,UInt16,UInt32,UInt64}
+
+const ReactantInt = Union{Base.uniontypes(ReactantSInt)...,Base.uniontypes(ReactantUInt)...}
 
 const ReactantComplexInt = Union{[Complex{T} for T in Base.uniontypes(ReactantInt)]...}
 

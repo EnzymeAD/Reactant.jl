@@ -1,4 +1,4 @@
-using Enzyme, Reactant, Test, Random, Statistics
+using Enzyme, Reactant, Test, Random, Statistics, FileCheck
 
 square(x) = x * 2
 
@@ -189,8 +189,21 @@ end
 
 @testset "onehot" begin
     x = Reactant.to_rarray(ones(3, 4))
-    hlo = @code_hlo optimize = false Enzyme.onehot(x)
-    @test !contains("stablehlo.constant", repr(hlo))
+    hlo = @code_hlo compile_options = CompileOptions(; max_constant_threshold=0) Enzyme.onehot(
+        x
+    )
+    @test @filecheck begin
+        @check "%cst = stablehlo.constant dense<1.000000e+00> : tensor<f64>"
+        @check "%cst_0 = stablehlo.constant dense<0.000000e+00> : tensor<12x12xf64>"
+        @check "%cst_1 = stablehlo.constant dense<1.000000e+00> : tensor<12xf64>"
+        @check "%0 = stablehlo.iota dim = 0 : tensor<12x2xi64>"
+        @check "%1 = \"stablehlo.scatter\"(%cst_0, %0, %cst_1) <{indices_are_sorted = false, scatter_dimension_numbers = #stablehlo.scatter<inserted_window_dims = [0, 1], scatter_dims_to_operand_dims = [0, 1], index_vector_dim = 1>, unique_indices = true}> ({"
+        @check "^bb0(%arg1: tensor<f64>, %arg2: tensor<f64>):"
+        @check "stablehlo.return %cst : tensor<f64>"
+        @check "}) : (tensor<12x12xf64>, tensor<12x2xi64>, tensor<12xf64>) -> tensor<12x12xf64>"
+        @check_not "stablehlo.constant"
+        hlo
+    end
 end
 
 fn(x) = sum(abs2, x)
@@ -298,7 +311,10 @@ end
 
     @test begin
         hlo = @code_hlo gradient_fn(x, st)
-        contains(repr(hlo), "stablehlo.rng_bit_generator")
+        @filecheck begin
+            @check "stablehlo.rng_bit_generator"
+            repr(hlo)
+        end
     end
 end
 
@@ -576,4 +592,57 @@ end
         )
         @test activity <: Duplicated
     end
+end
+
+function f_ret_buf!(dx, x)
+    copyto!(dx, x)
+    return dx
+end
+
+function seeded_reverse(dx, x, λ)
+    du = zero(x)
+    Enzyme.autodiff(
+        Reverse, Const(f_ret_buf!), Const, Duplicated(dx, copy(λ)), Duplicated(x, du)
+    )
+    return du
+end
+
+@testset "Seeded reverse-mode AD" begin
+    dx = zeros(Float32, 2)
+    x = Float32[3.0, 7.0]
+    λ = ones(Float32, 2)
+    r_dx = Reactant.ConcreteRArray(dx)
+    r_x = Reactant.ConcreteRArray(x)
+    r_λ = Reactant.ConcreteRArray(λ)
+
+    res = seeded_reverse(dx, x, λ)
+    r_res = @jit seeded_reverse(r_dx, r_x, r_λ)
+
+    @test res ≈ convert(Array, r_res)
+end
+
+mutable struct TwoArgStruct{A,B}
+    clock::A
+    velocities::B
+end
+
+function two_arg_fn(model)
+    model.clock = 0
+    return nothing
+end
+
+function differentiate_two_arg_fn(model)
+    dmodel = Enzyme.make_zero(model)
+    dedν = autodiff(
+        set_strong_zero(Enzyme.ReverseWithPrimal),
+        two_arg_fn,
+        Active,
+        Duplicated(model, dmodel),
+    )
+    return dedν
+end
+
+@testset "Two Arg Struct" begin
+    model = TwoArgStruct(ConcreteRNumber(0), Reactant.to_rarray(ones(Float32, 3)))
+    @jit differentiate_two_arg_fn(model)
 end

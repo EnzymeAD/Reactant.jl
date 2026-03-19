@@ -34,8 +34,11 @@
 #include "mlir/Dialect/Transform/Transforms/Passes.h"
 #include "mlir/InitAllPasses.h"
 #include "mlir/Parser/Parser.h"
+
 #include "mlir/Pass/PassRegistry.h"
 #include "mlir/Transforms/Passes.h"
+#include "mlir/lib/AsmParser/Lexer.h"
+#include "mlir/lib/AsmParser/Token.h"
 #include "src/enzyme_ad/jax/Dialect/Dialect.h"
 #include "src/enzyme_ad/jax/Implementations/XLADerivatives.h"
 #include "src/enzyme_ad/jax/Passes/Passes.h"
@@ -68,6 +71,8 @@
 #include "llvm/TargetParser/Host.h"
 
 #include "llvm-c/TargetMachine.h"
+
+#include "xla/pjrt/maybe_owning_mlir_module.h"
 
 // PJRT
 #include "xla/pjrt/cpu/cpu_client.h"
@@ -240,8 +245,12 @@ using HeldPjRtBuffer = HeldValue<std::shared_ptr<xla::PjRtBuffer>>;
 using HeldIfrtArray = HeldValue<tsl::RCReference<xla::ifrt::Array>>;
 using HeldHloModule = HeldValue<std::shared_ptr<xla::HloModule>>;
 using HeldIfrtSharding = HeldValue<std::shared_ptr<xla::ifrt::Sharding>>;
+using HeldIfrtConstSharding =
+    HeldValue<std::shared_ptr<const xla::ifrt::Sharding>>;
 using HeldIfrtLoadedExecutable =
     HeldValue<std::shared_ptr<xla::ifrt::LoadedExecutable>>;
+using HeldDistributedRuntimeClient =
+    HeldValue<std::shared_ptr<xla::DistributedRuntimeClient>>;
 
 REACTANT_ABI void (*ReactantThrowError)(const char *) = nullptr;
 
@@ -552,6 +561,27 @@ REACTANT_ABI PjRtClient *MakeClientUsingPluginAPI(const char *device_type,
   return GetCApiClient(client_name);
 }
 
+// Register a Julia-allocated PJRT_Api struct directly (no dlopen needed).
+// Julia fills the struct with @cfunction pointers, passes it here.
+REACTANT_ABI PjRtClient *MakeClientFromApi(const PJRT_Api *api,
+                                           const char *device_type,
+                                           const char *client_name,
+                                           const char **error) {
+  absl::Status set_status = pjrt::SetPjrtApi(device_type, api);
+  if (!set_status.ok()) {
+    auto str = set_status.message();
+    char *err = (char *)malloc(str.size() + 1);
+    memcpy(err, str.data(), str.size() + 1);
+    *error = err;
+    return nullptr;
+  }
+  if (InitializePjrtPlugin(device_type, error) == 1)
+    return nullptr;
+
+  RegisterProfiler(api);
+  return GetCApiClient(client_name);
+}
+
 REACTANT_ABI PjRtClient *MakeTPUClient(const char *tpu_path,
                                        const char **error) {
   // Prefer $TPU_LIBRARY_PATH if set
@@ -582,13 +612,13 @@ REACTANT_ABI int ClientProcessIndex(PjRtClient *client) {
 }
 
 REACTANT_ABI PjRtDevice *ClientGetDevice(PjRtClient *client, int device_id) {
-  return MyValueOrThrow(client->LookupDevice(PjRtGlobalDeviceId(device_id)));
+  return MyValueOrThrow(client->LookupDevice(GlobalDeviceId(device_id)));
 }
 
 REACTANT_ABI PjRtDevice *ClientGetAddressableDevice(PjRtClient *client,
                                                     int device_id) {
   return MyValueOrThrow(
-      client->LookupAddressableDevice(PjRtLocalDeviceId(device_id)));
+      client->LookupAddressableDevice(LocalDeviceId(device_id)));
 }
 
 REACTANT_ABI const char *ClientGetPlatformName(PjRtClient *client) {
@@ -615,7 +645,6 @@ REACTANT_ABI void ClientGetAddressableDevices(PjRtClient *client,
   }
 }
 
-// To keep in sync with JLAllocatorStats in src/XLA.jl
 struct JLAllocatorStats {
   int64_t num_allocs;
   int64_t bytes_in_use;
@@ -751,6 +780,15 @@ REACTANT_ABI int32_t ReactantCudaDriverGetVersion() {
   ReactantHandleCuResult(cuDriverGetVersion(&data));
   return data;
 }
+
+#if CUDA_VERSION >= 13000
+// This stub satisfies the linker for cuFFT's RDC callback requirements
+// without requiring an nvcc device-link step.
+extern "C" {
+void __cudaRegisterLinkedBinary_28b8d6c6_20_separate_callback_cu_a85cd5ea_29231() {
+}
+}
+#endif
 
 REACTANT_ABI int32_t ReactantHermeticCudaGetVersion() { return CUDA_VERSION; }
 
@@ -988,7 +1026,8 @@ REACTANT_ABI void CopyToBuffer(PjRtClient *client, PjRtBuffer *buffer,
   auto pid = client->platform_id();
   if (pid == xla::TpuId()) {
     auto dims = buffer->on_device_shape().dimensions();
-    // TODO(#2252): note this assume that we want to copy the entire buffer size.
+    // TODO(#2252): note this assume that we want to copy the entire buffer
+    // size.
     auto buf2 = ArrayFromHostBuffer(client, data, buffer->element_type(),
                                     dims.size(), dims.data(), buffer->device());
     *bufferP = buf2;
@@ -1050,7 +1089,8 @@ REACTANT_ABI void CopyFromBuffer(PjRtClient *client, PjRtBuffer *buffer,
 
   auto pid = client->platform_id();
   if (pid == xla::TpuId()) {
-    // TODO(#2252): note this assume that we want to copy the entire buffer size.
+    // TODO(#2252): note this assume that we want to copy the entire buffer
+    // size.
     BufferToHost(buffer, data);
     return;
   }
@@ -1310,7 +1350,7 @@ xla::PjRtLoadedExecutable *ClientCompileInternal(PjRtClient *client,
     }
   }
 
-  auto exec_err = client->CompileAndLoad(cmod_op, options);
+  auto exec_err = client->CompileAndLoad(MaybeOwningMlirModule(cmod_op), options);
 
   if (!exec_err.ok()) {
     std::string err_str;
@@ -1749,11 +1789,8 @@ REACTANT_ABI void ifrt_client_dtor(ifrt::Client *client) { delete client; }
 // generic version, but IFRT-PjRt backend only supports SingleDeviceSharding
 // and FullyReplicated. use `ifrt_pjrt_array_create` if using IFRT-PjRt.
 REACTANT_ABI HeldIfrtArray *ifrt_client_make_array_from_host_buffer(
-    ifrt::Client *client, void *data,
-    int dtype_kind, // int
-    int ndims, const int64_t *c_shape,
-    HeldValue<std::shared_ptr<const ifrt::Sharding>> *sharding,
-    int c_semantics) {
+    ifrt::Client *client, void *data, int dtype_kind, int ndims,
+    const int64_t *c_shape, HeldIfrtConstSharding *sharding, int c_semantics) {
   auto dtype = ifrt::DType(static_cast<ifrt::DType::Kind>(dtype_kind));
   auto shape = ifrt::Shape(absl::Span<const int64_t>(c_shape, ndims));
   return reactant::capture(MyValueOrThrow(client->MakeArrayFromHostBuffer(
@@ -1765,9 +1802,8 @@ REACTANT_ABI HeldIfrtArray *ifrt_client_make_array_from_host_buffer(
 
 REACTANT_ABI HeldIfrtArray *
 ifrt_client_make_single_shard_array_from_host_buffer(
-    ifrt::Client *client, void *data,
-    int dtype_kind, // int
-    int ndims, const int64_t *c_shape, int c_semantics, ifrt::Device *device,
+    ifrt::Client *client, void *data, int dtype_kind, int ndims,
+    const int64_t *c_shape, int c_semantics, ifrt::Device *device,
     const char *mem_kind) {
   auto memory_kind = ifrt::MemoryKind(std::string(mem_kind));
   auto sharding = reactant::capture(std::shared_ptr<const ifrt::Sharding>(
@@ -1780,8 +1816,8 @@ ifrt_client_make_single_shard_array_from_host_buffer(
 // each process only provides arrays for its own addressable devices
 REACTANT_ABI HeldIfrtArray *ifrt_client_assemble_array_from_single_shards(
     ifrt::Client *client, int32_t ndims, const int64_t *c_shape,
-    HeldValue<std::shared_ptr<const ifrt::Sharding>> *sharding, int32_t narrays,
-    HeldIfrtArray **c_arrays, int32_t c_semantics) {
+    HeldIfrtConstSharding *sharding, int32_t narrays, HeldIfrtArray **c_arrays,
+    int32_t c_semantics) {
   ifrt::Shape shape = ifrt::Shape(absl::Span<const int64_t>(c_shape, ndims));
   std::vector<tsl::RCReference<ifrt::Array>> arrays(narrays);
   for (int i = 0; i < narrays; i++) {
@@ -1796,9 +1832,8 @@ REACTANT_ABI HeldIfrtArray *ifrt_client_assemble_array_from_single_shards(
 
 // we should deprecate this because is IFRT-PjRt specific
 // try use `ifrt_client_make_single_shard_array_from_host_buffer` instead
-REACTANT_ABI HeldIfrtArray *
-ifrt_pjrt_array_create(ifrt::PjRtClient *client,
-                       HeldValue<std::shared_ptr<xla::PjRtBuffer>> *buffer) {
+REACTANT_ABI HeldIfrtArray *ifrt_pjrt_array_create(ifrt::PjRtClient *client,
+                                                   HeldPjRtBuffer *buffer) {
   return reactant::capture(
       tsl::RCReference<ifrt::Array>(MyValueOrThrow(xla::ifrt::PjRtArray::Create(
           client, buffer->obj(), /*has_custom_layout*/ false))));
@@ -2006,7 +2041,7 @@ ifrt_proxy_create_client(const char *c_proxy_server_address,
       .release();
 }
 
-REACTANT_ABI ifrt::Client *ifrt_pjrt_make_client(
+static ifrt::Client *ifrt_pjrt_make_client(
     PjRtClient *pjrt_client, int node_id, int num_nodes,
     void *distributed_runtime_client, const char **error,
     std::string key_prefix,
@@ -2479,7 +2514,10 @@ ifrt_sharding_is_fully_replicated(HeldIfrtSharding *sharding) {
 }
 
 REACTANT_ABI const char *ifrt_sharding_to_string(HeldIfrtSharding *sharding) {
-  return cstr_from_string(sharding->obj()->DebugString());
+  std::string str;
+  std::stringstream ss(str);
+  ss << *sharding->obj();
+  return cstr_from_string(ss.str());
 }
 
 REACTANT_ABI int32_t ifrt_sharding_devices_size(HeldIfrtSharding *sharding) {
@@ -2621,7 +2659,7 @@ REACTANT_ABI ifrt::Client *ifrt_array_to_client(HeldIfrtArray *array) {
   return array->obj()->client();
 }
 
-REACTANT_ABI HeldValue<std::shared_ptr<const ifrt::Sharding>> *
+REACTANT_ABI HeldIfrtConstSharding *
 ifrt_array_to_sharding(HeldIfrtArray *array) {
   return reactant::capture(array->obj()->shared_ptr_sharding());
 }
@@ -2656,43 +2694,144 @@ REACTANT_ABI HeldIfrtArray **ifrt_array_disassemble_into_single_device_arrays(
 
 #pragma region xla::Distributed
 
-REACTANT_ABI HeldValue<std::shared_ptr<xla::DistributedRuntimeClient>> *
-GetDistributedRuntimeClient(char *c_address, int32_t node_id,
-                            int32_t rpc_timeout_in_seconds,
-                            int32_t init_timeout,
-                            int32_t shutdown_timeout_in_minutes,
-                            int32_t heartbeat_timeout_in_seconds,
-                            bool use_compression) {
-  xla::DistributedRuntimeClient::Options options;
-  options.node_id = node_id;
-  options.rpc_timeout = absl::Seconds(rpc_timeout_in_seconds);
-  options.init_timeout = absl::Seconds(init_timeout);
-  options.shutdown_timeout = absl::Minutes(shutdown_timeout_in_minutes);
-  options.heartbeat_timeout = absl::Seconds(heartbeat_timeout_in_seconds);
+struct DistributedRuntimeClientOptions {
+  int32_t node_id;
+  int32_t rpc_timeout_in_seconds;
+  int32_t init_timeout_in_seconds;
+  int32_t shutdown_timeout_in_minutes;
+  int32_t heartbeat_timeout_in_seconds;
+  bool use_compression;
+  bool shutdown_on_destruction;
+  bool poll_for_error_from_service_at_startup;
+  bool recoverable;
+};
+
+REACTANT_ABI HeldDistributedRuntimeClient *
+GetDistributedRuntimeClientWithOptions(
+    char *c_address, DistributedRuntimeClientOptions *options) {
+  VLOG(3) << "DistributedRuntimeClientOptions: node_id: " << options->node_id
+          << " rpc_timeout_in_seconds: " << options->rpc_timeout_in_seconds
+          << " init_timeout_in_seconds: " << options->init_timeout_in_seconds
+          << " shutdown_timeout_in_minutes: "
+          << options->shutdown_timeout_in_minutes
+          << " heartbeat_timeout_in_seconds: "
+          << options->heartbeat_timeout_in_seconds
+          << " shutdown_on_destruction: " << options->shutdown_on_destruction
+          << " poll_for_error_from_service_at_startup: "
+          << options->poll_for_error_from_service_at_startup
+          << " recoverable: " << options->recoverable << "\n";
+
+  xla::DistributedRuntimeClient::Options xla_options;
+  xla_options.node_id = options->node_id;
+
+  if (options->rpc_timeout_in_seconds > 0) {
+    xla_options.rpc_timeout = absl::Seconds(options->rpc_timeout_in_seconds);
+  }
+  if (options->init_timeout_in_seconds > 0) {
+    xla_options.init_timeout = absl::Seconds(options->init_timeout_in_seconds);
+  }
+  if (options->shutdown_timeout_in_minutes > 0) {
+    xla_options.shutdown_timeout =
+        absl::Minutes(options->shutdown_timeout_in_minutes);
+  }
+  if (options->heartbeat_timeout_in_seconds > 0) {
+    xla_options.heartbeat_timeout =
+        absl::Seconds(options->heartbeat_timeout_in_seconds);
+  }
+
+  xla_options.shutdown_on_destruction = options->shutdown_on_destruction;
+  xla_options.poll_for_error_from_service_at_startup =
+      options->poll_for_error_from_service_at_startup;
+  xla_options.recoverable = options->recoverable;
 
   std::string address = c_address;
 
-  return reactant::capture(
-      xla::GetDistributedRuntimeClient(address, options, use_compression));
+  VLOG(3) << "address: " << address
+          << " use_compression: " << options->use_compression << "\n";
+
+  return reactant::capture(xla::GetDistributedRuntimeClient(
+      address, xla_options, options->use_compression));
 }
 
-REACTANT_ABI void free_distributed_runtime_client(
-    HeldValue<std::shared_ptr<xla::DistributedRuntimeClient>> *client) {
+REACTANT_ABI HeldDistributedRuntimeClient *GetDistributedRuntimeClient(
+    char *c_address, int32_t node_id, int32_t rpc_timeout_in_seconds,
+    int32_t init_timeout, int32_t shutdown_timeout_in_minutes,
+    int32_t heartbeat_timeout_in_seconds, bool use_compression) {
+  DistributedRuntimeClientOptions options;
+  options.node_id = node_id;
+  options.rpc_timeout_in_seconds = rpc_timeout_in_seconds;
+  options.init_timeout_in_seconds = init_timeout;
+  options.shutdown_timeout_in_minutes = shutdown_timeout_in_minutes;
+  options.heartbeat_timeout_in_seconds = heartbeat_timeout_in_seconds;
+  options.use_compression = use_compression;
+  options.shutdown_on_destruction = true;
+  options.poll_for_error_from_service_at_startup = true;
+  options.recoverable = false;
+
+  return GetDistributedRuntimeClientWithOptions(c_address, &options);
+}
+
+REACTANT_ABI void
+free_distributed_runtime_client(HeldDistributedRuntimeClient *client) {
   delete client;
 }
 
-REACTANT_ABI void distributed_runtime_client_connect(
-    HeldValue<std::shared_ptr<xla::DistributedRuntimeClient>> *client) {
+REACTANT_ABI void
+distributed_runtime_client_connect(HeldDistributedRuntimeClient *client) {
   auto status = client->obj()->Connect();
   if (!status.ok())
     ReactantThrowError(status.ToString().c_str());
 }
 
-REACTANT_ABI void distributed_runtime_client_shutdown(
-    HeldValue<std::shared_ptr<xla::DistributedRuntimeClient>> *client) {
+REACTANT_ABI void
+distributed_runtime_client_shutdown(HeldDistributedRuntimeClient *client) {
   auto status = client->obj()->Shutdown();
   if (!status.ok())
     ReactantThrowError(status.ToString().c_str());
+}
+
+struct DistributedRuntimeServiceOptions {
+  int32_t num_nodes;
+  bool recoverable;
+  int32_t heartbeat_timeout_in_seconds;
+  int32_t cluster_register_timeout_in_minutes;
+  int32_t shutdown_timeout_in_minutes;
+};
+
+REACTANT_ABI xla::DistributedRuntimeService *
+GetDistributedRuntimeServiceWithOptions(
+    char *c_address, DistributedRuntimeServiceOptions *options) {
+  xla::CoordinationServiceImpl::Options xla_options;
+  xla_options.num_nodes = options->num_nodes;
+  xla_options.recoverable = options->recoverable;
+
+  if (options->heartbeat_timeout_in_seconds > 0) {
+    xla_options.heartbeat_timeout =
+        absl::Seconds(options->heartbeat_timeout_in_seconds);
+  }
+  if (options->cluster_register_timeout_in_minutes > 0) {
+    xla_options.cluster_register_timeout =
+        absl::Minutes(options->cluster_register_timeout_in_minutes);
+  }
+  if (options->shutdown_timeout_in_minutes > 0) {
+    xla_options.shutdown_timeout =
+        absl::Minutes(options->shutdown_timeout_in_minutes);
+  }
+
+  std::string address = c_address;
+
+  VLOG(3) << "DistributedRuntimeServiceOptions: num_nodes: "
+          << options->num_nodes << " heartbeat_timeout_in_seconds: "
+          << options->heartbeat_timeout_in_seconds
+          << " cluster_register_timeout_in_minutes: "
+          << options->cluster_register_timeout_in_minutes
+          << " shutdown_timeout_in_minutes: "
+          << options->shutdown_timeout_in_minutes << "\n";
+
+  VLOG(3) << "address: " << address << "\n";
+
+  return MyValueOrThrow(xla::GetDistributedRuntimeService(address, xla_options))
+      .release();
 }
 
 REACTANT_ABI xla::DistributedRuntimeService *
@@ -2700,26 +2839,24 @@ GetDistributedRuntimeService(char *c_address, int num_nodes,
                              int32_t heartbeat_timeout_in_seconds,
                              int32_t cluster_register_timeout_in_minutes,
                              int32_t shutdown_timeout_in_minutes) {
-  xla::CoordinationServiceImpl::Options options;
+  DistributedRuntimeServiceOptions options;
   options.num_nodes = num_nodes;
-  options.heartbeat_timeout = absl::Seconds(heartbeat_timeout_in_seconds);
-  options.cluster_register_timeout =
-      absl::Minutes(cluster_register_timeout_in_minutes);
-  options.shutdown_timeout = absl::Minutes(shutdown_timeout_in_minutes);
+  options.recoverable = false;
+  options.heartbeat_timeout_in_seconds = heartbeat_timeout_in_seconds;
+  options.cluster_register_timeout_in_minutes =
+      cluster_register_timeout_in_minutes;
+  options.shutdown_timeout_in_minutes = shutdown_timeout_in_minutes;
 
-  std::string address = c_address;
-
-  return MyValueOrThrow(xla::GetDistributedRuntimeService(address, options))
-      .release();
+  return GetDistributedRuntimeServiceWithOptions(c_address, &options);
 }
 
-REACTANT_ABI void free_distributed_runtime_service(
-    xla::DistributedRuntimeService* service) {
+REACTANT_ABI void
+free_distributed_runtime_service(xla::DistributedRuntimeService *service) {
   delete service;
 }
 
-REACTANT_ABI void distributed_runtime_service_shutdown(
-    xla::DistributedRuntimeService *service) {
+REACTANT_ABI void
+distributed_runtime_service_shutdown(xla::DistributedRuntimeService *service) {
   service->Shutdown();
 }
 
@@ -2728,8 +2865,10 @@ REACTANT_ABI void distributed_runtime_service_shutdown(
 #pragma region Shardy
 
 REACTANT_ABI xla::HloSharding *
-hloShardingFromTensorShardingAttr(mlir::sdy::TensorShardingAttr attr,
-                                  mlir::sdy::MeshAttr meshAttr) {
+hloShardingFromTensorShardingAttr(MlirAttribute cattr,
+                                  MlirAttribute cmeshAttr) {
+  auto attr = mlir::cast<mlir::sdy::TensorShardingAttr>(unwrap(cattr));
+  auto meshAttr = mlir::cast<mlir::sdy::MeshAttr>(unwrap(cmeshAttr));
   mlir::ArrayRef<mlir::StringAttr> manual_axes = {};
   std::function<mlir::sdy::MeshAttr(mlir::sdy::TensorShardingAttr)>
       get_mesh_attr = [meshAttr](mlir::sdy::TensorShardingAttr local_attr) {
@@ -2740,13 +2879,17 @@ hloShardingFromTensorShardingAttr(mlir::sdy::TensorShardingAttr attr,
       xla::sdy::convertToHloSharding(attr, get_mesh_attr, manual_axes));
 }
 
-// TODO(#2252): This is incorrect for multiple meshes. We need to use the current mesh
-// to generate this instead of the global mesh Currently we are storing only a
-// single mesh, so we can just use this.
-REACTANT_ABI mlir::sdy::TensorShardingAttr hloShardingToTensorShardingAttr(
-    mlir::MLIRContext *context, const xla::HloSharding *hloSharding,
-    mlir::StringAttr meshName, mlir::sdy::MeshAttr meshAttr, int64_t rank,
+// TODO(#2252): This is incorrect for multiple meshes. We need to use the
+// current mesh to generate this instead of the global mesh Currently we are
+// storing only a single mesh, so we can just use this.
+REACTANT_ABI MlirAttribute hloShardingToTensorShardingAttr(
+    MlirContext cctx, const xla::HloSharding *hloSharding,
+    MlirAttribute cmeshName, MlirAttribute cmeshAttr, int64_t rank,
     const bool *isClosed, const int64_t *priority) {
+  mlir::MLIRContext *context = unwrap(cctx);
+  mlir::StringAttr meshName = mlir::cast<mlir::StringAttr>(unwrap(cmeshName));
+  mlir::sdy::MeshAttr meshAttr =
+      mlir::cast<mlir::sdy::MeshAttr>(unwrap(cmeshAttr));
   const llvm::SmallDenseMap<int64_t, llvm::StringRef>
       deviceIdToMaximalMeshName =
           llvm::SmallDenseMap<int64_t, llvm::StringRef>();
@@ -2768,10 +2911,10 @@ REACTANT_ABI mlir::sdy::TensorShardingAttr hloShardingToTensorShardingAttr(
                                                  isClosed[i], dimPriority));
   }
 
-  return mlir::sdy::TensorShardingAttr::get(
+  return wrap(mlir::sdy::TensorShardingAttr::get(
       context, meshName, tensorShardingAttr.getDimShardings(),
       tensorShardingAttr.getReplicatedAxes(),
-      tensorShardingAttr.getUnreducedAxes());
+      tensorShardingAttr.getUnreducedAxes()));
 }
 
 #pragma endregion
@@ -2783,11 +2926,9 @@ REACTANT_ABI void ifrt_loaded_executable_dtor(HeldIfrtLoadedExecutable *exec) {
 }
 
 REACTANT_ABI void ifrt_loaded_executable_execute(
-    HeldIfrtLoadedExecutable *exec, int num_args,
-    HeldValue<tsl::RCReference<ifrt::Array>> **op_args,
-    uint8_t *is_arg_donatable, int num_results,
-    HeldValue<tsl::RCReference<ifrt::Array>> **op_results, uint8_t *futures,
-    FutureType **status) {
+    HeldIfrtLoadedExecutable *exec, int num_args, HeldIfrtArray **op_args,
+    uint8_t *is_arg_donatable, int num_results, HeldIfrtArray **op_results,
+    uint8_t *futures, FutureType **status) {
   std::vector<tsl::RCReference<xla::ifrt::Array>> args;
   for (int i = 0; i < num_args; i++) {
     args.emplace_back(op_args[i]->obj());
@@ -2959,6 +3100,11 @@ REACTANT_ABI void dump_operation(Operation *op, const char *filename) {
 
   op->print(file, mlir::OpPrintingFlags().enableDebugInfo(true, false));
 }
+REACTANT_ABI void dump_string(const char *op, const char *filename) {
+  std::error_code EC;
+  llvm::raw_fd_ostream file(filename, EC, llvm::sys::fs::OF_Text);
+  file << op;
+}
 
 REACTANT_ABI bool pjrt_device_is_addressable(PjRtDevice *device) {
   return device->IsAddressable();
@@ -2975,8 +3121,7 @@ mlirGetParentOfTypeFunctionOp(mlir::Operation *op) {
 // xla::ifrt::CopyArrays
 REACTANT_ABI HeldIfrtArray **ifrt_copy_arrays_to_device_with_sharding(
     ifrt::Client *client, HeldIfrtArray **arrays, int32_t num_arrays,
-    HeldValue<std::shared_ptr<const ifrt::Sharding>> *dst_sharding,
-    int32_t c_semantics) {
+    HeldIfrtConstSharding *dst_sharding, int32_t c_semantics) {
   std::vector<tsl::RCReference<ifrt::Array>> src_arrays_vec;
   for (int i = 0; i < num_arrays; i++) {
     src_arrays_vec.push_back(arrays[i]->obj());
@@ -2989,7 +3134,7 @@ REACTANT_ABI HeldIfrtArray **ifrt_copy_arrays_to_device_with_sharding(
 
   HeldIfrtArray **res_dst_arrays = new HeldIfrtArray *[num_arrays];
   for (int i = 0; i < num_arrays; i++) {
-    arrays[i] = reactant::capture(std::move(dst_arrays[i]));
+    res_dst_arrays[i] = reactant::capture(std::move(dst_arrays[i]));
   }
   return res_dst_arrays;
 }
@@ -3037,14 +3182,14 @@ ifrt_make_arrays_from_host_buffer_shards_spec(
   };
 }
 
-// TODO(#2252): We can batch the construction of multiple arrays into a single call.
+// TODO(#2252): We can batch the construction of multiple arrays into a single
+// call.
 REACTANT_ABI HeldIfrtArray *ifrt_make_array_from_host_buffer_shards(
     ifrt::Client *client, const void **host_buffers, int num_buffers,
     const int64_t **host_buffer_shapes,
     const int64_t **addressable_shard_indices,
     const int64_t *addressable_shard_indices_sizes, int dtype_kind, int ndims,
-    const int64_t *final_buffer_shape,
-    HeldValue<std::shared_ptr<const ifrt::Sharding>> *sharding,
+    const int64_t *final_buffer_shape, HeldIfrtConstSharding *sharding,
     int32_t c_host_buffer_semantics) {
   auto spec = ifrt_make_arrays_from_host_buffer_shards_spec(
       host_buffers, num_buffers, host_buffer_shapes, addressable_shard_indices,
@@ -3546,7 +3691,7 @@ InitializeXProfStubs(const char *cstr_worker_service_address) {
 }
 
 REACTANT_ABI void StartGrpcServer(int port) {
-  xprof::pywrap::StartGrpcServer(port);
+  xprof::pywrap::StartGrpcServer(port, /*max_concurrent_worker_requests=*/1);
 }
 
 // Creates a ToolOptions map from Julia arrays.
@@ -3657,4 +3802,116 @@ REACTANT_ABI void *ReactantGetCompileOptions(size_t *size) {
   void *data = malloc(*size);
   memcpy(data, serialized.data(), *size);
   return data;
+}
+
+namespace {
+
+// Map mlir::Token::Kind to a simple integer category for Julia-side
+// highlighting
+int32_t mlirTokenKindToCategory(mlir::Token::Kind kind) {
+  switch (kind) {
+  case mlir::Token::percent_identifier:
+    return 1; // SSA (%foo)
+  case mlir::Token::at_identifier:
+    return 2; // Symbol (@foo)
+  case mlir::Token::caret_identifier:
+    return 3; // Block (^foo)
+  case mlir::Token::string:
+    return 4; // String
+
+  // Punctuation
+  case mlir::Token::arrow:
+  case mlir::Token::at:
+  case mlir::Token::colon:
+  case mlir::Token::comma:
+  case mlir::Token::ellipsis:
+  case mlir::Token::equal:
+  case mlir::Token::greater:
+  case mlir::Token::l_brace:
+  case mlir::Token::l_paren:
+  case mlir::Token::l_square:
+  case mlir::Token::less:
+  case mlir::Token::minus:
+  case mlir::Token::plus:
+  case mlir::Token::question:
+  case mlir::Token::r_brace:
+  case mlir::Token::r_paren:
+  case mlir::Token::r_square:
+  case mlir::Token::slash:
+  case mlir::Token::star:
+  case mlir::Token::vertical_bar:
+  case mlir::Token::file_metadata_begin:
+  case mlir::Token::file_metadata_end:
+    return 5; // Punct
+
+  case mlir::Token::bare_identifier:
+    return 7; // BareIdentifier
+  case mlir::Token::hash_identifier:
+    return 8; // HashIdentifier
+  case mlir::Token::exclamation_identifier:
+    return 9; // ExclamationIdentifier
+
+  case mlir::Token::integer:
+  case mlir::Token::floatliteral:
+    return 10; // Number
+  case mlir::Token::inttype:
+    return 11; // IntType
+
+  case mlir::Token::error:
+    return -1; // Error
+
+  case mlir::Token::eof:
+  case mlir::Token::code_complete:
+    return 0; // Default/EOF
+
+  default:
+    // Check if it's a keyword (kw_*)
+    if (kind >= mlir::Token::kw_affine_map)
+      return 6; // Keyword
+    return 0;   // Default
+  }
+}
+
+} // namespace
+
+REACTANT_ABI int32_t ReactantLexMLIR(MlirContext ctx, const char *input,
+                                     int32_t input_len, int32_t *token_kinds,
+                                     int32_t *token_offsets,
+                                     int32_t *token_lengths,
+                                     int32_t max_tokens) {
+  mlir::MLIRContext *context = unwrap(ctx);
+
+  // Create a MemoryBuffer from the input string (non-owning copy)
+  auto memBuffer = llvm::MemoryBuffer::getMemBuffer(
+      llvm::StringRef(input, input_len), "ReactantLexMLIR",
+      /*RequiresNullTerminator=*/false);
+
+  // Set up a SourceMgr with this buffer
+  llvm::SourceMgr sourceMgr;
+  sourceMgr.AddNewSourceBuffer(std::move(memBuffer), llvm::SMLoc());
+
+  // Create the lexer (no code completion)
+  mlir::Lexer lexer(sourceMgr, context, /*codeCompleteContext=*/nullptr);
+
+  const char *bufferStart = lexer.getBufferBegin();
+  int32_t count = 0;
+
+  while (count < max_tokens) {
+    mlir::Token tok = lexer.lexToken();
+    mlir::Token::Kind kind = tok.getKind();
+
+    if (kind == mlir::Token::eof)
+      break;
+
+    llvm::StringRef spelling = tok.getSpelling();
+    int32_t offset = static_cast<int32_t>(spelling.data() - bufferStart);
+    int32_t length = static_cast<int32_t>(spelling.size());
+
+    token_kinds[count] = mlirTokenKindToCategory(kind);
+    token_offsets[count] = offset;
+    token_lengths[count] = length;
+    count++;
+  }
+
+  return count;
 }

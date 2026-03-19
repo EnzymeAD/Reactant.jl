@@ -47,10 +47,18 @@ TracedRArray{T,N}(x::AbstractArray) where {T,N} = convert(TracedRArray{T,N}, x)
 Base.Tuple(x::TracedRArray) = ntuple(Base.Fix1(getindex, x), length(x))
 
 Base.size(x::TracedRArray) = x.shape
-Base.size(x::TracedRArray, i::Integer) = x.shape[i]
+function Base.size(x::TracedRArray, i::Integer)
+    if i > ndims(x)
+        1
+    else
+        x.shape[i]
+    end
+end
 
 function Base.size(x::TracedRArray, i::TracedRNumber{<:Integer})
-    return @allowscalar getindex(@opcall(constant([x.shape...])), i)
+    return @allowscalar ifelse(
+        i > ndims(x), 1, getindex(@opcall(constant([x.shape...])), i)
+    )
 end
 
 Base.collect(x::TracedRArray) = copy(x)
@@ -58,11 +66,13 @@ Base.collect(x::TracedRArray) = copy(x)
 Base.copy(A::TracedRArray{T,N}) where {T,N} = TracedRArray{T,N}((), A.mlir_data, size(A))
 
 function Base.similar(::TracedRArray, ::Type{T}, dims::Dims{N}) where {T,N}
-    return @opcall fill(zero(unwrapped_eltype(T)), dims)
+    return (@opcall fill(
+        zero(unwrapped_eltype(T)), dims
+    ))::TracedRArray{unwrapped_eltype(T),N}
 end
 
 function Base.similar(::Type{<:TracedRArray{T}}, dims::Dims{N}) where {T,N}
-    return @opcall fill(zero(T), dims)
+    return (@opcall fill(zero(T), dims))::TracedRArray{T,N}
 end
 
 function Base.show(io::IOty, X::AnyTracedRArray) where {IOty<:Union{IO,IOContext}}
@@ -88,6 +98,17 @@ end
 # Override _parentsmatch to avoid pointer comparisons during tracing
 # Direct TracedRArray comparisons - they don't alias unless they're the same object
 Base._parentsmatch(A::TracedRArray, B::TracedRArray) = A === B
+# A TracedRArray and a regular Array can never share memory, so they never alias.
+# Without this, the default DenseArray/StridedArray methods call pointer() which
+# isn't defined for TracedRArray, causing "conversion to pointer not defined"
+# errors when @views creates SubArray wrappers that trigger broadcast alias checking.
+Base._parentsmatch(::TracedRArray, ::AbstractArray) = false
+Base._parentsmatch(::AbstractArray, ::TracedRArray) = false
+# Resolve method ambiguities with Base's DenseArray and StridedArray specializations
+Base._parentsmatch(::TracedRArray, ::DenseArray) = false
+Base._parentsmatch(::DenseArray, ::TracedRArray) = false
+Base._parentsmatch(::TracedRArray, ::StridedArray) = false
+Base._parentsmatch(::StridedArray, ::TracedRArray) = false
 # ReshapedArray comparisons - check if they share the same parent (more specific than StridedArray)
 function Base._parentsmatch(
     A::Base.ReshapedArray{
@@ -242,19 +263,25 @@ AbstractReactantArrayStyle{M}(::Val{N}) where {N,M} = AbstractReactantArrayStyle
 function Broadcast.BroadcastStyle(::Type{<:AnyTracedRArray{T,N}}) where {T,N}
     return AbstractReactantArrayStyle{N}()
 end
+function Broadcast.BroadcastStyle(::Type{<:AbstractRange{<:TracedRNumber}})
+    return AbstractReactantArrayStyle{1}()
+end
+function Broadcast.BroadcastStyle(::Type{<:TracedRNumber})
+    return AbstractReactantArrayStyle{0}()
+end
 
 function Base.similar(
     ::Broadcasted{AbstractReactantArrayStyle{N}}, ::Type{T}, dims
 ) where {T<:Reactant.ReactantPrimitive,N}
     @assert N isa Int
-    return @opcall fill(zero(unwrapped_eltype(T)), dims)
+    return (@opcall fill(zero(unwrapped_eltype(T)), dims))::TracedRArray{T,N}
 end
 
 function Base.similar(
     ::Broadcasted{AbstractReactantArrayStyle{N}}, ::Type{TracedRNumber{T}}, dims
 ) where {T<:Reactant.ReactantPrimitive,N}
     @assert N isa Int
-    return @opcall fill(zero(T), dims)
+    return (@opcall fill(zero(T), dims))::TracedRArray{T,N}
 end
 
 function Base.copy(bc::Broadcasted{<:AbstractReactantArrayStyle{0}})
@@ -266,10 +293,11 @@ end
 Base.eltype(::Broadcast.Extruded{T}) where {T} = eltype(T)
 
 first_scalar(x) = @allowscalar first(x)
+first_scalar(x::Broadcast.Extruded) = first_scalar(x.x)
 
 # we need to override the outer copy method to make sure we never fall back to scalar
 # iteration (see, e.g., CUDA.jl#145)
-function Base.copy(bc::Broadcasted{<:AbstractReactantArrayStyle})
+function _copy(bc)
     fn = if bc.f isa Type && bc.f <: Reactant.ReactantPrimitive
         TracedUtils.TypeCast{bc.f}()
     else
@@ -277,14 +305,18 @@ function Base.copy(bc::Broadcasted{<:AbstractReactantArrayStyle})
     end
     ElType = Broadcast.combine_eltypes(fn, bc.args)
     # Special case a union{} return so we can see the better error message
-    if ElType === Union{}
-        fn(map(first_scalar, bc.args)...)
-    elseif ElType == Any
-        ElType = eltype(fn(map(first_scalar, bc.args)...))
+    if ElType === Union{} || ElType == Any || ElType == TracedRNumber
+        ElType = Core.Typeof(fn(map(first_scalar, bc.args)...))
     end
-    @assert ElType != Any && ElType != Union{}
+    if ElType == Any || ElType == Union{}
+        throw(AssertionError("Failed to deduce eltype of broadcast of $fn, found $ElType"))
+    end
     sim = similar(bc, ElType)
     return copyto!(sim, bc)
+end
+
+@noinline function Base.copy(bc::Broadcasted{<:AbstractReactantArrayStyle})
+    return _copy(bc)
 end
 
 function Base.materialize!(
@@ -1311,5 +1343,48 @@ function Base.permutedims!(dest::TracedRArray, src::AnyTracedRArray, perm)
     TracedUtils.set_mlir_data!(dest, result.mlir_data)
     return dest
 end
+
+function Base.push!(a::TracedRArray{T,1}, items...) where {T}
+    items_cat = Reactant.promote_to(TracedRArray{T,1}, [items...])
+    result = @opcall concatenate([a, items_cat], 1)
+    a.mlir_data = result.mlir_data
+    a.shape = result.shape
+    return a
+end
+
+function Base.pushfirst!(a::TracedRArray{T,1}, items...) where {T}
+    items_cat = Reactant.promote_to(TracedRArray{T,1}, [items...])
+    result = @opcall concatenate([items_cat, a], 1)
+    a.mlir_data = result.mlir_data
+    a.shape = result.shape
+    return a
+end
+
+function Base.pop!(a::TracedRArray{T,1}) where {T}
+    @assert length(a) > 0
+    val = @allowscalar a[end]
+    sliced = @opcall slice(a, [1], [length(a) - 1])
+    a.mlir_data = sliced.mlir_data
+    a.shape = sliced.shape
+    return val
+end
+
+function Base.popfirst!(a::TracedRArray{T,1}) where {T}
+    @assert length(a) > 0
+    val = @allowscalar a[1]
+    sliced = @opcall slice(a, [2], [length(a)])
+    a.mlir_data = sliced.mlir_data
+    a.shape = sliced.shape
+    return val
+end
+
+function Base.append!(a::TracedRArray{T,1}, b::TracedRArray{T,1}) where {T}
+    result = @opcall concatenate(TracedRArray{T,1}[a, b], 1)
+    a.mlir_data = result.mlir_data
+    a.shape = result.shape
+    return a
+end
+
+Base.extrema(A::TracedRArray) = minimum(A), maximum(A)
 
 end

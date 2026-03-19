@@ -1,4 +1,4 @@
-struct Identifier
+@checked struct Identifier
     ref::API.MlirIdentifier
 end
 

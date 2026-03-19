@@ -38,11 +38,26 @@ function ReactantCore.materialize_traced_array(x::Base.OneTo)
     return @opcall iota(Reactant.unwrapped_eltype(x), [length(x)]; iota_dimension=1)
 end
 
-function ReactantCore.materialize_traced_array(x::UnitRange)
+function ReactantCore.materialize_traced_array(x::AbstractUnitRange)
     return @opcall add(
         @opcall(iota(Reactant.unwrapped_eltype(x), [length(x)]; iota_dimension=1)),
         @opcall(fill(first(x), [length(x)])),
     )
+end
+
+function ReactantCore.materialize_traced_array(
+    x::Union{
+        StepRange,
+        StepRangeLen,
+        StepRange{<:TracedRNumber},
+        StepRangeLen{<:TracedRNumber},
+        Reactant.TracedStepRangeLen,
+    },
+)
+    step_arr = broadcast_to_size(step(x), (length(x),))
+    iota = @opcall iota(Reactant.unwrapped_eltype(x), [length(x)]; iota_dimension=1)
+    first_arr = broadcast_to_size(first(x), (length(x),))
+    return @opcall add(@opcall(multiply(step_arr, iota)), first_arr)
 end
 
 function ReactantCore.materialize_traced_array(x::SubArray)
@@ -346,7 +361,7 @@ function make_mlir_fn(
 
     # Explicitly don't use with_block to avoid creating a closure, which creates
     # both compile-time and relocatability issues
-    MLIR.IR.activate!(fnbody)
+    MLIR.IR.activate(fnbody)
 
     result = try
         process_linear_args!(linear_args, fnbody, do_transpose, optimize_then_pad, inv_map)
@@ -357,7 +372,7 @@ function make_mlir_fn(
             Reactant.call_with_reactant(Core.kwcall, kwargs, f, traced_args...)
         end
     finally
-        MLIR.IR.deactivate!(fnbody)
+        MLIR.IR.deactivate(fnbody)
         Ops.deactivate_constant_context!(fnbody)
     end
 
@@ -452,7 +467,7 @@ function prepare_mlir_fn_args(
         Reactant.TracedSetPath
     end
     fnbody = MLIR.IR.Block(MLIR.IR.Type[], MLIR.IR.Location[])
-    MLIR.IR.activate!(fnbody)
+    MLIR.IR.activate(fnbody)
     Ops.activate_constant_context!(fnbody)
     seen_args0 = OrderedIdDict()
     try
@@ -462,7 +477,7 @@ function prepare_mlir_fn_args(
             )
         end
     finally
-        MLIR.IR.deactivate!(fnbody)
+        MLIR.IR.deactivate(fnbody)
         Ops.deactivate_constant_context!(fnbody)
     end
 
@@ -647,7 +662,7 @@ function finalize_mlir_fn(
     end
 
     seen_results = OrderedIdDict()
-    MLIR.IR.activate!(fnbody)
+    MLIR.IR.activate(fnbody)
     traced_result = try
         traced_result = Reactant.make_tracer(
             seen_results, result, (resprefix,), outmode; runtime
@@ -665,7 +680,7 @@ function finalize_mlir_fn(
         end
         traced_result
     finally
-        MLIR.IR.deactivate!(fnbody)
+        MLIR.IR.deactivate(fnbody)
     end
 
     linear_results = Reactant.TracedType[]
@@ -816,7 +831,7 @@ function finalize_mlir_fn(
     end
 
     out_tys = Vector{MLIR.IR.Type}(undef, length(linear_results))
-    MLIR.IR.activate!(fnbody)
+    MLIR.IR.activate(fnbody)
     ret = try
         vals = Vector{MLIR.IR.Value}(undef, length(linear_results))
 
@@ -859,7 +874,7 @@ function finalize_mlir_fn(
         dialect = getfield(MLIR.Dialects, return_dialect)
         dialect.return_(vals)
     finally
-        MLIR.IR.deactivate!(fnbody)
+        MLIR.IR.deactivate(fnbody)
     end
 
     func2 = MLIR.IR.with_block(MLIR.IR.body(mod)) do
@@ -998,8 +1013,7 @@ function finalize_mlir_fn(
         num_partitions = 1
     end
 
-    MLIR.API.mlirOperationDestroy(func.ref)
-    func.ref = MLIR.API.MlirOperation(C_NULL)
+    MLIR.IR.dispose(func)
 
     return (
         func2,
@@ -1123,7 +1137,16 @@ function elem_apply_via_while_loop(f, args::Vararg{Any,Nargs}) where {Nargs}
 
     # This wont be a mutating function so we can safely execute it once
     res_tmp = @allowscalar(f([@allowscalar(arg[1]) for arg in flat_args]...))
-    result = similar(first(flat_args), Reactant.unwrapped_eltype(res_tmp), L)
+
+    # TODO: perhaps instead of this logic, we should have
+    # `similar(::TracedRArray, TracedRNumber{T}) where T = similar(::TracedRArray, T)`
+    # and just not unwrap here?
+    T_res = if typeof(res_tmp) <: TracedRNumber
+        Reactant.unwrapped_eltype(res_tmp)
+    else
+        typeof(res_tmp)
+    end
+    result = similar(first(flat_args), T_res, L)
 
     ind_var = Ref(0)
     f_ref = Ref(f)
@@ -1143,7 +1166,10 @@ end
 function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
     if all(iszero ∘ ndims, args)
         scalar_args = map(args) do arg
-            return promote_to(TracedRNumber{Reactant.unwrapped_eltype(arg)}, arg)
+            if arg isa Number || arg isa TracedRArray{<:Any,0}
+                return promote_to(TracedRNumber, arg)
+            end
+            return arg
         end
         return Reactant.call_with_reactant(f, scalar_args...)
     end
@@ -1284,13 +1310,9 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
     end
 
     seen_results = OrderedIdDict()
-    traced2_result = Reactant.make_tracer(
+    return Reactant.make_tracer(
         seen_results, result, (), Reactant.TracedSetPath; tobatch=OutShape
     )
-
-    func2.ref = MLIR.API.MlirOperation(C_NULL)
-
-    return traced2_result
 end
 
 function traced_indices(indices...)

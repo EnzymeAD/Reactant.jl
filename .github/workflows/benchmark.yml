@@ -8,110 +8,151 @@ permissions:
 
 on:
   schedule:
-    - cron: '0 3 * * *' # Nightly at 3am UTC
+    - cron: "0 3 * * *" # Nightly at 3am UTC
   workflow_dispatch:
     # Manual trigger
   pull_request:
     types: [labeled, unlabeled, synchronize, opened, reopened]
-    paths:
-      - ".github/workflows/benchmark.yml"
-      - "ext/**"
-      - "lib/**"
-      - "src/**"
-      - "benchmark/**"
-      - "Project.toml"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
-  check-benchmark-changes:
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
+  determine-suites:
+    runs-on: linux-x86-n2-32
+    container:
+      image: "ghcr.io/enzymead/reactant-docker-images@sha256:7004a6ebbdd77bd047900b2bffc542e8576864056dc27a9c94d30666d6f7ea01"
     outputs:
-      benchmark_changed: ${{ steps.filter.outputs.benchmark }}
+      suites: ${{ steps.compute.outputs.suites }}
+      any_suite: ${{ steps.compute.outputs.any_suite }}
     steps:
       - uses: actions/checkout@v6
-      - uses: dorny/paths-filter@v3
+        with:
+          fetch-depth: 0
+      - uses: dorny/paths-filter@v4
+        if: github.event_name == 'pull_request'
         id: filter
         with:
           filters: |
-            benchmark:
+            common:
+              - '.github/workflows/benchmark.yml'
+              # - 'benchmark/Project.toml'
+              - 'benchmark/*.jl'
+            benchmark_dirs:
               - 'benchmark/**'
+      - name: Compute suites to run
+        id: compute
+        shell: bash
+        run: |
+          # Discover all benchmark suites (subdirs of benchmark/ with a runbenchmarks.jl)
+          ALL_SUITES=$(find benchmark -maxdepth 2 -name runbenchmarks.jl -path 'benchmark/*/runbenchmarks.jl' \
+            | sed 's|benchmark/\(.*\)/runbenchmarks.jl|\1|' | sort | jq -Rsc 'split("\n") | map(select(. != ""))')
+          echo "Discovered suites: ${ALL_SUITES}"
+
+          # Run all suites for schedule, workflow_dispatch, or 'run benchmarks' label
+          if [[ "${{ github.event_name }}" != "pull_request" ]]; then
+            echo "suites=${ALL_SUITES}" >> $GITHUB_OUTPUT
+            echo "any_suite=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          HAS_LABEL="${{ contains(join(github.event.pull_request.labels.*.name, ','), 'run benchmarks') }}"
+          if [[ "${HAS_LABEL}" == "true" ]]; then
+            echo "suites=${ALL_SUITES}" >> $GITHUB_OUTPUT
+            echo "any_suite=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # For PRs, check if common files changed (run all) or only specific suites
+          COMMON="${{ steps.filter.outputs.common }}"
+          BENCHMARK_DIRS="${{ steps.filter.outputs.benchmark_dirs }}"
+          if [[ "${COMMON}" == "true" ]]; then
+            echo "suites=${ALL_SUITES}" >> $GITHUB_OUTPUT
+            echo "any_suite=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # If no benchmark-related files changed at all, skip
+          if [[ "${BENCHMARK_DIRS}" != "true" ]]; then
+            echo "No benchmark-related files changed and no label present, skipping."
+            echo "any_suite=false" >> $GITHUB_OUTPUT
+            echo 'suites=[]' >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Fetch the base branch for comparison
+          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+          git fetch origin "${{ github.event.pull_request.base.ref }}"
+
+          # Check which suite directories had changes using git diff
+          SUITES="[]"
+          for suite in $(echo "${ALL_SUITES}" | jq -r '.[]'); do
+            if git diff --quiet "origin/${{ github.event.pull_request.base.ref }}" -- "benchmark/${suite}/"; then
+              echo "Suite ${suite}: no changes"
+            else
+              echo "Suite ${suite}: changed"
+              SUITES=$(echo "${SUITES}" | jq -c ". + [\"${suite}\"]")
+            fi
+          done
+
+          if [[ "${SUITES}" == "[]" ]]; then
+            echo "any_suite=false" >> $GITHUB_OUTPUT
+          else
+            echo "any_suite=true" >> $GITHUB_OUTPUT
+          fi
+          echo "suites=${SUITES}" >> $GITHUB_OUTPUT
 
   benchmark:
     timeout-minutes: 90
-    needs: [check-benchmark-changes]
-    if: |
-      always() && (
-        (github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')) ||
-        (github.event_name == 'pull_request' && (
-          contains(join(github.event.pull_request.labels.*.name, ','), 'run benchmarks') ||
-          needs.check-benchmark-changes.outputs.benchmark_changed == 'true'
-        ))
-      )
+    needs: [determine-suites]
+    if: needs.determine-suites.outputs.any_suite == 'true'
     runs-on: ${{ matrix.os }}
     container:
       image: ${{ contains(matrix.os, 'linux') && 'ghcr.io/enzymead/reactant-docker-images@sha256:7004a6ebbdd77bd047900b2bffc542e8576864056dc27a9c94d30666d6f7ea01' || '' }}
     strategy:
       fail-fast: false
       matrix:
+        suite: ${{ fromJson(needs.determine-suites.outputs.suites) }}
         os:
           - linux-x86-n2-32
           - linux-x86-ct6e-180-4tpu
           - linux-x86-a2-48-a100-4gpu
+    env:
+      DEVICE: ${{ contains(matrix.os, 'a100') && 'CUDA' || contains(matrix.os, 'tpu') && 'TPU' || 'CPU' }}
+      JULIA_PKG_SERVER_REGISTRY_PREFERENCE: "eager"
     steps:
       - uses: actions/checkout@v6
       - uses: julia-actions/setup-julia@v2
         with:
           version: "1.11"
-      - uses: julia-actions/cache@v2
+      - uses: julia-actions/cache@v3
       - name: "Instantiate benchmarks environment"
-        shell: julia --color=yes --project=benchmark {0}
         run: |
-          using Pkg
-          Pkg.instantiate()
+          julia --color=yes --project=benchmark/${{ matrix.suite }} -e 'using Pkg; Pkg.instantiate()'
       - name: "Run Benchmarks"
         run: |
-          julia --color=yes --project=benchmark benchmark/runbenchmarks.jl
-        env:
-          XLA_FLAGS: "--xla_gpu_experimental_use_raft_select_k=true"
-      - name: Upload PProf Results
-        uses: actions/upload-artifact@v6
-        timeout-minutes: 10
-        with:
-          name: pprof-results-${{ matrix.os }}
-          path: "**/*pb.gz"
-          retention-days: 90
-          overwrite: false
+          julia --color=yes --project=benchmark/${{ matrix.suite }} benchmark/runbenchmarks.jl ${{ env.DEVICE }} ${{ matrix.suite }}
       - name: Upload Benchmark Results
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         timeout-minutes: 10
         with:
-          name: benchmark-results-${{ matrix.os }}
-          path: "benchmark/results/*"
+          name: benchmark-results-${{ matrix.suite }}-${{ env.DEVICE }}
+          path: "benchmark/${{ matrix.suite }}/results/*"
           retention-days: 90
           overwrite: false
 
   benchmark-aggregate:
-    if: |
-      always() && (
-        (github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')) ||
-        (github.event_name == 'pull_request' && (
-          contains(join(github.event.pull_request.labels.*.name, ','), 'run benchmarks') ||
-          needs.check-benchmark-changes.outputs.benchmark_changed == 'true'
-        ))
-      ) && needs.benchmark.result == 'success'
-    needs: [check-benchmark-changes, benchmark]
     runs-on: ubuntu-latest
+    if: ${{ !cancelled() && needs.benchmark.result == 'success' }}
+    needs: [determine-suites, benchmark]
     steps:
       - uses: actions/checkout@v6
       - uses: julia-actions/setup-julia@v2
         with:
           version: "1"
-      - uses: julia-actions/cache@v2
-      - uses: actions/download-artifact@v6
+      - uses: julia-actions/cache@v3
+      - uses: actions/download-artifact@v8
         with:
           pattern: benchmark-results-*
           path: benchmark/results
@@ -121,16 +162,24 @@ jobs:
         run: |
           julia --color=yes -e '@info "Instantiating project"
             using Pkg;
-            Pkg.add("JSON3");
+            Pkg.add("JSON");
             @info "Combining Benchmarks"
             include("benchmark/aggregate.jl")'
 
            echo "path=$(find benchmark -type f -name combinedbenchmarks.json 2>/dev/null)" >> $GITHUB_OUTPUT
+           echo "path_tflops=$(find benchmark -type f -name combinedbenchmarks_tflops.json 2>/dev/null)" >> $GITHUB_OUTPUT
       - name: Upload benchmark results as artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: benchmark-results
           path: ${{ steps.locate.outputs.path }}
+          retention-days: 90
+          overwrite: false
+      - name: Upload benchmark results as artifact (TFLOP/s)
+        uses: actions/upload-artifact@v7
+        with:
+          name: benchmark-results-tflops
+          path: ${{ steps.locate.outputs.path_tflops }}
           retention-days: 90
           overwrite: false
       - name: Upload Benchmark Results
@@ -141,9 +190,34 @@ jobs:
           output-file-path: ${{ steps.locate.outputs.path }}
           benchmark-data-dir-path: "benchmarks"
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          comment-always: true
+          comment-always: false
           summary-always: true
           alert-threshold: "150%"
           fail-on-alert: false
           auto-push: ${{ github.event_name != 'pull_request' }}
           max-items-in-chart: 50
+      - name: Upload Benchmark Results (TFLOP/s)
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          name: Reactant.jl Benchmarks (TFLOP/s)
+          tool: "customBiggerIsBetter"
+          output-file-path: ${{ steps.locate.outputs.path_tflops }}
+          benchmark-data-dir-path: "benchmarks_tflops"
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          comment-always: false
+          summary-always: true
+          alert-threshold: "150%"
+          fail-on-alert: false
+          auto-push: ${{ github.event_name != 'pull_request' }}
+          max-items-in-chart: 50
+          skip-fetch-gh-pages: true
+
+  notify:
+    name: Notify failed build
+    needs: [benchmark, benchmark-aggregate]
+    if: failure() && github.event.pull_request == null
+    runs-on: ubuntu-latest
+    steps:
+      - uses: jayqi/failed-build-issue-action@v1
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}

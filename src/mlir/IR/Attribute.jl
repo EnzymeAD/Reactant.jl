@@ -658,6 +658,12 @@ function DenseElementsAttribute(values::AbstractArray{String})
     # )
 end
 
+function DenseIndexElementsAttribute(values::AbstractArray{Int64})
+    shaped_type = TensorType(collect(Int, size(values)), IndexType())
+    values = Attribute.(to_row_major(values), (IndexType(),))
+    return Attribute(API.mlirDenseElementsAttrGet(shaped_type, length(values), values))
+end
+
 """
     Base.reshape(attr, shapedType)
 

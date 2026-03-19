@@ -1,7 +1,12 @@
 module Reactant
 
 using ReactantCore:
-    ReactantCore, @trace, within_compile, MissingTracedValue, materialize_traced_array
+    ReactantCore,
+    @trace,
+    within_compile,
+    MissingTracedValue,
+    materialize_traced_array,
+    Periodic
 
 using LinearAlgebra: LinearAlgebra, RowMaximum, NoPivot
 using Random: Random, AbstractRNG
@@ -201,6 +206,7 @@ Base.push!(no_rewrite_ancestor_modules, TracedUtils)
 include("TracedRNumber.jl")
 include("TracedRArray.jl")
 include("TracedRange.jl")
+include("TracedRational.jl")
 include("Indexing.jl")
 
 include("ConcreteRArray.jl")
@@ -223,6 +229,7 @@ use_overlayed_version(::TracedRArray) = true
 use_overlayed_version(::TracedRNumber) = true
 use_overlayed_version(::TracedStepRangeLen) = true
 use_overlayed_version(::TracedUnitRange) = true
+use_overlayed_version(::TracedRational) = true
 function use_overlayed_version(x::AbstractArray)
     a = ancestor(x)
     a === x && return false
@@ -250,6 +257,7 @@ end
 include("stdlibs/LinearAlgebra.jl")
 include("stdlibs/Random.jl")
 include("stdlibs/Base.jl")
+include("stdlibs/BLAS.jl")
 
 # Other Integrations
 include("Enzyme.jl")
@@ -268,7 +276,20 @@ include("Overlay.jl")
 # Serialization
 include("serialization/Serialization.jl")
 
-using .Compiler: @compile, @code_hlo, @code_mhlo, @jit, @code_xla, traced_getfield, compile
+# ProbProg
+include("probprog/ProbProg.jl")
+
+using .Compiler:
+    @compile,
+    @jit,
+    @code_hlo,
+    @code_mhlo,
+    @code_xla,
+    code_hlo,
+    code_mhlo,
+    code_xla,
+    traced_getfield,
+    compile
 export ConcreteRArray,
     ConcreteRNumber,
     ConcretePJRTArray,
@@ -283,18 +304,30 @@ export ConcreteRArray,
     @trace,
     within_compile
 
+@static if VERSION ≥ v"1.11"
+    @eval $(Expr(:public, :Periodic))
+end
+
 const registry = Ref{Union{Nothing,MLIR.IR.DialectRegistry}}()
+
+function register_enzymexla_dialects(ctx::MLIR.IR.Context)
+    MLIR.API.RegisterDialects(ctx)
+    return nothing
+end
+
+ReactantContext(; kwargs...) = ReactantContext(registry[]; kwargs...)
+function ReactantContext(args...; kwargs...)
+    ctx = MLIR.IR.Context(args...; kwargs...)
+    register_enzymexla_dialects(ctx)
+    return ctx
+end
 
 const passes_initialized = Ref(false)
 function initialize_dialect()
     registry[] = MLIR.IR.DialectRegistry()
-    @ccall MLIR.API.mlir_c.InitializeRegistry(
-        registry[]::MLIR.API.MlirDialectRegistry
-    )::Cvoid
+    MLIR.API.InitializeRegistry(registry[])
     if !passes_initialized[]
-        @ccall MLIR.API.mlir_c.InitializePasses(
-            registry[]::MLIR.API.MlirDialectRegistry
-        )::Cvoid
+        MLIR.API.InitializePasses(registry[])
         passes_initialized[] = true
     end
     return nothing
@@ -313,18 +346,18 @@ function initialize_ptrs()
         "__kmpc_for_static_init_8u",
         "__kmpc_fork_call",
     )
-        sym = Libdl.dlsym(LLVMOpenMP_jll.libomp_handle, name)
-        @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(name::Cstring, sym::Ptr{Cvoid})::Cvoid
+        MLIR.API.EnzymeJaXMapSymbol(name, Libdl.dlsym(LLVMOpenMP_jll.libomp_handle, name))
     end
-    if (@ccall MLIR.API.mlir_c.ReactantHermeticCudaGetVersion()::UInt32) != 0
+    if MLIR.API.ReactantHermeticCudaGetVersion() != 0
         for name in (
             "cuLaunchKernel",
             "cuModuleLoadData",
             "cuModuleGetFunction",
             "cuStreamSynchronize",
         )
-            sym = Libdl.dlsym(Reactant_jll.libReactantExtra_handle, name)
-            @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(name::Cstring, sym::Ptr{Cvoid})::Cvoid
+            MLIR.API.EnzymeJaXMapSymbol(
+                name, Libdl.dlsym(Reactant_jll.libReactantExtra_handle, name)
+            )
         end
     end
 end
@@ -347,7 +380,7 @@ function __init__()
             )
         end
     end
-
+    MLIR.Highlight.register_reactant_theme()
     return nothing
 end
 

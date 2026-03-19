@@ -4,6 +4,7 @@ using Reactant_jll
 using Libdl: dlsym
 using LinearAlgebra: BlasInt
 using Functors: Functors
+import p7zip_jll: p7zip
 
 import ..Reactant:
     Reactant,
@@ -31,6 +32,8 @@ import ..ReactantCore: correct_maybe_bcast_call
 const DEBUG_PRINT_CODEGEN = Ref(false)
 const DEBUG_DISABLE_RESHARDING = Ref(false)
 const DEBUG_ALIASED_BUFFER_ASSIGNMENT_ERROR = Ref(false)
+const DEBUG_PROBPROG_DUMP_VALUE = Ref(false)
+const DEBUG_PROBPROG_DISABLE_OPT = Ref(true)
 
 const DEBUG_BUFFER_POINTERS_STORE_DICT = Base.IdDict()
 
@@ -639,10 +642,13 @@ function create_result(
 
         for (k, v) in pairs(tocopy)
             subexpr = create_result(v, append_path(path, k), args...)
+            # symbol keys must be quoted in generated code; otherwise
+            # they are interpreted as variable references
+            k_expr = k isa Symbol ? QuoteNode(k) : k
             push!(
                 resultgen_code,
                 quote
-                    @inbounds $sym[$k] = $subexpr
+                    @inbounds $sym[$k_expr] = $subexpr
                 end,
             )
         end
@@ -705,6 +711,7 @@ function optimization_passes(
     backend::String="gpu",
     is_sharded::Bool=false,
     raise_shlo_to_blas_lapack::Bool=true,
+    self_to_convolution::Bool=false,
 )
     (; max_constant_threshold) = compile_options
 
@@ -723,6 +730,7 @@ function optimization_passes(
         "real_op_canon<16>",
         "imag_op_canon<16>",
         "conj_complex_negate<16>",
+        "negate_imag_conj<16>",
         "get_dimension_size_op_canon<16>",
         "reshape_op_canon<16>",
         "merge_consecutive_reshapes<16>",
@@ -886,7 +894,6 @@ function optimization_passes(
         "real_conj_simplify",
         "real_convert_simplify",
         "conj_complex_simplify",
-        "conj_convert_simplify",
         "elementwise_complex_simplify",
         "split_convolution_into_reverse_convolution",
         # TODO(#2251) we want to enable but may cause an infinite compile time
@@ -906,14 +913,12 @@ function optimization_passes(
         "compare_negate_const_simplify",
         "select_simplify",
         "concatenate_subtract_to_subtract_pad",
+        "concatenate_add_to_add_pad",
         "concatenate_broadcast_in_dim",
         "compare_abs",
         # "compare_mul",
         "compare_convert",
         "add_selects",
-        "self_subtract_to_convolution_like(0)",
-        "self_add_to_convolution_like(0)",
-        "self_mul_to_convolution_like(0)",
         "subtract_multiply_const_to_add_mul_const",
         "trivial_reduce_window_to_reduce_op",
         "case_to_if",
@@ -944,13 +949,30 @@ function optimization_passes(
         "recognize_from_constant($(max_constant_threshold))",
         "extend_to_broadcast",
         "reduce_max_min_mul_positive_scalar",
+        "add_complex_simplify",
+        "sub_complex_simplify",
+        "exponential_minus_one_fuse",
+        "scatter_of_scatter_simplify",
     ]
+
+    if self_to_convolution
+        append!(
+            transform_passes_list,
+            [
+                "self_subtract_to_convolution_like(0)",
+                "self_add_to_convolution_like(0)",
+                "self_mul_to_convolution_like(0)",
+            ],
+        )
+    end
 
     if !is_sharded
         # these passes don't have optimized sharding implementations
         if raise_shlo_to_blas_lapack
             if !compile_options.disable_structured_tensors_detection_passes
-                append!(transform_passes_list, ["dot_general_to_syrk"])
+                append!(
+                    transform_passes_list, ["dot_general_to_symm", "dot_general_to_syrk"]
+                )
             end
         end
     end
@@ -962,6 +984,8 @@ function optimization_passes(
                 "transpose_syrk_to_syrk",
                 "fuse_mul_into_syrk",
                 "fuse_add_into_syrk",
+                "fuse_mul_into_symm",
+                "fuse_add_into_symm",
                 "dot_general_only_diagonal_access",
                 "transpose_symmetric_simplify",
                 "syrk_simplify_output_uplo",
@@ -983,6 +1007,7 @@ function optimization_passes(
                 "unary_elementwise_scatter_simplify",
                 "scatter_indices_are_unique",
                 "split_complex_scatter",
+                "split_complex_gather",
                 ## const prop patterns
                 "scatter_update_computation_const_prop",
                 # gather patterns
@@ -1181,6 +1206,9 @@ function optimization_passes(
             "sign_const_prop",
             "floor_const_prop",
             "tan_const_prop",
+            "relu_const_prop",
+            "gelu_const_prop",
+            "softplus_const_prop",
             # binary constant propagation
             "add_const_prop",
             "and_const_prop",
@@ -1196,7 +1224,7 @@ function optimization_passes(
             "sub_const_prop",
             "xor_const_prop",
             # other constant propagations
-            "const_prop_through_barrier<16>",
+            # "const_prop_through_barrier<16>", # XXX: should we really do this??
             "concat_const_prop<1>($max_constant_threshold)",
             "dynamic_update_slice_const_prop($max_constant_threshold)",
             "clamp_const_prop",
@@ -1283,6 +1311,7 @@ function optimization_passes(
                 "transpose_select",
                 "transpose_while",
                 "transpose_slice",
+                "transpose_like_broadcast_slice",
                 "transpose_concat",
                 "transpose_iota",
                 "transpose_reduce",
@@ -1294,6 +1323,7 @@ function optimization_passes(
                 "transpose_extend",
                 "transpose_rotate",
                 "transpose_dynamic_slice",
+                "transpose_like_broadcast_dynamic_slice",
                 "transpose_reverse",
                 "transpose_batch_norm_training",
                 "transpose_batch_norm_inference",
@@ -1305,8 +1335,10 @@ function optimization_passes(
         )
         if AGGRESSIVE_PROPAGATION[]
             push!(transform_passes_list, "transpose_elementwise(0)")
+            push!(transform_passes_list, "transpose_like_broadcast_elementwise(0)")
         else
             push!(transform_passes_list, "transpose_elementwise(1)")
+            push!(transform_passes_list, "transpose_like_broadcast_elementwise(1)")
         end
     elseif compile_options.transpose_propagate === :down
         append!(
@@ -1379,7 +1411,14 @@ function optimization_passes(
     if lower_comms
         append!(
             lower_transform_passes,
-            ["lower_extend", "lower_wrap", "lower_rotate", "lower_updatewithoutcorners"],
+            [
+                "lower_extend",
+                "lower_wrap",
+                "lower_rotate",
+                "lower_multirotate",
+                "lower_multislice",
+                "lower_updatewithoutcorners",
+            ],
         )
     end
 
@@ -1439,6 +1478,16 @@ end
 # However, this errs as we cannot attach the transform with to the funcop itself [as we run a functionpass].
 const enzyme_pass::String = "enzyme{postpasses=\"arith-raise{stablehlo=true},canonicalize,cse,canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math,canonicalize,cse,canonicalize,arith-raise{stablehlo=true}\"}"
 
+function probprog_pass(;
+    debug_dump::Bool=DEBUG_PROBPROG_DUMP_VALUE[],
+    disable_optimizations::Bool=DEBUG_PROBPROG_DISABLE_OPT[],
+)
+    if !disable_optimizations
+        # TODO(#2063): Add probprog optimization passes
+    end
+    return "probprog{debug-dump=$debug_dump postpasses=\"arith-raise{stablehlo=true}\"}"
+end
+
 function run_pass_pipeline!(mod, pass_pipeline, key=""; enable_verifier=true)
     pm = MLIR.IR.PassManager()
     MLIR.IR.enable_verifier!(pm, enable_verifier)
@@ -1454,6 +1503,7 @@ function run_pass_pipeline!(
     pm = MLIR.IR.PassManager()
     MLIR.IR.enable_verifier!(pm, enable_verifier)
     opm = MLIR.IR.OpPassManager(pm)
+    # TODO: why isn't this being auto-generated?
     @ccall MLIR.API.mlir_c.addSdyPropagationPipeline(
         opm::MLIR.API.MlirOpPassManager,
         propagation_options.keep_sharding_rules::UInt8,
@@ -1483,6 +1533,34 @@ end
 function release_guard_from_gc_for_module(mod::MLIR.IR.Module)
     delete!(__module_gc_vector, mod)
     return nothing
+end
+
+function create_pass_failure_zip(f, args)
+    try
+        # Create a temporary directory for the files
+        temp_dir = mktempdir(; prefix="reactant_failure_", cleanup=false)
+
+        function_name = string(f)
+        function_name = replace(function_name, "!" => "_")
+        Reactant.Serialization.export_to_reactant_script(
+            f,
+            args...;
+            function_name,
+            output_dir=temp_dir,
+            compile_options=Reactant.CompileOptions(; optimization_passes=:none),
+            try_zip_on_failure=false,
+        )
+
+        # Create the zip file
+        zip_path = temp_dir * ".zip"
+        temp_files = readdir(temp_dir; join=true)
+        run(pipeline(`$(p7zip()) a -tzip $zip_path $temp_files`, devnull))
+
+        return zip_path
+    catch e
+        @error "Failed to create debug zip file" exception = e
+        return nothing
+    end
 end
 
 # helper for debug purposes: String -> Text
@@ -1517,10 +1595,12 @@ function __get_compile_options_and_kwargs(;
     xla_debug_options=(;),
     xla_executable_build_options=(;),
     xla_compile_options=(;),
+    strip=:all,
+    strip_llvm_debuginfo=false,
     kwargs...,
 )
     return (
-        Reactant.__compile_options_from_kwags(;
+        Reactant.__compile_options_from_kwargs(;
             compile_options,
             optimize,
             no_nan,
@@ -1542,12 +1622,21 @@ function __get_compile_options_and_kwargs(;
             xla_debug_options,
             xla_executable_build_options,
             xla_compile_options,
+            strip,
         ),
         kwargs,
     )
 end
 
-function compile_mlir(f, args; client=nothing, drop_unsupported_attributes=false, kwargs...)
+function compile_mlir(
+    ctx,
+    f,
+    args;
+    client=nothing,
+    drop_unsupported_attributes=false,
+    try_zip_on_failure::Bool=true,
+    kwargs...,
+)
     client = client !== nothing ? client : XLA.default_backend()
     backend = XLA.platform_name(client)
 
@@ -1557,20 +1646,56 @@ function compile_mlir(f, args; client=nothing, drop_unsupported_attributes=false
         backend = "cpu"
     end
 
-    results = MLIR.IR.with_context() do _
+    MLIR.IR.activate(ctx)
+    try
         mod = MLIR.IR.Module(MLIR.IR.Location())
 
         compile_options, kwargs_inner = __get_compile_options_and_kwargs(; kwargs...)
-        mlir_fn_res = compile_mlir!(
-            mod,
-            f,
-            args,
-            compile_options;
-            backend,
-            runtime=XLA.runtime(client),
-            client,
-            kwargs_inner...,
-        )
+
+        # Wrap compile_mlir! to catch pass pipeline failures
+        mlir_fn_res = try
+            compile_mlir!(
+                mod,
+                f,
+                args,
+                compile_options;
+                backend,
+                runtime=XLA.runtime(client),
+                client,
+                kwargs_inner...,
+            )
+        catch e
+            # Check if this is a pass pipeline failure
+            error_msg = string(e)
+            if contains(error_msg, "failed to run pass manager")
+                # Prevent infinite recursion
+                if !try_zip_on_failure
+                    rethrow(
+                        ErrorException(
+                            "Compilation failed and we were unable to create a debug zip \
+                            file.\nPlease report this issue at: \
+                            https://github.com/EnzymeAD/Reactant.jl/issues\n\
+                            Original error: $(error_msg)",
+                        ),
+                    )
+                end
+
+                # Create a debug zip file with the unoptimized IR
+                zip_path = create_pass_failure_zip(f, args)
+                if zip_path !== nothing
+                    rethrow(
+                        ErrorException(
+                            "Compilation failed during pass pipeline execution.\n\
+                            A debug zip file has been created at: $(zip_path)\n\
+                            Please upload this file when reporting the issue at: \
+                            https://github.com/EnzymeAD/Reactant.jl/issues\n\
+                            Original error: $(error_msg)"
+                        ),
+                    )
+                end
+            end
+            rethrow()
+        end
 
         # Attach a name, and partitioning attributes to the module
         __add_mhlo_attributes_and_name!(
@@ -1579,10 +1704,14 @@ function compile_mlir(f, args; client=nothing, drop_unsupported_attributes=false
 
         if drop_unsupported_attributes
             # Drop some of our attributes
-            run_pass_pipeline!(mod, "drop-unsupported-attributes", "drop_enzymexla_attributes")
+            run_pass_pipeline!(
+                mod, "drop-unsupported-attributes", "drop_enzymexla_attributes"
+            )
         end
 
         return mod, mlir_fn_res
+    finally
+        MLIR.IR.deactivate(ctx)
     end
 
     return results
@@ -1600,12 +1729,12 @@ const cuOptLevel = Ref{Int}(2)
 #                                      12.2 -> 82
 #                                      11.8 -> 78
 function cubinFeatures()
-    ver = @ccall MLIR.API.mlir_c.ReactantCudaDriverGetVersion()::UInt32
+    ver = MLIR.API.ReactantCudaDriverGetVersion()
     # No cuda available
     if ver == 0
         return "+ptx86"
     end
-    ver2 = @ccall MLIR.API.mlir_c.ReactantHermeticCudaGetVersion()::UInt32
+    ver2 = MLIR.API.ReactantHermeticCudaGetVersion()
     ver = min(ver, ver2)
     major, ver = divrem(ver, 1000)
     minor, _ = divrem(ver, 10)
@@ -1701,11 +1830,11 @@ function get_optimize_comms_passes(options::OptimizeCommunicationOptions)
         "enzyme-hlo-generate-td{patterns=concat_to_onedim_dus;concat_to_onedim_dusslice;concatreshape_to_onedim_dus}",
         "transform-interpreter",
         "enzyme-hlo-remove-transform",
-        "enzyme-hlo-generate-td{patterns=reshape_to_broadcast}",
+        "enzyme-hlo-generate-td{patterns=reshape_to_broadcast;recognize_multirotate;use_multirotate_neutral_result;recognize_multislice}",
         "transform-interpreter",
         "enzyme-hlo-remove-transform",
         options_str,
-        "enzyme-hlo-generate-td{patterns=lower_rotate;lower_wrap;lower_extend;lower_updatewithoutcorners}",
+        "enzyme-hlo-generate-td{patterns=lower_rotate;lower_wrap;lower_extend;lower_updatewithoutcorners;lower_multislice}",
         "transform-interpreter",
         "enzyme-hlo-remove-transform",
         options_str,
@@ -1734,6 +1863,7 @@ function compile_mlir!(
     f,
     args,
     compile_options::CompileOptions,
+    debugcache=default_debugcache(),
     callcache=default_callcache(),
     sdycache=default_sdycache(),
     sdygroupidcache=default_sdygroupidcache();
@@ -1744,14 +1874,16 @@ function compile_mlir!(
     client=nothing,
     kwargs...,
 )
+    @assert MLIR.IR.current_context() == MLIR.IR.context(mod)
     client = client !== nothing ? client : XLA.default_backend()
 
     # Explicitly don't use with_block to avoid creating a closure, which creates
     # both compile-time and relocatability issues
 
-    MLIR.IR.activate!(mod)
-    MLIR.IR.activate!(MLIR.IR.body(mod))
+    MLIR.IR.activate(mod)
+    MLIR.IR.activate(MLIR.IR.body(mod))
     activate_callcache!(callcache)
+    activate_debugcache!(debugcache)
     activate_sdycache!(sdycache)
     activate_sdygroupidcache!(sdygroupidcache)
 
@@ -1782,10 +1914,11 @@ function compile_mlir!(
         deactivate_sdycache!(sdycache)
         deactivate_sdygroupidcache!(sdygroupidcache)
         deactivate_callcache!(callcache)
-        MLIR.IR.deactivate!(MLIR.IR.body(mod))
+        deactivate_debugcache!(debugcache)
+        MLIR.IR.deactivate(MLIR.IR.body(mod))
         clear_llvm_compiler_cache!(mod)
         release_guard_from_gc_for_module(mod)
-        MLIR.IR.deactivate!(mod)
+        MLIR.IR.deactivate(mod)
     end
     (;
         fnwrapped,
@@ -1864,7 +1997,7 @@ function compile_mlir!(
         # Raise enabled but use default passes
         # TODO(#2240) remove redundant libdevice raise after fixing phase ordering
         result =
-            "canonicalize,llvm-to-memref-access,canonicalize,convert-llvm-to-cf,canonicalize,enzyme-lift-cf-to-scf,canonicalize,func.func(canonicalize-loops),canonicalize-scf-for,canonicalize,libdevice-funcs-raise,canonicalize,affine-cfg,canonicalize,func.func(canonicalize-loops),canonicalize,llvm-to-affine-access,canonicalize,delinearize-indexing,canonicalize,simplify-affine-exprs,affine-cfg,canonicalize,func.func(affine-loop-invariant-code-motion),canonicalize,sort-memory,raise-affine-to-stablehlo{prefer_while_raising=false dump_failed_lockstep=$(DUMP_FAILED_LOCKSTEP[])},canonicalize,arith-raise{stablehlo=true}," *
+            "canonicalize,llvm-to-memref-access,canonicalize,convert-llvm-to-cf,canonicalize,enzyme-lift-cf-to-scf,canonicalize,func.func(canonicalize-loops),canonicalize-scf-for,canonicalize,libdevice-funcs-raise,canonicalize,affine-cfg,canonicalize,func.func(canonicalize-loops),canonicalize,llvm-to-affine-access,canonicalize,delinearize-indexing,canonicalize,simplify-affine-exprs,affine-cfg,canonicalize,func.func(affine-loop-invariant-code-motion),canonicalize,sort-memory,raise-affine-to-stablehlo{strip_llvm_debuginfo=$(compile_options.strip_llvm_debuginfo) prefer_while_raising=false dump_failed_lockstep=$(DUMP_FAILED_LOCKSTEP[])},canonicalize,arith-raise{stablehlo=true}," *
             opt_passes2
 
         if DUS_TO_CONCAT[]
@@ -1885,14 +2018,20 @@ function compile_mlir!(
     end
 
     blas_int_width = sizeof(BlasInt) * 8
-    lower_enzymexla_linalg_pass = "lower-enzymexla-linalg{backend=$backend \
-                                   blas_int_width=$blas_int_width},\
-                                   lower-enzymexla-blas{backend=$backend \
-                                   blas_int_width=$blas_int_width},\
-                                   lower-enzymexla-lapack{backend=$backend \
-                                   blas_int_width=$blas_int_width}"
-
+    lower_enzymexla_linalg_pass = join(
+        [
+            "lower-enzymexla-linalg{backend=$backend blas_int_width=$blas_int_width}",
+            "lower-enzymexla-blas{backend=$backend blas_int_width=$blas_int_width}",
+            "lower-enzymexla-lapack{backend=$backend blas_int_width=$blas_int_width}",
+        ],
+        ",",
+    )
+    lower_enzymexla_ml_pass = "lower-enzymexla-ml"
     lower_enzymexla_mpi_pass = "lower-enzymexla-mpi{backend=$backend}"
+    lower_enzymexla_passes = join(
+        [lower_enzymexla_linalg_pass, lower_enzymexla_ml_pass, lower_enzymexla_mpi_pass],
+        ",",
+    )
 
     legalize_chlo_to_stablehlo =
         if legalize_stablehlo_to_mhlo || compile_options.legalize_chlo_to_stablehlo
@@ -1902,6 +2041,13 @@ function compile_mlir!(
         end
 
     legal_to_run_shardy_passes = compile_options.optimization_passes === :all
+
+    # Raise any triton kernel that might exist as a custom call
+    # We will lower them back later on, but having the full triton IR enables
+    # optimizations / differentiation, so we unconditionally do it
+    if compile_options.raise_triton_custom_call
+        run_pass_pipeline!(mod, "raise-triton-custom-call", "raise_triton_custom_call")
+    end
 
     if compile_options.optimization_passes === :all
         run_pass_pipeline!(
@@ -1922,8 +2068,7 @@ function compile_mlir!(
                         "enzyme-simplify-math",
                         legalize_chlo_to_stablehlo...,
                         opt_passes2,
-                        lower_enzymexla_linalg_pass,
-                        lower_enzymexla_mpi_pass,
+                        lower_enzymexla_passes,
                         jit,
                     ]
                 else
@@ -1941,8 +2086,7 @@ function compile_mlir!(
                         opt_passes2,
                         kern,
                         raise_passes,
-                        lower_enzymexla_linalg_pass,
-                        lower_enzymexla_mpi_pass,
+                        lower_enzymexla_passes,
                         jit,
                     ]
                 end,
@@ -2063,6 +2207,71 @@ function compile_mlir!(
             ),
             "no_enzyme",
         )
+    elseif compile_options.optimization_passes === :probprog
+        run_pass_pipeline!(
+            mod,
+            join(
+                if compile_options.raise_first
+                    [
+                        "mark-func-memory-effects",
+                        opt_passes,
+                        kern,
+                        raise_passes,
+                        "enzyme-batch",
+                        opt_passes2,
+                        probprog_pass(),
+                        "lower-probprog-to-stablehlo{backend=$backend}",
+                        "outline-enzyme-regions",
+                        enzyme_pass,
+                        opt_passes2,
+                        "canonicalize",
+                        "remove-unnecessary-enzyme-ops",
+                        "enzyme-simplify-math",
+                        (
+                            if compile_options.legalize_chlo_to_stablehlo
+                                ["func.func(chlo-legalize-to-stablehlo)"]
+                            else
+                                []
+                            end
+                        )...,
+                        opt_passes2,
+                        lower_enzymexla_passes,
+                        "lower-probprog-trace-ops{backend=$backend}",
+                        jit,
+                    ]
+                else
+                    [
+                        "mark-func-memory-effects",
+                        opt_passes,
+                        "enzyme-batch",
+                        opt_passes2,
+                        probprog_pass(),
+                        "lower-probprog-to-stablehlo{backend=$backend}",
+                        "outline-enzyme-regions",
+                        enzyme_pass,
+                        opt_passes2,
+                        "canonicalize",
+                        "remove-unnecessary-enzyme-ops",
+                        "enzyme-simplify-math",
+                        (
+                            if compile_options.legalize_chlo_to_stablehlo
+                                ["func.func(chlo-legalize-to-stablehlo)"]
+                            else
+                                []
+                            end
+                        )...,
+                        opt_passes2,
+                        kern,
+                        raise_passes,
+                        lower_enzymexla_passes,
+                        "lower-probprog-trace-ops{backend=$backend}",
+                        jit,
+                    ]
+                end,
+                ",",
+            ),
+            "probprog",
+        )
     elseif compile_options.optimization_passes === :only_enzyme
         run_pass_pipeline!(
             mod,
@@ -2074,6 +2283,24 @@ function compile_mlir!(
                     "canonicalize",
                     "remove-unnecessary-enzyme-ops",
                     "enzyme-simplify-math",
+                ],
+                ',',
+            ),
+            "only_enzyme",
+        )
+    elseif compile_options.optimization_passes === :noopt
+        run_pass_pipeline!(
+            mod,
+            join(
+                [
+                    "mark-func-memory-effects",
+                    "enzyme-batch",
+                    enzyme_pass,
+                    "canonicalize",
+                    "remove-unnecessary-enzyme-ops",
+                    "enzyme-simplify-math",
+                    lower_enzymexla_passes,
+                    jit,
                 ],
                 ',',
             ),
@@ -2095,8 +2322,7 @@ function compile_mlir!(
                         "enzyme-simplify-math",
                         legalize_chlo_to_stablehlo...,
                         opt_passes2,
-                        lower_enzymexla_linalg_pass,
-                        lower_enzymexla_mpi_pass,
+                        lower_enzymexla_passes,
                         jit,
                     ]
                 else
@@ -2111,8 +2337,7 @@ function compile_mlir!(
                         opt_passes2,
                         kern,
                         raise_passes,
-                        lower_enzymexla_linalg_pass,
-                        lower_enzymexla_mpi_pass,
+                        lower_enzymexla_passes,
                         jit,
                     ]
                 end,
@@ -2134,8 +2359,7 @@ function compile_mlir!(
                         opt_passes2,
                         enzyme_pass,
                         "canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math",
-                        lower_enzymexla_linalg_pass,
-                        lower_enzymexla_mpi_pass,
+                        lower_enzymexla_passes,
                         jit,
                     ]
                 else
@@ -2148,8 +2372,7 @@ function compile_mlir!(
                         "canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math",
                         kern,
                         raise_passes,
-                        lower_enzymexla_linalg_pass,
-                        lower_enzymexla_mpi_pass,
+                        lower_enzymexla_passes,
                         jit,
                     ]
                 end,
@@ -2195,6 +2418,10 @@ function compile_mlir!(
 
     if backend == "cuda" && compile_options.cudnn_hlo_optimize
         run_pass_pipeline!(mod, "enzymexla-cudnn-hlo-opt", "cudnn-hlo-opt")
+    end
+
+    if compile_options.lower_triton
+        run_pass_pipeline!(mod, "lower-triton", "lower_triton")
     end
 
     # Now we resolve paddings if `optimize_then_pad`
@@ -2266,7 +2493,7 @@ function compile_mlir!(
                 ],
             )
             push!(MLIR.IR.region(func_with_padding, 1), fnbody)
-            MLIR.IR.activate!(fnbody)
+            MLIR.IR.activate(fnbody)
             push!(MLIR.IR.body(mod), func_with_padding)
 
             try
@@ -2322,7 +2549,7 @@ function compile_mlir!(
 
                 MLIR.Dialects.func.return_(results)
             finally
-                MLIR.IR.deactivate!(fnbody)
+                MLIR.IR.deactivate(fnbody)
             end
 
             # we just need the ops to potentially remove slices / paddings
@@ -2336,7 +2563,7 @@ function compile_mlir!(
                             "cse",
                             "canonicalize",
                             opt_passes2,
-                            lower_enzymexla_linalg_pass,
+                            lower_enzymexla_passes,
                             jit,
                         ],
                         ",",
@@ -2361,8 +2588,7 @@ function compile_mlir!(
     use_shardy_partitioner = false
     result_shardings = missing
     if is_sharded && legal_to_run_shardy_passes
-        module_op = copy(MLIR.IR.Operation(mod))
-        mod_copied = MLIR.IR.Module(module_op)
+        mod_copied = copy(mod)
 
         if compile_options.shardy_passes isa ShardyPropagationOptions
             run_pass_pipeline!(mod_copied, compile_options.shardy_passes)
@@ -2375,9 +2601,9 @@ function compile_mlir!(
             )
         end
 
-        func_op = MLIR.API.mlirSymbolTableLookup(MLIR.IR.SymbolTable(module_op), fnname)
-        @assert func_op.ptr !== C_NULL
-        func_op_new_module = MLIR.IR.Operation(func_op, false)
+        func_op_new_module = MLIR.IR.@dispose sym_table = MLIR.IR.SymbolTable(mod_copied) begin
+            MLIR.IR.lookup(sym_table, fnname)
+        end
 
         result_attrs = MLIR.IR.getattr(func_op_new_module, "res_attrs")
         if result_attrs !== nothing
@@ -2450,13 +2676,25 @@ function compile_mlir!(
         end
     end
 
-    run_pass_pipeline!(mod, "mark-func-memory-effects", "mark-func-memory-effects")
+    if compile_options.optimization_passes !== :none
+        run_pass_pipeline!(mod, "mark-func-memory-effects", "mark-func-memory-effects")
+    end
 
-    func_op = MLIR.API.mlirSymbolTableLookup(
-        MLIR.IR.SymbolTable(MLIR.IR.Operation(mod)), fnname
-    )
-    @assert func_op.ptr !== C_NULL
-    func_op = MLIR.IR.Operation(func_op, false)
+    if compile_options.strip === :all
+        run_pass_pipeline!(mod, "strip-debuginfo", "strip-debuginfo")
+    elseif compile_options.strip isa Vector && length(compile_options.strip) != 0
+        run_pass_pipeline!(
+            mod,
+            "trim-callsites{to_trim=$(join(compile_options.strip, ";"))}",
+            "trim-callsites",
+        )
+    else
+        @assert compile_options.strip === :none
+    end
+
+    func_op = MLIR.IR.@dispose sym_table = MLIR.IR.SymbolTable(mod) begin
+        MLIR.IR.lookup(sym_table, fnname)
+    end
     fnbody = MLIR.IR.first_block(MLIR.IR.region(func_op, 1))::MLIR.IR.Block
     ret = MLIR.IR.terminator(fnbody)::MLIR.IR.Operation
 
@@ -2477,8 +2715,8 @@ function compile_mlir!(
         push!(preserved_args, (linear_results[i], MLIR.IR.block_arg_num(op)))
     end
 
-    MLIR.API.mlirOperationDestroy(ret)
-    ret.ref = MLIR.API.MlirOperation(C_NULL)
+    MLIR.IR.dispose(ret)
+
     MLIR.IR.with_block(fnbody) do
         return MLIR.Dialects.func.return_(nresults)
     end
@@ -2520,8 +2758,7 @@ function compile_mlir!(
         MLIR.IR.setattr!(func3, "enzymexla.memory_effects", mem)
     end
 
-    MLIR.API.mlirOperationDestroy(compiled_f)
-    compiled_f.ref = MLIR.API.MlirOperation(C_NULL)
+    MLIR.IR.dispose(compiled_f)
 
     # Add a `donated` attr to the function arguments. This doesn't affect XLA, but lets us
     # check which arguments were donated.
@@ -2533,7 +2770,7 @@ function compile_mlir!(
                 donated_args_mask[i] = true
 
                 residx = findfirst(Base.Fix1(===, arg), linear_results2)
-                if residx !== nothing
+                if residx !== nothing && in_tys[i] == out_tys2[residx]
                     MLIR.API.mlirFuncSetArgAttr(
                         func3,
                         i - 1,
@@ -2553,8 +2790,7 @@ function compile_mlir!(
     if backend == "tpu"
         for op in collect(MLIR.IR.body(mod))
             if MLIR.IR.dialect(op) == :llvm
-                MLIR.API.mlirOperationDestroy(op)
-                op.ref = MLIR.API.MlirOperation(C_NULL)
+                MLIR.IR.dispose(op)
             end
         end
     end
@@ -2628,6 +2864,7 @@ function get_common_compile_options()
         :cudnn_hlo_optimize => false,
         :legalize_chlo_to_stablehlo => false,
         :compile_options => missing,
+        :strip_llvm_debuginfo => false,
     )
 end
 
@@ -2648,6 +2885,46 @@ const SYNC_DOCS = """
     recommended when benchmarking.
 """
 
+struct TextualModule
+    ir::String
+
+    function TextualModule(mod::MLIR.IR.Module; debug=false)
+        io = IOBuffer()
+        show(IOContext(io, :debug => debug), mod)
+        return new(String(take!(io)))
+    end
+end
+
+Base.show(io::IO, tm::TextualModule) = print(io, MLIR.Highlight.highlight(tm.ir))
+Base.String(tm::TextualModule) = tm.ir
+
+function Base.convert(::Type{MLIR.IR.Module}, tm::TextualModule)
+    return parse(MLIR.IR.Module, tm.ir)
+end
+
+"""
+    code_hlo(ctx, f, args; fn_kwargs = NamedTuple(), kwargs...)
+
+Compile the function `f` with arguments `args` and return the compiled MLIR module.
+
+See also: [`@code_hlo`](@ref).
+"""
+function code_hlo(ctx, f, args; fn_kwargs=NamedTuple(), kwargs...)
+    if f isa Thunk
+        FTy = thunk_fn_type(f)
+        error(
+            "`@code_hlo` expects the original function, not a compiled `Thunk`. " *
+            "Pass the original function directly (of type `$FTy`), e.g. `@code_hlo my_function(args...)`.",
+        )
+    end
+    options = Dict(
+        k => v isa QuoteNode ? v.value : v for (k, v) in get_common_compile_options()
+    )
+    options[:shardy_passes] = :none
+    merge!(options, pairs(kwargs))
+    return first(compile_mlir(ctx, f, args; fn_kwargs, options...))
+end
+
 """
     @code_hlo [optimize = ...] [no_nan = <true/false>] f(args...)
 
@@ -2660,20 +2937,51 @@ $(COMMON_COMPILE_OPTIONS_DOCS)
 See also [`@code_xla`](@ref), [`@code_mhlo`](@ref).
 """
 macro code_hlo(args...)
-    compile_expr, (; compiled) = compile_call_expr(
-        __module__,
-        compile_mlir,
-        merge(get_common_compile_options(), Dict{Symbol,Any}(:shardy_passes => :(:none))),
+    (; f, args, kwargs, options) = parse_call_expr(
+        merge(
+            get_common_compile_options(),
+            Dict{Symbol,Any}(
+                :shardy_passes => :(:none), :debug => false, :strip => :(:none)
+            ),
+        ),
         args...,
     )
-    #! format: off
-    return esc(
-        :(
-            $(compile_expr);
-            $(first)($(compiled))
-        )
+    debug = get(() -> Expr(:kw, :debug, false), options, something(findfirst(opt -> opt.args[1] === :debug, options), -1)).args[2]
+    options = filter(opt -> opt.args[1] !== :debug, options)
+    return quote
+        $MLIR.IR.@dispose ctx = $Reactant.ReactantContext() begin
+            debug = $(esc(debug))
+            mod = $code_hlo(
+                ctx,
+                $(esc(f)),
+                $(esc(args));
+                fn_kwargs=(; $(esc.(kwargs)...)),
+                $(esc.(options)...),
+            )
+            try
+                $TextualModule(mod; debug)
+            finally
+                $MLIR.IR.dispose(mod)
+            end
+        end
+    end
+end
+
+"""
+    code_mhlo(ctx, f, args; fn_kwargs = NamedTuple(), kwargs...)
+
+Compile the function `f` with arguments `args` and return the compiled MLIR module.
+
+See also: [`@code_mhlo`](@ref).
+"""
+function code_mhlo(ctx, f, args; fn_kwargs=NamedTuple(), kwargs...)
+    options = Dict(
+        k => v isa QuoteNode ? v.value : v for (k, v) in get_common_compile_options()
     )
-    #! format: on
+    options[:legalize_stablehlo_to_mhlo] = true
+    options[:shardy_passes] = :to_mhlo_shardings
+    merge!(options, pairs(kwargs))
+    return first(compile_mlir(ctx, f, args; fn_kwargs, options...))
 end
 
 """
@@ -2688,25 +2996,53 @@ $(COMMON_COMPILE_OPTIONS_DOCS)
 See also [`@code_xla`](@ref), [`@code_hlo`](@ref).
 """
 macro code_mhlo(args...)
-    compile_expr, (; compiled) = compile_call_expr(
-        __module__,
-        compile_mlir,
+    (; f, args, kwargs, options) = parse_call_expr(
         merge(
             get_common_compile_options(),
             Dict{Symbol,Any}(
-                :legalize_stablehlo_to_mhlo => true, :shardy_passes => :(:to_mhlo_shardings)
+                :legalize_stablehlo_to_mhlo => true,
+                :shardy_passes => :(:to_mhlo_shardings),
+                :debug => false,
+                :strip => :(:none),
             ),
         ),
         args...,
     )
-    #! format: off
-    return esc(
-        :(
-            $(compile_expr);
-            $(first)($(compiled))
-        )
+    debug = get(() -> Expr(:kw, :debug, false), options, something(findfirst(opt -> opt.args[1] === :debug, options), -1)).args[2]
+    options = filter(opt -> opt.args[1] !== :debug, options)
+    return quote
+        $MLIR.IR.@dispose ctx = $Reactant.ReactantContext() begin
+            debug = $(esc(debug))
+            mod = $code_mhlo(
+                ctx,
+                $(esc(f)),
+                $(esc(args));
+                fn_kwargs=(; $(esc.(kwargs)...)),
+                $(esc.(options)...),
+            )
+            try
+                $TextualModule(mod; debug)
+            finally
+                $MLIR.IR.dispose(mod)
+            end
+        end
+    end
+end
+
+"""
+    code_xla(ctx, f, args; fn_kwargs = NamedTuple(), kwargs...)
+
+Compile the function `f` with arguments `args` and return the compiled HLO module.
+
+See also: [`@code_xla`](@ref).
+"""
+function code_xla(ctx, f, args; fn_kwargs=NamedTuple(), kwargs...)
+    options = Dict(
+        k => v isa QuoteNode ? v.value : v for (k, v) in get_common_compile_options()
     )
-    #! format: on
+    options[:before_xla_optimizations] = false
+    merge!(options, pairs(kwargs))
+    return compile_xla(ctx, f, args; fn_kwargs, options...)[2]
 end
 
 """
@@ -2723,23 +3059,25 @@ $(COMMON_COMPILE_OPTIONS_DOCS)
 See also [`@code_mhlo`](@ref), [`@code_hlo`](@ref).
 """
 macro code_xla(args...)
-    compile_expr, (; compiled) = compile_call_expr(
-        __module__,
-        compile_xla,
+    (; f, args, kwargs, options) = parse_call_expr(
         merge(
             get_common_compile_options(),
             Dict{Symbol,Any}(:before_xla_optimizations => false),
         ),
         args...,
     )
-    #! format: off
-    return esc(
-        :(
-            $(compile_expr);
-            $(compiled)[3]
-        )
-    )
-    #! format: on
+
+    return quote
+        $MLIR.IR.@dispose ctx = $Reactant.ReactantContext() begin
+            $code_xla(
+                ctx,
+                $(esc(f)),
+                $(esc(args));
+                fn_kwargs=(; $(esc.(kwargs)...)),
+                $(esc.(options)...),
+            )
+        end
+    end
 end
 
 """
@@ -2771,11 +3109,24 @@ $(COMMON_COMPILE_OPTIONS_DOCS)
 See also [`@jit`](@ref), [`@code_hlo`](@ref), [`@code_mhlo`](@ref), [`@code_xla`](@ref).
 """
 macro compile(args...)
-    default_options = merge(
-        get_common_compile_options(),
-        Dict{Symbol,Any}(:sync => false, :serializable => false),
+    (; f, args, kwargs, options) = parse_call_expr(
+        merge(
+            get_common_compile_options(),
+            Dict{Symbol,Any}(:sync => false, :serializable => false),
+        ),
+        args...,
     )
-    return esc(first(compile_call_expr(__module__, compile, default_options, args...)))
+    return quote
+        $MLIR.IR.@dispose ctx = $Reactant.ReactantContext() begin
+            $compile(
+                ctx,
+                $(esc(f)),
+                $(esc(args));
+                fn_kwargs=(; $(esc.(kwargs)...)),
+                $(esc.(options)...),
+            )
+        end
+    end
 end
 
 """
@@ -2807,20 +3158,22 @@ See also [`@compile`](@ref), [`@code_hlo`](@ref), [`@code_mhlo`](@ref), [`@code_
 """
 macro jit(args...)
     default_options = merge(get_common_compile_options(), Dict{Symbol,Any}(:sync => false))
-    compile_expr, (; compiled, args) = compile_call_expr(
-        __module__, compile, default_options, args...
-    )
-    #! format: off
-    return esc(
-        :(
-            $(compile_expr);
-            $(compiled)($(args)...)
-        )
-    )
-    #! format: on
+    (; f, args, kwargs, options) = parse_call_expr(default_options, args...)
+    return quote
+        $MLIR.IR.@dispose ctx = $Reactant.ReactantContext() begin
+            fn = $compile(
+                ctx,
+                $(esc(f)),
+                $(esc(args));
+                fn_kwargs=(; $(esc.(kwargs)...)),
+                $(esc.(options)...),
+            )
+            fn($(esc(args))...)
+        end
+    end
 end
 
-function compile_call_expr(_mod, compiler, options::Dict, args...)
+function parse_call_expr(options::Dict, args...)
     while length(args) > 1
         option, args = args[1], args[2:end]
         if !Meta.isexpr(option, :(=))
@@ -2833,10 +3186,6 @@ function compile_call_expr(_mod, compiler, options::Dict, args...)
     end
 
     call = only(args)
-    f_symbol = gensym(:f)
-    args_symbol = gensym(:args)
-    kwargs_symbol = gensym(:kwargs)
-    compiled_symbol = gensym(:compiled)
 
     if Meta.isexpr(call, :call)
         bcast, fname, fname_full = correct_maybe_bcast_call(call.args[1])
@@ -2873,19 +3222,11 @@ function compile_call_expr(_mod, compiler, options::Dict, args...)
         error("Invalid function call: $(call)")
     end
 
-    return (
-        quote
-            $(f_symbol) = $(fname)
-            $(args_symbol) = $(args_rhs)
-            $(kwargs_symbol) = (; $(kwargs_rhs...))
-            $(compiled_symbol) = $(compiler)(
-                $(f_symbol),
-                $(args_symbol);
-                fn_kwargs=$(kwargs_symbol),
-                $(Expr.(:kw, keys(options), values(options))...),
-            )
-        end,
-        (; compiled=compiled_symbol, args=args_symbol),
+    return (;
+        f=fname,
+        args=args_rhs,
+        kwargs=kwargs_rhs,
+        options=Expr.(:kw, keys(options), values(options)),
     )
 end
 
@@ -3708,7 +4049,14 @@ function __resolve_device_and_client(client, seen_args, linear_args, is_sharded)
     return (client, device)
 end
 
+function compile_xla(f, args; kwargs...)
+    MLIR.IR.@dispose ctx = Reactant.ReactantContext() begin
+        compile_xla(ctx, f, args; kwargs...)
+    end
+end
+
 function compile_xla(
+    ctx,
     f,
     args;
     before_xla_optimizations::Bool=false,
@@ -3716,10 +4064,6 @@ function compile_xla(
     serializable::Bool=false,
     kwargs...,
 )
-    # register MLIR dialects
-    ctx = MLIR.IR.Context(Reactant.registry[], false)
-    @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
-
     client = client !== nothing ? client : XLA.default_backend()
     backend = XLA.platform_name(client)
 
@@ -3729,12 +4073,13 @@ function compile_xla(
         backend = "cpu"
     end
 
-    MLIR.IR.activate!(ctx)
+    MLIR.IR.activate(ctx)
     try
         # compile function to MLIR module
         mod = MLIR.IR.Module(MLIR.IR.Location())
 
         compile_options, kwargs = __get_compile_options_and_kwargs(; kwargs...)
+
         mlir_fn_res = compile_mlir!(
             mod,
             f,
@@ -3810,9 +4155,11 @@ function compile_xla(
             hlo_modules = length(hlo_modules) == 1 ? only(hlo_modules) : hlo_modules
         end
 
-        return mod, exec, hlo_modules, mlir_fn_res, device, client, module_string
+        finalize(mod)
+
+        return exec, hlo_modules, mlir_fn_res, device, client, module_string
     finally
-        MLIR.IR.deactivate!(ctx)
+        MLIR.IR.deactivate(ctx)
     end
 end
 
@@ -3821,10 +4168,16 @@ const __thunk_fwd_body_cache = Dict{Symbol,Expr}()
 const __thunk_rev_body_cache = Dict{Expr,Symbol}()
 
 function compile(f, args; kwargs...)
+    MLIR.IR.@dispose ctx = Reactant.ReactantContext() begin
+        compile(ctx, f, args; kwargs...)
+    end
+end
+
+function compile(ctx, f, args; kwargs...)
     compile_options, kwargs = __get_compile_options_and_kwargs(; kwargs...)
 
-    _, exec, _, mlir_fn_res, device, client, str = compile_xla(
-        f, args; compile_options, kwargs...
+    exec, _, mlir_fn_res, device, client, str = compile_xla(
+        ctx, f, args; compile_options, kwargs...
     )
     (; linear_args, seen_args, linear_results, preserved_args, concrete_result) =
         mlir_fn_res
@@ -3967,6 +4320,8 @@ struct Thunk{FTy,tag,IsClosure,ArgTypes,ExecTy,DeviceTy,ClientTy,GD,DAM}
     compiled_with_sync::Bool
 end
 
+thunk_fn_type(::Thunk{FTy}) where {FTy} = FTy
+
 for fn in (:get_tag, :get_isclosure, :get_compiled_argtypes)
     @eval $fn(thunk::Thunk) = $fn(typeof(thunk))
 end
@@ -4068,7 +4423,7 @@ function register_thunk(
     )
 end
 
-for cache_type in (:callcache, :sdycache, :sdygroupidcache)
+for cache_type in (:callcache, :sdycache, :sdygroupidcache, :debugcache)
     activate_fn = Symbol(:activate_, cache_type, :!)
     deactivate_fn = Symbol(:deactivate_, cache_type, :!)
     has_fn = Symbol(:_has_, cache_type)
@@ -4138,6 +4493,10 @@ function default_callcache()
             resargprefix::Symbol,
         }
     }()
+end
+
+function default_debugcache()
+    return Vector{@NamedTuple{f_name::String, file::String, line::Int64}}(undef, 0)
 end
 
 # Since we cache these objects we cannot cache data containing MLIR operations (e.g. the entry must be a string

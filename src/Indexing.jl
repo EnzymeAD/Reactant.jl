@@ -7,6 +7,7 @@ using ..TracedUtils: TracedUtils
 
 using GPUArraysCore: @allowscalar, assertscalar
 using ReactantCore: materialize_traced_array
+using StructUtils: Selectors
 
 using Base: TwicePrecision
 
@@ -17,19 +18,6 @@ Base.getindex(a::TracedRNumber) = a
 Base.getindex(a::TracedRArray{T,0}) where {T} = TracedRNumber{T}((), a.mlir_data)
 function Base.getindex(a::TracedRArray{T,0}, ::CartesianIndex{0}) where {T}
     return TracedRNumber{T}((), a.mlir_data)
-end
-
-function Base.getindex(r::Union{Base.StepRangeLen,Base.LinRange}, i::TracedRNumber{Int})
-    @inline
-    i isa TracedRNumber{Bool} && throw(ArgumentError("invalid index: $i of type Bool"))
-    # @boundscheck checkbounds(r, i)
-    return Base.unsafe_getindex(r, i)
-end
-function Base.getindex(r::Base.UnitRange, i::I) where {I<:TracedRNumber{Int}}
-    val = convert(I, r.start + (i - oneunit(i)))
-    # TODO(#2237): we should have error messages at some point.
-    # @boundscheck Base._in_unit_range(v, val, i) || throw_boundserror(v, i)
-    return val
 end
 
 ## Array Indexing
@@ -87,9 +75,84 @@ function Base.getindex(
     return getindex(ancestor, idxs...)
 end
 
+# This method is needed exclusively to resolve an ambiguity
 function Base.getindex(
-    a::AbstractRange{TracedRNumber{T}}, index::Union{Int,TracedRNumber{Int}}
+    l::Selectors.List{TracedRNumber{T}}, index::Union{Int,TracedRNumber{Int}}
 ) where {T}
+    return getindex(Reactant.promote_to(TracedRArray{T,1}, l), index)
+end
+
+for (aT, iT) in (
+    (AbstractRange, TracedRNumber{<:Integer}),
+    (AbstractRange{<:TracedRNumber}, Int),
+    (AbstractRange{<:TracedRNumber}, TracedRNumber{<:Integer}),
+    (AbstractRange{<:TracedRNumber}, TracedRNumber{Int}),
+    # 1.10 specific ambiguity fixes
+    (UnitRange{<:TracedRNumber}, Int),
+)
+    @eval function Base.getindex(a::$aT, index::$iT)
+        return convert(
+            TracedRNumber{Reactant.unwrapped_eltype(a)},
+            first(a) + (index - oneunit(index)) * Base.step_hp(a),
+        )
+    end
+end
+
+for (aT, iT) in (
+    (Base.OneTo, TracedRNumber{<:Integer}),
+    (Base.OneTo{<:TracedRNumber}, Int),
+    (Base.OneTo{<:TracedRNumber}, TracedRNumber{<:Integer}),
+    (Base.OneTo{<:TracedRNumber}, TracedRNumber{Int}),
+)
+    @eval function Base.getindex(a::$aT, index::$iT)
+        return convert(TracedRNumber{Reactant.unwrapped_eltype(a)}, index)
+    end
+end
+
+for (aT, iT) in (
+    (StepRangeLen, TracedRNumber{<:Integer}),
+    (StepRangeLen{<:TracedRNumber}, Int),
+    (StepRangeLen{<:TracedRNumber}, TracedRNumber{<:Integer}),
+    (StepRangeLen{<:TracedRNumber}, TracedRNumber{Int}),
+)
+    @eval function Base.getindex(r::$aT, index::$iT)
+        # FIXME: this crashes for some reason
+        # u = convert(TracedRNumber{Reactant.unwrapped_eltype(r)}, index) - r.offset
+        # return convert(TracedRNumber{Reactant.unwrapped_eltype(r)}, r.ref + u * r.step)
+        return @allowscalar getindex(
+            Reactant.promote_to(TracedRArray{Reactant.unwrapped_eltype(r),1}, r), index
+        )
+    end
+end
+
+for (aT, iT) in (
+    (LinRange, TracedRNumber{<:Integer}),
+    (LinRange{<:TracedRNumber}, Int),
+    (LinRange{<:TracedRNumber}, TracedRNumber{<:Integer}),
+    (LinRange{<:TracedRNumber}, TracedRNumber{Int}),
+)
+    @eval function Base.getindex(r::$aT, index::$iT)
+        return convert(
+            TracedRNumber{Reactant.unwrapped_eltype(r)},
+            Base.lerpi(index - oneunit(index), r.lendiv, r.start, r.stop),
+        )
+    end
+end
+
+# v1.10 specific ambiguity fixes
+function Base.getindex(
+    a::Union{LinRange{TracedRNumber{T}},StepRangeLen{TracedRNumber{T}}}, index::Int
+) where {T}
+    return getindex(Reactant.promote_to(TracedRArray{T,1}, a), index)
+end
+
+function Base.getindex(
+    a::Union{
+        LinRange{T} where T<:Reactant.TracedRNumber,
+        StepRangeLen{T} where T<:Reactant.TracedRNumber,
+    },
+    index::Int,
+)
     return getindex(Reactant.promote_to(TracedRArray{T,1}, a), index)
 end
 
@@ -145,20 +208,6 @@ function Base.getindex(
     out = getindex(x.data, i)
     @assert !(out isa Missing)
     return out
-end
-
-function Base.getindex(x::Base.OneTo{TracedRNumber{T}}, i::Int) where {T}
-    return @allowscalar getindex(Reactant.promote_to(TracedRNumber{T}, x), i)
-end
-
-function Base.getindex(
-    x::Union{LinRange{TracedRNumber{T}},StepRangeLen{TracedRNumber{T}}}, i::Int
-) where {T}
-    return @allowscalar getindex(Reactant.promote_to(TracedRNumber{T}, x), i)
-end
-
-function Base.getindex(x::Base.UnitRange{TracedRNumber{T}}, i::Int) where {T}
-    return @allowscalar getindex(Reactant.promote_to(TracedRNumber{T}, x), i)
 end
 
 ## StepRangeLen Indexing
@@ -465,7 +514,7 @@ function get_slice_stride(x)
 end
 
 function getindex_linear(a::TracedRArray{T,N}, indices::AbstractArray) where {T,N}
-    if !(indices isa Reactant.TracedType)
+    if !(indices isa Reactant.TracedType || eltype(indices) <: TracedRNumber)
         if length(indices) == 1 && first(indices) isa CartesianIndex
             # fast-path else we will end up with a gather
             return Reactant.broadcast_to_size(
@@ -492,7 +541,7 @@ function getindex_linear(a::TracedRArray{T,N}, indices::AbstractArray) where {T,
         end
     end
 
-    if !(indices isa TracedRArray)
+    if !(indices isa TracedRArray || eltype(indices) <: TracedRNumber)
         indices = collect(indices)
         eltype(indices) <: CartesianIndex && (indices = LinearIndices(size(a))[indices])
         indices = Reactant.promote_to(TracedRArray{Int}, indices)

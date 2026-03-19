@@ -106,3 +106,16 @@ end
     @test Array(@jit(complex(ConcreteRArray(ones(ComplexF32, 2))))) ≈
         complex(ones(ComplexF32, 2))
 end
+
+@testset "isreal" begin
+    @testset "scalar" for x in (1.0, 1.0 + 2.0im, 1.0 + 0.0im)
+        x_concrete = Reactant.to_rarray(x)
+        @test only(@jit(isreal(x_concrete))) == isreal(x)
+    end
+
+    @testset "broadcast" begin
+        x = [1.0 + 0.0im, 1.0 + 2.0im, 1.0 - 2.0im, -5.0 + 0.0im]
+        x_concrete = Reactant.to_rarray(x)
+        @test @jit(isreal.(x_concrete)) == isreal.(x)
+    end
+end

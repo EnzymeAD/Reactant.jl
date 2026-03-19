@@ -1,28 +1,49 @@
-using Reactant, Test, Random, Random123, StableRNGs, Statistics
+using Reactant, Test, Random, Random123, StableRNGs, Statistics, FileCheck
 using StatsBase, Statistics, HypothesisTests, Distributions
 
 # First Testing overlay works correctly
 @testset "Random.jl Overlay" begin
     hlo = @code_hlo rand(Float32, 2, 3)
-    @test contains(repr(hlo), "stablehlo.rng_bit_generator")
+    @test @filecheck begin
+        @check "stablehlo.rng_bit_generator"
+        repr(hlo)
+    end
 
     hlo = @code_hlo rand(MersenneTwister(), Float32, 2, 3)
-    @test contains(repr(hlo), "stablehlo.rng_bit_generator")
+    @test @filecheck begin
+        @check "stablehlo.rng_bit_generator"
+        repr(hlo)
+    end
 
     hlo = @code_hlo rand(2, 3)
-    @test contains(repr(hlo), "stablehlo.rng_bit_generator")
+    @test @filecheck begin
+        @check "stablehlo.rng_bit_generator"
+        repr(hlo)
+    end
 
     hlo = @code_hlo rand(MersenneTwister(), 2, 3)
-    @test contains(repr(hlo), "stablehlo.rng_bit_generator")
+    @test @filecheck begin
+        @check "stablehlo.rng_bit_generator"
+        repr(hlo)
+    end
 
     hlo = @code_hlo rand(MersenneTwister(), Float64, (2, 3))
-    @test contains(repr(hlo), "stablehlo.rng_bit_generator")
+    @test @filecheck begin
+        @check "stablehlo.rng_bit_generator"
+        repr(hlo)
+    end
 
     hlo = @code_hlo rand(MersenneTwister(), Float64)
-    @test contains(repr(hlo), "stablehlo.rng_bit_generator")
+    @test @filecheck begin
+        @check "stablehlo.rng_bit_generator"
+        repr(hlo)
+    end
 
     hlo = @code_hlo rand(MersenneTwister())
-    @test contains(repr(hlo), "stablehlo.rng_bit_generator")
+    @test @filecheck begin
+        @check "stablehlo.rng_bit_generator"
+        repr(hlo)
+    end
 
     fn(x) = begin
         # TODO(#2253): MersenneTwister without seed leads to illegal instructions
@@ -31,7 +52,10 @@ using StatsBase, Statistics, HypothesisTests, Distributions
         return x
     end
     hlo = @code_hlo fn(Reactant.to_rarray(rand(Float64, 2, 3)))
-    @test contains(repr(hlo), "stablehlo.rng_bit_generator")
+    @test @filecheck begin
+        @check "stablehlo.rng_bit_generator"
+        repr(hlo)
+    end
 
     fn2() = begin
         # TODO(#2253): MersenneTwister without seed leads to illegal instructions
@@ -41,25 +65,40 @@ using StatsBase, Statistics, HypothesisTests, Distributions
         return x
     end
     hlo = @code_hlo fn2()
-    @test !contains(repr(hlo), "stablehlo.rng_bit_generator")
+    @test @filecheck begin
+        @check_not "stablehlo.rng_bit_generator"
+        repr(hlo)
+    end
 end
 
 @testset "Random123" begin
     hlo = @code_hlo rand(Random123.Threefry4x(), Float32, 2, 3)
-    @test contains(repr(hlo), "stablehlo.rng_bit_generator")
-    @test contains(repr(hlo), "THREE_FRY")
+    @test @filecheck begin
+        @check_dag "stablehlo.rng_bit_generator"
+        @check_dag "THREE_FRY"
+        repr(hlo)
+    end
 
     hlo = @code_hlo rand(Random123.Threefry2x(), Float64, 2, 3)
-    @test contains(repr(hlo), "stablehlo.rng_bit_generator")
-    @test contains(repr(hlo), "THREE_FRY")
+    @test @filecheck begin
+        @check_dag "stablehlo.rng_bit_generator"
+        @check_dag "THREE_FRY"
+        repr(hlo)
+    end
 
     hlo = @code_hlo rand(Random123.Philox4x(), Float64, 2, 3)
-    @test contains(repr(hlo), "stablehlo.rng_bit_generator")
-    @test contains(repr(hlo), "PHILOX")
+    @test @filecheck begin
+        @check_dag "stablehlo.rng_bit_generator"
+        @check_dag "PHILOX"
+        repr(hlo)
+    end
 
     hlo = @code_hlo rand(Random123.Philox2x(), Float64, 2, 3)
-    @test contains(repr(hlo), "stablehlo.rng_bit_generator")
-    @test contains(repr(hlo), "PHILOX")
+    @test @filecheck begin
+        @check_dag "stablehlo.rng_bit_generator"
+        @check_dag "PHILOX"
+        repr(hlo)
+    end
 end
 
 # Next we test that the random number generators actually generate data from the correct
@@ -214,7 +253,10 @@ end
     fn(st) = rand(st.rng, 10000)
 
     hlo = @code_hlo fn(rng_st_ra)
-    @test contains(repr(hlo), "stablehlo.rng_bit_generator")
+    @test @filecheck begin
+        @check "stablehlo.rng_bit_generator"
+        repr(hlo)
+    end
 
     @testset "natively supported RNGs" begin
         rng = Threefry2x()

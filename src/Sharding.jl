@@ -583,9 +583,8 @@ function sharding_to_array_slices(
 
     if needs_padding
         # MLIR for identity operation, avoid tracing here
-        ctx = MLIR.IR.Context(Reactant.registry[], false)
-        @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
-        MLIR.IR.activate!(ctx)
+        ctx = Reactant.ReactantContext()
+        MLIR.IR.activate(ctx)
 
         sdycache = Reactant.Compiler.default_sdycache()
         Reactant.Compiler.activate_sdycache!(sdycache)
@@ -606,11 +605,11 @@ function sharding_to_array_slices(
             )
             fnbody = MLIR.IR.Block(data_mlir_type, [MLIR.IR.Location()])
             push!(MLIR.IR.region(func, 1), fnbody)
-            MLIR.IR.activate!(fnbody)
+            MLIR.IR.activate(fnbody)
             try
                 MLIR.Dialects.func.return_([MLIR.IR.argument(fnbody, 1)])
             finally
-                MLIR.IR.deactivate!(fnbody)
+                MLIR.IR.deactivate(fnbody)
             end
             push!(MLIR.IR.body(mod), func)
 
@@ -642,7 +641,7 @@ function sharding_to_array_slices(
             @assert !needs_padding "This shouldn't happen. Open an issue on Reactant.jl.\nInput shape: $(size_x).\nOriginal Sharding: $(string(hlo_sharding.hlo_sharding)).\nNew sharding: $(string(new_hlo_sharding)).\nArray Slices: $(device_to_array_slices)."
         finally
             Reactant.Compiler.deactivate_sdycache!(sdycache)
-            MLIR.IR.deactivate!(ctx)
+            MLIR.IR.deactivate(ctx)
         end
     end
 
@@ -861,11 +860,7 @@ function hlo_sharding_from_sdy_tensor_sharding_attr(attr, mesh_attr)
     @assert MLIR.API.sdyAttributeIsATensorShardingAttr(attr)
     @assert MLIR.API.sdyAttributeIsAMeshAttr(mesh_attr)
     GC.@preserve attr begin
-        return XLA.HloSharding(
-            @ccall MLIR.API.mlir_c.hloShardingFromTensorShardingAttr(
-                attr::MLIR.API.MlirAttribute, mesh_attr::MLIR.API.MlirAttribute
-            )::Ptr{Cvoid}
-        )
+        return XLA.HloSharding(MLIR.API.hloShardingFromTensorShardingAttr(attr, mesh_attr))
     end
 end
 
@@ -892,7 +887,7 @@ function sharding_to_array_slices(
         else
             Reactant.ConcreteRArray(ones(Float32, size_x...); kws...)
         end
-        _, exec, _, _, _, _ = Reactant.Compiler.compile_xla(
+        exec, _, _, _, _ = Reactant.Compiler.compile_xla(
             Reactant.Ops.negate, (tmp,); input_shardings=IdDict(tmp => sharding)
         )
 
@@ -1034,15 +1029,15 @@ function get_tensor_sharding_attribute(
         string_mesh_name = MLIR.IR.Attribute(MLIR.IR.flatsymbol(mesh_name); context=ctx)
         GC.@preserve sharding begin
             attr = MLIR.IR.Attribute(
-                @ccall MLIR.API.mlir_c.hloShardingToTensorShardingAttr(
-                    ctx::MLIR.API.MlirContext,
-                    sharding.hlo_sharding.ptr::Ptr{Cvoid},
-                    string_mesh_name::MLIR.API.MlirAttribute,
-                    mesh_attr::MLIR.API.MlirAttribute,
-                    Int64(length(sharding.is_closed))::Int64,
-                    Bool[sharding.is_closed...]::Ptr{Bool},
-                    Int64[sharding.priority...]::Ptr{Int64},
-                )::MLIR.API.MlirAttribute
+                MLIR.API.hloShardingToTensorShardingAttr(
+                    ctx,
+                    sharding.hlo_sharding.ptr,
+                    string_mesh_name,
+                    mesh_attr,
+                    length(sharding.is_closed),
+                    Bool[sharding.is_closed...],
+                    Int64[sharding.priority...],
+                ),
             )
         end
         return attr, :sdy
@@ -1145,15 +1140,14 @@ function sdy_sharding_to_reactant_sharding(attr, global_device_ids, mod)
         )
     end
 
-    mesh_op = MLIR.IR.Operation(
-        MLIR.API.mlirSymbolTableLookup(
-            MLIR.IR.SymbolTable(MLIR.IR.Operation(mod)),
+    mesh_op = MLIR.IR.@dispose sym_table = MLIR.IR.SymbolTable(mod) begin
+        MLIR.IR.lookup(
+            sym_table,
             MLIR.IR.leafref(
                 MLIR.IR.Attribute(MLIR.API.sdyTensorShardingAttrGetMeshOrRef(mlir_attr))
             ),
-        ),
-        false,
-    )
+        )
+    end
     return sdy_tensor_sharding_to_named_sharding(
         sdy_mesh_to_reactant_mesh(MLIR.IR.getattr(mesh_op, "mesh"), global_device_ids),
         MLIR.IR.Attribute(mlir_attr),

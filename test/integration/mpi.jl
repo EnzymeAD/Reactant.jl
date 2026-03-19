@@ -213,6 +213,59 @@ end
     end
 end
 
+@testset "Isend / Irecv! / Waitall" begin
+    comm = MPI.COMM_WORLD
+    rank = MPI.Comm_rank(comm)
+    tag = 42
+
+    for T in datatypes
+        # NOTE: currently don't allow a request to cross the compile boundary
+        function waitall(send_buf, recv_buf)
+            reqs = Reactant.TracedRNumber[]
+
+            if rank == 0
+                dest = 1
+                src = 1
+
+                req = MPI.Irecv!(recv_buf, src, tag - 1, comm)
+                push!(reqs, req)
+
+                req = MPI.Isend(send_buf, dest, tag + 1, comm)
+                push!(reqs, req)
+            elseif rank == 1
+                dest = 0
+                src = 0
+
+                req = MPI.Isend(send_buf, dest, tag - 1, comm)
+                push!(reqs, req)
+
+                req = MPI.Irecv!(recv_buf, src, tag + 1, comm)
+                push!(reqs, req)
+            end
+
+            reqs = vcat(reqs...)
+            return MPI.Waitall(reqs)
+        end
+
+        send_buf = ConcreteRArray(ones(T, 5))
+        recv_buf = ConcreteRArray(zeros(T, 5))
+
+        @jit waitall(send_buf, recv_buf)
+
+        # debug
+        # if rank==0
+        #     println("\ncode_hlo optimize=false:\n",
+        #             @code_hlo optimize=false waitall(send_buf, recv_buf))
+        #     println("\ncode_hlo optimize=\"lower-enzymexla-mpi{backend=cpu}\":\n",
+        #             @code_hlo optimize="lower-enzymexla-mpi{backend=cpu}" waitall(send_buf, recv_buf))
+        #     println("\ncode_hlo:\n",
+        #             @code_hlo waitall(send_buf, recv_buf))
+        # end
+
+        @test recv_buf == send_buf
+    end
+end
+
 MPI.Finalize()
 
 Reactant.set_default_backend(client)

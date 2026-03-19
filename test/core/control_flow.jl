@@ -1,6 +1,8 @@
-using Reactant, Test
+using Reactant, Test, FileCheck
 using LinearAlgebra
 using Reactant.ReactantCore
+using Reactant: MLIR
+using Reactant: Periodic
 
 function condition1(x)
     y = sum(x)
@@ -686,7 +688,8 @@ end
 end
 
 function for_no_track_numbers(x, n)
-    @trace mincut = false checkpointing = true track_numbers = false for i in n:16
+    # Periodic(n) required for dynamic bounds (n:16 where n is traced)
+    @trace mincut = false checkpointing = Periodic(3) track_numbers = false for i in n:16
         x = x .+ 1
     end
     return x
@@ -705,9 +708,94 @@ end
     )
     @test for_no_track_numbers_ra(x_ra, n_ra) == for_no_track_numbers(x, n)
 
-    ir = sprint(show, @code_hlo optimize = "enzyme-batch" for_no_track_numbers(x_ra, n_ra))
-    @test contains(ir, "enzyme.disable_mincut")
-    @test contains(ir, "enzymexla.enable_checkpointing")
+    ir = @code_hlo optimize = "enzyme-batch" for_no_track_numbers(x_ra, n_ra)
+    @test @filecheck begin
+        @check_dag "enzyme.disable_mincut"
+        @check_dag "enzymexla.enable_checkpointing"
+        @check_dag "enzymexla.checkpoints = 3"
+        ir
+    end
+end
+
+function for_explicit_checkpoints(x, n)
+    @trace mincut = false checkpointing = Periodic(5) track_numbers = false for i in n:16
+        x = x .+ 1
+    end
+    return x
+end
+
+@testset "for: explicit checkpoints" begin
+    x = [1, 2, 3]
+    x_ra = Reactant.to_rarray(x)
+
+    n = 12
+    n_ra = Reactant.ConcreteRNumber(n)
+
+    # set optimize to only do enzyme-batch to prevent crash in opt
+    for_explicit_checkpoints_ra = @compile optimize = "enzyme-batch" for_explicit_checkpoints(
+        x_ra, n_ra
+    )
+    @test for_explicit_checkpoints_ra(x_ra, n_ra) == for_explicit_checkpoints(x, n)
+
+    ir = sprint(
+        show, @code_hlo optimize = "enzyme-batch" for_explicit_checkpoints(x_ra, n_ra)
+    )
+    @test @filecheck begin
+        @check_dag "enzymexla.enable_checkpointing"
+        @check_dag "enzymexla.checkpoints = 5"
+        ir
+    end
+end
+
+function while_explicit_checkpoints(x, n)
+    i = zero(n)
+    @trace mincut = false checkpointing = Periodic(5) track_numbers = false while i <= n
+        x = 2 .* x
+        i += one(i)
+    end
+    return x
+end
+
+@testset "while explicit checkpoints" begin
+    n = 10
+    n_ra = Reactant.ConcreteRNumber(n)
+    x = Float32[1, 2, 3]
+    x_ra = Reactant.to_rarray(x)
+
+    while_explicit_checkpoints_ra = @compile while_explicit_checkpoints(x_ra, n_ra)
+    @test while_explicit_checkpoints(x, n) == while_explicit_checkpoints(x_ra, n_ra)
+
+    ir = sprint(show, @code_hlo while_explicit_checkpoints(x_ra, n_ra))
+    @test @filecheck begin
+        @check_dag "enzymexla.enable_checkpointing"
+        @check_dag "enzymexla.checkpoints = 5"
+        ir
+    end
+end
+
+function for_default_checkpoints(x)
+    @trace checkpointing = true track_numbers = false for i in 1:100
+        x = x .+ 1
+    end
+    return x
+end
+
+@testset "for: default checkpoints (sqrt)" begin
+    x = [1, 2, 3]
+    x_ra = Reactant.to_rarray(x)
+
+    # set optimize to only do enzyme-batch to prevent crash in opt
+    for_default_checkpoints_ra = @compile optimize = "enzyme-batch" for_default_checkpoints(
+        x_ra
+    )
+    @test for_default_checkpoints_ra(x_ra) == for_default_checkpoints(x)
+
+    ir = sprint(show, @code_hlo optimize = "enzyme-batch" for_default_checkpoints(x_ra))
+    @test @filecheck begin
+        @check_dag "enzyme.disable_mincut"
+        @check_dag "enzymexla.enable_checkpointing"
+        ir
+    end
 end
 
 _call1(a, b) = a
@@ -726,18 +814,25 @@ end
     @test @jit(call1(a_ra, b_ra)) ≈ call1(a, b)
 
     # check whether the func for _call1 was only generated once:
-    ir = @code_hlo optimize = false call1(a_ra, b_ra)
-    ops = [op for op in Reactant.MLIR.IR.body(ir)]
-    @test length(ops) == 2 # call1, _call1
+    MLIR.IR.@dispose ctx = Reactant.ReactantContext() begin
+        ir = Reactant.code_hlo(ctx, call1, (a_ra, b_ra); optimize=false)
+        ops = [op for op in Reactant.MLIR.IR.body(ir)]
+        @test length(ops) == 2 # call1, _call1
+        MLIR.IR.dispose(ir)
+    end
 
     # With different operand sizes, different functions need to be generated:
     c = Reactant.TestUtils.construct_test_array(Float64, 4, 5)
     c_ra = Reactant.to_rarray(c)
 
     @test @jit(call1(a_ra, c_ra)) ≈ call1(a, c)
-    ir = @code_hlo optimize = false call1(a_ra, c_ra)
-    ops = [op for op in Reactant.MLIR.IR.body(ir)]
-    @test length(ops) == 3
+
+    MLIR.IR.@dispose ctx = Reactant.ReactantContext() begin
+        ir = Reactant.code_hlo(ctx, call1, (a_ra, c_ra); optimize=false)
+        ops = [op for op in Reactant.MLIR.IR.body(ir)]
+        @test length(ops) == 3
+        MLIR.IR.dispose(ir)
+    end
 end
 
 _call2(a) = a + a
@@ -770,9 +865,12 @@ end
     y = Reactant.TestUtils.construct_test_array(Float64, 3)
     y_ra = Reactant.to_rarray(y)
 
-    ir = @code_hlo optimize = false call3(y_ra)
-    ops = [op for op in Reactant.MLIR.IR.body(ir)]
-    @test length(ops) == 5 # call3, .+, .*, _call3 (2X)
+    MLIR.IR.@dispose ctx = Reactant.ReactantContext() begin
+        ir = Reactant.code_hlo(ctx, call3, (y_ra,); optimize=false)
+        ops = [op for op in Reactant.MLIR.IR.body(ir)]
+        @test length(ops) == 5 # call3, .+, .*, _call3 (2X)
+        MLIR.IR.dispose(ir)
+    end
 end
 
 struct Foo
@@ -795,9 +893,12 @@ end
     foo = Foo(Reactant.to_rarray(a))
     foo2 = Foo(Reactant.to_rarray(b))
     bar = Foo(Bar(Reactant.to_rarray(b))) # typeof(foo) == typeof(bar), but these don't match!
-    ir = @code_hlo optimize = false call4(foo, foo2, bar)
-    ops = [op for op in Reactant.MLIR.IR.body(ir)]
-    @test length(ops) == 3 # call4, _call4 for {foo, foo2}, and _call4 for bar
+    MLIR.IR.@dispose ctx = Reactant.ReactantContext() begin
+        ir = Reactant.code_hlo(ctx, call4, (foo, foo2, bar); optimize=false)
+        ops = [op for op in Reactant.MLIR.IR.body(ir)]
+        @test length(ops) == 3 # call4, _call4 for {foo, foo2}, and _call4 for bar
+        MLIR.IR.dispose(ir)
+    end
 end
 
 function _call5!(a, b)
@@ -834,12 +935,15 @@ end
 
         # Should work the same as untraced when JIT compiled
         @test @jit(traced_add(a_ra, b_ra)) ≈ traced_add(a, b)
-        ir = @code_hlo optimize = false traced_add(a_ra, b_ra)
-        func_names = [
-            String(Reactant.MLIR.IR.getattr(op, "sym_name")) for
-            op in Reactant.MLIR.IR.body(ir)
-        ]
-        @test any(contains("traced_add"), func_names)
+        MLIR.IR.@dispose ctx = Reactant.ReactantContext() begin
+            ir = Reactant.code_hlo(ctx, traced_add, (a_ra, b_ra); optimize=false)
+            func_names = [
+                String(Reactant.MLIR.IR.getattr(op, "sym_name")) for
+                op in Reactant.MLIR.IR.body(ir)
+            ]
+            @test any(contains("traced_add"), func_names)
+            MLIR.IR.dispose(ir)
+        end
 
         # Should also work with regular arrays (outside compile context)
         @test traced_add(a, b) ≈ a .+ b
@@ -857,12 +961,16 @@ end
         b_ra = Reactant.to_rarray(b)
 
         @test @jit(traced_multiply(a_ra, b_ra)) ≈ traced_multiply(a, b)
-        ir = @code_hlo optimize = false traced_multiply(a_ra, b_ra)
-        func_names = [
-            String(Reactant.MLIR.IR.getattr(op, "sym_name")) for
-            op in Reactant.MLIR.IR.body(ir)
-        ]
-        @test any(contains("traced_multiply"), func_names)
+
+        MLIR.IR.@dispose ctx = Reactant.ReactantContext() begin
+            ir = Reactant.code_hlo(ctx, traced_multiply, (a_ra, b_ra); optimize=false)
+            func_names = [
+                String(Reactant.MLIR.IR.getattr(op, "sym_name")) for
+                op in Reactant.MLIR.IR.body(ir)
+            ]
+            @test any(contains("traced_multiply"), func_names)
+            MLIR.IR.dispose(ir)
+        end
 
         @test traced_multiply(a, b) ≈ a .* b
     end
@@ -874,12 +982,16 @@ end
         a_ra = Reactant.to_rarray(a)
 
         @test @jit(singleline(a_ra)) ≈ singleline(a)
-        ir = @code_hlo optimize = false singleline(a_ra)
-        func_names = [
-            String(Reactant.MLIR.IR.getattr(op, "sym_name")) for
-            op in Reactant.MLIR.IR.body(ir)
-        ]
-        @test any(contains("singleline"), func_names)
+
+        MLIR.IR.@dispose ctx = Reactant.ReactantContext() begin
+            ir = Reactant.code_hlo(ctx, singleline, (a_ra,); optimize=false)
+            func_names = [
+                String(Reactant.MLIR.IR.getattr(op, "sym_name")) for
+                op in Reactant.MLIR.IR.body(ir)
+            ]
+            @test any(contains("singleline"), func_names)
+            MLIR.IR.dispose(ir)
+        end
 
         @test singleline(a) ≈ a .+ 1
     end
@@ -899,12 +1011,15 @@ end
         fn1 = FunctorTest1(2.0f0)
 
         @test @jit(fn1(a_ra)) ≈ fn1(a)
-        ir = @code_hlo optimize = false fn1(a_ra)
-        func_names = [
-            String(Reactant.MLIR.IR.getattr(op, "sym_name")) for
-            op in Reactant.MLIR.IR.body(ir)
-        ]
-        @test any(contains("FunctorTest1"), func_names)
+        MLIR.IR.@dispose ctx = Reactant.ReactantContext() begin
+            ir = Reactant.code_hlo(ctx, fn1, (a_ra,); optimize=false)
+            func_names = [
+                String(Reactant.MLIR.IR.getattr(op, "sym_name")) for
+                op in Reactant.MLIR.IR.body(ir)
+            ]
+            @test any(contains("FunctorTest1"), func_names)
+            MLIR.IR.dispose(ir)
+        end
 
         @test fn1(a) ≈ a .+ 2.0f0
     end
@@ -918,12 +1033,18 @@ end
         a_ra = Reactant.to_rarray(a)
 
         @test @jit(func_with_kwargs(a_ra; y=2.0f0)) ≈ func_with_kwargs(a; y=2.0f0)
-        ir = @code_hlo optimize = false func_with_kwargs(a_ra; y=2.0f0)
-        func_names = [
-            String(Reactant.MLIR.IR.getattr(op, "sym_name")) for
-            op in Reactant.MLIR.IR.body(ir)
-        ]
-        @test any(contains("kwcall"), func_names)
+
+        MLIR.IR.@dispose ctx = Reactant.ReactantContext() begin
+            ir = Reactant.code_hlo(
+                ctx, func_with_kwargs, (a_ra,); optimize=false, fn_kwargs=(; y=2.0f0)
+            )
+            func_names = [
+                String(Reactant.MLIR.IR.getattr(op, "sym_name")) for
+                op in Reactant.MLIR.IR.body(ir)
+            ]
+            @test any(contains("kwcall"), func_names)
+            MLIR.IR.dispose(ir)
+        end
 
         @test func_with_kwargs(a; y=2.0f0) ≈ a .+ 2.0f0
     end
@@ -1075,4 +1196,22 @@ end
 
     @test a_ra ≈ a
     @test b_ra ≈ b
+end
+
+function f_not_traced_conditional(cond, x)
+    @trace if cond
+        x = x .* 2
+    else
+        x = x .* 3
+    end
+    return x
+end
+
+@testset "not traced conditional" begin
+    cond = false
+    x = [1, 2, 3]
+    x_ra = Reactant.to_rarray(x)
+    cond = false
+
+    @test f_not_traced_conditional(cond, x) == @jit(f_not_traced_conditional(cond, x_ra))
 end

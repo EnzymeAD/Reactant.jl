@@ -52,6 +52,15 @@ struct MlirLlvmThreadPool
     ptr::Ptr{Cvoid}
 end
 
+"""
+    MlirLlvmRawFdOStream
+
+Re-export llvm::raw\\_fd\\_ostream so as to avoid including the LLVM C API directly.
+"""
+struct MlirLlvmRawFdOStream
+    ptr::Ptr{Cvoid}
+end
+
 struct MlirTypeID
     ptr::Ptr{Cvoid}
 end
@@ -171,6 +180,55 @@ Destroy an LLVM thread pool.
 """
 function mlirLlvmThreadPoolDestroy(pool)
     @ccall mlir_c.mlirLlvmThreadPoolDestroy(pool::MlirLlvmThreadPool)::Cvoid
+end
+
+"""
+    mlirLlvmThreadPoolGetMaxConcurrency(pool)
+
+Returns the maximum number of threads in the thread pool.
+"""
+function mlirLlvmThreadPoolGetMaxConcurrency(pool)
+    @ccall mlir_c.mlirLlvmThreadPoolGetMaxConcurrency(pool::MlirLlvmThreadPool)::Cint
+end
+
+"""
+    mlirLlvmRawFdOStreamCreate(path, binary, errorCallback, userData)
+
+Create a raw\\_fd\\_ostream for the given path. This wrapper is needed because std::ostream does not provide the file sharing semantics required on Windows. - `path`: output file path. - `binary`: controls text vs binary mode. - `errorCallback`: called with an error message on failure (optional). - `userData`: forwarded to `errorCallback` so it can copy the error message into caller-owned storage (e.g., a `std::string`). On failure, returns a null stream and invokes the optional error callback with the error message.
+"""
+function mlirLlvmRawFdOStreamCreate(path, binary, errorCallback, userData)
+    @ccall mlir_c.mlirLlvmRawFdOStreamCreate(
+        path::Cstring, binary::Bool, errorCallback::MlirStringCallback, userData::Ptr{Cvoid}
+    )::MlirLlvmRawFdOStream
+end
+
+"""
+    mlirLlvmRawFdOStreamWrite(stream, string)
+
+Write a string to a raw\\_fd\\_ostream created with [`mlirLlvmRawFdOStreamCreate`](@ref).
+"""
+function mlirLlvmRawFdOStreamWrite(stream, string)
+    @ccall mlir_c.mlirLlvmRawFdOStreamWrite(
+        stream::MlirLlvmRawFdOStream, string::MlirStringRef
+    )::Cvoid
+end
+
+"""
+    mlirLlvmRawFdOStreamIsNull(stream)
+
+Checks if a raw\\_fd\\_ostream is null.
+"""
+function mlirLlvmRawFdOStreamIsNull(stream)
+    @ccall mlir_c.mlirLlvmRawFdOStreamIsNull(stream::MlirLlvmRawFdOStream)::Bool
+end
+
+"""
+    mlirLlvmRawFdOStreamDestroy(stream)
+
+Destroy a raw\\_fd\\_ostream created with [`mlirLlvmRawFdOStreamCreate`](@ref).
+"""
+function mlirLlvmRawFdOStreamDestroy(stream)
+    @ccall mlir_c.mlirLlvmRawFdOStreamDestroy(stream::MlirLlvmRawFdOStream)::Cvoid
 end
 
 """
@@ -1437,6 +1495,17 @@ function mlirOperationGetOperand(op, pos)
 end
 
 """
+    mlirOperationGetOpOperand(op, pos)
+
+Returns `pos`-th OpOperand of the operation.
+"""
+function mlirOperationGetOpOperand(op, pos)
+    @ccall mlir_c.mlirOperationGetOpOperand(
+        op::MlirOperation, pos::Cptrdiff_t
+    )::MlirOpOperand
+end
+
+"""
     mlirOperationSetOperand(op, pos, newValue)
 
 Sets the `pos`-th operand of the operation.
@@ -1758,7 +1827,7 @@ end
 """
     MlirWalkResult
 
-Operation walk result.
+[`Operation`](@ref) walk result.
 """
 @cenum MlirWalkResult::UInt32 begin
     MlirWalkResultAdvance = 0x0000000000000000
@@ -1778,7 +1847,7 @@ end
 
 # typedef MlirWalkResult ( * MlirOperationWalkCallback ) ( MlirOperation , void * userData )
 """
-Operation walker type. The handler is passed an (opaque) reference to an operation and a pointer to a `userData`.
+[`Operation`](@ref) walker type. The handler is passed an (opaque) reference to an operation and a pointer to a `userData`.
 """
 const MlirOperationWalkCallback = Ptr{Cvoid}
 
@@ -4110,12 +4179,12 @@ function mlirSymbolRefAttrGetTypeID()
 end
 
 """
-    mlirDisctinctAttrCreate(referencedAttr)
+    mlirDistinctAttrCreate(referencedAttr)
 
-Creates a DisctinctAttr with the referenced attribute.
+Creates a DistinctAttr with the referenced attribute.
 """
-function mlirDisctinctAttrCreate(referencedAttr)
-    @ccall mlir_c.mlirDisctinctAttrCreate(referencedAttr::MlirAttribute)::MlirAttribute
+function mlirDistinctAttrCreate(referencedAttr)
+    @ccall mlir_c.mlirDistinctAttrCreate(referencedAttr::MlirAttribute)::MlirAttribute
 end
 
 """
@@ -6655,10 +6724,6 @@ function mlirAMDGPUTDMGatherBaseTypeGetName()
     @ccall mlir_c.mlirAMDGPUTDMGatherBaseTypeGetName()::MlirStringRef
 end
 
-function mlirGetDialectHandle__amx__()
-    @ccall mlir_c.mlirGetDialectHandle__amx__()::MlirDialectHandle
-end
-
 function mlirGetDialectHandle__affine__()
     @ccall mlir_c.mlirGetDialectHandle__affine__()::MlirDialectHandle
 end
@@ -7592,7 +7657,7 @@ function mlirLLVMDICompositeTypeAttrGetName()
 end
 
 """
-    mlirLLVMDIDerivedTypeAttrGet(ctx, tag, name, baseType, sizeInBits, alignInBits, offsetInBits, dwarfAddressSpace, flags, extraData)
+    mlirLLVMDIDerivedTypeAttrGet(ctx, tag, name, file, line, scope, baseType, sizeInBits, alignInBits, offsetInBits, dwarfAddressSpace, flags, extraData)
 
 Creates a LLVM DIDerivedType attribute. Note that `dwarfAddressSpace` is an optional field, where [`MLIR_CAPI_DWARF_ADDRESS_SPACE_NULL`](@ref) indicates null and non-negative values indicate a value present.
 """
@@ -7600,6 +7665,9 @@ function mlirLLVMDIDerivedTypeAttrGet(
     ctx,
     tag,
     name,
+    file,
+    line,
+    scope,
     baseType,
     sizeInBits,
     alignInBits,
@@ -7612,6 +7680,9 @@ function mlirLLVMDIDerivedTypeAttrGet(
         ctx::MlirContext,
         tag::Cuint,
         name::MlirAttribute,
+        file::MlirAttribute,
+        line::UInt32,
+        scope::MlirAttribute,
         baseType::MlirAttribute,
         sizeInBits::UInt64,
         alignInBits::UInt32,
@@ -8818,6 +8889,10 @@ function mlirSMTBitVectorTypeGetName()
     @ccall mlir_c.mlirSMTBitVectorTypeGetName()::MlirStringRef
 end
 
+function mlirSMTBitVectorTypeGetTypeID()
+    @ccall mlir_c.mlirSMTBitVectorTypeGetTypeID()::MlirTypeID
+end
+
 """
     mlirSMTTypeIsABool(type)
 
@@ -8840,6 +8915,10 @@ function mlirSMTBoolTypeGetName()
     @ccall mlir_c.mlirSMTBoolTypeGetName()::MlirStringRef
 end
 
+function mlirSMTBoolTypeGetTypeID()
+    @ccall mlir_c.mlirSMTBoolTypeGetTypeID()::MlirTypeID
+end
+
 """
     mlirSMTTypeIsAInt(type)
 
@@ -8860,6 +8939,10 @@ end
 
 function mlirSMTIntTypeGetName()
     @ccall mlir_c.mlirSMTIntTypeGetName()::MlirStringRef
+end
+
+function mlirSMTIntTypeGetTypeID()
+    @ccall mlir_c.mlirSMTIntTypeGetTypeID()::MlirTypeID
 end
 
 """
@@ -9163,325 +9246,8 @@ function mlirGetDialectHandle__tosa__()
     @ccall mlir_c.mlirGetDialectHandle__tosa__()::MlirDialectHandle
 end
 
-function mlirGetDialectHandle__transform__()
-    @ccall mlir_c.mlirGetDialectHandle__transform__()::MlirDialectHandle
-end
-
-function mlirTypeIsATransformAnyOpType(type)
-    @ccall mlir_c.mlirTypeIsATransformAnyOpType(type::MlirType)::Bool
-end
-
-function mlirTransformAnyOpTypeGetTypeID()
-    @ccall mlir_c.mlirTransformAnyOpTypeGetTypeID()::MlirTypeID
-end
-
-function mlirTransformAnyOpTypeGet(ctx)
-    @ccall mlir_c.mlirTransformAnyOpTypeGet(ctx::MlirContext)::MlirType
-end
-
-function mlirTransformAnyOpTypeGetName()
-    @ccall mlir_c.mlirTransformAnyOpTypeGetName()::MlirStringRef
-end
-
-function mlirTypeIsATransformAnyParamType(type)
-    @ccall mlir_c.mlirTypeIsATransformAnyParamType(type::MlirType)::Bool
-end
-
-function mlirTransformAnyParamTypeGetTypeID()
-    @ccall mlir_c.mlirTransformAnyParamTypeGetTypeID()::MlirTypeID
-end
-
-function mlirTransformAnyParamTypeGet(ctx)
-    @ccall mlir_c.mlirTransformAnyParamTypeGet(ctx::MlirContext)::MlirType
-end
-
-function mlirTransformAnyParamTypeGetName()
-    @ccall mlir_c.mlirTransformAnyParamTypeGetName()::MlirStringRef
-end
-
-function mlirTypeIsATransformAnyValueType(type)
-    @ccall mlir_c.mlirTypeIsATransformAnyValueType(type::MlirType)::Bool
-end
-
-function mlirTransformAnyValueTypeGetTypeID()
-    @ccall mlir_c.mlirTransformAnyValueTypeGetTypeID()::MlirTypeID
-end
-
-function mlirTransformAnyValueTypeGet(ctx)
-    @ccall mlir_c.mlirTransformAnyValueTypeGet(ctx::MlirContext)::MlirType
-end
-
-function mlirTransformAnyValueTypeGetName()
-    @ccall mlir_c.mlirTransformAnyValueTypeGetName()::MlirStringRef
-end
-
-function mlirTypeIsATransformOperationType(type)
-    @ccall mlir_c.mlirTypeIsATransformOperationType(type::MlirType)::Bool
-end
-
-function mlirTransformOperationTypeGetTypeID()
-    @ccall mlir_c.mlirTransformOperationTypeGetTypeID()::MlirTypeID
-end
-
-function mlirTransformOperationTypeGet(ctx, operationName)
-    @ccall mlir_c.mlirTransformOperationTypeGet(
-        ctx::MlirContext, operationName::MlirStringRef
-    )::MlirType
-end
-
-function mlirTransformOperationTypeGetName()
-    @ccall mlir_c.mlirTransformOperationTypeGetName()::MlirStringRef
-end
-
-function mlirTransformOperationTypeGetOperationName(type)
-    @ccall mlir_c.mlirTransformOperationTypeGetOperationName(type::MlirType)::MlirStringRef
-end
-
-function mlirTypeIsATransformParamType(type)
-    @ccall mlir_c.mlirTypeIsATransformParamType(type::MlirType)::Bool
-end
-
-function mlirTransformParamTypeGetTypeID()
-    @ccall mlir_c.mlirTransformParamTypeGetTypeID()::MlirTypeID
-end
-
-function mlirTransformParamTypeGet(ctx, type)
-    @ccall mlir_c.mlirTransformParamTypeGet(ctx::MlirContext, type::MlirType)::MlirType
-end
-
-function mlirTransformParamTypeGetName()
-    @ccall mlir_c.mlirTransformParamTypeGetName()::MlirStringRef
-end
-
-function mlirTransformParamTypeGetType(type)
-    @ccall mlir_c.mlirTransformParamTypeGetType(type::MlirType)::MlirType
-end
-
-struct MlirTransformOptions
+struct MlirMemoryEffectInstancesList
     ptr::Ptr{Cvoid}
-end
-
-"""
-    mlirTransformOptionsCreate()
-
-Creates a default-initialized transform options object.
-"""
-function mlirTransformOptionsCreate()
-    @ccall mlir_c.mlirTransformOptionsCreate()::MlirTransformOptions
-end
-
-"""
-    mlirTransformOptionsEnableExpensiveChecks(transformOptions, enable)
-
-Enables or disables expensive checks in transform options.
-"""
-function mlirTransformOptionsEnableExpensiveChecks(transformOptions, enable)
-    @ccall mlir_c.mlirTransformOptionsEnableExpensiveChecks(
-        transformOptions::MlirTransformOptions, enable::Bool
-    )::Cvoid
-end
-
-"""
-    mlirTransformOptionsGetExpensiveChecksEnabled(transformOptions)
-
-Returns true if expensive checks are enabled in transform options.
-"""
-function mlirTransformOptionsGetExpensiveChecksEnabled(transformOptions)
-    @ccall mlir_c.mlirTransformOptionsGetExpensiveChecksEnabled(
-        transformOptions::MlirTransformOptions
-    )::Bool
-end
-
-"""
-    mlirTransformOptionsEnforceSingleTopLevelTransformOp(transformOptions, enable)
-
-Enables or disables the enforcement of the top-level transform op being single in transform options.
-"""
-function mlirTransformOptionsEnforceSingleTopLevelTransformOp(transformOptions, enable)
-    @ccall mlir_c.mlirTransformOptionsEnforceSingleTopLevelTransformOp(
-        transformOptions::MlirTransformOptions, enable::Bool
-    )::Cvoid
-end
-
-"""
-    mlirTransformOptionsGetEnforceSingleTopLevelTransformOp(transformOptions)
-
-Returns true if the enforcement of the top-level transform op being single is enabled in transform options.
-"""
-function mlirTransformOptionsGetEnforceSingleTopLevelTransformOp(transformOptions)
-    @ccall mlir_c.mlirTransformOptionsGetEnforceSingleTopLevelTransformOp(
-        transformOptions::MlirTransformOptions
-    )::Bool
-end
-
-"""
-    mlirTransformOptionsDestroy(transformOptions)
-
-Destroys a transform options object previously created by [`mlirTransformOptionsCreate`](@ref).
-"""
-function mlirTransformOptionsDestroy(transformOptions)
-    @ccall mlir_c.mlirTransformOptionsDestroy(transformOptions::MlirTransformOptions)::Cvoid
-end
-
-"""
-    mlirTransformApplyNamedSequence(payload, transformRoot, transformModule, transformOptions)
-
-Applies the transformation script starting at the given transform root operation to the given payload operation. The module containing the transform root as well as the transform options should be provided. The transform operation must implement TransformOpInterface and the module must be a ModuleOp. Returns the status of the application.
-"""
-function mlirTransformApplyNamedSequence(
-    payload, transformRoot, transformModule, transformOptions
-)
-    @ccall mlir_c.mlirTransformApplyNamedSequence(
-        payload::MlirOperation,
-        transformRoot::MlirOperation,
-        transformModule::MlirOperation,
-        transformOptions::MlirTransformOptions,
-    )::MlirLogicalResult
-end
-
-"""
-    mlirMergeSymbolsIntoFromClone(target, other)
-
-Merge the symbols from `other` into `target`, potentially renaming them to avoid conflicts. Private symbols may be renamed during the merge, public symbols must have at most one declaration. A name conflict in public symbols is reported as an error before returning a failure.
-
-Note that this clones the `other` operation unlike the C++ counterpart that takes ownership.
-"""
-function mlirMergeSymbolsIntoFromClone(target, other)
-    @ccall mlir_c.mlirMergeSymbolsIntoFromClone(
-        target::MlirOperation, other::MlirOperation
-    )::MlirLogicalResult
-end
-
-function mlirGetDialectHandle__ub__()
-    @ccall mlir_c.mlirGetDialectHandle__ub__()::MlirDialectHandle
-end
-
-function mlirGetDialectHandle__vcix__()
-    @ccall mlir_c.mlirGetDialectHandle__vcix__()::MlirDialectHandle
-end
-
-function mlirGetDialectHandle__vector__()
-    @ccall mlir_c.mlirGetDialectHandle__vector__()::MlirDialectHandle
-end
-
-function mlirGetDialectHandle__wasmssa__()
-    @ccall mlir_c.mlirGetDialectHandle__wasmssa__()::MlirDialectHandle
-end
-
-function mlirGetDialectHandle__x86vector__()
-    @ccall mlir_c.mlirGetDialectHandle__x86vector__()::MlirDialectHandle
-end
-
-function mlirGetDialectHandle__xegpu__()
-    @ccall mlir_c.mlirGetDialectHandle__xegpu__()::MlirDialectHandle
-end
-
-function mlirGetDialectHandle__xevm__()
-    @ccall mlir_c.mlirGetDialectHandle__xevm__()::MlirDialectHandle
-end
-
-struct MlirExecutionEngine
-    ptr::Ptr{Cvoid}
-end
-
-"""
-    mlirExecutionEngineCreate(op, optLevel, numPaths, sharedLibPaths, enableObjectDump, enablePIC)
-
-Creates an ExecutionEngine for the provided ModuleOp. The ModuleOp is expected to be "translatable" to LLVM IR (only contains operations in dialects that implement the `LLVMTranslationDialectInterface`). The module ownership stays with the client and can be destroyed as soon as the call returns. `optLevel` is the optimization level to be used for transformation and code generation. LLVM passes at `optLevel` are run before code generation. The number and array of paths corresponding to shared libraries that will be loaded are specified via `numPaths` and `sharedLibPaths` respectively. The `enablePIC` arguments controls the relocation model, when true the generated code is emitted as "position independent", making it possible to save it and reload it as a shared object in another process. TODO: figure out other options.
-"""
-function mlirExecutionEngineCreate(
-    op, optLevel, numPaths, sharedLibPaths, enableObjectDump, enablePIC
-)
-    @ccall mlir_c.mlirExecutionEngineCreate(
-        op::MlirModule,
-        optLevel::Cint,
-        numPaths::Cint,
-        sharedLibPaths::Ptr{MlirStringRef},
-        enableObjectDump::Bool,
-        enablePIC::Bool,
-    )::MlirExecutionEngine
-end
-
-"""
-    mlirExecutionEngineInitialize(jit)
-
-Initialize the ExecutionEngine. Global constructors specified by `llvm.mlir.global\\_ctors` will be run. One common scenario is that kernel binary compiled from `gpu.module` gets loaded during initialization. Make sure all symbols are resolvable before initialization by calling [`mlirExecutionEngineRegisterSymbol`](@ref) or including shared libraries.
-"""
-function mlirExecutionEngineInitialize(jit)
-    @ccall mlir_c.mlirExecutionEngineInitialize(jit::MlirExecutionEngine)::Cvoid
-end
-
-"""
-    mlirExecutionEngineDestroy(jit)
-
-Destroy an ExecutionEngine instance.
-"""
-function mlirExecutionEngineDestroy(jit)
-    @ccall mlir_c.mlirExecutionEngineDestroy(jit::MlirExecutionEngine)::Cvoid
-end
-
-"""
-    mlirExecutionEngineIsNull(jit)
-
-Checks whether an execution engine is null.
-"""
-function mlirExecutionEngineIsNull(jit)
-    @ccall mlir_c.mlirExecutionEngineIsNull(jit::MlirExecutionEngine)::Bool
-end
-
-"""
-    mlirExecutionEngineInvokePacked(jit, name, arguments)
-
-Invoke a native function in the execution engine by name with the arguments and result of the invoked function passed as an array of pointers. The function must have been tagged with the `llvm.emit\\_c\\_interface` attribute. Returns a failure if the execution fails for any reason (the function name can't be resolved for instance).
-"""
-function mlirExecutionEngineInvokePacked(jit, name, arguments)
-    @ccall mlir_c.mlirExecutionEngineInvokePacked(
-        jit::MlirExecutionEngine, name::MlirStringRef, arguments::Ptr{Ptr{Cvoid}}
-    )::MlirLogicalResult
-end
-
-"""
-    mlirExecutionEngineLookupPacked(jit, name)
-
-Lookup the wrapper of the native function in the execution engine with the given name, returns nullptr if the function can't be looked-up.
-"""
-function mlirExecutionEngineLookupPacked(jit, name)
-    @ccall mlir_c.mlirExecutionEngineLookupPacked(
-        jit::MlirExecutionEngine, name::MlirStringRef
-    )::Ptr{Cvoid}
-end
-
-"""
-    mlirExecutionEngineLookup(jit, name)
-
-Lookup a native function in the execution engine by name, returns nullptr if the name can't be looked-up.
-"""
-function mlirExecutionEngineLookup(jit, name)
-    @ccall mlir_c.mlirExecutionEngineLookup(
-        jit::MlirExecutionEngine, name::MlirStringRef
-    )::Ptr{Cvoid}
-end
-
-"""
-    mlirExecutionEngineRegisterSymbol(jit, name, sym)
-
-Register a symbol with the jit: this symbol will be accessible to the jitted code.
-"""
-function mlirExecutionEngineRegisterSymbol(jit, name, sym)
-    @ccall mlir_c.mlirExecutionEngineRegisterSymbol(
-        jit::MlirExecutionEngine, name::MlirStringRef, sym::Ptr{Cvoid}
-    )::Cvoid
-end
-
-"""
-    mlirExecutionEngineDumpToObjectFile(jit, fileName)
-
-Dump as an object in `fileName`.
-"""
-function mlirExecutionEngineDumpToObjectFile(jit, fileName)
-    @ccall mlir_c.mlirExecutionEngineDumpToObjectFile(
-        jit::MlirExecutionEngine, fileName::MlirStringRef
-    )::Cvoid
 end
 
 """
@@ -9602,317 +9368,44 @@ function mlirInferShapedTypeOpInterfaceInferReturnTypes(
     )::MlirLogicalResult
 end
 
-struct MlirPass
-    ptr::Ptr{Cvoid}
-end
+"""
+    mlirMemoryEffectsOpInterfaceTypeID()
 
-struct MlirExternalPass
-    ptr::Ptr{Cvoid}
-end
-
-struct MlirPassManager
-    ptr::Ptr{Cvoid}
-end
-
-struct MlirOpPassManager
-    ptr::Ptr{Cvoid}
+Returns the interface TypeID of the MemoryEffectsOpInterface.
+"""
+function mlirMemoryEffectsOpInterfaceTypeID()
+    @ccall mlir_c.mlirMemoryEffectsOpInterfaceTypeID()::MlirTypeID
 end
 
 """
-    mlirPassManagerCreate(ctx)
+    MlirMemoryEffectsOpInterfaceCallbacks
 
-Create a new top-level PassManager with the default anchor.
+Callbacks for implementing MemoryEffectsOpInterface from external code.
+
+| Field      | Note                                                               |
+| :--------- | :----------------------------------------------------------------- |
+| construct  | Optional constructor for user data. Set to nullptr to disable it.  |
+| destruct   | Optional destructor for user data. Set to nullptr to disable it.   |
+| getEffects | Get memory effects callback.                                       |
 """
-function mlirPassManagerCreate(ctx)
-    @ccall mlir_c.mlirPassManagerCreate(ctx::MlirContext)::MlirPassManager
-end
-
-"""
-    mlirPassManagerCreateOnOperation(ctx, anchorOp)
-
-Create a new top-level PassManager anchored on `anchorOp`.
-"""
-function mlirPassManagerCreateOnOperation(ctx, anchorOp)
-    @ccall mlir_c.mlirPassManagerCreateOnOperation(
-        ctx::MlirContext, anchorOp::MlirStringRef
-    )::MlirPassManager
-end
-
-"""
-    mlirPassManagerDestroy(passManager)
-
-Destroy the provided PassManager.
-"""
-function mlirPassManagerDestroy(passManager)
-    @ccall mlir_c.mlirPassManagerDestroy(passManager::MlirPassManager)::Cvoid
-end
-
-"""
-    mlirPassManagerIsNull(passManager)
-
-Checks if a PassManager is null.
-"""
-function mlirPassManagerIsNull(passManager)
-    @ccall mlir_c.mlirPassManagerIsNull(passManager::MlirPassManager)::Bool
-end
-
-"""
-    mlirPassManagerGetAsOpPassManager(passManager)
-
-Cast a top-level PassManager to a generic OpPassManager.
-"""
-function mlirPassManagerGetAsOpPassManager(passManager)
-    @ccall mlir_c.mlirPassManagerGetAsOpPassManager(
-        passManager::MlirPassManager
-    )::MlirOpPassManager
-end
-
-"""
-    mlirPassManagerRunOnOp(passManager, op)
-
-Run the provided `passManager` on the given `op`.
-"""
-function mlirPassManagerRunOnOp(passManager, op)
-    @ccall mlir_c.mlirPassManagerRunOnOp(
-        passManager::MlirPassManager, op::MlirOperation
-    )::MlirLogicalResult
-end
-
-"""
-    mlirPassManagerEnableIRPrinting(passManager, printBeforeAll, printAfterAll, printModuleScope, printAfterOnlyOnChange, printAfterOnlyOnFailure, flags, treePrintingPath)
-
-Enable IR printing. The treePrintingPath argument is an optional path to a directory where the dumps will be produced. If it isn't provided then dumps are produced to stderr.
-"""
-function mlirPassManagerEnableIRPrinting(
-    passManager,
-    printBeforeAll,
-    printAfterAll,
-    printModuleScope,
-    printAfterOnlyOnChange,
-    printAfterOnlyOnFailure,
-    flags,
-    treePrintingPath,
-)
-    @ccall mlir_c.mlirPassManagerEnableIRPrinting(
-        passManager::MlirPassManager,
-        printBeforeAll::Bool,
-        printAfterAll::Bool,
-        printModuleScope::Bool,
-        printAfterOnlyOnChange::Bool,
-        printAfterOnlyOnFailure::Bool,
-        flags::MlirOpPrintingFlags,
-        treePrintingPath::MlirStringRef,
-    )::Cvoid
-end
-
-"""
-    mlirPassManagerEnableVerifier(passManager, enable)
-
-Enable / disable verify-each.
-"""
-function mlirPassManagerEnableVerifier(passManager, enable)
-    @ccall mlir_c.mlirPassManagerEnableVerifier(
-        passManager::MlirPassManager, enable::Bool
-    )::Cvoid
-end
-
-"""
-    mlirPassManagerEnableTiming(passManager)
-
-Enable pass timing.
-"""
-function mlirPassManagerEnableTiming(passManager)
-    @ccall mlir_c.mlirPassManagerEnableTiming(passManager::MlirPassManager)::Cvoid
-end
-
-"""
-    MlirPassDisplayMode
-
-Enumerated type of pass display modes. Mainly used in [`mlirPassManagerEnableStatistics`](@ref).
-"""
-@cenum MlirPassDisplayMode::UInt32 begin
-    MLIR_PASS_DISPLAY_MODE_LIST = 0x0000000000000000
-    MLIR_PASS_DISPLAY_MODE_PIPELINE = 0x0000000000000001
-end
-
-"""
-    mlirPassManagerEnableStatistics(passManager, displayMode)
-
-Enable pass statistics.
-"""
-function mlirPassManagerEnableStatistics(passManager, displayMode)
-    @ccall mlir_c.mlirPassManagerEnableStatistics(
-        passManager::MlirPassManager, displayMode::MlirPassDisplayMode
-    )::Cvoid
-end
-
-"""
-    mlirPassManagerGetNestedUnder(passManager, operationName)
-
-Nest an OpPassManager under the top-level PassManager, the nested passmanager will only run on operations matching the provided name. The returned OpPassManager will be destroyed when the parent is destroyed. To further nest more OpPassManager under the newly returned one, see `mlirOpPassManagerNest` below.
-"""
-function mlirPassManagerGetNestedUnder(passManager, operationName)
-    @ccall mlir_c.mlirPassManagerGetNestedUnder(
-        passManager::MlirPassManager, operationName::MlirStringRef
-    )::MlirOpPassManager
-end
-
-"""
-    mlirOpPassManagerGetNestedUnder(passManager, operationName)
-
-Nest an OpPassManager under the provided OpPassManager, the nested passmanager will only run on operations matching the provided name. The returned OpPassManager will be destroyed when the parent is destroyed.
-"""
-function mlirOpPassManagerGetNestedUnder(passManager, operationName)
-    @ccall mlir_c.mlirOpPassManagerGetNestedUnder(
-        passManager::MlirOpPassManager, operationName::MlirStringRef
-    )::MlirOpPassManager
-end
-
-"""
-    mlirPassManagerAddOwnedPass(passManager, pass)
-
-Add a pass and transfer ownership to the provided top-level mlirPassManager. If the pass is not a generic operation pass or a ModulePass, a new OpPassManager is implicitly nested under the provided PassManager.
-"""
-function mlirPassManagerAddOwnedPass(passManager, pass)
-    @ccall mlir_c.mlirPassManagerAddOwnedPass(
-        passManager::MlirPassManager, pass::MlirPass
-    )::Cvoid
-end
-
-"""
-    mlirOpPassManagerAddOwnedPass(passManager, pass)
-
-Add a pass and transfer ownership to the provided mlirOpPassManager. If the pass is not a generic operation pass or matching the type of the provided PassManager, a new OpPassManager is implicitly nested under the provided PassManager.
-"""
-function mlirOpPassManagerAddOwnedPass(passManager, pass)
-    @ccall mlir_c.mlirOpPassManagerAddOwnedPass(
-        passManager::MlirOpPassManager, pass::MlirPass
-    )::Cvoid
-end
-
-"""
-    mlirOpPassManagerAddPipeline(passManager, pipelineElements, callback, userData)
-
-Parse a sequence of textual MLIR pass pipeline elements and add them to the provided OpPassManager. If parsing fails an error message is reported using the provided callback.
-"""
-function mlirOpPassManagerAddPipeline(passManager, pipelineElements, callback, userData)
-    @ccall mlir_c.mlirOpPassManagerAddPipeline(
-        passManager::MlirOpPassManager,
-        pipelineElements::MlirStringRef,
-        callback::MlirStringCallback,
-        userData::Ptr{Cvoid},
-    )::MlirLogicalResult
-end
-
-"""
-    mlirPrintPassPipeline(passManager, callback, userData)
-
-Print a textual MLIR pass pipeline by sending chunks of the string representation and forwarding `userData to `callback`. Note that the callback may be called several times with consecutive chunks of the string.
-"""
-function mlirPrintPassPipeline(passManager, callback, userData)
-    @ccall mlir_c.mlirPrintPassPipeline(
-        passManager::MlirOpPassManager, callback::MlirStringCallback, userData::Ptr{Cvoid}
-    )::Cvoid
-end
-
-"""
-    mlirParsePassPipeline(passManager, pipeline, callback, userData)
-
-Parse a textual MLIR pass pipeline and assign it to the provided OpPassManager. If parsing fails an error message is reported using the provided callback.
-"""
-function mlirParsePassPipeline(passManager, pipeline, callback, userData)
-    @ccall mlir_c.mlirParsePassPipeline(
-        passManager::MlirOpPassManager,
-        pipeline::MlirStringRef,
-        callback::MlirStringCallback,
-        userData::Ptr{Cvoid},
-    )::MlirLogicalResult
-end
-
-"""
-    MlirExternalPassCallbacks
-
-Structure of external [`MlirPass`](@ref) callbacks. All callbacks are required to be set unless otherwise specified.
-
-| Field      | Note                                                                                                                                                                                              |
-| :--------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| construct  | This callback is called from the pass is created. This is analogous to a C++ pass constructor.                                                                                                    |
-| destruct   | This callback is called when the pass is destroyed This is analogous to a C++ pass destructor.                                                                                                    |
-| initialize | This callback is optional. The callback is called before the pass is run, allowing a chance to initialize any complex state necessary for running the pass. See Pass::initialize(MLIRContext *).  |
-| clone      | This callback is called when the pass is cloned. See Pass::clonePass().                                                                                                                           |
-| run        | This callback is called when the pass is run. See Pass::runOnOperation().                                                                                                                         |
-"""
-struct MlirExternalPassCallbacks
+struct MlirMemoryEffectsOpInterfaceCallbacks
     construct::Ptr{Cvoid}
     destruct::Ptr{Cvoid}
-    initialize::Ptr{Cvoid}
-    clone::Ptr{Cvoid}
-    run::Ptr{Cvoid}
+    getEffects::Ptr{Cvoid}
+    userData::Ptr{Cvoid}
 end
 
 """
-    mlirCreateExternalPass(passID, name, argument, description, opName, nDependentDialects, dependentDialects, callbacks, userData)
+    mlirMemoryEffectsOpInterfaceAttachFallbackModel(ctx, opName, callbacks)
 
-Creates an external [`MlirPass`](@ref) that calls the supplied `callbacks` using the supplied `userData`. If `opName` is empty, the pass is a generic operation pass. Otherwise it is an operation pass specific to the specified pass name.
+Attach a new FallbackModel for the MemoryEffectsOpInterface to the named operation. The FallbackModel will call the provided callbacks.
 """
-function mlirCreateExternalPass(
-    passID,
-    name,
-    argument,
-    description,
-    opName,
-    nDependentDialects,
-    dependentDialects,
-    callbacks,
-    userData,
-)
-    @ccall mlir_c.mlirCreateExternalPass(
-        passID::MlirTypeID,
-        name::MlirStringRef,
-        argument::MlirStringRef,
-        description::MlirStringRef,
+function mlirMemoryEffectsOpInterfaceAttachFallbackModel(ctx, opName, callbacks)
+    @ccall mlir_c.mlirMemoryEffectsOpInterfaceAttachFallbackModel(
+        ctx::MlirContext,
         opName::MlirStringRef,
-        nDependentDialects::Cptrdiff_t,
-        dependentDialects::Ptr{MlirDialectHandle},
-        callbacks::MlirExternalPassCallbacks,
-        userData::Ptr{Cvoid},
-    )::MlirPass
-end
-
-"""
-    mlirExternalPassSignalFailure(pass)
-
-This signals that the pass has failed. This is only valid to call during the `run` callback of [`MlirExternalPassCallbacks`](@ref). See Pass::signalPassFailure().
-"""
-function mlirExternalPassSignalFailure(pass)
-    @ccall mlir_c.mlirExternalPassSignalFailure(pass::MlirExternalPass)::Cvoid
-end
-
-"""
-    mlirRegisterAllDialects(registry)
-
-Appends all upstream dialects and extensions to the dialect registry.
-"""
-function mlirRegisterAllDialects(registry)
-    @ccall mlir_c.mlirRegisterAllDialects(registry::MlirDialectRegistry)::Cvoid
-end
-
-"""
-    mlirRegisterAllLLVMTranslations(context)
-
-Register all translations to LLVM IR for dialects that can support it.
-"""
-function mlirRegisterAllLLVMTranslations(context)
-    @ccall mlir_c.mlirRegisterAllLLVMTranslations(context::MlirContext)::Cvoid
-end
-
-"""
-    mlirRegisterAllPasses()
-
-Register all compiler passes of MLIR.
-"""
-function mlirRegisterAllPasses()
-    @ccall mlir_c.mlirRegisterAllPasses()::Cvoid
+        callbacks::MlirMemoryEffectsOpInterfaceCallbacks,
+    )::Cvoid
 end
 
 struct MlirRewriterBase
@@ -9958,6 +9451,26 @@ struct MlirPatternRewriter
 end
 
 struct MlirRewritePattern
+    ptr::Ptr{Cvoid}
+end
+
+struct MlirConversionTarget
+    ptr::Ptr{Cvoid}
+end
+
+struct MlirConversionPattern
+    ptr::Ptr{Cvoid}
+end
+
+struct MlirTypeConverter
+    ptr::Ptr{Cvoid}
+end
+
+struct MlirConversionPatternRewriter
+    ptr::Ptr{Cvoid}
+end
+
+struct MlirConversionConfig
     ptr::Ptr{Cvoid}
 end
 
@@ -10611,12 +10124,308 @@ function mlirWalkAndApplyPatterns(op, patterns)
 end
 
 """
+    mlirApplyPartialConversion(op, target, patterns, config)
+
+Apply a partial conversion on the given operation.
+"""
+function mlirApplyPartialConversion(op, target, patterns, config)
+    @ccall mlir_c.mlirApplyPartialConversion(
+        op::MlirOperation,
+        target::MlirConversionTarget,
+        patterns::MlirFrozenRewritePatternSet,
+        config::MlirConversionConfig,
+    )::MlirLogicalResult
+end
+
+"""
+    mlirApplyFullConversion(op, target, patterns, config)
+
+Apply a full conversion on the given operation.
+"""
+function mlirApplyFullConversion(op, target, patterns, config)
+    @ccall mlir_c.mlirApplyFullConversion(
+        op::MlirOperation,
+        target::MlirConversionTarget,
+        patterns::MlirFrozenRewritePatternSet,
+        config::MlirConversionConfig,
+    )::MlirLogicalResult
+end
+
+"""
+    mlirConversionConfigCreate()
+
+Create a default ConversionConfig.
+"""
+function mlirConversionConfigCreate()
+    @ccall mlir_c.mlirConversionConfigCreate()::MlirConversionConfig
+end
+
+"""
+    mlirConversionConfigDestroy(config)
+
+Destroy the given ConversionConfig.
+"""
+function mlirConversionConfigDestroy(config)
+    @ccall mlir_c.mlirConversionConfigDestroy(config::MlirConversionConfig)::Cvoid
+end
+
+@cenum MlirDialectConversionFoldingMode::UInt32 begin
+    MLIR_DIALECT_CONVERSION_FOLDING_MODE_NEVER = 0x0000000000000000
+    MLIR_DIALECT_CONVERSION_FOLDING_MODE_BEFORE_PATTERNS = 0x0000000000000001
+    MLIR_DIALECT_CONVERSION_FOLDING_MODE_AFTER_PATTERNS = 0x0000000000000002
+end
+
+"""
+    mlirConversionConfigSetFoldingMode(config, mode)
+
+Set the folding mode for the given ConversionConfig.
+"""
+function mlirConversionConfigSetFoldingMode(config, mode)
+    @ccall mlir_c.mlirConversionConfigSetFoldingMode(
+        config::MlirConversionConfig, mode::MlirDialectConversionFoldingMode
+    )::Cvoid
+end
+
+"""
+    mlirConversionConfigGetFoldingMode(config)
+
+Get the folding mode for the given ConversionConfig.
+"""
+function mlirConversionConfigGetFoldingMode(config)
+    @ccall mlir_c.mlirConversionConfigGetFoldingMode(
+        config::MlirConversionConfig
+    )::MlirDialectConversionFoldingMode
+end
+
+"""
+    mlirConversionConfigEnableBuildMaterializations(config, enable)
+
+Enable or disable building materializations during conversion.
+"""
+function mlirConversionConfigEnableBuildMaterializations(config, enable)
+    @ccall mlir_c.mlirConversionConfigEnableBuildMaterializations(
+        config::MlirConversionConfig, enable::Bool
+    )::Cvoid
+end
+
+"""
+    mlirConversionConfigIsBuildMaterializationsEnabled(config)
+
+Check if building materializations during conversion is enabled.
+"""
+function mlirConversionConfigIsBuildMaterializationsEnabled(config)
+    @ccall mlir_c.mlirConversionConfigIsBuildMaterializationsEnabled(
+        config::MlirConversionConfig
+    )::Bool
+end
+
+"""
     mlirPatternRewriterAsBase(rewriter)
 
 Cast the PatternRewriter to a RewriterBase
 """
 function mlirPatternRewriterAsBase(rewriter)
     @ccall mlir_c.mlirPatternRewriterAsBase(rewriter::MlirPatternRewriter)::MlirRewriterBase
+end
+
+"""
+    mlirConversionPatternRewriterAsPatternRewriter(rewriter)
+
+Cast the ConversionPatternRewriter to a PatternRewriter
+"""
+function mlirConversionPatternRewriterAsPatternRewriter(rewriter)
+    @ccall mlir_c.mlirConversionPatternRewriterAsPatternRewriter(
+        rewriter::MlirConversionPatternRewriter
+    )::MlirPatternRewriter
+end
+
+"""
+    mlirConversionPatternRewriterConvertRegionTypes(rewriter, region, typeConverter)
+
+Apply a signature conversion to each block in the given region.
+"""
+function mlirConversionPatternRewriterConvertRegionTypes(rewriter, region, typeConverter)
+    @ccall mlir_c.mlirConversionPatternRewriterConvertRegionTypes(
+        rewriter::MlirConversionPatternRewriter,
+        region::MlirRegion,
+        typeConverter::MlirTypeConverter,
+    )::MlirLogicalResult
+end
+
+"""
+    mlirConversionTargetCreate(context)
+
+Create an empty ConversionTarget.
+"""
+function mlirConversionTargetCreate(context)
+    @ccall mlir_c.mlirConversionTargetCreate(context::MlirContext)::MlirConversionTarget
+end
+
+"""
+    mlirConversionTargetDestroy(target)
+
+Destroy the given ConversionTarget.
+"""
+function mlirConversionTargetDestroy(target)
+    @ccall mlir_c.mlirConversionTargetDestroy(target::MlirConversionTarget)::Cvoid
+end
+
+"""
+    mlirConversionTargetAddLegalOp(target, opName)
+
+Register the given operations as legal.
+"""
+function mlirConversionTargetAddLegalOp(target, opName)
+    @ccall mlir_c.mlirConversionTargetAddLegalOp(
+        target::MlirConversionTarget, opName::MlirStringRef
+    )::Cvoid
+end
+
+"""
+    mlirConversionTargetAddIllegalOp(target, opName)
+
+Register the given operations as illegal.
+"""
+function mlirConversionTargetAddIllegalOp(target, opName)
+    @ccall mlir_c.mlirConversionTargetAddIllegalOp(
+        target::MlirConversionTarget, opName::MlirStringRef
+    )::Cvoid
+end
+
+"""
+    mlirConversionTargetAddLegalDialect(target, dialectName)
+
+Register the operations of the given dialect as legal.
+"""
+function mlirConversionTargetAddLegalDialect(target, dialectName)
+    @ccall mlir_c.mlirConversionTargetAddLegalDialect(
+        target::MlirConversionTarget, dialectName::MlirStringRef
+    )::Cvoid
+end
+
+"""
+    mlirConversionTargetAddIllegalDialect(target, dialectName)
+
+Register the operations of the given dialect as illegal.
+"""
+function mlirConversionTargetAddIllegalDialect(target, dialectName)
+    @ccall mlir_c.mlirConversionTargetAddIllegalDialect(
+        target::MlirConversionTarget, dialectName::MlirStringRef
+    )::Cvoid
+end
+
+"""
+    mlirTypeConverterCreate()
+
+Create a TypeConverter.
+"""
+function mlirTypeConverterCreate()
+    @ccall mlir_c.mlirTypeConverterCreate()::MlirTypeConverter
+end
+
+"""
+    mlirTypeConverterDestroy(typeConverter)
+
+Destroy the given TypeConverter.
+"""
+function mlirTypeConverterDestroy(typeConverter)
+    @ccall mlir_c.mlirTypeConverterDestroy(typeConverter::MlirTypeConverter)::Cvoid
+end
+
+# typedef MlirLogicalResult ( * MlirTypeConverterConversionCallback ) ( MlirType type , MlirType * convertedType , void * userData )
+"""
+Callback type for type conversion functions. Returns failure or sets convertedType to [`MlirType`](@ref){NULL} to indicate failure. If failure is returned, the converter is allowed to try another conversion function to perform the conversion.
+"""
+const MlirTypeConverterConversionCallback = Ptr{Cvoid}
+
+"""
+    mlirTypeConverterAddConversion(typeConverter, convertType, userData)
+
+Add a type conversion function to the given TypeConverter.
+"""
+function mlirTypeConverterAddConversion(typeConverter, convertType, userData)
+    @ccall mlir_c.mlirTypeConverterAddConversion(
+        typeConverter::MlirTypeConverter,
+        convertType::MlirTypeConverterConversionCallback,
+        userData::Ptr{Cvoid},
+    )::Cvoid
+end
+
+"""
+    mlirTypeConverterConvertType(typeConverter, type)
+
+Convert the given type using the given TypeConverter.
+"""
+function mlirTypeConverterConvertType(typeConverter, type)
+    @ccall mlir_c.mlirTypeConverterConvertType(
+        typeConverter::MlirTypeConverter, type::MlirType
+    )::MlirType
+end
+
+"""
+    MlirConversionPatternCallbacks
+
+ConversionPattern API
+
+| Field           | Note                                                                                                                                                                                                |
+| :-------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| construct       | Optional constructor for the user data. Set to nullptr to disable it.                                                                                                                               |
+| destruct        | Optional destructor for the user data. Set to nullptr to disable it.                                                                                                                                |
+| matchAndRewrite | The callback function to match against code rooted at the specified operation, and perform the conversion rewrite if the match is successful, corresponding to ConversionPattern::matchAndRewrite.  |
+"""
+struct MlirConversionPatternCallbacks
+    construct::Ptr{Cvoid}
+    destruct::Ptr{Cvoid}
+    matchAndRewrite::Ptr{Cvoid}
+end
+
+"""
+    mlirOpConversionPatternCreate(rootName, benefit, context, typeConverter, callbacks, userData, nGeneratedNames, generatedNames)
+
+Create a conversion pattern that matches the operation with the given rootName, corresponding to mlir::OpConversionPattern.
+"""
+function mlirOpConversionPatternCreate(
+    rootName,
+    benefit,
+    context,
+    typeConverter,
+    callbacks,
+    userData,
+    nGeneratedNames,
+    generatedNames,
+)
+    @ccall mlir_c.mlirOpConversionPatternCreate(
+        rootName::MlirStringRef,
+        benefit::Cuint,
+        context::MlirContext,
+        typeConverter::MlirTypeConverter,
+        callbacks::MlirConversionPatternCallbacks,
+        userData::Ptr{Cvoid},
+        nGeneratedNames::Csize_t,
+        generatedNames::Ptr{MlirStringRef},
+    )::MlirConversionPattern
+end
+
+"""
+    mlirConversionPatternGetTypeConverter(pattern)
+
+Get the type converter used by this conversion pattern.
+"""
+function mlirConversionPatternGetTypeConverter(pattern)
+    @ccall mlir_c.mlirConversionPatternGetTypeConverter(
+        pattern::MlirConversionPattern
+    )::MlirTypeConverter
+end
+
+"""
+    mlirConversionPatternAsRewritePattern(pattern)
+
+Cast the ConversionPattern to a RewritePattern.
+"""
+function mlirConversionPatternAsRewritePattern(pattern)
+    @ccall mlir_c.mlirConversionPatternAsRewritePattern(
+        pattern::MlirConversionPattern
+    )::MlirRewritePattern
 end
 
 """
@@ -10665,6 +10474,15 @@ function mlirRewritePatternSetCreate(context)
 end
 
 """
+    mlirRewritePatternSetGetContext(set)
+
+Get the context associated with a [`MlirRewritePatternSet`](@ref).
+"""
+function mlirRewritePatternSetGetContext(set)
+    @ccall mlir_c.mlirRewritePatternSetGetContext(set::MlirRewritePatternSet)::MlirContext
+end
+
+"""
     mlirRewritePatternSetDestroy(set)
 
 Destruct the given [`MlirRewritePatternSet`](@ref).
@@ -10682,6 +10500,1192 @@ function mlirRewritePatternSetAdd(set, pattern)
     @ccall mlir_c.mlirRewritePatternSetAdd(
         set::MlirRewritePatternSet, pattern::MlirRewritePattern
     )::Cvoid
+end
+
+function mlirGetDialectHandle__transform__()
+    @ccall mlir_c.mlirGetDialectHandle__transform__()::MlirDialectHandle
+end
+
+struct MlirTransformResults
+    ptr::Ptr{Cvoid}
+end
+
+struct MlirTransformRewriter
+    ptr::Ptr{Cvoid}
+end
+
+struct MlirTransformState
+    ptr::Ptr{Cvoid}
+end
+
+"""
+    MlirDiagnosedSilenceableFailure
+
+Enum representing the result of a transform operation.
+"""
+@cenum MlirDiagnosedSilenceableFailure::UInt32 begin
+    MlirDiagnosedSilenceableFailureSuccess = 0x0000000000000000
+    MlirDiagnosedSilenceableFailureSilenceableFailure = 0x0000000000000001
+    MlirDiagnosedSilenceableFailureDefiniteFailure = 0x0000000000000002
+end
+
+function mlirTypeIsATransformAnyOpType(type)
+    @ccall mlir_c.mlirTypeIsATransformAnyOpType(type::MlirType)::Bool
+end
+
+function mlirTransformAnyOpTypeGetTypeID()
+    @ccall mlir_c.mlirTransformAnyOpTypeGetTypeID()::MlirTypeID
+end
+
+function mlirTransformAnyOpTypeGet(ctx)
+    @ccall mlir_c.mlirTransformAnyOpTypeGet(ctx::MlirContext)::MlirType
+end
+
+function mlirTransformAnyOpTypeGetName()
+    @ccall mlir_c.mlirTransformAnyOpTypeGetName()::MlirStringRef
+end
+
+function mlirTypeIsATransformAnyParamType(type)
+    @ccall mlir_c.mlirTypeIsATransformAnyParamType(type::MlirType)::Bool
+end
+
+function mlirTransformAnyParamTypeGetTypeID()
+    @ccall mlir_c.mlirTransformAnyParamTypeGetTypeID()::MlirTypeID
+end
+
+function mlirTransformAnyParamTypeGet(ctx)
+    @ccall mlir_c.mlirTransformAnyParamTypeGet(ctx::MlirContext)::MlirType
+end
+
+function mlirTransformAnyParamTypeGetName()
+    @ccall mlir_c.mlirTransformAnyParamTypeGetName()::MlirStringRef
+end
+
+function mlirTypeIsATransformAnyValueType(type)
+    @ccall mlir_c.mlirTypeIsATransformAnyValueType(type::MlirType)::Bool
+end
+
+function mlirTransformAnyValueTypeGetTypeID()
+    @ccall mlir_c.mlirTransformAnyValueTypeGetTypeID()::MlirTypeID
+end
+
+function mlirTransformAnyValueTypeGet(ctx)
+    @ccall mlir_c.mlirTransformAnyValueTypeGet(ctx::MlirContext)::MlirType
+end
+
+function mlirTransformAnyValueTypeGetName()
+    @ccall mlir_c.mlirTransformAnyValueTypeGetName()::MlirStringRef
+end
+
+function mlirTypeIsATransformOperationType(type)
+    @ccall mlir_c.mlirTypeIsATransformOperationType(type::MlirType)::Bool
+end
+
+function mlirTransformOperationTypeGetTypeID()
+    @ccall mlir_c.mlirTransformOperationTypeGetTypeID()::MlirTypeID
+end
+
+function mlirTransformOperationTypeGet(ctx, operationName)
+    @ccall mlir_c.mlirTransformOperationTypeGet(
+        ctx::MlirContext, operationName::MlirStringRef
+    )::MlirType
+end
+
+function mlirTransformOperationTypeGetName()
+    @ccall mlir_c.mlirTransformOperationTypeGetName()::MlirStringRef
+end
+
+function mlirTransformOperationTypeGetOperationName(type)
+    @ccall mlir_c.mlirTransformOperationTypeGetOperationName(type::MlirType)::MlirStringRef
+end
+
+function mlirTypeIsATransformParamType(type)
+    @ccall mlir_c.mlirTypeIsATransformParamType(type::MlirType)::Bool
+end
+
+function mlirTransformParamTypeGetTypeID()
+    @ccall mlir_c.mlirTransformParamTypeGetTypeID()::MlirTypeID
+end
+
+function mlirTransformParamTypeGet(ctx, type)
+    @ccall mlir_c.mlirTransformParamTypeGet(ctx::MlirContext, type::MlirType)::MlirType
+end
+
+function mlirTransformParamTypeGetName()
+    @ccall mlir_c.mlirTransformParamTypeGetName()::MlirStringRef
+end
+
+function mlirTransformParamTypeGetType(type)
+    @ccall mlir_c.mlirTransformParamTypeGetType(type::MlirType)::MlirType
+end
+
+"""
+    mlirTransformRewriterAsBase(rewriter)
+
+Cast the TransformRewriter to a RewriterBase
+"""
+function mlirTransformRewriterAsBase(rewriter)
+    @ccall mlir_c.mlirTransformRewriterAsBase(
+        rewriter::MlirTransformRewriter
+    )::MlirRewriterBase
+end
+
+"""
+    mlirTransformResultsSetOps(results, result, numOps, ops)
+
+Set the payload operations for a transform result by iterating over a list.
+"""
+function mlirTransformResultsSetOps(results, result, numOps, ops)
+    @ccall mlir_c.mlirTransformResultsSetOps(
+        results::MlirTransformResults,
+        result::MlirValue,
+        numOps::Cptrdiff_t,
+        ops::Ptr{MlirOperation},
+    )::Cvoid
+end
+
+"""
+    mlirTransformResultsSetValues(results, result, numValues, values)
+
+Set the payload values for a transform result by iterating over a list.
+"""
+function mlirTransformResultsSetValues(results, result, numValues, values)
+    @ccall mlir_c.mlirTransformResultsSetValues(
+        results::MlirTransformResults,
+        result::MlirValue,
+        numValues::Cptrdiff_t,
+        values::Ptr{MlirValue},
+    )::Cvoid
+end
+
+"""
+    mlirTransformResultsSetParams(results, result, numParams, params)
+
+Set the parameters for a transform result by iterating over a list.
+"""
+function mlirTransformResultsSetParams(results, result, numParams, params)
+    @ccall mlir_c.mlirTransformResultsSetParams(
+        results::MlirTransformResults,
+        result::MlirValue,
+        numParams::Cptrdiff_t,
+        params::Ptr{MlirAttribute},
+    )::Cvoid
+end
+
+# typedef void ( * MlirOperationCallback ) ( MlirOperation , void * userData )
+"""
+Callback for iterating over payload operations.
+"""
+const MlirOperationCallback = Ptr{Cvoid}
+
+"""
+    mlirTransformStateForEachPayloadOp(state, value, callback, userData)
+
+Iterate over payload operations associated with the transform IR value. Calls the callback for each payload operation.
+"""
+function mlirTransformStateForEachPayloadOp(state, value, callback, userData)
+    @ccall mlir_c.mlirTransformStateForEachPayloadOp(
+        state::MlirTransformState,
+        value::MlirValue,
+        callback::MlirOperationCallback,
+        userData::Ptr{Cvoid},
+    )::Cvoid
+end
+
+# typedef void ( * MlirValueCallback ) ( MlirValue , void * userData )
+"""
+Callback for iterating over payload values.
+"""
+const MlirValueCallback = Ptr{Cvoid}
+
+"""
+    mlirTransformStateForEachPayloadValue(state, value, callback, userData)
+
+Iterate over payload values associated with the transform IR value. Calls the callback for each payload value.
+"""
+function mlirTransformStateForEachPayloadValue(state, value, callback, userData)
+    @ccall mlir_c.mlirTransformStateForEachPayloadValue(
+        state::MlirTransformState,
+        value::MlirValue,
+        callback::MlirValueCallback,
+        userData::Ptr{Cvoid},
+    )::Cvoid
+end
+
+# typedef void ( * MlirAttributeCallback ) ( MlirAttribute , void * userData )
+"""
+Callback for iterating over parameters.
+"""
+const MlirAttributeCallback = Ptr{Cvoid}
+
+"""
+    mlirTransformStateForEachParam(state, value, callback, userData)
+
+Iterate over parameters associated with the transform IR value. Calls the callback for each parameter.
+"""
+function mlirTransformStateForEachParam(state, value, callback, userData)
+    @ccall mlir_c.mlirTransformStateForEachParam(
+        state::MlirTransformState,
+        value::MlirValue,
+        callback::MlirAttributeCallback,
+        userData::Ptr{Cvoid},
+    )::Cvoid
+end
+
+"""
+    mlirTransformOpInterfaceTypeID()
+
+Returns the interface TypeID of the TransformOpInterface.
+"""
+function mlirTransformOpInterfaceTypeID()
+    @ccall mlir_c.mlirTransformOpInterfaceTypeID()::MlirTypeID
+end
+
+"""
+    MlirTransformOpInterfaceCallbacks
+
+Callbacks for implementing TransformOpInterface from external code.
+
+| Field                        | Note                                                                   |
+| :--------------------------- | :--------------------------------------------------------------------- |
+| construct                    | Optional constructor for the user data. Set to nullptr to disable it.  |
+| destruct                     | Optional destructor for the user data. Set to nullptr to disable it.   |
+| apply                        | Apply callback that implements the transformation.                     |
+| allowsRepeatedHandleOperands | Callback to check if repeated handle operands are allowed.             |
+"""
+struct MlirTransformOpInterfaceCallbacks
+    construct::Ptr{Cvoid}
+    destruct::Ptr{Cvoid}
+    apply::Ptr{Cvoid}
+    allowsRepeatedHandleOperands::Ptr{Cvoid}
+    userData::Ptr{Cvoid}
+end
+
+"""
+    mlirTransformOpInterfaceAttachFallbackModel(ctx, opName, callbacks)
+
+Attach TransformOpInterface to the operation with the given name using the provided callbacks.
+"""
+function mlirTransformOpInterfaceAttachFallbackModel(ctx, opName, callbacks)
+    @ccall mlir_c.mlirTransformOpInterfaceAttachFallbackModel(
+        ctx::MlirContext,
+        opName::MlirStringRef,
+        callbacks::MlirTransformOpInterfaceCallbacks,
+    )::Cvoid
+end
+
+"""
+    mlirPatternDescriptorOpInterfaceTypeID()
+
+Returns the interface TypeID of the PatternDescriptorOpInterface.
+"""
+function mlirPatternDescriptorOpInterfaceTypeID()
+    @ccall mlir_c.mlirPatternDescriptorOpInterfaceTypeID()::MlirTypeID
+end
+
+"""
+    MlirPatternDescriptorOpInterfaceCallbacks
+
+Callbacks for implementing PatternDescriptorOpInterface from external code.
+
+| Field                     | Note                                                                                                                                             |
+| :------------------------ | :----------------------------------------------------------------------------------------------------------------------------------------------- |
+| construct                 | Optional constructor for the user data. Set to nullptr to disable it.                                                                            |
+| destruct                  | Optional destructor for the user data. Set to nullptr to disable it.                                                                             |
+| populatePatterns          | Callback to populate rewrite patterns into the given pattern set.                                                                                |
+| populatePatternsWithState | Optional callback to populate rewrite patterns with transform state. Set to nullptr to use the default implementation (calls populatePatterns).  |
+"""
+struct MlirPatternDescriptorOpInterfaceCallbacks
+    construct::Ptr{Cvoid}
+    destruct::Ptr{Cvoid}
+    populatePatterns::Ptr{Cvoid}
+    populatePatternsWithState::Ptr{Cvoid}
+    userData::Ptr{Cvoid}
+end
+
+"""
+    mlirPatternDescriptorOpInterfaceAttachFallbackModel(ctx, opName, callbacks)
+
+Attach PatternDescriptorOpInterface to the operation with the given name using the provided callbacks.
+"""
+function mlirPatternDescriptorOpInterfaceAttachFallbackModel(ctx, opName, callbacks)
+    @ccall mlir_c.mlirPatternDescriptorOpInterfaceAttachFallbackModel(
+        ctx::MlirContext,
+        opName::MlirStringRef,
+        callbacks::MlirPatternDescriptorOpInterfaceCallbacks,
+    )::Cvoid
+end
+
+"""
+    mlirTransformOnlyReadsHandle(operands, numOperands, effects)
+
+Helper to mark operands as only reading handles.
+"""
+function mlirTransformOnlyReadsHandle(operands, numOperands, effects)
+    @ccall mlir_c.mlirTransformOnlyReadsHandle(
+        operands::Ptr{MlirOpOperand},
+        numOperands::Cptrdiff_t,
+        effects::MlirMemoryEffectInstancesList,
+    )::Cvoid
+end
+
+"""
+    mlirTransformConsumesHandle(operands, numOperands, effects)
+
+Helper to mark operands as consuming handles.
+"""
+function mlirTransformConsumesHandle(operands, numOperands, effects)
+    @ccall mlir_c.mlirTransformConsumesHandle(
+        operands::Ptr{MlirOpOperand},
+        numOperands::Cptrdiff_t,
+        effects::MlirMemoryEffectInstancesList,
+    )::Cvoid
+end
+
+"""
+    mlirTransformProducesHandle(results, numResults, effects)
+
+Helper to mark results as producing handles.
+"""
+function mlirTransformProducesHandle(results, numResults, effects)
+    @ccall mlir_c.mlirTransformProducesHandle(
+        results::Ptr{MlirValue},
+        numResults::Cptrdiff_t,
+        effects::MlirMemoryEffectInstancesList,
+    )::Cvoid
+end
+
+"""
+    mlirTransformModifiesPayload(effects)
+
+Helper to mark potential modifications to the payload IR.
+"""
+function mlirTransformModifiesPayload(effects)
+    @ccall mlir_c.mlirTransformModifiesPayload(
+        effects::MlirMemoryEffectInstancesList
+    )::Cvoid
+end
+
+"""
+    mlirTransformOnlyReadsPayload(effects)
+
+Helper to mark potential reads from the payload IR.
+"""
+function mlirTransformOnlyReadsPayload(effects)
+    @ccall mlir_c.mlirTransformOnlyReadsPayload(
+        effects::MlirMemoryEffectInstancesList
+    )::Cvoid
+end
+
+struct MlirTransformOptions
+    ptr::Ptr{Cvoid}
+end
+
+"""
+    mlirTransformOptionsCreate()
+
+Creates a default-initialized transform options object.
+"""
+function mlirTransformOptionsCreate()
+    @ccall mlir_c.mlirTransformOptionsCreate()::MlirTransformOptions
+end
+
+"""
+    mlirTransformOptionsEnableExpensiveChecks(transformOptions, enable)
+
+Enables or disables expensive checks in transform options.
+"""
+function mlirTransformOptionsEnableExpensiveChecks(transformOptions, enable)
+    @ccall mlir_c.mlirTransformOptionsEnableExpensiveChecks(
+        transformOptions::MlirTransformOptions, enable::Bool
+    )::Cvoid
+end
+
+"""
+    mlirTransformOptionsGetExpensiveChecksEnabled(transformOptions)
+
+Returns true if expensive checks are enabled in transform options.
+"""
+function mlirTransformOptionsGetExpensiveChecksEnabled(transformOptions)
+    @ccall mlir_c.mlirTransformOptionsGetExpensiveChecksEnabled(
+        transformOptions::MlirTransformOptions
+    )::Bool
+end
+
+"""
+    mlirTransformOptionsEnforceSingleTopLevelTransformOp(transformOptions, enable)
+
+Enables or disables the enforcement of the top-level transform op being single in transform options.
+"""
+function mlirTransformOptionsEnforceSingleTopLevelTransformOp(transformOptions, enable)
+    @ccall mlir_c.mlirTransformOptionsEnforceSingleTopLevelTransformOp(
+        transformOptions::MlirTransformOptions, enable::Bool
+    )::Cvoid
+end
+
+"""
+    mlirTransformOptionsGetEnforceSingleTopLevelTransformOp(transformOptions)
+
+Returns true if the enforcement of the top-level transform op being single is enabled in transform options.
+"""
+function mlirTransformOptionsGetEnforceSingleTopLevelTransformOp(transformOptions)
+    @ccall mlir_c.mlirTransformOptionsGetEnforceSingleTopLevelTransformOp(
+        transformOptions::MlirTransformOptions
+    )::Bool
+end
+
+"""
+    mlirTransformOptionsDestroy(transformOptions)
+
+Destroys a transform options object previously created by [`mlirTransformOptionsCreate`](@ref).
+"""
+function mlirTransformOptionsDestroy(transformOptions)
+    @ccall mlir_c.mlirTransformOptionsDestroy(transformOptions::MlirTransformOptions)::Cvoid
+end
+
+"""
+    mlirTransformApplyNamedSequence(payload, transformRoot, transformModule, transformOptions)
+
+Applies the transformation script starting at the given transform root operation to the given payload operation. The module containing the transform root as well as the transform options should be provided. The transform operation must implement TransformOpInterface and the module must be a ModuleOp. Returns the status of the application.
+"""
+function mlirTransformApplyNamedSequence(
+    payload, transformRoot, transformModule, transformOptions
+)
+    @ccall mlir_c.mlirTransformApplyNamedSequence(
+        payload::MlirOperation,
+        transformRoot::MlirOperation,
+        transformModule::MlirOperation,
+        transformOptions::MlirTransformOptions,
+    )::MlirLogicalResult
+end
+
+"""
+    mlirMergeSymbolsIntoFromClone(target, other)
+
+Merge the symbols from `other` into `target`, potentially renaming them to avoid conflicts. Private symbols may be renamed during the merge, public symbols must have at most one declaration. A name conflict in public symbols is reported as an error before returning a failure.
+
+Note that this clones the `other` operation unlike the C++ counterpart that takes ownership.
+"""
+function mlirMergeSymbolsIntoFromClone(target, other)
+    @ccall mlir_c.mlirMergeSymbolsIntoFromClone(
+        target::MlirOperation, other::MlirOperation
+    )::MlirLogicalResult
+end
+
+function mlirGetDialectHandle__ub__()
+    @ccall mlir_c.mlirGetDialectHandle__ub__()::MlirDialectHandle
+end
+
+function mlirGetDialectHandle__vcix__()
+    @ccall mlir_c.mlirGetDialectHandle__vcix__()::MlirDialectHandle
+end
+
+function mlirGetDialectHandle__vector__()
+    @ccall mlir_c.mlirGetDialectHandle__vector__()::MlirDialectHandle
+end
+
+function mlirGetDialectHandle__wasmssa__()
+    @ccall mlir_c.mlirGetDialectHandle__wasmssa__()::MlirDialectHandle
+end
+
+function mlirGetDialectHandle__x86__()
+    @ccall mlir_c.mlirGetDialectHandle__x86__()::MlirDialectHandle
+end
+
+function mlirGetDialectHandle__xegpu__()
+    @ccall mlir_c.mlirGetDialectHandle__xegpu__()::MlirDialectHandle
+end
+
+function mlirGetDialectHandle__xevm__()
+    @ccall mlir_c.mlirGetDialectHandle__xevm__()::MlirDialectHandle
+end
+
+struct MlirExecutionEngine
+    ptr::Ptr{Cvoid}
+end
+
+"""
+    mlirExecutionEngineCreate(op, optLevel, numPaths, sharedLibPaths, enableObjectDump, enablePIC)
+
+Creates an ExecutionEngine for the provided ModuleOp. The ModuleOp is expected to be "translatable" to LLVM IR (only contains operations in dialects that implement the `LLVMTranslationDialectInterface`). The module ownership stays with the client and can be destroyed as soon as the call returns. `optLevel` is the optimization level to be used for transformation and code generation. LLVM passes at `optLevel` are run before code generation. The number and array of paths corresponding to shared libraries that will be loaded are specified via `numPaths` and `sharedLibPaths` respectively. The `enablePIC` arguments controls the relocation model, when true the generated code is emitted as "position independent", making it possible to save it and reload it as a shared object in another process. TODO: figure out other options.
+"""
+function mlirExecutionEngineCreate(
+    op, optLevel, numPaths, sharedLibPaths, enableObjectDump, enablePIC
+)
+    @ccall mlir_c.mlirExecutionEngineCreate(
+        op::MlirModule,
+        optLevel::Cint,
+        numPaths::Cint,
+        sharedLibPaths::Ptr{MlirStringRef},
+        enableObjectDump::Bool,
+        enablePIC::Bool,
+    )::MlirExecutionEngine
+end
+
+"""
+    mlirExecutionEngineInitialize(jit)
+
+Initialize the ExecutionEngine. Global constructors specified by `llvm.mlir.global\\_ctors` will be run. One common scenario is that kernel binary compiled from `gpu.module` gets loaded during initialization. Make sure all symbols are resolvable before initialization by calling [`mlirExecutionEngineRegisterSymbol`](@ref) or including shared libraries.
+"""
+function mlirExecutionEngineInitialize(jit)
+    @ccall mlir_c.mlirExecutionEngineInitialize(jit::MlirExecutionEngine)::Cvoid
+end
+
+"""
+    mlirExecutionEngineDestroy(jit)
+
+Destroy an ExecutionEngine instance.
+"""
+function mlirExecutionEngineDestroy(jit)
+    @ccall mlir_c.mlirExecutionEngineDestroy(jit::MlirExecutionEngine)::Cvoid
+end
+
+"""
+    mlirExecutionEngineIsNull(jit)
+
+Checks whether an execution engine is null.
+"""
+function mlirExecutionEngineIsNull(jit)
+    @ccall mlir_c.mlirExecutionEngineIsNull(jit::MlirExecutionEngine)::Bool
+end
+
+"""
+    mlirExecutionEngineInvokePacked(jit, name, arguments)
+
+Invoke a native function in the execution engine by name with the arguments and result of the invoked function passed as an array of pointers. The function must have been tagged with the `llvm.emit\\_c\\_interface` attribute. Returns a failure if the execution fails for any reason (the function name can't be resolved for instance).
+"""
+function mlirExecutionEngineInvokePacked(jit, name, arguments)
+    @ccall mlir_c.mlirExecutionEngineInvokePacked(
+        jit::MlirExecutionEngine, name::MlirStringRef, arguments::Ptr{Ptr{Cvoid}}
+    )::MlirLogicalResult
+end
+
+"""
+    mlirExecutionEngineLookupPacked(jit, name)
+
+Lookup the wrapper of the native function in the execution engine with the given name, returns nullptr if the function can't be looked-up.
+"""
+function mlirExecutionEngineLookupPacked(jit, name)
+    @ccall mlir_c.mlirExecutionEngineLookupPacked(
+        jit::MlirExecutionEngine, name::MlirStringRef
+    )::Ptr{Cvoid}
+end
+
+"""
+    mlirExecutionEngineLookup(jit, name)
+
+Lookup a native function in the execution engine by name, returns nullptr if the name can't be looked-up.
+"""
+function mlirExecutionEngineLookup(jit, name)
+    @ccall mlir_c.mlirExecutionEngineLookup(
+        jit::MlirExecutionEngine, name::MlirStringRef
+    )::Ptr{Cvoid}
+end
+
+"""
+    mlirExecutionEngineRegisterSymbol(jit, name, sym)
+
+Register a symbol with the jit: this symbol will be accessible to the jitted code.
+"""
+function mlirExecutionEngineRegisterSymbol(jit, name, sym)
+    @ccall mlir_c.mlirExecutionEngineRegisterSymbol(
+        jit::MlirExecutionEngine, name::MlirStringRef, sym::Ptr{Cvoid}
+    )::Cvoid
+end
+
+"""
+    mlirExecutionEngineDumpToObjectFile(jit, fileName)
+
+Dump as an object in `fileName`.
+"""
+function mlirExecutionEngineDumpToObjectFile(jit, fileName)
+    @ccall mlir_c.mlirExecutionEngineDumpToObjectFile(
+        jit::MlirExecutionEngine, fileName::MlirStringRef
+    )::Cvoid
+end
+
+struct MlirDynamicOpTrait
+    ptr::Ptr{Cvoid}
+end
+
+struct MlirDynamicTypeDefinition
+    ptr::Ptr{Cvoid}
+end
+
+struct MlirDynamicAttrDefinition
+    ptr::Ptr{Cvoid}
+end
+
+"""
+    mlirDynamicOpTraitAttach(dynamicOpTrait, opName, context)
+
+Attach a dynamic op trait to the given operation name. Note that the operation name must be modeled by dynamic dialect and must be registered. The ownership of the trait will be transferred to the operation name after this call.
+"""
+function mlirDynamicOpTraitAttach(dynamicOpTrait, opName, context)
+    @ccall mlir_c.mlirDynamicOpTraitAttach(
+        dynamicOpTrait::MlirDynamicOpTrait, opName::MlirStringRef, context::MlirContext
+    )::Bool
+end
+
+"""
+    mlirDynamicOpTraitIsTerminatorCreate()
+
+Get the dynamic op trait that indicates the operation is a terminator.
+"""
+function mlirDynamicOpTraitIsTerminatorCreate()
+    @ccall mlir_c.mlirDynamicOpTraitIsTerminatorCreate()::MlirDynamicOpTrait
+end
+
+"""
+    mlirDynamicOpTraitNoTerminatorCreate()
+
+Get the dynamic op trait that indicates regions have no terminator.
+"""
+function mlirDynamicOpTraitNoTerminatorCreate()
+    @ccall mlir_c.mlirDynamicOpTraitNoTerminatorCreate()::MlirDynamicOpTrait
+end
+
+"""
+    mlirDynamicOpTraitDestroy(dynamicOpTrait)
+
+Destroy the dynamic op trait.
+"""
+function mlirDynamicOpTraitDestroy(dynamicOpTrait)
+    @ccall mlir_c.mlirDynamicOpTraitDestroy(dynamicOpTrait::MlirDynamicOpTrait)::Cvoid
+end
+
+"""
+    MlirDynamicOpTraitCallbacks
+
+| Field             | Note                                                                   |
+| :---------------- | :--------------------------------------------------------------------- |
+| construct         | Optional constructor for the user data. Set to nullptr to disable it.  |
+| destruct          | Optional destructor for the user data. Set to nullptr to disable it.   |
+| verifyTrait       | The callback function to verify the operation.                         |
+| verifyRegionTrait | The callback function to verify the operation with access to regions.  |
+"""
+struct MlirDynamicOpTraitCallbacks
+    construct::Ptr{Cvoid}
+    destruct::Ptr{Cvoid}
+    verifyTrait::Ptr{Cvoid}
+    verifyRegionTrait::Ptr{Cvoid}
+end
+
+"""
+    mlirDynamicOpTraitCreate(typeID, callbacks, userData)
+
+Create a custom dynamic op trait with the given type ID and callbacks.
+"""
+function mlirDynamicOpTraitCreate(typeID, callbacks, userData)
+    @ccall mlir_c.mlirDynamicOpTraitCreate(
+        typeID::MlirTypeID, callbacks::MlirDynamicOpTraitCallbacks, userData::Ptr{Cvoid}
+    )::MlirDynamicOpTrait
+end
+
+"""
+    mlirDialectIsAExtensibleDialect(dialect)
+
+Check if the given dialect is an extensible dialect.
+"""
+function mlirDialectIsAExtensibleDialect(dialect)
+    @ccall mlir_c.mlirDialectIsAExtensibleDialect(dialect::MlirDialect)::Bool
+end
+
+"""
+    mlirExtensibleDialectLookupTypeDefinition(dialect, typeName)
+
+Look up a registered type definition by type name in the given dialect. Note that the dialect must be an extensible dialect.
+"""
+function mlirExtensibleDialectLookupTypeDefinition(dialect, typeName)
+    @ccall mlir_c.mlirExtensibleDialectLookupTypeDefinition(
+        dialect::MlirDialect, typeName::MlirStringRef
+    )::MlirDynamicTypeDefinition
+end
+
+"""
+    mlirTypeIsADynamicType(type)
+
+Check if the given type is a dynamic type.
+"""
+function mlirTypeIsADynamicType(type)
+    @ccall mlir_c.mlirTypeIsADynamicType(type::MlirType)::Bool
+end
+
+"""
+    mlirDynamicTypeGet(typeDef, attrs, numAttrs)
+
+Get a dynamic type by instantiating the given type definition with the provided attributes.
+"""
+function mlirDynamicTypeGet(typeDef, attrs, numAttrs)
+    @ccall mlir_c.mlirDynamicTypeGet(
+        typeDef::MlirDynamicTypeDefinition, attrs::Ptr{MlirAttribute}, numAttrs::Cptrdiff_t
+    )::MlirType
+end
+
+"""
+    mlirDynamicTypeGetNumParams(type)
+
+Get the number of parameters in the given dynamic type.
+"""
+function mlirDynamicTypeGetNumParams(type)
+    @ccall mlir_c.mlirDynamicTypeGetNumParams(type::MlirType)::Cptrdiff_t
+end
+
+"""
+    mlirDynamicTypeGetParam(type, index)
+
+Get the parameter at the given index in the provided dynamic type.
+"""
+function mlirDynamicTypeGetParam(type, index)
+    @ccall mlir_c.mlirDynamicTypeGetParam(type::MlirType, index::Cptrdiff_t)::MlirAttribute
+end
+
+"""
+    mlirDynamicTypeGetTypeDef(type)
+
+Get the type definition of the given dynamic type.
+"""
+function mlirDynamicTypeGetTypeDef(type)
+    @ccall mlir_c.mlirDynamicTypeGetTypeDef(type::MlirType)::MlirDynamicTypeDefinition
+end
+
+"""
+    mlirDynamicTypeDefinitionGetTypeID(typeDef)
+
+Get the type ID of a dynamic type definition.
+"""
+function mlirDynamicTypeDefinitionGetTypeID(typeDef)
+    @ccall mlir_c.mlirDynamicTypeDefinitionGetTypeID(
+        typeDef::MlirDynamicTypeDefinition
+    )::MlirTypeID
+end
+
+"""
+    mlirDynamicTypeDefinitionGetName(typeDef)
+
+Get the name of the given dynamic type definition.
+"""
+function mlirDynamicTypeDefinitionGetName(typeDef)
+    @ccall mlir_c.mlirDynamicTypeDefinitionGetName(
+        typeDef::MlirDynamicTypeDefinition
+    )::MlirStringRef
+end
+
+"""
+    mlirDynamicTypeDefinitionGetDialect(typeDef)
+
+Get the dialect that the given dynamic type definition belongs to.
+"""
+function mlirDynamicTypeDefinitionGetDialect(typeDef)
+    @ccall mlir_c.mlirDynamicTypeDefinitionGetDialect(
+        typeDef::MlirDynamicTypeDefinition
+    )::MlirDialect
+end
+
+"""
+    mlirExtensibleDialectLookupAttrDefinition(dialect, attrName)
+
+Look up a registered attribute definition by attribute name in the given dialect. Note that the dialect must be an extensible dialect.
+"""
+function mlirExtensibleDialectLookupAttrDefinition(dialect, attrName)
+    @ccall mlir_c.mlirExtensibleDialectLookupAttrDefinition(
+        dialect::MlirDialect, attrName::MlirStringRef
+    )::MlirDynamicAttrDefinition
+end
+
+"""
+    mlirAttributeIsADynamicAttr(attr)
+
+Check if the given attribute is a dynamic attribute.
+"""
+function mlirAttributeIsADynamicAttr(attr)
+    @ccall mlir_c.mlirAttributeIsADynamicAttr(attr::MlirAttribute)::Bool
+end
+
+"""
+    mlirDynamicAttrGet(attrDef, attrs, numAttrs)
+
+Get a dynamic attribute by instantiating the given attribute definition with the provided attributes.
+"""
+function mlirDynamicAttrGet(attrDef, attrs, numAttrs)
+    @ccall mlir_c.mlirDynamicAttrGet(
+        attrDef::MlirDynamicAttrDefinition, attrs::Ptr{MlirAttribute}, numAttrs::Cptrdiff_t
+    )::MlirAttribute
+end
+
+"""
+    mlirDynamicAttrGetNumParams(attr)
+
+Get the number of parameters in the given dynamic attribute.
+"""
+function mlirDynamicAttrGetNumParams(attr)
+    @ccall mlir_c.mlirDynamicAttrGetNumParams(attr::MlirAttribute)::Cptrdiff_t
+end
+
+"""
+    mlirDynamicAttrGetParam(attr, index)
+
+Get the parameter at the given index in the provided dynamic attribute.
+"""
+function mlirDynamicAttrGetParam(attr, index)
+    @ccall mlir_c.mlirDynamicAttrGetParam(
+        attr::MlirAttribute, index::Cptrdiff_t
+    )::MlirAttribute
+end
+
+"""
+    mlirDynamicAttrGetAttrDef(attr)
+
+Get the attribute definition of the given dynamic attribute.
+"""
+function mlirDynamicAttrGetAttrDef(attr)
+    @ccall mlir_c.mlirDynamicAttrGetAttrDef(attr::MlirAttribute)::MlirDynamicAttrDefinition
+end
+
+"""
+    mlirDynamicAttrDefinitionGetTypeID(attrDef)
+
+Get the type ID of a dynamic attribute definition.
+"""
+function mlirDynamicAttrDefinitionGetTypeID(attrDef)
+    @ccall mlir_c.mlirDynamicAttrDefinitionGetTypeID(
+        attrDef::MlirDynamicAttrDefinition
+    )::MlirTypeID
+end
+
+"""
+    mlirDynamicAttrDefinitionGetName(attrDef)
+
+Get the name of the given dynamic attribute definition.
+"""
+function mlirDynamicAttrDefinitionGetName(attrDef)
+    @ccall mlir_c.mlirDynamicAttrDefinitionGetName(
+        attrDef::MlirDynamicAttrDefinition
+    )::MlirStringRef
+end
+
+"""
+    mlirDynamicAttrDefinitionGetDialect(attrDef)
+
+Get the dialect that the given dynamic attribute definition belongs to.
+"""
+function mlirDynamicAttrDefinitionGetDialect(attrDef)
+    @ccall mlir_c.mlirDynamicAttrDefinitionGetDialect(
+        attrDef::MlirDynamicAttrDefinition
+    )::MlirDialect
+end
+
+struct MlirPass
+    ptr::Ptr{Cvoid}
+end
+
+struct MlirExternalPass
+    ptr::Ptr{Cvoid}
+end
+
+struct MlirPassManager
+    ptr::Ptr{Cvoid}
+end
+
+struct MlirOpPassManager
+    ptr::Ptr{Cvoid}
+end
+
+"""
+    mlirPassManagerCreate(ctx)
+
+Create a new top-level PassManager with the default anchor.
+"""
+function mlirPassManagerCreate(ctx)
+    @ccall mlir_c.mlirPassManagerCreate(ctx::MlirContext)::MlirPassManager
+end
+
+"""
+    mlirPassManagerCreateOnOperation(ctx, anchorOp)
+
+Create a new top-level PassManager anchored on `anchorOp`.
+"""
+function mlirPassManagerCreateOnOperation(ctx, anchorOp)
+    @ccall mlir_c.mlirPassManagerCreateOnOperation(
+        ctx::MlirContext, anchorOp::MlirStringRef
+    )::MlirPassManager
+end
+
+"""
+    mlirPassManagerDestroy(passManager)
+
+Destroy the provided PassManager.
+"""
+function mlirPassManagerDestroy(passManager)
+    @ccall mlir_c.mlirPassManagerDestroy(passManager::MlirPassManager)::Cvoid
+end
+
+"""
+    mlirPassManagerIsNull(passManager)
+
+Checks if a PassManager is null.
+"""
+function mlirPassManagerIsNull(passManager)
+    @ccall mlir_c.mlirPassManagerIsNull(passManager::MlirPassManager)::Bool
+end
+
+"""
+    mlirPassManagerGetAsOpPassManager(passManager)
+
+Cast a top-level PassManager to a generic OpPassManager.
+"""
+function mlirPassManagerGetAsOpPassManager(passManager)
+    @ccall mlir_c.mlirPassManagerGetAsOpPassManager(
+        passManager::MlirPassManager
+    )::MlirOpPassManager
+end
+
+"""
+    mlirPassManagerRunOnOp(passManager, op)
+
+Run the provided `passManager` on the given `op`.
+"""
+function mlirPassManagerRunOnOp(passManager, op)
+    @ccall mlir_c.mlirPassManagerRunOnOp(
+        passManager::MlirPassManager, op::MlirOperation
+    )::MlirLogicalResult
+end
+
+"""
+    mlirPassManagerEnableIRPrinting(passManager, printBeforeAll, printAfterAll, printModuleScope, printAfterOnlyOnChange, printAfterOnlyOnFailure, flags, treePrintingPath)
+
+Enable IR printing. The treePrintingPath argument is an optional path to a directory where the dumps will be produced. If it isn't provided then dumps are produced to stderr.
+"""
+function mlirPassManagerEnableIRPrinting(
+    passManager,
+    printBeforeAll,
+    printAfterAll,
+    printModuleScope,
+    printAfterOnlyOnChange,
+    printAfterOnlyOnFailure,
+    flags,
+    treePrintingPath,
+)
+    @ccall mlir_c.mlirPassManagerEnableIRPrinting(
+        passManager::MlirPassManager,
+        printBeforeAll::Bool,
+        printAfterAll::Bool,
+        printModuleScope::Bool,
+        printAfterOnlyOnChange::Bool,
+        printAfterOnlyOnFailure::Bool,
+        flags::MlirOpPrintingFlags,
+        treePrintingPath::MlirStringRef,
+    )::Cvoid
+end
+
+"""
+    mlirPassManagerEnableVerifier(passManager, enable)
+
+Enable / disable verify-each.
+"""
+function mlirPassManagerEnableVerifier(passManager, enable)
+    @ccall mlir_c.mlirPassManagerEnableVerifier(
+        passManager::MlirPassManager, enable::Bool
+    )::Cvoid
+end
+
+"""
+    mlirPassManagerEnableTiming(passManager)
+
+Enable pass timing.
+"""
+function mlirPassManagerEnableTiming(passManager)
+    @ccall mlir_c.mlirPassManagerEnableTiming(passManager::MlirPassManager)::Cvoid
+end
+
+"""
+    MlirPassDisplayMode
+
+Enumerated type of pass display modes. Mainly used in [`mlirPassManagerEnableStatistics`](@ref).
+"""
+@cenum MlirPassDisplayMode::UInt32 begin
+    MLIR_PASS_DISPLAY_MODE_LIST = 0x0000000000000000
+    MLIR_PASS_DISPLAY_MODE_PIPELINE = 0x0000000000000001
+end
+
+"""
+    mlirPassManagerEnableStatistics(passManager, displayMode)
+
+Enable pass statistics.
+"""
+function mlirPassManagerEnableStatistics(passManager, displayMode)
+    @ccall mlir_c.mlirPassManagerEnableStatistics(
+        passManager::MlirPassManager, displayMode::MlirPassDisplayMode
+    )::Cvoid
+end
+
+"""
+    mlirPassManagerGetNestedUnder(passManager, operationName)
+
+Nest an OpPassManager under the top-level PassManager, the nested passmanager will only run on operations matching the provided name. The returned OpPassManager will be destroyed when the parent is destroyed. To further nest more OpPassManager under the newly returned one, see `mlirOpPassManagerNest` below.
+"""
+function mlirPassManagerGetNestedUnder(passManager, operationName)
+    @ccall mlir_c.mlirPassManagerGetNestedUnder(
+        passManager::MlirPassManager, operationName::MlirStringRef
+    )::MlirOpPassManager
+end
+
+"""
+    mlirOpPassManagerGetNestedUnder(passManager, operationName)
+
+Nest an OpPassManager under the provided OpPassManager, the nested passmanager will only run on operations matching the provided name. The returned OpPassManager will be destroyed when the parent is destroyed.
+"""
+function mlirOpPassManagerGetNestedUnder(passManager, operationName)
+    @ccall mlir_c.mlirOpPassManagerGetNestedUnder(
+        passManager::MlirOpPassManager, operationName::MlirStringRef
+    )::MlirOpPassManager
+end
+
+"""
+    mlirPassManagerAddOwnedPass(passManager, pass)
+
+Add a pass and transfer ownership to the provided top-level mlirPassManager. If the pass is not a generic operation pass or a ModulePass, a new OpPassManager is implicitly nested under the provided PassManager.
+"""
+function mlirPassManagerAddOwnedPass(passManager, pass)
+    @ccall mlir_c.mlirPassManagerAddOwnedPass(
+        passManager::MlirPassManager, pass::MlirPass
+    )::Cvoid
+end
+
+"""
+    mlirOpPassManagerAddOwnedPass(passManager, pass)
+
+Add a pass and transfer ownership to the provided mlirOpPassManager. If the pass is not a generic operation pass or matching the type of the provided PassManager, a new OpPassManager is implicitly nested under the provided PassManager.
+"""
+function mlirOpPassManagerAddOwnedPass(passManager, pass)
+    @ccall mlir_c.mlirOpPassManagerAddOwnedPass(
+        passManager::MlirOpPassManager, pass::MlirPass
+    )::Cvoid
+end
+
+"""
+    mlirOpPassManagerAddPipeline(passManager, pipelineElements, callback, userData)
+
+Parse a sequence of textual MLIR pass pipeline elements and add them to the provided OpPassManager. If parsing fails an error message is reported using the provided callback.
+"""
+function mlirOpPassManagerAddPipeline(passManager, pipelineElements, callback, userData)
+    @ccall mlir_c.mlirOpPassManagerAddPipeline(
+        passManager::MlirOpPassManager,
+        pipelineElements::MlirStringRef,
+        callback::MlirStringCallback,
+        userData::Ptr{Cvoid},
+    )::MlirLogicalResult
+end
+
+"""
+    mlirPrintPassPipeline(passManager, callback, userData)
+
+Print a textual MLIR pass pipeline by sending chunks of the string representation and forwarding `userData to `callback`. Note that the callback may be called several times with consecutive chunks of the string.
+"""
+function mlirPrintPassPipeline(passManager, callback, userData)
+    @ccall mlir_c.mlirPrintPassPipeline(
+        passManager::MlirOpPassManager, callback::MlirStringCallback, userData::Ptr{Cvoid}
+    )::Cvoid
+end
+
+"""
+    mlirParsePassPipeline(passManager, pipeline, callback, userData)
+
+Parse a textual MLIR pass pipeline and assign it to the provided OpPassManager. If parsing fails an error message is reported using the provided callback.
+"""
+function mlirParsePassPipeline(passManager, pipeline, callback, userData)
+    @ccall mlir_c.mlirParsePassPipeline(
+        passManager::MlirOpPassManager,
+        pipeline::MlirStringRef,
+        callback::MlirStringCallback,
+        userData::Ptr{Cvoid},
+    )::MlirLogicalResult
+end
+
+"""
+    MlirExternalPassCallbacks
+
+Structure of external [`MlirPass`](@ref) callbacks. All callbacks are required to be set unless otherwise specified.
+
+| Field      | Note                                                                                                                                                                                              |
+| :--------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| construct  | This callback is called from the pass is created. This is analogous to a C++ pass constructor.                                                                                                    |
+| destruct   | This callback is called when the pass is destroyed This is analogous to a C++ pass destructor.                                                                                                    |
+| initialize | This callback is optional. The callback is called before the pass is run, allowing a chance to initialize any complex state necessary for running the pass. See Pass::initialize(MLIRContext *).  |
+| clone      | This callback is called when the pass is cloned. See Pass::clonePass().                                                                                                                           |
+| run        | This callback is called when the pass is run. See Pass::runOnOperation().                                                                                                                         |
+"""
+struct MlirExternalPassCallbacks
+    construct::Ptr{Cvoid}
+    destruct::Ptr{Cvoid}
+    initialize::Ptr{Cvoid}
+    clone::Ptr{Cvoid}
+    run::Ptr{Cvoid}
+end
+
+"""
+    mlirCreateExternalPass(passID, name, argument, description, opName, nDependentDialects, dependentDialects, callbacks, userData)
+
+Creates an external [`MlirPass`](@ref) that calls the supplied `callbacks` using the supplied `userData`. If `opName` is empty, the pass is a generic operation pass. Otherwise it is an operation pass specific to the specified pass name.
+"""
+function mlirCreateExternalPass(
+    passID,
+    name,
+    argument,
+    description,
+    opName,
+    nDependentDialects,
+    dependentDialects,
+    callbacks,
+    userData,
+)
+    @ccall mlir_c.mlirCreateExternalPass(
+        passID::MlirTypeID,
+        name::MlirStringRef,
+        argument::MlirStringRef,
+        description::MlirStringRef,
+        opName::MlirStringRef,
+        nDependentDialects::Cptrdiff_t,
+        dependentDialects::Ptr{MlirDialectHandle},
+        callbacks::MlirExternalPassCallbacks,
+        userData::Ptr{Cvoid},
+    )::MlirPass
+end
+
+"""
+    mlirExternalPassSignalFailure(pass)
+
+This signals that the pass has failed. This is only valid to call during the `run` callback of [`MlirExternalPassCallbacks`](@ref). See Pass::signalPassFailure().
+"""
+function mlirExternalPassSignalFailure(pass)
+    @ccall mlir_c.mlirExternalPassSignalFailure(pass::MlirExternalPass)::Cvoid
+end
+
+"""
+    mlirRegisterAllDialects(registry)
+
+Appends all upstream dialects and extensions to the dialect registry.
+"""
+function mlirRegisterAllDialects(registry)
+    @ccall mlir_c.mlirRegisterAllDialects(registry::MlirDialectRegistry)::Cvoid
+end
+
+"""
+    mlirRegisterAllLLVMTranslations(context)
+
+Register all translations to LLVM IR for dialects that can support it.
+"""
+function mlirRegisterAllLLVMTranslations(context)
+    @ccall mlir_c.mlirRegisterAllLLVMTranslations(context::MlirContext)::Cvoid
+end
+
+"""
+    mlirRegisterAllPasses()
+
+Register all compiler passes of MLIR.
+"""
+function mlirRegisterAllPasses()
+    @ccall mlir_c.mlirRegisterAllPasses()::Cvoid
 end
 
 """
@@ -12340,14 +13344,6 @@ function enzymexlaGuaranteedAnalysisResultAttrGet(ctx, mode)
     )::MlirAttribute
 end
 
-function enzymeTraceTypeGet(ctx)
-    @ccall mlir_c.enzymeTraceTypeGet(ctx::MlirContext)::MlirType
-end
-
-function enzymeConstraintTypeGet(ctx)
-    @ccall mlir_c.enzymeConstraintTypeGet(ctx::MlirContext)::MlirType
-end
-
 @cenum EnzymeRngDistribution::UInt32 begin
     EnzymeRngDistribution_Uniform = 0x0000000000000000
     EnzymeRngDistribution_Normal = 0x0000000000000001
@@ -12406,6 +13402,1831 @@ end
 
 function enzymeSymbolAttrGet(ctx, ptr)
     @ccall mlir_c.enzymeSymbolAttrGet(ctx::MlirContext, ptr::UInt64)::MlirAttribute
+end
+
+struct JLHloCostAnalysisProperties
+    flops::Cfloat
+    transcendentals::Cfloat
+    bytes_accessed::Cfloat
+    optimal_seconds::Cfloat
+    utilization::Cfloat
+    operand0_utilization::Cfloat
+    operand1_utilization::Cfloat
+    operand0_bytes_accessed::Cfloat
+    operand1_bytes_accessed::Cfloat
+    output_root_bytes_accessed::Cfloat
+    reserved0::Cfloat
+end
+
+struct JLEstimateRunTimeData
+    flops::Int64
+    bytes_read::Int64
+    bytes_written::Int64
+    read_time_ns::Int64
+    write_time_ns::Int64
+    compute_time_ns::Int64
+    execution_time_ns::Int64
+end
+
+struct JLAllocatorStats
+    num_allocs::Int64
+    bytes_in_use::Int64
+    peak_bytes_in_use::Int64
+    largest_alloc_size::Int64
+    bytes_limit::Int64
+    bytes_reserved::Int64
+    peak_bytes_reserved::Int64
+    bytes_reservable_limit::Int64
+    largest_free_block_bytes::Int64
+    pool_bytes::Int64
+    peak_pool_bytes::Int64
+end
+
+struct DeviceProperties
+    totalGlobalMem::Csize_t
+    sharedMemPerBlock::Csize_t
+    regsPerBlock::Cint
+    warpSize::Cint
+    maxThreadsPerBlock::Cint
+    maxThreadsDim::NTuple{3,Cint}
+    maxGridSize::NTuple{3,Cint}
+    totalConstMem::Csize_t
+    major::Cint
+    minor::Cint
+    multiProcessorCount::Cint
+    canMapHostMemory::Cint
+    l2CacheSize::Cint
+    maxThreadsPerMultiProcessor::Cint
+end
+
+struct DistributedRuntimeClientOptions
+    node_id::Int32
+    rpc_timeout_in_seconds::Int32
+    init_timeout_in_seconds::Int32
+    shutdown_timeout_in_minutes::Int32
+    heartbeat_timeout_in_seconds::Int32
+    use_compression::Bool
+    shutdown_on_destruction::Bool
+    poll_for_error_from_service_at_startup::Bool
+    recoverable::Bool
+end
+
+struct DistributedRuntimeServiceOptions
+    num_nodes::Int32
+    recoverable::Bool
+    heartbeat_timeout_in_seconds::Int32
+    cluster_register_timeout_in_minutes::Int32
+    shutdown_timeout_in_minutes::Int32
+end
+
+const HeldPjRtClient = Cvoid
+
+const HeldIfrtConstSharding = Cvoid
+
+const LinkableRuntime = Cvoid
+
+const Operation = Cvoid
+
+const DeviceDescription = Cvoid
+
+const Client = Cvoid
+
+const Memory = Cvoid
+
+const PjRtBuffer = Cvoid
+
+const IfRtFutureType = Cvoid
+
+const PjRtClient = Cvoid
+
+const HloComputation = Cvoid
+
+const HloModule = Cvoid
+
+const FutureType = Cvoid
+
+const Device = Cvoid
+
+const HeldIfrtLoadedExecutable = Cvoid
+
+const HeldHloModule = Cvoid
+
+const PjRtLoadedExecutable = Cvoid
+
+const HloSharding = Cvoid
+
+const HeldDistributedRuntimeClient = Cvoid
+
+const DistributedRuntimeService = Cvoid
+
+const GrpcServer = Cvoid
+
+const HloInstruction = Cvoid
+
+const GPUPerformanceModel = Cvoid
+
+const ProfilerServer = Cvoid
+
+const HeldPjRtBuffer = Cvoid
+
+const HeldIfrtSharding = Cvoid
+
+const MemoryKind = Cvoid
+
+const PjRtDevice = Cvoid
+
+const ProfilerSession = Cvoid
+
+const OpSharding = Cvoid
+
+const PJRT_Api = Cvoid
+
+const HeldIfrtArray = Cvoid
+
+function ReactantHandleCuResult(curesult)
+    @ccall mlir_c.ReactantHandleCuResult(curesult::UInt32)::Cvoid
+end
+
+function mlirOperationInject(ctx, block, code, location, verify_after_parse)
+    @ccall mlir_c.mlirOperationInject(
+        ctx::MlirContext,
+        block::MlirBlock,
+        code::MlirStringRef,
+        location::MlirLocation,
+        verify_after_parse::Bool,
+    )::Bool
+end
+
+function mlirOperationParse(ctx, block, code, location, verify_after_parse)
+    @ccall mlir_c.mlirOperationParse(
+        ctx::MlirContext,
+        block::MlirBlock,
+        code::MlirStringRef,
+        location::MlirLocation,
+        verify_after_parse::Bool,
+    )::MlirOperation
+end
+
+function mlirGetFunctionTypeFromOperation(op)
+    @ccall mlir_c.mlirGetFunctionTypeFromOperation(op::MlirOperation)::MlirType
+end
+
+function mlirIsFunctionOpInterface(op)
+    @ccall mlir_c.mlirIsFunctionOpInterface(op::MlirOperation)::Bool
+end
+
+function ReactantFuncSetResultAttr(op, pos, name, attr)
+    @ccall mlir_c.ReactantFuncSetResultAttr(
+        op::MlirOperation, pos::Cptrdiff_t, name::MlirStringRef, attr::MlirAttribute
+    )::Cvoid
+end
+
+function ReactantFuncSetArgAttr(op, pos, name, attr)
+    @ccall mlir_c.ReactantFuncSetArgAttr(
+        op::MlirOperation, pos::Cptrdiff_t, name::MlirStringRef, attr::MlirAttribute
+    )::Cvoid
+end
+
+function InitializeLogs()
+    @ccall mlir_c.InitializeLogs()::Cvoid
+end
+
+function SetLogLevel(level)
+    @ccall mlir_c.SetLogLevel(level::Cint)::Cvoid
+end
+
+function SetModuleLogLevel(module_pattern, level)
+    @ccall mlir_c.SetModuleLogLevel(module_pattern::Cstring, level::Cint)::Cvoid
+end
+
+function GetDefaultTargetTriple()
+    @ccall mlir_c.GetDefaultTargetTriple()::Cstring
+end
+
+function enzymeActivityAttrGet(ctx, val)
+    @ccall mlir_c.enzymeActivityAttrGet(ctx::MlirContext, val::Int32)::MlirAttribute
+end
+
+function CreateProfilerSession(device_tracer_level, host_tracer_level)
+    @ccall mlir_c.CreateProfilerSession(
+        device_tracer_level::UInt32, host_tracer_level::UInt32
+    )::Ptr{ProfilerSession}
+end
+
+function ProfilerSessionCollectData(session, path)
+    @ccall mlir_c.ProfilerSessionCollectData(
+        session::Ptr{ProfilerSession}, path::Cstring
+    )::Cvoid
+end
+
+function ProfilerSessionDelete(session)
+    @ccall mlir_c.ProfilerSessionDelete(session::Ptr{ProfilerSession})::Cvoid
+end
+
+function ProfilerActivityStart(name, level)
+    @ccall mlir_c.ProfilerActivityStart(name::Cstring, level::Cint)::Int64
+end
+
+function ProfilerActivityEnd(id)
+    @ccall mlir_c.ProfilerActivityEnd(id::Int64)::Cvoid
+end
+
+function ProfilerServerStart(port)
+    @ccall mlir_c.ProfilerServerStart(port::Int32)::Ptr{ProfilerServer}
+end
+
+function ProfilerServerStop(server)
+    @ccall mlir_c.ProfilerServerStop(server::Ptr{ProfilerServer})::Cvoid
+end
+
+function MakeCPUClient(asynchronous, node_id)
+    @ccall mlir_c.MakeCPUClient(asynchronous::UInt8, node_id::Cint)::Ptr{PjRtClient}
+end
+
+function MakeGPUClient(
+    node_id,
+    num_nodes,
+    allowed_devices,
+    num_allowed_devices,
+    memory_fraction,
+    preallocate,
+    platform_name,
+    error,
+    distributed_runtime_client,
+)
+    @ccall mlir_c.MakeGPUClient(
+        node_id::Cint,
+        num_nodes::Cint,
+        allowed_devices::Ptr{Int64},
+        num_allowed_devices::Int64,
+        memory_fraction::Cdouble,
+        preallocate::Bool,
+        platform_name::Cstring,
+        error::Ptr{Cstring},
+        distributed_runtime_client::Ptr{Cvoid},
+    )::Ptr{PjRtClient}
+end
+
+function LoadPjrtPlugin(device_type, library_path, error)
+    @ccall mlir_c.LoadPjrtPlugin(
+        device_type::Cstring, library_path::Cstring, error::Ptr{Cstring}
+    )::Ptr{PJRT_Api}
+end
+
+function InitializePjrtPlugin(device_type, error)
+    @ccall mlir_c.InitializePjrtPlugin(device_type::Cstring, error::Ptr{Cstring})::Cint
+end
+
+function GetCApiClient(device_type)
+    @ccall mlir_c.GetCApiClient(device_type::Cstring)::Ptr{PjRtClient}
+end
+
+function pjrt_client_register_profiler(api)
+    @ccall mlir_c.pjrt_client_register_profiler(api::Ptr{PJRT_Api})::Cvoid
+end
+
+function MakeClientUsingPluginAPI(device_type, library_path, client_name, error)
+    @ccall mlir_c.MakeClientUsingPluginAPI(
+        device_type::Cstring,
+        library_path::Cstring,
+        client_name::Cstring,
+        error::Ptr{Cstring},
+    )::Ptr{PjRtClient}
+end
+
+function MakeClientFromApi(api, device_type, client_name, error)
+    @ccall mlir_c.MakeClientFromApi(
+        api::Ptr{PJRT_Api}, device_type::Cstring, client_name::Cstring, error::Ptr{Cstring}
+    )::Ptr{PjRtClient}
+end
+
+function MakeTPUClient(tpu_path, error)
+    @ccall mlir_c.MakeTPUClient(tpu_path::Cstring, error::Ptr{Cstring})::Ptr{PjRtClient}
+end
+
+function ClientNumDevices(client)
+    @ccall mlir_c.ClientNumDevices(client::Ptr{PjRtClient})::Cint
+end
+
+function ClientNumAddressableDevices(client)
+    @ccall mlir_c.ClientNumAddressableDevices(client::Ptr{PjRtClient})::Cint
+end
+
+function ClientProcessIndex(client)
+    @ccall mlir_c.ClientProcessIndex(client::Ptr{PjRtClient})::Cint
+end
+
+function ClientGetDevice(client, device_id)
+    @ccall mlir_c.ClientGetDevice(client::Ptr{PjRtClient}, device_id::Cint)::Ptr{PjRtDevice}
+end
+
+function ClientGetAddressableDevice(client, device_id)
+    @ccall mlir_c.ClientGetAddressableDevice(
+        client::Ptr{PjRtClient}, device_id::Cint
+    )::Ptr{PjRtDevice}
+end
+
+function ClientGetPlatformName(client)
+    @ccall mlir_c.ClientGetPlatformName(client::Ptr{PjRtClient})::Cstring
+end
+
+function DeviceGetKind(device)
+    @ccall mlir_c.DeviceGetKind(device::Ptr{PjRtDevice})::Cstring
+end
+
+function ClientGetDevices(client, out_devices)
+    @ccall mlir_c.ClientGetDevices(
+        client::Ptr{PjRtClient}, out_devices::Ptr{Ptr{PjRtDevice}}
+    )::Cvoid
+end
+
+function ClientGetAddressableDevices(client, out_devices)
+    @ccall mlir_c.ClientGetAddressableDevices(
+        client::Ptr{PjRtClient}, out_devices::Ptr{Ptr{PjRtDevice}}
+    )::Cvoid
+end
+
+function PjRtDeviceGetAllocatorStats(device, jlstats)
+    @ccall mlir_c.PjRtDeviceGetAllocatorStats(
+        device::Ptr{PjRtDevice}, jlstats::Ptr{JLAllocatorStats}
+    )::Cvoid
+end
+
+function ifrt_device_get_allocator_stats(device, jlstats)
+    @ccall mlir_c.ifrt_device_get_allocator_stats(
+        device::Ptr{Device}, jlstats::Ptr{JLAllocatorStats}
+    )::Cvoid
+end
+
+function ExecutableFree(exec)
+    @ccall mlir_c.ExecutableFree(exec::Ptr{PjRtLoadedExecutable})::Cvoid
+end
+
+function BufferToDevice(Buffer)
+    @ccall mlir_c.BufferToDevice(Buffer::Ptr{PjRtBuffer})::Ptr{PjRtDevice}
+end
+
+function BufferToClient(Buffer)
+    @ccall mlir_c.BufferToClient(Buffer::Ptr{PjRtBuffer})::Ptr{PjRtClient}
+end
+
+function BufferShape(Buffer)
+    @ccall mlir_c.BufferShape(Buffer::Ptr{PjRtBuffer})::Ptr{Int64}
+end
+
+function BufferNDimensions(Buffer)
+    @ccall mlir_c.BufferNDimensions(Buffer::Ptr{PjRtBuffer})::Int64
+end
+
+function BufferPrimitiveType(Buffer)
+    @ccall mlir_c.BufferPrimitiveType(Buffer::Ptr{PjRtBuffer})::Cint
+end
+
+function PjRtBufferFree(Buffer)
+    @ccall mlir_c.PjRtBufferFree(Buffer::Ptr{PjRtBuffer})::Cvoid
+end
+
+function DeviceToClient(Device_)
+    @ccall mlir_c.DeviceToClient(Device_::Ptr{PjRtDevice})::Ptr{PjRtClient}
+end
+
+function PjRtLoadedExecutableGetClient(exec)
+    @ccall mlir_c.PjRtLoadedExecutableGetClient(
+        exec::Ptr{PjRtLoadedExecutable}
+    )::Ptr{PjRtClient}
+end
+
+function ReactantLLVMParseCommandLineOptions(argc, argv, Overview)
+    @ccall mlir_c.ReactantLLVMParseCommandLineOptions(
+        argc::Cint, argv::Ptr{Cstring}, Overview::Cstring
+    )::Cvoid
+end
+
+function ReactantCudaDriverGetVersion()
+    @ccall mlir_c.ReactantCudaDriverGetVersion()::Int32
+end
+
+function ReactantHermeticCudaGetVersion()
+    @ccall mlir_c.ReactantHermeticCudaGetVersion()::Int32
+end
+
+function ReactantCudaDeviceGetComputeCapalilityMajor()
+    @ccall mlir_c.ReactantCudaDeviceGetComputeCapalilityMajor()::Int32
+end
+
+function ReactantCudaDeviceGetComputeCapalilityMinor()
+    @ccall mlir_c.ReactantCudaDeviceGetComputeCapalilityMinor()::Int32
+end
+
+function ReactantCudaDeviceGetWarpSizeInThreads()
+    @ccall mlir_c.ReactantCudaDeviceGetWarpSizeInThreads()::Int32
+end
+
+function ReactantCudaDeviceGetProperties(jlprops, device_id)
+    @ccall mlir_c.ReactantCudaDeviceGetProperties(
+        jlprops::Ptr{DeviceProperties}, device_id::Int32
+    )::Cvoid
+end
+
+function ReactantCudaGetRegsSpillsMaxThreadsFromBinary(
+    binary, fnname, regs, spills, maxThreads
+)
+    @ccall mlir_c.ReactantCudaGetRegsSpillsMaxThreadsFromBinary(
+        binary::Cstring,
+        fnname::Cstring,
+        regs::Ptr{Int32},
+        spills::Ptr{Int32},
+        maxThreads::Ptr{Int32},
+    )::Cvoid
+end
+
+function CudaGetStreamExecutorDeviceDescription(device_id)
+    @ccall mlir_c.CudaGetStreamExecutorDeviceDescription(
+        device_id::Int32
+    )::Ptr{DeviceDescription}
+end
+
+function deviceDescriptionToString(device)
+    @ccall mlir_c.deviceDescriptionToString(device::Ptr{DeviceDescription})::Cstring
+end
+
+function UnsafeBufferPointer(buffer)
+    @ccall mlir_c.UnsafeBufferPointer(buffer::Ptr{PjRtBuffer})::Ptr{Cvoid}
+end
+
+function ArrayFromHostBuffer(client, data, ptype, dim, cshape, device)
+    @ccall mlir_c.ArrayFromHostBuffer(
+        client::Ptr{PjRtClient},
+        data::Ptr{Cvoid},
+        ptype::UInt64,
+        dim::Csize_t,
+        cshape::Ptr{Int64},
+        device::Ptr{PjRtDevice},
+    )::Ptr{PjRtBuffer}
+end
+
+function CopyToBuffer(client, buffer, data, offset, size, bufferP)
+    @ccall mlir_c.CopyToBuffer(
+        client::Ptr{PjRtClient},
+        buffer::Ptr{PjRtBuffer},
+        data::Ptr{Cvoid},
+        offset::Csize_t,
+        size::Csize_t,
+        bufferP::Ptr{Ptr{PjRtBuffer}},
+    )::Cvoid
+end
+
+function BufferToHost(buffer, data)
+    @ccall mlir_c.BufferToHost(buffer::Ptr{PjRtBuffer}, data::Ptr{Cvoid})::Cvoid
+end
+
+function CopyFromBuffer(client, buffer, data, offset, size, bufferP)
+    @ccall mlir_c.CopyFromBuffer(
+        client::Ptr{PjRtClient},
+        buffer::Ptr{PjRtBuffer},
+        data::Ptr{Cvoid},
+        offset::Csize_t,
+        size::Csize_t,
+        bufferP::Ptr{Ptr{PjRtBuffer}},
+    )::Cvoid
+end
+
+function UninitPJRTBuffer(client, device, ptype, shapeLen, shape)
+    @ccall mlir_c.UninitPJRTBuffer(
+        client::Ptr{PjRtClient},
+        device::Ptr{PjRtDevice},
+        ptype::UInt64,
+        shapeLen::UInt64,
+        shape::Ptr{UInt64},
+    )::Ptr{PjRtBuffer}
+end
+
+function BufferOnCPU(buffer)
+    @ccall mlir_c.BufferOnCPU(buffer::Ptr{PjRtBuffer})::UInt8
+end
+
+function CopyBufferToDevice(buffer, dst_device)
+    @ccall mlir_c.CopyBufferToDevice(
+        buffer::Ptr{PjRtBuffer}, dst_device::Ptr{PjRtDevice}
+    )::Ptr{PjRtBuffer}
+end
+
+function FreeClient(client)
+    @ccall mlir_c.FreeClient(client::Ptr{PjRtClient})::Cvoid
+end
+
+function PjRtDeviceGetLocalDeviceId(device)
+    @ccall mlir_c.PjRtDeviceGetLocalDeviceId(device::Ptr{PjRtDevice})::Int64
+end
+
+function PjRtDeviceGetGlobalDeviceId(device)
+    @ccall mlir_c.PjRtDeviceGetGlobalDeviceId(device::Ptr{PjRtDevice})::Int64
+end
+
+function PjRtDeviceGetLocalHardwareId(device)
+    @ccall mlir_c.PjRtDeviceGetLocalHardwareId(device::Ptr{PjRtDevice})::Int64
+end
+
+function RegisterCustomCallTarget(name, address, platform)
+    @ccall mlir_c.RegisterCustomCallTarget(
+        name::Cstring, address::Ptr{Cvoid}, platform::Cstring
+    )::Cvoid
+end
+
+function ConvertLLVMToMLIR(lmod, cctx)
+    @ccall mlir_c.ConvertLLVMToMLIR(lmod::Cint, cctx::MlirContext)::MlirModule
+end
+
+function ConvertLLVMStrToMLIR(lmod, cctx)
+    @ccall mlir_c.ConvertLLVMStrToMLIR(lmod::Cstring, cctx::MlirContext)::MlirModule
+end
+
+function FreeFuture(Future)
+    @ccall mlir_c.FreeFuture(Future::Ptr{FutureType})::Cvoid
+end
+
+function FutureIsReady(Future)
+    @ccall mlir_c.FutureIsReady(Future::Ptr{FutureType})::UInt8
+end
+
+function FutureAwait(Future)
+    @ccall mlir_c.FutureAwait(Future::Ptr{FutureType})::Cvoid
+end
+
+function ClientCompile(
+    client,
+    cmod,
+    device_id,
+    mesh_ids,
+    num_mesh_ids,
+    xla_gpu_cuda_data_dir,
+    use_shardy_partitioner,
+    num_replicas,
+    num_partitions,
+    use_spmd_partitioning,
+    kernel_cache_enabled,
+    kernel_cache_path,
+    autotune_cache_enabled,
+    autotune_cache_path,
+    process_id,
+)
+    @ccall mlir_c.ClientCompile(
+        client::Ptr{PjRtClient},
+        cmod::MlirModule,
+        device_id::Int64,
+        mesh_ids::Ptr{Int64},
+        num_mesh_ids::Int64,
+        xla_gpu_cuda_data_dir::Cstring,
+        use_shardy_partitioner::Bool,
+        num_replicas::Int64,
+        num_partitions::Int64,
+        use_spmd_partitioning::Bool,
+        kernel_cache_enabled::Bool,
+        kernel_cache_path::Cstring,
+        autotune_cache_enabled::Bool,
+        autotune_cache_path::Cstring,
+        process_id::Cint,
+    )::Ptr{PjRtLoadedExecutable}
+end
+
+function ClientCompileWithProto(
+    client, cmod, compile_options_proto, compile_options_proto_size
+)
+    @ccall mlir_c.ClientCompileWithProto(
+        client::Ptr{PjRtClient},
+        cmod::MlirModule,
+        compile_options_proto::Cstring,
+        compile_options_proto_size::Csize_t,
+    )::Ptr{PjRtLoadedExecutable}
+end
+
+function PjRtLoadedExecutableGetOuputShardings(exec, op_shardings, num_op_shardings)
+    @ccall mlir_c.PjRtLoadedExecutableGetOuputShardings(
+        exec::Ptr{PjRtLoadedExecutable},
+        op_shardings::Ptr{Ptr{OpSharding}},
+        num_op_shardings::Int32,
+    )::Cvoid
+end
+
+function PjRtLoadedExecutableGetParameterShardings(exec, op_shardings, num_op_shardings)
+    @ccall mlir_c.PjRtLoadedExecutableGetParameterShardings(
+        exec::Ptr{PjRtLoadedExecutable},
+        op_shardings::Ptr{Ptr{OpSharding}},
+        num_op_shardings::Int32,
+    )::Cvoid
+end
+
+function XLAExecuteSharded(
+    exec,
+    num_args,
+    op_args,
+    device,
+    is_arg_donatable,
+    num_results,
+    op_results,
+    futures,
+    future_results,
+)
+    @ccall mlir_c.XLAExecuteSharded(
+        exec::Ptr{PjRtLoadedExecutable},
+        num_args::Cint,
+        op_args::Ptr{Ptr{PjRtBuffer}},
+        device::Ptr{PjRtDevice},
+        is_arg_donatable::Ptr{UInt8},
+        num_results::Cint,
+        op_results::Ptr{Ptr{PjRtBuffer}},
+        futures::Ptr{UInt8},
+        future_results::Ptr{Ptr{FutureType}},
+    )::Cvoid
+end
+
+function XLAExecute(
+    exec,
+    op_args_len,
+    op_args,
+    is_arg_donatable,
+    num_results,
+    op_results,
+    futures,
+    future_results,
+)
+    @ccall mlir_c.XLAExecute(
+        exec::Ptr{PjRtLoadedExecutable},
+        op_args_len::Cint,
+        op_args::Ptr{Ptr{PjRtBuffer}},
+        is_arg_donatable::Ptr{UInt8},
+        num_results::Cint,
+        op_results::Ptr{Ptr{PjRtBuffer}},
+        futures::Ptr{UInt8},
+        future_results::Ptr{Ptr{FutureType}},
+    )::Cvoid
+end
+
+function PjRtLoadedExecutableNumReplicas(exec)
+    @ccall mlir_c.PjRtLoadedExecutableNumReplicas(exec::Ptr{PjRtLoadedExecutable})::Cint
+end
+
+function PjRtLoadedExecutableNumPartitions(exec)
+    @ccall mlir_c.PjRtLoadedExecutableNumPartitions(exec::Ptr{PjRtLoadedExecutable})::Cint
+end
+
+function RegisterDialects(cctx)
+    @ccall mlir_c.RegisterDialects(cctx::MlirContext)::Cvoid
+end
+
+function InitializePasses(creg)
+    @ccall mlir_c.InitializePasses(creg::MlirDialectRegistry)::Cvoid
+end
+
+function InitializeRegistry(creg)
+    @ccall mlir_c.InitializeRegistry(creg::MlirDialectRegistry)::Cvoid
+end
+
+function LinkInModule(prevModC, newModC, entryfn)
+    @ccall mlir_c.LinkInModule(
+        prevModC::MlirModule, newModC::MlirModule, entryfn::Cstring
+    )::MlirOperation
+end
+
+function pjrt_client_dtor(client)
+    @ccall mlir_c.pjrt_client_dtor(client::Ptr{HeldPjRtClient})::Cvoid
+end
+
+function pjrt_client_num_devices(client)
+    @ccall mlir_c.pjrt_client_num_devices(client::Ptr{HeldPjRtClient})::Cint
+end
+
+function pjrt_client_num_addressable_devices(client)
+    @ccall mlir_c.pjrt_client_num_addressable_devices(client::Ptr{HeldPjRtClient})::Cint
+end
+
+function pjrt_client_pid(client)
+    @ccall mlir_c.pjrt_client_pid(client::Ptr{HeldPjRtClient})::Cint
+end
+
+function pjrt_client_get_device(client, device_id)
+    @ccall mlir_c.pjrt_client_get_device(
+        client::Ptr{HeldPjRtClient}, device_id::Cint
+    )::Ptr{PjRtDevice}
+end
+
+function pjrt_client_get_addressable_device(client, device_id)
+    @ccall mlir_c.pjrt_client_get_addressable_device(
+        client::Ptr{HeldPjRtClient}, device_id::Cint
+    )::Ptr{PjRtDevice}
+end
+
+function pjrt_client_platform_name(client)
+    @ccall mlir_c.pjrt_client_platform_name(client::Ptr{HeldPjRtClient})::Cstring
+end
+
+function pjrt_buffer_from_host(client, data, ptype, dim, cshape, device)
+    @ccall mlir_c.pjrt_buffer_from_host(
+        client::Ptr{HeldPjRtClient},
+        data::Ptr{Cvoid},
+        ptype::UInt64,
+        dim::Csize_t,
+        cshape::Ptr{Int64},
+        device::Ptr{PjRtDevice},
+    )::Ptr{HeldPjRtBuffer}
+end
+
+function pjrt_buffer_dtor(buffer)
+    @ccall mlir_c.pjrt_buffer_dtor(buffer::Ptr{HeldPjRtBuffer})::Cvoid
+end
+
+function pjrt_buffer_unsafe_buffer_pointer(buffer)
+    @ccall mlir_c.pjrt_buffer_unsafe_buffer_pointer(buffer::Ptr{HeldPjRtBuffer})::Ptr{Cvoid}
+end
+
+function pjrt_buffer_is_on_cpu(buffer)
+    @ccall mlir_c.pjrt_buffer_is_on_cpu(buffer::Ptr{HeldPjRtBuffer})::Bool
+end
+
+function pjrt_buffer_copy_to_device(buffer, dst_device)
+    @ccall mlir_c.pjrt_buffer_copy_to_device(
+        buffer::Ptr{HeldPjRtBuffer}, dst_device::Ptr{PjRtDevice}
+    )::Ptr{HeldPjRtBuffer}
+end
+
+function pjrt_buffer_to_host(buffer, data)
+    @ccall mlir_c.pjrt_buffer_to_host(buffer::Ptr{HeldPjRtBuffer}, data::Ptr{Cvoid})::Cvoid
+end
+
+function pjrt_buffer_print(buffer)
+    @ccall mlir_c.pjrt_buffer_print(buffer::Ptr{HeldPjRtBuffer})::Cvoid
+end
+
+function pjrt_buffer_get_device(buffer)
+    @ccall mlir_c.pjrt_buffer_get_device(buffer::Ptr{HeldPjRtBuffer})::Ptr{PjRtDevice}
+end
+
+function pjrt_buffer_get_client(buffer)
+    @ccall mlir_c.pjrt_buffer_get_client(buffer::Ptr{HeldPjRtBuffer})::Ptr{HeldPjRtClient}
+end
+
+function ifrt_client_dtor(client)
+    @ccall mlir_c.ifrt_client_dtor(client::Ptr{Client})::Cvoid
+end
+
+function ifrt_client_make_array_from_host_buffer(
+    client, data, dtype_kind, ndims, c_shape, sharding, c_semantics
+)
+    @ccall mlir_c.ifrt_client_make_array_from_host_buffer(
+        client::Ptr{Client},
+        data::Ptr{Cvoid},
+        dtype_kind::Cint,
+        ndims::Cint,
+        c_shape::Ptr{Int64},
+        sharding::Ptr{HeldIfrtConstSharding},
+        c_semantics::Cint,
+    )::Ptr{HeldIfrtArray}
+end
+
+function ifrt_client_make_single_shard_array_from_host_buffer(
+    client, data, dtype_kind, ndims, c_shape, c_semantics, device, mem_kind
+)
+    @ccall mlir_c.ifrt_client_make_single_shard_array_from_host_buffer(
+        client::Ptr{Client},
+        data::Ptr{Cvoid},
+        dtype_kind::Cint,
+        ndims::Cint,
+        c_shape::Ptr{Int64},
+        c_semantics::Cint,
+        device::Ptr{Device},
+        mem_kind::Cstring,
+    )::Ptr{HeldIfrtArray}
+end
+
+function ifrt_client_assemble_array_from_single_shards(
+    client, ndims, c_shape, sharding, narrays, c_arrays, c_semantics
+)
+    @ccall mlir_c.ifrt_client_assemble_array_from_single_shards(
+        client::Ptr{Client},
+        ndims::Int32,
+        c_shape::Ptr{Int64},
+        sharding::Ptr{HeldIfrtConstSharding},
+        narrays::Int32,
+        c_arrays::Ptr{Ptr{HeldIfrtArray}},
+        c_semantics::Int32,
+    )::Ptr{HeldIfrtArray}
+end
+
+function ifrt_pjrt_array_create(client, buffer)
+    @ccall mlir_c.ifrt_pjrt_array_create(
+        client::Ptr{PjRtClient}, buffer::Ptr{HeldPjRtBuffer}
+    )::Ptr{HeldIfrtArray}
+end
+
+function ifrt_compile(
+    client,
+    cmod,
+    device_id,
+    mesh_ids,
+    num_mesh_ids,
+    xla_gpu_cuda_data_dir,
+    use_shardy_partitioner,
+    num_replicas,
+    num_partitions,
+    use_spmd_partitioning,
+    kernel_cache_enabled,
+    kernel_cache_path,
+    autotune_cache_enabled,
+    autotune_cache_path,
+    process_id,
+)
+    @ccall mlir_c.ifrt_compile(
+        client::Ptr{Client},
+        cmod::MlirModule,
+        device_id::Int64,
+        mesh_ids::Ptr{Int64},
+        num_mesh_ids::Int64,
+        xla_gpu_cuda_data_dir::Cstring,
+        use_shardy_partitioner::Bool,
+        num_replicas::Int64,
+        num_partitions::Int64,
+        use_spmd_partitioning::Bool,
+        kernel_cache_enabled::Bool,
+        kernel_cache_path::Cstring,
+        autotune_cache_enabled::Bool,
+        autotune_cache_path::Cstring,
+        process_id::Cint,
+    )::Ptr{HeldIfrtLoadedExecutable}
+end
+
+function ifrt_compile_with_proto(
+    client, cmod, compile_options_proto, compile_options_proto_size
+)
+    @ccall mlir_c.ifrt_compile_with_proto(
+        client::Ptr{Client},
+        cmod::MlirModule,
+        compile_options_proto::Cstring,
+        compile_options_proto_size::Csize_t,
+    )::Ptr{HeldIfrtLoadedExecutable}
+end
+
+function ifrt_pjrt_loaded_executable_dtor(exec)
+    @ccall mlir_c.ifrt_pjrt_loaded_executable_dtor(exec::Ptr{PjRtLoadedExecutable})::Cvoid
+end
+
+function ifrt_array_dtor(array)
+    @ccall mlir_c.ifrt_array_dtor(array::Ptr{HeldIfrtArray})::Cvoid
+end
+
+function ifrt_CopyArrayToHostBuffer(array, data, semantics)
+    @ccall mlir_c.ifrt_CopyArrayToHostBuffer(
+        array::Ptr{HeldIfrtArray}, data::Ptr{Cvoid}, semantics::Cint
+    )::Ptr{FutureType}
+end
+
+function PjRtLoadedExecutableGetHloModules(exec, hlo_modules, nmodules)
+    @ccall mlir_c.PjRtLoadedExecutableGetHloModules(
+        exec::Ptr{PjRtLoadedExecutable}, hlo_modules::Ptr{Ptr{Cvoid}}, nmodules::Ptr{Int32}
+    )::Cvoid
+end
+
+function HloModuleToString(hlo_module, print_options)
+    @ccall mlir_c.HloModuleToString(
+        hlo_module::Ptr{HeldHloModule}, print_options::Int32
+    )::Cstring
+end
+
+function FreeHloModule(hlo_module)
+    @ccall mlir_c.FreeHloModule(hlo_module::Ptr{HeldHloModule})::Cvoid
+end
+
+function ifrt_proxy_grpc_server_dtor(server)
+    @ccall mlir_c.ifrt_proxy_grpc_server_dtor(server::Ptr{GrpcServer})::Cvoid
+end
+
+function ifrt_proxy_grpc_server_address(server)
+    @ccall mlir_c.ifrt_proxy_grpc_server_address(server::Ptr{GrpcServer})::Cstring
+end
+
+function ifrt_proxy_grpc_server_wait(server)
+    @ccall mlir_c.ifrt_proxy_grpc_server_wait(server::Ptr{GrpcServer})::Cvoid
+end
+
+function ifrt_proxy_create_client(c_proxy_server_address, connection_timeout_in_minutes)
+    @ccall mlir_c.ifrt_proxy_create_client(
+        c_proxy_server_address::Cstring, connection_timeout_in_minutes::Cint
+    )::Ptr{Client}
+end
+
+function ifrt_pjrt_make_client_with_default_kv_store(
+    pjrt_client, node_id, num_nodes, distributed_runtime_client, error, key_prefix
+)
+    @ccall mlir_c.ifrt_pjrt_make_client_with_default_kv_store(
+        pjrt_client::Ptr{PjRtClient},
+        node_id::Cint,
+        num_nodes::Cint,
+        distributed_runtime_client::Ptr{Cvoid},
+        error::Ptr{Cstring},
+        key_prefix::Cstring,
+    )::Ptr{Client}
+end
+
+function ifrt_make_pjrt_cpu_client(
+    asynchronous, node_id, num_nodes, distributed_runtime_client, error
+)
+    @ccall mlir_c.ifrt_make_pjrt_cpu_client(
+        asynchronous::UInt8,
+        node_id::Cint,
+        num_nodes::Cint,
+        distributed_runtime_client::Ptr{Cvoid},
+        error::Ptr{Cstring},
+    )::Ptr{Client}
+end
+
+function ifrt_make_pjrt_gpu_client(
+    node_id,
+    num_nodes,
+    allowed_devices,
+    num_allowed_devices,
+    memory_fraction,
+    preallocate,
+    platform_name,
+    error,
+    distributed_runtime_client,
+)
+    @ccall mlir_c.ifrt_make_pjrt_gpu_client(
+        node_id::Cint,
+        num_nodes::Cint,
+        allowed_devices::Ptr{Int64},
+        num_allowed_devices::Int64,
+        memory_fraction::Cdouble,
+        preallocate::Bool,
+        platform_name::Cstring,
+        error::Ptr{Cstring},
+        distributed_runtime_client::Ptr{Cvoid},
+    )::Ptr{Client}
+end
+
+function ifrt_make_pjrt_tpu_client(
+    tpu_path, error, node_id, num_nodes, distributed_runtime_client
+)
+    @ccall mlir_c.ifrt_make_pjrt_tpu_client(
+        tpu_path::Cstring,
+        error::Ptr{Cstring},
+        node_id::Cint,
+        num_nodes::Cint,
+        distributed_runtime_client::Ptr{Cvoid},
+    )::Ptr{Client}
+end
+
+function ifrt_FreeClient(client)
+    @ccall mlir_c.ifrt_FreeClient(client::Ptr{Client})::Cvoid
+end
+
+function ifrt_client_device_count(client)
+    @ccall mlir_c.ifrt_client_device_count(client::Ptr{Client})::Cint
+end
+
+function ifrt_client_addressable_device_count(client)
+    @ccall mlir_c.ifrt_client_addressable_device_count(client::Ptr{Client})::Cint
+end
+
+function ifrt_client_devices(client, out_devices)
+    @ccall mlir_c.ifrt_client_devices(
+        client::Ptr{Client}, out_devices::Ptr{Ptr{Device}}
+    )::Cvoid
+end
+
+function ifrt_client_addressable_devices(client, out_devices)
+    @ccall mlir_c.ifrt_client_addressable_devices(
+        client::Ptr{Client}, out_devices::Ptr{Ptr{Device}}
+    )::Cvoid
+end
+
+function ifrt_client_all_devices(client, out_devices)
+    @ccall mlir_c.ifrt_client_all_devices(
+        client::Ptr{Client}, out_devices::Ptr{Ptr{Device}}
+    )::Cvoid
+end
+
+function ifrt_client_lookup_device(client, dev_id)
+    @ccall mlir_c.ifrt_client_lookup_device(client::Ptr{Client}, dev_id::Cint)::Ptr{Device}
+end
+
+function ifrt_client_lookup_addressable_device(client, local_hw_id)
+    @ccall mlir_c.ifrt_client_lookup_addressable_device(
+        client::Ptr{Client}, local_hw_id::Cint
+    )::Ptr{Device}
+end
+
+function ifrt_ClientProcessIndex(client)
+    @ccall mlir_c.ifrt_ClientProcessIndex(client::Ptr{Client})::Cint
+end
+
+function ifrt_ClientGetPlatformName(client)
+    @ccall mlir_c.ifrt_ClientGetPlatformName(client::Ptr{Client})::Cstring
+end
+
+function ifrt_ClientGetDevice(client, idx)
+    @ccall mlir_c.ifrt_ClientGetDevice(client::Ptr{Client}, idx::Cint)::Ptr{Device}
+end
+
+function ifrt_ClientGetAddressableDevice(client, idx)
+    @ccall mlir_c.ifrt_ClientGetAddressableDevice(
+        client::Ptr{Client}, idx::Cint
+    )::Ptr{Device}
+end
+
+function ifrt_DeviceGetGlobalDeviceId(device)
+    @ccall mlir_c.ifrt_DeviceGetGlobalDeviceId(device::Ptr{Device})::Int64
+end
+
+function ifrt_DeviceGetKind(device)
+    @ccall mlir_c.ifrt_DeviceGetKind(device::Ptr{Device})::Cstring
+end
+
+function ifrt_DeviceToClient(device)
+    @ccall mlir_c.ifrt_DeviceToClient(device::Ptr{Device})::Ptr{Client}
+end
+
+function ifrt_DeviceIsAddressable(device)
+    @ccall mlir_c.ifrt_DeviceIsAddressable(device::Ptr{Device})::Bool
+end
+
+function ifrt_DeviceGetLocalHardwareId(device)
+    @ccall mlir_c.ifrt_DeviceGetLocalHardwareId(device::Ptr{Device})::Int64
+end
+
+function ifrt_DeviceGetDefaultMemory(device)
+    @ccall mlir_c.ifrt_DeviceGetDefaultMemory(device::Ptr{Device})::Ptr{Memory}
+end
+
+function ifrt_DeviceGetMemories(device, size)
+    @ccall mlir_c.ifrt_DeviceGetMemories(
+        device::Ptr{Device}, size::Ptr{Int32}
+    )::Ptr{Ptr{Memory}}
+end
+
+function ifrt_MemoryGetMemoryKind(memory)
+    @ccall mlir_c.ifrt_MemoryGetMemoryKind(memory::Ptr{Memory})::Ptr{MemoryKind}
+end
+
+function ifrt_MemoryToString(memory)
+    @ccall mlir_c.ifrt_MemoryToString(memory::Ptr{Memory})::Cstring
+end
+
+function ifrt_MemoryKindToString(memory_kind)
+    @ccall mlir_c.ifrt_MemoryKindToString(memory_kind::Ptr{MemoryKind})::Cstring
+end
+
+function ifrt_MemoryKindsAreEqual(a, b)
+    @ccall mlir_c.ifrt_MemoryKindsAreEqual(a::Ptr{MemoryKind}, b::Ptr{MemoryKind})::Bool
+end
+
+function free_op_sharding(op_sharding)
+    @ccall mlir_c.free_op_sharding(op_sharding::Ptr{OpSharding})::Cvoid
+end
+
+function op_sharding_to_op_sharding_type(op_sharding)
+    @ccall mlir_c.op_sharding_to_op_sharding_type(op_sharding::Ptr{OpSharding})::Int32
+end
+
+function op_sharding_to_shard_group_type(op_sharding)
+    @ccall mlir_c.op_sharding_to_shard_group_type(op_sharding::Ptr{OpSharding})::Int32
+end
+
+function op_sharding_to_shard_group_id(op_sharding)
+    @ccall mlir_c.op_sharding_to_shard_group_id(op_sharding::Ptr{OpSharding})::Int32
+end
+
+function op_sharding_is_shard_group(op_sharding)
+    @ccall mlir_c.op_sharding_is_shard_group(op_sharding::Ptr{OpSharding})::Bool
+end
+
+function op_sharding_replicate_on_last_tile_dim(op_sharding)
+    @ccall mlir_c.op_sharding_replicate_on_last_tile_dim(op_sharding::Ptr{OpSharding})::Bool
+end
+
+function op_sharding_has_last_tile_dims(op_sharding)
+    @ccall mlir_c.op_sharding_has_last_tile_dims(op_sharding::Ptr{OpSharding})::Bool
+end
+
+function op_sharding_last_tile_dims_size(op_sharding)
+    @ccall mlir_c.op_sharding_last_tile_dims_size(op_sharding::Ptr{OpSharding})::Int32
+end
+
+function op_sharding_last_tile_dims(op_sharding, last_tile_dims)
+    @ccall mlir_c.op_sharding_last_tile_dims(
+        op_sharding::Ptr{OpSharding}, last_tile_dims::Ptr{Int32}
+    )::Cvoid
+end
+
+function op_sharding_has_iota_reshape_dims(op_sharding)
+    @ccall mlir_c.op_sharding_has_iota_reshape_dims(op_sharding::Ptr{OpSharding})::Bool
+end
+
+function op_sharding_iota_reshape_dims_size(op_sharding)
+    @ccall mlir_c.op_sharding_iota_reshape_dims_size(op_sharding::Ptr{OpSharding})::Int32
+end
+
+function op_sharding_iota_reshape_dims(op_sharding, iota_reshape_dims)
+    @ccall mlir_c.op_sharding_iota_reshape_dims(
+        op_sharding::Ptr{OpSharding}, iota_reshape_dims::Ptr{Int32}
+    )::Cvoid
+end
+
+function op_sharding_has_iota_transpose_perm(op_sharding)
+    @ccall mlir_c.op_sharding_has_iota_transpose_perm(op_sharding::Ptr{OpSharding})::Bool
+end
+
+function op_sharding_iota_transpose_perm_size(op_sharding)
+    @ccall mlir_c.op_sharding_iota_transpose_perm_size(op_sharding::Ptr{OpSharding})::Int32
+end
+
+function op_sharding_iota_transpose_perm(op_sharding, iota_transpose_perm)
+    @ccall mlir_c.op_sharding_iota_transpose_perm(
+        op_sharding::Ptr{OpSharding}, iota_transpose_perm::Ptr{Int32}
+    )::Cvoid
+end
+
+function op_sharding_has_tile_assignment_dimensions(op_sharding)
+    @ccall mlir_c.op_sharding_has_tile_assignment_dimensions(
+        op_sharding::Ptr{OpSharding}
+    )::Bool
+end
+
+function op_sharding_tile_assignment_dimensions_size(op_sharding)
+    @ccall mlir_c.op_sharding_tile_assignment_dimensions_size(
+        op_sharding::Ptr{OpSharding}
+    )::Int32
+end
+
+function op_sharding_tile_assignment_dimensions(op_sharding, tile_assignment_dimensions)
+    @ccall mlir_c.op_sharding_tile_assignment_dimensions(
+        op_sharding::Ptr{OpSharding}, tile_assignment_dimensions::Ptr{Int32}
+    )::Cvoid
+end
+
+function op_sharding_has_tile_assignment_devices(op_sharding)
+    @ccall mlir_c.op_sharding_has_tile_assignment_devices(
+        op_sharding::Ptr{OpSharding}
+    )::Bool
+end
+
+function op_sharding_tile_assignment_devices_size(op_sharding)
+    @ccall mlir_c.op_sharding_tile_assignment_devices_size(
+        op_sharding::Ptr{OpSharding}
+    )::Int32
+end
+
+function op_sharding_tile_assignment_devices(op_sharding, tile_assignment_devices)
+    @ccall mlir_c.op_sharding_tile_assignment_devices(
+        op_sharding::Ptr{OpSharding}, tile_assignment_devices::Ptr{Int32}
+    )::Cvoid
+end
+
+function free_hlo_sharding(hlo_sharding)
+    @ccall mlir_c.free_hlo_sharding(hlo_sharding::Ptr{HloSharding})::Cvoid
+end
+
+function hlo_sharding_from_op_sharding(op_sharding)
+    @ccall mlir_c.hlo_sharding_from_op_sharding(
+        op_sharding::Ptr{OpSharding}
+    )::Ptr{HloSharding}
+end
+
+function hlo_sharding_to_op_sharding(hlo_sharding)
+    @ccall mlir_c.hlo_sharding_to_op_sharding(
+        hlo_sharding::Ptr{HloSharding}
+    )::Ptr{OpSharding}
+end
+
+function hlo_sharding_to_string(hlo_sharding)
+    @ccall mlir_c.hlo_sharding_to_string(hlo_sharding::Ptr{HloSharding})::Cstring
+end
+
+function ifrt_memory_kind_from_string(c_str)
+    @ccall mlir_c.ifrt_memory_kind_from_string(c_str::Cstring)::Ptr{MemoryKind}
+end
+
+function ifrt_memory_kind_with_optional_memory_space()
+    @ccall mlir_c.ifrt_memory_kind_with_optional_memory_space()::Ptr{MemoryKind}
+end
+
+function ifrt_memory_kind_has_value(memory_kind)
+    @ccall mlir_c.ifrt_memory_kind_has_value(memory_kind::Ptr{MemoryKind})::Bool
+end
+
+function free_ifrt_sharding(sharding)
+    @ccall mlir_c.free_ifrt_sharding(sharding::Ptr{HeldIfrtSharding})::Cvoid
+end
+
+function ifrt_sharding_from_xla_hlo_sharding(
+    client, device_list, num_devices, memory_kind, xla_hlo_sharding
+)
+    @ccall mlir_c.ifrt_sharding_from_xla_hlo_sharding(
+        client::Ptr{Client},
+        device_list::Ptr{Ptr{Device}},
+        num_devices::Int32,
+        memory_kind::Ptr{MemoryKind},
+        xla_hlo_sharding::Ptr{HloSharding},
+    )::Ptr{HeldIfrtSharding}
+end
+
+function ifrt_sharding_to_xla_hlo_sharding(sharding)
+    @ccall mlir_c.ifrt_sharding_to_xla_hlo_sharding(
+        sharding::Ptr{HeldIfrtSharding}
+    )::Ptr{HloSharding}
+end
+
+function ifrt_sharding_is_single_device_sharding(sharding)
+    @ccall mlir_c.ifrt_sharding_is_single_device_sharding(
+        sharding::Ptr{HeldIfrtSharding}
+    )::Bool
+end
+
+function ifrt_sharding_is_fully_replicated(sharding)
+    @ccall mlir_c.ifrt_sharding_is_fully_replicated(sharding::Ptr{HeldIfrtSharding})::Bool
+end
+
+function ifrt_sharding_to_string(sharding)
+    @ccall mlir_c.ifrt_sharding_to_string(sharding::Ptr{HeldIfrtSharding})::Cstring
+end
+
+function ifrt_sharding_devices_size(sharding)
+    @ccall mlir_c.ifrt_sharding_devices_size(sharding::Ptr{HeldIfrtSharding})::Int32
+end
+
+function ifrt_sharding_to_device_list(sharding, devices)
+    @ccall mlir_c.ifrt_sharding_to_device_list(
+        sharding::Ptr{HeldIfrtSharding}, devices::Ptr{Ptr{Device}}
+    )::Cvoid
+end
+
+function ifrt_sharding_to_index_domains(
+    sharding, array_size_list, array_size_len, index_domain_origins, index_domain_shapes
+)
+    @ccall mlir_c.ifrt_sharding_to_index_domains(
+        sharding::Ptr{HeldIfrtSharding},
+        array_size_list::Ptr{Int64},
+        array_size_len::Int32,
+        index_domain_origins::Ptr{Int64},
+        index_domain_shapes::Ptr{Int64},
+    )::Cvoid
+end
+
+function hlo_sharding_is_tuple(hloSharding)
+    @ccall mlir_c.hlo_sharding_is_tuple(hloSharding::Ptr{HloSharding})::Bool
+end
+
+function hlo_sharding_is_replicated(hloSharding)
+    @ccall mlir_c.hlo_sharding_is_replicated(hloSharding::Ptr{HloSharding})::Bool
+end
+
+function hlo_sharding_is_manual(hloSharding)
+    @ccall mlir_c.hlo_sharding_is_manual(hloSharding::Ptr{HloSharding})::Bool
+end
+
+function hlo_sharding_is_unknown(hloSharding)
+    @ccall mlir_c.hlo_sharding_is_unknown(hloSharding::Ptr{HloSharding})::Bool
+end
+
+function hlo_sharding_is_tiled(hloSharding)
+    @ccall mlir_c.hlo_sharding_is_tiled(hloSharding::Ptr{HloSharding})::Bool
+end
+
+function hlo_sharding_is_maximal(hloSharding)
+    @ccall mlir_c.hlo_sharding_is_maximal(hloSharding::Ptr{HloSharding})::Bool
+end
+
+function hlo_sharding_replicate_on_last_tile_dim(hloSharding)
+    @ccall mlir_c.hlo_sharding_replicate_on_last_tile_dim(
+        hloSharding::Ptr{HloSharding}
+    )::Bool
+end
+
+function hlo_sharding_tile_assignment_dimensions_size(hloSharding)
+    @ccall mlir_c.hlo_sharding_tile_assignment_dimensions_size(
+        hloSharding::Ptr{HloSharding}
+    )::Int32
+end
+
+function hlo_sharding_tile_assignment_devices_size(hloSharding)
+    @ccall mlir_c.hlo_sharding_tile_assignment_devices_size(
+        hloSharding::Ptr{HloSharding}
+    )::Int32
+end
+
+function hlo_sharding_tile_assignment_dimensions(hloSharding, dims, size)
+    @ccall mlir_c.hlo_sharding_tile_assignment_dimensions(
+        hloSharding::Ptr{HloSharding}, dims::Ptr{Int64}, size::Int32
+    )::Cvoid
+end
+
+function hlo_sharding_tile_assignment_devices(hloSharding, devices, size)
+    @ccall mlir_c.hlo_sharding_tile_assignment_devices(
+        hloSharding::Ptr{HloSharding}, devices::Ptr{Int64}, size::Int32
+    )::Cvoid
+end
+
+function hlo_sharding_check_eq(hloSharding, other)
+    @ccall mlir_c.hlo_sharding_check_eq(
+        hloSharding::Ptr{HloSharding}, other::Ptr{HloSharding}
+    )::Bool
+end
+
+function ifrt_free_future(Future)
+    @ccall mlir_c.ifrt_free_future(Future::Ptr{IfRtFutureType})::Cvoid
+end
+
+function ifrt_future_is_ready(Future)
+    @ccall mlir_c.ifrt_future_is_ready(Future::Ptr{IfRtFutureType})::UInt8
+end
+
+function ifrt_future_await(Future)
+    @ccall mlir_c.ifrt_future_await(Future::Ptr{IfRtFutureType})::Cvoid
+end
+
+function ifrt_free_array(array)
+    @ccall mlir_c.ifrt_free_array(array::Ptr{HeldIfrtArray})::Cvoid
+end
+
+function ifrt_array_shape(array)
+    @ccall mlir_c.ifrt_array_shape(array::Ptr{HeldIfrtArray})::Ptr{Int64}
+end
+
+function ifrt_array_ndims(array)
+    @ccall mlir_c.ifrt_array_ndims(array::Ptr{HeldIfrtArray})::Int64
+end
+
+function ifrt_array_eltype(array)
+    @ccall mlir_c.ifrt_array_eltype(array::Ptr{HeldIfrtArray})::Cint
+end
+
+function ifrt_array_to_client(array)
+    @ccall mlir_c.ifrt_array_to_client(array::Ptr{HeldIfrtArray})::Ptr{Client}
+end
+
+function ifrt_array_to_sharding(array)
+    @ccall mlir_c.ifrt_array_to_sharding(
+        array::Ptr{HeldIfrtArray}
+    )::Ptr{HeldIfrtConstSharding}
+end
+
+function ifrt_array_copy_to_host_buffer(array, data)
+    @ccall mlir_c.ifrt_array_copy_to_host_buffer(
+        array::Ptr{HeldIfrtArray}, data::Ptr{Cvoid}
+    )::Cvoid
+end
+
+function ifrt_array_disassemble_into_single_device_arrays(
+    array, c_semantics, c_single_device_shard_semantics, narrays
+)
+    @ccall mlir_c.ifrt_array_disassemble_into_single_device_arrays(
+        array::Ptr{HeldIfrtArray},
+        c_semantics::Int32,
+        c_single_device_shard_semantics::Int32,
+        narrays::Ptr{Int32},
+    )::Ptr{Ptr{HeldIfrtArray}}
+end
+
+function GetDistributedRuntimeClientWithOptions(c_address, options)
+    @ccall mlir_c.GetDistributedRuntimeClientWithOptions(
+        c_address::Cstring, options::Ptr{DistributedRuntimeClientOptions}
+    )::Ptr{HeldDistributedRuntimeClient}
+end
+
+function GetDistributedRuntimeClient(
+    c_address,
+    node_id,
+    rpc_timeout_in_seconds,
+    init_timeout,
+    shutdown_timeout_in_minutes,
+    heartbeat_timeout_in_seconds,
+    use_compression,
+)
+    @ccall mlir_c.GetDistributedRuntimeClient(
+        c_address::Cstring,
+        node_id::Int32,
+        rpc_timeout_in_seconds::Int32,
+        init_timeout::Int32,
+        shutdown_timeout_in_minutes::Int32,
+        heartbeat_timeout_in_seconds::Int32,
+        use_compression::Bool,
+    )::Ptr{HeldDistributedRuntimeClient}
+end
+
+function free_distributed_runtime_client(client)
+    @ccall mlir_c.free_distributed_runtime_client(
+        client::Ptr{HeldDistributedRuntimeClient}
+    )::Cvoid
+end
+
+function distributed_runtime_client_connect(client)
+    @ccall mlir_c.distributed_runtime_client_connect(
+        client::Ptr{HeldDistributedRuntimeClient}
+    )::Cvoid
+end
+
+function distributed_runtime_client_shutdown(client)
+    @ccall mlir_c.distributed_runtime_client_shutdown(
+        client::Ptr{HeldDistributedRuntimeClient}
+    )::Cvoid
+end
+
+function GetDistributedRuntimeServiceWithOptions(c_address, options)
+    @ccall mlir_c.GetDistributedRuntimeServiceWithOptions(
+        c_address::Cstring, options::Ptr{DistributedRuntimeServiceOptions}
+    )::Ptr{DistributedRuntimeService}
+end
+
+function GetDistributedRuntimeService(
+    c_address,
+    num_nodes,
+    heartbeat_timeout_in_seconds,
+    cluster_register_timeout_in_minutes,
+    shutdown_timeout_in_minutes,
+)
+    @ccall mlir_c.GetDistributedRuntimeService(
+        c_address::Cstring,
+        num_nodes::Cint,
+        heartbeat_timeout_in_seconds::Int32,
+        cluster_register_timeout_in_minutes::Int32,
+        shutdown_timeout_in_minutes::Int32,
+    )::Ptr{DistributedRuntimeService}
+end
+
+function free_distributed_runtime_service(service)
+    @ccall mlir_c.free_distributed_runtime_service(
+        service::Ptr{DistributedRuntimeService}
+    )::Cvoid
+end
+
+function distributed_runtime_service_shutdown(service)
+    @ccall mlir_c.distributed_runtime_service_shutdown(
+        service::Ptr{DistributedRuntimeService}
+    )::Cvoid
+end
+
+function hloShardingFromTensorShardingAttr(cattr, cmeshAttr)
+    @ccall mlir_c.hloShardingFromTensorShardingAttr(
+        cattr::MlirAttribute, cmeshAttr::MlirAttribute
+    )::Ptr{HloSharding}
+end
+
+function hloShardingToTensorShardingAttr(
+    cctx, hloSharding, cmeshName, cmeshAttr, rank, isClosed, priority
+)
+    @ccall mlir_c.hloShardingToTensorShardingAttr(
+        cctx::MlirContext,
+        hloSharding::Ptr{HloSharding},
+        cmeshName::MlirAttribute,
+        cmeshAttr::MlirAttribute,
+        rank::Int64,
+        isClosed::Ptr{Bool},
+        priority::Ptr{Int64},
+    )::MlirAttribute
+end
+
+function ifrt_loaded_executable_dtor(exec)
+    @ccall mlir_c.ifrt_loaded_executable_dtor(exec::Ptr{HeldIfrtLoadedExecutable})::Cvoid
+end
+
+function ifrt_loaded_executable_execute(
+    exec, num_args, op_args, is_arg_donatable, num_results, op_results, futures, status
+)
+    @ccall mlir_c.ifrt_loaded_executable_execute(
+        exec::Ptr{HeldIfrtLoadedExecutable},
+        num_args::Cint,
+        op_args::Ptr{Ptr{HeldIfrtArray}},
+        is_arg_donatable::Ptr{UInt8},
+        num_results::Cint,
+        op_results::Ptr{Ptr{HeldIfrtArray}},
+        futures::Ptr{UInt8},
+        status::Ptr{Ptr{FutureType}},
+    )::Cvoid
+end
+
+function ifrt_loaded_executable_client(exec)
+    @ccall mlir_c.ifrt_loaded_executable_client(
+        exec::Ptr{HeldIfrtLoadedExecutable}
+    )::Ptr{Client}
+end
+
+function ifrt_loaded_executable_get_parameter_shardings(
+    exec, op_shardings, num_op_shardings
+)
+    @ccall mlir_c.ifrt_loaded_executable_get_parameter_shardings(
+        exec::Ptr{HeldIfrtLoadedExecutable},
+        op_shardings::Ptr{Ptr{OpSharding}},
+        num_op_shardings::Int32,
+    )::Cvoid
+end
+
+function ifrt_loaded_executable_get_output_shardings(exec, op_shardings, num_op_shardings)
+    @ccall mlir_c.ifrt_loaded_executable_get_output_shardings(
+        exec::Ptr{HeldIfrtLoadedExecutable},
+        op_shardings::Ptr{Ptr{OpSharding}},
+        num_op_shardings::Int32,
+    )::Cvoid
+end
+
+function ifrt_loaded_executable_get_hlo_modules(exec, hlo_modules, nmodules)
+    @ccall mlir_c.ifrt_loaded_executable_get_hlo_modules(
+        exec::Ptr{HeldIfrtLoadedExecutable},
+        hlo_modules::Ptr{Ptr{Cvoid}},
+        nmodules::Ptr{Int32},
+    )::Cvoid
+end
+
+function ifrt_loaded_executable_num_devices(exec)
+    @ccall mlir_c.ifrt_loaded_executable_num_devices(
+        exec::Ptr{HeldIfrtLoadedExecutable}
+    )::Int32
+end
+
+function pjrt_hlo_module_cost_analysis_properties(client, hlo_module, jlproperties)
+    @ccall mlir_c.pjrt_hlo_module_cost_analysis_properties(
+        client::Ptr{PjRtClient},
+        hlo_module::Ptr{HeldHloModule},
+        jlproperties::Ptr{JLHloCostAnalysisProperties},
+    )::Cvoid
+end
+
+function ifrt_hlo_module_cost_analysis_properties(client, hlo_module, jlproperties)
+    @ccall mlir_c.ifrt_hlo_module_cost_analysis_properties(
+        client::Ptr{Client},
+        hlo_module::Ptr{HeldHloModule},
+        jlproperties::Ptr{JLHloCostAnalysisProperties},
+    )::Cvoid
+end
+
+function pjrt_device_is_addressable(device)
+    @ccall mlir_c.pjrt_device_is_addressable(device::Ptr{PjRtDevice})::Bool
+end
+
+function mlirGetParentOfTypeFunctionOp(op)
+    @ccall mlir_c.mlirGetParentOfTypeFunctionOp(op::Ptr{Operation})::Ptr{Operation}
+end
+
+function ifrt_copy_arrays_to_device_with_sharding(
+    client, arrays, num_arrays, dst_sharding, c_semantics
+)
+    @ccall mlir_c.ifrt_copy_arrays_to_device_with_sharding(
+        client::Ptr{Client},
+        arrays::Ptr{Ptr{HeldIfrtArray}},
+        num_arrays::Int32,
+        dst_sharding::Ptr{HeldIfrtConstSharding},
+        c_semantics::Int32,
+    )::Ptr{Ptr{HeldIfrtArray}}
+end
+
+function ifrt_make_array_from_host_buffer_shards(
+    client,
+    host_buffers,
+    num_buffers,
+    host_buffer_shapes,
+    addressable_shard_indices,
+    addressable_shard_indices_sizes,
+    dtype_kind,
+    ndims,
+    final_buffer_shape,
+    sharding,
+    c_host_buffer_semantics,
+)
+    @ccall mlir_c.ifrt_make_array_from_host_buffer_shards(
+        client::Ptr{Client},
+        host_buffers::Ptr{Ptr{Cvoid}},
+        num_buffers::Cint,
+        host_buffer_shapes::Ptr{Ptr{Int64}},
+        addressable_shard_indices::Ptr{Ptr{Int64}},
+        addressable_shard_indices_sizes::Ptr{Int64},
+        dtype_kind::Cint,
+        ndims::Cint,
+        final_buffer_shape::Ptr{Int64},
+        sharding::Ptr{HeldIfrtConstSharding},
+        c_host_buffer_semantics::Int32,
+    )::Ptr{HeldIfrtArray}
+end
+
+function ifrt_copy_array(array)
+    @ccall mlir_c.ifrt_copy_array(array::Ptr{HeldIfrtArray})::Ptr{HeldIfrtArray}
+end
+
+function reactantXLAThrow(str)
+    @ccall mlir_c.reactantXLAThrow(str::Cstring)::Cvoid
+end
+
+function reactantXLAInit(lrtP, backend)
+    @ccall mlir_c.reactantXLAInit(lrtP::Ptr{Ptr{LinkableRuntime}}, backend::Cstring)::Cvoid
+end
+
+function reactantXLADeInit(lrt)
+    @ccall mlir_c.reactantXLADeInit(lrt::Ptr{Ptr{LinkableRuntime}})::Cvoid
+end
+
+function reactantXLAMemcpy(lrtP, dst, src, size, direction)
+    @ccall mlir_c.reactantXLAMemcpy(
+        lrtP::Ptr{Ptr{LinkableRuntime}},
+        dst::Ptr{Cvoid},
+        src::Ptr{Cvoid},
+        size::Csize_t,
+        direction::Int32,
+    )::Cvoid
+end
+
+function reactantXLAMalloc(lrtP, ptype, shapeLen, shape)
+    @ccall mlir_c.reactantXLAMalloc(
+        lrtP::Ptr{Ptr{LinkableRuntime}}, ptype::UInt64, shapeLen::UInt64, shape::Ptr{UInt64}
+    )::Ptr{Cvoid}
+end
+
+function reactantXLAFree(lrtP, buffer0)
+    @ccall mlir_c.reactantXLAFree(
+        lrtP::Ptr{Ptr{LinkableRuntime}}, buffer0::Ptr{Cvoid}
+    )::Cvoid
+end
+
+function reactantXLAExec(lrtP, modstr, argcnt, args)
+    @ccall mlir_c.reactantXLAExec(
+        lrtP::Ptr{Ptr{LinkableRuntime}},
+        modstr::Cstring,
+        argcnt::Int64,
+        args::Ptr{Ptr{Cvoid}},
+    )::Cvoid
+end
+
+function convertMlirModuleToHloModule(mod)
+    @ccall mlir_c.convertMlirModuleToHloModule(mod::MlirModule)::Ptr{HeldHloModule}
+end
+
+function parseAndReturnUnverifiedHloModule(cstr)
+    @ccall mlir_c.parseAndReturnUnverifiedHloModule(cstr::Cstring)::Ptr{HeldHloModule}
+end
+
+function hloModuleGetEntryComputation(hlo_module)
+    @ccall mlir_c.hloModuleGetEntryComputation(
+        hlo_module::Ptr{HeldHloModule}
+    )::Ptr{HloComputation}
+end
+
+function freeHloComputation(hlo_computation)
+    @ccall mlir_c.freeHloComputation(hlo_computation::Ptr{HloComputation})::Cvoid
+end
+
+function hloComputationToString(hlo_computation, print_options)
+    @ccall mlir_c.hloComputationToString(
+        hlo_computation::Ptr{HloComputation}, print_options::Int32
+    )::Cstring
+end
+
+function hloComputationInstructionCount(hlo_computation)
+    @ccall mlir_c.hloComputationInstructionCount(
+        hlo_computation::Ptr{HloComputation}
+    )::Int64
+end
+
+function hloComputationGetInstructionsPostOrder(
+    hlo_computation, num_instructions, hlo_instructions
+)
+    @ccall mlir_c.hloComputationGetInstructionsPostOrder(
+        hlo_computation::Ptr{HloComputation},
+        num_instructions::Int64,
+        hlo_instructions::Ptr{Ptr{HloInstruction}},
+    )::Cvoid
+end
+
+function freeHloInstruction(hlo_instruction)
+    @ccall mlir_c.freeHloInstruction(hlo_instruction::Ptr{HloInstruction})::Cvoid
+end
+
+function hloInstructionToString(hlo_instruction, print_options)
+    @ccall mlir_c.hloInstructionToString(
+        hlo_instruction::Ptr{HloInstruction}, print_options::Int32
+    )::Cstring
+end
+
+function hloInstructionHasToApply(hlo_instruction)
+    @ccall mlir_c.hloInstructionHasToApply(hlo_instruction::Ptr{HloInstruction})::UInt8
+end
+
+function hloInstructionGetToApply(hlo_instruction)
+    @ccall mlir_c.hloInstructionGetToApply(
+        hlo_instruction::Ptr{HloInstruction}
+    )::Ptr{HloComputation}
+end
+
+function hloInstructionGetOpcode(hlo_instruction)
+    @ccall mlir_c.hloInstructionGetOpcode(hlo_instruction::Ptr{HloInstruction})::UInt8
+end
+
+function hloOpcodeToString(opcode)
+    @ccall mlir_c.hloOpcodeToString(opcode::UInt8)::Cstring
+end
+
+function hloInstructionIsFusion(hlo_instruction)
+    @ccall mlir_c.hloInstructionIsFusion(hlo_instruction::Ptr{HloInstruction})::UInt8
+end
+
+function hloInstructionGetFusionKind(hlo_instruction)
+    @ccall mlir_c.hloInstructionGetFusionKind(hlo_instruction::Ptr{HloInstruction})::UInt8
+end
+
+function hloFusionKindToString(kind)
+    @ccall mlir_c.hloFusionKindToString(kind::UInt8)::Cstring
+end
+
+function hloInstructionFusedInstructionsComputation(hlo_instruction)
+    @ccall mlir_c.hloInstructionFusedInstructionsComputation(
+        hlo_instruction::Ptr{HloInstruction}
+    )::Ptr{HloComputation}
+end
+
+function CreateGPUPerformanceModel(ctx, device_description)
+    @ccall mlir_c.CreateGPUPerformanceModel(
+        ctx::MlirContext, device_description::Ptr{DeviceDescription}
+    )::Ptr{GPUPerformanceModel}
+end
+
+function RunAnalysisOnHloModule(gpu_performance_model, hlo_module)
+    @ccall mlir_c.RunAnalysisOnHloModule(
+        gpu_performance_model::Ptr{GPUPerformanceModel}, hlo_module::Ptr{HeldHloModule}
+    )::Cvoid
+end
+
+function EstimateRunTimeForInstruction(gpu_performance_model, hlo_instruction, jldata)
+    @ccall mlir_c.EstimateRunTimeForInstruction(
+        gpu_performance_model::Ptr{GPUPerformanceModel},
+        hlo_instruction::Ptr{HloInstruction},
+        jldata::Ptr{JLEstimateRunTimeData},
+    )::Cvoid
+end
+
+function InitializeXProfStubs(cstr_worker_service_address)
+    @ccall mlir_c.InitializeXProfStubs(cstr_worker_service_address::Cstring)::Cvoid
+end
+
+function StartGrpcServer(port)
+    @ccall mlir_c.StartGrpcServer(port::Cint)::Cvoid
+end
+
+function XSpaceToToolsData(
+    xspace_paths,
+    num_paths,
+    tool_name,
+    bool_keys,
+    bool_values,
+    bool_count,
+    int_keys,
+    int_values,
+    int_count,
+    str_keys,
+    str_values,
+    str_count,
+    result_data,
+    result_size,
+    is_binary,
+    error,
+)
+    @ccall mlir_c.XSpaceToToolsData(
+        xspace_paths::Ptr{Cstring},
+        num_paths::Int64,
+        tool_name::Cstring,
+        bool_keys::Ptr{Cstring},
+        bool_values::Ptr{Bool},
+        bool_count::Int64,
+        int_keys::Ptr{Cstring},
+        int_values::Ptr{Cint},
+        int_count::Int64,
+        str_keys::Ptr{Cstring},
+        str_values::Ptr{Cstring},
+        str_count::Int64,
+        result_data::Ptr{Cstring},
+        result_size::Ptr{Int64},
+        is_binary::Ptr{Bool},
+        error::Ptr{Cstring},
+    )::Cint
+end
+
+function ReactantGetDebugOptions(size)
+    @ccall mlir_c.ReactantGetDebugOptions(size::Ptr{Csize_t})::Ptr{Cvoid}
+end
+
+function ReactantGetCompileOptions(size)
+    @ccall mlir_c.ReactantGetCompileOptions(size::Ptr{Csize_t})::Ptr{Cvoid}
+end
+
+function ReactantLexMLIR(
+    ctx, input, input_len, token_kinds, token_offsets, token_lengths, max_tokens
+)
+    @ccall mlir_c.ReactantLexMLIR(
+        ctx::MlirContext,
+        input::Cstring,
+        input_len::Int32,
+        token_kinds::Ptr{Int32},
+        token_offsets::Ptr{Int32},
+        token_lengths::Ptr{Int32},
+        max_tokens::Int32,
+    )::Int32
+end
+
+function registerReactantXLAFFI()
+    @ccall mlir_c.registerReactantXLAFFI()::Cvoid
 end
 
 const MLIR_CAPI_DWARF_ADDRESS_SPACE_NULL = -1

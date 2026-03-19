@@ -12,9 +12,9 @@ if Reactant_jll.is_available()
         initialize_dialect()
 
         if XLA.REACTANT_XLA_RUNTIME == "PJRT"
-            client = XLA.PJRT.CPUClient(; checkcount=false)
+            client = Accelerators.CPU.make_pjrt_client()
         elseif XLA.REACTANT_XLA_RUNTIME == "IFRT"
-            client = XLA.IFRT.CPUClient(; checkcount=false)
+            client = Accelerators.CPU.make_ifrt_client()
         else
             error("Unsupported runtime: $(XLA.REACTANT_XLA_RUNTIME)")
         end

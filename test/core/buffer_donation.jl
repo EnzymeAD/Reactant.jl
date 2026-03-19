@@ -1,4 +1,4 @@
-using Reactant, Test
+using Reactant, Test, FileCheck
 
 function donate_fill_x_with_2(x, y)
     x .= 2
@@ -23,9 +23,15 @@ end
     @jit(donate_fill_x_with_2(a, b))
     @test convert(Array, a) == 2 * ones(2, 2)
     hlo = @code_hlo(donate_fill_x_with_2(a, b))
-    @test length(findall("tf.aliasing_output = 0", repr(hlo))) == 1
 
-    (; preserved_args) = Reactant.Compiler.compile_xla(donate_fill_x_with_2, (a, b))[4]
+    @test @filecheck begin
+        @check_label "@main"
+        @check_same "tf.aliasing_output = 0"
+        @check_not "tf.aliasing_output = 1"
+        hlo
+    end
+
+    (; preserved_args) = Reactant.Compiler.compile_xla(donate_fill_x_with_2, (a, b))[3]
     preserved_args_idx = last.(preserved_args)
     @test preserved_args_idx == [1] # only `y`(i.e. `b`) is preserved
 
@@ -34,9 +40,15 @@ end
     @jit(donate_inplace_mul(a, b))
     @test convert(Array, a) == 6 * ones(2, 2)
     hlo = @code_hlo(donate_inplace_mul(a, b))
-    @test length(findall("tf.aliasing_output = 0", repr(hlo))) == 1
 
-    (; preserved_args) = Reactant.Compiler.compile_xla(donate_inplace_mul, (a, b))[4]
+    @test @filecheck begin
+        @check_label "@main"
+        @check_same "tf.aliasing_output = 0"
+        @check_not "tf.aliasing_output = 1"
+        hlo
+    end
+
+    (; preserved_args) = Reactant.Compiler.compile_xla(donate_inplace_mul, (a, b))[3]
     preserved_args_idx = last.(preserved_args)
     @test preserved_args_idx == [1] # only `y`(i.e. `b`) is preserved
 
@@ -47,11 +59,18 @@ end
     @test convert(Array, a) == 2 * ones(2, 2)
     @test convert(Array, b) == 3 * ones(3, 4)
     @test convert(Array, c) == 4 * ones(2, 2)
-    hlo = @code_hlo(multiple_donated_args(a, b, c))
-    @test contains(
-        repr(hlo),
-        "@main(%arg0: tensor<2x2xf64> {enzymexla.memory_effects = [], tf.aliasing_output = 0 : i32}, %arg1: tensor<4x3xf64> {enzymexla.memory_effects = [], tf.aliasing_output = 2 : i32}, %arg2: tensor<2x2xf64> {enzymexla.memory_effects = [], tf.aliasing_output = 1 : i32}) -> (tensor<2x2xf64>, tensor<2x2xf64>, tensor<4x3xf64>) attributes {enzymexla.memory_effects = []} {",
-    )
+    hlo = @code_hlo multiple_donated_args(a, b, c)
+
+    @test @filecheck begin
+        @check_label "@main"
+        @check_same "%arg0: tensor<2x2xf64>"
+        @check_same "tf.aliasing_output = 0"
+        @check_same "%arg1: tensor<4x3xf64>"
+        @check_same "tf.aliasing_output = 2"
+        @check_same "%arg2: tensor<2x2xf64>"
+        @check_same "tf.aliasing_output = 1"
+        hlo
+    end
 end
 
 function update_inplace!(x, y, z)
@@ -71,7 +90,7 @@ end
     z = Reactant.to_rarray(ones(3))
 
     @code_hlo assert_nonallocating = true update_inplace!(x, y, z)
-    (; preserved_args) = Reactant.Compiler.compile_xla(update_inplace!, (x, y, z))[4]
+    (; preserved_args) = Reactant.Compiler.compile_xla(update_inplace!, (x, y, z))[3]
     preserved_args_idx = last.(preserved_args)
     @test preserved_args_idx == [1, 2] # y and z are both preserved (preserved_args is 0-indexed)
 

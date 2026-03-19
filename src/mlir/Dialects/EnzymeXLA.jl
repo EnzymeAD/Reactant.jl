@@ -1210,6 +1210,25 @@ function mpi_wait(request::Value; location=Location())
     )
 end
 
+function mpi_waitall(count::Value, request::Value; location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[count, request]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "enzymexla.mpi.waitall",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 """
 `memcpy`
 
@@ -1444,6 +1463,39 @@ function lapack_ormqr(
     )
 end
 
+"""
+`piecewise_select`
+
+For coordinates that fit inside any of the boxes defined by the attribute,
+the result contains the element from the first operand, for other coordinates,
+it contains the element from the second operand.
+"""
+function piecewise_select(
+    whenInBox::Value,
+    whenOutOfBox::Value;
+    result=nothing::Union{Nothing,IR.Type},
+    boxes,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[whenInBox, whenOutOfBox]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[NamedAttribute("boxes", boxes),]
+    !isnothing(result) && push!(op_ty_results, result)
+
+    return create_operation(
+        "enzymexla.piecewise_select",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
 function pointer2memref(source::Value; result::IR.Type, location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[source,]
@@ -1472,6 +1524,27 @@ function polygeist_yield(; location=Location())
 
     return create_operation(
         "enzymexla.polygeist_yield",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+function lapack_potrf(
+    input::Value; output::IR.Type, info::IR.Type, uplo, location=Location()
+)
+    op_ty_results = IR.Type[output, info]
+    operands = Value[input,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[NamedAttribute("uplo", uplo),]
+
+    return create_operation(
+        "enzymexla.lapack.potrf",
         location;
         operands,
         owned_regions,
@@ -1604,6 +1677,28 @@ function linalg_svd(
         attributes,
         results=op_ty_results,
         result_inference=false,
+    )
+end
+
+function ml_softplus(
+    input::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[input,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(result) && push!(op_ty_results, result)
+
+    return create_operation(
+        "enzymexla.ml.softplus",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -1801,6 +1896,47 @@ function blas_trmm(
 
     return create_operation(
         "enzymexla.blas.trmm",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`blas_trsm`
+
+Solves op(A) * X = alpha * B, or X * op(A) = alpha * B, where alpha is a scalar,
+X and B are m x n matrices, A is a unit, or non-unit, upper or lower triangular
+matrix, and op(A) is one of op(A) = A, or op(A) = A^T or A^H.
+"""
+function blas_trsm(
+    alpha::Value,
+    A::Value,
+    B::Value;
+    output::IR.Type,
+    side,
+    uplo,
+    transa,
+    diag,
+    location=Location(),
+)
+    op_ty_results = IR.Type[output,]
+    operands = Value[alpha, A, B]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[
+        NamedAttribute("side", side),
+        NamedAttribute("uplo", uplo),
+        NamedAttribute("transa", transa),
+        NamedAttribute("diag", diag),
+    ]
+
+    return create_operation(
+        "enzymexla.blas.trsm",
         location;
         operands,
         owned_regions,

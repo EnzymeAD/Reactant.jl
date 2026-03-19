@@ -35,25 +35,28 @@ like the following will be displayed on GPUs):
 
 ```julia
 AggregateProfilingResult(
-    runtime = 0.00001235s, 
-    compile_time = 0.20724930s,  # time spent compiling by Reactant
+    runtime = 0.00003829s, 
+    compile_time = 2.18053260s,  # time spent compiling by Reactant
     GPU_0_bfc = MemoryProfileSummary(
-        peak_bytes_usage_lifetime = 32.015 MiB,  # peak memory usage over the entire program (lifetime of memory allocator)
+        peak_bytes_usage_lifetime = 64.010 MiB,  # peak memory usage over the entire program (lifetime of memory allocator)
         peak_stats = MemoryAggregationStats(
             stack_reserved_bytes = 0 bytes,  # memory usage by stack reservation
             heap_allocated_bytes = 30.750 KiB,  # memory usage by heap allocation
-            free_memory_bytes = 4.228 GiB,  # free memory available for allocation or reservation
-            fragmentation = 0.0,  # fragmentation of memory within [0, 1]
+            free_memory_bytes = 23.518 GiB,  # free memory available for allocation or reservation
+            fragmentation = 0.514931,  # fragmentation of memory within [0, 1]
             peak_bytes_in_use = 30.750 KiB # The peak memory usage over the entire program
         )
-        peak_stats_time = 0.02420451s, 
-        memory_capacity = 4.228 GiB # memory capacity of the allocator
+        peak_stats_time = 0.04975365s, 
+        memory_capacity = 23.518 GiB # memory capacity of the allocator
     )
     flops = FlopsSummary(
-        Flops = 5.180502680725853e-7,  # [flops / (peak flops * program time)], capped at 1.0
-        UncappedFlops = 5.180502680725853e-7, 
+        Flops = 2.8369974648038653e-9,  # [flops / (peak flops * program time)], capped at 1.0
+        UncappedFlops = 2.8369974648038653e-9, 
         RawFlops = 4060.0,  # Total FLOPs performed
         BF16Flops = 4060.0,  # Total FLOPs Normalized to the bf16 (default) devices peak bandwidth
+        RawTime = 0.00040298422s,  # Raw time in seconds
+        RawFlopsRate = 1.0074836180930361e7,  # Raw FLOPs rate in FLOPs/seconds
+        BF16FlopsRate = 1.0074836180930361e7,  # BF16 FLOPs rate in FLOPs/seconds
     )
 )
 ```
@@ -76,8 +79,8 @@ On GPUs this would look something like the following:
 ┌───────────────────┬─────────────┬────────────────┬──────────────┬──────────────┬──────────────┬──────────────┬───────────┬──────────┬────────────┬─────────────┐
 │       Kernel Name │ Occurrences │ Total Duration │ Avg Duration │ Min Duration │ Max Duration │ Static Shmem │ Block Dim │ Grid Dim │ TensorCore │ Occupancy % │
 ├───────────────────┼─────────────┼────────────────┼──────────────┼──────────────┼──────────────┼──────────────┼───────────┼──────────┼────────────┼─────────────┤
-│ gemm_fusion_dot_1 │           1 │    0.00000266s │  0.00000266s │  0.00000266s │  0.00000266s │    8.000 KiB │    64,1,1 │    1,1,1 │          ✗ │       50.0% │
-│   loop_add_fusion │           1 │    0.00000157s │  0.00000157s │  0.00000157s │  0.00000157s │      0 bytes │    20,1,1 │    1,1,1 │          ✗ │       31.2% │
+│ gemm_fusion_dot_1 │           1 │    0.00000250s │  0.00000250s │  0.00000250s │  0.00000250s │    2.000 KiB │    64,1,1 │    1,1,1 │          ✗ │      100.0% │
+│   loop_add_fusion │           1 │    0.00000131s │  0.00000131s │  0.00000131s │  0.00000131s │      0 bytes │    20,1,1 │    1,1,1 │          ✗ │       31.2% │
 └───────────────────┴─────────────┴────────────────┴──────────────┴──────────────┴──────────────┴──────────────┴───────────┴──────────┴────────────┴─────────────┘
 
 ╔================================================================================╗
@@ -87,8 +90,8 @@ On GPUs this would look something like the following:
 ┌───────────────────┬─────────┬─────────────┬─────────────┬─────────────────┬───────────────┬──────────┬───────────┬──────────────┬──────────┐
 │         Operation │    Type │ Host/Device │ Occurrences │ Total Self-Time │ Avg Self-Time │ Device % │ Memory BW │    FLOP Rate │ Bound By │
 ├───────────────────┼─────────┼─────────────┼─────────────┼─────────────────┼───────────────┼──────────┼───────────┼──────────────┼──────────┤
-│ gemm_fusion_dot.1 │ Unknown │      Device │           1 │     0.00000266s │   0.00000266s │   62.88% │ 1.71 GB/s │ 1.51 GFLOP/s │      HBM │
-│             +/add │     add │      Device │           1 │     0.00000157s │   0.00000157s │   37.12% │ 0.12 GB/s │ 0.04 GFLOP/s │      HBM │
+│ gemm_fusion_dot.1 │ Unknown │      Device │           1 │     0.00000250s │   0.00000250s │   65.55% │ 1.82 GB/s │  1.6 GFLOP/s │      HBM │
+│             +/add │     add │      Device │           1 │     0.00000131s │   0.00000131s │   34.45% │ 0.14 GB/s │ 0.05 GFLOP/s │      HBM │
 └───────────────────┴─────────┴─────────────┴─────────────┴─────────────────┴───────────────┴──────────┴───────────┴──────────────┴──────────┘
 
 ╔================================================================================╗
@@ -96,25 +99,28 @@ On GPUs this would look something like the following:
 ╚================================================================================╝
 
 AggregateProfilingResult(
-    runtime = 0.00002246s, 
-    compile_time = 0.16447328s,  # time spent compiling by Reactant
+    runtime = 0.00005622s, 
+    compile_time = 2.32802137s,  # time spent compiling by Reactant
     GPU_0_bfc = MemoryProfileSummary(
-        peak_bytes_usage_lifetime = 32.015 MiB,  # peak memory usage over the entire program (lifetime of memory allocator)
+        peak_bytes_usage_lifetime = 64.010 MiB,  # peak memory usage over the entire program (lifetime of memory allocator)
         peak_stats = MemoryAggregationStats(
             stack_reserved_bytes = 0 bytes,  # memory usage by stack reservation
-            heap_allocated_bytes = 31.250 KiB,  # memory usage by heap allocation
-            free_memory_bytes = 4.228 GiB,  # free memory available for allocation or reservation
-            fragmentation = 0.0,  # fragmentation of memory within [0, 1]
-            peak_bytes_in_use = 31.250 KiB # The peak memory usage over the entire program
+            heap_allocated_bytes = 81.750 KiB,  # memory usage by heap allocation
+            free_memory_bytes = 23.518 GiB,  # free memory available for allocation or reservation
+            fragmentation = 0.514564,  # fragmentation of memory within [0, 1]
+            peak_bytes_in_use = 81.750 KiB # The peak memory usage over the entire program
         )
-        peak_stats_time = 0.00812043s, 
-        memory_capacity = 4.228 GiB # memory capacity of the allocator
+        peak_stats_time = 0.00608052s, 
+        memory_capacity = 23.518 GiB # memory capacity of the allocator
     )
     flops = FlopsSummary(
-        Flops = 3.747296689092735e-6,  # [flops / (peak flops * program time)], capped at 1.0
-        UncappedFlops = 3.747296689092735e-6, 
+        Flops = 2.033375207640664e-8,  # [flops / (peak flops * program time)], capped at 1.0
+        UncappedFlops = 2.033375207640664e-8, 
         RawFlops = 4060.0,  # Total FLOPs performed
         BF16Flops = 4060.0,  # Total FLOPs Normalized to the bf16 (default) devices peak bandwidth
+        RawTime = 0.00005622s,  # Raw time in seconds
+        RawFlopsRate = 7.220987105380169e7,  # Raw FLOPs rate in FLOPs/seconds
+        BF16FlopsRate = 7.220987105380169e7,  # BF16 FLOPs rate in FLOPs/seconds
     )
 )
 ```

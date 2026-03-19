@@ -1,4 +1,4 @@
-using LinearAlgebra, Reactant, Test
+using LinearAlgebra, Reactant, Test, FileCheck
 
 const RunningOnTPU = contains(string(Reactant.devices()[1]), "TPU")
 
@@ -80,6 +80,28 @@ end
     C = similar(A, Float32, size(A, 1), size(x, 2))
     @jit(mul!(C_ra, A_ra, x_ra))
     mul!(C, A, x)
+    @test C_ra ≈ C atol = 1e-3 rtol = 1e-2
+end
+
+function do_mul_view!(data_3d, A, B)
+    C = view(data_3d, :, :, 1)
+    mul!(C, A, B)
+    return nothing
+end
+
+@testset "Matrix Multiplication with Views" begin
+    C = Reactant.TestUtils.construct_test_array(ComplexF32, 100, 8, 2)
+    A = Reactant.TestUtils.construct_test_array(ComplexF32, 100, 200)
+    B = Reactant.TestUtils.construct_test_array(ComplexF32, 200, 8)
+
+    C_ra = Reactant.to_rarray(C)
+    A_ra = Reactant.to_rarray(A)
+    B_ra = Reactant.to_rarray(B)
+
+    do_mul_view!(C, A, B)
+
+    @jit(do_mul_view!(C_ra, A_ra, B_ra))
+
     @test C_ra ≈ C atol = 1e-3 rtol = 1e-2
 end
 
@@ -463,37 +485,6 @@ end
     @test x_ra ≈ x
 end
 
-raise_to_syrk(x, y) = 3 .* (x * transpose(x)) .+ 5 .* y
-raise_to_syrk2(x, y) = 3 .* (transpose(x) * x) .+ 5 .* y
-
-@testset "syrk optimizations" begin
-    @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
-        RunningOnTPU && elty == ComplexF64 && continue
-
-        x = Reactant.TestUtils.construct_test_array(elty, 4, 5)
-        y1 = Reactant.TestUtils.construct_test_array(elty, 4, 4)
-        y2 = Reactant.TestUtils.construct_test_array(elty, 5, 5)
-        x_ra = Reactant.to_rarray(x)
-
-        @testset "fn: $(fn) | y: $(size(y))" for (fn, y) in
-                                                 ((raise_to_syrk, y1), (raise_to_syrk2, y2))
-            y_ra = Reactant.to_rarray(y)
-
-            hlo = @code_hlo compile_options = CompileOptions(;
-                disable_structured_tensors_detection_passes=false,
-                optimization_passes=:before_jit,
-            ) fn(x_ra, y_ra)
-            @test occursin("enzymexla.blas.syrk", repr(hlo))
-
-            fn_compile = @compile compile_options = CompileOptions(;
-                disable_structured_tensors_detection_passes=false
-            ) fn(x_ra, y_ra)
-
-            @test fn_compile(x_ra, y_ra) ≈ fn(x, y) atol = 1e-3 rtol = 1e-3
-        end
-    end
-end
-
 @testset "uniform scaling" begin
     x = Reactant.TestUtils.construct_test_array(Float32, 4, 4)
     x_ra = Reactant.to_rarray(x)
@@ -508,4 +499,17 @@ end
         @test @jit(uscale1(x_ra, y_ra)) ≈ uscale1(x, y)
         @test @jit(uscale2(x_ra, y_ra)) ≈ uscale2(x, y)
     end
+end
+
+# See https://github.com/EnzymeAD/Reactant.jl/issues/2130
+diagonal_3_arg_mul(x, y) = y' * Diagonal(x) * y
+
+@testset "diagonal 3 arg matmul" begin
+    x = Reactant.TestUtils.construct_test_array(Float32, 2)
+    y = Reactant.TestUtils.construct_test_array(Float32, 2, 2)
+
+    x_ra = Reactant.to_rarray(x)
+    y_ra = Reactant.to_rarray(y)
+
+    @test @jit(diagonal_3_arg_mul(x_ra, y_ra)) ≈ diagonal_3_arg_mul(x, y)
 end

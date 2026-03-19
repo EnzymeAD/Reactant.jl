@@ -1,0 +1,292 @@
+using Reactant, Test, FileCheck
+
+const addressable_devices = Reactant.addressable_devices()
+
+const RunningOnTPU = contains(string(Reactant.devices()[1]), "TPU")
+
+function rotate(x)
+    y = x[1:100, :]
+    x[1:924, :] = x[101:1024, :]
+    x[925:1024, :] = y
+    return nothing
+end
+function pad(x)
+    return Reactant.@opcall pad(x, eltype(x)(0); low=[5, 0], high=[15, 0], interior=[0, 0])
+end
+
+function dus(x, y)
+    x[6:(size(x, 1) - 15), :] = y
+    return nothing
+end
+
+function dus2(x, y)
+    x[6:(size(x, 1) - 15), 2:11] = y
+    return nothing
+end
+
+function multirot(x)
+    xs = [
+        Reactant.Ops.rotate(x, size(x, 1) - 2, ; dimension=1),
+        Reactant.Ops.rotate(x, size(x, 1) - 1, ; dimension=1),
+        x,
+        Reactant.Ops.rotate(x, 1, ; dimension=1),
+        Reactant.Ops.rotate(x, 2, ; dimension=1),
+    ]
+    return sum(xs)
+end
+
+if length(addressable_devices) ≥ 8
+    @testset "Rotate" begin
+        N = min((length(Reactant.devices()) ÷ 2) * 2, 8)
+
+        mesh = Sharding.Mesh(reshape(Reactant.devices()[1:N], 2, :), (:x, :y))
+        sharding = Sharding.NamedSharding(mesh, (:x, :y))
+
+        x = reshape(collect(Int, 1:(1024 * 12)), 1024, 12)
+        rx = Reactant.to_rarray(x; sharding)
+
+        hlo = @code_xla shardy_passes = :to_mhlo_shardings rotate(rx)
+        @test @filecheck begin
+            @check_not "all-to-all"
+            @check_not "all-reduce"
+            @check_not "all-gather"
+            @check "collective-permute"
+            hlo
+        end
+
+        rotate(x)
+        @jit shardy_passes = :to_mhlo_shardings rotate(rx)
+        @test all(x .== convert(Array, rx))
+    end
+
+    @testset "Pad" begin
+        N = min((length(Reactant.devices()) ÷ 2) * 2, 8)
+
+        mesh = Sharding.Mesh(reshape(Reactant.devices()[1:N], 2, :), (:x, :y))
+        sharding = Sharding.NamedSharding(mesh, (:x, :y))
+
+        x = reshape(collect(Int, 1:(1024 * 12)), 1024, 12)
+        rx = Reactant.to_rarray(x; sharding)
+
+        hlo = @code_xla shardy_passes = :to_mhlo_shardings pad(rx)
+        @test @filecheck begin
+            @check_not "all-to-all"
+            @check_not "all-reduce"
+            @check_not "all-gather"
+            @check "collective-permute"
+            hlo
+        end
+
+        # No non reactant version available res = pad(x)
+        r_res = @jit shardy_passes = :to_mhlo_shardings pad(rx)
+        # @test all(res .== convert(Array, r_res))
+    end
+
+    @testset "DUS" begin
+        N = min((length(Reactant.devices()) ÷ 2) * 2, 8)
+
+        mesh = Sharding.Mesh(reshape(Reactant.devices()[1:N], 2, :), (:x, :y))
+        sharding = Sharding.NamedSharding(mesh, (:x, :y))
+
+        M = 1024
+
+        x = reshape(collect(Int, 1:(M * 12)), M, 12)
+        y = reshape(collect(Int, 1000 * (1:((M - 20) * 12))), M - 20, 12)
+        rx = Reactant.to_rarray(x; sharding)
+        ry = Reactant.to_rarray(y; sharding)
+
+        hlo = @code_xla shardy_passes = :to_mhlo_shardings dus(rx, ry)
+        @test @filecheck begin
+            @check_not "all-to-all"
+            @check_not "all-reduce"
+            @check_not "all-gather"
+            @check "collective-permute"
+            hlo
+        end
+
+        dus(x, y)
+        @jit shardy_passes = :to_mhlo_shardings dus(rx, ry)
+        @test all(x .== convert(Array, rx))
+        @test all(y .== convert(Array, ry))
+    end
+
+    @testset "DUS2" begin
+        N = min((length(Reactant.devices()) ÷ 2) * 2, 8)
+
+        mesh = Sharding.Mesh(reshape(Reactant.devices()[1:N], 2, :), (:x, :y))
+        sharding = Sharding.NamedSharding(mesh, (:x, :y))
+
+        M = 1024
+
+        x = reshape(collect(Int, 1:(M * 12)), M, 12)
+        y = reshape(collect(Int, 1000 * (1:((M - 20) * 10))), M - 20, 10)
+        rx = Reactant.to_rarray(x; sharding)
+        ry = Reactant.to_rarray(y; sharding)
+
+        hlo = @code_xla shardy_passes = :to_mhlo_shardings dus2(rx, ry)
+        @test @filecheck begin
+            @check_not "all-to-all"
+            @check_not "all-reduce"
+            @check_not "all-gather"
+            @check "collective-permute"
+            hlo
+        end
+
+        dus2(x, y)
+        @jit shardy_passes = :to_mhlo_shardings dus2(rx, ry)
+        @test all(x .== convert(Array, rx))
+        @test all(y .== convert(Array, ry))
+    end
+
+    @testset "MultiRotate" begin
+        N = min((length(Reactant.devices()) ÷ 2) * 2, 8)
+
+        mesh = Sharding.Mesh(reshape(Reactant.devices()[1:N], 2, :), (:x, :y))
+        sharding = Sharding.NamedSharding(mesh, (:x, :y))
+
+        x = reshape(collect(Int, 1:(1024 * 12)), 1024, 12)
+        rx = Reactant.to_rarray(x; sharding)
+
+        hlo = @code_xla shardy_passes = :to_mhlo_shardings multirot(rx)
+        @test @filecheck begin
+            @check_not "all-to-all"
+            @check_not "all-reduce"
+            @check_not "all-gather"
+            @check_count 2 "%collective-permute{{(-start)?[.0-9]*}} ="
+            @check_not "%collective-permute{{(-start)?[.0-9]*}} ="
+
+            hlo
+        end
+    end
+end
+
+function wrap(x)
+    res = similar(x, size(x, 1) + 2 + 3)
+    res[1:3] = x[(end - 2):end]
+    res[4:(3 + size(x, 1))] = x
+    res[(3 + size(x, 1) + 1):end] = x[1:2]
+    return res
+end
+
+@testset "Wrap Size" begin
+    if length(addressable_devices) ≥ 2
+        @testset "Wrap Size ($Size)" for Size in [20, 22, 28]
+            N = 2
+            mesh = Sharding.Mesh(reshape(Reactant.devices()[1:N], 2), (:x,))
+            sharding = Sharding.NamedSharding(mesh, (:x,))
+
+            x = reshape(collect(Int32, 1:Size), Size)
+            rx = Reactant.to_rarray(x; sharding)
+
+            hlo = @code_xla shardy_passes = :to_mhlo_shardings wrap(rx)
+
+            if RunningOnTPU
+                @test_broken @filecheck begin
+                    @check_not "all-to-all"
+                    @check_not "all-reduce"
+                    @check_count 2 "%collective-permute{{(-start)?[.0-9]*}} ="
+                    @check_not "%collective-permute{{(-start)?[.0-9]*}} ="
+                    @check_count 1 "%all-gather{{(-start)?[.0-9]*}} ="
+                    @check_not "%all-gather{{(-start)?[.0-9]*}} ="
+
+                    hlo
+                end
+            else
+                @test @filecheck begin
+                    @check_not "all-to-all"
+                    @check_not "all-reduce"
+                    @check_count 2 "%collective-permute{{(-start)?[.0-9]*}} ="
+                    @check_not "%collective-permute{{(-start)?[.0-9]*}} ="
+                    @check_count 1 "%all-gather{{(-start)?[.0-9]*}} ="
+                    @check_not "%all-gather{{(-start)?[.0-9]*}} ="
+
+                    hlo
+                end
+            end
+
+            x2 = wrap(x)
+            rx2 = @jit shardy_passes = :to_mhlo_shardings wrap(rx)
+            @test all(x .== convert(Array, rx))
+        end
+    end
+end
+
+function nrotate(x, amt)
+    res = similar(x)
+    res[(end - amt + 1):end] = x[1:amt]
+    res[1:(end - amt)] = x[(amt + 1):end]
+    return res
+end
+
+function multirotate_left(x, sz)
+    if size(x, 1) != sz
+        x = x[1:sz]
+    end
+    return (nrotate(x, 2), nrotate(x, 1), x)
+end
+
+function multirotate_right(x, sz)
+    if size(x, 1) != sz
+        x = x[1:sz]
+    end
+    return (x, nrotate(x, size(x, 1) - 1), nrotate(x, size(x, 1) - 2))
+end
+
+function multirotate_both(x, sz)
+    if size(x, 1) != sz
+        x = x[1:sz]
+    end
+    return (nrotate(x, 1), x, nrotate(x, size(x, 1) - 1), nrotate(x, size(x, 1) - 2))
+end
+
+@testset "MultiRotate" begin
+    if length(addressable_devices) ≥ 2 && !RunningOnTPU
+        @testset "MultiRotate $mr $sz" for mr in (
+                multirotate_left, multirotate_right, multirotate_both
+            ),
+            sz in (20, 21)
+
+            N = min((length(Reactant.devices()) ÷ 2) * 2, 2)
+
+            mesh = Sharding.Mesh(reshape(Reactant.devices()[1:N], 2), (:x,))
+            sharding = Sharding.NamedSharding(mesh, (:x,))
+
+            size2 = N * div(sz + N - 1, N)
+            x = collect(Int, 1:size2)
+            rx = Reactant.to_rarray(x; sharding)
+
+            hlo = repr(@code_xla shardy_passes = :to_mhlo_shardings mr(rx, sz))
+            y = mr(x, sz)
+
+            Nallgathers = length(collect(eachmatch(r"%all-gather(-start)?[\.0-9]* =", hlo)))
+            Ncollectives = length(
+                collect(eachmatch(r"%collective-permute(-start)?[\.0-9]* =", hlo))
+            )
+
+            expected_allgathers = size2 == sz ? 0 : length(y)
+            expected_collectives = mr == multirotate_both ? 2 : 1
+
+            if Nallgathers != expected_allgathers || Ncollectives != expected_collectives
+                # for debugging print hlo
+                println(hlo)
+            end
+
+            @test @filecheck begin
+                @check_not "all-to-all"
+                @check_not "all-reduce"
+                @check_not "copy"
+                hlo
+            end
+
+            ry = @jit shardy_passes = :to_mhlo_shardings mr(rx, sz)
+
+            for (z, rz) in zip(y, ry)
+                @test all(z .== convert(Array, rz))
+            end
+        end
+    else
+        if RunningOnTPU
+            @warn "Skipping MultiRotate test on TPU"
+        end
+    end
+end

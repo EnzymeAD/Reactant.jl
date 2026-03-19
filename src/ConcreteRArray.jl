@@ -580,8 +580,8 @@ for aType in (:ConcretePJRTArray, :ConcreteIFRTArray)
 end
 
 function Base.copyto!(
-    dest::Vector{T}, doffs::Int64, src::ConcreteIFRTArray{T}, soffs::Int64, n::Int64
-) where {T}
+    dest::Array{T}, doffs::Int64, src::ConcreteIFRTArray{T}, soffs::Int64, n::Int64
+) where {T<:ReactantPrimitive}
     n == 0 && return dest
     n > 0 || Base._throw_argerror("Number of elements to copy must be non-negative.")
     @boundscheck checkbounds(dest, doffs:(doffs + n - 1))
@@ -598,20 +598,16 @@ function Base.copyto!(
     src_sync = src_async.buffer
     wait(src_async)
 
-    GC.@preserve dest begin
-        @ccall MLIR.API.mlir_c.ifrt_array_copy_to_host_buffer(
-            src_sync.buffer::Ptr{Cvoid},
-            pointer(dest, doffs)::Ptr{T},
-            ((soffs - 1) * sizeof(T))::Int64,
-        )::Ptr{Cvoid}
+    GC.@preserve dest src_sync begin
+        MLIR.API.ifrt_array_copy_to_host_buffer(src_sync.buffer, pointer(dest, doffs))
     end
 
     return dest
 end
 
 function Base.copyto!(
-    dest::Vector{T}, doffs::Int64, src::ConcretePJRTArray{T}, soffs::Int64, n::Int64
-) where {T}
+    dest::Array{T}, doffs::Int64, src::ConcretePJRTArray{T}, soffs::Int64, n::Int64
+) where {T<:ReactantPrimitive}
     n == 0 && return dest
     n > 0 || Base._throw_argerror("Number of elements to copy must be non-negative.")
     @boundscheck checkbounds(dest, doffs:(doffs + n - 1))
@@ -623,28 +619,29 @@ function Base.copyto!(
     src_sync = src_async.buffer
     wait(src_async)
 
-    GC.@preserve dest begin
-        @ccall MLIR.API.mlir_c.CopyFromBuffer(
-            client.client::Ptr{Cvoid},
-            src_sync.buffer::Ptr{Cvoid},
-            pointer(dest, doffs)::Ptr{T},
-            ((soffs - 1) * sizeof(T))::Int64,
-            (n * sizeof(T))::Int64,
-        )::Ptr{Cvoid}
+    GC.@preserve client src_sync dest begin
+        MLIR.API.CopyFromBuffer(
+            client.client,
+            src_sync.buffer,
+            pointer(dest, doffs),
+            (soffs - 1) * sizeof(T),
+            n * sizeof(T),
+            C_NULL,
+        )
     end
 
     return dest
 end
 
 function Base.copyto!(
-    dest::Vector{T}, src::Union{ConcretePJRTArray{T},ConcreteIFRTArray{T}}
-) where {T}
+    dest::Array{T}, src::Union{ConcretePJRTArray{T},ConcreteIFRTArray{T}}
+) where {T<:ReactantPrimitive}
     return copyto!(dest, 1, src, 1, length(src))
 end
 
 function Base.copyto!(
-    dest::ConcretePJRTArray{T}, doffs::Int64, src::Vector{T}, soffs::Int64, n::Int64
-) where {T}
+    dest::ConcretePJRTArray{T}, doffs::Int64, src::Array{T}, soffs::Int64, n::Int64
+) where {T<:ReactantPrimitive}
     n == 0 && return dest
     n > 0 || Base._throw_argerror("Number of elements to copy must be non-negative.")
     @boundscheck checkbounds(dest, doffs:(doffs + n - 1))
@@ -655,20 +652,23 @@ function Base.copyto!(
     dest_sync = dest_async.buffer
     wait(dest_async)
 
-    GC.@preserve src begin
-        @ccall MLIR.API.mlir_c.CopyToBuffer(
-            client.client::Ptr{Cvoid},
-            dest_sync.buffer::Ptr{Cvoid},
-            pointer(src, soffs)::Ptr{T},
-            ((doffs - 1) * sizeof(T))::Int64,
-            (n * sizeof(T))::Int64,
-        )::Ptr{Cvoid}
+    GC.@preserve dest_sync client src begin
+        MLIR.API.CopyToBuffer(
+            client.client,
+            dest_sync.buffer,
+            pointer(src, soffs),
+            (doffs - 1) * sizeof(T),
+            n * sizeof(T),
+            C_NULL,
+        )
     end
 
     return dest
 end
 
-function Base.copyto!(dest::ConcretePJRTArray{T}, src::Vector{T}) where {T}
+function Base.copyto!(
+    dest::ConcretePJRTArray{T}, src::Array{T}
+) where {T<:ReactantPrimitive}
     return copyto!(dest, 1, src, 1, length(src))
 end
 
@@ -896,3 +896,5 @@ for srcStyle in (IndexStyle, IndexCartesian),
         return dst
     end
 end
+
+Base.to_index(x::AbstractConcreteNumber) = to_number(x)

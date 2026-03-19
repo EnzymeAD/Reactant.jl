@@ -8,6 +8,20 @@
     return f
 end
 
+@reactant_overlay function Core.Compiler.return_type(@nospecialize(f), t::DataType)
+    world = ccall(:jl_get_tls_world_age, UInt, ())
+    args = Any[
+        _return_type, ReactantInterpreter(; world), Tuple{Core.Typeof(f),t.parameters...}
+    ]
+    return ccall(
+        :jl_call_in_typeinf_world, Any, (Ptr{Ptr{Cvoid}}, Cint), args, length(args)
+    )
+end
+
+@reactant_overlay function Core.Compiler.return_type(t::DataType, world::UInt)
+    return call_with_native(Base._return_type, ReactantInterpreter(; world), t)
+end
+
 # Enzyme.jl overlays
 const WITHIN_AUTODIFF = Ref(false)
 
@@ -367,5 +381,30 @@ end
         return call_with_native(TracedLinearAlgebra.overloaded_dot, x, A, y)
     else
         return call_with_native(LinearAlgebra.dot, x, A, y)
+    end
+end
+
+# 3 arg multiplication is specialized in Base, but we can reorder the computation
+# as an MLIR optimization
+@reactant_overlay @noinline function Base.:(*)(
+    a::AbstractArray, b::AbstractArray, c::AbstractArray
+)
+    if use_overlayed_version((a, b, c))
+        ab = call_with_native(TracedLinearAlgebra.overloaded_mul, a, b)
+        return call_with_native(TracedLinearAlgebra.overloaded_mul, ab, c)
+    else
+        return call_with_native(*, a, b, c)
+    end
+end
+
+@reactant_overlay @noinline function Base.:(*)(
+    a::AbstractArray, b::AbstractArray, c::AbstractArray, d::AbstractArray
+)
+    if use_overlayed_version((a, b, c, d))
+        ab = call_with_native(TracedLinearAlgebra.overloaded_mul, a, b)
+        abc = call_with_native(TracedLinearAlgebra.overloaded_mul, ab, c)
+        return call_with_native(TracedLinearAlgebra.overloaded_mul, abc, d)
+    else
+        return call_with_native(*, a, b, c, d)
     end
 end

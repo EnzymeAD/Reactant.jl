@@ -122,15 +122,37 @@ end
 @noinline function mlir_stacktrace(name, file, line)::MLIR.IR.Location
     # calling `stacktrace` can add a lot of time overhead, so let's avoid adding debug info if not used
     if !DEBUG_MODE[]
-        return MLIR.IR.Location(name, MLIR.IR.Location(file, line, 0))
+        init = MLIR.IR.Location(name, MLIR.IR.Location(file, line, 0))
+        res = nothing
+        if Reactant.Compiler._has_debugcache()
+            for stackframe in Reactant.Compiler.debugcache()
+                cur = MLIR.IR.Location(
+                    string(stackframe.f_name),
+                    MLIR.IR.Location(stackframe.file, stackframe.line, 0),
+                )
+                if res === nothing
+                    res = cur
+                else
+                    res = MLIR.IR.Location(cur, res)
+                end
+            end
+        end
+        if res === nothing
+            res = init
+        else
+            res = MLIR.IR.Location(init, res)
+        end
+        return res
     end
 
     # retrieve current stacktrace, remove this function's frame and translate to MLIR Location
     st = stacktrace()
     deleteat!(st, 1)
     return mapfoldl(MLIR.IR.Location, st) do stackframe
+        line = stackframe.line
+        line = line == -1 ? 0 : line
         return MLIR.IR.Location(
-            string(stackframe.func), MLIR.IR.Location(stackframe.file, stackframe.line, 0)
+            string(stackframe.func), MLIR.IR.Location(stackframe.file, line, 0)
         )
     end
 end
@@ -169,7 +191,7 @@ end
             )
         else
             location = with_debug() do
-                mlir_stacktrace("constant", @__FILE__, @__LINE__)
+                return mlir_stacktrace("constant", @__FILE__, @__LINE__)
             end
         end
     end
@@ -385,6 +407,8 @@ for (dialect, op) in [
     (:chlo, :erfc),
     (:chlo, :lgamma),
     (:chlo, :sinh),
+    (:enzymexla, :ml_softplus),
+    (:enzymexla, :ml_relu),
 ]
     @eval begin
         @noinline function $op(
@@ -411,6 +435,46 @@ for (dialect, op) in [
             return TracedRNumber{T}((), res)
         end
     end
+end
+
+# These are only defined for floating point types. So integers are typecast
+for op in (:ml_softplus,)
+    @eval begin
+        @noinline function $op(
+            x::TracedRArray{T,N};
+            location=mlir_stacktrace($(string(op)), @__FILE__, @__LINE__),
+        ) where {T<:Integer,N}
+            return $(op)(float(x); location=location)
+        end
+
+        @noinline function $op(
+            x::TracedRNumber{T};
+            location=mlir_stacktrace($(string(op)), @__FILE__, @__LINE__),
+        ) where {T<:Integer}
+            return $(op)(float(x); location=location)
+        end
+    end
+end
+
+@noinline function log1pexp(
+    x::TracedRNumber{T}; location=mlir_stacktrace("log1pexp", @__FILE__, @__LINE__)
+) where {T<:Real}
+    return ml_softplus(x; location)
+end
+
+# stablehlo doesn't allow unsigned integers should should anyways produce a no-op
+@noinline function abs(
+    x::TracedRArray{<:Reactant.ReactantUInt,N};
+    location=mlir_stacktrace("abs", @__FILE__, @__LINE__),
+) where {N}
+    return x
+end
+
+@noinline function abs(
+    x::TracedRNumber{<:Reactant.ReactantUInt};
+    location=mlir_stacktrace("abs", @__FILE__, @__LINE__),
+)
+    return x
 end
 
 @noinline function conj(
@@ -511,7 +575,7 @@ for (dialect, op) in
             res = MLIR.IR.result(
                 $(:($dialect.$op))(
                     x.mlir_data;
-                    $(result)=mlir_type(TracedRArray{Bool,N}, size(x)),
+                    ($(result))=mlir_type(TracedRArray{Bool,N}, size(x)),
                     location,
                 ),
             )
@@ -524,7 +588,7 @@ for (dialect, op) in
         ) where {T}
             res = MLIR.IR.result(
                 $(:($dialect.$op))(
-                    x.mlir_data; $(result)=mlir_type(TracedRArray{Bool,0}, ()), location
+                    x.mlir_data; ($(result))=mlir_type(TracedRArray{Bool,0}, ()), location
                 ),
             )
             return TracedRNumber{Bool}((), res)
@@ -1180,7 +1244,7 @@ end
         MLIR.IR.Attribute(is_host_transfer)
     end
     result_0 = map(results) do (typ, shape)
-        MLIR.IR.TensorType(shape, mlir_type(typ))
+        return MLIR.IR.TensorType(shape, mlir_type(typ))
     end
     op = stablehlo.recv(
         token.mlir_data; result_0, channel_handle, is_host_transfer, location
@@ -1380,7 +1444,7 @@ end
 
 @noinline function top_k(
     x::TracedRArray{T,N},
-    k;
+    k::Integer;
     dimension::Integer=N,
     location=mlir_stacktrace("top_k", @__FILE__, @__LINE__),
 ) where {T,N}
@@ -1841,14 +1905,25 @@ function _hlo_call_name(orig_name, module_suffix)
 end
 
 """
-    hlo_call(mlir_code::String, args::Vararg{AnyTracedRArray}...; func_name::String="main") -> NTuple{N, AnyTracedRArray}
+    hlo_call(
+        mlir_code::String,
+        args::Vararg{AnyTracedRArray}...;
+        func_name::String="main",
+        dummy_arguments::Bool=false,
+    ) -> NTuple{N, AnyTracedRArray}
 
-Given a MLIR module given as a string, calls the function identified by the `func_name` keyword parameter (default "main")
-with the provided arguments and return a tuple for each result of the call.
+Given a MLIR module given as a string, calls the function identified by the `func_name`
+keyword parameter (default "main") with the provided arguments and return a tuple for each
+result of the call.
+
+If `dummy_arguments` is set to `true`, then the function will be called with dummy arguments
+(zeros of the same shape and type as the provided arguments). We explicitly put an
+optimization barrier to ensure that these constants aren't folded into subsequent
+operations.
 
 ```julia-repl
 julia> Reactant.@jit(
-          hlo_call(
+          Reactant.Ops.hlo_call(
               \"\"\"
               module {
                 func.func @main(%arg0: tensor<3xf32>, %arg1: tensor<3xf32>) -> tensor<3xf32> {
@@ -1862,14 +1937,41 @@ julia> Reactant.@jit(
           )
        )
 (ConcretePJRTArray{Float32, 1}(Float32[2.0, 4.0, 6.0]),)
+
+julia> Reactant.@code_hlo(
+          Reactant.Ops.hlo_call(
+              \"\"\"
+              module {
+                func.func @main(%arg0: tensor<3xf32>, %arg1: tensor<3xf32>) -> tensor<3xf32> {
+                  %0 = stablehlo.add %arg0, %arg1 : tensor<3xf32>
+                  return %0 : tensor<3xf32>
+                }
+              }
+              \"\"\";
+              dummy_arguments=true,
+          )
+       )
+module @reactant_hlo_call attributes {mhlo.num_partitions = 1 : i64, mhlo.num_replicas = 1 : i64} {
+  func.func @main() -> tensor<3xf32> attributes {enzymexla.memory_effects = []} {
+    %cst = stablehlo.constant dense<0.000000e+00> : tensor<3xf32>
+    %0:2 = stablehlo.optimization_barrier %cst, %cst : tensor<3xf32>, tensor<3xf32>
+    %1 = stablehlo.add %0#0, %0#1 : tensor<3xf32>
+    return %1 : tensor<3xf32>
+  }
+}
 ```
 """
 @noinline function hlo_call(
     code,
     args...;
     func_name="main",
+    dummy_arguments::Bool=false,
     location=mlir_stacktrace("hlo_call", @__FILE__, @__LINE__),
 )
+    if dummy_arguments
+        @assert length(args) == 0 "hlo_call: dummy_arguments=true requires no arguments"
+    end
+
     module_suffix = string(hash(code); base=16)
     name_to_call = _hlo_call_name(func_name, module_suffix)
 
@@ -1927,16 +2029,35 @@ julia> Reactant.@jit(
     ftype_attr = MLIR.IR.getattr(fn, "function_type")
     ftype = MLIR.IR.Type(ftype_attr)
 
-    @assert all(Base.Fix2(isa, Union{TracedRArray,TracedRNumber}), args) "hlo_call: all inputs to hlo_call should be reactant arrays or numbers"
-    @assert MLIR.IR.ninputs(ftype) == length(args) "hlo_call: invalid number of arguments for function $func_name"
+    if dummy_arguments
+        operands = Union{TracedRArray,TracedRNumber}[]
+        for i in 1:MLIR.IR.ninputs(ftype)
+            expected_type = MLIR.IR.input(ftype, i)
+            base_num = Reactant.promote_to(
+                TracedRNumber, zero(MLIR.IR.julia_type(eltype(expected_type)))
+            )
+            if ndims(expected_type) != 0
+                push!(operands, fill(base_num, size(expected_type)))
+            else
+                push!(operands, base_num)
+            end
+        end
+        operands = MLIR.IR.Value[
+            Reactant.TracedUtils.get_mlir_data(a) for a in optimization_barrier(operands...)
+        ]
+    else
+        @assert all(Base.Fix2(isa, Union{TracedRArray,TracedRNumber}), args) "hlo_call: all inputs to hlo_call should be reactant arrays or numbers"
+        @assert MLIR.IR.ninputs(ftype) == length(args) "hlo_call: invalid number of arguments for function $func_name"
 
-    for (i, arg) in enumerate(args)
-        expected_type = MLIR.IR.input(ftype, i)
-        arg_type = MLIR.IR.type(Reactant.TracedUtils.get_mlir_data(arg))
-        @assert expected_type == arg_type "hlo_call: argument #$i has the wrong type (expected $expected_type, got $arg_type)"
+        for (i, arg) in enumerate(args)
+            expected_type = MLIR.IR.input(ftype, i)
+            arg_type = MLIR.IR.type(Reactant.TracedUtils.get_mlir_data(arg))
+            @assert expected_type == arg_type "hlo_call: argument #$i has the wrong type (expected $expected_type, got $arg_type)"
+        end
+
+        operands = MLIR.IR.Value[Reactant.TracedUtils.get_mlir_data(a) for a in args]
     end
 
-    operands = MLIR.IR.Value[Reactant.TracedUtils.get_mlir_data(a) for a in args]
     call = MLIR.Dialects.func.call(
         operands;
         result_0=[MLIR.IR.result(ftype, i) for i in 1:MLIR.IR.nresults(ftype)],
@@ -2245,14 +2366,21 @@ end
         MLIR.IR.setattr!(while_op, "enzyme.disable_mincut", MLIR.IR.UnitAttribute())
     end
 
-    if checkpointing
+    if checkpointing isa ReactantCore.Periodic
+        MLIR.IR.setattr!(
+            while_op, "enzymexla.enable_checkpointing", MLIR.IR.Attribute(true)
+        )
+        MLIR.IR.setattr!(
+            while_op, "enzymexla.checkpoints", MLIR.IR.Attribute(checkpointing.n)
+        )
+    elseif checkpointing === true
         MLIR.IR.setattr!(
             while_op, "enzymexla.enable_checkpointing", MLIR.IR.Attribute(true)
         )
     end
 
     return map(enumerate(linear_args)) do (i, arg)
-        Reactant.TracedUtils.set_mlir_data!(arg, MLIR.IR.result(while_op, i))
+        return Reactant.TracedUtils.set_mlir_data!(arg, MLIR.IR.result(while_op, i))
     end
 end
 
@@ -2317,7 +2445,7 @@ end
 
     true_fn_args = true_fn_names[1]
 
-    MLIR.IR.activate!(true_fn_body)
+    MLIR.IR.activate(true_fn_body)
     activate_constant_context!(true_fn_body)
     tb_result = try
         for (i, arg) in enumerate(tb_linear_args)
@@ -2343,7 +2471,7 @@ end
         Reactant.call_with_reactant(true_fn, tb_traced_args...)
     finally
         deactivate_constant_context!(true_fn_body)
-        MLIR.IR.deactivate!(true_fn_body)
+        MLIR.IR.deactivate(true_fn_body)
     end
 
     seen_true_results = Reactant.OrderedIdDict()
@@ -2382,7 +2510,7 @@ end
     push!(MLIR.IR.region(false_func_tmp, 1), false_fn_body)
 
     false_fn_args = false_fn_names[1]
-    MLIR.IR.activate!(false_fn_body)
+    MLIR.IR.activate(false_fn_body)
     activate_constant_context!(false_fn_body)
     fb_result = try
         for (i, arg) in enumerate(fb_linear_args)
@@ -2408,7 +2536,7 @@ end
         Reactant.call_with_reactant(false_fn, fb_traced_args...)
     finally
         deactivate_constant_context!(false_fn_body)
-        MLIR.IR.deactivate!(false_fn_body)
+        MLIR.IR.deactivate(false_fn_body)
     end
 
     seen_false_results = Reactant.OrderedIdDict()
@@ -2488,7 +2616,7 @@ end
     @assert length(fb_paths) == length(all_paths)
 
     # finalize the true branch by adding the missing values
-    MLIR.IR.activate!(true_fn_body)
+    MLIR.IR.activate(true_fn_body)
     activate_constant_context!(true_fn_body)
     tb_corrected_linear_results = Reactant.TracedType[]
     try
@@ -2500,12 +2628,12 @@ end
             end
         end
     finally
-        MLIR.IR.deactivate!(true_fn_body)
+        MLIR.IR.deactivate(true_fn_body)
         deactivate_constant_context!(true_fn_body)
     end
 
     # finalize the false branch by adding the missing values
-    MLIR.IR.activate!(false_fn_body)
+    MLIR.IR.activate(false_fn_body)
     activate_constant_context!(false_fn_body)
     fb_corrected_linear_results = Reactant.TracedType[]
     try
@@ -2517,7 +2645,7 @@ end
             end
         end
     finally
-        MLIR.IR.deactivate!(false_fn_body)
+        MLIR.IR.deactivate(false_fn_body)
         deactivate_constant_context!(false_fn_body)
     end
 
@@ -2538,23 +2666,23 @@ end
             z
         elseif tr isa MissingTracedValue
             @assert !(fr isa MissingTracedValue)
-            MLIR.IR.activate!(true_fn_body)
+            MLIR.IR.activate(true_fn_body)
             activate_constant_context!(true_fn_body)
             try
                 tb_corrected_linear_results[i] = zero(fr)
             finally
-                MLIR.IR.deactivate!(true_fn_body)
+                MLIR.IR.deactivate(true_fn_body)
                 deactivate_constant_context!(true_fn_body)
             end
             fr
         elseif fr isa MissingTracedValue
             @assert !(tr isa MissingTracedValue)
-            MLIR.IR.activate!(false_fn_body)
+            MLIR.IR.activate(false_fn_body)
             activate_constant_context!(false_fn_body)
             try
                 fb_corrected_linear_results[i] = zero(tr)
             finally
-                MLIR.IR.deactivate!(false_fn_body)
+                MLIR.IR.deactivate(false_fn_body)
                 deactivate_constant_context!(false_fn_body)
             end
             tr
@@ -2569,7 +2697,7 @@ end
 
     @assert length(all_paths) == length(result_types) + length(both_missing)
 
-    MLIR.IR.activate!(true_fn_body)
+    MLIR.IR.activate(true_fn_body)
     activate_constant_context!(true_fn_body)
     try
         vals = MLIR.IR.Value[
@@ -2578,11 +2706,11 @@ end
         ]
         MLIR.Dialects.stablehlo.return_(vals; location)
     finally
-        MLIR.IR.deactivate!(true_fn_body)
+        MLIR.IR.deactivate(true_fn_body)
         deactivate_constant_context!(true_fn_body)
     end
 
-    MLIR.IR.activate!(false_fn_body)
+    MLIR.IR.activate(false_fn_body)
     activate_constant_context!(false_fn_body)
     try
         vals = MLIR.IR.Value[
@@ -2591,7 +2719,7 @@ end
         ]
         MLIR.Dialects.stablehlo.return_(vals; location)
     finally
-        MLIR.IR.deactivate!(false_fn_body)
+        MLIR.IR.deactivate(false_fn_body)
         deactivate_constant_context!(false_fn_body)
     end
 
@@ -2611,8 +2739,7 @@ end
     MLIR.API.mlirRegionTakeBody(
         MLIR.IR.region(true_fn_compiled, 1), MLIR.IR.region(true_func_tmp, 1)
     )
-    MLIR.API.mlirOperationDestroy(true_func_tmp)
-    true_func_tmp.ref = MLIR.API.MlirOperation(C_NULL)
+    MLIR.IR.dispose(true_func_tmp)
 
     fb_out_types = [mlir_type(fr) for fr in fb_corrected_linear_results]
 
@@ -2629,8 +2756,7 @@ end
     MLIR.API.mlirRegionTakeBody(
         MLIR.IR.region(false_fn_compiled, 1), MLIR.IR.region(false_func_tmp, 1)
     )
-    MLIR.API.mlirOperationDestroy(false_func_tmp)
-    false_func_tmp.ref = MLIR.API.MlirOperation(C_NULL)
+    MLIR.IR.dispose(false_func_tmp)
 
     tb_region = Reactant.TracedUtils.__take_region(true_fn_compiled)
     fb_region = Reactant.TracedUtils.__take_region(false_fn_compiled)
@@ -2784,7 +2910,7 @@ result = Ops.case(
 
         branch_fn_args = branch_names[b][1]
 
-        MLIR.IR.activate!(branch_bodies[b])
+        MLIR.IR.activate(branch_bodies[b])
         activate_constant_context!(branch_bodies[b])
         branch_results[b] = try
             for (i, arg) in enumerate(branch_linear_args[b])
@@ -2809,7 +2935,7 @@ result = Ops.case(
             Reactant.call_with_reactant(branch_fns[b], branch_traced_args[b]...)
         finally
             deactivate_constant_context!(branch_bodies[b])
-            MLIR.IR.deactivate!(branch_bodies[b])
+            MLIR.IR.deactivate(branch_bodies[b])
         end
     end
 
@@ -2882,7 +3008,7 @@ result = Ops.case(
     branch_corrected_linear_results = [Reactant.TracedType[] for _ in 1:n_branches]
 
     for b in 1:n_branches
-        MLIR.IR.activate!(branch_bodies[b])
+        MLIR.IR.activate(branch_bodies[b])
         activate_constant_context!(branch_bodies[b])
         try
             for (i, _) in enumerate(branch_paths[b])
@@ -2908,7 +3034,7 @@ result = Ops.case(
                 end
             end
         finally
-            MLIR.IR.deactivate!(branch_bodies[b])
+            MLIR.IR.deactivate(branch_bodies[b])
             deactivate_constant_context!(branch_bodies[b])
         end
     end
@@ -2935,12 +3061,12 @@ result = Ops.case(
                     for other_b in 1:n_branches
                         if branch_corrected_linear_results[other_b][i] isa
                             MissingTracedValue
-                            MLIR.IR.activate!(branch_bodies[other_b])
+                            MLIR.IR.activate(branch_bodies[other_b])
                             activate_constant_context!(branch_bodies[other_b])
                             try
                                 branch_corrected_linear_results[other_b][i] = zero(res)
                             finally
-                                MLIR.IR.deactivate!(branch_bodies[other_b])
+                                MLIR.IR.deactivate(branch_bodies[other_b])
                                 deactivate_constant_context!(branch_bodies[other_b])
                             end
                         end
@@ -2953,7 +3079,7 @@ result = Ops.case(
 
     # Add return statements to each branch
     for b in 1:n_branches
-        MLIR.IR.activate!(branch_bodies[b])
+        MLIR.IR.activate(branch_bodies[b])
         activate_constant_context!(branch_bodies[b])
         try
             vals = MLIR.IR.Value[
@@ -2962,7 +3088,7 @@ result = Ops.case(
             ]
             MLIR.Dialects.stablehlo.return_(vals; location)
         finally
-            MLIR.IR.deactivate!(branch_bodies[b])
+            MLIR.IR.deactivate(branch_bodies[b])
             deactivate_constant_context!(branch_bodies[b])
         end
     end
@@ -2985,8 +3111,7 @@ result = Ops.case(
         MLIR.API.mlirRegionTakeBody(
             MLIR.IR.region(branch_fn_compiled, 1), MLIR.IR.region(branch_func_tmps[b], 1)
         )
-        MLIR.API.mlirOperationDestroy(branch_func_tmps[b].ref)
-        branch_func_tmps[b].ref = MLIR.API.MlirOperation(C_NULL)
+        MLIR.IR.dispose(branch_func_tmps[b])
 
         push!(branch_regions, Reactant.TracedUtils.__take_region(branch_fn_compiled))
         MLIR.IR.rmfromparent!(branch_fn_compiled)
@@ -3197,7 +3322,7 @@ end
     @assert ndevices == length(logical_device_ids) "length(logical_device_ids) should be \
                                                     same as prod(last, mesh_axes)"
     @assert all(Base.Fix2(≥, 0), logical_device_ids) "logical_device_ids must be \
-                                                      non-negative"
+                                                  non-negative"
 
     sorted_logical_device_ids = Base.sort(logical_device_ids)
     @assert sorted_logical_device_ids == 0:(ndevices - 1) "sorted logical_device_ids \
@@ -3324,7 +3449,7 @@ end
         init_values::TracedRNumber{T},
         dimensions::Vector{Int},
         fn::Function,
-        location=mlir_stacktrace("rand", @__FILE__, @__LINE__),
+        location=mlir_stacktrace("reduce", @__FILE__, @__LINE__),
     )
 
 Applies a reduction function `fn` along the specified `dimensions` of input `x`, starting from `init_values`.
@@ -3428,14 +3553,14 @@ function standardize_start_index(
     if (start_index isa Integer && start_index ≤ typemax(Int32)) || sz ≤ typemax(Int32)
         if start_index isa Integer && update_sz !== nothing
             @assert start_index + update_sz - 1 ≤ sz "Index $(idx) out of bounds: \
-                                                      start_index=$(start_index), \
-                                                      update_sz=$(update_sz), sz=$(sz)"
+                                                  start_index=$(start_index), \
+                                                  update_sz=$(update_sz), sz=$(sz)"
         end
         start_index = Reactant.promote_to(TracedRNumber{Int32}, start_index)
     elseif start_index isa Integer && update_sz !== nothing
         @assert start_index + update_sz - 1 ≤ sz "Index $(idx) out of bounds: \
-                                                  start_index=$(start_index), \
-                                                  update_sz=$(update_sz), sz=$(sz)"
+                                              start_index=$(start_index), \
+                                              update_sz=$(update_sz), sz=$(sz)"
         start_index = Reactant.promote_to(TracedRNumber, start_index)
     end
 
@@ -3686,7 +3811,7 @@ Compute the row maximum pivoted LU factorization of `x` and return the factors `
 """
 @noinline function lu(
     x::TracedRArray{T},
-    ::Type{pT}=Int32;
+    (::Type{pT})=Int32;
     location=mlir_stacktrace("lu", @__FILE__, @__LINE__),
 ) where {T,pT}
     @assert ndims(x) >= 2
@@ -3720,7 +3845,7 @@ end
 
 @noinline function svd(
     x::TracedRArray{T,N},
-    ::Type{iT}=Int32;
+    (::Type{iT})=Int32;
     full::Bool=false,
     algorithm::String="DEFAULT",
     location=mlir_stacktrace("svd", @__FILE__, @__LINE__),
@@ -3958,6 +4083,35 @@ end
     end
 end
 
+@noinline function ml_gelu(
+    x::Union{TracedRArray,TracedRNumber},
+    approximation::String;
+    location=mlir_stacktrace("ml.gelu", @__FILE__, @__LINE__),
+)
+    approx = if approximation == "NONE"
+        0
+    elseif approximation == "TANH"
+        1
+    elseif approximation == "SIGMOID"
+        2
+    else
+        error("Invalid gelu approximation: $approximation")
+    end
+    approx = MLIR.API.enzymexlaGeluApproximationAttrGet(
+        MLIR.IR.current_context(), Int32(approx)
+    )
+
+    res = MLIR.IR.result(
+        enzymexla.ml_gelu(x.mlir_data; gelu_approximation=approx, location), 1
+    )
+
+    if x isa TracedRArray
+        return TracedRArray{unwrapped_eltype(x),ndims(x)}((), res, size(x))
+    else
+        return TracedRNumber{unwrapped_eltype(x)}((), res)
+    end
+end
+
 @noinline function wrap(
     input::TracedRArray{T,N},
     lhs::Integer,
@@ -3967,9 +4121,9 @@ end
 ) where {T,N}
     @assert 1 ≤ dimension ≤ N "dimension must be between 1 and $(N) (got $(dimension))"
     @assert 0 ≤ lhs ≤ size(input, dimension) "lhs must be between 0 and \
-                                              $(size(input, dimension)) (got $(lhs))"
+                                      $(size(input, dimension)) (got $(lhs))"
     @assert 0 ≤ rhs ≤ size(input, dimension) "rhs must be between 0 and \
-                                              $(size(input, dimension)) (got $(rhs))"
+                                      $(size(input, dimension)) (got $(rhs))"
 
     sz = collect(Int64, size(input))
     sz[dimension] = sz[dimension] + lhs + rhs
@@ -3992,9 +4146,9 @@ end
 ) where {T,N}
     @assert 1 ≤ dimension ≤ N "dimension must be between 1 and $(N) (got $(dimension))"
     @assert 0 ≤ lhs ≤ size(input, dimension) "lhs must be between 0 and \
-                                              $(size(input, dimension)) (got $(lhs))"
+                                      $(size(input, dimension)) (got $(lhs))"
     @assert 0 ≤ rhs ≤ size(input, dimension) "rhs must be between 0 and \
-                                              $(size(input, dimension)) (got $(rhs))"
+                                      $(size(input, dimension)) (got $(rhs))"
     sz = collect(Int64, size(input))
     sz[dimension] = sz[dimension] + lhs + rhs
     return TracedRArray{T,N}(
@@ -4015,7 +4169,7 @@ end
 ) where {T,N}
     @assert 1 ≤ dimension ≤ N "dimension must be between 1 and $(N) (got $(dimension))"
     @assert 0 ≤ amount ≤ size(input, dimension) "amount must be between 0 and \
-                                                 $(size(input, dimension)) (got $(amount))"
+                                         $(size(input, dimension)) (got $(amount))"
     return TracedRArray{T,N}(
         (),
         MLIR.IR.result(
@@ -4029,6 +4183,59 @@ end
         ),
         size(input),
     )
+end
+
+@noinline function syrk(
+    A::TracedRArray{T,N},
+    C::TracedRArray{T,N},
+    alpha::Union{TracedRNumber{T},T},
+    beta::Union{TracedRNumber{T},T};
+    uplo::Char,
+    transpose_a::Char,
+    location=mlir_stacktrace("syrk", @__FILE__, @__LINE__),
+) where {T,N}
+    ctx = MLIR.IR.current_context()
+    uplo_attr = MLIR.API.enzymexlaLapackUploAttrGet(
+        ctx,
+        if uplo == 'U'
+            Int32(1)
+        elseif uplo == 'L'
+            Int32(0)
+        else
+            Int32(2)
+        end,
+    )
+    transpose_attr = MLIR.API.enzymexlaLapackTransposeAttrGet(
+        ctx,
+        if transpose_a == 'N'
+            Int32(0)
+        elseif transpose_a == 'T'
+            Int32(1)
+        elseif transpose_a == 'C'
+            Int32(2)
+        else
+            error("Unknown transpose mode: $transpose_a")
+        end,
+    )
+
+    alpha_ = constant(alpha; location)
+    beta_ = constant(beta; location)
+
+    res = MLIR.IR.result(
+        enzymexla.blas_syrk(
+            A.mlir_data,
+            C.mlir_data,
+            alpha_.mlir_data,
+            beta_.mlir_data;
+            uplo=uplo_attr,
+            output_uplo=uplo_attr,
+            transpose=transpose_attr,
+            output=mlir_type(TracedRArray{T,N}, size(C)),
+            location,
+        ),
+        1,
+    )
+    return TracedRArray{T,N}((), res, size(C))
 end
 
 @noinline function sharding_group(
@@ -4070,6 +4277,222 @@ end
     end
 
     return nothing
+end
+
+const _CALLBACK_REGISTRY = Dict{UInt,Any}()
+const _CALLBACK_LOCK = ReentrantLock()
+
+function _register_callback!(ptr::Ptr{Cvoid}, closure)
+    @lock _CALLBACK_LOCK begin
+        _CALLBACK_REGISTRY[UInt(ptr)] = closure
+    end
+    return nothing
+end
+
+@inline function _construct_host_julia_buffer(::Type{T}, shape, ptr) where {T}
+    return unsafe_wrap(Array, Ptr{T}(ptr), shape)
+end
+@inline function _construct_host_julia_buffer(::Type{T}, ::Tuple{}, ptr) where {T}
+    return _construct_host_julia_buffer(T, (1,), ptr)[1] # convert to number
+end
+
+# Defined in CUDAExt.jl
+function __construct_cuda_julia_buffer end
+
+@inline function _construct_cuda_julia_buffer(::Type{T}, shape, ptr) where {T}
+    if !Reactant.is_extension_loaded(Val(:CUDA))
+        error("CUDA.jl extension must be loaded to perform julia callbacks on the GPU.")
+    end
+    return __construct_cuda_julia_buffer(T, shape, ptr)
+end
+
+# Backend Values:
+#   1: Host
+#   2: CUDA.jl
+@inline function _wrap_buffers(
+    data_ptrs::Ptr{Ptr{Cvoid}},
+    specs::NTuple{N,Tuple{DataType,Tuple}},
+    ::Val{N},
+    backend::Int32,
+) where {N}
+    return ntuple(Val(N)) do i
+        T, shape = @inbounds specs[i]
+        ptr = unsafe_load(data_ptrs, i)
+        if backend == 1
+            return _construct_host_julia_buffer(T, shape, ptr)
+        elseif backend == 2
+            return _construct_cuda_julia_buffer(T, shape, ptr)
+        else
+            error("Unsupported backend: $backend")
+        end
+    end
+end
+
+function _make_c_callback(f::F, output_specs::Tuple, input_specs::Tuple) where {F}
+    out_val = Val(length(output_specs))
+    in_val = Val(length(input_specs))
+
+    function trampoline(
+        inputs_ptr::Ptr{Ptr{Cvoid}}, outputs_ptr::Ptr{Ptr{Cvoid}}, backend::Int32
+    )
+        output_arrays = _wrap_buffers(outputs_ptr, output_specs, out_val, backend)
+        input_arrays = _wrap_buffers(inputs_ptr, input_specs, in_val, backend)
+        try
+            f(output_arrays..., input_arrays...)
+            return true
+        catch e
+            @error "CustomCall callback failed" exception = (e, catch_backtrace())
+            return false
+        end
+    end
+
+    cfunc = @cfunction($trampoline, Bool, (
+        Ptr{Ptr{Cvoid}},  # inputs
+        Ptr{Ptr{Cvoid}},  # outputs
+        Int32,            # backend
+    ))
+
+    # Extract raw pointer from Base.CFunction
+    ptr = Base.unsafe_convert(Ptr{Cvoid}, cfunc)
+    # Store the CFunction (and closure) in the registry to prevent GC
+    _register_callback!(ptr, (f, trampoline, cfunc))
+    return ptr
+end
+
+function _col_major_layout(ndims::Integer)
+    return MLIR.IR.DenseIndexElementsAttribute(collect(Int64, 0:(ndims - 1)))
+end
+
+_col_major_layout(::Tuple{}) = MLIR.IR.Attribute(MLIR.IR.Attribute[])
+
+function _col_major_layout(specs::Tuple)
+    return MLIR.IR.Attribute(_col_major_layout.([length(spec[2]) for spec in specs]))
+end
+
+"""
+    julia_callback(
+        f,
+        result_specs::Tuple,
+        args::Union{TracedRArray, TracedRNumber}...;
+        has_side_effect::Bool = true,
+        result_alias = nothing,
+        location = Ops.mlir_stacktrace("julia_callback", @__FILE__, @__LINE__),
+    )
+
+Emit a `stablehlo.custom_call` that will call back into Julia function `f` at
+execution time.
+
+!!! warning "Limited Backend Support"
+
+    Currently this only supports CUDA and CPU backends. For CUDA support, `CUDA.jl`
+    must be loaded.
+
+!!! warning "Single Device"
+
+    This function doesn't support sharding across multiple devices.
+
+# Arguments
+
+  - `f`: A Julia function with signature `f(output_arrays..., input_arrays...)`.
+    The function receives N output arrays followed by M input arrays as positional
+    arguments.
+
+  - `result_specs`: A tuple of `(ElementType, shape)` pairs describing each output.
+    - `ElementType` is a Julia type (e.g., `Float32`, `Int64`).
+    - `shape` is a tuple of integers (e.g., `(3, 4)`). Use `()` for scalars.
+    - Example: `((Float32, (4,)), (Int64, ()))` for one 4-element vector and one scalar.
+
+  - `args...`: Traced inputs (`TracedRArray` or `TracedRNumber`).
+
+# Keyword Arguments
+
+  - `has_side_effect::Bool = true`: Whether the custom call has side effects. Set to `true`
+    if the callback modifies global state or the ordering matters. Default is `true` for
+    safety; set to `false` if the call is a pure function.
+
+  - `output_operand_aliases`: Optional output operand aliasing specification.
+
+# Returns
+
+A tuple of `TracedRArray` / `TracedRNumber` corresponding to the `result_specs`.
+If there is exactly one result, returns it unwrapped (not in a tuple).
+
+# Example
+
+```julia
+function my_scale!(out, x, alpha)
+    out .= alpha .* x
+    return nothing
+end
+
+function traced_fn(x, alpha)
+    return Reactant.Ops.julia_callback(
+        my_scale!, ((promote_type(eltype(x), eltype(alpha)), size(x)),), x, alpha
+    )
+end
+```
+"""
+function julia_callback(
+    f,
+    result_specs::Tuple,
+    args::Union{TracedRArray,TracedRNumber}...;
+    has_side_effect::Bool=true,
+    output_operand_aliases=nothing,
+    location=mlir_stacktrace("julia_callback", @__FILE__, @__LINE__),
+)
+    # Build specs tuples for the callback (captured at trace time)
+    output_specs = Tuple((unwrapped_eltype(T), Tuple(shape)) for (T, shape) in result_specs)
+    input_specs = Tuple((unwrapped_eltype(typeof(arg)), Tuple(size(arg))) for arg in args)
+
+    # Get the C function pointer for the callback
+    callback_ptr = _make_c_callback(f, output_specs, input_specs)
+    callback_ptr_int = Int64(UInt(callback_ptr))
+
+    # Build MLIR input values
+    input_values = MLIR.IR.Value[arg.mlir_data for arg in args]
+
+    # Build MLIR result types
+    result_types = MLIR.IR.Type[]
+    for (T, shape) in output_specs
+        shape_vec = collect(Int, shape)
+        push!(result_types, MLIR.IR.TensorType(shape_vec, MLIR.IR.Type(T)))
+    end
+
+    # Build backend_config as a dictionary with the callback pointer
+    backend_config = Dict("callback_ptr" => MLIR.IR.Attribute(callback_ptr_int))
+
+    # Emit the custom call op
+    op = stablehlo.custom_call(
+        input_values;
+        result_0=result_types,
+        call_target_name="reactant_julia_callback",
+        has_side_effect=MLIR.IR.Attribute(has_side_effect),
+        backend_config,
+        api_version=Int32(4),
+        output_operand_aliases=output_operand_aliases,
+        result_layouts=_col_major_layout(output_specs),
+        operand_layouts=_col_major_layout(input_specs),
+        location,
+    )
+
+    # Wrap results
+    results = []
+    for (i, (T, shape)) in enumerate(output_specs)
+        res = MLIR.IR.result(op, i)
+        if shape == () || shape == (1,) && length(shape) == 0
+            push!(results, TracedRNumber{T}((), res))
+        else
+            shape_tuple = Tuple(shape)
+            N = length(shape)
+            push!(results, TracedRArray{T,N}((), res, shape_tuple))
+        end
+    end
+
+    # Unwrap single results for convenience
+    if length(results) == 1
+        return results[1]
+    end
+    return Tuple(results)
 end
 
 end # module Ops

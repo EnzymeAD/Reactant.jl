@@ -13,11 +13,11 @@ end
 PB.default_values(::Type{Diagnostics}) = (;info = Vector{String}(), warnings = Vector{String}(), errors = Vector{String}())
 PB.field_numbers(::Type{Diagnostics}) = (;info = 1, warnings = 2, errors = 3)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:Diagnostics})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:Diagnostics}, _endpos::Int=0, _group::Bool=false)
     info = PB.BufferedVector{String}()
     warnings = PB.BufferedVector{String}()
     errors = PB.BufferedVector{String}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, info)

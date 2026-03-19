@@ -78,6 +78,10 @@ mutable struct TracedRArray{T,N} <: RArray{TracedRNumber{T},N}
         end
         return new{T,N}(paths, mlir_data, shape)
     end
+
+    function TracedRArray{T,N}(::UndefInitializer, shape::Integer...) where {T,N}
+        return similar(TracedRArray{T,N}, shape...)
+    end
 end
 
 function repath(x::TracedRArray{T,N}, paths) where {T,N}
@@ -101,11 +105,14 @@ function Adapt.parent_type(::Type{TracedStepRangeLen{T,R,S,L}}) where {T,R,S,L}
 end
 
 ## TracedUnitRange
+## NOTE(#461): we are currently storing the size as a temporary fix to avoid
+## dynamic shapes. Once we support that, we can remove the size field
 struct TracedUnitRange{T} <: AbstractUnitRange{T}
     start::T
     stop::T
-    function TracedUnitRange{T}(start::T, stop::T) where {T}
-        return new(start, unitrange_last(start, stop))
+    length::Int  # If < 0, then we need to compute it
+    function TracedUnitRange{T}(start::T, stop::T, length::Int=-1) where {T}
+        return new(start, unitrange_last(start, stop), length)
     end
 end
 
@@ -122,6 +129,17 @@ end
 
 @leaf TracedUnitRange
 Adapt.parent_type(::Type{TracedUnitRange{T}}) where {T} = TracedUnitRange{T}
+
+## TracedRational
+struct TracedRational{
+    T<:Union{<:Integer,<:AbstractConcreteNumber{<:Integer},TracedRNumber{<:Integer}}
+} <: Real
+    num::T
+    den::T
+end
+
+@leaf TracedRational
+Adapt.parent_type(::Type{TracedRational{T}}) where {T} = TracedRational{T}
 
 const AnyTracedRArray{T,N} = AbstractArray{TracedRNumber{T},N}
 const AnyTracedRVector{T} = AnyTracedRArray{T,1}

@@ -263,6 +263,77 @@ function async_store(
     )
 end
 
+"""
+`async_store_smem_to_tmem`
+
+Schedules an async copy of the contents of the `source` MemRef in SMEM to
+the `destination` MemRef in TMEM.
+
+The `source` and `destination` MemRefs must have the same element type, and
+shape.
+
+If `collective` is `true`, the copy is performed by a cluster of 2 CTAs,
+and we expect that this op is issued by a single CTA.
+If `collective` is `false`, the copy is performed by a single CTA.
+"""
+function async_store_smem_to_tmem(
+    source::Value, destination::Value; collective=nothing, location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[source, destination]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(collective) && push!(attributes, NamedAttribute("collective", collective))
+
+    return create_operation(
+        "mosaic_gpu.async_store_smem_to_tmem",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`async_store_sparse_metadata_smem_to_tmem`
+
+Schedules an async copy of the sparse metadata from the `source` MemRef
+in SMEM to the `destination` MemRef in TMEM.
+
+The `source` and `destination` MemRefs must have the same element type (i2).
+Given a destination shape of [M, N], the source shape must be
+[M/128, N/64, 128, 64], and M % 128 == 0 and N % 64 == 0.
+
+If `collective` is `true`, the copy is performed by a cluster of 2 CTAs,
+and we expect that this op is issued by a single CTA.
+If `collective` is `false`, the copy is performed by a single CTA.
+"""
+function async_store_sparse_metadata_smem_to_tmem(
+    source::Value, destination::Value; collective=nothing, location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[source, destination]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(collective) && push!(attributes, NamedAttribute("collective", collective))
+
+    return create_operation(
+        "mosaic_gpu.async_store_sparse_metadata_smem_to_tmem",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function async_store_tmem(source::Value, destination::Value; location=Location())
     op_ty_results = IR.Type[]
     operands = Value[source, destination]
@@ -285,9 +356,14 @@ end
 """
 `broadcast_in_dim`
 
-`broadcast_dimensions` must have the same size as the rank of the input
-vector and for each input dimension, specifies which output dimension it
-corresponds to.
+The `operand` is broadcast to the shape described by the result type.
+`broadcast_dimensions` maps the dimensions of `operand` to the dimensions of
+the target shape, i.e. the i\'th dimension of the operand is mapped to the
+`broadcast_dimensions[i]`\'th dimension of the output shape. The dimensions
+of the operand must have size 1 or be the same size as the dimension in the
+output shape they are mapped to.
+
+This op matches the semantics of `lax.broadcast_in_dim`.
 """
 function broadcast_in_dim(
     operand::Value; result_0::IR.Type, broadcast_dimensions, location=Location()
@@ -602,6 +678,12 @@ When set the operation is defined as:
 
   accumulator += (a * a_scale) * (b * b_scale)
 
+`a_sparse_metadata` is an optional sparse metadata matrix that resides in
+TMEM. When set, `a` is treated as a sparse matrix and the metadata encodes
+the sparsity pattern. With sparse MMA, `a`\'s contracting dimension is halved
+relative to `b`\'s contracting dimension. `a_sparse_metadata` must have the same
+shape as `a`.
+
 `accumulate` is a boolean that indicates whether to perform the accumulate
 step.
 """
@@ -612,6 +694,7 @@ function tcgen05_mma(
     accumulate::Value,
     a_scale=nothing::Union{Nothing,Value};
     b_scale=nothing::Union{Nothing,Value},
+    a_sparse_metadata=nothing::Union{Nothing,Value},
     collective=nothing,
     location=Location(),
 )
@@ -622,10 +705,17 @@ function tcgen05_mma(
     attributes = NamedAttribute[]
     !isnothing(a_scale) && push!(operands, a_scale)
     !isnothing(b_scale) && push!(operands, b_scale)
+    !isnothing(a_sparse_metadata) && push!(operands, a_sparse_metadata)
     push!(
         attributes,
         operandsegmentsizes([
-            1, 1, 1, 1, Int(!isnothing(a_scale)), Int(!isnothing(b_scale))
+            1,
+            1,
+            1,
+            1,
+            Int(!isnothing(a_scale)),
+            Int(!isnothing(b_scale)),
+            Int(!isnothing(a_sparse_metadata)),
         ]),
     )
     !isnothing(collective) && push!(attributes, NamedAttribute("collective", collective))
@@ -639,6 +729,43 @@ function tcgen05_mma(
         attributes,
         results=op_ty_results,
         result_inference=false,
+    )
+end
+
+"""
+`tile_shape`
+
+Tiles the shape of a strided `memref`.
+
+The `tiling` is applied to the logical trailing dimensions of the source
+`memref`.
+
+Note that this is different from tiling the `memref` itself, since this
+operation does not perform any data movement.
+
+E.g., for a contiguous `memref` of shape `(5, 128, 128)` and a tiling
+`(64, 32)`, the result will be a contiguous `memref` of shape
+`(5, 2, 4, 64, 32)`.
+"""
+function tile_shape(
+    source::Value; result_0=nothing::Union{Nothing,IR.Type}, tiling, location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[source,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[NamedAttribute("tiling", tiling),]
+    !isnothing(result_0) && push!(op_ty_results, result_0)
+
+    return create_operation(
+        "mosaic_gpu.tile_shape",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -809,9 +936,15 @@ non-contiguous memory.
 If `optimized` is true, raises an error if we cannot generate an optimised
 transfer. If unset, fall back to a non-optimized transfer if unable to
 generate an optimized transfer.
+
+If `atomic_type` is set, performs an atomic store-(add|min|...) of the value.
 """
 function vector_store(
-    valueToStore::Value, destination::Value; optimized=nothing, location=Location()
+    valueToStore::Value,
+    destination::Value;
+    optimized=nothing,
+    atomic_type=nothing,
+    location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[valueToStore, destination]
@@ -819,6 +952,7 @@ function vector_store(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(optimized) && push!(attributes, NamedAttribute("optimized", optimized))
+    !isnothing(atomic_type) && push!(attributes, NamedAttribute("atomic_type", atomic_type))
 
     return create_operation(
         "mosaic_gpu.vector_store",
@@ -944,25 +1078,6 @@ function with_transforms(
         attributes,
         results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
         result_inference=(length(op_ty_results) == 0 ? true : false),
-    )
-end
-
-function tma_gather_supported(; location=Location())
-    op_ty_results = IR.Type[]
-    operands = Value[]
-    owned_regions = Region[]
-    successors = Block[]
-    attributes = NamedAttribute[]
-
-    return create_operation(
-        "mosaic_gpu.tma_gather_supported",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
-        results=op_ty_results,
-        result_inference=false,
     )
 end
 

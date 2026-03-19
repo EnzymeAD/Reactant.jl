@@ -102,7 +102,8 @@ export default defineConfig({
             link: "/tutorials/persistent_compile_cache",
           },
           { text: "Raising", link: "/tutorials/raising" },
-          { text: "Computational kernels", link: "/tutorials/kernels" }
+          { text: "Computational kernels", link: "/tutorials/kernels" },
+          { text: "Debugging compilation errors", link: "/tutorials/debugging" },
         ],
       },
       {
@@ -121,6 +122,7 @@ export default defineConfig({
               { text: "Builtin", link: "/api/dialects/builtin" },
               { text: "Chlo", link: "/api/dialects/chlo" },
               { text: "Complex", link: "/api/dialects/complex" },
+              { text: "CUDA Tile", link: "/api/dialects/cuda_tile" },
               { text: "Enzyme", link: "/api/dialects/enzyme" },
               { text: "EnzymeXLA", link: "/api/dialects/enzymexla" },
               { text: "Func", link: "/api/dialects/func" },
@@ -191,7 +193,8 @@ export default defineConfig({
             link: "/tutorials/persistent_compile_cache",
           },
           { text: "Raising", link: "/tutorials/raising" },
-          { text: "Computational kernels", link: "/tutorials/kernels" }
+          { text: "Computational kernels", link: "/tutorials/kernels" },
+          { text: "Debugging compilation errors", link: "/tutorials/debugging" },
         ],
       }
     ],
@@ -217,6 +220,7 @@ export default defineConfig({
               { text: "Builtin", link: "/api/dialects/builtin" },
               { text: "Chlo", link: "/api/dialects/chlo" },
               { text: "Complex", link: "/api/dialects/complex" },
+              { text: "CUDA Tile", link: "/api/dialects/cuda_tile" },
               { text: "Enzyme", link: "/api/dialects/enzyme" },
               { text: "EnzymeXLA", link: "/api/dialects/enzymexla" },
               { text: "Func", link: "/api/dialects/func" },

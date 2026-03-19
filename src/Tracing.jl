@@ -542,7 +542,7 @@ Base.@nospecializeinfer function traced_type_inner(
     return SubArray{T2,N,P2,I2,L}
 end
 
-for P in (Ptr, Core.LLVMPtr, Base.RefValue)
+for P in (Ptr, Core.LLVMPtr, Base.RefValue, Ref)
     @eval Base.@nospecializeinfer function traced_type_inner(
         @nospecialize(PT::Type{$P}),
         seen,
@@ -554,7 +554,7 @@ for P in (Ptr, Core.LLVMPtr, Base.RefValue)
         return $(P)
     end
 end
-for P in (Ptr, Base.RefValue)
+for P in (Ptr, Base.RefValue, Ref)
     @eval Base.@nospecializeinfer function traced_type_inner(
         @nospecialize(PT::Type{$P{T}}),
         seen,
@@ -1709,6 +1709,13 @@ Base.@nospecializeinfer function make_tracer(
     return prev
 end
 
+# avoid the real fallback
+Base.@nospecializeinfer function make_tracer(
+    seen, @nospecialize(prev::TracedRational), @nospecialize(path), mode; kwargs...
+)
+    return make_tracer_via_immutable_constructor(seen, prev, path, mode; kwargs...)
+end
+
 Base.@nospecializeinfer function make_tracer(
     seen, @nospecialize(prev::Type), @nospecialize(path), mode; kwargs...
 )
@@ -2094,6 +2101,47 @@ Base.@nospecializeinfer function make_tracer(
     return prev
 end
 
+"""
+    to_rarray(x; track_numbers=false, sharding=NoSharding(), device=nothing, client=nothing, runtime=nothing)
+
+Convert a Julia value `x` into its Reactant equivalent by tracing through the structure.
+Arrays are converted to `ConcreteRArray`, and (optionally) scalar numbers are converted
+to `ConcreteRNumber`.
+
+## Keyword Arguments
+
+- `track_numbers::Union{Bool, Type} = false`: Controls whether plain Julia numbers are
+  converted to `ConcreteRNumber`.
+  - `false` (default): scalars are left as-is and will be treated as compile-time constants
+    (frozen at tracing time).
+  - `true`: all scalar numbers are converted to `ConcreteRNumber`.
+  - A type (e.g. `Number`, `Float64`, `Int`): only scalars that are subtypes of the given
+    type are tracked.
+- `sharding`: Sharding specification for the resulting array.
+- `device`: Target device for the resulting array.
+- `client`: XLA client to use.
+- `runtime`: Backend runtime to use (`Val(:PJRT)` or `Val(:IFRT)`).
+
+## Examples
+
+```julia
+# Convert an array (always tracked)
+x = Reactant.to_rarray([1.0, 2.0, 3.0])   # ConcreteRArray{Float64, 1}
+
+# Convert a scalar WITHOUT tracking (default) — frozen at compile time
+t = Reactant.to_rarray(0.5)                # plain Float64
+
+# Convert a scalar WITH tracking — varies at runtime
+t = Reactant.to_rarray(0.5; track_numbers=true)   # ConcreteRNumber{Float64}
+
+# Convert a struct, tracking all number fields
+struct Params; values::Vector{Float64}; scale::Float64; end
+rparams = Reactant.to_rarray(Params([1.0], 2.0); track_numbers=true)
+```
+
+See also: [Partial Evaluation](@ref partial-evaluation) for how untracked values
+become compile-time constants.
+"""
 @inline function to_rarray(
     @nospecialize(x);
     runtime::Union{Nothing,Val{:IFRT},Val{:PJRT}}=nothing,
@@ -2291,7 +2339,8 @@ function make_tracer(
     if typeof(newstart) == typeof(prev.start) && typeof(newstop) == typeof(prev.stop)
         return prev
     else
-        return TracedUnitRange(newstart, newstop)
+        len = length(prev)
+        return TracedUnitRange(newstart, newstop, len isa Integer ? len : -1)
     end
 end
 
@@ -2307,7 +2356,7 @@ function traced_type_inner(
     newT = traced_type_inner(T, seen, mode, track_numbers, ndevices, runtime)
     newR = traced_type_inner(R, seen, mode, track_numbers, ndevices, runtime)
     newS = traced_type_inner(S, seen, mode, track_numbers, ndevices, runtime)
-    newL = traced_type_inner(L, seen, mode, track_numbers, ndevices, runtime)
+    newL = traced_type_inner(L, seen, mode, Union{}, ndevices, runtime)
     if T == newT && R == newR && S == newS && L == newL
         return RT
     else
@@ -2328,7 +2377,7 @@ function make_tracer(
         push!(path, Core.Typeof(prev))
         make_tracer(seen, prev.ref, path, mode; sharding, kwargs...)
         make_tracer(seen, prev.step, path, mode; sharding, kwargs...)
-        make_tracer(seen, prev.len, path, mode; sharding, kwargs...)
+        make_tracer(seen, prev.len, path, mode; sharding, kwargs..., track_numbers=Union{})
         make_tracer(seen, prev.offset, path, mode; sharding, kwargs...)
         return nothing
     end
@@ -2336,16 +2385,78 @@ function make_tracer(
     newstep = make_tracer(
         seen, prev.step, append_path(path, :step), mode; sharding, kwargs...
     )
-    newlen = make_tracer(seen, prev.len, append_path(path, :len), mode; sharding, kwargs...)
+    newlen = make_tracer(
+        seen,
+        prev.len,
+        append_path(path, :len),
+        mode;
+        sharding,
+        kwargs...,
+        track_numbers=Union{},
+    )
     newoffset = make_tracer(
         seen, prev.offset, append_path(path, :offset), mode; sharding, kwargs...
     )
-    if typeof(newref) == typeof(prev.ref) &&
+    if (
+        typeof(newref) == typeof(prev.ref) &&
         typeof(newstep) == typeof(prev.step) &&
         typeof(newlen) == typeof(prev.len) &&
         typeof(newoffset) == typeof(prev.offset)
+    )
         return prev
     else
         return TracedStepRangeLen(newref, newstep, newlen, newoffset)
     end
+end
+
+function traced_type_inner(
+    @nospecialize(RT::Type{<:Rational}),
+    seen,
+    mode::TraceMode,
+    track_numbers::Type,
+    @nospecialize(ndevices),
+    runtime,
+)
+    (T,) = RT.parameters
+    newT = traced_type_inner(T, seen, mode, track_numbers, ndevices, runtime)
+    if T == newT
+        return RT
+    else
+        return TracedRational{newT}
+    end
+end
+
+function make_tracer(
+    seen,
+    @nospecialize(prev::Rational),
+    @nospecialize(path),
+    mode;
+    @nospecialize(sharding = Sharding.NoSharding()),
+    kwargs...,
+)
+    Sharding.is_sharded(sharding) && error("Cannot specify sharding for Rational")
+    if mode == TracedToTypes
+        push!(path, Core.Typeof(prev))
+        make_tracer(seen, prev.num, path, mode; kwargs...)
+        make_tracer(seen, prev.den, path, mode; kwargs...)
+        return nothing
+    end
+    newnum = make_tracer(seen, prev.num, append_path(path, :num), mode; kwargs...)
+    newden = make_tracer(seen, prev.den, append_path(path, :den), mode; kwargs...)
+    if typeof(newnum) == typeof(prev.num) && typeof(newden) == typeof(prev.den)
+        return prev
+    else
+        return TracedRational(newnum, newden)
+    end
+end
+
+function make_tracer(
+    seen,
+    prev::IOStream,
+    @nospecialize(path),
+    mode;
+    @nospecialize(sharding = Sharding.NoSharding()),
+    kwargs...,
+)
+    return prev
 end

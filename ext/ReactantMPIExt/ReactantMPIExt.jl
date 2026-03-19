@@ -3,7 +3,7 @@ module ReactantMPIExt
 using Reactant
 using Reactant: Reactant, Distributed, MLIR
 using MPI: MPI
-using Libdl
+using Libdl: Libdl
 
 # https://github.com/jax-ml/jax/blob/b0117366686ab084d38ad2657d9a2ae3a581ca7e/jax/_src/clusters/mpi4py_cluster.py
 Distributed.is_env_present(::Distributed.MPIEnvDetector) = MPI.Initialized()
@@ -36,9 +36,8 @@ function Distributed.get_local_process_id(::Distributed.MPIEnvDetector)
 end
 
 function __init__()
-    libmpi_handle = MPI.API.libmpi_handle
-
     # register MPI routines
+    #! explicit-imports: off
     for name in [
         :MPI_Init,
         :MPI_Finalize,
@@ -52,9 +51,9 @@ function __init__()
         :MPI_Wait,
         :MPI_Request_free,
     ]
-        sym = Libdl.dlsym(libmpi_handle, name)
-        @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(name::Cstring, sym::Ptr{Cvoid})::Cvoid
+        MLIR.API.EnzymeJaXMapSymbol(name, Libdl.dlsym(MPI.API.libmpi_handle, name))
     end
+    #! explicit-imports: on
 
     # register MPI constants
     # NOTE these symbols are not ABI-stable until MPI 5.0, but in practice, they are represented as word-size values (i.e. `int` or ptr)
@@ -213,28 +212,28 @@ function __init__()
         if value isa Base.RefValue
             value = value[]
         end
-        value = convert(Int, value)
-        @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(name::Cstring, value::Int)::Cvoid
+        MLIR.API.EnzymeJaXMapSymbol(name, convert(Int, value))
     end
 end
 
-mutable struct TracedRequest <: MPI.AbstractRequest
-    paths::Tuple
-    mlir_data::Union{Nothing,Reactant.MLIR.IR.Value}
+# # NOTE: We currently do not allow a Request to cross the compile boundary. The commented
+# out code below is the beginning of what would be required to implement that
+# mutable struct TracedRequest <: MPI.AbstractRequest
+#     paths::Tuple
+#     mlir_data::Union{Nothing,Reactant.MLIR.IR.Value}
 
-    function TracedRequest(paths::Tuple, mlir_data::Union{Nothing,Reactant.MLIR.IR.Value})
-        if !isnothing(mlir_data)
-            @assert size(Reactant.MLIR.IR.type(mlir_data)) == ()
-        end
-        return new(paths, mlir_data)
-    end
-end
+#     function TracedRequest(paths::Tuple, mlir_data::Union{Nothing,Reactant.MLIR.IR.Value})
+#         if !isnothing(mlir_data)
+#             @assert size(Reactant.MLIR.IR.type(mlir_data)) == ()
+#         end
+#         return new(paths, mlir_data)
+#     end
+# end
 
-function Base.show(io::IOty, X::TracedRequest) where {IOty<:Union{IO,IOContext}}
-    return print(io, "TracedRequest(", X.paths, ")")
-end
+# function Base.show(io::IOty, X::TracedRequest) where {IOty<:Union{IO,IOContext}}
+#     return print(io, "TracedRequest(", X.paths, ")")
+# end
 
-# # NOTE: Commenting out the below on the assumption that a Request will never cross the compile boundary
 # #       If we ever want to return a request, the below could serve as a starting point
 # Reactant.TracedUtils.get_mlir_data(x::TracedRequest) = x.mlir_data
 # Reactant.TracedUtils.set_mlir_data!(x::TracedRequest, data) = (x.mlir_data = data; return x)
