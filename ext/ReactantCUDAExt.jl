@@ -924,7 +924,6 @@ function compile(job)
         if Reactant.Compiler.DUMP_LLVMIR[]
             println("cuda.jl post vendor IR\n", string(mod))
         end
-        LLVM.run!(GPUCompiler.DeadArgumentEliminationPass(), mod, tm)
 
         for fname in ("gpu_report_exception", "gpu_signal_exception")
             if LLVM.haskey(LLVM.functions(mod), fname)
@@ -939,6 +938,8 @@ function compile(job)
                 Reactant.Enzyme.Compiler.eraseInst(mod, fn)
             end
         end
+
+        LLVM.run!(GPUCompiler.DeadArgumentEliminationPass(), mod, tm)
 
         errors = GPUCompiler.check_ir!(job, GPUCompiler.IRError[], mod)
         unique!(errors)
