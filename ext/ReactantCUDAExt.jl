@@ -1490,11 +1490,14 @@ end
 # ============================================================
 
 # CuArray -> ConcreteRArray: D2D copy via CreateViewOfDeviceBuffer + CopyToMemorySpace.
-# We pass the active CUDA.jl stream handle to BufferFromDevicePointer so that PJRT
-# inserts a cross-stream dependency (via CreateViewOfDeviceBuffer's stream_opt parameter).
-# This is non-blocking from the CPU -- PJRT records an event on the CUDA stream and waits
-# for it on the XLA compute stream before reading, so all pending CUDA.jl writes are
-# guaranteed complete before the D2D copy begins.
+# We synchronize the CUDA stream before calling into PJRT to ensure all pending
+# CUDA.jl writes to the source CuArray are complete, then pass stream=0.
+#
+# Note: ideally we'd pass the CUDA.jl stream handle directly so PJRT can insert a
+# cross-stream dependency without blocking the CPU. However, XLA's
+# GetStreamFromExternalStream only accepts streams it created or that were registered
+# via dlpack -- CUDA.jl's task-local streams are not recognized. Until XLA exposes a
+# stream registration API, we must synchronize + pass 0.
 #
 # Safety: BufferFromDevicePointer creates an ephemeral PJRT view of cu's memory,
 # then does a D2D copy via CopyToMemorySpace, then awaits the copy's completion
@@ -1524,9 +1527,10 @@ function Reactant.ConcretePJRTArray(
         ))
     end
 
-    # Pass the active CUDA stream handle so PJRT can insert a cross-stream dependency
-    # instead of blocking the CPU with CUDA.synchronize().
-    cuda_stream = Int64(UInt(CUDA.stream().handle))
+    # Synchronize CUDA stream to ensure all writes to cu are complete before
+    # PJRT reads from this memory. See note above re: why we can't pass the
+    # stream handle directly.
+    CUDA.synchronize()
 
     sizear = collect(Int64, reverse(size(cu)))
     GC.@preserve cu sizear theclient thedevice begin
@@ -1537,7 +1541,7 @@ function Reactant.ConcretePJRTArray(
             N,
             sizear,
             thedevice.device,
-            cuda_stream,
+            Int64(0),  # stream=0: data already synchronized
         )
     end
     async_buf = Reactant.XLA.PJRT.AsyncBuffer(Reactant.XLA.PJRT.Buffer(buf), nothing)
@@ -1572,11 +1576,14 @@ function CUDA.CuArray(ra::Reactant.ConcretePJRTArray{T,N,1}) where {T,N}
     ))
 
     cu = CUDA.CuArray{T}(undef, size(ra))
-    GC.@preserve ra cu begin
-        # AwaitBufferReady: waits for definition events, returns synchronized device ptr
-        src_ptr = MLIR.API.AwaitBufferReady(buf.buffer)
-        # unsafe_copyto! with default async=false is synchronous (blocks until copy completes)
-        unsafe_copyto!(pointer(cu), CUDA.CuPtr{T}(UInt(src_ptr)), length(ra))
+    n = length(ra)
+    if n > 0
+        GC.@preserve ra cu begin
+            # AwaitBufferReady: waits for definition events, returns synchronized device ptr
+            src_ptr = MLIR.API.AwaitBufferReady(buf.buffer)
+            # unsafe_copyto! with default async=false is synchronous (blocks until copy completes)
+            unsafe_copyto!(pointer(cu), CUDA.CuPtr{T}(UInt(src_ptr)), n)
+        end
     end
     return cu
 end
