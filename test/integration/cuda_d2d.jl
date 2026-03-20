@@ -40,7 +40,6 @@ else # CUDA.functional()
 
     @testset "Random data (non-trivial bit patterns)" begin
         cu = CUDA.rand(Float32, 403, 7625)
-        CUDA.synchronize()
         ra = ConcretePJRTArray(cu)
         @test Array(ra) == Array(cu)
     end
@@ -83,7 +82,6 @@ end
 # ============================================================
 @testset "Round-trip CuArray -> RArray -> CuArray" begin
     cu_orig = CUDA.rand(Float32, 403, 7625)
-    CUDA.synchronize()
     orig_data = Array(cu_orig)
     ra = ConcretePJRTArray(cu_orig)
     cu_back = CuArray(ra)
@@ -210,7 +208,6 @@ end
 # ============================================================
 @testset "Rapid repeated forward conversions" begin
     cu = CUDA.rand(Float32, 10_000)
-    CUDA.synchronize()
     expected = Array(cu)
 
     results = [Array(ConcretePJRTArray(cu)) for _ in 1:100]
@@ -235,7 +232,6 @@ end
     ra = ConcretePJRTArray(cu)
     # Overwrite the CuArray
     cu .= 0f0
-    CUDA.synchronize()
     # The ConcreteRArray should still have the original data
     @test Array(ra) == Float32[1, 2, 3, 4, 5]
 end
@@ -279,7 +275,6 @@ end
 
     @testset "Large array (100MB)" begin
         cu = CUDA.rand(Float32, 25_000_000)  # 100MB
-        CUDA.synchronize()
         expected = Array(cu)
         ra = ConcretePJRTArray(cu)
         @test Array(ra) == expected
