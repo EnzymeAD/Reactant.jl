@@ -175,6 +175,23 @@ end
 !!! note
     It is recommended to use the Chrome browser to open the perfetto URL.
 
+## XProf
+
+[XProf](https://openxla.org/xprof) is a complete web UI to analyze the log files captured by Reactant.
+It can be installed in the following manner:
+
+```bash
+pip install xprof # or xprof-nightly
+```
+
+Launching xprof is then as simple as:
+
+```bash
+xprof --logdir=./
+```
+
+which will then make the xprof interface available on port `:8791` by default.
+
 ## Tensorboard
 
 ![The tensorboard interface](images/tensorboard.png)
@@ -193,6 +210,7 @@ And then run the following in the folder where the `plugins` folder was generate
 ```bash
 tensorboard --logdir ./
 ```
+
 
 ## Adding Custom Annotations
 

@@ -2592,7 +2592,7 @@ REACTANT_ABI bool hlo_sharding_is_tiled(xla::HloSharding *hloSharding) {
 }
 
 REACTANT_ABI bool hlo_sharding_is_maximal(xla::HloSharding *hloSharding) {
-  return hloSharding->IsTileMaximal();
+  return hloSharding->IsReplicatedOrSingleDevice();
 }
 
 REACTANT_ABI bool
