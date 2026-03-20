@@ -1,4 +1,4 @@
-using Reactant, Test
+using Reactant, Test, FileCheck
 
 @testset "ReactantExport" begin
     @testset "Simple function export" begin
@@ -25,11 +25,14 @@ using Reactant, Test
 
         # Verify Julia script contains key components
         julia_content = read(julia_file_path, String)
-        @test contains(julia_content, "using Reactant")
-        @test contains(julia_content, "using Serialization")
-        @test contains(julia_content, "f_simple")
-        @test contains(julia_content, "load_inputs")
-        @test contains(julia_content, "run_f_simple")
+        @test @filecheck begin
+            @check_dag "using Reactant"
+            @check_dag "using Serialization"
+            @check_dag "f_simple"
+            @check_dag "load_inputs"
+            @check_dag "run_f_simple"
+            julia_content
+        end
 
         # We can't execute the full script since HLO execution isn't implemented yet,
         # but we can verify the structure is correct
@@ -65,9 +68,12 @@ using Reactant, Test
 
         # Verify Julia script structure
         julia_content = read(julia_file_path, String)
-        @test contains(julia_content, "matmul")
-        @test contains(julia_content, "arg1")
-        @test contains(julia_content, "arg2")
+        @test @filecheck begin
+            @check_dag "matmul"
+            @check_dag "arg1"
+            @check_dag "arg2"
+            julia_content
+        end
     end
 
     @testset "Complex function with multiple arguments" begin
@@ -100,10 +106,13 @@ using Reactant, Test
         @test length(jls_files) > 0
 
         julia_content = read(julia_file_path, String)
-        @test contains(julia_content, "complex_fn")
-        @test contains(julia_content, "arg1")
-        @test contains(julia_content, "arg2")
-        @test contains(julia_content, "arg3")
+        @test @filecheck begin
+            @check_dag "complex_fn"
+            @check_dag "arg1"
+            @check_dag "arg2"
+            @check_dag "arg3"
+            julia_content
+        end
     end
 
     @testset "Test Serialization input/output consistency" begin

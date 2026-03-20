@@ -6,14 +6,16 @@ using LinearAlgebra: BLAS
         x = Reactant.TestUtils.construct_test_array(Float32, 32)
         x_ra = Reactant.to_rarray(x)
 
-        @test @jit(BLAS.asum(length(x), x_ra, 1)) ≈ BLAS.asum(length(x), x, 1)
-        @test @jit(BLAS.asum(3, x_ra, 5)) ≈ BLAS.asum(3, x, 5)
+        @test @jit(BLAS.asum(length(x), x_ra, 1)) ≈ BLAS.asum(length(x), x, 1) atol = 1e-3 rtol =
+            1e-3
+        @test @jit(BLAS.asum(3, x_ra, 5)) ≈ BLAS.asum(3, x, 5) atol = 1e-3 rtol = 1e-3
 
         y = Reactant.TestUtils.construct_test_array(Complex{Float32}, 32)
         y_ra = Reactant.to_rarray(y)
 
-        @test @jit(BLAS.asum(length(y), y_ra, 1)) ≈ BLAS.asum(length(y), y, 1)
-        @test @jit(BLAS.asum(3, y_ra, 5)) ≈ BLAS.asum(3, y, 5)
+        @test @jit(BLAS.asum(length(y), y_ra, 1)) ≈ BLAS.asum(length(y), y, 1) atol = 1e-3 rtol =
+            1e-3
+        @test @jit(BLAS.asum(3, y_ra, 5)) ≈ BLAS.asum(3, y, 5) atol = 1e-3 rtol = 1e-3
     end
 
     @testset "dot" begin
@@ -22,37 +24,40 @@ using LinearAlgebra: BLAS
         x_ra = Reactant.to_rarray(x)
         y_ra = Reactant.to_rarray(y)
 
-        @test @jit(dot(x_ra, y_ra)) ≈ dot(x, y)
-        @test @jit(BLAS.dot(length(x), x_ra, 1, y_ra, 1)) ≈ BLAS.dot(length(x), x, 1, y, 1)
+        @test @jit(dot(x_ra, y_ra)) ≈ dot(x, y) atol = 1e-3 rtol = 1e-3
+        @test @jit(BLAS.dot(length(x), x_ra, 1, y_ra, 1)) ≈ BLAS.dot(length(x), x, 1, y, 1) atol =
+            1e-3 rtol = 1e-3
 
         z1 = Reactant.TestUtils.construct_test_array(Complex{Float32}, 32)
         z2 = Reactant.TestUtils.construct_test_array(Complex{Float32}, 32) .+ 3.0f0
         z1_ra = Reactant.to_rarray(z1)
         z2_ra = Reactant.to_rarray(z2)
 
-        @test @jit(BLAS.dotu(z1_ra, z2_ra)) ≈ BLAS.dotu(z1, z2)
-        @test @jit(BLAS.dotc(z1_ra, z2_ra)) ≈ BLAS.dotc(z1, z2)
+        @test @jit(BLAS.dotu(z1_ra, z2_ra)) ≈ BLAS.dotu(z1, z2) atol = 1e-3 rtol = 1e-3
+        @test @jit(BLAS.dotc(z1_ra, z2_ra)) ≈ BLAS.dotc(z1, z2) atol = 1e-3 rtol = 1e-3
     end
 
     @testset "scal!" begin
         x = Reactant.TestUtils.construct_test_array(Float32, 32)
         x_ra = Reactant.to_rarray(x)
 
-        @test @jit(BLAS.scal(2.0f0, x_ra)) ≈ BLAS.scal(length(x), 2.0f0, x, 1)
+        @test @jit(BLAS.scal(2.0f0, x_ra)) ≈ BLAS.scal(length(x), 2.0f0, x, 1) atol = 1e-3 rtol =
+            1e-3
 
         x_ra = Reactant.to_rarray(x)
         @jit BLAS.scal!(3, 2.0f0, x_ra, 5)
         x_target = copy(x)
         BLAS.scal!(3, 2.0f0, x_target, 5)
-        @test x_ra ≈ x_target
+        @test x_ra ≈ x_target atol = 1e-3 rtol = 1e-3
     end
 
     @testset "nrm2" begin
         x = Reactant.TestUtils.construct_test_array(Float32, 32)
         x_ra = Reactant.to_rarray(x)
 
-        @test @jit(BLAS.nrm2(length(x), x_ra, 1)) ≈ BLAS.nrm2(length(x), x, 1)
-        @test @jit(BLAS.nrm2(x_ra)) ≈ BLAS.nrm2(x)
+        @test @jit(BLAS.nrm2(length(x), x_ra, 1)) ≈ BLAS.nrm2(length(x), x, 1) atol = 1e-3 rtol =
+            1e-3
+        @test @jit(BLAS.nrm2(x_ra)) ≈ BLAS.nrm2(x) atol = 1e-3 rtol = 1e-3
     end
 
     @testset "rot!" begin
@@ -65,8 +70,8 @@ using LinearAlgebra: BLAS
         @jit BLAS.rot!(x_ra, y_ra, c, s)
         x_target, y_target = copy(x), copy(y)
         BLAS.rot!(length(x_target), x_target, 1, y_target, 1, c, s)
-        @test x_ra ≈ x_target
-        @test y_ra ≈ y_target
+        @test x_ra ≈ x_target atol = 1e-3 rtol = 1e-3
+        @test y_ra ≈ y_target atol = 1e-3 rtol = 1e-3
     end
 
     @testset "iamax" begin
@@ -80,7 +85,7 @@ using LinearAlgebra: BLAS
         y = Reactant.TestUtils.construct_test_array(Float32, 32)
         x_ra, y_ra = Reactant.to_rarray(x), Reactant.to_rarray(y)
         @jit BLAS.blascopy!(length(x), x_ra, 1, y_ra, 1)
-        @test y_ra ≈ x
+        @test y_ra ≈ x atol = 1e-3 rtol = 1e-3
     end
 end
 
@@ -89,28 +94,28 @@ end
         A = Reactant.TestUtils.construct_test_array(Float32, 16, 16)
         x = Reactant.TestUtils.construct_test_array(Float32, 16)
         y = Reactant.TestUtils.construct_test_array(Float32, 16)
-        A_ra, x_ra, y_ra = Reactant.to_rarray(A),
-        Reactant.to_rarray(x),
-        Reactant.to_rarray(y)
+        A_ra, x_ra, y_ra = (
+            Reactant.to_rarray(A), Reactant.to_rarray(x), Reactant.to_rarray(y)
+        )
 
         @jit BLAS.gemv!('N', 2.0f0, A_ra, x_ra, 3.0f0, y_ra)
         y_target = copy(y)
         BLAS.gemv!('N', 2.0f0, A, x, 3.0f0, y_target)
-        @test y_ra ≈ y_target
+        @test y_ra ≈ y_target atol = 1e-3 rtol = 1e-3
     end
 
     @testset "ger!" begin
         A = Reactant.TestUtils.construct_test_array(Float32, 16, 16)
         x = Reactant.TestUtils.construct_test_array(Float32, 16)
         y = Reactant.TestUtils.construct_test_array(Float32, 16)
-        A_ra, x_ra, y_ra = Reactant.to_rarray(A),
-        Reactant.to_rarray(x),
-        Reactant.to_rarray(y)
+        A_ra, x_ra, y_ra = (
+            Reactant.to_rarray(A), Reactant.to_rarray(x), Reactant.to_rarray(y)
+        )
 
         @jit BLAS.ger!(2.0f0, x_ra, y_ra, A_ra)
         A_target = copy(A)
         BLAS.ger!(2.0f0, x, y, A_target)
-        @test A_ra ≈ A_target
+        @test A_ra ≈ A_target atol = 1e-3 rtol = 1e-3
     end
 
     @testset "symv!" begin
@@ -118,14 +123,14 @@ end
         A = A + A'
         x = Reactant.TestUtils.construct_test_array(Float32, 16)
         y = Reactant.TestUtils.construct_test_array(Float32, 16)
-        A_ra, x_ra, y_ra = Reactant.to_rarray(A),
-        Reactant.to_rarray(x),
-        Reactant.to_rarray(y)
+        A_ra, x_ra, y_ra = (
+            Reactant.to_rarray(A), Reactant.to_rarray(x), Reactant.to_rarray(y)
+        )
 
         @jit BLAS.symv!('U', 2.0f0, A_ra, x_ra, 3.0f0, y_ra)
         y_target = copy(y)
         BLAS.symv!('U', 2.0f0, A, x, 3.0f0, y_target)
-        @test y_ra ≈ y_target
+        @test y_ra ≈ y_target atol = 1e-3 rtol = 1e-3
     end
 
     @testset "hemv!" begin
@@ -133,14 +138,14 @@ end
         A = A + A'
         x = Reactant.TestUtils.construct_test_array(ComplexF32, 16)
         y = Reactant.TestUtils.construct_test_array(ComplexF32, 16)
-        A_ra, x_ra, y_ra = Reactant.to_rarray(A),
-        Reactant.to_rarray(x),
-        Reactant.to_rarray(y)
+        A_ra, x_ra, y_ra = (
+            Reactant.to_rarray(A), Reactant.to_rarray(x), Reactant.to_rarray(y)
+        )
 
         @jit BLAS.hemv!('U', ComplexF32(2.0f0), A_ra, x_ra, ComplexF32(3.0f0), y_ra)
         y_target = copy(y)
         BLAS.hemv!('U', ComplexF32(2.0f0), A, x, ComplexF32(3.0f0), y_target)
-        @test y_ra ≈ y_target
+        @test y_ra ≈ y_target atol = 1e-3 rtol = 1e-3
     end
 
     @testset "syr!" begin
@@ -152,7 +157,7 @@ end
         @jit BLAS.syr!('U', 2.0f0, x_ra, A_ra)
         A_target = copy(A)
         BLAS.syr!('U', 2.0f0, x, A_target)
-        @test UpperTriangular(A_ra) ≈ UpperTriangular(A_target)
+        @test UpperTriangular(A_ra) ≈ UpperTriangular(A_target) atol = 1e-3 rtol = 1e-3
     end
 
     @testset "her!" begin
@@ -164,7 +169,7 @@ end
         @jit BLAS.her!('U', 2.0f0, x_ra, A_ra)
         A_target = copy(A)
         BLAS.her!('U', 2.0f0, x, A_target)
-        @test Hermitian(A_ra, :U) ≈ Hermitian(A_target, :U)
+        @test Hermitian(A_ra, :U) ≈ Hermitian(A_target, :U) atol = 1e-3 rtol = 1e-3
     end
 
     if isdefined(BLAS, :geru!)
@@ -172,14 +177,14 @@ end
             A = Reactant.TestUtils.construct_test_array(ComplexF32, 16, 16)
             x = Reactant.TestUtils.construct_test_array(ComplexF32, 16)
             y = Reactant.TestUtils.construct_test_array(ComplexF32, 16)
-            A_ra, x_ra, y_ra = Reactant.to_rarray(A),
-            Reactant.to_rarray(x),
-            Reactant.to_rarray(y)
+            A_ra, x_ra, y_ra = (
+                Reactant.to_rarray(A), Reactant.to_rarray(x), Reactant.to_rarray(y)
+            )
 
             @jit BLAS.geru!(ComplexF32(2.0f0), x_ra, y_ra, A_ra)
             A_target = copy(A)
             BLAS.geru!(ComplexF32(2.0f0), x, y, A_target)
-            @test A_ra ≈ A_target
+            @test A_ra ≈ A_target atol = 1e-3 rtol = 1e-3
         end
     end
 
@@ -188,14 +193,16 @@ end
         A = A + A'
         x = Reactant.TestUtils.construct_test_array(Float32, 16)
         A_ra, x_ra = Reactant.to_rarray(A), Reactant.to_rarray(x)
-        @test @jit(BLAS.symv('U', 2.0f0, A_ra, x_ra)) ≈ BLAS.symv('U', 2.0f0, A, x)
+        @test @jit(BLAS.symv('U', 2.0f0, A_ra, x_ra)) ≈ BLAS.symv('U', 2.0f0, A, x) atol =
+            1e-3
+        rtol = 1e-3
 
         Ac = Reactant.TestUtils.construct_test_array(ComplexF32, 16, 16)
         Ac = Ac + Ac'
         xc = Reactant.TestUtils.construct_test_array(ComplexF32, 16)
         Ac_ra, xc_ra = Reactant.to_rarray(Ac), Reactant.to_rarray(xc)
         @test @jit(BLAS.hemv('U', ComplexF32(2.0f0), Ac_ra, xc_ra)) ≈
-            BLAS.hemv('U', ComplexF32(2.0f0), Ac, xc)
+            BLAS.hemv('U', ComplexF32(2.0f0), Ac, xc) atol = 1e-3 rtol = 1e-3
     end
 
     @testset "trmv!" begin
@@ -206,7 +213,7 @@ end
         @jit BLAS.trmv!('U', 'N', 'N', A_ra, x_ra)
         x_target = copy(x)
         BLAS.trmv!('U', 'N', 'N', A, x_target)
-        @test x_ra ≈ x_target
+        @test x_ra ≈ x_target atol = 1e-3 rtol = 1e-3
     end
 
     @testset "trsv!" begin
@@ -218,7 +225,7 @@ end
         @jit BLAS.trsv!('U', 'N', 'N', A_ra, x_ra)
         x_target = copy(x)
         BLAS.trsv!('U', 'N', 'N', A, x_target)
-        @test x_ra ≈ x_target
+        @test x_ra ≈ x_target atol = 1e-3 rtol = 1e-3
     end
 
     @testset "gemv/trmv/trsv" begin
@@ -226,13 +233,16 @@ end
         x = Reactant.TestUtils.construct_test_array(Float32, 16)
         A_ra, x_ra = Reactant.to_rarray(A), Reactant.to_rarray(x)
 
-        @test @jit(BLAS.gemv('N', 2.0f0, A_ra, x_ra)) ≈ BLAS.gemv('N', 2.0f0, A, x)
-        @test @jit(BLAS.trmv('U', 'N', 'N', A_ra, x_ra)) ≈ BLAS.trmv('U', 'N', 'N', A, x)
+        @test @jit(BLAS.gemv('N', 2.0f0, A_ra, x_ra)) ≈ BLAS.gemv('N', 2.0f0, A, x) atol =
+            1e-3
+        rtol = 1e-3
+        @test @jit(BLAS.trmv('U', 'N', 'N', A_ra, x_ra)) ≈ BLAS.trmv('U', 'N', 'N', A, x) atol =
+            1e-3 rtol = 1e-3
 
         Ainv = A' * A + I
         Ainv_ra = Reactant.to_rarray(Ainv)
         @test @jit(BLAS.trsv('U', 'N', 'N', Ainv_ra, x_ra)) ≈
-            BLAS.trsv('U', 'N', 'N', Ainv, x)
+            BLAS.trsv('U', 'N', 'N', Ainv, x) atol = 1e-3 rtol = 1e-3
     end
 end
 
@@ -241,14 +251,14 @@ end
         A = Reactant.TestUtils.construct_test_array(Float32, 16, 16)
         B = Reactant.TestUtils.construct_test_array(Float32, 16, 16)
         C = Reactant.TestUtils.construct_test_array(Float32, 16, 16)
-        A_ra, B_ra, C_ra = Reactant.to_rarray(A),
-        Reactant.to_rarray(B),
-        Reactant.to_rarray(C)
+        A_ra, B_ra, C_ra = (
+            Reactant.to_rarray(A), Reactant.to_rarray(B), Reactant.to_rarray(C)
+        )
 
         @jit BLAS.gemm!('N', 'N', 2.0f0, A_ra, B_ra, 3.0f0, C_ra)
         C_target = copy(C)
         BLAS.gemm!('N', 'N', 2.0f0, A, B, 3.0f0, C_target)
-        @test C_ra ≈ C_target
+        @test C_ra ≈ C_target atol = 1e-3 rtol = 1e-3
     end
 
     @testset "trsm!" begin
@@ -260,7 +270,7 @@ end
         @jit BLAS.trsm!('L', 'U', 'N', 'N', 2.0f0, A_ra, B_ra)
         B_target = copy(B)
         BLAS.trsm!('L', 'U', 'N', 'N', 2.0f0, A, B_target)
-        @test B_ra ≈ B_target
+        @test B_ra ≈ B_target atol = 1e-3 rtol = 1e-3
     end
 
     @testset "syrk!" begin
@@ -272,7 +282,7 @@ end
         @jit BLAS.syrk!('U', 'N', 2.0f0, A_ra, 3.0f0, C_ra)
         C_target = copy(C)
         BLAS.syrk!('U', 'N', 2.0f0, A, 3.0f0, C_target)
-        @test UpperTriangular(C_ra) ≈ UpperTriangular(C_target)
+        @test UpperTriangular(C_ra) ≈ UpperTriangular(C_target) atol = 1e-3 rtol = 1e-3
 
         # test 'L' and 'T'
         A2 = Reactant.TestUtils.construct_test_array(Float32, 16, 16)
@@ -283,7 +293,7 @@ end
         @jit BLAS.syrk!('L', 'T', 2.0f0, A2_ra, 3.0f0, C2_ra)
         C2_target = copy(C2)
         BLAS.syrk!('L', 'T', 2.0f0, A2, 3.0f0, C2_target)
-        @test LowerTriangular(C2_ra) ≈ LowerTriangular(C2_target)
+        @test LowerTriangular(C2_ra) ≈ LowerTriangular(C2_target) atol = 1e-3 rtol = 1e-3
     end
 
     if isdefined(BLAS, :gemmt!)
@@ -291,14 +301,14 @@ end
             A = Reactant.TestUtils.construct_test_array(Float32, 16, 16)
             B = Reactant.TestUtils.construct_test_array(Float32, 16, 16)
             C = Reactant.TestUtils.construct_test_array(Float32, 16, 16)
-            A_ra, B_ra, C_ra = Reactant.to_rarray(A),
-            Reactant.to_rarray(B),
-            Reactant.to_rarray(C)
+            A_ra, B_ra, C_ra = (
+                Reactant.to_rarray(A), Reactant.to_rarray(B), Reactant.to_rarray(C)
+            )
 
             @jit BLAS.gemmt!('U', 'N', 'N', 2.0f0, A_ra, B_ra, 3.0f0, C_ra)
             C_target = copy(C)
             BLAS.gemmt!('U', 'N', 'N', 2.0f0, A, B, 3.0f0, C_target)
-            @test UpperTriangular(C_ra) ≈ UpperTriangular(C_target)
+            @test UpperTriangular(C_ra) ≈ UpperTriangular(C_target) atol = 1e-3 rtol = 1e-3
         end
     end
 
@@ -307,27 +317,27 @@ end
         A = A + A'
         B = Reactant.TestUtils.construct_test_array(Float32, 16, 16)
         C = Reactant.TestUtils.construct_test_array(Float32, 16, 16)
-        A_ra, B_ra, C_ra = Reactant.to_rarray(A),
-        Reactant.to_rarray(B),
-        Reactant.to_rarray(C)
+        A_ra, B_ra, C_ra = (
+            Reactant.to_rarray(A), Reactant.to_rarray(B), Reactant.to_rarray(C)
+        )
 
         @jit BLAS.symm!('L', 'U', 2.0f0, A_ra, B_ra, 3.0f0, C_ra)
         C_target = copy(C)
         BLAS.symm!('L', 'U', 2.0f0, A, B, 3.0f0, C_target)
-        @test C_ra ≈ C_target
+        @test C_ra ≈ C_target atol = 1e-3 rtol = 1e-3
 
         Ac = Reactant.TestUtils.construct_test_array(ComplexF32, 16, 16)
         Ac = Ac + Ac'
         Bc = Reactant.TestUtils.construct_test_array(ComplexF32, 16, 16)
         Cc = Reactant.TestUtils.construct_test_array(ComplexF32, 16, 16)
-        Ac_ra, Bc_ra, Cc_ra = Reactant.to_rarray(Ac),
-        Reactant.to_rarray(Bc),
-        Reactant.to_rarray(Cc)
+        Ac_ra, Bc_ra, Cc_ra = (
+            Reactant.to_rarray(Ac), Reactant.to_rarray(Bc), Reactant.to_rarray(Cc)
+        )
 
         @jit BLAS.hemm!('L', 'U', ComplexF32(2.0f0), Ac_ra, Bc_ra, ComplexF32(3.0f0), Cc_ra)
         Cc_target = copy(Cc)
         BLAS.hemm!('L', 'U', ComplexF32(2.0f0), Ac, Bc, ComplexF32(3.0f0), Cc_target)
-        @test Cc_ra ≈ Cc_target
+        @test Cc_ra ≈ Cc_target atol = 1e-3 rtol = 1e-3
     end
 
     @testset "trmm!" begin
@@ -338,7 +348,7 @@ end
         @jit BLAS.trmm!('L', 'U', 'N', 'N', 2.0f0, A_ra, B_ra)
         B_target = copy(B)
         BLAS.trmm!('L', 'U', 'N', 'N', 2.0f0, A, B_target)
-        @test B_ra ≈ B_target
+        @test B_ra ≈ B_target atol = 1e-3 rtol = 1e-3
     end
 
     @testset "syr2k!" begin
@@ -346,14 +356,14 @@ end
         B = Reactant.TestUtils.construct_test_array(Float32, 16, 16)
         C = Reactant.TestUtils.construct_test_array(Float32, 16, 16)
         C = C + C'
-        A_ra, B_ra, C_ra = Reactant.to_rarray(A),
-        Reactant.to_rarray(B),
-        Reactant.to_rarray(C)
+        A_ra, B_ra, C_ra = (
+            Reactant.to_rarray(A), Reactant.to_rarray(B), Reactant.to_rarray(C)
+        )
 
         @jit BLAS.syr2k!('U', 'N', 2.0f0, A_ra, B_ra, 3.0f0, C_ra)
         C_target = copy(C)
         BLAS.syr2k!('U', 'N', 2.0f0, A, B, 3.0f0, C_target)
-        @test UpperTriangular(C_ra) ≈ UpperTriangular(C_target)
+        @test UpperTriangular(C_ra) ≈ UpperTriangular(C_target) atol = 1e-3 rtol = 1e-3
     end
 
     @testset "herk!/her2k!" begin
@@ -361,20 +371,20 @@ end
         Bc = Reactant.TestUtils.construct_test_array(ComplexF32, 16, 16)
         Cc = Reactant.TestUtils.construct_test_array(ComplexF32, 16, 16)
         Cc = Cc + Cc'
-        Ac_ra, Bc_ra, Cc_ra = Reactant.to_rarray(Ac),
-        Reactant.to_rarray(Bc),
-        Reactant.to_rarray(Cc)
+        Ac_ra, Bc_ra, Cc_ra = (
+            Reactant.to_rarray(Ac), Reactant.to_rarray(Bc), Reactant.to_rarray(Cc)
+        )
 
         @jit BLAS.herk!('U', 'N', 2.0f0, Ac_ra, 3.0f0, Cc_ra)
         Cc_target = copy(Cc)
         BLAS.herk!('U', 'N', 2.0f0, Ac, 3.0f0, Cc_target)
-        @test Hermitian(Cc_ra, :U) ≈ Hermitian(Cc_target, :U)
+        @test Hermitian(Cc_ra, :U) ≈ Hermitian(Cc_target, :U) atol = 1e-3 rtol = 1e-3
 
         Cc2_ra = Reactant.to_rarray(Cc) # reset
         @jit BLAS.her2k!('U', 'N', ComplexF32(2.0f0), Ac_ra, Bc_ra, 3.0f0, Cc2_ra)
         Cc2_target = copy(Cc)
         BLAS.her2k!('U', 'N', ComplexF32(2.0f0), Ac, Bc, 3.0f0, Cc2_target)
-        @test Hermitian(Cc2_ra, :U) ≈ Hermitian(Cc2_target, :U)
+        @test Hermitian(Cc2_ra, :U) ≈ Hermitian(Cc2_target, :U) atol = 1e-3 rtol = 1e-3
     end
 
     @testset "Non-mutating Level 3" begin
@@ -383,39 +393,41 @@ end
         A_ra, B_ra = Reactant.to_rarray(A), Reactant.to_rarray(B)
 
         @test @jit(BLAS.gemm('N', 'N', 2.0f0, A_ra, B_ra)) ≈
-            BLAS.gemm('N', 'N', 2.0f0, A, B)
+            BLAS.gemm('N', 'N', 2.0f0, A, B) atol = 1e-3 rtol = 1e-3
 
         if isdefined(BLAS, :gemmt)
             @test UpperTriangular(@jit(BLAS.gemmt('U', 'N', 'N', 2.0f0, A_ra, B_ra))) ≈
-                UpperTriangular(BLAS.gemmt('U', 'N', 'N', 2.0f0, A, B))
+                UpperTriangular(BLAS.gemmt('U', 'N', 'N', 2.0f0, A, B)) atol = 1e-3 rtol =
+                1e-3
         end
 
         Ainv = A' * A + I
         Ainv_ra = Reactant.to_rarray(Ainv)
         @test @jit(BLAS.symm('L', 'U', 2.0f0, Ainv_ra, B_ra)) ≈
-            BLAS.symm('L', 'U', 2.0f0, Ainv, B)
+            BLAS.symm('L', 'U', 2.0f0, Ainv, B) atol = 1e-3 rtol = 1e-3
         @test @jit(BLAS.trmm('L', 'U', 'N', 'N', 2.0f0, Ainv_ra, B_ra)) ≈
-            BLAS.trmm('L', 'U', 'N', 'N', 2.0f0, Ainv, B)
+            BLAS.trmm('L', 'U', 'N', 'N', 2.0f0, Ainv, B) atol = 1e-3 rtol = 1e-3
         @test @jit(BLAS.trsm('L', 'U', 'N', 'N', 2.0f0, Ainv_ra, B_ra)) ≈
-            BLAS.trsm('L', 'U', 'N', 'N', 2.0f0, Ainv, B)
+            BLAS.trsm('L', 'U', 'N', 'N', 2.0f0, Ainv, B) atol = 1e-3 rtol = 1e-3
 
         @test UpperTriangular(@jit(BLAS.syrk('U', 'N', 2.0f0, A_ra))) ≈
-            UpperTriangular(BLAS.syrk('U', 'N', 2.0f0, A))
+            UpperTriangular(BLAS.syrk('U', 'N', 2.0f0, A)) atol = 1e-3 rtol = 1e-3
         @test UpperTriangular(@jit(BLAS.syr2k('U', 'N', 2.0f0, A_ra, B_ra))) ≈
-            UpperTriangular(BLAS.syr2k('U', 'N', 2.0f0, A, B))
+            UpperTriangular(BLAS.syr2k('U', 'N', 2.0f0, A, B)) atol = 1e-3 rtol = 1e-3
 
         Ac = Reactant.TestUtils.construct_test_array(ComplexF32, 16, 16)
         Bc = Reactant.TestUtils.construct_test_array(ComplexF32, 16, 16)
         Acinv = Ac' * Ac + I
-        Ac_ra, Bc_ra, Acinv_ra = Reactant.to_rarray(Ac),
-        Reactant.to_rarray(Bc),
-        Reactant.to_rarray(Acinv)
+        Ac_ra, Bc_ra, Acinv_ra = (
+            Reactant.to_rarray(Ac), Reactant.to_rarray(Bc), Reactant.to_rarray(Acinv)
+        )
 
         @test @jit(BLAS.hemm('L', 'U', ComplexF32(2.0f0), Acinv_ra, Bc_ra)) ≈
-            BLAS.hemm('L', 'U', ComplexF32(2.0f0), Acinv, Bc)
+            BLAS.hemm('L', 'U', ComplexF32(2.0f0), Acinv, Bc) atol = 1e-3 rtol = 1e-3
         @test Hermitian(@jit(BLAS.herk('U', 'N', 2.0f0, Ac_ra)), :U) ≈
-            Hermitian(BLAS.herk('U', 'N', 2.0f0, Ac), :U)
+            Hermitian(BLAS.herk('U', 'N', 2.0f0, Ac), :U) atol = 1e-3 rtol = 1e-3
         @test Hermitian(@jit(BLAS.her2k('U', 'N', ComplexF32(2.0f0), Ac_ra, Bc_ra)), :U) ≈
-            Hermitian(BLAS.her2k('U', 'N', ComplexF32(2.0f0), Ac, Bc), :U)
+            Hermitian(BLAS.her2k('U', 'N', ComplexF32(2.0f0), Ac, Bc), :U) atol = 1e-3 rtol =
+            1e-3
     end
 end

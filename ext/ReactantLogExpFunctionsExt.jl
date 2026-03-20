@@ -45,7 +45,7 @@ LogExpFunctions.logistic(x::TracedRNumber) = @opcall logistic(x)
 LogExpFunctions.log1psq(x::TracedRNumber{<:Real}) = log1p(abs2(x))
 
 # log1pexp: log(1+exp(x)) with careful evaluation
-LogExpFunctions.log1pexp(x::TracedRNumber{<:Real}) = @opcall log1pexp(x)
+LogExpFunctions.log1pexp(x::TracedRNumber{<:Real}) = @opcall ml_softplus(x)
 
 # log1mexp: log(1 - exp(x))
 function LogExpFunctions.log1mexp(x::TracedRNumber{<:Real})

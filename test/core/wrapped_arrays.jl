@@ -1,4 +1,4 @@
-using Reactant, Test, Statistics, NNlib, LinearAlgebra
+using Reactant, Test, Statistics, NNlib, LinearAlgebra, FileCheck
 
 function view_getindex_1(x)
     x = view(x, 2:3, 1:2, :)
@@ -259,10 +259,16 @@ end
     x_ra = Reactant.to_rarray(x)
 
     hlo = repr(@code_hlo(reshape_getindex(x_ra)))
-    @test !occursin("stablehlo.gather", hlo)
+    @test @filecheck begin
+        @check_not "stablehlo.gather"
+        hlo
+    end
 
     hlo = repr(@code_hlo(permutedims_getindex(x_ra)))
-    @test !occursin("stablehlo.gather", hlo)
+    @test @filecheck begin
+        @check_not "stablehlo.gather"
+        hlo
+    end
 end
 
 function view_adjoint(x)

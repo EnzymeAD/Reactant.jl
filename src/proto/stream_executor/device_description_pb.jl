@@ -252,9 +252,9 @@ struct GpuDeviceInfoProto
     threads_per_core_limit::Int32
     core_count::Int32
     fpus_per_core::Int64
-    block_dim_limit_x::Int32
-    block_dim_limit_y::Int32
-    block_dim_limit_z::Int32
+    block_dim_limit_x::Int64
+    block_dim_limit_y::Int64
+    block_dim_limit_z::Int64
     memory_bandwidth::Int64
     l2_cache_size::Int64
     clock_rate_ghz::Float32
@@ -269,7 +269,7 @@ end
 PB.oneof_field_types(::Type{GpuDeviceInfoProto}) = (;
     compute_capability = (;cuda_compute_capability=CudaComputeCapabilityProto, rocm_compute_capability=RocmComputeCapabilityProto, oneapi_compute_capability=OneAPIComputeCapabilityProto),
 )
-PB.default_values(::Type{GpuDeviceInfoProto}) = (;threads_per_block_limit = zero(Int32), threads_per_warp = zero(Int32), shared_memory_per_block = zero(Int32), shared_memory_per_core = zero(Int32), threads_per_core_limit = zero(Int32), core_count = zero(Int32), fpus_per_core = zero(Int64), block_dim_limit_x = zero(Int32), block_dim_limit_y = zero(Int32), block_dim_limit_z = zero(Int32), memory_bandwidth = zero(Int64), l2_cache_size = zero(Int64), clock_rate_ghz = zero(Float32), device_memory_size = zero(Int64), shared_memory_per_block_optin = zero(Int32), cuda_compute_capability = nothing, rocm_compute_capability = nothing, oneapi_compute_capability = nothing, registers_per_core_limit = zero(Int64), registers_per_block_limit = zero(Int64), scalar_unit_description = nothing, matrix_unit_description = nothing)
+PB.default_values(::Type{GpuDeviceInfoProto}) = (;threads_per_block_limit = zero(Int32), threads_per_warp = zero(Int32), shared_memory_per_block = zero(Int32), shared_memory_per_core = zero(Int32), threads_per_core_limit = zero(Int32), core_count = zero(Int32), fpus_per_core = zero(Int64), block_dim_limit_x = zero(Int64), block_dim_limit_y = zero(Int64), block_dim_limit_z = zero(Int64), memory_bandwidth = zero(Int64), l2_cache_size = zero(Int64), clock_rate_ghz = zero(Float32), device_memory_size = zero(Int64), shared_memory_per_block_optin = zero(Int32), cuda_compute_capability = nothing, rocm_compute_capability = nothing, oneapi_compute_capability = nothing, registers_per_core_limit = zero(Int64), registers_per_block_limit = zero(Int64), scalar_unit_description = nothing, matrix_unit_description = nothing)
 PB.field_numbers(::Type{GpuDeviceInfoProto}) = (;threads_per_block_limit = 1, threads_per_warp = 2, shared_memory_per_block = 3, shared_memory_per_core = 4, threads_per_core_limit = 5, core_count = 6, fpus_per_core = 7, block_dim_limit_x = 8, block_dim_limit_y = 9, block_dim_limit_z = 10, memory_bandwidth = 11, l2_cache_size = 12, clock_rate_ghz = 13, device_memory_size = 14, shared_memory_per_block_optin = 15, cuda_compute_capability = 16, rocm_compute_capability = 17, oneapi_compute_capability = 22, registers_per_core_limit = 18, registers_per_block_limit = 19, scalar_unit_description = 20, matrix_unit_description = 21)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:GpuDeviceInfoProto}, _endpos::Int=0, _group::Bool=false)
@@ -280,9 +280,9 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:GpuDeviceInfoProto}, _en
     threads_per_core_limit = zero(Int32)
     core_count = zero(Int32)
     fpus_per_core = zero(Int64)
-    block_dim_limit_x = zero(Int32)
-    block_dim_limit_y = zero(Int32)
-    block_dim_limit_z = zero(Int32)
+    block_dim_limit_x = zero(Int64)
+    block_dim_limit_y = zero(Int64)
+    block_dim_limit_z = zero(Int64)
     memory_bandwidth = zero(Int64)
     l2_cache_size = zero(Int64)
     clock_rate_ghz = zero(Float32)
@@ -310,11 +310,11 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:GpuDeviceInfoProto}, _en
         elseif field_number == 7
             fpus_per_core = PB.decode(d, Int64)
         elseif field_number == 8
-            block_dim_limit_x = PB.decode(d, Int32)
+            block_dim_limit_x = PB.decode(d, Int64)
         elseif field_number == 9
-            block_dim_limit_y = PB.decode(d, Int32)
+            block_dim_limit_y = PB.decode(d, Int64)
         elseif field_number == 10
-            block_dim_limit_z = PB.decode(d, Int32)
+            block_dim_limit_z = PB.decode(d, Int64)
         elseif field_number == 11
             memory_bandwidth = PB.decode(d, Int64)
         elseif field_number == 12
@@ -355,9 +355,9 @@ function PB.encode(e::PB.AbstractProtoEncoder, x::GpuDeviceInfoProto)
     x.threads_per_core_limit != zero(Int32) && PB.encode(e, 5, x.threads_per_core_limit)
     x.core_count != zero(Int32) && PB.encode(e, 6, x.core_count)
     x.fpus_per_core != zero(Int64) && PB.encode(e, 7, x.fpus_per_core)
-    x.block_dim_limit_x != zero(Int32) && PB.encode(e, 8, x.block_dim_limit_x)
-    x.block_dim_limit_y != zero(Int32) && PB.encode(e, 9, x.block_dim_limit_y)
-    x.block_dim_limit_z != zero(Int32) && PB.encode(e, 10, x.block_dim_limit_z)
+    x.block_dim_limit_x != zero(Int64) && PB.encode(e, 8, x.block_dim_limit_x)
+    x.block_dim_limit_y != zero(Int64) && PB.encode(e, 9, x.block_dim_limit_y)
+    x.block_dim_limit_z != zero(Int64) && PB.encode(e, 10, x.block_dim_limit_z)
     x.memory_bandwidth != zero(Int64) && PB.encode(e, 11, x.memory_bandwidth)
     x.l2_cache_size != zero(Int64) && PB.encode(e, 12, x.l2_cache_size)
     x.clock_rate_ghz !== zero(Float32) && PB.encode(e, 13, x.clock_rate_ghz)
@@ -386,9 +386,9 @@ function PB._encoded_size(x::GpuDeviceInfoProto)
     x.threads_per_core_limit != zero(Int32) && (encoded_size += PB._encoded_size(x.threads_per_core_limit, 5))
     x.core_count != zero(Int32) && (encoded_size += PB._encoded_size(x.core_count, 6))
     x.fpus_per_core != zero(Int64) && (encoded_size += PB._encoded_size(x.fpus_per_core, 7))
-    x.block_dim_limit_x != zero(Int32) && (encoded_size += PB._encoded_size(x.block_dim_limit_x, 8))
-    x.block_dim_limit_y != zero(Int32) && (encoded_size += PB._encoded_size(x.block_dim_limit_y, 9))
-    x.block_dim_limit_z != zero(Int32) && (encoded_size += PB._encoded_size(x.block_dim_limit_z, 10))
+    x.block_dim_limit_x != zero(Int64) && (encoded_size += PB._encoded_size(x.block_dim_limit_x, 8))
+    x.block_dim_limit_y != zero(Int64) && (encoded_size += PB._encoded_size(x.block_dim_limit_y, 9))
+    x.block_dim_limit_z != zero(Int64) && (encoded_size += PB._encoded_size(x.block_dim_limit_z, 10))
     x.memory_bandwidth != zero(Int64) && (encoded_size += PB._encoded_size(x.memory_bandwidth, 11))
     x.l2_cache_size != zero(Int64) && (encoded_size += PB._encoded_size(x.l2_cache_size, 12))
     x.clock_rate_ghz !== zero(Float32) && (encoded_size += PB._encoded_size(x.clock_rate_ghz, 13))

@@ -67,7 +67,7 @@ jobs:
         if: ${{ ! inputs.assertions }}
         with:
           version: ${{ inputs.julia_version }}
-      - uses: julia-actions/cache@v2
+      - uses: julia-actions/cache@v3
         id: julia-cache
         with:
           cache-name: julia-cache;workflow=${{ inputs.julia_version }}-${{ inputs.os }}-${{ inputs.runtime }}-assertions=${{ inputs.assertions }}-${{ github.event_name }}-${{ inputs.test_args }}-${{ inputs.downgrade_testing }}-${{ inputs.localjll }}
@@ -121,6 +121,8 @@ jobs:
           echo $PWD/julia/usr/bin >> $GITHUB_PATH
 
       # Install dependencies (specifically ReactantCore subdirectory for 1.10)
+      # Disable precompile here, since it will be invalidated based on change
+      # to xla_runtime preference in the next step.
       - name: "Install Dependencies"
         run: |
           import Pkg
@@ -134,17 +136,28 @@ jobs:
         shell: julia --color=yes --code-coverage=user --depwarn=yes --project=. {0}
         # Only in Julia v1.10 we need to install `ReactantCore` manually.
         if: ${{ inputs.julia_version == '1.10' || inputs.julia_version == 'lts' }}
+        env:
+          JULIA_PKG_PRECOMPILE_AUTO: 0
+
+      - name: "Install Dependencies (1.11+)"
+        run: |
+          import Pkg
+          Pkg.Registry.update()
+          Pkg.instantiate()
+        shell: julia --color=yes --project=. {0}
+        if: ${{ inputs.julia_version != '1.10' && inputs.julia_version != 'lts' }}
+        env:
+          JULIA_PKG_PRECOMPILE_AUTO: 0
 
       # Run the tests (pjrt or ifrt or both)
       - name: "Setup Runtime Preferences (PJRT)"
         if: ${{ inputs.runtime == 'pjrt' || inputs.runtime == 'both' }}
-        uses: "DamianReeves/write-file-action@master"
-        with:
-          path: "LocalPreferences.toml"
-          write-mode: "overwrite"
-          contents: |
-            [Reactant]
-            xla_runtime = "PJRT"
+        run: |
+          using Preferences, UUIDs
+          Preferences.set_preferences!(
+            "Reactant", "xla_runtime" => "PJRT"; force=true
+          )
+        shell: julia --color=yes --project=. {0}
       - name: "Set test arguments and other environment variables"
         shell: bash
         run: |
@@ -179,13 +192,12 @@ jobs:
 
       - name: "Setup Runtime Preferences (IFRT)"
         if: ${{ inputs.runtime == 'ifrt' || inputs.runtime == 'both' }}
-        uses: "DamianReeves/write-file-action@master"
-        with:
-          path: "LocalPreferences.toml"
-          write-mode: "overwrite"
-          contents: |
-            [Reactant]
-            xla_runtime = "IFRT"
+        run: |
+          using Preferences, UUIDs
+          Preferences.set_preferences!(
+            "Reactant", "xla_runtime" => "IFRT"; force=true
+          )
+        shell: julia --color=yes --project=. {0}
       - name: "Run Tests (IFRT)"
         if: ${{ inputs.runtime == 'ifrt' || inputs.runtime == 'both' }}
         timeout-minutes: 120

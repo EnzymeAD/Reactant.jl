@@ -19,6 +19,13 @@ within_compile
 
 ```@docs
 @trace
+Periodic
+```
+
+## Converting Data
+
+```@docs
+Reactant.to_rarray
 ```
 
 ## Reactant data types

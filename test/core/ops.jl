@@ -1,4 +1,4 @@
-using Reactant, Test
+using Reactant, Test, FileCheck
 using Reactant: Ops
 using LinearAlgebra
 using SpecialFunctions: SpecialFunctions
@@ -1078,7 +1078,10 @@ end
         """;
         dummy_arguments=true,
     )
-    @test occursin("stablehlo.optimization_barrier", repr(hlo))
+    @test @filecheck begin
+        @check "stablehlo.optimization_barrier"
+        repr(hlo)
+    end
 
     hlo = @code_hlo Ops.hlo_call(
         """
@@ -1091,7 +1094,10 @@ end
         """;
         dummy_arguments=true,
     )
-    @test occursin("stablehlo.optimization_barrier", repr(hlo))
+    @test @filecheck begin
+        @check "stablehlo.optimization_barrier"
+        repr(hlo)
+    end
 end
 
 function f_repeat(x, y)
@@ -1349,15 +1355,17 @@ end
             hlo = @code_hlo Ops.batch_norm_training(
                 x, scale, offset; epsilon=1e-5, feature_index=2
             )
-            @test occursin("stablehlo.batch_norm_training", repr(hlo))
+            @test @filecheck begin
+                @check "stablehlo.batch_norm_training"
+                repr(hlo)
+            end
 
             if !affine
-                @test occursin(
-                    "stablehlo.constant dense<0.000000e+00> : tensor<3xf32>", repr(hlo)
-                )
-                @test occursin(
-                    "stablehlo.constant dense<1.000000e+00> : tensor<3xf32>", repr(hlo)
-                )
+                @test @filecheck begin
+                    @check_dag "stablehlo.constant dense<0.000000e+00> : tensor<3xf32>"
+                    @check_dag "stablehlo.constant dense<1.000000e+00> : tensor<3xf32>"
+                    repr(hlo)
+                end
             end
 
             res, m, v = @jit Ops.batch_norm_training(
@@ -1391,14 +1399,16 @@ end
             hlo = @code_hlo Ops.batch_norm_inference(
                 x, scale, offset, rm, rv; epsilon=1e-5, feature_index=2
             )
-            @test occursin("stablehlo.batch_norm_inference", repr(hlo))
+            @test @filecheck begin
+                @check "stablehlo.batch_norm_inference"
+                repr(hlo)
+            end
             if !affine
-                @test occursin(
-                    "stablehlo.constant dense<0.000000e+00> : tensor<3xf32>", repr(hlo)
-                )
-                @test occursin(
-                    "stablehlo.constant dense<1.000000e+00> : tensor<3xf32>", repr(hlo)
-                )
+                @test @filecheck begin
+                    @check_dag "stablehlo.constant dense<0.000000e+00> : tensor<3xf32>"
+                    @check_dag "stablehlo.constant dense<1.000000e+00> : tensor<3xf32>"
+                    repr(hlo)
+                end
             end
 
             res = @jit Ops.batch_norm_inference(
@@ -1427,12 +1437,16 @@ end
             hlo = @code_hlo Ops.batch_norm_grad(
                 x, scale, rm, rv, gx; epsilon=1e-5, feature_index=2
             )
-            @test occursin("stablehlo.batch_norm_grad", repr(hlo))
+            @test @filecheck begin
+                @check "stablehlo.batch_norm_grad"
+                repr(hlo)
+            end
 
             if !affine
-                @test occursin(
-                    "stablehlo.constant dense<1.000000e+00> : tensor<3xf32>", repr(hlo)
-                )
+                @test @filecheck begin
+                    @check "stablehlo.constant dense<1.000000e+00> : tensor<3xf32>"
+                    repr(hlo)
+                end
             end
 
             gres, gscale, goffset = @jit Ops.batch_norm_grad(

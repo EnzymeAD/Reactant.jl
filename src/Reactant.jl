@@ -1,7 +1,12 @@
 module Reactant
 
 using ReactantCore:
-    ReactantCore, @trace, within_compile, MissingTracedValue, materialize_traced_array
+    ReactantCore,
+    @trace,
+    within_compile,
+    MissingTracedValue,
+    materialize_traced_array,
+    Periodic
 
 using LinearAlgebra: LinearAlgebra, RowMaximum, NoPivot
 using Random: Random, AbstractRNG
@@ -201,6 +206,7 @@ Base.push!(no_rewrite_ancestor_modules, TracedUtils)
 include("TracedRNumber.jl")
 include("TracedRArray.jl")
 include("TracedRange.jl")
+include("TracedRational.jl")
 include("Indexing.jl")
 
 include("ConcreteRArray.jl")
@@ -223,6 +229,7 @@ use_overlayed_version(::TracedRArray) = true
 use_overlayed_version(::TracedRNumber) = true
 use_overlayed_version(::TracedStepRangeLen) = true
 use_overlayed_version(::TracedUnitRange) = true
+use_overlayed_version(::TracedRational) = true
 function use_overlayed_version(x::AbstractArray)
     a = ancestor(x)
     a === x && return false
@@ -297,6 +304,10 @@ export ConcreteRArray,
     @trace,
     within_compile
 
+@static if VERSION ≥ v"1.11"
+    @eval $(Expr(:public, :Periodic))
+end
+
 const registry = Ref{Union{Nothing,MLIR.IR.DialectRegistry}}()
 
 function register_enzymexla_dialects(ctx::MLIR.IR.Context)
@@ -369,7 +380,7 @@ function __init__()
             )
         end
     end
-
+    MLIR.Highlight.register_reactant_theme()
     return nothing
 end
 

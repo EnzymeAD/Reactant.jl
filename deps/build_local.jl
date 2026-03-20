@@ -203,7 +203,10 @@ cc_is_gcc, gcc_version = let
 end
 
 build_cmd_list = [bazel_cmd, "build"]
-!isempty(arg) && push!(build_cmd_list, arg)
+if !isempty(arg)
+    push!(build_cmd_list, arg)
+    push!(build_cmd_list, "--config=cuda_static")
+end
 if parsed_args["cache"]
     push!(build_cmd_list, "--config=public_cache")
 end

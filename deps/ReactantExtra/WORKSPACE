@@ -4,7 +4,7 @@ NSYNC_COMMIT = "82b118aa7ace3132e517e2c467f8732978cf4023"
 
 NSYNC_SHA256 = ""
 
-ENZYMEXLA_COMMIT = "739dda82b99e364b1440276c31da8c45bf33a7a1"
+ENZYMEXLA_COMMIT = "685a63e2a301d530b1c6443ea3299e49a8123788"
 
 ENZYMEXLA_SHA256 = ""
 
@@ -13,17 +13,6 @@ http_archive(
     sha256 = NSYNC_SHA256,
     strip_prefix = "nsync-" + NSYNC_COMMIT,
     urls = ["https://github.com/wsmoses/nsync/archive/{commit}.tar.gz".format(commit = NSYNC_COMMIT)],
-)
-
-XPROF_COMMIT = "4f957e315d31061c1109a30d4c14820e715a766f"
-
-XPROF_SHA256 = ""
-
-http_archive(
-    name = "org_xprof",
-    sha256 = XPROF_SHA256,
-    strip_prefix = "xprof-" + XPROF_COMMIT,
-    urls = ["https://github.com/openxla/xprof/archive/{commit}.tar.gz".format(commit = XPROF_COMMIT)],
 )
 
 # Required by Perfetto.
@@ -111,6 +100,10 @@ LLVM_TARGETS = [
 #         "https://github.com/facebook/zstd/releases/download/v1.5.2/zstd-1.5.2.tar.gz"
 #     ],
 # )
+
+load("@enzyme_ad//third_party/xprof:workspace.bzl", xprof_workspace = "repo")
+
+xprof_workspace()
 
 load("@enzyme_ad//third_party/ml_toolchain:workspace.bzl", ml_toolchain_workspace = "repo")
 
@@ -247,6 +240,35 @@ load("@jax//:test_shard_count.bzl", "test_shard_count_repository")
 
 test_shard_count_repository(
     name = "test_shard_count",
+)
+
+load("@jax_wheel//:wheel.bzl", "WHEEL_VERSION")
+load("@python_version_repo//:py_version.bzl", "HERMETIC_PYTHON_VERSION")
+load("@jax//third_party/rocm_wheels:workspace.bzl", "rocm_wheels_repository")
+
+# Pre-built ROCm wheels from a GitHub release (ROCm/rocm-jax).
+rocm_wheels_repository(
+    name = "rocm_wheels",
+    jaxlib_version = WHEEL_VERSION,
+    python_version = HERMETIC_PYTHON_VERSION,
+    # rocm_version = "7.2.0",  # Optional: pick a specific ROCm version.
+)
+
+# Used for --//jax:build_jaxlib=false (pre-built wheels from GitHub).
+external_deps_repository(
+    name = "rocm_prebuilt_test_deps",
+    deps = [
+        "@rocm_wheels//:rocm_pjrt_py_import",
+        "@rocm_wheels//:rocm_plugin_py_import",
+    ],
+)
+
+load("@jax//jaxlib:jax_python_wheel.bzl", "jax_python_wheel_repository")
+
+jax_python_wheel_repository(
+    name = "jax_wheel",
+    version_key = "_version",
+    version_source = "@jax//jax:version.py",
 )
 
 load(
