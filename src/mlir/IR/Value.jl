@@ -83,6 +83,10 @@ function op_res_num(value::Value)
     return API.mlirOpResultGetResultNumber(value)
 end
 
+function location(value::Value)
+    return Location(API.mlirValueGetLocation(value))
+end
+
 function position(value::Value)
     if is_block_arg(value)
         return block_arg_num(value)
