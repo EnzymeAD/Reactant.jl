@@ -1092,7 +1092,7 @@ function mlir_extract_roots_from_value!(val::MLIR.IR.Value, roots_ptr::MLIR.IR.V
                 fty = MLIR.API.mlirLLVMStructTypeGetElementType(ty, i)
                 npath = copy(path)
                 push!(npath, Int32(i))
-                pushfirst!(todo, (npath, fty))
+                pushfirst!(todo, (npath, MLIR.IR.Type(fty)))
             end
             continue
         end
