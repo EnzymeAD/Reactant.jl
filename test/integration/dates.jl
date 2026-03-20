@@ -686,10 +686,6 @@ end
         state = State(clock)
         timestepping!(state)
 
-        # TODO: the track_numbers here is necessary. That may or may not be a bug within trace (track_numbers option in trace gives wrong results), see https://github.com/EnzymeAD/Reactant.jl/issues/2561
-        #clock_jit = Reactant.to_rarray(
-        #    Clock(5, DateTime(2002, 1, 1), Dates.Day(1)); #track_numbers = true
-        #)
         clock_jit = Clock(5, Dates.DateTime(2002, 1, 1), Dates.Day(1))
         clock_jit = Reactant.to_rarray(clock_jit; track_numbers=true)
 
