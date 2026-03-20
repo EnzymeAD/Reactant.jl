@@ -1136,7 +1136,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     )
 
     trueidx = 1
-    allocs = Union{Tuple{MLIR.IR.Value,MLIR.IR.Type},Nothing}[]
+    allocs = Union{Tuple{MLIR.IR.Value,MLIR.IR.Type, Type},Nothing}[]
 
     llvmptr = MLIR.IR.Type(MLIR.API.mlirLLVMPointerTypeGet(ctx, 0))
     i8 = MLIR.IR.Type(UInt8)
@@ -1153,6 +1153,10 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
                 MLIR.API.mlirLLVMFunctionTypeGetInput(gpu_function_type, trueidx - 1)
             )
             trueidx += 1
+	    jltyp = Core.Typeof(a)
+	    if Enzyme.Compiler.inline_roots_type(jltyp) != 0
+	       trueidx += 1
+	    end
             c1 = MLIR.IR.result(
                 MLIR.Dialects.llvm.mlir_constant(;
                     res=MLIR.IR.Type(Int64), value=MLIR.IR.Attribute(1)
@@ -1165,7 +1169,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
                 ),
                 1,
             )
-            push!(allocs, (alloc, argty))
+	    push!(allocs, (alloc, argty, jltyp))
 
             sz = abi_sizeof(a)
             array_ty = MLIR.IR.Type(MLIR.API.mlirLLVMArrayTypeGet(MLIR.IR.Type(Int8), sz))
@@ -1176,6 +1180,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
                 1,
             )
             MLIR.Dialects.llvm.store(cdata, alloc)
+
         end
     end
 
@@ -1241,9 +1246,29 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
             if arg === nothing
                 continue
             end
-            alloc, argty = arg
+            alloc, argty, jltyp = arg
             argres = MLIR.IR.result(MLIR.Dialects.llvm.load(alloc; res=argty), 1)
             push!(wrapargs, argres)
+	    roots = Enzyme.Compiler.inline_roots_type(jltyp)
+	    if Enzyme.Compiler.inline_roots_type(roots) != 0
+               c1 = MLIR.IR.result(
+                MLIR.Dialects.llvm.mlir_constant(;
+                    res=MLIR.IR.Type(Int64), value=MLIR.IR.Attribute(1)
+                ),
+                1,
+		    )
+	       jlvaluet = PointerType(StructType([]), 10)
+	       njlvaluet = ArrayType(roots, jlvaluet)
+		roots_ptr =  MLIR.IR.result(
+			MLIR.Dialects.llvm.alloca(
+			    c1; elem_type=MLIR.IR.Attribute(argty), res=njlvaluet
+			),
+			1,
+		    )
+
+		    mlir_extract_roots_from_value!(argres, roots_ptr)
+		    push!(wrapargs, roots_ptr)
+	    end
         end
         MLIR.Dialects.llvm.call(
             wrapargs,
