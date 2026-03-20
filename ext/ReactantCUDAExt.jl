@@ -1051,6 +1051,54 @@ function get_field_offset(T::Type, path)
 
     return offset
 end
+function mlir_extract_roots_from_value!(val::MLIR.IR.Value, roots_ptr::MLIR.IR.Value, @nospecialize(argty::MLIR.IR.Type), @nospecialize(njlvaluet::MLIR.IR.Type))
+    ctx = MLIR.IR.current_context()
+    llvmptr = MLIR.IR.Type(MLIR.API.mlirLLVMPointerTypeGet(ctx, 0))
+    
+    count = 0
+    # path uses Int32 for extractvalue position which takes Int32 array
+    todo = [(Int32[], argty)]
+    
+    while !isempty(todo)
+        path, ty = popfirst!(todo)
+        
+        if MLIR.API.mlirTypeIsALLVMPointerType(ty)
+            addrspace = MLIR.API.mlirLLVMPointerTypeGetAddressSpace(ty)
+            if 10 <= addrspace <= 12
+                extr = MLIR.IR.result(
+                    MLIR.Dialects.llvm.extractvalue(val; res=ty, position=MLIR.IR.Attribute(Int32.(path))),
+                    1
+                )
+                
+                gep_ptr = MLIR.IR.result(
+                    MLIR.Dialects.llvm.getelementptr(
+                        roots_ptr,
+                        MLIR.IR.Value[];
+                        res=llvmptr,
+                        elem_type=njlvaluet,
+                        rawConstantIndices=MLIR.IR.Attribute([Int32(0), Int32(count)]),
+                    ),
+                    1,
+                )
+                MLIR.Dialects.llvm.store(extr, gep_ptr)
+                count += 1
+                continue
+            end
+        end
+        
+        if MLIR.API.mlirTypeIsALLVMStructType(ty)
+            numfields = MLIR.API.mlirLLVMStructTypeGetNumElementTypes(ty)
+            for i in (numfields-1):-1:0
+                fty = MLIR.API.mlirLLVMStructTypeGetElementType(ty, i)
+                npath = copy(path)
+                push!(npath, Int32(i))
+                pushfirst!(todo, (npath, fty))
+            end
+            continue
+        end
+    end
+end
+
 
 Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     args...;
@@ -1253,23 +1301,24 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
             alloc, argty, jltyp = arg
             argres = MLIR.IR.result(MLIR.Dialects.llvm.load(alloc; res=argty), 1)
             push!(wrapargs, argres)
-    	    if Enzyme.Compiler.inline_roots_type(jltyp) != 0
+            if Enzyme.Compiler.inline_roots_type(jltyp) != 0
                c1 = MLIR.IR.result(
                 MLIR.Dialects.llvm.mlir_constant(;
                     res=MLIR.IR.Type(Int64), value=MLIR.IR.Attribute(1)
                 ),
                 1,
 		    )
-	       jlvaluet = PointerType(StructType([]), 10)
-	       njlvaluet = ArrayType(roots, jlvaluet)
+               roots_count = Enzyme.Compiler.inline_roots_type(jltyp)
+	       jlvaluet = MLIR.IR.Type(MLIR.API.mlirLLVMPointerTypeGet(ctx, 10))
+	       njlvaluet = MLIR.IR.Type(MLIR.API.mlirLLVMArrayTypeGet(jlvaluet, roots_count))
 		roots_ptr =  MLIR.IR.result(
 			MLIR.Dialects.llvm.alloca(
-			    c1; elem_type=MLIR.IR.Attribute(argty), res=njlvaluet
+			    c1; elem_type=MLIR.IR.Attribute(njlvaluet), res=llvmptr
 			),
 			1,
 		    )
 
-		    mlir_extract_roots_from_value!(argres, roots_ptr)
+		    mlir_extract_roots_from_value!(argres, roots_ptr, argty, njlvaluet)
 		    push!(wrapargs, roots_ptr)
 	    end
         end
