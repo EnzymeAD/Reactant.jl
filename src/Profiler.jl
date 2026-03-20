@@ -39,20 +39,90 @@ end
     When profiling compiled functions make sure to [`Reactant.Compiler.@compile`](@ref) with the `sync=true` option so that the compiled execution is captured by the profiler.
 
 """
+# Default CUPTI Performance Monitor counters for GPU kernel analysis.
+# Pass to `with_profiler` via `pm_counters=Profiler.DEFAULT_PM_COUNTERS`.
+#
+# Available counters depend on GPU architecture. Common useful ones:
+#
+# DRAM bandwidth:
+#   dram__bytes_read.sum, dram__bytes_write.sum,
+#   dram__throughput.avg.pct_of_peak_sustained_elapsed
+#
+# L2 cache:
+#   lts__t_sectors_lookup_hit.sum, lts__t_sectors_lookup_miss.sum,
+#   lts__t_bytes.sum
+#
+# L1/local memory (register spills):
+#   l1tex__t_bytes.sum,
+#   l1tex__data_pipe_lsu_wavefronts_mem_lg_cmd_local.sum
+#
+# Compute:
+#   sm__inst_executed.sum,
+#   sm__sass_thread_inst_executed_op_dfma_pred_on.sum (FP64 FMAs)
+#
+# Occupancy:
+#   sm__warps_active.avg.pct_of_peak_sustained_active
+#
+# To list all available counters for your GPU, run:
+#   ncu --query-metrics          (Nsight Compute)
+#   cupti_query --device 0 --getmetrics   (CUPTI toolkit)
+#
+# Note: PM counter collection requires profiling permissions on NVIDIA GPUs.
+# Set NVreg_RestrictProfilingToAdminUsers=0 in /etc/modprobe.d/nvidia-profiler.conf
+# and reload the nvidia kernel module.
+const DEFAULT_PM_COUNTERS = join(
+    [
+        "dram__bytes_read.sum",
+        "dram__bytes_write.sum",
+        "lts__t_sectors_lookup_hit.sum",
+        "lts__t_sectors_lookup_miss.sum",
+        "sm__inst_executed.sum",
+    ],
+    ",",
+)
+
+"""
+    with_profiler(f, trace_output_dir; trace_device=true, trace_host=true,
+                  create_perfetto_link=false, pm_counters=nothing, advanced_config=Dict())
+
+Runs the provided function under a profiler for XLA. The `pm_counters` keyword
+enables CUPTI hardware counter collection via the PM sampling API. Pass a
+comma-separated string of CUPTI metric names, or use `DEFAULT_PM_COUNTERS`
+for a standard set.
+
+With PM counters enabled, `get_framework_op_stats()` returns per-kernel metrics
+including `measured_memory_bw`, `operational_intensity`, and `bound_by`.
+
+```julia
+with_profiler("./traces"; pm_counters=Profiler.DEFAULT_PM_COUNTERS) do
+    compiled_fn(args...)
+end
+```
+"""
 function with_profiler(
     f,
     trace_output_dir::String;
     trace_device=true,
     trace_host=true,
     create_perfetto_link=false,
+    pm_counters::Union{String,Nothing}=nothing,
+    advanced_config::Dict{String,String}=Dict{String,String}(),
 )
     device_tracer_level =
         trace_device isa Bool ? UInt32(trace_device ? 1 : 0) : UInt32(trace_device)
     host_tracer_level =
         trace_host isa Bool ? UInt32(trace_host ? 2 : 0) : UInt32(trace_host)
 
+    config = copy(advanced_config)
+    if pm_counters !== nothing
+        config["gpu_pm_sample_counters"] = pm_counters
+        @info "PM counter collection enabled. If this fails with CUPTI_ERROR_INSUFFICIENT_PRIVILEGES, " *
+              "set NVreg_RestrictProfilingToAdminUsers=0 in /etc/modprobe.d/nvidia-profiler.conf " *
+              "and reload the nvidia kernel module."
+    end
+
     profiler = Reactant.MLIR.API.CreateProfilerSession(
-        device_tracer_level, host_tracer_level
+        device_tracer_level, host_tracer_level; advanced_config=config
     )
 
     results = try
@@ -501,6 +571,8 @@ function profile_and_get_xplane_file(
     nrepeat::Int=1,
     warmup::Int=1,
     profile_dir::Union{String,Nothing}=nothing,
+    pm_counters::Union{String,Nothing}=nothing,
+    advanced_config::Dict{String,String}=Dict{String,String}(),
     kwargs...,
 ) where {F}
     @assert warmup >= 1 "Warmup must be non-negative."
@@ -525,7 +597,7 @@ function profile_and_get_xplane_file(
     end
 
     # profile
-    with_profiler(profile_dir) do
+    with_profiler(profile_dir; pm_counters, advanced_config) do
         for i in 1:nrepeat
             annotate("bench"; metadata=Dict("step_num" => i, "_r" => 1)) do
                 fn(args...; kwargs...)
@@ -787,10 +859,12 @@ function profile_thunk_with_xprof(
     warmup::Int=1,
     profile_dir::Union{String,Nothing}=nothing,
     compile_time_ns::Int64=0,
+    pm_counters::Union{String,Nothing}=nothing,
+    advanced_config::Dict{String,String}=Dict{String,String}(),
     kwargs...,
 )
     (; val, xplane_file) = profile_and_get_xplane_file(
-        fn, args...; nrepeat, warmup, profile_dir, kwargs...
+        fn, args...; nrepeat, warmup, profile_dir, pm_counters, advanced_config, kwargs...
     )
     memory_data = get_aggregate_memory_statistics(xplane_file)
     metrics_data = get_aggregate_metrics(xplane_file, nrepeat)
