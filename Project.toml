@@ -74,7 +74,7 @@ ReactantCore = {path = "lib/ReactantCore"}
 [extensions]
 ReactantAbstractFFTsExt = "AbstractFFTs"
 ReactantArrayInterfaceExt = "ArrayInterface"
-ReactantCUDAExt = ["CUDA", "GPUCompiler", "KernelAbstractions", "LLVM"]
+ReactantCUDAExt = ["CUDA", "Enzyme", "GPUCompiler", "KernelAbstractions", "LLVM"]
 ReactantDLFP8TypesExt = "DLFP8Types"
 ReactantFFTWExt = ["FFTW", "AbstractFFTs", "LinearAlgebra"]
 ReactantFillArraysExt = "FillArrays"

@@ -10,6 +10,7 @@ using Reactant:
 using Reactant.Compiler: raising, LLVMFunc, llvm_compiler_cache
 using Reactant.Ops: @opcall
 
+using Enzyme
 using Adapt: Adapt, adapt
 using CUDA: CUDA, CuDim, DenseCuArray, unsafe_cached_load
 
@@ -1141,6 +1142,8 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     llvmptr = MLIR.IR.Type(MLIR.API.mlirLLVMPointerTypeGet(ctx, 0))
     i8 = MLIR.IR.Type(UInt8)
     allargs = Any[func.f, args...]
+    ctx = LLVM.Context()
+    LLVM.activate(ctx)
     for a in allargs
         if sizeof(a) == 0
             push!(allocs, nothing)
@@ -1153,10 +1156,10 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
                 MLIR.API.mlirLLVMFunctionTypeGetInput(gpu_function_type, trueidx - 1)
             )
             trueidx += 1
-	    jltyp = Core.Typeof(a)
-	    if Enzyme.Compiler.inline_roots_type(jltyp) != 0
-	       trueidx += 1
-	    end
+	        jltyp = Core.Typeof(a)
+	        if Enzyme.Compiler.inline_roots_type(jltyp) != 0
+	            trueidx += 1
+	        end
             c1 = MLIR.IR.result(
                 MLIR.Dialects.llvm.mlir_constant(;
                     res=MLIR.IR.Type(Int64), value=MLIR.IR.Attribute(1)
@@ -1183,6 +1186,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
 
         end
     end
+    LLVM.deactivate(ctx)
 
     argidx = 1
     for arg in values(seen)
@@ -1249,8 +1253,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
             alloc, argty, jltyp = arg
             argres = MLIR.IR.result(MLIR.Dialects.llvm.load(alloc; res=argty), 1)
             push!(wrapargs, argres)
-	    roots = Enzyme.Compiler.inline_roots_type(jltyp)
-	    if Enzyme.Compiler.inline_roots_type(roots) != 0
+    	    if Enzyme.Compiler.inline_roots_type(jltyp) != 0
                c1 = MLIR.IR.result(
                 MLIR.Dialects.llvm.mlir_constant(;
                     res=MLIR.IR.Type(Int64), value=MLIR.IR.Attribute(1)
