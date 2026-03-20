@@ -13607,10 +13607,23 @@ function enzymeActivityAttrGet(ctx, val)
     @ccall mlir_c.enzymeActivityAttrGet(ctx::MlirContext, val::Int32)::MlirAttribute
 end
 
-function CreateProfilerSession(device_tracer_level, host_tracer_level)
-    @ccall mlir_c.CreateProfilerSession(
-        device_tracer_level::UInt32, host_tracer_level::UInt32
-    )::Ptr{ProfilerSession}
+function CreateProfilerSession(
+    device_tracer_level, host_tracer_level;
+    advanced_config::Dict{String,String}=Dict{String,String}(),
+)
+    keys = collect(Base.keys(advanced_config))
+    values = collect(Base.values(advanced_config))
+    GC.@preserve keys values begin
+        key_ptrs = isempty(keys) ? C_NULL : Base.unsafe_convert.(Cstring, keys)
+        val_ptrs = isempty(values) ? C_NULL : Base.unsafe_convert.(Cstring, values)
+        return @ccall mlir_c.CreateProfilerSession(
+            device_tracer_level::UInt32,
+            host_tracer_level::UInt32,
+            (isempty(keys) ? C_NULL : key_ptrs)::Ptr{Cstring},
+            (isempty(values) ? C_NULL : val_ptrs)::Ptr{Cstring},
+            length(keys)::Cint,
+        )::Ptr{ProfilerSession}
+    end
 end
 
 function ProfilerSessionCollectData(session, path)
