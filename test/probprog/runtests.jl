@@ -12,7 +12,9 @@ delete!(testsuite, "common")
 include("../test_helpers.jl")
 
 if NTPUs > 0 || BACKEND == "tpu"
-    empty!(testsuite)
+    # On TPU, run all MWE variants to find which complexity level triggers the crash
+    tpu_tests = Set(["tpu_mwe_b2_no_leapfrog", "tpu_mwe_b2"])
+    filter!(p -> p.first in tpu_tests, testsuite)
 end
 
 custom_test_worker = NTPUs > 0 || BACKEND == "tpu"
