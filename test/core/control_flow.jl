@@ -1215,3 +1215,29 @@ end
 
     @test f_not_traced_conditional(cond, x) == @jit(f_not_traced_conditional(cond, x_ra))
 end
+
+function f_no_else_with_assert(x, cond)
+    @trace if cond
+        @assert x != 2
+        nothing
+    end
+end
+
+@testset "no else branch with macro expansion (issue: UndefVarError on constant condition)" begin
+    # Test that @trace if without else branch and a macro call (like @assert)
+    # that expands to an if statement doesn't cause UndefVarError
+    @test f_no_else_with_assert(1, false) === nothing
+    @test f_no_else_with_assert(1, true) === nothing
+
+    # Verify the assertion actually triggers when expected
+    @test_throws AssertionError f_no_else_with_assert(2, true)
+
+    # Same test but run via @jit with constant (non-traced) condition
+    x = 1
+    @test @jit(f_no_else_with_assert(x, false)) === nothing
+    @test @jit(f_no_else_with_assert(x, true)) === nothing
+
+    # Also test with traced array inputs
+    x_ra = Reactant.to_rarray(fill(1, 2))
+    @test @jit(f_no_else_with_assert(x_ra, false)) === nothing
+end
