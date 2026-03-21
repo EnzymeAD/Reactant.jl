@@ -74,7 +74,7 @@ ReactantCore = {path = "lib/ReactantCore"}
 [extensions]
 ReactantAbstractFFTsExt = "AbstractFFTs"
 ReactantArrayInterfaceExt = "ArrayInterface"
-ReactantCUDAExt = ["CUDA", "GPUCompiler", "KernelAbstractions", "LLVM"]
+ReactantCUDAExt = ["CUDA", "Enzyme", "GPUCompiler", "KernelAbstractions", "LLVM"]
 ReactantDLFP8TypesExt = "DLFP8Types"
 ReactantFFTWExt = ["FFTW", "AbstractFFTs", "LinearAlgebra"]
 ReactantFillArraysExt = "FillArrays"
@@ -106,7 +106,7 @@ Crayons = "4.1.1"
 DLFP8Types = "0.1"
 Downloads = "1.6"
 EnumX = "1"
-Enzyme = "0.13.87"
+Enzyme = "0.13.104"
 EnzymeCore = "0.8.14"
 FFTW = "1"
 FillArrays = "1.13"
