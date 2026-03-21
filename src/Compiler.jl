@@ -1732,7 +1732,7 @@ const cuOptLevel = Ref{Int}(2)
 #                                      12.2 -> 82
 #                                      11.8 -> 78
 function cubinFeatures()
-    fallback = "+ptx86"
+    fallback = "+ptx80"
     ver = MLIR.API.ReactantCudaDriverGetVersion()
     # No cuda available
     if ver == 0
