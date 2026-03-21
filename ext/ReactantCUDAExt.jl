@@ -1564,6 +1564,74 @@ end
     end
 end
 
+# ============================================================
+# Device-to-device CuArray <-> ConcreteRArray conversions
+# ============================================================
+
+# CuArray -> ConcreteRArray: D2D copy via CreateViewOfDeviceBuffer + CopyToMemorySpace.
+# We synchronize the CUDA stream before calling into PJRT to ensure all pending
+# CUDA.jl writes to the source CuArray are complete. Then we pass stream=0 to
+# BufferFromDevicePointer (meaning "data is already ready, no stream to wait on").
+#
+# Safety: BufferFromDevicePointer creates an ephemeral PJRT view of cu's memory,
+# then does a D2D copy via CopyToMemorySpace, then awaits the copy's completion
+# (GetReadyFuture().Await()) before returning. This ensures the D2D copy finishes
+# while GC.@preserve still holds cu alive, so the source memory is never read
+# after it could be freed.
+function Reactant.ConcretePJRTArray(
+    cu::DenseCuArray{T,N};
+    client::Union{Nothing,Reactant.XLA.PJRT.Client}=nothing,
+    device::Union{Nothing,Reactant.XLA.PJRT.Device}=nothing,
+) where {T,N}
+    theclient = client === nothing ? Reactant.XLA.default_backend() : client
+    thedevice = device === nothing ? Reactant.XLA.default_device(theclient) : device
+
+    # Synchronize CUDA stream to ensure all writes to cu are complete before
+    # PJRT reads from this memory.
+    CUDA.synchronize()
+
+    sizear = collect(Int64, reverse(size(cu)))
+    GC.@preserve cu sizear theclient thedevice begin
+        buf = MLIR.API.BufferFromDevicePointer(
+            theclient.client,
+            Ptr{Cvoid}(UInt(pointer(cu))),
+            Reactant.XLA.primitive_type(T),
+            N,
+            sizear,
+            thedevice.device,
+            Int64(0),  # stream=0: data already synchronized
+        )
+    end
+    async_buf = Reactant.XLA.PJRT.AsyncBuffer(Reactant.XLA.PJRT.Buffer(buf), nothing)
+    shardinfo = Reactant.Sharding.ShardInfo(Reactant.Sharding.NoSharding(), nothing)
+    return Reactant.ConcretePJRTArray{T,N,1}((async_buf,), size(cu), shardinfo)
+end
+
+# Non-contiguous CuArray views (e.g. stride-2 SubArrays) are not DenseCuArray,
+# so they don't dispatch to the method above. Materialize to contiguous first.
+function Reactant.ConcretePJRTArray(
+    cu::SubArray{T,N,<:CUDA.CuArray}; kwargs...
+) where {T,N}
+    return Reactant.ConcretePJRTArray(CUDA.CuArray(cu); kwargs...)
+end
+
+# ConcreteRArray -> CuArray: D2D copy using AwaitBufferReady for synchronization.
+# AwaitBufferReady calls GetReadyFuture().Await() to wait for all PJRT definition
+# events to resolve, then returns the raw device pointer. We then D2D copy into
+# a new CuArray.
+function CUDA.CuArray(ra::Reactant.ConcretePJRTArray{T,N,1}) where {T,N}
+    buf = Reactant.get_buffer(ra)
+    cu = CUDA.CuArray{T}(undef, size(ra))
+    nbytes = length(ra) * sizeof(T)
+    GC.@preserve ra cu begin
+        # AwaitBufferReady: waits for definition events, returns synchronized device ptr
+        src_ptr = MLIR.API.AwaitBufferReady(buf.buffer)
+        # cuMemcpyDtoD_v2 is synchronous (blocks until copy completes)
+        CUDA.cuMemcpyDtoD_v2(pointer(cu), CUDA.CuPtr{Nothing}(UInt(src_ptr)), nbytes)
+    end
+    return cu
+end
+
 function __init__()
     # Required to unbreak with_profile
     delete!(ENV, "NVTX_INJECTION64_PATH")
