@@ -264,6 +264,44 @@ function async_store(
 end
 
 """
+`async_store_scales_smem_to_tmem`
+
+Schedules an async copy of the scaling factors from the `source` MemRef
+in SMEM to the `destination` MemRef in TMEM.
+
+The `source` and `destination` MemRefs must have the same element type
+(F8E8M0FNU or F8E4M3FN).
+
+Given a destination shape [M, N], the source shape must be
+[M/128, N/4, 32, 16], and M % 128 == 0 and N % 4 == 0.
+
+If `collective` is `true`, the copy is performed by a cluster of 2 CTAs,
+and we expect that this op is issued by a single CTA.
+If `collective` is `false`, the copy is performed by a single CTA.
+"""
+function async_store_scales_smem_to_tmem(
+    source::Value, destination::Value; collective=nothing, location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[source, destination]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(collective) && push!(attributes, NamedAttribute("collective", collective))
+
+    return create_operation(
+        "mosaic_gpu.async_store_scales_smem_to_tmem",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
 `async_store_smem_to_tmem`
 
 Schedules an async copy of the contents of the `source` MemRef in SMEM to
@@ -1044,6 +1082,25 @@ function wait(barrier::Value, parity::Value; location=Location())
 
     return create_operation(
         "mosaic_gpu.wait",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+function warp_map(operands::Vector{Value}; body::Region, location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[operands...,]
+    owned_regions = Region[body,]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "mosaic_gpu.warp_map",
         location;
         operands,
         owned_regions,

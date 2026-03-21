@@ -1994,7 +1994,6 @@ function func(;
     reciprocal_estimates=nothing,
     prefer_vector_width=nothing,
     target_features=nothing,
-    no_nans_fp_math=nothing,
     no_signed_zeros_fp_math=nothing,
     denormal_fpenv=nothing,
     fp_contract=nothing,
@@ -2084,8 +2083,6 @@ function func(;
         push!(attributes, NamedAttribute("prefer_vector_width", prefer_vector_width))
     !isnothing(target_features) &&
         push!(attributes, NamedAttribute("target_features", target_features))
-    !isnothing(no_nans_fp_math) &&
-        push!(attributes, NamedAttribute("no_nans_fp_math", no_nans_fp_math))
     !isnothing(no_signed_zeros_fp_math) && push!(
         attributes, NamedAttribute("no_signed_zeros_fp_math", no_signed_zeros_fp_math)
     )
