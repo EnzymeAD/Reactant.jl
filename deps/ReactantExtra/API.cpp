@@ -1880,14 +1880,15 @@ ifrt_compile(ifrt::Client *client, MlirModule cmod, int64_t device_id,
              int64_t num_replicas, int64_t num_partitions,
              bool use_spmd_partitioning, bool kernel_cache_enabled,
              const char *kernel_cache_path, bool autotune_cache_enabled,
-             const char *autotune_cache_path, int process_id) {
+             const char *autotune_cache_path, int process_id,
+	     bool xla_enable_enzyme_comms_opt) {
   return ifrt_compile_internal(
       client, cmod,
       GenerateCompileOptions(
           device_id, mesh_ids, num_mesh_ids, xla_gpu_cuda_data_dir,
           use_shardy_partitioner, num_replicas, num_partitions,
           use_spmd_partitioning, kernel_cache_enabled, kernel_cache_path,
-          autotune_cache_enabled, autotune_cache_path, process_id));
+          autotune_cache_enabled, autotune_cache_path, process_id, xla_enable_enzyme_comms_opt));
 }
 
 REACTANT_ABI HeldIfrtLoadedExecutable *
