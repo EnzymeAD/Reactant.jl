@@ -4475,9 +4475,18 @@ function mlirAttributeIsADenseFPElements(attr)
 end
 
 """
+    mlirDenseTypedElementsAttrGetTypeID()
+
+Returns the typeID of a DenseTypedElements attribute.
+"""
+function mlirDenseTypedElementsAttrGetTypeID()
+    @ccall mlir_c.mlirDenseTypedElementsAttrGetTypeID()::MlirTypeID
+end
+
+"""
     mlirDenseIntOrFPElementsAttrGetTypeID()
 
-Returns the typeID of an DenseIntOrFPElements attribute.
+Deprecated API. Will be removed in the future.
 """
 function mlirDenseIntOrFPElementsAttrGetTypeID()
     @ccall mlir_c.mlirDenseIntOrFPElementsAttrGetTypeID()::MlirTypeID
@@ -7184,6 +7193,19 @@ function mlirLLVMVoidTypeGetName()
 end
 
 """
+    mlirTypeIsALLVMArrayType(type)
+
+Returns `true` if the type is an LLVM dialect array type.
+"""
+function mlirTypeIsALLVMArrayType(type)
+    @ccall mlir_c.mlirTypeIsALLVMArrayType(type::MlirType)::Bool
+end
+
+function mlirLLVMArrayTypeGetTypeID()
+    @ccall mlir_c.mlirLLVMArrayTypeGetTypeID()::MlirTypeID
+end
+
+"""
     mlirLLVMArrayTypeGet(elementType, numElements)
 
 Creates an llvm.array type.
@@ -7203,6 +7225,15 @@ Returns the element type of the llvm.array type.
 """
 function mlirLLVMArrayTypeGetElementType(type)
     @ccall mlir_c.mlirLLVMArrayTypeGetElementType(type::MlirType)::MlirType
+end
+
+"""
+    mlirLLVMArrayTypeGetNumElements(type)
+
+Returns the number of elements in the llvm.array type.
+"""
+function mlirLLVMArrayTypeGetNumElements(type)
+    @ccall mlir_c.mlirLLVMArrayTypeGetNumElements(type::MlirType)::Cuint
 end
 
 """
