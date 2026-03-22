@@ -539,8 +539,21 @@ REACTANT_ABI int InitializePjrtPlugin(const char *device_type,
   return 0;
 }
 
-REACTANT_ABI PjRtClient *GetCApiClient(const char *device_type) {
-  return xla::GetCApiClient(device_type).value().release();
+PjRtClient *GetCApiClientInternal(const char *device_type, const char **error) {
+  auto result = xla::GetCApiClient(device_type);
+  if (!result.ok()) {
+    auto str = result.status().message();
+    char *err = (char *)malloc(str.size() + 1);
+    memcpy(err, str.data(), str.size() + 1);
+    err[str.size()] = '\0';
+    if (error) {
+      *error = err;
+    } else {
+      free(err);
+    }
+    return nullptr;
+  }
+  return result.value().release();
 }
 
 REACTANT_ABI void pjrt_client_register_profiler(const PJRT_Api *api) {
@@ -558,7 +571,7 @@ REACTANT_ABI PjRtClient *MakeClientUsingPluginAPI(const char *device_type,
     return nullptr;
 
   RegisterProfiler(pluginLoad);
-  return GetCApiClient(client_name);
+  return GetCApiClientInternal(client_name, error);
 }
 
 // Register a Julia-allocated PJRT_Api struct directly (no dlopen needed).
@@ -572,6 +585,7 @@ REACTANT_ABI PjRtClient *MakeClientFromApi(const PJRT_Api *api,
     auto str = set_status.message();
     char *err = (char *)malloc(str.size() + 1);
     memcpy(err, str.data(), str.size() + 1);
+    err[str.size()] = '\0';
     *error = err;
     return nullptr;
   }
@@ -579,7 +593,7 @@ REACTANT_ABI PjRtClient *MakeClientFromApi(const PJRT_Api *api,
     return nullptr;
 
   RegisterProfiler(api);
-  return GetCApiClient(client_name);
+  return GetCApiClientInternal(client_name, error);
 }
 
 REACTANT_ABI PjRtClient *MakeTPUClient(const char *tpu_path,
