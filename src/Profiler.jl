@@ -39,37 +39,43 @@ end
     When profiling compiled functions make sure to [`Reactant.Compiler.@compile`](@ref) with the `sync=true` option so that the compiled execution is captured by the profiler.
 
 """
-# Default CUPTI Performance Monitor counters for GPU kernel analysis.
-# Pass to `with_profiler` via `pm_counters=Profiler.DEFAULT_PM_COUNTERS`.
-#
-# Available counters depend on GPU architecture. Common useful ones:
-#
-# DRAM bandwidth:
-#   dram__bytes_read.sum, dram__bytes_write.sum,
-#   dram__throughput.avg.pct_of_peak_sustained_elapsed
-#
-# L2 cache:
-#   lts__t_sectors_lookup_hit.sum, lts__t_sectors_lookup_miss.sum,
-#   lts__t_bytes.sum
-#
-# L1/local memory (register spills):
-#   l1tex__t_bytes.sum,
-#   l1tex__data_pipe_lsu_wavefronts_mem_lg_cmd_local.sum
-#
-# Compute:
-#   sm__inst_executed.sum,
-#   sm__sass_thread_inst_executed_op_dfma_pred_on.sum (FP64 FMAs)
-#
-# Occupancy:
-#   sm__warps_active.avg.pct_of_peak_sustained_active
-#
-# To list all available counters for your GPU, run:
-#   ncu --query-metrics          (Nsight Compute)
-#   cupti_query --device 0 --getmetrics   (CUPTI toolkit)
-#
-# Note: PM counter collection requires profiling permissions on NVIDIA GPUs.
-# Set NVreg_RestrictProfilingToAdminUsers=0 in /etc/modprobe.d/nvidia-profiler.conf
-# and reload the nvidia kernel module.
+
+"""
+    DEFAULT_PM_COUNTERS
+
+Default CUPTI Performance Monitor counters for GPU kernel analysis.
+Pass to `with_profiler` via `pm_counters=Profiler.DEFAULT_PM_COUNTERS`.
+
+Available counters depend on GPU architecture. Common useful ones:
+
+DRAM bandwidth:
+  `dram__bytes_read.sum`, `dram__bytes_write.sum`,
+  `dram__throughput.avg.pct_of_peak_sustained_elapsed`
+
+L2 cache:
+  `lts__t_sectors_lookup_hit.sum`, `lts__t_sectors_lookup_miss.sum`,
+  `lts__t_bytes.sum`
+
+L1/local memory (register spills):
+  `l1tex__t_bytes.sum`,
+  `l1tex__data_pipe_lsu_wavefronts_mem_lg_cmd_local.sum`
+
+Compute:
+  `sm__inst_executed.sum`,
+  `sm__sass_thread_inst_executed_op_dfma_pred_on.sum` (FP64 FMAs)
+
+Occupancy:
+  `sm__warps_active.avg.pct_of_peak_sustained_active`
+
+To list all available counters for your GPU, run:
+  `ncu --query-metrics` (Nsight Compute) or
+  `cupti_query --device 0 --getmetrics` (CUPTI toolkit)
+
+!!! note
+    PM counter collection requires profiling permissions on NVIDIA GPUs.
+    Set `NVreg_RestrictProfilingToAdminUsers=0` in `/etc/modprobe.d/nvidia-profiler.conf`
+    and reload the nvidia kernel module.
+"""
 const DEFAULT_PM_COUNTERS = join(
     [
         "dram__bytes_read.sum",
@@ -114,16 +120,44 @@ function with_profiler(
         trace_host isa Bool ? UInt32(trace_host ? 2 : 0) : UInt32(trace_host)
 
     config = copy(advanced_config)
+    # Allow enabling PM counters via environment variable
+    if pm_counters === nothing
+        pm_counters = get(ENV, "REACTANT_PM_COUNTERS", nothing)
+    end
     if pm_counters !== nothing
-        config["gpu_pm_sample_counters"] = pm_counters
-        @info "PM counter collection enabled. If this fails with CUPTI_ERROR_INSUFFICIENT_PRIVILEGES, " *
-              "set NVreg_RestrictProfilingToAdminUsers=0 in /etc/modprobe.d/nvidia-profiler.conf " *
-              "and reload the nvidia kernel module."
+        # Check if CUPTI profiling is likely to work on this system
+        nvidia_params = "/proc/driver/nvidia/params"
+        if isfile(nvidia_params)
+            params_content = read(nvidia_params, String)
+            if contains(params_content, "RmProfilingAdminOnly: 1")
+                @warn "CUPTI PM counter collection requires profiling permissions. " *
+                      "Set NVreg_RestrictProfilingToAdminUsers=0 in " *
+                      "/etc/modprobe.d/nvidia-profiler.conf and reload the nvidia module. " *
+                      "Continuing without PM counters."
+                pm_counters = nothing
+            end
+        elseif !Sys.islinux()
+            @warn "PM counter collection is only supported on Linux with NVIDIA GPUs. " *
+                  "Continuing without PM counters."
+            pm_counters = nothing
+        end
+        if pm_counters !== nothing
+            config["gpu_pm_sample_counters"] = pm_counters
+        end
     end
 
-    profiler = Reactant.MLIR.API.CreateProfilerSession(
-        device_tracer_level, host_tracer_level; advanced_config=config
-    )
+    config_keys = collect(keys(config))
+    config_values = collect(values(config))
+    profiler = GC.@preserve config_keys config_values begin
+        key_ptrs = isempty(config_keys) ? C_NULL : Base.unsafe_convert.(Cstring, config_keys)
+        val_ptrs = isempty(config_values) ? C_NULL : Base.unsafe_convert.(Cstring, config_values)
+        Reactant.MLIR.API.CreateProfilerSession(
+            device_tracer_level, host_tracer_level,
+            isempty(config_keys) ? C_NULL : key_ptrs,
+            isempty(config_values) ? C_NULL : val_ptrs,
+            Cint(length(config_keys)),
+        )
+    end
 
     results = try
         f()
