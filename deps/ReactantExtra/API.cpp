@@ -390,13 +390,22 @@ enzymeActivityAttrGet(MlirContext ctx, int32_t val) {
                                               (mlir::enzyme::Activity)val));
 }
 
-// Create profiler session and start profiling
+// Create profiler session and start profiling.
+// advanced_config_keys/values are parallel arrays of key-value pairs that
+// get inserted into ProfileOptions::advanced_configuration.
+// Pass n_advanced=0 with nullptr for keys/values to use defaults.
 REACTANT_ABI tsl::ProfilerSession *
-CreateProfilerSession(uint32_t device_tracer_level,
-                      uint32_t host_tracer_level) {
+CreateProfilerSession(uint32_t device_tracer_level, uint32_t host_tracer_level,
+                      const char **advanced_config_keys,
+                      const char **advanced_config_values, int n_advanced) {
   tensorflow::ProfileOptions options = tsl::ProfilerSession::DefaultOptions();
   options.set_device_tracer_level(device_tracer_level);
   options.set_host_tracer_level(host_tracer_level);
+  for (int i = 0; i < n_advanced; i++) {
+    auto *config_value =
+        &(*options.mutable_advanced_configuration())[advanced_config_keys[i]];
+    config_value->set_string_value(advanced_config_values[i]);
+  }
   auto sess = tsl::ProfilerSession::Create(options);
   return sess.release();
 }
@@ -1366,7 +1375,8 @@ xla::PjRtLoadedExecutable *ClientCompileInternal(PjRtClient *client,
     }
   }
 
-  auto exec_err = client->CompileAndLoad(MaybeOwningMlirModule(cmod_op), options);
+  auto exec_err =
+      client->CompileAndLoad(MaybeOwningMlirModule(cmod_op), options);
 
   if (!exec_err.ok()) {
     std::string err_str;
