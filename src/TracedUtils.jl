@@ -1146,7 +1146,12 @@ function elem_apply_via_while_loop(f, args::Vararg{Any,Nargs}) where {Nargs}
     else
         typeof(res_tmp)
     end
-    result = similar(first(flat_args), T_res, L)
+
+    # Before we selected the output container based on the first argument
+    # That doesn't work for cases when StructArrays are involved
+    # Since this is essentially a broadcast I'm reusing this machinery
+    bc = Base.Broadcast.Broadcasted(f, Tuple(flat_args))
+    result = similar(bc, T_res)
 
     ind_var = Ref(0)
     f_ref = Ref(f)
