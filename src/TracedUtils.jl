@@ -1129,7 +1129,7 @@ function __elem_apply_loop_body(idx_ref, fn_ref::F, res_ref, args_ref, L_ref) wh
     return nothing
 end
 
-function elem_apply_via_while_loop(f, args::Vararg{Any,Nargs}) where {Nargs}
+function elem_apply_via_while_loop(f, args::Vararg{Any,Nargs}; dest=nothing) where {Nargs}
     @assert allequal(size.(args)) "All args must have the same size"
     L = length(first(args))
     # flattening the tensors makes the auto-batching pass work nicer
@@ -1150,8 +1150,13 @@ function elem_apply_via_while_loop(f, args::Vararg{Any,Nargs}) where {Nargs}
     # Before we selected the output container based on the first argument
     # That doesn't work for cases when StructArrays are involved
     # Since this is essentially a broadcast I'm reusing this machinery
-    bc = Base.Broadcast.Broadcasted(f, Tuple(flat_args))
-    result = similar(bc, T_res)
+    if isnothing(dest)
+        bc = Base.Broadcast.Broadcasted(f, Tuple(flat_args))
+        result = similar(bc, T_res)
+    else
+        @assert size(dest) == size(first(args)) "dest must have the same size as the input args"
+        result = dest
+    end
 
     ind_var = Ref(0)
     f_ref = Ref(f)
