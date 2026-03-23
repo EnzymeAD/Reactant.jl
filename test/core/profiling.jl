@@ -81,7 +81,7 @@ end
             mktempdir() do profile_dir
                 Reactant.Profiler.with_profiler(
                     profile_dir;
-                    pm_counters=Reactant.Profiler.DEFAULT_PM_COUNTERS,
+                    pm_counters=Reactant.Profiler.default_pm_counters(),
                 ) do
                     fn(x, W, b)
                 end
@@ -93,7 +93,7 @@ end
             pm_result = Reactant.Profiler.profile_and_get_xplane_file(
                 fn, x, W, b;
                 nrepeat=3,
-                pm_counters=Reactant.Profiler.DEFAULT_PM_COUNTERS,
+                pm_counters=Reactant.Profiler.default_pm_counters(),
             )
             @test isfile(pm_result.xplane_file)
 

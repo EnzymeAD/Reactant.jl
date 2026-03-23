@@ -41,51 +41,56 @@ end
 """
 
 """
-    DEFAULT_PM_COUNTERS
+    PM_COUNTERS
 
-Default CUPTI Performance Monitor counters for GPU kernel analysis.
-Pass to `with_profiler` via `pm_counters=Profiler.DEFAULT_PM_COUNTERS`.
+Named CUPTI PM sampling counters for GPU kernel analysis. Keys are human-readable
+names, values are the CUPTI metric strings. Most bare metric names work across
+architectures (Turing through Blackwell); L2 cache metrics may require
+architecture-specific Triage-namespaced prefixes.
 
-Available counters depend on GPU architecture. Common useful ones:
+Use [`default_pm_counters`](@ref) to get a default set, or pick specific counters:
 
-DRAM bandwidth:
-  `dram__bytes_read.sum`, `dram__bytes_write.sum`,
-  `dram__throughput.avg.pct_of_peak_sustained_elapsed`
+```julia
+using Reactant.Profiler: PM_COUNTERS
+counters = join([PM_COUNTERS[:dram_read_throughput], PM_COUNTERS[:sm_ipc]], ",")
+with_profiler("./traces"; pm_counters=counters) do
+    compiled_fn(args...)
+end
+```
+"""
+const PM_COUNTERS = Dict{Symbol,String}(
+    # DRAM bandwidth
+    :dram_read_throughput => "dramc__read_throughput.avg.pct_of_peak_sustained_elapsed",
+    :dram_write_throughput => "dramc__write_throughput.avg.pct_of_peak_sustained_elapsed",
+    :dram_throughput => "dramc__throughput.avg.pct_of_peak_sustained_elapsed",
+    # L2 cache
+    :l2_throughput => "lts__throughput.avg.pct_of_peak_sustained_elapsed",
+    :l2_hit_rate => "lts__t_sector_hit_rate.pct",
+    # SM compute
+    :sm_ipc => "sm__inst_executed_realtime.avg.per_cycle_active",
+    :sm_active => "sm__cycles_active.avg",
+    :sm_throughput => "sm__inst_executed_realtime.avg.pct_of_peak_sustained_elapsed",
+)
 
-L2 cache:
-  `lts__t_sectors_lookup_hit.sum`, `lts__t_sectors_lookup_miss.sum`,
-  `lts__t_bytes.sum`
+"""
+    default_pm_counters() -> String
 
-L1/local memory (register spills):
-  `l1tex__t_bytes.sum`,
-  `l1tex__data_pipe_lsu_wavefronts_mem_lg_cmd_local.sum`
+Return a comma-separated string of CUPTI PM sampling counters suitable for
+profiling GPU kernels. The returned set covers DRAM throughput, L2 cache, and
+SM compute utilization. Counter names are architecture-independent bare names
+that work across Turing, Ampere, Ada, Hopper, and Blackwell GPUs.
 
-Compute:
-  `sm__inst_executed.sum`,
-  `sm__sass_thread_inst_executed_op_dfma_pred_on.sum` (FP64 FMAs)
-
-Occupancy:
-  `sm__warps_active.avg.pct_of_peak_sustained_active`
-
-To list all available counters for your GPU, run:
-  `ncu --query-metrics` (Nsight Compute) or
-  `cupti_query --device 0 --getmetrics` (CUPTI toolkit)
+To list all available PM sampling counters for your specific GPU, run:
+  `ncu --query-metrics-collection pmsampling --chip <chip>`
 
 !!! note
     PM counter collection requires profiling permissions on NVIDIA GPUs.
     Set `NVreg_RestrictProfilingToAdminUsers=0` in `/etc/modprobe.d/nvidia-profiler.conf`
     and reload the nvidia kernel module.
 """
-const DEFAULT_PM_COUNTERS = join(
-    [
-        "dram__bytes_read.sum",
-        "dram__bytes_write.sum",
-        "lts__t_sectors_lookup_hit.sum",
-        "lts__t_sectors_lookup_miss.sum",
-        "sm__inst_executed.sum",
-    ],
-    ",",
-)
+function default_pm_counters()
+    return join(values(PM_COUNTERS), ",")
+end
 
 """
     with_profiler(f, trace_output_dir; trace_device=true, trace_host=true,
@@ -93,14 +98,14 @@ const DEFAULT_PM_COUNTERS = join(
 
 Runs the provided function under a profiler for XLA. The `pm_counters` keyword
 enables CUPTI hardware counter collection via the PM sampling API. Pass a
-comma-separated string of CUPTI metric names, or use `DEFAULT_PM_COUNTERS`
+comma-separated string of CUPTI metric names, or use `default_pm_counters()`
 for a standard set.
 
 With PM counters enabled, `get_framework_op_stats()` returns per-kernel metrics
 including `measured_memory_bw`, `operational_intensity`, and `bound_by`.
 
 ```julia
-with_profiler("./traces"; pm_counters=Profiler.DEFAULT_PM_COUNTERS) do
+with_profiler("./traces"; pm_counters=Profiler.default_pm_counters()) do
     compiled_fn(args...)
 end
 ```
