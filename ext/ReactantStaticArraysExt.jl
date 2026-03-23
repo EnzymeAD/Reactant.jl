@@ -2,8 +2,11 @@ module ReactantStaticArraysExt
 
 using Reactant
 import Reactant.TracedRArrayOverrides: overloaded_map
+import Reactant.TracedLinearAlgebra: overloaded_mul
 
 using StaticArrays: SArray, StaticArray
+
+const SAReact{Sz, T} = StaticArray{Sz<:Tuple, T<:Reactant.TracedRNumber}
 
 Base.@nospecializeinfer function Reactant.traced_type_inner(
     @nospecialize(FA::Type{SArray{S,T,N,L}}),
@@ -17,13 +20,13 @@ Base.@nospecializeinfer function Reactant.traced_type_inner(
     return SArray{S,T_traced,N,L}
 end
 
-function Reactant.materialize_traced_array(x::SArray)
-    as = Reactant.aos_to_soa(collect(x))
-    return Reactant.materialize_traced_array(as)
+function Reactant.materialize_traced_array(x::SAReact)
+    return x
 end
 
 # We don't want to overload map on StaticArrays because it autopromote to TracedRArrays which we 
 # do not want.
-overloaded_map(f, a::StaticArray{<:Tuple,<:Reactant.TracedRNumber}) = f.(a)
+overloaded_map(f, a::SAReact) = f.(a)
+overloaded_mul(A::SAReact, B::SAReact) = A * B
 
 end
