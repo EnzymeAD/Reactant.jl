@@ -12,11 +12,8 @@ linear(x, W, b) = (W * x) .+ b
 @testset "Profiling" begin
     # Run the profiling/timing tools and print
     if !Sys.iswindows()
-        fn = @compile linear(x, W, b)
-        @test_throws AssertionError Reactant.Profiler.profile_and_get_xplane_file(
-            fn, x, W, b; nrepeat=10
-        )
-
+        # Profile first — compiling without sync=true before profiling
+        # poisons the CUPTI profiler state for the process lifetime.
         fn = @compile sync = true linear(x, W, b)
         file =
             Reactant.Profiler.profile_and_get_xplane_file(
@@ -48,6 +45,12 @@ linear(x, W, b) = (W * x) .+ b
         Reactant.@profile nrepeat = 32 linear(x, W, b)
         Reactant.@profile nrepeat = 32 compile_options = Reactant.DefaultXLACompileOptions() linear(
             x, W, b
+        )
+
+        # Test that non-sync compiled thunks are rejected
+        fn_nosync = @compile linear(x, W, b)
+        @test_throws AssertionError Reactant.Profiler.profile_and_get_xplane_file(
+            fn_nosync, x, W, b; nrepeat=10
         )
     end
 end
