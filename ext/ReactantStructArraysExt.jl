@@ -54,7 +54,7 @@ function Base.copyto!(
 
     args = (Reactant.broadcast_to_size(Base.materialize(a), size(bc)) for a in bc.args)
 
-    Reactant.TracedUtils.elem_apply_via_while_loop(bc.f, args...; dest = dest)
+    Reactant.TracedUtils.elem_apply_via_while_loop(bc.f, args...; dest=dest)
 
     return dest
 end
