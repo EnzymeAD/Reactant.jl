@@ -1723,23 +1723,33 @@ const cuindexBitWidth = Ref{Int}(32)
 const cubinFormat = Ref{String}("bin")
 const cuOptLevel = Ref{Int}(2)
 
-# Wgatever the relevant highest version from our LLVM is within NVPTX.td
-# Or more specifically looking at clang/lib/Driver/ToolChains/Cuda.cpp:684
-#  We see relevant ptx version is CUDA 12.6 -> 85
+# Whatever the relevant highest version from our LLVM is within NVPTX.td
+# Or more specifically looking at clang/lib/Driver/ToolChains/Cuda.cpp:682
+#  We see relevant ptx version is CUDA 13.2 -> 92
+#                                      13.0 -> 90
+#                                      12.9 -> 88
+#                                      12.6 -> 85
 #                                      12.2 -> 82
 #                                      11.8 -> 78
 function cubinFeatures()
+    fallback = "+ptx80"
     ver = MLIR.API.ReactantCudaDriverGetVersion()
     # No cuda available
     if ver == 0
-        return "+ptx86"
+        return fallback
     end
     ver2 = MLIR.API.ReactantHermeticCudaGetVersion()
     ver = min(ver, ver2)
     major, ver = divrem(ver, 1000)
     minor, _ = divrem(ver, 10)
-    # From https://github.com/llvm/llvm-project/blob/b60aed6fbabc291a7afbcb460453f9dcdce76f34/clang/lib/Driver/ToolChains/Cuda.cpp#L686
     cuver_map = Dict([
+        # For CUDA 13+, you have to go through the documentation of each minor version
+        # (https://developer.nvidia.com/cuda-toolkit-archive) and look at the PTX ISA page.
+        (132, 92),
+        (131, 91),
+        (130, 90),
+        # From https://github.com/llvm/llvm-project/blob/7d7cd745af221c8690ea6deb2dfbf232658158cd/clang/lib/Driver/ToolChains/Cuda.cpp#L682
+        (129, 88),
         (128, 87),
         (126, 85),
         (125, 85),
@@ -1766,7 +1776,7 @@ function cubinFeatures()
     ])
     mver = major * 10 + minor
     if !in(mver, keys(cuver_map))
-        return 86
+        return fallback
     end
     ptx = cuver_map[mver]
     return "+ptx$ptx"

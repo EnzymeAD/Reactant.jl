@@ -1994,7 +1994,6 @@ function func(;
     reciprocal_estimates=nothing,
     prefer_vector_width=nothing,
     target_features=nothing,
-    no_nans_fp_math=nothing,
     no_signed_zeros_fp_math=nothing,
     denormal_fpenv=nothing,
     fp_contract=nothing,
@@ -2084,8 +2083,6 @@ function func(;
         push!(attributes, NamedAttribute("prefer_vector_width", prefer_vector_width))
     !isnothing(target_features) &&
         push!(attributes, NamedAttribute("target_features", target_features))
-    !isnothing(no_nans_fp_math) &&
-        push!(attributes, NamedAttribute("no_nans_fp_math", no_nans_fp_math))
     !isnothing(no_signed_zeros_fp_math) && push!(
         attributes, NamedAttribute("no_signed_zeros_fp_math", no_signed_zeros_fp_math)
     )
@@ -2370,6 +2367,61 @@ function mul(
         attributes,
         results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
         result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
+`named_metadata`
+
+Represents an LLVM named metadata node (`llvm::NamedMDNode`). Named
+metadata nodes are module-level metadata that associate a name string
+with a list of metadata nodes. Each operand must be an `#llvm.md_node`.
+
+Note: cyclic metadata graphs are not supported. Because metadata attributes
+are represented as MLIR attributes (which form a tree), there is no way to
+express a metadata node that directly or transitively references itself.
+LLVM IR permits such cycles (e.g. `!0 = !{!0}`), but they cannot be
+represented here and will not round-trip through this op.
+
+# Example
+```mlir
+llvm.named_metadata \"foo.version\" [
+  #llvm.md_node<#llvm.md_const<2 : i32>,
+                #llvm.md_const<9 : i32>,
+                #llvm.md_const<0 : i32>
+  >
+]
+llvm.named_metadata \"foo.kernel\" [
+  #llvm.md_node<
+    #llvm.md_func<@my_kernel>,
+    #llvm.md_node<>,
+    #llvm.md_node<
+      #llvm.md_node<#llvm.md_const<0 : i32>,
+                    #llvm.md_string<\"foo.buffer\">
+      >
+    >
+  >
+]
+```
+"""
+function named_metadata(; metadata_name, nodes, location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[
+        NamedAttribute("metadata_name", metadata_name), NamedAttribute("nodes", nodes)
+    ]
+
+    return create_operation(
+        "llvm.named_metadata",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
     )
 end
 

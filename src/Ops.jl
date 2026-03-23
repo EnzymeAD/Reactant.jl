@@ -89,7 +89,7 @@ function mlir_type(x::Union{RNumber,RArray})::MLIR.IR.Type
     return MLIR.IR.TensorType(collect(Int, size(x)), MLIR.IR.Type(unwrapped_eltype(x)))
 end
 
-mlir_type(::MissingTracedValue) = MLIR.IR.TensorType((), MLIR.IR.Type(Bool))
+mlir_type(::MissingTracedValue) = MLIR.IR.TensorType(Int[], MLIR.IR.Type(Bool))
 
 function mlir_type(RT::Type{<:RArray{T,N}}, shape) where {T,N}
     @assert length(shape) == N
@@ -2396,6 +2396,14 @@ end
     false_fn_names = (
         gensym(:false_fn_args), gensym(:false_result), gensym(:false_fn_resargs)
     )
+    if length(args) == 1 && args[1] isa NamedTuple
+        named_args = args[1]
+        filtered_keys = Tuple(
+            k for k in keys(named_args) if !isa(getfield(named_args, k), MissingTracedValue)
+        )
+        filtered_values = Tuple(getfield(named_args, r) for r in filtered_keys)
+        args = (NamedTuple{filtered_keys}(filtered_values),)
+    end
 
     # Make all the args traced or concrete
     N = length(args)
@@ -2795,9 +2803,16 @@ end
             )
         elseif path[1] == :resarg
             residx += 1
-            Reactant.TracedUtils.set!(
-                args, path[2:end], MLIR.IR.result(if_compiled, residx)
-            )
+            target = args
+            for p in path[2:end]
+                target = Reactant.Compiler.traced_getfield(target, p)
+            end
+            if target isa
+                Union{Reactant.ConcreteRArray,Reactant.ConcreteRNumber,Reactant.TracedType}
+                Reactant.TracedUtils.set!(
+                    args, path[2:end], MLIR.IR.result(if_compiled, residx)
+                )
+            end
         end
     end
 
