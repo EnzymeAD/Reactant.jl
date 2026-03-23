@@ -538,21 +538,24 @@ end
 function trace_if(expr; store_last_line=nothing, depth=0, track_numbers)
     discard_vars_from_expansion = []
     original_expr = expr
+    depth == 0 && error_if_any_control_flow(expr)
 
-    if depth == 0
-        error_if_any_control_flow(expr)
-
-        counter = 0
-        expr = MacroTools.prewalk(expr) do x
-            counter += 1
-            if x isa Expr && x.head == :if && counter > 1
+    expand_nested =
+        x -> begin
+            if x isa Expr && x.head == :if
                 ex_new, dv, _ = trace_if(x; store_last_line, depth=depth + 1, track_numbers)
                 append!(discard_vars_from_expansion, dv)
                 return ex_new
             end
-            return x
+            return MacroTools.walk(x, expand_nested, identity)
         end
-    end
+    expr = Expr(
+        expr.head,
+        [
+            (i > 1 && expr.args[i] isa Expr) ? expand_nested(expr.args[i]) : expr.args[i]
+            for i in 1:length(expr.args)
+        ]...,
+    )
 
     cond_expr = remove_shortcircuiting(expr.args[1])
     condition_vars = [ExpressionExplorer.compute_symbols_state(cond_expr).references...]
@@ -578,10 +581,12 @@ function trace_if(expr; store_last_line=nothing, depth=0, track_numbers)
         end
     end
 
-    true_branch_symbols = ExpressionExplorer.compute_symbols_state(true_block)
+    true_branch_symbols = ExpressionExplorer.compute_symbols_state(original_expr.args[2])
     true_branch_input_list = [true_branch_symbols.references...]
     filter!(x -> x ∉ SPECIAL_SYMBOLS, true_branch_input_list)
-    true_branch_assignments = [true_branch_symbols.assignments...]
+    true_branch_assignments = [
+        ExpressionExplorer.compute_symbols_state(true_block).assignments...
+    ]
     all_true_branch_vars = true_branch_input_list ∪ true_branch_assignments
     true_branch_fn_name = gensym(:true_branch)
 
@@ -624,10 +629,14 @@ function trace_if(expr; store_last_line=nothing, depth=0, track_numbers)
         end
     end
 
-    false_branch_symbols = ExpressionExplorer.compute_symbols_state(false_block)
+    false_branch_symbols = ExpressionExplorer.compute_symbols_state(
+        length(original_expr.args) > 2 ? original_expr.args[3] : Expr(:block)
+    )
     false_branch_input_list = [false_branch_symbols.references...]
     filter!(x -> x ∉ SPECIAL_SYMBOLS, false_branch_input_list)
-    false_branch_assignments = [false_branch_symbols.assignments...]
+    false_branch_assignments = [
+        ExpressionExplorer.compute_symbols_state(false_block).assignments...
+    ]
     all_false_branch_vars = false_branch_input_list ∪ false_branch_assignments
     false_branch_fn_name = gensym(:false_branch)
 
@@ -637,43 +646,46 @@ function trace_if(expr; store_last_line=nothing, depth=0, track_numbers)
 
     all_vars = all_input_vars ∪ all_output_vars
 
-    non_existent_true_branch_vars = setdiff(
-        all_output_vars, all_true_branch_vars, all_input_vars
+    true_branch_fn = :(
+        (args,) -> begin
+            $([:($v = if hasproperty(args, $(QuoteNode(v)))
+                        getproperty(args, $(QuoteNode(v)))
+                    else
+                        $(MissingTracedValue)()
+                    end) for v in all_vars]...)
+            $(true_block)
+            return ($(all_output_vars...),)
+        end
     )
-    true_branch_extras = Expr(
-        :block,
-        [:($(var) = $(MissingTracedValue)()) for var in non_existent_true_branch_vars]...,
-    )
-
-    true_branch_fn = :(($(all_input_vars...),) -> begin
-        $(true_block)
-        $(true_branch_extras)
-        return ($(all_output_vars...),)
-    end)
     true_branch_fn = cleanup_expr_to_avoid_boxing(
         true_branch_fn, true_branch_fn_name, all_vars
     )
     true_branch_fn = :($(true_branch_fn_name) = $(true_branch_fn))
 
-    non_existent_false_branch_vars = setdiff(
-        all_output_vars, all_false_branch_vars, all_input_vars
+    false_branch_fn = :(
+        (args,) -> begin
+            $([:($v = if hasproperty(args, $(QuoteNode(v)))
+                        getproperty(args, $(QuoteNode(v)))
+                    else
+                        $(MissingTracedValue)()
+                    end) for v in all_vars]...)
+            $(false_block)
+            return ($(all_output_vars...),)
+        end
     )
-    false_branch_extras = Expr(
-        :block,
-        [:($(var) = $(MissingTracedValue)()) for var in non_existent_false_branch_vars]...,
-    )
-
-    false_branch_fn = :(($(all_input_vars...),) -> begin
-        $(false_block)
-        $(false_branch_extras)
-        return ($(all_output_vars...),)
-    end)
     false_branch_fn = cleanup_expr_to_avoid_boxing(
         false_branch_fn, false_branch_fn_name, all_vars
     )
     false_branch_fn = :($(false_branch_fn_name) = $(false_branch_fn))
 
     cond_name = gensym(:cond)
+
+    names_expr = Expr(:tuple, [QuoteNode(v) for v in all_vars]...)
+    values_expr = Expr(
+        :tuple,
+        [:($(Expr(:isdefined, v)) ? $v : $(MissingTracedValue)()) for v in all_vars]...,
+    )
+    args_expr = :(Reactant.NamedTuple{$names_expr}($values_expr))
 
     reactant_code_block = quote
         $(true_branch_fn)
@@ -682,7 +694,7 @@ function trace_if(expr; store_last_line=nothing, depth=0, track_numbers)
             $(cond_name),
             $(true_branch_fn_name),
             $(false_branch_fn_name),
-            ($(all_input_vars...),);
+            $(args_expr);
             track_numbers=($(track_numbers)),
         )
     end
@@ -754,7 +766,7 @@ end
 
 # Generate this dummy function and later we remove it during tracing
 function traced_if(cond, true_fn, false_fn, args; track_numbers)
-    return cond ? true_fn(args...) : false_fn(args...)
+    return cond ? true_fn(args) : false_fn(args)
 end
 
 function traced_while end # defined inside Reactant.jl

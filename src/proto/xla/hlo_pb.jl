@@ -4,7 +4,7 @@ using ProtoBuf.EnumX: @enumx
 
 export ConvolutionKind, Kind, var"StackFrameIndexProto.FileLocation"
 export var"HloBufferDonorProto.BufferDonorEntryProto", CustomCallApiVersion
-export var"StackFrameIndexProto.StackFrame", var"HloInputs.LiteralDescriptor"
+export var"StackFrameIndexProto.StackFrame", var"HloInputs.LiteralDescriptor", Payload
 export var"HloModuleProto.ProfileType", CustomCallSchedule, HloPassMetadata, TriState
 export var"LogicalBufferProto.Location", var"HloScheduleProto.InstructionSequence"
 export var"BufferAllocationProto.Assigned", var"MemoryUsageReportProto.AllocationEntry"
@@ -198,6 +198,51 @@ function PB._encoded_size(x::var"HloInputs.LiteralDescriptor")
     encoded_size = 0
     x.version != zero(Int32) && (encoded_size += PB._encoded_size(x.version, 1))
     x.argument_size_bytes != zero(UInt64) && (encoded_size += PB._encoded_size(x.argument_size_bytes, 2))
+    return encoded_size
+end
+
+struct Payload
+    payload_source::Union{Nothing,OneOf{<:Union{Vector{UInt8},Int64}}}
+end
+PB.oneof_field_types(::Type{Payload}) = (;
+    payload_source = (;value=Vector{UInt8}, id=Int64),
+)
+PB.default_values(::Type{Payload}) = (;value = UInt8[], id = zero(Int64))
+PB.field_numbers(::Type{Payload}) = (;value = 1, id = 2)
+
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:Payload}, _endpos::Int=0, _group::Bool=false)
+    payload_source = nothing
+    while !PB.message_done(d, _endpos, _group)
+        field_number, wire_type = PB.decode_tag(d)
+        if field_number == 1
+            payload_source = OneOf(:value, PB.decode(d, Vector{UInt8}))
+        elseif field_number == 2
+            payload_source = OneOf(:id, PB.decode(d, Int64))
+        else
+            Base.skip(d, wire_type)
+        end
+    end
+    return Payload(payload_source)
+end
+
+function PB.encode(e::PB.AbstractProtoEncoder, x::Payload)
+    initpos = position(e.io)
+    if isnothing(x.payload_source);
+    elseif x.payload_source.name === :value
+        PB.encode(e, 1, x.payload_source[]::Vector{UInt8})
+    elseif x.payload_source.name === :id
+        PB.encode(e, 2, x.payload_source[]::Int64)
+    end
+    return position(e.io) - initpos
+end
+function PB._encoded_size(x::Payload)
+    encoded_size = 0
+    if isnothing(x.payload_source);
+    elseif x.payload_source.name === :value
+        encoded_size += PB._encoded_size(x.payload_source[]::Vector{UInt8}, 1)
+    elseif x.payload_source.name === :id
+        encoded_size += PB._encoded_size(x.payload_source[]::Int64, 2)
+    end
     return encoded_size
 end
 
@@ -1144,6 +1189,7 @@ struct HloInstructionProto
     called_computation_ids::Vector{Int64}
     sharding::Union{Nothing,OpSharding}
     backend_config::Vector{UInt8}
+    backend_config_payload::Union{Nothing,Payload}
     replica_groups::Vector{ReplicaGroup}
     all_reduce_id::Int64
     use_global_device_ids::Bool
@@ -1191,8 +1237,8 @@ PB.oneof_field_types(::Type{HloInstructionProto}) = (;
     optional_cross_program_prefetch_index = (;cross_program_prefetch_index=Int32),
     replica_group_list = (;collective_device_list=CollectiveDeviceListProto, iota_collective_device_list=IotaReplicaGroupListProto, mesh_axes_replica_group_list=MeshAxesReplicaGroupListProto),
 )
-PB.default_values(::Type{HloInstructionProto}) = (;name = "", opcode = "", shape = nothing, metadata = nothing, literal = nothing, parameter_number = zero(Int64), fusion_kind = "", tuple_index = zero(Int64), dimensions = Vector{Int64}(), window = nothing, convolution_dimension_numbers = nothing, feature_group_count = zero(Int64), batch_group_count = zero(Int64), slice_dimensions = Vector{var"HloInstructionProto.SliceDimensions"}(), exponent_bits = zero(Int32), mantissa_bits = zero(Int32), dynamic_slice_sizes = Vector{Int64}(), padding_config = nothing, outfeed_config = UInt8[], distribution = RandomDistribution.RNG_INVALID, epsilon = zero(Float32), feature_index = zero(Int64), channel_id = zero(Int64), infeed_config = UInt8[], custom_call_target = "", outfeed_shape = nothing, dot_dimension_numbers = nothing, ragged_dot_dimension_numbers = nothing, fft_type = FftType.FFT, fft_length = Vector{Int64}(), comparison_direction = "", gather_dimension_numbers = nothing, gather_slice_sizes = Vector{Int64}(), id = zero(Int64), operand_ids = Vector{Int64}(), control_predecessor_ids = Vector{Int64}(), called_computation_ids = Vector{Int64}(), sharding = nothing, backend_config = UInt8[], replica_groups = Vector{ReplicaGroup}(), all_reduce_id = zero(Int64), use_global_device_ids = false, is_host_transfer = false, is_stable = false, scatter_dimension_numbers = nothing, precision_config = nothing, source_target_pairs = Vector{SourceTarget}(), domain_entry_sharding = nothing, domain_exit_sharding = nothing, constrain_layout = false, operand_shapes_with_layout = Vector{ShapeProto}(), triangular_solve_options = nothing, cholesky_options = nothing, parameter_replication = nothing, custom_call_has_side_effect = false, output_operand_aliasing = Vector{OutputOperandAliasing}(), custom_call_schedule = CustomCallSchedule.SCHEDULE_NONE, delta = zero(Int64), indices_are_sorted = false, frontend_attributes = nothing, unique_indices = false, rng_algorithm = RandomAlgorithm.RNG_DEFAULT, comparison_type = "", is_cross_program_prefetch = false, cross_program_prefetch_index = zero(Int32), padding_type = PaddingType.PADDING_INVALID, custom_call_api_version = CustomCallApiVersion.API_VERSION_UNSPECIFIED, async_execution_thread = "", k = zero(Int64), largest = false, statistics_viz = nothing, collective_device_list = nothing, iota_collective_device_list = nothing, mesh_axes_replica_group_list = nothing, original_value = nothing, is_composite = false, result_accuracy = nothing, is_reverse = false, num_carries = zero(Int64), is_associative = TriState.TRI_STATE_UNSPECIFIED, conv_kind = ConvolutionKind.CONVOLUTION_KIND_UNSET, sparsity_config = nothing)
-PB.field_numbers(::Type{HloInstructionProto}) = (;name = 1, opcode = 2, shape = 3, metadata = 7, literal = 8, parameter_number = 9, fusion_kind = 11, tuple_index = 13, dimensions = 14, window = 15, convolution_dimension_numbers = 16, feature_group_count = 50, batch_group_count = 58, slice_dimensions = 17, exponent_bits = 18, mantissa_bits = 19, dynamic_slice_sizes = 20, padding_config = 21, outfeed_config = 22, distribution = 23, epsilon = 24, feature_index = 25, channel_id = 26, infeed_config = 27, custom_call_target = 28, outfeed_shape = 29, dot_dimension_numbers = 30, ragged_dot_dimension_numbers = 90, fft_type = 31, fft_length = 32, comparison_direction = 63, gather_dimension_numbers = 33, gather_slice_sizes = 34, id = 35, operand_ids = 36, control_predecessor_ids = 37, called_computation_ids = 38, sharding = 40, backend_config = 43, replica_groups = 49, all_reduce_id = 45, use_global_device_ids = 71, is_host_transfer = 47, is_stable = 60, scatter_dimension_numbers = 48, precision_config = 51, source_target_pairs = 52, domain_entry_sharding = 54, domain_exit_sharding = 55, constrain_layout = 56, operand_shapes_with_layout = 57, triangular_solve_options = 59, cholesky_options = 62, parameter_replication = 61, custom_call_has_side_effect = 65, output_operand_aliasing = 74, custom_call_schedule = 76, delta = 66, indices_are_sorted = 67, frontend_attributes = 68, unique_indices = 69, rng_algorithm = 70, comparison_type = 72, is_cross_program_prefetch = 73, cross_program_prefetch_index = 80, padding_type = 75, custom_call_api_version = 77, async_execution_thread = 79, k = 81, largest = 85, statistics_viz = 82, collective_device_list = 87, iota_collective_device_list = 92, mesh_axes_replica_group_list = 93, original_value = 88, is_composite = 89, result_accuracy = 91, is_reverse = 94, num_carries = 95, is_associative = 96, conv_kind = 97, sparsity_config = 98)
+PB.default_values(::Type{HloInstructionProto}) = (;name = "", opcode = "", shape = nothing, metadata = nothing, literal = nothing, parameter_number = zero(Int64), fusion_kind = "", tuple_index = zero(Int64), dimensions = Vector{Int64}(), window = nothing, convolution_dimension_numbers = nothing, feature_group_count = zero(Int64), batch_group_count = zero(Int64), slice_dimensions = Vector{var"HloInstructionProto.SliceDimensions"}(), exponent_bits = zero(Int32), mantissa_bits = zero(Int32), dynamic_slice_sizes = Vector{Int64}(), padding_config = nothing, outfeed_config = UInt8[], distribution = RandomDistribution.RNG_INVALID, epsilon = zero(Float32), feature_index = zero(Int64), channel_id = zero(Int64), infeed_config = UInt8[], custom_call_target = "", outfeed_shape = nothing, dot_dimension_numbers = nothing, ragged_dot_dimension_numbers = nothing, fft_type = FftType.FFT, fft_length = Vector{Int64}(), comparison_direction = "", gather_dimension_numbers = nothing, gather_slice_sizes = Vector{Int64}(), id = zero(Int64), operand_ids = Vector{Int64}(), control_predecessor_ids = Vector{Int64}(), called_computation_ids = Vector{Int64}(), sharding = nothing, backend_config = UInt8[], backend_config_payload = nothing, replica_groups = Vector{ReplicaGroup}(), all_reduce_id = zero(Int64), use_global_device_ids = false, is_host_transfer = false, is_stable = false, scatter_dimension_numbers = nothing, precision_config = nothing, source_target_pairs = Vector{SourceTarget}(), domain_entry_sharding = nothing, domain_exit_sharding = nothing, constrain_layout = false, operand_shapes_with_layout = Vector{ShapeProto}(), triangular_solve_options = nothing, cholesky_options = nothing, parameter_replication = nothing, custom_call_has_side_effect = false, output_operand_aliasing = Vector{OutputOperandAliasing}(), custom_call_schedule = CustomCallSchedule.SCHEDULE_NONE, delta = zero(Int64), indices_are_sorted = false, frontend_attributes = nothing, unique_indices = false, rng_algorithm = RandomAlgorithm.RNG_DEFAULT, comparison_type = "", is_cross_program_prefetch = false, cross_program_prefetch_index = zero(Int32), padding_type = PaddingType.PADDING_INVALID, custom_call_api_version = CustomCallApiVersion.API_VERSION_UNSPECIFIED, async_execution_thread = "", k = zero(Int64), largest = false, statistics_viz = nothing, collective_device_list = nothing, iota_collective_device_list = nothing, mesh_axes_replica_group_list = nothing, original_value = nothing, is_composite = false, result_accuracy = nothing, is_reverse = false, num_carries = zero(Int64), is_associative = TriState.TRI_STATE_UNSPECIFIED, conv_kind = ConvolutionKind.CONVOLUTION_KIND_UNSET, sparsity_config = nothing)
+PB.field_numbers(::Type{HloInstructionProto}) = (;name = 1, opcode = 2, shape = 3, metadata = 7, literal = 8, parameter_number = 9, fusion_kind = 11, tuple_index = 13, dimensions = 14, window = 15, convolution_dimension_numbers = 16, feature_group_count = 50, batch_group_count = 58, slice_dimensions = 17, exponent_bits = 18, mantissa_bits = 19, dynamic_slice_sizes = 20, padding_config = 21, outfeed_config = 22, distribution = 23, epsilon = 24, feature_index = 25, channel_id = 26, infeed_config = 27, custom_call_target = 28, outfeed_shape = 29, dot_dimension_numbers = 30, ragged_dot_dimension_numbers = 90, fft_type = 31, fft_length = 32, comparison_direction = 63, gather_dimension_numbers = 33, gather_slice_sizes = 34, id = 35, operand_ids = 36, control_predecessor_ids = 37, called_computation_ids = 38, sharding = 40, backend_config = 43, backend_config_payload = 99, replica_groups = 49, all_reduce_id = 45, use_global_device_ids = 71, is_host_transfer = 47, is_stable = 60, scatter_dimension_numbers = 48, precision_config = 51, source_target_pairs = 52, domain_entry_sharding = 54, domain_exit_sharding = 55, constrain_layout = 56, operand_shapes_with_layout = 57, triangular_solve_options = 59, cholesky_options = 62, parameter_replication = 61, custom_call_has_side_effect = 65, output_operand_aliasing = 74, custom_call_schedule = 76, delta = 66, indices_are_sorted = 67, frontend_attributes = 68, unique_indices = 69, rng_algorithm = 70, comparison_type = 72, is_cross_program_prefetch = 73, cross_program_prefetch_index = 80, padding_type = 75, custom_call_api_version = 77, async_execution_thread = 79, k = 81, largest = 85, statistics_viz = 82, collective_device_list = 87, iota_collective_device_list = 92, mesh_axes_replica_group_list = 93, original_value = 88, is_composite = 89, result_accuracy = 91, is_reverse = 94, num_carries = 95, is_associative = 96, conv_kind = 97, sparsity_config = 98)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HloInstructionProto}, _endpos::Int=0, _group::Bool=false)
     name = ""
@@ -1234,6 +1280,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HloInstructionProto}, _e
     called_computation_ids = PB.BufferedVector{Int64}()
     sharding = Ref{Union{Nothing,OpSharding}}(nothing)
     backend_config = UInt8[]
+    backend_config_payload = Ref{Union{Nothing,Payload}}(nothing)
     replica_groups = PB.BufferedVector{ReplicaGroup}()
     all_reduce_id = zero(Int64)
     use_global_device_ids = false
@@ -1355,6 +1402,8 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HloInstructionProto}, _e
             PB.decode!(d, sharding)
         elseif field_number == 43
             backend_config = PB.decode(d, Vector{UInt8})
+        elseif field_number == 99
+            PB.decode!(d, backend_config_payload)
         elseif field_number == 49
             PB.decode!(d, replica_groups)
         elseif field_number == 45
@@ -1445,7 +1494,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HloInstructionProto}, _e
             Base.skip(d, wire_type)
         end
     end
-    return HloInstructionProto(name, opcode, shape[], metadata[], literal[], parameter_number, fusion_kind, tuple_index, dimensions[], window[], convolution_dimension_numbers[], feature_group_count, batch_group_count, slice_dimensions[], exponent_bits, mantissa_bits, dynamic_slice_sizes[], padding_config[], outfeed_config, distribution, epsilon, feature_index, channel_id, infeed_config, custom_call_target, outfeed_shape[], dot_dimension_numbers[], ragged_dot_dimension_numbers[], fft_type, fft_length[], comparison_direction, gather_dimension_numbers[], gather_slice_sizes[], id, operand_ids[], control_predecessor_ids[], called_computation_ids[], sharding[], backend_config, replica_groups[], all_reduce_id, use_global_device_ids, is_host_transfer, is_stable, scatter_dimension_numbers[], precision_config[], source_target_pairs[], domain_entry_sharding[], domain_exit_sharding[], constrain_layout, operand_shapes_with_layout[], triangular_solve_options[], cholesky_options[], parameter_replication[], custom_call_has_side_effect, output_operand_aliasing[], custom_call_schedule, delta, indices_are_sorted, frontend_attributes[], unique_indices, rng_algorithm, comparison_type, is_cross_program_prefetch, optional_cross_program_prefetch_index, padding_type, custom_call_api_version, async_execution_thread, k, largest, statistics_viz[], replica_group_list, original_value[], is_composite, result_accuracy[], is_reverse, num_carries, is_associative, conv_kind, sparsity_config[])
+    return HloInstructionProto(name, opcode, shape[], metadata[], literal[], parameter_number, fusion_kind, tuple_index, dimensions[], window[], convolution_dimension_numbers[], feature_group_count, batch_group_count, slice_dimensions[], exponent_bits, mantissa_bits, dynamic_slice_sizes[], padding_config[], outfeed_config, distribution, epsilon, feature_index, channel_id, infeed_config, custom_call_target, outfeed_shape[], dot_dimension_numbers[], ragged_dot_dimension_numbers[], fft_type, fft_length[], comparison_direction, gather_dimension_numbers[], gather_slice_sizes[], id, operand_ids[], control_predecessor_ids[], called_computation_ids[], sharding[], backend_config, backend_config_payload[], replica_groups[], all_reduce_id, use_global_device_ids, is_host_transfer, is_stable, scatter_dimension_numbers[], precision_config[], source_target_pairs[], domain_entry_sharding[], domain_exit_sharding[], constrain_layout, operand_shapes_with_layout[], triangular_solve_options[], cholesky_options[], parameter_replication[], custom_call_has_side_effect, output_operand_aliasing[], custom_call_schedule, delta, indices_are_sorted, frontend_attributes[], unique_indices, rng_algorithm, comparison_type, is_cross_program_prefetch, optional_cross_program_prefetch_index, padding_type, custom_call_api_version, async_execution_thread, k, largest, statistics_viz[], replica_group_list, original_value[], is_composite, result_accuracy[], is_reverse, num_carries, is_associative, conv_kind, sparsity_config[])
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::HloInstructionProto)
@@ -1489,6 +1538,7 @@ function PB.encode(e::PB.AbstractProtoEncoder, x::HloInstructionProto)
     !isempty(x.called_computation_ids) && PB.encode(e, 38, x.called_computation_ids)
     !isnothing(x.sharding) && PB.encode(e, 40, x.sharding)
     !isempty(x.backend_config) && PB.encode(e, 43, x.backend_config)
+    !isnothing(x.backend_config_payload) && PB.encode(e, 99, x.backend_config_payload)
     !isempty(x.replica_groups) && PB.encode(e, 49, x.replica_groups)
     x.all_reduce_id != zero(Int64) && PB.encode(e, 45, x.all_reduce_id)
     x.use_global_device_ids != false && PB.encode(e, 71, x.use_global_device_ids)
@@ -1583,6 +1633,7 @@ function PB._encoded_size(x::HloInstructionProto)
     !isempty(x.called_computation_ids) && (encoded_size += PB._encoded_size(x.called_computation_ids, 38))
     !isnothing(x.sharding) && (encoded_size += PB._encoded_size(x.sharding, 40))
     !isempty(x.backend_config) && (encoded_size += PB._encoded_size(x.backend_config, 43))
+    !isnothing(x.backend_config_payload) && (encoded_size += PB._encoded_size(x.backend_config_payload, 99))
     !isempty(x.replica_groups) && (encoded_size += PB._encoded_size(x.replica_groups, 49))
     x.all_reduce_id != zero(Int64) && (encoded_size += PB._encoded_size(x.all_reduce_id, 45))
     x.use_global_device_ids != false && (encoded_size += PB._encoded_size(x.use_global_device_ids, 71))
@@ -1923,6 +1974,7 @@ struct var"##Stub#HloModuleProto"{T1<:var"##Abstract#OriginalValueRecoveryTableP
     id::Int64
     schedule::Union{Nothing,HloScheduleProto}
     input_output_alias::Union{Nothing,HloInputOutputAliasProto}
+    payloads::Vector{Vector{UInt8}}
     buffer_donor::Union{Nothing,HloBufferDonorProto}
     cross_program_prefetches::Vector{CrossProgramPrefetch}
     is_dynamic::Bool
@@ -2000,8 +2052,8 @@ end
 
 const HloModuleProto = var"##Stub#HloModuleProto"{var"##Stub#OriginalValueRecoveryTableProto"{var"##Stub#OriginalValueRecoveryTableProto.Entry"}}
 PB.reserved_fields(::Type{HloModuleProto}) = (names = ["dynamic_parameter_binding"], numbers = Union{Int,UnitRange{Int}}[9])
-PB.default_values(::Type{HloModuleProto}) = (;name = "", entry_computation_name = "", entry_computation_id = zero(Int64), computations = Vector{HloComputationProto}(), host_program_shape = nothing, id = zero(Int64), schedule = nothing, input_output_alias = nothing, buffer_donor = nothing, cross_program_prefetches = Vector{CrossProgramPrefetch}(), is_dynamic = false, spmd_output_sharding = nothing, spmd_parameters_shardings = Vector{OpSharding}(), use_auto_spmd_partitioning = false, profile_info = Vector{var"HloModuleProto.ProfileInfo"}(), device_assignment = nothing, stack_frame_index = nothing, frontend_attributes = nothing, original_value_recovery_table = nothing, device_type = "")
-PB.field_numbers(::Type{HloModuleProto}) = (;name = 1, entry_computation_name = 2, entry_computation_id = 6, computations = 3, host_program_shape = 4, id = 5, schedule = 7, input_output_alias = 8, buffer_donor = 18, cross_program_prefetches = 10, is_dynamic = 11, spmd_output_sharding = 12, spmd_parameters_shardings = 14, use_auto_spmd_partitioning = 16, profile_info = 13, device_assignment = 15, stack_frame_index = 17, frontend_attributes = 19, original_value_recovery_table = 20, device_type = 21)
+PB.default_values(::Type{HloModuleProto}) = (;name = "", entry_computation_name = "", entry_computation_id = zero(Int64), computations = Vector{HloComputationProto}(), host_program_shape = nothing, id = zero(Int64), schedule = nothing, input_output_alias = nothing, payloads = Vector{Vector{UInt8}}(), buffer_donor = nothing, cross_program_prefetches = Vector{CrossProgramPrefetch}(), is_dynamic = false, spmd_output_sharding = nothing, spmd_parameters_shardings = Vector{OpSharding}(), use_auto_spmd_partitioning = false, profile_info = Vector{var"HloModuleProto.ProfileInfo"}(), device_assignment = nothing, stack_frame_index = nothing, frontend_attributes = nothing, original_value_recovery_table = nothing, device_type = "")
+PB.field_numbers(::Type{HloModuleProto}) = (;name = 1, entry_computation_name = 2, entry_computation_id = 6, computations = 3, host_program_shape = 4, id = 5, schedule = 7, input_output_alias = 8, payloads = 22, buffer_donor = 18, cross_program_prefetches = 10, is_dynamic = 11, spmd_output_sharding = 12, spmd_parameters_shardings = 14, use_auto_spmd_partitioning = 16, profile_info = 13, device_assignment = 15, stack_frame_index = 17, frontend_attributes = 19, original_value_recovery_table = 20, device_type = 21)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HloModuleProto}, _endpos::Int=0, _group::Bool=false)
     name = ""
@@ -2012,6 +2064,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HloModuleProto}, _endpos
     id = zero(Int64)
     schedule = Ref{Union{Nothing,HloScheduleProto}}(nothing)
     input_output_alias = Ref{Union{Nothing,HloInputOutputAliasProto}}(nothing)
+    payloads = PB.BufferedVector{Vector{UInt8}}()
     buffer_donor = Ref{Union{Nothing,HloBufferDonorProto}}(nothing)
     cross_program_prefetches = PB.BufferedVector{CrossProgramPrefetch}()
     is_dynamic = false
@@ -2042,6 +2095,8 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HloModuleProto}, _endpos
             PB.decode!(d, schedule)
         elseif field_number == 8
             PB.decode!(d, input_output_alias)
+        elseif field_number == 22
+            PB.decode!(d, payloads)
         elseif field_number == 18
             PB.decode!(d, buffer_donor)
         elseif field_number == 10
@@ -2070,7 +2125,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HloModuleProto}, _endpos
             Base.skip(d, wire_type)
         end
     end
-    return HloModuleProto(name, entry_computation_name, entry_computation_id, computations[], host_program_shape[], id, schedule[], input_output_alias[], buffer_donor[], cross_program_prefetches[], is_dynamic, spmd_output_sharding[], spmd_parameters_shardings[], use_auto_spmd_partitioning, profile_info[], device_assignment[], stack_frame_index[], frontend_attributes[], original_value_recovery_table[], device_type)
+    return HloModuleProto(name, entry_computation_name, entry_computation_id, computations[], host_program_shape[], id, schedule[], input_output_alias[], payloads[], buffer_donor[], cross_program_prefetches[], is_dynamic, spmd_output_sharding[], spmd_parameters_shardings[], use_auto_spmd_partitioning, profile_info[], device_assignment[], stack_frame_index[], frontend_attributes[], original_value_recovery_table[], device_type)
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::HloModuleProto)
@@ -2083,6 +2138,7 @@ function PB.encode(e::PB.AbstractProtoEncoder, x::HloModuleProto)
     x.id != zero(Int64) && PB.encode(e, 5, x.id)
     !isnothing(x.schedule) && PB.encode(e, 7, x.schedule)
     !isnothing(x.input_output_alias) && PB.encode(e, 8, x.input_output_alias)
+    !isempty(x.payloads) && PB.encode(e, 22, x.payloads)
     !isnothing(x.buffer_donor) && PB.encode(e, 18, x.buffer_donor)
     !isempty(x.cross_program_prefetches) && PB.encode(e, 10, x.cross_program_prefetches)
     x.is_dynamic != false && PB.encode(e, 11, x.is_dynamic)
@@ -2107,6 +2163,7 @@ function PB._encoded_size(x::HloModuleProto)
     x.id != zero(Int64) && (encoded_size += PB._encoded_size(x.id, 5))
     !isnothing(x.schedule) && (encoded_size += PB._encoded_size(x.schedule, 7))
     !isnothing(x.input_output_alias) && (encoded_size += PB._encoded_size(x.input_output_alias, 8))
+    !isempty(x.payloads) && (encoded_size += PB._encoded_size(x.payloads, 22))
     !isnothing(x.buffer_donor) && (encoded_size += PB._encoded_size(x.buffer_donor, 18))
     !isempty(x.cross_program_prefetches) && (encoded_size += PB._encoded_size(x.cross_program_prefetches, 10))
     x.is_dynamic != false && (encoded_size += PB._encoded_size(x.is_dynamic, 11))

@@ -4475,9 +4475,18 @@ function mlirAttributeIsADenseFPElements(attr)
 end
 
 """
+    mlirDenseTypedElementsAttrGetTypeID()
+
+Returns the typeID of a DenseTypedElements attribute.
+"""
+function mlirDenseTypedElementsAttrGetTypeID()
+    @ccall mlir_c.mlirDenseTypedElementsAttrGetTypeID()::MlirTypeID
+end
+
+"""
     mlirDenseIntOrFPElementsAttrGetTypeID()
 
-Returns the typeID of an DenseIntOrFPElements attribute.
+Deprecated API. Will be removed in the future.
 """
 function mlirDenseIntOrFPElementsAttrGetTypeID()
     @ccall mlir_c.mlirDenseIntOrFPElementsAttrGetTypeID()::MlirTypeID
@@ -7184,6 +7193,19 @@ function mlirLLVMVoidTypeGetName()
 end
 
 """
+    mlirTypeIsALLVMArrayType(type)
+
+Returns `true` if the type is an LLVM dialect array type.
+"""
+function mlirTypeIsALLVMArrayType(type)
+    @ccall mlir_c.mlirTypeIsALLVMArrayType(type::MlirType)::Bool
+end
+
+function mlirLLVMArrayTypeGetTypeID()
+    @ccall mlir_c.mlirLLVMArrayTypeGetTypeID()::MlirTypeID
+end
+
+"""
     mlirLLVMArrayTypeGet(elementType, numElements)
 
 Creates an llvm.array type.
@@ -7206,6 +7228,15 @@ function mlirLLVMArrayTypeGetElementType(type)
 end
 
 """
+    mlirLLVMArrayTypeGetNumElements(type)
+
+Returns the number of elements in the llvm.array type.
+"""
+function mlirLLVMArrayTypeGetNumElements(type)
+    @ccall mlir_c.mlirLLVMArrayTypeGetNumElements(type::MlirType)::Cuint
+end
+
+"""
     mlirLLVMFunctionTypeGet(resultType, nArgumentTypes, argumentTypes, isVarArg)
 
 Creates an llvm.func type.
@@ -7224,6 +7255,24 @@ function mlirLLVMFunctionTypeGetName()
 end
 
 """
+    mlirTypeIsALLVMFunctionType(type)
+
+Returns `true` if the type is an LLVM dialect function type.
+"""
+function mlirTypeIsALLVMFunctionType(type)
+    @ccall mlir_c.mlirTypeIsALLVMFunctionType(type::MlirType)::Bool
+end
+
+"""
+    mlirLLVMFunctionTypeGetTypeID()
+
+Returns the TypeID of an LLVM function type.
+"""
+function mlirLLVMFunctionTypeGetTypeID()
+    @ccall mlir_c.mlirLLVMFunctionTypeGetTypeID()::MlirTypeID
+end
+
+"""
     mlirLLVMFunctionTypeGetNumInputs(type)
 
 Returns the number of input types.
@@ -7239,6 +7288,15 @@ Returns the pos-th input type.
 """
 function mlirLLVMFunctionTypeGetInput(type, pos)
     @ccall mlir_c.mlirLLVMFunctionTypeGetInput(type::MlirType, pos::Cptrdiff_t)::MlirType
+end
+
+"""
+    mlirLLVMFunctionTypeIsVarArg(type)
+
+Returns `true` if the function type is variadic.
+"""
+function mlirLLVMFunctionTypeIsVarArg(type)
+    @ccall mlir_c.mlirLLVMFunctionTypeIsVarArg(type::MlirType)::Bool
 end
 
 """
@@ -8080,6 +8138,169 @@ Gets the scope of this DIModuleAttr.
 """
 function mlirLLVMDIModuleAttrGetScope(diModule)
     @ccall mlir_c.mlirLLVMDIModuleAttrGetScope(diModule::MlirAttribute)::MlirAttribute
+end
+
+"""
+    mlirLLVMMDStringAttrGet(ctx, value)
+
+Creates an LLVM MDStringAttr.
+"""
+function mlirLLVMMDStringAttrGet(ctx, value)
+    @ccall mlir_c.mlirLLVMMDStringAttrGet(
+        ctx::MlirContext, value::MlirStringRef
+    )::MlirAttribute
+end
+
+"""
+    mlirLLVMAttrIsAMDStringAttr(attr)
+
+Returns `true` if the attribute is an LLVM MDStringAttr.
+"""
+function mlirLLVMAttrIsAMDStringAttr(attr)
+    @ccall mlir_c.mlirLLVMAttrIsAMDStringAttr(attr::MlirAttribute)::Bool
+end
+
+"""
+    mlirLLVMMDStringAttrGetTypeID()
+
+Returns the TypeID of MDStringAttr.
+"""
+function mlirLLVMMDStringAttrGetTypeID()
+    @ccall mlir_c.mlirLLVMMDStringAttrGetTypeID()::MlirTypeID
+end
+
+"""
+    mlirLLVMMDStringAttrGetValue(attr)
+
+Returns the string value of an LLVM MDStringAttr.
+"""
+function mlirLLVMMDStringAttrGetValue(attr)
+    @ccall mlir_c.mlirLLVMMDStringAttrGetValue(attr::MlirAttribute)::MlirStringRef
+end
+
+"""
+    mlirLLVMMDConstantAttrGet(ctx, valueAttr)
+
+Creates an LLVM MDConstantAttr wrapping an attribute.
+"""
+function mlirLLVMMDConstantAttrGet(ctx, valueAttr)
+    @ccall mlir_c.mlirLLVMMDConstantAttrGet(
+        ctx::MlirContext, valueAttr::MlirAttribute
+    )::MlirAttribute
+end
+
+"""
+    mlirLLVMAttrIsAMDConstantAttr(attr)
+
+Returns `true` if the attribute is an LLVM MDConstantAttr.
+"""
+function mlirLLVMAttrIsAMDConstantAttr(attr)
+    @ccall mlir_c.mlirLLVMAttrIsAMDConstantAttr(attr::MlirAttribute)::Bool
+end
+
+"""
+    mlirLLVMMDConstantAttrGetTypeID()
+
+Returns the TypeID of MDConstantAttr.
+"""
+function mlirLLVMMDConstantAttrGetTypeID()
+    @ccall mlir_c.mlirLLVMMDConstantAttrGetTypeID()::MlirTypeID
+end
+
+"""
+    mlirLLVMMDConstantAttrGetValue(attr)
+
+Returns the attribute value of an LLVM MDConstantAttr.
+"""
+function mlirLLVMMDConstantAttrGetValue(attr)
+    @ccall mlir_c.mlirLLVMMDConstantAttrGetValue(attr::MlirAttribute)::MlirAttribute
+end
+
+"""
+    mlirLLVMMDFuncAttrGet(ctx, name)
+
+Creates an LLVM MDFuncAttr referencing a function symbol.
+"""
+function mlirLLVMMDFuncAttrGet(ctx, name)
+    @ccall mlir_c.mlirLLVMMDFuncAttrGet(
+        ctx::MlirContext, name::MlirAttribute
+    )::MlirAttribute
+end
+
+"""
+    mlirLLVMAttrIsAMDFuncAttr(attr)
+
+Returns `true` if the attribute is an LLVM MDFuncAttr.
+"""
+function mlirLLVMAttrIsAMDFuncAttr(attr)
+    @ccall mlir_c.mlirLLVMAttrIsAMDFuncAttr(attr::MlirAttribute)::Bool
+end
+
+"""
+    mlirLLVMMDFuncAttrGetTypeID()
+
+Returns the TypeID of MDFuncAttr.
+"""
+function mlirLLVMMDFuncAttrGetTypeID()
+    @ccall mlir_c.mlirLLVMMDFuncAttrGetTypeID()::MlirTypeID
+end
+
+"""
+    mlirLLVMMDFuncAttrGetName(attr)
+
+Returns the symbol name of an LLVM MDFuncAttr.
+"""
+function mlirLLVMMDFuncAttrGetName(attr)
+    @ccall mlir_c.mlirLLVMMDFuncAttrGetName(attr::MlirAttribute)::MlirAttribute
+end
+
+"""
+    mlirLLVMMDNodeAttrGet(ctx, nOperands, operands)
+
+Creates an LLVM MDNodeAttr.
+"""
+function mlirLLVMMDNodeAttrGet(ctx, nOperands, operands)
+    @ccall mlir_c.mlirLLVMMDNodeAttrGet(
+        ctx::MlirContext, nOperands::Cptrdiff_t, operands::Ptr{MlirAttribute}
+    )::MlirAttribute
+end
+
+"""
+    mlirLLVMAttrIsAMDNodeAttr(attr)
+
+Returns `true` if the attribute is an LLVM MDNodeAttr.
+"""
+function mlirLLVMAttrIsAMDNodeAttr(attr)
+    @ccall mlir_c.mlirLLVMAttrIsAMDNodeAttr(attr::MlirAttribute)::Bool
+end
+
+"""
+    mlirLLVMMDNodeAttrGetTypeID()
+
+Returns the TypeID of MDNodeAttr.
+"""
+function mlirLLVMMDNodeAttrGetTypeID()
+    @ccall mlir_c.mlirLLVMMDNodeAttrGetTypeID()::MlirTypeID
+end
+
+"""
+    mlirLLVMMDNodeAttrGetNumOperands(attr)
+
+Returns the number of operands in an LLVM MDNodeAttr.
+"""
+function mlirLLVMMDNodeAttrGetNumOperands(attr)
+    @ccall mlir_c.mlirLLVMMDNodeAttrGetNumOperands(attr::MlirAttribute)::Cptrdiff_t
+end
+
+"""
+    mlirLLVMMDNodeAttrGetOperand(attr, index)
+
+Returns the operand at the given index of an LLVM MDNodeAttr.
+"""
+function mlirLLVMMDNodeAttrGetOperand(attr, index)
+    @ccall mlir_c.mlirLLVMMDNodeAttrGetOperand(
+        attr::MlirAttribute, index::Cptrdiff_t
+    )::MlirAttribute
 end
 
 """
@@ -11689,12 +11910,12 @@ function mlirRegisterAllPasses()
 end
 
 """
-    mlirTranslateModuleToSMTLIB(arg1, arg2, userData, inlineSingleUseValues, indentLetBody)
+    mlirTranslateModuleToSMTLIB(arg1, arg2, userData, inlineSingleUseValues, indentLetBody, emitReset)
 
 Emits SMTLIB for the specified module using the provided callback and user data
 """
 function mlirTranslateModuleToSMTLIB(
-    arg1, arg2, userData, inlineSingleUseValues, indentLetBody
+    arg1, arg2, userData, inlineSingleUseValues, indentLetBody, emitReset
 )
     @ccall mlir_c.mlirTranslateModuleToSMTLIB(
         arg1::MlirModule,
@@ -11702,11 +11923,12 @@ function mlirTranslateModuleToSMTLIB(
         userData::Ptr{Cvoid},
         inlineSingleUseValues::Bool,
         indentLetBody::Bool,
+        emitReset::Bool,
     )::MlirLogicalResult
 end
 
 function mlirTranslateOperationToSMTLIB(
-    arg1, arg2, userData, inlineSingleUseValues, indentLetBody
+    arg1, arg2, userData, inlineSingleUseValues, indentLetBody, emitReset
 )
     @ccall mlir_c.mlirTranslateOperationToSMTLIB(
         arg1::MlirOperation,
@@ -11714,6 +11936,7 @@ function mlirTranslateOperationToSMTLIB(
         userData::Ptr{Cvoid},
         inlineSingleUseValues::Bool,
         indentLetBody::Bool,
+        emitReset::Bool,
     )::MlirLogicalResult
 end
 
@@ -13607,9 +13830,19 @@ function enzymeActivityAttrGet(ctx, val)
     @ccall mlir_c.enzymeActivityAttrGet(ctx::MlirContext, val::Int32)::MlirAttribute
 end
 
-function CreateProfilerSession(device_tracer_level, host_tracer_level)
+function CreateProfilerSession(
+    device_tracer_level,
+    host_tracer_level,
+    advanced_config_keys,
+    advanced_config_values,
+    n_advanced,
+)
     @ccall mlir_c.CreateProfilerSession(
-        device_tracer_level::UInt32, host_tracer_level::UInt32
+        device_tracer_level::UInt32,
+        host_tracer_level::UInt32,
+        advanced_config_keys::Ptr{Cstring},
+        advanced_config_values::Ptr{Cstring},
+        n_advanced::Cint,
     )::Ptr{ProfilerSession}
 end
 
@@ -13675,10 +13908,6 @@ end
 
 function InitializePjrtPlugin(device_type, error)
     @ccall mlir_c.InitializePjrtPlugin(device_type::Cstring, error::Ptr{Cstring})::Cint
-end
-
-function GetCApiClient(device_type)
-    @ccall mlir_c.GetCApiClient(device_type::Cstring)::Ptr{PjRtClient}
 end
 
 function pjrt_client_register_profiler(api)
@@ -13969,6 +14198,7 @@ function ClientCompile(
     autotune_cache_enabled,
     autotune_cache_path,
     process_id,
+    enable_enzyme_comms,
 )
     @ccall mlir_c.ClientCompile(
         client::Ptr{PjRtClient},
@@ -13986,6 +14216,7 @@ function ClientCompile(
         autotune_cache_enabled::Bool,
         autotune_cache_path::Cstring,
         process_id::Cint,
+        enable_enzyme_comms::Bool,
     )::Ptr{PjRtLoadedExecutable}
 end
 
@@ -14234,6 +14465,7 @@ function ifrt_compile(
     autotune_cache_enabled,
     autotune_cache_path,
     process_id,
+    xla_enable_enzyme_comms_opt,
 )
     @ccall mlir_c.ifrt_compile(
         client::Ptr{Client},
@@ -14251,6 +14483,7 @@ function ifrt_compile(
         autotune_cache_enabled::Bool,
         autotune_cache_path::Cstring,
         process_id::Cint,
+        xla_enable_enzyme_comms_opt::Bool,
     )::Ptr{HeldIfrtLoadedExecutable}
 end
 
