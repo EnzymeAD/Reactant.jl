@@ -13830,9 +13830,19 @@ function enzymeActivityAttrGet(ctx, val)
     @ccall mlir_c.enzymeActivityAttrGet(ctx::MlirContext, val::Int32)::MlirAttribute
 end
 
-function CreateProfilerSession(device_tracer_level, host_tracer_level)
+function CreateProfilerSession(
+    device_tracer_level,
+    host_tracer_level,
+    advanced_config_keys,
+    advanced_config_values,
+    n_advanced,
+)
     @ccall mlir_c.CreateProfilerSession(
-        device_tracer_level::UInt32, host_tracer_level::UInt32
+        device_tracer_level::UInt32,
+        host_tracer_level::UInt32,
+        advanced_config_keys::Ptr{Cstring},
+        advanced_config_values::Ptr{Cstring},
+        n_advanced::Cint,
     )::Ptr{ProfilerSession}
 end
 
@@ -13898,10 +13908,6 @@ end
 
 function InitializePjrtPlugin(device_type, error)
     @ccall mlir_c.InitializePjrtPlugin(device_type::Cstring, error::Ptr{Cstring})::Cint
-end
-
-function GetCApiClient(device_type)
-    @ccall mlir_c.GetCApiClient(device_type::Cstring)::Ptr{PjRtClient}
 end
 
 function pjrt_client_register_profiler(api)
