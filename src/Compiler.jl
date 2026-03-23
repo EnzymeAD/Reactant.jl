@@ -3435,7 +3435,7 @@ function codegen_flatten!(
             push!(
                 flatten_code,
                 :(donate_argument!(
-                    donated_args_mask, $carg_sym, $i, donated_buffers, $(path)
+                    donated_args_mask, $carg_sym, $i, donated_buffers, seen_buffers, $(path)
                 )),
             )
         elseif runtime isa Val{:IFRT}
@@ -3504,13 +3504,6 @@ function codegen_flatten!(
             else
                 push!(flatten_code, :($sbuf = XLA.synced_buffer($usbuf)))
             end
-            # Important to mark donated after we have extracted the data
-            push!(
-                flatten_code,
-                :(donate_argument!(
-                    donated_args_mask, $carg_sym, $i, donated_buffers, $(path)
-                )),
-            )
         else
             error("Unsupported runtime $runtime")
         end
@@ -3529,10 +3522,17 @@ function donate_argument!(
     carg::Union{ConcretePJRTNumber,ConcretePJRTArray},
     i::Int,
     donated_buffers,
+    buffers,
     path,
 )
+    buffers = Tuple(d.buffer for d in carg.data)
     if donated_args_mask[i]
-        buffers = Tuple(d.buffer for d in carg.data)
+        if buffers in seen_buffers
+            error(
+                "Donated buffer $(carg.data) is already given as non-donated. Can't pass \
+                 pass a buffer as both non-donated and donated. The argument is present at $(path).",
+            )
+        end
         if buffers in donated_buffers
             error("Donated buffer $(carg.data) is already marked as donated. Can't donate \
                    the same buffer multiple times. The argument is present at $(path)")
@@ -3540,6 +3540,7 @@ function donate_argument!(
         push!(donated_buffers, buffers)
         Reactant.mark_donated!(carg)
     end
+    return push!(seen_buffers, buffers)
 end
 
 function donate_argument!(
@@ -3547,9 +3548,16 @@ function donate_argument!(
     carg::Union{ConcreteIFRTNumber,ConcreteIFRTArray},
     i::Int,
     donated_buffers,
+    seen_buffers,
     path,
 )
     if donated_args_mask[i]
+        if carg.data.buffer in seen_buffers
+            error(
+                "Donated buffer $(carg.data) is already given as non-donated. Can't pass \
+                 pass a buffer as both non-donated and donated. The argument is present at $(path).",
+            )
+        end
         if carg.data.buffer in donated_buffers
             error("Donated buffer $(carg.data) is already marked as donated. Can't donate \
                    the same buffer multiple times. The argument is present at $(path)")
@@ -3557,6 +3565,7 @@ function donate_argument!(
         push!(donated_buffers, carg.data.buffer)
         Reactant.mark_donated!(carg)
     end
+    return push!(seen_buffers, carg.data.buffer)
 end
 
 # TODO(#2233): Currently we copy to host and then make the transfer to the sharded devices. This is
@@ -4226,6 +4235,12 @@ function compile(ctx, f, args; kwargs...)
         ndevices,
     )
 
+    # Donate args
+    donate_args_code = quote
+        println("ok", $flatten_arg_names)
+        refine_donated_args_mask!(donated_args_mask, $(Expr(:tuple, flatten_arg_names...)))
+    end
+
     concretized_res_names, xla_call_code = codegen_xla_call(
         flatten_arg_names,
         length(linear_results),
@@ -4278,11 +4293,19 @@ function compile(ctx, f, args; kwargs...)
         :(Base.IdSet{XLA.IFRT.Array}())
     end
 
+    seen_buffers_set = if XLA.runtime(client) isa Val{:PJRT}
+        :(Base.IdSet{NTuple{<:Any,XLA.PJRT.Buffer}}())
+    else
+        :(Base.IdSet{XLA.IFRT.Array}())
+    end
+
     body = quote
         global_mesh = $(global_mesh_expr)
         donated_buffers = $(donated_buffers_set)
+        seen_buffers = $(seen_buffers_set)
         donated_args_mask = thunk.donated_args_mask
         $(flatten_code...)
+        $(donate_args_code)
         $(xla_call_code)
         $(sync_call)
         $(shard_info_code...)
@@ -4317,6 +4340,28 @@ function compile(ctx, f, args; kwargs...)
         mlir_fn_res.donated_args_mask,
         compile_options.sync,
     )
+end
+
+function refine_donated_args_mask!(mask, buffers)
+    nmask = Base.Dict{Ptr{Cvoid},Bool}()
+    for (donate, carg) in zip(mask, buffers)
+        bufkey = if carg isa Union{ConcretePJRTNumber,ConcretePJRTArray}
+            error("todo")
+            Tuple(d.buffer for d in carg.data)
+        else
+            carg.buffer
+        end
+        nmask[bufkey] = donate & get(nmask, bufkey, false)
+    end
+    for (i, carg) in enumerate(buffers)
+        bufkey = if carg isa Union{ConcretePJRTNumber,ConcretePJRTArray}
+            Tuple(d.buffer for d in carg.data)
+        else
+            carg.buffer
+        end
+        mask[i] = nmask[bufkey]
+    end
+    return mask
 end
 
 struct Thunk{FTy,tag,IsClosure,ArgTypes,ExecTy,DeviceTy,ClientTy,GD,DAM}
