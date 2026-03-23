@@ -51,3 +51,55 @@ linear(x, W, b) = (W * x) .+ b
         )
     end
 end
+
+@testset "Advanced config profiling" begin
+    if !Sys.iswindows()
+        fn = @compile sync = true linear(x, W, b)
+
+        # Test with_profiler accepting advanced_config dict
+        mktempdir() do profile_dir
+            Reactant.Profiler.with_profiler(
+                profile_dir; advanced_config=Dict{String,String}()
+            ) do
+                fn(x, W, b)
+            end
+            traces_path = joinpath(profile_dir, "plugins", "profile")
+            @test isdir(traces_path)
+        end
+
+        # Test profile_and_get_xplane_file with advanced_config
+        result = Reactant.Profiler.profile_and_get_xplane_file(
+            fn, x, W, b; nrepeat=3, advanced_config=Dict{String,String}()
+        )
+        @test isfile(result.xplane_file)
+
+        if RunningOnCUDA
+            # Test with PM counters on GPU
+            # PM counters may fail due to permissions (CUPTI_ERROR_INSUFFICIENT_PRIVILEGES),
+            # so we test that the API accepts them without error. The profiler gracefully
+            # degrades if permissions are missing.
+            mktempdir() do profile_dir
+                Reactant.Profiler.with_profiler(
+                    profile_dir;
+                    pm_counters=Reactant.Profiler.DEFAULT_PM_COUNTERS,
+                ) do
+                    fn(x, W, b)
+                end
+                traces_path = joinpath(profile_dir, "plugins", "profile")
+                @test isdir(traces_path)
+            end
+
+            # Test profile_and_get_xplane_file with pm_counters
+            pm_result = Reactant.Profiler.profile_and_get_xplane_file(
+                fn, x, W, b;
+                nrepeat=3,
+                pm_counters=Reactant.Profiler.DEFAULT_PM_COUNTERS,
+            )
+            @test isfile(pm_result.xplane_file)
+
+            # framework_op_stats may be empty if CUPTI permissions are restricted
+            pm_stats = Reactant.Profiler.get_framework_op_stats(pm_result.xplane_file)
+            @test pm_stats isa Vector
+        end
+    end
+end
