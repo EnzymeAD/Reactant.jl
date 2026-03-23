@@ -4377,7 +4377,7 @@ function refine_donated_args_mask!(mask, buffers)
         else
             carg.buffer
         end
-        nmask[bufkey] = donate & get(nmask, bufkey, false)
+        nmask[bufkey] = donate & get(nmask, bufkey, true)
     end
     for (i, carg) in enumerate(buffers)
         bufkey = if carg isa Union{ConcretePJRTNumber,ConcretePJRTArray}
