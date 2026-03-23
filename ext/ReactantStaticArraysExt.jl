@@ -6,7 +6,7 @@ import Reactant.TracedLinearAlgebra: overloaded_mul
 
 using StaticArrays: SArray, StaticArray
 
-const SAReact{Sz, T} = StaticArray{Sz<:Tuple, T<:Reactant.TracedRNumber}
+const SAReact{Sz, T} = StaticArray{Sz, T} where {Sz <: Tuple, T <: Reactant.TracedRNumber}
 
 Base.@nospecializeinfer function Reactant.traced_type_inner(
     @nospecialize(FA::Type{SArray{S,T,N,L}}),
