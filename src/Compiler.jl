@@ -3272,6 +3272,8 @@ The name is due to its similarity to the `flatten` function in `jax.tree_util.re
 
 - `flatten_names`: A list of `Symbol`s representing the names of the flattened arguments.
 - `flatten_code`: A list of `Expr`s to extract the XLA buffers from the input arguments.
+- `flatten_carg_names`: A list of `Symbol` representing Array names.
+- `flatten_paths`: The list of paths for each argument.
 
 # Note
 
@@ -3286,8 +3288,10 @@ function codegen_flatten!(
     ndevices::Int,
 )
     flatten_names = Symbol[]
+    flatten_carg_names = Symbol[]
     flatten_code = Expr[]
     runtime = XLA.runtime(client)
+    flatten_paths = []
     resharded_inputs = Dict{Tuple,Any}()
 
     inv_seen_args = if is_sharded
@@ -3316,8 +3320,10 @@ function codegen_flatten!(
                 "Invalid path duplication $(Reactant.TracedUtils.get_paths(arg)) into $(paths)",
             )
         end
+        push!(flatten_paths, path)
 
         carg_sym = Symbol(:carg_, i)
+        push!(flatten_carg_names, carg_sym)
         usbuf = Symbol(:usbuf_, i)
 
         flatcode = :(getindex(args, $(path[2])))
@@ -3512,9 +3518,10 @@ function codegen_flatten!(
     # We reorder how the buffers are passed to the XLA call
     if is_sharded && runtime isa Val{:PJRT}
         flatten_names = vcat(eachrow(reshape(flatten_names, ndevices, :))...)
+        flatten_paths = vcat(eachrow(reshape(flatten_paths, ndevices, :))...)
     end
 
-    return flatten_names, flatten_code, resharded_inputs
+    return flatten_names, flatten_code, resharded_inputs, flatten_carg_names, flatten_paths
 end
 
 function donate_argument!(
@@ -4226,7 +4233,7 @@ function compile(ctx, f, args; kwargs...)
     ndevices = mlir_fn_res.is_sharded ? length(mlir_fn_res.global_device_ids) : 1
 
     # generate Julia `Thunk` code
-    flatten_arg_names, flatten_code, resharded_inputs = codegen_flatten!(
+    flatten_arg_names, flatten_code, resharded_inputs, flatten_carg_names, flatten_arg_paths = codegen_flatten!(
         linear_args,
         seen_args,
         mlir_fn_res.is_sharded,
@@ -4236,9 +4243,29 @@ function compile(ctx, f, args; kwargs...)
     )
 
     # Donate args
-    donate_args_code = quote
-        println("ok", $flatten_arg_names)
-        refine_donated_args_mask!(donated_args_mask, $(Expr(:tuple, flatten_arg_names...)))
+    runtime = XLA.runtime(client)
+    donate_args_code = if runtime isa Val{:IFRT}
+        donate_args_code = quote
+            flat_args = $(Expr(:tuple, flatten_arg_names...))
+            Reactant.Compiler.refine_donated_args_mask!(donated_args_mask, flat_args)
+        end
+        for (i, (flatten_name, path)) in
+            enumerate(zip(flatten_carg_names, flatten_arg_paths))
+            push!(
+                donate_args_code.args,
+                :(Reactant.Compiler.donate_argument!(
+                    donated_args_mask,
+                    $flatten_name,
+                    $i,
+                    donated_buffers,
+                    seen_buffers,
+                    $path,
+                )),
+            )
+        end
+        donate_args_code
+    else
+        quote end
     end
 
     concretized_res_names, xla_call_code = codegen_xla_call(
@@ -4346,7 +4373,6 @@ function refine_donated_args_mask!(mask, buffers)
     nmask = Base.Dict{Ptr{Cvoid},Bool}()
     for (donate, carg) in zip(mask, buffers)
         bufkey = if carg isa Union{ConcretePJRTNumber,ConcretePJRTArray}
-            error("todo")
             Tuple(d.buffer for d in carg.data)
         else
             carg.buffer
