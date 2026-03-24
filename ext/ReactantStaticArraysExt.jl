@@ -6,7 +6,7 @@ import Reactant.TracedLinearAlgebra: overloaded_mul
 
 using StaticArrays: SArray, StaticArray
 
-const SAReact{Sz, T} = StaticArray{Sz, T} where {Sz<:Tuple, T<:Reactant.TracedRNumber}
+const SAReact{Sz,T} = StaticArray{Sz,T} where {Sz<:Tuple,T<:Reactant.TracedRNumber}
 
 Base.@nospecializeinfer function Reactant.traced_type_inner(
     @nospecialize(FA::Type{SArray{S,T,N,L}}),
@@ -28,9 +28,7 @@ end
 overloaded_map(f, a::SAReact, rest::SAReact...) = f.(a, rest...)
 overloaded_mapreduce(f, op, a::SAReact; kwargs...) = mapreduce(f, op, a, kwargs...)
 
-function overloaded_mul(
-    A::SAReact, B::SAReact, alpha::Number=true, beta::Number=false
-)
+function overloaded_mul(A::SAReact, B::SAReact, alpha::Number=true, beta::Number=false)
     C = A * B
     if !(alpha isa Reactant.TracedRNumber) && isone(alpha)
         return C
