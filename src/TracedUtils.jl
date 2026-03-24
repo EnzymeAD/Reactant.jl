@@ -472,8 +472,16 @@ function prepare_mlir_fn_args(
     seen_args0 = OrderedIdDict()
     try
         for i in 1:N
+            arg_sharding = if args[i] isa Reactant.AbstractConcreteArray ||
+                              args[i] isa Reactant.AbstractConcreteNumber
+                sinfo = args[i].sharding
+                Reactant.Sharding.is_sharded(sinfo) ? sinfo : Reactant.Sharding.NoSharding()
+            else
+                Reactant.Sharding.NoSharding()
+            end
             @inbounds traced_args[i] = Reactant.make_tracer(
-                seen_args0, args[i], (argprefix, i), inmode; toscalar, runtime
+                seen_args0, args[i], (argprefix, i), inmode;
+                toscalar, runtime, sharding=arg_sharding
             )
         end
     finally
