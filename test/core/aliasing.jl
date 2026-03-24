@@ -4,8 +4,7 @@ function buffer_equals(x, y)
     if x isa Reactant.ConcreteIFRTArray
         y.data.buffer == x.data.buffer
     elseif x isa Reactant.ConcretePJRTArray
-        all(((x,y),) -> x == y,
-            zip(x.data, y.data))
+        all(((x, y),) -> x == y, zip(x.data, y.data))
     else
         error("invalid array type $(typeof(x))")
     end
