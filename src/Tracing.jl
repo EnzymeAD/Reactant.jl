@@ -1505,7 +1505,13 @@ Base.@nospecializeinfer function make_tracer(
                     (XLA.PJRT.AsyncEmptyBuffer,), size(prev), Sharding.NoShardInfo()
                 )
             else
-                error("TODO(#2230): implement sharding")
+                ndev = Sharding.ndevices(sharding)
+                shard_info = Sharding.ShardInfo(sharding, nothing)
+                res = ConcretePJRTArray{T,N,ndev}(
+                    ntuple(_ -> XLA.PJRT.AsyncEmptyBuffer, ndev),
+                    size(prev),
+                    shard_info,
+                )
             end
             seen[prev] = res
             return res
@@ -1516,7 +1522,10 @@ Base.@nospecializeinfer function make_tracer(
                     XLA.IFRT.AsyncEmptyArray, size(prev), Sharding.NoShardInfo()
                 )
             else
-                error("TODO(#2230): implement sharding")
+                shard_info = Sharding.ShardInfo(sharding, nothing)
+                res = ConcreteIFRTArray{T,N}(
+                    XLA.IFRT.AsyncEmptyArray, size(prev), shard_info
+                )
             end
             seen[prev] = res
             return res
@@ -1594,7 +1603,11 @@ Base.@nospecializeinfer function make_tracer(
                     (XLA.PJRT.AsyncEmptyBuffer,), Sharding.NoShardInfo()
                 )
             else
-                error("TODO(#2230): implement sharding")
+                ndev = Sharding.ndevices(sharding)
+                shard_info = Sharding.ShardInfo(sharding, nothing)
+                res = ConcretePJRTNumber{T,ndev}(
+                    ntuple(_ -> XLA.PJRT.AsyncEmptyBuffer, ndev), shard_info
+                )
             end
             seen[prev] = res
             return res
@@ -1605,7 +1618,10 @@ Base.@nospecializeinfer function make_tracer(
                     XLA.IFRT.AsyncEmptyArray, Sharding.NoShardInfo()
                 )
             else
-                error("TODO(#2230): implement sharding")
+                shard_info = Sharding.ShardInfo(sharding, nothing)
+                res = ConcreteIFRTNumber{T}(
+                    XLA.IFRT.AsyncEmptyArray, shard_info
+                )
             end
             seen[prev] = res
             return res
