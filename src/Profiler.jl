@@ -131,14 +131,14 @@ function with_profiler(
             params_content = read(nvidia_params, String)
             if contains(params_content, "RmProfilingAdminOnly: 1")
                 @warn "CUPTI PM counter collection requires profiling permissions. " *
-                      "Set NVreg_RestrictProfilingToAdminUsers=0 in " *
-                      "/etc/modprobe.d/nvidia-profiler.conf and reload the nvidia module. " *
-                      "Continuing without PM counters."
+                    "Set NVreg_RestrictProfilingToAdminUsers=0 in " *
+                    "/etc/modprobe.d/nvidia-profiler.conf and reload the nvidia module. " *
+                    "Continuing without PM counters."
                 pm_counters = nothing
             end
         elseif !Sys.islinux()
             @warn "PM counter collection is only supported on Linux with NVIDIA GPUs. " *
-                  "Continuing without PM counters."
+                "Continuing without PM counters."
             pm_counters = nothing
         end
         if pm_counters !== nothing
@@ -149,10 +149,13 @@ function with_profiler(
     config_keys = collect(keys(config))
     config_values = collect(values(config))
     profiler = GC.@preserve config_keys config_values begin
-        key_ptrs = isempty(config_keys) ? C_NULL : Base.unsafe_convert.(Cstring, config_keys)
-        val_ptrs = isempty(config_values) ? C_NULL : Base.unsafe_convert.(Cstring, config_values)
+        key_ptrs =
+            isempty(config_keys) ? C_NULL : Base.unsafe_convert.(Cstring, config_keys)
+        val_ptrs =
+            isempty(config_values) ? C_NULL : Base.unsafe_convert.(Cstring, config_values)
         Reactant.MLIR.API.CreateProfilerSession(
-            device_tracer_level, host_tracer_level,
+            device_tracer_level,
+            host_tracer_level,
             isempty(config_keys) ? C_NULL : key_ptrs,
             isempty(config_values) ? C_NULL : val_ptrs,
             Cint(length(config_keys)),
