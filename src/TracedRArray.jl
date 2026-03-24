@@ -392,7 +392,8 @@ function _copyto!(dest::AnyTracedRArray, bc::Broadcasted)
         TracedUtils.elem_apply(bc.f, args...),
     )
     TracedUtils.set_mlir_data!(dest, res.mlir_data)
-    TracedUtils.set_paths!(dest, (TracedUtils.get_paths(dest)..., (:new_buffer,)))
+    tarray_dest = materialize_traced_array(dest)
+    TracedUtils.set_paths!(tarray_dest, (TracedUtils.get_paths(tarray_dest)..., (:new_buffer,)))
     return dest
 end
 
