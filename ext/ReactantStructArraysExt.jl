@@ -53,7 +53,7 @@ function Base.copyto!(
     bc = Broadcast.preprocess(dest, bc)
 
     args = (Reactant.broadcast_to_size(Base.materialize(a), size(bc)) for a in bc.args)
-
+    @info "HERE"
     Reactant.TracedUtils.elem_apply_via_while_loop(bc.f, args...; dest=dest)
 
     return dest
@@ -72,10 +72,9 @@ function Base.copyto!(
     isempty(dest) && return dest
 
     bc = Broadcast.preprocess(dest, bc)
-
     args = (Reactant.broadcast_to_size(Base.materialize(a), size(bc)) for a in bc.args)
-    res = Reactant.TracedUtils.elem_apply_via_while_loop(bc.f, args...)
-    return copyto!(dest, res)
+    Reactant.TracedUtils.elem_apply_via_while_loop(bc.f, args...; dest)
+    return dest
 end
 
 function Base.similar(
