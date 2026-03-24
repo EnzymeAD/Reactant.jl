@@ -2716,7 +2716,9 @@ function compile_mlir!(
 
     for (i, op) in enumerate(results)
         if !MLIR.IR.is_block_arg(op) ||
-            !Reactant.TracedUtils.has_idx(linear_results[i], :args) # new buffer
+            !Reactant.TracedUtils.has_idx(linear_results[i], :args) ||  # new buffer
+            Reactant.TracedUtils.has_idx(linear_results[i], :new_buffer)
+
             push!(nresults, op)
             push!(linear_results2, linear_results[i])
             results_mask[i] = true
