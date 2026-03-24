@@ -2648,6 +2648,8 @@ function compile_mlir!(
                 ),
                 "post_sdy_propagation",
             )
+
+            run_stablehlo_fixup!(mod)
         elseif compile_options.shardy_passes isa ShardyPropagationOptions
             run_pass_pipeline!(mod, compile_options.shardy_passes)
             # sdy passes are run deep inside the XLA compiler. So the only way to respect
@@ -4538,6 +4540,89 @@ end
 function clear_llvm_compiler_cache!(_mod::MLIR.IR.Module)
     delete!(_llvm_compiler_caches, _mod)
     return nothing
+end
+
+# -- helper pass to fix stablehlo import --
+
+struct FixupStablehloPass <: MLIR.IR.AbstractPass end
+
+MLIR.IR.opname(::FixupStablehloPass) = "func.func"
+
+function fixup!(op::MLIR.IR.Operation)
+    # Recurse first so inner patterns are already simplified
+    for reg in op
+        for bl in reg
+            for subop in collect(bl)
+                fixup!(subop)
+            end
+        end
+    end
+
+    MLIR.IR.name(op) == "stablehlo.broadcast_in_dim" || return
+
+    # Pattern: broadcast_in_dim(broadcast_in_dim(X, dimsA), dimsB)
+    #       -> broadcast_in_dim(X, merged_dims)
+    operand = MLIR.IR.operand(op, 1)
+    MLIR.IR.is_op_res(operand) || return
+    owner = MLIR.IR.owner(operand)
+    MLIR.IR.name(owner) == "stablehlo.broadcast_in_dim" || return
+
+    inner_dims_attr = MLIR.IR.getattr(owner, "broadcast_dimensions")
+    outer_dims_attr = MLIR.IR.getattr(op, "broadcast_dimensions")
+    (inner_dims_attr === nothing || outer_dims_attr === nothing) && return
+
+    # Read 0-indexed MLIR dims into Julia arrays
+    n_inner = Int(MLIR.API.mlirDenseArrayGetNumElements(inner_dims_attr))
+    n_outer = Int(MLIR.API.mlirDenseArrayGetNumElements(outer_dims_attr))
+    inner_dims = [MLIR.API.mlirDenseI64ArrayGetElement(inner_dims_attr, i) for i in 0:(n_inner - 1)]
+    outer_dims = [MLIR.API.mlirDenseI64ArrayGetElement(outer_dims_attr, i) for i in 0:(n_outer - 1)]
+
+    # merged[i] = outer_dims[ inner_dims[i] ] (both 0-indexed; +1 to convert to Julia indexing)
+    merged_dims = Int64[outer_dims[inner_dims[i] + 1] for i in 1:n_inner]
+
+    inner_operand = MLIR.IR.operand(owner, 1)
+    result_type = MLIR.IR.type(MLIR.IR.result(op, 1))
+    merged_dims_attr = MLIR.IR.DenseArrayAttribute(merged_dims)
+
+    new_op = MLIR.Dialects.stablehlo.broadcast_in_dim(
+        inner_operand; result_0=result_type, broadcast_dimensions=merged_dims_attr
+    )
+
+    # Copy mhlo.sharding from outer op if present
+    sharding = MLIR.IR.getattr(op, "mhlo.sharding")
+    if sharding !== nothing
+        MLIR.IR.setattr!(new_op, "mhlo.sharding", sharding)
+    end
+
+    MLIR.IR.insert_before!(MLIR.IR.block(op), op, new_op)
+    MLIR.API.mlirValueReplaceAllUsesOfWith(MLIR.IR.result(op, 1), MLIR.IR.result(new_op, 1))
+    MLIR.IR.dispose(MLIR.IR.rmfromparent!(op))
+    return nothing
+end
+
+function MLIR.IR.pass_run(ctx::MLIR.IR.Context, ::FixupStablehloPass, op::MLIR.IR.Operation)
+    fixup!(op)
+    return nothing
+end
+
+function run_stablehlo_fixup!(mod)
+    pass = FixupStablehloPass()
+    pm = MLIR.IR.PassManager()
+    mlir_pass = MLIR.IR.create_external_pass!(pm, pass, "fixup-stablehlo", "fixup-stablehlo",
+                                              "a pass to fixup stablehlo before transforming to hlo")
+    opname = MLIR.IR.opname(pass)
+    if isempty(opname)
+        MLIR.IR.add_owned_pass!(pm, mlir_pass)
+    else
+        opm = MLIR.IR.OpPassManager(pm, opname)
+        MLIR.IR.add_owned_pass!(opm, mlir_pass)
+    end
+
+    @info "Running StableHLO fixup"
+    MLIR.IR.run!(pm, mod)
+    run_pass_pipeline!(mod, "canonicalize", "post-stablehlo-fixup")
+
+    return mod
 end
 
 end
