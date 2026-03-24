@@ -2685,6 +2685,8 @@ function compile_mlir!(
                 ),
                 "to_mhlo_shardings",
             )
+
+            run_stablehlo_fixup!(mod)
         end
     end
 
