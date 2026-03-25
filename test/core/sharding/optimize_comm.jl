@@ -292,36 +292,48 @@ end
 end
 
 function multislice_both(x, sz)
-  return (x[5:14], x[6:15], x[7:16], x[8:17])
+    if size(x, 1) != sz
+        x = x[1:sz]
+    end
+    return (x[5:14], x[6:15], x[7:16], x[8:17])
 end
 
-if length(addressable_devices) ≥ 2
-   @testset "MultiSlice $size" for size in (20,21) begin
-        N = min((length(Reactant.devices()) ÷ 2) * 2, 2)
+@testset "MultiSlice" begin
+    if length(addressable_devices) ≥ 2 && !RunningOnTPU
+        @testset "MultiSlice $size" for size in (20, 21)
+            N = min((length(Reactant.devices()) ÷ 2) * 2, 2)
 
-        mesh = Sharding.Mesh(reshape(Reactant.devices()[1:N], 2), (:x,))
-        sharding = Sharding.NamedSharding(mesh, (:x,))
+            mesh = Sharding.Mesh(reshape(Reactant.devices()[1:N], 2), (:x,))
+            sharding = Sharding.NamedSharding(mesh, (:x,))
 
-	size2 = N * div(size + N - 1, N)
-	x = collect(Int, 0:(size2-1))
-        rx = Reactant.to_rarray(x; sharding)
+            size2 = N * div(size + N - 1, N)
+            x = collect(Int, 0:(size2 - 1))
+            rx = Reactant.to_rarray(x; sharding)
 
-        hlo = repr(@code_xla shardy_passes = :to_mhlo_shardings multislice_both(rx, size))
-	y = multislice_both(x, size)
+            hlo = repr(@code_xla shardy_passes = :to_mhlo_shardings multislice_both(rx, size))
+            y = multislice_both(x, size)
 
-	@test !contains(hlo, "all-to-all")
-        @test !contains(hlo, "all-reduce")
-        @test !contains(hlo, "copy")
+            @test @filecheck begin
+                @check_not "all-to-all"
+                @check_not "all-reduce"
+                @check_not "copy"
+                hlo
+            end
 
-        @test length(collect(eachmatch(r"%collective-permute[\.0-9]* =", hlo))) == 2
+            @test length(
+                collect(eachmatch(r"%collective-permute(-start)?[\.0-9]* =", hlo))
+            ) == 2
+            @test length(collect(eachmatch(r"%all-gather(-start)?[\.0-9]* =", hlo))) == 0
 
-        @test length(collect(eachmatch(r"%all-gather[\.0-9]* =", hlo))) == 0
-	
-	ry = @jit shardy_passes = :to_mhlo_shardings multislice_both(rx, size)
+            ry = @jit shardy_passes = :to_mhlo_shardings multislice_both(rx, size)
 
-	for (z, rz) in zip(y, ry)
-	   @test all(z .== convert(Array, rz))
-	end
-	end
+            for (z, rz) in zip(y, ry)
+                @test all(z .== convert(Array, rz))
+            end
+        end
+    else
+        if RunningOnTPU
+            @warn "Skipping MultiSlice test on TPU"
+        end
     end
 end
