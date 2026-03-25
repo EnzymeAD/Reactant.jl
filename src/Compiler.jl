@@ -1430,16 +1430,19 @@ function optimization_passes(
         ],
         ",",
     )
-    # Ghost cell widening: must run BEFORE transform_passes which includes
-    # recognize_extend/rotate that convert slice→pad into enzymexla ops.
-    ghost_cell = is_sharded ? ",func.func(stencil-ghost-cell-widening),canonicalize,cse," : ","
-    func_passes = join(["canonicalize", "cse", "canonicalize"], ",") * ghost_cell * transform_passes
+    func_passes = join(["canonicalize", "cse", "canonicalize", transform_passes], ",")
     if lower_comms
         func_passes =
             func_passes *
             ",enzyme-hlo-generate-td{" *
             join(lower_transform_passes, ';') *
             "},transform-interpreter,enzyme-hlo-remove-transform"
+    end
+    # Ghost cell widening: runs LAST in func_passes, after all optimization
+    # and comm lowering patterns. Must be last because pad optimization patterns
+    # (e.g., slice_pad) would otherwise fold our widened slices back into pads.
+    if is_sharded
+        func_passes *= ",func.func(stencil-ghost-cell-widening),canonicalize,cse"
     end
     if CONCATS_TO_DUS[]
         push!(
