@@ -81,6 +81,7 @@ function Base.similar(
     bc::Broadcasted{StructArrayStyle{S,N}}, ::Type{ElType}
 ) where {S<:AbstractReactantArrayStyle,N,ElType}
     bc′ = convert(Broadcasted{S}, bc)
+    # It is possible that we have multiple broadcasted arguments
     alloc(::Type{T}) where {T} = (T <: Complex) ? similar(bc′, T) :
                                  (StructArrays.isnonemptystructtype(T) ?
                                   StructArrays.buildfromschema(alloc, T) :
