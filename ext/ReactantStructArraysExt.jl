@@ -73,8 +73,8 @@ function Base.copyto!(
 
     bc = Broadcast.preprocess(dest, bc)
     args = (Reactant.broadcast_to_size(Base.materialize(a), size(bc)) for a in bc.args)
-    Reactant.TracedUtils.elem_apply_via_while_loop(bc.f, args...)
-    return dest
+    res = Reactant.TracedUtils.elem_apply_via_while_loop(bc.f, args...)
+    return copyto!(dest, res)
 end
 
 function alloc_sarr(bc, T)
