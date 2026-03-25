@@ -1430,8 +1430,12 @@ function optimization_passes(
         ],
         ",",
     )
-    ghost_cell_passes = is_sharded ? ["stencil-ghost-cell-widening", "canonicalize", "cse"] : String[]
-    func_passes = join(["canonicalize", "cse", "canonicalize", ghost_cell_passes..., transform_passes], ",")
+    func_passes = join(["canonicalize", "cse", "canonicalize", transform_passes], ",")
+    # Ghost cell widening: runs after optimization patterns have canonicalized
+    # the stencil slice→pad patterns, but before comm lowering recognizes them.
+    if is_sharded
+        func_passes *= ",stencil-ghost-cell-widening,canonicalize,cse"
+    end
     if lower_comms
         func_passes =
             func_passes *
