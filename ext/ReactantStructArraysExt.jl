@@ -82,10 +82,19 @@ function Base.similar(
 ) where {S<:AbstractReactantArrayStyle,N,ElType}
     bc′ = convert(Broadcasted{S}, bc)
     # It is possible that we have multiple broadcasted arguments
-    alloc(::Type{T}) where {T} = (T <: Complex) ? similar(bc′, T) :
-                                 (StructArrays.isnonemptystructtype(T) ?
-                                  StructArrays.buildfromschema(alloc, T) :
-                                  similar(bc′, T))
+    function alloc(::Type{T}) where {T}
+        return if (T <: Complex)
+            similar(bc′, T)
+        else
+            (
+            if StructArrays.isnonemptystructtype(T)
+                StructArrays.buildfromschema(alloc, T)
+            else
+                similar(bc′, T)
+            end
+        )
+        end
+    end
     return alloc(ElType)
 end
 
@@ -134,7 +143,6 @@ end
 @inline function Reactant.traced_getfield(@nospecialize(obj::StructArray), field)
     return Base.getfield(obj, field)
 end
-
 
 # This is to tell StructArrays to leave these array types alone.
 StructArrays.staticschema(::Type{<:Reactant.AnyTracedRArray}) = NamedTuple{()}

@@ -1150,7 +1150,11 @@ function elem_apply_via_while_loop(f, args::Vararg{Any,Nargs}) where {Nargs}
     # flattening the tensors makes the auto-batching pass work nicer
     flat_args = ntuple(Val(Nargs)) do i
         arg = args[i]
-        scalar_arg(arg) ? RefFillVector(arg) : ReactantCore.materialize_traced_array(vec(arg))
+        if scalar_arg(arg)
+            RefFillVector(arg)
+        else
+            ReactantCore.materialize_traced_array(vec(arg))
+        end
     end
 
     # This wont be a mutating function so we can safely execute it once
