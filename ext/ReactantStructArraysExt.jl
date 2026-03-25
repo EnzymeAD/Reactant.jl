@@ -53,8 +53,8 @@ function Base.copyto!(
     bc = Broadcast.preprocess(dest, bc)
 
     args = (Reactant.broadcast_to_size(Base.materialize(a), size(bc)) for a in bc.args)
-    @info "HERE"
-    Reactant.TracedUtils.elem_apply_via_while_loop(bc.f, args...; dest=dest)
+    res = Reactant.TracedUtils.elem_apply_via_while_loop(bc.f, args...)
+    copyto!(dest, res)
 
     return dest
 end
@@ -81,11 +81,11 @@ function Base.similar(
     bc::Broadcasted{StructArrayStyle{S,N}}, ::Type{ElType}
 ) where {S<:AbstractReactantArrayStyle,N,ElType}
     bc′ = convert(Broadcasted{S}, bc)
-    if StructArrays.isnonemptystructtype(ElType)
-        StructArrays.buildfromschema(T -> similar(bc′, T), ElType)
-    else
-        similar(bc′, ElType)
-    end
+    alloc(::Type{T}) where {T} = (T <: Complex) ? similar(bc′, T) :
+                                 (StructArrays.isnonemptystructtype(T) ?
+                                  StructArrays.buildfromschema(alloc, T) :
+                                  similar(bc′, T))
+    return alloc(ElType)
 end
 
 Base.@propagate_inbounds function StructArrays._getindex(
@@ -134,11 +134,6 @@ end
     return Base.getfield(obj, field)
 end
 
-function Base.similar(
-    ::Base.Broadcast.Broadcasted{AbstractReactantArrayStyle}, ::Type{Eltype}, dims
-) where {Eltype}
-    return similar(TracedRArray{Eltype}, dims)
-end
 
 # This is to tell StructArrays to leave these array types alone.
 StructArrays.staticschema(::Type{<:Reactant.AnyTracedRArray}) = NamedTuple{()}
