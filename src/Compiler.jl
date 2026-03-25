@@ -2059,6 +2059,17 @@ function compile_mlir!(
         run_pass_pipeline!(mod, "raise-triton-custom-call", "raise_triton_custom_call")
     end
 
+    # Ghost cell widening: replace per-operator halo exchanges with a single
+    # wide ghost cell exchange for stencil computations.
+    # Must run before optimization passes (which recognize/lower comm patterns).
+    if is_sharded && compile_options.optimization_passes === :all
+        run_pass_pipeline!(
+            mod,
+            "stencil-ghost-cell-widening,canonicalize,cse",
+            "stencil_ghost_cell_widening",
+        )
+    end
+
     if compile_options.optimization_passes === :all
         run_pass_pipeline!(
             mod,
