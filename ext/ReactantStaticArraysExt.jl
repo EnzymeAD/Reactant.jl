@@ -29,6 +29,8 @@ overloaded_map(f, a::SAReact, rest::SAReact...) = f.(a, rest...)
 overloaded_mapreduce(f, op, a::SAReact; kwargs...) = mapreduce(f, op, a, kwargs...)
 
 function overloaded_mul(A::SAReact, B::SAReact, alpha::Number=true, beta::Number=false)
+    # beta is not supported since it is zero by default in Reactant 
+    # (similar it zero'd automatically for TracedRArrays)
     C = A * B
     if !(alpha isa Reactant.TracedRNumber) && isone(alpha)
         return C
