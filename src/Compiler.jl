@@ -1430,7 +1430,8 @@ function optimization_passes(
         ],
         ",",
     )
-    func_passes = join(["canonicalize", "cse", "canonicalize", transform_passes], ",")
+    ghost_cell_passes = is_sharded ? ["stencil-ghost-cell-widening", "canonicalize", "cse"] : String[]
+    func_passes = join(["canonicalize", "cse", "canonicalize", ghost_cell_passes..., transform_passes], ",")
     if lower_comms
         func_passes =
             func_passes *
