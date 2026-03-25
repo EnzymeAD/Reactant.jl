@@ -290,3 +290,38 @@ end
         end
     end
 end
+
+function multislice_both(x, sz)
+  return (x[5:14], x[6:15], x[7:16], x[8:17])
+end
+
+if length(addressable_devices) ≥ 2
+   @testset "MultiSlice $size" for size in (20,21) begin
+        N = min((length(Reactant.devices()) ÷ 2) * 2, 2)
+
+        mesh = Sharding.Mesh(reshape(Reactant.devices()[1:N], 2), (:x,))
+        sharding = Sharding.NamedSharding(mesh, (:x,))
+
+	size2 = N * div(size + N - 1, N)
+	x = collect(Int, 0:(size2-1))
+        rx = Reactant.to_rarray(x; sharding)
+
+        hlo = repr(@code_xla shardy_passes = :to_mhlo_shardings multislice_both(rx, size))
+	y = multislice_both(x, size)
+
+	@test !contains(hlo, "all-to-all")
+        @test !contains(hlo, "all-reduce")
+        @test !contains(hlo, "copy")
+
+        @test length(collect(eachmatch(r"%collective-permute[\.0-9]* =", hlo))) == 2
+
+        @test length(collect(eachmatch(r"%all-gather[\.0-9]* =", hlo))) == 0
+	
+	ry = @jit shardy_passes = :to_mhlo_shardings multislice_both(rx, size)
+
+	for (z, rz) in zip(y, ry)
+	   @test all(z .== convert(Array, rz))
+	end
+	end
+    end
+end
