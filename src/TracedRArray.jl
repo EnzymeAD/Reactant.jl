@@ -323,10 +323,6 @@ function Base.materialize!(
     ::Style, dest, bc::Broadcasted
 ) where {Style<:AbstractReactantArrayStyle}
     _copyto!(dest, instantiate(Broadcasted{Style}(bc.f, bc.args, axes(dest))))
-    tarray_dest = materialize_traced_array(dest)
-    TracedUtils.set_paths!(
-        tarray_dest, (TracedUtils.get_paths(tarray_dest)..., (:new_buffer,))
-    )
     return dest
 end
 
