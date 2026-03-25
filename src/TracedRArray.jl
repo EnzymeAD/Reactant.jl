@@ -322,7 +322,12 @@ end
 function Base.materialize!(
     ::Style, dest, bc::Broadcasted
 ) where {Style<:AbstractReactantArrayStyle}
-    return _copyto!(dest, instantiate(Broadcasted{Style}(bc.f, bc.args, axes(dest))))
+    _copyto!(dest, instantiate(Broadcasted{Style}(bc.f, bc.args, axes(dest))))
+    tarray_dest = materialize_traced_array(dest)
+    TracedUtils.set_paths!(
+        tarray_dest, (TracedUtils.get_paths(tarray_dest)..., (:new_buffer,))
+    )
+    return dest
 end
 
 Base.copyto!(dest::AnyTracedRArray, bc::Broadcasted{Nothing}) = _copyto!(dest, bc) # Keep it for ArrayConflict
@@ -392,10 +397,6 @@ function _copyto!(dest::AnyTracedRArray, bc::Broadcasted)
         TracedUtils.elem_apply(bc.f, args...),
     )
     TracedUtils.set_mlir_data!(dest, res.mlir_data)
-    tarray_dest = materialize_traced_array(dest)
-    TracedUtils.set_paths!(
-        tarray_dest, (TracedUtils.get_paths(tarray_dest)..., (:new_buffer,))
-    )
     return dest
 end
 
