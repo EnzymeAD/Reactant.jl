@@ -1434,7 +1434,7 @@ function optimization_passes(
     # Ghost cell widening: runs after optimization patterns have canonicalized
     # the stencil slice→pad patterns, but before comm lowering recognizes them.
     if is_sharded
-        func_passes *= ",stencil-ghost-cell-widening,canonicalize,cse"
+        func_passes *= ",func.func(stencil-ghost-cell-widening),canonicalize,cse"
     end
     if lower_comms
         func_passes =
