@@ -685,7 +685,7 @@ function trace_if(expr; store_last_line=nothing, depth=0, track_numbers)
         :tuple,
         [:($(Expr(:isdefined, v)) ? $v : $(MissingTracedValue)()) for v in all_vars]...,
     )
-    args_expr = :(Reactant.NamedTuple{$names_expr}($values_expr))
+    args_expr = :(NamedTuple{$names_expr}($values_expr))
 
     reactant_code_block = quote
         $(true_branch_fn)
