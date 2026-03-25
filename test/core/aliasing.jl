@@ -26,6 +26,13 @@ function br_func!(x, z)
     return nothing
 end
 
+function f!(x, j)
+    x.x .= 2.0 .* x.x
+    x.y = x.x
+    j .= x.y
+    return nothing
+end
+
 @testset "Buffer aliasing" begin
     x = Reactant.to_rarray(ones(10))
     y = similar(x)
@@ -39,4 +46,12 @@ end
     @jit br_func!(x, z)
     @test buffer_equals(x.x, x.y)
     @test !buffer_equals(x.x, z)
+
+    x = Reactant.to_rarray(ones(10))
+    y = Reactant.to_rarray(ones(10))
+    z = Reactant.to_rarray(ones(10))
+    x = X(x, y)
+    @jit f!(x, z)
+    @test buffer_equals(x.x, x.y)
+    @test !buffer_equals(x.y, z)
 end
