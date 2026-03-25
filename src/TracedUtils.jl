@@ -1128,10 +1128,7 @@ function __elem_apply_loop_body(idx_ref, fn_ref::F, res_ref, args_ref, L_ref) wh
     res = res_ref[]
     idx = idx_ref[] + 1
 
-    scalar_args = ntuple(length(args)) do i
-        arg = args[i]
-        return @allowscalar(arg[idx])
-    end
+    scalar_args = [@allowscalar(arg[idx]) for arg in args]
     @allowscalar res[idx] = fn(scalar_args...)
 
     idx_ref[] = idx
@@ -1139,29 +1136,23 @@ function __elem_apply_loop_body(idx_ref, fn_ref::F, res_ref, args_ref, L_ref) wh
     return nothing
 end
 
+scalar_arg(arg) = arg isa Base.RefValue || !(arg isa AbstractArray)
+
+flattenarg(arg) = ReactantCore.materialize_traced_array(vec(arg))
+flattenarg(arg::Ref) = RefFillVector(arg)
+
 function elem_apply_via_while_loop(f, args::Vararg{Any,Nargs}) where {Nargs}
-    scalar_arg(arg) = arg isa Base.RefValue || !(arg isa AbstractArray)
-    non_ref_args = Tuple(arg for arg in args if !scalar_arg(arg))
+    non_ref_args = [arg for arg in args if !scalar_arg(arg)]
     if !isempty(non_ref_args)
         @assert allequal(size.(non_ref_args)) "All args must have the same size"
     end
     out_size = isempty(non_ref_args) ? () : size(first(non_ref_args))
     L = isempty(non_ref_args) ? 1 : length(first(non_ref_args))
     # flattening the tensors makes the auto-batching pass work nicer
-    flat_args = ntuple(Val(Nargs)) do i
-        arg = args[i]
-        if scalar_arg(arg)
-            RefFillVector(arg)
-        else
-            ReactantCore.materialize_traced_array(vec(arg))
-        end
-    end
+    flat_args = [flattenarg(arg) for arg in args]
 
     # This wont be a mutating function so we can safely execute it once
-    scalar_seed_args = ntuple(Val(Nargs)) do i
-        arg = flat_args[i]
-        @allowscalar(arg[1])
-    end
+    scalar_seed_args = [@allowscalar(arg[1]) for arg in flat_args]
     res_tmp = @allowscalar(f(scalar_seed_args...))
 
     # TODO: perhaps instead of this logic, we should have

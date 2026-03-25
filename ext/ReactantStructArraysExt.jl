@@ -73,8 +73,18 @@ function Base.copyto!(
 
     bc = Broadcast.preprocess(dest, bc)
     args = (Reactant.broadcast_to_size(Base.materialize(a), size(bc)) for a in bc.args)
-    Reactant.TracedUtils.elem_apply_via_while_loop(bc.f, args...; dest)
+    Reactant.TracedUtils.elem_apply_via_while_loop(bc.f, args...)
     return dest
+end
+
+function alloc_sarr(bc, T)
+    # Short circuit for Complex since in Reactant they are just a regular number
+    T <: Complex && return similar(bc, T)
+    if StructArrays.isnonemptystructtype(T)
+        return StructArrays.buildfromschema(x -> alloc_sarr(bc, x), T)
+    else
+        return similar(bc, T)
+    end
 end
 
 function Base.similar(
@@ -82,20 +92,7 @@ function Base.similar(
 ) where {S<:AbstractReactantArrayStyle,N,ElType}
     bc′ = convert(Broadcasted{S}, bc)
     # It is possible that we have multiple broadcasted arguments
-    function alloc(::Type{T}) where {T}
-        return if (T <: Complex)
-            similar(bc′, T)
-        else
-            (
-            if StructArrays.isnonemptystructtype(T)
-                StructArrays.buildfromschema(alloc, T)
-            else
-                similar(bc′, T)
-            end
-        )
-        end
-    end
-    return alloc(ElType)
+    return alloc_sarr(bc′, ElType)
 end
 
 Base.@propagate_inbounds function StructArrays._getindex(
