@@ -1430,12 +1430,10 @@ function optimization_passes(
         ],
         ",",
     )
-    func_passes = join(["canonicalize", "cse", "canonicalize", transform_passes], ",")
-    # Ghost cell widening: runs after optimization patterns have canonicalized
-    # the stencil slice→pad patterns, but before comm lowering recognizes them.
-    if is_sharded
-        func_passes *= ",func.func(stencil-ghost-cell-widening),canonicalize,cse"
-    end
+    # Ghost cell widening: must run BEFORE transform_passes which includes
+    # recognize_extend/rotate that convert slice→pad into enzymexla ops.
+    ghost_cell = is_sharded ? ",func.func(stencil-ghost-cell-widening),canonicalize,cse," : ","
+    func_passes = join(["canonicalize", "cse", "canonicalize"], ",") * ghost_cell * transform_passes
     if lower_comms
         func_passes =
             func_passes *
