@@ -3821,9 +3821,7 @@ function codegen_unflatten!(
                 # this traced array take an identity value derived from another argument but
                 # is its own traced array. As such, it needs to allocate a new buffer instead of using the arg directly.
                 needs_copy =
-                    initial_path[1] === :args &&
-                    argpath[1] === :args &&
-                    use_count > 1
+                    initial_path[1] === :args && argpath[1] === :args && use_count > 1
 
                 argres = :(args[$(argpath[2])])
                 for p in argpath[3:end]
