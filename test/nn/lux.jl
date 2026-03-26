@@ -97,3 +97,18 @@ end
     res, st_new = @jit model(x, ps, st)
     @test st_new.rng isa Reactant.ReactantRNG
 end
+@testset "Lux Parameter JVP with Bias" begin
+    noisy = Reactant.TestUtils.construct_test_array(Float32, 5, 2)
+    model = Dense(5 => 4; use_bias=true)
+    ps, st = Lux.setup(Xoshiro(0), model)
+    cnoisy = Reactant.to_rarray(noisy)
+    cps = Reactant.to_rarray(ps)
+    cst = Reactant.to_rarray(st)
+
+    sm_input = Lux.StatefulLuxLayer{true}(model, cps, cst)
+    f(p) = first(model(cnoisy, p, cst))
+
+    # test jvp
+    jvp = @jit jacobian_vector_product(f, AutoEnzyme(), cps, cps)
+    @test jvp isa NamedTuple
+end

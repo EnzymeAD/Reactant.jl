@@ -449,6 +449,18 @@ function overload_autodiff(
             push!(
                 outtys, TracedUtils.transpose_ty(MLIR.IR.type(TracedUtils.get_mlir_data(a)))
             )
+
+            if CMode <: ForwardMode && act != enzyme_const && act != enzyme_constnoneed
+                push!(
+                    outtys,
+                    TracedUtils.batch_ty(
+                        width,
+                        TracedUtils.transpose_ty(
+                            MLIR.IR.type(TracedUtils.get_mlir_data(a))
+                        ),
+                    ),
+                )
+            end
         end
     end
 
@@ -517,9 +529,15 @@ function overload_autodiff(
                 arg.val, path[3:end], TracedUtils.transpose_val(MLIR.IR.result(res, residx))
             )
             residx += 1
+            if CMode <: ForwardMode && act != enzyme_const && act != enzyme_constnoneed
+                residx += 1
+            end
         else
             TracedUtils.set!(a, (), TracedUtils.transpose_val(MLIR.IR.result(res, residx)))
             residx += 1
+            if CMode <: ForwardMode && act != enzyme_const && act != enzyme_constnoneed
+                residx += 1
+            end
         end
     end
 
