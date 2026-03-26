@@ -1,7 +1,7 @@
 function ReactantCore.traced_if(
     cond::TracedRNumber{Bool}, true_fn::TFn, false_fn::FFn, args; track_numbers=Number
 ) where {TFn,FFn}
-    return @opcall if_condition(cond, true_fn, false_fn, args...; track_numbers)
+    return @opcall if_condition(cond, true_fn, false_fn, args; track_numbers)
 end
 
 function ReactantCore.traced_call(f::Function, args...)

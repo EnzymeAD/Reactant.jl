@@ -17,6 +17,12 @@ end
     end
 end
 
+@testset "Device Addressability" begin
+    for d in Reactant.devices()
+        @test Reactant.XLA.is_addressable(d) isa Bool
+    end
+end
+
 @testset "Sharding Across 2 Devices" begin
     if length(addressable_devices) ≥ 2
         mesh = Sharding.Mesh([0 1;], ("x", "y"))

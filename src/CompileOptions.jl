@@ -24,7 +24,7 @@ communication.
     wrap_to_rotate::Int = 0
     updatewithoutcorners_to_select::Int = 1
     multirotate_custom_call::Int = 1
-    multislice_custom_call::Int = 0
+    multislice_custom_call::Int = 1
     wrap_custom_call::Int = 1
 end
 
@@ -290,6 +290,7 @@ function CompileOptions(;
             :just_batch,
             :none,
             :probprog,
+            :noopt,
         ]
     end
 
@@ -449,7 +450,7 @@ function DefaultXLACompileOptions(;
     donated_args=:auto, sync=false, optimize_then_pad=true, assert_nonallocating=false
 )
     return CompileOptions(;
-        optimization_passes=:only_enzyme,
+        optimization_passes=:noopt,
         inline=false,
         donated_args,
         sync,
