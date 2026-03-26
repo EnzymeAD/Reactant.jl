@@ -201,11 +201,23 @@ function mcmc_logpdf(
     adapt_step_size::Bool=true,
     adapt_mass_matrix::Bool=true,
     trajectory_length::Float64=2π,
+    strong_zero::Bool=false,
 ) where {Nargs}
     pos_size = length(initial_position)
 
-    sample_pos = TracedRArray{Float64,2}((), nothing, (1, pos_size))
+    sample_pos = TracedRArray{Float64,1}((), nothing, (pos_size,))
     logpdf_fn_attr, extra_mlir_data = trace_logpdf_function(logdensity_fn, sample_pos, args)
+
+    initial_position_2d = if ndims(initial_position) == 1
+        reshape(initial_position, 1, pos_size)
+    else
+        initial_position
+    end
+    initial_gradient_2d = if !isnothing(initial_gradient) && ndims(initial_gradient) == 1
+        reshape(initial_gradient, 1, pos_size)
+    else
+        initial_gradient
+    end
 
     rng_args = (rng,)
     ppf = process_probprog_function(identity, rng_args, "mcmc_logpdf")
@@ -247,9 +259,12 @@ function mcmc_logpdf(
         TracedUtils.get_mlir_data(inverse_mass_matrix)
     end
     step_size_val = isnothing(step_size) ? nothing : TracedUtils.get_mlir_data(step_size)
-    initial_position_val = TracedUtils.get_mlir_data(initial_position)
-    initial_gradient_val =
-        isnothing(initial_gradient) ? nothing : TracedUtils.get_mlir_data(initial_gradient)
+    initial_position_val = TracedUtils.get_mlir_data(initial_position_2d)
+    initial_gradient_val = if isnothing(initial_gradient_2d)
+        nothing
+    else
+        TracedUtils.get_mlir_data(initial_gradient_2d)
+    end
     initial_pe_val = if isnothing(initial_potential_energy)
         nothing
     else
@@ -296,6 +311,7 @@ function mcmc_logpdf(
         num_warmup=Int64(num_warmup),
         num_samples=Int64(num_samples),
         thinning=Int64(thinning),
+        strong_zero,
     )
 
     traced_result = process_probprog_outputs(
@@ -322,13 +338,20 @@ function mcmc_logpdf(
 
     inv_mass_shape =
         isnothing(inverse_mass_matrix) ? (1, pos_size) : size(inverse_mass_matrix)
+    inv_mass_ndims = length(inv_mass_shape)
+
+    inv_mass_traced = if inv_mass_ndims == 1
+        TracedRArray{Float64,1}((), MLIR.IR.result(mcmc_op, 8), inv_mass_shape)
+    else
+        TracedRArray{Float64,2}((), MLIR.IR.result(mcmc_op, 8), inv_mass_shape)
+    end
 
     state = MCMCState(
         TracedRArray{Float64,2}((), MLIR.IR.result(mcmc_op, 4), (1, pos_size)),
         TracedRArray{Float64,2}((), MLIR.IR.result(mcmc_op, 5), (1, pos_size)),
         TracedRArray{Float64,0}((), MLIR.IR.result(mcmc_op, 6), ()),
         TracedRArray{Float64,0}((), MLIR.IR.result(mcmc_op, 7), ()),
-        TracedRArray{Float64,2}((), MLIR.IR.result(mcmc_op, 8), inv_mass_shape),
+        inv_mass_traced,
         TracedRArray{UInt64,1}((), MLIR.IR.result(mcmc_op, 3), size(rng.seed)),
     )
 
