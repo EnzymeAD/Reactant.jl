@@ -81,6 +81,7 @@ Reactant.Profiler.@timed
 Reactant.Profiler.@profile
 Reactant.Profiler.profiler_activity_start
 Reactant.Profiler.profiler_activity_end
+Reactant.Profiler.DEFAULT_PM_COUNTERS
 ```
 
 ### XProf APIs

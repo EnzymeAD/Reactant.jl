@@ -772,7 +772,7 @@ end
 @noinline Base.Math.log2(x::TracedRNumber) = Base.Math._log(x, Val(2), :log2)
 Base.Math._log(x::TracedRNumber, base, ::Symbol) = log(x) / log(Reactant._unwrap_val(base))
 
-Base.isreal(::TracedRNumber) = false
+Base.isreal(x::TracedRNumber) = iszero(imag(x))
 Base.isreal(::TracedRNumber{<:Real}) = true
 
 Base.isinteger(x::TracedRNumber{<:Integer}) = true

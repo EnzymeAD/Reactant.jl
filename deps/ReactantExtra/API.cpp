@@ -390,13 +390,22 @@ enzymeActivityAttrGet(MlirContext ctx, int32_t val) {
                                               (mlir::enzyme::Activity)val));
 }
 
-// Create profiler session and start profiling
+// Create profiler session and start profiling.
+// advanced_config_keys/values are parallel arrays of key-value pairs that
+// get inserted into ProfileOptions::advanced_configuration.
+// Pass n_advanced=0 with nullptr for keys/values to use defaults.
 REACTANT_ABI tsl::ProfilerSession *
-CreateProfilerSession(uint32_t device_tracer_level,
-                      uint32_t host_tracer_level) {
+CreateProfilerSession(uint32_t device_tracer_level, uint32_t host_tracer_level,
+                      const char **advanced_config_keys,
+                      const char **advanced_config_values, int n_advanced) {
   tensorflow::ProfileOptions options = tsl::ProfilerSession::DefaultOptions();
   options.set_device_tracer_level(device_tracer_level);
   options.set_host_tracer_level(host_tracer_level);
+  for (int i = 0; i < n_advanced; i++) {
+    auto *config_value =
+        &(*options.mutable_advanced_configuration())[advanced_config_keys[i]];
+    config_value->set_string_value(advanced_config_values[i]);
+  }
   auto sess = tsl::ProfilerSession::Create(options);
   return sess.release();
 }
@@ -539,8 +548,21 @@ REACTANT_ABI int InitializePjrtPlugin(const char *device_type,
   return 0;
 }
 
-REACTANT_ABI PjRtClient *GetCApiClient(const char *device_type) {
-  return xla::GetCApiClient(device_type).value().release();
+PjRtClient *GetCApiClientInternal(const char *device_type, const char **error) {
+  auto result = xla::GetCApiClient(device_type);
+  if (!result.ok()) {
+    auto str = result.status().message();
+    char *err = (char *)malloc(str.size() + 1);
+    memcpy(err, str.data(), str.size() + 1);
+    err[str.size()] = '\0';
+    if (error) {
+      *error = err;
+    } else {
+      free(err);
+    }
+    return nullptr;
+  }
+  return result.value().release();
 }
 
 REACTANT_ABI void pjrt_client_register_profiler(const PJRT_Api *api) {
@@ -558,7 +580,7 @@ REACTANT_ABI PjRtClient *MakeClientUsingPluginAPI(const char *device_type,
     return nullptr;
 
   RegisterProfiler(pluginLoad);
-  return GetCApiClient(client_name);
+  return GetCApiClientInternal(client_name, error);
 }
 
 // Register a Julia-allocated PJRT_Api struct directly (no dlopen needed).
@@ -572,6 +594,7 @@ REACTANT_ABI PjRtClient *MakeClientFromApi(const PJRT_Api *api,
     auto str = set_status.message();
     char *err = (char *)malloc(str.size() + 1);
     memcpy(err, str.data(), str.size() + 1);
+    err[str.size()] = '\0';
     *error = err;
     return nullptr;
   }
@@ -579,7 +602,7 @@ REACTANT_ABI PjRtClient *MakeClientFromApi(const PJRT_Api *api,
     return nullptr;
 
   RegisterProfiler(api);
-  return GetCApiClient(client_name);
+  return GetCApiClientInternal(client_name, error);
 }
 
 REACTANT_ABI PjRtClient *MakeTPUClient(const char *tpu_path,
@@ -1233,15 +1256,14 @@ GenerateCompileOptions(int64_t device_id, const int64_t *mesh_ids,
                        int64_t num_partitions, bool use_spmd_partitioning,
                        bool kernel_cache_enabled, const char *kernel_cache_path,
                        bool autotune_cache_enabled,
-                       const char *autotune_cache_path, int process_id) {
+                       const char *autotune_cache_path, int process_id,
+                       bool xla_enable_enzyme_comms_opt) {
   xla::CompileOptions options;
   auto debug_options = options.executable_build_options.mutable_debug_options();
 
   debug_options->set_xla_gpu_cuda_data_dir(xla_gpu_cuda_data_dir);
-  debug_options->set_xla_enable_enzyme_comms_opt(true);
-  #if defined(REACTANT_CUDA) || defined(REACTANT_ROCM)
-  debug_options->set_xla_gpu_predict_fusion_spills(true);
-  #endif
+  debug_options->set_xla_enable_enzyme_comms_opt(xla_enable_enzyme_comms_opt);
+
   debug_options->set_xla_gpu_experimental_use_raft_select_k(true);
 
   if (kernel_cache_enabled) {
@@ -1360,7 +1382,8 @@ xla::PjRtLoadedExecutable *ClientCompileInternal(PjRtClient *client,
     }
   }
 
-  auto exec_err = client->CompileAndLoad(MaybeOwningMlirModule(cmod_op), options);
+  auto exec_err =
+      client->CompileAndLoad(MaybeOwningMlirModule(cmod_op), options);
 
   if (!exec_err.ok()) {
     std::string err_str;
@@ -1379,14 +1402,16 @@ ClientCompile(PjRtClient *client, MlirModule cmod, int64_t device_id,
               int64_t num_replicas, int64_t num_partitions,
               bool use_spmd_partitioning, bool kernel_cache_enabled,
               const char *kernel_cache_path, bool autotune_cache_enabled,
-              const char *autotune_cache_path, int process_id) {
+              const char *autotune_cache_path, int process_id,
+              bool enable_enzyme_comms) {
   return ClientCompileInternal(
       client, cmod,
       GenerateCompileOptions(
           device_id, mesh_ids, num_mesh_ids, xla_gpu_cuda_data_dir,
           use_shardy_partitioner, num_replicas, num_partitions,
           use_spmd_partitioning, kernel_cache_enabled, kernel_cache_path,
-          autotune_cache_enabled, autotune_cache_path, process_id));
+          autotune_cache_enabled, autotune_cache_path, process_id,
+          enable_enzyme_comms));
 }
 
 REACTANT_ABI xla::PjRtLoadedExecutable *
@@ -1886,14 +1911,15 @@ ifrt_compile(ifrt::Client *client, MlirModule cmod, int64_t device_id,
              int64_t num_replicas, int64_t num_partitions,
              bool use_spmd_partitioning, bool kernel_cache_enabled,
              const char *kernel_cache_path, bool autotune_cache_enabled,
-             const char *autotune_cache_path, int process_id) {
+             const char *autotune_cache_path, int process_id,
+	     bool xla_enable_enzyme_comms_opt) {
   return ifrt_compile_internal(
       client, cmod,
       GenerateCompileOptions(
           device_id, mesh_ids, num_mesh_ids, xla_gpu_cuda_data_dir,
           use_shardy_partitioner, num_replicas, num_partitions,
           use_spmd_partitioning, kernel_cache_enabled, kernel_cache_path,
-          autotune_cache_enabled, autotune_cache_path, process_id));
+          autotune_cache_enabled, autotune_cache_path, process_id, xla_enable_enzyme_comms_opt));
 }
 
 REACTANT_ABI HeldIfrtLoadedExecutable *
@@ -2592,7 +2618,7 @@ REACTANT_ABI bool hlo_sharding_is_tiled(xla::HloSharding *hloSharding) {
 }
 
 REACTANT_ABI bool hlo_sharding_is_maximal(xla::HloSharding *hloSharding) {
-  return hloSharding->IsTileMaximal();
+  return hloSharding->IsReplicatedOrSingleDevice();
 }
 
 REACTANT_ABI bool
