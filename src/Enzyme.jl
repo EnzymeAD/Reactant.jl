@@ -536,7 +536,7 @@ function overload_autodiff(
         else
             TracedUtils.set!(a, (), TracedUtils.transpose_val(MLIR.IR.result(res, residx)))
             residx += 1
-            act = act_from_type(arg, reverse, true)
+            act = act_from_type(Const, reverse, true)
             if CMode <: ForwardMode && act != enzyme_const && act != enzyme_constnoneed
                 residx += 1
             end
