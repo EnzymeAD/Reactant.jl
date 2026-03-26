@@ -414,6 +414,8 @@ function start_xprof_grpc_server(port::Integer)
     return nothing
 end
 
+const XSPACE_CACHE = Dict{UInt64,Tuple{Vector{UInt8},Bool}}()
+
 """
     xspace_to_tools_data(
         xspace_paths::Vector{String}, tool_name::String; options::Dict=Dict()
@@ -443,6 +445,12 @@ data, is_binary = xspace_to_tools_data(["/path/to/xspace"], "trace_viewer")
 function xspace_to_tools_data(
     xspace_paths::Vector{String}, tool_name::String; options::Dict=Dict()
 )
+    cache_key = hash((xspace_paths, tool_name, options))
+    if haskey(XSPACE_CACHE, cache_key)
+        @debug "Using cached XSpace data for files $(xspace_paths) and tool $(tool_name)"
+        return XSPACE_CACHE[cache_key]
+    end
+
     # we need to initialize this before using any xprof apis
     initialize_xprof_stubs_and_server()
 
@@ -527,20 +535,25 @@ function xspace_to_tools_data(
         unsafe_copyto!(pointer(data), Ptr{UInt8}(result_data[]), result_size[])
         Libc.free(result_data[])
     end
-    return data, is_binary[]
+
+    result = (data, is_binary[])
+    XSPACE_CACHE[cache_key] = result
+    return result
 end
 
 # Internal APIs to query XProf
 function extract_mean_step_time(xplane_file::String, nrepeat::Int)
     @assert ispath(xplane_file) "xplane_file $xplane_file does not exist."
 
-    # try from overview_page first
-    try
-        res = extract_mean_step_time_from_overview_page(xplane_file, nrepeat)
-        res !== nothing && return res
-    catch
-    end
-    @debug "Failed to extract mean step time from overview_page"
+    # # try from overview_page first
+    # try
+    #     res = extract_mean_step_time_from_overview_page(xplane_file, nrepeat)
+    #     res !== nothing && return res
+    # catch
+    # end
+    # @debug "Failed to extract mean step time from overview_page"
+
+    # Fetching from op profile is more stable
     try
         res = extract_mean_step_time_from_hlo_op_profile(xplane_file, nrepeat)
         res !== nothing && return res
@@ -578,9 +591,8 @@ function extract_mean_step_time_from_overview_page(xplane_file::String, ::Int)
 end
 
 function extract_mean_step_time_from_hlo_op_profile(xplane_file::String, nrepeat::Int)
-    data = JSON.parse(xspace_to_tools_data([xplane_file], "op_profile")[1])
-    picosec = data["byProgram"]["metrics"]["normalizedTimePs"]
-    return (picosec ÷ 1000) ÷ nrepeat
+    metrics = get_aggregate_metrics(xplane_file)
+    return ceil(Int64, (metrics.raw_time_s * 1e9) ÷ nrepeat) # In nanoseconds
 end
 
 # Bind to port 0 to let the OS assign a free port
@@ -753,8 +765,11 @@ end
 function Base.getproperty(
     summary::Proto.tensorflow.profiler.op_profile.Metrics, name::Symbol
 )
+    if name == :raw_time_s
+        return getfield(summary, :raw_time) * 1e-12
+    end
     if name == :raw_flops_rate || name == :bf16_flops_rate
-        rawtime_s = getfield(summary, :raw_time) * 1e-12
+        rawtime_s = getproperty(summary, :raw_time_s)
         name_sym = name == :raw_flops_rate ? :raw_flops : :bf16_flops
         return getfield(summary, name_sym) / rawtime_s
     end
@@ -764,7 +779,7 @@ end
 function _show_with_indent(
     io, summary::Proto.tensorflow.profiler.op_profile.Metrics, indent=0
 )
-    rawtime_s = summary.raw_time * 1e-12
+    rawtime_s = summary.raw_time_s
 
     print(io, "    "^indent * "flops = $(summary.flops), ")
     Base.printstyled(
@@ -806,7 +821,7 @@ function Base.show(io::IO, flops::Proto.tensorflow.profiler.op_profile.Metrics)
     return nothing
 end
 
-function get_aggregate_metrics(xplane_file::String, nrepeat::Int)
+function get_aggregate_metrics(xplane_file::String)
     data = JSON.parse(xspace_to_tools_data([xplane_file], "op_profile")[1])
     if !haskey(data, :byProgram) || !haskey(data[:byProgram], :metrics)
         data_available_keys = keys(data)
@@ -904,7 +919,7 @@ function profile_thunk_with_xprof(
         fn, args...; nrepeat, warmup, profile_dir, pm_counters, advanced_config, kwargs...
     )
     memory_data = get_aggregate_memory_statistics(xplane_file)
-    metrics_data = get_aggregate_metrics(xplane_file, nrepeat)
+    metrics_data = get_aggregate_metrics(xplane_file)
     runtime_ns = extract_mean_step_time(xplane_file, nrepeat)
     return (;
         val,
@@ -917,7 +932,7 @@ end
 
 function load_xplane_file(xplane_file::String; nrepeat::Int=1, compile_time_ns::Int64=0)
     memory_data = get_aggregate_memory_statistics(xplane_file)
-    metrics_data = get_aggregate_metrics(xplane_file, nrepeat)
+    metrics_data = get_aggregate_metrics(xplane_file)
     runtime_ns = extract_mean_step_time(xplane_file, nrepeat)
     return AggregateProfilingResult(runtime_ns, compile_time_ns, memory_data, metrics_data)
 end
