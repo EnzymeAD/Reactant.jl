@@ -3780,6 +3780,7 @@ function codegen_unflatten!(
     )
 
     # if some argument is mutated, change them to point to the correct concrete results
+    preserved_arg_use_count = zeros(UInt32, length(preserved_args))
     for (pi, (result, arg_idx)) in enumerate(preserved_args)
         paths = (
             (
@@ -3815,13 +3816,14 @@ function codegen_unflatten!(
             end
 
             if isnothing(argpath_value)
+                use_count = (preserved_arg_use_count[arg_idx + 1] += one(UInt32))
+
                 # this traced array take an identity value derived from another argument but
                 # is its own traced array. As such, it needs to allocate a new buffer instead of using the arg directly.
                 needs_copy =
                     initial_path[1] === :args &&
                     argpath[1] === :args &&
-                    initial_path[2:end] != argpath[2:end] &&
-                    count(parg -> parg[2] == arg_idx, preserved_args) > 1
+                    use_count > 1
 
                 argres = :(args[$(argpath[2])])
                 for p in argpath[3:end]
