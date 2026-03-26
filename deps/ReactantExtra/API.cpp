@@ -1249,15 +1249,13 @@ REACTANT_ABI uint8_t FutureIsReady(FutureType *Future) {
 
 REACTANT_ABI void FutureAwait(FutureType *Future) { Future->Await(); }
 
-xla::CompileOptions
-GenerateCompileOptions(int64_t device_id, const int64_t *mesh_ids,
-                       int64_t num_mesh_ids, const char *xla_gpu_cuda_data_dir,
-                       bool use_shardy_partitioner, int64_t num_replicas,
-                       int64_t num_partitions, bool use_spmd_partitioning,
-                       bool kernel_cache_enabled, const char *kernel_cache_path,
-                       bool autotune_cache_enabled,
-                       const char *autotune_cache_path, int process_id,
-                       bool xla_enable_enzyme_comms_opt) {
+xla::CompileOptions GenerateCompileOptions(
+    int64_t device_id, const int64_t *mesh_ids, int64_t num_mesh_ids,
+    const char *xla_gpu_cuda_data_dir, bool use_shardy_partitioner,
+    int64_t num_replicas, int64_t num_partitions, bool use_spmd_partitioning,
+    bool kernel_cache_enabled, const char *kernel_cache_path,
+    bool autotune_cache_enabled, const char *autotune_cache_path,
+    int process_id, bool xla_enable_enzyme_comms_opt) {
   xla::CompileOptions options;
   auto debug_options = options.executable_build_options.mutable_debug_options();
 
@@ -1357,13 +1355,6 @@ xla::CompileOptions GenerateCompileOptions(const char *compile_options_proto,
   if (!options_or.ok()) {
     ReactantThrowError(options_or.status().ToString().c_str());
   }
-  
-  auto debug_options = options_or->executable_build_options.mutable_debug_options();
-  debug_options->set_xla_enable_enzyme_comms_opt(true);
-  #if defined(REACTANT_CUDA) || defined(REACTANT_ROCM)
-  debug_options->set_xla_gpu_predict_fusion_spills(true);
-  #endif
-  debug_options->set_xla_gpu_experimental_use_raft_select_k(true);
 
   return std::move(options_or).value();
 }
@@ -1912,14 +1903,15 @@ ifrt_compile(ifrt::Client *client, MlirModule cmod, int64_t device_id,
              bool use_spmd_partitioning, bool kernel_cache_enabled,
              const char *kernel_cache_path, bool autotune_cache_enabled,
              const char *autotune_cache_path, int process_id,
-	     bool xla_enable_enzyme_comms_opt) {
+             bool xla_enable_enzyme_comms_opt) {
   return ifrt_compile_internal(
       client, cmod,
       GenerateCompileOptions(
           device_id, mesh_ids, num_mesh_ids, xla_gpu_cuda_data_dir,
           use_shardy_partitioner, num_replicas, num_partitions,
           use_spmd_partitioning, kernel_cache_enabled, kernel_cache_path,
-          autotune_cache_enabled, autotune_cache_path, process_id, xla_enable_enzyme_comms_opt));
+          autotune_cache_enabled, autotune_cache_path, process_id,
+          xla_enable_enzyme_comms_opt));
 }
 
 REACTANT_ABI HeldIfrtLoadedExecutable *
