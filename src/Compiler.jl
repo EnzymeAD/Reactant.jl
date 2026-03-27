@@ -3780,7 +3780,7 @@ function codegen_unflatten!(
     )
 
     # if some argument is mutated, change them to point to the correct concrete results
-    preserved_arg_use_count = zeros(UInt32, length(preserved_args))
+    preserved_arg_use_count = zeros(UInt32, length(linear_args))
     for (pi, (result, arg_idx)) in enumerate(preserved_args)
         paths = (
             (
