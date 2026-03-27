@@ -283,6 +283,46 @@ function and_v1(lhs::Value, rhs::Value; result::IR.Type, location=Location())
     )
 end
 
+function async_done_v1(operand::Value; result::IR.Type, location=Location())
+    op_ty_results = IR.Type[result,]
+    operands = Value[operand,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "vhlo.async_done_v1",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+function async_start_v1(
+    operands::Vector{Value}; result::IR.Type, collective::Region, location=Location()
+)
+    op_ty_results = IR.Type[result,]
+    operands = Value[operands...,]
+    owned_regions = Region[collective,]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "vhlo.async_start_v1",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function atan2_v1(lhs::Value, rhs::Value; result::IR.Type, location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[lhs, rhs]
