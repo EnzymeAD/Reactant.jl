@@ -138,6 +138,7 @@
 #include "xla/python/ifrt/ir/ifrt_ir_program.h"
 #include "xla/python/ifrt/memory.h"
 #include "xla/python/ifrt/shape.h"
+#include "xla/layout_util.h"
 #include "xla/python/ifrt/sharding.h"
 #include "xla/python/ifrt/topology.h"
 #include "xla/python/ifrt/tuple.h"
@@ -1174,6 +1175,72 @@ REACTANT_ABI PjRtBuffer *CopyBufferToDevice(PjRtBuffer *buffer,
   auto res = MyValueOrThrow(
       buffer->CopyToMemorySpace(*dst_device->default_memory_space()));
   return res.release();
+}
+
+// Create a new PJRT-owned buffer by D2D-copying from an external device pointer.
+// This is the safe way to transfer data from e.g. a CUDA.jl CuArray into XLA:
+// it creates an ephemeral non-owning view of the external memory, then copies
+// into a new PJRT-managed buffer using XLA's internal D2D stream infrastructure.
+// The `stream` parameter tells PJRT which external CUDA stream produced the
+// data, enabling correct cross-stream synchronization. Pass 0 only if the
+// data at device_ptr is already fully written and synchronized — 0 means
+// "no stream to wait on," not "unknown stream."
+REACTANT_ABI PjRtBuffer *BufferFromDevicePointer(PjRtClient *client,
+                                                 void *device_ptr,
+                                                 uint64_t ptype, size_t dim,
+                                                 const int64_t *cshape,
+                                                 PjRtDevice *device,
+                                                 int64_t stream) {
+  xla::Shape shape((xla::PrimitiveType)ptype,
+                   absl::Span<const int64_t>(cshape, dim));
+  // GPU buffers require an explicit memory layout. Use default row-major
+  // (descending) layout, matching the dimension order passed from Julia.
+  *shape.mutable_layout() = xla::LayoutUtil::MakeDescendingLayout(dim);
+
+  // stream_opt: if non-zero, synchronize with external CUDA stream
+  std::optional<std::intptr_t> stream_opt;
+  if (stream != 0)
+    stream_opt = stream;
+
+  // Step 1: Create ephemeral non-owning view of external device memory.
+  // on_delete_callback is a no-op because we don't own the source memory.
+  auto view = MyValueOrThrow(client->CreateViewOfDeviceBuffer(
+      device_ptr, shape, *device->default_memory_space(),
+      /*on_delete_callback=*/[]() {}, stream_opt));
+
+  // Step 2: D2D copy to a new PJRT-owned buffer.
+  // CopyToMemorySpace schedules an async copy and returns immediately.
+  auto owned = MyValueOrThrow(
+      view->CopyToMemorySpace(*device->default_memory_space()));
+
+  // Step 3: Wait for the copy to complete before returning.
+  // CopyToMemorySpace is async (ScheduleCopyTo returns immediately), so the
+  // source memory at device_ptr may still be being read. We must block until
+  // the copy finishes so that the caller's GC.@preserve on the source CuArray
+  // covers the entire read. Without this, GC could free the source memory
+  // while the async copy is still in flight.
+  auto ready = owned->GetReadyFuture();
+  auto status = ready.Await();
+  if (!status.ok()) {
+    ReactantThrowError(status.ToString().c_str());
+  }
+
+  // Now the copy is complete. The view can be safely destroyed (it holds a
+  // non-owning pointer to source memory, but the copy no longer needs it).
+  return owned.release();
+}
+
+// Wait for a PJRT buffer's data to be ready (all definition events resolved).
+// Returns the raw device pointer after synchronization, ensuring the data
+// is safe to read from an external CUDA context.
+REACTANT_ABI void *AwaitBufferReady(PjRtBuffer *buffer) {
+  auto ready = buffer->GetReadyFuture();
+  auto status = ready.Await();
+  if (!status.ok()) {
+    ReactantThrowError(status.ToString().c_str());
+  }
+  auto unsafe = MyValueOrThrow(buffer->client()->UnsafeBufferPointer(buffer));
+  return (void *)unsafe;
 }
 
 REACTANT_ABI void FreeClient(PjRtClient *client) { delete client; }
