@@ -1370,6 +1370,7 @@ function store(
     mask=nothing::Union{Nothing,Value};
     cache=nothing,
     evict=nothing,
+    ignore_cta=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -1380,6 +1381,7 @@ function store(
     !isnothing(mask) && push!(operands, mask)
     !isnothing(cache) && push!(attributes, NamedAttribute("cache", cache))
     !isnothing(evict) && push!(attributes, NamedAttribute("evict", evict))
+    !isnothing(ignore_cta) && push!(attributes, NamedAttribute("ignore_cta", ignore_cta))
 
     return create_operation(
         "tt.store",

@@ -86,6 +86,24 @@ end
         # Run the exported script and verify results
         result = run_exported_enzymejax_function(python_file_path, "run_matmul")
         @test isapprox(Array(result), expected_result; atol=1e-5, rtol=1e-5)
+
+        # Export function with no data
+        python_file_path = Reactant.Serialization.export_to_enzymejax(
+            f_matmul,
+            x,
+            y;
+            output_dir=mktempdir(; cleanup=true),
+            function_name="matmul",
+            export_data_as_npz=false,
+        )
+
+        @test isfile(python_file_path)
+
+        python_content = read(python_file_path, String)
+        @test @filecheck begin
+            @check "prng_key = jax.random.PRNGKey(0)"
+            python_content
+        end
     end
 
     @testset "Complex function with multiple arguments" begin
