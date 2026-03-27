@@ -183,7 +183,7 @@ end
 # constant ops
 @noinline function constant(
     x::DenseArray{T,N}; location=mlir_stacktrace("constant", @__FILE__, @__LINE__)
-) where {T,N}
+) where {T<:Number,N}
     if sizeof(x) > LARGE_CONSTANT_THRESHOLD[]
         if LARGE_CONSTANT_RAISE_ERROR[]
             error(
@@ -355,7 +355,7 @@ end
 
 @noinline function fill(
     element::T, shape::Vector{Int}; location=mlir_stacktrace("fill", @__FILE__, @__LINE__)
-) where {T}
+) where {T<:Number}
     tt = MLIR.IR.TensorType(shape, MLIR.IR.Type(T))
     splatattr = MLIR.API.mlirDenseElementsAttrSplatGet(tt, _fill_element_attr(element))
     if T <: Complex{<:Integer}
