@@ -311,7 +311,9 @@ function mcmc_logpdf(
         num_warmup=Int64(num_warmup),
         num_samples=Int64(num_samples),
         thinning=Int64(thinning),
-        strong_zero,
+        autodiff_attrs=MLIR.IR.Attribute(
+            Dict("strong_zero" => MLIR.IR.Attribute(strong_zero))
+        ),
     )
 
     traced_result = process_probprog_outputs(
