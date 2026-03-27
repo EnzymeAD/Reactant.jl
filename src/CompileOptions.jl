@@ -193,6 +193,9 @@ Fine-grained control over the compilation options for the Reactant compiler.
   - `disable_structured_tensors_passes`: Disables structured tensors optimization passes.
     (Default `false`).
   - `strip_llvm_debuginfo`: Removes LLVM debug info from the generated IR.
+  - `store_args_res_path`: If `true`, attaches `reactant.path` attributes to each argument
+    and result of the main MLIR function, encoding the Julia object path as an array of
+    string (for `Symbol`) and integer elements. Defaults to `false`.
 """
 struct CompileOptions
     optimization_passes::Union{Symbol,String}
@@ -236,6 +239,7 @@ struct CompileOptions
     disable_structured_tensors_passes::Bool
     strip_llvm_debuginfo::Bool
     strip::Union{Symbol,Vector{String}}
+    store_args_res_path::Bool
 end
 
 function CompileOptions(;
@@ -272,6 +276,7 @@ function CompileOptions(;
     strip::Union{Symbol,Vector{String}}=:all,
     raise_triton_custom_call::Bool=true,
     lower_triton::Bool=true,
+    store_args_res_path::Bool=false,
 )
     optimization_passes isa Bool &&
         (optimization_passes = ifelse(optimization_passes, :all, :none))
@@ -335,6 +340,7 @@ function CompileOptions(;
         disable_structured_tensors_passes,
         strip_llvm_debuginfo,
         strip,
+        store_args_res_path,
     )
 end
 
@@ -389,6 +395,7 @@ function __compile_options_with_reversed_propagation(compile_options::CompileOpt
         compile_options.disable_structured_tensors_passes,
         compile_options.strip_llvm_debuginfo,
         compile_options.strip,
+        compile_options.store_args_res_path,
     )
 end
 
@@ -430,6 +437,7 @@ function __compile_options_with_updated_sync(compile_options::CompileOptions, sy
         compile_options.disable_structured_tensors_passes,
         compile_options.strip_llvm_debuginfo,
         compile_options.strip,
+        compile_options.store_args_res_path,
     )
 end
 
