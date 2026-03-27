@@ -3780,7 +3780,7 @@ function codegen_unflatten!(
     )
 
     # if some argument is mutated, change them to point to the correct concrete results
-    preserved_arg_use_count = zeros(UInt32, length(linear_args))
+    orig_buffer_available = trues(length(linear_args))
     for (pi, (result, arg_idx)) in enumerate(preserved_args)
         paths = (
             (
@@ -3794,6 +3794,10 @@ function codegen_unflatten!(
             p for p in Reactant.TracedUtils.get_paths(arg) if length(p) > 0 && p[1] == :args
         ))
         argpath_value = nothing
+
+        if any(parg -> parg[2] == arg_idx, preserved_args)
+            orig_buffer_available[arg_idx + 1] = false
+        end
 
         for path in paths
             @assert path[1] == :resargs || path[1] == :args "Expected :resargs or :args, got $(path[1])"
@@ -3816,12 +3820,13 @@ function codegen_unflatten!(
             end
 
             if isnothing(argpath_value)
-                use_count = (preserved_arg_use_count[arg_idx + 1] += one(UInt32))
-
                 # this traced array take an identity value derived from another argument but
                 # is its own traced array. As such, it needs to allocate a new buffer instead of using the arg directly.
                 needs_copy =
-                    initial_path[1] === :args && argpath[1] === :args && use_count > 1
+                    initial_path[1] === :args &&
+                    argpath[1] === :args &&
+                    !orig_buffer_available[arg_idx + 1]
+                orig_buffer_available[arg_idx + 1] = false
 
                 argres = :(args[$(argpath[2])])
                 for p in argpath[3:end]
