@@ -319,6 +319,88 @@ function and(
 end
 
 """
+`async_done`
+
+Waits for the completion of an asynchronous execution of an operation.
+
+See:
+https://github.com/openxla/stablehlo/blob/main/docs/spec.md#async_done
+
+# Example
+```mlir
+%0 = \"stablehlo.async_start\"(%arg0) ({
+  %1 = \"stablehlo.all_gather\"(%arg0) {
+    all_gather_dim = 1 : i64,
+    replica_groups = dense<[[0, 2, 4, 6], [1, 3, 5, 7]]> : tensor<2x4xi64>
+  } : (tensor<8x2xf32>) -> tensor<8x8xf32>
+  \"stablehlo.return\"(%1) : (tensor<8x8xf32>) -> ()
+}) : (tensor<8x2xf32>) -> !stablehlo.future<tensor<8x8xf32>>
+%2 = \"stablehlo.async_done\"(%0) : (!stablehlo.future<tensor<8x8xf32>>) -> tensor<8x8xf32>
+```
+"""
+function async_done(
+    operand::Value; result_0=nothing::Union{Nothing,IR.Type}, location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[operand,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(result_0) && push!(op_ty_results, result_0)
+
+    return create_operation(
+        "stablehlo.async_done",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
+`async_start`
+
+Starts an asynchronous execution of an operation.
+
+See:
+https://github.com/openxla/stablehlo/blob/main/docs/spec.md#async_start
+
+# Example
+```mlir
+%0 = \"stablehlo.async_start\"(%arg0) ({
+  %1 = \"stablehlo.all_gather\"(%arg0) {
+    all_gather_dim = 1 : i64,
+    replica_groups = dense<[[0, 2, 4, 6], [1, 3, 5, 7]]> : tensor<2x4xi64>
+  } : (tensor<8x2xf32>) -> tensor<8x8xf32>
+  \"stablehlo.return\"(%1) : (tensor<8x8xf32>) -> ()
+}) : (tensor<8x2xf32>) -> !stablehlo.future<tensor<8x8xf32>>
+```
+"""
+function async_start(
+    operands::Vector{Value}; result_0::IR.Type, body::Region, location=Location()
+)
+    op_ty_results = IR.Type[result_0,]
+    operands = Value[operands...,]
+    owned_regions = Region[body,]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "stablehlo.async_start",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
 `atan2`
 
 Performs element-wise atan2 operation on `lhs` and `rhs` tensor and produces
