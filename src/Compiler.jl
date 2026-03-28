@@ -2430,6 +2430,10 @@ function compile_mlir!(
         run_pass_pipeline!(mod, "enzymexla-cudnn-hlo-opt", "cudnn-hlo-opt")
     end
 
+    if backend == "tpu" && compile_options.tpu_pad_for_alignment
+        run_pass_pipeline!(mod, "pad-for-alignment", "tpu_pad_for_alignment")
+    end
+
     if compile_options.lower_triton
         run_pass_pipeline!(mod, "lower-triton", "lower_triton")
     end
