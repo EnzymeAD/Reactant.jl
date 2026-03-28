@@ -1135,6 +1135,15 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     for (i, prev) in enumerate(Any[func.f, args...])
         Reactant.make_tracer(seen, prev, (kernelargsym, i), Reactant.NoStopTracedTrack)
     end
+    has_cast_float_type = @static if isdefined(Core, :BFloat16)
+        any(values(seen)) do arg
+            (arg isa TracedRArray || arg isa TracedRNumber) &&
+                Reactant.unwrapped_eltype(typeof(arg)) === Core.BFloat16
+        end
+    else
+        false
+    end
+
     wrapper_tys = MLIR.IR.Type[]
     for arg in values(seen)
         if !(arg isa TracedRArray || arg isa TracedRNumber)
@@ -1162,6 +1171,13 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     end
     wrapbody = MLIR.IR.Block(wrapper_tys, [MLIR.IR.Location() for _ in wrapper_tys])
     push!(MLIR.IR.region(wrapfunc, 1), wrapbody)
+    if has_cast_float_type
+        MLIR.IR.setattr!(
+            wrapfunc,
+            "enzymexla.float_type",
+            MLIR.IR.Attribute(MLIR.API.mlirTypeAttrGet(MLIR.IR.Type(Core.BFloat16))),
+        )
+    end
     for i in 1:length(wrapper_tys)
         MLIR.API.ReactantFuncSetArgAttr(
             wrapfunc,
@@ -1353,6 +1369,9 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
             "enzymexla.kernel_call", @__FILE__, @__LINE__
         ),
     )
+    if has_cast_float_type
+        MLIR.IR.setattr!(call, "cast_float_type", MLIR.IR.UnitAttribute())
+    end
 
     argidx = 1
     for arg in values(seen)
@@ -1364,13 +1383,30 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     end
 end
 
+@static if isdefined(Core, :BFloat16)
+    function _bfloat16_to_float32_type(@nospecialize(T))
+        T === Core.BFloat16 && return Float32
+        T isa DataType || return T
+        isempty(T.parameters) && return T
+        new_params = Any[_bfloat16_to_float32_type(p) for p in T.parameters]
+        all(p1 === p2 for (p1, p2) in zip(T.parameters, new_params)) && return T
+        return T.name.wrapper{new_params...}
+    end
+
+    function _substitute_bfloat16_tt(@nospecialize(tt::Type{<:Tuple}))
+        new_params = Any[_bfloat16_to_float32_type(T) for T in tt.parameters]
+        return Tuple{new_params...}
+    end
+end
+
 Reactant.@reactant_overlay @noinline function CUDA.cufunction(
     f::F, tt::TT=Tuple{}; kwargs...
 ) where {F,TT}
     res = Base.@lock CUDA.cufunction_lock begin
         # compile the function
         cache = llvm_compiler_cache(MLIR.IR.current_module())
-        source = CUDA.methodinstance(F, tt)
+        effective_tt = @static isdefined(Core, :BFloat16) ? _substitute_bfloat16_tt(tt) : tt
+        source = CUDA.methodinstance(F, effective_tt)
         # cuda = CUDA.active_state()
         device = nothing # cuda.device
         # config = CUDA.compiler_config(device; kwargs...)::CUDA.CUDACompilerConfig
