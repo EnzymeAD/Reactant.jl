@@ -1901,7 +1901,7 @@ function compile_mlir!(
     # checking whether the user set an explicit list of passes, or chose
     # `raise=true` to use the default passes.
     raise = compile_options.raise
-    if backend == "tpu" && raise isa Bool
+    if (backend == "tpu" || backend == "rocm") && raise isa Bool
         raise = true
     end
     is_raising = raise isa String || raise
@@ -1952,7 +1952,7 @@ function compile_mlir!(
 
     toolkit = XLA.CUDA_DATA_DIR[]
 
-    if backend == "cpu" || backend == "tpu"
+    if backend == "cpu" || backend == "tpu" || backend == "rocm"
         kern = "lower-kernel{backend=cpu},canonicalize"
         if backend == "tpu"
             jit = "lower-jit{openmp=$(OpenMP[]) backend=cpu},symbol-dce,strip-debuginfo"
@@ -1965,7 +1965,6 @@ function compile_mlir!(
         else
             "lower-kernel,canonicalize"
         end
-
         device_properties = XLA.device_properties(XLA.default_device(client))
         cubinChip = "sm_$(device_properties.major)$(device_properties.minor)"
 
