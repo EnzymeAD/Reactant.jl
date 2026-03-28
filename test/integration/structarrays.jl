@@ -1,4 +1,4 @@
-using StructArrays, Reactant, Test
+using StructArrays, StaticArrays, Reactant, LinearAlgebra, Test
 
 @testset "StructArray to_rarray and make_tracer" begin
     x = StructArray(;
@@ -68,4 +68,16 @@ end
         zip(components(result), components(broadcast_elwise(x)))
         @test component_ra ≈ component
     end
+end
+
+@testset "structarray with static array broadcasting" begin
+    trel(x) = tr.(x)
+    s = StructArray{SMatrix{2,2,Float64,4}}((
+        fill(1.0, 4), fill(2.0, 4), fill(3.0, 4), fill(4.0, 4)
+    ))
+    sr = Reactant.to_rarray(s)
+    out = @jit(trel(sr))
+    @test out ≈ trel(s)
+    @test out isa ConcreteRArray
+    @test @jit(sum(sr)) ≈ sum(s)
 end
