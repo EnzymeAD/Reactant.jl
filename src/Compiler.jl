@@ -2031,7 +2031,9 @@ function compile_mlir!(
     lower_enzymexla_linalg_pass = join(
         [
             "lower-enzymexla-linalg{backend=$backend blas_int_width=$blas_int_width}",
-            "lower-enzymexla-blas{backend=$backend blas_int_width=$blas_int_width}",
+            "blas-legalize-to-stablehlo{trsm=true}", # direct mapping to stablehlo ops
+            "lower-blas{backend=$backend blas_int_width=$blas_int_width}",
+            "blas-legalize-to-stablehlo{symm=true syrk=true}", # fallback
             "lower-enzymexla-lapack{backend=$backend blas_int_width=$blas_int_width}",
         ],
         ",",
