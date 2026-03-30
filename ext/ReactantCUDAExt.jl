@@ -12,7 +12,7 @@ using Reactant.Ops: @opcall
 
 using Enzyme
 using Adapt: Adapt, adapt
-using CUDA: CUDA, CuDim, DenseCuArray, unsafe_cached_load
+using CUDA: CUDA, CuDim, DenseCuArray, unsafe_cached_load, CUDACore
 
 using GPUCompiler: GPUCompiler
 using GPUArraysCore: @allowscalar
