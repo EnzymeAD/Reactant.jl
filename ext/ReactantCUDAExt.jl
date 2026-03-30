@@ -297,7 +297,7 @@ end
 
 ## indexing intrinsics
 
-CUDACore.@device_function @inline function arrayref(
+CUDA.@device_function @inline function arrayref(
     A::CuTracedArray{T}, index::Integer
 ) where {T}
     @boundscheck checkbounds(A, index)
@@ -342,7 +342,7 @@ end
     end
 end
 
-CUDACore.@device_function @inline function arrayset(
+CUDA.@device_function @inline function arrayset(
     A::CuTracedArray{T}, x::T, index::Integer
 ) where {T}
     @boundscheck checkbounds(A, index)
@@ -377,7 +377,7 @@ end
     end
 end
 
-CUDACore.@device_function @inline function const_arrayref(
+CUDA.@device_function @inline function const_arrayref(
     A::CuTracedArray{T}, index::Integer
 ) where {T}
     @boundscheck checkbounds(A, index)
