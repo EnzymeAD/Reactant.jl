@@ -1384,7 +1384,7 @@ Reactant.@reactant_overlay @noinline function CUDA.cufunction(
         name = nothing
         debuginfo = false
         config = GPUCompiler.CompilerConfig(
-            CUDA.PTXCompilerTarget(; cap=llvm_cap, ptx=llvm_ptx, debuginfo),
+            GPUCompiler.PTXCompilerTarget(; cap=llvm_cap, ptx=llvm_ptx, debuginfo),
             CUDA.CUDACompilerParams(; cap=cuda_cap, ptx=cuda_ptx);
             kernel,
             name,
