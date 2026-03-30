@@ -1368,7 +1368,7 @@ end
 Reactant.@reactant_overlay @noinline function CUDA.cufunction(
     f::F, tt::TT=Tuple{}; kwargs...
 ) where {F,TT}
-    res = Base.@lock CUDA.cufunction_lock begin
+    res = Base.@lock CUDACore.cufunction_lock begin
         # compile the function
         cache = llvm_compiler_cache(MLIR.IR.current_module())
         source = CUDA.methodinstance(F, tt)
