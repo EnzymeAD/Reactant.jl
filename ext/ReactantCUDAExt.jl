@@ -18,6 +18,7 @@ using GPUCompiler: GPUCompiler
 using GPUArraysCore: @allowscalar
 using KernelAbstractions: KernelAbstractions
 using LLVM: LLVM
+using Printf: Printf
 
 using PrecompileTools: @setup_workload, @compile_workload
 
@@ -244,11 +245,11 @@ Base.@nospecializeinfer function Reactant.promote_traced_type(
 end
 
 function Base.show(io::IO, a::AT) where {AT<:CuTracedArray}
-    CUDA.Printf.@printf(io, "%s cu traced array at %p", join(size(a), '×'), Int(pointer(a)))
+    Printf.@printf(io, "%s cu traced array at %p", join(size(a), '×'), Int(pointer(a)))
 end
 
 function Base.show(io::IO, a::AT) where {AT<:CuTracedRNumber}
-    CUDA.Printf.@printf(
+    Printf.@printf(
         io, "%s cu traced rnumber at %p", join(size(a), '×'), Int(pointer(a))
     )
 end
