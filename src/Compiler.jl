@@ -2431,7 +2431,12 @@ function compile_mlir!(
     end
 
     if backend == "tpu" && compile_options.tpu_pad_for_alignment
-        run_pass_pipeline!(mod, "pad-for-alignment,canonicalize", "tpu_pad_for_alignment")
+        run_pass_pipeline!(mod, join([
+            "pad-for-alignment",
+            "canonicalize",
+            "enzyme-hlo-generate-td{patterns=pad_simplify(1);slice_simplify;pad_pad;slice_slice;slice_pad;noop_slice}",
+            "cse",
+        ], ','), "tpu_pad_for_alignment")
     end
 
     if compile_options.lower_triton
