@@ -1396,6 +1396,17 @@ function mlirOperationGetContext(op)
 end
 
 """
+    mlirOperationNameHasTrait(opName, traitTypeID, context)
+
+Checks if the operation name has a trait identified by the given type id.
+"""
+function mlirOperationNameHasTrait(opName, traitTypeID, context)
+    @ccall mlir_c.mlirOperationNameHasTrait(
+        opName::MlirStringRef, traitTypeID::MlirTypeID, context::MlirContext
+    )::Bool
+end
+
+"""
     mlirOperationGetLocation(op)
 
 Gets the location of the operation.
@@ -7824,7 +7835,7 @@ end
 end
 
 """
-    mlirLLVMDICompileUnitAttrGet(ctx, id, sourceLanguage, file, producer, isOptimized, emissionKind, nameTableKind, splitDebugFilename)
+    mlirLLVMDICompileUnitAttrGet(ctx, id, sourceLanguage, file, producer, isOptimized, emissionKind, isDebugInfoForProfiling, nameTableKind, splitDebugFilename, nImportedEntities, importedEntities)
 
 Creates a LLVM DICompileUnit attribute.
 """
@@ -7836,8 +7847,11 @@ function mlirLLVMDICompileUnitAttrGet(
     producer,
     isOptimized,
     emissionKind,
+    isDebugInfoForProfiling,
     nameTableKind,
     splitDebugFilename,
+    nImportedEntities,
+    importedEntities,
 )
     @ccall mlir_c.mlirLLVMDICompileUnitAttrGet(
         ctx::MlirContext,
@@ -7847,8 +7861,11 @@ function mlirLLVMDICompileUnitAttrGet(
         producer::MlirAttribute,
         isOptimized::Bool,
         emissionKind::MlirLLVMDIEmissionKind,
+        isDebugInfoForProfiling::Bool,
         nameTableKind::MlirLLVMDINameTableKind,
         splitDebugFilename::MlirAttribute,
+        nImportedEntities::Cptrdiff_t,
+        importedEntities::Ptr{MlirAttribute},
     )::MlirAttribute
 end
 
@@ -11358,12 +11375,30 @@ function mlirDynamicOpTraitIsTerminatorCreate()
 end
 
 """
+    mlirDynamicOpTraitIsTerminatorGetTypeID()
+
+Get the type ID of the dynamic op trait that indicates the operation is a terminator.
+"""
+function mlirDynamicOpTraitIsTerminatorGetTypeID()
+    @ccall mlir_c.mlirDynamicOpTraitIsTerminatorGetTypeID()::MlirTypeID
+end
+
+"""
     mlirDynamicOpTraitNoTerminatorCreate()
 
 Get the dynamic op trait that indicates regions have no terminator.
 """
 function mlirDynamicOpTraitNoTerminatorCreate()
     @ccall mlir_c.mlirDynamicOpTraitNoTerminatorCreate()::MlirDynamicOpTrait
+end
+
+"""
+    mlirDynamicOpTraitNoTerminatorGetTypeID()
+
+Get the type ID of the dynamic op trait that indicates regions have no terminator.
+"""
+function mlirDynamicOpTraitNoTerminatorGetTypeID()
+    @ccall mlir_c.mlirDynamicOpTraitNoTerminatorGetTypeID()::MlirTypeID
 end
 
 """
