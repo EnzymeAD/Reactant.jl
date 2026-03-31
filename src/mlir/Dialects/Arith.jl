@@ -510,6 +510,43 @@ function constant(; result=nothing::Union{Nothing,IR.Type}, value, location=Loca
     )
 end
 
+"""
+`convertf`
+
+Cast a floating-point value to a different floating-point type of the same
+bitwidth. This operation handles conversions between types that have the
+same bitwidth but different semantics (e.g., f16 to bf16), which cannot
+be represented by `arith.extf` or `arith.truncf`.
+
+The source and destination element types must be different and must have
+the same bitwidth. If the value cannot be exactly represented, it is
+rounded using the provided rounding mode or the default one if no rounding
+mode is provided. When operating on vectors, casts elementwise.
+"""
+function convertf(
+    in::Value; out::IR.Type, roundingmode=nothing, fastmath=nothing, location=Location()
+)
+    op_ty_results = IR.Type[out,]
+    operands = Value[in,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(roundingmode) &&
+        push!(attributes, NamedAttribute("roundingmode", roundingmode))
+    !isnothing(fastmath) && push!(attributes, NamedAttribute("fastmath", fastmath))
+
+    return create_operation(
+        "arith.convertf",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function divf(
     lhs::Value,
     rhs::Value;

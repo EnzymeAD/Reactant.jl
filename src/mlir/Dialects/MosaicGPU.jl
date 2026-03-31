@@ -614,6 +614,75 @@ function print_layout(value::Value; format, location=Location())
 end
 
 """
+`query_cluster_cancel`
+
+It interprets the 16-byte opaque response written to shared memory by a
+completed `try_cluster_cancel` call to determine if a new work unit was
+successfully claimed.
+
+If `success` is true, then `x`, `y`, and `z` are set to the CTA ID of the
+first CTA that is part of the cluster that was claimed.
+"""
+function query_cluster_cancel(
+    cancellation_result::Value;
+    x=nothing::Union{Nothing,IR.Type},
+    y=nothing::Union{Nothing,IR.Type},
+    z=nothing::Union{Nothing,IR.Type},
+    success=nothing::Union{Nothing,IR.Type},
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[cancellation_result,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(x) && push!(op_ty_results, x)
+    !isnothing(y) && push!(op_ty_results, y)
+    !isnothing(z) && push!(op_ty_results, z)
+    !isnothing(success) && push!(op_ty_results, success)
+
+    return create_operation(
+        "mosaic_gpu.query_cluster_cancel",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
+`reinterpret_cast`
+
+Casts a memref to a new memref type with a potentially different shape but
+the same total number of elements and the same element type. This is a
+pure reinterpretation of the shape and layout; no data is moved or copied.
+
+Unlike `memref.reinterpret_cast`, this op does not take explicit offsets,
+sizes, or strides. The result type fully determines the reinterpretation.
+"""
+function reinterpret_cast(source::Value; result::IR.Type, location=Location())
+    op_ty_results = IR.Type[result,]
+    operands = Value[source,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "mosaic_gpu.reinterpret_cast",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
 `return_`
 
 The `return` op is a terminator that indicates the end of execution
@@ -771,43 +840,6 @@ function tcgen05_mma(
 end
 
 """
-`tile_shape`
-
-Tiles the shape of a strided `memref`.
-
-The `tiling` is applied to the logical trailing dimensions of the source
-`memref`.
-
-Note that this is different from tiling the `memref` itself, since this
-operation does not perform any data movement.
-
-E.g., for a contiguous `memref` of shape `(5, 128, 128)` and a tiling
-`(64, 32)`, the result will be a contiguous `memref` of shape
-`(5, 2, 4, 64, 32)`.
-"""
-function tile_shape(
-    source::Value; result_0=nothing::Union{Nothing,IR.Type}, tiling, location=Location()
-)
-    op_ty_results = IR.Type[]
-    operands = Value[source,]
-    owned_regions = Region[]
-    successors = Block[]
-    attributes = NamedAttribute[NamedAttribute("tiling", tiling),]
-    !isnothing(result_0) && push!(op_ty_results, result_0)
-
-    return create_operation(
-        "mosaic_gpu.tile_shape",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
-    )
-end
-
-"""
 `tmem_alloc`
 
 This op allocates a chunk of TMEM and stores the pointer to the memory
@@ -919,6 +951,38 @@ function tmem_relinquish_alloc_permit(; collective=nothing, location=Location())
 
     return create_operation(
         "mosaic_gpu.tmem_relinquish_alloc_permit",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`try_cluster_cancel`
+
+It allows an SM to dynamically acquire work by atomically canceling the launch
+of a pending cluster from the grid and claiming its CTA ID as the next unit
+of work.
+"""
+function try_cluster_cancel(
+    cancellation_result::Value,
+    barrier::Value,
+    predicate=nothing::Union{Nothing,Value};
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[cancellation_result, barrier]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(predicate) && push!(operands, predicate)
+
+    return create_operation(
+        "mosaic_gpu.try_cluster_cancel",
         location;
         operands,
         owned_regions,
@@ -1092,10 +1156,10 @@ function wait(barrier::Value, parity::Value; location=Location())
     )
 end
 
-function warp_map(operands::Vector{Value}; body::Region, location=Location())
+function warp_map(operands::Vector{Value}; region::Region, location=Location())
     op_ty_results = IR.Type[]
     operands = Value[operands...,]
-    owned_regions = Region[body,]
+    owned_regions = Region[region,]
     successors = Block[]
     attributes = NamedAttribute[]
 

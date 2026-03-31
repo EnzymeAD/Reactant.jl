@@ -1294,6 +1294,44 @@ function memref2pointer(source::Value; result::IR.Type, location=Location())
 end
 
 """
+`multi_pad`
+
+MultiPad operation produces multiple padded versions of the input tensor.
+Given dimension=D and amount=A, it produces A + 1 results.
+The i-th result corresponds to padding along dimension D by:
+- Low side: i
+- High side: A - i
+Other dimensions are not padded.
+"""
+function multi_pad(
+    operand::Value,
+    padding_value::Value;
+    results::Vector{IR.Type},
+    dimension,
+    amount,
+    location=Location(),
+)
+    op_ty_results = IR.Type[results...,]
+    operands = Value[operand, padding_value]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[
+        NamedAttribute("dimension", dimension), NamedAttribute("amount", amount)
+    ]
+
+    return create_operation(
+        "enzymexla.multi_pad",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
 `multi_rotate`
 
 MultiRotate operation produces multiple rotated versions of the input tensor.
@@ -1882,6 +1920,7 @@ function blas_trmm(
     side,
     uplo,
     transpose,
+    diag,
     location=Location(),
 )
     op_ty_results = IR.Type[output,]
@@ -1892,6 +1931,7 @@ function blas_trmm(
         NamedAttribute("side", side),
         NamedAttribute("uplo", uplo),
         NamedAttribute("transpose", transpose),
+        NamedAttribute("diag", diag),
     ]
 
     return create_operation(

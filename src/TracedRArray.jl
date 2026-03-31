@@ -322,7 +322,8 @@ end
 function Base.materialize!(
     ::Style, dest, bc::Broadcasted
 ) where {Style<:AbstractReactantArrayStyle}
-    return _copyto!(dest, instantiate(Broadcasted{Style}(bc.f, bc.args, axes(dest))))
+    _copyto!(dest, instantiate(Broadcasted{Style}(bc.f, bc.args, axes(dest))))
+    return dest
 end
 
 Base.copyto!(dest::AnyTracedRArray, bc::Broadcasted{Nothing}) = _copyto!(dest, bc) # Keep it for ArrayConflict

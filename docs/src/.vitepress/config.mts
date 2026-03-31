@@ -74,7 +74,7 @@ export default defineConfig({
       { text: "Home", link: "/" },
       { text: "Getting Started",
         items: [
-          { text: "Introduction", link: "/introduction" },
+          { text: "Introduction", link: "/introduction/" },
           { text: "Configuration", link: "/introduction/configuration" },
           { text: "FAQs", link: "/introduction/FAQs" },
         ],
@@ -163,7 +163,7 @@ export default defineConfig({
         text: "Getting Started",
         collapsed: false,
         items: [
-          { text: "Introduction", link: "/introduction" },
+          { text: "Introduction", link: "/introduction/" },
           { text: "Configuration", link: "/introduction/configuration" },
           { text: "FAQs", link: "/introduction/FAQs" },
         ],

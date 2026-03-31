@@ -2722,6 +2722,7 @@ function compile_mlir!(
             results_mask[i] = true
             continue
         end
+
         push!(preserved_args, (linear_results[i], MLIR.IR.block_arg_num(op)))
     end
 
@@ -3779,7 +3780,8 @@ function codegen_unflatten!(
     )
 
     # if some argument is mutated, change them to point to the correct concrete results
-    for (result, arg_idx) in preserved_args
+    orig_buffer_available = trues(length(linear_args))
+    for (pi, (result, arg_idx)) in enumerate(preserved_args)
         paths = (
             (
                 p for p in Reactant.TracedUtils.get_paths(result) if
@@ -3787,21 +3789,26 @@ function codegen_unflatten!(
             )...,
         )
 
-        for path in paths
-            arg = linear_args[arg_idx + 1]
-            argpath = only((
-                p for
-                p in Reactant.TracedUtils.get_paths(arg) if length(p) > 0 && p[1] == :args
-            ))
+        arg = linear_args[arg_idx + 1]
+        argpath = only((
+            p for p in Reactant.TracedUtils.get_paths(arg) if length(p) > 0 && p[1] == :args
+        ))
+        argpath_value = nothing
 
+        if any(parg -> parg[2] == arg_idx, preserved_args)
+            orig_buffer_available[arg_idx + 1] = false
+        end
+
+        for path in paths
             @assert path[1] == :resargs || path[1] == :args "Expected :resargs or :args, got $(path[1])"
+            initial_path = path
             # We can optimize cases where we set the arg to itself
             if path[2:end] == argpath[2:end]
                 continue
             end
             res = :(args[$(path[2])])
-            path = path[3:end]
 
+            path = path[3:end]
             for p in path
                 res = :(traced_getfield($res, $(Meta.quot(p))))
             end
@@ -3812,12 +3819,34 @@ function codegen_unflatten!(
                 error("TODO(#2234): Not yet Implemented. Open an issue on Reactant.jl.")
             end
 
-            argres = :(args[$(argpath[2])])
-            for p in argpath[3:end]
-                argres = :(traced_getfield($argres, $(Meta.quot(p))))
+            if isnothing(argpath_value)
+                # this traced array take an identity value derived from another argument but
+                # is its own traced array. As such, it needs to allocate a new buffer instead of using the arg directly.
+                needs_copy =
+                    initial_path[1] === :args &&
+                    argpath[1] === :args &&
+                    !orig_buffer_available[arg_idx + 1]
+                orig_buffer_available[arg_idx + 1] = false
+
+                argres = :(args[$(argpath[2])])
+                for p in argpath[3:end]
+                    argres = :(traced_getfield($argres, $(Meta.quot(p))))
+                end
+                argpath_value = Symbol(:argpath_value, pi)
+                argres_data = :($(argres).data)
+                if needs_copy
+                    if runtime isa Val{:PJRT}
+                        argres_data = :(map(copy, $argres_data))
+                    elseif runtime isa Val{:IFRT}
+                        argres_data = :(copy($argres_data))
+                    else
+                        error("unknown runtime $runtime")
+                    end
+                end
+                push!(unflatten_code, :($argpath_value = $argres_data))
             end
 
-            res = :(traced_setfield!($res, :data, $argres.data, $(path)))
+            res = :(traced_setfield!($res, :data, $argpath_value, $(path)))
             push!(unflatten_code, res)
         end
     end
