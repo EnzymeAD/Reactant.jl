@@ -2435,6 +2435,8 @@ function compile_mlir!(
             "pad-for-alignment",
             "canonicalize",
             "enzyme-hlo-generate-td{patterns=pad_simplify(1);slice_simplify;pad_pad;slice_slice;slice_pad;noop_slice}",
+            "transform-interpreter",
+            "enzyme-hlo-remove-transform",
             "cse",
         ], ','), "tpu_pad_for_alignment")
     end
