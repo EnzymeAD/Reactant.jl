@@ -1259,7 +1259,7 @@ function optimization_passes(
         append!(
             transform_passes_list,
             [
-                "reshape_broadcast",
+                "concat_broadcast_slice",
                 "reshape_concat",
                 "reshape_dus",
                 "dot_reshape_pad<1>",
