@@ -264,7 +264,7 @@ function CompileOptions(;
     raise_first::Bool=false,
     legalize_chlo_to_stablehlo::Bool=false,
     cudnn_hlo_optimize::Bool=false,
-    shardy_passes::Union{Symbol,ShardyPropagationOptions}=:to_mhlo_shardings,
+    shardy_passes::Union{Symbol,ShardyPropagationOptions}=:post_sdy_propagation,
     optimize_then_pad::Bool=true,
     optimize_communications::Union{Bool,OptimizeCommunicationOptions}=true,
     assert_nonallocating::Bool=false,
