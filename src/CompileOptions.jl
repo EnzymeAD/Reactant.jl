@@ -7,7 +7,7 @@ end
 
 function Base.String(options::MultiFloatOptions)
     return (
-        "multi-float-conversion{source-type=$(options.source) target-type=$(options.target) concat-dimension=$(options.dimension), expansion-size=$(options.limbs)}"
+        "multi-float-conversion{source-type=$(options.source) target-type=$(options.target) concat-dimension=$(options.dimension) expansion-size=$(options.limbs)}"
     )
 end
 
