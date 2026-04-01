@@ -976,6 +976,28 @@ function kernel_call(
     )
 end
 
+function ml_lgamma(
+    input::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[input,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(result) && push!(op_ty_results, result)
+
+    return create_operation(
+        "enzymexla.ml.lgamma",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
 function linalg_lu(
     input::Value;
     output::IR.Type,
