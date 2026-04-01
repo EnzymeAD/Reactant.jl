@@ -2,11 +2,12 @@
     source::String = "f64"
     target::String = "f32"
     dimension::String = "first"
+    limbs::Int = 2
 end
 
 function Base.String(options::MultiFloatOptions)
     return (
-        "multi-float-conversion{source-type=$(options.source) target-type=$(options.target) concat-dimension=$(options.dimension)}"
+        "multi-float-conversion{source-type=$(options.source) target-type=$(options.target) concat-dimension=$(options.dimension), expansion-size=$(options.limbs)}"
     )
 end
 
