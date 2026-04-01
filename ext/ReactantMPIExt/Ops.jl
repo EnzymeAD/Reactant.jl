@@ -184,6 +184,29 @@ end
     return recvbuf
 end
 
+@noinline function Bcast!(
+    buf::TracedRArray,
+    root::TracedRNumber;
+    location=mlir_stacktrace("mpi.bcast", @__FILE__, @__LINE__),
+)
+    T = Reactant.unwrapped_eltype(buf)
+    mpi_datatype = get_mpi_datatype_enum(MPI.Datatype(T))
+
+    count = Reactant.Ops.constant(Int32(length(buf)))
+
+    ret = enzymexla.mpi_bcast(
+        buf.mlir_data,
+        count.mlir_data,
+        root.mlir_data;
+        outbuf=mlir_type(buf),
+        datatype=MLIR.API.enzymexlaMPIDatatypeAttrGet(IR.current_context(), mpi_datatype),
+        location,
+    )
+
+    buf.mlir_data = IR.result(ret)
+    return buf
+end
+
 const MPI_OP_MAP = Dict(
     MPI.OP_NULL.val => MLIR.API.ENZYMEXLA_MPI_OP_NULL,
     MPI.BAND.val => MLIR.API.ENZYMEXLA_MPI_BAND,
