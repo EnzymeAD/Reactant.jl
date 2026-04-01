@@ -24,11 +24,7 @@ import ..Reactant:
     append_path,
     ancestor,
     TracedType
-import Reactant:
-    OptimizeCommunicationOptions,
-    ShardyPropagationOptions,
-    CompileOptions,
-    MultiFloatOptions
+import Reactant: OptimizeCommunicationOptions, ShardyPropagationOptions, CompileOptions
 using Reactant_jll: Reactant_jll
 
 import ..ReactantCore: correct_maybe_bcast_call
