@@ -1,3 +1,15 @@
+@kwdef struct MultiFloatOptions
+    source::String = "f64"
+    target::String = "f32"
+    dimension::String = "first"
+end
+
+function Base.String(options::MultiFloatOptions)
+    return (
+        "multi-float-conversion{source-type=$(options.source) target-type=$(options.target) concat-dimension=$(options.dimension)}"
+    )
+end
+
 # TODO(#2265): document these options at some point
 """
     OptimizeCommunicationOptions

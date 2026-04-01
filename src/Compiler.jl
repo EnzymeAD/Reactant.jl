@@ -1882,6 +1882,7 @@ function compile_mlir!(
     runtime::Union{Val{:PJRT},Val{:IFRT}},
     legalize_stablehlo_to_mhlo::Bool=false,
     client=nothing,
+    multifloat::Union{Nothing, MultiFloatOptions}=nothing,
     kwargs...,
 )
     @assert MLIR.IR.current_context() == MLIR.IR.context(mod)
@@ -2592,6 +2593,10 @@ function compile_mlir!(
             compiled_f = func_with_padding
             in_tys = in_tys_padded
         end
+    end
+
+    if multifloat !== nothing
+        run_pass_pipeline!(mod, String(multifloat), "multifloat")
     end
 
     # shardy passes
