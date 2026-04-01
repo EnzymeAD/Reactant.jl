@@ -249,6 +249,7 @@ struct CompileOptions
     disable_structured_tensors_passes::Bool
     strip_llvm_debuginfo::Bool
     strip::Union{Symbol,Vector{String}}
+    multifloat::Union{Nothing,MultiFloatOptions}
 end
 
 function CompileOptions(;
@@ -285,6 +286,7 @@ function CompileOptions(;
     strip::Union{Symbol,Vector{String}}=:all,
     raise_triton_custom_call::Bool=true,
     lower_triton::Bool=true,
+    multifloat::Union{Nothing,MultiFloatOptions}=nothing,
 )
     optimization_passes isa Bool &&
         (optimization_passes = ifelse(optimization_passes, :all, :none))
@@ -348,6 +350,7 @@ function CompileOptions(;
         disable_structured_tensors_passes,
         strip_llvm_debuginfo,
         strip,
+	multifloat
     )
 end
 
@@ -402,6 +405,7 @@ function __compile_options_with_reversed_propagation(compile_options::CompileOpt
         compile_options.disable_structured_tensors_passes,
         compile_options.strip_llvm_debuginfo,
         compile_options.strip,
+	compile_options.multifloat,
     )
 end
 
@@ -443,6 +447,7 @@ function __compile_options_with_updated_sync(compile_options::CompileOptions, sy
         compile_options.disable_structured_tensors_passes,
         compile_options.strip_llvm_debuginfo,
         compile_options.strip,
+	compile_options.multifloat,
     )
 end
 
