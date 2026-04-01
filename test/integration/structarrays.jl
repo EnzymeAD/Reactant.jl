@@ -81,3 +81,16 @@ end
     @test out isa ConcreteRArray
     @test @jit(sum(sr)) ≈ sum(s)
 end
+
+@testset "structarray with complex numbers" begin
+    s = randn(64)
+
+    elcom(x) = complex(x, x)
+    sr = Reactant.to_rarray(s)
+    out = @jit(elcom.(sr))
+    @test out ≈ elcom.(s)
+    @test out isa ConcreteRArray
+    @test @jit(sum(sr)) ≈ sum(s)
+end
+
+
