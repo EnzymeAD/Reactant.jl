@@ -765,6 +765,7 @@ function mcmc(
     hmc_config=nothing,
     nuts_config=nothing,
     logpdf_fn=nothing,
+    autodiff_attrs=nothing,
     name=nothing,
     location=Location(),
 )
@@ -810,6 +811,8 @@ function mcmc(
     !isnothing(hmc_config) && push!(attributes, NamedAttribute("hmc_config", hmc_config))
     !isnothing(nuts_config) && push!(attributes, NamedAttribute("nuts_config", nuts_config))
     !isnothing(logpdf_fn) && push!(attributes, NamedAttribute("logpdf_fn", logpdf_fn))
+    !isnothing(autodiff_attrs) &&
+        push!(attributes, NamedAttribute("autodiff_attrs", autodiff_attrs))
     !isnothing(name) && push!(attributes, NamedAttribute("name", name))
 
     return create_operation(
