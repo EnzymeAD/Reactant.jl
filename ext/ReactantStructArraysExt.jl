@@ -103,22 +103,39 @@ Base.@propagate_inbounds function StructArrays._getindex(
     return createinstance(T, get_ith(cols, I...)...)
 end
 
+setstruct(col, val, I) = @inbounds Reactant.@allowscalar col[I] = val
+struct SetStruct{T}
+    I::T
+end
+(s::SetStruct)(col, val) = setstruct(col, val, s.I)
+(s::SetStruct)(vals) = s(vals...)
+
 Base.@propagate_inbounds function Base.setindex!(
     s::StructArray{T,<:Any,<:Any,Int}, vals, I::TracedRNumber{TI}
 ) where {T,TI<:Integer}
     valsT = maybe_convert_elt(T, vals)
-    foreachfield((col, val) -> (@inbounds Reactant.@allowscalar col[I] = val), s, valsT)
+    setter = SetStruct(I)
+    foreachfield(setter, s, valsT)
     return s
 end
 
 const MRarr = Union{Reactant.AnyTracedRArray,Reactant.RArray}
+getstruct(col, n, I) = @inbounds Reactant.@allowscalar col[n][I...]
+struct GetStruct{C ,Idx}
+    cols::C
+    I::Idx
+end
+(g::GetStruct)(n) = getstruct(g.cols, n, g.I...)
+
 function StructArrays.get_ith(cols::NamedTuple{N,<:NTuple{K,<:MRarr}}, I...) where {N,K}
-    ith = ntuple(n -> Reactant.@allowscalar(cols[n][I...]), Val(K))
+    getter = GetStruct(cols, I)
+    ith = ntuple(getter, Val(K))
     return ith
 end
 
 function StructArrays.get_ith(cols::NTuple{K,<:MRarr}, I...) where {K}
-    ith = ntuple(n -> Reactant.@allowscalar(cols[n][I...]), Val(K))
+    getter = GetStruct(cols, I)
+    ith = ntuple(getter, Val(K))
     return ith
 end
 
