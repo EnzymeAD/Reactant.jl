@@ -13602,6 +13602,78 @@ function enzymexlaGuaranteedAnalysisResultAttrGet(ctx, mode)
     )::MlirAttribute
 end
 
+"""
+    EnzymeXLAPropagateDirection
+
+Enum for propagation direction (reshape/transpose).
+"""
+@cenum EnzymeXLAPropagateDirection::UInt32 begin
+    ENZYMEXLA_PROPAGATE_NONE = 0x0000000000000000
+    ENZYMEXLA_PROPAGATE_UP = 0x0000000000000001
+    ENZYMEXLA_PROPAGATE_DOWN = 0x0000000000000002
+end
+
+"""
+    EnzymeXLATransformPassesOptions
+
+Options that control which transform passes are generated.
+"""
+struct EnzymeXLATransformPassesOptions
+    max_constant_threshold::Int64
+    while_unroll_threshold::Int64
+    reshape_propagate::EnzymeXLAPropagateDirection
+    transpose_propagate::EnzymeXLAPropagateDirection
+    no_nan::Bool
+    all_finite::Bool
+    dus_to_concat::Bool
+    dus_slice_simplify::Bool
+    sum_to_reducewindow::Bool
+    sum_to_conv::Bool
+    aggressive_sum_to_conv::Bool
+    while_concat::Bool
+    aggressive_propagation::Bool
+    is_sharded::Bool
+    raise_shlo_to_blas_lapack::Bool
+    recognize_comms::Bool
+    lower_comms::Bool
+    enable_self_to_convolution_like_passes::Bool
+    enable_structured_tensors_detection_passes::Bool
+    enable_structured_tensors_passes::Bool
+    enable_scatter_gather_optimization_passes::Bool
+    enable_slice_to_batch_passes::Bool
+    enable_reduce_slice_fusion_passes::Bool
+    enable_concat_to_batch_passes::Bool
+    enable_loop_raising_passes::Bool
+    enable_licm_optimization_passes::Bool
+    enable_pad_optimization_passes::Bool
+end
+
+"""
+    enzymexlaGetTransformPassesList(options, mainPasses, lowerPasses)
+
+Returns the transform passes list as a semicolon-separated string. The caller must free the returned string using [`enzymexlaFreeTransformPassesList`](@ref).
+
+Two separate lists are produced: - `mainPasses`: the primary transform pass list - `lowerPasses`: the lowering transform pass list (for lower\\_comms)
+
+Each is returned as a semicolon-separated string of pass patterns.
+"""
+function enzymexlaGetTransformPassesList(options, mainPasses, lowerPasses)
+    @ccall mlir_c.enzymexlaGetTransformPassesList(
+        options::Ptr{EnzymeXLATransformPassesOptions},
+        mainPasses::Ptr{Cstring},
+        lowerPasses::Ptr{Cstring},
+    )::Cvoid
+end
+
+"""
+    enzymexlaFreeTransformPassesList(passes)
+
+Free a string returned by [`enzymexlaGetTransformPassesList`](@ref).
+"""
+function enzymexlaFreeTransformPassesList(passes)
+    @ccall mlir_c.enzymexlaFreeTransformPassesList(passes::Cstring)::Cvoid
+end
+
 @cenum EnzymeRngDistribution::UInt32 begin
     EnzymeRngDistribution_Uniform = 0x0000000000000000
     EnzymeRngDistribution_Normal = 0x0000000000000001
