@@ -350,7 +350,7 @@ function CompileOptions(;
         disable_structured_tensors_passes,
         strip_llvm_debuginfo,
         strip,
-	multifloat
+        multifloat,
     )
 end
 
@@ -405,7 +405,7 @@ function __compile_options_with_reversed_propagation(compile_options::CompileOpt
         compile_options.disable_structured_tensors_passes,
         compile_options.strip_llvm_debuginfo,
         compile_options.strip,
-	compile_options.multifloat,
+        compile_options.multifloat,
     )
 end
 
@@ -447,7 +447,7 @@ function __compile_options_with_updated_sync(compile_options::CompileOptions, sy
         compile_options.disable_structured_tensors_passes,
         compile_options.strip_llvm_debuginfo,
         compile_options.strip,
-	compile_options.multifloat,
+        compile_options.multifloat,
     )
 end
 
