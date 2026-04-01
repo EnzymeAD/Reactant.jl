@@ -121,7 +121,7 @@ end
 
 const MRarr = Union{Reactant.AnyTracedRArray,Reactant.RArray}
 getstruct(col, n, I) = @inbounds Reactant.@allowscalar col[n][I...]
-struct GetStruct{C ,Idx}
+struct GetStruct{C,Idx}
     cols::C
     I::Idx
 end
