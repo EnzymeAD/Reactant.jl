@@ -80,8 +80,9 @@ end
 function alloc_sarr(bc, T)
     # Short circuit for Complex since in Reactant they are just a regular number
     T <: Complex && return similar(bc, T)
+    asa = Base.Fix1(alloc_sarr, bc)
     if StructArrays.isnonemptystructtype(T)
-        return StructArrays.buildfromschema(x -> alloc_sarr(bc, x), T)
+        return StructArrays.buildfromschema(asa, T)
     else
         return similar(bc, T)
     end
