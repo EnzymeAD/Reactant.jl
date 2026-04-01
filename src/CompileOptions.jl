@@ -137,6 +137,12 @@ Fine-grained control over the compilation options for the Reactant compiler.
   - `cudnn_hlo_optimize`: Run cuDNN specific HLO optimizations. This is only relevant for
     GPU backends and is `false` by default. **Experimental and not heavily tested.**
 
+### Only for TPU backend
+
+  - `tpu_pad_for_alignment`: If `true`, pad the tensor dimensions up to a multiple of 128 to
+    ensure that they are aligned. This is required by TPUs to achieve good performance.
+    Defaults to `true`.
+
 ## Sharding Options
 
   - `shardy_passes`: Defaults to `:post_sdy_propagation`. Other options are:
@@ -222,6 +228,7 @@ struct CompileOptions
     legalize_chlo_to_stablehlo::Bool
     # backend specific options
     cudnn_hlo_optimize::Bool
+    tpu_pad_for_alignment::Bool
     # sharding options
     shardy_passes::Union{Symbol,ShardyPropagationOptions}
     optimize_then_pad::Bool
@@ -264,6 +271,7 @@ function CompileOptions(;
     raise_first::Bool=false,
     legalize_chlo_to_stablehlo::Bool=false,
     cudnn_hlo_optimize::Bool=false,
+    tpu_pad_for_alignment::Bool=true,
     shardy_passes::Union{Symbol,ShardyPropagationOptions}=:to_mhlo_shardings,
     optimize_then_pad::Bool=true,
     optimize_communications::Union{Bool,OptimizeCommunicationOptions}=true,
@@ -328,6 +336,7 @@ function CompileOptions(;
         raise_first,
         legalize_chlo_to_stablehlo,
         cudnn_hlo_optimize,
+        tpu_pad_for_alignment,
         shardy_passes,
         optimize_then_pad,
         optimize_communications,
@@ -383,6 +392,7 @@ function __compile_options_with_reversed_propagation(compile_options::CompileOpt
         compile_options.raise_first,
         compile_options.legalize_chlo_to_stablehlo,
         compile_options.cudnn_hlo_optimize,
+        compile_options.tpu_pad_for_alignment,
         compile_options.shardy_passes,
         compile_options.optimize_then_pad,
         compile_options.optimize_communications,
@@ -425,6 +435,7 @@ function __compile_options_with_updated_sync(compile_options::CompileOptions, sy
         compile_options.raise_first,
         compile_options.legalize_chlo_to_stablehlo,
         compile_options.cudnn_hlo_optimize,
+        compile_options.tpu_pad_for_alignment,
         compile_options.shardy_passes,
         compile_options.optimize_then_pad,
         compile_options.optimize_communications,

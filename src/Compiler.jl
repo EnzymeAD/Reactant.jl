@@ -2434,6 +2434,24 @@ function compile_mlir!(
         run_pass_pipeline!(mod, "enzymexla-cudnn-hlo-opt", "cudnn-hlo-opt")
     end
 
+    if backend == "tpu" && compile_options.tpu_pad_for_alignment
+        run_pass_pipeline!(
+            mod,
+            join(
+                [
+                    "pad-for-alignment",
+                    "canonicalize",
+                    "enzyme-hlo-generate-td{patterns=pad_simplify(1);slice_simplify;pad_pad;slice_slice;slice_pad;noop_slice}",
+                    "transform-interpreter",
+                    "enzyme-hlo-remove-transform",
+                    "cse",
+                ],
+                ',',
+            ),
+            "tpu_pad_for_alignment",
+        )
+    end
+
     if compile_options.lower_triton
         run_pass_pipeline!(mod, "lower-triton", "lower_triton")
     end
