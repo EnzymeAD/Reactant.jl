@@ -2594,6 +2594,10 @@ function compile_mlir!(
         end
     end
 
+    if compile_options.multifloat !== nothing
+        run_pass_pipeline!(mod, String(compile_options.multifloat), "multifloat")
+    end
+
     # shardy passes
     use_shardy_partitioner = false
     result_shardings = missing

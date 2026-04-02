@@ -1,3 +1,16 @@
+@kwdef struct MultiFloatOptions
+    source::String = "f64"
+    target::String = "f32"
+    dimension::String = "first"
+    limbs::Int = 2
+end
+
+function Base.String(options::MultiFloatOptions)
+    return (
+        "multi-float-conversion{source-type=$(options.source) target-type=$(options.target) concat-dimension=$(options.dimension) expansion-size=$(options.limbs)}"
+    )
+end
+
 # TODO(#2265): document these options at some point
 """
     OptimizeCommunicationOptions
@@ -237,6 +250,7 @@ struct CompileOptions
     disable_structured_tensors_passes::Bool
     strip_llvm_debuginfo::Bool
     strip::Union{Symbol,Vector{String}}
+    multifloat::Union{Nothing,MultiFloatOptions}
 end
 
 function CompileOptions(;
@@ -251,7 +265,7 @@ function CompileOptions(;
     raise_first::Bool=false,
     legalize_chlo_to_stablehlo::Bool=false,
     cudnn_hlo_optimize::Bool=false,
-    shardy_passes::Union{Symbol,ShardyPropagationOptions}=:to_mhlo_shardings,
+    shardy_passes::Union{Symbol,ShardyPropagationOptions}=:post_sdy_propagation,
     optimize_then_pad::Bool=true,
     optimize_communications::Union{Bool,OptimizeCommunicationOptions}=true,
     assert_nonallocating::Bool=false,
@@ -273,6 +287,7 @@ function CompileOptions(;
     strip::Union{Symbol,Vector{String}}=:all,
     raise_triton_custom_call::Bool=true,
     lower_triton::Bool=true,
+    multifloat::Union{Nothing,MultiFloatOptions}=nothing,
 )
     optimization_passes isa Bool &&
         (optimization_passes = ifelse(optimization_passes, :all, :none))
@@ -336,6 +351,7 @@ function CompileOptions(;
         disable_structured_tensors_passes,
         strip_llvm_debuginfo,
         strip,
+        multifloat,
     )
 end
 
@@ -390,6 +406,7 @@ function __compile_options_with_reversed_propagation(compile_options::CompileOpt
         compile_options.disable_structured_tensors_passes,
         compile_options.strip_llvm_debuginfo,
         compile_options.strip,
+        compile_options.multifloat,
     )
 end
 
@@ -431,6 +448,7 @@ function __compile_options_with_updated_sync(compile_options::CompileOptions, sy
         compile_options.disable_structured_tensors_passes,
         compile_options.strip_llvm_debuginfo,
         compile_options.strip,
+        compile_options.multifloat,
     )
 end
 

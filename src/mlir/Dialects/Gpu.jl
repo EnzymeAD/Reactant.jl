@@ -128,6 +128,41 @@ function alloc(
 end
 
 """
+`ballot`
+
+The `ballot` op performs a ballot operation across all threads in a subgroup.
+Each thread contributes its predicate value as a single bit. The result is an
+integer where the Nth bit is set iff the Nth thread\'s predicate is true.
+
+The result type must be a signless integer type. The exact supported widths
+are target-dependent. Common GPU targets support i32 and i64.
+
+# Example
+```mlir
+%0 = gpu.ballot %pred : i32
+%1 = gpu.ballot %pred : i64
+```
+"""
+function ballot(predicate::Value; result::IR.Type, location=Location())
+    op_ty_results = IR.Type[result,]
+    operands = Value[predicate,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "gpu.ballot",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
 `barrier`
 
 The `barrier` op synchronizes all work items of a workgroup. It is used
