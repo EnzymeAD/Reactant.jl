@@ -53,7 +53,7 @@ Reactant = {path = ".."}
 [compat]
 Adapt = "4.1"
 ArrayInterface = "7.17.1"
-CUDA = "5.9"
+CUDA = "5.9, 6"
 DLFP8Types = "0.1"
 Distributions = "0.25"
 Enzyme = "0.13.28"

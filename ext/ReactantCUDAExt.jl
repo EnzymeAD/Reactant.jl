@@ -13,11 +13,18 @@ using Reactant.Ops: @opcall
 using Enzyme
 using Adapt: Adapt, adapt
 using CUDA: CUDA, CuDim, DenseCuArray, unsafe_cached_load
+# Compatibility for CUDA v5 and v6
+if isdefined(CUDA, :CUDACore)
+    using CUDA: CUDACore
+else
+    const CUDACore = CUDA
+end
 
 using GPUCompiler: GPUCompiler
 using GPUArraysCore: @allowscalar
 using KernelAbstractions: KernelAbstractions
 using LLVM: LLVM
+using Printf: Printf
 
 using PrecompileTools: @setup_workload, @compile_workload
 
@@ -244,11 +251,11 @@ Base.@nospecializeinfer function Reactant.promote_traced_type(
 end
 
 function Base.show(io::IO, a::AT) where {AT<:CuTracedArray}
-    CUDA.Printf.@printf(io, "%s cu traced array at %p", join(size(a), '×'), Int(pointer(a)))
+    Printf.@printf(io, "%s cu traced array at %p", join(size(a), '×'), Int(pointer(a)))
 end
 
 function Base.show(io::IO, a::AT) where {AT<:CuTracedRNumber}
-    CUDA.Printf.@printf(
+    Printf.@printf(
         io, "%s cu traced rnumber at %p", join(size(a), '×'), Int(pointer(a))
     )
 end
@@ -1367,10 +1374,10 @@ end
 Reactant.@reactant_overlay @noinline function CUDA.cufunction(
     f::F, tt::TT=Tuple{}; kwargs...
 ) where {F,TT}
-    res = Base.@lock CUDA.cufunction_lock begin
+    res = Base.@lock CUDACore.cufunction_lock begin
         # compile the function
         cache = llvm_compiler_cache(MLIR.IR.current_module())
-        source = CUDA.methodinstance(F, tt)
+        source = GPUCompiler.methodinstance(F, tt)
         # cuda = CUDA.active_state()
         device = nothing # cuda.device
         # config = CUDA.compiler_config(device; kwargs...)::CUDA.CUDACompilerConfig
@@ -1383,8 +1390,8 @@ Reactant.@reactant_overlay @noinline function CUDA.cufunction(
         name = nothing
         debuginfo = false
         config = GPUCompiler.CompilerConfig(
-            CUDA.PTXCompilerTarget(; cap=llvm_cap, ptx=llvm_ptx, debuginfo),
-            CUDA.CUDACompilerParams(; cap=cuda_cap, ptx=cuda_ptx);
+            GPUCompiler.PTXCompilerTarget(; cap=llvm_cap, ptx=llvm_ptx, debuginfo),
+            CUDACore.CUDACompilerParams(; cap=cuda_cap, ptx=cuda_ptx);
             kernel,
             name,
             always_inline,
