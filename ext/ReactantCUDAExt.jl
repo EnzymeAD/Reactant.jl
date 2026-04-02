@@ -1564,6 +1564,109 @@ end
     end
 end
 
+# ============================================================
+# Device-to-device CuArray <-> ConcreteRArray conversions
+# ============================================================
+
+# CuArray -> ConcreteRArray: D2D copy via CreateViewOfDeviceBuffer + CopyToMemorySpace.
+# We synchronize the CUDA stream before calling into PJRT to ensure all pending
+# CUDA.jl writes to the source CuArray are complete, then pass stream=0.
+#
+# Note: ideally we'd pass the CUDA.jl stream handle directly so PJRT can insert a
+# cross-stream dependency without blocking the CPU. However, XLA's
+# GetStreamFromExternalStream only accepts streams it created or that were registered
+# via dlpack -- CUDA.jl's task-local streams are not recognized. Until XLA exposes a
+# stream registration API, we must synchronize + pass 0.
+#
+# Safety: BufferFromDevicePointer creates an ephemeral PJRT view of cu's memory,
+# then does a D2D copy via CopyToMemorySpace, then awaits the copy's completion
+# (GetReadyFuture().Await()) before returning. This ensures the D2D copy finishes
+# while GC.@preserve still holds cu alive, so the source memory is never read
+# after it could be freed.
+#
+# Device selection: when device=nothing, the PJRT device matching the CuArray's
+# CUDA device ordinal is selected automatically. When device is explicit, an assertion
+# verifies it matches the CuArray's device.
+function Reactant.ConcretePJRTArray(
+    cu::DenseCuArray{T,N};
+    client::Union{Nothing,Reactant.XLA.PJRT.Client}=nothing,
+    device::Union{Nothing,Reactant.XLA.PJRT.Device}=nothing,
+) where {T,N}
+    theclient = client === nothing ? Reactant.XLA.default_backend() : client
+
+    # Auto-select or validate the PJRT device based on the CuArray's CUDA device
+    cuda_dev_id = CUDA.deviceid(CUDA.device(cu))
+    if device === nothing
+        thedevice = Reactant.XLA.get_addressable_device(theclient, cuda_dev_id)
+    else
+        thedevice = device
+        pjrt_dev_id = Int(Reactant.XLA.device_ordinal(thedevice))
+        cuda_dev_id == pjrt_dev_id || throw(ArgumentError(
+            "CuArray is on CUDA device $cuda_dev_id but target PJRT device has ID $pjrt_dev_id"
+        ))
+    end
+
+    # Synchronize CUDA stream to ensure all writes to cu are complete before
+    # PJRT reads from this memory. See note above re: why we can't pass the
+    # stream handle directly.
+    CUDA.synchronize()
+
+    sizear = collect(Int64, reverse(size(cu)))
+    GC.@preserve cu sizear theclient thedevice begin
+        buf = MLIR.API.BufferFromDevicePointer(
+            theclient.client,
+            Ptr{Cvoid}(UInt(pointer(cu))),
+            Reactant.XLA.primitive_type(T),
+            N,
+            sizear,
+            thedevice.device,
+            Int64(0),  # stream=0: data already synchronized
+        )
+    end
+    async_buf = Reactant.XLA.PJRT.AsyncBuffer(Reactant.XLA.PJRT.Buffer(buf), nothing)
+    shardinfo = Reactant.Sharding.ShardInfo(Reactant.Sharding.NoSharding(), nothing)
+    return Reactant.ConcretePJRTArray{T,N,1}((async_buf,), size(cu), shardinfo)
+end
+
+# Non-contiguous CuArray views (e.g. stride-2 SubArrays) are not DenseCuArray,
+# so they don't dispatch to the method above. Materialize to contiguous first.
+function Reactant.ConcretePJRTArray(
+    cu::SubArray{T,N,<:CUDA.CuArray}; kwargs...
+) where {T,N}
+    return Reactant.ConcretePJRTArray(CUDA.CuArray(cu); kwargs...)
+end
+
+# ConcreteRArray -> CuArray: D2D copy using AwaitBufferReady for synchronization.
+# AwaitBufferReady calls GetReadyFuture().Await() to wait for all PJRT definition
+# events to resolve, then returns the raw device pointer. We then D2D copy into
+# a new CuArray via CUDA.jl's unsafe_copyto! (which handles same-device vs peer
+# transfers and synchronizes by default).
+#
+# Device assertion: the current CUDA device must match the PJRT buffer's device,
+# since the new CuArray is allocated on the current CUDA device.
+function CUDA.CuArray(ra::Reactant.ConcretePJRTArray{T,N,1}) where {T,N}
+    buf = Reactant.get_buffer(ra)
+
+    # Assert current CUDA device matches the PJRT buffer's device
+    pjrt_dev_id = Int(Reactant.XLA.device_ordinal(Reactant.XLA.device(buf)))
+    cuda_dev_id = CUDA.deviceid(CUDA.device())
+    pjrt_dev_id == cuda_dev_id || throw(ArgumentError(
+        "ConcreteRArray buffer is on PJRT device $pjrt_dev_id but current CUDA device is $cuda_dev_id"
+    ))
+
+    cu = CUDA.CuArray{T}(undef, size(ra))
+    n = length(ra)
+    if n > 0
+        GC.@preserve ra cu begin
+            # AwaitBufferReady: waits for definition events, returns synchronized device ptr
+            src_ptr = MLIR.API.AwaitBufferReady(buf.buffer)
+            # unsafe_copyto! with default async=false is synchronous (blocks until copy completes)
+            unsafe_copyto!(pointer(cu), CUDA.CuPtr{T}(UInt(src_ptr)), n)
+        end
+    end
+    return cu
+end
+
 function __init__()
     # Required to unbreak with_profile
     delete!(ENV, "NVTX_INJECTION64_PATH")
