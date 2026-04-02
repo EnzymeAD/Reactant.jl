@@ -15,6 +15,24 @@ using ..Reactant:
 using ReactantCore: ReactantCore
 using GPUArraysCore: GPUArraysCore
 
+const GELU_APPROXIMATION_MAP = Dict(
+    "NONE" => MLIR.API.ENZYMEXLA_GELU_APPROXIMATION_NONE,
+    "TANH" => MLIR.API.ENZYMEXLA_GELU_APPROXIMATION_TANH,
+    "SIGMOID" => MLIR.API.ENZYMEXLA_GELU_APPROXIMATION_SIGMOID,
+)
+
+const LAPACK_TRANSPOSE_MAP = Dict(
+    'N' => MLIR.API.ENZYMEXLA_LAPACK_TRANSPOSE_NONE,
+    'T' => MLIR.API.ENZYMEXLA_LAPACK_TRANSPOSE_TRANSPOSE,
+    'C' => MLIR.API.ENZYMEXLA_LAPACK_TRANSPOSE_CONJUGATE_TRANSPOSE,
+)
+
+const LAPACK_UPLO_MAP = Dict(
+    'U' => MLIR.API.ENZYMEXLA_LAPACK_UPLO_UPPER,
+    'L' => MLIR.API.ENZYMEXLA_LAPACK_UPLO_LOWER,
+    'F' => MLIR.API.ENZYMEXLA_LAPACK_UPLO_FULL,
+)
+
 function _function_macro_error()
     throw(ArgumentError("`caller_function` is not available in this context"))
 end
@@ -3877,13 +3895,13 @@ end
     info_size = batch_sizes
 
     if algorithm == "DEFAULT"
-        algint = 0
+        alg = MLIR.API.ENZYMEXLA_SVD_ALGORITHM_NONE
     elseif algorithm == "QRIteration"
-        algint = 1
+        alg = MLIR.API.ENZYMEXLA_SVD_ALGORITHM_QRITERATION
     elseif algorithm == "DivideAndConquer"
-        algint = 2
+        alg = MLIR.API.ENZYMEXLA_SVD_ALGORITHM_DIVIDEANDCONQUER
     elseif algorithm == "Jacobi"
-        algint = 3
+        alg = MLIR.API.ENZYMEXLA_SVD_ALGORITHM_JACOBI
     else
         error("Unsupported SVD algorithm: $algorithm")
     end
@@ -3895,7 +3913,7 @@ end
         Vt=mlir_type(TracedRArray{T,N}, Vt_size),
         info=mlir_type(TracedRArray{iT,N - 2}, info_size),
         full=full,
-        algorithm=MLIR.API.enzymexlaSVDAlgorithmAttrGet(MLIR.IR.current_context(), algint),
+        algorithm=MLIR.API.enzymexlaSVDAlgorithmAttrGet(MLIR.IR.current_context(), alg),
         location,
     )
 
@@ -4103,21 +4121,15 @@ end
     approximation::String;
     location=mlir_stacktrace("ml.gelu", @__FILE__, @__LINE__),
 )
-    approx = if approximation == "NONE"
-        0
-    elseif approximation == "TANH"
-        1
-    elseif approximation == "SIGMOID"
-        2
-    else
-        error("Invalid gelu approximation: $approximation")
-    end
-    approx = MLIR.API.enzymexlaGeluApproximationAttrGet(
-        MLIR.IR.current_context(), Int32(approx)
-    )
-
     res = MLIR.IR.result(
-        enzymexla.ml_gelu(x.mlir_data; gelu_approximation=approx, location), 1
+        enzymexla.ml_gelu(
+            x.mlir_data;
+            gelu_approximation=MLIR.API.enzymexlaGeluApproximationAttrGet(
+                MLIR.IR.current_context(), GELU_APPROXIMATION_MAP[approximation]
+            ),
+            location,
+        ),
+        1,
     )
 
     if x isa TracedRArray
@@ -4210,41 +4222,19 @@ end
     location=mlir_stacktrace("syrk", @__FILE__, @__LINE__),
 ) where {T,N}
     ctx = MLIR.IR.current_context()
-    uplo_attr = MLIR.API.enzymexlaLapackUploAttrGet(
-        ctx,
-        if uplo == 'U'
-            Int32(1)
-        elseif uplo == 'L'
-            Int32(0)
-        else
-            Int32(2)
-        end,
-    )
-    transpose_attr = MLIR.API.enzymexlaLapackTransposeAttrGet(
-        ctx,
-        if transpose_a == 'N'
-            Int32(0)
-        elseif transpose_a == 'T'
-            Int32(1)
-        elseif transpose_a == 'C'
-            Int32(2)
-        else
-            error("Unknown transpose mode: $transpose_a")
-        end,
-    )
-
-    alpha_ = constant(alpha; location)
-    beta_ = constant(beta; location)
+    uplo_attr = MLIR.API.enzymexlaLapackUploAttrGet(ctx, LAPACK_UPLO_MAP[uplo])
 
     res = MLIR.IR.result(
         enzymexla.blas_syrk(
             A.mlir_data,
             C.mlir_data,
-            alpha_.mlir_data,
-            beta_.mlir_data;
+            constant(alpha; location).mlir_data,
+            constant(beta; location).mlir_data;
             uplo=uplo_attr,
             output_uplo=uplo_attr,
-            transpose=transpose_attr,
+            transpose=MLIR.API.enzymexlaLapackTransposeAttrGet(
+                ctx, LAPACK_TRANSPOSE_MAP[transpose_a]
+            ),
             output=mlir_type(TracedRArray{T,N}, size(C)),
             location,
         ),
