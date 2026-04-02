@@ -2831,8 +2831,14 @@ function compile_mlir!(
         end
     end
 
+    result_sharding = if is_sharded && mlir_fn_res.unique_meshes !== nothing
+        Sharding.Replicated(first(mlir_fn_res.unique_meshes))
+    else
+        Sharding.NoSharding()
+    end
     concrete_result = make_tracer(
-        OrderedIdDict(), traced_result, ("result",), TracedToConcrete; runtime
+        OrderedIdDict(), traced_result, ("result",), TracedToConcrete;
+        runtime, sharding=result_sharding
     )
 
     return Reactant.TracedUtils.CompiledMlirFnResult(
