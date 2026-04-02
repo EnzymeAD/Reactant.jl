@@ -1115,6 +1115,13 @@ function __elem_apply_loop_condition(idx_ref, fn_ref::F, res_ref, args_ref, L_re
     return idx_ref[] < L_ref[]
 end
 
+struct RefFillVector{T}
+    data::T
+end
+
+Base.getindex(rv::RefFillVector, i) = rv.data[]
+Base.broadcastable(x::RefFillVector) = x
+
 function __elem_apply_loop_body(idx_ref, fn_ref::F, res_ref, args_ref, L_ref) where {F}
     args = args_ref[]
     fn = fn_ref[]
@@ -1129,14 +1136,24 @@ function __elem_apply_loop_body(idx_ref, fn_ref::F, res_ref, args_ref, L_ref) wh
     return nothing
 end
 
+scalar_arg(arg) = arg isa Base.RefValue || !(arg isa AbstractArray)
+
+flattenarg(arg) = ReactantCore.materialize_traced_array(vec(arg))
+flattenarg(arg::Ref) = RefFillVector(arg)
+
 function elem_apply_via_while_loop(f, args::Vararg{Any,Nargs}) where {Nargs}
-    @assert allequal(size.(args)) "All args must have the same size"
-    L = length(first(args))
+    non_ref_args = [arg for arg in args if !scalar_arg(arg)]
+    if !isempty(non_ref_args)
+        @assert allequal(size.(non_ref_args)) "All args must have the same size"
+    end
+    out_size = isempty(non_ref_args) ? () : size(first(non_ref_args))
+    L = isempty(non_ref_args) ? 1 : length(first(non_ref_args))
     # flattening the tensors makes the auto-batching pass work nicer
-    flat_args = [ReactantCore.materialize_traced_array(vec(arg)) for arg in args]
+    flat_args = [flattenarg(arg) for arg in args]
 
     # This wont be a mutating function so we can safely execute it once
-    res_tmp = @allowscalar(f([@allowscalar(arg[1]) for arg in flat_args]...))
+    scalar_seed_args = [@allowscalar(arg[1]) for arg in flat_args]
+    res_tmp = @allowscalar(f(scalar_seed_args...))
 
     # TODO: perhaps instead of this logic, we should have
     # `similar(::TracedRArray, TracedRNumber{T}) where T = similar(::TracedRArray, T)`
@@ -1146,7 +1163,12 @@ function elem_apply_via_while_loop(f, args::Vararg{Any,Nargs}) where {Nargs}
     else
         typeof(res_tmp)
     end
-    result = similar(first(flat_args), T_res, L)
+
+    # Before we selected the output container based on the first argument
+    # That doesn't work for cases when StructArrays are involved
+    # Since this is essentially a broadcast I'm reusing this machinery
+    bc = Base.Broadcast.Broadcasted(f, Tuple(args))
+    result = similar(bc, T_res)
 
     ind_var = Ref(0)
     f_ref = Ref(f)
@@ -1160,7 +1182,7 @@ function elem_apply_via_while_loop(f, args::Vararg{Any,Nargs}) where {Nargs}
         (ind_var, f_ref, result_ref, args_ref, limit_ref),
     )
 
-    return ReactantCore.materialize_traced_array(reshape(result, size(first(args))))
+    return ReactantCore.materialize_traced_array(reshape(result, out_size))
 end
 
 function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
