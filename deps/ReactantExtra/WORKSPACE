@@ -51,7 +51,10 @@ sed -i.bak0 "s,//:patches,@enzyme_ad//:patches,g" third_party/*/workspace.bzl
     urls = ["https://github.com/EnzymeAD/Enzyme-JAX/archive/{commit}.tar.gz".format(commit = ENZYMEXLA_COMMIT)],
 )
 
-NEW_XLA_PATCHES = []
+NEW_XLA_PATCHES = [
+    # Add gfx1102 (RX 7600) to StreamExecutor's supported GPU list
+    """sed -i 's/"gfx1103", "gfx1150"/"gfx1102", "gfx1103", "gfx1150"/' xla/stream_executor/rocm/rocm_compute_capability.h""",
+]
 
 LLVM_TARGETS = [
     "AMDGPU",
