@@ -840,6 +840,7 @@ function optimization_passes(
         "abs_positive_simplify",
         "transpose_elementwise_transpose",
         "select_comp_iota_const_simplify<1>",
+        "select_broadcast_iota",
         "sign_abs_simplify<1>",
         "broadcastindim_is_reshape",
         "reduce_window_wrap<1>",
@@ -1258,6 +1259,7 @@ function optimization_passes(
         append!(
             transform_passes_list,
             [
+                "concat_broadcast_slice",
                 "reshape_concat",
                 "reshape_dus",
                 "dot_reshape_pad<1>",
