@@ -701,6 +701,12 @@ const DUS_SLICE_SIMPLIFY = Ref(true)
 const CONCATS_TO_DUS = Ref(false)
 const WHILE_UNROLL_THRESHOLD = Ref(4)
 
+function _propagate_direction(sym::Symbol)
+    sym === :up && return MLIR.API.ENZYMEXLA_PROPAGATE_UP
+    sym === :down && return MLIR.API.ENZYMEXLA_PROPAGATE_DOWN
+    return MLIR.API.ENZYMEXLA_PROPAGATE_NONE
+end
+
 # Optimization passes via transform dialect
 function optimization_passes(
     compile_options::CompileOptions;
@@ -713,12 +719,6 @@ function optimization_passes(
     raise_shlo_to_blas_lapack::Bool=true,
     self_to_convolution::Bool=false,
 )
-    function _propagate_direction(sym::Symbol)
-        sym === :up && return MLIR.API.ENZYMEXLA_PROPAGATE_UP
-        sym === :down && return MLIR.API.ENZYMEXLA_PROPAGATE_DOWN
-        return MLIR.API.ENZYMEXLA_PROPAGATE_NONE
-    end
-
     options = MLIR.API.EnzymeXLATransformPassesOptions(
         compile_options.max_constant_threshold,          # max_constant_threshold
         WHILE_UNROLL_THRESHOLD[],                        # while_unroll_threshold
