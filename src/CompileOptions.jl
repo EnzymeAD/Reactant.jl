@@ -38,6 +38,7 @@ communication.
     updatewithoutcorners_to_select::Int = 1
     multirotate_custom_call::Int = 1
     multislice_custom_call::Int = 1
+    multipad_custom_call::Int = 1
     wrap_custom_call::Int = 1
 end
 
