@@ -648,6 +648,40 @@ function init(; result_0::IR.Type, location=Location())
     )
 end
 
+function jacobian(
+    inputs::Vector{Value};
+    outputs::Vector{IR.Type},
+    fn,
+    activity,
+    ret_activity,
+    width=nothing,
+    strong_zero=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[outputs...,]
+    operands = Value[inputs...,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[
+        NamedAttribute("fn", fn),
+        NamedAttribute("activity", activity),
+        NamedAttribute("ret_activity", ret_activity),
+    ]
+    !isnothing(width) && push!(attributes, NamedAttribute("width", width))
+    !isnothing(strong_zero) && push!(attributes, NamedAttribute("strong_zero", strong_zero))
+
+    return create_operation(
+        "enzyme.jacobian",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function load(cache::Value, indices::Vector{Value}; result::IR.Type, location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[cache, indices...]

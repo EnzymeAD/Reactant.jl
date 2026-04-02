@@ -13034,6 +13034,24 @@ function stablehloTypeIsAToken(type)
     @ccall mlir_c.stablehloTypeIsAToken(type::MlirType)::Bool
 end
 
+function stablehloFutureTypeGet(ctx, nTypes, types)
+    @ccall mlir_c.stablehloFutureTypeGet(
+        ctx::MlirContext, nTypes::Cptrdiff_t, types::Ptr{MlirType}
+    )::MlirType
+end
+
+function stablehloTypeIsAFuture(type)
+    @ccall mlir_c.stablehloTypeIsAFuture(type::MlirType)::Bool
+end
+
+function stablehloFutureTypeGetNumTypes(type)
+    @ccall mlir_c.stablehloFutureTypeGetNumTypes(type::MlirType)::Cptrdiff_t
+end
+
+function stablehloFutureTypeGetType(type, pos)
+    @ccall mlir_c.stablehloFutureTypeGetType(type::MlirType, pos::Cptrdiff_t)::MlirType
+end
+
 function sdyAttributeIsAMeshAxisAttr(attr)
     @ccall mlir_c.sdyAttributeIsAMeshAxisAttr(attr::MlirAttribute)::Bool
 end
@@ -13496,14 +13514,14 @@ function mlirMosaicGpuTileTransformAttrGet(ctx, tiling, tiling_size)
     )::MlirAttribute
 end
 
-function mlirMosaicGpuTileTransformAttrGetTilingSize(attr)
-    @ccall mlir_c.mlirMosaicGpuTileTransformAttrGetTilingSize(attr::MlirAttribute)::Int32
+function mlirMosaicGpuTileTransformAttrGetTiling(attr)
+    @ccall mlir_c.mlirMosaicGpuTileTransformAttrGetTiling(
+        attr::MlirAttribute
+    )::MlirAttribute
 end
 
-function mlirMosaicGpuTileTransformAttrGetTiling(attr, index)
-    @ccall mlir_c.mlirMosaicGpuTileTransformAttrGetTiling(
-        attr::MlirAttribute, index::Int32
-    )::Int32
+function mlirMosaicGpuTileTransformAttrGetTypeID()
+    @ccall mlir_c.mlirMosaicGpuTileTransformAttrGetTypeID()::MlirTypeID
 end
 
 function mlirMosaicGpuIsATransposeTransformAttr(attr)
@@ -13516,16 +13534,14 @@ function mlirMosaicGpuTransposeTransformAttrGet(ctx, permutation, permutation_si
     )::MlirAttribute
 end
 
-function mlirMosaicGpuTransposeTransformAttrGetPermutationSize(attr)
-    @ccall mlir_c.mlirMosaicGpuTransposeTransformAttrGetPermutationSize(
+function mlirMosaicGpuTransposeTransformAttrGetPermutation(attr)
+    @ccall mlir_c.mlirMosaicGpuTransposeTransformAttrGetPermutation(
         attr::MlirAttribute
-    )::Int32
+    )::MlirAttribute
 end
 
-function mlirMosaicGpuTransposeTransformAttrGetPermutation(attr, index)
-    @ccall mlir_c.mlirMosaicGpuTransposeTransformAttrGetPermutation(
-        attr::MlirAttribute, index::Int32
-    )::Int32
+function mlirMosaicGpuTransposeTransformAttrGetTypeID()
+    @ccall mlir_c.mlirMosaicGpuTransposeTransformAttrGetTypeID()::MlirTypeID
 end
 
 function mlirMosaicGpuIsASwizzleTransformAttr(attr)
@@ -13542,6 +13558,44 @@ function mlirMosaicGpuSwizzleTransformAttrGetSwizzle(attr)
     @ccall mlir_c.mlirMosaicGpuSwizzleTransformAttrGetSwizzle(attr::MlirAttribute)::Int32
 end
 
+function mlirMosaicGpuSwizzleTransformAttrGetTypeID()
+    @ccall mlir_c.mlirMosaicGpuSwizzleTransformAttrGetTypeID()::MlirTypeID
+end
+
+function mlirMosaicGpuIsACopyPartitionAttr(attr)
+    @ccall mlir_c.mlirMosaicGpuIsACopyPartitionAttr(attr::MlirAttribute)::Bool
+end
+
+function mlirMosaicGpuIsACopyReplicatedAttr(attr)
+    @ccall mlir_c.mlirMosaicGpuIsACopyReplicatedAttr(attr::MlirAttribute)::Bool
+end
+
+function mlirMosaicGpuCopyReplicatedAttrGet(ctx)
+    @ccall mlir_c.mlirMosaicGpuCopyReplicatedAttrGet(ctx::MlirContext)::MlirAttribute
+end
+
+function mlirMosaicGpuCopyReplicatedAttrGetTypeID()
+    @ccall mlir_c.mlirMosaicGpuCopyReplicatedAttrGetTypeID()::MlirTypeID
+end
+
+function mlirMosaicGpuIsACopyPartitionedAttr(attr)
+    @ccall mlir_c.mlirMosaicGpuIsACopyPartitionedAttr(attr::MlirAttribute)::Bool
+end
+
+function mlirMosaicGpuCopyPartitionedAttrGet(ctx, axis)
+    @ccall mlir_c.mlirMosaicGpuCopyPartitionedAttrGet(
+        ctx::MlirContext, axis::Int32
+    )::MlirAttribute
+end
+
+function mlirMosaicGpuCopyPartitionedAttrGetAxis(attr)
+    @ccall mlir_c.mlirMosaicGpuCopyPartitionedAttrGetAxis(attr::MlirAttribute)::Int32
+end
+
+function mlirMosaicGpuCopyPartitionedAttrGetTypeID()
+    @ccall mlir_c.mlirMosaicGpuCopyPartitionedAttrGetTypeID()::MlirTypeID
+end
+
 function mlirGetDialectHandle__mosaic_gpu__()
     @ccall mlir_c.mlirGetDialectHandle__mosaic_gpu__()::MlirDialectHandle
 end
@@ -13552,53 +13606,171 @@ function mlirDialectRegistryInsertMosaicGpuInlinerExtensions(registry)
     )::Cvoid
 end
 
-function enzymexlaLapackLayoutAttrGet(ctx, col_major)
+function mlirMosaicGpuIsABarrierType(type)
+    @ccall mlir_c.mlirMosaicGpuIsABarrierType(type::MlirType)::Bool
+end
+
+function mlirMosaicGpuBarrierTypeGet(ctx, orders_tensor_core)
+    @ccall mlir_c.mlirMosaicGpuBarrierTypeGet(
+        ctx::MlirContext, orders_tensor_core::Bool
+    )::MlirType
+end
+
+function mlirMosaicGpuBarrierTypeGetOrdersTensorCore(type)
+    @ccall mlir_c.mlirMosaicGpuBarrierTypeGetOrdersTensorCore(type::MlirType)::Bool
+end
+
+function mlirMosaicGpuBarrierTypeGetTypeID()
+    @ccall mlir_c.mlirMosaicGpuBarrierTypeGetTypeID()::MlirTypeID
+end
+
+@cenum EnzymeXlaLapackLayout::UInt32 begin
+    ENZYMEXLA_LAPACK_LAYOUT_COLUMN_MAJOR = 0x0000000000000000
+    ENZYMEXLA_LAPACK_LAYOUT_ROW_MAJOR = 0x0000000000000001
+end
+
+function enzymexlaLapackLayoutAttrGet(ctx, layout)
     @ccall mlir_c.enzymexlaLapackLayoutAttrGet(
-        ctx::MlirContext, col_major::UInt8
+        ctx::MlirContext, layout::EnzymeXlaLapackLayout
     )::MlirAttribute
 end
 
-function enzymexlaLapackTransposeAttrGet(ctx, mode)
+@cenum EnzymeXlaLapackTranspose::UInt32 begin
+    ENZYMEXLA_LAPACK_TRANSPOSE_NONE = 0x0000000000000000
+    ENZYMEXLA_LAPACK_TRANSPOSE_TRANSPOSE = 0x0000000000000001
+    ENZYMEXLA_LAPACK_TRANSPOSE_CONJUGATE_TRANSPOSE = 0x0000000000000002
+end
+
+function enzymexlaLapackTransposeAttrGet(ctx, transpose)
     @ccall mlir_c.enzymexlaLapackTransposeAttrGet(
-        ctx::MlirContext, mode::Int32
+        ctx::MlirContext, transpose::EnzymeXlaLapackTranspose
     )::MlirAttribute
 end
 
-function enzymexlaLapackSideAttrGet(ctx, left_side)
+@cenum EnzymeXlaLapackSide::UInt32 begin
+    ENZYMEXLA_LAPACK_SIDE_LEFT = 0x0000000000000000
+    ENZYMEXLA_LAPACK_SIDE_RIGHT = 0x0000000000000001
+end
+
+function enzymexlaLapackSideAttrGet(ctx, side)
     @ccall mlir_c.enzymexlaLapackSideAttrGet(
-        ctx::MlirContext, left_side::UInt8
+        ctx::MlirContext, side::EnzymeXlaLapackSide
     )::MlirAttribute
 end
 
-function enzymexlaLapackUploAttrGet(ctx, mode)
-    @ccall mlir_c.enzymexlaLapackUploAttrGet(ctx::MlirContext, mode::Int32)::MlirAttribute
+@cenum EnzymeXlaLapackUplo::UInt32 begin
+    ENZYMEXLA_LAPACK_UPLO_LOWER = 0x0000000000000000
+    ENZYMEXLA_LAPACK_UPLO_UPPER = 0x0000000000000001
+    ENZYMEXLA_LAPACK_UPLO_FULL = 0x0000000000000002
 end
 
-function enzymexlaQRAlgorithmAttrGet(ctx, mode)
-    @ccall mlir_c.enzymexlaQRAlgorithmAttrGet(ctx::MlirContext, mode::Int32)::MlirAttribute
+function enzymexlaLapackUploAttrGet(ctx, uplo)
+    @ccall mlir_c.enzymexlaLapackUploAttrGet(
+        ctx::MlirContext, uplo::EnzymeXlaLapackUplo
+    )::MlirAttribute
 end
 
-function enzymexlaSVDAlgorithmAttrGet(ctx, mode)
-    @ccall mlir_c.enzymexlaSVDAlgorithmAttrGet(ctx::MlirContext, mode::Int32)::MlirAttribute
+@cenum EnzymeXlaQRAlgorithm::UInt32 begin
+    ENZYMEXLA_QR_ALGORITHM_NONE = 0x0000000000000000
+    ENZYMEXLA_QR_ALGORITHM_HOUSEHOLDER = 0x0000000000000001
 end
 
-function enzymexlaGeluApproximationAttrGet(ctx, mode)
+function enzymexlaQRAlgorithmAttrGet(ctx, algorithm)
+    @ccall mlir_c.enzymexlaQRAlgorithmAttrGet(
+        ctx::MlirContext, algorithm::EnzymeXlaQRAlgorithm
+    )::MlirAttribute
+end
+
+@cenum EnzymeXlaSVDAlgorithm::UInt32 begin
+    ENZYMEXLA_SVD_ALGORITHM_NONE = 0x0000000000000000
+    ENZYMEXLA_SVD_ALGORITHM_QRITERATION = 0x0000000000000001
+    ENZYMEXLA_SVD_ALGORITHM_DIVIDEANDCONQUER = 0x0000000000000002
+    ENZYMEXLA_SVD_ALGORITHM_JACOBI = 0x0000000000000003
+end
+
+function enzymexlaSVDAlgorithmAttrGet(ctx, algorithm)
+    @ccall mlir_c.enzymexlaSVDAlgorithmAttrGet(
+        ctx::MlirContext, algorithm::EnzymeXlaSVDAlgorithm
+    )::MlirAttribute
+end
+
+@cenum EnzymeXlaGeluApproximation::UInt32 begin
+    ENZYMEXLA_GELU_APPROXIMATION_NONE = 0x0000000000000000
+    ENZYMEXLA_GELU_APPROXIMATION_TANH = 0x0000000000000001
+    ENZYMEXLA_GELU_APPROXIMATION_SIGMOID = 0x0000000000000002
+end
+
+function enzymexlaGeluApproximationAttrGet(ctx, approximation)
     @ccall mlir_c.enzymexlaGeluApproximationAttrGet(
-        ctx::MlirContext, mode::Int32
+        ctx::MlirContext, approximation::EnzymeXlaGeluApproximation
     )::MlirAttribute
 end
 
-function enzymexlaMPIDatatypeAttrGet(ctx, mode)
-    @ccall mlir_c.enzymexlaMPIDatatypeAttrGet(ctx::MlirContext, mode::Int32)::MlirAttribute
+@cenum EnzymeXlaMPIDatatype::UInt32 begin
+    ENZYMEXLA_MPI_DATATYPE_NULL = 0x0000000000000000
+    ENZYMEXLA_MPI_INT8_T = 0x0000000000000001
+    ENZYMEXLA_MPI_UINT8_T = 0x0000000000000002
+    ENZYMEXLA_MPI_INT16_T = 0x0000000000000003
+    ENZYMEXLA_MPI_UINT16_T = 0x0000000000000004
+    ENZYMEXLA_MPI_INT32_T = 0x0000000000000005
+    ENZYMEXLA_MPI_UINT32_T = 0x0000000000000006
+    ENZYMEXLA_MPI_INT64_T = 0x0000000000000007
+    ENZYMEXLA_MPI_UINT64_T = 0x0000000000000008
+    ENZYMEXLA_MPI_BYTE = 0x0000000000000009
+    ENZYMEXLA_MPI_SHORT = 0x000000000000000a
+    ENZYMEXLA_MPI_UNSIGNED_SHORT = 0x000000000000000b
+    ENZYMEXLA_MPI_INT = 0x000000000000000c
+    ENZYMEXLA_MPI_UNSIGNED = 0x000000000000000d
+    ENZYMEXLA_MPI_LONG = 0x000000000000000e
+    ENZYMEXLA_MPI_UNSIGNED_LONG = 0x000000000000000f
+    ENZYMEXLA_MPI_LONG_LONG_INT = 0x0000000000000010
+    ENZYMEXLA_MPI_UNSIGNED_LONG_LONG = 0x0000000000000011
+    ENZYMEXLA_MPI_CHAR = 0x0000000000000012
+    ENZYMEXLA_MPI_SIGNED_CHAR = 0x0000000000000013
+    ENZYMEXLA_MPI_UNSIGNED_CHAR = 0x0000000000000014
+    ENZYMEXLA_MPI_WCHAR = 0x0000000000000015
+    ENZYMEXLA_MPI_FLOAT = 0x0000000000000016
+    ENZYMEXLA_MPI_DOUBLE = 0x0000000000000017
+    ENZYMEXLA_MPI_C_FLOAT_COMPLEX = 0x0000000000000018
+    ENZYMEXLA_MPI_C_DOUBLE_COMPLEX = 0x0000000000000019
+    ENZYMEXLA_MPI_C_BOOL = 0x000000000000001a
 end
 
-function enzymexlaMPIOpAttrGet(ctx, mode)
-    @ccall mlir_c.enzymexlaMPIOpAttrGet(ctx::MlirContext, mode::Int32)::MlirAttribute
+function enzymexlaMPIDatatypeAttrGet(ctx, datatype)
+    @ccall mlir_c.enzymexlaMPIDatatypeAttrGet(
+        ctx::MlirContext, datatype::EnzymeXlaMPIDatatype
+    )::MlirAttribute
 end
 
-function enzymexlaGuaranteedAnalysisResultAttrGet(ctx, mode)
+@cenum EnzymeXlaMPIOp::UInt32 begin
+    ENZYMEXLA_MPI_OP_NULL = 0x0000000000000000
+    ENZYMEXLA_MPI_BAND = 0x0000000000000001
+    ENZYMEXLA_MPI_BOR = 0x0000000000000002
+    ENZYMEXLA_MPI_BXOR = 0x0000000000000003
+    ENZYMEXLA_MPI_LAND = 0x0000000000000004
+    ENZYMEXLA_MPI_LOR = 0x0000000000000005
+    ENZYMEXLA_MPI_LXOR = 0x0000000000000006
+    ENZYMEXLA_MPI_MAX = 0x0000000000000007
+    ENZYMEXLA_MPI_MIN = 0x0000000000000008
+    ENZYMEXLA_MPI_PROD = 0x0000000000000009
+    ENZYMEXLA_MPI_REPLACE = 0x000000000000000a
+    ENZYMEXLA_MPI_SUM = 0x000000000000000b
+    ENZYMEXLA_MPI_NO_OP = 0x000000000000000c
+end
+
+function enzymexlaMPIOpAttrGet(ctx, op)
+    @ccall mlir_c.enzymexlaMPIOpAttrGet(ctx::MlirContext, op::EnzymeXlaMPIOp)::MlirAttribute
+end
+
+@cenum EnzymeXlaGuaranteedAnalysisResult::UInt32 begin
+    ENZYMEXLA_GUARANTEED_ANALYSIS_RESULT_GUARANTEED = 0x0000000000000000
+    ENZYMEXLA_GUARANTEED_ANALYSIS_RESULT_NOTGUARANTEED = 0x0000000000000001
+    ENZYMEXLA_GUARANTEED_ANALYSIS_RESULT_UNKNOWN = 0x0000000000000002
+end
+
+function enzymexlaGuaranteedAnalysisResultAttrGet(ctx, result)
     @ccall mlir_c.enzymexlaGuaranteedAnalysisResultAttrGet(
-        ctx::MlirContext, mode::Int32
+        ctx::MlirContext, result::EnzymeXlaGuaranteedAnalysisResult
     )::MlirAttribute
 end
 
