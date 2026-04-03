@@ -235,7 +235,7 @@ end
 
 function spinup_loop!(model)
     Δt = model.clock.last_Δt
-    @trace mincut = true track_numbers = false for i in 1:10
+    @trace mincut = true track_numbers = false for i in 1:1000
         time_step!(model, Δt)
     end
     return nothing
@@ -267,7 +267,7 @@ end
 
 function loop!(model)
     Δt = model.clock.last_Δt
-    @trace mincut = true checkpointing = true track_numbers = false for i in 1:9
+    @trace mincut = true checkpointing = true track_numbers = false for i in 1:25
         time_step!(model, Δt)
     end
     return nothing
@@ -375,7 +375,31 @@ function run_abernathey_channel_benchmark!(
     u_wind_stress = u_wind_stress_init(model.grid, parameters)
     v_wind_stress = v_wind_stress_init(model.grid, parameters)
     Tᵢ, Sᵢ = temperature_salinity_init(model.grid, parameters)
-    mld = Field{Center,Center,Nothing}(model.grid) # Not used for now
+    Δz_ra = Reactant.to_rarray(Δz)
+
+    rspinup_reentrant_channel_model! = @compile raise_first = true raise = true sync = true spinup_reentrant_channel_model!(
+        model, Tᵢ, Sᵢ, u_wind_stress, v_wind_stress, T_flux
+    )
+
+    #restimate_tracer_error = @compile raise_first=true raise=true sync=true estimate_tracer_error(
+    #    model, Tᵢ, Sᵢ, u_wind_stress, v_wind_stress, T_flux, Δz
+    #)
+
+    rspinup_reentrant_channel_model!(model, Tᵢ, Sᵢ, u_wind_stress, v_wind_stress, T_flux)
+    @allowscalar set!(Tᵢ, model.tracers.T)
+    @allowscalar set!(Sᵢ, model.tracers.S)
+
+    # Profile and time the spinup_reentrant_channel_model!
+    #Reactant.Profiler.@profile restimate_tracer_error(model, Tᵢ, Sᵢ, u_wind_stress, v_wind_stress, T_flux, Δz)
+
+    
+    # Now AD test, make the grid again:
+    grid = make_grid(architecture, Nx, Ny, Nz, z_faces)
+    model = build_model(grid, Δt₀, parameters)
+    T_flux = T_flux_init(model.grid, parameters)
+    u_wind_stress = u_wind_stress_init(model.grid, parameters)
+    v_wind_stress = v_wind_stress_init(model.grid, parameters)
+    Tᵢ, Sᵢ = temperature_salinity_init(model.grid, parameters)
     Δz_ra = Reactant.to_rarray(Δz)
 
     dmodel = Enzyme.make_zero(model)
@@ -384,51 +408,23 @@ function run_abernathey_channel_benchmark!(
     du_wind_stress = Field{Face,Center,Nothing}(model.grid)
     dv_wind_stress = Field{Center,Face,Nothing}(model.grid)
     dT_flux = Field{Center,Center,Nothing}(model.grid)
-    dmld = Field{Center,Center,Nothing}(model.grid)
     dΔz_ra = Enzyme.make_zero(Δz_ra)
 
+    # Spinup the model for a sufficient amount of time, save the T and S from this state:
+    rspinup_reentrant_channel_model!(model, Tᵢ, Sᵢ, u_wind_stress, v_wind_stress, T_flux)
+    @allowscalar set!(Tᵢ, model.tracers.T)
+    @allowscalar set!(Sᵢ, model.tracers.S)
+
+    rdifferentiate_tracer_error = @compile raise_first=true raise=true sync=true differentiate_tracer_error(
+        model, Tᵢ, Sᵢ, u_wind_stress, v_wind_stress, T_flux, Δz_ra, dmodel, dTᵢ, dSᵢ, du_wind_stress, dv_wind_stress, dT_flux, dΔz_ra
+    )
+
     # Profile and time the differentiate_tracer_error
-    full_benchmark_name = "Oceananigans/DifferentiateTracerError/$(backend)/Reverse"
-
-    prof_result = Reactant.Profiler.profile_with_xprof(
-        differentiate_tracer_error,
-        model,
-        Tᵢ,
-        Sᵢ,
-        u_wind_stress,
-        v_wind_stress,
-        T_flux,
-        Δz_ra,
-        dmodel,
-        dTᵢ,
-        dSᵢ,
-        du_wind_stress,
-        dv_wind_stress,
-        dT_flux,
-        dΔz_ra;
-        nrepeat=10,
-        warmup=1,
-        compile_options=CompileOptions(; raise=true, raise_first=true),
-    )
-    results["Runtime (s)"][full_benchmark_name] =
-        prof_result.profiling_result.runtime_ns / 1e9
-    results["TFLOP/s"][full_benchmark_name] =
-        if prof_result.profiling_result.metrics_data === nothing
-            -1
-        else
-            prof_result.profiling_result.metrics_data.raw_flops_rate / 1e12
-        end
-
-    print_stmt = @sprintf(
-        "%100s     :     %.5gs    %.5g TFLOP/s",
-        full_benchmark_name,
-        results["Runtime (s)"][full_benchmark_name],
-        results["TFLOP/s"][full_benchmark_name]
-    )
-    @info print_stmt
-
+    Reactant.Profiler.@profile rdifferentiate_tracer_error(model, Tᵢ, Sᵢ, u_wind_stress, v_wind_stress, T_flux, Δz_ra, dmodel, dTᵢ, dSᵢ, du_wind_stress, dv_wind_stress, dT_flux, dΔz_ra)
+    
     return nothing
 end
+
 
 if abspath(PROGRAM_FILE) == @__FILE__
     backend = get_backend()
