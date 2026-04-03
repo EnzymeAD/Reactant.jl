@@ -959,6 +959,7 @@ function compile(job)
             throw(GPUCompiler.InvalidIRError(job, errors))
         end
         # LLVM.strip_debuginfo!(mod)
+        dl = string(LLVM.datalayout(mod))
         modstr = string(mod)
         # This is a bit weird since we're taking a module from julia's llvm into reactant's llvm version
         # it is probably safer to reparse a string using the right llvm module api, so we will do that.
@@ -967,7 +968,17 @@ function compile(job)
         )
         @assert mmod != C_NULL
 
-        linkRes = MLIR.API.LinkInModule(MLIR.IR.current_module(), mmod, entryname)
+        cur_module = MLIR.IR.current_module()
+        linkRes = MLIR.API.LinkInModule(cur_module, mmod, entryname)
+
+        dl_attr_name = "llvm.data_layout"
+        prevdlattr = MLIR.IR.getattr(MLIR.IR.Operation(cur_module), dl_attr_name)
+        if !isnothing(prevdlattr)
+            prevdl = String(prevdlattr)
+            @assert prevdl == dl "data layout mismatch, tried compiling cuda kernels for different target machines?"
+        else
+            MLIR.IR.setattr!(MLIR.IR.Operation(cur_module), dl_attr_name, MLIR.IR.Attribute(dl))
+        end
 
         String(Reactant.TracedUtils.get_attribute_by_name(linkRes, "sym_name"))
     end
@@ -1175,12 +1186,12 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
         MLIR.IR.setattr!(
             wrapfunc,
             "enzymexla.float_type",
-            MLIR.IR.Attribute(MLIR.API.mlirTypeAttrGet(MLIR.IR.Type(Core.BFloat16))),
+            MLIR.IR.Attribute(MLIR.IR.Type(Core.BFloat16)),
         )
         MLIR.IR.setattr!(
             wrapfunc,
             "enzymexla.src_float_type",
-            MLIR.IR.Attribute(MLIR.API.mlirTypeAttrGet(MLIR.IR.Type(Core.Float16)))
+            MLIR.IR.Attribute(MLIR.IR.Type(Core.Float16)),
         )
     end
     for i in 1:length(wrapper_tys)
