@@ -1411,11 +1411,6 @@ Reactant.@reactant_overlay @noinline function CUDA.cufunction(
         # compile the function
         cache = llvm_compiler_cache(MLIR.IR.current_module())
         effective_tt = @static isdefined(Core, :BFloat16) ? _substitute_bfloat16_tt(tt) : tt
-
-        if effective_tt !== tt
-            @info "compiling bf16" name = nameof(F) effective_tt tt
-        end
-
         source = CUDA.methodinstance(F, effective_tt)
         # cuda = CUDA.active_state()
         device = nothing # cuda.device
