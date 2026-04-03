@@ -1177,6 +1177,11 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
             "enzymexla.float_type",
             MLIR.IR.Attribute(MLIR.API.mlirTypeAttrGet(MLIR.IR.Type(Core.BFloat16))),
         )
+        MLIR.IR.setattr!(
+            wrapfunc,
+            "enzymexla.src_float_type",
+            MLIR.IR.Attribute(MLIR.API.mlirTypeAttrGet(MLIR.IR.Type(Core.Float16)))
+        )
     end
     for i in 1:length(wrapper_tys)
         MLIR.API.ReactantFuncSetArgAttr(
@@ -1385,7 +1390,7 @@ end
 
 @static if isdefined(Core, :BFloat16)
     function _bfloat16_to_float32_type(@nospecialize(T))
-        T === Core.BFloat16 && return Float32
+        T === Core.BFloat16 && return Float16
         T isa DataType || return T
         isempty(T.parameters) && return T
         new_params = Any[_bfloat16_to_float32_type(p) for p in T.parameters]
@@ -1406,6 +1411,11 @@ Reactant.@reactant_overlay @noinline function CUDA.cufunction(
         # compile the function
         cache = llvm_compiler_cache(MLIR.IR.current_module())
         effective_tt = @static isdefined(Core, :BFloat16) ? _substitute_bfloat16_tt(tt) : tt
+
+        if effective_tt !== tt
+            @info "compiling bf16" name = nameof(F) effective_tt tt
+        end
+
         source = CUDA.methodinstance(F, effective_tt)
         # cuda = CUDA.active_state()
         device = nothing # cuda.device
