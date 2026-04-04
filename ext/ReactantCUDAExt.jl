@@ -971,14 +971,14 @@ function compile(job)
         cur_module = MLIR.IR.current_module()
         linkRes = MLIR.API.LinkInModule(cur_module, mmod, entryname)
 
-        #dl_attr_name = "llvm.data_layout"
-        #prevdlattr = MLIR.IR.getattr(MLIR.IR.Operation(cur_module), dl_attr_name)
-        #if !isnothing(prevdlattr)
-        #    prevdl = String(prevdlattr)
-        #    @assert prevdl == dl "data layout mismatch, tried compiling cuda kernels for different target machines?"
-        #else
-        #    MLIR.IR.setattr!(MLIR.IR.Operation(cur_module), dl_attr_name, MLIR.IR.Attribute(dl))
-        #end
+        dl_attr_name = "llvm.data_layout"
+        prevdlattr = MLIR.IR.getattr(MLIR.IR.Operation(cur_module), dl_attr_name)
+        if !isnothing(prevdlattr)
+            prevdl = String(prevdlattr)
+            @assert prevdl == dl "data layout mismatch, tried compiling cuda kernels for different target machines?"
+        else
+            MLIR.IR.setattr!(MLIR.IR.Operation(cur_module), dl_attr_name, MLIR.IR.Attribute(dl))
+        end
 
         String(Reactant.TracedUtils.get_attribute_by_name(linkRes, "sym_name"))
     end
