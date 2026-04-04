@@ -2018,7 +2018,7 @@ function blas_trmm(
     side,
     uplo,
     transpose,
-    diag,
+    unit_diagonal=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[output,]
@@ -2029,8 +2029,9 @@ function blas_trmm(
         NamedAttribute("side", side),
         NamedAttribute("uplo", uplo),
         NamedAttribute("transpose", transpose),
-        NamedAttribute("diag", diag),
     ]
+    !isnothing(unit_diagonal) &&
+        push!(attributes, NamedAttribute("unit_diagonal", unit_diagonal))
 
     return create_operation(
         "enzymexla.blas.trmm",
@@ -2059,7 +2060,7 @@ function blas_trsm(
     side,
     uplo,
     transa,
-    diag,
+    unit_diagonal=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[output,]
@@ -2070,8 +2071,9 @@ function blas_trsm(
         NamedAttribute("side", side),
         NamedAttribute("uplo", uplo),
         NamedAttribute("transa", transa),
-        NamedAttribute("diag", diag),
     ]
+    !isnothing(unit_diagonal) &&
+        push!(attributes, NamedAttribute("unit_diagonal", unit_diagonal))
 
     return create_operation(
         "enzymexla.blas.trsm",
