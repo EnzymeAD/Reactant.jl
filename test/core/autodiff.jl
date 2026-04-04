@@ -646,3 +646,14 @@ end
     model = TwoArgStruct(ConcreteRNumber(0), Reactant.to_rarray(ones(Float32, 3)))
     @jit differentiate_two_arg_fn(model)
 end
+
+function return_arg(x)
+    return x
+end
+
+@testset "Return Argument ForwardMode" begin
+    x = Reactant.to_rarray([1.0, 2.0])
+    dx = Reactant.to_rarray([3.0, 4.0])
+    res = @jit Enzyme.autodiff(Forward, return_arg, Duplicated(x, dx))
+    @test res[1] ≈ dx
+end
