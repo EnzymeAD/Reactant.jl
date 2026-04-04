@@ -2,6 +2,7 @@
 Adapt = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
 Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"
 ArrayInterface = "4fba245c-0d91-5ea0-9b3e-6abc04ee57a9"
+BFloat16s = "ab4f0b2a-ad5b-11e8-123f-65d77653426b"
 CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
 CondaPkg = "992eb4ea-22a4-4c89-a5bb-47a3300528ab"
 DLFP8Types = "f4c16678-4a16-415b-82ef-ed337c5d6c7c"
