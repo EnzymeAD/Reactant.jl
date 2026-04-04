@@ -92,5 +92,3 @@ end
     @test out isa ConcreteRArray
     @test @jit(sum(sr)) ≈ sum(s)
 end
-
-
