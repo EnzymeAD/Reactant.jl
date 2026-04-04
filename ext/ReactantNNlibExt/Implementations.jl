@@ -27,14 +27,14 @@ end
 
 function NNlib.softmax!(out::AnyTracedRArray{T,N}, x::AbstractArray; dims=1) where {T,N}
     x = T.(materialize_traced_array(x))
-    res = @opcall softmax(x; dims=collect(Int64, dims))
+    res = @opcall softmax(x; dims=vec(collect(Int64, dims)))
     copyto!(out, res)
     return out
 end
 
 function NNlib.logsoftmax!(out::AnyTracedRArray{T}, x::AbstractArray; dims=1) where {T}
     x = T.(materialize_traced_array(x))
-    res = @opcall logsoftmax(x; dims=collect(Int64, dims))
+    res = @opcall logsoftmax(x; dims=vec(collect(Int64, dims)))
     copyto!(out, res)
     return out
 end

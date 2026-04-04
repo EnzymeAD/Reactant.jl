@@ -33,6 +33,13 @@ const LAPACK_UPLO_MAP = Dict(
     'F' => MLIR.API.ENZYMEXLA_LAPACK_UPLO_FULL,
 )
 
+const SVD_ALGORITHM_MAP = Dict(
+    "DEFAULT" => MLIR.API.ENZYMEXLA_SVD_ALGORITHM_NONE,
+    "QRIteration" => MLIR.API.ENZYMEXLA_SVD_ALGORITHM_QRITERATION,
+    "Jacobi" => MLIR.API.ENZYMEXLA_SVD_ALGORITHM_JACOBI,
+    "DivideAndConquer" => MLIR.API.ENZYMEXLA_SVD_ALGORITHM_DIVIDEANDCONQUER,
+)
+
 function _function_macro_error()
     throw(ArgumentError("`caller_function` is not available in this context"))
 end
@@ -3894,18 +3901,6 @@ end
     Vt_size = (batch_sizes..., full ? n : r, n)
     info_size = batch_sizes
 
-    if algorithm == "DEFAULT"
-        alg = MLIR.API.ENZYMEXLA_SVD_ALGORITHM_NONE
-    elseif algorithm == "QRIteration"
-        alg = MLIR.API.ENZYMEXLA_SVD_ALGORITHM_QRITERATION
-    elseif algorithm == "DivideAndConquer"
-        alg = MLIR.API.ENZYMEXLA_SVD_ALGORITHM_DIVIDEANDCONQUER
-    elseif algorithm == "Jacobi"
-        alg = MLIR.API.ENZYMEXLA_SVD_ALGORITHM_JACOBI
-    else
-        error("Unsupported SVD algorithm: $algorithm")
-    end
-
     svd_op = enzymexla.linalg_svd(
         x.mlir_data;
         U=mlir_type(TracedRArray{T,N}, U_size),
@@ -3913,7 +3908,9 @@ end
         Vt=mlir_type(TracedRArray{T,N}, Vt_size),
         info=mlir_type(TracedRArray{iT,N - 2}, info_size),
         full=full,
-        algorithm=MLIR.API.enzymexlaSVDAlgorithmAttrGet(MLIR.IR.current_context(), alg),
+        algorithm=MLIR.API.enzymexlaSVDAlgorithmAttrGet(
+            MLIR.IR.current_context(), SVD_ALGORITHM_MAP[algorithm]
+        ),
         location,
     )
 
