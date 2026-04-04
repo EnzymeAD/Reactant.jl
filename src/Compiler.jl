@@ -1118,6 +1118,7 @@ function cubinFeatures()
     return "+ptx$ptx"
 end
 
+const BFLOAT16_COMPILE_TYPE = Ref{DataType}(Float32)
 const DEBUG_KERNEL = Ref{Bool}(false)
 const DUMP_LLVMIR = Ref{Bool}(false)
 const DUMP_FAILED_LOCKSTEP = Ref{Bool}(false)

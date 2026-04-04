@@ -971,14 +971,14 @@ function compile(job)
         cur_module = MLIR.IR.current_module()
         linkRes = MLIR.API.LinkInModule(cur_module, mmod, entryname)
 
-        dl_attr_name = "llvm.data_layout"
-        prevdlattr = MLIR.IR.getattr(MLIR.IR.Operation(cur_module), dl_attr_name)
-        if !isnothing(prevdlattr)
-            prevdl = String(prevdlattr)
-            @assert prevdl == dl "data layout mismatch, tried compiling cuda kernels for different target machines?"
-        else
-            MLIR.IR.setattr!(MLIR.IR.Operation(cur_module), dl_attr_name, MLIR.IR.Attribute(dl))
-        end
+        #dl_attr_name = "llvm.data_layout"
+        #prevdlattr = MLIR.IR.getattr(MLIR.IR.Operation(cur_module), dl_attr_name)
+        #if !isnothing(prevdlattr)
+        #    prevdl = String(prevdlattr)
+        #    @assert prevdl == dl "data layout mismatch, tried compiling cuda kernels for different target machines?"
+        #else
+        #    MLIR.IR.setattr!(MLIR.IR.Operation(cur_module), dl_attr_name, MLIR.IR.Attribute(dl))
+        #end
 
         String(Reactant.TracedUtils.get_attribute_by_name(linkRes, "sym_name"))
     end
@@ -1146,8 +1146,13 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     for (i, prev) in enumerate(Any[func.f, args...])
         Reactant.make_tracer(seen, prev, (kernelargsym, i), Reactant.NoStopTracedTrack)
     end
+    bfloat16_compile_type = @static if isdefined(Core, :BFloat16)
+        Reactant.Compiler.BFLOAT16_COMPILE_TYPE[]
+    else
+        nothing
+    end
     has_cast_float_type = @static if isdefined(Core, :BFloat16)
-        any(values(seen)) do arg
+        bfloat16_compile_type !== Core.BFloat16 && any(values(seen)) do arg
             (arg isa TracedRArray || arg isa TracedRNumber) &&
                 Reactant.unwrapped_eltype(typeof(arg)) === Core.BFloat16
         end
@@ -1184,14 +1189,12 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     push!(MLIR.IR.region(wrapfunc, 1), wrapbody)
     if has_cast_float_type
         MLIR.IR.setattr!(
-            wrapfunc,
-            "enzymexla.float_type",
-            MLIR.IR.Attribute(MLIR.IR.Type(Core.BFloat16)),
+            wrapfunc, "enzymexla.float_type", MLIR.IR.Attribute(MLIR.IR.Type(Core.BFloat16))
         )
         MLIR.IR.setattr!(
             wrapfunc,
             "enzymexla.src_float_type",
-            MLIR.IR.Attribute(MLIR.IR.Type(Core.Float16)),
+            MLIR.IR.Attribute(MLIR.IR.Type(bfloat16_compile_type)),
         )
     end
     for i in 1:length(wrapper_tys)
@@ -1255,15 +1258,65 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
             )
             push!(allocs, (alloc, argty, jltyp))
 
-            sz = abi_sizeof(a)
-            array_ty = MLIR.IR.Type(MLIR.API.mlirLLVMArrayTypeGet(MLIR.IR.Type(Int8), sz))
-            cdata = MLIR.IR.result(
-                MLIR.Dialects.llvm.mlir_constant(;
-                    res=array_ty, value=MLIR.IR.DenseElementsAttribute(to_bytes(a))
-                ),
-                1,
-            )
-            MLIR.Dialects.llvm.store(cdata, alloc)
+            if has_cast_float_type
+                # The argument `a` has BFloat16 fields but the GPU function was
+                # compiled with a substitute type (e.g. Float32). We need to:
+                # 1. Create an alloca with the bf16 layout
+                # 2. Store the raw bf16 bytes into it
+                # 3. Load, walk the struct fields, extend bf16→f32, store into alloc
+                compile_float_ty = MLIR.IR.Type(bfloat16_compile_type)
+                bf16_float_ty = MLIR.IR.Type(Core.BFloat16)
+                bf16_ty = _replace_float_in_llvm_type(
+                    argty, compile_float_ty, bf16_float_ty
+                )
+
+                bf16_c1 = MLIR.IR.result(
+                    MLIR.Dialects.llvm.mlir_constant(;
+                        res=MLIR.IR.Type(Int64), value=MLIR.IR.Attribute(1)
+                    ),
+                    1,
+                )
+                bf16_alloc = MLIR.IR.result(
+                    MLIR.Dialects.llvm.alloca(
+                        bf16_c1; elem_type=MLIR.IR.Attribute(bf16_ty), res=llvmptr
+                    ),
+                    1,
+                )
+
+                sz = abi_sizeof(a)
+                val = to_bytes(a)
+                array_ty = MLIR.IR.Type(
+                    MLIR.API.mlirLLVMArrayTypeGet(MLIR.IR.Type(Int8), sz)
+                )
+                cdata = MLIR.IR.result(
+                    MLIR.Dialects.llvm.mlir_constant(;
+                        res=array_ty, value=MLIR.IR.DenseElementsAttribute(val)
+                    ),
+                    1,
+                )
+                MLIR.Dialects.llvm.store(cdata, bf16_alloc)
+
+                bf16_val = MLIR.IR.result(
+                    MLIR.Dialects.llvm.load(bf16_alloc; res=bf16_ty), 1
+                )
+                converted_val = _convert_bf16_value(
+                    bf16_val, bf16_ty, argty, bf16_float_ty, compile_float_ty
+                )
+                MLIR.Dialects.llvm.store(converted_val, alloc)
+            else
+                sz = abi_sizeof(a)
+                val = to_bytes(a)
+                array_ty = MLIR.IR.Type(
+                    MLIR.API.mlirLLVMArrayTypeGet(MLIR.IR.Type(Int8), sz)
+                )
+                cdata = MLIR.IR.result(
+                    MLIR.Dialects.llvm.mlir_constant(;
+                        res=array_ty, value=MLIR.IR.DenseElementsAttribute(val)
+                    ),
+                    1,
+                )
+                MLIR.Dialects.llvm.store(cdata, alloc)
+            end
         end
     end
     LLVM.deactivate(ctx)
@@ -1307,7 +1360,14 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
             # we need to now compute the offset in bytes of the path
             julia_arg = allargs[p[2]]
 
-            offset = get_field_offset(typeof(julia_arg), p[3:end])
+            offset = if has_cast_float_type
+                get_field_offset(
+                    _bfloat16_to_ft_type(typeof(julia_arg), bfloat16_compile_type),
+                    p[3:end],
+                )
+            else
+                get_field_offset(typeof(julia_arg), p[3:end])
+            end
             MLIR.IR.with_block(wrapbody) do
                 ptr = MLIR.IR.result(
                     MLIR.Dialects.llvm.getelementptr(
@@ -1400,18 +1460,146 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
 end
 
 @static if isdefined(Core, :BFloat16)
-    function _bfloat16_to_float32_type(@nospecialize(T))
-        T === Core.BFloat16 && return Float16
+    function _bfloat16_to_ft_type(@nospecialize(T), @nospecialize(FT))
+        T === Core.BFloat16 && return FT
         T isa DataType || return T
         isempty(T.parameters) && return T
-        new_params = Any[_bfloat16_to_float32_type(p) for p in T.parameters]
+        new_params = Any[_bfloat16_to_ft_type(p, FT) for p in T.parameters]
         all(p1 === p2 for (p1, p2) in zip(T.parameters, new_params)) && return T
         return T.name.wrapper{new_params...}
     end
 
-    function _substitute_bfloat16_tt(@nospecialize(tt::Type{<:Tuple}))
-        new_params = Any[_bfloat16_to_float32_type(T) for T in tt.parameters]
+    function _substitute_bfloat16_tt(@nospecialize(tt::Type{<:Tuple}), @nospecialize(FT))
+        new_params = Any[_bfloat16_to_ft_type(T, FT) for T in tt.parameters]
         return Tuple{new_params...}
+    end
+
+    """
+        _replace_float_in_llvm_type(ty, src_float_ty, tgt_float_ty)
+
+    Recursively walk an LLVM type and replace `src_float_ty` with `tgt_float_ty`.
+    Handles struct types and array types.
+    """
+    function _replace_float_in_llvm_type(
+        ty::MLIR.IR.Type, src_float_ty::MLIR.IR.Type, tgt_float_ty::MLIR.IR.Type
+    )
+        ty == src_float_ty && return tgt_float_ty
+        if MLIR.API.mlirTypeIsALLVMStructType(ty)
+            n = MLIR.API.mlirLLVMStructTypeGetNumElementTypes(ty)
+            field_types = MLIR.IR.Type[
+                _replace_float_in_llvm_type(
+                    MLIR.IR.Type(MLIR.API.mlirLLVMStructTypeGetElementType(ty, i - 1)),
+                    src_float_ty,
+                    tgt_float_ty,
+                ) for i in 1:n
+            ]
+            if all(
+                field_types[i] ==
+                MLIR.IR.Type(MLIR.API.mlirLLVMStructTypeGetElementType(ty, i - 1)) for
+                i in 1:n
+            )
+                return ty
+            end
+            ctx = MLIR.IR.current_context()
+            is_packed = MLIR.API.mlirLLVMStructTypeIsPacked(ty)
+            return MLIR.IR.Type(
+                MLIR.API.mlirLLVMStructTypeLiteralGet(ctx, n, field_types, is_packed)
+            )
+        elseif MLIR.API.mlirTypeIsALLVMArrayType(ty)
+            elem_ty = MLIR.IR.Type(MLIR.API.mlirLLVMArrayTypeGetElementType(ty))
+            new_elem_ty = _replace_float_in_llvm_type(elem_ty, src_float_ty, tgt_float_ty)
+            if new_elem_ty == elem_ty
+                return ty
+            end
+            num_elems = MLIR.API.mlirLLVMArrayTypeGetNumElements(ty)
+            return MLIR.IR.Type(MLIR.API.mlirLLVMArrayTypeGet(new_elem_ty, num_elems))
+        end
+        return ty
+    end
+
+    """
+        _convert_bf16_value(src_val, src_ty, tgt_ty, src_float_ty, tgt_float_ty)
+
+    Recursively walk an LLVM value, converting float fields from `src_float_ty` to
+    `tgt_float_ty` using arith.extf. Returns a new value of type `tgt_ty`.
+    """
+    function _convert_bf16_value(
+        src_val::MLIR.IR.Value,
+        src_ty::MLIR.IR.Type,
+        tgt_ty::MLIR.IR.Type,
+        src_float_ty::MLIR.IR.Type,
+        tgt_float_ty::MLIR.IR.Type,
+    )
+        src_ty == tgt_ty && return src_val
+        if src_ty == src_float_ty
+            src_width = MLIR.API.mlirFloatTypeGetWidth(src_float_ty)
+            tgt_width = MLIR.API.mlirFloatTypeGetWidth(tgt_float_ty)
+            if tgt_width > src_width
+                return MLIR.IR.result(
+                    MLIR.Dialects.llvm.fpext(src_val; res=tgt_float_ty), 1
+                )
+            elseif tgt_width < src_width
+                return MLIR.IR.result(
+                    MLIR.Dialects.llvm.fptrunc(src_val; res=tgt_float_ty), 1
+                )
+            else
+                return MLIR.IR.result(
+                    MLIR.Dialects.llvm.fptrunc(src_val; res=tgt_float_ty), 1
+                )
+            end
+        end
+        if MLIR.API.mlirTypeIsALLVMStructType(src_ty)
+            n = MLIR.API.mlirLLVMStructTypeGetNumElementTypes(src_ty)
+            tgt_val = MLIR.IR.result(MLIR.Dialects.llvm.mlir_undef(; res=tgt_ty), 1)
+            for i in 0:(n - 1)
+                field_src_ty = MLIR.IR.Type(
+                    MLIR.API.mlirLLVMStructTypeGetElementType(src_ty, i)
+                )
+                field_tgt_ty = MLIR.IR.Type(
+                    MLIR.API.mlirLLVMStructTypeGetElementType(tgt_ty, i)
+                )
+                field_val = MLIR.IR.result(
+                    MLIR.Dialects.llvm.extractvalue(
+                        src_val; res=field_src_ty, position=MLIR.IR.Attribute(Int64[i])
+                    ),
+                    1,
+                )
+                converted = _convert_bf16_value(
+                    field_val, field_src_ty, field_tgt_ty, src_float_ty, tgt_float_ty
+                )
+                tgt_val = MLIR.IR.result(
+                    MLIR.Dialects.llvm.insertvalue(
+                        tgt_val, converted; res=tgt_ty, position=MLIR.IR.Attribute(Int64[i])
+                    ),
+                    1,
+                )
+            end
+            return tgt_val
+        elseif MLIR.API.mlirTypeIsALLVMArrayType(src_ty)
+            num_elems = MLIR.API.mlirLLVMArrayTypeGetNumElements(src_ty)
+            elem_src_ty = MLIR.IR.Type(MLIR.API.mlirLLVMArrayTypeGetElementType(src_ty))
+            elem_tgt_ty = MLIR.IR.Type(MLIR.API.mlirLLVMArrayTypeGetElementType(tgt_ty))
+            tgt_val = MLIR.IR.result(MLIR.Dialects.llvm.mlir_undef(; res=tgt_ty), 1)
+            for i in 0:(num_elems - 1)
+                elem_val = MLIR.IR.result(
+                    MLIR.Dialects.llvm.extractvalue(
+                        src_val; res=elem_src_ty, position=MLIR.IR.Attribute(Int64[i])
+                    ),
+                    1,
+                )
+                converted = _convert_bf16_value(
+                    elem_val, elem_src_ty, elem_tgt_ty, src_float_ty, tgt_float_ty
+                )
+                tgt_val = MLIR.IR.result(
+                    MLIR.Dialects.llvm.insertvalue(
+                        tgt_val, converted; res=tgt_ty, position=MLIR.IR.Attribute(Int64[i])
+                    ),
+                    1,
+                )
+            end
+            return tgt_val
+        end
+        return src_val
     end
 end
 
@@ -1421,7 +1609,11 @@ Reactant.@reactant_overlay @noinline function CUDA.cufunction(
     res = Base.@lock CUDA.cufunction_lock begin
         # compile the function
         cache = llvm_compiler_cache(MLIR.IR.current_module())
-        effective_tt = @static isdefined(Core, :BFloat16) ? _substitute_bfloat16_tt(tt) : tt
+        effective_tt = @static if isdefined(Core, :BFloat16)
+            _substitute_bfloat16_tt(tt, Reactant.Compiler.BFLOAT16_COMPILE_TYPE[])
+        else
+            tt
+        end
         source = CUDA.methodinstance(F, effective_tt)
         # cuda = CUDA.active_state()
         device = nothing # cuda.device
