@@ -4500,4 +4500,29 @@ function julia_callback(
     return Tuple(results)
 end
 
+@noinline function softmax(
+    x::TracedRArray{T,N};
+    dims::Vector{Int64},
+    location=mlir_stacktrace("softmax", @__FILE__, @__LINE__),
+) where {T,N}
+    max_val = Reactant.call_with_reactant(Core.kwcall, (; dims,), Base.maximum, x)
+    exp_diff = exponential(x .- max_val; location)
+    denom = Reactant.call_with_reactant(Core.kwcall, (; dims,), Base.sum, exp_diff)
+    return exp_diff ./ denom
+end
+
+@noinline function logsoftmax(
+    x::TracedRArray{T,N};
+    dims::Vector{Int64},
+    location=mlir_stacktrace("logsoftmax", @__FILE__, @__LINE__),
+) where {T,N}
+    max_val = Reactant.call_with_reactant(Core.kwcall, (; dims,), Base.maximum, x)
+    diff = x .- max_val
+    exp_diff = exponential(diff; location)
+    reduced_exp_diff = Reactant.call_with_reactant(
+        Core.kwcall, (; dims,), Base.sum, exp_diff
+    )
+    return diff .- log(reduced_exp_diff; location)
+end
+
 end # module Ops

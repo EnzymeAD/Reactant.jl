@@ -96,11 +96,16 @@ end
 function LogExpFunctions.softmax!(
     r::AnyTracedRArray{<:Real}, x::AnyTracedRArray{<:Real}=r; dims=:
 )
-    return LogExpFunctions._softmax!(r, x, dims)
+    dims isa Colon && (dims = 1:ndims(x))
+    res = @opcall softmax(x; dims=vec(collect(Int64, dims)))
+    copyto!(r, res)
+    return r
 end
 
 function LogExpFunctions.softmax(x::AnyTracedRArray{<:Real}; dims=:)
-    return LogExpFunctions._softmax!(similar(x, float(eltype(x))), x, dims)
+    dims isa Colon && (dims = 1:ndims(x))
+    res = @opcall softmax(x; dims=vec(collect(Int64, dims)))
+    return res
 end
 
 for (T1, T2) in [(TracedRNumber, Number), (Number, TracedRNumber)]

@@ -27,31 +27,15 @@ end
 
 function NNlib.softmax!(out::AnyTracedRArray{T,N}, x::AbstractArray; dims=1) where {T,N}
     x = T.(materialize_traced_array(x))
-    max_ = maximum(x; dims)
-    diff = exp.(x .- max_)
-    # TOOD: re-enable conditional once https://github.com/EnzymeAD/Reactant.jl/issues/1581
-    # fixed
-    # @trace if all(isfinite, max_)
-    @. out = diff
-    # else
-    #     @. out = ifelse(isinf(max_), ifelse(isinf(x), T(1), T(0)), diff)
-    # end
-    out ./= sum(out; dims)
+    res = @opcall softmax(x; dims=collect(Int64, dims))
+    copyto!(out, res)
     return out
 end
 
 function NNlib.logsoftmax!(out::AnyTracedRArray{T}, x::AbstractArray; dims=1) where {T}
     x = T.(materialize_traced_array(x))
-    max_ = maximum(x; dims)
-    diff = x .- max_
-    # TOOD: re-enable conditional once https://github.com/EnzymeAD/Reactant.jl/issues/1581
-    # fixed
-    # @trace if all(isfinite, max_)
-    @. out = diff
-    # else
-    #     @. out = ifelse(isinf(max_), ifelse(isinf(x), T(0), -T(Inf)), diff)
-    # end
-    out .-= log.(sum(exp, out; dims))
+    res = @opcall logsoftmax(x; dims=collect(Int64, dims))
+    copyto!(out, res)
     return out
 end
 
