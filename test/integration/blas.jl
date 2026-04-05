@@ -1,6 +1,8 @@
 using LinearAlgebra, Reactant, Test
 using LinearAlgebra: BLAS
 
+const RunningOnTPU = contains(string(Reactant.devices()[1]), "TPU")
+
 @testset "Level 1" begin
     @testset "asum" begin
         x = Reactant.TestUtils.construct_test_array(Float32, 32)
@@ -282,8 +284,8 @@ end
         @jit BLAS.syrk!('U', 'N', 2.0f0, A_ra, 3.0f0, C_ra)
         C_target = copy(C)
         BLAS.syrk!('U', 'N', 2.0f0, A, 3.0f0, C_target)
-        @test_broken UpperTriangular(C_ra) ≈ UpperTriangular(C_target) atol = 1e-3 rtol =
-            1e-3
+        @test UpperTriangular(C_ra) ≈ UpperTriangular(C_target) atol = 1e-3 rtol = 1e-3 broken =
+            !RunningOnTPU
 
         # test 'L' and 'T'
         A2 = Reactant.TestUtils.construct_test_array(Float32, 16, 16)
@@ -294,8 +296,8 @@ end
         @jit BLAS.syrk!('L', 'T', 2.0f0, A2_ra, 3.0f0, C2_ra)
         C2_target = copy(C2)
         BLAS.syrk!('L', 'T', 2.0f0, A2, 3.0f0, C2_target)
-        @test_broken LowerTriangular(C2_ra) ≈ LowerTriangular(C2_target) atol = 1e-3 rtol =
-            1e-3
+        @test LowerTriangular(C2_ra) ≈ LowerTriangular(C2_target) atol = 1e-3 rtol = 1e-3 broken =
+            !RunningOnTPU
     end
 
     if isdefined(BLAS, :gemmt!)
@@ -412,8 +414,9 @@ end
         @test @jit(BLAS.trsm('L', 'U', 'N', 'N', 2.0f0, Ainv_ra, B_ra)) ≈
             BLAS.trsm('L', 'U', 'N', 'N', 2.0f0, Ainv, B) atol = 1e-3 rtol = 1e-3
 
-        @test_broken UpperTriangular(@jit(BLAS.syrk('U', 'N', 2.0f0, A_ra))) ≈
-            UpperTriangular(BLAS.syrk('U', 'N', 2.0f0, A)) atol = 1e-3 rtol = 1e-3
+        @test UpperTriangular(@jit(BLAS.syrk('U', 'N', 2.0f0, A_ra))) ≈
+            UpperTriangular(BLAS.syrk('U', 'N', 2.0f0, A)) atol = 1e-3 rtol = 1e-3 broken =
+            !RunningOnTPU
         @test UpperTriangular(@jit(BLAS.syr2k('U', 'N', 2.0f0, A_ra, B_ra))) ≈
             UpperTriangular(BLAS.syr2k('U', 'N', 2.0f0, A, B)) atol = 1e-3 rtol = 1e-3
 
