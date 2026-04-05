@@ -290,7 +290,9 @@ using .Compiler:
     code_mhlo,
     code_xla,
     traced_getfield,
-    compile
+    compile,
+    save_compiled_artifact,
+    load_compiled_artifact
 export ConcreteRArray,
     ConcreteRNumber,
     ConcretePJRTArray,
@@ -303,7 +305,9 @@ export ConcreteRArray,
     @code_xla,
     @jit,
     @trace,
-    within_compile
+    within_compile,
+    save_compiled_artifact,
+    load_compiled_artifact
 
 @static if VERSION ≥ v"1.11"
     @eval $(Expr(:public, :Periodic))
