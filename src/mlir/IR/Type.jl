@@ -172,15 +172,13 @@ Creates an f16 type in the given context. The type is owned by the context.
 Type(::Core.Type{Float16}; context::Context=current_context()) =
     Type(API.mlirF16TypeGet(context))
 
-if isdefined(Core, :BFloat16)
-    """
-        Type(::Core.Type{Core.BFloat16}; context=current_context())
+"""
+    Type(::Core.Type{BFloat16}; context=current_context())
 
-    Creates an bf16 type in the given context. The type is owned by the context.
-    """
-    function Type(::Core.Type{Core.BFloat16}; context::Context=current_context())
-        return BFloat16Type(; context)
-    end
+Creates an bf16 type in the given context. The type is owned by the context.
+"""
+function Type(::Core.Type{BFloat16}; context::Context=current_context())
+    return BFloat16Type(; context)
 end
 
 """
@@ -828,7 +826,7 @@ function julia_type(type::Type)
     elseif istf32(type)
         Reactant.TF32
     elseif isbf16(type)
-        Core.BFloat16
+        BFloat16
     elseif isf16(type)
         Float16
     elseif isf32(type)

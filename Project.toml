@@ -8,6 +8,7 @@ projects = ["docs", "test"]
 
 [deps]
 Adapt = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
+BFloat16s = "ab4f0b2a-ad5b-11e8-123f-65d77653426b"
 CEnum = "fa961155-64e5-5f13-b03f-caf6b980ea82"
 Crayons = "a8cc5b0e-0ffa-5ad4-8c14-923d3ee1735f"
 Downloads = "f43a241f-c20a-4ad4-852c-f6b1247861c6"
@@ -104,6 +105,7 @@ ReactantZygoteExt = "Zygote"
 AbstractFFTs = "1.5"
 Adapt = "4.4"
 ArrayInterface = "7.17.1"
+BFloat16s = "0.6.1"
 CEnum = "0.5"
 CUDA = "5.9"
 Crayons = "4.1.1"

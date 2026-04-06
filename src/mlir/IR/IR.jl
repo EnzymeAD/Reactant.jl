@@ -3,6 +3,7 @@ module IR
 using ..Reactant
 using ..API
 
+using BFloat16s: BFloat16s, BFloat16
 using LLVM: LLVM, @checked, mark_alloc, mark_use, mark_dispose
 import LLVM: activate, deactivate, dispose, @dispose, refcheck
 
