@@ -85,6 +85,11 @@ be multicast to all other blocks in the cluster. In this way TMA multicast
 guarantees L2 cache hits. The `collective` attribute is the list of
 cluster dimensions along which to partition the input data loads.
 
+The `leader_tracked` attribute can be provided to only track the completion
+of the copy in the leader block in the cluster. If `CopyPartitioned(axis)`,
+performs a partitioned collective copy along the given axis. If
+`CopyReplicated`, all blocks load the same data.
+
 The `predicate` allows scheduling the transfer conditionally. The async copy
    is always scheduled by at most a single lane in the warpgroup.
 """
@@ -94,6 +99,7 @@ function async_load(
     barrier::Value,
     indices::Vector{Value},
     predicate=nothing::Union{Nothing,Value};
+    leader_tracked=nothing,
     slice_lengths,
     collective,
     location=Location(),
@@ -111,6 +117,8 @@ function async_load(
         attributes,
         operandsegmentsizes([1, 1, 1, length(indices), Int(!isnothing(predicate))]),
     )
+    !isnothing(leader_tracked) &&
+        push!(attributes, NamedAttribute("leader_tracked", leader_tracked))
 
     return create_operation(
         "mosaic_gpu.async_load",
@@ -521,7 +529,11 @@ Initializes `num_barriers` barriers each meant to synchronize exactly
 `base_pointer` must be a pointer to a shared memory location.
 """
 function initialize_barrier(
-    base_pointer::Value; arrival_count, num_barriers, location=Location()
+    base_pointer::Value;
+    arrival_count,
+    num_barriers,
+    orders_tensor_core,
+    location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[base_pointer,]
@@ -530,6 +542,7 @@ function initialize_barrier(
     attributes = NamedAttribute[
         NamedAttribute("arrival_count", arrival_count),
         NamedAttribute("num_barriers", num_barriers),
+        NamedAttribute("orders_tensor_core", orders_tensor_core),
     ]
 
     return create_operation(
@@ -746,6 +759,35 @@ function slice_tmem(source::Value; result_0::IR.Type, offset, location=Location(
 
     return create_operation(
         "mosaic_gpu.slice_tmem",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`tcgen05_commit_arrive`
+
+Makes the `barrier` object track the completion of all prior async
+tcgen05 operations.
+
+if `collective` is `true`, allow signaling on the `barrier` object of
+multiple CTAs within the cluster.
+"""
+function tcgen05_commit_arrive(barrier::Value; collective=nothing, location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[barrier,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(collective) && push!(attributes, NamedAttribute("collective", collective))
+
+    return create_operation(
+        "mosaic_gpu.tcgen05_commit_arrive",
         location;
         operands,
         owned_regions,
@@ -1040,12 +1082,16 @@ transfer. If unset, fall back to a non-optimized transfer if unable to
 generate an optimized transfer.
 
 If `atomic_type` is set, performs an atomic store-(add|min|...) of the value.
+
+If `multimem` is true, then the store is performed on all the devices in the
+underlying mesh using `multimem` instructions.
 """
 function vector_store(
     valueToStore::Value,
     destination::Value;
     optimized=nothing,
     atomic_type=nothing,
+    multimem=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -1055,6 +1101,7 @@ function vector_store(
     attributes = NamedAttribute[]
     !isnothing(optimized) && push!(attributes, NamedAttribute("optimized", optimized))
     !isnothing(atomic_type) && push!(attributes, NamedAttribute("atomic_type", atomic_type))
+    !isnothing(multimem) && push!(attributes, NamedAttribute("multimem", multimem))
 
     return create_operation(
         "mosaic_gpu.vector_store",
