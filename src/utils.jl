@@ -1192,9 +1192,7 @@ end
     return $(Expr(:meta, :generated, call_llvm_generator))
 end
 
-@static if isdefined(Core, :BFloat16)
-    nmantissa(::Type{Core.BFloat16}) = 7
-end
+nmantissa(::Type{BFloat16}) = 7
 nmantissa(::Type{Float16}) = 10
 nmantissa(::Type{Float32}) = 23
 nmantissa(::Type{Float64}) = 52
