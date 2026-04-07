@@ -266,7 +266,7 @@ end
     end
 end
 
-@testset "Reactant Bcast!" begin
+@testset "Bcast!" begin
     comm = MPI.COMM_WORLD
     rank = MPI.Comm_rank(comm)
     root = 0
@@ -279,6 +279,8 @@ end
             else
                 x = zeros(T, 5)
             end
+            # try block catches any invalid combinations we missed above, depending on
+            # mpi implem
             expected = try
                 ConcreteRArray(MPI.Bcast!(x, root, comm))
             catch
