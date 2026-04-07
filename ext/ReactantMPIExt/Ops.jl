@@ -184,7 +184,7 @@ end
     return recvbuf
 end
 
-@noinline function Bcast!(
+@noinline function bcast!(
     buf::TracedRArray,
     root::TracedRNumber;
     location=mlir_stacktrace("mpi.bcast", @__FILE__, @__LINE__),

@@ -111,5 +111,5 @@ end
 
 function MPI.Bcast!(buf::TracedRArray, root::TracedRNumber, comm::MPI.Comm)
     @assert comm == MPI.COMM_WORLD "Only MPI.COMM_WORLD is supported currently"
-    return Ops.Bcast!(buf, root)
+    return Ops.bcast!(buf, root)
 end
