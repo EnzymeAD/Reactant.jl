@@ -113,7 +113,7 @@ end
 function _collect_result_paths(traced_val)
     return Tuple[
         p for p in Reactant.TracedUtils.get_paths(traced_val) if
-        length(p) > 0 && (p[1] == :result || p[1] == :resargs)
+        length(p) > 0 && (p[1] === :result || p[1] == :resargs || p[1] === :args)
     ]
 end
 
@@ -165,16 +165,16 @@ function _delinearize_results(args, hlo_results, artifact::CompiledArtifact)
     for (paths, block_arg_idx) in artifact.preserved_args
         # The traced value is the input arg itself (it was a pass-through)
         source_path = artifact.arg_paths[block_arg_idx + 1]
-        traced_val = _eval_path(args, source_path)
+        val = _eval_path(args, source_path)
         for path in paths
             if path[1] == :result
-                push!(result_values, traced_val)
+                push!(result_values, val)
             elseif path[1] == :resargs
                 target_path = path[2:end]
                 source_suffix = source_path[2:end]
                 # Skip self-assignment (arg maps to itself)
                 target_path == source_suffix && continue
-                _update_arg!(args, path, traced_val)
+                _update_arg!(args, path, copy(val.data)) # TODO: copy here is wrong, do the same as in Compiler.jl
             end
         end
     end
@@ -421,52 +421,25 @@ function load_compiled_executable(
     artifact = serialized.artifact
     linear_args = _linearize_concrete_args(args, artifact.arg_paths)
 
-    # Build arrays for the C API call
-    num_args = length(linear_args)
+    @info "linae" linear_args
+
+    for (arr, d) in zip(linear_args, artifact.donated_args_mask)
+        if d
+            #Reactant.mark_donated!(arr)
+        end
+    end
+
+    linear_ptrs = Tuple((arr.data.buffer.buffer for arr in linear_args))
+
     num_outs = Int(serialized.num_outputs)
-    # The C API expects HeldIfrtArray** — extract the raw pointers
-    input_arr = Ptr{Cvoid}[a.data.buffer.buffer for a in linear_args]
-    donated_arr = UInt8[UInt8(d) for d in artifact.donated_args_mask]
-    output_arr = Vector{Ptr{Cvoid}}(undef, num_outs)
-    futures_ref = Ref{UInt8}(0)
-    status_ref = Ref{Ptr{Cvoid}}(C_NULL)
+    donated_arr = Tuple(UInt8(d) for d in artifact.donated_args_mask)
 
-    GC.@preserve exec linear_args output_arr futures_ref status_ref begin
-        MLIR.API.ifrt_loaded_executable_execute(
-            exec.exec,
-            num_args,
-            input_arr,
-            donated_arr,
-            num_outs,
-            output_arr,
-            futures_ref,
-            status_ref,
-        )
-    end
+    output_arr = XLA.execute(exec, linear_ptrs, donated_arr, Val(num_outs))
 
-    # Wait for completion
-    if futures_ref[] != 0 && status_ref[] != C_NULL
-        future = XLA.IFRT.Future(status_ref[])
-        wait(future)
-    end
-
-    # Wrap results as ConcreteIFRTArrays with correct ShardInfo
-    concrete_results = map(enumerate(output_arr)) do (i, ptr)
-        arr = XLA.IFRT.AsyncArray(XLA.IFRT.Array(ptr), nothing)
-        T = eltype(arr.buffer)
-        shape = size(arr.buffer)
-        N = length(shape)
-        sharding = serialized.result_shardings[i]
-        array_slices, sharding = Reactant.Sharding.sharding_to_array_slices(
-            sharding, shape; return_updated_sharding=Val(true), client
-        )
-        ConcreteIFRTArray{T,N}(
-            arr, shape, Reactant.Sharding.ShardInfo(sharding, array_slices)
-        )
-    end
+    @show output_arr
 
     # Delinearize: wrap results back
-    return _delinearize_concrete_results(args, concrete_results, artifact, num_outs)
+    return _delinearize_results(args, output_arr, artifact)
 end
 
 function _linearize_concrete_args(args, arg_paths::Vector{Tuple})
@@ -483,34 +456,6 @@ function _linearize_concrete_args(args, arg_paths::Vector{Tuple})
         linear_args[i] = val
     end
     return linear_args
-end
-
-function _delinearize_concrete_results(args, results, artifact, num_outputs)
-    result_values = []
-
-    for (i, paths) in enumerate(artifact.result_paths)
-        res = results[i]
-        for path in paths
-            if path[1] == :result
-                push!(result_values, res)
-            end
-        end
-    end
-
-    for (paths, block_arg_idx) in artifact.preserved_args
-        source_path = artifact.arg_paths[block_arg_idx + 1]
-        val = args[source_path[2]]
-        for p in source_path[3:end]
-            val = traced_getfield(val, p)
-        end
-        for path in paths
-            if path[1] == :result
-                push!(result_values, val)
-            end
-        end
-    end
-
-    return Tuple(result_values)
 end
 
 """
@@ -595,22 +540,13 @@ function _extract_shardinfo(concrete_result, args, paths)
     return Reactant.Sharding.NoShardInfo()
 end
 
-function _update_arg!(args, resargs_path::Tuple, traced_val)
+function _update_arg!(args, resargs_path::Tuple, val)
     @assert resargs_path[1] == :resargs
     target = args[resargs_path[2]]
     # Navigate to the parent of the leaf
-    for p in resargs_path[3:(end - 1)]
+    for p in resargs_path[3:end]
         target = traced_getfield(target, p)
     end
-    if length(resargs_path) >= 3
-        leaf = traced_getfield(target, resargs_path[end])
-        Reactant.TracedUtils.set_mlir_data!(
-            leaf, Reactant.TracedUtils.get_mlir_data(traced_val)
-        )
-    else
-        # Direct arg replacement (path is just (:resargs, idx))
-        Reactant.TracedUtils.set_mlir_data!(
-            target, Reactant.TracedUtils.get_mlir_data(traced_val)
-        )
-    end
+    @info "setfield!" target resargs_path val
+    return setfield!(target, :data, val)
 end
