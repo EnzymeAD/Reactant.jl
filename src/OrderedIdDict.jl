@@ -23,7 +23,7 @@ Base.length(d::OrderedIdDict) = length(d.kv)
 Base.isempty(d::OrderedIdDict) = isempty(d.kv)
 
 function Base.getindex(d::OrderedIdDict, k)
-    return d.kv[objectid(k)].second
+    return last(d.kv[objectid(k)])
 end
 
 function Base.setindex!(d::OrderedIdDict, v, k)
