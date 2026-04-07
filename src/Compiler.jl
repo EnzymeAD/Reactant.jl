@@ -1965,6 +1965,7 @@ function compile_mlir!(
                     result_attrs[i - 1], mlir_fn_res.global_device_ids, mod_copied
                 )
             end
+            @info "got shardings" result_shardings
         else
             result_shardings = [Sharding.Replicated() for _ in 1:length(linear_results)]
         end
