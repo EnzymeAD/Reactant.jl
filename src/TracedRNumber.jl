@@ -297,7 +297,43 @@ Base.flipsign(x::TracedRNumber, y::TracedRNumber) = ifelse(y < 0, -x, x)
 function Base.div(
     x::TracedRNumber{<:Reactant.ReactantSInt}, y::TracedRNumber{<:Reactant.ReactantUInt}
 )
+    return div(x, y, RoundDown)
+end
+function Base.div(
+    x::TracedRNumber{<:Reactant.ReactantSInt}, y::TracedRNumber{<:Reactant.ReactantUInt},
+    ::typeof(RoundToZero),
+)
     return flipsign(signed(div(unsigned(abs(x)), y)), x)
+end
+function Base.div(
+    x::TracedRNumber{<:Reactant.ReactantSInt}, y::TracedRNumber{<:Reactant.ReactantUInt},
+    ::typeof(RoundDown),
+)
+    ax = unsigned(abs(x))
+    q = signed(div(ax, y))
+    has_rem = !iszero(rem(ax, y))
+    result = flipsign(q, x)
+    return ifelse(signbit(x) & has_rem, result - one(result), result)
+end
+function Base.div(
+    x::TracedRNumber{<:Reactant.ReactantSInt}, y::TracedRNumber{<:Reactant.ReactantUInt},
+    ::typeof(RoundUp),
+)
+    ax = unsigned(abs(x))
+    q = signed(div(ax, y))
+    has_rem = !iszero(rem(ax, y))
+    result = flipsign(q, x)
+    return ifelse(!signbit(x) & has_rem, result + one(result), result)
+end
+function Base.div(
+    x::TracedRNumber{<:Reactant.ReactantSInt}, y::TracedRNumber{<:Reactant.ReactantUInt},
+    ::typeof(RoundFromZero),
+)
+    ax = unsigned(abs(x))
+    q = signed(div(ax, y))
+    has_rem = !iszero(rem(ax, y))
+    q_adj = q + ifelse(has_rem, one(q), zero(q))
+    return flipsign(q_adj, x)
 end
 function Base.div(
     x::TracedRNumber{<:Reactant.ReactantUInt}, y::TracedRNumber{<:Reactant.ReactantSInt}
@@ -347,9 +383,24 @@ end
 function Base.div(
     @nospecialize(lhs::TracedRNumber{T}),
     @nospecialize(rhs::TracedRNumber{T}),
+    ::typeof(RoundToZero),
+) where {T<:Integer}
+    return @opcall divide(lhs, rhs)
+end
+function Base.div(
+    @nospecialize(lhs::TracedRNumber{T}),
+    @nospecialize(rhs::TracedRNumber{T}),
     ::typeof(RoundDown),
 ) where {T<:Integer}
     return @opcall divide(lhs, rhs)
+end
+function Base.div(
+    @nospecialize(lhs::TracedRNumber{T}),
+    @nospecialize(rhs::TracedRNumber{T}),
+    ::typeof(RoundUp),
+) where {T<:Integer}
+    q = div(lhs, rhs)  # truncation (RoundToZero)
+    return q + (!iszero(rem(lhs, rhs)) & (signbit(lhs) == signbit(rhs)))
 end
 function Base.div(
     @nospecialize(lhs::TracedRNumber{T}),
