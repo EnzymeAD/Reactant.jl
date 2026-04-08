@@ -1301,7 +1301,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
             trueidx += 1
             jltyp = Core.Typeof(a)
             lltyp = to_llvmtype(argty)
-            if Enzyme.Compiler.inline_roots_type(llvmtyp) != 0
+            if Enzyme.Compiler.inline_roots_type(lltyp) != 0
                 trueidx += 1
             end
             c1 = MLIR.IR.result(
