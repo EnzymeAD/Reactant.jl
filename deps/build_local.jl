@@ -224,7 +224,7 @@ push!(build_cmd_list, "--check_visibility=false")
 push!(build_cmd_list, "--verbose_failures")
 push!(build_cmd_list, "--jobs=$(parsed_args["jobs"])")
 push!(build_cmd_list, "--experimental_ui_max_stdouterr_bytes=-1")
-push!(build_cmd_list, "--sandbox_debug")
+push!(build_cmd_list, "--spawn_strategy=local")
 
 push!(build_cmd_list, "--linkopt=-fuse-ld=lld")
 
