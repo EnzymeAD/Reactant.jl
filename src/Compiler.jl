@@ -235,7 +235,7 @@ Base.@nospecializeinfer function create_result(
         error("cannot copy $tocopy of type $(Core.Typeof(tocopy))")
     end
 
-    T = typeof(tocopy)
+    T = Core.Typeof(tocopy)
 
     args = (
         result_stores,
