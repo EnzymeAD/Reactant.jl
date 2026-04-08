@@ -12,7 +12,7 @@ using Reactant.XLA.IFRT: GpuTopology
 
 @show Reactant.devices()
 
-Reactant.set_default_backend("cpu")
+# Reactant.set_default_backend("cpu")
 
 @show Reactant.devices()
 

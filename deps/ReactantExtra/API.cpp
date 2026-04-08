@@ -1999,7 +1999,8 @@ REACTANT_ABI HeldIfrtLoadedExecutable *ifrt_deserialize_and_load(
   xla::CompileOptions compile_options =
       GenerateCompileOptions(compile_options_proto, compile_options_proto_size);
   auto compiler = client->GetDefaultCompiler();
-  auto device_list = MyValueOrThrow(client->MakeDeviceList(client->devices()));
+  auto device_list =
+      MyValueOrThrow(client->MakeDeviceList(client->GetAllDevices()));
   auto options = std::make_unique<xla::ifrt::XlaDeserializeExecutableOptions>(
       compile_options, device_list);
   auto loaded = MyValueOrThrow(

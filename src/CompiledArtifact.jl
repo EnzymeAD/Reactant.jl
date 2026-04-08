@@ -378,14 +378,18 @@ function load_compiled_executable(
     compile_options, _ = __get_compile_options_and_kwargs(; kwargs...)
 
     xla_compile_options = if serialized.is_sharded
-        global_device_ids = collect(Int64, 0:1)
+        # TODO: this is wrong
+        global_device_ids = collect(Int64, 0:(length(Reactant.devices(client)) - 1))
         XLA.make_compile_options(;
             device_id=Int64(-1),
             num_replicas=serialized.num_replicas,
             num_partitions=serialized.num_partitions,
             mesh_ids=global_device_ids,
             xla_compile_options=compile_options.xla_compile_options,
-            xla_debug_options=compile_options.xla_debug_options,
+            xla_debug_options=merge(
+                (; xla_gpu_experimental_aot_compiled_thunks=true),
+                compile_options.xla_debug_options,
+            ),
             xla_executable_build_options=merge(
                 (; use_shardy_partitioner=true, use_spmd_partitioning=true),
                 compile_options.xla_executable_build_options,
@@ -423,13 +427,39 @@ function load_compiled_executable(
 
     @info "linae" linear_args
 
-    for (arr, d) in zip(linear_args, artifact.donated_args_mask)
-        if d
-            #Reactant.mark_donated!(arr)
+    for (i, lina) in enumerate(linear_args), (j, linb) in enumerate(linear_args)
+        i == j && continue
+
+        function clean_path(args, path)
+            @assert(path[1] === :args)
+            name = "args[$(path[2])]"
+            v = args[path[2]]
+            for f in path[3:end]
+                name *= "." * fieldname(v, f)
+                v = getfield(v, f)
+            end
+            return name
+        end
+
+        if lina === linb || lina.data.buffer.buffer === linb.data.buffer.buffer
+            error(
+                "aliasing between $i and $j at " *
+                clean_path(args, artifact.arg_paths[i]) *
+                " and " *
+                clean_path(args, artifact.arg_paths[j]),
+            )
         end
     end
 
-    linear_ptrs = Tuple((arr.data.buffer.buffer for arr in linear_args))
+    for (arr, d) in zip(linear_args, artifact.donated_args_mask)
+        if d
+            # Reactant.mark_donated!(arr)
+        end
+    end
+
+    linear_ptrs = Tuple((XLA.synced_buffer(arr.data).buffer for arr in linear_args))
+
+    @info "sending" n_ptrs = length(unique(linear_ptrs))
 
     num_outs = Int(serialized.num_outputs)
     donated_arr = Tuple(UInt8(d) for d in artifact.donated_args_mask)
@@ -547,6 +577,5 @@ function _update_arg!(args, resargs_path::Tuple, val)
     for p in resargs_path[3:end]
         target = traced_getfield(target, p)
     end
-    @info "setfield!" target resargs_path val
     return setfield!(target, :data, val)
 end

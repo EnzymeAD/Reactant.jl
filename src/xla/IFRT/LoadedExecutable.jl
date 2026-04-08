@@ -212,6 +212,8 @@ end
     future_res = Ref{Ptr{Cvoid}}()
     futures = Ref{UInt8}(0)
 
+    @info "EXECUTING" N l = length(inputs) m = M
+
     GC.@preserve exec outputs future_res futures begin
         MLIR.API.ifrt_loaded_executable_execute(
             exec.exec,
