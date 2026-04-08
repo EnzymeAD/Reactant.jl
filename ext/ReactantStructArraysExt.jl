@@ -121,7 +121,7 @@ Base.@propagate_inbounds function Base.setindex!(
 end
 
 const MRarr = Union{Reactant.AnyTracedRArray,Reactant.RArray}
-getstruct(col, n, I) = @inbounds Reactant.@allowscalar col[n][I...]
+getstruct(col, n, I...) = @inbounds Reactant.@allowscalar col[n][I...]
 struct GetStruct{C,Idx}
     cols::C
     I::Idx
