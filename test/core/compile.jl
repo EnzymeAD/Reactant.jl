@@ -195,7 +195,7 @@ end
 
     function Reactant.Compiler.create_result(
         tocopy::MockTestCustomPath,
-        path,
+        path::Tuple,
         result_stores,
         path_to_shard_info,
         to_unreshard_results,
