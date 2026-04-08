@@ -1710,7 +1710,7 @@ function Reactant.make_tracer(
             nv = Reactant.make_tracer(
                 seen,
                 pv,
-                append_path(path, I),
+                push(path, I),
                 mode;
                 track_numbers,
                 sharding=Base.getproperty(sharding, I),

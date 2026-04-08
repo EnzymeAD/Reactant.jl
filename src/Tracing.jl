@@ -1078,7 +1078,6 @@ function make_tracer(
 )
     return prev
 end
-append_path(@nospecialize(path), i) = (path..., i)
 
 Base.@nospecializeinfer function make_tracer_via_immutable_constructor(
     seen,
@@ -1122,7 +1121,7 @@ Base.@nospecializeinfer function make_tracer_via_immutable_constructor(
     changed = false
     for i in 1:nf
         if isdefined(prev, i)
-            newpath = mode == TracedToTypes ? path : append_path(path, i)
+            newpath = mode == TracedToTypes ? path : push(path, i)
             xi = Base.getfield(prev, i)
             xi2 = make_tracer(
                 seen,
@@ -1206,7 +1205,7 @@ Base.@nospecializeinfer function make_tracer_unknown(
         changed = false
         for i in 1:nf
             if isdefined(prev, i)
-                newpath = mode == TracedToTypes ? path : append_path(path, i)
+                newpath = mode == TracedToTypes ? path : push(path, i)
                 xi = Base.getfield(prev, i)
                 xi2 = make_tracer(
                     seen,
@@ -1243,7 +1242,7 @@ Base.@nospecializeinfer function make_tracer_unknown(
     changed = false
     for i in 1:nf
         if isdefined(prev, i)
-            newpath = mode == TracedToTypes ? path : append_path(path, i)
+            newpath = mode == TracedToTypes ? path : push(path, i)
             xi = Base.getfield(prev, i)
             xi2 = make_tracer(
                 seen,
@@ -1280,7 +1279,7 @@ Base.@nospecializeinfer function make_tracer_unknown(
                         elseif is_traced_number(ft_j) && val_j isa unwrapped_eltype(ft_j)
                             val_wrapped = ft_j(val_j)
                             # Correct the path for the wrapped scalar
-                            sub_path = append_path(newpath, j)
+                            sub_path = push(newpath, j)
                             val_wrapped = Core.Typeof(val_wrapped)(
                                 (sub_path,), val_wrapped.mlir_data
                             )
@@ -1359,7 +1358,7 @@ function make_tracer(
     kwargs...,
 )
     if toscalar && mode == TracedSetPath
-        return make_tracer(seen, prev[], append_path(path, :x), mode; toscalar=false)
+        return make_tracer(seen, prev[], push(path, :x), mode; toscalar=false)
     end
     @assert !toscalar
     return make_tracer_unknown(seen, prev, path, mode; toscalar, kwargs...)
@@ -1752,8 +1751,8 @@ Base.@nospecializeinfer function make_tracer(
         return nothing
     end
     return Complex(
-        make_tracer(seen, prev.re, append_path(path, :re), mode; kwargs...),
-        make_tracer(seen, prev.im, append_path(path, :im), mode; kwargs...),
+        make_tracer(seen, prev.re, push(path, :re), mode; kwargs...),
+        make_tracer(seen, prev.im, push(path, :im), mode; kwargs...),
     )
 end
 
@@ -1824,7 +1823,7 @@ Base.@nospecializeinfer function make_tracer(
             nv = make_tracer(
                 seen,
                 pv,
-                append_path(path, I),
+                push(path, I),
                 mode;
                 track_numbers,
                 sharding=Base.getproperty(sharding, I),
@@ -1928,7 +1927,7 @@ Base.@nospecializeinfer function make_tracer(
         nv = make_tracer(
             seen,
             v,
-            append_path(path, k),
+            push(path, k),
             mode;
             track_numbers,
             sharding=Base.getproperty(sharding, k),
@@ -1970,7 +1969,7 @@ Base.@nospecializeinfer function make_tracer(
             make_tracer(
                 seen,
                 v,
-                append_path(path, i),
+                push(path, i),
                 mode;
                 sharding=Base.getproperty(sharding, i),
                 kwargs...,
@@ -2007,7 +2006,7 @@ Base.@nospecializeinfer function make_tracer(
             make_tracer(
                 seen,
                 Base.getfield(prev, i),
-                append_path(path, i),
+                push(path, i),
                 mode;
                 sharding=Base.getproperty(sharding, i),
                 track_numbers,
@@ -2050,7 +2049,7 @@ Base.@nospecializeinfer function make_tracer(
     tr = make_tracer(
         seen,
         prev2,
-        append_path(path, :contents),
+        push(path, :contents),
         mode;
         sharding=Base.getproperty(sharding, :contents),
         kwargs...,
@@ -2334,8 +2333,8 @@ function make_tracer(
         make_tracer(seen, prev.stop, path, mode; kwargs...)
         return nothing
     end
-    newstart = make_tracer(seen, prev.start, append_path(path, :start), mode; kwargs...)
-    newstop = make_tracer(seen, prev.stop, append_path(path, :stop), mode; kwargs...)
+    newstart = make_tracer(seen, prev.start, push(path, :start), mode; kwargs...)
+    newstop = make_tracer(seen, prev.stop, push(path, :stop), mode; kwargs...)
     if typeof(newstart) == typeof(prev.start) && typeof(newstop) == typeof(prev.stop)
         return prev
     else
@@ -2381,21 +2380,21 @@ function make_tracer(
         make_tracer(seen, prev.offset, path, mode; sharding, kwargs...)
         return nothing
     end
-    newref = make_tracer(seen, prev.ref, append_path(path, :ref), mode; sharding, kwargs...)
+    newref = make_tracer(seen, prev.ref, push(path, :ref), mode; sharding, kwargs...)
     newstep = make_tracer(
-        seen, prev.step, append_path(path, :step), mode; sharding, kwargs...
+        seen, prev.step, push(path, :step), mode; sharding, kwargs...
     )
     newlen = make_tracer(
         seen,
         prev.len,
-        append_path(path, :len),
+        push(path, :len),
         mode;
         sharding,
         kwargs...,
         track_numbers=Union{},
     )
     newoffset = make_tracer(
-        seen, prev.offset, append_path(path, :offset), mode; sharding, kwargs...
+        seen, prev.offset, push(path, :offset), mode; sharding, kwargs...
     )
     if (
         typeof(newref) == typeof(prev.ref) &&
@@ -2441,8 +2440,8 @@ function make_tracer(
         make_tracer(seen, prev.den, path, mode; kwargs...)
         return nothing
     end
-    newnum = make_tracer(seen, prev.num, append_path(path, :num), mode; kwargs...)
-    newden = make_tracer(seen, prev.den, append_path(path, :den), mode; kwargs...)
+    newnum = make_tracer(seen, prev.num, push(path, :num), mode; kwargs...)
+    newden = make_tracer(seen, prev.den, push(path, :den), mode; kwargs...)
     if typeof(newnum) == typeof(prev.num) && typeof(newden) == typeof(prev.den)
         return prev
     else

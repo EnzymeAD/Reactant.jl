@@ -21,7 +21,7 @@ import ..Reactant:
     OrderedIdDict,
     make_tracer,
     TracedToConcrete,
-    append_path,
+    push,
     ancestor,
     TracedType
 import Reactant: OptimizeCommunicationOptions, ShardyPropagationOptions, CompileOptions
@@ -257,7 +257,7 @@ function create_result(
             # If the field is undefined we don't set it. A common example for this is `du2`
             # for Tridiagonal
             isdefined(tocopy, i) || continue
-            ev = create_result(getfield(tocopy, i), append_path(path, i), args...)
+            ev = create_result(getfield(tocopy, i), push(path, i), args...)
             push!(elems, ev)
         end
 
@@ -527,7 +527,7 @@ function create_result(
         result_cache[tocopy] = sym
 
         for (i, v) in enumerate(tocopy)
-            subexpr = create_result(v, append_path(path, i), args...)
+            subexpr = create_result(v, push(path, i), args...)
             push!(
                 resultgen_code,
                 quote
@@ -566,7 +566,7 @@ function create_result(
     )
     elems = Union{Symbol,Expr}[]
     for (k, v) in pairs(tocopy)
-        push!(elems, create_result(v, append_path(path, k), args...))
+        push!(elems, create_result(v, push(path, k), args...))
     end
     return :(($(elems...),))
 end
@@ -597,7 +597,7 @@ function create_result(
     )
     elems = Union{Symbol,Expr}[]
     for (i, (_, v)) in enumerate(pairs(tocopy))
-        push!(elems, create_result(v, append_path(path, i), args...))
+        push!(elems, create_result(v, push(path, i), args...))
     end
     return :(NamedTuple{$K}(($(elems...),)))
 end
@@ -641,7 +641,7 @@ function create_result(
         result_cache[tocopy] = sym
 
         for (k, v) in pairs(tocopy)
-            subexpr = create_result(v, append_path(path, k), args...)
+            subexpr = create_result(v, push(path, k), args...)
             # symbol keys must be quoted in generated code; otherwise
             # they are interpreted as variable references
             k_expr = k isa Symbol ? QuoteNode(k) : k
