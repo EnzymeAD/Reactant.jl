@@ -103,3 +103,13 @@ function MPI.Allreduce!(sendbuf::TracedRArray, recvbuf::TracedRArray, op, comm::
 
     return Ops.allreduce!(op, sendbuf, recvbuf)
 end
+
+function MPI.Bcast!(buf::TracedRArray, root::Integer, comm::MPI.Comm)
+    root = Reactant.Ops.constant(Int32(root))
+    return MPI.Bcast!(buf, root, comm)
+end
+
+function MPI.Bcast!(buf::TracedRArray, root::TracedRNumber, comm::MPI.Comm)
+    @assert comm == MPI.COMM_WORLD "Only MPI.COMM_WORLD is supported currently"
+    return Ops.bcast!(buf, root)
+end
