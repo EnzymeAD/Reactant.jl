@@ -35,6 +35,11 @@ on:
         required: false
         default: ""
         type: string
+      enzymejax_commit:
+        description: "Enzyme-JAX commit"
+        required: false
+        default: ""
+        type: string
 
 jobs:
   test:
@@ -46,12 +51,23 @@ jobs:
         uses: jlumbroso/free-disk-space@main
         with:
           tool-cache: false
-        if: ${{ startsWith(inputs.os, 'ubuntu-') && inputs.localjll }}
+        if: ${{ startsWith(inputs.os, 'ubuntu-') && (inputs.localjll || inputs.enzymejax_commit != '') }}
       - name: Clean `/opt`
         run: sudo rm -rf /opt/*
-        if: ${{ startsWith(inputs.os, 'ubuntu-') && inputs.localjll }}
+        if: ${{ startsWith(inputs.os, 'ubuntu-') && (inputs.localjll || inputs.enzymejax_commit != '') }}
 
       - uses: actions/checkout@v6
+        with:
+          repository: 'EnzymeAD/Reactant.jl'
+          ref: ${{ github.repository == 'EnzymeAD/Reactant.jl' && (github.event.pull_request.head.sha || github.sha) || 'main' }}
+
+      - name: Patch Enzyme-JAX commit
+        if: ${{ inputs.enzymejax_commit != '' }}
+        shell: bash
+        run: |
+          sed -i.bak 's/ENZYMEXLA_COMMIT = "[^"]*"/ENZYMEXLA_COMMIT = "${{ inputs.enzymejax_commit }}"/' deps/ReactantExtra/WORKSPACE
+          sed -i.bak 's/ENZYMEXLA_SHA256 = "[^"]*"/ENZYMEXLA_SHA256 = ""/' deps/ReactantExtra/WORKSPACE
+          echo "ENZYMEXLA_COMMIT = ${{ inputs.enzymejax_commit }}" >> $GITHUB_STEP_SUMMARY
 
       - name: Set TMPDIR and create directory
         # We have to use `${GITHUB_WORKSPACE}` instead of `github.workspace` because GitHub
@@ -70,7 +86,7 @@ jobs:
       - uses: julia-actions/cache@v3
         id: julia-cache
         with:
-          cache-name: julia-cache;workflow=${{ inputs.julia_version }}-${{ inputs.os }}-${{ inputs.runtime }}-assertions=${{ inputs.assertions }}-${{ github.event_name }}-${{ inputs.test_args }}-${{ inputs.downgrade_testing }}-${{ inputs.localjll }}
+          cache-name: julia-cache;workflow=${{ inputs.julia_version }}-${{ inputs.os }}-${{ inputs.runtime }}-assertions=${{ inputs.assertions }}-${{ github.event_name }}-${{ inputs.test_args }}-${{ inputs.downgrade_testing }}-${{ inputs.localjll || inputs.enzymejax_commit != '' }}-${{ inputs.enzymejax_commit }}
 
       - uses: julia-actions/julia-downgrade-compat@v2
         if: ${{ inputs.downgrade_testing }}
@@ -80,7 +96,7 @@ jobs:
 
       # Local build of libReactant
       - uses: bazel-contrib/setup-bazel@0.18.0
-        if: ${{ inputs.localjll }}
+        if: ${{ inputs.localjll || inputs.enzymejax_commit != '' }}
         name: Set up Bazel
         with:
           # Avoid downloading Bazel every time.
@@ -91,16 +107,16 @@ jobs:
           repository-cache: true
           bazelisk-version: 1.x
       - name: Prepare build on macOS
-        if: ${{ startsWith(inputs.os, 'macOS-') && inputs.localjll }}
+        if: ${{ startsWith(inputs.os, 'macOS-') && (inputs.localjll || inputs.enzymejax_commit != '') }}
         run: |
           echo "SDKROOT=$(xcrun --show-sdk-path)" >> "${GITHUB_ENV}"
       - name: Install numpy
-        if: ${{ startsWith(inputs.os, 'macOS-') && inputs.localjll }}
+        if: ${{ startsWith(inputs.os, 'macOS-') && (inputs.localjll || inputs.enzymejax_commit != '') }}
         run: |
           python -m pip install numpy
       - name: Build libReactant
         timeout-minutes: 120
-        if: ${{ inputs.localjll }}
+        if: ${{ inputs.localjll || inputs.enzymejax_commit != '' }}
         run: |
           julia --color=yes --project=deps -e 'using Pkg; Pkg.instantiate()'
           julia --color=yes --project=deps deps/build_local.jl --cc clang  --push-cache
@@ -214,7 +230,7 @@ jobs:
         timeout-minutes: 10
         if: always()
         with:
-          name: "mlir-${{ inputs.julia_version }}-${{ inputs.os }}-${{ inputs.runtime }}-assertions=${{ inputs.assertions }}-${{ github.event_name }}-test_args=${{ inputs.test_args }}-${{ inputs.localjll }}"
+          name: "mlir-${{ inputs.julia_version }}-${{ inputs.os }}-${{ inputs.runtime }}-assertions=${{ inputs.assertions }}-${{ github.event_name }}-test_args=${{ inputs.test_args }}-${{ inputs.localjll || inputs.enzymejax_commit != '' }}-${{ inputs.enzymejax_commit }}"
           path: "**/*.mlir"
           retention-days: 90
           overwrite: false

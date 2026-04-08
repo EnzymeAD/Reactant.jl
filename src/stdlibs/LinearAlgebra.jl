@@ -27,6 +27,11 @@ function __init__()
         libblastrampoline_handle = Libdl.dlopen(BLAS.libblas)
 
         for (cname, enzymexla_name) in [
+            # gtsv
+            (BLAS.@blasfunc(sgtsv_), :enzymexla_lapack_sgtsv_),
+            (BLAS.@blasfunc(dgtsv_), :enzymexla_lapack_dgtsv_),
+            (BLAS.@blasfunc(cgtsv_), :enzymexla_lapack_cgtsv_),
+            (BLAS.@blasfunc(zgtsv_), :enzymexla_lapack_zgtsv_),
             # LU
             (BLAS.@blasfunc(sgetrf_), :enzymexla_lapack_sgetrf_),
             (BLAS.@blasfunc(dgetrf_), :enzymexla_lapack_dgetrf_),
