@@ -450,17 +450,16 @@ function BLAS.trmm!(
     A::AnyTracedRMatrix,
     B::AnyTracedRMatrix,
 )
-    A_ = (uplo == 'U') ? UpperTriangular(A) : LowerTriangular(A)
-    if diag == 'U'
-        A_ = (uplo == 'U') ? UnitUpperTriangular(A) : UnitLowerTriangular(A)
-    end
-    A_op = (transa == 'N') ? A_ : (transa == 'T' ? transpose(A_) : adjoint(A_))
-
-    if side == 'L'
-        copyto!(B, alpha .* (A_op * B))
-    else
-        copyto!(B, alpha .* (B * A_op))
-    end
+    res = @opcall trmm(
+        materialize_traced_array(A),
+        materialize_traced_array(B),
+        alpha,
+        side=side,
+        uplo=uplo,
+        transpose_a=transa,
+        diag,
+    )
+    copyto!(B, res)
     return B
 end
 
