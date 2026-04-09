@@ -15,7 +15,7 @@ const AnyStridedTracedRArray{T,N} = StridedArray{TracedRNumber{T},N}
 function Reactant.make_tracer(
     seen,
     @nospecialize(prev::AbstractFFTs.Plan{T}),
-    @nospecialize(path),
+    path,
     mode;
     @nospecialize(track_numbers::Type = Union{}),
     @nospecialize(sharding = Reactant.Sharding.NoSharding()),
