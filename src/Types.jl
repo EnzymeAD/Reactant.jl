@@ -52,6 +52,11 @@ mutable struct TracedRNumber{T} <: RNumber{T}
     end
 end
 
+TracedRNumber{T}(mlir_data::Union{Nothing,MLIR.IR.Value}) where {T} = TracedRNumber{T}((), mlir_data)
+function TracedRNumber{T}(::Tuple{}, mlir_data) where {T}
+    return TracedRNumber{T}(PersistentStack{Any}(nothing, nothing, 0), mlir_data)
+end
+
 Base.elsize(::Type{TracedRNumber{T}}) where {T} = sizeof(T)
 Base.elsize(::Type{RNumber{T}}) where {T} = sizeof(T)
 Base.elsize(::Type{<:AbstractConcreteNumber{T}}) where {T} = sizeof(T)
@@ -82,6 +87,11 @@ mutable struct TracedRArray{T,N} <: RArray{TracedRNumber{T},N}
     function TracedRArray{T,N}(::UndefInitializer, shape::Integer...) where {T,N}
         return similar(TracedRArray{T,N}, shape...)
     end
+end
+
+TracedRArray{T,N}(mlir_data::Union{Nothing,MLIR.IR.Value}) where {T} = TracedRArray{T,N}((), mlir_data)
+function TracedRArray{T,N}(::Tuple{}, mlir_data) where {T}
+    return TracedRArray{T,N}(PersistentStack{Any}(nothing, nothing, 0), mlir_data)
 end
 
 function repath(x::TracedRArray{T,N}, paths) where {T,N}
