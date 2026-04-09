@@ -89,9 +89,9 @@ mutable struct TracedRArray{T,N} <: RArray{TracedRNumber{T},N}
     end
 end
 
-TracedRArray{T,N}(mlir_data::Union{Nothing,MLIR.IR.Value}) where {T} = TracedRArray{T,N}((), mlir_data)
-function TracedRArray{T,N}(::Tuple{}, mlir_data) where {T}
-    return TracedRArray{T,N}(PersistentStack{Any}(nothing, nothing, 0), mlir_data)
+TracedRArray{T,N}(mlir_data::Union{Nothing,MLIR.IR.Value}, shape) where {T,N} = TracedRArray{T,N}((), mlir_data, shape)
+function TracedRArray{T,N}(::Tuple{}, mlir_data, shape) where {T,N}
+    return TracedRArray{T,N}(PersistentStack{Any}(nothing, nothing, 0), mlir_data, shape)
 end
 
 function repath(x::TracedRArray{T,N}, paths) where {T,N}
