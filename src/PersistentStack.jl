@@ -24,7 +24,7 @@ end
 # fast shortcut for Base.Iterators.reverse
 function Base.iterate(stack::Base.Iterators.Reverse{<:PersistentStack}, state = stack.itr)
     isempty(stack.itr) && return nothing
-    return pop(state), front(state)
+    return pop(state), Base.front(state)
 end
 
 function Base.getindex(stack::PersistentStack, i)
@@ -33,7 +33,7 @@ function Base.getindex(stack::PersistentStack, i)
     end
     count = length(stack)
     while count > i
-        stack = front(stack)
+        stack = Base.front(stack)
         count -= 1
     end
     return pop(stack)
@@ -43,10 +43,10 @@ Base.lastindex(stack::PersistentStack) = length(stack)
 
 function Base.collect(stack::PersistentStack{T}) where {T}
     res = T[pop(stack)]
-    state = front(stack)
+    state = Base.front(stack)
     while !isnothing(state)
         push!(res, pop(state))
-        state = front(state)
+        state = Base.front(state)
     end
     reverse!(res)
     return res
