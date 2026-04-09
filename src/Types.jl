@@ -39,11 +39,11 @@ end
 
 ## TracedRNumber
 mutable struct TracedRNumber{T} <: RNumber{T}
-    paths::Tuple
+    paths::PersistentStack{Any}
     mlir_data::Union{Nothing,MLIR.IR.Value}
 
     function TracedRNumber{T}(
-        paths::Tuple, mlir_data::Union{Nothing,MLIR.IR.Value}
+        paths::PersistentStack{Any}, mlir_data::Union{Nothing,MLIR.IR.Value}
     ) where {T}
         if !isnothing(mlir_data)
             @assert size(MLIR.IR.type(mlir_data)) == ()
@@ -65,12 +65,12 @@ end
 
 ## TracedRArray
 mutable struct TracedRArray{T,N} <: RArray{TracedRNumber{T},N}
-    paths::Tuple
+    paths::PersistentStack{Any}
     mlir_data::Union{Nothing,MLIR.IR.Value}
     shape::NTuple{N,Int}
 
     function TracedRArray{T,N}(
-        paths::Tuple, mlir_data::Union{Nothing,MLIR.IR.Value}, shape
+        paths::PersistentStack{Any}, mlir_data::Union{Nothing,MLIR.IR.Value}, shape
     ) where {T,N}
         shape = Tuple(shape)
         if !isnothing(mlir_data)
