@@ -43,7 +43,7 @@ function Base.getindex(stack::PersistentStack, i::Int)
 end
 
 function Base.getindex(stack::PersistentStack{T}, r::UnitRange{Int}) where {T}
-    isempty(r) && throw(ErrorException("Empty range is not supported."))
+    isempty(r) && return PersistentStack{T}(pop(stack), nothing, 0)
     if first(r) < 1 || last(r) > length(stack)
         throw(BoundsError(stack, r))
     end
