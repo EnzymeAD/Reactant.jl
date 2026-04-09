@@ -1467,21 +1467,21 @@ Base.@nospecializeinfer function make_tracer(
         return nothing
     end
     if mode == TracedTrack
-        TracedUtils.set_paths!(prev, (TracedUtils.get_paths(prev)..., path))
+        TracedUtils.set_paths!(prev, push(TracedUtils.get_paths(prev), path))
         if !haskey(seen, prev)
             return seen[prev] = prev
         end
         return prev
     end
     if mode == NoStopTracedTrack
-        TracedUtils.set_paths!(prev, (TracedUtils.get_paths(prev)..., path))
+        TracedUtils.set_paths!(prev, push(TracedUtils.get_paths(prev), path))
         if !haskey(seen, prev)
             seen[prev] = prev # don't return!
         end
         return prev
     end
     if mode == TracedSetPath
-        TracedUtils.set_paths!(prev, (TracedUtils.get_paths(prev)..., path))
+        TracedUtils.set_paths!(prev, push(TracedUtils.get_paths(prev), path))
         if haskey(seen, prev)
             return seen[prev]
         end
@@ -1556,21 +1556,21 @@ Base.@nospecializeinfer function make_tracer(
         return nothing
     end
     if mode == TracedTrack
-        TracedUtils.set_paths!(prev, (TracedUtils.get_paths(prev)..., path))
+        TracedUtils.set_paths!(prev, push(TracedUtils.get_paths(prev), path))
         if !haskey(seen, prev)
             return seen[prev] = prev
         end
         return prev
     end
     if mode == NoStopTracedTrack
-        TracedUtils.set_paths!(prev, (TracedUtils.get_paths(prev)..., path))
+        TracedUtils.set_paths!(prev, push(TracedUtils.get_paths(prev), path))
         if !haskey(seen, prev)
             seen[prev] = prev # don't return!
         end
         return prev
     end
     if mode == TracedSetPath
-        TracedUtils.set_paths!(prev, (TracedUtils.get_paths(prev)..., path))
+        TracedUtils.set_paths!(prev, push(TracedUtils.get_paths(prev), path))
         if haskey(seen, prev)
             return seen[prev]
         end
@@ -1636,21 +1636,21 @@ Base.@nospecializeinfer function make_tracer(
         throw("Cannot have MissingTracedValue as function call argument.")
     end
     if mode == TracedTrack
-        TracedUtils.set_paths!(prev, (TracedUtils.get_paths(prev)..., path))
+        TracedUtils.set_paths!(prev, push(TracedUtils.get_paths(prev), path))
         if !haskey(seen, prev)
             return seen[prev] = prev
         end
         return prev
     end
     if mode == NoStopTracedTrack
-        TracedUtils.set_paths!(prev, (TracedUtils.get_paths(prev)..., path))
+        TracedUtils.set_paths!(prev, push(TracedUtils.get_paths(prev), path))
         if !haskey(seen, prev)
             seen[prev] = prev # don't return!
         end
         return prev
     end
     if mode == TracedSetPath
-        TracedUtils.set_paths!(prev, (TracedUtils.get_paths(prev)..., path))
+        TracedUtils.set_paths!(prev, push(TracedUtils.get_paths(prev), path))
         haskey(seen, prev) && return seen[prev]
         res = MissingTracedValue((path,))
         seen[res] = res
@@ -2083,7 +2083,7 @@ Base.@nospecializeinfer function make_tracer(
         return make_tracer(seen, prev.seed, path, mode; kwargs...)
     end
     return ReactantRNG(
-        make_tracer(seen, prev.seed, (path..., 1), mode; kwargs...), prev.algorithm
+        make_tracer(seen, prev.seed, push(path, 1), mode; kwargs...), prev.algorithm
     )
 end
 
@@ -2093,7 +2093,7 @@ Base.@nospecializeinfer function make_tracer(
     if mode == ArrayToConcrete
         TracedRandom.should_warn_if_not_natively_supported(prev)
         return ReactantRNG(
-            make_tracer(seen, TracedRandom.make_seed(prev), (path..., 1), mode; kwargs...),
+            make_tracer(seen, TracedRandom.make_seed(prev), push(path, 1), mode; kwargs...),
             TracedRandom.rng_algorithm(prev),
         )
     end
