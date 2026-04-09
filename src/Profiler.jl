@@ -940,30 +940,30 @@ passing the path to the file.
 """
 function get_total_program_roofline(xplane_file_path::String)
     @assert isfile(xplane_file_path) "File not found: $xplane_file_path"
-    
+
     try
         # Pass the file path directly to xspace_to_tools_data
         data, is_binary = xspace_to_tools_data([xplane_file_path], "roofline_model")
-        
+
         s = String(data)
         j = JSON.parse(s)
-        
+
         if j isa Vector && length(j) > 0
             table = j[1]
             cols = table["cols"]
             rows = table["rows"]
-            
+
             if length(rows) > 0
                 col_ids = [c["id"] for c in cols]
                 op_idx = findfirst(==("operation"), col_ids)
-                
+
                 for row in rows
                     cells = row["c"]
                     if op_idx !== nothing && op_idx <= length(cells)
                         op_name = cells[op_idx]["v"]
                         # Look for the aggregate row
                         if op_name == "Program" || op_name == "Total"
-                            res = Dict{String, Any}()
+                            res = Dict{String,Any}()
                             for (i, col) in enumerate(cols)
                                 if i <= length(cells)
                                     res[col["id"]] = cells[i]["v"]
@@ -978,9 +978,9 @@ function get_total_program_roofline(xplane_file_path::String)
     catch e
         @debug "Error calling roofline_model tool: $e"
     end
-    
+
     @warn "Roofline tool returned no data or failed. This may happen if the profile lacks step markers."
-    return Dict{String, Any}()
+    return Dict{String,Any}()
 end
 
 function _extract_kwargs_from_expr(args...)
