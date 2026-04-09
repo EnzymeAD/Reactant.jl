@@ -1652,7 +1652,7 @@ Base.@nospecializeinfer function make_tracer(
     if mode == TracedSetPath
         TracedUtils.set_paths!(prev, push(TracedUtils.get_paths(prev), path))
         haskey(seen, prev) && return seen[prev]
-        res = MissingTracedValue((path,))
+        res = MissingTracedValue(Tuple(path))
         seen[res] = res
         return res
     end
