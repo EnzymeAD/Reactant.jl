@@ -21,6 +21,7 @@ import ..Reactant:
     OrderedIdDict,
     make_tracer,
     TracedToConcrete,
+    PersistentStack,
     push,
     ancestor,
     TracedType
@@ -2169,7 +2170,7 @@ function compile_mlir!(
     end
 
     concrete_result = make_tracer(
-        OrderedIdDict(), traced_result, ("result",), TracedToConcrete; runtime
+        OrderedIdDict(), traced_result, PersistentStack{Any}("result"), TracedToConcrete; runtime
     )
 
     return Reactant.TracedUtils.CompiledMlirFnResult(
@@ -3108,7 +3109,7 @@ function codegen_unflatten!(
 
     result_code = create_result(
         concrete_result,
-        (),
+        PersistentStack{Any}(nothing, nothing, 0),
         result_stores,
         path_to_shard_info,
         to_unreshard_results,
@@ -3562,8 +3563,8 @@ function compile(ctx, f, args; kwargs...)
     (; linear_args, seen_args, linear_results, preserved_args, concrete_result) =
         mlir_fn_res
 
-    result_stores = Dict{Tuple,Symbol}()
-    path_to_shard_info = mlir_fn_res.is_sharded ? Dict{Tuple,Symbol}() : nothing
+    result_stores = Dict{PersistentStack{Any},Symbol}()
+    path_to_shard_info = mlir_fn_res.is_sharded ? Dict{PersistentStack{Any},Symbol}() : nothing
 
     global_mesh_expr = if mlir_fn_res.unique_meshes === nothing
         :()
