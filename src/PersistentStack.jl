@@ -27,7 +27,10 @@ function Base.iterate(stack::Base.Iterators.Reverse{<:PersistentStack}, state = 
     return pop(state), Base.front(state)
 end
 
-function Base.getindex(stack::PersistentStack, i)
+Base.firstindex(::PersistentStack) = 1
+Base.lastindex(stack::PersistentStack) = length(stack)
+
+function Base.getindex(stack::PersistentStack, i::Int)
     if i < 1 || i > length(stack)
         throw(BoundsError(stack, i))
     end
@@ -38,8 +41,19 @@ function Base.getindex(stack::PersistentStack, i)
     end
     return pop(stack)
 end
-Base.firstindex(::PersistentStack) = 1
-Base.lastindex(stack::PersistentStack) = length(stack)
+
+function Base.getindex(stack::PersistentStack{T}, r::UnitRange{Int}) where {T}
+    isempty(r) && throw(ErrorException("Empty range is not supported."))
+    if first(r) < 1 || last(r) > length(stack)
+        throw(BoundsError(stack, r))
+    end
+
+    res = PersistentStack{T}(stack[first(r)])
+    for i in r[2:end]
+        res = push(res, stack[i])
+    end
+    return res
+end
 
 function Base.collect(stack::PersistentStack{T}) where {T}
     n = length(stack)
