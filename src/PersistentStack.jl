@@ -42,12 +42,12 @@ Base.firstindex(::PersistentStack) = 1
 Base.lastindex(stack::PersistentStack) = length(stack)
 
 function Base.collect(stack::PersistentStack{T}) where {T}
-    res = T[pop(stack)]
-    state = Base.front(stack)
-    while !isnothing(state)
-        push!(res, pop(state))
-        state = Base.front(state)
+    n = length(stack)
+    res = Vector{T}(undef, n)
+    state = stack
+    for i in 1:n
+        res[n-i+1] = pop(state)
+        state = Base.front(state) 
     end
-    reverse!(res)
     return res
 end
