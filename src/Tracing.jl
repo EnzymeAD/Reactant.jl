@@ -1380,7 +1380,7 @@ Base.@nospecializeinfer function make_tracer(
     mode == ArrayToConcrete && return ConcretePJRTArray(prev; sharding, device, client)
     mode != ConcreteToTraced && throw("Cannot trace concrete")
     haskey(seen, prev) && return seen[prev]::TracedRArray{T,N}
-    res = TracedRArray{T,N}((path,), nothing, size(prev))
+    res = TracedRArray{T,N}(PersistentStack{Any}(path), nothing, size(prev))
     seen[prev] = res
     return res
 end
@@ -1401,7 +1401,7 @@ Base.@nospecializeinfer function make_tracer(
     mode == ArrayToConcrete && return ConcreteIFRTArray(prev; sharding, device, client)
     mode != ConcreteToTraced && throw("Cannot trace concrete")
     haskey(seen, prev) && return seen[prev]::TracedRArray{T,N}
-    res = TracedRArray{T,N}((path,), nothing, size(prev))
+    res = TracedRArray{T,N}(PersistentStack{Any}(path), nothing, size(prev))
     seen[prev] = res
     return res
 end
@@ -1422,7 +1422,7 @@ Base.@nospecializeinfer function make_tracer(
     mode == ArrayToConcrete && return ConcretePJRTNumber(prev; sharding, device, client)
     mode != ConcreteToTraced && throw("Cannot trace existing trace type")
     haskey(seen, prev) && return seen[prev]::TracedRNumber{T}
-    res = TracedRNumber{T}((path,), nothing)
+    res = TracedRNumber{T}(PersistentStack{Any}(path), nothing)
     seen[prev] = res
     return res
 end
@@ -1443,7 +1443,7 @@ Base.@nospecializeinfer function make_tracer(
     mode == ArrayToConcrete && return ConcreteIFRTNumber(prev; sharding, device, client)
     mode != ConcreteToTraced && throw("Cannot trace existing trace type")
     haskey(seen, prev) && return seen[prev]::TracedRNumber{T}
-    res = TracedRNumber{T}((path,), nothing)
+    res = TracedRNumber{T}(PersistentStack{Any}(path), nothing)
     seen[prev] = res
     return res
 end
@@ -1486,11 +1486,11 @@ Base.@nospecializeinfer function make_tracer(
             return seen[prev]
         end
         res = if toscalar
-            TracedRNumber{T}((path,), nothing)
+            TracedRNumber{T}(PersistentStack{Any}(path), nothing)
         elseif tobatch !== nothing
             error("This should not happen...")
         else
-            TracedRArray{T,N}((path,), prev.mlir_data, size(prev))
+            TracedRArray{T,N}(PersistentStack{Any}(path), prev.mlir_data, size(prev))
         end
         seen[prev] = res
         return res
@@ -1575,11 +1575,11 @@ Base.@nospecializeinfer function make_tracer(
             return seen[prev]
         end
         res = if toscalar
-            TracedRNumber{T}((path,), nothing)
+            TracedRNumber{T}(PersistentStack{Any}(path), nothing)
         elseif tobatch !== nothing
-            TracedRArray{T,length(tobatch)}((path,), prev.mlir_data, tobatch)
+            TracedRArray{T,length(tobatch)}(PersistentStack{Any}(path), prev.mlir_data, tobatch)
         else
-            TracedRNumber{T}((path,), prev.mlir_data)
+            TracedRNumber{T}(PersistentStack{Any}(path), prev.mlir_data)
         end
         seen[prev] = res
         return res
@@ -1689,7 +1689,7 @@ Base.@nospecializeinfer function make_tracer(
             error("Unsupported runtime $runtime")
         else
             if mode == TracedTrack || mode == NoStopTracedTrack
-                res = TracedRNumber{RT}((path,), broadcast_to_size(prev, ()).mlir_data)
+                res = TracedRNumber{RT}(PersistentStack{Any}(path), broadcast_to_size(prev, ()).mlir_data)
                 if Base.ismutable(prev) && !haskey(seen, prev)
                     return seen[prev] = res
                 end
@@ -1697,7 +1697,7 @@ Base.@nospecializeinfer function make_tracer(
                 return res
             elseif mode == TracedSetPath
                 haskey(seen, prev) && return seen[prev]
-                res = TracedRNumber{RT}((path,), broadcast_to_size(prev, ()).mlir_data)
+                res = TracedRNumber{RT}(PersistentStack{Any}(path), broadcast_to_size(prev, ()).mlir_data)
                 seen[prev] = res
                 return res
             elseif mode == TracedToConcrete
