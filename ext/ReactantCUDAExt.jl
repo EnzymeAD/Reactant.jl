@@ -1178,6 +1178,12 @@ function mlir_extract_roots_from_value!(
     end
 end
 
+# On 1.12+, there was a change to the calling convention where
+# an additional argument would be added for the roots, this will
+# return the number of roots in the corresponding convention, or
+# 0 if it does not apply https://github.com/JuliaLang/julia/pull/55767/files#diff-62cfb2606c6a323a7f26a3eddfa0bf2b819fa33e094561fee09daeb328e3a1e7
+const HasInlineRootsABI = VERSION ≥ v"1.12"
+
 Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     args...;
     convert=Val(true),
@@ -1280,7 +1286,10 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     )
 
     trueidx = 1
-    allocs = Union{Tuple{MLIR.IR.Value,MLIR.IR.Type,LLVM.LLVMType},Nothing}[]
+    allocs = Union{
+        Tuple{MLIR.IR.Value,MLIR.IR.Type,HasInlineRootsABI ? LLVM.LLVMType : Nothing},
+        Nothing,
+    }[]
 
     llvmptr = MLIR.IR.Type(MLIR.API.mlirLLVMPointerTypeGet(ctx, 0))
     i8 = MLIR.IR.Type(UInt8)
@@ -1300,8 +1309,8 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
             )
             trueidx += 1
             jltyp = Core.Typeof(a)
-            lltyp = to_llvmtype(argty)
-            if Enzyme.Compiler.inline_roots_type(lltyp) != 0
+            lltyp = HasInlineRootsABI ? to_llvmtype(argty) : nothing
+            if HasInlineRootsABI && Enzyme.Compiler.inline_roots_type(lltyp) != 0
                 trueidx += 1
             end
             c1 = MLIR.IR.result(
@@ -1453,7 +1462,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
             alloc, argty, llvmtyp = arg
             argres = MLIR.IR.result(MLIR.Dialects.llvm.load(alloc; res=argty), 1)
             push!(wrapargs, argres)
-            if Enzyme.Compiler.inline_roots_type(llvmtyp) != 0
+            if HasInlineRootsABI && Enzyme.Compiler.inline_roots_type(llvmtyp) != 0
                 c1 = MLIR.IR.result(
                     MLIR.Dialects.llvm.mlir_constant(;
                         res=MLIR.IR.Type(Int64), value=MLIR.IR.Attribute(1)
