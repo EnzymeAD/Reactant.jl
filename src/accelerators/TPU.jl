@@ -146,6 +146,7 @@ const _GOOGLE_PCI_VENDOR_ID = "0x1ae0"
     v5p
     v5e
     v6e
+    tpu7x
 end
 
 const _TPU_PCI_DEVICE_IDS = Dict(
@@ -155,6 +156,7 @@ const _TPU_PCI_DEVICE_IDS = Dict(
     "0x0062" => TPUVersion.v5p,
     "0x0063" => TPUVersion.v5e,
     "0x006f" => TPUVersion.v6e,
+    "0x0076" => TPUVersion.tpu7x,
 )
 
 has_tpu() = first(num_available_tpu_chips_and_device_id()) > 0
