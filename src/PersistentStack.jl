@@ -9,7 +9,10 @@ PersistentStack{T}(x) where {T} = PersistentStack{T}(x, nothing, 1)
 
 push(stack::PersistentStack, x) = PersistentStack(x, stack, length(stack) + 1)
 pop(stack::PersistentStack) = stack.data
-Base.front(stack::PersistentStack) = stack.prev
+
+function Base.front(stack::PersistentStack{T}) where {T}
+    !isnothing(stack.prev) ? stack.prev : PersistentStack{T}(pop(stack), nothing, 0)
+end
 
 Base.IteratorEltype(::Type{<:PersistentStack{T}}) where {T} = Base.HasEltype()
 Base.eltype(::Type{<:PersistentStack{T}}) where {T} = T
