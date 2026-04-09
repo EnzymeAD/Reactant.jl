@@ -300,13 +300,15 @@ function Base.div(
     return div(x, y, RoundDown)
 end
 function Base.div(
-    x::TracedRNumber{<:Reactant.ReactantSInt}, y::TracedRNumber{<:Reactant.ReactantUInt},
+    x::TracedRNumber{<:Reactant.ReactantSInt},
+    y::TracedRNumber{<:Reactant.ReactantUInt},
     ::typeof(RoundToZero),
 )
     return flipsign(signed(div(unsigned(abs(x)), y)), x)
 end
 function Base.div(
-    x::TracedRNumber{<:Reactant.ReactantSInt}, y::TracedRNumber{<:Reactant.ReactantUInt},
+    x::TracedRNumber{<:Reactant.ReactantSInt},
+    y::TracedRNumber{<:Reactant.ReactantUInt},
     ::typeof(RoundDown),
 )
     ax = unsigned(abs(x))
@@ -316,7 +318,8 @@ function Base.div(
     return ifelse(signbit(x) & has_rem, result - one(result), result)
 end
 function Base.div(
-    x::TracedRNumber{<:Reactant.ReactantSInt}, y::TracedRNumber{<:Reactant.ReactantUInt},
+    x::TracedRNumber{<:Reactant.ReactantSInt},
+    y::TracedRNumber{<:Reactant.ReactantUInt},
     ::typeof(RoundUp),
 )
     ax = unsigned(abs(x))
@@ -326,7 +329,8 @@ function Base.div(
     return ifelse(!signbit(x) & has_rem, result + one(result), result)
 end
 function Base.div(
-    x::TracedRNumber{<:Reactant.ReactantSInt}, y::TracedRNumber{<:Reactant.ReactantUInt},
+    x::TracedRNumber{<:Reactant.ReactantSInt},
+    y::TracedRNumber{<:Reactant.ReactantUInt},
     ::typeof(RoundFromZero),
 )
     ax = unsigned(abs(x))
