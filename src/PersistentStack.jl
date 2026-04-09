@@ -55,6 +55,17 @@ function Base.getindex(stack::PersistentStack{T}, r::UnitRange{Int}) where {T}
     return res
 end
 
+function Base.hash(x::PersistentStack, h::UInt)
+    isempty(x) && return hash((), h ⊻ 0x12345678)
+    return hash((pop(x), Base.front(x)), h)
+end
+
+function Base.:(==)(x::PersistentStack, y::PersistentStack)
+    length(x) != length(y) && return false
+    isempty(x) && isempty(y) && return true
+    pop(x) == pop(y) && Base.front(x) == Base.front(y)
+end
+
 function Base.collect(stack::PersistentStack{T}) where {T}
     n = length(stack)
     res = Vector{T}(undef, n)
