@@ -54,3 +54,5 @@ end
 
 # calling (stack...,) is bad [median=617.612 ns]. use this instead [median=382.267 ns].
 Base.Tuple(stack::PersistentStack) = Tuple(collect(stack))
+
+Base.show(io::IO, stack::PersistentStack) = print(io, Tuple(stack))
