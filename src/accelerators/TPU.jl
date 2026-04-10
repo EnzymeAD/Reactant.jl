@@ -250,7 +250,7 @@ function get_metadata(key)
     gce_metadata_endpoint =
         "http://" * get(ENV, "GCE_METADATA_IP", "metadata.google.internal")
     retry_count = 0
-    retry_seconds = 0.500
+    retry_seconds = parse(Float64, get(ENV, "REACTANT_GCE_METADATA_RETRY_SECONDS", "0.5"))
     api_resp = nothing
 
     while retry_count < 6
