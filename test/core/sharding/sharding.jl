@@ -576,18 +576,27 @@ end
             mesh = Sharding.Mesh(reshape(Reactant.devices()[1:N], 1, 1), (:x,))
             sharding = Sharding.NamedSharding(mesh, ("x", nothing, nothing))
         else
-            mesh = Sharding.Mesh(reshape(Reactant.devices()[1:N], N÷2, 2), (:x, "y"))
+            mesh = Sharding.Mesh(reshape(Reactant.devices()[1:N], N ÷ 2, 2), (:x, "y"))
             sharding = Sharding.NamedSharding(mesh, ("x", "y", nothing))
         end
         # Source array: 2x2x2
         src = reshape(Float32[1:8;], 2, 2, 2)
         final_size = (4, 4, 4)
-        
         # Local reference implementations
         function local_nearest(arr, fsize)
             res = Array{eltype(arr)}(undef, fsize)
             for I in CartesianIndices(fsize)
-                idx = ntuple(d -> clamp(div(2*(I.I[d]-1)*(size(arr,d)-1) + fsize[d]-1, 2*(fsize[d]-1)) + 1, 1, size(arr,d)), ndims(arr))
+                idx = ntuple(
+                    d -> clamp(
+                        div(
+                            2 * (I.I[d] - 1) * (size(arr, d) - 1) + fsize[d] - 1,
+                            2 * (fsize[d] - 1),
+                        ) + 1,
+                        1,
+                        size(arr, d),
+                    ),
+                    ndims(arr),
+                )
                 res[I] = arr[CartesianIndex(idx)]
             end
             return res
@@ -599,14 +608,35 @@ end
             total_den = prod(dens)
             for I in CartesianIndices(fsize)
                 sum_val = 0.0
-                lows = ntuple(d -> clamp(div((I.I[d]-1)*(size(arr,d)-1), fsize[d]-1) + 1, 1, size(arr,d)), ndims(arr))
-                highs = ntuple(d -> clamp(div((I.I[d]-1)*(size(arr,d)-1) + fsize[d]-2, fsize[d]-1) + 1, 1, size(arr,d)), ndims(arr))
-                rems = ntuple(d -> rem((I.I[d]-1)*(size(arr,d)-1), fsize[d]-1), ndims(arr))
-                
+                lows = ntuple(
+                    d -> clamp(
+                        div((I.I[d] - 1) * (size(arr, d) - 1), fsize[d] - 1) + 1,
+                        1,
+                        size(arr, d),
+                    ),
+                    ndims(arr),
+                )
+                highs = ntuple(
+                    d -> clamp(
+                        div(
+                            (I.I[d] - 1) * (size(arr, d) - 1) + fsize[d] - 2,
+                            fsize[d] - 1,
+                        ) + 1,
+                        1,
+                        size(arr, d),
+                    ),
+                    ndims(arr),
+                )
+                rems = ntuple(
+                    d -> rem((I.I[d] - 1) * (size(arr, d) - 1), fsize[d] - 1), ndims(arr)
+                )
+
                 corner_space = CartesianIndices(ntuple(_ -> 2, ndims(arr)))
                 for c in corner_space
                     idx = ntuple(d -> c[d] == 1 ? lows[d] : highs[d], ndims(arr))
-                    w_int = prod(ntuple(d -> c[d] == 1 ? (dens[d] - rems[d]) : rems[d], ndims(arr)))
+                    w_int = prod(
+                        ntuple(d -> c[d] == 1 ? (dens[d] - rems[d]) : rems[d], ndims(arr))
+                    )
                     sum_val += w_int * arr[CartesianIndex(idx)]
                 end
                 res[I] = sum_val / total_den
@@ -620,7 +650,6 @@ end
         )
         @test size(carray_nearest) == final_size
         @test Array(carray_nearest) ≈ local_nearest(src, final_size)
-        
         # Test Linear
         carray_linear = Reactant.InterpolateArray(
             src, final_size, sharding, Reactant.InterpolationType.Linear

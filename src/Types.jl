@@ -442,33 +442,29 @@ end
     Linear
 end
 
-
 function InterpolateArray(
     local_cpu_array::AbstractArray{T,N},
     final_grid_size::Dims{N},
     sharding::Sharding.AbstractSharding,
     interpolation::InterpolationType.T,
-    halo::Dims{N} = ntuple(_ -> 0, N);
-    client=nothing
+    halo::Dims{N}=ntuple(_ -> 0, N);
+    client=nothing,
 ) where {T,N}
     @assert Sharding.is_sharded(sharding)
-    
     client = client === nothing ? XLA.default_backend() : client
     @assert client isa XLA.IFRT.Client "InterpolateArray currently only supports IFRT client"
-    
     (; hlo_sharding) = Sharding.HloSharding(sharding, final_grid_size)
     all_devices = XLA.get_device.((client,), sharding.mesh.device_ids)
-    
-    addressable_device_indices = [i - 1 for (i, device) in enumerate(all_devices) if XLA.is_addressable(device)]
-    
+
+    addressable_device_indices = [
+        i - 1 for (i, device) in enumerate(all_devices) if XLA.is_addressable(device)
+    ]
+
     addressable_slices, _ = XLA.sharding_to_concrete_array_indices(
         hlo_sharding, final_grid_size, addressable_device_indices
     )
-    
     src_size = size(local_cpu_array)
-    
     ordered_buffers = Vector{Array{T,N}}(undef, length(addressable_slices))
-    
     for (buf_idx, slice) in enumerate(addressable_slices)
         shard_shape = length.(slice)
         if interpolation == InterpolationType.Nearest
@@ -479,7 +475,7 @@ function InterpolateArray(
                 H_eff = max(1, H)
                 b = N_dim == 1 ? 1 : (N_dim - 2*H_eff + 1)
                 
-                return [begin
+               [begin
                     if I <= H
                         clamp(I, 1, M_dim)
                     elseif I >= N_dim - H + 1
@@ -491,7 +487,6 @@ function InterpolateArray(
                     end
                 end for I in I_range]
             end
-            
             buf = Array{T,N}(undef, shard_shape)
             for I in CartesianIndices(shard_shape)
                 idx = ntuple(dim -> src_idx_ranges[dim][I.I[dim]], N)
@@ -504,24 +499,25 @@ function InterpolateArray(
             # This ensures that the corners of the grids align exactly (I=1 -> 1, I=N_dim -> M_dim).
             # We compute this mapping using pure integers to avoid floating-point inaccuracies.
             # If halo > 0, the mapping is applied to the region between halos.
-            
             lows = ntuple(N) do dim
                 I_range = slice[dim]
                 N_dim, M_dim = final_grid_size[dim], src_size[dim]
                 H = halo[dim]
                 H_eff = max(1, H)
-                b = N_dim == 1 ? 1 : (N_dim - 2*H_eff + 1)
-                
-                [begin
-                    if I <= H
-                        clamp(I, 1, M_dim)
-                    elseif I >= N_dim - H + 1
-                        clamp(M_dim - N_dim + I, 1, M_dim)
-                    else
-                        a = (I - H_eff) * (M_dim - 2*H_eff + 1)
-                        clamp(H_eff + div(a, b), 1, M_dim)
-                    end
-                end for I in I_range]
+                b = N_dim == 1 ? 1 : (N_dim - 2 * H_eff + 1)
+
+                [
+                    begin
+                        if I <= H
+                            clamp(I, 1, M_dim)
+                        elseif I >= N_dim - H + 1
+                            clamp(M_dim - N_dim + I, 1, M_dim)
+                        else
+                            a = (I - H_eff) * (M_dim - 2 * H_eff + 1)
+                            clamp(H_eff + div(a, b), 1, M_dim)
+                        end
+                    end for I in I_range
+                ]
             end
 
             highs = ntuple(N) do dim
@@ -529,53 +525,65 @@ function InterpolateArray(
                 N_dim, M_dim = final_grid_size[dim], src_size[dim]
                 H = halo[dim]
                 H_eff = max(1, H)
-                b = N_dim == 1 ? 1 : (N_dim - 2*H_eff + 1)
-                
-                [begin
-                    if I <= H
-                        clamp(I, 1, M_dim)
-                    elseif I >= N_dim - H + 1
-                        clamp(M_dim - N_dim + I, 1, M_dim)
-                    else
-                        a = (I - H_eff) * (M_dim - 2*H_eff + 1)
-                        clamp(H_eff + (b == 0 ? 0 : div(a + b - 1, b)), 1, M_dim)
-                    end
-                end for I in I_range]
+                b = N_dim == 1 ? 1 : (N_dim - 2 * H_eff + 1)
+
+                [
+                    begin
+                        if I <= H
+                            clamp(I, 1, M_dim)
+                        elseif I >= N_dim - H + 1
+                            clamp(M_dim - N_dim + I, 1, M_dim)
+                        else
+                            a = (I - H_eff) * (M_dim - 2 * H_eff + 1)
+                            clamp(H_eff + (b == 0 ? 0 : div(a + b - 1, b)), 1, M_dim)
+                        end
+                    end for I in I_range
+                ]
             end
 
             dens = ntuple(N) do dim
                 H_eff = max(1, halo[dim])
-                max(1, final_grid_size[dim] - 2*H_eff + 1)
+                max(1, final_grid_size[dim] - 2 * H_eff + 1)
             end
             total_den = prod(dens)
-            
             rems = ntuple(N) do dim
                 I_range = slice[dim]
                 N_dim, M_dim = final_grid_size[dim], src_size[dim]
                 H = halo[dim]
                 H_eff = max(1, H)
-                b = N_dim == 1 ? 1 : (N_dim - 2*H_eff + 1)
-                
-                [begin
-                    if I <= H || I >= N_dim - H + 1
-                        0
-                    else
-                        a = (I - H_eff) * (M_dim - 2*H_eff + 1)
-                        b == 0 ? 0 : rem(a, b)
-                    end
-                end for I in I_range]
+                b = N_dim == 1 ? 1 : (N_dim - 2 * H_eff + 1)
+
+                [
+                    begin
+                        if I <= H || I >= N_dim - H + 1
+                            0
+                        else
+                            a = (I - H_eff) * (M_dim - 2 * H_eff + 1)
+                            b == 0 ? 0 : rem(a, b)
+                        end
+                    end for I in I_range
+                ]
             end
-            
             buf = Array{T,N}(undef, shard_shape)
             corner_space = CartesianIndices(ntuple(_ -> 2, N))
-            
             for I in CartesianIndices(shard_shape)
                 sum_val = zero(T)
                 for c in corner_space
-                    idx = ntuple(dim -> c[dim] == 1 ? lows[dim][I.I[dim]] : highs[dim][I.I[dim]], N)
-                    
-                    w_int = prod(ntuple(dim -> c[dim] == 1 ? (dens[dim] - rems[dim][I.I[dim]]) : rems[dim][I.I[dim]], N))
-                    
+                    idx = ntuple(
+                        dim -> c[dim] == 1 ? lows[dim][I.I[dim]] : highs[dim][I.I[dim]], N
+                    )
+
+                    w_int = prod(
+                        ntuple(
+                            dim -> if c[dim] == 1
+                                (dens[dim] - rems[dim][I.I[dim]])
+                            else
+                                rems[dim][I.I[dim]]
+                            end,
+                            N,
+                        ),
+                    )
+
                     sum_val += w_int * local_cpu_array[CartesianIndex(idx)]
                 end
                 buf[I] = sum_val / total_den
@@ -583,10 +591,8 @@ function InterpolateArray(
         else
             error("Unsupported interpolation type")
         end
-        
         ordered_buffers[buf_idx] = buf
     end
-    
     return ConcreteIFRTArray(ordered_buffers, final_grid_size; client, sharding)
 end
 
