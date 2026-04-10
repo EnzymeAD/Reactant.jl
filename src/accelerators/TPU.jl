@@ -159,7 +159,7 @@ const _TPU_PCI_DEVICE_IDS = Dict(
     "0x0076" => TPUVersion.tpu7x,
 )
 
-const NUM_AVAILABLE_TPU_CHIPS_AND_DEVICE_ID = Ref{Union{Nothing,Tuple{Int,TPUVersion}}}(
+const NUM_AVAILABLE_TPU_CHIPS_AND_DEVICE_ID = Ref{Union{Nothing,Tuple{Int,TPUVersion.T}}}(
     nothing
 )
 
@@ -177,6 +177,11 @@ function num_available_tpu_chips_and_device_id()
         return NUM_AVAILABLE_TPU_CHIPS_AND_DEVICE_ID[]
     end
 
+    NUM_AVAILABLE_TPU_CHIPS_AND_DEVICE_ID[] = _num_available_tpu_chips_and_device_id()
+    return NUM_AVAILABLE_TPU_CHIPS_AND_DEVICE_ID[]
+end
+
+function _num_available_tpu_chips_and_device_id()
     Sys.islinux() || return 0, TPUVersion.Unknown
 
     devices_dir = "/sys/bus/pci/devices/"
