@@ -459,15 +459,13 @@ function InterpolateArray(
     (; hlo_sharding) = Sharding.HloSharding(sharding, final_grid_size)
     all_devices = XLA.get_device.((client,), sharding.mesh.device_ids)
     
-    slices, _ = XLA.sharding_to_concrete_array_indices(
-        hlo_sharding, final_grid_size, 0:(length(all_devices) - 1)
+    addressable_device_indices = [i - 1 for (i, device) in enumerate(all_devices) if XLA.is_addressable(device)]
+    
+    addressable_slices, _ = XLA.sharding_to_concrete_array_indices(
+        hlo_sharding, final_grid_size, addressable_device_indices
     )
     
     src_size = size(local_cpu_array)
-    
-    addressable_slices = [
-        slice for (slice, device) in zip(slices, all_devices) if XLA.is_addressable(device)
-    ]
     
     ordered_buffers = Vector{Array{T,N}}(undef, length(addressable_slices))
     
