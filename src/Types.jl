@@ -447,7 +447,8 @@ function InterpolateArray(
     local_cpu_array::AbstractArray{T,N},
     final_grid_size::Dims{N},
     sharding::Sharding.AbstractSharding,
-    interpolation::InterpolationType.T;
+    interpolation::InterpolationType.T,
+    halo::Dims{N} = ntuple(_ -> 0, N);
     client=nothing
 ) where {T,N}
     @assert Sharding.is_sharded(sharding)
@@ -476,12 +477,21 @@ function InterpolateArray(
             src_idx_ranges = ntuple(N) do dim
                 I_range = slice[dim]
                 N_dim, M_dim = final_grid_size[dim], src_size[dim]
-                if N_dim == 1
-                    return ones(Int, length(I_range))
-                else
-                    b = N_dim - 1
-                    return [clamp(div(2 * (I - 1) * (M_dim - 1) + b, 2 * b) + 1, 1, M_dim) for I in I_range]
-                end
+                H = halo[dim]
+                H_eff = max(1, H)
+                b = N_dim == 1 ? 1 : (N_dim - 2*H_eff + 1)
+                
+                return [begin
+                    if I <= H
+                        clamp(I, 1, M_dim)
+                    elseif I >= N_dim - H + 1
+                        clamp(M_dim - N_dim + I, 1, M_dim)
+                    else
+                        a = (I - H_eff) * (M_dim - 2*H_eff + 1)
+                        idx = H_eff + (b == 0 ? 0 : div(2a + b, 2b))
+                        clamp(idx, 1, M_dim)
+                    end
+                end for I in I_range]
             end
             
             buf = Array{T,N}(undef, shard_shape)
@@ -495,27 +505,67 @@ function InterpolateArray(
             # `t * (M_dim - 1) + 1` in the source grid.
             # This ensures that the corners of the grids align exactly (I=1 -> 1, I=N_dim -> M_dim).
             # We compute this mapping using pure integers to avoid floating-point inaccuracies.
+            # If halo > 0, the mapping is applied to the region between halos.
+            
             lows = ntuple(N) do dim
                 I_range = slice[dim]
                 N_dim, M_dim = final_grid_size[dim], src_size[dim]
-                [clamp(N_dim == 1 ? 1 : (div((I - 1) * (M_dim - 1), N_dim - 1) + 1), 1, M_dim) for I in I_range]
+                H = halo[dim]
+                H_eff = max(1, H)
+                b = N_dim == 1 ? 1 : (N_dim - 2*H_eff + 1)
+                
+                [begin
+                    if I <= H
+                        clamp(I, 1, M_dim)
+                    elseif I >= N_dim - H + 1
+                        clamp(M_dim - N_dim + I, 1, M_dim)
+                    else
+                        a = (I - H_eff) * (M_dim - 2*H_eff + 1)
+                        clamp(H_eff + div(a, b), 1, M_dim)
+                    end
+                end for I in I_range]
             end
 
             highs = ntuple(N) do dim
                 I_range = slice[dim]
                 N_dim, M_dim = final_grid_size[dim], src_size[dim]
-                [clamp(N_dim == 1 ? 1 : (div((I - 1) * (M_dim - 1) + N_dim - 2, N_dim - 1) + 1), 1, M_dim) for I in I_range]
+                H = halo[dim]
+                H_eff = max(1, H)
+                b = N_dim == 1 ? 1 : (N_dim - 2*H_eff + 1)
+                
+                [begin
+                    if I <= H
+                        clamp(I, 1, M_dim)
+                    elseif I >= N_dim - H + 1
+                        clamp(M_dim - N_dim + I, 1, M_dim)
+                    else
+                        a = (I - H_eff) * (M_dim - 2*H_eff + 1)
+                        clamp(H_eff + (b == 0 ? 0 : div(a + b - 1, b)), 1, M_dim)
+                    end
+                end for I in I_range]
             end
 
             dens = ntuple(N) do dim
-                final_grid_size[dim] == 1 ? 1 : (final_grid_size[dim] - 1)
+                H_eff = max(1, halo[dim])
+                max(1, final_grid_size[dim] - 2*H_eff + 1)
             end
             total_den = prod(dens)
             
             rems = ntuple(N) do dim
                 I_range = slice[dim]
                 N_dim, M_dim = final_grid_size[dim], src_size[dim]
-                [N_dim == 1 ? 0 : rem((I - 1) * (M_dim - 1), N_dim - 1) for I in I_range]
+                H = halo[dim]
+                H_eff = max(1, H)
+                b = N_dim == 1 ? 1 : (N_dim - 2*H_eff + 1)
+                
+                [begin
+                    if I <= H || I >= N_dim - H + 1
+                        0
+                    else
+                        a = (I - H_eff) * (M_dim - 2*H_eff + 1)
+                        b == 0 ? 0 : rem(a, b)
+                    end
+                end for I in I_range]
             end
             
             buf = Array{T,N}(undef, shard_shape)
