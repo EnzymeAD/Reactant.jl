@@ -390,12 +390,16 @@ function BLAS.symm!(
     beta::Number,
     C::AnyTracedRMatrix,
 )
-    As = Symmetric(A, Symbol(uplo))
-    if side == 'L'
-        LinearAlgebra.mul!(C, As, B, alpha, beta)
-    else
-        LinearAlgebra.mul!(C, B, As, alpha, beta)
-    end
+    res = @opcall symm(
+        materialize_traced_array(A),
+        materialize_traced_array(B),
+        materialize_traced_array(C),
+        alpha,
+        beta;
+        side=side,
+        uplo=uplo,
+    )
+    copyto!(C, res)
     return C
 end
 
@@ -457,7 +461,7 @@ function BLAS.trmm!(
         side=side,
         uplo=uplo,
         transpose_a=transa,
-        diag,
+        diag=diag == 'U',
     )
     copyto!(B, res)
     return B
