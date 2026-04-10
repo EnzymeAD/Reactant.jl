@@ -221,9 +221,11 @@ end
 function cloud_tpu_init!()
     libtpu_dir = get_libtpu_dir()
     num_tpu_chips, tpu_version = num_available_tpu_chips_and_device_id()
-    if tpu_version != TPUVersion.Unknown &&
+    if (
+        tpu_version != TPUVersion.Unknown &&
         tpu_version ≥ TPUVersion.v5e &&
         !transparent_hugepages_enabled()
+    )
         @warn "Transparent hugepages are not enabled. TPU runtime startup and \
                shutdown time should be significantly improved on TPU v5e and newer. \
                If not already set, you may need to enable transparent hugepages in \
@@ -266,9 +268,15 @@ const _TPU_METADATA_RESPONSE_CODE_SUCCESS = 200
 function get_metadata(key)
     # Based on https://github.com/tensorflow/tensorflow/pull/40317
     gce_metadata_endpoint =
-        "http://" * get(ENV, "GCE_METADATA_IP", "metadata.google.internal")
+        "http://" * get(
+            ENV,
+            "GCE_METADATA_IP",
+            get(ENV, "GCE_METADATA_HOST", "metadata.google.internal"),
+        )
+    @debug "Getting metadata for key: $(key)" gce_metadata_endpoint
     retry_count = 0
     retry_seconds = parse(Float64, get(ENV, "REACTANT_GCE_METADATA_RETRY_SECONDS", "0.5"))
+    @debug "Retry seconds: $(retry_seconds)"
     api_resp = nothing
 
     while retry_count < 6
