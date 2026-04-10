@@ -10,7 +10,7 @@ using p7zip_jll: p7zip
 using ..Registration: register_backend
 
 const libtpu_dir = Ref{Union{Nothing,String}}(nothing)
-const RUNNING_IN_CLOUD_TPU_VM = Ref(false)
+const RUNNING_IN_CLOUD_TPU_VM = Ref{Union{Nothing,Bool}}(nothing)
 
 const LIBTPU_VERSION = "0.0.39.dev20260401"
 const LIBTPU_SO = "libtpu-$(replace(string(LIBTPU_VERSION), '.' => '_')).so"
@@ -159,9 +159,24 @@ const _TPU_PCI_DEVICE_IDS = Dict(
     "0x0076" => TPUVersion.tpu7x,
 )
 
-has_tpu() = first(num_available_tpu_chips_and_device_id()) > 0
+const NUM_AVAILABLE_TPU_CHIPS_AND_DEVICE_ID = Ref{Union{Nothing,Tuple{Int,TPUVersion}}}(
+    nothing
+)
+
+function has_tpu()
+    if RUNNING_IN_CLOUD_TPU_VM[] !== nothing
+        return RUNNING_IN_CLOUD_TPU_VM[]
+    end
+    num_tpu_chips, _ = num_available_tpu_chips_and_device_id()
+    RUNNING_IN_CLOUD_TPU_VM[] = num_tpu_chips > 0
+    return RUNNING_IN_CLOUD_TPU_VM[]
+end
 
 function num_available_tpu_chips_and_device_id()
+    if NUM_AVAILABLE_TPU_CHIPS_AND_DEVICE_ID[] !== nothing
+        return NUM_AVAILABLE_TPU_CHIPS_AND_DEVICE_ID[]
+    end
+
     Sys.islinux() || return 0, TPUVersion.Unknown
 
     devices_dir = "/sys/bus/pci/devices/"
@@ -214,8 +229,6 @@ function cloud_tpu_init!()
     if (libtpu_dir === nothing || num_tpu_chips == 0) && !force_tpu_init()
         return nothing
     end
-
-    RUNNING_IN_CLOUD_TPU_VM[] = true
 
     # Set environment variables
     ENV["GRPC_VERBOSITY"] = get(ENV, "GRPC_VERBOSITY", "ERROR")

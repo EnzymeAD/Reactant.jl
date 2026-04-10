@@ -376,7 +376,7 @@ function _get_worker_list_in_slice end
 ## GceTPUCluster
 
 function is_env_present(::GceTPUCluster)
-    if !Accelerators.TPU.RUNNING_IN_CLOUD_TPU_VM[]
+    if !Accelerators.TPU.has_tpu()
         @debug "Did not detect cloud TPU VM"
         return false
     end
@@ -411,12 +411,12 @@ end
 ## GkeTPUCluster
 
 function is_env_present(::GkeTPUCluster)
-    if Accelerators.TPU.RUNNING_IN_CLOUD_TPU_VM[] && haskey(ENV, "TPU_WORKER_HOSTNAMES")
+    if Accelerators.TPU.has_tpu() && haskey(ENV, "TPU_WORKER_HOSTNAMES")
         @debug "Detected GKE TPU cluster for Reactant Distributed System"
         return true
     end
 
-    if !Accelerators.TPU.RUNNING_IN_CLOUD_TPU_VM[]
+    if !Accelerators.TPU.has_tpu()
         @debug "Did not detect cloud TPU VM"
         return false
     end
