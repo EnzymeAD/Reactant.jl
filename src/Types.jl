@@ -437,6 +437,111 @@ function ConcreteIFRTArray(
     )
 end
 
+@enumx InterpolationType begin
+    Nearest
+    Linear
+end
+
+
+function InterpolateArray(
+    local_cpu_array::AbstractArray{T,N},
+    final_grid_size::Dims{N},
+    sharding::Sharding.AbstractSharding,
+    interpolation::InterpolationType.T;
+    client=nothing
+) where {T,N}
+    @assert Sharding.is_sharded(sharding)
+    
+    client = client === nothing ? XLA.default_backend() : client
+    @assert client isa XLA.IFRT.Client "InterpolateArray currently only supports IFRT client"
+    
+    (; hlo_sharding) = Sharding.HloSharding(sharding, final_grid_size)
+    all_devices = XLA.get_device.((client,), sharding.mesh.device_ids)
+    
+    slices, _ = XLA.sharding_to_concrete_array_indices(
+        hlo_sharding, final_grid_size, 0:(length(all_devices) - 1)
+    )
+    
+    src_size = size(local_cpu_array)
+    
+    addressable_slices = [
+        slice for (slice, device) in zip(slices, all_devices) if XLA.is_addressable(device)
+    ]
+    
+    ordered_buffers = Vector{Array{T,N}}(undef, length(addressable_slices))
+    
+    for (buf_idx, slice) in enumerate(addressable_slices)
+        shard_shape = length.(slice)
+        if interpolation == InterpolationType.Nearest
+            src_idx_ranges = ntuple(N) do dim
+                I_range = slice[dim]
+                N_dim, M_dim = final_grid_size[dim], src_size[dim]
+                if N_dim == 1
+                    return ones(Int, length(I_range))
+                else
+                    b = N_dim - 1
+                    return [clamp(div(2 * (I - 1) * (M_dim - 1) + b, 2 * b) + 1, 1, M_dim) for I in I_range]
+                end
+            end
+            
+            buf = Array{T,N}(undef, shard_shape)
+            for I in CartesianIndices(shard_shape)
+                idx = ntuple(dim -> src_idx_ranges[dim][I.I[dim]], N)
+                buf[I] = local_cpu_array[CartesianIndex(idx)]
+            end
+        elseif interpolation == InterpolationType.Linear
+            # We use node-aligned interpolation to map target grid indices to source grid indices.
+            # A point at fraction `t = (I - 1) / (N_dim - 1)` in the target grid maps to
+            # `t * (M_dim - 1) + 1` in the source grid.
+            # This ensures that the corners of the grids align exactly (I=1 -> 1, I=N_dim -> M_dim).
+            # We compute this mapping using pure integers to avoid floating-point inaccuracies.
+            lows = ntuple(N) do dim
+                I_range = slice[dim]
+                N_dim, M_dim = final_grid_size[dim], src_size[dim]
+                [clamp(N_dim == 1 ? 1 : (div((I - 1) * (M_dim - 1), N_dim - 1) + 1), 1, M_dim) for I in I_range]
+            end
+
+            highs = ntuple(N) do dim
+                I_range = slice[dim]
+                N_dim, M_dim = final_grid_size[dim], src_size[dim]
+                [clamp(N_dim == 1 ? 1 : (div((I - 1) * (M_dim - 1) + N_dim - 2, N_dim - 1) + 1), 1, M_dim) for I in I_range]
+            end
+
+            dens = ntuple(N) do dim
+                final_grid_size[dim] == 1 ? 1 : (final_grid_size[dim] - 1)
+            end
+            total_den = prod(dens)
+            
+            rems = ntuple(N) do dim
+                I_range = slice[dim]
+                N_dim, M_dim = final_grid_size[dim], src_size[dim]
+                [N_dim == 1 ? 0 : rem((I - 1) * (M_dim - 1), N_dim - 1) for I in I_range]
+            end
+            
+            buf = Array{T,N}(undef, shard_shape)
+            corner_space = CartesianIndices(ntuple(_ -> 2, N))
+            
+            for I in CartesianIndices(shard_shape)
+                sum_val = zero(T)
+                for c in corner_space
+                    idx = ntuple(dim -> c[dim] == 1 ? lows[dim][I.I[dim]] : highs[dim][I.I[dim]], N)
+                    
+                    w_int = prod(ntuple(dim -> c[dim] == 1 ? (dens[dim] - rems[dim][I.I[dim]]) : rems[dim][I.I[dim]], N))
+                    
+                    sum_val += w_int * local_cpu_array[CartesianIndex(idx)]
+                end
+                buf[I] = sum_val / total_den
+            end
+        else
+            error("Unsupported interpolation type")
+        end
+        
+        ordered_buffers[buf_idx] = buf
+    end
+    
+    return ConcreteIFRTArray(ordered_buffers, final_grid_size; client, sharding)
+end
+
 Base.wait(x::Union{ConcreteIFRTArray,ConcreteIFRTNumber}) = wait(x.data)
 XLA.client(x::Union{ConcreteIFRTArray,ConcreteIFRTNumber}) = XLA.client(x.data)
 function XLA.device(x::Union{ConcreteIFRTArray,ConcreteIFRTNumber})
