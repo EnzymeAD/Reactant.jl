@@ -411,7 +411,10 @@ end
 ## GkeTPUCluster
 
 function is_env_present(::GkeTPUCluster)
-    if Accelerators.TPU.has_tpu() && haskey(ENV, "TPU_WORKER_HOSTNAMES")
+    if (
+        Accelerators.TPU.has_tpu() &&
+        (haskey(ENV, "TPU_WORKER_HOSTNAMES") || haskey(ENV, "TPU_PROCESS_ADDRESSES"))
+    )
         @debug "Detected GKE TPU cluster for Reactant Distributed System"
         return true
     end
@@ -421,15 +424,23 @@ function is_env_present(::GkeTPUCluster)
         return false
     end
 
-    @debug "TPU_WORKER_HOSTNAMES is not set, so it's not a GKE TPU cluster."
+    @debug "TPU_WORKER_HOSTNAMES or TPU_PROCESS_ADDRESSES is not set, so it's not a GKE TPU cluster."
     return false
 end
 
 function _get_process_id_in_slice(::GkeTPUCluster)
     @assert haskey(ENV, "TPU_WORKER_ID") "TPU_WORKER_ID is not set in the environment."
+    @debug "[GETPID $(getpid())] TPU_WORKER_ID is set: $(ENV["TPU_WORKER_ID"])"
     return parse(Int, ENV["TPU_WORKER_ID"])
 end
 
-_get_worker_list_in_slice(::GkeTPUCluster) = split(ENV["TPU_WORKER_HOSTNAMES"], ',')
+function _get_worker_list_in_slice(::GkeTPUCluster)
+    if haskey(ENV, "TPU_PROCESS_ADDRESSES")
+        @debug "[GETPID $(getpid())] TPU_PROCESS_ADDRESSES is set: $(ENV["TPU_PROCESS_ADDRESSES"])"
+        return split(ENV["TPU_PROCESS_ADDRESSES"], ',')
+    end
+    @debug "[GETPID $(getpid())] TPU_WORKER_HOSTNAMES is set: $(ENV["TPU_WORKER_HOSTNAMES"])"
+    return split(ENV["TPU_WORKER_HOSTNAMES"], ',')
+end
 
 end
