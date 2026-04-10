@@ -381,7 +381,7 @@ function is_env_present(::GceTPUCluster)
         return false
     end
 
-    if haskey(ENV, "TPU_SKIP_MDS_QUERY")
+    if Accelerators.TPU.skip_mds_query()
         @debug "TPU_SKIP_MDS_QUERY is set to True, so it's probably not a GCE TPU cluster."
         return false
     end

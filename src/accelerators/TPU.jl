@@ -221,6 +221,10 @@ end
 function cloud_tpu_init!()
     libtpu_dir = get_libtpu_dir()
     num_tpu_chips, tpu_version = num_available_tpu_chips_and_device_id()
+    if num_tpu_chips == 0
+        ENV["TPU_SKIP_MDS_QUERY"] = "1"
+    end
+
     if (
         tpu_version != TPUVersion.Unknown &&
         tpu_version ≥ TPUVersion.v5e &&
@@ -265,14 +269,14 @@ end
 
 const _TPU_METADATA_RESPONSE_CODE_SUCCESS = 200
 
+function skip_mds_query()
+    return haskey(ENV, "TPU_SKIP_MDS_QUERY") && parse(Bool, ENV["TPU_SKIP_MDS_QUERY"])
+end
+
 function get_metadata(key)
     # Based on https://github.com/tensorflow/tensorflow/pull/40317
     gce_metadata_endpoint =
-        "http://" * get(
-            ENV,
-            "GCE_METADATA_IP",
-            get(ENV, "GCE_METADATA_HOST", "metadata.google.internal"),
-        )
+        "http://" * get(ENV, "GCE_METADATA_IP", "metadata.google.internal")
     @debug "Getting metadata for key: $(key)" gce_metadata_endpoint
     retry_count = 0
     retry_seconds = parse(Float64, get(ENV, "REACTANT_GCE_METADATA_RETRY_SECONDS", "0.5"))
@@ -307,6 +311,8 @@ end
 
 function get_tpu_env_value(key)
     haskey(ENV, key) && return ENV[key]
+
+    skip_mds_query() && return nothing
 
     tpu_env_data = first(get_metadata("tpu-env"))
     key_value_pairs = split(tpu_env_data, "\n")
