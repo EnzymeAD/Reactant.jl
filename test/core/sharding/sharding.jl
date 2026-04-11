@@ -569,11 +569,11 @@ end
 
 @testset "InterpolateArray" begin
     if Reactant.XLA.runtime() isa Val{:IFRT}
-        N = min((length(Reactant.devices()) ÷ 2) * 2, 1)
+        N = min(length(Reactant.devices()), 2)
 
         # Use 1 device if only 1 is available, or 2 if available to test actual sharding
         if length(addressable_devices) == 1
-            mesh = Sharding.Mesh(reshape(Reactant.devices()[1:N], 1, 1), (:x,))
+            mesh = Sharding.Mesh(Reactant.devices()[1:N], (:x,))
             sharding = Sharding.NamedSharding(mesh, ("x", nothing, nothing))
         else
             mesh = Sharding.Mesh(reshape(Reactant.devices()[1:N], N ÷ 2, 2), (:x, "y"))
@@ -604,32 +604,27 @@ end
 
         function local_linear(arr, fsize)
             res = Array{eltype(arr)}(undef, fsize)
-            dens = ntuple(d -> fsize[d] - 1, ndims(arr))
+            dens = ntuple(d -> 2 * fsize[d], ndims(arr))
             total_den = prod(dens)
             for I in CartesianIndices(fsize)
                 sum_val = 0.0
-                lows = ntuple(
-                    d -> clamp(
-                        div((I.I[d] - 1) * (size(arr, d) - 1), fsize[d] - 1) + 1,
-                        1,
-                        size(arr, d),
-                    ),
-                    ndims(arr),
-                )
-                highs = ntuple(
-                    d -> clamp(
-                        div(
-                            (I.I[d] - 1) * (size(arr, d) - 1) + fsize[d] - 2,
-                            fsize[d] - 1,
-                        ) + 1,
-                        1,
-                        size(arr, d),
-                    ),
-                    ndims(arr),
-                )
-                rems = ntuple(
-                    d -> rem((I.I[d] - 1) * (size(arr, d) - 1), fsize[d] - 1), ndims(arr)
-                )
+                lows = ntuple(d -> begin
+                    a = (2 * I.I[d] - 1) * size(arr, d) + fsize[d]
+                    b = 2 * fsize[d]
+                    clamp(a ÷ b, 1, size(arr, d))
+                end, ndims(arr))
+                
+                highs = ntuple(d -> begin
+                    a = (2 * I.I[d] - 1) * size(arr, d) + fsize[d]
+                    b = 2 * fsize[d]
+                    clamp(a ÷ b + 1, 1, size(arr, d))
+                end, ndims(arr))
+                
+                rems = ntuple(d -> begin
+                    a = (2 * I.I[d] - 1) * size(arr, d) + fsize[d]
+                    b = 2 * fsize[d]
+                    a % b
+                end, ndims(arr))
 
                 corner_space = CartesianIndices(ntuple(_ -> 2, ndims(arr)))
                 for c in corner_space
@@ -656,6 +651,25 @@ end
         )
         @test size(carray_linear) == final_size
         @test Array(carray_linear) ≈ local_linear(src, final_size)
+
+        # Test with halos (source without halo, target with halo)
+        halo_val = (1, 1, 1)
+        final_size_halo = (6, 6, 6)
+        carray_halo = Reactant.InterpolateArray(
+            src, final_size_halo, sharding, Reactant.InterpolationType.Nearest, halo_val;
+            src_halo=(0, 0, 0)
+        )
+        
+        # Compute expected manually for Nearest
+        expected_halo = Array{Float32}(undef, 6, 6, 6)
+        idx_map = [1, 1, 1, 2, 2, 2]
+        for I in CartesianIndices((6, 6, 6))
+            idx = ntuple(d -> idx_map[I.I[d]], 3)
+            expected_halo[I] = src[CartesianIndex(idx)]
+        end
+        
+        @test size(carray_halo) == final_size_halo
+        @test Array(carray_halo) ≈ expected_halo
     else
         @warn "Wrong backend type to run InterpolateArray tests"
     end
