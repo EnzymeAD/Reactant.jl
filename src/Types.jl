@@ -472,25 +472,29 @@ function InterpolateArray(
                 I_range = slice[dim]
                 N_dim, M_dim = final_grid_size[dim], src_size[dim]
                 H = halo[dim]
-                
-               [begin
-                    if I <= H
-                        clamp(I, 1, M_dim)
-                    elseif I >= N_dim - H + 1
-                        clamp(M_dim - N_dim + I, 1, M_dim)
-                    else
-                        I_shifted = I - H
-                        N_dim_shifted = N_dim - 2*H
-                        M_dim_shifted = M_dim - 2*H
-                        
-                        if N_dim_shifted <= 0 || M_dim_shifted <= 0
+
+                [
+                    begin
+                        if I <= H
                             clamp(I, 1, M_dim)
+                        elseif I >= N_dim - H + 1
+                            clamp(M_dim - N_dim + I, 1, M_dim)
                         else
-                            idx_shifted = (I_shifted * M_dim_shifted + N_dim_shifted - 1) ÷ N_dim_shifted
-                            clamp(idx_shifted + H, 1, M_dim)
+                            I_shifted = I - H
+                            N_dim_shifted = N_dim - 2 * H
+                            M_dim_shifted = M_dim - 2 * H
+
+                            if N_dim_shifted <= 0 || M_dim_shifted <= 0
+                                clamp(I, 1, M_dim)
+                            else
+                                idx_shifted =
+                                    (I_shifted * M_dim_shifted + N_dim_shifted - 1) ÷
+                                    N_dim_shifted
+                                clamp(idx_shifted + H, 1, M_dim)
+                            end
                         end
-                    end
-                end for I in I_range]
+                    end for I in I_range
+                ]
             end
             buf = Array{T,N}(undef, shard_shape)
             for I in CartesianIndices(shard_shape)
@@ -507,7 +511,7 @@ function InterpolateArray(
                 I_range = slice[dim]
                 N_dim, M_dim = final_grid_size[dim], src_size[dim]
                 H = halo[dim]
-                
+
                 [
                     begin
                         if I <= H
@@ -516,9 +520,9 @@ function InterpolateArray(
                             clamp(M_dim - N_dim + I, 1, M_dim)
                         else
                             I_shifted = I - H
-                            N_dim_shifted = N_dim - 2*H
-                            M_dim_shifted = M_dim - 2*H
-                            
+                            N_dim_shifted = N_dim - 2 * H
+                            M_dim_shifted = M_dim - 2 * H
+
                             a = (2 * I_shifted - 1) * M_dim_shifted + N_dim_shifted
                             b = 2 * N_dim_shifted
                             low_shifted = a ÷ b
@@ -532,7 +536,7 @@ function InterpolateArray(
                 I_range = slice[dim]
                 N_dim, M_dim = final_grid_size[dim], src_size[dim]
                 H = halo[dim]
-                
+
                 [
                     begin
                         if I <= H
@@ -541,9 +545,9 @@ function InterpolateArray(
                             clamp(M_dim - N_dim + I, 1, M_dim)
                         else
                             I_shifted = I - H
-                            N_dim_shifted = N_dim - 2*H
-                            M_dim_shifted = M_dim - 2*H
-                            
+                            N_dim_shifted = N_dim - 2 * H
+                            M_dim_shifted = M_dim - 2 * H
+
                             a = (2 * I_shifted - 1) * M_dim_shifted + N_dim_shifted
                             b = 2 * N_dim_shifted
                             low_shifted = a ÷ b
@@ -558,21 +562,21 @@ function InterpolateArray(
                 2 * max(1, final_grid_size[dim] - 2 * H)
             end
             total_den = prod(dens)
-            
+
             rems = ntuple(N) do dim
                 I_range = slice[dim]
                 N_dim, M_dim = final_grid_size[dim], src_size[dim]
                 H = halo[dim]
-                
+
                 [
                     begin
                         if I <= H || I >= N_dim - H + 1
                             0
                         else
                             I_shifted = I - H
-                            N_dim_shifted = N_dim - 2*H
-                            M_dim_shifted = M_dim - 2*H
-                            
+                            N_dim_shifted = N_dim - 2 * H
+                            M_dim_shifted = M_dim - 2 * H
+
                             a = (2 * I_shifted - 1) * M_dim_shifted + N_dim_shifted
                             b = 2 * N_dim_shifted
                             a % b
@@ -590,14 +594,11 @@ function InterpolateArray(
                     )
 
                     w_int = prod(
-                        ntuple(
-                            dim -> if c[dim] == 1
-                                (dens[dim] - rems[dim][I.I[dim]])
-                            else
-                                rems[dim][I.I[dim]]
-                            end,
-                            N,
-                        ),
+                        ntuple(dim -> if c[dim] == 1
+                            (dens[dim] - rems[dim][I.I[dim]])
+                        else
+                            rems[dim][I.I[dim]]
+                        end, N)
                     )
 
                     sum_val += w_int * local_cpu_array[CartesianIndex(idx)]

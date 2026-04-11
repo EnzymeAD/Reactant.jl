@@ -762,9 +762,11 @@ function optimization_passes(
     MLIR.API.enzymexlaFreeTransformPassesList(lower_passes_ptr[])
     main_passes_str = replace(main_passes_str, "convert_mul_convert;" => "")
     lower_passes_str = replace(lower_passes_str, "convert_mul_convert;" => "")
-    
+
     main_passes_str = replace(main_passes_str, "associative_binary_op_reordering<1>;" => "")
-    lower_passes_str = replace(lower_passes_str, "associative_binary_op_reordering<1>;" => "")
+    lower_passes_str = replace(
+        lower_passes_str, "associative_binary_op_reordering<1>;" => ""
+    )
 
     transform_passes = join(
         [
