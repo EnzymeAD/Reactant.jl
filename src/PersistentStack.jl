@@ -78,7 +78,7 @@ function Base.collect(stack::PersistentStack{T}) where {T}
     state = stack
     for i in 1:n
         res[n-i+1] = pop(state)
-        state = Base.front(state) 
+        state = state.prev
     end
     return res
 end
