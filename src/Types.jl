@@ -472,8 +472,6 @@ function InterpolateArray(
                 I_range = slice[dim]
                 N_dim, M_dim = final_grid_size[dim], src_size[dim]
                 H = halo[dim]
-                H_eff = max(1, H)
-                b = N_dim == 1 ? 1 : (N_dim - 2*H_eff + 1)
                 
                [begin
                     if I <= H
@@ -481,9 +479,16 @@ function InterpolateArray(
                     elseif I >= N_dim - H + 1
                         clamp(M_dim - N_dim + I, 1, M_dim)
                     else
-                        a = (I - H_eff) * (M_dim - 2*H_eff + 1)
-                        idx = H_eff + (b == 0 ? 0 : div(2a + b, 2b))
-                        clamp(idx, 1, M_dim)
+                        I_shifted = I - H
+                        N_dim_shifted = N_dim - 2*H
+                        M_dim_shifted = M_dim - 2*H
+                        
+                        if N_dim_shifted <= 0 || M_dim_shifted <= 0
+                            clamp(I, 1, M_dim)
+                        else
+                            idx_shifted = (I_shifted * M_dim_shifted + N_dim_shifted - 1) ÷ N_dim_shifted
+                            clamp(idx_shifted + H, 1, M_dim)
+                        end
                     end
                 end for I in I_range]
             end
@@ -493,19 +498,16 @@ function InterpolateArray(
                 buf[I] = local_cpu_array[CartesianIndex(idx)]
             end
         elseif interpolation == InterpolationType.Linear
-            # We use node-aligned interpolation to map target grid indices to source grid indices.
-            # A point at fraction `t = (I - 1) / (N_dim - 1)` in the target grid maps to
-            # `t * (M_dim - 1) + 1` in the source grid.
-            # This ensures that the corners of the grids align exactly (I=1 -> 1, I=N_dim -> M_dim).
+            # We use cell-centered interpolation to map target grid indices to source grid indices.
+            # A point at target index `I` maps to `(I - 0.5) * (M_dim / N_dim) + 0.5` in the source grid.
+            # This ensures that we match Oceananigans' interpolation behavior.
             # We compute this mapping using pure integers to avoid floating-point inaccuracies.
             # If halo > 0, the mapping is applied to the region between halos.
             lows = ntuple(N) do dim
                 I_range = slice[dim]
                 N_dim, M_dim = final_grid_size[dim], src_size[dim]
                 H = halo[dim]
-                H_eff = max(1, H)
-                b = N_dim == 1 ? 1 : (N_dim - 2 * H_eff + 1)
-
+                
                 [
                     begin
                         if I <= H
@@ -513,8 +515,14 @@ function InterpolateArray(
                         elseif I >= N_dim - H + 1
                             clamp(M_dim - N_dim + I, 1, M_dim)
                         else
-                            a = (I - H_eff) * (M_dim - 2 * H_eff + 1)
-                            clamp(H_eff + div(a, b), 1, M_dim)
+                            I_shifted = I - H
+                            N_dim_shifted = N_dim - 2*H
+                            M_dim_shifted = M_dim - 2*H
+                            
+                            a = (2 * I_shifted - 1) * M_dim_shifted + N_dim_shifted
+                            b = 2 * N_dim_shifted
+                            low_shifted = a ÷ b
+                            clamp(low_shifted + H, 1, M_dim)
                         end
                     end for I in I_range
                 ]
@@ -524,9 +532,7 @@ function InterpolateArray(
                 I_range = slice[dim]
                 N_dim, M_dim = final_grid_size[dim], src_size[dim]
                 H = halo[dim]
-                H_eff = max(1, H)
-                b = N_dim == 1 ? 1 : (N_dim - 2 * H_eff + 1)
-
+                
                 [
                     begin
                         if I <= H
@@ -534,32 +540,42 @@ function InterpolateArray(
                         elseif I >= N_dim - H + 1
                             clamp(M_dim - N_dim + I, 1, M_dim)
                         else
-                            a = (I - H_eff) * (M_dim - 2 * H_eff + 1)
-                            clamp(H_eff + (b == 0 ? 0 : div(a + b - 1, b)), 1, M_dim)
+                            I_shifted = I - H
+                            N_dim_shifted = N_dim - 2*H
+                            M_dim_shifted = M_dim - 2*H
+                            
+                            a = (2 * I_shifted - 1) * M_dim_shifted + N_dim_shifted
+                            b = 2 * N_dim_shifted
+                            low_shifted = a ÷ b
+                            clamp(low_shifted + 1 + H, 1, M_dim)
                         end
                     end for I in I_range
                 ]
             end
 
             dens = ntuple(N) do dim
-                H_eff = max(1, halo[dim])
-                max(1, final_grid_size[dim] - 2 * H_eff + 1)
+                H = halo[dim]
+                2 * max(1, final_grid_size[dim] - 2 * H)
             end
             total_den = prod(dens)
+            
             rems = ntuple(N) do dim
                 I_range = slice[dim]
                 N_dim, M_dim = final_grid_size[dim], src_size[dim]
                 H = halo[dim]
-                H_eff = max(1, H)
-                b = N_dim == 1 ? 1 : (N_dim - 2 * H_eff + 1)
-
+                
                 [
                     begin
                         if I <= H || I >= N_dim - H + 1
                             0
                         else
-                            a = (I - H_eff) * (M_dim - 2 * H_eff + 1)
-                            b == 0 ? 0 : rem(a, b)
+                            I_shifted = I - H
+                            N_dim_shifted = N_dim - 2*H
+                            M_dim_shifted = M_dim - 2*H
+                            
+                            a = (2 * I_shifted - 1) * M_dim_shifted + N_dim_shifted
+                            b = 2 * N_dim_shifted
+                            a % b
                         end
                     end for I in I_range
                 ]
