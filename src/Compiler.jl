@@ -760,6 +760,8 @@ function optimization_passes(
     lower_passes_str = unsafe_string(lower_passes_ptr[])
     MLIR.API.enzymexlaFreeTransformPassesList(main_passes_ptr[])
     MLIR.API.enzymexlaFreeTransformPassesList(lower_passes_ptr[])
+    main_passes_str = replace(main_passes_str, "convert_mul_convert;" => "")
+    lower_passes_str = replace(lower_passes_str, "convert_mul_convert;" => "")
 
     transform_passes = join(
         [
