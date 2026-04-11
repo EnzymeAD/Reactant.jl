@@ -7,6 +7,9 @@ end
 PersistentStack(x) = PersistentStack(x, nothing, 1)
 PersistentStack{T}(x) where {T} = PersistentStack{T}(x, nothing, 1)
 
+PersistentStack(stack::PersistentStack) = stack
+PersistentStack{T}(stack::PersistentStack{T}) where {T} = stack
+
 push(stack::PersistentStack, x) = PersistentStack(x, stack, length(stack) + 1)
 pop(stack::PersistentStack) = stack.data
 
