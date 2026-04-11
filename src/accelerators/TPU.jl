@@ -129,7 +129,9 @@ function download_libtpu_if_needed(path=nothing)
                     "https://storage.googleapis.com/libtpu-nightly-releases/wheels/libtpu/libtpu-$(LIBTPU_VERSION)+nightly-cp314-cp314-manylinux_2_31_x86_64.whl",
                     zip_file_path,
                 )
-                run(pipeline(`$(p7zip()) x -tzip -o$(tmp_dir) -- $(zip_file_path)`, devnull))
+                run(
+                    pipeline(`$(p7zip()) x -tzip -o$(tmp_dir) -- $(zip_file_path)`, devnull)
+                )
                 mv(joinpath(tmp_dir, "libtpu", "libtpu.so"), libtpu_path)
                 rm(tmp_dir; recursive=true)
             end

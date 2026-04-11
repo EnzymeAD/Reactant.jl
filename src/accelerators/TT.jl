@@ -141,7 +141,11 @@ function download_tt_pjrt_plugin_if_needed(dir=nothing)
                     end
                     @debug "Downloading TT PJRT plugin from '$(wheel_url)'"
                     Downloads.download(wheel_url, zip_file_path)
-                    run(pipeline(`$(p7zip()) x -tzip -o$(tmp_dir) -- $(zip_file_path)`, devnull))
+                    run(
+                        pipeline(
+                            `$(p7zip()) x -tzip -o$(tmp_dir) -- $(zip_file_path)`, devnull
+                        ),
+                    )
                     data_dir = only(filter!(endswith(".data"), readdir(tmp_dir; join=true)))
                     # We need to move the entire `pjrt_plugin_tt` directory to the destination.
                     mv(joinpath(data_dir, "purelib", "pjrt_plugin_tt"), dir; force=true)

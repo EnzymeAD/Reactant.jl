@@ -53,7 +53,9 @@ function download_metal_pjrt_plugin_if_needed(path=nothing)
                     end,
                     zip_file_path,
                 )
-                run(pipeline(`$(p7zip()) x -tzip -o$(tmp_dir) -- $(zip_file_path)`, devnull))
+                run(
+                    pipeline(`$(p7zip()) x -tzip -o$(tmp_dir) -- $(zip_file_path)`, devnull)
+                )
                 mv(
                     joinpath(
                         tmp_dir, "jax_plugins", "metal_plugin", "pjrt_plugin_metal_14.dylib"
