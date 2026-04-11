@@ -6,6 +6,7 @@ using Scratch: @get_scratch!
 using HTTP: HTTP
 using Downloads: Downloads
 using p7zip_jll: p7zip
+using FileWatching: mkpidlock
 
 using ..Registration: register_backend
 
@@ -117,18 +118,22 @@ function download_libtpu_if_needed(path=nothing)
 
     libtpu_path = joinpath(path, LIBTPU_SO)
     if !isfile(libtpu_path)
-        @debug "Downloading libtpu: $(LIBTPU_VERSION)"
-        zip_file_path = joinpath(path, "tpu.zip")
+        # Ensure path exists before creating lock file
         !isdir(path) && mkpath(path)
-        tmp_dir = mktempdir(path)
-        Downloads.download(
-            "https://storage.googleapis.com/libtpu-nightly-releases/wheels/libtpu/libtpu-$(LIBTPU_VERSION)+nightly-cp314-cp314-manylinux_2_31_x86_64.whl",
-            zip_file_path,
-        )
-        run(pipeline(`$(p7zip()) x -tzip -o$(tmp_dir) -- $(zip_file_path)`, devnull))
-        mv(joinpath(tmp_dir, "libtpu", "libtpu.so"), libtpu_path)
-        rm(tmp_dir; recursive=true)
-        rm(zip_file_path; recursive=true)
+        mkpidlock(joinpath(path, "download_libtpu.lock")) do
+            if !isfile(libtpu_path)
+                @debug "Downloading libtpu: $(LIBTPU_VERSION)"
+                tmp_dir = mktempdir(path)
+                zip_file_path = joinpath(tmp_dir, "tpu.zip")
+                Downloads.download(
+                    "https://storage.googleapis.com/libtpu-nightly-releases/wheels/libtpu/libtpu-$(LIBTPU_VERSION)+nightly-cp314-cp314-manylinux_2_31_x86_64.whl",
+                    zip_file_path,
+                )
+                run(pipeline(`$(p7zip()) x -tzip -o$(tmp_dir) -- $(zip_file_path)`, devnull))
+                mv(joinpath(tmp_dir, "libtpu", "libtpu.so"), libtpu_path)
+                rm(tmp_dir; recursive=true)
+            end
+        end
     end
 end
 
