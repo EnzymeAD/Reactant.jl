@@ -450,6 +450,7 @@ function InterpolateArray(
     halo::Dims{N}=ntuple(_ -> 0, N);
     client=nothing,
     src_halo::Dims{N}=ntuple(_ -> 0, N),
+    active_size::Union{Nothing, Dims{N}}=nothing,
 ) where {T,N}
     @assert Sharding.is_sharded(sharding)
     client = client === nothing ? XLA.default_backend() : client
@@ -474,16 +475,16 @@ function InterpolateArray(
                 N_dim, M_dim = final_grid_size[dim], src_size[dim]
                 H = halo[dim]
                 H_src = src_halo[dim]
+                N_dim_shifted = active_size !== nothing ? active_size[dim] : (N_dim - 2 * H)
 
                 [
                     begin
                         if I <= H
                             clamp(I, 1, M_dim)
-                        elseif I >= N_dim - H + 1
+                        elseif I > H + N_dim_shifted
                             clamp(M_dim - N_dim + I, 1, M_dim)
                         else
                             I_shifted = I - H
-                            N_dim_shifted = N_dim - 2 * H
                             M_dim_shifted = M_dim - 2 * H_src
 
                             if N_dim_shifted <= 0 || M_dim_shifted <= 0
@@ -514,16 +515,16 @@ function InterpolateArray(
                 N_dim, M_dim = final_grid_size[dim], src_size[dim]
                 H = halo[dim]
                 H_src = src_halo[dim]
+                N_dim_shifted = active_size !== nothing ? active_size[dim] : (N_dim - 2 * H)
 
                 [
                     begin
                         if I <= H
                             clamp(I, 1, M_dim)
-                        elseif I >= N_dim - H + 1
+                        elseif I > H + N_dim_shifted
                             clamp(M_dim - N_dim + I, 1, M_dim)
                         else
                             I_shifted = I - H
-                            N_dim_shifted = N_dim - 2 * H
                             M_dim_shifted = M_dim - 2 * H_src
 
                             a = (2 * I_shifted - 1) * M_dim_shifted + N_dim_shifted
@@ -540,16 +541,16 @@ function InterpolateArray(
                 N_dim, M_dim = final_grid_size[dim], src_size[dim]
                 H = halo[dim]
                 H_src = src_halo[dim]
+                N_dim_shifted = active_size !== nothing ? active_size[dim] : (N_dim - 2 * H)
 
                 [
                     begin
                         if I <= H
                             clamp(I, 1, M_dim)
-                        elseif I >= N_dim - H + 1
+                        elseif I > H + N_dim_shifted
                             clamp(M_dim - N_dim + I, 1, M_dim)
                         else
                             I_shifted = I - H
-                            N_dim_shifted = N_dim - 2 * H
                             M_dim_shifted = M_dim - 2 * H_src
 
                             a = (2 * I_shifted - 1) * M_dim_shifted + N_dim_shifted
@@ -563,7 +564,8 @@ function InterpolateArray(
 
             dens = ntuple(N) do dim
                 H = halo[dim]
-                2 * max(1, final_grid_size[dim] - 2 * H)
+                N_dim_shifted = active_size !== nothing ? active_size[dim] : (final_grid_size[dim] - 2 * H)
+                2 * max(1, N_dim_shifted)
             end
             total_den = prod(dens)
 
@@ -572,14 +574,14 @@ function InterpolateArray(
                 N_dim, M_dim = final_grid_size[dim], src_size[dim]
                 H = halo[dim]
                 H_src = src_halo[dim]
+                N_dim_shifted = active_size !== nothing ? active_size[dim] : (N_dim - 2 * H)
 
                 [
                     begin
-                        if I <= H || I >= N_dim - H + 1
+                        if I <= H || I > H + N_dim_shifted
                             0
                         else
                             I_shifted = I - H
-                            N_dim_shifted = N_dim - 2 * H
                             M_dim_shifted = M_dim - 2 * H_src
 
                             a = (2 * I_shifted - 1) * M_dim_shifted + N_dim_shifted
