@@ -256,9 +256,7 @@ function Base.show(io::IO, a::AT) where {AT<:CuTracedArray}
 end
 
 function Base.show(io::IO, a::AT) where {AT<:CuTracedRNumber}
-    Printf.@printf(
-        io, "%s cu traced rnumber at %p", join(size(a), '×'), Int(pointer(a))
-    )
+    Printf.@printf(io, "%s cu traced rnumber at %p", join(size(a), '×'), Int(pointer(a)))
 end
 
 ## array interface
