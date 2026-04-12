@@ -18,6 +18,7 @@ using Reactant_jll: Reactant_jll
 using LLVMOpenMP_jll: LLVMOpenMP_jll
 
 using Adapt: Adapt, WrappedArray
+using BFloat16s: BFloat16s, BFloat16
 using GPUArraysCore: GPUArraysCore, @allowscalar, allowscalar
 
 using Enzyme: Enzyme
@@ -93,7 +94,8 @@ include("accelerators/Accelerators.jl")
 
 include("CompileOptions.jl")
 
-export OptimizeCommunicationOptions, ShardyPropagationOptions, CompileOptions
+export OptimizeCommunicationOptions,
+    ShardyPropagationOptions, CompileOptions, MultiFloatOptions
 
 include("mlir/MLIR.jl")
 include("xla/XLA.jl")

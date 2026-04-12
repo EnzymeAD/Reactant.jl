@@ -437,6 +437,182 @@ function ConcreteIFRTArray(
     )
 end
 
+@enumx InterpolationType begin
+    Nearest
+    Linear
+end
+
+function InterpolateArray(
+    local_cpu_array::AbstractArray{T,N},
+    final_grid_size::Dims{N},
+    sharding::Sharding.AbstractSharding,
+    interpolation::InterpolationType.T,
+    halo::Dims{N}=ntuple(_ -> 0, N);
+    client=nothing,
+) where {T,N}
+    @assert Sharding.is_sharded(sharding)
+    client = client === nothing ? XLA.default_backend() : client
+    @assert client isa XLA.IFRT.Client "InterpolateArray currently only supports IFRT client"
+    (; hlo_sharding) = Sharding.HloSharding(sharding, final_grid_size)
+    all_devices = XLA.get_device.((client,), sharding.mesh.device_ids)
+
+    addressable_device_indices = [
+        i - 1 for (i, device) in enumerate(all_devices) if XLA.is_addressable(device)
+    ]
+
+    addressable_slices, _ = XLA.sharding_to_concrete_array_indices(
+        hlo_sharding, final_grid_size, addressable_device_indices
+    )
+    src_size = size(local_cpu_array)
+    ordered_buffers = Vector{Array{T,N}}(undef, length(addressable_slices))
+    for (buf_idx, slice) in enumerate(addressable_slices)
+        shard_shape = length.(slice)
+        if interpolation == InterpolationType.Nearest
+            src_idx_ranges = ntuple(N) do dim
+                I_range = slice[dim]
+                N_dim, M_dim = final_grid_size[dim], src_size[dim]
+                H = halo[dim]
+
+                [
+                    begin
+                        if I <= H
+                            clamp(I, 1, M_dim)
+                        elseif I >= N_dim - H + 1
+                            clamp(M_dim - N_dim + I, 1, M_dim)
+                        else
+                            I_shifted = I - H
+                            N_dim_shifted = N_dim - 2 * H
+                            M_dim_shifted = M_dim - 2 * H
+
+                            if N_dim_shifted <= 0 || M_dim_shifted <= 0
+                                clamp(I, 1, M_dim)
+                            else
+                                idx_shifted =
+                                    (I_shifted * M_dim_shifted + N_dim_shifted - 1) ÷
+                                    N_dim_shifted
+                                clamp(idx_shifted + H, 1, M_dim)
+                            end
+                        end
+                    end for I in I_range
+                ]
+            end
+            buf = Array{T,N}(undef, shard_shape)
+            for I in CartesianIndices(shard_shape)
+                idx = ntuple(dim -> src_idx_ranges[dim][I.I[dim]], N)
+                buf[I] = local_cpu_array[CartesianIndex(idx)]
+            end
+        elseif interpolation == InterpolationType.Linear
+            # We use cell-centered interpolation to map target grid indices to source grid indices.
+            # A point at target index `I` maps to `(I - 0.5) * (M_dim / N_dim) + 0.5` in the source grid.
+            # This ensures that we match Oceananigans' interpolation behavior.
+            # We compute this mapping using pure integers to avoid floating-point inaccuracies.
+            # If halo > 0, the mapping is applied to the region between halos.
+            lows = ntuple(N) do dim
+                I_range = slice[dim]
+                N_dim, M_dim = final_grid_size[dim], src_size[dim]
+                H = halo[dim]
+
+                [
+                    begin
+                        if I <= H
+                            clamp(I, 1, M_dim)
+                        elseif I >= N_dim - H + 1
+                            clamp(M_dim - N_dim + I, 1, M_dim)
+                        else
+                            I_shifted = I - H
+                            N_dim_shifted = N_dim - 2 * H
+                            M_dim_shifted = M_dim - 2 * H
+
+                            a = (2 * I_shifted - 1) * M_dim_shifted + N_dim_shifted
+                            b = 2 * N_dim_shifted
+                            low_shifted = a ÷ b
+                            clamp(low_shifted + H, 1, M_dim)
+                        end
+                    end for I in I_range
+                ]
+            end
+
+            highs = ntuple(N) do dim
+                I_range = slice[dim]
+                N_dim, M_dim = final_grid_size[dim], src_size[dim]
+                H = halo[dim]
+
+                [
+                    begin
+                        if I <= H
+                            clamp(I, 1, M_dim)
+                        elseif I >= N_dim - H + 1
+                            clamp(M_dim - N_dim + I, 1, M_dim)
+                        else
+                            I_shifted = I - H
+                            N_dim_shifted = N_dim - 2 * H
+                            M_dim_shifted = M_dim - 2 * H
+
+                            a = (2 * I_shifted - 1) * M_dim_shifted + N_dim_shifted
+                            b = 2 * N_dim_shifted
+                            low_shifted = a ÷ b
+                            clamp(low_shifted + 1 + H, 1, M_dim)
+                        end
+                    end for I in I_range
+                ]
+            end
+
+            dens = ntuple(N) do dim
+                H = halo[dim]
+                2 * max(1, final_grid_size[dim] - 2 * H)
+            end
+            total_den = prod(dens)
+
+            rems = ntuple(N) do dim
+                I_range = slice[dim]
+                N_dim, M_dim = final_grid_size[dim], src_size[dim]
+                H = halo[dim]
+
+                [
+                    begin
+                        if I <= H || I >= N_dim - H + 1
+                            0
+                        else
+                            I_shifted = I - H
+                            N_dim_shifted = N_dim - 2 * H
+                            M_dim_shifted = M_dim - 2 * H
+
+                            a = (2 * I_shifted - 1) * M_dim_shifted + N_dim_shifted
+                            b = 2 * N_dim_shifted
+                            a % b
+                        end
+                    end for I in I_range
+                ]
+            end
+            buf = Array{T,N}(undef, shard_shape)
+            corner_space = CartesianIndices(ntuple(_ -> 2, N))
+            for I in CartesianIndices(shard_shape)
+                sum_val = zero(T)
+                for c in corner_space
+                    idx = ntuple(
+                        dim -> c[dim] == 1 ? lows[dim][I.I[dim]] : highs[dim][I.I[dim]], N
+                    )
+
+                    w_int = prod(
+                        ntuple(dim -> if c[dim] == 1
+                            (dens[dim] - rems[dim][I.I[dim]])
+                        else
+                            rems[dim][I.I[dim]]
+                        end, N)
+                    )
+
+                    sum_val += w_int * local_cpu_array[CartesianIndex(idx)]
+                end
+                buf[I] = sum_val / total_den
+            end
+        else
+            error("Unsupported interpolation type")
+        end
+        ordered_buffers[buf_idx] = buf
+    end
+    return ConcreteIFRTArray(ordered_buffers, final_grid_size; client, sharding)
+end
+
 Base.wait(x::Union{ConcreteIFRTArray,ConcreteIFRTNumber}) = wait(x.data)
 XLA.client(x::Union{ConcreteIFRTArray,ConcreteIFRTNumber}) = XLA.client(x.data)
 function XLA.device(x::Union{ConcreteIFRTArray,ConcreteIFRTNumber})

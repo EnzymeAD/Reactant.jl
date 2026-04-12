@@ -1,5 +1,5 @@
 using Reactant, Test, CUDA
-
+using BFloat16s: BFloat16
 const ReactantCUDAExt = Base.get_extension(Reactant, :ReactantCUDAExt)
 
 @testset "Promote CuTraced" begin
@@ -30,6 +30,17 @@ end
     @jit square!(A, B)
     @test all(Array(A) .≈ (oA .* oA .* 100))
     @test all(Array(B) .≈ (oA .* 100))
+end
+
+@static if VERSION >= v"1.12"
+    @testset "Square BF16 raised Kernel" begin
+        oA = collect(BFloat16, 1:1:64)
+        A = Reactant.to_rarray(oA)
+        B = Reactant.to_rarray(100 .* oA)
+        @jit raise = true square!(A, B)
+        @test all(Array(A) .≈ (oA .* oA .* 100))
+        @test all(Array(B) .≈ (oA .* 100))
+    end
 end
 
 function sin_kernel!(x, y)

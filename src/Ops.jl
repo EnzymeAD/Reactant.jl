@@ -15,6 +15,31 @@ using ..Reactant:
 using ReactantCore: ReactantCore
 using GPUArraysCore: GPUArraysCore
 
+const GELU_APPROXIMATION_MAP = Dict(
+    "NONE" => MLIR.API.ENZYMEXLA_GELU_APPROXIMATION_NONE,
+    "TANH" => MLIR.API.ENZYMEXLA_GELU_APPROXIMATION_TANH,
+    "SIGMOID" => MLIR.API.ENZYMEXLA_GELU_APPROXIMATION_SIGMOID,
+)
+
+const LAPACK_TRANSPOSE_MAP = Dict(
+    'N' => MLIR.API.ENZYMEXLA_LAPACK_TRANSPOSE_NONE,
+    'T' => MLIR.API.ENZYMEXLA_LAPACK_TRANSPOSE_TRANSPOSE,
+    'C' => MLIR.API.ENZYMEXLA_LAPACK_TRANSPOSE_CONJUGATE_TRANSPOSE,
+)
+
+const LAPACK_UPLO_MAP = Dict(
+    'U' => MLIR.API.ENZYMEXLA_LAPACK_UPLO_UPPER,
+    'L' => MLIR.API.ENZYMEXLA_LAPACK_UPLO_LOWER,
+    'F' => MLIR.API.ENZYMEXLA_LAPACK_UPLO_FULL,
+)
+
+const SVD_ALGORITHM_MAP = Dict(
+    "DEFAULT" => MLIR.API.ENZYMEXLA_SVD_ALGORITHM_NONE,
+    "QRIteration" => MLIR.API.ENZYMEXLA_SVD_ALGORITHM_QRITERATION,
+    "Jacobi" => MLIR.API.ENZYMEXLA_SVD_ALGORITHM_JACOBI,
+    "DivideAndConquer" => MLIR.API.ENZYMEXLA_SVD_ALGORITHM_DIVIDEANDCONQUER,
+)
+
 function _function_macro_error()
     throw(ArgumentError("`caller_function` is not available in this context"))
 end
@@ -3876,18 +3901,6 @@ end
     Vt_size = (batch_sizes..., full ? n : r, n)
     info_size = batch_sizes
 
-    if algorithm == "DEFAULT"
-        algint = 0
-    elseif algorithm == "QRIteration"
-        algint = 1
-    elseif algorithm == "DivideAndConquer"
-        algint = 2
-    elseif algorithm == "Jacobi"
-        algint = 3
-    else
-        error("Unsupported SVD algorithm: $algorithm")
-    end
-
     svd_op = enzymexla.linalg_svd(
         x.mlir_data;
         U=mlir_type(TracedRArray{T,N}, U_size),
@@ -3895,7 +3908,9 @@ end
         Vt=mlir_type(TracedRArray{T,N}, Vt_size),
         info=mlir_type(TracedRArray{iT,N - 2}, info_size),
         full=full,
-        algorithm=MLIR.API.enzymexlaSVDAlgorithmAttrGet(MLIR.IR.current_context(), algint),
+        algorithm=MLIR.API.enzymexlaSVDAlgorithmAttrGet(
+            MLIR.IR.current_context(), SVD_ALGORITHM_MAP[algorithm]
+        ),
         location,
     )
 
@@ -4103,21 +4118,15 @@ end
     approximation::String;
     location=mlir_stacktrace("ml.gelu", @__FILE__, @__LINE__),
 )
-    approx = if approximation == "NONE"
-        0
-    elseif approximation == "TANH"
-        1
-    elseif approximation == "SIGMOID"
-        2
-    else
-        error("Invalid gelu approximation: $approximation")
-    end
-    approx = MLIR.API.enzymexlaGeluApproximationAttrGet(
-        MLIR.IR.current_context(), Int32(approx)
-    )
-
     res = MLIR.IR.result(
-        enzymexla.ml_gelu(x.mlir_data; gelu_approximation=approx, location), 1
+        enzymexla.ml_gelu(
+            x.mlir_data;
+            gelu_approximation=MLIR.API.enzymexlaGeluApproximationAttrGet(
+                MLIR.IR.current_context(), GELU_APPROXIMATION_MAP[approximation]
+            ),
+            location,
+        ),
+        1,
     )
 
     if x isa TracedRArray
@@ -4210,41 +4219,19 @@ end
     location=mlir_stacktrace("syrk", @__FILE__, @__LINE__),
 ) where {T,N}
     ctx = MLIR.IR.current_context()
-    uplo_attr = MLIR.API.enzymexlaLapackUploAttrGet(
-        ctx,
-        if uplo == 'U'
-            Int32(1)
-        elseif uplo == 'L'
-            Int32(0)
-        else
-            Int32(2)
-        end,
-    )
-    transpose_attr = MLIR.API.enzymexlaLapackTransposeAttrGet(
-        ctx,
-        if transpose_a == 'N'
-            Int32(0)
-        elseif transpose_a == 'T'
-            Int32(1)
-        elseif transpose_a == 'C'
-            Int32(2)
-        else
-            error("Unknown transpose mode: $transpose_a")
-        end,
-    )
-
-    alpha_ = constant(alpha; location)
-    beta_ = constant(beta; location)
+    uplo_attr = MLIR.API.enzymexlaLapackUploAttrGet(ctx, LAPACK_UPLO_MAP[uplo])
 
     res = MLIR.IR.result(
         enzymexla.blas_syrk(
             A.mlir_data,
             C.mlir_data,
-            alpha_.mlir_data,
-            beta_.mlir_data;
+            constant(alpha; location).mlir_data,
+            constant(beta; location).mlir_data;
             uplo=uplo_attr,
             output_uplo=uplo_attr,
-            transpose=transpose_attr,
+            transpose=MLIR.API.enzymexlaLapackTransposeAttrGet(
+                ctx, LAPACK_TRANSPOSE_MAP[transpose_a]
+            ),
             output=mlir_type(TracedRArray{T,N}, size(C)),
             location,
         ),
@@ -4508,6 +4495,31 @@ function julia_callback(
         return results[1]
     end
     return Tuple(results)
+end
+
+@noinline function softmax(
+    x::TracedRArray{T,N};
+    dims::Vector{Int64},
+    location=mlir_stacktrace("softmax", @__FILE__, @__LINE__),
+) where {T,N}
+    max_val = Reactant.call_with_reactant(Core.kwcall, (; dims,), Base.maximum, x)
+    exp_diff = exponential(x .- max_val; location)
+    denom = Reactant.call_with_reactant(Core.kwcall, (; dims,), Base.sum, exp_diff)
+    return exp_diff ./ denom
+end
+
+@noinline function logsoftmax(
+    x::TracedRArray{T,N};
+    dims::Vector{Int64},
+    location=mlir_stacktrace("logsoftmax", @__FILE__, @__LINE__),
+) where {T,N}
+    max_val = Reactant.call_with_reactant(Core.kwcall, (; dims,), Base.maximum, x)
+    diff = x .- max_val
+    exp_diff = exponential(diff; location)
+    reduced_exp_diff = Reactant.call_with_reactant(
+        Core.kwcall, (; dims,), Base.sum, exp_diff
+    )
+    return diff .- log(reduced_exp_diff; location)
 end
 
 end # module Ops

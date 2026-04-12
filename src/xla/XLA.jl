@@ -8,6 +8,7 @@ using EnumX: @enumx
 using Enzyme: Compiler
 using Preferences: load_preference
 using UUIDs: UUID
+using ScopedValues: ScopedValue, with
 
 using Setfield: Setfield, @set!
 
@@ -47,6 +48,8 @@ include("PJRT/PJRT.jl")
 include("IFRT/IFRT.jl")
 
 include("CompileOptions.jl")
+
+const BACKENDS_TO_INITIALIZE = ScopedValue{Union{Missing,Set{String}}}(missing)
 
 abstract type AbstractBackendState end
 
@@ -116,12 +119,19 @@ function cleanup_backend_state()
     return nothing
 end
 
+function normalize_backend_name(backend::String)
+    backend == "gpu" && return Set(["cuda", "metal", "rocm"])
+    return Set([backend])
+end
+
 function client(backend::String)
     if backend == "gpu"
         if haskey(global_backend_state.clients, "cuda")
             backend = "cuda"
         elseif haskey(global_backend_state.clients, "metal")
             backend = "metal"
+        elseif haskey(global_backend_state.clients, "rocm")
+            backend = "rocm"
         else
             error("No GPU client found")
         end
@@ -145,7 +155,9 @@ function set_default_backend(backend::AbstractClient)
 end
 
 function set_default_backend(backend::String)
-    global_backend_state.default_client = client(backend)
+    with(BACKENDS_TO_INITIALIZE => normalize_backend_name(backend)) do
+        global_backend_state.default_client = client(backend)
+    end
     return nothing
 end
 
@@ -235,6 +247,8 @@ end
 
 for runtime in (:PJRT, :IFRT)
     @eval function initialize_default_clients!(state::$(Symbol(runtime, :BackendState)))
+        backends_to_initialize = BACKENDS_TO_INITIALIZE[]
+
         was_initialized = state.initialized
         state.initialized = true
         distributed_runtime_client = if global_state.num_processes > 1
@@ -249,10 +263,9 @@ for runtime in (:PJRT, :IFRT)
             state,
             was_initialized;
             allow_initialization=backend -> begin
-                if Reactant.precompiling()
-                    return backend.platform_name == "cpu"
-                end
-                return true
+                Reactant.precompiling() && return backend.platform_name == "cpu"
+                backends_to_initialize === missing && return true
+                return backend.platform_name in backends_to_initialize
             end,
             node_id=global_state.process_id,
             num_nodes=global_state.num_processes,

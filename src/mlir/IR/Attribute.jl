@@ -612,15 +612,13 @@ function DenseElementsAttribute(values::AbstractArray{Float64})
     )
 end
 
-if isdefined(Core, :BFloat16)
-    function DenseElementsAttribute(values::AbstractArray{Core.BFloat16})
-        shaped_type = TensorType(collect(Int, size(values)), Type(Core.BFloat16))
-        return Attribute(
-            API.mlirDenseElementsAttrBFloat16Get(
-                shaped_type, length(values), to_row_major(values)
-            ),
-        )
-    end
+function DenseElementsAttribute(values::AbstractArray{BFloat16})
+    shaped_type = TensorType(collect(Int, size(values)), Type(BFloat16))
+    return Attribute(
+        API.mlirDenseElementsAttrBFloat16Get(
+            shaped_type, length(values), to_row_major(values)
+        ),
+    )
 end
 
 function DenseElementsAttribute(values::AbstractArray{Float16})

@@ -35,9 +35,7 @@ primitive_types_list = [
     (18, Complex{Float64}),
 ]
 
-@static if isdefined(Core, :BFloat16)
-    push!(primitive_types_list, (16, Core.BFloat16))
-end
+push!(primitive_types_list, (16, Reactant.BFloat16))
 
 for (int_val, jl_type) in primitive_types_list
     @eval begin

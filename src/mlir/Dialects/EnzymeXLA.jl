@@ -976,6 +976,28 @@ function kernel_call(
     )
 end
 
+function ml_lgamma(
+    input::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[input,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(result) && push!(op_ty_results, result)
+
+    return create_operation(
+        "enzymexla.ml.lgamma",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
 function linalg_lu(
     input::Value;
     output::IR.Type,
@@ -1040,6 +1062,27 @@ function mpi_barrier(; location=Location())
 
     return create_operation(
         "enzymexla.mpi.barrier",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+function mpi_bcast(
+    inbuf::Value, count::Value, root::Value; outbuf::IR.Type, datatype, location=Location()
+)
+    op_ty_results = IR.Type[outbuf,]
+    operands = Value[inbuf, count, root]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[NamedAttribute("datatype", datatype),]
+
+    return create_operation(
+        "enzymexla.mpi.bcast",
         location;
         operands,
         owned_regions,
@@ -1905,6 +1948,61 @@ function blas_syrk(
     )
 end
 
+function ml_tgamma(
+    input::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[input,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(result) && push!(op_ty_results, result)
+
+    return create_operation(
+        "enzymexla.ml.tgamma",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
+`linalg_tridiagonal_solve`
+Computes the solution of a tridiagonal linear system.
+  Parameters:
+  dl: A batch of vectors with shape [..., m]. The lower diagonal of A:
+    dl[i] := A[i, i-1] for i in [0,m). Note that dl[0] = 0.
+  d: A batch of vectors with shape [..., m]. The middle diagonal of A:
+    d[i]  := A[i, i] for i in [0,m).
+  du: A batch of vectors with shape [..., m]. The upper diagonal of A:
+    du[i] := A[i, i+1] for i in [0,m). Note that dl[m-1] = 0.
+  b: Right hand side matrix.
+"""
+function linalg_tridiagonal_solve(
+    dl::Value, d::Value, du::Value, B::Value; X::IR.Type, location=Location()
+)
+    op_ty_results = IR.Type[X,]
+    operands = Value[dl, d, du, B]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "enzymexla.linalg.tridiagonal_solve",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 """
 `blas_trmm`
 
@@ -1920,7 +2018,7 @@ function blas_trmm(
     side,
     uplo,
     transpose,
-    diag,
+    unit_diagonal=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[output,]
@@ -1931,8 +2029,9 @@ function blas_trmm(
         NamedAttribute("side", side),
         NamedAttribute("uplo", uplo),
         NamedAttribute("transpose", transpose),
-        NamedAttribute("diag", diag),
     ]
+    !isnothing(unit_diagonal) &&
+        push!(attributes, NamedAttribute("unit_diagonal", unit_diagonal))
 
     return create_operation(
         "enzymexla.blas.trmm",
@@ -1961,7 +2060,7 @@ function blas_trsm(
     side,
     uplo,
     transa,
-    diag,
+    unit_diagonal=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[output,]
@@ -1972,8 +2071,9 @@ function blas_trsm(
         NamedAttribute("side", side),
         NamedAttribute("uplo", uplo),
         NamedAttribute("transa", transa),
-        NamedAttribute("diag", diag),
     ]
+    !isnothing(unit_diagonal) &&
+        push!(attributes, NamedAttribute("unit_diagonal", unit_diagonal))
 
     return create_operation(
         "enzymexla.blas.trsm",

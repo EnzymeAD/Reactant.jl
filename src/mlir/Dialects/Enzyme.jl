@@ -648,6 +648,40 @@ function init(; result_0::IR.Type, location=Location())
     )
 end
 
+function jacobian(
+    inputs::Vector{Value};
+    outputs::Vector{IR.Type},
+    fn,
+    activity,
+    ret_activity,
+    width=nothing,
+    strong_zero=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[outputs...,]
+    operands = Value[inputs...,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[
+        NamedAttribute("fn", fn),
+        NamedAttribute("activity", activity),
+        NamedAttribute("ret_activity", ret_activity),
+    ]
+    !isnothing(width) && push!(attributes, NamedAttribute("width", width))
+    !isnothing(strong_zero) && push!(attributes, NamedAttribute("strong_zero", strong_zero))
+
+    return create_operation(
+        "enzyme.jacobian",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function load(cache::Value, indices::Vector{Value}; result::IR.Type, location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[cache, indices...]
@@ -765,6 +799,7 @@ function mcmc(
     hmc_config=nothing,
     nuts_config=nothing,
     logpdf_fn=nothing,
+    autodiff_attrs=nothing,
     name=nothing,
     location=Location(),
 )
@@ -810,6 +845,8 @@ function mcmc(
     !isnothing(hmc_config) && push!(attributes, NamedAttribute("hmc_config", hmc_config))
     !isnothing(nuts_config) && push!(attributes, NamedAttribute("nuts_config", nuts_config))
     !isnothing(logpdf_fn) && push!(attributes, NamedAttribute("logpdf_fn", logpdf_fn))
+    !isnothing(autodiff_attrs) &&
+        push!(attributes, NamedAttribute("autodiff_attrs", autodiff_attrs))
     !isnothing(name) && push!(attributes, NamedAttribute("name", name))
 
     return create_operation(
