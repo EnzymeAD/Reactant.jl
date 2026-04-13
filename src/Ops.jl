@@ -4215,11 +4215,11 @@ end
     alpha::Union{TracedRNumber{T},T},
     beta::Union{TracedRNumber{T},T};
     uplo::Char,
+    output_uplo::Char,
     transpose_a::Char,
     location=mlir_stacktrace("syrk", @__FILE__, @__LINE__),
 ) where {T,N}
     ctx = MLIR.IR.current_context()
-    uplo_attr = MLIR.API.enzymexlaLapackUploAttrGet(ctx, LAPACK_UPLO_MAP[uplo])
 
     res = MLIR.IR.result(
         enzymexla.blas_syrk(
@@ -4227,8 +4227,10 @@ end
             C.mlir_data,
             constant(alpha; location).mlir_data,
             constant(beta; location).mlir_data;
-            uplo=uplo_attr,
-            output_uplo=uplo_attr,
+            uplo=MLIR.API.enzymexlaLapackUploAttrGet(ctx, LAPACK_UPLO_MAP[uplo]),
+            output_uplo=MLIR.API.enzymexlaLapackUploAttrGet(
+                ctx, LAPACK_UPLO_MAP[output_uplo]
+            ),
             transpose=MLIR.API.enzymexlaLapackTransposeAttrGet(
                 ctx, LAPACK_TRANSPOSE_MAP[transpose_a]
             ),
