@@ -33,6 +33,10 @@ const LAPACK_UPLO_MAP = Dict(
     'F' => MLIR.API.ENZYMEXLA_LAPACK_UPLO_FULL,
 )
 
+const LAPACK_SIDE_MAP = Dict(
+    'L' => MLIR.API.ENZYMEXLA_LAPACK_SIDE_LEFT, 'R' => MLIR.API.ENZYMEXLA_LAPACK_SIDE_RIGHT
+)
+
 const SVD_ALGORITHM_MAP = Dict(
     "DEFAULT" => MLIR.API.ENZYMEXLA_SVD_ALGORITHM_NONE,
     "QRIteration" => MLIR.API.ENZYMEXLA_SVD_ALGORITHM_QRITERATION,
@@ -4238,6 +4242,72 @@ end
         1,
     )
     return TracedRArray{T,N}((), res, size(C))
+end
+
+@noinline function symm(
+    A::TracedRArray{T,N},
+    B::TracedRArray{T,N},
+    C::TracedRArray{T,N},
+    alpha::Union{TracedRNumber{T},T},
+    beta::Union{TracedRNumber{T},T};
+    side::Char,
+    uplo::Char,
+    location=mlir_stacktrace("symm", @__FILE__, @__LINE__),
+) where {T,N}
+    ctx = MLIR.IR.current_context()
+    side_attr = MLIR.API.enzymexlaLapackSideAttrGet(ctx, LAPACK_SIDE_MAP[side])
+    uplo_attr = MLIR.API.enzymexlaLapackUploAttrGet(ctx, LAPACK_UPLO_MAP[uplo])
+
+    res = MLIR.IR.result(
+        enzymexla.blas_symm(
+            A.mlir_data,
+            B.mlir_data,
+            C.mlir_data,
+            constant(alpha; location).mlir_data,
+            constant(beta; location).mlir_data;
+            side=side_attr,
+            uplo=uplo_attr,
+            output=mlir_type(TracedRArray{T,N}, size(C)),
+            location,
+        ),
+        1,
+    )
+    return TracedRArray{T,N}((), res, size(C))
+end
+
+@noinline function trmm(
+    A::TracedRArray{T,N},
+    B::TracedRArray{T,N},
+    alpha::Union{TracedRNumber{T},T};
+    side::Char,
+    uplo::Char,
+    transpose_a::Char,
+    unit_diagonal::Bool,
+    location=mlir_stacktrace("trmm", @__FILE__, @__LINE__),
+) where {T,N}
+    ctx = MLIR.IR.current_context()
+    side_attr = MLIR.API.enzymexlaLapackSideAttrGet(ctx, LAPACK_SIDE_MAP[side])
+    uplo_attr = MLIR.API.enzymexlaLapackUploAttrGet(ctx, LAPACK_UPLO_MAP[uplo])
+    trans_attr = MLIR.API.enzymexlaLapackTransposeAttrGet(
+        ctx, LAPACK_TRANSPOSE_MAP[transpose_a]
+    )
+    unit_attr = unit_diagonal ? MLIR.IR.UnitAttribute() : nothing
+
+    res = MLIR.IR.result(
+        enzymexla.blas_trmm(
+            A.mlir_data,
+            B.mlir_data,
+            constant(alpha; location).mlir_data;
+            side=side_attr,
+            uplo=uplo_attr,
+            transpose=trans_attr,
+            unit_diagonal=unit_attr,
+            output=mlir_type(TracedRArray{T,N}, size(B)),
+            location,
+        ),
+        1,
+    )
+    return TracedRArray{T,N}((), res, size(B))
 end
 
 @noinline function sharding_group(
