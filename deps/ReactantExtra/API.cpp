@@ -1823,6 +1823,7 @@ REACTANT_ABI HeldIfrtArray *ifrt_client_make_array_from_host_buffer(
       data, dtype, shape,
       std::nullopt, // byte_strides
       sharding->obj(),
+      nullptr, // layout
       static_cast<ifrt::Client::HostBufferSemantics>(c_semantics), [] {})));
 }
 

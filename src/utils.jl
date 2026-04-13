@@ -5,6 +5,18 @@ struct CompilerParams <: GPUCompiler.AbstractCompilerParams
     use_native_interp::Bool
 end
 
+struct UnboundTypeParamError <: Exception
+    mi::Core.MethodInstance
+end
+
+function Base.showerror(io::IO, e::UnboundTypeParamError)
+    println(
+        io,
+        "UnboundTypeParamError: Calling method with unbound type parameters is unsupported by GPUCompiler and thus Reactant",
+    )
+    return Enzyme.Compiler.pretty_print_mi(e.mi, io)
+end
+
 NativeCompilerJob = GPUCompiler.CompilerJob{GPUCompiler.NativeCompilerTarget,CompilerParams}
 GPUCompiler.can_throw(@nospecialize(job::NativeCompilerJob)) = true
 function GPUCompiler.method_table(@nospecialize(job::NativeCompilerJob))
@@ -753,14 +765,7 @@ function call_llvm_generator(
 
     for svar in mi.sparam_vals
         if svar isa TypeVar
-            errstr = sprint() do io
-                println(
-                    io,
-                    "Calling method with unbound type parameters is unsupported by GPUCompiler and thus Reactant",
-                )
-                Enzyme.Compiler.pretty_print_mi(mi, io)
-            end
-            method_error = :(throw(AssertionError($errstr)))
+            method_error = :(throw($(UnboundTypeParamError)($mi)))
             return stub(world, source, method_error)
         end
     end

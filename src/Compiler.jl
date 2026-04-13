@@ -218,9 +218,9 @@ function traced_setfield_buffer!(
     return traced_setfield!(obj, field, cval, path)
 end
 
-function create_result(
-    tocopy::T,
-    path,
+Base.@nospecializeinfer function create_result(
+    @nospecialize(tocopy),
+    @nospecialize(path::Tuple),
     result_stores,
     path_to_shard_info,
     to_unreshard_results,
@@ -230,10 +230,12 @@ function create_result(
     result_cache,
     var_idx,
     resultgen_code,
-) where {T}
+)
     if !isstructtype(typeof(tocopy))
         error("cannot copy $tocopy of type $(Core.Typeof(tocopy))")
     end
+
+    T = Core.Typeof(tocopy)
 
     args = (
         result_stores,
@@ -277,7 +279,7 @@ end
 
 function create_result(
     tocopy::ConcretePJRTNumber{T,D},
-    path,
+    @nospecialize(path::Tuple),
     result_stores,
     path_to_shard_info,
     to_unreshard_results,
@@ -319,7 +321,7 @@ end
 
 function create_result(
     tocopy::ConcreteIFRTNumber{T},
-    path,
+    @nospecialize(path::Tuple),
     result_stores,
     path_to_shard_info,
     to_unreshard_results,
@@ -361,7 +363,7 @@ end
 
 function create_result(
     tocopy::ConcretePJRTArray{T,N,D},
-    path,
+    @nospecialize(path::Tuple),
     result_stores,
     path_to_shard_info,
     to_unreshard_results,
@@ -404,7 +406,7 @@ end
 
 function create_result(
     tocopy::ConcreteIFRTArray{T,N},
-    path,
+    @nospecialize(path::Tuple),
     result_stores,
     path_to_shard_info,
     to_unreshard_results,
@@ -490,7 +492,7 @@ end
 
 function create_result(
     tocopy::Array{T,N},
-    path,
+    @nospecialize(path::Tuple),
     result_stores,
     path_to_shard_info,
     to_unreshard_results,
@@ -542,7 +544,7 @@ end
 
 function create_result(
     tocopy::Tuple,
-    path,
+    @nospecialize(path::Tuple),
     result_stores,
     path_to_shard_info,
     to_unreshard_results,
@@ -573,7 +575,7 @@ end
 
 function create_result(
     tocopy::NamedTuple{K,T},
-    path,
+    @nospecialize(path::Tuple),
     result_stores,
     path_to_shard_info,
     to_unreshard_results,
@@ -604,7 +606,7 @@ end
 
 function create_result(
     tocopy::D,
-    path,
+    @nospecialize(path::Tuple),
     result_stores,
     path_to_shard_info,
     to_unreshard_results,
@@ -661,7 +663,7 @@ end
 
 function create_result(
     tocopy::Reactant.XLA.AbstractDevice,
-    _path,
+    @nospecialize(_path::Tuple),
     _result_stores,
     _path_to_shard_info,
     _to_unreshard_results,
@@ -677,7 +679,7 @@ end
 
 function create_result(
     tocopy::Union{Integer,AbstractFloat,AbstractString,Nothing,Type,Symbol,Char},
-    _path,
+    @nospecialize(_path::Tuple),
     _result_stores,
     _path_to_shard_info,
     _to_unreshard_results,
@@ -760,6 +762,13 @@ function optimization_passes(
     lower_passes_str = unsafe_string(lower_passes_ptr[])
     MLIR.API.enzymexlaFreeTransformPassesList(main_passes_ptr[])
     MLIR.API.enzymexlaFreeTransformPassesList(lower_passes_ptr[])
+    main_passes_str = replace(main_passes_str, "convert_mul_convert;" => "")
+    lower_passes_str = replace(lower_passes_str, "convert_mul_convert;" => "")
+
+    main_passes_str = replace(main_passes_str, "associative_binary_op_reordering<1>;" => "")
+    lower_passes_str = replace(
+        lower_passes_str, "associative_binary_op_reordering<1>;" => ""
+    )
 
     transform_passes = join(
         [

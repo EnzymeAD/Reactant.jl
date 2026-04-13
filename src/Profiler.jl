@@ -6,6 +6,7 @@ using JSON: JSON
 using PrettyTables: PrettyTables, pretty_table
 using Crayons: Crayon
 using Scratch: @get_scratch!
+using ProtoBuf: ProtoBuf
 
 const PROFILING_DIR = Ref{Union{Nothing,String}}(nothing)
 const GRPC_SERVER_STARTED = Ref{Bool}(false)
@@ -920,6 +921,66 @@ function load_xplane_file(xplane_file::String; nrepeat::Int=1, compile_time_ns::
     metrics_data = get_aggregate_metrics(xplane_file, nrepeat)
     runtime_ns = extract_mean_step_time(xplane_file, nrepeat)
     return AggregateProfilingResult(runtime_ns, compile_time_ns, memory_data, metrics_data)
+end
+
+"""
+    get_total_program_roofline(xplane_file_path::String)
+
+Extract the total program roofline model information from an XSpace profile file (.xplane.pb).
+Returns a Dictionary with the extracted metrics.
+
+This function uses Reactant's `xspace_to_tools_data` with the `"roofline_model"` tool,
+passing the path to the file.
+
+# Arguments
+- `xplane_file_path`: The path to the `.xplane.pb` file.
+
+# Returns
+- `Dict{String, Any}`: A dictionary containing the roofline metrics, or an empty dict if no data is found.
+"""
+function get_total_program_roofline(xplane_file_path::String)
+    @assert isfile(xplane_file_path) "File not found: $xplane_file_path"
+
+    try
+        # Pass the file path directly to xspace_to_tools_data
+        data, is_binary = xspace_to_tools_data([xplane_file_path], "roofline_model")
+
+        s = String(data)
+        j = JSON.parse(s)
+
+        if j isa Vector && length(j) > 0
+            table = j[1]
+            cols = table["cols"]
+            rows = table["rows"]
+
+            if length(rows) > 0
+                col_ids = [c["id"] for c in cols]
+                op_idx = findfirst(==("operation"), col_ids)
+
+                for row in rows
+                    cells = row["c"]
+                    if op_idx !== nothing && op_idx <= length(cells)
+                        op_name = cells[op_idx]["v"]
+                        # Look for the aggregate row
+                        if op_name == "Program" || op_name == "Total"
+                            res = Dict{String,Any}()
+                            for (i, col) in enumerate(cols)
+                                if i <= length(cells)
+                                    res[col["id"]] = cells[i]["v"]
+                                end
+                            end
+                            return res
+                        end
+                    end
+                end
+            end
+        end
+    catch e
+        @debug "Error calling roofline_model tool: $e"
+    end
+
+    @warn "Roofline tool returned no data or failed. This may happen if the profile lacks step markers."
+    return Dict{String,Any}()
 end
 
 function _extract_kwargs_from_expr(args...)
