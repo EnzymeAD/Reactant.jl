@@ -33,6 +33,10 @@ const LAPACK_UPLO_MAP = Dict(
     'F' => MLIR.API.ENZYMEXLA_LAPACK_UPLO_FULL,
 )
 
+const LAPACK_SIDE_MAP = Dict(
+    'L' => MLIR.API.ENZYMEXLA_LAPACK_SIDE_LEFT, 'R' => MLIR.API.ENZYMEXLA_LAPACK_SIDE_RIGHT
+)
+
 const SVD_ALGORITHM_MAP = Dict(
     "DEFAULT" => MLIR.API.ENZYMEXLA_SVD_ALGORITHM_NONE,
     "QRIteration" => MLIR.API.ENZYMEXLA_SVD_ALGORITHM_QRITERATION,
@@ -4274,7 +4278,7 @@ end
 @noinline function trmm(
     A::TracedRArray{T,N},
     B::TracedRArray{T,N},
-    alpha::Union{TracedRNumber{T},T},
+    alpha::Union{TracedRNumber{T},T};
     side::Char,
     uplo::Char,
     transpose_a::Char,
@@ -4293,8 +4297,7 @@ end
         enzymexla.blas_trmm(
             A.mlir_data,
             B.mlir_data,
-            constant(alpha; location).mlir_data,
-            constant(beta; location).mlir_data;
+            constant(alpha; location).mlir_data;
             side=side_attr,
             uplo=uplo_attr,
             transpose=trans_attr,

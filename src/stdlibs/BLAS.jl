@@ -457,11 +457,11 @@ function BLAS.trmm!(
     res = @opcall trmm(
         materialize_traced_array(A),
         materialize_traced_array(B),
-        alpha,
+        alpha;
         side=side,
         uplo=uplo,
         transpose_a=transa,
-        diag=diag == 'U',
+        unit_diagonal=diag == 'U',
     )
     copyto!(B, res)
     return B
