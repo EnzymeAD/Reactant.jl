@@ -21,7 +21,8 @@ import ..Reactant:
     OrderedIdDict,
     make_tracer,
     TracedToConcrete,
-    append_path,
+    PersistentStack,
+    push,
     ancestor,
     TracedType
 import Reactant: OptimizeCommunicationOptions, ShardyPropagationOptions, CompileOptions
@@ -259,7 +260,7 @@ Base.@nospecializeinfer function create_result(
             # If the field is undefined we don't set it. A common example for this is `du2`
             # for Tridiagonal
             isdefined(tocopy, i) || continue
-            ev = create_result(getfield(tocopy, i), append_path(path, i), args...)
+            ev = create_result(getfield(tocopy, i), push(path, i), args...)
             push!(elems, ev)
         end
 
@@ -529,7 +530,7 @@ function create_result(
         result_cache[tocopy] = sym
 
         for (i, v) in enumerate(tocopy)
-            subexpr = create_result(v, append_path(path, i), args...)
+            subexpr = create_result(v, push(path, i), args...)
             push!(
                 resultgen_code,
                 quote
@@ -568,7 +569,7 @@ function create_result(
     )
     elems = Union{Symbol,Expr}[]
     for (k, v) in pairs(tocopy)
-        push!(elems, create_result(v, append_path(path, k), args...))
+        push!(elems, create_result(v, push(path, k), args...))
     end
     return :(($(elems...),))
 end
@@ -599,7 +600,7 @@ function create_result(
     )
     elems = Union{Symbol,Expr}[]
     for (i, (_, v)) in enumerate(pairs(tocopy))
-        push!(elems, create_result(v, append_path(path, i), args...))
+        push!(elems, create_result(v, push(path, i), args...))
     end
     return :(NamedTuple{$K}(($(elems...),)))
 end
@@ -643,7 +644,7 @@ function create_result(
         result_cache[tocopy] = sym
 
         for (k, v) in pairs(tocopy)
-            subexpr = create_result(v, append_path(path, k), args...)
+            subexpr = create_result(v, push(path, k), args...)
             # symbol keys must be quoted in generated code; otherwise
             # they are interpreted as variable references
             k_expr = k isa Symbol ? QuoteNode(k) : k
@@ -2178,7 +2179,7 @@ function compile_mlir!(
     end
 
     concrete_result = make_tracer(
-        OrderedIdDict(), traced_result, ("result",), TracedToConcrete; runtime
+        OrderedIdDict(), traced_result, PersistentStack{Any}("result"), TracedToConcrete; runtime
     )
 
     return Reactant.TracedUtils.CompiledMlirFnResult(
@@ -3117,7 +3118,7 @@ function codegen_unflatten!(
 
     result_code = create_result(
         concrete_result,
-        (),
+        PersistentStack{Any}(nothing, nothing, 0),
         result_stores,
         path_to_shard_info,
         to_unreshard_results,
@@ -3571,8 +3572,8 @@ function compile(ctx, f, args; kwargs...)
     (; linear_args, seen_args, linear_results, preserved_args, concrete_result) =
         mlir_fn_res
 
-    result_stores = Dict{Tuple,Symbol}()
-    path_to_shard_info = mlir_fn_res.is_sharded ? Dict{Tuple,Symbol}() : nothing
+    result_stores = Dict{PersistentStack{Any},Symbol}()
+    path_to_shard_info = mlir_fn_res.is_sharded ? Dict{PersistentStack{Any},Symbol}() : nothing
 
     global_mesh_expr = if mlir_fn_res.unique_meshes === nothing
         :()

@@ -1072,18 +1072,17 @@ end
 function make_tracer(
     seen,
     @nospecialize(prev::Union{Base.ExceptionStack,Core.MethodInstance}),
-    @nospecialize(path),
+    path,
     mode;
     kwargs...,
 )
     return prev
 end
-append_path(@nospecialize(path), i) = (path..., i)
 
 Base.@nospecializeinfer function make_tracer_via_immutable_constructor(
     seen,
     @nospecialize(prev),
-    @nospecialize(path),
+    path,
     mode;
     @nospecialize(track_numbers::Type = Union{}),
     @nospecialize(sharding = Sharding.NoSharding()),
@@ -1122,7 +1121,7 @@ Base.@nospecializeinfer function make_tracer_via_immutable_constructor(
     changed = false
     for i in 1:nf
         if isdefined(prev, i)
-            newpath = mode == TracedToTypes ? path : append_path(path, i)
+            newpath = mode == TracedToTypes ? path : push(path, i)
             xi = Base.getfield(prev, i)
             xi2 = make_tracer(
                 seen,
@@ -1167,7 +1166,7 @@ end
 Base.@nospecializeinfer function make_tracer_unknown(
     seen,
     @nospecialize(prev),
-    @nospecialize(path),
+    path,
     mode;
     @nospecialize(track_numbers::Type = Union{}),
     @nospecialize(sharding = Sharding.NoSharding()),
@@ -1206,7 +1205,7 @@ Base.@nospecializeinfer function make_tracer_unknown(
         changed = false
         for i in 1:nf
             if isdefined(prev, i)
-                newpath = mode == TracedToTypes ? path : append_path(path, i)
+                newpath = mode == TracedToTypes ? path : push(path, i)
                 xi = Base.getfield(prev, i)
                 xi2 = make_tracer(
                     seen,
@@ -1243,7 +1242,7 @@ Base.@nospecializeinfer function make_tracer_unknown(
     changed = false
     for i in 1:nf
         if isdefined(prev, i)
-            newpath = mode == TracedToTypes ? path : append_path(path, i)
+            newpath = mode == TracedToTypes ? path : push(path, i)
             xi = Base.getfield(prev, i)
             xi2 = make_tracer(
                 seen,
@@ -1280,7 +1279,7 @@ Base.@nospecializeinfer function make_tracer_unknown(
                         elseif is_traced_number(ft_j) && val_j isa unwrapped_eltype(ft_j)
                             val_wrapped = ft_j(val_j)
                             # Correct the path for the wrapped scalar
-                            sub_path = append_path(newpath, j)
+                            sub_path = push(newpath, j)
                             val_wrapped = Core.Typeof(val_wrapped)(
                                 (sub_path,), val_wrapped.mlir_data
                             )
@@ -1338,7 +1337,7 @@ end
 function make_tracer(
     seen,
     @nospecialize(prev),
-    @nospecialize(path),
+    path,
     mode;
     @nospecialize(track_numbers::Type = Union{}),
     @nospecialize(sharding = Sharding.NoSharding()),
@@ -1353,13 +1352,13 @@ end
 function make_tracer(
     seen,
     @nospecialize(prev::Base.RefValue),
-    @nospecialize(path),
+    path,
     mode;
     @nospecialize(toscalar = false),
     kwargs...,
 )
     if toscalar && mode == TracedSetPath
-        return make_tracer(seen, prev[], append_path(path, :x), mode; toscalar=false)
+        return make_tracer(seen, prev[], push(path, :x), mode; toscalar=false)
     end
     @assert !toscalar
     return make_tracer_unknown(seen, prev, path, mode; toscalar, kwargs...)
@@ -1368,7 +1367,7 @@ end
 Base.@nospecializeinfer function make_tracer(
     seen,
     @nospecialize(prev::ConcretePJRTArray{T,N}),
-    @nospecialize(path),
+    path,
     mode;
     @nospecialize(sharding = Sharding.NoSharding()),
     @nospecialize(device = nothing),
@@ -1381,7 +1380,7 @@ Base.@nospecializeinfer function make_tracer(
     mode == ArrayToConcrete && return ConcretePJRTArray(prev; sharding, device, client)
     mode != ConcreteToTraced && throw("Cannot trace concrete")
     haskey(seen, prev) && return seen[prev]::TracedRArray{T,N}
-    res = TracedRArray{T,N}((path,), nothing, size(prev))
+    res = TracedRArray{T,N}(PersistentStack{Any}(path), nothing, size(prev))
     seen[prev] = res
     return res
 end
@@ -1389,7 +1388,7 @@ end
 Base.@nospecializeinfer function make_tracer(
     seen,
     @nospecialize(prev::ConcreteIFRTArray{T,N}),
-    @nospecialize(path),
+    path,
     mode;
     @nospecialize(sharding = Sharding.NoSharding()),
     @nospecialize(device = nothing),
@@ -1402,7 +1401,7 @@ Base.@nospecializeinfer function make_tracer(
     mode == ArrayToConcrete && return ConcreteIFRTArray(prev; sharding, device, client)
     mode != ConcreteToTraced && throw("Cannot trace concrete")
     haskey(seen, prev) && return seen[prev]::TracedRArray{T,N}
-    res = TracedRArray{T,N}((path,), nothing, size(prev))
+    res = TracedRArray{T,N}(PersistentStack{Any}(path), nothing, size(prev))
     seen[prev] = res
     return res
 end
@@ -1410,7 +1409,7 @@ end
 Base.@nospecializeinfer function make_tracer(
     seen,
     prev::ConcretePJRTNumber{T},
-    @nospecialize(path),
+    path,
     mode;
     @nospecialize(sharding = Sharding.NoSharding()),
     @nospecialize(device = nothing),
@@ -1423,7 +1422,7 @@ Base.@nospecializeinfer function make_tracer(
     mode == ArrayToConcrete && return ConcretePJRTNumber(prev; sharding, device, client)
     mode != ConcreteToTraced && throw("Cannot trace existing trace type")
     haskey(seen, prev) && return seen[prev]::TracedRNumber{T}
-    res = TracedRNumber{T}((path,), nothing)
+    res = TracedRNumber{T}(PersistentStack{Any}(path), nothing)
     seen[prev] = res
     return res
 end
@@ -1431,7 +1430,7 @@ end
 Base.@nospecializeinfer function make_tracer(
     seen,
     @nospecialize(prev::ConcreteIFRTNumber{T}),
-    @nospecialize(path),
+    path,
     mode;
     @nospecialize(sharding = Sharding.NoSharding()),
     @nospecialize(device = nothing),
@@ -1444,7 +1443,7 @@ Base.@nospecializeinfer function make_tracer(
     mode == ArrayToConcrete && return ConcreteIFRTNumber(prev; sharding, device, client)
     mode != ConcreteToTraced && throw("Cannot trace existing trace type")
     haskey(seen, prev) && return seen[prev]::TracedRNumber{T}
-    res = TracedRNumber{T}((path,), nothing)
+    res = TracedRNumber{T}(PersistentStack{Any}(path), nothing)
     seen[prev] = res
     return res
 end
@@ -1452,7 +1451,7 @@ end
 Base.@nospecializeinfer function make_tracer(
     seen,
     @nospecialize(prev::TracedRArray{T,N}),
-    @nospecialize(path),
+    path,
     mode;
     toscalar=false,
     tobatch=nothing,
@@ -1468,30 +1467,30 @@ Base.@nospecializeinfer function make_tracer(
         return nothing
     end
     if mode == TracedTrack
-        TracedUtils.set_paths!(prev, (TracedUtils.get_paths(prev)..., path))
+        TracedUtils.set_paths!(prev, push(TracedUtils.get_paths(prev), path))
         if !haskey(seen, prev)
             return seen[prev] = prev
         end
         return prev
     end
     if mode == NoStopTracedTrack
-        TracedUtils.set_paths!(prev, (TracedUtils.get_paths(prev)..., path))
+        TracedUtils.set_paths!(prev, push(TracedUtils.get_paths(prev), path))
         if !haskey(seen, prev)
             seen[prev] = prev # don't return!
         end
         return prev
     end
     if mode == TracedSetPath
-        TracedUtils.set_paths!(prev, (TracedUtils.get_paths(prev)..., path))
+        TracedUtils.set_paths!(prev, push(TracedUtils.get_paths(prev), path))
         if haskey(seen, prev)
             return seen[prev]
         end
         res = if toscalar
-            TracedRNumber{T}((path,), nothing)
+            TracedRNumber{T}(PersistentStack{Any}(path), nothing)
         elseif tobatch !== nothing
             error("This should not happen...")
         else
-            TracedRArray{T,N}((path,), prev.mlir_data, size(prev))
+            TracedRArray{T,N}(PersistentStack{Any}(path), prev.mlir_data, size(prev))
         end
         seen[prev] = res
         return res
@@ -1541,7 +1540,7 @@ end
 Base.@nospecializeinfer function make_tracer(
     seen,
     @nospecialize(prev::TracedRNumber{T}),
-    @nospecialize(path),
+    path,
     mode;
     tobatch=nothing,
     toscalar=false,
@@ -1557,30 +1556,30 @@ Base.@nospecializeinfer function make_tracer(
         return nothing
     end
     if mode == TracedTrack
-        TracedUtils.set_paths!(prev, (TracedUtils.get_paths(prev)..., path))
+        TracedUtils.set_paths!(prev, push(TracedUtils.get_paths(prev), path))
         if !haskey(seen, prev)
             return seen[prev] = prev
         end
         return prev
     end
     if mode == NoStopTracedTrack
-        TracedUtils.set_paths!(prev, (TracedUtils.get_paths(prev)..., path))
+        TracedUtils.set_paths!(prev, push(TracedUtils.get_paths(prev), path))
         if !haskey(seen, prev)
             seen[prev] = prev # don't return!
         end
         return prev
     end
     if mode == TracedSetPath
-        TracedUtils.set_paths!(prev, (TracedUtils.get_paths(prev)..., path))
+        TracedUtils.set_paths!(prev, push(TracedUtils.get_paths(prev), path))
         if haskey(seen, prev)
             return seen[prev]
         end
         res = if toscalar
-            TracedRNumber{T}((path,), nothing)
+            TracedRNumber{T}(PersistentStack{Any}(path), nothing)
         elseif tobatch !== nothing
-            TracedRArray{T,length(tobatch)}((path,), prev.mlir_data, tobatch)
+            TracedRArray{T,length(tobatch)}(PersistentStack{Any}(path), prev.mlir_data, tobatch)
         else
-            TracedRNumber{T}((path,), prev.mlir_data)
+            TracedRNumber{T}(PersistentStack{Any}(path), prev.mlir_data)
         end
         seen[prev] = res
         return res
@@ -1628,7 +1627,7 @@ Base.@nospecializeinfer function make_tracer(
 end
 
 Base.@nospecializeinfer function make_tracer(
-    seen, @nospecialize(prev::MissingTracedValue), @nospecialize(path), mode; kwargs...
+    seen, @nospecialize(prev::MissingTracedValue), path, mode; kwargs...
 )
     if mode == ConcreteToTraced
         throw("Cannot trace existing trace type")
@@ -1637,23 +1636,23 @@ Base.@nospecializeinfer function make_tracer(
         throw("Cannot have MissingTracedValue as function call argument.")
     end
     if mode == TracedTrack
-        TracedUtils.set_paths!(prev, (TracedUtils.get_paths(prev)..., path))
+        TracedUtils.set_paths!(prev, push(TracedUtils.get_paths(prev), path))
         if !haskey(seen, prev)
             return seen[prev] = prev
         end
         return prev
     end
     if mode == NoStopTracedTrack
-        TracedUtils.set_paths!(prev, (TracedUtils.get_paths(prev)..., path))
+        TracedUtils.set_paths!(prev, push(TracedUtils.get_paths(prev), path))
         if !haskey(seen, prev)
             seen[prev] = prev # don't return!
         end
         return prev
     end
     if mode == TracedSetPath
-        TracedUtils.set_paths!(prev, (TracedUtils.get_paths(prev)..., path))
+        TracedUtils.set_paths!(prev, push(TracedUtils.get_paths(prev), path))
         haskey(seen, prev) && return seen[prev]
-        res = MissingTracedValue((path,))
+        res = MissingTracedValue(Tuple(path))
         seen[res] = res
         return res
     end
@@ -1667,7 +1666,7 @@ end
 Base.@nospecializeinfer function make_tracer(
     seen,
     @nospecialize(prev::Number),
-    @nospecialize(path),
+    path,
     mode;
     @nospecialize(track_numbers::Type = Union{}),
     @nospecialize(sharding = Sharding.NoSharding()),
@@ -1690,7 +1689,7 @@ Base.@nospecializeinfer function make_tracer(
             error("Unsupported runtime $runtime")
         else
             if mode == TracedTrack || mode == NoStopTracedTrack
-                res = TracedRNumber{RT}((path,), broadcast_to_size(prev, ()).mlir_data)
+                res = TracedRNumber{RT}(PersistentStack{Any}(path), broadcast_to_size(prev, ()).mlir_data)
                 if Base.ismutable(prev) && !haskey(seen, prev)
                     return seen[prev] = res
                 end
@@ -1698,7 +1697,7 @@ Base.@nospecializeinfer function make_tracer(
                 return res
             elseif mode == TracedSetPath
                 haskey(seen, prev) && return seen[prev]
-                res = TracedRNumber{RT}((path,), broadcast_to_size(prev, ()).mlir_data)
+                res = TracedRNumber{RT}(PersistentStack{Any}(path), broadcast_to_size(prev, ()).mlir_data)
                 seen[prev] = res
                 return res
             elseif mode == TracedToConcrete
@@ -1711,13 +1710,13 @@ end
 
 # avoid the real fallback
 Base.@nospecializeinfer function make_tracer(
-    seen, @nospecialize(prev::TracedRational), @nospecialize(path), mode; kwargs...
+    seen, @nospecialize(prev::TracedRational), path, mode; kwargs...
 )
     return make_tracer_via_immutable_constructor(seen, prev, path, mode; kwargs...)
 end
 
 Base.@nospecializeinfer function make_tracer(
-    seen, @nospecialize(prev::Type), @nospecialize(path), mode; kwargs...
+    seen, @nospecialize(prev::Type), path, mode; kwargs...
 )
     if mode == TracedToTypes
         push!(path, prev)
@@ -1727,7 +1726,7 @@ Base.@nospecializeinfer function make_tracer(
 end
 
 Base.@nospecializeinfer function make_tracer(
-    seen, @nospecialize(prev::Symbol), @nospecialize(path), mode; kwargs...
+    seen, @nospecialize(prev::Symbol), path, mode; kwargs...
 )
     if mode == TracedToTypes
         push!(path, prev)
@@ -1739,7 +1738,7 @@ end
 Base.@nospecializeinfer function make_tracer(
     seen,
     @nospecialize(prev::Complex),
-    @nospecialize(path),
+    path,
     mode;
     @nospecialize(sharding = Sharding.NoSharding()),
     kwargs...,
@@ -1752,15 +1751,15 @@ Base.@nospecializeinfer function make_tracer(
         return nothing
     end
     return Complex(
-        make_tracer(seen, prev.re, append_path(path, :re), mode; kwargs...),
-        make_tracer(seen, prev.im, append_path(path, :im), mode; kwargs...),
+        make_tracer(seen, prev.re, push(path, :re), mode; kwargs...),
+        make_tracer(seen, prev.im, push(path, :im), mode; kwargs...),
     )
 end
 
 Base.@nospecializeinfer function make_tracer(
     seen,
     @nospecialize(prev::Array),
-    @nospecialize(path),
+    path,
     mode;
     @nospecialize(track_numbers::Type = Union{}),
     @nospecialize(sharding = Sharding.NoSharding()),
@@ -1824,7 +1823,7 @@ Base.@nospecializeinfer function make_tracer(
             nv = make_tracer(
                 seen,
                 pv,
-                append_path(path, I),
+                push(path, I),
                 mode;
                 track_numbers,
                 sharding=Base.getproperty(sharding, I),
@@ -1847,7 +1846,7 @@ Base.@nospecializeinfer function make_tracer(
 end
 
 Base.@nospecializeinfer function make_tracer(
-    seen, @nospecialize(prev::BitArray), @nospecialize(path), mode; kwargs...
+    seen, @nospecialize(prev::BitArray), path, mode; kwargs...
 )
     if mode == ArrayToConcrete
         return make_tracer(seen, Array(prev), path, mode; kwargs...)
@@ -1859,7 +1858,7 @@ end
 Base.@nospecializeinfer function make_tracer(
     seen,
     @nospecialize(prev::Dict{Key,Value}),
-    @nospecialize(path),
+    path,
     mode;
     @nospecialize(track_numbers::Type = Union{}),
     @nospecialize(sharding = Sharding.NoSharding()),
@@ -1928,7 +1927,7 @@ Base.@nospecializeinfer function make_tracer(
         nv = make_tracer(
             seen,
             v,
-            append_path(path, k),
+            push(path, k),
             mode;
             track_numbers,
             sharding=Base.getproperty(sharding, k),
@@ -1950,7 +1949,7 @@ end
 Base.@nospecializeinfer function make_tracer(
     seen,
     @nospecialize(prev::Tuple),
-    @nospecialize(path),
+    path,
     mode;
     @nospecialize(sharding = Sharding.NoSharding()),
     kwargs...,
@@ -1970,7 +1969,7 @@ Base.@nospecializeinfer function make_tracer(
             make_tracer(
                 seen,
                 v,
-                append_path(path, i),
+                push(path, i),
                 mode;
                 sharding=Base.getproperty(sharding, i),
                 kwargs...,
@@ -1982,7 +1981,7 @@ end
 Base.@nospecializeinfer function make_tracer(
     seen,
     @nospecialize(prev::NamedTuple),
-    @nospecialize(path),
+    path,
     mode;
     @nospecialize(track_numbers::Type = Union{}),
     @nospecialize(sharding = Sharding.NoSharding()),
@@ -2007,7 +2006,7 @@ Base.@nospecializeinfer function make_tracer(
             make_tracer(
                 seen,
                 Base.getfield(prev, i),
-                append_path(path, i),
+                push(path, i),
                 mode;
                 sharding=Base.getproperty(sharding, i),
                 track_numbers,
@@ -2023,7 +2022,7 @@ struct UndefinedBox end
 Base.@nospecializeinfer function make_tracer(
     seen,
     @nospecialize(prev::Core.Box),
-    @nospecialize(path),
+    path,
     mode;
     @nospecialize(sharding = Sharding.NoSharding()),
     kwargs...,
@@ -2050,7 +2049,7 @@ Base.@nospecializeinfer function make_tracer(
     tr = make_tracer(
         seen,
         prev2,
-        append_path(path, :contents),
+        push(path, :contents),
         mode;
         sharding=Base.getproperty(sharding, :contents),
         kwargs...,
@@ -2066,7 +2065,7 @@ end
 Base.@nospecializeinfer function make_tracer(
     seen,
     @nospecialize(prev::Sharding.Mesh),
-    @nospecialize(path),
+    path,
     mode;
     @nospecialize(track_numbers::Type = Union{}),
     @nospecialize(sharding = Sharding.NoSharding()),
@@ -2077,24 +2076,24 @@ Base.@nospecializeinfer function make_tracer(
 end
 
 Base.@nospecializeinfer function make_tracer(
-    seen, @nospecialize(prev::ReactantRNG), @nospecialize(path), mode; kwargs...
+    seen, @nospecialize(prev::ReactantRNG), path, mode; kwargs...
 )
     if mode == TracedToTypes
         push!(path, Core.Typeof(prev))
         return make_tracer(seen, prev.seed, path, mode; kwargs...)
     end
     return ReactantRNG(
-        make_tracer(seen, prev.seed, (path..., 1), mode; kwargs...), prev.algorithm
+        make_tracer(seen, prev.seed, push(path, 1), mode; kwargs...), prev.algorithm
     )
 end
 
 Base.@nospecializeinfer function make_tracer(
-    seen, @nospecialize(prev::Random.AbstractRNG), @nospecialize(path), mode; kwargs...
+    seen, @nospecialize(prev::Random.AbstractRNG), path, mode; kwargs...
 )
     if mode == ArrayToConcrete
         TracedRandom.should_warn_if_not_natively_supported(prev)
         return ReactantRNG(
-            make_tracer(seen, TracedRandom.make_seed(prev), (path..., 1), mode; kwargs...),
+            make_tracer(seen, TracedRandom.make_seed(prev), push(path, 1), mode; kwargs...),
             TracedRandom.rng_algorithm(prev),
         )
     end
@@ -2322,7 +2321,7 @@ end
 function make_tracer(
     seen,
     @nospecialize(prev::UnitRange),
-    @nospecialize(path),
+    path,
     mode;
     @nospecialize(sharding = Sharding.NoSharding()),
     kwargs...,
@@ -2334,8 +2333,8 @@ function make_tracer(
         make_tracer(seen, prev.stop, path, mode; kwargs...)
         return nothing
     end
-    newstart = make_tracer(seen, prev.start, append_path(path, :start), mode; kwargs...)
-    newstop = make_tracer(seen, prev.stop, append_path(path, :stop), mode; kwargs...)
+    newstart = make_tracer(seen, prev.start, push(path, :start), mode; kwargs...)
+    newstop = make_tracer(seen, prev.stop, push(path, :stop), mode; kwargs...)
     if typeof(newstart) == typeof(prev.start) && typeof(newstop) == typeof(prev.stop)
         return prev
     else
@@ -2367,7 +2366,7 @@ end
 function make_tracer(
     seen,
     @nospecialize(prev::StepRangeLen),
-    @nospecialize(path),
+    path,
     mode;
     @nospecialize(sharding = Sharding.NoSharding()),
     kwargs...,
@@ -2381,21 +2380,21 @@ function make_tracer(
         make_tracer(seen, prev.offset, path, mode; sharding, kwargs...)
         return nothing
     end
-    newref = make_tracer(seen, prev.ref, append_path(path, :ref), mode; sharding, kwargs...)
+    newref = make_tracer(seen, prev.ref, push(path, :ref), mode; sharding, kwargs...)
     newstep = make_tracer(
-        seen, prev.step, append_path(path, :step), mode; sharding, kwargs...
+        seen, prev.step, push(path, :step), mode; sharding, kwargs...
     )
     newlen = make_tracer(
         seen,
         prev.len,
-        append_path(path, :len),
+        push(path, :len),
         mode;
         sharding,
         kwargs...,
         track_numbers=Union{},
     )
     newoffset = make_tracer(
-        seen, prev.offset, append_path(path, :offset), mode; sharding, kwargs...
+        seen, prev.offset, push(path, :offset), mode; sharding, kwargs...
     )
     if (
         typeof(newref) == typeof(prev.ref) &&
@@ -2429,7 +2428,7 @@ end
 function make_tracer(
     seen,
     @nospecialize(prev::Rational),
-    @nospecialize(path),
+    path,
     mode;
     @nospecialize(sharding = Sharding.NoSharding()),
     kwargs...,
@@ -2441,8 +2440,8 @@ function make_tracer(
         make_tracer(seen, prev.den, path, mode; kwargs...)
         return nothing
     end
-    newnum = make_tracer(seen, prev.num, append_path(path, :num), mode; kwargs...)
-    newden = make_tracer(seen, prev.den, append_path(path, :den), mode; kwargs...)
+    newnum = make_tracer(seen, prev.num, push(path, :num), mode; kwargs...)
+    newden = make_tracer(seen, prev.den, push(path, :den), mode; kwargs...)
     if typeof(newnum) == typeof(prev.num) && typeof(newden) == typeof(prev.den)
         return prev
     else
@@ -2453,7 +2452,7 @@ end
 function make_tracer(
     seen,
     prev::IOStream,
-    @nospecialize(path),
+    path,
     mode;
     @nospecialize(sharding = Sharding.NoSharding()),
     kwargs...,

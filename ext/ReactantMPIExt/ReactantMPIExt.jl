@@ -250,7 +250,7 @@ end
 # Base.@nospecializeinfer function Reactant.make_tracer(
 #     seen,
 #     @nospecialize(prev::TracedRequest),
-#     @nospecialize(path),
+#     path,
 #     mode;
 #     tobatch=nothing,
 #     toscalar=false,

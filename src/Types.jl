@@ -39,17 +39,22 @@ end
 
 ## TracedRNumber
 mutable struct TracedRNumber{T} <: RNumber{T}
-    paths::Tuple
+    paths::PersistentStack{Any}
     mlir_data::Union{Nothing,MLIR.IR.Value}
 
     function TracedRNumber{T}(
-        paths::Tuple, mlir_data::Union{Nothing,MLIR.IR.Value}
+        paths::PersistentStack{Any}, mlir_data::Union{Nothing,MLIR.IR.Value}
     ) where {T}
         if !isnothing(mlir_data)
             @assert size(MLIR.IR.type(mlir_data)) == ()
         end
         return new{T}(paths, mlir_data)
     end
+end
+
+TracedRNumber{T}(mlir_data::Union{Nothing,MLIR.IR.Value}) where {T} = TracedRNumber{T}((), mlir_data)
+function TracedRNumber{T}(::Tuple{}, mlir_data) where {T}
+    return TracedRNumber{T}(PersistentStack{Any}(nothing, nothing, 0), mlir_data)
 end
 
 Base.elsize(::Type{TracedRNumber{T}}) where {T} = sizeof(T)
@@ -65,12 +70,12 @@ end
 
 ## TracedRArray
 mutable struct TracedRArray{T,N} <: RArray{TracedRNumber{T},N}
-    paths::Tuple
+    paths::PersistentStack{Any}
     mlir_data::Union{Nothing,MLIR.IR.Value}
     shape::NTuple{N,Int}
 
     function TracedRArray{T,N}(
-        paths::Tuple, mlir_data::Union{Nothing,MLIR.IR.Value}, shape
+        paths::PersistentStack{Any}, mlir_data::Union{Nothing,MLIR.IR.Value}, shape
     ) where {T,N}
         shape = Tuple(shape)
         if !isnothing(mlir_data)
@@ -82,6 +87,11 @@ mutable struct TracedRArray{T,N} <: RArray{TracedRNumber{T},N}
     function TracedRArray{T,N}(::UndefInitializer, shape::Integer...) where {T,N}
         return similar(TracedRArray{T,N}, shape...)
     end
+end
+
+TracedRArray{T,N}(mlir_data::Union{Nothing,MLIR.IR.Value}, shape) where {T,N} = TracedRArray{T,N}((), mlir_data, shape)
+function TracedRArray{T,N}(::Tuple{}, mlir_data, shape) where {T,N}
+    return TracedRArray{T,N}(PersistentStack{Any}(nothing, nothing, 0), mlir_data, shape)
 end
 
 function repath(x::TracedRArray{T,N}, paths) where {T,N}
