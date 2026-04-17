@@ -49,8 +49,13 @@ function Core.Compiler.optimize(
             opt.src, opt, caller
         )
         Core.Compiler.ipo_dataflow_analysis!(interp, ir, caller)
-    else
+    elseif VERSION < v"1.13-"
         Core.Compiler.@timeit "optimizer" ir = Core.Compiler.run_passes_ipo_safe(
+            opt.src, opt
+        )
+        Core.Compiler.ipo_dataflow_analysis!(interp, opt, ir, caller)
+    else
+        Core.Compiler.@zone "optimizer" ir = Core.Compiler.run_passes_ipo_safe(
             opt.src, opt
         )
         Core.Compiler.ipo_dataflow_analysis!(interp, opt, ir, caller)
@@ -64,7 +69,11 @@ function Core.Compiler.optimize(
         safe_print("post rewrite_insts", ir)
     end
     Core.Compiler.verify_ir(ir)
-    res = Core.Compiler.finish(interp, opt, ir, caller)
+    @static if VERSION < v"1.13-"
+        res = Core.Compiler.finish(interp, opt, ir, caller)
+    else
+        res = Core.Compiler.finishopt!(interp, opt, ir)
+    end
 
     return res
 end
@@ -196,7 +205,11 @@ const __skip_rewrite_func_set = Set([
     typeof(Base.StackTraces.show_spec_sig),
     typeof(Core.throw_inexacterror),
     typeof(Base.throw_boundserror),
-    typeof(Base._shrink),
+    @static(
+        if VERSION < v"1.13-"
+            typeof(Base.memoryref)
+        end
+    ),
     typeof(Base._shrink!),
     typeof(Base.ht_keyindex),
     typeof(Base.checkindex),
