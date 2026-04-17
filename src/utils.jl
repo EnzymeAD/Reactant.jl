@@ -55,9 +55,7 @@ function Core.Compiler.optimize(
         )
         Core.Compiler.ipo_dataflow_analysis!(interp, opt, ir, caller)
     else
-        Core.Compiler.@zone "optimizer" ir = Core.Compiler.run_passes_ipo_safe(
-            opt.src, opt
-        )
+        Core.Compiler.@zone "optimizer" ir = Core.Compiler.run_passes_ipo_safe(opt.src, opt)
         Core.Compiler.ipo_dataflow_analysis!(interp, opt, ir, caller)
     end
     mi = opt.linfo
