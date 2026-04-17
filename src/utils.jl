@@ -205,7 +205,7 @@ const __skip_rewrite_func_set = Set([
     typeof(Base.throw_boundserror),
     @static(
         if VERSION < v"1.13-"
-            typeof(Base.memoryref)
+            typeof(Base._shrink)
         end
     ),
     typeof(Base._shrink!),
