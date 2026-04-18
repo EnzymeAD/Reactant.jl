@@ -7,7 +7,8 @@ using Reactant:
     AnyConcretePJRTArray,
     MLIR,
     TracedRNumber,
-    ReactantPrecompilationException
+    ReactantPrecompilationException,
+    call_with_native
 using Reactant.Compiler: raising, LLVMFunc, llvm_compiler_cache
 using Reactant.Ops: @opcall
 
@@ -612,7 +613,7 @@ end
     f::LLVMFunc{F,tt}; shmem::Union{Integer,Base.Callable}=0, max_threads::Integer=0
 ) where {F,tt}
     return CUDA.launch_configuration(
-        Base.inferencebarrier(CUDA.cufunction)(f.f, Tuple{tt.parameters[2:end]...}).fun;
+        call_with_native(CUDA.cufunction, f.f, Tuple{tt.parameters[2:end]...}).fun;
         shmem,
         max_threads,
     )
