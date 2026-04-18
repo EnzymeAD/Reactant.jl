@@ -111,6 +111,7 @@ end
                 Reactant.Accelerators.TPU.TPUVersion,
                 Reactant.PrecisionConfig,
                 ReactantMPIExt.Ops,
+                Reactant.InterpolationType,
             ),
             ignore=(
                 Reactant.Proto,
