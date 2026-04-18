@@ -4209,6 +4209,23 @@ end
     )
 end
 
+@noinline function tridiagonal_solve(
+    dl::TracedRArray{T,N},
+    d::TracedRArray{T,N},
+    du::TracedRArray{T,N},
+    B::TracedRArray{T,N},
+    location=mlir_stacktrace("tridiagonal_solve", @__FILE__, @__LINE__),
+) where {T,N}
+    res = MLIR.IR.result(
+        enzymexla.linalg_tridiagonal_solve(
+            dl.mlir_data, d.mlir_data, du.mlir_data, B.mlir_data; location
+        ),
+        1,
+    )
+    #TODO: return info
+    return TracedRArray{T,N}((), res, size(B))
+end
+
 @noinline function syrk(
     A::TracedRArray{T,N},
     C::TracedRArray{T,N},
