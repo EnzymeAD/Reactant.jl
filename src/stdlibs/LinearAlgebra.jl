@@ -441,6 +441,17 @@ function diagonal_indices(m::Integer, n::Integer, k::Integer, v::Integer)
     end
 end
 
+function LinearAlgebra.ldiv!(A::Tridiagonal{<:TracedRNumber}, B::AnyTracedRMatrix)
+    res = @opcall triangular_solve(
+        materialize_traced_array(A.dl),
+        materialize_traced_array(A.d),
+        materialize_traced_array(A.du),
+        materialize_traced_array(B);
+    )
+    copyto!(B, res)
+    return B
+end
+
 function LinearAlgebra.ldiv!(
     B::Union{AnyTracedRArray{T,1},AnyTracedRArray{T,2}}, D::Diagonal, A::AbstractVecOrMat
 ) where {T}
