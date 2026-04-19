@@ -7,18 +7,26 @@ using Reactant:
     AnyConcretePJRTArray,
     MLIR,
     TracedRNumber,
-    ReactantPrecompilationException
+    ReactantPrecompilationException,
+    call_with_native
 using Reactant.Compiler: raising, LLVMFunc, llvm_compiler_cache
 using Reactant.Ops: @opcall
 
 using Enzyme
 using Adapt: Adapt, adapt
 using CUDA: CUDA, CuDim, DenseCuArray, unsafe_cached_load
+# Compatibility for CUDA v5 and v6
+if isdefined(CUDA, :CUDACore)
+    using CUDA: CUDACore
+else
+    const CUDACore = CUDA
+end
 
 using GPUCompiler: GPUCompiler
 using GPUArraysCore: @allowscalar
 using KernelAbstractions: KernelAbstractions
 using LLVM: LLVM
+using Printf: Printf
 
 using PrecompileTools: @setup_workload, @compile_workload
 
@@ -245,13 +253,11 @@ Base.@nospecializeinfer function Reactant.promote_traced_type(
 end
 
 function Base.show(io::IO, a::AT) where {AT<:CuTracedArray}
-    CUDA.Printf.@printf(io, "%s cu traced array at %p", join(size(a), '×'), Int(pointer(a)))
+    Printf.@printf(io, "%s cu traced array at %p", join(size(a), '×'), Int(pointer(a)))
 end
 
 function Base.show(io::IO, a::AT) where {AT<:CuTracedRNumber}
-    CUDA.Printf.@printf(
-        io, "%s cu traced rnumber at %p", join(size(a), '×'), Int(pointer(a))
-    )
+    Printf.@printf(io, "%s cu traced rnumber at %p", join(size(a), '×'), Int(pointer(a)))
 end
 
 ## array interface
@@ -607,7 +613,7 @@ end
     f::LLVMFunc{F,tt}; shmem::Union{Integer,Base.Callable}=0, max_threads::Integer=0
 ) where {F,tt}
     return CUDA.launch_configuration(
-        Base.inferencebarrier(CUDA.cufunction)(f.f, Tuple{tt.parameters[2:end]...}).fun;
+        call_with_native(CUDA.cufunction, f.f, Tuple{tt.parameters[2:end]...}).fun;
         shmem,
         max_threads,
     )
@@ -1591,13 +1597,13 @@ end
 Reactant.@reactant_overlay @noinline function CUDA.cufunction(
     f::F, tt::TT=Tuple{}; kwargs...
 ) where {F,TT}
-    res = Base.@lock CUDA.cufunction_lock begin
+    res = Base.@lock CUDACore.cufunction_lock begin
         # compile the function
         cache = llvm_compiler_cache(MLIR.IR.current_module())
         effective_tt = _substitute_bfloat16_tt(
             tt, Reactant.Compiler.BFLOAT16_COMPILE_TYPE[]
         )
-        source = CUDA.methodinstance(F, effective_tt)
+        source = GPUCompiler.methodinstance(F, effective_tt)
         # cuda = CUDA.active_state()
         device = nothing # cuda.device
         # config = CUDA.compiler_config(device; kwargs...)::CUDA.CUDACompilerConfig
@@ -1610,8 +1616,8 @@ Reactant.@reactant_overlay @noinline function CUDA.cufunction(
         name = nothing
         debuginfo = false
         config = GPUCompiler.CompilerConfig(
-            CUDA.PTXCompilerTarget(; cap=llvm_cap, ptx=llvm_ptx, debuginfo),
-            CUDA.CUDACompilerParams(; cap=cuda_cap, ptx=cuda_ptx);
+            GPUCompiler.PTXCompilerTarget(; cap=llvm_cap, ptx=llvm_ptx, debuginfo),
+            CUDACore.CUDACompilerParams(; cap=cuda_cap, ptx=cuda_ptx);
             kernel,
             name,
             always_inline,
