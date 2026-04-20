@@ -681,6 +681,64 @@ end
         )) == Dates.datetime2julian(Dates.DateTime(1930, 12, 1, 1, 5, 1))
     end
 
+    @testset "dayofyear accessor" begin
+        for dt in (Dates.Date(2000, 1, 1), Dates.Date(2000, 2, 29), Dates.Date(2001, 3, 1),
+                   Dates.Date(1999, 12, 31), Dates.Date(2000, 7, 15))
+            dt_r = convert(RDExt.ReactantDate, dt)
+            @test Dates.dayofyear(dt_r) == Dates.dayofyear(dt)
+        end
+        for dt in (Dates.DateTime(2000, 1, 1), Dates.DateTime(2000, 2, 29, 12),
+                   Dates.DateTime(2001, 3, 1, 0, 0, 1))
+            dt_r = convert(RDExt.ReactantDateTime, dt)
+            @test Dates.dayofyear(dt_r) == Dates.dayofyear(dt)
+        end
+    end
+
+    @testset "firstdayofmonth accessor" begin
+        for dt in (Dates.Date(2000, 1, 15), Dates.Date(2000, 2, 29), Dates.Date(1999, 12, 31))
+            dt_r = convert(RDExt.ReactantDate, dt)
+            @test Dates.Date(Dates.firstdayofmonth(dt_r)) == Dates.firstdayofmonth(dt)
+        end
+        for dt in (Dates.DateTime(2000, 3, 15, 12, 30), Dates.DateTime(2001, 1, 1))
+            dt_r = convert(RDExt.ReactantDateTime, dt)
+            @test Dates.DateTime(Dates.firstdayofmonth(dt_r)) == Dates.firstdayofmonth(dt)
+        end
+    end
+
+    @testset "ReactantDate ↔ ReactantDateTime ↔ ReactantTime conversions" begin
+        d = Dates.Date(2024, 6, 15)
+        d_r = convert(RDExt.ReactantDate, d)
+        dt_r = convert(RDExt.ReactantDateTime, d_r)
+        @test Dates.DateTime(dt_r) == Dates.DateTime(d)
+
+        dt = Dates.DateTime(2024, 6, 15, 12, 30, 45, 500)
+        dt_r = convert(RDExt.ReactantDateTime, dt)
+        d_r2 = convert(RDExt.ReactantDate, dt_r)
+        @test Dates.Date(d_r2) == Dates.Date(dt)
+
+        t_r = convert(RDExt.ReactantTime, dt_r)
+        @test Dates.Time(t_r) == Dates.Time(12, 30, 45, 500)
+    end
+
+    @testset "Millisecond/Day convert to/from ReactantDateTime/ReactantDate" begin
+        ms = Dates.Millisecond(86400000)
+        dt_r = convert(RDExt.ReactantDateTime, ms)
+        @test convert(Dates.Millisecond, dt_r) == ms
+
+        d = Dates.Day(1)
+        d_r = convert(RDExt.ReactantDate, d)
+        @test convert(Dates.Day, d_r) == d
+    end
+
+    @testset "isleapyear(TracedRNumber)" begin
+        for y in (1600, 2000, 2400)
+            @test Dates.isleapyear(y) == true
+        end
+        for y in (1700, 1800, 1900, 2100, 2023)
+            @test Dates.isleapyear(y) == false
+        end
+    end
+
     @testset "Minimal timestepper with Dates" begin
         clock = Clock(5, DateTime(2002, 1, 1), Dates.Day(1))
         state = State(clock)
