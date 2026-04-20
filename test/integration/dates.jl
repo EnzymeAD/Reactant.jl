@@ -682,20 +682,29 @@ end
     end
 
     @testset "dayofyear accessor" begin
-        for dt in (Dates.Date(2000, 1, 1), Dates.Date(2000, 2, 29), Dates.Date(2001, 3, 1),
-                   Dates.Date(1999, 12, 31), Dates.Date(2000, 7, 15))
+        for dt in (
+            Dates.Date(2000, 1, 1),
+            Dates.Date(2000, 2, 29),
+            Dates.Date(2001, 3, 1),
+            Dates.Date(1999, 12, 31),
+            Dates.Date(2000, 7, 15),
+        )
             dt_r = convert(RDExt.ReactantDate, dt)
             @test Dates.dayofyear(dt_r) == Dates.dayofyear(dt)
         end
-        for dt in (Dates.DateTime(2000, 1, 1), Dates.DateTime(2000, 2, 29, 12),
-                   Dates.DateTime(2001, 3, 1, 0, 0, 1))
+        for dt in (
+            Dates.DateTime(2000, 1, 1),
+            Dates.DateTime(2000, 2, 29, 12),
+            Dates.DateTime(2001, 3, 1, 0, 0, 1),
+        )
             dt_r = convert(RDExt.ReactantDateTime, dt)
             @test Dates.dayofyear(dt_r) == Dates.dayofyear(dt)
         end
     end
 
     @testset "firstdayofmonth accessor" begin
-        for dt in (Dates.Date(2000, 1, 15), Dates.Date(2000, 2, 29), Dates.Date(1999, 12, 31))
+        for dt in
+            (Dates.Date(2000, 1, 15), Dates.Date(2000, 2, 29), Dates.Date(1999, 12, 31))
             dt_r = convert(RDExt.ReactantDate, dt)
             @test Dates.Date(Dates.firstdayofmonth(dt_r)) == Dates.firstdayofmonth(dt)
         end
