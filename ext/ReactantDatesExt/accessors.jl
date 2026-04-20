@@ -56,8 +56,8 @@ function Dates.yearmonthday(days::Reactant.TracedRNumber)
     h = 100z - 25
     a = fld(h, 3652425)
     b = a - fld(a, 4)
-    y = fld(100b + h, 36525);
-    c = b + z - 365y - fld(y, 4);
+    y = fld(100b + h, 36525)
+    c = b + z - 365y - fld(y, 4)
     m = div(5c + 456, 153)
     d = c - div(153m - 457, 5)
     overflow = fld(m - 1, 12)
