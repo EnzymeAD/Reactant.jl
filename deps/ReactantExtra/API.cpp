@@ -1249,15 +1249,13 @@ REACTANT_ABI uint8_t FutureIsReady(FutureType *Future) {
 
 REACTANT_ABI void FutureAwait(FutureType *Future) { Future->Await(); }
 
-xla::CompileOptions
-GenerateCompileOptions(int64_t device_id, const int64_t *mesh_ids,
-                       int64_t num_mesh_ids, const char *xla_gpu_cuda_data_dir,
-                       bool use_shardy_partitioner, int64_t num_replicas,
-                       int64_t num_partitions, bool use_spmd_partitioning,
-                       bool kernel_cache_enabled, const char *kernel_cache_path,
-                       bool autotune_cache_enabled,
-                       const char *autotune_cache_path, int process_id,
-                       bool xla_enable_enzyme_comms_opt) {
+xla::CompileOptions GenerateCompileOptions(
+    int64_t device_id, const int64_t *mesh_ids, int64_t num_mesh_ids,
+    const char *xla_gpu_cuda_data_dir, bool use_shardy_partitioner,
+    int64_t num_replicas, int64_t num_partitions, bool use_spmd_partitioning,
+    bool kernel_cache_enabled, const char *kernel_cache_path,
+    bool autotune_cache_enabled, const char *autotune_cache_path,
+    int process_id, bool xla_enable_enzyme_comms_opt) {
   xla::CompileOptions options;
   auto debug_options = options.executable_build_options.mutable_debug_options();
 
@@ -1905,14 +1903,15 @@ ifrt_compile(ifrt::Client *client, MlirModule cmod, int64_t device_id,
              bool use_spmd_partitioning, bool kernel_cache_enabled,
              const char *kernel_cache_path, bool autotune_cache_enabled,
              const char *autotune_cache_path, int process_id,
-	     bool xla_enable_enzyme_comms_opt) {
+             bool xla_enable_enzyme_comms_opt) {
   return ifrt_compile_internal(
       client, cmod,
       GenerateCompileOptions(
           device_id, mesh_ids, num_mesh_ids, xla_gpu_cuda_data_dir,
           use_shardy_partitioner, num_replicas, num_partitions,
           use_spmd_partitioning, kernel_cache_enabled, kernel_cache_path,
-          autotune_cache_enabled, autotune_cache_path, process_id, xla_enable_enzyme_comms_opt));
+          autotune_cache_enabled, autotune_cache_path, process_id,
+          xla_enable_enzyme_comms_opt));
 }
 
 REACTANT_ABI HeldIfrtLoadedExecutable *
@@ -3445,6 +3444,62 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
     }
 
     auto funcOp = cast<func::FuncOp>(&module->getBody()->back());
+    // funcOp.dump();
+    llvm::SmallDenseMap<int, llvm::SmallVector<int, 4>> shapeMap;
+    int idx = -1;
+    for (mlir::Attribute attr : *funcOp.getArgAttrs()) {
+      idx++;
+      mlir::DictionaryAttr dAttr = dyn_cast<mlir::DictionaryAttr>(attr);
+      if (!dAttr || dAttr.empty())
+        continue;
+
+      for (auto namedAttr : dAttr) {
+        mlir::StringRef name = namedAttr.getName();
+        mlir::Attribute value = namedAttr.getValue();
+
+        if (!name.starts_with("shape."))
+          continue;
+
+        // Strip prefix
+        llvm::StringRef suffix = name.drop_front(strlen("shape."));
+
+        int mapVecIdx = 0;
+        int dimIdx;
+        if (!suffix.empty() && !suffix.getAsInteger(10, dimIdx)) {
+          mapVecIdx = dimIdx + 2;
+        }
+        if (suffix == "ld") {
+          mapVecIdx = 1;
+        }
+        if (shapeMap[idx].size() <= mapVecIdx)
+          shapeMap[idx].resize(mapVecIdx + 1);
+        auto targetIdx = cast<mlir::IntegerAttr>(value).getInt();
+        if (targetIdx < 0) {
+          shapeMap[idx][mapVecIdx] = -1;
+          continue;
+        }
+        auto literal_or = baseArrays[targetIdx]->ToLiteralSync();
+        if (!literal_or.ok()) {
+          llvm::errs() << "failed move from device to host\n";
+          continue;
+        }
+        shapeMap[idx][mapVecIdx] = literal_or.value()->GetFirstElement<int>();
+      }
+    }
+
+    // debug print
+    for (const auto &it : shapeMap) {
+      int key = it.first;
+      const auto &vec = it.second;
+
+      llvm::outs() << "key " << key << ": [";
+      for (size_t i = 0; i < vec.size(); ++i) {
+        llvm::outs() << vec[i];
+        if (i + 1 < vec.size())
+          llvm::outs() << ", ";
+      }
+      llvm::outs() << "]\n";
+    }
 
     mlir::OpBuilder builder(module->getContext());
     funcOp.setSymName(builder.getStringAttr("main"));
@@ -3458,18 +3513,68 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
 
     SmallVector<mlir::Type> types;
     for (int64_t i = 0; i < argcnt; i++) {
-      auto RTT = MyValueOrThrow(xla::ConvertShapeToType<mlir::RankedTensorType>(
-          baseArrays[i]->on_device_shape(), builder));
-      types.push_back(RTT);
+      if (shapeMap.count(i) > 0) {
+        mlir::RankedTensorType RTT =
+            cast<mlir::RankedTensorType>(MyValueOrThrow(xla::ConvertShapeToType<mlir::RankedTensorType>(
+                baseArrays[i]->on_device_shape(), builder)));
+        
+        Type operandType = funcOp.getFunctionType().getInput(i);
+        auto shapedType = cast<ShapedType>(operandType);
+        Type elemType = shapedType.getElementType();
+
+        int width = 0;
+        if (auto intTy = dyn_cast<IntegerType>(elemType)) {
+          width = intTy.getWidth() / 8;
+        }
+        if (auto floatTy = dyn_cast<FloatType>(elemType)) {
+          width = floatTy.getWidth() / 8;
+        }
+
+        int numElems = RTT.getShape()[0] / width;
+        shapeMap[i].push_back(numElems);
+        RTT = RankedTensorType::get(
+          {numElems},
+          elemType
+        );
+        RTT.dump();
+        types.push_back(RTT);
+      } else {
+        auto RTT =
+            MyValueOrThrow(xla::ConvertShapeToType<mlir::RankedTensorType>(
+                baseArrays[i]->on_device_shape(), builder));
+        types.push_back(RTT);
+      }
     }
+
+    std::string shapesAsString;
+    bool firstKey = true;
+    for (auto &it : shapeMap) {
+      if (!firstKey)
+        shapesAsString += ";";
+      firstKey = false;
+
+      shapesAsString += std::to_string(it.first);
+      shapesAsString += ":";
+
+      bool firstVal = true;
+      for (int v : it.second) {
+        if (!firstVal)
+          shapesAsString += ",";
+        firstVal = false;
+        shapesAsString += std::to_string(v);
+      }
+    }
+    pm.addPass(mlir::enzyme::createPropagateShapesPass(
+        mlir::enzyme::PropagateShapesPassOptions{shapesAsString}));
+    pm.addPass(createCanonicalizerPass());
+    pm.addPass(mlir::enzyme::createPrintPass());
     pm.addPass(mlir::stablehlo::createStablehloRefineArgumentsPass(types));
     pm.addPass(mlir::stablehlo::createStablehloRefineShapesPass());
     pm.addNestedPass<mlir::func::FuncOp>(
         stablehlo::createStablehloCanonicalizeDynamismPass());
     pm.addPass(mlir::enzyme::createEnzymeHLOOptPass());
-
     if (!mlir::succeeded(pm.run(*module))) {
-      llvm::errs() << " failed to run passes\n";
+      llvm::errs() << " failed to run passes1!\n";
       exit(1);
     }
 
