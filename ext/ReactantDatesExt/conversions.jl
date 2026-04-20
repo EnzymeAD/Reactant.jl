@@ -121,8 +121,12 @@ end
 function Base.convert(::Type{ReactantDateTime{I}}, dt::Dates.DateTime) where {I}
     return ReactantDateTime{I}(dt)
 end
-Base.convert(::Type{ReactantDateTime}, x::Dates.Millisecond) = ReactantDateTime(Dates.UTInstant(ReactantMillisecond(Dates.value(x))))
-Base.convert(::Type{Dates.Millisecond}, dt::ReactantDateTime) = Dates.Millisecond(Dates.value(dt))
+function Base.convert(::Type{ReactantDateTime}, x::Dates.Millisecond)
+    return ReactantDateTime(Dates.UTInstant(ReactantMillisecond(Dates.value(x))))
+end
+function Base.convert(::Type{Dates.Millisecond}, dt::ReactantDateTime)
+    return Dates.Millisecond(Dates.value(dt))
+end
 
 # Date conversion
 function Base.convert(::Type{ReactantDate}, dt::Dates.Date)
@@ -138,7 +142,9 @@ end
 function Base.convert(::Type{ReactantDate{I}}, dt::Dates.Date) where {I}
     return ReactantDate{I}(dt)
 end
-Base.convert(::Type{ReactantDate}, x::Dates.Day) = ReactantDate(Dates.UTInstant(ReactantDay(Dates.value(x))))
+function Base.convert(::Type{ReactantDate}, x::Dates.Day)
+    return ReactantDate(Dates.UTInstant(ReactantDay(Dates.value(x))))
+end
 Base.convert(::Type{Dates.Day}, dt::ReactantDate) = Dates.Day(Dates.value(dt))
 
 # Time conversion
@@ -162,10 +168,14 @@ end
 Dates.datetime2julian(dt::ReactantDateTime) = (value(dt) - Dates.JULIANEPOCH) / 86400000.0
 
 # conversions within ReactantDatesExt types
-Base.convert(::Type{ReactantDateTime}, dt::ReactantDate) =
-    ReactantDateTime(Dates.UTInstant(ReactantMillisecond(Dates.value(dt) * 86400000)))
-Base.convert(::Type{ReactantDate}, dt::ReactantDateTime) =
-    ReactantDate(Dates.UTInstant(ReactantDay(div(Dates.value(dt), 86400000))))
-Base.convert(::Type{ReactantTime}, dt::ReactantDateTime) =
-    ReactantTime(ReactantNanosecond((Dates.value(dt) % 86400000) * 1000000))
-
+function Base.convert(::Type{ReactantDateTime}, dt::ReactantDate)
+    return ReactantDateTime(
+        Dates.UTInstant(ReactantMillisecond(Dates.value(dt) * 86400000))
+    )
+end
+function Base.convert(::Type{ReactantDate}, dt::ReactantDateTime)
+    return ReactantDate(Dates.UTInstant(ReactantDay(div(Dates.value(dt), 86400000))))
+end
+function Base.convert(::Type{ReactantTime}, dt::ReactantDateTime)
+    return ReactantTime(ReactantNanosecond((Dates.value(dt) % 86400000) * 1000000))
+end

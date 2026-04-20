@@ -48,5 +48,5 @@ for (T, unit) in (
     (:ReactantMicrosecond, "microseconds"),
     (:ReactantNanosecond, "nanoseconds"),
 )
-    @eval Dates._units(::ReactantDatesExt.$T) = " " * $unit
+    @eval Dates._units(::$T) = " " * $unit
 end

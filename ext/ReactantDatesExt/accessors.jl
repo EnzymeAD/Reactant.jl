@@ -52,23 +52,38 @@ yearmonthday(dt::Union{ReactantDate,ReactantDateTime}) = Dates.yearmonthday(days
 # The algorithm is identical to Dates/src/accessors.jl (proleptic Gregorian calendar)
 # These versions replace ternary operators with `flds` and `divs
 function Dates.yearmonthday(days::Reactant.TracedRNumber)
-    z = days + 306; h = 100z - 25; a = fld(h, 3652425); b = a - fld(a, 4)
-    y = fld(100b + h, 36525); c = b + z - 365y - fld(y, 4); m = div(5c + 456, 153)
+    z = days + 306;
+    h = 100z - 25;
+    a = fld(h, 3652425);
+    b = a - fld(a, 4)
+    y = fld(100b + h, 36525);
+    c = b + z - 365y - fld(y, 4);
+    m = div(5c + 456, 153)
     d = c - div(153m - 457, 5)
     overflow = fld(m - 1, 12)
     return (y + overflow, m - 12overflow, d)
 end
 
 function Dates.yearmonth(days::Reactant.TracedRNumber)
-    z = days + 306; h = 100z - 25; a = fld(h, 3652425); b = a - fld(a, 4)
-    y = fld(100b + h, 36525); c = b + z - 365y - fld(y, 4); m = div(5c + 456, 153)
+    z = days + 306;
+    h = 100z - 25;
+    a = fld(h, 3652425);
+    b = a - fld(a, 4)
+    y = fld(100b + h, 36525);
+    c = b + z - 365y - fld(y, 4);
+    m = div(5c + 456, 153)
     overflow = fld(m - 1, 12)
     return (y + overflow, m - 12overflow)
 end
 
 function Dates.monthday(days::Reactant.TracedRNumber)
-    z = days + 306; h = 100z - 25; a = fld(h, 3652425); b = a - fld(a, 4)
-    y = fld(100b + h, 36525); c = b + z - 365y - fld(y, 4); m = div(5c + 456, 153)
+    z = days + 306;
+    h = 100z - 25;
+    a = fld(h, 3652425);
+    b = a - fld(a, 4)
+    y = fld(100b + h, 36525);
+    c = b + z - 365y - fld(y, 4);
+    m = div(5c + 456, 153)
     d = c - div(153m - 457, 5)
     overflow = fld(m - 1, 12)
     return (m - 12overflow, d)
@@ -76,7 +91,9 @@ end
 
 # Replaces the MONTHDAYS[m] tuple lookup with a
 # branching computation over the cumulative month-day offsets
-function Dates.dayofyear(y::Reactant.TracedRNumber, m::Reactant.TracedRNumber, d::Reactant.TracedRNumber)
+function Dates.dayofyear(
+    y::Reactant.TracedRNumber, m::Reactant.TracedRNumber, d::Reactant.TracedRNumber
+)
     @trace if m == 1
         monthdays = zero(m)
     elseif m == 2
@@ -106,7 +123,7 @@ function Dates.dayofyear(y::Reactant.TracedRNumber, m::Reactant.TracedRNumber, d
     return monthdays + d + leap_correction
 end
 
-function Dates.dayofyear(dt::Union{ReactantDatesExt.ReactantDate, ReactantDatesExt.ReactantDateTime})
+function Dates.dayofyear(dt::Union{ReactantDate,ReactantDateTime})
     y, m, d = Dates.yearmonthday(dt)
     return Dates.dayofyear(y, m, d)
 end

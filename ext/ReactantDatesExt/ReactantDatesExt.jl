@@ -11,7 +11,7 @@ using Dates:
     DateTime,
     Date,
     Time
-using Reactant: Reactant
+using Reactant: Reactant, @trace
 
 include("types.jl")
 include("accessors.jl")

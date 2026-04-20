@@ -717,7 +717,7 @@ end
         @test Dates.Date(d_r2) == Dates.Date(dt)
 
         t_r = convert(RDExt.ReactantTime, dt_r)
-        @test Dates.Time(t_r) == Dates.Time(12, 30, 45, 500)
+        @test convert(Dates.Time, t_r) == Dates.Time(12, 30, 45, 500)
     end
 
     @testset "Millisecond/Day convert to/from ReactantDateTime/ReactantDate" begin
