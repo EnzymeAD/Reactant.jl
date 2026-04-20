@@ -15,6 +15,7 @@ using Reactant: Reactant
 
 include("types.jl")
 include("accessors.jl")
+include("adjusters.jl")
 include("io.jl")
 include("arithmetic.jl")
 include("conversions.jl")

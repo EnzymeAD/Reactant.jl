@@ -34,6 +34,17 @@ struct ReactantTime{I} <: TimeType
     instant::ReactantNanosecond{I}
 end
 
+# Typed outer constructors for Reactant period types so that Period arithmetic
+# (e.g. -(x::P, y::P) = P(value(x)-value(y))) preserves the type parameter I
+# when value arithmetic falls back to a plain Int via ConcretePJRTNumber.to_number.
+for T in (
+    :ReactantYear, :ReactantMonth, :ReactantDay,
+    :ReactantHour, :ReactantMinute, :ReactantSecond,
+    :ReactantMillisecond, :ReactantMicrosecond, :ReactantNanosecond,
+)
+    @eval (::Type{ReactantDatesExt.$T{I}})(v::Number) where {I} = ReactantDatesExt.$T(convert(I, v))
+end
+
 # value accessor for Reactant* period types (Period already defines value(x::Period) = x.value,
 # which works since Reactant* periods <: Period, but we define these for Reactant* TimeTypes)
 Dates.value(dt::ReactantDateTime) = dt.instant.periods.value
@@ -68,6 +79,8 @@ Base.isless(x::ReactantTime, y::ReactantTime) = isless(value(x), value(y))
 (==)(x::ReactantDateTime, y::ReactantDateTime) = (==)(value(x), value(y))
 (==)(x::ReactantDate, y::ReactantDate) = (==)(value(x), value(y))
 (==)(x::ReactantTime, y::ReactantTime) = (==)(value(x), value(y))
+
+Dates.isleapyear(y::Reactant.TracedRNumber) = (y % 4 == 0) & ((y % 100 != 0) | (y % 400 == 0))
 
 # ReactantDate-ReactantDateTime promotion
 Base.promote_rule(::Type{ReactantDate}, ::Type{ReactantDateTime}) = ReactantDateTime
