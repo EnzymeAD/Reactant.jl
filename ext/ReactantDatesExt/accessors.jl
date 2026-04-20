@@ -77,9 +77,9 @@ function Dates.yearmonth(days::Reactant.TracedRNumber)
 end
 
 function Dates.monthday(days::Reactant.TracedRNumber)
-    z = days + 306;
-    h = 100z - 25;
-    a = fld(h, 3652425);
+    z = days + 306
+    h = 100z - 25
+    a = fld(h, 3652425)
     b = a - fld(a, 4)
     y = fld(100b + h, 36525);
     c = b + z - 365y - fld(y, 4);
