@@ -50,7 +50,7 @@ monthday(dt::Union{ReactantDate,ReactantDateTime}) = Dates.monthday(days(dt))
 yearmonthday(dt::Union{ReactantDate,ReactantDateTime}) = Dates.yearmonthday(days(dt))
 
 # The algorithm is identical to Dates/src/accessors.jl (proleptic Gregorian calendar)
-# These versions replace ternary operators with `flds` and `divs
+# These versions replace ternary operators with `flds` and `divs`
 function Dates.yearmonthday(days::Reactant.TracedRNumber)
     z = days + 306;
     h = 100z - 25;
