@@ -3405,6 +3405,42 @@ REACTANT_ABI void reactantXLAFree(LinkableRuntime **__restrict__ lrtP,
   PjRtBufferFree((PjRtBuffer *)buffer);
 }
 
+struct ShapeInfo {
+  int64_t ldim = -1;
+  int64_t totalSize = -1;
+  int64_t transposed = -1;
+  llvm::SmallVector<int64_t, 2> shape;
+};
+
+std::string
+EncodeShapeInfoStruct(const llvm::SmallDenseMap<int, ShapeInfo> &map) {
+  std::string out;
+  bool firstEntry = true;
+
+  for (const auto &it : map) {
+    if (!firstEntry)
+      out += ";";
+    firstEntry = false;
+
+    int key = it.first;
+    const ShapeInfo &s = it.second;
+
+    out += std::to_string(key) + ":";
+
+    out += std::to_string(s.ldim) + "|";
+    out += std::to_string(s.totalSize) + "|";
+    out += std::to_string(s.transposed) + "|";
+
+    for (size_t i = 0; i < s.shape.size(); ++i) {
+      if (i > 0)
+        out += ",";
+      out += std::to_string(s.shape[i]);
+    }
+  }
+
+  return out;
+}
+
 REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
                                   const char *modstr, int64_t argcnt,
                                   void **args) {
@@ -3428,80 +3464,88 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
     sizeKey.emplace_back(dims.begin(), dims.end());
   }
 
-  auto iter = cache.find(sizeKey);
+  MLIRContext context(lrt->registry);
+  RegisterDialects(wrap(&context));
 
-  if (iter == cache.end()) {
-    MLIRContext context(lrt->registry);
-    RegisterDialects(wrap(&context));
+  mlir::OwningOpRef<mlir::ModuleOp> module(
+      mlir::ModuleOp::create(mlir::OpBuilder(&context).getUnknownLoc()));
+  mlir::OpBuilder builder(module->getContext());
 
-    mlir::OwningOpRef<mlir::ModuleOp> module(
-        mlir::ModuleOp::create(mlir::OpBuilder(&context).getUnknownLoc()));
+  ParserConfig config(&context, /*verify_after_parse*/ true);
+  if (failed(parseSourceString(modstr, module->getBody(), config))) {
+    llvm::errs() << " failed to parse module:\n";
+    exit(1);
+  }
 
-    ParserConfig config(&context, /*verify_after_parse*/ true);
-    if (failed(parseSourceString(modstr, module->getBody(), config))) {
-      llvm::errs() << " failed to parse module:\n";
-      exit(1);
-    }
+  auto funcOp = cast<func::FuncOp>(&module->getBody()->back());
+  llvm::SmallDenseMap<int, ShapeInfo> shapeMap;
+  int idx = -1;
+  for (mlir::Attribute attr : *funcOp.getArgAttrs()) {
+    idx++;
+    mlir::DictionaryAttr dAttr = dyn_cast<mlir::DictionaryAttr>(attr);
+    if (!dAttr || dAttr.empty())
+      continue;
 
-    auto funcOp = cast<func::FuncOp>(&module->getBody()->back());
-    // funcOp.dump();
-    llvm::SmallDenseMap<int, llvm::SmallVector<int, 4>> shapeMap;
-    int idx = -1;
-    for (mlir::Attribute attr : *funcOp.getArgAttrs()) {
-      idx++;
-      mlir::DictionaryAttr dAttr = dyn_cast<mlir::DictionaryAttr>(attr);
-      if (!dAttr || dAttr.empty())
+    for (auto namedAttr : dAttr) {
+      mlir::StringRef name = namedAttr.getName();
+      mlir::Attribute value = namedAttr.getValue();
+
+      if (!name.starts_with("shape."))
         continue;
 
-      for (auto namedAttr : dAttr) {
-        mlir::StringRef name = namedAttr.getName();
-        mlir::Attribute value = namedAttr.getValue();
-
-        if (!name.starts_with("shape."))
-          continue;
-
-        // Strip prefix
-        llvm::StringRef suffix = name.drop_front(strlen("shape."));
-
-        int mapVecIdx = 0;
-        int dimIdx;
-        if (!suffix.empty() && !suffix.getAsInteger(10, dimIdx)) {
-          mapVecIdx = dimIdx + 2;
-        }
-        if (suffix == "ld") {
-          mapVecIdx = 1;
-        }
-        if (shapeMap[idx].size() <= mapVecIdx)
-          shapeMap[idx].resize(mapVecIdx + 1);
-        auto targetIdx = cast<mlir::IntegerAttr>(value).getInt();
-        if (targetIdx < 0) {
-          shapeMap[idx][mapVecIdx] = -1;
-          continue;
-        }
-        auto literal_or = baseArrays[targetIdx]->ToLiteralSync();
-        if (!literal_or.ok()) {
-          llvm::errs() << "failed move from device to host\n";
-          continue;
-        }
-        shapeMap[idx][mapVecIdx] = literal_or.value()->GetFirstElement<int>();
+      auto targetIdx = cast<mlir::IntegerAttr>(value).getInt();
+      if (targetIdx < 0) {
+        continue;
       }
+      auto literal_or = baseArrays[targetIdx]->ToLiteralSync();
+      if (!literal_or.ok()) {
+        llvm::errs() << "failed move from device to host\n";
+        continue;
+      }
+      int runtimeValue = literal_or.value()->GetFirstElement<int>();
+
+      llvm::StringRef suffix = name.drop_front(strlen("shape."));
+      if (suffix == "ld") {
+        shapeMap[idx].ldim = runtimeValue;
+        continue;
+      }
+      if (suffix == "transpose") {
+        shapeMap[idx].transposed = runtimeValue;
+        continue;
+      }
+      int dimIdx;
+      if (suffix.empty() || suffix.getAsInteger(10, dimIdx))
+        continue;
+      if (shapeMap[idx].shape.size() <= dimIdx)
+        shapeMap[idx].shape.resize(dimIdx + 1);
+
+      shapeMap[idx].shape[dimIdx] = runtimeValue;
     }
 
-    // debug print
-    for (const auto &it : shapeMap) {
-      int key = it.first;
-      const auto &vec = it.second;
+    if (shapeMap.count(idx) > 0) {
+      auto RTT = cast<mlir::RankedTensorType>(
+          MyValueOrThrow(xla::ConvertShapeToType<mlir::RankedTensorType>(
+              baseArrays[idx]->on_device_shape(), builder)));
+      Type operandType = funcOp.getFunctionType().getInput(idx);
+      auto shapedType = cast<ShapedType>(operandType);
+      Type elemType = shapedType.getElementType();
 
-      llvm::outs() << "key " << key << ": [";
-      for (size_t i = 0; i < vec.size(); ++i) {
-        llvm::outs() << vec[i];
-        if (i + 1 < vec.size())
-          llvm::outs() << ", ";
+      int width = 0;
+      if (auto intTy = dyn_cast<IntegerType>(elemType)) {
+        width = intTy.getWidth() / 8;
       }
-      llvm::outs() << "]\n";
-    }
+      if (auto floatTy = dyn_cast<FloatType>(elemType)) {
+        width = floatTy.getWidth() / 8;
+      }
 
-    mlir::OpBuilder builder(module->getContext());
+      int numElems = RTT.getShape()[0] / width;
+      shapeMap[idx].totalSize = numElems;
+
+    }
+  }
+
+  auto iter = cache.find(sizeKey);
+  if (iter == cache.end()) {
     funcOp.setSymName(builder.getStringAttr("main"));
     funcOp.setVisibility(SymbolTable::Visibility::Public);
 
@@ -3514,29 +3558,15 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
     SmallVector<mlir::Type> types;
     for (int64_t i = 0; i < argcnt; i++) {
       if (shapeMap.count(i) > 0) {
-        mlir::RankedTensorType RTT =
-            cast<mlir::RankedTensorType>(MyValueOrThrow(xla::ConvertShapeToType<mlir::RankedTensorType>(
+        mlir::RankedTensorType RTT = cast<mlir::RankedTensorType>(
+            MyValueOrThrow(xla::ConvertShapeToType<mlir::RankedTensorType>(
                 baseArrays[i]->on_device_shape(), builder)));
-        
+
         Type operandType = funcOp.getFunctionType().getInput(i);
         auto shapedType = cast<ShapedType>(operandType);
         Type elemType = shapedType.getElementType();
+        RTT = RankedTensorType::get({shapeMap[i].totalSize}, elemType);
 
-        int width = 0;
-        if (auto intTy = dyn_cast<IntegerType>(elemType)) {
-          width = intTy.getWidth() / 8;
-        }
-        if (auto floatTy = dyn_cast<FloatType>(elemType)) {
-          width = floatTy.getWidth() / 8;
-        }
-
-        int numElems = RTT.getShape()[0] / width;
-        shapeMap[i].push_back(numElems);
-        RTT = RankedTensorType::get(
-          {numElems},
-          elemType
-        );
-        RTT.dump();
         types.push_back(RTT);
       } else {
         auto RTT =
@@ -3546,24 +3576,8 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
       }
     }
 
-    std::string shapesAsString;
-    bool firstKey = true;
-    for (auto &it : shapeMap) {
-      if (!firstKey)
-        shapesAsString += ";";
-      firstKey = false;
+    std::string shapesAsString = EncodeShapeInfoStruct(shapeMap);
 
-      shapesAsString += std::to_string(it.first);
-      shapesAsString += ":";
-
-      bool firstVal = true;
-      for (int v : it.second) {
-        if (!firstVal)
-          shapesAsString += ",";
-        firstVal = false;
-        shapesAsString += std::to_string(v);
-      }
-    }
     pm.addPass(mlir::enzyme::createPropagateShapesPass(
         mlir::enzyme::PropagateShapesPassOptions{shapesAsString}));
     pm.addPass(createCanonicalizerPass());
