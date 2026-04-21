@@ -1,4 +1,5 @@
 #include <iostream>
+#include <vector>
 
 #include "mlir-c/IR.h"
 #include "mlir-c/Support.h"
@@ -3413,7 +3414,7 @@ struct ShapeInfo {
 };
 
 std::string
-EncodeShapeInfoStruct(const llvm::SmallDenseMap<int, ShapeInfo> &map) {
+encodeShapeInfoAsString(const llvm::SmallDenseMap<int, ShapeInfo> &map) {
   std::string out;
   bool firstEntry = true;
 
@@ -3441,6 +3442,28 @@ EncodeShapeInfoStruct(const llvm::SmallDenseMap<int, ShapeInfo> &map) {
   return out;
 }
 
+std::vector<std::vector<int64_t>>
+getCacheKeyFromRuntimeShape(const llvm::SmallDenseMap<int, ShapeInfo> &map) {
+  std::vector<std::vector<int64_t>> out;
+
+  for (const auto &it : map) {
+    int key = it.first;
+    auto &s = it.second;
+
+    std::vector<int64_t> row;
+    row.push_back(key);
+    row.push_back(s.ldim);
+    row.push_back(s.totalSize);
+    row.push_back(s.transposed);
+    row.push_back(s.shape.size()); // store length
+    for (int v : s.shape)
+      row.push_back(v);
+    out.push_back(std::move(row));
+  }
+
+  return out;
+}
+
 REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
                                   const char *modstr, int64_t argcnt,
                                   void **args) {
@@ -3460,7 +3483,14 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
     }
     baseArrays[i] = argB;
     basePtrs[i] = argP;
-    auto dims = argB->on_device_shape().dimensions();
+    auto dimsSpan = argB->on_device_shape().dimensions();
+
+    llvm::SmallVector<int64_t, 4> dims(dimsSpan.begin(), dimsSpan.end());
+    auto shape = argB->on_device_shape();
+    int64_t elemBytes =
+        xla::ShapeUtil::ByteSizeOfPrimitiveType(shape.element_type());
+    if (!dims.empty())
+      dims.back() *= elemBytes;
     sizeKey.emplace_back(dims.begin(), dims.end());
   }
 
@@ -3526,22 +3556,29 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
       auto RTT = cast<mlir::RankedTensorType>(
           MyValueOrThrow(xla::ConvertShapeToType<mlir::RankedTensorType>(
               baseArrays[idx]->on_device_shape(), builder)));
+
+      int64_t numElems = RTT.getNumElements();
+      auto srcElemTy = RTT.getElementType();
+      unsigned srcBits = srcElemTy.getIntOrFloatBitWidth();
+
       Type operandType = funcOp.getFunctionType().getInput(idx);
       auto shapedType = cast<ShapedType>(operandType);
       Type elemType = shapedType.getElementType();
 
-      int width = 0;
-      if (auto intTy = dyn_cast<IntegerType>(elemType)) {
-        width = intTy.getWidth() / 8;
-      }
-      if (auto floatTy = dyn_cast<FloatType>(elemType)) {
-        width = floatTy.getWidth() / 8;
-      }
+      unsigned dstBits = elemType.getIntOrFloatBitWidth();
 
-      int numElems = RTT.getShape()[0] / width;
-      shapeMap[idx].totalSize = numElems;
+      int64_t totalBytes = numElems * (srcBits / 8);
+      int64_t newElemBytes = dstBits / 8;
 
+      int64_t newNumElems = totalBytes / newElemBytes;
+
+      shapeMap[idx].totalSize = newNumElems;
     }
+  }
+
+  if (!shapeMap.empty()) {
+    auto dynamicSizeKey = getCacheKeyFromRuntimeShape(shapeMap);
+    sizeKey.insert(sizeKey.end(), dynamicSizeKey.begin(), dynamicSizeKey.end());
   }
 
   auto iter = cache.find(sizeKey);
@@ -3576,7 +3613,7 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
       }
     }
 
-    std::string shapesAsString = EncodeShapeInfoStruct(shapeMap);
+    std::string shapesAsString = encodeShapeInfoAsString(shapeMap);
 
     pm.addPass(mlir::enzyme::createPropagateShapesPass(
         mlir::enzyme::PropagateShapesPassOptions{shapesAsString}));
@@ -3588,7 +3625,7 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
         stablehlo::createStablehloCanonicalizeDynamismPass());
     pm.addPass(mlir::enzyme::createEnzymeHLOOptPass());
     if (!mlir::succeeded(pm.run(*module))) {
-      llvm::errs() << " failed to run passes1!\n";
+      llvm::errs() << " failed to run passes!\n";
       exit(1);
     }
 
