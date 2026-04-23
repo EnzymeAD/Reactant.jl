@@ -29,6 +29,17 @@ end
         f = Reactant.compile(() -> x, ())
         @test f() ≈ x
     end
+
+    @testset "Enum" begin
+        @enum MyEnum begin
+            MyEnumA = 1
+            MyEnumB = 2
+        end
+
+        x = MyEnumA
+        f = @compile identity(x)
+        @test f(x) == x
+    end
 end
 
 @testset "world-age" begin
