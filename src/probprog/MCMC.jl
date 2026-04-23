@@ -123,7 +123,7 @@ function mcmc(
 
     trace_val = TracedUtils.get_mlir_data(original_trace)
 
-    mcmc_op = MLIR.Dialects.enzyme.mcmc(
+    mcmc_op = MLIR.Dialects.impulse.infer(
         mlir_caller_args,
         trace_val;
         inverse_mass_matrix=inverse_mass_matrix_val,
@@ -288,7 +288,7 @@ function mcmc_logpdf(
         MLIR.IR.type(inverse_mass_matrix_val)
     end
 
-    mcmc_op = MLIR.Dialects.enzyme.mcmc(
+    mcmc_op = MLIR.Dialects.impulse.infer(
         mlir_caller_args;
         inverse_mass_matrix=inverse_mass_matrix_val,
         step_size=step_size_val,

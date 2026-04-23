@@ -95,7 +95,7 @@ end
             )
         end
         @test @filecheck begin
-            @check_not "enzyme.mh"
+            @check_not "impulse.mh"
             repr(code)
         end
 
