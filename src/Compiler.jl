@@ -277,6 +277,37 @@ Base.@nospecializeinfer function create_result(
     return result_cache[tocopy]
 end
 
+Base.@nospecializeinfer function create_result(
+    @nospecialize(tocopy::Enum),
+    @nospecialize(path::Tuple),
+    result_stores,
+    path_to_shard_info,
+    to_unreshard_results,
+    _unresharded_code::Vector{Expr},
+    _unresharded_arrays_cache,
+    used_shardinfo,
+    result_cache,
+    var_idx,
+    resultgen_code,
+)
+    if !haskey(result_cache, tocopy)
+        sym = Symbol("result", var_idx[])
+        var_idx[] += 1
+
+        result = Meta.quot(tocopy)
+
+        push!(
+            resultgen_code,
+            quote
+                $sym = $result
+            end,
+        )
+        result_cache[tocopy] = sym
+    end
+
+    return result_cache[tocopy]
+end
+
 function create_result(
     tocopy::ConcretePJRTNumber{T,D},
     @nospecialize(path::Tuple),
