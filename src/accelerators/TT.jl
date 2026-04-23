@@ -4,6 +4,7 @@ using Reactant: Reactant
 using Scratch: @get_scratch!
 using Downloads: Downloads
 using p7zip_jll: p7zip
+using FileWatching: mkpidlock
 
 using ..Registration: register_backend
 
@@ -127,21 +128,29 @@ function download_tt_pjrt_plugin_if_needed(dir=nothing)
     if isfile(tt_pjrt_plugin_path)
         @debug "TT PJRT plugin already found in '$(tt_pjrt_plugin_path)', nothing to do"
     else
-        @debug "Will install the TT PJRT plugin to '$(tt_pjrt_plugin_path)'"
-        mktempdir() do tmp_dir
-            # Index at https://pypi.eng.aws.tenstorrent.com/pjrt-plugin-tt/
-            zip_file_path = joinpath(tmp_dir, "pjrt-plugin-tt.zip")
-            wheel_url = if Sys.ARCH === :x86_64
-                "https://pypi.eng.aws.tenstorrent.com/pjrt-plugin-tt/pjrt_plugin_tt-0.6.0.dev20251202-cp311-cp311-linux_x86_64.whl"
-            else
-                error("Unsupported architecture for TT PJRT plugin: $(Sys.ARCH)")
+        mkpidlock(joinpath(dir, "download_tt_pjrt_plugin.lock")) do
+            if !isfile(tt_pjrt_plugin_path)
+                @debug "Will install the TT PJRT plugin to '$(tt_pjrt_plugin_path)'"
+                mktempdir() do tmp_dir
+                    # Index at https://pypi.eng.aws.tenstorrent.com/pjrt-plugin-tt/
+                    zip_file_path = joinpath(tmp_dir, "pjrt-plugin-tt.zip")
+                    wheel_url = if Sys.ARCH === :x86_64
+                        "https://pypi.eng.aws.tenstorrent.com/pjrt-plugin-tt/pjrt_plugin_tt-0.6.0.dev20251202-cp311-cp311-linux_x86_64.whl"
+                    else
+                        error("Unsupported architecture for TT PJRT plugin: $(Sys.ARCH)")
+                    end
+                    @debug "Downloading TT PJRT plugin from '$(wheel_url)'"
+                    Downloads.download(wheel_url, zip_file_path)
+                    run(
+                        pipeline(
+                            `$(p7zip()) x -tzip -o$(tmp_dir) -- $(zip_file_path)`, devnull
+                        ),
+                    )
+                    data_dir = only(filter!(endswith(".data"), readdir(tmp_dir; join=true)))
+                    # We need to move the entire `pjrt_plugin_tt` directory to the destination.
+                    mv(joinpath(data_dir, "purelib", "pjrt_plugin_tt"), dir; force=true)
+                end
             end
-            @debug "Downloading TT PJRT plugin from '$(wheel_url)'"
-            Downloads.download(wheel_url, zip_file_path)
-            run(pipeline(`$(p7zip()) x -tzip -o$(tmp_dir) -- $(zip_file_path)`, devnull))
-            data_dir = only(filter!(endswith(".data"), readdir(tmp_dir; join=true)))
-            # We need to move the entire `pjrt_plugin_tt` directory to the destination.
-            mv(joinpath(data_dir, "purelib", "pjrt_plugin_tt"), dir; force=true)
         end
         @assert isfile(tt_pjrt_plugin_path)
     end

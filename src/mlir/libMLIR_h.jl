@@ -13562,6 +13562,108 @@ function mlirMosaicGpuSwizzleTransformAttrGetTypeID()
     @ccall mlir_c.mlirMosaicGpuSwizzleTransformAttrGetTypeID()::MlirTypeID
 end
 
+function mlirMosaicGpuIsAWGSplatFragLayoutAttr(attr)
+    @ccall mlir_c.mlirMosaicGpuIsAWGSplatFragLayoutAttr(attr::MlirAttribute)::Bool
+end
+
+function mlirMosaicGpuWGSplatFragLayoutAttrGetTypeID()
+    @ccall mlir_c.mlirMosaicGpuWGSplatFragLayoutAttrGetTypeID()::MlirTypeID
+end
+
+function mlirMosaicGpuWGSplatFragLayoutAttrGet(ctx, shape)
+    @ccall mlir_c.mlirMosaicGpuWGSplatFragLayoutAttrGet(
+        ctx::MlirContext, shape::MlirAttribute
+    )::MlirAttribute
+end
+
+function mlirMosaicGpuWGSplatFragLayoutAttrGetShape(attr)
+    @ccall mlir_c.mlirMosaicGpuWGSplatFragLayoutAttrGetShape(
+        attr::MlirAttribute
+    )::MlirAttribute
+end
+
+function mlirMosaicGpuIsAWGStridedFragLayoutAttr(attr)
+    @ccall mlir_c.mlirMosaicGpuIsAWGStridedFragLayoutAttr(attr::MlirAttribute)::Bool
+end
+
+function mlirMosaicGpuWGStridedFragLayoutAttrGetTypeID()
+    @ccall mlir_c.mlirMosaicGpuWGStridedFragLayoutAttrGetTypeID()::MlirTypeID
+end
+
+function mlirMosaicGpuWGStridedFragLayoutAttrGet(ctx, shape, vector_size)
+    @ccall mlir_c.mlirMosaicGpuWGStridedFragLayoutAttrGet(
+        ctx::MlirContext, shape::MlirAttribute, vector_size::Int32
+    )::MlirAttribute
+end
+
+function mlirMosaicGpuWGStridedFragLayoutAttrGetShape(attr)
+    @ccall mlir_c.mlirMosaicGpuWGStridedFragLayoutAttrGetShape(
+        attr::MlirAttribute
+    )::MlirAttribute
+end
+
+function mlirMosaicGpuWGStridedFragLayoutAttrGetVectorSize(attr)
+    @ccall mlir_c.mlirMosaicGpuWGStridedFragLayoutAttrGetVectorSize(
+        attr::MlirAttribute
+    )::Int32
+end
+
+function mlirMosaicGpuIsAReplicatedAttr(attr)
+    @ccall mlir_c.mlirMosaicGpuIsAReplicatedAttr(attr::MlirAttribute)::Bool
+end
+
+function mlirMosaicGpuReplicatedAttrGetTypeID()
+    @ccall mlir_c.mlirMosaicGpuReplicatedAttrGetTypeID()::MlirTypeID
+end
+
+function mlirMosaicGpuReplicatedAttrGet(ctx, times)
+    @ccall mlir_c.mlirMosaicGpuReplicatedAttrGet(
+        ctx::MlirContext, times::Int32
+    )::MlirAttribute
+end
+
+function mlirMosaicGpuReplicatedAttrGetTimes(attr)
+    @ccall mlir_c.mlirMosaicGpuReplicatedAttrGetTimes(attr::MlirAttribute)::Int32
+end
+
+function mlirMosaicGpuIsATiledLayoutAttr(attr)
+    @ccall mlir_c.mlirMosaicGpuIsATiledLayoutAttr(attr::MlirAttribute)::Bool
+end
+
+function mlirMosaicGpuTiledLayoutAttrGetTypeID()
+    @ccall mlir_c.mlirMosaicGpuTiledLayoutAttrGetTypeID()::MlirTypeID
+end
+
+function mlirMosaicGpuTiledLayoutAttrGet(ctx, tiling, warp_dims, lane_dims, vector_dim)
+    @ccall mlir_c.mlirMosaicGpuTiledLayoutAttrGet(
+        ctx::MlirContext,
+        tiling::MlirAttribute,
+        warp_dims::MlirAttribute,
+        lane_dims::MlirAttribute,
+        vector_dim::Int32,
+    )::MlirAttribute
+end
+
+function mlirMosaicGpuTiledLayoutAttrGetTiling(attr)
+    @ccall mlir_c.mlirMosaicGpuTiledLayoutAttrGetTiling(attr::MlirAttribute)::MlirAttribute
+end
+
+function mlirMosaicGpuTiledLayoutAttrGetWarpDims(attr)
+    @ccall mlir_c.mlirMosaicGpuTiledLayoutAttrGetWarpDims(
+        attr::MlirAttribute
+    )::MlirAttribute
+end
+
+function mlirMosaicGpuTiledLayoutAttrGetLaneDims(attr)
+    @ccall mlir_c.mlirMosaicGpuTiledLayoutAttrGetLaneDims(
+        attr::MlirAttribute
+    )::MlirAttribute
+end
+
+function mlirMosaicGpuTiledLayoutAttrGetVectorDim(attr)
+    @ccall mlir_c.mlirMosaicGpuTiledLayoutAttrGetVectorDim(attr::MlirAttribute)::Int32
+end
+
 function mlirMosaicGpuIsACopyPartitionAttr(attr)
     @ccall mlir_c.mlirMosaicGpuIsACopyPartitionAttr(attr::MlirAttribute)::Bool
 end

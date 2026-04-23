@@ -6,11 +6,12 @@ using Scratch: @get_scratch!
 using HTTP: HTTP
 using Downloads: Downloads
 using p7zip_jll: p7zip
+using FileWatching: mkpidlock
 
 using ..Registration: register_backend
 
 const libtpu_dir = Ref{Union{Nothing,String}}(nothing)
-const RUNNING_IN_CLOUD_TPU_VM = Ref(false)
+const RUNNING_IN_CLOUD_TPU_VM = Ref{Union{Nothing,Bool}}(nothing)
 
 const LIBTPU_VERSION = "0.0.39.dev20260401"
 const LIBTPU_SO = "libtpu-$(replace(string(LIBTPU_VERSION), '.' => '_')).so"
@@ -117,18 +118,24 @@ function download_libtpu_if_needed(path=nothing)
 
     libtpu_path = joinpath(path, LIBTPU_SO)
     if !isfile(libtpu_path)
-        @debug "Downloading libtpu: $(LIBTPU_VERSION)"
-        zip_file_path = joinpath(path, "tpu.zip")
+        # Ensure path exists before creating lock file
         !isdir(path) && mkpath(path)
-        tmp_dir = mktempdir(path)
-        Downloads.download(
-            "https://storage.googleapis.com/libtpu-nightly-releases/wheels/libtpu/libtpu-$(LIBTPU_VERSION)+nightly-cp314-cp314-manylinux_2_31_x86_64.whl",
-            zip_file_path,
-        )
-        run(pipeline(`$(p7zip()) x -tzip -o$(tmp_dir) -- $(zip_file_path)`, devnull))
-        mv(joinpath(tmp_dir, "libtpu", "libtpu.so"), libtpu_path)
-        rm(tmp_dir; recursive=true)
-        rm(zip_file_path; recursive=true)
+        mkpidlock(joinpath(path, "download_libtpu.lock")) do
+            if !isfile(libtpu_path)
+                @debug "Downloading libtpu: $(LIBTPU_VERSION)"
+                tmp_dir = mktempdir(path)
+                zip_file_path = joinpath(tmp_dir, "tpu.zip")
+                Downloads.download(
+                    "https://storage.googleapis.com/libtpu-nightly-releases/wheels/libtpu/libtpu-$(LIBTPU_VERSION)+nightly-cp314-cp314-manylinux_2_31_x86_64.whl",
+                    zip_file_path,
+                )
+                run(
+                    pipeline(`$(p7zip()) x -tzip -o$(tmp_dir) -- $(zip_file_path)`, devnull)
+                )
+                mv(joinpath(tmp_dir, "libtpu", "libtpu.so"), libtpu_path)
+                rm(tmp_dir; recursive=true)
+            end
+        end
     end
 end
 
@@ -146,6 +153,7 @@ const _GOOGLE_PCI_VENDOR_ID = "0x1ae0"
     v5p
     v5e
     v6e
+    tpu7x
 end
 
 const _TPU_PCI_DEVICE_IDS = Dict(
@@ -155,11 +163,32 @@ const _TPU_PCI_DEVICE_IDS = Dict(
     "0x0062" => TPUVersion.v5p,
     "0x0063" => TPUVersion.v5e,
     "0x006f" => TPUVersion.v6e,
+    "0x0076" => TPUVersion.tpu7x,
 )
 
-has_tpu() = first(num_available_tpu_chips_and_device_id()) > 0
+const NUM_AVAILABLE_TPU_CHIPS_AND_DEVICE_ID = Ref{Union{Nothing,Tuple{Int,TPUVersion.T}}}(
+    nothing
+)
+
+function has_tpu()
+    if RUNNING_IN_CLOUD_TPU_VM[] !== nothing
+        return RUNNING_IN_CLOUD_TPU_VM[]
+    end
+    num_tpu_chips, _ = num_available_tpu_chips_and_device_id()
+    RUNNING_IN_CLOUD_TPU_VM[] = num_tpu_chips > 0
+    return RUNNING_IN_CLOUD_TPU_VM[]
+end
 
 function num_available_tpu_chips_and_device_id()
+    if NUM_AVAILABLE_TPU_CHIPS_AND_DEVICE_ID[] !== nothing
+        return NUM_AVAILABLE_TPU_CHIPS_AND_DEVICE_ID[]
+    end
+
+    NUM_AVAILABLE_TPU_CHIPS_AND_DEVICE_ID[] = _num_available_tpu_chips_and_device_id()
+    return NUM_AVAILABLE_TPU_CHIPS_AND_DEVICE_ID[]
+end
+
+function _num_available_tpu_chips_and_device_id()
     Sys.islinux() || return 0, TPUVersion.Unknown
 
     devices_dir = "/sys/bus/pci/devices/"
@@ -199,9 +228,15 @@ end
 function cloud_tpu_init!()
     libtpu_dir = get_libtpu_dir()
     num_tpu_chips, tpu_version = num_available_tpu_chips_and_device_id()
-    if tpu_version != TPUVersion.Unknown &&
+    if num_tpu_chips == 0
+        ENV["TPU_SKIP_MDS_QUERY"] = "1"
+    end
+
+    if (
+        tpu_version != TPUVersion.Unknown &&
         tpu_version ≥ TPUVersion.v5e &&
         !transparent_hugepages_enabled()
+    )
         @warn "Transparent hugepages are not enabled. TPU runtime startup and \
                shutdown time should be significantly improved on TPU v5e and newer. \
                If not already set, you may need to enable transparent hugepages in \
@@ -212,8 +247,6 @@ function cloud_tpu_init!()
     if (libtpu_dir === nothing || num_tpu_chips == 0) && !force_tpu_init()
         return nothing
     end
-
-    RUNNING_IN_CLOUD_TPU_VM[] = true
 
     # Set environment variables
     ENV["GRPC_VERBOSITY"] = get(ENV, "GRPC_VERBOSITY", "ERROR")
@@ -243,12 +276,18 @@ end
 
 const _TPU_METADATA_RESPONSE_CODE_SUCCESS = 200
 
+function skip_mds_query()
+    return haskey(ENV, "TPU_SKIP_MDS_QUERY") && parse(Bool, ENV["TPU_SKIP_MDS_QUERY"])
+end
+
 function get_metadata(key)
     # Based on https://github.com/tensorflow/tensorflow/pull/40317
     gce_metadata_endpoint =
         "http://" * get(ENV, "GCE_METADATA_IP", "metadata.google.internal")
+    @debug "Getting metadata for key: $(key)" gce_metadata_endpoint
     retry_count = 0
-    retry_seconds = 0.500
+    retry_seconds = parse(Float64, get(ENV, "REACTANT_GCE_METADATA_RETRY_SECONDS", "0.5"))
+    @debug "Retry seconds: $(retry_seconds)"
     api_resp = nothing
 
     while retry_count < 6
@@ -279,6 +318,8 @@ end
 
 function get_tpu_env_value(key)
     haskey(ENV, key) && return ENV[key]
+
+    skip_mds_query() && return nothing
 
     tpu_env_data = first(get_metadata("tpu-env"))
     key_value_pairs = split(tpu_env_data, "\n")

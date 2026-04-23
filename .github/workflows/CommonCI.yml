@@ -79,7 +79,7 @@ jobs:
           mkdir -p "$TMPDIR"
           echo "TMPDIR=$TMPDIR" >> $GITHUB_ENV
 
-      - uses: julia-actions/setup-julia@v2
+      - uses: julia-actions/setup-julia@v3
         if: ${{ ! inputs.assertions }}
         with:
           version: ${{ inputs.julia_version }}
