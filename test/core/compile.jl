@@ -13,75 +13,84 @@ intout_caller(vis) = @noinline intout(vis)
     @test_throws MethodError @compile intout_caller(visr)
 end
 
-@testset "compile" begin
-    @testset "create_result" begin
-        @testset "NamedTuple" begin
-            x = (; a=Reactant.TestUtils.construct_test_array(Float64, 4, 3))
-            x2 = Reactant.to_rarray(x)
+@testset "create_result" begin
+    @testset "NamedTuple" begin
+        x = (; a=Reactant.TestUtils.construct_test_array(Float64, 4, 3))
+        x2 = Reactant.to_rarray(x)
 
-            res = @jit sum(x2)
-            @test res isa NamedTuple
-            @test res.a isa ConcreteRNumber{Float64}
-            @test isapprox(res.a, sum(x.a))
+        res = @jit sum(x2)
+        @test res isa NamedTuple
+        @test res.a isa ConcreteRNumber{Float64}
+        @test isapprox(res.a, sum(x.a))
+    end
+
+    @testset "Array" begin
+        x = [1 2; 3 4; 5 6]
+        f = Reactant.compile(() -> x, ())
+        @test f() ≈ x
+    end
+
+    @testset "Enum" begin
+        @enum MyEnum begin
+            MyEnumA = 1
+            MyEnumB = 2
         end
 
-        @testset "Array" begin
-            x = [1 2; 3 4; 5 6]
-            f = Reactant.compile(() -> x, ())
-            @test f() ≈ x
-        end
+        x = MyEnumA
+        f = @compile identity(x)
+        @test f(x) == x
     end
-
-    @testset "world-age" begin
-        a = ones(2, 10)
-        b = ones(10, 2)
-        a_ra = Reactant.to_rarray(a)
-        b_ra = Reactant.to_rarray(b)
-
-        fworld(x, y) = @jit(x * y)
-
-        @test fworld(a_ra, b_ra) ≈ ones(2, 2) * 10
-    end
-
-    @testset "type casting & optimized out returns" begin
-        a = ones(2, 10)
-        a_ra = Reactant.to_rarray(a)
-
-        ftype1(x) = Float64.(x)
-        ftype2(x) = Float32.(x)
-
-        y1 = @jit ftype1(a_ra)
-        y2 = @jit ftype2(a_ra)
-
-        @test y1 isa Reactant.ConcreteRArray{Float64,2}
-        @test y2 isa Reactant.ConcreteRArray{Float32,2}
-
-        @test y1 ≈ Float64.(a)
-        @test y2 ≈ Float32.(a)
-    end
-
-    @testset "no variable name collisions in compile macros (#237)" begin
-        f(x) = x
-        g(x) = f(x)
-        x = Reactant.TestUtils.construct_test_array(Float64, 2, 2)
-        y = Reactant.to_rarray(x)
-        @test (@jit g(y); true)
-    end
-
-    # disabled due to long test time (core tests go from 2m to 7m just with this test)
-    # @testset "resource exhaustation bug (#190)" begin
-    #     x = rand(2, 2)
-    #     y = Reactant.to_rarray(x)
-    #     @test try
-    #         for _ in 1:10_000
-    #             f = @compile sum(y)
-    #         end
-    #         true
-    #     catch e
-    #         false
-    #     end
-    # end
 end
+
+@testset "world-age" begin
+    a = ones(2, 10)
+    b = ones(10, 2)
+    a_ra = Reactant.to_rarray(a)
+    b_ra = Reactant.to_rarray(b)
+
+    fworld(x, y) = @jit(x * y)
+
+    @test fworld(a_ra, b_ra) ≈ ones(2, 2) * 10
+end
+
+@testset "type casting & optimized out returns" begin
+    a = ones(2, 10)
+    a_ra = Reactant.to_rarray(a)
+
+    ftype1(x) = Float64.(x)
+    ftype2(x) = Float32.(x)
+
+    y1 = @jit ftype1(a_ra)
+    y2 = @jit ftype2(a_ra)
+
+    @test y1 isa Reactant.ConcreteRArray{Float64,2}
+    @test y2 isa Reactant.ConcreteRArray{Float32,2}
+
+    @test y1 ≈ Float64.(a)
+    @test y2 ≈ Float32.(a)
+end
+
+@testset "no variable name collisions in compile macros (#237)" begin
+    f(x) = x
+    g(x) = f(x)
+    x = Reactant.TestUtils.construct_test_array(Float64, 2, 2)
+    y = Reactant.to_rarray(x)
+    @test (@jit g(y); true)
+end
+
+# disabled due to long test time (core tests go from 2m to 7m just with this test)
+# @testset "resource exhaustation bug (#190)" begin
+#     x = rand(2, 2)
+#     y = Reactant.to_rarray(x)
+#     @test try
+#         for _ in 1:10_000
+#             f = @compile sum(y)
+#         end
+#         true
+#     catch e
+#         false
+#     end
+# end
 
 @testset "Module export" begin
     f(x) = sin.(cos.(x))
