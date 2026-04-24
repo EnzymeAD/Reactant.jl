@@ -568,4 +568,16 @@ function overload_autodiff(
     end
 end
 
+function overload_jacobian(::Enzyme.ForwardMode, args...; kwargs...)
+    print("Reactant.jl overlay in progress for Enzyme.jacobian")
+    return nothing
+end
+
+function overload_jacobian(
+    ::Enzyme.ReverseMode, f, xs...; n_outs=nothing, chunk=nothing
+)
+    print("Reactant.jl overlay in progress for Enzyme.jacobian")
+    return nothing
+end
+
 const ignore_derivatives = EnzymeCore.ignore_derivatives

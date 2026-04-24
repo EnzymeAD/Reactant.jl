@@ -44,6 +44,7 @@ end
 @reactant_overlay @noinline function Enzyme.autodiff(
     rmode::Enzyme.Mode, f::FA, args::Vararg{Annotation,Nargs}
 ) where {FA<:Annotation,Nargs}
+    print("within reactant overloaded autodiff")
     original_within_autodiff = WITHIN_AUTODIFF[]
     try
         WITHIN_AUTODIFF[] = true
@@ -75,6 +76,18 @@ end
     finally
         WITHIN_AUTODIFF[] = original_within_autodiff
     end
+end
+
+@reactant_overlay @noinline function Enzyme.jacobian(
+    mode::Enzyme.ForwardMode, args...; kwargs...
+)
+    return overload_jacobian(mode, args...; kwargs...)
+end
+
+@reactant_overlay @noinline function Enzyme.jacobian(
+    mode::Enzyme.ReverseMode, f, xs...; n_outs=nothing, chunk=nothing
+)
+    return overload_jacobian(mode, f, xs...; n_outs, chunk)
 end
 
 @reactant_overlay function EnzymeCore.ignore_derivatives(args...)
