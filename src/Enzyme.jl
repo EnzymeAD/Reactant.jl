@@ -568,16 +568,503 @@ function overload_autodiff(
     end
 end
 
-function overload_jacobian(::Enzyme.ForwardMode, args...; kwargs...)
-    print("Reactant.jl overlay in progress for Enzyme.jacobian")
-    return nothing
+function lower_jacobian(
+    mode::CMode, f::FA, args::Vararg{Annotation,Nargs}
+) where {CMode<:Mode,FA<:Annotation,Nargs}
+    return lower_jacobian(mode, f, infer_activity(mode, f, args...), args...)
+end
+
+function lower_jacobian(
+    ::CMode, f::FA, ::Type{A}, args::Vararg{Annotation,Nargs}
+) where {CMode<:Mode,FA<:Annotation,A<:Annotation,Nargs}
+    reverse = CMode <: ReverseMode
+
+    width = Enzyme.same_or_one(1, args...)
+    if width == 0
+        throw(ErrorException("Cannot differentiate with a batch size of 0"))
+    end
+
+    primf = f.val
+    primargs = ((v.val for v in args)...,)
+
+    argprefix::Symbol = gensym("jacobianarg")
+    resprefix::Symbol = gensym("jacobianresult")
+    resargprefix::Symbol = gensym("jacobianresarg")
+
+    mlir_fn_res = TracedUtils.make_mlir_fn(
+        primf,
+        primargs,
+        (),
+        string(f) * "_jacobian",
+        false;
+        argprefix,
+        resprefix,
+        resargprefix,
+    )
+    (; result, linear_args, in_tys, linear_results) = mlir_fn_res
+    fnwrap = mlir_fn_res.fnwrapped
+
+    activity = Int32[]
+    ad_inputs = MLIR.IR.Value[]
+
+    reverse_seeds = Dict{Tuple,MLIR.IR.Value}()
+
+    for a in linear_args
+        idx, path = TracedUtils.get_argidx(a, argprefix)
+        arg = idx == 1 && fnwrap ? f : args[idx - fnwrap]
+        push!(activity, act_from_type(arg, reverse))
+        push_acts!(ad_inputs, arg, path[3:end], reverse)
+
+        if CMode <: ReverseMode && act_from_type(arg, false) == enzyme_dup
+            x = if width == 1
+                arg.dval
+            elseif arg.dval isa AbstractArray
+                arg.dval
+            else
+                call_with_reactant(stack, arg.dval)
+            end
+            for p in path[3:end]
+                x = Compiler.traced_getfield(x, p)
+            end
+            x = TracedUtils.get_mlir_data(x)
+            reverse_seeds[path] = x
+        end
+    end
+
+    outtys = MLIR.IR.Type[]
+    ret_activity = Int32[]
+
+    for a in linear_results
+        if TracedUtils.has_idx(a, resprefix)
+            if EnzymeCore.needs_primal(CMode)
+                push!(
+                    outtys,
+                    TracedUtils.transpose_ty(MLIR.IR.type(TracedUtils.get_mlir_data(a))),
+                )
+            end
+
+            if CMode <: ForwardMode && !(A <: Const)
+                push!(
+                    outtys,
+                    TracedUtils.batch_ty(
+                        width,
+                        TracedUtils.transpose_ty(
+                            MLIR.IR.type(TracedUtils.get_mlir_data(a))
+                        ),
+                    ),
+                )
+            end
+
+            act = act_from_type(A, reverse, EnzymeCore.needs_primal(CMode))
+            cst = nothing
+            if act == enzyme_out || act == enzyme_outnoneed
+                if width == 1
+                    cst = @opcall fill(one(unwrapped_eltype(a)), size(a))
+                else
+                    cst = @opcall fill(one(unwrapped_eltype(a)), (size(a)..., width))
+                end
+                cst = cst.mlir_data
+            end
+
+            if CMode <: ReverseMode && TracedUtils.has_idx(a, argprefix)
+                idx, path = TracedUtils.get_argidx(a, argprefix)
+                arg = idx == 1 && fnwrap ? f : args[idx - fnwrap]
+                if act_from_type(arg, false) == enzyme_dup
+                    seed = reverse_seeds[path]
+                    if cst == nothing
+                        if act == enzyme_const
+                            act = enzyme_out
+                        elseif act == enzyme_constnoneed
+                            act = enzyme_outnoneed
+                        else
+                            @assert false
+                        end
+                        cst = seed
+                    else
+                        @assert act == enzyme_out || act == enzyme_outnoneed
+                        cst = MLIR.IR.result(MLIR.Dialects.stablehlo.add(cst, seed), 1)
+                    end
+                end
+            end
+
+            push!(ret_activity, act)
+            if cst != nothing
+                push!(ad_inputs, cst)
+            end
+        else
+            if TracedUtils.has_idx(a, argprefix)
+                idx, path = TracedUtils.get_argidx(a, argprefix)
+                arg = idx == 1 && fnwrap ? f : args[idx - fnwrap]
+
+                act = act_from_type(arg, reverse, true)
+                push!(ret_activity, act)
+
+                if act == enzyme_out || act == enzyme_outnoneed
+                    seed = reverse_seeds[path]
+                    push!(ad_inputs, seed)
+                end
+            else
+                act = act_from_type(Const, reverse, true)
+                push!(ret_activity, act)
+            end
+
+            push!(
+                outtys, TracedUtils.transpose_ty(MLIR.IR.type(TracedUtils.get_mlir_data(a)))
+            )
+        end
+    end
+
+    for (i, act) in enumerate(activity)
+        if act == enzyme_out || act == enzyme_dup || act == enzyme_dupnoneed
+            push!(outtys, TracedUtils.batch_ty(width, in_tys[i]))
+        end
+    end
+
+    fname = TracedUtils.get_attribute_by_name(mlir_fn_res.f, "sym_name")
+    fname = MLIR.IR.FlatSymbolRefAttribute(Base.String(fname))
+    res = MLIR.Dialects.enzyme.jacobian(
+        [TracedUtils.transpose_val(v) for v in ad_inputs];
+        outputs=outtys,
+        fn=fname,
+        width,
+        strong_zero=EnzymeCore.strong_zero(CMode),
+        activity=MLIR.IR.Attribute([act_attr(a) for a in activity]),
+        ret_activity=MLIR.IR.Attribute([act_attr(a) for a in ret_activity]),
+    )
+
+    residx = 1
+
+    dresult = if CMode <: ForwardMode && !(A <: Const)
+        if width == 1
+            deepcopy(result)
+        else
+            ntuple(Val(width)) do i
+                Base.@_inline_meta
+                deepcopy(result)
+            end
+        end
+    else
+        nothing
+    end
+
+    for a in linear_results
+        if TracedUtils.has_idx(a, resprefix)
+            if EnzymeCore.needs_primal(CMode)
+                path = TracedUtils.get_idx(a, resprefix)
+                tval = TracedUtils.transpose_val(MLIR.IR.result(res, residx))
+                TracedUtils.set!(result, path[2:end], tval)
+                residx += 1
+            end
+            if CMode <: ForwardMode && !(A <: Const)
+                path = TracedUtils.get_idx(a, resprefix)
+                tval = TracedUtils.transpose_val(MLIR.IR.result(res, residx))
+                if width == 1
+                    TracedUtils.set!(dresult, path[2:end], tval)
+                else
+                    ttval = TracedRArray(tval)
+                    for (i, sl) in enumerate(eachslice(ttval; dims=ndims(ttval)))
+                        TracedUtils.set!(
+                            dresult[i],
+                            path[2:end],
+                            @allowscalar(TracedUtils.get_mlir_data(sl))
+                        )
+                    end
+                end
+                residx += 1
+            end
+        elseif TracedUtils.has_idx(a, argprefix)
+            idx, path = TracedUtils.get_argidx(a, argprefix)
+            arg = idx == 1 && fnwrap ? f : args[idx - fnwrap]
+            TracedUtils.set!(
+                arg.val, path[3:end], TracedUtils.transpose_val(MLIR.IR.result(res, residx))
+            )
+            residx += 1
+        else
+            TracedUtils.set!(a, (), TracedUtils.transpose_val(MLIR.IR.result(res, residx)))
+            residx += 1
+        end
+    end
+
+    restup = Any[(a isa Active) ? copy(a) : nothing for a in args]
+    for a in linear_args
+        idx, path = TracedUtils.get_argidx(a, argprefix)
+
+        arg = idx == 1 && fnwrap ? f : args[idx - fnwrap]
+        act_from_type(arg, reverse) != enzyme_out && continue
+
+        if idx == 1 && fnwrap && arg isa Active
+            @assert false
+        end
+
+        set_act!(
+            arg,
+            path[3:end],
+            reverse,
+            TracedUtils.transpose_val(MLIR.IR.result(res, residx));
+            width,
+            emptypath=arg isa Active,
+        )
+        residx += 1
+    end
+
+    if reverse
+        if EnzymeCore.needs_primal(CMode)
+            return ((restup...,), result)
+        else
+            return ((restup...,),)
+        end
+    else
+        if EnzymeCore.needs_primal(CMode)
+            if CMode <: ForwardMode && !(A <: Const)
+                return (dresult, result)
+            else
+                return (result,)
+            end
+        else
+            if CMode <: ForwardMode && !(A <: Const)
+                return (dresult,)
+            else
+                return ()
+            end
+        end
+    end
+end
+
+@inline _jacobian_unwrap_const(x::Const) = x.val
+@inline _jacobian_unwrap_const(x) = x
+
+function _jacobian_wrap_const(x)
+    if x isa Const
+        return x
+    end
+    x isa Annotation &&
+        error(
+            "Reactant jacobian overlay v1 expects raw values or Const-wrapped values for non-differentiated arguments.",
+        )
+    return Const(x)
+end
+
+function _jacobian_active_arg_index(args::Tuple)
+    idx = 0
+    for i in eachindex(args)
+        if !(args[i] isa Const)
+            if idx != 0
+                error(
+                    "Reactant jacobian overlay v1 supports exactly one differentiable argument; wrap all other arguments with `Const(...)`.",
+                )
+            end
+            idx = i
+        end
+    end
+    idx == 0 &&
+        error(
+            "Reactant jacobian overlay v1 requires exactly one differentiable argument; all arguments were Const.",
+        )
+    return idx
+end
+
+function _jacobian_parse_chunk(chunk)
+    chunk === nothing && return nothing
+    chunk isa Val || error("Reactant jacobian overlay v1 expects `chunk` to be `nothing` or `Val{N}()`.")
+    c = typeof(chunk).parameters[1]
+    c == 0 && error("Cannot differentiate with a batch size of 0")
+    c < 0 && error("Reactant jacobian overlay v1 requires `chunk` to be positive.")
+    return c
+end
+
+function _jacobian_parse_nouts(n_outs)
+    n_outs === nothing &&
+        error(
+            "Reactant jacobian overlay v1 requires explicit `n_outs` in reverse mode.",
+        )
+    n_outs isa Val ||
+        error("Reactant jacobian overlay v1 expects `n_outs` to be a tuple `Val((... ,))`.")
+    dims = typeof(n_outs).parameters[1]
+    dims isa Tuple ||
+        error("Reactant jacobian overlay v1 expects `n_outs` to be a tuple `Val((... ,))`.")
+    for d in dims
+        (d isa Integer && d >= 0) ||
+            error("Reactant jacobian overlay v1 requires non-negative integer `n_outs` dimensions.")
+    end
+    return dims
+end
+
+function _jacobian_num_elements(dims::Tuple)
+    if isempty(dims)
+        return 1
+    end
+    return prod(dims)
+end
+
+function _jacobian_forward_seed_groups(x, chunk)
+    c = _jacobian_parse_chunk(chunk)
+    if x isa AbstractFloat
+        return ((one(x),),)
+    elseif x isa AbstractArray
+        if c === nothing
+            return (Enzyme.onehot(x),)
+        else
+            return Enzyme.chunkedonehot(x, Val(c))
+        end
+    else
+        error(
+            "Reactant jacobian overlay v1 currently supports differentiating only `AbstractArray` or `AbstractFloat` arguments.",
+        )
+    end
+end
+
+function _jacobian_forward_assemble(rows::Vector{Any}, x::AbstractArray)
+    isempty(rows) && error("Reactant jacobian overlay v1 produced no Jacobian rows.")
+    first_row = first(rows)
+    first_row isa AbstractArray &&
+        error(
+            "Reactant jacobian overlay v1 currently supports only scalar-output functions in forward mode.",
+        )
+    length(rows) == length(x) ||
+        error("Reactant jacobian overlay v1 expected $(length(x)) Jacobian rows, got $(length(rows)).")
+    stacked = call_with_reactant(stack, Tuple(rows))
+    return call_with_reactant(reshape, stacked, size(x)...)
+end
+
+function _jacobian_forward_assemble(rows::Vector{Any}, ::AbstractFloat)
+    length(rows) == 1 ||
+        error(
+            "Reactant jacobian overlay v1 expected a single Jacobian entry for scalar input.",
+        )
+    return only(rows)
+end
+
+function _jacobian_forward_assemble(rows::Vector{Any}, x)
+    error(
+        "Reactant jacobian overlay v1 currently supports differentiating only `AbstractArray` or `AbstractFloat` arguments (got $(Core.Typeof(x))).",
+    )
 end
 
 function overload_jacobian(
-    ::Enzyme.ReverseMode, f, xs...; n_outs=nothing, chunk=nothing
+    mode::Enzyme.ForwardMode, f, x, xs...; chunk=nothing, shadows=nothing, kwargs...
 )
-    print("Reactant.jl overlay in progress for Enzyme.jacobian")
-    return nothing
+    isempty(kwargs) ||
+        error(
+            "Reactant jacobian overlay v1 only supports `chunk` and `shadows` keywords in forward mode.",
+        )
+    shadows === nothing ||
+        error(
+            "Reactant jacobian overlay v1 does not support explicit `shadows`; omit the keyword to use internal Jacobian seeds.",
+        )
+
+    all_args = (x, xs...)
+    active_idx = _jacobian_active_arg_index(all_args)
+    active_arg = all_args[active_idx]
+
+    active_arg isa Annotation &&
+        !(active_arg isa Const) &&
+        error(
+            "Reactant jacobian overlay v1 expects a raw differentiable argument value, not an Enzyme annotation wrapper.",
+        )
+
+    active_val = _jacobian_unwrap_const(active_arg)
+    seed_groups = _jacobian_forward_seed_groups(active_val, chunk)
+
+    f_ann = f isa Annotation ? f : Const(f)
+
+    mode_iter = mode
+    primal = nothing
+    rows = Any[]
+
+    for seeds in seed_groups
+        seeds_tuple = Tuple(seeds)
+        active_ann = if length(seeds_tuple) == 1
+            Duplicated(active_val, only(seeds_tuple))
+        else
+            BatchDuplicated(active_val, seeds_tuple)
+        end
+        rt = length(seeds_tuple) == 1 ? Duplicated : BatchDuplicated
+
+        ann_args = Any[]
+        for i in eachindex(all_args)
+            if i == active_idx
+                push!(ann_args, active_ann)
+            else
+                push!(ann_args, _jacobian_wrap_const(all_args[i]))
+            end
+        end
+
+        res = lower_jacobian(mode_iter, f_ann, rt, ann_args...)
+        dpart = res[1]
+
+        if EnzymeCore.needs_primal(mode_iter)
+            primal = res[2]
+            mode_iter = EnzymeCore.NoPrimal(mode_iter)
+        end
+
+        if length(seeds_tuple) == 1
+            push!(rows, dpart)
+        else
+            append!(rows, collect(dpart))
+        end
+    end
+
+    jac = _jacobian_forward_assemble(rows, active_val)
+    derivs = ntuple(i -> i == active_idx ? jac : nothing, length(all_args))
+
+    if EnzymeCore.needs_primal(mode)
+        return (; derivs, val=primal)
+    end
+    return derivs
+end
+
+function overload_jacobian(
+    mode::Enzyme.ReverseMode, f, x, xs...; n_outs=nothing, chunk=nothing
+)
+    n_out_dims = _jacobian_parse_nouts(n_outs)
+    n_out_elems = _jacobian_num_elements(n_out_dims)
+    n_out_elems == 1 ||
+        error(
+            "Reactant jacobian overlay v1 currently supports only scalar-output functions in reverse mode (`prod(n_outs) == 1`).",
+        )
+
+    c = _jacobian_parse_chunk(chunk)
+    (c === nothing || c == 1) ||
+        error(
+            "Reactant jacobian overlay v1 reverse mode currently supports only `chunk=nothing` or `chunk=Val(1)`.",
+        )
+
+    all_args = (x, xs...)
+    active_idx = _jacobian_active_arg_index(all_args)
+    active_arg = all_args[active_idx]
+
+    active_arg isa Annotation &&
+        !(active_arg isa Const) &&
+        error(
+            "Reactant jacobian overlay v1 expects a raw differentiable argument value, not an Enzyme annotation wrapper.",
+        )
+
+    active_val = _jacobian_unwrap_const(active_arg)
+    active_val isa Union{AbstractArray,AbstractFloat} ||
+        error(
+            "Reactant jacobian overlay v1 currently supports differentiating only `AbstractArray` or `AbstractFloat` arguments.",
+        )
+
+    active_seed = Enzyme.make_zero(active_val)
+    active_ann = Duplicated(active_val, active_seed)
+    f_ann = f isa Annotation ? f : Const(f)
+
+    ann_args = Any[]
+    for i in eachindex(all_args)
+        if i == active_idx
+            push!(ann_args, active_ann)
+        else
+            push!(ann_args, _jacobian_wrap_const(all_args[i]))
+        end
+    end
+
+    res = lower_jacobian(mode, f_ann, Active, ann_args...)
+
+    derivs = ntuple(i -> i == active_idx ? active_seed : nothing, length(all_args))
+    if EnzymeCore.needs_primal(mode)
+        return (; derivs, val=res[2])
+    end
+    return derivs
 end
 
 const ignore_derivatives = EnzymeCore.ignore_derivatives
