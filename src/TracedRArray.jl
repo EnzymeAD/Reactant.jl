@@ -1338,7 +1338,7 @@ function Base.permutedims(A::AnyTracedRArray{T,N}, perm) where {T,N}
     return @opcall transpose(materialize_traced_array(A), Int64[perm...])
 end
 
-function Base.permutedims!(dest::TracedRArray, src::AnyTracedRArray, perm)
+function Base.permutedims!(dest::AnyTracedRArray, src::AnyTracedRArray, perm)
     result = @opcall transpose(materialize_traced_array(src), Int64[perm...])
     TracedUtils.set_mlir_data!(dest, result.mlir_data)
     return dest
