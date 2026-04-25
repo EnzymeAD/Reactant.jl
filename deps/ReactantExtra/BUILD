@@ -1673,6 +1673,24 @@ gentbl_cc_library(
 )
 
 gentbl_cc_library(
+    name = "ImpulseJLIncGen",
+    tbl_outs = [
+        (
+            [
+                "--generator=jl-op-defs",
+                "--disable-module-wrap=0",
+            ],
+            "Impulse.jl",
+        ),
+    ],
+    tblgen = "//:mlir-jl-tblgen",
+    td_file = "@enzyme//:Enzyme/MLIR/Dialect/Impulse/ImpulseOps.td",
+    deps = [
+        "@enzyme//:ImpulseDialectTdFiles",
+    ],
+)
+
+gentbl_cc_library(
     name = "EnzymeXLAJLIncGen",
     tbl_outs = [
         (
