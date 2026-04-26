@@ -35,13 +35,13 @@ end
 
         before = @code_hlo optimize = false ProbProg.simulate(rng, model, μ, σ, shape)
         @test @filecheck begin
-            @check "enzyme.simulate"
+            @check "impulse.simulate"
             repr(before)
         end
 
         after = @code_hlo optimize = :probprog ProbProg.simulate(rng, model, μ, σ, shape)
         @test @filecheck begin
-            @check_not "enzyme.simulate"
+            @check_not "impulse.simulate"
             repr(after)
         end
     end
