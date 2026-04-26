@@ -94,6 +94,7 @@ end
         Reactant.PrecisionConfig,
         Reactant.InterpolationType,
         ReactantMPIExt.Ops,
+        Reactant.EnzymeActivity,
     )
 
     test_explicit_imports(
