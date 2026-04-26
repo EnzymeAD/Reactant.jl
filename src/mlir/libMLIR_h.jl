@@ -13913,6 +13913,7 @@ struct EnzymeXLATransformPassesOptions
     enable_self_to_convolution_like_passes::Bool
     enable_structured_tensors_detection_passes::Bool
     enable_structured_tensors_passes::Bool
+    enable_triangular_passes::Bool
     enable_scatter_gather_optimization_passes::Bool
     enable_slice_to_batch_passes::Bool
     enable_reduce_slice_fusion_passes::Bool

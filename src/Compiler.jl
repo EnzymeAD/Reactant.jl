@@ -720,6 +720,7 @@ function optimization_passes(
     is_sharded::Bool=false,
     raise_shlo_to_blas_lapack::Bool=true,
     self_to_convolution::Bool=false,
+    triangular::Bool=false,
 )
     options = MLIR.API.EnzymeXLATransformPassesOptions(
         compile_options.max_constant_threshold,          # max_constant_threshold
@@ -742,6 +743,7 @@ function optimization_passes(
         self_to_convolution,                             # enable_self_to_convolution_like_passes
         !compile_options.disable_structured_tensors_detection_passes, # enable_structured_tensors_detection_passes
         !compile_options.disable_structured_tensors_passes,          # enable_structured_tensors_passes
+        triangular,                  # enable_triangular_passes
         !compile_options.disable_scatter_gather_optimization_passes, # enable_scatter_gather_optimization_passes
         !compile_options.disable_slice_to_batch_passes,              # enable_slice_to_batch_passes
         !compile_options.disable_reduce_slice_fusion_passes,         # enable_reduce_slice_fusion_passes
@@ -1342,7 +1344,13 @@ function compile_mlir!(
         compile_options; sroa=true, recognize_comms, lower_comms, backend, is_sharded
     )
     opt_passes2 = optimization_passes(
-        compile_options; sroa=false, recognize_comms, lower_comms, backend, is_sharded
+        compile_options;
+        sroa=false,
+        recognize_comms,
+        lower_comms,
+        backend,
+        is_sharded,
+        triangular=!compile_options.disable_structured_tensors_detection_passes,
     )
 
     raise_passes = if raise isa String
