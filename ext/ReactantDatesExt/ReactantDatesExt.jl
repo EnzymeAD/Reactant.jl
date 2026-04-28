@@ -11,10 +11,11 @@ using Dates:
     DateTime,
     Date,
     Time
-using Reactant: Reactant
+using Reactant: Reactant, @trace
 
 include("types.jl")
 include("accessors.jl")
+include("adjusters.jl")
 include("io.jl")
 include("arithmetic.jl")
 include("conversions.jl")
