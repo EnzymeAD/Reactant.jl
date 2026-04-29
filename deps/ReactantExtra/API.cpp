@@ -143,6 +143,12 @@
 #include "xla/python/ifrt/tuple.h"
 #include "xla/python/ifrt/value.h"
 
+// GPU Topology (for AOT compilation with mock devices)
+#include "xla/backends/gpu/target_config/target_config.h"
+#include "xla/pjrt/gpu/se_gpu_topology_description.h"
+#include "xla/pjrt/pjrt_compiler.h"
+#include "xla/service/gpu_topology.h"
+
 // IFRT - PJRT
 #include "xla/python/pjrt_ifrt/pjrt_array.h"
 #include "xla/python/pjrt_ifrt/pjrt_client.h"
@@ -1894,8 +1900,121 @@ ifrt_compile_internal(ifrt::Client *client, MlirModule cmod,
           .Await()));
 }
 
-// we might me interested in the `Compiler::Compile` method variant that accepts
-// `Topology`
+// Topology-based compilation (AOT / cross-compilation for mock devices)
+
+using HeldIfrtExecutable = HeldValue<std::shared_ptr<xla::ifrt::Executable>>;
+
+REACTANT_ABI xla::PjRtTopologyDescription *ifrt_gpu_topology_create(
+    ifrt::Client *client, const char *platform_version, int32_t num_partitions,
+    int32_t num_hosts_per_partition, int32_t num_devices_per_host) {
+  // Extract GPU target config from the client's existing topology so the
+  // offline-compiled executable matches the real hardware capabilities.
+  std::optional<xla::gpu::GpuTargetConfig> target_config = std::nullopt;
+  std::optional<stream_executor::GpuTargetConfigProto> target_config_proto =
+      std::nullopt;
+
+  auto *pjrt_client = llvm::dyn_cast<xla::ifrt::PjRtClient>(client);
+  if (pjrt_client != nullptr) {
+    auto topo_or = pjrt_client->pjrt_client()->GetTopologyDescription();
+    if (topo_or.ok()) {
+      auto *gpu_topo =
+          dynamic_cast<const xla::StreamExecutorGpuTopologyDescription *>(
+              *topo_or);
+      if (gpu_topo != nullptr) {
+        if (gpu_topo->target_config().has_value()) {
+          target_config_proto = *gpu_topo->target_config();
+        } else if (gpu_topo->gpu_topology().has_gpu_target_config()) {
+          target_config = gpu_topo->gpu_topology().gpu_target_config();
+        }
+      }
+    }
+  }
+
+  auto gpu_topology = std::make_shared<xla::GpuTopology>(
+      platform_version, num_partitions, num_hosts_per_partition,
+      num_devices_per_host, std::move(target_config));
+  return new xla::StreamExecutorGpuTopologyDescription(
+      xla::CudaId(), xla::CudaName(), std::move(gpu_topology), {},
+      std::move(target_config_proto));
+}
+
+REACTANT_ABI void ifrt_topology_dtor(xla::PjRtTopologyDescription *topology) {
+  delete topology;
+}
+
+REACTANT_ABI HeldIfrtExecutable *
+ifrt_compile_with_topology(ifrt::Client *client, MlirModule cmod,
+                           xla::PjRtTopologyDescription *topology,
+                           const char *compile_options_proto,
+                           size_t compile_options_proto_size) {
+  xla::CompileOptions compile_options =
+      GenerateCompileOptions(compile_options_proto, compile_options_proto_size);
+
+  mlir::ModuleOp cmod_op = cast<ModuleOp>(*unwrap(cmod));
+  if (compile_options.executable_build_options.use_spmd_partitioning() &&
+      compile_options.executable_build_options.use_shardy_partitioner()) {
+    auto status = xla::ExportShardyForHloRoundTrip(cmod_op);
+    if (!status.ok()) {
+      ReactantThrowError(status.ToString().c_str());
+    }
+  }
+
+  auto program =
+      std::make_unique<xla::ifrt::HloProgram>(xla::ifrt::HloProgram(cmod_op));
+
+  auto pjrt_compiler = client->GetDefaultCompiler();
+
+  auto xla_compile_options = std::make_unique<xla::ifrt::XlaCompileOptions>(
+      compile_options, xla::ifrt::DeviceListRef());
+
+  auto pjrt_topology = std::make_shared<xla::ifrt::PjRtTopology>(
+      std::shared_ptr<const xla::PjRtTopologyDescription>(
+          topology, [](const xla::PjRtTopologyDescription *) {}));
+
+  auto executable =
+      MyValueOrThrow(pjrt_compiler
+                         ->Compile(std::move(program), *pjrt_topology,
+                                   std::move(xla_compile_options))
+                         .Await());
+
+  return reactant::capture(
+      std::shared_ptr<xla::ifrt::Executable>(std::move(executable)));
+}
+
+REACTANT_ABI const char *ifrt_executable_serialize(HeldIfrtExecutable *exec,
+                                                   size_t *out_size) {
+  std::string serialized = MyValueOrThrow(exec->obj()->Serialize());
+  *out_size = serialized.size();
+  char *buf = (char *)malloc(serialized.size());
+  memcpy(buf, serialized.data(), serialized.size());
+  return buf;
+}
+
+REACTANT_ABI void ifrt_executable_dtor(HeldIfrtExecutable *exec) {
+  delete exec;
+}
+
+REACTANT_ABI HeldIfrtLoadedExecutable *ifrt_deserialize_and_load(
+    ifrt::Client *client, const char *serialized_bytes, size_t serialized_size,
+    const char *compile_options_proto, size_t compile_options_proto_size) {
+  xla::CompileOptions compile_options =
+      GenerateCompileOptions(compile_options_proto, compile_options_proto_size);
+  auto compiler = client->GetDefaultCompiler();
+  auto device_list =
+      MyValueOrThrow(client->MakeDeviceList(client->GetAllDevices()));
+  auto options = std::make_unique<xla::ifrt::XlaDeserializeExecutableOptions>(
+      compile_options, device_list);
+  auto loaded = MyValueOrThrow(
+      compiler
+          ->DeserializeLoadedExecutable(
+              absl::string_view(serialized_bytes, serialized_size),
+              std::move(options))
+          .Await());
+  return reactant::capture(
+      std::shared_ptr<xla::ifrt::LoadedExecutable>(std::move(loaded)));
+}
+
+//
 REACTANT_ABI HeldIfrtLoadedExecutable *
 ifrt_compile(ifrt::Client *client, MlirModule cmod, int64_t device_id,
              const int64_t *mesh_ids, int64_t num_mesh_ids,

@@ -86,17 +86,18 @@ function make_compile_options(;
     @set! executable_build_options.allow_spmd_sharding_propagation_to_output = [false]
 
     if device_id < 0
-        @assert mesh_ids !== nothing
-        @assert length(mesh_ids) == num_replicas * num_partitions
+        if mesh_ids !== nothing
+            @assert length(mesh_ids) == num_replicas * num_partitions
 
-        computation_devices = [
-            Reactant.Proto.xla.var"DeviceAssignmentProto.ComputationDevice"([
-                mesh_ids[(i - 1) * num_partitions + j] for i in 1:num_replicas
-            ]) for j in 1:num_partitions
-        ]
-        @set! executable_build_options.device_assignment = Reactant.Proto.xla.DeviceAssignmentProto(
-            Int32(num_replicas), Int32(num_partitions), computation_devices
-        )
+            computation_devices = [
+                Reactant.Proto.xla.var"DeviceAssignmentProto.ComputationDevice"([
+                    mesh_ids[(i - 1) * num_partitions + j] for i in 1:num_replicas
+                ]) for j in 1:num_partitions
+            ]
+            @set! executable_build_options.device_assignment = Reactant.Proto.xla.DeviceAssignmentProto(
+                Int32(num_replicas), Int32(num_partitions), computation_devices
+            )
+        end
     else
         @set! executable_build_options.device_ordinal = device_id
         @set! executable_build_options.device_assignment = Reactant.Proto.xla.DeviceAssignmentProto(

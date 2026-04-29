@@ -59,6 +59,77 @@ module API
         )::Ptr{HeldIfrtLoadedExecutable}
     end
 
+    # GPU topology for AOT compilation with mock devices
+    const PjRtTopologyDescription = Cvoid
+    const HeldIfrtExecutable = Cvoid
+
+    function ifrt_gpu_topology_create(
+        client,
+        platform_version::String,
+        num_partitions::Int32,
+        num_hosts_per_partition::Int32,
+        num_devices_per_host::Int32,
+    )
+        return @ccall mlir_c.ifrt_gpu_topology_create(
+            client::Ptr{Cvoid},
+            platform_version::Cstring,
+            num_partitions::Int32,
+            num_hosts_per_partition::Int32,
+            num_devices_per_host::Int32,
+        )::Ptr{PjRtTopologyDescription}
+    end
+
+    function ifrt_topology_dtor(topology)
+        return @ccall mlir_c.ifrt_topology_dtor(
+            topology::Ptr{PjRtTopologyDescription}
+        )::Cvoid
+    end
+
+    function ifrt_compile_with_topology(
+        client,
+        cmod,
+        topology,
+        compile_options_proto::Vector{UInt8},
+        compile_options_proto_size,
+    )
+        return @ccall mlir_c.ifrt_compile_with_topology(
+            client.client::Ptr{Cvoid},
+            cmod::MlirModule,
+            topology::Ptr{PjRtTopologyDescription},
+            compile_options_proto::Ptr{UInt8},
+            compile_options_proto_size::Csize_t,
+        )::Ptr{HeldIfrtExecutable}
+    end
+
+    function ifrt_executable_serialize(exec)
+        out_size = Ref{Csize_t}(0)
+        ptr = @ccall mlir_c.ifrt_executable_serialize(
+            exec::Ptr{HeldIfrtExecutable}, out_size::Ptr{Csize_t}
+        )::Cstring
+        bytes = unsafe_wrap(Array, Ptr{UInt8}(ptr), out_size[]; own=true)
+        return bytes
+    end
+
+    function ifrt_executable_dtor(exec)
+        return @ccall mlir_c.ifrt_executable_dtor(exec::Ptr{HeldIfrtExecutable})::Cvoid
+    end
+
+    function ifrt_deserialize_and_load(
+        client,
+        serialized_bytes::Vector{UInt8},
+        serialized_bytes_size,
+        compile_options_proto::Vector{UInt8},
+        compile_options_proto_size,
+    )
+        return @ccall mlir_c.ifrt_deserialize_and_load(
+            client.client::Ptr{Cvoid},
+            serialized_bytes::Ptr{UInt8},
+            serialized_bytes_size::Csize_t,
+            compile_options_proto::Ptr{UInt8},
+            compile_options_proto_size::Csize_t,
+        )::Ptr{HeldIfrtLoadedExecutable}
+    end
+
     function ClientCompileWithProto(
         client, cmod, compile_options_proto::Vector{UInt8}, compile_options_proto_size
     )
