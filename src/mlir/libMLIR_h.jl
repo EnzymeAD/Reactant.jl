@@ -14521,6 +14521,22 @@ function CopyBufferToDevice(buffer, dst_device)
     )::Ptr{PjRtBuffer}
 end
 
+function BufferFromDevicePointer(client, device_ptr, ptype, dim, cshape, device, stream)
+    @ccall mlir_c.BufferFromDevicePointer(
+        client::Ptr{PjRtClient},
+        device_ptr::Ptr{Cvoid},
+        ptype::UInt64,
+        dim::Csize_t,
+        cshape::Ptr{Int64},
+        device::Ptr{PjRtDevice},
+        stream::Int64,
+    )::Ptr{PjRtBuffer}
+end
+
+function AwaitBufferReady(buffer)
+    @ccall mlir_c.AwaitBufferReady(buffer::Ptr{PjRtBuffer})::Ptr{Cvoid}
+end
+
 function FreeClient(client)
     @ccall mlir_c.FreeClient(client::Ptr{PjRtClient})::Cvoid
 end

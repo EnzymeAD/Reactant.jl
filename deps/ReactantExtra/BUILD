@@ -1150,6 +1150,8 @@ cc_library(
             "-Wl,-exported_symbol,_ArrayFromHostBuffer",
             "-Wl,-exported_symbol,_BufferOnCPU",
             "-Wl,-exported_symbol,_CopyBufferToDevice",
+            "-Wl,-exported_symbol,_BufferFromDevicePointer",
+            "-Wl,-exported_symbol,_AwaitBufferReady",
             "-Wl,-exported_symbol,_BufferToHost",
             "-Wl,-exported_symbol,_FreeClient",
             "-Wl,-exported_symbol,_ClientCompile",
