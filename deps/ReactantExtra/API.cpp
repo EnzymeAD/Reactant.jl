@@ -1,4 +1,5 @@
 #include <iostream>
+#include <vector>
 
 #include "mlir-c/IR.h"
 #include "mlir-c/Support.h"
@@ -3406,6 +3407,64 @@ REACTANT_ABI void reactantXLAFree(LinkableRuntime **__restrict__ lrtP,
   PjRtBufferFree((PjRtBuffer *)buffer);
 }
 
+struct ShapeInfo {
+  int64_t ldim = -1;
+  int64_t totalSize = -1;
+  int64_t transposed = -1;
+  llvm::SmallVector<int64_t, 2> shape;
+};
+
+std::string
+encodeShapeInfoAsString(const llvm::SmallDenseMap<int, ShapeInfo> &map) {
+  std::string out;
+  bool firstEntry = true;
+
+  for (const auto &it : map) {
+    if (!firstEntry)
+      out += ";";
+    firstEntry = false;
+
+    int key = it.first;
+    const ShapeInfo &s = it.second;
+
+    out += std::to_string(key) + ":";
+
+    out += std::to_string(s.ldim) + "|";
+    out += std::to_string(s.totalSize) + "|";
+    out += std::to_string(s.transposed) + "|";
+
+    for (size_t i = 0; i < s.shape.size(); ++i) {
+      if (i > 0)
+        out += ",";
+      out += std::to_string(s.shape[i]);
+    }
+  }
+
+  return out;
+}
+
+std::vector<std::vector<int64_t>>
+getCacheKeyFromRuntimeShape(const llvm::SmallDenseMap<int, ShapeInfo> &map) {
+  std::vector<std::vector<int64_t>> out;
+
+  for (const auto &it : map) {
+    int key = it.first;
+    auto &s = it.second;
+
+    std::vector<int64_t> row;
+    row.push_back(key);
+    row.push_back(s.ldim);
+    row.push_back(s.totalSize);
+    row.push_back(s.transposed);
+    row.push_back(s.shape.size()); // store length
+    for (int v : s.shape)
+      row.push_back(v);
+    out.push_back(std::move(row));
+  }
+
+  return out;
+}
+
 REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
                                   const char *modstr, int64_t argcnt,
                                   void **args) {
@@ -3425,28 +3484,106 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
     }
     baseArrays[i] = argB;
     basePtrs[i] = argP;
-    auto dims = argB->on_device_shape().dimensions();
+    auto dimsSpan = argB->on_device_shape().dimensions();
+
+    llvm::SmallVector<int64_t, 4> dims(dimsSpan.begin(), dimsSpan.end());
+    auto shape = argB->on_device_shape();
+    int64_t elemBytes =
+        xla::ShapeUtil::ByteSizeOfPrimitiveType(shape.element_type());
+    if (!dims.empty())
+      dims.back() *= elemBytes;
     sizeKey.emplace_back(dims.begin(), dims.end());
   }
 
-  auto iter = cache.find(sizeKey);
+  MLIRContext context(lrt->registry);
+  RegisterDialects(wrap(&context));
 
-  if (iter == cache.end()) {
-    MLIRContext context(lrt->registry);
-    RegisterDialects(wrap(&context));
+  mlir::OwningOpRef<mlir::ModuleOp> module(
+      mlir::ModuleOp::create(mlir::OpBuilder(&context).getUnknownLoc()));
+  mlir::OpBuilder builder(module->getContext());
 
-    mlir::OwningOpRef<mlir::ModuleOp> module(
-        mlir::ModuleOp::create(mlir::OpBuilder(&context).getUnknownLoc()));
+  ParserConfig config(&context, /*verify_after_parse*/ true);
+  if (failed(parseSourceString(modstr, module->getBody(), config))) {
+    llvm::errs() << " failed to parse module:\n";
+    exit(1);
+  }
 
-    ParserConfig config(&context, /*verify_after_parse*/ true);
-    if (failed(parseSourceString(modstr, module->getBody(), config))) {
-      llvm::errs() << " failed to parse module:\n";
-      exit(1);
+  auto funcOp = cast<func::FuncOp>(&module->getBody()->back());
+  llvm::SmallDenseMap<int, ShapeInfo> shapeMap;
+  int idx = -1;
+  for (mlir::Attribute attr : *funcOp.getArgAttrs()) {
+    idx++;
+    mlir::DictionaryAttr dAttr = dyn_cast<mlir::DictionaryAttr>(attr);
+    if (!dAttr || dAttr.empty())
+      continue;
+
+    for (auto namedAttr : dAttr) {
+      mlir::StringRef name = namedAttr.getName();
+      mlir::Attribute value = namedAttr.getValue();
+
+      if (!name.starts_with("shape."))
+        continue;
+
+      auto targetIdx = cast<mlir::IntegerAttr>(value).getInt();
+      if (targetIdx < 0) {
+        continue;
+      }
+      auto literal_or = baseArrays[targetIdx]->ToLiteralSync();
+      if (!literal_or.ok()) {
+        llvm::errs() << "failed move from device to host\n";
+        continue;
+      }
+      int runtimeValue = literal_or.value()->GetFirstElement<int>();
+
+      llvm::StringRef suffix = name.drop_front(strlen("shape."));
+      if (suffix == "ld") {
+        shapeMap[idx].ldim = runtimeValue;
+        continue;
+      }
+      if (suffix == "transpose") {
+        shapeMap[idx].transposed = runtimeValue;
+        continue;
+      }
+      int dimIdx;
+      if (suffix.empty() || suffix.getAsInteger(10, dimIdx))
+        continue;
+      if (shapeMap[idx].shape.size() <= dimIdx)
+        shapeMap[idx].shape.resize(dimIdx + 1);
+
+      shapeMap[idx].shape[dimIdx] = runtimeValue;
     }
 
-    auto funcOp = cast<func::FuncOp>(&module->getBody()->back());
+    if (shapeMap.count(idx) > 0) {
+      auto RTT = cast<mlir::RankedTensorType>(
+          MyValueOrThrow(xla::ConvertShapeToType<mlir::RankedTensorType>(
+              baseArrays[idx]->on_device_shape(), builder)));
 
-    mlir::OpBuilder builder(module->getContext());
+      int64_t numElems = RTT.getNumElements();
+      auto srcElemTy = RTT.getElementType();
+      unsigned srcBits = srcElemTy.getIntOrFloatBitWidth();
+
+      Type operandType = funcOp.getFunctionType().getInput(idx);
+      auto shapedType = cast<ShapedType>(operandType);
+      Type elemType = shapedType.getElementType();
+
+      unsigned dstBits = elemType.getIntOrFloatBitWidth();
+
+      int64_t totalBytes = numElems * (srcBits / 8);
+      int64_t newElemBytes = dstBits / 8;
+
+      int64_t newNumElems = totalBytes / newElemBytes;
+
+      shapeMap[idx].totalSize = newNumElems;
+    }
+  }
+
+  if (!shapeMap.empty()) {
+    auto dynamicSizeKey = getCacheKeyFromRuntimeShape(shapeMap);
+    sizeKey.insert(sizeKey.end(), dynamicSizeKey.begin(), dynamicSizeKey.end());
+  }
+
+  auto iter = cache.find(sizeKey);
+  if (iter == cache.end()) {
     funcOp.setSymName(builder.getStringAttr("main"));
     funcOp.setVisibility(SymbolTable::Visibility::Public);
 
@@ -3458,18 +3595,38 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
 
     SmallVector<mlir::Type> types;
     for (int64_t i = 0; i < argcnt; i++) {
-      auto RTT = MyValueOrThrow(xla::ConvertShapeToType<mlir::RankedTensorType>(
-          baseArrays[i]->on_device_shape(), builder));
-      types.push_back(RTT);
+      if (shapeMap.count(i) > 0) {
+        mlir::RankedTensorType RTT = cast<mlir::RankedTensorType>(
+            MyValueOrThrow(xla::ConvertShapeToType<mlir::RankedTensorType>(
+                baseArrays[i]->on_device_shape(), builder)));
+
+        Type operandType = funcOp.getFunctionType().getInput(i);
+        auto shapedType = cast<ShapedType>(operandType);
+        Type elemType = shapedType.getElementType();
+        RTT = RankedTensorType::get({shapeMap[i].totalSize}, elemType);
+
+        types.push_back(RTT);
+      } else {
+        auto RTT =
+            MyValueOrThrow(xla::ConvertShapeToType<mlir::RankedTensorType>(
+                baseArrays[i]->on_device_shape(), builder));
+        types.push_back(RTT);
+      }
     }
+
+    std::string shapesAsString = encodeShapeInfoAsString(shapeMap);
+
+    pm.addPass(mlir::enzyme::createPropagateShapesPass(
+        mlir::enzyme::PropagateShapesPassOptions{shapesAsString}));
+    pm.addPass(createCanonicalizerPass());
+    pm.addPass(mlir::enzyme::createPrintPass());
     pm.addPass(mlir::stablehlo::createStablehloRefineArgumentsPass(types));
     pm.addPass(mlir::stablehlo::createStablehloRefineShapesPass());
     pm.addNestedPass<mlir::func::FuncOp>(
         stablehlo::createStablehloCanonicalizeDynamismPass());
     pm.addPass(mlir::enzyme::createEnzymeHLOOptPass());
-
     if (!mlir::succeeded(pm.run(*module))) {
-      llvm::errs() << " failed to run passes\n";
+      llvm::errs() << " failed to run passes!\n";
       exit(1);
     }
 
