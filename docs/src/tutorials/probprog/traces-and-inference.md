@@ -25,25 +25,15 @@ Each value in `choices` is an array indexed on its first axis by the sample's sy
 
 `@compile optimize = :probprog` returns Impulse's internal tensor-based representation of traces. 
 
-The flat form contains every random choice made by the model,
-flattened and concatenated in **first-encounter execution order**:
-each `sample(...; logpdf=...)` call during tracing appends its choice
-at the current end of the row and advances the offset by
-`prod(shape)`. Submodel `sample(rng, f, ...)` calls (with no `logpdf`)
-recurse into `f`, so any leaf samples inside `f` get the enclosing
-submodel symbols recorded as their `parent_path` and land at the
-position they were reached at. For example, if a model samples
-`slope::(1,)`, then `intercept::(1,)`, then `ys::(10,)`, the trace
-tensor for one execution is a 12-element row laid out in exactly that
-order. With `num_samples` rows (e.g., from a NUTS run with
-`num_samples = 12`), the trace tensor becomes a `(num_samples, 12)`
-tensor.
-
-The trace tensor returned by [`mcmc`](@ref) is *not* in execution
-order — it is in **`Selection` order** (alphabetical by stringified
-address path, the order [`select`](@ref) imposes on its inputs).
-[`filter_entries_by_selection`](@ref) handles the re-layout so that
-[`unflatten_trace`](@ref) reconstructs the right tree.
+The flat form contains every random choice the model would make,
+flattened and concatenated into a single row, with the layout fixed at
+trace time. With `num_samples` rows (e.g., from a NUTS run with
+`num_samples = 12`), the trace tensor becomes a
+`(num_samples, position_size)` tensor where `position_size` is the
+total number of elements across all sampled sites. There are no symbol
+lookups in this representation; per-site offsets and shapes are baked
+in at compile time, and the bridge helpers below carry that layout
+metadata so the tensor can be reconstituted into a tree.
 
 ### Helpers that bridge the two
 
