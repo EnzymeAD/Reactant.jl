@@ -14,6 +14,10 @@ For walkthroughs and runnable end-to-end programs, follow the
   distributions, custom samplers, supports.
 - [Traces and constrained inference](@ref probprog-traces) — `Trace`,
   `Address`, `Constraint`, `Selection`, `simulate` and `generate`.
+- [Trace representation](@ref probprog-trace-representation) — how
+  Reactant carries a trace as a flat position-vector tensor during
+  compilation, and the helpers that expand it back into a
+  tree-shaped `Trace`.
 - [MCMC: MH, HMC, NUTS](@ref probprog-mcmc) — `mh`, `mcmc`, `mcmc_logpdf`.
 - [Running and resuming chains](@ref probprog-chains) — `run_chain`,
   `MCMCState`, checkpointing, `mcmc_summary`.
@@ -31,8 +35,6 @@ onto `Gen.select`, and so on.
 | `Address`      | `Address(syms::Symbol...)` | [Traces and constrained inference](@ref probprog-traces) |
 | `Selection`    | `const Selection = OrderedSet{Address}`; built via `select` | [Traces and constrained inference](@ref probprog-traces) |
 | `Constraint`   | `Constraint(pairs::Pair...)` | [Traces and constrained inference](@ref probprog-traces) |
-| `TraceEntry`   | `struct TraceEntry; symbol, shape, num_elements, offset, parent_path; end` (layout metadata, auto-populated during tracing) | [Traces and constrained inference](@ref probprog-traces) |
-| `TracedTrace`  | per-trace context produced by `with_trace` | [Traces and constrained inference](@ref probprog-traces) |
 | `MCMCState`    | `mutable struct MCMCState; position, gradient, potential_energy, step_size, inverse_mass_matrix, rng; end` | [Running and resuming chains](@ref probprog-chains) |
 
 ## Distributions
@@ -81,7 +83,7 @@ when `adapt_step_size = true`.
 |--------|-----------|-----|
 | `select`                       | `select(addrs::Address...) -> Selection` | [Traces and constrained inference](@ref probprog-traces) |
 | `get_choices`                  | `get_choices(trace::Trace) -> Dict{Symbol,Any}` | [Traces and constrained inference](@ref probprog-traces) |
-| `with_trace`                   | `with_trace(f, tt::TracedTrace=TracedTrace()) -> (f_result, tt)` | [Traces and constrained inference](@ref probprog-traces) |
+| `with_trace`                   | `with_trace(f) -> (f_result, tt)` (installs the Impulse tracing context for the duration of `f()`; collects the layout metadata `unflatten_trace` needs) | [Traces and constrained inference](@ref probprog-traces) |
 | `unflatten_trace`              | `unflatten_trace(trace_tensor, weight, entries, retval) -> Trace` | [Traces and constrained inference](@ref probprog-traces) |
 | `filter_entries_by_selection`  | `filter_entries_by_selection(entries, selection)` | [MCMC: MH, HMC, NUTS](@ref probprog-mcmc) |
 | `extract_addresses`            | `extract_addresses(constraint::Constraint) -> Set{Address}` | [Traces and constrained inference](@ref probprog-traces) |

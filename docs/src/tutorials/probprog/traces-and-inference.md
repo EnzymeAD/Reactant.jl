@@ -1,7 +1,7 @@
 # [Traces and constrained inference](@id probprog-traces)
 
 A *trace* records every random choice in one model execution, along with
-its log-density and the model's return value. Two ways to produce one:
+its log-density and the model's return value. There are two ways to produce a trace:
 
 - [`simulate`](@ref) runs forward; each `sample` draws from the prior.
 - [`generate`](@ref) conditions on observed choices and returns an
@@ -19,9 +19,45 @@ compiles, runs, and returns an unflattened [`Trace`](@ref).
 | `retval`    | Model return |
 | `weight`    | Importance weight (`generate`) or prior log-density (`simulate`) |
 
-Each value in `choices` is an array indexed on its first axis by sample.
-Size 1 from `simulate_` / `generate_`; larger from [`mcmc`](@ref).
-[`get_choices(trace)`](@ref) returns `trace.choices`.
+Each value in `choices` is an array indexed on its first axis by the sample's symbol.
+
+## [Internal Trace Representation](@id probprog-trace-representation)
+
+`@compile optimize = :probprog` returns Impulse's internal tensor-based representation of traces. 
+
+The flat form contains every random choice made by the model,
+flattened and concatenated in **first-encounter execution order**:
+each `sample(...; logpdf=...)` call during tracing appends its choice
+at the current end of the row and advances the offset by
+`prod(shape)`. Submodel `sample(rng, f, ...)` calls (with no `logpdf`)
+recurse into `f`, so any leaf samples inside `f` get the enclosing
+submodel symbols recorded as their `parent_path` and land at the
+position they were reached at. For example, if a model samples
+`slope::(1,)`, then `intercept::(1,)`, then `ys::(10,)`, the trace
+tensor for one execution is a 12-element row laid out in exactly that
+order. With `num_samples` rows (e.g., from a NUTS run with
+`num_samples = 12`), the trace tensor becomes a `(num_samples, 12)`
+tensor.
+
+The trace tensor returned by [`mcmc`](@ref) is *not* in execution
+order — it is in **`Selection` order** (alphabetical by stringified
+address path, the order [`select`](@ref) imposes on its inputs).
+[`filter_entries_by_selection`](@ref) handles the re-layout so that
+[`unflatten_trace`](@ref) reconstructs the right tree.
+
+### Helpers that bridge the two
+
+Reactant frontend provides convenience helpers that handle the conversion in either direction.
+
+- [`simulate_`](@ref) and [`generate_`](@ref) compile, run the model,
+  and immediately convert the result back to a tree-shaped
+  [`Trace`](@ref). The flat form never surfaces.
+- [`unflatten_trace`](@ref) does the explicit tensor → tree conversion,
+  given a trace tensor and layout metadata
+  (per-site offset, shape, address-path) collected by the Impulse tracing context.
+- [`with_trace`](@ref) installs the Impulse tracing context that collects the
+  layout metadata while a compiled program is being built.
+  your `@compile` call in it.
 
 ## `simulate_`
 
