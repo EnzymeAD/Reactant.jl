@@ -650,6 +650,8 @@ end
     dims::Vector{Int};
     location=mlir_stacktrace("reshape", @__FILE__, @__LINE__),
 ) where {T,N}
+    @assert length(x) == prod(dims)
+
     # HLO reshape semantics collapse the opposite way
     res1 = transpose(x, Int64[N:-1:1...])
     restype = mlir_type(TracedRArray{T,length(dims)}, collect(Int64, Base.reverse(dims)))

@@ -277,6 +277,37 @@ Base.@nospecializeinfer function create_result(
     return result_cache[tocopy]
 end
 
+Base.@nospecializeinfer function create_result(
+    @nospecialize(tocopy::Enum),
+    @nospecialize(path::Tuple),
+    result_stores,
+    path_to_shard_info,
+    to_unreshard_results,
+    _unresharded_code::Vector{Expr},
+    _unresharded_arrays_cache,
+    used_shardinfo,
+    result_cache,
+    var_idx,
+    resultgen_code,
+)
+    if !haskey(result_cache, tocopy)
+        sym = Symbol("result", var_idx[])
+        var_idx[] += 1
+
+        result = Meta.quot(tocopy)
+
+        push!(
+            resultgen_code,
+            quote
+                $sym = $result
+            end,
+        )
+        result_cache[tocopy] = sym
+    end
+
+    return result_cache[tocopy]
+end
+
 function create_result(
     tocopy::ConcretePJRTNumber{T,D},
     @nospecialize(path::Tuple),
@@ -823,14 +854,14 @@ end
 # However, this errs as we cannot attach the transform with to the funcop itself [as we run a functionpass].
 const enzyme_pass::String = "enzyme{postpasses=\"arith-raise{stablehlo=true},canonicalize,cse,canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math,canonicalize,cse,canonicalize,arith-raise{stablehlo=true}\"}"
 
-function probprog_pass(;
+function impulse_pass(;
     debug_dump::Bool=DEBUG_PROBPROG_DUMP_VALUE[],
     disable_optimizations::Bool=DEBUG_PROBPROG_DISABLE_OPT[],
 )
     if !disable_optimizations
-        # TODO(#2063): Add probprog optimization passes
+        # TODO(#2063): Add impulse optimization passes
     end
-    return "probprog{debug-dump=$debug_dump postpasses=\"arith-raise{stablehlo=true}\"}"
+    return "expand-impulse{debug-dump=$debug_dump postpasses=\"arith-raise{stablehlo=true}\"}"
 end
 
 function run_pass_pipeline!(mod, pass_pipeline, key=""; enable_verifier=true)
@@ -1575,8 +1606,8 @@ function compile_mlir!(
                         raise_passes,
                         "enzyme-batch",
                         opt_passes2,
-                        probprog_pass(),
-                        "lower-probprog-to-stablehlo{backend=$backend}",
+                        impulse_pass(),
+                        "lower-impulse-to-stablehlo{backend=$backend}",
                         "outline-enzyme-regions",
                         enzyme_pass,
                         opt_passes2,
@@ -1592,7 +1623,7 @@ function compile_mlir!(
                         )...,
                         opt_passes2,
                         lower_enzymexla_passes,
-                        "lower-probprog-trace-ops{backend=$backend}",
+                        "lower-impulse-trace-ops{backend=$backend}",
                         jit,
                     ]
                 else
@@ -1601,8 +1632,8 @@ function compile_mlir!(
                         opt_passes,
                         "enzyme-batch",
                         opt_passes2,
-                        probprog_pass(),
-                        "lower-probprog-to-stablehlo{backend=$backend}",
+                        impulse_pass(),
+                        "lower-impulse-to-stablehlo{backend=$backend}",
                         "outline-enzyme-regions",
                         enzyme_pass,
                         opt_passes2,
@@ -1620,13 +1651,13 @@ function compile_mlir!(
                         kern,
                         raise_passes,
                         lower_enzymexla_passes,
-                        "lower-probprog-trace-ops{backend=$backend}",
+                        "lower-impulse-trace-ops{backend=$backend}",
                         jit,
                     ]
                 end,
                 ",",
             ),
-            "probprog",
+            "impulse",
         )
     elseif compile_options.optimization_passes === :only_enzyme
         run_pass_pipeline!(

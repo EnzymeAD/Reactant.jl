@@ -28,7 +28,7 @@ end
 
         code = @code_hlo optimize = false ProbProg.sample(rng, ProbProg.Normal(μ, σ, shape))
         @test @filecheck begin
-            @check "enzyme.sample"
+            @check "impulse.sample"
             repr(code)
         end
     end
@@ -42,7 +42,7 @@ end
 
         code = @code_hlo optimize = false ProbProg.sample(rng, two_samples, μ, σ, shape)
         @test @filecheck begin
-            @check "enzyme.sample"
+            @check "impulse.sample"
             repr(code)
         end
     end
@@ -58,7 +58,7 @@ end
             rng, compose, μ, σ, shape
         )
         @test @filecheck begin
-            @check "enzyme.sample"
+            @check "impulse.sample"
             repr(before)
         end
 
@@ -66,7 +66,7 @@ end
             rng, compose, μ, σ, shape
         )
         @test @filecheck begin
-            @check_not "enzyme.sample"
+            @check_not "impulse.sample"
             repr(after)
         end
     end
