@@ -1,353 +1,88 @@
 # [Probabilistic Programming API](@id probprog-api)
 
-Exports from `Reactant.ProbProg`. Names are qualified as `ProbProg.<name>`;
-`using Reactant: ProbProg` unqualifies them. Usage shown in the
-[tutorials](@ref probprog).
+This page is a flat index of the public exports of `Reactant.ProbProg`,
+Reactant's probabilistic-programming module. Names are qualified as
+`ProbProg.<name>`; `using Reactant: ProbProg` unqualifies them.
+
+For walkthroughs and runnable end-to-end programs, follow the
+[Probabilistic Programming tutorials](@ref probprog):
+
+- [Overview](@ref probprog) — Bayesian linear and logistic regression.
+- [Interface overview](@ref probprog-interface-overview) — quick tabular
+  summary of the public surface.
+- [Sampling and distributions](@ref probprog-sampling) — `sample`, built-in
+  distributions, custom samplers, supports.
+- [Traces and constrained inference](@ref probprog-traces) — `Trace`,
+  `Address`, `Constraint`, `Selection`, `simulate` and `generate`.
+- [MCMC: MH, HMC, NUTS](@ref probprog-mcmc) — `mh`, `mcmc`, `mcmc_logpdf`.
+- [Running and resuming chains](@ref probprog-chains) — `run_chain`,
+  `MCMCState`, checkpointing, `mcmc_summary`.
+
+The conceptual vocabulary (traces, choice maps, selections, generative
+functions) is the same as in [Gen.jl](https://www.gen.dev/); readers
+familiar with Gen can map `Constraint` onto Gen's `ChoiceMap`, `select`
+onto `Gen.select`, and so on.
 
 ## Types
 
-### `Trace`
-
-[Gen-style trace](https://www.gen.dev/docs/stable/ref/core/gfi/#Traces) of one model execution:
-
-```julia
-mutable struct Trace
-    choices::Dict{Symbol, Any}
-    retval::Any
-    weight::Any
-    subtraces::Dict{Symbol, Any}
-end
-
-ProbProg.Trace()
-```
-
-- `choices`: per-address values; first axis indexes samples.
-- `subtraces`: nested `Trace`s keyed by outer `symbol`.
-- `retval`: model return.
-- `weight`: prior log-density (`simulate`) or importance weight
-  (`generate`).
-
-See [`get_choices`](@ref), [`unflatten_trace`](@ref).
-
-### `Address`
-
-Paths of symbols used to index into the trace.
-
-```julia
-ProbProg.Address(:slope)
-ProbProg.Address(:outer, :inner, :x) # nested
-```
-
-### `Selection`
-
-[Gen-style selection](https://www.gen.dev/docs/stable/ref/core/selections/) of addresses that is used to specify which random choices should be included in the inference operation. Constructed via [`select`](@ref).
-
-### `Constraint`
-
-`Address`-keyed dict of observations. Similar to Gen's [`ChoiceMap`](https://www.gen.dev/docs/stable/ref/core/choice_maps/).
-
-```julia
-obs = ProbProg.Constraint(
-    :y     => [0.1, 0.2, 0.3],
-    :outer => :inner => [1.0],
-)
-```
-
-### `TraceEntry`
-
-Layout metadata for one sampled site, used to reconstruct the trace from a flat tensor representation.
-
-```julia
-struct TraceEntry
-    symbol::Symbol
-    shape::Tuple
-    num_elements::Int
-    offset::Int
-    parent_path::Vector{Symbol}
-end
-```
-
-Auto-generated during tracing. Consumed by [`unflatten_trace`](@ref) and
-[`filter_entries_by_selection`](@ref).
-
-### `TracedTrace`
-
-Per-trace context. Returned by [`with_trace`](@ref).
-
-### `MCMCState`
-
-Sampler states needed to resume probabilistic inference from a previous state.
-
-```julia
-mutable struct MCMCState
-    position
-    gradient
-    potential_energy
-    step_size
-    inverse_mass_matrix
-    rng
-end
-```
-
-Used by [`mcmc`](@ref), [`mcmc_logpdf`](@ref),
-[`run_chain`](@ref). Serialized and deserialized by [`save_state`](@ref) / [`load_state`](@ref).
+| Symbol | Signature | See |
+|--------|-----------|-----|
+| `Trace`        | `mutable struct Trace; choices, retval, weight, subtraces; end` | [Traces and constrained inference](@ref probprog-traces) |
+| `Address`      | `Address(syms::Symbol...)` | [Traces and constrained inference](@ref probprog-traces) |
+| `Selection`    | `const Selection = OrderedSet{Address}`; built via `select` | [Traces and constrained inference](@ref probprog-traces) |
+| `Constraint`   | `Constraint(pairs::Pair...)` | [Traces and constrained inference](@ref probprog-traces) |
+| `TraceEntry`   | `struct TraceEntry; symbol, shape, num_elements, offset, parent_path; end` (layout metadata, auto-populated during tracing) | [Traces and constrained inference](@ref probprog-traces) |
+| `TracedTrace`  | per-trace context produced by `with_trace` | [Traces and constrained inference](@ref probprog-traces) |
+| `MCMCState`    | `mutable struct MCMCState; position, gradient, potential_energy, step_size, inverse_mass_matrix, rng; end` | [Running and resuming chains](@ref probprog-chains) |
 
 ## Distributions
 
-Built-in distributions:
-
-| Constructor | Default |
-|-------------|---------|
-| `ProbProg.Normal(μ, σ, shape)`     | `Normal()` → `μ=0, σ=1, shape=(1,)` |
-| `ProbProg.Exponential(λ, shape)`   | `Exponential()` → `λ=1, shape=(1,)` |
-| `ProbProg.LogNormal(μ, σ, shape)`  | `LogNormal()` → `μ=0, σ=1, shape=(1,)` |
-| `ProbProg.Bernoulli(logits, shape)`| — |
-
-Each registers a sampler and log-density; `ProbProg.sample(rng, dist)`
-needs no extra arguments.
-
-One can also define custom distributions by implementing the following methods:
-- `sampler(::Type{<:Distribution})`
-- `logpdf_fn(::Type{<:Distribution})`
-- `params(::Distribution)`
-- `support(::Type{<:Distribution})` (for HMC/NUTS automatic constraint transformation)
-- `bounds(::Type{<:Distribution})` (for HMC/NUTS automatic constraint transformation)
-
-See the [documentation](@ref distributions) for more details.
+`ProbProg.sample(rng, dist; symbol=:x)` works on any `Distribution`
+subtype. Built-in distributions (`Normal`, `Exponential`, `LogNormal`,
+`Bernoulli`) and the recipe for defining custom ones are described in
+the [Sampling and distributions](@ref probprog-sampling) tutorial.
 
 ## Modeling
 
-### `sample`
-
-```julia
-# Distribution
-ProbProg.sample(rng, dist; symbol=gensym("sample"))
-
-# Custom sampler
-ProbProg.sample(
-    rng, f, args...;
-    symbol  = gensym("sample"),
-    logpdf  = nothing,  # assumes (sample, args...) -> scalar
-    support = :real,
-    bounds  = (nothing, nothing),
-)
-```
-
-Returns `(updated_rng, value)`. `symbol` becomes the trace address.
-
-### `untraced_call`
-
-Call a probabilistic function without recording its choices:
-
-```julia
-ProbProg.untraced_call(rng, f, args...)
-```
-
-### `simulate`
-
-Forward simulation.
-
-```julia
-trace_tensor, weight, retval = ProbProg.simulate(rng, f, args...)
-```
-
-Default dimension of `trace_tensor`: `(1, position_size)`. Default dimension of `weight`: scalar tensor. Needs to be embedded in an `@compile` / `@jit` for compilation.
-
-### `simulate_`
-
-Compile + run wrapper returning an unflattened trace. Handles `@compile` / `@jit` context. Similar to `simulate`, but the trace is returned in an unflattened form.
-
-```julia
-trace, weight = ProbProg.simulate_(rng, f, args...)
-```
-
-### `generate`
-
-Generate a trace conditioned on a set of observed random choices, returning the trace and the log importance weight.
-
-```julia
-trace_tensor, weight, retval = ProbProg.generate(
-    rng, constraint_tensor, f, args...;
-    constrained_addresses::Set{Address},
-)
-```
-
-Default dimension of `constraint_tensor`: `(1, total_constrained_size)`, values in `extract_addresses(constraint)` order. Default dimension of `trace_tensor`: `(1, position_size)`. Default dimension of `weight`: scalar tensor. Needs to be embedded in an `@compile` / `@jit` for compilation.
-
-### `generate_`
-
-Compile + run wrapper returning an unflattened trace. Handles `@compile` / `@jit` context, and builds the constraint tensor from a [`Constraint`](@ref). Similar to `generate`, but the trace is returned in an unflattened form.
-
-```julia
-trace, weight = ProbProg.generate_(rng, constraint, f, args...)
-```
+| Symbol | Signature | See |
+|--------|-----------|-----|
+| `sample`        | `sample(rng, dist; symbol)` &nbsp;/&nbsp; `sample(rng, f, args...; symbol, logpdf, support, bounds)` | [Sampling and distributions](@ref probprog-sampling) |
+| `untraced_call` | `untraced_call(rng, f, args...)` | [Sampling and distributions](@ref probprog-sampling) |
+| `simulate`      | `simulate(rng, f, args...) -> (trace_tensor, weight, retval)` | [Traces and constrained inference](@ref probprog-traces) |
+| `simulate_`     | `simulate_(rng, f, args...) -> (trace::Trace, weight)` | [Traces and constrained inference](@ref probprog-traces) |
+| `generate`      | `generate(rng, constraint_tensor, f, args...; constrained_addresses)` | [Traces and constrained inference](@ref probprog-traces) |
+| `generate_`     | `generate_(rng, constraint, f, args...) -> (trace::Trace, weight)` | [Traces and constrained inference](@ref probprog-traces) |
 
 ## Inference
 
-### `mh`
+| Symbol | Signature | See |
+|--------|-----------|-----|
+| `mh`          | `mh(rng, trace, weight, f, args...; selection)` | [MCMC: MH, HMC, NUTS](@ref probprog-mcmc) |
+| `mcmc`        | `mcmc(rng, original_trace, f, args...; selection, algorithm, step_size, inverse_mass_matrix, num_warmup, num_samples, ...)` &nbsp;/&nbsp; `mcmc(state::MCMCState, ...)` | [MCMC: MH, HMC, NUTS](@ref probprog-mcmc) |
+| `mcmc_logpdf` | `mcmc_logpdf(rng, logdensity_fn, initial_position, args...; algorithm, step_size, inverse_mass_matrix, ...)` &nbsp;/&nbsp; `mcmc_logpdf(state::MCMCState, ...)` | [MCMC: MH, HMC, NUTS](@ref probprog-mcmc) |
+| `run_chain`   | `run_chain(rng, logpdf_fn, initial_position, args...; num_warmup, num_samples, chunk_size, ...)` &nbsp;/&nbsp; `run_chain(state::MCMCState, ...)` | [Running and resuming chains](@ref probprog-chains) |
 
-One MH step:
-
-```julia
-new_trace, new_weight, accepted, _ = ProbProg.mh(
-    rng, trace, weight, f, args...;
-    selection::Selection,
-)
-```
-
-Selected sites regenerate from the prior. `accepted` is a scalar `Bool`
-tensor. Alias: `ProbProg.metropolis_hastings`.
-
-### `mcmc`
-
-Trace-based HMC / NUTS:
-
-```julia
-# Fresh chain
-new_trace, diagnostics, retval, state = ProbProg.mcmc(
-    rng, original_trace, f, args...;
-    selection::Selection,
-    algorithm            = :HMC,   # or :NUTS
-    inverse_mass_matrix  = nothing,
-    step_size            = nothing,
-    trajectory_length    = 2π,
-    max_tree_depth       = 10,
-    max_delta_energy     = 1000.0,
-    num_warmup           = 0,
-    num_samples          = 1,
-    thinning             = 1,
-    adapt_step_size      = true,
-    adapt_mass_matrix    = true,
-)
-
-# Resume
-new_trace, diagnostics, retval, state = ProbProg.mcmc(
-    state::MCMCState, original_trace, f, args...;
-    selection::Selection,
-    kwargs...,
-)
-```
-
-Returns:
-- `new_trace`: `(num_samples ÷ thinning, selected_position_size)`.
-- `diagnostics`: per-iteration `Bool` (scalar if
-  `num_samples ÷ thinning == 1`).
-- `retval`: model return.
-- `state`: [`MCMCState`](@ref).
-
-### `mcmc_logpdf`
-
-HMC / NUTS over a user provided log-density function. Mirrors [`mcmc`](@ref):
-
-```julia
-# Fresh chain
-samples, diagnostics, retval, state = ProbProg.mcmc_logpdf(
-    rng, logdensity_fn, initial_position, args...;
-    algorithm                 = :NUTS,
-    inverse_mass_matrix       = nothing,
-    step_size                 = nothing,
-    initial_gradient          = nothing,
-    initial_potential_energy  = nothing,
-    max_tree_depth            = 10,
-    max_delta_energy          = 1000.0,
-    num_warmup                = 0,
-    num_samples               = 1,
-    thinning                  = 1,
-    adapt_step_size           = true,
-    adapt_mass_matrix         = true,
-    trajectory_length         = 2π,
-    strong_zero               = false,
-)
-
-# Resume
-samples, diagnostics, retval, state = ProbProg.mcmc_logpdf(
-    state::MCMCState, logdensity_fn, args...; kwargs...,
-)
-```
-
-`logdensity_fn`: `(position, args...) -> scalar`. `strong_zero = true`
-treats zero paths as strong zeros, avoiding NaN gradients through inactive
-branches.
-
-### `run_chain`
-
-Chunked chain driver:
-
-```julia
-samples::Array, state::MCMCState = ProbProg.run_chain(
-    rng, logpdf_fn, initial_position, args...;
-    algorithm           = :NUTS,
-    num_warmup          = 0,
-    num_samples         = 1000,
-    chunk_size          = 100,
-    step_size           = nothing,
-    inverse_mass_matrix = nothing,
-    progress_bar        = true,
-    max_tree_depth      = 10,
-    max_delta_energy    = 1000.0,
-    adapt_step_size     = true,
-    adapt_mass_matrix   = true,
-    thinning            = 1,
-    trajectory_length   = 2π,
-)
-
-# Resume
-samples, state = ProbProg.run_chain(state::MCMCState, logpdf_fn; kwargs...)
-```
-
-`samples`: host `Array{Float64,2}`. `progress_bar=false` compiles one
-monolithic function; `true` compiles warmup and sampling kernels and
-invokes the latter chunk by chunk.
+NUTS currently requires an explicit `step_size`; the default
+`step_size = nothing` is rejected by the pass implementation
+(`find_reasonable_step_size` is not yet implemented). Pass
+`Reactant.ConcreteRNumber(0.1)` (or similar) and rely on dual averaging
+when `adapt_step_size = true`.
 
 ## State persistence
 
-### `save_state`
-
-Serialize a [`MCMCState`](@ref) to a file.
-
-```julia
-ProbProg.save_state(filename::String, state::MCMCState)
-```
-
-### `load_state`
-
-Deserialize a [`MCMCState`](@ref) from a saved state.
-
-```julia
-state::MCMCState = ProbProg.load_state(filename::String)
-```
+| Symbol | Signature | See |
+|--------|-----------|-----|
+| `save_state` | `save_state(filename::String, state::MCMCState)` | [Running and resuming chains](@ref probprog-chains) |
+| `load_state` | `load_state(filename::String) -> MCMCState` | [Running and resuming chains](@ref probprog-chains) |
 
 ## Utilities
 
-### `select`
-
-Construct a [`Selection`](@ref) from a list of addresses.
-
-```julia
-ProbProg.select(
-    ProbProg.Address(:slope),
-    ProbProg.Address(:intercept),
-)
-```
-
-### `get_choices`
-
-Return the choices of a `Trace`.
-
-### `unflatten_trace`
-
-Rebuild a dictionary-like `Trace` from a flat tensor with layout metadata.
-
-```julia
-trace = ProbProg.unflatten_trace(trace_tensor, weight, tt.entries, retval)
-```
-
-### `mcmc_summary`
-
-Per-parameter summary: mean, std, median, quantiles, `n_eff`, `r_hat`.
-Accepts a sample matrix or a [`Trace`](@ref):
-
-```julia
-ProbProg.mcmc_summary(samples; names=["β0", "β1"])
-ProbProg.mcmc_summary(trace)
-```
+| Symbol | Signature | See |
+|--------|-----------|-----|
+| `select`                       | `select(addrs::Address...) -> Selection` | [Traces and constrained inference](@ref probprog-traces) |
+| `get_choices`                  | `get_choices(trace::Trace) -> Dict{Symbol,Any}` | [Traces and constrained inference](@ref probprog-traces) |
+| `with_trace`                   | `with_trace(f, tt::TracedTrace=TracedTrace()) -> (f_result, tt)` | [Traces and constrained inference](@ref probprog-traces) |
+| `unflatten_trace`              | `unflatten_trace(trace_tensor, weight, entries, retval) -> Trace` | [Traces and constrained inference](@ref probprog-traces) |
+| `filter_entries_by_selection`  | `filter_entries_by_selection(entries, selection)` | [MCMC: MH, HMC, NUTS](@ref probprog-mcmc) |
+| `extract_addresses`            | `extract_addresses(constraint::Constraint) -> Set{Address}` | [Traces and constrained inference](@ref probprog-traces) |
+| `mcmc_summary`                 | `mcmc_summary(samples; names)` &nbsp;/&nbsp; `mcmc_summary(trace::Trace)` | [Running and resuming chains](@ref probprog-chains) |
