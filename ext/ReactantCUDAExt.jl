@@ -1022,6 +1022,71 @@ function to_bytes(x)
     end
 end
 
+function to_llvmtype(@nospecialize(mlirty::MLIR.IR.Type))
+    # Void (no predicate in the C API; compare by value)
+    if mlirty == MLIR.IR.Type(MLIR.API.mlirLLVMVoidTypeGet(MLIR.IR.context(mlirty)))
+        return LLVM.VoidType()
+    end
+
+    # Integers
+    MLIR.IR.isinteger(mlirty) && return LLVM.IntType(MLIR.IR.bitwidth(mlirty))
+
+    # Float types
+    MLIR.IR.isf16(mlirty) && return LLVM.HalfType()
+    MLIR.IR.isbf16(mlirty) && return LLVM.BFloatType()
+    MLIR.IR.isf32(mlirty) && return LLVM.FloatType()
+    MLIR.IR.isf64(mlirty) && return LLVM.DoubleType()
+    MLIR.IR.istf32(mlirty) && return LLVM.FloatType()
+
+    # Pointer
+    if MLIR.API.mlirTypeIsALLVMPointerType(mlirty)
+        addrspace = MLIR.API.mlirLLVMPointerTypeGetAddressSpace(mlirty)
+        return LLVM.PointerType(addrspace)
+    end
+
+    # Array
+    if MLIR.API.mlirTypeIsALLVMArrayType(mlirty)
+        elem = MLIR.IR.Type(MLIR.API.mlirLLVMArrayTypeGetElementType(mlirty))
+        n = MLIR.API.mlirLLVMArrayTypeGetNumElements(mlirty)
+        return LLVM.ArrayType(to_llvmtype(elem), n)
+    end
+
+    # Struct
+    if MLIR.API.mlirTypeIsALLVMStructType(mlirty)
+        packed = MLIR.API.mlirLLVMStructTypeIsPacked(mlirty)
+        nfields = MLIR.API.mlirLLVMStructTypeGetNumElementTypes(mlirty)
+        elems = LLVM.LLVMType[
+            to_llvmtype(MLIR.IR.Type(MLIR.API.mlirLLVMStructTypeGetElementType(mlirty, i)))
+            for i in 0:(nfields - 1)
+        ]
+        if !MLIR.API.mlirLLVMStructTypeIsLiteral(mlirty)
+            nameref = MLIR.API.mlirLLVMStructTypeGetIdentifier(mlirty)
+            sname = unsafe_string(nameref.data, nameref.length)
+            st = LLVM.StructType(sname)
+            isempty(elems) || LLVM.elements!(st, elems, packed)
+            return st
+        end
+        return LLVM.StructType(elems; packed)
+    end
+
+    # Function
+    if MLIR.API.mlirTypeIsALLVMFunctionType(mlirty)
+        retty = to_llvmtype(
+            MLIR.IR.Type(MLIR.API.mlirLLVMFunctionTypeGetReturnType(mlirty))
+        )
+        ninputs = MLIR.API.mlirLLVMFunctionTypeGetNumInputs(mlirty)
+        params = LLVM.LLVMType[
+            to_llvmtype(MLIR.IR.Type(MLIR.API.mlirLLVMFunctionTypeGetInput(mlirty, i))) for
+            i in 0:(ninputs - 1)
+        ]
+        return LLVM.FunctionType(
+            retty, params; vararg=MLIR.API.mlirLLVMFunctionTypeIsVarArg(mlirty)
+        )
+    end
+
+    return error("cannot convert type to llvm " * string(mlirty))
+end
+
 function Reactant.make_tracer(
     seen, @nospecialize(prev::CuTracedArray), @nospecialize(path), mode; kwargs...
 )
@@ -1118,6 +1183,12 @@ function mlir_extract_roots_from_value!(
         end
     end
 end
+
+# On 1.12+, there was a change to the calling convention where
+# an additional argument would be added for the roots, this will
+# return the number of roots in the corresponding convention, or
+# 0 if it does not apply https://github.com/JuliaLang/julia/pull/55767/files#diff-62cfb2606c6a323a7f26a3eddfa0bf2b819fa33e094561fee09daeb328e3a1e7
+const HasInlineRootsABI = VERSION ≥ v"1.12"
 
 Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     args...;
@@ -1221,7 +1292,10 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     )
 
     trueidx = 1
-    allocs = Union{Tuple{MLIR.IR.Value,MLIR.IR.Type,Type},Nothing}[]
+    allocs = Union{
+        Tuple{MLIR.IR.Value,MLIR.IR.Type,HasInlineRootsABI ? LLVM.LLVMType : Nothing},
+        Nothing,
+    }[]
 
     llvmptr = MLIR.IR.Type(MLIR.API.mlirLLVMPointerTypeGet(ctx, 0))
     i8 = MLIR.IR.Type(UInt8)
@@ -1241,7 +1315,8 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
             )
             trueidx += 1
             jltyp = Core.Typeof(a)
-            if Enzyme.Compiler.inline_roots_type(jltyp) != 0
+            lltyp = HasInlineRootsABI ? to_llvmtype(argty) : nothing
+            if HasInlineRootsABI && Enzyme.Compiler.inline_roots_type(lltyp) != 0
                 trueidx += 1
             end
             c1 = MLIR.IR.result(
@@ -1256,7 +1331,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
                 ),
                 1,
             )
-            push!(allocs, (alloc, argty, jltyp))
+            push!(allocs, (alloc, argty, lltyp))
 
             if has_cast_float_type
                 # The argument `a` has BFloat16 fields but the GPU function was
@@ -1390,17 +1465,17 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
             if arg === nothing
                 continue
             end
-            alloc, argty, jltyp = arg
+            alloc, argty, llvmtyp = arg
             argres = MLIR.IR.result(MLIR.Dialects.llvm.load(alloc; res=argty), 1)
             push!(wrapargs, argres)
-            if Enzyme.Compiler.inline_roots_type(jltyp) != 0
+            if HasInlineRootsABI && Enzyme.Compiler.inline_roots_type(llvmtyp) != 0
                 c1 = MLIR.IR.result(
                     MLIR.Dialects.llvm.mlir_constant(;
                         res=MLIR.IR.Type(Int64), value=MLIR.IR.Attribute(1)
                     ),
                     1,
                 )
-                roots_count = Enzyme.Compiler.inline_roots_type(jltyp)
+                roots_count = Enzyme.Compiler.inline_roots_type(llvmtyp)
                 jlvaluet = MLIR.IR.Type(MLIR.API.mlirLLVMPointerTypeGet(ctx, 10))
                 njlvaluet = MLIR.IR.Type(
                     MLIR.API.mlirLLVMArrayTypeGet(jlvaluet, roots_count)
