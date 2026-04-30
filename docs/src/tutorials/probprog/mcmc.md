@@ -16,10 +16,26 @@ Inner loops run on device without Julia round-trips.
 One MH step over a [`Selection`](@ref). Selected sites resample from the
 prior; the rest stay fixed.
 
-```julia
+```@example probprog_mcmc
 using Reactant
 using Reactant: ProbProg, ReactantRNG
 
+xs = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0]
+ys = [8.23, 5.87, 3.99, 2.59, 0.23, -0.66, -3.53, -6.91, -7.24, -9.90]
+
+obs                   = ProbProg.Constraint(:ys => ys)
+constrained_addresses = ProbProg.extract_addresses(obs)
+obs_flat              = Float64[]
+for addr in constrained_addresses
+    append!(obs_flat, vec(obs[addr]))
+end
+obs_tensor = Reactant.to_rarray(reshape(obs_flat, 1, :))
+
+seed = Reactant.to_rarray(UInt64[1, 5])
+rng  = ReactantRNG(seed)
+```
+
+```@example probprog_mcmc
 function model(rng, xs)
     _, slope = ProbProg.sample(
         rng, ProbProg.Normal(0.0, 2.0, (1,)); symbol=:slope,
@@ -61,7 +77,7 @@ alternating.
 
 ### Compile and run
 
-```julia
+```@example probprog_mcmc
 num_iters = Reactant.ConcreteRNumber(1000)
 
 compiled_fn, tt = ProbProg.with_trace() do
