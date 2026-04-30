@@ -25,7 +25,7 @@ Size 1 from `simulate_` / `generate_`; larger from [`mcmc`](@ref).
 
 ## `simulate_`
 
-```julia
+```@example probprog_traces
 using Reactant
 using Reactant: ProbProg, ReactantRNG
 
@@ -54,7 +54,7 @@ tensor using layout metadata collected during tracing.
 
 ### Submodels
 
-```julia
+```@example probprog_traces
 function pair(rng, μ, σ, shape)
     _, a = ProbProg.sample(rng, ProbProg.Normal(μ, σ, shape); symbol=:a)
     _, b = ProbProg.sample(rng, ProbProg.Normal(μ, σ, shape); symbol=:b)
@@ -102,7 +102,7 @@ trace = ProbProg.unflatten_trace(trace_tensor, weight, tt.entries, retval)
 
 A [`Constraint`](@ref) pins addresses to observed values:
 
-```julia
+```@example probprog_traces
 obs = ProbProg.Constraint(
     :param_a => [0.0],
     :param_b => [0.0],
@@ -143,7 +143,7 @@ automatically.
 
 An [`Address`](@ref) is a path of symbols:
 
-```julia
+```@example probprog_traces
 ProbProg.Address(:slope)
 ProbProg.Address(:outer, :inner, :x)
 ProbProg.Address([:outer, :inner, :x])
@@ -152,7 +152,7 @@ ProbProg.Address([:outer, :inner, :x])
 Equality is path equality. A [`Selection`](@ref) is an
 `OrderedSet{Address}`:
 
-```julia
+```@example probprog_traces
 ProbProg.select(
     ProbProg.Address(:slope),
     ProbProg.Address(:intercept),

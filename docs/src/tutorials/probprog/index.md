@@ -21,7 +21,7 @@ random choice named via `symbol`, [`generate`](@ref) folds observations
 into the trace and [`mcmc`](@ref) updates the unobserved addresses via
 NUTS. Generation and inference are fused into a single compiled program:
 
-```julia
+```@example probprog_index
 using Reactant, Statistics
 using Reactant: ProbProg, ReactantRNG
 
@@ -46,7 +46,7 @@ end
 xs = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0]
 ys = [8.23, 5.87, 3.99, 2.59, 0.23, -0.66, -3.53, -6.91, -7.24, -9.90]
 
-# Fold observations into a flat constraint tensor in canonical address order.
+# Fold observations into a flat constraint tensor.
 obs                   = ProbProg.Constraint(:ys => ys)
 constrained_addresses = ProbProg.extract_addresses(obs)
 obs_flat              = Float64[]
@@ -56,18 +56,15 @@ end
 obs_tensor = Reactant.to_rarray(reshape(obs_flat, 1, :))
 
 # `generate` conditions on observations; `mcmc` explores slope/intercept via NUTS.
-function program(rng, model, xs, obs_tensor, constrained_addresses)
+function program(rng, model, xs, obs_tensor, constrained_addresses,
+                 selection, step_size, inverse_mass_matrix)
     trace, _, _ = ProbProg.generate(
-        rng, obs_tensor, model, xs;
-        constrained_addresses=constrained_addresses,
+        rng, obs_tensor, model, xs; constrained_addresses,
     )
     trace, diag, _, _ = ProbProg.mcmc(
         rng, trace, model, xs;
-        selection   = ProbProg.select(
-            ProbProg.Address(:slope),
-            ProbProg.Address(:intercept),
-        ),
-        algorithm   = :NUTS,
+        selection, algorithm = :NUTS,
+        step_size, inverse_mass_matrix,
         num_warmup  = 200,
         num_samples = 500,
     )
@@ -76,17 +73,25 @@ end
 
 seed = Reactant.to_rarray(UInt64[1, 5])
 rng  = ReactantRNG(seed)
-
-compiled_fn, tt = ProbProg.with_trace() do
-    @compile optimize=:probprog program(rng, linreg, xs, obs_tensor, constrained_addresses)
-end
-
-trace_tensor, _ = compiled_fn(rng, linreg, xs, obs_tensor, constrained_addresses)
-
-selection        = ProbProg.select(
+selection           = ProbProg.select(
     ProbProg.Address(:slope),
     ProbProg.Address(:intercept),
 )
+step_size           = Reactant.ConcreteRNumber(0.1)
+inverse_mass_matrix = Reactant.ConcreteRArray([0.5 0.0; 0.0 0.5])
+
+compiled_fn, tt = ProbProg.with_trace() do
+    @compile optimize=:probprog program(
+        rng, linreg, xs, obs_tensor, constrained_addresses,
+        selection, step_size, inverse_mass_matrix,
+    )
+end
+
+trace_tensor, _ = compiled_fn(
+    rng, linreg, xs, obs_tensor, constrained_addresses,
+    selection, step_size, inverse_mass_matrix,
+)
+
 selected_entries = ProbProg.filter_entries_by_selection(tt.entries, selection)
 trace            = ProbProg.unflatten_trace(trace_tensor, 0.0, selected_entries, nothing)
 
@@ -106,7 +111,7 @@ the trace machinery. Below, a standard Normal prior on the weight vector
 is combined with a logistic-regression likelihood written in the
 numerically stable form of the binary cross-entropy:
 
-```julia
+```@example probprog_index
 # β ~ Normal(0, I);  yᵢ | β ~ Bernoulli(σ(xᵢ · β))
 # log p(β | X, y) = -½ ‖β‖²  +  Σᵢ [ yᵢ (xᵢ·β) − log(1 + exp(xᵢ·β)) ]
 function logdensity(β, X, y)
@@ -114,6 +119,23 @@ function logdensity(β, X, y)
     ll     = sum(y .* logits .- max.(logits, 0.0) .- log1p.(exp.(.-abs.(logits))))
     pr     = -0.5 * sum(β .^ 2)
     return ll + pr
+end
+
+# `mcmc_logpdf` is wrapped in a function that gets `@compile`d; this matches the
+# pattern in `test/probprog/mcmc_logpdf.jl`.
+function logreg_program(
+    rng, logdensity_fn, initial_position, X, y,
+    step_size, inverse_mass_matrix, num_warmup::Int, num_samples::Int,
+)
+    samples, _, _, state = ProbProg.mcmc_logpdf(
+        rng, logdensity_fn, initial_position, X, y;
+        algorithm         = :NUTS,
+        step_size, inverse_mass_matrix,
+        num_warmup, num_samples,
+        adapt_step_size   = true,
+        adapt_mass_matrix = true,
+    )
+    return samples, state.step_size
 end
 
 # Design matrix with an intercept column and one real-valued feature.
@@ -127,25 +149,27 @@ X_data = Float64[
 ]
 y_data = [0.0, 1.0, 1.0, 0.0, 1.0, 0.0]
 
-X                = Reactant.to_rarray(X_data)
-y                = Reactant.to_rarray(y_data)
-initial_position = Reactant.to_rarray(zeros(2))
+X                   = Reactant.to_rarray(X_data)
+y                   = Reactant.to_rarray(y_data)
+initial_position    = Reactant.to_rarray(reshape(zeros(2), 1, 2))
+step_size_lr        = Reactant.ConcreteRNumber(0.1)
+inverse_mass_matrix_lr = Reactant.ConcreteRArray([1.0 0.0; 0.0 1.0])
 
 seed_lr = Reactant.to_rarray(UInt64[2, 7])
 rng_lr  = ReactantRNG(seed_lr)
 
-samples, _, _, state = ProbProg.mcmc_logpdf(
-    rng_lr, logdensity, initial_position, X, y;
-    algorithm         = :NUTS,
-    num_warmup        = 200,
-    num_samples       = 500,
-    adapt_step_size   = true,
-    adapt_mass_matrix = true,
+compiled_lr = @compile optimize=:probprog logreg_program(
+    rng_lr, logdensity, initial_position, X, y,
+    step_size_lr, inverse_mass_matrix_lr, 200, 500,
+)
+samples, adapted_step_size = compiled_lr(
+    rng_lr, logdensity, initial_position, X, y,
+    step_size_lr, inverse_mass_matrix_lr, 200, 500,
 )
 
 (
-    posterior_mean_β    = vec(mean(Array(samples); dims=1)),  # (intercept, slope)
-    adapted_step_size   = Array(state.step_size)[],
+    posterior_mean_β  = vec(mean(Array(samples); dims=1)),  # (intercept, slope)
+    adapted_step_size = Array(adapted_step_size)[],
 )
 ```
 

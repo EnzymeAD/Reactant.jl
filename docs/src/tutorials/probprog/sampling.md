@@ -72,7 +72,7 @@ ProbProg.sample(
 
 Example:
 
-```julia
+```@example probprog_sampling
 normal(rng, μ, σ, shape) = μ .+ σ .* randn(rng, shape)
 
 function normal_logpdf(x, μ, σ, _)
@@ -136,7 +136,7 @@ Built-in distributions set `support` automatically.
 A sampler that itself calls `ProbProg.sample` yields nested traces. Inner
 sites become child addresses under the outer `symbol`:
 
-```julia
+```@example probprog_sampling
 function inner(rng, μ, σ, shape)
     _, a = ProbProg.sample(rng, ProbProg.Normal(μ, σ, shape); symbol=:a)
     _, b = ProbProg.sample(rng, ProbProg.Normal(μ, σ, shape); symbol=:b)
