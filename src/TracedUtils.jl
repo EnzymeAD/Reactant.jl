@@ -1141,7 +1141,7 @@ scalar_arg(arg) = arg isa Base.RefValue || !(arg isa AbstractArray)
 flattenarg(arg) = ReactantCore.materialize_traced_array(vec(arg))
 flattenarg(arg::Ref) = RefFillVector(arg)
 
-function elem_apply_via_while_loop(f, args::Vararg{Any,Nargs}) where {Nargs}
+function elem_apply_via_while_loop(f, args::Vararg{Any,Nargs}; kwargs...) where {Nargs}
     non_ref_args = [arg for arg in args if !scalar_arg(arg)]
     if !isempty(non_ref_args)
         @assert allequal(size.(non_ref_args)) "All args must have the same size"
@@ -1179,7 +1179,8 @@ function elem_apply_via_while_loop(f, args::Vararg{Any,Nargs}) where {Nargs}
     ReactantCore.traced_while(
         __elem_apply_loop_condition,
         __elem_apply_loop_body,
-        (ind_var, f_ref, result_ref, args_ref, limit_ref),
+        (ind_var, f_ref, result_ref, args_ref, limit_ref);
+        kwargs
     )
 
     return ReactantCore.materialize_traced_array(reshape(result, out_size))
