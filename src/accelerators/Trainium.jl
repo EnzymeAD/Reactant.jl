@@ -179,7 +179,7 @@ function download_trainium_pjrt_plugin_if_needed(dir=nothing)
     dir === nothing && (dir = get_trainium_pjrt_plugin_dir())
     @assert dir !== nothing "trainium_pjrt_plugin_dir is not set!"
 
-    trainium_pjrt_plugin_path = joinpath(dir, trainium_pjrt_plugin_name[])
+    trainium_pjrt_plugin_path = joinpath(dir, "libneuronxla", trainium_pjrt_plugin_name[])
     if isfile(trainium_pjrt_plugin_path)
         @debug "Trainium PJRT plugin already found in '$(trainium_pjrt_plugin_path)', nothing to do"
     else
