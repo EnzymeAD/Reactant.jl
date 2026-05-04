@@ -1112,7 +1112,7 @@ function set!(x, path, tostore; emptypath=false)
 end
 
 function __elem_apply_loop_condition(idx_ref, fn_ref::F, res_ref, args_ref, L_ref) where {F}
-    return @allowscalar(idx_ref[1]) < L_ref[]
+    return @allowscalar(idx_ref[]) < L_ref[]
 end
 
 struct RefFillVector{T}
@@ -1126,7 +1126,7 @@ function __elem_apply_loop_body(idx_ref, fn_ref::F, res_ref, args_ref, L_ref) wh
     args = args_ref[]
     fn = fn_ref[]
     res = res_ref[]
-    idx = @allowscalar(idx_ref[1]) + 1
+    idx = @allowscalar(idx_ref[]) + 1
 
     scalar_args = [@allowscalar(arg[idx]) for arg in args]
     @allowscalar res[idx] = fn(scalar_args...)
@@ -1170,7 +1170,7 @@ function elem_apply_via_while_loop(f, args::Vararg{Any,Nargs}; kwargs...) where 
     bc = Base.Broadcast.Broadcasted(f, Tuple(args))
     result = similar(bc, T_res)
 
-    ind_var = zeros(TracedRArray{Int}, 1)
+    ind_var = zeros(TracedRArray{Int}, ())
     f_ref = Ref(f)
     result_ref = Ref(result)
     args_ref = Ref(flat_args)
