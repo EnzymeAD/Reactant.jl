@@ -92,6 +92,17 @@ def my_check_call(args, **kwargs):
 
 subprocess.check_call = my_check_call
 
+old_check_output = subprocess.check_output
+
+def my_check_output(args, **kwargs):
+    if args[0] == 'neuronx-cc' and '--version' in args:
+        print('Intercepted neuronx-cc --version call!')
+        return b"neuronx-cc version 2.24.8799.0"
+    else:
+        return old_check_output(args, **kwargs)
+
+subprocess.check_output = my_check_output
+
 # Ensure libneuronxla and neuronx-cc are installed using pip.pyz
 try:
     import libneuronxla
