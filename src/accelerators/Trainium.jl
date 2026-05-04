@@ -49,22 +49,65 @@ function make_pjrt_client(;
     ccall((:Py_Initialize, PYTHON_LIB), Cvoid, ())
 
     plugin_dir = get_trainium_pjrt_plugin_dir()
+    python_packages_dir = joinpath(plugin_dir, "python_packages")
+    
+    # Add to system PATH for subprocess calls to neuronx-cc
+    if isdir(python_packages_dir)
+        ENV["PATH"] = python_packages_dir * ":" * get(ENV, "PATH", "")
+    end
     
     # Create a dummy libneuronxla module with expected attributes
     py_code = """
 import sys
 import os
 
-# Add path to the scratch directory where libneuronxla is extracted
-sys.path.append('$(escape_string(plugin_dir))')
+plugin_dir = '$(escape_string(plugin_dir))'
+target_dir = '$(escape_string(python_packages_dir))'
 
-import libneuronxla
-print('Imported real libneuronxla successfully')
+sys.path.append(plugin_dir)
+sys.path.append(target_dir)
 
-# Call configure_environment and hook as required by the library
-libneuronxla.configure_environment()
-libneuronxla.hook()
-print('Called configure_environment and hook')
+# Helper to install if missing using the initialized interpreter
+def ensure_package(name, url_or_name):
+    try:
+        __import__(name)
+        print(f'{name} already available')
+    except ImportError:
+        print(f'{name} not found, installing {url_or_name}...')
+        try:
+            import pip
+        except ImportError:
+            import ensurepip
+            ensurepip.bootstrap()
+            import pip
+        
+        import runpy
+        # Backup sys.argv
+        old_argv = sys.argv
+        sys.argv = ['pip', 'install', '--target', target_dir, url_or_name]
+        try:
+            runpy.run_module('pip', run_name='__main__')
+        except SystemExit as e:
+            if e.code != 0:
+                raise RuntimeError(f'pip failed with code {e.code}')
+        finally:
+            sys.argv = old_argv
+        print(f'{name} installed successfully')
+
+ensure_package('boto3', 'boto3')
+ensure_package('neuronx_cc', 'https://pip.repos.neuron.amazonaws.com/neuronx-cc/neuronx_cc-2.24.8799.0%2B6f62ff7c-cp310-cp310-linux_x86_64.whl')
+
+try:
+    import libneuronxla
+    print('Imported real libneuronxla successfully')
+    
+    # Call configure_environment and hook as required by the library
+    libneuronxla.configure_environment()
+    libneuronxla.hook()
+    print('Called configure_environment and hook')
+except ImportError as e:
+    print(f'Failed to import real libneuronxla: {e}')
+    raise e
 """
 
     ccall((:PyRun_SimpleString, PYTHON_LIB), Cint, (Cstring,), py_code)
