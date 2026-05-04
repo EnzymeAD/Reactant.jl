@@ -6,6 +6,9 @@ using Downloads: Downloads
 using p7zip_jll: p7zip
 using FileWatching: mkpidlock
 
+using Libdl
+const PYTHON_LIB = "/usr/lib/python3.10/config-3.10-x86_64-linux-gnu/libpython3.10.so"
+
 using ..Registration: register_backend
 
 const trainium_pjrt_plugin_dir = Ref{Union{Nothing,String}}(nothing)
@@ -36,6 +39,49 @@ function make_pjrt_client(;
     if allowed_devices !== nothing
         @debug "TrainiumClient doesn't support allowed_devices. Ignoring the kwarg."
     end
+
+    # Load the Python library globally
+    Libdl.dlopen(PYTHON_LIB, Libdl.RTLD_GLOBAL)
+
+    # Initialize the Python interpreter
+    ccall(:Py_Initialize, Cvoid, ())
+
+    # Create a dummy libneuronxla module with expected attributes
+    py_code = """
+    import types
+    import sys
+    import os
+    import socket
+
+    mod = types.ModuleType('libneuronxla')
+
+    # Add dummy callback
+    def dummy_callback(name, addressable_device_index, execution_count):
+        return 'inputs'
+    mod._dump_hlo_snapshot_callback = dummy_callback
+
+    # Add dummy configure function
+    def dummy_configure():
+        pass
+    mod.configure_environment = dummy_configure
+
+    # Add dummy hook function that sets NEURON_RT_ROOT_COMM_ID
+    def dummy_hook():
+        # Find a free port
+        with socket.socket() as s:
+            s.bind(('', 0))
+            port = s.getsockname()[1]
+        
+        os.environ['NEURON_RT_ROOT_COMM_ID'] = f'localhost:{port}'
+        print(f'Dummy hook called, set NEURON_RT_ROOT_COMM_ID to localhost:{port}')
+        pass
+    mod.hook = dummy_hook
+
+    sys.modules['libneuronxla'] = mod
+    print('Dummy libneuronxla module with callbacks and functional hook created and registered')
+    """
+
+    ccall(:PyRun_SimpleString, Cint, (Cstring,), py_code)
 
     return Reactant.XLA.PJRT.MakeClientUsingPluginAPI(get_trainium_pjrt_plugin_path(), "trainium", "Trainium")
 end
@@ -121,7 +167,7 @@ function download_trainium_pjrt_plugin_if_needed(dir=nothing)
                 @debug "Will install the Trainium PJRT plugin to '$(trainium_pjrt_plugin_path)'"
                 mktempdir() do tmp_dir
                     zip_file_path = joinpath(tmp_dir, "libneuronxla.zip")
-                    wheel_url = "https://pip.repos.neuron.amazonaws.com/libneuronxla/libneuronxla-2.2.8201.0%2Bf46ac1ef-py3-none-linux_x86_64.whl"
+                    wheel_url = "https://pip.repos.neuron.amazonaws.com/libneuronxla/libneuronxla-2.2.16408.0+50c26cbd-py3-none-linux_x86_64.whl"
                     @debug "Downloading Trainium PJRT plugin from '$(wheel_url)'"
                     Downloads.download(wheel_url, zip_file_path)
                     run(
