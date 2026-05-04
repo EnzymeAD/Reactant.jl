@@ -68,6 +68,10 @@ target_dir = '$(escape_string(python_packages_dir))'
 sys.path.append(plugin_dir)
 sys.path.append(target_dir)
 
+# Add bin directory to system PATH in Python environment
+bin_dir = os.path.join(target_dir, 'bin')
+os.environ['PATH'] = bin_dir + os.pathsep + os.environ.get('PATH', '')
+
 
 
 # Ensure libneuronxla and neuronx-cc are installed using pip.pyz
