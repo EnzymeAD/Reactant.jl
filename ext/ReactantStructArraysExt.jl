@@ -73,7 +73,7 @@ function Base.copyto!(
 
     bc = Broadcast.preprocess(dest, bc)
     args = (Reactant.broadcast_to_size(Base.materialize(a), size(bc)) for a in bc.args)
-    res = Reactant.TracedUtils.elem_apply_via_while_loop(bc.f, args...; track_numbers=false)
+    res = Reactant.TracedUtils.elem_apply_via_while_loop(bc.f, args...; track_numbers=Union{})
     return copyto!(dest, res)
 end
 
