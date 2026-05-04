@@ -28,6 +28,20 @@ function setup_correct_env_vars!()
     end
 end
 
+function make_pjrt_client(;
+    node_id::Integer=0,
+    num_nodes::Integer=1,
+    distributed_runtime_client=nothing,
+    allowed_devices::Union{Nothing,Vector{Int}}=nothing,
+)
+    @assert node_id == 0 "`make_pjrt_client` does not support node_id"
+    @assert num_nodes == 1 "`make_pjrt_client` does not support num_nodes > 1"
+    @assert distributed_runtime_client === nothing "`make_pjrt_client` does not support distributed_runtime_client"
+
+    if allowed_devices !== nothing
+        @debug "TrainiumClient doesn't support allowed_devices. Ignoring the kwarg."
+    end
+
     plugin_dir = get_trainium_pjrt_plugin_dir()
     
     # Create a dummy libneuronxla module with expected attributes
