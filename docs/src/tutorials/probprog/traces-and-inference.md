@@ -42,10 +42,10 @@ Reactant frontend provides convenience helpers that handle the conversion in eit
 - [`simulate_`](@ref) and [`generate_`](@ref) compile, run the model,
   and immediately convert the result back to a tree-shaped
   [`Trace`](@ref). The flat form never surfaces.
-- [`unflatten_trace`](@ref) does the explicit tensor → tree conversion,
+- `unflatten_trace` does the explicit tensor → tree conversion,
   given a trace tensor and layout metadata
   (per-site offset, shape, address-path) collected by the Impulse tracing context.
-- [`with_trace`](@ref) installs the Impulse tracing context that collects the
+- `with_trace` installs the Impulse tracing context that collects the
   layout metadata while a compiled program is being built.
   your `@compile` call in it.
 
@@ -98,17 +98,17 @@ trace.subtraces[:s].choices[:a]
 trace.subtraces[:t].choices[:b]
 ```
 
-## Low-level `simulate`
+## `simulate`
 
-Inside a larger compiled program, [`simulate`](@ref) returns MLIR-traced
-values:
+Inside a larger compiled program, the low-level form of
+[`simulate`](@ref) returns MLIR-traced values:
 
 ```julia
 trace_tensor, weight, retval = ProbProg.simulate(rng, model, μ, σ, shape)
 ```
 
 `trace_tensor` is rank-2 shape `(1, position_size)`. Wrap with
-[`with_trace`](@ref) to install the tracing context:
+`with_trace` to install the tracing context:
 
 ```julia
 code, tt = ProbProg.with_trace() do
@@ -118,7 +118,7 @@ code, tt = ProbProg.with_trace() do
 end
 ```
 
-Rebuild a `Trace` with [`unflatten_trace`](@ref):
+Rebuild a `Trace` from a tensor-based trace representation with `unflatten_trace`:
 
 ```julia
 trace = ProbProg.unflatten_trace(trace_tensor, weight, tt.entries, retval)
@@ -139,12 +139,16 @@ obs = ProbProg.Constraint(
 
 Nested addresses: `Constraint(:outer => :inner => value)`.
 
+### `generate_`
+
 [`generate_`](@ref) returns a trace whose `weight` is the log importance
 weight:
 
 ```julia
 trace, weight = ProbProg.generate_(rng, obs, model, xs)
 ```
+
+### `generate`
 
 For embedding inside a compiled function, flatten manually and call
 [`generate`](@ref):
@@ -167,6 +171,8 @@ automatically.
 
 ## Addresses
 
+### `Address`
+
 An [`Address`](@ref) is a path of symbols:
 
 ```@example probprog_traces
@@ -175,8 +181,12 @@ ProbProg.Address(:outer, :inner, :x)
 ProbProg.Address([:outer, :inner, :x])
 ```
 
-Equality is path equality. A [`Selection`](@ref) is an
-`OrderedSet{Address}`:
+Equality is path equality.
+
+### `select`
+
+A [`Selection`](@ref) is an `OrderedSet{Address}` built with
+[`select`](@ref):
 
 ```@example probprog_traces
 ProbProg.select(

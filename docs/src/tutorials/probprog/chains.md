@@ -17,7 +17,10 @@ hang-up, or a resumable inference session.
     [`mcmc`](@ref) with an appropriate `num_samples` and unflatten the
     resulting tensor yourself (see [the MCMC tutorial](@ref probprog-mcmc)).
 
-## Driving a chain with `run_chain`
+## `run_chain`
+
+Drives a chain in fixed-size chunks, yielding intermediate `MCMCState`s
+for checkpointing.
 
 ```julia
 using Reactant
@@ -60,11 +63,11 @@ step size and running acceptance rate. For production runs where you want
 a single fused kernel and no Julia-level printing, set `progress_bar =
 false`; the driver then compiles one monolithic function.
 
-## `MCMCState`: the resume token
+## `MCMCState`
 
-Every inference entry point returns an [`MCMCState`](@ref). It packs
-everything needed to continue sampling from exactly where the previous call
-left off:
+Every inference entry point returns an [`MCMCState`](@ref): sampler states need to resume inference.
+It packs everything needed from exactly where
+the previous call left off:
 
 ```julia
 state.position           # last accepted position (1 × d)
@@ -126,7 +129,15 @@ arrays, so it is cross-session but version-sensitive to Reactant itself.
 For long-term archival, save the raw `position`, `inverse_mass_matrix`,
 `step_size`, and `rng` fields yourself.
 
-## Summaries with `mcmc_summary`
+### `save_state`
+
+Serialises an `MCMCState` to disk via Julia's `Serialization` module.
+
+### `load_state`
+
+Reloads an `MCMCState` previously written with `save_state`.
+
+## `mcmc_summary`
 
 [`mcmc_summary`](@ref) takes either a sample matrix or a [`Trace`](@ref) and
 produces a per-parameter summary table: mean, std, median, 5%/95% quantiles,
@@ -141,7 +152,7 @@ ProbProg.mcmc_summary(samples)
 ProbProg.mcmc_summary(samples; names = ["β0", "β1", "σ"])
 ```
 
-From a `Trace` produced by [`mcmc`](@ref) + [`unflatten_trace`](@ref):
+From a `Trace` produced by [`mcmc`](@ref) + `unflatten_trace`:
 
 ```julia
 ProbProg.mcmc_summary(trace)

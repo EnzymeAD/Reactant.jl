@@ -117,14 +117,14 @@ trace, diagnostics, _, state = ProbProg.mcmc(
 )
 ```
 
-### Selection and position vector
+### `Selection`
 
-Only selected sites enter the position vector; others stay at their
-initial-trace values. Output `trace` has shape
+A `Selection` names the sites an inference program updates. Only selected sites
+enter the position vector; others stay at their initial-trace values. Output `trace` has shape
 `(num_samples ÷ thinning, selected_dim)`.
 
-Rebuild a tree `Trace` with [`filter_entries_by_selection`](@ref) and
-[`unflatten_trace`](@ref):
+Rebuild a tree `Trace` with `filter_entries_by_selection` and
+`unflatten_trace`:
 
 ```julia
 selected_entries = ProbProg.filter_entries_by_selection(tt.entries, selection)
