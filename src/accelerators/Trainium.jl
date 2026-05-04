@@ -58,45 +58,13 @@ import os
 # Add path to the scratch directory where libneuronxla is extracted
 sys.path.append('$(escape_string(plugin_dir))')
 
-try:
-    import libneuronxla
-    print('Imported real libneuronxla successfully')
-    
-    # Call configure_environment and hook as required by the library
-    libneuronxla.configure_environment()
-    libneuronxla.hook()
-    print('Called configure_environment and hook')
-except ImportError as e:
-    print(f'Failed to import real libneuronxla: {e}. Falling back to dummy module.')
-    import types
-    import socket
-    
-    mod = types.ModuleType('libneuronxla')
-    
-    def dummy_callback(name, addressable_device_index, execution_count):
-        return 'inputs'
-    mod._dump_hlo_snapshot_callback = dummy_callback
-    
-    def dummy_configure():
-        pass
-    mod.configure_environment = dummy_configure
-    
-    def dummy_hook():
-        with socket.socket() as s:
-            s.bind(('', 0))
-            port = s.getsockname()[1]
-        os.environ['NEURON_RT_ROOT_COMM_ID'] = f'localhost:{port}'
-        print(f'Dummy hook called, set NEURON_RT_ROOT_COMM_ID to localhost:{port}')
-        pass
-    mod.hook = dummy_hook
-    
-    def dummy_neuronx_cc(code, code_format, platform_version, file_prefix):
-        print('Dummy neuronx_cc called')
-        return 0, b''
-    mod.neuronx_cc = dummy_neuronx_cc
-    
-    sys.modules['libneuronxla'] = mod
-    print('Dummy libneuronxla module with callbacks, hook, and neuronx_cc created and registered')
+import libneuronxla
+print('Imported real libneuronxla successfully')
+
+# Call configure_environment and hook as required by the library
+libneuronxla.configure_environment()
+libneuronxla.hook()
+print('Called configure_environment and hook')
 """
 
     ccall((:PyRun_SimpleString, PYTHON_LIB), Cint, (Cstring,), py_code)
