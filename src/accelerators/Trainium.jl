@@ -113,6 +113,9 @@ except ImportError:
     finally:
         sys.argv = old_argv
     
+    import importlib
+    importlib.invalidate_caches()
+    
     import libneuronxla
     print('libneuronxla installed successfully')
 
