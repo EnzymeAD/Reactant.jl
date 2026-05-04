@@ -270,6 +270,10 @@ function Broadcast.BroadcastStyle(::Type{<:TracedRNumber})
     return AbstractReactantArrayStyle{0}()
 end
 
+function Base.zeros(::Type{T}, dims::NTuple{N, Int}) where {T<:TracedRArray, N}
+    return (@opcall fill(zero(unwrapped_eltype(T)), dims))::TracedRArray{unwrapped_eltype(T),N}
+end
+
 function Base.similar(
     ::Broadcasted{AbstractReactantArrayStyle{N}}, ::Type{T}, dims
 ) where {T<:Reactant.ReactantPrimitive,N}
