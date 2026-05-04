@@ -3612,7 +3612,7 @@ function standardize_start_indices(
     operand::TracedRArray{T,N}, update, start_indices::Vector
 ) where {T,N}
     @assert length(start_indices) == N
-    return [
+    return MLIR.IR.Value[
         standardize_start_index(
             size(operand, i),
             update === nothing ? nothing : size(update, i),
