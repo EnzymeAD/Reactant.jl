@@ -42,6 +42,12 @@ function make_pjrt_client(;
         @debug "TrainiumClient doesn't support allowed_devices. Ignoring the kwarg."
     end
 
+    # Load the Python library globally
+    Libdl.dlopen(PYTHON_LIB, Libdl.RTLD_GLOBAL)
+
+    # Initialize the Python interpreter
+    ccall((:Py_Initialize, PYTHON_LIB), Cvoid, ())
+
     plugin_dir = get_trainium_pjrt_plugin_dir()
     
     # Create a dummy libneuronxla module with expected attributes
@@ -93,7 +99,7 @@ except ImportError as e:
     print('Dummy libneuronxla module with callbacks, hook, and neuronx_cc created and registered')
 """
 
-    ccall(:PyRun_SimpleString, Cint, (Cstring,), py_code)
+    ccall((:PyRun_SimpleString, PYTHON_LIB), Cint, (Cstring,), py_code)
 
     return Reactant.XLA.PJRT.MakeClientUsingPluginAPI(get_trainium_pjrt_plugin_path(), "trainium", "Trainium")
 end
