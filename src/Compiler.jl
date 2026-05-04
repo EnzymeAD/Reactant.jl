@@ -1278,7 +1278,7 @@ function compile_mlir!(
     # checking whether the user set an explicit list of passes, or chose
     # `raise=true` to use the default passes.
     raise = compile_options.raise
-    if backend == "tpu" && raise isa Bool
+    if (backend == "tpu" || backend == "neuron" || backend == "trainium") && raise isa Bool
         raise = true
     end
     is_raising = raise isa String || raise
@@ -1329,9 +1329,9 @@ function compile_mlir!(
 
     toolkit = XLA.CUDA_DATA_DIR[]
 
-    if backend == "cpu" || backend == "tpu"
+    if backend == "cpu" || backend == "tpu" || backend == "neuron" || backend == "trainium"
         kern = "lower-kernel{backend=cpu},canonicalize"
-        if backend == "tpu"
+        if backend == "tpu" || backend == "neuron" || backend == "trainium"
             jit = "lower-jit{openmp=$(OpenMP[]) backend=cpu},symbol-dce,strip-debuginfo"
         else
             jit = "lower-jit{openmp=$(OpenMP[]) backend=cpu},symbol-dce"
@@ -2178,8 +2178,8 @@ function compile_mlir!(
         end
     end
 
-    # drop certain operations from the module if using TPU backend
-    if backend == "tpu"
+    # drop certain operations from the module if using TPU or Trainium backend
+    if backend == "tpu" || backend == "neuron" || backend == "trainium"
         for op in collect(MLIR.IR.body(mod))
             if MLIR.IR.dialect(op) == :llvm
                 MLIR.IR.dispose(op)
