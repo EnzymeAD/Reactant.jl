@@ -52,20 +52,9 @@ function make_pjrt_client(;
     python_packages_dir = joinpath(plugin_dir, "python_packages")
     
     # Add to system PATH for subprocess calls to neuronx-cc
-    if isdir(python_packages_dir)
-        ENV["PATH"] = python_packages_dir * ":" * get(ENV, "PATH", "")
-    end
-
-    # Create wrapper script for neuronx-cc if it doesn't exist
-    wrapper_path = joinpath(python_packages_dir, "neuronx-cc")
-    if !isfile(wrapper_path)
-        mkpath(dirname(wrapper_path))
-        open(wrapper_path, "w") do io
-            println(io, "#!/bin/bash")
-            println(io, "export PYTHONPATH=\"$(escape_string(python_packages_dir)):\$PYTHONPATH\"")
-            println(io, "python3 -m neuronxcc \"\$@\"")
-        end
-        chmod(wrapper_path, 0o755)
+    bin_dir = joinpath(python_packages_dir, "bin")
+    if isdir(bin_dir)
+        ENV["PATH"] = bin_dir * ":" * get(ENV, "PATH", "")
     end
     
     # Create a dummy libneuronxla module with expected attributes
