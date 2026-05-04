@@ -7,6 +7,7 @@ using p7zip_jll: p7zip
 using FileWatching: mkpidlock
 
 using Libdl
+const TRAINIUM_WHEEL = "libneuronxla-2.2.16408.0+50c26cbd-py3-none-linux_x86_64.whl"
 const PYTHON_LIB = "/usr/lib/python3.10/config-3.10-x86_64-linux-gnu/libpython3.10.so"
 
 using ..Registration: register_backend
@@ -167,7 +168,7 @@ function download_trainium_pjrt_plugin_if_needed(dir=nothing)
                 @debug "Will install the Trainium PJRT plugin to '$(trainium_pjrt_plugin_path)'"
                 mktempdir() do tmp_dir
                     zip_file_path = joinpath(tmp_dir, "libneuronxla.zip")
-                    wheel_url = "https://pip.repos.neuron.amazonaws.com/libneuronxla/libneuronxla-2.2.16408.0+50c26cbd-py3-none-linux_x86_64.whl"
+                    wheel_url = "https://pip.repos.neuron.amazonaws.com/libneuronxla/$(TRAINIUM_WHEEL)"
                     @debug "Downloading Trainium PJRT plugin from '$(wheel_url)'"
                     Downloads.download(wheel_url, zip_file_path)
                     run(
