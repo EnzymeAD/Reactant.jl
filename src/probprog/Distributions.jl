@@ -49,10 +49,8 @@ function _normal_sampler(rng, μ, σ, shape)
 end
 
 function _normal_logpdf(x, μ, σ, _)
-    n = length(x)
-    log_sigma = sum(log.(σ))
-    diff = x .- μ
-    return -n * log_sigma - n / 2 * log(2π) - sum(diff .* diff ./ (2 .* σ .* σ))
+    z = (x .- μ) ./ σ
+    return sum(.-(abs2.(z) .+ log(2π)) ./ 2 .- log.(σ))
 end
 
 sampler(::Type{<:Normal}) = _normal_sampler
@@ -85,9 +83,7 @@ function _exponential_sampler(rng, λ, shape)
 end
 
 function _exponential_logpdf(x, λ, _)
-    n = length(x)
-    log_lambda = sum(log.(λ))
-    return n * log_lambda - sum(λ .* x)
+    return sum(log.(λ) .- λ .* x)
 end
 
 sampler(::Type{<:Exponential}) = _exponential_sampler
@@ -121,12 +117,9 @@ function _lognormal_sampler(rng, μ, σ, shape)
 end
 
 function _lognormal_logpdf(x, μ, σ, _)
-    n = length(x)
     log_x = log.(x)
-    log_sigma = sum(log.(σ))
-    diff = log_x .- μ
-    return -sum(log_x) - n * log_sigma - n / 2 * log(2π) -
-           sum(diff .* diff ./ (2 .* σ .* σ))
+    z = (log_x .- μ) ./ σ
+    return sum(.-(abs2.(z) .+ log(2π)) ./ 2 .- log.(σ) .- log_x)
 end
 
 sampler(::Type{<:LogNormal}) = _lognormal_sampler

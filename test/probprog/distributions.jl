@@ -254,6 +254,71 @@ include(joinpath(@__DIR__, "common.jl"))
         end
     end
 
+    @testset "Normal(0, vector σ) [heteroscedastic]" begin
+        logpdf_fn = ProbProg.logpdf_fn(ProbProg.Normal)
+
+        x = ConcreteRArray([0.5, 1.0, -0.3, 2.1, -1.5])
+        μ = ConcreteRNumber(0.0)
+        σ = ConcreteRArray([0.5, 1.0, 2.0, 0.3, 1.5])
+
+        lp = @jit logpdf_fn(x, μ, σ, nothing)
+        reactant_lp = Reactant.to_number(lp)
+
+        if check_numpyro_available()
+            jnp = pyimport("jax.numpy")
+            dist = pyimport("numpyro.distributions")
+
+            x_jnp = jnp.array(pylist([0.5, 1.0, -0.3, 2.1, -1.5]))
+            σ_jnp = jnp.array(pylist([0.5, 1.0, 2.0, 0.3, 1.5]))
+            d = dist.Normal(0.0, σ_jnp)
+            numpyro_lp = pyconvert(Float64, d.log_prob(x_jnp).sum().item())
+            @test reactant_lp ≈ numpyro_lp atol = 1e-10
+        end
+    end
+
+    @testset "LogNormal(0, vector σ) [heteroscedastic]" begin
+        logpdf_fn = ProbProg.logpdf_fn(ProbProg.LogNormal)
+
+        x = ConcreteRArray([0.5, 1.0, 1.5, 2.0, 3.0])
+        μ = ConcreteRNumber(0.0)
+        σ = ConcreteRArray([0.5, 1.0, 2.0, 0.3, 1.5])
+
+        lp = @jit logpdf_fn(x, μ, σ, nothing)
+        reactant_lp = Reactant.to_number(lp)
+
+        if check_numpyro_available()
+            jnp = pyimport("jax.numpy")
+            dist = pyimport("numpyro.distributions")
+
+            x_jnp = jnp.array(pylist([0.5, 1.0, 1.5, 2.0, 3.0]))
+            σ_jnp = jnp.array(pylist([0.5, 1.0, 2.0, 0.3, 1.5]))
+            d = dist.LogNormal(0.0, σ_jnp)
+            numpyro_lp = pyconvert(Float64, d.log_prob(x_jnp).sum().item())
+            @test reactant_lp ≈ numpyro_lp atol = 1e-10
+        end
+    end
+
+    @testset "Exponential(vector λ) [heteroscedastic]" begin
+        logpdf_fn = ProbProg.logpdf_fn(ProbProg.Exponential)
+
+        x = ConcreteRArray([0.5, 1.0, 2.0, 0.1, 3.0])
+        λ = ConcreteRArray([2.0, 0.5, 1.0, 3.0, 0.25])
+
+        lp = @jit logpdf_fn(x, λ, nothing)
+        reactant_lp = Reactant.to_number(lp)
+
+        if check_numpyro_available()
+            jnp = pyimport("jax.numpy")
+            dist = pyimport("numpyro.distributions")
+
+            x_jnp = jnp.array(pylist([0.5, 1.0, 2.0, 0.1, 3.0]))
+            λ_jnp = jnp.array(pylist([2.0, 0.5, 1.0, 3.0, 0.25]))
+            d = dist.Exponential(; rate=λ_jnp)
+            numpyro_lp = pyconvert(Float64, d.log_prob(x_jnp).sum().item())
+            @test reactant_lp ≈ numpyro_lp atol = 1e-10
+        end
+    end
+
     @testset "Bernoulli(logits=0.5)" begin
         sample_fn = ProbProg.sampler(ProbProg.Bernoulli)
         logpdf_fn = ProbProg.logpdf_fn(ProbProg.Bernoulli)
