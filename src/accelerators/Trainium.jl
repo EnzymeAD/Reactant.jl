@@ -60,6 +60,7 @@ function make_pjrt_client(;
     py_code = """
 import sys
 import os
+import runpy
 
 plugin_dir = '$(escape_string(plugin_dir))'
 target_dir = '$(escape_string(python_packages_dir))'
@@ -67,35 +68,26 @@ target_dir = '$(escape_string(python_packages_dir))'
 sys.path.append(plugin_dir)
 sys.path.append(target_dir)
 
-# Helper to install if missing using the initialized interpreter
-def ensure_package(name, url_or_name):
-    try:
-        __import__(name)
-        print(f'{name} already available')
-    except ImportError:
-        print(f'{name} not found, installing {url_or_name}...')
-        try:
-            import pip
-        except ImportError:
-            import ensurepip
-            ensurepip.bootstrap()
-            import pip
+# Ensure boto3 is installed using pip.pyz
+try:
+    import boto3
+    print('boto3 already available')
+except ImportError:
+    print('boto3 not found, installing using pip.pyz...')
+    pip_pyz_path = os.path.join(plugin_dir, 'pip.pyz')
+    if not os.path.exists(pip_pyz_path):
+        raise FileNotFoundError(f"pip.pyz not found at {pip_pyz_path}")
         
-        import runpy
-        # Backup sys.argv
-        old_argv = sys.argv
-        sys.argv = ['pip', 'install', '--target', target_dir, url_or_name]
-        try:
-            runpy.run_module('pip', run_name='__main__')
-        except SystemExit as e:
-            if e.code != 0:
-                raise RuntimeError(f'pip failed with code {e.code}')
-        finally:
-            sys.argv = old_argv
-        print(f'{name} installed successfully')
-
-ensure_package('boto3', 'boto3')
-ensure_package('neuronx_cc', 'https://pip.repos.neuron.amazonaws.com/neuronx-cc/neuronx_cc-2.24.8799.0%2B6f62ff7c-cp310-cp310-linux_x86_64.whl')
+    old_argv = sys.argv
+    sys.argv = ['pip', 'install', '--target', target_dir, 'boto3']
+    try:
+        runpy.run_path(pip_pyz_path, run_name='__main__')
+    except SystemExit as e:
+        if e.code != 0:
+            raise RuntimeError(f'pip failed with code {e.code}')
+    finally:
+        sys.argv = old_argv
+    print('boto3 installed successfully')
 
 try:
     import libneuronxla
@@ -215,6 +207,28 @@ function download_trainium_pjrt_plugin_if_needed(dir=nothing)
                     )
                     # Move the whole libneuronxla directory to dir
                     mv(joinpath(tmp_dir, "libneuronxla"), joinpath(dir, "libneuronxla"); force=true)
+                    
+                    # Download and unzip neuronx-cc wheel
+                    neuronx_cc_url = "https://pip.repos.neuron.amazonaws.com/neuronx-cc/neuronx_cc-2.24.8799.0%2B6f62ff7c-cp310-cp310-linux_x86_64.whl"
+                    neuronx_cc_zip = joinpath(tmp_dir, "neuronx_cc.zip")
+                    @debug "Downloading neuronx-cc from '$(neuronx_cc_url)'"
+                    Downloads.download(neuronx_cc_url, neuronx_cc_zip)
+                    run(
+                        pipeline(
+                            `$(p7zip()) x -tzip -o$(tmp_dir)/neuronx_cc -- $(neuronx_cc_zip)`, devnull
+                        ),
+                    )
+                    # Move content to dir/python_packages
+                    python_packages_dir = joinpath(dir, "python_packages")
+                    mkpath(python_packages_dir)
+                    for f in readdir(joinpath(tmp_dir, "neuronx_cc"); join=true)
+                        mv(f, joinpath(python_packages_dir, basename(f)); force=true)
+                    end
+                    
+                    # Download pip.pyz
+                    pip_url = "https://bootstrap.pypa.io/pip/pip.pyz"
+                    @debug "Downloading pip.pyz from '$(pip_url)'"
+                    Downloads.download(pip_url, joinpath(dir, "pip.pyz"))
                 end
             end
         end
