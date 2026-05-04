@@ -1,6 +1,6 @@
 # [Sampling and distributions](@id probprog-sampling)
 
-A random choice uses [`ProbProg.sample`](@ref). Two call forms: a built-in
+A random choice uses [`sample`](@ref). Two call forms: a built-in
 [`Distribution`](@ref), or a user sampler function with optional log-density.
 
 ## Built-in distribution
@@ -172,5 +172,46 @@ Lowered form:
 ```julia
 @code_hlo optimize=:probprog ProbProg.untraced_call(rng, model, μ, σ, (10,))
 ```
+
+## Symbol reference
+
+### `sample`
+
+Draw a value from a distribution at a named address.
+
+### `untraced_call`
+
+Call a probabilistic function without recording its choices in the parent
+trace.
+
+### `Distribution`
+
+Abstract supertype for built-in distributions. A subtype defines a
+constructor and a `support`, which together determine how `sample`
+interacts with the site at inference time.
+
+### `Normal`
+
+Gaussian distribution. `Normal(μ, σ, shape)`; scalar or array parameters broadcast
+against `shape`. `support = :real`.
+
+### `Exponential`
+
+Exponential rate distribution. `Exponential(λ, shape)`. `support = :positive`.
+
+### `LogNormal`
+
+Log-normal distribution. `LogNormal(μ, σ, shape)`. `support = :positive`.
+
+### `Bernoulli`
+
+Bernoulli on logit scale. `Bernoulli(logits, shape)`. `support = :real`
+(logits are unconstrained).
+
+!!! todo "Distributions.jl tracing support"
+    Tracing support for
+    [Distributions.jl](https://github.com/JuliaStats/Distributions.jl) (independent of Impulse) is
+    planned but not yet implemented. Once landed, distributions from 
+    `Distributions.Distribution` (e.g., `Distributions.Normal(0.0, 1.0)`, `Distributions.MvNormal(μ, Σ)`) will be usable as the distribution argument to `sample` directly.
 
 Next: [traces and constrained inference](@ref probprog-traces).
