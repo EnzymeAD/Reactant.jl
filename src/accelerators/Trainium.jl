@@ -55,6 +55,18 @@ function make_pjrt_client(;
     if isdir(python_packages_dir)
         ENV["PATH"] = python_packages_dir * ":" * get(ENV, "PATH", "")
     end
+
+    # Create wrapper script for neuronx-cc if it doesn't exist
+    wrapper_path = joinpath(python_packages_dir, "neuronx-cc")
+    if !isfile(wrapper_path)
+        mkpath(dirname(wrapper_path))
+        open(wrapper_path, "w") do io
+            println(io, "#!/bin/bash")
+            println(io, "export PYTHONPATH=\"$(escape_string(python_packages_dir)):\$PYTHONPATH\"")
+            println(io, "python3 -m neuronxcc \"\$@\"")
+        end
+        chmod(wrapper_path, 0o755)
+    end
     
     # Create a dummy libneuronxla module with expected attributes
     py_code = """
@@ -69,39 +81,7 @@ target_dir = '$(escape_string(python_packages_dir))'
 sys.path.append(plugin_dir)
 sys.path.append(target_dir)
 
-# Monkey-patch subprocess to intercept neuronx-cc calls
-old_check_call = subprocess.check_call
 
-def my_check_call(args, **kwargs):
-    if args[0] == 'neuronx-cc':
-        print('Intercepted neuronx-cc call!')
-        old_argv = sys.argv
-        sys.argv = args
-        try:
-            # Run neuronxcc module instead of binary
-            runpy.run_module('neuronxcc', run_name='__main__')
-            return 0
-        except SystemExit as e:
-            if e.code != 0:
-                raise subprocess.CalledProcessError(e.code, args)
-            return 0
-        finally:
-            sys.argv = old_argv
-    else:
-        return old_check_call(args, **kwargs)
-
-subprocess.check_call = my_check_call
-
-old_check_output = subprocess.check_output
-
-def my_check_output(args, **kwargs):
-    if args[0] == 'neuronx-cc' and '--version' in args:
-        print('Intercepted neuronx-cc --version call!')
-        return b"neuronx-cc version 2.24.8799.0"
-    else:
-        return old_check_output(args, **kwargs)
-
-subprocess.check_output = my_check_output
 
 # Ensure libneuronxla and neuronx-cc are installed using pip.pyz
 try:
