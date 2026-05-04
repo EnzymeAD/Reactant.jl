@@ -53,9 +53,7 @@ function make_pjrt_client(;
     
     # Add to system PATH for subprocess calls to neuronx-cc
     bin_dir = joinpath(python_packages_dir, "bin")
-    if isdir(bin_dir)
-        ENV["PATH"] = bin_dir * ":" * get(ENV, "PATH", "")
-    end
+    ENV["PATH"] = bin_dir * ":" * get(ENV, "PATH", "")
     
     # Create a dummy libneuronxla module with expected attributes
     py_code = """
