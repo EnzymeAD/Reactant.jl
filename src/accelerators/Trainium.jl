@@ -197,6 +197,5 @@ function download_trainium_pjrt_plugin_if_needed(dir=nothing)
         end
     end
 end
-end
 
 end # module Trainium
