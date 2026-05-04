@@ -72,6 +72,9 @@ sys.path.append(target_dir)
 bin_dir = os.path.join(target_dir, 'bin')
 os.environ['PATH'] = bin_dir + os.pathsep + os.environ.get('PATH', '')
 
+# Add target_dir to PYTHONPATH for subprocesses
+os.environ['PYTHONPATH'] = target_dir + os.pathsep + os.environ.get('PYTHONPATH', '')
+
 
 
 # Ensure libneuronxla and neuronx-cc are installed using pip.pyz
