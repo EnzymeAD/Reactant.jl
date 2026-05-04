@@ -48,6 +48,7 @@ function _normal_sampler(rng, μ, σ, shape)
     return μ .+ σ .* randn(rng, shape)
 end
 
+# Reference: https://github.com/probcomp/Gen.jl/blob/027dbc6e71cec3e281b335292c57ad776a8bf9db/src/modeling_library/distributions/normal.jl#L61-L69
 function _normal_logpdf(x, μ, σ, _)
     z = (x .- μ) ./ σ
     return sum(.-(abs2.(z) .+ log(2π)) ./ 2 .- log.(σ))
