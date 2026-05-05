@@ -73,12 +73,7 @@ target_dir = '$(escape_string(python_packages_dir))'
 sys.path.append(plugin_dir)
 sys.path.append(target_dir)
 
-# Import hlo_pb2 before overriding libneuronxla
-try:
-    from libneuronxla.proto import hlo_pb2
-    print('Successfully imported hlo_pb2')
-except Exception as e:
-    print(f'Failed to import hlo_pb2: {e}')
+
 
 # Add bin directory to system PATH in Python environment
 bin_dir = os.path.join(target_dir, 'bin')
@@ -111,6 +106,13 @@ except ImportError:
     importlib.invalidate_caches()
     
     print('Dependencies installed successfully')
+
+# Import hlo_pb2 after installing dependencies
+try:
+    from libneuronxla.proto import hlo_pb2
+    print('Successfully imported hlo_pb2')
+except Exception as e:
+    print(f'Failed to import hlo_pb2: {e}')
 
 class GlobalCounter:
     _counter = 0
