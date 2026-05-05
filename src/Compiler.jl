@@ -1417,7 +1417,7 @@ function compile_mlir!(
     lower_enzymexla_mpi_pass = if backend == "cpu"
         "lower-enzymexla-mpi{backend=$backend}"
     else
-        Reactant.default_comm_handle = default_nccl_comm_handle()
+        default_comm_handle = Reactant.default_nccl_comm_handle()
         "lower-enzymexla-mpi{backend=$backend comm=$default_comm_handle}"
     end
     lower_enzymexla_passes = join(
