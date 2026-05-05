@@ -92,6 +92,11 @@ end
         @test res[1] isa ConcreteRNumber{Float32}
         @test res[2] isa ConcreteRNumber{Float32}
     end
+    @testset for fn in (cispi, cis)
+        res = @jit fn(x_ra)
+        @test res ≈ fn(x)
+        @test res isa ConcreteRNumber{Complex{Float32}}
+    end
 
     @testset "sinc" begin
         x = Reactant.TestUtils.construct_test_array(Float64, 4, 16)[:, 1:7]
@@ -120,13 +125,6 @@ end
 
 
     end
-  
-    @testset for fn in (cispi, cis)
-        res = @jit fn(x_ra)
-        @test res ≈ fn(x)
-        @test res isa ConcreteRNumber{Complex{Float32}}
-    end
-
 end
 
 @testset "isfinite" begin
