@@ -319,6 +319,22 @@ function download_trainium_pjrt_plugin_if_needed(dir=nothing)
                     for f in readdir(joinpath(tmp_dir, "neuronx_cc"); join=true)
                         mv(f, joinpath(python_packages_dir, basename(f)); force=true)
                     end
+                    
+                    # Create bin/neuronx-cc script manually since we bypassed pip
+                    bin_dir = joinpath(python_packages_dir, "bin")
+                    mkpath(bin_dir)
+                    script_path = joinpath(bin_dir, "neuronx-cc")
+                    open(script_path, "w") do f
+                        write(f, """
+#!/usr/bin/python3
+import sys
+from neuronxcc.driver.CommandDriver import main
+if __name__ == '__main__':
+    sys.argv[0] = sys.argv[0].removesuffix('.exe')
+    sys.exit(main())
+""")
+                    end
+                    chmod(script_path, 0o755)
                 end
             end
         end
