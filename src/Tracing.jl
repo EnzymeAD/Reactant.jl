@@ -460,6 +460,24 @@ Base.@nospecializeinfer function traced_type_inner(
 end
 
 Base.@nospecializeinfer function traced_type_inner(
+    A::Type{AbstractArray{<:T,N}},
+    seen,
+    mode::TraceMode,
+    @nospecialize(track_numbers::Type),
+    @nospecialize(ndevices),
+    @nospecialize(runtime)
+) where {T,N}
+    if mode == ConcreteToTraced
+        return AbstractArray{
+            <:traced_type_inner(T, seen, mode, track_numbers, ndevices, runtime),
+            ndims(A),
+        }
+    else
+        return A
+    end
+end
+
+Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(A::Type{<:Array}),
     seen,
     mode::TraceMode,

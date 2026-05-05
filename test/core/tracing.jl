@@ -103,6 +103,7 @@ end
         ),
         (AbstractVector, AbstractVector, AbstractVector),
         (AbstractMatrix, AbstractMatrix, AbstractMatrix),
+        (AbstractVector{<:Integer}, AbstractVector{<:Integer}, AbstractVector{<:Integer}),
 
         # BitArray types
         (BitArray, BitArray, BitArray),
