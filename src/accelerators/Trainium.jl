@@ -59,7 +59,7 @@ function make_pjrt_client(;
     py_code = """
 import sys
 import os
-import runpy
+import types
 import subprocess
 
 plugin_dir = '$(escape_string(plugin_dir))'
@@ -71,43 +71,57 @@ sys.path.append(target_dir)
 # Add bin directory to system PATH in Python environment
 bin_dir = os.path.join(target_dir, 'bin')
 os.environ['PATH'] = bin_dir + os.pathsep + os.environ.get('PATH', '')
-
-# Add target_dir to PYTHONPATH for subprocesses
 os.environ['PYTHONPATH'] = target_dir + os.pathsep + os.environ.get('PYTHONPATH', '')
 
+# Create dummy libneuronxla module
+mod = types.ModuleType('libneuronxla')
 
+def dummy_configure():
+    pass
+mod.configure_environment = dummy_configure
 
-# Ensure libneuronxla and neuronx-cc are installed using pip.pyz
-try:
-    import libneuronxla
-    print('libneuronxla already available')
-except ImportError:
-    print('libneuronxla not found, installing using pip.pyz...')
-    pip_pyz_path = os.path.join(plugin_dir, 'pip.pyz')
-    if not os.path.exists(pip_pyz_path):
-        raise FileNotFoundError(f"pip.pyz not found at {pip_pyz_path}")
+def dummy_hook():
+    pass
+mod.hook = dummy_hook
+
+def dummy_callback(name, addressable_device_index, execution_count):
+    return 'inputs'
+mod._dump_hlo_snapshot_callback = dummy_callback
+
+def my_neuronx_cc(code, code_format, platform_version, file_prefix):
+    print(f'My neuronx_cc called with prefix {file_prefix}')
+    hlo_path = file_prefix + ".hlo"
+    neff_path = file_prefix + ".neff"
+    
+    with open(hlo_path, 'wb') as fp:
+        fp.write(code)
         
-    old_argv = sys.argv
-    # Install libneuronxla and neuronx-cc from AWS Neuron repo
-    sys.argv = ['pip', 'install', '--target', target_dir, '--extra-index-url', 'https://pip.repos.neuron.amazonaws.com/', 'libneuronxla', 'neuronx-cc']
+    # Run neuronx-cc from scratch space
+    cmd = [
+        os.path.join(bin_dir, 'neuronx-cc'),
+        'compile',
+        '--framework=XLA',
+        '--target=trn1',
+        '--output=' + neff_path,
+        hlo_path
+    ]
+    
+    print(f'Running command: {cmd}')
     try:
-        runpy.run_path(pip_pyz_path, run_name='__main__')
-    except SystemExit as e:
-        if e.code != 0:
-            raise RuntimeError(f'pip failed with code {e.code}')
-    finally:
-        sys.argv = old_argv
-    
-    import importlib
-    importlib.invalidate_caches()
-    
-    import libneuronxla
-    print('libneuronxla installed successfully')
+        subprocess.check_call(cmd)
+    except subprocess.CalledProcessError as e:
+        print(f'neuronx-cc failed with code {e.returncode}')
+        raise e
+        
+    with open(neff_path, 'rb') as fp:
+        neff_bytes = fp.read()
+        
+    return neff_bytes, None
 
-# Configure environment
-libneuronxla.configure_environment()
-libneuronxla.hook()
-print('Called configure_environment and hook')
+mod.neuronx_cc = my_neuronx_cc
+
+sys.modules['libneuronxla'] = mod
+print('Dummy libneuronxla module with real-ish neuronx_cc registered')
 """
 
     ccall((:PyRun_SimpleString, PYTHON_LIB), Cint, (Cstring,), py_code)
@@ -196,17 +210,48 @@ function download_trainium_pjrt_plugin_if_needed(dir=nothing)
     dir === nothing && (dir = get_trainium_pjrt_plugin_dir())
     @assert dir !== nothing "trainium_pjrt_plugin_dir is not set!"
 
-    pip_path = joinpath(dir, "pip.pyz")
-    if isfile(pip_path)
-        @debug "pip.pyz already found in '$(pip_path)', nothing to do"
+    trainium_pjrt_plugin_path = joinpath(dir, "libneuronxla", trainium_pjrt_plugin_name[])
+    
+    if isfile(trainium_pjrt_plugin_path)
+        @debug "Trainium PJRT plugin already found in '$(trainium_pjrt_plugin_path)', nothing to do"
     else
-        mkpidlock(joinpath(dir, "download_pip.lock")) do
-            if !isfile(pip_path)
-                @debug "Downloading pip.pyz to '$(pip_path)'"
-                pip_url = "https://bootstrap.pypa.io/pip/pip.pyz"
-                Downloads.download(pip_url, pip_path)
+        mkpidlock(joinpath(dir, "download_trainium_pjrt_plugin.lock")) do
+            if !isfile(trainium_pjrt_plugin_path)
+                @debug "Will install the Trainium PJRT plugin to '$(trainium_pjrt_plugin_path)'"
+                mktempdir() do tmp_dir
+                    # Download and unzip libneuronxla wheel to get libneuronpjrt.so
+                    zip_file_path = joinpath(tmp_dir, "libneuronxla.zip")
+                    wheel_url = "https://pip.repos.neuron.amazonaws.com/libneuronxla/$(TRAINIUM_WHEEL)"
+                    @debug "Downloading Trainium PJRT plugin from '$(wheel_url)'"
+                    Downloads.download(wheel_url, zip_file_path)
+                    run(
+                        pipeline(
+                            `$(p7zip()) x -tzip -o$(tmp_dir) -- $(zip_file_path)`, devnull
+                        ),
+                    )
+                    # Move the whole libneuronxla directory to dir
+                    mv(joinpath(tmp_dir, "libneuronxla"), joinpath(dir, "libneuronxla"); force=true)
+                    
+                    # Download and unzip neuronx-cc wheel
+                    neuronx_cc_url = "https://pip.repos.neuron.amazonaws.com/neuronx-cc/neuronx_cc-2.24.8799.0%2B6f62ff7c-cp310-cp310-linux_x86_64.whl"
+                    neuronx_cc_zip = joinpath(tmp_dir, "neuronx_cc.zip")
+                    @debug "Downloading neuronx-cc from '$(neuronx_cc_url)'"
+                    Downloads.download(neuronx_cc_url, neuronx_cc_zip)
+                    run(
+                        pipeline(
+                            `$(p7zip()) x -tzip -o$(tmp_dir)/neuronx_cc -- $(neuronx_cc_zip)`, devnull
+                        ),
+                    )
+                    # Move content to dir/python_packages
+                    python_packages_dir = joinpath(dir, "python_packages")
+                    mkpath(python_packages_dir)
+                    for f in readdir(joinpath(tmp_dir, "neuronx_cc"); join=true)
+                        mv(f, joinpath(python_packages_dir, basename(f)); force=true)
+                    end
+                end
             end
         end
+        @assert isfile(trainium_pjrt_plugin_path)
     end
 end
 
