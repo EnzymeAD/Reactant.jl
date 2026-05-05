@@ -82,14 +82,13 @@ end
     @test @jit(sum(sr)) ≈ sum(s1)
 
     s2 = StructArray{SMatrix{2,2,Float64,4}}((
-    fill(1.0, 4,4), fill(2.0, 4,4), fill(3.0, 4,4), fill(4.0, 4,4)
+        fill(1.0, 4, 4), fill(2.0, 4, 4), fill(3.0, 4, 4), fill(4.0, 4, 4)
     ))
     sr = Reactant.to_rarray(s2)
     out = @jit(trel(sr))
     @test out ≈ trel(s2)
     @test out isa ConcreteRArray
     @test @jit(sum(sr)) ≈ sum(s2)
-
 end
 
 @testset "structarray with complex numbers" begin

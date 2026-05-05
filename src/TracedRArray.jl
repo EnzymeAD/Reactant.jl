@@ -271,10 +271,14 @@ function Broadcast.BroadcastStyle(::Type{<:TracedRNumber})
 end
 
 function Base.zeros(::Type{T}, dims::Tuple{}) where {T<:TracedRArray}
-    return (@opcall fill(zero(unwrapped_eltype(T)), dims))::TracedRArray{unwrapped_eltype(T),0}
+    return (@opcall fill(
+        zero(unwrapped_eltype(T)), dims
+    ))::TracedRArray{unwrapped_eltype(T),0}
 end
-function Base.zeros(::Type{T}, dims::NTuple{N, Int}) where {T<:TracedRArray, N}
-    return (@opcall fill(zero(unwrapped_eltype(T)), dims))::TracedRArray{unwrapped_eltype(T),N}
+function Base.zeros(::Type{T}, dims::NTuple{N,Int}) where {T<:TracedRArray,N}
+    return (@opcall fill(
+        zero(unwrapped_eltype(T)), dims
+    ))::TracedRArray{unwrapped_eltype(T),N}
 end
 
 function Base.similar(

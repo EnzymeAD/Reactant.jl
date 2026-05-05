@@ -1180,7 +1180,7 @@ function elem_apply_via_while_loop(f, args::Vararg{Any,Nargs}; kwargs...) where 
         __elem_apply_loop_condition,
         __elem_apply_loop_body,
         (ind_var, f_ref, result_ref, args_ref, limit_ref);
-        kwargs...
+        kwargs...,
     )
 
     return ReactantCore.materialize_traced_array(reshape(result, out_size))
