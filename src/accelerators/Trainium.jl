@@ -198,10 +198,10 @@ function get_trainium_pjrt_plugin_path()
     if isfile(dev_path)
         return dev_path
     end
-    # Check if it is in the scratch space under python_packages
-    pip_path = joinpath(get_trainium_pjrt_plugin_dir(), "python_packages", "libneuronxla", trainium_pjrt_plugin_name[])
-    if isfile(pip_path)
-        return pip_path
+    # Check if it is in the scratch space as a directory
+    dir_path = joinpath(get_trainium_pjrt_plugin_dir(), "libneuronxla", trainium_pjrt_plugin_name[])
+    if isfile(dir_path)
+        return dir_path
     end
     return joinpath(get_trainium_pjrt_plugin_dir(), trainium_pjrt_plugin_name[])
 end
