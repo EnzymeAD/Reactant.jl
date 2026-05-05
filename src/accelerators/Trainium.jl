@@ -62,6 +62,10 @@ import os
 import types
 import subprocess
 import socket
+import argparse
+import json
+import shlex
+import tempfile
 
 plugin_dir = '$(escape_string(plugin_dir))'
 target_dir = '$(escape_string(python_packages_dir))'
