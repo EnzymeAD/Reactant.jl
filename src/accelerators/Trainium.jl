@@ -61,6 +61,7 @@ import sys
 import os
 import types
 import subprocess
+import socket
 
 plugin_dir = '$(escape_string(plugin_dir))'
 target_dir = '$(escape_string(python_packages_dir))'
@@ -147,9 +148,25 @@ def dummy_configure():
     pass
 mod.configure_environment = dummy_configure
 
-def dummy_hook():
-    pass
-mod.hook = dummy_hook
+_USED_PORTS = set()
+
+def _find_free_port():
+    for _ in range(256):
+        with socket.socket() as sock:
+            sock.bind(('', 0))
+            _, port = sock.getsockname()
+            if port not in _USED_PORTS:
+                _USED_PORTS.add(port)
+                return port
+    raise OSError('No free port found!')
+
+def my_hook():
+    if 'NEURON_RT_ROOT_COMM_ID' not in os.environ:
+        port = _find_free_port()
+        os.environ['NEURON_RT_ROOT_COMM_ID'] = f'localhost:{port}'
+        print(f"Set NEURON_RT_ROOT_COMM_ID to localhost:{port}")
+
+mod.hook = my_hook
 
 def dummy_callback(name, addressable_device_index, execution_count):
     return 'inputs'
