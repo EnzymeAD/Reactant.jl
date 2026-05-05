@@ -37,7 +37,7 @@ function init_default_comm(; comm::MPI.Comm=MPI.COMM_WORLD)
 
     nccl_comm = NCCL.Communicator(nranks, rank; unique_id)
     DEFAULT_COMM[] = nccl_comm
-    DEFAULT_COMM_HANDLE[] = convert(UInt, nccl_comm.handle)
+    DEFAULT_COMM_HANDLE[] = Base.reinterpret(UInt, nccl_comm.handle)
 
     return nccl_comm
 end
