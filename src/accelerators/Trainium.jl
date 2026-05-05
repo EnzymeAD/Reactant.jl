@@ -73,6 +73,13 @@ target_dir = '$(escape_string(python_packages_dir))'
 sys.path.append(plugin_dir)
 sys.path.append(target_dir)
 
+# Import hlo_pb2 before overriding libneuronxla
+try:
+    from libneuronxla.proto import hlo_pb2
+    print('Successfully imported hlo_pb2')
+except Exception as e:
+    print(f'Failed to import hlo_pb2: {e}')
+
 # Add bin directory to system PATH in Python environment
 bin_dir = os.path.join(target_dir, 'bin')
 os.environ['PATH'] = bin_dir + os.pathsep + os.environ.get('PATH', '')
@@ -176,7 +183,6 @@ def _neuronx_cc_impl_fast(code, target):
     return neff_bytes, compiled_hlo_bytes
 
 def _wrap_neff_as_custom_call(code, neff_bytes):
-    from libneuronxla.proto import hlo_pb2
     if not neff_bytes:
         return b''
     hlo_module = hlo_pb2.HloModuleProto()
