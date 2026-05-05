@@ -73,6 +73,73 @@ bin_dir = os.path.join(target_dir, 'bin')
 os.environ['PATH'] = bin_dir + os.pathsep + os.environ.get('PATH', '')
 os.environ['PYTHONPATH'] = target_dir + os.pathsep + os.environ.get('PYTHONPATH', '')
 
+class GlobalCounter:
+    _counter = 0
+    def __call__(self):
+        count = GlobalCounter._counter
+        GlobalCounter._counter += 1
+        return count
+
+def _neuronx_cc_impl_fast(code, target):
+    cmd = [
+        'neuronx-cc',
+        'compile',
+        '--framework=XLA',
+        f'--target={target}',
+        '--verbose=35',
+        '--enable-internal-neff-wrapper',
+    ]
+    flags = os.environ.get('NEURON_CC_FLAGS', '')
+    flags = shlex.split(flags)
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        '--dump',
+        default=None,
+        help='Folder to dump neuronx-cc artifacts')
+    args, flags = parser.parse_known_args(flags)
+    with tempfile.TemporaryDirectory() as tmpdir:
+        if args.dump is not None:
+            tmpdir = os.path.abspath(args.dump)
+            tmpdir = os.path.join(
+                tmpdir, f'pid{os.getpid()}-program{GlobalCounter()()}')
+            os.makedirs(tmpdir, exist_ok=True)
+            cmd.extend(['--pipeline', 'compile', 'SaveTemps'])
+        hlo_module_path = os.path.join(tmpdir, 'file.code')
+        with open(hlo_module_path, 'wb') as fp:
+            fp.write(code)
+        neff_path = os.path.join(tmpdir, 'file.neff')
+        cmd.append(f'--output={neff_path}')
+        cmd.append(hlo_module_path)
+        cmd.extend(flags)
+        if args.dump is not None:
+            ver_cmd = ['neuronx-cc', '--version']
+            ncc_version = subprocess.check_output(
+                ver_cmd, stderr=subprocess.STDOUT).decode()
+            ncc_version, *_ = ncc_version.split('\n')
+            *_, ncc_version = ncc_version.split('version ')
+            with open(os.path.join(tmpdir, 'neuronx_cc_metadata.json'), 'w') as fp:
+                json.dump([ncc_version, cmd], fp)
+        
+        env = os.environ.copy()
+        ld_preload = env.get('LD_PRELOAD', '')
+        if 'libtcmalloc' in ld_preload:
+            updated_ld_preload = ':'.join(
+                path for path in ld_preload.split(':') if 'libtcmalloc' not in path
+            )
+            env['LD_PRELOAD'] = updated_ld_preload
+
+        # FIXED: use check_call instead of run to avoid hang
+        subprocess.check_call(cmd, cwd=tmpdir, env=env)
+
+        with open(neff_path, 'rb') as fp:
+            neff_bytes = fp.read()
+        compiled_hlo_bytes = None
+        compiled_hlo_path = os.path.join(tmpdir, 'wrapped_neff.hlo')
+        if os.path.isfile(compiled_hlo_path):
+            with open(compiled_hlo_path, 'rb') as fp:
+                compiled_hlo_bytes = fp.read()
+    return neff_bytes, compiled_hlo_bytes
+
 # Create dummy libneuronxla module
 mod = types.ModuleType('libneuronxla')
 
@@ -89,39 +156,22 @@ def dummy_callback(name, addressable_device_index, execution_count):
 mod._dump_hlo_snapshot_callback = dummy_callback
 
 def my_neuronx_cc(code, code_format, platform_version, file_prefix):
-    print(f'My neuronx_cc called with prefix {file_prefix}')
-    hlo_path = file_prefix + ".hlo"
-    neff_path = file_prefix + ".neff"
-    
-    with open(hlo_path, 'wb') as fp:
-        fp.write(code)
+    platform_str = platform_version.decode()
+    if platform_str == '2.0':
+        target = 'trn1'
+    elif platform_str == '2.1':
+        target = 'inf2'
+    elif platform_str == '1.0':
+        target = 'inf1'
+    else:
+        target = 'trn1'
         
-    # Run neuronx-cc from scratch space
-    cmd = [
-        os.path.join(bin_dir, 'neuronx-cc'),
-        'compile',
-        '--framework=XLA',
-        '--target=trn1',
-        '--output=' + neff_path,
-        hlo_path
-    ]
-    
-    print(f'Running command: {cmd}')
-    try:
-        subprocess.check_call(cmd)
-    except subprocess.CalledProcessError as e:
-        print(f'neuronx-cc failed with code {e.returncode}')
-        raise e
-        
-    with open(neff_path, 'rb') as fp:
-        neff_bytes = fp.read()
-        
-    return neff_bytes, None
+    return _neuronx_cc_impl_fast(code, target)
 
 mod.neuronx_cc = my_neuronx_cc
 
 sys.modules['libneuronxla'] = mod
-print('Dummy libneuronxla module with real-ish neuronx_cc registered')
+print('Dummy libneuronxla module with real _neuronx_cc_impl_fast registered')
 """
 
     ccall((:PyRun_SimpleString, PYTHON_LIB), Cint, (Cstring,), py_code)
