@@ -437,14 +437,17 @@ function download_trainium_pjrt_plugin_if_needed(dir=nothing)
                 @assert !isempty(libefa_rpm) "libefa RPM not found in $suse_path"
                 
                 @debug "Extracting libefa rpm: $(libefa_rpm[1])"
-                # Extract RPM using p7zip
+                # Extract RPM using p7zip (produces a cpio archive)
                 run(`$(p7zip()) x -y $(libefa_rpm[1]) -o$(efa_extracted_dir)`)
                 
-                # Extract the cpio archive inside the RPM
-                extracted_file = joinpath(efa_extracted_dir, "libefa1-61.0-0.x86_64")
-                @assert isfile(extracted_file) "Failed to extract libefa RPM payload to $extracted_file"
-                run(`$(p7zip()) x -y $(extracted_file) -o$(efa_extracted_dir)`)
-                rm(extracted_file; force=true)
+                # Extract the cpio archive using standard cpio tool
+                extracted_file = "libefa1-61.0-0.x86_64"
+                cd(efa_extracted_dir) do
+                    run(pipeline(`cpio -idmv`, stdin=extracted_file))
+                    rm(extracted_file; force=true)
+                end
+                
+
                 
                 # Clean up the large installer directory
                 rm(extracted_efa_dir; recursive=true, force=true)
