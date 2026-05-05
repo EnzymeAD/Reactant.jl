@@ -284,7 +284,17 @@ include("ControlFlow.jl")
 include("Enums.jl")
 include("Tracing.jl")
 
+<<<<<<< HEAD
 include("compiler/Compiler.jl")
+=======
+function default_nccl_comm_handle()
+    ext = Base.get_extension(@__MODULE__, :ReactantNCCLExt)
+    ext === nothing && error("ReactantNCCLExt is not loaded; load NCCL and MPI first")
+    return ext.default_comm_handle()
+end
+
+include("Compiler.jl")
+>>>>>>> bc9cb44fb (Make comm gettable inside compiler.jl)
 
 include("Overlay.jl")
 
