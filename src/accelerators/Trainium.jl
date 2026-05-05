@@ -217,7 +217,8 @@ def my_neuronx_cc(code, code_format, platform_version, file_prefix):
     else:
         target = 'trn1'
         
-    return _neuronx_cc_impl_fast(code, target)
+    neff_bytes, compiled_hlo_bytes = _neuronx_cc_impl_fast(code, target)
+    return 0, neff_bytes
 
 mod.neuronx_cc = my_neuronx_cc
 
