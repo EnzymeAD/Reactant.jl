@@ -825,12 +825,12 @@ function Base.sincospi(x::TracedRNumber{T}) where {T}
     return @opcall(sine(T(π) * x)), @opcall(cosine(T(π) * x))
 end
 
-function Base.cispi(x::TracedRNumber{T}) where {T}
+function Base.cispi(x::TracedRNumber)
     s, c = sincospi(x)
     return complex(c, s)
 end
 
-function Base.cis(x::TracedRNumber{T}) where {T}
+function Base.cis(x::TracedRNumber)
     s, c = sincos(x)
     return complex(c, s)
 end
