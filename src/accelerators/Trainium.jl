@@ -422,23 +422,8 @@ function download_trainium_pjrt_plugin_if_needed(dir=nothing)
                             @debug "Extracting libfabric deb: $(libfabric_deb[1])"
                             mkpath(efa_extracted_dir)
                             
-                            # Extract deb using p7zip (creates data.tar.xz or similar)
-                            run(`$(p7zip()) x -y $(libfabric_deb[1]) -o$(efa_extracted_dir)`)
-                            
-                            # Find data.tar.*
-                            data_files = readdir(efa_extracted_dir; join=true)
-                            data_tar_comp = filter(f -> occursin("data.tar", f), data_files)
-                            if !isempty(data_tar_comp)
-                                # Extract data.tar.* to data.tar using p7zip
-                                run(`$(p7zip()) x -y $(data_tar_comp[1]) -o$(efa_extracted_dir)`)
-                                
-                                data_tar = joinpath(efa_extracted_dir, "data.tar")
-                                if isfile(data_tar)
-                                    run(`$(p7zip()) x -y $(data_tar) -o$(efa_extracted_dir)`)
-                                    rm(data_tar; force=true)
-                                end
-                                rm(data_tar_comp[1]; force=true)
-                        end
+                            # Extract deb using dpkg-deb (p7zip fails on .deb files)
+                            run(`dpkg-deb -x $(libfabric_deb[1]) $(efa_extracted_dir)`)
                         
                         # Also extract libefa from SUSE RPM if available
                         suse_path = joinpath(extracted_efa_dir, "RPMS", "SUSE", "x86_64", "rdma-core")
