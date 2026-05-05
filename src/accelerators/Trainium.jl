@@ -267,23 +267,23 @@ print('Dummy libneuronxla module with real _neuronx_cc_impl_fast registered')
 
     scratch_dir = get_trainium_pjrt_plugin_dir()
     
+    # Load custom libibverbs
+    libibverbs_path = joinpath(scratch_dir, "libfabric_extracted", "usr", "lib64", "libibverbs.so.1")
+    @assert isfile(libibverbs_path) "libibverbs.so.1 not found in scratch space at $libibverbs_path"
+    Libdl.dlopen(libibverbs_path, Libdl.RTLD_GLOBAL)
+    @debug "Loaded custom libibverbs from $libibverbs_path"
+
     # Load custom libefa
     libefa_path = joinpath(scratch_dir, "libfabric_extracted", "usr", "lib64", "libefa.so.1")
-    if isfile(libefa_path)
-        Libdl.dlopen(libefa_path, Libdl.RTLD_GLOBAL)
-        @debug "Loaded custom libefa from $libefa_path"
-    else
-        error("libefa.so.1 not found in scratch space at $libefa_path")
-    end
+    @assert isfile(libefa_path) "libefa.so.1 not found in scratch space at $libefa_path"
+    Libdl.dlopen(libefa_path, Libdl.RTLD_GLOBAL)
+    @debug "Loaded custom libefa from $libefa_path"
 
     # Load custom libfabric to avoid version mismatch
     libfabric_path = joinpath(scratch_dir, "libfabric_extracted", "opt", "amazon", "efa", "lib", "libfabric.so.1")
-    if isfile(libfabric_path)
-        Libdl.dlopen(libfabric_path, Libdl.RTLD_GLOBAL)
-        @debug "Loaded custom libfabric from $libfabric_path"
-    else
-        error("libfabric.so.1 not found in scratch space at $libfabric_path")
-    end
+    @assert isfile(libfabric_path) "libfabric.so.1 not found in scratch space at $libfabric_path"
+    Libdl.dlopen(libfabric_path, Libdl.RTLD_GLOBAL)
+    @debug "Loaded custom libfabric from $libfabric_path"
 
     return Reactant.XLA.PJRT.MakeClientUsingPluginAPI(get_trainium_pjrt_plugin_path(), "trainium", "Trainium")
 end
@@ -445,6 +445,19 @@ function download_trainium_pjrt_plugin_if_needed(dir=nothing)
                 cd(efa_extracted_dir) do
                     run(pipeline(`cpio -idmv`, stdin=extracted_file))
                     rm(extracted_file; force=true)
+                end
+                
+                # Also extract libibverbs from SUSE RPM
+                libibverbs_rpm = filter(f -> endswith(f, ".rpm") && occursin("libibverbs1", f), rpms)
+                @assert !isempty(libibverbs_rpm) "libibverbs RPM not found in $suse_path"
+                
+                @debug "Extracting libibverbs rpm: $(libibverbs_rpm[1])"
+                run(`$(p7zip()) x -y $(libibverbs_rpm[1]) -o$(efa_extracted_dir)`)
+                
+                extracted_verbs_file = "libibverbs1-61.0-0.x86_64"
+                cd(efa_extracted_dir) do
+                    run(pipeline(`cpio -idmv`, stdin=extracted_verbs_file))
+                    rm(extracted_verbs_file; force=true)
                 end
                 
 
