@@ -413,34 +413,41 @@ function download_trainium_pjrt_plugin_if_needed(dir=nothing)
                 
                 # Now find and extract libfabric deb
                 extracted_efa_dir = joinpath(dir, "aws-efa-installer")
-                if isdir(extracted_efa_dir)
-                    deb_path = joinpath(extracted_efa_dir, "DEBS", "UBUNTU2204", "x86_64")
-                    if isdir(deb_path)
-                        debs = readdir(deb_path; join=true)
-                        libfabric_deb = filter(f -> occursin("libfabric1-aws", f), debs)
-                        if !isempty(libfabric_deb)
-                            @debug "Extracting libfabric deb: $(libfabric_deb[1])"
-                            mkpath(efa_extracted_dir)
-                            
-                            # Extract deb using dpkg-deb (p7zip fails on .deb files)
-                            run(`dpkg-deb -x $(libfabric_deb[1]) $(efa_extracted_dir)`)
-                        
-                        # Also extract libefa from SUSE RPM if available
-                        suse_path = joinpath(extracted_efa_dir, "RPMS", "SUSE", "x86_64", "rdma-core")
-                        if isdir(suse_path)
-                            rpms = readdir(suse_path; join=true)
-                            libefa_rpm = filter(f -> occursin("libefa1", f), rpms)
-                            if !isempty(libefa_rpm)
-                                @debug "Extracting libefa rpm: $(libefa_rpm[1])"
-                                # Extract RPM using p7zip
-                                run(`$(p7zip()) x -y $(libefa_rpm[1]) -o$(efa_extracted_dir)`)
-                            end
-                        end
-                    end
-                    end
-                    # Clean up the large installer directory
-                    rm(extracted_efa_dir; recursive=true, force=true)
-                end
+                @assert isdir(extracted_efa_dir) "EFA installer failed to extract to $extracted_efa_dir"
+                
+                deb_path = joinpath(extracted_efa_dir, "DEBS", "UBUNTU2204", "x86_64")
+                @assert isdir(deb_path) "DEB path not found at $deb_path"
+                
+                debs = readdir(deb_path; join=true)
+                libfabric_deb = filter(f -> occursin("libfabric1-aws", f), debs)
+                @assert !isempty(libfabric_deb) "libfabric deb not found in $deb_path"
+                
+                @debug "Extracting libfabric deb: $(libfabric_deb[1])"
+                mkpath(efa_extracted_dir)
+                
+                # Extract deb using dpkg-deb (p7zip fails on .deb files)
+                run(`dpkg-deb -x $(libfabric_deb[1]) $(efa_extracted_dir)`)
+            
+                # Also extract libefa from SUSE RPM
+                suse_path = joinpath(extracted_efa_dir, "RPMS", "SUSE", "x86_64", "rdma-core")
+                @assert isdir(suse_path) "SUSE RPM path not found at $suse_path"
+                
+                rpms = readdir(suse_path; join=true)
+                libefa_rpm = filter(f -> occursin("libefa1", f), rpms)
+                @assert !isempty(libefa_rpm) "libefa RPM not found in $suse_path"
+                
+                @debug "Extracting libefa rpm: $(libefa_rpm[1])"
+                # Extract RPM using p7zip
+                run(`$(p7zip()) x -y $(libefa_rpm[1]) -o$(efa_extracted_dir)`)
+                
+                # Extract the cpio archive inside the RPM
+                extracted_file = joinpath(efa_extracted_dir, "libefa1-61.0-0.x86_64")
+                @assert isfile(extracted_file) "Failed to extract libefa RPM payload to $extracted_file"
+                run(`$(p7zip()) x -y $(extracted_file) -o$(efa_extracted_dir)`)
+                rm(extracted_file; force=true)
+                
+                # Clean up the large installer directory
+                rm(extracted_efa_dir; recursive=true, force=true)
             end
         end
     end
