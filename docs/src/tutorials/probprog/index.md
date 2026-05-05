@@ -1,34 +1,69 @@
 # [Probabilistic Programming](@id probprog)
 
-`Reactant.ProbProg` is Reactant's probabilistic programming module, built on the `impulse` dialect.
+[Reactant.jl](https://github.com/EnzymeAD/Reactant.jl) compiles ordinary Julia
+code through [MLIR](https://mlir.llvm.org/), running it on CPU, GPU, or TPU
+without rewriting. You write a normal Julia function, wrap a call to it in
+[`@compile`](@ref), and Reactant traces the function, lowers it through MLIR,
+and hands you back a callable compiled program. Array inputs are staged
+through [`ConcreteRArray`](@ref) (created with [`Reactant.to_rarray`](@ref))
+so they live on the target device.
 
-A summary of exported symbols is provided in the [Interface Overview](@ref probprog-interface-overview). Please refer to the [API Reference](@ref probprog-api) for documentation of exported symbols.
+`Reactant.ProbProg` is the Julia front-end for the `impulse` dialect,
+implemented across [Enzyme](https://github.com/EnzymeAD/Enzyme)
+(dialect definition and inference materialization passes) and
+[Enzyme-JAX](https://github.com/EnzymeAD/Enzyme-JAX) (backend-specific lowering). The `impulse` dialect provides high-level MLIR ops for describing
+probabilistic modeling and inference, materializes inference computation
+through compiler passes, and applies 
+general-purpose and probabilistic-programming-specific optimizations
+during lowering.
 
-## Example Usage
+!!! todo "`optimize = :probprog` opt-in required"
+    For now, `@compile` needs an explicit `optimize = :probprog` argument
+    on probabilistic programs to enable the impulse-specific MLIR passes
+    (you'll see this in every `@compile` call below). Merging those passes
+    into the default `@compile` pipeline is work in progress; once it
+    lands, the explicit opt-in will no longer be required.
 
-A generative function can be constructed using the Gen-style modeling language or 
-*trace-based mode*, where the generative function is expressed with
-[`ProbProg.sample`](@ref) calls and the inference kernel walks the trace;
-and *custom logpdf mode*, where the user supplies a log-density function directly.
-Each is illustrated below with a canonical example — Bayesian
-linear regression for the trace-based route, and Bayesian logistic
-regression for the custom logpdf route.
+Next, we walk through two operating modes of `Reactant.ProbProg`: a trace-based mode built around a generative function, and a custom log-density mode that takes a custom log-density function.
 
-### Trace-based mode: Bayesian linear regression
+## [Trace-based mode](@id probprog-trace-based)
 
-With the generative function written as ordinary Julia code and each
-random choice named via `symbol`, [`generate`](@ref) folds observations
-into the trace and [`mcmc`](@ref) updates the unobserved addresses via
-NUTS. Generation and inference are fused into a single compiled program:
+We describe a Bayesian linear regression question:
+
+```math
+\begin{aligned}
+\text{slope}     &\sim \mathcal{N}(0, 2) \\
+\text{intercept} &\sim \mathcal{N}(0, 10) \\
+y_i \mid \text{slope}, \text{intercept} &\sim \mathcal{N}(\text{slope} \cdot x_i + \text{intercept},\, 1)
+\end{aligned}
+```
+
+Both regression coefficients are given Gaussian priors, tighter on `slope`
+(standard deviation 2) and looser on `intercept` (standard deviation 10).
+Each observation `y_i` is then drawn from a Gaussian centered on the
+fitted value `slope · x_i + intercept` with fixed noise (standard deviation 1).
+
+### The data
+
+Synthetic data drawn from `slope = -2, intercept = 10`. The `xs` /
+`ys` pair is what we'll condition on.
 
 ```@example probprog_index
-using Reactant, Statistics
-using Reactant: ProbProg, ReactantRNG
+xs = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0]
+ys = [8.23, 5.87, 3.99, 2.59, 0.23, -0.66, -3.53, -6.91, -7.24, -9.90]
+nothing # hide
+```
 
-# slope     ~ Normal(0,  2)
-# intercept ~ Normal(0, 10)
-# yᵢ | slope, intercept ~ Normal(slope · xᵢ + intercept, 1)
-function linreg(rng, xs)
+### Describing the Model
+
+We describe this model in `Reactant.ProbProg` as follows:
+
+```@example probprog_index
+using Reactant, Statistics            # hide
+using Reactant: ReactantRNG           # hide
+using Reactant: ProbProg
+
+function model(rng, xs)
     _, slope = ProbProg.sample(
         rng, ProbProg.Normal(0.0, 2.0, (1,)); symbol=:slope,
     )
@@ -42,155 +77,189 @@ function linreg(rng, xs)
     )
     return ys
 end
+```
 
-xs = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0]
-ys = [8.23, 5.87, 3.99, 2.59, 0.23, -0.66, -3.53, -6.91, -7.24, -9.90]
+Each random choice is introduced by a `ProbProg.sample(rng, dist; symbol=...)`
+call that takes a random number generator (RNG) and a distribution function. The `symbol` keyword names
+the sample site used for conditioning and specifying parameters to infer.
 
-# Fold observations into a flat constraint tensor.
-obs                   = ProbProg.Constraint(:ys => ys)
+As a calling convention, `ProbProg.sample` returns `(rng, value)`; the first element (omitted with `_` above) is the updated RNG. In the current implementation `rng` is a traced [`ReactantRNG`](https://github.com/EnzymeAD/Reactant.jl/blob/main/src/Types.jl#L648) whose state corresponds to a `tensor<2xui64>` RNG state in the generated MLIR. We don't thread it through manually because Reactant tracing handles the input/output threading at the IR level, and `ReactantRNG`'s internal state is updated via Julia mutability (see  [here](https://github.com/EnzymeAD/Reactant.jl/blob/main/src/stdlibs/Random.jl#L62) for details).
+
+### Describing Inference
+
+We condition on the observed `ys` with a [`Constraint`](@ref) object:
+
+```@example probprog_index
+obs = ProbProg.Constraint(:ys => ys)
+```
+
+The current implementation requires a bit of boilerplate to flatten the
+`Constraint` into a tensor representation and to extract its address set
+before passing them to the `@compile`'d function below. See [Traces and
+constrained inference](@ref probprog-traces) for details. The resulting
+tensor and address set:
+
+```@setup probprog_index
 constrained_addresses = ProbProg.extract_addresses(obs)
-obs_flat              = Float64[]
+obs_flat = Float64[]
 for addr in constrained_addresses
     append!(obs_flat, vec(obs[addr]))
 end
 obs_tensor = Reactant.to_rarray(reshape(obs_flat, 1, :))
+```
 
-# `generate` conditions on observations; `mcmc` explores slope/intercept via NUTS.
-function program(rng, model, xs, obs_tensor, constrained_addresses,
-                 selection, step_size, inverse_mass_matrix)
-    trace, _, _ = ProbProg.generate(
-        rng, obs_tensor, model, xs; constrained_addresses,
-    )
-    trace, diag, _, _ = ProbProg.mcmc(
-        rng, trace, model, xs;
-        selection, algorithm = :NUTS,
-        step_size, inverse_mass_matrix,
-        num_warmup  = 200,
-        num_samples = 500,
-    )
-    return trace, diag
-end
+```@example probprog_index
+obs_tensor
+```
 
-seed = Reactant.to_rarray(UInt64[1, 5])
-rng  = ReactantRNG(seed)
-selection           = ProbProg.select(
+```@example probprog_index
+constrained_addresses
+```
+
+We then specify what parameters to infer:
+
+```@example probprog_index
+selection = ProbProg.select(
     ProbProg.Address(:slope),
     ProbProg.Address(:intercept),
 )
-step_size           = Reactant.ConcreteRNumber(0.1)
-inverse_mass_matrix = Reactant.ConcreteRArray([0.5 0.0; 0.0 0.5])
-
-compiled_fn, tt = ProbProg.with_trace() do
-    @compile optimize=:probprog program(
-        rng, linreg, xs, obs_tensor, constrained_addresses,
-        selection, step_size, inverse_mass_matrix,
-    )
-end
-
-trace_tensor, _ = compiled_fn(
-    rng, linreg, xs, obs_tensor, constrained_addresses,
-    selection, step_size, inverse_mass_matrix,
-)
-
-selected_entries = ProbProg.filter_entries_by_selection(tt.entries, selection)
-trace            = ProbProg.unflatten_trace(trace_tensor, 0.0, selected_entries, nothing)
-
-(
-    posterior_mean_slope     = mean(trace.choices[:slope][:, 1]),
-    posterior_mean_intercept = mean(trace.choices[:intercept][:, 1]),
-)
 ```
 
-The data were generated from `slope = -2`, `intercept = 10`; NUTS
-recovers both posterior means.
-
-### Custom logpdf mode: Bayesian logistic regression
-
-When a closed-form log-density is available, [`mcmc_logpdf`](@ref) skips
-the trace machinery. Below, a standard Normal prior on the weight vector
-is combined with a logistic-regression likelihood written in the
-numerically stable form of the binary cross-entropy:
+We express inference in a single function that conditions the model on the
+constraint with [`generate`](@ref) and then runs NUTS over the selected sites
+with [`mcmc`](@ref).
 
 ```@example probprog_index
-# β ~ Normal(0, I);  yᵢ | β ~ Bernoulli(σ(xᵢ · β))
-# log p(β | X, y) = -½ ‖β‖²  +  Σᵢ [ yᵢ (xᵢ·β) − log(1 + exp(xᵢ·β)) ]
-function logdensity(β, X, y)
-    logits = X * β
-    ll     = sum(y .* logits .- max.(logits, 0.0) .- log1p.(exp.(.-abs.(logits))))
-    pr     = -0.5 * sum(β .^ 2)
-    return ll + pr
-end
-
-# `mcmc_logpdf` is wrapped in a function that gets `@compile`d; this matches the
-# pattern in `test/probprog/mcmc_logpdf.jl`.
-function logreg_program(
-    rng, logdensity_fn, initial_position, X, y,
-    step_size, inverse_mass_matrix, num_warmup::Int, num_samples::Int,
-)
-    samples, _, _, state = ProbProg.mcmc_logpdf(
-        rng, logdensity_fn, initial_position, X, y;
-        algorithm         = :NUTS,
-        step_size, inverse_mass_matrix,
-        num_warmup, num_samples,
-        adapt_step_size   = true,
-        adapt_mass_matrix = true,
+function infer(rng, xs, obs_tensor, step_size, inverse_mass_matrix)
+    trace, = ProbProg.generate(
+        rng, obs_tensor, model, xs; constrained_addresses,
     )
-    return samples, state.step_size
+    trace, = ProbProg.mcmc(
+        rng, trace, model, xs;
+        selection, algorithm=:NUTS,
+        step_size, inverse_mass_matrix,
+        num_warmup=200, num_samples=500,
+    )
+    return trace
 end
+```
 
-# Design matrix with an intercept column and one real-valued feature.
-X_data = Float64[
-    1.0 -0.5
-    1.0  0.3
-    1.0  0.8
-    1.0 -0.2
-    1.0  1.4
-    1.0 -1.1
-]
-y_data = [0.0, 1.0, 1.0, 0.0, 1.0, 0.0]
+The returned `trace` contains the sampling result as a 2D tensor: each row is the concatenation of all selected sites' flattened values for one post-warmup sample. (We will show a possible trace for this example problem below.)
 
-X                   = Reactant.to_rarray(X_data)
-y                   = Reactant.to_rarray(y_data)
-initial_position    = Reactant.to_rarray(reshape(zeros(2), 1, 2))
-step_size_lr        = Reactant.ConcreteRNumber(0.1)
-inverse_mass_matrix_lr = Reactant.ConcreteRArray([1.0 0.0; 0.0 1.0])
 
-seed_lr = Reactant.to_rarray(UInt64[2, 7])
-rng_lr  = ReactantRNG(seed_lr)
+#### Compiling with `@compile`
 
-compiled_lr = @compile optimize=:probprog logreg_program(
-    rng_lr, logdensity, initial_position, X, y,
-    step_size_lr, inverse_mass_matrix_lr, 200, 500,
-)
-samples, adapted_step_size = compiled_lr(
-    rng_lr, logdensity, initial_position, X, y,
-    step_size_lr, inverse_mass_matrix_lr, 200, 500,
-)
+We compile `infer` with Reactant's [`@compile`](@ref) for 
+compiler-optimized probabilistic inference:
 
-(
-    posterior_mean_β  = vec(mean(Array(samples); dims=1)),  # (intercept, slope)
-    adapted_step_size = Array(adapted_step_size)[],
+```@example probprog_index
+rng                 = ReactantRNG()
+step_size           = Reactant.ConcreteRNumber(0.1)
+inverse_mass_matrix = Reactant.ConcreteRArray([1.0 0.0; 0.0 1.0])
+
+compiled_fn = @compile optimize=:probprog infer(
+    rng, xs, obs_tensor, step_size, inverse_mass_matrix,
 )
 ```
 
-Trace-based mode is preferable when the model is naturally expressed as
-a generative function and the same definition should drive forward
-simulation, conditioning, and inference; custom logpdf mode is
-preferable when a log-density implementation is already available or when
-integrating with an external log-density library.
+!!! note "Defaults"
+    It is often sufficient to start with `step_size = 1.0` and an
+    identity `inverse_mass_matrix`. With the default `adapt_step_size =
+    true` and `adapt_mass_matrix = true`, [`mcmc`](@ref) adaptively
+    selects appropriate values during the warmup iterations.
 
-## Further reading
+The `compiled_fn` is a callable object that takes the same arguments as
+`infer` and returns the inference result. We can execute the compiled inference program any number of times by calling it: 
+
+```@example probprog_index
+trace_tensor = compiled_fn(rng, xs, obs_tensor, step_size, inverse_mass_matrix)
+```
+
+Each row is one post-warmup sample; columns hold the sampled values for each selected site:
+
+```text
+            :intercept   :slope
+sample 1:      ...         ...
+sample 2:      ...         ...
+   ⋮            ⋮           ⋮
+sample N:      ...         ...
+```
+
+From the sampler output, the posterior mean is:
+
+```@example probprog_index
+(
+    posterior_mean_intercept = mean(trace_tensor[:, 1]),
+    posterior_mean_slope     = mean(trace_tensor[:, 2]),
+)
+```
+
+The data were generated from `slope = -2, intercept = 10`; NUTS recovers
+both posterior means.
+
+## Custom logpdf mode
+
+In larger applications, it is often infeasible to express the model in
+a PPL modeling language as we showed in the [trace-based mode](@ref probprog-trace-based)
+above. We can use `Reactant.ProbProg` to compile and run its inference algorithms directly on a hand-written log-density function via the custom logpdf
+mode.
+
+For example, we can write the log-density function of the previous Bayesian linear regression model directly:
+```@example probprog_index
+function logdensity(θ, xs, ys)
+    X = hcat(xs, ones(length(xs)))
+    residuals = ys .- X * θ
+    pr = -0.5 * sum(θ .^ 2 ./ [4.0, 100.0])
+    ll = -0.5 * sum(residuals .^ 2)
+    return ll + pr
+end
+```
+
+We pass `logdensity` to the [`mcmc_logpdf`](@ref) interface along with
+an initial [position](https://en.wikipedia.org/wiki/Hamiltonian_Monte_Carlo) vector
+(the parameter values the chain starts from):
+
+```@example probprog_index
+function infer_logpdf(rng, θ0, xs, ys, step_size, inverse_mass_matrix)
+    trace, = ProbProg.mcmc_logpdf(rng, logdensity, θ0, xs, ys;
+        algorithm=:NUTS,
+        step_size, inverse_mass_matrix,
+        num_warmup=200, num_samples=500,
+    )
+    return trace
+end
+
+θ0 = Reactant.to_rarray(reshape([0.0, 0.0], 1, 2))
+compiled_logpdf = @compile optimize=:probprog infer_logpdf(
+    rng, θ0, xs, ys, step_size, inverse_mass_matrix,
+)
+trace = compiled_logpdf(rng, θ0, xs, ys, step_size, inverse_mass_matrix)
+```
+
+We get similar inference results
+
+```@example probprog_index
+(
+    posterior_mean_slope     = mean(trace[:, 1]),
+    posterior_mean_intercept = mean(trace[:, 2]),
+)
+```
+
+NUTS recovers both posterior means here too.
+
+## More Explanations
 
 - [Sampling and distributions](@ref probprog-sampling) — semantics of
   [`sample`](@ref), the built-in [`Distribution`](@ref) hierarchy, custom
   samplers with user-supplied `logpdf`, and constrained supports.
-- [Traces and constrained inference](@ref probprog-traces) — [`simulate`](@ref)
-  versus [`generate`](@ref), [`Constraint`](@ref) / [`Address`](@ref)
-  construction, and the interpretation of importance weights.
+- [Traces and constrained inference](@ref probprog-traces) —
+  [`simulate`](@ref) versus [`generate`](@ref), [`Constraint`](@ref) /
+  [`Address`](@ref) construction, and the trace round-trip between flat
+  position vector and tree-shaped [`Trace`](@ref).
 - [MCMC: MH, HMC, NUTS](@ref probprog-mcmc) — Metropolis-Hastings over a
   [`Selection`](@ref), gradient-based chains via [`mcmc`](@ref), and
   log-density-driven chains via [`mcmc_logpdf`](@ref).
-- [Running and resuming chains](@ref probprog-chains) — [`run_chain`](@ref),
-  warmup and checkpointing through [`MCMCState`](@ref),
-  [`save_state`](@ref) / [`load_state`](@ref), and posterior summaries with
-  [`mcmc_summary`](@ref).
+- [Running and resuming chains](@ref probprog-chains) —
+  [`run_chain`](@ref), warmup and checkpointing through
+  [`MCMCState`](@ref), [`save_state`](@ref) / [`load_state`](@ref), and
+  posterior summaries with [`mcmc_summary`](@ref).
