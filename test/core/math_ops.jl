@@ -92,6 +92,35 @@ end
         @test res[1] isa ConcreteRNumber{Float32}
         @test res[2] isa ConcreteRNumber{Float32}
     end
+
+    @testset "sinc" begin
+        x = Reactant.TestUtils.construct_test_array(Float64, 4, 16)[:, 1:7]
+        x_ra = Reactant.to_rarray(x)
+
+        @test @jit(sinc.(x_ra)) ≈ sinc.(x)
+        @test @jit(sinc.(x_ra)) isa ConcreteRArray{Float64,2}
+
+        xz = ConcreteRNumber(0.0)
+        xinf = ConcreteRNumber(Inf)
+        @test @jit(sinc(ConcreteRNumber(0.0))) ≈ sinc(0.0)
+        @test @jit(sinc(ConcreteRNumber(Inf))) ≈ sinc(Inf)
+
+
+        x = Reactant.TestUtils.construct_test_array(ComplexF64, 4, 16)[:, 1:7]
+        x_ra = Reactant.to_rarray(x)
+
+        @test @jit(sinc.(x_ra)) ≈ sinc.(x)
+        @test @jit(sinc.(x_ra)) isa ConcreteRArray{ComplexF64,2}
+
+        xz0 = 1e-5 - 2e-5im
+        xz = ConcreteRNumber(xz0) # Below the threshold
+        xinf = ConcreteRNumber(Inf + 1im)
+        @test @jit(sinc(xz)) ≈ sinc(xz0)
+        @test @jit(sinc(xinf)) ≈ sinc(Inf + 1im)
+
+
+    end
+
 end
 
 @testset "isfinite" begin
