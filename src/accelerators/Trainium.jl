@@ -175,6 +175,31 @@ def _neuronx_cc_impl_fast(code, target):
                 compiled_hlo_bytes = fp.read()
     return neff_bytes, compiled_hlo_bytes
 
+def _wrap_neff_as_custom_call(code, neff_bytes):
+    from libneuronxla.proto import hlo_pb2
+    if not neff_bytes:
+        return b''
+    hlo_module = hlo_pb2.HloModuleProto()
+    hlo_module.ParseFromString(code)
+    entry, = [cpt for cpt in hlo_module.computations if cpt.id == hlo_module.entry_computation_id]
+    parameters = [None for _ in entry.program_shape.parameters]
+    for inst in entry.instructions:
+        if inst.opcode == 'parameter':
+            parameters[inst.parameter_number] = inst
+    root, = [inst for inst in entry.instructions if inst.id == entry.root_id]
+    fused_root = hlo_pb2.HloInstructionProto()
+    fused_root.CopyFrom(root)
+    fused_root.opcode = 'custom-call'
+    fused_root.operand_ids[:] = [param.id for param in parameters]
+    fused_root.custom_call_target = 'AwsNeuronNeff'
+    fused_root.backend_config = neff_bytes
+    fused_root.frontend_attributes.map['valid_inputs'] = ','.join(['1' for _ in parameters])
+    while entry.instructions:
+        entry.instructions.pop()
+    entry.instructions.extend(parameters)
+    entry.instructions.append(fused_root)
+    return hlo_module.SerializeToString()
+
 # Create dummy libneuronxla module
 mod = types.ModuleType('libneuronxla')
 
@@ -218,7 +243,11 @@ def my_neuronx_cc(code, code_format, platform_version, file_prefix):
         target = 'trn1'
         
     neff_bytes, compiled_hlo_bytes = _neuronx_cc_impl_fast(code, target)
-    return 0, neff_bytes
+    if neff_bytes:
+        compiled_hlo_bytes = _wrap_neff_as_custom_call(code, neff_bytes)
+        return 0, compiled_hlo_bytes
+    else:
+        return 0, b''
 
 mod.neuronx_cc = my_neuronx_cc
 
