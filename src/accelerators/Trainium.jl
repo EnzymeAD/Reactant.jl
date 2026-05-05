@@ -78,6 +78,33 @@ bin_dir = os.path.join(target_dir, 'bin')
 os.environ['PATH'] = bin_dir + os.pathsep + os.environ.get('PATH', '')
 os.environ['PYTHONPATH'] = target_dir + os.pathsep + os.environ.get('PYTHONPATH', '')
 
+# Ensure neuronxcc is installed using pip.pyz
+try:
+    import neuronxcc
+    print('neuronxcc already available')
+except ImportError:
+    print('neuronxcc not found, installing using pip.pyz...')
+    pip_pyz_path = os.path.join(plugin_dir, 'pip.pyz')
+    if not os.path.exists(pip_pyz_path):
+        raise FileNotFoundError(f"pip.pyz not found at {pip_pyz_path}")
+        
+    old_argv = sys.argv
+    # Install libneuronxla and neuronx-cc from AWS Neuron repo
+    sys.argv = ['pip', 'install', '--target', target_dir, '--extra-index-url', 'https://pip.repos.neuron.amazonaws.com/', 'libneuronxla', 'neuronx-cc']
+    try:
+        import runpy
+        runpy.run_path(pip_pyz_path, run_name='__main__')
+    except SystemExit as e:
+        if e.code != 0:
+            raise RuntimeError(f'pip failed with code {e.code}')
+    finally:
+        sys.argv = old_argv
+    
+    import importlib
+    importlib.invalidate_caches()
+    
+    print('Dependencies installed successfully')
+
 class GlobalCounter:
     _counter = 0
     def __call__(self):
@@ -272,7 +299,12 @@ function get_trainium_pjrt_plugin_path()
     if isfile(dev_path)
         return dev_path
     end
-    # Check if it is in the scratch space as a directory
+    # Check if it is in the scratch space under python_packages (installed via pip)
+    pip_path = joinpath(get_trainium_pjrt_plugin_dir(), "python_packages", "libneuronxla", trainium_pjrt_plugin_name[])
+    if isfile(pip_path)
+        return pip_path
+    end
+    # Check if it is in the scratch space as a directory (manually unzipped)
     dir_path = joinpath(get_trainium_pjrt_plugin_dir(), "libneuronxla", trainium_pjrt_plugin_name[])
     if isfile(dir_path)
         return dir_path
@@ -284,64 +316,17 @@ function download_trainium_pjrt_plugin_if_needed(dir=nothing)
     dir === nothing && (dir = get_trainium_pjrt_plugin_dir())
     @assert dir !== nothing "trainium_pjrt_plugin_dir is not set!"
 
-    trainium_pjrt_plugin_path = joinpath(dir, "libneuronxla", trainium_pjrt_plugin_name[])
-    
-    if isfile(trainium_pjrt_plugin_path)
-        @debug "Trainium PJRT plugin already found in '$(trainium_pjrt_plugin_path)', nothing to do"
+    pip_path = joinpath(dir, "pip.pyz")
+    if isfile(pip_path)
+        @debug "pip.pyz already found in '$(pip_path)', nothing to do"
     else
-        mkpidlock(joinpath(dir, "download_trainium_pjrt_plugin.lock")) do
-            if !isfile(trainium_pjrt_plugin_path)
-                @debug "Will install the Trainium PJRT plugin to '$(trainium_pjrt_plugin_path)'"
-                mktempdir() do tmp_dir
-                    # Download and unzip libneuronxla wheel to get libneuronpjrt.so
-                    zip_file_path = joinpath(tmp_dir, "libneuronxla.zip")
-                    wheel_url = "https://pip.repos.neuron.amazonaws.com/libneuronxla/$(TRAINIUM_WHEEL)"
-                    @debug "Downloading Trainium PJRT plugin from '$(wheel_url)'"
-                    Downloads.download(wheel_url, zip_file_path)
-                    run(
-                        pipeline(
-                            `$(p7zip()) x -tzip -o$(tmp_dir) -- $(zip_file_path)`, devnull
-                        ),
-                    )
-                    # Move the whole libneuronxla directory to dir
-                    mv(joinpath(tmp_dir, "libneuronxla"), joinpath(dir, "libneuronxla"); force=true)
-                    
-                    # Download and unzip neuronx-cc wheel
-                    neuronx_cc_url = "https://pip.repos.neuron.amazonaws.com/neuronx-cc/neuronx_cc-2.24.8799.0%2B6f62ff7c-cp310-cp310-linux_x86_64.whl"
-                    neuronx_cc_zip = joinpath(tmp_dir, "neuronx_cc.zip")
-                    @debug "Downloading neuronx-cc from '$(neuronx_cc_url)'"
-                    Downloads.download(neuronx_cc_url, neuronx_cc_zip)
-                    run(
-                        pipeline(
-                            `$(p7zip()) x -tzip -o$(tmp_dir)/neuronx_cc -- $(neuronx_cc_zip)`, devnull
-                        ),
-                    )
-                    # Move content to dir/python_packages
-                    python_packages_dir = joinpath(dir, "python_packages")
-                    mkpath(python_packages_dir)
-                    for f in readdir(joinpath(tmp_dir, "neuronx_cc"); join=true)
-                        mv(f, joinpath(python_packages_dir, basename(f)); force=true)
-                    end
-                    
-                    # Create bin/neuronx-cc script manually since we bypassed pip
-                    bin_dir = joinpath(python_packages_dir, "bin")
-                    mkpath(bin_dir)
-                    script_path = joinpath(bin_dir, "neuronx-cc")
-                    open(script_path, "w") do f
-                        write(f, """
-#!/usr/bin/python3
-import sys
-from neuronxcc.driver.CommandDriver import main
-if __name__ == '__main__':
-    sys.argv[0] = sys.argv[0].removesuffix('.exe')
-    sys.exit(main())
-""")
-                    end
-                    chmod(script_path, 0o755)
-                end
+        mkpidlock(joinpath(dir, "download_pip.lock")) do
+            if !isfile(pip_path)
+                @debug "Downloading pip.pyz to '$(pip_path)'"
+                pip_url = "https://bootstrap.pypa.io/pip/pip.pyz"
+                Downloads.download(pip_url, pip_path)
             end
         end
-        @assert isfile(trainium_pjrt_plugin_path)
     end
 end
 
