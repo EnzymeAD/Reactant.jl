@@ -1414,7 +1414,9 @@ function compile_mlir!(
         ",",
     )
     lower_enzymexla_ml_pass = "lower-enzymexla-ml"
-    lower_enzymexla_mpi_pass = "lower-enzymexla-mpi{backend=$backend}"
+    default_comm_handle = default_nccl_comm_handle()
+    lower_enzymexla_mpi_pass =
+        "lower-enzymexla-mpi{backend=$backend comm=$default_comm_handle}"
     lower_enzymexla_passes = join(
         [lower_enzymexla_linalg_pass, lower_enzymexla_ml_pass, lower_enzymexla_mpi_pass],
         ",",

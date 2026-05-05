@@ -271,6 +271,12 @@ const TracedType = Union{TracedRArray,TracedRNumber,MissingTracedValue}
 include("ControlFlow.jl")
 include("Tracing.jl")
 
+function default_nccl_comm_handle()
+    ext = Base.get_extension(@__MODULE__, :ReactantNCCLExt)
+    ext === nothing && error("ReactantNCCLExt is not loaded; load NCCL and MPI first")
+    return ext.default_comm_handle()
+end
+
 include("Compiler.jl")
 
 include("Overlay.jl")
