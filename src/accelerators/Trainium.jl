@@ -115,7 +115,7 @@ def _neuronx_cc_impl_fast(code, target):
             ver_cmd = ['neuronx-cc', '--version']
             ncc_version = subprocess.check_output(
                 ver_cmd, stderr=subprocess.STDOUT).decode()
-            ncc_version, *_ = ncc_version.split('\n')
+            ncc_version, *_ = ncc_version.split('\\n')
             *_, ncc_version = ncc_version.split('version ')
             with open(os.path.join(tmpdir, 'neuronx_cc_metadata.json'), 'w') as fp:
                 json.dump([ncc_version, cmd], fp)
