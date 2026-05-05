@@ -117,13 +117,16 @@ def _neuronx_cc_impl_fast(code, target):
         cmd.append(hlo_module_path)
         cmd.extend(flags)
         if args.dump is not None:
-            ver_cmd = ['neuronx-cc', '--version']
-            ncc_version = subprocess.check_output(
-                ver_cmd, stderr=subprocess.STDOUT).decode()
-            ncc_version, *_ = ncc_version.split('\\n')
-            *_, ncc_version = ncc_version.split('version ')
-            with open(os.path.join(tmpdir, 'neuronx_cc_metadata.json'), 'w') as fp:
-                json.dump([ncc_version, cmd], fp)
+            try:
+                ver_cmd = ['neuronx-cc', '--version']
+                ncc_version = subprocess.check_output(
+                    ver_cmd, stderr=subprocess.STDOUT).decode()
+                ncc_version, *_ = ncc_version.split('\\n')
+                *_, ncc_version = ncc_version.split('version ')
+                with open(os.path.join(tmpdir, 'neuronx_cc_metadata.json'), 'w') as fp:
+                    json.dump([ncc_version, cmd], fp)
+            except Exception as e:
+                print(f"Warning: failed to get neuronx-cc version: {e}")
         
         env = os.environ.copy()
         ld_preload = env.get('LD_PRELOAD', '')
