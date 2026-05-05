@@ -265,6 +265,13 @@ print('Dummy libneuronxla module with real _neuronx_cc_impl_fast registered')
 
     ccall((:PyRun_SimpleString, PYTHON_LIB), Cint, (Cstring,), py_code)
 
+    # Load custom libfabric if available to avoid version mismatch
+    libfabric_path = "/home/ubuntu/libfabric_extracted/opt/amazon/efa/lib/libfabric.so.1"
+    if isfile(libfabric_path)
+        Libdl.dlopen(libfabric_path, Libdl.RTLD_GLOBAL)
+        @debug "Loaded custom libfabric from $libfabric_path"
+    end
+
     return Reactant.XLA.PJRT.MakeClientUsingPluginAPI(get_trainium_pjrt_plugin_path(), "trainium", "Trainium")
 end
 
