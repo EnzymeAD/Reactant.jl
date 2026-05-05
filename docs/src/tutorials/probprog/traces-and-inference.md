@@ -150,24 +150,21 @@ trace, weight = ProbProg.generate_(rng, obs, model, xs)
 
 ### `generate`
 
-For embedding inside a compiled function, flatten manually and call
-[`generate`](@ref):
+For embedding inside a compiled function, prepare the constraint tensor
+with [`flatten_constraint`](@ref) and the address set with
+[`extract_addresses`](@ref), then call [`generate`](@ref):
 
 ```julia
 constrained_addresses = ProbProg.extract_addresses(obs)
-obs_flat = Float64[]
-for addr in constrained_addresses
-    append!(obs_flat, vec(obs[addr]))
-end
-obs_tensor = Reactant.to_rarray(reshape(obs_flat, 1, :))
+obs_tensor            = ProbProg.flatten_constraint(obs)
 
 trace_tensor, weight, _ = ProbProg.generate(
     rng, obs_tensor, model, xs; constrained_addresses,
 )
 ```
 
-Append values in `extract_addresses(obs)` order. `generate_` handles this
-automatically.
+Note that [`flatten_constraint`](@ref) concatenates values in the same order as
+the addresses returned by [`extract_addresses`](@ref). `generate_` helper handles this automatically.
 
 ## Addresses
 
