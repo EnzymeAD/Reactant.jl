@@ -1,0 +1,9 @@
+[deps]
+MPI = "da04e1cc-30fd-572f-bb4f-1f8673147195"
+NCCL = "3fe64909-d7a1-4096-9b7d-7a0f12cf0f6b"
+Reactant = "3c362404-f566-11ee-1572-e11a4b42c853"
+Reactant_jll = "0192cb87-2b54-54ad-80e0-3be72ad8a3c0"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[sources]
+Reactant = {path = "/home/romanlee/codes/Reactant.jl"}
