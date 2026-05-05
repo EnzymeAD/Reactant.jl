@@ -87,4 +87,5 @@ when `adapt_step_size = true`.
 | `unflatten_trace`              | `unflatten_trace(trace_tensor, weight, entries, retval) -> Trace` | [Traces and constrained inference](@ref probprog-traces) |
 | `filter_entries_by_selection`  | `filter_entries_by_selection(entries, selection)` | [MCMC: MH, HMC, NUTS](@ref probprog-mcmc) |
 | `extract_addresses`            | `extract_addresses(constraint::Constraint) -> Set{Address}` | [Traces and constrained inference](@ref probprog-traces) |
+| `flatten_constraint`           | `flatten_constraint(constraint::Constraint) -> ConcreteRArray` | [Traces and constrained inference](@ref probprog-traces) |
 | `mcmc_summary`                 | `mcmc_summary(samples; names)` &nbsp;/&nbsp; `mcmc_summary(trace::Trace)` | [Running and resuming chains](@ref probprog-chains) |

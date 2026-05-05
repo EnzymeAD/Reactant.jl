@@ -95,25 +95,15 @@ obs = ProbProg.Constraint(:ys => ys)
 
 The current implementation requires a bit of boilerplate to flatten the
 `Constraint` into a tensor representation and to extract its address set
-before passing them to the `@compile`'d function below. See [Traces and
-constrained inference](@ref probprog-traces) for details. The resulting
-tensor and address set:
+before passing them to the `@compile`'d function below (see
+[Traces and constrained inference](@ref probprog-traces) for details):
 
-```@setup probprog_index
+```@example probprog_index
+obs_tensor = ProbProg.flatten_constraint(obs)
+```
+
+```@example probprog_index
 constrained_addresses = ProbProg.extract_addresses(obs)
-obs_flat = Float64[]
-for addr in constrained_addresses
-    append!(obs_flat, vec(obs[addr]))
-end
-obs_tensor = Reactant.to_rarray(reshape(obs_flat, 1, :))
-```
-
-```@example probprog_index
-obs_tensor
-```
-
-```@example probprog_index
-constrained_addresses
 ```
 
 We then specify what parameters to infer:
