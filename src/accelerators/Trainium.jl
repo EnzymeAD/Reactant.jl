@@ -265,11 +265,24 @@ print('Dummy libneuronxla module with real _neuronx_cc_impl_fast registered')
 
     ccall((:PyRun_SimpleString, PYTHON_LIB), Cint, (Cstring,), py_code)
 
-    # Load custom libfabric if available to avoid version mismatch
-    libfabric_path = "/home/ubuntu/libfabric_extracted/opt/amazon/efa/lib/libfabric.so.1"
+    scratch_dir = get_trainium_pjrt_plugin_dir()
+    
+    # Load custom libefa
+    libefa_path = joinpath(scratch_dir, "libfabric_extracted", "usr", "lib64", "libefa.so.1")
+    if isfile(libefa_path)
+        Libdl.dlopen(libefa_path, Libdl.RTLD_GLOBAL)
+        @debug "Loaded custom libefa from $libefa_path"
+    else
+        error("libefa.so.1 not found in scratch space at $libefa_path")
+    end
+
+    # Load custom libfabric to avoid version mismatch
+    libfabric_path = joinpath(scratch_dir, "libfabric_extracted", "opt", "amazon", "efa", "lib", "libfabric.so.1")
     if isfile(libfabric_path)
         Libdl.dlopen(libfabric_path, Libdl.RTLD_GLOBAL)
         @debug "Loaded custom libfabric from $libfabric_path"
+    else
+        error("libfabric.so.1 not found in scratch space at $libfabric_path")
     end
 
     return Reactant.XLA.PJRT.MakeClientUsingPluginAPI(get_trainium_pjrt_plugin_path(), "trainium", "Trainium")
@@ -370,6 +383,79 @@ function download_trainium_pjrt_plugin_if_needed(dir=nothing)
                 @debug "Downloading pip.pyz to '$(pip_path)'"
                 pip_url = "https://bootstrap.pypa.io/pip/pip.pyz"
                 Downloads.download(pip_url, pip_path)
+            end
+        end
+    end
+    
+    # Download and extract EFA installer for libfabric
+    efa_extracted_dir = joinpath(dir, "libfabric_extracted")
+    if isdir(efa_extracted_dir)
+        @debug "EFA libraries already extracted in '$(efa_extracted_dir)', nothing to do"
+    else
+        mkpidlock(joinpath(dir, "download_efa.lock")) do
+            if !isdir(efa_extracted_dir)
+                @debug "Downloading EFA installer..."
+                efa_url = "https://efa-installer.amazonaws.com/aws-efa-installer-latest.tar.gz"
+                efa_tarball = joinpath(dir, "aws-efa-installer-latest.tar.gz")
+                Downloads.download(efa_url, efa_tarball)
+                
+                @debug "Extracting EFA installer..."
+                # Use p7zip to extract .tar.gz to .tar
+                run(`$(p7zip()) x -y $(efa_tarball) -o$(dir)`)
+                
+                tar_file = joinpath(dir, "aws-efa-installer-latest.tar")
+                # Extract .tar using p7zip
+                run(`$(p7zip()) x -y $(tar_file) -o$(dir)`)
+                
+                # Clean up tarballs
+                rm(efa_tarball; force=true)
+                rm(tar_file; force=true)
+                
+                # Now find and extract libfabric deb
+                extracted_efa_dir = joinpath(dir, "aws-efa-installer")
+                if isdir(extracted_efa_dir)
+                    deb_path = joinpath(extracted_efa_dir, "DEBS", "UBUNTU2204", "x86_64")
+                    if isdir(deb_path)
+                        debs = readdir(deb_path; join=true)
+                        libfabric_deb = filter(f -> occursin("libfabric1-aws", f), debs)
+                        if !isempty(libfabric_deb)
+                            @debug "Extracting libfabric deb: $(libfabric_deb[1])"
+                            mkpath(efa_extracted_dir)
+                            
+                            # Extract deb using p7zip (creates data.tar.xz or similar)
+                            run(`$(p7zip()) x -y $(libfabric_deb[1]) -o$(efa_extracted_dir)`)
+                            
+                            # Find data.tar.*
+                            data_files = readdir(efa_extracted_dir; join=true)
+                            data_tar_comp = filter(f -> occursin("data.tar", f), data_files)
+                            if !isempty(data_tar_comp)
+                                # Extract data.tar.* to data.tar using p7zip
+                                run(`$(p7zip()) x -y $(data_tar_comp[1]) -o$(efa_extracted_dir)`)
+                                
+                                data_tar = joinpath(efa_extracted_dir, "data.tar")
+                                if isfile(data_tar)
+                                    run(`$(p7zip()) x -y $(data_tar) -o$(efa_extracted_dir)`)
+                                    rm(data_tar; force=true)
+                                end
+                                rm(data_tar_comp[1]; force=true)
+                        end
+                        
+                        # Also extract libefa from SUSE RPM if available
+                        suse_path = joinpath(extracted_efa_dir, "RPMS", "SUSE", "x86_64", "rdma-core")
+                        if isdir(suse_path)
+                            rpms = readdir(suse_path; join=true)
+                            libefa_rpm = filter(f -> occursin("libefa1", f), rpms)
+                            if !isempty(libefa_rpm)
+                                @debug "Extracting libefa rpm: $(libefa_rpm[1])"
+                                # Extract RPM using p7zip
+                                run(`$(p7zip()) x -y $(libefa_rpm[1]) -o$(efa_extracted_dir)`)
+                            end
+                        end
+                    end
+                    end
+                    # Clean up the large installer directory
+                    rm(extracted_efa_dir; recursive=true, force=true)
+                end
             end
         end
     end
