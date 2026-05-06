@@ -56,31 +56,24 @@ function make_pjrt_client(;
     ENV["PATH"] = bin_dir * ":" * get(ENV, "PATH", "")
     
     # Create a dummy libneuronxla module with expected attributes
-    py_code = """
+    # Phase 1: Install dependencies if needed
+    py_install_code = """
 import sys
 import os
 import types
-import subprocess
 import socket
 import argparse
-import json
 import shlex
 import tempfile
+import subprocess
+import json
 
 plugin_dir = '$(escape_string(plugin_dir))'
 target_dir = '$(escape_string(python_packages_dir))'
 
-sys.path.append(plugin_dir)
-sys.path.append(target_dir)
+if target_dir not in sys.path:
+    sys.path.append(target_dir)
 
-
-
-# Add bin directory to system PATH in Python environment
-bin_dir = os.path.join(target_dir, 'bin')
-os.environ['PATH'] = bin_dir + os.pathsep + os.environ.get('PATH', '')
-os.environ['PYTHONPATH'] = target_dir + os.pathsep + os.environ.get('PYTHONPATH', '')
-
-# Ensure neuronxcc is installed using pip.pyz
 try:
     import neuronxcc
     print('neuronxcc already available')
@@ -91,7 +84,6 @@ except ImportError:
         raise FileNotFoundError(f"pip.pyz not found at {pip_pyz_path}")
         
     old_argv = sys.argv
-    # Install libneuronxla and neuronx-cc from AWS Neuron repo
     sys.argv = ['pip', 'install', '--target', target_dir, '--extra-index-url', 'https://pip.repos.neuron.amazonaws.com/', 'libneuronxla', 'neuronx-cc']
     try:
         import runpy
@@ -106,13 +98,26 @@ except ImportError:
     importlib.invalidate_caches()
     
     print('Dependencies installed successfully')
+"""
+    ccall((:PyRun_SimpleString, PYTHON_LIB), Cint, (Cstring,), py_install_code)
 
-# Import hlo_pb2 after installing dependencies
-try:
-    from libneuronxla.proto import hlo_pb2
-    print('Successfully imported hlo_pb2')
-except Exception as e:
-    print(f'Failed to import hlo_pb2: {e}')
+    # Phase 2: Write the dummy package to a file so it's importable by spawned processes
+    reactant_lib_path = joinpath(python_packages_dir, "reactant_lib.py")
+    
+    # We write this file dynamically to avoid hardcoding machine-specific paths
+    open(reactant_lib_path, "w") do io
+        write(io, """
+import sys
+import os
+import types
+import socket
+import argparse
+import shlex
+import tempfile
+import subprocess
+import json
+
+from libneuronxla.proto import hlo_pb2
 
 class GlobalCounter:
     _counter = 0
@@ -120,6 +125,8 @@ class GlobalCounter:
         count = GlobalCounter._counter
         GlobalCounter._counter += 1
         return count
+
+global_counter = GlobalCounter()
 
 def _ncc_helper(cmd):
     import sys
@@ -138,7 +145,6 @@ def _ncc_helper(cmd):
         sys.argv = old_argv
 
 def _neuronx_cc_impl_fast(code, target):
-    
     cmd = [
         'neuronx-cc',
         'compile',
@@ -159,7 +165,7 @@ def _neuronx_cc_impl_fast(code, target):
         if args.dump is not None:
             tmpdir = os.path.abspath(args.dump)
             tmpdir = os.path.join(
-                tmpdir, f'pid{os.getpid()}-program{GlobalCounter()()}')
+                tmpdir, f'pid{os.getpid()}-program{global_counter()}')
             os.makedirs(tmpdir, exist_ok=True)
             cmd.extend(['--pipeline', 'compile', 'SaveTemps'])
         hlo_module_path = os.path.join(tmpdir, 'file.code')
@@ -174,7 +180,7 @@ def _neuronx_cc_impl_fast(code, target):
                 ver_cmd = ['neuronx-cc', '--version']
                 ncc_version = subprocess.check_output(
                     ver_cmd, stderr=subprocess.STDOUT).decode()
-                ncc_version, *_ = ncc_version.split('\\n')
+                ncc_version, *_ = ncc_version.split('\\\\n')
                 *_, ncc_version = ncc_version.split('version ')
                 with open(os.path.join(tmpdir, 'neuronx_cc_metadata.json'), 'w') as fp:
                     json.dump([ncc_version, cmd], fp)
@@ -193,6 +199,10 @@ def _neuronx_cc_impl_fast(code, target):
         # This avoids fork deadlocks in multi-threaded Julia, and avoids pickling errors in neuronxcc!
         import multiprocessing
         ctx = multiprocessing.get_context('spawn')
+        
+        # Ensure child process can find us
+        os.environ['PYTHONPATH'] = '$(escape_string(python_packages_dir))' + os.pathsep + os.environ.get('PYTHONPATH', '')
+        
         p = ctx.Process(target=_ncc_helper, args=(cmd,))
         p.start()
         p.join()
@@ -232,12 +242,8 @@ def _wrap_neff_as_custom_call(code, neff_bytes):
     entry.instructions.append(fused_root)
     return hlo_module.SerializeToString()
 
-# Create dummy libneuronxla module
-mod = types.ModuleType('libneuronxla')
-
 def dummy_configure():
     pass
-mod.configure_environment = dummy_configure
 
 _USED_PORTS = set()
 
@@ -257,11 +263,8 @@ def my_hook():
         os.environ['NEURON_RT_ROOT_COMM_ID'] = f'localhost:{port}'
         print(f"Set NEURON_RT_ROOT_COMM_ID to localhost:{port}")
 
-mod.hook = my_hook
-
 def dummy_callback(name, addressable_device_index, execution_count):
     return 'inputs'
-mod._dump_hlo_snapshot_callback = dummy_callback
 
 def my_neuronx_cc(code, code_format, platform_version, file_prefix):
     platform_str = platform_version.decode()
@@ -280,14 +283,25 @@ def my_neuronx_cc(code, code_format, platform_version, file_prefix):
         return 0, compiled_hlo_bytes
     else:
         return 0, b''
+""")
+    end
 
-mod.neuronx_cc = my_neuronx_cc
+    # Phase 3: Register the dummy module using the package we just wrote
+    py_hook_code = """
+import sys
+import types
+import reactant_lib
+
+mod = types.ModuleType('libneuronxla')
+mod.configure_environment = reactant_lib.dummy_configure
+mod.hook = reactant_lib.my_hook
+mod._dump_hlo_snapshot_callback = reactant_lib.dummy_callback
+mod.neuronx_cc = reactant_lib.my_neuronx_cc
 
 sys.modules['libneuronxla'] = mod
-print('Dummy libneuronxla module with real _neuronx_cc_impl_fast registered')
+print('Dummy libneuronxla module registered using reactant_lib')
 """
-
-    ccall((:PyRun_SimpleString, PYTHON_LIB), Cint, (Cstring,), py_code)
+    ccall((:PyRun_SimpleString, PYTHON_LIB), Cint, (Cstring,), py_hook_code)
 
     scratch_dir = get_trainium_pjrt_plugin_dir()
     
