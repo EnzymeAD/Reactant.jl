@@ -198,17 +198,9 @@ def _neuronx_cc_impl_fast(code, target):
 
         # FIXED: Use a spawned process to run CommandDriver.main
         # This avoids fork deadlocks in multi-threaded Julia, and avoids pickling errors in neuronxcc!
-        import multiprocessing
-        ctx = multiprocessing.get_context('spawn')
-        
-        # Ensure child process can find us
-        os.environ['PYTHONPATH'] = '$(escape_string(python_packages_dir))' + os.pathsep + os.environ.get('PYTHONPATH', '')
-        
-        p = ctx.Process(target=_ncc_helper, args=(cmd,))
-        p.start()
-        p.join()
-        if p.exitcode != 0:
-            raise RuntimeError(f"Helper process failed with exit code {p.exitcode}")
+        # FIXED: use check_call and forward stdout/stderr directly
+        import sys
+        subprocess.check_call(cmd, cwd=tmpdir, env=env, stdout=sys.stdout, stderr=sys.stderr)
 
         with open(neff_path, 'rb') as fp:
             neff_bytes = fp.read()
