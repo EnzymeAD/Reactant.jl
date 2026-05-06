@@ -901,7 +901,7 @@ function compile(job)
         )
 
         if !Reactant.precompiling()
-            GPUCompiler.link_library!(mod, GPUCompiler.load_runtime(job))
+            LLVM.link!(mod, GPUCompiler.load_runtime(job); only_needed=true)
         end
         entryname = LLVM.name(meta.entry)
 
