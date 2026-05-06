@@ -76,7 +76,6 @@ if target_dir not in sys.path:
 
 try:
     import neuronxcc
-    print('neuronxcc already available')
 except ImportError:
     print('neuronxcc not found, installing using pip.pyz...')
     pip_pyz_path = os.path.join(plugin_dir, 'pip.pyz')
@@ -96,8 +95,6 @@ except ImportError:
     
     import importlib
     importlib.invalidate_caches()
-    
-    print('Dependencies installed successfully')
 """
     ccall((:PyRun_SimpleString, PYTHON_LIB), Cint, (Cstring,), py_install_code)
 
@@ -317,7 +314,6 @@ mod._dump_hlo_snapshot_callback = reactant_lib.dummy_callback
 mod.neuronx_cc = reactant_lib.my_neuronx_cc
 
 sys.modules['libneuronxla'] = mod
-print('Dummy libneuronxla module registered using reactant_lib')
 """
     ccall((:PyRun_SimpleString, PYTHON_LIB), Cint, (Cstring,), py_hook_code)
 
