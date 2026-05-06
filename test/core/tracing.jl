@@ -104,7 +104,11 @@ end
         (AbstractVector, AbstractVector, AbstractVector),
         (AbstractMatrix, AbstractMatrix, AbstractMatrix),
         (AbstractVector{<:Integer}, AbstractVector{<:Integer}, AbstractVector{<:Integer}),
-        (AbstractVector{<:Int}, AbstractVector{<:Int}, AbstractVector{<:TracedRNumber{Int}}),
+        (
+            AbstractVector{<:Int},
+            AbstractVector{<:Int},
+            AbstractVector{<:TracedRNumber{Int}}
+        ),
 
         # BitArray types
         (BitArray, BitArray, BitArray),
