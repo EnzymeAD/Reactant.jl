@@ -175,7 +175,7 @@ def _neuronx_cc_impl_fast(code, target):
         # FIXED: use check_call with file redirection to avoid hang on filled pipes
         with open(os.path.join(tmpdir, 'stdout.txt'), 'w') as out, \
              open(os.path.join(tmpdir, 'stderr.txt'), 'w') as err:
-            subprocess.check_call(cmd, cwd=tmpdir, env=env, stdout=out, stderr=err)
+            subprocess.check_call(cmd, cwd=tmpdir, env=env, stdout=out, stderr=err, stdin=subprocess.DEVNULL)
         
         # Flush output to parent process pipes after compiler finished
         # to avoid dead-lock on filled pipes during compilation
