@@ -98,7 +98,6 @@ end
         @test res ≈ fn(x)
         @test res isa ConcreteRNumber{Complex{Float32}}
     end
-
 end
 
 @testset "isfinite" begin
