@@ -107,7 +107,7 @@ end
         (
             AbstractVector{<:Int},
             AbstractVector{<:Int},
-            AbstractVector{<:TracedRNumber{Int}}
+            AbstractVector{<:TracedRNumber{Int}},
         ),
 
         # BitArray types
