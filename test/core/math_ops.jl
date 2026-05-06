@@ -100,7 +100,7 @@ end
 
     @testset "sinc" begin
         @test @jit(sinc.(x_ra)) ≈ sinc.(x)
-        @test @jit(sinc.(x_ra)) isa ConcreteRArray{Float64,2}
+        @test @jit(sinc.(x_ra)) isa ConcreteRArray{Float32,2}
 
         xz = ConcreteRNumber(0.0)
         xinf = ConcreteRNumber(Inf)
@@ -108,16 +108,16 @@ end
         @test @jit(sinc(ConcreteRNumber(Inf))) ≈ sinc(Inf)
 
         # Complex test
-        xc = Reactant.TestUtils.construct_test_array(ComplexF64, 4, 16)[:, 1:7]
+        xc = Reactant.TestUtils.construct_test_array(ComplexF32, 4, 16)[:, 1:7]
         xc_ra = Reactant.to_rarray(xc)
 
         @test @jit(sinc.(xc_ra)) ≈ sinc.(xc)
-        @test @jit(sinc.(xc_ra)) isa ConcreteRArray{ComplexF64,2}
+        @test @jit(sinc.(xc_ra)) isa ConcreteRArray{ComplexF32,2}
 
         # Ensure we hit the small-argument branch
-        xz0 = 1e-5 - 2e-5im
+        xz0 = ComplexF32(1e-5 - 2e-5im)
         xz = ConcreteRNumber(xz0) # Below the threshold
-        xinf = ConcreteRNumber(Inf + 1im)
+        xinf = ConcreteRNumber(ComplexF32(Inf + 1im))
         @test @jit(sinc(xz)) ≈ sinc(xz0)
         @test @jit(sinc(xinf)) ≈ sinc(Inf + 1im)
     end
