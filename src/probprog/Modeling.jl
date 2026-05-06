@@ -225,18 +225,22 @@ function simulate_(rng::AbstractRNG, f::Function, args::Vararg{Any,Nargs}) where
     return trace, trace.weight
 end
 
+function flatten_constraint(constraint::Constraint)
+    addresses = extract_addresses(constraint)
+    flat = Float64[]
+    for addr in addresses
+        append!(flat, vec(constraint[addr]))
+    end
+    return to_rarray(reshape(flat, 1, :))
+end
+
 # Gen-like helper function.
 function generate_(
     rng::AbstractRNG, constraint::Constraint, f::Function, args::Vararg{Any,Nargs}
 ) where {Nargs}
     tt = TracedTrace()
     constrained_addresses = extract_addresses(constraint)
-
-    constraint_flat = Float64[]
-    for addr in constrained_addresses
-        append!(constraint_flat, vec(constraint[addr]))
-    end
-    constraint_tensor = to_rarray(reshape(constraint_flat, 1, :))
+    constraint_tensor = flatten_constraint(constraint)
 
     compiled_fn = ScopedValues.with(TRACING_TRACE => tt) do
         @compile optimize = :probprog generate(

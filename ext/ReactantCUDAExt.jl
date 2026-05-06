@@ -661,9 +661,15 @@ function vendored_optimize_module!(
     LLVM.@dispose pb = LLVM.NewPMPassBuilder() begin
         LLVM.register!(pb, GPUCompiler.NVVMReflectPass())
 
-        LLVM.add!(pb, LLVM.NewPMFunctionPassManager()) do fpm
-            # TODO(#2239): need to run this earlier; optimize_module! is called after addOptimizationPasses!
+        if GPUCompiler.NVVMReflectPass().type != :function
             LLVM.add!(fpm, GPUCompiler.NVVMReflectPass())
+        end
+
+        LLVM.add!(pb, LLVM.NewPMFunctionPassManager()) do fpm
+            if GPUCompiler.NVVMReflectPass().type == :function
+                # TODO(#2239): need to run this earlier; optimize_module! is called after addOptimizationPasses!
+                LLVM.add!(fpm, GPUCompiler.NVVMReflectPass())
+            end
 
             # needed by GemmKernels.jl-like code
             LLVM.add!(fpm, LLVM.SpeculativeExecutionPass())
