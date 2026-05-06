@@ -42,7 +42,7 @@ end
 
 @inline function traced_getfield(
     @nospecialize(
-        obj::Union{Reactant.AbstractConcreteArray,Reactant.AbstractConcreteNumber}
+        obj::Union{AbstractConcreteArray,AbstractConcreteNumber}
     ),
     field,
 )
@@ -56,7 +56,7 @@ end
 end
 
 @inline function traced_setfield!(
-    @nospecialize(obj::Reactant.AbstractConcreteNumber), field, val, path
+    @nospecialize(obj::AbstractConcreteNumber), field, val, path
 )
     if DEBUG_ALIASED_BUFFER_ASSIGNMENT_ERROR[] && field == :data
         if val ∈ keys(DEBUG_BUFFER_POINTERS_STORE_DICT)
