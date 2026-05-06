@@ -6,7 +6,7 @@ using Downloads: Downloads
 using p7zip_jll: p7zip
 using FileWatching: mkpidlock
 
-using Libdl
+import Libdl
 
 const TRAINIUM_WHEEL = "libneuronxla-2.2.16408.0%2B50c26cbd-py3-none-linux_x86_64.whl"
 const PYTHON_LIB = "/usr/lib/python3.10/config-3.10-x86_64-linux-gnu/libpython3.10.so"
