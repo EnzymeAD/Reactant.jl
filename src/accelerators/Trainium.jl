@@ -172,17 +172,18 @@ def _neuronx_cc_impl_fast(code, target):
             )
             env['LD_PRELOAD'] = updated_ld_preload
 
-        # FIXED: use check_call with file redirection to avoid hang on filled pipes
-        with open(os.path.join(tmpdir, 'stdout.txt'), 'w') as out, \
-             open(os.path.join(tmpdir, 'stderr.txt'), 'w') as err:
-            subprocess.check_call(cmd, cwd=tmpdir, env=env, stdout=out, stderr=err, stdin=subprocess.DEVNULL)
+        # FIXED: Avoid subprocess and call Python main directly to avoid pipe hangs
+        import sys
+        from neuronxcc.driver.CommandDriver import main as ncc_main
         
-        # Flush output to parent process pipes after compiler finished
-        # to avoid dead-lock on filled pipes during compilation
-        with open(os.path.join(tmpdir, 'stdout.txt'), 'r') as f:
-            sys.stdout.write(f.read())
-        with open(os.path.join(tmpdir, 'stderr.txt'), 'r') as f:
-            sys.stderr.write(f.read())
+        old_argv = sys.argv
+        sys.argv = cmd
+        try:
+            ret = ncc_main()
+            if ret != 0 and ret is not None:
+                raise RuntimeError(f"neuronx-cc failed with exit code {ret}")
+        finally:
+            sys.argv = old_argv
 
         with open(neff_path, 'rb') as fp:
             neff_bytes = fp.read()
