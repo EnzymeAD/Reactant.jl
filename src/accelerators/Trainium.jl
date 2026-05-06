@@ -172,8 +172,10 @@ def _neuronx_cc_impl_fast(code, target):
             )
             env['LD_PRELOAD'] = updated_ld_preload
 
-        # FIXED: use check_call instead of run to avoid hang
-        subprocess.check_call(cmd, cwd=tmpdir, env=env)
+        # FIXED: use check_call with file redirection to avoid hang on filled pipes
+        with open(os.path.join(tmpdir, 'stdout.txt'), 'w') as out, \
+             open(os.path.join(tmpdir, 'stderr.txt'), 'w') as err:
+            subprocess.check_call(cmd, cwd=tmpdir, env=env, stdout=out, stderr=err)
 
         with open(neff_path, 'rb') as fp:
             neff_bytes = fp.read()
