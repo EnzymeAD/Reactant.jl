@@ -105,6 +105,7 @@ except ImportError:
     reactant_lib_path = joinpath(python_packages_dir, "reactant_lib.py")
     
     # We write this file dynamically to avoid hardcoding machine-specific paths
+    if !isfile(reactant_lib_path)
     open(reactant_lib_path, "w") do io
         write(io, """
 import sys
@@ -284,6 +285,7 @@ def my_neuronx_cc(code, code_format, platform_version, file_prefix):
     else:
         return 0, b''
 """)
+    end
     end
 
     # Phase 3: Register the dummy module using the package we just wrote
