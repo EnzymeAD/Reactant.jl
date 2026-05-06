@@ -223,7 +223,7 @@ def _neuronx_cc_impl_fast(code, target):
         p.wait()
         
             
-        if p.returncode != 0:
+        if not killed and p.returncode != 0:
             raise RuntimeError(f"neuronx-cc failed with exit code {p.returncode}")
 
         with open(neff_path, 'rb') as fp:
