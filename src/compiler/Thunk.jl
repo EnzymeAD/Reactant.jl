@@ -1,3 +1,5 @@
+# This file defines the `Thunk` type, which represents a XLA-compiled function along with the required code to unwrap the arguments and to wrap the results.
+
 using ..Reactant: XLA
 
 # inspired by RuntimeGeneratedFunction.jl

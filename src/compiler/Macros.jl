@@ -1,3 +1,5 @@
+# This file defines the user-facing macros and functions for compiling and inspecting code.
+
 import ..ReactantCore: correct_maybe_bcast_call
 using ..Reactant: Reactant, MLIR
 

@@ -1,3 +1,5 @@
+# This file contains the MLIR optimization pass logic.
+
 using ..Reactant: Reactant, MLIR, OptimizeCommunicationOptions, ShardyPropagationOptions, CompileOptions
 
 const BFLOAT16_COMPILE_TYPE = Ref{DataType}(Float32)
