@@ -202,13 +202,25 @@ def _neuronx_cc_impl_fast(code, target):
         import sys
         env['PYTHONPATH'] = '$(escape_string(python_packages_dir))' + os.pathsep + env.get('PYTHONPATH', '')
         
-        p = subprocess.Popen(cmd, cwd=tmpdir, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        stdout_data, stderr_data = p.communicate()
+        p = subprocess.Popen(cmd, cwd=tmpdir, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
         
-        if stdout_data:
-            sys.stdout.write(stdout_data.decode())
-        if stderr_data:
-            sys.stderr.write(stderr_data.decode())
+        import atexit
+        def cleanup():
+            if p.poll() is None:
+                p.kill()
+        atexit.register(cleanup)
+        
+        killed = False
+        for line in p.stdout:
+            sys.stdout.write(line)
+            if 'Compiler status PASS' in line:
+                time.sleep(1) # Give it a bit of time to finish writing just in case
+                p.kill()
+                killed = True
+                break
+                
+        p.wait()
+        
             
         if p.returncode != 0:
             raise RuntimeError(f"neuronx-cc failed with exit code {p.returncode}")
