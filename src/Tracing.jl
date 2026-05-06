@@ -467,14 +467,11 @@ Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(ndevices),
     @nospecialize(runtime)
 ) where {T,N}
-    if mode == ConcreteToTraced
-        return AbstractArray{
-            <:traced_type_inner(T, seen, mode, track_numbers, ndevices, runtime),
-            ndims(A),
-        }
-    else
-        return A
-    end
+    T2 = A.var.ub
+    T´ = traced_type_inner(T2, seen, mode, track_numbers, ndevices, runtime)
+    T´var = Core.TypeVar(gensym(), T´)
+    typ = Core.apply_type(AbstractArray, T´var, N)
+    return Core.UnionAll(T´var, typ)
 end
 
 Base.@nospecializeinfer function traced_type_inner(
