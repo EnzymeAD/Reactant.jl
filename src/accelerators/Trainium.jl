@@ -198,9 +198,20 @@ def _neuronx_cc_impl_fast(code, target):
             )
             env['LD_PRELOAD'] = updated_ld_preload
 
-        # FIXED: use check_call and forward stdout/stderr directly
+        # FIXED: Use Popen and actively read pipes to avoid hangs on full buffers
         import sys
-        subprocess.check_call(cmd, cwd=tmpdir, env=env, stdout=sys.stdout, stderr=sys.stderr)
+        env['PYTHONPATH'] = '$(escape_string(python_packages_dir))' + os.pathsep + env.get('PYTHONPATH', '')
+        
+        p = subprocess.Popen(cmd, cwd=tmpdir, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        stdout_data, stderr_data = p.communicate()
+        
+        if stdout_data:
+            sys.stdout.write(stdout_data.decode())
+        if stderr_data:
+            sys.stderr.write(stderr_data.decode())
+            
+        if p.returncode != 0:
+            raise RuntimeError(f"neuronx-cc failed with exit code {p.returncode}")
 
         with open(neff_path, 'rb') as fp:
             neff_bytes = fp.read()
