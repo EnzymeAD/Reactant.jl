@@ -107,7 +107,6 @@ end
         @test @jit(sinc(ConcreteRNumber(0.0))) ≈ sinc(0.0)
         @test @jit(sinc(ConcreteRNumber(Inf))) ≈ sinc(Inf)
 
-
         # Complex test
         xc = Reactant.TestUtils.construct_test_array(ComplexF64, 4, 16)[:, 1:7]
         xc_ra = Reactant.to_rarray(xc)
@@ -122,8 +121,6 @@ end
         @test @jit(sinc(xz)) ≈ sinc(xz0)
         @test @jit(sinc(xinf)) ≈ sinc(Inf + 1im)
     end
-  
-
 end
 
 @testset "isfinite" begin

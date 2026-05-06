@@ -832,21 +832,20 @@ function Base.cis(x::TracedRNumber)
     s, c = sincos(x)
     return complex(c, s)
 end
-                      
-function Base.sinc(x::TracedRNumber) 
-    r = ifelse(iszero(x), one(x), sinpi(x)/(pi*x))
+
+function Base.sinc(x::TracedRNumber)
+    r = ifelse(iszero(x), one(x), sinpi(x) / (pi * x))
     return ifelse(isinf(x), zero(x), r)
 end
 
 function Base.sinc(x::TracedRNumber{<:Complex{T}}) where {T}
     r1 = ifelse(
         abs(x) < Base.Math._sinc_threshold(T),
-        evalpoly(x^2, (T(1), -T(pi)^2/6, T(pi)^4/120)),
-        sinpi(x) / (pi * x) 
+        evalpoly(x^2, (T(1), -T(pi)^2 / 6, T(pi)^4 / 120)),
+        sinpi(x) / (pi * x),
     )
     return ifelse(isinf(real(x)), zero(x), r1)
 end
-
 
 @noinline Base.Math.log10(x::TracedRNumber) = Base.Math._log(x, Val(10), :log10)
 @noinline Base.Math.log2(x::TracedRNumber) = Base.Math._log(x, Val(2), :log2)
