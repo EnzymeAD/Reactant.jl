@@ -123,7 +123,9 @@ class GlobalCounter:
 
 def _neuronx_cc_impl_fast(code, target):
     import multiprocessing
-    multiprocessing.set_start_method('spawn', force=True)
+    # Use get_context('spawn') and monkey patch Process to avoid "context has already been set" error
+    ctx = multiprocessing.get_context('spawn')
+    multiprocessing.Process = ctx.Process
     
     cmd = [
         'neuronx-cc',
