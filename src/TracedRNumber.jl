@@ -819,10 +819,22 @@ for (jlop, hloop) in
         @opcall $(hloop)(T(π) * lhs)
 end
 
+
+
 function Base.sincospi(x::TracedRNumber{T}) where {T}
     return @opcall(sine(T(π) * x)), @opcall(cosine(T(π) * x))
 end
 
+function Base.cispi(x::TracedRNumber)
+    s, c = sincospi(x)
+    return complex(c, s)
+end
+
+function Base.cis(x::TracedRNumber)
+    s, c = sincos(x)
+    return complex(c, s)
+end
+                      
 function Base.sinc(x::TracedRNumber) 
     r = ifelse(iszero(x), one(x), sinpi(x)/(pi*x))
     return ifelse(isinf(x), zero(x), r)
@@ -836,8 +848,6 @@ function Base.sinc(x::TracedRNumber{<:Complex{T}}) where {T}
     )
     return ifelse(isinf(real(x)), zero(x), r1)
 end
-
-
 
 
 @noinline Base.Math.log10(x::TracedRNumber) = Base.Math._log(x, Val(10), :log10)

@@ -120,6 +120,12 @@ end
 
 
     end
+  
+    @testset for fn in (cispi, cis)
+        res = @jit fn(x_ra)
+        @test res ≈ fn(x)
+        @test res isa ConcreteRNumber{Complex{Float32}}
+    end
 
 end
 
