@@ -27,8 +27,6 @@ import ..Reactant:
 import Reactant: OptimizeCommunicationOptions, ShardyPropagationOptions, CompileOptions
 using Reactant_jll: Reactant_jll
 
-import ..ReactantCore: correct_maybe_bcast_call
-
 include("Macros.jl")
 
 const DEBUG_PRINT_CODEGEN = Ref(false)

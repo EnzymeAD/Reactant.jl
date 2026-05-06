@@ -1,3 +1,6 @@
+import ..ReactantCore: correct_maybe_bcast_call
+using ..Reactant: Reactant, MLIR
+
 const COMMON_COMPILE_OPTIONS_DOCS = """
   - `compile_options`: If provided, then all other compilation options will be ignored.
     This should be an object of type [`CompileOptions`](@ref).
