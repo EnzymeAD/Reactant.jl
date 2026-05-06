@@ -122,6 +122,9 @@ class GlobalCounter:
         return count
 
 def _neuronx_cc_impl_fast(code, target):
+    import multiprocessing
+    multiprocessing.set_start_method('spawn', force=True)
+    
     cmd = [
         'neuronx-cc',
         'compile',
