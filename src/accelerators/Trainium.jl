@@ -121,11 +121,23 @@ class GlobalCounter:
         GlobalCounter._counter += 1
         return count
 
+def _ncc_helper(cmd):
+    import sys
+    from neuronxcc.driver.CommandDriver import main as ncc_main
+    
+    old_argv = sys.argv
+    sys.argv = cmd
+    try:
+        ret = ncc_main()
+        if ret != 0 and ret is not None:
+             sys.exit(ret)
+    except Exception as e:
+        print(f"Error in helper: {e}")
+        sys.exit(1)
+    finally:
+        sys.argv = old_argv
+
 def _neuronx_cc_impl_fast(code, target):
-    import multiprocessing
-    # Use get_context('spawn') and monkey patch Process to avoid "context has already been set" error
-    ctx = multiprocessing.get_context('spawn')
-    multiprocessing.Process = ctx.Process
     
     cmd = [
         'neuronx-cc',
@@ -177,18 +189,15 @@ def _neuronx_cc_impl_fast(code, target):
             )
             env['LD_PRELOAD'] = updated_ld_preload
 
-        # FIXED: Avoid subprocess and call Python main directly to avoid pipe hangs
-        import sys
-        from neuronxcc.driver.CommandDriver import main as ncc_main
-        
-        old_argv = sys.argv
-        sys.argv = cmd
-        try:
-            ret = ncc_main()
-            if ret != 0 and ret is not None:
-                raise RuntimeError(f"neuronx-cc failed with exit code {ret}")
-        finally:
-            sys.argv = old_argv
+        # FIXED: Use a spawned process to run CommandDriver.main
+        # This avoids fork deadlocks in multi-threaded Julia, and avoids pickling errors in neuronxcc!
+        import multiprocessing
+        ctx = multiprocessing.get_context('spawn')
+        p = ctx.Process(target=_ncc_helper, args=(cmd,))
+        p.start()
+        p.join()
+        if p.exitcode != 0:
+            raise RuntimeError(f"Helper process failed with exit code {p.exitcode}")
 
         with open(neff_path, 'rb') as fp:
             neff_bytes = fp.read()
