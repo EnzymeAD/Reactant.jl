@@ -176,11 +176,14 @@ def _neuronx_cc_impl_fast(code, target):
         cmd.append(f'--output={neff_path}')
         cmd.append(hlo_module_path)
         cmd.extend(flags)
+        env = os.environ.copy()
+        env['PYTHONPATH'] = '$(escape_string(python_packages_dir))' + os.pathsep + env.get('PYTHONPATH', '')
+        
         if args.dump is not None:
             try:
                 ver_cmd = [os.path.join('$(escape_string(python_packages_dir))', 'bin', 'neuronx-cc'), '--version']
                 ncc_version = subprocess.check_output(
-                    ver_cmd, stderr=subprocess.STDOUT).decode()
+                    ver_cmd, stderr=subprocess.STDOUT, env=env).decode()
                 ncc_version, *_ = ncc_version.split('\\\\n')
                 *_, ncc_version = ncc_version.split('version ')
                 with open(os.path.join(tmpdir, 'neuronx_cc_metadata.json'), 'w') as fp:
@@ -188,7 +191,6 @@ def _neuronx_cc_impl_fast(code, target):
             except Exception as e:
                 print(f"Warning: failed to get neuronx-cc version: {e}")
         
-        env = os.environ.copy()
         ld_preload = env.get('LD_PRELOAD', '')
         if 'libtcmalloc' in ld_preload:
             updated_ld_preload = ':'.join(
@@ -196,8 +198,6 @@ def _neuronx_cc_impl_fast(code, target):
             )
             env['LD_PRELOAD'] = updated_ld_preload
 
-        # FIXED: Use a spawned process to run CommandDriver.main
-        # This avoids fork deadlocks in multi-threaded Julia, and avoids pickling errors in neuronxcc!
         # FIXED: use check_call and forward stdout/stderr directly
         import sys
         subprocess.check_call(cmd, cwd=tmpdir, env=env, stdout=sys.stdout, stderr=sys.stderr)
