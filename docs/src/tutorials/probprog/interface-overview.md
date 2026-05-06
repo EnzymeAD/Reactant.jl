@@ -36,7 +36,7 @@ The full signatures and semantics are documented in the
 | Symbol | Role |
 |--------|------|
 | [`Trace`](@ref)       | Executed-model record: `choices`, `subtraces`, `retval`, `weight`. |
-| [`Constraint`](@ref)  | Dict-like `Address → value` mapping for observations. |
+| [`Constraint`](@ref probprog-conditioning)  | Dict-like `Address → value` mapping for observations. |
 | [`Address`](@ref)     | Immutable symbol path identifying a sample site. |
 | [`Selection`](@ref)   | Ordered set of addresses; constructed with [`select`](@ref). |
 | [`Normal`](@ref) &nbsp;/&nbsp; [`Exponential`](@ref) &nbsp;/&nbsp; [`LogNormal`](@ref) &nbsp;/&nbsp; [`Bernoulli`](@ref) | Built-in distributions, each carrying a static `shape::Tuple` and registered sampler / log-density. |

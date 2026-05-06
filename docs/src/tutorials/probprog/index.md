@@ -87,7 +87,7 @@ As a calling convention, `ProbProg.sample` returns `(rng, value)`; the first ele
 
 ### Describing Inference
 
-We condition on the observed `ys` with a [`Constraint`](@ref) object:
+We condition on the observed `ys` with a [`Constraint`](@ref probprog-conditioning) object:
 
 ```@example probprog_index
 obs = ProbProg.Constraint(:ys => ys)
@@ -243,7 +243,7 @@ NUTS recovers both posterior means here too.
   [`sample`](@ref), the built-in [`Distribution`](@ref) hierarchy, custom
   samplers with user-supplied `logpdf`, and constrained supports.
 - [Traces and constrained inference](@ref probprog-traces) —
-  [`simulate`](@ref) versus [`generate`](@ref), [`Constraint`](@ref) /
+  [`simulate`](@ref) versus [`generate`](@ref), [`Constraint`](@ref probprog-conditioning) /
   [`Address`](@ref) construction, and the trace round-trip between flat
   position vector and tree-shaped [`Trace`](@ref).
 - [MCMC: MH, HMC, NUTS](@ref probprog-mcmc) — Metropolis-Hastings over a

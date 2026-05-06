@@ -124,9 +124,9 @@ Rebuild a `Trace` from a tensor-based trace representation with `unflatten_trace
 trace = ProbProg.unflatten_trace(trace_tensor, weight, tt.entries, retval)
 ```
 
-## Conditioning
+## [Conditioning](@id probprog-conditioning)
 
-A [`Constraint`](@ref) pins addresses to observed values:
+A `Constraint` pins addresses to observed values:
 
 ```@example probprog_traces
 obs = ProbProg.Constraint(
@@ -151,8 +151,8 @@ trace, weight = ProbProg.generate_(rng, obs, model, xs)
 ### `generate`
 
 For embedding inside a compiled function, prepare the constraint tensor
-with [`flatten_constraint`](@ref) and the address set with
-[`extract_addresses`](@ref), then call [`generate`](@ref):
+with `flatten_constraint` and the address set with
+`extract_addresses`, then call [`generate`](@ref):
 
 ```julia
 constrained_addresses = ProbProg.extract_addresses(obs)
@@ -163,8 +163,8 @@ trace_tensor, weight, _ = ProbProg.generate(
 )
 ```
 
-Note that [`flatten_constraint`](@ref) concatenates values in the same order as
-the addresses returned by [`extract_addresses`](@ref). `generate_` helper handles this automatically.
+Note that `flatten_constraint` concatenates values in the same order as
+the addresses returned by `extract_addresses`. `generate_` helper handles this automatically.
 
 ## Addresses
 
@@ -177,8 +177,6 @@ ProbProg.Address(:slope)
 ProbProg.Address(:outer, :inner, :x)
 ProbProg.Address([:outer, :inner, :x])
 ```
-
-Equality is path equality.
 
 ### `select`
 
