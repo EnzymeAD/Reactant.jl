@@ -99,6 +99,9 @@ end
     end
 
     @testset "sinc" begin
+        x = Reactant.TestUtils.construct_test_array(Float32, 4, 16)[:, 1:7]
+        x_ra = Reactant.to_rarray(x)
+
         @test @jit(sinc.(x_ra)) ≈ sinc.(x)
         @test @jit(sinc.(x_ra)) isa ConcreteRArray{Float32,2}
 
