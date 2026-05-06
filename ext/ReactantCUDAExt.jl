@@ -662,7 +662,7 @@ function vendored_optimize_module!(
         LLVM.register!(pb, GPUCompiler.NVVMReflectPass())
 
         if GPUCompiler.NVVMReflectPass().type != :function
-            LLVM.add!(fpm, GPUCompiler.NVVMReflectPass())
+            LLVM.add!(pb, GPUCompiler.NVVMReflectPass())
         end
 
         LLVM.add!(pb, LLVM.NewPMFunctionPassManager()) do fpm
