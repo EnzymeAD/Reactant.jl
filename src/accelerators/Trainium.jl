@@ -147,7 +147,7 @@ def _ncc_helper(cmd):
 
 def _neuronx_cc_impl_fast(code, target):
     cmd = [
-        'neuronx-cc',
+        os.path.join('$(escape_string(python_packages_dir))', 'bin', 'neuronx-cc'),
         'compile',
         '--framework=XLA',
         f'--target={target}',
@@ -178,7 +178,7 @@ def _neuronx_cc_impl_fast(code, target):
         cmd.extend(flags)
         if args.dump is not None:
             try:
-                ver_cmd = ['neuronx-cc', '--version']
+                ver_cmd = [os.path.join('$(escape_string(python_packages_dir))', 'bin', 'neuronx-cc'), '--version']
                 ncc_version = subprocess.check_output(
                     ver_cmd, stderr=subprocess.STDOUT).decode()
                 ncc_version, *_ = ncc_version.split('\\\\n')
