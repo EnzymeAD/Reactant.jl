@@ -1,7 +1,16 @@
 # This file defines the Julia code generation logic that is ultimately the body of a `Thunk`.
 
 using ..Reactant:
-    Reactant, TracedRArray, TracedRNumber, ConcretePJRTArray, ConcretePJRTNumber, ConcreteIFRTArray, ConcreteIFRTNumber, AbstractConcreteArray, AbstractConcreteNumber, ancestor
+    Reactant,
+    TracedRArray,
+    TracedRNumber,
+    ConcretePJRTArray,
+    ConcretePJRTNumber,
+    ConcreteIFRTArray,
+    ConcreteIFRTNumber,
+    AbstractConcreteArray,
+    AbstractConcreteNumber,
+    ancestor
 
 const DEBUG_DISABLE_RESHARDING = Ref(false)
 const DEBUG_ALIASED_BUFFER_ASSIGNMENT_ERROR = Ref(false)
