@@ -41,10 +41,7 @@ end
 end
 
 @inline function traced_getfield(
-    @nospecialize(
-        obj::Union{AbstractConcreteArray,AbstractConcreteNumber}
-    ),
-    field,
+    @nospecialize(obj::Union{AbstractConcreteArray,AbstractConcreteNumber}), field
 )
     return Base.getproperty(obj, field)
 end
