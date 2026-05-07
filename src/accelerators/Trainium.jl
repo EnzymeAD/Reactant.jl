@@ -9,10 +9,15 @@ using FileWatching: mkpidlock
 using Libdl: Libdl
 
 const TRAINIUM_WHEEL = "libneuronxla-2.2.16408.0%2B50c26cbd-py3-none-linux_x86_64.whl"
-const PYTHON_LIB = begin
-    try
+function get_python_lib()
+    dyn_path = try
         readchomp(`python3 -c "import sysconfig; import os; print(os.path.join(sysconfig.get_config_var('LIBDIR'), sysconfig.get_config_var('LDLIBRARY')))"`)
     catch
+        ""
+    end
+    if isfile(dyn_path)
+        dyn_path
+    else
         "/usr/lib/python3.10/config-3.10-x86_64-linux-gnu/libpython3.10.so" # fallback
     end
 end
@@ -49,10 +54,11 @@ function make_pjrt_client(;
     end
 
     # Load the Python library globally
-    Libdl.dlopen(PYTHON_LIB, Libdl.RTLD_GLOBAL)
+    python_lib_path = get_python_lib()
+    py_handle = Libdl.dlopen(python_lib_path, Libdl.RTLD_GLOBAL)
 
     # Initialize the Python interpreter
-    ccall((:Py_Initialize, PYTHON_LIB), Cvoid, ())
+    ccall((:Py_Initialize, py_handle), Cvoid, ())
 
     plugin_dir = get_trainium_pjrt_plugin_dir()
     python_packages_dir = joinpath(plugin_dir, "python_packages")
@@ -102,7 +108,7 @@ except ImportError:
     import importlib
     importlib.invalidate_caches()
 """
-    ccall((:PyRun_SimpleString, PYTHON_LIB), Cint, (Cstring,), py_install_code)
+    ccall((:PyRun_SimpleString, py_handle), Cint, (Cstring,), py_install_code)
 
     # Phase 2: Write the dummy package to a file so it's importable by spawned processes
     reactant_lib_path = joinpath(python_packages_dir, "reactant_lib.py")
@@ -324,7 +330,7 @@ mod.neuronx_cc = reactant_lib.my_neuronx_cc
 
 sys.modules['libneuronxla'] = mod
 """
-    ccall((:PyRun_SimpleString, PYTHON_LIB), Cint, (Cstring,), py_hook_code)
+    ccall((:PyRun_SimpleString, py_handle), Cint, (Cstring,), py_hook_code)
 
     scratch_dir = get_trainium_pjrt_plugin_dir()
 
