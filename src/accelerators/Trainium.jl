@@ -58,7 +58,8 @@ function make_pjrt_client(;
     py_handle = Libdl.dlopen(python_lib_path, Libdl.RTLD_GLOBAL)
 
     # Initialize the Python interpreter
-    ccall((:Py_Initialize, py_handle), Cvoid, ())
+    py_init_ptr = Libdl.dlsym(py_handle, :Py_Initialize)
+    ccall(py_init_ptr, Cvoid, ())
 
     plugin_dir = get_trainium_pjrt_plugin_dir()
     python_packages_dir = joinpath(plugin_dir, "python_packages")
@@ -108,7 +109,8 @@ except ImportError:
     import importlib
     importlib.invalidate_caches()
 """
-    ccall((:PyRun_SimpleString, py_handle), Cint, (Cstring,), py_install_code)
+    py_run_ptr = Libdl.dlsym(py_handle, :PyRun_SimpleString)
+    ccall(py_run_ptr, Cint, (Cstring,), py_install_code)
 
     # Phase 2: Write the dummy package to a file so it's importable by spawned processes
     reactant_lib_path = joinpath(python_packages_dir, "reactant_lib.py")
@@ -330,7 +332,7 @@ mod.neuronx_cc = reactant_lib.my_neuronx_cc
 
 sys.modules['libneuronxla'] = mod
 """
-    ccall((:PyRun_SimpleString, py_handle), Cint, (Cstring,), py_hook_code)
+    ccall(py_run_ptr, Cint, (Cstring,), py_hook_code)
 
     scratch_dir = get_trainium_pjrt_plugin_dir()
 
