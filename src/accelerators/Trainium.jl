@@ -50,11 +50,11 @@ function make_pjrt_client(;
 
     plugin_dir = get_trainium_pjrt_plugin_dir()
     python_packages_dir = joinpath(plugin_dir, "python_packages")
-    
+
     # Add to system PATH for subprocess calls to neuronx-cc
     bin_dir = joinpath(python_packages_dir, "bin")
     ENV["PATH"] = bin_dir * ":" * get(ENV, "PATH", "")
-    
+
     # Create a dummy libneuronxla module with expected attributes
     # Phase 1: Install dependencies if needed
     py_install_code = """
@@ -100,11 +100,13 @@ except ImportError:
 
     # Phase 2: Write the dummy package to a file so it's importable by spawned processes
     reactant_lib_path = joinpath(python_packages_dir, "reactant_lib.py")
-    
+
     # We write this file dynamically to avoid hardcoding machine-specific paths
     if !isfile(reactant_lib_path)
-    open(reactant_lib_path, "w") do io
-        write(io, """
+        open(reactant_lib_path, "w") do io
+            write(
+                io,
+                """
 import sys
 import os
 import types
@@ -297,8 +299,9 @@ def my_neuronx_cc(code, code_format, platform_version, file_prefix):
         return 0, compiled_hlo_bytes
     else:
         return 0, b''
-""")
-    end
+""",
+            )
+        end
     end
 
     # Phase 3: Register the dummy module using the package we just wrote
@@ -318,26 +321,34 @@ sys.modules['libneuronxla'] = mod
     ccall((:PyRun_SimpleString, PYTHON_LIB), Cint, (Cstring,), py_hook_code)
 
     scratch_dir = get_trainium_pjrt_plugin_dir()
-    
+
     # Load custom libibverbs
-    libibverbs_path = joinpath(scratch_dir, "libfabric_extracted", "usr", "lib64", "libibverbs.so.1")
+    libibverbs_path = joinpath(
+        scratch_dir, "libfabric_extracted", "usr", "lib64", "libibverbs.so.1"
+    )
     @assert isfile(libibverbs_path) "libibverbs.so.1 not found in scratch space at $libibverbs_path"
     Libdl.dlopen(libibverbs_path, Libdl.RTLD_GLOBAL)
     @debug "Loaded custom libibverbs from $libibverbs_path"
 
     # Load custom libefa
-    libefa_path = joinpath(scratch_dir, "libfabric_extracted", "usr", "lib64", "libefa.so.1")
+    libefa_path = joinpath(
+        scratch_dir, "libfabric_extracted", "usr", "lib64", "libefa.so.1"
+    )
     @assert isfile(libefa_path) "libefa.so.1 not found in scratch space at $libefa_path"
     Libdl.dlopen(libefa_path, Libdl.RTLD_GLOBAL)
     @debug "Loaded custom libefa from $libefa_path"
 
     # Load custom libfabric to avoid version mismatch
-    libfabric_path = joinpath(scratch_dir, "libfabric_extracted", "opt", "amazon", "efa", "lib", "libfabric.so.1")
+    libfabric_path = joinpath(
+        scratch_dir, "libfabric_extracted", "opt", "amazon", "efa", "lib", "libfabric.so.1"
+    )
     @assert isfile(libfabric_path) "libfabric.so.1 not found in scratch space at $libfabric_path"
     Libdl.dlopen(libfabric_path, Libdl.RTLD_GLOBAL)
     @debug "Loaded custom libfabric from $libfabric_path"
 
-    return Reactant.XLA.PJRT.MakeClientUsingPluginAPI(get_trainium_pjrt_plugin_path(), "trainium", "Trainium")
+    return Reactant.XLA.PJRT.MakeClientUsingPluginAPI(
+        get_trainium_pjrt_plugin_path(), "trainium", "Trainium"
+    )
 end
 
 function make_ifrt_client(;
@@ -410,12 +421,19 @@ function get_trainium_pjrt_plugin_path()
         return dev_path
     end
     # Check if it is in the scratch space under python_packages (installed via pip)
-    pip_path = joinpath(get_trainium_pjrt_plugin_dir(), "python_packages", "libneuronxla", trainium_pjrt_plugin_name[])
+    pip_path = joinpath(
+        get_trainium_pjrt_plugin_dir(),
+        "python_packages",
+        "libneuronxla",
+        trainium_pjrt_plugin_name[],
+    )
     if isfile(pip_path)
         return pip_path
     end
     # Check if it is in the scratch space as a directory (manually unzipped)
-    dir_path = joinpath(get_trainium_pjrt_plugin_dir(), "libneuronxla", trainium_pjrt_plugin_name[])
+    dir_path = joinpath(
+        get_trainium_pjrt_plugin_dir(), "libneuronxla", trainium_pjrt_plugin_name[]
+    )
     if isfile(dir_path)
         return dir_path
     end
@@ -438,7 +456,7 @@ function download_trainium_pjrt_plugin_if_needed(dir=nothing)
             end
         end
     end
-    
+
     # Download and extract EFA installer for libfabric
     efa_extracted_dir = joinpath(dir, "libfabric_extracted")
     if isdir(efa_extracted_dir)
@@ -450,70 +468,72 @@ function download_trainium_pjrt_plugin_if_needed(dir=nothing)
                 efa_url = "https://efa-installer.amazonaws.com/aws-efa-installer-latest.tar.gz"
                 efa_tarball = joinpath(dir, "aws-efa-installer-latest.tar.gz")
                 Downloads.download(efa_url, efa_tarball)
-                
+
                 @debug "Extracting EFA installer..."
                 # Use p7zip to extract .tar.gz to .tar
                 run(`$(p7zip()) x -y $(efa_tarball) -o$(dir)`)
-                
+
                 tar_file = joinpath(dir, "aws-efa-installer-latest.tar")
                 # Extract .tar using p7zip
                 run(`$(p7zip()) x -y $(tar_file) -o$(dir)`)
-                
+
                 # Clean up tarballs
                 rm(efa_tarball; force=true)
                 rm(tar_file; force=true)
-                
+
                 # Now find and extract libfabric deb
                 extracted_efa_dir = joinpath(dir, "aws-efa-installer")
                 @assert isdir(extracted_efa_dir) "EFA installer failed to extract to $extracted_efa_dir"
-                
+
                 deb_path = joinpath(extracted_efa_dir, "DEBS", "UBUNTU2204", "x86_64")
                 @assert isdir(deb_path) "DEB path not found at $deb_path"
-                
+
                 debs = readdir(deb_path; join=true)
                 libfabric_deb = filter(f -> occursin("libfabric1-aws", f), debs)
                 @assert !isempty(libfabric_deb) "libfabric deb not found in $deb_path"
-                
+
                 @debug "Extracting libfabric deb: $(libfabric_deb[1])"
                 mkpath(efa_extracted_dir)
-                
+
                 # Extract deb using dpkg-deb (p7zip fails on .deb files)
                 run(`dpkg-deb -x $(libfabric_deb[1]) $(efa_extracted_dir)`)
-            
+
                 # Also extract libefa from SUSE RPM
-                suse_path = joinpath(extracted_efa_dir, "RPMS", "SUSE", "x86_64", "rdma-core")
+                suse_path = joinpath(
+                    extracted_efa_dir, "RPMS", "SUSE", "x86_64", "rdma-core"
+                )
                 @assert isdir(suse_path) "SUSE RPM path not found at $suse_path"
-                
+
                 rpms = readdir(suse_path; join=true)
                 libefa_rpm = filter(f -> occursin("libefa1", f), rpms)
                 @assert !isempty(libefa_rpm) "libefa RPM not found in $suse_path"
-                
+
                 @debug "Extracting libefa rpm: $(libefa_rpm[1])"
                 # Extract RPM using p7zip (produces a cpio archive)
                 run(`$(p7zip()) x -y $(libefa_rpm[1]) -o$(efa_extracted_dir)`)
-                
+
                 # Extract the cpio archive using standard cpio tool
                 extracted_file = "libefa1-61.0-0.x86_64"
                 cd(efa_extracted_dir) do
-                    run(pipeline(`cpio -idmv`, stdin=extracted_file))
+                    run(pipeline(`cpio -idmv`; stdin=extracted_file))
                     rm(extracted_file; force=true)
                 end
-                
+
                 # Also extract libibverbs from SUSE RPM
-                libibverbs_rpm = filter(f -> endswith(f, ".rpm") && occursin("libibverbs1", f), rpms)
+                libibverbs_rpm = filter(
+                    f -> endswith(f, ".rpm") && occursin("libibverbs1", f), rpms
+                )
                 @assert !isempty(libibverbs_rpm) "libibverbs RPM not found in $suse_path"
-                
+
                 @debug "Extracting libibverbs rpm: $(libibverbs_rpm[1])"
                 run(`$(p7zip()) x -y $(libibverbs_rpm[1]) -o$(efa_extracted_dir)`)
-                
+
                 extracted_verbs_file = "libibverbs1-61.0-0.x86_64"
                 cd(efa_extracted_dir) do
-                    run(pipeline(`cpio -idmv`, stdin=extracted_verbs_file))
+                    run(pipeline(`cpio -idmv`; stdin=extracted_verbs_file))
                     rm(extracted_verbs_file; force=true)
                 end
-                
 
-                
                 # Clean up the large installer directory
                 rm(extracted_efa_dir; recursive=true, force=true)
             end
