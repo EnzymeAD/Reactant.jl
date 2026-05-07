@@ -71,12 +71,7 @@ function run_nuts_test(;
         :param_a => [0.0], :param_b => [0.0], :ys_a => ys_a, :ys_b => ys_b
     )
     constrained_addresses = ProbProg.extract_addresses(obs)
-
-    obs_flat = Float64[]
-    for addr in constrained_addresses
-        append!(obs_flat, vec(obs[addr]))
-    end
-    obs_tensor = Reactant.to_rarray(reshape(obs_flat, 1, :))
+    obs_tensor = ProbProg.flatten_constraint(obs)
 
     step_size = ConcreteRNumber(0.1)
     max_tree_depth = 10

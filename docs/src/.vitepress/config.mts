@@ -104,6 +104,7 @@ export default defineConfig({
           { text: "Raising", link: "/tutorials/raising" },
           { text: "Computational kernels", link: "/tutorials/kernels" },
           { text: "Debugging compilation errors", link: "/tutorials/debugging" },
+          { text: "Probabilistic Programming", link: "/tutorials/probprog/" },
         ],
       },
       {
@@ -114,6 +115,7 @@ export default defineConfig({
           { text: "Serialization", link: "/api/serialization" },
           { text: "Ops", link: "/api/ops" },
           { text: "Configuration", link: "/api/config" },
+          { text: "Probabilistic Programming", link: "/api/probprog" },
           {
             text: "MLIR Dialects",
             items: [
@@ -196,6 +198,24 @@ export default defineConfig({
           { text: "Raising", link: "/tutorials/raising" },
           { text: "Computational kernels", link: "/tutorials/kernels" },
           { text: "Debugging compilation errors", link: "/tutorials/debugging" },
+          {
+            text: "Probabilistic Programming",
+            collapsed: false,
+            items: [
+              { text: "Overview", link: "/tutorials/probprog/" },
+              { text: "Interface overview", link: "/tutorials/probprog/interface-overview" },
+              { text: "Sampling and distributions", link: "/tutorials/probprog/sampling" },
+              {
+                text: "Traces and constrained inference",
+                link: "/tutorials/probprog/traces-and-inference",
+              },
+              { text: "MCMC: MH, HMC, NUTS", link: "/tutorials/probprog/mcmc" },
+              {
+                text: "Running and resuming chains",
+                link: "/tutorials/probprog/chains",
+              },
+            ],
+          },
         ],
       }
     ],
@@ -212,6 +232,7 @@ export default defineConfig({
           { text: "Serialization", link: "/api/serialization" },
           { text: "Ops", link: "/api/ops" },
           { text: "Configuration", link: "/api/config" },
+          { text: "Probabilistic Programming", link: "/api/probprog" },
           {
             text: "MLIR Dialects",
             collapsed: false,
