@@ -10,15 +10,34 @@ using Libdl: Libdl
 
 const TRAINIUM_WHEEL = "libneuronxla-2.2.16408.0%2B50c26cbd-py3-none-linux_x86_64.whl"
 function get_python_lib()
+    println("CONDA_PREFIX = ", get(ENV, "CONDA_PREFIX", "not set"))
+    println("FULL ENV:")
+    for (k, v) in ENV
+        println("  ", k, " = ", v)
+    end
+    # Check if we are in a Conda environment
+    if haskey(ENV, "CONDA_PREFIX")
+        for libname in ["libpython3.10.so", "libpython3.so"]
+            conda_lib = joinpath(ENV["CONDA_PREFIX"], "lib", libname)
+            if isfile(conda_lib)
+                println("Found Python lib in Conda: ", conda_lib)
+                return conda_lib
+            end
+        end
+    end
+
     dyn_path = try
         readchomp(`python3 -c "import sysconfig; import os; print(os.path.join(sysconfig.get_config_var('LIBDIR'), sysconfig.get_config_var('LDLIBRARY')))"`)
     catch
         ""
     end
     if isfile(dyn_path)
-        dyn_path
+        println("Found Python lib via sysconfig: ", dyn_path)
+        return dyn_path
     else
-        "/usr/lib/python3.10/config-3.10-x86_64-linux-gnu/libpython3.10.so" # fallback
+        fallback = "/usr/lib/python3.10/config-3.10-x86_64-linux-gnu/libpython3.10.so"
+        println("Using fallback Python lib: ", fallback)
+        return fallback
     end
 end
 
@@ -55,6 +74,7 @@ function make_pjrt_client(;
 
     # Load the Python library globally
     python_lib_path = get_python_lib()
+    println("Loading Python library: ", python_lib_path)
     py_handle = Libdl.dlopen(python_lib_path, Libdl.RTLD_GLOBAL)
 
     # Initialize the Python interpreter
