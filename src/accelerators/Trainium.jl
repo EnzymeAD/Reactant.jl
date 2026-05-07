@@ -9,7 +9,37 @@ using FileWatching: mkpidlock
 using Libdl: Libdl
 
 const TRAINIUM_WHEEL = "libneuronxla-2.2.16408.0%2B50c26cbd-py3-none-linux_x86_64.whl"
-const PYTHON_LIB = "/usr/lib/python3.10/config-3.10-x86_64-linux-gnu/libpython3.10.so"
+function get_python_lib()
+    println("CONDA_PREFIX = ", get(ENV, "CONDA_PREFIX", "not set"))
+    println("FULL ENV:")
+    for (k, v) in ENV
+        println("  ", k, " = ", v)
+    end
+    # Check if we are in a Conda environment
+    if haskey(ENV, "CONDA_PREFIX")
+        for libname in ["libpython3.10.so", "libpython3.so"]
+            conda_lib = joinpath(ENV["CONDA_PREFIX"], "lib", libname)
+            if isfile(conda_lib)
+                println("Found Python lib in Conda: ", conda_lib)
+                return conda_lib
+            end
+        end
+    end
+
+    dyn_path = try
+        readchomp(`python3 -c "import sysconfig; import os; print(os.path.join(sysconfig.get_config_var('LIBDIR'), sysconfig.get_config_var('LDLIBRARY')))"`)
+    catch
+        ""
+    end
+    if isfile(dyn_path)
+        println("Found Python lib via sysconfig: ", dyn_path)
+        return dyn_path
+    else
+        fallback = "/usr/lib/python3.10/config-3.10-x86_64-linux-gnu/libpython3.10.so"
+        println("Using fallback Python lib: ", fallback)
+        return fallback
+    end
+end
 
 using ..Registration: register_backend
 
@@ -43,10 +73,13 @@ function make_pjrt_client(;
     end
 
     # Load the Python library globally
-    Libdl.dlopen(PYTHON_LIB, Libdl.RTLD_GLOBAL)
+    python_lib_path = get_python_lib()
+    println("Loading Python library: ", python_lib_path)
+    py_handle = Libdl.dlopen(python_lib_path, Libdl.RTLD_GLOBAL)
 
     # Initialize the Python interpreter
-    ccall((:Py_Initialize, PYTHON_LIB), Cvoid, ())
+    py_init_ptr = Libdl.dlsym(py_handle, :Py_Initialize)
+    ccall(py_init_ptr, Cvoid, ())
 
     plugin_dir = get_trainium_pjrt_plugin_dir()
     python_packages_dir = joinpath(plugin_dir, "python_packages")
@@ -96,7 +129,8 @@ except ImportError:
     import importlib
     importlib.invalidate_caches()
 """
-    ccall((:PyRun_SimpleString, PYTHON_LIB), Cint, (Cstring,), py_install_code)
+    py_run_ptr = Libdl.dlsym(py_handle, :PyRun_SimpleString)
+    ccall(py_run_ptr, Cint, (Cstring,), py_install_code)
 
     # Phase 2: Write the dummy package to a file so it's importable by spawned processes
     reactant_lib_path = joinpath(python_packages_dir, "reactant_lib.py")
@@ -318,7 +352,7 @@ mod.neuronx_cc = reactant_lib.my_neuronx_cc
 
 sys.modules['libneuronxla'] = mod
 """
-    ccall((:PyRun_SimpleString, PYTHON_LIB), Cint, (Cstring,), py_hook_code)
+    ccall(py_run_ptr, Cint, (Cstring,), py_hook_code)
 
     scratch_dir = get_trainium_pjrt_plugin_dir()
 
