@@ -3935,12 +3935,11 @@ end
 end
 
 @noinline function qr(
-    x::TracedRArray{T,N},
-    (::Type{iT})=Int32;
+    x::TracedRArray{T,N};
     algorithm::String="DEFAULT",
     location=mlir_stacktrace("qr", @__FILE__, @__LINE__),
 ) where {T,N}
-    @assert N >= 2
+    @assert N == 2
 
     batch_sizes = size(x)[1:(end - 2)]
     m, n = size(x)[(end - 1):end]
@@ -3954,7 +3953,6 @@ end
         x.mlir_data;
         Q=mlir_type(TracedRArray{T,N}, Q_size),
         R=mlir_type(TracedRArray{T,N}, R_size),
-        info=mlir_type(TracedRArray{iT,N - 2}, info_size),
         algorithm=MLIR.API.enzymexlaQRAlgorithmAttrGet(
             MLIR.IR.current_context(), QR_ALGORITHM_MAP[algorithm]
         ),
@@ -3964,13 +3962,7 @@ end
     Q = TracedRArray{T,N}((), MLIR.IR.result(qr_op, 1), Q_size)
     R = TracedRArray{T,N}((), MLIR.IR.result(qr_op, 2), R_size)
 
-    if N == 2
-        info = TracedRNumber{iT}((), MLIR.IR.result(qr_op, 3))
-    else
-        info = TracedRArray{iT,N - 2}((), MLIR.IR.result(qr_op, 3), info_size)
-    end
-
-    return Q, R, info
+    return Q, R
 end
 
 @noinline function reduce_window(
