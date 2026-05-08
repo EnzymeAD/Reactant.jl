@@ -49,6 +49,7 @@ include("ProtoUtils.jl")
 
 # auxiliary types and functions
 include("OrderedIdDict.jl")
+include("PersistentStack.jl")
 
 function precompiling()
     return (@ccall jl_generating_output()::Cint) == 1

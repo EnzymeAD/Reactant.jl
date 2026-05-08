@@ -16,7 +16,6 @@ import Reactant:
     TraceMode,
     TracedToTypes,
     traced_type_inner,
-    append_path,
     make_tracer,
     traced_type,
     ReactantPrimitive,

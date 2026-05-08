@@ -12,6 +12,8 @@ using ..Reactant:
     MissingTracedValue,
     OrderedIdDict,
     Ops,
+    PersistentStack,
+    push,
     promote_to, # keep this to avoid breaking external code
     broadcast_to_size # keep this to avoid breaking external code
 using ..Ops: @opcall
@@ -471,9 +473,10 @@ function prepare_mlir_fn_args(
     Ops.activate_constant_context!(fnbody)
     seen_args0 = OrderedIdDict()
     try
+        path = PersistentStack{Any}(argprefix)
         for i in 1:N
             @inbounds traced_args[i] = Reactant.make_tracer(
-                seen_args0, args[i], (argprefix, i), inmode; toscalar, runtime
+                seen_args0, args[i], push(path, i), inmode; toscalar, runtime
             )
         end
     finally
@@ -665,15 +668,16 @@ function finalize_mlir_fn(
     MLIR.IR.activate(fnbody)
     traced_result = try
         traced_result = Reactant.make_tracer(
-            seen_results, result, (resprefix,), outmode; runtime
+            seen_results, result, PersistentStack{Any}(resprefix), outmode; runtime
         )
 
         # marks buffers to be donated
+        path = PersistentStack{Any}(resargprefix)
         for i in 1:N
             Reactant.make_tracer(
                 seen_results,
                 traced_args[i],
-                (resargprefix, i),
+                push(path, i),
                 Reactant.NoStopTracedTrack;
                 runtime,
             )

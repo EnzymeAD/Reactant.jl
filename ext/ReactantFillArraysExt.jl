@@ -26,11 +26,11 @@ for AT in (Fill, Ones, Zeros)
 end
 
 Base.@nospecializeinfer function Reactant.make_tracer(
-    seen, @nospecialize(prev::Fill{T,N,Axes}), @nospecialize(path), mode; kwargs...
+    seen, @nospecialize(prev::Fill{T,N,Axes}), path, mode; kwargs...
 ) where {T,N,Axes}
     return Fill(
         Reactant.make_tracer(
-            seen, prev.value, (path..., 1), mode; kwargs..., track_numbers=Number
+            seen, prev.value, push(path, 1), mode; kwargs..., track_numbers=Number
         ),
         prev.axes,
     )
@@ -39,7 +39,7 @@ end
 Base.@nospecializeinfer function Reactant.make_tracer(
     seen,
     @nospecialize(prev::Ones{T,N,Axes}),
-    @nospecialize(path),
+    path,
     mode;
     @nospecialize(sharding = Sharding.NoSharding()),
     @nospecialize(runtime = nothing),
@@ -51,7 +51,7 @@ end
 Base.@nospecializeinfer function Reactant.make_tracer(
     seen,
     @nospecialize(prev::Zeros{T,N,Axes}),
-    @nospecialize(path),
+    path,
     mode;
     @nospecialize(sharding = Sharding.NoSharding()),
     @nospecialize(runtime = nothing),
@@ -75,11 +75,11 @@ Base.@nospecializeinfer function Reactant.traced_type_inner(
 end
 
 Base.@nospecializeinfer function Reactant.make_tracer(
-    seen, @nospecialize(prev::OneElement{T,N,I,A}), @nospecialize(path), mode; kwargs...
+    seen, @nospecialize(prev::OneElement{T,N,I,A}), path, mode; kwargs...
 ) where {T,N,I,A}
     return OneElement(
         Reactant.make_tracer(
-            seen, prev.val, (path..., 1), mode; kwargs..., track_numbers=Number
+            seen, prev.val, push(path, 1), mode; kwargs..., track_numbers=Number
         ),
         prev.ind,
         prev.axes,

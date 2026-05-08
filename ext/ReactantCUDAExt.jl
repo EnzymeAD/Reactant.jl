@@ -1029,7 +1029,7 @@ function to_bytes(x)
 end
 
 function Reactant.make_tracer(
-    seen, @nospecialize(prev::CuTracedArray), @nospecialize(path), mode; kwargs...
+    seen, @nospecialize(prev::CuTracedArray), path, mode; kwargs...
 )
     x = Base.unsafe_pointer_to_objref(Base.reinterpret(Ptr{Cvoid}, prev.ptr))
     x = x::TracedRArray
@@ -1038,7 +1038,7 @@ function Reactant.make_tracer(
 end
 
 function Reactant.make_tracer(
-    seen, @nospecialize(prev::CuTracedRNumber), @nospecialize(path), mode; kwargs...
+    seen, @nospecialize(prev::CuTracedRNumber), path, mode; kwargs...
 )
     x = Base.unsafe_pointer_to_objref(Base.reinterpret(Ptr{Cvoid}, prev.ptr))
     x = x::TracedRNumber
@@ -1688,7 +1688,7 @@ end
 function Reactant.make_tracer(
     seen,
     @nospecialize(prev::CUDA.CuArray),
-    @nospecialize(path),
+    path,
     mode;
     @nospecialize(track_numbers::Type = Union{}),
     @nospecialize(sharding = Reactant.Sharding.NoSharding()),
@@ -1722,7 +1722,7 @@ function Reactant.make_tracer(
             nv = Reactant.make_tracer(
                 seen,
                 pv,
-                append_path(path, I),
+                push(path, I),
                 mode;
                 track_numbers,
                 sharding=Base.getproperty(sharding, I),
