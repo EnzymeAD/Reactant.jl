@@ -141,7 +141,7 @@ end
 @leaf TracedRational
 Adapt.parent_type(::Type{TracedRational{T}}) where {T} = TracedRational{T}
 
-const AnyTracedRArray{T,N} = AbstractArray{TracedRNumber{T},N}
+const AnyTracedRArray{T,N} = Union{AbstractArray{TracedRNumber{T},N},TracedRArray{T,N}}
 const AnyTracedRVector{T} = AnyTracedRArray{T,1}
 const AnyTracedRMatrix{T} = AnyTracedRArray{T,2}
 const AnyTracedRVecOrMat{T} = Union{AnyTracedRVector{T},AnyTracedRMatrix{T}}
