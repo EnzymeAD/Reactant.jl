@@ -40,6 +40,11 @@ const SVD_ALGORITHM_MAP = Dict(
     "DivideAndConquer" => MLIR.API.ENZYMEXLA_SVD_ALGORITHM_DIVIDEANDCONQUER,
 )
 
+const QR_ALGORITHM_MAP = Dict(
+    "DEFAULT" => MLIR.API.ENZYMEXLA_QR_ALGORITHM_NONE,
+    "Householder" => MLIR.API.ENZYMEXLA_QR_ALGORITHM_HOUSEHOLDER,
+)
+
 function _function_macro_error()
     throw(ArgumentError("`caller_function` is not available in this context"))
 end
@@ -3927,6 +3932,45 @@ end
     end
 
     return U, S, Vt, info
+end
+
+@noinline function qr(
+    x::TracedRArray{T,N},
+    (::Type{iT})=Int32;
+    algorithm::String="DEFAULT",
+    location=mlir_stacktrace("qr", @__FILE__, @__LINE__),
+) where {T,N}
+    @assert N >= 2
+
+    batch_sizes = size(x)[1:(end - 2)]
+    m, n = size(x)[(end - 1):end]
+    r = min(m, n)
+
+    Q_size = (batch_sizes..., m, r)
+    R_size = (batch_sizes..., r, n)
+    info_size = batch_sizes
+
+    qr_op = enzymexla.linalg_qr(
+        x.mlir_data;
+        Q=mlir_type(TracedRArray{T,N}, Q_size),
+        R=mlir_type(TracedRArray{T,N}, R_size),
+        info=mlir_type(TracedRArray{iT,N - 2}, info_size),
+        algorithm=MLIR.API.enzymexlaQRAlgorithmAttrGet(
+            MLIR.IR.current_context(), QR_ALGORITHM_MAP[algorithm]
+        ),
+        location,
+    )
+
+    Q = TracedRArray{T,N}((), MLIR.IR.result(qr_op, 1), Q_size)
+    R = TracedRArray{T,N}((), MLIR.IR.result(qr_op, 2), R_size)
+
+    if N == 2
+        info = TracedRNumber{iT}((), MLIR.IR.result(qr_op, 3))
+    else
+        info = TracedRArray{iT,N - 2}((), MLIR.IR.result(qr_op, 3), info_size)
+    end
+
+    return Q, R, info
 end
 
 @noinline function reduce_window(
