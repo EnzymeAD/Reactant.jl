@@ -64,7 +64,7 @@ end
 @leaf TracedRNumber
 
 ## TracedRArray
-mutable struct TracedRArray{T,N} <: RArray{TracedRNumber{T},N}
+mutable struct TracedRArray{T,N} <: RArray{T,N}
     paths::Tuple
     mlir_data::Union{Nothing,MLIR.IR.Value}
     shape::NTuple{N,Int}

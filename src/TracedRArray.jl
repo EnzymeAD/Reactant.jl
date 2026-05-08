@@ -46,6 +46,8 @@ TracedRArray{T,N}(x::AbstractArray) where {T,N} = convert(TracedRArray{T,N}, x)
 
 Base.Tuple(x::TracedRArray) = ntuple(Base.Fix1(getindex, x), length(x))
 
+Base.eltype(::Type{A}) where {T,A<:TracedRArray{T}} = TracedRNumber{T}
+
 Base.size(x::TracedRArray) = x.shape
 function Base.size(x::TracedRArray, i::Integer)
     if i > ndims(x)
