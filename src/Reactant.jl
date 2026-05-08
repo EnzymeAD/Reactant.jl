@@ -291,7 +291,10 @@ using .Compiler:
     code_mhlo,
     code_xla,
     traced_getfield,
-    compile
+    compile,
+    save_compiled_artifact,
+    save_compiled_executable,
+    load_compiled_executable
 export ConcreteRArray,
     ConcreteRNumber,
     ConcretePJRTArray,

@@ -3950,4 +3950,6 @@ function clear_llvm_compiler_cache!(_mod::MLIR.IR.Module)
     return nothing
 end
 
+include("CompiledArtifact.jl")
+
 end

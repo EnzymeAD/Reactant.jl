@@ -86,6 +86,122 @@ function XLA.compile(
     )
 end
 
+"""
+    GpuTopology(client; num_partitions, num_hosts_per_partition=1,
+                       num_devices_per_host, platform_version="12.3")
+
+Create a GPU topology description for AOT compilation with mock devices.
+The `client` is used to extract the GPU target config (compute capability,
+memory, etc.) so the compiled executable matches the real hardware.
+"""
+mutable struct GpuTopology
+    topology::Ptr{Cvoid}
+
+    function GpuTopology(
+        client=XLA.default_backend();
+        num_partitions::Integer,
+        num_hosts_per_partition::Integer=1,
+        num_devices_per_host::Integer,
+        platform_version::String="12.3",
+    )
+        ptr = MLIR.API.ifrt_gpu_topology_create(
+            client.client,
+            platform_version,
+            Int32(num_partitions),
+            Int32(num_hosts_per_partition),
+            Int32(num_devices_per_host),
+        )
+        return finalizer(new(ptr)) do topo
+            XLA.is_live[] && MLIR.API.ifrt_topology_dtor(topo.topology)
+        end
+    end
+end
+
+"""
+    compile_to_executable(client, mod, topology; compile_options, kwargs...)
+
+Compile an MLIR module against a GPU topology (AOT, no live devices needed).
+Returns an unloaded `Executable` that can be serialized.
+"""
+function compile_to_executable(
+    client::Client,
+    mod::MLIR.IR.Module,
+    topology::GpuTopology;
+    compile_options::Reactant.Proto.xla.CompileOptionsProto,
+)
+    compile_options_bytes = Reactant.ProtoUtils.proto_to_bytes(compile_options)
+    GC.@preserve client mod topology compile_options_bytes begin
+        exec = MLIR.IR.try_compile_dump_mlir(mod) do
+            MLIR.API.ifrt_compile_with_topology(
+                client,
+                mod,
+                topology.topology,
+                compile_options_bytes,
+                length(compile_options_bytes),
+            )
+        end
+    end
+    return Executable(exec)
+end
+
+"""
+    Executable
+
+An unloaded IFRT executable (compiled but not yet loaded onto devices).
+Can be serialized to bytes and later deserialized + loaded.
+"""
+mutable struct Executable
+    exec::Ptr{Cvoid}
+
+    function Executable(exec::Ptr{Cvoid})
+        @assert exec != C_NULL
+        return finalizer(new(exec)) do e
+            XLA.is_live[] && MLIR.API.ifrt_executable_dtor(e.exec)
+        end
+    end
+end
+
+"""
+    serialize_executable(exec::Executable) -> Vector{UInt8}
+
+Serialize an unloaded executable to bytes for on-disk storage.
+"""
+function serialize_executable(exec::Executable)
+    GC.@preserve exec begin
+        return MLIR.API.ifrt_executable_serialize(exec.exec)
+    end
+end
+
+"""
+    deserialize_and_load(client::Client, bytes::Vector{UInt8}; kwargs...) -> LoadedExecutable
+
+Deserialize and load an executable onto the devices of `client`.
+"""
+function deserialize_and_load(
+    client::Client,
+    bytes::Vector{UInt8};
+    num_outputs::Int64,
+    num_parameters::Int64,
+    is_sharded::Bool,
+    num_replicas::Int64,
+    num_partitions::Int64,
+    compile_options::Reactant.Proto.xla.CompileOptionsProto,
+)
+    compile_options_bytes = Reactant.ProtoUtils.proto_to_bytes(compile_options)
+    GC.@preserve client bytes begin
+        exec = MLIR.API.ifrt_deserialize_and_load(
+            client,
+            bytes,
+            length(bytes),
+            compile_options_bytes,
+            length(compile_options_bytes),
+        )
+    end
+    return LoadedExecutable(
+        exec, num_outputs, num_parameters, is_sharded, num_replicas, num_partitions
+    )
+end
+
 @inline function XLA.execute(
     exec::LoadedExecutable,
     inputs::NTuple{N,Ptr{Cvoid}},
@@ -95,6 +211,8 @@ end
     outputs = Ref{NTuple{n_outs,Ptr{Cvoid}}}()
     future_res = Ref{Ptr{Cvoid}}()
     futures = Ref{UInt8}(0)
+
+    @info "EXECUTING" N l = length(inputs) m = M
 
     GC.@preserve exec outputs future_res futures begin
         MLIR.API.ifrt_loaded_executable_execute(
