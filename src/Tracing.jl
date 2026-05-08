@@ -1513,15 +1513,14 @@ Base.@nospecializeinfer function make_tracer(
     end
 
     if mode == TracedToConcrete
+        ndev = Sharding.ndevices(sharding)
         if runtime isa Val{:PJRT}
             haskey(seen, prev) && return seen[prev]::ConcretePJRTArray{T,N}
-            if !Sharding.is_sharded(sharding)
-                res = ConcretePJRTArray{T,N,1}(
-                    (XLA.PJRT.AsyncEmptyBuffer,), size(prev), Sharding.NoShardInfo()
-                )
-            else
-                error("TODO(#2230): implement sharding")
-            end
+            res = ConcretePJRTArray{T,N,ndev}(
+                ntuple(_ -> XLA.PJRT.AsyncEmptyBuffer, ndev),
+                size(prev),
+                Sharding.NoShardInfo(),
+            )
             seen[prev] = res
             return res
         elseif runtime isa Val{:IFRT}
@@ -1531,7 +1530,7 @@ Base.@nospecializeinfer function make_tracer(
                     XLA.IFRT.AsyncEmptyArray, size(prev), Sharding.NoShardInfo()
                 )
             else
-                error("TODO(#2230): implement sharding")
+                error("TODO(#2230): implement sharding for IFRT")
             end
             seen[prev] = res
             return res
@@ -1602,15 +1601,12 @@ Base.@nospecializeinfer function make_tracer(
     end
 
     if mode == TracedToConcrete
+        ndev = Sharding.ndevices(sharding)
         if runtime isa Val{:PJRT}
             haskey(seen, prev) && return seen[prev]::ConcretePJRTNumber{T}
-            if !Sharding.is_sharded(sharding)
-                res = ConcretePJRTNumber{T,1}(
-                    (XLA.PJRT.AsyncEmptyBuffer,), Sharding.NoShardInfo()
-                )
-            else
-                error("TODO(#2230): implement sharding")
-            end
+            res = ConcretePJRTNumber{T,ndev}(
+                ntuple(_ -> XLA.PJRT.AsyncEmptyBuffer, ndev), Sharding.NoShardInfo()
+            )
             seen[prev] = res
             return res
         elseif runtime isa Val{:IFRT}
@@ -1620,7 +1616,7 @@ Base.@nospecializeinfer function make_tracer(
                     XLA.IFRT.AsyncEmptyArray, Sharding.NoShardInfo()
                 )
             else
-                error("TODO(#2230): implement sharding")
+                error("TODO(#2230): implement sharding for IFRT")
             end
             seen[prev] = res
             return res
