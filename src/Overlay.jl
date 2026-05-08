@@ -179,10 +179,16 @@ for (cT, aT, bT) in (
         @reactant_overlay @noinline function LinearAlgebra.mul!(
             C::CT, A::AT, B::BT, α::Number, β::Number
         ) where {CT<:$cT,AT<:$aT,BT<:$bT}
-            A, B = aos_to_soa(A), aos_to_soa(B)
+            A2, B2 = aos_to_soa(A), aos_to_soa(B)
             C2 = aos_to_soa(C)
-            if use_overlayed_version((C2, A, B))
-                call_with_native(TracedLinearAlgebra.overloaded_mul!, C2, A, B, α, β)
+            # For structured arrays (e.g. sparse) that are their own ancestor,
+            # fall through to native mul! so that their own implementation is used.
+            a_is_structured = !(A2 isa TracedRArray) && ancestor(A2) === A2 &&
+                use_overlayed_version(A2)
+            b_is_structured = !(B2 isa TracedRArray) && ancestor(B2) === B2 &&
+                use_overlayed_version(B2)
+            if !a_is_structured && !b_is_structured && use_overlayed_version((C2, A2, B2))
+                call_with_native(TracedLinearAlgebra.overloaded_mul!, C2, A2, B2, α, β)
                 if C2 !== C
                     C .= C2
                 end
