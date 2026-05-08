@@ -30,8 +30,8 @@ end
 Base.propertynames(::BatchedSVD) = (:U, :S, :V, :Vt)
 
 Base.iterate(F::BatchedSVD) = (F.U, Val(:S))
-Base.iterate(F::BatchedSVD, ::Val{:S}) = (F.S, Val(:Vt))
-Base.iterate(F::BatchedSVD, ::Val{:Vt}) = (F.Vt, Val(:done))
+Base.iterate(F::BatchedSVD, ::Val{:S}) = (F.S, Val(:V))
+Base.iterate(F::BatchedSVD, ::Val{:V}) = (F.V, Val(:done))
 Base.iterate(::BatchedSVD, ::Val{:done}) = nothing
 
 struct DefaultEnzymeXLASVDAlgorithm <: LinearAlgebra.Algorithm end
