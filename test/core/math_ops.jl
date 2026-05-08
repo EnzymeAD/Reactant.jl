@@ -428,3 +428,19 @@ end
     @test xd == 1
     @test yd == 4
 end
+
+@testset "hypot" begin
+    x = ConcreteRNumber(3.0)
+    y = ConcreteRNumber(4.0)
+    @test @jit(hypot(x, y)) ≈ 5.0
+    @test @jit(hypot(x, y)) isa ConcreteRNumber{Float64}
+
+    # Mixed: one traced, one plain
+    @test @jit(hypot(x, 4.0)) ≈ 5.0
+    @test @jit(hypot(3.0, y)) ≈ 5.0
+
+    # Broadcast over arrays
+    xs = Reactant.to_rarray([3.0, 5.0, 8.0])
+    ys = Reactant.to_rarray([4.0, 12.0, 15.0])
+    @test @jit(hypot.(xs, ys)) ≈ [5.0, 13.0, 17.0]
+end

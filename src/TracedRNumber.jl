@@ -1025,6 +1025,16 @@ for (Ti, Tf) in ((Int16, Float16), (Int32, Float32), (Int64, Float64))
 end
 Base.signbit(::TracedRNumber{<:Unsigned}) = Reactant.promote_to(TracedRNumber{Bool}, false)
 
+function Base.hypot(x::TracedRNumber, y::TracedRNumber)
+    return sqrt(x * x + y * y)
+end
+function Base.hypot(x::TracedRNumber{T}, y::Number) where {T}
+    return hypot(x, Reactant.promote_to(TracedRNumber{T}, y))
+end
+function Base.hypot(x::Number, y::TracedRNumber{T}) where {T}
+    return hypot(Reactant.promote_to(TracedRNumber{T}, x), y)
+end
+
 function Base.copysign(x::TracedRNumber, y::TracedRNumber)
     return ifelse(signbit(y), -one(x), one(x)) * abs(x)
 end
