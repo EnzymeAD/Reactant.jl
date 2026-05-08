@@ -1,4 +1,5 @@
 [deps]
+CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
 MPI = "da04e1cc-30fd-572f-bb4f-1f8673147195"
 NCCL = "3fe64909-d7a1-4096-9b7d-7a0f12cf0f6b"
 Reactant = "3c362404-f566-11ee-1572-e11a4b42c853"
