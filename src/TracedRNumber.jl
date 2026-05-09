@@ -1030,8 +1030,9 @@ function Base.hypot(x::TracedRNumber, y::TracedRNumber)
     ay = abs(y)
     # Swap so that a = max(|x|, |y|) and b = min(|x|, |y|),
     # then compute a * sqrt(1 + (b/a)^2) to avoid overflow/underflow.
-    a = ifelse(ax >= ay, ax, ay)
-    b = ifelse(ax >= ay, ay, ax)
+    x_ge_y = ax >= ay
+    a = ifelse(x_ge_y, ax, ay)
+    b = ifelse(x_ge_y, ay, ax)
     return ifelse(iszero(a), zero(a), a * sqrt(one(a) + (b / a)^2))
 end
 function Base.hypot(x::TracedRNumber{T}, y::Number) where {T}
