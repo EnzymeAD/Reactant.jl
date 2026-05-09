@@ -1026,7 +1026,13 @@ end
 Base.signbit(::TracedRNumber{<:Unsigned}) = Reactant.promote_to(TracedRNumber{Bool}, false)
 
 function Base.hypot(x::TracedRNumber, y::TracedRNumber)
-    return sqrt(x * x + y * y)
+    ax = abs(x)
+    ay = abs(y)
+    # Swap so that a = max(|x|, |y|) and b = min(|x|, |y|),
+    # then compute a * sqrt(1 + (b/a)^2) to avoid overflow/underflow.
+    a = ifelse(ax >= ay, ax, ay)
+    b = ifelse(ax >= ay, ay, ax)
+    return ifelse(iszero(a), zero(a), a * sqrt(one(a) + (b / a)^2))
 end
 function Base.hypot(x::TracedRNumber{T}, y::Number) where {T}
     return hypot(x, Reactant.promote_to(TracedRNumber{T}, y))

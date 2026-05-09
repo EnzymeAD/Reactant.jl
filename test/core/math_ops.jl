@@ -439,6 +439,13 @@ end
     @test @jit(hypot(x, 4.0)) ≈ 5.0
     @test @jit(hypot(3.0, y)) ≈ 5.0
 
+    # Zero edge case
+    @test @jit(hypot(ConcreteRNumber(0.0), ConcreteRNumber(0.0))) ≈ 0.0
+
+    # Large values that would overflow with naive x^2 + y^2
+    large = ConcreteRNumber(floatmax(Float64) / 2)
+    @test isfinite(@jit(hypot(large, large)))
+
     # Broadcast over arrays
     xs = Reactant.to_rarray([3.0, 5.0, 8.0])
     ys = Reactant.to_rarray([4.0, 12.0, 15.0])
