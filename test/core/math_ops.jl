@@ -444,7 +444,11 @@ end
 
     # Large values that would overflow with naive x^2 + y^2
     large = ConcreteRNumber(floatmax(Float64) / 2)
-    @test isfinite(@jit(hypot(large, large)))
+    @test @jit(hypot(large, large)) ≈ large * sqrt(2)
+
+    # Small values that would underflow with naive x^2 + y^2
+    small = ConcreteRNumber(2 * nextfloat(0.0))
+    @test @jit(hypot(small, small)) ≈ small * sqrt(2)
 
     # Broadcast over arrays
     xs = Reactant.to_rarray([3.0, 5.0, 8.0])
