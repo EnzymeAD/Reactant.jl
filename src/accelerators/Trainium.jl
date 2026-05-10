@@ -21,7 +21,9 @@ function get_python_lib()
     end
 
     dyn_path = try
-        readchomp(`python3 -c "import sysconfig; import os; print(os.path.join(sysconfig.get_config_var('LIBDIR'), sysconfig.get_config_var('LDLIBRARY')))"`)
+        readchomp(
+            `python3 -c "import sysconfig; import os; print(os.path.join(sysconfig.get_config_var('LIBDIR'), sysconfig.get_config_var('LDLIBRARY')))"`,
+        )
     catch
         ""
     end
