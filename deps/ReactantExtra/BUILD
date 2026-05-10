@@ -291,7 +291,6 @@ cc_toolchain_config(
     opt_compile_flags = [
         "-g0",
         "-O2",
-        "-D_FORTIFY_SOURCE=1",
         "-DNDEBUG",
         "-ffunction-sections",
         "-fdata-sections",
@@ -537,7 +536,6 @@ cc_toolchain_config(
     opt_compile_flags = [
         "-g0",
         "-O2",
-        "-D_FORTIFY_SOURCE=1",
         "-DNDEBUG",
         "-ffunction-sections",
         "-fdata-sections",
@@ -656,7 +654,6 @@ cc_toolchain_config(
     opt_compile_flags = [
         "-g0",
         "-O2",
-        "-D_FORTIFY_SOURCE=1",
         "-DNDEBUG",
         "-ffunction-sections",
         "-fdata-sections",
@@ -776,7 +773,6 @@ cc_toolchain_config(
     opt_compile_flags = [
         "-g0",
         "-O2",
-        "-D_FORTIFY_SOURCE=1",
         "-DNDEBUG",
         "-ffunction-sections",
         "-fdata-sections",
@@ -897,7 +893,6 @@ cc_toolchain_config(
     opt_compile_flags = [
         "-g0",
         "-O2",
-        "-D_FORTIFY_SOURCE=1",
         "-DNDEBUG",
         "-ffunction-sections",
         "-fdata-sections",
@@ -1001,7 +996,6 @@ cc_toolchain_config(
     opt_compile_flags = [
         "-g0",
         "-O2",
-        "-D_FORTIFY_SOURCE=1",
         "-DNDEBUG",
         "-ffunction-sections",
         "-fdata-sections",
