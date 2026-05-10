@@ -93,6 +93,7 @@ _exponential_logpdf(x::AbstractArray, θ, _shape) =
 # `Exponential(θ[, dims])` returns an `AffineDistribution` over
 # `StdExponential` with `loc = 0` and `scale = θ`.
 
+Exponential() = Exponential(1.0)
 function Exponential(θ::Number)
     T = float(unwrapped_eltype(θ))
     return AffineDistribution(StdExponential{T,0}(()), zero(θ), θ)

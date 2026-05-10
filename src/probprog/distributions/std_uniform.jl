@@ -86,6 +86,7 @@ _uniform_logpdf(x::AbstractArray, a, b, _shape) = logpdf(Uniform(a, b, size(x)),
 # `Uniform(a, b[, dims])` returns an `AffineDistribution` over `StdUniform`
 # with `loc = a` and `scale = b - a`.
 
+Uniform() = Uniform(0.0, 1.0)
 function Uniform(a::Number, b::Number)
     T = float(promote_type(unwrapped_eltype(a), unwrapped_eltype(b)))
     return AffineDistribution(StdUniform{T,0}(()), a, b - a)

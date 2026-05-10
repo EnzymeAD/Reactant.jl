@@ -90,6 +90,7 @@ _normal_logpdf(x::AbstractArray, μ, σ, _shape) = logpdf(Normal(μ, σ, size(x)
 # user's `μ`/`σ` (possibly `TracedRNumber`) are kept verbatim on the affine
 # transform so the trace flows through.
 
+Normal() = Normal(0.0, 1.0)
 function Normal(μ::Number, σ::Number)
     T = float(promote_type(unwrapped_eltype(μ), unwrapped_eltype(σ)))
     return AffineDistribution(StdNormal{T,0}(()), μ, σ)
@@ -129,6 +130,7 @@ support(::Type{<:AffineDistribution{<:StdNormal}}) = RealSupport()
 # of an affine-Normal base so dispatch sees it as
 # `TransformedDistribution{<:Normal, LogTransform}` — no new struct needed.
 
+LogNormal() = LogNormal(0.0, 1.0)
 LogNormal(μ::Number, σ::Number) = TransformedDistribution(Normal(μ, σ), LogTransform())
 function LogNormal(μ::Number, σ::Number, dims::Dims{N}) where {N}
     return TransformedDistribution(Normal(μ, σ, dims), LogTransform())
@@ -168,6 +170,7 @@ support(::Type{<:TransformedDistribution{<:AffineDistribution{<:StdNormal},LogTr
 # ----- LogitNormal -------------------------------------------------------
 # `y = σ(z)` where `z ~ Normal(μ, σ)`. Same compose-on-Normal pattern.
 
+LogitNormal() = LogitNormal(0.0, 1.0)
 function LogitNormal(μ::Number, σ::Number)
     return TransformedDistribution(Normal(μ, σ), LogitTransform())
 end

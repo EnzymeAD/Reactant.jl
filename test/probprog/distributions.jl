@@ -279,8 +279,8 @@ end
             sum(([0.0, 1.0, 1.0] .* logits) .- log1p.(exp.(logits))) atol = 1.0e-12
 
         # Mean = sigmoid(logits).
-        @test ProbProg.mean(ProbProg.Bernoulli(0.0)) ≈ 0.5 atol = 1.0e-12
-        @test ProbProg.var(ProbProg.Bernoulli(0.0)) ≈ 0.25 atol = 1.0e-12
+        @test ProbProg.Distributions.mean(ProbProg.Bernoulli(0.0)) ≈ 0.5 atol = 1.0e-12
+        @test ProbProg.Distributions.var(ProbProg.Bernoulli(0.0)) ≈ 0.25 atol = 1.0e-12
     end
 
     @testset "LogitNormal" begin
