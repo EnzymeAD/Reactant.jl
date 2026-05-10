@@ -128,20 +128,14 @@ params(d::StdInverseGamma) = (d.α,)
 # `params(d) = (α, θ)`. Sample = `θ / Gamma(α, 1)` (Marsaglia–Tsang).
 # Logpdf uses the in-tree `_loggamma` (Lanczos).
 
-function _invgamma_sampler(rng, α, θ, shape)
-    αf = Float64(α)
-    if isempty(shape)
-        return θ * inv(_rand_gamma(rng, αf))
-    end
-    out = Array{Float64}(undef, shape...)
-    @inbounds for i in eachindex(out)
-        out[i] = θ * inv(_rand_gamma(rng, αf))
-    end
-    return out
-end
-function _invgamma_logpdf(x, α, θ, _shape)
-    return sum(α .* log.(θ) .- _loggamma.(α) .- (α .+ 1) .* log.(x) .- θ ./ x)
-end
+# Thin top-level wrappers for `Modeling.jl` — see `std_normal.jl` for the
+# rationale.
+_invgamma_sampler(rng, α, θ, shape::Tuple{}) = rand(rng, InverseGamma(α, θ))
+_invgamma_sampler(rng, α, θ, shape::Dims) = rand(rng, InverseGamma(α, θ, shape))
+
+_invgamma_logpdf(x::Number, α, θ, _shape) = logpdf(InverseGamma(α, θ), x)
+_invgamma_logpdf(x::AbstractArray, α, θ, _shape) =
+    logpdf(InverseGamma(α, θ, size(x)), x)
 
 
 # ----- user-facing InverseGamma constructor ------------------------------

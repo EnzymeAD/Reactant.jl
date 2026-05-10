@@ -72,14 +72,14 @@ quantile(d::StdUniform{T,0}, p::Number) where {T} = _std_quantile(d, p)
 
 # ----- ProbProg trait API -------------------------------------------------
 
-function _uniform_sampler(rng, a, b, shape)
-    isempty(shape) && return a + (b - a) * rand(rng)
-    return a .+ (b .- a) .* rand(rng, shape...)
-end
-function _uniform_logpdf(x, a, b, _shape)
-    n = length(x)
-    return n == 1 ? -log(b - a) : -n * log(b - a)
-end
+# Thin top-level wrappers for `Modeling.jl` — see `std_normal.jl` for the
+# rationale. The dispatched logpdf returns -Inf outside [a, b] (the old
+# hand-rolled trait helper missed that check).
+_uniform_sampler(rng, a, b, shape::Tuple{}) = rand(rng, Uniform(a, b))
+_uniform_sampler(rng, a, b, shape::Dims) = rand(rng, Uniform(a, b, shape))
+
+_uniform_logpdf(x::Number, a, b, _shape) = logpdf(Uniform(a, b), x)
+_uniform_logpdf(x::AbstractArray, a, b, _shape) = logpdf(Uniform(a, b, size(x)), x)
 
 
 # ----- user-facing Uniform constructor -----------------------------------

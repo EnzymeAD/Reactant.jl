@@ -70,17 +70,16 @@ quantile(d::StdNormal{T,0}, p::Number) where {T} = _std_quantile(d, p)
 
 
 # ----- ProbProg trait API -------------------------------------------------
-# Used by `Modeling.jl`'s `sample(rng, dist::D)`. The shape argument is
-# appended at the call site (since our `params(d)` is shape-free).
+# Thin top-level wrappers that `Modeling.jl` lowers to MLIR symbols. The
+# math lives in the `AffineDistribution`/`TransformedDistribution`
+# dispatch — these are just here so `process_probprog_function` gets a
+# stable Julia function with the flat `(x, params..., shape)` signature.
 
-function _normal_sampler(rng, μ, σ, shape)
-    isempty(shape) && return μ + σ * randn(rng)
-    return μ .+ σ .* randn(rng, shape...)
-end
-function _normal_logpdf(x, μ, σ, _shape)
-    z = (x .- μ) ./ σ
-    return sum(.-(abs2.(z) .+ log(2π)) ./ 2 .- log.(σ))
-end
+_normal_sampler(rng, μ, σ, shape::Tuple{}) = rand(rng, Normal(μ, σ))
+_normal_sampler(rng, μ, σ, shape::Dims) = rand(rng, Normal(μ, σ, shape))
+
+_normal_logpdf(x::Number, μ, σ, _shape) = logpdf(Normal(μ, σ), x)
+_normal_logpdf(x::AbstractArray, μ, σ, _shape) = logpdf(Normal(μ, σ, size(x)), x)
 
 
 # ----- user-facing Normal constructor ------------------------------------
@@ -151,15 +150,13 @@ function quantile(
     return exp(quantile(d.base, p))
 end
 
-# Trait API for ProbProg sampling.
-function _lognormal_sampler(rng, μ, σ, shape)
-    isempty(shape) && return exp(μ + σ * randn(rng))
-    return exp.(μ .+ σ .* randn(rng, shape...))
-end
-function _lognormal_logpdf(y, μ, σ, _shape)
-    z = (log.(y) .- μ) ./ σ
-    return sum(.-(abs2.(z) .+ log(2π)) ./ 2 .- log.(σ) .- log.(y))
-end
+# Trait API for ProbProg sampling — thin delegators (see `_normal_sampler`).
+_lognormal_sampler(rng, μ, σ, shape::Tuple{}) = rand(rng, LogNormal(μ, σ))
+_lognormal_sampler(rng, μ, σ, shape::Dims) = rand(rng, LogNormal(μ, σ, shape))
+
+_lognormal_logpdf(y::Number, μ, σ, _shape) = logpdf(LogNormal(μ, σ), y)
+_lognormal_logpdf(y::AbstractArray, μ, σ, _shape) =
+    logpdf(LogNormal(μ, σ, size(y)), y)
 sampler(::Type{<:TransformedDistribution{<:AffineDistribution{<:StdNormal},LogTransform}}) =
     _lognormal_sampler
 logpdf_fn(::Type{<:TransformedDistribution{<:AffineDistribution{<:StdNormal},LogTransform}}) =
@@ -182,16 +179,12 @@ LogitNormal(μ::Number, σ::Number, dims::Int...) = LogitNormal(μ, σ, dims)
 params(d::TransformedDistribution{<:AffineDistribution{<:StdNormal},LogitTransform}) =
     params(d.base)
 
-function _logitnormal_sampler(rng, μ, σ, shape)
-    isempty(shape) && return _sigmoid(μ + σ * randn(rng))
-    return _sigmoid.(μ .+ σ .* randn(rng, shape...))
-end
-function _logitnormal_logpdf(y, μ, σ, _shape)
-    z = (_logit.(y) .- μ) ./ σ
-    return sum(
-        .-(abs2.(z) .+ log(2π)) ./ 2 .- log.(σ) .- log.(y) .- log.(one.(y) .- y)
-    )
-end
+_logitnormal_sampler(rng, μ, σ, shape::Tuple{}) = rand(rng, LogitNormal(μ, σ))
+_logitnormal_sampler(rng, μ, σ, shape::Dims) = rand(rng, LogitNormal(μ, σ, shape))
+
+_logitnormal_logpdf(y::Number, μ, σ, _shape) = logpdf(LogitNormal(μ, σ), y)
+_logitnormal_logpdf(y::AbstractArray, μ, σ, _shape) =
+    logpdf(LogitNormal(μ, σ, size(y)), y)
 sampler(
     ::Type{<:TransformedDistribution{<:AffineDistribution{<:StdNormal},LogitTransform}}
 ) = _logitnormal_sampler

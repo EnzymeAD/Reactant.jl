@@ -125,27 +125,14 @@ params(d::StdTDist) = (d.ν,)
 # ----- ProbProg trait API -------------------------------------------------
 # `params(d) = (ν, μ, σ)`. Sample = `μ + σ · Z / sqrt(Gamma(ν/2, 1) · 2/ν)`.
 
-function _tdist_sampler(rng, ν, μ, σ, shape)
-    νf = Float64(ν)
-    sample_one = function ()
-        z = randn(rng)
-        g = _rand_gamma(rng, νf / 2)
-        return μ + σ * z / sqrt(g * 2 / νf)
-    end
-    isempty(shape) && return sample_one()
-    out = Array{Float64}(undef, shape...)
-    @inbounds for i in eachindex(out)
-        out[i] = sample_one()
-    end
-    return out
-end
-function _tdist_logpdf(x, ν, μ, σ, _shape)
-    z = (x .- μ) ./ σ
-    lognorm_per =
-        _loggamma.((ν .+ 1) ./ 2) .- _loggamma.(ν ./ 2) .-
-        log(π) ./ 2 .- log.(ν) ./ 2
-    return sum(lognorm_per .- ((ν .+ 1) ./ 2) .* log1p.(z .* z ./ ν) .- log.(σ))
-end
+# Thin top-level wrappers for `Modeling.jl` — see `std_normal.jl` for the
+# rationale.
+_tdist_sampler(rng, ν, μ, σ, shape::Tuple{}) = rand(rng, TDist(ν, μ, σ))
+_tdist_sampler(rng, ν, μ, σ, shape::Dims) = rand(rng, TDist(ν, μ, σ, shape))
+
+_tdist_logpdf(x::Number, ν, μ, σ, _shape) = logpdf(TDist(ν, μ, σ), x)
+_tdist_logpdf(x::AbstractArray, ν, μ, σ, _shape) =
+    logpdf(TDist(ν, μ, σ, size(x)), x)
 
 
 # ----- user-facing TDist constructor -------------------------------------

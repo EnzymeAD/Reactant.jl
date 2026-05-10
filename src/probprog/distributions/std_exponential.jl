@@ -79,14 +79,14 @@ quantile(d::StdExponential{T,0}, p::Number) where {T} = _std_quantile(d, p)
 # `params(d) = (θ,)` (scale). `randexp` gives unit-rate exponentials; scale
 # by θ.
 
-function _exponential_sampler(rng, θ, shape)
-    isempty(shape) && return θ * randexp(rng)
-    return θ .* randexp(rng, shape...)
-end
-function _exponential_logpdf(x, θ, _shape)
-    tmp = @. -x / θ - log(θ)
-    return sum(tmp)
-end
+# Thin top-level wrappers for `Modeling.jl` — see `std_normal.jl` for the
+# rationale. Math lives in the `AffineDistribution{<:StdExponential}` path.
+_exponential_sampler(rng, θ, shape::Tuple{}) = rand(rng, Exponential(θ))
+_exponential_sampler(rng, θ, shape::Dims) = rand(rng, Exponential(θ, shape))
+
+_exponential_logpdf(x::Number, θ, _shape) = logpdf(Exponential(θ), x)
+_exponential_logpdf(x::AbstractArray, θ, _shape) =
+    logpdf(Exponential(θ, size(x)), x)
 
 
 # ----- user-facing Exponential constructor -------------------------------
