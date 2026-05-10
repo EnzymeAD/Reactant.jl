@@ -79,6 +79,21 @@ end
             @test ProbProg.params(d2) == (5.0, 0.3, 1.2)
 
         end
+
+        @testset "Bernoulli" begin
+            d = ProbProg.Bernoulli(0.3)
+            @test ProbProg.params(d) == (0.3,)
+            @test size(d) == ()
+
+            d2 = ProbProg.Bernoulli(0.5, (4,))
+            @test size(d2) == (4,)
+
+            # Per-element logits
+            logits = [-1.0, 0.0, 1.0]
+            d3 = ProbProg.Bernoulli(logits)
+            @test size(d3) == (3,)
+            @test ProbProg.params(d3) == (logits,)
+        end
     end
 
     @testset "logpdf (no SpecialFunctions dependency)" begin
@@ -238,6 +253,36 @@ end
         end
     end
 
+    @testset "Bernoulli" begin
+        # logp(y; ℓ) = y·ℓ − softplus(ℓ).
+        for (ℓ, y) in ((0.0, 0), (0.0, 1), (2.5, 1), (-1.7, 0), (3.0, 0))
+            d = ProbProg.Bernoulli(ℓ)
+            ref = y * ℓ - log1p(exp(ℓ))
+            @test ProbProg.logpdf(d, y) ≈ ref atol = 1.0e-12
+        end
+        # Numerical stability at large |ℓ|.
+        @test ProbProg.logpdf(ProbProg.Bernoulli(50.0), 1) ≈ 0 atol = 1.0e-12
+        @test isfinite(ProbProg.logpdf(ProbProg.Bernoulli(-50.0), 0))
+
+        # Sampling lands in {0, 1}.
+        rng = Random.default_rng()
+        d = ProbProg.Bernoulli(0.3, (50,))
+        for _ in 1:5
+            x = ProbProg.Distributions.rand(rng, d)
+            @test all(xi -> xi == 0 || xi == 1, x)
+        end
+
+        # Per-element logits.
+        logits = [-2.0, 0.0, 2.0]
+        d3 = ProbProg.Bernoulli(logits)
+        @test ProbProg.logpdf(d3, [0.0, 1.0, 1.0]) ≈
+            sum(([0.0, 1.0, 1.0] .* logits) .- log1p.(exp.(logits))) atol = 1.0e-12
+
+        # Mean = sigmoid(logits).
+        @test ProbProg.mean(ProbProg.Bernoulli(0.0)) ≈ 0.5 atol = 1.0e-12
+        @test ProbProg.var(ProbProg.Bernoulli(0.0)) ≈ 0.25 atol = 1.0e-12
+    end
+
     @testset "LogitNormal" begin
         d = ProbProg.LogitNormal(0.0, 1.0)
         @test ProbProg.params(d) == (0.0, 1.0)
@@ -334,6 +379,13 @@ end
                 base = ndist.Normal(μ, σ)
                 d_py = ndist.TransformedDistribution(base, transforms.SigmoidTransform())
                 ref = np_logpdf(d_py, xs)
+                @test lp ≈ ref atol = 1.0e-10
+            end
+
+            @testset "Bernoulli(logits=$ℓ)" for ℓ in (0.5, -2.0, 3.0)
+                ys = [0.0, 1.0, 1.0, 0.0, 1.0]
+                lp = lp_via_jit(ProbProg.Bernoulli(ℓ), ys, (ℓ,))
+                ref = np_logpdf(ndist.BernoulliLogits(ℓ), ys)
                 @test lp ≈ ref atol = 1.0e-10
             end
         end

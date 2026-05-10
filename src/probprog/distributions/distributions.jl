@@ -16,6 +16,7 @@
 #   std_uniform.jl         — `StdUniform` + `Uniform` constructor
 #   std_inverse_gamma.jl   — `StdInverseGamma` + `InverseGamma` constructor
 #   std_tdist.jl           — `StdTDist` + `TDist` constructor
+#   bernoulli.jl           — `Bernoulli` (discrete, standalone)
 #
 # Each `std_*.jl` file owns the user-facing constructor and ProbProg
 # trait dispatches for its base. `transformed.jl` is loaded first so the
@@ -40,6 +41,7 @@ using ...Reactant.Ops: @opcall
 using LinearAlgebra: logabsdet
 
 export Normal, Exponential, Uniform, InverseGamma, TDist, LogNormal, LogitNormal
+export Bernoulli
 export StdNormal, StdExponential, StdUniform, StdInverseGamma, StdTDist
 export AffineDistribution, TransformedDistribution
 export AbstractTransform,
@@ -199,5 +201,6 @@ include("std_exponential.jl")
 include("std_uniform.jl")
 include("std_inverse_gamma.jl")
 include("std_tdist.jl")
+include("bernoulli.jl")
 
 end # module Distributions
