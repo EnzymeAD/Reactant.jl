@@ -91,6 +91,10 @@ end
 @leaf TracedRArray
 Adapt.parent_type(::Type{TracedRArray{T,N}}) where {T,N} = TracedRArray{T,N}
 
+array_eltype(::T) where {T} = array_eltype(T)
+array_eltype(::Type{<:TracedRArray{T}}) where {T} = T
+array_eltype(T::Type) = eltype(T)
+
 ## TracedStepRangeLen
 struct TracedStepRangeLen{T,R,S,L} <: AbstractRange{T}
     ref::R
