@@ -120,6 +120,7 @@ isa_traced_soa(_) = false
 isa_traced_soa(::TracedRArray) = true
 isa_traced_soa(::AbstractRange{<:TracedRNumber}) = true
 
+unwrapped_eltype(::Type) = Any
 unwrapped_eltype(::Type{T}) where {T<:Number} = T
 unwrapped_eltype(::Type{<:RNumber{T}}) where {T} = T
 unwrapped_eltype(::Type{TracedRNumber{T}}) where {T} = T
