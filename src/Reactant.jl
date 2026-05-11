@@ -131,6 +131,10 @@ unwrapped_eltype(::TracedRNumber{T}) where {T} = T
 unwrapped_eltype(::Type{<:AbstractArray{T}}) where {T} = unwrapped_eltype(T)
 unwrapped_eltype(::AbstractArray{T}) where {T} = unwrapped_eltype(T)
 
+array_eltype(::T) where {T} = array_eltype(T)
+array_eltype(::Type{<:TracedRArray{T}}) where {T} = T
+array_eltype(T::Type) = eltype(T)
+
 include("Ops.jl")
 Base.push!(no_rewrite_ancestor_modules, Ops)
 
