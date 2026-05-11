@@ -205,6 +205,27 @@ for (cT, aT, bT) in (
     end
 end
 
+for (aT, bT) in (
+    (:(LinearAlgebra.StridedMaybeAdjOrTransMat{<:LinearAlgebra.BlasReal}), :(LinearAlgebra.StridedMaybeAdjOrTransMat{<:LinearAlgebra.BlasReal})),
+    (:(LinearAlgebra.StridedMaybeAdjOrTransMat{<:LinearAlgebra.BlasComplex}), :(LinearAlgebra.StridedMaybeAdjOrTransMat{<:LinearAlgebra.BlasComplex})),
+    (:(LinearAlgebra.StridedMatrix{<:LinearAlgebra.BlasComplex}), :(LinearAlgebra.StridedMaybeAdjOrTransMat{<:LinearAlgebra.BlasReal})),
+    (:(LinearAlgebra.AdjOrTransStridedMat{<:LinearAlgebra.BlasComplex}), :(LinearAlgebra.StridedMaybeAdjOrTransMat{<:LinearAlgebra.BlasReal})),
+)
+    @eval begin
+        @reactant_overlay @noinline function Base.:(*)(A::AT, B::BT) where {AT<:$aT,BT<:$bT}
+            A, B = aos_to_soa(A), aos_to_soa(B)
+            if use_overlayed_version((A, B))
+                return call_with_native(TracedLinearAlgebra.overloaded_mul, A, B)
+            else
+                # Inference barrier is required when calling function recursively within
+                # overload. This is required since otherwise type inference will think this
+                # is a recursive edge rather than a call to the base method
+                return call_with_native(*, A, B)
+            end
+        end
+    end
+end
+
 # Base overloads
 @reactant_overlay @noinline function Base._stack(dims::Union{Integer,Colon}, iter)
     if use_overlayed_version(iter)
