@@ -15,11 +15,6 @@ Adapt.parent_type(::Type{MockTensor{T,N,A}}) where {T,N,A} = A
 Base.cos(x::MockTensor) = MockTensor(cos.(parent(x)), x.inds)
 bcast_cos(x::MockTensor) = cos(x)
 
-mutable struct MutableMockTensor{T,N,A<:AbstractArray{T,N}} <: AbstractArray{T,N}
-    data::A
-    inds::Vector{Symbol}
-end
-
 Base.@nospecializeinfer function Reactant.traced_type_inner(
     @nospecialize(A::Type{<:MockTensor}),
     seen,
@@ -31,8 +26,13 @@ Base.@nospecializeinfer function Reactant.traced_type_inner(
     T2 = Reactant.traced_type_inner(
         A.parameters[3], seen, mode, track_numbers, ndevices, runtime
     )
-    MT = MockTensor{eltype(T2),ndims(A),T2}
+    MT = MockTensor{Reactant.unwrapped_eltype(T2),ndims(A),T2}
     return MT
+end
+
+mutable struct MutableMockTensor{T,N,A<:AbstractArray{T,N}} <: AbstractArray{T,N}
+    data::A
+    inds::Vector{Symbol}
 end
 
 function MutableMockTensor(data::A, inds) where {T,N,A<:AbstractArray{T,N}}
@@ -48,6 +48,21 @@ Base.cos(x::MutableMockTensor) = MutableMockTensor(cos.(parent(x)), x.inds)
 
 bcast_cos(x) = cos.(x)
 bcast_cos(x::MutableMockTensor) = cos(x)
+
+Base.@nospecializeinfer function Reactant.traced_type_inner(
+    @nospecialize(A::Type{<:MutableMockTensor}),
+    seen,
+    mode::Reactant.TraceMode,
+    @nospecialize(track_numbers::Type),
+    @nospecialize(ndevices),
+    @nospecialize(runtime)
+)
+    T2 = Reactant.traced_type_inner(
+        A.parameters[3], seen, mode, track_numbers, ndevices, runtime
+    )
+    MT = MutableMockTensor{Reactant.unwrapped_eltype(T2),ndims(A),T2}
+    return MT
+end
 
 # modified from JuliaCollections/DataStructures.jl
 # NOTE original uses abstract type instead of union, which is not supported

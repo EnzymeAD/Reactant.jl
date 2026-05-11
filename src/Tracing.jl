@@ -553,7 +553,7 @@ Base.@nospecializeinfer function traced_type_inner(
 ) where {T,N,P,I,L}
     P2 = traced_type_inner(P, seen, mode, track_numbers, ndevices, runtime)
     I2 = traced_type_inner(I, seen, mode, track_numbers, ndevices, runtime)
-    T2 = eltype(P2)
+    T2 = unwrapped_eltype(P2)
     return SubArray{T2,N,P2,I2,L}
 end
 
@@ -1829,7 +1829,7 @@ Base.@nospecializeinfer function make_tracer(
         end
         return nothing
     end
-    TT = traced_type(eltype(RT), Val(mode), track_numbers, sharding, runtime)
+    TT = traced_type(unwrapped_eltype(RT), Val(mode), track_numbers, sharding, runtime)
     newa = Array{TT,ndims(RT)}(undef, size(prev))
     seen[prev] = newa
     same = true
