@@ -384,6 +384,34 @@ function copy_arrays_to_device_with_sharding(buffers::Vector{Array}, sharding::S
     return dst_arrays
 end
 
-Base.copy(b::Array) = Array(GC.@preserve b begin
-    MLIR.API.ifrt_copy_array(b.buffer)
-end)
+function Base.copy(b::Array)
+    sharding = XLA.sharding(b)
+    if all(XLA.is_addressable, XLA.devices(sharding))
+        return Array(GC.@preserve b begin
+            MLIR.API.ifrt_copy_array(b.buffer)
+        end)
+    end
+
+    # Multi-process: `ifrt_copy_array` cannot copy a buffer that spans
+    # non-addressable devices.  Copy this process's addressable shards
+    # individually, then reassemble using the original sharding.
+    client = XLA.client(b)
+    sdas = disassemble_into_single_device_arrays(b, true)
+    copied_ptrs = Vector{Ptr{Nothing}}(undef, length(sdas))
+    for (i, sda) in enumerate(sdas)
+        copied_ptrs[i] = GC.@preserve sda begin
+            MLIR.API.ifrt_copy_array(sda.buffer)
+        end
+    end
+    arr_shape = collect(Int64, reverse(size(b)))
+    buf = GC.@preserve b client sharding begin
+        MLIR.API.ifrt_client_assemble_array_from_single_shards(
+            client.client,
+            length(arr_shape), arr_shape,
+            sharding.ptr,
+            length(copied_ptrs), copied_ptrs,
+            2, # kDonateInput — donates the per-shard copies, not `b`
+        )
+    end
+    return Array(buf)
+end
