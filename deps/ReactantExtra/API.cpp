@@ -3466,7 +3466,7 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
           baseArrays[i]->on_device_shape(), builder));
       types.push_back(RTT);
     }
-    pm.addPass(mlir::stablehlo::createStablehloRefineArgumentsPass(types));
+    pm.addPass(mlir::enzyme::createEnzymeRefineArgumentsPass(types));
     pm.addPass(mlir::stablehlo::createStablehloRefineShapesPass());
     pm.addNestedPass<mlir::func::FuncOp>(
         stablehlo::createStablehloCanonicalizeDynamismPass());
@@ -3474,6 +3474,11 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
 
     if (!mlir::succeeded(pm.run(*module))) {
       llvm::errs() << " failed to run passes\n";
+      llvm::errs() << " modstr:\n" << modstr << "\n";
+      pm.dump();
+      for (auto ty : types) {
+        llvm::errs() << " arg: " << ty << "\n";
+      }
       exit(1);
     }
 
