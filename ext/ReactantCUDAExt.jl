@@ -575,7 +575,7 @@ end
 function recudaconvert(arg)
     return adapt(ReactantKernelAdaptor(), arg)
 end
-Reactant.@reactant_overlay @noinline function CUDA.cudaconvert(arg)
+Reactant.@reactant_overlay function CUDA.cudaconvert(arg)
     return recudaconvert(arg)
 end
 
@@ -1125,7 +1125,7 @@ function mlir_extract_roots_from_value!(
     end
 end
 
-Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
+Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
     args...;
     convert=Val(true),
     blocks::CuDim=1,
@@ -1600,7 +1600,7 @@ function _convert_bf16_value(
     return src_val
 end
 
-Reactant.@reactant_overlay @noinline function CUDA.cufunction(
+Reactant.@reactant_overlay function CUDA.cufunction(
     f::F, tt::TT=Tuple{}; kwargs...
 ) where {F,TT}
     res = Base.@lock CUDACore.cufunction_lock begin
