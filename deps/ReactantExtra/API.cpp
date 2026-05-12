@@ -3403,6 +3403,8 @@ REACTANT_ABI void *reactantXLAMalloc(LinkableRuntime **__restrict__ lrtP,
 
 REACTANT_ABI void reactantXLAFree(LinkableRuntime **__restrict__ lrtP,
                                   void *__restrict__ buffer0) {
+  if (!buffer0)
+    return;
   void *buffer = *(void **)buffer0;
   free(buffer0);
   PjRtBufferFree((PjRtBuffer *)buffer);
