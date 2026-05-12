@@ -407,9 +407,11 @@ function Base.copy(b::Array)
     buf = GC.@preserve b client sharding begin
         MLIR.API.ifrt_client_assemble_array_from_single_shards(
             client.client,
-            length(arr_shape), arr_shape,
+            length(arr_shape),
+            arr_shape,
             sharding.ptr,
-            length(copied_ptrs), copied_ptrs,
+            length(copied_ptrs),
+            copied_ptrs,
             2, # kDonateInput — donates the per-shard copies, not `b`
         )
     end
