@@ -3401,13 +3401,6 @@ REACTANT_ABI void *reactantXLAMalloc(LinkableRuntime **__restrict__ lrtP,
   (void)pair;
   // Assert that it was actually inserted
   assert(pair.second);
-  llvm::errs() << " reactantXLAMalloc: ptype:" << ptype << "[";
-  for (size_t i=0; i<shapeLen; i++) {
-    if (i != 0)
-	  llvm::errs() << ", ";
-    llvm::errs() << shape[i];
-  }
-  llvm::errs() << "], xbuffer: " << xbuffer << " xbuffer0: " << xbuffer0 << "\n";
   return xbuffer;
 }
 
@@ -3415,7 +3408,6 @@ REACTANT_ABI void reactantXLAFree(LinkableRuntime **__restrict__ lrtP,
                                   void *__restrict__ buffer0) {
   if (!buffer0)
     return;
-  llvm::errs() << " reactantXLAFree: " << buffer0 << "\n";
   auto lrt = *lrtP;
   void *buffer = *(void **)buffer0;
   auto erased = lrt->allocations.erase((void*)buffer0);
@@ -3435,7 +3427,6 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
 
   std::vector<std::vector<int64_t>> sizeKey;
   sizeKey.reserve(argcnt);
-  llvm::errs() << " reactantXLAExec:\n";
   for (int64_t i = 0; i < argcnt; i++) {
     auto &&[argB, argO, argP] = bufferAndOffset(lrt, args[i]);
     if (argO != 0) {
@@ -3447,10 +3438,7 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
     basePtrs[i] = argP;
     auto dims = argB->on_device_shape().dimensions();
     sizeKey.emplace_back(dims.begin(), dims.end());
-    llvm::errs() << " arg[" << i << "] = " << args[i] << " , argB=" << argB << " argO=" << argO << " argP=" << argP << "\n"; 
   }
-
-  llvm::errs() << " modstr:\n" << modstr << "\n";  
 
   auto iter = cache.find(sizeKey);
 
@@ -3501,7 +3489,6 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
       exit(1);
     }
 
-    llvm::errs() << " post mod:\n" << *module << "\n";
     auto exec =
         ClientCompileWithProto(lrt->client, wrap(module.get()), nullptr, 0);
 
@@ -3523,7 +3510,6 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
                     future_results.data());
   free(is_arg_donatable);
   for (int64_t i = 0; i < argcnt; i++) {
-    llvm::errs() << " results[" << i << "] = " << results[i] << "\n";
     *basePtrs[i] = results[i];
     if (futures[i]) {
       FutureAwait(future_results[i]);
