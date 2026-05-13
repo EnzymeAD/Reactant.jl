@@ -475,9 +475,15 @@ function run_chain(
     adapt_mass_matrix::Bool=true,
     thinning::Int=1,
     trajectory_length::Float64=2π,
+    strong_zero::Bool=false,
 )
     mcmc_kwargs = (;
-        algorithm, max_tree_depth, max_delta_energy, trajectory_length, thinning
+        algorithm,
+        max_tree_depth,
+        max_delta_energy,
+        trajectory_length,
+        thinning,
+        strong_zero,
     )
 
     if !progress_bar
@@ -680,6 +686,7 @@ function run_chain(
     max_delta_energy::Float64=1000.0,
     thinning::Int=1,
     trajectory_length::Float64=2π,
+    strong_zero::Bool=false,
 )
     return run_chain(
         ReactantRNG(state.rng),
@@ -698,5 +705,6 @@ function run_chain(
         adapt_mass_matrix=false,
         thinning,
         trajectory_length,
+        strong_zero,
     )
 end
