@@ -1273,6 +1273,41 @@ function mpi_waitall(count::Value, request::Value; location=Location())
 end
 
 """
+`memcpy2d`
+
+The `enzymexla.memcpy2d` operation copies a 2D region from one memref to another.
+"""
+function memcpy2d(
+    asyncDependencies::Vector{Value},
+    target::Value,
+    dpitch::Value,
+    source::Value,
+    spitch::Value,
+    width::Value,
+    height::Value;
+    asyncToken=nothing::Union{Nothing,IR.Type},
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[asyncDependencies..., target, dpitch, source, spitch, width, height]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(asyncToken) && push!(op_ty_results, asyncToken)
+
+    return create_operation(
+        "enzymexla.memcpy2d",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
 `memcpy`
 
 The `gpu.memcpy` operation copies the content of one memref to another.
@@ -1326,6 +1361,38 @@ function memref2pointer(source::Value; result::IR.Type, location=Location())
 
     return create_operation(
         "enzymexla.memref2pointer",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`memset`
+
+The `enzymexla.memset` operation fills the content of a memref with a value.
+"""
+function memset(
+    asyncDependencies::Vector{Value},
+    target::Value,
+    value::Value,
+    count::Value;
+    asyncToken=nothing::Union{Nothing,IR.Type},
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[asyncDependencies..., target, value, count]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(asyncToken) && push!(op_ty_results, asyncToken)
+
+    return create_operation(
+        "enzymexla.memset",
         location;
         operands,
         owned_regions,
