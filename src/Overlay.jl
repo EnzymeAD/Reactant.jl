@@ -155,9 +155,7 @@ for randfun in (:rand, :randn, :randexp)
         end
 
         # inplace
-        @reactant_overlay function Random.$(randfun!)(
-            rng::AbstractRNG, A::AnyTracedRArray
-        )
+        @reactant_overlay function Random.$(randfun!)(rng::AbstractRNG, A::AnyTracedRArray)
             return call_with_native(TracedRandom.$(overload_randfun!), rng, A)
         end
         @reactant_overlay function Random.$(randfun!)(A::AnyTracedRArray)
@@ -316,9 +314,7 @@ for (jlop, rop, default_pivot) in (
     (:cholesky!, :overloaded_cholesky, NoPivot),
 )
     @eval begin
-        @reactant_overlay function LinearAlgebra.$(jlop)(
-            x::AbstractArray; kwargs...
-        )
+        @reactant_overlay function LinearAlgebra.$(jlop)(x::AbstractArray; kwargs...)
             if use_overlayed_version(x)
                 pivot = $(default_pivot)()
                 return call_with_native(
@@ -351,9 +347,7 @@ end
 
 for (jlop, rop) in ((:svd, :overloaded_svd),)
     @eval begin
-        @reactant_overlay function LinearAlgebra.$(jlop)(
-            x::AbstractArray; kwargs...
-        )
+        @reactant_overlay function LinearAlgebra.$(jlop)(x::AbstractArray; kwargs...)
             if use_overlayed_version(x)
                 return call_with_native(
                     TracedLinearAlgebra.$(rop),
@@ -386,9 +380,7 @@ end
 
 # 3 arg multiplication is specialized in Base, but we can reorder the computation
 # as an MLIR optimization
-@reactant_overlay function Base.:(*)(
-    a::AbstractArray, b::AbstractArray, c::AbstractArray
-)
+@reactant_overlay function Base.:(*)(a::AbstractArray, b::AbstractArray, c::AbstractArray)
     if use_overlayed_version((a, b, c))
         ab = call_with_native(TracedLinearAlgebra.overloaded_mul, a, b)
         return call_with_native(TracedLinearAlgebra.overloaded_mul, ab, c)
