@@ -3397,7 +3397,10 @@ REACTANT_ABI void *reactantXLAMalloc(LinkableRuntime **__restrict__ lrtP,
   auto xbuffer0 = UninitPJRTBuffer(lrt->client, device, ptype, shapeLen, shape);
   void **xbuffer = (void **)malloc(sizeof(void *));
   xbuffer[0] = xbuffer0;
-  lrt->allocations.insert((void *)xbuffer);
+  auto pair = lrt->allocations.insert((void *)xbuffer);
+  (void)pair;
+  // Assert that it was actually inserted
+  assert(pair.second);
   return xbuffer;
 }
 
@@ -3405,7 +3408,11 @@ REACTANT_ABI void reactantXLAFree(LinkableRuntime **__restrict__ lrtP,
                                   void *__restrict__ buffer0) {
   if (!buffer0)
     return;
+  auto lrt = *lrtP;
   void *buffer = *(void **)buffer0;
+  auto erased = lrt->allocations.erase((void*)buffer0);
+  assert(erased == 1);
+  (void)erased;
   free(buffer0);
   PjRtBufferFree((PjRtBuffer *)buffer);
 }
