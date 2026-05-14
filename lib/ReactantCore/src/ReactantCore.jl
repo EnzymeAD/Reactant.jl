@@ -367,6 +367,18 @@ function trace_while(expr; track_numbers, mincut, checkpointing, first_arg=nothi
     union!(external_syms, body_symbols.assignments)
     filter!(∉(SPECIAL_SYMBOLS), external_syms)
 
+    # Symbols that may be reassigned (rebound) inside the loop. Slots
+    # corresponding to these symbols may need to be unaliased before tracing
+    # the while loop body, so each reassigned slot has a distinct identity in
+    # the MLIR signature even when the same TracedType is shared with another
+    # slot on entry. Slots that are only mutated in-place (and never rebound)
+    # must keep their aliased identity to preserve the user's mutation
+    # semantics.
+    reassigned_syms = Set{Symbol}()
+    union!(reassigned_syms, cond_symbols.assignments)
+    union!(reassigned_syms, body_symbols.assignments)
+    reassigned_mask_expr = Expr(:tuple, (s in reassigned_syms for s in external_syms)...)
+
     all_syms = Expr(:tuple, external_syms...)
     args_names = Expr(:tuple, external_syms...)
 
@@ -417,6 +429,7 @@ function trace_while(expr; track_numbers, mincut, checkpointing, first_arg=nothi
                 verify_arg_names=($(verify_arg_names_sym)),
                 mincut=($(mincut)),
                 checkpointing=($(checkpointing)),
+                reassigned_args=($(reassigned_mask_expr)),
             )
         end
     end

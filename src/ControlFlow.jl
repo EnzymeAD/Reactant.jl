@@ -16,8 +16,16 @@ function ReactantCore.traced_while(
     verify_arg_names=nothing,
     checkpointing=false,
     mincut=false,
+    reassigned_args=nothing,
 ) where {CFn,BFn}
     return @opcall while_loop(
-        cond_fn, body_fn, args...; track_numbers, verify_arg_names, checkpointing, mincut
+        cond_fn,
+        body_fn,
+        args...;
+        track_numbers,
+        verify_arg_names,
+        checkpointing,
+        mincut,
+        reassigned_args,
     )
 end
