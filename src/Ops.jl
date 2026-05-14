@@ -2386,23 +2386,25 @@ end
 
     # Each top-level argument of a stablehlo.while is an independent loop slot.
     # If two slots reference the same TracedType on entry (aliasing across
-    # loop-carried variables, e.g. `pow2 = a` before the loop) AND one of the
+    # loop-carried variables before the loop) AND one of the
     # slots is reassigned inside the body, the in-loop reassignment would
     # leave the input/output slot cardinality mismatched and verification
     # would fail.
     # ```jl
     # a = ...
     # b = a
-    # @trace for ...
-    #   
+    # <<< `a` and `b` refer to the same traced value >>>
+    # @trace for ... 
+    #   ... = ...a...
+    #   b = ...
     # end
+    # <<<`a` and `b` refer to different traced values >>>
     # ```
     # Replace the cross-slot duplicate TracedType in any
     # reassigned slot with a fresh tracer wrapping the same MLIR value so
     # each such slot has a distinct identity. Slots that are only mutated
     # in-place keep their aliased identity to preserve Julia's mutation
-    # semantics (so e.g. `res .= ...` is observable through `st.x` when
-    # `st === (; x = res)` on entry).
+    # semantics.
     args = _unalias_while_loop_args(args, reassigned_args)
 
     # Make all the args traced or concrete
