@@ -102,6 +102,7 @@ function async_load(
     leader_tracked=nothing,
     slice_lengths,
     collective,
+    oob_fill_mode=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -119,6 +120,8 @@ function async_load(
     )
     !isnothing(leader_tracked) &&
         push!(attributes, NamedAttribute("leader_tracked", leader_tracked))
+    !isnothing(oob_fill_mode) &&
+        push!(attributes, NamedAttribute("oob_fill_mode", oob_fill_mode))
 
     return create_operation(
         "mosaic_gpu.async_load",
@@ -234,15 +237,23 @@ is always scheduled by at most a single lane in the warpgroup.
 The `reduction_op` attribute can be provided to perform a reduction when
 storing to GMEM. For example, using `add` will add the SMEM values to
 existing values in GMEM.
+
+The `gmem_peer_id` and `is_global_broadcast` parameters define the
+destination of the store in a multi-GPU setting. `gmem_peer_id` specifies a
+particular device id to store to, while `is_global_broadcast` indicates
+that the value should be broadcast to all peers. These two parameters are
+mutually exclusive (i.e. both cannot be set).
 """
 function async_store(
     source::Value,
     destination::Value,
     indices::Vector{Value},
     predicate=nothing::Union{Nothing,Value};
+    gmem_peer_id=nothing::Union{Nothing,Value},
     slice_lengths,
     commit_group=nothing,
     reduction_op=nothing,
+    is_global_broadcast=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -251,13 +262,19 @@ function async_store(
     successors = Block[]
     attributes = NamedAttribute[NamedAttribute("slice_lengths", slice_lengths),]
     !isnothing(predicate) && push!(operands, predicate)
+    !isnothing(gmem_peer_id) && push!(operands, gmem_peer_id)
     push!(
-        attributes, operandsegmentsizes([1, 1, length(indices), Int(!isnothing(predicate))])
+        attributes,
+        operandsegmentsizes([
+            1, 1, length(indices), Int(!isnothing(predicate)), Int(!isnothing(gmem_peer_id))
+        ]),
     )
     !isnothing(commit_group) &&
         push!(attributes, NamedAttribute("commit_group", commit_group))
     !isnothing(reduction_op) &&
         push!(attributes, NamedAttribute("reduction_op", reduction_op))
+    !isnothing(is_global_broadcast) &&
+        push!(attributes, NamedAttribute("is_global_broadcast", is_global_broadcast))
 
     return create_operation(
         "mosaic_gpu.async_store",
@@ -299,6 +316,47 @@ function async_store_scales_smem_to_tmem(
 
     return create_operation(
         "mosaic_gpu.async_store_scales_smem_to_tmem",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`async_store_smem`
+
+`cluster_dim` and `cluster_idx` specify the target block.
+
+The target block can wait on the provided barrier (its local copy) to
+observe the completion of this copy.
+
+When `atomic` is specified, the store performs an atomic reduction on target
+SMEM instead of overwriting it.
+"""
+function async_store_smem(
+    valueToStore::Value,
+    destination::Value,
+    barrier::Value,
+    cluster_idx::Value;
+    cluster_dim,
+    atomic_type=nothing,
+    optimized=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[valueToStore, destination, barrier, cluster_idx]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[NamedAttribute("cluster_dim", cluster_dim),]
+    !isnothing(atomic_type) && push!(attributes, NamedAttribute("atomic_type", atomic_type))
+    !isnothing(optimized) && push!(attributes, NamedAttribute("optimized", optimized))
+
+    return create_operation(
+        "mosaic_gpu.async_store_smem",
         location;
         operands,
         owned_regions,
@@ -521,6 +579,47 @@ function debug_print(value::Value; format, location=Location())
 end
 
 """
+`get_cluster_ref`
+
+Maps a memref to a peer block in the cluster along specified dimensions.
+"""
+function get_cluster_ref(
+    source::Value,
+    x=nothing::Union{Nothing,Value};
+    y=nothing::Union{Nothing,Value},
+    z=nothing::Union{Nothing,Value},
+    result=nothing::Union{Nothing,IR.Type},
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[source,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(x) && push!(operands, x)
+    !isnothing(y) && push!(operands, y)
+    !isnothing(z) && push!(operands, z)
+    push!(
+        attributes,
+        operandsegmentsizes([
+            1, Int(!isnothing(x)), Int(!isnothing(y)), Int(!isnothing(z))
+        ]),
+    )
+    !isnothing(result) && push!(op_ty_results, result)
+
+    return create_operation(
+        "mosaic_gpu.get_cluster_ref",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
 `initialize_barrier`
 
 Initializes `num_barriers` barriers each meant to synchronize exactly
@@ -573,6 +672,44 @@ function layout_cast(
 
     return create_operation(
         "mosaic_gpu.layout_cast",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
+`multimem_load_reduce`
+
+Loads from a multicast memref specified by the `source` and reduces the
+loaded values into a single output using hardware-accelerated multimem
+instructions.
+
+The reduction is defined by `reduction_op` and the devices which participate
+in the operation are backed by a multicast pointer `source`.
+
+And, Or and Xor reduction types are compatible only with int inputs.
+Umin, Umax, Smin and Smax may only be specified for int types.
+"""
+function multimem_load_reduce(
+    source::Value;
+    result_0=nothing::Union{Nothing,IR.Type},
+    reduction_type,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[source,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[NamedAttribute("reduction_type", reduction_type),]
+    !isnothing(result_0) && push!(op_ty_results, result_0)
+
+    return create_operation(
+        "mosaic_gpu.multimem_load_reduce",
         location;
         operands,
         owned_regions,
@@ -724,12 +861,21 @@ function return_(operands::Vector{Value}; location=Location())
     )
 end
 
-function slice_smem(offset::Value; result_0::IR.Type, location=Location())
+"""
+`slice_smem`
+
+Constructs a SMEM ref starting at the specified offset.
+
+`slice_smem` may optionally carry an `alias_id` attribute that is used to
+differentiate between potentially aliasing allocations.
+"""
+function slice_smem(; result_0::IR.Type, offset, alias_id=nothing, location=Location())
     op_ty_results = IR.Type[result_0,]
-    operands = Value[offset,]
+    operands = Value[]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[]
+    attributes = NamedAttribute[NamedAttribute("offset", offset),]
+    !isnothing(alias_id) && push!(attributes, NamedAttribute("alias_id", alias_id))
 
     return create_operation(
         "mosaic_gpu.slice_smem",

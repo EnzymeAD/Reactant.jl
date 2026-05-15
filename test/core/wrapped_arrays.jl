@@ -294,3 +294,19 @@ end
     @test @jit(view_transpose(x_ra)) ≈ view_transpose(x)
     @test @jit(view_diagonal(x_ra)) ≈ view_diagonal(x)
 end
+
+function permutedims!_reshaped(A, B)
+    A_reshaped = reshape(A, 2, 2, 2)
+    B_reshaped = reshape(B, 2, 2, 2)
+    permutedims!(A_reshaped, B_reshaped, (2, 3, 1))
+    return A
+end
+
+@testset "permutedims! on reshaped arrays" begin
+    A = randn(Float32, 8)
+    B = randn(Float32, 8)
+    A_ra = Reactant.to_rarray(A)
+    B_ra = Reactant.to_rarray(B)
+
+    @test Array(@jit(permutedims!_reshaped(A_ra, B_ra))) ≈ permutedims!_reshaped(A, B)
+end

@@ -1258,6 +1258,9 @@ cc_library(
             "-Wl,-exported_symbol,_GetDistributedRuntimeClientWithOptions",
             "-Wl,-exported_symbol,_GetDistributedRuntimeServiceWithOptions",
             "-Wl,-exported_symbol,_ReactantLexMLIR",
+            "-Wl,-exported_symbol,_ReactantCompileMhloToLLVM",
+            "-Wl,-exported_symbol,_ReactantFreeLocalExecutable",
+            "-Wl,-exported_symbol,_ReactantCreateLLVMMod",
         ],
     }),
     linkstatic = True,
@@ -1301,6 +1304,8 @@ cc_library(
         "@enzyme_ad//src/enzyme_ad/jax:XLADerivatives",
         "@enzyme_ad//src/enzyme_ad/jax:CInterface",
         "@enzyme_ad//src/enzyme_ad/jax:xla_ffi",
+        "@enzyme_ad//src/enzyme_ad/jax:compile_with_xla",
+        "@enzyme_ad//src/enzyme_ad/jax:clang_compile",
         # "@enzyme_ad//src/enzyme_ad/jax:gpu",
         "@xla//xla/ffi/api:ffi",
         "@xla//xla/ffi:ffi_api",
@@ -1669,6 +1674,24 @@ gentbl_cc_library(
     td_file = "@enzyme//:Enzyme/MLIR/Dialect/EnzymeOps.td",
     deps = [
         "@enzyme//:EnzymeDialectTdFiles",
+    ],
+)
+
+gentbl_cc_library(
+    name = "ImpulseJLIncGen",
+    tbl_outs = [
+        (
+            [
+                "--generator=jl-op-defs",
+                "--disable-module-wrap=0",
+            ],
+            "Impulse.jl",
+        ),
+    ],
+    tblgen = "//:mlir-jl-tblgen",
+    td_file = "@enzyme//:Enzyme/MLIR/Dialect/Impulse/ImpulseOps.td",
+    deps = [
+        "@enzyme//:ImpulseDialectTdFiles",
     ],
 )
 

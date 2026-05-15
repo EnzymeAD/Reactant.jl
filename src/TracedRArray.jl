@@ -270,6 +270,17 @@ function Broadcast.BroadcastStyle(::Type{<:TracedRNumber})
     return AbstractReactantArrayStyle{0}()
 end
 
+function Base.zeros(::Type{T}, dims::Tuple{}) where {T<:TracedRArray}
+    return (@opcall fill(
+        zero(unwrapped_eltype(T)), dims
+    ))::TracedRArray{unwrapped_eltype(T),0}
+end
+function Base.zeros(::Type{T}, dims::NTuple{N,Int}) where {T<:TracedRArray,N}
+    return (@opcall fill(
+        zero(unwrapped_eltype(T)), dims
+    ))::TracedRArray{unwrapped_eltype(T),N}
+end
+
 function Base.similar(
     ::Broadcasted{AbstractReactantArrayStyle{N}}, ::Type{T}, dims
 ) where {T<:Reactant.ReactantPrimitive,N}
@@ -1338,7 +1349,7 @@ function Base.permutedims(A::AnyTracedRArray{T,N}, perm) where {T,N}
     return @opcall transpose(materialize_traced_array(A), Int64[perm...])
 end
 
-function Base.permutedims!(dest::TracedRArray, src::AnyTracedRArray, perm)
+function Base.permutedims!(dest::AnyTracedRArray, src::AnyTracedRArray, perm)
     result = @opcall transpose(materialize_traced_array(src), Int64[perm...])
     TracedUtils.set_mlir_data!(dest, result.mlir_data)
     return dest

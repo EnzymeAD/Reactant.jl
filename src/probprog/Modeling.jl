@@ -71,7 +71,7 @@ function sample(
         ),
     )
 
-    sample_op = MLIR.Dialects.enzyme.sample(
+    sample_op = MLIR.Dialects.impulse.sample(
         mlir_caller_args;
         outputs=mlir_result_types,
         fn=fn_attr,
@@ -133,7 +133,7 @@ function untraced_call(rng::AbstractRNG, f::Function, args::Vararg{Any,Nargs}) w
 
     fn_attr = MLIR.IR.FlatSymbolRefAttribute(f_name)
 
-    call_op = MLIR.Dialects.enzyme.untracedCall(
+    call_op = MLIR.Dialects.impulse.untracedCall(
         mlir_caller_args; outputs=mlir_result_types, fn=fn_attr
     )
 
@@ -183,7 +183,7 @@ function simulate(rng::AbstractRNG, f::Function, args::Vararg{Any,Nargs}) where 
     trace_type = MLIR.IR.TensorType([1, pos_size], MLIR.IR.Type(Float64))
     weight_type = MLIR.IR.TensorType(Int64[], MLIR.IR.Type(Float64))
 
-    simulate_op = MLIR.Dialects.enzyme.simulate(
+    simulate_op = MLIR.Dialects.impulse.simulate(
         mlir_caller_args;
         trace=trace_type,
         weight=weight_type,
@@ -225,18 +225,22 @@ function simulate_(rng::AbstractRNG, f::Function, args::Vararg{Any,Nargs}) where
     return trace, trace.weight
 end
 
+function flatten_constraint(constraint::Constraint)
+    addresses = extract_addresses(constraint)
+    flat = Float64[]
+    for addr in addresses
+        append!(flat, vec(constraint[addr]))
+    end
+    return to_rarray(reshape(flat, 1, :))
+end
+
 # Gen-like helper function.
 function generate_(
     rng::AbstractRNG, constraint::Constraint, f::Function, args::Vararg{Any,Nargs}
 ) where {Nargs}
     tt = TracedTrace()
     constrained_addresses = extract_addresses(constraint)
-
-    constraint_flat = Float64[]
-    for addr in constrained_addresses
-        append!(constraint_flat, vec(constraint[addr]))
-    end
-    constraint_tensor = to_rarray(reshape(constraint_flat, 1, :))
+    constraint_tensor = flatten_constraint(constraint)
 
     compiled_fn = ScopedValues.with(TRACING_TRACE => tt) do
         @compile optimize = :probprog generate(
@@ -308,7 +312,7 @@ function generate(
 
     constraint_mlir = TracedUtils.get_mlir_data(constraint_tensor)
 
-    generate_op = MLIR.Dialects.enzyme.generate(
+    generate_op = MLIR.Dialects.impulse.generate(
         mlir_caller_args,
         constraint_mlir;
         trace=trace_type,

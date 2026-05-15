@@ -49,8 +49,24 @@ end
     @testset "Unbound Args" begin
         methods_with_unbound_args = Aqua.detect_unbound_args_recursively(Reactant)
         num_unbound_args = 0
+        allowed_methods_with_unbound_args = [
+            only(
+                methods(
+                    Reactant.traced_type_inner,
+                    (
+                        Type{AbstractArray{<:Integer,TypeVar(:N)}},
+                        Any,
+                        Reactant.TraceMode,
+                        Type,
+                        Any,
+                        Any,
+                    ),
+                ),
+            ),
+        ]
         for method in methods_with_unbound_args
-            if !issubmodule(parentmodule(method), Reactant.Proto)
+            if !issubmodule(parentmodule(method), Reactant.Proto) &&
+                method ∉ allowed_methods_with_unbound_args
                 num_unbound_args += 1
                 @warn "Method $(method) has unbound args"
             end
@@ -94,6 +110,7 @@ end
         Reactant.PrecisionConfig,
         Reactant.InterpolationType,
         ReactantMPIExt.Ops,
+        Reactant.EnzymeActivity,
     )
 
     test_explicit_imports(

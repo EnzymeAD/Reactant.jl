@@ -133,7 +133,8 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#all_gather
 ```mlir
 %result:2 = \"stablehlo.all_gather\"(%operand0, %operand1) {
   all_gather_dim = 1 : i64,
-  replica_groups = dense<[[0, 1]]> : tensor<1x2xi64>,
+  replica_groups = #stablehlo.replica_group_mesh_axes<
+    mesh = #stablehlo.mesh<axes = [#stablehlo.mesh_axis<name = \"foo\", size = 2>]>, axes = [\"foo\"]>,
   channel_handle = #stablehlo.channel_handle<handle = 0, type = 0>
 } : (tensor<2x2xi64>, tensor<2x2xi64>) -> (tensor<2x4xi64>, tensor<2x4xi64>)
 ```
@@ -189,7 +190,9 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#all_reduce
   %0 = \"stablehlo.add\"(%arg0, %arg1) : (tensor<i64>, tensor<i64>) -> tensor<i64>
   \"stablehlo.return\"(%0) : (tensor<i64>) -> ()
 }) {
-  replica_groups = dense<[[0, 1]]> : tensor<1x2xi64>,
+  replica_groups = #stablehlo.replica_group_mesh_axes<
+    mesh = #stablehlo.mesh<axes = [#stablehlo.mesh_axis<name = \"foo\", size = 2>]>, axes = [\"foo\"]
+  >,
   channel_handle = #stablehlo.channel_handle<handle = 0, type = 0>
 } : (tensor<4xi64>, tensor<4xi64>) -> (tensor<4xi64>, tensor<4xi64>)
 ```
@@ -242,7 +245,9 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#all_to_all
   split_dimension = 1 : i64,
   concat_dimension = 0 : i64,
   split_count = 2 : i64,
-  replica_groups = dense<[[0, 1]]> : tensor<1x2xi64>
+  replica_groups = #stablehlo.replica_group_mesh_axes<
+    mesh = #stablehlo.mesh<axes = [#stablehlo.mesh_axis<name = \"foo\", size = 2>]>, axes = [\"foo\"]
+  >
 } : (tensor<2x4xi64>, tensor<2x4xi64>) -> (tensor<4x2xi64>, tensor<4x2xi64>)
 ```
 """
@@ -942,7 +947,9 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#collective_broadcast
 # Example
 ```mlir
 %result = \"stablehlo.collective_broadcast\"(%operand) {
-  replica_groups = dense<[[0, 1]]> : tensor<1x2xi64>,
+  replica_groups = #stablehlo.replica_group_mesh_axes<
+    mesh = #stablehlo.mesh<axes = [#stablehlo.mesh_axis<name = \"foo\", size = 2>]>, axes = [\"foo\"]
+  >,
   channel_handle = #stablehlo.channel_handle<handle = 0, type = 0>
 } : (tensor<1x2xi64>) -> tensor<1x2xi64>
 ```
@@ -3395,7 +3402,9 @@ scatters the split parts between the processes to produce the `result`.
  stablehlo.return %0 : tensor<i64>
     }) {
  scatter_dimension = 1 : i64,
- replica_groups = dense<[[0, 1]]> : tensor<1x2xi64>,
+ replica_groups = #stablehlo.replica_group_mesh_axes<
+   mesh = #stablehlo.mesh<axes = [#stablehlo.mesh_axis<name = \"foo\", size = 2>]>, axes = [\"foo\"]
+ >,
  channel_handle = #stablehlo.channel_handle<handle = 0, type = 0>
     } : (tensor<2x4xi64>) -> tensor<2x2xi64>
     ```

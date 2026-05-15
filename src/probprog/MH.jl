@@ -52,7 +52,7 @@ function mh(
     trace_mlir = TracedUtils.get_mlir_data(original_trace)
     weight_mlir = TracedUtils.get_mlir_data(original_weight)
 
-    mh_op = MLIR.Dialects.enzyme.mh(
+    mh_op = MLIR.Dialects.impulse.mh(
         trace_mlir,
         weight_mlir,
         mlir_caller_args;

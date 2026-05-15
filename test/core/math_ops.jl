@@ -92,6 +92,38 @@ end
         @test res[1] isa ConcreteRNumber{Float32}
         @test res[2] isa ConcreteRNumber{Float32}
     end
+    @testset for fn in (cispi, cis)
+        res = @jit fn(x_ra)
+        @test res ≈ fn(x)
+        @test res isa ConcreteRNumber{Complex{Float32}}
+    end
+
+    @testset "sinc" begin
+        x = Reactant.TestUtils.construct_test_array(Float32, 4, 16)[:, 1:7]
+        x_ra = Reactant.to_rarray(x)
+
+        @test @jit(sinc.(x_ra)) ≈ sinc.(x)
+        @test @jit(sinc.(x_ra)) isa ConcreteRArray{Float32,2}
+
+        xz = ConcreteRNumber(0.0)
+        xinf = ConcreteRNumber(Inf)
+        @test @jit(sinc(ConcreteRNumber(0.0))) ≈ sinc(0.0)
+        @test @jit(sinc(ConcreteRNumber(Inf))) ≈ sinc(Inf)
+
+        # Complex test
+        xc = Reactant.TestUtils.construct_test_array(ComplexF32, 4, 16)[:, 1:7]
+        xc_ra = Reactant.to_rarray(xc)
+
+        @test @jit(sinc.(xc_ra)) ≈ sinc.(xc)
+        @test @jit(sinc.(xc_ra)) isa ConcreteRArray{ComplexF32,2}
+
+        # Ensure we hit the small-argument branch
+        xz0 = ComplexF32(1e-5 - 2e-5im)
+        xz = ConcreteRNumber(xz0) # Below the threshold
+        xinf = ConcreteRNumber(ComplexF32(Inf + 1im))
+        @test @jit(sinc(xz)) ≈ sinc(xz0)
+        @test @jit(sinc(xinf)) ≈ sinc(Inf + 1im)
+    end
 end
 
 @testset "isfinite" begin

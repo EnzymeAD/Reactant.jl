@@ -1,9 +1,11 @@
-const enzyme_out = 0
-const enzyme_dup = 1
-const enzyme_const = 2
-const enzyme_dupnoneed = 3
-const enzyme_outnoneed = 4
-const enzyme_constnoneed = 5
+@enumx EnzymeActivity begin
+    OUT = 0
+    DUPLICATED = 1
+    CONST = 2
+    DUPLICATED_NO_NEED = 3
+    OUT_NO_NEED = 4
+    CONST_NO_NEED = 5
+end
 
 struct StackedBatchDuplicated{T,N,M,V<:AbstractArray{T,N},W<:AbstractArray{T,M}} <:
        Annotation{V}
@@ -201,17 +203,17 @@ end
 end
 
 @inline function act_from_type(::Type{<:Active}, reverse, needs_primal)
-    return needs_primal ? enzyme_out : enzyme_outnoneed
+    return needs_primal ? EnzymeActivity.OUT : EnzymeActivity.OUT_NO_NEED
 end
 @inline function act_from_type(::Type{<:Const}, reverse, needs_primal)
-    return needs_primal ? enzyme_const : enzyme_constnoneed
+    return needs_primal ? EnzymeActivity.CONST : EnzymeActivity.CONST_NO_NEED
 end
 
 @inline function act_from_type(::Type{<:Duplicated}, reverse, needs_primal)
     if reverse
-        return needs_primal ? enzyme_out : enzyme_outnoneed
+        return needs_primal ? EnzymeActivity.OUT : EnzymeActivity.OUT_NO_NEED
     else
-        return needs_primal ? enzyme_dup : enzyme_dupnoneed
+        return needs_primal ? EnzymeActivity.DUPLICATED : EnzymeActivity.DUPLICATED_NO_NEED
     end
 end
 @inline function act_from_type(
@@ -221,7 +223,7 @@ end
 end
 
 @inline function act_from_type(::Type{<:DuplicatedNoNeed}, reverse, needs_primal)
-    return reverse ? enzyme_out : enzyme_dupnoneed
+    return reverse ? EnzymeActivity.OUT : EnzymeActivity.DUPLICATED_NO_NEED
 end
 @inline function act_from_type(
     ::Type{<:Union{BatchDuplicatedNoNeed,StackedBatchDuplicatedNoNeed}},
@@ -289,7 +291,9 @@ function set_act!(inp, path, reverse, tostore; emptypath=false, width=1)
 end
 
 function act_attr(val)
-    return MLIR.IR.Attribute(MLIR.API.enzymeActivityAttrGet(MLIR.IR.current_context(), val))
+    return MLIR.IR.Attribute(
+        MLIR.API.enzymeActivityAttrGet(MLIR.IR.current_context(), Int32(val))
+    )
 end
 
 function infer_activity(
@@ -342,7 +346,7 @@ function overload_autodiff(
     (; result, linear_args, in_tys, linear_results) = mlir_fn_res
     fnwrap = mlir_fn_res.fnwrapped
 
-    activity = Int32[]
+    activity = EnzymeActivity.T[]
     ad_inputs = MLIR.IR.Value[]
 
     reverse_seeds = Dict{Tuple,MLIR.IR.Value}()
@@ -353,7 +357,7 @@ function overload_autodiff(
         push!(activity, act_from_type(arg, reverse))
         push_acts!(ad_inputs, arg, path[3:end], reverse)
 
-        if CMode <: ReverseMode && act_from_type(arg, false) == enzyme_dup
+        if CMode <: ReverseMode && act_from_type(arg, false) == EnzymeActivity.DUPLICATED
             x = if width == 1
                 arg.dval
             elseif arg.dval isa AbstractArray
@@ -370,7 +374,7 @@ function overload_autodiff(
     end
 
     outtys = MLIR.IR.Type[]
-    ret_activity = Int32[]
+    ret_activity = EnzymeActivity.T[]
 
     for a in linear_results
         if TracedUtils.has_idx(a, resprefix)
@@ -395,7 +399,7 @@ function overload_autodiff(
 
             act = act_from_type(A, reverse, EnzymeCore.needs_primal(CMode))
             cst = nothing
-            if act == enzyme_out || act == enzyme_outnoneed
+            if act == EnzymeActivity.OUT || act == EnzymeActivity.OUT_NO_NEED
                 if width == 1
                     cst = @opcall fill(one(unwrapped_eltype(a)), size(a))
                 else
@@ -407,26 +411,28 @@ function overload_autodiff(
             if CMode <: ReverseMode && TracedUtils.has_idx(a, argprefix)
                 idx, path = TracedUtils.get_argidx(a, argprefix)
                 arg = idx == 1 && fnwrap ? f : args[idx - fnwrap]
-                if act_from_type(arg, false) == enzyme_dup
+                if act_from_type(arg, false) == EnzymeActivity.DUPLICATED
                     seed = reverse_seeds[path]
-                    if cst == nothing
-                        if act == enzyme_const
-                            act = enzyme_out
-                        elseif act == enzyme_constnoneed
-                            act = enzyme_outnoneed
+                    if cst === nothing
+                        if act == EnzymeActivity.CONST
+                            act = EnzymeActivity.OUT
+                        elseif act == EnzymeActivity.CONST_NO_NEED
+                            act = EnzymeActivity.OUT_NO_NEED
                         else
                             @assert false
                         end
                         cst = seed
                     else
-                        @assert act == enzyme_out || act == enzyme_outnoneed
+                        @assert (
+                            act == EnzymeActivity.OUT || act == EnzymeActivity.OUT_NO_NEED
+                        )
                         cst = MLIR.IR.result(MLIR.Dialects.stablehlo.add(cst, seed), 1)
                     end
                 end
             end
 
             push!(ret_activity, act)
-            if cst != nothing
+            if cst !== nothing
                 push!(ad_inputs, cst)
             end
         else
@@ -437,7 +443,7 @@ function overload_autodiff(
                 act = act_from_type(arg, reverse, true)
                 push!(ret_activity, act)
 
-                if act == enzyme_out || act == enzyme_outnoneed
+                if act == EnzymeActivity.OUT || act == EnzymeActivity.OUT_NO_NEED
                     seed = reverse_seeds[path]
                     push!(ad_inputs, seed)
                 end
@@ -453,7 +459,11 @@ function overload_autodiff(
     end
 
     for (i, act) in enumerate(activity)
-        if act == enzyme_out || act == enzyme_dup || act == enzyme_dupnoneed
+        if (
+            act == EnzymeActivity.OUT ||
+            act == EnzymeActivity.DUPLICATED ||
+            act == EnzymeActivity.DUPLICATED_NO_NEED
+        )
             push!(outtys, TracedUtils.batch_ty(width, in_tys[i]))
         end
     end
@@ -528,7 +538,7 @@ function overload_autodiff(
         idx, path = TracedUtils.get_argidx(a, argprefix)
 
         arg = idx == 1 && fnwrap ? f : args[idx - fnwrap]
-        act_from_type(arg, reverse) != enzyme_out && continue
+        act_from_type(arg, reverse) != EnzymeActivity.OUT && continue
 
         if idx == 1 && fnwrap && arg isa Active
             @assert false

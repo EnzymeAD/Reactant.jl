@@ -128,8 +128,8 @@ unwrapped_eltype(::T) where {T<:Number} = T
 unwrapped_eltype(::RNumber{T}) where {T} = T
 unwrapped_eltype(::TracedRNumber{T}) where {T} = T
 
-unwrapped_eltype(::Type{<:AbstractArray{T,N}}) where {T,N} = unwrapped_eltype(T)
-unwrapped_eltype(::AbstractArray{T,N}) where {T,N} = unwrapped_eltype(T)
+unwrapped_eltype(::Type{<:AbstractArray{T}}) where {T} = unwrapped_eltype(T)
+unwrapped_eltype(::AbstractArray{T}) where {T} = unwrapped_eltype(T)
 
 include("Ops.jl")
 Base.push!(no_rewrite_ancestor_modules, Ops)
@@ -271,7 +271,7 @@ const TracedType = Union{TracedRArray,TracedRNumber,MissingTracedValue}
 include("ControlFlow.jl")
 include("Tracing.jl")
 
-include("Compiler.jl")
+include("compiler/Compiler.jl")
 
 include("Overlay.jl")
 

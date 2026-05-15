@@ -1112,7 +1112,7 @@ function set!(x, path, tostore; emptypath=false)
 end
 
 function __elem_apply_loop_condition(idx_ref, fn_ref::F, res_ref, args_ref, L_ref) where {F}
-    return idx_ref[] < L_ref[]
+    return @allowscalar(idx_ref[]) < L_ref[]
 end
 
 struct RefFillVector{T}
@@ -1126,12 +1126,12 @@ function __elem_apply_loop_body(idx_ref, fn_ref::F, res_ref, args_ref, L_ref) wh
     args = args_ref[]
     fn = fn_ref[]
     res = res_ref[]
-    idx = idx_ref[] + 1
+    idx = @allowscalar(idx_ref[]) + 1
 
     scalar_args = [@allowscalar(arg[idx]) for arg in args]
     @allowscalar res[idx] = fn(scalar_args...)
 
-    idx_ref[] = idx
+    @allowscalar idx_ref[] = idx
     res_ref[] = res
     return nothing
 end
@@ -1141,7 +1141,7 @@ scalar_arg(arg) = arg isa Base.RefValue || !(arg isa AbstractArray)
 flattenarg(arg) = ReactantCore.materialize_traced_array(vec(arg))
 flattenarg(arg::Ref) = RefFillVector(arg)
 
-function elem_apply_via_while_loop(f, args::Vararg{Any,Nargs}) where {Nargs}
+function elem_apply_via_while_loop(f, args::Vararg{Any,Nargs}; kwargs...) where {Nargs}
     non_ref_args = [arg for arg in args if !scalar_arg(arg)]
     if !isempty(non_ref_args)
         @assert allequal(size.(non_ref_args)) "All args must have the same size"
@@ -1170,7 +1170,7 @@ function elem_apply_via_while_loop(f, args::Vararg{Any,Nargs}) where {Nargs}
     bc = Base.Broadcast.Broadcasted(f, Tuple(args))
     result = similar(bc, T_res)
 
-    ind_var = Ref(0)
+    ind_var = zeros(TracedRArray{Int}, ())
     f_ref = Ref(f)
     result_ref = Ref(result)
     args_ref = Ref(flat_args)
@@ -1179,7 +1179,8 @@ function elem_apply_via_while_loop(f, args::Vararg{Any,Nargs}) where {Nargs}
     ReactantCore.traced_while(
         __elem_apply_loop_condition,
         __elem_apply_loop_body,
-        (ind_var, f_ref, result_ref, args_ref, limit_ref),
+        (ind_var, f_ref, result_ref, args_ref, limit_ref);
+        kwargs...,
     )
 
     return ReactantCore.materialize_traced_array(reshape(result, out_size))

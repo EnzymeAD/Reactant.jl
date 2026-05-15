@@ -575,7 +575,7 @@ end
 function recudaconvert(arg)
     return adapt(ReactantKernelAdaptor(), arg)
 end
-Reactant.@reactant_overlay @noinline function CUDA.cudaconvert(arg)
+Reactant.@reactant_overlay function CUDA.cudaconvert(arg)
     return recudaconvert(arg)
 end
 
@@ -661,9 +661,15 @@ function vendored_optimize_module!(
     LLVM.@dispose pb = LLVM.NewPMPassBuilder() begin
         LLVM.register!(pb, GPUCompiler.NVVMReflectPass())
 
+        if GPUCompiler.NVVMReflectPass().type != :function
+            LLVM.add!(pb, GPUCompiler.NVVMReflectPass())
+        end
+
         LLVM.add!(pb, LLVM.NewPMFunctionPassManager()) do fpm
-            # TODO(#2239): need to run this earlier; optimize_module! is called after addOptimizationPasses!
-            LLVM.add!(fpm, GPUCompiler.NVVMReflectPass())
+            if GPUCompiler.NVVMReflectPass().type == :function
+                # TODO(#2239): need to run this earlier; optimize_module! is called after addOptimizationPasses!
+                LLVM.add!(fpm, GPUCompiler.NVVMReflectPass())
+            end
 
             # needed by GemmKernels.jl-like code
             LLVM.add!(fpm, LLVM.SpeculativeExecutionPass())
@@ -895,7 +901,7 @@ function compile(job)
         )
 
         if !Reactant.precompiling()
-            GPUCompiler.link_library!(mod, GPUCompiler.load_runtime(job))
+            LLVM.link!(mod, GPUCompiler.load_runtime(job))
         end
         entryname = LLVM.name(meta.entry)
 
@@ -1119,7 +1125,7 @@ function mlir_extract_roots_from_value!(
     end
 end
 
-Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
+Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
     args...;
     convert=Val(true),
     blocks::CuDim=1,
@@ -1594,7 +1600,7 @@ function _convert_bf16_value(
     return src_val
 end
 
-Reactant.@reactant_overlay @noinline function CUDA.cufunction(
+Reactant.@reactant_overlay function CUDA.cufunction(
     f::F, tt::TT=Tuple{}; kwargs...
 ) where {F,TT}
     res = Base.@lock CUDACore.cufunction_lock begin

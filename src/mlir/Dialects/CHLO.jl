@@ -1471,6 +1471,7 @@ function scan(
     outputs::Vector{IR.Type},
     carries::Vector{IR.Type},
     dimension,
+    scan_dim_size=nothing,
     is_reverse=nothing,
     is_associative=nothing,
     body::Region,
@@ -1483,6 +1484,8 @@ function scan(
     attributes = NamedAttribute[NamedAttribute("dimension", dimension),]
     push!(attributes, operandsegmentsizes([length(inputs), length(inits)]))
     push!(attributes, resultsegmentsizes([length(outputs), length(carries)]))
+    !isnothing(scan_dim_size) &&
+        push!(attributes, NamedAttribute("scan_dim_size", scan_dim_size))
     !isnothing(is_reverse) && push!(attributes, NamedAttribute("is_reverse", is_reverse))
     !isnothing(is_associative) &&
         push!(attributes, NamedAttribute("is_associative", is_associative))
