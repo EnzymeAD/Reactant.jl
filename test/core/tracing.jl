@@ -412,6 +412,38 @@ end
     @test opt_traced.centred isa Bool
 end
 
+function aliased_trace_for(m::T) where {T}
+    a = one(T)
+    pow2 = a
+
+    Reactant.@trace for _ in 1:8
+        pow2 += a
+    end
+
+    return a
+end
+
+function aliased_trace_for_dead_code(m::T) where {T}
+    a = one(T)
+    b = zero(T)
+    pow2 = a
+
+    Reactant.@trace for _ in 1:8
+        c = sin(a)
+        pow2 += b
+    end
+
+    return a
+end
+
+@testset "aliased TracedRNumber in @trace for" begin
+    ms = Float64[0.01, 0.1, 0.5, 0.9]
+    m_r = Reactant.to_rarray(ms)
+
+    @test @jit(aliased_trace_for.(m_r)) ≈ aliased_trace_for.(ms)
+    @test @jit(aliased_trace_for_dead_code.(m_r)) ≈ aliased_trace_for_dead_code.(ms)
+end
+
 @testset "@skip_rewrite_func" begin
     a = ConcreteRArray([1.0 2.0; 3.0 4.0])
 
