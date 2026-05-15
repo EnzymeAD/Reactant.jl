@@ -28,6 +28,28 @@ struct Periodic
     n::Int
 end
 
+"""
+    ReactantCore.Binomial(budget::Int)
+
+Checkpointing strategy for traced loops that uses a fixed budget for checkpoints and uses
+the revolve algorithm [1] to minimize compute around that budget.
+
+```julia
+# Explicit periodic checkpointing with 4 checkpoints
+@trace checkpointing=Binomial(4) for i in 1:100
+    x = x .+ 1
+end
+```
+
+[1] Griewank, A., & Walther, A. (2000).
+    Algorithm 799: revolve: an implementation of checkpointing for the reverse
+    or adjoint mode of computational differentiation.
+    ACM Transactions on Mathematical Software (TOMS), 26(1), 19-45.
+"""
+struct Binomial
+    budget::Int
+end
+
 # Traits
 function is_traced((@nospecialize x::T), seen=Base.IdSet()) where {T}
     if !isprimitivetype(x)
@@ -163,7 +185,7 @@ end
 The behavior of loops can be configured with the following configuration options:
 
  - `track_numbers::Union{Bool,Datatype}` - whether Julia numbers should be automatically promoted to traced numbers upon entering the loop.
- - `checkpointing::Union{Bool,Periodic}` - whether or not to enable checkpointing when performing reverse mode differentiation. Can be `false` (default), `true` (automatic checkpointing), or `Periodic(n)` to specify `n` checkpoints. When `true` is used, defaults to `isqrt(num_iters)` checkpoints for `for` loops with static (non-traced) bounds. `Periodic(n)` must be used for `while` loops or `for` loops with dynamic (traced) bounds when checkpointing is enabled.
+ - `checkpointing::Union{Bool,Periodic,Binomial}` - whether or not to enable checkpointing when performing reverse mode differentiation. Can be `false` (default), `true` (automatic checkpointing), or `Periodic(n)` to specify `n` checkpoints. When `true` is used, defaults to `isqrt(num_iters)` checkpoints for `for` loops with static (non-traced) bounds. `Periodic(n)` must be used for `while` loops or `for` loops with dynamic (traced) bounds when checkpointing is enabled.
  - `mincut::Bool` - whether or not to enable the mincut algorithm when performing reverse mode differentiation (default: `false`).
 """
 macro trace(args...)
@@ -327,7 +349,7 @@ function trace_while(expr; track_numbers, mincut, checkpointing, first_arg=nothi
     if checkpointing === true && first_arg === nothing
         # This is a raw while loop (not from trace_for), require Periodic(n)
         error(
-            "Reactant.Periodic(n) must be used for while loops when checkpointing is enabled. " *
+            "Reactant.Periodic(n) or Reactant.Binomial(n) must be used for while loops when checkpointing is enabled. " *
             "Use `@trace checkpointing=Reactant.Periodic(n) while ...` where n is the number of checkpoints.",
         )
     end
@@ -476,7 +498,7 @@ function trace_for(expr; track_numbers, checkpointing, mincut)
     elseif checkpointing === false
         :($checkpointing_sym = false)
     else
-        # Assume it's a Periodic(n) expression or variable
+        # Assume it's a Periodic(n) or Binomial(n) expression or variable
         :($checkpointing_sym = $checkpointing)
     end
 
