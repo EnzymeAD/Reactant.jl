@@ -444,6 +444,29 @@ end
     @test @jit(aliased_trace_for_dead_code.(m_r)) ≈ aliased_trace_for_dead_code.(ms)
 end
 
+function aliased_trace_for_array(ms::AbstractArray{T}) where {T}
+    a = ms
+    pow2 = ms
+
+    Reactant.@trace for _ in 1:8
+        @allowscalar a[1] = zero(eltype(a))
+        @allowscalar pow2[2] = zero(eltype(a))
+    end
+
+    return a, pow2
+end
+
+@testset "aliased TracedRArray in @trace for" begin
+    ms = Float64[0.01, 0.1, 0.5, 0.9]
+    ms_r = Reactant.to_rarray(ms)
+
+    res_ra = @jit aliased_trace_for_array(ms_r)
+    res = aliased_trace_for_array(copy(ms))
+
+    @test Array(res_ra[1]) ≈ res[1]
+    @test Array(res_ra[2]) ≈ res[2]
+end
+
 @testset "@skip_rewrite_func" begin
     a = ConcreteRArray([1.0 2.0; 3.0 4.0])
 
