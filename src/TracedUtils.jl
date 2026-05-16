@@ -538,7 +538,7 @@ function prepare_mlir_fn_args(
         end
     end
 
-    func = MLIR.IR.with_block(MLIR.IR.body(mod)) do
+    func = MLIR.IR.@with_block MLIR.IR.body(mod) begin
         return MLIR.Dialects.func.func_(;
             sym_name=name * "_tmp",
             function_type=MLIR.IR.FunctionType(in_tys, Vector{MLIR.IR.Type}(undef, 0)),

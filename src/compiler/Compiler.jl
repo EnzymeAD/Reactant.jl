@@ -1098,7 +1098,7 @@ function compile_mlir!(
 
     MLIR.IR.dispose(ret)
 
-    MLIR.IR.with_block(fnbody) do
+    MLIR.IR.@with_block fnbody begin
         return MLIR.Dialects.func.return_(nresults)
     end
 
