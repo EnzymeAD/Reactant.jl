@@ -3336,6 +3336,7 @@ We return a NamedTuple with the following fields:
     sym_name::String="mesh",
     location=mlir_stacktrace("mesh", @__FILE__, @__LINE__),
 )
+    @info "1"
     cache = Reactant.Compiler.sdycache(; throw_error=ReactantCore.within_compile())
     key = (m.logical_device_ids, m.axis_names, size(m))
     cache !== nothing && haskey(cache, key) && return cache[key]
@@ -3357,6 +3358,7 @@ end
     sym_name::String="mesh",
     location=mlir_stacktrace("mesh", @__FILE__, @__LINE__),
 )
+    @info "2"
     # See https://github.com/openxla/shardy/blob/f9d83e779a58b811b848c4edfaf68e88b636787d/shardy/dialect/sdy/ir/verifiers.cc#L647-L699 for the checks
     ndevices = prod(last, mesh_axes)
 
@@ -3391,7 +3393,7 @@ end
     sym_name = Reactant.TracedUtils.__lookup_unique_name_in_module(mod, sym_name)
 
     mesh_op = MLIR.IR.@with_module mod begin
-        return MLIR.Dialects.sdy.mesh(; sym_name, mesh=mesh_attr, location)
+        MLIR.Dialects.sdy.mesh(; sym_name, mesh=mesh_attr, location)
     end
 
     # mesh_op needs to be moved to the beginning of the module
