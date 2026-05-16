@@ -3390,7 +3390,7 @@ end
 
     sym_name = Reactant.TracedUtils.__lookup_unique_name_in_module(mod, sym_name)
 
-    mesh_op = MLIR.IR.with_module(mod) do
+    mesh_op = MLIR.IR.@with_module mod begin
         return MLIR.Dialects.sdy.mesh(; sym_name, mesh=mesh_attr, location)
     end
 
