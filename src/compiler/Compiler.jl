@@ -1098,8 +1098,8 @@ function compile_mlir!(
 
     MLIR.IR.dispose(ret)
 
-    MLIR.IR.with_block(fnbody) do
-        return MLIR.Dialects.func.return_(nresults)
+    MLIR.IR.@with_block fnbody begin
+        MLIR.Dialects.func.return_(nresults)
     end
 
     out_tys2 = [MLIR.IR.type(a) for a in nresults]

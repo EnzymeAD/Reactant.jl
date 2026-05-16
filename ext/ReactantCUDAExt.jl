@@ -1182,8 +1182,8 @@ Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
     wrapftype = MLIR.IR.Type(
         MLIR.API.mlirLLVMFunctionTypeGet(voidty, length(wrapper_tys), wrapper_tys, false)
     )
-    wrapfunc = MLIR.IR.with_block(MLIR.IR.body(mod)) do
-        return MLIR.Dialects.llvm.func(;
+    wrapfunc = MLIR.IR.@with_block MLIR.IR.body(mod) begin
+        MLIR.Dialects.llvm.func(;
             sym_name,
             sym_visibility=MLIR.IR.Attribute("private"),
             function_type=wrapftype,
@@ -1241,7 +1241,7 @@ Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
         end
 
         # TODO(#2240): check for only integer and explicitly non cutraced types
-        MLIR.IR.with_block(wrapbody) do
+        MLIR.IR.@with_block wrapbody begin
             argty = MLIR.IR.Type(
                 MLIR.API.mlirLLVMFunctionTypeGetInput(gpu_function_type, trueidx - 1)
             )
@@ -1374,7 +1374,7 @@ Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
             else
                 get_field_offset(typeof(julia_arg), p[3:end])
             end
-            MLIR.IR.with_block(wrapbody) do
+            MLIR.IR.@with_block wrapbody begin
                 ptr = MLIR.IR.result(
                     MLIR.Dialects.llvm.getelementptr(
                         alloc,
@@ -1391,7 +1391,7 @@ Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
         argidx += 1
     end
 
-    MLIR.IR.with_block(wrapbody) do
+    MLIR.IR.@with_block wrapbody begin
         for arg in allocs
             if arg === nothing
                 continue
