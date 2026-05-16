@@ -836,7 +836,8 @@ function HloSharding(sharding::DimsSharding, size_x)
 end
 
 function Base.convert(::Type{HloSharding}, sharding::NamedSharding)
-    MLIR.IR.with_context(; allow_use_existing=true) do ctx
+    ctx = MLIR.IR.has_context() ? MLIR.IR.current_context() : Reactant.ReactantContext()
+    MLIR.IR.@with_context ctx begin
         mesh_op = Reactant.Ops.mesh(
             sharding.mesh; mod=MLIR.IR.Module(MLIR.IR.Location(; context=ctx))
         )

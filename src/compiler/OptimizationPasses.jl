@@ -212,7 +212,7 @@ end
 
 # helper for debug purposes: String -> Text
 function run_pass_pipeline_on_source(source, pass_pipeline; enable_verifier=true)
-    return MLIR.IR.with_context() do _
+    return MLIR.IR.@with_context Reactant.ReactantContext() begin
         mod = parse(MLIR.IR.Module, source)
         run_pass_pipeline!(mod, pass_pipeline; enable_verifier)
         MLIR.IR.verifyall(MLIR.IR.Operation(mod); debug=true)
