@@ -39,7 +39,7 @@ function test()
                     Reactant.TracedRArray{Float64,1}((), MLIR.IR.argument(fnbody, 1), (4,))
                 )
 
-                return tmp(a, b, d)
+                tmp(a, b, d)
             end
         end
 

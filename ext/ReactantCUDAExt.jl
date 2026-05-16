@@ -1183,7 +1183,7 @@ Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
         MLIR.API.mlirLLVMFunctionTypeGet(voidty, length(wrapper_tys), wrapper_tys, false)
     )
     wrapfunc = MLIR.IR.@with_block MLIR.IR.body(mod) begin
-        return MLIR.Dialects.llvm.func(;
+        MLIR.Dialects.llvm.func(;
             sym_name,
             sym_visibility=MLIR.IR.Attribute("private"),
             function_type=wrapftype,
