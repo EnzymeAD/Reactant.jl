@@ -405,11 +405,7 @@ function compile_mlir!(
     lower_enzymexla_math_pass = "lower-enzymexla-math"
     lower_enzymexla_mpi_pass = "lower-enzymexla-mpi{backend=$backend}"
     lower_enzymexla_passes = join(
-        [
-            lower_enzymexla_linalg_pass,
-            lower_enzymexla_math_pass,
-            lower_enzymexla_mpi_pass,
-        ],
+        [lower_enzymexla_linalg_pass, lower_enzymexla_math_pass, lower_enzymexla_mpi_pass],
         ",",
     )
 
