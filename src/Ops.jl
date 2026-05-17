@@ -433,7 +433,7 @@ for (dialect, op) in [
     (:chlo, :lgamma),
     (:chlo, :sinh),
     (:enzymexla, :math_softplus),
-    (:enzymexla, :ml_relu),
+    (:enzymexla, :math_relu),
 ]
     @eval begin
         @noinline function $op(

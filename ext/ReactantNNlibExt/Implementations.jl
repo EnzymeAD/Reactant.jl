@@ -2,7 +2,7 @@ for (jlop, hloop) in (
     (:(NNlib.tanh_fast), :tanh),
     (:(NNlib.sigmoid_fast), :logistic),
     (:(NNlib.sigmoid), :logistic),
-    (:(NNlib.relu), :ml_relu),
+    (:(NNlib.relu), :math_relu),
     (:(NNlib.softplus), :math_softplus),
 )
     @eval $(jlop)(x::TracedRNumber) = @opcall $(hloop)(x)
