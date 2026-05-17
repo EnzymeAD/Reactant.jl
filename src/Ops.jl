@@ -432,7 +432,7 @@ for (dialect, op) in [
     (:chlo, :erfc),
     (:chlo, :lgamma),
     (:chlo, :sinh),
-    (:enzymexla, :ml_softplus),
+    (:enzymexla, :math_softplus),
     (:enzymexla, :ml_relu),
 ]
     @eval begin
@@ -463,7 +463,7 @@ for (dialect, op) in [
 end
 
 # These are only defined for floating point types. So integers are typecast
-for op in (:ml_softplus,)
+for op in (:math_softplus,)
     @eval begin
         @noinline function $op(
             x::TracedRArray{T,N};
@@ -484,7 +484,7 @@ end
 @noinline function log1pexp(
     x::TracedRNumber{T}; location=mlir_stacktrace("log1pexp", @__FILE__, @__LINE__)
 ) where {T<:Real}
-    return ml_softplus(x; location)
+    return math_softplus(x; location)
 end
 
 # stablehlo doesn't allow unsigned integers should should anyways produce a no-op
@@ -4115,13 +4115,13 @@ end
     end
 end
 
-@noinline function ml_gelu(
+@noinline function math_gelu(
     x::Union{TracedRArray,TracedRNumber},
     approximation::String;
     location=mlir_stacktrace("ml.gelu", @__FILE__, @__LINE__),
 )
     res = MLIR.IR.result(
-        enzymexla.ml_gelu(
+        enzymexla.math_gelu(
             x.mlir_data;
             gelu_approximation=MLIR.API.enzymexlaGeluApproximationAttrGet(
                 MLIR.IR.current_context(), GELU_APPROXIMATION_MAP[approximation]
