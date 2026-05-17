@@ -509,7 +509,7 @@ function gpu_wrapper(
     )
 end
 
-function ml_gelu(
+function math_gelu(
     input::Value;
     result=nothing::Union{Nothing,IR.Type},
     gelu_approximation,
@@ -523,7 +523,7 @@ function ml_gelu(
     !isnothing(result) && push!(op_ty_results, result)
 
     return create_operation(
-        "enzymexla.ml.gelu",
+        "enzymexla.math.gelu",
         location;
         operands,
         owned_regions,
@@ -976,7 +976,7 @@ function kernel_call(
     )
 end
 
-function ml_lgamma(
+function math_lgamma(
     input::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
 )
     op_ty_results = IR.Type[]
@@ -987,7 +987,7 @@ function ml_lgamma(
     !isnothing(result) && push!(op_ty_results, result)
 
     return create_operation(
-        "enzymexla.ml.lgamma",
+        "enzymexla.math.lgamma",
         location;
         operands,
         owned_regions,
@@ -1739,7 +1739,9 @@ function linalg_qr(
     )
 end
 
-function ml_relu(input::Value; result=nothing::Union{Nothing,IR.Type}, location=Location())
+function math_relu(
+    input::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+)
     op_ty_results = IR.Type[]
     operands = Value[input,]
     owned_regions = Region[]
@@ -1748,7 +1750,7 @@ function ml_relu(input::Value; result=nothing::Union{Nothing,IR.Type}, location=
     !isnothing(result) && push!(op_ty_results, result)
 
     return create_operation(
-        "enzymexla.ml.relu",
+        "enzymexla.math.relu",
         location;
         operands,
         owned_regions,
@@ -1828,7 +1830,7 @@ function linalg_svd(
     )
 end
 
-function ml_softplus(
+function math_softplus(
     input::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
 )
     op_ty_results = IR.Type[]
@@ -1839,7 +1841,7 @@ function ml_softplus(
     !isnothing(result) && push!(op_ty_results, result)
 
     return create_operation(
-        "enzymexla.ml.softplus",
+        "enzymexla.math.softplus",
         location;
         operands,
         owned_regions,
@@ -2015,7 +2017,7 @@ function blas_syrk(
     )
 end
 
-function ml_tgamma(
+function math_tgamma(
     input::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
 )
     op_ty_results = IR.Type[]
@@ -2026,7 +2028,7 @@ function ml_tgamma(
     !isnothing(result) && push!(op_ty_results, result)
 
     return create_operation(
-        "enzymexla.ml.tgamma",
+        "enzymexla.math.tgamma",
         location;
         operands,
         owned_regions,
