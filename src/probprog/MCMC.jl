@@ -72,11 +72,7 @@ function mcmc(
     trace_type = MLIR.IR.TensorType(
         [collection_size, selection_pos_size], MLIR.IR.Type(Float64)
     )
-    diagnostics_type = if collection_size == 1
-        MLIR.IR.TensorType(Int64[], MLIR.IR.Type(Bool))
-    else
-        MLIR.IR.TensorType([Int64(collection_size)], MLIR.IR.Type(Bool))
-    end
+    diagnostics_type = MLIR.IR.TensorType([Int64(collection_size)], MLIR.IR.Type(Bool))
 
     position_type = MLIR.IR.TensorType([1, selection_pos_size], MLIR.IR.Type(Float64))
     scalar_type = MLIR.IR.TensorType(Int64[], MLIR.IR.Type(Float64))
@@ -162,11 +158,7 @@ function mcmc(
     new_trace = TracedRArray{Float64,2}(
         (), MLIR.IR.result(mcmc_op, 1), (collection_size, selection_pos_size)
     )
-    diagnostics = if collection_size == 1
-        TracedRArray{Bool,0}((), MLIR.IR.result(mcmc_op, 2), ())
-    else
-        TracedRArray{Bool,1}((), MLIR.IR.result(mcmc_op, 2), (collection_size,))
-    end
+    diagnostics = TracedRArray{Bool,1}((), MLIR.IR.result(mcmc_op, 2), (collection_size,))
 
     inv_mass_shape =
         isnothing(inverse_mass_matrix) ? (1, selection_pos_size) : size(inverse_mass_matrix)
@@ -273,11 +265,7 @@ function mcmc_logpdf(
 
     collection_size = num_samples ÷ thinning
     trace_type = MLIR.IR.TensorType([collection_size, pos_size], MLIR.IR.Type(Float64))
-    diagnostics_type = if collection_size == 1
-        MLIR.IR.TensorType(Int64[], MLIR.IR.Type(Bool))
-    else
-        MLIR.IR.TensorType([Int64(collection_size)], MLIR.IR.Type(Bool))
-    end
+    diagnostics_type = MLIR.IR.TensorType([Int64(collection_size)], MLIR.IR.Type(Bool))
 
     position_type = MLIR.IR.TensorType([1, pos_size], MLIR.IR.Type(Float64))
     scalar_type = MLIR.IR.TensorType(Int64[], MLIR.IR.Type(Float64))
@@ -332,11 +320,7 @@ function mcmc_logpdf(
     new_trace = TracedRArray{Float64,2}(
         (), MLIR.IR.result(mcmc_op, 1), (collection_size, pos_size)
     )
-    diagnostics = if collection_size == 1
-        TracedRArray{Bool,0}((), MLIR.IR.result(mcmc_op, 2), ())
-    else
-        TracedRArray{Bool,1}((), MLIR.IR.result(mcmc_op, 2), (collection_size,))
-    end
+    diagnostics = TracedRArray{Bool,1}((), MLIR.IR.result(mcmc_op, 2), (collection_size,))
 
     inv_mass_shape =
         isnothing(inverse_mass_matrix) ? (1, pos_size) : size(inverse_mass_matrix)
@@ -475,9 +459,15 @@ function run_chain(
     adapt_mass_matrix::Bool=true,
     thinning::Int=1,
     trajectory_length::Float64=2π,
+    strong_zero::Bool=false,
 )
     mcmc_kwargs = (;
-        algorithm, max_tree_depth, max_delta_energy, trajectory_length, thinning
+        algorithm,
+        max_tree_depth,
+        max_delta_energy,
+        trajectory_length,
+        thinning,
+        strong_zero,
     )
 
     if !progress_bar
@@ -680,6 +670,7 @@ function run_chain(
     max_delta_energy::Float64=1000.0,
     thinning::Int=1,
     trajectory_length::Float64=2π,
+    strong_zero::Bool=false,
 )
     return run_chain(
         ReactantRNG(state.rng),
@@ -698,5 +689,6 @@ function run_chain(
         adapt_mass_matrix=false,
         thinning,
         trajectory_length,
+        strong_zero,
     )
 end
