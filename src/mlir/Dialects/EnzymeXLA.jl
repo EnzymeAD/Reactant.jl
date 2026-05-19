@@ -336,6 +336,28 @@ function comm_region(; result_0::Vector{IR.Type}, body::Region, location=Locatio
     )
 end
 
+function math_cosc(
+    input::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[input,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(result) && push!(op_ty_results, result)
+
+    return create_operation(
+        "enzymexla.math.cosc",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
 function extend(
     operand::Value;
     result=nothing::Union{Nothing,IR.Type},
@@ -824,6 +846,28 @@ function special_hankelh2x(
 
     return create_operation(
         "enzymexla.special.hankelh2x",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+function math_hypot(
+    lhs::Value, rhs::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[lhs, rhs]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(result) && push!(op_ty_results, result)
+
+    return create_operation(
+        "enzymexla.math.hypot",
         location;
         operands,
         owned_regions,
@@ -1827,6 +1871,28 @@ function linalg_svd(
         attributes,
         results=op_ty_results,
         result_inference=false,
+    )
+end
+
+function math_sinc(
+    input::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[input,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(result) && push!(op_ty_results, result)
+
+    return create_operation(
+        "enzymexla.math.sinc",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
