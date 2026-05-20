@@ -90,7 +90,7 @@ function do_mul_view!(data_3d, A, B)
 end
 
 function do_mul_view_5arg!(data_3d, A, B, α, β)
-    C = view(data_3d,:,:,1)
+    C = view(data_3d, :, :, 1)
     mul!(C, A, B, α, β)
     return nothing
 end
