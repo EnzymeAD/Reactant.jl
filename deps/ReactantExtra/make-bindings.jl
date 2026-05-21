@@ -8,39 +8,8 @@ end
 
 src_dir = joinpath(dirname(dirname(@__DIR__)), "src")
 
-dialect_files = [
-    "Builtin.jl",
-    "Arith.jl",
-    "Affine.jl",
-    "Complex.jl",
-    "Func.jl",
-    "Enzyme.jl",
-    "EnzymeXLA.jl",
-    "Impulse.jl",
-    "StableHLO.jl",
-    "CHLO.jl",
-    "VHLO.jl",
-    "Llvm.jl",
-    "Nvvm.jl",
-    "Gpu.jl",
-    "Affine.jl",
-    # "TPU.jl", # TODO(#2264): currently broken - causes segfault in mlir-jl-tblgen
-    "MosaicGPU.jl",
-    "Triton.jl",
-    "Shardy.jl",
-    "MPI.jl",
-    "MemRef.jl",
-    "SparseTensor.jl",
-    "Tensor.jl",
-    "Shape.jl",
-    "TritonExt.jl",
-    "CUDATile.jl",
-]
-
-other_files = ["libMLIR_h.jl"]
-
-all_files = vcat(dialect_files, other_files)
-bazel_targets = ["//:$f" for f in all_files]
+files = ["libMLIR_h.jl"]
+bazel_targets = ["//:$f" for f in files]
 
 # Build all targets simultaneously
 run(
@@ -51,14 +20,6 @@ run(
 )
 
 # Copy built files to their destinations
-for file in dialect_files
-    Base.Filesystem.cp(
-        joinpath(@__DIR__, "bazel-bin", file),
-        joinpath(src_dir, "mlir", "Dialects", file);
-        force=true,
-    )
-end
-
 for file in other_files
     Base.Filesystem.cp(
         joinpath(@__DIR__, "bazel-bin", file), joinpath(src_dir, "mlir", file); force=true
