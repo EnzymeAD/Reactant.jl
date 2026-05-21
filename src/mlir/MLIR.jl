@@ -20,6 +20,9 @@ module API
     end
 
     # Additional functions
+    operandsegmentsizes(segments) = NamedAttribute("operand_segment_sizes", Int32.(segments))
+    resultsegmentsizes(segments) = NamedAttribute("result_segment_sizes", Int32.(segments))
+
     function EnzymeJaXMapSymbol(name, sym)
         @ccall mlir_c.EnzymeJaXMapSymbol(name::Cstring, sym::Ptr{Cvoid})::Cvoid
     end
@@ -72,7 +75,6 @@ module API
 end # module API
 
 include("IR/IR.jl")
-include("Dialects.jl")
 include("Highlight.jl")
 
 end # module MLIR
