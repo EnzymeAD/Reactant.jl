@@ -1092,22 +1092,27 @@ function mlir_extract_roots_from_value!(
             addrspace = MLIR.API.mlirLLVMPointerTypeGetAddressSpace(ty)
             if 10 <= addrspace <= 12
                 extr = MLIR.IR.result(
-                    MLIR.Dialects.llvm.extractvalue(
-                        val; res=ty, position=MLIR.IR.Attribute(Int32.(path))
+                    MLIR.IR.create_operation(
+                        "llvm.extractvalue";
+                        operands=[val],
+                        results=[ty],
+                        attributes=[MLIR.IR.NamedAttribute("position", Int32.(path))],
                     ),
                     1,
                 )
                 gep_ptr = MLIR.IR.result(
-                    MLIR.Dialects.llvm.getelementptr(
-                        roots_ptr,
-                        MLIR.IR.Value[];
-                        res=llvmptr,
-                        elem_type=njlvaluet,
-                        rawConstantIndices=MLIR.IR.Attribute([Int32(0), Int32(count)]),
+                    MLIR.IR.create_operation(
+                        "llvm.getelementptr";
+                        operands=[roots_ptr],
+                        results=[llvmptr],
+                        attributes=[
+                            MLIR.IR.NamedAttribute("elem_type", njlvaluet),
+                            MLIR.IR.NamedAttribute("rawConstantIndices", Int32[0, count]),
+                        ],
                     ),
                     1,
                 )
-                MLIR.Dialects.llvm.store(extr, gep_ptr)
+                MLIR.IR.create_operation("llvm.store"; operands=[extr, gep_ptr])
                 count += 1
                 continue
             end
@@ -1183,12 +1188,15 @@ Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
         MLIR.API.mlirLLVMFunctionTypeGet(voidty, length(wrapper_tys), wrapper_tys, false)
     )
     wrapfunc = MLIR.IR.@with_block MLIR.IR.body(mod) begin
-        MLIR.Dialects.llvm.func(;
-            sym_name,
-            sym_visibility=MLIR.IR.Attribute("private"),
-            function_type=wrapftype,
-            body=MLIR.IR.Region(),
-            CConv,
+        MLIR.IR.create_operation(
+            "llvm.func";
+            attributes = [
+                MLIR.IR.NamedAttribute("sym_name", sym_name),
+                MLIR.IR.NamedAttribute("sym_visibility", "private"),
+                MLIR.IR.NamedAttribute("function_type", wrapftype),
+                MLIR.IR.NamedAttribute("CConv", CConv),
+            ],
+            owned_regions = [MLIR.IR.Region()],
         )
     end
     wrapbody = MLIR.IR.Block(wrapper_tys, [MLIR.IR.Location() for _ in wrapper_tys])
@@ -1251,14 +1259,19 @@ Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
                 trueidx += 1
             end
             c1 = MLIR.IR.result(
-                MLIR.Dialects.llvm.mlir_constant(;
-                    res=MLIR.IR.Type(Int64), value=MLIR.IR.Attribute(1)
+                MLIR.IR.create_operation(
+                    "llvm.mlir.constant";
+                    attributes=[MLIR.IR.NamedAttribute("value", 1)],
+                    results = [MLIR.IR.Type(Int64)],
                 ),
                 1,
             )
             alloc = MLIR.IR.result(
-                MLIR.Dialects.llvm.alloca(
-                    c1; elem_type=MLIR.IR.Attribute(argty), res=llvmptr
+                MLIR.IR.create_operation(
+                    "llvm.alloca";
+                    operands=[c1],
+                    attributes=[MLIR.IR.NamedAttribute("elem_type", argty)],
+                    results=[llvmptr],
                 ),
                 1,
             )
@@ -1277,14 +1290,19 @@ Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
                 )
 
                 bf16_c1 = MLIR.IR.result(
-                    MLIR.Dialects.llvm.mlir_constant(;
-                        res=MLIR.IR.Type(Int64), value=MLIR.IR.Attribute(1)
+                    MLIR.IR.create_operation(
+                        "llvm.mlir.constant";
+                        attributes=[MLIR.IR.NamedAttribute("value", 1)],
+                        results = [MLIR.IR.Type(Int64)],
                     ),
                     1,
                 )
                 bf16_alloc = MLIR.IR.result(
-                    MLIR.Dialects.llvm.alloca(
-                        bf16_c1; elem_type=MLIR.IR.Attribute(bf16_ty), res=llvmptr
+                    MLIR.IR.create_operation(
+                        "llvm.alloca";
+                        operands=[bf16_c1],
+                        attributes=[MLIR.IR.NamedAttribute("elem_type", bf16_ty)],
+                        results=[llvmptr],
                     ),
                     1,
                 )
@@ -1295,20 +1313,23 @@ Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
                     MLIR.API.mlirLLVMArrayTypeGet(MLIR.IR.Type(Int8), sz)
                 )
                 cdata = MLIR.IR.result(
-                    MLIR.Dialects.llvm.mlir_constant(;
-                        res=array_ty, value=MLIR.IR.DenseElementsAttribute(val)
+                    MLIR.IR.create_operation(
+                        "llvm.mlir.constant";
+                        attributes=[MLIR.IR.NamedAttribute("value", MLIR.IR.DenseElementsAttribute(val))],
+                        results = [array_ty],
                     ),
                     1,
                 )
-                MLIR.Dialects.llvm.store(cdata, bf16_alloc)
+                MLIR.IR.create_operation("llvm.store"; operands=[cdata, bf16_alloc])
 
                 bf16_val = MLIR.IR.result(
-                    MLIR.Dialects.llvm.load(bf16_alloc; res=bf16_ty), 1
+                    MLIR.IR.create_operation("llvm.load"; operands=[bf16_alloc], results=[bf16_ty]),
+                    1
                 )
                 converted_val = _convert_bf16_value(
                     bf16_val, bf16_ty, argty, bf16_float_ty, compile_float_ty
                 )
-                MLIR.Dialects.llvm.store(converted_val, alloc)
+                MLIR.IR.create_operation("llvm.store"; operands=[converted_val, alloc])
             else
                 sz = abi_sizeof(a)
                 val = to_bytes(a)
@@ -1316,12 +1337,14 @@ Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
                     MLIR.API.mlirLLVMArrayTypeGet(MLIR.IR.Type(Int8), sz)
                 )
                 cdata = MLIR.IR.result(
-                    MLIR.Dialects.llvm.mlir_constant(;
-                        res=array_ty, value=MLIR.IR.DenseElementsAttribute(val)
+                    MLIR.IR.create_operation(
+                        "llvm.mlir.constant";
+                        attributes=[MLIR.IR.NamedAttribute("value", MLIR.IR.DenseElementsAttribute(val))],
+                        results = [array_ty],
                     ),
                     1,
                 )
-                MLIR.Dialects.llvm.store(cdata, alloc)
+                MLIR.IR.create_operation("llvm.store"; operands=[cdata, alloc])
             end
         end
     end
@@ -1376,16 +1399,18 @@ Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
             end
             MLIR.IR.@with_block wrapbody begin
                 ptr = MLIR.IR.result(
-                    MLIR.Dialects.llvm.getelementptr(
-                        alloc,
-                        MLIR.IR.Value[];
-                        res=llvmptr,
-                        elem_type=i8,
-                        rawConstantIndices=MLIR.IR.Attribute([Int32(offset)]),
+                    MLIR.IR.create_operation(
+                        "llvm.getelementptr";
+                        operands=[alloc],
+                        results=[llvmptr],
+                        attributes=[
+                            MLIR.IR.NamedAttribute("elem_type", i8),
+                            MLIR.IR.NamedAttribute("rawConstantIndices", Int32[offset]),
+                        ],
                     ),
                     1,
                 )
-                MLIR.Dialects.llvm.store(MLIR.IR.argument(wrapbody, argidx), ptr)
+                MLIR.IR.create_operation("llvm.store"; operands=[MLIR.IR.argument(wrapbody, argidx), ptr])
             end
         end
         argidx += 1
@@ -1397,12 +1422,14 @@ Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
                 continue
             end
             alloc, argty, jltyp = arg
-            argres = MLIR.IR.result(MLIR.Dialects.llvm.load(alloc; res=argty), 1)
+            argres = MLIR.IR.result(MLIR.IR.create_operation("llvm.load"; operands=[alloc], results=[argty]), 1)
             push!(wrapargs, argres)
             if Enzyme.Compiler.inline_roots_type(jltyp) != 0
                 c1 = MLIR.IR.result(
-                    MLIR.Dialects.llvm.mlir_constant(;
-                        res=MLIR.IR.Type(Int64), value=MLIR.IR.Attribute(1)
+                    MLIR.IR.create_operation(
+                        "llvm.mlir.constant";
+                        attributes=[MLIR.IR.NamedAttribute("value", 1)],
+                        results = [MLIR.IR.Type(Int64)],
                     ),
                     1,
                 )
@@ -1412,8 +1439,11 @@ Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
                     MLIR.API.mlirLLVMArrayTypeGet(jlvaluet, roots_count)
                 )
                 roots_ptr = MLIR.IR.result(
-                    MLIR.Dialects.llvm.alloca(
-                        c1; elem_type=MLIR.IR.Attribute(njlvaluet), res=llvmptr
+                    MLIR.IR.create_operation(
+                        "llvm.alloca";
+                        operands=[c1],
+                        attributes=[MLIR.IR.NamedAttribute("elem_type", njlvaluet)],
+                        results=[llvmptr],
                     ),
                     1,
                 )
@@ -1422,13 +1452,15 @@ Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
                 push!(wrapargs, roots_ptr)
             end
         end
-        MLIR.Dialects.llvm.call(
-            wrapargs,
-            MLIR.IR.Value[];
-            callee=MLIR.IR.FlatSymbolRefAttribute(Base.String(fname)),
-            op_bundle_sizes=MLIR.IR.Attribute(Int32[]),
+        MLIR.IR.create_operation(
+            "llvm.return";
+            operands=wrapargs,
+            attributes=[
+                MLIR.IR.NamedAttribute("callee", MLIR.IR.FlatSymbolRefAttribute(Base.String(fname))),
+                MLIR.IR.NamedAttribute("op_bundle_sizes", Int32[]),
+            ]
         )
-        MLIR.Dialects.llvm.return_(nothing)
+        MLIR.IR.create_operation("llvm.return")
     end
 
     output_operand_aliases = MLIR.IR.Attribute(aliases)
@@ -1440,17 +1472,20 @@ Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
     end
 
     @assert length(restys) == length(aliases)
-    call = MLIR.Dialects.enzymexla.kernel_call(
-        blk_operands...;
-        inputs=mlir_args,
-        result_0=restys,
-        fn=MLIR.IR.FlatSymbolRefAttribute(sym_name),
-        output_operand_aliases=MLIR.IR.Attribute(output_operand_aliases),
-        xla_side_effect_free=MLIR.IR.UnitAttribute(),
-        location=Reactant.Ops.mlir_stacktrace(
-            "enzymexla.kernel_call", @__FILE__, @__LINE__
-        ),
-    )
+    call = let
+        attributes = [
+            MLIR.IR.NamedAttribute("fn", MLIR.IR.FlatSymbolRefAttribute(sym_name)),
+            MLIR.IR.NamedAttribute("output_operand_aliases", MLIR.IR.Attribute(output_operand_aliases)),
+            MLIR.IR.NamedAttribute("xla_side_effect_free", MLIR.IR.UnitAttribute()),
+        ]
+        create_operation(
+            "enzymexla.kernel_call",
+            Reactant.Ops.mlir_stacktrace("enzymexla.kernel_call", @__FILE__, @__LINE__);
+            operands=vcat(blk_operands, mlir_args),
+            attributes,
+            results=restys,
+        )
+    end
     if has_cast_float_type
         MLIR.IR.setattr!(call, "cast_float_type", MLIR.IR.UnitAttribute())
     end
@@ -1539,16 +1574,19 @@ function _convert_bf16_value(
         src_width = MLIR.API.mlirFloatTypeGetWidth(src_float_ty)
         tgt_width = MLIR.API.mlirFloatTypeGetWidth(tgt_float_ty)
         if tgt_width > src_width
-            return MLIR.IR.result(MLIR.Dialects.llvm.fpext(src_val; res=tgt_float_ty), 1)
+            op = MLIR.IR.create_operation("llvm.fpext"; operands=[src_val], results=[tgt_float_ty])
+            return MLIR.IR.result(op, 1)
         elseif tgt_width < src_width
-            return MLIR.IR.result(MLIR.Dialects.llvm.fptrunc(src_val; res=tgt_float_ty), 1)
+            op = MLIR.IR.create_operation("llvm.fptrunc"; operands=[src_val], results=[tgt_float_ty])
+            return MLIR.IR.result(op, 1)
         else
-            return MLIR.IR.result(MLIR.Dialects.llvm.fptrunc(src_val; res=tgt_float_ty), 1)
+            op = MLIR.IR.create_operation("llvm.fptrunc"; operands=[src_val], results=[tgt_float_ty])
+            return MLIR.IR.result(op, 1)
         end
     end
     if MLIR.API.mlirTypeIsALLVMStructType(src_ty)
         n = MLIR.API.mlirLLVMStructTypeGetNumElementTypes(src_ty)
-        tgt_val = MLIR.IR.result(MLIR.Dialects.llvm.mlir_undef(; res=tgt_ty), 1)
+        tgt_val = MLIR.IR.result(MLIR.IR.create_operation("llvm.mlir_undef"; results=[tgt_ty]), 1)
         for i in 0:(n - 1)
             field_src_ty = MLIR.IR.Type(
                 MLIR.API.mlirLLVMStructTypeGetElementType(src_ty, i)
@@ -1557,18 +1595,14 @@ function _convert_bf16_value(
                 MLIR.API.mlirLLVMStructTypeGetElementType(tgt_ty, i)
             )
             field_val = MLIR.IR.result(
-                MLIR.Dialects.llvm.extractvalue(
-                    src_val; res=field_src_ty, position=MLIR.IR.Attribute(Int64[i])
-                ),
+                MLIR.IR.create_operation("llvm.extractvalue"; operands=[src_val], results=[field_src_ty], attributes=[MLIR.IR.NamedAttribute("position", Int64[i])]),
                 1,
             )
             converted = _convert_bf16_value(
                 field_val, field_src_ty, field_tgt_ty, src_float_ty, tgt_float_ty
             )
             tgt_val = MLIR.IR.result(
-                MLIR.Dialects.llvm.insertvalue(
-                    tgt_val, converted; res=tgt_ty, position=MLIR.IR.Attribute(Int64[i])
-                ),
+                MLIR.IR.create_operation("llvm.insertvalue"; operands=[tgt_val, converted], results=[tgt_ty], attributes=[MLIR.IR.NamedAttribute("position", Int64[i])]),
                 1,
             )
         end
@@ -1577,21 +1611,17 @@ function _convert_bf16_value(
         num_elems = MLIR.API.mlirLLVMArrayTypeGetNumElements(src_ty)
         elem_src_ty = MLIR.IR.Type(MLIR.API.mlirLLVMArrayTypeGetElementType(src_ty))
         elem_tgt_ty = MLIR.IR.Type(MLIR.API.mlirLLVMArrayTypeGetElementType(tgt_ty))
-        tgt_val = MLIR.IR.result(MLIR.Dialects.llvm.mlir_undef(; res=tgt_ty), 1)
+        tgt_val = MLIR.IR.result(MLIR.IR.create_operation("llvm.mlir_undef"; results=[tgt_ty]), 1)
         for i in 0:(num_elems - 1)
             elem_val = MLIR.IR.result(
-                MLIR.Dialects.llvm.extractvalue(
-                    src_val; res=elem_src_ty, position=MLIR.IR.Attribute(Int64[i])
-                ),
+                MLIR.IR.create_operation("llvm.extractvalue"; operands=[src_val], results=[elem_src_ty], attributes=[MLIR.IR.NamedAttribute("position", Int64[i])]),
                 1,
             )
             converted = _convert_bf16_value(
                 elem_val, elem_src_ty, elem_tgt_ty, src_float_ty, tgt_float_ty
             )
             tgt_val = MLIR.IR.result(
-                MLIR.Dialects.llvm.insertvalue(
-                    tgt_val, converted; res=tgt_ty, position=MLIR.IR.Attribute(Int64[i])
-                ),
+                MLIR.IR.create_operation("llvm.insertvalue"; operands=[tgt_val, converted], results=[tgt_ty], attributes=[MLIR.IR.NamedAttribute("position", Int64[i])]),
                 1,
             )
         end

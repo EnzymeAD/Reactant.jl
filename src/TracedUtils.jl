@@ -244,7 +244,9 @@ Base.@nospecializeinfer function transpose_val(
     val_size = size(MLIR.IR.type(val))
     val_size == () && return val
     attr = MLIR.IR.DenseArrayAttribute(Int64[reverse(0:(length(val_size) - 1))...])
-    return MLIR.IR.result(MLIR.Dialects.stablehlo.transpose(val; permutation=attr), 1)
+    attributes = [MLIR.IR.NamedAttribute("permutation", attr)]
+    op = MLIR.IR.create_operation("stablehlo.transpose"; operands=[val], attributes)
+    return MLIR.IR.result(op, 1)
 end
 
 Base.@nospecializeinfer function unpad_val_op(
@@ -252,11 +254,14 @@ Base.@nospecializeinfer function unpad_val_op(
 )::MLIR.IR.Operation
     start_indices = zeros(Int64, length(padding))
     limit_indices = collect(Int64, sz) .- padding
-    return MLIR.Dialects.stablehlo.slice(
-        val;
-        start_indices=MLIR.IR.DenseArrayAttribute(start_indices),
-        limit_indices=MLIR.IR.DenseArrayAttribute(limit_indices),
-        strides=MLIR.IR.DenseArrayAttribute(ones(Int64, length(padding))),
+    create_operation(
+        "stablehlo.slice";
+        operands=[val],
+        attributes=[
+            MLIR.IR.NamedAttribute("start_indices", MLIR.IR.DenseArrayAttribute(start_indices)),
+            MLIR.IR.NamedAttribute("limit_indices", MLIR.IR.DenseArrayAttribute(limit_indices)),
+            MLIR.IR.NamedAttribute("strides", MLIR.IR.DenseArrayAttribute(ones(Int64, length(padding)))),
+        ],
     )
 end
 
@@ -539,10 +544,13 @@ function prepare_mlir_fn_args(
     end
 
     func = MLIR.IR.@with_block MLIR.IR.body(mod) begin
-        MLIR.Dialects.func.func_(;
-            sym_name=name * "_tmp",
-            function_type=MLIR.IR.FunctionType(in_tys, Vector{MLIR.IR.Type}(undef, 0)),
-            body=MLIR.IR.Region(),
+        MLIR.IR.create_operation(
+            "func.func";
+            attributes=[
+                MLIR.IR.NamedAttribute("sym_name", name * "_tmp"),
+                MLIR.IR.NamedAttribute("function_type", MLIR.IR.FunctionType(in_tys, Vector{MLIR.IR.Type}(undef, 0))),
+            ],
+            owned_regions=[MLIR.IR.Region()],
         )
     end
 
@@ -871,21 +879,23 @@ function finalize_mlir_fn(
 
         args_in_result == :all && @assert length(vals) == length(linear_results)
 
-        dialect = getfield(MLIR.Dialects, return_dialect)
-        dialect.return_(vals)
+        MLIR.IR.create_operation("$return_dialect.return"; operands=vals)
     finally
         MLIR.IR.deactivate(fnbody)
     end
 
     func2 = MLIR.IR.@with_block MLIR.IR.body(mod) begin
-        MLIR.Dialects.func.func_(;
-            sym_name=__lookup_unique_name_in_module(mod, name),
-            function_type=MLIR.IR.FunctionType(in_tys, out_tys),
-            body=MLIR.IR.Region(),
-            arg_attrs=MLIR.IR.getattr(func, "arg_attrs"),
-            res_attrs=MLIR.IR.getattr(func, "res_attrs"),
-            no_inline=MLIR.IR.getattr(func, "no_inline"),
-            sym_visibility,
+        MLIR.IR.create_operation(
+            "func.func";
+            attributes=[
+                MLIR.IR.NamedAttribute("sym_name", __lookup_unique_name_in_module(mod, name)),
+                MLIR.IR.NamedAttribute("function_type", MLIR.IR.FunctionType(in_tys, out_tys)),
+                MLIR.IR.NamedAttribute("sym_visibility", sym_visibility),
+                MLIR.IR.NamedAttribute("arg_attrs", MLIR.IR.getattr(func, "arg_attrs")),
+                MLIR.IR.NamedAttribute("res_attrs", MLIR.IR.getattr(func, "res_attrs")),
+                MLIR.IR.NamedAttribute("no_inline", MLIR.IR.getattr(func, "no_inline")),
+            ],
+            owned_regions=[MLIR.IR.Region()],
         )
     end
 
@@ -1293,11 +1303,14 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
         ) for arg in linear_results
     ]
 
-    res = MLIR.Dialects.enzyme.batch(
-        batch_inputs;
-        outputs=out_tys2,
-        fn=fname,
-        batch_shape=MLIR.IR.DenseArrayAttribute([Int64(i) for i in OutShape]),
+    res = MLIR.IR.create_operation(
+        "enzyme.batch";
+        operands=batch_inputs,
+        attributes=[
+            MLIR.IR.NamedAttribute("fn", fname),
+            MLIR.IR.NamedAttribute("batch_shape", MLIR.IR.DenseArrayAttribute(Int64.(OutShape))),
+        ],
+        results=out_tys2,
     )
 
     residx = 1

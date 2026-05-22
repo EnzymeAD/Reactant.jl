@@ -22,11 +22,14 @@ function test()
 
         in_tys = [MLIR.IR.TensorType([4], MLIR.IR.Type(Float64))]
 
-        func = MLIR.Dialects.func.func_(;
-            sym_name="main_tmp",
-            function_type=MLIR.IR.FunctionType(in_tys, []),
-            body=MLIR.IR.Region(),
-        )
+        func = let
+            attributes = [
+                MLIR.IR.NamedAttribute("sym_name", "main_tmp"),
+                MLIR.IR.NamedAttribute("function_type", MLIR.IR.FunctionType(in_tys, [])),
+                MLIR.IR.NamedAttribute("no_inline", true),
+            ]
+            MLIR.IR.create_operation("func.func"; attributes, owned_regions = [MLIR.IR.Region()])
+        end
 
         fnbody = MLIR.IR.Block(in_tys, [MLIR.IR.Location() for _ in in_tys])
         push!(MLIR.IR.region(func, 1), fnbody)

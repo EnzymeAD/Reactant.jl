@@ -292,17 +292,19 @@ function replicate_array_to_all_devices(array::Array, sharding, mesh, size_arr)
             output_sharding, common_args...; common_kwargs...
         )
 
-        func = MLIR.Dialects.func.func_(;
-            sym_name="main",
-            function_type=MLIR.IR.FunctionType(data_mlir_type, data_mlir_type),
-            no_inline=true,
-            body=MLIR.IR.Region(),
-        )
+        func = let
+            attributes = [
+                MLIR.IR.NamedAttribute("sym_name", sym_name),
+                MLIR.IR.NamedAttribute("function_type", MLIR.IR.FunctionType(data_mlir_type, data_mlir_type)),
+                MLIR.IR.NamedAttribute("no_inline", true),
+            ]
+            MLIR.IR.create_operation("func.func"; attributes, owned_regions = [MLIR.IR.Region()])
+        end
         fnbody = MLIR.IR.Block(data_mlir_type, [MLIR.IR.Location()])
         push!(MLIR.IR.region(func, 1), fnbody)
         MLIR.IR.activate(fnbody)
         try
-            MLIR.Dialects.func.return_([MLIR.IR.argument(fnbody, 1)])
+            MLIR.IR.create_operation("func.return"; operands=[MLIR.IR.block_argument(fnbody, 1)])
         finally
             MLIR.IR.deactivate(fnbody)
         end
