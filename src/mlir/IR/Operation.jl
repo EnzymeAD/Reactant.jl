@@ -317,7 +317,7 @@ end
 
 function create_operation_common(
     name,
-    loc=MLIR.IR.Location();
+    loc=Location();
     results=nothing,
     operands=nothing,
     owned_regions=nothing,
