@@ -102,8 +102,6 @@ end
 @testset "ExplicitImports" begin
     unanalyzable_modules = (
         Reactant.DotGeneralAlgorithmPreset,
-        Reactant.MLIR.Dialects,
-        get_all_submodules(Reactant.MLIR.Dialects)...,
         get_all_submodules(Reactant.Proto)...,
         Reactant.XLA.OpShardingType,
         Reactant.Accelerators.TPU.TPUVersion,
