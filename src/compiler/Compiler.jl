@@ -847,14 +847,32 @@ function compile_mlir!(
 
             fnname_old = fnname
             fnname = string(f, "_padded")
-            func_with_padding = MLIR.Dialects.func.func_(;
-                sym_name=fnname,
-                function_type=MLIR.IR.FunctionType(in_tys_padded, out_tys_padded),
-                arg_attrs=MLIR.IR.getattr(compiled_f, "arg_attrs"),
-                res_attrs=MLIR.IR.getattr(compiled_f, "res_attrs"),
-                no_inline=MLIR.IR.getattr(compiled_f, "no_inline"),
-                body=MLIR.IR.Region(),
-                sym_visibility=MLIR.IR.getattr(compiled_f, "private"),
+            func_with_padding = MLIR.IR.create_operation(
+                "func.func";
+                attributes = [
+                    MLIR.IR.NamedAttribute("sym_name", fnname),
+                    MLIR.IR.NamedAttribute(
+                        "function_type",
+                        MLIR.IR.FunctionType(in_tys_padded, out_tys_padded),
+                    ),
+                    MLIR.IR.NamedAttribute(
+                        "arg_attrs",
+                        MLIR.IR.getattr(compiled_f, "arg_attrs"),
+                    ),
+                    MLIR.IR.NamedAttribute(
+                        "res_attrs",
+                        MLIR.IR.getattr(compiled_f, "res_attrs"),
+                    ),
+                    MLIR.IR.NamedAttribute(
+                        "no_inline",
+                        MLIR.IR.getattr(compiled_f, "no_inline"),
+                    ),
+                    MLIR.IR.NamedAttribute(
+                        "sym_visibility",
+                        MLIR.IR.getattr(compiled_f, "private"),
+                    ),
+                ],
+                owned_regions=[MLIR.IR.Region()],
             )
             fnbody = MLIR.IR.Block(
                 in_tys_padded,
