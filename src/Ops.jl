@@ -436,7 +436,7 @@ for (dialect, op) in [
         ) where {T,N}
             operands = [Reactant.TracedUtils.get_mlir_data(x)]
             results = [mlir_type(TracedRArray{T,N}, size(x))]
-            op = create_operation("$(dialect).$(op)", location; operands, results)
+            op = create_operation($(string(dialect)) * "." * $(string(op)), location; operands, results)
             res = MLIR.IR.result(op)
             return TracedRArray{T,N}((), res, size(x))
         end
@@ -447,7 +447,7 @@ for (dialect, op) in [
         ) where {T}
             operands = [Reactant.TracedUtils.get_mlir_data(x)]
             results = [mlir_type(TracedRArray{T,0}, ())]
-            op = create_operation("$(dialect).$(op)", location; operands, results)
+            op = create_operation($(string(dialect)) * "." * $(string(op)), location; operands, results)
             res = MLIR.IR.result(op)
             return TracedRNumber{T}((), res)
         end
@@ -553,9 +553,9 @@ for (dialect, op) in [
             b::TracedRArray{T,N};
             location=mlir_stacktrace($(string(op)), @__FILE__, @__LINE__),
         ) where {T,N}
-            operands = [Reactant.TracedUtils.get_mlir_data(a.mlir_data), Reactant.TracedUtils.get_mlir_data(b.mlir_data)]
+            operands = [Reactant.TracedUtils.get_mlir_data(a), Reactant.TracedUtils.get_mlir_data(b)]
             results = [mlir_type(TracedRArray{T,N}, size(a))]
-            op = create_operation("$(dialect).$(op)", location; operands, results)
+            op = create_operation($(string(dialect)) * "." * $(string(op)), location; operands, results)
             res = MLIR.IR.result(op)
             return TracedRArray{T,N}((), res, size(a))
         end
@@ -565,9 +565,9 @@ for (dialect, op) in [
             b::TracedRNumber{T};
             location=mlir_stacktrace($(string(op)), @__FILE__, @__LINE__),
         ) where {T}
-            operands = [Reactant.TracedUtils.get_mlir_data(a.mlir_data), Reactant.TracedUtils.get_mlir_data(b.mlir_data)]
+            operands = [Reactant.TracedUtils.get_mlir_data(a), Reactant.TracedUtils.get_mlir_data(b)]
             results = [mlir_type(TracedRArray{T,0}, ())]
-            op = create_operation("$(dialect).$(op)", location; operands, results)
+            op = create_operation($(string(dialect)) * "." * $(string(op)), location; operands, results)
             res = MLIR.IR.result(op)
             return TracedRNumber{T}((), res)
         end
@@ -585,7 +585,7 @@ for (dialect, op) in
         ) where {T,N}
             operands = [Reactant.TracedUtils.get_mlir_data(x)]
             results = [mlir_type(TracedRArray{Bool,N}, size(x))]
-            op = create_operation("$(dialect).$(op)", location; operands, results)
+            op = create_operation($(string(dialect)) * "." * $(string(op)), location; operands, results)
             res = MLIR.IR.result(op)
             return TracedRArray{Bool,N}((), res, size(x))
         end
@@ -596,7 +596,7 @@ for (dialect, op) in
         ) where {T}
             operands = [Reactant.TracedUtils.get_mlir_data(x)]
             results = [mlir_type(TracedRArray{Bool,0}, ())]
-            op = create_operation("$(dialect).$(op)", location; operands, results)
+            op = create_operation($(string(dialect)) * "." * $(string(op)), location; operands, results)
             res = MLIR.IR.result(op)
             return TracedRNumber{Bool}((), res)
         end
