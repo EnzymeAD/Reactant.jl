@@ -1145,17 +1145,23 @@ function compile_mlir!(
         result_shardings_after_masking = missing
     end
 
-    func3 = MLIR.IR.create_operation(
-        "func.func";
-        attributes=[
+    func3 = let
+        attributes = [
             MLIR.IR.NamedAttribute("sym_name", "main"),
             MLIR.IR.NamedAttribute("function_type", MLIR.IR.FunctionType(in_tys, out_tys2)),
-            MLIR.IR.NamedAttribute("arg_attrs", MLIR.IR.getattr(compiled_f, "arg_attrs")),
-            MLIR.IR.NamedAttribute("res_attrs", res_attrs),
-            MLIR.IR.NamedAttribute("no_inline", MLIR.IR.getattr(compiled_f, "no_inline")),
-        ],
-        owned_regions = [MLIR.IR.Region()]
-    )
+        ]
+        arg_attrs = MLIR.IR.getattr(compiled_f, "arg_attrs")
+        !isnothing(arg_attrs) && push!(attributes, MLIR.IR.NamedAttribute("arg_attrs", arg_attrs))
+        !isnothing(res_attrs) && push!(attributes, MLIR.IR.NamedAttribute("res_attrs", res_attrs))
+        no_inline = MLIR.IR.getattr(compiled_f, "no_inline")
+        !isnothing(no_inline) && push!(attributes, MLIR.IR.NamedAttribute("no_inline", no_inline))
+        MLIR.IR.create_operation(
+            "func.func";
+            attributes,
+            owned_regions = [MLIR.IR.Region()],
+            result_inference = false,
+        )
+    end
     MLIR.API.mlirRegionTakeBody(MLIR.IR.region(func3, 1), MLIR.IR.region(compiled_f, 1))
 
     push!(MLIR.IR.body(mod), func3)

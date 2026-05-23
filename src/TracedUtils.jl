@@ -886,16 +886,21 @@ function finalize_mlir_fn(
     end
 
     func2 = MLIR.IR.@with_block MLIR.IR.body(mod) begin
+        attributes = [
+            MLIR.IR.NamedAttribute("sym_name", __lookup_unique_name_in_module(mod, name)),
+            MLIR.IR.NamedAttribute("function_type", MLIR.IR.FunctionType(in_tys, out_tys)),
+        ]
+        !isnothing(sym_visibility) && push!(attributes, MLIR.IR.NamedAttribute("sym_visibility", sym_visibility))
+        let arg_attrs = MLIR.IR.getattr(func, "arg_attrs"),
+            res_attrs = MLIR.IR.getattr(func, "res_attrs")
+            no_inline = MLIR.IR.getattr(func, "no_inline")
+            !isnothing(arg_attrs) && push!(attributes, MLIR.IR.NamedAttribute("arg_attrs", arg_attrs))
+            !isnothing(res_attrs) && push!(attributes, MLIR.IR.NamedAttribute("res_attrs", res_attrs))
+            !isnothing(no_inline) && push!(attributes, MLIR.IR.NamedAttribute("no_inline", no_inline))
+        end
         MLIR.IR.create_operation(
             "func.func";
-            attributes=[
-                MLIR.IR.NamedAttribute("sym_name", __lookup_unique_name_in_module(mod, name)),
-                MLIR.IR.NamedAttribute("function_type", MLIR.IR.FunctionType(in_tys, out_tys)),
-                MLIR.IR.NamedAttribute("sym_visibility", sym_visibility),
-                MLIR.IR.NamedAttribute("arg_attrs", MLIR.IR.getattr(func, "arg_attrs")),
-                MLIR.IR.NamedAttribute("res_attrs", MLIR.IR.getattr(func, "res_attrs")),
-                MLIR.IR.NamedAttribute("no_inline", MLIR.IR.getattr(func, "no_inline")),
-            ],
+            attributes,
             owned_regions=[MLIR.IR.Region()],
             result_inference=false,
         )
