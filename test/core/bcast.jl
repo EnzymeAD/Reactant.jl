@@ -28,7 +28,7 @@ function test()
                 MLIR.IR.NamedAttribute("function_type", MLIR.IR.FunctionType(in_tys, [])),
                 MLIR.IR.NamedAttribute("no_inline", true),
             ]
-            MLIR.IR.create_operation("func.func"; attributes, owned_regions = [MLIR.IR.Region()])
+            MLIR.IR.create_operation("func.func"; attributes, owned_regions = [MLIR.IR.Region()], result_inference=false)
         end
 
         fnbody = MLIR.IR.Block(in_tys, [MLIR.IR.Location() for _ in in_tys])

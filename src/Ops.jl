@@ -1829,7 +1829,7 @@ end
     location=mlir_stacktrace("return_", @__FILE__, @__LINE__),
 )
     operands = Reactant.TracedUtils.get_mlir_data.(results)
-    return create_operation("stablehlo.return", location; operands)
+    return create_operation("stablehlo.return", location; operands, inference_results=false)
 end
 
 # control flow ops
@@ -2468,7 +2468,7 @@ end
             MLIR.IR.NamedAttribute("function_type", MLIR.IR.FunctionType(input_types, [])),
         ]
         owned_regions = [MLIR.IR.Region()]
-        create_operation("func.func", location; attributes, owned_regions)
+        create_operation("func.func", location; attributes, owned_regions, result_inference=false)
     end
     true_fn_body = MLIR.IR.Block()
     push!(MLIR.IR.region(true_func_tmp, 1), true_fn_body)
@@ -2535,7 +2535,7 @@ end
             MLIR.IR.NamedAttribute("function_type", MLIR.IR.FunctionType(input_types, [])),
         ]
         owned_regions = [MLIR.IR.Region()]
-        create_operation("func.func", location; attributes, owned_regions)
+        create_operation("func.func", location; attributes, owned_regions, result_inference=false)
     end
     false_fn_body = MLIR.IR.Block()
     push!(MLIR.IR.region(false_func_tmp, 1), false_fn_body)
@@ -2735,7 +2735,7 @@ end
             Reactant.TracedUtils.get_mlir_data(res) for
             res in tb_corrected_linear_results if !(res isa MissingTracedValue)
         ]
-        create_operation("stablehlo.return", location; operands=vals)
+        create_operation("stablehlo.return", location; operands=vals, result_inference=false)
     finally
         MLIR.IR.deactivate(true_fn_body)
         deactivate_constant_context!(true_fn_body)
@@ -2748,7 +2748,7 @@ end
             Reactant.TracedUtils.get_mlir_data(res) for
             res in fb_corrected_linear_results if !(res isa MissingTracedValue)
         ]
-        create_operation("stablehlo.return", location; operands=vals)
+        create_operation("stablehlo.return", location; operands=vals, result_inference=false)
     finally
         MLIR.IR.deactivate(false_fn_body)
         deactivate_constant_context!(false_fn_body)
@@ -2766,7 +2766,7 @@ end
             MLIR.IR.NamedAttribute("function_type", MLIR.IR.FunctionType(input_types, tb_out_types)),
         ]
         owned_regions = [MLIR.IR.Region()]
-        create_operation("func.func", location; attributes, owned_regions)
+        create_operation("func.func", location; attributes, owned_regions, result_inference=false)
     end
     MLIR.API.mlirRegionTakeBody(
         MLIR.IR.region(true_fn_compiled, 1), MLIR.IR.region(true_func_tmp, 1)
@@ -2784,7 +2784,7 @@ end
             MLIR.IR.NamedAttribute("function_type", MLIR.IR.FunctionType(input_types, fb_out_types)),
         ]
         owned_regions = [MLIR.IR.Region()]
-        create_operation("func.func", location; attributes, owned_regions)
+        create_operation("func.func", location; attributes, owned_regions, result_inference=false)
     end
     MLIR.API.mlirRegionTakeBody(
         MLIR.IR.region(false_fn_compiled, 1), MLIR.IR.region(false_func_tmp, 1)
@@ -2942,7 +2942,7 @@ result = Ops.case(
                 MLIR.IR.NamedAttribute("function_type", MLIR.IR.FunctionType(input_types, [])),
             ]
             owned_regions = [MLIR.IR.Region()]
-            create_operation("func.func", location; attributes, owned_regions)
+            create_operation("func.func", location; attributes, owned_regions, result_inference=false)
         end
         branch_bodies[b] = MLIR.IR.Block()
         push!(MLIR.IR.region(branch_func_tmps[b], 1), branch_bodies[b])
@@ -3125,7 +3125,7 @@ result = Ops.case(
                 Reactant.TracedUtils.get_mlir_data(res) for
                 res in branch_corrected_linear_results[b] if !(res isa MissingTracedValue)
             ]
-            create_operation("stablehlo.return", location; operands=vals)
+            create_operation("stablehlo.return", location; operands=vals, result_inference=false)
         finally
             MLIR.IR.deactivate(branch_bodies[b])
             deactivate_constant_context!(branch_bodies[b])
@@ -3146,7 +3146,7 @@ result = Ops.case(
                 MLIR.IR.NamedAttribute("function_type", MLIR.IR.FunctionType(input_types, branch_out_types)),
             ]
             owned_regions = [MLIR.IR.Region()]
-            create_operation("func.func", location; attributes, owned_regions)
+            create_operation("func.func", location; attributes, owned_regions, result_inference=false)
         end
         MLIR.API.mlirRegionTakeBody(
             MLIR.IR.region(branch_fn_compiled, 1), MLIR.IR.region(branch_func_tmps[b], 1)

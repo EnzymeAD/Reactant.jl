@@ -551,6 +551,7 @@ function prepare_mlir_fn_args(
                 MLIR.IR.NamedAttribute("function_type", MLIR.IR.FunctionType(in_tys, Vector{MLIR.IR.Type}(undef, 0))),
             ],
             owned_regions=[MLIR.IR.Region()],
+            result_inference=false,
         )
     end
 
@@ -879,7 +880,7 @@ function finalize_mlir_fn(
 
         args_in_result == :all && @assert length(vals) == length(linear_results)
 
-        MLIR.IR.create_operation("$return_dialect.return"; operands=vals)
+        MLIR.IR.create_operation("$return_dialect.return"; operands=vals, result_inference=false)
     finally
         MLIR.IR.deactivate(fnbody)
     end
@@ -896,6 +897,7 @@ function finalize_mlir_fn(
                 MLIR.IR.NamedAttribute("no_inline", MLIR.IR.getattr(func, "no_inline")),
             ],
             owned_regions=[MLIR.IR.Region()],
+            result_inference=false,
         )
     end
 

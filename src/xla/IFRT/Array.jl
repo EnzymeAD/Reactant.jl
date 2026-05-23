@@ -298,13 +298,13 @@ function replicate_array_to_all_devices(array::Array, sharding, mesh, size_arr)
                 MLIR.IR.NamedAttribute("function_type", MLIR.IR.FunctionType(data_mlir_type, data_mlir_type)),
                 MLIR.IR.NamedAttribute("no_inline", true),
             ]
-            MLIR.IR.create_operation("func.func"; attributes, owned_regions = [MLIR.IR.Region()])
+            MLIR.IR.create_operation("func.func"; attributes, owned_regions = [MLIR.IR.Region()], result_inference=false)
         end
         fnbody = MLIR.IR.Block(data_mlir_type, [MLIR.IR.Location()])
         push!(MLIR.IR.region(func, 1), fnbody)
         MLIR.IR.activate(fnbody)
         try
-            MLIR.IR.create_operation("func.return"; operands=[MLIR.IR.block_argument(fnbody, 1)])
+            MLIR.IR.create_operation("func.return"; operands=[MLIR.IR.block_argument(fnbody, 1)], result_inference=false)
         finally
             MLIR.IR.deactivate(fnbody)
         end

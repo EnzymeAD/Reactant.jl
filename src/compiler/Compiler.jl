@@ -873,6 +873,7 @@ function compile_mlir!(
                     ),
                 ],
                 owned_regions=[MLIR.IR.Region()],
+                result_inference=false,
             )
             fnbody = MLIR.IR.Block(
                 in_tys_padded,
@@ -945,7 +946,7 @@ function compile_mlir!(
                     results[i] = MLIR.IR.result(pad_op, 1)
                 end
 
-                MLIR.IR.create_operation("func.return"; operands=results)
+                MLIR.IR.create_operation("func.return"; operands=results, result_inference=false)
             finally
                 MLIR.IR.deactivate(fnbody)
             end
@@ -1121,7 +1122,7 @@ function compile_mlir!(
     MLIR.IR.dispose(ret)
 
     MLIR.IR.@with_block fnbody begin
-        MLIR.IR.create_operation("func.return"; operands=nresults)
+        MLIR.IR.create_operation("func.return"; operands=nresults, result_inference=false)
     end
 
     out_tys2 = [MLIR.IR.type(a) for a in nresults]
