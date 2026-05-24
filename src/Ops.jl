@@ -1495,7 +1495,7 @@ end
     result_shape = collect(Int64, size(x))
     result_shape[dimension] = k
 
-    operands = Reactant.TracedUtils.get_mlir_data.([x, iota_arg, init_val, init_arg])
+    operands = [Reactant.TracedUtils.get_mlir_data(y) for y in [x, iota_arg, init_val, init_arg]]
     results = [
         mlir_type(TracedRArray{T,N}, result_shape),
         mlir_type(TracedRArray{Int32,N}, result_shape),
@@ -1885,7 +1885,7 @@ end
     results::Union{TracedRArray,TracedRNumber}...;
     location=mlir_stacktrace("return_", @__FILE__, @__LINE__),
 )
-    operands = Reactant.TracedUtils.get_mlir_data.(results)
+    operands = [Reactant.TracedUtils.get_mlir_data(result) for result in results]
     return create_operation("stablehlo.return", location; operands, inference_results=false)
 end
 
@@ -1949,8 +1949,7 @@ end
     if !isnothing(compare_type)
         push!(attributes, MLIR.IR.NamedAttribute("compare_type", mlir_type(compare_type)))
     end
-    operands = Reactant.TracedUtils.get_mlir_data.([lhs, rhs])
-
+    operands = [Reactant.TracedUtils.get_mlir_data(x) for x in (lhs, rhs)]
     op = create_operation("stablehlo.compare", location; operands, attributes)
     res = MLIR.IR.result(op)
     lhs isa TracedRNumber && return TracedRNumber{Bool}((), res)
@@ -2276,8 +2275,8 @@ end
 
     owned_regions = [update_computation]
 
-    dest_values = Reactant.TracedUtils.get_mlir_data.([dest])
-    update_values = Reactant.TracedUtils.get_mlir_data.([updates])
+    dest_values = [Reactant.TracedUtils.get_mlir_data(d) for d in dest]
+    update_values = [Reactant.TracedUtils.get_mlir_data(u) for u in updates]
     operands = vcat(
         dest_values, [Reactant.TracedUtils.get_mlir_data(scatter_indices)], update_values
     )
@@ -2372,7 +2371,7 @@ end
         ),
         MLIR.IR.NamedAttribute("indices_are_sorted", indices_are_sorted),
     ]
-    operands = Reactant.TracedUtils.get_mlir_data.([src, gather_indices])
+    operands = [Reactant.TracedUtils.get_mlir_data(x) for x in [src, gather_indices]]
     op = create_operation("stablehlo.gather", location; operands, attributes)
     res = MLIR.IR.result(op, 1)
 
@@ -2449,7 +2448,7 @@ end
 
     while_op = let results = input_types
         owned_regions = [cond_reg, body_reg]
-        operands = Reactant.TracedUtils.get_mlir_data.(linear_args)
+        operands = [Reactant.TracedUtils.get_mlir_data(arg) for arg in linear_args]
         create_operation("stablehlo.while", location; operands, owned_regions, results)
     end
 
@@ -3688,8 +3687,7 @@ end
     attributes = [MLIR.IR.NamedAttribute("dimensions", MLIR.IR.Attribute(dimensions .- 1))]
     owned_regions = [_construct_reduce_function(fn, unwrapped_eltype.(xs)...)]
     operands = vcat(
-        Reactant.TracedUtils.get_mlir_data.(xs),
-        # broadcasting init_values gives problems as it uses AbstractReactantStyle instead of default style
+        [Reactant.TracedUtils.get_mlir_data(x) for x in xs],
         [Reactant.TracedUtils.get_mlir_data(val) for val in init_values],
     )
     results = [
@@ -3948,7 +3946,7 @@ function triangular_solve(
         end,
     )
 
-    operands = Reactant.TracedUtils.get_mlir_data.([a, b])
+    operands = [Reactant.TracedUtils.get_mlir_data(x) for x in [a, b]]
     attributes = [
         MLIR.IR.NamedAttribute("left_side", left_side),
         MLIR.IR.NamedAttribute("lower", lower),
@@ -4087,8 +4085,8 @@ end
     ]
     owned_regions = [_construct_reduce_function(f, T)]
     operands = vcat(
-        Reactant.TracedUtils.get_mlir_data.(inputs),
-        Reactant.TracedUtils.get_mlir_data.(init_values),
+        [Reactant.TracedUtils.get_mlir_data(x) for x in inputs],
+        [Reactant.TracedUtils.get_mlir_data(init_val) for init_val in init_values],
     )
     results = [
         mlir_type(TracedRArray{T,length(output_shape)}, output_shape) for
@@ -4133,7 +4131,7 @@ end
         MLIR.IR.NamedAttribute("epsilon", Float32(epsilon)),
         MLIR.IR.NamedAttribute("feature_index", feature_index - 1),
     ]
-    operands = Reactant.TracedUtils.get_mlir_data.([operand, scale, offset, mean, variance])
+    operands = [Reactant.TracedUtils.get_mlir_data(x) for x in [operand, scale, offset, mean, variance]]
     op = create_operation("stablehlo.batch_norm_inference", location; operands, attributes)
     res = MLIR.IR.result(op, 1)
 
@@ -4166,7 +4164,7 @@ end
         MLIR.IR.NamedAttribute("epsilon", Float32(epsilon)),
         MLIR.IR.NamedAttribute("feature_index", feature_index - 1),
     ]
-    operands = Reactant.TracedUtils.get_mlir_data.([operand, scale, offset])
+    operands = [Reactant.TracedUtils.get_mlir_data(x) for x in [operand, scale, offset]]
     op = create_operation("stablehlo.batch_norm_training", location; operands, attributes)
 
     return (
@@ -4202,8 +4200,7 @@ end
         MLIR.IR.NamedAttribute("epsilon", Float32(epsilon)),
         MLIR.IR.NamedAttribute("feature_index", feature_index - 1),
     ]
-    operands =
-        Reactant.TracedUtils.get_mlir_data.([operand, scale, mean, variance, grad_output])
+    operands = [Reactant.TracedUtils.get_mlir_data(x) for x in [operand, scale, mean, variance, grad_output]]
     op = create_operation("stablehlo.batch_norm_grad", location; operands, attributes)
 
     grad_operand = TracedRArray{T,N}((), MLIR.IR.result(op, 1), size(operand))
@@ -4350,9 +4347,9 @@ end
         ),
     ]
     operands =
-        Reactant.TracedUtils.get_mlir_data.([
+        [Reactant.TracedUtils.get_mlir_data(x) for x in [
             A, C, constant(alpha; location), constant(beta; location)
-        ])
+        ]]
     results = [mlir_type(TracedRArray{T,N}, size(C))]
     op = create_operation("enzyme.blas_syrk", location; operands, attributes, results)
     res = MLIR.IR.result(op, 1)
