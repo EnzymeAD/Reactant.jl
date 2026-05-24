@@ -599,19 +599,26 @@ function sharding_to_array_slices(
 
             func = MLIR.IR.create_operation(
                 "func.func";
-                attributes = [
+                attributes=[
                     MLIR.IR.NamedAttribute("sym_name", sym_name),
-                    MLIR.IR.NamedAttribute("function_type", MLIR.IR.FunctionType(data_mlir_type, data_mlir_type)),
+                    MLIR.IR.NamedAttribute(
+                        "function_type",
+                        MLIR.IR.FunctionType(data_mlir_type, data_mlir_type),
+                    ),
                     MLIR.IR.NamedAttribute("no_inline", true),
                 ],
-                owned_regions = [MLIR.IR.Region()],
-                result_inference = false,
+                owned_regions=[MLIR.IR.Region()],
+                result_inference=false,
             )
             fnbody = MLIR.IR.Block(data_mlir_type, [MLIR.IR.Location()])
             push!(MLIR.IR.region(func, 1), fnbody)
             MLIR.IR.activate(fnbody)
             try
-                MLIR.IR.create_operation("func.return"; operands=MLIR.IR.Value[MLIR.IR.argument(fnbody, 1)], result_inference=false)
+                MLIR.IR.create_operation(
+                    "func.return";
+                    operands=MLIR.IR.Value[MLIR.IR.argument(fnbody, 1)],
+                    result_inference=false,
+                )
             finally
                 MLIR.IR.deactivate(fnbody)
             end

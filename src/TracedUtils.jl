@@ -254,13 +254,19 @@ Base.@nospecializeinfer function unpad_val_op(
 )::MLIR.IR.Operation
     start_indices = zeros(Int64, length(padding))
     limit_indices = collect(Int64, sz) .- padding
-    create_operation(
+    return create_operation(
         "stablehlo.slice";
         operands=[val],
         attributes=[
-            MLIR.IR.NamedAttribute("start_indices", MLIR.IR.DenseArrayAttribute(start_indices)),
-            MLIR.IR.NamedAttribute("limit_indices", MLIR.IR.DenseArrayAttribute(limit_indices)),
-            MLIR.IR.NamedAttribute("strides", MLIR.IR.DenseArrayAttribute(ones(Int64, length(padding)))),
+            MLIR.IR.NamedAttribute(
+                "start_indices", MLIR.IR.DenseArrayAttribute(start_indices)
+            ),
+            MLIR.IR.NamedAttribute(
+                "limit_indices", MLIR.IR.DenseArrayAttribute(limit_indices)
+            ),
+            MLIR.IR.NamedAttribute(
+                "strides", MLIR.IR.DenseArrayAttribute(ones(Int64, length(padding)))
+            ),
         ],
     )
 end
@@ -548,7 +554,10 @@ function prepare_mlir_fn_args(
             "func.func";
             attributes=[
                 MLIR.IR.NamedAttribute("sym_name", name * "_tmp"),
-                MLIR.IR.NamedAttribute("function_type", MLIR.IR.FunctionType(in_tys, Vector{MLIR.IR.Type}(undef, 0))),
+                MLIR.IR.NamedAttribute(
+                    "function_type",
+                    MLIR.IR.FunctionType(in_tys, Vector{MLIR.IR.Type}(undef, 0)),
+                ),
             ],
             owned_regions=[MLIR.IR.Region()],
             result_inference=false,
@@ -880,7 +889,9 @@ function finalize_mlir_fn(
 
         args_in_result == :all && @assert length(vals) == length(linear_results)
 
-        MLIR.IR.create_operation("$return_dialect.return"; operands=vals, result_inference=false)
+        MLIR.IR.create_operation(
+            "$return_dialect.return"; operands=vals, result_inference=false
+        )
     finally
         MLIR.IR.deactivate(fnbody)
     end
@@ -890,13 +901,18 @@ function finalize_mlir_fn(
             MLIR.IR.NamedAttribute("sym_name", __lookup_unique_name_in_module(mod, name)),
             MLIR.IR.NamedAttribute("function_type", MLIR.IR.FunctionType(in_tys, out_tys)),
         ]
-        !isnothing(sym_visibility) && push!(attributes, MLIR.IR.NamedAttribute("sym_visibility", sym_visibility))
+        !isnothing(sym_visibility) &&
+            push!(attributes, MLIR.IR.NamedAttribute("sym_visibility", sym_visibility))
         let arg_attrs = MLIR.IR.getattr(func, "arg_attrs"),
             res_attrs = MLIR.IR.getattr(func, "res_attrs")
+
             no_inline = MLIR.IR.getattr(func, "no_inline")
-            !isnothing(arg_attrs) && push!(attributes, MLIR.IR.NamedAttribute("arg_attrs", arg_attrs))
-            !isnothing(res_attrs) && push!(attributes, MLIR.IR.NamedAttribute("res_attrs", res_attrs))
-            !isnothing(no_inline) && push!(attributes, MLIR.IR.NamedAttribute("no_inline", no_inline))
+            !isnothing(arg_attrs) &&
+                push!(attributes, MLIR.IR.NamedAttribute("arg_attrs", arg_attrs))
+            !isnothing(res_attrs) &&
+                push!(attributes, MLIR.IR.NamedAttribute("res_attrs", res_attrs))
+            !isnothing(no_inline) &&
+                push!(attributes, MLIR.IR.NamedAttribute("no_inline", no_inline))
         end
         MLIR.IR.create_operation(
             "func.func";
@@ -1315,7 +1331,9 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
         operands=batch_inputs,
         attributes=[
             MLIR.IR.NamedAttribute("fn", fname),
-            MLIR.IR.NamedAttribute("batch_shape", MLIR.IR.DenseArrayAttribute(Int64.(OutShape))),
+            MLIR.IR.NamedAttribute(
+                "batch_shape", MLIR.IR.DenseArrayAttribute(Int64.(OutShape))
+            ),
         ],
         results=out_tys2,
     )

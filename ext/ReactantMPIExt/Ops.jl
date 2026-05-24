@@ -19,7 +19,11 @@ using MPI: MPI
     location=mlir_stacktrace("mpi.comm_rank", @__FILE__, @__LINE__)
 )
     rank = mlir_type(TracedRArray{Int32,0}, ())
-    op = create_operation("enzymexla.mpi.comm_rank", location; attributes = [MLIR.IR.NamedAttribute("rank", rank)])
+    op = create_operation(
+        "enzymexla.mpi.comm_rank",
+        location;
+        attributes=[MLIR.IR.NamedAttribute("rank", rank)],
+    )
     res = IR.result(op)
     return TracedRNumber{Int32}((), res)
 end
@@ -28,7 +32,11 @@ end
     location=mlir_stacktrace("mpi.comm_size", @__FILE__, @__LINE__)
 )
     size = mlir_type(TracedRArray{Int32,0}, ())
-    op = create_operation("enzymexla.mpi.comm_size", location; attributes = [MLIR.IR.NamedAttribute("size", size)])
+    op = create_operation(
+        "enzymexla.mpi.comm_size",
+        location;
+        attributes=[MLIR.IR.NamedAttribute("size", size)],
+    )
     res = IR.result(op)
     return TracedRNumber{Int32}((), res)
 end
@@ -54,7 +62,7 @@ end
         MLIR.IR.NamedAttribute(
             "datatype",
             MLIR.API.enzymexlaMPIDatatypeAttrGet(IR.current_context(), mpi_datatype),
-        )
+        ),
     ]
     create_operation("enzymexla.mpi.send", location; operands, attributes)
 
@@ -71,12 +79,12 @@ end
     mpi_datatype = get_mpi_datatype_enum(MPI.Datatype(T))
 
     count = Reactant.Ops.constant(Int32(length(buf)))
-    
+
     attributes = [
         MLIR.IR.NamedAttribute(
             "datatype",
             MLIR.API.enzymexlaMPIDatatypeAttrGet(IR.current_context(), mpi_datatype),
-        )
+        ),
     ]
     operands = Reactant.TracedUtils.get_mlir_data.([buf, count, dest, tag])
     results = [mlir_type(TracedRArray{Int32,0}, ())]
@@ -99,10 +107,12 @@ end
         MLIR.IR.NamedAttribute(
             "datatype",
             MLIR.API.enzymexlaMPIDatatypeAttrGet(IR.current_context(), mpi_datatype),
-        )
+        ),
     ]
     operands = Reactant.TracedUtils.get_mlir_data.([buf, count, src, tag])
-    op = create_operation("enzymexla.mpi.recv", location; operands, attributes, results=[mlir_type(buf)])
+    op = create_operation(
+        "enzymexla.mpi.recv", location; operands, attributes, results=[mlir_type(buf)]
+    )
 
     buf.mlir_data = IR.result(op)
     return buf
@@ -123,7 +133,7 @@ end
         MLIR.IR.NamedAttribute(
             "datatype",
             MLIR.API.enzymexlaMPIDatatypeAttrGet(IR.current_context(), mpi_datatype),
-        )
+        ),
     ]
     operands = Reactant.TracedUtils.get_mlir_data.([buf, count, src, tag])
     results = [mlir_type(buf), mlir_type(TracedRArray{Int32,0}, ())]
@@ -163,19 +173,24 @@ end
     mpi_datatype = get_mpi_datatype_enum(MPI.Datatype(T))
 
     count = Reactant.Ops.constant(Int32(length(sendbuf)))
-    
+
     attributes = [
         MLIR.IR.NamedAttribute(
             "datatype",
             MLIR.API.enzymexlaMPIDatatypeAttrGet(IR.current_context(), mpi_datatype),
         ),
         MLIR.IR.NamedAttribute(
-            "op",
-            MLIR.API.enzymexlaMPIOpAttrGet(IR.current_context(), mpi_op),
+            "op", MLIR.API.enzymexlaMPIOpAttrGet(IR.current_context(), mpi_op)
         ),
     ]
     operands = Reactant.TracedUtils.get_mlir_data.([sendbuf, recvbuf, count])
-    op = create_operation("enzymexla.mpi.allreduce", location; operands, attributes, results=[mlir_type(recvbuf)])
+    op = create_operation(
+        "enzymexla.mpi.allreduce",
+        location;
+        operands,
+        attributes,
+        results=[mlir_type(recvbuf)],
+    )
 
     recvbuf.mlir_data = IR.result(op)
     return recvbuf
@@ -195,10 +210,12 @@ end
         MLIR.IR.NamedAttribute(
             "datatype",
             MLIR.API.enzymexlaMPIDatatypeAttrGet(IR.current_context(), mpi_datatype),
-        )
+        ),
     ]
     operands = Reactant.TracedUtils.get_mlir_data.([buf, count, root])
-    op = create_operation("enzymexla.mpi.bcast", location; operands, attributes, results=[mlir_type(buf)])
+    op = create_operation(
+        "enzymexla.mpi.bcast", location; operands, attributes, results=[mlir_type(buf)]
+    )
 
     buf.mlir_data = IR.result(op)
     return buf

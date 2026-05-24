@@ -20,7 +20,9 @@ module API
     end
 
     # Additional functions
-    operandsegmentsizes(segments) = NamedAttribute("operand_segment_sizes", Int32.(segments))
+    function operandsegmentsizes(segments)
+        return NamedAttribute("operand_segment_sizes", Int32.(segments))
+    end
     resultsegmentsizes(segments) = NamedAttribute("result_segment_sizes", Int32.(segments))
 
     function EnzymeJaXMapSymbol(name, sym)

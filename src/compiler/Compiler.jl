@@ -849,27 +849,22 @@ function compile_mlir!(
             fnname = string(f, "_padded")
             func_with_padding = MLIR.IR.create_operation(
                 "func.func";
-                attributes = [
+                attributes=[
                     MLIR.IR.NamedAttribute("sym_name", fnname),
                     MLIR.IR.NamedAttribute(
-                        "function_type",
-                        MLIR.IR.FunctionType(in_tys_padded, out_tys_padded),
+                        "function_type", MLIR.IR.FunctionType(in_tys_padded, out_tys_padded)
                     ),
                     MLIR.IR.NamedAttribute(
-                        "arg_attrs",
-                        MLIR.IR.getattr(compiled_f, "arg_attrs"),
+                        "arg_attrs", MLIR.IR.getattr(compiled_f, "arg_attrs")
                     ),
                     MLIR.IR.NamedAttribute(
-                        "res_attrs",
-                        MLIR.IR.getattr(compiled_f, "res_attrs"),
+                        "res_attrs", MLIR.IR.getattr(compiled_f, "res_attrs")
                     ),
                     MLIR.IR.NamedAttribute(
-                        "no_inline",
-                        MLIR.IR.getattr(compiled_f, "no_inline"),
+                        "no_inline", MLIR.IR.getattr(compiled_f, "no_inline")
                     ),
                     MLIR.IR.NamedAttribute(
-                        "sym_visibility",
-                        MLIR.IR.getattr(compiled_f, "private"),
+                        "sym_visibility", MLIR.IR.getattr(compiled_f, "private")
                     ),
                 ],
                 owned_regions=[MLIR.IR.Region()],
@@ -912,8 +907,12 @@ function compile_mlir!(
                 call_op = MLIR.IR.create_operation(
                     "func.call";
                     operands=call_args,
-                    attributes=[MLIR.IR.NamedAttribute("callee", MLIR.IR.FlatSymbolRefAttribute(fnname_old))],
-                    results=[MLIR.IR.result(ftype, i) for i in 1:MLIR.IR.nresults(ftype)]
+                    attributes=[
+                        MLIR.IR.NamedAttribute(
+                            "callee", MLIR.IR.FlatSymbolRefAttribute(fnname_old)
+                        ),
+                    ],
+                    results=[MLIR.IR.result(ftype, i) for i in 1:MLIR.IR.nresults(ftype)],
                 )
 
                 results = MLIR.IR.Value[
@@ -940,13 +939,15 @@ function compile_mlir!(
                                 "interior_padding",
                                 MLIR.IR.DenseArrayAttribute(fill(0, length(padding))),
                             ),
-                        ]
+                        ],
                     )
 
                     results[i] = MLIR.IR.result(pad_op, 1)
                 end
 
-                MLIR.IR.create_operation("func.return"; operands=results, result_inference=false)
+                MLIR.IR.create_operation(
+                    "func.return"; operands=results, result_inference=false
+                )
             finally
                 MLIR.IR.deactivate(fnbody)
             end
@@ -1151,15 +1152,18 @@ function compile_mlir!(
             MLIR.IR.NamedAttribute("function_type", MLIR.IR.FunctionType(in_tys, out_tys2)),
         ]
         arg_attrs = MLIR.IR.getattr(compiled_f, "arg_attrs")
-        !isnothing(arg_attrs) && push!(attributes, MLIR.IR.NamedAttribute("arg_attrs", arg_attrs))
-        !isnothing(res_attrs) && push!(attributes, MLIR.IR.NamedAttribute("res_attrs", res_attrs))
+        !isnothing(arg_attrs) &&
+            push!(attributes, MLIR.IR.NamedAttribute("arg_attrs", arg_attrs))
+        !isnothing(res_attrs) &&
+            push!(attributes, MLIR.IR.NamedAttribute("res_attrs", res_attrs))
         no_inline = MLIR.IR.getattr(compiled_f, "no_inline")
-        !isnothing(no_inline) && push!(attributes, MLIR.IR.NamedAttribute("no_inline", no_inline))
+        !isnothing(no_inline) &&
+            push!(attributes, MLIR.IR.NamedAttribute("no_inline", no_inline))
         MLIR.IR.create_operation(
             "func.func";
             attributes,
-            owned_regions = [MLIR.IR.Region()],
-            result_inference = false,
+            owned_regions=[MLIR.IR.Region()],
+            result_inference=false,
         )
     end
     MLIR.API.mlirRegionTakeBody(MLIR.IR.region(func3, 1), MLIR.IR.region(compiled_f, 1))
