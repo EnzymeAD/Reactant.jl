@@ -3769,7 +3769,7 @@ end
     attributes = [MLIR.IR.NamedAttribute("slice_sizes", collect(Int64, slice_sizes))]
     operands = vcat(
         [Reactant.TracedUtils.get_mlir_data(operand)],
-        standardize_start_indices(operand, nothing, start_indices)
+        standardize_start_indices(operand, nothing, start_indices),
     )
     op = create_operation("stablehlo.dynamic_slice", location; operands, attributes)
     res = MLIR.IR.result(op, 1)
