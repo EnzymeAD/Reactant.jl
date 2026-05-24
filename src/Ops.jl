@@ -1495,7 +1495,9 @@ end
     result_shape = collect(Int64, size(x))
     result_shape[dimension] = k
 
-    operands = [Reactant.TracedUtils.get_mlir_data(y) for y in [x, iota_arg, init_val, init_arg]]
+    operands = [
+        Reactant.TracedUtils.get_mlir_data(y) for y in [x, iota_arg, init_val, init_arg]
+    ]
     results = [
         mlir_type(TracedRArray{T,N}, result_shape),
         mlir_type(TracedRArray{Int32,N}, result_shape),
@@ -4131,7 +4133,10 @@ end
         MLIR.IR.NamedAttribute("epsilon", Float32(epsilon)),
         MLIR.IR.NamedAttribute("feature_index", feature_index - 1),
     ]
-    operands = [Reactant.TracedUtils.get_mlir_data(x) for x in [operand, scale, offset, mean, variance]]
+    operands = [
+        Reactant.TracedUtils.get_mlir_data(x) for
+        x in [operand, scale, offset, mean, variance]
+    ]
     op = create_operation("stablehlo.batch_norm_inference", location; operands, attributes)
     res = MLIR.IR.result(op, 1)
 
@@ -4200,7 +4205,10 @@ end
         MLIR.IR.NamedAttribute("epsilon", Float32(epsilon)),
         MLIR.IR.NamedAttribute("feature_index", feature_index - 1),
     ]
-    operands = [Reactant.TracedUtils.get_mlir_data(x) for x in [operand, scale, mean, variance, grad_output]]
+    operands = [
+        Reactant.TracedUtils.get_mlir_data(x) for
+        x in [operand, scale, mean, variance, grad_output]
+    ]
     op = create_operation("stablehlo.batch_norm_grad", location; operands, attributes)
 
     grad_operand = TracedRArray{T,N}((), MLIR.IR.result(op, 1), size(operand))
@@ -4346,10 +4354,10 @@ end
             ),
         ),
     ]
-    operands =
-        [Reactant.TracedUtils.get_mlir_data(x) for x in [
-            A, C, constant(alpha; location), constant(beta; location)
-        ]]
+    operands = [
+        Reactant.TracedUtils.get_mlir_data(x) for
+        x in [A, C, constant(alpha; location), constant(beta; location)]
+    ]
     results = [mlir_type(TracedRArray{T,N}, size(C))]
     op = create_operation("enzyme.blas_syrk", location; operands, attributes, results)
     res = MLIR.IR.result(op, 1)
