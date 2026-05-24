@@ -1197,6 +1197,7 @@ Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
                 MLIR.IR.NamedAttribute("CConv", CConv),
             ],
             owned_regions=[MLIR.IR.Region()],
+            result_inference=false,
         )
     end
     wrapbody = MLIR.IR.Block(wrapper_tys, [MLIR.IR.Location() for _ in wrapper_tys])
@@ -1467,7 +1468,7 @@ Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
             end
         end
         MLIR.IR.create_operation(
-            "llvm.return";
+            "llvm.call";
             operands=wrapargs,
             attributes=[
                 MLIR.IR.NamedAttribute(
@@ -1475,8 +1476,9 @@ Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
                 ),
                 MLIR.IR.NamedAttribute("op_bundle_sizes", Int32[]),
             ],
+            results=MLIR.IR.Type[],
         )
-        MLIR.IR.create_operation("llvm.return")
+        MLIR.IR.create_operation("llvm.return"; result_inference=false)
     end
 
     output_operand_aliases = MLIR.IR.Attribute(aliases)
