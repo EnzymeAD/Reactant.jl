@@ -3751,11 +3751,10 @@ end
     start_indices::Vector;
     location=mlir_stacktrace("dynamic_update_slice", @__FILE__, @__LINE__),
 ) where {T,N}
-    operands = [
-        Reactant.TracedUtils.get_mlir_data(operand),
-        Reactant.TracedUtils.get_mlir_data(update),
+    operands = vcat(
+        [Reactant.TracedUtils.get_mlir_data(x) for x in (operand, update)],
         standardize_start_indices(operand, update, start_indices),
-    ]
+    )
     op = create_operation("stablehlo.dynamic_update_slice", location; operands)
     res = MLIR.IR.result(op, 1)
     return TracedRArray{T,N}((), res, size(res))
@@ -3768,10 +3767,10 @@ end
     location=mlir_stacktrace("dynamic_slice", @__FILE__, @__LINE__),
 ) where {T,N}
     attributes = [MLIR.IR.NamedAttribute("slice_sizes", collect(Int64, slice_sizes))]
-    operands = [
-        Reactant.TracedUtils.get_mlir_data(operand),
-        standardize_start_indices(operand, nothing, start_indices),
-    ]
+    operands = vcat(
+        [Reactant.TracedUtils.get_mlir_data(operand)],
+        standardize_start_indices(operand, nothing, start_indices)
+    )
     op = create_operation("stablehlo.dynamic_slice", location; operands, attributes)
     res = MLIR.IR.result(op, 1)
     return TracedRArray{T,ndims(res)}((), res, size(res))
