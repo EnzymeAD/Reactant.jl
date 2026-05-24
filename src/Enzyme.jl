@@ -426,7 +426,7 @@ function overload_autodiff(
                         @assert act == EnzymeActivity.OUT ||
                             act == EnzymeActivity.OUT_NO_NEED
                         cst = MLIR.IR.result(
-                            create_operation("stablehlo.add"; operands=[cst, seed]), 1
+                            MLIR.IR.create_operation("stablehlo.add"; operands=[cst, seed]), 1
                         )
                     end
                 end

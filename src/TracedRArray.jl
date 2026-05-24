@@ -519,7 +519,7 @@ function Base._cat_t(dims, ::Type{T}, X::TracedRArray...) where {T}
         (),
         MLIR.IR.result(
             # TODO: maybe we should do some conversion?
-            create_operation(
+            MLIR.IR.create_operation(
                 "stablehlo.concatenate";
                 operands=collect(TracedUtils.get_mlir_data.(X)),
                 attributes=[MLIR.IR.NamedAttribute("dimension", dims - 1)], # stablehlo expects this to be zero-indexed

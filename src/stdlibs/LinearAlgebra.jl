@@ -416,8 +416,7 @@ function LinearAlgebra._diagm(shape, kv::Pair{<:Integer,<:AnyTracedRVector}...)
     end
     scatter_indices = @opcall concatenate(scatter_inds, 1)
     op = MLIR.IR.create_operation(
-        "stablehlo.concatenate",
-        location;
+        "stablehlo.concatenate";
         operands=concat_inputs,
         attributes=[MLIR.IR.NamedAttribute("dimension", 0)],
     )
