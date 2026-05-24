@@ -1317,13 +1317,12 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
         end
     end
 
-    OutShape = isempty(seen_args) ? nothing : first(input_shapes)
+    OutShape = isempty(seen_args) ? nothing : collect(Int, first(input_shapes))
     @assert !isnothing(OutShape)
 
     out_tys2 = MLIR.IR.Type[
-        MLIR.IR.TensorType(
-            collect(Int, OutShape), MLIR.IR.Type(Reactant.unwrapped_eltype(arg))
-        ) for arg in linear_results
+        MLIR.IR.TensorType(OutShape, MLIR.IR.Type(Reactant.unwrapped_eltype(arg))) for
+        arg in linear_results
     ]
 
     res = MLIR.IR.create_operation(
@@ -1331,9 +1330,7 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
         operands=batch_inputs,
         attributes=[
             MLIR.IR.NamedAttribute("fn", fname),
-            MLIR.IR.NamedAttribute(
-                "batch_shape", MLIR.IR.DenseArrayAttribute(Int64.(OutShape))
-            ),
+            MLIR.IR.NamedAttribute("batch_shape", MLIR.IR.DenseArrayAttribute(OutShape)),
         ],
         results=out_tys2,
     )
