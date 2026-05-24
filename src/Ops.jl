@@ -3687,7 +3687,8 @@ end
     owned_regions = [_construct_reduce_function(fn, unwrapped_eltype.(xs)...)]
     operands = vcat(
         Reactant.TracedUtils.get_mlir_data.(xs),
-        Reactant.TracedUtils.get_mlir_data.(init_values),
+        # broadcasting init_values gives problems as it uses AbstractReactantStyle instead of default style
+        [Reactant.TracedUtils.get_mlir_data(val) for val in init_values],
     )
     results = [
         mlir_type(TracedRArray{unwrapped_eltype(x),length(reduced_shape)}, reduced_shape)
