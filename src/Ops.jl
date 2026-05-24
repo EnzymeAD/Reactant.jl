@@ -332,8 +332,8 @@ for (T, mlir_func) in (
         )
             tt = MLIR.IR.TensorType(shape, MLIR.IR.Type($T); location=location)
 
-            splatattr = MLIR.API.$mlir_func(tt, number)
-            cst_op = create_operation("stablehlo.constant", location; results=[tt])
+            attributes = [MLIR.IR.NamedAttribute("value", MLIR.API.$mlir_func(tt, number))]
+            cst_op = create_operation("stablehlo.constant", location; results=[tt], attributes)
             cst = MLIR.IR.result(cst_op)
             ta = TracedRArray{$T,length(shape)}((), cst, shape)
             return ta
