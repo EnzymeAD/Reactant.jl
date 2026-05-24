@@ -1112,7 +1112,9 @@ function mlir_extract_roots_from_value!(
                     ),
                     1,
                 )
-                MLIR.IR.create_operation("llvm.store"; operands=[extr, gep_ptr])
+                MLIR.IR.create_operation(
+                    "llvm.store"; operands=[extr, gep_ptr], result_inference=false
+                )
                 count += 1
                 continue
             end
@@ -1325,7 +1327,9 @@ Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
                     ),
                     1,
                 )
-                MLIR.IR.create_operation("llvm.store"; operands=[cdata, bf16_alloc])
+                MLIR.IR.create_operation(
+                    "llvm.store"; operands=[cdata, bf16_alloc], result_inference=false
+                )
 
                 bf16_val = MLIR.IR.result(
                     MLIR.IR.create_operation(
@@ -1336,7 +1340,9 @@ Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
                 converted_val = _convert_bf16_value(
                     bf16_val, bf16_ty, argty, bf16_float_ty, compile_float_ty
                 )
-                MLIR.IR.create_operation("llvm.store"; operands=[converted_val, alloc])
+                MLIR.IR.create_operation(
+                    "llvm.store"; operands=[converted_val, alloc], result_inference=false
+                )
             else
                 sz = abi_sizeof(a)
                 val = to_bytes(a)
@@ -1355,7 +1361,9 @@ Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
                     ),
                     1,
                 )
-                MLIR.IR.create_operation("llvm.store"; operands=[cdata, alloc])
+                MLIR.IR.create_operation(
+                    "llvm.store"; operands=[cdata, alloc], result_inference=false
+                )
             end
         end
     end
@@ -1422,7 +1430,9 @@ Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
                     1,
                 )
                 MLIR.IR.create_operation(
-                    "llvm.store"; operands=[MLIR.IR.argument(wrapbody, argidx), ptr]
+                    "llvm.store";
+                    operands=[MLIR.IR.argument(wrapbody, argidx), ptr],
+                    result_inference=false,
                 )
             end
         end
