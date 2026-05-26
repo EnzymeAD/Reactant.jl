@@ -768,7 +768,7 @@ end
     ir = sprint(show, @code_hlo while_explicit_checkpoints(x_ra, n_ra))
     @test @filecheck begin
         @check_dag "enzymexla.enable_checkpointing"
-        @check_dag "enzymexla.checkpoints = 5"
+        @check_dag "enzymexla.checkpoint_period = 5"
         ir
     end
 end
