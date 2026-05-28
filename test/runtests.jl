@@ -6,6 +6,7 @@ parsed_args = parse_args(ARGS)
 
 const ENZYMEJAX_INSTALLED = Ref(false)
 const NUMPYRO_INSTALLED = Ref(false)
+const TORCH_INSTALLED = Ref(false)
 
 # Install specific packages. Pkg.test doesn't pick up CondaPkg.toml in test folder
 if (
@@ -29,6 +30,22 @@ if (
     try
         CondaPkg.add_pip("numpyro")
         NUMPYRO_INSTALLED[] = true
+    catch
+    end
+end
+
+if (
+    isempty(parsed_args.positionals) ||
+    "integration" ∈ parsed_args.positionals ||
+    "integration/pytorch" ∈ parsed_args.positionals
+)
+    # A CPU build of torch is recommended: a CUDA torch wheel ships libtorch_cuda.so
+    # that clashes with Reactant's runtime when imported afterwards, in which case the
+    # extension's torch import fails and integration/pytorch skips itself gracefully.
+    try
+        CondaPkg.add_pip("torch"; version=">=2.4")
+        CondaPkg.add_pip("torchax")
+        TORCH_INSTALLED[] = true
     catch
     end
 end
@@ -66,6 +83,10 @@ end
 
 if !NUMPYRO_INSTALLED[]
     delete!(testsuite, "integration/numpyro")
+end
+
+if !TORCH_INSTALLED[]
+    delete!(testsuite, "integration/pytorch")
 end
 
 include("test_helpers.jl")
