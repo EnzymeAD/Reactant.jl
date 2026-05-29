@@ -119,6 +119,76 @@ class _ConvBNConst(nn.Module):
                 @test size(y) == (1, 4, 6, 6)
                 @test relerr(y, torch_to_julia(y_native)) < 1.0f-3
             end
+
+            @testset "Multiple inputs (operand ordering)" begin
+                # forward(self, a, b) takes two tensors. Exercises the
+                # (inputs..., weights...) reordering and the n_inputs accounting for
+                # length(args) > 1, which the single-input tests never hit.
+                torch.manual_seed(0)
+                pyexec(
+                    """
+import torch, torch.nn as nn
+class _TwoInput(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.lin = nn.Linear(8, 4)
+    def forward(self, a, b):
+        return self.lin(a) + b
+""",
+                    @__MODULE__,
+                )
+                model = pyeval("_TwoInput", @__MODULE__)()
+                model.eval()
+
+                adata = randn(Float32, 3, 8)
+                bdata = randn(Float32, 3, 4)
+                y_native = model(
+                    torch.from_numpy(np.asarray(adata)), torch.from_numpy(np.asarray(bdata))
+                )
+
+                a_ra = Reactant.to_rarray(adata)
+                b_ra = Reactant.to_rarray(bdata)
+                y = @jit model(a_ra, b_ra)
+
+                @test size(y) == (3, 4)
+                @test relerr(y, torch_to_julia(y_native)) < 1.0f-4
+            end
+
+            @testset "Multiple outputs (result ordering)" begin
+                # forward returns a tuple of two tensors. Exercises the length(res) > 1
+                # branch of pycall_with_torch_export and output ordering.
+                torch.manual_seed(0)
+                pyexec(
+                    """
+import torch, torch.nn as nn
+class _TwoOutput(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.lin = nn.Linear(8, 4)
+    def forward(self, x):
+        h = self.lin(x)
+        return h, torch.relu(h)
+""",
+                    @__MODULE__,
+                )
+                model = pyeval("_TwoOutput", @__MODULE__)()
+                model.eval()
+
+                xdata = randn(Float32, 3, 8)
+                native = model(torch.from_numpy(np.asarray(xdata)))
+                y0_native = native[0]
+                y1_native = native[1]
+
+                x_ra = Reactant.to_rarray(xdata)
+                y = @jit model(x_ra)
+
+                @test y isa Tuple
+                @test length(y) == 2
+                @test size(y[1]) == (3, 4)
+                @test size(y[2]) == (3, 4)
+                @test relerr(y[1], torch_to_julia(y0_native)) < 1.0f-4
+                @test relerr(y[2], torch_to_julia(y1_native)) < 1.0f-4
+            end
         end
     end
 end
