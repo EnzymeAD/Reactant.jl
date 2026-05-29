@@ -64,6 +64,27 @@ using Test
                 @test relerr(y, torch_to_julia(y_native)) < 1.0f-4
             end
 
+            @testset "Float64 (double precision)" begin
+                # Double precision is common in the Julia scientific ecosystem. jax
+                # disables 64-bit by default, so the export helper enables it for the
+                # lowering (see pytorch.jl); otherwise the model would be downcast to
+                # float32 and hlo_call would reject the float64 operands. The result
+                # should stay Float64 and match eager torch to near machine epsilon.
+                torch.manual_seed(0)
+                model = nn.Sequential(nn.Linear(8, 16), nn.ReLU(), nn.Linear(16, 4))
+                model.double()
+                model.eval()
+
+                xdata = randn(Float64, 4, 8)
+                y_native = model(torch.from_numpy(np.asarray(xdata)))
+
+                y = @jit model(Reactant.to_rarray(xdata))
+
+                @test y isa ConcreteRArray{Float64,2}
+                @test size(y) == (4, 4)
+                @test relerr(y, torch_to_julia(y_native)) < 1.0e-12
+            end
+
             @testset "BatchNorm exercises module_kept_var_idx" begin
                 torch.manual_seed(0)
                 model = nn.Sequential(nn.Linear(6, 6), nn.BatchNorm1d(6), nn.ReLU())

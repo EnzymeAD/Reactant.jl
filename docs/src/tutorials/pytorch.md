@@ -56,6 +56,53 @@ scripted = torch.jit.load("model.pt")
 y = @jit scripted(x)
 ```
 
+## Matmul precision
+
+The float32 matmul precision of an imported model is fixed by jax when it lowers the
+model to StableHLO, and it is baked into the exported program. jax chooses it from
+the platform it detects in the current process at trace time, not from the backend
+Reactant ultimately runs on, so the two can disagree:
+
+- With a GPU visible to jax (the default when `CUDA_VISIBLE_DEVICES` is unset, or any
+  non-empty value), jax lowers float32 matmuls at reduced, TF32-style precision. That
+  reduced precision is frozen in, so it applies even if Reactant then executes on CPU.
+  On a CPU-only host this shows up as a roughly `5e-4` relative difference from eager
+  PyTorch rather than the roughly `1e-7` of full float32.
+- With only CPU detected (`CUDA_VISIBLE_DEVICES=""` hides all GPUs), jax lowers at
+  full float32, and that too is frozen in, so you will not get the TF32 speedup even
+  if you later run the compiled module on a GPU. TF32 also requires an Ampere or newer
+  GPU in the first place.
+
+The import path deliberately follows jax's default so callers can trade accuracy for
+speed, and it emits a one-time warning reporting the precision in effect. For a
+deterministic, platform-independent result, set the precision explicitly before
+tracing:
+
+```julia
+pyimport("jax").config.update("jax_default_matmul_precision", "highest")
+```
+
+`"highest"` gives full float32 on any platform; the integration tests use it so their
+comparisons against eager PyTorch are exact.
+
+## Float64 (double precision)
+
+Double precision models work directly. Build the module and the Reactant input in
+`Float64` and call it as usual:
+
+```julia
+model = nn.Sequential(nn.Linear(8, 16), nn.ReLU(), nn.Linear(16, 4))
+model.double()
+
+x = Reactant.to_rarray(rand(Float64, 4, 8))
+y = @jit model(x)            # y is a Float64 Reactant array
+```
+
+jax disables 64-bit support by default and would otherwise canonicalize float64 to
+float32 during lowering. The import path enables jax's x64 mode only for the duration
+of the export, so float64 models keep double precision without changing jax's global
+configuration.
+
 ## Limitations
 
 - The model must be exportable with `torch.export`. Data-dependent control flow or

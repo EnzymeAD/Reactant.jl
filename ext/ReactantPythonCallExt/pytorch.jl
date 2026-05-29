@@ -76,6 +76,16 @@ _install_state_order_fix()
 def _torch_to_stablehlo_inputs_first(model, example_inputs, strict):
     blocker = _TritonBlocker()
     sys.meta_path.insert(0, blocker)
+    # Enable jax's 64-bit mode for the lowering so float64 models keep double
+    # precision. jax disables x64 by default and would otherwise canonicalize float64
+    # weights, inputs, and avals to float32, producing an f64/f32 mismatch when
+    # Reactant feeds the original float64 operands to hlo_call. Save and restore the
+    # flag so this stays scoped to the export and does not change global jax behavior
+    # (for example the jax tracing path in pycall.jl). The weights and the exported
+    # program are materialized inside this window, so they retain their dtype after
+    # the flag is restored.
+    prev_x64 = _jax.config.jax_enable_x64
+    _jax.config.update("jax_enable_x64", True)
     try:
         exported = _torch.export.export(model, example_inputs, strict=strict)
         weights, func = _txe.exported_program_to_jax(exported)
@@ -91,6 +101,7 @@ def _torch_to_stablehlo_inputs_first(model, example_inputs, strict):
         jax_export = _jax.export.export(_jax.jit(reordered))((jax_avals,), weights)
         return weights, jax_export, len(jax_avals)
     finally:
+        _jax.config.update("jax_enable_x64", prev_x64)
         try:
             sys.meta_path.remove(blocker)
         except ValueError:
@@ -203,12 +214,15 @@ function pycall_with_torch_export(model::Py, args...)
     matmul_precision = pyconvert(
         String, pyimport("builtins").str(jaxptr[].config.jax_default_matmul_precision)
     )
-    @warn "Tracing a PyTorch model: jax will lower float32 matmuls with \
-           jax_default_matmul_precision=$(matmul_precision). A value of None means jax's \
-           platform default, which can be reduced (TF32-style) precision on a \
-           GPU-initialized jax and will differ from a CPU run. Set \
-           jax_default_matmul_precision=\"highest\" before tracing for full float32 \
-           precision." maxlog = 1
+    @warn "Tracing a PyTorch model: jax is lowering float32 matmuls with \
+           jax_default_matmul_precision=$(matmul_precision), and that precision is frozen \
+           into the exported StableHLO. jax picks it from the platform it detects at \
+           trace time, not the backend Reactant executes on, so the two can disagree: \
+           with GPUs visible jax can bake reduced (TF32-style) precision even if \
+           execution falls back to CPU, and with only CPU detected it bakes full \
+           float32 even if you later run on a GPU (and TF32 itself needs an Ampere or \
+           newer GPU). Set jax_default_matmul_precision=\"highest\" before tracing for \
+           deterministic full float32." maxlog = 1
 
     # Export with strict=false (the non-Dynamo tracer). Besides being required for
     # TorchScript, strict=true routes through Dynamo, whose accelerator/stream
