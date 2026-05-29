@@ -33,6 +33,14 @@ using Test
             nn = pyimport("torch.nn")
             np = pyimport("numpy")
 
+            # The import path leaves matmul precision at jax's platform default (see
+            # pytorch.jl), which on a GPU-initialized jax lowers float32 matmuls at
+            # reduced (TF32-style) precision and diverges from eager torch by ~5e-4.
+            # The tests want exact, deterministic comparisons, so force full float32
+            # precision here. This is a test-only setting; it does not change the
+            # default behavior of the import path for users.
+            pyimport("jax").config.update("jax_default_matmul_precision", "highest")
+
             @testset "Eager nn.Linear chain" begin
                 torch.manual_seed(0)
                 model = nn.Sequential(nn.Linear(8, 16), nn.ReLU(), nn.Linear(16, 4))
@@ -49,7 +57,11 @@ using Test
 
                 @test y isa ConcreteRArray{Float32,2}
                 @test size(y) == (4, 4)
-                @test relerr(y, torch_to_julia(y_native)) < 1.0f-3
+                # 1e-4 holds across CPU and GPU because the lowering pins matmul
+                # precision to "highest" (see pytorch.jl). Without that pin jax
+                # lowers float32 matmuls at reduced precision when it initializes for
+                # a GPU platform, pushing the error against eager torch to ~5e-4.
+                @test relerr(y, torch_to_julia(y_native)) < 1.0f-4
             end
 
             @testset "BatchNorm exercises module_kept_var_idx" begin
@@ -64,7 +76,7 @@ using Test
                 x_ra = Reactant.to_rarray(xdata)
                 y = @jit model(x_ra)
 
-                @test relerr(y, torch_to_julia(y_native)) < 1.0f-3
+                @test relerr(y, torch_to_julia(y_native)) < 1.0f-4
             end
 
             @testset "BatchNorm + lifted constant (state ordering)" begin
@@ -99,7 +111,7 @@ class _ConvBNConst(nn.Module):
                 y = @jit model(Reactant.to_rarray(xdata))
 
                 @test size(y) == (1, 2, 12, 12)
-                @test relerr(y, torch_to_julia(y_native)) < 1.0f-3
+                @test relerr(y, torch_to_julia(y_native)) < 1.0f-4
             end
 
             @testset "TorchScript Conv2d (trace)" begin
@@ -117,7 +129,7 @@ class _ConvBNConst(nn.Module):
                 y = @jit scripted(x_ra)
 
                 @test size(y) == (1, 4, 6, 6)
-                @test relerr(y, torch_to_julia(y_native)) < 1.0f-3
+                @test relerr(y, torch_to_julia(y_native)) < 1.0f-4
             end
 
             @testset "Multiple inputs (operand ordering)" begin

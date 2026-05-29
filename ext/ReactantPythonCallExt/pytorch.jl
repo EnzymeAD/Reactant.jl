@@ -82,6 +82,12 @@ def _torch_to_stablehlo_inputs_first(model, example_inputs, strict):
         jax_avals = _txe.extract_avals(exported)
         def reordered(inputs, weights):
             return func(weights, inputs)
+        # Matmul precision follows jax's default for the active platform, so float32
+        # dot_general may lower at reduced (TF32-style) precision when jax initializes
+        # for a GPU. This mirrors normal jax/torchax behavior and lets callers trade
+        # accuracy for speed. Callers that need full precision can set
+        # jax_default_matmul_precision="highest" before invoking the model (the tests
+        # do this for deterministic comparisons against eager torch).
         jax_export = _jax.export.export(_jax.jit(reordered))((jax_avals,), weights)
         return weights, jax_export, len(jax_avals)
     finally:
@@ -189,6 +195,20 @@ function pycall_with_torch_export(model::Py, args...)
         push!(example, torch.from_numpy(np_zeros))
     end
     py_args = pytuple(Tuple(example))
+
+    # Report (once per session) the matmul precision jax will use to lower the model.
+    # When this is left at jax's default, float32 matmuls may lower at reduced
+    # (TF32-style) precision on a GPU-initialized jax (see the note in
+    # `_torch_to_stablehlo_inputs_first`), which changes results relative to a CPU run.
+    matmul_precision = pyconvert(
+        String, pyimport("builtins").str(jaxptr[].config.jax_default_matmul_precision)
+    )
+    @warn "Tracing a PyTorch model: jax will lower float32 matmuls with \
+           jax_default_matmul_precision=$(matmul_precision). A value of None means jax's \
+           platform default, which can be reduced (TF32-style) precision on a \
+           GPU-initialized jax and will differ from a CPU run. Set \
+           jax_default_matmul_precision=\"highest\" before tracing for full float32 \
+           precision." maxlog = 1
 
     # Export with strict=false (the non-Dynamo tracer). Besides being required for
     # TorchScript, strict=true routes through Dynamo, whose accelerator/stream
