@@ -42,9 +42,15 @@ if (
     # A CPU build of torch is recommended: a CUDA torch wheel ships libtorch_cuda.so
     # that clashes with Reactant's runtime when imported afterwards, in which case the
     # extension's torch import fails and integration/pytorch skips itself gracefully.
+    #
+    # torchax is pinned to the versions whose internal API layout ReactantPythonCallExt
+    # depends on (see ext/ReactantPythonCallExt/pytorch.jl). Note that torchax >=0.0.10
+    # declares jax>=0.6.2 while the enzymejax block above pins jax==0.5, so these two
+    # cannot share one environment: the pytorch integration tests are expected to run in
+    # a job that does not also install jax==0.5 (i.e. not the enzymejax/full run).
     try
         CondaPkg.add_pip("torch"; version=">=2.4")
-        CondaPkg.add_pip("torchax")
+        CondaPkg.add_pip("torchax"; version=">=0.0.10,<0.0.13")
         TORCH_INSTALLED[] = true
     catch
     end
