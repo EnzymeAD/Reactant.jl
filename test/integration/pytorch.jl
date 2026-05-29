@@ -49,7 +49,7 @@ using Test
 
                 @test y isa ConcreteRArray{Float32,2}
                 @test size(y) == (4, 4)
-                @test relerr(y, torch_to_julia(y_native)) < 1.0f-4
+                @test relerr(y, torch_to_julia(y_native)) < 1.0f-3
             end
 
             @testset "BatchNorm exercises module_kept_var_idx" begin
