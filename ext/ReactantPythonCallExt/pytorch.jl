@@ -24,6 +24,7 @@
 const TORCH_TO_STABLEHLO_INPUTS_FIRST_PY = """
 import sys
 import jax as _jax
+import jax.numpy as _jnp
 import torch as _torch
 import torchax.export as _txe
 
@@ -33,62 +34,88 @@ class _TritonBlocker:
             raise ImportError("triton import blocked by ReactantPythonCallExt to avoid an LLVM clash with Reactant")
         return None
 
-# torchax's `_extract_states_from_exported_program` builds the positional state
-# list as params + buffers + lifted-constants, but torch.export can order the graph
-# placeholders differently (e.g. params, constant, buffers). The interpreter binds
-# states to placeholders by position, so the default order can feed the wrong tensor
-# to each placeholder (a scalar constant where a conv buffer is expected, etc.),
-# silently corrupting any model whose placeholder order differs. Override it to emit
-# states in the graph's own `input_specs` order. This patches the torchax.export
-# module global that `exported_program_to_jax` looks up at call time.
-def _install_state_order_fix():
-    _InputKind = _torch.export.graph_signature.InputKind
-    def _extract_states_in_input_spec_order(exported_program):
-        gs = exported_program.graph_signature
-        state_dict = dict(exported_program.state_dict)
-        constants = dict(getattr(exported_program, "constants", None) or {})
-        names, values = [], []
-        for spec in gs.input_specs:
-            if spec.kind == _InputKind.USER_INPUT:
-                continue
-            target = spec.target
-            if spec.kind in (_InputKind.PARAMETER, _InputKind.BUFFER):
-                v = state_dict[target]
-            elif spec.kind == _InputKind.CONSTANT_TENSOR:
-                v = constants[target]
-            else:
-                v = constants.get(target, state_dict.get(target))
-            names.append(target)
-            values.append(v)
-        return names, values
-    # Fail loudly if the symbol we override has moved or been renamed: a plain
-    # attribute assignment would otherwise succeed silently, leave torchax calling
-    # its original function, and reintroduce the state-corruption bug this fixes.
-    if not hasattr(_txe, "_extract_states_from_exported_program"):
-        raise AttributeError(
-            "torchax.export._extract_states_from_exported_program is missing; "
-            "the installed torchax version is incompatible with ReactantPythonCallExt"
+# torchax binds the model's states (parameters, buffers, lifted constants) to the
+# decomposed graph's non-user placeholders by position, in graph order. It extracts
+# them in `params + buffers + lifted-constants` order, but torch.export can order the
+# placeholders differently (e.g. params, constant, buffers), so the default order can
+# feed the wrong tensor to each placeholder (a scalar constant where a conv buffer is
+# expected, etc.), silently corrupting any model whose placeholder order differs.
+#
+# `_reorder_weights_to_placeholder_order` below fixes this without monkey patching
+# torchax: it recovers the decomposed `ExportedProgram` that the returned `func` binds
+# to (it is captured in `func`'s closure) and permutes the already-converted weight
+# list into the graph's own `input_specs` order before we feed it to `func`. Reading
+# the order from the exact program `func` uses avoids any assumption about torchax's
+# decomposition sequence; an incompatible torchax fails loudly here rather than
+# producing silently wrong results.
+def _reorder_weights_to_placeholder_order(weights, func):
+    # `func` is the closure returned by `exported_program_to_jax`; it runs the
+    # interpreter over a decomposed `ExportedProgram` it captured. Recover that program
+    # by type (independent of closure cell order).
+    decomposed = next(
+        (cell.cell_contents for cell in (func.__closure__ or [])
+         if isinstance(cell.cell_contents, _torch.export.ExportedProgram)),
+        None,
+    )
+    if decomposed is None:
+        raise RuntimeError(
+            "could not recover the decomposed ExportedProgram from torchax's func "
+            "closure; the installed torchax version is incompatible with ReactantPythonCallExt"
         )
-    _txe._extract_states_from_exported_program = _extract_states_in_input_spec_order
+    _InputKind = _torch.export.graph_signature.InputKind
+    gs = decomposed.graph_signature
+    # The order torchax extracted `weights` in (mirrors its
+    # `_extract_states_from_exported_program`).
+    extracted = (list(gs.parameters) + list(gs.buffers)
+                 + list(getattr(gs, "lifted_tensor_constants", [])))
+    # The order the interpreter consumes the states in: the graph's own placeholders.
+    placeholder_order = [s.target for s in gs.input_specs if s.kind != _InputKind.USER_INPUT]
+    if sorted(placeholder_order) != sorted(extracted):
+        raise RuntimeError(
+            "torchax state/placeholder set mismatch; the installed torchax version is "
+            "incompatible with ReactantPythonCallExt"
+        )
+    pos = {name: i for i, name in enumerate(extracted)}
+    return [weights[pos[target]] for target in placeholder_order]
 
-_install_state_order_fix()
+def _demote_weak_scalar_constants(weights):
+    # Reproduce PyTorch's weak-scalar promotion: a float64 *scalar* constant (a Python
+    # float literal) binds to the dtype of the tensor it operates on instead of upcasting
+    # it. jax materializes it as a strong float64 array that (with x64 on) upcasts and
+    # then collides with float32 operands (e.g. a 0.001 constant reaching a float32 conv).
+    # Cast 0-dim float64 constants to float32 so the constant's precision follows its
+    # operands; genuine multi-dim float64 data is left alone, and jax promotes a demoted
+    # scalar back to float64 wherever it meets a real float64 tensor.
+    return [w.astype(_jnp.float32)
+            if (getattr(w, "ndim", None) == 0 and getattr(w, "dtype", None) == _jnp.float64)
+            else w
+            for w in weights]
 
 def _torch_to_stablehlo_inputs_first(model, example_inputs, strict):
     blocker = _TritonBlocker()
     sys.meta_path.insert(0, blocker)
-    # Enable jax's 64-bit mode for the lowering so float64 models keep double
-    # precision. jax disables x64 by default and would otherwise canonicalize float64
-    # weights, inputs, and avals to float32, producing an f64/f32 mismatch when
-    # Reactant feeds the original float64 operands to hlo_call. Save and restore the
-    # flag so this stays scoped to the export and does not change global jax behavior
-    # (for example the jax tracing path in pycall.jl). The weights and the exported
-    # program are materialized inside this window, so they retain their dtype after
-    # the flag is restored.
+    # Enable jax's 64-bit mode for the lowering so genuinely double-precision models keep
+    # their dtype. jax disables x64 by default and would otherwise canonicalize float64
+    # weights, inputs, and avals to float32, producing an f64/f32 mismatch when Reactant
+    # feeds the original float64 operands to hlo_call. PyTorch's weak-scalar promotion (a
+    # float64 Python-float constant binds to its operand's dtype rather than upcasting it)
+    # is reproduced by `_demote_weak_scalar_constants`, so a float32 model's incidental
+    # float64 scalars do not collide with float32 operands in strict ops (dot_general,
+    # conv). Save and restore the flag so this stays scoped to the export and does not
+    # change global jax behavior (for example the jax tracing path in pycall.jl): jax is
+    # shared process-wide here, unlike a dedicated export process, so we do not set x64
+    # globally. The weights and the exported program are materialized inside this window,
+    # so they retain their dtype after the flag is restored.
     prev_x64 = _jax.config.jax_enable_x64
     _jax.config.update("jax_enable_x64", True)
     try:
         exported = _torch.export.export(model, example_inputs, strict=strict)
         weights, func = _txe.exported_program_to_jax(exported)
+        # torchax extracts `weights` in params+buffers+constants order, which can
+        # diverge from the order `func` binds them to the graph placeholders. Reorder
+        # into placeholder order so each weight reaches the correct placeholder.
+        weights = _reorder_weights_to_placeholder_order(weights, func)
+        weights = _demote_weak_scalar_constants(weights)
         jax_avals = _txe.extract_avals(exported)
         def reordered(inputs, weights):
             return func(weights, inputs)
