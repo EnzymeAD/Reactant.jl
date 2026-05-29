@@ -153,11 +153,10 @@ function _ensure_torchscript_patches()
 end
 
 is_torch_module(f::Py) =
-    TORCH_EXPORT_SUPPORTED[] && pyconvert(Bool, pybuiltins.isinstance(f, torchptr[].nn.Module))
+    TORCH_EXPORT_SUPPORTED[] && pyisinstance(f, torchptr[].nn.Module)
 
 is_torchscript_module(f::Py) =
-    TORCH_EXPORT_SUPPORTED[] &&
-        pyconvert(Bool, pybuiltins.isinstance(f, torchptr[].jit.ScriptModule))
+    TORCH_EXPORT_SUPPORTED[] && pyisinstance(f, torchptr[].jit.ScriptModule)
 
 function pycall_with_torch_export(model::Py, args...)
     TORCH_EXPORT_SUPPORTED[] || throw("torch/torchax could not be loaded.")

@@ -3,13 +3,13 @@ module ReactantPythonCallExt
 using PythonCall:
     PythonCall,
     Py,
-    pybuiltins,
     pyconvert,
     pydict,
     pyeval,
     pyexec,
     pyfunc,
     pyimport,
+    pyisinstance,
     pylist,
     pytuple
 using Reactant: Reactant, TracedRArray, TracedRNumber, @reactant_overlay
