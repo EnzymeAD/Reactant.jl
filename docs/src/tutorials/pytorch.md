@@ -10,7 +10,9 @@ This feature lives in the `ReactantPythonCallExt` extension and is enabled when
 traced with [`torch.export`](https://pytorch.org/docs/stable/export.html), lowered
 to StableHLO with [`torchax`](https://github.com/pytorch/xla/tree/master/torchax),
 and inlined into the current trace. The module's parameters and buffers are carried
-across as inlined constants, mirroring how JAX closure parameters are captured.
+across as inlined constants, mirroring how JAX closure parameters are captured. As
+with closure-captured values in the JAX path, this embeds the weights directly in
+the compiled module, so very large models produce correspondingly large modules.
 
 ## Usage
 
@@ -31,6 +33,12 @@ y = @jit model(x)                              # traced, compiled, executed
 
 You provide only the model object and the Reactant input arrays; the weights are
 read from the module automatically.
+
+!!! note "The module is mutated in place"
+    Importing a module switches it into eval mode (`model.eval()`), and for
+    TorchScript inputs it also rewraps leaf parameters as `torch.nn.Parameter` on
+    the module object you pass in. If you need the original module untouched, pass a
+    copy.
 
 !!! note "Array layout"
     The Reactant array's shape is the PyTorch tensor shape directly, with the batch
