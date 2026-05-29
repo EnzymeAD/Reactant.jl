@@ -61,6 +61,14 @@ def _install_state_order_fix():
             names.append(target)
             values.append(v)
         return names, values
+    # Fail loudly if the symbol we override has moved or been renamed: a plain
+    # attribute assignment would otherwise succeed silently, leave torchax calling
+    # its original function, and reintroduce the state-corruption bug this fixes.
+    if not hasattr(_txe, "_extract_states_from_exported_program"):
+        raise AttributeError(
+            "torchax.export._extract_states_from_exported_program is missing; "
+            "the installed torchax version is incompatible with ReactantPythonCallExt"
+        )
     _txe._extract_states_from_exported_program = _extract_states_in_input_spec_order
 
 _install_state_order_fix()
@@ -108,6 +116,18 @@ def _fix_jit_parameters(mod):
 
 def _register_aten_convolution_default_handler():
     aten = _torch.ops.aten
+    # Fail loudly if the overloads or helpers we rely on have moved, rather than
+    # registering against a stale symbol or calling a missing function later.
+    if not hasattr(aten, "_convolution") or not hasattr(aten._convolution, "default"):
+        raise AttributeError(
+            "torch.ops.aten._convolution.default is missing; "
+            "the installed torch version is incompatible with ReactantPythonCallExt"
+        )
+    if not hasattr(_jaten, "_aten_convolution"):
+        raise AttributeError(
+            "torchax.ops.jaten._aten_convolution is missing; "
+            "the installed torchax version is incompatible with ReactantPythonCallExt"
+        )
     def _conv_handler(input, weight, bias, stride, padding, dilation, transposed,
                       output_padding, groups, benchmark, deterministic, cudnn_enabled, allow_tf32):
         return _jaten._aten_convolution(input, weight, bias, stride, padding, dilation,
