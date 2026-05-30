@@ -135,6 +135,47 @@ class _ConvBNConst(nn.Module):
                 @test relerr(y, torch_to_julia(y_native)) < 1.0f-4
             end
 
+            @testset "Weak scalar constant (FP64 promotion under x64)" begin
+                # A float32 model whose forward adds a 0-dim float64 scalar tensor.
+                # PyTorch's scalar (0-dim) promotion rule keeps the result float32:
+                # the float64 scalar binds to its float32 operand instead of
+                # upcasting it. The export helper enables jax x64 (see pytorch.jl),
+                # under which jax would otherwise keep the constant a strong float64
+                # array that upcasts and collides with the float32 operands in strict
+                # ops. _demote_weak_scalar_constants demotes the 0-dim float64
+                # constant back to float32 so the result stays Float32 and matches
+                # eager torch. (Bare Python float literals are constant-folded by
+                # torch.export and never reach this path, so use an explicit float64
+                # scalar tensor to exercise it.)
+                torch.manual_seed(0)
+                pyexec(
+                    """
+import torch, torch.nn as nn
+class _WeakScalar(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.lin = nn.Linear(8, 4)
+    def forward(self, x):
+        return self.lin(x) + torch.tensor(0.5, dtype=torch.float64)
+""",
+                    @__MODULE__,
+                )
+                model = pyeval("_WeakScalar", @__MODULE__)()
+                model.eval()
+
+                xdata = randn(Float32, 3, 8)
+                y_native = model(torch.from_numpy(np.asarray(xdata)))
+
+                @test pyconvert(String, pyimport("builtins").str(y_native.dtype)) ==
+                    "torch.float32"
+
+                y = @jit model(Reactant.to_rarray(xdata))
+
+                @test y isa ConcreteRArray{Float32,2}
+                @test size(y) == (3, 4)
+                @test relerr(y, torch_to_julia(y_native)) < 1.0f-4
+            end
+
             @testset "TorchScript Conv2d (trace)" begin
                 torch.manual_seed(0)
                 conv = nn.Conv2d(3, 4, 3)
