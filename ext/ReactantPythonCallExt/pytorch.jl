@@ -196,11 +196,11 @@ function _ensure_torchscript_patches()
     return nothing
 end
 
-is_torch_module(f::Py) =
-    TORCH_EXPORT_SUPPORTED[] && pyisinstance(f, torchptr[].nn.Module)
+is_torch_module(f::Py) = TORCH_EXPORT_SUPPORTED[] && pyisinstance(f, torchptr[].nn.Module)
 
-is_torchscript_module(f::Py) =
-    TORCH_EXPORT_SUPPORTED[] && pyisinstance(f, torchptr[].jit.ScriptModule)
+function is_torchscript_module(f::Py)
+    return TORCH_EXPORT_SUPPORTED[] && pyisinstance(f, torchptr[].jit.ScriptModule)
+end
 
 function pycall_with_torch_export(model::Py, args...)
     TORCH_EXPORT_SUPPORTED[] || throw("torch/torchax could not be loaded.")
@@ -229,7 +229,9 @@ function pycall_with_torch_export(model::Py, args...)
         T = Reactant.unwrapped_eltype(arg)
         haskey(NUMPY_SIMPLE_TYPES, T) ||
             error("pycall_with_torch_export: no numpy dtype mapping for $T")
-        np_zeros = np.zeros(pytuple(collect(Int, size(arg))); dtype=string(NUMPY_SIMPLE_TYPES[T]))
+        np_zeros = np.zeros(
+            pytuple(collect(Int, size(arg))); dtype=string(NUMPY_SIMPLE_TYPES[T])
+        )
         push!(example, torch.from_numpy(np_zeros))
     end
     py_args = pytuple(Tuple(example))
