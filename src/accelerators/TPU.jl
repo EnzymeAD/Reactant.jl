@@ -292,7 +292,7 @@ function get_metadata(key)
 
     while retry_count < 6
         try
-            api_resp = HTTP.get(
+            api_resp = get(
                 "$(gce_metadata_endpoint)/computeMetadata/v1/instance/attributes/$(key)",
                 ["Metadata-Flavor" => "Google"];
                 connect_timeout=60,
