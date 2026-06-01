@@ -588,6 +588,38 @@ for (dialect, op) in [
     end
 end
 
+@noinline function hypot(
+    a::TracedRArray{T,N},
+    b::TracedRArray{T,N};
+    location=mlir_stacktrace("hypot", @__FILE__, @__LINE__),
+) where {T,N}
+    res = MLIR.IR.result(
+        enzymexla.math_hypot(
+            a.mlir_data,
+            b.mlir_data;
+            result=mlir_type(TracedRArray{T,N}, size(a)),
+            location,
+        ),
+    )
+    return TracedRArray{T,N}((), res, size(a))
+end
+
+@noinline function hypot(
+    a::TracedRNumber{T},
+    b::TracedRNumber{T};
+    location=mlir_stacktrace("hypot", @__FILE__, @__LINE__),
+) where {T}
+    res = MLIR.IR.result(
+        enzymexla.math_hypot(
+            a.mlir_data,
+            b.mlir_data;
+            result=mlir_type(TracedRArray{T,0}, ()),
+            location,
+        ),
+    )
+    return TracedRNumber{T}((), res)
+end
+
 # is* checks
 for (dialect, op) in
     [(:stablehlo, :is_finite), (:chlo, :is_inf), (:chlo, :is_neg_inf), (:chlo, :is_pos_inf)]
