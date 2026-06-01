@@ -2,6 +2,8 @@
 using Reactant, Test
 
 const RunningOnTPU = contains(string(Reactant.devices()[1]), "TPU")
+const RunningOnCUDA = contains(string(Reactant.devices()[1]), "CUDA")
+const RunningOnCPU = contains(string(Reactant.devices()[1]), "CPU")
 
 sinexp(x) = sin(exp(x))
 sinexpbc(x) = sinexp.(x)
@@ -243,7 +245,7 @@ end
         b in (-7, -0.57, -0.0, 1, 3.14)
 
         @test Reactant.to_number(@jit(copysign(ConcreteRNumber(a), ConcreteRNumber(b)))) ≈
-            copysign(a, b)
+              copysign(a, b)
     end
 end
 
@@ -425,4 +427,31 @@ end
     @test yd isa ConcreteRNumber{UInt64}
     @test xd == 1
     @test yd == 4
+end
+
+@testset "hypot" begin
+    x = ConcreteRNumber(3.0)
+    y = ConcreteRNumber(4.0)
+    @test @jit(hypot(x, y)) ≈ 5.0
+    @test @jit(hypot(x, y)) isa ConcreteRNumber{Float64}
+
+    # Mixed: one traced, one plain
+    @test @jit(hypot(x, 4.0)) ≈ 5.0
+    @test @jit(hypot(3.0, y)) ≈ 5.0
+
+    # Zero edge case
+    @test @jit(hypot(ConcreteRNumber(0.0), ConcreteRNumber(0.0))) ≈ 0.0
+
+    # Large values that would overflow with naive x^2 + y^2
+    large = ConcreteRNumber(floatmax(Float64) / 2)
+    @test @jit(hypot(large, large)) ≈ large * sqrt(2) broken = RunningOnTPU
+
+    # Small values that would underflow with naive x^2 + y^2
+    small = ConcreteRNumber(2 * nextfloat(0.0))
+    @test @jit(hypot(small, small)) ≈ small * sqrt(2) broken = RunningOnCPU
+
+    # Broadcast over arrays
+    xs = Reactant.to_rarray([3.0, 5.0, 8.0])
+    ys = Reactant.to_rarray([4.0, 12.0, 15.0])
+    @test @jit(hypot.(xs, ys)) ≈ [5.0, 13.0, 17.0]
 end

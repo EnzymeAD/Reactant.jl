@@ -784,6 +784,24 @@ Base.atand(x::TracedRNumber) = rad2deg(atan(x))
 Base.atan(y::TracedRNumber, x::TracedRNumber) = @opcall atan2(y, x)
 Base.atand(y::TracedRNumber, x::TracedRNumber) = rad2deg(atan(y, x))
 
+Base.hypot(x::TracedRNumber{T}, y::TracedRNumber{T}) where {T} = @opcall hypot(x, y)
+Base.hypot(x::TracedRNumber{T}, y) where {T} = Base.hypot(x, Reactant.promote_to(x, y))
+function Base.hypot(x::TracedRNumber{T}, y::Number) where {T}
+    return Base.hypot(x, Reactant.promote_to(x, y))
+end
+Base.hypot(x, y::TracedRNumber{T}) where {T} = Base.hypot(Reactant.promote_to(y, x), y)
+function Base.hypot(x::Number, y::TracedRNumber{T}) where {T}
+    return Base.hypot(Reactant.promote_to(y, x), y)
+end
+
+function Base.hypot(x::TracedRNumber{T1}, y::TracedRNumber{T2}) where {T1,T2}
+    commonTy = TracedRNumber{Base.promote_type(T1, T2)}
+    return Base.hypot(Reactant.promote_to(commonTy, x), Reactant.promote_to(commonTy, y))
+end
+
+Base.hypot(::Missing, ::TracedRNumber) = missing
+Base.hypot(::TracedRNumber, ::Missing) = missing
+
 Base.acscd(x::TracedRNumber) = rad2deg(asin(1 / x))
 Base.asecd(x::TracedRNumber) = rad2deg(acos(1 / x))
 Base.acotd(x::TracedRNumber) = rad2deg(atan(1 / x))
