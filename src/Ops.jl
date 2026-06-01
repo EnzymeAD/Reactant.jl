@@ -595,10 +595,7 @@ end
 ) where {T,N}
     res = MLIR.IR.result(
         enzymexla.math_hypot(
-            a.mlir_data,
-            b.mlir_data;
-            result=mlir_type(TracedRArray{T,N}, size(a)),
-            location,
+            a.mlir_data, b.mlir_data; result=mlir_type(TracedRArray{T,N}, size(a)), location
         ),
     )
     return TracedRArray{T,N}((), res, size(a))
@@ -611,10 +608,7 @@ end
 ) where {T}
     res = MLIR.IR.result(
         enzymexla.math_hypot(
-            a.mlir_data,
-            b.mlir_data;
-            result=mlir_type(TracedRArray{T,0}, ()),
-            location,
+            a.mlir_data, b.mlir_data; result=mlir_type(TracedRArray{T,0}, ()), location
         ),
     )
     return TracedRNumber{T}((), res)
