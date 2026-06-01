@@ -415,11 +415,12 @@ function LinearAlgebra._diagm(shape, kv::Pair{<:Integer,<:AnyTracedRVector}...)
         push!(concat_inputs, get_mlir_data(v))
     end
     scatter_indices = @opcall concatenate(scatter_inds, 1)
-    values = TracedRArray{T,1}(
-        (),
-        MLIR.IR.result(MLIR.Dialects.stablehlo.concatenate(concat_inputs; dimension=0), 1),
-        (size(scatter_indices, 1),),
+    op = MLIR.IR.create_operation(
+        "stablehlo.concatenate";
+        operands=concat_inputs,
+        attributes=[MLIR.IR.NamedAttribute("dimension", 0)],
     )
+    values = TracedRArray{T,1}((), MLIR.IR.result(op, 1), (size(scatter_indices, 1),))
     return @opcall scatter_setindex(@opcall(fill(zero(T), (m, n))), scatter_indices, values)
 end
 

@@ -423,10 +423,11 @@ function overload_autodiff(
                         end
                         cst = seed
                     else
-                        @assert (
-                            act == EnzymeActivity.OUT || act == EnzymeActivity.OUT_NO_NEED
+                        @assert act == EnzymeActivity.OUT ||
+                            act == EnzymeActivity.OUT_NO_NEED
+                        cst = MLIR.IR.result(
+                            MLIR.IR.create_operation("stablehlo.add"; operands=[cst, seed]), 1
                         )
-                        cst = MLIR.IR.result(MLIR.Dialects.stablehlo.add(cst, seed), 1)
                     end
                 end
             end
@@ -470,14 +471,21 @@ function overload_autodiff(
 
     fname = TracedUtils.get_attribute_by_name(mlir_fn_res.f, "sym_name")
     fname = MLIR.IR.FlatSymbolRefAttribute(Base.String(fname))
-    res = (reverse ? MLIR.Dialects.enzyme.autodiff : MLIR.Dialects.enzyme.fwddiff)(
-        [TracedUtils.transpose_val(v) for v in ad_inputs];
-        outputs=outtys,
-        fn=fname,
-        width,
-        strong_zero=EnzymeCore.strong_zero(CMode),
-        activity=MLIR.IR.Attribute([act_attr(a) for a in activity]),
-        ret_activity=MLIR.IR.Attribute([act_attr(a) for a in ret_activity]),
+    res = MLIR.IR.create_operation(
+        reverse ? "enzyme.autodiff" : "enzyme.fwddiff";
+        operands=[TracedUtils.transpose_val(v) for v in ad_inputs],
+        attributes=[
+            MLIR.IR.NamedAttribute("fn", fname),
+            MLIR.IR.NamedAttribute("width", width),
+            MLIR.IR.NamedAttribute("strong_zero", EnzymeCore.strong_zero(CMode)),
+            MLIR.IR.NamedAttribute(
+                "activity", MLIR.IR.Attribute([act_attr(a) for a in activity])
+            ),
+            MLIR.IR.NamedAttribute(
+                "ret_activity", MLIR.IR.Attribute([act_attr(a) for a in ret_activity])
+            ),
+        ],
+        results=outtys,
     )
 
     residx = 1

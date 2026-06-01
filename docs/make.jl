@@ -12,13 +12,6 @@ makedocs(;
         Reactant.MLIR,
         Reactant.MLIR.API,
         Reactant.MLIR.IR,
-        filter(
-            Base.Fix2(isa, Module),
-            [
-                getproperty(Reactant.MLIR.Dialects, x) for
-                x in names(Reactant.MLIR.Dialects; all=true) if x != :Dialects
-            ],
-        )...,
     ],
     authors=join(
         [
