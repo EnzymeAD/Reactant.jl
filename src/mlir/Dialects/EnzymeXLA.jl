@@ -1761,15 +1761,12 @@ will be a m x n trapezoidal matrix.
 This operation is modeled after the mathematical formulation of the QR
 factorization, and not after LAPACK\'s compact formats.
 """
-function linalg_qr(
-    input::Value; Q::IR.Type, R::IR.Type, algorithm=nothing, location=Location()
-)
-    op_ty_results = IR.Type[Q, R]
+function linalg_qr(input::Value; Q::IR.Type, R::IR.Type, info::IR.Type, location=Location())
+    op_ty_results = IR.Type[Q, R, info]
     operands = Value[input,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
-    !isnothing(algorithm) && push!(attributes, NamedAttribute("algorithm", algorithm))
 
     return create_operation(
         "enzymexla.linalg.qr",
