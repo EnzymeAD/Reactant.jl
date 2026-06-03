@@ -880,20 +880,20 @@ function vendored_buildEarlySimplificationPipeline(mpm, @nospecialize(job::GPUCo
     LLVM.add!(mpm, LLVM.NewPMFunctionPassManager()) do fpm
         LLVM.add!(fpm, LLVM.LowerExpectIntrinsicPass())
         if opt_level >= 2
-            LLVM.add!(fpm, LLVM.PropagateJuliaAddrspacesPass())
+            LLVM.add!(fpm, LLVM.Interop.PropagateJuliaAddrspacesPass())
         end
         # DCE must come before simplifycfg: codegen can generate unused
         # statements that would otherwise alter how simplifycfg optimizes the CFG.
         LLVM.add!(fpm, LLVM.DCEPass())
         LLVM.add!(fpm, LLVM.SimplifyCFGPass(; GPUCompiler.BasicSimplifyCFGOptions...))
         if opt_level >= 1
-            LLVM.add!(fpm, SROAPass())
-            LLVM.add!(fpm, EarlyCSEPass())
+            LLVM.add!(fpm, LLVM.SROAPass())
+            LLVM.add!(fpm, LLVM.EarlyCSEPass())
         end
     end
     if opt_level >= 1
-        LLVM.add!(mpm, GlobalOptPass())
-        LLVM.add!(mpm, NewPMFunctionPassManager()) do fpm
+        LLVM.add!(mpm, LLVM.GlobalOptPass())
+        LLVM.add!(mpm, LLVM.NewPMFunctionPassManager()) do fpm
             LLVM.add!(fpm, LLVM.PromotePass())
             if instcombine
                 LLVM.add!(fpm, LLVM.InstCombinePass())
