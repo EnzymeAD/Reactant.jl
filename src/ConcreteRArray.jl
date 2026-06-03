@@ -106,19 +106,36 @@ function Base.isempty(x::Union{WrappedConcretePJRTArray,WrappedConcreteIFRTArray
 end
 
 function Base.convert(::Type{<:Array}, X::AbstractConcreteArray{T,N}) where {T,N}
-    if has_padding(X)
-        padding = get_padding(X)
-        data = Array{T,N}(undef, (size(X) .+ padding)...)
-        write_to_host_buffer!(data, X)
-        return view(data, [1:size(X, i) for i in 1:ndims(X)]...)
+    client = XLA.client(X)
+    if T <: Complex && !XLA.supports_complex(client)
+        T2 = real(T)
+        if has_padding(X)
+            padding = get_padding(X)
+            data = Array{T,N}(undef, (size(X) .+ padding)...)
+            data_re = reinterpret(reshape, T2, data)
+            write_to_host_buffer!(data_re, X)
+            return view(data, [1:size(X, i) for i in 1:ndims(X)]...)
+        else
+            data = Array{T,N}(undef, size(X)...)
+            data_re = reinterpret(reshape, T2, data)
+            write_to_host_buffer!(data_re, X)
+            return data
+        end
     else
-        data = Array{T,N}(undef, size(X)...)
-        write_to_host_buffer!(data, X)
-        return data
+        if has_padding(X)
+            padding = get_padding(X)
+            data = Array{T,N}(undef, (size(X) .+ padding)...)
+            write_to_host_buffer!(data, X)
+            return view(data, [1:size(X, i) for i in 1:ndims(X)]...)
+        else
+            data = Array{T,N}(undef, size(X)...)
+            write_to_host_buffer!(data, X)
+            return data
+        end
     end
 end
 
-function write_to_host_buffer!(data::Array, X::ConcretePJRTArray{T,N}) where {T,N}
+function write_to_host_buffer!(data::AbstractArray, X::ConcretePJRTArray{T,N}) where {T,N}
     if Sharding.is_sharded(X)
         completed = Set{eltype(X.sharding.device_to_array_slices)}()
         for idx in 1:length(X.data)
@@ -135,10 +152,11 @@ function write_to_host_buffer!(data::Array, X::ConcretePJRTArray{T,N}) where {T,
     return nothing
 end
 
-function write_to_host_buffer!(data::Array, X::ConcreteIFRTArray{T,N}) where {T,N}
+function write_to_host_buffer!(data::AbstractArray, X::ConcreteIFRTArray{T,N}) where {T,N}
     XLA.to_host(X.data, data, X.sharding)
     return nothing
 end
+
 
 function Base.convert(
     ::Type{<:Array}, X::Union{WrappedConcretePJRTArray,WrappedConcreteIFRTArray}
@@ -707,7 +725,16 @@ for aType in (:ConcretePJRTArray, :ConcreteIFRTArray)
         function Base.copyto!(
             dest::Array, src::Broadcast.Broadcasted{Broadcast.ArrayStyle{$(aType)}}
         )
-            write_to_host_buffer!(dest, copy(src))
+            copied_src = copy(src)
+            client = XLA.client(copied_src)
+            T = eltype(copied_src)
+            if T <: Complex && !XLA.supports_complex(client)
+                T2 = real(T)
+                dest_re = reinterpret(reshape, T2, dest)
+                write_to_host_buffer!(dest_re, copied_src)
+            else
+                write_to_host_buffer!(dest, copied_src)
+            end
             return dest
         end
 

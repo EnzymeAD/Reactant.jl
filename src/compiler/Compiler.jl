@@ -119,6 +119,10 @@ function compile_mlir(
             mod, f; mlir_fn_res.num_partitions, mlir_fn_res.num_replicas
         )
 
+        if !XLA.supports_complex(client)
+            run_pass_pipeline!(mod, "lower-complex-operations", "lower_complex_operations")
+        end
+
         if drop_unsupported_attributes
             # Drop some of our attributes
             run_pass_pipeline!(
@@ -283,6 +287,8 @@ function compile_mlir!(
             true;
             runtime,
             compile_options.optimize_then_pad,
+            client,
+            emulate_complex=true,
             kwargs...,
         )
     finally

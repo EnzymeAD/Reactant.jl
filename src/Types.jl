@@ -244,6 +244,24 @@ function ConcretePJRTArray{T,N}(
     return ConcretePJRTArray{T,N,D}(data, shape, sharding)
 end
 
+function adapt_sharding_for_complex(sharding::Sharding.NoSharding, N)
+    return Sharding.NoSharding()
+end
+function adapt_sharding_for_complex(sharding::Sharding.Replicated, N)
+    return Sharding.Replicated(sharding.mesh)
+end
+function adapt_sharding_for_complex(sharding::Sharding.NamedSharding, N)
+    return Sharding.NamedSharding(
+        sharding.mesh,
+        [[nothing]; sharding.partition_spec],
+        is_closed=(true, sharding.is_closed...),
+        priority=(-1, sharding.priority...),
+    )
+end
+function adapt_sharding_for_complex(sharding::Sharding.AbstractSharding, N)
+    return adapt_sharding_for_complex(Sharding.NamedSharding(sharding, N), N)
+end
+
 function ConcretePJRTArray(
     data::Array{T,N};
     client::Union{Nothing,XLA.PJRT.Client}=nothing,
@@ -252,11 +270,22 @@ function ConcretePJRTArray(
     sharding::Sharding.AbstractSharding=Sharding.NoSharding(),
 ) where {T,N}
     theclient, thedevice = _select_client_and_device(client, idx, device, sharding)
-    sharded_data, shardinfo = sharding(theclient, thedevice, data)
-    shape = size(data)
-    nsharded = length(sharded_data)
-    return ConcretePJRTArray{T,N,nsharded}(sharded_data, shape, shardinfo)
+    if T <: Complex && !XLA.supports_complex(theclient)
+        T2 = real(T)
+        data_re = reinterpret(reshape, T2, data)
+        sharding_re = adapt_sharding_for_complex(sharding, N)
+        sharded_data, shardinfo = sharding_re(theclient, thedevice, data_re)
+        shape = size(data)
+        nsharded = length(sharded_data)
+        return ConcretePJRTArray{T,N,nsharded}(sharded_data, shape, shardinfo)
+    else
+        sharded_data, shardinfo = sharding(theclient, thedevice, data)
+        shape = size(data)
+        nsharded = length(sharded_data)
+        return ConcretePJRTArray{T,N,nsharded}(sharded_data, shape, shardinfo)
+    end
 end
+
 
 Base.wait(x::Union{ConcretePJRTArray,ConcretePJRTNumber}) = foreach(wait, x.data)
 XLA.client(x::Union{ConcretePJRTArray,ConcretePJRTNumber}) = XLA.client(x.data)
@@ -384,9 +413,17 @@ function ConcreteIFRTArray(
 ) where {T,N}
     theclient, thedevice = _select_client_and_device(client, idx, device, sharding)
     shape = size(data)
-    # ToDo: How to use specified device (non-sharded case)?
-    sharded_data, shardinfo, padding = sharding(theclient, nothing, data)
-    return ConcreteIFRTArray{T,N}(sharded_data, shape, shardinfo, padding)
+    if T <: Complex && !XLA.supports_complex(theclient)
+        T2 = real(T)
+        data_re = reinterpret(reshape, T2, data)
+        sharding_re = adapt_sharding_for_complex(sharding, N)
+        sharded_data, shardinfo, padding = sharding_re(theclient, nothing, data_re)
+        return ConcreteIFRTArray{T,N}(sharded_data, shape, shardinfo, padding)
+    else
+        # ToDo: How to use specified device (non-sharded case)?
+        sharded_data, shardinfo, padding = sharding(theclient, nothing, data)
+        return ConcreteIFRTArray{T,N}(sharded_data, shape, shardinfo, padding)
+    end
 end
 
 # Assemble data from multiple arrays. Needed in distributed setting where each process wont
@@ -405,37 +442,76 @@ function ConcreteIFRTArray(
 
     client = client === nothing ? XLA.default_backend() : client
 
-    (; hlo_sharding) = Sharding.HloSharding(sharding, array_size)
-    all_devices = XLA.get_device.((client,), sharding.mesh.device_ids)
-    ifrt_sharding = XLA.IFRT.Sharding(all_devices, hlo_sharding)
+    if T <: Complex && !XLA.supports_complex(client)
+        T2 = real(T)
+        data_re = [reinterpret(reshape, T2, x) for x in data]
+        array_size_re = (2, array_size...)
+        sharding_re = adapt_sharding_for_complex(sharding, N)
 
-    # Validate that all the slices are as we expected them to be
-    slices, _ = XLA.sharding_to_concrete_array_indices(
-        hlo_sharding, array_size, 0:(length(all_devices) - 1)
-    )
-    addressable_slices = [
-        slice for (slice, device) in zip(slices, all_devices) if XLA.is_addressable(device)
-    ]
-    for (i, slice) in enumerate(addressable_slices)
-        idx = findfirst(Base.Fix1(in, i), data_to_addressable_shard)
-        @assert idx !== nothing
-        @assert size(data[idx]) == length.(slice) "Expected data[$idx] to be at \
-                                                   $(slice), but got size \
-                                                   $(size(data[idx]))"
-    end
+        (; hlo_sharding) = Sharding.HloSharding(sharding_re, array_size_re)
+        all_devices = XLA.get_device.((client,), sharding_re.mesh.device_ids)
+        ifrt_sharding = XLA.IFRT.Sharding(all_devices, hlo_sharding)
 
-    # Make the mapping 0-indexed
-    @inbounds for shard_idxs in data_to_addressable_shard
-        shard_idxs .-= 1
+        # Validate that all the slices are as we expected them to be
+        slices, _ = XLA.sharding_to_concrete_array_indices(
+            hlo_sharding, array_size_re, 0:(length(all_devices) - 1)
+        )
+        addressable_slices = [
+            slice for (slice, device) in zip(slices, all_devices) if XLA.is_addressable(device)
+        ]
+        for (i, slice) in enumerate(addressable_slices)
+            idx = findfirst(Base.Fix1(in, i), data_to_addressable_shard)
+            @assert idx !== nothing
+            @assert size(data_re[idx]) == length.(slice) "Expected data_re[$idx] to be at \
+                                                       $(slice), but got size \
+                                                       $(size(data_re[idx]))"
+        end
+
+        data_to_addressable_shard_copy = [copy(x) for x in data_to_addressable_shard]
+        @inbounds for shard_idxs in data_to_addressable_shard_copy
+            shard_idxs .-= 1
+        end
+        ifrt_array = XLA.IFRT.AsyncArray(
+            XLA.IFRT.Array(client, data_re, data_to_addressable_shard_copy, array_size_re, ifrt_sharding),
+            nothing,
+        )
+        return ConcreteIFRTArray{T,N}(
+            ifrt_array, array_size, Sharding.ShardInfo(sharding_re, slices)
+        )
+    else
+        (; hlo_sharding) = Sharding.HloSharding(sharding, array_size)
+        all_devices = XLA.get_device.((client,), sharding.mesh.device_ids)
+        ifrt_sharding = XLA.IFRT.Sharding(all_devices, hlo_sharding)
+
+        # Validate that all the slices are as we expected them to be
+        slices, _ = XLA.sharding_to_concrete_array_indices(
+            hlo_sharding, array_size, 0:(length(all_devices) - 1)
+        )
+        addressable_slices = [
+            slice for (slice, device) in zip(slices, all_devices) if XLA.is_addressable(device)
+        ]
+        for (i, slice) in enumerate(addressable_slices)
+            idx = findfirst(Base.Fix1(in, i), data_to_addressable_shard)
+            @assert idx !== nothing
+            @assert size(data[idx]) == length.(slice) "Expected data[$idx] to be at \
+                                                       $(slice), but got size \
+                                                       $(size(data[idx]))"
+        end
+
+        # Make the mapping 0-indexed
+        @inbounds for shard_idxs in data_to_addressable_shard
+            shard_idxs .-= 1
+        end
+        ifrt_array = XLA.IFRT.AsyncArray(
+            XLA.IFRT.Array(client, data, data_to_addressable_shard, array_size, ifrt_sharding),
+            nothing,
+        )
+        return ConcreteIFRTArray{T,N}(
+            ifrt_array, array_size, Sharding.ShardInfo(sharding, slices)
+        )
     end
-    ifrt_array = XLA.IFRT.AsyncArray(
-        XLA.IFRT.Array(client, data, data_to_addressable_shard, array_size, ifrt_sharding),
-        nothing,
-    )
-    return ConcreteIFRTArray{T,N}(
-        ifrt_array, array_size, Sharding.ShardInfo(sharding, slices)
-    )
 end
+
 
 @enumx InterpolationType begin
     Nearest
@@ -731,10 +807,20 @@ function ConcretePJRTArray{T}(
     sharding::Sharding.AbstractSharding=Sharding.NoSharding(),
 ) where {T}
     theclient, thedevice = _select_client_and_device(client, idx, device, sharding)
-    sharded_data, shardinfo = sharding(theclient, thedevice, T, shape)
-    N = length(shape)
-    nsharded = length(sharded_data)
-    return ConcretePJRTArray{T,N,nsharded}(sharded_data, shape, shardinfo)
+    if T <: Complex && !XLA.supports_complex(theclient)
+        T2 = real(T)
+        shape_re = (2, shape...)
+        sharding_re = adapt_sharding_for_complex(sharding, length(shape))
+        sharded_data, shardinfo = sharding_re(theclient, thedevice, T2, shape_re)
+        N = length(shape)
+        nsharded = length(sharded_data)
+        return ConcretePJRTArray{T,N,nsharded}(sharded_data, shape, shardinfo)
+    else
+        sharded_data, shardinfo = sharding(theclient, thedevice, T, shape)
+        N = length(shape)
+        nsharded = length(sharded_data)
+        return ConcretePJRTArray{T,N,nsharded}(sharded_data, shape, shardinfo)
+    end
 end
 
 function ConcreteIFRTArray{T}(
@@ -747,12 +833,21 @@ function ConcreteIFRTArray{T}(
 ) where {T}
     theclient, thedevice = _select_client_and_device(client, idx, device, sharding)
     N = length(shape)
-    # ToDo: How to avoid allocating dummy array on host?
-    dummy_array = Array{T}(undef, shape)
-    # ToDo: How to use specified device (non-sharded case)?
-    sharded_data, shardinfo, padding = sharding(theclient, nothing, dummy_array)
-    return ConcreteIFRTArray{T,N}(sharded_data, shape, shardinfo, padding)
+    if T <: Complex && !XLA.supports_complex(theclient)
+        T2 = real(T)
+        dummy_array = Array{T2}(undef, (2, shape...))
+        sharding_re = adapt_sharding_for_complex(sharding, N)
+        sharded_data, shardinfo, padding = sharding_re(theclient, nothing, dummy_array)
+        return ConcreteIFRTArray{T,N}(sharded_data, shape, shardinfo, padding)
+    else
+        # ToDo: How to avoid allocating dummy array on host?
+        dummy_array = Array{T}(undef, shape)
+        # ToDo: How to use specified device (non-sharded case)?
+        sharded_data, shardinfo, padding = sharding(theclient, nothing, dummy_array)
+        return ConcreteIFRTArray{T,N}(sharded_data, shape, shardinfo, padding)
+    end
 end
+
 
 function _select_client_and_device(
     client::Union{Nothing,XLA.AbstractClient},

@@ -18,7 +18,7 @@ end
 
 function Array(
     client::Client,
-    array::Base.Array{T,N},
+    array::Base.StridedArray{T,N},
     device::Device=XLA.default_device(client),
     memory_kind::AbstractString=string(convert(MemoryKind, XLA.default_memory(device))),
 ) where {T<:Reactant.ReactantPrimitive,N}
@@ -38,7 +38,7 @@ function Array(
 end
 
 function Array(
-    client::Client, array::Base.Array{T,N}, sharding::Sharding
+    client::Client, array::Base.StridedArray{T,N}, sharding::Sharding
 ) where {T<:Reactant.ReactantPrimitive,N}
     all_devices = XLA.devices(sharding)
     all_logical_device_ids = collect(Int64, 0:(length(all_devices) - 1))
@@ -76,7 +76,7 @@ end
 
 function Array(
     client::Client,
-    host_buffers::Vector{Base.Array{T,N}},
+    host_buffers::Vector{<:Base.StridedArray{T,N}},
     addressable_shard_indices::Vector{Vector{Int64}},
     array_shape,
     sharding::Sharding,

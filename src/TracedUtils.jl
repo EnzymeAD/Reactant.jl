@@ -12,6 +12,7 @@ using ..Reactant:
     MissingTracedValue,
     OrderedIdDict,
     Ops,
+    XLA,
     promote_to, # keep this to avoid breaking external code
     broadcast_to_size # keep this to avoid breaking external code
 using ..Ops: @opcall
@@ -317,6 +318,8 @@ function make_mlir_fn(
     resargprefix::Symbol=:resargs,
     num_replicas=1,
     optimize_then_pad::Bool=true,
+    client=nothing,
+    emulate_complex::Bool=false,
 )
     if sizeof(typeof(f)) != 0 || f isa Base.BroadcastFunction
         mlir_fn_res = make_mlir_fn(
@@ -338,6 +341,8 @@ function make_mlir_fn(
             resprefix,
             resargprefix,
             num_replicas,
+            client,
+            emulate_complex,
         )
         mlir_fn_res.fnwrapped = true
         return mlir_fn_res
@@ -353,7 +358,9 @@ function make_mlir_fn(
         optimize_then_pad,
         do_transpose,
         input_shardings,
-        verify_arg_names,
+        verify_arg_names;
+        client,
+        emulate_complex,
     )
 
     Ops.activate_constant_context!(fnbody)
@@ -364,7 +371,7 @@ function make_mlir_fn(
     MLIR.IR.activate(fnbody)
 
     result = try
-        process_linear_args!(linear_args, fnbody, do_transpose, optimize_then_pad, inv_map)
+        process_linear_args!(linear_args, fnbody, do_transpose, optimize_then_pad, inv_map; client, emulate_complex)
 
         if isempty(kwargs)
             Reactant.call_with_reactant(f, traced_args...)
@@ -416,7 +423,9 @@ function make_mlir_fn(
         args,
         N,
         concretein,
-        toscalar,
+        toscalar;
+        client,
+        emulate_complex,
     )
 
     return CompiledMlirFnResult(
@@ -456,7 +465,9 @@ function prepare_mlir_fn_args(
     optimize_then_pad,
     do_transpose,
     input_shardings,
-    verify_arg_names,
+    verify_arg_names;
+    client=nothing,
+    emulate_complex=false,
 )
     N = length(args)
     traced_args = Vector{Any}(undef, N)
@@ -499,21 +510,41 @@ function prepare_mlir_fn_args(
         inv_map[v] = k
     end
 
+    has_complex = !emulate_complex || XLA.supports_complex(client)
+
     in_tys = Vector{MLIR.IR.Type}(undef, length(linear_args))
     for (i, arg) in enumerate(linear_args)
-        elT = MLIR.IR.Type(Reactant.unwrapped_eltype(arg))
-        if toscalar
-            in_tys[i] = MLIR.IR.TensorType(Int[], elT)
-        else
-            sz = collect(Int, size(arg))
-            if !optimize_then_pad
-                carg = inv_map[arg]
-                Reactant.has_padding(carg) && (sz .+= Reactant.get_padding(carg))
+        T = Reactant.unwrapped_eltype(arg)
+        if T <: Complex && !has_complex
+            elT = MLIR.IR.Type(real(T))
+            if toscalar
+                in_tys[i] = MLIR.IR.TensorType(Int[2], elT)
+            else
+                sz = collect(Int, size(arg))
+                if !optimize_then_pad
+                    carg = inv_map[arg]
+                    Reactant.has_padding(carg) && (sz .+= Reactant.get_padding(carg))
+                end
+                sz = [2; sz]
+                typ = MLIR.IR.TensorType(sz, elT)
+                do_transpose && (typ = transpose_ty(typ))
+                in_tys[i] = typ
             end
+        else
+            elT = MLIR.IR.Type(T)
+            if toscalar
+                in_tys[i] = MLIR.IR.TensorType(Int[], elT)
+            else
+                sz = collect(Int, size(arg))
+                if !optimize_then_pad
+                    carg = inv_map[arg]
+                    Reactant.has_padding(carg) && (sz .+= Reactant.get_padding(carg))
+                end
 
-            typ = MLIR.IR.TensorType(sz, elT)
-            do_transpose && (typ = transpose_ty(typ))
-            in_tys[i] = typ
+                typ = MLIR.IR.TensorType(sz, elT)
+                do_transpose && (typ = transpose_ty(typ))
+                in_tys[i] = typ
+            end
         end
     end
 
@@ -592,7 +623,8 @@ function prepare_mlir_fn_args(
     )
 end
 
-function process_linear_args!(linear_args, fnbody, do_transpose, optimize_then_pad, inv_map)
+function process_linear_args!(linear_args, fnbody, do_transpose, optimize_then_pad, inv_map; client=nothing, emulate_complex=false)
+    has_complex = !emulate_complex || XLA.supports_complex(client)
     for (i, arg) in enumerate(linear_args)
         raw_arg = MLIR.IR.argument(fnbody, i)
         row_maj_arg = do_transpose ? transpose_val(raw_arg) : raw_arg
@@ -608,7 +640,31 @@ function process_linear_args!(linear_args, fnbody, do_transpose, optimize_then_p
                 row_maj_arg = MLIR.IR.result(unpad_val_op(row_maj_arg, padding, sz), 1)
             end
         end
-        set_mlir_data!(arg, row_maj_arg)
+        
+        T = Reactant.unwrapped_eltype(arg)
+        if T <: Complex && !has_complex
+            T2 = real(T)
+            sz = size(arg)
+            N = length(sz)
+            
+            start_real = [1; ones(Int, N)]
+            limit_real = [1; collect(Int, sz)]
+            start_imag = [2; ones(Int, N)]
+            limit_imag = [2; collect(Int, sz)]
+            
+            traced_raw = TracedRArray{T2, N+1}((), row_maj_arg, (2, sz...))
+            
+            real_slice = Ops.slice(traced_raw, start_real, limit_real)
+            imag_slice = Ops.slice(traced_raw, start_imag, limit_imag)
+            
+            real_part = Ops.reshape(real_slice, sz...)
+            imag_part = Ops.reshape(imag_slice, sz...)
+            
+            complex_val = Ops.complex(real_part, imag_part)
+            set_mlir_data!(arg, complex_val.mlir_data)
+        else
+            set_mlir_data!(arg, row_maj_arg)
+        end
     end
 end
 
@@ -641,8 +697,12 @@ function finalize_mlir_fn(
     args,
     N,
     concretein,
-    toscalar,
+    toscalar;
+    client=nothing,
+    emulate_complex=false,
 )
+    has_complex = !emulate_complex || XLA.supports_complex(client)
+
     # check which arguments have been mutated
     mutated_args = Int[]
     if !construct_function_without_args
@@ -856,12 +916,39 @@ function finalize_mlir_fn(
                 col_maj = get_mlir_data(broadcast_to_size(false, ()))
                 out_ty = Ops.mlir_type(TracedRArray{Bool,0}, ())
             else
-                col_maj = get_mlir_data(res)
-                out_ty = Ops.mlir_type(res)
+                T = Reactant.unwrapped_eltype(res)
+                if T <: Complex && !has_complex
+                    res_array = if res isa TracedRNumber
+                        TracedRArray{T,0}((), get_mlir_data(res), ())
+                    else
+                        res
+                    end
 
-                if do_transpose
-                    col_maj = transpose_val(col_maj)
-                    out_ty = transpose_ty(out_ty)
+                    real_part = Ops.real(res_array)
+                    imag_part = Ops.imag(res_array)
+
+                    sz = size(res_array)
+                    sz_reshaped = (1, sz...)
+
+                    real_reshaped = Ops.reshape(real_part, sz_reshaped...)
+                    imag_reshaped = Ops.reshape(imag_part, sz_reshaped...)
+
+                    concated = Ops.concatenate([real_reshaped, imag_reshaped], 1)
+                    col_maj = get_mlir_data(concated)
+                    out_ty = Ops.mlir_type(concated)
+
+                    if do_transpose
+                        col_maj = transpose_val(col_maj)
+                        out_ty = transpose_ty(out_ty)
+                    end
+                else
+                    col_maj = get_mlir_data(res)
+                    out_ty = Ops.mlir_type(res)
+
+                    if do_transpose
+                        col_maj = transpose_val(col_maj)
+                        out_ty = transpose_ty(out_ty)
+                    end
                 end
             end
 
@@ -927,8 +1014,14 @@ function finalize_mlir_fn(
                     sharding.mesh.axis_names,
                     size(sharding.mesh),
                 )]
+                T = Reactant.unwrapped_eltype(arg)
+                sz = if T <: Complex && !has_complex
+                    (2, size(arg)...)
+                else
+                    size(arg)
+                end
                 attr, dialect = Reactant.Sharding.get_tensor_sharding_attribute(
-                    sharding, ctx, sym_name, mesh_attr, size(arg)
+                    sharding, ctx, sym_name, mesh_attr, sz
                 )
                 linear_arg_shardings[i] = (attr, dialect)
                 if dialect == :sdy
@@ -988,8 +1081,15 @@ function finalize_mlir_fn(
                     )
                     haskey(mesh_cache, key) || @opcall(mesh(sharding.mesh))
                     (; sym_name, mesh_attr) = mesh_cache[key]
+                    T = Reactant.unwrapped_eltype(arg)
+                    if T <: Complex && !has_complex
+                        sharding = Reactant.adapt_sharding_for_complex(sharding, ndims(arg))
+                        sz = (2, size(arg)...)
+                    else
+                        sz = size(arg)
+                    end
                     attr, dialect = Reactant.Sharding.get_tensor_sharding_attribute(
-                        sharding, ctx, sym_name, mesh_attr, size(arg)
+                        sharding, ctx, sym_name, mesh_attr, sz
                     )
                     if dialect == :sdy
                         MLIR.API.mlirFuncSetResultAttr(func2, i - 1, "sdy.sharding", attr)

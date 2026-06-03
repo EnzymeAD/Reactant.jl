@@ -119,3 +119,31 @@ end
         @test @jit(isreal.(x_concrete)) == isreal.(x)
     end
 end
+
+@testset "forced complex emulation" begin
+    @eval Reactant.XLA function supports_complex(client::Union{AbstractClient,Nothing})
+        return false
+    end
+
+    try
+        @testset "emulated complex addition" begin
+            a = Reactant.to_rarray(ones(ComplexF32, 2))
+            b = Reactant.to_rarray(ones(ComplexF32, 2))
+            c = Reactant.compile(+, (a, b))(a, b)
+            @test c == ones(ComplexF32, 2) + ones(ComplexF32, 2)
+        end
+    finally
+        @eval Reactant.XLA function supports_complex(client::Union{AbstractClient,Nothing})
+            if Reactant.precompiling()
+                return true
+            end
+            client === nothing && return true
+            pname = lowercase(platform_name(client))
+            if pname == "neuron" || pname == "trainium"
+                return false
+            end
+            return true
+        end
+    end
+end
+
