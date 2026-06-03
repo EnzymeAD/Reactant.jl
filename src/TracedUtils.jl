@@ -510,7 +510,7 @@ function prepare_mlir_fn_args(
         inv_map[v] = k
     end
 
-    has_complex = !emulate_complex || XLA.supports_complex(client)
+    has_complex = !emulate_complex
 
     in_tys = Vector{MLIR.IR.Type}(undef, length(linear_args))
     for (i, arg) in enumerate(linear_args)
@@ -624,7 +624,7 @@ function prepare_mlir_fn_args(
 end
 
 function process_linear_args!(linear_args, fnbody, do_transpose, optimize_then_pad, inv_map; client=nothing, emulate_complex=false)
-    has_complex = !emulate_complex || XLA.supports_complex(client)
+    has_complex = !emulate_complex
     for (i, arg) in enumerate(linear_args)
         raw_arg = MLIR.IR.argument(fnbody, i)
         row_maj_arg = do_transpose ? transpose_val(raw_arg) : raw_arg
@@ -701,7 +701,7 @@ function finalize_mlir_fn(
     client=nothing,
     emulate_complex=false,
 )
-    has_complex = !emulate_complex || XLA.supports_complex(client)
+    has_complex = !emulate_complex
 
     # check which arguments have been mutated
     mutated_args = Int[]

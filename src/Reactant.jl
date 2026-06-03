@@ -92,13 +92,13 @@ _parent_type(::Type{<:Slices{P}}) where {P} = P
 
 include("accelerators/Accelerators.jl")
 
+include("mlir/MLIR.jl")
+include("xla/XLA.jl")
+
 include("CompileOptions.jl")
 
 export OptimizeCommunicationOptions,
     ShardyPropagationOptions, CompileOptions, MultiFloatOptions
-
-include("mlir/MLIR.jl")
-include("xla/XLA.jl")
 
 include("Configuration.jl")
 include("Sharding.jl")
