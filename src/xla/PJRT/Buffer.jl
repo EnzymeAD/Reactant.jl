@@ -7,10 +7,17 @@ mutable struct Buffer <: XLA.AbstractBuffer
 end
 
 function Buffer(client::Client, array::StridedArray{T,N}, device::Device) where {T,N}
+    ndims = N
     sizear = collect(Int64, reverse(size(array)))
+    ptype = XLA.primitive_type(T)
+    if T <: Complex && !XLA.supports_complex(client)
+        ndims += 1
+        ptype = XLA.primitive_type(real(T))
+        pushfirst!(sizear, 2)
+    end
     GC.@preserve client array device begin
         buffer = MLIR.API.ArrayFromHostBuffer(
-            client.client, pointer(array), XLA.primitive_type(T), N, sizear, device.device
+            client.client, pointer(array), ptype, ndims, sizear, device.device
         )
     end
     return Buffer(buffer)
@@ -85,14 +92,24 @@ end
         end
     end
 
+    ndims = length(dims)
+    ptype = XLA.primitive_type(S)
+    sizear = collect(Int64, reverse(dims))
+
+    if S <: Complex && !XLA.supports_complex(client)
+        ndims += 1
+        ptype = XLA.primitive_type(real(S))
+        pushfirst!(sizear, 2)
+    end
+
     GC.@preserve client device begin
         return Buffer(
             MLIR.API.UninitPJRTBuffer(
                 client.client,
                 device.device,
-                XLA.primitive_type(S),
-                length(dims),
-                collect(Int64, reverse(dims)),
+                ptype,
+                ndims,
+                sizear,
             ),
         )
     end

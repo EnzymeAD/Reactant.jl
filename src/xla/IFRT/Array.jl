@@ -18,17 +18,26 @@ end
 
 function Array(
     client::Client,
-    array::Base.StridedArray{T,N},
+    array::Base.Array{T,N},
     device::Device=XLA.default_device(client),
     memory_kind::AbstractString=string(convert(MemoryKind, XLA.default_memory(device))),
 ) where {T<:Reactant.ReactantPrimitive,N}
+    ndims = N
+    sizear = collect(Int64, reverse(size(array)))
+    ptype = XLA.primitive_type(T)
+    if T <: Complex && !XLA.supports_complex(client)
+        ndims += 1
+        ptype = XLA.primitive_type(real(T))
+        pushfirst!(sizear, 2)
+    end
+
     GC.@preserve client device begin
         buffer = MLIR.API.ifrt_client_make_single_shard_array_from_host_buffer(
             client.client,
             array,
-            XLA.primitive_type(T),
-            N,
-            collect(Int64, reverse(size(array))),
+            ptype,
+            ndims,
+            sizear,
             0,
             device.device,
             string(memory_kind),
@@ -38,7 +47,7 @@ function Array(
 end
 
 function Array(
-    client::Client, array::Base.StridedArray{T,N}, sharding::Sharding
+    client::Client, array::Base.Array{T,N}, sharding::Sharding
 ) where {T<:Reactant.ReactantPrimitive,N}
     all_devices = XLA.devices(sharding)
     all_logical_device_ids = collect(Int64, 0:(length(all_devices) - 1))
@@ -100,11 +109,18 @@ function Array(
     end
 
     array_shape = collect(Int64, reverse(array_shape))
+    ndims = length(array_shape)
+
+    if T <: Complex && !XLA.supports_complex(client)
+        pushfirst!(array_shape, 2)
+        ndims += 1
+        @assert Reactant.Sharding.is_replicated(sharding) "Complex number emulation on sharded arrays is not yet supported."
+    end
 
     GC.@preserve client sharding begin
         buffer = MLIR.API.ifrt_client_assemble_array_from_single_shards(
             client.client,
-            length(array_shape),
+            ndims,
             array_shape,
             sharding.ptr,
             length(single_device_arrays),
@@ -117,8 +133,16 @@ function Array(
 end
 
 function Array(
-    client::Client, array::Base.Array{T,N}, sharding
+    client::Client, array::Base.StridedArray{T,N}, sharding
 ) where {T<:Reactant.ReactantPrimitive,N}
+    if T <: Complex && !XLA.supports_complex(client)
+        @assert sharding isa Reactant.Sharding.NoSharding || sharding isa Reactant.Sharding.Replicated
+        T2 = real(T)
+        array_re = reinterpret(reshape, T2, array)
+        sharding_re = Reactant.Sharding.HloSharding(sharding, size(array_re))
+        return Array(client, array_re, sharding_re)
+    end
+
     @assert sharding isa Reactant.Sharding.AbstractSharding
     if !(sharding isa Reactant.Sharding.HloSharding)
         sharding = Reactant.Sharding.HloSharding(sharding, size(array))
