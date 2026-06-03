@@ -85,7 +85,7 @@ end
 
 function Array(
     client::Client,
-    host_buffers::Vector{<:Base.StridedArray{T,N}},
+    host_buffers::Vector{Base.Array{T,N}},
     addressable_shard_indices::Vector{Vector{Int64}},
     array_shape,
     sharding::Sharding,
@@ -133,7 +133,7 @@ function Array(
 end
 
 function Array(
-    client::Client, array::Base.StridedArray{T,N}, sharding
+    client::Client, array::Base.Array{T,N}, sharding
 ) where {T<:Reactant.ReactantPrimitive,N}
     if T <: Complex && !XLA.supports_complex(client)
         @assert sharding isa Reactant.Sharding.NoSharding || sharding isa Reactant.Sharding.Replicated
