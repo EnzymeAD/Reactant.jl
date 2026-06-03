@@ -866,7 +866,7 @@ end
 function vendored_buildEarlySimplificationPipeline(mpm, @nospecialize(job::GPUCompiler.CompilerJob), opt_level)
     if GPUCompiler.should_verify()
         LLVM.add!(mpm, LLVM.NewPMFunctionPassManager()) do fpm
-            add!(fpm, LLVM.GCInvariantVerifierPass())
+            LLVM.add!(fpm, LLVM.GCInvariantVerifierPass())
         end
         LLVM.add!(mpm, LLVM.VerifierPass())
     end
