@@ -1604,6 +1604,8 @@ struct ReactantPTXBackend
     raising::Bool
 end
 
+Base.hash(target::ReactantPTXBackend, h::UInt) = Base.hash(target.raising, h)
+
 const ReactantCUDACompilerConfig = CompilerConfig{ReactantPTXCompilerTarget{ReactantPTXBackend}, CUDACompilerParams}
 const ReactantCUDACompilerJob = CompilerJob{ReactantPTXCompilerTarget{ReactantPTXBackend},CUDACompilerParams}
 
