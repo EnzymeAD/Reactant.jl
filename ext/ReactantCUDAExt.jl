@@ -863,9 +863,52 @@ function vendored_buildScalarOptimizerPipeline(
     # TODO(#2239) invokeScalarOptimizerCallbacks
 end
 
+function vendored_buildEarlySimplificationPipeline(mpm, @nospecialize(job::GPUCompiler.CompilerJob), opt_level, instcombine::Bool=false)
+    if GPUCompiler.should_verify()
+        LLVM.add!(mpm, LLVM.NewPMFunctionPassManager()) do fpm
+            LLVM.add!(fpm, LLVM.Interop.GCInvariantVerifierPass())
+        end
+        LLVM.add!(mpm, LLVM.VerifierPass())
+    end
+    LLVM.add!(mpm, LLVM.ForceFunctionAttrsPass())
+    if LLVM.version() >= v"17"
+        LLVM.add!(mpm, LLVM.PipelineStartCallbacks(; opt_level))
+    end
+    LLVM.add!(mpm, LLVM.Annotation2MetadataPass())
+    LLVM.add!(mpm, LLVM.InferFunctionAttrsPass())
+    LLVM.add!(mpm, LLVM.ConstantMergePass())
+    LLVM.add!(mpm, LLVM.NewPMFunctionPassManager()) do fpm
+        LLVM.add!(fpm, LLVM.LowerExpectIntrinsicPass())
+        if opt_level >= 2
+            LLVM.add!(fpm, LLVM.Interop.PropagateJuliaAddrspacesPass())
+        end
+        # DCE must come before simplifycfg: codegen can generate unused
+        # statements that would otherwise alter how simplifycfg optimizes the CFG.
+        LLVM.add!(fpm, LLVM.DCEPass())
+        LLVM.add!(fpm, LLVM.SimplifyCFGPass(; GPUCompiler.BasicSimplifyCFGOptions...))
+        if opt_level >= 1
+            LLVM.add!(fpm, LLVM.SROAPass())
+            LLVM.add!(fpm, LLVM.EarlyCSEPass())
+        end
+    end
+    if opt_level >= 1
+        LLVM.add!(mpm, LLVM.GlobalOptPass())
+        LLVM.add!(mpm, LLVM.NewPMFunctionPassManager()) do fpm
+            LLVM.add!(fpm, LLVM.PromotePass())
+            if instcombine
+                LLVM.add!(fpm, LLVM.InstCombinePass())
+            else
+                LLVM.add!(fpm, LLVM.InstSimplifyPass())
+            end
+        end
+    end
+    if LLVM.version() >= v"17"
+        LLVM.add!(mpm, LLVM.PipelineEarlySimplificationCallbacks(; opt_level))
+    end
+end
+
 function vendored_buildNewPMPipeline!(mpm, @nospecialize(job), opt_level)
-    # Doesn't call instcombine
-    GPUCompiler.buildEarlySimplificationPipeline(mpm, job, opt_level)
+    vendored_buildEarlySimplificationPipeline(mpm, job, opt_level)
     LLVM.add!(mpm, LLVM.AlwaysInlinerPass())
     vendored_buildEarlyOptimizerPipeline(mpm, job, opt_level)
     LLVM.add!(mpm, LLVM.NewPMFunctionPassManager()) do fpm
