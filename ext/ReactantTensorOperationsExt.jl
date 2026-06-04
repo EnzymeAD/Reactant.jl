@@ -101,7 +101,7 @@ end
 
 # TODO tensortrace!
 
-function tensorcontract!(
+function TO.tensorcontract!(
     Ct::TracedRArray,
     A::AbstractArray,
     pA::Index2Tuple,
@@ -130,8 +130,11 @@ function tensorcontract!(
     end
 
     contracting_dimensions = (collect(pA[2]), collect(pB[1]))
-    Ctmp = α * @opcall dot_general(At, Bt; contracting_dimensions)
-    if !iszero(β)
+    Ctmp = @opcall dot_general(At, Bt; contracting_dimensions)
+    if α isa TracedRNumber || !isone(α)
+        Ctmp *= α
+    end
+    if β isa TracedRNumber || !iszero(β)
         Ctmp += β * Ct
     end
     set_mlir_data!(Ct, get_mlir_data(Ctmp))
