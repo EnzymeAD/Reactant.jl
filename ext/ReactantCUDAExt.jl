@@ -907,7 +907,7 @@ function vendored_buildEarlySimplificationPipeline(mpm, @nospecialize(job::GPUCo
     end
 end
 
-function vendored_buildLoopOptimizerPipeline(fpm, @nospecialize(job::CompilerJob), opt_level, instcombine::Bool=false)
+function vendored_buildLoopOptimizerPipeline(fpm, @nospecialize(job::GPUCompiler.CompilerJob), opt_level, instcombine::Bool=false)
     LLVM.add!(fpm, LLVM.NewPMLoopPassManager(; use_memory_ssa=true)) do lpm
         LLVM.add!(lpm, LLVM.LowerSIMDLoopPass())
         if opt_level >= 2
