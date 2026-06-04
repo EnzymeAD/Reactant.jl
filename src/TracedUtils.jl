@@ -645,7 +645,7 @@ function process_linear_args!(linear_args, fnbody, do_transpose, optimize_then_p
             start_imag = ones(Int, N+1)
             start_imag[1] = 2
             limit_imag = collect(Int, sz)
-            pushfirst!(limit_real, 2)
+            pushfirst!(limit_imag, 2)
             
             traced_raw = TracedRArray{T2, N+1}((), row_maj_arg, (2, sz...))
             
