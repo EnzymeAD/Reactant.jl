@@ -949,7 +949,7 @@ function vendored_buildLoopOptimizerPipeline(fpm, @nospecialize(job::GPUCompiler
     end
 end
 
-function vendored_buildVectorPipeline(fpm, @nospecialize(job::CompilerJob), opt_level, instcombine::Bool=false)
+function vendored_buildVectorPipeline(fpm, @nospecialize(job::GPUCompiler.CompilerJob), opt_level, instcombine::Bool=false)
     # re-rotate loops that might have been unrotated in the simplification above
     LLVM.add!(fpm, LLVM.NewPMLoopPassManager()) do lpm
         LLVM.add!(lpm, LLVM.LoopRotatePass())
