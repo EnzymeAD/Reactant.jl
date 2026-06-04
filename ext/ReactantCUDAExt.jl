@@ -909,17 +909,17 @@ end
 
 function vendored_buildLoopOptimizerPipeline(fpm, @nospecialize(job::GPUCompiler.CompilerJob), opt_level, instcombine::Bool=false)
     LLVM.add!(fpm, LLVM.NewPMLoopPassManager(; use_memory_ssa=true)) do lpm
-        LLVM.add!(lpm, LLVM.LowerSIMDLoopPass())
+        LLVM.add!(lpm, LLVM.Interop.LowerSIMDLoopPass())
         if opt_level >= 2
             LLVM.add!(lpm, LLVM.LoopInstSimplifyPass())
             LLVM.add!(lpm, LLVM.LoopSimplifyCFGPass())
             # run LICM with AllowSpeculation=false before rotation to avoid
             # speculating loads that rotation can hoist more precisely.
             LLVM.add!(lpm, LLVM.LICMPass(; allowspeculation=false))
-            LLVM.add!(lpm, LLVM.JuliaLICMPass())
+            LLVM.add!(lpm, LLVM.Interop.JuliaLICMPass())
             LLVM.add!(lpm, LLVM.LoopRotatePass())
             LLVM.add!(lpm, LLVM.LICMPass())
-            LLVM.add!(lpm, LLVM.JuliaLICMPass())
+            LLVM.add!(lpm, LLVM.Interop.JuliaLICMPass())
             LLVM.add!(lpm, LLVM.SimpleLoopUnswitchPass(nontrivial=true, trivial=true))
         end
         if LLVM.version() >= v"17"
