@@ -1,7 +1,13 @@
 module ReactantTensorOperationsExt
 
 using Reactant
-using Reactant: @reactant_overlay, use_overlayed_version, call_with_native, TracedRArray, TracedRNumber, unwrapped_eltype
+using Reactant:
+    @reactant_overlay,
+    use_overlayed_version,
+    call_with_native,
+    TracedRArray,
+    TracedRNumber,
+    unwrapped_eltype
 using Reactant.Ops: @opcall
 using Reactant.TracedUtils: materialize_traced_array, get_mlir_data, set_mlir_data!
 using TensorOperations
@@ -9,16 +15,20 @@ using TensorOperations: TensorOperations as TO, ReactantBackend, ReactantAllocat
 
 # allocation
 function TO.tensoradd_type(TC, A::ConcreteRArray, pA::Index2Tuple, conjA::Bool)
-    return ConcreteRArray{TC, TO.numind(pA)}
+    return ConcreteRArray{TC,TO.numind(pA)}
 end
 
 function TO.tensoradd_type(TC, A::TracedRArray, pA::Index2Tuple, conjA::Bool)
-    return TracedRArray{unwrapped_eltype(TC), TO.numind(pA)}
+    return TracedRArray{unwrapped_eltype(TC),TO.numind(pA)}
 end
 
 function TO.tensoralloc_add(
-    TC, A::AbstractArray, pA::Index2Tuple, conjA::Bool,
-    istemp::Val, allocator::TO.ReactantAllocator{true}
+    TC,
+    A::AbstractArray,
+    pA::Index2Tuple,
+    conjA::Bool,
+    istemp::Val,
+    allocator::TO.ReactantAllocator{true},
 )
     T = unwrapped_eltype(TC)
     ttype = TO.tensoradd_type(T, A, pA, conjA)
@@ -27,7 +37,9 @@ function TO.tensoralloc_add(
 end
 
 # backend selection
-@reactant_overlay function TO.select_backend(::typeof(TO.tensoradd!), C::AbstractArray, A::AbstractArray)
+@reactant_overlay function TO.select_backend(
+    ::typeof(TO.tensoradd!), C::AbstractArray, A::AbstractArray
+)
     if use_overlayed_version(C) || use_overlayed_version(A)
         ReactantBackend()
     else
@@ -35,7 +47,9 @@ end
     end
 end
 
-@reactant_overlay function TO.select_backend(::typeof(TO.tensortrace!), C::AbstractArray, A::AbstractArray)
+@reactant_overlay function TO.select_backend(
+    ::typeof(TO.tensortrace!), C::AbstractArray, A::AbstractArray
+)
     if use_overlayed_version(C) || use_overlayed_version(A)
         ReactantBackend()
     else
@@ -43,7 +57,9 @@ end
     end
 end
 
-@reactant_overlay function TO.select_backend(::typeof(TO.tensorcontract!), C::AbstractArray, A::AbstractArray, B::AbstractArray)
+@reactant_overlay function TO.select_backend(
+    ::typeof(TO.tensorcontract!), C::AbstractArray, A::AbstractArray, B::AbstractArray
+)
     if use_overlayed_version(C) || use_overlayed_version(A) || use_overlayed_version(B)
         ReactantBackend()
     else
@@ -58,9 +74,13 @@ end
 
 function TO.tensoradd!(
     Ct::TracedRArray,
-    A::AbstractArray, pA::Index2Tuple, conjA::Bool,
-    α::Number, β::Number,
-    ::ReactantBackend, allocator = ReactantAllocator{true}()
+    A::AbstractArray,
+    pA::Index2Tuple,
+    conjA::Bool,
+    α::Number,
+    β::Number,
+    ::ReactantBackend,
+    allocator=ReactantAllocator{true}(),
 )
     TO.argcheck_tensoradd(Ct, A, pA)
     TO.dimcheck_tensoradd(Ct, A, pA)
@@ -83,11 +103,17 @@ end
 
 function tensorcontract!(
     Ct::TracedRArray,
-    A::AbstractArray, pA::Index2Tuple, conjA::Bool,
-    B::AbstractArray, pB::Index2Tuple, conjB::Bool,
+    A::AbstractArray,
+    pA::Index2Tuple,
+    conjA::Bool,
+    B::AbstractArray,
+    pB::Index2Tuple,
+    conjB::Bool,
     pAB::Index2Tuple,
-    α::Number, β::Number,
-    ::ReactantBackend, allocator = ReactantAllocator{true}()
+    α::Number,
+    β::Number,
+    ::ReactantBackend,
+    allocator=ReactantAllocator{true}(),
 )
     TO.argcheck_tensorcontract(Ct, A, pA, B, pB, pAB)
     TO.dimcheck_tensorcontract(Ct, A, pA, B, pB, pAB)
