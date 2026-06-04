@@ -517,13 +517,14 @@ function trace_for(expr; track_numbers, checkpointing, mincut)
         end
 
         local $counter = zero($start_sym)
+        local $num_iters = div($limit_sym - $start_sym, $step_sym)
+        $num_iters += one($num_iters)
 
         $(trace_while(
             Expr(
                 :while,
                 quote
-                    local $num_iters = div($limit_sym - $start_sym, $step_sym)
-                    $counter < $num_iters + one($num_iters)
+                    $counter < $num_iters
                 end,
                 quote
                     local $induction = $start_sym + $counter * $step_sym
