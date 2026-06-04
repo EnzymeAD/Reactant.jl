@@ -287,7 +287,6 @@ function compile_mlir!(
             true;
             runtime,
             compile_options.optimize_then_pad,
-            client,
             emulate_complex=compile_options.emulate_complex,
             kwargs...,
         )
