@@ -13,6 +13,18 @@
     return ContinuousImage(rast, grid, DeltaPulse{T}())
 end
 
+# Stupid hack until I add a better sampler for VonMises distributions
+function Distributions._rand!(
+    rng::Random.AbstractRNG, d::DiagonalVonMises, x::AbstractVector{<:Float32}
+)
+    dv = Distributions.product_distribution(
+        Distributions.VonMises.(Float64.(d.μ), Float64.(d.κ))
+    )
+    x64 = rand(rng, dv)
+    x .= Float32.(x64)
+    return x
+end
+
 function convert_table(T, dvis)
     dt = datatable(dvis)
 
