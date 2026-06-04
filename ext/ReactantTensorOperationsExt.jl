@@ -1,7 +1,7 @@
 module ReactantTensorOperationsExt
 
 using Reactant
-using Reactant: @reactant_overlay, use_overlayed_version, call_with_native, TracedRArray, unwrapped_eltype
+using Reactant: @reactant_overlay, use_overlayed_version, call_with_native, TracedRArray, TracedRNumber, unwrapped_eltype
 using Reactant.Ops: @opcall
 using Reactant.TracedUtils: materialize_traced_array, get_mlir_data, set_mlir_data!
 using TensorOperations
@@ -23,7 +23,7 @@ function TO.tensoralloc_add(
     T = unwrapped_eltype(TC)
     ttype = TO.tensoradd_type(T, A, pA, conjA)
     structure = TO.tensoradd_structure(A, pA, conjA)
-    return @opcall fill(zero(T), structure)
+    return similar(ttype, structure)
 end
 
 # backend selection
@@ -71,7 +71,10 @@ function TO.tensoradd!(
         At = conj(At)
     end
 
-    Ctmp = α * At + β * Ct
+    Ctmp = α * At
+    if β isa TracedRNumber || !iszero(β)
+        Ctmp += β * Ct
+    end
     set_mlir_data!(Ct, get_mlir_data(Ctmp))
     return Ct
 end
@@ -101,8 +104,10 @@ function tensorcontract!(
     end
 
     contracting_dimensions = (collect(pA[2]), collect(pB[1]))
-    ABt = @opcall dot_general(At, Bt; contracting_dimensions)
-    Ctmp = α * ABt + β * Ct
+    Ctmp = α * @opcall dot_general(At, Bt; contracting_dimensions)
+    if !iszero(β)
+        Ctmp += β * Ct
+    end
     set_mlir_data!(Ct, get_mlir_data(Ctmp))
     return Ct
 end
