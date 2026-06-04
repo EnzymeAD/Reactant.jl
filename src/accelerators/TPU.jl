@@ -3,7 +3,6 @@ module TPU
 using Reactant: Reactant
 using EnumX: @enumx
 using Scratch: @get_scratch!
-using HTTP: HTTP
 using Downloads: Downloads
 using p7zip_jll: p7zip
 using FileWatching: mkpidlock
@@ -290,16 +289,20 @@ function get_metadata(key)
     @debug "Retry seconds: $(retry_seconds)"
     api_resp = nothing
 
+    body = nothing
+
     while retry_count < 6
         try
-            api_resp = get(
-                "$(gce_metadata_endpoint)/computeMetadata/v1/instance/attributes/$(key)",
-                ["Metadata-Flavor" => "Google"];
-                connect_timeout=60,
-                readtimeout=60,
+            buf = IOBuffer()
+            api_resp = Downloads.request(
+                "$(gce_metadata_endpoint)/computeMetadata/v1/instance/attributes/$(key)";
+                headers=["Metadata-Flavor" => "Google"],
+                output=buf,
+                timeout=60,
             )
+            body = String(take!(buf))
 
-            HTTP.status(api_resp) == _TPU_METADATA_RESPONSE_CODE_SUCCESS && break
+            api_resp.status == _TPU_METADATA_RESPONSE_CODE_SUCCESS && break
         catch err
             @warn "Error while trying to get metadata['$(key)']. Tried \
                    [$(retry_count) / 6] times" err
@@ -313,7 +316,7 @@ function get_metadata(key)
         throw(ErrorException("Getting metadata['$(key)'] failed for 6 tries"))
     end
 
-    return String(api_resp.body), HTTP.status(api_resp)
+    return body, api_resp.status
 end
 
 function get_tpu_env_value(key)
