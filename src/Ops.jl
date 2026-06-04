@@ -432,8 +432,8 @@ for (dialect, op) in [
     (:chlo, :erfc),
     (:chlo, :lgamma),
     (:chlo, :sinh),
-    (:enzymexla, :ml_softplus),
-    (:enzymexla, :ml_relu),
+    (:enzymexla, :math_softplus),
+    (:enzymexla, :math_relu),
 ]
     @eval begin
         @noinline function $op(
@@ -463,7 +463,7 @@ for (dialect, op) in [
 end
 
 # These are only defined for floating point types. So integers are typecast
-for op in (:ml_softplus,)
+for op in (:math_softplus,)
     @eval begin
         @noinline function $op(
             x::TracedRArray{T,N};
@@ -484,7 +484,7 @@ end
 @noinline function log1pexp(
     x::TracedRNumber{T}; location=mlir_stacktrace("log1pexp", @__FILE__, @__LINE__)
 ) where {T<:Real}
-    return ml_softplus(x; location)
+    return math_softplus(x; location)
 end
 
 # stablehlo doesn't allow unsigned integers should should anyways produce a no-op
@@ -2477,8 +2477,8 @@ end
 
     # compile the true branch without any returns first
     true_fn_mod = MLIR.IR.current_module()
-    true_func_tmp = MLIR.IR.with_block(MLIR.IR.body(true_fn_mod)) do
-        return MLIR.Dialects.func.func_(;
+    true_func_tmp = MLIR.IR.@with_block MLIR.IR.body(true_fn_mod) begin
+        MLIR.Dialects.func.func_(;
             sym_name=string(true_fn) * "_tb_tmp",
             function_type=MLIR.IR.FunctionType(input_types, []),
             body=MLIR.IR.Region(),
@@ -2543,8 +2543,8 @@ end
 
     # compile the false branch without any returns similar to the true branch
     false_fn_mod = MLIR.IR.current_module()
-    false_func_tmp = MLIR.IR.with_block(MLIR.IR.body(false_fn_mod)) do
-        return MLIR.Dialects.func.func_(;
+    false_func_tmp = MLIR.IR.@with_block MLIR.IR.body(false_fn_mod) begin
+        MLIR.Dialects.func.func_(;
             sym_name=string(false_fn) * "_fb_tmp",
             function_type=MLIR.IR.FunctionType(input_types, []),
             body=MLIR.IR.Region(),
@@ -2771,8 +2771,8 @@ end
     # With the corrected results, we can compile the true and false branches
     tb_out_types = [mlir_type(tr) for tr in tb_corrected_linear_results]
 
-    true_fn_compiled = MLIR.IR.with_block(MLIR.IR.body(true_fn_mod)) do
-        return MLIR.Dialects.func.func_(;
+    true_fn_compiled = MLIR.IR.@with_block MLIR.IR.body(true_fn_mod) begin
+        MLIR.Dialects.func.func_(;
             sym_name=Reactant.TracedUtils.__lookup_unique_name_in_module(
                 true_fn_mod, string(true_fn) * "_tb"
             ),
@@ -2788,8 +2788,8 @@ end
 
     fb_out_types = [mlir_type(fr) for fr in fb_corrected_linear_results]
 
-    false_fn_compiled = MLIR.IR.with_block(MLIR.IR.body(false_fn_mod)) do
-        return MLIR.Dialects.func.func_(;
+    false_fn_compiled = MLIR.IR.@with_block MLIR.IR.body(false_fn_mod) begin
+        MLIR.Dialects.func.func_(;
             sym_name=Reactant.TracedUtils.__lookup_unique_name_in_module(
                 false_fn_mod, string(false_fn) * "_fb"
             ),
@@ -2949,8 +2949,8 @@ result = Ops.case(
     branch_results = Vector{Any}(undef, n_branches)
 
     for b in 1:n_branches
-        branch_func_tmps[b] = MLIR.IR.with_block(MLIR.IR.body(branch_mods[b])) do
-            return MLIR.Dialects.func.func_(;
+        branch_func_tmps[b] = MLIR.IR.@with_block MLIR.IR.body(branch_mods[b]) begin
+            MLIR.Dialects.func.func_(;
                 sym_name=string(branch_fns[b]) * "_branch$(b)_tmp",
                 function_type=MLIR.IR.FunctionType(input_types, []),
                 body=MLIR.IR.Region(),
@@ -3150,8 +3150,8 @@ result = Ops.case(
     for b in 1:n_branches
         branch_out_types = [mlir_type(tr) for tr in branch_corrected_linear_results[b]]
 
-        branch_fn_compiled = MLIR.IR.with_block(MLIR.IR.body(branch_mods[b])) do
-            return MLIR.Dialects.func.func_(;
+        branch_fn_compiled = MLIR.IR.@with_block MLIR.IR.body(branch_mods[b]) begin
+            MLIR.Dialects.func.func_(;
                 sym_name=Reactant.TracedUtils.__lookup_unique_name_in_module(
                     branch_mods[b], string(branch_fns[b]) * "_branch$(b)"
                 ),
@@ -3400,8 +3400,8 @@ end
 
     sym_name = Reactant.TracedUtils.__lookup_unique_name_in_module(mod, sym_name)
 
-    mesh_op = MLIR.IR.with_module(mod) do
-        return MLIR.Dialects.sdy.mesh(; sym_name, mesh=mesh_attr, location)
+    mesh_op = MLIR.IR.@with_module mod begin
+        MLIR.Dialects.sdy.mesh(; sym_name, mesh=mesh_attr, location)
     end
 
     # mesh_op needs to be moved to the beginning of the module
@@ -4125,13 +4125,13 @@ end
     end
 end
 
-@noinline function ml_gelu(
+@noinline function math_gelu(
     x::Union{TracedRArray,TracedRNumber},
     approximation::String;
     location=mlir_stacktrace("ml.gelu", @__FILE__, @__LINE__),
 )
     res = MLIR.IR.result(
-        enzymexla.ml_gelu(
+        enzymexla.math_gelu(
             x.mlir_data;
             gelu_approximation=MLIR.API.enzymexlaGeluApproximationAttrGet(
                 MLIR.IR.current_context(), GELU_APPROXIMATION_MAP[approximation]

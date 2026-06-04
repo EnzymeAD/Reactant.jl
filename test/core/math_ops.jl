@@ -92,13 +92,38 @@ end
         @test res[1] isa ConcreteRNumber{Float32}
         @test res[2] isa ConcreteRNumber{Float32}
     end
-
     @testset for fn in (cispi, cis)
         res = @jit fn(x_ra)
         @test res ≈ fn(x)
         @test res isa ConcreteRNumber{Complex{Float32}}
     end
 
+    @testset "sinc" begin
+        x = Reactant.TestUtils.construct_test_array(Float32, 4, 16)[:, 1:7]
+        x_ra = Reactant.to_rarray(x)
+
+        @test @jit(sinc.(x_ra)) ≈ sinc.(x)
+        @test @jit(sinc.(x_ra)) isa ConcreteRArray{Float32,2}
+
+        xz = ConcreteRNumber(0.0)
+        xinf = ConcreteRNumber(Inf)
+        @test @jit(sinc(ConcreteRNumber(0.0))) ≈ sinc(0.0)
+        @test @jit(sinc(ConcreteRNumber(Inf))) ≈ sinc(Inf)
+
+        # Complex test
+        xc = Reactant.TestUtils.construct_test_array(ComplexF32, 4, 16)[:, 1:7]
+        xc_ra = Reactant.to_rarray(xc)
+
+        @test @jit(sinc.(xc_ra)) ≈ sinc.(xc)
+        @test @jit(sinc.(xc_ra)) isa ConcreteRArray{ComplexF32,2}
+
+        # Ensure we hit the small-argument branch
+        xz0 = ComplexF32(1e-5 - 2e-5im)
+        xz = ConcreteRNumber(xz0) # Below the threshold
+        xinf = ConcreteRNumber(ComplexF32(Inf + 1im))
+        @test @jit(sinc(xz)) ≈ sinc(xz0)
+        @test @jit(sinc(xinf)) ≈ sinc(Inf + 1im)
+    end
 end
 
 @testset "isfinite" begin
@@ -141,10 +166,9 @@ end
     b = [6.6, -2.2, -8.8, 4.4, -10.1]
 
     expected_mod = mod.(a, b)
-    @test @jit(mod.(Reactant.to_rarray(a), Reactant.to_rarray(b))) ≈ expected_mod broken =
-        RunningOnTPU
-    @test @jit(mod.(a, Reactant.to_rarray(b))) ≈ expected_mod broken = RunningOnTPU
-    @test @jit(mod.(Reactant.to_rarray(a), b)) ≈ expected_mod broken = RunningOnTPU
+    @test @jit(mod.(Reactant.to_rarray(a), Reactant.to_rarray(b))) ≈ expected_mod
+    @test @jit(mod.(a, Reactant.to_rarray(b))) ≈ expected_mod
+    @test @jit(mod.(Reactant.to_rarray(a), b)) ≈ expected_mod
 
     expected_rem = rem.(a, b)
     @test @jit(rem.(Reactant.to_rarray(a), Reactant.to_rarray(b))) ≈ expected_rem
@@ -210,8 +234,7 @@ end
 
 @testset "signbit" begin
     @testset "$(typeof(x))" for x in (-4, -3.14, -0.0f0, 0.0, 0, 5, 6.28f0)
-        @test @jit(signbit(ConcreteRNumber(x))) == signbit(x) broken =
-            RunningOnTPU && eltype(x) == Float64
+        @test @jit(signbit(ConcreteRNumber(x))) == signbit(x)
     end
 end
 
@@ -220,7 +243,7 @@ end
         b in (-7, -0.57, -0.0, 1, 3.14)
 
         @test Reactant.to_number(@jit(copysign(ConcreteRNumber(a), ConcreteRNumber(b)))) ≈
-            copysign(a, b) broken = RunningOnTPU && eltype(b) == Float64
+            copysign(a, b)
     end
 end
 

@@ -1087,12 +1087,14 @@ function fneg(
     )
 end
 
-function fpext(arg::Value; res::IR.Type, location=Location())
+function fpext(arg::Value; res::IR.Type, fastmathFlags=nothing, location=Location())
     op_ty_results = IR.Type[res,]
     operands = Value[arg,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(fastmathFlags) &&
+        push!(attributes, NamedAttribute("fastmathFlags", fastmathFlags))
 
     return create_operation(
         "llvm.fpext",
@@ -1144,12 +1146,14 @@ function fptoui(arg::Value; res::IR.Type, location=Location())
     )
 end
 
-function fptrunc(arg::Value; res::IR.Type, location=Location())
+function fptrunc(arg::Value; res::IR.Type, fastmathFlags=nothing, location=Location())
     op_ty_results = IR.Type[res,]
     operands = Value[arg,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(fastmathFlags) &&
+        push!(attributes, NamedAttribute("fastmathFlags", fastmathFlags))
 
     return create_operation(
         "llvm.fptrunc",
@@ -2025,6 +2029,7 @@ function func(;
     reqd_work_group_size=nothing,
     intel_reqd_sub_group_size=nothing,
     uwtable_kind=nothing,
+    use_sample_profile=nothing,
     body::Region,
     location=Location(),
 )
@@ -2139,6 +2144,8 @@ function func(;
     )
     !isnothing(uwtable_kind) &&
         push!(attributes, NamedAttribute("uwtable_kind", uwtable_kind))
+    !isnothing(use_sample_profile) &&
+        push!(attributes, NamedAttribute("use_sample_profile", use_sample_profile))
 
     return create_operation(
         "llvm.func",

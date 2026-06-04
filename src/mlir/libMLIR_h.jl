@@ -932,6 +932,24 @@ function mlirLocationUnknownGet(context)
 end
 
 """
+    mlirLocationUnknownGetTypeID()
+
+TypeID Getter for Unknown.
+"""
+function mlirLocationUnknownGetTypeID()
+    @ccall mlir_c.mlirLocationUnknownGetTypeID()::MlirTypeID
+end
+
+"""
+    mlirLocationIsAUnknown(location)
+
+Checks whether the given location is an Unknown.
+"""
+function mlirLocationIsAUnknown(location)
+    @ccall mlir_c.mlirLocationIsAUnknown(location::MlirLocation)::Bool
+end
+
+"""
     mlirLocationGetContext(location)
 
 Gets the context that a location was created with.
@@ -7675,7 +7693,7 @@ function mlirLLVMDICompositeTypeAttrGetRecSelf(recId)
 end
 
 """
-    mlirLLVMDICompositeTypeAttrGet(ctx, recId, isRecSelf, tag, name, file, line, scope, baseType, flags, sizeInBits, alignInBits, nElements, elements, dataLocation, rank, allocated, associated)
+    mlirLLVMDICompositeTypeAttrGet(ctx, recId, isRecSelf, tag, name, file, line, scope, baseType, flags, sizeInBits, alignInBits, nElements, elements, dataLocation, rank, allocated, associated, identifier, discriminator)
 
 Creates a LLVM DICompositeType attribute.
 """
@@ -7698,6 +7716,8 @@ function mlirLLVMDICompositeTypeAttrGet(
     rank,
     allocated,
     associated,
+    identifier,
+    discriminator,
 )
     @ccall mlir_c.mlirLLVMDICompositeTypeAttrGet(
         ctx::MlirContext,
@@ -7718,6 +7738,8 @@ function mlirLLVMDICompositeTypeAttrGet(
         rank::MlirAttribute,
         allocated::MlirAttribute,
         associated::MlirAttribute,
+        identifier::MlirAttribute,
+        discriminator::MlirAttribute,
     )::MlirAttribute
 end
 
@@ -7835,12 +7857,23 @@ end
 end
 
 """
-    mlirLLVMDICompileUnitAttrGet(ctx, id, sourceLanguage, file, producer, isOptimized, emissionKind, isDebugInfoForProfiling, nameTableKind, splitDebugFilename, nImportedEntities, importedEntities)
+    mlirLLVMDICompileUnitAttrGetRecSelf(recId)
+
+Creates a self-referencing LLVM DICompileUnitAttr attribute.
+"""
+function mlirLLVMDICompileUnitAttrGetRecSelf(recId)
+    @ccall mlir_c.mlirLLVMDICompileUnitAttrGetRecSelf(recId::MlirAttribute)::MlirAttribute
+end
+
+"""
+    mlirLLVMDICompileUnitAttrGet(ctx, recId, isRecSelf, id, sourceLanguage, file, producer, isOptimized, emissionKind, isDebugInfoForProfiling, nameTableKind, splitDebugFilename, nImportedEntities, importedEntities)
 
 Creates a LLVM DICompileUnit attribute.
 """
 function mlirLLVMDICompileUnitAttrGet(
     ctx,
+    recId,
+    isRecSelf,
     id,
     sourceLanguage,
     file,
@@ -7855,6 +7888,8 @@ function mlirLLVMDICompileUnitAttrGet(
 )
     @ccall mlir_c.mlirLLVMDICompileUnitAttrGet(
         ctx::MlirContext,
+        recId::MlirAttribute,
+        isRecSelf::Bool,
         id::MlirAttribute,
         sourceLanguage::Cuint,
         file::MlirAttribute,
@@ -9604,6 +9639,70 @@ function mlirInferShapedTypeOpInterfaceInferReturnTypes(
         callback::MlirShapedTypeComponentsCallback,
         userData::Ptr{Cvoid},
     )::MlirLogicalResult
+end
+
+"""
+    MlirSpeculatability
+
+Enum representing the speculatability of an operation.
+"""
+@cenum MlirSpeculatability::UInt32 begin
+    MlirSpeculatabilityNotSpeculatable = 0x0000000000000000
+    MlirSpeculatabilitySpeculatable = 0x0000000000000001
+    MlirSpeculatabilityRecursivelySpeculatable = 0x0000000000000002
+end
+
+"""
+    mlirConditionallySpeculatableOpInterfaceTypeID()
+
+Returns the interface TypeID of the ConditionallySpeculatable interface.
+"""
+function mlirConditionallySpeculatableOpInterfaceTypeID()
+    @ccall mlir_c.mlirConditionallySpeculatableOpInterfaceTypeID()::MlirTypeID
+end
+
+"""
+    MlirConditionallySpeculatableOpInterfaceCallbacks
+
+Callbacks for implementing ConditionallySpeculatable from external code.
+
+| Field              | Note                                                               |
+| :----------------- | :----------------------------------------------------------------- |
+| construct          | Optional constructor for user data. Set to nullptr to disable it.  |
+| destruct           | Optional destructor for user data. Set to nullptr to disable it.   |
+| getSpeculatability | Returns the speculatability of the given operation.                |
+"""
+struct MlirConditionallySpeculatableOpInterfaceCallbacks
+    construct::Ptr{Cvoid}
+    destruct::Ptr{Cvoid}
+    getSpeculatability::Ptr{Cvoid}
+    userData::Ptr{Cvoid}
+end
+
+"""
+    mlirConditionallySpeculatableOpInterfaceAttachFallbackModel(ctx, opName, callbacks)
+
+Attach a new FallbackModel for the ConditionallySpeculatable interface to the named operation. The FallbackModel will call the provided callbacks.
+"""
+function mlirConditionallySpeculatableOpInterfaceAttachFallbackModel(ctx, opName, callbacks)
+    @ccall mlir_c.mlirConditionallySpeculatableOpInterfaceAttachFallbackModel(
+        ctx::MlirContext,
+        opName::MlirStringRef,
+        callbacks::MlirConditionallySpeculatableOpInterfaceCallbacks,
+    )::Cvoid
+end
+
+"""
+    mlirConditionallySpeculatableOpInterfaceGetSpeculatability(operation)
+
+Returns the speculatability of the given operation.
+
+The operation must implement the ConditionallySpeculatable interface.
+"""
+function mlirConditionallySpeculatableOpInterfaceGetSpeculatability(operation)
+    @ccall mlir_c.mlirConditionallySpeculatableOpInterfaceGetSpeculatability(
+        operation::MlirOperation
+    )::MlirSpeculatability
 end
 
 """
@@ -11995,7 +12094,7 @@ const LLVMMemoryBufferRef = Ptr{LLVMOpaqueMemoryBuffer}
 mutable struct LLVMOpaqueContext end
 
 """
-The top-level container for all LLVM global data. See the LLVMContext class.
+The top-level container for all LLVM global data. See the [`LLVMContext`](@ref) class.
 """
 const LLVMContextRef = Ptr{LLVMOpaqueContext}
 
@@ -12005,7 +12104,7 @@ mutable struct LLVMOpaqueModule end
 The top-level container for all other LLVM Intermediate Representation (IR) objects.
 
 # See also
-llvm::Module
+llvm::[`Module`](@ref)
 """
 const LLVMModuleRef = Ptr{LLVMOpaqueModule}
 
@@ -12085,7 +12184,7 @@ const LLVMDIBuilderRef = Ptr{LLVMOpaqueDIBuilder}
 mutable struct LLVMOpaqueModuleProvider end
 
 """
-Interface used to provide a module to JIT or interpreter. This is now just a synonym for llvm::Module, but we have to keep using the different type to keep binary compatibility.
+Interface used to provide a module to JIT or interpreter. This is now just a synonym for llvm::[`Module`](@ref), but we have to keep using the different type to keep binary compatibility.
 """
 const LLVMModuleProviderRef = Ptr{LLVMOpaqueModuleProvider}
 
@@ -12145,7 +12244,7 @@ mutable struct LLVMOpaqueModuleFlagEntry end
 
 """
 # See also
-llvm::Module::ModuleFlagEntry
+llvm::[`Module`](@ref)::ModuleFlagEntry
 """
 const LLVMModuleFlagEntry = LLVMOpaqueModuleFlagEntry
 
@@ -12193,7 +12292,7 @@ end
 Translate operation that satisfies LLVM dialect module requirements into an LLVM IR module living in the given context. This translates operations from any dilalect that has a registered implementation of LLVMTranslationDialectInterface.
 
 # Returns
-the generated LLVM IR Module from the translated MLIR module, it is owned by the caller.
+the generated LLVM IR [`Module`](@ref) from the translated MLIR module, it is owned by the caller.
 """
 function mlirTranslateModuleToLLVMIR(_module, context)
     @ccall mlir_c.mlirTranslateModuleToLLVMIR(
@@ -12947,6 +13046,100 @@ function stablehloResultAccuracyAttrGetMode(attr)
     @ccall mlir_c.stablehloResultAccuracyAttrGetMode(attr::MlirAttribute)::MlirAttribute
 end
 
+function stablehloSubAxisInfoAttrGet(ctx, preSize, size)
+    @ccall mlir_c.stablehloSubAxisInfoAttrGet(
+        ctx::MlirContext, preSize::Int64, size::Int64
+    )::MlirAttribute
+end
+
+function stablehloAttributeIsASubAxisInfoAttr(attr)
+    @ccall mlir_c.stablehloAttributeIsASubAxisInfoAttr(attr::MlirAttribute)::Bool
+end
+
+function stablehloSubAxisInfoAttrGetPreSize(attr)
+    @ccall mlir_c.stablehloSubAxisInfoAttrGetPreSize(attr::MlirAttribute)::Int64
+end
+
+function stablehloSubAxisInfoAttrGetSize(attr)
+    @ccall mlir_c.stablehloSubAxisInfoAttrGetSize(attr::MlirAttribute)::Int64
+end
+
+function stablehloAxisRefAttrGet(ctx, name, subAxisInfo)
+    @ccall mlir_c.stablehloAxisRefAttrGet(
+        ctx::MlirContext, name::MlirStringRef, subAxisInfo::MlirAttribute
+    )::MlirAttribute
+end
+
+function stablehloAttributeIsAnAxisRefAttr(attr)
+    @ccall mlir_c.stablehloAttributeIsAnAxisRefAttr(attr::MlirAttribute)::Bool
+end
+
+function stablehloAxisRefAttrGetName(attr)
+    @ccall mlir_c.stablehloAxisRefAttrGetName(attr::MlirAttribute)::MlirStringRef
+end
+
+function stablehloAxisRefAttrGetSubAxisInfo(attr)
+    @ccall mlir_c.stablehloAxisRefAttrGetSubAxisInfo(attr::MlirAttribute)::MlirAttribute
+end
+
+function stablehloReplicaGroupMeshAxesAttrGet(ctx, mesh, axes)
+    @ccall mlir_c.stablehloReplicaGroupMeshAxesAttrGet(
+        ctx::MlirContext, mesh::MlirAttribute, axes::MlirAttribute
+    )::MlirAttribute
+end
+
+function stablehloAttributeIsAReplicaGroupMeshAxesAttr(attr)
+    @ccall mlir_c.stablehloAttributeIsAReplicaGroupMeshAxesAttr(attr::MlirAttribute)::Bool
+end
+
+function stablehloReplicaGroupMeshAxesAttrGetMesh(attr)
+    @ccall mlir_c.stablehloReplicaGroupMeshAxesAttrGetMesh(
+        attr::MlirAttribute
+    )::MlirAttribute
+end
+
+function stablehloReplicaGroupMeshAxesAttrGetAxes(attr)
+    @ccall mlir_c.stablehloReplicaGroupMeshAxesAttrGetAxes(
+        attr::MlirAttribute
+    )::MlirAttribute
+end
+
+function stablehloMeshAxisAttrGet(ctx, name, size)
+    @ccall mlir_c.stablehloMeshAxisAttrGet(
+        ctx::MlirContext, name::MlirStringRef, size::Int64
+    )::MlirAttribute
+end
+
+function stablehloAttributeIsAMeshAxisAttr(attr)
+    @ccall mlir_c.stablehloAttributeIsAMeshAxisAttr(attr::MlirAttribute)::Bool
+end
+
+function stablehloMeshAxisAttrGetName(attr)
+    @ccall mlir_c.stablehloMeshAxisAttrGetName(attr::MlirAttribute)::MlirStringRef
+end
+
+function stablehloMeshAxisAttrGetSize(attr)
+    @ccall mlir_c.stablehloMeshAxisAttrGetSize(attr::MlirAttribute)::Int64
+end
+
+function stablehloMeshAttrGet(ctx, axes, deviceIds)
+    @ccall mlir_c.stablehloMeshAttrGet(
+        ctx::MlirContext, axes::MlirAttribute, deviceIds::MlirAttribute
+    )::MlirAttribute
+end
+
+function stablehloAttributeIsAMeshAttr(attr)
+    @ccall mlir_c.stablehloAttributeIsAMeshAttr(attr::MlirAttribute)::Bool
+end
+
+function stablehloMeshAttrGetAxes(attr)
+    @ccall mlir_c.stablehloMeshAttrGetAxes(attr::MlirAttribute)::MlirAttribute
+end
+
+function stablehloMeshAttrGetDeviceIds(attr)
+    @ccall mlir_c.stablehloMeshAttrGetDeviceIds(attr::MlirAttribute)::MlirAttribute
+end
+
 function mlirGetDialectHandle__stablehlo__()
     @ccall mlir_c.mlirGetDialectHandle__stablehlo__()::MlirDialectHandle
 end
@@ -13508,9 +13701,9 @@ function mlirMosaicGpuIsATileTransformAttr(attr)
     @ccall mlir_c.mlirMosaicGpuIsATileTransformAttr(attr::MlirAttribute)::Bool
 end
 
-function mlirMosaicGpuTileTransformAttrGet(ctx, tiling, tiling_size)
+function mlirMosaicGpuTileTransformAttrGet(ctx, tiling)
     @ccall mlir_c.mlirMosaicGpuTileTransformAttrGet(
-        ctx::MlirContext, tiling::Ptr{Int32}, tiling_size::Int32
+        ctx::MlirContext, tiling::MlirAttribute
     )::MlirAttribute
 end
 
@@ -13528,9 +13721,9 @@ function mlirMosaicGpuIsATransposeTransformAttr(attr)
     @ccall mlir_c.mlirMosaicGpuIsATransposeTransformAttr(attr::MlirAttribute)::Bool
 end
 
-function mlirMosaicGpuTransposeTransformAttrGet(ctx, permutation, permutation_size)
+function mlirMosaicGpuTransposeTransformAttrGet(ctx, permutation)
     @ccall mlir_c.mlirMosaicGpuTransposeTransformAttrGet(
-        ctx::MlirContext, permutation::Ptr{Int32}, permutation_size::Int32
+        ctx::MlirContext, permutation::MlirAttribute
     )::MlirAttribute
 end
 
@@ -14123,6 +14316,10 @@ const HeldDistributedRuntimeClient = Cvoid
 
 const DistributedRuntimeService = Cvoid
 
+const Module = Cvoid
+
+const LLVMContext = Cvoid
+
 const GrpcServer = Cvoid
 
 const HloInstruction = Cvoid
@@ -14140,6 +14337,8 @@ const MemoryKind = Cvoid
 const PjRtDevice = Cvoid
 
 const ProfilerSession = Cvoid
+
+const LocalExecutable = Cvoid
 
 const OpSharding = Cvoid
 
@@ -15823,6 +16022,76 @@ end
 
 function ReactantGetCompileOptions(size)
     @ccall mlir_c.ReactantGetCompileOptions(size::Ptr{Csize_t})::Ptr{Cvoid}
+end
+
+function ReactantCompileMhloToLLVM(
+    mhlo_text, mhlo_text_len, out_output_str, xla_runtime, pass_pipeline
+)
+    @ccall mlir_c.ReactantCompileMhloToLLVM(
+        mhlo_text::Cstring,
+        mhlo_text_len::Csize_t,
+        out_output_str::Ptr{Cstring},
+        xla_runtime::UInt8,
+        pass_pipeline::Cstring,
+    )::Ptr{LocalExecutable}
+end
+
+function ReactantFreeLocalExecutable(exec)
+    @ccall mlir_c.ReactantFreeLocalExecutable(exec::Ptr{LocalExecutable})::Cvoid
+end
+
+function ReactantCreateLLVMMod(
+    fn_str,
+    fn_len,
+    source_str,
+    source_len,
+    out_shapes_data,
+    out_shapes_sizes,
+    num_out_shapes,
+    out_names_data,
+    num_out_names,
+    in_shapes_data,
+    in_shapes_sizes,
+    num_in_shapes,
+    in_names_data,
+    num_in_names,
+    argv_data,
+    num_argv,
+    mode_enum,
+    lang_enum,
+    xla_runtime,
+    pass_pipeline,
+    out_module,
+    out_context,
+    out_off,
+    out_tmp_buf,
+)
+    @ccall mlir_c.ReactantCreateLLVMMod(
+        fn_str::Cstring,
+        fn_len::Csize_t,
+        source_str::Cstring,
+        source_len::Csize_t,
+        out_shapes_data::Ptr{Int64},
+        out_shapes_sizes::Ptr{Csize_t},
+        num_out_shapes::Csize_t,
+        out_names_data::Ptr{Cstring},
+        num_out_names::Csize_t,
+        in_shapes_data::Ptr{Int64},
+        in_shapes_sizes::Ptr{Csize_t},
+        num_in_shapes::Csize_t,
+        in_names_data::Ptr{Cstring},
+        num_in_names::Csize_t,
+        argv_data::Ptr{Cstring},
+        num_argv::Csize_t,
+        mode_enum::Cint,
+        lang_enum::Cint,
+        xla_runtime::UInt8,
+        pass_pipeline::Cstring,
+        out_module::Ptr{Ptr{Module}},
+        out_context::Ptr{Ptr{LLVMContext}},
+        out_off::Ptr{Csize_t},
+        out_tmp_buf::Ptr{Csize_t},
+    )::Cvoid
 end
 
 function ReactantLexMLIR(

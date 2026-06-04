@@ -271,7 +271,7 @@ const TracedType = Union{TracedRArray,TracedRNumber,MissingTracedValue}
 include("ControlFlow.jl")
 include("Tracing.jl")
 
-include("Compiler.jl")
+include("compiler/Compiler.jl")
 
 include("Overlay.jl")
 

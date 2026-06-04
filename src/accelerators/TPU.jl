@@ -13,7 +13,7 @@ using ..Registration: register_backend
 const libtpu_dir = Ref{Union{Nothing,String}}(nothing)
 const RUNNING_IN_CLOUD_TPU_VM = Ref{Union{Nothing,Bool}}(nothing)
 
-const LIBTPU_VERSION = "0.0.39.dev20260401"
+const LIBTPU_VERSION = "0.0.42.dev20260520"
 const LIBTPU_SO = "libtpu-$(replace(string(LIBTPU_VERSION), '.' => '_')).so"
 
 function setup_correct_env_vars!()
@@ -292,7 +292,7 @@ function get_metadata(key)
 
     while retry_count < 6
         try
-            api_resp = HTTP.get(
+            api_resp = get(
                 "$(gce_metadata_endpoint)/computeMetadata/v1/instance/attributes/$(key)",
                 ["Metadata-Flavor" => "Google"];
                 connect_timeout=60,

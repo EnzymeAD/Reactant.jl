@@ -575,7 +575,7 @@ end
 function recudaconvert(arg)
     return adapt(ReactantKernelAdaptor(), arg)
 end
-Reactant.@reactant_overlay @noinline function CUDA.cudaconvert(arg)
+Reactant.@reactant_overlay function CUDA.cudaconvert(arg)
     return recudaconvert(arg)
 end
 
@@ -662,7 +662,7 @@ function vendored_optimize_module!(
         LLVM.register!(pb, GPUCompiler.NVVMReflectPass())
 
         if GPUCompiler.NVVMReflectPass().type != :function
-            LLVM.add!(fpm, GPUCompiler.NVVMReflectPass())
+            LLVM.add!(pb, GPUCompiler.NVVMReflectPass())
         end
 
         LLVM.add!(pb, LLVM.NewPMFunctionPassManager()) do fpm
@@ -863,9 +863,52 @@ function vendored_buildScalarOptimizerPipeline(
     # TODO(#2239) invokeScalarOptimizerCallbacks
 end
 
+function vendored_buildEarlySimplificationPipeline(mpm, @nospecialize(job::GPUCompiler.CompilerJob), opt_level, instcombine::Bool=false)
+    if GPUCompiler.should_verify()
+        LLVM.add!(mpm, LLVM.NewPMFunctionPassManager()) do fpm
+            LLVM.add!(fpm, LLVM.Interop.GCInvariantVerifierPass())
+        end
+        LLVM.add!(mpm, LLVM.VerifierPass())
+    end
+    LLVM.add!(mpm, LLVM.ForceFunctionAttrsPass())
+    if LLVM.version() >= v"17"
+        LLVM.add!(mpm, LLVM.PipelineStartCallbacks(; opt_level))
+    end
+    LLVM.add!(mpm, LLVM.Annotation2MetadataPass())
+    LLVM.add!(mpm, LLVM.InferFunctionAttrsPass())
+    LLVM.add!(mpm, LLVM.ConstantMergePass())
+    LLVM.add!(mpm, LLVM.NewPMFunctionPassManager()) do fpm
+        LLVM.add!(fpm, LLVM.LowerExpectIntrinsicPass())
+        if opt_level >= 2
+            LLVM.add!(fpm, LLVM.Interop.PropagateJuliaAddrspacesPass())
+        end
+        # DCE must come before simplifycfg: codegen can generate unused
+        # statements that would otherwise alter how simplifycfg optimizes the CFG.
+        LLVM.add!(fpm, LLVM.DCEPass())
+        LLVM.add!(fpm, LLVM.SimplifyCFGPass(; GPUCompiler.BasicSimplifyCFGOptions...))
+        if opt_level >= 1
+            LLVM.add!(fpm, LLVM.SROAPass())
+            LLVM.add!(fpm, LLVM.EarlyCSEPass())
+        end
+    end
+    if opt_level >= 1
+        LLVM.add!(mpm, LLVM.GlobalOptPass())
+        LLVM.add!(mpm, LLVM.NewPMFunctionPassManager()) do fpm
+            LLVM.add!(fpm, LLVM.PromotePass())
+            if instcombine
+                LLVM.add!(fpm, LLVM.InstCombinePass())
+            else
+                LLVM.add!(fpm, LLVM.InstSimplifyPass())
+            end
+        end
+    end
+    if LLVM.version() >= v"17"
+        LLVM.add!(mpm, LLVM.PipelineEarlySimplificationCallbacks(; opt_level))
+    end
+end
+
 function vendored_buildNewPMPipeline!(mpm, @nospecialize(job), opt_level)
-    # Doesn't call instcombine
-    GPUCompiler.buildEarlySimplificationPipeline(mpm, job, opt_level)
+    vendored_buildEarlySimplificationPipeline(mpm, job, opt_level)
     LLVM.add!(mpm, LLVM.AlwaysInlinerPass())
     vendored_buildEarlyOptimizerPipeline(mpm, job, opt_level)
     LLVM.add!(mpm, LLVM.NewPMFunctionPassManager()) do fpm
@@ -901,7 +944,7 @@ function compile(job)
         )
 
         if !Reactant.precompiling()
-            GPUCompiler.link_library!(mod, GPUCompiler.load_runtime(job))
+            LLVM.link!(mod, GPUCompiler.load_runtime(job))
         end
         entryname = LLVM.name(meta.entry)
 
@@ -1125,7 +1168,7 @@ function mlir_extract_roots_from_value!(
     end
 end
 
-Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
+Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
     args...;
     convert=Val(true),
     blocks::CuDim=1,
@@ -1182,8 +1225,8 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     wrapftype = MLIR.IR.Type(
         MLIR.API.mlirLLVMFunctionTypeGet(voidty, length(wrapper_tys), wrapper_tys, false)
     )
-    wrapfunc = MLIR.IR.with_block(MLIR.IR.body(mod)) do
-        return MLIR.Dialects.llvm.func(;
+    wrapfunc = MLIR.IR.@with_block MLIR.IR.body(mod) begin
+        MLIR.Dialects.llvm.func(;
             sym_name,
             sym_visibility=MLIR.IR.Attribute("private"),
             function_type=wrapftype,
@@ -1241,7 +1284,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
         end
 
         # TODO(#2240): check for only integer and explicitly non cutraced types
-        MLIR.IR.with_block(wrapbody) do
+        MLIR.IR.@with_block wrapbody begin
             argty = MLIR.IR.Type(
                 MLIR.API.mlirLLVMFunctionTypeGetInput(gpu_function_type, trueidx - 1)
             )
@@ -1374,7 +1417,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
             else
                 get_field_offset(typeof(julia_arg), p[3:end])
             end
-            MLIR.IR.with_block(wrapbody) do
+            MLIR.IR.@with_block wrapbody begin
                 ptr = MLIR.IR.result(
                     MLIR.Dialects.llvm.getelementptr(
                         alloc,
@@ -1391,7 +1434,7 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
         argidx += 1
     end
 
-    MLIR.IR.with_block(wrapbody) do
+    MLIR.IR.@with_block wrapbody begin
         for arg in allocs
             if arg === nothing
                 continue
@@ -1600,7 +1643,7 @@ function _convert_bf16_value(
     return src_val
 end
 
-Reactant.@reactant_overlay @noinline function CUDA.cufunction(
+Reactant.@reactant_overlay function CUDA.cufunction(
     f::F, tt::TT=Tuple{}; kwargs...
 ) where {F,TT}
     res = Base.@lock CUDACore.cufunction_lock begin

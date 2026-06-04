@@ -418,6 +418,37 @@ function data_flow_edge(
 end
 
 """
+`func_data_flow_edge`
+A data flow edge op but for func arguments or call results.
+    When its operand is a BlockArgument; it is a bridge from the caller callOp\'s
+    argument to the users of the func argument. There is one func data flow edge
+    for each func argument. When its operand is an OpResult; it is a bridge
+    from the called funcOp\'s return value to the users of the call result. There
+    is one func data flow edge for each call result.
+"""
+function func_data_flow_edge(
+    operand::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[operand,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(result) && push!(op_ty_results, result)
+
+    return create_operation(
+        "sdy.func_data_flow_edge",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
 `manual_computation`
 
 Jump into a region written in terms of per-device local code with explicit
