@@ -7,7 +7,8 @@ using Reactant:
     call_with_native,
     TracedRArray,
     TracedRNumber,
-    unwrapped_eltype
+    unwrapped_eltype,
+    promote_to
 using Reactant.Ops: @opcall
 using Reactant.TracedUtils: materialize_traced_array, get_mlir_data, set_mlir_data!
 using TensorOperations
@@ -72,6 +73,15 @@ function TO.tensorscalar(C::TracedRArray)
     return ndims(C) == 0 ? @allowscalar(C[]) : throw(DimensionMismatch())
 end
 
+function Reactant.promote_to(
+    TT::Type{TracedRNumber{T}}, ::TO.VectorInterface.Zero
+) where {T}
+    return promote_to(TT, zero(T))
+end
+function Reactant.promote_to(TT::Type{TracedRNumber{T}}, ::TO.VectorInterface.One) where {T}
+    return promote_to(TT, one(T))
+end
+
 function TO.tensoradd!(
     Ct::TracedRArray,
     A::AbstractArray,
@@ -91,16 +101,15 @@ function TO.tensoradd!(
         At = conj(At)
     end
 
-    Ctmp = α * At
-    if β isa TracedRNumber || !iszero(β)
-        Ctmp += β * Ct
-    end
+    αt = promote_to(TracedRNumber{unwrapped_eltype(At)}, α)
+    βt = promote_to(TracedRNumber{unwrapped_eltype(Ct)}, β)
+    Ctmp = αt * At + βt * Ct
     set_mlir_data!(Ct, get_mlir_data(Ctmp))
     return Ct
 end
 
 function TO.tensortrace!(
-    C::AbstractArray,
+    Ct::AbstractArray,
     A::AbstractArray,
     p::Index2Tuple,
     q::Index2Tuple,
@@ -110,8 +119,8 @@ function TO.tensortrace!(
     ::ReactantBackend,
     allocator=ReactantAllocator{true}(),
 )
-    TO.argcheck_tensortrace(C, A, p, q)
-    TO.dimcheck_tensortrace(C, A, p, q)
+    TO.argcheck_tensortrace(Ct, A, p, q)
+    TO.dimcheck_tensortrace(Ct, A, p, q)
 
     At = materialize_traced_array(A)
 
@@ -124,12 +133,12 @@ function TO.tensortrace!(
     for (i, inds) in enumerate(Iterators.product([1:size(At, d) for d in q[1]]...))
         start_indices[i, :] = repeat(collect(Int, inds); inner=2)
     end
-    start_indices = Reactant.promote_to(TracedRArray{Int,2}, start_indices)
+    start_indices = promote_to(TracedRArray{Int,2}, start_indices)
     offset_dims = collect(Int, 1:TO.numind(p))
     collapsed_slice_dims = collect(Iterators.flatten(zip(q...)))
     operand_batching_dims = Int[]
     start_indices_batching_dims = Int[]
-    start_index_map = collect(Iterators.flatten(zip(q...)))
+    start_index_map = collect(Int, 1:size(start_indices, 1)) #collect(Iterators.flatten(zip(q...)))
     index_vector_dim = 1
     slice_sizes = Int[d ∈ q[1] || d ∈ q[2] ? 1 : size(At, d) for d in 1:ndims(At)]
     indices_are_sorted = false
@@ -145,19 +154,13 @@ function TO.tensortrace!(
         slice_sizes,
         indices_are_sorted,
     )
-
     Ctmp = dropdims(sum(Ctmp; dims=ndims(Ctmp)); dims=ndims(Ctmp))
 
-    if α isa TracedRNumber || !isone(α)
-        Ctmp *= α
-    end
-
-    if β isa TracedRNumber || !iszero(β)
-        Ctmp += β * C
-    end
-
-    set_mlir_data!(C, get_mlir_data(Ctmp))
-    return C
+    αt = promote_to(TracedRNumber{unwrapped_eltype(At)}, α)
+    βt = promote_to(TracedRNumber{unwrapped_eltype(Ct)}, β)
+    Ctmp = αt * Ctmp + βt * Ct
+    set_mlir_data!(Ct, get_mlir_data(Ctmp))
+    return Ct
 end
 
 function TO.tensorcontract!(
@@ -189,13 +192,11 @@ function TO.tensorcontract!(
     end
 
     contracting_dimensions = (collect(pA[2]), collect(pB[1]))
-    Ctmp = @opcall dot_general(At, Bt; contracting_dimensions)
-    if α isa TracedRNumber || !isone(α)
-        Ctmp *= α
-    end
-    if β isa TracedRNumber || !iszero(β)
-        Ctmp += β * Ct
-    end
+    ABt = @opcall dot_general(At, Bt; contracting_dimensions)
+
+    αt = promote_to(TracedRNumber{unwrapped_eltype(ABt)}, α)
+    βt = promote_to(TracedRNumber{unwrapped_eltype(Ct)}, β)
+    Ctmp = αt * ABt + βt * Ct
     set_mlir_data!(Ct, get_mlir_data(Ctmp))
     return Ct
 end
