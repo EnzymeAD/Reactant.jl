@@ -127,10 +127,10 @@ t = Reactant.to_rarray(0.0; track_numbers=true)  # ConcreteRNumber{Float64}
 ```
 
 !!! tip
-When calling `Reactant.to_rarray` on a struct or tuple that contains both
-arrays and scalar parameters, pass `track_numbers=true` (or
-`track_numbers=Number`) to ensure all scalar fields are tracked and will
-respond to runtime values.
+    When calling `Reactant.to_rarray` on a struct or tuple that contains both
+    arrays and scalar parameters, pass `track_numbers=true` (or
+    `track_numbers=Number`) to ensure all scalar fields are tracked and will
+    respond to runtime values.
 
 ## More Examples
 
@@ -294,9 +294,9 @@ For a loop containing $S$ instructions and with $N$ iterations. The following ar
 ### Complete Example: Neural Network Training
 
 !!! tip "Training Lux Neural Networks"
-If you are using [Lux.jl](https://lux.csail.mit.edu/) for neural networks, prefer using the
-[TrainState API](https://lux.csail.mit.edu/stable/manual/compiling_lux_models#compile_lux_model_trainstate)
-that abstracts away a lot of these details.
+    If you are using [Lux.jl](https://lux.csail.mit.edu/) for neural networks, prefer using the
+    [TrainState API](https://lux.csail.mit.edu/stable/manual/compiling_lux_models#compile_lux_model_trainstate)
+    that abstracts away a lot of these details.
 
 Here's a complete example of training a simple neural network:
 
