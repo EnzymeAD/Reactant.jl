@@ -863,7 +863,9 @@ function vendored_buildScalarOptimizerPipeline(
     # TODO(#2239) invokeScalarOptimizerCallbacks
 end
 
-function vendored_buildEarlySimplificationPipeline(mpm, @nospecialize(job::GPUCompiler.CompilerJob), opt_level, instcombine::Bool=false)
+function vendored_buildEarlySimplificationPipeline(
+    mpm, @nospecialize(job::GPUCompiler.CompilerJob), opt_level, instcombine::Bool=false
+)
     if GPUCompiler.should_verify()
         LLVM.add!(mpm, LLVM.NewPMFunctionPassManager()) do fpm
             LLVM.add!(fpm, LLVM.Interop.GCInvariantVerifierPass())

@@ -69,7 +69,6 @@ function build_post(::Type{T}, fov, npix, dataf) where {T}
     pl = StationaryRandomFieldPlan(grd)
     mimg = intensitymap(modify(Gaussian(), Stretch(μas2rad(T(25.0)))), grd)
     skymr = skym(grd; T=T, srf=pl, mimg=mimg)
-    
 
     g(x) = exp(complex(x.lg, x.gp))
     G = SingleStokesGain(g)
@@ -87,7 +86,9 @@ function build_post(::Type{T}, fov, npix, dataf) where {T}
     )
     intmodel = InstrumentModel(G, intpr)
 
-    postr = Comrade.prepare_device(VLBIPosterior(skymr, intmodel, dvis), ComradeBase.ReactantEx())
+    postr = Comrade.prepare_device(
+        VLBIPosterior(skymr, intmodel, dvis), ComradeBase.ReactantEx()
+    )
     tpostr = asflat(postr)
 
     return tpostr
