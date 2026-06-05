@@ -35,7 +35,7 @@ Checkpointing strategy for traced loops that uses a fixed budget for checkpoints
 the revolve algorithm [1] to minimize compute around that budget.
 
 ```julia
-# Explicit periodic checkpointing with 4 checkpoints
+# Explicit binomial checkpointing with 4 checkpoints
 @trace checkpointing=Binomial(4) for i in 1:100
     x = x .+ 1
 end
