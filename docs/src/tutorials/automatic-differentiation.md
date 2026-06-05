@@ -285,11 +285,11 @@ It is important to note that while checkpointing reduces the memory requirements
 
 For a loop containing $S$ instructions and with $N$ iterations. The following are rough estimates of the compute / memory trade offs for each methods.
 
-| Method    | default     | `enable_checkpointing=true` | `Periodic(p)`          | `Binomial(b)` |
-| --------- | ----------- | --------------------------- | ---------------------- | ------------- |
-| Code size | $2\times S$ | $3\times S$                 | $3\times S$            | $4\times S$   |
-| Memory    | $N$         | $\sqrt{N}$                  | $p + N\div p$          | $b$           |
-| Runtime   | $N$         | $N + \sqrt{N}$              | $N + p\times(N\div p)$ |               |
+| Method    | default     | `enable_checkpointing=true` | `Periodic(p)`                     | `Binomial(b)`            |
+| --------- | ----------- | --------------------------- | --------------------------------- | ------------------------ |
+| Code size | $2\times S$ | $3\times S$                 | $3\times S$                       | $4\times S$              |
+| Memory    | $N$         | $\sqrt{N}$                  | $p + N\div p$                     | $b$                      |
+| Runtime   | $N$         | $(N + \sqrt{N}) \times S$   | $(N + p\times(N\div p)) \times S$ | $\binom{N+b}{b}\times S$ |
 
 ### Complete Example: Neural Network Training
 
