@@ -101,9 +101,14 @@ end
 
 function TO.tensortrace!(
     C::AbstractArray,
-    A::AbstractArray, p::Index2Tuple, q::Index2Tuple, conjA::Bool,
-    α::Number, β::Number,
-    ::ReactantBackend, allocator = ReactantAllocator{true}()
+    A::AbstractArray,
+    p::Index2Tuple,
+    q::Index2Tuple,
+    conjA::Bool,
+    α::Number,
+    β::Number,
+    ::ReactantBackend,
+    allocator=ReactantAllocator{true}(),
 )
     TO.argcheck_tensortrace(C, A, p, q)
     TO.dimcheck_tensortrace(C, A, p, q)
@@ -115,9 +120,9 @@ function TO.tensortrace!(
     end
 
     # `p` contains the batching dims, `q` contains the left/right dims for partial trace
-    start_indices = zeros(Int, prod(d->size(At, d), q[1]), TO.numind(q))
-    for (i, inds) in enumerate(Iterators.product([1:size(At,d) for d in q[1]]...))
-        start_indices[i,:] = repeat(collect(Int, inds), inner=2)
+    start_indices = zeros(Int, prod(d -> size(At, d), q[1]), TO.numind(q))
+    for (i, inds) in enumerate(Iterators.product([1:size(At, d) for d in q[1]]...))
+        start_indices[i, :] = repeat(collect(Int, inds); inner=2)
     end
     start_indices = Reactant.promote_to(TracedRArray{Int,2}, start_indices)
     offset_dims = collect(Int, 1:TO.numind(p))
@@ -126,7 +131,7 @@ function TO.tensortrace!(
     start_indices_batching_dims = Int[]
     start_index_map = collect(Iterators.flatten(zip(q...)))
     index_vector_dim = 1
-    slice_sizes = Int[d ∈ q[1] || d ∈ q[2] ? 1 : size(At,d) for d in 1:ndims(At)]
+    slice_sizes = Int[d ∈ q[1] || d ∈ q[2] ? 1 : size(At, d) for d in 1:ndims(At)]
     indices_are_sorted = false
     Ctmp = @opcall gather(
         At,
@@ -138,7 +143,7 @@ function TO.tensortrace!(
         start_index_map,
         index_vector_dim,
         slice_sizes,
-        indices_are_sorted
+        indices_are_sorted,
     )
 
     Ctmp = dropdims(sum(Ctmp; dims=ndims(Ctmp)); dims=ndims(Ctmp))
