@@ -1,6 +1,6 @@
 using Test
 using Reactant
-using Reactant.TestUtils
+using Reactant.TestUtils: construct_test_array
 using TensorOperations
 
 fadd(α, X) = @tensor Y[a, b, c] := α * X[c, a, b]
