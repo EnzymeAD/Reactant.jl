@@ -944,7 +944,7 @@ function vendored_buildLoopOptimizerPipeline(fpm, @nospecialize(job::GPUCompiler
             LLVM.add!(lpm, LLVM.LoopFullUnrollPass())
         end
         if LLVM.version() >= v"17"
-            add!(lpm, LoopOptimizerEndCallbacks(; opt_level))
+            LLVM.add!(lpm, LLVM.LoopOptimizerEndCallbacks(; opt_level))
         end
     end
 end
