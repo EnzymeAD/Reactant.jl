@@ -99,7 +99,61 @@ function TO.tensoradd!(
     return Ct
 end
 
-# TODO tensortrace!
+function TO.tensortrace!(
+    C::AbstractArray,
+    A::AbstractArray, p::Index2Tuple, q::Index2Tuple, conjA::Bool,
+    α::Number, β::Number,
+    ::ReactantBackend, allocator = ReactantAllocator{true}()
+)
+    TO.argcheck_tensortrace(C, A, p, q)
+    TO.dimcheck_tensortrace(C, A, p, q)
+
+    At = materialize_traced_array(A)
+
+    if conjA
+        At = conj(At)
+    end
+
+    # `p` contains the batching dims, `q` contains the left/right dims for partial trace
+    start_indices = zeros(Int, prod(d->size(At, d), q[1]), TO.numind(q))
+    for (i, inds) in enumerate(Iterators.product([1:size(At,d) for d in q[1]]...))
+        start_indices[i,:] = repeat(collect(Int, inds), inner=2)
+    end
+    start_indices = Reactant.promote_to(TracedRArray{Int,2}, start_indices)
+    offset_dims = collect(Int, 1:TO.numind(p))
+    collapsed_slice_dims = collect(Iterators.flatten(zip(q...)))
+    operand_batching_dims = Int[]
+    start_indices_batching_dims = Int[]
+    start_index_map = collect(Iterators.flatten(zip(q...)))
+    index_vector_dim = 1
+    slice_sizes = Int[d ∈ q[1] || d ∈ q[2] ? 1 : size(At,d) for d in 1:ndims(At)]
+    indices_are_sorted = false
+    Ctmp = @opcall gather(
+        At,
+        start_indices;
+        offset_dims,
+        collapsed_slice_dims,
+        operand_batching_dims,
+        start_indices_batching_dims,
+        start_index_map,
+        index_vector_dim,
+        slice_sizes,
+        indices_are_sorted
+    )
+
+    Ctmp = dropdims(sum(Ctmp; dims=ndims(Ctmp)); dims=ndims(Ctmp))
+
+    if α isa TracedRNumber || !isone(α)
+        Ctmp *= α
+    end
+
+    if β isa TracedRNumber || !iszero(β)
+        Ctmp += β * C
+    end
+
+    set_mlir_data!(C, get_mlir_data(Ctmp))
+    return C
+end
 
 function TO.tensorcontract!(
     Ct::TracedRArray,
