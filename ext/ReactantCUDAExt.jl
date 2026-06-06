@@ -909,7 +909,9 @@ function vendored_buildEarlySimplificationPipeline(
     end
 end
 
-function vendored_buildLoopOptimizerPipeline(fpm, @nospecialize(job::GPUCompiler.CompilerJob), opt_level, instcombine::Bool=false)
+function vendored_buildLoopOptimizerPipeline(
+    fpm, @nospecialize(job::GPUCompiler.CompilerJob), opt_level, instcombine::Bool=false
+)
     LLVM.add!(fpm, LLVM.NewPMLoopPassManager(; use_memory_ssa=true)) do lpm
         LLVM.add!(lpm, LLVM.Interop.LowerSIMDLoopPass())
         if opt_level >= 2
@@ -922,10 +924,10 @@ function vendored_buildLoopOptimizerPipeline(fpm, @nospecialize(job::GPUCompiler
             LLVM.add!(lpm, LLVM.LoopRotatePass())
             LLVM.add!(lpm, LLVM.LICMPass())
             LLVM.add!(lpm, LLVM.Interop.JuliaLICMPass())
-            LLVM.add!(lpm, LLVM.SimpleLoopUnswitchPass(nontrivial=true, trivial=true))
+            LLVM.add!(lpm, LLVM.SimpleLoopUnswitchPass(; nontrivial=true, trivial=true))
         end
         if LLVM.version() >= v"17"
-           LLVM.add!(lpm, LLVM.LateLoopOptimizationsCallbacks(; opt_level))
+            LLVM.add!(lpm, LLVM.LateLoopOptimizationsCallbacks(; opt_level))
         end
     end
     if opt_level >= 2
@@ -941,7 +943,7 @@ function vendored_buildLoopOptimizerPipeline(fpm, @nospecialize(job::GPUCompiler
         if opt_level >= 2
             LLVM.add!(lpm, LLVM.LoopIdiomRecognizePass())
             LLVM.add!(lpm, LLVM.IndVarSimplifyPass())
-            LLVM.add!(lpm, LLVM.SimpleLoopUnswitchPass(nontrivial=true, trivial=true))
+            LLVM.add!(lpm, LLVM.SimpleLoopUnswitchPass(; nontrivial=true, trivial=true))
             LLVM.add!(lpm, LLVM.LoopDeletionPass())
             LLVM.add!(lpm, LLVM.LoopFullUnrollPass())
         end
@@ -951,7 +953,9 @@ function vendored_buildLoopOptimizerPipeline(fpm, @nospecialize(job::GPUCompiler
     end
 end
 
-function vendored_buildVectorPipeline(fpm, @nospecialize(job::GPUCompiler.CompilerJob), opt_level, instcombine::Bool=false)
+function vendored_buildVectorPipeline(
+    fpm, @nospecialize(job::GPUCompiler.CompilerJob), opt_level, instcombine::Bool=false
+)
     # re-rotate loops that might have been unrotated in the simplification above
     LLVM.add!(fpm, LLVM.NewPMLoopPassManager()) do lpm
         LLVM.add!(lpm, LLVM.LoopRotatePass())
@@ -986,7 +990,7 @@ function vendored_buildVectorPipeline(fpm, @nospecialize(job::GPUCompiler.Compil
     else
         LLVM.add!(fpm, LLVM.SROAPass())
     end
-    LLVM.add!(fpm, LLVM.InstSimplifyPass())
+    return LLVM.add!(fpm, LLVM.InstSimplifyPass())
 end
 
 function vendored_buildNewPMPipeline!(mpm, @nospecialize(job), opt_level)
