@@ -210,8 +210,12 @@ function XLA.to_host(buffer::Array, data, reactant_sharding)
     if reactant_sharding isa Reactant.Sharding.NoSharding
         data_buffer = first(single_device_arrays)
         data_buffer_shape = reverse(size(data_buffer))
-        @assert size(data) == data_buffer_shape "Expected data to be of size \
-                                                 $(size(data)), got $(data_buffer_shape)"
+        expected_size = size(data)
+        if eltype(data) <: Complex && eltype(data_buffer) == real(eltype(data))
+            expected_size = (2, expected_size...)
+        end
+        @assert expected_size == data_buffer_shape "Expected data to be of size \
+                                                    $(expected_size), got $(data_buffer_shape)"
         GC.@preserve data_buffer begin
             MLIR.API.ifrt_array_copy_to_host_buffer(data_buffer.buffer, data)
         end
