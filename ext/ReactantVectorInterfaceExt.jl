@@ -1,6 +1,6 @@
 module ReactantVectorInterfaceExt
 
-using Rectant
+using Reactant
 using VectorInterface
 
 function Reactant.promote_to(TT::Type{TracedRNumber{T}}, ::VectorInterface.Zero) where {T}
