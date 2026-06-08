@@ -863,7 +863,9 @@ function vendored_buildScalarOptimizerPipeline(
     # TODO(#2239) invokeScalarOptimizerCallbacks
 end
 
-function vendored_buildEarlySimplificationPipeline(mpm, @nospecialize(job::GPUCompiler.CompilerJob), opt_level, instcombine::Bool=false)
+function vendored_buildEarlySimplificationPipeline(
+    mpm, @nospecialize(job::GPUCompiler.CompilerJob), opt_level, instcombine::Bool=false
+)
     if GPUCompiler.should_verify()
         LLVM.add!(mpm, LLVM.NewPMFunctionPassManager()) do fpm
             LLVM.add!(fpm, LLVM.Interop.GCInvariantVerifierPass())
@@ -907,20 +909,102 @@ function vendored_buildEarlySimplificationPipeline(mpm, @nospecialize(job::GPUCo
     end
 end
 
+function vendored_buildLoopOptimizerPipeline(
+    fpm, @nospecialize(job::GPUCompiler.CompilerJob), opt_level, instcombine::Bool=false
+)
+    LLVM.add!(fpm, LLVM.NewPMLoopPassManager(; use_memory_ssa=true)) do lpm
+        LLVM.add!(lpm, LLVM.Interop.LowerSIMDLoopPass())
+        if opt_level >= 2
+            LLVM.add!(lpm, LLVM.LoopInstSimplifyPass())
+            LLVM.add!(lpm, LLVM.LoopSimplifyCFGPass())
+            # run LICM with AllowSpeculation=false before rotation to avoid
+            # speculating loads that rotation can hoist more precisely.
+            LLVM.add!(lpm, LLVM.LICMPass(; allowspeculation=false))
+            LLVM.add!(lpm, LLVM.Interop.JuliaLICMPass())
+            LLVM.add!(lpm, LLVM.LoopRotatePass())
+            LLVM.add!(lpm, LLVM.LICMPass())
+            LLVM.add!(lpm, LLVM.Interop.JuliaLICMPass())
+            LLVM.add!(lpm, LLVM.SimpleLoopUnswitchPass(; nontrivial=true, trivial=true))
+        end
+        if LLVM.version() >= v"17"
+            LLVM.add!(lpm, LLVM.LateLoopOptimizationsCallbacks(; opt_level))
+        end
+    end
+    if opt_level >= 2
+        LLVM.add!(fpm, LLVM.IRCEPass())
+    end
+    LLVM.add!(fpm, LLVM.SimplifyCFGPass(; GPUCompiler.BasicSimplifyCFGOptions...))
+    if instcombine
+        LLVM.add!(fpm, LLVM.InstCombinePass())
+    else
+        LLVM.add!(fpm, LLVM.InstSimplifyPass())
+    end
+    LLVM.add!(fpm, LLVM.NewPMLoopPassManager()) do lpm
+        if opt_level >= 2
+            LLVM.add!(lpm, LLVM.LoopIdiomRecognizePass())
+            LLVM.add!(lpm, LLVM.IndVarSimplifyPass())
+            LLVM.add!(lpm, LLVM.SimpleLoopUnswitchPass(; nontrivial=true, trivial=true))
+            LLVM.add!(lpm, LLVM.LoopDeletionPass())
+            LLVM.add!(lpm, LLVM.LoopFullUnrollPass())
+        end
+        if LLVM.version() >= v"17"
+            LLVM.add!(lpm, LLVM.LoopOptimizerEndCallbacks(; opt_level))
+        end
+    end
+end
+
+function vendored_buildVectorPipeline(
+    fpm, @nospecialize(job::GPUCompiler.CompilerJob), opt_level, instcombine::Bool=false
+)
+    # re-rotate loops that might have been unrotated in the simplification above
+    LLVM.add!(fpm, LLVM.NewPMLoopPassManager()) do lpm
+        LLVM.add!(lpm, LLVM.LoopRotatePass())
+        LLVM.add!(lpm, LLVM.LoopDeletionPass())
+    end
+    LLVM.add!(fpm, LLVM.LoopDistributePass())
+    LLVM.add!(fpm, LLVM.InjectTLIMappings())
+    LLVM.add!(fpm, LLVM.LoopVectorizePass())
+    LLVM.add!(fpm, LLVM.LoopLoadEliminationPass())
+    LLVM.add!(fpm, LLVM.SimplifyCFGPass(; GPUCompiler.AggressiveSimplifyCFGOptions...))
+    LLVM.add!(fpm, LLVM.NewPMLoopPassManager(; use_memory_ssa=true)) do lpm
+        LLVM.add!(lpm, LLVM.LICMPass())
+    end
+    LLVM.add!(fpm, LLVM.EarlyCSEPass())
+    LLVM.add!(fpm, LLVM.CorrelatedValuePropagationPass())
+    if instcombine
+        LLVM.add!(fpm, LLVM.InstCombinePass())
+    else
+        LLVM.add!(fpm, LLVM.InstSimplifyPass())
+    end
+    LLVM.add!(fpm, LLVM.SLPVectorizerPass())
+    LLVM.add!(fpm, LLVM.VectorCombinePass())
+    if LLVM.version() >= v"17"
+        add!(fpm, LLVM.VectorizerStartCallbacks(; opt_level))
+    end
+    LLVM.add!(fpm, LLVM.LoopUnrollPass(; opt_level))
+    if LLVM.version() >= v"21"
+        add!(fpm, LLVM.VectorizerEndCallbacks(; opt_level))
+    end
+    if LLVM.version() >= v"16"
+        LLVM.add!(fpm, LLVM.SROAPass(; preserve_cfg=true))
+    else
+        LLVM.add!(fpm, LLVM.SROAPass())
+    end
+    return LLVM.add!(fpm, LLVM.InstSimplifyPass())
+end
+
 function vendored_buildNewPMPipeline!(mpm, @nospecialize(job), opt_level)
     vendored_buildEarlySimplificationPipeline(mpm, job, opt_level)
     LLVM.add!(mpm, LLVM.AlwaysInlinerPass())
     vendored_buildEarlyOptimizerPipeline(mpm, job, opt_level)
     LLVM.add!(mpm, LLVM.NewPMFunctionPassManager()) do fpm
-        # Doesn't call instcombine
-        GPUCompiler.buildLoopOptimizerPipeline(fpm, job, opt_level)
+        vendored_buildLoopOptimizerPipeline(fpm, job, opt_level)
         vendored_buildScalarOptimizerPipeline(fpm, job, opt_level)
         if GPUCompiler.uses_julia_runtime(job) && opt_level >= 2
             # TODO(#2240): we disable vectorization, as this generally isn't useful for GPU targets
             #      and actually causes issues with some back-end compilers (like Metal).
             # TODO(#2240): Make this not dependent on `uses_julia_runtime` (likely CPU), but it's own control
-            # Doesn't call instcombine
-            GPUCompiler.buildVectorPipeline(fpm, job, opt_level)
+            vendored_buildVectorPipeline(fpm, job, opt_level)
         end
         # if isdebug(:optim)
         #     add!(fpm, WarnMissedTransformationsPass())

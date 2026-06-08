@@ -7,7 +7,6 @@ using Random: Random
 using Printf: @sprintf
 
 using LinearAlgebra
-using AbstractFFTs
 using Accessors: @set, @reset
 using VLBISkyModels
 using VLBILikelihoods
@@ -16,12 +15,12 @@ using Distributions
 using VLBIImagePriors
 using LogExpFunctions
 import TransformVariables as TV
+using VLBIFiles
 
 using Downloads
 using Distributions
 using Enzyme
 
-using Pyehtim
 using Test
 
 include("common.jl")
@@ -35,13 +34,13 @@ include("comimager.jl")
 function run_all_benchmarks(backend::String)
     results = Dict{String,Dict{String,Float64}}()
 
-    dataurl = "https://de.cyverse.org/anon-files/iplant/home/shared/commons_repo/curated/EHTC_M87pol2017_Nov2023/hops_data/April06/SR2_M87_2017_096_lo_hops_ALMArot.uvfits"
+    dataurl = "https://github.com/ptiede/ComradeTestData/releases/download/Data/eht_2017_data.uvfits"
     dataf = Base.download(dataurl)
 
     T = backend == "TPU" ? Float32 : Float64
 
     for sz in (64, 128, 256)
-        tpostr = build_post(T, μas2rad(200.0), 64, dataf)
+        tpostr = build_post(T, μas2rad(200.0), sz, dataf)
         run_comrade_benchmark!(
             results, "Comrade EHT Imaging $(sz) x $(sz) [$(T)]", backend, tpostr
         )
