@@ -24,7 +24,7 @@ ftrace(X) = @tensor Y[l, k, m] := X[l, i, i, k, j, j, m]
 end
 
 fcontract1(A, B) = @tensor C[] := A[a, b, c] * B[c, a, b]
-fcontract2(A, B) = @tensor C[d,e] := A[a, d, b, c] * B[c, a, e, b]
+fcontract2(A, B) = @tensor C[d, e] := A[a, d, b, c] * B[c, a, e, b]
 
 @testset "tensorcontract!" begin
     @testset let
