@@ -9,7 +9,7 @@ using Reactant:
     TracedRNumber,
     unwrapped_eltype,
     promote_to
-using TensorOperations: TensorOperations as TO
+using TensorOperations: TensorOperations as TO, Index2Tuple
 
 # allocation
 function TO.tensoradd_type(TC, A::ConcreteRArray, pA::Index2Tuple, conjA::Bool)
