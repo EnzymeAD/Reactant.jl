@@ -23,20 +23,33 @@ ftrace(X) = @tensor Y[l, k, m] := X[l, i, i, k, j, j, m]
     @test ftrace(a) ≈ @jit ftrace(a_re)
 end
 
-fcontract(A, B) = @tensor C[] := A[a, b, c] * B[c, a, b]
+fcontract1(A, B) = @tensor C[] := A[a, b, c] * B[c, a, b]
+fcontract2(A, B) = @tensor C[d,e] := A[a, d, b, c] * B[c, a, e, b]
 
 @testset "tensorcontract!" begin
-    a = construct_test_array(Float64, 5, 5, 5)
-    b = construct_test_array(Float64, 5, 5, 5)
+    @testset let
+        a = construct_test_array(Float64, 5, 5, 5)
+        b = construct_test_array(Float64, 5, 5, 5)
+        a_re = Reactant.to_rarray(a)
+        b_re = Reactant.to_rarray(b)
+        @test fcontract1(a, b) ≈ @jit fcontract1(a_re, b_re)
+    end
 
-    a_re = Reactant.to_rarray(a)
-    b_re = Reactant.to_rarray(b)
-    @test fcontract(a, b) ≈ @jit fcontract(a_re, b_re)
+    @testset let
+        a = construct_test_array(Float64, 5, 2, 5, 5)
+        b = construct_test_array(Float64, 5, 5, 3, 5)
+        a_re = Reactant.to_rarray(a)
+        b_re = Reactant.to_rarray(b)
+        @test fcontract2(a, b) ≈ @jit fcontract2(a_re, b_re)
+    end
 end
 
-fall(α, A, B, C, D) = @tensor begin
-    D[a, b, c] = A[a, e, f, c, f, g] * B[g, b, e] + α * C[c, a, b]
-    E[a, b, c] := A[a, e, f, c, f, g] * B[g, b, e] + α * C[c, a, b]
+function fall(α, A, B, C, D)
+    E = @tensor begin
+        D[a, b, c] = A[a, e, f, c, f, g] * B[g, b, e] + α * C[c, a, b]
+        E[a, b, c] := A[a, e, f, c, f, g] * B[g, b, e] + α * C[c, a, b]
+    end
+    return E
 end
 
 @testset "all" begin
