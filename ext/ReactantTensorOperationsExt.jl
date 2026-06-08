@@ -73,15 +73,6 @@ function TO.tensorscalar(C::TracedRArray)
     return ndims(C) == 0 ? @allowscalar(C[]) : throw(DimensionMismatch())
 end
 
-function Reactant.promote_to(
-    TT::Type{TracedRNumber{T}}, ::TO.VectorInterface.Zero
-) where {T}
-    return promote_to(TT, zero(T))
-end
-function Reactant.promote_to(TT::Type{TracedRNumber{T}}, ::TO.VectorInterface.One) where {T}
-    return promote_to(TT, one(T))
-end
-
 function TO.tensoradd!(
     Ct::TracedRArray,
     A::AbstractArray,
