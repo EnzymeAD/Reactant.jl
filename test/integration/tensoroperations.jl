@@ -20,6 +20,7 @@ ftrace(X) = @tensor Y[l, k, m] := X[l, i, i, k, j, j, m]
 @testset "tensortrace!" begin
     a = ones(3, 2, 2, 3, 2, 2, 3)
     a_re = Reactant.to_rarray(a)
+    @test ftrace(a) ≈ @jit ftrace(a_re)
 end
 
 fcontract(A, B) = @tensor C[] := A[a, b, c] * B[c, a, b]
