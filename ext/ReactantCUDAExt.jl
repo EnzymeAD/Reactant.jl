@@ -1685,6 +1685,13 @@ Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
                 push!(wrapargs, roots_ptr)
             end
         end
+        nargs = MLIR.IR.nargs(MLIR.IR.first_block(MLIR.IR.region(gpufunc, 1)))
+        if length(wrapargs) != nargs
+            error(
+                "detected ABI breakage, please open an issue on https://github.com/EnzymeAD/Reactant.jl/issues/new with instructions on how to reproduce.",
+            )
+        end
+
         MLIR.Dialects.llvm.call(
             wrapargs,
             MLIR.IR.Value[];
