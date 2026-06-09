@@ -2330,8 +2330,7 @@ If `reassigned_args` is `nothing`, no unaliasing is done.
 """
 function _unalias_while_loop_args(args::Tuple, reassigned_args)
     reassigned_args === nothing && return args
-    length(reassigned_args) == length(args) ||
-        return args  # mismatch — be conservative and skip
+    length(reassigned_args) == length(args) || return args  # mismatch — be conservative and skip
 
     # Collect the set of top-level identities (across all slots) so we can
     # detect when a reassigned slot's identity also appears at the top level
