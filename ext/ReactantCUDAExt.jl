@@ -1727,6 +1727,17 @@ function _convert_bf16_value(
     return src_val
 end
 
+struct ReactantPTXBackend
+    raising::Bool
+end
+
+Base.hash(target::ReactantPTXBackend, h::UInt) = Base.hash(target.raising, h)
+
+const ReactantCUDACompilerConfig = CompilerConfig{ReactantPTXCompilerTarget{ReactantPTXBackend}, CUDACompilerParams}
+const ReactantCUDACompilerJob = CompilerJob{ReactantPTXCompilerTarget{ReactantPTXBackend},CUDACompilerParams}
+
+GPUCompiler.optimization_options(job::ReactantCUDACompilerJob) =  (; instcombine=!job.config.target.raising, ptxfastmath=!job.config.target.raising)
+
 Reactant.@reactant_overlay function CUDA.cufunction(
     f::F, tt::TT=Tuple{}; kwargs...
 ) where {F,TT}
@@ -1749,7 +1760,7 @@ Reactant.@reactant_overlay function CUDA.cufunction(
         name = nothing
         debuginfo = false
         config = GPUCompiler.CompilerConfig(
-            GPUCompiler.PTXCompilerTarget(; cap=llvm_cap, ptx=llvm_ptx, debuginfo),
+            ReactantPTXCompilerTarget{ReactantPTXBackend}(; cap=llvm_cap, ptx=llvm_ptx, debuginfo, backendinfo=ReactantPTXBackend(raising())),
             CUDACore.CUDACompilerParams(; cap=cuda_cap, ptx=cuda_ptx);
             kernel,
             name,
