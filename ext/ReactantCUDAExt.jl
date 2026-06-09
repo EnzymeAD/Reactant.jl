@@ -1371,7 +1371,8 @@ function _check_no_traced_in_kernel_arg(@nospecialize(T::Type))
 
       Fix: add `Adapt.@adapt_structure <StructName>` to the struct that contains the
       field at the path above.
-  """)
+  """
+    )
 end
 
 # On 1.12+, there was a change to the calling convention where
