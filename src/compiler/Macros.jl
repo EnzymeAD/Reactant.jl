@@ -33,6 +33,13 @@ end
 Base.show(io::IO, tm::TextualModule) = print(io, MLIR.Highlight.highlight(tm.ir))
 Base.String(tm::TextualModule) = tm.ir
 
+struct TextualLLVMModule
+    ir::String
+end
+
+Base.show(io::IO, tm::TextualLLVMModule) = InteractiveUtils.print_llvm(io, tm.ir)
+Base.String(tm::TextualLLVMModule) = tm.ir
+
 function Base.convert(::Type{MLIR.IR.Module}, tm::TextualModule)
     return parse(MLIR.IR.Module, tm.ir)
 end
@@ -275,7 +282,7 @@ macro code_xla_llvm(args...)
     options = filter(opt -> opt.args[1] !== :debug, options)
     return quote
         $MLIR.IR.@dispose ctx = $Reactant.ReactantContext() begin
-            $code_xla_llvm(
+            llvm_ir_string = $code_xla_llvm(
                 ctx,
                 $(esc(f)),
                 $(esc(args));
@@ -283,6 +290,7 @@ macro code_xla_llvm(args...)
                 debug=$(esc(debug)),
                 $(esc.(options)...),
             )
+            $TextualLLVMModule(llvm_ir_string)
         end
     end
 end
