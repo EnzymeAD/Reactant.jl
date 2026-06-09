@@ -2398,7 +2398,7 @@ end
             while_op, "enzymexla.enable_checkpointing", MLIR.IR.Attribute(true)
         )
         MLIR.IR.setattr!(
-            while_op, "enzymexla.checkpoints", MLIR.IR.Attribute(checkpointing.n)
+            while_op, "enzymexla.checkpoint_period", MLIR.IR.Attribute(checkpointing.n)
         )
     elseif checkpointing === true
         MLIR.IR.setattr!(
