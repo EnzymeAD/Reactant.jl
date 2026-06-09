@@ -6,7 +6,8 @@ using ReactantCore:
     within_compile,
     MissingTracedValue,
     materialize_traced_array,
-    Periodic
+    Periodic,
+    Binomial
 
 using LinearAlgebra: LinearAlgebra, RowMaximum, NoPivot
 using Random: Random, AbstractRNG
