@@ -230,7 +230,14 @@ Compile the function `f` with arguments `args` and return the compiled LLVM IR.
 See also: [`@code_xla_llvm`](@ref).
 """
 function code_xla_llvm(
-    ctx, f, args; fn_kwargs=NamedTuple(), debug=false, xla_runtime=false, pass_pipeline="", kwargs...
+    ctx,
+    f,
+    args;
+    fn_kwargs=NamedTuple(),
+    debug=false,
+    xla_runtime=false,
+    pass_pipeline="",
+    kwargs...,
 )
     if f isa Thunk
         FTy = thunk_fn_type(f)
@@ -247,7 +254,9 @@ function code_xla_llvm(
     mod, mlir_fn_res = compile_mlir(ctx, f, args; fn_kwargs, options...)
     try
         tm = TextualModule((mod); debug)
-            return MLIR.API.compile_mhlo_to_llvm_string(tm.ir; pass_pipeline=pass_pipeline, xla_runtime=xla_runtime)
+        return MLIR.API.compile_mhlo_to_llvm_string(
+            tm.ir; pass_pipeline=pass_pipeline, xla_runtime=xla_runtime
+        )
     finally
         MLIR.IR.dispose(mod)
     end
