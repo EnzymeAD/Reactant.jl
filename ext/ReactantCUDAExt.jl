@@ -1330,6 +1330,50 @@ function mlir_extract_roots_from_value!(
     end
 end
 
+function _find_unadapted_traced(
+    @nospecialize(T::Type), seen::Set{Any}=Set{Any}(), path::String=""
+)
+    T isa UnionAll && return nothing
+    T in seen && return nothing
+    push!(seen, T)
+    T <: TracedRNumber && return isempty(path) ? "<arg>" : path
+    T <: TracedRArray && return isempty(path) ? "<arg>" : path
+    isbitstype(T) && return nothing
+    for i in 1:fieldcount(T)
+        FT = fieldtype(T, i)
+        !isconcretetype(FT) && return FT
+        FT === T && continue  # avoid infinite recursion on self-referential types                                          
+        subpath = isempty(path) ? String(fieldname(T, i)) : "$path.$(fieldname(T, i))"
+        result = _find_unadapted_traced(FT, seen, subpath)
+        result !== nothing && return result
+    end
+    return nothing
+end
+
+function _check_no_traced_in_kernel_arg(@nospecialize(T::Type))
+    bad = _find_unadapted_traced(T)
+    bad === nothing && return nothing
+
+    if !isconcretetype(bad)
+        error(
+            "GPU kernel argument of type $T contains a non-concrete traced value at field: $bad ",
+        )
+    end
+
+    return error(
+        """
+      GPU kernel argument of type $T contains an unadapted traced value at field: $bad
+
+      After, all TracedRNumber/TracedRArray must have been replaced by
+      their CuTracedRNumber/CuTracedArray counterparts. A surviving traced value means
+      some struct in the hierarchy is missing `Adapt.@adapt_structure`, so its fields
+      were not recursed into during GPU adaptation.
+
+      Fix: add `Adapt.@adapt_structure <StructName>` to the struct that contains the
+      field at the path above.
+  """)
+end
+
 # On 1.12+, there was a change to the calling convention where
 # an additional argument would be added for the roots, this will
 # return the number of roots in the corresponding convention, or
@@ -1351,6 +1395,10 @@ Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
 
     if convert == Val(true)
         args = recudaconvert.(args)
+    end
+
+    for arg in Any[func.f, args...]
+        _check_no_traced_in_kernel_arg(typeof(arg))
     end
 
     mlir_args = MLIR.IR.Value[]
