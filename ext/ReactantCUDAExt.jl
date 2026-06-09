@@ -1372,7 +1372,7 @@ end
 
 const ReactantCUDAJob = GPUCompiler.CompilerJob{GPUCompiler.PTXCompilerTarget, ReactantCUDACompilerParams}
 function GPUCompiler.optimization_options(job::ReactantCUDAJob)
-    return (; instcombine=false, fastmath=false)
+    return (; instcombine=false, fastmath=false, aggressiveinstcombine=false)
 end
 
 function Base.getproperty(RCP::ReactantCUDACompilerParams, field::Symbol)
