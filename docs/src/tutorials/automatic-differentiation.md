@@ -291,6 +291,10 @@ For a loop containing $S$ instructions and with $N$ iterations. The following ar
 | Memory    | $N$         | $\sqrt{N}$                  | $p + N\div p$                     | $b$                      |
 | Runtime   | $N$         | $(N + \sqrt{N}) \times S$   | $(N + p\times(N\div p)) \times S$ | $\binom{N+b}{b}\times S$ |
 
+!!! note
+    When using a number of iterations that is not known at compile time, it is recommended to use the [`Binomial`](@ref) checkpointing scheme.
+    Due to limitations in the XLA backend with respect to dynamic shapes, regular AD through a loop with dynamic number of operations is not supported on all platforms.
+
 ### Complete Example: Neural Network Training
 
 !!! tip "Training Lux Neural Networks"
