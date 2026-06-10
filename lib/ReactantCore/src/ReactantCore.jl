@@ -3,7 +3,7 @@ module ReactantCore
 using ExpressionExplorer: ExpressionExplorer
 using MacroTools: MacroTools, @capture
 
-export @trace, within_compile, MissingTracedValue, promote_to_traced, Periodic
+export @trace, within_compile, MissingTracedValue, promote_to_traced, Periodic, Binomial
 
 """
     Periodic(n::Int)
