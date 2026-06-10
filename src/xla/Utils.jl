@@ -5,7 +5,9 @@ struct ReactantInternalError <: Base.Exception
 end
 
 function Base.showerror(io::IO, ece::ReactantInternalError)
-    return print(io, ece.msg, '\n')
+    print(io, ece.msg, '\n')
+    Base.Experimental.show_error_hints(io, ece)
+    return nothing
 end
 
 function reactant_err(msg::Cstring)::Cvoid
