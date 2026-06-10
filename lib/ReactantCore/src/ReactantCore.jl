@@ -402,6 +402,24 @@ function trace_while(expr; track_numbers, mincut, checkpointing, first_arg=nothi
     args_sym = gensym(:args)
     verify_arg_names_sym = gensym(:verify_arg_names)
 
+    # After the loop, rebind the outer (caller-local) variables for any slot
+    # that may be reassigned inside the loop. This is required because
+    # `_unalias_while_loop_args` may replace a reassigned slot's ref contents
+    # with a *fresh* tracer (`Base.copy`) when that slot aliases another slot
+    # on entry. In that case the outer variable no longer shares object
+    # identity with the loop-carried tracer, so the in-place `set_mlir_data!`
+    # performed by `while_loop` would not be visible through the outer binding.
+    # Writing the ref contents back ensures the reassigned outer variable
+    # observes its own (possibly cloned) loop result. Slots that are only
+    # mutated in-place keep their identity and propagate without write-back.
+    write_backs = [
+        :(
+            if !isnothing($(args_sym)[$i][])
+                $s = $(args_sym)[$i][]
+            end
+        ) for (i, s) in enumerate(external_syms) if s in reassigned_syms
+    ]
+
     reactant_code_block = quote
         let $args_sym = $(args_init)
             $cond_fn_sym = $(arg_syms) -> begin
@@ -431,6 +449,8 @@ function trace_while(expr; track_numbers, mincut, checkpointing, first_arg=nothi
                 checkpointing=($(checkpointing)),
                 reassigned_args=($(reassigned_mask_expr)),
             )
+            $(write_backs...)
+            nothing
         end
     end
 
