@@ -318,8 +318,9 @@ function overloaded_mul!(
         if β_is_zero
             res = α_res
         else
+            C_mat = materialize_traced_array(C)
             β_C = @opcall multiply(
-                C, @opcall(fill(Reactant.promote_to(TracedRNumber{T}, β), size(C)))
+                C_mat, @opcall(fill(Reactant.promote_to(TracedRNumber{T}, β), size(C_mat)))
             )
             res = @opcall add(α_res, β_C)
         end

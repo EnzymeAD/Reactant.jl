@@ -1,27 +1,27 @@
 using Reactant: @reactant_overlay, TracedRArray, TracedRNumber
 
-# @reactant_overlay @noinline function MPI.Init(; kwargs...)
+# @reactant_overlay function MPI.Init(; kwargs...)
 #     if !isempty(kwargs)
 #         @warn "Ignoring MPI.Init kwargs when tracing over MPI..." kwargs...
 #     end
 #     return Ops.init()
 # end
 
-# @reactant_overlay @noinline function MPI.Finalize(; kwargs...)
+# @reactant_overlay function MPI.Finalize(; kwargs...)
 #     return Ops.finalize()
 # end
 
-@reactant_overlay @noinline function MPI.Comm_rank(comm::MPI.Comm)
+@reactant_overlay function MPI.Comm_rank(comm::MPI.Comm)
     @assert comm == MPI.COMM_WORLD "Only MPI.COMM_WORLD is supported currently"
     return Ops.comm_rank()
 end
 
-@reactant_overlay @noinline function MPI.Comm_size(comm::MPI.Comm)
+@reactant_overlay function MPI.Comm_size(comm::MPI.Comm)
     @assert comm == MPI.COMM_WORLD "Only MPI.COMM_WORLD is supported currently"
     return Ops.comm_size()
 end
 
-@reactant_overlay @noinline function MPI.Barrier(comm::MPI.Comm)
+@reactant_overlay function MPI.Barrier(comm::MPI.Comm)
     @assert comm == MPI.COMM_WORLD "Only MPI.COMM_WORLD is supported currently"
     return Ops.barrier()
 end

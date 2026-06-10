@@ -642,6 +642,9 @@ function sharding_to_array_slices(
         finally
             Reactant.Compiler.deactivate_sdycache!(sdycache)
             MLIR.IR.deactivate(ctx)
+            # This context is always freshly created above, so dispose it
+            # unconditionally to avoid leaking it (see issue #2944).
+            MLIR.IR.dispose(ctx)
         end
     end
 
@@ -836,23 +839,34 @@ function HloSharding(sharding::DimsSharding, size_x)
 end
 
 function Base.convert(::Type{HloSharding}, sharding::NamedSharding)
-    MLIR.IR.with_context(; allow_use_existing=true) do ctx
-        mesh_op = Reactant.Ops.mesh(
-            sharding.mesh; mod=MLIR.IR.Module(MLIR.IR.Location(; context=ctx))
-        )
+    # Reuse the active context when one exists (e.g. inside `@compile`); otherwise
+    # create a temporary one and dispose it below. MLIR contexts have no finalizer, so a
+    # locally created context must be disposed explicitly or it leaks (see issue #2944).
+    has_ctx = MLIR.IR.has_context()
+    ctx = has_ctx ? MLIR.IR.current_context() : Reactant.ReactantContext()
+    try
+        MLIR.IR.@with_context ctx begin
+            mesh_op = Reactant.Ops.mesh(
+                sharding.mesh; mod=MLIR.IR.Module(MLIR.IR.Location(; context=ctx))
+            )
 
-        tensor_sharding_attr, _ = get_tensor_sharding_attribute(
-            sharding, ctx, mesh_op.sym_name, mesh_op.mesh_attr, nothing; dialect=:sdy
-        )
+            tensor_sharding_attr, _ = get_tensor_sharding_attribute(
+                sharding, ctx, mesh_op.sym_name, mesh_op.mesh_attr, nothing; dialect=:sdy
+            )
 
-        return HloSharding(
-            hlo_sharding_from_sdy_tensor_sharding_attr(
-                tensor_sharding_attr, mesh_op.mesh_attr
-            ),
-            sharding.mesh,
-            sharding.is_closed,
-            sharding.priority,
-        )
+            # The returned `XLA.HloSharding` is a standalone object that does not reference
+            # `ctx`, so disposing the context afterwards is safe.
+            return HloSharding(
+                hlo_sharding_from_sdy_tensor_sharding_attr(
+                    tensor_sharding_attr, mesh_op.mesh_attr
+                ),
+                sharding.mesh,
+                sharding.is_closed,
+                sharding.priority,
+            )
+        end
+    finally
+        has_ctx || MLIR.IR.dispose(ctx)
     end
 end
 

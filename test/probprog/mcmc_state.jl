@@ -6,6 +6,10 @@ function standard_normal_logpdf(x)
     return -0.5 * sum(x .^ 2)
 end
 
+function logpdf_divinf(x)
+    return -sum(min.(1.0, 1.0 ./ (x .^ 2)))
+end
+
 function warmup_program(
     rng,
     logpdf_fn,
@@ -643,6 +647,131 @@ end
             @test all(isfinite, more_samples)
         finally
             rm(tmpdir; recursive=true)
+        end
+    end
+
+    @testset "strong_zero" begin
+        initial_position_sz = Reactant.to_rarray([0.0, 0.0])
+        step_size_sz = ConcreteRNumber(0.5)
+        inv_mass_sz = ConcreteRArray([1.0 0.0; 0.0 1.0])
+        fresh_rng_sz() = ReactantRNG(Reactant.to_rarray(UInt64[42, 0]))
+
+        @testset "monolithic strong_zero=true escapes origin" begin
+            samples, _ = ProbProg.run_chain(
+                fresh_rng_sz(),
+                logpdf_divinf,
+                initial_position_sz;
+                algorithm=:NUTS,
+                num_warmup=0,
+                num_samples=3,
+                chunk_size=3,
+                step_size=step_size_sz,
+                inverse_mass_matrix=inv_mass_sz,
+                progress_bar=false,
+                max_tree_depth=5,
+                adapt_step_size=false,
+                adapt_mass_matrix=false,
+                strong_zero=true,
+            )
+            @test size(samples) == (3, pos_size)
+            @test all(isfinite, samples)
+            @test !all(samples .== 0.0)
+        end
+
+        @testset "monolithic strong_zero=false stays at origin" begin
+            samples, _ = ProbProg.run_chain(
+                fresh_rng_sz(),
+                logpdf_divinf,
+                initial_position_sz;
+                algorithm=:NUTS,
+                num_warmup=0,
+                num_samples=3,
+                chunk_size=3,
+                step_size=step_size_sz,
+                inverse_mass_matrix=inv_mass_sz,
+                progress_bar=false,
+                max_tree_depth=5,
+                adapt_step_size=false,
+                adapt_mass_matrix=false,
+                strong_zero=false,
+            )
+            @test size(samples) == (3, pos_size)
+            @test all(samples .== 0.0)
+        end
+
+        @testset "chunked strong_zero=true escapes origin" begin
+            samples, _ = ProbProg.run_chain(
+                fresh_rng_sz(),
+                logpdf_divinf,
+                initial_position_sz;
+                algorithm=:NUTS,
+                num_warmup=0,
+                num_samples=5,
+                chunk_size=2,
+                step_size=step_size_sz,
+                inverse_mass_matrix=inv_mass_sz,
+                progress_bar=true,
+                max_tree_depth=5,
+                adapt_step_size=false,
+                adapt_mass_matrix=false,
+                strong_zero=true,
+            )
+            @test size(samples) == (5, pos_size)
+            @test all(isfinite, samples)
+            @test !all(samples .== 0.0)
+        end
+
+        @testset "chunked strong_zero=false stays at origin" begin
+            samples, _ = ProbProg.run_chain(
+                fresh_rng_sz(),
+                logpdf_divinf,
+                initial_position_sz;
+                algorithm=:NUTS,
+                num_warmup=0,
+                num_samples=5,
+                chunk_size=2,
+                step_size=step_size_sz,
+                inverse_mass_matrix=inv_mass_sz,
+                progress_bar=true,
+                max_tree_depth=5,
+                adapt_step_size=false,
+                adapt_mass_matrix=false,
+                strong_zero=false,
+            )
+            @test size(samples) == (5, pos_size)
+            @test all(samples .== 0.0)
+        end
+
+        @testset "MCMCState overload forwards strong_zero=true" begin
+            _, state = ProbProg.run_chain(
+                fresh_rng_sz(),
+                logpdf_divinf,
+                initial_position_sz;
+                algorithm=:NUTS,
+                num_warmup=0,
+                num_samples=2,
+                chunk_size=2,
+                step_size=step_size_sz,
+                inverse_mass_matrix=inv_mass_sz,
+                progress_bar=false,
+                max_tree_depth=5,
+                adapt_step_size=false,
+                adapt_mass_matrix=false,
+                strong_zero=true,
+            )
+
+            samples2, _ = ProbProg.run_chain(
+                state,
+                logpdf_divinf;
+                algorithm=:NUTS,
+                num_samples=3,
+                chunk_size=3,
+                progress_bar=false,
+                max_tree_depth=5,
+                strong_zero=true,
+            )
+            @test size(samples2) == (3, pos_size)
+            @test all(isfinite, samples2)
         end
     end
 end

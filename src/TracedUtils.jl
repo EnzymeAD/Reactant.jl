@@ -538,8 +538,8 @@ function prepare_mlir_fn_args(
         end
     end
 
-    func = MLIR.IR.with_block(MLIR.IR.body(mod)) do
-        return MLIR.Dialects.func.func_(;
+    func = MLIR.IR.@with_block MLIR.IR.body(mod) begin
+        MLIR.Dialects.func.func_(;
             sym_name=name * "_tmp",
             function_type=MLIR.IR.FunctionType(in_tys, Vector{MLIR.IR.Type}(undef, 0)),
             body=MLIR.IR.Region(),
@@ -877,8 +877,8 @@ function finalize_mlir_fn(
         MLIR.IR.deactivate(fnbody)
     end
 
-    func2 = MLIR.IR.with_block(MLIR.IR.body(mod)) do
-        return MLIR.Dialects.func.func_(;
+    func2 = MLIR.IR.@with_block MLIR.IR.body(mod) begin
+        MLIR.Dialects.func.func_(;
             sym_name=__lookup_unique_name_in_module(mod, name),
             function_type=MLIR.IR.FunctionType(in_tys, out_tys),
             body=MLIR.IR.Region(),

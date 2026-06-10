@@ -5,9 +5,8 @@ using Random: Random
 
 include("../utils.jl")
 
-logdensityofref(tpostr, xr) = logdensityof(tpostr[], xr)
 function gradref(tpostr, xr)
-    derivs, val = (Enzyme.gradient(ReverseWithPrimal, logdensityofref, Ref(tpostr), xr))
+    derivs, val = (Enzyme.gradient(ReverseWithPrimal, logdensityof, Const(tpostr), xr))
     return last(derivs), val
 end
 

@@ -1159,6 +1159,8 @@ function func(;
     known_block_size=nothing,
     known_grid_size=nothing,
     known_cluster_size=nothing,
+    workgroup_attributions=nothing,
+    kernel=nothing,
     body::Region,
     location=Location(),
 )
@@ -1179,6 +1181,9 @@ function func(;
         push!(attributes, NamedAttribute("known_grid_size", known_grid_size))
     !isnothing(known_cluster_size) &&
         push!(attributes, NamedAttribute("known_cluster_size", known_cluster_size))
+    !isnothing(workgroup_attributions) &&
+        push!(attributes, NamedAttribute("workgroup_attributions", workgroup_attributions))
+    !isnothing(kernel) && push!(attributes, NamedAttribute("kernel", kernel))
 
     return create_operation(
         "gpu.func",
@@ -1490,6 +1495,11 @@ supported by the target architecture. The cluster size can be set by
 arguments are present, the Op launches a kernel that clusters the given
 thread blocks. This feature is exclusive to certain architectures.
 
+The `cooperative` attribute indicates that the kernel should be launched
+cooperatively, guaranteeing that all thread blocks in the grid are
+co-resident on the GPU simultaneously. This enables grid-wide
+synchronization patterns.
+
 # Example
 
 ```mlir
@@ -1564,6 +1574,7 @@ function launch_func(
     asyncObject=nothing::Union{Nothing,Value},
     asyncToken=nothing::Union{Nothing,IR.Type},
     kernel,
+    cooperative=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -1604,6 +1615,7 @@ function launch_func(
         ]),
     )
     !isnothing(asyncToken) && push!(op_ty_results, asyncToken)
+    !isnothing(cooperative) && push!(attributes, NamedAttribute("cooperative", cooperative))
 
     return create_operation(
         "gpu.launch_func",
@@ -1748,8 +1760,10 @@ function launch(
     clusterSizeZ=nothing::Union{Nothing,Value},
     dynamicSharedMemorySize=nothing::Union{Nothing,Value},
     asyncToken=nothing::Union{Nothing,IR.Type},
+    cooperative=nothing,
     module_=nothing,
     function_=nothing,
+    workgroup_attributions=nothing,
     body::Region,
     location=Location(),
 )
@@ -1787,8 +1801,11 @@ function launch(
         ]),
     )
     !isnothing(asyncToken) && push!(op_ty_results, asyncToken)
+    !isnothing(cooperative) && push!(attributes, NamedAttribute("cooperative", cooperative))
     !isnothing(module_) && push!(attributes, NamedAttribute("module", module_))
     !isnothing(function_) && push!(attributes, NamedAttribute("function", function_))
+    !isnothing(workgroup_attributions) &&
+        push!(attributes, NamedAttribute("workgroup_attributions", workgroup_attributions))
 
     return create_operation(
         "gpu.launch",
@@ -3116,6 +3133,9 @@ determined using `indices`. The matrix being loaded into is the result.  The
 matrix which eventually allows the lowering to determine the size of each
 row.  If the `transpose` attribute is present then the op does a transposed load.
 
+The memory indices along each dimension must be in-bounds for that dimension
+as with an ordinary `memref.load`.
+
 For integer types, the resulting `!gpu.mma_matrix` type needs to specify the
 signedness of the data if the matrix type is an `A` or `B` operand for
 `gpu.subgroup_mma_compute`.
@@ -3172,6 +3192,9 @@ specifies the leading dimension of the destination matrix. If the
 
 This op is often meant to be used along with `gpu.subgroup_mma_load_matrix` and
 `gpu.subgroup_mma_compute`.
+
+The memory indices along each dimension must be in-bounds for that dimension
+as with an ordinary `memref.load`.
 
 # Example
 

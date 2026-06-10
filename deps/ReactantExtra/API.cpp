@@ -43,6 +43,8 @@
 #include "src/enzyme_ad/jax/Implementations/XLADerivatives.h"
 #include "src/enzyme_ad/jax/Passes/Passes.h"
 #include "src/enzyme_ad/jax/RegistryUtils.h"
+#include "src/enzyme_ad/jax/clang_compile.h"
+#include "src/enzyme_ad/jax/compile_with_xla.h"
 #include "llvm/Support/TargetSelect.h"
 
 #include "mlir/Dialect/LLVMIR/Transforms/InlinerInterfaceImpl.h"
@@ -3395,13 +3397,22 @@ REACTANT_ABI void *reactantXLAMalloc(LinkableRuntime **__restrict__ lrtP,
   auto xbuffer0 = UninitPJRTBuffer(lrt->client, device, ptype, shapeLen, shape);
   void **xbuffer = (void **)malloc(sizeof(void *));
   xbuffer[0] = xbuffer0;
-  lrt->allocations.insert((void *)xbuffer);
+  auto pair = lrt->allocations.insert((void *)xbuffer);
+  (void)pair;
+  // Assert that it was actually inserted
+  assert(pair.second);
   return xbuffer;
 }
 
 REACTANT_ABI void reactantXLAFree(LinkableRuntime **__restrict__ lrtP,
                                   void *__restrict__ buffer0) {
+  if (!buffer0)
+    return;
+  auto lrt = *lrtP;
   void *buffer = *(void **)buffer0;
+  auto erased = lrt->allocations.erase((void*)buffer0);
+  assert(erased == 1);
+  (void)erased;
   free(buffer0);
   PjRtBufferFree((PjRtBuffer *)buffer);
 }
@@ -3462,7 +3473,7 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
           baseArrays[i]->on_device_shape(), builder));
       types.push_back(RTT);
     }
-    pm.addPass(mlir::stablehlo::createStablehloRefineArgumentsPass(types));
+    pm.addPass(mlir::enzyme::createEnzymeRefineArgumentsPass(types));
     pm.addPass(mlir::stablehlo::createStablehloRefineShapesPass());
     pm.addNestedPass<mlir::func::FuncOp>(
         stablehlo::createStablehloCanonicalizeDynamismPass());
@@ -3470,6 +3481,11 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
 
     if (!mlir::succeeded(pm.run(*module))) {
       llvm::errs() << " failed to run passes\n";
+      llvm::errs() << " modstr:\n" << modstr << "\n";
+      pm.dump();
+      for (auto ty : types) {
+        llvm::errs() << " arg: " << ty << "\n";
+      }
       exit(1);
     }
 
@@ -3831,6 +3847,103 @@ REACTANT_ABI void *ReactantGetCompileOptions(size_t *size) {
   void *data = malloc(*size);
   memcpy(data, serialized.data(), *size);
   return data;
+}
+
+REACTANT_ABI xla::LocalExecutable *
+ReactantCompileMhloToLLVM(const char *mhlo_text, size_t mhlo_text_len,
+                          char **out_output_str, uint8_t xla_runtime,
+                          const char *pass_pipeline) {
+  llvm::StringRef mhlo_ref(mhlo_text, mhlo_text_len);
+  std::string output_str;
+  std::string pipeline_str(pass_pipeline ? pass_pipeline : "");
+  bool runtime_bool = (xla_runtime != 0);
+
+  auto exec = MyValueOrThrow(compile_mhlo_to_llvm_with_xla(
+      mhlo_ref, output_str, runtime_bool, pipeline_str));
+
+  *out_output_str = strdup(output_str.c_str());
+
+  return exec.release();
+}
+
+REACTANT_ABI void ReactantFreeLocalExecutable(xla::LocalExecutable *exec) {
+  delete exec;
+}
+
+REACTANT_ABI void ReactantCreateLLVMMod(
+    const char *fn_str, size_t fn_len, const char *source_str,
+    size_t source_len, const int64_t *out_shapes_data,
+    const size_t *out_shapes_sizes, size_t num_out_shapes,
+    const char **out_names_data, size_t num_out_names,
+    const int64_t *in_shapes_data, const size_t *in_shapes_sizes,
+    size_t num_in_shapes, const char **in_names_data, size_t num_in_names,
+    const char **argv_data, size_t num_argv, int mode_enum, int lang_enum,
+    uint8_t xla_runtime, const char *pass_pipeline, llvm::Module **out_module,
+    llvm::LLVMContext **out_context, size_t *out_off, size_t *out_tmp_buf) {
+
+  std::string fn(fn_str ? std::string(fn_str, fn_len) : std::string());
+  llvm::StringRef source(source_str ? llvm::StringRef(source_str, source_len) : llvm::StringRef());
+
+  std::vector<llvm::SmallVector<int64_t>> out_shapes;
+  out_shapes.reserve(num_out_shapes);
+  size_t out_data_offset = 0;
+  for (size_t i = 0; i < num_out_shapes; ++i) {
+    size_t size = out_shapes_sizes[i];
+    llvm::SmallVector<int64_t> shape;
+    for (size_t j = 0; j < size; ++j) {
+      shape.push_back(out_shapes_data[out_data_offset++]);
+    }
+    out_shapes.push_back(std::move(shape));
+  }
+
+  std::vector<std::string> out_names;
+  out_names.reserve(num_out_names);
+  for (size_t i = 0; i < num_out_names; ++i) {
+    out_names.emplace_back(out_names_data[i] ? out_names_data[i] : "");
+  }
+
+  std::vector<llvm::SmallVector<int64_t>> in_shapes;
+  in_shapes.reserve(num_in_shapes);
+  size_t in_data_offset = 0;
+  for (size_t i = 0; i < num_in_shapes; ++i) {
+    size_t size = in_shapes_sizes[i];
+    llvm::SmallVector<int64_t> shape;
+    for (size_t j = 0; j < size; ++j) {
+      shape.push_back(in_shapes_data[in_data_offset++]);
+    }
+    in_shapes.push_back(std::move(shape));
+  }
+
+  std::vector<std::string> in_names;
+  in_names.reserve(num_in_names);
+  for (size_t i = 0; i < num_in_names; ++i) {
+    in_names.emplace_back(in_names_data[i] ? in_names_data[i] : "");
+  }
+
+  std::vector<std::string> argv_strs;
+  argv_strs.reserve(num_argv);
+  for (size_t i = 0; i < num_argv; ++i) {
+    argv_strs.emplace_back(argv_data[i] ? argv_data[i] : "");
+  }
+
+  ABI mode = static_cast<ABI>(mode_enum);
+  ::Language lang = static_cast<::Language>(lang_enum);
+  bool runtime_bool = (xla_runtime != 0);
+  std::string pipeline_str(pass_pipeline ? pass_pipeline : "");
+
+  auto result_tuple = MyValueOrThrow(
+      createLLVMMod(fn, source, out_shapes, out_names, in_shapes, in_names,
+                    argv_strs, mode, lang, runtime_bool, pipeline_str));
+
+  if (out_module)
+    *out_module = std::get<0>(result_tuple).release();
+  if (out_context)
+    *out_context = std::get<1>(result_tuple).release();
+
+  if (out_off)
+    *out_off = std::get<2>(result_tuple);
+  if (out_tmp_buf)
+    *out_tmp_buf = std::get<3>(result_tuple);
 }
 
 namespace {

@@ -166,10 +166,9 @@ end
     b = [6.6, -2.2, -8.8, 4.4, -10.1]
 
     expected_mod = mod.(a, b)
-    @test @jit(mod.(Reactant.to_rarray(a), Reactant.to_rarray(b))) ≈ expected_mod broken =
-        RunningOnTPU
-    @test @jit(mod.(a, Reactant.to_rarray(b))) ≈ expected_mod broken = RunningOnTPU
-    @test @jit(mod.(Reactant.to_rarray(a), b)) ≈ expected_mod broken = RunningOnTPU
+    @test @jit(mod.(Reactant.to_rarray(a), Reactant.to_rarray(b))) ≈ expected_mod
+    @test @jit(mod.(a, Reactant.to_rarray(b))) ≈ expected_mod
+    @test @jit(mod.(Reactant.to_rarray(a), b)) ≈ expected_mod
 
     expected_rem = rem.(a, b)
     @test @jit(rem.(Reactant.to_rarray(a), Reactant.to_rarray(b))) ≈ expected_rem
@@ -235,8 +234,7 @@ end
 
 @testset "signbit" begin
     @testset "$(typeof(x))" for x in (-4, -3.14, -0.0f0, 0.0, 0, 5, 6.28f0)
-        @test @jit(signbit(ConcreteRNumber(x))) == signbit(x) broken =
-            RunningOnTPU && eltype(x) == Float64
+        @test @jit(signbit(ConcreteRNumber(x))) == signbit(x)
     end
 end
 
@@ -245,7 +243,7 @@ end
         b in (-7, -0.57, -0.0, 1, 3.14)
 
         @test Reactant.to_number(@jit(copysign(ConcreteRNumber(a), ConcreteRNumber(b)))) ≈
-            copysign(a, b) broken = RunningOnTPU && eltype(b) == Float64
+            copysign(a, b)
     end
 end
 
