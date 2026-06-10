@@ -34,6 +34,18 @@ const KA = KernelAbstractions
 
 Reactant.is_extension_loaded(::Val{:CUDA}) = true
 
+Base.Experimental.@MethodTable(REACTANT_CUDA_METHOD_TABLE)
+
+macro reactant_cuda_overlay(def)
+    return Base.Experimental.var"@overlay"(
+        __source__, __module__, REACTANT_CUDA_METHOD_TABLE, def
+    )
+end
+
+# We keep this to avoid issues with raising where a bounds error is thrown. See https://github.com/EnzymeAD/Reactant.jl/issues/2964
+@reactant_cuda_overlay Base.sqrt(x::Float64) = ccall("extern __nv_sqrt", llvmcall, Cdouble, (Cdouble,), x)
+@reactant_cuda_overlay Base.sqrt(x::Float32) = ccall("extern __nv_sqrtf", llvmcall, Cfloat, (Cfloat,), x)
+
 struct CuTracedArray{T,N,A,Size} <: DenseArray{T,N}
     ptr::Core.LLVMPtr{T,A}
 
@@ -1735,6 +1747,10 @@ end
 const ReactantCUDAJob = GPUCompiler.CompilerJob{GPUCompiler.PTXCompilerTarget, ReactantCUDACompilerParams}
 function GPUCompiler.optimization_options(job::ReactantCUDAJob)
     return (; instcombine=false, fastmath=false, aggressiveinstcombine=false)
+end
+
+function GPUCompiler.method_table(@nospecialize(job::ReactantCUDAJob))
+    return GPUCompiler.StackedMethodTable(job.world, REACTANT_CUDA_METHOD_TABLE, CUDA.method_table) 
 end
 
 function Base.getproperty(RCP::ReactantCUDACompilerParams, field::Symbol)
