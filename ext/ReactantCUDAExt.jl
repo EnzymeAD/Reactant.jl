@@ -1742,19 +1742,25 @@ end
 
 struct ReactantCUDACompilerParams <: CUDACore.AbstractCUDACompilerParams
     parent::CUDACore.CUDACompilerParams
+    raising::Bool
 end
 
 const ReactantCUDAJob = GPUCompiler.CompilerJob{GPUCompiler.PTXCompilerTarget, ReactantCUDACompilerParams}
 function GPUCompiler.optimization_options(job::ReactantCUDAJob)
-    return (; instcombine=false, fastmath=false, aggressiveinstcombine=false)
+    raising = job.config.params.raising
+    return (; instcombine=!raising, fastmath=!raising, aggressiveinstcombine=!raising)
 end
 
 function GPUCompiler.method_table(@nospecialize(job::ReactantCUDAJob))
-    return GPUCompiler.StackedMethodTable(job.world, REACTANT_CUDA_METHOD_TABLE, CUDA.method_table) 
+    return job.config.params.raising ? REACTANT_CUDA_METHOD_TABLE : CUDACore.method_table 
+end
+function GPUCompiler.method_table_view(@nospecialize(job::ReactantCUDAJob))
+    pview = GPUCompiler.get_method_table_view(job.world, CUDACore.method_table)
+    return job.config.params.raising ? GPUCompiler.StackedMethodTable(job.world, REACTANT_CUDA_METHOD_TABLE, pview) : pview 
 end
 
 function Base.getproperty(RCP::ReactantCUDACompilerParams, field::Symbol)
-    if field == :parent
+    if field == :parent || field == :raising
         return getfield(RCP, field)
     else
         return Base.getproperty(getfield(RCP, :parent), field)
@@ -1784,7 +1790,7 @@ Reactant.@reactant_overlay function CUDA.cufunction(
         debuginfo = false
         config = GPUCompiler.CompilerConfig(
             GPUCompiler.PTXCompilerTarget(; cap=llvm_cap, ptx=llvm_ptx, debuginfo),
-            ReactantCUDACompilerParams(CUDACore.CUDACompilerParams(; cap=cuda_cap, ptx=cuda_ptx));
+            ReactantCUDACompilerParams(CUDACore.CUDACompilerParams(; cap=cuda_cap, ptx=cuda_ptx), raising());
             kernel,
             name,
             always_inline,
