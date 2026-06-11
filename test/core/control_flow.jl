@@ -2,7 +2,8 @@ using Reactant, Test, FileCheck
 using LinearAlgebra
 using Reactant.ReactantCore
 using Reactant: MLIR
-using Reactant: Periodic
+using Reactant: Periodic, Binomial
+using Enzyme
 
 function condition1(x)
     y = sum(x)
@@ -796,6 +797,87 @@ end
         @check_dag "enzymexla.enable_checkpointing"
         ir
     end
+end
+
+function for_binomial_ckpt_body(x, n, ckpt)
+    @trace checkpointing = ckpt for i in 1:n
+        x = sin.(x)
+    end
+    return sum(x)
+end
+
+function for_binomial_ckpt_grad(x, n, ckpt)
+    dx = Enzyme.make_zero(x)
+    Enzyme.autodiff(
+        Reverse, for_binomial_ckpt_body, Active, Duplicated(x, dx), Const(n), Const(ckpt)
+    )
+    return dx
+end
+
+@testset "for: binomial checkpointing autodiff matches no checkpointing" begin
+    x = Float32[1.0, 0.5, -0.5]
+    x_ra = Reactant.to_rarray(x)
+    n_ra = Reactant.ConcreteRNumber(10)
+
+    dx_binom = @jit for_binomial_ckpt_grad(x_ra, n_ra, Binomial(3))
+    # Plain Julia reference: 10 iterations of sin, same loop body
+    dx_ref = Enzyme.gradient(
+        Reverse, x -> sum(foldl((v, _) -> sin.(v), 1:10; init=x)), copy(x)
+    )[1]
+
+    @test Array(dx_binom) ≈ dx_ref
+end
+
+function for_binomial_ir_check(x)
+    @trace checkpointing = Binomial(4) track_numbers = false for i in 1:20
+        x = x .+ 1
+    end
+    return x
+end
+
+@testset "for: binomial checkpointing IR attributes" begin
+    x = [1, 2, 3]
+    x_ra = Reactant.to_rarray(x)
+
+    ir = sprint(show, @code_hlo optimize = "enzyme-batch" for_binomial_ir_check(x_ra))
+    @test @filecheck begin
+        @check_dag "enzymexla.enable_checkpointing"
+        @check_dag "enzymexla.binomial_checkpointing"
+        @check_dag "enzymexla.checkpoint_period = 4"
+        ir
+    end
+end
+
+function while_binomial_ckpt_body(x, n, ckpt)
+    i = zero(n)
+    @trace checkpointing = ckpt track_numbers = false while i < n
+        x = sin.(x)
+        i += one(i)
+    end
+    return sum(x)
+end
+
+function while_binomial_ckpt_grad(x, n, ckpt)
+    dx = Enzyme.make_zero(x)
+    Enzyme.autodiff(
+        Reverse, while_binomial_ckpt_body, Active, Duplicated(x, dx), Const(n), Const(ckpt)
+    )
+    return dx
+end
+
+@testset "while: binomial checkpointing autodiff matches no checkpointing" begin
+    n = 10
+    n_ra = Reactant.ConcreteRNumber(n)
+    x = Float32[1.0, 0.5, -0.5]
+    x_ra = Reactant.to_rarray(x)
+
+    dx_binom = @jit while_binomial_ckpt_grad(x_ra, n_ra, Binomial(3))
+    # Plain Julia reference: 10 iterations of sin, same loop body
+    dx_ref = Enzyme.gradient(
+        Reverse, x -> sum(foldl((v, _) -> sin.(v), 1:n; init=x)), copy(x)
+    )[1]
+
+    @test Array(dx_binom) ≈ dx_ref
 end
 
 _call1(a, b) = a

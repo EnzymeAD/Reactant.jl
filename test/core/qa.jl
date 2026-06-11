@@ -135,6 +135,7 @@ end
                 :code_mhlo,
                 :code_xla,
                 :Periodic,
+                :Binomial,
             ),
         ),
         all_qualified_accesses_via_owners=true,
