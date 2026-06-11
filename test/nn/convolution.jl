@@ -1,5 +1,7 @@
 using LuxLib, Reactant, Enzyme, NNlib, Test, Statistics
 
+const MightUseMIOpen = contains(lowercase(string(Reactant.devices()[1])), "rocm")
+
 @testset "Fused Conv" begin
     @testset for groups in (1, 2), has_bias in (true, false), act in (identity, relu, tanh)
         weight = Reactant.TestUtils.construct_test_array(Float32, 4, 4, 8 ÷ groups, 4)
@@ -14,15 +16,21 @@ using LuxLib, Reactant, Enzyme, NNlib, Test, Statistics
             padding in ((0, 0), (2, 2), (2, 0)),
             dilation in ((1, 1), (1, 2))
 
+            if any(!=(1), dilation) && MightUseMIOpen
+                continue # MIOpen doesn't support dilation != 1 yet
+            end
+
+            might_fail = MightUseMIOpen && any(!=(1), dilation)
+
             conv_dims = DenseConvDims(x, weight; stride, padding, dilation, groups)
 
-            reactant_res = @jit fused_conv_bias_activation(
-                act, weight_reactant, x_reactant, bias_reactant, conv_dims
-            )
-
-            luxlib_res = fused_conv_bias_activation(act, weight, x, bias, conv_dims)
-
-            @test reactant_res ≈ luxlib_res atol = 1e-5 rtol = 1e-2
+            @test begin
+                reactant_res = @jit fused_conv_bias_activation(
+                    act, weight_reactant, x_reactant, bias_reactant, conv_dims
+                )
+                luxlib_res = fused_conv_bias_activation(act, weight, x, bias, conv_dims)
+                isapprox(reactant_res, luxlib_res; atol=1e-5, rtol=1e-2)
+            end broken = might_fail
         end
 
         # TODO(#2253): test for gradients
@@ -172,6 +180,12 @@ end
             padding in ((0, 0), (2, 2), (0, 2), (2, 0)),
             dilation in ((1, 1), (1, 2))
 
+            if any(!=(1), dilation) && MightUseMIOpen
+                continue # MIOpen doesn't support dilation != 1 yet
+            end
+
+            might_fail = MightUseMIOpen && any(!=(1), dilation)
+
             conv_dims = DenseConvDims(x, weight; stride, padding, dilation, groups)
 
             output_size = (
@@ -184,20 +198,22 @@ end
 
             Reactant.with_config(; convolution_precision=PrecisionConfig.HIGH) do
                 @test @jit(NNlib.conv(x_reactant, weight_reactant, conv_dims)) ≈
-                    NNlib.conv(x, weight, conv_dims)
+                    NNlib.conv(x, weight, conv_dims) broken = might_fail
 
                 ∇data = NNlib.∇conv_data(dy, weight, conv_dims)
                 @test @jit(NNlib.∇conv_data(dy_reactant, weight_reactant, conv_dims)) ≈
-                    ∇data
+                    ∇data broken = might_fail
 
                 ∇filter = NNlib.∇conv_filter(x, dy, conv_dims)
-                @test @jit(NNlib.∇conv_filter(x_reactant, dy_reactant, conv_dims)) ≈ ∇filter
+                @test @jit(NNlib.∇conv_filter(x_reactant, dy_reactant, conv_dims)) ≈ ∇filter broken =
+                    might_fail
 
-                ∇data_enzyme, ∇filter_enzyme = @jit ∇conv_data_filter(
-                    x_reactant, weight_reactant, conv_dims
-                )
-                @test ∇data_enzyme ≈ ∇data
-                @test ∇filter_enzyme ≈ ∇filter
+                @test begin
+                    ∇data_enzyme, ∇filter_enzyme = @jit ∇conv_data_filter(
+                        x_reactant, weight_reactant, conv_dims
+                    )
+                    isapprox(∇data_enzyme, ∇data) && isapprox(∇filter_enzyme, ∇filter)
+                end broken = might_fail
             end
         end
     end
