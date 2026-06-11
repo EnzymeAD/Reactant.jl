@@ -43,10 +43,9 @@ macro reactant_cuda_overlay(def)
 end
 
 # We keep this to avoid issues with raising where a bounds error is thrown. See https://github.com/EnzymeAD/Reactant.jl/issues/2964
-@reactant_cuda_overlay Base.sqrt(x::Float64) =
-    ccall("extern __nv_sqrt", llvmcall, Cdouble, (Cdouble,), x)
-@reactant_cuda_overlay Base.sqrt(x::Float32) =
-    ccall("extern __nv_sqrtf", llvmcall, Cfloat, (Cfloat,), x)
+@reactant_cuda_overlay Base.sqrt(x::Float64) = ccall("extern __nv_sqrt", llvmcall, Cdouble, (Cdouble,), x)
+@reactant_cuda_overlay Base.sqrt(x::Float32) = ccall("extern __nv_sqrtf", llvmcall, Cfloat, (Cfloat,), x)
+@reactant_cuda_overlay Base.FastMath.sqrt_fast(x::Union{Float32, Float64}) = sqrt(x)
 
 struct CuTracedArray{T,N,A,Size} <: DenseArray{T,N}
     ptr::Core.LLVMPtr{T,A}
