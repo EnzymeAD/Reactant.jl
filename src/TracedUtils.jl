@@ -502,10 +502,10 @@ function prepare_mlir_fn_args(
     in_tys = Vector{MLIR.IR.Type}(undef, length(linear_args))
     for (i, arg) in enumerate(linear_args)
         elT = MLIR.IR.Type(Reactant.unwrapped_eltype(arg))
-        if toscalar
+        sz = collect(Int, size(arg))
+        if toscalar && length(sz) == 0
             in_tys[i] = MLIR.IR.TensorType(Int[], elT)
         else
-            sz = collect(Int, size(arg))
             if !optimize_then_pad
                 carg = inv_map[arg]
                 Reactant.has_padding(carg) && (sz .+= Reactant.get_padding(carg))
@@ -1275,11 +1275,12 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
         push_val!(batch_inputs, ogarg, path[3:end])
 
         if ogarg isa Base.RefValue
+            ta  = TracedRArray(batch_inputs[end])
             batch_inputs[end] =
                 (@opcall broadcast_in_dim(
-                    TracedRArray(batch_inputs[end]),
-                    Int64[],
-                    collect(Int64, input_shapes[1]),
+                    ta,
+                    collect(Int64, (length(input_shapes[1]) + 1):(length(input_shapes[1]) + ndims(ta))),
+                    collect(Int64, (input_shapes[1]..., size(ta)...)),
                 )).mlir_data
         end
     end
