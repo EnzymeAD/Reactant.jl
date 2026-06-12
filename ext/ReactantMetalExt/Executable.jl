@@ -551,12 +551,11 @@ function _loaded_exec_execute(
         ObjC_id{Metal.MPSGraphs.MPSGraph}(meta.graph_id)
     )
 
-    # Reconstruct input MTLBuffers from PJRT argument handles (MTLBuffer ObjC ids)
+    # Reconstruct input MTLBuffers from PJRT argument handles (MetalBufferMeta ptrs)
     input_bufs = Metal.MTL.MTLBuffer[]
     for i in 0:(num_args - 1)
         buf_handle = unsafe_load(Ptr{Ptr{Cvoid}}(device0_arglist + 8 * i))
-        mtl_buf = Metal.MTL.MTLBufferInstance(ObjC_id{Metal.MTL.MTLBuffer}(UInt64(buf_handle)))
-        push!(input_bufs, mtl_buf)
+        push!(input_bufs, handle_mtl_buffer(buf_handle))
     end
 
     # Build feeds dictionary from C struct metadata
@@ -642,16 +641,11 @@ function _loaded_exec_execute(
             end
             Metal.MTL.wait_completed(cmdbuf)
 
-            # Retain output buffer + cache dims/dtype for PJRT queries
+            # Retain output buffer + wrap in a malloc'd MetalBufferMeta handle
             ObjC = Metal.MTL.ObjectiveC
             ObjC.Foundation.retain(out_buf)
-            out_dims = Int64.(out_shape)
-            out_handle = UInt64(pointer(out_buf))
-            _BUFFER_DIMS_CACHE[out_handle] = out_dims
-            _BUFFER_DTYPE_CACHE[out_handle] = out_pjrt_type
-            unsafe_store!(
-                Ptr{Ptr{Cvoid}}(device0_outlist + 8 * (i - 1)), Ptr{Cvoid}(out_handle)
-            )
+            out_handle = new_buffer_handle(out_buf, Int64.(out_shape), out_pjrt_type)
+            unsafe_store!(Ptr{Ptr{Cvoid}}(device0_outlist + 8 * (i - 1)), out_handle)
         end
     end
 
