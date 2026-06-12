@@ -366,7 +366,7 @@ function make_mlir_fn(
     force_raising = any_input_sharding && !Reactant.Compiler.raising()
 
     if force_raising
-       activate_raising!(true)
+       Reactant.Compiler.activate_raising!(true)
     end
 
     result = try
@@ -381,7 +381,7 @@ function make_mlir_fn(
         MLIR.IR.deactivate(fnbody)
         Ops.deactivate_constant_context!(fnbody)
         if force_raising
-          deactivate_raising!(true)
+          Reactant.Compiler.deactivate_raising!(true)
         end
     end
 
