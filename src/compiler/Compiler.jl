@@ -3,6 +3,7 @@ module Compiler
 using Reactant_jll
 using Libdl: dlsym
 using LinearAlgebra: BlasInt
+using InteractiveUtils: InteractiveUtils
 import p7zip_jll: p7zip
 
 import ..Reactant:
