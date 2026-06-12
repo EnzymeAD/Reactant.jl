@@ -363,7 +363,7 @@ function make_mlir_fn(
     # both compile-time and relocatability issues
     MLIR.IR.activate(fnbody)
 
-    force_raising = any_input_sharding && !raising()
+    force_raising = any_input_sharding && !Reactant.Compiler.raising()
 
     if force_raising
        activate_raising!(true)
