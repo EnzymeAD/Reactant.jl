@@ -1447,7 +1447,6 @@ Reactant.@reactant_overlay function CUDA.cufunction(
 	    CUDACore.CUDACompilerParams(; cap=cuda_cap, ptx=cuda_ptx)
 	end
 
-	@show raising()
         config = GPUCompiler.CompilerConfig(
             GPUCompiler.PTXCompilerTarget(; cap=llvm_cap, ptx=llvm_ptx, debuginfo),
             ReactantCUDACompilerParams(
