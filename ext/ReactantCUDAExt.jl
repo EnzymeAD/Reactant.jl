@@ -43,8 +43,10 @@ macro reactant_cuda_overlay(def)
 end
 
 # We keep this to avoid issues with raising where a bounds error is thrown. See https://github.com/EnzymeAD/Reactant.jl/issues/2964
-@reactant_cuda_overlay Base.sqrt(x::Float64) = ccall("extern __nv_sqrt", llvmcall, Cdouble, (Cdouble,), x)
-@reactant_cuda_overlay Base.sqrt(x::Float32) = ccall("extern __nv_sqrtf", llvmcall, Cfloat, (Cfloat,), x)
+@reactant_cuda_overlay Base.sqrt(x::Float64) =
+    ccall("extern __nv_sqrt", llvmcall, Cdouble, (Cdouble,), x)
+@reactant_cuda_overlay Base.sqrt(x::Float32) =
+    ccall("extern __nv_sqrtf", llvmcall, Cfloat, (Cfloat,), x)
 
 struct CuTracedArray{T,N,A,Size} <: DenseArray{T,N}
     ptr::Core.LLVMPtr{T,A}
@@ -1341,31 +1343,62 @@ function _find_unadapted_traced(
     isbitstype(T) && return nothing
     for i in 1:fieldcount(T)
         FT = fieldtype(T, i)
-        !isconcretetype(FT) && return FT
-        FT === T && continue  # avoid infinite recursion on self-referential types                                          
         subpath = isempty(path) ? String(fieldname(T, i)) : "$path.$(fieldname(T, i))"
+        !isconcretetype(FT) && return (subpath, FT)
+        FT === T && continue  # avoid infinite recursion on self-referential types
         result = _find_unadapted_traced(FT, seen, subpath)
         result !== nothing && return result
     end
     return nothing
 end
 
+# Mirror of GPUCompiler's explain_nonisbits: recursively list non-isbits fields.
+function _explain_nonbitstype(@nospecialize(dt), depth=1; maxdepth=10)
+    depth > maxdepth && return ""
+    try
+        fieldcount(dt)
+    catch
+        return ""
+    end
+    msg = ""
+    for (ft, fn) in zip(fieldtypes(dt), fieldnames(dt))
+        if !isbitstype(ft)
+            msg *= "  "^depth * ".$fn is of type $ft which is not isbits.\n"
+            msg *= _explain_nonbitstype(ft, depth + 1)
+        end
+    end
+    return msg
+end
+
 function _check_no_traced_in_kernel_arg(@nospecialize(T::Type))
     bad = _find_unadapted_traced(T)
     bad === nothing && return nothing
 
-    if !isconcretetype(bad)
-        error(
-            "GPU kernel argument of type $T contains a non-concrete traced value at field: $bad ",
-        )
+    if bad isa Tuple  # (path, non-concrete-type)
+        path, FT = bad
+        explanation = _explain_nonbitstype(T)
+        error("""passing non-bitstype argument
+               Argument to your kernel function is of type $T, which is not a bitstype:
+               $(isempty(explanation) ? "" : explanation)
+               Field .$path has declared type $FT, which is not a concrete type \
+(it is a UnionAll / abstract type). Julia stores abstract-typed struct fields as \
+GC-managed heap pointers that cannot be represented in a GPU kernel.
+
+               Only bitstypes, which are "plain data" types that are immutable and \
+contain no references to other values, can be used in GPU kernels.
+               For more information, see the `Base.isbitstype` function.
+
+               Fix: replace the abstract field type with its concrete parametric form \
+(e.g. use `$(nameof(FT)){I}` instead of `$(nameof(FT))` in the struct definition).""")
     end
 
+    # bad is a path String: a TracedRNumber/TracedRArray was not adapted
     return error(
         """
       GPU kernel argument of type $T contains an unadapted traced value at field: $bad
 
-      After, all TracedRNumber/TracedRArray must have been replaced by
-      their CuTracedRNumber/CuTracedArray counterparts. A surviving traced value means
+      All TracedRNumber/TracedRArray must have been replaced by their
+      CuTracedRNumber/CuTracedArray counterparts. A surviving traced value means
       some struct in the hierarchy is missing `Adapt.@adapt_structure`, so its fields
       were not recursed into during GPU adaptation.
 
@@ -1876,18 +1909,24 @@ struct ReactantCUDACompilerParams <: CUDACore.AbstractCUDACompilerParams
     raising::Bool
 end
 
-const ReactantCUDAJob = GPUCompiler.CompilerJob{GPUCompiler.PTXCompilerTarget, ReactantCUDACompilerParams}
+const ReactantCUDAJob = GPUCompiler.CompilerJob{
+    GPUCompiler.PTXCompilerTarget,ReactantCUDACompilerParams
+}
 function GPUCompiler.optimization_options(job::ReactantCUDAJob)
     raising = job.config.params.raising
     return (; instcombine=!raising, fastmath=!raising, aggressiveinstcombine=!raising)
 end
 
 function GPUCompiler.method_table(@nospecialize(job::ReactantCUDAJob))
-    return job.config.params.raising ? REACTANT_CUDA_METHOD_TABLE : CUDACore.method_table 
+    return job.config.params.raising ? REACTANT_CUDA_METHOD_TABLE : CUDACore.method_table
 end
 function GPUCompiler.method_table_view(@nospecialize(job::ReactantCUDAJob))
     pview = GPUCompiler.get_method_table_view(job.world, CUDACore.method_table)
-    return job.config.params.raising ? GPUCompiler.StackedMethodTable(job.world, REACTANT_CUDA_METHOD_TABLE, pview) : pview 
+    return if job.config.params.raising
+        GPUCompiler.StackedMethodTable(job.world, REACTANT_CUDA_METHOD_TABLE, pview)
+    else
+        pview
+    end
 end
 
 function Base.getproperty(RCP::ReactantCUDACompilerParams, field::Symbol)
@@ -1921,7 +1960,9 @@ Reactant.@reactant_overlay function CUDA.cufunction(
         debuginfo = false
         config = GPUCompiler.CompilerConfig(
             GPUCompiler.PTXCompilerTarget(; cap=llvm_cap, ptx=llvm_ptx, debuginfo),
-            ReactantCUDACompilerParams(CUDACore.CUDACompilerParams(; cap=cuda_cap, ptx=cuda_ptx), raising());
+            ReactantCUDACompilerParams(
+                CUDACore.CUDACompilerParams(; cap=cuda_cap, ptx=cuda_ptx), raising()
+            );
             kernel,
             name,
             always_inline,
