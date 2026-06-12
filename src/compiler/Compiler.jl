@@ -271,14 +271,6 @@ function compile_mlir!(
         raise = true
     end
     is_raising = raise isa String || raise
-
-    # Custom Kernels without Raising will lead to suboptimal codegen for is_sharded, force
-    # raising
-    if is_sharded
-        is_raising = true
-        raise isa Bool && (raise = true)
-    end
-
     activate_raising!(is_raising)
 
     fnname = string(f)
@@ -316,6 +308,13 @@ function compile_mlir!(
         is_sharded,
     ) = mlir_fn_res
     compiled_f = mlir_fn_res.f
+
+    # Custom Kernels without Raising will lead to suboptimal codegen for is_sharded, force
+    # raising
+    if is_sharded
+        is_raising = true
+        raise isa Bool && (raise = true)
+    end
 
     toolkit = XLA.CUDA_DATA_DIR[]
 
