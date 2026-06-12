@@ -1438,20 +1438,16 @@ Reactant.@reactant_overlay function CUDA.cufunction(
         name = nothing
         debuginfo = false
 
-
-	params = if CUVERSION == 6
-            llvm_sm   = CUDACore.SMVersion(cuda_cap.major,
-				       cuda_cap.minor)
-	    CUDACore.CUDACompilerParams(; sm=llvm_sm, ptx=cuda_ptx)
-	else
-	    CUDACore.CUDACompilerParams(; cap=cuda_cap, ptx=cuda_ptx)
-	end
+        params = if CUVERSION == 6
+            llvm_sm = CUDACore.SMVersion(cuda_cap.major, cuda_cap.minor)
+            CUDACore.CUDACompilerParams(; sm=llvm_sm, ptx=cuda_ptx)
+        else
+            CUDACore.CUDACompilerParams(; cap=cuda_cap, ptx=cuda_ptx)
+        end
 
         config = GPUCompiler.CompilerConfig(
             GPUCompiler.PTXCompilerTarget(; cap=llvm_cap, ptx=llvm_ptx, debuginfo),
-            ReactantCUDACompilerParams(
-                params, raising()
-            );
+            ReactantCUDACompilerParams(params, raising());
             kernel,
             name,
             always_inline,
