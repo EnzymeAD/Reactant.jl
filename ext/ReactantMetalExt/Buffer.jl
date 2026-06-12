@@ -1,8 +1,10 @@
 # Buffer.jl — MTLBuffer-based buffer PJRT callbacks
 #
-# The PJRT buffer handle IS the retained MTLBuffer ObjC id (UInt64).
-# Metadata (dims, dtype) is cached in Julia-side Dicts keyed by handle.
-# Apple manages buffer memory via ObjC retain/release.
+# The PJRT buffer handle is a Libc.malloc'd MetalBufferMeta struct that owns a
+# retained MTLBuffer ObjC id plus the metadata (dims, dtype) PJRT queries need.
+# We control alloc/free: the struct is malloc'd on buffer creation and freed
+# (together with the MTLBuffer release) on PJRT_Buffer_Destroy — no Julia-side
+# registries and no GC involvement.
 
 # Type conversion helpers — delegate to Reactant's canonical implementations
 pjrt_type_to_julia(t::UInt32) = Reactant.XLA.julia_type(Int64(t))
@@ -11,14 +13,70 @@ julia_type_to_pjrt(T) = UInt32(Reactant.XLA.primitive_type(T))
 const _ObjC = Metal.MTL.ObjectiveC
 
 # ============================================================
-# Buffer metadata caches
+# Buffer handle struct
 # ============================================================
-# PJRT_Buffer_Dimensions needs a stable Ptr{Int64} for the buffer's lifetime.
-# PJRT_Buffer_ElementType needs the dtype. Both are cached here,
-# added on buffer creation and removed on destroy.
 
-const _BUFFER_DIMS_CACHE = Dict{UInt64,Vector{Int64}}()
-const _BUFFER_DTYPE_CACHE = Dict{UInt64,UInt32}()
+# XLA supports ranks well below this; fixed-size inline dims keep the struct
+# POD so PJRT_Buffer_Dimensions can hand out a stable interior pointer.
+const METAL_BUFFER_MAX_RANK = 16
+
+struct MetalBufferMeta
+    mtl_id::UInt64    # retained MTLBuffer ObjC id
+    dtype::UInt32     # PJRT_Buffer_Type
+    ndims::Int32
+    dims::NTuple{METAL_BUFFER_MAX_RANK,Int64}
+end
+
+"""
+    new_buffer_handle(mtl_buf, dims, pjrt_type) -> Ptr{Cvoid}
+
+Allocate a `MetalBufferMeta` with `Libc.malloc` describing an already-retained
+MTLBuffer and return it as the opaque PJRT buffer handle.
+"""
+function new_buffer_handle(
+    mtl_buf::Metal.MTL.MTLBuffer, dims::Vector{Int64}, pjrt_type::UInt32
+)
+    ndims = length(dims)
+    ndims <= METAL_BUFFER_MAX_RANK ||
+        error("Buffer rank $ndims exceeds METAL_BUFFER_MAX_RANK")
+    meta = Ptr{MetalBufferMeta}(Libc.malloc(sizeof(MetalBufferMeta)))
+    Reactant.unsafe_store_field!(meta, UInt64(pointer(mtl_buf)), Val{:mtl_id}())
+    Reactant.unsafe_store_field!(meta, pjrt_type, Val{:dtype}())
+    Reactant.unsafe_store_field!(meta, Int32(ndims), Val{:ndims}())
+    dims_ptr = Ptr{Int64}(UInt(meta) + fieldoffset(MetalBufferMeta, 4))
+    for i in 1:ndims
+        unsafe_store!(dims_ptr, dims[i], i)
+    end
+    return Ptr{Cvoid}(meta)
+end
+
+"""
+    handle_mtl_buffer(handle) -> MTLBuffer
+
+Reconstruct the retained MTLBuffer from a PJRT buffer handle.
+"""
+function handle_mtl_buffer(handle::Ptr{Cvoid})
+    mtl_id = Reactant.unsafe_load_field(Ptr{MetalBufferMeta}(handle), Val{:mtl_id}())
+    return Metal.MTL.MTLBufferInstance(_ObjC.id{Metal.MTL.MTLBuffer}(mtl_id))
+end
+
+function handle_dims(handle::Ptr{Cvoid})
+    meta = Ptr{MetalBufferMeta}(handle)
+    ndims = Int(Reactant.unsafe_load_field(meta, Val{:ndims}()))
+    dims_ptr = Ptr{Int64}(UInt(meta) + fieldoffset(MetalBufferMeta, 4))
+    return Int64[unsafe_load(dims_ptr, i) for i in 1:ndims]
+end
+
+function handle_dtype(handle::Ptr{Cvoid})
+    return Reactant.unsafe_load_field(Ptr{MetalBufferMeta}(handle), Val{:dtype}())
+end
+
+function handle_nbytes(handle::Ptr{Cvoid})
+    dims = handle_dims(handle)
+    julia_dtype = pjrt_type_to_julia(handle_dtype(handle))
+    n_elems = isempty(dims) ? 1 : prod(dims)
+    return Int(n_elems * sizeof(julia_dtype))
+end
 
 # ============================================================
 # MTLBuffer helpers
@@ -28,7 +86,7 @@ const _BUFFER_DTYPE_CACHE = Dict{UInt64,UInt32}()
     create_mtl_buffer(dev, host_data_ptr, dims, pjrt_type, nbytes) -> MTLBuffer
 
 Allocate a shared MTLBuffer, copy host data into it, and retain it.
-Returns the MTLBuffer (caller must cache dims/dtype separately).
+Returns the MTLBuffer (wrap it with [`new_buffer_handle`](@ref) to get a PJRT handle).
 """
 function create_mtl_buffer(
     dev, host_data_ptr::Ptr{UInt8}, dims::Vector{Int64}, pjrt_type::UInt32, nbytes::Int
@@ -75,9 +133,7 @@ function _client_buffer_from_host(
 
     dev = Metal.device()
     mtl_buf = create_mtl_buffer(dev, data_ptr, dims, type_val, nbytes)
-    handle = UInt64(pointer(mtl_buf))
-    _BUFFER_DIMS_CACHE[handle] = dims
-    _BUFFER_DTYPE_CACHE[handle] = type_val
+    handle = new_buffer_handle(mtl_buf, dims, type_val)
 
     Reactant.unsafe_store_field!(
         args, Ptr{CAPI.PJRT_Event}(C_NULL), Val{:done_with_host_buffer}()
@@ -88,27 +144,27 @@ end
 
 function _buffer_destroy(args::Ptr{CAPI.PJRT_Buffer_Destroy_Args})::Ptr{Cvoid}
     handle = Ptr{Cvoid}(Reactant.unsafe_load_field(args, Val{:buffer}()))
-    raw_id = UInt64(handle)
-    delete!(_BUFFER_DIMS_CACHE, raw_id)
-    delete!(_BUFFER_DTYPE_CACHE, raw_id)
-    destroy_mtl_buffer(raw_id)
+    mtl_id = Reactant.unsafe_load_field(Ptr{MetalBufferMeta}(handle), Val{:mtl_id}())
+    destroy_mtl_buffer(mtl_id)
+    Libc.free(handle)
     return C_NULL
 end
 
 function _buffer_element_type(args::Ptr{CAPI.PJRT_Buffer_ElementType_Args})::Ptr{Cvoid}
     handle = Ptr{Cvoid}(Reactant.unsafe_load_field(args, Val{:buffer}()))
-    raw_id = UInt64(handle)
-    pjrt_type = _BUFFER_DTYPE_CACHE[raw_id]
-    Reactant.unsafe_store_field!(args, CAPI.PJRT_Buffer_Type(pjrt_type), Val{:type}())
+    Reactant.unsafe_store_field!(
+        args, CAPI.PJRT_Buffer_Type(handle_dtype(handle)), Val{:type}()
+    )
     return C_NULL
 end
 
 function _buffer_dimensions(args::Ptr{CAPI.PJRT_Buffer_Dimensions_Args})::Ptr{Cvoid}
     handle = Ptr{Cvoid}(Reactant.unsafe_load_field(args, Val{:buffer}()))
-    raw_id = UInt64(handle)
-    dims = _BUFFER_DIMS_CACHE[raw_id]
-    Reactant.unsafe_store_field!(args, pointer(dims), Val{:dims}())
-    Reactant.unsafe_store_field!(args, Csize_t(length(dims)), Val{:num_dims}())
+    meta = Ptr{MetalBufferMeta}(handle)
+    ndims = Int(Reactant.unsafe_load_field(meta, Val{:ndims}()))
+    dims_ptr = Ptr{Int64}(UInt(meta) + fieldoffset(MetalBufferMeta, 4))
+    Reactant.unsafe_store_field!(args, dims_ptr, Val{:dims}())
+    Reactant.unsafe_store_field!(args, Csize_t(ndims), Val{:num_dims}())
     return C_NULL
 end
 
@@ -116,14 +172,8 @@ function _buffer_on_device_size(
     args::Ptr{CAPI.PJRT_Buffer_OnDeviceSizeInBytes_Args}
 )::Ptr{Cvoid}
     handle = Ptr{Cvoid}(Reactant.unsafe_load_field(args, Val{:buffer}()))
-    raw_id = UInt64(handle)
-    dims = _BUFFER_DIMS_CACHE[raw_id]
-    pjrt_type = _BUFFER_DTYPE_CACHE[raw_id]
-    julia_dtype = pjrt_type_to_julia(pjrt_type)
-    n_elems = length(dims) > 0 ? prod(dims) : 1
-    nbytes = Int(n_elems * sizeof(julia_dtype))
     Reactant.unsafe_store_field!(
-        args, Csize_t(nbytes), Val{:on_device_size_in_bytes}()
+        args, Csize_t(handle_nbytes(handle)), Val{:on_device_size_in_bytes}()
     )
     return C_NULL
 end
@@ -154,17 +204,9 @@ function _buffer_to_host(args::Ptr{CAPI.PJRT_Buffer_ToHostBuffer_Args})::Ptr{Cvo
     dst_size = Int(Reactant.unsafe_load_field(args, Val{:dst_size}()))
 
     if dst_ptr != C_NULL
-        raw_id = UInt64(handle)
-        mtl_buf = Metal.MTL.MTLBufferInstance(
-            _ObjC.id{Metal.MTL.MTLBuffer}(raw_id)
-        )
+        mtl_buf = handle_mtl_buffer(handle)
         data_ptr = Ptr{UInt8}(contents(mtl_buf))
-        dims = _BUFFER_DIMS_CACHE[raw_id]
-        pjrt_type = _BUFFER_DTYPE_CACHE[raw_id]
-        julia_dtype = pjrt_type_to_julia(pjrt_type)
-        n_elems = length(dims) > 0 ? prod(dims) : 1
-        buf_nbytes = Int(n_elems * sizeof(julia_dtype))
-        nbytes = min(dst_size, buf_nbytes)
+        nbytes = min(dst_size, handle_nbytes(handle))
         unsafe_copyto!(dst_ptr, data_ptr, nbytes)
     end
 
