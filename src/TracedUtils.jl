@@ -366,7 +366,7 @@ function make_mlir_fn(
     force_raising = any_input_sharding && !Reactant.Compiler.raising()
 
     if force_raising
-       Reactant.Compiler.activate_raising!(true)
+        Reactant.Compiler.activate_raising!(true)
     end
 
     result = try
@@ -381,7 +381,7 @@ function make_mlir_fn(
         MLIR.IR.deactivate(fnbody)
         Ops.deactivate_constant_context!(fnbody)
         if force_raising
-          Reactant.Compiler.deactivate_raising!(true)
+            Reactant.Compiler.deactivate_raising!(true)
         end
     end
 
@@ -541,11 +541,11 @@ function prepare_mlir_fn_args(
             if Reactant.Sharding.is_sharded(k)
                 @opcall mesh(k.sharding.mesh)
                 traced_args_to_shardings[v] = k.sharding
-		any_input_sharding = true
+                any_input_sharding = true
             elseif input_shardings !== nothing && haskey(input_shardings, k)
                 @opcall mesh(input_shardings[k].mesh)
                 traced_args_to_shardings[v] = input_shardings[k]
-		any_input_sharding = true
+                any_input_sharding = true
             end
         end
     end
@@ -601,7 +601,7 @@ function prepare_mlir_fn_args(
         fnbody,
         seen_args,
         skipped_args,
-	any_input_sharding
+        any_input_sharding,
     )
 end
 
