@@ -57,7 +57,7 @@ Reconstruct the retained MTLBuffer from a PJRT buffer handle.
 """
 function handle_mtl_buffer(handle::Ptr{Cvoid})
     mtl_id = Reactant.unsafe_load_field(Ptr{MetalBufferMeta}(handle), Val{:mtl_id}())
-    return Metal.MTL.MTLBufferInstance(_ObjC.id{Metal.MTL.MTLBuffer}(mtl_id))
+    return Metal.MTL.MTLBuffer(_ObjC.id{Metal.MTL.MTLBuffer}(mtl_id))
 end
 
 function handle_dims(handle::Ptr{Cvoid})
@@ -106,7 +106,7 @@ end
 Free and release an MTLBuffer from its raw ObjC id.
 """
 function destroy_mtl_buffer(raw_id::UInt64)
-    mtl_buf = Metal.MTL.MTLBufferInstance(
+    mtl_buf = Metal.MTL.MTLBuffer(
         _ObjC.id{Metal.MTL.MTLBuffer}(raw_id)
     )
     Metal.free(mtl_buf)

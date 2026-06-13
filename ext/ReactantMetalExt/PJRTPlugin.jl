@@ -56,6 +56,18 @@ const SENTINEL_MEMORY = Int64(0xFEEDFACE)
 const SENTINEL_ERROR = Int64(0xDEAD)
 const SENTINEL_EVENT = Int64(0x1234CAFE)
 
+# The PJRT C API protocol version this plugin implements. This is deliberately
+# NOT CAPI.PJRT_API_MINOR (the version of the vendored headers): the framework
+# gates newer protocol behavior on the version the PLUGIN reports. In
+# particular, since minor 105 the framework dereferences PJRT_Memory handles
+# directly (memory->vtable user-data mechanism, see SupportsMemoryUserData in
+# xla/pjrt/c_api_client/pjrt_c_api_client.cc), which our opaque sentinel
+# handles do not support. The framework accepts any plugin minor >= 29
+# (kMinPjRtMinor in xla/pjrt/pjrt_api.cc). 0.93 is the protocol level this
+# plugin was written and validated against; bump only after implementing the
+# corresponding protocol additions.
+const PLUGIN_PJRT_API_MINOR = 93
+
 # Error handle for UNIMPLEMENTED responses
 UNIMPL_ERROR_HANDLE = Ptr{Cvoid}(0)
 
@@ -623,7 +635,7 @@ function init_pjrt_handles!()
             Csize_t(sizeof(CAPI.PJRT_Api_Version)),
             Ptr{CAPI.PJRT_Extension_Base}(0),
             Cint(CAPI.PJRT_API_MAJOR),
-            Cint(CAPI.PJRT_API_MINOR),
+            Cint(PLUGIN_PJRT_API_MINOR),
         ),
         fns...,
     )
