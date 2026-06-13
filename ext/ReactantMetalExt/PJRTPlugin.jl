@@ -479,9 +479,7 @@ function init_pjrt_handles!()
         (Ptr{Reactant.XLA.PJRT.CAPI.PJRT_LoadedExecutable_GetDeviceAssignment_Args},)
     )
     global cfn_device_get_attributes = @cfunction(
-        _device_get_attributes,
-        Ptr{Cvoid},
-        (Ptr{PJRT_Device_GetAttributes_Args},)
+        _device_get_attributes, Ptr{Cvoid}, (Ptr{PJRT_Device_GetAttributes_Args},)
     )
 
     # Rebuild the function pointer tuple and PJRT_Api struct at runtime.
@@ -649,4 +647,3 @@ end
 # ============================================================
 # Public API
 # ============================================================
-

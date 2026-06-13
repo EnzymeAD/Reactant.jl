@@ -712,9 +712,10 @@ function handle_scatter(ctx, op)
     op2_val = IR.operand(op, 2)
     op3_val = IR.operand(op, 3)
 
-    all_const = haskey(ctx.const_ir_data, op1_val) &&
-                haskey(ctx.const_ir_data, op2_val) &&
-                haskey(ctx.const_ir_data, op3_val)
+    all_const =
+        haskey(ctx.const_ir_data, op1_val) &&
+        haskey(ctx.const_ir_data, op2_val) &&
+        haskey(ctx.const_ir_data, op3_val)
 
     if all_const
         base_shape, base_flat = ctx.const_ir_data[op1_val]
@@ -743,7 +744,9 @@ function handle_scatter(ctx, op)
             if bname == "stablehlo.constant"
                 bval_attr = IR.getattr(body_op, "value")
                 if bval_attr !== nothing && IR.issplat(bval_attr)
-                    body_const_val = Float64(API.mlirDenseElementsAttrGetFloatSplatValue(bval_attr))
+                    body_const_val = Float64(
+                        API.mlirDenseElementsAttrGetFloatSplatValue(bval_attr)
+                    )
                     use_body_const = true
                 end
             end
@@ -751,7 +754,9 @@ function handle_scatter(ctx, op)
 
         for i in 0:(n_updates - 1)
             # Extract ND index from row i of the indices tensor (row-major)
-            nd_idx = Int[round(Int, idx_flat[i * idx_depth + d + 1]) for d in 0:(idx_depth - 1)]
+            nd_idx = Int[
+                round(Int, idx_flat[i * idx_depth + d + 1]) for d in 0:(idx_depth - 1)
+            ]
             # Compute flat position in the output tensor (row-major)
             flat_pos = 0
             stride = 1
@@ -1653,7 +1658,7 @@ function execute!(exec::MetalExecutable, input_bufs::Vector)
 
             # Export MPSNDArray data directly to raw MTLBuffer (no MtlArray needed)
             cmdbuf = Metal.MTL.MTLCommandBuffer(queue) do cmdbuf
-                Metal.MPS.exportDataWithCommandBuffer(
+                return Metal.MPS.exportDataWithCommandBuffer(
                     ndarray, cmdbuf, out_buf, mps_dtype, UInt(0)
                 )
             end

@@ -438,9 +438,7 @@ function _loaded_exec_destroy(
     # --- Release ObjC objects (balances retain in freeze_executable) ---
 
     # Graph
-    graph = Metal.MPSGraphs.MPSGraph(
-        ObjC_id{Metal.MPSGraphs.MPSGraph}(meta.graph_id)
-    )
+    graph = Metal.MPSGraphs.MPSGraph(ObjC_id{Metal.MPSGraphs.MPSGraph}(meta.graph_id))
     ObjC.release(graph)
 
     # Input placeholders
@@ -549,9 +547,7 @@ function _loaded_exec_execute(
     ObjC_id = Metal.MTL.ObjectiveC.id
 
     # Reconstruct MPSGraph from retained ObjC id
-    graph = Metal.MPSGraphs.MPSGraph(
-        ObjC_id{Metal.MPSGraphs.MPSGraph}(meta.graph_id)
-    )
+    graph = Metal.MPSGraphs.MPSGraph(ObjC_id{Metal.MPSGraphs.MPSGraph}(meta.graph_id))
 
     # Reconstruct input MTLBuffers from PJRT argument handles (MetalBufferMeta ptrs)
     input_bufs = Metal.MTL.MTLBuffer[]
@@ -637,7 +633,7 @@ function _loaded_exec_execute(
 
             out_buf = Metal.alloc(dev, out_nbytes; storage=Metal.SharedStorage)
             cmdbuf = Metal.MTL.MTLCommandBuffer(queue) do cmdbuf
-                Metal.MPS.exportDataWithCommandBuffer(
+                return Metal.MPS.exportDataWithCommandBuffer(
                     ndarray, cmdbuf, out_buf, mps_dtype_jl, UInt(0)
                 )
             end
