@@ -386,16 +386,18 @@ function _client_compile(args::Ptr{CAPI.PJRT_Client_Compile_Args})::Ptr{Cvoid}
     # is not in Reactant's registry.  stablehloDeserializePortableArtifactNoError
     # handles VHLO internally (parses VHLO, upgrades to StableHLO) and returns
     # a StableHLO module in our context.
-    exec, mlir_text = IR.with_context() do _ctx
-        str_ref = API.MlirStringRef(Ptr{Cchar}(code_ptr), Csize_t(code_size))
-        mlir_mod_ref = API.stablehloDeserializePortableArtifactNoError(str_ref, _ctx)
-        mod = IR.Module(mlir_mod_ref)
-        # Serialize MLIR text BEFORE compile_mlir_module modifies/consumes the module.
-        io = IOBuffer()
-        show(io, mod)
-        mlir_str = String(take!(io))
-        exec_inner = compile_mlir_module(mod)
-        (exec_inner, mlir_str)
+    exec, mlir_text = IR.@dispose ctx = Reactant.ReactantContext() begin
+        IR.@with_context ctx begin
+            str_ref = API.MlirStringRef(Ptr{Cchar}(code_ptr), Csize_t(code_size))
+            mlir_mod_ref = API.stablehloDeserializePortableArtifactNoError(str_ref, ctx)
+            mod = IR.Module(mlir_mod_ref)
+            # Serialize MLIR text BEFORE compile_mlir_module modifies/consumes the module.
+            io = IOBuffer()
+            show(io, mod)
+            mlir_str = String(take!(io))
+            exec_inner = compile_mlir_module(mod)
+            (exec_inner, mlir_str)
+        end
     end
 
     # Store MLIR text in the executable struct (for _exec_optimized_program)
@@ -436,14 +438,14 @@ function _loaded_exec_destroy(
     # --- Release ObjC objects (balances retain in freeze_executable) ---
 
     # Graph
-    graph = Metal.MPSGraphs.MPSGraphInstance(
+    graph = Metal.MPSGraphs.MPSGraph(
         ObjC_id{Metal.MPSGraphs.MPSGraph}(meta.graph_id)
     )
     ObjC.release(graph)
 
     # Input placeholders
     for i in 1:n_in
-        ph = Metal.MPSGraphs.MPSGraphTensorInstance(
+        ph = Metal.MPSGraphs.MPSGraphTensor(
             ObjC_id{Metal.MPSGraphs.MPSGraphTensor}(
                 unsafe_load(meta.input_placeholder_ids, i)
             ),
@@ -453,7 +455,7 @@ function _loaded_exec_destroy(
 
     # Output tensors
     for i in 1:n_out
-        t = Metal.MPSGraphs.MPSGraphTensorInstance(
+        t = Metal.MPSGraphs.MPSGraphTensor(
             ObjC_id{Metal.MPSGraphs.MPSGraphTensor}(unsafe_load(meta.output_tensor_ids, i))
         )
         ObjC.release(t)
@@ -461,7 +463,7 @@ function _loaded_exec_destroy(
 
     # Const placeholders
     for i in 1:n_c
-        ph = Metal.MPSGraphs.MPSGraphTensorInstance(
+        ph = Metal.MPSGraphs.MPSGraphTensor(
             ObjC_id{Metal.MPSGraphs.MPSGraphTensor}(
                 unsafe_load(meta.const_placeholder_ids, i)
             ),
@@ -472,7 +474,7 @@ function _loaded_exec_destroy(
     # Const MTLBuffers (allocated via Metal.alloc — freed via Metal.free)
     mtl_id = Metal.MTL.ObjectiveC.id
     for i in 1:n_c
-        mtl_buf = Metal.MTL.MTLBufferInstance(
+        mtl_buf = Metal.MTL.MTLBuffer(
             mtl_id{Metal.MTL.MTLBuffer}(unsafe_load(meta.const_mtl_buf_ids, i))
         )
         Metal.free(mtl_buf)
@@ -547,7 +549,7 @@ function _loaded_exec_execute(
     ObjC_id = Metal.MTL.ObjectiveC.id
 
     # Reconstruct MPSGraph from retained ObjC id
-    graph = Metal.MPSGraphs.MPSGraphInstance(
+    graph = Metal.MPSGraphs.MPSGraph(
         ObjC_id{Metal.MPSGraphs.MPSGraph}(meta.graph_id)
     )
 
@@ -567,7 +569,7 @@ function _loaded_exec_execute(
         input_dtype = pjrt_type_to_julia(unsafe_load(meta.input_dtypes, k))
         mps_dtype = julia_to_mps_dtype(input_dtype)
         mps_shape = convert(Metal.MPS.MPSShape, ir_shape)
-        ph = Metal.MPSGraphs.MPSGraphTensorInstance(
+        ph = Metal.MPSGraphs.MPSGraphTensor(
             ObjC_id{Metal.MPSGraphs.MPSGraphTensor}(
                 unsafe_load(meta.input_placeholder_ids, k)
             ),
@@ -578,13 +580,13 @@ function _loaded_exec_execute(
     # Add constant feeds (from frozen MTLBuffers + stored shape/dtype)
     # Const shapes are stored as Julia shapes; MPSGraphTensorData needs IR order (reversed for 2D+)
     for i in 1:Int(meta.n_consts)
-        ph = Metal.MPSGraphs.MPSGraphTensorInstance(
+        ph = Metal.MPSGraphs.MPSGraphTensor(
             ObjC_id{Metal.MPSGraphs.MPSGraphTensor}(
                 unsafe_load(meta.const_placeholder_ids, i)
             ),
         )
         buf_id = unsafe_load(meta.const_mtl_buf_ids, i)
-        mtl_buf = Metal.MTL.MTLBufferInstance(id{Metal.MTL.MTLBuffer}(buf_id))
+        mtl_buf = Metal.MTL.MTLBuffer(id{Metal.MTL.MTLBuffer}(buf_id))
         rank = Int(unsafe_load(meta.const_shape_ranks, i))
         julia_shape = [
             Int(unsafe_load(unsafe_load(meta.const_shapes, i), j)) for j in 1:rank
@@ -600,7 +602,7 @@ function _loaded_exec_execute(
     # Reconstruct output tensors from retained ObjC ids
     n_out = Int(meta.n_outputs)
     output_tensors = [
-        Metal.MPSGraphs.MPSGraphTensorInstance(
+        Metal.MPSGraphs.MPSGraphTensor(
             ObjC_id{Metal.MPSGraphs.MPSGraphTensor}(unsafe_load(meta.output_tensor_ids, i))
         ) for i in 1:n_out
     ]
