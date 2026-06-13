@@ -6,6 +6,7 @@ parsed_args = parse_args(ARGS)
 
 const ENZYMEJAX_INSTALLED = Ref(false)
 const NUMPYRO_INSTALLED = Ref(false)
+const TORCH_INSTALLED = Ref(false)
 
 # Install specific packages. Pkg.test doesn't pick up CondaPkg.toml in test folder
 if (
@@ -29,6 +30,44 @@ if (
     try
         CondaPkg.add_pip("numpyro")
         NUMPYRO_INSTALLED[] = true
+    catch
+    end
+end
+
+if (
+    isempty(parsed_args.positionals) ||
+    "integration" ∈ parsed_args.positionals ||
+    "integration/pytorch" ∈ parsed_args.positionals
+)
+    # A CPU build of torch is required: the default PyPI torch wheel on Linux is a
+    # CUDA build whose libtorch_cuda.so clashes with Reactant's runtime and fails to
+    # import after Reactant loads, which would make the extension disable torch
+    # support and integration/pytorch skip itself instead of running. CondaPkg cannot
+    # pin a per-package index, so we let it resolve torch and torchax normally, then
+    # reinstall the resolved torch as its CPU variant from the PyTorch CPU index.
+    #
+    # torchax is pinned to the versions whose internal API layout ReactantPythonCallExt
+    # depends on (see ext/ReactantPythonCallExt/pytorch.jl). Note that torchax >=0.0.10
+    # declares jax>=0.6.2 while the enzymejax block above pins jax==0.5, so these two
+    # cannot share one environment: the pytorch integration tests are expected to run in
+    # a job that does not also install jax==0.5 (i.e. not the enzymejax/full run).
+    try
+        CondaPkg.add_pip("torch"; version=">=2.4")
+        CondaPkg.add_pip("torchax"; version=">=0.0.10,<0.0.13")
+        # Swap to the CPU torch build. We read the resolved version from package
+        # metadata (not by importing torch, since the CUDA build may fail to import)
+        # and force-reinstall the matching CPU wheel with --no-deps, since all of
+        # torch's dependencies are already present from the resolve above.
+        CondaPkg.withenv() do
+            run(`python -m ensurepip --upgrade`)
+            torch_version = readchomp(
+                `python -c "import importlib.metadata as m; print(m.version('torch').split('+')[0])"`,
+            )
+            run(
+                `python -m pip install --index-url https://download.pytorch.org/whl/cpu --no-deps --force-reinstall "torch==$(torch_version)"`,
+            )
+        end
+        TORCH_INSTALLED[] = true
     catch
     end
 end
@@ -66,6 +105,10 @@ end
 
 if !NUMPYRO_INSTALLED[]
     delete!(testsuite, "integration/numpyro")
+end
+
+if !TORCH_INSTALLED[]
+    delete!(testsuite, "integration/pytorch")
 end
 
 include("test_helpers.jl")
