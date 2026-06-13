@@ -8,8 +8,7 @@ using Metal: MtlArray
 using Metal.MTL: @objc, id, nil, NSString, NSArray, NSDictionary, reinterpret
 
 # MTLBuffer types for Buffer.jl helpers
-using Metal.MTL:
-    MTLDevice, MTLBuffer, NSUInteger, contents
+using Metal.MTL: MTLDevice, MTLBuffer, NSUInteger, contents
 
 # Descriptor types needed by @objc [T alloc] calls (macro requires bare identifiers)
 using Metal.MPSGraphs:
@@ -62,9 +61,7 @@ function __init__()
             try
                 init_pjrt_handles!()
                 Reactant.Accelerators.Registration.register_backend(
-                    "metal";
-                    priority=400,
-                    pjrt_initialize_function=make_pjrt_client,
+                    "metal"; priority=400, pjrt_initialize_function=make_pjrt_client
                 )
             catch e
                 @warn "Metal backend initialization failed" exception = e

@@ -106,9 +106,7 @@ end
 Free and release an MTLBuffer from its raw ObjC id.
 """
 function destroy_mtl_buffer(raw_id::UInt64)
-    mtl_buf = Metal.MTL.MTLBuffer(
-        _ObjC.id{Metal.MTL.MTLBuffer}(raw_id)
-    )
+    mtl_buf = Metal.MTL.MTLBuffer(_ObjC.id{Metal.MTL.MTLBuffer}(raw_id))
     Metal.free(mtl_buf)
     _ObjC.Foundation.release(mtl_buf)
     return nothing
