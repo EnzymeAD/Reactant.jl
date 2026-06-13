@@ -60,13 +60,18 @@ steps:
                 - src
                 - ext
         commands: |
-          julia --project=. -e 'println("--- :julia: Instantiating project")
+          julia -e 'println("--- :julia: Setting up Metal test environment")
               using Pkg
-              Pkg.develop([PackageSpec(path="lib/ReactantCore")])'
+              Pkg.activate("metal_test_env")
+              Pkg.develop([PackageSpec(path="."), PackageSpec(path="lib/ReactantCore")])
+              # Released Metal.jl (<= 1.9.3) caps GPUCompiler below Reactant's
+              # requirement (>= 1.17 since #2963). Pin the Metal.jl commit that
+              # bumped GPUCompiler until a release including it is tagged.
+              Pkg.add(url="https://github.com/JuliaGPU/Metal.jl", rev="9a9d568d2895800a47edc36972b162cbd2db70ea")
+              Pkg.add(["Enzyme", "Lux", "Random", "Test"])'
 
-          julia --project=. -e 'println("--- :julia: Run Tests")
-              using Pkg
-              Pkg.test(; coverage="user", test_args=["plugins/metal"])'
+          julia --project=metal_test_env --code-coverage=user -e 'println("--- :julia: Run Metal plugin tests")
+              include("test/plugins/metal.jl")'
         agents:
           queue: "juliaecosystem"
           os: "macos"
