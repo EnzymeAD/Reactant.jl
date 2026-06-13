@@ -584,6 +584,42 @@ function math_gelu(
 end
 
 """
+`blas_gemm`
+
+C := alpha*op(A)*op(B) + beta*C\"
+"""
+function blas_gemm(
+    alpha::Value,
+    A::Value,
+    B::Value,
+    beta::Value,
+    C::Value;
+    output::IR.Type,
+    transa=nothing,
+    transb=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[output,]
+    operands = Value[alpha, A, B, beta, C]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(transa) && push!(attributes, NamedAttribute("transa", transa))
+    !isnothing(transb) && push!(attributes, NamedAttribute("transb", transb))
+
+    return create_operation(
+        "enzymexla.blas.gemm",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
 `lapack_gemqrt`
 
 This operation is modeled after LAPACK\'s *GEMQR routines.
