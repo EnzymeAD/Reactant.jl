@@ -29,8 +29,8 @@ jobs:
       fail-fast: false
       matrix:
         version:
-          - "1.10"
-          - "1.11"
+          #- "1.10"
+          #- "1.11"
           - "1.12"
           # - 'nightly'
         os:
@@ -97,7 +97,7 @@ jobs:
           - "ifrt"
     uses: ./.github/workflows/CommonCI.yml
     with:
-      julia_version: "1.10"
+      julia_version: "1.12"
       os: "ubuntu-24.04"
       runtime: ${{ matrix.runtime }}
       test_args: ${{ matrix.test_group == 'core' && 'core plugins' || matrix.test_group }}
