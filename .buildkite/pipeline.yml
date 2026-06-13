@@ -64,18 +64,17 @@ steps:
               using Pkg
               Pkg.activate("metal_test_env")
               Pkg.develop([PackageSpec(path="."), PackageSpec(path="lib/ReactantCore")])
-              # Released Metal.jl (<= 1.9.3) caps GPUCompiler below Reactant's
-              # requirement (>= 1.17 since #2963). Pin the Metal.jl commit that
-              # bumped GPUCompiler until a release including it is tagged.
+              # Released Metal.jl (<= 1.9.3) caps GPUCompiler below the
+              # minimum Reactant requires (>= 1.17 since #2963). Pin the
+              # Metal.jl commit that bumped GPUCompiler until a release
+              # including it is tagged.
               Pkg.add(url="https://github.com/JuliaGPU/Metal.jl", rev="9a9d568d2895800a47edc36972b162cbd2db70ea")
               Pkg.add(["Enzyme", "Lux", "Random", "Test"])'
 
           julia --project=metal_test_env --code-coverage=user -e 'println("--- :julia: Run Metal plugin tests")
               include("test/plugins/metal.jl")'
         agents:
-          queue: "juliaecosystem"
-          os: "macos"
-          arch: "aarch64"
+          queue: "metal"
         env:
           JULIA_DEBUG: "Reactant,Reactant_jll"
         if: build.message !~ /\[skip tests\]/ && build.message !~ /\[skip metal\]/
