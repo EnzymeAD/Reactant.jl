@@ -1285,24 +1285,6 @@ function codegen_unflatten!(
     return (body_code, used_shardinfo)
 end
 
-"""
-    codegen_unflatten_aliased_args!
-
-Generate the code that points mutated/aliased arguments at the correct concrete results.
-
-Each `preserved_args` entry is classified *as a whole* (not per path): a result that
-aliases an input argument (it has at least one `:args` path) must take the source
-argument's buffer as it was *before* the XLA execution overwrote the arguments, so its
-source-buffer read is emitted into `pre_execution_read_code` (placed at the very front of
-the body). A pure `:resargs` mutation takes the value *after* the write-back, so its read
-is emitted into `post_execution_read_code`. The destination writes (`traced_setfield!`)
-always go into `write_code` so they are applied after the write-back.
-
-Classifying per result rather than per path matters because a single result can carry
-both an `:args` and a `:resargs` path pointing at the *same* destination; handling it once
-(deduplicated by destination) avoids the post-execution write clobbering the
-pre-execution one.
-"""
 function codegen_unflatten_aliased_args!(
     pre_execution_read_code,
     post_execution_read_code,
