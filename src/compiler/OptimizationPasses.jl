@@ -11,6 +11,9 @@ const OpenMP = Ref{Bool}(true)
 const SROA_ATTRIBUTOR = Ref{Bool}(true)
 const DEBUG_PROBPROG_DUMP_VALUE = Ref(false)
 const DEBUG_PROBPROG_DISABLE_OPT = Ref(true)
+const DEBUG_MLIR_DIAGNOSTIC_LEVEL = Ref{MLIR.API.MlirDiagnosticSeverity}(
+    MLIR.API.MlirDiagnosticError
+)
 
 const WHILE_CONCAT = Ref(false)
 const DUS_TO_CONCAT = Ref(false)
@@ -161,10 +164,12 @@ function run!(pm::MLIR.IR.PassManager, op, key::String="")
     diagnostics = DiagnosticMessage[]
     handler =
         MLIR.IR.attach_diagnostic_handler!(; context=MLIR.IR.current_context()) do diag
+            severity = MLIR.IR.severity(diag)
+            severity > DEBUG_MLIR_DIAGNOSTIC_LEVEL[] && return false
             push!(
                 diagnostics,
                 DiagnosticMessage(
-                    MLIR.IR.severity(diag),
+                    severity,
                     _sprint_diagnostic(diag),
                     _collect_location_frames(MLIR.IR.location(diag)),
                 ),
@@ -174,12 +179,11 @@ function run!(pm::MLIR.IR.PassManager, op, key::String="")
     result = try
         MLIR.IR.run!(pm, op, key)
     catch
-        MLIR.IR.detach_diagnostic_handler!(handler)
         throw(CompilationError(key, diagnostics))
+    finally
+        MLIR.IR.detach_diagnostic_handler!(handler)
     end
-    MLIR.IR.detach_diagnostic_handler!(handler)
-    visible = filter(d -> d.severity != MLIR.API.MlirDiagnosticRemark, diagnostics)
-    isempty(visible) || _print_diagnostics(stderr, visible)
+    isempty(diagnostics) || _print_diagnostics(stderr, diagnostics)
     return result
 end
 
