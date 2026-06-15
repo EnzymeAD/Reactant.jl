@@ -15310,12 +15310,13 @@ function reactantXLAFree(lrtP, buffer0)
     )::Cvoid
 end
 
-function reactantXLAExec(lrtP, modstr, argcnt, args)
+function reactantXLAExec(lrtP, modstr, argcnt, args, shapeMetadata)
     @ccall mlir_c.reactantXLAExec(
         lrtP::Ptr{Ptr{LinkableRuntime}},
         modstr::Cstring,
         argcnt::Int64,
         args::Ptr{Ptr{Cvoid}},
+        shapeMetadata::Ptr{Ptr{Cvoid}}
     )::Cvoid
 end
 

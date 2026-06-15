@@ -1,3 +1,4 @@
+#include <cstdint>
 #include <iostream>
 #include <vector>
 
@@ -3412,6 +3413,15 @@ struct ShapeInfo {
   int64_t transposed = -1;
   llvm::SmallVector<int64_t, 2> shape;
 };
+struct ShapeMetadata {
+  // enum = 0 for float, enum = 1 for int (probably add more datatypes/switch this to a define later)
+  int64_t datatypeEnum = -1; 
+  int64_t bitWidth = -1;
+
+  int64_t ldimIdx = -1;
+  int64_t transposedIdx = -1;
+  llvm::SmallVector<int64_t, 2> shapeIdxs;
+};
 
 std::string
 encodeShapeInfoAsString(const llvm::SmallDenseMap<int, ShapeInfo> &map) {
@@ -3466,7 +3476,7 @@ getCacheKeyFromRuntimeShape(const llvm::SmallDenseMap<int, ShapeInfo> &map) {
 
 REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
                                   const char *modstr, int64_t argcnt,
-                                  void **args) {
+                                  void **args, void **shapeMetadata) {
   auto lrt = *lrtP;
   auto &cache = lrt->executables[modstr];
   std::vector<PjRtBuffer *> baseArrays(argcnt);
@@ -3474,7 +3484,19 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
 
   std::vector<std::vector<int64_t>> sizeKey;
   sizeKey.reserve(argcnt);
+  llvm::SmallDenseMap<int, ShapeMetadata> shapeMetadataMap;
   for (int64_t i = 0; i < argcnt; i++) {
+    if (shapeMetadata[i]) {
+      // datatypeEnum is currently unused, and can be safely removed
+      shapeMetadataMap[i].datatypeEnum = ((int64_t*)(shapeMetadata[i]))[0];
+      shapeMetadataMap[i].bitWidth = ((int64_t*)(shapeMetadata[i]))[1];
+      shapeMetadataMap[i].ldimIdx = ((int64_t*)(shapeMetadata[i]))[2];
+      shapeMetadataMap[i].transposedIdx = ((int64_t*)(shapeMetadata[i]))[3];
+      for (int64_t j = 0; j < ((int64_t*)(shapeMetadata[i]))[4]; j++) {
+        shapeMetadataMap[i].shapeIdxs.push_back(((int64_t*)(shapeMetadata[i]))[j+5]);
+      }
+    }
+
     auto &&[argB, argO, argP] = bufferAndOffset(lrt, args[i]);
     if (argO != 0) {
       llvm::errs() << "only zero-offset execution supported, argument " << i
@@ -3501,79 +3523,50 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
       mlir::ModuleOp::create(mlir::OpBuilder(&context).getUnknownLoc()));
   mlir::OpBuilder builder(module->getContext());
 
-  ParserConfig config(&context, /*verify_after_parse*/ true);
-  if (failed(parseSourceString(modstr, module->getBody(), config))) {
-    llvm::errs() << " failed to parse module:\n";
-    exit(1);
-  }
-
-  auto funcOp = cast<func::FuncOp>(&module->getBody()->back());
   llvm::SmallDenseMap<int, ShapeInfo> shapeMap;
-  int idx = -1;
-  for (mlir::Attribute attr : *funcOp.getArgAttrs()) {
-    idx++;
-    mlir::DictionaryAttr dAttr = dyn_cast<mlir::DictionaryAttr>(attr);
-    if (!dAttr || dAttr.empty())
-      continue;
-
-    for (auto namedAttr : dAttr) {
-      mlir::StringRef name = namedAttr.getName();
-      mlir::Attribute value = namedAttr.getValue();
-
-      if (!name.starts_with("shape."))
-        continue;
-
-      auto targetIdx = cast<mlir::IntegerAttr>(value).getInt();
-      if (targetIdx < 0) {
-        continue;
-      }
-      auto literal_or = baseArrays[targetIdx]->ToLiteralSync();
+  for (auto [idx, metadata] : shapeMetadataMap) {
+    if (metadata.ldimIdx >= 0) {
+      auto literal_or = baseArrays[metadata.ldimIdx]->ToLiteralSync();
       if (!literal_or.ok()) {
         llvm::errs() << "failed move from device to host\n";
         continue;
       }
       int runtimeValue = literal_or.value()->GetFirstElement<int>();
-
-      llvm::StringRef suffix = name.drop_front(strlen("shape."));
-      if (suffix == "ld") {
-        shapeMap[idx].ldim = runtimeValue;
-        continue;
-      }
-      if (suffix == "transpose") {
-        shapeMap[idx].transposed = runtimeValue;
-        continue;
-      }
-      int dimIdx;
-      if (suffix.empty() || suffix.getAsInteger(10, dimIdx))
-        continue;
-      if (shapeMap[idx].shape.size() <= dimIdx)
-        shapeMap[idx].shape.resize(dimIdx + 1);
-
-      shapeMap[idx].shape[dimIdx] = runtimeValue;
+      shapeMap[idx].ldim = runtimeValue;
     }
 
-    if (shapeMap.count(idx) > 0) {
-      auto RTT = cast<mlir::RankedTensorType>(
-          MyValueOrThrow(xla::ConvertShapeToType<mlir::RankedTensorType>(
-              baseArrays[idx]->on_device_shape(), builder)));
-
-      int64_t numElems = RTT.getNumElements();
-      auto srcElemTy = RTT.getElementType();
-      unsigned srcBits = srcElemTy.getIntOrFloatBitWidth();
-
-      Type operandType = funcOp.getFunctionType().getInput(idx);
-      auto shapedType = cast<ShapedType>(operandType);
-      Type elemType = shapedType.getElementType();
-
-      unsigned dstBits = elemType.getIntOrFloatBitWidth();
-
-      int64_t totalBytes = numElems * (srcBits / 8);
-      int64_t newElemBytes = dstBits / 8;
-
-      int64_t newNumElems = totalBytes / newElemBytes;
-
-      shapeMap[idx].totalSize = newNumElems;
+    if (metadata.transposedIdx >= 0) {
+      auto literal_or = baseArrays[metadata.transposedIdx]->ToLiteralSync();
+      if (!literal_or.ok()) {
+        llvm::errs() << "failed move from device to host\n";
+        continue;
+      }
+      int runtimeValue = literal_or.value()->GetFirstElement<int>();
+      shapeMap[idx].transposed = runtimeValue;
     }
+
+    for (auto shapeIdx : metadata.shapeIdxs) {
+      auto literal_or = baseArrays[shapeIdx]->ToLiteralSync();
+      if (!literal_or.ok()) {
+        llvm::errs() << "failed move from device to host\n";
+        continue;
+      }
+      int runtimeValue = literal_or.value()->GetFirstElement<int>();
+      shapeMap[idx].shape.push_back(runtimeValue);
+    }
+
+    // calculate the number of elements in the passed shape, keeping into account
+    // that we may have to cast the data into a different datatype with a different bit width.
+    auto RTT = cast<mlir::RankedTensorType>(
+        MyValueOrThrow(xla::ConvertShapeToType<mlir::RankedTensorType>(
+            baseArrays[idx]->on_device_shape(), builder)));
+
+    int64_t numElems = RTT.getNumElements();
+    auto srcElemTy = RTT.getElementType();
+    unsigned srcBits = srcElemTy.getIntOrFloatBitWidth();
+
+    int64_t newNumElems = (numElems * srcBits) / shapeMetadataMap[idx].bitWidth;
+    shapeMap[idx].totalSize = newNumElems;
   }
 
   if (!shapeMap.empty()) {
@@ -3583,6 +3576,14 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
 
   auto iter = cache.find(sizeKey);
   if (iter == cache.end()) {
+    ParserConfig config(&context, /*verify_after_parse*/ true);
+    if (failed(parseSourceString(modstr, module->getBody(), config))) {
+      llvm::errs() << " failed to parse module:\n";
+      exit(1);
+    }
+
+    auto funcOp = cast<func::FuncOp>(&module->getBody()->back());
+    
     funcOp.setSymName(builder.getStringAttr("main"));
     funcOp.setVisibility(SymbolTable::Visibility::Public);
 
@@ -3617,8 +3618,7 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
 
     pm.addPass(mlir::enzyme::createPropagateShapesPass(
         mlir::enzyme::PropagateShapesPassOptions{shapesAsString}));
-    pm.addPass(createCanonicalizerPass());
-    pm.addPass(mlir::enzyme::createPrintPass());
+    // pm.addPass(createCanonicalizerPass());
     pm.addPass(mlir::stablehlo::createStablehloRefineArgumentsPass(types));
     pm.addPass(mlir::stablehlo::createStablehloRefineShapesPass());
     pm.addNestedPass<mlir::func::FuncOp>(
