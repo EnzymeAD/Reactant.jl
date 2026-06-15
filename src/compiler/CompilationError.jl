@@ -146,12 +146,45 @@ function _print_frame(io::IO, j::Int, frame::StackFrame)
     end
 end
 
+function _print_julia_code_snippet(io::IO, frames)
+    isempty(frames) && return nothing
+    frame = frames[@something findfirst(
+        frame -> !occursin("Reactant.jl", frame.location), frames
+    ) firstindex(frames)]
+    if isnothing(match(r".*:\d+:\d+", frame.location))
+        return nothing
+    end
+
+    file, line, col = split(frame.location, ":"; keepempty=false)
+    endswith(file, ".jl") || return nothing
+
+    line, col = parse(Int, line), parse(Int, col)
+
+    iszero(col) || return nothing
+
+    isfile(file) || return nothing
+
+    border = 1
+
+    println(io)
+    println(io, frame.location)
+
+    lines = readlines(file)
+    line_range = max(line - border, firstindex(lines)):min(line + border, lastindex(lines))
+    num_digits = div(maximum(line_range), 10, RoundUp)
+    for li in line_range
+        printstyled(io, lpad(string(li), num_digits), " | "; color=:light_black)
+        println(io, lines[li])
+    end
+end
+
 function _print_diagnostics(io::IO, diagnostics::Vector{DiagnosticMessage})
     for (i, diag) in enumerate(diagnostics)
         i > 1 && println(io)
         label = _severity_label(diag.severity)
         printstyled(io, label; color=_severity_color(diag.severity), bold=true)
         println(io, ": $(diag.message)")
+        _print_julia_code_snippet(io, diag.frames)
         if !isempty(diag.frames)
             printstyled(io, "Stacktrace:"; bold=true)
             println(io)
