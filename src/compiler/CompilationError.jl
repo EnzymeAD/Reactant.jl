@@ -121,11 +121,14 @@ function _severity_color(sev::MLIR.API.MlirDiagnosticSeverity)
     return :light_black
 end
 
-function _print_frame(io::IO, j::Int, frame::StackFrame)
-    print(io, "  ")
-    printstyled(io, "[$j]"; color=:light_black)
+function _print_frame(io::IO, j::Int, frame::StackFrame, num_frames::Int)
+    max_size = ndigits(num_frames) + 4
+    printstyled(io, lpad("[$j]", max_size); color=:light_black)
     if isempty(frame.name)
         print(io, " ")
+        printstyled(io, "unknown"; bold=true)
+        println(io)
+        print(io, " "^(max_size - 1))
         printstyled(io, "@"; color=:cyan)
         print(io, " ")
         printstyled(io, frame.location; color=:light_black)
@@ -138,7 +141,7 @@ function _print_frame(io::IO, j::Int, frame::StackFrame)
         print(io, " ")
         printstyled(io, frame.name; bold=true)
         println(io)
-        print(io, "     ")
+        print(io, " "^(max_size - 1))
         printstyled(io, "@"; color=:cyan)
         print(io, " ")
         printstyled(io, frame.location; color=:light_black)
@@ -189,7 +192,7 @@ function _print_diagnostics(io::IO, diagnostics::Vector{DiagnosticMessage})
             printstyled(io, "Stacktrace:"; bold=true)
             println(io)
             for (j, frame) in enumerate(diag.frames)
-                _print_frame(io, j, frame)
+                _print_frame(io, j, frame, length(diag.frames))
             end
         end
     end
