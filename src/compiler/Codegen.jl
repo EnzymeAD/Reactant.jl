@@ -1238,15 +1238,89 @@ function codegen_unflatten!(
         resultgen_code,
     )
 
-    # if some argument is mutated, change them to point to the correct concrete results
+    # If some argument is mutated, change them to point to the correct concrete results.
+    #
+    # The source-buffer reads are split from the destination writes so each can be placed
+    # at the correct point relative to the execution-result write-back generated in
+    # `unflatten_code`:
+    #   * A result that aliases an input argument (it has an `:args` path) takes the
+    #     source argument's *pre-execution* buffer, so that read must be captured before
+    #     any of the result assignments (`resultgen_code`, the `result` construction, and
+    #     the write-back) read from or overwrite the arguments. Those reads go at the very
+    #     front of the returned body.
+    #   * A pure `:resargs` mutation takes the *post-execution* value, so that read
+    #     happens after the write-back.
+    # In all cases the writes are applied after the write-back so an aliased argument is
+    # not clobbered by it.
     orig_buffer_available = trues(length(linear_args))
+    pre_execution_read_code = Expr[]
+    post_execution_read_code = Expr[]
+    alias_write_code = Expr[]
+    codegen_unflatten_aliased_args!(
+        pre_execution_read_code,
+        post_execution_read_code,
+        alias_write_code,
+        preserved_args,
+        linear_args,
+        resharded_inputs,
+        orig_buffer_available,
+        runtime,
+    )
+
+    # generate return object which stores the concrete results in some arbitrary way
+    body_code = Expr[
+        pre_execution_read_code...,
+        unresharded_code...,
+        resultgen_code...,
+        :(result = $result_code),
+        unflatten_code...,
+        post_execution_read_code...,
+        alias_write_code...,
+    ]
+
+    if DEBUG_ALIASED_BUFFER_ASSIGNMENT_ERROR[]
+        push!(body_code, :(empty!(DEBUG_BUFFER_POINTERS_STORE_DICT)))
+    end
+
+    return (body_code, used_shardinfo)
+end
+
+"""
+    codegen_unflatten_aliased_args!
+
+Generate the code that points mutated/aliased arguments at the correct concrete results.
+
+Each `preserved_args` entry is classified *as a whole* (not per path): a result that
+aliases an input argument (it has at least one `:args` path) must take the source
+argument's buffer as it was *before* the XLA execution overwrote the arguments, so its
+source-buffer read is emitted into `pre_execution_read_code` (placed at the very front of
+the body). A pure `:resargs` mutation takes the value *after* the write-back, so its read
+is emitted into `post_execution_read_code`. The destination writes (`traced_setfield!`)
+always go into `write_code` so they are applied after the write-back.
+
+Classifying per result rather than per path matters because a single result can carry
+both an `:args` and a `:resargs` path pointing at the *same* destination; handling it once
+(deduplicated by destination) avoids the post-execution write clobbering the
+pre-execution one.
+"""
+function codegen_unflatten_aliased_args!(
+    pre_execution_read_code,
+    post_execution_read_code,
+    write_code,
+    preserved_args,
+    linear_args,
+    resharded_inputs,
+    orig_buffer_available,
+    runtime,
+)
     for (pi, (result, arg_idx)) in enumerate(preserved_args)
         paths = (
             (
                 p for p in Reactant.TracedUtils.get_paths(result) if
-                length(p) > 0 && (p[1] == :resargs || p[1] == :args)
+                length(p) > 0 && (p[1] == :args || p[1] == :resargs)
             )...,
         )
+        isempty(paths) && continue
 
         arg = linear_args[arg_idx + 1]
         argpath = only((
@@ -1258,13 +1332,24 @@ function codegen_unflatten!(
             orig_buffer_available[arg_idx + 1] = false
         end
 
+        # A result that also lives at an `:args` path aliases an input argument, so its
+        # source buffer must be captured before the execution results overwrite the
+        # arguments. Otherwise it is a pure mutation and the post-execution value is used.
+        aliases_input = any(p -> p[1] == :args, paths)
+        read_code = aliases_input ? pre_execution_read_code : post_execution_read_code
+
+        seen_dsts = Set{Any}()
         for path in paths
-            @assert path[1] == :resargs || path[1] == :args "Expected :resargs or :args, got $(path[1])"
             initial_path = path
             # We can optimize cases where we set the arg to itself
             if path[2:end] == argpath[2:end]
                 continue
             end
+            # The destination position is independent of the path prefix; an `:args` and a
+            # `:resargs` path can resolve to the same argument slot. Write it only once.
+            path[2:end] in seen_dsts && continue
+            push!(seen_dsts, path[2:end])
+
             res = :(args[$(path[2])])
 
             path = path[3:end]
@@ -1291,7 +1376,7 @@ function codegen_unflatten!(
                 for p in argpath[3:end]
                     argres = :(traced_getfield($argres, $(Meta.quot(p))))
                 end
-                argpath_value = Symbol(:argpath_value, pi)
+                argpath_value = Symbol(:argpath_value_, pi)
                 argres_data = :($(argres).data)
                 if needs_copy
                     if runtime isa Val{:PJRT}
@@ -1302,28 +1387,15 @@ function codegen_unflatten!(
                         error("unknown runtime $runtime")
                     end
                 end
-                push!(unflatten_code, :($argpath_value = $argres_data))
+                # Capture the source buffer into a temporary so the actual write can be
+                # applied later without re-reading the (possibly overwritten) argument.
+                push!(read_code, :($argpath_value = $argres_data))
             end
 
-            res = :(traced_setfield!($res, :data, $argpath_value, $(path)))
-            push!(unflatten_code, res)
+            push!(write_code, :(traced_setfield!($res, :data, $argpath_value, $(path))))
         end
     end
-
-    if DEBUG_ALIASED_BUFFER_ASSIGNMENT_ERROR[]
-        push!(unflatten_code, :(empty!(DEBUG_BUFFER_POINTERS_STORE_DICT)))
-    end
-
-    # generate return object which stores the concrete results in some arbitrary way
-    return (
-        Expr[
-            unresharded_code...,
-            resultgen_code...,
-            :(result = $result_code),
-            unflatten_code...,
-        ],
-        used_shardinfo,
-    )
+    return pre_execution_read_code, post_execution_read_code, write_code
 end
 
 """
