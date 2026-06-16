@@ -1,5 +1,5 @@
 import ..Reactant
-using ..Reactant: TracedRArray, ReactantRNG
+using ..Reactant: TracedRArray, ReactantRNG, ConcreteRNumber
 using Serialization: Serialization
 
 function mcmc(
@@ -121,6 +121,7 @@ function mcmc(
 
     mcmc_op = MLIR.Dialects.impulse.infer(
         mlir_caller_args,
+        MLIR.IR.Value[],
         trace_val;
         inverse_mass_matrix=inverse_mass_matrix_val,
         step_size=step_size_val,
@@ -132,6 +133,7 @@ function mcmc(
         final_potential_energy=scalar_type,
         final_step_size=scalar_type,
         final_inverse_mass_matrix=inv_mass_type,
+        adaptation_state_out=MLIR.IR.Type[],
         fn=fn_attr,
         selection=MLIR.IR.Attribute(selection_attr),
         all_addresses=all_addresses_attr,
@@ -194,6 +196,10 @@ function mcmc_logpdf(
     adapt_mass_matrix::Bool=true,
     trajectory_length::Float64=2π,
     strong_zero::Bool=false,
+    total_warmup::Union{Nothing,Int}=nothing,
+    warmup_offset=nothing,
+    adaptation_state::Union{Nothing,AdaptationState}=nothing,
+    expose_adaptation::Bool=false,
 ) where {Nargs}
     pos_size = length(initial_position)
 
@@ -276,13 +282,50 @@ function mcmc_logpdf(
         MLIR.IR.type(inverse_mass_matrix_val)
     end
 
+    scalar_i64_type = MLIR.IR.TensorType(Int64[], MLIR.IR.Type(Int64))
+    diagonal = isnothing(inverse_mass_matrix) ? true : (ndims(inverse_mass_matrix) == 1)
+    welford_mean_type = MLIR.IR.TensorType([pos_size], MLIR.IR.Type(Float64))
+    welford_m2_type = if diagonal
+        MLIR.IR.TensorType([pos_size], MLIR.IR.Type(Float64))
+    else
+        MLIR.IR.TensorType([pos_size, pos_size], MLIR.IR.Type(Float64))
+    end
+
+    adaptation_in_vals = if isnothing(adaptation_state)
+        MLIR.IR.Value[]
+    else
+        MLIR.IR.Value[
+            TracedUtils.get_mlir_data(x) for x in adaptation_operands(adaptation_state)
+        ]
+    end
+    warmup_offset_val =
+        isnothing(warmup_offset) ? nothing : TracedUtils.get_mlir_data(warmup_offset)
+    total_warmup_attr = isnothing(total_warmup) ? nothing : Int64(total_warmup)
+    adaptation_out_types = if expose_adaptation
+        MLIR.IR.Type[
+            scalar_type,
+            scalar_type,
+            scalar_type,
+            scalar_i64_type,
+            scalar_type,
+            welford_mean_type,
+            welford_m2_type,
+            scalar_i64_type,
+            scalar_i64_type,
+        ]
+    else
+        MLIR.IR.Type[]
+    end
+
     mcmc_op = MLIR.Dialects.impulse.infer(
-        mlir_caller_args;
+        mlir_caller_args,
+        adaptation_in_vals;
         inverse_mass_matrix=inverse_mass_matrix_val,
         step_size=step_size_val,
         initial_position=initial_position_val,
         initial_gradient=initial_gradient_val,
         initial_potential_energy=initial_pe_val,
+        warmup_offset=warmup_offset_val,
         trace=trace_type,
         diagnostics=diagnostics_type,
         output_rng_state=mlir_result_types[1],
@@ -291,6 +334,8 @@ function mcmc_logpdf(
         final_potential_energy=scalar_type,
         final_step_size=scalar_type,
         final_inverse_mass_matrix=inv_mass_type,
+        adaptation_state_out=adaptation_out_types,
+        total_warmup=total_warmup_attr,
         logpdf_fn=logpdf_fn_attr,
         selection=MLIR.IR.Attribute(MLIR.IR.Attribute[]),
         all_addresses=MLIR.IR.Attribute(MLIR.IR.Attribute[]),
@@ -332,6 +377,30 @@ function mcmc_logpdf(
         TracedRArray{Float64,2}((), MLIR.IR.result(mcmc_op, 8), inv_mass_shape)
     end
 
+    adaptation = if expose_adaptation
+        da = DualAveragingState(
+            TracedRArray{Float64,0}((), MLIR.IR.result(mcmc_op, 9), ()),
+            TracedRArray{Float64,0}((), MLIR.IR.result(mcmc_op, 10), ()),
+            TracedRArray{Float64,0}((), MLIR.IR.result(mcmc_op, 11), ()),
+            TracedRArray{Int64,0}((), MLIR.IR.result(mcmc_op, 12), ()),
+            TracedRArray{Float64,0}((), MLIR.IR.result(mcmc_op, 13), ()),
+        )
+        welford_m2 = if diagonal
+            TracedRArray{Float64,1}((), MLIR.IR.result(mcmc_op, 15), (pos_size,))
+        else
+            TracedRArray{Float64,2}((), MLIR.IR.result(mcmc_op, 15), (pos_size, pos_size))
+        end
+        welford = WelfordState(
+            TracedRArray{Float64,1}((), MLIR.IR.result(mcmc_op, 14), (pos_size,)),
+            welford_m2,
+            TracedRArray{Int64,0}((), MLIR.IR.result(mcmc_op, 16), ()),
+        )
+        window_idx = TracedRArray{Int64,0}((), MLIR.IR.result(mcmc_op, 17), ())
+        AdaptationState(da, welford, window_idx)
+    else
+        nothing
+    end
+
     state = MCMCState(
         TracedRArray{Float64,2}((), MLIR.IR.result(mcmc_op, 4), (1, pos_size)),
         TracedRArray{Float64,2}((), MLIR.IR.result(mcmc_op, 5), (1, pos_size)),
@@ -339,6 +408,7 @@ function mcmc_logpdf(
         TracedRArray{Float64,0}((), MLIR.IR.result(mcmc_op, 7), ()),
         inv_mass_traced,
         TracedRArray{UInt64,1}((), MLIR.IR.result(mcmc_op, 3), size(rng.seed)),
+        adaptation,
     )
 
     return new_trace, diagnostics, traced_result, state
@@ -397,6 +467,7 @@ function mcmc_logpdf(
         num_warmup,
         adapt_step_size,
         adapt_mass_matrix,
+        adaptation_state=state.adaptation,
         kwargs...,
     )
 end
@@ -408,37 +479,243 @@ function _format_stats(; step_size=nothing, acc_rate=nothing)
     return isempty(parts) ? "" : " | " * join(parts, ", ")
 end
 
-function _print_progress(current, total; width=40, stats="")
-    frac = current / total
+function _print_progress(current, total; width=40, stats="", label="Sampling")
+    frac = total == 0 ? 1.0 : current / total
     filled = round(Int, frac * width)
     bar = "━"^filled * " "^(width - filled)
-    print("\r  Sampling $(bar) $(current)/$(total)$(stats)")
+    print("\r  $(label) $(bar) $(current)/$(total)$(stats)")
     current == total && println()
     return flush(stdout)
 end
 
+function _progress_callback()
+    return function (info)
+        if info.phase === :warmup
+            _print_progress(
+                info.step,
+                info.total;
+                label="Warmup",
+                stats=_format_stats(; step_size=info.step_size),
+            )
+        else
+            _print_progress(
+                info.step,
+                info.total;
+                label="Sampling",
+                stats=_format_stats(;
+                    step_size=info.step_size, acc_rate=info.acceptance_rate
+                ),
+            )
+        end
+        return nothing
+    end
+end
+
+function _compose_callbacks(a, b)
+    isnothing(a) && return b
+    isnothing(b) && return a
+    return function (info)
+        ra = a(info)
+        rb = b(info)
+        return (ra === false || rb === false) ? false : nothing
+    end
+end
+
 function save_state(filename::String, state::MCMCState)
-    data = Dict{String,Any}(
-        "position" => Array(state.position),
-        "gradient" => Array(state.gradient),
-        "potential_energy" => Array(state.potential_energy)[],
-        "step_size" => Array(state.step_size)[],
-        "inverse_mass_matrix" => Array(state.inverse_mass_matrix),
-        "rng" => Array(state.rng),
-    )
+    data = Dict{String,Any}("sampler" => _sampler_to_dict(state))
+    if !isnothing(state.adaptation)
+        data["adaptation"] = _adaptation_to_dict(state.adaptation)
+    end
     return open(io -> Serialization.serialize(io, data), filename, "w")
 end
 
 function load_state(filename::String)
     data = open(Serialization.deserialize, filename)
-    return MCMCState(
-        Reactant.to_rarray(data["position"]),
-        Reactant.to_rarray(data["gradient"]),
-        Reactant.to_rarray(fill(data["potential_energy"])),
-        Reactant.to_rarray(fill(data["step_size"])),
-        Reactant.to_rarray(data["inverse_mass_matrix"]),
-        Reactant.to_rarray(data["rng"]),
+    state = _sampler_from_dict(data["sampler"])
+    if haskey(data, "adaptation")
+        state.adaptation = _adaptation_from_dict(data["adaptation"])
+    end
+    return state
+end
+
+function _warmup_info(st::MCMCState, step, total)
+    return (;
+        phase=:warmup,
+        step=step,
+        total=total,
+        step_size=Float64(Array(st.step_size)[]),
+        inverse_mass_matrix=Array(st.inverse_mass_matrix),
+        acceptance_rate=nothing,
+        samples=nothing,
+        state=st,
     )
+end
+
+function _run_chain_chunked(
+    rng,
+    logpdf_fn,
+    initial_position,
+    step_size,
+    inverse_mass_matrix;
+    num_warmup,
+    num_samples,
+    chunk_size,
+    warmup_chunk_size,
+    adapt_step_size,
+    adapt_mass_matrix,
+    callback,
+    mcmc_kwargs,
+)
+    pos_size = length(initial_position)
+    all_chunks = Matrix{Float64}[]
+    collected = 0
+    fire(info) = callback(info) === false
+
+    sampler = nothing
+
+    if num_warmup > 0
+        c1 = min(warmup_chunk_size, num_warmup)
+        wfirst = function (sr, lf, pos, ss, imm, offset)
+            _, _, _, ws = mcmc_logpdf(
+                ReactantRNG(sr),
+                lf,
+                pos;
+                step_size=ss,
+                inverse_mass_matrix=imm,
+                num_warmup=c1,
+                num_samples=0,
+                adapt_step_size,
+                adapt_mass_matrix,
+                total_warmup=num_warmup,
+                warmup_offset=offset,
+                expose_adaptation=true,
+                mcmc_kwargs...,
+            )
+            return ws
+        end
+        off = ConcreteRNumber(Int64(0))
+        compiled = Reactant.Compiler.compile(
+            wfirst,
+            (rng.seed, logpdf_fn, initial_position, step_size, inverse_mass_matrix, off);
+            optimize=:probprog,
+        )
+        ws = compiled(
+            rng.seed, logpdf_fn, initial_position, step_size, inverse_mass_matrix, off
+        )
+        done = c1
+        stop = fire(_warmup_info(ws, done, num_warmup))
+
+        cont_cache = Dict{Int,Any}()
+        while !stop && done < num_warmup
+            nsteps = min(warmup_chunk_size, num_warmup - done)
+            wcont = get!(cont_cache, nsteps) do
+                fn = function (st_in::MCMCState, lf, offset)
+                    _, _, _, st_out = mcmc_logpdf(
+                        st_in,
+                        lf;
+                        num_warmup=nsteps,
+                        num_samples=0,
+                        adapt_step_size,
+                        adapt_mass_matrix,
+                        total_warmup=num_warmup,
+                        warmup_offset=offset,
+                        expose_adaptation=true,
+                        mcmc_kwargs...,
+                    )
+                    return st_out
+                end
+                Reactant.Compiler.compile(
+                    fn,
+                    (ws, logpdf_fn, ConcreteRNumber(Int64(done)));
+                    optimize=:probprog,
+                )
+            end
+            ws = wcont(ws, logpdf_fn, ConcreteRNumber(Int64(done)))
+            done += nsteps
+            stop = fire(_warmup_info(ws, done, num_warmup))
+        end
+        stop && return Matrix{Float64}(undef, 0, pos_size), ws
+        sampler = MCMCState(
+            ws.position,
+            ws.gradient,
+            ws.potential_energy,
+            ws.step_size,
+            ws.inverse_mass_matrix,
+            ws.rng,
+        )
+    end
+
+    if isnothing(sampler)
+        seed_fn = function (sr, lf, pos, ss, imm)
+            _, _, _, st = mcmc_logpdf(
+                ReactantRNG(sr),
+                lf,
+                pos;
+                step_size=ss,
+                inverse_mass_matrix=imm,
+                num_warmup=0,
+                num_samples=0,
+                adapt_step_size=false,
+                adapt_mass_matrix=false,
+                mcmc_kwargs...,
+            )
+            return st
+        end
+        compiled = Reactant.Compiler.compile(
+            seed_fn,
+            (rng.seed, logpdf_fn, initial_position, step_size, inverse_mass_matrix);
+            optimize=:probprog,
+        )
+        sampler = compiled(
+            rng.seed, logpdf_fn, initial_position, step_size, inverse_mass_matrix
+        )
+    end
+
+    samp_cache = Dict{Int,Any}()
+    while collected < num_samples
+        nsamp = min(chunk_size, num_samples - collected)
+        sfn = get!(samp_cache, nsamp) do
+            fn = function (st::MCMCState, lf)
+                samples, diag, _, st2 = mcmc_logpdf(
+                    ReactantRNG(st.rng),
+                    lf,
+                    st.position;
+                    step_size=st.step_size,
+                    inverse_mass_matrix=st.inverse_mass_matrix,
+                    initial_gradient=st.gradient,
+                    initial_potential_energy=st.potential_energy,
+                    num_warmup=0,
+                    num_samples=nsamp,
+                    adapt_step_size=false,
+                    adapt_mass_matrix=false,
+                    mcmc_kwargs...,
+                )
+                return samples, diag, st2
+            end
+            Reactant.Compiler.compile(fn, (sampler, logpdf_fn); optimize=:probprog)
+        end
+        samples, diag, sampler = sfn(sampler, logpdf_fn)
+        chunk = Array(samples)
+        diag_arr = Array(diag)
+        push!(all_chunks, chunk)
+        collected += nsamp
+        stop = fire((;
+            phase=:sampling,
+            step=collected,
+            total=num_samples,
+            step_size=Float64(Array(sampler.step_size)[]),
+            inverse_mass_matrix=Array(sampler.inverse_mass_matrix),
+            acceptance_rate=(
+                isempty(diag_arr) ? nothing : sum(diag_arr) / length(diag_arr)
+            ),
+            samples=chunk,
+            state=sampler,
+        ))
+        stop && break
+    end
+
+    result = isempty(all_chunks) ? Matrix{Float64}(undef, 0, pos_size) : vcat(all_chunks...)
+    return result, sampler
 end
 
 # TODO(#2619): add trace-based mode support
@@ -460,6 +737,8 @@ function run_chain(
     thinning::Int=1,
     trajectory_length::Float64=2π,
     strong_zero::Bool=false,
+    callback=nothing,
+    warmup_chunk_size::Int=chunk_size,
 )
     mcmc_kwargs = (;
         algorithm,
@@ -470,7 +749,7 @@ function run_chain(
         strong_zero,
     )
 
-    if !progress_bar
+    if !progress_bar && isnothing(callback)
         monolithic_fn = function (rng, logpdf_fn, pos, ss, imm)
             samples, _, _, state = mcmc_logpdf(
                 rng,
@@ -498,165 +777,22 @@ function run_chain(
         return Array(samples), state
     end
 
-    first_chunk = min(chunk_size, num_samples)
-    remaining = num_samples - first_chunk
-
-    warmup_fn = function (rng, logpdf_fn, pos, ss, imm)
-        samples, diag, _, state = mcmc_logpdf(
-            rng,
-            logpdf_fn,
-            pos;
-            step_size=ss,
-            inverse_mass_matrix=imm,
-            num_warmup,
-            num_samples=first_chunk,
-            adapt_step_size,
-            adapt_mass_matrix,
-            mcmc_kwargs...,
-        )
-        return samples, diag, state
-    end
-
-    print("\r  Compiling...")
-    flush(stdout)
-
-    compiled_warmup = Reactant.Compiler.compile(
-        warmup_fn,
-        (rng, logpdf_fn, initial_position, step_size, inverse_mass_matrix);
-        optimize=:probprog,
+    effective = _compose_callbacks(progress_bar ? _progress_callback() : nothing, callback)
+    return _run_chain_chunked(
+        rng,
+        logpdf_fn,
+        initial_position,
+        step_size,
+        inverse_mass_matrix;
+        num_warmup,
+        num_samples,
+        chunk_size,
+        warmup_chunk_size,
+        adapt_step_size,
+        adapt_mass_matrix,
+        callback=effective,
+        mcmc_kwargs,
     )
-
-    if num_warmup > 0
-        print("\r  Warmup " * "━"^40 * " 0/$(num_warmup)")
-        flush(stdout)
-    end
-
-    samples1, diag1, state = compiled_warmup(
-        rng, logpdf_fn, initial_position, step_size, inverse_mass_matrix
-    )
-
-    ss_val = Float64(Array(state.step_size)[])
-    diag1_arr = Array(diag1)
-    acc_rate = sum(diag1_arr) / length(diag1_arr)
-
-    if num_warmup > 0
-        warmup_stats = _format_stats(; step_size=ss_val)
-        print("\r  Warmup " * "━"^40 * " $(num_warmup)/$(num_warmup)$(warmup_stats)")
-        println()
-    end
-
-    all_chunks = [Array(samples1)]
-    stats = _format_stats(; step_size=ss_val, acc_rate)
-    _print_progress(first_chunk, num_samples; stats)
-
-    if remaining > 0
-        full_chunks = remaining ÷ chunk_size
-        remainder = remaining % chunk_size
-
-        if full_chunks > 0
-            continue_fn = function (sr, lf, pos, grad, pe, ss, imm)
-                samples, diag, _, st = mcmc_logpdf(
-                    ReactantRNG(sr),
-                    lf,
-                    pos;
-                    step_size=ss,
-                    inverse_mass_matrix=imm,
-                    initial_gradient=grad,
-                    initial_potential_energy=pe,
-                    num_warmup=0,
-                    num_samples=chunk_size,
-                    adapt_step_size=false,
-                    adapt_mass_matrix=false,
-                    mcmc_kwargs...,
-                )
-                return samples, diag, st
-            end
-
-            compiled_continue = Reactant.Compiler.compile(
-                continue_fn,
-                (
-                    state.rng,
-                    logpdf_fn,
-                    state.position,
-                    state.gradient,
-                    state.potential_energy,
-                    state.step_size,
-                    state.inverse_mass_matrix,
-                );
-                optimize=:probprog,
-            )
-
-            for i in 1:full_chunks
-                chunk, diag, state = compiled_continue(
-                    state.rng,
-                    logpdf_fn,
-                    state.position,
-                    state.gradient,
-                    state.potential_energy,
-                    state.step_size,
-                    state.inverse_mass_matrix,
-                )
-                push!(all_chunks, Array(chunk))
-                diag_arr = Array(diag)
-                acc_rate = sum(diag_arr) / length(diag_arr)
-                ss_val = Float64(Array(state.step_size)[])
-                stats = _format_stats(; step_size=ss_val, acc_rate)
-                _print_progress(first_chunk + i * chunk_size, num_samples; stats)
-            end
-        end
-
-        if remainder > 0
-            remainder_fn = function (sr, lf, pos, grad, pe, ss, imm)
-                samples, diag, _, st = mcmc_logpdf(
-                    ReactantRNG(sr),
-                    lf,
-                    pos;
-                    step_size=ss,
-                    inverse_mass_matrix=imm,
-                    initial_gradient=grad,
-                    initial_potential_energy=pe,
-                    num_warmup=0,
-                    num_samples=remainder,
-                    adapt_step_size=false,
-                    adapt_mass_matrix=false,
-                    mcmc_kwargs...,
-                )
-                return samples, diag, st
-            end
-
-            compiled_remainder = Reactant.Compiler.compile(
-                remainder_fn,
-                (
-                    state.rng,
-                    logpdf_fn,
-                    state.position,
-                    state.gradient,
-                    state.potential_energy,
-                    state.step_size,
-                    state.inverse_mass_matrix,
-                );
-                optimize=:probprog,
-            )
-
-            chunk, diag, state = compiled_remainder(
-                state.rng,
-                logpdf_fn,
-                state.position,
-                state.gradient,
-                state.potential_energy,
-                state.step_size,
-                state.inverse_mass_matrix,
-            )
-            push!(all_chunks, Array(chunk))
-            diag_arr = Array(diag)
-            acc_rate = sum(diag_arr) / length(diag_arr)
-            ss_val = Float64(Array(state.step_size)[])
-            stats = _format_stats(; step_size=ss_val, acc_rate)
-            _print_progress(num_samples, num_samples; stats)
-        end
-    end
-
-    return vcat(all_chunks...), state
 end
 
 function run_chain(
@@ -671,6 +807,7 @@ function run_chain(
     thinning::Int=1,
     trajectory_length::Float64=2π,
     strong_zero::Bool=false,
+    callback=nothing,
 )
     return run_chain(
         ReactantRNG(state.rng),
@@ -690,5 +827,6 @@ function run_chain(
         thinning,
         trajectory_length,
         strong_zero,
+        callback,
     )
 end

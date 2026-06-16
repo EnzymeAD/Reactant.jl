@@ -1,4 +1,5 @@
 using OrderedCollections: OrderedSet
+using ..Reactant: Reactant
 
 mutable struct Trace
     choices::Dict{Symbol,Any}
@@ -75,6 +76,53 @@ mutable struct TracedTrace
 end
 TracedTrace() = TracedTrace(TraceEntry[], 0, Symbol[])
 
+mutable struct DualAveragingState
+    log_step_size::Any
+    log_step_size_avg::Any
+    gradient_avg::Any
+    step_count::Any
+    prox_center::Any
+end
+
+mutable struct WelfordState
+    mean::Any
+    m2::Any
+    n::Any
+end
+
+mutable struct AdaptationState
+    dual_averaging::DualAveragingState
+    welford::WelfordState
+    window_idx::Any
+end
+
+function adaptation_operands(da::DualAveragingState)
+    return (
+        da.log_step_size,
+        da.log_step_size_avg,
+        da.gradient_avg,
+        da.step_count,
+        da.prox_center,
+    )
+end
+
+function adaptation_operands(a::AdaptationState)
+    return (
+        adaptation_operands(a.dual_averaging)...,
+        a.welford.mean,
+        a.welford.m2,
+        a.welford.n,
+        a.window_idx,
+    )
+end
+
+function AdaptationState(vals)
+    @assert length(vals) == 9 "adaptation_state must have 9 entries, got $(length(vals))"
+    da = DualAveragingState(vals[1], vals[2], vals[3], vals[4], vals[5])
+    welford = WelfordState(vals[6], vals[7], vals[8])
+    return AdaptationState(da, welford, vals[9])
+end
+
 mutable struct MCMCState
     position::Any
     gradient::Any
@@ -82,6 +130,68 @@ mutable struct MCMCState
     step_size::Any
     inverse_mass_matrix::Any
     rng::Any
+    adaptation::Union{Nothing,AdaptationState}
+end
+
+function MCMCState(
+    position, gradient, potential_energy, step_size, inverse_mass_matrix, rng
+)
+    return MCMCState(
+        position, gradient, potential_energy, step_size, inverse_mass_matrix, rng, nothing
+    )
+end
+
+function _sampler_to_dict(s::MCMCState)
+    return Dict{String,Any}(
+        "position" => Array(s.position),
+        "gradient" => Array(s.gradient),
+        "potential_energy" => Array(s.potential_energy)[],
+        "step_size" => Array(s.step_size)[],
+        "inverse_mass_matrix" => Array(s.inverse_mass_matrix),
+        "rng" => Array(s.rng),
+    )
+end
+
+function _sampler_from_dict(d)
+    return MCMCState(
+        Reactant.to_rarray(d["position"]),
+        Reactant.to_rarray(d["gradient"]),
+        Reactant.to_rarray(fill(d["potential_energy"])),
+        Reactant.to_rarray(fill(d["step_size"])),
+        Reactant.to_rarray(d["inverse_mass_matrix"]),
+        Reactant.to_rarray(d["rng"]),
+    )
+end
+
+function _adaptation_to_dict(a::AdaptationState)
+    da = a.dual_averaging
+    return Dict{String,Any}(
+        "da_log_step_size" => Array(da.log_step_size)[],
+        "da_log_step_size_avg" => Array(da.log_step_size_avg)[],
+        "da_gradient_avg" => Array(da.gradient_avg)[],
+        "da_step_count" => Array(da.step_count)[],
+        "da_prox_center" => Array(da.prox_center)[],
+        "welford_mean" => Array(a.welford.mean),
+        "welford_m2" => Array(a.welford.m2),
+        "welford_n" => Array(a.welford.n)[],
+        "window_idx" => Array(a.window_idx)[],
+    )
+end
+
+function _adaptation_from_dict(d::Dict)
+    da = DualAveragingState(
+        Reactant.to_rarray(fill(d["da_log_step_size"])),
+        Reactant.to_rarray(fill(d["da_log_step_size_avg"])),
+        Reactant.to_rarray(fill(d["da_gradient_avg"])),
+        Reactant.to_rarray(fill(d["da_step_count"])),
+        Reactant.to_rarray(fill(d["da_prox_center"])),
+    )
+    welford = WelfordState(
+        Reactant.to_rarray(d["welford_mean"]),
+        Reactant.to_rarray(d["welford_m2"]),
+        Reactant.to_rarray(fill(d["welford_n"])),
+    )
+    return AdaptationState(da, welford, Reactant.to_rarray(fill(d["window_idx"])))
 end
 
 get_choices(trace::Trace) = trace.choices
