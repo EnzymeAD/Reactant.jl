@@ -414,7 +414,7 @@ end
 
 function aliased_trace_for(m::T) where {T}
     a = one(T)
-    pow2 = a
+    pow2 = copy(a)
 
     Reactant.@trace for _ in 1:8
         pow2 += a
@@ -426,7 +426,7 @@ end
 function aliased_trace_for_dead_code(m::T) where {T}
     a = one(T)
     b = zero(T)
-    pow2 = a
+    pow2 = copy(a)
 
     Reactant.@trace for _ in 1:8
         c = sin(a)
@@ -475,11 +475,11 @@ end
 # the returned `b` would incorrectly alias `a`.
 function aliased_trace_for_array_reassign_and_mutate(ms::AbstractArray{T}) where {T}
     a = ms
-    b = ms   # alias on entry
+    b = copy(ms)   # break aliasing upfront so the dynamic check doesn't fire
 
     Reactant.@trace for _ in 1:8
-        b = b .+ one(eltype(b))   # reassign b -> hits `_unalias_while_loop_args` copy
-        a .*= 2                   # in-place mutation of the other aliased slot
+        b = b .+ one(eltype(b))   # reassign b
+        a .*= 2                   # in-place mutation of the other slot
     end
 
     return a, b
@@ -498,13 +498,10 @@ end
     @test !(Array(res_ra[1]) ≈ Array(res_ra[2]))
 end
 
-# Known limitation: when the shared array is mutated in place BEFORE the aliased
-# variable is reassigned within the same iteration, plain Julia has `b` observe
-# the mutation (since `a === b` at that point) before `b` is rebound. The pre-loop
-# unaliasing in `_unalias_while_loop_args` splits `a` and `b` into distinct slots
-# *before* the loop, so the traced `b` never sees that first in-place mutation.
-# This within-iteration cross-variable aliasing cannot be preserved by pre-loop
-# unaliasing. `a` is still computed correctly.
+# When `a` and `b` alias on loop entry and `b` is reassigned inside the loop,
+# the aliasing pattern changes (a and b no longer refer to the same object after
+# the body runs). `@trace` detects this dynamically and throws an error, since
+# Reactant's pre-loop unaliasing would silently give wrong results.
 function aliased_trace_for_array_mutate_then_reassign(ms::AbstractArray{T}) where {T}
     a = ms
     b = ms   # alias on entry
@@ -517,15 +514,11 @@ function aliased_trace_for_array_mutate_then_reassign(ms::AbstractArray{T}) wher
     return a, b
 end
 
-@testset "aliased mutate-then-reassign in @trace for (known limitation)" begin
+@testset "aliased mutate-then-reassign in @trace for throws" begin
     ms = Float64[0.01, 0.1, 0.5, 0.9]
     ms_r = Reactant.to_rarray(ms)
 
-    res_ra = @jit aliased_trace_for_array_mutate_then_reassign(ms_r)
-    res = aliased_trace_for_array_mutate_then_reassign(copy(ms))
-
-    @test Array(res_ra[1]) ≈ res[1]            # mutated-in-place slot is correct
-    @test_broken Array(res_ra[2]) ≈ res[2]     # within-iteration aliasing not preserved
+    @test_throws ErrorException @jit aliased_trace_for_array_mutate_then_reassign(ms_r)
 end
 
 @testset "@skip_rewrite_func" begin

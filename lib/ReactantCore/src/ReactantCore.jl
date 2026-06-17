@@ -338,6 +338,38 @@ function trace_function_definition(mod, expr)
     end
 end
 
+function _check_aliasing_unchanged(pre_ids::Tuple, post_ids::Tuple, varnames::Tuple)
+    n = length(pre_ids)
+    for i in 1:n
+        isnothing(pre_ids[i]) && continue
+        for j in (i + 1):n
+            isnothing(pre_ids[j]) && continue
+            pre_alias = pre_ids[i] == pre_ids[j]
+            post_alias =
+                !isnothing(post_ids[i]) &&
+                !isnothing(post_ids[j]) &&
+                post_ids[i] == post_ids[j]
+            if pre_alias && !post_alias
+                ni, nj = varnames[i], varnames[j]
+                error(
+                    "Reactant.@trace: the aliasing pattern of loop-carried variables " *
+                    "changed during the loop body.\n`$ni` and `$nj` referred to the same " *
+                    "object before the loop body but not after.\n" *
+                    "Fix: break the aliasing before the `@trace` loop, " *
+                    "e.g. `$nj = copy($nj)`.",
+                )
+            elseif !pre_alias && post_alias
+                ni, nj = varnames[i], varnames[j]
+                error(
+                    "Reactant.@trace: the aliasing pattern of loop-carried variables " *
+                    "changed during the loop body.\n`$ni` and `$nj` did not alias before " *
+                    "the loop body but do after.\nThis is unsupported.",
+                )
+            end
+        end
+    end
+end
+
 function trace_while(expr; track_numbers, mincut, checkpointing, first_arg=nothing)
     Meta.isexpr(expr, :while, 2) || error("expected while expr")
     cond, body = expr.args
@@ -401,6 +433,7 @@ function trace_while(expr; track_numbers, mincut, checkpointing, first_arg=nothi
     cond_fn_sym = gensym(:cond_fn)
     args_sym = gensym(:args)
     verify_arg_names_sym = gensym(:verify_arg_names)
+    pre_alias_ids_sym = gensym(:pre_alias_ids)
 
     # After the loop, rebind the outer (caller-local) variables for any slot
     # that may be reassigned inside the loop. This is required because
@@ -420,21 +453,46 @@ function trace_while(expr; track_numbers, mincut, checkpointing, first_arg=nothi
         ) for (i, s) in enumerate(external_syms) if s in reassigned_syms
     ]
 
+    # Capture the objectid of each loop-carried slot before traced_while is called.
+    # These are recorded after args are created but before _unalias_while_loop_args
+    # runs inside traced_while/while_loop. We use objectid(nothing) = 0 as a sentinel;
+    # non-traced values get `nothing` so they are skipped in the aliasing check.
+    pre_ids_expr = Expr(
+        :tuple,
+        [
+            :($(is_traced)($(args_sym)[$i][]) ? objectid($(args_sym)[$i][]) : nothing) for
+            i in 1:length(external_syms)
+        ]...,
+    )
+
+    # After the body runs and from_locals has written back into the refs, capture
+    # post-body objectids and verify the aliasing pattern is unchanged.
+    post_ids_expr = Expr(
+        :tuple,
+        [:($(is_traced)($ref[]) ? objectid($ref[]) : nothing) for ref in ref_syms]...,
+    )
+    varnames_expr = Expr(:tuple, QuoteNode.(external_syms)...)
+
     reactant_code_block = quote
         let $args_sym = $(args_init)
+            $pre_alias_ids_sym = $(pre_ids_expr)
             $cond_fn_sym = $(arg_syms) -> begin
                 $(to_locals...)
                 $cond
             end
-            $body_fn_sym = $(arg_syms) -> begin
-                $(to_locals...)
-                $body
-                $(from_locals...)
-                nothing
-            end
+            $body_fn_sym =
+                $(arg_syms) -> begin
+                    $(to_locals...)
+                    $body
+                    $(from_locals...)
+                    $(ReactantCore)._check_aliasing_unchanged(
+                        $pre_alias_ids_sym, $(post_ids_expr), $(varnames_expr)
+                    )
+                    nothing
+                end
 
-            $(verify_arg_names_sym) = if sizeof($(cond_fn_sym)) != 0
-                (Symbol($cond_fn_sym), $(QuoteNode.(args_names.args)...))
+            $(verify_arg_names_sym) = if sizeof($(body_fn_sym)) != 0
+                (Symbol($body_fn_sym), $(QuoteNode.(args_names.args)...))
             else
                 ($(QuoteNode.(args_names.args)...),)
             end
