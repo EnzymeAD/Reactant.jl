@@ -2313,63 +2313,6 @@ end
     )
 end
 
-"""
-    _unalias_while_loop_args(args::Tuple, reassigned_args) -> Tuple
-
-Walk the top-level arguments of a `stablehlo.while` and ensure that any
-slot that may be **reassigned** (rebound) inside the loop body has a
-TracedType identity that is distinct from every other slot's top-level
-identity. For such a conflicting slot, the immediate top-level TracedType
-(or the inner of a top-level `Base.RefValue`) is replaced with a fresh
-tracer (`Base.copy`) that wraps the same MLIR value.
-
-Slots that are NOT reassigned are left untouched, even when they alias
-another slot.
-
-If `reassigned_args` is `nothing`, no unaliasing is done.
-"""
-function _unalias_while_loop_args(args::Tuple, reassigned_args)
-    reassigned_args === nothing && return args
-    length(reassigned_args) == length(args) || return args  # mismatch — be conservative and skip
-
-    # Collect the set of top-level identities (across all slots) so we can
-    # detect when a reassigned slot's identity also appears at the top level
-    # of another slot.
-    occurrences = Base.IdDict{Reactant.TracedType,Int}()
-    for x in args
-        primary = _toplevel_traced_identity(x)
-        primary === nothing && continue
-        occurrences[primary] = get(occurrences, primary, 0) + 1
-    end
-
-    return ntuple(length(args)) do i
-        x = args[i]
-        reassigned_args[i] || return x
-        primary = _toplevel_traced_identity(x)
-        primary === nothing && return x
-        # Only clone if the identity is shared with another top-level slot.
-        get(occurrences, primary, 0) > 1 || return x
-        # One fewer top-level occurrence after cloning.
-        occurrences[primary] -= 1
-        if x isa Reactant.TracedType
-            return Base.copy(x)
-        elseif x isa Base.RefValue
-            x[] = Base.copy(primary)
-            return x
-        end
-        return x
-    end
-end
-
-function _toplevel_traced_identity(x)
-    if x isa Reactant.TracedType
-        return x
-    elseif x isa Base.RefValue && x[] isa Reactant.TracedType
-        return x[]
-    end
-    return nothing
-end
-
 @noinline function while_loop(
     cond_fn::CFn,
     body_fn::BFn,
@@ -2378,33 +2321,9 @@ end
     verify_arg_names=nothing,
     checkpointing=false,
     mincut=false,
-    reassigned_args=nothing,
     location=mlir_stacktrace("while_loop", @__FILE__, @__LINE__),
 ) where {CFn,BFn}
     # TODO(#2250): detect and prevent mutation within the condition
-
-    # Each top-level argument of a stablehlo.while is an independent loop slot.
-    # If two slots reference the same TracedType on entry (aliasing across
-    # loop-carried variables before the loop) AND one of the
-    # slots is reassigned inside the body, the in-loop reassignment would
-    # leave the input/output slot cardinality mismatched and verification
-    # would fail.
-    # ```jl
-    # a = ...
-    # b = a
-    # <<< `a` and `b` refer to the same traced value >>>
-    # @trace for ... 
-    #   ... = ...a...
-    #   b = ...
-    # end
-    # <<<`a` and `b` refer to different traced values >>>
-    # ```
-    # Replace the cross-slot duplicate TracedType in any
-    # reassigned slot with a fresh tracer wrapping the same MLIR value so
-    # each such slot has a distinct identity. Slots that are only mutated
-    # in-place keep their aliased identity to preserve Julia's mutation
-    # semantics.
-    args = _unalias_while_loop_args(args, reassigned_args)
 
     # Make all the args traced or concrete
     N = length(args)

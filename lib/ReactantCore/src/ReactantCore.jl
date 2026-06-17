@@ -399,17 +399,9 @@ function trace_while(expr; track_numbers, mincut, checkpointing, first_arg=nothi
     union!(external_syms, body_symbols.assignments)
     filter!(∉(SPECIAL_SYMBOLS), external_syms)
 
-    # Symbols that may be reassigned (rebound) inside the loop. Slots
-    # corresponding to these symbols may need to be unaliased before tracing
-    # the while loop body, so each reassigned slot has a distinct identity in
-    # the MLIR signature even when the same TracedType is shared with another
-    # slot on entry. Slots that are only mutated in-place (and never rebound)
-    # must keep their aliased identity to preserve the user's mutation
-    # semantics.
     reassigned_syms = Set{Symbol}()
     union!(reassigned_syms, cond_symbols.assignments)
     union!(reassigned_syms, body_symbols.assignments)
-    reassigned_mask_expr = Expr(:tuple, (s in reassigned_syms for s in external_syms)...)
 
     all_syms = Expr(:tuple, external_syms...)
     args_names = Expr(:tuple, external_syms...)
@@ -436,15 +428,10 @@ function trace_while(expr; track_numbers, mincut, checkpointing, first_arg=nothi
     pre_alias_ids_sym = gensym(:pre_alias_ids)
 
     # After the loop, rebind the outer (caller-local) variables for any slot
-    # that may be reassigned inside the loop. This is required because
-    # `_unalias_while_loop_args` may replace a reassigned slot's ref contents
-    # with a *fresh* tracer (`Base.copy`) when that slot aliases another slot
-    # on entry. In that case the outer variable no longer shares object
-    # identity with the loop-carried tracer, so the in-place `set_mlir_data!`
-    # performed by `while_loop` would not be visible through the outer binding.
-    # Writing the ref contents back ensures the reassigned outer variable
-    # observes its own (possibly cloned) loop result. Slots that are only
-    # mutated in-place keep their identity and propagate without write-back.
+    # that is reassigned inside the loop. The traced body writes new TracedType
+    # objects into the refs via from_locals; the while loop propagates their
+    # MLIR results back. The outer variable still points to the pre-loop object,
+    # so we write the ref's final content back to update the outer binding.
     write_backs = [
         :(
             if !isnothing($(args_sym)[$i][])
@@ -454,9 +441,7 @@ function trace_while(expr; track_numbers, mincut, checkpointing, first_arg=nothi
     ]
 
     # Capture the objectid of each loop-carried slot before traced_while is called.
-    # These are recorded after args are created but before _unalias_while_loop_args
-    # runs inside traced_while/while_loop. We use objectid(nothing) = 0 as a sentinel;
-    # non-traced values get `nothing` so they are skipped in the aliasing check.
+    # Non-traced values get `nothing` so they are skipped in the aliasing check.
     pre_ids_expr = Expr(
         :tuple,
         [
@@ -505,7 +490,6 @@ function trace_while(expr; track_numbers, mincut, checkpointing, first_arg=nothi
                 verify_arg_names=($(verify_arg_names_sym)),
                 mincut=($(mincut)),
                 checkpointing=($(checkpointing)),
-                reassigned_args=($(reassigned_mask_expr)),
             )
             $(write_backs...)
             nothing
