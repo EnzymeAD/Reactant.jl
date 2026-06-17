@@ -40,24 +40,13 @@ http_archive(
     urls = ["https://github.com/google/perfetto/archive/refs/tags/v53.0.tar.gz"],
 )
 
-if OVERRIDE_ENZYME_JAX_PATH:
-    local_repository(
-        name = "enzyme_ad",
-        path = OVERRIDE_ENZYME_JAX_PATH,
-    )
-else:
-    http_archive(
-        name = "enzyme_ad",
-        patch_cmds = [
-            """
-sed -i.bak0 "s/\\\\\\\\\\\\\\\\\\/\\\\\\\\\\\\\\\\\\/:patches/@enzyme_ad\\\\\\\\\\\\\\\\\\/\\\\\\\\\\\\\\\\\\/:patches/g" workspace.bzl
-sed -i.bak0 "s,//:patches,@enzyme_ad//:patches,g" third_party/*/workspace.bzl
-""",
-        ],
-        sha256 = ENZYMEXLA_SHA256,
-        strip_prefix = "Enzyme-JAX-" + ENZYMEXLA_COMMIT,
-        urls = ["https://github.com/EnzymeAD/Enzyme-JAX/archive/{commit}.tar.gz".format(commit = ENZYMEXLA_COMMIT)],
-    )
+load("//:workspace.bzl", "enzyme_jax_repository")
+
+enzyme_jax_repository(
+    local_path = OVERRIDE_ENZYME_JAX_PATH,
+    commit = ENZYMEXLA_COMMIT,
+    sha256 = ENZYMEXLA_SHA256,
+)
 
 NEW_XLA_PATCHES = []
 
