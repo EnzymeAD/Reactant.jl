@@ -399,10 +399,6 @@ function trace_while(expr; track_numbers, mincut, checkpointing, first_arg=nothi
     union!(external_syms, body_symbols.assignments)
     filter!(∉(SPECIAL_SYMBOLS), external_syms)
 
-    reassigned_syms = Set{Symbol}()
-    union!(reassigned_syms, cond_symbols.assignments)
-    union!(reassigned_syms, body_symbols.assignments)
-
     all_syms = Expr(:tuple, external_syms...)
     args_names = Expr(:tuple, external_syms...)
 
@@ -426,19 +422,6 @@ function trace_while(expr; track_numbers, mincut, checkpointing, first_arg=nothi
     args_sym = gensym(:args)
     verify_arg_names_sym = gensym(:verify_arg_names)
     pre_alias_ids_sym = gensym(:pre_alias_ids)
-
-    # After the loop, rebind the outer (caller-local) variables for any slot
-    # that is reassigned inside the loop. The traced body writes new TracedType
-    # objects into the refs via from_locals; the while loop propagates their
-    # MLIR results back. The outer variable still points to the pre-loop object,
-    # so we write the ref's final content back to update the outer binding.
-    write_backs = [
-        :(
-            if !isnothing($(args_sym)[$i][])
-                $s = $(args_sym)[$i][]
-            end
-        ) for (i, s) in enumerate(external_syms) if s in reassigned_syms
-    ]
 
     # Capture the objectid of each loop-carried slot before traced_while is called.
     # Non-traced values get `nothing` so they are skipped in the aliasing check.
@@ -491,8 +474,6 @@ function trace_while(expr; track_numbers, mincut, checkpointing, first_arg=nothi
                 mincut=($(mincut)),
                 checkpointing=($(checkpointing)),
             )
-            $(write_backs...)
-            nothing
         end
     end
 
