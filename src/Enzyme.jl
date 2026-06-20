@@ -337,7 +337,7 @@ function overload_autodiff(
         primf,
         primargs,
         (),
-        string(f) * "_autodiff",
+        string(FA) * "_autodiff",
         false;
         argprefix,
         resprefix,
