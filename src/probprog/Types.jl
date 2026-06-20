@@ -123,6 +123,49 @@ function AdaptationState(vals)
     return AdaptationState(da, welford, vals[9])
 end
 
+function Base.copy(da::DualAveragingState)
+    return DualAveragingState(
+        copy(da.log_step_size),
+        copy(da.log_step_size_avg),
+        copy(da.gradient_avg),
+        copy(da.step_count),
+        copy(da.prox_center),
+    )
+end
+
+Base.copy(w::WelfordState) = WelfordState(copy(w.mean), copy(w.m2), copy(w.n))
+
+function Base.copy(a::AdaptationState)
+    return AdaptationState(copy(a.dual_averaging), copy(a.welford), copy(a.window_idx))
+end
+
+struct MCMCConfig
+    algorithm::Symbol
+    max_tree_depth::Int
+    max_delta_energy::Float64
+    trajectory_length::Float64
+    thinning::Int
+    strong_zero::Bool
+end
+
+function MCMCConfig(;
+    algorithm::Symbol=:NUTS,
+    max_tree_depth::Int=10,
+    max_delta_energy::Float64=1000.0,
+    trajectory_length::Float64=2π,
+    thinning::Int=1,
+    strong_zero::Bool=false,
+)
+    return MCMCConfig(
+        algorithm,
+        max_tree_depth,
+        max_delta_energy,
+        trajectory_length,
+        thinning,
+        strong_zero,
+    )
+end
+
 mutable struct MCMCState
     position::Any
     gradient::Any
@@ -131,13 +174,63 @@ mutable struct MCMCState
     inverse_mass_matrix::Any
     rng::Any
     adaptation::Union{Nothing,AdaptationState}
+    config::MCMCConfig
 end
 
 function MCMCState(
-    position, gradient, potential_energy, step_size, inverse_mass_matrix, rng
+    position,
+    gradient,
+    potential_energy,
+    step_size,
+    inverse_mass_matrix,
+    rng,
+    adaptation::Union{Nothing,AdaptationState}=nothing;
+    config::MCMCConfig=MCMCConfig(),
 )
     return MCMCState(
-        position, gradient, potential_energy, step_size, inverse_mass_matrix, rng, nothing
+        position,
+        gradient,
+        potential_energy,
+        step_size,
+        inverse_mass_matrix,
+        rng,
+        adaptation,
+        config,
+    )
+end
+
+function Base.copy(s::MCMCState)
+    return MCMCState(
+        copy(s.position),
+        copy(s.gradient),
+        copy(s.potential_energy),
+        copy(s.step_size),
+        copy(s.inverse_mass_matrix),
+        copy(s.rng),
+        s.adaptation === nothing ? nothing : copy(s.adaptation);
+        config=s.config,
+    )
+end
+
+function _config_to_dict(c::MCMCConfig)
+    return Dict{String,Any}(
+        "algorithm" => String(c.algorithm),
+        "max_tree_depth" => c.max_tree_depth,
+        "max_delta_energy" => c.max_delta_energy,
+        "trajectory_length" => c.trajectory_length,
+        "thinning" => c.thinning,
+        "strong_zero" => c.strong_zero,
+    )
+end
+
+function _config_from_dict(d)
+    return MCMCConfig(;
+        algorithm=Symbol(d["algorithm"]),
+        max_tree_depth=d["max_tree_depth"],
+        max_delta_energy=d["max_delta_energy"],
+        trajectory_length=d["trajectory_length"],
+        thinning=d["thinning"],
+        strong_zero=d["strong_zero"],
     )
 end
 
@@ -149,10 +242,12 @@ function _sampler_to_dict(s::MCMCState)
         "step_size" => Array(s.step_size)[],
         "inverse_mass_matrix" => Array(s.inverse_mass_matrix),
         "rng" => Array(s.rng),
+        "config" => _config_to_dict(s.config),
     )
 end
 
 function _sampler_from_dict(d)
+    config = haskey(d, "config") ? _config_from_dict(d["config"]) : MCMCConfig()
     return MCMCState(
         Reactant.to_rarray(d["position"]),
         Reactant.to_rarray(d["gradient"]),
@@ -160,6 +255,8 @@ function _sampler_from_dict(d)
         Reactant.to_rarray(fill(d["step_size"])),
         Reactant.to_rarray(d["inverse_mass_matrix"]),
         Reactant.to_rarray(d["rng"]),
+        nothing;
+        config=config,
     )
 end
 
