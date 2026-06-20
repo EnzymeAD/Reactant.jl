@@ -1,5 +1,6 @@
 using Reactant, Test, Random
 using Statistics, Serialization
+using LinearAlgebra: diag
 using Reactant: ProbProg, ReactantRNG, ConcreteRNumber, ConcreteRArray
 using Reactant.ProbProg: MCMCState
 
@@ -100,11 +101,28 @@ end
         )
 
         events = NamedTuple[]
-        cb =
-            info -> begin
-                push!(events, (; phase=info.phase, step=info.step, total=info.total))
-                return nothing
+        cb = function (info)
+            posterior = if info.phase === :sampling
+                (; mean=vec(mean(info.samples; dims=1)), std=vec(std(info.samples; dims=1)))
+            else
+                nothing
             end
+            push!(
+                events,
+                (;
+                    phase=info.phase,
+                    step=info.step,
+                    total=info.total,
+                    progress=info.step / info.total,
+                    step_size=info.step_size,
+                    mass_scales=diag(info.inverse_mass_matrix),
+                    acceptance_rate=info.acceptance_rate,
+                    position=vec(Array(info.state.position)),
+                    posterior=posterior,
+                ),
+            )
+            return nothing
+        end
         samples, state = ProbProg.run_chain(
             fresh_rng(),
             standard_normal_logpdf,
@@ -130,6 +148,16 @@ end
         @test length(sampling_events) == cld(nsamp, 4)
         @test warmup_events[end].step == num_warmup
         @test sampling_events[end].step == nsamp
+
+        @test all(e -> isfinite(e.step_size) && e.step_size > 0, events)
+        @test all(e -> length(e.mass_scales) == pos_size, events)
+        @test all(e -> length(e.position) == pos_size, events)
+        @test all(e -> e.progress ≈ e.step / e.total, events)
+        @test all(e -> e.acceptance_rate === nothing, warmup_events)
+        @test all(e -> e.posterior === nothing, warmup_events)
+        @test all(e -> e.acceptance_rate isa Real, sampling_events)
+        @test all(e -> length(e.posterior.mean) == pos_size, sampling_events)
+        @test all(e -> length(e.posterior.std) == pos_size, sampling_events)
     end
 
     @testset "run_chain(state) continuation is pure and bit-exact" begin

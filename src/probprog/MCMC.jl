@@ -659,38 +659,6 @@ function _compile_sample_kernel(state::MCMCState, logpdf_fn, num_samples::Int, m
     return Reactant.Compiler.compile(fn, (state, logpdf_fn); optimize=:probprog)
 end
 
-function _seed_state(
-    rng,
-    logpdf_fn,
-    initial_position,
-    step_size,
-    inverse_mass_matrix;
-    adapt_step_size,
-    adapt_mass_matrix,
-    total_warmup,
-    mcmc_kwargs,
-)
-    seed_fn = function (sr, lf, pos, ss, imm)
-        _, _, _, st = _infer(
-            ReactantRNG(sr),
-            lf,
-            pos;
-            step_size=ss,
-            inverse_mass_matrix=imm,
-            num_warmup=0,
-            num_samples=0,
-            adapt_step_size,
-            adapt_mass_matrix,
-            total_warmup,
-            mcmc_kwargs...,
-        )
-        return st
-    end
-    args = (rng.seed, logpdf_fn, initial_position, step_size, inverse_mass_matrix)
-    compiled = Reactant.Compiler.compile(seed_fn, args; optimize=:probprog)
-    return compiled(args...)
-end
-
 function _run_chain_chunked(
     rng,
     logpdf_fn,
@@ -713,26 +681,24 @@ function _run_chain_chunked(
     all_chunks = Matrix{Float64}[]
     collected = 0
 
-    state = nothing
+    state = MCMCState(
+        initial_position,
+        initial_gradient,
+        initial_potential_energy,
+        step_size,
+        inverse_mass_matrix,
+        rng.seed;
+        config=MCMCConfig(; mcmc_kwargs...),
+    )
 
     if num_warmup > 0
-        state = _seed_state(
-            rng,
-            logpdf_fn,
-            initial_position,
-            step_size,
-            inverse_mass_matrix;
-            adapt_step_size,
-            adapt_mass_matrix,
-            total_warmup=num_warmup,
-            mcmc_kwargs,
-        )
         done = 0
-        kernel_nsteps = 0
         kernel = nothing
+        kernel_key = nothing
         while done < num_warmup
             nsteps = min(warmup_chunk_size, num_warmup - done)
-            if nsteps != kernel_nsteps
+            key = (nsteps, isnothing(state.gradient))
+            if key != kernel_key
                 kernel = _compile_warmup_kernel(
                     state,
                     logpdf_fn,
@@ -742,7 +708,7 @@ function _run_chain_chunked(
                     adapt_mass_matrix,
                     mcmc_kwargs,
                 )
-                kernel_nsteps = nsteps
+                kernel_key = key
             end
             state = kernel(state, logpdf_fn, ConcreteRNumber(Int64(done)))
             done += nsteps
@@ -752,37 +718,14 @@ function _run_chain_chunked(
         end
     end
 
-    if isnothing(state) && !isnothing(initial_gradient)
-        state = MCMCState(
-            initial_position,
-            initial_gradient,
-            initial_potential_energy,
-            step_size,
-            inverse_mass_matrix,
-            rng.seed;
-            config=MCMCConfig(; mcmc_kwargs...),
-        )
-    elseif isnothing(state)
-        state = _seed_state(
-            rng,
-            logpdf_fn,
-            initial_position,
-            step_size,
-            inverse_mass_matrix;
-            adapt_step_size=false,
-            adapt_mass_matrix=false,
-            total_warmup=nothing,
-            mcmc_kwargs,
-        )
-    end
-
-    kernel_nsamp = 0
     kernel = nothing
+    kernel_key = nothing
     while collected < num_samples
         nsamp = min(chunk_size, num_samples - collected)
-        if nsamp != kernel_nsamp
+        key = (nsamp, isnothing(state.gradient))
+        if key != kernel_key
             kernel = _compile_sample_kernel(state, logpdf_fn, nsamp, mcmc_kwargs)
-            kernel_nsamp = nsamp
+            kernel_key = key
         end
         samples, diag, state = kernel(state, logpdf_fn)
         chunk = Array(samples)
