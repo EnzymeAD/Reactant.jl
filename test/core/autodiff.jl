@@ -646,3 +646,32 @@ end
     model = TwoArgStruct(ConcreteRNumber(0), Reactant.to_rarray(ones(Float32, 3)))
     @jit differentiate_two_arg_fn(model)
 end
+
+forward_to!(y, x, f) = (copyto!(y, f(x)); nothing)
+
+function jvp_constarg(fwd, x0, v, yproto)
+    y = zero(yproto)
+    dy = zero(yproto)
+    Enzyme.autodiff(
+        Enzyme.Forward,
+        forward_to!,
+        Enzyme.Const,
+        Enzyme.Duplicated(y, dy),
+        Enzyme.Duplicated(x0, v),
+        Enzyme.Const(fwd),
+    )
+    return dy
+end
+
+fwd_nocap(x) = complex.(x .* 2.0, x .* 3.0)
+
+@testset "Forward Mode with complex output and mutated Duplicated args" begin
+    N = 64
+    x0 = Reactant.to_rarray(randn(N))
+    v = Reactant.to_rarray(ones(N))
+    yc = @jit fwd_nocap(x0)
+    dy = @jit jvp_constarg(fwd_nocap, x0, v, yc)
+    @test dy isa ConcreteRArray{ComplexF64,1}
+    @test dy ≈ complex.(v .* 2.0, v .* 3.0)
+end
+
