@@ -273,12 +273,14 @@ Returns: (trace, diagnostics, rng, final_position, final_gradient,
 """
 function infer(
     inputs::Vector{Value},
+    adaptation_state_in::Vector{Value},
     original_trace=nothing::Union{Nothing,Value};
     inverse_mass_matrix=nothing::Union{Nothing,Value},
     step_size=nothing::Union{Nothing,Value},
     initial_position=nothing::Union{Nothing,Value},
     initial_gradient=nothing::Union{Nothing,Value},
     initial_potential_energy=nothing::Union{Nothing,Value},
+    warmup_offset=nothing::Union{Nothing,Value},
     trace::IR.Type,
     diagnostics::IR.Type,
     output_rng_state::IR.Type,
@@ -287,12 +289,14 @@ function infer(
     final_potential_energy::IR.Type,
     final_step_size::IR.Type,
     final_inverse_mass_matrix::IR.Type,
+    adaptation_state_out::Vector{IR.Type},
     fn=nothing,
     selection,
     all_addresses,
     num_warmup=nothing,
     num_samples=nothing,
     thinning=nothing,
+    total_warmup=nothing,
     hmc_config=nothing,
     nuts_config=nothing,
     logpdf_fn=nothing,
@@ -309,8 +313,9 @@ function infer(
         final_potential_energy,
         final_step_size,
         final_inverse_mass_matrix,
+        adaptation_state_out...,
     ]
-    operands = Value[inputs...,]
+    operands = Value[inputs..., adaptation_state_in...]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
@@ -323,22 +328,27 @@ function infer(
     !isnothing(initial_position) && push!(operands, initial_position)
     !isnothing(initial_gradient) && push!(operands, initial_gradient)
     !isnothing(initial_potential_energy) && push!(operands, initial_potential_energy)
+    !isnothing(warmup_offset) && push!(operands, warmup_offset)
     push!(
         attributes,
         operandsegmentsizes([
             length(inputs),
+            length(adaptation_state_in),
             Int(!isnothing(original_trace)),
             Int(!isnothing(inverse_mass_matrix)),
             Int(!isnothing(step_size)),
             Int(!isnothing(initial_position)),
             Int(!isnothing(initial_gradient)),
             Int(!isnothing(initial_potential_energy)),
+            Int(!isnothing(warmup_offset)),
         ]),
     )
     !isnothing(fn) && push!(attributes, NamedAttribute("fn", fn))
     !isnothing(num_warmup) && push!(attributes, NamedAttribute("num_warmup", num_warmup))
     !isnothing(num_samples) && push!(attributes, NamedAttribute("num_samples", num_samples))
     !isnothing(thinning) && push!(attributes, NamedAttribute("thinning", thinning))
+    !isnothing(total_warmup) &&
+        push!(attributes, NamedAttribute("total_warmup", total_warmup))
     !isnothing(hmc_config) && push!(attributes, NamedAttribute("hmc_config", hmc_config))
     !isnothing(nuts_config) && push!(attributes, NamedAttribute("nuts_config", nuts_config))
     !isnothing(logpdf_fn) && push!(attributes, NamedAttribute("logpdf_fn", logpdf_fn))
