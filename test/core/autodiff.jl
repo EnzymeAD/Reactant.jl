@@ -674,4 +674,3 @@ fwd_nocap(x) = complex.(x .* 2.0, x .* 3.0)
     @test dy isa ConcreteRArray{ComplexF64,1}
     @test dy ≈ complex.(v .* 2.0, v .* 3.0)
 end
-
