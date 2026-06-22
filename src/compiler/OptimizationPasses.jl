@@ -11,6 +11,9 @@ const OpenMP = Ref{Bool}(true)
 const SROA_ATTRIBUTOR = Ref{Bool}(true)
 const DEBUG_PROBPROG_DUMP_VALUE = Ref(false)
 const DEBUG_PROBPROG_DISABLE_OPT = Ref(true)
+const DEBUG_MLIR_DIAGNOSTIC_LEVEL = Ref{MLIR.API.MlirDiagnosticSeverity}(
+    MLIR.API.MlirDiagnosticError
+)
 
 const WHILE_CONCAT = Ref(false)
 const DUS_TO_CONCAT = Ref(false)
@@ -152,12 +155,44 @@ function impulse_pass(;
     return "expand-impulse{debug-dump=$debug_dump postpasses=\"arith-raise{stablehlo=true}\"}"
 end
 
+# ── run! wrapper ─────────────────────────────────────────────────────────────
+
+# Wraps MLIR.IR.run! to capture diagnostics.
+# On failure: throws CompilationError containing all diagnostics.
+# On success: prints any non-remark diagnostics to stderr using the same format.
+function run!(pm::MLIR.IR.PassManager, op, key::String="")
+    diagnostics = DiagnosticMessage[]
+    handler =
+        MLIR.IR.attach_diagnostic_handler!(; context=MLIR.IR.current_context()) do diag
+            severity = MLIR.IR.severity(diag)
+            severity > DEBUG_MLIR_DIAGNOSTIC_LEVEL[] && return false
+            push!(
+                diagnostics,
+                DiagnosticMessage(
+                    severity,
+                    _sprint_diagnostic(diag),
+                    _collect_location_frames(MLIR.IR.location(diag)),
+                ),
+            )
+            return false  # allow other handlers to also see the diagnostic
+        end
+    result = try
+        MLIR.IR.run!(pm, op, key)
+    catch
+        throw(CompilationError(key, diagnostics))
+    finally
+        MLIR.IR.detach_diagnostic_handler!(handler)
+    end
+    isempty(diagnostics) || _print_diagnostics(stderr, diagnostics)
+    return result
+end
+
 function run_pass_pipeline!(mod, pass_pipeline, key=""; enable_verifier=true)
     pm = MLIR.IR.PassManager()
     MLIR.IR.enable_verifier!(pm, enable_verifier)
     opm = MLIR.IR.OpPassManager(pm)
     MLIR.IR.add_pipeline!(opm, pass_pipeline)
-    MLIR.IR.run!(pm, MLIR.IR.Operation(mod), key)
+    run!(pm, MLIR.IR.Operation(mod), key)
     return mod
 end
 
@@ -178,7 +213,7 @@ function run_pass_pipeline!(
         propagation_options.skip_inline::UInt8,
         propagation_options.enable_insert_explicit_collectives::UInt8,
     )::Cvoid
-    MLIR.IR.run!(pm, mod, "sdy_prop")
+    run!(pm, mod, "sdy_prop")
     return mod
 end
 
