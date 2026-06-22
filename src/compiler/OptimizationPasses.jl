@@ -120,9 +120,9 @@ function optimization_passes(
 
         first_sroa_attributor =
             if SROA_ATTRIBUTOR[] === true || SROA_ATTRIBUTOR[] === :first_sroa_only
-                "sroa=true"
+                "attributor=true"
             elseif SROA_ATTRIBUTOR[] === false
-                "sroa=false"
+                "attributor=false"
             else
                 error(
                     "invalid SROA_ATTRIBUTOR[] value. supported: true, false and :first_sroa_only (got $(SROA_ATTRIBUTOR[]))",
@@ -130,9 +130,9 @@ function optimization_passes(
             end
 
         second_sroa_attributor = if SROA_ATTRIBUTOR[] === true
-            "sroa=true"
+            "attributor=true"
         else
-            "sroa=false"
+            "attributor=false"
         end
 
         if DUMP_LLVMIR[]
