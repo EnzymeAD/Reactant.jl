@@ -443,3 +443,11 @@ mapped_sub(xs...) = stack(map(-, xs...))
         end
     end
 end
+
+map_sum_closure_bad(x) = only(map(_ -> sum(x; dims = 2), 1:1))
+
+@testset "map of closure returning sum" begin
+    x = randn(5, 3)
+    x_ra = Reactant.to_rarray(x)
+    @test @jit(map_sum_closure_bad(x_ra)) ≈ map_sum_closure_bad(x)
+end
