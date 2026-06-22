@@ -8,7 +8,7 @@ const DEBUG_KERNEL = Ref{Bool}(false)
 const DUMP_LLVMIR = Ref{Bool}(false)
 const DUMP_FAILED_LOCKSTEP = Ref{Bool}(false)
 const OpenMP = Ref{Bool}(true)
-const SROA_ATTRIBUTOR = Ref{Bool}(true)
+const SROA_ATTRIBUTOR = Ref{Union{Bool,Symbol}}(:first_sroa_only)
 const DEBUG_PROBPROG_DUMP_VALUE = Ref(false)
 const DEBUG_PROBPROG_DISABLE_OPT = Ref(true)
 const DEBUG_MLIR_DIAGNOSTIC_LEVEL = Ref{MLIR.API.MlirDiagnosticSeverity}(
@@ -117,21 +117,36 @@ function optimization_passes(
     end
     if sroa
         push!(passes, "propagate-constant-bounds")
+
+        first_sroa_attributor = if SROA_ATTRIBUTOR[] === true || SROA_ATTRIBUTOR[] === :first_sroa_only
+            "sroa=true"
+        elseif SROA_ATTRIBUTOR[] === false
+            "sroa=false"
+        else
+            error("invalid SROA_ATTRIBUTOR[] value. supported: true, false and :first_sroa_only (got $(SROA_ATTRIBUTOR[]))")
+        end
+
+        second_sroa_attributor = if SROA_ATTRIBUTOR[] === true
+            "sroa=true"
+        else
+            "sroa=false"
+        end
+
         if DUMP_LLVMIR[]
             push!(
                 passes,
-                "sroa-wrappers{dump_prellvm=true dump_postllvm=true instcombine=false instsimplify=true $(SROA_ATTRIBUTOR[] ? "" : "attributor=false")}",
+                "sroa-wrappers{dump_prellvm=true dump_postllvm=true instcombine=false instsimplify=true $first_sroa_attributor}",
             )
         else
             push!(
                 passes,
-                "sroa-wrappers{instcombine=false instsimplify=true $(SROA_ATTRIBUTOR[] ? "" : "attributor=false")}",
+                "sroa-wrappers{instcombine=false instsimplify=true $first_sroa_attributor}",
             )
         end
         push!(passes, "canonicalize")
         push!(
             passes,
-            "sroa-wrappers{instcombine=false instsimplify=true $(SROA_ATTRIBUTOR[] ? "" : "attributor=false")}",
+            "sroa-wrappers{instcombine=false instsimplify=true $second_sroa_attributor}",
         )
         push!(passes, "libdevice-funcs-raise")
         push!(passes, "canonicalize")
