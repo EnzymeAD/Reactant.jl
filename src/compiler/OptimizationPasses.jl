@@ -118,13 +118,16 @@ function optimization_passes(
     if sroa
         push!(passes, "propagate-constant-bounds")
 
-        first_sroa_attributor = if SROA_ATTRIBUTOR[] === true || SROA_ATTRIBUTOR[] === :first_sroa_only
-            "sroa=true"
-        elseif SROA_ATTRIBUTOR[] === false
-            "sroa=false"
-        else
-            error("invalid SROA_ATTRIBUTOR[] value. supported: true, false and :first_sroa_only (got $(SROA_ATTRIBUTOR[]))")
-        end
+        first_sroa_attributor =
+            if SROA_ATTRIBUTOR[] === true || SROA_ATTRIBUTOR[] === :first_sroa_only
+                "sroa=true"
+            elseif SROA_ATTRIBUTOR[] === false
+                "sroa=false"
+            else
+                error(
+                    "invalid SROA_ATTRIBUTOR[] value. supported: true, false and :first_sroa_only (got $(SROA_ATTRIBUTOR[]))",
+                )
+            end
 
         second_sroa_attributor = if SROA_ATTRIBUTOR[] === true
             "sroa=true"
