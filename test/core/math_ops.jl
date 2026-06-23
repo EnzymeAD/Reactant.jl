@@ -245,7 +245,7 @@ end
         b in (-7, -0.57, -0.0, 1, 3.14)
 
         @test Reactant.to_number(@jit(copysign(ConcreteRNumber(a), ConcreteRNumber(b)))) ≈
-              copysign(a, b)
+            copysign(a, b)
     end
 end
 
