@@ -42,12 +42,28 @@ end
     @inbounds y[i] = x[i] * x[i]
 end
 
+@kernel function weno_weights_kernel!(out, @Const(c))
+    i = @index(Global)
+    @inbounds begin
+        α1 = (2 / 3) / c[i]
+        α2 = (1 / 3) / c[i + 1]
+
+        out[i] = α1 + α2   # bare sum of the two lanes
+    end
+end
+
 function square(x)
     y = similar(x)
     backend = KernelAbstractions.get_backend(x)
     kernel! = square_kernel!(backend)
     kernel!(y, x; ndrange=length(x))
     return y
+end
+
+function run_weno!(out, c)
+    backend = KernelAbstractions.get_backend(out)
+    weno_weights_kernel!(backend)(out, c; ndrange=length(out))
+    return KernelAbstractions.synchronize(backend)
 end
 
 @testset "KernelAbstractions Square" begin
@@ -72,4 +88,17 @@ end
     end
 
     @test all(Array(@jit(raise = raise, square(x))) .≈ Array(x) .* Array(x))
+end
+
+@testset "KernelAbstractions WENO weights" begin
+    N   = 64
+    c   = Reactant.to_rarray(sin.((1:N+2) ./ 3.0))
+    out = Reactant.to_rarray(zeros(N))
+
+    compiled! = Reactant.@compile raise=true run_weno!(out, c)
+    compiled!(out, c)
+
+    c_cpu = sin.((1:N+2) ./ 3.0)
+    expected = (2 / 3) ./ c_cpu[1:N] .+ (1 / 3) ./ c_cpu[2:(N + 1)]
+    @test Array(out) ≈ expected
 end
