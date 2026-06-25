@@ -91,14 +91,14 @@ end
 end
 
 @testset "KernelAbstractions WENO weights" begin
-    N   = 64
-    c   = Reactant.to_rarray(sin.((1:N+2) ./ 3.0))
+    N = 64
+    c = Reactant.to_rarray(sin.((1:(N + 2)) ./ 3.0))
     out = Reactant.to_rarray(zeros(N))
 
-    compiled! = Reactant.@compile raise=true run_weno!(out, c)
+    compiled! = Reactant.@compile raise = true run_weno!(out, c)
     compiled!(out, c)
 
-    c_cpu = sin.((1:N+2) ./ 3.0)
+    c_cpu = sin.((1:(N + 2)) ./ 3.0)
     expected = (2 / 3) ./ c_cpu[1:N] .+ (1 / 3) ./ c_cpu[2:(N + 1)]
     @test Array(out) ≈ expected
 end
