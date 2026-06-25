@@ -12,11 +12,8 @@ linear(x, W, b) = (W * x) .+ b
 @testset "Profiling" begin
     # Run the profiling/timing tools and print
     if !Sys.iswindows()
-        fn = @compile linear(x, W, b)
-        @test_throws AssertionError Reactant.Profiler.profile_and_get_xplane_file(
-            fn, x, W, b; nrepeat=10
-        )
-
+        # Profile first — compiling without sync=true before profiling
+        # poisons the CUPTI profiler state for the process lifetime.
         fn = @compile sync = true linear(x, W, b)
         file =
             Reactant.Profiler.profile_and_get_xplane_file(
@@ -49,5 +46,63 @@ linear(x, W, b) = (W * x) .+ b
         Reactant.@profile nrepeat = 32 compile_options = Reactant.DefaultXLACompileOptions() linear(
             x, W, b
         )
+
+        # Test that non-sync compiled thunks are rejected
+        fn_nosync = @compile linear(x, W, b)
+        @test_throws AssertionError Reactant.Profiler.profile_and_get_xplane_file(
+            fn_nosync, x, W, b; nrepeat=10
+        )
+    end
+end
+
+@testset "Advanced config profiling" begin
+    if !Sys.iswindows()
+        fn = @compile sync = true linear(x, W, b)
+
+        # Test with_profiler accepting advanced_config dict
+        mktempdir() do profile_dir
+            Reactant.Profiler.with_profiler(
+                profile_dir; advanced_config=Dict{String,String}()
+            ) do
+                fn(x, W, b)
+            end
+            traces_path = joinpath(profile_dir, "plugins", "profile")
+            @test isdir(traces_path)
+        end
+
+        # Test profile_and_get_xplane_file with advanced_config
+        result = Reactant.Profiler.profile_and_get_xplane_file(
+            fn, x, W, b; nrepeat=3, advanced_config=Dict{String,String}()
+        )
+        @test isfile(result.xplane_file)
+
+        if RunningOnCUDA
+            # Test with PM counters on GPU
+            # PM counters may fail due to permissions (CUPTI_ERROR_INSUFFICIENT_PRIVILEGES),
+            # so we test that the API accepts them without error. The profiler gracefully
+            # degrades if permissions are missing.
+            mktempdir() do profile_dir
+                Reactant.Profiler.with_profiler(
+                    profile_dir;
+                    pm_counters=Reactant.Profiler.default_pm_counters(),
+                ) do
+                    fn(x, W, b)
+                end
+                traces_path = joinpath(profile_dir, "plugins", "profile")
+                @test isdir(traces_path)
+            end
+
+            # Test profile_and_get_xplane_file with pm_counters
+            pm_result = Reactant.Profiler.profile_and_get_xplane_file(
+                fn, x, W, b;
+                nrepeat=3,
+                pm_counters=Reactant.Profiler.default_pm_counters(),
+            )
+            @test isfile(pm_result.xplane_file)
+
+            # framework_op_stats may be empty if CUPTI permissions are restricted
+            pm_stats = Reactant.Profiler.get_framework_op_stats(pm_result.xplane_file)
+            @test pm_stats isa Vector
+        end
     end
 end
