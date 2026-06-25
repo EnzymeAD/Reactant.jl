@@ -453,6 +453,7 @@ function InterpolateArray(
     interpolation::InterpolationType.T,
     halo::Dims{N}=ntuple(_ -> 0, N);
     client=nothing,
+    src_halo::Dims{N}=ntuple(_ -> 0, N),
 ) where {T,N}
     @assert Sharding.is_sharded(sharding)
     client = client === nothing ? XLA.default_backend() : client
@@ -476,6 +477,7 @@ function InterpolateArray(
                 I_range = slice[dim]
                 N_dim, M_dim = final_grid_size[dim], src_size[dim]
                 H = halo[dim]
+                H_src = src_halo[dim]
 
                 [
                     begin
@@ -486,7 +488,7 @@ function InterpolateArray(
                         else
                             I_shifted = I - H
                             N_dim_shifted = N_dim - 2 * H
-                            M_dim_shifted = M_dim - 2 * H
+                            M_dim_shifted = M_dim - 2 * H_src
 
                             if N_dim_shifted <= 0 || M_dim_shifted <= 0
                                 clamp(I, 1, M_dim)
@@ -494,7 +496,7 @@ function InterpolateArray(
                                 idx_shifted =
                                     (I_shifted * M_dim_shifted + N_dim_shifted - 1) ÷
                                     N_dim_shifted
-                                clamp(idx_shifted + H, 1, M_dim)
+                                clamp(idx_shifted + H_src, 1, M_dim)
                             end
                         end
                     end for I in I_range
@@ -515,6 +517,7 @@ function InterpolateArray(
                 I_range = slice[dim]
                 N_dim, M_dim = final_grid_size[dim], src_size[dim]
                 H = halo[dim]
+                H_src = src_halo[dim]
 
                 [
                     begin
@@ -525,12 +528,12 @@ function InterpolateArray(
                         else
                             I_shifted = I - H
                             N_dim_shifted = N_dim - 2 * H
-                            M_dim_shifted = M_dim - 2 * H
+                            M_dim_shifted = M_dim - 2 * H_src
 
                             a = (2 * I_shifted - 1) * M_dim_shifted + N_dim_shifted
                             b = 2 * N_dim_shifted
                             low_shifted = a ÷ b
-                            clamp(low_shifted + H, 1, M_dim)
+                            clamp(low_shifted + H_src, 1, M_dim)
                         end
                     end for I in I_range
                 ]
@@ -540,6 +543,7 @@ function InterpolateArray(
                 I_range = slice[dim]
                 N_dim, M_dim = final_grid_size[dim], src_size[dim]
                 H = halo[dim]
+                H_src = src_halo[dim]
 
                 [
                     begin
@@ -550,12 +554,12 @@ function InterpolateArray(
                         else
                             I_shifted = I - H
                             N_dim_shifted = N_dim - 2 * H
-                            M_dim_shifted = M_dim - 2 * H
+                            M_dim_shifted = M_dim - 2 * H_src
 
                             a = (2 * I_shifted - 1) * M_dim_shifted + N_dim_shifted
                             b = 2 * N_dim_shifted
                             low_shifted = a ÷ b
-                            clamp(low_shifted + 1 + H, 1, M_dim)
+                            clamp(low_shifted + 1 + H_src, 1, M_dim)
                         end
                     end for I in I_range
                 ]
@@ -571,6 +575,7 @@ function InterpolateArray(
                 I_range = slice[dim]
                 N_dim, M_dim = final_grid_size[dim], src_size[dim]
                 H = halo[dim]
+                H_src = src_halo[dim]
 
                 [
                     begin
@@ -579,7 +584,7 @@ function InterpolateArray(
                         else
                             I_shifted = I - H
                             N_dim_shifted = N_dim - 2 * H
-                            M_dim_shifted = M_dim - 2 * H
+                            M_dim_shifted = M_dim - 2 * H_src
 
                             a = (2 * I_shifted - 1) * M_dim_shifted + N_dim_shifted
                             b = 2 * N_dim_shifted
