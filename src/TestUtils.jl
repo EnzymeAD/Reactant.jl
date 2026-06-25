@@ -36,13 +36,20 @@ function default_epslion(::Val{fdtype}, ::Type{T}) where {fdtype,T}
 end
 
 function get_perturbation(x::AbstractArray{T}, epsilon) where {T}
+    elT = Reactant.unwrapped_eltype(T)
     onehot_matrix = Reactant.promote_to(
-        TracedRArray{Reactant.unwrapped_eltype(T),2},
-        LinearAlgebra.Diagonal(fill(epsilon, length(x)));
+        TracedRArray{real(elT),2}, LinearAlgebra.Diagonal(fill(epsilon, length(x)))
     )
-    return permutedims(
+    perturbation = permutedims(
         reshape(onehot_matrix, size(x)..., length(x)), (ndims(x) + 1, 1:(ndims(x))...)
     )
+    # For complex numbers, we need to perturb real and imaginary parts separately
+    if elT <: Complex
+        real_perturbation = complex.(perturbation, zero(perturbation))
+        imag_perturbation = complex.(zero(perturbation), perturbation)
+        return cat(real_perturbation, imag_perturbation; dims=1)
+    end
+    return perturbation
 end
 
 function generate_perturbed_array(::Val{:central}, x::AbstractArray{T}, epsilon) where {T}
@@ -171,6 +178,23 @@ function finite_difference_gradient(
             elseif method isa Val{:forward}
                 diff = batched_res[1:(end - 1)] .- batched_res[end:end]
                 grad_res = diff ./ epsilon
+            end
+
+            # For complex inputs, combine real and imaginary gradients
+            # Following FiniteDiff.jl: df = real(∂f/∂x) - im * imag(∂f/∂y / im)
+            # where ∂f/∂x comes from real perturbation (divided by epsilon)
+            # and ∂f/∂y comes from imaginary perturbation (divided by im * epsilon)
+            # Since imag(z/im) = -real(z), this simplifies to:
+            # df = real(∂f/∂x) + im * real(∂f/∂y)
+            # See: https://github.com/JuliaDiff/FiniteDiff.jl/blob/master/src/gradients.jl
+            if elT <: Complex
+                n = length(arg)
+                real_grad = grad_res[1:n]  # divided by epsilon
+                imag_grad = grad_res[(n + 1):(2n)]  # divided by epsilon (needs /im correction)
+                # imag_grad was divided by epsilon, but should be divided by im*epsilon
+                # Since imag(z/im) = -real(z): imag(imag_grad/im) = -real(imag_grad)
+                # So: df = real(real_grad) - im*(-real(imag_grad)) = real(real_grad) + im*real(imag_grad)
+                grad_res = real.(real_grad) .+ elT(im) .* real.(imag_grad)
             end
 
             push!(gradient_result_map_path, TracedUtils.get_idx(arg, argprefix))
