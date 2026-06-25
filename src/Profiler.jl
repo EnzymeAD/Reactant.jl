@@ -84,6 +84,10 @@ const DEFAULT_PM_COUNTERS = join(
         "lts__t_sectors_lookup_hit.sum",
         "lts__t_sectors_lookup_miss.sum",
         "sm__inst_executed.sum",
+        "sm__flops_fp64.sum",
+        "sm__flops_fp32.sum",
+        "sm__flops_fp16.sum",
+        "sm__flops_tensor_core.sum",
     ],
     ",",
 )
