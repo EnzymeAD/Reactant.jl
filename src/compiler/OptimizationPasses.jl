@@ -8,9 +8,12 @@ const DEBUG_KERNEL = Ref{Bool}(false)
 const DUMP_LLVMIR = Ref{Bool}(false)
 const DUMP_FAILED_LOCKSTEP = Ref{Bool}(false)
 const OpenMP = Ref{Bool}(true)
-const SROA_ATTRIBUTOR = Ref{Bool}(true)
+const SROA_ATTRIBUTOR = Ref{Union{Bool,Symbol}}(true)
 const DEBUG_PROBPROG_DUMP_VALUE = Ref(false)
 const DEBUG_PROBPROG_DISABLE_OPT = Ref(true)
+const DEBUG_MLIR_DIAGNOSTIC_LEVEL = Ref{MLIR.API.MlirDiagnosticSeverity}(
+    MLIR.API.MlirDiagnosticError
+)
 
 const WHILE_CONCAT = Ref(false)
 const DUS_TO_CONCAT = Ref(false)
@@ -114,21 +117,39 @@ function optimization_passes(
     end
     if sroa
         push!(passes, "propagate-constant-bounds")
+
+        first_sroa_attributor =
+            if SROA_ATTRIBUTOR[] === true || SROA_ATTRIBUTOR[] === :first_sroa_only
+                "attributor=true"
+            elseif SROA_ATTRIBUTOR[] === false
+                "attributor=false"
+            else
+                error(
+                    "invalid SROA_ATTRIBUTOR[] value. supported: true, false and :first_sroa_only (got $(SROA_ATTRIBUTOR[]))",
+                )
+            end
+
+        second_sroa_attributor = if SROA_ATTRIBUTOR[] === true
+            "attributor=true"
+        else
+            "attributor=false"
+        end
+
         if DUMP_LLVMIR[]
             push!(
                 passes,
-                "sroa-wrappers{dump_prellvm=true dump_postllvm=true instcombine=false instsimplify=true $(SROA_ATTRIBUTOR[] ? "" : "attributor=false")}",
+                "sroa-wrappers{dump_prellvm=true dump_postllvm=true instcombine=false instsimplify=true $first_sroa_attributor}",
             )
         else
             push!(
                 passes,
-                "sroa-wrappers{instcombine=false instsimplify=true $(SROA_ATTRIBUTOR[] ? "" : "attributor=false")}",
+                "sroa-wrappers{instcombine=false instsimplify=true $first_sroa_attributor}",
             )
         end
         push!(passes, "canonicalize")
         push!(
             passes,
-            "sroa-wrappers{instcombine=false instsimplify=true $(SROA_ATTRIBUTOR[] ? "" : "attributor=false")}",
+            "sroa-wrappers{instcombine=false instsimplify=true $second_sroa_attributor}",
         )
         push!(passes, "libdevice-funcs-raise")
         push!(passes, "canonicalize")
@@ -152,12 +173,44 @@ function impulse_pass(;
     return "expand-impulse{debug-dump=$debug_dump postpasses=\"arith-raise{stablehlo=true}\"}"
 end
 
+# ── run! wrapper ─────────────────────────────────────────────────────────────
+
+# Wraps MLIR.IR.run! to capture diagnostics.
+# On failure: throws CompilationError containing all diagnostics.
+# On success: prints any non-remark diagnostics to stderr using the same format.
+function run!(pm::MLIR.IR.PassManager, op, key::String="")
+    diagnostics = DiagnosticMessage[]
+    handler =
+        MLIR.IR.attach_diagnostic_handler!(; context=MLIR.IR.current_context()) do diag
+            severity = MLIR.IR.severity(diag)
+            severity > DEBUG_MLIR_DIAGNOSTIC_LEVEL[] && return false
+            push!(
+                diagnostics,
+                DiagnosticMessage(
+                    severity,
+                    _sprint_diagnostic(diag),
+                    _collect_location_frames(MLIR.IR.location(diag)),
+                ),
+            )
+            return false  # allow other handlers to also see the diagnostic
+        end
+    result = try
+        MLIR.IR.run!(pm, op, key)
+    catch
+        throw(CompilationError(key, diagnostics))
+    finally
+        MLIR.IR.detach_diagnostic_handler!(handler)
+    end
+    isempty(diagnostics) || _print_diagnostics(stderr, diagnostics)
+    return result
+end
+
 function run_pass_pipeline!(mod, pass_pipeline, key=""; enable_verifier=true)
     pm = MLIR.IR.PassManager()
     MLIR.IR.enable_verifier!(pm, enable_verifier)
     opm = MLIR.IR.OpPassManager(pm)
     MLIR.IR.add_pipeline!(opm, pass_pipeline)
-    MLIR.IR.run!(pm, MLIR.IR.Operation(mod), key)
+    run!(pm, MLIR.IR.Operation(mod), key)
     return mod
 end
 
@@ -178,7 +231,7 @@ function run_pass_pipeline!(
         propagation_options.skip_inline::UInt8,
         propagation_options.enable_insert_explicit_collectives::UInt8,
     )::Cvoid
-    MLIR.IR.run!(pm, mod, "sdy_prop")
+    run!(pm, mod, "sdy_prop")
     return mod
 end
 

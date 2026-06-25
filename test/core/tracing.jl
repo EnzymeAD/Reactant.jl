@@ -412,6 +412,29 @@ end
     @test opt_traced.centred isa Bool
 end
 
+# When `a` and `b` alias on loop entry and `b` is reassigned inside the loop,
+# the aliasing pattern changes (a and b no longer refer to the same object after
+# the body runs). `@trace` detects this dynamically and throws an error, since
+# Reactant's pre-loop unaliasing would silently give wrong results.
+function aliased_trace_for_array_mutate_then_reassign(ms::AbstractArray{T}) where {T}
+    a = ms
+    b = ms   # alias on entry
+
+    Reactant.@trace for _ in 1:8
+        a .+= one(eltype(a))   # in-place mutation of shared array
+        b = b .* 2             # reassign b AFTER the mutation
+    end
+
+    return a, b
+end
+
+@testset "aliased mutate-then-reassign in @trace for throws" begin
+    ms = Float64[0.01, 0.1, 0.5, 0.9]
+    ms_r = Reactant.to_rarray(ms)
+
+    @test_throws ErrorException @jit aliased_trace_for_array_mutate_then_reassign(ms_r)
+end
+
 @testset "@skip_rewrite_func" begin
     a = ConcreteRArray([1.0 2.0; 3.0 4.0])
 

@@ -6,7 +6,8 @@ using ReactantCore:
     within_compile,
     MissingTracedValue,
     materialize_traced_array,
-    Periodic
+    Periodic,
+    Binomial
 
 using LinearAlgebra: LinearAlgebra, RowMaximum, NoPivot
 using Random: Random, AbstractRNG
@@ -307,7 +308,7 @@ export ConcreteRArray,
     within_compile
 
 @static if VERSION ≥ v"1.11"
-    @eval $(Expr(:public, :Periodic))
+    @eval $(Expr(:public, :Periodic, :Binomial))
 end
 
 const registry = Ref{Union{Nothing,MLIR.IR.DialectRegistry}}()
@@ -370,6 +371,16 @@ function __init__()
         initialize_dialect()
     else
         @warn "Reactant_jll isn't availble for your platform $(Reactant_jll.host_platform)"
+    end
+
+    Base.Experimental.register_error_hint(XLA.ReactantInternalError) do io, exc
+        if occursin("'stablehlo.dynamic_pad' op can't be translated to XLA HLO", exc.msg) &&
+            occursin("stablehlo.while", exc.msg)
+            print(
+                io,
+                "\nAttempted to perform automatic differentation of a loop with non-statically known bounds. Try using `checkpointing=Reactant.Binomial(budget)` where `budget` is an integer specifying the maximum number of checkpoints Reactant is able to take during the augmented primal computation.",
+            )
+        end
     end
 
     Base.Experimental.register_error_hint(MethodError) do io, exc, argtypes, kwargs

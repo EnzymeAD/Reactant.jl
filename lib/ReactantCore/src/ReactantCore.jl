@@ -3,7 +3,7 @@ module ReactantCore
 using ExpressionExplorer: ExpressionExplorer
 using MacroTools: MacroTools, @capture
 
-export @trace, within_compile, MissingTracedValue, promote_to_traced, Periodic
+export @trace, within_compile, MissingTracedValue, promote_to_traced, Periodic, Binomial
 
 """
     Periodic(n::Int)
@@ -26,6 +26,28 @@ end
 """
 struct Periodic
     n::Int
+end
+
+"""
+    ReactantCore.Binomial(budget::Int)
+
+Checkpointing strategy for traced loops that uses a fixed budget for checkpoints and uses
+the revolve algorithm [1] to minimize compute around that budget.
+
+```julia
+# Explicit binomial checkpointing with 4 checkpoints
+@trace checkpointing=Binomial(4) for i in 1:100
+    x = x .+ 1
+end
+```
+
+[1] Griewank, A., & Walther, A. (2000).
+    Algorithm 799: revolve: an implementation of checkpointing for the reverse
+    or adjoint mode of computational differentiation.
+    ACM Transactions on Mathematical Software (TOMS), 26(1), 19-45.
+"""
+struct Binomial
+    budget::Int
 end
 
 # Traits
@@ -163,7 +185,7 @@ end
 The behavior of loops can be configured with the following configuration options:
 
  - `track_numbers::Union{Bool,Datatype}` - whether Julia numbers should be automatically promoted to traced numbers upon entering the loop.
- - `checkpointing::Union{Bool,Periodic}` - whether or not to enable checkpointing when performing reverse mode differentiation. Can be `false` (default), `true` (automatic checkpointing), or `Periodic(n)` to specify `n` checkpoints. When `true` is used, defaults to `isqrt(num_iters)` checkpoints for `for` loops with static (non-traced) bounds. `Periodic(n)` must be used for `while` loops or `for` loops with dynamic (traced) bounds when checkpointing is enabled.
+ - `checkpointing::Union{Bool,Periodic,Binomial}` - whether or not to enable checkpointing when performing reverse mode differentiation. Can be `false` (default), `true` (automatic checkpointing), or `Periodic(n)` to specify `n` checkpoints. When `true` is used, defaults to `isqrt(num_iters)` checkpoints for `for` loops with static (non-traced) bounds. `Periodic(n)` must be used for `while` loops or `for` loops with dynamic (traced) bounds when checkpointing is enabled.
  - `mincut::Bool` - whether or not to enable the mincut algorithm when performing reverse mode differentiation (default: `false`).
 """
 macro trace(args...)
@@ -316,6 +338,38 @@ function trace_function_definition(mod, expr)
     end
 end
 
+function _check_aliasing_unchanged(pre_ids::Tuple, post_ids::Tuple, varnames::Tuple)
+    n = length(pre_ids)
+    for i in 1:n
+        isnothing(pre_ids[i]) && continue
+        for j in (i + 1):n
+            isnothing(pre_ids[j]) && continue
+            pre_alias = pre_ids[i] == pre_ids[j]
+            post_alias =
+                !isnothing(post_ids[i]) &&
+                !isnothing(post_ids[j]) &&
+                post_ids[i] == post_ids[j]
+            if pre_alias && !post_alias
+                ni, nj = varnames[i], varnames[j]
+                error(
+                    "Reactant.@trace: the aliasing pattern of loop-carried variables " *
+                    "changed during the loop body.\n`$ni` and `$nj` referred to the same " *
+                    "object before the loop body but not after.\n" *
+                    "Fix: break the aliasing before the `@trace` loop, " *
+                    "e.g. `$nj = copy($nj)`.",
+                )
+            elseif !pre_alias && post_alias
+                ni, nj = varnames[i], varnames[j]
+                error(
+                    "Reactant.@trace: the aliasing pattern of loop-carried variables " *
+                    "changed during the loop body.\n`$ni` and `$nj` did not alias before " *
+                    "the loop body but do after.\nThis is unsupported.",
+                )
+            end
+        end
+    end
+end
+
 function trace_while(expr; track_numbers, mincut, checkpointing, first_arg=nothing)
     Meta.isexpr(expr, :while, 2) || error("expected while expr")
     cond, body = expr.args
@@ -327,7 +381,7 @@ function trace_while(expr; track_numbers, mincut, checkpointing, first_arg=nothi
     if checkpointing === true && first_arg === nothing
         # This is a raw while loop (not from trace_for), require Periodic(n)
         error(
-            "Reactant.Periodic(n) must be used for while loops when checkpointing is enabled. " *
+            "Reactant.Periodic(n) or Reactant.Binomial(n) must be used for while loops when checkpointing is enabled. " *
             "Use `@trace checkpointing=Reactant.Periodic(n) while ...` where n is the number of checkpoints.",
         )
     end
@@ -367,22 +421,46 @@ function trace_while(expr; track_numbers, mincut, checkpointing, first_arg=nothi
     cond_fn_sym = gensym(:cond_fn)
     args_sym = gensym(:args)
     verify_arg_names_sym = gensym(:verify_arg_names)
+    pre_alias_ids_sym = gensym(:pre_alias_ids)
+
+    # Capture the objectid of each loop-carried slot before traced_while is called.
+    # Non-traced values get `nothing` so they are skipped in the aliasing check.
+    pre_ids_expr = Expr(
+        :tuple,
+        [
+            :($(is_traced)($(args_sym)[$i][]) ? objectid($(args_sym)[$i][]) : nothing) for
+            i in 1:length(external_syms)
+        ]...,
+    )
+
+    # After the body runs and from_locals has written back into the refs, capture
+    # post-body objectids and verify the aliasing pattern is unchanged.
+    post_ids_expr = Expr(
+        :tuple,
+        [:($(is_traced)($ref[]) ? objectid($ref[]) : nothing) for ref in ref_syms]...,
+    )
+    varnames_expr = Expr(:tuple, QuoteNode.(external_syms)...)
 
     reactant_code_block = quote
         let $args_sym = $(args_init)
+            $pre_alias_ids_sym = $(pre_ids_expr)
             $cond_fn_sym = $(arg_syms) -> begin
                 $(to_locals...)
                 $cond
             end
-            $body_fn_sym = $(arg_syms) -> begin
-                $(to_locals...)
-                $body
-                $(from_locals...)
-                nothing
-            end
+            $body_fn_sym =
+                $(arg_syms) -> begin
+                    $(to_locals...)
+                    $body
+                    $(from_locals...)
+                    $(ReactantCore)._check_aliasing_unchanged(
+                        $pre_alias_ids_sym, $(post_ids_expr), $(varnames_expr)
+                    )
+                    nothing
+                end
 
-            $(verify_arg_names_sym) = if sizeof($(cond_fn_sym)) != 0
-                (Symbol($cond_fn_sym), $(QuoteNode.(args_names.args)...))
+            $(verify_arg_names_sym) = if sizeof($(body_fn_sym)) != 0
+                (Symbol($body_fn_sym), $(QuoteNode.(args_names.args)...))
             else
                 ($(QuoteNode.(args_names.args)...),)
             end
@@ -476,7 +554,7 @@ function trace_for(expr; track_numbers, checkpointing, mincut)
     elseif checkpointing === false
         :($checkpointing_sym = false)
     else
-        # Assume it's a Periodic(n) expression or variable
+        # Assume it's a Periodic(n) or Binomial(n) expression or variable
         :($checkpointing_sym = $checkpointing)
     end
 
@@ -495,13 +573,14 @@ function trace_for(expr; track_numbers, checkpointing, mincut)
         end
 
         local $counter = zero($start_sym)
+        local $num_iters = div($limit_sym - $start_sym, $step_sym)
+        $num_iters += one($num_iters)
 
         $(trace_while(
             Expr(
                 :while,
                 quote
-                    local $num_iters = div($limit_sym - $start_sym, $step_sym)
-                    $counter < $num_iters + one($num_iters)
+                    $counter < $num_iters
                 end,
                 quote
                     local $induction = $start_sym + $counter * $step_sym

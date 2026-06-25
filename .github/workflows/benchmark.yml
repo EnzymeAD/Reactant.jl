@@ -27,7 +27,7 @@ jobs:
       suites: ${{ steps.compute.outputs.suites }}
       any_suite: ${{ steps.compute.outputs.any_suite }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - uses: dorny/paths-filter@v4
@@ -122,7 +122,7 @@ jobs:
       DEVICE: ${{ contains(matrix.os, 'a100') && 'CUDA' || contains(matrix.os, 'tpu') && 'TPU' || 'CPU' }}
       JULIA_PKG_SERVER_REGISTRY_PREFERENCE: "eager"
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: julia-actions/setup-julia@v3
         with:
           version: "1.11"
@@ -147,7 +147,7 @@ jobs:
     if: ${{ !cancelled() && needs.benchmark.result == 'success' }}
     needs: [determine-suites, benchmark]
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: julia-actions/setup-julia@v3
         with:
           version: "1"

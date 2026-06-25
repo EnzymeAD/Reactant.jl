@@ -337,7 +337,7 @@ function overload_autodiff(
         primf,
         primargs,
         (),
-        string(f) * "_autodiff",
+        string(FA) * "_autodiff",
         false;
         argprefix,
         resprefix,
@@ -455,15 +455,24 @@ function overload_autodiff(
             push!(
                 outtys, TracedUtils.transpose_ty(MLIR.IR.type(TracedUtils.get_mlir_data(a)))
             )
+            if CMode <: ForwardMode &&
+                act != EnzymeActivity.CONST &&
+                act != EnzymeActivity.CONST_NO_NEED
+                push!(
+                    outtys,
+                    TracedUtils.batch_ty(
+                        width,
+                        TracedUtils.transpose_ty(
+                            MLIR.IR.type(TracedUtils.get_mlir_data(a))
+                        ),
+                    ),
+                )
+            end
         end
     end
 
     for (i, act) in enumerate(activity)
-        if (
-            act == EnzymeActivity.OUT ||
-            act == EnzymeActivity.DUPLICATED ||
-            act == EnzymeActivity.DUPLICATED_NO_NEED
-        )
+        if act == EnzymeActivity.OUT
             push!(outtys, TracedUtils.batch_ty(width, in_tys[i]))
         end
     end
@@ -527,6 +536,19 @@ function overload_autodiff(
                 arg.val, path[3:end], TracedUtils.transpose_val(MLIR.IR.result(res, residx))
             )
             residx += 1
+            act = act_from_type(arg, reverse, true)
+            if CMode <: ForwardMode &&
+                act != EnzymeActivity.CONST &&
+                act != EnzymeActivity.CONST_NO_NEED
+                set_act!(
+                    arg,
+                    path[3:end],
+                    reverse,
+                    TracedUtils.transpose_val(MLIR.IR.result(res, residx));
+                    width,
+                )
+                residx += 1
+            end
         else
             TracedUtils.set!(a, (), TracedUtils.transpose_val(MLIR.IR.result(res, residx)))
             residx += 1
