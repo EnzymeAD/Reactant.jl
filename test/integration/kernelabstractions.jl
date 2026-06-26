@@ -1,4 +1,4 @@
-using CUDA, KernelAbstractions, Reactant, Test
+using CUDA, KernelAbstractions, Reactant, Test, FileCheck
 
 # Simple kernel for matrix multiplication
 @kernel function matmul_kernel!(output, a)
@@ -101,4 +101,31 @@ end
     c_cpu = sin.((1:(N + 2)) ./ 3.0)
     expected = (2 / 3) ./ c_cpu[1:N] .+ (1 / 3) ./ c_cpu[2:(N + 1)]
     @test Array(out) ≈ expected
+end
+
+@kernel function fma_kernel!(out, @Const(a), @Const(b), @Const(c))
+    i = @index(Global)
+    @inbounds out[i] = fma(a[i], b[i], c[i])
+end
+
+function run_fma!(out, a, b, c)
+    backend = KernelAbstractions.get_backend(out)
+    kernel! = fma_kernel!(backend)
+    kernel!(out, a, b, c; ndrange=length(out))
+    return out
+end
+
+@testset "Compile FMA" begin
+    a = Reactant.to_rarray(Float64[1.0, 2.0, 3.0, 4.0])
+    b = Reactant.to_rarray(Float64[2.0, 3.0, 4.0, 5.0])
+    c = Reactant.to_rarray(Float64[0.5, 0.5, 0.5, 0.5])
+    out = Reactant.to_rarray(zeros(Float64, 4))
+
+    ir = repr(Reactant.@code_hlo raise = true run_fma!(out, a, b, c))
+    @test @filecheck begin
+        @check "%0 = stablehlo.multiply %arg1, %arg2 : tensor<4xf64>"
+        @check_next "%1 = stablehlo.add %0, %arg3 : tensor<4xf64>"
+        @check_next "return %1 : tensor<4xf64>"
+        ir
+    end
 end

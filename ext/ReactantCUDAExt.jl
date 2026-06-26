@@ -693,35 +693,44 @@ function compile(job)
         end
         opt_level = 2
         tm = GPUCompiler.llvm_machine(job.config.target)
-        LLVM.@dispose pb = LLVM.NewPMPassBuilder() begin
-            LLVM.register!(pb, GPULowerCPUFeaturesPass())
-            LLVM.register!(pb, GPULowerPTLSPass())
-            LLVM.register!(pb, GPULowerGCFramePass())
-            LLVM.register!(pb, AddKernelStatePass())
-            LLVM.register!(pb, LowerKernelStatePass())
-            LLVM.register!(pb, CleanupKernelStatePass())
 
-            LLVM.add!(pb, LLVM.NewPMModulePassManager()) do mpm
-                GPUCompiler.buildNewPMPipeline!(mpm, job, opt_level)
+        prev_job =
+            isdefined(GPUCompiler, :current_job) ? GPUCompiler.current_job : nothing
+        GPUCompiler.current_job = job
+
+        try
+            LLVM.@dispose pb = LLVM.NewPMPassBuilder() begin
+                LLVM.register!(pb, GPULowerCPUFeaturesPass())
+                LLVM.register!(pb, GPULowerPTLSPass())
+                LLVM.register!(pb, GPULowerGCFramePass())
+                LLVM.register!(pb, AddKernelStatePass())
+                LLVM.register!(pb, LowerKernelStatePass())
+                LLVM.register!(pb, CleanupKernelStatePass())
+
+                LLVM.add!(pb, LLVM.NewPMModulePassManager()) do mpm
+                    GPUCompiler.buildNewPMPipeline!(mpm, job, opt_level)
+                end
+                LLVM.run!(pb, mod, tm)
             end
-            LLVM.run!(pb, mod, tm)
-        end
-        if Reactant.Compiler.DUMP_LLVMIR[]
-            println("cuda.jl pre vendor IR\n", string(mod))
-        end
-
-        LLVM.@dispose pb = LLVM.NewPMPassBuilder() begin
-            LLVM.add!(pb, LLVM.NewPMModulePassManager()) do mpm
-                LLVM.add!(mpm, LLVM.AlwaysInlinerPass())
+            if Reactant.Compiler.DUMP_LLVMIR[]
+                println("cuda.jl pre vendor IR\n", string(mod))
             end
-            LLVM.run!(pb, mod, tm)
-        end
 
-        GPUCompiler.optimize_module!(job, mod)
-        if Reactant.Compiler.DUMP_LLVMIR[]
-            println("cuda.jl post vendor IR\n", string(mod))
+            LLVM.@dispose pb = LLVM.NewPMPassBuilder() begin
+                LLVM.add!(pb, LLVM.NewPMModulePassManager()) do mpm
+                    LLVM.add!(mpm, LLVM.AlwaysInlinerPass())
+                end
+                LLVM.run!(pb, mod, tm)
+            end
+
+            GPUCompiler.optimize_module!(job, mod)
+            if Reactant.Compiler.DUMP_LLVMIR[]
+                println("cuda.jl post vendor IR\n", string(mod))
+            end
+            LLVM.run!(GPUCompiler.DeadArgumentEliminationPass(), mod, tm)
+        finally
+            GPUCompiler.current_job = prev_job
         end
-        LLVM.run!(GPUCompiler.DeadArgumentEliminationPass(), mod, tm)
 
         for fname in ("gpu_report_exception", "gpu_signal_exception")
             if LLVM.haskey(LLVM.functions(mod), fname)
