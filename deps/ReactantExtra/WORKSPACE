@@ -8,6 +8,8 @@ ENZYMEXLA_COMMIT = "d4ddff0e2a69caea42c8c75998c75b51a69a662e"
 
 ENZYMEXLA_SHA256 = ""
 
+OVERRIDE_ENZYME_JAX_PATH = ""
+
 http_archive(
     name = "nsync",
     sha256 = NSYNC_SHA256,
@@ -38,17 +40,12 @@ http_archive(
     urls = ["https://github.com/google/perfetto/archive/refs/tags/v53.0.tar.gz"],
 )
 
-http_archive(
-    name = "enzyme_ad",
-    patch_cmds = [
-        """
-sed -i.bak0 "s/\\\\\\\\\\\\\\\\\\/\\\\\\\\\\\\\\\\\\/:patches/@enzyme_ad\\\\\\\\\\\\\\\\\\/\\\\\\\\\\\\\\\\\\/:patches/g" workspace.bzl
-sed -i.bak0 "s,//:patches,@enzyme_ad//:patches,g" third_party/*/workspace.bzl
-""",
-    ],
+load("//:workspace.bzl", "enzyme_jax_repository")
+
+enzyme_jax_repository(
+    commit = ENZYMEXLA_COMMIT,
+    local_path = OVERRIDE_ENZYME_JAX_PATH,
     sha256 = ENZYMEXLA_SHA256,
-    strip_prefix = "Enzyme-JAX-" + ENZYMEXLA_COMMIT,
-    urls = ["https://github.com/EnzymeAD/Enzyme-JAX/archive/{commit}.tar.gz".format(commit = ENZYMEXLA_COMMIT)],
 )
 
 NEW_XLA_PATCHES = []
