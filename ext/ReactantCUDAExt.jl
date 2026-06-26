@@ -693,6 +693,8 @@ function compile(job)
         end
         opt_level = 2
         tm = GPUCompiler.llvm_machine(job.config.target)
+
+        GPUCompiler.current_job = job
         LLVM.@dispose pb = LLVM.NewPMPassBuilder() begin
             LLVM.register!(pb, GPULowerCPUFeaturesPass())
             LLVM.register!(pb, GPULowerPTLSPass())
