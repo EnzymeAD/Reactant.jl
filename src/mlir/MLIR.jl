@@ -48,6 +48,42 @@ module API
         @ccall mlir_c.registerEnzymeJaXXLAFFI()::Cvoid
     end
 
+    function compile_mhlo_to_llvm_string(
+        mhlo_text::String; pass_pipeline::String="", xla_runtime::Bool=false
+    )
+        out_str_ref = Ref{Ptr{Cchar}}(C_NULL)
+
+        exec_ptr = ccall(
+            (:ReactantCompileMhloToLLVM, Reactant_jll.libReactantExtra),
+            Ptr{Cvoid},
+            (Cstring, Csize_t, Ref{Ptr{Cchar}}, UInt8, Cstring),
+            mhlo_text,
+            sizeof(mhlo_text),
+            out_str_ref,
+            UInt8(xla_runtime),
+            pass_pipeline,
+        )
+
+        if exec_ptr == C_NULL
+            error("Reactant XLA compilation to LLVM failed.")
+        end
+
+        llvm_ir = ""
+        if out_str_ref[] != C_NULL
+            llvm_ir = unsafe_string(out_str_ref[])
+            Libc.free(out_str_ref[])
+        end
+
+        ccall(
+            (:ReactantFreeLocalExecutable, Reactant_jll.libReactantExtra),
+            Cvoid,
+            (Ptr{Cvoid},),
+            exec_ptr,
+        )
+
+        return llvm_ir
+    end
+
     function ifrt_compile_with_proto(
         client, cmod, compile_options_proto::Vector{UInt8}, compile_options_proto_size
     )
