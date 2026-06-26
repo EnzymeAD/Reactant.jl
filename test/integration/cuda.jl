@@ -252,7 +252,9 @@ struct MyClock2{T}
     iteration::Int
 end
 
-Adapt.adapt_structure(to, c::MyClock2) = (time=Adapt.adapt(to, c.time), iteration=c.iteration)
+function Adapt.adapt_structure(to, c::MyClock2)
+    return (time=Adapt.adapt(to, c.time), iteration=c.iteration)
+end
 
 @kernel function _touch!(arr, clock, params)
     i = @index(Global)
@@ -267,15 +269,18 @@ function run!(arr, clock, params)
 end
 
 @testset "Oceananigans Clock" begin
-    arr    = Reactant.to_rarray(zeros(Float64, 16))
-    clock  = MyClock(ConcreteRNumber(0.0), 3)
+    arr = Reactant.to_rarray(zeros(Float64, 16))
+    clock = MyClock(ConcreteRNumber(0.0), 3)
     params = RawParams(ConcreteRNumber(0.1), 7)
 
-    @test_throws "GPU kernel argument of type @NamedTuple{time::Reactant.TracedRNumber{Float64}, iteration::Int64} contains an unadapted traced value at field: time" Reactant.@compile raise=true raise_first=true sync=true run!(arr, clock, params)
+    @test_throws "GPU kernel argument of type @NamedTuple{time::Reactant.TracedRNumber{Float64}, iteration::Int64} contains an unadapted traced value at field: time" Reactant.@compile raise =
+        true raise_first = true sync = true run!(arr, clock, params)
 
     clock2 = MyClock2(ConcreteRNumber(0.0), 3)
 
-    r_run! = Reactant.@compile raise=true raise_first=true sync=true run!(arr, clock2, params)
+    r_run! = Reactant.@compile raise = true raise_first = true sync = true run!(
+        arr, clock2, params
+    )
     r_run!(arr, clock2, params)
 
     @test all(==(10), Array(arr))
