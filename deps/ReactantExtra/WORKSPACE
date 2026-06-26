@@ -43,8 +43,8 @@ http_archive(
 load("//:workspace.bzl", "enzyme_jax_repository")
 
 enzyme_jax_repository(
-    local_path = OVERRIDE_ENZYME_JAX_PATH,
     commit = ENZYMEXLA_COMMIT,
+    local_path = OVERRIDE_ENZYME_JAX_PATH,
     sha256 = ENZYMEXLA_SHA256,
 )
 
