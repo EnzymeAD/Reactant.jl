@@ -343,7 +343,7 @@ function make_mlir_fn(
         return mlir_fn_res
     end
 
-    (; N, traced_args, linear_args, inv_map, in_tys, sym_visibility, mod, traced_args_to_shardings, func, fnbody, seen_args, skipped_args) = prepare_mlir_fn_args(
+    (; N, traced_args, linear_args, inv_map, in_tys, sym_visibility, mod, traced_args_to_shardings, func, fnbody, seen_args, skipped_args, any_input_sharding) = prepare_mlir_fn_args(
         args,
         name,
         concretein,
@@ -363,6 +363,12 @@ function make_mlir_fn(
     # both compile-time and relocatability issues
     MLIR.IR.activate(fnbody)
 
+    force_raising = any_input_sharding && !Reactant.Compiler.raising()
+
+    if force_raising
+        Reactant.Compiler.activate_raising!(true)
+    end
+
     result = try
         process_linear_args!(linear_args, fnbody, do_transpose, optimize_then_pad, inv_map)
 
@@ -374,6 +380,9 @@ function make_mlir_fn(
     finally
         MLIR.IR.deactivate(fnbody)
         Ops.deactivate_constant_context!(fnbody)
+        if force_raising
+            Reactant.Compiler.deactivate_raising!(true)
+        end
     end
 
     # check which arguments have been mutated
@@ -526,14 +535,17 @@ function prepare_mlir_fn_args(
 
     # Insert meshes for the sharded arguments
     traced_args_to_shardings = OrderedIdDict()
+    any_input_sharding = false
     for (k, v) in seen_args
         if k isa Reactant.AbstractConcreteNumber || k isa Reactant.AbstractConcreteArray
             if Reactant.Sharding.is_sharded(k)
                 @opcall mesh(k.sharding.mesh)
                 traced_args_to_shardings[v] = k.sharding
+                any_input_sharding = true
             elseif input_shardings !== nothing && haskey(input_shardings, k)
                 @opcall mesh(input_shardings[k].mesh)
                 traced_args_to_shardings[v] = input_shardings[k]
+                any_input_sharding = true
             end
         end
     end
@@ -589,6 +601,7 @@ function prepare_mlir_fn_args(
         fnbody,
         seen_args,
         skipped_args,
+        any_input_sharding,
     )
 end
 

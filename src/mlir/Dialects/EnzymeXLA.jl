@@ -296,6 +296,33 @@ function special_besselyx(
     )
 end
 
+function math_binomial_progress(
+    num_steps::Value,
+    budget::Value;
+    result=nothing::Union{Nothing,IR.Type},
+    max_iters=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[num_steps, budget]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(result) && push!(op_ty_results, result)
+    !isnothing(max_iters) && push!(attributes, NamedAttribute("max_iters", max_iters))
+
+    return create_operation(
+        "enzymexla.math.binomial_progress",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
 function cacheload(
     memref::Value, indices::Vector{Value}; result::IR.Type, location=Location()
 )
@@ -553,6 +580,42 @@ function math_gelu(
         attributes,
         results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
         result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
+`blas_gemm`
+
+C := alpha*op(A)*op(B) + beta*C\"
+"""
+function blas_gemm(
+    alpha::Value,
+    A::Value,
+    B::Value,
+    beta::Value,
+    C::Value;
+    output::IR.Type,
+    transa=nothing,
+    transb=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[output,]
+    operands = Value[alpha, A, B, beta, C]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(transa) && push!(attributes, NamedAttribute("transa", transa))
+    !isnothing(transb) && push!(attributes, NamedAttribute("transb", transb))
+
+    return create_operation(
+        "enzymexla.blas.gemm",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
     )
 end
 
