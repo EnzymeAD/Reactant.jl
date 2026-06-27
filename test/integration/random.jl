@@ -271,4 +271,14 @@ end
         @test rng_ra.seed ≈ UInt64[rng.ctr1, rng.ctr2, rng.key]
         @test rng_ra.algorithm == "PHILOX"
     end
+
+    @testset "Batched/Broadcasted Rand" begin
+        rng = Reactant.ReactantRNG()
+        as = Reactant.to_rarray(ones(10))
+        test_fn(rng, α) = rand(rng, typeof(α))
+        res = @jit test_fn.(Ref(rng), as)
+        @test res isa ConcreteRArray{Float64,1}
+        @test length(res) == 10
+    end
 end
+
