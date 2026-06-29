@@ -67,7 +67,7 @@ function amdDriverInitialized()::Bool
         else
             # Case 2: The directory exists but `initstate` does not.
             # This implies the driver is built into the kernel and is active.
-    	    @debug "Detected AMD driver built into kernel"
+            @debug "Detected AMD driver built into kernel"
             return true
         end
     end
