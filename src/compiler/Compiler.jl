@@ -1198,8 +1198,14 @@ function compile_mlir!(
         end
     end
 
+    sharding = if mlir_fn_res.is_sharded && !isempty(result_shardings_after_masking)
+        first(result_shardings_after_masking)
+    else
+        Sharding.NoSharding()
+    end
+
     concrete_result = make_tracer(
-        OrderedIdDict(), traced_result, ("result",), TracedToConcrete; runtime
+        OrderedIdDict(), traced_result, ("result",), TracedToConcrete; runtime, sharding
     )
 
     return Reactant.TracedUtils.CompiledMlirFnResult(
