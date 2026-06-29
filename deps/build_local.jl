@@ -60,10 +60,10 @@ function amdDriverInitialized()::Bool
             found = open(initstate_path) do file
                 contains(read(file, String), "live")
             end
-	    if found
-    		@debug "Detected AMD live driver"
-	    end
-	    return true
+            if found
+                @debug "Detected AMD live driver"
+            end
+            return true
         else
             # Case 2: The directory exists but `initstate` does not.
             # This implies the driver is built into the kernel and is active.
