@@ -46,6 +46,36 @@ function get_cuda_version()
     return current_cuda_version
 end
 
+function amdDriverInitialized()::Bool
+    amdgpu_module_path = "/sys/module/amdgpu"
+
+    # First, check if the driver's module directory exists.
+    if isdir(amdgpu_module_path)
+        initstate_path = joinpath(amdgpu_module_path, "initstate")
+
+        if isfile(initstate_path)
+            # Case 1: The driver is a loadable module.
+            # We need to read its state to see if it's 'live'.
+            # The `open...do` block ensures the file is closed automatically.
+            found = open(initstate_path) do file
+                contains(read(file, String), "live")
+            end
+	    if found
+    		@debug "Detected AMD live driver"
+	    end
+	    return true
+        else
+            # Case 2: The directory exists but `initstate` does not.
+            # This implies the driver is built into the kernel and is active.
+    	    @debug "Detected AMD driver built into kernel"
+            return true
+        end
+    end
+
+    # If the directory doesn't exist, the driver isn't available.
+    return false
+end
+
 s = ArgParseSettings()
 #! format: off
 @add_arg_table! s begin
@@ -128,6 +158,8 @@ struct CUDABackend <: AbstractBackend
     CUDABackend(ver::VersionNumber) = new(VersionNumber(ver.major))
 end
 
+struct ROCMBackend <: AbstractBackend end
+
 function parse_build_backend(str::String)::AbstractBackend
     if str == "cpu"
         return CPUBackend()
@@ -135,11 +167,15 @@ function parse_build_backend(str::String)::AbstractBackend
         return CUDABackend(v"12")
     elseif str == "cuda13"
         return CUDABackend(v"13")
+    elseif str == "rocm"
+        return ROCMBackend()
     end
 
-    if str in ("auto", "cuda")
+    if str in ("auto", "cuda", "rocm")
         cuda_ver = get_cuda_version()
-        if isnothing(cuda_ver)
+        if !isnothing(cuda_ver)
+            return CUDABackend(get_cuda_version())
+        else
             if str == "cuda"
                 throw(
                     AssertionError(
@@ -147,10 +183,19 @@ function parse_build_backend(str::String)::AbstractBackend
                     ),
                 )
             end
-            return CPUBackend()
-        else
-            return CUDABackend(get_cuda_version())
         end
+        if amdDriverInitialized()
+            return ROCMBackend()
+        else
+            if str == "rocm"
+                throw(
+                    AssertionError(
+                        "Could not detect ROCm device, but requested ROCm with auto version build",
+                    ),
+                )
+            end
+        end
+        return CPUBackend()
     else
         error("Unknown backend '$(str)'")
     end
@@ -164,6 +209,8 @@ arg = if build_backend == CUDABackend(v"12")
     "--config=cuda12"
 elseif build_backend == CUDABackend(v"13")
     "--config=cuda13"
+elseif build_backend == ROCMBackend()
+    "--config=rocm"
 elseif build_backend == CPUBackend()
     ""
 else
