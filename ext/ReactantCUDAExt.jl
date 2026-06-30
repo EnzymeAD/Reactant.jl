@@ -928,7 +928,7 @@ function _find_unadapted_traced(
     isbitstype(T) && return nothing
     for i in 1:fieldcount(T)
         FT = fieldtype(T, i)
-        subpath = isempty(path) ? String(fieldname(T, i)) : "$path.$(fieldname(T, i))"
+        subpath = isempty(path) ? string(fieldname(T, i)) : "$path.$(fieldname(T, i))"
         !isconcretetype(FT) && return (subpath, FT)
         FT === T && continue  # avoid infinite recursion on self-referential types
         result = _find_unadapted_traced(FT, seen, subpath)
