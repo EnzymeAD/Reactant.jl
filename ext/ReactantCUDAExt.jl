@@ -820,6 +820,71 @@ function to_bytes(x)
     end
 end
 
+function to_llvmtype(@nospecialize(mlirty::MLIR.IR.Type))
+    # Void (no predicate in the C API; compare by value)
+    if mlirty == MLIR.IR.Type(MLIR.API.mlirLLVMVoidTypeGet(MLIR.IR.context(mlirty)))
+        return LLVM.VoidType()
+    end
+
+    # Integers
+    MLIR.IR.isinteger(mlirty) && return LLVM.IntType(MLIR.IR.bitwidth(mlirty))
+
+    # Float types
+    MLIR.IR.isf16(mlirty) && return LLVM.HalfType()
+    MLIR.IR.isbf16(mlirty) && return LLVM.BFloatType()
+    MLIR.IR.isf32(mlirty) && return LLVM.FloatType()
+    MLIR.IR.isf64(mlirty) && return LLVM.DoubleType()
+    MLIR.IR.istf32(mlirty) && return LLVM.FloatType()
+
+    # Pointer
+    if MLIR.API.mlirTypeIsALLVMPointerType(mlirty)
+        addrspace = MLIR.API.mlirLLVMPointerTypeGetAddressSpace(mlirty)
+        return LLVM.PointerType(addrspace)
+    end
+
+    # Array
+    if MLIR.API.mlirTypeIsALLVMArrayType(mlirty)
+        elem = MLIR.IR.Type(MLIR.API.mlirLLVMArrayTypeGetElementType(mlirty))
+        n = MLIR.API.mlirLLVMArrayTypeGetNumElements(mlirty)
+        return LLVM.ArrayType(to_llvmtype(elem), n)
+    end
+
+    # Struct
+    if MLIR.API.mlirTypeIsALLVMStructType(mlirty)
+        packed = MLIR.API.mlirLLVMStructTypeIsPacked(mlirty)
+        nfields = MLIR.API.mlirLLVMStructTypeGetNumElementTypes(mlirty)
+        elems = LLVM.LLVMType[
+            to_llvmtype(MLIR.IR.Type(MLIR.API.mlirLLVMStructTypeGetElementType(mlirty, i)))
+            for i in 0:(nfields - 1)
+        ]
+        if !MLIR.API.mlirLLVMStructTypeIsLiteral(mlirty)
+            nameref = MLIR.API.mlirLLVMStructTypeGetIdentifier(mlirty)
+            sname = unsafe_string(nameref.data, nameref.length)
+            st = LLVM.StructType(sname)
+            isempty(elems) || LLVM.elements!(st, elems, packed)
+            return st
+        end
+        return LLVM.StructType(elems; packed)
+    end
+
+    # Function
+    if MLIR.API.mlirTypeIsALLVMFunctionType(mlirty)
+        retty = to_llvmtype(
+            MLIR.IR.Type(MLIR.API.mlirLLVMFunctionTypeGetReturnType(mlirty))
+        )
+        ninputs = MLIR.API.mlirLLVMFunctionTypeGetNumInputs(mlirty)
+        params = LLVM.LLVMType[
+            to_llvmtype(MLIR.IR.Type(MLIR.API.mlirLLVMFunctionTypeGetInput(mlirty, i))) for
+            i in 0:(ninputs - 1)
+        ]
+        return LLVM.FunctionType(
+            retty, params; vararg=MLIR.API.mlirLLVMFunctionTypeIsVarArg(mlirty)
+        )
+    end
+
+    return error("cannot convert type to llvm " * string(mlirty))
+end
+
 function Reactant.make_tracer(
     seen, @nospecialize(prev::CuTracedArray), @nospecialize(path), mode; kwargs...
 )
@@ -917,6 +982,88 @@ function mlir_extract_roots_from_value!(
     end
 end
 
+function _find_unadapted_traced(
+    @nospecialize(T::Type), seen::Set{Any}=Set{Any}(), path::String=""
+)
+    T isa UnionAll && return nothing
+    T in seen && return nothing
+    push!(seen, T)
+    T <: TracedRNumber && return isempty(path) ? "<arg>" : path
+    T <: TracedRArray && return isempty(path) ? "<arg>" : path
+    isbitstype(T) && return nothing
+    for i in 1:fieldcount(T)
+        FT = fieldtype(T, i)
+        subpath = isempty(path) ? String(fieldname(T, i)) : "$path.$(fieldname(T, i))"
+        !isconcretetype(FT) && return (subpath, FT)
+        FT === T && continue  # avoid infinite recursion on self-referential types
+        result = _find_unadapted_traced(FT, seen, subpath)
+        result !== nothing && return result
+    end
+    return nothing
+end
+
+# Mirror of GPUCompiler's explain_nonisbits: recursively list non-isbits fields.
+function _explain_nonbitstype(@nospecialize(dt), depth=1; maxdepth=10)
+    depth > maxdepth && return ""
+    try
+        fieldcount(dt)
+    catch
+        return ""
+    end
+    msg = ""
+    for (ft, fn) in zip(fieldtypes(dt), fieldnames(dt))
+        if !isbitstype(ft)
+            msg *= "  "^depth * ".$fn is of type $ft which is not isbits.\n"
+            msg *= _explain_nonbitstype(ft, depth + 1)
+        end
+    end
+    return msg
+end
+
+function _check_no_traced_in_kernel_arg(@nospecialize(T::Type))
+    bad = _find_unadapted_traced(T)
+    bad === nothing && return nothing
+
+    if bad isa Tuple  # (path, non-concrete-type)
+        path, FT = bad
+        explanation = _explain_nonbitstype(T)
+        error("""passing non-bitstype argument
+               Argument to your kernel function is of type $T, which is not a bitstype:
+               $(isempty(explanation) ? "" : explanation)
+               Field .$path has declared type $FT, which is not a concrete type \
+(it is a UnionAll / abstract type). Julia stores abstract-typed struct fields as \
+GC-managed heap pointers that cannot be represented in a GPU kernel.
+
+               Only bitstypes, which are "plain data" types that are immutable and \
+contain no references to other values, can be used in GPU kernels.
+               For more information, see the `Base.isbitstype` function.
+
+               Fix: replace the abstract field type with its concrete parametric form \
+(e.g. use `$(nameof(FT)){I}` instead of `$(nameof(FT))` in the struct definition).""")
+    end
+
+    # bad is a path String: a TracedRNumber/TracedRArray was not adapted
+    return error(
+        """
+      GPU kernel argument of type $T contains an unadapted traced value at field: $bad
+
+      All TracedRNumber/TracedRArray must have been replaced by their
+      CuTracedRNumber/CuTracedArray counterparts. A surviving traced value means
+      some struct in the hierarchy is missing `Adapt.@adapt_structure`, so its fields
+      were not recursed into during GPU adaptation.
+
+      Fix: add `Adapt.@adapt_structure <StructName>` to the struct that contains the
+      field at the path above.
+  """
+    )
+end
+
+# On 1.12+, there was a change to the calling convention where
+# an additional argument would be added for the roots, this will
+# return the number of roots in the corresponding convention, or
+# 0 if it does not apply https://github.com/JuliaLang/julia/pull/55767/files#diff-62cfb2606c6a323a7f26a3eddfa0bf2b819fa33e094561fee09daeb328e3a1e7
+const HasInlineRootsABI = VERSION ≥ v"1.12"
+
 Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
     args...;
     convert=Val(true),
@@ -932,6 +1079,10 @@ Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
 
     if convert == Val(true)
         args = recudaconvert.(args)
+    end
+
+    for arg in Any[func.f, args...]
+        _check_no_traced_in_kernel_arg(typeof(arg))
     end
 
     mlir_args = MLIR.IR.Value[]
@@ -1019,7 +1170,10 @@ Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
     )
 
     trueidx = 1
-    allocs = Union{Tuple{MLIR.IR.Value,MLIR.IR.Type,Type},Nothing}[]
+    allocs = Union{
+        Tuple{MLIR.IR.Value,MLIR.IR.Type,HasInlineRootsABI ? LLVM.LLVMType : Nothing},
+        Nothing,
+    }[]
 
     llvmptr = MLIR.IR.Type(MLIR.API.mlirLLVMPointerTypeGet(ctx, 0))
     i8 = MLIR.IR.Type(UInt8)
@@ -1039,7 +1193,8 @@ Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
             )
             trueidx += 1
             jltyp = Core.Typeof(a)
-            if Enzyme.Compiler.inline_roots_type(jltyp) != 0
+            lltyp = HasInlineRootsABI ? to_llvmtype(argty) : nothing
+            if HasInlineRootsABI && Enzyme.Compiler.inline_roots_type(lltyp) != 0
                 trueidx += 1
             end
             c1 = MLIR.IR.result(
@@ -1054,7 +1209,7 @@ Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
                 ),
                 1,
             )
-            push!(allocs, (alloc, argty, jltyp))
+            push!(allocs, (alloc, argty, lltyp))
 
             if has_cast_float_type
                 # The argument `a` has BFloat16 fields but the GPU function was
@@ -1188,17 +1343,17 @@ Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
             if arg === nothing
                 continue
             end
-            alloc, argty, jltyp = arg
+            alloc, argty, llvmtyp = arg
             argres = MLIR.IR.result(MLIR.Dialects.llvm.load(alloc; res=argty), 1)
             push!(wrapargs, argres)
-            if Enzyme.Compiler.inline_roots_type(jltyp) != 0
+            if HasInlineRootsABI && Enzyme.Compiler.inline_roots_type(llvmtyp) != 0
                 c1 = MLIR.IR.result(
                     MLIR.Dialects.llvm.mlir_constant(;
                         res=MLIR.IR.Type(Int64), value=MLIR.IR.Attribute(1)
                     ),
                     1,
                 )
-                roots_count = Enzyme.Compiler.inline_roots_type(jltyp)
+                roots_count = Enzyme.Compiler.inline_roots_type(llvmtyp)
                 jlvaluet = MLIR.IR.Type(MLIR.API.mlirLLVMPointerTypeGet(ctx, 10))
                 njlvaluet = MLIR.IR.Type(
                     MLIR.API.mlirLLVMArrayTypeGet(jlvaluet, roots_count)
@@ -1214,6 +1369,13 @@ Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
                 push!(wrapargs, roots_ptr)
             end
         end
+        nargs = MLIR.IR.nargs(MLIR.IR.first_block(MLIR.IR.region(gpufunc, 1)))
+        if length(wrapargs) != nargs
+            error(
+                "detected ABI breakage, please open an issue on https://github.com/EnzymeAD/Reactant.jl/issues/new with instructions on how to reproduce.",
+            )
+        end
+
         MLIR.Dialects.llvm.call(
             wrapargs,
             MLIR.IR.Value[];
