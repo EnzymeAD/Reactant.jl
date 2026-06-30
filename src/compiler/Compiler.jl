@@ -1086,7 +1086,8 @@ function compile_mlir!(
     results_mask = falses(length(results))
 
     for (i, op) in enumerate(results)
-        if !MLIR.IR.is_block_arg(op) ||
+        if !XLA_BYPASS_OPTIMIZATION[] ||
+            !MLIR.IR.is_block_arg(op) ||
             !Reactant.TracedUtils.has_idx(linear_results[i], :args) # new buffer
             push!(nresults, op)
             push!(linear_results2, linear_results[i])
