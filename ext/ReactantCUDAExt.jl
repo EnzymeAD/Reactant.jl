@@ -701,12 +701,54 @@ function compile(job)
 
         try
             LLVM.@dispose pb = LLVM.NewPMPassBuilder() begin
-                LLVM.register!(pb, GPULowerCPUFeaturesPass())
-                LLVM.register!(pb, GPULowerPTLSPass())
-                LLVM.register!(pb, GPULowerGCFramePass())
-                LLVM.register!(pb, AddKernelStatePass())
-                LLVM.register!(pb, LowerKernelStatePass())
-                LLVM.register!(pb, CleanupKernelStatePass())
+                LLVM.register!(
+                    pb,
+                    if isdefined(GPUCompiler, :CPUFeatures)
+                        GPULowerCPUFeaturesPass(job)
+                    else
+                        GPULowerCPUFeaturesPass()
+                    end,
+                )
+                LLVM.register!(
+                    pb,
+                    if isdefined(GPUCompiler, :LowerPTLS)
+                        GPULowerPTLSPass(job)
+                    else
+                        GPULowerPTLSPass()
+                    end,
+                )
+                LLVM.register!(
+                    pb,
+                    if isdefined(GPUCompiler, :LowerGCFrame)
+                        GPULowerGCFramePass(job)
+                    else
+                        GPULowerGCFramePass()
+                    end,
+                )
+                LLVM.register!(
+                    pb,
+                    if isdefined(GPUCompiler, :AddKernelState)
+                        AddKernelStatePass(job)
+                    else
+                        AddKernelStatePass()
+                    end,
+                )
+                LLVM.register!(
+                    pb,
+                    if isdefined(GPUCompiler, :LowerKernelState)
+                        LowerKernelStatePass(job)
+                    else
+                        LowerKernelStatePass()
+                    end,
+                )
+                LLVM.register!(
+                    pb,
+                    if isdefined(GPUCompiler, :CleanupKernelState)
+                        CleanupKernelStatePass(job)
+                    else
+                        CleanupKernelStatePass()
+                    end,
+                )
 
                 LLVM.add!(pb, LLVM.NewPMModulePassManager()) do mpm
                     GPUCompiler.buildNewPMPipeline!(mpm, job, opt_level)
