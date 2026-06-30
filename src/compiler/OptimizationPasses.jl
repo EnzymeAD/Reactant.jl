@@ -14,8 +14,6 @@ const DEBUG_PROBPROG_DISABLE_OPT = Ref(true)
 const DEBUG_MLIR_DIAGNOSTIC_LEVEL = Ref{MLIR.API.MlirDiagnosticSeverity}(
     MLIR.API.MlirDiagnosticError
 )
-const XLA_BYPASS_OPTIMIZATION = Ref{Bool}(false)
-
 const WHILE_CONCAT = Ref(false)
 const DUS_TO_CONCAT = Ref(false)
 const SUM_TO_REDUCEWINDOW = Ref(false)
