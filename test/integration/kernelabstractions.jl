@@ -125,7 +125,7 @@ end
     @test @filecheck begin
         @check "%0 = stablehlo.multiply %arg1, %arg2 : tensor<4xf64>"
         @check_next "%1 = stablehlo.add %0, %arg3 : tensor<4xf64>"
-        @check_next "return %1 : tensor<4xf64>"
+        @check_next "return %1"
         ir
     end
 end
