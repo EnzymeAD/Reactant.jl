@@ -694,9 +694,10 @@ function compile(job)
         opt_level = 2
         tm = GPUCompiler.llvm_machine(job.config.target)
 
-        prev_job =
-            isdefined(GPUCompiler, :current_job) ? GPUCompiler.current_job : nothing
-        GPUCompiler.current_job = job
+        if isdefined(GPUCompiler, :current_job)
+            prev_job = GPUCompiler.current_job
+            GPUCompiler.current_job = job
+        end
 
         try
             LLVM.@dispose pb = LLVM.NewPMPassBuilder() begin
@@ -729,7 +730,9 @@ function compile(job)
             end
             LLVM.run!(GPUCompiler.DeadArgumentEliminationPass(), mod, tm)
         finally
-            GPUCompiler.current_job = prev_job
+            if isdefined(GPUCompiler, :current_job)
+                GPUCompiler.current_job = prev_job
+            end
         end
 
         for fname in ("gpu_report_exception", "gpu_signal_exception")
