@@ -3643,15 +3643,13 @@ namespace details {
 // Cost analysis for individual instructions.
 class GPUPerformanceModel {
 public:
-  GPUPerformanceModel(mlir::MLIRContext *mlir_context,
-                      stream_executor::DeviceDescription *device_description)
-      : mlir_context_(std::move(mlir_context)),
-        device_description_(*device_description),
+  GPUPerformanceModel(stream_executor::DeviceDescription *device_description)
+      : device_description_(*device_description),
         hlo_cost_analysis_options_{.count_multiple_input_accesses = true},
         fusion_analysis_cache_(device_description_),
         gpu_hlo_cost_analysis_(hlo_cost_analysis_options_, device_description_),
         gpu_performance_model_(device_description_, fusion_analysis_cache_,
-                               gpu_performance_model_cache_, mlir_context_) {}
+                               gpu_performance_model_cache_) {}
 
   void RunAnalysisOnHloModule(std::shared_ptr<xla::HloModule> hlo_module) {
     hlo_module->entry_computation()->Accept(&gpu_hlo_cost_analysis_);
@@ -3669,7 +3667,6 @@ public:
   }
 
 private:
-  mlir::MLIRContext *mlir_context_;
   xla::gpu::GpuHloCostAnalysis::Options hlo_cost_analysis_options_;
   stream_executor::DeviceDescription device_description_;
   xla::gpu::HloFusionAnalysisCache fusion_analysis_cache_;
@@ -3682,8 +3679,8 @@ private:
 } // namespace details
 
 REACTANT_ABI details::GPUPerformanceModel *CreateGPUPerformanceModel(
-    MlirContext ctx, stream_executor::DeviceDescription *device_description) {
-  return new details::GPUPerformanceModel(unwrap(ctx), device_description);
+    stream_executor::DeviceDescription *device_description) {
+  return new details::GPUPerformanceModel(device_description);
 }
 
 REACTANT_ABI void
@@ -3709,7 +3706,7 @@ REACTANT_ABI void EstimateRunTimeForInstruction(
 #else
 
 REACTANT_ABI void *CreateGPUPerformanceModel(
-    MlirContext ctx, stream_executor::DeviceDescription *device_description) {
+    stream_executor::DeviceDescription *device_description) {
   return nullptr;
 }
 
