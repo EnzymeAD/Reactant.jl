@@ -636,12 +636,35 @@ end
     )
 end
 
-function GPULowerCPUFeaturesPass()
-    return LLVM.NewPMModulePass("GPULowerCPUFeatures", GPUCompiler.cpu_features!)
+function GPULowerCPUFeaturesPass(job)
+    return LLVM.NewPMModulePass(
+        "GPULowerCPUFeatures",
+        if isdefined(GPUCompiler, :CPUFeatures)
+            GPUCompiler.CPUFeatures(job)
+        else
+            GPUCompiler.cpu_features!
+        end,
+    )
 end
-GPULowerPTLSPass() = LLVM.NewPMModulePass("GPULowerPTLS", GPUCompiler.lower_ptls!)
-function GPULowerGCFramePass()
-    return LLVM.NewPMFunctionPass("GPULowerGCFrame", GPUCompiler.lower_gc_frame!)
+function GPULowerPTLSPass(job)
+    return LLVM.NewPMModulePass(
+        "GPULowerPTLS",
+        if isdefined(GPUCompiler, :LowerPTLS)
+            GPUCompiler.LowerPTLS(job)
+        else
+            GPUCompiler.lower_ptls!
+        end,
+    )
+end
+function GPULowerGCFramePass(job)
+    return LLVM.NewPMFunctionPass(
+        "GPULowerGCFrame",
+        if isdefined(GPUCompiler, :LowerGCFrame)
+            GPUCompiler.LowerGCFrame(job)
+        else
+            GPUCompiler.lower_gc_frame!
+        end,
+    )
 end
 function noop_pass(x)
     return false
@@ -701,54 +724,12 @@ function compile(job)
 
         try
             LLVM.@dispose pb = LLVM.NewPMPassBuilder() begin
-                LLVM.register!(
-                    pb,
-                    if isdefined(GPUCompiler, :CPUFeatures)
-                        GPULowerCPUFeaturesPass(job)
-                    else
-                        GPULowerCPUFeaturesPass()
-                    end,
-                )
-                LLVM.register!(
-                    pb,
-                    if isdefined(GPUCompiler, :LowerPTLS)
-                        GPULowerPTLSPass(job)
-                    else
-                        GPULowerPTLSPass()
-                    end,
-                )
-                LLVM.register!(
-                    pb,
-                    if isdefined(GPUCompiler, :LowerGCFrame)
-                        GPULowerGCFramePass(job)
-                    else
-                        GPULowerGCFramePass()
-                    end,
-                )
-                LLVM.register!(
-                    pb,
-                    if isdefined(GPUCompiler, :AddKernelState)
-                        AddKernelStatePass(job)
-                    else
-                        AddKernelStatePass()
-                    end,
-                )
-                LLVM.register!(
-                    pb,
-                    if isdefined(GPUCompiler, :LowerKernelState)
-                        LowerKernelStatePass(job)
-                    else
-                        LowerKernelStatePass()
-                    end,
-                )
-                LLVM.register!(
-                    pb,
-                    if isdefined(GPUCompiler, :CleanupKernelState)
-                        CleanupKernelStatePass(job)
-                    else
-                        CleanupKernelStatePass()
-                    end,
-                )
+                LLVM.register!(pb, GPULowerCPUFeaturesPass(job))
+                LLVM.register!(pb, GPULowerPTLSPass(job))
+                LLVM.register!(pb, GPULowerGCFramePass(job))
+                LLVM.register!(pb, AddKernelStatePass())
+                LLVM.register!(pb, LowerKernelStatePass())
+                LLVM.register!(pb, CleanupKernelStatePass())
 
                 LLVM.add!(pb, LLVM.NewPMModulePassManager()) do mpm
                     GPUCompiler.buildNewPMPipeline!(mpm, job, opt_level)
