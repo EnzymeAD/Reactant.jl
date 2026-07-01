@@ -636,12 +636,35 @@ end
     )
 end
 
-function GPULowerCPUFeaturesPass()
-    return LLVM.NewPMModulePass("GPULowerCPUFeatures", GPUCompiler.cpu_features!)
+function GPULowerCPUFeaturesPass(job)
+    return LLVM.NewPMModulePass(
+        "GPULowerCPUFeatures",
+        if isdefined(GPUCompiler, :CPUFeatures)
+            GPUCompiler.CPUFeatures(job)
+        else
+            GPUCompiler.cpu_features!
+        end,
+    )
 end
-GPULowerPTLSPass() = LLVM.NewPMModulePass("GPULowerPTLS", GPUCompiler.lower_ptls!)
-function GPULowerGCFramePass()
-    return LLVM.NewPMFunctionPass("GPULowerGCFrame", GPUCompiler.lower_gc_frame!)
+function GPULowerPTLSPass(job)
+    return LLVM.NewPMModulePass(
+        "GPULowerPTLS",
+        if isdefined(GPUCompiler, :LowerPTLS)
+            GPUCompiler.LowerPTLS(job)
+        else
+            GPUCompiler.lower_ptls!
+        end,
+    )
+end
+function GPULowerGCFramePass(job)
+    return LLVM.NewPMFunctionPass(
+        "GPULowerGCFrame",
+        if isdefined(GPUCompiler, :LowerGCFrame)
+            GPUCompiler.LowerGCFrame(job)
+        else
+            GPUCompiler.lower_gc_frame!
+        end,
+    )
 end
 function noop_pass(x)
     return false
@@ -694,15 +717,16 @@ function compile(job)
         opt_level = 2
         tm = GPUCompiler.llvm_machine(job.config.target)
 
-        prev_job =
-            isdefined(GPUCompiler, :current_job) ? GPUCompiler.current_job : nothing
-        GPUCompiler.current_job = job
+        if isdefined(GPUCompiler, :current_job)
+            prev_job = GPUCompiler.current_job
+            GPUCompiler.current_job = job
+        end
 
         try
             LLVM.@dispose pb = LLVM.NewPMPassBuilder() begin
-                LLVM.register!(pb, GPULowerCPUFeaturesPass())
-                LLVM.register!(pb, GPULowerPTLSPass())
-                LLVM.register!(pb, GPULowerGCFramePass())
+                LLVM.register!(pb, GPULowerCPUFeaturesPass(job))
+                LLVM.register!(pb, GPULowerPTLSPass(job))
+                LLVM.register!(pb, GPULowerGCFramePass(job))
                 LLVM.register!(pb, AddKernelStatePass())
                 LLVM.register!(pb, LowerKernelStatePass())
                 LLVM.register!(pb, CleanupKernelStatePass())
@@ -729,7 +753,9 @@ function compile(job)
             end
             LLVM.run!(GPUCompiler.DeadArgumentEliminationPass(), mod, tm)
         finally
-            GPUCompiler.current_job = prev_job
+            if isdefined(GPUCompiler, :current_job)
+                GPUCompiler.current_job = prev_job
+            end
         end
 
         for fname in ("gpu_report_exception", "gpu_signal_exception")
