@@ -1268,7 +1268,6 @@ xla::CompileOptions GenerateCompileOptions(
 
   if (kernel_cache_enabled) {
     debug_options->set_xla_gpu_kernel_cache_file(kernel_cache_path);
-    debug_options->set_xla_gpu_enable_llvm_module_compilation_parallelism(true);
   }
 
   if (autotune_cache_enabled) {
