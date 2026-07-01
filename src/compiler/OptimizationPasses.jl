@@ -92,6 +92,11 @@ function optimization_passes(
         lower_passes_str, "associative_binary_op_reordering<1>;" => ""
     )
 
+    if compile_options.optimization_passes === :probprog
+        main_passes_str = replace(main_passes_str, "log_simplify;" => "")
+        lower_passes_str = replace(lower_passes_str, "log_simplify;" => "")
+    end
+
     transform_passes = join(
         [
             "enzyme-hlo-generate-td{patterns=" * main_passes_str * "}",
