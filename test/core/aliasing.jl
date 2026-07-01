@@ -55,3 +55,29 @@ end
     @test buffer_equals(x.x, x.y)
     @test !buffer_equals(x.y, z)
 end
+
+mutable struct State{A}
+    u::A
+    u⁰::A
+end
+
+function step!(state)
+    state.u⁰ .= state.u
+    state.u = state.u .+ 1.0
+    return nothing
+end
+
+@testset "Mutable struct aliasing" begin
+    sz = 3
+
+    state_v = State(fill(0.5, sz), fill(0.0, sz))
+    step!(state_v)
+
+    state_r = State(ConcreteRArray(fill(0.5, sz)), ConcreteRArray(fill(0.0, sz)))
+
+    r_step! = Reactant.@compile step!(state_r)
+    r_step!(state_r)
+
+    @test state_v.u == Array(state_r.u)
+    @test state_v.u⁰ == Array(state_r.u⁰)
+end
