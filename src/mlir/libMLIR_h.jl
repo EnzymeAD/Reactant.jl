@@ -13717,26 +13717,6 @@ function mlirMosaicGpuTileTransformAttrGetTypeID()
     @ccall mlir_c.mlirMosaicGpuTileTransformAttrGetTypeID()::MlirTypeID
 end
 
-function mlirMosaicGpuIsATransposeTransformAttr(attr)
-    @ccall mlir_c.mlirMosaicGpuIsATransposeTransformAttr(attr::MlirAttribute)::Bool
-end
-
-function mlirMosaicGpuTransposeTransformAttrGet(ctx, permutation)
-    @ccall mlir_c.mlirMosaicGpuTransposeTransformAttrGet(
-        ctx::MlirContext, permutation::MlirAttribute
-    )::MlirAttribute
-end
-
-function mlirMosaicGpuTransposeTransformAttrGetPermutation(attr)
-    @ccall mlir_c.mlirMosaicGpuTransposeTransformAttrGetPermutation(
-        attr::MlirAttribute
-    )::MlirAttribute
-end
-
-function mlirMosaicGpuTransposeTransformAttrGetTypeID()
-    @ccall mlir_c.mlirMosaicGpuTransposeTransformAttrGetTypeID()::MlirTypeID
-end
-
 function mlirMosaicGpuIsASwizzleTransformAttr(attr)
     @ccall mlir_c.mlirMosaicGpuIsASwizzleTransformAttr(attr::MlirAttribute)::Bool
 end
