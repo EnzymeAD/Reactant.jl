@@ -52,6 +52,37 @@ function arrive(barrier::Value; orders_tensor_core, location=Location())
 end
 
 """
+`assume_multiple`
+
+This operation is a hint to the compiler that the input `value` is guaranteed
+to be a multiple of `multiple`. This can be used to satisfy divisibility checks
+in some compiler passes.
+
+The result is the same as the input `value`.
+"""
+function assume_multiple(
+    value::Value; result=nothing::Union{Nothing,IR.Type}, multiple, location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[value,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[NamedAttribute("multiple", multiple),]
+    !isnothing(result) && push!(op_ty_results, result)
+
+    return create_operation(
+        "mosaic_gpu.assume_multiple",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
 `async_load`
 
 Schedules an async copy of the contents of the `source` MemRef in GMEM to

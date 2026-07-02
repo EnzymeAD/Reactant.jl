@@ -5450,6 +5450,45 @@ function redux_sync(
     )
 end
 
+"""
+`rsqrt`
+
+Computes an approximation of the reciprocal of the square root of the
+input value: `d = 1 / sqrt(a)`. Supports both f32 and f64. The maximum
+relative error for the f32 form over the entire positive finite range
+is 2^-22.9.
+
+The `ftz` attribute, when set, flushes subnormal inputs and results to
+sign-preserving zero. For f64 inputs, `ftz=true` selects a coarser
+approximation that uses only the upper 32 bits of the input (the lower
+32 bits of the result are zeroed).
+
+For more information, see PTX ISA:
+[rsqrt](https://docs.nvidia.com/cuda/parallel-thread-execution/#floating-point-instructions-rsqrt)
+"""
+function rsqrt(
+    src::Value; res=nothing::Union{Nothing,IR.Type}, ftz=nothing, location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[src,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
+    !isnothing(ftz) && push!(attributes, NamedAttribute("ftz", ftz))
+
+    return create_operation(
+        "nvvm.rsqrt",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
 function setmaxregister(; regCount, action, location=Location())
     op_ty_results = IR.Type[]
     operands = Value[]
@@ -5592,6 +5631,73 @@ function read_ptx_sreg_smid(;
 
     return create_operation(
         "nvvm.read.ptx.sreg.smid",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
+`sqrt_approx`
+
+Computes a fast approximation of the square root of the input value
+(`res = sqrt(src)`). The maximum relative error over the entire positive
+finite range is 2^-23.
+
+The `ftz` attribute, when set, flushes subnormal inputs and results to
+sign-preserving zero.
+
+For more information, see PTX ISA:
+[sqrt](https://docs.nvidia.com/cuda/parallel-thread-execution/#floating-point-instructions-sqrt)
+"""
+function sqrt_approx(
+    src::Value; res=nothing::Union{Nothing,IR.Type}, ftz=nothing, location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[src,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
+    !isnothing(ftz) && push!(attributes, NamedAttribute("ftz", ftz))
+
+    return create_operation(
+        "nvvm.sqrt.approx",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
+`sqrt`
+
+Compute sqrt(src) and store the result in res.
+
+For more information, see PTX ISA:
+[sqrt](https://docs.nvidia.com/cuda/parallel-thread-execution/#floating-point-instructions-sqrt)
+"""
+function sqrt(
+    src::Value; res=nothing::Union{Nothing,IR.Type}, rnd, ftz=nothing, location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[src,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[NamedAttribute("rnd", rnd),]
+    !isnothing(res) && push!(op_ty_results, res)
+    !isnothing(ftz) && push!(attributes, NamedAttribute("ftz", ftz))
+
+    return create_operation(
+        "nvvm.sqrt",
         location;
         operands,
         owned_regions,

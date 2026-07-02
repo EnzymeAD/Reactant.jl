@@ -2160,6 +2160,49 @@ function subi(
 end
 
 """
+`subui_extended`
+
+Performs (N+1)-bit subtraction on zero-extended operands. Returns two
+results: the N-bit difference (same type as both operands), and the borrow
+bit (boolean-like), where `1` indicates unsigned subtraction underflow
+(i.e. `lhs < rhs` when interpreted as unsigned), while `0` indicates no
+underflow.
+
+# Example
+
+```mlir
+// Scalar subtraction.
+%diff, %borrow = arith.subui_extended %b, %c : i64, i1
+
+// Vector element-wise subtraction.
+%d:2 = arith.subui_extended %e, %f : vector<4xi32>, vector<4xi1>
+
+// Tensor element-wise subtraction.
+%x:2 = arith.subui_extended %y, %z : tensor<4x?xi8>, tensor<4x?xi1>
+```
+"""
+function subui_extended(
+    lhs::Value, rhs::Value; diff::IR.Type, borrow::IR.Type, location=Location()
+)
+    op_ty_results = IR.Type[diff, borrow]
+    operands = Value[lhs, rhs]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "arith.subui_extended",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
 `truncf`
 
 Truncate a floating-point value to a smaller floating-point-typed value.
