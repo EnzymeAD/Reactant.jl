@@ -522,7 +522,9 @@ function LinearAlgebra.axpy!(α::Number, x::TracedRArray{T}, y::TracedRArray{T})
             ),
         )
     end
-    ax = @opcall multiply(x, Reactant.broadcast_to_size(T(α), size(x)))
+    T1 = unwrapped_eltype(T)
+    α = Reactant.promote_to(TracedRNumber{T1}, α)
+    ax = @opcall multiply(x, Reactant.broadcast_to_size(α, size(x)))
 
     set_mlir_data!(y, get_mlir_data(@opcall add(y, ax)))
     return y
@@ -538,8 +540,11 @@ function LinearAlgebra.axpby!(
             ),
         )
     end
-    ax = @opcall multiply(x, Reactant.broadcast_to_size(T(α), size(x)))
-    by = @opcall multiply(y, Reactant.broadcast_to_size(T(β), size(y)))
+    T1 = unwrapped_eltype(T)
+    α = Reactant.promote_to(TracedRNumber{T1}, α)
+    β = Reactant.promote_to(TracedRNumber{T1}, β)
+    ax = @opcall multiply(x, Reactant.broadcast_to_size(α, size(x)))
+    by = @opcall multiply(y, Reactant.broadcast_to_size(β, size(y)))
 
     set_mlir_data!(y, get_mlir_data(@opcall add(ax, by)))
     return y
