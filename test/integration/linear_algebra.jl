@@ -261,6 +261,15 @@ end
 
     @jit axpy!(α, x_ra, y_ra)
     @test y_ra ≈ axpy!(α, x, y)
+
+    α = Reactant.ConcreteRNumber(3)
+    x = Reactant.TestUtils.construct_test_array(Int64, 4)
+    x_ra = Reactant.to_rarray(x)
+    y = Reactant.TestUtils.construct_test_array(Int64, 4)
+    y_ra = Reactant.to_rarray(y)
+
+    @jit axpy!(α, x_ra, y_ra)
+    @test y_ra ≈ axpy!(Reactant.to_number(α), x, y)
 end
 
 @testset "axpby!" begin
@@ -302,6 +311,16 @@ end
 
     @jit axpby!(α, x_ra, β, y_ra)
     @test y_ra ≈ axpby!(α, x, β, y)
+
+    α = Reactant.ConcreteRNumber(3)
+    β = Reactant.ConcreteRNumber(2)
+    x = Reactant.TestUtils.construct_test_array(Int64, 4)
+    y = Reactant.TestUtils.construct_test_array(Int64, 4)
+    x_ra = Reactant.to_rarray(x)
+    y_ra = Reactant.to_rarray(y)
+
+    @jit axpby!(α, x_ra, β, y_ra)
+    @test y_ra ≈ axpby!(Reactant.to_number(α), x, Reactant.to_number(β), y)
 end
 
 @testset "Dot" begin

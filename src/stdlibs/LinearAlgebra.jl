@@ -514,6 +514,9 @@ function LinearAlgebra._kron!(C::AnyTracedRMatrix, A::AnyTracedRMatrix, B::AnyTr
     return C
 end
 
+_convert(T, x) = T(x)
+_convert(T, x::TracedRNumber) = TracedRNumber{T}(x)
+
 function LinearAlgebra.axpy!(α::Number, x::TracedRArray{T}, y::TracedRArray{T}) where {T}
     if length(x) != length(y)
         throw(
@@ -522,7 +525,7 @@ function LinearAlgebra.axpy!(α::Number, x::TracedRArray{T}, y::TracedRArray{T})
             ),
         )
     end
-    ax = @opcall multiply(x, Reactant.broadcast_to_size(T(α), size(x)))
+    ax = @opcall multiply(x, Reactant.broadcast_to_size(_convert(T, α), size(x)))
 
     set_mlir_data!(y, get_mlir_data(@opcall add(y, ax)))
     return y
@@ -538,8 +541,8 @@ function LinearAlgebra.axpby!(
             ),
         )
     end
-    ax = @opcall multiply(x, Reactant.broadcast_to_size(T(α), size(x)))
-    by = @opcall multiply(y, Reactant.broadcast_to_size(T(β), size(y)))
+    ax = @opcall multiply(x, Reactant.broadcast_to_size(_convert(T, α), size(x)))
+    by = @opcall multiply(y, Reactant.broadcast_to_size(_convert(T, β), size(y)))
 
     set_mlir_data!(y, get_mlir_data(@opcall add(ax, by)))
     return y
