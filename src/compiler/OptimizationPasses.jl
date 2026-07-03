@@ -43,6 +43,12 @@ function optimization_passes(
     raise_shlo_to_blas_lapack::Bool=true,
     self_to_convolution::Bool=false,
 )
+    # Build the excluded-passes pointer array. Julia Strings are null-terminated,
+    # so unsafe_convert(Cstring, s) gives a stable C pointer while the String is live.
+    excl_strs = compile_options.excluded_passes
+    excl_cstrs = Cstring[Base.unsafe_convert(Cstring, s) for s in excl_strs]
+    excl_ptr = isempty(excl_cstrs) ? Ptr{Cstring}(C_NULL) : pointer(excl_cstrs)
+
     options = MLIR.API.EnzymeXLATransformPassesOptions(
         compile_options.max_constant_threshold,          # max_constant_threshold
         WHILE_UNROLL_THRESHOLD[],                        # while_unroll_threshold
@@ -70,12 +76,15 @@ function optimization_passes(
         !compile_options.disable_concat_to_batch_passes,             # enable_concat_to_batch_passes
         !compile_options.disable_loop_raising_passes,                # enable_loop_raising_passes
         !compile_options.disable_licm_optimization_passes,           # enable_licm_optimization_passes
+        Int64(compile_options.loop_unswitch_threshold),              # loop_unswitch_threshold
         !compile_options.disable_pad_optimization_passes,            # enable_pad_optimization_passes
+        excl_ptr,                                                    # excluded_passes
+        Csize_t(length(excl_cstrs)),                                 # num_excluded_passes
     )
 
     main_passes_ptr = Ref{Cstring}()
     lower_passes_ptr = Ref{Cstring}()
-    GC.@preserve options begin
+    GC.@preserve options excl_strs excl_cstrs begin
         MLIR.API.enzymexlaGetTransformPassesList(
             Ref(options), main_passes_ptr, lower_passes_ptr
         )
