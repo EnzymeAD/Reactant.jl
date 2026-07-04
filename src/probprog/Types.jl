@@ -96,26 +96,6 @@ mutable struct AdaptationState
     window_idx::Any
 end
 
-function adaptation_operands(da::DualAveragingState)
-    return (
-        da.log_step_size,
-        da.log_step_size_avg,
-        da.gradient_avg,
-        da.step_count,
-        da.prox_center,
-    )
-end
-
-function adaptation_operands(a::AdaptationState)
-    return (
-        adaptation_operands(a.dual_averaging)...,
-        a.welford.mean,
-        a.welford.m2,
-        a.welford.n,
-        a.window_idx,
-    )
-end
-
 function AdaptationState(vals)
     @assert length(vals) == 9 "adaptation_state must have 9 entries, got $(length(vals))"
     da = DualAveragingState(vals[1], vals[2], vals[3], vals[4], vals[5])

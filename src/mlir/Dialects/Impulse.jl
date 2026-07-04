@@ -254,44 +254,31 @@ Runs MCMC inference on selected addresses.
 Two modes of operation:
 1. Trace-based mode: `fn` and `original_trace` are provided. The model
    function with `impulse.sample` ops defines the density.
-2. Custom logpdf mode: `logpdf_fn` and `initial_position` are provided.
+2. Custom logpdf mode: `logpdf_fn` and `init_position` are provided.
    The logpdf function maps position -> scalar log-density directly.
 
 The `selection` attribute determines which addresses to sample via HMC/NUTS.
 All sample addresses are included in the trace tensor for consistency.
 
-Returns: (trace, diagnostics, log_densities, rng, final_position, final_gradient,
-          final_potential_energy, final_step_size, final_inverse_mass_matrix)
-- trace: tensor<num_samples x position_size x f64>
-- diagnostics: tensor<num_samples x 2 x i1> - placeholder for future expansion
-- log_densities: tensor<num_samples x f64> - log densities of samples
-- rng: updated RNG state
-- final_position: tensor<1 x position_size x f64> - position after last sample
-- final_gradient: tensor<1 x position_size x f64> - gradient at final position
-- final_potential_energy: tensor<f64> - potential energy at final position
-- final_step_size: tensor<f64> - adapted step size (after warmup)
-- final_inverse_mass_matrix: tensor - adapted inverse mass matrix (after warmup)
+Resumable algorithm state (adapted step size, inverse mass matrix, dual
+averaging / Welford accumulators, warmup progress, and the final
+position/gradient/potential energy) is carried opaquely as a bundle:
+`state_in` warm-starts a run (empty = cold start), `state_out` returns it,
+and `state_schema` names each slot. `trace`, `diagnostics`, and
+`output_rng_state` are the only universal results.
 """
 function infer(
     inputs::Vector{Value},
-    adaptation_state_in::Vector{Value},
+    state_in::Vector{Value},
     original_trace=nothing::Union{Nothing,Value};
-    inverse_mass_matrix=nothing::Union{Nothing,Value},
-    step_size=nothing::Union{Nothing,Value},
-    initial_position=nothing::Union{Nothing,Value},
-    initial_gradient=nothing::Union{Nothing,Value},
-    initial_potential_energy=nothing::Union{Nothing,Value},
-    warmup_offset=nothing::Union{Nothing,Value},
+    init_inverse_mass_matrix=nothing::Union{Nothing,Value},
+    init_step_size=nothing::Union{Nothing,Value},
+    init_position=nothing::Union{Nothing,Value},
     trace::IR.Type,
     diagnostics::IR.Type,
     log_densities::IR.Type,
     output_rng_state::IR.Type,
-    final_position::IR.Type,
-    final_gradient::IR.Type,
-    final_potential_energy::IR.Type,
-    final_step_size::IR.Type,
-    final_inverse_mass_matrix::IR.Type,
-    adaptation_state_out::Vector{IR.Type},
+    state_out::Vector{IR.Type},
     fn=nothing,
     selection,
     all_addresses,
@@ -302,23 +289,13 @@ function infer(
     hmc_config=nothing,
     nuts_config=nothing,
     logpdf_fn=nothing,
+    state_schema=nothing,
     autodiff_attrs=nothing,
     name=nothing,
     location=Location(),
 )
-    op_ty_results = IR.Type[
-        trace,
-        diagnostics,
-        log_densities,
-        output_rng_state,
-        final_position,
-        final_gradient,
-        final_potential_energy,
-        final_step_size,
-        final_inverse_mass_matrix,
-        adaptation_state_out...,
-    ]
-    operands = Value[inputs..., adaptation_state_in...]
+    op_ty_results = IR.Type[trace, diagnostics, output_rng_state, state_out...]
+    operands = Value[inputs..., state_in...]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
@@ -326,24 +303,18 @@ function infer(
         NamedAttribute("all_addresses", all_addresses),
     ]
     !isnothing(original_trace) && push!(operands, original_trace)
-    !isnothing(inverse_mass_matrix) && push!(operands, inverse_mass_matrix)
-    !isnothing(step_size) && push!(operands, step_size)
-    !isnothing(initial_position) && push!(operands, initial_position)
-    !isnothing(initial_gradient) && push!(operands, initial_gradient)
-    !isnothing(initial_potential_energy) && push!(operands, initial_potential_energy)
-    !isnothing(warmup_offset) && push!(operands, warmup_offset)
+    !isnothing(init_inverse_mass_matrix) && push!(operands, init_inverse_mass_matrix)
+    !isnothing(init_step_size) && push!(operands, init_step_size)
+    !isnothing(init_position) && push!(operands, init_position)
     push!(
         attributes,
         operandsegmentsizes([
             length(inputs),
-            length(adaptation_state_in),
+            length(state_in),
             Int(!isnothing(original_trace)),
-            Int(!isnothing(inverse_mass_matrix)),
-            Int(!isnothing(step_size)),
-            Int(!isnothing(initial_position)),
-            Int(!isnothing(initial_gradient)),
-            Int(!isnothing(initial_potential_energy)),
-            Int(!isnothing(warmup_offset)),
+            Int(!isnothing(init_inverse_mass_matrix)),
+            Int(!isnothing(init_step_size)),
+            Int(!isnothing(init_position)),
         ]),
     )
     !isnothing(fn) && push!(attributes, NamedAttribute("fn", fn))
@@ -355,12 +326,120 @@ function infer(
     !isnothing(hmc_config) && push!(attributes, NamedAttribute("hmc_config", hmc_config))
     !isnothing(nuts_config) && push!(attributes, NamedAttribute("nuts_config", nuts_config))
     !isnothing(logpdf_fn) && push!(attributes, NamedAttribute("logpdf_fn", logpdf_fn))
+    !isnothing(state_schema) &&
+        push!(attributes, NamedAttribute("state_schema", state_schema))
     !isnothing(autodiff_attrs) &&
         push!(attributes, NamedAttribute("autodiff_attrs", autodiff_attrs))
     !isnothing(name) && push!(attributes, NamedAttribute("name", name))
 
     return create_operation(
         "impulse.infer",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`infer_region`
+
+Region-form of `impulse.infer`, produced by `inline-infer-regions` and
+consumed directly by `expand-impulse`:
+
+- `sampler`: the model computation (with `sample_region` ops), the target of
+  sampler-region SICM and the source for proposal-based algorithms.
+- `logpdf`: the joint logpdf, constructed by the `sicm` pass (after
+  sampler-region SICM, so it is born optimized). Its block arguments are
+  the position values, one per non-RNG sample result of each selected
+  address in `selection` order; everything else it references is captured
+  from the enclosing scope and is sample-invariant by construction
+  (hoisted invariants, model inputs, and pinned trace values of unselected
+  sites). SICM runs a second time on this region; `expand-impulse` then
+  clones it as the potential-energy body inside the materialized
+  HMC/NUTS loop.
+
+Mirrors `impulse.infer`\'s operands/results/attributes (created by a
+wholesale attribute copy) plus the two regions and the
+`num_position_args`/`position_size` bookkeeping for the joint logpdf.
+"""
+function infer_region(
+    inputs::Vector{Value},
+    state_in::Vector{Value},
+    original_trace=nothing::Union{Nothing,Value};
+    init_inverse_mass_matrix=nothing::Union{Nothing,Value},
+    init_step_size=nothing::Union{Nothing,Value},
+    init_position=nothing::Union{Nothing,Value},
+    trace::IR.Type,
+    diagnostics::IR.Type,
+    output_rng_state::IR.Type,
+    state_out::Vector{IR.Type},
+    fn=nothing,
+    selection,
+    all_addresses,
+    num_warmup=nothing,
+    num_samples=nothing,
+    thinning=nothing,
+    total_warmup=nothing,
+    hmc_config=nothing,
+    nuts_config=nothing,
+    logpdf_fn=nothing,
+    state_schema=nothing,
+    autodiff_attrs=nothing,
+    name=nothing,
+    num_position_args=nothing,
+    position_size=nothing,
+    sampler::Region,
+    logpdf::Region,
+    location=Location(),
+)
+    op_ty_results = IR.Type[trace, diagnostics, output_rng_state, state_out...]
+    operands = Value[inputs..., state_in...]
+    owned_regions = Region[sampler, logpdf]
+    successors = Block[]
+    attributes = NamedAttribute[
+        NamedAttribute("selection", selection),
+        NamedAttribute("all_addresses", all_addresses),
+    ]
+    !isnothing(original_trace) && push!(operands, original_trace)
+    !isnothing(init_inverse_mass_matrix) && push!(operands, init_inverse_mass_matrix)
+    !isnothing(init_step_size) && push!(operands, init_step_size)
+    !isnothing(init_position) && push!(operands, init_position)
+    push!(
+        attributes,
+        operandsegmentsizes([
+            length(inputs),
+            length(state_in),
+            Int(!isnothing(original_trace)),
+            Int(!isnothing(init_inverse_mass_matrix)),
+            Int(!isnothing(init_step_size)),
+            Int(!isnothing(init_position)),
+        ]),
+    )
+    !isnothing(fn) && push!(attributes, NamedAttribute("fn", fn))
+    !isnothing(num_warmup) && push!(attributes, NamedAttribute("num_warmup", num_warmup))
+    !isnothing(num_samples) && push!(attributes, NamedAttribute("num_samples", num_samples))
+    !isnothing(thinning) && push!(attributes, NamedAttribute("thinning", thinning))
+    !isnothing(total_warmup) &&
+        push!(attributes, NamedAttribute("total_warmup", total_warmup))
+    !isnothing(hmc_config) && push!(attributes, NamedAttribute("hmc_config", hmc_config))
+    !isnothing(nuts_config) && push!(attributes, NamedAttribute("nuts_config", nuts_config))
+    !isnothing(logpdf_fn) && push!(attributes, NamedAttribute("logpdf_fn", logpdf_fn))
+    !isnothing(state_schema) &&
+        push!(attributes, NamedAttribute("state_schema", state_schema))
+    !isnothing(autodiff_attrs) &&
+        push!(attributes, NamedAttribute("autodiff_attrs", autodiff_attrs))
+    !isnothing(name) && push!(attributes, NamedAttribute("name", name))
+    !isnothing(num_position_args) &&
+        push!(attributes, NamedAttribute("num_position_args", num_position_args))
+    !isnothing(position_size) &&
+        push!(attributes, NamedAttribute("position_size", position_size))
+
+    return create_operation(
+        "impulse.infer_region",
         location;
         operands,
         owned_regions,
@@ -656,6 +735,53 @@ function sample(
 
     return create_operation(
         "impulse.sample",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`sample_region`
+
+Region-form of `impulse.sample`: the sampler and logpdf function bodies are
+inlined as nested regions, enabling sample-invariant code motion (SICM) to
+analyze across sample sites. The `logpdf` region is cleared once its body has
+been merged into the enclosing `infer_region`\'s joint logpdf.
+
+The `address` attribute is the site\'s full address as an array of symbols;
+submodel dissolution prepends the enclosing site\'s address, so entries of
+the `infer_region`\'s `selection`/`all_addresses` match by attribute equality.
+"""
+function sample_region(
+    inputs::Vector{Value};
+    outputs::Vector{IR.Type},
+    fn=nothing,
+    logpdf_fn=nothing,
+    address=nothing,
+    support=nothing,
+    name=nothing,
+    sampler::Region,
+    logpdf::Region,
+    location=Location(),
+)
+    op_ty_results = IR.Type[outputs...,]
+    operands = Value[inputs...,]
+    owned_regions = Region[sampler, logpdf]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(fn) && push!(attributes, NamedAttribute("fn", fn))
+    !isnothing(logpdf_fn) && push!(attributes, NamedAttribute("logpdf_fn", logpdf_fn))
+    !isnothing(address) && push!(attributes, NamedAttribute("address", address))
+    !isnothing(support) && push!(attributes, NamedAttribute("support", support))
+    !isnothing(name) && push!(attributes, NamedAttribute("name", name))
+
+    return create_operation(
+        "impulse.sample_region",
         location;
         operands,
         owned_regions,

@@ -2,6 +2,154 @@ import ..Reactant
 using ..Reactant: TracedRArray, ReactantRNG, ConcreteRNumber
 using Serialization: Serialization
 
+# Mirrors mlir::impulse::buildStateSchema; the op verifier rejects any other order.
+const _STATE_SLOTS_PLAIN = String[
+    "position", "gradient", "potential_energy", "step_size", "inverse_mass_matrix"
+]
+const _STATE_SLOTS_ADAPT = String[
+    "da_log_step_size",
+    "da_log_step_size_avg",
+    "da_gradient_avg",
+    "da_step_count",
+    "da_prox_center",
+    "welford_mean",
+    "welford_m2",
+    "welford_n",
+    "window_idx",
+    "warmup_offset",
+]
+
+function state_schema_names(adaptive::Bool)
+    return if adaptive
+        vcat(_STATE_SLOTS_PLAIN, _STATE_SLOTS_ADAPT)
+    else
+        copy(_STATE_SLOTS_PLAIN)
+    end
+end
+
+function _state_schema_attr(names)
+    return MLIR.IR.Attribute(MLIR.IR.Attribute[MLIR.IR.Attribute(n) for n in names])
+end
+
+# Must agree with the diagonal test in buildStateSchema.
+function _mass_is_diagonal(inv_mass_shape)
+    n = length(inv_mass_shape)
+    return n == 1 || (n == 2 && inv_mass_shape[1] == 1)
+end
+
+# `state_out` result types in canonical schema order.
+function state_out_types(
+    adaptive::Bool, position_type, scalar_type, inv_mass_type, pos_size::Int, diagonal::Bool
+)
+    types = MLIR.IR.Type[
+        position_type, position_type, scalar_type, scalar_type, inv_mass_type
+    ]
+    if adaptive
+        f64 = MLIR.IR.Type(Float64)
+        scalar_i64_type = MLIR.IR.TensorType(Int64[], MLIR.IR.Type(Int64))
+        welford_mean_type = MLIR.IR.TensorType([pos_size], f64)
+        welford_m2_type = if diagonal
+            MLIR.IR.TensorType([pos_size], f64)
+        else
+            MLIR.IR.TensorType([pos_size, pos_size], f64)
+        end
+        append!(
+            types,
+            MLIR.IR.Type[
+                scalar_type,
+                scalar_type,
+                scalar_type,
+                scalar_i64_type,
+                scalar_type,
+                welford_mean_type,
+                welford_m2_type,
+                scalar_i64_type,
+                scalar_i64_type,
+                scalar_i64_type,
+            ],
+        )
+    end
+    return types
+end
+
+function state_operands(
+    position,
+    gradient,
+    potential_energy,
+    step_size,
+    inverse_mass_matrix,
+    adaptation::Union{Nothing,AdaptationState},
+    warmup_offset,
+    adaptive::Bool,
+)
+    vals = Any[position, gradient, potential_energy, step_size, inverse_mass_matrix]
+    if adaptive
+        da = adaptation.dual_averaging
+        append!(
+            vals,
+            Any[
+                da.log_step_size,
+                da.log_step_size_avg,
+                da.gradient_avg,
+                da.step_count,
+                da.prox_center,
+                adaptation.welford.mean,
+                adaptation.welford.m2,
+                adaptation.welford.n,
+                adaptation.window_idx,
+                warmup_offset,
+            ],
+        )
+    end
+    return MLIR.IR.Value[TracedUtils.get_mlir_data(v) for v in vals]
+end
+
+# warmup_offset is not part of MCMCState; chunked warmup tracks it in Julia.
+function unpack_state(schema_names, mcmc_op, pos_size, inv_mass_shape, rng_shape, config)
+    slot = Dict{String,Int}(n => 4 + i for (i, n) in enumerate(schema_names))
+    r(name) = MLIR.IR.result(mcmc_op, slot[name])
+
+    inv_mass = if length(inv_mass_shape) == 1
+        TracedRArray{Float64,1}((), r("inverse_mass_matrix"), inv_mass_shape)
+    else
+        TracedRArray{Float64,2}((), r("inverse_mass_matrix"), inv_mass_shape)
+    end
+
+    adaptation = if haskey(slot, "window_idx")
+        welford_m2 = if _mass_is_diagonal(inv_mass_shape)
+            TracedRArray{Float64,1}((), r("welford_m2"), (pos_size,))
+        else
+            TracedRArray{Float64,2}((), r("welford_m2"), (pos_size, pos_size))
+        end
+        da = DualAveragingState(
+            TracedRArray{Float64,0}((), r("da_log_step_size"), ()),
+            TracedRArray{Float64,0}((), r("da_log_step_size_avg"), ()),
+            TracedRArray{Float64,0}((), r("da_gradient_avg"), ()),
+            TracedRArray{Int64,0}((), r("da_step_count"), ()),
+            TracedRArray{Float64,0}((), r("da_prox_center"), ()),
+        )
+        welford = WelfordState(
+            TracedRArray{Float64,1}((), r("welford_mean"), (pos_size,)),
+            welford_m2,
+            TracedRArray{Int64,0}((), r("welford_n"), ()),
+        )
+        AdaptationState(da, welford, TracedRArray{Int64,0}((), r("window_idx"), ()))
+    else
+        nothing
+    end
+
+    return MCMCState(
+        TracedRArray{Float64,2}((), r("position"), (1, pos_size)),
+        TracedRArray{Float64,2}((), r("gradient"), (1, pos_size)),
+        TracedRArray{Float64,0}((), r("potential_energy"), ()),
+        TracedRArray{Float64,0}((), r("step_size"), ()),
+        inv_mass,
+        TracedRArray{UInt64,1}((), MLIR.IR.result(mcmc_op, 4), rng_shape),
+        adaptation;
+        config=config,
+    )
+end
+
 function mcmc(
     rng::AbstractRNG,
     original_trace,
@@ -122,27 +270,27 @@ function mcmc(
 
     trace_val = TracedUtils.get_mlir_data(original_trace)
 
+    schema_names = state_schema_names(false)
+
     mcmc_op = MLIR.Dialects.impulse.infer(
         mlir_caller_args,
         MLIR.IR.Value[],
         trace_val;
-        inverse_mass_matrix=inverse_mass_matrix_val,
-        step_size=step_size_val,
+        init_inverse_mass_matrix=inverse_mass_matrix_val,
+        init_step_size=step_size_val,
         trace=trace_type,
         diagnostics=diagnostics_type,
         log_densities=log_densities_type,
         output_rng_state=mlir_result_types[1],
-        final_position=position_type,
-        final_gradient=position_type,
-        final_potential_energy=scalar_type,
-        final_step_size=scalar_type,
-        final_inverse_mass_matrix=inv_mass_type,
-        adaptation_state_out=MLIR.IR.Type[],
+        state_out=state_out_types(
+            false, position_type, scalar_type, inv_mass_type, selection_pos_size, true
+        ),
         fn=fn_attr,
         selection=MLIR.IR.Attribute(selection_attr),
         all_addresses=all_addresses_attr,
         hmc_config=hmc_config_attr,
         nuts_config=nuts_config_attr,
+        state_schema=_state_schema_attr(schema_names),
         num_warmup=Int64(num_warmup),
         num_samples=Int64(num_samples),
         thinning=Int64(thinning),
@@ -172,14 +320,13 @@ function mcmc(
     inv_mass_shape =
         isnothing(inverse_mass_matrix) ? (1, selection_pos_size) : size(inverse_mass_matrix)
 
-    state = MCMCState(
-        TracedRArray{Float64,2}((), MLIR.IR.result(mcmc_op, 5), (1, selection_pos_size)),
-        TracedRArray{Float64,2}((), MLIR.IR.result(mcmc_op, 6), (1, selection_pos_size)),
-        TracedRArray{Float64,0}((), MLIR.IR.result(mcmc_op, 7), ()),
-        TracedRArray{Float64,0}((), MLIR.IR.result(mcmc_op, 8), ()),
-        TracedRArray{Float64,2}((), MLIR.IR.result(mcmc_op, 9), inv_mass_shape),
-        TracedRArray{UInt64,1}((), MLIR.IR.result(mcmc_op, 4), size(rng.seed));
-        config=MCMCConfig(;
+    state = unpack_state(
+        schema_names,
+        mcmc_op,
+        selection_pos_size,
+        inv_mass_shape,
+        size(rng.seed),
+        MCMCConfig(;
             algorithm, max_tree_depth, max_delta_energy, trajectory_length, thinning
         ),
     )
@@ -267,16 +414,6 @@ function _infer(
     end
     step_size_val = isnothing(step_size) ? nothing : TracedUtils.get_mlir_data(step_size)
     initial_position_val = TracedUtils.get_mlir_data(initial_position_2d)
-    initial_gradient_val = if isnothing(initial_gradient_2d)
-        nothing
-    else
-        TracedUtils.get_mlir_data(initial_gradient_2d)
-    end
-    initial_pe_val = if isnothing(initial_potential_energy)
-        nothing
-    else
-        TracedUtils.get_mlir_data(initial_potential_energy)
-    end
 
     collection_size = num_samples ÷ thinning
     trace_type = MLIR.IR.TensorType([collection_size, pos_size], MLIR.IR.Type(Float64))
@@ -294,62 +431,61 @@ function _infer(
         MLIR.IR.type(inverse_mass_matrix_val)
     end
 
-    scalar_i64_type = MLIR.IR.TensorType(Int64[], MLIR.IR.Type(Int64))
-    diagonal = isnothing(inverse_mass_matrix) ? true : (ndims(inverse_mass_matrix) == 1)
-    welford_mean_type = MLIR.IR.TensorType([pos_size], MLIR.IR.Type(Float64))
-    welford_m2_type = if diagonal
-        MLIR.IR.TensorType([pos_size], MLIR.IR.Type(Float64))
+    inv_mass_shape =
+        isnothing(inverse_mass_matrix) ? (1, pos_size) : size(inverse_mass_matrix)
+    diagonal = _mass_is_diagonal(inv_mass_shape)
+
+    # Keep adaptation when resuming so the cached sample kernels see a stable state.
+    adaptive = adapt_step_size || adapt_mass_matrix || !isnothing(adaptation_state)
+    resume =
+        !isnothing(initial_gradient_2d) &&
+        !isnothing(initial_potential_energy) &&
+        (!adaptive || !isnothing(adaptation_state))
+
+    schema_names = state_schema_names(adaptive)
+
+    state_in_vals = if resume
+        offset = if (adaptive && isnothing(warmup_offset))
+            Ops.constant(fill(Int64(0)))
+        else
+            warmup_offset
+        end
+        state_operands(
+            initial_position_2d,
+            initial_gradient_2d,
+            initial_potential_energy,
+            step_size,
+            inverse_mass_matrix,
+            adaptation_state,
+            offset,
+            adaptive,
+        )
     else
-        MLIR.IR.TensorType([pos_size, pos_size], MLIR.IR.Type(Float64))
+        MLIR.IR.Value[]
     end
 
-    adaptation_in_vals = if isnothing(adaptation_state)
-        MLIR.IR.Value[]
-    else
-        MLIR.IR.Value[
-            TracedUtils.get_mlir_data(x) for x in adaptation_operands(adaptation_state)
-        ]
-    end
-    warmup_offset_val =
-        isnothing(warmup_offset) ? nothing : TracedUtils.get_mlir_data(warmup_offset)
     total_warmup_attr = isnothing(total_warmup) ? nothing : Int64(total_warmup)
-    adaptation_out_types = MLIR.IR.Type[
-        scalar_type,
-        scalar_type,
-        scalar_type,
-        scalar_i64_type,
-        scalar_type,
-        welford_mean_type,
-        welford_m2_type,
-        scalar_i64_type,
-        scalar_i64_type,
-    ]
 
     mcmc_op = MLIR.Dialects.impulse.infer(
         mlir_caller_args,
-        adaptation_in_vals;
-        inverse_mass_matrix=inverse_mass_matrix_val,
-        step_size=step_size_val,
-        initial_position=initial_position_val,
-        initial_gradient=initial_gradient_val,
-        initial_potential_energy=initial_pe_val,
-        warmup_offset=warmup_offset_val,
+        state_in_vals;
+        init_inverse_mass_matrix=inverse_mass_matrix_val,
+        init_step_size=step_size_val,
+        init_position=initial_position_val,
         trace=trace_type,
         diagnostics=diagnostics_type,
         log_densities=log_densities_type,
         output_rng_state=mlir_result_types[1],
-        final_position=position_type,
-        final_gradient=position_type,
-        final_potential_energy=scalar_type,
-        final_step_size=scalar_type,
-        final_inverse_mass_matrix=inv_mass_type,
-        adaptation_state_out=adaptation_out_types,
+        state_out=state_out_types(
+            adaptive, position_type, scalar_type, inv_mass_type, pos_size, diagonal
+        ),
         total_warmup=total_warmup_attr,
         logpdf_fn=logpdf_fn_attr,
         selection=MLIR.IR.Attribute(MLIR.IR.Attribute[]),
         all_addresses=MLIR.IR.Attribute(MLIR.IR.Attribute[]),
         hmc_config=hmc_config_attr,
         nuts_config=nuts_config_attr,
+        state_schema=_state_schema_attr(schema_names),
         num_warmup=Int64(num_warmup),
         num_samples=Int64(num_samples),
         thinning=Int64(thinning),
@@ -379,45 +515,13 @@ function _infer(
         (), MLIR.IR.result(mcmc_op, 3), (collection_size,)
     )
 
-    inv_mass_shape =
-        isnothing(inverse_mass_matrix) ? (1, pos_size) : size(inverse_mass_matrix)
-    inv_mass_ndims = length(inv_mass_shape)
-
-    inv_mass_traced = if inv_mass_ndims == 1
-        TracedRArray{Float64,1}((), MLIR.IR.result(mcmc_op, 9), inv_mass_shape)
-    else
-        TracedRArray{Float64,2}((), MLIR.IR.result(mcmc_op, 9), inv_mass_shape)
-    end
-
-    da = DualAveragingState(
-        TracedRArray{Float64,0}((), MLIR.IR.result(mcmc_op, 10), ()),
-        TracedRArray{Float64,0}((), MLIR.IR.result(mcmc_op, 11), ()),
-        TracedRArray{Float64,0}((), MLIR.IR.result(mcmc_op, 12), ()),
-        TracedRArray{Int64,0}((), MLIR.IR.result(mcmc_op, 13), ()),
-        TracedRArray{Float64,0}((), MLIR.IR.result(mcmc_op, 14), ()),
-    )
-    welford_m2 = if diagonal
-        TracedRArray{Float64,1}((), MLIR.IR.result(mcmc_op, 16), (pos_size,))
-    else
-        TracedRArray{Float64,2}((), MLIR.IR.result(mcmc_op, 16), (pos_size, pos_size))
-    end
-    welford = WelfordState(
-        TracedRArray{Float64,1}((), MLIR.IR.result(mcmc_op, 15), (pos_size,)),
-        welford_m2,
-        TracedRArray{Int64,0}((), MLIR.IR.result(mcmc_op, 17), ()),
-    )
-    window_idx = TracedRArray{Int64,0}((), MLIR.IR.result(mcmc_op, 18), ())
-    adaptation = AdaptationState(da, welford, window_idx)
-
-    state = MCMCState(
-        TracedRArray{Float64,2}((), MLIR.IR.result(mcmc_op, 5), (1, pos_size)),
-        TracedRArray{Float64,2}((), MLIR.IR.result(mcmc_op, 6), (1, pos_size)),
-        TracedRArray{Float64,0}((), MLIR.IR.result(mcmc_op, 7), ()),
-        TracedRArray{Float64,0}((), MLIR.IR.result(mcmc_op, 8), ()),
-        inv_mass_traced,
-        TracedRArray{UInt64,1}((), MLIR.IR.result(mcmc_op, 4), size(rng.seed)),
-        adaptation;
-        config=MCMCConfig(;
+    state = unpack_state(
+        schema_names,
+        mcmc_op,
+        pos_size,
+        inv_mass_shape,
+        size(rng.seed),
+        MCMCConfig(;
             algorithm,
             max_tree_depth,
             max_delta_energy,
