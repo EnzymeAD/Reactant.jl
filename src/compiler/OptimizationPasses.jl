@@ -11,6 +11,9 @@ const OpenMP = Ref{Bool}(true)
 const SROA_ATTRIBUTOR = Ref{Union{Bool,Symbol}}(true)
 const DEBUG_PROBPROG_DUMP_VALUE = Ref(false)
 const DEBUG_PROBPROG_DISABLE_OPT = Ref(true)
+const DEBUG_PROBPROG_DISABLE_SICM = Ref(false)
+const DEBUG_PROBPROG_DISABLE_REGION = Ref(false)
+const DEBUG_PROBPROG_DUMP_PASSES = Ref(false)
 const DEBUG_MLIR_DIAGNOSTIC_LEVEL = Ref{MLIR.API.MlirDiagnosticSeverity}(
     MLIR.API.MlirDiagnosticError
 )
@@ -187,11 +190,18 @@ const enzyme_pass::String = "enzyme{postpasses=\"arith-raise{stablehlo=true},enz
 function impulse_pass(;
     debug_dump::Bool=DEBUG_PROBPROG_DUMP_VALUE[],
     disable_optimizations::Bool=DEBUG_PROBPROG_DISABLE_OPT[],
+    disable_sicm::Bool=DEBUG_PROBPROG_DISABLE_SICM[],
+    disable_region::Bool=DEBUG_PROBPROG_DISABLE_REGION[],
 )
-    if !disable_optimizations
-        # TODO(#2063): Add impulse optimization passes
-    end
-    return "expand-impulse{debug-dump=$debug_dump postpasses=\"arith-raise{stablehlo=true}\"}"
+    expand = "expand-impulse{debug-dump=$debug_dump postpasses=\"arith-raise{stablehlo=true}\"}"
+    (disable_optimizations || disable_region) && return expand
+    # SICM region pipeline: inline infer into region form, run dual SICM
+    # (sampler-region SICM -> construct joint logpdf -> logpdf-region SICM),
+    # then expand-impulse consumes the optimized infer_region directly.
+    sicm = disable_sicm ? "sicm{max-iterations=0}" : "sicm"
+    return join(
+        ["inline-infer-regions", "canonicalize,cse", sicm, "canonicalize,cse", expand], ","
+    )
 end
 
 # ── run! wrapper ─────────────────────────────────────────────────────────────
