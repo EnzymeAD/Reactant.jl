@@ -518,3 +518,44 @@ end
 sampler(::Type{<:HalfCauchy}) = _halfcauchy_sampler
 logpdf_fn(::Type{<:HalfCauchy}) = _halfcauchy_logpdf
 support(::Type{<:HalfCauchy}) = :positive
+#==============================================================================#
+# Dirichlet Distribution
+# Parameterized by a concentration vector `alpha` over a K-simplex (shape (K,)).
+# Support: SIMPLEX (stick-breaking). Matches scipy.stats.dirichlet.
+#==============================================================================#
+
+struct Dirichlet{Tα,S<:Tuple} <: Distribution
+    alpha::Tα
+    shape::S
+
+    function Dirichlet{Tα,S}(alpha::Tα, shape::S) where {Tα,S<:Tuple}
+        isempty(shape) && throw(ArgumentError("shape cannot be empty"))
+        return new{Tα,S}(alpha, shape)
+    end
+end
+
+Dirichlet(alpha::Tα, shape::S) where {Tα,S<:Tuple} = Dirichlet{Tα,S}(alpha, shape)
+Dirichlet(alpha) = Dirichlet(alpha, (length(alpha),))
+
+params(d::Dirichlet) = (d.alpha, d.shape)
+
+function _dirichlet_sampler(rng, alpha, shape)
+    # Gamma-normalize construction. NOTE: jax.random.dirichlet uses
+    # `softmax(loggamma(key, alpha))` (a log-space rejection sampler), so this is
+    # only distributionally equal, not bit-identical (different RNG consumption).
+    g = _gamma_sampler(rng, alpha, 1.0, shape)
+    return g ./ sum(g)
+end
+
+function _dirichlet_logpdf(x, alpha, _)
+    # Term-for-term match of numpyro.distributions.Dirichlet.log_prob:
+    #   normalize_term = sum(gammaln(conc)) - gammaln(sum(conc))
+    #   log_prob       = sum(log(value) * (conc - 1)) - normalize_term
+    α = Ops.fill(0.0, size(x)...) .+ alpha
+    normalize_term = sum(Ops.lgamma(α)) - Ops.lgamma(sum(α))
+    return sum(log.(x) .* (α .- 1.0)) - normalize_term
+end
+
+sampler(::Type{<:Dirichlet}) = _dirichlet_sampler
+logpdf_fn(::Type{<:Dirichlet}) = _dirichlet_logpdf
+support(::Type{<:Dirichlet}) = :simplex

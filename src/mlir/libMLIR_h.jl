@@ -16501,10 +16501,11 @@ end
     EnzymeSupportKind_Interval = 0x0000000000000003
     EnzymeSupportKind_GreaterThan = 0x0000000000000004
     EnzymeSupportKind_LessThan = 0x0000000000000005
+    EnzymeSupportKind_Simplex = 0x0000000000000006
 end
 
 function enzymeSupportAttrGet(
-    ctx, kind, hasLowerBound, lowerBound, hasUpperBound, upperBound
+    ctx, kind, hasLowerBound, lowerBound, hasUpperBound, upperBound, eventSize
 )
     @ccall Reactant_jll.libReactantExtra.enzymeSupportAttrGet(
         ctx::MlirContext,
@@ -16513,6 +16514,7 @@ function enzymeSupportAttrGet(
         lowerBound::Cdouble,
         hasUpperBound::Bool,
         upperBound::Cdouble,
+        eventSize::Int64,
     )::MlirAttribute
 end
 

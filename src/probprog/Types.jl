@@ -67,6 +67,21 @@ struct TraceEntry
     num_elements::Int
     offset::Int
     parent_path::Vector{Symbol}
+    support::Symbol
+    event_size::Int
+end
+
+function TraceEntry(symbol, shape, num_elements, offset, parent_path)
+    return TraceEntry(symbol, shape, num_elements, offset, parent_path, :real, 0)
+end
+
+# Must match the C++ getUnconstrainedSize.
+function unconstrained_num_elements(entry::TraceEntry)
+    if entry.support === :simplex && entry.event_size > 1
+        m = entry.num_elements ÷ entry.event_size
+        return m * (entry.event_size - 1)
+    end
+    return entry.num_elements
 end
 
 mutable struct TracedTrace

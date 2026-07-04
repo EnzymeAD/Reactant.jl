@@ -210,6 +210,8 @@ function filter_entries_by_selection(entries::Vector{TraceEntry}, selection::Sel
                         entry.num_elements,
                         new_offset,
                         entry.parent_path,
+                        entry.support,
+                        entry.event_size,
                     ),
                 )
                 new_offset += entry.num_elements

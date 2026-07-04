@@ -60,6 +60,9 @@ function sample(
     lower_val = isnothing(lower) ? NaN : Float64(lower)
     upper_val = isnothing(upper) ? NaN : Float64(upper)
 
+    sample_shape_full = size(mlir_result_types[2])
+    event_size = support === :simplex ? Int64(last(sample_shape_full)) : Int64(0)
+
     support_attr = MLIR.IR.Attribute(
         MLIR.API.enzymeSupportAttrGet(
             MLIR.IR.current_context(),
@@ -68,6 +71,7 @@ function sample(
             lower_val,
             has_upper,
             upper_val,
+            event_size,
         ),
     )
 
@@ -97,7 +101,13 @@ function sample(
             sample_shape = size(mlir_result_types[2])
             num_el = max(1, prod(sample_shape))
             entry = TraceEntry(
-                symbol, sample_shape, num_el, tt.position_size, copy(tt.address_stack)
+                symbol,
+                sample_shape,
+                num_el,
+                tt.position_size,
+                copy(tt.address_stack),
+                support,
+                Int(event_size),
             )
             push!(tt.entries, entry)
             tt.position_size += num_el

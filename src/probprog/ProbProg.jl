@@ -27,7 +27,8 @@ export Distribution,
     MultiNormal,
     Gamma,
     StudentT,
-    HalfCauchy
+    HalfCauchy,
+    Dirichlet
 
 # Utility functions.
 export get_choices,

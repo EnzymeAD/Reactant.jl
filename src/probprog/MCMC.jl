@@ -271,12 +271,15 @@ function mcmc(
 
     all_addresses_attr = build_selection_attr(tt)
 
+    # Samples are constrained; NUTS state is unconstrained (narrower for SIMPLEX).
     selection_pos_size = 0
+    unconstrained_pos_size = 0
     for address in selection
         for entry in tt.entries
             entry_path = [entry.parent_path..., entry.symbol]
             if entry_path == collect(address.path)
                 selection_pos_size += entry.num_elements
+                unconstrained_pos_size += unconstrained_num_elements(entry)
                 break
             end
         end
@@ -311,7 +314,7 @@ function mcmc(
     diagnostics_type = MLIR.IR.TensorType(diag_dims, MLIR.IR.Type(Bool))
     log_densities_type = MLIR.IR.TensorType(ld_dims, MLIR.IR.Type(Float64))
 
-    position_type = MLIR.IR.TensorType([1, selection_pos_size], MLIR.IR.Type(Float64))
+    position_type = MLIR.IR.TensorType([1, unconstrained_pos_size], MLIR.IR.Type(Float64))
     scalar_type = MLIR.IR.TensorType(Int64[], MLIR.IR.Type(Float64))
 
     hmc_config_attr = nothing
@@ -358,8 +361,11 @@ function mcmc(
 
     schema_names = state_schema_names(false)
 
-    inv_mass_shape =
-        isnothing(inverse_mass_matrix) ? (1, selection_pos_size) : size(inverse_mass_matrix)
+    inv_mass_shape = if isnothing(inverse_mass_matrix)
+        (1, unconstrained_pos_size)
+    else
+        size(inverse_mass_matrix)
+    end
 
     mcmc_op = MLIR.Dialects.impulse.infer(
         mlir_caller_args,
@@ -376,7 +382,7 @@ function mcmc(
             position_type,
             scalar_type,
             inv_mass_type,
-            selection_pos_size,
+            unconstrained_pos_size,
             true;
             num_chains,
             inv_mass_shape,
@@ -425,7 +431,7 @@ function mcmc(
         state = unpack_states_multichain(
             schema_names,
             mcmc_op,
-            selection_pos_size,
+            unconstrained_pos_size,
             inv_mass_shape,
             size(rng.seed),
             config,
@@ -443,7 +449,12 @@ function mcmc(
     )
 
     state = unpack_state(
-        schema_names, mcmc_op, selection_pos_size, inv_mass_shape, size(rng.seed), config
+        schema_names,
+        mcmc_op,
+        unconstrained_pos_size,
+        inv_mass_shape,
+        size(rng.seed),
+        config,
     )
 
     return new_trace, diagnostics, log_densities, traced_result, state
