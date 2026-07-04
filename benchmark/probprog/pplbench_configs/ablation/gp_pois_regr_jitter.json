@@ -1,0 +1,52 @@
+{
+  "model": {
+    "class": "gp_pois_regr_jitter.GPPoisRegrJitter",
+    "args": {"n": 40, "rho": 3.0},
+    "seed": 12345
+  },
+  "iterations": 1500,
+  "num_warmup": 500,
+  "trials": 4,
+  "ppls": [
+    {
+      "name": "impulse",
+      "inference": {
+        "class": "inference.MCMC",
+        "infer_args": {
+          "step_size": 0.09,
+          "max_tree_depth": 10,
+          "adapt_step_size": true,
+          "adapt_mass_matrix": true
+        }
+      },
+      "legend": {
+        "name": "Full (pre-SICM)",
+        "color": "red"
+      },
+      "trials": 4
+    },
+    {
+      "name": "impulse",
+      "inference": {
+        "class": "inference.MCMC",
+        "infer_args": {
+          "step_size": 0.09,
+          "max_tree_depth": 10,
+          "adapt_step_size": true,
+          "adapt_mass_matrix": true,
+          "no_opt": true
+        }
+      },
+      "legend": {
+        "name": "No opt",
+        "color": "gray"
+      },
+      "trials": 4
+    }
+  ],
+  "save_samples": true,
+  "figures": {
+    "generate_pll": true,
+    "suffix": "png"
+  }
+}

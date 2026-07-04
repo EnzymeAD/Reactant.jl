@@ -1,0 +1,126 @@
+{
+  "model": {
+    "class": "stochastic_volatility.StochasticVolatility",
+    "args": {
+      "n": 20,
+      "phi": 0.95
+    },
+    "seed": 12345
+  },
+  "iterations": 1500,
+  "num_warmup": 500,
+  "trials": 4,
+  "ppls": [
+    {
+      "name": "numpyro",
+      "inference": {
+        "class": "inference.MCMC",
+        "infer_args": {
+          "step_size": 0.1,
+          "max_tree_depth": 10,
+          "adapt_step_size": true,
+          "adapt_mass_matrix": true
+        }
+      },
+      "legend": {
+        "name": "NumPyro",
+        "color": "blue"
+      },
+      "trials": 4
+    },
+    {
+      "name": "impulse",
+      "inference": {
+        "class": "inference.MCMC",
+        "infer_args": {
+          "step_size": 0.1,
+          "max_tree_depth": 10,
+          "adapt_step_size": true,
+          "adapt_mass_matrix": true
+        }
+      },
+      "legend": {
+        "name": "Impulse",
+        "color": "red"
+      },
+      "trials": 4
+    },
+    {
+      "name": "impulse",
+      "inference": {
+        "class": "inference.MCMC",
+        "infer_args": {
+          "step_size": 0.1,
+          "max_tree_depth": 10,
+          "adapt_step_size": true,
+          "adapt_mass_matrix": true,
+          "disable_opt": true
+        }
+      },
+      "legend": {
+        "name": "Impulse (no opt)",
+        "color": "orange"
+      },
+      "trials": 4,
+      "optional": true
+    },
+    {
+      "name": "stan",
+      "inference": {
+        "class": "inference.MCMC",
+        "infer_args": {
+          "step_size": 0.1,
+          "max_tree_depth": 10,
+          "adapt_step_size": true,
+          "adapt_mass_matrix": true
+        }
+      },
+      "legend": {
+        "name": "Stan",
+        "color": "green"
+      },
+      "trials": 4
+    },
+    {
+      "name": "turing",
+      "inference": {
+        "class": "inference.MCMC",
+        "infer_args": {
+          "step_size": 0.1,
+          "max_tree_depth": 10,
+          "adapt_step_size": true,
+          "adapt_mass_matrix": true
+        }
+      },
+      "legend": {
+        "name": "Turing.jl",
+        "color": "purple"
+      },
+      "trials": 2,
+      "optional": true
+    },
+    {
+      "name": "pymc",
+      "inference": {
+        "class": "inference.MCMC",
+        "infer_args": {
+          "step_size": 0.1,
+          "max_tree_depth": 10,
+          "adapt_step_size": true,
+          "adapt_mass_matrix": true
+        }
+      },
+      "legend": {
+        "name": "PyMC",
+        "color": "darkgreen"
+      },
+      "trials": 2,
+      "optional": true
+    }
+  ],
+  "save_samples": true,
+  "figures": {
+    "generate_pll": true,
+    "suffix": "png"
+  }
+}

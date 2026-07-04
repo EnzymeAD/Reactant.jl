@@ -1,0 +1,72 @@
+{
+  "model": {
+    "class": "shared_cholesky.SharedCholesky",
+    "args": {
+      "n": 50
+    },
+    "seed": 12345
+  },
+  "iterations": 1500,
+  "num_warmup": 500,
+  "trials": 4,
+  "ppls": [
+    {
+      "name": "impulse",
+      "inference": {
+        "class": "inference.MCMC",
+        "infer_args": {
+          "step_size": 0.1,
+          "max_tree_depth": 10,
+          "adapt_step_size": true,
+          "adapt_mass_matrix": true
+        }
+      },
+      "legend": {
+        "name": "Full",
+        "color": "red"
+      },
+      "trials": 4
+    },
+    {
+      "name": "impulse",
+      "inference": {
+        "class": "inference.MCMC",
+        "infer_args": {
+          "step_size": 0.1,
+          "max_tree_depth": 10,
+          "adapt_step_size": true,
+          "adapt_mass_matrix": true,
+          "disable_sicm": true
+        }
+      },
+      "legend": {
+        "name": "No SICM",
+        "color": "orange"
+      },
+      "trials": 4
+    },
+    {
+      "name": "impulse",
+      "inference": {
+        "class": "inference.MCMC",
+        "infer_args": {
+          "step_size": 0.1,
+          "max_tree_depth": 10,
+          "adapt_step_size": true,
+          "adapt_mass_matrix": true,
+          "disable_region": true
+        }
+      },
+      "legend": {
+        "name": "No region",
+        "color": "gray"
+      },
+      "trials": 4
+    }
+  ],
+  "save_samples": true,
+  "figures": {
+    "generate_pll": true,
+    "suffix": "png"
+  }
+}
