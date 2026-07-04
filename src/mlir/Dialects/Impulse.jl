@@ -276,7 +276,6 @@ function infer(
     init_position=nothing::Union{Nothing,Value},
     trace::IR.Type,
     diagnostics::IR.Type,
-    log_densities::IR.Type,
     output_rng_state::IR.Type,
     state_out::Vector{IR.Type},
     fn=nothing,
@@ -285,6 +284,7 @@ function infer(
     num_warmup=nothing,
     num_samples=nothing,
     thinning=nothing,
+    num_chains=nothing,
     total_warmup=nothing,
     hmc_config=nothing,
     nuts_config=nothing,
@@ -321,6 +321,7 @@ function infer(
     !isnothing(num_warmup) && push!(attributes, NamedAttribute("num_warmup", num_warmup))
     !isnothing(num_samples) && push!(attributes, NamedAttribute("num_samples", num_samples))
     !isnothing(thinning) && push!(attributes, NamedAttribute("thinning", thinning))
+    !isnothing(num_chains) && push!(attributes, NamedAttribute("num_chains", num_chains))
     !isnothing(total_warmup) &&
         push!(attributes, NamedAttribute("total_warmup", total_warmup))
     !isnothing(hmc_config) && push!(attributes, NamedAttribute("hmc_config", hmc_config))
@@ -383,6 +384,7 @@ function infer_region(
     num_warmup=nothing,
     num_samples=nothing,
     thinning=nothing,
+    num_chains=nothing,
     total_warmup=nothing,
     hmc_config=nothing,
     nuts_config=nothing,
@@ -423,6 +425,7 @@ function infer_region(
     !isnothing(num_warmup) && push!(attributes, NamedAttribute("num_warmup", num_warmup))
     !isnothing(num_samples) && push!(attributes, NamedAttribute("num_samples", num_samples))
     !isnothing(thinning) && push!(attributes, NamedAttribute("thinning", thinning))
+    !isnothing(num_chains) && push!(attributes, NamedAttribute("num_chains", num_chains))
     !isnothing(total_warmup) &&
         push!(attributes, NamedAttribute("total_warmup", total_warmup))
     !isnothing(hmc_config) && push!(attributes, NamedAttribute("hmc_config", hmc_config))

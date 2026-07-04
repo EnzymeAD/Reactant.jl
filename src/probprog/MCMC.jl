@@ -37,10 +37,46 @@ function _mass_is_diagonal(inv_mass_shape)
     return n == 1 || (n == 2 && inv_mass_shape[1] == 1)
 end
 
-# `state_out` result types in canonical schema order.
 function state_out_types(
-    adaptive::Bool, position_type, scalar_type, inv_mass_type, pos_size::Int, diagonal::Bool
+    adaptive::Bool,
+    position_type,
+    scalar_type,
+    inv_mass_type,
+    pos_size::Int,
+    diagonal::Bool;
+    num_chains::Int=1,
+    inv_mass_shape=nothing,
 )
+    if num_chains > 1
+        f64 = MLIR.IR.Type(Float64)
+        i64 = MLIR.IR.Type(Int64)
+        _cm(shape, et) = MLIR.IR.TensorType(Int[num_chains, shape...], et)
+        pos_t = _cm((1, pos_size), f64)
+        scal_t = _cm((), f64)
+        scal_i64 = _cm((), i64)
+        imm_t = _cm(Tuple(inv_mass_shape), f64)
+        types = MLIR.IR.Type[pos_t, pos_t, scal_t, scal_t, imm_t]
+        if adaptive
+            welford_mean_t = _cm((pos_size,), f64)
+            welford_m2_t = diagonal ? _cm((pos_size,), f64) : _cm((pos_size, pos_size), f64)
+            append!(
+                types,
+                MLIR.IR.Type[
+                    scal_t,
+                    scal_t,
+                    scal_t,
+                    scal_i64,
+                    scal_t,
+                    welford_mean_t,
+                    welford_m2_t,
+                    scal_i64,
+                    scal_i64,
+                    scal_i64,
+                ],
+            )
+        end
+        return types
+    end
     types = MLIR.IR.Type[
         position_type, position_type, scalar_type, scalar_type, inv_mass_type
     ]
@@ -150,12 +186,57 @@ function unpack_state(schema_names, mcmc_op, pos_size, inv_mass_shape, rng_shape
     )
 end
 
+function _chain_slice(
+    mcmc_op, result_idx::Int, ::Type{T}, single_shape::Tuple, num_chains::Int, c::Int
+) where {T}
+    nd = length(single_shape) + 1
+    cm = TracedRArray{T,nd}(
+        (), MLIR.IR.result(mcmc_op, result_idx), (num_chains, single_shape...)
+    )
+    lo = Int[c, ones(Int, length(single_shape))...]
+    hi = Int[c, collect(Int, single_shape)...]
+    sl = Reactant.Ops.slice(cm, lo, hi)
+    return Reactant.Ops.reshape(sl, collect(Int, single_shape))
+end
+
+# Per-chain `Vector{MCMCState}` from chain-major `state_out`. The trace-based
+# `mcmc` always uses the plain 5-slot schema, so no adaptation slots are present;
+# all chains share the single `output_rng_state` (last chain's final rng).
+function unpack_states_multichain(
+    schema_names, mcmc_op, pos_size, inv_mass_shape, rng_shape, config, num_chains
+)
+    slot = Dict{String,Int}(n => 4 + i for (i, n) in enumerate(schema_names))
+    rng_val = TracedRArray{UInt64,1}((), MLIR.IR.result(mcmc_op, 4), rng_shape)
+    states = MCMCState[]
+    for c in 1:num_chains
+        pos = _chain_slice(mcmc_op, slot["position"], Float64, (1, pos_size), num_chains, c)
+        grad = _chain_slice(
+            mcmc_op, slot["gradient"], Float64, (1, pos_size), num_chains, c
+        )
+        pe = _chain_slice(mcmc_op, slot["potential_energy"], Float64, (), num_chains, c)
+        ss = _chain_slice(mcmc_op, slot["step_size"], Float64, (), num_chains, c)
+        inv_mass = _chain_slice(
+            mcmc_op,
+            slot["inverse_mass_matrix"],
+            Float64,
+            Tuple(inv_mass_shape),
+            num_chains,
+            c,
+        )
+        push!(
+            states, MCMCState(pos, grad, pe, ss, inv_mass, rng_val, nothing; config=config)
+        )
+    end
+    return states
+end
+
 function mcmc(
     rng::AbstractRNG,
     original_trace,
     f::Function,
     args::Vararg{Any,Nargs};
     selection::Selection,
+    num_chains::Int=1,
     algorithm::Symbol=:HMC,
     inverse_mass_matrix=nothing,
     step_size=nothing,
@@ -217,13 +298,18 @@ function mcmc(
     end
 
     collection_size = num_samples ÷ thinning
-    trace_type = MLIR.IR.TensorType(
-        [collection_size, selection_pos_size], MLIR.IR.Type(Float64)
-    )
-    diagnostics_type = MLIR.IR.TensorType(
-        [Int64(collection_size), Int64(2)], MLIR.IR.Type(Bool)
-    )
-    log_densities_type = MLIR.IR.TensorType([Int64(collection_size)], MLIR.IR.Type(Float64))
+    # Diagnostics columns: [accepted, diverging].
+    trace_dims = if num_chains > 1
+        [num_chains, collection_size, selection_pos_size]
+    else
+        [collection_size, selection_pos_size]
+    end
+    diag_dims =
+        num_chains > 1 ? Int64[num_chains, collection_size, 2] : Int64[collection_size, 2]
+    ld_dims = num_chains > 1 ? Int64[num_chains, collection_size] : Int64[collection_size]
+    trace_type = MLIR.IR.TensorType(trace_dims, MLIR.IR.Type(Float64))
+    diagnostics_type = MLIR.IR.TensorType(diag_dims, MLIR.IR.Type(Bool))
+    log_densities_type = MLIR.IR.TensorType(ld_dims, MLIR.IR.Type(Float64))
 
     position_type = MLIR.IR.TensorType([1, selection_pos_size], MLIR.IR.Type(Float64))
     scalar_type = MLIR.IR.TensorType(Int64[], MLIR.IR.Type(Float64))
@@ -272,6 +358,9 @@ function mcmc(
 
     schema_names = state_schema_names(false)
 
+    inv_mass_shape =
+        isnothing(inverse_mass_matrix) ? (1, selection_pos_size) : size(inverse_mass_matrix)
+
     mcmc_op = MLIR.Dialects.impulse.infer(
         mlir_caller_args,
         MLIR.IR.Value[],
@@ -283,7 +372,14 @@ function mcmc(
         log_densities=log_densities_type,
         output_rng_state=mlir_result_types[1],
         state_out=state_out_types(
-            false, position_type, scalar_type, inv_mass_type, selection_pos_size, true
+            false,
+            position_type,
+            scalar_type,
+            inv_mass_type,
+            selection_pos_size,
+            true;
+            num_chains,
+            inv_mass_shape,
         ),
         fn=fn_attr,
         selection=MLIR.IR.Attribute(selection_attr),
@@ -294,6 +390,7 @@ function mcmc(
         num_warmup=Int64(num_warmup),
         num_samples=Int64(num_samples),
         thinning=Int64(thinning),
+        num_chains=Int64(num_chains),
     )
 
     traced_result = process_probprog_outputs(
@@ -309,6 +406,34 @@ function mcmc(
         true,
     )
 
+    config = MCMCConfig(;
+        algorithm, max_tree_depth, max_delta_energy, trajectory_length, thinning
+    )
+
+    if num_chains > 1
+        new_trace = TracedRArray{Float64,3}(
+            (),
+            MLIR.IR.result(mcmc_op, 1),
+            (num_chains, collection_size, selection_pos_size),
+        )
+        diagnostics = TracedRArray{Bool,3}(
+            (), MLIR.IR.result(mcmc_op, 2), (num_chains, collection_size, 2)
+        )
+        log_densities = TracedRArray{Float64,2}(
+            (), MLIR.IR.result(mcmc_op, 3), (num_chains, collection_size)
+        )
+        state = unpack_states_multichain(
+            schema_names,
+            mcmc_op,
+            selection_pos_size,
+            inv_mass_shape,
+            size(rng.seed),
+            config,
+            num_chains,
+        )
+        return new_trace, diagnostics, log_densities, traced_result, state
+    end
+
     new_trace = TracedRArray{Float64,2}(
         (), MLIR.IR.result(mcmc_op, 1), (collection_size, selection_pos_size)
     )
@@ -317,18 +442,8 @@ function mcmc(
         (), MLIR.IR.result(mcmc_op, 3), (collection_size,)
     )
 
-    inv_mass_shape =
-        isnothing(inverse_mass_matrix) ? (1, selection_pos_size) : size(inverse_mass_matrix)
-
     state = unpack_state(
-        schema_names,
-        mcmc_op,
-        selection_pos_size,
-        inv_mass_shape,
-        size(rng.seed),
-        MCMCConfig(;
-            algorithm, max_tree_depth, max_delta_energy, trajectory_length, thinning
-        ),
+        schema_names, mcmc_op, selection_pos_size, inv_mass_shape, size(rng.seed), config
     )
 
     return new_trace, diagnostics, log_densities, traced_result, state

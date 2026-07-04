@@ -79,6 +79,7 @@ function run_numpyro_mcmc(;
     inverse_mass_matrix=nothing,
     adapt_step_size::Bool=true,
     adapt_mass_matrix::Bool=true,
+    num_chains::Int=1,
 )
     numpyro_infer = pyimport("numpyro.infer")
     np = pyimport("numpy")
@@ -111,10 +112,25 @@ function run_numpyro_mcmc(;
     end
 
     mcmc = numpyro_infer.MCMC(
-        kernel; num_warmup=num_warmup, num_samples=num_samples, progress_bar=false
+        kernel;
+        num_warmup=num_warmup,
+        num_samples=num_samples,
+        num_chains=num_chains,
+        chain_method="sequential",
+        progress_bar=false,
     )
 
     mcmc.run(rng_key, model_args...; model_kwargs..., init_params=init_params)
+
+    if num_chains > 1
+        samples_py = mcmc.get_samples(; group_by_chain=true)
+        result = Dict{Symbol,Matrix{Float64}}()
+        for name in param_names
+            arr2d = np.asarray(samples_py[string(name)]).reshape(num_chains, num_samples)
+            result[name] = pyconvert(Matrix{Float64}, arr2d)
+        end
+        return result
+    end
 
     samples_py = mcmc.get_samples()
     result = Dict{Symbol,Vector{Float64}}()
