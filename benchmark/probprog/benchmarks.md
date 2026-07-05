@@ -313,3 +313,51 @@ driver `coal_mining_mh_demo.jl`; JSON carries both `p` (MH) and `p_enum`).
 *Cost note*: tracing one `impulse.if` per year is superlinear in the series
 length (n=20: 63s compile; n=56: 545s), so the branchy demo uses n=56 rather than
 the full 112.
+
+---
+
+## Variational inference (SVI) — SICM-on-VI
+
+VI now runs through the same region pipeline as HMC/NUTS
+(`inline-infer-regions → sicm → construct joint logpdf → expand-impulse`), so the
+identical sample-invariant code motion rewrites optimize the VI model density.
+This is the algorithm-independence result: the CholeskyScale / TriangularSolveScale
+/ LogMultiply cascade that speeds up NUTS on `scale_family_mvn` fires inside the VI
+`infer_region` logpdf and hoists the invariant matrix work ABOVE the SVI loop.
+
+**Config**: AutoNormal guide, Adam (lr 0.01), 300 steps, 1 particle, n=8, CPU.
+Impulse compiles the whole SVI loop into one XLA `while`; NumPyro uses `svi.run`
+(lax.scan-fused). Drivers: `test/probprog/svi_sicm_benchmark.jl` (Impulse + IR),
+`test/probprog/svi_numpyro_reference.py` (NumPyro `svi.run`). Artifacts under the
+evidence dir (`*_hlo_sicm_{on,off}.mlir`, `svi_benchmark.json`,
+`numpyro_svi_fair.json`).
+
+**Per-step wall clock + final ELBO**:
+
+| model | framework | per-step (µs) | final ELBO | notes |
+|-------|-----------|--------------:|-----------:|-------|
+| scale_family_mvn | Impulse (SICM) | 2.01 | -1.2291 | cholesky in-loop 0 |
+| scale_family_mvn | Impulse (no opt) | 10.28 | -1.2291 | cholesky in-loop 1; **5.11× slower/step** |
+| scale_family_mvn | NumPyro SVI | 558.65 | -1.2671 | matches Impulse ELBO to 6.3e-14 under matched RBG key |
+| gp_pois_regr | Impulse (SICM) | 1.92 | -17.6265 | cholesky in-loop 0 |
+| gp_pois_regr | Impulse (no opt) | 6.73 | -17.6265 | cholesky in-loop 1; **3.51× slower/step** |
+| gp_pois_regr | NumPyro SVI | 802.96 | -19.8088 | — |
+
+**SICM effect** (same framework, on vs off): eliminates the per-step
+`stablehlo.cholesky` (in-loop count 1→0) for both models and cuts in-loop
+triangular solves (mvn 6→2, gp 2→0), for a 5.11×/3.51× per-step speedup. In the
+lowered HLO with SICM on, `chol(R)` is computed once before the `stablehlo.while`
+(scale_family_mvn: line 116 vs while at line 524) and only a scalar `multiply` by
+`tau` plus a solve against the pre-factored matrix remain inside the loop; with
+SICM off, `chol(tau²·R)` is recomputed every step inside the loop body.
+
+**Correctness**: Impulse VI reproduces NumPyro SVI seed-for-seed. Under the matched
+RBG key (`test/probprog/vi_*.jl`, 19/19 tests at 1e-12–1e-10), and on
+`scale_family_mvn` here the final ELBO agrees to 6.3e-14. The NumPyro `final ELBO`
+column above differs only because `svi_numpyro_reference.py` times with jax's default
+`PRNGKey(0)` (throughput is seed-independent); the ELBO-agreement metric uses the
+matched RBG key.
+
+*Note*: n=8 is a micro-benchmark; the absolute Impulse-vs-NumPyro per-step ratio is
+dominated by whole-loop XLA fusion at small size. The load-bearing, size-robust
+result is the SICM on/off ratio and the elimination of the per-step cholesky.
