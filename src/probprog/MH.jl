@@ -7,6 +7,8 @@ function mh(
     f::Function,
     args::Vararg{Any,Nargs};
     selection::Selection,
+    constraint=nothing,
+    constrained_addresses=nothing,
 ) where {Nargs}
     args = (rng, args...)
 
@@ -52,10 +54,35 @@ function mh(
     trace_mlir = TracedUtils.get_mlir_data(original_trace)
     weight_mlir = TracedUtils.get_mlir_data(original_weight)
 
+    # Lets a branch flip re-read the observation instead of a stale trace slot.
+    constraint_mlir = nothing
+    constrained_addresses_attr_val = nothing
+    if constraint !== nothing
+        @assert constrained_addresses !== nothing "mh: `constrained_addresses` \
+            required when `constraint` is provided"
+        constrained_addresses_attr = MLIR.IR.Attribute[]
+        for address in constrained_addresses
+            address_attr = MLIR.IR.Attribute[]
+            for sym in address.path
+                sym_addr = reinterpret(UInt64, pointer_from_objref(sym))
+                push!(
+                    address_attr,
+                    MLIR.IR.Attribute(
+                        MLIR.API.enzymeSymbolAttrGet(MLIR.IR.current_context(), sym_addr)
+                    ),
+                )
+            end
+            push!(constrained_addresses_attr, MLIR.IR.Attribute(address_attr))
+        end
+        constraint_mlir = TracedUtils.get_mlir_data(constraint)
+        constrained_addresses_attr_val = MLIR.IR.Attribute(constrained_addresses_attr)
+    end
+
     mh_op = MLIR.Dialects.impulse.mh(
         trace_mlir,
         weight_mlir,
-        mlir_caller_args;
+        mlir_caller_args,
+        constraint_mlir;
         new_trace=trace_type,
         new_weight=weight_type,
         accepted=accepted_type,
@@ -63,6 +90,7 @@ function mh(
         fn=fn_attr,
         selection=selection_attr,
         regenerate_addresses=MLIR.IR.Attribute(regenerate_attr),
+        constrained_addresses=constrained_addresses_attr_val,
     )
 
     traced_result = process_probprog_outputs(

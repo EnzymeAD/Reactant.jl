@@ -506,11 +506,15 @@ end
 
 Performs one MH step: regenerates selected addresses and accepts/rejects
 based on weight ratio.
+
+An optional `constraint` tensor (with `constrained_addresses`) supplies
+observed values, forwarded verbatim to the internal `regenerate`.
 """
 function mh(
     original_trace::Value,
     original_weight::Value,
-    inputs::Vector{Value};
+    inputs::Vector{Value},
+    constraint=nothing::Union{Nothing,Value};
     new_trace::IR.Type,
     new_weight::IR.Type,
     accepted::IR.Type,
@@ -518,6 +522,7 @@ function mh(
     fn,
     selection,
     regenerate_addresses,
+    constrained_addresses=nothing,
     name=nothing,
     location=Location(),
 )
@@ -530,6 +535,12 @@ function mh(
         NamedAttribute("selection", selection),
         NamedAttribute("regenerate_addresses", regenerate_addresses),
     ]
+    !isnothing(constraint) && push!(operands, constraint)
+    push!(
+        attributes, operandsegmentsizes([1, 1, length(inputs), Int(!isnothing(constraint))])
+    )
+    !isnothing(constrained_addresses) &&
+        push!(attributes, NamedAttribute("constrained_addresses", constrained_addresses))
     !isnothing(name) && push!(attributes, NamedAttribute("name", name))
 
     return create_operation(
@@ -651,6 +662,14 @@ Used internally by MH.
 
 Takes explicit old_trace and returns new trace with weight.
 
+An optional `constraint` tensor (with `constrained_addresses` describing its
+layout) supplies observed values for constrained sample sites. Constrained
+sites are always scored/written from the constraint value when their branch
+is taken, rather than reused from the old trace slot. This is what keeps MH
+correct when a proposed value flips which `impulse.if` branch executes: a
+site that was previously not taken (its trace slot is stale) is refreshed
+from the constraint instead of the stale slot.
+
 Returns: (new_trace, weight, retvals...)
 - new_trace: tensor<1 x position_size x f64> - flattened samples
 - weight: tensor<f64> - accumulated log probability
@@ -658,13 +677,15 @@ Returns: (new_trace, weight, retvals...)
 """
 function regenerate(
     inputs::Vector{Value},
-    original_trace::Value;
+    original_trace::Value,
+    constraint=nothing::Union{Nothing,Value};
     new_trace::IR.Type,
     weight::IR.Type,
     outputs::Vector{IR.Type},
     fn,
     selection,
     regenerate_addresses,
+    constrained_addresses=nothing,
     name=nothing,
     location=Location(),
 )
@@ -677,6 +698,10 @@ function regenerate(
         NamedAttribute("selection", selection),
         NamedAttribute("regenerate_addresses", regenerate_addresses),
     ]
+    !isnothing(constraint) && push!(operands, constraint)
+    push!(attributes, operandsegmentsizes([length(inputs), 1, Int(!isnothing(constraint))]))
+    !isnothing(constrained_addresses) &&
+        push!(attributes, NamedAttribute("constrained_addresses", constrained_addresses))
     !isnothing(name) && push!(attributes, NamedAttribute("name", name))
 
     return create_operation(

@@ -7,16 +7,13 @@
 # recovers the posterior over the switch position `s` and shows concentration at
 # the true `s*`.
 #
-# NOTE (blocked kernel): the intended single-address MH kernel
-# (`coal_mining_mh_program`, alternating `mh(:s)/mh(:l1)/mh(:l2)`) is BLOCKED by a
-# C2 regenerate bug: `mh`/regenerate over the discrete branch-selecting address
-# does NOT re-apply the observed constraint to a branch site that becomes active
-# after a flip, so the posterior is wrong (minimal n=1 reproducer: `generate`
-# gives the exact p(s=1|y)=0.980, MH gives 0.11). The branchy mechanism itself is
-# correct: `generate` threads the taken-branch weight exactly. This driver
-# therefore recovers p(s|y) by enumerating s through the verified `generate`
-# path (p(s|y) = softmax_s weight(s | y, l1, l2)), which is exactly the marginal
-# the blocked MH would target.
+# The single-address MH kernel (`coal_mining_mh_program`, alternating
+# `mh(:s)/mh(:l1)/mh(:l2)`) drives the recovery. It forwards the observations to
+# `mh` so that when a proposal flips which `impulse.if` branch runs, the
+# newly-taken observation is re-scored from the constraint instead of a stale
+# trace slot (C4 fix). The exhaustive enumeration through the verified `generate`
+# path (p(s|y) = softmax_s weight(s | y, l1, l2)) is kept as an independent
+# cross-check: the MH histogram must match it.
 #
 # Usage:
 #   CUDA_VISIBLE_DEVICES="" julia -t 32 --project=benchmark/probprog \
@@ -140,13 +137,45 @@ function main()
     ps = exp.(weights .- m)
     ps ./= sum(ps)
     smap = argmax(ps) - 1
-    @printf("MAP s = %d (true %d), p(MAP) = %.3f\n", smap, s_true, ps[smap + 1])
+    @printf("MAP s = %d (true %d), p(MAP) = %.3f  [enumeration]\n", smap, s_true, ps[smap + 1])
 
-    println("\nposterior mass around s* (s : p(s|y)):")
+    # --- Real MH kernel (the C4-fixed path) ---
+    # Observations for MH: l1,l2 fixed + both per-year branch copies. `s` is NOT
+    # constrained (it is the regenerated address).
+    mh_obs = branch_constraint(y; l1_init=[l1_true], l2_init=[l2_true])
+    mh_constrained = ProbProg.extract_addresses(mh_obs)
+    mh_ot = ProbProg.flatten_constraint(mh_obs)
+    bins = Reactant.to_rarray(reshape(Float64.(0:n), 1, n + 1))
+    num_iters = 20000
+
+    @printf("compiling MH kernel (mh(:s)/mh(:l1)/mh(:l2), %d if-sites)... ", n)
+    flush(stdout)
+    mct = @elapsed begin
+        mh_compiled, _ = ProbProg.with_trace() do
+            @compile sync = true optimize = :probprog coal_mining_mh_program(
+                rng, branch_model, bins, mh_ot, mh_constrained, ConcreteRNumber(num_iters)
+            )
+        end
+    end
+    @printf("%.1fs\n", mct)
+    flush(stdout)
+    print("running MH (", num_iters, " sweeps)... ")
+    flush(stdout)
+    mrt = @elapsed hist = Array(
+        mh_compiled(rng, branch_model, bins, mh_ot, mh_constrained, ConcreteRNumber(num_iters))
+    )[:]
+    @printf("%.1fs\n", mrt)
+    p_mh = hist ./ sum(hist)
+    smap_mh = argmax(p_mh) - 1
+    tvd = 0.5 * sum(abs.(ps .- p_mh))
+    @printf("MAP s = %d (true %d), p(MAP) = %.3f  [MH]   TVD(MH,enum) = %.4f\n",
+            smap_mh, s_true, p_mh[smap_mh + 1], tvd)
+
+    println("\nposterior mass around s* (s : p_MH : p_enum):")
     for s in max(0, s_true - 5):min(n, s_true + 5)
-        bar = repeat("#", round(Int, ps[s + 1] * 100))
+        bar = repeat("#", round(Int, p_mh[s + 1] * 100))
         marker = s == s_true ? "  <- s*" : ""
-        @printf("  %3d : %.4f %s%s\n", s, ps[s + 1], bar, marker)
+        @printf("  %3d : %.4f : %.4f %s%s\n", s, p_mh[s + 1], ps[s + 1], bar, marker)
     end
 
     outdir = joinpath(BENCH_DIR, "figures")
@@ -154,11 +183,14 @@ function main()
     json_path = joinpath(outdir, "coal_mining_mh_posterior.json")
     open(json_path, "w") do f
         JSON3.write(f, Dict(
-            "s" => collect(0:n), "p" => collect(ps), "weights" => collect(weights),
+            "s" => collect(0:n), "p" => collect(p_mh), "p_enum" => collect(ps),
+            "weights" => collect(weights),
             "s_true" => s_true, "l1_true" => l1_true, "l2_true" => l2_true,
-            "n" => n, "seed" => seed, "map_s" => smap,
-            "method" => "enumerate-via-generate (MH/regenerate blocked by C2 bug)",
+            "n" => n, "seed" => seed, "map_s" => smap_mh, "map_s_enum" => smap,
+            "num_iters" => num_iters, "tvd" => tvd,
+            "method" => "MH kernel coal_mining_mh_program (mh(:s)/mh(:l1)/mh(:l2)); p_enum = enumerate-via-generate cross-check",
             "compile_time" => ct, "run_time" => rt,
+            "mh_compile_time" => mct, "mh_run_time" => mrt,
         ))
     end
     println("\nposterior-over-s written to ", json_path)

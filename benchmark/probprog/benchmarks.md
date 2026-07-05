@@ -296,18 +296,20 @@ flow). `standard/coal_mining.jl` `coal_mining_branch` keeps `s` explicit and
 observes each year's Poisson likelihood INSIDE the taken `impulse.if` branch
 (per-branch addresses `ye_t`/`yl_t`; nothing sampled/returned by a branch feeds a
 later sample op). The branch weight threads correctly through `generate` (n=1
-enumerable check: p(s=1|y)=0.980, exact). Enumerating `p(s|y) ∝ softmax_s
-weight(s|y,l1,l2)` through this verified branchy `generate` path recovers the
-switch: at n=56, s*=40 the posterior concentrates with MAP s=39, p(39)=0.526,
-p(40)=0.215, mass in [34,46] = 0.9999 (`figures/coal_mining_mh_posterior.png`,
-driver `coal_mining_mh_demo.jl`).
+enumerable check: p(s=1|y)=0.980, exact).
 
-*Known limitation*: the intended single-address MH kernel
-(`coal_mining_mh_program`, alternating `mh(:s)/mh(:l1)/mh(:l2)`) is BLOCKED by a
-C2 regenerate bug — `mh`/regenerate over the discrete branch-selecting address
-does not refresh the observed value of a branch site that flips from not-taken to
-taken (it retains the stale zero slot), so the MH posterior is wrong (n=1:
-MH gives 0.11 vs the exact 0.980). `generate` is unaffected; the enumerate-via-
-generate recovery above is the same marginal the MH would target. Also, tracing
-one `impulse.if` per year is superlinear in the series length (n=20: 63s compile;
-n=56: 545s), so the branchy demo uses n=56 rather than the full 112.
+The single-address MH kernel (`coal_mining_mh_program`, alternating
+`mh(:s)/mh(:l1)/mh(:l2)`) now drives the recovery. It forwards the observations to
+`mh`, so a proposal that flips which `impulse.if` branch runs re-scores the
+newly-taken observation from the constraint instead of a stale trace slot (C4
+fix; before the fix MH gave p(s=1|y)=0.11 vs the exact 0.980). Correctness is
+pinned two ways: (1) n=1, MH p(s=1|y)=0.982 vs analytic 0.980
+(`test/probprog/if_branch.jl::coal_branch_flip_mh`); (2) n=20 s-only sweep, MH
+histogram matches the enumerate-via-`generate` posterior to TVD=0.008 with the
+same MAP. At n=56, s*=40 the MH posterior concentrates around the true switch and
+agrees with the enumeration cross-check (`figures/coal_mining_mh_posterior.png`,
+driver `coal_mining_mh_demo.jl`; JSON carries both `p` (MH) and `p_enum`).
+
+*Cost note*: tracing one `impulse.if` per year is superlinear in the series
+length (n=20: 63s compile; n=56: 545s), so the branchy demo uses n=56 rather than
+the full 112.

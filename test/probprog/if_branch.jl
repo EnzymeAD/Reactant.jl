@@ -40,6 +40,44 @@ function mh_program(rng, model, obs_tensor, constrained, num_iters)
     return zsum
 end
 
+# The observation lives inside the taken branch; a flip must re-read it from the constraint.
+_pois_sampler(rng, rate) = Reactant.Ops.fill(0.0, 1)
+_pois_logpdf(y, rate) = sum(y .* log.(rate) .- rate .- Reactant.Ops.lgamma(y .+ 1.0))
+
+function coal1(rng)
+    _, s = ProbProg.sample(rng, ProbProg.DiscreteUniform(0.0, 1.0); symbol=:s)
+    _, l1 = ProbProg.sample(rng, ProbProg.Gamma(3.0, 1.0, (1,)); symbol=:l1)
+    _, l2 = ProbProg.sample(rng, ProbProg.Gamma(3.0, 1.0, (1,)); symbol=:l2)
+    cond = sum(s) > 0.0
+    ProbProg.if_(
+        rng,
+        cond,
+        () -> ProbProg.sample(rng, _pois_sampler, l1; symbol=:ye_0, logpdf=_pois_logpdf)[2],
+        () -> ProbProg.sample(rng, _pois_sampler, l2; symbol=:yl_0, logpdf=_pois_logpdf)[2],
+    )
+    return nothing
+end
+
+function coal1_mh(rng, model, obs_tensor, constrained, num_iters)
+    trace, weight, _ = ProbProg.generate(
+        rng, obs_tensor, model; constrained_addresses=constrained
+    )
+    acc = trace[1:1, 1:1] .* 0.0
+    @trace for _ in 1:num_iters
+        trace, weight, _ = ProbProg.mh(
+            rng,
+            trace,
+            weight,
+            model;
+            selection=ProbProg.select(ProbProg.Address(:s)),
+            constraint=obs_tensor,
+            constrained_addresses=constrained,
+        )
+        acc = acc .+ trace[1:1, 1:1]
+    end
+    return acc
+end
+
 @testset "if_branch" begin
     @testset "DiscreteUniform" begin
         function du_model(rng)
@@ -96,5 +134,26 @@ end
         sig(t) = 1 / (1 + exp(-t))
         exact = sig(2.234 - 0.847) / (sig(2.234 - 0.847) + sig(-0.847))
         @test isapprox(phat, exact; atol=0.02)
+    end
+
+    @testset "coal_branch_flip_mh" begin
+        rng = ReactantRNG(Reactant.to_rarray(UInt64[7, 9]))
+        obs = ProbProg.Constraint(
+            :l1 => [3.0], :l2 => [0.9], :ye_0 => [5.0], :yl_0 => [5.0]
+        )
+        constrained = ProbProg.extract_addresses(obs)
+        obs_tensor = ProbProg.flatten_constraint(obs)
+        N = 20000
+
+        compiled, _ = ProbProg.with_trace() do
+            @compile optimize = :probprog coal1_mh(
+                rng, coal1, obs_tensor, constrained, ConcreteRNumber(N)
+            )
+        end
+        acc = compiled(rng, coal1, obs_tensor, constrained, ConcreteRNumber(N))
+        phat = Array(acc)[1] / N
+
+        # Analytic p(s=1 | y) = σ(logpmf(5|3) - logpmf(5|0.9)) = 0.9806.
+        @test 0.97 <= phat <= 0.99
     end
 end

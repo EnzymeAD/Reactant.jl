@@ -173,13 +173,19 @@ function coal_mining_mh_program(rng, model, bins, obs_tensor, constrained, num_i
     hist = zero.(bins)
     @trace for _ in 1:num_iters
         trace, weight, _ = ProbProg.mh(
-            rng, trace, weight, model; selection=ProbProg.select(ProbProg.Address(:s))
+            rng, trace, weight, model;
+            selection=ProbProg.select(ProbProg.Address(:s)),
+            constraint=obs_tensor, constrained_addresses=constrained,
         )
         trace, weight, _ = ProbProg.mh(
-            rng, trace, weight, model; selection=ProbProg.select(ProbProg.Address(:l1))
+            rng, trace, weight, model;
+            selection=ProbProg.select(ProbProg.Address(:l1)),
+            constraint=obs_tensor, constrained_addresses=constrained,
         )
         trace, weight, _ = ProbProg.mh(
-            rng, trace, weight, model; selection=ProbProg.select(ProbProg.Address(:l2))
+            rng, trace, weight, model;
+            selection=ProbProg.select(ProbProg.Address(:l2)),
+            constraint=obs_tensor, constrained_addresses=constrained,
         )
         s_v = sum(trace[1:1, 1:1])
         hist = hist .+ ifelse.(abs.(bins .- s_v) .< 0.5, 1.0, 0.0)
