@@ -80,6 +80,7 @@ function run_numpyro_mcmc(;
     adapt_step_size::Bool=true,
     adapt_mass_matrix::Bool=true,
     num_chains::Int=1,
+    return_last_key::Bool=false,
 )
     numpyro_infer = pyimport("numpyro.infer")
     np = pyimport("numpy")
@@ -122,23 +123,38 @@ function run_numpyro_mcmc(;
 
     mcmc.run(rng_key, model_args...; model_kwargs..., init_params=init_params)
 
-    if num_chains > 1
-        samples_py = mcmc.get_samples(; group_by_chain=true)
-        result = Dict{Symbol,Matrix{Float64}}()
-        for name in param_names
-            arr2d = np.asarray(samples_py[string(name)]).reshape(num_chains, num_samples)
-            result[name] = pyconvert(Matrix{Float64}, arr2d)
+    # rbg keys are uint32[..., 2, 2]; view them as two uint64 per chain to compare bitwise.
+    last_keys = if return_last_key
+        jax_random = pyimport("jax.random")
+        key = mcmc.last_state.rng_key
+        kd = np.asarray(jax_random.key_data(key)).view(np.uint64)
+        if num_chains > 1
+            pyconvert(Matrix{UInt64}, kd.reshape(num_chains, 2))
+        else
+            pyconvert(Vector{UInt64}, kd.reshape(2))
         end
-        return result
+    else
+        nothing
     end
 
-    samples_py = mcmc.get_samples()
-    result = Dict{Symbol,Vector{Float64}}()
-    for name in param_names
-        arr = pyconvert(Vector{Float64}, np.asarray(samples_py[string(name)]).flatten())
-        result[name] = arr
+    result = if num_chains > 1
+        samples_py = mcmc.get_samples(; group_by_chain=true)
+        d = Dict{Symbol,Matrix{Float64}}()
+        for name in param_names
+            arr2d = np.asarray(samples_py[string(name)]).reshape(num_chains, num_samples)
+            d[name] = pyconvert(Matrix{Float64}, arr2d)
+        end
+        d
+    else
+        samples_py = mcmc.get_samples()
+        d = Dict{Symbol,Vector{Float64}}()
+        for name in param_names
+            d[name] = pyconvert(Vector{Float64}, np.asarray(samples_py[string(name)]).flatten())
+        end
+        d
     end
-    return result
+
+    return return_last_key ? (result, last_keys) : result
 end
 
 function run_numpyro_svi(;

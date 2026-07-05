@@ -39,7 +39,7 @@ function nuts_multichain_program(
         rng, constraint_tensor, model, xs; constrained_addresses
     )
 
-    trace, diagnostics, _, _ = ProbProg.mcmc(
+    trace, diagnostics, _, states = ProbProg.mcmc(
         rng,
         trace,
         model,
@@ -56,7 +56,8 @@ function nuts_multichain_program(
         adapt_mass_matrix,
     )
 
-    return trace, diagnostics
+    final_keys = ProbProg._stack_chain_major([s.rng for s in states])
+    return trace, diagnostics, final_keys
 end
 
 function run_multichain_test(;
@@ -103,7 +104,7 @@ function run_multichain_test(;
         )
     end
 
-    trace_tensor, diagnostics = compiled_fn(
+    trace_tensor, diagnostics, final_keys = compiled_fn(
         rng,
         model,
         xs,
@@ -121,6 +122,7 @@ function run_multichain_test(;
     )
     trace_tensor = Array(trace_tensor)
     diagnostics = Array(diagnostics)
+    final_keys = Array(final_keys)
 
     selected_entries = ProbProg.filter_entries_by_selection(tt.entries, selection)
     per_chain = [
@@ -128,18 +130,19 @@ function run_multichain_test(;
         c in 1:num_chains
     ]
 
-    return per_chain, diagnostics, num_warmup, num_samples, num_chains
+    return per_chain, diagnostics, final_keys, num_warmup, num_samples, num_chains
 end
 
 @testset "nuts_multichain" begin
     @testset "adapt_step_size=$ass, adapt_mass_matrix=$amm" for (ass, amm) in [
         (false, false), (true, true)
     ]
-        per_chain, diagnostics, num_warmup, num_samples, num_chains = run_multichain_test(;
+        per_chain, diagnostics, final_keys, num_warmup, num_samples, num_chains = run_multichain_test(;
             adapt_step_size=ass, adapt_mass_matrix=amm, num_warmup=200, num_samples=5
         )
 
         @test length(per_chain) == num_chains
+        @test size(final_keys) == (num_chains, 2)
         @test size(diagnostics) == (num_chains, num_samples)
         for c in 1:num_chains
             @test haskey(per_chain[c].choices, :param_a)
@@ -177,7 +180,7 @@ end
             ys_b_jnp = jnp.array([-2.6, -1.4, -0.6, 0.4, 1.6])
 
             zeros_c = jnp.zeros(num_chains)
-            numpyro_samples = run_numpyro_mcmc(;
+            numpyro_samples, numpyro_keys = run_numpyro_mcmc(;
                 model=numpyro_model,
                 rng_key=seed_to_rbg_key(UInt64[1, 5]),
                 model_args=(xs_jnp, ys_a_jnp, ys_b_jnp),
@@ -193,6 +196,7 @@ end
                 adapt_step_size=ass,
                 adapt_mass_matrix=amm,
                 num_chains=num_chains,
+                return_last_key=true,
             )
 
             @testset "chain $c bitwise vs NumPyro" for c in 1:num_chains
@@ -201,6 +205,7 @@ end
                     numpyro_vals = numpyro_samples[name][c, :]
                     @test reactant_vals ≈ numpyro_vals atol = 1e-8 rtol = 1e-6
                 end
+                @test final_keys[c, :] == numpyro_keys[c, :]
             end
         end
     end

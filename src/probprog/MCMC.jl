@@ -19,12 +19,11 @@ const _STATE_SLOTS_ADAPT = String[
     "warmup_offset",
 ]
 
-function state_schema_names(adaptive::Bool)
-    return if adaptive
-        vcat(_STATE_SLOTS_PLAIN, _STATE_SLOTS_ADAPT)
-    else
-        copy(_STATE_SLOTS_PLAIN)
-    end
+function state_schema_names(adaptive::Bool, num_chains::Int=1)
+    names =
+        adaptive ? vcat(_STATE_SLOTS_PLAIN, _STATE_SLOTS_ADAPT) : copy(_STATE_SLOTS_PLAIN)
+    num_chains > 1 && push!(names, "rng")
+    return names
 end
 
 function _state_schema_attr(names)
@@ -46,10 +45,12 @@ function state_out_types(
     diagonal::Bool;
     num_chains::Int=1,
     inv_mass_shape=nothing,
+    rng_shape=nothing,
 )
     if num_chains > 1
         f64 = MLIR.IR.Type(Float64)
         i64 = MLIR.IR.Type(Int64)
+        ui64 = MLIR.IR.Type(UInt64)
         _cm(shape, et) = MLIR.IR.TensorType(Int[num_chains, shape...], et)
         pos_t = _cm((1, pos_size), f64)
         scal_t = _cm((), f64)
@@ -75,6 +76,7 @@ function state_out_types(
                 ],
             )
         end
+        push!(types, _cm(Tuple(rng_shape), ui64))
         return types
     end
     types = MLIR.IR.Type[
@@ -199,14 +201,13 @@ function _chain_slice(
     return Reactant.Ops.reshape(sl, collect(Int, single_shape))
 end
 
-# Per-chain `Vector{MCMCState}` from chain-major `state_out`. The trace-based
-# `mcmc` always uses the plain 5-slot schema, so no adaptation slots are present;
-# all chains share the single `output_rng_state` (last chain's final rng).
+# output_rng_state stays the last chain's key; each state gets its own chain's key.
 function unpack_states_multichain(
     schema_names, mcmc_op, pos_size, inv_mass_shape, rng_shape, config, num_chains
 )
     slot = Dict{String,Int}(n => 4 + i for (i, n) in enumerate(schema_names))
-    rng_val = TracedRArray{UInt64,1}((), MLIR.IR.result(mcmc_op, 4), rng_shape)
+    has_adapt = haskey(slot, "window_idx")
+    diagonal = _mass_is_diagonal(inv_mass_shape)
     states = MCMCState[]
     for c in 1:num_chains
         pos = _chain_slice(mcmc_op, slot["position"], Float64, (1, pos_size), num_chains, c)
@@ -223,11 +224,75 @@ function unpack_states_multichain(
             num_chains,
             c,
         )
+        rng_c = _chain_slice(mcmc_op, slot["rng"], UInt64, Tuple(rng_shape), num_chains, c)
+        adaptation = if has_adapt
+            m2_shape = diagonal ? (pos_size,) : (pos_size, pos_size)
+            da = DualAveragingState(
+                _chain_slice(mcmc_op, slot["da_log_step_size"], Float64, (), num_chains, c),
+                _chain_slice(
+                    mcmc_op, slot["da_log_step_size_avg"], Float64, (), num_chains, c
+                ),
+                _chain_slice(mcmc_op, slot["da_gradient_avg"], Float64, (), num_chains, c),
+                _chain_slice(mcmc_op, slot["da_step_count"], Int64, (), num_chains, c),
+                _chain_slice(mcmc_op, slot["da_prox_center"], Float64, (), num_chains, c),
+            )
+            welford = WelfordState(
+                _chain_slice(
+                    mcmc_op, slot["welford_mean"], Float64, (pos_size,), num_chains, c
+                ),
+                _chain_slice(mcmc_op, slot["welford_m2"], Float64, m2_shape, num_chains, c),
+                _chain_slice(mcmc_op, slot["welford_n"], Int64, (), num_chains, c),
+            )
+            AdaptationState(
+                da,
+                welford,
+                _chain_slice(mcmc_op, slot["window_idx"], Int64, (), num_chains, c),
+            )
+        else
+            nothing
+        end
         push!(
-            states, MCMCState(pos, grad, pe, ss, inv_mass, rng_val, nothing; config=config)
+            states, MCMCState(pos, grad, pe, ss, inv_mass, rng_c, adaptation; config=config)
         )
     end
     return states
+end
+
+function _stack_chain_major(arrs::Vector)
+    reshaped = [Reactant.Ops.reshape(a, Int[1, size(a)...]) for a in arrs]
+    return Reactant.Ops.concatenate(reshaped, 1)
+end
+
+function state_operands_multichain(states::Vector{MCMCState}, warmup_offset, adaptive::Bool)
+    stackf(f) = TracedUtils.get_mlir_data(_stack_chain_major([f(s) for s in states]))
+    vals = MLIR.IR.Value[
+        stackf(s -> s.position),
+        stackf(s -> s.gradient),
+        stackf(s -> s.potential_energy),
+        stackf(s -> s.step_size),
+        stackf(s -> s.inverse_mass_matrix),
+    ]
+    if adaptive
+        append!(
+            vals,
+            MLIR.IR.Value[
+                stackf(s -> s.adaptation.dual_averaging.log_step_size),
+                stackf(s -> s.adaptation.dual_averaging.log_step_size_avg),
+                stackf(s -> s.adaptation.dual_averaging.gradient_avg),
+                stackf(s -> s.adaptation.dual_averaging.step_count),
+                stackf(s -> s.adaptation.dual_averaging.prox_center),
+                stackf(s -> s.adaptation.welford.mean),
+                stackf(s -> s.adaptation.welford.m2),
+                stackf(s -> s.adaptation.welford.n),
+                stackf(s -> s.adaptation.window_idx),
+                TracedUtils.get_mlir_data(
+                    _stack_chain_major([warmup_offset for _ in states])
+                ),
+            ],
+        )
+    end
+    push!(vals, stackf(s -> s.rng))
+    return vals
 end
 
 function mcmc(
@@ -359,7 +424,7 @@ function mcmc(
 
     trace_val = TracedUtils.get_mlir_data(original_trace)
 
-    schema_names = state_schema_names(false)
+    schema_names = state_schema_names(false, num_chains)
 
     inv_mass_shape = if isnothing(inverse_mass_matrix)
         (1, unconstrained_pos_size)
@@ -386,6 +451,7 @@ function mcmc(
             true;
             num_chains,
             inv_mass_shape,
+            rng_shape=size(rng.seed),
         ),
         fn=fn_attr,
         selection=MLIR.IR.Attribute(selection_attr),
@@ -684,6 +750,203 @@ function _infer(
     )
 end
 
+# initial_position must be chain-major (leading dim == num_chains), as in NumPyro.
+function _infer_multichain(
+    rng::AbstractRNG,
+    logdensity_fn::Function,
+    initial_position,
+    args::Vararg{Any,Nargs};
+    num_chains::Int,
+    algorithm::Symbol=:NUTS,
+    inverse_mass_matrix=nothing,
+    step_size=nothing,
+    max_tree_depth::Int=10,
+    max_delta_energy::Float64=1000.0,
+    num_warmup::Int=0,
+    num_samples::Int=1,
+    thinning::Int=1,
+    adapt_step_size::Bool=true,
+    adapt_mass_matrix::Bool=true,
+    trajectory_length::Float64=2π,
+    strong_zero::Bool=false,
+    total_warmup::Union{Nothing,Int}=nothing,
+    warmup_offset=nothing,
+    resume_states::Union{Nothing,Vector{MCMCState}}=nothing,
+) where {Nargs}
+    resume = resume_states !== nothing
+
+    initial_position_3d = if resume
+        _stack_chain_major([s.position for s in resume_states])
+    elseif ndims(initial_position) == 2
+        reshape(initial_position, num_chains, 1, :)
+    else
+        initial_position
+    end
+    if size(initial_position_3d, 1) != num_chains
+        error(
+            "multi-chain `initial_position` leading dimension " *
+            "($(size(initial_position_3d, 1))) must equal num_chains ($num_chains)",
+        )
+    end
+    pos_size = size(initial_position_3d, 3)
+
+    sample_pos = TracedRArray{Float64,1}((), nothing, (pos_size,))
+    logpdf_fn_attr, extra_mlir_data = trace_logpdf_function(logdensity_fn, sample_pos, args)
+
+    rng_args = (rng,)
+    ppf = process_probprog_function(identity, rng_args, "mcmc_logpdf")
+    (;
+        mlir_caller_args,
+        mlir_result_types,
+        traced_result,
+        linear_results,
+        fnwrapped,
+        argprefix,
+        resprefix,
+    ) = ppf
+    append!(mlir_caller_args, extra_mlir_data)
+
+    hmc_config_attr = nothing
+    nuts_config_attr = nothing
+    if algorithm == :HMC
+        hmc_config_attr = MLIR.API.enzymeHMCConfigAttrGet(
+            MLIR.IR.current_context(), trajectory_length, adapt_step_size, adapt_mass_matrix
+        )
+    elseif algorithm == :NUTS
+        nuts_config_attr = MLIR.API.enzymeNUTSConfigAttrGet(
+            MLIR.IR.current_context(),
+            max_tree_depth,
+            true,
+            max_delta_energy,
+            adapt_step_size,
+            adapt_mass_matrix,
+        )
+    else
+        error("Unknown MCMC algorithm: $algorithm. Supported: :HMC, :NUTS")
+    end
+
+    imm_ref = resume ? resume_states[1].inverse_mass_matrix : inverse_mass_matrix
+    ss_ref = resume ? resume_states[1].step_size : step_size
+    inverse_mass_matrix_val =
+        isnothing(imm_ref) ? nothing : TracedUtils.get_mlir_data(imm_ref)
+    step_size_val = isnothing(ss_ref) ? nothing : TracedUtils.get_mlir_data(ss_ref)
+    initial_position_val = TracedUtils.get_mlir_data(initial_position_3d)
+
+    collection_size = num_samples ÷ thinning
+    trace_type = MLIR.IR.TensorType(
+        [num_chains, collection_size, pos_size], MLIR.IR.Type(Float64)
+    )
+    diagnostics_type = MLIR.IR.TensorType([num_chains, collection_size], MLIR.IR.Type(Bool))
+
+    position_type = MLIR.IR.TensorType([1, pos_size], MLIR.IR.Type(Float64))
+    scalar_type = MLIR.IR.TensorType(Int64[], MLIR.IR.Type(Float64))
+    inv_mass_type = if isnothing(inverse_mass_matrix_val)
+        position_type
+    else
+        MLIR.IR.type(inverse_mass_matrix_val)
+    end
+    inv_mass_shape = if resume
+        size(resume_states[1].inverse_mass_matrix)
+    elseif isnothing(inverse_mass_matrix)
+        (1, pos_size)
+    else
+        size(inverse_mass_matrix)
+    end
+    diagonal = _mass_is_diagonal(inv_mass_shape)
+
+    adaptive =
+        adapt_step_size ||
+        adapt_mass_matrix ||
+        (resume && resume_states[1].adaptation !== nothing)
+    schema_names = state_schema_names(adaptive, num_chains)
+
+    state_in_vals = if resume
+        offset = if adaptive && isnothing(warmup_offset)
+            Ops.constant(fill(Int64(0)))
+        else
+            warmup_offset
+        end
+        state_operands_multichain(resume_states, offset, adaptive)
+    else
+        MLIR.IR.Value[]
+    end
+
+    total_warmup_attr = isnothing(total_warmup) ? nothing : Int64(total_warmup)
+
+    mcmc_op = MLIR.Dialects.impulse.infer(
+        mlir_caller_args,
+        state_in_vals;
+        init_inverse_mass_matrix=inverse_mass_matrix_val,
+        init_step_size=step_size_val,
+        init_position=initial_position_val,
+        trace=trace_type,
+        diagnostics=diagnostics_type,
+        output_rng_state=mlir_result_types[1],
+        state_out=state_out_types(
+            adaptive,
+            position_type,
+            scalar_type,
+            inv_mass_type,
+            pos_size,
+            diagonal;
+            num_chains,
+            inv_mass_shape,
+            rng_shape=size(rng.seed),
+        ),
+        total_warmup=total_warmup_attr,
+        logpdf_fn=logpdf_fn_attr,
+        selection=MLIR.IR.Attribute(MLIR.IR.Attribute[]),
+        all_addresses=MLIR.IR.Attribute(MLIR.IR.Attribute[]),
+        hmc_config=hmc_config_attr,
+        nuts_config=nuts_config_attr,
+        state_schema=_state_schema_attr(schema_names),
+        num_warmup=Int64(num_warmup),
+        num_samples=Int64(num_samples),
+        thinning=Int64(thinning),
+        num_chains=Int64(num_chains),
+        autodiff_attrs=MLIR.IR.Attribute(
+            Dict("strong_zero" => MLIR.IR.Attribute(strong_zero))
+        ),
+    )
+
+    traced_result = process_probprog_outputs(
+        mcmc_op,
+        linear_results,
+        traced_result,
+        identity,
+        rng_args,
+        fnwrapped,
+        resprefix,
+        argprefix,
+        2,
+        true,
+    )
+
+    new_trace = TracedRArray{Float64,3}(
+        (), MLIR.IR.result(mcmc_op, 1), (num_chains, collection_size, pos_size)
+    )
+    diagnostics = TracedRArray{Bool,2}(
+        (), MLIR.IR.result(mcmc_op, 2), (num_chains, collection_size)
+    )
+    states = unpack_states_multichain(
+        schema_names,
+        mcmc_op,
+        pos_size,
+        inv_mass_shape,
+        size(rng.seed),
+        MCMCConfig(;
+            algorithm,
+            max_tree_depth,
+            max_delta_energy,
+            trajectory_length,
+            thinning,
+            strong_zero,
+        ),
+        num_chains,
+    )
+    return new_trace, diagnostics, traced_result, states
+end
+
 function mcmc_logpdf(
     rng::AbstractRNG,
     logdensity_fn::Function,
@@ -703,7 +966,29 @@ function mcmc_logpdf(
     adapt_mass_matrix::Bool=true,
     trajectory_length::Float64=2π,
     strong_zero::Bool=false,
+    num_chains::Int=1,
 ) where {Nargs}
+    if num_chains > 1
+        return _infer_multichain(
+            rng,
+            logdensity_fn,
+            initial_position,
+            args...;
+            num_chains,
+            algorithm,
+            inverse_mass_matrix,
+            step_size,
+            max_tree_depth,
+            max_delta_energy,
+            num_warmup,
+            num_samples,
+            thinning,
+            adapt_step_size,
+            adapt_mass_matrix,
+            trajectory_length,
+            strong_zero,
+        )
+    end
     return _infer(
         rng,
         logdensity_fn,
@@ -791,6 +1076,45 @@ function mcmc_logpdf(
         num_samples,
         adapt_step_size,
         adapt_mass_matrix,
+    )
+end
+
+function mcmc_logpdf(
+    states::Vector{MCMCState},
+    logdensity_fn::Function,
+    args::Vararg{Any,Nargs};
+    algorithm::Symbol=states[1].config.algorithm,
+    max_tree_depth::Int=states[1].config.max_tree_depth,
+    max_delta_energy::Float64=states[1].config.max_delta_energy,
+    trajectory_length::Float64=states[1].config.trajectory_length,
+    thinning::Int=states[1].config.thinning,
+    strong_zero::Bool=states[1].config.strong_zero,
+    num_warmup::Int=0,
+    num_samples::Int=1,
+    adapt_step_size::Bool=false,
+    adapt_mass_matrix::Bool=false,
+    total_warmup::Union{Nothing,Int}=nothing,
+    warmup_offset=nothing,
+) where {Nargs}
+    return _infer_multichain(
+        ReactantRNG(states[1].rng),
+        logdensity_fn,
+        nothing,
+        args...;
+        num_chains=length(states),
+        resume_states=states,
+        algorithm,
+        max_tree_depth,
+        max_delta_energy,
+        trajectory_length,
+        thinning,
+        strong_zero,
+        num_warmup,
+        num_samples,
+        adapt_step_size,
+        adapt_mass_matrix,
+        total_warmup,
+        warmup_offset,
     )
 end
 
@@ -1005,6 +1329,7 @@ function run_chain(
     num_warmup::Int=0,
     num_samples::Int=1000,
     chunk_size::Int=100,
+    num_chains::Int=1,
     step_size=nothing,
     inverse_mass_matrix=nothing,
     initial_gradient=nothing,
@@ -1028,6 +1353,33 @@ function run_chain(
         thinning,
         strong_zero,
     )
+
+    # Multi-chain runs the whole warmup+sampling as a single compiled multichain
+    # op (per-chain kernels unrolled in the lowering); the chunked/progress-bar
+    # scheduler is single-chain. `initial_position` must be chain-major with
+    # leading dim == num_chains.
+    if num_chains > 1
+        monolithic_fn = function (rng, logpdf_fn, pos, ss, imm)
+            s, _, _, sts = mcmc_logpdf(
+                rng,
+                logpdf_fn,
+                pos;
+                num_chains,
+                step_size=ss,
+                inverse_mass_matrix=imm,
+                num_warmup,
+                num_samples,
+                adapt_step_size,
+                adapt_mass_matrix,
+                mcmc_kwargs...,
+            )
+            return s, sts
+        end
+        args = (rng, logpdf_fn, initial_position, step_size, inverse_mass_matrix)
+        compiled = Reactant.Compiler.compile(monolithic_fn, args; optimize=:probprog)
+        samples, states = compiled(args...)
+        return Array(samples), states
+    end
 
     if !progress_bar && isnothing(callback) && num_samples > 0
         monolithic_fn = function (rng, logpdf_fn, pos, grad, pe, ss, imm)
