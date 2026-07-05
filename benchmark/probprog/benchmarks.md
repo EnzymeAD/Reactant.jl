@@ -361,3 +361,61 @@ matched RBG key.
 *Note*: n=8 is a micro-benchmark; the absolute Impulse-vs-NumPyro per-step ratio is
 dominated by whole-loop XLA fusion at small size. The load-bearing, size-robust
 result is the SICM on/off ratio and the elimination of the per-step cholesky.
+
+---
+
+## Programmable MH (Gen-style) — SICM on the MH proposal density
+
+The OOPSLA rebuttal's programmable-inference snippet: a user-written loop that
+alternates single-address Metropolis-Hastings moves over a generative model
+(`mh(:slope)` then `mh(:tau)`, n iterations). Each `ProbProg.mh` call lowers to
+its own `impulse.infer(mh_config)` region, so the shared region pipeline
+(`inline-infer-regions → sicm → construct joint logpdf → expand-impulse`)
+optimizes every MH move's proposal density — the same machinery that optimizes
+HMC/NUTS/VI. This is the algorithm-independence claim demonstrated on
+custom, user-composed inference.
+
+**Two models, honest split of the story:**
+- *Plain rebuttal snippet* (slope/intercept Normal priors, observed `ys`): both
+  moves lower to distinct `impulse.infer_region` ops (`infer_region_count = 2`,
+  `flat_infer_count = 0`), but the plain-Normal density is **SICM-neutral** — the
+  region pipeline's win here is ordinary LICM/CSE (SICM-on and SICM-off HLO are
+  identical around the loop). Reported as such.
+- *Hoistable-covariance variant* (linear-regression mean + MVN likelihood with
+  covariance `tau²·R`, R a fixed correlation matrix): SICM's
+  CholeskyScale/TriangularSolveScale/LogMultiply cascade fires inside each MH
+  move's joint logpdf, rewriting `chol(tau²·R) → sqrt(tau²)·chol(R)` and hoisting
+  `chol(R)` out of the move. This is where the SICM story lives.
+
+**Config**: n=8, 500 iterations = 1000 MH moves, per-move min wall-clock over 8
+reps, CPU. Driver: `test/probprog/mh_sicm_benchmark.jl` (also emits the IR
+evidence). SICM arm sets `DEBUG_PROBPROG_DISABLE_OPT[]=false` (the opt-in region
+path); the no-opt arm leaves the default (`true` → legacy flat `impulse.mh`).
+
+**Per-move wall clock (hoistable-covariance variant)**:
+
+| model | arm | per-move (µs) | speedup | notes |
+|-------|-----|--------------:|--------:|-------|
+| scale_linreg_mvn (n=8) | Impulse (SICM) | 2.93 | 1.00× | `sqrt(tau²)·chol(R)` decomposition; sqrt in-loop 1 |
+| scale_linreg_mvn (n=8) | Impulse (region, no SICM) | 4.37 | **1.49×** | isolates SICM's algebra (only the SICM knob flips) |
+| scale_linreg_mvn (n=8) | Impulse (no opt / flat) | 4.43 | 1.51× | legacy `impulse.mh`; no region, no SICM |
+
+**SICM effect**: the isolated **1.49×** per-move speedup (region path, SICM on vs
+off) is the direct SICM contribution; the `stablehlo.sqrt` in the loop body
+(present only with SICM on) is the decomposition witness. At the impulse/region
+level SICM hoists `chol(R)` above the user `stablehlo.while` and threads it in as
+a loop-carried invariant (`cov_region_sicm_on.mlir`); in the final XLA HLO,
+`expand-impulse` re-materialises the per-move density and XLA's while-loop LICM
+does not further hoist it, so the fully-hoisted "in-loop chol 1→0" shape is
+exercised instead by the internal-loop (`num_samples>1`) form in the Enzyme-JAX
+lit test `mh_region.mlir`.
+
+**Correctness**: seed-for-seed the SICM and no-opt chains make identical accept
+decisions (19/19 accepts each) and land on a byte-identical posterior
+(|Δτ| = |Δslope| = 0, |Δaccepts| = 0). The SICM rewrites preserve the
+distribution exactly on this program.
+
+*Note*: n=8 is a micro-benchmark; the load-bearing result is the SICM on/off
+per-move ratio (1.49×) on a custom, user-composed MH kernel. No Gen.jl baseline
+is reported: no Gen.jl environment is provisioned here, and standing one up is out
+of scope for this micro-benchmark (flagged as optional follow-up).
