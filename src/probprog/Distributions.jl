@@ -565,3 +565,48 @@ end
 sampler(::Type{<:Dirichlet}) = _dirichlet_sampler
 logpdf_fn(::Type{<:Dirichlet}) = _dirichlet_logpdf
 support(::Type{<:Dirichlet}) = :simplex
+#==============================================================================#
+# DiscreteUniform Distribution
+# Uniform over the integers {low, low+1, ..., high} (both endpoints included).
+#==============================================================================#
+
+struct DiscreteUniform{Tlow,Thigh,S<:Tuple} <: Distribution
+    low::Tlow
+    high::Thigh
+    shape::S
+
+    function DiscreteUniform{Tlow,Thigh,S}(
+        low::Tlow, high::Thigh, shape::S
+    ) where {Tlow,Thigh,S<:Tuple}
+        isempty(shape) && throw(ArgumentError("shape cannot be empty"))
+        return new{Tlow,Thigh,S}(low, high, shape)
+    end
+end
+
+function DiscreteUniform(low::Tlow, high::Thigh, shape::S) where {Tlow,Thigh,S<:Tuple}
+    return DiscreteUniform{Tlow,Thigh,S}(low, high, shape)
+end
+DiscreteUniform(low, high) = DiscreteUniform(low, high, (1,))
+
+params(d::DiscreteUniform) = (d.low, d.high, d.shape)
+
+function _discreteuniform_sampler(rng, low, high, shape)
+    # numpyro draws `random.randint(key, shape, low, high + 1)`; jax's randint
+    # uses a two-word rejection-free algorithm we cannot reproduce bit-for-bit
+    # with a single uniform draw, so this is distributionally equal but not
+    # bitwise identical to numpyro's sampler.
+    n = (high - low) + 1.0
+    u = rand(rng, shape...)
+    return low .+ floor.(u .* n)
+end
+
+function _discreteuniform_logpdf(x, low, high, _)
+    # numpyro: -log(high + 1 - low), constant over the support, broadcast to the
+    # sample shape and summed.
+    logp = .-log.((high + 1.0) - low)
+    return sum(logp .+ zero.(x))
+end
+
+sampler(::Type{<:DiscreteUniform}) = _discreteuniform_sampler
+logpdf_fn(::Type{<:DiscreteUniform}) = _discreteuniform_logpdf
+support(::Type{<:DiscreteUniform}) = :real

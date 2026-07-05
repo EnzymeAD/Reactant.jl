@@ -28,7 +28,8 @@ export Distribution,
     Gamma,
     StudentT,
     HalfCauchy,
-    Dirichlet
+    Dirichlet,
+    DiscreteUniform
 
 # Utility functions.
 export get_choices,
@@ -39,6 +40,7 @@ export mcmc_summary
 
 # Core MLIR ops.
 export sample,
+    if_,
     untraced_call,
     simulate,
     generate,
