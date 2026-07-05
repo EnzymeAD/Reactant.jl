@@ -774,6 +774,7 @@ function sample(
     logpdf=nothing,
     symbol=nothing,
     support=nothing,
+    dist=nothing,
     name=nothing,
     location=Location(),
 )
@@ -785,6 +786,7 @@ function sample(
     !isnothing(logpdf) && push!(attributes, NamedAttribute("logpdf", logpdf))
     !isnothing(symbol) && push!(attributes, NamedAttribute("symbol", symbol))
     !isnothing(support) && push!(attributes, NamedAttribute("support", support))
+    !isnothing(dist) && push!(attributes, NamedAttribute("dist", dist))
     !isnothing(name) && push!(attributes, NamedAttribute("name", name))
 
     return create_operation(
@@ -818,6 +820,7 @@ function sample_region(
     logpdf_fn=nothing,
     address=nothing,
     support=nothing,
+    dist=nothing,
     name=nothing,
     sampler::Region,
     logpdf::Region,
@@ -832,6 +835,7 @@ function sample_region(
     !isnothing(logpdf_fn) && push!(attributes, NamedAttribute("logpdf_fn", logpdf_fn))
     !isnothing(address) && push!(attributes, NamedAttribute("address", address))
     !isnothing(support) && push!(attributes, NamedAttribute("support", support))
+    !isnothing(dist) && push!(attributes, NamedAttribute("dist", dist))
     !isnothing(name) && push!(attributes, NamedAttribute("name", name))
 
     return create_operation(

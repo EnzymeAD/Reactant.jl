@@ -24,6 +24,13 @@ function bounds(::Type{D}) where {D<:Distribution}
     return (nothing, nothing)
 end
 
+# F2 spike: the `#impulse.dist` attribute string for distributions the shared
+# builder can emit end-to-end, or `nothing` for distributions still carried by
+# traced sampler/logpdf symbols. Only consulted when `EMIT_DISTRIBUTIONS[]`.
+function dist_spec(::Type{D}) where {D<:Distribution}
+    return nothing
+end
+
 #==============================================================================#
 # Normal Distribution
 #==============================================================================#
@@ -58,6 +65,8 @@ end
 sampler(::Type{<:Normal}) = _normal_sampler
 logpdf_fn(::Type{<:Normal}) = _normal_logpdf
 support(::Type{<:Normal}) = :real
+# Normal(mu, sigma) = StdNormal pushed through Affine(loc=mu, scale=sigma).
+dist_spec(::Type{<:Normal}) = "#impulse.dist<STD_NORMAL, [#impulse.xform<AFFINE>]>"
 
 #==============================================================================#
 # Exponential Distribution

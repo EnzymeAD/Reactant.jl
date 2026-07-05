@@ -23,6 +23,7 @@ function sample(
     logpdf::Union{Nothing,Function}=nothing,
     support::Symbol=:real,
     bounds::Tuple{Union{Nothing,Real},Union{Nothing,Real}}=(nothing, nothing),
+    dist::Union{Nothing,AbstractString}=nothing,
 ) where {Nargs}
     tt = TRACING_TRACE[]
     is_generative = logpdf === nothing
@@ -75,6 +76,8 @@ function sample(
         ),
     )
 
+    dist_attr = dist === nothing ? nothing : MLIR.IR.Attribute(Base.String(dist))
+
     sample_op = MLIR.Dialects.impulse.sample(
         mlir_caller_args;
         outputs=mlir_result_types,
@@ -82,6 +85,7 @@ function sample(
         logpdf=logpdf_attr,
         symbol=symbol_attr,
         support=support_attr,
+        dist=dist_attr,
         name=Base.String(symbol),
     )
 
@@ -123,6 +127,7 @@ function sample(
     rng::AbstractRNG, dist::D; symbol::Symbol=gensym("sample")
 ) where {D<:Distribution}
     dist_type = typeof(dist)
+    dist_attr_str = EMIT_DISTRIBUTIONS[] ? dist_spec(dist_type) : nothing
     return sample(
         rng,
         sampler(dist_type),
@@ -131,6 +136,7 @@ function sample(
         logpdf=logpdf_fn(dist_type),
         support=support(dist_type),
         bounds=bounds(dist_type),
+        dist=dist_attr_str,
     )
 end
 

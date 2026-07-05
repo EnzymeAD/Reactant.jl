@@ -3,6 +3,13 @@ module ProbProg
 using ..Reactant: MLIR, TracedUtils, AbstractRNG, Ops
 using ReactantCore: @trace
 
+# F2 spike flag (attr-level, default OFF): when true, distributions that the
+# shared bijector/distribution library can emit (currently Normal as
+# StdNormal + Affine) attach a `#impulse.dist` attribute to their sample site,
+# routing lowering through the C++ builder's emitted sampler/logpdf instead of
+# the traced sampler/logpdf symbols.
+const EMIT_DISTRIBUTIONS = Ref(false)
+
 include("Types.jl")
 include("Distributions.jl")
 include("FFI.jl")
