@@ -271,6 +271,7 @@ function infer(
     inputs::Vector{Value},
     state_in::Vector{Value},
     original_trace=nothing::Union{Nothing,Value};
+    constraint=nothing::Union{Nothing,Value},
     init_inverse_mass_matrix=nothing::Union{Nothing,Value},
     init_step_size=nothing::Union{Nothing,Value},
     init_position=nothing::Union{Nothing,Value},
@@ -290,6 +291,8 @@ function infer(
     hmc_config=nothing,
     nuts_config=nothing,
     vi_config=nothing,
+    mh_config=nothing,
+    constrained_addresses=nothing,
     logpdf_fn=nothing,
     state_schema=nothing,
     autodiff_attrs=nothing,
@@ -305,6 +308,7 @@ function infer(
         NamedAttribute("all_addresses", all_addresses),
     ]
     !isnothing(original_trace) && push!(operands, original_trace)
+    !isnothing(constraint) && push!(operands, constraint)
     !isnothing(init_inverse_mass_matrix) && push!(operands, init_inverse_mass_matrix)
     !isnothing(init_step_size) && push!(operands, init_step_size)
     !isnothing(init_position) && push!(operands, init_position)
@@ -315,6 +319,7 @@ function infer(
             length(inputs),
             length(state_in),
             Int(!isnothing(original_trace)),
+            Int(!isnothing(constraint)),
             Int(!isnothing(init_inverse_mass_matrix)),
             Int(!isnothing(init_step_size)),
             Int(!isnothing(init_position)),
@@ -331,6 +336,9 @@ function infer(
     !isnothing(hmc_config) && push!(attributes, NamedAttribute("hmc_config", hmc_config))
     !isnothing(nuts_config) && push!(attributes, NamedAttribute("nuts_config", nuts_config))
     !isnothing(vi_config) && push!(attributes, NamedAttribute("vi_config", vi_config))
+    !isnothing(mh_config) && push!(attributes, NamedAttribute("mh_config", mh_config))
+    !isnothing(constrained_addresses) &&
+        push!(attributes, NamedAttribute("constrained_addresses", constrained_addresses))
     !isnothing(logpdf_fn) && push!(attributes, NamedAttribute("logpdf_fn", logpdf_fn))
     !isnothing(state_schema) &&
         push!(attributes, NamedAttribute("state_schema", state_schema))
@@ -376,6 +384,7 @@ function infer_region(
     inputs::Vector{Value},
     state_in::Vector{Value},
     original_trace=nothing::Union{Nothing,Value};
+    constraint=nothing::Union{Nothing,Value},
     init_inverse_mass_matrix=nothing::Union{Nothing,Value},
     init_step_size=nothing::Union{Nothing,Value},
     init_position=nothing::Union{Nothing,Value},
@@ -395,6 +404,8 @@ function infer_region(
     hmc_config=nothing,
     nuts_config=nothing,
     vi_config=nothing,
+    mh_config=nothing,
+    constrained_addresses=nothing,
     logpdf_fn=nothing,
     state_schema=nothing,
     autodiff_attrs=nothing,
@@ -414,6 +425,7 @@ function infer_region(
         NamedAttribute("all_addresses", all_addresses),
     ]
     !isnothing(original_trace) && push!(operands, original_trace)
+    !isnothing(constraint) && push!(operands, constraint)
     !isnothing(init_inverse_mass_matrix) && push!(operands, init_inverse_mass_matrix)
     !isnothing(init_step_size) && push!(operands, init_step_size)
     !isnothing(init_position) && push!(operands, init_position)
@@ -424,6 +436,7 @@ function infer_region(
             length(inputs),
             length(state_in),
             Int(!isnothing(original_trace)),
+            Int(!isnothing(constraint)),
             Int(!isnothing(init_inverse_mass_matrix)),
             Int(!isnothing(init_step_size)),
             Int(!isnothing(init_position)),
@@ -440,6 +453,9 @@ function infer_region(
     !isnothing(hmc_config) && push!(attributes, NamedAttribute("hmc_config", hmc_config))
     !isnothing(nuts_config) && push!(attributes, NamedAttribute("nuts_config", nuts_config))
     !isnothing(vi_config) && push!(attributes, NamedAttribute("vi_config", vi_config))
+    !isnothing(mh_config) && push!(attributes, NamedAttribute("mh_config", mh_config))
+    !isnothing(constrained_addresses) &&
+        push!(attributes, NamedAttribute("constrained_addresses", constrained_addresses))
     !isnothing(logpdf_fn) && push!(attributes, NamedAttribute("logpdf_fn", logpdf_fn))
     !isnothing(state_schema) &&
         push!(attributes, NamedAttribute("state_schema", state_schema))

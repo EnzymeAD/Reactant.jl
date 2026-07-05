@@ -16540,6 +16540,10 @@ function enzymeNUTSConfigAttrGet(
     )::MlirAttribute
 end
 
+function enzymeMHConfigAttrGet(ctx)
+    @ccall mlir_c.enzymeMHConfigAttrGet(ctx::MlirContext)::MlirAttribute
+end
+
 function enzymeSymbolAttrGet(ctx, ptr)
     @ccall Reactant_jll.libReactantExtra.enzymeSymbolAttrGet(
         ctx::MlirContext, ptr::UInt64

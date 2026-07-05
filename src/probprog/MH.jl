@@ -9,6 +9,7 @@ function mh(
     selection::Selection,
     constraint=nothing,
     constrained_addresses=nothing,
+    region::Bool=true,
 ) where {Nargs}
     args = (rng, args...)
 
@@ -50,6 +51,7 @@ function mh(
     trace_type = MLIR.IR.TensorType([1, pos_size], MLIR.IR.Type(Float64))
     weight_type = MLIR.IR.TensorType(Int64[], MLIR.IR.Type(Float64))
     accepted_type = MLIR.IR.TensorType(Int64[], MLIR.IR.Type(Bool))
+    log_densities_type = MLIR.IR.TensorType(Int64[], MLIR.IR.Type(Float64))
 
     trace_mlir = TracedUtils.get_mlir_data(original_trace)
     weight_mlir = TracedUtils.get_mlir_data(original_weight)
@@ -76,6 +78,52 @@ function mh(
         end
         constraint_mlir = TracedUtils.get_mlir_data(constraint)
         constrained_addresses_attr_val = MLIR.IR.Attribute(constrained_addresses_attr)
+    end
+
+    if region
+        mh_config_attr = MLIR.IR.Attribute(
+            MLIR.API.enzymeMHConfigAttrGet(MLIR.IR.current_context())
+        )
+        schema_attr = MLIR.IR.Attribute(MLIR.IR.Attribute[MLIR.IR.Attribute("weight")])
+
+        infer_op = MLIR.Dialects.impulse.infer(
+            mlir_caller_args,
+            MLIR.IR.Value[weight_mlir],
+            trace_mlir;
+            constraint=constraint_mlir,
+            trace=trace_type,
+            diagnostics=accepted_type,
+            # Zero-filled by the lowering: MH has no per-sample log density (Enzyme#2958).
+            log_densities=log_densities_type,
+            output_rng_state=mlir_result_types[1],
+            state_out=MLIR.IR.Type[weight_type],
+            fn=fn_attr,
+            selection=MLIR.IR.Attribute(regenerate_attr),
+            all_addresses=selection_attr,
+            mh_config=mh_config_attr,
+            constrained_addresses=constrained_addresses_attr_val,
+            state_schema=schema_attr,
+            num_samples=Int64(1),
+        )
+
+        traced_result = process_probprog_outputs(
+            infer_op,
+            linear_results,
+            traced_result,
+            f,
+            args,
+            fnwrapped,
+            resprefix,
+            argprefix,
+            3,
+            true,
+        )
+
+        new_trace = TracedRArray{Float64,2}((), MLIR.IR.result(infer_op, 1), (1, pos_size))
+        accepted = TracedRArray{Bool,0}((), MLIR.IR.result(infer_op, 2), ())
+        new_weight = TracedRArray{Float64,0}((), MLIR.IR.result(infer_op, 5), ())
+
+        return new_trace, new_weight, accepted, traced_result
     end
 
     mh_op = MLIR.Dialects.impulse.mh(
