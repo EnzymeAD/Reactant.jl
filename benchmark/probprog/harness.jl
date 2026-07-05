@@ -267,10 +267,13 @@ function main()
     # RNG
     rng = ReactantRNG(Reactant.to_rarray(UInt64[UInt64(seed), UInt64(0)]))
 
-    # Inverse mass matrix
+    # Inverse mass matrix. A model's `setup` may return an explicit
+    # `inverse_mass_matrix` (a length-`position_size` vector selects the
+    # diagonal-mass path); otherwise default to a dense identity.
     step_size_rnum = ConcreteRNumber(step_size)
     inverse_mass_matrix = Reactant.to_rarray(
-        Matrix{Float64}(I, spec.position_size, spec.position_size)
+        hasproperty(spec, :inverse_mass_matrix) ? spec.inverse_mass_matrix :
+        Matrix{Float64}(I, spec.position_size, spec.position_size),
     )
 
     # Compile

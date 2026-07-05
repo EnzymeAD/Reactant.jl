@@ -228,3 +228,33 @@ PPLBench-style synthetic benchmarks with PLL evaluation:
 | Logistic Regression | `LogisticRegression` | Already done |
 | Eight Schools | `NSchools` (similar hierarchical) | Already has model class |
 | Hierarchical Poisson | Custom or use `RobustRegression` as substitute | `RobustRegression` exists |
+
+
+## 5. Crowd-Sourced Annotation (Dawid-Skene, discrete latents marginalized)
+
+**Source**: Resurrected from upstream PPLBench (`crowd_sourced_annotation`,
+ACL Q14-1025). Discrete per-item true labels are marginalized exactly via
+`log_sum_exp` over categories, matching the upstream Stan reference. Impulse
+expresses the marginal through a custom-logpdf observed site; continuous
+latents are `prev` (K-simplex) and `confusion_matrix` (k*K batched
+K-simplices, SIMPLEX stick-breaking support).
+
+**Config**: `pplbench_configs/standard/crowd_sourced_annotation.json`
+(upstream defaults n=2000, k=10, num_categories=3, num_labels_per_item=3;
+1000 train / 1000 test; iterations 4000, warmup 1000, 4 trials;
+position_size 62 unconstrained). Smoke variant:
+`crowd_sourced_annotation_smoke.json` (n=200, k=5).
+
+**Results** (2026-07-04, CPU, 32 threads, seed 12345, outputs
+`outputs/2026-07-04_21:52:34`):
+
+| PPL | compile (s) | infer per trial (s) | final PLL per trial | n_eff/s median |
+|-----|-------------|---------------------|---------------------|----------------|
+| Impulse | 49.7 | 4.23, 3.71, 3.57, 3.62 | -1805.7, -1809.4, -1808.9, -1808.8 | 5485 |
+| Impulse (no opt) | 49.8 | 4.27, 3.69, 3.49, 3.53 | -1805.1, -1810.0, -1809.0, -1804.4 | 5835 |
+| Stan | 6.4 | 91.6, 95.1, 83.3, 90.0 | -1806.7, -1804.8, -1847.4, -1808.0 | 0.1 |
+
+PLL curves overlap (both Impulse variants converge to the same PLL band as
+Stan's healthy trials; Stan trial 2 mixed poorly, dragging its n_eff down).
+Impulse is ~24x faster per trial than Stan at equal draw counts. SICM makes
+no measurable difference on this model (no heavy sample-invariant compute).
