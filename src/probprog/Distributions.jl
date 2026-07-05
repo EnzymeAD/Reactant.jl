@@ -543,17 +543,23 @@ function _dirichlet_sampler(rng, alpha, shape)
     # Gamma-normalize construction. NOTE: jax.random.dirichlet uses
     # `softmax(loggamma(key, alpha))` (a log-space rejection sampler), so this is
     # only distributionally equal, not bit-identical (different RNG consumption).
+    # For a batched (m, K) site the K-simplex event axis is the last axis, so the
+    # normalization is per K-block, not global.
     g = _gamma_sampler(rng, alpha, 1.0, shape)
-    return g ./ sum(g)
+    return g ./ sum(g; dims=ndims(g))
 end
 
 function _dirichlet_logpdf(x, alpha, _)
-    # Term-for-term match of numpyro.distributions.Dirichlet.log_prob:
-    #   normalize_term = sum(gammaln(conc)) - gammaln(sum(conc))
-    #   log_prob       = sum(log(value) * (conc - 1)) - normalize_term
+    # Term-for-term match of numpyro.distributions.Dirichlet.log_prob, reducing
+    # over the last (event) axis so that a batched (m, K) site is m independent
+    # K-simplices:
+    #   normalize_term = sum(gammaln(conc), -1) - gammaln(sum(conc, -1))
+    #   log_prob       = sum(log(value) * (conc - 1), -1) - normalize_term
+    # The scalar returned is the sum of the per-block log_prob values.
     α = Ops.fill(0.0, size(x)...) .+ alpha
-    normalize_term = sum(Ops.lgamma(α)) - Ops.lgamma(sum(α))
-    return sum(log.(x) .* (α .- 1.0)) - normalize_term
+    d = ndims(α)
+    normalize_term = sum(Ops.lgamma(α); dims=d) .- Ops.lgamma(sum(α; dims=d))
+    return sum(sum(log.(x) .* (α .- 1.0); dims=d) .- normalize_term)
 end
 
 sampler(::Type{<:Dirichlet}) = _dirichlet_sampler

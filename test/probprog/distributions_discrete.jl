@@ -73,6 +73,38 @@ end
         end
     end
 
+    @testset "batched (m>1) logpdf vs NumPyro / SciPy" begin
+        logpdf_fn = ProbProg.logpdf_fn(ProbProg.Dirichlet)
+        # (x (m,K), alpha (m,K), numpyro total, scipy total)
+        cases = [
+            (
+                [0.2 0.3 0.5; 0.1 0.2 0.7; 0.25 0.25 0.5],
+                [1.0 1.0 1.0; 2.0 3.0 4.0; 0.5 0.5 0.5],
+                2.1163485688292702,
+                2.116348568829271,
+            ),
+            (
+                [0.3 0.3 0.4; 0.6 0.1 0.3],
+                [1.0 1.0 1.0; 1.0 1.0 1.0],
+                1.3862943611198881,
+                1.3862943611198906,
+            ),
+            (
+                [0.1 0.2 0.3 0.4; 0.4 0.3 0.2 0.1],
+                [2.0 2.0 2.0 2.0; 1.0 2.0 3.0 4.0],
+                1.479191741554379,
+                1.4791917415543736,
+            ),
+        ]
+        for (xv, av, numpyro_ref, scipy_ref) in cases
+            x = ConcreteRArray(xv)
+            alpha = ConcreteRArray(av)
+            lp = Reactant.to_number(@jit logpdf_fn(x, alpha, nothing))
+            @test lp ≈ numpyro_ref atol = 1e-10
+            @test lp ≈ scipy_ref atol = 1e-10
+        end
+    end
+
     @testset "stick-breaking vs NumPyro" begin
         # numpyro StickBreakingTransform (JAX x64): x -> (T(x), logdet, T.inv(T(x))).
         fwd_cases = [
@@ -116,6 +148,16 @@ end
         @test length(draws[1]) == 3
         @test all(draws[1] .> 0.0)
         @test sum(draws[1]) ≈ 1.0 atol = 1e-12
+    end
+
+    @testset "batched (m>1) sampler normalizes per block" begin
+        sample_fn = ProbProg.sampler(ProbProg.Dirichlet)
+        rng = ReactantRNG(Reactant.to_rarray(UInt64[7, 11]))
+        alpha = ConcreteRArray([2.0 3.0 5.0; 1.0 1.0 1.0; 4.0 2.0 1.0])
+        draw = Array(@jit sample_fn(rng, alpha, (3, 3)))
+        @test size(draw) == (3, 3)
+        @test all(draw .> 0.0)
+        @test vec(sum(draw; dims=2)) ≈ ones(3) atol = 1e-12
     end
 end
 
