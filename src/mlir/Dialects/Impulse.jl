@@ -274,6 +274,7 @@ function infer(
     init_inverse_mass_matrix=nothing::Union{Nothing,Value},
     init_step_size=nothing::Union{Nothing,Value},
     init_position=nothing::Union{Nothing,Value},
+    init_scale=nothing::Union{Nothing,Value},
     trace::IR.Type,
     diagnostics::IR.Type,
     output_rng_state::IR.Type,
@@ -288,6 +289,7 @@ function infer(
     total_warmup=nothing,
     hmc_config=nothing,
     nuts_config=nothing,
+    vi_config=nothing,
     logpdf_fn=nothing,
     state_schema=nothing,
     autodiff_attrs=nothing,
@@ -306,6 +308,7 @@ function infer(
     !isnothing(init_inverse_mass_matrix) && push!(operands, init_inverse_mass_matrix)
     !isnothing(init_step_size) && push!(operands, init_step_size)
     !isnothing(init_position) && push!(operands, init_position)
+    !isnothing(init_scale) && push!(operands, init_scale)
     push!(
         attributes,
         operandsegmentsizes([
@@ -315,6 +318,7 @@ function infer(
             Int(!isnothing(init_inverse_mass_matrix)),
             Int(!isnothing(init_step_size)),
             Int(!isnothing(init_position)),
+            Int(!isnothing(init_scale)),
         ]),
     )
     !isnothing(fn) && push!(attributes, NamedAttribute("fn", fn))
@@ -326,6 +330,7 @@ function infer(
         push!(attributes, NamedAttribute("total_warmup", total_warmup))
     !isnothing(hmc_config) && push!(attributes, NamedAttribute("hmc_config", hmc_config))
     !isnothing(nuts_config) && push!(attributes, NamedAttribute("nuts_config", nuts_config))
+    !isnothing(vi_config) && push!(attributes, NamedAttribute("vi_config", vi_config))
     !isnothing(logpdf_fn) && push!(attributes, NamedAttribute("logpdf_fn", logpdf_fn))
     !isnothing(state_schema) &&
         push!(attributes, NamedAttribute("state_schema", state_schema))
@@ -374,6 +379,7 @@ function infer_region(
     init_inverse_mass_matrix=nothing::Union{Nothing,Value},
     init_step_size=nothing::Union{Nothing,Value},
     init_position=nothing::Union{Nothing,Value},
+    init_scale=nothing::Union{Nothing,Value},
     trace::IR.Type,
     diagnostics::IR.Type,
     output_rng_state::IR.Type,
@@ -388,6 +394,7 @@ function infer_region(
     total_warmup=nothing,
     hmc_config=nothing,
     nuts_config=nothing,
+    vi_config=nothing,
     logpdf_fn=nothing,
     state_schema=nothing,
     autodiff_attrs=nothing,
@@ -410,6 +417,7 @@ function infer_region(
     !isnothing(init_inverse_mass_matrix) && push!(operands, init_inverse_mass_matrix)
     !isnothing(init_step_size) && push!(operands, init_step_size)
     !isnothing(init_position) && push!(operands, init_position)
+    !isnothing(init_scale) && push!(operands, init_scale)
     push!(
         attributes,
         operandsegmentsizes([
@@ -419,6 +427,7 @@ function infer_region(
             Int(!isnothing(init_inverse_mass_matrix)),
             Int(!isnothing(init_step_size)),
             Int(!isnothing(init_position)),
+            Int(!isnothing(init_scale)),
         ]),
     )
     !isnothing(fn) && push!(attributes, NamedAttribute("fn", fn))
@@ -430,6 +439,7 @@ function infer_region(
         push!(attributes, NamedAttribute("total_warmup", total_warmup))
     !isnothing(hmc_config) && push!(attributes, NamedAttribute("hmc_config", hmc_config))
     !isnothing(nuts_config) && push!(attributes, NamedAttribute("nuts_config", nuts_config))
+    !isnothing(vi_config) && push!(attributes, NamedAttribute("vi_config", vi_config))
     !isnothing(logpdf_fn) && push!(attributes, NamedAttribute("logpdf_fn", logpdf_fn))
     !isnothing(state_schema) &&
         push!(attributes, NamedAttribute("state_schema", state_schema))

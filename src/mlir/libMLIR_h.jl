@@ -16546,6 +16546,58 @@ function enzymeSymbolAttrGet(ctx, ptr)
     )::MlirAttribute
 end
 
+function enzymeVIConfigAttrGet(
+    ctx,
+    guideKind,
+    optimizerKind,
+    numParticles,
+    hasInitScale,
+    initScale,
+    hasAdamB1,
+    adamB1,
+    hasAdamB2,
+    adamB2,
+    hasAdamEps,
+    adamEps,
+    hasClipNorm,
+    clipNorm,
+    hasInitRadius,
+    initRadius,
+    hasMomentumMass,
+    momentumMass,
+    hasRmspropGamma,
+    rmspropGamma,
+    hasRmspropEps,
+    rmspropEps,
+    stableUpdate,
+)
+    @ccall mlir_c.enzymeVIConfigAttrGet(
+        ctx::MlirContext,
+        guideKind::Int32,
+        optimizerKind::Int32,
+        numParticles::Int64,
+        hasInitScale::Bool,
+        initScale::Cdouble,
+        hasAdamB1::Bool,
+        adamB1::Cdouble,
+        hasAdamB2::Bool,
+        adamB2::Cdouble,
+        hasAdamEps::Bool,
+        adamEps::Cdouble,
+        hasClipNorm::Bool,
+        clipNorm::Cdouble,
+        hasInitRadius::Bool,
+        initRadius::Cdouble,
+        hasMomentumMass::Bool,
+        momentumMass::Cdouble,
+        hasRmspropGamma::Bool,
+        rmspropGamma::Cdouble,
+        hasRmspropEps::Bool,
+        rmspropEps::Cdouble,
+        stableUpdate::Bool,
+    )::MlirAttribute
+end
+
 struct CachedExec
     exec::Ptr{Cint}
     written::Ptr{UInt8}

@@ -141,6 +141,135 @@ function run_numpyro_mcmc(;
     return result
 end
 
+function run_numpyro_svi(;
+    model,
+    rng_key,
+    model_args::Tuple=(),
+    model_kwargs::NamedTuple=(;),
+    init_loc_values::Union{Nothing,AbstractDict}=nothing,
+    init_scale::Float64=0.1,
+    num_steps::Int=5,
+    step_size::Float64=0.01,
+    optimizer::Symbol=:Adam,
+    num_particles::Int=1,
+    adam_b1::Float64=0.9,
+    adam_b2::Float64=0.999,
+    adam_eps::Float64=1.0e-8,
+    clip_norm::Float64=10.0,
+    momentum_mass::Float64=0.9,
+    rmsprop_gamma::Float64=0.9,
+    rmsprop_eps::Float64=1.0e-8,
+    guide_kind::Symbol=:AutoNormal,
+    stable_update::Bool=false,
+    param_names::Vector{Symbol},
+)
+    numpyro_infer = pyimport("numpyro.infer")
+    numpyro_optim = pyimport("numpyro.optim")
+    numpyro_init = pyimport("numpyro.infer.initialization")
+    autoguide_mod = pyimport("numpyro.infer.autoguide")
+    np = pyimport("numpy")
+
+    init_loc_fn = if init_loc_values === nothing
+        nothing
+    else
+        py_dict = pydict()
+        for (k, v) in init_loc_values
+            py_dict[string(k)] = v
+        end
+        numpyro_init.init_to_value(; values=py_dict)
+    end
+
+    guide = if guide_kind == :AutoNormal
+        if init_loc_fn === nothing
+            autoguide_mod.AutoNormal(model; init_scale=init_scale)
+        else
+            autoguide_mod.AutoNormal(model; init_loc_fn=init_loc_fn, init_scale=init_scale)
+        end
+    elseif guide_kind == :AutoDelta
+        if init_loc_fn === nothing
+            autoguide_mod.AutoDelta(model)
+        else
+            autoguide_mod.AutoDelta(model; init_loc_fn=init_loc_fn)
+        end
+    else
+        error("Unknown guide_kind: $guide_kind. Supported: :AutoNormal, :AutoDelta")
+    end
+
+    if optimizer == :Adam
+        opt = numpyro_optim.Adam(;
+            step_size=step_size, b1=adam_b1, b2=adam_b2, eps=adam_eps
+        )
+    elseif optimizer == :SGD
+        opt = numpyro_optim.SGD(; step_size=step_size)
+    elseif optimizer == :ClippedAdam
+        opt = numpyro_optim.ClippedAdam(;
+            step_size=step_size, b1=adam_b1, b2=adam_b2, eps=adam_eps, clip_norm=clip_norm
+        )
+    elseif optimizer == :Momentum
+        opt = numpyro_optim.Momentum(; step_size=step_size, mass=momentum_mass)
+    elseif optimizer == :RMSProp
+        opt = numpyro_optim.RMSProp(;
+            step_size=step_size, gamma=rmsprop_gamma, eps=rmsprop_eps
+        )
+    elseif optimizer == :Adagrad
+        opt = numpyro_optim.Adagrad(; step_size=step_size, momentum=momentum_mass)
+    elseif optimizer == :RMSPropMomentum
+        opt = numpyro_optim.RMSPropMomentum(;
+            step_size=step_size,
+            gamma=rmsprop_gamma,
+            eps=rmsprop_eps,
+            momentum=momentum_mass,
+        )
+    else
+        error("Unknown optimizer: $optimizer")
+    end
+
+    elbo = numpyro_infer.Trace_ELBO(; num_particles=num_particles)
+    svi = numpyro_infer.SVI(model, guide, opt; loss=elbo)
+
+    state = svi.init(rng_key, model_args...; model_kwargs...)
+
+    trajectory = Dict(name => Float64[] for name in param_names)
+    elbo_traj = Float64[]
+
+    for _ in 1:num_steps
+        out = if stable_update
+            svi.stable_update(state, model_args...; model_kwargs...)
+        else
+            svi.update(state, model_args...; model_kwargs...)
+        end
+        state = out[0]
+        loss = out[1]
+        push!(elbo_traj, -pyconvert(Float64, np.asarray(loss).item()))
+        params = svi.get_params(state)
+        for name in param_names
+            arr = np.asarray(params[string(name)]).flatten()
+            v = pyconvert(Float64, arr[0].item())
+            push!(trajectory[name], v)
+        end
+    end
+
+    return (loc_traj=trajectory, elbo_traj=elbo_traj)
+end
+
+function compare_trajectories_pointwise(
+    impulse_traj::AbstractMatrix,
+    numpyro_traj::Vector{Float64};
+    atol::Float64=1e-10,
+    rtol::Float64=1e-10,
+    label::String="trajectory",
+)
+    @testset "NumPyro pointwise comparison: $label" begin
+        impulse_flat = vec(impulse_traj)
+        @assert length(impulse_flat) == length(numpyro_traj) (
+            "size mismatch: impulse=$(length(impulse_flat)) numpyro=$(length(numpyro_traj))"
+        )
+        max_abs = maximum(abs.(impulse_flat .- numpyro_traj))
+        @info "$label max abs diff = $max_abs (atol=$atol)"
+        @test impulse_flat ≈ numpyro_traj atol = atol rtol = rtol
+    end
+end
+
 function compare_samples_pointwise(
     reactant_trace,
     numpyro_samples::Dict{Symbol,Vector{Float64}},

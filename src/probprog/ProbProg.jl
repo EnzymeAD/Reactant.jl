@@ -11,9 +11,10 @@ include("Display.jl")
 include("Stats.jl")
 include("MH.jl")
 include("MCMC.jl")
+include("VI.jl")
 
 # Types.
-export Trace, Constraint, Selection, Address, TraceEntry, TracedTrace, MCMCState
+export Trace, Constraint, Selection, Address, TraceEntry, TracedTrace, MCMCState, VIState
 
 # Distributions.
 export Distribution,
@@ -47,6 +48,7 @@ export sample,
     mh,
     mcmc,
     mcmc_logpdf,
+    svi,
     save_state,
     load_state,
     run_chain
