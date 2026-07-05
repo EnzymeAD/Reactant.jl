@@ -258,3 +258,56 @@ PLL curves overlap (both Impulse variants converge to the same PLL band as
 Stan's healthy trials; Stan trial 2 mixed poorly, dragging its n_eff down).
 Impulse is ~24x faster per trial than Stan at equal draw counts. SICM makes
 no measurable difference on this model (no heavy sample-invariant compute).
+
+
+## 6. Coal-Mining Disasters Change Point (marginalized NUTS + branchy MH mechanism)
+
+**Model**: Poisson time series with an unknown switch year `s`. Priors
+`l1,l2 ~ Gamma(3,1)`, `s ~ DiscreteUniform{0..T}`, `y_t ~ Poisson(t<s ? l1 : l2)`.
+Synthetic data (seed 12345): T=112, s*=40, l1*=3.0, l2*=0.9.
+
+**Primary — marginalized NUTS**: `s` is integrated out with the prefix/suffix
+cumulative-sum trick, so NUTS runs on the two continuous log-rates. Impulse
+expresses the marginal `logsumexp_s(-log(T+1) + A_s + B_s)` through a custom-logpdf
+observed site; the NumPyro baseline is the same arrangement via `numpyro.factor`
++ `jnp.cumsum` (`ppls/numpyro/coal_mining.py`). In-sample marginal PLL (the full
+series is both train and test; a change-point series does not split i.i.d.).
+
+**Config**: `pplbench_configs/standard/coal_mining.json` (iterations 4000, warmup
+1000, 4 trials; position_size 2, dense identity mass to match NumPyro
+`dense_mass=True`). Smoke: `coal_mining_smoke.json`.
+
+**Results** (2026-07-04, CPU, 32 threads, seed 12345, outputs
+`outputs/2026-07-04_23:38:42`):
+
+| PPL | compile (s) | infer per trial (s) | final PLL per trial | n_eff/s median |
+|-----|-------------|---------------------|---------------------|----------------|
+| NumPyro | 1.3 | 0.591, 0.620, 0.574, 0.592 | -173.46, -173.39, -173.71, -173.67 | 17424 |
+| Impulse | 32.3 | 0.633, 0.317, 0.260, 0.270 | -173.46, -173.67, -173.70, -173.75 | 33788 |
+| Impulse (no opt) | 33.4 | 0.631, 0.086, 0.216, 0.250 | -173.70, -173.52, -173.71, -173.76 | 55878 |
+
+PLL curves overlap tightly (all final PLL in [-173.4, -173.76]); posterior means
+agree (NumPyro l1=2.71/l2=0.99, Impulse l1=2.74/l2=0.99, both recover the truth).
+Impulse steady-state infer ~2x faster per trial than NumPyro; SICM makes no
+measurable difference (2-parameter model, no sample-invariant heavy compute).
+
+**Mechanism demo — branchy change point** (Impulse-only, C2 stochastic control
+flow). `standard/coal_mining.jl` `coal_mining_branch` keeps `s` explicit and
+observes each year's Poisson likelihood INSIDE the taken `impulse.if` branch
+(per-branch addresses `ye_t`/`yl_t`; nothing sampled/returned by a branch feeds a
+later sample op). The branch weight threads correctly through `generate` (n=1
+enumerable check: p(s=1|y)=0.980, exact). Enumerating `p(s|y) ∝ softmax_s
+weight(s|y,l1,l2)` through this verified branchy `generate` path recovers the
+switch: at n=56, s*=40 the posterior concentrates with MAP s=39, p(39)=0.526,
+p(40)=0.215, mass in [34,46] = 0.9999 (`figures/coal_mining_mh_posterior.png`,
+driver `coal_mining_mh_demo.jl`).
+
+*Known limitation*: the intended single-address MH kernel
+(`coal_mining_mh_program`, alternating `mh(:s)/mh(:l1)/mh(:l2)`) is BLOCKED by a
+C2 regenerate bug — `mh`/regenerate over the discrete branch-selecting address
+does not refresh the observed value of a branch site that flips from not-taken to
+taken (it retains the stale zero slot), so the MH posterior is wrong (n=1:
+MH gives 0.11 vs the exact 0.980). `generate` is unaffected; the enumerate-via-
+generate recovery above is the same marginal the MH would target. Also, tracing
+one `impulse.if` per year is superlinear in the series length (n=20: 63s compile;
+n=56: 545s), so the branchy demo uses n=56 rather than the full 112.
