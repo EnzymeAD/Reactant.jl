@@ -10,6 +10,26 @@ import os
 import sys
 import time
 
+
+def _early_num_chains():
+    for i, a in enumerate(sys.argv):
+        if a == "--num-chains" and i + 1 < len(sys.argv):
+            return int(sys.argv[i + 1])
+    return 1
+
+
+# `--xla_force_host_platform_device_count` must be set before jax initializes so
+# chain_method="parallel" gets a genuine pmap over host devices (the H1 test
+# pattern) rather than falling back to sequential. Only forced for num_chains>1.
+_early_nc = _early_num_chains()
+if _early_nc > 1 and "xla_force_host_platform_device_count" not in os.environ.get(
+    "XLA_FLAGS", ""
+):
+    os.environ["XLA_FLAGS"] = (
+        os.environ.get("XLA_FLAGS", "")
+        + f" --xla_force_host_platform_device_count={_early_nc}"
+    ).strip()
+
 import jax
 jax.config.update("jax_enable_x64", True)
 jax.config.update("jax_default_prng_impl", "rbg")
@@ -99,11 +119,11 @@ def dump_mcmc_hlo(mcmc, rng_key, data, jax_init, module_name):
     print(f"NumPyro HLO: {dump_path} ({sz} KB, lowered in {dt:.2f}s)", flush=True)
 
 
-def run_trial(mcmc, rng_key, data, jax_init):
+def run_trial(mcmc, rng_key, data, jax_init, group_by_chain=False):
     mcmc._last_state = None
     mcmc.run(rng_key, data, init_params=jax_init)
     jax.block_until_ready(mcmc.get_samples())
-    return mcmc.get_samples()
+    return mcmc.get_samples(group_by_chain=group_by_chain)
 
 
 # =============================================================================
@@ -284,6 +304,8 @@ def main():
     parser.add_argument("--adapt-step-size", action="store_true")
     parser.add_argument("--adapt-mass-matrix", action="store_true")
     parser.add_argument("--method", default="nuts")
+    parser.add_argument("--num-chains", type=int, default=1)
+    parser.add_argument("--chain-method", default="parallel")
     parser.add_argument("--num-steps", type=int, default=300)
     parser.add_argument("--num-particles", type=int, default=1)
     parser.add_argument("--init-scale", type=float, default=0.1)
@@ -322,21 +344,44 @@ def main():
         **({"inverse_mass_matrix": jnp.eye(position_size, dtype=jnp.float64)}
            if position_size else {}),
     )
+    num_chains = args.num_chains
+    group_by_chain = num_chains > 1
     mcmc = infer.MCMC(
         kernel,
         num_warmup=args.num_warmup,
         num_samples=args.num_samples,
+        num_chains=num_chains,
+        chain_method=args.chain_method,
         progress_bar=False,
     )
+    if group_by_chain:
+        ndev = jax.local_device_count()
+        print(
+            f"NumPyro: num_chains={num_chains}, chain_method={args.chain_method}, "
+            f"local_device_count={ndev} "
+            f"({'genuine pmap' if ndev >= num_chains else 'FALLBACK to sequential'})",
+            flush=True,
+        )
 
     rng_key = make_rng_key(args.seed)
-    jax_init = make_init_params(init_params_raw)
-    jax_init = constrained_to_unconstrained(impl.model, data, jax_init)
+
+    def prep_init(raw):
+        # Multi-chain init_params carry a leading num_chains dim (numpyro splits
+        # the key per chain; same init position for all chains matches the
+        # Impulse arm, which feeds every chain the same trial constraint).
+        j = make_init_params(raw)
+        j = constrained_to_unconstrained(impl.model, data, j)
+        if group_by_chain and j is not None:
+            j = {k: jnp.broadcast_to(v, (num_chains,) + jnp.shape(v))
+                 for k, v in j.items()}
+        return j
+
+    jax_init = prep_init(init_params_raw)
 
     # JIT warmup
     print("NumPyro: JIT warmup...", flush=True)
     jit_start = time.time()
-    run_trial(mcmc, rng_key, data, jax_init)
+    run_trial(mcmc, rng_key, data, jax_init, group_by_chain)
     jit_time = time.time() - jit_start
     print(f"NumPyro: JIT warmup done ({jit_time:.2f}s)", flush=True)
 
@@ -345,7 +390,7 @@ def main():
 
     # First real trial
     t0 = time.time()
-    samples = run_trial(mcmc, rng_key, data, jax_init)
+    samples = run_trial(mcmc, rng_key, data, jax_init, group_by_chain)
     run_time = time.time() - t0
 
     write_output(args.output, samples, impl, jit_time, run_time)
@@ -364,8 +409,7 @@ def main():
             req = json.loads(stripped)
             new_seed = req["seed"]
             new_output_path = req["output"]
-            new_init = make_init_params(req.get("init_params"))
-            new_init = constrained_to_unconstrained(impl.model, data, new_init)
+            new_init = prep_init(req.get("init_params"))
 
             new_rng = make_rng_key(new_seed)
             profile_dir = req.get("profile")
@@ -375,11 +419,11 @@ def main():
                 print(f"Profiling -> {profile_dir}", flush=True)
                 with jax.profiler.trace(profile_dir, create_perfetto_link=False):
                     t0 = time.time()
-                    new_samples = run_trial(mcmc, new_rng, data, new_init)
+                    new_samples = run_trial(mcmc, new_rng, data, new_init, group_by_chain)
                     new_run_time = time.time() - t0
             else:
                 t0 = time.time()
-                new_samples = run_trial(mcmc, new_rng, data, new_init)
+                new_samples = run_trial(mcmc, new_rng, data, new_init, group_by_chain)
                 new_run_time = time.time() - t0
 
             write_output(new_output_path, new_samples, impl, 0.0, new_run_time)

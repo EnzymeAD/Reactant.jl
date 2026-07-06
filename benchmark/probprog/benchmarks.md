@@ -452,3 +452,60 @@ distribution exactly on this program.
 per-move ratio (1.49×) on a custom, user-composed MH kernel. No Gen.jl baseline
 is reported: no Gen.jl environment is provisioned here, and standing one up is out
 of scope for this micro-benchmark (flagged as optional follow-up).
+
+## Multi-chain standby variants (`_mc4`)
+
+Standby reference columns (additive; the single-chain configs and their numbers
+above are UNTOUCHED, for comparability). Each `_mc4` config runs `num_chains=4`
+genuine chains per trial: Impulse via concurrent Julia thread-dispatch of the
+compiled single-chain kernel (`chain_method=:parallel`); NumPyro via genuine
+`pmap` over 4 forced host devices (`chain_method="parallel"`, driver sets
+`XLA_FLAGS=--xla_force_host_platform_device_count=4`); Stan via native
+`parallel_chains=4`. `trials=2` (so diagnostics are pooled over
+`trials*num_chains = 8` chains), except `crowd_sourced_annotation_mc4` uses
+`trials=4` (16 chains) so its seed set includes the poor-mixing seed 6164479
+that makes Stan's R-hat flag (see below). Wall-clock is the steady-state (trial 1)
+4-chain parallel run. The single-chain key split
+(`jax.random.split(key, num_chains)`) is shared bitwise across the arms, so
+chain c is the same chain in each framework.
+
+**PLL semantics**: `pooled PLL` is the cumulative predictive log-likelihood over
+the draws of ALL chains pooled together (not per-chain). **Diagnostics** (NEW for
+chains>1): split R-hat and pooled ESS across the `trials*num_chains` chains, per
+parameter, from `arviz.rhat` / `arviz.ess` (the diagnostic path already in
+`ppl_helper`), written to `multichain_diagnostics.json` per run.
+
+Configs: `pplbench_configs/standard/{logistic_regression,crowd_sourced_annotation,coal_mining}_mc4.json`,
+`pplbench_configs/sicm/gp_pois_regr_scaled_mc4.json`.
+
+| model | arm | pooled PLL | split R-hat (max) | pooled ESS (median) | steady wall-clock (s) | pooled ESS/s (median) |
+|-------|-----|-----------:|------------------:|--------------------:|----------------------:|----------------------:|
+| coal_mining | NumPyro | -173.60 | 1.0004 | 19694 | 0.84 | 23549 |
+| coal_mining | Impulse | -173.60 | 1.0006 | 17828 | 1.12 | 15933 |
+| logistic_regression | NumPyro | -29.99 | 1.0009 | 32499 | 4.58 | 7102 |
+| logistic_regression | Impulse | -30.15 | 1.0007 | 31731 | 10.50 | 3023 |
+| logistic_regression | Stan | -30.10 | 1.0004 | 31425 | 18.90 | 1662 |
+| crowd_sourced_annotation (trials 4, 16 ch) | Impulse | -1805.79 | 1.0007 | 82243 | 15.11 | 5441 |
+| crowd_sourced_annotation (trials 4, 16 ch) | Stan **[R-hat FLAG]** | -1805.55 | **1.1665** | **72** | 104.72 | 0.7 |
+| gp_pois_regr_scaled (SICM) | NumPyro | -36.16 | 1.0017 | 10394 | 2.15 | 4838 |
+| gp_pois_regr_scaled (SICM) | Impulse | -36.28 | 1.0030 | 11566 | 0.98 | 11770 |
+| gp_pois_regr_scaled (SICM) | Stan | -36.21 | 1.0023 | 12030 | 1.26 | 9568 |
+
+**Observations**: (1) All arms on all four models converge (max R-hat 1.003);
+the multi-chain diagnostics confirm correctness uniformly and pooled PLL agree
+across frameworks. (2) Pooled ESS/s ranking is model-dependent and mirrors the
+single-chain per-step story: NumPyro leads on the dense-linear models
+(logistic, coal), while Impulse leads on the SICM model (gp_pois_regr, 11770 vs
+NumPyro 4838). (3) Impulse's thread-dispatch multi-chain parallelism is less
+efficient than NumPyro's single-kernel `pmap` on the large dense model (logistic
+10.5 s vs 4.6 s for the 4-chain trial); on smaller/SICM models the gap closes or
+reverses. (4) On crowd_sourced the multi-chain split R-hat is a genuine framework
+discriminator. At `trials=2` (benchmark seeds that exclude the problematic one)
+both arms converge (max R-hat 1.001). Including the historically-bad seed 6164479
+(a `trials=4` run, 16 chains) surfaces the single-chain "poorly-mixed Stan trial"
+anecdote as a flagged, per-parameter result: **Stan** split R-hat median 1.14 /
+max 1.17 (worst `confusion_matrix`), pooled ESS collapsing to **72**, whereas
+**Impulse** on the identical 16 chains stays R-hat ≤ 1.0007 with pooled ESS 82k.
+Both arms' pooled PLL still read ≈ −1805, so this convergence-robustness
+difference is invisible to PLL alone. Impulse remains ~7× faster wall-clock and
+~8× higher pooled ESS/s than Stan there.

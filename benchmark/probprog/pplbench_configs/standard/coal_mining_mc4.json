@@ -1,0 +1,60 @@
+{
+  "model": {
+    "class": "coal_mining.CoalMining",
+    "args": {
+      "n": 112,
+      "s_true": 40,
+      "l1_true": 3.0,
+      "l2_true": 0.9
+    },
+    "seed": 12345
+  },
+  "iterations": 4000,
+  "num_warmup": 1000,
+  "trials": 2,
+  "ppls": [
+    {
+      "name": "numpyro",
+      "inference": {
+        "class": "inference.MCMC",
+        "infer_args": {
+          "step_size": 0.1,
+          "max_tree_depth": 10,
+          "adapt_step_size": true,
+          "adapt_mass_matrix": true,
+          "num_chains": 4,
+          "chain_method": "parallel"
+        }
+      },
+      "legend": {
+        "name": "NumPyro (mc4)",
+        "color": "blue"
+      },
+      "trials": 2
+    },
+    {
+      "name": "impulse",
+      "inference": {
+        "class": "inference.MCMC",
+        "infer_args": {
+          "step_size": 0.1,
+          "max_tree_depth": 10,
+          "adapt_step_size": true,
+          "adapt_mass_matrix": true,
+          "num_chains": 4,
+          "chain_method": "parallel"
+        }
+      },
+      "legend": {
+        "name": "Impulse (mc4)",
+        "color": "red"
+      },
+      "trials": 2
+    }
+  ],
+  "save_samples": true,
+  "figures": {
+    "generate_pll": true,
+    "suffix": "png"
+  }
+}

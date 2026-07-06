@@ -1,0 +1,62 @@
+{
+  "model": {
+    "class": "crowd_sourced_annotation.CrowdSourcedAnnotation",
+    "args": {
+      "n": 2000,
+      "k": 10,
+      "num_categories": 3,
+      "expected_correctness": 0.8,
+      "num_labels_per_item": 3,
+      "concentration": 10
+    },
+    "seed": 12345
+  },
+  "iterations": 4000,
+  "num_warmup": 1000,
+  "trials": 4,
+  "ppls": [
+    {
+      "name": "impulse",
+      "inference": {
+        "class": "inference.MCMC",
+        "infer_args": {
+          "step_size": 0.1,
+          "max_tree_depth": 10,
+          "adapt_step_size": true,
+          "adapt_mass_matrix": true,
+          "num_chains": 4,
+          "chain_method": "parallel"
+        }
+      },
+      "legend": {
+        "name": "Impulse (mc4)",
+        "color": "red"
+      },
+      "trials": 4
+    },
+    {
+      "name": "stan",
+      "inference": {
+        "class": "inference.MCMC",
+        "infer_args": {
+          "step_size": 0.1,
+          "max_tree_depth": 10,
+          "adapt_step_size": true,
+          "adapt_mass_matrix": true,
+          "num_chains": 4,
+          "chain_method": "parallel"
+        }
+      },
+      "legend": {
+        "name": "Stan (mc4)",
+        "color": "green"
+      },
+      "trials": 4
+    }
+  ],
+  "save_samples": true,
+  "figures": {
+    "generate_pll": true,
+    "suffix": "png"
+  }
+}

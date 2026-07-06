@@ -56,6 +56,42 @@ function flatten_constraint(constraint::ProbProg.Constraint)
     return constraint_tensor, constrained_addresses
 end
 
+# Genuine multi-chain NUTS by concurrent thread dispatch of the compiled
+# single-chain kernel (mirrors ProbProg.run_chain(:parallel), which cannot be
+# used here because the generic model harness has no hand-written logdensity
+# function). `split_chain_rngs` reproduces `jax.random.split(key, num_chains)`
+# bitwise, so chain c matches NumPyro/Stan chain c; each chain owns private
+# copies of every donated concrete input, so the shared compiled thunk never
+# races on a donated buffer. `:sequential` runs the same chains serially.
+# Returns (chain_major_output_dict, elapsed_seconds); chains are pooled for PLL
+# and kept per-chain for split-Rhat / pooled-ESS downstream (arviz in ppl_helper).
+function run_nuts_multichain(
+    run_one, rng, num_chains::Int, chain_method::Symbol
+)
+    chain_keys = ProbProg.split_chain_rngs(rng, num_chains)
+    results = Vector{Dict{String,Any}}(undef, num_chains)
+    elapsed = @elapsed begin
+        if chain_method == :parallel
+            tasks = [Threads.@spawn run_one(chain_keys[c]) for c in 1:num_chains]
+            for c in 1:num_chains
+                results[c] = fetch(tasks[c])
+            end
+        else
+            for c in 1:num_chains
+                results[c] = run_one(chain_keys[c])
+            end
+        end
+    end
+    # Chain-major nesting: a Vector of per-chain values (each itself the
+    # extract_samples value, a Vector or Vector-of-Vectors), so JSON3 serializes
+    # nested arrays that the subprocess reads as (num_chains, draw, ...).
+    output = Dict{String,Any}()
+    for var in keys(results[1])
+        output[var] = [results[c][var] for c in 1:num_chains]
+    end
+    return output, elapsed
+end
+
 # =============================================================================
 # Shared SVI infrastructure
 # =============================================================================
@@ -355,6 +391,8 @@ function main()
     profile_breakdown = false
     server_mode = false
     method = "nuts"
+    num_chains = 1
+    chain_method = "parallel"
     num_steps = 300
     num_particles = 1
     init_scale = 0.1
@@ -373,6 +411,10 @@ function main()
             i += 1; output_path = ARGS[i]
         elseif arg == "--method"
             i += 1; method = ARGS[i]
+        elseif arg == "--num-chains"
+            i += 1; num_chains = parse(Int, ARGS[i])
+        elseif arg == "--chain-method"
+            i += 1; chain_method = ARGS[i]
         elseif arg == "--num-steps"
             i += 1; num_steps = parse(Int, ARGS[i])
         elseif arg == "--num-particles"
@@ -509,9 +551,34 @@ function main()
         return trace_tensor, diagnostics
     end
 
+    # One chain's samples from private copies of every donated concrete input,
+    # so the shared compiled thunk is safe to run concurrently across chains.
+    function run_one_chain(key_c, ct)
+        tt, _ = compiled_fn(
+            key_c, spec.model_fn, spec.model_args, copy(step_size_rnum),
+            max_tree_depth, num_warmup, num_samples,
+            copy(ct), constrained_addresses, spec.selection,
+            adapt_step_size, adapt_mass_matrix, copy(inverse_mass_matrix),
+        )
+        return extract_samples(
+            ProbProg.unflatten_trace(Array(tt), 0.0, selected_entries, nothing)
+        )
+    end
+
+    chain_method_sym = Symbol(chain_method)
+    multichain = num_chains > 1
+    if multichain
+        println("  num_chains=$num_chains, chain_method=$chain_method_sym")
+    end
+
     print("Running... ")
     run_time = @elapsed begin
-        if profile_breakdown || PROFILE_BREAKDOWN_ENV
+        if multichain
+            output, _ = run_nuts_multichain(
+                k -> run_one_chain(k, constraint_tensor), rng, num_chains,
+                chain_method_sym,
+            )
+        elseif profile_breakdown || PROFILE_BREAKDOWN_ENV
             println("profiling with op_profile breakdown...")
             result = Reactant.Profiler.profile_with_xprof(
                 compiled_fn, rng, spec.model_fn, spec.model_args, step_size_rnum,
@@ -531,10 +598,12 @@ function main()
         else
             trace_tensor, diagnostics = run_compiled(rng, constraint_tensor)
         end
-        trace_tensor = Array(trace_tensor)
-        diagnostics = Array(diagnostics)
-        trace = ProbProg.unflatten_trace(trace_tensor, 0.0, selected_entries, nothing)
-        output = extract_samples( trace)
+        if !multichain
+            trace_tensor = Array(trace_tensor)
+            diagnostics = Array(diagnostics)
+            trace = ProbProg.unflatten_trace(trace_tensor, 0.0, selected_entries, nothing)
+            output = extract_samples( trace)
+        end
     end
     println("$(round(run_time * 1000, digits=2)) ms")
 
@@ -579,20 +648,29 @@ function main()
                 String(req["profile"]) : nothing
 
             new_run_time = @elapsed begin
-                if profile_dir !== nothing
+                if multichain
+                    new_output, _ = run_nuts_multichain(
+                        k -> run_one_chain(k, new_constraint_tensor), new_rng,
+                        num_chains, chain_method_sym,
+                    )
+                elseif profile_dir !== nothing
                     mkpath(profile_dir)
                     println("Profiling -> $profile_dir")
                     flush(stdout)
                     new_trace_tensor, new_diagnostics = Reactant.Profiler.with_profiler(profile_dir) do
                         run_compiled(new_rng, new_constraint_tensor)
                     end
+                    new_trace_tensor = Array(new_trace_tensor)
+                    new_diagnostics = Array(new_diagnostics)
+                    new_trace = ProbProg.unflatten_trace(new_trace_tensor, 0.0, selected_entries, nothing)
+                    new_output = extract_samples( new_trace)
                 else
                     new_trace_tensor, new_diagnostics = run_compiled(new_rng, new_constraint_tensor)
+                    new_trace_tensor = Array(new_trace_tensor)
+                    new_diagnostics = Array(new_diagnostics)
+                    new_trace = ProbProg.unflatten_trace(new_trace_tensor, 0.0, selected_entries, nothing)
+                    new_output = extract_samples( new_trace)
                 end
-                new_trace_tensor = Array(new_trace_tensor)
-                new_diagnostics = Array(new_diagnostics)
-                new_trace = ProbProg.unflatten_trace(new_trace_tensor, 0.0, selected_entries, nothing)
-                new_output = extract_samples( new_trace)
             end
             new_output["compile_time"] = 0.0
             new_output["run_time"] = new_run_time

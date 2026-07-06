@@ -31,7 +31,7 @@ def reconstruct_dataset(data_dict):
 
 def run_trial(model, stan_data, num_warmup, num_samples, seed,
               step_size, max_tree_depth, adapt_step_size, adapt_mass_matrix,
-              init_params):
+              init_params, num_chains=1):
     inits = None
     if init_params is not None:
         inits = {}
@@ -41,7 +41,8 @@ def run_trial(model, stan_data, num_warmup, num_samples, seed,
 
     fit = model.sample(
         data=stan_data,
-        chains=1,
+        chains=num_chains,
+        parallel_chains=num_chains,
         iter_warmup=num_warmup,
         iter_sampling=num_samples,
         seed=seed,
@@ -56,13 +57,21 @@ def run_trial(model, stan_data, num_warmup, num_samples, seed,
     return fit.stan_variables()
 
 
-def write_output(output_path, samples, impl, compile_time, run_time):
+def write_output(output_path, samples, impl, compile_time, run_time,
+                 num_chains=1, num_samples=None):
     result = impl.extract_data_from_stan(samples)
 
     output = {}
     for var in result.data_vars:
         vals = result[var].values
-        if vals.ndim == 1:
+        if num_chains > 1:
+            # cmdstanpy pools draws chain-major (all of chain 0, then chain 1,
+            # ...); reshape the draw axis to (chain, draw) so the subprocess
+            # reader sees a leading chain dim for split-Rhat / pooled-ESS.
+            per = vals.shape[0] // num_chains
+            vals = vals.reshape((num_chains, per) + vals.shape[1:])
+            output[var] = [vals[c].tolist() for c in range(num_chains)]
+        elif vals.ndim == 1:
             output[var] = vals.tolist()
         else:
             output[var] = [vals[i].tolist() for i in range(vals.shape[0])]
@@ -85,6 +94,8 @@ def main():
     parser.add_argument("--max-tree-depth", type=int, default=10)
     parser.add_argument("--adapt-step-size", action="store_true")
     parser.add_argument("--adapt-mass-matrix", action="store_true")
+    parser.add_argument("--num-chains", type=int, default=1)
+    parser.add_argument("--chain-method", default="parallel")
     parser.add_argument("--server", action="store_true")
     args = parser.parse_args()
 
@@ -115,6 +126,14 @@ def main():
         compile_time = time.time() - compile_start
         print(f"Stan: compilation done ({compile_time:.2f}s)", flush=True)
 
+        num_chains = args.num_chains
+        if num_chains > 1:
+            print(
+                f"Stan: chains={num_chains} (native parallel_chains), "
+                f"chain_method={args.chain_method}",
+                flush=True,
+            )
+
         # First trial
         t0 = time.time()
         samples = run_trial(
@@ -122,11 +141,12 @@ def main():
             args.num_warmup, args.num_samples, args.seed,
             args.step_size, args.max_tree_depth,
             args.adapt_step_size, args.adapt_mass_matrix,
-            data_dict.get("init_params"),
+            data_dict.get("init_params"), num_chains,
         )
         run_time = time.time() - t0
 
-        write_output(args.output, samples, impl, compile_time, run_time)
+        write_output(args.output, samples, impl, compile_time, run_time,
+                     num_chains, args.num_samples)
         print(f"First trial: {run_time:.3f}s", flush=True)
 
         if args.server:
@@ -150,11 +170,12 @@ def main():
                     args.num_warmup, args.num_samples, new_seed,
                     args.step_size, args.max_tree_depth,
                     args.adapt_step_size, args.adapt_mass_matrix,
-                    new_init,
+                    new_init, num_chains,
                 )
                 new_run_time = time.time() - t0
 
-                write_output(new_output_path, new_samples, impl, 0.0, new_run_time)
+                write_output(new_output_path, new_samples, impl, 0.0, new_run_time,
+                             num_chains, args.num_samples)
                 print(f"###DONE### {new_run_time*1000:.2f} ms", flush=True)
 
     finally:

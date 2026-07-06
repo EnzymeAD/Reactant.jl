@@ -1,0 +1,77 @@
+{
+  "model": {
+    "class": "gp_pois_regr_scaled.GPPoisRegrScaled",
+    "args": {
+      "n": 30,
+      "rho": 2.0
+    },
+    "seed": 12345
+  },
+  "iterations": 1500,
+  "num_warmup": 500,
+  "trials": 2,
+  "ppls": [
+    {
+      "name": "numpyro",
+      "inference": {
+        "class": "inference.MCMC",
+        "infer_args": {
+          "step_size": 0.1,
+          "max_tree_depth": 10,
+          "adapt_step_size": true,
+          "adapt_mass_matrix": true,
+          "num_chains": 4,
+          "chain_method": "parallel"
+        }
+      },
+      "legend": {
+        "name": "NumPyro (mc4)",
+        "color": "blue"
+      },
+      "trials": 2
+    },
+    {
+      "name": "impulse",
+      "inference": {
+        "class": "inference.MCMC",
+        "infer_args": {
+          "step_size": 0.1,
+          "max_tree_depth": 10,
+          "adapt_step_size": true,
+          "adapt_mass_matrix": true,
+          "num_chains": 4,
+          "chain_method": "parallel"
+        }
+      },
+      "legend": {
+        "name": "Impulse (mc4)",
+        "color": "red"
+      },
+      "trials": 2
+    },
+    {
+      "name": "stan",
+      "inference": {
+        "class": "inference.MCMC",
+        "infer_args": {
+          "step_size": 0.1,
+          "max_tree_depth": 10,
+          "adapt_step_size": true,
+          "adapt_mass_matrix": true,
+          "num_chains": 4,
+          "chain_method": "parallel"
+        }
+      },
+      "legend": {
+        "name": "Stan (mc4)",
+        "color": "green"
+      },
+      "trials": 2
+    }
+  ],
+  "save_samples": true,
+  "figures": {
+    "generate_pll": true,
+    "suffix": "png"
+  }
+}

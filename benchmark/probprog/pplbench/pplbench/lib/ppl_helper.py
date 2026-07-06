@@ -118,9 +118,16 @@ def _run_single_ppl(
     compile_seed, shared_trial_seeds, max_trials,
     all_names, all_variable_metrics, all_pll, all_timing,
     all_samples, all_overall_neff, all_overall_neff_per_time,
+    all_multichain,
 ):
     """Run all trials for a single PPL. Appends results to the provided lists.
-    Raises on failure so the caller can catch and skip."""
+    Raises on failure so the caller can catch and skip.
+
+    `num_chains` (from infer_args) > 1 requests genuine multi-chain inference
+    (impulse parallel thread-dispatch, numpyro pmap, stan native chains). The
+    chain axis is the flat list of every (trial, genuine-chain) pair, so arviz
+    sees trials*num_chains chains for split-Rhat / pooled-ESS; single-chain
+    (num_chains=1) reduces to the original trials-as-chains behavior exactly."""
     compile_t1 = time.time()
     infer_obj = pplobj.inference_class(pplobj.impl_class, train_data.attrs)
     infer_obj.compile(seed=compile_seed, **pplobj.compile_args)
@@ -146,10 +153,17 @@ def _run_single_ppl(
             num_warmup = 0
 
     ppl_trials = pplobj.trials if pplobj.trials is not None else config.trials
-    LOGGER.info(f"Running {ppl_trials} trials for {pplobj.name}")
+    num_chains = int(pplobj.infer_args.get("num_chains", 1))
+    LOGGER.info(
+        f"Running {ppl_trials} trials for {pplobj.name}"
+        + (f" x {num_chains} chains" if num_chains > 1 else "")
+    )
 
     do_profile = getattr(config, "profile", False)
-    trial_samples, trial_pll, trial_timing = [], [], []
+    # Flat over (trial, genuine-chain): `chain_*` populate the arviz chain axis;
+    # `per_trial_times` drives steady-state timing (excludes the compile trial).
+    chain_samples, chain_pll, chain_timing = [], [], []
+    per_trial_times = []
     for trialnum in range(ppl_trials):
         trial_seed = shared_trial_seeds[trialnum]
         init_params = model_cls.generate_init_params(
@@ -181,58 +195,67 @@ def _run_single_ppl(
                 compile_time = subprocess_compile_time
         LOGGER.info(f"inference trial {trialnum} took {infer_time:.2f} secs")
 
-        for var_name in sorted(samples.data_vars):
-            vals = samples[var_name].values
-            post = vals[num_warmup:]
-            if post.ndim == 1:
-                LOGGER.info(f"  {pplobj.name} trial {trialnum} {var_name} (first 5): {post[:5]}")
-            else:
-                LOGGER.info(f"  {pplobj.name} trial {trialnum} {var_name}[:,0] (first 5): {post[:5, 0]}")
-
-        valid_samples = samples.dropna("draw")
         if samples.sizes["draw"] != config.iterations:
             raise RuntimeError(
                 f"Expected {config.iterations} samples, but {samples.sizes['draw']}"
                 f" samples are returned by {pplobj.name}"
             )
 
-        persample_pll = model_cls.evaluate_posterior_predictive(
-            valid_samples, test_data
-        )
-        pll = np.logaddexp.accumulate(persample_pll) - np.log(
-            np.arange(valid_samples.sizes["draw"]) + 1
-        )
-        LOGGER.info(f"PLL = {str(pll)}")
-        trial_samples.append(samples)
+        per_trial_times.append(infer_time)
 
-        padded_pll = np.full(config.iterations, np.nan)
-        padded_pll[valid_samples.draw.data] = pll
-        trial_pll.append(padded_pll)
-        trial_timing.append([compile_time, infer_time])
+        # One single-chain Dataset per genuine chain (num_chains for the
+        # multi-chain path, else the trial itself).
+        if num_chains > 1:
+            trial_chains = [samples.isel(chain=c) for c in range(num_chains)]
+        else:
+            trial_chains = [samples]
+
+        for j, sc in enumerate(trial_chains):
+            valid_samples = sc.dropna("draw")
+            persample_pll = model_cls.evaluate_posterior_predictive(
+                valid_samples, test_data
+            )
+            pll = np.logaddexp.accumulate(persample_pll) - np.log(
+                np.arange(valid_samples.sizes["draw"]) + 1
+            )
+            padded_pll = np.full(config.iterations, np.nan)
+            padded_pll[valid_samples.draw.data] = pll
+            chain_samples.append(sc)
+            chain_pll.append(padded_pll)
+            # Timing lives on each trial's first chain only; the sibling chains
+            # of one parallel trial share its wall-clock, so carrying it once
+            # keeps results.csv's per-trial steady-state mean correct.
+            chain_timing.append(
+                [compile_time, infer_time] if j == 0 else [float('nan'), float('nan')]
+            )
+        LOGGER.info(f"  {pplobj.name} trial {trialnum} last-chain PLL[-1] = "
+                    f"{chain_pll[-1][~np.isnan(chain_pll[-1])][-1]:.4f}")
         infer_obj.additional_diagnostics(output_dir, f"{pplobj.name}_{trialnum}")
     del infer_obj
 
-    # Compute metrics from real trials only
+    n_chains_total = len(chain_samples)
     trial_samples_data = xr.concat(
-        trial_samples, pd.Index(data=np.arange(ppl_trials), name="chain")
+        chain_samples, pd.Index(data=np.arange(n_chains_total), name="chain")
     )
     trial_samples_no_warmup = trial_samples_data.isel(draw=slice(num_warmup, None))
 
     neff_data = arviz.ess(trial_samples_no_warmup)
     rhat_data = arviz.rhat(trial_samples_no_warmup)
-    LOGGER.info(f"Trials completed for {pplobj.name} ({ppl_trials} trials)")
+    LOGGER.info(f"Trials completed for {pplobj.name} ({ppl_trials} trials"
+                + (f" x {num_chains} chains" if num_chains > 1 else "") + ")")
     LOGGER.info("== n_eff ===")
     LOGGER.info(str(neff_data.data_vars))
     LOGGER.info("==  Rhat ===")
     LOGGER.info(str(rhat_data.data_vars))
 
     neff_values = np.concatenate([np.atleast_1d(neff_data[v].values).ravel() for v in neff_data.data_vars])
+    rhat_values = np.concatenate([np.atleast_1d(rhat_data[v].values).ravel() for v in rhat_data.data_vars])
     overall_neff = [
         neff_values.min(),
         np.median(neff_values),
         neff_values.max(),
     ]
-    trial_times = np.array(trial_timing)[:, 1]
+    trial_times = np.array(per_trial_times)
     steady_times = trial_times[1:] if len(trial_times) > 1 else trial_times
     mean_inference_time = np.mean(steady_times)
     overall_neff_per_time = np.array(overall_neff) / mean_inference_time
@@ -246,15 +269,66 @@ def _run_single_ppl(
     LOGGER.info("== overall n_eff/s [min, median, max]===")
     LOGGER.info(str(overall_neff_per_time))
 
-    # Pad to max_trials for uniform data dimensions across PPLs
-    if ppl_trials < max_trials:
+    if num_chains > 1:
+        # Pooled PLL: cumulative predictive log-likelihood over the draws of ALL
+        # chains pooled together (stated pooling). Concatenate the per-chain
+        # single-chain datasets along `draw` (preserves each var's dim order, so
+        # the model's evaluate sees the same layout as the single-chain path).
+        # split-Rhat / pooled-ESS come from arviz over the trials*num_chains
+        # chains above.
+        pooled_valid = xr.concat(
+            [sc.isel(draw=slice(num_warmup, None)).dropna("draw")
+             for sc in chain_samples],
+            dim="draw",
+        )
+        pooled_valid = pooled_valid.assign_coords(
+            draw=np.arange(pooled_valid.sizes["draw"])
+        )
+        persample = model_cls.evaluate_posterior_predictive(pooled_valid, test_data)
+        pooled_pll = float(
+            (np.logaddexp.accumulate(persample)
+             - np.log(np.arange(len(persample)) + 1))[-1]
+        )
+        max_rhat = float(np.nanmax(rhat_values))
+        rhat_flag = max_rhat > 1.01
+        LOGGER.info(
+            f"== MULTICHAIN {pplobj.name}: pooled PLL={pooled_pll:.4f}, "
+            f"split-Rhat[min,med,max]="
+            f"[{np.nanmin(rhat_values):.4f},{np.nanmedian(rhat_values):.4f},"
+            f"{max_rhat:.4f}], pooled ESS[min,med,max]={overall_neff}, "
+            f"steady wall-clock={mean_inference_time:.3f}s"
+            + ("  ** Rhat>1.01 FLAG: poor mixing **" if rhat_flag else "")
+        )
+        all_multichain.append({
+            "ppl": pplobj.name,
+            "num_chains": num_chains,
+            "trials": ppl_trials,
+            "chains_total": n_chains_total,
+            "pooled_pll": pooled_pll,
+            "rhat_min": float(np.nanmin(rhat_values)),
+            "rhat_median": float(np.nanmedian(rhat_values)),
+            "rhat_max": max_rhat,
+            "rhat_flag": bool(rhat_flag),
+            "ess_min": float(overall_neff[0]),
+            "ess_median": float(overall_neff[1]),
+            "ess_max": float(overall_neff[2]),
+            "steady_wall_clock_s": float(mean_inference_time),
+            "ess_per_s_median": float(overall_neff_per_time[1]),
+            "per_param_rhat": {
+                v: np.atleast_1d(rhat_data[v].values).ravel().tolist()
+                for v in rhat_data.data_vars
+            },
+        })
+
+    # Pad the chain axis to max_trials (= max chains across PPLs) for uniform dims
+    if n_chains_total < max_trials:
         trial_samples_data = trial_samples_data.reindex(
             chain=np.arange(max_trials)
         )
-        while len(trial_pll) < max_trials:
-            trial_pll.append(np.full(config.iterations, np.nan))
-        while len(trial_timing) < max_trials:
-            trial_timing.append([float('nan'), float('nan')])
+        while len(chain_pll) < max_trials:
+            chain_pll.append(np.full(config.iterations, np.nan))
+        while len(chain_timing) < max_trials:
+            chain_timing.append([float('nan'), float('nan')])
 
     trial_variable_metrics_data = xr.concat(
         [neff_data, rhat_data], pd.Index(data=["n_eff", "Rhat"], name="metric")
@@ -262,8 +336,8 @@ def _run_single_ppl(
     # Only append to result lists after all trials succeed
     all_names.append(pplobj.name)
     all_variable_metrics.append(trial_variable_metrics_data)
-    all_pll.append(trial_pll)
-    all_timing.append(trial_timing)
+    all_pll.append(chain_pll)
+    all_timing.append(chain_timing)
     all_samples.append(trial_samples_data)
     all_overall_neff.append(overall_neff)
     all_overall_neff_per_time.append(overall_neff_per_time)
@@ -294,12 +368,15 @@ def collect_samples_and_stats(
     """
     all_variable_metrics, all_pll, all_timing, all_names = [], [], [], []
     all_samples, all_overall_neff, all_overall_neff_per_time = [], [], []
+    all_multichain = []
 
-    # Compute max trials across all PPLs (per-PPL trials override global)
-    max_trials = max(
-        pplobj.trials if pplobj.trials is not None else config.trials
-        for pplobj in all_ppl_details
-    )
+    # Chain-axis size = max over PPLs of trials * num_chains (single-chain arms
+    # have num_chains=1, so this reduces to max trials).
+    def _arm_chains(pplobj):
+        t = pplobj.trials if pplobj.trials is not None else config.trials
+        return t * int(pplobj.infer_args.get("num_chains", 1))
+
+    max_trials = max(_arm_chains(pplobj) for pplobj in all_ppl_details)
 
     # Pre-generate shared trial seeds so all PPLs get identical seeds per trial
     shared_seed = config.model.seed if hasattr(config.model, "seed") else int(time.time())
@@ -317,6 +394,7 @@ def collect_samples_and_stats(
                 _compile_seed, shared_trial_seeds, max_trials,
                 all_names, all_variable_metrics, all_pll, all_timing,
                 all_samples, all_overall_neff, all_overall_neff_per_time,
+                all_multichain,
             )
         except Exception:
             LOGGER.exception(f"PPL `{pplobj.name}` failed, skipping")
@@ -324,6 +402,12 @@ def collect_samples_and_stats(
             continue
     if failed_ppls:
         LOGGER.warning(f"Failed PPLs: {failed_ppls}")
+    if all_multichain:
+        import json as _json
+        mc_path = os.path.join(output_dir, "multichain_diagnostics.json")
+        with open(mc_path, "w") as _f:
+            _json.dump(all_multichain, _f, indent=2)
+        LOGGER.info(f"Multichain diagnostics written to {mc_path}")
     if not all_names:
         raise RuntimeError("All PPLs failed, no results to save")
     # merge the trial-level metrics at the PPL level

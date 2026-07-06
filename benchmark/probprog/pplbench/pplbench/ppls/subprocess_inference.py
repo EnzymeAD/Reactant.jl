@@ -6,6 +6,7 @@ import tempfile
 from typing import cast, Dict, List, Type
 
 import numpy as np
+import pandas as pd
 import xarray as xr
 
 from .base_ppl_impl import BasePPLImplementation
@@ -113,6 +114,35 @@ class SubprocessMCMC(BasePPLInference):
                 "Subprocess compile=%.2fs, run=%.2fs (total=%.2fs)",
                 compile_t, run_t, compile_t + run_t,
             )
+
+            num_chains = int(infer_args.get("num_chains", 1))
+            if num_chains > 1:
+                # Harness returned chain-major arrays (num_chains, num_samples,
+                # ...). Front-pad each chain along its own draw axis and build one
+                # Dataset per chain, concatenated along a new leading `chain` dim
+                # (feeds arviz split-Rhat / pooled-ESS in ppl_helper).
+                per_chain_ds = []
+                for c in range(num_chains):
+                    chain_samples = {}
+                    for key, values in output.items():
+                        if key in ("compile_time", "run_time"):
+                            continue
+                        arr = np.array(values)
+                        if arr.ndim == 0:
+                            continue
+                        chain_arr = arr[c]
+                        pad = np.tile(
+                            chain_arr[0:1],
+                            (num_warmup,) + (1,) * (chain_arr.ndim - 1),
+                        )
+                        chain_samples[key] = np.concatenate(
+                            [pad, chain_arr], axis=0
+                        )
+                    per_chain_ds.append(self._extract_data(chain_samples))
+                return xr.concat(
+                    per_chain_ds,
+                    dim=pd.Index(np.arange(num_chains), name="chain"),
+                )
 
             samples = {}
             for key, values in output.items():

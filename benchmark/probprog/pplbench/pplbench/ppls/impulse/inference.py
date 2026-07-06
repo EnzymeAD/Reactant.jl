@@ -42,6 +42,10 @@ class MCMC(SubprocessMCMC):
             cmd.append("--adapt-step-size")
         if adapt_mass_matrix:
             cmd.append("--adapt-mass-matrix")
+        if kwargs.get("num_chains"):
+            cmd += ["--num-chains", str(kwargs["num_chains"])]
+        if kwargs.get("chain_method"):
+            cmd += ["--chain-method", str(kwargs["chain_method"])]
         if kwargs.get("disable_opt", False):
             cmd.append("--disable-opt")
         if kwargs.get("disable_sicm", False):
