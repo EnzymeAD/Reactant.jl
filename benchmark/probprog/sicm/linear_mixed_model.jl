@@ -31,7 +31,7 @@ function model_lmm(rng, X, K_re, y)
     )
 
     # Mean: X * beta
-    mu = reshape(X * reshape(beta, k, 1), n)
+    mu = (X * reshape(beta, k, 1))[:, 1]
 
     # Covariance: sigma_u^2 * K_re + sigma_e^2 * I
     su_2d = reshape(sigma_u, 1, 1)

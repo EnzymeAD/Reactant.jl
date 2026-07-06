@@ -89,7 +89,7 @@ function model_hierarchical_mvn(rng, Omega, K, J)
     theta = mu_col .+ C.factors' * eta_matrix   # K x J
 
     # Observations: y_{jk} ~ Normal(theta_{jk}, sigma_obs)
-    theta_flat = reshape(theta, J * K)
+    theta_flat = reshape(theta, J * K, 1)[:, 1]
     _, obs = ProbProg.sample(
         rng, ProbProg.Normal(theta_flat, sigma_obs, (J * K,)); symbol=:y
     )

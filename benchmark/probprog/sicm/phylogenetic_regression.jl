@@ -59,7 +59,7 @@ function model_phylo_regression(rng, X, C_phylo, C_env, y)
     )
 
     # Mean: X * beta
-    mu = reshape(X * reshape(beta, k, 1), n)
+    mu = (X * reshape(beta, k, 1))[:, 1]
 
     # Covariance: sigma_p^2 * C_phylo + sigma_e^2 * C_env
     # Both C_phylo and C_env are invariant, neither is identity.

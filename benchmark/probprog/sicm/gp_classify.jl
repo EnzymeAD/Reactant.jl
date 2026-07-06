@@ -36,7 +36,7 @@ function model_gp_classify(rng, x, y, rho)
     cov = (alpha_2d .* alpha_2d) .* K_base
 
     C = cholesky(cov)
-    f = reshape(C.factors' * reshape(f_tilde, n, 1), n)
+    f = (C.factors' * reshape(f_tilde, n, 1))[:, 1]
 
     # Bernoulli with logits f
     _, obs = ProbProg.sample(

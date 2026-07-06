@@ -1,0 +1,3083 @@
+{
+  "correctness": {},
+  "baselines": {
+    "svi/scale_family_mvn": {
+      "config_name": "svi/scale_family_mvn",
+      "model_class": "scale_family_mvn.ScaleFamilyMVN",
+      "model_args": {
+        "n": 8,
+        "lengthscale": 3.0
+      },
+      "frameworks": {
+        "NumPyro": {
+          "compile_time_s": 1.7912182807922363,
+          "per_iter_ms_mean": 1.0830989480018616,
+          "per_iter_ms_std": 0.06692883652459469,
+          "infer_per_trial_s": [
+            0.2087,
+            0.2077,
+            0.2103,
+            0.2398
+          ],
+          "total_s_mean": 0.21661978960037231,
+          "iterations": 200,
+          "num_warmup": 0,
+          "n_trials": 4,
+          "neff_min": 386.38862164222655,
+          "neff_median": 386.38862164222655,
+          "neff_max": 386.38862164222655,
+          "neff_per_s_median": 1762.345668665787,
+          "pll_per_trial": [
+            -15.2634,
+            -15.2894,
+            -15.1534,
+            -15.0841
+          ],
+          "pll_final_mean": -15.197575
+        },
+        "Impulse": {
+          "compile_time_s": 11.907504779,
+          "per_iter_ms_mean": 0.0331705975,
+          "per_iter_ms_std": 0.022054440631420893,
+          "infer_per_trial_s": [
+            0.0143,
+            0.0041,
+            0.0039,
+            0.0042
+          ],
+          "total_s_mean": 0.0066341195,
+          "iterations": 200,
+          "num_warmup": 0,
+          "n_trials": 4,
+          "neff_min": 845.7968961301343,
+          "neff_median": 845.7968961301343,
+          "neff_max": 845.7968961301343,
+          "neff_per_s_median": 206879.5985009778,
+          "pll_per_trial": [
+            -15.1655,
+            -15.1172,
+            -15.1232,
+            -15.169
+          ],
+          "pll_final_mean": -15.143725
+        },
+        "Impulse (no opt)": {
+          "compile_time_s": 12.239073529,
+          "per_iter_ms_mean": 0.08841296624999999,
+          "per_iter_ms_std": 0.021039230344580807,
+          "infer_per_trial_s": [
+            0.025,
+            0.0151,
+            0.0153,
+            0.0153
+          ],
+          "total_s_mean": 0.01768259325,
+          "iterations": 200,
+          "num_warmup": 0,
+          "n_trials": 4,
+          "neff_min": 845.7968961301343,
+          "neff_median": 845.7968961301343,
+          "neff_max": 845.7968961301343,
+          "neff_per_s_median": 55449.06738169004,
+          "pll_per_trial": [
+            -15.1655,
+            -15.1172,
+            -15.1232,
+            -15.169
+          ],
+          "pll_final_mean": -15.143725
+        }
+      }
+    },
+    "svi/gp_pois_regr": {
+      "config_name": "svi/gp_pois_regr",
+      "model_class": "gp_pois_regr_scaled.GPPoisRegrScaled",
+      "model_args": {
+        "n": 8,
+        "rho": 1.0
+      },
+      "frameworks": {
+        "NumPyro": {
+          "compile_time_s": 2.8074662685394287,
+          "per_iter_ms_mean": 1.639740765094757,
+          "per_iter_ms_std": 0.11933120224766836,
+          "infer_per_trial_s": [
+            0.2984,
+            0.3113,
+            0.3563,
+            0.3458
+          ],
+          "total_s_mean": 0.3279481530189514,
+          "iterations": 200,
+          "num_warmup": 0,
+          "n_trials": 4,
+          "neff_min": 746.9050683395271,
+          "neff_median": 791.7670606439193,
+          "neff_max": 901.3663015047681,
+          "neff_per_s_median": 2343.8217021545474,
+          "pll_per_trial": [
+            -6.5518,
+            -6.4365,
+            -6.3521,
+            -6.402
+          ],
+          "pll_final_mean": -6.4356
+        },
+        "Impulse": {
+          "compile_time_s": 36.272394865,
+          "per_iter_ms_mean": 0.03355501,
+          "per_iter_ms_std": 0.02452098868766281,
+          "infer_per_trial_s": [
+            0.0152,
+            0.0038,
+            0.0039,
+            0.0039
+          ],
+          "total_s_mean": 0.006711002000000001,
+          "iterations": 200,
+          "num_warmup": 0,
+          "n_trials": 4,
+          "neff_min": 429.6447646110456,
+          "neff_median": 721.526853922092,
+          "neff_max": 916.3868270861203,
+          "neff_per_s_median": 185976.25106506218,
+          "pll_per_trial": [
+            -6.3874,
+            -6.2293,
+            -6.3222,
+            -6.5193
+          ],
+          "pll_final_mean": -6.36455
+        },
+        "Impulse (no opt)": {
+          "compile_time_s": 36.953391512,
+          "per_iter_ms_mean": 0.08493991125,
+          "per_iter_ms_std": 0.02248336824402162,
+          "infer_per_trial_s": [
+            0.0248,
+            0.0144,
+            0.0146,
+            0.0142
+          ],
+          "total_s_mean": 0.01698798225,
+          "iterations": 200,
+          "num_warmup": 0,
+          "n_trials": 4,
+          "neff_min": 429.6447646110456,
+          "neff_median": 721.526853922092,
+          "neff_max": 916.3868270861203,
+          "neff_per_s_median": 50129.54715368855,
+          "pll_per_trial": [
+            -6.3874,
+            -6.2293,
+            -6.3222,
+            -6.5193
+          ],
+          "pll_final_mean": -6.36455
+        }
+      }
+    },
+    "standard/coal_mining": {
+      "config_name": "standard/coal_mining",
+      "model_class": "coal_mining.CoalMining",
+      "model_args": {
+        "n": 112,
+        "s_true": 40,
+        "l1_true": 3.0,
+        "l2_true": 0.9
+      },
+      "frameworks": {
+        "NumPyro": {
+          "compile_time_s": 1.3284788131713867,
+          "per_iter_ms_mean": 0.14697755873203278,
+          "per_iter_ms_std": 0.003182925250868208,
+          "infer_per_trial_s": [
+            0.5834,
+            0.6092,
+            0.5753,
+            0.5838
+          ],
+          "total_s_mean": 0.5879102349281311,
+          "iterations": 4000,
+          "num_warmup": 1000,
+          "n_trials": 4,
+          "neff_min": 10284.675335418815,
+          "neff_median": 10380.274041456181,
+          "neff_max": 10475.872747493548,
+          "neff_per_s_median": 17611.303620475977,
+          "pll_per_trial": [
+            -173.4638,
+            -173.3879,
+            -173.7142,
+            -173.6721
+          ],
+          "pll_final_mean": -173.5595
+        },
+        "Impulse": {
+          "compile_time_s": 29.115287016,
+          "per_iter_ms_mean": 0.0860587954375,
+          "per_iter_ms_std": 0.03318863492503726,
+          "infer_per_trial_s": [
+            0.573,
+            0.2865,
+            0.2492,
+            0.2681
+          ],
+          "total_s_mean": 0.34423518175,
+          "iterations": 4000,
+          "num_warmup": 1000,
+          "n_trials": 4,
+          "neff_min": 8665.290296706436,
+          "neff_median": 9648.564721899547,
+          "neff_max": 10631.839147092656,
+          "neff_per_s_median": 36006.36492391922,
+          "pll_per_trial": [
+            -173.4444,
+            -173.6801,
+            -173.6986,
+            -173.531
+          ],
+          "pll_final_mean": -173.588525
+        },
+        "Impulse (no opt)": {
+          "compile_time_s": 29.078140141,
+          "per_iter_ms_mean": 0.0846893151875,
+          "per_iter_ms_std": 0.04254142305061633,
+          "infer_per_trial_s": [
+            0.6329,
+            0.2252,
+            0.2421,
+            0.2548
+          ],
+          "total_s_mean": 0.33875726075,
+          "iterations": 4000,
+          "num_warmup": 1000,
+          "n_trials": 4,
+          "neff_min": 10152.062578163626,
+          "neff_median": 10563.77798123466,
+          "neff_max": 10975.493384305695,
+          "neff_per_s_median": 43887.992480919835,
+          "pll_per_trial": [
+            -173.6778,
+            -173.5244,
+            -173.7072,
+            -173.5549
+          ],
+          "pll_final_mean": -173.616075
+        }
+      }
+    },
+    "motivating/gp_pois_regr": {
+      "config_name": "motivating/gp_pois_regr",
+      "model_class": "gp_pois_regr_scaled.GPPoisRegrScaled",
+      "model_args": {
+        "n": 40,
+        "rho": 1.0
+      },
+      "frameworks": {
+        "NumPyro": {
+          "compile_time_s": 5.176548719406128,
+          "per_iter_ms_mean": 2.8488296270370483,
+          "per_iter_ms_std": 0.046974737811814306,
+          "infer_per_trial_s": [
+            4.3247,
+            4.2912,
+            4.1534,
+            4.3236
+          ],
+          "total_s_mean": 4.2732444405555725,
+          "iterations": 1500,
+          "num_warmup": 500,
+          "n_trials": 4,
+          "neff_min": 972.6805136182071,
+          "neff_median": 5472.680952336121,
+          "neff_max": 6702.467948238077,
+          "neff_per_s_median": 1285.8432253707092,
+          "pll_per_trial": [
+            -49.7597,
+            -48.8945,
+            -50.0078,
+            -48.6133
+          ],
+          "pll_final_mean": -49.318825000000004
+        },
+        "Impulse": {
+          "compile_time_s": 38.546493181,
+          "per_iter_ms_mean": 0.250345531,
+          "per_iter_ms_std": 0.11887602279504307,
+          "infer_per_trial_s": [
+            0.6841,
+            0.2638,
+            0.2709,
+            0.2833
+          ],
+          "total_s_mean": 0.3755182965,
+          "iterations": 1500,
+          "num_warmup": 500,
+          "n_trials": 4,
+          "neff_min": 1213.287654226494,
+          "neff_median": 5673.158351206371,
+          "neff_max": 7569.238195538182,
+          "neff_per_s_median": 20807.678565609753,
+          "pll_per_trial": [
+            -49.8767,
+            -49.5808,
+            -50.0778,
+            -49.8271
+          ],
+          "pll_final_mean": -49.8406
+        },
+        "Impulse (no opt)": {
+          "compile_time_s": 39.2445308,
+          "per_iter_ms_mean": 8.582628015833334,
+          "per_iter_ms_std": 0.20955793500194397,
+          "infer_per_trial_s": [
+            12.4195,
+            13.2502,
+            12.7645,
+            13.0615
+          ],
+          "total_s_mean": 12.87394202375,
+          "iterations": 1500,
+          "num_warmup": 500,
+          "n_trials": 4,
+          "neff_min": 1692.579758951242,
+          "neff_median": 5566.181835050759,
+          "neff_max": 6847.239695466155,
+          "neff_per_s_median": 427.3321988170991,
+          "pll_per_trial": [
+            -49.8851,
+            -49.9594,
+            -49.3215,
+            -48.5902
+          ],
+          "pll_final_mean": -49.43905
+        },
+        "Stan": {
+          "compile_time_s": 8.448266506195068,
+          "per_iter_ms_mean": 1.7525477011998494,
+          "per_iter_ms_std": 0.10920085733485582,
+          "infer_per_trial_s": [
+            2.7704,
+            2.7346,
+            2.3543,
+            2.6559
+          ],
+          "total_s_mean": 2.628821551799774,
+          "iterations": 1500,
+          "num_warmup": 500,
+          "n_trials": 4,
+          "neff_min": 91.45451840897412,
+          "neff_median": 2261.453243995637,
+          "neff_max": 5623.480698742608,
+          "neff_per_s_median": 875.9839900574416,
+          "pll_per_trial": [
+            -49.8497,
+            -49.8291,
+            -49.5004,
+            -49.7621
+          ],
+          "pll_final_mean": -49.735324999999996
+        }
+      }
+    },
+    "standard/crowd_sourced_annotation": {
+      "config_name": "standard/crowd_sourced_annotation",
+      "model_class": "crowd_sourced_annotation.CrowdSourcedAnnotation",
+      "model_args": {
+        "n": 2000,
+        "k": 10,
+        "num_categories": 3,
+        "expected_correctness": 0.8,
+        "num_labels_per_item": 3,
+        "concentration": 10
+      },
+      "frameworks": {
+        "Impulse": {
+          "compile_time_s": 47.384455836,
+          "per_iter_ms_mean": 0.9457207462499999,
+          "per_iter_ms_std": 0.031535930461803766,
+          "infer_per_trial_s": [
+            3.9966,
+            3.6924,
+            3.7545,
+            3.6881
+          ],
+          "total_s_mean": 3.7828829849999996,
+          "iterations": 4000,
+          "num_warmup": 1000,
+          "n_trials": 4,
+          "neff_min": 11416.896212560785,
+          "neff_median": 17395.215910748226,
+          "neff_max": 24006.852562379976,
+          "neff_per_s_median": 4686.652801819547,
+          "pll_per_trial": [
+            -1807.9325,
+            -1808.9163,
+            -1807.6618,
+            -1809.2533
+          ],
+          "pll_final_mean": -1808.440975
+        },
+        "Impulse (no opt)": {
+          "compile_time_s": 50.677881783,
+          "per_iter_ms_mean": 1.14425558525,
+          "per_iter_ms_std": 0.04876599741859779,
+          "infer_per_trial_s": [
+            4.9124,
+            4.4543,
+            4.5026,
+            4.4388
+          ],
+          "total_s_mean": 4.577022341,
+          "iterations": 4000,
+          "num_warmup": 1000,
+          "n_trials": 4,
+          "neff_min": 12509.552932279752,
+          "neff_median": 19625.037390271533,
+          "neff_max": 29369.31684579149,
+          "neff_per_s_median": 4395.084709575159,
+          "pll_per_trial": [
+            -1854.1875,
+            -1848.4973,
+            -1854.4809,
+            -1855.5034
+          ],
+          "pll_final_mean": -1853.1672749999998
+        },
+        "Stan": {
+          "compile_time_s": 6.959553003311157,
+          "per_iter_ms_mean": 23.116391479969025,
+          "per_iter_ms_std": 1.2259872149720983,
+          "infer_per_trial_s": [
+            93.9803,
+            96.6177,
+            84.1274,
+            95.1369
+          ],
+          "total_s_mean": 92.4655659198761,
+          "iterations": 4000,
+          "num_warmup": 1000,
+          "n_trials": 4,
+          "neff_min": 7.071809616133783,
+          "neff_median": 8.057134121557441,
+          "neff_max": 19775.15221993426,
+          "neff_per_s_median": 0.08761501172653978,
+          "pll_per_trial": [
+            -1806.7229,
+            -1804.7935,
+            -1847.4124,
+            -1807.9978
+          ],
+          "pll_final_mean": -1816.73165
+        }
+      }
+    },
+    "standard/noisy_or_topic": {
+      "config_name": "standard/noisy_or_topic",
+      "model_class": "noisy_or_topic.NoisyOrTopic",
+      "model_args": {
+        "n": 2,
+        "num_topics": 50,
+        "num_words": 100,
+        "avg_fanout": 3.0,
+        "avg_leak_weight": 0.1,
+        "avg_topic_weight": 1.0
+      },
+      "frameworks": {
+        "Impulse": {
+          "compile_time_s": 25.007611734,
+          "per_iter_ms_mean": 5.693583737499999,
+          "per_iter_ms_std": 1.3552837209152284,
+          "infer_per_trial_s": [
+            20.0855,
+            19.2144,
+            19.6485,
+            32.1488
+          ],
+          "total_s_mean": 22.774334949999997,
+          "iterations": 4000,
+          "num_warmup": 1000,
+          "n_trials": 4,
+          "neff_min": 660.5152693217889,
+          "neff_median": 5423.2223227192635,
+          "neff_max": 12034.420975562189,
+          "neff_per_s_median": 229.11215316183566,
+          "pll_per_trial": [
+            -28.176,
+            -28.312,
+            -27.9025,
+            -28.648
+          ],
+          "pll_final_mean": -28.259625
+        },
+        "Impulse (no opt)": {
+          "compile_time_s": 25.521378028,
+          "per_iter_ms_mean": 4.8542399844375,
+          "per_iter_ms_std": 0.10224810332527708,
+          "infer_per_trial_s": [
+            19.8837,
+            18.7934,
+            19.3371,
+            19.6537
+          ],
+          "total_s_mean": 19.41695993775,
+          "iterations": 4000,
+          "num_warmup": 1000,
+          "n_trials": 4,
+          "neff_min": 2896.7477394836983,
+          "neff_median": 5916.261862442923,
+          "neff_max": 12000.0,
+          "neff_per_s_median": 307.15683023181765,
+          "pll_per_trial": [
+            -27.6303,
+            -27.2078,
+            -27.8183,
+            -26.9944
+          ],
+          "pll_final_mean": -27.412699999999997
+        },
+        "Stan": {
+          "compile_time_s": 7.731971740722656,
+          "per_iter_ms_mean": 19.84063759446144,
+          "per_iter_ms_std": 2.959051132191266,
+          "infer_per_trial_s": [
+            62.1908,
+            78.1215,
+            81.6966,
+            95.4413
+          ],
+          "total_s_mean": 79.36255037784576,
+          "iterations": 4000,
+          "num_warmup": 1000,
+          "n_trials": 4,
+          "neff_min": 1669.6908775618222,
+          "neff_median": 6809.106425241078,
+          "neff_max": 12037.35427012731,
+          "neff_per_s_median": 80.02573147267402,
+          "pll_per_trial": [
+            -28.7257,
+            -28.1583,
+            -28.6389,
+            -28.3383
+          ],
+          "pll_final_mean": -28.4653
+        }
+      }
+    },
+    "standard/coal_mining_mc4": {
+      "config_name": "standard/coal_mining_mc4",
+      "model_class": "coal_mining.CoalMining",
+      "model_args": {
+        "n": 112,
+        "s_true": 40,
+        "l1_true": 3.0,
+        "l2_true": 0.9
+      },
+      "frameworks": {
+        "NumPyro (mc4)": {
+          "compile_time_s": 1.0836787223815918,
+          "per_iter_ms_mean": NaN,
+          "per_iter_ms_std": NaN,
+          "infer_per_trial_s": [
+            0.8726,
+            NaN,
+            NaN,
+            NaN,
+            0.8238,
+            NaN,
+            NaN,
+            NaN
+          ],
+          "total_s_mean": NaN,
+          "iterations": 4000,
+          "num_warmup": 1000,
+          "n_trials": 8,
+          "neff_min": 18525.979906386045,
+          "neff_median": 19694.36247482249,
+          "neff_max": 20862.745043258936,
+          "neff_per_s_median": 23905.466236119137,
+          "pll_per_trial": [
+            -173.6217,
+            -173.7929
+          ],
+          "pll_final_mean": -173.7073
+        },
+        "Impulse (mc4)": {
+          "compile_time_s": 28.269166752,
+          "per_iter_ms_mean": NaN,
+          "per_iter_ms_std": NaN,
+          "infer_per_trial_s": [
+            3.3076,
+            NaN,
+            NaN,
+            NaN,
+            1.1887,
+            NaN,
+            NaN,
+            NaN
+          ],
+          "total_s_mean": NaN,
+          "iterations": 4000,
+          "num_warmup": 1000,
+          "n_trials": 8,
+          "neff_min": 17226.52707672262,
+          "neff_median": 17828.480368931072,
+          "neff_max": 18430.43366113952,
+          "neff_per_s_median": 14998.710054773917,
+          "pll_per_trial": [
+            -173.4557,
+            -173.78
+          ],
+          "pll_final_mean": -173.61785
+        }
+      }
+    },
+    "standard/crowd_sourced_annotation_mc4": {
+      "config_name": "standard/crowd_sourced_annotation_mc4",
+      "model_class": "crowd_sourced_annotation.CrowdSourcedAnnotation",
+      "model_args": {
+        "n": 2000,
+        "k": 10,
+        "num_categories": 3,
+        "expected_correctness": 0.8,
+        "num_labels_per_item": 3,
+        "concentration": 10
+      },
+      "frameworks": {
+        "Impulse (mc4)": {
+          "compile_time_s": 45.807652886,
+          "per_iter_ms_mean": NaN,
+          "per_iter_ms_std": NaN,
+          "infer_per_trial_s": [
+            17.3191,
+            NaN,
+            NaN,
+            NaN,
+            14.9494,
+            NaN,
+            NaN,
+            NaN,
+            14.5618,
+            NaN,
+            NaN,
+            NaN,
+            14.7404,
+            NaN,
+            NaN,
+            NaN
+          ],
+          "total_s_mean": NaN,
+          "iterations": 4000,
+          "num_warmup": 1000,
+          "n_trials": 16,
+          "neff_min": 51180.309075363504,
+          "neff_median": 81204.85632863548,
+          "neff_max": 109821.24697766376,
+          "neff_per_s_median": 5505.2222989054435,
+          "pll_per_trial": [
+            -1808.0637,
+            -1806.746,
+            -1804.7084,
+            -1804.7248
+          ],
+          "pll_final_mean": -1806.0607249999998
+        },
+        "Stan (mc4)": {
+          "compile_time_s": 6.708964109420776,
+          "per_iter_ms_mean": NaN,
+          "per_iter_ms_std": NaN,
+          "infer_per_trial_s": [
+            108.5529,
+            NaN,
+            NaN,
+            NaN,
+            111.3191,
+            NaN,
+            NaN,
+            NaN,
+            103.3856,
+            NaN,
+            NaN,
+            NaN,
+            97.0944,
+            NaN,
+            NaN,
+            NaN
+          ],
+          "total_s_mean": NaN,
+          "iterations": 4000,
+          "num_warmup": 1000,
+          "n_trials": 16,
+          "neff_min": 61.59524944221907,
+          "neff_median": 72.02127946080614,
+          "neff_max": 80074.56044402628,
+          "neff_per_s_median": 0.6929586149237482,
+          "pll_per_trial": [
+            -1805.6758,
+            -1804.9572,
+            -1809.6069,
+            -1806.7371
+          ],
+          "pll_final_mean": -1806.74425
+        }
+      }
+    },
+    "standard/logistic_regression_mc4": {
+      "config_name": "standard/logistic_regression_mc4",
+      "model_class": "logistic_regression.LogisticRegression",
+      "model_args": {
+        "n": 10000,
+        "k": 10,
+        "rho": 3.0
+      },
+      "frameworks": {
+        "NumPyro (mc4)": {
+          "compile_time_s": 4.951519727706909,
+          "per_iter_ms_mean": NaN,
+          "per_iter_ms_std": NaN,
+          "infer_per_trial_s": [
+            4.6162,
+            NaN,
+            NaN,
+            NaN,
+            4.5239,
+            NaN,
+            NaN,
+            NaN
+          ],
+          "total_s_mean": NaN,
+          "iterations": 4000,
+          "num_warmup": 1000,
+          "n_trials": 8,
+          "neff_min": 32065.69975101412,
+          "neff_median": 32498.734932922795,
+          "neff_max": 44045.05442824371,
+          "neff_per_s_median": 7183.855680525957,
+          "pll_per_trial": [
+            -30.3272,
+            -30.2186
+          ],
+          "pll_final_mean": -30.2729
+        },
+        "Impulse (mc4)": {
+          "compile_time_s": 12.912561337,
+          "per_iter_ms_mean": NaN,
+          "per_iter_ms_std": NaN,
+          "infer_per_trial_s": [
+            11.6487,
+            NaN,
+            NaN,
+            NaN,
+            10.0639,
+            NaN,
+            NaN,
+            NaN
+          ],
+          "total_s_mean": NaN,
+          "iterations": 4000,
+          "num_warmup": 1000,
+          "n_trials": 8,
+          "neff_min": 30514.24761524141,
+          "neff_median": 31731.269132515412,
+          "neff_max": 42844.455505112375,
+          "neff_per_s_median": 3152.972843464022,
+          "pll_per_trial": [
+            -30.9408,
+            -30.3924
+          ],
+          "pll_final_mean": -30.6666
+        },
+        "Stan (mc4)": {
+          "compile_time_s": 5.845947504043579,
+          "per_iter_ms_mean": NaN,
+          "per_iter_ms_std": NaN,
+          "infer_per_trial_s": [
+            17.3325,
+            NaN,
+            NaN,
+            NaN,
+            18.023,
+            NaN,
+            NaN,
+            NaN
+          ],
+          "total_s_mean": NaN,
+          "iterations": 4000,
+          "num_warmup": 1000,
+          "n_trials": 8,
+          "neff_min": 30382.284581033735,
+          "neff_median": 31425.36512817455,
+          "neff_max": 47812.2918303922,
+          "neff_per_s_median": 1743.6232069777006,
+          "pll_per_trial": [
+            -29.6044,
+            -30.758
+          ],
+          "pll_final_mean": -30.181199999999997
+        }
+      }
+    },
+    "standard/n_schools": {
+      "config_name": "standard/n_schools",
+      "model_class": "n_schools.NSchools",
+      "model_args": {
+        "n": 10000
+      },
+      "frameworks": {
+        "NumPyro": {
+          "compile_time_s": 4.34622597694397,
+          "per_iter_ms_mean": 0.7549970597028732,
+          "per_iter_ms_std": 0.03984704291786488,
+          "infer_per_trial_s": [
+            3.1328,
+            2.9803,
+            3.1892,
+            2.7777
+          ],
+          "total_s_mean": 3.019988238811493,
+          "iterations": 4000,
+          "num_warmup": 1000,
+          "n_trials": 4,
+          "neff_min": 8887.645130110499,
+          "neff_median": 15521.83977969854,
+          "neff_max": 18187.745243234047,
+          "neff_per_s_median": 5204.487964842532,
+          "pll_per_trial": [
+            -6872.0855,
+            -6871.1332,
+            -6870.4951,
+            -6865.9108
+          ],
+          "pll_final_mean": -6869.906150000001
+        },
+        "Impulse": {
+          "compile_time_s": 27.865019997,
+          "per_iter_ms_mean": 0.503309884125,
+          "per_iter_ms_std": 0.04634928998894276,
+          "infer_per_trial_s": [
+            2.3264,
+            1.871,
+            1.88,
+            1.9754
+          ],
+          "total_s_mean": 2.0132395365,
+          "iterations": 4000,
+          "num_warmup": 1000,
+          "n_trials": 4,
+          "neff_min": 10871.815295980523,
+          "neff_median": 15923.528289550088,
+          "neff_max": 17619.40262592707,
+          "neff_per_s_median": 8342.000096209353,
+          "pll_per_trial": [
+            -6870.2195,
+            -6872.7266,
+            -6871.161,
+            -6867.34
+          ],
+          "pll_final_mean": -6870.361775
+        },
+        "Impulse (no opt)": {
+          "compile_time_s": 28.233518656,
+          "per_iter_ms_mean": 0.5218135783125,
+          "per_iter_ms_std": 0.07099546990584905,
+          "infer_per_trial_s": [
+            2.5476,
+            1.9023,
+            2.0885,
+            1.8107
+          ],
+          "total_s_mean": 2.08725431325,
+          "iterations": 4000,
+          "num_warmup": 1000,
+          "n_trials": 4,
+          "neff_min": 9521.28523284792,
+          "neff_median": 16757.225222197136,
+          "neff_max": 18044.38907467783,
+          "neff_per_s_median": 8665.357041195875,
+          "pll_per_trial": [
+            -467189.579,
+            -492638.1307,
+            -497007.9847,
+            -498183.3972
+          ],
+          "pll_final_mean": -488754.7729
+        },
+        "Stan": {
+          "compile_time_s": 6.39149284362793,
+          "per_iter_ms_mean": 3.8779612332582474,
+          "per_iter_ms_std": 0.10661121082459789,
+          "infer_per_trial_s": [
+            16.0264,
+            15.7137,
+            14.8662,
+            15.4411
+          ],
+          "total_s_mean": 15.51184493303299,
+          "iterations": 4000,
+          "num_warmup": 1000,
+          "n_trials": 4,
+          "neff_min": 10340.889720726645,
+          "neff_median": 15566.728424436269,
+          "neff_max": 17450.93157524471,
+          "neff_per_s_median": 1014.759307893826,
+          "pll_per_trial": [
+            -6873.2183,
+            -6869.2298,
+            -6868.7845,
+            -6869.5365
+          ],
+          "pll_final_mean": -6870.192275000001
+        }
+      }
+    },
+    "standard/robust_regression": {
+      "config_name": "standard/robust_regression",
+      "model_class": "robust_regression.RobustRegression",
+      "model_args": {
+        "n": 10000,
+        "k": 10
+      },
+      "frameworks": {
+        "NumPyro": {
+          "compile_time_s": 4.196735382080078,
+          "per_iter_ms_mean": 0.8315238207578659,
+          "per_iter_ms_std": 0.09959586243965697,
+          "infer_per_trial_s": [
+            3.3825,
+            3.6581,
+            2.6597,
+            3.6041
+          ],
+          "total_s_mean": 3.3260952830314636,
+          "iterations": 4000,
+          "num_warmup": 1000,
+          "n_trials": 4,
+          "neff_min": 6362.312508886881,
+          "neff_median": 26588.230943482456,
+          "neff_max": 29696.697509951664,
+          "neff_per_s_median": 8039.309161794669,
+          "pll_per_trial": [
+            -7184.5985,
+            -7184.7843,
+            -7184.8518,
+            -7184.2175
+          ],
+          "pll_final_mean": -7184.613025
+        },
+        "Impulse": {
+          "compile_time_s": 27.849298216,
+          "per_iter_ms_mean": 0.496920129875,
+          "per_iter_ms_std": 0.08169454919743184,
+          "infer_per_trial_s": [
+            2.3796,
+            1.9923,
+            1.4773,
+            2.1015
+          ],
+          "total_s_mean": 1.9876805195,
+          "iterations": 4000,
+          "num_warmup": 1000,
+          "n_trials": 4,
+          "neff_min": 6310.834586819809,
+          "neff_median": 26978.731469530536,
+          "neff_max": 31043.909470392333,
+          "neff_per_s_median": 14527.876885569965,
+          "pll_per_trial": [
+            -7184.7192,
+            -7184.8821,
+            -7184.8591,
+            -7184.8494
+          ],
+          "pll_final_mean": -7184.827449999999
+        },
+        "Impulse (no opt)": {
+          "compile_time_s": 28.310345978,
+          "per_iter_ms_mean": 0.489204478125,
+          "per_iter_ms_std": 0.0934203919768832,
+          "infer_per_trial_s": [
+            2.4737,
+            1.9248,
+            1.4204,
+            2.0083
+          ],
+          "total_s_mean": 1.9568179125,
+          "iterations": 4000,
+          "num_warmup": 1000,
+          "n_trials": 4,
+          "neff_min": 6310.834586819809,
+          "neff_median": 26978.731469530536,
+          "neff_max": 31043.909470392333,
+          "neff_per_s_median": 15118.172735411683,
+          "pll_per_trial": [
+            -7184.7192,
+            -7184.8821,
+            -7184.8591,
+            -7184.8494
+          ],
+          "pll_final_mean": -7184.827449999999
+        },
+        "Stan": {
+          "compile_time_s": 5.927991628646851,
+          "per_iter_ms_mean": 2.296630382537842,
+          "per_iter_ms_std": 0.14174970718553423,
+          "infer_per_trial_s": [
+            8.8419,
+            8.7743,
+            8.9688,
+            10.1611
+          ],
+          "total_s_mean": 9.186521530151367,
+          "iterations": 4000,
+          "num_warmup": 1000,
+          "n_trials": 4,
+          "neff_min": 6036.035361905056,
+          "neff_median": 25234.912256154184,
+          "neff_max": 27875.08957673237,
+          "neff_per_s_median": 2713.0278969422216,
+          "pll_per_trial": [
+            -7185.0039,
+            -7185.2317,
+            -7184.8759,
+            -7184.4717
+          ],
+          "pll_final_mean": -7184.8958
+        }
+      }
+    },
+    "standard/logistic_regression": {
+      "config_name": "standard/logistic_regression",
+      "model_class": "logistic_regression.LogisticRegression",
+      "model_args": {
+        "n": 10000,
+        "k": 10,
+        "rho": 3.0
+      },
+      "frameworks": {
+        "NumPyro": {
+          "compile_time_s": 5.06352162361145,
+          "per_iter_ms_mean": 1.0409974157810211,
+          "per_iter_ms_std": 0.04668117155958034,
+          "infer_per_trial_s": [
+            3.976,
+            3.9864,
+            4.2933,
+            4.4003
+          ],
+          "total_s_mean": 4.1639896631240845,
+          "iterations": 4000,
+          "num_warmup": 1000,
+          "n_trials": 4,
+          "neff_min": 15460.393791830867,
+          "neff_median": 16038.84686279349,
+          "neff_max": 23438.298861009207,
+          "neff_per_s_median": 3794.689469468554,
+          "pll_per_trial": [
+            -30.5247,
+            -30.0193,
+            -30.434,
+            -30.5718
+          ],
+          "pll_final_mean": -30.387449999999998
+        },
+        "Impulse": {
+          "compile_time_s": 13.117102822,
+          "per_iter_ms_mean": 0.6554787161875,
+          "per_iter_ms_std": 0.022265874855522214,
+          "infer_per_trial_s": [
+            2.562,
+            2.5289,
+            2.636,
+            2.7608
+          ],
+          "total_s_mean": 2.62191486475,
+          "iterations": 4000,
+          "num_warmup": 1000,
+          "n_trials": 4,
+          "neff_min": 14903.422211598474,
+          "neff_median": 15651.639341395348,
+          "neff_max": 22304.14223210854,
+          "neff_per_s_median": 5924.433270412804,
+          "pll_per_trial": [
+            -30.5147,
+            -30.2627,
+            -30.1932,
+            -30.7263
+          ],
+          "pll_final_mean": -30.424225
+        },
+        "Impulse (no opt)": {
+          "compile_time_s": 12.897631497,
+          "per_iter_ms_mean": 0.6577595291875,
+          "per_iter_ms_std": 0.03396035842055808,
+          "infer_per_trial_s": [
+            2.462,
+            2.569,
+            2.6609,
+            2.8323
+          ],
+          "total_s_mean": 2.63103811675,
+          "iterations": 4000,
+          "num_warmup": 1000,
+          "n_trials": 4,
+          "neff_min": 14903.422211598474,
+          "neff_median": 15651.639341395348,
+          "neff_max": 22304.14223210854,
+          "neff_per_s_median": 5824.1066409908035,
+          "pll_per_trial": [
+            -30.5147,
+            -30.2627,
+            -30.1932,
+            -30.7263
+          ],
+          "pll_final_mean": -30.424225
+        },
+        "Stan": {
+          "compile_time_s": 5.708966970443726,
+          "per_iter_ms_mean": 3.155804142355919,
+          "per_iter_ms_std": 0.07223127884864407,
+          "infer_per_trial_s": [
+            12.3057,
+            12.8778,
+            12.943,
+            12.3663
+          ],
+          "total_s_mean": 12.623216569423676,
+          "iterations": 4000,
+          "num_warmup": 1000,
+          "n_trials": 4,
+          "neff_min": 14067.057234707852,
+          "neff_median": 14990.60872174374,
+          "neff_max": 23569.751645259366,
+          "neff_per_s_median": 1177.6681113925983,
+          "pll_per_trial": [
+            -30.4894,
+            -26.9433,
+            -30.2586,
+            -30.2247
+          ],
+          "pll_final_mean": -29.479
+        }
+      }
+    },
+    "ablation/gp_fixed_lengthscale": {
+      "config_name": "ablation/gp_fixed_lengthscale",
+      "model_class": "gp_fixed_lengthscale.GPFixedLengthscale",
+      "model_args": {
+        "n": 100,
+        "rho": 2.0
+      },
+      "frameworks": {
+        "Full SICM": {
+          "compile_time_s": 16.783925322,
+          "per_iter_ms_mean": 24.391130032,
+          "per_iter_ms_std": 0.14776037400000064,
+          "infer_per_trial_s": [
+            12.1217,
+            12.2694
+          ],
+          "total_s_mean": 12.195565016,
+          "iterations": 500,
+          "num_warmup": 200,
+          "n_trials": 2,
+          "neff_min": 302.94972671456435,
+          "neff_median": 338.6703039677783,
+          "neff_max": 374.3908812209923,
+          "neff_per_s_median": 27.60273984393117,
+          "pll_per_trial": [
+            -33.7108,
+            -33.2629
+          ],
+          "pll_final_mean": -33.486850000000004
+        }
+      }
+    },
+    "ablation/linear_mixed_model": {
+      "config_name": "ablation/linear_mixed_model",
+      "model_class": "linear_mixed_model.LinearMixedModel",
+      "model_args": {
+        "n": 60,
+        "k": 30,
+        "q": 15
+      },
+      "frameworks": {
+        "Full SICM": {
+          "compile_time_s": 14.937962605,
+          "per_iter_ms_mean": 168.0705544825,
+          "per_iter_ms_std": 84.86504853749999,
+          "infer_per_trial_s": [
+            16.6411,
+            50.5871
+          ],
+          "total_s_mean": 33.6141108965,
+          "iterations": 200,
+          "num_warmup": 50,
+          "n_trials": 2,
+          "neff_min": 117.98623362134089,
+          "neff_median": 241.52499834470177,
+          "neff_max": 381.50787828346284,
+          "neff_per_s_median": 4.774436565294527,
+          "pll_per_trial": [
+            -46.6758,
+            -45.3832
+          ],
+          "pll_final_mean": -46.0295
+        }
+      }
+    },
+    "ablation/stochastic_volatility": {
+      "config_name": "ablation/stochastic_volatility",
+      "model_class": "stochastic_volatility.StochasticVolatility",
+      "model_args": {
+        "n": 50,
+        "phi": 0.95
+      },
+      "frameworks": {
+        "Full SICM": {
+          "compile_time_s": 20.336382905,
+          "per_iter_ms_mean": 2.565542341,
+          "per_iter_ms_std": 0.29314734899999983,
+          "infer_per_trial_s": [
+            1.4293,
+            1.1362
+          ],
+          "total_s_mean": 1.2827711705,
+          "iterations": 500,
+          "num_warmup": 200,
+          "n_trials": 2,
+          "neff_min": 358.41543356467696,
+          "neff_median": 485.69653216981794,
+          "neff_max": 695.9955554633319,
+          "neff_per_s_median": 427.47544672446446,
+          "pll_per_trial": [
+            -29.6755,
+            -29.0742
+          ],
+          "pll_final_mean": -29.374850000000002
+        }
+      }
+    },
+    "ablation/gp_pois_regr_scaled": {
+      "config_name": "ablation/gp_pois_regr_scaled",
+      "model_class": "gp_pois_regr_scaled.GPPoisRegrScaled",
+      "model_args": {
+        "n": 40,
+        "rho": 1.0
+      },
+      "frameworks": {
+        "Full (pre-SICM)": {
+          "compile_time_s": 40.212617435,
+          "per_iter_ms_mean": 0.21915077858333334,
+          "per_iter_ms_std": 0.08727413167856035,
+          "infer_per_trial_s": [
+            0.6747,
+            0.2807,
+            0.2774,
+            0.282,
+            0.2854,
+            0.2689,
+            0.2721,
+            0.2885
+          ],
+          "total_s_mean": 0.328726167875,
+          "iterations": 1500,
+          "num_warmup": 500,
+          "n_trials": 8,
+          "neff_min": 1784.945135194028,
+          "neff_median": 10286.988691527167,
+          "neff_max": 12267.259418373013,
+          "neff_per_s_median": 36831.398613706035
+        }
+      }
+    },
+    "ablation/logistic_regression": {
+      "config_name": "ablation/logistic_regression",
+      "model_class": "logistic_regression.LogisticRegression",
+      "model_args": {
+        "n": 10000,
+        "k": 10,
+        "rho": 3.0
+      },
+      "frameworks": {
+        "Full": {
+          "compile_time_s": 13.20334502,
+          "per_iter_ms_mean": 0.3784183952625,
+          "per_iter_ms_std": 0.031199301492555773,
+          "infer_per_trial_s": [
+            3.7177,
+            3.9276,
+            4.164,
+            4.1862,
+            3.1626,
+            3.6857,
+            3.8602,
+            3.5695
+          ],
+          "total_s_mean": 3.784183952625,
+          "iterations": 10000,
+          "num_warmup": 5000,
+          "n_trials": 8,
+          "neff_min": 56125.56298815976,
+          "neff_median": 58282.06830675376,
+          "neff_max": 82420.81694805498,
+          "neff_per_s_median": 15362.917140811074,
+          "pll_per_trial": [
+            -30.8779,
+            -29.7996,
+            -30.6709,
+            -30.5883,
+            -25.5787,
+            -30.8772,
+            -31.018,
+            -30.9289
+          ],
+          "pll_final_mean": -30.0424375
+        },
+        "No SICM": {
+          "compile_time_s": 12.768163998,
+          "per_iter_ms_mean": 0.3837527248375,
+          "per_iter_ms_std": 0.024089688279289784,
+          "infer_per_trial_s": [
+            3.7946,
+            3.9889,
+            3.9532,
+            4.0759,
+            3.8869,
+            3.699,
+            3.2781,
+            4.0237
+          ],
+          "total_s_mean": 3.8375272483750003,
+          "iterations": 10000,
+          "num_warmup": 5000,
+          "n_trials": 8,
+          "neff_min": 56125.56298815976,
+          "neff_median": 58282.06830675376,
+          "neff_max": 82420.81694805498,
+          "neff_per_s_median": 15163.186133476223,
+          "pll_per_trial": [
+            -30.8779,
+            -29.7996,
+            -30.6709,
+            -30.5883,
+            -25.5787,
+            -30.8772,
+            -31.018,
+            -30.9289
+          ],
+          "pll_final_mean": -30.0424375
+        }
+      }
+    },
+    "ablation/robust_regression": {
+      "config_name": "ablation/robust_regression",
+      "model_class": "robust_regression.RobustRegression",
+      "model_args": {
+        "n": 10000,
+        "k": 10
+      },
+      "frameworks": {
+        "Full": {
+          "compile_time_s": 29.89843977,
+          "per_iter_ms_mean": 0.364193637575,
+          "per_iter_ms_std": 0.027621475908650987,
+          "infer_per_trial_s": [
+            4.2332,
+            3.6193,
+            3.1678,
+            3.6367,
+            3.6125,
+            3.6069,
+            3.7579,
+            3.5011
+          ],
+          "total_s_mean": 3.6419363757500003,
+          "iterations": 10000,
+          "num_warmup": 5000,
+          "n_trials": 8,
+          "neff_min": 59288.1579738166,
+          "neff_median": 92971.80039947874,
+          "neff_max": 99744.39369052701,
+          "neff_per_s_median": 26134.26906413731,
+          "pll_per_trial": [
+            -7184.2795,
+            -7184.891,
+            -7184.4057,
+            -7185.0627,
+            -7184.9594,
+            -7185.2771,
+            -7185.1016,
+            -7185.0668
+          ],
+          "pll_final_mean": -7184.880475
+        },
+        "No SICM": {
+          "compile_time_s": 29.620416227,
+          "per_iter_ms_mean": 0.379099633525,
+          "per_iter_ms_std": 0.03067646475850936,
+          "infer_per_trial_s": [
+            4.3289,
+            3.6826,
+            3.1773,
+            3.9529,
+            3.9086,
+            3.6941,
+            3.905,
+            3.6785
+          ],
+          "total_s_mean": 3.79099633525,
+          "iterations": 10000,
+          "num_warmup": 5000,
+          "n_trials": 8,
+          "neff_min": 59288.1579738166,
+          "neff_median": 92971.80039947874,
+          "neff_max": 99744.39369052701,
+          "neff_per_s_median": 25031.78617659073,
+          "pll_per_trial": [
+            -7184.2795,
+            -7184.891,
+            -7184.4057,
+            -7185.0627,
+            -7184.9594,
+            -7185.2771,
+            -7185.1016,
+            -7185.0668
+          ],
+          "pll_final_mean": -7184.880475
+        }
+      }
+    },
+    "ablation/n_schools": {
+      "config_name": "ablation/n_schools",
+      "model_class": "n_schools.NSchools",
+      "model_args": {
+        "n": 10000
+      },
+      "frameworks": {
+        "Full": {
+          "compile_time_s": 27.505098895,
+          "per_iter_ms_mean": 0.3397149537625,
+          "per_iter_ms_std": 0.02596832301475846,
+          "infer_per_trial_s": [
+            3.3503,
+            3.2288,
+            3.6057,
+            3.5222,
+            3.4477,
+            3.6486,
+            2.8024,
+            3.5714
+          ],
+          "total_s_mean": 3.397149537625,
+          "iterations": 10000,
+          "num_warmup": 5000,
+          "n_trials": 8,
+          "neff_min": 29912.03940259214,
+          "neff_median": 53446.80539929589,
+          "neff_max": 57950.886046070096,
+          "neff_per_s_median": 15701.931903742647,
+          "pll_per_trial": [
+            -6873.065,
+            -6869.5739,
+            -6869.0839,
+            -6870.6082,
+            -6871.7198,
+            -6872.2386,
+            -6865.8922,
+            -6871.6918
+          ],
+          "pll_final_mean": -6870.484175
+        },
+        "No SICM": {
+          "compile_time_s": 28.563771451,
+          "per_iter_ms_mean": 0.3709597884375,
+          "per_iter_ms_std": 0.07175656895406533,
+          "infer_per_trial_s": [
+            3.4662,
+            5.4768,
+            3.6108,
+            3.5548,
+            3.4288,
+            3.6948,
+            2.8044,
+            3.6403
+          ],
+          "total_s_mean": 3.709597884375,
+          "iterations": 10000,
+          "num_warmup": 5000,
+          "n_trials": 8,
+          "neff_min": 29912.03940259214,
+          "neff_median": 53446.80539929589,
+          "neff_max": 57950.886046070096,
+          "neff_per_s_median": 14273.933343263998,
+          "pll_per_trial": [
+            -6873.065,
+            -6869.5739,
+            -6869.0839,
+            -6870.6082,
+            -6871.7198,
+            -6872.2386,
+            -6865.8922,
+            -6871.6918
+          ],
+          "pll_final_mean": -6870.484175
+        }
+      }
+    },
+    "sicm_ablation/gp_pois_regr": {
+      "config_name": "sicm_ablation/gp_pois_regr",
+      "model_class": "gp_pois_regr_scaled.GPPoisRegrScaled",
+      "model_args": {
+        "n": 40,
+        "rho": 1.0
+      },
+      "frameworks": {
+        "SICM": {
+          "compile_time_s": 39.081495701,
+          "per_iter_ms_mean": 0.970987555,
+          "per_iter_ms_std": 0.37655215100000006,
+          "infer_per_trial_s": [
+            0.6738,
+            0.2972
+          ],
+          "total_s_mean": 0.4854937775,
+          "iterations": 500,
+          "num_warmup": 200,
+          "n_trials": 2,
+          "neff_min": 251.97221265327548,
+          "neff_median": 547.580817835467,
+          "neff_max": 779.9234645207194,
+          "neff_per_s_median": 1842.3560042041743,
+          "pll_per_trial": [
+            -50.1671,
+            -49.1849
+          ],
+          "pll_final_mean": -49.676
+        },
+        "No SICM": {
+          "compile_time_s": 38.994923171,
+          "per_iter_ms_mean": 24.849211357999998,
+          "per_iter_ms_std": 1.5664008360000015,
+          "infer_per_trial_s": [
+            13.2078,
+            11.6414
+          ],
+          "total_s_mean": 12.424605678999999,
+          "iterations": 500,
+          "num_warmup": 200,
+          "n_trials": 2,
+          "neff_min": 259.3782041732178,
+          "neff_median": 600.8684777986489,
+          "neff_max": 732.7089190059576,
+          "neff_per_s_median": 51.614771956408475,
+          "pll_per_trial": [
+            -49.3475,
+            -49.5408
+          ],
+          "pll_final_mean": -49.44414999999999
+        }
+      }
+    },
+    "sicm_ablation/gp_classify": {
+      "config_name": "sicm_ablation/gp_classify",
+      "model_class": "gp_classify.GPClassify",
+      "model_args": {
+        "n": 40,
+        "rho": 1.0
+      },
+      "frameworks": {
+        "SICM": {
+          "compile_time_s": 20.122932318,
+          "per_iter_ms_mean": 0.836057069,
+          "per_iter_ms_std": 0.428880731,
+          "infer_per_trial_s": [
+            0.6325,
+            0.2036
+          ],
+          "total_s_mean": 0.4180285345,
+          "iterations": 500,
+          "num_warmup": 200,
+          "n_trials": 2,
+          "neff_min": 249.95383428651746,
+          "neff_median": 604.4355163668085,
+          "neff_max": 769.6425109674818,
+          "neff_per_s_median": 2968.912777867797,
+          "pll_per_trial": [
+            -11.0263,
+            -5.4714
+          ],
+          "pll_final_mean": -8.248850000000001
+        },
+        "No SICM": {
+          "compile_time_s": 20.89906871,
+          "per_iter_ms_mean": 19.711792206,
+          "per_iter_ms_std": 0.14648080800000152,
+          "infer_per_trial_s": [
+            9.9291,
+            9.7827
+          ],
+          "total_s_mean": 9.855896103,
+          "iterations": 500,
+          "num_warmup": 200,
+          "n_trials": 2,
+          "neff_min": 290.8755919466962,
+          "neff_median": 586.1038929284582,
+          "neff_max": 828.7738246354559,
+          "neff_per_s_median": 59.91255452119927,
+          "pll_per_trial": [
+            -11.7086,
+            -11.3498
+          ],
+          "pll_final_mean": -11.5292
+        }
+      }
+    },
+    "sicm_ablation/hierarchical_mvn": {
+      "config_name": "sicm_ablation/hierarchical_mvn",
+      "model_class": "hierarchical_mvn.HierarchicalMVN",
+      "model_args": {
+        "n": 60,
+        "K": 40,
+        "J": 2
+      },
+      "frameworks": {
+        "SICM": {
+          "compile_time_s": 20.378636868,
+          "per_iter_ms_mean": 14.1203633375,
+          "per_iter_ms_std": 0.34990842750000084,
+          "infer_per_trial_s": [
+            2.8941,
+            2.7541
+          ],
+          "total_s_mean": 2.8240726675000003,
+          "iterations": 200,
+          "num_warmup": 50,
+          "n_trials": 2,
+          "neff_min": 4.586992055468317,
+          "neff_median": 37.57009171080077,
+          "neff_max": 101.44059965709451,
+          "neff_per_s_median": 13.641557942838057,
+          "pll_per_trial": [
+            -131.9237,
+            -127.123
+          ],
+          "pll_final_mean": -129.52335
+        },
+        "No SICM": {
+          "compile_time_s": 19.88912791,
+          "per_iter_ms_mean": 127.56414530250001,
+          "per_iter_ms_std": 1.6157013624999976,
+          "infer_per_trial_s": [
+            25.836,
+            25.1897
+          ],
+          "total_s_mean": 25.512829060500003,
+          "iterations": 200,
+          "num_warmup": 50,
+          "n_trials": 2,
+          "neff_min": 4.433284084583202,
+          "neff_median": 29.103453206458457,
+          "neff_max": 157.97014092181234,
+          "neff_per_s_median": 1.1553716860655665,
+          "pll_per_trial": [
+            -149.6375,
+            -137.9023
+          ],
+          "pll_final_mean": -143.7699
+        }
+      }
+    },
+    "sicm_ablation/eigenlift_solve": {
+      "config_name": "sicm_ablation/eigenlift_solve",
+      "model_class": "eigenlift_solve.EigenLiftSolve",
+      "model_args": {
+        "n": 50
+      },
+      "frameworks": {
+        "SICM": {
+          "compile_time_s": 21.096209308,
+          "per_iter_ms_mean": 3.9946482475,
+          "per_iter_ms_std": 1.6346701374999997,
+          "infer_per_trial_s": [
+            1.1259,
+            0.472
+          ],
+          "total_s_mean": 0.7989296495,
+          "iterations": 200,
+          "num_warmup": 50,
+          "n_trials": 2,
+          "neff_min": 17.708515443784492,
+          "neff_median": 111.08934461094663,
+          "neff_max": 228.47061816104224,
+          "neff_per_s_median": 235.36096402806598,
+          "pll_per_trial": [
+            0.0,
+            0.0
+          ],
+          "pll_final_mean": 0.0
+        },
+        "No SICM": {
+          "compile_time_s": 20.884570896,
+          "per_iter_ms_mean": 519.8254145675,
+          "per_iter_ms_std": 8.03360892249998,
+          "infer_per_trial_s": [
+            105.5718,
+            102.3584
+          ],
+          "total_s_mean": 103.9650829135,
+          "iterations": 200,
+          "num_warmup": 50,
+          "n_trials": 2,
+          "neff_min": 16.669239554014975,
+          "neff_median": 147.9799297173246,
+          "neff_max": 227.9414073620861,
+          "neff_per_s_median": 1.4457043673337906,
+          "pll_per_trial": [
+            0.0,
+            0.0
+          ],
+          "pll_final_mean": 0.0
+        }
+      }
+    },
+    "sicm_ablation/stochastic_volatility": {
+      "config_name": "sicm_ablation/stochastic_volatility",
+      "model_class": "stochastic_volatility.StochasticVolatility",
+      "model_args": {
+        "n": 50,
+        "phi": 0.95
+      },
+      "frameworks": {
+        "SICM": {
+          "compile_time_s": 19.702494676,
+          "per_iter_ms_mean": 2.3854288849999996,
+          "per_iter_ms_std": 0.317358555,
+          "infer_per_trial_s": [
+            1.3514,
+            1.034
+          ],
+          "total_s_mean": 1.1927144424999998,
+          "iterations": 500,
+          "num_warmup": 200,
+          "n_trials": 2,
+          "neff_min": 358.41543356467696,
+          "neff_median": 485.69653216981794,
+          "neff_max": 695.9955554633319,
+          "neff_per_s_median": 469.70987893803203,
+          "pll_per_trial": [
+            -29.6755,
+            -29.0742
+          ],
+          "pll_final_mean": -29.374850000000002
+        },
+        "No SICM": {
+          "compile_time_s": 19.633927296,
+          "per_iter_ms_mean": 225.42255549,
+          "per_iter_ms_std": 21.597174722000005,
+          "infer_per_trial_s": [
+            101.9127,
+            123.5099
+          ],
+          "total_s_mean": 112.711277745,
+          "iterations": 500,
+          "num_warmup": 200,
+          "n_trials": 2,
+          "neff_min": 239.76658566779017,
+          "neff_median": 470.6622181300288,
+          "neff_max": 758.5525020752467,
+          "neff_per_s_median": 3.810725707829831,
+          "pll_per_trial": [
+            -29.2722,
+            -27.6327
+          ],
+          "pll_final_mean": -28.45245
+        }
+      }
+    }
+  },
+  "sicm": {
+    "sicm/stochastic_volatility": {
+      "config_name": "sicm/stochastic_volatility",
+      "model_class": "stochastic_volatility.StochasticVolatility",
+      "model_args": {
+        "n": 20,
+        "phi": 0.95
+      },
+      "frameworks": {
+        "NumPyro": {
+          "compile_time_s": 1.7242004871368408,
+          "per_iter_ms_mean": 0.6761627991994222,
+          "per_iter_ms_std": 0.12076890099555447,
+          "infer_per_trial_s": [
+            0.8866,
+            0.9781,
+            0.8722,
+            1.32
+          ],
+          "total_s_mean": 1.0142441987991333,
+          "iterations": 1500,
+          "num_warmup": 500,
+          "n_trials": 4,
+          "neff_min": 600.0395444349322,
+          "neff_median": 2887.1923589343587,
+          "neff_max": 4417.239099695313,
+          "neff_per_s_median": 2732.067877504356,
+          "pll_per_trial": [
+            -4.6279,
+            -4.5957,
+            -4.6662,
+            -4.5729
+          ],
+          "pll_final_mean": -4.615675
+        },
+        "Impulse": {
+          "compile_time_s": 19.493797365,
+          "per_iter_ms_mean": 0.14434107966666668,
+          "per_iter_ms_std": 0.13199258088608226,
+          "infer_per_trial_s": [
+            0.5592,
+            0.0943,
+            0.0988,
+            0.1137
+          ],
+          "total_s_mean": 0.2165116195,
+          "iterations": 1500,
+          "num_warmup": 500,
+          "n_trials": 4,
+          "neff_min": 402.1792358594513,
+          "neff_median": 2706.504636255717,
+          "neff_max": 3457.474139005681,
+          "neff_per_s_median": 26462.216172985773,
+          "pll_per_trial": [
+            -4.3934,
+            -4.8026,
+            -4.8028,
+            -4.3264
+          ],
+          "pll_final_mean": -4.5813
+        },
+        "Impulse (no opt)": {
+          "compile_time_s": 19.096643984,
+          "per_iter_ms_mean": 1.1765855368333333,
+          "per_iter_ms_std": 0.2682370402694196,
+          "infer_per_trial_s": [
+            2.1398,
+            1.0962,
+            1.8204,
+            2.0031
+          ],
+          "total_s_mean": 1.76487830525,
+          "iterations": 1500,
+          "num_warmup": 500,
+          "n_trials": 4,
+          "neff_min": 178.7614959248651,
+          "neff_median": 2714.9482244462715,
+          "neff_max": 3666.084303549542,
+          "neff_per_s_median": 1655.5644040164636,
+          "pll_per_trial": [
+            -7.9839,
+            -7.8848,
+            -8.0448,
+            -7.9855
+          ],
+          "pll_final_mean": -7.97475
+        },
+        "Stan": {
+          "compile_time_s": 8.978836059570312,
+          "per_iter_ms_mean": 0.26218398412068683,
+          "per_iter_ms_std": 0.0430462987729165,
+          "infer_per_trial_s": [
+            0.4778,
+            0.3653,
+            0.3052,
+            0.4248
+          ],
+          "total_s_mean": 0.3932759761810303,
+          "iterations": 1500,
+          "num_warmup": 500,
+          "n_trials": 4,
+          "neff_min": 1000.8165708568595,
+          "neff_median": 2991.646614055059,
+          "neff_max": 3801.254755052026,
+          "neff_per_s_median": 8193.760299385782,
+          "pll_per_trial": [
+            -4.6807,
+            -4.8475,
+            -4.7103,
+            -4.6915
+          ],
+          "pll_final_mean": -4.7325
+        }
+      }
+    },
+    "sicm/gp_classify": {
+      "config_name": "sicm/gp_classify",
+      "model_class": "gp_classify.GPClassify",
+      "model_args": {
+        "n": 30,
+        "rho": 2.0
+      },
+      "frameworks": {
+        "NumPyro": {
+          "compile_time_s": 2.1799099445343018,
+          "per_iter_ms_mean": 0.8588721752166748,
+          "per_iter_ms_std": 0.024846506231007974,
+          "infer_per_trial_s": [
+            1.3055,
+            1.2834,
+            1.333,
+            1.2314
+          ],
+          "total_s_mean": 1.2883082628250122,
+          "iterations": 1500,
+          "num_warmup": 500,
+          "n_trials": 4,
+          "neff_min": 1433.6615208234048,
+          "neff_median": 5326.251174692579,
+          "neff_max": 6031.3901692676045,
+          "neff_per_s_median": 4152.782685908255,
+          "pll_per_trial": [
+            -11.2038,
+            -11.4177,
+            -11.1385,
+            -11.0782
+          ],
+          "pll_final_mean": -11.20955
+        },
+        "Impulse": {
+          "compile_time_s": 20.677172106,
+          "per_iter_ms_mean": 0.1835416225,
+          "per_iter_ms_std": 0.13039472523170023,
+          "infer_per_trial_s": [
+            0.6139,
+            0.1565,
+            0.1737,
+            0.1572
+          ],
+          "total_s_mean": 0.27531243375,
+          "iterations": 1500,
+          "num_warmup": 500,
+          "n_trials": 4,
+          "neff_min": 1941.4766085267129,
+          "neff_median": 5656.0603033389725,
+          "neff_max": 6774.473657090103,
+          "neff_per_s_median": 34815.6819321817,
+          "pll_per_trial": [
+            -11.3927,
+            -11.1623,
+            -11.2025,
+            -10.9612
+          ],
+          "pll_final_mean": -11.179675
+        },
+        "Impulse (no opt)": {
+          "compile_time_s": 20.541065962,
+          "per_iter_ms_mean": 3.1339811388333336,
+          "per_iter_ms_std": 0.1907862613344442,
+          "infer_per_trial_s": [
+            5.0624,
+            4.2607,
+            4.7418,
+            4.7391
+          ],
+          "total_s_mean": 4.70097170825,
+          "iterations": 1500,
+          "num_warmup": 500,
+          "n_trials": 4,
+          "neff_min": 1742.2082831146195,
+          "neff_median": 5973.430569866801,
+          "neff_max": 6886.207708386102,
+          "neff_per_s_median": 1304.0978364135585,
+          "pll_per_trial": [
+            -11.3914,
+            -9.7903,
+            -10.1443,
+            -10.3242
+          ],
+          "pll_final_mean": -10.41255
+        },
+        "Stan": {
+          "compile_time_s": 8.41853952407837,
+          "per_iter_ms_mean": 0.7580980062484742,
+          "per_iter_ms_std": 0.048921610717531795,
+          "infer_per_trial_s": [
+            1.0128,
+            1.1676,
+            1.2035,
+            1.1646
+          ],
+          "total_s_mean": 1.1371470093727112,
+          "iterations": 1500,
+          "num_warmup": 500,
+          "n_trials": 4,
+          "neff_min": 1792.3208543307305,
+          "neff_median": 5415.913279366367,
+          "neff_max": 6507.6435084395935,
+          "neff_per_s_median": 4595.283041421187,
+          "pll_per_trial": [
+            -11.0051,
+            -10.1418,
+            -11.3957,
+            -10.9399
+          ],
+          "pll_final_mean": -10.870625
+        }
+      }
+    },
+    "sicm/gp_pois_regr_scaled": {
+      "config_name": "sicm/gp_pois_regr_scaled",
+      "model_class": "gp_pois_regr_scaled.GPPoisRegrScaled",
+      "model_args": {
+        "n": 30,
+        "rho": 2.0
+      },
+      "frameworks": {
+        "NumPyro": {
+          "compile_time_s": 2.313234567642212,
+          "per_iter_ms_mean": 0.9129998683929443,
+          "per_iter_ms_std": 0.020561053906721652,
+          "infer_per_trial_s": [
+            1.4213,
+            1.3601,
+            1.3401,
+            1.3565
+          ],
+          "total_s_mean": 1.3694998025894165,
+          "iterations": 1500,
+          "num_warmup": 500,
+          "n_trials": 4,
+          "neff_min": 1897.064328384336,
+          "neff_median": 5100.878976234973,
+          "neff_max": 5939.231461750826,
+          "neff_per_s_median": 3772.192237763089,
+          "pll_per_trial": [
+            -36.4243,
+            -36.5022,
+            -36.0599,
+            -34.0952
+          ],
+          "pll_final_mean": -35.7704
+        },
+        "Impulse": {
+          "compile_time_s": 38.197799793,
+          "per_iter_ms_mean": 0.19096349900000004,
+          "per_iter_ms_std": 0.13150830625314774,
+          "infer_per_trial_s": [
+            0.628,
+            0.1809,
+            0.1666,
+            0.1703
+          ],
+          "total_s_mean": 0.2864452485,
+          "iterations": 1500,
+          "num_warmup": 500,
+          "n_trials": 4,
+          "neff_min": 1726.3519063287201,
+          "neff_median": 5038.754655472936,
+          "neff_max": 6898.110594334513,
+          "neff_per_s_median": 29193.85810580935,
+          "pll_per_trial": [
+            -36.3997,
+            -36.5212,
+            -35.253,
+            -36.4741
+          ],
+          "pll_final_mean": -36.162
+        },
+        "Impulse (no opt)": {
+          "compile_time_s": 38.604553964,
+          "per_iter_ms_mean": 3.269636529,
+          "per_iter_ms_std": 0.2514808326152747,
+          "infer_per_trial_s": [
+            5.3816,
+            4.3448,
+            5.0575,
+            4.8339
+          ],
+          "total_s_mean": 4.9044547935,
+          "iterations": 1500,
+          "num_warmup": 500,
+          "n_trials": 4,
+          "neff_min": 1771.4904247282766,
+          "neff_median": 5573.601859735138,
+          "neff_max": 6725.8523119968395,
+          "neff_per_s_median": 1174.5226211447532,
+          "pll_per_trial": [
+            -36.3811,
+            -36.4982,
+            -36.1778,
+            -36.0251
+          ],
+          "pll_final_mean": -36.27055
+        },
+        "Stan": {
+          "compile_time_s": 8.394912481307983,
+          "per_iter_ms_mean": 0.7356101671854656,
+          "per_iter_ms_std": 0.013238077776041307,
+          "infer_per_trial_s": [
+            1.0854,
+            1.1367,
+            1.0997,
+            1.0919
+          ],
+          "total_s_mean": 1.1034152507781982,
+          "iterations": 1500,
+          "num_warmup": 500,
+          "n_trials": 4,
+          "neff_min": 1936.0002203876406,
+          "neff_median": 6124.540272591878,
+          "neff_max": 7575.328139987211,
+          "neff_per_s_median": 5520.505129373887,
+          "pll_per_trial": [
+            -36.3213,
+            -36.377,
+            -36.4025,
+            -36.4301
+          ],
+          "pll_final_mean": -36.382725
+        }
+      }
+    },
+    "sicm/phylogenetic_regression": {
+      "config_name": "sicm/phylogenetic_regression",
+      "model_class": "phylogenetic_regression.PhylogeneticRegression",
+      "model_args": {
+        "n": 50,
+        "k": 3
+      },
+      "frameworks": {
+        "NumPyro": {
+          "compile_time_s": 2.557976245880127,
+          "per_iter_ms_mean": 1.1354411840438843,
+          "per_iter_ms_std": 0.042610200327001954,
+          "infer_per_trial_s": [
+            1.767,
+            1.6107,
+            1.6769,
+            1.7581
+          ],
+          "total_s_mean": 1.7031617760658264,
+          "iterations": 1500,
+          "num_warmup": 500,
+          "n_trials": 4,
+          "neff_min": 485.8381645364331,
+          "neff_median": 2440.663061429521,
+          "neff_max": 3751.102719417484,
+          "neff_per_s_median": 1451.1583776504524,
+          "pll_per_trial": [
+            -93.1085,
+            -93.4565,
+            -93.4356,
+            -93.0709
+          ],
+          "pll_final_mean": -93.26787499999999
+        },
+        "Impulse": {
+          "compile_time_s": 14.813535312,
+          "per_iter_ms_mean": 4.5710296275,
+          "per_iter_ms_std": 0.30409480917203124,
+          "infer_per_trial_s": [
+            6.2462,
+            7.3346,
+            6.5892,
+            7.2562
+          ],
+          "total_s_mean": 6.85654444125,
+          "iterations": 1500,
+          "num_warmup": 500,
+          "n_trials": 4,
+          "neff_min": 20.04944557628393,
+          "neff_median": 38.776455672346614,
+          "neff_max": 687.664815408252,
+          "neff_per_s_median": 5.492420873596299,
+          "pll_per_trial": [
+            -92.8533,
+            -93.6247,
+            -93.505,
+            -92.5989
+          ],
+          "pll_final_mean": -93.145475
+        },
+        "Impulse (no opt)": {
+          "compile_time_s": 15.100044299,
+          "per_iter_ms_mean": 5.623762998666667,
+          "per_iter_ms_std": 2.228136185450562,
+          "infer_per_trial_s": [
+            7.4867,
+            14.0998,
+            5.5389,
+            6.6171
+          ],
+          "total_s_mean": 8.435644498,
+          "iterations": 1500,
+          "num_warmup": 500,
+          "n_trials": 4,
+          "neff_min": 566.4210250766664,
+          "neff_median": 2066.7067487961594,
+          "neff_max": 3053.6297396476316,
+          "neff_per_s_median": 236.14254960737162,
+          "pll_per_trial": [
+            -93.8564,
+            -94.4001,
+            -94.3118,
+            -93.1965
+          ],
+          "pll_final_mean": -93.94120000000001
+        },
+        "Stan": {
+          "compile_time_s": 6.9546661376953125,
+          "per_iter_ms_mean": 0.9034293095270793,
+          "per_iter_ms_std": 0.32587867924387487,
+          "infer_per_trial_s": [
+            1.218,
+            2.1815,
+            0.9192,
+            1.102
+          ],
+          "total_s_mean": 1.355143964290619,
+          "iterations": 1500,
+          "num_warmup": 500,
+          "n_trials": 4,
+          "neff_min": 47.81253492838851,
+          "neff_median": 446.17555583432636,
+          "neff_max": 1736.065558162052,
+          "neff_per_s_median": 318.5011767592015,
+          "pll_per_trial": [
+            -93.3825,
+            -93.6693,
+            -93.3788,
+            -92.6327
+          ],
+          "pll_final_mean": -93.265825
+        }
+      }
+    },
+    "sicm/car_spatial": {
+      "config_name": "sicm/car_spatial",
+      "model_class": "car_spatial.CARSpatial",
+      "model_args": {
+        "n": 50,
+        "rho": 0.99
+      },
+      "frameworks": {
+        "NumPyro": {
+          "compile_time_s": 11.3321533203125,
+          "per_iter_ms_mean": 7.0608679850896205,
+          "per_iter_ms_std": 0.3190380796560499,
+          "infer_per_trial_s": [
+            10.6271,
+            10.6328,
+            11.2272,
+            9.8781
+          ],
+          "total_s_mean": 10.59130197763443,
+          "iterations": 1500,
+          "num_warmup": 500,
+          "n_trials": 4,
+          "neff_min": 2980.5530774506565,
+          "neff_median": 3532.8981096556568,
+          "neff_max": 4068.087622679536,
+          "neff_per_s_median": 333.9420955800788,
+          "pll_per_trial": [
+            -202.91,
+            -203.9683,
+            -204.2388,
+            -201.1385
+          ],
+          "pll_final_mean": -203.0639
+        },
+        "Impulse": {
+          "compile_time_s": 33.557937518,
+          "per_iter_ms_mean": 10.563869235166667,
+          "per_iter_ms_std": 0.47284961060908515,
+          "infer_per_trial_s": [
+            15.9736,
+            15.2865,
+            16.9532,
+            15.1699
+          ],
+          "total_s_mean": 15.84580385275,
+          "iterations": 1500,
+          "num_warmup": 500,
+          "n_trials": 4,
+          "neff_min": 2707.189597740586,
+          "neff_median": 3231.621165319015,
+          "neff_max": 3526.05842791321,
+          "neff_per_s_median": 204.49147361922172,
+          "pll_per_trial": [
+            -202.8157,
+            -203.2275,
+            -203.3816,
+            -201.5568
+          ],
+          "pll_final_mean": -202.74540000000002
+        },
+        "Impulse (no opt)": {
+          "compile_time_s": 32.647592511,
+          "per_iter_ms_mean": 47.2865933775,
+          "per_iter_ms_std": 2.6959262349168234,
+          "infer_per_trial_s": [
+            71.876,
+            76.1525,
+            70.8634,
+            64.8277
+          ],
+          "total_s_mean": 70.92989006625001,
+          "iterations": 1500,
+          "num_warmup": 500,
+          "n_trials": 4,
+          "neff_min": 2773.1113319013302,
+          "neff_median": 3596.465038763202,
+          "neff_max": 3808.3366084664276,
+          "neff_per_s_median": 50.930967757529075,
+          "pll_per_trial": [
+            -15587572.9061,
+            -15597242.1589,
+            -15663514.2406,
+            -15607181.7027
+          ],
+          "pll_final_mean": -15613877.752074998
+        },
+        "Stan": {
+          "compile_time_s": 6.837636709213257,
+          "per_iter_ms_mean": 5.422117511431376,
+          "per_iter_ms_std": 0.3644472094084643,
+          "infer_per_trial_s": [
+            8.0095,
+            7.2894,
+            8.608,
+            8.6258
+          ],
+          "total_s_mean": 8.133176267147064,
+          "iterations": 1500,
+          "num_warmup": 500,
+          "n_trials": 4,
+          "neff_min": 2975.9333668899835,
+          "neff_median": 4021.009603510154,
+          "neff_max": 4359.796556569016,
+          "neff_per_s_median": 491.90283997343045,
+          "pll_per_trial": [
+            -203.7109,
+            -203.4751,
+            -203.4893,
+            -204.1288
+          ],
+          "pll_final_mean": -203.70102500000002
+        }
+      }
+    },
+    "sicm/scale_family_mvn": {
+      "config_name": "sicm/scale_family_mvn",
+      "model_class": "scale_family_mvn.ScaleFamilyMVN",
+      "model_args": {
+        "n": 60,
+        "lengthscale": 3.0
+      },
+      "frameworks": {
+        "NumPyro": {
+          "compile_time_s": 1.4947140216827393,
+          "per_iter_ms_mean": 0.5776997804641724,
+          "per_iter_ms_std": 0.03801360398720263,
+          "infer_per_trial_s": [
+            0.8798,
+            0.9543,
+            0.82,
+            0.8121
+          ],
+          "total_s_mean": 0.8665496706962585,
+          "iterations": 1500,
+          "num_warmup": 500,
+          "n_trials": 4,
+          "neff_min": 1649.7644188216125,
+          "neff_median": 1649.7644188216125,
+          "neff_max": 1649.7644188216125,
+          "neff_per_s_median": 1913.573413815158,
+          "pll_per_trial": [
+            -38.0144,
+            -38.075,
+            -37.9876,
+            -38.2347
+          ],
+          "pll_final_mean": -38.077925
+        },
+        "Stan": {
+          "compile_time_s": 5.76814341545105,
+          "per_iter_ms_mean": 0.25231873989105225,
+          "per_iter_ms_std": 0.004381456940022674,
+          "infer_per_trial_s": [
+            0.3822,
+            0.3845,
+            0.3798,
+            0.3675
+          ],
+          "total_s_mean": 0.37847810983657837,
+          "iterations": 1500,
+          "num_warmup": 500,
+          "n_trials": 4,
+          "neff_min": 1385.9122499098453,
+          "neff_median": 1385.9122499098453,
+          "neff_max": 1385.9122499098453,
+          "neff_per_s_median": 3673.703189290255,
+          "pll_per_trial": [
+            -38.1647,
+            -37.9759,
+            -38.4796,
+            -37.9431
+          ],
+          "pll_final_mean": -38.14082500000001
+        }
+      }
+    },
+    "sicm/gp_fixed_lengthscale": {
+      "config_name": "sicm/gp_fixed_lengthscale",
+      "model_class": "gp_fixed_lengthscale.GPFixedLengthscale",
+      "model_args": {
+        "n": 60,
+        "rho": 2.0
+      },
+      "frameworks": {
+        "NumPyro": {
+          "compile_time_s": 1.8006043434143066,
+          "per_iter_ms_mean": 0.7183690468470255,
+          "per_iter_ms_std": 0.031689197600947475,
+          "infer_per_trial_s": [
+            1.1326,
+            1.0676,
+            1.1044,
+            1.0056
+          ],
+          "total_s_mean": 1.0775535702705383,
+          "iterations": 1500,
+          "num_warmup": 500,
+          "n_trials": 4,
+          "neff_min": 3150.251224816297,
+          "neff_median": 3160.594993939417,
+          "neff_max": 3170.9387630625365,
+          "neff_per_s_median": 2983.9705879195594,
+          "pll_per_trial": [
+            -28.7466,
+            -28.6094,
+            -28.797,
+            -28.6675
+          ],
+          "pll_final_mean": -28.705125000000002
+        },
+        "Impulse": {
+          "compile_time_s": 16.131200208,
+          "per_iter_ms_mean": 3.6549373655,
+          "per_iter_ms_std": 0.11611526292704108,
+          "infer_per_trial_s": [
+            5.7807,
+            5.4224,
+            5.3494,
+            5.3771
+          ],
+          "total_s_mean": 5.4824060482500006,
+          "iterations": 1500,
+          "num_warmup": 500,
+          "n_trials": 4,
+          "neff_min": 2880.2442554799727,
+          "neff_median": 3189.0377011178334,
+          "neff_max": 3497.8311467556937,
+          "neff_per_s_median": 592.429757940235,
+          "pll_per_trial": [
+            -28.7405,
+            -28.5941,
+            -28.69,
+            -28.625
+          ],
+          "pll_final_mean": -28.6624
+        },
+        "Impulse (no opt)": {
+          "compile_time_s": 16.209872177,
+          "per_iter_ms_mean": 3.5898755386666665,
+          "per_iter_ms_std": 0.07168894917787508,
+          "infer_per_trial_s": [
+            5.3475,
+            5.5655,
+            5.344,
+            5.2822
+          ],
+          "total_s_mean": 5.384813308,
+          "iterations": 1500,
+          "num_warmup": 500,
+          "n_trials": 4,
+          "neff_min": 2880.2442554799727,
+          "neff_median": 3189.0377011178334,
+          "neff_max": 3497.8311467556937,
+          "neff_per_s_median": 590.8641586254175,
+          "pll_per_trial": [
+            -28.7405,
+            -28.5941,
+            -28.69,
+            -28.625
+          ],
+          "pll_final_mean": -28.6624
+        },
+        "Stan": {
+          "compile_time_s": 6.031999588012695,
+          "per_iter_ms_mean": 0.5074241956075033,
+          "per_iter_ms_std": 0.04927913150791964,
+          "infer_per_trial_s": [
+            0.7164,
+            0.8883,
+            0.7321,
+            0.7078
+          ],
+          "total_s_mean": 0.7611362934112549,
+          "iterations": 1500,
+          "num_warmup": 500,
+          "n_trials": 4,
+          "neff_min": 3524.357045633621,
+          "neff_median": 3580.71525929767,
+          "neff_max": 3637.0734729617184,
+          "neff_per_s_median": 4614.008469712286,
+          "pll_per_trial": [
+            -29.0198,
+            -28.8194,
+            -28.7666,
+            -28.6282
+          ],
+          "pll_final_mean": -28.808500000000002
+        }
+      }
+    },
+    "sicm/hierarchical_mvn": {
+      "config_name": "sicm/hierarchical_mvn",
+      "model_class": "hierarchical_mvn.HierarchicalMVN",
+      "model_args": {
+        "n": 60,
+        "K": 20,
+        "J": 10
+      },
+      "frameworks": {
+        "NumPyro": {
+          "compile_time_s": 35.1034517288208,
+          "per_iter_ms_mean": 24.5158288081487,
+          "per_iter_ms_std": 1.0764489044713526,
+          "infer_per_trial_s": [
+            34.9642,
+            35.4854,
+            38.9126,
+            37.7328
+          ],
+          "total_s_mean": 36.77374321222305,
+          "iterations": 1500,
+          "num_warmup": 500,
+          "n_trials": 4,
+          "neff_min": 41.82074662708021,
+          "neff_median": 476.5510377138426,
+          "neff_max": 1843.8916916845083,
+          "neff_per_s_median": 12.749875333013721,
+          "pll_per_trial": [
+            -263.1259,
+            -224.8673,
+            -240.8621,
+            -249.0998
+          ],
+          "pll_final_mean": -244.48877499999998
+        },
+        "Impulse": {
+          "compile_time_s": 23.011246009,
+          "per_iter_ms_mean": 25.174941431,
+          "per_iter_ms_std": 6.455079276434671,
+          "infer_per_trial_s": [
+            30.5701,
+            29.1735,
+            37.7477,
+            53.5584
+          ],
+          "total_s_mean": 37.7624121465,
+          "iterations": 1500,
+          "num_warmup": 500,
+          "n_trials": 4,
+          "neff_min": 185.20137333026605,
+          "neff_median": 603.5072662884388,
+          "neff_max": 2078.6479502077364,
+          "neff_per_s_median": 15.027621854579952,
+          "pll_per_trial": [
+            -396.9971,
+            -394.5371,
+            -407.8563,
+            -400.9748
+          ],
+          "pll_final_mean": -400.091325
+        },
+        "Impulse (no opt)": {
+          "compile_time_s": 78.242099824,
+          "per_iter_ms_mean": 84.79095761033335,
+          "per_iter_ms_std": 29.21860087642411,
+          "infer_per_trial_s": [
+            202.8478,
+            98.8975,
+            99.2248,
+            107.7756
+          ],
+          "total_s_mean": 127.18643641550001,
+          "iterations": 1500,
+          "num_warmup": 500,
+          "n_trials": 4,
+          "neff_min": 137.80230934423173,
+          "neff_median": 503.61407094347106,
+          "neff_max": 1881.7648405880054,
+          "neff_per_s_median": 4.939040264586434,
+          "pll_per_trial": [
+            -435.4703,
+            -440.6366,
+            -428.9187,
+            -439.794
+          ],
+          "pll_final_mean": -436.20489999999995
+        },
+        "Stan": {
+          "compile_time_s": 11.30045747756958,
+          "per_iter_ms_mean": 39.88158289591472,
+          "per_iter_ms_std": 0.6942541380790702,
+          "infer_per_trial_s": [
+            59.4112,
+            61.5865,
+            59.4119,
+            58.8799
+          ],
+          "total_s_mean": 59.82237434387207,
+          "iterations": 1500,
+          "num_warmup": 500,
+          "n_trials": 4,
+          "neff_min": 59.62061316140275,
+          "neff_median": 540.185203720476,
+          "neff_max": 1763.1057341813755,
+          "neff_per_s_median": 9.00917785281607,
+          "pll_per_trial": [
+            -396.1221,
+            -401.2622,
+            -406.2523,
+            -403.9246
+          ],
+          "pll_final_mean": -401.89029999999997
+        }
+      }
+    },
+    "sicm/linear_mixed_model": {
+      "config_name": "sicm/linear_mixed_model",
+      "model_class": "linear_mixed_model.LinearMixedModel",
+      "model_args": {
+        "n": 100,
+        "k": 3,
+        "q": 20
+      },
+      "frameworks": {
+        "NumPyro": {
+          "compile_time_s": 3.9987757205963135,
+          "per_iter_ms_mean": 1.8466534614562988,
+          "per_iter_ms_std": 0.05872027688815938,
+          "infer_per_trial_s": [
+            2.8404,
+            2.7789,
+            2.6234,
+            2.8372
+          ],
+          "total_s_mean": 2.7699801921844482,
+          "iterations": 1500,
+          "num_warmup": 500,
+          "n_trials": 4,
+          "neff_min": 3655.1129507293786,
+          "neff_median": 4367.815362885393,
+          "neff_max": 5392.108878540017,
+          "neff_per_s_median": 1590.3226939126648,
+          "pll_per_trial": [
+            -105.5304,
+            -105.376,
+            -105.6494,
+            -105.0541
+          ],
+          "pll_final_mean": -105.40247500000001
+        },
+        "Impulse": {
+          "compile_time_s": 15.77888966,
+          "per_iter_ms_mean": 28.704523884833336,
+          "per_iter_ms_std": 0.46131170634039875,
+          "infer_per_trial_s": [
+            44.1885,
+            42.5763,
+            43.0406,
+            42.4217
+          ],
+          "total_s_mean": 43.056785827249996,
+          "iterations": 1500,
+          "num_warmup": 500,
+          "n_trials": 4,
+          "neff_min": 4161.07486296941,
+          "neff_median": 4524.479219262762,
+          "neff_max": 5385.604699907614,
+          "neff_per_s_median": 106.01048794822917,
+          "pll_per_trial": [
+            -105.68,
+            -105.5371,
+            -105.7196,
+            -105.0722
+          ],
+          "pll_final_mean": -105.50222500000001
+        },
+        "Impulse (no opt)": {
+          "compile_time_s": 15.349981993,
+          "per_iter_ms_mean": 29.003667497333335,
+          "per_iter_ms_std": 1.0004940422526925,
+          "infer_per_trial_s": [
+            41.838,
+            45.941,
+            43.0914,
+            43.1516
+          ],
+          "total_s_mean": 43.505501246,
+          "iterations": 1500,
+          "num_warmup": 500,
+          "n_trials": 4,
+          "neff_min": 3668.7300427027676,
+          "neff_median": 4110.715624386126,
+          "neff_max": 4551.147995276289,
+          "neff_per_s_median": 93.29533527346766,
+          "pll_per_trial": [
+            -131.9941,
+            -130.7869,
+            -132.8393,
+            -133.6829
+          ],
+          "pll_final_mean": -132.32580000000002
+        },
+        "Stan": {
+          "compile_time_s": 7.148261547088623,
+          "per_iter_ms_mean": 2.9236307938893638,
+          "per_iter_ms_std": 0.14507090537057674,
+          "infer_per_trial_s": [
+            4.1944,
+            4.1569,
+            4.6747,
+            4.5158
+          ],
+          "total_s_mean": 4.385446190834045,
+          "iterations": 1500,
+          "num_warmup": 500,
+          "n_trials": 4,
+          "neff_min": 4915.320756463494,
+          "neff_median": 5645.961980491434,
+          "neff_max": 5720.69088718964,
+          "neff_per_s_median": 1269.0030152503057,
+          "pll_per_trial": [
+            -105.3526,
+            -105.6833,
+            -105.4742,
+            -105.0185
+          ],
+          "pll_final_mean": -105.38215
+        }
+      }
+    },
+    "sicm/scale_family_mvn_n100": {
+      "config_name": "sicm/scale_family_mvn_n100",
+      "model_class": "scale_family_mvn.ScaleFamilyMVN",
+      "model_args": {
+        "n": 100,
+        "lengthscale": 3.0
+      },
+      "frameworks": {
+        "NumPyro": {
+          "compile_time_s": 2.4673047065734863,
+          "per_iter_ms_mean": 1.1852106253306072,
+          "per_iter_ms_std": 0.10924883830264094,
+          "infer_per_trial_s": [
+            1.8958,
+            1.5583,
+            1.6869,
+            1.9703
+          ],
+          "total_s_mean": 1.7778159379959106,
+          "iterations": 1500,
+          "num_warmup": 500,
+          "n_trials": 4,
+          "neff_min": 1705.3162843529608,
+          "neff_median": 1705.3162843529608,
+          "neff_max": 1705.3162843529608,
+          "neff_per_s_median": 980.9234085264375,
+          "pll_per_trial": [
+            -41.709,
+            -41.6645,
+            -41.6596,
+            -42.0268
+          ],
+          "pll_final_mean": -41.764975
+        }
+      }
+    },
+    "sicm/gp_fixed_lengthscale_n100": {
+      "config_name": "sicm/gp_fixed_lengthscale_n100",
+      "model_class": "gp_fixed_lengthscale.GPFixedLengthscale",
+      "model_args": {
+        "n": 100,
+        "rho": 2.0
+      },
+      "frameworks": {
+        "NumPyro": {
+          "compile_time_s": 3.031794786453247,
+          "per_iter_ms_mean": 1.5409230788548787,
+          "per_iter_ms_std": 0.07347278873087358,
+          "infer_per_trial_s": [
+            2.327,
+            2.3982,
+            2.3934,
+            2.1268
+          ],
+          "total_s_mean": 2.311384618282318,
+          "iterations": 1500,
+          "num_warmup": 500,
+          "n_trials": 4,
+          "neff_min": 3023.627744819944,
+          "neff_median": 3328.425951014702,
+          "neff_max": 3633.22415720946,
+          "neff_per_s_median": 1443.26895305176,
+          "pll_per_trial": [
+            -33.2295,
+            -33.181,
+            -33.1205,
+            -33.0946
+          ],
+          "pll_final_mean": -33.156400000000005
+        },
+        "Impulse": {
+          "compile_time_s": 16.71658741,
+          "per_iter_ms_mean": 18.352263172666667,
+          "per_iter_ms_std": 1.9655231730845877,
+          "infer_per_trial_s": [
+            29.1687,
+            29.7014,
+            28.7909,
+            22.4526
+          ],
+          "total_s_mean": 27.528394759,
+          "iterations": 1500,
+          "num_warmup": 500,
+          "n_trials": 4,
+          "neff_min": 2658.1685067327658,
+          "neff_median": 3055.5282510136726,
+          "neff_max": 3452.8879952945795,
+          "neff_per_s_median": 113.24472381246612,
+          "pll_per_trial": [
+            -33.3189,
+            -33.1339,
+            -33.0523,
+            -33.1742
+          ],
+          "pll_final_mean": -33.169825
+        },
+        "Impulse (no opt)": {
+          "compile_time_s": 16.098325881,
+          "per_iter_ms_mean": 18.817538008166668,
+          "per_iter_ms_std": 1.9876955364526754,
+          "infer_per_trial_s": [
+            29.8394,
+            30.8543,
+            29.026,
+            23.1855
+          ],
+          "total_s_mean": 28.22630701225,
+          "iterations": 1500,
+          "num_warmup": 500,
+          "n_trials": 4,
+          "neff_min": 2658.1685067327658,
+          "neff_median": 3055.5282510136726,
+          "neff_max": 3452.8879952945795,
+          "neff_per_s_median": 110.35330706465913,
+          "pll_per_trial": [
+            -33.3189,
+            -33.1339,
+            -33.0523,
+            -33.1742
+          ],
+          "pll_final_mean": -33.169825
+        }
+      }
+    },
+    "sicm/linear_mixed_model_n200": {
+      "config_name": "sicm/linear_mixed_model_n200",
+      "model_class": "linear_mixed_model.LinearMixedModel",
+      "model_args": {
+        "n": 200,
+        "k": 3,
+        "q": 20
+      },
+      "frameworks": {
+        "NumPyro": {
+          "compile_time_s": 12.386142253875732,
+          "per_iter_ms_mean": 7.676154732704163,
+          "per_iter_ms_std": 0.09582895608986011,
+          "infer_per_trial_s": [
+            11.491,
+            11.6204,
+            11.6564,
+            11.2892
+          ],
+          "total_s_mean": 11.514232099056244,
+          "iterations": 1500,
+          "num_warmup": 500,
+          "n_trials": 4,
+          "neff_min": 3998.7451559357837,
+          "neff_median": 4266.035643138792,
+          "neff_max": 5444.280098313505,
+          "neff_per_s_median": 370.252149539668,
+          "pll_per_trial": [
+            -183.2603,
+            -183.4342,
+            -183.5567,
+            -182.6464
+          ],
+          "pll_final_mean": -183.2244
+        },
+        "Impulse": {
+          "compile_time_s": 15.808213098,
+          "per_iter_ms_mean": 110.17072314366666,
+          "per_iter_ms_std": 23.56556524698852,
+          "infer_per_trial_s": [
+            131.5596,
+            128.3511,
+            202.5948,
+            198.5189
+          ],
+          "total_s_mean": 165.25608471549998,
+          "iterations": 1500,
+          "num_warmup": 500,
+          "n_trials": 4,
+          "neff_min": 4073.2990433912496,
+          "neff_median": 4632.911154436378,
+          "neff_max": 5318.2042751250765,
+          "neff_per_s_median": 26.25053749521937,
+          "pll_per_trial": [
+            -183.0669,
+            -183.4072,
+            -183.5148,
+            -183.4777
+          ],
+          "pll_final_mean": -183.36665000000002
+        },
+        "Impulse (no opt)": {
+          "compile_time_s": 16.139403341,
+          "per_iter_ms_mean": 87.1603583745,
+          "per_iter_ms_std": 5.503806927895283,
+          "infer_per_trial_s": [
+            144.4287,
+            129.3982,
+            126.4713,
+            122.6638
+          ],
+          "total_s_mean": 130.74053756175,
+          "iterations": 1500,
+          "num_warmup": 500,
+          "n_trials": 4,
+          "neff_min": 4184.89736588939,
+          "neff_median": 4654.093039954013,
+          "neff_max": 5285.326583150602,
+          "neff_per_s_median": 36.885194187725276,
+          "pll_per_trial": [
+            -245.9177,
+            -253.3704,
+            -245.5808,
+            -245.962
+          ],
+          "pll_final_mean": -247.70772499999998
+        }
+      }
+    },
+    "sicm/gp_pois_regr_scaled_mc4": {
+      "config_name": "sicm/gp_pois_regr_scaled_mc4",
+      "model_class": "gp_pois_regr_scaled.GPPoisRegrScaled",
+      "model_args": {
+        "n": 30,
+        "rho": 2.0
+      },
+      "frameworks": {
+        "NumPyro (mc4)": {
+          "compile_time_s": 2.2418062686920166,
+          "per_iter_ms_mean": NaN,
+          "per_iter_ms_std": NaN,
+          "infer_per_trial_s": [
+            2.041,
+            NaN,
+            NaN,
+            NaN,
+            2.0576,
+            NaN,
+            NaN,
+            NaN
+          ],
+          "total_s_mean": NaN,
+          "iterations": 1500,
+          "num_warmup": 500,
+          "n_trials": 8,
+          "neff_min": 3244.4147214750406,
+          "neff_median": 10394.450165365315,
+          "neff_max": 11188.633852779643,
+          "neff_per_s_median": 5051.724522647331,
+          "pll_per_trial": [
+            -36.3619,
+            -35.5943
+          ],
+          "pll_final_mean": -35.9781
+        },
+        "Impulse (mc4)": {
+          "compile_time_s": 38.223976351,
+          "per_iter_ms_mean": NaN,
+          "per_iter_ms_std": NaN,
+          "infer_per_trial_s": [
+            2.9782,
+            NaN,
+            NaN,
+            NaN,
+            0.9483,
+            NaN,
+            NaN,
+            NaN
+          ],
+          "total_s_mean": NaN,
+          "iterations": 1500,
+          "num_warmup": 500,
+          "n_trials": 8,
+          "neff_min": 3747.488411682282,
+          "neff_median": 11080.814510097302,
+          "neff_max": 12927.34860273352,
+          "neff_per_s_median": 11685.21078241954,
+          "pll_per_trial": [
+            -36.6477,
+            -36.8411
+          ],
+          "pll_final_mean": -36.7444
+        },
+        "Stan (mc4)": {
+          "compile_time_s": 8.165312767028809,
+          "per_iter_ms_mean": NaN,
+          "per_iter_ms_std": NaN,
+          "infer_per_trial_s": [
+            1.2914,
+            NaN,
+            NaN,
+            NaN,
+            1.2708,
+            NaN,
+            NaN,
+            NaN
+          ],
+          "total_s_mean": NaN,
+          "iterations": 1500,
+          "num_warmup": 500,
+          "n_trials": 8,
+          "neff_min": 3297.0506077438527,
+          "neff_median": 12030.16784924126,
+          "neff_max": 14603.993291067949,
+          "neff_per_s_median": 9466.355074418254,
+          "pll_per_trial": [
+            -36.6435,
+            -36.7593
+          ],
+          "pll_final_mean": -36.70140000000001
+        }
+      }
+    }
+  }
+}
