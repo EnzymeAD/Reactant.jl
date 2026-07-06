@@ -465,9 +465,21 @@ function main()
     @assert !isempty(data_path) "Missing --data argument"
     @assert !isempty(output_path) "Missing --output argument"
 
-    Reactant.Compiler.DEBUG_PROBPROG_DISABLE_OPT[] = disable_opt
+    # The ablation "No opt" arm (`--no-opt`) is the fully-unoptimized baseline:
+    # it selects the flat expand-impulse lowering, i.e. exactly the same runtime
+    # mechanism as `--disable-opt`. (The legacy `:probprog_no_opt` named pipeline
+    # it used to select no longer exists in the unified `:probprog` pipeline.)
+    Reactant.Compiler.DEBUG_PROBPROG_DISABLE_OPT[] = disable_opt || no_opt
     Reactant.Compiler.DEBUG_PROBPROG_DISABLE_SICM[] = disable_sicm
     Reactant.Compiler.DEBUG_PROBPROG_DISABLE_REGION[] = disable_region
+    if post_sicm
+        error(
+            "--post-sicm (post-lowering SICM) is not a supported arm in the " *
+            "unified :probprog pipeline; it selected the removed " *
+            ":probprog_post_sicm pipeline. Use --disable-sicm (No SICM) or " *
+            "--no-opt (No opt) instead.",
+        )
+    end
     if dump_passes || DUMP_MLIR
         Reactant.Compiler.DEBUG_PROBPROG_DUMP_PASSES[] = true
         dump_passes_dir = joinpath(get(ENV, "PPLBENCH_OUTPUT_DIR", "outputs"), "sicm_dumps")
@@ -489,7 +501,7 @@ function main()
     spec = setup(data)
 
     if method == "svi"
-        opt_pipeline = post_sicm ? :probprog_post_sicm : no_opt ? :probprog_no_opt : :probprog
+        opt_pipeline = :probprog
         run_svi(
             data, spec, output_path, seed, step_size, num_steps, num_particles,
             init_scale, Symbol(guide), Symbol(optimizer), num_samples,
@@ -521,7 +533,7 @@ function main()
     )
 
     # Compile
-    opt_pipeline = post_sicm ? :probprog_post_sicm : no_opt ? :probprog_no_opt : :probprog
+    opt_pipeline = :probprog
     print("Compiling... ")
     compile_time = @elapsed begin
         compiled_fn, tt = ProbProg.with_trace() do
