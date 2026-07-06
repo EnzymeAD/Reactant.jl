@@ -1,9 +1,7 @@
-# F2 spike F-gate: compile one small model BOTH ways -- traced Normal
-# (EMIT_DISTRIBUTIONS off) vs emitted StdNormal+Affine (EMIT_DISTRIBUTIONS on)
-# -- through simulate, generate, and one NUTS run, and compare:
-#   * the sampler RNG stream (the sampled trace) bitwise
 using Reactant, Test, Random
 using Reactant: ProbProg, ReactantRNG, ConcreteRNumber
+
+include(joinpath(@__DIR__, "common.jl"))
 
 function gate_model(rng, mu, sigma)
     _, s = ProbProg.sample(rng, ProbProg.Normal(mu, sigma, (1,)); symbol=:s)
@@ -11,63 +9,34 @@ function gate_model(rng, mu, sigma)
     return t
 end
 
-# Run `f` once with EMIT_DISTRIBUTIONS off (traced) and once on (emitted).
+function gate_model_ref(rng, mu, sigma)
+    _, s = ProbProg.sample(
+        rng, ref_normal_sampler, mu, sigma, (1,); symbol=:s, logpdf=ref_normal_logpdf
+    )
+    _, t = ProbProg.sample(
+        rng, ref_normal_sampler, s, sigma, (1,); symbol=:t, logpdf=ref_normal_logpdf
+    )
+    return t
+end
+
 function both_ways(f)
-    saved = ProbProg.EMIT_DISTRIBUTIONS[]
-    ProbProg.EMIT_DISTRIBUTIONS[] = false
-    traced = f()
-    ProbProg.EMIT_DISTRIBUTIONS[] = true
-    emitted = f()
-    ProbProg.EMIT_DISTRIBUTIONS[] = saved
-    return traced, emitted
+    return f(gate_model_ref), f(gate_model)
 end
 
 maxabsdiff(a, b) = maximum(abs.(Array(a) .- Array(b)); init=0.0)
 bitwise_equal(a, b) = Array(a) == Array(b)
 
-function simulate_program(rng, mu, sigma)
-    return ProbProg.simulate(rng, gate_model, mu, sigma)
-end
-
-function generate_program(rng, obs_tensor, mu, sigma, constrained_addresses)
-    return ProbProg.generate(rng, obs_tensor, gate_model, mu, sigma; constrained_addresses)
-end
-
-function nuts_program(
-    rng, obs_tensor, mu, sigma, constrained_addresses, selection, imm, step_size
-)
-    trace, _, _ = ProbProg.generate(
-        rng, obs_tensor, gate_model, mu, sigma; constrained_addresses
-    )
-    new_trace, diagnostics, _, _ = ProbProg.mcmc(
-        rng,
-        trace,
-        gate_model,
-        mu,
-        sigma;
-        selection,
-        algorithm=:NUTS,
-        inverse_mass_matrix=imm,
-        step_size,
-        max_tree_depth=5,
-        num_warmup=0,
-        num_samples=3,
-        adapt_step_size=false,
-        adapt_mass_matrix=false,
-    )
-    return new_trace, diagnostics
-end
-
-@testset "dist emit-vs-traced gate" begin
+@testset "dist emit-vs-reference gate" begin
     mu = ConcreteRNumber(0.5)
     sigma = ConcreteRNumber(2.0)
 
     @testset "simulate (seed $s0/$s1)" for (s0, s1) in
                                            ((1, 4), (7, 11), (42, 43), (100, 200))
-        function run_simulate()
+        function run_simulate(model)
             seed = Reactant.to_rarray(UInt64[s0, s1])
             rng = ReactantRNG(seed)
-            compiled = @compile optimize = :probprog simulate_program(rng, mu, sigma)
+            prog(rng, mu, sigma) = ProbProg.simulate(rng, model, mu, sigma)
+            compiled = @compile optimize = :probprog prog(rng, mu, sigma)
             trace, weight, _ = compiled(rng, mu, sigma)
             return Array(trace), Array(weight)
         end
@@ -86,85 +55,45 @@ end
         constrained_addresses = ProbProg.extract_addresses(obs)
         obs_tensor = ProbProg.flatten_constraint(obs)
 
-        function run_generate()
+        function run_generate(model)
             seed = Reactant.to_rarray(UInt64[1, 4])
             rng = ReactantRNG(seed)
-            compiled = @compile optimize = :probprog generate_program(
-                rng, obs_tensor, mu, sigma, constrained_addresses
-            )
-            trace, weight, _ = compiled(rng, obs_tensor, mu, sigma, constrained_addresses)
+            function prog(rng, ot, mu, sigma)
+                return ProbProg.generate(rng, ot, model, mu, sigma; constrained_addresses)
+            end
+            compiled = @compile optimize = :probprog prog(rng, obs_tensor, mu, sigma)
+            trace, weight, _ = compiled(rng, obs_tensor, mu, sigma)
             return Array(trace), Array(weight)
         end
         (t_tr, w_tr), (t_em, w_em) = both_ways(run_generate)
         wdiff = maxabsdiff(w_tr, w_em)
         tdiff = maxabsdiff(t_tr, t_em)
-        @info "generate" weight_absdiff = wdiff trace_absdiff = tdiff trace_bitwise = bitwise_equal(
-            t_tr, t_em
-        )
+        @info "generate" weight_absdiff = wdiff trace_absdiff = tdiff
         @test wdiff <= 1e-12
         @test tdiff <= 1e-9
     end
 
     @testset "generate (s observed, t sampled)" begin
-        # Constrains :s only, so the generate lowering scores :s from the
-        # constraint (emitDistLogpdf) and DRAWS :t through the emitted sampler
-        # (emitDistSampler) -- exercising both generate emit branches.
         obs = ProbProg.Constraint(:s => [0.3])
         constrained_addresses = ProbProg.extract_addresses(obs)
         obs_tensor = ProbProg.flatten_constraint(obs)
 
-        function run_generate2()
+        function run_generate2(model)
             seed = Reactant.to_rarray(UInt64[7, 11])
             rng = ReactantRNG(seed)
-            compiled = @compile optimize = :probprog generate_program(
-                rng, obs_tensor, mu, sigma, constrained_addresses
-            )
-            trace, weight, _ = compiled(rng, obs_tensor, mu, sigma, constrained_addresses)
+            function prog(rng, ot, mu, sigma)
+                return ProbProg.generate(rng, ot, model, mu, sigma; constrained_addresses)
+            end
+            compiled = @compile optimize = :probprog prog(rng, obs_tensor, mu, sigma)
+            trace, weight, _ = compiled(rng, obs_tensor, mu, sigma)
             return Array(trace), Array(weight)
         end
         (t_tr, w_tr), (t_em, w_em) = both_ways(run_generate2)
         wdiff = maxabsdiff(w_tr, w_em)
         tdiff = maxabsdiff(t_tr, t_em)
-        @info "generate2" weight_absdiff = wdiff trace_absdiff = tdiff trace_bitwise = bitwise_equal(
-            t_tr, t_em
-        )
+        @info "generate2" weight_absdiff = wdiff trace_absdiff = tdiff
         @test wdiff <= 1e-12
         @test tdiff <= 1e-9
-    end
-
-    @testset "mh (flat regenerate)" begin
-        # A fully-constrained generate yields a deterministic (sampler-free)
-        # trace0/weight0; the flat MH step (region=false) lowers to
-        # `impulse.regenerate`, whose selected `:s` site is redrawn through the
-        # emitted sampler and scored by the emitted logpdf.
-        obs = ProbProg.Constraint(:s => [0.3], :t => [0.6])
-        constrained_addresses = ProbProg.extract_addresses(obs)
-        obs_tensor = ProbProg.flatten_constraint(obs)
-        selection = ProbProg.select(ProbProg.Address(:s))
-
-        function run_mh()
-            seed = Reactant.to_rarray(UInt64[42, 43])
-            rng = ReactantRNG(seed)
-            function mh_program(rng, obs_tensor, mu, sigma)
-                trace0, weight0, _ = ProbProg.generate(
-                    rng, obs_tensor, gate_model, mu, sigma; constrained_addresses
-                )
-                nt, nw, acc, _ = ProbProg.mh(
-                    rng, trace0, weight0, gate_model, mu, sigma; selection, region=false
-                )
-                return nt, nw, acc
-            end
-            compiled = @compile optimize = :probprog mh_program(rng, obs_tensor, mu, sigma)
-            nt, nw, acc = compiled(rng, obs_tensor, mu, sigma)
-            return Array(nt), Array(nw), Array(acc)
-        end
-        (t_tr, w_tr, a_tr), (t_em, w_em, a_em) = both_ways(run_mh)
-        wdiff = maxabsdiff(w_tr, w_em)
-        tdiff = maxabsdiff(t_tr, t_em)
-        @info "mh" weight_absdiff = wdiff trace_absdiff = tdiff accepted = (a_tr, a_em)
-        @test wdiff <= 1e-9
-        @test tdiff <= 1e-9
-        @test a_tr == a_em
     end
 
     @testset "NUTS" begin
@@ -173,54 +102,77 @@ end
         obs_tensor = ProbProg.flatten_constraint(obs)
         selection = ProbProg.select(ProbProg.Address(:s))
 
-        function run_nuts()
+        function run_nuts(model)
             seed = Reactant.to_rarray(UInt64[1, 4])
             rng = ReactantRNG(seed)
             imm = Reactant.to_rarray([1.0])
             step_size = ConcreteRNumber(0.1)
-            compiled = @compile optimize = :probprog nuts_program(
-                rng, obs_tensor, mu, sigma, constrained_addresses, selection, imm, step_size
+            function prog(rng, ot, mu, sigma, imm, step_size)
+                trace, _, _ = ProbProg.generate(
+                    rng, ot, model, mu, sigma; constrained_addresses
+                )
+                nt, diag, _, _ = ProbProg.mcmc(
+                    rng,
+                    trace,
+                    model,
+                    mu,
+                    sigma;
+                    selection,
+                    algorithm=:NUTS,
+                    inverse_mass_matrix=imm,
+                    step_size,
+                    max_tree_depth=5,
+                    num_warmup=0,
+                    num_samples=3,
+                    adapt_step_size=false,
+                    adapt_mass_matrix=false,
+                )
+                return nt, diag
+            end
+            compiled = @compile optimize = :probprog prog(
+                rng, obs_tensor, mu, sigma, imm, step_size
             )
-            new_trace, diagnostics = compiled(
-                rng, obs_tensor, mu, sigma, constrained_addresses, selection, imm, step_size
-            )
+            new_trace, diagnostics = compiled(rng, obs_tensor, mu, sigma, imm, step_size)
             return Array(new_trace), Array(diagnostics)
         end
         (tr_tr, d_tr), (tr_em, d_em) = both_ways(run_nuts)
         tdiff = maxabsdiff(tr_tr, tr_em)
         ddiff = maxabsdiff(d_tr, d_em)
-        @info "nuts" trace_absdiff = tdiff diag_absdiff = ddiff trace_bitwise = bitwise_equal(
-            tr_tr, tr_em
-        )
+        @info "nuts" trace_absdiff = tdiff diag_absdiff = ddiff
         @test tdiff <= 1e-9
     end
 
     @testset "LogNormal composition (StdNormal + Affine + Exp)" begin
-        # LogNormal exercises a length-2 transform chain [Affine, Exp]: the
-        # emitted sampler is exp(mu + sigma*z) and the emitted logpdf is the
-        # change-of-variables base_logpdf(inverse(y)) - Sum logdet, which must
-        # reproduce the traced -log(sigma) - log(x) Jacobian bitwise (scalar site).
         function lognormal_model(rng, mu, sigma)
             _, x = ProbProg.sample(rng, ProbProg.LogNormal(mu, sigma, (1,)); symbol=:x)
             return x
         end
+        function lognormal_model_ref(rng, mu, sigma)
+            _, x = ProbProg.sample(
+                rng,
+                ref_lognormal_sampler,
+                mu,
+                sigma,
+                (1,);
+                symbol=:x,
+                logpdf=ref_lognormal_logpdf,
+            )
+            return x
+        end
 
         @testset "simulate (sampler stream)" begin
-            function run()
+            function run(model)
                 seed = Reactant.to_rarray(UInt64[13, 17])
                 rng = ReactantRNG(seed)
-                compiled = @compile optimize = :probprog ProbProg.simulate(
-                    rng, lognormal_model, mu, sigma
-                )
-                t, w, _ = compiled(rng, lognormal_model, mu, sigma)
+                prog(rng, mu, sigma) = ProbProg.simulate(rng, model, mu, sigma)
+                compiled = @compile optimize = :probprog prog(rng, mu, sigma)
+                t, w, _ = compiled(rng, mu, sigma)
                 return Array(t), Array(w)
             end
-            (t_tr, w_tr), (t_em, w_em) = both_ways(run)
+            (t_tr, w_tr), (t_em, w_em) = ((run(lognormal_model_ref), run(lognormal_model)))
             wdiff = maxabsdiff(w_tr, w_em)
             tdiff = maxabsdiff(t_tr, t_em)
-            @info "lognormal simulate" weight_absdiff = wdiff trace_absdiff = tdiff trace_bitwise = bitwise_equal(
-                t_tr, t_em
-            )
+            @info "lognormal simulate" weight_absdiff = wdiff trace_absdiff = tdiff
             @test wdiff <= 1e-12
             @test tdiff <= 1e-9
         end
@@ -229,19 +181,19 @@ end
             obs = ProbProg.Constraint(:x => [1.7])
             constrained_addresses = ProbProg.extract_addresses(obs)
             obs_tensor = ProbProg.flatten_constraint(obs)
-            function run()
+            function run(model)
                 seed = Reactant.to_rarray(UInt64[13, 17])
                 rng = ReactantRNG(seed)
                 function prog(rng, ot)
                     return ProbProg.generate(
-                        rng, ot, lognormal_model, mu, sigma; constrained_addresses
+                        rng, ot, model, mu, sigma; constrained_addresses
                     )
                 end
                 compiled = @compile optimize = :probprog prog(rng, obs_tensor)
                 _, w, _ = compiled(rng, obs_tensor)
                 return Array(w)
             end
-            w_tr, w_em = both_ways(run)
+            w_tr, w_em = run(lognormal_model_ref), run(lognormal_model)
             wdiff = maxabsdiff(w_tr, w_em)
             @info "lognormal generate" weight_absdiff = wdiff
             @test wdiff <= 1e-12

@@ -305,3 +305,107 @@ function compare_samples_pointwise(
         end
     end
 end
+
+# Test-only reference samplers/logpdfs: the oracles for the emitted distributions.
+
+using Random: randexp
+using LinearAlgebra: cholesky, I
+
+const _refOps = Reactant.Ops
+
+ref_normal_sampler(rng, μ, σ, shape) = μ .+ σ .* randn(rng, shape)
+function ref_normal_logpdf(x, μ, σ, _)
+    z = (x .- μ) ./ σ
+    return sum(.-(abs2.(z) .+ log(2π)) ./ 2 .- log.(σ))
+end
+
+ref_exponential_sampler(rng, λ, shape) = randexp(rng, shape) ./ λ
+ref_exponential_logpdf(x, λ, _) = sum(log.(λ) .- λ .* x)
+
+ref_halfnormal_sampler(rng, σ, shape) = abs.(σ .* randn(rng, shape))
+function ref_halfnormal_logpdf(x, σ, _)
+    n = length(x)
+    log_sigma = sum(log.(σ))
+    return n * log(2) - n * log_sigma - n / 2 * log(2π) - sum(x .* x ./ (2 .* σ .* σ))
+end
+
+ref_lognormal_sampler(rng, μ, σ, shape) = exp.(μ .+ σ .* randn(rng, shape))
+function ref_lognormal_logpdf(x, μ, σ, _)
+    log_x = log.(x)
+    z = (log_x .- μ) ./ σ
+    return sum(.-(abs2.(z) .+ log(2π)) ./ 2 .- log.(σ) .- log_x)
+end
+
+function ref_bernoulli_sampler(rng, logits, shape)
+    probs = 1.0 ./ (1.0 .+ exp.(-logits))
+    u = rand(rng, size(probs)...)
+    return Float64.(u .< probs)
+end
+function ref_bernoulli_logpdf(y, logits, _)
+    return sum(y .* logits .- max.(logits, 0.0) .- log1p.(exp.(.-abs.(logits))))
+end
+
+function ref_discreteuniform_sampler(rng, low, high, shape)
+    n = (high - low) + 1.0
+    u = rand(rng, shape...)
+    return low .+ floor.(u .* n)
+end
+function ref_discreteuniform_logpdf(x, low, high, _)
+    logp = .-log.((high + 1.0) - low)
+    return sum(logp .+ zero.(x))
+end
+
+function ref_halfcauchy_sampler(rng, scale, shape)
+    u = rand(rng, shape...)
+    finfo_eps = eps(Float64)
+    u_cauchy = u .* (1.0 - finfo_eps) .+ finfo_eps
+    return scale .* abs.(tan.(π .* (u_cauchy .- 0.5)))
+end
+function ref_halfcauchy_logpdf(x, scale, _)
+    return sum(log(2 / π) .- log.(scale) .- log1p.((x ./ scale) .* (x ./ scale)))
+end
+
+function ref_mvn_sampler(rng, μ, Σ, shape)
+    n = shape[1]
+    z = randn(rng, shape)
+    C = cholesky(Σ)
+    return μ .+ reshape(C.factors' * reshape(z, n, 1), n)
+end
+function ref_mvn_logpdf(x, μ, Σ, shape)
+    n = shape[1]
+    C = cholesky(Σ)
+    diff = x .- μ
+    alpha = reshape(C \ reshape(diff, n, 1), n)
+    I_n = Matrix{Float64}(I, n, n)
+    U_diag = vec(sum(C.factors .* I_n; dims=1))
+    log_det = 2.0 * sum(log.(U_diag))
+    return -0.5 * (sum(diff .* alpha) + log_det + n * log(2π))
+end
+
+function ref_gamma_logpdf(x, concentration, rate, _)
+    α = _refOps.fill(0.0, size(x)...) .+ concentration
+    β = _refOps.fill(0.0, size(x)...) .+ rate
+    return sum((α .- 1) .* log.(x) .- β .* x .- _refOps.lgamma(α) .+ α .* log.(β))
+end
+
+function ref_studentt_logpdf(x, df, loc, scale, _)
+    df_t = _refOps.fill(0.0, size(x)...) .+ df
+    scale_t = _refOps.fill(0.0, size(x)...) .+ scale
+    y = (x .- loc) ./ scale_t
+    return sum(
+        _refOps.lgamma((df_t .+ 1) ./ 2) .- _refOps.lgamma(df_t ./ 2) .-
+        0.5 .* log.(df_t .* π) .- log.(scale_t) .-
+        (df_t .+ 1) ./ 2 .* log1p.(y .* y ./ df_t),
+    )
+end
+
+function ref_poisson_logpdf(k, rate, _)
+    return sum(k .* log.(rate) .- rate .- _refOps.lgamma(k .+ 1.0))
+end
+
+function ref_dirichlet_logpdf(x, alpha, _)
+    α = _refOps.fill(0.0, size(x)...) .+ alpha
+    d = ndims(α)
+    normalize_term = sum(_refOps.lgamma(α); dims=d) .- _refOps.lgamma(sum(α; dims=d))
+    return sum(sum(log.(x) .* (α .- 1.0); dims=d) .- normalize_term)
+end

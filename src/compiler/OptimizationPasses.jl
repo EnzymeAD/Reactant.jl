@@ -188,6 +188,7 @@ end
 const enzyme_pass::String = "enzyme{postpasses=\"arith-raise{stablehlo=true},enzyme-batch-to-stablehlo,canonicalize,cse,canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math,canonicalize,cse,canonicalize,arith-raise{stablehlo=true}\"}"
 
 function impulse_pass(;
+    backend::String="cpu",
     debug_dump::Bool=DEBUG_PROBPROG_DUMP_VALUE[],
     disable_optimizations::Bool=DEBUG_PROBPROG_DISABLE_OPT[],
     disable_sicm::Bool=DEBUG_PROBPROG_DISABLE_SICM[],
@@ -195,12 +196,23 @@ function impulse_pass(;
 )
     expand = "expand-impulse{debug-dump=$debug_dump postpasses=\"arith-raise{stablehlo=true}\"}"
     (disable_optimizations || disable_region) && return expand
-    # SICM region pipeline: inline infer into region form, run dual SICM
-    # (sampler-region SICM -> construct joint logpdf -> logpdf-region SICM),
-    # then expand-impulse consumes the optimized infer_region directly.
+    #   - `lower-impulse-to-stablehlo{linalg-only}` lowers the emitted matrix
+    #     ops (cholesky/triangular_solve/dot);
+    linalg = "lower-impulse-to-stablehlo{linalg-only=true backend=$backend}"
+    raise = "arith-raise{stablehlo=true}"
     sicm = disable_sicm ? "sicm{max-iterations=0}" : "sicm"
     return join(
-        ["inline-infer-regions", "canonicalize,cse", sicm, "canonicalize,cse", expand], ","
+        [
+            "inline-infer-regions",
+            "canonicalize,cse",
+            linalg,
+            raise,
+            "canonicalize,cse",
+            sicm,
+            "canonicalize,cse",
+            expand,
+        ],
+        ",",
     )
 end
 

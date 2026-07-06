@@ -52,7 +52,7 @@ end
     end
 
     @testset "logpdf vs NumPyro / SciPy" begin
-        logpdf_fn = ProbProg.logpdf_fn(ProbProg.Dirichlet)
+        logpdf_fn = ref_dirichlet_logpdf
         # (x, alpha, numpyro Dirichlet.log_prob, scipy.stats.dirichlet.logpdf)
         cases = [
             ([0.2, 0.3, 0.5], [1.0, 1.0, 1.0], 0.6931471805599441, 0.6931471805599453),
@@ -74,7 +74,7 @@ end
     end
 
     @testset "batched (m>1) logpdf vs NumPyro / SciPy" begin
-        logpdf_fn = ProbProg.logpdf_fn(ProbProg.Dirichlet)
+        logpdf_fn = ref_dirichlet_logpdf
         # (x (m,K), alpha (m,K), numpyro total, scipy total)
         cases = [
             (

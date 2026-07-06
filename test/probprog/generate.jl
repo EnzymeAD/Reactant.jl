@@ -1,7 +1,9 @@
 using Reactant, Test, Random, Statistics
 using Reactant: ProbProg, ReactantRNG
 
-normal_logpdf = ProbProg._normal_logpdf
+include(joinpath(@__DIR__, "common.jl"))
+
+normal_logpdf = ref_normal_logpdf
 
 function model(rng, μ, σ, shape)
     _, s = ProbProg.sample(rng, ProbProg.Normal(μ, σ, shape); symbol=:s)

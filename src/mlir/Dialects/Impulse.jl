@@ -792,11 +792,19 @@ end
 
 Sample from a distribution. By convention, the 0th operand in `inputs`
 or `outputs` is the initial RNG state (seed).
+
+The sampler symbol `fn` is optional: a site that carries a `#impulse.dist`
+attribute derives its sampler and logpdf from the shared distribution builder,
+so it needs no traced `fn`/`logpdf` symbols and its result types are the ones
+the frontend constructs directly from the distribution\'s shape. A site with a
+traced sampler (the rejection-loop natives, generative sub-calls, or the
+custom-logpdf escape hatch) carries `fn`; a custom-logpdf site additionally
+carries `logpdf`. The verifier requires either `fn` or `dist` to be present.
 """
 function sample(
     inputs::Vector{Value};
     outputs::Vector{IR.Type},
-    fn,
+    fn=nothing,
     logpdf=nothing,
     symbol=nothing,
     support=nothing,
@@ -808,7 +816,8 @@ function sample(
     operands = Value[inputs...,]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[NamedAttribute("fn", fn),]
+    attributes = NamedAttribute[]
+    !isnothing(fn) && push!(attributes, NamedAttribute("fn", fn))
     !isnothing(logpdf) && push!(attributes, NamedAttribute("logpdf", logpdf))
     !isnothing(symbol) && push!(attributes, NamedAttribute("symbol", symbol))
     !isnothing(support) && push!(attributes, NamedAttribute("support", support))

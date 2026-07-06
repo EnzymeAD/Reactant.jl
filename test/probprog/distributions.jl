@@ -54,8 +54,8 @@ include(joinpath(@__DIR__, "common.jl"))
     end
 
     @testset "Normal(0, 1)" begin
-        sample_fn = ProbProg.sampler(ProbProg.Normal)
-        logpdf_fn = ProbProg.logpdf_fn(ProbProg.Normal)
+        sample_fn = ref_normal_sampler
+        logpdf_fn = ref_normal_logpdf
 
         rng = ReactantRNG(Reactant.to_rarray(UInt64[0, 42]))
         μ = ConcreteRNumber(0.0)
@@ -88,8 +88,8 @@ include(joinpath(@__DIR__, "common.jl"))
     end
 
     @testset "Normal(2, 0.5)" begin
-        sample_fn = ProbProg.sampler(ProbProg.Normal)
-        logpdf_fn = ProbProg.logpdf_fn(ProbProg.Normal)
+        sample_fn = ref_normal_sampler
+        logpdf_fn = ref_normal_logpdf
 
         rng = ReactantRNG(Reactant.to_rarray(UInt64[1, 4]))
         μ = ConcreteRNumber(2.0)
@@ -121,8 +121,8 @@ include(joinpath(@__DIR__, "common.jl"))
     end
 
     @testset "Exponential(2)" begin
-        sample_fn = ProbProg.sampler(ProbProg.Exponential)
-        logpdf_fn = ProbProg.logpdf_fn(ProbProg.Exponential)
+        sample_fn = ref_exponential_sampler
+        logpdf_fn = ref_exponential_logpdf
 
         rng = ReactantRNG(Reactant.to_rarray(UInt64[1, 4]))
         λ = ConcreteRNumber(2.0)
@@ -154,8 +154,8 @@ include(joinpath(@__DIR__, "common.jl"))
     end
 
     @testset "Exponential(0.5)" begin
-        sample_fn = ProbProg.sampler(ProbProg.Exponential)
-        logpdf_fn = ProbProg.logpdf_fn(ProbProg.Exponential)
+        sample_fn = ref_exponential_sampler
+        logpdf_fn = ref_exponential_logpdf
 
         rng = ReactantRNG(Reactant.to_rarray(UInt64[0, 42]))
         λ = ConcreteRNumber(0.5)
@@ -187,8 +187,8 @@ include(joinpath(@__DIR__, "common.jl"))
     end
 
     @testset "LogNormal(0, 1)" begin
-        sample_fn = ProbProg.sampler(ProbProg.LogNormal)
-        logpdf_fn = ProbProg.logpdf_fn(ProbProg.LogNormal)
+        sample_fn = ref_lognormal_sampler
+        logpdf_fn = ref_lognormal_logpdf
 
         rng = ReactantRNG(Reactant.to_rarray(UInt64[1, 4]))
         μ = ConcreteRNumber(0.0)
@@ -221,8 +221,8 @@ include(joinpath(@__DIR__, "common.jl"))
     end
 
     @testset "LogNormal(1, 0.5)" begin
-        sample_fn = ProbProg.sampler(ProbProg.LogNormal)
-        logpdf_fn = ProbProg.logpdf_fn(ProbProg.LogNormal)
+        sample_fn = ref_lognormal_sampler
+        logpdf_fn = ref_lognormal_logpdf
 
         rng = ReactantRNG(Reactant.to_rarray(UInt64[0, 42]))
         μ = ConcreteRNumber(1.0)
@@ -255,7 +255,7 @@ include(joinpath(@__DIR__, "common.jl"))
     end
 
     @testset "Normal(0, vector σ) [heteroscedastic]" begin
-        logpdf_fn = ProbProg.logpdf_fn(ProbProg.Normal)
+        logpdf_fn = ref_normal_logpdf
 
         x = ConcreteRArray([0.5, 1.0, -0.3, 2.1, -1.5])
         μ = ConcreteRNumber(0.0)
@@ -277,7 +277,7 @@ include(joinpath(@__DIR__, "common.jl"))
     end
 
     @testset "LogNormal(0, vector σ) [heteroscedastic]" begin
-        logpdf_fn = ProbProg.logpdf_fn(ProbProg.LogNormal)
+        logpdf_fn = ref_lognormal_logpdf
 
         x = ConcreteRArray([0.5, 1.0, 1.5, 2.0, 3.0])
         μ = ConcreteRNumber(0.0)
@@ -299,7 +299,7 @@ include(joinpath(@__DIR__, "common.jl"))
     end
 
     @testset "Exponential(vector λ) [heteroscedastic]" begin
-        logpdf_fn = ProbProg.logpdf_fn(ProbProg.Exponential)
+        logpdf_fn = ref_exponential_logpdf
 
         x = ConcreteRArray([0.5, 1.0, 2.0, 0.1, 3.0])
         λ = ConcreteRArray([2.0, 0.5, 1.0, 3.0, 0.25])
@@ -320,8 +320,8 @@ include(joinpath(@__DIR__, "common.jl"))
     end
 
     @testset "Bernoulli(logits=0.5)" begin
-        sample_fn = ProbProg.sampler(ProbProg.Bernoulli)
-        logpdf_fn = ProbProg.logpdf_fn(ProbProg.Bernoulli)
+        sample_fn = ref_bernoulli_sampler
+        logpdf_fn = ref_bernoulli_logpdf
 
         rng = ReactantRNG(Reactant.to_rarray(UInt64[1, 4]))
         logits = ConcreteRArray(zeros(10))
@@ -357,8 +357,8 @@ include(joinpath(@__DIR__, "common.jl"))
     end
 
     @testset "Bernoulli(logits=-2)" begin
-        sample_fn = ProbProg.sampler(ProbProg.Bernoulli)
-        logpdf_fn = ProbProg.logpdf_fn(ProbProg.Bernoulli)
+        sample_fn = ref_bernoulli_sampler
+        logpdf_fn = ref_bernoulli_logpdf
 
         rng = ReactantRNG(Reactant.to_rarray(UInt64[1, 4]))
         logits = ConcreteRArray([-2.0, 0.0, 2.0])

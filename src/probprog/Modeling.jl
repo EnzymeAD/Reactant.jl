@@ -11,7 +11,6 @@ function get_support_kind(s::Symbol)
     s === :greater_than && return MLIR.API.EnzymeSupportKind_GreaterThan
     s === :less_than && return MLIR.API.EnzymeSupportKind_LessThan
     s === :simplex && return MLIR.API.EnzymeSupportKind_Simplex
-    s === :lower_cholesky && return MLIR.API.EnzymeSupportKind_LowerCholesky
     return error("Unknown support type: $s")
 end
 
@@ -26,7 +25,7 @@ function sample(
     dist::Union{Nothing,AbstractString}=nothing,
 ) where {Nargs}
     tt = TRACING_TRACE[]
-    is_generative = logpdf === nothing
+    is_generative = logpdf === nothing && dist === nothing
 
     if tt !== nothing && is_generative
         push!(tt.address_stack, symbol)
@@ -76,7 +75,8 @@ function sample(
         ),
     )
 
-    dist_attr = dist === nothing ? nothing : MLIR.IR.Attribute(Base.String(dist))
+    dist_attr =
+        dist === nothing ? nothing : Base.parse(MLIR.IR.Attribute, Base.String(dist))
 
     sample_op = MLIR.Dialects.impulse.sample(
         mlir_caller_args;
@@ -123,21 +123,100 @@ function sample(
     return traced_result
 end
 
+_sample_operand(x::MLIR.IR.Value) = x
+_sample_operand(x::Reactant.TracedRNumber) = TracedUtils.get_mlir_data(x)
+_sample_operand(x::Reactant.TracedRArray) = TracedUtils.get_mlir_data(x)
+_sample_operand(x::Real) = TracedUtils.get_mlir_data(Ops.constant(Float64(x)))
+function _sample_operand(x::AbstractArray{<:Real})
+    return TracedUtils.get_mlir_data(Ops.constant(Array{Float64}(x)))
+end
+
+_dist_result(value, shape::Tuple{}) = Reactant.TracedRNumber{Float64}((), value)
+_dist_result(value, shape::Tuple) = TracedRArray{Float64,length(shape)}((), value, shape)
+
+function _sample_from_dist(rng::AbstractRNG, dist::AbstractDistribution, symbol::Symbol)
+    dist_type = typeof(dist)
+    sup = support(dist_type)
+    shp = dist_shape(dist)
+
+    rng_mlir = TracedUtils.get_mlir_data(rng.seed)
+    inputs = MLIR.IR.Value[rng_mlir]
+    for p in dist_operands(dist)
+        push!(inputs, _sample_operand(p))
+    end
+
+    value_type = MLIR.IR.TensorType(collect(Int, shp), MLIR.IR.Type(Float64))
+    result_types = MLIR.IR.Type[MLIR.IR.type(rng_mlir), value_type]
+
+    symbol_addr = reinterpret(UInt64, pointer_from_objref(symbol))
+    symbol_attr = MLIR.IR.Attribute(
+        MLIR.API.enzymeSymbolAttrGet(MLIR.IR.current_context(), symbol_addr)
+    )
+    support_attr = MLIR.IR.Attribute(
+        MLIR.API.enzymeSupportAttrGet(
+            MLIR.IR.current_context(),
+            get_support_kind(sup),
+            false,
+            NaN,
+            false,
+            NaN,
+            Int64(0),
+        ),
+    )
+    dist_attr = Base.parse(MLIR.IR.Attribute, dist_spec(dist_type))
+
+    sample_op = MLIR.Dialects.impulse.sample(
+        inputs;
+        outputs=result_types,
+        fn=nothing,
+        logpdf=nothing,
+        symbol=symbol_attr,
+        support=support_attr,
+        dist=dist_attr,
+        name=Base.String(symbol),
+    )
+
+    TracedUtils.set_mlir_data!(rng.seed, MLIR.IR.result(sample_op, 1))
+    value = _dist_result(MLIR.IR.result(sample_op, 2), shp)
+
+    tt = TRACING_TRACE[]
+    if tt !== nothing
+        num_el = max(1, prod(shp))
+        entry = TraceEntry(
+            symbol, shp, num_el, tt.position_size, copy(tt.address_stack), sup, 0
+        )
+        push!(tt.entries, entry)
+        tt.position_size += num_el
+    end
+
+    return rng, value
+end
+
+# Constants would be baked into the traced sampler, leaving the emitted logpdf no operands.
+_traced_param(x::Reactant.TracedRNumber) = x
+_traced_param(x::Reactant.TracedRArray) = x
+_traced_param(x::Reactant.ConcreteRNumber) = x
+_traced_param(x::Reactant.ConcreteRArray) = x
+_traced_param(x::Real) = Ops.constant(Float64(x))
+_traced_param(x::AbstractArray{<:Real}) = Ops.constant(Array{Float64}(x))
+
 function sample(
     rng::AbstractRNG, dist::D; symbol::Symbol=gensym("sample")
-) where {D<:Distribution}
-    dist_type = typeof(dist)
-    dist_attr_str = EMIT_DISTRIBUTIONS[] ? dist_spec(dist_type) : nothing
-    return sample(
-        rng,
-        sampler(dist_type),
-        params(dist)...;
-        symbol=symbol,
-        logpdf=logpdf_fn(dist_type),
-        support=support(dist_type),
-        bounds=bounds(dist_type),
-        dist=dist_attr_str,
-    )
+) where {D<:AbstractDistribution}
+    if sampler_traced(dist)
+        return sample(
+            rng,
+            sampler(D),
+            map(_traced_param, dist_operands(dist))...,
+            dist_shape(dist);
+            symbol=symbol,
+            logpdf=nothing,
+            support=support(D),
+            bounds=bounds(D),
+            dist=dist_spec(D),
+        )
+    end
+    return _sample_from_dist(rng, dist, symbol)
 end
 
 function _if_wrap(template::TracedRArray{T,N}, value) where {T,N}

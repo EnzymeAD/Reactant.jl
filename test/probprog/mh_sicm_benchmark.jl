@@ -214,8 +214,28 @@ function evidence_cov(n)
     rng = ReactantRNG(seed)
     N = ConcreteRNumber(2)
 
-    region_on = "inline-infer-regions,canonicalize,cse,sicm"
-    chol_above_while = -1
+    # `lower-impulse-to-stablehlo{linalg-only}`, the elementwise tail via
+    _co = Reactant.Compiler.CompileOptions()
+    _op = Reactant.Compiler.optimization_passes(_co; sroa=true, backend="cpu")
+    _op2 = Reactant.Compiler.optimization_passes(_co; sroa=false, backend="cpu")
+    region_on = join(
+        [
+            "mark-func-memory-effects",
+            _op,
+            "enzyme-batch",
+            _op2,
+            "inline-infer-regions",
+            "canonicalize,cse",
+            "lower-impulse-to-stablehlo{linalg-only=true backend=cpu}",
+            "arith-raise{stablehlo=true}",
+            "canonicalize,cse",
+            "sicm",
+            "canonicalize,cse",
+        ],
+        ",",
+    )
+    # Counts chol above infer_region; XLA LICM lifts it above the while later.
+    chol_above_region = -1
     try
         ir_on = repr(
             Reactant.@code_hlo optimize = region_on programmable_mh_cov(
@@ -223,9 +243,9 @@ function evidence_cov(n)
             )
         )
         write(joinpath(OUT, "cov_region_sicm_on.mlir"), ir_on)
-        widx = findfirst("stablehlo.while", ir_on)
-        chol_above_while =
-            widx === nothing ? -1 : count("stablehlo.cholesky", ir_on[1:first(widx)])
+        ridx = findfirst("impulse.infer_region", ir_on)
+        chol_above_region =
+            ridx === nothing ? -1 : count("stablehlo.cholesky", ir_on[1:first(ridx)])
     catch e
         @warn "cov region-on IR capture failed" exception = (e,)
     end
@@ -250,10 +270,10 @@ function evidence_cov(n)
 
     mon = while_metrics(hlo_on)
     moff = while_metrics(hlo_off)
-    @info "[cov] region-level: cholesky hoisted ABOVE the user while (SICM on) = $chol_above_while"
+    @info "[cov] region-level: cholesky hoisted OUT of the density region (SICM on) = $chol_above_region"
     @info "[cov] final-HLO SICM ON : cholesky before-while=$(mon.chol_pre) in-while=$(mon.chol_body) | triangular in-while=$(mon.tri_body) | sqrt in-while=$(mon.sqrt_body)"
     @info "[cov] final-HLO SICM OFF: cholesky before-while=$(moff.chol_pre) in-while=$(moff.chol_body) | triangular in-while=$(moff.tri_body) | sqrt in-while=$(moff.sqrt_body)"
-    return (on=mon, off=moff, chol_above_while=chol_above_while)
+    return (on=mon, off=moff, chol_above_region=chol_above_region)
 end
 
 function run_arm(
@@ -381,7 +401,8 @@ open(joinpath(OUT, "mh_benchmark.json"), "w") do io
     println(io, "  },")
     println(io, "  \"cov_ir\": {")
     println(
-        io, "    \"region_chol_hoisted_above_while_sicm_on\": $(covir.chol_above_while),"
+        io,
+        "    \"region_chol_hoisted_out_of_density_sicm_on\": $(covir.chol_above_region),",
     )
     println(
         io,
@@ -494,7 +515,7 @@ using Test
     @test reb.sicm_neutral                       # plain-Normal density has no SICM target
     @test covir.on.sqrt_body >= 1
     @test covir.off.sqrt_body == 0
-    @test covir.chol_above_while >= 1
+    @test covir.chol_above_region >= 1
     @test bench.accS == bench.accN
     @test bench.accS > 0
     @test abs(bench.tauS - bench.tauN) <= 1e-12
