@@ -13,11 +13,12 @@ end
 
 # Run `f` once with EMIT_DISTRIBUTIONS off (traced) and once on (emitted).
 function both_ways(f)
+    saved = ProbProg.EMIT_DISTRIBUTIONS[]
     ProbProg.EMIT_DISTRIBUTIONS[] = false
     traced = f()
     ProbProg.EMIT_DISTRIBUTIONS[] = true
     emitted = f()
-    ProbProg.EMIT_DISTRIBUTIONS[] = false
+    ProbProg.EMIT_DISTRIBUTIONS[] = saved
     return traced, emitted
 end
 
@@ -192,5 +193,58 @@ end
             tr_tr, tr_em
         )
         @test tdiff <= 1e-9
+    end
+
+    @testset "LogNormal composition (StdNormal + Affine + Exp)" begin
+        # LogNormal exercises a length-2 transform chain [Affine, Exp]: the
+        # emitted sampler is exp(mu + sigma*z) and the emitted logpdf is the
+        # change-of-variables base_logpdf(inverse(y)) - Sum logdet, which must
+        # reproduce the traced -log(sigma) - log(x) Jacobian bitwise (scalar site).
+        function lognormal_model(rng, mu, sigma)
+            _, x = ProbProg.sample(rng, ProbProg.LogNormal(mu, sigma, (1,)); symbol=:x)
+            return x
+        end
+
+        @testset "simulate (sampler stream)" begin
+            function run()
+                seed = Reactant.to_rarray(UInt64[13, 17])
+                rng = ReactantRNG(seed)
+                compiled = @compile optimize = :probprog ProbProg.simulate(
+                    rng, lognormal_model, mu, sigma
+                )
+                t, w, _ = compiled(rng, lognormal_model, mu, sigma)
+                return Array(t), Array(w)
+            end
+            (t_tr, w_tr), (t_em, w_em) = both_ways(run)
+            wdiff = maxabsdiff(w_tr, w_em)
+            tdiff = maxabsdiff(t_tr, t_em)
+            @info "lognormal simulate" weight_absdiff = wdiff trace_absdiff = tdiff trace_bitwise = bitwise_equal(
+                t_tr, t_em
+            )
+            @test wdiff <= 1e-12
+            @test tdiff <= 1e-9
+        end
+
+        @testset "generate (logpdf change-of-variables)" begin
+            obs = ProbProg.Constraint(:x => [1.7])
+            constrained_addresses = ProbProg.extract_addresses(obs)
+            obs_tensor = ProbProg.flatten_constraint(obs)
+            function run()
+                seed = Reactant.to_rarray(UInt64[13, 17])
+                rng = ReactantRNG(seed)
+                function prog(rng, ot)
+                    return ProbProg.generate(
+                        rng, ot, lognormal_model, mu, sigma; constrained_addresses
+                    )
+                end
+                compiled = @compile optimize = :probprog prog(rng, obs_tensor)
+                _, w, _ = compiled(rng, obs_tensor)
+                return Array(w)
+            end
+            w_tr, w_em = both_ways(run)
+            wdiff = maxabsdiff(w_tr, w_em)
+            @info "lognormal generate" weight_absdiff = wdiff
+            @test wdiff <= 1e-12
+        end
     end
 end

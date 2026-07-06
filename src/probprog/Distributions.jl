@@ -135,6 +135,9 @@ end
 sampler(::Type{<:HalfNormal}) = _halfnormal_sampler
 logpdf_fn(::Type{<:HalfNormal}) = _halfnormal_logpdf
 support(::Type{<:HalfNormal}) = :positive
+# Folded native HalfNormal(sigma): sampler abs(sigma*z), split logpdf. Not a
+# base+chain because abs is not a bijection.
+dist_spec(::Type{<:HalfNormal}) = "#impulse.dist<HALF_NORMAL>"
 
 #==============================================================================#
 # LogNormal Distribution
@@ -171,6 +174,12 @@ end
 sampler(::Type{<:LogNormal}) = _lognormal_sampler
 logpdf_fn(::Type{<:LogNormal}) = _lognormal_logpdf
 support(::Type{<:LogNormal}) = :positive
+# LogNormal(mu, sigma) = StdNormal pushed through Affine(loc=mu, scale=sigma) then
+# Exp; sampler exp(mu + sigma*z), logpdf base_logpdf(inverse(y)) - Sum logdet
+# (matches the traced -log(sigma) - log(x) change-of-variables).
+function dist_spec(::Type{<:LogNormal})
+    return "#impulse.dist<STD_NORMAL, [#impulse.xform<AFFINE>, #impulse.xform<EXP>]>"
+end
 
 struct Bernoulli{Tp,S<:Tuple} <: Distribution
     logits::Tp
@@ -540,6 +549,9 @@ end
 sampler(::Type{<:HalfCauchy}) = _halfcauchy_sampler
 logpdf_fn(::Type{<:HalfCauchy}) = _halfcauchy_logpdf
 support(::Type{<:HalfCauchy}) = :positive
+# Folded native HalfCauchy(scale): sampler scale*abs(tan(pi*(u_cauchy-0.5))),
+# split logpdf. Not a base+chain because abs is not a bijection.
+dist_spec(::Type{<:HalfCauchy}) = "#impulse.dist<HALF_CAUCHY>"
 #==============================================================================#
 # Dirichlet Distribution
 # Parameterized by a concentration vector `alpha` over a K-simplex (shape (K,)).
@@ -587,6 +599,10 @@ end
 sampler(::Type{<:Dirichlet}) = _dirichlet_sampler
 logpdf_fn(::Type{<:Dirichlet}) = _dirichlet_logpdf
 support(::Type{<:Dirichlet}) = :simplex
+# Distributional native Dirichlet(alpha): logpdf emitted with per-block (last
+# axis) reduction (needs impulse.lgamma); the gamma-normalize sampler stays
+# traced (distributional, not bitwise, per B4).
+dist_spec(::Type{<:Dirichlet}) = "#impulse.dist<DIRICHLET>"
 #==============================================================================#
 # DiscreteUniform Distribution
 # Uniform over the integers {low, low+1, ..., high} (both endpoints included).

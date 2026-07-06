@@ -12,11 +12,12 @@ using Reactant, Test, Random
 using Reactant: ProbProg, ReactantRNG, ConcreteRNumber
 
 function both_ways(f)
+    saved = ProbProg.EMIT_DISTRIBUTIONS[]
     ProbProg.EMIT_DISTRIBUTIONS[] = false
     traced = f()
     ProbProg.EMIT_DISTRIBUTIONS[] = true
     emitted = f()
-    ProbProg.EMIT_DISTRIBUTIONS[] = false
+    ProbProg.EMIT_DISTRIBUTIONS[] = saved
     return traced, emitted
 end
 
@@ -179,5 +180,64 @@ end
             @test maxabsdiff(wt, we) <= 1e-12
             @test isapprox(Array(we)[], ref; atol=1e-9)
         end
+    end
+
+    #==========================================================================#
+    # Folded natives (sampler + split logpdf): HalfNormal, HalfCauchy
+    #==========================================================================#
+    @testset "HalfNormal" begin
+        hn_model(rng, s) = ProbProg.sample(rng, ProbProg.HalfNormal(s, (1,)); symbol=:x)[2]
+        s = ConcreteRNumber(1.5)
+        (t_tr, w_tr), (t_em, w_em) = simulate_site(hn_model, s)
+        @test maxabsdiff(t_tr, t_em) <= 1e-9   # sampler (sub-ULP StdNormal)
+        @test maxabsdiff(w_tr, w_em) <= 1e-12
+        numpyro = Dict(
+            0.5 => -0.6868120163084473,
+            1.0 => -0.8534786829751139,
+            2.0 => -1.5201453496417807,
+        )
+        for (x, ref) in numpyro
+            (wt, we) = constrained_weight(hn_model, [x], s)
+            @test maxabsdiff(wt, we) <= 1e-12
+            @test isapprox(Array(we)[], ref; atol=1e-9)
+        end
+    end
+
+    @testset "HalfCauchy" begin
+        hc_model(rng, s) = ProbProg.sample(rng, ProbProg.HalfCauchy(s, (1,)); symbol=:x)[2]
+        s = ConcreteRNumber(2.0)
+        (t_tr, w_tr), (t_em, w_em) = simulate_site(hc_model, s)
+        @test bitwise_equal(t_tr, t_em)        # uniform draw + tan matches traced
+        @test maxabsdiff(w_tr, w_em) <= 1e-12
+        numpyro = Dict(
+            0.5 => -1.205354507665835,
+            1.0 => -1.3678734371636097,
+            3.0 => -2.3233848821910463,
+        )
+        for (x, ref) in numpyro
+            (wt, we) = constrained_weight(hc_model, [x], s)
+            @test maxabsdiff(wt, we) <= 1e-12
+            @test isapprox(Array(we)[], ref; atol=1e-9)
+        end
+    end
+
+    #==========================================================================#
+    # Distributional native (sampler traced): Dirichlet -- logpdf emitted with a
+    # per-block (last-axis) reduction, scored through a constrained generate.
+    #==========================================================================#
+    @testset "Dirichlet logpdf" begin
+        dir_model(rng, a) = ProbProg.sample(rng, ProbProg.Dirichlet(a, (3,)); symbol=:x)[2]
+        # alpha = [1,1,1]: uniform on the 2-simplex; log p = log(2) everywhere.
+        a1 = Reactant.to_rarray([1.0, 1.0, 1.0])
+        for (x, ref) in
+            ([0.2, 0.3, 0.5] => 0.6931471805599441, [0.1, 0.1, 0.8] => 0.6931471805599441)
+            (wt, we) = constrained_weight(dir_model, x, a1)
+            @test maxabsdiff(wt, we) <= 1e-12
+            @test isapprox(Array(we)[], ref; atol=1e-9)
+        end
+        a2 = Reactant.to_rarray([2.0, 3.0, 5.0])
+        (wt, we) = constrained_weight(dir_model, [0.2, 0.3, 0.5], a2)
+        @test maxabsdiff(wt, we) <= 1e-12
+        @test isapprox(Array(we)[], 2.140654225847829; atol=1e-9)
     end
 end
