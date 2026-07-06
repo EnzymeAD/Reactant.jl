@@ -100,6 +100,8 @@ end
 sampler(::Type{<:Exponential}) = _exponential_sampler
 logpdf_fn(::Type{<:Exponential}) = _exponential_logpdf
 support(::Type{<:Exponential}) = :positive
+# Native Exponential(lambda): sampler -log1p(-u)/lambda, split logpdf.
+dist_spec(::Type{<:Exponential}) = "#impulse.dist<EXPONENTIAL>"
 #==============================================================================#
 # HalfNormal Distribution
 #==============================================================================#
@@ -197,6 +199,8 @@ end
 sampler(::Type{<:Bernoulli}) = _bernoulli_sampler
 logpdf_fn(::Type{<:Bernoulli}) = _bernoulli_logpdf
 support(::Type{<:Bernoulli}) = :real
+# Native Bernoulli(logits): sampler u < sigmoid(logits), split logpdf.
+dist_spec(::Type{<:Bernoulli}) = "#impulse.dist<BERNOULLI>"
 #==============================================================================#
 # Poisson Distribution
 #==============================================================================#
@@ -303,6 +307,9 @@ end
 sampler(::Type{<:Poisson}) = _poisson_sampler
 logpdf_fn(::Type{<:Poisson}) = _poisson_logpdf
 support(::Type{<:Poisson}) = :real
+# Native Poisson(rate): logpdf emitted (needs impulse.lgamma); sampler stays
+# traced (Knuth / Hoermann rejection loops are not bitwise-reproducible).
+dist_spec(::Type{<:Poisson}) = "#impulse.dist<POISSON>"
 #==============================================================================#
 # Multivariate Normal Distribution
 #==============================================================================#
@@ -431,6 +438,9 @@ end
 sampler(::Type{<:Gamma}) = _gamma_sampler
 logpdf_fn(::Type{<:Gamma}) = _gamma_logpdf
 support(::Type{<:Gamma}) = :positive
+# Native Gamma(concentration, rate): logpdf emitted (needs impulse.lgamma);
+# sampler stays traced (Marsaglia-Tsang rejection loop).
+dist_spec(::Type{<:Gamma}) = "#impulse.dist<GAMMA>"
 #==============================================================================#
 # StudentT Distribution
 # Parameterized by df (degrees of freedom), loc, scale.
@@ -487,6 +497,9 @@ end
 sampler(::Type{<:StudentT}) = _studentt_sampler
 logpdf_fn(::Type{<:StudentT}) = _studentt_logpdf
 support(::Type{<:StudentT}) = :real
+# Native StudentT(df, loc, scale): logpdf emitted (needs impulse.lgamma);
+# sampler stays traced (draws a Gamma via rejection).
+dist_spec(::Type{<:StudentT}) = "#impulse.dist<STUDENT_T>"
 #==============================================================================#
 # HalfCauchy Distribution
 # Parameterized by scale. Support: [0, ∞).
@@ -619,3 +632,6 @@ end
 sampler(::Type{<:DiscreteUniform}) = _discreteuniform_sampler
 logpdf_fn(::Type{<:DiscreteUniform}) = _discreteuniform_logpdf
 support(::Type{<:DiscreteUniform}) = :real
+# Native DiscreteUniform(low, high): sampler low + floor(u*(high-low+1)), split
+# logpdf. low/high must be passed as traced operands (not literals) for emit.
+dist_spec(::Type{<:DiscreteUniform}) = "#impulse.dist<DISCRETE_UNIFORM>"

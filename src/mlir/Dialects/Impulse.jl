@@ -480,6 +480,32 @@ function infer_region(
 end
 
 """
+`lgamma`
+
+Elementwise log|Gamma(x)|. Lowered to `chlo.lgamma` in Enzyme-JAX; emitted by
+the distribution builder for logpdf normalizers that need it (Gamma, StudentT,
+Poisson).
+"""
+function lgamma(operand::Value; result::IR.Type, location=Location())
+    op_ty_results = IR.Type[result,]
+    operands = Value[operand,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "impulse.lgamma",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
 `log_add_exp`
 
 Computes log(exp(x) + exp(y)).
