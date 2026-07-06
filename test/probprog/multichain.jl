@@ -39,13 +39,14 @@ function nuts_multichain_program(
         rng, constraint_tensor, model, xs; constrained_addresses
     )
 
-    trace, diagnostics, _, states = ProbProg.mcmc(
+    trace, diagnostics, _, _, states = ProbProg.mcmc(
         rng,
         trace,
         model,
         xs;
         selection,
         num_chains,
+        chain_method=:sequential,
         algorithm=:NUTS,
         inverse_mass_matrix,
         step_size,
@@ -143,7 +144,7 @@ end
 
         @test length(per_chain) == num_chains
         @test size(final_keys) == (num_chains, 2)
-        @test size(diagnostics) == (num_chains, num_samples)
+        @test size(diagnostics) == (num_chains, num_samples, 2)
         for c in 1:num_chains
             @test haskey(per_chain[c].choices, :param_a)
             @test haskey(per_chain[c].choices, :param_b)

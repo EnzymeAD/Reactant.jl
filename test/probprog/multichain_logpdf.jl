@@ -16,11 +16,12 @@ function logpdf_multichain_program(
     adapt_step_size::Bool,
     adapt_mass_matrix::Bool,
 )
-    samples, _, _, states = ProbProg.mcmc_logpdf(
+    samples, _, _, _, states = ProbProg.mcmc_logpdf(
         rng,
         logpdf_fn,
         init_pos;
         num_chains=2,
+        chain_method=:sequential,
         algorithm=:NUTS,
         step_size,
         inverse_mass_matrix=imm,
@@ -37,11 +38,12 @@ end
 function logpdf_multichain_split_program(
     rng, logpdf_fn, init_pos, step_size, imm, M::Int, N::Int
 )
-    sA, _, _, statesA = ProbProg.mcmc_logpdf(
+    sA, _, _, _, statesA = ProbProg.mcmc_logpdf(
         rng,
         logpdf_fn,
         init_pos;
         num_chains=2,
+        chain_method=:sequential,
         algorithm=:NUTS,
         step_size,
         inverse_mass_matrix=imm,
@@ -51,7 +53,7 @@ function logpdf_multichain_split_program(
         adapt_step_size=false,
         adapt_mass_matrix=false,
     )
-    sB, _, _, statesB = ProbProg.mcmc_logpdf(
+    sB, _, _, _, statesB = ProbProg.mcmc_logpdf(
         statesA, logpdf_fn; num_samples=N, adapt_step_size=false, adapt_mass_matrix=false
     )
     keysB = ProbProg._stack_chain_major([s.rng for s in statesB])

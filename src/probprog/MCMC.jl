@@ -295,6 +295,56 @@ function state_operands_multichain(states::Vector{MCMCState}, warmup_offset, ada
     return vals
 end
 
+# NumPyro defaults to :parallel for num_chains > 1.
+const _CHAIN_METHODS = (:sequential, :parallel, :vectorized)
+_default_chain_method(num_chains::Int) = num_chains > 1 ? :parallel : :sequential
+
+function _validate_chain_method(chain_method::Symbol)
+    chain_method in _CHAIN_METHODS || error(
+        "Unknown chain_method: $chain_method. Supported: :sequential, :parallel, :vectorized",
+    )
+    chain_method == :vectorized && error(
+        "chain_method=:vectorized is not implemented yet (planned for H2). Use " *
+        ":parallel (default) or :sequential.",
+    )
+    return chain_method
+end
+
+# Bitwise equal to impulse::RandomSplitOp (jax.random.split); all chain methods share it.
+function _random_split(rng::ReactantRNG, n::Int)
+    seed_val = TracedUtils.get_mlir_data(rng.seed)
+    seed_ty = MLIR.IR.type(seed_val)
+    op = MLIR.Dialects.impulse.randomSplit(
+        seed_val; output_rng_states=[seed_ty for _ in 1:n]
+    )
+    sz = size(rng.seed)
+    return [ReactantRNG(TracedRArray{UInt64,1}((), MLIR.IR.result(op, c), sz)) for c in 1:n]
+end
+
+function split_chain_rngs(rng::ReactantRNG, n::Int)
+    r = copy(rng)
+    split_fn = rr -> Tuple(s.seed for s in _random_split(rr, n))
+    compiled = Reactant.Compiler.compile(split_fn, (r,); optimize=:probprog)
+    seeds = compiled(r)
+    return ReactantRNG[ReactantRNG(copy(s)) for s in seeds]
+end
+
+# Safe only because every chain owns distinct concrete inputs (no shared donated buffers).
+function _dispatch_parallel(thunk, per_chain_inputs::Vector)
+    n = length(per_chain_inputs)
+    results = Vector{Any}(undef, n)
+    t0 = time()
+    tasks = Vector{Task}(undef, n)
+    for c in 1:n
+        inputs = per_chain_inputs[c]
+        tasks[c] = Threads.@spawn thunk(inputs...)
+    end
+    for c in 1:n
+        results[c] = fetch(tasks[c])
+    end
+    return results, time() - t0
+end
+
 function mcmc(
     rng::AbstractRNG,
     original_trace,
@@ -302,6 +352,7 @@ function mcmc(
     args::Vararg{Any,Nargs};
     selection::Selection,
     num_chains::Int=1,
+    chain_method::Symbol=_default_chain_method(num_chains),
     algorithm::Symbol=:HMC,
     inverse_mass_matrix=nothing,
     step_size=nothing,
@@ -314,6 +365,8 @@ function mcmc(
     adapt_step_size::Bool=true,
     adapt_mass_matrix::Bool=true,
 ) where {Nargs}
+    _validate_chain_method(chain_method)
+    # In one traced call, :parallel emits the same unrolled IR as :sequential.
     args = (rng, args...)
 
     tt = TracedTrace()
@@ -836,7 +889,13 @@ function _infer_multichain(
     trace_type = MLIR.IR.TensorType(
         [num_chains, collection_size, pos_size], MLIR.IR.Type(Float64)
     )
-    diagnostics_type = MLIR.IR.TensorType([num_chains, collection_size], MLIR.IR.Type(Bool))
+    # Diagnostics columns: [accepted, diverging].
+    diagnostics_type = MLIR.IR.TensorType(
+        [num_chains, collection_size, 2], MLIR.IR.Type(Bool)
+    )
+    log_densities_type = MLIR.IR.TensorType(
+        [num_chains, collection_size], MLIR.IR.Type(Float64)
+    )
 
     position_type = MLIR.IR.TensorType([1, pos_size], MLIR.IR.Type(Float64))
     scalar_type = MLIR.IR.TensorType(Int64[], MLIR.IR.Type(Float64))
@@ -881,6 +940,7 @@ function _infer_multichain(
         init_position=initial_position_val,
         trace=trace_type,
         diagnostics=diagnostics_type,
+        log_densities=log_densities_type,
         output_rng_state=mlir_result_types[1],
         state_out=state_out_types(
             adaptive,
@@ -918,15 +978,18 @@ function _infer_multichain(
         fnwrapped,
         resprefix,
         argprefix,
-        2,
+        3,
         true,
     )
 
     new_trace = TracedRArray{Float64,3}(
         (), MLIR.IR.result(mcmc_op, 1), (num_chains, collection_size, pos_size)
     )
-    diagnostics = TracedRArray{Bool,2}(
-        (), MLIR.IR.result(mcmc_op, 2), (num_chains, collection_size)
+    diagnostics = TracedRArray{Bool,3}(
+        (), MLIR.IR.result(mcmc_op, 2), (num_chains, collection_size, 2)
+    )
+    log_densities = TracedRArray{Float64,2}(
+        (), MLIR.IR.result(mcmc_op, 3), (num_chains, collection_size)
     )
     states = unpack_states_multichain(
         schema_names,
@@ -944,7 +1007,7 @@ function _infer_multichain(
         ),
         num_chains,
     )
-    return new_trace, diagnostics, traced_result, states
+    return new_trace, diagnostics, log_densities, traced_result, states
 end
 
 function mcmc_logpdf(
@@ -967,7 +1030,9 @@ function mcmc_logpdf(
     trajectory_length::Float64=2π,
     strong_zero::Bool=false,
     num_chains::Int=1,
+    chain_method::Symbol=_default_chain_method(num_chains),
 ) where {Nargs}
+    _validate_chain_method(chain_method)
     if num_chains > 1
         return _infer_multichain(
             rng,
@@ -1320,6 +1385,64 @@ function _run_chain_chunked(
     return result, state
 end
 
+# Chain c uses split(rng, num_chains)[c] and row c of initial_position, as :sequential.
+function _run_chain_parallel(
+    rng,
+    logpdf_fn,
+    initial_position;
+    num_chains::Int,
+    num_warmup::Int,
+    num_samples::Int,
+    step_size,
+    inverse_mass_matrix,
+    adapt_step_size::Bool,
+    adapt_mass_matrix::Bool,
+    mcmc_kwargs,
+)
+    keys = split_chain_rngs(rng, num_chains)
+    pos_host = Array(initial_position)
+    size(pos_host, 1) == num_chains || error(
+        "multi-chain `initial_position` leading dimension ($(size(pos_host, 1))) " *
+        "must equal num_chains ($num_chains)",
+    )
+
+    single_fn = function (r, logpdf_fn, pos, ss, imm)
+        s, _, _, _, st = mcmc_logpdf(
+            r,
+            logpdf_fn,
+            pos;
+            num_chains=1,
+            step_size=ss,
+            inverse_mass_matrix=imm,
+            num_warmup,
+            num_samples,
+            adapt_step_size,
+            adapt_mass_matrix,
+            mcmc_kwargs...,
+        )
+        return s, st
+    end
+
+    chain_inputs =
+        c -> (
+            keys[c],
+            logpdf_fn,
+            Reactant.to_rarray(pos_host[c, :]),
+            (step_size === nothing ? nothing : copy(step_size)),
+            (inverse_mass_matrix === nothing ? nothing : copy(inverse_mass_matrix)),
+        )
+
+    compiled = Reactant.Compiler.compile(single_fn, chain_inputs(1); optimize=:probprog)
+
+    per_chain_inputs = Any[chain_inputs(c) for c in 1:num_chains]
+    results, elapsed = _dispatch_parallel(compiled, per_chain_inputs)
+    @debug "run_chain(:parallel) dispatched $num_chains chains over $(Threads.nthreads()) threads in $(round(elapsed; digits=3))s"
+
+    samples = cat((reshape(Array(r[1]), 1, size(r[1])...) for r in results)...; dims=1)
+    states = MCMCState[r[2] for r in results]
+    return samples, states
+end
+
 # TODO(#2619): add trace-based mode support
 function run_chain(
     rng,
@@ -1330,6 +1453,7 @@ function run_chain(
     num_samples::Int=1000,
     chunk_size::Int=100,
     num_chains::Int=1,
+    chain_method::Symbol=_default_chain_method(num_chains),
     step_size=nothing,
     inverse_mass_matrix=nothing,
     initial_gradient=nothing,
@@ -1345,6 +1469,7 @@ function run_chain(
     callback=nothing,
     warmup_chunk_size::Int=chunk_size,
 )
+    _validate_chain_method(chain_method)
     mcmc_kwargs = (;
         algorithm,
         max_tree_depth,
@@ -1354,17 +1479,29 @@ function run_chain(
         strong_zero,
     )
 
-    # Multi-chain runs the whole warmup+sampling as a single compiled multichain
-    # op (per-chain kernels unrolled in the lowering); the chunked/progress-bar
-    # scheduler is single-chain. `initial_position` must be chain-major with
-    # leading dim == num_chains.
     if num_chains > 1
+        if chain_method == :parallel
+            return _run_chain_parallel(
+                rng,
+                logpdf_fn,
+                initial_position;
+                num_chains,
+                num_warmup,
+                num_samples,
+                step_size,
+                inverse_mass_matrix,
+                adapt_step_size,
+                adapt_mass_matrix,
+                mcmc_kwargs,
+            )
+        end
         monolithic_fn = function (rng, logpdf_fn, pos, ss, imm)
-            s, _, _, sts = mcmc_logpdf(
+            s, _, _, _, sts = mcmc_logpdf(
                 rng,
                 logpdf_fn,
                 pos;
                 num_chains,
+                chain_method=:sequential,
                 step_size=ss,
                 inverse_mass_matrix=imm,
                 num_warmup,
