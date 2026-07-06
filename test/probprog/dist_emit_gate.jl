@@ -104,6 +104,68 @@ end
         @test tdiff <= 1e-9
     end
 
+    @testset "generate (s observed, t sampled)" begin
+        # Constrains :s only, so the generate lowering scores :s from the
+        # constraint (emitDistLogpdf) and DRAWS :t through the emitted sampler
+        # (emitDistSampler) -- exercising both generate emit branches.
+        obs = ProbProg.Constraint(:s => [0.3])
+        constrained_addresses = ProbProg.extract_addresses(obs)
+        obs_tensor = ProbProg.flatten_constraint(obs)
+
+        function run_generate2()
+            seed = Reactant.to_rarray(UInt64[7, 11])
+            rng = ReactantRNG(seed)
+            compiled = @compile optimize = :probprog generate_program(
+                rng, obs_tensor, mu, sigma, constrained_addresses
+            )
+            trace, weight, _ = compiled(rng, obs_tensor, mu, sigma, constrained_addresses)
+            return Array(trace), Array(weight)
+        end
+        (t_tr, w_tr), (t_em, w_em) = both_ways(run_generate2)
+        wdiff = maxabsdiff(w_tr, w_em)
+        tdiff = maxabsdiff(t_tr, t_em)
+        @info "generate2" weight_absdiff = wdiff trace_absdiff = tdiff trace_bitwise = bitwise_equal(
+            t_tr, t_em
+        )
+        @test wdiff <= 1e-12
+        @test tdiff <= 1e-9
+    end
+
+    @testset "mh (flat regenerate)" begin
+        # A fully-constrained generate yields a deterministic (sampler-free)
+        # trace0/weight0; the flat MH step (region=false) lowers to
+        # `impulse.regenerate`, whose selected `:s` site is redrawn through the
+        # emitted sampler and scored by the emitted logpdf.
+        obs = ProbProg.Constraint(:s => [0.3], :t => [0.6])
+        constrained_addresses = ProbProg.extract_addresses(obs)
+        obs_tensor = ProbProg.flatten_constraint(obs)
+        selection = ProbProg.select(ProbProg.Address(:s))
+
+        function run_mh()
+            seed = Reactant.to_rarray(UInt64[42, 43])
+            rng = ReactantRNG(seed)
+            function mh_program(rng, obs_tensor, mu, sigma)
+                trace0, weight0, _ = ProbProg.generate(
+                    rng, obs_tensor, gate_model, mu, sigma; constrained_addresses
+                )
+                nt, nw, acc, _ = ProbProg.mh(
+                    rng, trace0, weight0, gate_model, mu, sigma; selection, region=false
+                )
+                return nt, nw, acc
+            end
+            compiled = @compile optimize = :probprog mh_program(rng, obs_tensor, mu, sigma)
+            nt, nw, acc = compiled(rng, obs_tensor, mu, sigma)
+            return Array(nt), Array(nw), Array(acc)
+        end
+        (t_tr, w_tr, a_tr), (t_em, w_em, a_em) = both_ways(run_mh)
+        wdiff = maxabsdiff(w_tr, w_em)
+        tdiff = maxabsdiff(t_tr, t_em)
+        @info "mh" weight_absdiff = wdiff trace_absdiff = tdiff accepted = (a_tr, a_em)
+        @test wdiff <= 1e-9
+        @test tdiff <= 1e-9
+        @test a_tr == a_em
+    end
+
     @testset "NUTS" begin
         obs = ProbProg.Constraint(:t => [0.3])
         constrained_addresses = ProbProg.extract_addresses(obs)
