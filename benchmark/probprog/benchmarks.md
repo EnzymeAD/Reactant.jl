@@ -362,6 +362,39 @@ matched RBG key.
 dominated by whole-loop XLA fusion at small size. The load-bearing, size-robust
 result is the SICM on/off ratio and the elimination of the per-step cholesky.
 
+### End-to-end through PPLBench (canonical harness)
+
+SVI is now a first-class PPLBench inference mode, replacing the focused D3 drivers
+above (kept as tests). The `SVI` class in `ppls/{impulse,numpyro}/inference.py`
+dispatches to `harness.jl --method svi` / `numpyro_harness.py --method svi`;
+configs live in `pplbench_configs/svi/{scale_family_mvn,gp_pois_regr}.json`. The
+config's `iterations` is the number of posterior draws K; `num_steps` is the SVI
+optimization budget. Predictive log likelihood (PPLBench's metric) is computed from
+K=200 draws of the fitted AutoNormal guide (eps ~ N(0,I); z = loc + scale·eps in the
+unconstrained latent space; per-site constraining bijector), mirroring NumPyro's
+`Predictive` / `sample_posterior` over the guide. Guide-sampling parity is
+constructional, not bitwise (independent RNG streams; Impulse draws host-side,
+NumPyro uses threefry), so PLL/ELBO agreement is a numerical, not bit-exact, check.
+
+**Config**: AutoNormal + Adam (lr 0.01), 2000 steps, 1 particle, K=200 draws, n=8,
+32 threads, CPU. Wall clock is the mean over steady-state trials (trial 0 excluded).
+
+| model | framework | per-step (µs) | fit/trial (ms) | final ELBO | final PLL (mean) | SICM |
+|-------|-----------|--------------:|---------------:|-----------:|-----------------:|------|
+| scale_family_mvn | Impulse (SICM) | 2.08 | 4.15 | -17.43 | -15.14 | in-loop cholesky removed |
+| scale_family_mvn | Impulse (no opt) | 7.63 | 15.27 | -17.43 | -15.14 | **3.68× slower/step** |
+| scale_family_mvn | NumPyro SVI | 110.63 | 221.3 | -17.71 | -15.20 | reference |
+| gp_pois_regr | Impulse (SICM) | 2.08 | 4.15 | -13.87 | -6.36 | in-loop cholesky removed |
+| gp_pois_regr | Impulse (no opt) | 7.12 | 14.25 | -13.87 | -6.36 | **3.43× slower/step** |
+| gp_pois_regr | NumPyro SVI | 164.52 | 329.0 | -13.57 | -6.44 | reference |
+
+The SICM on/off per-step ratios (3.68× mvn, 3.43× gp) and per-step figures (SICM
+2.08 µs, no-opt 7.1–7.6 µs) reproduce the D3 micro-benchmark (3.38×/3.57×, SICM
+2.06–2.24 µs) under the independent PPLBench wall-clock path. Impulse SICM and no-opt
+produce bit-identical draws and PLL (SICM is a performance-only transform). Cross
+-framework, Impulse and NumPyro PLLs agree to within single-particle ELBO noise
+(mvn -15.14 vs -15.20; gp -6.36 vs -6.44) on the shared PPLBench test data.
+
 ---
 
 ## Programmable MH (Gen-style) — SICM on the MH proposal density

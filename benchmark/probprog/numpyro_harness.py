@@ -16,6 +16,7 @@ jax.config.update("jax_default_prng_impl", "rbg")
 
 import jax.numpy as jnp
 import numpy as np
+import numpyro
 import numpyro.infer as infer
 import xarray as xr
 
@@ -105,6 +106,156 @@ def run_trial(mcmc, rng_key, data, jax_init):
     return mcmc.get_samples()
 
 
+# =============================================================================
+# SVI support
+# =============================================================================
+
+def _svi_init_constrained(model, data, seed):
+    """constrain(0) at each latent site: exp(0)=1 for positive, 0 for real.
+
+    Mirrors the Impulse harness's deterministic unconstrained guide loc = 0 so
+    both backends start SVI from the same point (AutoNormal unconstrains these
+    values internally to set the guide location)."""
+    import numpyro.handlers as handlers
+    from numpyro.distributions.transforms import biject_to
+
+    # Only the site supports (shapes) are read here. Use a typed threefry key:
+    # numpyro's seed handler rejects raw RBG keys produced from an int seed under
+    # the global RBG prng impl (same reason `constrained_to_unconstrained` above
+    # uses threefry).
+    key = jax.random.wrap_key_data(
+        np.array([0, 0], dtype=np.uint32), impl="threefry2x32"
+    )
+    tr = handlers.trace(handlers.seed(model, key)).get_trace(data)
+    init = {}
+    for name, site in tr.items():
+        if site["type"] == "sample" and not site.get("is_observed", False):
+            transform = biject_to(site["fn"].support)
+            init[name] = transform(jnp.zeros(site["fn"].shape()))
+    return init
+
+
+def _build_svi(model, data, guide_name, optimizer_name, step_size,
+               num_particles, init_scale, seed):
+    from numpyro.infer import SVI, Trace_ELBO
+    from numpyro.infer.autoguide import AutoDelta, AutoNormal
+    from numpyro.infer.initialization import init_to_value
+
+    init_c = _svi_init_constrained(model, data, seed)
+    init_loc_fn = init_to_value(values=init_c)
+    if guide_name == "AutoDelta":
+        guide = AutoDelta(model, init_loc_fn=init_loc_fn)
+    elif guide_name in ("AutoNormal", "AutoMultivariateNormal"):
+        # AutoMultivariateNormal is validated separately; the SVI benchmark
+        # models use AutoNormal, matching the Impulse configs.
+        guide = AutoNormal(model, init_loc_fn=init_loc_fn, init_scale=init_scale)
+    else:
+        raise ValueError(f"Unsupported guide: {guide_name}")
+
+    opts = {
+        "Adam": lambda: numpyro.optim.Adam(step_size=step_size),
+        "SGD": lambda: numpyro.optim.SGD(step_size=step_size),
+        "ClippedAdam": lambda: numpyro.optim.ClippedAdam(step_size=step_size),
+        "Momentum": lambda: numpyro.optim.Momentum(step_size=step_size, mass=0.9),
+        "RMSProp": lambda: numpyro.optim.RMSProp(step_size=step_size),
+        "Adagrad": lambda: numpyro.optim.Adagrad(step_size=step_size),
+        "RMSPropMomentum":
+            lambda: numpyro.optim.RMSPropMomentum(step_size=step_size),
+    }
+    if optimizer_name not in opts:
+        raise ValueError(f"Unsupported optimizer: {optimizer_name}")
+    opt = opts[optimizer_name]()
+
+    svi = SVI(model, guide, opt, loss=Trace_ELBO(num_particles=num_particles))
+    return svi, guide
+
+
+def _svi_write_diagnostics(model_name, seed, elbo_traj, per_step, num_steps):
+    diag_dir = os.path.join(
+        os.environ.get("PPLBENCH_OUTPUT_DIR", "outputs"), "svi_diagnostics"
+    )
+    os.makedirs(diag_dir, exist_ok=True)
+    safe = "".join(c if c.isalnum() or c == "_" else "_" for c in str(model_name))
+    path = os.path.join(diag_dir, f"numpyro_{safe}_seed{seed}.json")
+    with open(path, "w") as f:
+        json.dump({
+            "model": str(model_name),
+            "seed": int(seed),
+            "num_steps": int(num_steps),
+            "per_step_s": float(per_step),
+            "final_elbo": float(elbo_traj[-1]) if len(elbo_traj) else float("nan"),
+            "elbo_trajectory": [float(x) for x in elbo_traj],
+        }, f)
+
+
+def run_svi_trial(svi, guide, rng_key, data, num_steps, num_draws):
+    """Fit for num_steps (timed) then draw num_draws from the fitted guide via
+    sample_posterior (Predictive over the guide, constrained space). Only the fit
+    is timed, matching the Impulse harness (guide draws are a post-fit diagnostic)."""
+    fit_key, draw_key = jax.random.split(rng_key)
+    t0 = time.time()
+    res = svi.run(fit_key, num_steps, data, progress_bar=False)
+    res.losses.block_until_ready()
+    run_time = time.time() - t0
+    params = res.params
+    losses = np.asarray(res.losses)
+    draws = guide.sample_posterior(draw_key, params, sample_shape=(num_draws,))
+    jax.block_until_ready(draws)
+    samples = {k: np.asarray(v) for k, v in draws.items()}
+    return samples, (-losses).tolist(), run_time
+
+
+def svi_main(args, impl, data, module_path):
+    # NumPyro's AutoGuide internally seeds with an int (rng_seed=0), which the
+    # seed handler rejects under the global RBG prng impl this harness uses for
+    # MCMC. SVI parity with Impulse is not bitwise (guide draws / gradient
+    # sampling differ), so use threefry here, matching the D3 SVI reference.
+    jax.config.update("jax_default_prng_impl", "threefry2x32")
+    model_name = module_path
+    K = args.num_samples
+
+    def one_trial(seed):
+        rng_key = jax.random.PRNGKey(int(seed))
+        svi, guide = _build_svi(
+            impl.model, data, args.guide, args.optimizer, args.step_size,
+            args.num_particles, args.init_scale, seed,
+        )
+        # JIT warm (discarded), then a timed fit.
+        run_svi_trial(svi, guide, rng_key, data, args.num_steps, K)
+        samples, elbo_traj, run_time = run_svi_trial(
+            svi, guide, rng_key, data, args.num_steps, K
+        )
+        _svi_write_diagnostics(
+            model_name, seed, elbo_traj, run_time / args.num_steps, args.num_steps
+        )
+        return samples, elbo_traj, run_time
+
+    print("NumPyro SVI: JIT warmup + first trial...", flush=True)
+    jit_start = time.time()
+    samples, elbo_traj, run_time = one_trial(args.seed)
+    jit_time = time.time() - jit_start
+    write_output(args.output, samples, impl, jit_time, run_time)
+    final = elbo_traj[-1] if elbo_traj else float("nan")
+    print(f"First trial: {run_time:.3f}s final_elbo={final:.6f}", flush=True)
+
+    if not args.server:
+        return
+
+    print("###READY###", flush=True)
+    for line in sys.stdin:
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if stripped == "EXIT":
+            break
+        req = json.loads(stripped)
+        new_seed = req["seed"]
+        new_output_path = req["output"]
+        new_samples, _, new_run_time = one_trial(new_seed)
+        write_output(new_output_path, new_samples, impl, 0.0, new_run_time)
+        print(f"###DONE### {new_run_time * 1000:.2f} ms", flush=True)
+
+
 def write_output(output_path, samples, impl, compile_time, run_time):
     output = {}
     for k, v in samples.items():
@@ -132,6 +283,12 @@ def main():
     parser.add_argument("--max-tree-depth", type=int, default=10)
     parser.add_argument("--adapt-step-size", action="store_true")
     parser.add_argument("--adapt-mass-matrix", action="store_true")
+    parser.add_argument("--method", default="nuts")
+    parser.add_argument("--num-steps", type=int, default=300)
+    parser.add_argument("--num-particles", type=int, default=1)
+    parser.add_argument("--init-scale", type=float, default=0.1)
+    parser.add_argument("--guide", default="AutoNormal")
+    parser.add_argument("--optimizer", default="Adam")
     parser.add_argument("--server", action="store_true")
     args = parser.parse_args()
 
@@ -145,6 +302,10 @@ def main():
     mod = importlib.import_module(f"pplbench.ppls.numpyro.{module_path}")
     impl_class = getattr(mod, class_name)
     impl = impl_class(**data.attrs)
+
+    if args.method == "svi":
+        svi_main(args, impl, data, module_path)
+        return
 
     position_size = None
     if init_params_raw:

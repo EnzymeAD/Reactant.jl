@@ -57,6 +57,77 @@ function flatten_constraint(constraint::ProbProg.Constraint)
 end
 
 # =============================================================================
+# Shared SVI infrastructure
+# =============================================================================
+
+# `guide` / `optimizer` are compile-time Symbols; `num_steps`, `num_particles`,
+# `init_scale` are compile-time literals baked into the VIConfigAttr. Only the
+# rng, learning rate, constraint tensor and initial guide loc are runtime
+# operands, so a single compilation serves every server trial.
+function svi_program(
+    rng, model, model_args, step_size, num_steps, num_particles, init_scale,
+    guide, optimizer, constraint_tensor, constrained_addresses, selection,
+    initial_position,
+)
+    trace0, _, _ = ProbProg.generate(
+        rng, constraint_tensor, model, model_args...; constrained_addresses
+    )
+    _, elbo, _, state = ProbProg.svi(
+        rng, trace0, model, model_args...;
+        selection, guide, optimizer, step_size, num_steps, num_particles,
+        init_scale, initial_position,
+    )
+    return elbo, state.loc, state.scale
+end
+
+# Draw `K` posterior samples from a fitted AutoNormal/AutoDelta guide, mirroring
+# NumPyro's `Predictive` over the guide: eps ~ N(0,I), z = loc + scale*eps in the
+# unconstrained latent space, then the per-site constraining bijector. `scale` is
+# the guide's constrained (softplus) std for AutoNormal, zeros for AutoDelta.
+# Host RNG (seeded per trial): predictive draws are a post-fit diagnostic, not
+# part of the SICM-optimized SVI loop.
+function svi_guide_draws(loc, scale, selected_entries, K::Int, seed::Integer)
+    d = size(loc, 2)
+    gen = Random.MersenneTwister(seed)
+    eps = randn(gen, K, d)
+    z = loc .+ scale .* eps
+    constrained = copy(z)
+    for entry in selected_entries
+        cols = (entry.offset + 1):(entry.offset + entry.num_elements)
+        if entry.support === :positive
+            @views constrained[:, cols] .= exp.(z[:, cols])
+        elseif entry.support === :real
+            # identity bijector
+        else
+            error(
+                "SVI guide draw: unsupported support :$(entry.support) for site " *
+                ":$(entry.symbol) (only :real and :positive are handled)",
+            )
+        end
+    end
+    return constrained
+end
+
+function _svi_write_diagnostics(model_name, seed, elbo_traj, per_step, num_steps)
+    out_dir = get(ENV, "PPLBENCH_OUTPUT_DIR", "outputs")
+    diag_dir = joinpath(out_dir, "svi_diagnostics")
+    mkpath(diag_dir)
+    safe = replace(String(model_name), r"[^A-Za-z0-9_]" => "_")
+    path = joinpath(diag_dir, "$(safe)_seed$(seed).json")
+    open(path, "w") do io
+        JSON3.write(io, Dict(
+            "model" => String(model_name),
+            "seed" => seed,
+            "num_steps" => num_steps,
+            "per_step_s" => per_step,
+            "final_elbo" => isempty(elbo_traj) ? NaN : Float64(elbo_traj[end]),
+            "elbo_trajectory" => Float64.(elbo_traj),
+        ))
+    end
+    return path
+end
+
+# =============================================================================
 # Profiling helpers
 # =============================================================================
 
@@ -159,6 +230,109 @@ const MODEL_PATH = _parse_model_arg()
 include(joinpath(@__DIR__, MODEL_PATH * ".jl"))
 
 # =============================================================================
+# SVI entry point
+# =============================================================================
+
+function run_svi(
+    data, spec, output_path, seed, step_size, num_steps, num_particles,
+    init_scale, guide, optimizer, num_draws, opt_pipeline, server_mode,
+)
+    println("Impulse SVI: $(spec.model_name)")
+    println("  guide=$guide, optimizer=$optimizer, step_size=$step_size, num_steps=$num_steps")
+    println("  num_particles=$num_particles, init_scale=$init_scale, num_draws=$num_draws")
+    println("  pipeline=$opt_pipeline")
+
+    pos = spec.position_size
+    # Deterministic unconstrained guide loc at 0 (constrained: 1 for positive
+    # sites, 0 for real), matching the D3 reference. Trials vary only by rng seed.
+    initial_position = Reactant.to_rarray(zeros(1, pos))
+    step_size_rnum = ConcreteRNumber(step_size)
+
+    constraint = build_constraint(data, get(data, "init_params", nothing))
+    constraint_tensor, constrained_addresses = flatten_constraint(constraint)
+
+    rng = ReactantRNG(Reactant.to_rarray(UInt64[UInt64(seed), UInt64(0)]))
+
+    print("Compiling... ")
+    compile_time = @elapsed begin
+        compiled_fn, tt = ProbProg.with_trace() do
+            @compile sync = true optimize = opt_pipeline svi_program(
+                rng, spec.model_fn, spec.model_args, step_size_rnum, num_steps,
+                num_particles, init_scale, guide, optimizer, constraint_tensor,
+                constrained_addresses, spec.selection, initial_position,
+            )
+        end
+    end
+    println("$(round(compile_time * 1000, digits=2)) ms")
+    selected_entries = ProbProg.filter_entries_by_selection(tt.entries, spec.selection)
+
+    function fit_and_sample(r, ct, ip, this_seed)
+        run_time = @elapsed begin
+            elbo_t, loc_t, scale_t = compiled_fn(
+                r, spec.model_fn, spec.model_args, step_size_rnum, num_steps,
+                num_particles, init_scale, guide, optimizer, ct,
+                constrained_addresses, spec.selection, ip,
+            )
+            elbo = Array(elbo_t)
+            loc = Array(loc_t)
+            scale = Array(scale_t)
+        end
+        constrained = svi_guide_draws(loc, scale, selected_entries, num_draws, this_seed)
+        trace = ProbProg.unflatten_trace(constrained, 0.0, selected_entries, nothing)
+        out = extract_samples(trace)
+        per_step = run_time / num_steps
+        _svi_write_diagnostics(spec.model_name, this_seed, vec(elbo), per_step, num_steps)
+        return out, run_time, vec(elbo)
+    end
+
+    print("Fitting... ")
+    output, run_time, elbo = fit_and_sample(rng, constraint_tensor, initial_position, seed)
+    final_elbo = isempty(elbo) ? NaN : elbo[end]
+    println("$(round(run_time * 1000, digits=2)) ms  final_elbo=$final_elbo")
+
+    output["compile_time"] = compile_time
+    output["run_time"] = run_time
+    open(output_path, "w") do f
+        JSON3.write(f, output)
+    end
+    println("Output written to $output_path")
+    println("  compile_time: $(round(compile_time, digits=3))s")
+    println("  run_time: $(round(run_time, digits=3))s")
+
+    if server_mode
+        flush(stdout)
+        println("###READY###")
+        flush(stdout)
+
+        while !eof(stdin)
+            line = readline(stdin)
+            stripped = strip(line)
+            isempty(stripped) && continue
+            stripped == "EXIT" && break
+
+            req = JSON3.read(stripped)
+            new_seed = Int(req["seed"])
+            new_output_path = String(req["output"])
+            println("Server trial: seed=$new_seed, output=$new_output_path")
+            flush(stdout)
+
+            new_rng = ReactantRNG(Reactant.to_rarray(UInt64[UInt64(new_seed), UInt64(0)]))
+            new_output, new_run_time, _ = fit_and_sample(
+                new_rng, constraint_tensor, initial_position, new_seed
+            )
+            new_output["compile_time"] = 0.0
+            new_output["run_time"] = new_run_time
+            open(new_output_path, "w") do f
+                JSON3.write(f, new_output)
+            end
+
+            println("###DONE### $(round(new_run_time * 1000, digits=2)) ms")
+            flush(stdout)
+        end
+    end
+end
+
+# =============================================================================
 # Main
 # =============================================================================
 
@@ -180,6 +354,12 @@ function main()
     dump_passes = false
     profile_breakdown = false
     server_mode = false
+    method = "nuts"
+    num_steps = 300
+    num_particles = 1
+    init_scale = 0.1
+    guide = "AutoNormal"
+    optimizer = "Adam"
     device = get(ENV, "CUDA_VISIBLE_DEVICES", "") == "" ? "cpu" : "cuda"
 
     i = 1
@@ -191,6 +371,18 @@ function main()
             i += 1; data_path = ARGS[i]
         elseif arg == "--output"
             i += 1; output_path = ARGS[i]
+        elseif arg == "--method"
+            i += 1; method = ARGS[i]
+        elseif arg == "--num-steps"
+            i += 1; num_steps = parse(Int, ARGS[i])
+        elseif arg == "--num-particles"
+            i += 1; num_particles = parse(Int, ARGS[i])
+        elseif arg == "--init-scale"
+            i += 1; init_scale = parse(Float64, ARGS[i])
+        elseif arg == "--guide"
+            i += 1; guide = ARGS[i]
+        elseif arg == "--optimizer"
+            i += 1; optimizer = ARGS[i]
         elseif arg == "--num-warmup"
             i += 1; num_warmup = parse(Int, ARGS[i])
         elseif arg == "--num-samples"
@@ -253,6 +445,16 @@ function main()
 
     # Model-specific setup
     spec = setup(data)
+
+    if method == "svi"
+        opt_pipeline = post_sicm ? :probprog_post_sicm : no_opt ? :probprog_no_opt : :probprog
+        run_svi(
+            data, spec, output_path, seed, step_size, num_steps, num_particles,
+            init_scale, Symbol(guide), Symbol(optimizer), num_samples,
+            opt_pipeline, server_mode,
+        )
+        return
+    end
 
     println("Impulse Benchmark: $(spec.model_name)")
     println("  device=$device, model=$model_path")

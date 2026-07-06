@@ -1,0 +1,79 @@
+{
+  "model": {
+    "class": "gp_pois_regr_scaled.GPPoisRegrScaled",
+    "args": {
+      "n": 8,
+      "rho": 1.0
+    },
+    "seed": 12345
+  },
+  "iterations": 200,
+  "num_warmup": 0,
+  "trials": 4,
+  "ppls": [
+    {
+      "name": "numpyro",
+      "inference": {
+        "class": "inference.SVI",
+        "infer_args": {
+          "step_size": 0.01,
+          "num_steps": 2000,
+          "num_particles": 1,
+          "init_scale": 0.1,
+          "guide": "AutoNormal",
+          "optimizer": "Adam"
+        }
+      },
+      "legend": {
+        "name": "NumPyro",
+        "color": "blue"
+      },
+      "trials": 4
+    },
+    {
+      "name": "impulse",
+      "inference": {
+        "class": "inference.SVI",
+        "infer_args": {
+          "step_size": 0.01,
+          "num_steps": 2000,
+          "num_particles": 1,
+          "init_scale": 0.1,
+          "guide": "AutoNormal",
+          "optimizer": "Adam"
+        }
+      },
+      "legend": {
+        "name": "Impulse",
+        "color": "red"
+      },
+      "trials": 4
+    },
+    {
+      "name": "impulse",
+      "inference": {
+        "class": "inference.SVI",
+        "infer_args": {
+          "step_size": 0.01,
+          "num_steps": 2000,
+          "num_particles": 1,
+          "init_scale": 0.1,
+          "guide": "AutoNormal",
+          "optimizer": "Adam",
+          "disable_opt": true
+        }
+      },
+      "legend": {
+        "name": "Impulse (no opt)",
+        "color": "orange"
+      },
+      "trials": 4,
+      "optional": true
+    }
+  ],
+  "save_samples": true,
+  "figures": {
+    "generate_pll": true,
+    "suffix": "png"
+  }
+}
