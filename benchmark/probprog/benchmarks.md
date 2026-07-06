@@ -316,6 +316,59 @@ the full 112.
 
 ---
 
+## 7. Noisy-Or Topic (Gumbel-softmax relaxation, APPROXIMATE posterior)
+
+Latent Keyphrase Inference (LAKI): a boolean noisy-OR Bayesian network whose
+discrete latent is the topic on/off vector `active` (leak node + `num_topics`
+topics), with observed word-presence sentences `S`. Model provenance:
+upstream `facebookresearch/pplbench` `models/noisy_or_topic.py` (copied
+verbatim; the `n == 2` hard requirement is preserved, giving one train + one
+test sentence). Config: `pplbench_configs/standard/noisy_or_topic.json`
+(defaults `num_topics=50, num_words=100, avg_fanout=3, avg_leak_weight=0.1,
+avg_topic_weight=1`; 4000 iterations, 1000 warmup, 4 trials) and a smoke config
+`noisy_or_topic_smoke.json` (`num_topics=10, num_words=20`).
+
+**HONESTY — this is the approximate relaxation posterior, not exact
+marginalization.** Stan (the only continuous-PPL reference upstream; there is no
+NumPyro implementation and none was invented) cannot sample the discrete topic
+states, so it replaces them with a **Gumbel-softmax continuous relaxation**
+(temperature `tau = 0.1`): each topic is a 2-way softmax over
+`[log1m_exp(-w), -w] + gumbel`, and the boolean state is recovered by argmax.
+The Impulse model implements the SAME relaxation with the SAME `tau`, so its
+posterior is likewise the softmax-relaxed approximation (softmax ≈ argmax), NOT
+the marginalized discrete posterior. Both PPLs therefore target the identical
+approximate object, which is what makes the comparison apples-to-apples; neither
+should be read as the exact noisy-OR posterior. The predictive log-likelihood
+(PLL) reuses the upstream `evaluate_posterior_predictive`, evaluated on the
+argmax-recovered binary `active`.
+
+The Impulse model adds the **Gumbel** distribution (support REAL, added the new
+way through the shared DistBuilder library — see `dist_natives_gate.jl`). The two
+`gumbel(0,1)` latent vectors enter the model only through their whole-vector
+difference; the sequential per-topic relaxation is evaluated as a P-step
+whole-vector fixed point over the strictly-lower-triangular topic dependency
+(exact, not an approximation of the relaxation), which keeps every Gumbel use a
+matmul/elementwise op. `active[:,0] == 1` (leak) is pinned and verified in every
+draw.
+
+Results (upstream defaults, seed 12345, 32 threads, CPU; 1000 warmup + 3000
+samples, 4 trials):
+
+| PPL | compile (s) | infer per trial (s) | final PLL per trial | final PLL mean |
+|-----|-------------|---------------------|---------------------|----------------|
+| Impulse | 24.0 | 20.3, 19.0, 19.6, 31.6 | -28.18, -28.31, -27.90, -28.65 | **-28.26** |
+| Stan | 8.0 | 68.6, 77.2, 80.5, 90.4 | -28.73, -28.16, -28.64, -28.34 | **-28.47** |
+
+- The two approximate-relaxation posteriors agree to ≈0.2 nat in mean PLL
+  (Impulse -28.26 vs Stan -28.47), well inside the per-trial spread (~0.7 nat).
+- Impulse inference is ~3.5× faster per trial (~22 s vs ~79 s) at identical draw
+  counts; the one-time 24 s compile amortizes over trials (server mode).
+- Compile time at `num_topics=50` is 24 s (the P=51-step unrolled fixed point);
+  it does not blow up, so no reduction of `num_topics` was needed.
+- PLL curves: `outputs/2026-07-06_03:35:37/pll*.png`.
+
+---
+
 ## Variational inference (SVI) — SICM-on-VI
 
 VI now runs through the same region pipeline as HMC/NUTS

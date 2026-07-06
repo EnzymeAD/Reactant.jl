@@ -321,4 +321,43 @@ end
         we = emitted_weight(dir_model, [0.2, 0.3, 0.5], a2)
         @test isapprox(Array(we)[], 2.140654225847829; atol=1e-9)
     end
+
+    @testset "Gumbel" begin
+        # Sampler not bit-matched to jax.random.gumbel, which clamps u to [tiny, 1).
+        gum_model(rng, lc, sc) =
+            ProbProg.sample(rng, ProbProg.Gumbel(lc, sc, (1,)); symbol=:x)[2]
+        lc0 = ConcreteRNumber(0.0)
+        sc0 = ConcreteRNumber(1.0)
+        numpyro0 = Dict(
+            0.0 => -1.0,
+            1.0 => -1.3678794411714423,
+            2.0 => -2.135335283236613,
+            -1.0 => -1.7182818284590455,
+        )
+        for (x, ref) in numpyro0
+            we = emitted_weight(gum_model, [x], lc0, sc0)
+            @test isapprox(Array(we)[], ref; atol=1e-9)
+        end
+        lc1 = ConcreteRNumber(0.5)
+        sc1 = ConcreteRNumber(2.0)
+        numpyro1 = Dict(
+            0.0 => -1.7271725972476868,
+            1.0 => -1.7219479636313504,
+            2.0 => -1.9155137333009602,
+            -1.0 => -2.06014719717262,
+        )
+        for (x, ref) in numpyro1
+            we = emitted_weight(gum_model, [x], lc1, sc1)
+            @test isapprox(Array(we)[], ref; atol=1e-9)
+        end
+        seed = Reactant.to_rarray(UInt64[7, 11])
+        rng = ReactantRNG(seed)
+        sim(rng, lc, sc) = ProbProg.simulate(rng, gum_model, lc, sc)
+        compiled = @compile optimize = :probprog sim(rng, lc1, sc1)
+        t, w, _ = compiled(rng, lc1, sc1)
+        drawn = Array(t)[1]
+        @test isfinite(drawn)
+        we = emitted_weight(gum_model, [drawn], lc1, sc1)
+        @test isapprox(Array(w)[], Array(we)[]; atol=1e-9)
+    end
 end

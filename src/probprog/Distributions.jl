@@ -476,3 +476,30 @@ DiscreteUniform(low, high) = DiscreteUniform(low, high, (1,))
 params(d::DiscreteUniform) = (d.low, d.high, d.shape)
 support(::Type{<:DiscreteUniform}) = :real
 dist_spec(::Type{<:DiscreteUniform}) = _dist_spec("DISCRETE_UNIFORM")
+
+#==============================================================================#
+# Gumbel Distribution
+#==============================================================================#
+
+struct Gumbel{Tloc,Tscale,S<:Tuple} <: AbstractDistribution
+    loc::Tloc
+    scale::Tscale
+    shape::S
+
+    function Gumbel{Tloc,Tscale,S}(
+        loc::Tloc, scale::Tscale, shape::S
+    ) where {Tloc,Tscale,S<:Tuple}
+        isempty(shape) && throw(ArgumentError("shape cannot be empty"))
+        return new{Tloc,Tscale,S}(loc, scale, shape)
+    end
+end
+
+function Gumbel(loc::Tloc, scale::Tscale, shape::S) where {Tloc,Tscale,S<:Tuple}
+    return Gumbel{Tloc,Tscale,S}(loc, scale, shape)
+end
+Gumbel(loc, scale) = Gumbel(loc, scale, (1,))
+Gumbel() = Gumbel(0.0, 1.0, (1,))
+
+params(d::Gumbel) = (d.loc, d.scale, d.shape)
+support(::Type{<:Gumbel}) = :real
+dist_spec(::Type{<:Gumbel}) = _dist_spec("GUMBEL")

@@ -16,8 +16,15 @@ import ...API
 """
 `cholesky`
 
-Computes the Cholesky decomposition of a symmetric positive definite matrix A.
-Returns L such that A = L @ L^T (if lower=true) or A = U^T @ U (if lower=false).
+Computes the Cholesky factorization of the symmetric positive-definite
+matrix in the trailing two dimensions of `input` (any leading dimensions are
+treated as a batch). If `lower` is true, returns the lower-triangular L with
+A = L @ L^T; if false, returns the upper-triangular U with A = U^T @ U. The
+strictly-opposite triangle of the result is zero. The input must be symmetric
+positive definite; the result is otherwise unspecified. Result shape equals
+the input shape.
+
+Note: lowered 1:1 to `stablehlo.cholesky` with the same `lower` flag.
 """
 function cholesky(input::Value; result::IR.Type, lower=nothing, location=Location())
     op_ty_results = IR.Type[result,]
@@ -42,7 +49,16 @@ end
 """
 `dot`
 
-Computes a general dot product operation. To be lowered to `stablehlo.dot_general`.
+Generalized tensor contraction of `lhs` and `rhs`. Contracts the paired
+`lhs_contracting_dimensions`/`rhs_contracting_dimensions` (which must have
+equal size in each pair) by summing the elementwise products over them, and
+batches over the paired `lhs_batching_dimensions`/`rhs_batching_dimensions`
+(also equal-sized per pair). The result shape is, in order: the batch
+dimensions, the remaining (free) `lhs` dimensions, then the remaining (free)
+`rhs` dimensions. A dimension index may appear at most once across the
+batching and contracting lists for a given operand.
+
+Note: lowered 1:1 to `stablehlo.dot_general` with the same dimension numbers.
 """
 function dot(
     lhs::Value,
@@ -80,7 +96,15 @@ end
 """
 `dynamic_slice`
 
-Extract a slice from a tensor at dynamic start indices.
+Extracts a sub-tensor of static shape `slice_sizes` from `operand`, starting
+at the runtime `start_indices` (one scalar index tensor per operand
+dimension). Before use, each start index is clamped into
+`[0, operand_dim - slice_sizes[d]]` so the whole slice stays in bounds, so
+out-of-range indices shift the window to the nearest fully-in-bounds position
+rather than reading out of bounds. The result shape is `slice_sizes`.
+
+Note: lowered 1:1 to `stablehlo.dynamic_slice`, whose clamping semantics this
+matches.
 """
 function dynamic_slice(
     operand::Value,
@@ -110,7 +134,15 @@ end
 """
 `dynamic_update_slice`
 
-Update a slice in a tensor at dynamic start indices.
+Produces a copy of `operand` with `update` written in starting at the runtime
+`start_indices` (one scalar index tensor per operand dimension). Before use,
+each start index is clamped into `[0, operand_dim - update_dim[d]]` so the
+entire `update` lands in bounds, so out-of-range indices shift the write
+window to the nearest fully-in-bounds position rather than writing out of
+bounds. The result has the shape of `operand`.
+
+Note: lowered 1:1 to `stablehlo.dynamic_update_slice`, whose clamping
+semantics this matches.
 """
 function dynamic_update_slice(
     operand::Value,
@@ -264,8 +296,8 @@ Resumable algorithm state (adapted step size, inverse mass matrix, dual
 averaging / Welford accumulators, warmup progress, and the final
 position/gradient/potential energy) is carried opaquely as a bundle:
 `state_in` warm-starts a run (empty = cold start), `state_out` returns it,
-and `state_schema` names each slot. `trace`, `diagnostics`, and
-`output_rng_state` are the only universal results.
+and `state_schema` names each slot. `trace`, `diagnostics`,
+`log_densities`, and `output_rng_state` are the only universal results.
 """
 function infer(
     inputs::Vector{Value},
@@ -278,6 +310,7 @@ function infer(
     init_scale=nothing::Union{Nothing,Value},
     trace::IR.Type,
     diagnostics::IR.Type,
+    log_densities::IR.Type,
     output_rng_state::IR.Type,
     state_out::Vector{IR.Type},
     fn=nothing,
@@ -299,7 +332,9 @@ function infer(
     name=nothing,
     location=Location(),
 )
-    op_ty_results = IR.Type[trace, diagnostics, output_rng_state, state_out...]
+    op_ty_results = IR.Type[
+        trace, diagnostics, log_densities, output_rng_state, state_out...
+    ]
     operands = Value[inputs..., state_in...]
     owned_regions = Region[]
     successors = Block[]
@@ -391,6 +426,7 @@ function infer_region(
     init_scale=nothing::Union{Nothing,Value},
     trace::IR.Type,
     diagnostics::IR.Type,
+    log_densities::IR.Type,
     output_rng_state::IR.Type,
     state_out::Vector{IR.Type},
     fn=nothing,
@@ -416,7 +452,9 @@ function infer_region(
     logpdf::Region,
     location=Location(),
 )
-    op_ty_results = IR.Type[trace, diagnostics, output_rng_state, state_out...]
+    op_ty_results = IR.Type[
+        trace, diagnostics, log_densities, output_rng_state, state_out...
+    ]
     operands = Value[inputs..., state_in...]
     owned_regions = Region[sampler, logpdf]
     successors = Block[]
@@ -508,7 +546,13 @@ end
 """
 `log_add_exp`
 
-Computes log(exp(x) + exp(y)).
+Elementwise `log(exp(lhs) + exp(rhs))`, computed in a numerically stable way
+as `max(lhs, rhs) + log1p(exp(-|lhs - rhs|))`. When the difference is not
+finite (e.g. an infinite operand) the result falls back to `lhs + rhs`.
+`lhs` and `rhs` share the result shape and element type.
+
+Note: there is no single StableHLO op; this lowers to the max/log1p
+expansion above.
 """
 function log_add_exp(lhs::Value, rhs::Value; result::IR.Type, location=Location())
     op_ty_results = IR.Type[result,]
@@ -532,7 +576,10 @@ end
 """
 `logistic`
 
-Computes the logistic (sigmoid) function: 1 / (1 + exp(-x)).
+Elementwise logistic (sigmoid) function `1 / (1 + exp(-x))` over `operand`.
+Result and operand share shape and element type.
+
+Note: lowered 1:1 to `stablehlo.logistic`.
 """
 function logistic(operand::Value; result::IR.Type, location=Location())
     op_ty_results = IR.Type[result,]
@@ -610,7 +657,11 @@ end
 """
 `popcount`
 
-Returns the number of 1-bits elementwise.
+Elementwise population count: each result element is the number of set bits
+(1-bits) in the corresponding integer `operand` element. Operand and result
+are integer tensors of the same shape and element type.
+
+Note: lowered 1:1 to `stablehlo.popcnt`.
 """
 function popcount(operand::Value; result::IR.Type, location=Location())
     op_ty_results = IR.Type[result,]
@@ -634,23 +685,33 @@ end
 """
 `random`
 
-Generates random numbers using the rng_distribution algorithm and produces
-a result tensor.
+Draws a result tensor of random numbers from `rng_state` and returns the
+advanced RNG state alongside the samples. Uniform bits are produced by a
+counter-based bit generator keyed by `rng_state`; the parametric distributions
+below are constructed deterministically from those bits, so the same input
+state reproduces the same samples.
 
-If rng_distribution = UNIFORM, then the random numbers are generated following
-the uniform distribution over the interval [a, b). If a >= b, the behavior is
-undefined.
+If rng_distribution = UNIFORM, samples are drawn from the uniform distribution
+over [a, b). A base draw in [0, 1) is formed from the raw bits (assembling the
+mantissa of a float in [1, 2) and subtracting 1) and affine-mapped to
+[a, b). If a >= b, the behavior is undefined.
 
-If rng_distribution = NORMAL, then the random numbers are generated following
-the normal distribution with mean = a and standard deviation = b. If b < 0,
-the behavior is undefined.
+If rng_distribution = NORMAL, samples follow the normal distribution with
+mean = a and standard deviation = b, formed from a uniform draw u in [0, 1)
+via the probit `sqrt(2) * erfinv(2u - 1)`, then scaled by b and shifted by a.
+If b < 0, the behavior is undefined.
 
-If rng_distribution = MULTINORMAL, then the random numbers are generated
-following the multivariate normal distribution with mean = a (scalar or vector)
-and covariance matrix = b. The parameter b should be a positive definite matrix.
+If rng_distribution = MULTINORMAL, samples follow the multivariate normal with
+mean = a (scalar or vector) and covariance matrix = b: a standard-normal vector
+is drawn as above and mapped through the Cholesky factor of b, then shifted by
+a. The parameter b must be positive definite.
 
 By convention, the 0th operand in inputs is the initial RNG state and the
 0th operand in results is the updated RNG state.
+
+Note: lowered using `stablehlo.rng_bit_generator` (DEFAULT algorithm) for the
+bits, with `chlo.erf_inv` for the probit and `stablehlo.cholesky` for
+MULTINORMAL.
 """
 function random(
     rng_state::Value,
@@ -682,8 +743,14 @@ end
 """
 `randomSplit`
 
-Splits an RNG state into multiple independent RNG states.
+Derives N independent RNG states (N = number of results) from a single input
+`rng_state` by hashing it with the Threefry2x32 counter-based PRF (five
+rounds), matching JAX\'s `random.split`. Each output state is statistically
+independent and deterministically reproducible from the input state.
 Reference: https://github.com/jax-ml/jax/blob/c25e095fcec9678a4ce5f723afce0c6a3c48a5e7/jax/_src/random.py#L281-L294
+
+Note: lowered to the inlined Threefry2x32 round sequence over StableHLO
+integer ops (no single StableHLO op).
 """
 function randomSplit(
     rng_state::Value; output_rng_states::Vector{IR.Type}, location=Location()
@@ -768,6 +835,16 @@ function regenerate(
     )
 end
 
+"""
+`reshape`
+
+Reinterprets `input` as a tensor of the result type\'s static shape,
+preserving the linear (row-major, last-dimension-fastest) order of elements.
+The result shape is fully static and its total element count must equal that
+of `input`; no elements are added, dropped, or reordered.
+
+Note: lowered 1:1 to `stablehlo.reshape`.
+"""
 function reshape(input::Value; result::IR.Type, location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[input,]
@@ -800,6 +877,13 @@ the frontend constructs directly from the distribution\'s shape. A site with a
 traced sampler (the rejection-loop natives, generative sub-calls, or the
 custom-logpdf escape hatch) carries `fn`; a custom-logpdf site additionally
 carries `logpdf`. The verifier requires either `fn` or `dist` to be present.
+
+Round-trip limitation: with `fn` absent the pretty form prints as
+`impulse.sample(%inputs) ...`, which the generic MLIR parser cannot round-trip
+(the leading `(` after the op name is read as the start of a type). Passes
+operate on the in-memory op, so this affects only textual `.mlir` inputs; write
+an fn-absent site in generic op form (`\"impulse.sample\"(...) {...} : ...`) when
+a test must parse one from text.
 """
 function sample(
     inputs::Vector{Value};
@@ -888,9 +972,16 @@ end
 """
 `select`
 
-Extended select operation that supports:
-- `tensor<i1>` conditions with differently-sized operands
-- standard cases supported by `arith.select`
+Elementwise selection between `true_value` and `false_value`: each result
+element is the corresponding `true_value` element where `condition` is true,
+otherwise the `false_value` element. As an extension over `arith.select`, a
+rank-0 `tensor<i1>` `condition` selects between the two operands as whole
+tensors, so the operands may have a shape that differs from a per-element
+condition. When `condition` matches the operand shape, selection is per
+element. `true_value` and `false_value` share the result\'s shape and element
+type.
+
+Note: lowered 1:1 to `stablehlo.select`.
 """
 function select(
     condition::Value,
@@ -966,7 +1057,15 @@ end
 """
 `slice`
 
-Extract a static slice from a tensor.
+Extracts a statically-shaped sub-tensor of `operand`. In each dimension `d`
+it takes the elements at indices `start_indices[d] + k*strides[d]` for
+`k = 0, 1, ...` while the index stays below `limit_indices[d]`, yielding
+`ceil((limit_indices[d] - start_indices[d]) / strides[d])` elements. All
+three index arrays are static and have one entry per operand dimension; the
+result shape follows from them and must be in bounds
+(`0 <= start <= limit <= dim_size`, `strides >= 1`).
+
+Note: lowered 1:1 to `stablehlo.slice`.
 """
 function slice(
     operand::Value;
@@ -1001,10 +1100,16 @@ end
 """
 `triangular_solve`
 
-Solves a system of linear equations with a triangular coefficient matrix.
-If left_side=true, solves op(A) @ X = B for X.
-If left_side=false, solves X @ op(A) = B for X.
-op(A) is determined by transpose_a: NO_TRANSPOSE, TRANSPOSE, or ADJOINT.
+Solves a linear system whose coefficient matrix `a` is triangular, returning
+X with the shape of `b`. Only the triangle of `a` selected by `lower` is
+read (lower-triangular if `lower` is true, else upper); when `unit_diagonal`
+is true the diagonal of `a` is taken to be all ones and its stored diagonal
+is ignored. `op(a)` is `a`, `a^T`, or `a^H` according to `transpose_a`
+(NO_TRANSPOSE, TRANSPOSE, ADJOINT). If `left_side` is true, solves
+`op(a) @ X = b`; if false, solves `X @ op(a) = b`. `a` operates on the
+trailing two dimensions; leading dimensions are batched.
+
+Note: lowered 1:1 to `stablehlo.triangular_solve` with the same attributes.
 """
 function triangular_solve(
     a::Value,
