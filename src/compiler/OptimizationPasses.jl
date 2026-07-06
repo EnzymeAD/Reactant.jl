@@ -196,16 +196,15 @@ function impulse_pass(;
 )
     expand = "expand-impulse{debug-dump=$debug_dump postpasses=\"arith-raise{stablehlo=true}\"}"
     (disable_optimizations || disable_region) && return expand
-    #   - `lower-impulse-to-stablehlo{linalg-only}` lowers the emitted matrix
-    #     ops (cholesky/triangular_solve/dot);
-    linalg = "lower-impulse-to-stablehlo{linalg-only=true backend=$backend}"
+    # Lower emitted distribution math to StableHLO so the SICM patterns match it.
+    math_twins = "lower-impulse-to-stablehlo{math-twins-only=true backend=$backend}"
     raise = "arith-raise{stablehlo=true}"
     sicm = disable_sicm ? "sicm{max-iterations=0}" : "sicm"
     return join(
         [
             "inline-infer-regions",
             "canonicalize,cse",
-            linalg,
+            math_twins,
             raise,
             "canonicalize,cse",
             sicm,

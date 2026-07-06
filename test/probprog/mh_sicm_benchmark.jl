@@ -214,7 +214,7 @@ function evidence_cov(n)
     rng = ReactantRNG(seed)
     N = ConcreteRNumber(2)
 
-    # `lower-impulse-to-stablehlo{linalg-only}`, the elementwise tail via
+    # Mirrors the :probprog pipeline up to and including sicm.
     _co = Reactant.Compiler.CompileOptions()
     _op = Reactant.Compiler.optimization_passes(_co; sroa=true, backend="cpu")
     _op2 = Reactant.Compiler.optimization_passes(_co; sroa=false, backend="cpu")
@@ -226,7 +226,7 @@ function evidence_cov(n)
             _op2,
             "inline-infer-regions",
             "canonicalize,cse",
-            "lower-impulse-to-stablehlo{linalg-only=true backend=cpu}",
+            "lower-impulse-to-stablehlo{math-twins-only=true backend=cpu}",
             "arith-raise{stablehlo=true}",
             "canonicalize,cse",
             "sicm",
