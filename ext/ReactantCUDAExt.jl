@@ -636,12 +636,35 @@ end
     )
 end
 
-function GPULowerCPUFeaturesPass()
-    return LLVM.NewPMModulePass("GPULowerCPUFeatures", GPUCompiler.cpu_features!)
+function GPULowerCPUFeaturesPass(job)
+    return LLVM.NewPMModulePass(
+        "GPULowerCPUFeatures",
+        if isdefined(GPUCompiler, :CPUFeatures)
+            GPUCompiler.CPUFeatures(job)
+        else
+            GPUCompiler.cpu_features!
+        end,
+    )
 end
-GPULowerPTLSPass() = LLVM.NewPMModulePass("GPULowerPTLS", GPUCompiler.lower_ptls!)
-function GPULowerGCFramePass()
-    return LLVM.NewPMFunctionPass("GPULowerGCFrame", GPUCompiler.lower_gc_frame!)
+function GPULowerPTLSPass(job)
+    return LLVM.NewPMModulePass(
+        "GPULowerPTLS",
+        if isdefined(GPUCompiler, :LowerPTLS)
+            GPUCompiler.LowerPTLS(job)
+        else
+            GPUCompiler.lower_ptls!
+        end,
+    )
+end
+function GPULowerGCFramePass(job)
+    return LLVM.NewPMFunctionPass(
+        "GPULowerGCFrame",
+        if isdefined(GPUCompiler, :LowerGCFrame)
+            GPUCompiler.LowerGCFrame(job)
+        else
+            GPUCompiler.lower_gc_frame!
+        end,
+    )
 end
 function noop_pass(x)
     return false
@@ -694,15 +717,16 @@ function compile(job)
         opt_level = 2
         tm = GPUCompiler.llvm_machine(job.config.target)
 
-        prev_job =
-            isdefined(GPUCompiler, :current_job) ? GPUCompiler.current_job : nothing
-        GPUCompiler.current_job = job
+        if isdefined(GPUCompiler, :current_job)
+            prev_job = GPUCompiler.current_job
+            GPUCompiler.current_job = job
+        end
 
         try
             LLVM.@dispose pb = LLVM.NewPMPassBuilder() begin
-                LLVM.register!(pb, GPULowerCPUFeaturesPass())
-                LLVM.register!(pb, GPULowerPTLSPass())
-                LLVM.register!(pb, GPULowerGCFramePass())
+                LLVM.register!(pb, GPULowerCPUFeaturesPass(job))
+                LLVM.register!(pb, GPULowerPTLSPass(job))
+                LLVM.register!(pb, GPULowerGCFramePass(job))
                 LLVM.register!(pb, AddKernelStatePass())
                 LLVM.register!(pb, LowerKernelStatePass())
                 LLVM.register!(pb, CleanupKernelStatePass())
@@ -729,7 +753,9 @@ function compile(job)
             end
             LLVM.run!(GPUCompiler.DeadArgumentEliminationPass(), mod, tm)
         finally
-            GPUCompiler.current_job = prev_job
+            if isdefined(GPUCompiler, :current_job)
+                GPUCompiler.current_job = prev_job
+            end
         end
 
         for fname in ("gpu_report_exception", "gpu_signal_exception")
@@ -917,6 +943,82 @@ function mlir_extract_roots_from_value!(
     end
 end
 
+function _find_unadapted_traced(
+    @nospecialize(T::Type), seen::Set{Any}=Set{Any}(), path::String=""
+)
+    T isa UnionAll && return nothing
+    T in seen && return nothing
+    push!(seen, T)
+    T <: TracedRNumber && return isempty(path) ? "<arg>" : path
+    T <: TracedRArray && return isempty(path) ? "<arg>" : path
+    isbitstype(T) && return nothing
+    for i in 1:fieldcount(T)
+        FT = fieldtype(T, i)
+        subpath = isempty(path) ? string(fieldname(T, i)) : "$path.$(fieldname(T, i))"
+        !isconcretetype(FT) && return (subpath, FT)
+        FT === T && continue  # avoid infinite recursion on self-referential types
+        result = _find_unadapted_traced(FT, seen, subpath)
+        result !== nothing && return result
+    end
+    return nothing
+end
+
+# Mirror of GPUCompiler's explain_nonisbits: recursively list non-isbits fields.
+function _explain_nonbitstype(@nospecialize(dt), depth=1; maxdepth=10)
+    depth > maxdepth && return ""
+    try
+        fieldcount(dt)
+    catch
+        return ""
+    end
+    msg = ""
+    for (ft, fn) in zip(fieldtypes(dt), fieldnames(dt))
+        if !isbitstype(ft)
+            msg *= "  "^depth * ".$fn is of type $ft which is not isbits.\n"
+            msg *= _explain_nonbitstype(ft, depth + 1)
+        end
+    end
+    return msg
+end
+
+function _check_no_traced_in_kernel_arg(@nospecialize(T::Type))
+    bad = _find_unadapted_traced(T)
+    bad === nothing && return nothing
+
+    if bad isa Tuple  # (path, non-concrete-type)
+        path, FT = bad
+        explanation = _explain_nonbitstype(T)
+        error("""passing non-bitstype argument
+               Argument to your kernel function is of type $T, which is not a bitstype:
+               $(isempty(explanation) ? "" : explanation)
+               Field .$path has declared type $FT, which is not a concrete type \
+(it is a UnionAll / abstract type). Julia stores abstract-typed struct fields as \
+GC-managed heap pointers that cannot be represented in a GPU kernel.
+
+               Only bitstypes, which are "plain data" types that are immutable and \
+contain no references to other values, can be used in GPU kernels.
+               For more information, see the `Base.isbitstype` function.
+
+               Fix: replace the abstract field type with its concrete parametric form \
+(e.g. use `$(nameof(FT)){I}` instead of `$(nameof(FT))` in the struct definition).""")
+    end
+
+    # bad is a path String: a TracedRNumber/TracedRArray was not adapted
+    return error(
+        """
+      GPU kernel argument of type $T contains an unadapted traced value at field: $bad
+
+      All TracedRNumber/TracedRArray must have been replaced by their
+      CuTracedRNumber/CuTracedArray counterparts. A surviving traced value means
+      some struct in the hierarchy is missing `Adapt.@adapt_structure`, so its fields
+      were not recursed into during GPU adaptation.
+
+      Fix: add `Adapt.@adapt_structure <StructName>` to the struct that contains the
+      field at the path above.
+  """
+    )
+end
+
 Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
     args...;
     convert=Val(true),
@@ -932,6 +1034,10 @@ Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
 
     if convert == Val(true)
         args = recudaconvert.(args)
+    end
+
+    for arg in Any[func.f, args...]
+        _check_no_traced_in_kernel_arg(typeof(arg))
     end
 
     mlir_args = MLIR.IR.Value[]
@@ -1214,6 +1320,13 @@ Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
                 push!(wrapargs, roots_ptr)
             end
         end
+        nargs = MLIR.IR.nargs(MLIR.IR.first_block(MLIR.IR.region(gpufunc, 1)))
+        if length(wrapargs) != nargs
+            error(
+                "detected ABI breakage, please open an issue on https://github.com/EnzymeAD/Reactant.jl/issues/new with instructions on how to reproduce.",
+            )
+        end
+
         MLIR.Dialects.llvm.call(
             wrapargs,
             MLIR.IR.Value[];
