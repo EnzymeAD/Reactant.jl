@@ -67,6 +67,12 @@ for RT in (:RInteger, :RFloat, :RComplex)
     @eval @inline Enzyme.make_zero(x::$RT) = zero(Core.Typeof(x))
 end
 
+# Reactant numbers are mutable wrappers around device/MLIR values and must not
+# be classified as active scalars, which Enzyme does for any `AbstractFloat`.
+function Enzyme.Compiler.active_reg_nothrow(::Type{T}) where {T<:RNumber}
+    return Enzyme.Compiler.DupState
+end
+
 # Reactant numbers are mutable wrappers around device/MLIR values and must
 # stay `Duplicated` under autodiff even though they subtype `AbstractFloat`.
 for RT in (:RArray, :RNumber, :RInteger, :RFloat, :RComplex)
@@ -468,7 +474,11 @@ function overload_autodiff(
                 push!(ret_activity, act)
 
                 if act == EnzymeActivity.OUT || act == EnzymeActivity.OUT_NO_NEED
-                    seed = reverse_seeds[path]
+                    seed = get(reverse_seeds, path) do
+                        # `Active` arguments have no shadow; the re-emitted
+                        # argument result receives no incoming cotangent.
+                        TracedUtils.get_mlir_data(zero(a))
+                    end
                     push!(ad_inputs, seed)
                 end
             else
@@ -579,7 +589,7 @@ function overload_autodiff(
         end
     end
 
-    restup = Any[(a isa Active) ? copy(a) : nothing for a in args]
+    restup = Any[nothing for _ in args]
     for a in linear_args
         idx, path = TracedUtils.get_argidx(a, argprefix)
 
@@ -590,14 +600,22 @@ function overload_autodiff(
             @assert false
         end
 
-        set_act!(
-            arg,
-            path[3:end],
-            reverse,
-            TracedUtils.transpose_val(MLIR.IR.result(res, residx));
-            width,
-            emptypath=arg isa Active,
-        )
+        if arg isa Active && width == 1 && isempty(path[3:end])
+            # `Active` arguments return their gradient in the result tuple
+            # instead of accumulating into a shadow
+            restup[idx - fnwrap] = Reactant.TracedRNumber{unwrapped_eltype(arg.val)}(
+                (), TracedUtils.transpose_val(MLIR.IR.result(res, residx))
+            )
+        else
+            set_act!(
+                arg,
+                path[3:end],
+                reverse,
+                TracedUtils.transpose_val(MLIR.IR.result(res, residx));
+                width,
+                emptypath=arg isa Active,
+            )
+        end
         residx += 1
     end
 

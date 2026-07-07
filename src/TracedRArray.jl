@@ -304,6 +304,10 @@ function Base.similar(
     return (@opcall fill(zero(T), dims))::TracedRArray{T,N}
 end
 
+broadcast_eltype_param(::Type{<:TracedRNumber{T}}) where {T} = T
+broadcast_eltype_param(::Type{T}) where {T<:Reactant.ReactantPrimitive} = T
+broadcast_eltype_param(@nospecialize(_)) = nothing
+
 function Base.copy(bc::Broadcasted{<:AbstractReactantArrayStyle{0}})
     ElType = Broadcast.combine_eltypes(bc.f, bc.args)
     dest = copyto!(similar(bc, ElType), bc)
@@ -324,8 +328,9 @@ function _copy(bc)
         bc.f
     end
     ElType = Broadcast.combine_eltypes(fn, bc.args)
-    # Special case a union{} return so we can see the better error message
-    if ElType === Union{} || ElType == Any || ElType == TracedRNumber
+    # Inference may return an abstract eltype (e.g. `Real` or `Union{}`); get a
+    # usable one from a sample value in that case.
+    if broadcast_eltype_param(ElType) === nothing
         ElType = Core.Typeof(fn(map(first_scalar, bc.args)...))
     end
     if ElType == Any || ElType == Union{}

@@ -209,6 +209,17 @@ function Base.getindex(
     return out
 end
 
+# Disambiguate the TracedRange getindex methods against the range loops above
+function Base.getindex(v::TracedUnitRange{<:TracedRNumber}, i::TracedRInteger)
+    return convert(eltype(v), v.start + (i - oneunit(i)))
+end
+function Base.getindex(v::TracedUnitRange{<:TracedRNumber}, i::TracedRInteger{Int})
+    return convert(eltype(v), v.start + (i - oneunit(i)))
+end
+function Base.getindex(r::TracedStepRangeLen{<:TracedRNumber}, i::TracedRInteger{Int})
+    return Base.unsafe_getindex(r, i)
+end
+
 ## StepRangeLen Indexing
 function Base.getindex(r::TracedStepRangeLen{T}, s::OrdinalRange{S}) where {T,S}
     @inline

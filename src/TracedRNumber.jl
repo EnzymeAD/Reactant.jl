@@ -13,6 +13,7 @@ using ..Reactant:
     traced_number_type
 using ..Ops: @opcall
 using ReactantCore: ReactantCore, @trace
+using BFloat16s: BFloat16
 using Adapt: Adapt
 
 # This isn't technically necessary in this module, but this type used to be
@@ -857,6 +858,21 @@ for (jlop, hloop) in ((:(Base.:&), :and), (:(Base.:|), :or), (:(Base.xor), :xor)
     end
 end
 Base.:!(x::TracedRInteger) = @opcall not(x)
+
+# With a traced integer exponent, Base's `^(::Number, ::Integer)` would call
+# `power_by_squaring`, which branches on traced booleans. The extra methods
+# disambiguate against Base's specialized `^` methods.
+for B in (:TracedRInteger, :TracedRFloat, :TracedRComplex, :Real, :Complex)
+    @eval Base.:^(x::$B, p::TracedRInteger) = ^(promote(x, p)...)
+end
+for B in (
+    Float16, Float32, Union{Float16,Float32}, Float64, BFloat16,
+    Complex{<:AbstractFloat}, Complex{<:Integer}, Complex{<:Rational},
+)
+    @eval Base.:^(x::$B, p::TracedRInteger) = ^(promote(x, p)...)
+end
+
+Base.fma(x::TracedRFloat{T}, y::TracedRFloat{T}, z::TracedRFloat{T}) where {T} = x * y + z
 
 function Base.literal_pow(
     ::Base.RefValue{typeof(^)}, x::TracedRNumber{T}, ::Base.RefValue{Val{P}}

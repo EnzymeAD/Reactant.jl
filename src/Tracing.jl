@@ -302,7 +302,7 @@ Base.@nospecializeinfer function traced_type_inner(
     if mode == ConcreteToTraced
         A´ = Base.unwrap_unionall(A)
         T, N, _ = A´.parameters
-        A´´ = TracedRArray{T,N}
+        A´´ = T isa Core.TypeVar ? TracedRArray{T,N} : TracedRArray{T,N,traced_number_type(T)}
         A_ret = N isa Core.TypeVar ? UnionAll(N, A´´) : A´´
         A_ret2 = T isa Core.TypeVar ? UnionAll(T, A_ret) : A_ret
         return A_ret2
@@ -332,7 +332,7 @@ Base.@nospecializeinfer function traced_type_inner(
     if mode == ConcreteToTraced
         A´ = Base.unwrap_unionall(A)
         T, N = A´.parameters
-        A´´ = TracedRArray{T,N}
+        A´´ = T isa Core.TypeVar ? TracedRArray{T,N} : TracedRArray{T,N,traced_number_type(T)}
         A_ret = N isa Core.TypeVar ? UnionAll(N, A´´) : A´´
         A_ret2 = T isa Core.TypeVar ? UnionAll(T, A_ret) : A_ret
         return A_ret2
