@@ -3,7 +3,13 @@ module TracedRArrayOverrides
 using Base: Broadcast
 using Base.Broadcast: Broadcasted, AbstractArrayStyle, instantiate
 
-using ..Reactant: Reactant, TracedRArray, TracedRNumber, AnyTracedRArray, AnyTracedRVector
+using ..Reactant:
+    Reactant,
+    TracedRArray,
+    TracedRNumber,
+    TracedRInteger,
+    AnyTracedRArray,
+    AnyTracedRVector
 using ..Reactant: MLIR, unwrapped_eltype
 using ..Ops: @opcall
 using ..TracedUtils: TracedUtils, get_mlir_data, set_mlir_data!, materialize_traced_array
@@ -252,6 +258,9 @@ function Base.fill!(A::AnyTracedRArray{T,N}, x::TracedRNumber{T2}) where {T,N,T2
 end
 
 function Base.fill!(A::Array{T,N}, x::TracedRNumber{T2}) where {T,N,T2}
+    return throw(MethodError(fill!, (A, x)))
+end
+function Base.fill!(A::Union{Array{Int8},Array{UInt8}}, x::TracedRInteger)
     return throw(MethodError(fill!, (A, x)))
 end
 

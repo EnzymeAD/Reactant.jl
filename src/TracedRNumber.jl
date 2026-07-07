@@ -111,8 +111,19 @@ function Base.promote_rule(::Type{<:TracedRNumber{T}}, ::Type{Bool}) where {T}
     return traced_number_type(T)
 end
 
-# Disambiguate against Base's irrational-vs-Real rule; real-only since
-# `TracedRReal <: Real` while the full union is not.
+# Disambiguate against Base's irrational rules on `Number` and `Real`.
+function Base.promote_rule(
+    T::Type{<:AbstractIrrational}, ::Type{<:TracedRNumber{S}}
+) where {S}
+    return traced_number_type(Base.promote_type(T, S))
+end
+
+function Base.promote_rule(
+    ::Type{<:TracedRNumber{S}}, T::Type{<:AbstractIrrational}
+) where {S}
+    return traced_number_type(Base.promote_type(T, S))
+end
+
 function Base.promote_rule(
     T::Type{<:AbstractIrrational}, ::Type{<:TracedRReal{S}}
 ) where {S}
@@ -123,6 +134,36 @@ function Base.promote_rule(
     ::Type{<:TracedRReal{S}}, T::Type{<:AbstractIrrational}
 ) where {S}
     return traced_number_type(Base.promote_type(T, S))
+end
+
+# Disambiguate against the float8 promotion rules in PrimitiveTypes.jl, which
+# apply to `Type{<:Integer}` and hence to traced integers.
+for S in Base.uniontypes(Reactant.ReactantFloat8)
+    @eval begin
+        function Base.promote_rule(::Type{$S}, ::Type{<:TracedRInteger{T}}) where {T}
+            return traced_number_type(Base.promote_type(T, $S))
+        end
+        function Base.promote_rule(::Type{<:TracedRInteger{T}}, ::Type{$S}) where {T}
+            return traced_number_type(Base.promote_type(T, $S))
+        end
+    end
+end
+
+# Disambiguate against Base's `Rational` and `Complex` promotion rules.
+function Base.promote_rule(
+    ::Type{Rational{T}}, ::Type{<:TracedRInteger{S}}
+) where {T<:Integer,S}
+    return Reactant.TracedRational{traced_number_type(Base.promote_type(T, S))}
+end
+function Base.promote_rule(
+    ::Type{Rational{T}}, ::Type{<:TracedRFloat{S}}
+) where {T<:Integer,S}
+    return traced_number_type(Base.promote_type(Rational{T}, S))
+end
+function Base.promote_rule(
+    ::Type{Complex{T}}, ::Type{<:TracedRReal{S}}
+) where {T<:Real,S}
+    return traced_number_type(Base.promote_type(Complex{T}, S))
 end
 
 function Base.promote_rule(::Type{Nothing}, ::Type{<:TracedRNumber{S}}) where {S}
@@ -206,7 +247,18 @@ function TracedRNumber{T}(x::Number) where {T}
 end
 
 # Covers the concrete traced types, e.g. via `convert(TracedRFloat{Float64}, x)`.
+# The extra methods disambiguate against Base's constructors on `Real`,
+# `AbstractFloat`, and `Integer`.
 (::Type{RT})(x::Number) where {RT<:TracedRNumber} = Reactant.promote_to(RT, x)
+for (RT, XT) in (
+    (:TracedRReal, :Complex),
+    (:TracedRInteger, :Complex),
+    (:TracedRFloat, :Complex),
+    (:TracedRInteger, :Rational),
+    (:TracedRFloat, :Rational),
+)
+    @eval (::Type{RT})(x::$XT) where {RT<:$RT} = Reactant.promote_to(RT, x)
+end
 
 for T in Base.uniontypes(Reactant.ReactantFloat8)
     @eval TracedRNumber{T}(x::$T) where {T} = Reactant.promote_to(TracedRNumber{T}, x)
@@ -312,6 +364,21 @@ for op in (:mod, :mod1, :rem)
     end
 end
 
+for op in (:mod, :rem)
+    @eval begin
+        function Base.$op(
+            @nospecialize(lhs::TracedRInteger{T}), @nospecialize(rhs::Rational)
+        ) where {T}
+            return $(op)(lhs, Reactant.promote_to(TracedRNumber{T}, rhs))
+        end
+        function Base.$op(
+            @nospecialize(lhs::Rational), @nospecialize(rhs::TracedRInteger{T})
+        ) where {T}
+            return $(op)(Reactant.promote_to(TracedRNumber{T}, lhs), rhs)
+        end
+    end
+end
+
 Base.flipsign(x::TracedRReal, y::TracedRReal) = ifelse(y < 0, -x, x)
 
 function Base.div(
@@ -405,30 +472,30 @@ function Base.div(
 end
 
 function Base.div(
-    @nospecialize(lhs::TracedRNumber{T}),
-    @nospecialize(rhs::TracedRNumber{T}),
+    @nospecialize(lhs::TracedRInteger{T}),
+    @nospecialize(rhs::TracedRInteger{T}),
     ::typeof(RoundToZero),
 ) where {T<:Integer}
     return @opcall divide(lhs, rhs)
 end
 function Base.div(
-    @nospecialize(lhs::TracedRNumber{T}),
-    @nospecialize(rhs::TracedRNumber{T}),
+    @nospecialize(lhs::TracedRInteger{T}),
+    @nospecialize(rhs::TracedRInteger{T}),
     ::typeof(RoundDown),
 ) where {T<:Integer}
     return @opcall divide(lhs, rhs)
 end
 function Base.div(
-    @nospecialize(lhs::TracedRNumber{T}),
-    @nospecialize(rhs::TracedRNumber{T}),
+    @nospecialize(lhs::TracedRInteger{T}),
+    @nospecialize(rhs::TracedRInteger{T}),
     ::typeof(RoundUp),
 ) where {T<:Integer}
     q = div(lhs, rhs)  # truncation (RoundToZero)
     return q + (!iszero(rem(lhs, rhs)) & (signbit(lhs) == signbit(rhs)))
 end
 function Base.div(
-    @nospecialize(lhs::TracedRNumber{T}),
-    @nospecialize(rhs::TracedRNumber{T}),
+    @nospecialize(lhs::TracedRInteger{T}),
+    @nospecialize(rhs::TracedRInteger{T}),
     ::typeof(RoundFromZero),
 ) where {T<:Integer}
     return ifelse(
@@ -436,25 +503,81 @@ function Base.div(
     )
 end
 function Base.div(
-    @nospecialize(lhs::TracedRNumber{T}),
-    @nospecialize(rhs::TracedRNumber{T}),
+    @nospecialize(lhs::TracedRInteger{T}),
+    @nospecialize(rhs::TracedRInteger{T}),
     r::Union{typeof(RoundNearest),typeof(RoundNearestTiesAway),typeof(RoundNearestTiesUp)},
 ) where {T<:Integer}
     return divrem(lhs, rhs, r)[1]
 end
 
 function Base.div(
-    @nospecialize(x::TracedRNumber{T}), @nospecialize(y::TracedRNumber{T}), r::RoundingMode
-) where {T<:AbstractFloat}
+    @nospecialize(x::TracedRFloat{T}), @nospecialize(y::TracedRFloat{T}), r::RoundingMode
+) where {T}
     return round(div(x, y), r)
 end
 
-Base.div(@nospecialize(lhs::TracedRNumber{<:Integer}), ::Missing, ::RoundingMode) = missing
-Base.div(::Missing, @nospecialize(rhs::TracedRNumber{<:Integer}), ::RoundingMode) = missing
+Base.div(@nospecialize(lhs::TracedRInteger), ::Missing, ::RoundingMode) = missing
+Base.div(::Missing, @nospecialize(rhs::TracedRInteger), ::RoundingMode) = missing
+
+# Base has `div` methods specialized on single rounding modes (and on
+# `Rational` arguments); the following methods only disambiguate against them.
+for RM in (
+    RoundingMode{:FromZero},
+    RoundingMode{:Nearest},
+    RoundingMode{:NearestTiesAway},
+    RoundingMode{:NearestTiesUp},
+    RoundingMode{:Up},
+    RoundingMode{:Down},
+    # Base also groups the nearest modes into a single method
+    Union{
+        RoundingMode{:Nearest},RoundingMode{:NearestTiesAway},RoundingMode{:NearestTiesUp}
+    },
+)
+    @eval begin
+        function Base.div(
+            @nospecialize(lhs::TracedRInteger{T1}),
+            @nospecialize(rhs::TracedRInteger{T2}),
+            r::$RM,
+        ) where {T1,T2}
+            T = promote_type(T1, T2)
+            return div(
+                Reactant.promote_to(TracedRNumber{T}, lhs),
+                Reactant.promote_to(TracedRNumber{T}, rhs),
+                r,
+            )
+        end
+        function Base.div(
+            @nospecialize(lhs::TracedRInteger{T}), rhs::Integer, r::$RM
+        ) where {T}
+            return div(lhs, Reactant.promote_to(TracedRNumber{T}, rhs), r)
+        end
+        function Base.div(
+            lhs::Integer, @nospecialize(rhs::TracedRInteger{T}), r::$RM
+        ) where {T}
+            return div(Reactant.promote_to(TracedRNumber{T}, lhs), rhs, r)
+        end
+    end
+end
+function Base.div(
+    @nospecialize(lhs::TracedRInteger{T}), rhs::Rational, r::RoundingMode
+) where {T}
+    return div(lhs, Reactant.promote_to(TracedRNumber{T}, rhs), r)
+end
+function Base.div(
+    lhs::Rational, @nospecialize(rhs::TracedRInteger{T}), r::RoundingMode
+) where {T}
+    return div(Reactant.promote_to(TracedRNumber{T}, lhs), rhs, r)
+end
+function Base.div(@nospecialize(lhs::TracedRInteger{T}), rhs::Rational) where {T}
+    return div(lhs, Reactant.promote_to(TracedRNumber{T}, rhs))
+end
+function Base.div(lhs::Rational, @nospecialize(rhs::TracedRInteger{T})) where {T}
+    return div(Reactant.promote_to(TracedRNumber{T}, lhs), rhs)
+end
 
 function Base.divrem(
-    @nospecialize(a::TracedRNumber{T}),
-    @nospecialize(b::TracedRNumber{T}),
+    @nospecialize(a::TracedRInteger{T}),
+    @nospecialize(b::TracedRInteger{T}),
     r::Union{typeof(RoundUp),typeof(RoundDown),typeof(RoundToZero)},
 ) where {T<:Integer}
     if r === RoundToZero
@@ -470,10 +593,10 @@ function Base.divrem(
 end
 
 function Base.divrem(
-    @nospecialize(x::TracedRNumber{T}),
-    @nospecialize(y::TracedRNumber{T}),
+    @nospecialize(x::TracedRInteger{T}),
+    @nospecialize(y::TracedRInteger{T}),
     ::typeof(RoundNearest),
-) where {T<:Integer}
+) where {T}
     (q, r) = divrem(x, y)
     threshold = isodd(y) | iseven(q)
     half_y = y ÷ 2
@@ -492,10 +615,10 @@ function Base.divrem(
 end
 
 function Base.divrem(
-    @nospecialize(x::TracedRNumber{T}),
-    @nospecialize(y::TracedRNumber{T}),
+    @nospecialize(x::TracedRInteger{T}),
+    @nospecialize(y::TracedRInteger{T}),
     ::typeof(RoundNearestTiesAway),
-) where {T<:Integer}
+) where {T}
     (q, r) = divrem(x, y)
     threshold = isodd(y)
     half_y = y ÷ 2
@@ -514,10 +637,10 @@ function Base.divrem(
 end
 
 function Base.divrem(
-    @nospecialize(x::TracedRNumber{T}),
-    @nospecialize(y::TracedRNumber{T}),
+    @nospecialize(x::TracedRInteger{T}),
+    @nospecialize(y::TracedRInteger{T}),
     ::typeof(RoundNearestTiesUp),
-) where {T<:Integer}
+) where {T}
     (q, r) = divrem(x, y)
     half_y = y ÷ 2
     # x >= 0, y >= 0
@@ -535,10 +658,10 @@ function Base.divrem(
 end
 
 function Base.divrem(
-    @nospecialize(x::TracedRNumber{T}),
-    @nospecialize(y::TracedRNumber{T}),
+    @nospecialize(x::TracedRInteger{T}),
+    @nospecialize(y::TracedRInteger{T}),
     ::typeof(RoundFromZero),
-) where {T<:Integer}
+) where {T}
     q_up, r_up = divrem(x, y, RoundUp)
     q_down, r_down = divrem(x, y, RoundDown)
     return ifelse(signbit(x) == signbit(y), (q_up, r_up), (q_down, r_down))
@@ -687,6 +810,12 @@ function Base.:+(
         end
     end
     return Base.TwicePrecision(Base.canonicalize2(r, s)...)
+end
+
+function Base.:*(
+    x::TwicePrecision{<:Union{Float16,Float32,Float64}}, v::TracedRInteger
+)
+    return invoke(*, Tuple{TwicePrecision,TracedRNumber}, x, v)
 end
 
 function Base.:*(x::TwicePrecision, v::TracedRNumber)
@@ -1059,6 +1188,13 @@ function Base.copysign(x::S, y::TracedRReal) where {S<:Real}
     return copysign(Reactant.promote_to(TracedRNumber{unwrapped_eltype(S)}, x), y)
 end
 
+# Base specializes `copysign` on these first-argument types.
+for S in (:Float16, :Float32, :Float64, :Signed, :Rational)
+    @eval function Base.copysign(x::$S, y::TracedRReal)
+        return copysign(Reactant.promote_to(TracedRNumber{unwrapped_eltype(x)}, x), y)
+    end
+end
+
 function Base.zeros(::Type{<:TracedRNumber{T}}, dims::Dims{N}) where {T,N}
     return @opcall fill(zero(T), dims)
 end
@@ -1088,6 +1224,12 @@ function Base.checkindex(::Type{Bool}, _inds, ::TracedRNumber)
 end
 
 function Base.checkindex(::Type{Bool}, ::AbstractUnitRange, ::TracedRNumber)
+    @warn "Currently we don't perform bounds checking for TracedRNumber. This will be \
+           fixed in a future version of Reactant." maxlog = 1
+    return true
+end
+
+function Base.checkindex(::Type{Bool}, ::Base.IdentityUnitRange, ::TracedRReal)
     @warn "Currently we don't perform bounds checking for TracedRNumber. This will be \
            fixed in a future version of Reactant." maxlog = 1
     return true

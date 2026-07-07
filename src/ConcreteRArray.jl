@@ -243,8 +243,18 @@ for jlop in (
         for T2 in CONCRETE_NUMBER_KINDS
             @eval $(jlop)(x::$(T1), y::$(T2)) = $(jlop)(to_number(x), to_number(y))
         end
-        for X in
-            (:Rational, :BigInt, :BigFloat, :AbstractIrrational, :AbstractFloat, :Complex)
+        for X in (
+            :Real,
+            :Integer,
+            :Bool,
+            :Rational,
+            :BigInt,
+            :BigFloat,
+            :AbstractIrrational,
+            :AbstractFloat,
+            :Complex,
+            :(Complex{Bool}),
+        )
             @eval begin
                 $(jlop)(x::$(T1), y::$(X)) = $(jlop)(to_number(x), y)
                 $(jlop)(x::$(X), y::$(T1)) = $(jlop)(x, to_number(y))
@@ -269,33 +279,95 @@ for jlop in (
     end
 end
 
-for T in (AbstractConcreteNumber, AbstractConcreteArray{<:Number,0})
-    @eval Base.div(x::$(T), y::$(T), r::RoundingMode=RoundToZero) =
-        div(to_number(x), to_number(y), r)
-    @eval Base.div(x::$(T), y::Number, r::RoundingMode=RoundToZero) =
-        div(to_number(x), y, r)
-    @eval Base.div(x::Number, y::$(T), r::RoundingMode=RoundToZero) =
-        div(x, to_number(y), r)
+# Base specializes `div` on single rounding modes and on `Rational` arguments;
+# the corresponding methods below only disambiguate against those.
+const BASE_SPECIFIC_ROUNDING_MODES = (
+    RoundingMode{:FromZero},
+    RoundingMode{:Nearest},
+    RoundingMode{:NearestTiesAway},
+    RoundingMode{:NearestTiesUp},
+    RoundingMode{:Up},
+    RoundingMode{:Down},
+    # Base also groups the nearest modes into a single method
+    Union{
+        RoundingMode{:Nearest},RoundingMode{:NearestTiesAway},RoundingMode{:NearestTiesUp}
+    },
+)
 
-    @eval Base.div(x::$(T), y::TracedRNumber, r::RoundingMode=RoundToZero) =
-        div(to_number(x), y, r)
-    @eval Base.div(x::TracedRNumber, y::$(T), r::RoundingMode=RoundToZero) =
-        div(x, to_number(y), r)
-    @eval Base.div(x::TracedRNumber{S}, y::$(T), r::RoundingMode) where {S<:Integer} =
-        div(x, to_number(y), r)
-    @eval Base.div(x::TracedRNumber{S}, y::$(T), r::RoundingMode) where {S<:AbstractFloat} =
-        div(x, to_number(y), r)
-    @eval Base.div(x::$(T), y::TracedRNumber{S}, r::RoundingMode) where {S<:Integer} =
-        div(to_number(x), y, r)
-    @eval Base.div(x::$(T), y::TracedRNumber{S}, r::RoundingMode) where {S<:AbstractFloat} =
-        div(to_number(x), y, r)
+for T1 in CONCRETE_NUMBER_KINDS
+    @eval begin
+        Base.div(x::$(T1), y::Number, r::RoundingMode=RoundToZero) =
+            div(to_number(x), y, r)
+        Base.div(x::Number, y::$(T1), r::RoundingMode=RoundToZero) =
+            div(x, to_number(y), r)
+        Base.div(x::$(T1), y::Real, r::RoundingMode=RoundToZero) = div(to_number(x), y, r)
+        Base.div(x::Real, y::$(T1), r::RoundingMode=RoundToZero) = div(x, to_number(y), r)
+        Base.div(x::$(T1), y::Rational, r::RoundingMode=RoundToZero) =
+            div(to_number(x), y, r)
+        Base.div(x::Rational, y::$(T1), r::RoundingMode=RoundToZero) =
+            div(x, to_number(y), r)
+        Base.div(x::$(T1), y::TracedRReal, r::RoundingMode=RoundToZero) =
+            div(to_number(x), y, r)
+        Base.div(x::TracedRReal, y::$(T1), r::RoundingMode=RoundToZero) =
+            div(x, to_number(y), r)
+    end
+    for RM in BASE_SPECIFIC_ROUNDING_MODES
+        @eval begin
+            Base.div(x::$(T1), y::Integer, r::$RM) = div(to_number(x), y, r)
+            Base.div(x::Integer, y::$(T1), r::$RM) = div(x, to_number(y), r)
+            Base.div(x::T, y::T, r::$RM) where {T<:$(T1)} =
+                div(to_number(x), to_number(y), r)
+        end
+    end
+    for T2 in CONCRETE_NUMBER_KINDS
+        @eval Base.div(x::$(T1), y::$(T2), r::RoundingMode=RoundToZero) =
+            div(to_number(x), to_number(y), r)
+        for RM in BASE_SPECIFIC_ROUNDING_MODES
+            @eval Base.div(x::$(T1), y::$(T2), r::$RM) =
+                div(to_number(x), to_number(y), r)
+        end
+    end
+    for T2 in TRACED_NUMBER_KINDS
+        @eval begin
+            Base.div(x::$(T1), y::$(T2), r::RoundingMode=RoundToZero) =
+                div(to_number(x), y, r)
+            Base.div(x::$(T2), y::$(T1), r::RoundingMode=RoundToZero) =
+                div(x, to_number(y), r)
+        end
+        for RM in BASE_SPECIFIC_ROUNDING_MODES
+            @eval begin
+                Base.div(x::$(T1), y::$(T2), r::$RM) = div(to_number(x), y, r)
+                Base.div(x::$(T2), y::$(T1), r::$RM) = div(x, to_number(y), r)
+            end
+        end
+    end
 end
 
-# `Rational` exponents are covered by the disambiguation grid above.
+let T = AbstractConcreteArray{<:Number,0}
+    @eval begin
+        Base.div(x::$(T), y::$(T), r::RoundingMode=RoundToZero) =
+            div(to_number(x), to_number(y), r)
+        Base.div(x::$(T), y::Number, r::RoundingMode=RoundToZero) = div(to_number(x), y, r)
+        Base.div(x::Number, y::$(T), r::RoundingMode=RoundToZero) = div(x, to_number(y), r)
+        Base.div(x::$(T), y::TracedRNumber, r::RoundingMode=RoundToZero) =
+            div(to_number(x), y, r)
+        Base.div(x::TracedRNumber, y::$(T), r::RoundingMode=RoundToZero) =
+            div(x, to_number(y), r)
+    end
+end
+
+# `Rational` and `Integer` exponents are covered by the disambiguation grid
+# above; these disambiguate against Base's `^(::SomeFloat, ::Integer)` and
+# `^(::Complex{...}, ::Integer)` specializations.
+for B in (Float16, Float32, Union{Float16,Float32}, Float64, BFloat16)
+    @eval Base.:^(x::$(B), y::AbstractConcreteInteger) = ^(x, to_number(y))
+end
+for B in (Complex{<:AbstractFloat}, Complex{<:Integer}, Complex{<:Rational})
+    @eval Base.:^(x::$(B), y::AbstractConcreteInteger) = ^(x, to_number(y))
+end
 for CT in CONCRETE_NUMBER_KINDS
-    @eval Base.:^(x::$(CT), y::Integer) = ^(to_number(x), y)
+    @eval Base.:^(::Irrational{:ℯ}, x::$(CT)) = exp(to_number(x))
 end
-Base.:^(::Irrational{:ℯ}, x::AbstractConcreteNumber) = exp(to_number(x))
 
 for jlop in (:(Base.isnan), :(Base.isfinite)),
     T in (CONCRETE_NUMBER_KINDS..., AbstractConcreteArray{<:Any,0})
@@ -303,13 +375,17 @@ for jlop in (:(Base.isnan), :(Base.isfinite)),
     @eval $(jlop)(x::$(T)) = $(jlop)(to_number(x))
 end
 
-for (T1, T2) in (
-    (AbstractConcreteNumber, AbstractConcreteNumber),
-    (AbstractConcreteNumber, Number),
-    (Number, AbstractConcreteNumber),
+isapprox_pairs = Any[
     (AbstractConcreteArray{<:Any,0}, Number),
     (Number, AbstractConcreteArray{<:Any,0}),
-)
+]
+for T1 in CONCRETE_NUMBER_KINDS
+    push!(isapprox_pairs, (T1, Number), (Number, T1), (T1, Integer), (Integer, T1))
+    for T2 in CONCRETE_NUMBER_KINDS
+        push!(isapprox_pairs, (T1, T2))
+    end
+end
+for (T1, T2) in isapprox_pairs
     @eval begin
         function Base.isapprox(x::$(T1), y::$(T2); kwargs...)
             return Base.isapprox(to_number(x), to_number(y); kwargs...)

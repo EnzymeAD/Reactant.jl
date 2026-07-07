@@ -1,6 +1,12 @@
 module TracedRationalOverrides
 
-using ..Reactant: Reactant, AbstractConcreteNumber, TracedRNumber, TracedRInteger, RInteger
+using ..Reactant:
+    Reactant,
+    AbstractConcreteNumber,
+    AbstractConcreteInteger,
+    TracedRNumber,
+    TracedRInteger,
+    RInteger
 import ..Reactant: TracedRational
 using ReactantCore: ReactantCore
 
@@ -118,18 +124,19 @@ Base.:-(x::TracedRational) = TracedRational(-x.num, x.den)
 # TODO: check for overflow/underflow for integer types
 
 for op in (:+, :-, :rem, :mod)
-    @eval begin
-        function Base.$(op)(x::TracedRational, y::TracedRational)
-            xd, yd = Base.divgcd(promote(x.den, y.den)...)
-            return TracedRational($(op)(x.num * yd, y.num * xd), x.den * yd)
-        end
+    @eval function Base.$(op)(x::TracedRational, y::TracedRational)
+        xd, yd = Base.divgcd(promote(x.den, y.den)...)
+        return TracedRational($(op)(x.num * yd, y.num * xd), x.den * yd)
+    end
+    for IT in (:Integer, :AbstractConcreteInteger)
+        @eval begin
+            function Base.$(op)(x::TracedRational, y::$IT)
+                return TracedRational($(op)(x.num, x.den * y), x.den)
+            end
 
-        function Base.$(op)(x::TracedRational, y::Integer)
-            return TracedRational($(op)(x.num, x.den * y), x.den)
-        end
-
-        function Base.$(op)(x::Integer, y::TracedRational)
-            return TracedRational($(op)(x * y.den, y.num), y.den)
+            function Base.$(op)(x::$IT, y::TracedRational)
+                return TracedRational($(op)(x * y.den, y.num), y.den)
+            end
         end
     end
 end
@@ -140,14 +147,18 @@ function Base.:*(x::TracedRational, y::TracedRational)
     return TracedRational(xn * yn, xd * yd)
 end
 
-function Base.:*(x::TracedRational, y::Integer)
-    xd, yn = Base.divgcd(promote(x.den, y)...)
-    return TracedRational(x.num * yn, xd)
-end
+for IT in (:Integer, :AbstractConcreteInteger)
+    @eval begin
+        function Base.:*(x::TracedRational, y::$IT)
+            xd, yn = Base.divgcd(promote(x.den, y)...)
+            return TracedRational(x.num * yn, xd)
+        end
 
-function Base.:*(x::Integer, y::TracedRational)
-    xn, yd = Base.divgcd(promote(x, y.den)...)
-    return TracedRational(xn * y.num, yd)
+        function Base.:*(x::$IT, y::TracedRational)
+            xn, yd = Base.divgcd(promote(x, y.den)...)
+            return TracedRational(xn * y.num, yd)
+        end
+    end
 end
 
 Base.inv(x::TracedRational) = TracedRational(x.den, x.num)
@@ -165,6 +176,9 @@ Base.convert(::Type{TracedRational{T}}, x::TracedRational{T}) where {T} = x
 Base.convert(::Type{TracedRational{T}}, x::TracedRational) where {T} = TracedRational{T}(x)
 Base.convert(::Type{TracedRational{T}}, x::Rational) where {T} = TracedRational{T}(x)
 Base.convert(::Type{TracedRational{T}}, x::Integer) where {T} = TracedRational{T}(x)
+function Base.convert(::Type{TracedRational{T}}, x::AbstractConcreteInteger) where {T}
+    return TracedRational{T}(x)
+end
 
 # Other utility functions
 Base.zero(::Type{TracedRational{T}}) where {T} = TracedRational(zero(T), one(T))
@@ -189,14 +203,18 @@ end
 Base.://(num::TracedRational, den::Rational) = num//TracedRational(den)
 Base.://(num::Rational, den::TracedRational) = TracedRational(num)//den
 
-function Base.://(x::TracedRational, y::Integer)
-    xn, yn = Base.divgcd(promote(x.num, y)...)
-    return checked_den(xn, x.den * yn)
-end
+for IT in (:Integer, :AbstractConcreteInteger)
+    @eval begin
+        function Base.://(x::TracedRational, y::$IT)
+            xn, yn = Base.divgcd(promote(x.num, y)...)
+            return checked_den(xn, x.den * yn)
+        end
 
-function Base.://(x::Integer, y::TracedRational)
-    xn, yn = Base.divgcd(promote(x, y.num)...)
-    return checked_den(xn * y.den, yn)
+        function Base.://(x::$IT, y::TracedRational)
+            xn, yn = Base.divgcd(promote(x, y.num)...)
+            return checked_den(xn * y.den, yn)
+        end
+    end
 end
 
 function Base.://(x::TracedRational, y::TracedRational)
@@ -205,8 +223,12 @@ function Base.://(x::TracedRational, y::TracedRational)
     return checked_den(xn * yd, xd * yn)
 end
 
-Base.:/(x::TracedRational, y::Integer) = x//y
-Base.:/(x::Integer, y::TracedRational) = x//y
+for IT in (:Integer, :AbstractConcreteInteger)
+    @eval begin
+        Base.:/(x::TracedRational, y::$IT) = x//y
+        Base.:/(x::$IT, y::TracedRational) = x//y
+    end
+end
 Base.:/(x::TracedRational, y::TracedRational) = x//y
 
 end

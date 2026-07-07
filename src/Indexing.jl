@@ -1,6 +1,12 @@
 module TracedIndexing
 
-using ..Reactant: Reactant, TracedRArray, TracedRNumber, TracedStepRangeLen, TracedUnitRange
+using ..Reactant:
+    Reactant,
+    TracedRArray,
+    TracedRNumber,
+    TracedRInteger,
+    TracedStepRangeLen,
+    TracedUnitRange
 using ..Reactant: AnyTracedRArray, ancestor, unwrapped_eltype
 using ..Ops: @opcall
 using ..TracedUtils: TracedUtils
@@ -83,10 +89,11 @@ function Base.getindex(
 end
 
 for (aT, iT) in (
-    (AbstractRange, TracedRNumber{<:Integer}),
+    (AbstractRange, TracedRInteger),
     (AbstractRange{<:TracedRNumber}, Int),
-    (AbstractRange{<:TracedRNumber}, TracedRNumber{<:Integer}),
-    (AbstractRange{<:TracedRNumber}, TracedRNumber{Int}),
+    (AbstractRange{<:TracedRNumber}, TracedRInteger),
+    (AbstractRange{<:TracedRNumber}, Union{Int,TracedRInteger{Int}}),
+    (Base.IdentityUnitRange, TracedRInteger),
     # 1.10 specific ambiguity fixes
     (UnitRange{<:TracedRNumber}, Int),
 )
@@ -99,10 +106,9 @@ for (aT, iT) in (
 end
 
 for (aT, iT) in (
-    (Base.OneTo, TracedRNumber{<:Integer}),
+    (Base.OneTo, TracedRInteger),
     (Base.OneTo{<:TracedRNumber}, Int),
-    (Base.OneTo{<:TracedRNumber}, TracedRNumber{<:Integer}),
-    (Base.OneTo{<:TracedRNumber}, TracedRNumber{Int}),
+    (Base.OneTo{<:TracedRNumber}, TracedRInteger),
 )
     @eval function Base.getindex(a::$aT, index::$iT)
         return convert(TracedRNumber{Reactant.unwrapped_eltype(a)}, index)
@@ -110,10 +116,9 @@ for (aT, iT) in (
 end
 
 for (aT, iT) in (
-    (StepRangeLen, TracedRNumber{<:Integer}),
+    (StepRangeLen, TracedRInteger),
     (StepRangeLen{<:TracedRNumber}, Int),
-    (StepRangeLen{<:TracedRNumber}, TracedRNumber{<:Integer}),
-    (StepRangeLen{<:TracedRNumber}, TracedRNumber{Int}),
+    (StepRangeLen{<:TracedRNumber}, TracedRInteger),
 )
     @eval function Base.getindex(r::$aT, index::$iT)
         # FIXME: this crashes for some reason
@@ -126,10 +131,9 @@ for (aT, iT) in (
 end
 
 for (aT, iT) in (
-    (LinRange, TracedRNumber{<:Integer}),
+    (LinRange, TracedRInteger),
     (LinRange{<:TracedRNumber}, Int),
-    (LinRange{<:TracedRNumber}, TracedRNumber{<:Integer}),
-    (LinRange{<:TracedRNumber}, TracedRNumber{Int}),
+    (LinRange{<:TracedRNumber}, TracedRInteger),
 )
     @eval function Base.getindex(r::$aT, index::$iT)
         return convert(
@@ -285,10 +289,12 @@ function Base.unsafe_getindex(r::TracedStepRangeLen, i::TracedRNumber{Int})
 end
 
 function Base.unsafe_getindex(
-    r::Union{
-        Base.StepRangeLen{T,<:TwicePrecision,<:TwicePrecision},
-        TracedStepRangeLen{T,<:TwicePrecision,<:TwicePrecision,<:TwicePrecision},
-    },
+    r::Base.StepRangeLen{T,<:TwicePrecision,<:TwicePrecision}, i::TracedRInteger{Int}
+) where {T}
+    return overloaded_unsafe_getindex(r, i)
+end
+function Base.unsafe_getindex(
+    r::TracedStepRangeLen{T,<:TwicePrecision,<:TwicePrecision,<:TwicePrecision},
     i::TracedRNumber{Int},
 ) where {T}
     return overloaded_unsafe_getindex(r, i)
