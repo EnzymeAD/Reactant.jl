@@ -41,16 +41,14 @@ const SVD_ALGORITHM_MAP = Dict(
 )
 
 function _function_macro_error()
-    throw(ArgumentError("`caller_function` is not available in this context"))
+    return throw(ArgumentError("`caller_function` is not available in this context"))
 end
 
 macro caller_function()
-    return esc(
-        quote
-            $(Expr(:isdefined, :var"#self#")) || $(_function_macro_error)()
-            var"#self#"
-        end,
-    )
+    return esc(quote
+        $(Expr(:isdefined, :var"#self#")) || $(_function_macro_error)()
+        var"#self#"
+    end)
 end
 
 """
@@ -119,6 +117,11 @@ mlir_type(::MissingTracedValue) = MLIR.IR.TensorType(Int[], MLIR.IR.Type(Bool))
 function mlir_type(RT::Type{<:RArray{T,N}}, shape) where {T,N}
     @assert length(shape) == N
     return MLIR.IR.TensorType(collect(Int, shape), MLIR.IR.Type(unwrapped_eltype(RT)))
+end
+
+function mlir_type(RT::Type{<:TracedRArray{T,N}}, shape) where {T,N}
+    @assert length(shape) == N
+    return MLIR.IR.TensorType(collect(Int, shape), MLIR.IR.Type(T))
 end
 
 function mlir_type(RT::Type{<:RNumber})::MLIR.IR.Type
@@ -1374,16 +1377,15 @@ end
         sample_inputs[2i - 1] = Reactant.promote_to(TracedRNumber{T}, 0)
         sample_inputs[2i] = Reactant.promote_to(TracedRNumber{T}, 0)
     end
-    func =
-        Reactant.TracedUtils.make_mlir_fn(
-            comparator,
-            (sample_inputs...,),
-            (),
-            "comparator",
-            false;
-            args_in_result=:none,
-            return_dialect=:stablehlo,
-        ).f
+    func = Reactant.TracedUtils.make_mlir_fn(
+        comparator,
+        (sample_inputs...,),
+        (),
+        "comparator",
+        false;
+        args_in_result=:none,
+        return_dialect=:stablehlo,
+    ).f
     @assert MLIR.IR.nregions(func) == 1
     fn_name = String(
         MLIR.IR.getattr(func, String(MLIR.API.mlirSymbolTableGetSymbolAttributeName()))
@@ -1432,21 +1434,20 @@ end
 ) where {T<:AbstractFloat,N}
     fallback === missing && (fallback = Reactant.FALLBACK_APPROX_TOP_K_LOWERING[])
 
-    func =
-        Reactant.TracedUtils.make_mlir_fn(
-            comparator,
-            (
-                Reactant.promote_to(TracedRNumber{T}, 0),
-                Reactant.promote_to(TracedRNumber{T}, 0),
-                Reactant.promote_to(TracedRNumber{Int32}, 0),
-                Reactant.promote_to(TracedRNumber{Int32}, 0),
-            ),
-            (),
-            "comparator",
-            false;
-            args_in_result=:none,
-            return_dialect=:stablehlo,
-        ).f
+    func = Reactant.TracedUtils.make_mlir_fn(
+        comparator,
+        (
+            Reactant.promote_to(TracedRNumber{T}, 0),
+            Reactant.promote_to(TracedRNumber{T}, 0),
+            Reactant.promote_to(TracedRNumber{Int32}, 0),
+            Reactant.promote_to(TracedRNumber{Int32}, 0),
+        ),
+        (),
+        "comparator",
+        false;
+        args_in_result=:none,
+        return_dialect=:stablehlo,
+    ).f
     @assert MLIR.IR.nregions(func) == 1
     fn_name = MLIR.IR.FlatSymbolRefAttribute(
         String(
@@ -1504,7 +1505,7 @@ end
     @assert 1 <= dimension <= N
 
     # XLA codegen for top.k is extremely sub-optimal. For special cases we can bypass that
-    if k isa Integer && k == 1
+    if k isa Integer && !(k isa TracedRNumber) && k == 1
         values, indices = argmax(x; dimension, location)
         return (;
             values, indices=add(indices, fill(Int64(1), Tuple(size(indices))); location)
@@ -2177,16 +2178,15 @@ end
         Reactant.promote_to(TracedRNumber, zero(T)),
     )
 
-    compiled_fn =
-        Reactant.TracedUtils.make_mlir_fn(
-            f,
-            sample_inputs,
-            (),
-            "update_computation",
-            false;
-            args_in_result=:result,
-            return_dialect=:stablehlo,
-        ).f
+    compiled_fn = Reactant.TracedUtils.make_mlir_fn(
+        f,
+        sample_inputs,
+        (),
+        "update_computation",
+        false;
+        args_in_result=:result,
+        return_dialect=:stablehlo,
+    ).f
     update_computation = MLIR.IR.Region()
     MLIR.API.mlirRegionTakeBody(update_computation, MLIR.IR.region(compiled_fn, 1))
     MLIR.IR.rmfromparent!(compiled_fn)
@@ -2370,36 +2370,34 @@ end
 
     input_types = [mlir_type(arg) for arg in linear_args]
 
-    cond_fn_compiled =
-        Reactant.TracedUtils.make_mlir_fn(
-            cond_fn,
-            traced_args,
-            (),
-            string(gensym("cond_fn")),
-            false;
-            return_dialect=:stablehlo,
-            args_in_result=:result,
-            do_transpose=false,
-            argprefix=gensym("loop_condarg"),
-            resprefix=gensym("loop_condres"),
-            resargprefix=gensym("loop_condresarg"),
-        ).f
+    cond_fn_compiled = Reactant.TracedUtils.make_mlir_fn(
+        cond_fn,
+        traced_args,
+        (),
+        string(gensym("cond_fn")),
+        false;
+        return_dialect=:stablehlo,
+        args_in_result=:result,
+        do_transpose=false,
+        argprefix=gensym("loop_condarg"),
+        resprefix=gensym("loop_condres"),
+        resargprefix=gensym("loop_condresarg"),
+    ).f
 
-    body_fn_compiled =
-        Reactant.TracedUtils.make_mlir_fn(
-            body_fn,
-            traced_args,
-            (),
-            string(gensym("body_fn")),
-            false;
-            return_dialect=:stablehlo,
-            args_in_result=:all,
-            do_transpose=false,
-            verify_arg_names,
-            argprefix=gensym("loop_bodyarg"),
-            resprefix=gensym("loop_bodyres"),
-            resargprefix=gensym("loop_bodyresarg"),
-        ).f
+    body_fn_compiled = Reactant.TracedUtils.make_mlir_fn(
+        body_fn,
+        traced_args,
+        (),
+        string(gensym("body_fn")),
+        false;
+        return_dialect=:stablehlo,
+        args_in_result=:all,
+        do_transpose=false,
+        verify_arg_names,
+        argprefix=gensym("loop_bodyarg"),
+        resprefix=gensym("loop_bodyres"),
+        resargprefix=gensym("loop_bodyresarg"),
+    ).f
 
     cond_reg = Reactant.TracedUtils.__take_region(cond_fn_compiled)
     body_reg = Reactant.TracedUtils.__take_region(body_fn_compiled)
@@ -2844,16 +2842,17 @@ end
         location,
     )
 
-    corrected_traced_results =
-        map(zip(traced_false_results, traced_true_results)) do (fr, tr)
-            if fr isa MissingTracedValue && tr isa MissingTracedValue
-                return fr
-            elseif fr isa MissingTracedValue
-                return tr
-            else
-                return fr
-            end
+    corrected_traced_results = map(
+        zip(traced_false_results, traced_true_results)
+    ) do (fr, tr)
+        if fr isa MissingTracedValue && tr isa MissingTracedValue
+            return fr
+        elseif fr isa MissingTracedValue
+            return tr
+        else
+            return fr
         end
+    end
 
     @assert length(all_paths) == length(result_types)
 
@@ -3492,16 +3491,15 @@ end
 function _construct_reduce_function(f::F, Ts::Type...) where {F}
     inputs_1 = [Reactant.promote_to(TracedRNumber{T}, 0) for T in Ts]
     inputs_2 = [Reactant.promote_to(TracedRNumber{T}, 0) for T in Ts]
-    func =
-        Reactant.TracedUtils.make_mlir_fn(
-            f,
-            (inputs_1..., inputs_2...),
-            (),
-            "reduce_fn" * string(f),
-            false;
-            args_in_result=:none,
-            return_dialect=:stablehlo,
-        ).f
+    func = Reactant.TracedUtils.make_mlir_fn(
+        f,
+        (inputs_1..., inputs_2...),
+        (),
+        "reduce_fn" * string(f),
+        false;
+        args_in_result=:none,
+        return_dialect=:stablehlo,
+    ).f
 
     @assert MLIR.IR.nregions(func) == 1
     ftype_attr = MLIR.IR.getattr(func, "function_type")
@@ -3628,14 +3626,15 @@ function standardize_start_index(
     start_index::Union{Integer,TracedRNumber{<:Integer}},
     idx::Integer,
 )
-    if (start_index isa Integer && start_index ≤ typemax(Int32)) || sz ≤ typemax(Int32)
-        if start_index isa Integer && update_sz !== nothing
+    is_static_index = !(start_index isa TracedRNumber)
+    if (is_static_index && start_index ≤ typemax(Int32)) || sz ≤ typemax(Int32)
+        if is_static_index && update_sz !== nothing
             @assert start_index + update_sz - 1 ≤ sz "Index $(idx) out of bounds: \
                                                   start_index=$(start_index), \
                                                   update_sz=$(update_sz), sz=$(sz)"
         end
         start_index = Reactant.promote_to(TracedRNumber{Int32}, start_index)
-    elseif start_index isa Integer && update_sz !== nothing
+    elseif is_static_index && update_sz !== nothing
         @assert start_index + update_sz - 1 ≤ sz "Index $(idx) out of bounds: \
                                               start_index=$(start_index), \
                                               update_sz=$(update_sz), sz=$(sz)"

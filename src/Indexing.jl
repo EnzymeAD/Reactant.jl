@@ -198,7 +198,7 @@ function Base.getindex(x::Base.ReshapedArray{<:TracedRNumber}, index::Base.Resha
 end
 
 function Base.getindex(
-    x::Base.Sort.WithoutMissingVector{TracedRNumber{T}}, i::Int
+    x::Base.Sort.WithoutMissingVector{<:TracedRNumber{T}}, i::Int
 ) where {T}
     out = getindex(x.data, i)
     @assert !(out isa Missing)
@@ -437,9 +437,7 @@ function Base.setindex!(a::TracedRArray{T,N}, v, indices::Vararg{Any,N}) where {
 
     TracedUtils.set_mlir_data!(
         a,
-        @opcall(
-            dynamic_update_slice(a, v, [i isa Colon ? 1 : first(i) for i in indices])
-        ).mlir_data,
+        @opcall(dynamic_update_slice(a, v, [i isa Colon ? 1 : first(i) for i in indices])).mlir_data,
     )
     return v
 end

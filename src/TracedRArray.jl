@@ -252,7 +252,7 @@ function Base.fill!(A::AnyTracedRArray{T,N}, x::TracedRNumber{T2}) where {T,N,T2
 end
 
 function Base.fill!(A::Array{T,N}, x::TracedRNumber{T2}) where {T,N,T2}
-    throw(MethodError(fill!, (A, x)))
+    return throw(MethodError(fill!, (A, x)))
 end
 
 struct AbstractReactantArrayStyle{N} <: AbstractArrayStyle{N} end
@@ -1009,7 +1009,7 @@ end
         end
         return TracedRNumber{
             unwrapped_eltype(
-                Base._accumulate_promote_op(op, Array{T,ndims(A)}(undef, size(A)); init)
+                Base._accumulate_promote_op(op, Array{T,ndims(A)}(undef, size(A));init)
             ),
         }
     end
