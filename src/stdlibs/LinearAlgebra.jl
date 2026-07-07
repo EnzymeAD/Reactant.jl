@@ -118,7 +118,7 @@ for (AT, comp) in ((:LowerTriangular, "GE"), (:UpperTriangular, "LE"))
             px = materialize_traced_array(parent(x))
             row_idxs = @opcall iota(Int, [m, n]; iota_dimension=1)
             col_idxs = @opcall iota(Int, [m, n]; iota_dimension=2)
-            indicator = @opcall compare(row_idxs, col_idxs; comparison_direction=$(comp))
+            indicator = @opcall compare(row_idxs, col_idxs; comparison_direction=($(comp)))
             return @opcall select(indicator, px, zero(px))
         end
 
@@ -214,9 +214,11 @@ for (AT, dcomp, ocomp) in (
         m, n = size(x)
         row_idxs = @opcall iota(Int, [m, n]; iota_dimension=1)
         col_idxs = @opcall iota(Int, [m, n]; iota_dimension=2)
-        data_indicator = @opcall compare(row_idxs, col_idxs; comparison_direction=$(dcomp))
+        data_indicator = @opcall compare(
+            row_idxs, col_idxs; comparison_direction=($(dcomp))
+        )
         original_indicator = @opcall compare(
-            row_idxs, col_idxs; comparison_direction=$(ocomp)
+            row_idxs, col_idxs; comparison_direction=($(ocomp))
         )
         res = @opcall add(
             @opcall(select(data_indicator, tdata, z)),
@@ -780,9 +782,9 @@ for (wT, lower, ud) in (
             parent(A),
             rhs;
             left_side=false,
-            lower=$(lower),
-            transpose_a='N',
-            unit_diagonal=$(ud),
+            lower=($(lower)),
+            transpose_a=('N'),
+            unit_diagonal=($(ud)),
         )
     end
 end

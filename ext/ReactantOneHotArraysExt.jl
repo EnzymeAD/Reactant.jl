@@ -7,11 +7,15 @@ using ReactantCore: ReactantCore
 using Reactant.Ops: @opcall
 
 __compatible_eltype(::Type{T}, ::Type{U}) where {T,U} = T
-function __compatible_eltype(::Type{TracedRNumber{T}}, ::Type{TracedRNumber{U}}) where {T,U}
-    return TracedRNumber{T}
+function __compatible_eltype(
+    ::Type{<:TracedRNumber{T}}, ::Type{<:TracedRNumber{U}}
+) where {T,U}
+    return Reactant.traced_number_type(T)
 end
-__compatible_eltype(::Type{TracedRNumber{T}}, ::Type{U}) where {T,U} = T
-__compatible_eltype(::Type{T}, ::Type{TracedRNumber{U}}) where {T,U} = TracedRNumber{T}
+__compatible_eltype(::Type{<:TracedRNumber{T}}, ::Type{U}) where {T,U} = T
+function __compatible_eltype(::Type{T}, ::Type{<:TracedRNumber{U}}) where {T,U}
+    return Reactant.traced_number_type(T)
+end
 
 function Reactant.traced_type_inner(
     @nospecialize(_::Type{OneHotArray{T,N,Np1,I}}),
@@ -60,7 +64,7 @@ function OneHotArrays.onehotbatch(data::AnyTracedRArray{<:Any,N}, labels) where 
     )
     data = ReactantCore.materialize_traced_array(reshape(data, 1, size(data)...))
     indices = UInt32.(@opcall(findfirst(data .== labels_expanded; dimension=1)))
-    return OneHotArray{TracedRNumber{UInt32},N,N + 1,typeof(indices)}(
+    return OneHotArray{Reactant.TracedRInteger{UInt32},N,N + 1,typeof(indices)}(
         indices, length(labels)
     )
 end
@@ -73,7 +77,7 @@ function OneHotArrays.onehotbatch(
         TracedRNumber{UInt32} ∘ Base.Fix2(+, 1 - first(labels)),
         ReactantCore.materialize_traced_array(data),
     )
-    return OneHotArray{TracedRNumber{UInt32},N,N + 1,typeof(indices)}(
+    return OneHotArray{Reactant.TracedRInteger{UInt32},N,N + 1,typeof(indices)}(
         indices, length(labels)
     )
 end

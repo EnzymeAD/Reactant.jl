@@ -112,9 +112,8 @@ end
 @static if VERSION < v"1.12-"
     Reactant.@reactant_overlay Base.@nospecializeinfer @noinline function (
         obj::KA.Kernel{ReactantBackend}
-    )(
-        @nospecialize args...; ndrange=nothing, workgroupsize=nothing
     )
+        (@nospecialize args...; ndrange=nothing, workgroupsize=nothing)
         return Reactant.call_with_reactant(
             Reactant.ka_with_reactant, ndrange, workgroupsize, obj, args...
         )
