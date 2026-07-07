@@ -123,14 +123,16 @@ isa_traced_soa(::AbstractRange{<:TracedRNumber}) = true
 
 unwrapped_eltype(::Type{T}) where {T<:Number} = T
 unwrapped_eltype(::Type{<:RNumber{T}}) where {T} = T
-unwrapped_eltype(::Type{TracedRNumber{T}}) where {T} = T
 
 unwrapped_eltype(::T) where {T<:Number} = T
 unwrapped_eltype(::RNumber{T}) where {T} = T
-unwrapped_eltype(::TracedRNumber{T}) where {T} = T
 
 unwrapped_eltype(::Type{<:AbstractArray{T}}) where {T} = unwrapped_eltype(T)
 unwrapped_eltype(::AbstractArray{T}) where {T} = unwrapped_eltype(T)
+
+# `TracedRArray{T,N}` with the element-type parameter left free does not match
+# `Type{<:AbstractArray{T}}` (no single eltype), so extract `T` directly.
+unwrapped_eltype(::Type{<:TracedRArray{T}}) where {T} = T
 
 include("Ops.jl")
 Base.push!(no_rewrite_ancestor_modules, Ops)
@@ -157,7 +159,7 @@ aos_to_soa(x::AbstractArray) = x
 aos_to_soa(x::TracedRArray) = x
 aos_to_soa(x::AnyTracedRArray) = x
 
-function aos_to_soa(x::Array{TracedRNumber{T}}) where {T}
+function aos_to_soa(x::Array{<:TracedRNumber{T}}) where {T}
     isa_traced_soa(ancestor(x)) && return x
     for i in eachindex(x)
         if !isassigned(x, i)
@@ -293,12 +295,21 @@ using .Compiler:
     code_xla,
     traced_getfield,
     compile
-export ConcreteRArray,
+export RInteger,
+    RFloat,
+    RComplex,
+    ConcreteRArray,
     ConcreteRNumber,
     ConcretePJRTArray,
     ConcretePJRTNumber,
+    ConcretePJRTInteger,
+    ConcretePJRTFloat,
+    ConcretePJRTComplex,
     ConcreteIFRTArray,
     ConcreteIFRTNumber,
+    ConcreteIFRTInteger,
+    ConcreteIFRTFloat,
+    ConcreteIFRTComplex,
     @compile,
     @code_hlo,
     @code_mhlo,

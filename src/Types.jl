@@ -1,6 +1,19 @@
-abstract type RNumber{T<:ReactantPrimitive} <: Number end
+# Reactant numbers are split by numeric kind so that traced and concrete values
+# subtype `Integer` and `AbstractFloat` where possible. Julia has no abstract
+# complex type, so complex Reactant numbers can only subtype `Number`.
+abstract type RInteger{T<:ReactantPrimitive} <: Integer end
+abstract type RFloat{T<:ReactantPrimitive} <: AbstractFloat end
+abstract type RComplex{T<:ReactantPrimitive} <: Number end
 
-abstract type AbstractConcreteNumber{T} <: RNumber{T} end
+const RReal{T} = Union{RInteger{T},RFloat{T}}
+const RNumber{T} = Union{RReal{T},RComplex{T}}
+
+abstract type AbstractConcreteInteger{T} <: RInteger{T} end
+abstract type AbstractConcreteFloat{T} <: RFloat{T} end
+abstract type AbstractConcreteComplex{T} <: RComplex{T} end
+
+const AbstractConcreteReal{T} = Union{AbstractConcreteInteger{T},AbstractConcreteFloat{T}}
+const AbstractConcreteNumber{T} = Union{AbstractConcreteReal{T},AbstractConcreteComplex{T}}
 
 abstract type RArray{T,N} <: DenseArray{T,N} end
 
@@ -37,63 +50,94 @@ end
 ## MissingTracedValue -- defined in ReactantCore
 @leaf MissingTracedValue
 
-## TracedRNumber
-mutable struct TracedRNumber{T} <: RNumber{T}
-    paths::Tuple
-    mlir_data::Union{Nothing,MLIR.IR.Value}
+## TracedRInteger, TracedRFloat, TracedRComplex
+for (TracedT, AbstractT) in
+    ((:TracedRInteger, :RInteger), (:TracedRFloat, :RFloat), (:TracedRComplex, :RComplex))
+    @eval begin
+        mutable struct $TracedT{T} <: $AbstractT{T}
+            paths::Tuple
+            mlir_data::Union{Nothing,MLIR.IR.Value}
 
-    function TracedRNumber{T}(
-        paths::Tuple, mlir_data::Union{Nothing,MLIR.IR.Value}
-    ) where {T}
-        if !isnothing(mlir_data)
-            @assert size(MLIR.IR.type(mlir_data)) == ()
+            function $TracedT{T}(
+                paths::Tuple, mlir_data::Union{Nothing,MLIR.IR.Value}
+            ) where {T}
+                if !isnothing(mlir_data)
+                    @assert size(MLIR.IR.type(mlir_data)) == ()
+                end
+                return new{T}(paths, mlir_data)
+            end
         end
-        return new{T}(paths, mlir_data)
+
+        @leaf $TracedT
     end
 end
 
-Base.elsize(::Type{TracedRNumber{T}}) where {T} = sizeof(T)
-Base.elsize(::Type{RNumber{T}}) where {T} = sizeof(T)
-Base.elsize(::Type{<:AbstractConcreteNumber{T}}) where {T} = sizeof(T)
-Base.elsize(::Type{<:AbstractConcreteArray{T}}) where {T} = sizeof(T)
+const TracedRReal{T} = Union{TracedRInteger{T},TracedRFloat{T}}
+const TracedRNumber{T} = Union{TracedRReal{T},TracedRComplex{T}}
 
-function repath(x::TracedRNumber{T}, paths) where {T}
-    return TracedRNumber{T}(paths, x.mlir_data)
+"""
+    traced_number_type(::Type{T}) where {T<:ReactantPrimitive}
+
+The concrete traced number type for element type `T`, i.e. the member of
+`TracedRNumber{T}` that matches the numeric kind of `T`.
+"""
+@inline traced_number_type(::Type{T}) where {T<:Integer} = TracedRInteger{T}
+@inline traced_number_type(::Type{T}) where {T<:AbstractFloat} = TracedRFloat{T}
+@inline traced_number_type(::Type{T}) where {T<:Complex} = TracedRComplex{T}
+
+@inline function TracedRNumber{T}(
+    paths::Tuple, mlir_data::Union{Nothing,MLIR.IR.Value}
+) where {T}
+    return traced_number_type(T)(paths, mlir_data)
 end
 
-@leaf TracedRNumber
+Base.elsize(::Type{<:RNumber{T}}) where {T} = sizeof(T)
+Base.elsize(::Type{<:AbstractConcreteArray{T}}) where {T} = sizeof(T)
+
+repath(x::TracedRNumber, paths) = Core.Typeof(x)(paths, x.mlir_data)
 
 ## TracedRArray
-mutable struct TracedRArray{T,N} <: RArray{TracedRNumber{T},N}
+## The element type `RT` is redundant (it is always `traced_number_type(T)`) but
+## exposes the numeric kind of the elements in the `RArray` supertype, so that
+## e.g. a traced float array is an `AbstractArray{<:AbstractFloat}`.
+mutable struct TracedRArray{T,N,RT<:TracedRNumber{T}} <: RArray{RT,N}
     paths::Tuple
     mlir_data::Union{Nothing,MLIR.IR.Value}
     shape::NTuple{N,Int}
 
-    function TracedRArray{T,N}(
+    function TracedRArray{T,N,RT}(
         paths::Tuple, mlir_data::Union{Nothing,MLIR.IR.Value}, shape
-    ) where {T,N}
+    ) where {T,N,RT<:TracedRNumber{T}}
         shape = Tuple(shape)
         if !isnothing(mlir_data)
             @assert size(MLIR.IR.type(mlir_data)) == shape "Expected: $(shape), got: $(size(MLIR.IR.type(mlir_data)))"
         end
-        return new{T,N}(paths, mlir_data, shape)
+        return new{T,N,RT}(paths, mlir_data, shape)
     end
+end
 
-    function TracedRArray{T,N}(::UndefInitializer, shape::Integer...) where {T,N}
-        return similar(TracedRArray{T,N}, shape...)
-    end
+function TracedRArray{T,N}(
+    paths::Tuple, mlir_data::Union{Nothing,MLIR.IR.Value}, shape
+) where {T,N}
+    return TracedRArray{T,N,traced_number_type(T)}(paths, mlir_data, shape)
+end
 
-    function TracedRArray{T,N}(::UndefInitializer, shape::NTuple{N,Int}) where {T,N}
-        return similar(TracedRArray{T,N}, shape)
-    end
+function TracedRArray{T,N}(::UndefInitializer, shape::Integer...) where {T,N}
+    return similar(TracedRArray{T,N}, shape...)
+end
+
+function TracedRArray{T,N}(::UndefInitializer, shape::NTuple{N,Int}) where {T,N}
+    return similar(TracedRArray{T,N}, shape)
 end
 
 function repath(x::TracedRArray{T,N}, paths) where {T,N}
-    return TracedRArray{T,N}(paths, x.mlir_data, x.shape)
+    return Core.Typeof(x)(paths, x.mlir_data, x.shape)
 end
 
 @leaf TracedRArray
-Adapt.parent_type(::Type{TracedRArray{T,N}}) where {T,N} = TracedRArray{T,N}
+function Adapt.parent_type(::Type{<:TracedRArray{T,N}}) where {T,N}
+    return TracedRArray{T,N,traced_number_type(T)}
+end
 
 ## TracedStepRangeLen
 struct TracedStepRangeLen{T,R,S,L} <: AbstractRange{T}
@@ -135,9 +179,7 @@ end
 Adapt.parent_type(::Type{TracedUnitRange{T}}) where {T} = TracedUnitRange{T}
 
 ## TracedRational
-struct TracedRational{
-    T<:Union{<:Integer,<:AbstractConcreteNumber{<:Integer},TracedRNumber{<:Integer}}
-} <: Real
+struct TracedRational{T<:Integer} <: Real
     num::T
     den::T
 end
@@ -151,20 +193,50 @@ const AnyTracedRMatrix{T} = AnyTracedRArray{T,2}
 const AnyTracedRVecOrMat{T} = Union{AnyTracedRVector{T},AnyTracedRMatrix{T}}
 
 # Concrete Types
-## ConcretePJRTNumber
-mutable struct ConcretePJRTNumber{T,D} <: AbstractConcreteNumber{T}
-    data::NTuple{D,XLA.PJRT.AsyncBuffer}
-    sharding::Sharding.ShardInfo
-    donated::Bool
+## ConcretePJRTInteger, ConcretePJRTFloat, ConcretePJRTComplex
+for (ConcreteT, AbstractT) in (
+    (:ConcretePJRTInteger, :AbstractConcreteInteger),
+    (:ConcretePJRTFloat, :AbstractConcreteFloat),
+    (:ConcretePJRTComplex, :AbstractConcreteComplex),
+)
+    @eval begin
+        mutable struct $ConcreteT{T,D} <: $AbstractT{T}
+            data::NTuple{D,XLA.PJRT.AsyncBuffer}
+            sharding::Sharding.ShardInfo
+            donated::Bool
 
-    function ConcretePJRTNumber{T,D}(
-        data::NTuple{D,XLA.PJRT.AsyncBuffer}, sharding::Sharding.ShardInfo
-    ) where {T,D}
-        return new{T,D}(data, sharding, false)
+            function $ConcreteT{T,D}(
+                data::NTuple{D,XLA.PJRT.AsyncBuffer}, sharding::Sharding.ShardInfo
+            ) where {T,D}
+                return new{T,D}(data, sharding, false)
+            end
+        end
+
+        @leaf $ConcreteT
     end
 end
 
+const ConcretePJRTReal{T,D} = Union{ConcretePJRTInteger{T,D},ConcretePJRTFloat{T,D}}
+const ConcretePJRTNumber{T,D} = Union{ConcretePJRTReal{T,D},ConcretePJRTComplex{T,D}}
+
+"""
+    pjrt_number_type(::Type{T}) where {T<:ReactantPrimitive}
+
+The concrete PJRT number type for element type `T` (with the device-count
+parameter `D` left free), i.e. the member of `ConcretePJRTNumber{T}` that
+matches the numeric kind of `T`.
+"""
+@inline pjrt_number_type(::Type{T}) where {T<:Integer} = ConcretePJRTInteger{T}
+@inline pjrt_number_type(::Type{T}) where {T<:AbstractFloat} = ConcretePJRTFloat{T}
+@inline pjrt_number_type(::Type{T}) where {T<:Complex} = ConcretePJRTComplex{T}
+
 ConcretePJRTNumber{T,1}(x::Number) where {T} = ConcretePJRTNumber{T}(x)
+
+function ConcretePJRTNumber{T,D}(
+    data::NTuple{D,XLA.PJRT.AsyncBuffer}, sharding::Sharding.ShardInfo
+) where {T,D}
+    return pjrt_number_type(T){D}(data, sharding)
+end
 
 function ConcretePJRTNumber{T}(data::Tuple{XLA.PJRT.AsyncBuffer}) where {T}
     return ConcretePJRTNumber{T,1}(data, Sharding.NoShardInfo())
@@ -173,8 +245,6 @@ end
 function ConcretePJRTNumber{T}(data::NTuple{D,XLA.PJRT.AsyncBuffer}, sharding) where {T,D}
     return ConcretePJRTNumber{T,D}(data, sharding)
 end
-
-@leaf ConcretePJRTNumber
 
 function ConcretePJRTNumber{T}(data::T2; kwargs...) where {T<:Number,T2<:Number}
     carray = ConcretePJRTArray(fill(convert(T, data)); kwargs...)
@@ -296,24 +366,51 @@ end
 
 # While sharding is part of IFRT.Array, we still need to carry it around for compiling the
 # MLIR module.
-## ConcreteIFRTNumber
-mutable struct ConcreteIFRTNumber{T} <: AbstractConcreteNumber{T}
-    data::XLA.IFRT.AsyncArray
-    sharding::Sharding.ShardInfo
-    donated::Bool
+## ConcreteIFRTInteger, ConcreteIFRTFloat, ConcreteIFRTComplex
+for (ConcreteT, AbstractT) in (
+    (:ConcreteIFRTInteger, :AbstractConcreteInteger),
+    (:ConcreteIFRTFloat, :AbstractConcreteFloat),
+    (:ConcreteIFRTComplex, :AbstractConcreteComplex),
+)
+    @eval begin
+        mutable struct $ConcreteT{T} <: $AbstractT{T}
+            data::XLA.IFRT.AsyncArray
+            sharding::Sharding.ShardInfo
+            donated::Bool
 
-    function ConcreteIFRTNumber{T}(
-        data::XLA.IFRT.AsyncArray, sharding::Sharding.ShardInfo
-    ) where {T}
-        return new{T}(data, sharding, false)
+            function $ConcreteT{T}(
+                data::XLA.IFRT.AsyncArray, sharding::Sharding.ShardInfo
+            ) where {T}
+                return new{T}(data, sharding, false)
+            end
+        end
+
+        @leaf $ConcreteT
     end
+end
+
+const ConcreteIFRTReal{T} = Union{ConcreteIFRTInteger{T},ConcreteIFRTFloat{T}}
+const ConcreteIFRTNumber{T} = Union{ConcreteIFRTReal{T},ConcreteIFRTComplex{T}}
+
+"""
+    ifrt_number_type(::Type{T}) where {T<:ReactantPrimitive}
+
+The concrete IFRT number type for element type `T`, i.e. the member of
+`ConcreteIFRTNumber{T}` that matches the numeric kind of `T`.
+"""
+@inline ifrt_number_type(::Type{T}) where {T<:Integer} = ConcreteIFRTInteger{T}
+@inline ifrt_number_type(::Type{T}) where {T<:AbstractFloat} = ConcreteIFRTFloat{T}
+@inline ifrt_number_type(::Type{T}) where {T<:Complex} = ConcreteIFRTComplex{T}
+
+function ConcreteIFRTNumber{T}(
+    data::XLA.IFRT.AsyncArray, sharding::Sharding.ShardInfo
+) where {T}
+    return ifrt_number_type(T)(data, sharding)
 end
 
 function ConcreteIFRTNumber{T}(data::XLA.IFRT.AsyncArray) where {T}
     return ConcreteIFRTNumber{T}(data, Sharding.NoShardInfo())
 end
-
-@leaf ConcreteIFRTNumber
 
 function ConcreteIFRTNumber{T}(data::T2; kwargs...) where {T<:Number,T2<:Number}
     carray = ConcreteIFRTArray(fill(convert(T, data)); kwargs...)
@@ -477,7 +574,7 @@ function InterpolateArray(
                 N_dim, M_dim = final_grid_size[dim], src_size[dim]
                 H = halo[dim]
 
-                [
+                return [
                     begin
                         if I <= H
                             clamp(I, 1, M_dim)
@@ -516,7 +613,7 @@ function InterpolateArray(
                 N_dim, M_dim = final_grid_size[dim], src_size[dim]
                 H = halo[dim]
 
-                [
+                return [
                     begin
                         if I <= H
                             clamp(I, 1, M_dim)
@@ -541,7 +638,7 @@ function InterpolateArray(
                 N_dim, M_dim = final_grid_size[dim], src_size[dim]
                 H = halo[dim]
 
-                [
+                return [
                     begin
                         if I <= H
                             clamp(I, 1, M_dim)
@@ -563,7 +660,7 @@ function InterpolateArray(
 
             dens = ntuple(N) do dim
                 H = halo[dim]
-                2 * max(1, final_grid_size[dim] - 2 * H)
+                return 2 * max(1, final_grid_size[dim] - 2 * H)
             end
             total_den = prod(dens)
 
@@ -572,7 +669,7 @@ function InterpolateArray(
                 N_dim, M_dim = final_grid_size[dim], src_size[dim]
                 H = halo[dim]
 
-                [
+                return [
                     begin
                         if I <= H || I >= N_dim - H + 1
                             0
@@ -597,13 +694,11 @@ function InterpolateArray(
                         dim -> c[dim] == 1 ? lows[dim][I.I[dim]] : highs[dim][I.I[dim]], N
                     )
 
-                    w_int = prod(
-                        ntuple(dim -> if c[dim] == 1
-                            (dens[dim] - rems[dim][I.I[dim]])
-                        else
-                            rems[dim][I.I[dim]]
-                        end, N)
-                    )
+                    w_int = prod(ntuple(dim -> if c[dim] == 1
+                        (dens[dim] - rems[dim][I.I[dim]])
+                    else
+                        rems[dim][I.I[dim]]
+                    end, N))
 
                     sum_val += w_int * local_cpu_array[CartesianIndex(idx)]
                 end
