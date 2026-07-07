@@ -1,0 +1,9 @@
+config,framework,compile_s,per_iter_ms,infer_per_trial_s,neff_median,neff_per_s_median,pll_final_mean,n_trials
+motivating/gp_pois_regr,Turing.jl,8.68,nan,99.8699;nan,1406.5,14.1,-49.668,2
+motivating/gp_pois_regr,PyMC,0.01,15.4279,27.2584;19.0252,2095.8,110.2,-49.565,2
+standard/n_schools,Turing.jl,14.29,nan,241.3714;nan,4131.9,17.1,-6869.019,2
+standard/n_schools,PyMC,0.02,111.013,357.4368;530.6674,3562.7,6.7,-6870.15,2
+standard/robust_regression,Turing.jl,9.99,nan,95.3894;nan,5487.8,57.5,-7185.012,2
+standard/robust_regression,PyMC,0.01,1.999,10.6589;5.333,11358.6,2129.9,-7184.86,2
+standard/logistic_regression,Turing.jl,8.31,12.9464,49.5144;52.3846;56.1765;49.0674,16068.7,305.8,-30.722,4
+standard/logistic_regression,PyMC,0.01,nan,92.2948;102.1999;nan;nan,900.6,8.8,-30.165,4

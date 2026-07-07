@@ -1,0 +1,229 @@
+{
+  "motivating/gp_pois_regr": {
+    "model_class": "gp_pois_regr_scaled.GPPoisRegrScaled",
+    "model_args": {
+      "n": 40,
+      "rho": 1.0
+    },
+    "iterations": 1500,
+    "num_warmup": 500,
+    "num_chains": 1,
+    "frameworks": {
+      "Turing.jl": {
+        "compile_time_s": 8.677618602,
+        "per_iter_ms_mean": NaN,
+        "per_iter_ms_std": NaN,
+        "infer_per_trial_s": [
+          99.8699,
+          NaN
+        ],
+        "total_s_mean": NaN,
+        "iterations": 1500,
+        "num_warmup": 500,
+        "n_trials": 2,
+        "neff_min": 298.85428998417916,
+        "neff_median": 1406.5420024947568,
+        "neff_max": 2253.9292461573837,
+        "neff_per_s_median": 14.083737312852733,
+        "pll_per_trial": [
+          -49.668
+        ],
+        "pll_final_mean": -49.668
+      },
+      "PyMC": {
+        "compile_time_s": 0.012834548950195312,
+        "per_iter_ms_mean": 15.42786733309428,
+        "per_iter_ms_std": 2.744398196538289,
+        "infer_per_trial_s": [
+          27.2584,
+          19.0252
+        ],
+        "total_s_mean": 23.14180099964142,
+        "iterations": 1500,
+        "num_warmup": 500,
+        "n_trials": 2,
+        "neff_min": 880.7831789800179,
+        "neff_median": 2095.7673645261307,
+        "neff_max": 3577.258595437246,
+        "neff_per_s_median": 110.15742049550994,
+        "pll_per_trial": [
+          -49.5528,
+          -49.5764
+        ],
+        "pll_final_mean": -49.5646
+      }
+    }
+  },
+  "standard/n_schools": {
+    "model_class": "n_schools.NSchools",
+    "model_args": {
+      "n": 10000
+    },
+    "iterations": 4000,
+    "num_warmup": 1000,
+    "num_chains": 1,
+    "frameworks": {
+      "Turing.jl": {
+        "compile_time_s": 14.290340823,
+        "per_iter_ms_mean": NaN,
+        "per_iter_ms_std": NaN,
+        "infer_per_trial_s": [
+          241.3714,
+          NaN
+        ],
+        "total_s_mean": NaN,
+        "iterations": 4000,
+        "num_warmup": 1000,
+        "n_trials": 2,
+        "neff_min": 2845.984583850345,
+        "neff_median": 4131.903762356204,
+        "neff_max": 5177.719115631953,
+        "neff_per_s_median": 17.11844510120424,
+        "pll_per_trial": [
+          -6869.0194
+        ],
+        "pll_final_mean": -6869.0194
+      },
+      "PyMC": {
+        "compile_time_s": 0.022893905639648438,
+        "per_iter_ms_mean": 111.01302391290665,
+        "per_iter_ms_std": 21.65382868051529,
+        "infer_per_trial_s": [
+          357.4368,
+          530.6674
+        ],
+        "total_s_mean": 444.0520956516266,
+        "iterations": 4000,
+        "num_warmup": 1000,
+        "n_trials": 2,
+        "neff_min": 1941.7078975631603,
+        "neff_median": 3562.702318927949,
+        "neff_max": 4424.6601085437305,
+        "neff_per_s_median": 6.713625614241412,
+        "pll_per_trial": [
+          -6867.5532,
+          -6872.7467
+        ],
+        "pll_final_mean": -6870.14995
+      }
+    }
+  },
+  "standard/robust_regression": {
+    "model_class": "robust_regression.RobustRegression",
+    "model_args": {
+      "n": 10000,
+      "k": 10
+    },
+    "iterations": 4000,
+    "num_warmup": 1000,
+    "num_chains": 1,
+    "frameworks": {
+      "Turing.jl": {
+        "compile_time_s": 9.994493178,
+        "per_iter_ms_mean": NaN,
+        "per_iter_ms_std": NaN,
+        "infer_per_trial_s": [
+          95.3894,
+          NaN
+        ],
+        "total_s_mean": NaN,
+        "iterations": 4000,
+        "num_warmup": 1000,
+        "n_trials": 2,
+        "neff_min": 1875.6143401119352,
+        "neff_median": 5487.796434062999,
+        "neff_max": 6452.939821110102,
+        "neff_per_s_median": 57.530451071815286,
+        "pll_per_trial": [
+          -7185.0117
+        ],
+        "pll_final_mean": -7185.0117
+      },
+      "PyMC": {
+        "compile_time_s": 0.009560823440551758,
+        "per_iter_ms_mean": 1.9989859759807587,
+        "per_iter_ms_std": 0.6657333672046661,
+        "infer_per_trial_s": [
+          10.6589,
+          5.333
+        ],
+        "total_s_mean": 7.995943903923035,
+        "iterations": 4000,
+        "num_warmup": 1000,
+        "n_trials": 2,
+        "neff_min": 8818.855117562625,
+        "neff_median": 11358.622690546674,
+        "neff_max": 13247.382578719693,
+        "neff_per_s_median": 2129.87070412968,
+        "pll_per_trial": [
+          -7185.0333,
+          -7184.6874
+        ],
+        "pll_final_mean": -7184.86035
+      }
+    }
+  },
+  "standard/logistic_regression": {
+    "model_class": "logistic_regression.LogisticRegression",
+    "model_args": {
+      "n": 10000,
+      "k": 10,
+      "rho": 3.0
+    },
+    "iterations": 4000,
+    "num_warmup": 1000,
+    "num_chains": 1,
+    "frameworks": {
+      "Turing.jl": {
+        "compile_time_s": 8.306269146,
+        "per_iter_ms_mean": 12.946424540812501,
+        "per_iter_ms_std": 0.7091586922753721,
+        "infer_per_trial_s": [
+          49.5144,
+          52.3846,
+          56.1765,
+          49.0674
+        ],
+        "total_s_mean": 51.785698163250004,
+        "iterations": 4000,
+        "num_warmup": 1000,
+        "n_trials": 4,
+        "neff_min": 15374.881036771745,
+        "neff_median": 16068.724957095937,
+        "neff_max": 22376.0333332427,
+        "neff_per_s_median": 305.82155497301954,
+        "pll_per_trial": [
+          -30.8103,
+          -30.7411,
+          -30.4764,
+          -30.8595
+        ],
+        "pll_final_mean": -30.721825
+      },
+      "PyMC": {
+        "compile_time_s": 0.007470130920410156,
+        "per_iter_ms_mean": NaN,
+        "per_iter_ms_std": NaN,
+        "infer_per_trial_s": [
+          92.2948,
+          102.1999,
+          NaN,
+          NaN
+        ],
+        "total_s_mean": NaN,
+        "iterations": 4000,
+        "num_warmup": 1000,
+        "n_trials": 4,
+        "neff_min": 809.6302004887971,
+        "neff_median": 900.6151888111451,
+        "neff_max": 4803.8844517397265,
+        "neff_per_s_median": 8.812289005398446,
+        "pll_per_trial": [
+          -30.0217,
+          -30.3075
+        ],
+        "pll_final_mean": -30.1646
+      }
+    }
+  }
+}
