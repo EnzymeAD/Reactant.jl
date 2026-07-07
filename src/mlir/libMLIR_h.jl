@@ -15950,9 +15950,9 @@ function hloInstructionFusedInstructionsComputation(hlo_instruction)
     )::Ptr{HloComputation}
 end
 
-function CreateGPUPerformanceModel(ctx, device_description)
+function CreateGPUPerformanceModel(device_description)
     @ccall mlir_c.CreateGPUPerformanceModel(
-        ctx::MlirContext, device_description::Ptr{DeviceDescription}
+        device_description::Ptr{DeviceDescription}
     )::Ptr{GPUPerformanceModel}
 end
 
