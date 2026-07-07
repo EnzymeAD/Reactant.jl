@@ -4,12 +4,7 @@ using Base: Broadcast
 using Base.Broadcast: Broadcasted, AbstractArrayStyle, instantiate
 
 using ..Reactant:
-    Reactant,
-    TracedRArray,
-    TracedRNumber,
-    TracedRInteger,
-    AnyTracedRArray,
-    AnyTracedRVector
+    Reactant, TracedRArray, TracedRNumber, TracedRInteger, AnyTracedRArray, AnyTracedRVector
 using ..Reactant: MLIR, unwrapped_eltype
 using ..Ops: @opcall
 using ..TracedUtils: TracedUtils, get_mlir_data, set_mlir_data!, materialize_traced_array

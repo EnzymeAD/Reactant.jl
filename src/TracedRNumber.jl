@@ -161,9 +161,7 @@ function Base.promote_rule(
 ) where {T<:Integer,S}
     return traced_number_type(Base.promote_type(Rational{T}, S))
 end
-function Base.promote_rule(
-    ::Type{Complex{T}}, ::Type{<:TracedRReal{S}}
-) where {T<:Real,S}
+function Base.promote_rule(::Type{Complex{T}}, ::Type{<:TracedRReal{S}}) where {T<:Real,S}
     return traced_number_type(Base.promote_type(Complex{T}, S))
 end
 
@@ -817,9 +815,7 @@ function Base.:+(
     return Base.TwicePrecision(Base.canonicalize2(r, s)...)
 end
 
-function Base.:*(
-    x::TwicePrecision{<:Union{Float16,Float32,Float64}}, v::TracedRInteger
-)
+function Base.:*(x::TwicePrecision{<:Union{Float16,Float32,Float64}}, v::TracedRInteger)
     return invoke(*, Tuple{TwicePrecision,TracedRNumber}, x, v)
 end
 
@@ -866,8 +862,14 @@ for B in (:TracedRInteger, :TracedRFloat, :TracedRComplex, :Real, :Complex)
     @eval Base.:^(x::$B, p::TracedRInteger) = ^(promote(x, p)...)
 end
 for B in (
-    Float16, Float32, Union{Float16,Float32}, Float64, BFloat16,
-    Complex{<:AbstractFloat}, Complex{<:Integer}, Complex{<:Rational},
+    Float16,
+    Float32,
+    Union{Float16,Float32},
+    Float64,
+    BFloat16,
+    Complex{<:AbstractFloat},
+    Complex{<:Integer},
+    Complex{<:Rational},
 )
     @eval Base.:^(x::$B, p::TracedRInteger) = ^(promote(x, p)...)
 end

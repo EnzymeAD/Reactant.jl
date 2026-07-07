@@ -300,10 +300,8 @@ const BASE_SPECIFIC_ROUNDING_MODES = (
 
 for T1 in CONCRETE_NUMBER_KINDS
     @eval begin
-        Base.div(x::$(T1), y::Number, r::RoundingMode=RoundToZero) =
-            div(to_number(x), y, r)
-        Base.div(x::Number, y::$(T1), r::RoundingMode=RoundToZero) =
-            div(x, to_number(y), r)
+        Base.div(x::$(T1), y::Number, r::RoundingMode=RoundToZero) = div(to_number(x), y, r)
+        Base.div(x::Number, y::$(T1), r::RoundingMode=RoundToZero) = div(x, to_number(y), r)
         Base.div(x::$(T1), y::Real, r::RoundingMode=RoundToZero) = div(to_number(x), y, r)
         Base.div(x::Real, y::$(T1), r::RoundingMode=RoundToZero) = div(x, to_number(y), r)
         Base.div(x::$(T1), y::Rational, r::RoundingMode=RoundToZero) =
@@ -327,8 +325,7 @@ for T1 in CONCRETE_NUMBER_KINDS
         @eval Base.div(x::$(T1), y::$(T2), r::RoundingMode=RoundToZero) =
             div(to_number(x), to_number(y), r)
         for RM in BASE_SPECIFIC_ROUNDING_MODES
-            @eval Base.div(x::$(T1), y::$(T2), r::$RM) =
-                div(to_number(x), to_number(y), r)
+            @eval Base.div(x::$(T1), y::$(T2), r::$RM) = div(to_number(x), to_number(y), r)
         end
     end
     for T2 in TRACED_NUMBER_KINDS
@@ -380,8 +377,7 @@ for jlop in (:(Base.isnan), :(Base.isfinite)),
 end
 
 isapprox_pairs = Any[
-    (AbstractConcreteArray{<:Any,0}, Number),
-    (Number, AbstractConcreteArray{<:Any,0}),
+    (AbstractConcreteArray{<:Any,0}, Number), (Number, AbstractConcreteArray{<:Any,0})
 ]
 for T1 in CONCRETE_NUMBER_KINDS
     push!(isapprox_pairs, (T1, Number), (Number, T1), (T1, Integer), (Integer, T1))

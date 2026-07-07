@@ -236,12 +236,9 @@ end
             sym = Symbol("result", var_idx[])
             var_idx[] += 1
 
-            push!(
-                resultgen_code,
-                quote
-                    $sym = ($MockTestCustomPath)($ar)
-                end,
-            )
+            push!(resultgen_code, quote
+                $sym = ($MockTestCustomPath)($ar)
+            end)
             result_cache[tocopy] = sym
         end
 

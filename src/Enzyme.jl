@@ -477,7 +477,7 @@ function overload_autodiff(
                     seed = get(reverse_seeds, path) do
                         # `Active` arguments have no shadow; the re-emitted
                         # argument result receives no incoming cotangent.
-                        TracedUtils.get_mlir_data(zero(a))
+                        return TracedUtils.get_mlir_data(zero(a))
                     end
                     push!(ad_inputs, seed)
                 end
