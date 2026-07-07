@@ -228,6 +228,10 @@ const TRACED_NUMBER_KINDS = (TracedRInteger, TracedRFloat, TracedRComplex)
 
 for jlop in (
     :(Base.isless),
+    :(Base.:<),
+    :(Base.:<=),
+    :(Base.:>),
+    :(Base.:>=),
     :(Base.:+),
     :(Base.:-),
     :(Base.:*),

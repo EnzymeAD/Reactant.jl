@@ -312,11 +312,15 @@ for (jlop, hloop) in (
     (:(Base.:*), :multiply),
     (:(Base.:/), :divide),
     (:(Base.:^), :power),
-    (:(Base.rem), :remainder),
 )
     @eval function $(jlop)(lhs::TracedRNumber{T}, rhs::TracedRNumber{T}) where {T}
         return @opcall $(hloop)(lhs, rhs)
     end
+end
+
+# real-only, so that it dominates the mixed-argument methods below
+function Base.rem(lhs::TracedRReal{T}, rhs::TracedRReal{T}) where {T}
+    return @opcall remainder(lhs, rhs)
 end
 
 function Base.rem(x::TracedRReal, y::TracedRReal, ::typeof(Base.RoundFromZero))
@@ -336,14 +340,14 @@ Base.:*(z::Complex{Bool}, x::TracedRReal) = x * z
 
 # Based on https://github.com/JuliaLang/julia/blob/39255d47db7657950ff1c82137ecec5a70bae622/base/float.jl#L608-L617
 function Base.mod(
-    @nospecialize(x::Reactant.TracedRNumber{T}), @nospecialize(y::Reactant.TracedRNumber{T})
+    @nospecialize(x::TracedRReal{T}), @nospecialize(y::TracedRReal{T})
 ) where {T}
     r = rem(x, y)
     return ifelse(r == 0, copysign(r, y), ifelse((r > 0) ⊻ (y > 0), r + y, r))
 end
 
 function Base.mod1(
-    @nospecialize(x::Reactant.TracedRNumber{T}), @nospecialize(y::Reactant.TracedRNumber{T})
+    @nospecialize(x::TracedRReal{T}), @nospecialize(y::TracedRReal{T})
 ) where {T}
     m = mod(x, y)
     return ifelse(m == 0, y, m)
@@ -982,6 +986,15 @@ function Base.cis(x::TracedRReal)
     return complex(c, s)
 end
 
+Base.sincos(x::TracedRFloat) = (sin(x), cos(x))
+Base.exp2(x::TracedRFloat{T}) where {T} = T(2)^x
+Base.exp10(x::TracedRFloat{T}) where {T} = T(10)^x
+Base.mod2pi(x::TracedRFloat{T}) where {T} = mod(x, T(2π))
+function Base.modf(x::TracedRFloat)
+    ipart = trunc(x)
+    return (x - ipart, ipart)
+end
+
 function Base.sinc(x::TracedRNumber)
     r = ifelse(iszero(x), one(x), sinpi(x) / (pi * x))
     return ifelse(isinf(x), zero(x), r)
@@ -1003,6 +1016,8 @@ for TracedT in (:TracedRReal, :TracedRComplex)
     end
 end
 Base.Math._log(x::TracedRNumber, base, ::Symbol) = log(x) / log(Reactant._unwrap_val(base))
+
+Base.isreal(x::TracedRComplex) = iszero(imag(x))
 
 Base.isodd(x::TracedRComplex) = isodd(real(x))
 Base.isodd(x::TracedRInteger) = !iszero(rem(x, 2))

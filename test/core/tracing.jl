@@ -26,7 +26,11 @@ struct RMSProp{Teta,Trho,Teps,C<:Bool}
 end
 
 @testset "Traced Type" begin
-    @test !(Vector{Union{}} <: Reactant.AnyTracedRArray)
+    # `Vector{Union{}}` (e.g. an empty array literal) matches the covariant
+    # `AnyTracedRArray` alias, but must not be routed into the traced-array
+    # machinery
+    @test ReactantCore.materialize_traced_array(Union{}[]) isa Vector{Union{}}
+    @test Reactant.aos_to_soa(Union{}[]) isa Vector{Union{}}
 end
 
 mul(a, b) = a .* b
@@ -338,11 +342,11 @@ end
         Foo, [Float64, Bar{Float64}, Reactant.TracedRArray{Float64,1}]
     ) == (
         Foo{
-            TracedRNumber{Float64},
-            Bar{TracedRNumber{Float64}},
-            Reactant.TracedRArray{Float64,1},
+            Reactant.TracedRFloat{Float64},
+            Bar{Reactant.TracedRFloat{Float64}},
+            Reactant.TracedRArray{Float64,1,Reactant.TracedRFloat{Float64}},
         },
-        [true, true, false],
+        [true, true, true],
     )
 
     @test Reactant.apply_type_with_promotion(

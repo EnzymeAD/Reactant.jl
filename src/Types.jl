@@ -270,6 +270,17 @@ function ConcretePJRTNumber(data::T; kwargs...) where {T<:Number}
     return ConcretePJRTNumber{T}(data; kwargs...)
 end
 
+# Value constructors for the kind-specific types, e.g. via
+# `convert(ConcretePJRTFloat{Float64,1}, x)`. The `Rational`/`Complex` methods
+# disambiguate against Base's constructors on `Integer`/`AbstractFloat`/`Real`.
+for CT in (:ConcretePJRTInteger, :ConcretePJRTFloat, :ConcretePJRTComplex),
+    XT in (:Number, :Rational, :Complex)
+
+    @eval function (::Type{CT})(x::$XT; kwargs...) where {CT<:$CT}
+        return ConcretePJRTNumber{unwrapped_eltype(CT)}(x; kwargs...)
+    end
+end
+
 function ConcretePJRTNumber(data::ConcretePJRTNumber; kwargs...)
     return ConcretePJRTNumber(
         to_number(data);
@@ -429,6 +440,14 @@ function ConcreteIFRTNumber{T}(
 end
 function ConcreteIFRTNumber(data::T; kwargs...) where {T<:Number}
     return ConcreteIFRTNumber{T}(data; kwargs...)
+end
+
+for CT in (:ConcreteIFRTInteger, :ConcreteIFRTFloat, :ConcreteIFRTComplex),
+    XT in (:Number, :Rational, :Complex)
+
+    @eval function (::Type{CT})(x::$XT; kwargs...) where {CT<:$CT}
+        return ConcreteIFRTNumber{unwrapped_eltype(CT)}(x; kwargs...)
+    end
 end
 
 function ConcreteIFRTNumber(data::ConcreteIFRTNumber; kwargs...)

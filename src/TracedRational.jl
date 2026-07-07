@@ -93,6 +93,16 @@ end
 function Base.promote_rule(::Type{BigFloat}, ::Type{Reactant.TracedRational{T}}) where {T}
     return BigFloat
 end
+function Base.promote_rule(
+    ::Type{<:Reactant.TracedRFloat{T2}}, ::Type{TracedRational{T}}
+) where {T2,T}
+    return Reactant.TracedRFloat{T2}
+end
+function Base.promote_rule(
+    ::Type{TracedRational{T}}, ::Type{<:Reactant.TracedRFloat{T2}}
+) where {T2,T}
+    return Reactant.TracedRFloat{T2}
+end
 
 # Operations
 Base.sign(x::TracedRational) = oftype(x, sign(x.num))

@@ -989,10 +989,18 @@ returns
 
 The first type parameter has been promoted to satisfy to be in agreement with the second parameter.
 """
+# `TracedRArray{T,N}` with the element-type parameter left free has no single
+# eltype and hence cannot instantiate an `AbstractArray{T}`-bounded type
+# parameter; substitute the concrete traced array type.
+concretize_traced_param(@nospecialize(T)) = T
+function concretize_traced_param(::Type{TracedRArray{T,N}}) where {T,N}
+    return TracedRArray{T,N,traced_number_type(T)}
+end
+
 function apply_type_with_promotion(wrapper, params, relevant_typevars=typevar_dict(wrapper))
     unwrapped = Base.unwrap_unionall(wrapper) # remove all the typevars
     original_params = copy(params)
-    params = [params...]
+    params = Any[concretize_traced_param(p) for p in params]
 
     changed = true
     iter = 0

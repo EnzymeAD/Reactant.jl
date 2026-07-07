@@ -81,6 +81,10 @@ function ReactantCore.materialize_traced_array(
     return permutedims(materialize_traced_array(parent(x)), perm)
 end
 
+# Guards against `Union{}`-eltype (empty) arrays, which match the covariant
+# `AnyTracedRArray` alias but carry no traced values.
+ReactantCore.materialize_traced_array(x::AbstractArray{Union{}}) = x
+
 function ReactantCore.materialize_traced_array(
     x::AbstractArray{<:TracedRNumber{T}}
 ) where {T}
