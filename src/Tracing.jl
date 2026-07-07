@@ -37,6 +37,11 @@ for T in (
     AbstractFloat,
     Integer,
     RNumber,
+    # The abstract kinds resolve the ambiguity between the `AbstractFloat` /
+    # `Integer` methods above and the `RNumber` union.
+    RInteger,
+    RFloat,
+    RComplex,
     Val,
     VersionNumber,
     Sharding.Mesh,
@@ -63,15 +68,15 @@ Base.@nospecializeinfer function traced_type_inner(
 )
     if mode == ArrayToConcrete && T <: track_numbers
         if runtime isa Val{:PJRT}
-            return ConcretePJRTNumber{T,_unwrap_val(ndevices)}
+            return pjrt_number_type(T){_unwrap_val(ndevices)}
         elseif runtime isa Val{:IFRT}
-            return ConcreteIFRTNumber{T}
+            return ifrt_number_type(T)
         else
             error("Unsupported runtime $runtime")
         end
     elseif (mode == NoStopTracedTrack || mode == TracedTrack || mode == TracedSetPath) &&
         T <: track_numbers
-        return TracedRNumber{T}
+        return traced_number_type(T)
     end
     return T
 end
@@ -221,51 +226,68 @@ Base.@nospecializeinfer function traced_type_inner(
     end
 end
 
-Base.@nospecializeinfer function traced_type_inner(
-    @nospecialize(T0::Type{<:ConcretePJRTNumber}),
-    seen,
-    @nospecialize(mode::TraceMode),
-    @nospecialize(track_numbers::Type),
-    @nospecialize(ndevices),
-    @nospecialize(runtime)
+Base.@nospecializeinfer function concrete_pjrt_number_traced_type(
+    @nospecialize(T0::Type), @nospecialize(mode::TraceMode), @nospecialize(ndevices)
 )
-    T = Base.unwrap_unionall(T0).parameters[1]
-
     if mode == ConcreteToTraced
-        return T0 isa UnionAll ? TracedRNumber : TracedRNumber{T}
+        T0 isa UnionAll && return TracedRNumber
+        return traced_number_type(unwrapped_eltype(T0))
     elseif mode == TracedToConcrete
         return T0
     elseif mode == ArrayToConcrete
-        @assert runtime isa Val{:PJRT}
         if T0 isa UnionAll
-            return ConcretePJRTNumbe{T,_unwrap_val(ndevices)} where {T}
+            return ConcretePJRTNumber{T,_unwrap_val(ndevices)} where {T}
         else
-            return ConcretePJRTNumber{T,_unwrap_val(ndevices)}
+            return pjrt_number_type(unwrapped_eltype(T0)){_unwrap_val(ndevices)}
         end
     else
         throw("Unsupported mode: $mode")
     end
 end
 
-Base.@nospecializeinfer function traced_type_inner(
-    @nospecialize(T0::Type{<:ConcreteIFRTNumber}),
-    seen,
-    @nospecialize(mode::TraceMode),
-    @nospecialize(track_numbers::Type),
-    @nospecialize(ndevices),
-    @nospecialize(runtime)
+Base.@nospecializeinfer function concrete_ifrt_number_traced_type(
+    @nospecialize(T0::Type), @nospecialize(mode::TraceMode)
 )
-    T = Base.unwrap_unionall(T0).parameters[1]
-
     if mode == ConcreteToTraced
-        return T0 isa UnionAll ? TracedRNumber : TracedRNumber{T}
+        T0 isa UnionAll && return TracedRNumber
+        return traced_number_type(unwrapped_eltype(T0))
     elseif mode == TracedToConcrete
         return T0
     elseif mode == ArrayToConcrete
-        @assert runtime isa Val{:IFRT}
-        return T0 isa UnionAll ? ConcreteIFRTNumber : ConcreteIFRTNumber{T}
+        T0 isa UnionAll && return ConcreteIFRTNumber
+        return ifrt_number_type(unwrapped_eltype(T0))
     else
         throw("Unsupported mode: $mode")
+    end
+end
+
+for NumT in
+    (:ConcretePJRTNumber, :ConcretePJRTInteger, :ConcretePJRTFloat, :ConcretePJRTComplex)
+    @eval Base.@nospecializeinfer function traced_type_inner(
+        @nospecialize(T0::Type{<:$NumT}),
+        seen,
+        @nospecialize(mode::TraceMode),
+        @nospecialize(track_numbers::Type),
+        @nospecialize(ndevices),
+        @nospecialize(runtime)
+    )
+        mode == ArrayToConcrete && @assert runtime isa Val{:PJRT}
+        return concrete_pjrt_number_traced_type(T0, mode, ndevices)
+    end
+end
+
+for NumT in
+    (:ConcreteIFRTNumber, :ConcreteIFRTInteger, :ConcreteIFRTFloat, :ConcreteIFRTComplex)
+    @eval Base.@nospecializeinfer function traced_type_inner(
+        @nospecialize(T0::Type{<:$NumT}),
+        seen,
+        @nospecialize(mode::TraceMode),
+        @nospecialize(track_numbers::Type),
+        @nospecialize(ndevices),
+        @nospecialize(runtime)
+    )
+        mode == ArrayToConcrete && @assert runtime isa Val{:IFRT}
+        return concrete_ifrt_number_traced_type(T0, mode)
     end
 end
 
@@ -351,12 +373,13 @@ Base.@nospecializeinfer function traced_type_inner(
     if mode == ConcreteToTraced
         throw("TracedRArray cannot be traced")
     elseif mode == TracedToConcrete
+        elT, N = Base.unwrap_unionall(T).parameters
         if runtime isa Val{:PJRT}
-            return ConcretePJRTArray{T.parameters[1],T.parameters[2],_unwrap_val(ndevices)}
+            return ConcretePJRTArray{elT,N,_unwrap_val(ndevices)}
         elseif runtime isa Val{:IFRT}
             return ConcreteIFRTArray{
-                T.parameters[1],
-                T.parameters[2],
+                elT,
+                N,
                 Nothing, # TODO(#2251): check if we can ensure no padding??
             }
         end
@@ -370,11 +393,9 @@ Base.@nospecializeinfer function traced_type_inner(
     end
 end
 
-Base.@nospecializeinfer function traced_type_inner(
-    @nospecialize(T::Type{<:TracedRNumber}),
-    seen,
-    mode::TraceMode,
-    @nospecialize(track_numbers::Type),
+Base.@nospecializeinfer function traced_number_traced_type(
+    @nospecialize(T::Type),
+    @nospecialize(mode::TraceMode),
     @nospecialize(ndevices),
     @nospecialize(runtime)
 )
@@ -385,12 +406,12 @@ Base.@nospecializeinfer function traced_type_inner(
             if T isa UnionAll
                 return UnionAll(T.var, ConcretePJRTNumber{T.var,_unwrap_val(ndevices)})
             end
-            return ConcretePJRTNumber{T.parameters[1],_unwrap_val(ndevices)}
+            return pjrt_number_type(unwrapped_eltype(T)){_unwrap_val(ndevices)}
         elseif runtime isa Val{:IFRT}
             if T isa UnionAll
                 return UnionAll(T.var, ConcreteIFRTNumber{T.var})
             end
-            return ConcreteIFRTNumber{T.parameters[1]}
+            return ifrt_number_type(unwrapped_eltype(T))
         end
         error("Unsupported runtime $runtime")
     elseif mode == TracedToJAX
@@ -399,6 +420,19 @@ Base.@nospecializeinfer function traced_type_inner(
         return T
     else
         throw("Abstract RNumber cannot be made concrete in mode $mode")
+    end
+end
+
+for NumT in (:TracedRNumber, :TracedRInteger, :TracedRFloat, :TracedRComplex)
+    @eval Base.@nospecializeinfer function traced_type_inner(
+        @nospecialize(T::Type{<:$NumT}),
+        seen,
+        mode::TraceMode,
+        @nospecialize(track_numbers::Type),
+        @nospecialize(ndevices),
+        @nospecialize(runtime)
+    )
+        return traced_number_traced_type(T, mode, ndevices, runtime)
     end
 end
 
@@ -950,7 +984,7 @@ Reactant.apply_type_with_promotion(Foo, (Int, TracedRArray{Int, 1}))
 ```
 returns
 ```jl
-(Foo{Reactant.TracedRNumber{Int64}, Reactant.TracedRArray{Int64, 1}}, Bool[1, 0])
+(Foo{Reactant.TracedRInteger{Int64}, Reactant.TracedRArray{Int64, 1}}, Bool[1, 0])
 ```
 
 The first type parameter has been promoted to satisfy to be in agreement with the second parameter.
@@ -1002,7 +1036,7 @@ function apply_type_with_promotion(wrapper, params, relevant_typevars=typevar_di
                         # This happens when `value` lost the promotion battle.
                         # At this point, we need to update the problematic parameter in`value`.
                         d = typevar_dict(rewrapped)
-                        v = Any[param.parameters...]
+                        v = Any[Base.unwrap_unionall(param).parameters...]
                         v[d[typevar]] = resolved
                         params[i], _changed_params = apply_type_with_promotion(rewrapped, v)
                     end
