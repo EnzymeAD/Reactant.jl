@@ -63,27 +63,53 @@ end
 
 Reactant.use_overlayed_version(::CuTracedArray) = true
 
-struct CuTracedRNumber{T,A} <: Number
-    ptr::Core.LLVMPtr{T,A}
+# Split by numeric kind, mirroring the traced host types, so that kernel-side
+# numbers subtype Integer and AbstractFloat where possible.
+for (CuT, AbstractT) in (
+    (:CuTracedRInteger, :(Reactant.RInteger)),
+    (:CuTracedRFloat, :(Reactant.RFloat)),
+    (:CuTracedRComplex, :(Reactant.RComplex)),
+)
+    @eval begin
+        struct $CuT{T,A} <: $AbstractT{T}
+            ptr::Core.LLVMPtr{T,A}
 
-    function CuTracedRNumber{T,A}(xs::TracedRNumber) where {T,A}
-        Reactant.Compiler.guard_from_gc_for_module(MLIR.IR.current_module(), xs)
-        ptr = Base.reinterpret(Core.LLVMPtr{T,CUDA.AS.Global}, Base.pointer_from_objref(xs))
-        return new(ptr)
-    end
-    function CuTracedRNumber{T,A}(ptr::Core.LLVMPtr{T,A}) where {T,A}
-        return new(ptr)
+            function $CuT{T,A}(xs::TracedRNumber) where {T,A}
+                Reactant.Compiler.guard_from_gc_for_module(MLIR.IR.current_module(), xs)
+                ptr = Base.reinterpret(
+                    Core.LLVMPtr{T,CUDA.AS.Global}, Base.pointer_from_objref(xs)
+                )
+                return new(ptr)
+            end
+            function $CuT{T,A}(ptr::Core.LLVMPtr{T,A}) where {T,A}
+                return new(ptr)
+            end
+        end
+
+        Reactant.use_overlayed_version(::$CuT) = true
     end
 end
 
-Reactant.use_overlayed_version(::CuTracedRNumber) = true
+const CuTracedRReal{T,A} = Union{CuTracedRInteger{T,A},CuTracedRFloat{T,A}}
+const CuTracedRNumber{T,A} = Union{CuTracedRReal{T,A},CuTracedRComplex{T,A}}
+
+@inline cu_traced_number_type(::Type{T}) where {T<:Integer} = CuTracedRInteger{T}
+@inline cu_traced_number_type(::Type{T}) where {T<:AbstractFloat} = CuTracedRFloat{T}
+@inline cu_traced_number_type(::Type{T}) where {T<:Complex} = CuTracedRComplex{T}
+
+@inline function CuTracedRNumber{T,A}(xs::TracedRNumber) where {T,A}
+    return cu_traced_number_type(T){A}(xs)
+end
+@inline function CuTracedRNumber{T,A}(ptr::Core.LLVMPtr{T,A}) where {T,A}
+    return cu_traced_number_type(T){A}(ptr)
+end
 
 Base.@nospecializeinfer Reactant.is_traced_number(
     @nospecialize(T::Type{<:CuTracedRNumber})
 ) = true
 Reactant.unwrapped_eltype(::Type{<:CuTracedRNumber{T}}) where {T} = T
 
-@inline CuTracedRNumber{T,A}(val::Number) where {T,A} = convert(CuTracedRNumber{T,A}, val)
+@inline (::Type{CuT})(val::Number) where {CuT<:CuTracedRNumber} = convert(CuT, val)
 
 function Base.getindex(RN::CuTracedRNumber{T,A}) where {T,A}
     align = alignment(RN)
@@ -91,6 +117,10 @@ function Base.getindex(RN::CuTracedRNumber{T,A}) where {T,A}
 end
 
 Base.convert(::Type{T}, RN::CuTracedRNumber) where {T<:Number} = convert(T, getindex(RN))
+
+# Defined per numeric kind: a single method on the `CuTracedRNumber` union
+# would be ambiguous with Base's methods on `Real`/`Integer`/`AbstractFloat`.
+const CU_TRACED_NUMBER_KINDS = (CuTracedRInteger, CuTracedRFloat, CuTracedRComplex)
 
 for jlop in (
     :(Base.min),
@@ -106,10 +136,32 @@ for jlop in (
     :(Base.:(==)),
     :(Base.:(!=)),
 )
-    @eval begin
-        @inline $jlop(a::CuTracedRNumber, b::CuTracedRNumber) = $jlop(a[], b[])
-        @inline $jlop(a::CuTracedRNumber{T,A}, b::Number) where {T,A} = $jlop(a[], b)
-        @inline $jlop(a::Number, b::CuTracedRNumber{T,A}) where {T,A} = $jlop(a, b[])
+    for K1 in CU_TRACED_NUMBER_KINDS
+        @eval begin
+            @inline $jlop(a::$K1, b::Number) = $jlop(a[], b)
+            @inline $jlop(a::Number, b::$K1) = $jlop(a, b[])
+        end
+        for K2 in CU_TRACED_NUMBER_KINDS
+            @eval @inline $jlop(a::$K1, b::$K2) = $jlop(a[], b[])
+        end
+        for X in (
+            :Real,
+            :Integer,
+            :Bool,
+            :AbstractFloat,
+            :Complex,
+            :(Complex{Bool}),
+            :Rational,
+            :BigInt,
+            :BigFloat,
+            :AbstractIrrational,
+        )
+            jlop == :(Base.:^) && X === :Integer && continue
+            @eval begin
+                @inline $jlop(a::$X, b::$K1) = $jlop(a, b[])
+                @inline $jlop(a::$K1, b::$X) = $jlop(a[], b)
+            end
+        end
     end
 end
 
@@ -123,20 +175,20 @@ end
 @inline Base.ifelse(cond::CuTracedRNumber, a::CuTracedRNumber, b::CuTracedRNumber) =
     ifelse(cond[], a[], b[])
 
-Base.@constprop :aggressive @inline Base.:^(
-    a::CuTracedRNumber{T,A}, b::Integer
-) where {T,A} = ^(a[], b)
+for K in CU_TRACED_NUMBER_KINDS
+    @eval Base.@constprop :aggressive @inline Base.:^(a::$K, b::Integer) = ^(a[], b)
+end
 
 @inline Base.unsafe_trunc(::Type{T}, a::CuTracedRNumber) where {T} =
     Base.unsafe_trunc(T, a[])
 
-for jlop in (:(Base.:+), :(Base.:-), :(Base.isnan), :(Base.isfinite), :(Base.isinf))
-    @eval begin
-        @inline $jlop(a::CuTracedRNumber) = $jlop(a[])
-    end
+for jlop in (:(Base.:+), :(Base.:-), :(Base.isnan), :(Base.isfinite), :(Base.isinf)),
+    K in CU_TRACED_NUMBER_KINDS
+
+    @eval @inline $jlop(a::$K) = $jlop(a[])
 end
 
-Base.OneTo(x::CuTracedRNumber{<:Integer}) = Base.OneTo(x[])
+Base.OneTo(x::CuTracedRInteger) = Base.OneTo(x[])
 
 @static if isdefined(Base, :unchecked_oneto)
     function Base.unchecked_oneto(x::CuTracedRNumber{<:Integer})
@@ -273,8 +325,12 @@ function Base.show(io::IO, a::AT) where {AT<:CuTracedArray}
     Printf.@printf(io, "%s cu traced array at %p", join(size(a), '×'), Int(pointer(a)))
 end
 
-function Base.show(io::IO, a::AT) where {AT<:CuTracedRNumber}
-    Printf.@printf(io, "%s cu traced rnumber at %p", join(size(a), '×'), Int(pointer(a)))
+for K in CU_TRACED_NUMBER_KINDS
+    @eval function Base.show(io::IO, a::AT) where {AT<:$K}
+        Printf.@printf(
+            io, "%s cu traced rnumber at %p", join(size(a), '×'), Int(pointer(a))
+        )
+    end
 end
 
 ## array interface
@@ -1597,15 +1653,17 @@ Base.@nospecializeinfer function Reactant.traced_type_inner(
     return A
 end
 
-Base.@nospecializeinfer function Reactant.traced_type_inner(
-    @nospecialize(A::Type{<:CuTracedRNumber}),
-    seen,
-    @nospecialize(mode::Reactant.TraceMode),
-    @nospecialize(track_numbers::Type),
-    @nospecialize(ndevices),
-    @nospecialize(runtime)
-)
-    return A
+for CuT in (:CuTracedRNumber, :CuTracedRInteger, :CuTracedRFloat, :CuTracedRComplex)
+    @eval Base.@nospecializeinfer function Reactant.traced_type_inner(
+        @nospecialize(A::Type{<:$CuT}),
+        seen,
+        @nospecialize(mode::Reactant.TraceMode),
+        @nospecialize(track_numbers::Type),
+        @nospecialize(ndevices),
+        @nospecialize(runtime)
+    )
+        return A
+    end
 end
 
 Base.@nospecializeinfer function Reactant.traced_type_inner(
