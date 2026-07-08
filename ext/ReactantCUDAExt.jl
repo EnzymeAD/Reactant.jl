@@ -864,9 +864,7 @@ function compile(job)
             prevdl = String(prevdlattr)
             @assert prevdl == dl "data layout mismatch, tried compiling cuda kernels for different target machines?"
         else
-            MLIR.IR.setattr!(
-                MLIR.IR.Operation(cur_module), dl_attr_name, MLIR.IR.Attribute(dl)
-            )
+            MLIR.IR.setattr!(MLIR.IR.Operation(cur_module), dl_attr_name, MLIR.IR.Attribute(dl))
         end
 
         return String(Reactant.TracedUtils.get_attribute_by_name(linkRes, "sym_name"))
@@ -1119,7 +1117,7 @@ Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
     has_cast_float_type =
         bfloat16_compile_type !== BFloat16 && any(values(seen)) do arg
             (arg isa TracedRArray || arg isa TracedRNumber) &&
-            Reactant.unwrapped_eltype(typeof(arg)) === BFloat16
+                Reactant.unwrapped_eltype(typeof(arg)) === BFloat16
         end
 
     wrapper_tys = MLIR.IR.Type[]

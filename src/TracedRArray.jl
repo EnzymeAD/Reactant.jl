@@ -1024,7 +1024,7 @@ end
         end
         return TracedRNumber{
             unwrapped_eltype(
-                Base._accumulate_promote_op(op, Array{T,ndims(A)}(undef, size(A));init)
+                Base._accumulate_promote_op(op, Array{T,ndims(A)}(undef, size(A)); init)
             ),
         }
     end

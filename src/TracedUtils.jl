@@ -96,17 +96,17 @@ function ReactantCore.materialize_traced_array(
 end
 
 get_mlir_data(x::TracedRNumber) = x.mlir_data
-set_mlir_data!(x::TracedRNumber, data) = (x.mlir_data=data; return x)
+set_mlir_data!(x::TracedRNumber, data) = (x.mlir_data = data; return x)
 get_paths(x::TracedRNumber) = x.paths
-set_paths!(x::TracedRNumber, paths) = (x.paths=paths; return x)
+set_paths!(x::TracedRNumber, paths) = (x.paths = paths; return x)
 
 get_mlir_data(x::TracedRArray) = x.mlir_data
 get_mlir_data(x::AnyTracedRArray) = get_mlir_data(materialize_traced_array(x))
 get_paths(x::TracedRArray) = x.paths
-set_paths!(x::TracedRArray, paths) = (x.paths=paths; return x)
+set_paths!(x::TracedRArray, paths) = (x.paths = paths; return x)
 
 get_paths(x::MissingTracedValue) = x.paths
-set_paths!(x::MissingTracedValue, paths) = (x.paths=paths; return x)
+set_paths!(x::MissingTracedValue, paths) = (x.paths = paths; return x)
 
 function set_mlir_data!(x::TracedRArray, data)
     x.mlir_data = data
@@ -1294,11 +1294,12 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
         push_val!(batch_inputs, ogarg, path[3:end])
 
         if ogarg isa Base.RefValue
-            batch_inputs[end] = (@opcall broadcast_in_dim(
-                TracedRArray(batch_inputs[end]),
-                Int64[],
-                collect(Int64, input_shapes[1]),
-            )).mlir_data
+            batch_inputs[end] =
+                (@opcall broadcast_in_dim(
+                    TracedRArray(batch_inputs[end]),
+                    Int64[],
+                    collect(Int64, input_shapes[1]),
+                )).mlir_data
         end
     end
 

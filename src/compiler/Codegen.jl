@@ -247,9 +247,12 @@ Base.@nospecializeinfer function create_result(
 
         result = Expr(:new, T, elems...)
 
-        push!(resultgen_code, quote
-            $sym = $result
-        end)
+        push!(
+            resultgen_code,
+            quote
+                $sym = $result
+            end,
+        )
         result_cache[tocopy] = sym
     end
 
@@ -275,9 +278,12 @@ Base.@nospecializeinfer function create_result(
 
         result = Meta.quot(tocopy)
 
-        push!(resultgen_code, quote
-            $sym = $result
-        end)
+        push!(
+            resultgen_code,
+            quote
+                $sym = $result
+            end,
+        )
         result_cache[tocopy] = sym
     end
 
@@ -314,9 +320,12 @@ function create_pjrt_number_result(
         else
             result = :(ConcretePJRTNumber{$T}($restore))
         end
-        push!(resultgen_code, quote
-            $sym = $result
-        end)
+        push!(
+            resultgen_code,
+            quote
+                $sym = $result
+            end,
+        )
         result_cache[tocopy] = sym
     end
 
@@ -353,9 +362,12 @@ function create_ifrt_number_result(
         else
             result = :(ConcreteIFRTNumber{$T}($restore))
         end
-        push!(resultgen_code, quote
-            $sym = $result
-        end)
+        push!(
+            resultgen_code,
+            quote
+                $sym = $result
+            end,
+        )
         result_cache[tocopy] = sym
     end
 
@@ -435,9 +447,12 @@ function create_result(
         else
             result = :(ConcretePJRTArray{$T,$N}($restore, $(tocopy.shape)))
         end
-        push!(resultgen_code, quote
-            $sym = $result
-        end)
+        push!(
+            resultgen_code,
+            quote
+                $sym = $result
+            end,
+        )
         result_cache[tocopy] = sym
     end
 
@@ -491,9 +506,12 @@ function create_result(
         else
             result = :(ConcreteIFRTArray{$T,$N}($(restore), $(tocopy.shape)))
         end
-        push!(resultgen_code, quote
-            $sym = $result
-        end)
+        push!(
+            resultgen_code,
+            quote
+                $sym = $result
+            end,
+        )
         result_cache[tocopy] = sym
     end
 
@@ -556,17 +574,23 @@ function create_result(
         sym = Symbol("result", var_idx[])
         var_idx[] += 1
 
-        push!(resultgen_code, quote
-            $sym = $(Array{T,N})(undef, $(size(tocopy)...,))
-        end)
+        push!(
+            resultgen_code,
+            quote
+                $sym = $(Array{T,N})(undef, $(size(tocopy)...,))
+            end,
+        )
 
         result_cache[tocopy] = sym
 
         for (i, v) in enumerate(tocopy)
             subexpr = create_result(v, append_path(path, i), args...)
-            push!(resultgen_code, quote
-                @inbounds $sym[$i] = $subexpr
-            end)
+            push!(
+                resultgen_code,
+                quote
+                    @inbounds $sym[$i] = $subexpr
+                end,
+            )
         end
     end
 
@@ -664,9 +688,12 @@ function create_result(
         sym = Symbol("result", var_idx[])
         var_idx[] += 1
 
-        push!(resultgen_code, quote
-            $sym = $D()
-        end)
+        push!(
+            resultgen_code,
+            quote
+                $sym = $D()
+            end,
+        )
 
         result_cache[tocopy] = sym
 
@@ -675,9 +702,12 @@ function create_result(
             # symbol keys must be quoted in generated code; otherwise
             # they are interpreted as variable references
             k_expr = k isa Symbol ? QuoteNode(k) : k
-            push!(resultgen_code, quote
-                @inbounds $sym[$k_expr] = $subexpr
-            end)
+            push!(
+                resultgen_code,
+                quote
+                    @inbounds $sym[$k_expr] = $subexpr
+                end,
+            )
         end
     end
 
@@ -1231,9 +1261,12 @@ function codegen_unflatten!(
             sym = Symbol("result", var_idx[])
             var_idx[] += 1
 
-            push!(resultgen_code, quote
-                $sym = $argres.data
-            end)
+            push!(
+                resultgen_code,
+                quote
+                    $sym = $argres.data
+                end,
+            )
 
             result_stores[path] = sym
         end

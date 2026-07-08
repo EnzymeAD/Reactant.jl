@@ -781,11 +781,13 @@ function InterpolateArray(
                         dim -> c[dim] == 1 ? lows[dim][I.I[dim]] : highs[dim][I.I[dim]], N
                     )
 
-                    w_int = prod(ntuple(dim -> if c[dim] == 1
-                        (dens[dim] - rems[dim][I.I[dim]])
-                    else
-                        rems[dim][I.I[dim]]
-                    end, N))
+                    w_int = prod(
+                        ntuple(dim -> if c[dim] == 1
+                            (dens[dim] - rems[dim][I.I[dim]])
+                        else
+                            rems[dim][I.I[dim]]
+                        end, N)
+                    )
 
                     sum_val += w_int * local_cpu_array[CartesianIndex(idx)]
                 end

@@ -661,7 +661,7 @@ function Base.copy(bc::Base.Broadcast.Broadcasted{Broadcast.ArrayStyle{ConcreteP
     if all(buffer_on_cpu, bc.args) && all(
         x ->
             !(x isa ConcretePJRTArray) ||
-            (x isa ConcretePJRTArray && !Sharding.is_sharded(x)),
+                (x isa ConcretePJRTArray && !Sharding.is_sharded(x)),
         bc.args,
     )
         ElType = Base.Broadcast.combine_eltypes(bc.f, bc.args)
