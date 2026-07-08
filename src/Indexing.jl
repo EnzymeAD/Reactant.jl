@@ -109,6 +109,7 @@ for (aT, iT) in (
     (Base.OneTo, TracedRInteger),
     (Base.OneTo{<:TracedRNumber}, Int),
     (Base.OneTo{<:TracedRNumber}, TracedRInteger),
+    (Base.OneTo{<:TracedRNumber}, TracedRInteger{Int}),
 )
     @eval function Base.getindex(a::$aT, index::$iT)
         return convert(TracedRNumber{Reactant.unwrapped_eltype(a)}, index)
@@ -117,8 +118,8 @@ end
 
 for (aT, iT) in (
     (StepRangeLen, TracedRInteger),
-    (StepRangeLen{<:TracedRNumber}, Int),
     (StepRangeLen{<:TracedRNumber}, TracedRInteger),
+    (StepRangeLen{<:TracedRNumber}, TracedRInteger{Int}),
 )
     @eval function Base.getindex(r::$aT, index::$iT)
         # FIXME: this crashes for some reason
@@ -132,8 +133,8 @@ end
 
 for (aT, iT) in (
     (LinRange, TracedRInteger),
-    (LinRange{<:TracedRNumber}, Int),
     (LinRange{<:TracedRNumber}, TracedRInteger),
+    (LinRange{<:TracedRNumber}, TracedRInteger{Int}),
 )
     @eval function Base.getindex(r::$aT, index::$iT)
         return convert(
@@ -147,16 +148,6 @@ end
 function Base.getindex(
     a::Union{LinRange{TracedRNumber{T}},StepRangeLen{TracedRNumber{T}}}, index::Int
 ) where {T}
-    return getindex(Reactant.promote_to(TracedRArray{T,1}, a), index)
-end
-
-function Base.getindex(
-    a::Union{
-        LinRange{T} where T<:Reactant.TracedRNumber,
-        StepRangeLen{T} where T<:Reactant.TracedRNumber,
-    },
-    index::Int,
-)
     return getindex(Reactant.promote_to(TracedRArray{T,1}, a), index)
 end
 
@@ -202,7 +193,7 @@ function Base.getindex(x::Base.ReshapedArray{<:TracedRNumber}, index::Base.Resha
 end
 
 function Base.getindex(
-    x::Base.Sort.WithoutMissingVector{<:TracedRNumber{T}}, i::Int
+    x::Base.Sort.WithoutMissingVector{<:TracedRNumber{T}}, i::Union{Int,TracedRInteger{Int}}
 ) where {T}
     out = getindex(x.data, i)
     @assert !(out isa Missing)
@@ -214,6 +205,14 @@ function Base.getindex(v::TracedUnitRange{<:TracedRNumber}, i::TracedRInteger)
     return convert(eltype(v), v.start + (i - oneunit(i)))
 end
 function Base.getindex(v::TracedUnitRange{<:TracedRNumber}, i::TracedRInteger{Int})
+    return convert(eltype(v), v.start + (i - oneunit(i)))
+end
+function Base.getindex(
+    v::TracedUnitRange{<:TracedRNumber}, i::Union{Int,TracedRInteger{Int}}
+)
+    return convert(eltype(v), v.start + (i - oneunit(i)))
+end
+function Base.getindex(v::TracedUnitRange{<:TracedRNumber}, i::Int)
     return convert(eltype(v), v.start + (i - oneunit(i)))
 end
 function Base.getindex(r::TracedStepRangeLen{<:TracedRNumber}, i::TracedRInteger{Int})
@@ -323,7 +322,7 @@ end
 
 Base.getindex(v::TracedUnitRange, ::Colon) = v
 
-for iType in (Int, TracedRNumber{Int}, Integer)
+for iType in (Int, TracedRNumber{Int}, Integer, TracedRInteger, TracedRInteger{Int})
     @eval function Base.getindex(v::TracedUnitRange{T}, i::$iType) where {T}
         return convert(T, v.start + (i - oneunit(i)))
         # TODO(#2237): we should have error messages at some point.

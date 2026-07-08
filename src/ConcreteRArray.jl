@@ -200,7 +200,7 @@ end
 
 function Base.convert(
     ::Type{T}, x::Union{ConcretePJRTScalar{T},ConcreteIFRTScalar{T}}
-) where {T<:Number}
+) where {T<:ReactantPrimitive}
     return to_number(x)
 end
 function Base.convert(

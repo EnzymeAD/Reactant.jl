@@ -38,6 +38,13 @@ function Base.getindex(
     return getindex(parent(x), idx...)
 end
 
+# Disambiguates against the generic traced-array `getindex`.
+function Base.getindex(
+    x::ReadOnly{<:TracedRNumber{T},N}, idx::Vararg{Union{Int,Reactant.TracedRNumber{Int}},N}
+) where {T,N}
+    return getindex(parent(x), idx...)
+end
+
 function Base.getindex(
     x::SparseArrays.ReadOnly{<:Reactant.TracedRNumber,1},
     idx::Union{Int64,Reactant.TracedRNumber{Int64}},

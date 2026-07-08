@@ -289,11 +289,22 @@ end
 # `convert(ConcretePJRTFloat{Float64,1}, x)`. The `Rational`/`Complex` methods
 # disambiguate against Base's constructors on `Integer`/`AbstractFloat`/`Real`.
 for CT in (:ConcretePJRTInteger, :ConcretePJRTFloat, :ConcretePJRTComplex),
-    XT in (:Number, :Rational, :Complex, :BigFloat)
+    XT in (:Number, :Complex, :BigFloat)
 
     @eval function (::Type{CT})(x::$XT; kwargs...) where {CT<:$CT}
         return ConcretePJRTNumber{unwrapped_eltype(CT)}(x; kwargs...)
     end
+end
+for CT in (:ConcretePJRTInteger, :ConcretePJRTComplex)
+    @eval function (::Type{CT})(x::Rational; kwargs...) where {CT<:$CT}
+        return ConcretePJRTNumber{unwrapped_eltype(CT)}(x; kwargs...)
+    end
+end
+# The ambiguity resolver requires the exact TypeVar shape of the competing
+# Base constructor: `(::Type{T})(::Rational{S}) where {S,T<:AbstractFloat}`
+# is `S`-parameterized, `(::Type{T})(::Rational) where {T<:Integer}` is not.
+function (::Type{CT})(x::Rational{S}; kwargs...) where {S,CT<:ConcretePJRTFloat}
+    return ConcretePJRTNumber{unwrapped_eltype(CT)}(x; kwargs...)
 end
 
 function ConcretePJRTNumber(data::ConcretePJRTNumber; kwargs...)
@@ -458,11 +469,22 @@ function ConcreteIFRTNumber(data::T; kwargs...) where {T<:Number}
 end
 
 for CT in (:ConcreteIFRTInteger, :ConcreteIFRTFloat, :ConcreteIFRTComplex),
-    XT in (:Number, :Rational, :Complex, :BigFloat)
+    XT in (:Number, :Complex, :BigFloat)
 
     @eval function (::Type{CT})(x::$XT; kwargs...) where {CT<:$CT}
         return ConcreteIFRTNumber{unwrapped_eltype(CT)}(x; kwargs...)
     end
+end
+for CT in (:ConcreteIFRTInteger, :ConcreteIFRTComplex)
+    @eval function (::Type{CT})(x::Rational; kwargs...) where {CT<:$CT}
+        return ConcreteIFRTNumber{unwrapped_eltype(CT)}(x; kwargs...)
+    end
+end
+# The ambiguity resolver requires the exact TypeVar shape of the competing
+# Base constructor: `(::Type{T})(::Rational{S}) where {S,T<:AbstractFloat}`
+# is `S`-parameterized, `(::Type{T})(::Rational) where {T<:Integer}` is not.
+function (::Type{CT})(x::Rational{S}; kwargs...) where {S,CT<:ConcreteIFRTFloat}
+    return ConcreteIFRTNumber{unwrapped_eltype(CT)}(x; kwargs...)
 end
 
 function ConcreteIFRTNumber(data::ConcreteIFRTNumber; kwargs...)

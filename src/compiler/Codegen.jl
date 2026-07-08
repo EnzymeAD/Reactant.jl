@@ -366,14 +366,14 @@ end
 # method) so that integer/float scalars are not ambiguous with the
 # `create_result(::Union{Integer,AbstractFloat,...})` method below.
 for (NumT, worker) in (
-    (:ConcretePJRTNumber, :create_pjrt_number_result),
-    (:ConcretePJRTInteger, :create_pjrt_number_result),
-    (:ConcretePJRTFloat, :create_pjrt_number_result),
-    (:ConcretePJRTComplex, :create_pjrt_number_result),
-    (:ConcreteIFRTNumber, :create_ifrt_number_result),
-    (:ConcreteIFRTInteger, :create_ifrt_number_result),
-    (:ConcreteIFRTFloat, :create_ifrt_number_result),
-    (:ConcreteIFRTComplex, :create_ifrt_number_result),
+    (ConcretePJRTNumber, create_pjrt_number_result),
+    (ConcretePJRTInteger, create_pjrt_number_result),
+    (ConcretePJRTFloat, create_pjrt_number_result),
+    (ConcretePJRTComplex, create_pjrt_number_result),
+    (ConcreteIFRTNumber, create_ifrt_number_result),
+    (ConcreteIFRTInteger, create_ifrt_number_result),
+    (ConcreteIFRTFloat, create_ifrt_number_result),
+    (ConcreteIFRTComplex, create_ifrt_number_result),
 )
     @eval function create_result(
         tocopy::$NumT,

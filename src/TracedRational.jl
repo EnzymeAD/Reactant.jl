@@ -84,6 +84,11 @@ end
 function Base.promote_rule(::Type{TracedRational{T}}, ::Type{Rational{S}}) where {T,S}
     return TracedRational{promote_type(T, S)}
 end
+function Base.promote_rule(
+    ::Type{TracedRational{T}}, ::Type{<:Reactant.TracedRInteger{S}}
+) where {T,S}
+    return TracedRational{promote_type(T, Reactant.TracedRInteger{S})}
+end
 function Base.promote_rule(::Type{TracedRational{T}}, ::Type{S}) where {T,S<:AbstractFloat}
     return S
 end
@@ -112,6 +117,9 @@ function Base.copysign(x::TracedRational, y::Real)
 end
 function Base.copysign(x::TracedRational, y::Rational)
     return TracedRational(copysign(x.num, y.num), x.den)
+end
+function Base.copysign(x::TracedRational, y::Reactant.TracedRReal)
+    return TracedRational(copysign(x.num, y), x.den)
 end
 
 Base.abs(x::TracedRational) = TracedRational(abs(x.num), x.den)
@@ -148,6 +156,16 @@ for op in (:+, :-, :rem, :mod)
                 return TracedRational($(op)(x * y.den, y.num), y.den)
             end
         end
+    end
+end
+
+# `TracedRInteger <: Integer`, so Base's checked `(Integer, Rational)`
+# arithmetic would apply; promote to `TracedRational` instead. (`mod` and
+# `rem` for these pairs are defined in TracedRNumber.jl.)
+for op in (:+, :-, :*)
+    @eval begin
+        Base.$(op)(x::Reactant.TracedRInteger, y::Rational) = $(op)(promote(x, y)...)
+        Base.$(op)(x::Rational, y::Reactant.TracedRInteger) = $(op)(promote(x, y)...)
     end
 end
 

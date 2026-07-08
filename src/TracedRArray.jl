@@ -4,7 +4,13 @@ using Base: Broadcast
 using Base.Broadcast: Broadcasted, AbstractArrayStyle, instantiate
 
 using ..Reactant:
-    Reactant, TracedRArray, TracedRNumber, TracedRInteger, AnyTracedRArray, AnyTracedRVector
+    Reactant,
+    TracedRArray,
+    TracedRNumber,
+    TracedRInteger,
+    TracedRReal,
+    AnyTracedRArray,
+    AnyTracedRVector
 using ..Reactant: MLIR, unwrapped_eltype
 using ..Ops: @opcall
 using ..TracedUtils: TracedUtils, get_mlir_data, set_mlir_data!, materialize_traced_array
@@ -1113,13 +1119,18 @@ end
 
 for (aType, xType) in (
     (AbstractRange{<:Real}, TracedRNumber{<:Real}),
+    (AbstractRange{<:Integer}, TracedRReal{<:Real}),
+    (AbstractRange{<:TracedRInteger}, TracedRReal{<:Real}),
     (AbstractRange{<:TracedRNumber}, Real),
     (AbstractRange{<:TracedRNumber}, TracedRNumber{<:Real}),
 )
     @eval function Base.searchsortedfirst(
         a::$(aType), x::$(xType), o::Base.DirectOrdering
     )::TracedRNumber{keytype(a)}
-        x = TracedUtils.promote_to(TracedRNumber{Reactant.unwrapped_eltype(a)}, x)
+        # promoting `x` to the range element type would truncate, e.g. for
+        # `searchsortedfirst(1:10, 2.5)`
+        T = Base.promote_type(Reactant.unwrapped_eltype(a), Reactant.unwrapped_eltype(x))
+        x = TracedUtils.promote_to(TracedRNumber{T}, x)
 
         f, h, l = first(a), step(a), last(a)
         n = round(Int, (x - f) / h + 1)

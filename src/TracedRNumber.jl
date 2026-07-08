@@ -150,14 +150,42 @@ for S in Base.uniontypes(Reactant.ReactantFloat8)
     end
 end
 
-# Disambiguate against Base's `Rational` and `Complex` promotion rules.
+# Base defines its own `BigInt`/`BigFloat` promotion rules per numeric kind;
+# these methods only disambiguate against them.
+function Base.promote_rule(::Type{BigInt}, ::Type{<:TracedRInteger{T}}) where {T}
+    return traced_number_type(Base.promote_type(BigInt, T))
+end
+function Base.promote_rule(::Type{BigInt}, ::Type{<:TracedRFloat{T}}) where {T}
+    return traced_number_type(Base.promote_type(BigInt, T))
+end
+function Base.promote_rule(::Type{BigFloat}, ::Type{<:TracedRReal{T}}) where {T}
+    return traced_number_type(Base.promote_type(BigFloat, T))
+end
+function Base.promote_rule(::Type{BigFloat}, ::Type{<:TracedRFloat{T}}) where {T}
+    return traced_number_type(Base.promote_type(BigFloat, T))
+end
+
+# Disambiguate against Base's `Rational` and `Complex` promotion rules. Both
+# argument orders are needed: the generic rules above intercept the reverse
+# direction before Base's `Bottom` fallback, and their result computation
+# cannot represent rationals.
 function Base.promote_rule(
     ::Type{Rational{T}}, ::Type{<:TracedRInteger{S}}
 ) where {T<:Integer,S}
     return Reactant.TracedRational{traced_number_type(Base.promote_type(T, S))}
 end
 function Base.promote_rule(
+    ::Type{<:TracedRInteger{S}}, ::Type{Rational{T}}
+) where {T<:Integer,S}
+    return Reactant.TracedRational{traced_number_type(Base.promote_type(T, S))}
+end
+function Base.promote_rule(
     ::Type{Rational{T}}, ::Type{<:TracedRFloat{S}}
+) where {T<:Integer,S}
+    return traced_number_type(Base.promote_type(Rational{T}, S))
+end
+function Base.promote_rule(
+    ::Type{<:TracedRFloat{S}}, ::Type{Rational{T}}
 ) where {T<:Integer,S}
     return traced_number_type(Base.promote_type(Rational{T}, S))
 end
@@ -254,10 +282,14 @@ for (RT, XT) in (
     (:TracedRInteger, :Complex),
     (:TracedRFloat, :Complex),
     (:TracedRInteger, :Rational),
-    (:TracedRFloat, :Rational),
+    (:TracedRInteger, :BigFloat),
 )
     @eval (::Type{RT})(x::$XT) where {RT<:$RT} = Reactant.promote_to(RT, x)
 end
+# The ambiguity resolver requires the exact TypeVar shape of the competing
+# Base constructor: `(::Type{T})(::Rational{S}) where {S,T<:AbstractFloat}`
+# is `S`-parameterized, `(::Type{T})(::Rational) where {T<:Integer}` is not.
+(::Type{RT})(x::Rational{S}) where {S,RT<:TracedRFloat} = Reactant.promote_to(RT, x)
 
 for T in Base.uniontypes(Reactant.ReactantFloat8)
     @eval TracedRNumber{T}(x::$T) where {T} = Reactant.promote_to(TracedRNumber{T}, x)
@@ -505,12 +537,13 @@ function Base.div(
         signbit(lhs) == signbit(rhs), div(lhs, rhs, RoundUp), div(lhs, rhs, RoundDown)
     )
 end
-function Base.div(
-    @nospecialize(lhs::TracedRInteger{T}),
-    @nospecialize(rhs::TracedRInteger{T}),
-    r::Union{typeof(RoundNearest),typeof(RoundNearestTiesAway),typeof(RoundNearestTiesUp)},
-) where {T<:Integer}
-    return divrem(lhs, rhs, r)[1]
+for RM in
+    (RoundingMode{:Nearest}, RoundingMode{:NearestTiesAway}, RoundingMode{:NearestTiesUp})
+    @eval function Base.div(
+        @nospecialize(lhs::TracedRInteger{T}), @nospecialize(rhs::TracedRInteger{T}), r::$RM
+    ) where {T<:Integer}
+        return divrem(lhs, rhs, r)[1]
+    end
 end
 
 function Base.div(
@@ -858,9 +891,12 @@ Base.:!(x::TracedRInteger) = @opcall not(x)
 # With a traced integer exponent, Base's `^(::Number, ::Integer)` would call
 # `power_by_squaring`, which branches on traced booleans. The extra methods
 # disambiguate against Base's specialized `^` methods.
-for B in (:TracedRInteger, :TracedRFloat, :TracedRComplex, :Real, :Complex, :Rational)
+for B in (:TracedRInteger, :TracedRFloat, :TracedRComplex, :Real, :Complex)
     @eval Base.:^(x::$B, p::TracedRInteger) = ^(promote(x, p)...)
 end
+# A traced exponent's sign is unknown at trace time, so rationality cannot be
+# preserved (`x^p` vs `inv(x)^-p`); compute in floating point instead.
+Base.:^(x::Rational, p::TracedRInteger) = ^(float(x), p)
 for B in (
     Float16,
     Float32,
@@ -870,9 +906,18 @@ for B in (
     Complex{<:AbstractFloat},
     Complex{<:Integer},
     Complex{<:Rational},
+    Irrational{:ℯ},
+    BigInt,
+    BigFloat,
 )
     @eval Base.:^(x::$B, p::TracedRInteger) = ^(promote(x, p)...)
 end
+
+# Same-`T` disambiguators against the same-type traced `^` method.
+Base.:^(x::TracedRInteger{T}, p::TracedRInteger{T}) where {T} = @opcall power(x, p)
+Base.:^(x::TracedRFloat{T}, p::TracedRInteger{T}) where {T} = ^(promote(x, p)...)
+Base.:^(x::TracedRComplex{T}, p::TracedRInteger{T}) where {T} = ^(promote(x, p)...)
+Base.:^(x::TracedRReal{T}, p::TracedRInteger{T}) where {T} = ^(promote(x, p)...)
 
 Base.fma(x::TracedRFloat{T}, y::TracedRFloat{T}, z::TracedRFloat{T}) where {T} = x * y + z
 
@@ -1084,8 +1129,6 @@ Base.float(::Type{TracedRNumber{T}}) where {T} = traced_number_type(float(T))
 for TracedT in (:TracedRInteger, :TracedRFloat, :TracedRComplex)
     @eval Base.float(::Type{<:$TracedT{T}}) where {T} = traced_number_type(float(T))
 end
-
-using Reactant: ReactantFloat, ReactantInt
 
 Base.round(A::TracedRFloat) = @opcall round_nearest_even(A)
 Base.round(A::TracedRInteger) = A
