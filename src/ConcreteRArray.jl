@@ -484,6 +484,15 @@ end
 
 Base.similar(a::ConcretePJRTArray, dims::Dims) = similar(a, eltype(a), dims)
 
+# A concrete array asked for a traced element type (e.g. via LinearAlgebra's
+# generic `similar`/`\` while tracing) cannot hold traced values in its device
+# buffer, so produce a traced array instead.
+function Base.similar(
+    ::ConcretePJRTArray{T,N,D}, ::Type{S}, dims::Dims
+) where {S<:TracedRNumber,T,N,D}
+    return similar(TracedRArray{unwrapped_eltype(S)}, dims)
+end
+
 function Base.similar(AT::Type{<:ConcretePJRTArray{T}}, dims::Dims; kwargs...) where {T}
     return similar(AT, T, dims; kwargs...)
 end
@@ -492,6 +501,11 @@ function Base.similar(a::ConcreteIFRTArray{T}, ::Type{S}=T, dims::Dims=size(a)) 
     return ConcreteIFRTArray(
         Array{S}(undef, dims); client=XLA.client(a), device=XLA.device(a), a.sharding
     )
+end
+function Base.similar(
+    ::ConcreteIFRTArray{T}, ::Type{S}, dims::Dims
+) where {S<:TracedRNumber,T}
+    return similar(TracedRArray{unwrapped_eltype(S)}, dims)
 end
 Base.similar(a::ConcreteIFRTArray, dims::Dims) = similar(a, eltype(a), dims)
 function Base.similar(::Type{ConcreteIFRTArray{T}}, dims::Dims) where {T}
