@@ -107,7 +107,7 @@ function set_mlir_data!(x::TracedRArray, data)
     return x
 end
 
-function set_mlir_data!(x::Base.ReshapedArray{TracedRNumber{T}}, data) where {T}
+function set_mlir_data!(x::Base.ReshapedArray{<:TracedRNumber{T}}, data) where {T}
     set_mlir_data!(
         parent(x),
         get_mlir_data(@opcall(reshape(TracedRArray{T}(data), size(parent(x))...))),
@@ -116,7 +116,7 @@ function set_mlir_data!(x::Base.ReshapedArray{TracedRNumber{T}}, data) where {T}
 end
 
 function get_ancestor_and_indices(
-    x::Base.ReshapedArray{TracedRNumber{T},N}, indices::Vector{CartesianIndex{N}}
+    x::Base.ReshapedArray{<:TracedRNumber{T},N}, indices::Vector{CartesianIndex{N}}
 ) where {T,N}
     linear_indices = LinearIndices(size(x))[indices]
     parent_linear_indices = LinearIndices(size(parent(x)))[linear_indices]
@@ -124,7 +124,7 @@ function get_ancestor_and_indices(
 end
 
 function get_ancestor_and_indices(
-    x::Base.ReshapedArray{TracedRNumber{T},N}, indices...
+    x::Base.ReshapedArray{<:TracedRNumber{T},N}, indices...
 ) where {T,N}
     @assert length(indices) == N "Expected $N indices, got $(length(indices))"
     indices = Base.to_indices(x, indices)
@@ -160,7 +160,7 @@ function get_ancestor_and_indices(
 end
 
 function set_mlir_data!(
-    x::PermutedDimsArray{TracedRNumber{T},N,perm,iperm}, data
+    x::PermutedDimsArray{<:TracedRNumber{T},N,perm,iperm}, data
 ) where {T,N,perm,iperm}
     set_mlir_data!(parent(x), get_mlir_data(permutedims(TracedRArray{T}(data), iperm)))
     return x

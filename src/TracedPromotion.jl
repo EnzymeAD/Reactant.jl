@@ -11,30 +11,30 @@ function promote_to(::Type{TracedRArray{T}}, rhs) where {T}
     return promote_to(TracedRArray{T,ndims(rhs)}, rhs)
 end
 
-promote_to(::Type{TracedRArray{T,N}}, rhs::TracedRArray{T,N}) where {T,N} = rhs
-function promote_to(::Type{TracedRArray{T,N}}, rhs::TracedRArray{T2,N}) where {T,T2,N}
+promote_to(::Type{<:TracedRArray{T,N}}, rhs::TracedRArray{T,N}) where {T,N} = rhs
+function promote_to(::Type{<:TracedRArray{T,N}}, rhs::TracedRArray{T2,N}) where {T,T2,N}
     return @opcall convert(TracedRArray{T,N}, rhs)
 end
 
 function promote_to(
-    ::Type{TracedRArray{T,N}}, rhs::AbstractArray{<:TracedRNumber,N}
+    ::Type{<:TracedRArray{T,N}}, rhs::AbstractArray{<:TracedRNumber,N}
 ) where {T,N}
     return @opcall convert(TracedRArray{T,N}, aos_to_soa(materialize_traced_array(rhs)))
 end
 
-function promote_to(::Type{TracedRArray{T,1}}, rhs::AbstractRange) where {T}
+function promote_to(::Type{<:TracedRArray{T,1}}, rhs::AbstractRange) where {T}
     return @opcall convert(TracedRArray{T,1}, materialize_traced_array(rhs))
 end
 
-function promote_to(::Type{TracedRArray{T,1}}, rhs::Base.OneTo) where {T}
+function promote_to(::Type{<:TracedRArray{T,1}}, rhs::Base.OneTo) where {T}
     return promote_to(TracedRArray{T,1}, first(rhs):last(rhs))
 end
 
-function promote_to(::Type{TracedRArray{T,N}}, rhs::LinearAlgebra.Diagonal) where {T,N}
+function promote_to(::Type{<:TracedRArray{T,N}}, rhs::LinearAlgebra.Diagonal) where {T,N}
     return LinearAlgebra.diagm(promote_to(TracedRArray{T,1}, rhs.diag))
 end
 
-function promote_to(::Type{TracedRArray{T,N}}, rhs::AbstractArray{<:Any,N}) where {T,N}
+function promote_to(::Type{<:TracedRArray{T,N}}, rhs::AbstractArray{<:Any,N}) where {T,N}
     if ancestor(rhs) isa AnyTracedRArray
         return promote_to(TracedRArray{T,N}, materialize_traced_array(rhs))
     end
@@ -42,7 +42,7 @@ function promote_to(::Type{TracedRArray{T,N}}, rhs::AbstractArray{<:Any,N}) wher
     return promote_to(TracedRArray{T,N}, @opcall(constant(rhs)))
 end
 
-function promote_to(::Type{TracedRArray{T,N}}, rhs::Number) where {T,N}
+function promote_to(::Type{<:TracedRArray{T,N}}, rhs::Number) where {T,N}
     return promote_to(TracedRArray{T,N}, [rhs])
 end
 
@@ -58,35 +58,35 @@ function promote_to(
     return promote_to(TracedRNumber{float(unwrapped_eltype(T))}, rhs)
 end
 
-promote_to(::Type{TracedRNumber{T}}, rhs::TracedRNumber{T}) where {T} = rhs
-function promote_to(::Type{TracedRNumber{T}}, rhs::TracedRNumber{T2}) where {T,T2}
+promote_to(::Type{<:TracedRNumber{T}}, rhs::TracedRNumber{T}) where {T} = rhs
+function promote_to(::Type{<:TracedRNumber{T}}, rhs::TracedRNumber{T2}) where {T,T2}
     return @opcall convert(TracedRNumber{T}, rhs)
 end
 function promote_to(
-    ::Type{TracedRNumber{T}}, rhs::TracedRNumber{T2}
+    ::Type{<:TracedRNumber{T}}, rhs::TracedRNumber{T2}
 ) where {T<:ReactantFloat8,T2}
     return @opcall convert(TracedRNumber{T}, rhs)
 end
 
-function promote_to(::Type{TracedRArray{T,0}}, rhs::TracedRNumber{T2}) where {T,T2}
+function promote_to(::Type{<:TracedRArray{T,0}}, rhs::TracedRNumber{T2}) where {T,T2}
     return TracedRArray{T,0}((), @opcall(convert(TracedRNumber{T}, rhs)).mlir_data, ())
 end
-function promote_to(::Type{TracedRNumber{T}}, rhs::TracedRArray{T2,0}) where {T,T2}
+function promote_to(::Type{<:TracedRNumber{T}}, rhs::TracedRArray{T2,0}) where {T,T2}
     return TracedRNumber{T}((), @opcall(convert(TracedRArray{T,0}, rhs)).mlir_data)
 end
 
-function promote_to(::Type{TracedRNumber{T}}, rhs::Number) where {T<:ReactantFloat8}
+function promote_to(::Type{<:TracedRNumber{T}}, rhs::Number) where {T<:ReactantFloat8}
     res = @opcall(fill(rhs))
     return @opcall convert(
         TracedRNumber{T}, TracedRNumber{unwrapped_eltype(res)}((), res.mlir_data)
     )
 end
 
-function promote_to(::Type{TracedRNumber{T}}, rhs::Number) where {T}
+function promote_to(::Type{<:TracedRNumber{T}}, rhs::Number) where {T}
     return promote_to(TracedRNumber{T}, T(rhs))
 end
 
-function promote_to(::Type{TracedRNumber{T}}, rhs::T) where {T<:ReactantPrimitive}
+function promote_to(::Type{<:TracedRNumber{T}}, rhs::T) where {T<:ReactantPrimitive}
     res = @opcall fill(rhs)
     return TracedRNumber{T}((), res.mlir_data)
 end

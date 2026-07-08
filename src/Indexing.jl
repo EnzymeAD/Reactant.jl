@@ -77,7 +77,7 @@ end
 
 # This method is needed exclusively to resolve an ambiguity
 function Base.getindex(
-    l::Selectors.List{TracedRNumber{T}}, index::Union{Int,TracedRNumber{Int}}
+    l::Selectors.List{<:TracedRNumber{T}}, index::Union{Int,TracedRNumber{Int}}
 ) where {T}
     return getindex(Reactant.promote_to(TracedRArray{T,1}, l), index)
 end
@@ -173,8 +173,8 @@ end
 
 ### Specialize certain dispatches for better codegen
 for aType in (
-    Base.ReshapedArray{TracedRNumber{T}} where {T},
-    PermutedDimsArray{TracedRNumber{T}} where {T},
+    Base.ReshapedArray{<:TracedRNumber{T}} where {T},
+    PermutedDimsArray{<:TracedRNumber{T}} where {T},
 )
     @eval begin
         function Base.getindex(a::$(aType), indices::Union{Int,TracedRNumber{Int}}...)
@@ -188,8 +188,8 @@ for aType in (
 end
 
 for aType in (
-    Base.ReshapedArray{TracedRNumber{T},N,P,Tuple{}} where {T,N,P<:AbstractArray},
-    Base.ReshapedArray{TracedRNumber{T},1,P,Tuple{}} where {T,P<:AbstractArray},
+    Base.ReshapedArray{<:TracedRNumber{T},N,P,Tuple{}} where {T,N,P<:AbstractArray},
+    Base.ReshapedArray{<:TracedRNumber{T},1,P,Tuple{}} where {T,P<:AbstractArray},
 )
     @eval function Base.getindex(a::$(aType), indices::Int)
         return getindex(materialize_traced_array(a), indices)
@@ -197,7 +197,7 @@ for aType in (
 end
 
 function Base.getindex(
-    x::Base.ReshapedArray{TracedRNumber{T}}, index::Base.ReshapedIndex
+    x::Base.ReshapedArray{<:TracedRNumber{T}}, index::Base.ReshapedIndex
 ) where {T}
     return getindex(parent(x), index.parentindex)
 end
@@ -463,7 +463,7 @@ function generate_index_list(i1, is...)
 end
 
 function scalar_index_to_cartesian(
-    idx::AbstractVector{TracedRNumber{T}}, sz::NTuple{N,Int}
+    idx::AbstractVector{<:TracedRNumber{T}}, sz::NTuple{N,Int}
 ) where {T,N}
     idx = materialize_traced_array(idx)
     idx = @opcall(subtract(idx, @opcall(fill(T(1), size(idx)))))

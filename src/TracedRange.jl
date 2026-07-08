@@ -154,7 +154,7 @@ function Base._in_unit_range(
     return (i > 0) & (val <= v.stop) & (val >= v.start)
 end
 
-@inline function Base.length(r::TracedUnitRange{TracedRNumber{T}}) where {T}
+@inline function Base.length(r::TracedUnitRange{<:TracedRNumber{T}}) where {T}
     if r.length >= 0
         return r.length
     end
