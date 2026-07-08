@@ -858,7 +858,7 @@ Base.:!(x::TracedRInteger) = @opcall not(x)
 # With a traced integer exponent, Base's `^(::Number, ::Integer)` would call
 # `power_by_squaring`, which branches on traced booleans. The extra methods
 # disambiguate against Base's specialized `^` methods.
-for B in (:TracedRInteger, :TracedRFloat, :TracedRComplex, :Real, :Complex)
+for B in (:TracedRInteger, :TracedRFloat, :TracedRComplex, :Real, :Complex, :Rational)
     @eval Base.:^(x::$B, p::TracedRInteger) = ^(promote(x, p)...)
 end
 for B in (

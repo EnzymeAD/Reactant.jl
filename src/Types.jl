@@ -108,6 +108,9 @@ mutable struct TracedRArray{T,N,RT<:TracedRNumber{T}} <: RArray{RT,N}
     function TracedRArray{T,N,RT}(
         paths::Tuple, mlir_data::Union{Nothing,MLIR.IR.Value}, shape
     ) where {T,N,RT<:TracedRNumber{T}}
+        RT === traced_number_type(T) ||
+            throw(ArgumentError("Element type of TracedRArray{$T} must be \
+                                 $(traced_number_type(T)), got $RT"))
         shape = Tuple(shape)
         if !isnothing(mlir_data)
             @assert size(MLIR.IR.type(mlir_data)) == shape "Expected: $(shape), got: $(size(MLIR.IR.type(mlir_data)))"
@@ -127,6 +130,18 @@ function TracedRArray{T,N}(::UndefInitializer, shape::Integer...) where {T,N}
 end
 
 function TracedRArray{T,N}(::UndefInitializer, shape::NTuple{N,Int}) where {T,N}
+    return similar(TracedRArray{T,N}, shape)
+end
+
+function TracedRArray{T,N,RT}(
+    ::UndefInitializer, shape::Integer...
+) where {T,N,RT<:TracedRNumber{T}}
+    return similar(TracedRArray{T,N}, shape...)
+end
+
+function TracedRArray{T,N,RT}(
+    ::UndefInitializer, shape::NTuple{N,Int}
+) where {T,N,RT<:TracedRNumber{T}}
     return similar(TracedRArray{T,N}, shape)
 end
 
@@ -274,7 +289,7 @@ end
 # `convert(ConcretePJRTFloat{Float64,1}, x)`. The `Rational`/`Complex` methods
 # disambiguate against Base's constructors on `Integer`/`AbstractFloat`/`Real`.
 for CT in (:ConcretePJRTInteger, :ConcretePJRTFloat, :ConcretePJRTComplex),
-    XT in (:Number, :Rational, :Complex)
+    XT in (:Number, :Rational, :Complex, :BigFloat)
 
     @eval function (::Type{CT})(x::$XT; kwargs...) where {CT<:$CT}
         return ConcretePJRTNumber{unwrapped_eltype(CT)}(x; kwargs...)
@@ -443,7 +458,7 @@ function ConcreteIFRTNumber(data::T; kwargs...) where {T<:Number}
 end
 
 for CT in (:ConcreteIFRTInteger, :ConcreteIFRTFloat, :ConcreteIFRTComplex),
-    XT in (:Number, :Rational, :Complex)
+    XT in (:Number, :Rational, :Complex, :BigFloat)
 
     @eval function (::Type{CT})(x::$XT; kwargs...) where {CT<:$CT}
         return ConcreteIFRTNumber{unwrapped_eltype(CT)}(x; kwargs...)
