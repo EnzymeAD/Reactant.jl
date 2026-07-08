@@ -34,6 +34,14 @@ Reactant.to_rarray
 ```@docs
 ConcreteRArray
 ConcreteRNumber
+Reactant.RNumber
+Reactant.RReal
+RInteger
+RFloat
+RComplex
+Reactant.traced_number_type
+Reactant.pjrt_number_type
+Reactant.ifrt_number_type
 ```
 
 ## Inspect Generated HLO

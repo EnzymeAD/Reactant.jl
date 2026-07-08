@@ -1,11 +1,42 @@
-# Reactant numbers are split by numeric kind so that traced and concrete values
-# subtype `Integer` and `AbstractFloat` where possible. Julia has no abstract
-# complex type, so complex Reactant numbers can only subtype `Number`.
+"""
+    RInteger{T} <: Integer
+
+Abstract supertype of Reactant integers (traced and concrete) with underlying
+element type `T`.
+"""
 abstract type RInteger{T<:ReactantPrimitive} <: Integer end
+
+"""
+    RFloat{T} <: AbstractFloat
+
+Abstract supertype of Reactant floats (traced and concrete) with underlying
+element type `T`.
+"""
 abstract type RFloat{T<:ReactantPrimitive} <: AbstractFloat end
+
+"""
+    RComplex{T} <: Number
+
+Abstract supertype of complex Reactant numbers (traced and concrete) with
+underlying element type `T`. Julia has no abstract complex type, so complex
+Reactant numbers can only subtype `Number`.
+"""
 abstract type RComplex{T<:ReactantPrimitive} <: Number end
 
+"""
+    RReal{T}
+
+Union of the real Reactant number kinds `RInteger{T}` and `RFloat{T}`.
+"""
 const RReal{T} = Union{RInteger{T},RFloat{T}}
+
+"""
+    RNumber{T}
+
+Union of all Reactant number kinds: `RInteger{T}`, `RFloat{T}` and
+`RComplex{T}`. Dispatch on the kind types to target a subset of Reactant
+numbers.
+"""
 const RNumber{T} = Union{RReal{T},RComplex{T}}
 
 abstract type AbstractConcreteInteger{T} <: RInteger{T} end
