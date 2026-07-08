@@ -276,6 +276,7 @@ cc_toolchain_config(
         #         "/opt/x86_64-linux-musl/lib/gcc/x86_64-linux-musl/12.1.0/include",
         #         "/opt/x86_64-linux-musl/include",
     ],
+    compile_flags = ["-DREACTANT_USING_BB"],
     dbg_compile_flags = ["-g"],
     host_system_name = "linux",
     link_flags = [
@@ -397,6 +398,7 @@ cc_toolchain_config(
         "/opt/x86_64-linux-musl/lib/clang/17/include",
         "/opt/x86_64-linux-musl/lib/clang/18/include",
     ],
+    compile_flags = ["-DREACTANT_USING_BB"],
     dbg_compile_flags = ["-g"],
     host_system_name = "linux",
     link_flags = [
@@ -525,6 +527,7 @@ cc_toolchain_config(
         "/opt/x86_64-linux-musl/lib/clang/17/include",
         "/opt/x86_64-linux-musl/lib/clang/18/include",
     ],
+    compile_flags = ["-DREACTANT_USING_BB"],
     dbg_compile_flags = ["-g"],
     host_system_name = "linux",
     link_flags = [
@@ -641,6 +644,7 @@ cc_toolchain_config(
         "/opt/x86_64-linux-musl/lib/clang/17/include",
         "/opt/x86_64-linux-musl/lib/clang/18/include",
     ],
+    compile_flags = ["-DREACTANT_USING_BB"],
     dbg_compile_flags = [
         "-g",
     ],
@@ -761,6 +765,7 @@ cc_toolchain_config(
         "/opt/x86_64-linux-musl/lib/clang/17/include",
         "/opt/x86_64-linux-musl/lib/clang/18/include",
     ],
+    compile_flags = ["-DREACTANT_USING_BB"],
     dbg_compile_flags = [
         "-g",
         "-stdlib=libc++",
@@ -882,6 +887,7 @@ cc_toolchain_config(
         "/opt/x86_64-linux-musl/lib/clang/17/include",
         "/opt/x86_64-linux-musl/lib/clang/18/include",
     ],
+    compile_flags = ["-DREACTANT_USING_BB"],
     dbg_compile_flags = [
         "-g",
     ],
