@@ -67,22 +67,6 @@ for RT in (:RInteger, :RFloat, :RComplex)
     @eval @inline Enzyme.make_zero(x::$RT) = zero(Core.Typeof(x))
 end
 
-# Reactant numbers are mutable wrappers around device/MLIR values and must not
-# be classified as active scalars, which Enzyme does for any `AbstractFloat`.
-function Enzyme.Compiler.active_reg_nothrow(::Type{T}) where {T<:RNumber}
-    return Enzyme.Compiler.DupState
-end
-
-# Reactant numbers are mutable wrappers around device/MLIR values and must
-# stay `Duplicated` under autodiff even though they subtype `AbstractFloat`.
-for RT in (:RArray, :RNumber, :RInteger, :RFloat, :RComplex)
-    @eval @inline function Enzyme.guess_activity(
-        ::Type{T}, mode::Enzyme.Mode
-    ) where {T<:$RT}
-        return Enzyme.Duplicated{T}
-    end
-end
-
 @inline function Enzyme.make_zero(x::RArray{FT,N})::RArray{FT,N} where {FT<:AbstractFloat,N}
     return Base.zero(x)
 end
@@ -603,7 +587,7 @@ function overload_autodiff(
         if arg isa Active && width == 1 && isempty(path[3:end])
             # `Active` arguments return their gradient in the result tuple
             # instead of accumulating into a shadow
-            restup[idx - fnwrap] = Reactant.TracedRNumber{unwrapped_eltype(arg.val)}(
+            restup[idx - fnwrap] = TracedRNumber{unwrapped_eltype(arg.val)}(
                 (), TracedUtils.transpose_val(MLIR.IR.result(res, residx))
             )
         else
