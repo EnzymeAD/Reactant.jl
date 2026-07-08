@@ -1572,7 +1572,7 @@ const ReactantCUDAJob = GPUCompiler.CompilerJob{
 GPUCompiler.can_vectorize(job::ReactantCUDAJob) = !job.config.params.raising
 function GPUCompiler.optimization_options(job::ReactantCUDAJob)
     raising = job.config.params.raising
-    return (; instcombine=(!raising), fastmath=(!raising), aggressiveinstcombine=(!raising))
+    return (; instcombine=!raising, fastmath=!raising, aggressiveinstcombine=!raising)
 end
 
 function GPUCompiler.method_table(@nospecialize(job::ReactantCUDAJob))

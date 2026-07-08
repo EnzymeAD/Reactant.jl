@@ -225,7 +225,7 @@ const MPI_OP_MAP = Dict(
 
 function get_mpi_op_enum(op)
     return get(MPI_OP_MAP, op.val) do
-        return throw(ArgumentError("Unknown MPI op `$op`"))
+        throw(ArgumentError("Unknown MPI op `$op`"))
     end
 end
 
@@ -261,7 +261,7 @@ const MPI_DATATYPE_MAP = Dict(
 
 function get_mpi_datatype_enum(datatype)
     return get(MPI_DATATYPE_MAP, datatype.val) do
-        return throw(ArgumentError("Unknown MPI datatype `$datatype`"))
+        throw(ArgumentError("Unknown MPI datatype `$datatype`"))
     end
 end
 
