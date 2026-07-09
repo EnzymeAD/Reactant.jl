@@ -124,7 +124,7 @@ jobs:
         if: ${{ inputs.localjll || inputs.enzymejax_commit != '' }}
         run: |
           julia --color=yes --project=deps -e 'using Pkg; Pkg.instantiate()'
-          julia --color=yes --project=deps deps/build_local.jl --cc clang  --push-cache
+          julia --color=yes --project=deps deps/build_local.jl --cc clang  --push-cache --debug
           cp LocalPreferences.toml test/
 
       # Compile Julia if assertions are enabled
