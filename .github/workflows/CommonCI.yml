@@ -124,7 +124,7 @@ jobs:
         if: ${{ inputs.localjll || inputs.enzymejax_commit != '' }}
         run: |
           julia --color=yes --project=deps -e 'using Pkg; Pkg.instantiate()'
-          julia --color=yes --project=deps deps/build_local.jl --cc clang  --push-cache --debug
+          julia --color=yes --project=deps deps/build_local.jl --cc clang  --push-cache
           cp LocalPreferences.toml test/
 
       # Compile Julia if assertions are enabled
@@ -220,8 +220,8 @@ jobs:
           )
         shell: julia --color=yes --project=. {0}
 
-      - name: "Setup tmate session"
-        uses: mxschmitt/action-tmate@v3
+      # - name: "Setup tmate session"
+      #   uses: mxschmitt/action-tmate@v3
 
       - name: "Run Tests (IFRT)"
         if: ${{ inputs.runtime == 'ifrt' || inputs.runtime == 'both' }}
