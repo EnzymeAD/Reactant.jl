@@ -968,6 +968,14 @@ resolve_conflict(t1::Type{<:ConcreteRNumber{T}}, t2::Type{T}) where {T} = T
 resolve_conflict(t1::Type{T}, t2::Type{<:ConcreteRNumber{T}}) where {T} = T
 resolve_conflict(t1, t2) = promote_type(t1, t2)
 
+# `TracedRArray{T,N}` with the element-type parameter left free has no single
+# eltype and hence cannot instantiate an `AbstractArray{T}`-bounded type
+# parameter; substitute the concrete traced array type.
+concretize_traced_param(@nospecialize(T)) = T
+function concretize_traced_param(::Type{TracedRArray{T,N}}) where {T,N}
+    return TracedRArray{T,N,traced_number_type(T)}
+end
+
 """
 This function tries to apply the param types to the wrapper type.
 When there's a constraint conflict, it tries to resolve it:
@@ -982,23 +990,15 @@ using Reactant
 struct Foo{T, A<:AbstractArray{T}}
     a::A
 end
-Reactant.apply_type_with_promotion(Foo, (Int, TracedRArray{Int, 1}))
+Reactant.apply_type_with_promotion(Foo, Any[Int, TracedRArray{Int, 1}])
 ```
 returns
 ```jl
-(Foo{Reactant.TracedRInteger{Int64}, Reactant.TracedRArray{Int64, 1}}, Bool[1, 0])
+(Foo{Reactant.TracedRInteger{Int64}, Reactant.TracedRArray{Int64, 1, Reactant.TracedRInteger{Int64}}}, Bool[1, 1])
 ```
 
 The first type parameter has been promoted to satisfy to be in agreement with the second parameter.
 """
-# `TracedRArray{T,N}` with the element-type parameter left free has no single
-# eltype and hence cannot instantiate an `AbstractArray{T}`-bounded type
-# parameter; substitute the concrete traced array type.
-concretize_traced_param(@nospecialize(T)) = T
-function concretize_traced_param(::Type{TracedRArray{T,N}}) where {T,N}
-    return TracedRArray{T,N,traced_number_type(T)}
-end
-
 function apply_type_with_promotion(wrapper, params, relevant_typevars=typevar_dict(wrapper))
     unwrapped = Base.unwrap_unionall(wrapper) # remove all the typevars
     original_params = copy(params)
