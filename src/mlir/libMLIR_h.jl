@@ -14112,7 +14112,10 @@ struct EnzymeXLATransformPassesOptions
     enable_concat_to_batch_passes::Bool
     enable_loop_raising_passes::Bool
     enable_licm_optimization_passes::Bool
+    loop_unswitch_threshold::Int64
     enable_pad_optimization_passes::Bool
+    excluded_passes::Ptr{Cstring}
+    num_excluded_passes::Csize_t
 end
 
 """
