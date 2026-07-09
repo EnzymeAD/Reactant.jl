@@ -26,10 +26,10 @@ struct RMSProp{Teta,Trho,Teps,C<:Bool}
 end
 
 @testset "Traced Type" begin
-    # `Vector{Union{}}` (e.g. an empty array literal) matches the covariant
-    # `AnyTracedRArray` alias, but must not be routed into the traced-array
-    # machinery
-    @test ReactantCore.materialize_traced_array(Union{}[]) isa Vector{Union{}}
+    # `Vector{Union{}}` (e.g. an empty array literal) must not match the
+    # `AnyTracedRArray` alias or be routed into the traced-array machinery
+    @test !(Vector{Union{}} <: Reactant.AnyTracedRArray)
+    @test Reactant.materialize_traced_array(Union{}[]) isa Vector{Union{}}
     @test Reactant.aos_to_soa(Union{}[]) isa Vector{Union{}}
 end
 

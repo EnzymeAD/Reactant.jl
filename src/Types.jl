@@ -233,7 +233,17 @@ end
 @leaf TracedRational
 Adapt.parent_type(::Type{TracedRational{T}}) where {T} = TracedRational{T}
 
-const AnyTracedRArray{T,N} = AbstractArray{TracedRNumber{T},N}
+## Enumerate the traced element types invariantly instead of bounding them
+## covariantly (`AbstractArray{<:TracedRNumber{T},N}`): a covariant bound would
+## also match `Vector{Union{}}` (the type of empty array literals), which must
+## not be routed into the traced-array machinery (#1290).
+const AnyTracedRArray{T,N} = Union{
+    AbstractArray{TracedRInteger{T},N},
+    AbstractArray{TracedRFloat{T},N},
+    AbstractArray{TracedRComplex{T},N},
+    AbstractArray{TracedRReal{T},N},
+    AbstractArray{TracedRNumber{T},N},
+}
 const AnyTracedRVector{T} = AnyTracedRArray{T,1}
 const AnyTracedRMatrix{T} = AnyTracedRArray{T,2}
 const AnyTracedRVecOrMat{T} = Union{AnyTracedRVector{T},AnyTracedRMatrix{T}}
