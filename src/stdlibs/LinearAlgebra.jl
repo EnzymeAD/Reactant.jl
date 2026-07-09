@@ -3,7 +3,12 @@ module TracedLinearAlgebra
 using ..MLIR: MLIR
 using ..Reactant: Reactant, Ops
 using ..Reactant:
-    TracedRArray, TracedRNumber, AnyTracedRArray, AnyTracedRMatrix, AnyTracedRVector
+    TracedRArray,
+    TracedRNumber,
+    TracedRInteger,
+    AnyTracedRArray,
+    AnyTracedRMatrix,
+    AnyTracedRVector
 using ..Reactant: call_with_reactant, unwrapped_eltype, promote_to
 using ReactantCore: ReactantCore, materialize_traced_array, @trace
 using Reactant_jll: Reactant_jll
@@ -710,8 +715,18 @@ for AT in (
     LinearAlgebra.UnitLowerTriangular{<:TracedRNumber},
     LinearAlgebra.UpperHessenberg{<:TracedRNumber},
 )
-    @eval function Base.getindex(A::$AT, i::Int, j::Int)
-        return getindex(materialize_traced_array(A), i, j)
+    @eval begin
+        function Base.getindex(A::$AT, i::Int, j::Int)
+            return getindex(materialize_traced_array(A), i, j)
+        end
+        # 1.10's structured-matrix `getindex` methods take `Integer`s, so
+        # their intersection with the traced-array methods includes traced
+        # integer indices; 1.12's take `Int`s, which the first cover matches.
+        function Base.getindex(
+            A::$AT, i::Union{Int,TracedRInteger{Int}}, j::Union{Int,TracedRInteger{Int}}
+        )
+            return getindex(materialize_traced_array(A), i, j)
+        end
     end
 end
 
