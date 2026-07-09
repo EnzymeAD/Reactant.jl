@@ -1215,6 +1215,11 @@ function Base.ceil(::Type{T}, x::TracedRFloat) where {T<:Integer}
     return trunc(T, ceil(x))
 end
 
+# disambiguate against 1.10's `round/floor/ceil(::Type{Bool}, ::AbstractFloat)`
+Base.round(::Type{Bool}, x::TracedRFloat) = trunc(Bool, round(x))
+Base.floor(::Type{Bool}, x::TracedRFloat) = trunc(Bool, floor(x))
+Base.ceil(::Type{Bool}, x::TracedRFloat) = trunc(Bool, ceil(x))
+
 # Concatenation. Numbers in Julia are handled in a much less generic fashion than arrays
 Base.vcat(x::TracedRNumber...) = Base.typed_vcat(Base.promote_eltypeof(x...), x...)
 function Base.typed_vcat(::Type{T}, x::TracedRNumber...) where {T}
