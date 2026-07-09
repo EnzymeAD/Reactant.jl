@@ -96,6 +96,15 @@ for (aT, iT) in (
     (Base.IdentityUnitRange, TracedRInteger),
     # 1.10 specific ambiguity fixes
     (UnitRange{<:TracedRNumber}, Int),
+    # 1.10's `getindex(::UnitRange{<:Union{...}}, ::Integer)` overflow-safe
+    # grouping (range.jl) needs an exact-grouping disambiguator now that
+    # traced integers are `Integer`s
+    (
+        UnitRange{
+            <:Union{Bool,Int128,Int16,Int32,Int64,Int8,UInt128,UInt16,UInt32,UInt64,UInt8}
+        },
+        TracedRInteger,
+    ),
 )
     @eval function Base.getindex(a::$aT, index::$iT)
         return convert(
