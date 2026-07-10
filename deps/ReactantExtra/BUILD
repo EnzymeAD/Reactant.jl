@@ -254,6 +254,7 @@ cc_toolchain_config(
     builtin_sysroot = "/opt/x86_64-linux-musl/bin/../x86_64-linux-musl/sys-root",
     compile_flags = [
         "-stdlib=libstdc++",
+        "-DREACTANT_TOOLCHAIN_IS_BB",
     ],
     compiler = "clang",
     coverage_compile_flags = ["--coverage"],
@@ -378,6 +379,7 @@ cc_toolchain_config(
         "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION/backward",
         "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION/parallel",
         "-stdlib=libstdc++",
+        "-DREACTANT_TOOLCHAIN_IS_BB",
     ],
     compiler = "clang",
     coverage_compile_flags = ["--coverage"],
@@ -506,6 +508,7 @@ cc_toolchain_config(
         "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION/BB_TARGET",
         "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION/backward",
         "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION/parallel",
+        "-DREACTANT_TOOLCHAIN_IS_BB",
     ],
     compiler = "clang",
     coverage_compile_flags = ["--coverage"],
@@ -622,6 +625,7 @@ cc_toolchain_config(
     builtin_sysroot = "/opt/BB_TARGET/BB_TARGET/sys-root/",
     compile_flags = [
         "-stdlib=libc++",
+        "-DREACTANT_TOOLCHAIN_IS_BB",
     ],
     compiler = "clang",
     coverage_compile_flags = ["--coverage"],
@@ -742,6 +746,7 @@ cc_toolchain_config(
     builtin_sysroot = "/opt/BB_TARGET/BB_TARGET/sys-root/",
     compile_flags = [
         "-stdlib=libc++",
+        "-DREACTANT_TOOLCHAIN_IS_BB",
     ],
     compiler = "clang",
     coverage_compile_flags = ["--coverage"],
@@ -863,6 +868,7 @@ cc_toolchain_config(
     builtin_sysroot = "/opt/BB_TARGET/BB_TARGET/sys-root/",
     compile_flags = [
         "-stdlib=libstdc++",
+        "-DREACTANT_TOOLCHAIN_IS_BB",
     ],
     compiler = "clang",
     coverage_compile_flags = ["--coverage"],
