@@ -272,3 +272,30 @@ end
         @test rng_ra.algorithm == "PHILOX"
     end
 end
+
+function _rand_foo3(rng, α)
+    T = typeof(α)
+    boost = one(T)
+    @trace if α < one(T)
+        boost = rand(rng, T)^inv(α)
+    end
+    dv = zero(T)
+    i = 0
+    @trace while (dv == zero(dv))
+        x = rand(rng, T) - 0.5
+        dv = ifelse(x > 0, x, dv)
+    end
+    return boost * dv
+end
+
+@testset "Random state mutation across conditional branches and while loop" begin
+    for val in (0.5, 1.0, 1.5, 2.0)
+        rng = Reactant.ReactantRNG()
+        a = ConcreteRNumber(val)
+        rg = @compile _rand_foo3(rng, a)
+        res1 = rg(rng, a)
+        res2 = rg(rng, a)
+        @test res1 != res2
+    end
+end
+

@@ -666,7 +666,6 @@ function trace_if(expr; store_last_line=nothing, depth=0, track_numbers)
     true_branch_assignments = [
         ExpressionExplorer.compute_symbols_state(true_block).assignments...
     ]
-    all_true_branch_vars = true_branch_input_list ∪ true_branch_assignments
     true_branch_fn_name = gensym(:true_branch)
 
     else_block, discard_vars, _ = if length(expr.args) == 3
@@ -716,14 +715,13 @@ function trace_if(expr; store_last_line=nothing, depth=0, track_numbers)
     false_branch_assignments = [
         ExpressionExplorer.compute_symbols_state(false_block).assignments...
     ]
-    all_false_branch_vars = false_branch_input_list ∪ false_branch_assignments
     false_branch_fn_name = gensym(:false_branch)
 
-    all_input_vars = true_branch_input_list ∪ false_branch_input_list
-    all_output_vars = all_true_branch_vars ∪ all_false_branch_vars
+    all_input_vars = unique(true_branch_input_list ∪ false_branch_input_list)
+    all_output_vars = unique(true_branch_assignments ∪ false_branch_assignments)
     discard_vars !== nothing && setdiff!(all_output_vars, discard_vars)
 
-    all_vars = all_input_vars ∪ all_output_vars
+    all_vars = unique(all_input_vars ∪ all_output_vars)
 
     true_branch_fn = :(
         (args,) -> begin
