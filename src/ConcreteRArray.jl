@@ -285,18 +285,6 @@ end
 
 # Base specializes `div` on single rounding modes and on `Rational` arguments;
 # the corresponding methods below only disambiguate against those.
-const BASE_SPECIFIC_ROUNDING_MODES = (
-    RoundingMode{:FromZero},
-    RoundingMode{:Nearest},
-    RoundingMode{:NearestTiesAway},
-    RoundingMode{:NearestTiesUp},
-    RoundingMode{:Up},
-    RoundingMode{:Down},
-    # Base also groups the nearest modes into a single method
-    Union{
-        RoundingMode{:Nearest},RoundingMode{:NearestTiesAway},RoundingMode{:NearestTiesUp}
-    },
-)
 
 for T1 in CONCRETE_NUMBER_KINDS
     @eval begin

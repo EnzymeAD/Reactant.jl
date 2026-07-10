@@ -1204,3 +1204,19 @@ nmantissa(::Type{Float64}) = 52
 
 @inline _unwrap_val(x) = x
 @inline _unwrap_val(::Val{val}) where {val} = _unwrap_val(val)
+
+# Base specializes `div` (and friends) on these single-rounding-mode method
+# shapes; disambiguators against them must enumerate the same shapes.
+const BASE_SPECIFIC_ROUNDING_MODES = (
+    RoundingMode{:FromZero},
+    RoundingMode{:Nearest},
+    RoundingMode{:NearestTiesAway},
+    RoundingMode{:NearestTiesUp},
+    RoundingMode{:Up},
+    RoundingMode{:Down},
+    # Base also groups the nearest modes into a single method
+    Union{
+        RoundingMode{:Nearest},RoundingMode{:NearestTiesAway},RoundingMode{:NearestTiesUp}
+    },
+)
+

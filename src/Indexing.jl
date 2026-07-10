@@ -160,9 +160,7 @@ for R in (:(UnitRange{T}), :(Base.OneTo{T}), :(Union{LinRange{T},StepRangeLen{T}
 end
 
 # 1.10's overflow-safe `UnitRange` grouping needs its own exact-grouping cover
-function Base.getindex(
-    r::UnitRange{T}, index::TracedRInteger
-) where {T<:Union{Bool,Int128,Int16,Int32,Int64,Int8,UInt128,UInt16,UInt32,UInt64,UInt8}}
+function Base.getindex(r::UnitRange{T}, index::TracedRInteger) where {T<:Base.OverflowSafe}
     return traced_range_getindex(r, index)
 end
 

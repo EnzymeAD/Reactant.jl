@@ -557,18 +557,7 @@ Base.div(::Missing, @nospecialize(rhs::TracedRInteger), ::RoundingMode) = missin
 
 # Base has `div` methods specialized on single rounding modes (and on
 # `Rational` arguments); the following methods only disambiguate against them.
-for RM in (
-    RoundingMode{:FromZero},
-    RoundingMode{:Nearest},
-    RoundingMode{:NearestTiesAway},
-    RoundingMode{:NearestTiesUp},
-    RoundingMode{:Up},
-    RoundingMode{:Down},
-    # Base also groups the nearest modes into a single method
-    Union{
-        RoundingMode{:Nearest},RoundingMode{:NearestTiesAway},RoundingMode{:NearestTiesUp}
-    },
-)
+for RM in Reactant.BASE_SPECIFIC_ROUNDING_MODES
     @eval begin
         function Base.div(
             @nospecialize(lhs::TracedRInteger{T1}),
