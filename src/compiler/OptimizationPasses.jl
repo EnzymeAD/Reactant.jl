@@ -201,7 +201,7 @@ function run!(pm::MLIR.IR.PassManager, op, key::String="")
                     _collect_location_frames(MLIR.IR.location(diag)),
                 ),
             )
-            return false  # allow other handlers to also see the diagnostic
+            return true  # consume the diagnostic
         end
     result = try
         MLIR.IR.run!(pm, op, key)
