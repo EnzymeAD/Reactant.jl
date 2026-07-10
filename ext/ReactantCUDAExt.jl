@@ -122,47 +122,28 @@ Base.convert(::Type{T}, RN::CuTracedRNumber) where {T<:Number} = convert(T, geti
 # would be ambiguous with Base's methods on `Real`/`Integer`/`AbstractFloat`.
 const CU_TRACED_NUMBER_KINDS = (CuTracedRInteger, CuTracedRFloat, CuTracedRComplex)
 
-for jlop in (
-    :(Base.min),
-    :(Base.mod),
-    :(Base.max),
-    :(Base.:+),
-    :(Base.:-),
-    :(Base.:*),
-    :(Base.:/),
-    :(Base.:^),
-    :(Base.rem),
-    :(Base.isless),
-    :(Base.:(==)),
-    :(Base.:(!=)),
-)
-    for K1 in CU_TRACED_NUMBER_KINDS
-        @eval begin
-            @inline $jlop(a::$K1, b::Number) = $jlop(a[], b)
-            @inline $jlop(a::Number, b::$K1) = $jlop(a, b[])
-        end
-        for K2 in CU_TRACED_NUMBER_KINDS
-            @eval @inline $jlop(a::$K1, b::$K2) = $jlop(a[], b[])
-        end
-        for X in (
-            :Real,
-            :Integer,
-            :Bool,
-            :AbstractFloat,
-            :Complex,
-            :(Complex{Bool}),
-            :Rational,
-            :BigInt,
-            :BigFloat,
-            :AbstractIrrational,
-        )
-            jlop == :(Base.:^) && X === :Integer && continue
-            @eval begin
-                @inline $jlop(a::$X, b::$K1) = $jlop(a, b[])
-                @inline $jlop(a::$K1, b::$X) = $jlop(a[], b)
-            end
-        end
-    end
+Reactant.foreach_number_kind_forwarding(
+    (
+        :(Base.min),
+        :(Base.mod),
+        :(Base.max),
+        :(Base.:+),
+        :(Base.:-),
+        :(Base.:*),
+        :(Base.:/),
+        :(Base.:^),
+        :(Base.rem),
+        :(Base.isless),
+        :(Base.:(==)),
+        :(Base.:(!=)),
+    ),
+    CU_TRACED_NUMBER_KINDS;
+    # `^` with a plain integer exponent has its own constant-propagating method
+    skip=(jlop, X) -> jlop == :(Base.:^) && X === :Integer,
+) do jlop, TX, TY, unwrap_a, unwrap_b
+    aa = unwrap_a ? :(a[]) : :a
+    ab = unwrap_b ? :(b[]) : :b
+    @eval @inline $(jlop)(a::$(TX), b::$(TY)) = $(jlop)($(aa), $(ab))
 end
 
 @inline Base.ifelse(cond::Bool, a, b::CuTracedRNumber) = ifelse(cond, a, b[])

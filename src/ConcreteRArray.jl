@@ -226,7 +226,7 @@ const CONCRETE_NUMBER_KINDS = (
 )
 const TRACED_NUMBER_KINDS = (TracedRInteger, TracedRFloat, TracedRComplex)
 
-for jlop in (
+const FORWARDED_NUMBER_OPS = (
     :(Base.isless),
     :(Base.:<),
     :(Base.:<=),
@@ -239,39 +239,23 @@ for jlop in (
     :(Base.:^),
     :(Base.:(==)),
 )
-    for T1 in CONCRETE_NUMBER_KINDS
-        @eval begin
-            $(jlop)(x::$(T1), y::Number) = $(jlop)(to_number(x), y)
-            $(jlop)(x::Number, y::$(T1)) = $(jlop)(x, to_number(y))
-        end
-        for T2 in CONCRETE_NUMBER_KINDS
-            @eval $(jlop)(x::$(T1), y::$(T2)) = $(jlop)(to_number(x), to_number(y))
-        end
-        for X in (
-            :Real,
-            :Integer,
-            :Bool,
-            :Rational,
-            :BigInt,
-            :BigFloat,
-            :AbstractIrrational,
-            :AbstractFloat,
-            :Complex,
-            :(Complex{Bool}),
-        )
-            @eval begin
-                $(jlop)(x::$(T1), y::$(X)) = $(jlop)(to_number(x), y)
-                $(jlop)(x::$(X), y::$(T1)) = $(jlop)(x, to_number(y))
-            end
-        end
-        for T2 in TRACED_NUMBER_KINDS
-            @eval begin
-                $(jlop)(x::$(T1), y::$(T2)) = throw(MethodError($(jlop), (x, y)))
-                $(jlop)(x::$(T2), y::$(T1)) = throw(MethodError($(jlop), (x, y)))
-            end
-        end
-    end
 
+foreach_number_kind_forwarding(
+    FORWARDED_NUMBER_OPS, CONCRETE_NUMBER_KINDS
+) do jlop, TX, TY, unwrap_x, unwrap_y
+    ax = unwrap_x ? :(to_number(x)) : :x
+    ay = unwrap_y ? :(to_number(y)) : :y
+    @eval $(jlop)(x::$(TX), y::$(TY)) = $(jlop)($(ax), $(ay))
+end
+
+for jlop in FORWARDED_NUMBER_OPS, T1 in CONCRETE_NUMBER_KINDS, T2 in TRACED_NUMBER_KINDS
+    @eval begin
+        $(jlop)(x::$(T1), y::$(T2)) = throw(MethodError($(jlop), (x, y)))
+        $(jlop)(x::$(T2), y::$(T1)) = throw(MethodError($(jlop), (x, y)))
+    end
+end
+
+for jlop in FORWARDED_NUMBER_OPS
     T = AbstractConcreteArray{<:Number,0}
     @eval begin
         $(jlop)(x::$(T), y::$(T)) = $(jlop)(to_number(x), to_number(y))
