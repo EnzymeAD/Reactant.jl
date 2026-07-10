@@ -36,9 +36,9 @@ ConcreteRArray
 ConcreteRNumber
 Reactant.RNumber
 Reactant.RReal
-RInteger
-RFloat
-RComplex
+Reactant.RInteger
+Reactant.RFloat
+Reactant.RComplex
 Reactant.traced_number_type
 Reactant.pjrt_number_type
 Reactant.ifrt_number_type

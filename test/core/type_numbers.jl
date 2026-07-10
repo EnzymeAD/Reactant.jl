@@ -289,6 +289,12 @@ end
         TracedRInteger,
         TracedRFloat,
         TracedRComplex,
+        ConcretePJRTInteger,
+        ConcretePJRTFloat,
+        ConcretePJRTComplex,
+        ConcreteIFRTInteger,
+        ConcreteIFRTFloat,
+        ConcreteIFRTComplex,
         traced_number_type
 
     @testset "abstract kinds" begin
