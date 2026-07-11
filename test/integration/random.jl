@@ -298,4 +298,3 @@ end
         @test res1 != res2
     end
 end
-
