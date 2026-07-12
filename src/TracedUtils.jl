@@ -116,16 +116,16 @@ function set_mlir_data!(x::Base.ReshapedArray{<:TracedRNumber{T}}, data) where {
 end
 
 function get_ancestor_and_indices(
-    x::Base.ReshapedArray{<:TracedRNumber{T},N}, indices::Vector{CartesianIndex{N}}
-) where {T,N}
+    x::Base.ReshapedArray{<:TracedRNumber,N}, indices::Vector{CartesianIndex{N}}
+) where {N}
     linear_indices = LinearIndices(size(x))[indices]
     parent_linear_indices = LinearIndices(size(parent(x)))[linear_indices]
     return (parent(x), (parent_linear_indices,))
 end
 
 function get_ancestor_and_indices(
-    x::Base.ReshapedArray{<:TracedRNumber{T},N}, indices...
-) where {T,N}
+    x::Base.ReshapedArray{<:TracedRNumber,N}, indices...
+) where {N}
     @assert length(indices) == N "Expected $N indices, got $(length(indices))"
     indices = Base.to_indices(x, indices)
     if any(is_traced, indices)

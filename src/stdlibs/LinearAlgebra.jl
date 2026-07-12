@@ -81,30 +81,30 @@ include("factorization/Factorization.jl")
 
 # Various Wrapper Arrays defined in LinearAlgebra
 function ReactantCore.materialize_traced_array(
-    x::Transpose{<:TracedRNumber{T},<:AnyTracedRArray}
-) where {T}
+    x::Transpose{<:TracedRNumber,<:AnyTracedRArray}
+)
     px = materialize_traced_array(parent(x))
     A = ndims(px) == 1 ? reshape(px, :, 1) : px
     return permutedims(A, (2, 1))
 end
 
 function ReactantCore.materialize_traced_array(
-    x::Adjoint{<:TracedRNumber{T},<:AnyTracedRArray}
-) where {T}
+    x::Adjoint{<:TracedRNumber,<:AnyTracedRArray}
+)
     return @opcall conj(
         materialize_traced_array(transpose(materialize_traced_array(parent(x))))
     )
 end
 
 function ReactantCore.materialize_traced_array(
-    x::Diagonal{<:TracedRNumber{T},<:AnyTracedRVector}
-) where {T}
+    x::Diagonal{<:TracedRNumber,<:AnyTracedRVector}
+)
     return diagm(materialize_traced_array(parent(x)))
 end
 
 function ReactantCore.materialize_traced_array(
-    x::Tridiagonal{<:TracedRNumber{T},<:AnyTracedRVector}
-) where {T}
+    x::Tridiagonal{<:TracedRNumber,<:AnyTracedRVector}
+)
     return diagm(-1 => x.dl, 0 => x.d, 1 => x.du)
 end
 
@@ -112,8 +112,8 @@ for (AT, comp) in ((:LowerTriangular, "GE"), (:UpperTriangular, "LE"))
     uAT = Symbol(:Unit, AT)
     @eval begin
         function ReactantCore.materialize_traced_array(
-            x::LinearAlgebra.$(AT){<:TracedRNumber{T},<:AnyTracedRMatrix}
-        ) where {T}
+            x::LinearAlgebra.$(AT){<:TracedRNumber,<:AnyTracedRMatrix}
+        )
             m, n = size(x)
             px = materialize_traced_array(parent(x))
             row_idxs = @opcall iota(Int, [m, n]; iota_dimension=1)
@@ -123,8 +123,8 @@ for (AT, comp) in ((:LowerTriangular, "GE"), (:UpperTriangular, "LE"))
         end
 
         function ReactantCore.materialize_traced_array(
-            x::LinearAlgebra.$(uAT){<:TracedRNumber{T},<:AnyTracedRMatrix}
-        ) where {T}
+            x::LinearAlgebra.$(uAT){<:TracedRNumber,<:AnyTracedRMatrix}
+        )
             m, n = size(x)
             px = materialize_traced_array(parent(x))
             row_idxs = @opcall iota(Int, [m, n]; iota_dimension=1)
@@ -139,8 +139,8 @@ for (AT, comp) in ((:LowerTriangular, "GE"), (:UpperTriangular, "LE"))
 end
 
 function ReactantCore.materialize_traced_array(
-    x::Hermitian{<:TracedRNumber{T},<:AnyTracedRMatrix}
-) where {T}
+    x::Hermitian{<:TracedRNumber,<:AnyTracedRMatrix}
+)
     m, n = size(x)
     row_idxs = @opcall iota(Int, [m, n]; iota_dimension=1)
     col_idxs = @opcall iota(Int, [m, n]; iota_dimension=2)
@@ -152,8 +152,8 @@ function ReactantCore.materialize_traced_array(
 end
 
 function ReactantCore.materialize_traced_array(
-    x::Symmetric{<:TracedRNumber{T},<:AnyTracedRMatrix}
-) where {T}
+    x::Symmetric{<:TracedRNumber,<:AnyTracedRMatrix}
+)
     m, n = size(x)
     row_idxs = @opcall iota(Int, [m, n]; iota_dimension=1)
     col_idxs = @opcall iota(Int, [m, n]; iota_dimension=2)
@@ -227,9 +227,7 @@ for (AT, dcomp, ocomp) in (
     end
 end
 
-function TracedUtils.set_mlir_data!(
-    x::Hermitian{<:TracedRNumber{T},<:AnyTracedRMatrix}, data
-) where {T}
+function TracedUtils.set_mlir_data!(x::Hermitian{<:TracedRNumber,<:AnyTracedRMatrix}, data)
     if x.uplo == 'L'
         set_mlir_data!(LowerTriangular(parent(x)), data)
     else
@@ -238,9 +236,7 @@ function TracedUtils.set_mlir_data!(
     return x
 end
 
-function TracedUtils.set_mlir_data!(
-    x::Symmetric{<:TracedRNumber{T},<:AnyTracedRMatrix}, data
-) where {T}
+function TracedUtils.set_mlir_data!(x::Symmetric{<:TracedRNumber,<:AnyTracedRMatrix}, data)
     if x.uplo == 'L'
         set_mlir_data!(LowerTriangular(parent(x)), data)
     else
@@ -259,7 +255,7 @@ function TracedUtils.set_mlir_data!(
     return x
 end
 
-Reactant.aos_to_soa(x::Tridiagonal{<:TracedRNumber{T}}) where {T} = x
+Reactant.aos_to_soa(x::Tridiagonal{<:TracedRNumber}) = x
 
 # Core functions
 function overloaded_mul(
