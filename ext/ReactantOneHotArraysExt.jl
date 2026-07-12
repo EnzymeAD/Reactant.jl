@@ -7,13 +7,11 @@ using ReactantCore: ReactantCore
 using Reactant.Ops: @opcall
 
 __compatible_eltype(::Type{T}, ::Type{U}) where {T,U} = T
-function __compatible_eltype(
-    ::Type{<:TracedRNumber{T}}, ::Type{<:TracedRNumber{U}}
-) where {T,U}
+function __compatible_eltype(::Type{<:TracedRNumber{T}}, ::Type{<:TracedRNumber}) where {T}
     return Reactant.traced_number_type(T)
 end
-__compatible_eltype(::Type{<:TracedRNumber{T}}, ::Type{U}) where {T,U} = T
-function __compatible_eltype(::Type{T}, ::Type{<:TracedRNumber{U}}) where {T,U}
+__compatible_eltype(::Type{<:TracedRNumber{T}}, ::Type) where {T} = T
+function __compatible_eltype(::Type{T}, ::Type{<:TracedRNumber}) where {T}
     return Reactant.traced_number_type(T)
 end
 

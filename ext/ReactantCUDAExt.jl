@@ -307,7 +307,7 @@ function Base.show(io::IO, a::AT) where {AT<:CuTracedArray}
 end
 
 for K in CU_TRACED_NUMBER_KINDS
-    @eval function Base.show(io::IO, a::AT) where {AT<:$K}
+    @eval function Base.show(io::IO, a::$K)
         Printf.@printf(
             io, "%s cu traced rnumber at %p", join(size(a), '×'), Int(pointer(a))
         )
