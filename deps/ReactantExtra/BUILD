@@ -1,7 +1,8 @@
-load("@llvm-project//mlir:tblgen.bzl", "gentbl_cc_library")
+load("@llvm-project//mlir:tblgen.bzl", "gentbl_cc_library", "td_library")
 load("@local_config_cuda//cuda:build_defs.bzl", "if_cuda")
 load("@local_config_rocm//rocm:build_defs.bzl", "if_rocm")
 load("@xla//tools/toolchains/cross_compile/cc:cc_toolchain_config.bzl", "cc_toolchain_config")
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
 
 # load("//toolchain:yggdrasil.bzl", "ygg_cc_toolchain")
 licenses(["notice"])
@@ -1087,6 +1088,42 @@ platform(
 )
 
 cc_library(
+    name = "triton_dialect_capi_objects",
+    srcs = ["triton_capi/triton_dialect_capi.cpp"],
+    hdrs = ["triton_capi/triton_dialect_capi.h"],
+    includes = ["triton_capi"],
+    deps = [
+        "@llvm-project//llvm:Support",
+        "@llvm-project//mlir:CAPIIRObjects",
+        "@llvm-project//mlir:IR",
+        "@triton//:TritonDialects",
+    ],
+    alwayslink = True,
+)
+
+cc_test(
+    name = "triton_dialect_capi_test",
+    srcs = ["triton_capi/triton_dialect_capi_test.cpp"],
+    includes = ["triton_capi"],
+    deps = [
+        ":triton_dialect_capi_objects",
+        "@com_google_googletest//:gtest_main",
+        "@llvm-project//mlir:CAPIIR",
+        "@llvm-project//mlir:IR",
+    ],
+)
+
+td_library(
+    name = "TritonDialectTdFiles",
+    srcs = [
+        "triton_capi/triton.td",
+    ],
+    deps = [
+        "@triton//:td_files",
+    ],
+)
+
+cc_library(
     name = "ReactantExtraLib",
     srcs = glob(
         [
@@ -1391,7 +1428,7 @@ cc_library(
 
         # Broken upstream x/ref https://github.com/jax-ml/jax/issues/33344
         # "@jax//jaxlib/mosaic:tpu_dialect_capi_objects",
-        "@jax//jaxlib/triton:triton_dialect_capi_objects",
+        ":triton_dialect_capi_objects",
         "@xla//xla/pjrt/plugin/xla_cpu:xla_cpu_pjrt_client",
         "@stablehlo//:linalg_passes",
         "@stablehlo//:tosa_passes",
@@ -1803,10 +1840,10 @@ gentbl_cc_library(
         ),
     ],
     tblgen = "//:mlir-jl-tblgen",
-    td_file = "@jax//jaxlib/triton:triton.td",
+    td_file = "triton_capi/triton.td",
     deps = [
         "@llvm-project//mlir:OpBaseTdFiles",
-        "@triton//:td_files",
+        ":TritonDialectTdFiles",
     ],
 )
 
@@ -1957,7 +1994,7 @@ genrule(
         "@stablehlo//:stablehlo/integrations/c/StablehloDialectApi.h",
         "@stablehlo//:stablehlo/integrations/c/StablehloTypes.h",
         "@shardy//shardy/integrations/c:attributes.h",
-        "@jax//jaxlib/triton:triton_dialect_capi.h",
+        "triton_capi/triton_dialect_capi.h",
         "@jax//jaxlib/mosaic:dialect/tpu/integrations/c/tpu_dialect.h",
         "@jax//jaxlib/mosaic:dialect/tpu/integrations/c/tpu_passes.capi.h.inc",
         "@jax//jaxlib/mosaic/dialect/gpu:integrations/c/attributes.h",
@@ -1973,7 +2010,7 @@ genrule(
         "//:make.jl",
     ],
     outs = ["libMLIR_h.jl"],
-    cmd = "$$JULIA \"--color=yes\" \"--project=$(location //:Project.toml)\" \"$(location //:make.jl)\" \"--extract-api\" \"$(location @llvm-project//mlir:include/mlir-c/Bindings/Python/Interop.h)\" \"$(location @llvm-project//llvm:include/llvm-c/Support.h)\" \"$(locations @llvm-project//mlir:ConversionPassIncGen_filegroup)\" \"$(location @stablehlo//:stablehlo/integrations/c/StablehloAttributes.h)\" \"$(location @shardy//shardy/integrations/c:attributes.h)\" \"$(location @jax//jaxlib/triton:triton_dialect_capi.h)\" \"$(location @jax//jaxlib/mosaic:dialect/tpu/integrations/c/tpu_dialect.h)\" \"$(location @jax//jaxlib/mosaic/dialect/gpu:integrations/c/gpu_dialect.h)\" \"$(location @enzyme_ad//src/enzyme_ad/jax:Integrations/c/EnzymeXLA.h)\" \"$(location @enzyme//:Enzyme/MLIR/Integrations/c/EnzymeMLIR.h)\" \"$@\"",
+    cmd = "$$JULIA \"--color=yes\" \"--project=$(location //:Project.toml)\" \"$(location //:make.jl)\" \"--extract-api\" \"$(location @llvm-project//mlir:include/mlir-c/Bindings/Python/Interop.h)\" \"$(location @llvm-project//llvm:include/llvm-c/Support.h)\" \"$(locations @llvm-project//mlir:ConversionPassIncGen_filegroup)\" \"$(location @stablehlo//:stablehlo/integrations/c/StablehloAttributes.h)\" \"$(location @shardy//shardy/integrations/c:attributes.h)\" \"$(location triton_capi/triton_dialect_capi.h)\" \"$(location @jax//jaxlib/mosaic:dialect/tpu/integrations/c/tpu_dialect.h)\" \"$(location @jax//jaxlib/mosaic/dialect/gpu:integrations/c/gpu_dialect.h)\" \"$(location @enzyme_ad//src/enzyme_ad/jax:Integrations/c/EnzymeXLA.h)\" \"$(location @enzyme//:Enzyme/MLIR/Integrations/c/EnzymeMLIR.h)\" \"$@\"",
     tags = [
         "jlrule",
     ],
