@@ -254,6 +254,7 @@ cc_toolchain_config(
     builtin_sysroot = "/opt/x86_64-linux-musl/bin/../x86_64-linux-musl/sys-root",
     compile_flags = [
         "-stdlib=libstdc++",
+        "-DREACTANT_TOOLCHAIN_IS_BB",
     ],
     compiler = "clang",
     coverage_compile_flags = ["--coverage"],
@@ -378,6 +379,7 @@ cc_toolchain_config(
         "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION/backward",
         "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION/parallel",
         "-stdlib=libstdc++",
+        "-DREACTANT_TOOLCHAIN_IS_BB",
     ],
     compiler = "clang",
     coverage_compile_flags = ["--coverage"],
@@ -506,6 +508,7 @@ cc_toolchain_config(
         "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION/BB_TARGET",
         "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION/backward",
         "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION/parallel",
+        "-DREACTANT_TOOLCHAIN_IS_BB",
     ],
     compiler = "clang",
     coverage_compile_flags = ["--coverage"],
@@ -622,6 +625,7 @@ cc_toolchain_config(
     builtin_sysroot = "/opt/BB_TARGET/BB_TARGET/sys-root/",
     compile_flags = [
         "-stdlib=libc++",
+        "-DREACTANT_TOOLCHAIN_IS_BB",
     ],
     compiler = "clang",
     coverage_compile_flags = ["--coverage"],
@@ -742,6 +746,7 @@ cc_toolchain_config(
     builtin_sysroot = "/opt/BB_TARGET/BB_TARGET/sys-root/",
     compile_flags = [
         "-stdlib=libc++",
+        "-DREACTANT_TOOLCHAIN_IS_BB",
     ],
     compiler = "clang",
     coverage_compile_flags = ["--coverage"],
@@ -863,6 +868,7 @@ cc_toolchain_config(
     builtin_sysroot = "/opt/BB_TARGET/BB_TARGET/sys-root/",
     compile_flags = [
         "-stdlib=libstdc++",
+        "-DREACTANT_TOOLCHAIN_IS_BB",
     ],
     compiler = "clang",
     coverage_compile_flags = ["--coverage"],
@@ -1326,9 +1332,6 @@ cc_library(
         "@xla//xla/service:metrics_proto_cc_impl",
         "@xla//xla/service:custom_call_target_registry",
         "@xla//xla/service/cpu:cpu_compiler",
-        "@xla//xla/stream_executor/tpu:tpu_on_demand_compiler",
-        "@xla//xla/stream_executor/tpu:tpu_executor",
-        "@xla//xla/stream_executor/tpu:tpu_transfer_manager",
         "@xla//xla/service/cpu:cpu_transfer_manager",
         "@xla//xla/tsl/protobuf:protos_all_cc_impl",
         "@xla//xla/tsl/framework:allocator_registry_impl",

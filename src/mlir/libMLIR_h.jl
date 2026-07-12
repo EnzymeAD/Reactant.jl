@@ -14112,7 +14112,10 @@ struct EnzymeXLATransformPassesOptions
     enable_concat_to_batch_passes::Bool
     enable_loop_raising_passes::Bool
     enable_licm_optimization_passes::Bool
+    loop_unswitch_threshold::Int64
     enable_pad_optimization_passes::Bool
+    excluded_passes::Ptr{Cstring}
+    num_excluded_passes::Csize_t
 end
 
 """
@@ -15950,9 +15953,9 @@ function hloInstructionFusedInstructionsComputation(hlo_instruction)
     )::Ptr{HloComputation}
 end
 
-function CreateGPUPerformanceModel(ctx, device_description)
+function CreateGPUPerformanceModel(device_description)
     @ccall mlir_c.CreateGPUPerformanceModel(
-        ctx::MlirContext, device_description::Ptr{DeviceDescription}
+        device_description::Ptr{DeviceDescription}
     )::Ptr{GPUPerformanceModel}
 end
 

@@ -278,3 +278,13 @@ end
     views_bcast!(du_jl, u_jl)
     @test Array(du_ra) ≈ du_jl
 end
+
+@testset "broadcasted function with constant result" begin
+    x = Reactant.ConcreteRArray(rand(10))
+
+    f(x) = broadcast(xj -> true, x)
+    @test Array(@jit f(x)) == fill(true, 10)
+
+    g(x) = all(broadcast(xj -> true, x))
+    @test Bool(@jit g(x))
+end
