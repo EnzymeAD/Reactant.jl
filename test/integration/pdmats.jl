@@ -19,4 +19,3 @@ end
     @test PDMats.invwsumsq(w, a) ≈ @jit(PDMats.invwsumsq(rw, a)) rtol = 1e-12
     @test PDMats.invwsumsq(w, a) ≈ @jit(PDMats.invwsumsq(w, ra)) rtol = 1e-12
 end
-
