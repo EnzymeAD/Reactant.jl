@@ -397,17 +397,6 @@ function trace_while(expr; track_numbers, mincut, checkpointing, first_arg=nothi
     union!(external_syms, cond_symbols.assignments)
     union!(external_syms, body_symbols.references)
     union!(external_syms, body_symbols.assignments)
-    # Locally defined callables (e.g. closures over traced values) that are
-    # called in the loop must become loop-carried arguments as well, so that
-    # traced values captured by them become while-loop operands instead of
-    # closure captures of the generated body function (which would result in
-    # region block arguments without matching operands). Only plain names can
-    # refer to local callables:
-    for symbols_state in (cond_symbols, body_symbols)
-        for fn in symbols_state.funccalls
-            length(fn.parts) == 1 && union!(external_syms, fn.parts)
-        end
-    end
     filter!(∉(SPECIAL_SYMBOLS), external_syms)
 
     all_syms = Expr(:tuple, external_syms...)
