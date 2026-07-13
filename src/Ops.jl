@@ -2397,7 +2397,7 @@ function _verify_while_region_args(
         or they do not match the $(length(input_types)) loop operand(s)
         (cond: $(length(cond_args)), body: $(length(body_args))).
         This is a bug in Reactant; please open an issue.
-        $(join(lines, "\n"))""",
+        $(join(lines, "\n"))"""
     )
 end
 
@@ -2454,7 +2454,8 @@ end
         # The macro prepends `Symbol(body_fn)` when body_fn is a closure
         # (matching the old `Reactant.apply` wrapping); strip it and account
         # for the two leading function arguments instead.
-        names = sizeof(BFn) != 0 ? Base.tail(Tuple(verify_arg_names)) : Tuple(verify_arg_names)
+        names =
+            sizeof(BFn) != 0 ? Base.tail(Tuple(verify_arg_names)) : Tuple(verify_arg_names)
         verify_arg_names = (Symbol("cond_fn"), Symbol("body_fn"), names...)
     end
 
@@ -2511,9 +2512,12 @@ end
     body_fn_compiled = body_fn_res.f
 
     _verify_while_region_args(
-        cond_fn_res.linear_args, cond_argprefix,
-        body_fn_res.linear_args, body_argprefix,
-        input_types, verify_arg_names,
+        cond_fn_res.linear_args,
+        cond_argprefix,
+        body_fn_res.linear_args,
+        body_argprefix,
+        input_types,
+        verify_arg_names,
     )
 
     cond_reg = Reactant.TracedUtils.__take_region(cond_fn_compiled)
