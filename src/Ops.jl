@@ -2339,6 +2339,12 @@ end
     )
 end
 
+# Explicitly redirect through `call_with_reactant` so that the closures are
+# always traced with the Reactant interpreter, even if the rewrite pass does
+# not rewrite the dynamic call inside these wrappers.
+_call_while_cond(cond_fn, body_fn, args...) = Reactant.call_with_reactant(cond_fn, args...)
+_call_while_body(cond_fn, body_fn, args...) = Reactant.call_with_reactant(body_fn, args...)
+
 @noinline function while_loop(
     cond_fn::CFn,
     body_fn::BFn,
@@ -2351,9 +2357,21 @@ end
 ) where {CFn,BFn}
     # TODO(#2250): detect and prevent mutation within the condition
 
-    # Make all the args traced or concrete
+    # Make all the args traced or concrete. The condition and body functions
+    # themselves are traced as well: traced values captured by them (e.g.
+    # through closures called inside the loop) must become while-loop operands
+    # so that the region block arguments match the loop operands.
     N = length(args)
     seen_args = Reactant.OrderedIdDict()
+    # Note: no `track_numbers` for the functions themselves — plain numbers
+    # captured by the closures (e.g. objectids captured for aliasing checks)
+    # must stay untraced, matching how `make_mlir_fn` traces the region args.
+    traced_cond_fn = Reactant.make_tracer(
+        seen_args, cond_fn, (), Reactant.NoStopTracedTrack
+    )
+    traced_body_fn = Reactant.make_tracer(
+        seen_args, body_fn, (), Reactant.NoStopTracedTrack
+    )
     traced_args = Vector{Any}(undef, N)
 
     for (i, prev) in enumerate(args)
@@ -2370,10 +2388,23 @@ end
 
     input_types = [mlir_type(arg) for arg in linear_args]
 
+    # Both regions are traced over the same argument tuple (cond_fn, body_fn,
+    # args...) so that their block arguments are identical and match the
+    # while-loop operands collected above.
+    wrapped_args = (traced_cond_fn, traced_body_fn, traced_args...)
+
+    if verify_arg_names !== nothing
+        # The macro prepends `Symbol(body_fn)` when body_fn is a closure
+        # (matching the old `Reactant.apply` wrapping); strip it and account
+        # for the two leading function arguments instead.
+        names = sizeof(BFn) != 0 ? Base.tail(Tuple(verify_arg_names)) : Tuple(verify_arg_names)
+        verify_arg_names = (Symbol("cond_fn"), Symbol("body_fn"), names...)
+    end
+
     cond_fn_compiled =
         Reactant.TracedUtils.make_mlir_fn(
-            cond_fn,
-            traced_args,
+            _call_while_cond,
+            wrapped_args,
             (),
             string(gensym("cond_fn")),
             false;
@@ -2387,8 +2418,8 @@ end
 
     body_fn_compiled =
         Reactant.TracedUtils.make_mlir_fn(
-            body_fn,
-            traced_args,
+            _call_while_body,
+            wrapped_args,
             (),
             string(gensym("body_fn")),
             false;
