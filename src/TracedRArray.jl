@@ -398,10 +398,12 @@ function _copyto!(dest::AnyTracedRArray, bc::Broadcasted)
 
     args = (Reactant.broadcast_to_size(Base.materialize(a), size(bc)) for a in bc.args)
 
-    res = Reactant.promote_to(
-        TracedRArray{unwrapped_eltype(dest),ndims(dest)},
-        TracedUtils.elem_apply(bc.f, args...),
-    )
+    res0 = TracedUtils.elem_apply(bc.f, args...)
+    if !(res0 isa Reactant.TracedType)
+        # `bc.f` returned a constant that does not depend on its arguments:
+        res0 = Reactant.broadcast_to_size(res0, size(dest))
+    end
+    res = Reactant.promote_to(TracedRArray{unwrapped_eltype(dest),ndims(dest)}, res0)
     TracedUtils.set_mlir_data!(dest, res.mlir_data)
     return dest
 end
