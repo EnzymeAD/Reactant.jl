@@ -1315,6 +1315,16 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
 
     residx = 1
 
+    # Arguments the scalar function did not mutate are pure passthroughs of
+    # the batch inputs, so writing the batched result back into them would
+    # only rebind them to an equal value; skip those to avoid spuriously
+    # marking read-only inputs as mutated in enclosing regions (e.g. the
+    # condition of a traced while loop).
+    mutated_linear_args = Base.IdSet{Any}()
+    for i in mlir_fn_res.mutated_args
+        push!(mutated_linear_args, linear_args[i])
+    end
+
     for a in linear_results
         resv = MLIR.IR.result(res, residx)
         residx += 1
@@ -1325,6 +1335,7 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
             if path[1] == resprefix
                 set!(result, path[2:end], resv)
             elseif path[1] == argprefix
+                a in mutated_linear_args || continue
                 idx = path[2]::Int
 
                 ogarg = if idx == 1 && fnwrap
