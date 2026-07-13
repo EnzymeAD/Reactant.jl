@@ -2345,6 +2345,56 @@ end
 _call_while_cond(cond_fn, body_fn, args...) = Reactant.call_with_reactant(cond_fn, args...)
 _call_while_body(cond_fn, body_fn, args...) = Reactant.call_with_reactant(body_fn, args...)
 
+# `stablehlo.while` requires both regions' block arguments to match the loop
+# operands. This holds by construction — both regions are traced over the same
+# `(cond_fn, body_fn, args...)` tuple, whose deterministic, identity-deduped
+# traversal yields the same traced leaves in the same order as the operand
+# collection — but the invariant would break if the argument graph were mutated
+# between the two traces or traversed non-deterministically. Verify it via the
+# recorded argument paths (graph positions), which is stronger than comparing
+# types: it also catches same-typed leaves being permuted between the regions.
+function _verify_while_region_args(
+    cond_args, cond_argprefix, body_args, body_argprefix, input_types, verify_arg_names
+)
+    path_tails(arg, prefix) =
+        sort!(Any[path[2:end] for path in arg.paths if length(path) > 0 && path[1] == prefix])
+    cond_paths = [path_tails(arg, cond_argprefix) for arg in cond_args]
+    body_paths = [path_tails(arg, body_argprefix) for arg in body_args]
+    if cond_paths == body_paths && length(body_args) == length(input_types)
+        return nothing
+    end
+
+    function describe(tails)
+        isempty(tails) && return "<no argument path>"
+        return join(
+            map(tails) do t
+                name = if verify_arg_names !== nothing && t[1] in eachindex(verify_arg_names)
+                    string(verify_arg_names[t[1]])
+                else
+                    "arg" * string(t[1])
+                end
+                "$name (path=$t)"
+            end,
+            " / ",
+        )
+    end
+
+    lines = String[]
+    for i in 1:max(length(cond_paths), length(body_paths))
+        c = i <= length(cond_paths) ? describe(cond_paths[i]) : "<missing>"
+        b = i <= length(body_paths) ? describe(body_paths[i]) : "<missing>"
+        c == b || push!(lines, "  block argument $i: cond=$c vs body=$b")
+    end
+    return error(
+        """
+        Traced while loop condition and body regions disagree on their block arguments,
+        or they do not match the $(length(input_types)) loop operand(s)
+        (cond: $(length(cond_args)), body: $(length(body_args))).
+        This is a bug in Reactant; please open an issue.
+        $(join(lines, "\n"))""",
+    )
+end
+
 @noinline function while_loop(
     cond_fn::CFn,
     body_fn::BFn,
@@ -2401,36 +2451,44 @@ _call_while_body(cond_fn, body_fn, args...) = Reactant.call_with_reactant(body_f
         verify_arg_names = (Symbol("cond_fn"), Symbol("body_fn"), names...)
     end
 
-    cond_fn_compiled =
-        Reactant.TracedUtils.make_mlir_fn(
-            _call_while_cond,
-            wrapped_args,
-            (),
-            string(gensym("cond_fn")),
-            false;
-            return_dialect=:stablehlo,
-            args_in_result=:result,
-            do_transpose=false,
-            argprefix=gensym("loop_condarg"),
-            resprefix=gensym("loop_condres"),
-            resargprefix=gensym("loop_condresarg"),
-        ).f
+    cond_argprefix = gensym("loop_condarg")
+    cond_fn_res = Reactant.TracedUtils.make_mlir_fn(
+        _call_while_cond,
+        wrapped_args,
+        (),
+        string(gensym("cond_fn")),
+        false;
+        return_dialect=:stablehlo,
+        args_in_result=:result,
+        do_transpose=false,
+        argprefix=cond_argprefix,
+        resprefix=gensym("loop_condres"),
+        resargprefix=gensym("loop_condresarg"),
+    )
+    cond_fn_compiled = cond_fn_res.f
 
-    body_fn_compiled =
-        Reactant.TracedUtils.make_mlir_fn(
-            _call_while_body,
-            wrapped_args,
-            (),
-            string(gensym("body_fn")),
-            false;
-            return_dialect=:stablehlo,
-            args_in_result=:all,
-            do_transpose=false,
-            verify_arg_names,
-            argprefix=gensym("loop_bodyarg"),
-            resprefix=gensym("loop_bodyres"),
-            resargprefix=gensym("loop_bodyresarg"),
-        ).f
+    body_argprefix = gensym("loop_bodyarg")
+    body_fn_res = Reactant.TracedUtils.make_mlir_fn(
+        _call_while_body,
+        wrapped_args,
+        (),
+        string(gensym("body_fn")),
+        false;
+        return_dialect=:stablehlo,
+        args_in_result=:all,
+        do_transpose=false,
+        verify_arg_names,
+        argprefix=body_argprefix,
+        resprefix=gensym("loop_bodyres"),
+        resargprefix=gensym("loop_bodyresarg"),
+    )
+    body_fn_compiled = body_fn_res.f
+
+    _verify_while_region_args(
+        cond_fn_res.linear_args, cond_argprefix,
+        body_fn_res.linear_args, body_argprefix,
+        input_types, verify_arg_names,
+    )
 
     cond_reg = Reactant.TracedUtils.__take_region(cond_fn_compiled)
     body_reg = Reactant.TracedUtils.__take_region(body_fn_compiled)
