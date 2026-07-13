@@ -2353,31 +2353,37 @@ _call_while_body(cond_fn, body_fn, args...) = Reactant.call_with_reactant(body_f
 # between the two traces or traversed non-deterministically. Verify it via the
 # recorded argument paths (graph positions), which is stronger than comparing
 # types: it also catches same-typed leaves being permuted between the regions.
+function _while_arg_paths(arg, prefix)
+    return sort!(
+        Any[path[2:end] for path in arg.paths if length(path) > 0 && path[1] == prefix]
+    )
+end
+
+function _while_arg_name(tails, verify_arg_names)
+    isempty(tails) && return "<no argument path>"
+    return join(
+        map(tails) do t
+            name = if verify_arg_names !== nothing && t[1] in eachindex(verify_arg_names)
+                string(verify_arg_names[t[1]])
+            else
+                "arg" * string(t[1])
+            end
+            "$name (path=$t)"
+        end,
+        " / ",
+    )
+end
+
 function _verify_while_region_args(
     cond_args, cond_argprefix, body_args, body_argprefix, input_types, verify_arg_names
 )
-    path_tails(arg, prefix) =
-        sort!(Any[path[2:end] for path in arg.paths if length(path) > 0 && path[1] == prefix])
-    cond_paths = [path_tails(arg, cond_argprefix) for arg in cond_args]
-    body_paths = [path_tails(arg, body_argprefix) for arg in body_args]
+    cond_paths = [_while_arg_paths(arg, cond_argprefix) for arg in cond_args]
+    body_paths = [_while_arg_paths(arg, body_argprefix) for arg in body_args]
     if cond_paths == body_paths && length(body_args) == length(input_types)
         return nothing
     end
 
-    function describe(tails)
-        isempty(tails) && return "<no argument path>"
-        return join(
-            map(tails) do t
-                name = if verify_arg_names !== nothing && t[1] in eachindex(verify_arg_names)
-                    string(verify_arg_names[t[1]])
-                else
-                    "arg" * string(t[1])
-                end
-                "$name (path=$t)"
-            end,
-            " / ",
-        )
-    end
+    describe(tails) = _while_arg_name(tails, verify_arg_names)
 
     lines = String[]
     for i in 1:max(length(cond_paths), length(body_paths))
@@ -2405,7 +2411,8 @@ end
     mincut=false,
     location=mlir_stacktrace("while_loop", @__FILE__, @__LINE__),
 ) where {CFn,BFn}
-    # TODO(#2250): detect and prevent mutation within the condition
+    # Mutation of traced values within the condition is detected and rejected
+    # after the condition region is traced (#2250).
 
     # Make all the args traced or concrete. The condition and body functions
     # themselves are traced as well: traced values captured by them (e.g.
@@ -2466,6 +2473,25 @@ end
         resargprefix=gensym("loop_condresarg"),
     )
     cond_fn_compiled = cond_fn_res.f
+
+    # The condition region only returns the loop predicate, so mutations of
+    # traced values inside it would be silently discarded on every iteration
+    # (#2250). `make_mlir_fn` already detected which block arguments were
+    # mutated during tracing; reject them here.
+    if !isempty(cond_fn_res.mutated_args)
+        mutated_names = [
+            _while_arg_name(
+                _while_arg_paths(cond_fn_res.linear_args[i], cond_argprefix),
+                verify_arg_names,
+            ) for i in cond_fn_res.mutated_args
+        ]
+        error(
+            "Mutation of traced values inside the condition of a traced while loop " *
+            "is not supported: the condition only returns the loop predicate, so " *
+            "these mutations would be silently discarded on every iteration. " *
+            "Move them into the loop body. Mutated: $(join(mutated_names, ", "))",
+        )
+    end
 
     body_argprefix = gensym("loop_bodyarg")
     body_fn_res = Reactant.TracedUtils.make_mlir_fn(
