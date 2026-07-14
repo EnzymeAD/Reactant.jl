@@ -1,0 +1,13 @@
+[deps]
+Enzyme = "7da242da-08ed-463a-9acd-ee780be4f1d9"
+Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
+Reactant = "3c362404-f566-11ee-1572-e11a4b42c853"
+
+[sources]
+Reactant = {path = "../.."}
+
+[compat]
+Enzyme = "0.13.115"
+Printf = "1"
+Reactant = "0.2.272"
+julia = "1.11"
