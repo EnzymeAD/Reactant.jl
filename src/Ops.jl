@@ -2342,8 +2342,23 @@ end
 # Explicitly redirect through `call_with_reactant` so that the closures are
 # always traced with the Reactant interpreter, even if the rewrite pass does
 # not rewrite the dynamic call inside these wrappers.
-_call_while_cond(cond_fn, body_fn, args...) = Reactant.call_with_reactant(cond_fn, args...)
-_call_while_body(cond_fn, body_fn, args...) = Reactant.call_with_reactant(body_fn, args...)
+#
+# `cond_fn`/`body_fn` are placed *last*, after the explicit loop args, so that
+# the while-loop operands stay ordered as (loop args..., closure captures...).
+# Enzyme's reverse-mode differentiation of `stablehlo.while` identifies the
+# counted-loop induction variable/bound heuristically and expects them near
+# the front of the operand list; putting closure-only captures (e.g. arrays
+# only read, never reassigned, inside the loop) ahead of the explicit args
+# shifts the induction variable back and confuses that heuristic, producing
+# a malformed reverse loop (mismatched operand shapes).
+function _call_while_cond(args_and_fns...)
+    cond_fn = args_and_fns[end - 1]
+    return Reactant.call_with_reactant(cond_fn, args_and_fns[1:(end - 2)]...)
+end
+function _call_while_body(args_and_fns...)
+    body_fn = args_and_fns[end]
+    return Reactant.call_with_reactant(body_fn, args_and_fns[1:(end - 2)]...)
+end
 
 # `stablehlo.while` requires both regions' block arguments to match the loop
 # operands. This holds by construction — both regions are traced over the same
@@ -2420,15 +2435,6 @@ end
     # so that the region block arguments match the loop operands.
     N = length(args)
     seen_args = Reactant.OrderedIdDict()
-    # Note: no `track_numbers` for the functions themselves — plain numbers
-    # captured by the closures (e.g. objectids captured for aliasing checks)
-    # must stay untraced, matching how `make_mlir_fn` traces the region args.
-    traced_cond_fn = Reactant.make_tracer(
-        seen_args, cond_fn, (), Reactant.NoStopTracedTrack
-    )
-    traced_body_fn = Reactant.make_tracer(
-        seen_args, body_fn, (), Reactant.NoStopTracedTrack
-    )
     traced_args = Vector{Any}(undef, N)
 
     for (i, prev) in enumerate(args)
@@ -2436,6 +2442,20 @@ end
             seen_args, prev, (), Reactant.NoStopTracedTrack; track_numbers
         )
     end
+
+    # Note: no `track_numbers` for the functions themselves — plain numbers
+    # captured by the closures (e.g. objectids captured for aliasing checks)
+    # must stay untraced, matching how `make_mlir_fn` traces the region args.
+    # These are traced *after* `args` so that traced values captured only by
+    # the closures (e.g. arrays only read, never reassigned, inside the loop)
+    # are placed after the explicit loop args in the operand list below; see
+    # `_call_while_cond`/`_call_while_body` for why the ordering matters.
+    traced_cond_fn = Reactant.make_tracer(
+        seen_args, cond_fn, (), Reactant.NoStopTracedTrack
+    )
+    traced_body_fn = Reactant.make_tracer(
+        seen_args, body_fn, (), Reactant.NoStopTracedTrack
+    )
 
     linear_args = Reactant.TracedType[]
     for (_, v) in seen_args
@@ -2445,18 +2465,18 @@ end
 
     input_types = [mlir_type(arg) for arg in linear_args]
 
-    # Both regions are traced over the same argument tuple (cond_fn, body_fn,
-    # args...) so that their block arguments are identical and match the
+    # Both regions are traced over the same argument tuple (args..., cond_fn,
+    # body_fn) so that their block arguments are identical and match the
     # while-loop operands collected above.
-    wrapped_args = (traced_cond_fn, traced_body_fn, traced_args...)
+    wrapped_args = (traced_args..., traced_cond_fn, traced_body_fn)
 
     if verify_arg_names !== nothing
         # The macro prepends `Symbol(body_fn)` when body_fn is a closure
         # (matching the old `Reactant.apply` wrapping); strip it and account
-        # for the two leading function arguments instead.
+        # for the two trailing function arguments instead.
         names =
             sizeof(BFn) != 0 ? Base.tail(Tuple(verify_arg_names)) : Tuple(verify_arg_names)
-        verify_arg_names = (Symbol("cond_fn"), Symbol("body_fn"), names...)
+        verify_arg_names = (names..., Symbol("cond_fn"), Symbol("body_fn"))
     end
 
     cond_argprefix = gensym("loop_condarg")
