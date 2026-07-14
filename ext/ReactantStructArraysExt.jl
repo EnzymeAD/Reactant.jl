@@ -31,6 +31,8 @@ function __init__()
     Reactant.@skip_rewrite_func StructArrays.index_type
 end
 
+Reactant.is_extension_loaded(::Val{:StructArrays}) = true
+
 StructArrays.always_struct_broadcast(::AbstractReactantArrayStyle) = true
 
 function Base.copy(
@@ -81,14 +83,14 @@ function Base.copyto!(
     return copyto!(dest, res)
 end
 
-function alloc_sarr(bc, T)
+function alloc_sarr(bc, T, dims=axes(bc))
     # Short circuit for Complex since in Reactant they are just a regular number
-    T <: Complex && return similar(bc, T)
-    asa = Base.Fix1(alloc_sarr, bc)
+    T <: Complex && return similar(bc, T, dims)
+    asa = FT -> alloc_sarr(bc, FT, dims)
     if StructArrays.isnonemptystructtype(T)
         return StructArrays.buildfromschema(asa, T)
     else
-        return similar(bc, T)
+        return similar(bc, T, dims)
     end
 end
 
@@ -98,6 +100,16 @@ function Base.similar(
     bc′ = convert(Broadcasted{S}, bc)
     # It is possible that we have multiple broadcasted arguments
     return alloc_sarr(bc′, ElType)
+end
+
+# Broadcasted functions returning tuples or structs over traced arrays get a
+# struct-of-arrays result (see issue #1566)
+function Base.similar(
+    bc::Broadcasted{AbstractReactantArrayStyle{N}}, ::Type{T}, dims
+) where {T,N}
+    (T <: Complex || !StructArrays.isnonemptystructtype(T)) &&
+        throw(MethodError(similar, (bc, T, dims)))
+    return alloc_sarr(bc, T, dims)
 end
 
 Base.@propagate_inbounds function StructArrays._getindex(
