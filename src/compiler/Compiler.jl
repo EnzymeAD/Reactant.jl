@@ -246,6 +246,7 @@ function compile_mlir!(
     compile_options::CompileOptions,
     debugcache=default_debugcache(),
     callcache=default_callcache(),
+    autodiffcache=default_autodiffcache(),
     sdycache=default_sdycache(),
     sdygroupidcache=default_sdygroupidcache();
     fn_kwargs=(),
@@ -264,6 +265,7 @@ function compile_mlir!(
     MLIR.IR.activate(mod)
     MLIR.IR.activate(MLIR.IR.body(mod))
     activate_callcache!(callcache)
+    activate_autodiffcache!(autodiffcache)
     activate_debugcache!(debugcache)
     activate_sdycache!(sdycache)
     activate_sdygroupidcache!(sdygroupidcache)
@@ -294,6 +296,7 @@ function compile_mlir!(
         deactivate_raising!(is_raising)
         deactivate_sdycache!(sdycache)
         deactivate_sdygroupidcache!(sdygroupidcache)
+        deactivate_autodiffcache!(autodiffcache)
         deactivate_callcache!(callcache)
         deactivate_debugcache!(debugcache)
         MLIR.IR.deactivate(MLIR.IR.body(mod))
@@ -1573,7 +1576,7 @@ function compile(ctx, f, args; kwargs...)
     )
 end
 
-for cache_type in (:callcache, :sdycache, :sdygroupidcache, :debugcache)
+for cache_type in (:callcache, :autodiffcache, :sdycache, :sdygroupidcache, :debugcache)
     activate_fn = Symbol(:activate_, cache_type, :!)
     deactivate_fn = Symbol(:deactivate_, cache_type, :!)
     has_fn = Symbol(:_has_, cache_type)
@@ -1643,6 +1646,10 @@ function default_callcache()
             resargprefix::Symbol,
         }
     }()
+end
+
+function default_autodiffcache()
+    return Dict{Vector,Any}()
 end
 
 function default_debugcache()

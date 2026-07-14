@@ -55,9 +55,18 @@ function flatten_states(states)
     return arrays
 end
 
-function compile_timed(f, args)
+function brusselator_compile_options(diff_batch::Bool)
+    ad_optimization_passes = if diff_batch
+        Reactant.ADOptimizationOptions(; diff_batch=true)
+    else
+        false
+    end
+    return Reactant.CompileOptions(; sync=true, ad_optimization_passes)
+end
+
+function compile_timed(f, args, compile_options::Reactant.CompileOptions)
     compiled = Ref{Any}()
-    seconds = @elapsed compiled[] = Reactant.compile(f, args; sync=true)
+    seconds = @elapsed compiled[] = Reactant.compile(f, args; compile_options)
     return compiled[], seconds
 end
 
@@ -138,12 +147,14 @@ function run_brusselator_validation(;
     primal_rtol::Float64=1.0e-10,
     jvp_atol::Float64=2.0e-6,
     jvp_rtol::Float64=2.0e-7,
+    diff_batch::Bool=false,
 )
     isempty(Ks) && throw(ArgumentError("Ks must not be empty"))
     all(K -> K in SUPPORTED_CHUNKS, Ks) ||
         throw(ArgumentError("Ks must be selected from $SUPPORTED_CHUNKS"))
     samples > 0 || throw(ArgumentError("samples must be positive"))
     epsilon > 0 || throw(ArgumentError("epsilon must be positive"))
+    compile_options = brusselator_compile_options(diff_batch)
 
     problem = brusselator_problem(N)
     state = split_state(problem.u)
@@ -164,7 +175,7 @@ function run_brusselator_validation(;
         zero_state(state), state, problem.coordinates, problem.p
     ))
     primal_compiled, primal_compile_seconds = compile_timed(
-        brusselator_2d_loop!, primal_args
+        brusselator_2d_loop!, primal_args, compile_options
     )
     primal_first_seconds = execute_timed(primal_compiled, primal_args)
     primal_steady = steady_timings(primal_compiled, primal_args, samples)
@@ -200,7 +211,9 @@ function run_brusselator_validation(;
         problem.coordinates,
         problem.p,
     ))
-    single_compiled, single_compile_seconds = compile_timed(residual_jvp!, single_args)
+    single_compiled, single_compile_seconds = compile_timed(
+        residual_jvp!, single_args, compile_options
+    )
     single_first_seconds = execute_timed(single_compiled, single_args)
     single_steady = steady_timings(single_compiled, single_args, samples)
     reactant_single = host_state(single_args[1])
@@ -240,7 +253,9 @@ function run_brusselator_validation(;
             outputs, state, chunk_seeds, problem.coordinates, problem.p
         ))
         wrapper = chunk_function(K)
-        chunk_compiled, chunk_compile_seconds = compile_timed(wrapper, chunk_args)
+        chunk_compiled, chunk_compile_seconds = compile_timed(
+            wrapper, chunk_args, compile_options
+        )
         chunk_first_seconds = execute_timed(chunk_compiled, chunk_args)
         chunk_steady = steady_timings(chunk_compiled, chunk_args, samples)
         chunk_outputs = map(host_state, chunk_args[1])
@@ -296,6 +311,7 @@ function run_brusselator_validation(;
     println("  K:        ", join(Ks, ","))
     println("  seeds:    ", seed_kind)
     println("  epsilon:  ", epsilon)
+    println("  diff batch: ", diff_batch)
     println("  logical output shape: ", size(reference_primal))
     println()
     print_metrics(
@@ -342,6 +358,7 @@ function run_brusselator_validation(;
         N,
         Ks,
         seed_kind,
+        diff_batch,
         primal=(;
             julia_metrics=julia_primal_metrics,
             reactant_metrics=reactant_primal_metrics,
@@ -366,12 +383,17 @@ measuring only launch overhead. Numerical finite-difference checks deliberately 
 diffusion coefficient. This path still checks finite outputs and independent buffers.
 """
 function run_brusselator_performance(;
-    N::Int=4096, Ks::Tuple=(1, 2, 4, 8, 12), seed_kind::Symbol=:onehot, samples::Int=30
+    N::Int=4096,
+    Ks::Tuple=(1, 2, 4, 8, 12),
+    seed_kind::Symbol=:onehot,
+    samples::Int=30,
+    diff_batch::Bool=false,
 )
     isempty(Ks) && throw(ArgumentError("Ks must not be empty"))
     all(K -> K in SUPPORTED_CHUNKS, Ks) ||
         throw(ArgumentError("Ks must be selected from $SUPPORTED_CHUNKS"))
     samples > 0 || throw(ArgumentError("samples must be positive"))
+    compile_options = brusselator_compile_options(diff_batch)
 
     problem = brusselator_problem(N)
     state = split_state(problem.u)
@@ -383,7 +405,7 @@ function run_brusselator_performance(;
         zero_state(state), state, problem.coordinates, problem.p
     ))
     primal_compiled, primal_compile_seconds = compile_timed(
-        brusselator_2d_loop!, primal_args
+        brusselator_2d_loop!, primal_args, compile_options
     )
     primal_first_seconds = execute_timed(primal_compiled, primal_args)
     primal_steady = steady_timings(primal_compiled, primal_args, samples)
@@ -404,7 +426,9 @@ function run_brusselator_performance(;
         problem.coordinates,
         problem.p,
     ))
-    single_compiled, single_compile_seconds = compile_timed(residual_jvp!, single_args)
+    single_compiled, single_compile_seconds = compile_timed(
+        residual_jvp!, single_args, compile_options
+    )
     single_first_seconds = execute_timed(single_compiled, single_args)
     single_steady = steady_timings(single_compiled, single_args, samples)
     single_finite = all(isfinite, logical_array(single_args[1]))
@@ -428,7 +452,9 @@ function run_brusselator_performance(;
         chunk_args = Reactant.to_rarray((
             outputs, state, chunk_seeds, problem.coordinates, problem.p
         ))
-        chunk_compiled, chunk_compile_seconds = compile_timed(chunk_function(K), chunk_args)
+        chunk_compiled, chunk_compile_seconds = compile_timed(
+            chunk_function(K), chunk_args, compile_options
+        )
         chunk_first_seconds = execute_timed(chunk_compiled, chunk_args)
         chunk_steady = steady_timings(chunk_compiled, chunk_args, samples)
         first_output_finite = all(isfinite, logical_array(chunk_args[1][1]))
@@ -459,6 +485,7 @@ function run_brusselator_performance(;
     println("  K:        ", join(Ks, ","))
     println("  seeds:    ", seed_kind)
     println("  samples:  ", samples)
+    println("  diff batch: ", diff_batch)
     @printf("  one logical state: %.3f GiB\n", logical_state_bytes / 2.0^30)
     println("  execution is synchronous; no distributed sharding is requested")
     println()
@@ -484,6 +511,7 @@ function run_brusselator_performance(;
         N,
         Ks,
         seed_kind,
+        diff_batch,
         primal=(; finite=primal_finite, timing=primal_timing),
         single_jvp=(; finite=single_finite, timing=single_timing),
         chunks=chunk_results,
@@ -511,7 +539,8 @@ function parse_command_line(args)
     seed_kind = Symbol(get(options, "seed", default_seed))
     epsilon = parse(Float64, get(options, "epsilon", "1e-4"))
     samples = parse(Int, get(options, "samples", default_samples))
-    return (; mode, N, Ks, seed_kind, epsilon, samples)
+    diff_batch = parse(Bool, get(options, "diff-batch", "false"))
+    return (; mode, N, Ks, seed_kind, epsilon, samples, diff_batch)
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__
@@ -523,10 +552,15 @@ if abspath(PROGRAM_FILE) == @__FILE__
             seed_kind=options.seed_kind,
             epsilon=options.epsilon,
             samples=options.samples,
+            diff_batch=options.diff_batch,
         )
     else
         run_brusselator_performance(;
-            N=options.N, Ks=options.Ks, seed_kind=options.seed_kind, samples=options.samples
+            N=options.N,
+            Ks=options.Ks,
+            seed_kind=options.seed_kind,
+            samples=options.samples,
+            diff_batch=options.diff_batch,
         )
     end
 end

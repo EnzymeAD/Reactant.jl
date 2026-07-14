@@ -43,7 +43,7 @@ selected explicitly:
 ```sh
 CUDA_VISIBLE_DEVICES=0 julia --project=benchmark/brusselator --startup-file=no \
   benchmark/brusselator/runbenchmarks.jl \
-  --mode=validation --n=32 --ks=1,2,4,8,12 --samples=10
+  --mode=validation --n=32 --ks=1,2,4,8,12 --samples=10 --diff-batch=true
 ```
 
 ## Performance benchmark
@@ -60,7 +60,7 @@ with a smaller grid or fewer simultaneous JVPs:
 ```sh
 CUDA_VISIBLE_DEVICES=0 julia --project=benchmark/brusselator --startup-file=no \
   benchmark/brusselator/runbenchmarks.jl \
-  --mode=performance --n=2048 --ks=1,2,4 --samples=30
+  --mode=performance --n=2048 --ks=1,2,4 --samples=30 --diff-batch=true
 ```
 
 The output separates compilation, first execution, steady median, and steady minimum
@@ -79,6 +79,7 @@ All options use `--name=value` syntax:
 | `--seed` | `dense`, `onehot` | `dense` | `onehot` |
 | `--samples` | positive integer | `5` | `30` |
 | `--epsilon` | positive floating-point value | `1e-4` | unused |
+| `--diff-batch` | `true`, `false` | `false` | `false` |
 
 ## Layout and compiler experiments
 
@@ -88,10 +89,27 @@ All options use `--name=value` syntax:
   coordinates, and parameters, and only its tangent seed and destination differ.
 - `runbenchmarks.jl` contains correctness checks, compilation, synchronized timing, and
   command-line handling.
+- `inspect_mlir.jl` saves the initial, pre-batching, post-batching, and legalized MLIR
+  for each selected chunk size under the ignored `results/` directory. It also applies
+  a diagnostic post-core-Enzyme helper legalization explicitly and saves both sides of
+  it; that diagnostic stage is not part of the production pass ordering.
+- `profile_k8.jl` compiles only the K=8 chunk and can save XProf kernel and framework-op
+  reports without profiling the primal and single-JVP setup cases.
 - `Project.toml` is the isolated benchmark environment.
 
-`compile_timed` in `runbenchmarks.jl` is the central call to `Reactant.compile`. Compiler
-pass or `CompileOptions` experiments can be routed through that function while leaving
-the workload and validation references unchanged. Run validation after every compiler
-configuration before comparing performance results. The checked-in runner uses Reactant's
-normal compilation pipeline; it does not explicitly run `enzyme-diff-batch`.
+`compile_timed` in `runbenchmarks.jl` is the central call to `Reactant.compile`. Set
+`--diff-batch=true` to compile with
+`ADOptimizationOptions(; diff_batch=true)`, or leave the default `false` to disable all
+optional AD-aware optimizations. All other compile and benchmark settings are identical.
+Run validation for both configurations before comparing performance results.
+
+To inspect differentiation batching at each relevant pipeline stage, run:
+
+```sh
+CUDA_VISIBLE_DEVICES=0 julia --project=benchmark/brusselator --startup-file=no \
+  benchmark/brusselator/inspect_mlir.jl \
+  --n=3 --ks=1,2,4,8,12 --output-dir=benchmark/brusselator/results/mlir
+```
+
+The inspection grid is intentionally small because the operation structure and batching
+decision do not depend on the tensor dimensions.

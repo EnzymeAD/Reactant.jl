@@ -329,22 +329,59 @@ function overload_autodiff(
     primf = f.val
     primargs = ((v.val for v in args)...,)
 
-    argprefix::Symbol = gensym("autodiffarg")
-    resprefix::Symbol = gensym("autodiffresult")
-    resargprefix::Symbol = gensym("autodiffresarg")
+    seen = OrderedIdDict()
+    cache_key = Any[:enzyme_autodiff]
+    make_tracer(seen, (primf, primargs...), cache_key, TracedToTypes)
+    cache = Compiler.autodiffcache(; throw_error=false)
 
-    mlir_fn_res = TracedUtils.make_mlir_fn(
-        primf,
-        primargs,
-        (),
-        string(FA) * "_autodiff",
-        false;
-        argprefix,
-        resprefix,
-        resargprefix,
-    )
-    (; result, linear_args, in_tys, linear_results) = mlir_fn_res
-    fnwrap = mlir_fn_res.fnwrapped
+    if cache !== nothing && haskey(cache, cache_key)
+        (;
+            f_name,
+            result,
+            linear_args,
+            in_tys,
+            linear_results,
+            fnwrap,
+            argprefix,
+            resprefix,
+            resargprefix,
+        ) = cache[cache_key]
+        result = deepcopy(result)
+    else
+        argprefix::Symbol = gensym("autodiffarg")
+        resprefix::Symbol = gensym("autodiffresult")
+        resargprefix::Symbol = gensym("autodiffresarg")
+
+        mlir_fn_res = TracedUtils.make_mlir_fn(
+            primf,
+            primargs,
+            (),
+            string(FA) * "_autodiff",
+            false;
+            argprefix,
+            resprefix,
+            resargprefix,
+            args_in_result=:mutated,
+        )
+        (; result, linear_args, in_tys, linear_results) = mlir_fn_res
+        fnwrap = mlir_fn_res.fnwrapped
+        f_name = Base.String(
+            TracedUtils.get_attribute_by_name(mlir_fn_res.f, "sym_name")
+        )
+        if cache !== nothing
+            cache[cache_key] = (;
+                f_name,
+                result=deepcopy(result),
+                linear_args,
+                in_tys,
+                linear_results,
+                fnwrap,
+                argprefix,
+                resprefix,
+                resargprefix,
+            )
+        end
+    end
 
     activity = EnzymeActivity.T[]
     ad_inputs = MLIR.IR.Value[]
@@ -477,8 +514,7 @@ function overload_autodiff(
         end
     end
 
-    fname = TracedUtils.get_attribute_by_name(mlir_fn_res.f, "sym_name")
-    fname = MLIR.IR.FlatSymbolRefAttribute(Base.String(fname))
+    fname = MLIR.IR.FlatSymbolRefAttribute(f_name)
     res = (reverse ? MLIR.Dialects.enzyme.autodiff : MLIR.Dialects.enzyme.fwddiff)(
         [TracedUtils.transpose_val(v) for v in ad_inputs];
         outputs=outtys,
