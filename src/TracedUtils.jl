@@ -1157,13 +1157,15 @@ flattenarg(arg::Ref) = RefFillVector(arg)
 function elem_apply_via_while_loop!(
     result, f, args::Vararg{Any,Nargs}; kwargs...
 ) where {Nargs}
-    non_ref_args = [arg for arg in args if !scalar_arg(arg)]
+    # tuples instead of vectors: collecting args of mixed eltypes would trigger
+    # `convert` to a non-concrete `TracedRArray` type, which `promote_to` rejects
+    non_ref_args = filter(!scalar_arg, args)
     if !isempty(non_ref_args)
         @assert allequal(size.(non_ref_args)) "All args must have the same size"
     end
     L = isempty(non_ref_args) ? 1 : length(first(non_ref_args))
     # flattening the tensors makes the auto-batching pass work nicer
-    flat_args = [flattenarg(arg) for arg in args]
+    flat_args = map(flattenarg, args)
 
     ind_var = zeros(TracedRArray{Int}, ())
     f_ref = Ref(f)
@@ -1182,11 +1184,11 @@ function elem_apply_via_while_loop!(
 end
 
 function elem_apply_via_while_loop(f, args::Vararg{Any,Nargs}; kwargs...) where {Nargs}
-    non_ref_args = [arg for arg in args if !scalar_arg(arg)]
+    non_ref_args = filter(!scalar_arg, args)
     out_size = isempty(non_ref_args) ? () : size(first(non_ref_args))
 
     # This wont be a mutating function so we can safely execute it once
-    scalar_seed_args = [@allowscalar(flattenarg(arg)[1]) for arg in args]
+    scalar_seed_args = map(arg -> @allowscalar(flattenarg(arg)[1]), args)
     res_tmp = @allowscalar(f(scalar_seed_args...))
 
     # TODO: perhaps instead of this logic, we should have
