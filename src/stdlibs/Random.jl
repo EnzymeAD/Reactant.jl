@@ -22,32 +22,32 @@ end
     return Random.rand!(rng, Vector{UInt64}(undef, 2))
 end
 
-# This is the definition of Random.hash_seed from base Julia, but inlined because it's not
-# exported, and also unavailable pre-Julia 1.11
-function _hash_seed(seed::Integer)
-    ctx = SHA.SHA2_256_CTX()
-    neg = signbit(seed)
-    if neg
-        seed = ~seed
-    end
-    @assert seed >= 0
-    while true
-        word = (seed % UInt32) & 0xffffffff
-        seed >>>= 32
-        SHA.update!(ctx, reinterpret(NTuple{4,UInt8}, word))
-        iszero(seed) && break
-    end
-    neg && SHA.update!(ctx, (0x01,))
-    return SHA.digest!(ctx)
-end
-
 @noinline function Random.seed!(rng::ReactantRNG, seed::Number)
     if seed isa TracedRNumber
         error("Passing in `TracedRNumber` as a seed is not supported. Please pass in a \
                `TracedRArray` of the appropriate size instead.")
     end
 
-    seed = reinterpret(UInt64, _hash_seed(seed))
+    hashed = @static if isdefined(Random, :hash_seed)
+        Random.hash_seed(seed)
+    else
+        # Not present < Julia 1.11
+        ctx = SHA.SHA2_256_CTX()
+        neg = signbit(seed)
+        if neg
+            seed = ~seed
+        end
+        @assert seed >= 0
+        while true
+            word = (seed % UInt32) & 0xffffffff
+            seed >>>= 32
+            SHA.update!(ctx, reinterpret(NTuple{4,UInt8}, word))
+            iszero(seed) && break
+        end
+        neg && SHA.update!(ctx, (0x01,))
+        SHA.digest!(ctx)
+    end
+    seed = reinterpret(UInt64, hashed)
     return Random.seed!(rng, seed[1:length(rng.seed)])
 end
 
