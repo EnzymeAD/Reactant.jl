@@ -23,8 +23,8 @@ function chunk_arguments(N, K)
     problem = brusselator_problem(N)
     state = split_state(problem.u)
     seeds = make_tangent_seeds(state, K; kind=:dense)
-    outputs = ntuple(_ -> zero_state(state), K)
-    return Reactant.to_rarray((outputs, state, seeds, problem.coordinates, problem.p))
+    compressed = zero_compressed_jacobian(state, K)
+    return Reactant.to_rarray((compressed, state, seeds, problem.coordinates, problem.p))
 end
 
 function chunk_mlir(wrapper, args; compile_options=nothing)

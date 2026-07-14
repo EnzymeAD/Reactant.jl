@@ -1,11 +1,15 @@
 # Brusselator benchmark
 
-This suite measures a two-dimensional Brusselator residual and Enzyme forward-mode
-Jacobian-vector products compiled by Reactant. It contains two complementary modes:
+This suite adapts NonlinearSolve.jl's sparse Brusselator Jacobian construction. It measures
+the two-dimensional residual and Enzyme forward-mode Jacobian-vector products compiled by
+Reactant. A chunk of `K` colored directions produces one compressed Jacobian block with
+shape `(2N^2, K)`, matching the data consumed by sparse Jacobian decompression instead of
+materializing `K` separate output states. It contains two complementary modes:
 
 - `validation` uses a small grid and checks the Julia and Reactant primal residuals,
-  ordinary and compiled Enzyme JVPs, centered finite differences, independent chunked
-  JVP calls, finite values, output shapes, and buffer aliasing.
+  ordinary and compiled Enzyme JVPs, centered finite differences, the compressed block
+  against independently computed JVP columns, finite values, output shapes, and buffer
+  aliasing.
 - `performance` uses a large grid and synchronized device execution. It omits finite
   differences because their cancellation error grows with the `(N - 1)^2` diffusion
   scaling, but retains finite-output and non-aliasing sanity checks.
@@ -43,7 +47,8 @@ selected explicitly:
 ```sh
 CUDA_VISIBLE_DEVICES=0 julia --project=benchmark/brusselator --startup-file=no \
   benchmark/brusselator/runbenchmarks.jl \
-  --mode=validation --n=32 --ks=1,2,4,8,12 --samples=10 --diff-batch=true
+  --mode=validation --n=32 --ks=1,2,4,8,12 --samples=10 \
+  --diff-batch=true --post-opt=false
 ```
 
 ## Performance benchmark
@@ -60,12 +65,15 @@ with a smaller grid or fewer simultaneous JVPs:
 ```sh
 CUDA_VISIBLE_DEVICES=0 julia --project=benchmark/brusselator --startup-file=no \
   benchmark/brusselator/runbenchmarks.jl \
-  --mode=performance --n=2048 --ks=1,2,4 --samples=30 --diff-batch=true
+  --mode=performance --n=2048 --ks=1,2,4 --samples=30 \
+  --diff-batch=true --post-opt=false
 ```
 
 The output separates compilation, first execution, steady median, and steady minimum
 times. It also reports throughput, per-direction time, logical-state size, and the
-argument-buffer footprint for each chunk.
+argument-buffer footprint for each chunk. The timed chunk ends after filling the compressed
+Jacobian block; sparse decompression and the Newton linear solve are deliberately outside
+the measurement.
 
 ## Command-line options
 
@@ -88,7 +96,9 @@ All options use `--name=value` syntax:
 - `workload.jl` contains the initialization, scalar Julia reference, Reactant-compatible
   residual, Enzyme forward JVP, and statically independent chunk wrappers. The AD-facing
   residual is a pure function: every JVP in a chunk receives the same primal state,
-  coordinates, and parameters, and only its tangent seed and destination differ.
+  coordinates, and parameters, and only its tangent seed differs. The results are flattened
+  into adjacent columns of one `(2N^2, K)` compressed Jacobian block, following the
+  DifferentiationInterface sparse-Jacobian staging used by NonlinearSolve.jl.
 - `runbenchmarks.jl` contains correctness checks, compilation, synchronized timing, and
   command-line handling.
 - `inspect_mlir.jl` saves the initial, pre-batching, post-batching, and legalized MLIR
@@ -129,8 +139,12 @@ also runs after core Enzyme because core differentiation can create a second gen
 `enzyme.concat` and `enzyme.extract` helpers; without it, the no-HLO-opt IR is not legal for
 XLA.
 
-The measured CPU result and exact pipeline definition are recorded in
-[`diff-batch-no-post-hlo-report.md`](diff-batch-no-post-hlo-report.md).
+The earlier separate-output CPU result and exact pipeline definition are recorded in
+[`diff-batch-no-post-hlo-report.md`](diff-batch-no-post-hlo-report.md). The current
+compressed-Jacobian result on one RTX 5090 is recorded in
+[`compressed-jacobian-diff-batch-gpu-report.md`](compressed-jacobian-diff-batch-gpu-report.md),
+and its kernel/IR root-cause analysis is in
+[`compressed-jacobian-diff-batch-profile-report.md`](compressed-jacobian-diff-batch-profile-report.md).
 
 To inspect differentiation batching at each relevant pipeline stage, run:
 

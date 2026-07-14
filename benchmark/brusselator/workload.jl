@@ -22,6 +22,7 @@ export SUPPORTED_CHUNKS,
     jacobian_chunk_k12!,
     make_tangent_seeds,
     onehot_tangent_seed,
+    residual_jvp,
     residual_jvp!,
     split_state,
     stack_state
@@ -166,14 +167,13 @@ function brusselator_2d_loop!(du::AbstractArray, u::AbstractArray, coordinates, 
 end
 
 """
-    residual_jvp!(ddu, u, du_seed, coordinates, p)
+    residual_jvp(u, du_seed, coordinates, p)
 
-Compute `ddu = J(u) * du_seed` with Enzyme forward mode. The differentiated residual is
-pure, so only the shared state, coordinates, and parameters are primal operands. Coordinates
-and parameters are inactive, and separate calls differ only in their tangent seeds.
+Compute and return `J(u) * du_seed` with Enzyme forward mode. The result is a tuple of
+the two `N x N` species tangents.
 """
-function residual_jvp!(ddu, u, du_seed, coordinates, p)
-    derivative = only(Enzyme.autodiff(
+function residual_jvp(u, du_seed, coordinates, p)
+    return only(Enzyme.autodiff(
         Enzyme.Forward,
         brusselator_2d_components,
         Enzyme.Duplicated,
@@ -182,57 +182,115 @@ function residual_jvp!(ddu, u, du_seed, coordinates, p)
         Enzyme.Const(coordinates),
         Enzyme.Const(p),
     ))
+end
+
+"""
+    residual_jvp!(ddu, u, du_seed, coordinates, p)
+
+Compute `ddu = J(u) * du_seed` with Enzyme forward mode. The differentiated residual is
+pure, so only the shared state, coordinates, and parameters are primal operands. Coordinates
+and parameters are inactive, and separate calls differ only in their tangent seeds.
+"""
+function residual_jvp!(ddu, u, du_seed, coordinates, p)
+    derivative = residual_jvp(u, du_seed, coordinates, p)
     copyto!(ddu[1], derivative[1])
     copyto!(ddu[2], derivative[2])
     return nothing
 end
 
+"""Flatten a tuple of species JVPs into the columns of a compressed Jacobian block."""
+function store_compressed_jvps!(compressed, derivatives::Tuple)
+    columns = map(derivatives) do derivative
+        return vcat(vec(derivative[1]), vec(derivative[2]))
+    end
+    copyto!(compressed, hcat(columns...))
+    return nothing
+end
+
 # These wrappers deliberately spell out every independent forward-mode column computation.
 # Keeping the source unbatched lets compiler-pass experiments discover and combine the calls.
-function jacobian_chunk_k1!(outputs, u, seeds, coordinates, p)
-    residual_jvp!(outputs[1], u, seeds[1], coordinates, p)
+# Unlike the earlier kernel-only benchmark, the terminal result follows
+# DifferentiationInterface's sparse-Jacobian path: each JVP is one column of a single
+# `(2N^2) x K` compressed Jacobian block.
+function jacobian_chunk_k1!(compressed, u, seeds, coordinates, p)
+    derivative1 = residual_jvp(u, seeds[1], coordinates, p)
+    store_compressed_jvps!(compressed, (derivative1,))
     return nothing
 end
 
-function jacobian_chunk_k2!(outputs, u, seeds, coordinates, p)
-    residual_jvp!(outputs[1], u, seeds[1], coordinates, p)
-    residual_jvp!(outputs[2], u, seeds[2], coordinates, p)
+function jacobian_chunk_k2!(compressed, u, seeds, coordinates, p)
+    derivative1 = residual_jvp(u, seeds[1], coordinates, p)
+    derivative2 = residual_jvp(u, seeds[2], coordinates, p)
+    store_compressed_jvps!(compressed, (derivative1, derivative2))
     return nothing
 end
 
-function jacobian_chunk_k4!(outputs, u, seeds, coordinates, p)
-    residual_jvp!(outputs[1], u, seeds[1], coordinates, p)
-    residual_jvp!(outputs[2], u, seeds[2], coordinates, p)
-    residual_jvp!(outputs[3], u, seeds[3], coordinates, p)
-    residual_jvp!(outputs[4], u, seeds[4], coordinates, p)
+function jacobian_chunk_k4!(compressed, u, seeds, coordinates, p)
+    derivative1 = residual_jvp(u, seeds[1], coordinates, p)
+    derivative2 = residual_jvp(u, seeds[2], coordinates, p)
+    derivative3 = residual_jvp(u, seeds[3], coordinates, p)
+    derivative4 = residual_jvp(u, seeds[4], coordinates, p)
+    store_compressed_jvps!(
+        compressed, (derivative1, derivative2, derivative3, derivative4)
+    )
     return nothing
 end
 
-function jacobian_chunk_k8!(outputs, u, seeds, coordinates, p)
-    residual_jvp!(outputs[1], u, seeds[1], coordinates, p)
-    residual_jvp!(outputs[2], u, seeds[2], coordinates, p)
-    residual_jvp!(outputs[3], u, seeds[3], coordinates, p)
-    residual_jvp!(outputs[4], u, seeds[4], coordinates, p)
-    residual_jvp!(outputs[5], u, seeds[5], coordinates, p)
-    residual_jvp!(outputs[6], u, seeds[6], coordinates, p)
-    residual_jvp!(outputs[7], u, seeds[7], coordinates, p)
-    residual_jvp!(outputs[8], u, seeds[8], coordinates, p)
+function jacobian_chunk_k8!(compressed, u, seeds, coordinates, p)
+    derivative1 = residual_jvp(u, seeds[1], coordinates, p)
+    derivative2 = residual_jvp(u, seeds[2], coordinates, p)
+    derivative3 = residual_jvp(u, seeds[3], coordinates, p)
+    derivative4 = residual_jvp(u, seeds[4], coordinates, p)
+    derivative5 = residual_jvp(u, seeds[5], coordinates, p)
+    derivative6 = residual_jvp(u, seeds[6], coordinates, p)
+    derivative7 = residual_jvp(u, seeds[7], coordinates, p)
+    derivative8 = residual_jvp(u, seeds[8], coordinates, p)
+    store_compressed_jvps!(
+        compressed,
+        (
+            derivative1,
+            derivative2,
+            derivative3,
+            derivative4,
+            derivative5,
+            derivative6,
+            derivative7,
+            derivative8,
+        ),
+    )
     return nothing
 end
 
-function jacobian_chunk_k12!(outputs, u, seeds, coordinates, p)
-    residual_jvp!(outputs[1], u, seeds[1], coordinates, p)
-    residual_jvp!(outputs[2], u, seeds[2], coordinates, p)
-    residual_jvp!(outputs[3], u, seeds[3], coordinates, p)
-    residual_jvp!(outputs[4], u, seeds[4], coordinates, p)
-    residual_jvp!(outputs[5], u, seeds[5], coordinates, p)
-    residual_jvp!(outputs[6], u, seeds[6], coordinates, p)
-    residual_jvp!(outputs[7], u, seeds[7], coordinates, p)
-    residual_jvp!(outputs[8], u, seeds[8], coordinates, p)
-    residual_jvp!(outputs[9], u, seeds[9], coordinates, p)
-    residual_jvp!(outputs[10], u, seeds[10], coordinates, p)
-    residual_jvp!(outputs[11], u, seeds[11], coordinates, p)
-    residual_jvp!(outputs[12], u, seeds[12], coordinates, p)
+function jacobian_chunk_k12!(compressed, u, seeds, coordinates, p)
+    derivative1 = residual_jvp(u, seeds[1], coordinates, p)
+    derivative2 = residual_jvp(u, seeds[2], coordinates, p)
+    derivative3 = residual_jvp(u, seeds[3], coordinates, p)
+    derivative4 = residual_jvp(u, seeds[4], coordinates, p)
+    derivative5 = residual_jvp(u, seeds[5], coordinates, p)
+    derivative6 = residual_jvp(u, seeds[6], coordinates, p)
+    derivative7 = residual_jvp(u, seeds[7], coordinates, p)
+    derivative8 = residual_jvp(u, seeds[8], coordinates, p)
+    derivative9 = residual_jvp(u, seeds[9], coordinates, p)
+    derivative10 = residual_jvp(u, seeds[10], coordinates, p)
+    derivative11 = residual_jvp(u, seeds[11], coordinates, p)
+    derivative12 = residual_jvp(u, seeds[12], coordinates, p)
+    store_compressed_jvps!(
+        compressed,
+        (
+            derivative1,
+            derivative2,
+            derivative3,
+            derivative4,
+            derivative5,
+            derivative6,
+            derivative7,
+            derivative8,
+            derivative9,
+            derivative10,
+            derivative11,
+            derivative12,
+        ),
+    )
     return nothing
 end
 

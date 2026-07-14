@@ -10,6 +10,19 @@ host_state(state) = map(Array, state)
 logical_array(state::Tuple) = stack_state(host_state(state))
 logical_array(array::AbstractArray) = Array(array)
 
+function zero_compressed_jacobian(state::Tuple, K::Integer)
+    rows = sum(length, state)
+    return zeros(eltype(first(state)), rows, K)
+end
+
+function compressed_jacobian_block(states)
+    columns = map(states) do state
+        array = logical_array(state)
+        return vec(array)
+    end
+    return hcat(columns...)
+end
+
 function error_metrics(actual, reference; relative_floor=nothing)
     actual_array = logical_array(actual)
     reference_array = logical_array(reference)
@@ -253,13 +266,13 @@ function run_brusselator_validation(;
     chunk_results = Dict{Int,Any}()
     chunks_ok = true
     for K in Ks
-        outputs = ntuple(_ -> zero_state(state), K)
+        compressed = zero_compressed_jacobian(state, K)
         chunk_seeds = ntuple(k -> seeds[k], K)
-        alias_arrays = flatten_states((state, chunk_seeds, outputs))
+        alias_arrays = flatten_states((state, chunk_seeds, compressed))
         alias_ok = buffers_do_not_alias(alias_arrays)
 
         chunk_args = Reactant.to_rarray((
-            outputs, state, chunk_seeds, problem.coordinates, problem.p
+            compressed, state, chunk_seeds, problem.coordinates, problem.p
         ))
         wrapper = chunk_function(K)
         chunk_compiled, chunk_compile_seconds = compile_timed(
@@ -267,28 +280,21 @@ function run_brusselator_validation(;
         )
         chunk_first_seconds = execute_timed(chunk_compiled, chunk_args)
         chunk_steady = steady_timings(chunk_compiled, chunk_args, samples)
-        chunk_outputs = map(host_state, chunk_args[1])
+        chunk_output = Array(chunk_args[1])
 
-        individual_metrics = ntuple(
-            k -> error_metrics(chunk_outputs[k], individual_reactant_jvps[k]), K
+        individual_reference = compressed_jacobian_block(individual_reactant_jvps[1:K])
+        fd_reference = compressed_jacobian_block(fd_jvps[1:K])
+        individual_metrics = error_metrics(chunk_output, individual_reference)
+        fd_metrics = error_metrics(chunk_output, fd_reference)
+        individual_ok = passes(
+            chunk_output, individual_reference; atol=primal_atol, rtol=primal_rtol
         )
-        fd_metrics = ntuple(k -> error_metrics(chunk_outputs[k], fd_jvps[k]), K)
-        individual_ok = all(1:K) do k
-            return passes(
-                chunk_outputs[k],
-                individual_reactant_jvps[k];
-                atol=primal_atol,
-                rtol=primal_rtol,
-            )
-        end
-        fd_ok = all(1:K) do k
-            return passes(chunk_outputs[k], fd_jvps[k]; atol=jvp_atol, rtol=jvp_rtol)
-        end
+        fd_ok = passes(chunk_output, fd_reference; atol=jvp_atol, rtol=jvp_rtol)
         chunk_ok = alias_ok && individual_ok && fd_ok
         chunks_ok &= chunk_ok
 
         chunk_results[K] = (;
-            outputs=chunk_outputs,
+            compressed=chunk_output,
             alias_ok,
             individual_metrics,
             fd_metrics,
@@ -338,17 +344,14 @@ function run_brusselator_validation(;
     print_metrics("Reactant JVP vs finite diff", single_fd_metrics, single_fd_ok)
     for K in Ks
         result = chunk_results[K]
-        max_individual_abs = maximum(metric.max_abs for metric in result.individual_metrics)
-        max_individual_rel = maximum(metric.max_rel for metric in result.individual_metrics)
-        max_fd_abs = maximum(metric.max_abs for metric in result.fd_metrics)
-        max_fd_rel = maximum(metric.max_rel for metric in result.fd_metrics)
         @printf(
-            "chunk K=%-2d vs individual: max_abs=%10.3e max_rel=%10.3e; vs FD: max_abs=%10.3e max_rel=%10.3e; alias=%-5s %s\n",
+            "compressed K=%-2d shape=%-12s vs individual: max_abs=%10.3e max_rel=%10.3e; vs FD: max_abs=%10.3e max_rel=%10.3e; alias=%-5s %s\n",
             K,
-            max_individual_abs,
-            max_individual_rel,
-            max_fd_abs,
-            max_fd_rel,
+            string(result.individual_metrics.shape),
+            result.individual_metrics.max_abs,
+            result.individual_metrics.max_rel,
+            result.fd_metrics.max_abs,
+            result.fd_metrics.max_rel,
             string(result.alias_ok),
             result.correct ? "PASS" : "FAIL",
         )
@@ -457,20 +460,20 @@ function run_brusselator_performance(;
     chunk_results = Dict{Int,Any}()
     chunks_ok = true
     for K in Ks
-        outputs = ntuple(_ -> zero_state(state), K)
+        compressed = zero_compressed_jacobian(state, K)
         chunk_seeds = ntuple(k -> seeds[k], K)
-        alias_arrays = flatten_states((state, chunk_seeds, outputs))
+        alias_arrays = flatten_states((state, chunk_seeds, compressed))
         alias_ok = buffers_do_not_alias(alias_arrays)
 
         chunk_args = Reactant.to_rarray((
-            outputs, state, chunk_seeds, problem.coordinates, problem.p
+            compressed, state, chunk_seeds, problem.coordinates, problem.p
         ))
         chunk_compiled, chunk_compile_seconds = compile_timed(
             chunk_function(K), chunk_args, compile_options
         )
         chunk_first_seconds = execute_timed(chunk_compiled, chunk_args)
         chunk_steady = steady_timings(chunk_compiled, chunk_args, samples)
-        first_output_finite = all(isfinite, logical_array(chunk_args[1][1]))
+        first_output_finite = isfinite(only(Array(chunk_args[1][1:1, 1:1])))
         chunk_ok = alias_ok && first_output_finite
         chunks_ok &= chunk_ok
         chunk_results[K] = (;

@@ -70,8 +70,8 @@ function profile_k8(;
     problem = brusselator_problem(N)
     state = split_state(problem.u)
     seeds = make_tangent_seeds(state, K; kind=:onehot)
-    outputs = ntuple(_ -> zero_state(state), K)
-    args = Reactant.to_rarray((outputs, state, seeds, problem.coordinates, problem.p))
+    compressed = zero_compressed_jacobian(state, K)
+    args = Reactant.to_rarray((compressed, state, seeds, problem.coordinates, problem.p))
     compile_options = brusselator_compile_options(
         diff_batch; post_optimization
     )
