@@ -34,11 +34,11 @@ function _hash_seed(seed::Integer)
     while true
         word = (seed % UInt32) & 0xffffffff
         seed >>>= 32
-        SHA.update!(ctx, reinterpret(NTuple{4, UInt8}, word))
+        SHA.update!(ctx, reinterpret(NTuple{4,UInt8}, word))
         iszero(seed) && break
     end
     neg && SHA.update!(ctx, (0x01,))
-    SHA.digest!(ctx)
+    return SHA.digest!(ctx)
 end
 
 @noinline function Random.seed!(rng::ReactantRNG, seed::Number)
