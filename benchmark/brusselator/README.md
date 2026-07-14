@@ -30,6 +30,18 @@ The suite's `Project.toml` resolves Reactant from this repository checkout and i
 the compatible Enzyme version. No package installation is needed on subsequent runs
 unless the environment changes.
 
+When the repository's `LocalPreferences.toml` selects a locally built `Reactant_jll`,
+also put the repository project on Julia's load path before running the benchmark from
+the repository root:
+
+```sh
+export JULIA_LOAD_PATH="@:$PWD:@stdlib"
+```
+
+This makes the benchmark project inherit the matching local `libReactantExtra`. Without
+it, Julia can load the released artifact library alongside this checkout's compiler code,
+which is an unsupported ABI mismatch.
+
 To select one GPU on a multi-GPU machine, set `CUDA_VISIBLE_DEVICES` when launching Julia.
 For example, all commands below select device 0.
 
@@ -110,6 +122,12 @@ All options use `--name=value` syntax:
   reports without profiling the primal and single-JVP setup cases. Its
   `--post-opt=false` ablation preserves the normal pre-Enzyme passes and required
   legalization but skips the post-Enzyme StableHLO optimization pipeline.
+- `regressions/brusselator-k8-n4096-batched.mlir` is the exact StableHLO module captured
+  by XLA from the profiled `N=4096`, `K=8`, `diff_batch=true`, `post_opt=false` run. It is
+  a full production-size dump, not a hand-written or minimized example.
+- `regressions/brusselator-slice-elementwise-concat-min.mlir` keeps the production
+  `8x4096x4096` types and all eight partitions, but reduces the graph to the two tangent
+  concatenations, one shared elementwise value, its two consumers, and their lane slices.
 - `Project.toml` is the isolated benchmark environment.
 
 `compile_timed` in `runbenchmarks.jl` is the central call to `Reactant.compile`. Set
@@ -139,12 +157,34 @@ also runs after core Enzyme because core differentiation can create a second gen
 `enzyme.concat` and `enzyme.extract` helpers; without it, the no-HLO-opt IR is not legal for
 XLA.
 
-The earlier separate-output CPU result and exact pipeline definition are recorded in
-[`diff-batch-no-post-hlo-report.md`](diff-batch-no-post-hlo-report.md). The current
-compressed-Jacobian result on one RTX 5090 is recorded in
+The compressed-Jacobian result on one RTX 5090 is recorded in
 [`compressed-jacobian-diff-batch-gpu-report.md`](compressed-jacobian-diff-batch-gpu-report.md),
+the focused no-post-Enzyme-optimization ablation is in
+[`ad-batching-codegen-ablation-report.md`](ad-batching-codegen-ablation-report.md),
 and its kernel/IR root-cause analysis is in
 [`compressed-jacobian-diff-batch-profile-report.md`](compressed-jacobian-diff-batch-profile-report.md).
+The exact StableHLO input for an Enzyme-JAX regression test is
+[`regressions/brusselator-k8-n4096-batched.mlir`](regressions/brusselator-k8-n4096-batched.mlir).
+The structurally minimized reproducer is
+[`regressions/brusselator-slice-elementwise-concat-min.mlir`](regressions/brusselator-slice-elementwise-concat-min.mlir).
+
+Run the current Enzyme-JAX StableHLO optimizer on the minimized input with:
+
+```sh
+enzymexlamlir-opt \
+  benchmark/brusselator/regressions/brusselator-slice-elementwise-concat-min.mlir \
+  --enzyme-hlo-opt
+```
+
+The output still contains two `stablehlo.concatenate` operations, the three elementwise
+operations on `tensor<8x4096x4096xf64>`, and all sixteen terminal slices. Run it on the
+unmodified captured input with:
+
+```sh
+enzymexlamlir-opt \
+  benchmark/brusselator/regressions/brusselator-k8-n4096-batched.mlir \
+  --enzyme-hlo-opt
+```
 
 To inspect differentiation batching at each relevant pipeline stage, run:
 

@@ -10,11 +10,11 @@ shared nonlinear term `u^2*v`; it is consumed once with a plus sign by the first
 and once with a minus sign by the second species. XLA chooses to compute that multi-use
 wide value once and store it rather than clone it into the terminal output fusion.
 
-This is the reason for the measured slowdown. Precomputing the shared term makes the final
-kernel 1.865 ms faster, but the producer kernel costs 3.370 ms, leaving a measured 1.506 ms
-net regression. The result is not a kernel-launch-overhead problem: both kernels process
-hundreds of millions of values, and the extra kernel accounts for 39.9% of batched device
-time.
+This is the dominant identified structural cause of the measured slowdown. In the matched
+kernel accounting, precomputing the shared term makes the final kernel 1.865 ms faster, but
+the producer kernel costs 3.370 ms, leaving a measured 1.506 ms net regression. The result
+is not a kernel-launch-overhead problem: both kernels process hundreds of millions of
+values, and the extra kernel accounts for 39.9% of batched device time.
 
 ## Matched profile
 
@@ -63,37 +63,68 @@ buffer assignment rather than a traffic estimate.
 
 ## IR evidence
 
-After batching and legalization, StableHLO contains one width-8 forward derivative. Its
-two tangent inputs are concatenations of the eight original directions. After Enzyme, the
-important part of the simplified graph is:
+The complete regression input is
+[`regressions/brusselator-k8-n4096-batched.mlir`](regressions/brusselator-k8-n4096-batched.mlir).
+It is the unmodified StableHLO module sent to XLA by the profiled batched run, rather than
+a minimized or hand-written testcase. The following lines are verbatim excerpts from it.
+The companion
+[`regressions/brusselator-slice-elementwise-concat-min.mlir`](regressions/brusselator-slice-elementwise-concat-min.mlir)
+keeps the exact `8x4096x4096` production types and eight one-lane partitions while reducing
+the graph to the missed optimization. Running it through `--enzyme-hlo-opt` still leaves
+the two concatenations, the shared multiply and its add/subtract consumers at full width,
+and all sixteen slices.
+
+The eight tangent inputs first become the leading dimension of two `8x4096x4096` values:
 
 ```mlir
-%du = stablehlo.concatenate %du0, ..., %du7, dim = 0
-%dv = stablehlo.concatenate %dv0, ..., %dv7, dim = 0
-
-%twodu = stablehlo.add %du, %du
-%a = stablehlo.multiply %broadcast_v, %twodu
-%b = stablehlo.multiply %dv, %broadcast_u_squared
-%nonlinear_tangent = stablehlo.add %a, %b
-
-%out_u = stablehlo.add %u_linear_part, %nonlinear_tangent
-%out_v = stablehlo.subtract %v_linear_part, %nonlinear_tangent
-
-%u0 = stablehlo.slice %out_u [0:1, ...]
-// ... the remaining same-partition slices of out_u and out_v ...
+%8 = stablehlo.concatenate %0, %1, %2, %3, %4, %5, %6, %7, dim = 0 : (tensor<1x4096x4096xf64>, tensor<1x4096x4096xf64>, tensor<1x4096x4096xf64>, tensor<1x4096x4096xf64>, tensor<1x4096x4096xf64>, tensor<1x4096x4096xf64>, tensor<1x4096x4096xf64>, tensor<1x4096x4096xf64>) -> tensor<8x4096x4096xf64> loc(#loc)
+%17 = stablehlo.concatenate %9, %10, %11, %12, %13, %14, %15, %16, dim = 0 : (tensor<1x4096x4096xf64>, tensor<1x4096x4096xf64>, tensor<1x4096x4096xf64>, tensor<1x4096x4096xf64>, tensor<1x4096x4096xf64>, tensor<1x4096x4096xf64>, tensor<1x4096x4096xf64>, tensor<1x4096x4096xf64>) -> tensor<8x4096x4096xf64> loc(#loc)
 ```
 
-In the captured N=3 IR these are `%8`/`%17`, `%319`, `%320`, and `%326`; `%319` is the
-multi-use `tensor<8x3x3xf64>` value. The production N=4096 XLA HLO preserves the same
-structure:
+The shared nonlinear tangent is `%1033`. It feeds both species before the results are
+sliced back into the original eight partitions:
 
-- `loop_add_fusion` returns `f64[8,4096,4096]` and computes only the shared nonlinear
-  tangent.
-- `loop_concatenate_fusion` takes that tensor as operand 0 and uses it twice, once in an
-  add and once in a subtract.
-- The thunk sequence executes the two kernels serially.
-- XLA buffer assignment reserves 1,073,741,824 bytes for the intermediate. Total assigned
-  memory rises from 4.25 GiB unbatched to 5.25 GiB batched.
+```mlir
+%1026 = stablehlo.multiply %8, %1025 : tensor<8x4096x4096xf64> loc(#loc)
+%1027 = stablehlo.add %1026, %1026 : tensor<8x4096x4096xf64> loc(#loc)
+%1028 = stablehlo.multiply %arg1, %arg1 : tensor<4096x4096xf64> loc(#loc)
+%1029 = stablehlo.broadcast_in_dim %arg2, dims = [1, 2] : (tensor<4096x4096xf64>) -> tensor<8x4096x4096xf64> loc(#loc)
+%1030 = stablehlo.multiply %1027, %1029 : tensor<8x4096x4096xf64> loc(#loc)
+%1031 = stablehlo.broadcast_in_dim %1028, dims = [1, 2] : (tensor<4096x4096xf64>) -> tensor<8x4096x4096xf64> loc(#loc)
+%1032 = stablehlo.multiply %17, %1031 : tensor<8x4096x4096xf64> loc(#loc)
+%1033 = stablehlo.add %1030, %1032 : tensor<8x4096x4096xf64> loc(#loc)
+%1034 = stablehlo.add %1024, %1033 : tensor<8x4096x4096xf64> loc(#loc)
+%1035 = stablehlo.broadcast_in_dim %cst_1, dims = [1, 2] : (tensor<4096x4096xf64>) -> tensor<8x4096x4096xf64> loc(#loc)
+%1036 = stablehlo.multiply %8, %1035 : tensor<8x4096x4096xf64> loc(#loc)
+%1037 = stablehlo.add %1034, %1036 : tensor<8x4096x4096xf64> loc(#loc)
+%1038 = stablehlo.multiply %1022, %1023 : tensor<8x4096x4096xf64> loc(#loc)
+%1039 = stablehlo.broadcast_in_dim %cst_0, dims = [1, 2] : (tensor<4096x4096xf64>) -> tensor<8x4096x4096xf64> loc(#loc)
+%1040 = stablehlo.multiply %8, %1039 : tensor<8x4096x4096xf64> loc(#loc)
+%1041 = stablehlo.add %1038, %1040 : tensor<8x4096x4096xf64> loc(#loc)
+%1042 = stablehlo.subtract %1041, %1033 : tensor<8x4096x4096xf64> loc(#loc)
+%1043 = stablehlo.slice %1037 [0:1, 0:4096, 0:4096] : (tensor<8x4096x4096xf64>) -> tensor<1x4096x4096xf64> loc(#loc)
+%1045 = stablehlo.slice %1037 [1:2, 0:4096, 0:4096] : (tensor<8x4096x4096xf64>) -> tensor<1x4096x4096xf64> loc(#loc)
+%1059 = stablehlo.slice %1042 [0:1, 0:4096, 0:4096] : (tensor<8x4096x4096xf64>) -> tensor<1x4096x4096xf64> loc(#loc)
+%1061 = stablehlo.slice %1042 [1:2, 0:4096, 0:4096] : (tensor<8x4096x4096xf64>) -> tensor<1x4096x4096xf64> loc(#loc)
+```
+
+XLA preserves the multi-use width-8 value and makes the dataflow across the kernel boundary
+explicit:
+
+```text
+%loop_add_fusion = f64[8,4096,4096]{2,1,0} fusion(%Arg_2.1, %Arg_1.1, %Arg_18.1, %Arg_16.1, %Arg_14.1, /*index=5*/%Arg_12.1, %Arg_10.1, %Arg_8.1, %Arg_6.1, %Arg_4.1, /*index=10*/%Arg_17.1, %Arg_15.1, %Arg_13.1, %Arg_11.1, %Arg_9.1, /*index=15*/%Arg_7.1, %Arg_5.1, %Arg_3.1), kind=kLoop, calls=%fused_add, backend_config={"operation_queue_id":"0","force_earliest_schedule":false,"reification_cost":[],"device_type":"DEVICE_TYPE_INVALID","native_emitter_backend_config":{"type":"NATIVE_EMITTER_TYPE_INVALID","unroll_factor":0}}
+ROOT %loop_concatenate_fusion = f64[8,33554432]{1,0} fusion(%loop_add_fusion, %Arg_17.1, %Arg_15.1, %Arg_13.1, %Arg_11.1, /*index=5*/%Arg_9.1, %Arg_7.1, %Arg_5.1, %Arg_3.1, %Arg_18.1, /*index=10*/%Arg_16.1, %Arg_14.1, %Arg_12.1, %Arg_10.1, %Arg_8.1, /*index=15*/%Arg_6.1, %Arg_4.1), kind=kLoop, calls=%fused_concatenate, backend_config={"operation_queue_id":"0","force_earliest_schedule":false,"reification_cost":[],"device_type":"DEVICE_TYPE_INVALID","native_emitter_backend_config":{"type":"NATIVE_EMITTER_TYPE_INVALID","unroll_factor":0}}
+```
+
+The corresponding buffer assignment is:
+
+```text
+allocation 20: size 1073741824, preallocated-temp:
+ value: <319 loop_add_fusion @0> (size=1073741824,offset=0): f64[8,4096,4096]{2,1,0}
+```
+
+The thunk sequence executes the two kernels serially. Total assigned memory rises from
+4.25 GiB unbatched to 5.25 GiB batched.
 
 The unbatched HLO has only `loop_concatenate_fusion`. Its lane-local nonlinear expressions
 remain inside that output fusion, so no derivative-sized intermediate crosses a kernel
@@ -121,7 +152,10 @@ batching still enabled and every other benchmark setting unchanged:
 
 The ablation still has a small 128 MiB `wrapped_multiply` temporary, but eliminates the
 1.00 GiB width-8 temporary and recovers 13.3% of synchronized runtime. This is a diagnostic
-confirmation, not a suggested change to the Brusselator source.
+confirmation, not a suggested change to the Brusselator source. Relative to the unbatched
+baseline it recovers about 85% of the host-median gap but about 44% of the summed-kernel-time
+gap; changing association is therefore strong causal evidence for the wide temporary, not
+proof that this one rewrite explains every residual timing difference.
 
 ## Compiler fix suggested by the profile
 
@@ -131,6 +165,13 @@ terminal lane slice backward through the elementwise DAG and simplify a slice of
 concatenation to the corresponding input. For this graph it must also clone the sliced form
 of `%nonlinear_tangent` into its two consumers instead of preserving one materialized wide
 common subexpression.
+
+The minimized reproducer also exposes why the current `SliceElementwise` rewrite does not
+start this cleanup. It computes one bounding slice across every slice user and only rewrites
+when that bounding slice is a strict subset of the elementwise result. The eight lanes here
+cover `[0:8, 0:4096, 0:4096]`, exactly the full result, so the pattern reports no change. It
+therefore never exposes the subsequent `Slice(Concat)` simplifications, even though every
+slice uses the same concatenation partition.
 
 The rewrite should be profitability-driven rather than unconditional for arbitrary shared
 producers. Here the decision is unambiguous: materializing saves 1.865 ms in the consumer
