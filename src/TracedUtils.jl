@@ -1154,18 +1154,39 @@ scalar_arg(arg) = arg isa Base.RefValue || !(arg isa AbstractArray)
 flattenarg(arg) = ReactantCore.materialize_traced_array(vec(arg))
 flattenarg(arg::Ref) = RefFillVector(arg)
 
-function elem_apply_via_while_loop(f, args::Vararg{Any,Nargs}; kwargs...) where {Nargs}
+function elem_apply_via_while_loop!(
+    result, f, args::Vararg{Any,Nargs}; kwargs...
+) where {Nargs}
     non_ref_args = [arg for arg in args if !scalar_arg(arg)]
     if !isempty(non_ref_args)
         @assert allequal(size.(non_ref_args)) "All args must have the same size"
     end
-    out_size = isempty(non_ref_args) ? () : size(first(non_ref_args))
     L = isempty(non_ref_args) ? 1 : length(first(non_ref_args))
     # flattening the tensors makes the auto-batching pass work nicer
     flat_args = [flattenarg(arg) for arg in args]
 
+    ind_var = zeros(TracedRArray{Int}, ())
+    f_ref = Ref(f)
+    result_ref = Ref(result)
+    args_ref = Ref(flat_args)
+    limit_ref = Ref(L)
+
+    ReactantCore.traced_while(
+        __elem_apply_loop_condition,
+        __elem_apply_loop_body,
+        (ind_var, f_ref, result_ref, args_ref, limit_ref);
+        kwargs...,
+    )
+
+    return result
+end
+
+function elem_apply_via_while_loop(f, args::Vararg{Any,Nargs}; kwargs...) where {Nargs}
+    non_ref_args = [arg for arg in args if !scalar_arg(arg)]
+    out_size = isempty(non_ref_args) ? () : size(first(non_ref_args))
+
     # This wont be a mutating function so we can safely execute it once
-    scalar_seed_args = [@allowscalar(arg[1]) for arg in flat_args]
+    scalar_seed_args = [@allowscalar(flattenarg(arg)[1]) for arg in args]
     res_tmp = @allowscalar(f(scalar_seed_args...))
 
     # TODO: perhaps instead of this logic, we should have
@@ -1183,18 +1204,7 @@ function elem_apply_via_while_loop(f, args::Vararg{Any,Nargs}; kwargs...) where 
     bc = Base.Broadcast.Broadcasted(f, Tuple(args))
     result = similar(bc, T_res)
 
-    ind_var = zeros(TracedRArray{Int}, ())
-    f_ref = Ref(f)
-    result_ref = Ref(result)
-    args_ref = Ref(flat_args)
-    limit_ref = Ref(L)
-
-    ReactantCore.traced_while(
-        __elem_apply_loop_condition,
-        __elem_apply_loop_body,
-        (ind_var, f_ref, result_ref, args_ref, limit_ref);
-        kwargs...,
-    )
+    elem_apply_via_while_loop!(result, f, args...; kwargs...)
 
     return ReactantCore.materialize_traced_array(reshape(result, out_size))
 end
