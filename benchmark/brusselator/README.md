@@ -74,12 +74,14 @@ All options use `--name=value` syntax:
 | Option | Values | Validation default | Performance default |
 |---|---|---:|---:|
 | `--mode` | `validation`, `performance` | `validation` | `performance` |
+| `--backend` | `auto`, `cpu`, `gpu` | `auto` | `auto` |
 | `--n` | grid width greater than 1 | `16` | `4096` |
 | `--ks` | comma-separated subset of `1,2,4,8,12` | `1,2,4` | `1,2,4,8,12` |
 | `--seed` | `dense`, `onehot` | `dense` | `onehot` |
 | `--samples` | positive integer | `5` | `30` |
 | `--epsilon` | positive floating-point value | `1e-4` | unused |
 | `--diff-batch` | `true`, `false` | `false` | `false` |
+| `--post-opt` | `true`, `false` | `true` | `true` |
 
 ## Layout and compiler experiments
 
@@ -91,10 +93,13 @@ All options use `--name=value` syntax:
   command-line handling.
 - `inspect_mlir.jl` saves the initial, pre-batching, post-batching, and legalized MLIR
   for each selected chunk size under the ignored `results/` directory. It also applies
-  a diagnostic post-core-Enzyme helper legalization explicitly and saves both sides of
-  it; that diagnostic stage is not part of the production pass ordering.
+  post-core-Enzyme helper legalization explicitly and saves both sides of it. The normal
+  optimized pipeline does not add that pass explicitly; the `--post-opt=false` ablation
+  does because the omitted HLO transforms otherwise leave helper ops illegal for XLA.
 - `profile_k8.jl` compiles only the K=8 chunk and can save XProf kernel and framework-op
-  reports without profiling the primal and single-JVP setup cases.
+  reports without profiling the primal and single-JVP setup cases. Its
+  `--post-opt=false` ablation preserves the normal pre-Enzyme passes and required
+  legalization but skips the post-Enzyme StableHLO optimization pipeline.
 - `Project.toml` is the isolated benchmark environment.
 
 `compile_timed` in `runbenchmarks.jl` is the central call to `Reactant.compile`. Set
@@ -102,6 +107,30 @@ All options use `--name=value` syntax:
 `ADOptimizationOptions(; diff_batch=true)`, or leave the default `false` to disable all
 optional AD-aware optimizations. All other compile and benchmark settings are identical.
 Run validation for both configurations before comparing performance results.
+
+To measure batching without the post-Enzyme HLO optimizer, run the K=8 profiler for
+both batching configurations:
+
+```sh
+for diff_batch in false true; do
+  julia --project=benchmark/brusselator --startup-file=no \
+    benchmark/brusselator/profile_k8.jl \
+    --diff-batch=$diff_batch --post-opt=false
+done
+```
+
+The `--post-opt=false` path sets
+`CompileOptions(disable_post_enzyme_hlo_optimization_passes=true)`. It leaves the normal
+`:all` pipeline and the `enzyme-diff-batch` -> `enzyme-batch-to-stablehlo` ordering intact.
+Only the generated post-Enzyme `enzyme-hlo-*` transforms are omitted; inlining, SROA,
+canonicalization, CSE, lowering, and XLA's own compiler optimizations remain enabled and
+identical in both configurations. A semantics-only `enzyme-batch-to-stablehlo` legalization
+also runs after core Enzyme because core differentiation can create a second generation of
+`enzyme.concat` and `enzyme.extract` helpers; without it, the no-HLO-opt IR is not legal for
+XLA.
+
+The measured CPU result and exact pipeline definition are recorded in
+[`diff-batch-no-post-hlo-report.md`](diff-batch-no-post-hlo-report.md).
 
 To inspect differentiation batching at each relevant pipeline stage, run:
 

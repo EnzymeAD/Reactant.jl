@@ -15,11 +15,12 @@ function profile_options(args)
     samples = parse(Int, get(options, "samples", "10"))
     warmup = parse(Int, get(options, "warmup", "3"))
     diff_batch = parse(Bool, get(options, "diff-batch", "false"))
+    post_optimization = parse(Bool, get(options, "post-opt", "true"))
     profile_dir = get(options, "profile-dir", "")
     N > 1 || throw(ArgumentError("n must be greater than one"))
     samples > 0 || throw(ArgumentError("samples must be positive"))
     warmup > 0 || throw(ArgumentError("warmup must be positive"))
-    return (; N, samples, warmup, diff_batch, profile_dir)
+    return (; N, samples, warmup, diff_batch, post_optimization, profile_dir)
 end
 
 function save_profile_reports(profile_dir, xplane_file)
@@ -62,14 +63,18 @@ function save_profile_reports(profile_dir, xplane_file)
     return kernel_stats, framework_stats
 end
 
-function profile_k8(; N, samples, warmup, diff_batch, profile_dir)
+function profile_k8(;
+    N, samples, warmup, diff_batch, post_optimization, profile_dir
+)
     K = 8
     problem = brusselator_problem(N)
     state = split_state(problem.u)
     seeds = make_tangent_seeds(state, K; kind=:onehot)
     outputs = ntuple(_ -> zero_state(state), K)
     args = Reactant.to_rarray((outputs, state, seeds, problem.coordinates, problem.p))
-    compile_options = brusselator_compile_options(diff_batch)
+    compile_options = brusselator_compile_options(
+        diff_batch; post_optimization
+    )
     compiled, compile_seconds = compile_timed(chunk_function(K), args, compile_options)
 
     for _ in 1:warmup
@@ -78,9 +83,10 @@ function profile_k8(; N, samples, warmup, diff_batch, profile_dir)
     timings = steady_timings(compiled, args, samples)
 
     @printf(
-        "K=8 N=%d diff_batch=%s compile=%.6f s median=%.6f ms minimum=%.6f ms\n",
+        "K=8 N=%d diff_batch=%s post_opt=%s compile=%.6f s median=%.6f ms minimum=%.6f ms\n",
         N,
         string(diff_batch),
+        string(post_optimization),
         compile_seconds,
         1.0e3 * timings.median,
         1.0e3 * timings.minimum,

@@ -372,6 +372,34 @@ function compile_mlir!(
     opt_passes2 = optimization_passes(
         compile_options; sroa=false, recognize_comms, lower_comms, backend, is_sharded
     )
+    if compile_options.disable_post_enzyme_hlo_optimization_passes
+        # Core Enzyme can introduce enzyme.concat/enzyme.extract while differentiating
+        # batched StableHLO. The generated HLO transforms normally eliminate those
+        # helpers, so retain their semantics-only legalization in this ablation.
+        post_enzyme_legalization_passes = ["enzyme-batch-to-stablehlo"]
+        post_enzyme_opt_passes = optimization_passes(
+            compile_options;
+            sroa=false,
+            hlo_optimize=false,
+            recognize_comms,
+            lower_comms,
+            backend,
+            is_sharded,
+        )
+        post_enzyme_sroa_opt_passes = optimization_passes(
+            compile_options;
+            sroa=true,
+            hlo_optimize=false,
+            recognize_comms,
+            lower_comms,
+            backend,
+            is_sharded,
+        )
+    else
+        post_enzyme_legalization_passes = String[]
+        post_enzyme_opt_passes = opt_passes2
+        post_enzyme_sroa_opt_passes = opt_passes
+    end
     ad_pre_enzyme_pipeline = ad_pre_enzyme_passes(compile_options.ad_optimization_passes)
 
     raise_passes = if raise isa String
@@ -448,12 +476,13 @@ function compile_mlir!(
                         opt_passes2,
                         ad_pre_enzyme_pipeline...,
                         enzyme_pass,
-                        opt_passes2,
+                        post_enzyme_legalization_passes...,
+                        post_enzyme_opt_passes,
                         "canonicalize",
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
                         legalize_chlo_to_stablehlo...,
-                        opt_passes2,
+                        post_enzyme_opt_passes,
                         lower_enzymexla_passes,
                         jit,
                     ]
@@ -465,12 +494,13 @@ function compile_mlir!(
                         opt_passes2,
                         ad_pre_enzyme_pipeline...,
                         enzyme_pass,
-                        opt_passes2,
+                        post_enzyme_legalization_passes...,
+                        post_enzyme_opt_passes,
                         "canonicalize",
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
                         legalize_chlo_to_stablehlo...,
-                        opt_passes2,
+                        post_enzyme_opt_passes,
                         kern,
                         raise_passes,
                         lower_enzymexla_passes,
@@ -806,9 +836,14 @@ function compile_mlir!(
         )
         opt_passes_down = optimization_passes(
             Reactant.__compile_options_with_reversed_propagation(compile_options);
+            hlo_optimize=!compile_options.disable_post_enzyme_hlo_optimization_passes,
             common_kwargs...,
         )
-        opt_passes_up = optimization_passes(compile_options; common_kwargs...)
+        opt_passes_up = optimization_passes(
+            compile_options;
+            hlo_optimize=!compile_options.disable_post_enzyme_hlo_optimization_passes,
+            common_kwargs...,
+        )
         run_pass_pipeline!(
             mod,
             join([opt_passes_down, opt_passes_up, opt_passes_down], ","),
@@ -958,11 +993,11 @@ function compile_mlir!(
                     mod,
                     join(
                         [
-                            opt_passes,
+                            post_enzyme_sroa_opt_passes,
                             "canonicalize",
                             "cse",
                             "canonicalize",
-                            opt_passes2,
+                            post_enzyme_opt_passes,
                             lower_enzymexla_passes,
                             jit,
                         ],

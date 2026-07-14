@@ -55,13 +55,19 @@ function flatten_states(states)
     return arrays
 end
 
-function brusselator_compile_options(diff_batch::Bool)
+function brusselator_compile_options(
+    diff_batch::Bool; post_optimization::Bool=true
+)
     ad_optimization_passes = if diff_batch
         Reactant.ADOptimizationOptions(; diff_batch=true)
     else
         false
     end
-    return Reactant.CompileOptions(; sync=true, ad_optimization_passes)
+    return Reactant.CompileOptions(;
+        sync=true,
+        ad_optimization_passes,
+        disable_post_enzyme_hlo_optimization_passes=!post_optimization,
+    )
 end
 
 function compile_timed(f, args, compile_options::Reactant.CompileOptions)
@@ -96,6 +102,8 @@ function repository_sha()
         return "unknown"
     end
 end
+
+backend_name() = Reactant.XLA.platform_name(Reactant.XLA.default_backend())
 
 function print_metrics(label, metrics, correct)
     @printf(
@@ -148,13 +156,14 @@ function run_brusselator_validation(;
     jvp_atol::Float64=2.0e-6,
     jvp_rtol::Float64=2.0e-7,
     diff_batch::Bool=false,
+    post_optimization::Bool=true,
 )
     isempty(Ks) && throw(ArgumentError("Ks must not be empty"))
     all(K -> K in SUPPORTED_CHUNKS, Ks) ||
         throw(ArgumentError("Ks must be selected from $SUPPORTED_CHUNKS"))
     samples > 0 || throw(ArgumentError("samples must be positive"))
     epsilon > 0 || throw(ArgumentError("epsilon must be positive"))
-    compile_options = brusselator_compile_options(diff_batch)
+    compile_options = brusselator_compile_options(diff_batch; post_optimization)
 
     problem = brusselator_problem(N)
     state = split_state(problem.u)
@@ -306,12 +315,14 @@ function run_brusselator_validation(;
     println("  Julia:    ", VERSION)
     println("  Reactant: ", package_version(Reactant))
     println("  Enzyme:   ", package_version(Enzyme))
+    println("  backend:  ", backend_name())
     println("  repo SHA: ", repository_sha())
     println("  N:        ", N)
     println("  K:        ", join(Ks, ","))
     println("  seeds:    ", seed_kind)
     println("  epsilon:  ", epsilon)
     println("  diff batch: ", diff_batch)
+    println("  post-Enzyme HLO optimization: ", post_optimization)
     println("  logical output shape: ", size(reference_primal))
     println()
     print_metrics(
@@ -359,6 +370,7 @@ function run_brusselator_validation(;
         Ks,
         seed_kind,
         diff_batch,
+        post_optimization,
         primal=(;
             julia_metrics=julia_primal_metrics,
             reactant_metrics=reactant_primal_metrics,
@@ -388,12 +400,13 @@ function run_brusselator_performance(;
     seed_kind::Symbol=:onehot,
     samples::Int=30,
     diff_batch::Bool=false,
+    post_optimization::Bool=true,
 )
     isempty(Ks) && throw(ArgumentError("Ks must not be empty"))
     all(K -> K in SUPPORTED_CHUNKS, Ks) ||
         throw(ArgumentError("Ks must be selected from $SUPPORTED_CHUNKS"))
     samples > 0 || throw(ArgumentError("samples must be positive"))
-    compile_options = brusselator_compile_options(diff_batch)
+    compile_options = brusselator_compile_options(diff_batch; post_optimization)
 
     problem = brusselator_problem(N)
     state = split_state(problem.u)
@@ -480,12 +493,14 @@ function run_brusselator_performance(;
     println("  Julia:    ", VERSION)
     println("  Reactant: ", package_version(Reactant))
     println("  Enzyme:   ", package_version(Enzyme))
+    println("  backend:  ", backend_name())
     println("  repo SHA: ", repository_sha())
     println("  N:        ", N, " (", N^2, " cells)")
     println("  K:        ", join(Ks, ","))
     println("  seeds:    ", seed_kind)
     println("  samples:  ", samples)
     println("  diff batch: ", diff_batch)
+    println("  post-Enzyme HLO optimization: ", post_optimization)
     @printf("  one logical state: %.3f GiB\n", logical_state_bytes / 2.0^30)
     println("  execution is synchronous; no distributed sharding is requested")
     println()
@@ -512,6 +527,7 @@ function run_brusselator_performance(;
         Ks,
         seed_kind,
         diff_batch,
+        post_optimization,
         primal=(; finite=primal_finite, timing=primal_timing),
         single_jvp=(; finite=single_finite, timing=single_timing),
         chunks=chunk_results,
@@ -540,11 +556,26 @@ function parse_command_line(args)
     epsilon = parse(Float64, get(options, "epsilon", "1e-4"))
     samples = parse(Int, get(options, "samples", default_samples))
     diff_batch = parse(Bool, get(options, "diff-batch", "false"))
-    return (; mode, N, Ks, seed_kind, epsilon, samples, diff_batch)
+    post_optimization = parse(Bool, get(options, "post-opt", "true"))
+    backend = get(options, "backend", "auto")
+    backend in ("auto", "cpu", "gpu") ||
+        throw(ArgumentError("backend must be auto, cpu, or gpu"))
+    return (;
+        mode,
+        N,
+        Ks,
+        seed_kind,
+        epsilon,
+        samples,
+        diff_batch,
+        post_optimization,
+        backend,
+    )
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__
     options = parse_command_line(ARGS)
+    options.backend == "auto" || Reactant.set_default_backend(options.backend)
     if options.mode === :validation
         run_brusselator_validation(;
             N=options.N,
@@ -553,6 +584,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
             epsilon=options.epsilon,
             samples=options.samples,
             diff_batch=options.diff_batch,
+            post_optimization=options.post_optimization,
         )
     else
         run_brusselator_performance(;
@@ -561,6 +593,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
             seed_kind=options.seed_kind,
             samples=options.samples,
             diff_batch=options.diff_batch,
+            post_optimization=options.post_optimization,
         )
     end
 end
