@@ -187,15 +187,13 @@ function run_brusselator_validation(;
 
     native_jvps = map(seeds) do seed
         output = zero_state(state)
-        scratch = zero_state(state)
-        residual_jvp!(output, scratch, state, seed, problem.coordinates, problem.p)
+        residual_jvp!(output, state, seed, problem.coordinates, problem.p)
         return output
     end
     native_jvp_metrics = error_metrics(native_jvps[1], fd_jvps[1])
     native_jvp_ok = passes(native_jvps[1], fd_jvps[1]; atol=jvp_atol, rtol=jvp_rtol)
 
     single_args = Reactant.to_rarray((
-        zero_state(state),
         zero_state(state),
         state,
         seeds[1],
@@ -221,7 +219,6 @@ function run_brusselator_validation(;
     individual_reactant_jvps = map(seeds) do seed
         args = Reactant.to_rarray((
             zero_state(state),
-            zero_state(state),
             state,
             seed,
             problem.coordinates,
@@ -235,15 +232,12 @@ function run_brusselator_validation(;
     chunks_ok = true
     for K in Ks
         outputs = ntuple(_ -> zero_state(state), K)
-        primal_outputs = ntuple(_ -> zero_state(state), K)
         chunk_seeds = ntuple(k -> seeds[k], K)
-        alias_arrays = flatten_states((
-            (state,), Tuple(chunk_seeds), Tuple(outputs), Tuple(primal_outputs)
-        ))
+        alias_arrays = flatten_states((state, chunk_seeds, outputs))
         alias_ok = buffers_do_not_alias(alias_arrays)
 
         chunk_args = Reactant.to_rarray((
-            outputs, primal_outputs, state, chunk_seeds, problem.coordinates, problem.p
+            outputs, state, chunk_seeds, problem.coordinates, problem.p
         ))
         wrapper = chunk_function(K)
         chunk_compiled, chunk_compile_seconds = compile_timed(wrapper, chunk_args)
@@ -405,7 +399,6 @@ function run_brusselator_performance(;
 
     single_args = Reactant.to_rarray((
         zero_state(state),
-        zero_state(state),
         state,
         seeds[1],
         problem.coordinates,
@@ -428,15 +421,12 @@ function run_brusselator_performance(;
     chunks_ok = true
     for K in Ks
         outputs = ntuple(_ -> zero_state(state), K)
-        primal_outputs = ntuple(_ -> zero_state(state), K)
         chunk_seeds = ntuple(k -> seeds[k], K)
-        alias_arrays = flatten_states((
-            (state,), Tuple(chunk_seeds), Tuple(outputs), Tuple(primal_outputs)
-        ))
+        alias_arrays = flatten_states((state, chunk_seeds, outputs))
         alias_ok = buffers_do_not_alias(alias_arrays)
 
         chunk_args = Reactant.to_rarray((
-            outputs, primal_outputs, state, chunk_seeds, problem.coordinates, problem.p
+            outputs, state, chunk_seeds, problem.coordinates, problem.p
         ))
         chunk_compiled, chunk_compile_seconds = compile_timed(chunk_function(K), chunk_args)
         chunk_first_seconds = execute_timed(chunk_compiled, chunk_args)
@@ -447,7 +437,7 @@ function run_brusselator_performance(;
         chunk_results[K] = (;
             alias_ok,
             finite=first_output_finite,
-            argument_gib=(1 + 3 * K) * logical_state_bytes / 2.0^30,
+            argument_gib=(1 + 2 * K) * logical_state_bytes / 2.0^30,
             timing=(;
                 compile=chunk_compile_seconds,
                 first_execution=chunk_first_seconds,

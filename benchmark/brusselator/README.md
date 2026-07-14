@@ -83,7 +83,9 @@ All options use `--name=value` syntax:
 ## Layout and compiler experiments
 
 - `workload.jl` contains the initialization, scalar Julia reference, Reactant-compatible
-  residual, Enzyme forward JVP, and statically independent chunk wrappers.
+  residual, Enzyme forward JVP, and statically independent chunk wrappers. The AD-facing
+  residual is a pure function: every JVP in a chunk receives the same primal state,
+  coordinates, and parameters, and only its tangent seed and destination differ.
 - `runbenchmarks.jl` contains correctness checks, compilation, synchronized timing, and
   command-line handling.
 - `Project.toml` is the isolated benchmark environment.
@@ -91,4 +93,5 @@ All options use `--name=value` syntax:
 `compile_timed` in `runbenchmarks.jl` is the central call to `Reactant.compile`. Compiler
 pass or `CompileOptions` experiments can be routed through that function while leaving
 the workload and validation references unchanged. Run validation after every compiler
-configuration before comparing performance results.
+configuration before comparing performance results. The checked-in runner uses Reactant's
+normal compilation pipeline; it does not explicitly run `enzyme-diff-batch`.

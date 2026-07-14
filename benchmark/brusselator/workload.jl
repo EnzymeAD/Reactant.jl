@@ -5,6 +5,7 @@ using Enzyme
 using Reactant
 
 export SUPPORTED_CHUNKS,
+    brusselator_2d_components,
     brusselator_2d_loop!,
     brusselator_2d_components!,
     brusselator_2d_reference!,
@@ -93,16 +94,19 @@ function brusselator_2d_reference!(du, u, coordinates, p)
 end
 
 """
-    brusselator_2d_components!(du_u, du_v, u, v, coordinates, p)
+    brusselator_2d_components(u, v, coordinates, p)
 
-Evaluate the same residual for a component-array state `(u_species, v_species)`. Reactant's
-scalar extraction from an `(N,N,2)` array lowers to a multiplicative reduction that the
-current Enzyme overlay cannot differentiate. Splitting the species dimension leaves every
-numerical equation unchanged and makes the compiled state a tuple of two `N x N` arrays.
+Evaluate the residual as a pure function of the component-array state. The AD-facing
+interface deliberately returns its outputs instead of accepting mutable primal-output
+scratch. Repeated JVPs therefore have identical primal operands and differ only in their
+tangent seeds.
+
+Reactant's scalar extraction from an `(N,N,2)` array lowers to a multiplicative reduction
+that the current Enzyme overlay cannot differentiate. Splitting the species dimension
+leaves every numerical equation unchanged and makes the compiled state a tuple of two
+`N x N` arrays.
 """
-function brusselator_2d_components!(
-    du_species::AbstractMatrix,
-    dv_species::AbstractMatrix,
+function brusselator_2d_components(
     u_species::AbstractMatrix,
     v_species::AbstractMatrix,
     coordinates,
@@ -123,15 +127,26 @@ function brusselator_2d_components!(
     y = reshape(coordinates, 1, N)
     forcing = (((x .- 0.3) .^ 2 .+ (y .- 0.6) .^ 2) .<= 0.1^2) .* 5.0
 
-    copyto!(
-        du_species,
+    du_species =
         scaled_alpha .* u_laplacian .+ B .+ u_species .^ 2 .* v_species .-
-        (A + 1) .* u_species .+ forcing,
-    )
-    copyto!(
-        dv_species,
-        scaled_alpha .* v_laplacian .+ A .* u_species .- u_species .^ 2 .* v_species,
-    )
+        (A + 1) .* u_species .+ forcing
+    dv_species =
+        scaled_alpha .* v_laplacian .+ A .* u_species .- u_species .^ 2 .* v_species
+    return du_species, dv_species
+end
+
+"""Write the pure component residual into caller-provided output buffers."""
+function brusselator_2d_components!(
+    du_species::AbstractMatrix,
+    dv_species::AbstractMatrix,
+    u_species::AbstractMatrix,
+    v_species::AbstractMatrix,
+    coordinates,
+    p,
+)
+    residual = brusselator_2d_components(u_species, v_species, coordinates, p)
+    copyto!(du_species, residual[1])
+    copyto!(dv_species, residual[2])
     return nothing
 end
 
@@ -151,75 +166,73 @@ function brusselator_2d_loop!(du::AbstractArray, u::AbstractArray, coordinates, 
 end
 
 """
-    residual_jvp!(ddu, primal_output, u, du_seed, coordinates, p)
+    residual_jvp!(ddu, u, du_seed, coordinates, p)
 
-Compute `ddu = J(u) * du_seed` with Enzyme forward mode. The residual's primal output is
-distinct scratch and is not returned or consumed; coordinates and parameters are inactive.
+Compute `ddu = J(u) * du_seed` with Enzyme forward mode. The differentiated residual is
+pure, so only the shared state, coordinates, and parameters are primal operands. Coordinates
+and parameters are inactive, and separate calls differ only in their tangent seeds.
 """
-function residual_jvp!(ddu, primal_output, u, du_seed, coordinates, p)
-    Enzyme.autodiff(
+function residual_jvp!(ddu, u, du_seed, coordinates, p)
+    derivative = only(Enzyme.autodiff(
         Enzyme.Forward,
-        brusselator_2d_components!,
-        Enzyme.Const,
-        # DuplicatedNoNeed currently gives the overlay an inconsistent result count for
-        # mutated outputs. Duplicated has the same tangent semantics and keeps the primal
-        # values only in these caller-provided scratch buffers.
-        Enzyme.Duplicated(primal_output[1], ddu[1]),
-        Enzyme.Duplicated(primal_output[2], ddu[2]),
+        brusselator_2d_components,
+        Enzyme.Duplicated,
         Enzyme.Duplicated(u[1], du_seed[1]),
         Enzyme.Duplicated(u[2], du_seed[2]),
         Enzyme.Const(coordinates),
         Enzyme.Const(p),
-    )
+    ))
+    copyto!(ddu[1], derivative[1])
+    copyto!(ddu[2], derivative[2])
     return nothing
 end
 
-# These wrappers deliberately spell out every call. They model independent forward-mode
-# column computations and must not be replaced by Enzyme batching or a dynamic loop.
-function jacobian_chunk_k1!(outputs, primal_outputs, u, seeds, coordinates, p)
-    residual_jvp!(outputs[1], primal_outputs[1], u, seeds[1], coordinates, p)
+# These wrappers deliberately spell out every independent forward-mode column computation.
+# Keeping the source unbatched lets compiler-pass experiments discover and combine the calls.
+function jacobian_chunk_k1!(outputs, u, seeds, coordinates, p)
+    residual_jvp!(outputs[1], u, seeds[1], coordinates, p)
     return nothing
 end
 
-function jacobian_chunk_k2!(outputs, primal_outputs, u, seeds, coordinates, p)
-    residual_jvp!(outputs[1], primal_outputs[1], u, seeds[1], coordinates, p)
-    residual_jvp!(outputs[2], primal_outputs[2], u, seeds[2], coordinates, p)
+function jacobian_chunk_k2!(outputs, u, seeds, coordinates, p)
+    residual_jvp!(outputs[1], u, seeds[1], coordinates, p)
+    residual_jvp!(outputs[2], u, seeds[2], coordinates, p)
     return nothing
 end
 
-function jacobian_chunk_k4!(outputs, primal_outputs, u, seeds, coordinates, p)
-    residual_jvp!(outputs[1], primal_outputs[1], u, seeds[1], coordinates, p)
-    residual_jvp!(outputs[2], primal_outputs[2], u, seeds[2], coordinates, p)
-    residual_jvp!(outputs[3], primal_outputs[3], u, seeds[3], coordinates, p)
-    residual_jvp!(outputs[4], primal_outputs[4], u, seeds[4], coordinates, p)
+function jacobian_chunk_k4!(outputs, u, seeds, coordinates, p)
+    residual_jvp!(outputs[1], u, seeds[1], coordinates, p)
+    residual_jvp!(outputs[2], u, seeds[2], coordinates, p)
+    residual_jvp!(outputs[3], u, seeds[3], coordinates, p)
+    residual_jvp!(outputs[4], u, seeds[4], coordinates, p)
     return nothing
 end
 
-function jacobian_chunk_k8!(outputs, primal_outputs, u, seeds, coordinates, p)
-    residual_jvp!(outputs[1], primal_outputs[1], u, seeds[1], coordinates, p)
-    residual_jvp!(outputs[2], primal_outputs[2], u, seeds[2], coordinates, p)
-    residual_jvp!(outputs[3], primal_outputs[3], u, seeds[3], coordinates, p)
-    residual_jvp!(outputs[4], primal_outputs[4], u, seeds[4], coordinates, p)
-    residual_jvp!(outputs[5], primal_outputs[5], u, seeds[5], coordinates, p)
-    residual_jvp!(outputs[6], primal_outputs[6], u, seeds[6], coordinates, p)
-    residual_jvp!(outputs[7], primal_outputs[7], u, seeds[7], coordinates, p)
-    residual_jvp!(outputs[8], primal_outputs[8], u, seeds[8], coordinates, p)
+function jacobian_chunk_k8!(outputs, u, seeds, coordinates, p)
+    residual_jvp!(outputs[1], u, seeds[1], coordinates, p)
+    residual_jvp!(outputs[2], u, seeds[2], coordinates, p)
+    residual_jvp!(outputs[3], u, seeds[3], coordinates, p)
+    residual_jvp!(outputs[4], u, seeds[4], coordinates, p)
+    residual_jvp!(outputs[5], u, seeds[5], coordinates, p)
+    residual_jvp!(outputs[6], u, seeds[6], coordinates, p)
+    residual_jvp!(outputs[7], u, seeds[7], coordinates, p)
+    residual_jvp!(outputs[8], u, seeds[8], coordinates, p)
     return nothing
 end
 
-function jacobian_chunk_k12!(outputs, primal_outputs, u, seeds, coordinates, p)
-    residual_jvp!(outputs[1], primal_outputs[1], u, seeds[1], coordinates, p)
-    residual_jvp!(outputs[2], primal_outputs[2], u, seeds[2], coordinates, p)
-    residual_jvp!(outputs[3], primal_outputs[3], u, seeds[3], coordinates, p)
-    residual_jvp!(outputs[4], primal_outputs[4], u, seeds[4], coordinates, p)
-    residual_jvp!(outputs[5], primal_outputs[5], u, seeds[5], coordinates, p)
-    residual_jvp!(outputs[6], primal_outputs[6], u, seeds[6], coordinates, p)
-    residual_jvp!(outputs[7], primal_outputs[7], u, seeds[7], coordinates, p)
-    residual_jvp!(outputs[8], primal_outputs[8], u, seeds[8], coordinates, p)
-    residual_jvp!(outputs[9], primal_outputs[9], u, seeds[9], coordinates, p)
-    residual_jvp!(outputs[10], primal_outputs[10], u, seeds[10], coordinates, p)
-    residual_jvp!(outputs[11], primal_outputs[11], u, seeds[11], coordinates, p)
-    residual_jvp!(outputs[12], primal_outputs[12], u, seeds[12], coordinates, p)
+function jacobian_chunk_k12!(outputs, u, seeds, coordinates, p)
+    residual_jvp!(outputs[1], u, seeds[1], coordinates, p)
+    residual_jvp!(outputs[2], u, seeds[2], coordinates, p)
+    residual_jvp!(outputs[3], u, seeds[3], coordinates, p)
+    residual_jvp!(outputs[4], u, seeds[4], coordinates, p)
+    residual_jvp!(outputs[5], u, seeds[5], coordinates, p)
+    residual_jvp!(outputs[6], u, seeds[6], coordinates, p)
+    residual_jvp!(outputs[7], u, seeds[7], coordinates, p)
+    residual_jvp!(outputs[8], u, seeds[8], coordinates, p)
+    residual_jvp!(outputs[9], u, seeds[9], coordinates, p)
+    residual_jvp!(outputs[10], u, seeds[10], coordinates, p)
+    residual_jvp!(outputs[11], u, seeds[11], coordinates, p)
+    residual_jvp!(outputs[12], u, seeds[12], coordinates, p)
     return nothing
 end
 
