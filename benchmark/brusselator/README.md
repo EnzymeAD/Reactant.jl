@@ -30,17 +30,64 @@ The suite's `Project.toml` resolves Reactant from this repository checkout and i
 the compatible Enzyme version. No package installation is needed on subsequent runs
 unless the environment changes.
 
-When the repository's `LocalPreferences.toml` selects a locally built `Reactant_jll`,
-also put the repository project on Julia's load path before running the benchmark from
-the repository root:
+### Using a local `libReactantExtra`
+
+`libReactantExtra` is Reactant's native C++ library. It contains the MLIR, Enzyme-JAX,
+and XLA compiler support that the Julia package accesses through `Reactant_jll`. Changes
+to native passes therefore require a matching local library; using this checkout's Julia
+compiler code with an older released artifact can produce missing-pass, missing-symbol,
+or ABI errors.
+
+From the Reactant repository root, build an optimized CUDA library with:
+
+```sh
+julia --project=deps --startup-file=no -e 'using Pkg; Pkg.instantiate()'
+julia --project=deps --startup-file=no deps/build_local.jl --backend=cuda
+```
+
+Use `--backend=cpu` for a CPU-only build or `--backend=auto` to detect the available
+backend. The build script writes
+`deps/ReactantExtra/bazel-bin/libReactantExtra.so` and creates or updates the repository's
+`LocalPreferences.toml` so that `Reactant_jll` selects that library.
+
+By default the build uses the Enzyme-JAX revision pinned in
+`deps/ReactantExtra/WORKSPACE`, which in turn selects a pinned core Enzyme revision. The
+Brusselator runs recorded here instead overrode core Enzyme with a local checkout so that
+the merged `BatchDiffPass` mixed-activity input-indexing fix was present:
+
+```sh
+julia --project=deps --startup-file=no deps/build_local.jl --backend=cuda \
+  --extraopt="--override_repository=enzyme=/absolute/path/to/Enzyme/enzyme"
+```
+
+Keep this override when testing local core-Enzyme changes, or until Enzyme-JAX's pinned
+core revision contains the required fix. A separate local Enzyme-JAX checkout is not used
+unless Bazel's `enzyme_ad` repository is also overridden; add the following repeatable
+option to the same build command when needed:
+
+```sh
+--extraopt="--override_repository=enzyme_ad=/absolute/path/to/Enzyme-JAX"
+```
+
+The Brusselator suite has its own Julia environment. Put the repository project on the
+load path so that this environment inherits the generated root preference:
 
 ```sh
 export JULIA_LOAD_PATH="@:$PWD:@stdlib"
 ```
 
-This makes the benchmark project inherit the matching local `libReactantExtra`. Without
-it, Julia can load the released artifact library alongside this checkout's compiler code,
-which is an unsupported ABI mismatch.
+Verify the selected library before benchmarking:
+
+```sh
+julia --project=benchmark/brusselator --startup-file=no -e \
+  'using Reactant; @show Reactant.Reactant_jll.libReactantExtra_path'
+```
+
+The printed path should end in
+`deps/ReactantExtra/bazel-bin/libReactantExtra.so`. Start a new Julia process after every
+rebuild because a running process will continue using the library it already loaded. See
+the [local ReactantExtra build guide](../../docs/src/tutorials/local-build.md) for compiler,
+debug-build, and Bazel options.
 
 To select one GPU on a multi-GPU machine, set `CUDA_VISIBLE_DEVICES` when launching Julia.
 For example, all commands below select device 0.
