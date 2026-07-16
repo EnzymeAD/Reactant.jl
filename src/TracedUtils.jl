@@ -369,8 +369,10 @@ function make_mlir_fn(
         Reactant.Compiler.activate_raising!(true)
     end
 
+    initial_arg_values = MLIR.IR.Value[]
     result = try
         process_linear_args!(linear_args, fnbody, do_transpose, optimize_then_pad, inv_map)
+        append!(initial_arg_values, get_mlir_data.(linear_args))
 
         if isempty(kwargs)
             Reactant.call_with_reactant(f, traced_args...)
@@ -389,7 +391,7 @@ function make_mlir_fn(
     mutated_args = Int[]
     if !construct_function_without_args
         for (i, arg) in enumerate(linear_args)
-            if get_mlir_data(arg) != MLIR.IR.argument(fnbody, i)
+            if get_mlir_data(arg) != initial_arg_values[i]
                 # mutation occured!
                 push!(mutated_args, i)
             end
@@ -410,6 +412,7 @@ function make_mlir_fn(
         do_transpose,
         optimize_then_pad,
         inv_map,
+        mutated_args,
         args_in_result,
         resprefix,
         argprefix,
@@ -639,6 +642,7 @@ function finalize_mlir_fn(
     do_transpose,
     optimize_then_pad,
     inv_map,
+    mutated_args,
     args_in_result,
     resprefix,
     argprefix,
@@ -656,17 +660,6 @@ function finalize_mlir_fn(
     concretein,
     toscalar,
 )
-    # check which arguments have been mutated
-    mutated_args = Int[]
-    if !construct_function_without_args
-        for (i, arg) in enumerate(linear_args)
-            if get_mlir_data(arg) != MLIR.IR.argument(fnbody, i)
-                # mutation occured!
-                push!(mutated_args, i)
-            end
-        end
-    end
-
     outmode = if concretein
         @assert !toscalar
         Reactant.NoStopTracedTrack

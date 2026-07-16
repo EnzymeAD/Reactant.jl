@@ -222,6 +222,9 @@ Fine-grained control over the compilation options for the Reactant compiler.
     These options are not part of the public API and are subject to change without any
     notice or deprecation cycle.
 
+  - `disable_post_enzyme_hlo_optimization_passes`: Disables the generated HLO
+    optimization transforms after core Enzyme in the default `:all` pipeline while
+    preserving the rest of the pass pipeline. (Default: `false`).
   - `disable_scatter_gather_optimization_passes`: Disables the scatter-gather
     optimization passes. (Default: `false`).
   - `disable_pad_optimization_passes`: Disables the pad optimization passes. This is
@@ -278,6 +281,7 @@ struct CompileOptions
     xla_compile_options::NamedTuple
     xla_debug_options::NamedTuple
     ## private options for ablation studies
+    disable_post_enzyme_hlo_optimization_passes::Bool
     disable_scatter_gather_optimization_passes::Bool
     disable_pad_optimization_passes::Bool
     disable_licm_optimization_passes::Bool
@@ -316,6 +320,7 @@ function CompileOptions(;
     xla_executable_build_options::NamedTuple=NamedTuple(),
     xla_compile_options::NamedTuple=NamedTuple(),
     xla_debug_options::NamedTuple=NamedTuple(),
+    disable_post_enzyme_hlo_optimization_passes::Bool=false,
     disable_scatter_gather_optimization_passes::Bool=false,
     disable_pad_optimization_passes::Bool=false,
     disable_licm_optimization_passes::Bool=false,
@@ -385,6 +390,7 @@ function CompileOptions(;
         xla_executable_build_options,
         xla_compile_options,
         xla_debug_options,
+        disable_post_enzyme_hlo_optimization_passes,
         disable_scatter_gather_optimization_passes,
         disable_pad_optimization_passes,
         disable_licm_optimization_passes,
@@ -443,6 +449,7 @@ function __compile_options_with_reversed_propagation(compile_options::CompileOpt
         compile_options.xla_executable_build_options,
         compile_options.xla_compile_options,
         compile_options.xla_debug_options,
+        compile_options.disable_post_enzyme_hlo_optimization_passes,
         compile_options.disable_scatter_gather_optimization_passes,
         compile_options.disable_pad_optimization_passes,
         compile_options.disable_licm_optimization_passes,
@@ -488,6 +495,7 @@ function __compile_options_with_updated_sync(compile_options::CompileOptions, sy
         compile_options.xla_executable_build_options,
         compile_options.xla_compile_options,
         compile_options.xla_debug_options,
+        compile_options.disable_post_enzyme_hlo_optimization_passes,
         compile_options.disable_scatter_gather_optimization_passes,
         compile_options.disable_pad_optimization_passes,
         compile_options.disable_licm_optimization_passes,

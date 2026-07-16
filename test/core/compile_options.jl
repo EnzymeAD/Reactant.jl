@@ -74,6 +74,10 @@ module {
     @test CompileOptions(; ad_optimization_passes=true).ad_optimization_passes === true
     @test CompileOptions(; ad_optimization_passes=enabled_ad).ad_optimization_passes ===
         enabled_ad
+    @test !CompileOptions().disable_post_enzyme_hlo_optimization_passes
+    @test CompileOptions(;
+        disable_post_enzyme_hlo_optimization_passes=true
+    ).disable_post_enzyme_hlo_optimization_passes
 
     keyword_options = CompileOptions(; ad_optimization_passes=enabled_ad)
     positional_options = CompileOptions(
@@ -93,6 +97,7 @@ end
         ad_optimization_passes=enabled_ad,
         transpose_propagate=:up,
         reshape_propagate=:down,
+        disable_post_enzyme_hlo_optimization_passes=true,
         sync=false,
     )
 
@@ -176,6 +181,28 @@ end
     @test pass_count(enabled_pipeline, "enzyme-diff-batch") == 1
     @test pass_count(enabled_pipeline, "enzyme-batch-to-stablehlo") == 1
     @test pass_count(enabled_pipeline, "enzyme-batch") == 1
+
+    post_optimization_disabled_pipeline = dumped_pass_pipeline(
+        ad_test_compile_options(;
+            ad_optimization_passes=true,
+            disable_post_enzyme_hlo_optimization_passes=true,
+        ),
+        "all",
+    )
+    @test pass_count(post_optimization_disabled_pipeline, "enzyme-diff-batch") == 1
+    @test pass_count(
+        post_optimization_disabled_pipeline, "enzyme-batch-to-stablehlo"
+    ) == 2
+    @test pass_count(post_optimization_disabled_pipeline, "enzyme-batch") == 1
+    disabled_hlo_passes = pass_count(
+        post_optimization_disabled_pipeline, "enzyme-hlo-generate-td"
+    )
+    enabled_hlo_passes = pass_count(enabled_pipeline, "enzyme-hlo-generate-td")
+    @test enabled_hlo_passes == 2 * disabled_hlo_passes
+    @test pass_count(post_optimization_disabled_pipeline, "canonicalize") ==
+        pass_count(enabled_pipeline, "canonicalize")
+    @test pass_count(post_optimization_disabled_pipeline, "cse") ==
+        pass_count(enabled_pipeline, "cse")
 
     batch_position = first(findfirst("enzyme-batch", enabled_pipeline))
     diff_batch_position = first(findfirst("enzyme-diff-batch", enabled_pipeline))

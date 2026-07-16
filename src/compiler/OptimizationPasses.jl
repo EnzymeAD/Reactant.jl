@@ -40,6 +40,7 @@ end
 function optimization_passes(
     compile_options::CompileOptions;
     sroa::Bool=false,
+    hlo_optimize::Bool=true,
     dus_to_concat::Bool=false,
     recognize_comms::Bool=true,
     lower_comms::Bool=true,
@@ -106,23 +107,26 @@ function optimization_passes(
         lower_passes_str, "associative_binary_op_reordering<1>;" => ""
     )
 
-    transform_passes = join(
-        [
-            "enzyme-hlo-generate-td{patterns=" * main_passes_str * "}",
-            "transform-interpreter",
-            "enzyme-hlo-remove-transform",
-        ],
-        ",",
-    )
-    func_passes = join(["canonicalize", "cse", "canonicalize", transform_passes], ",")
-    if lower_comms
+    func_passes = "canonicalize,cse,canonicalize"
+    if hlo_optimize
+        transform_passes = join(
+            [
+                "enzyme-hlo-generate-td{patterns=" * main_passes_str * "}",
+                "transform-interpreter",
+                "enzyme-hlo-remove-transform",
+            ],
+            ",",
+        )
+        func_passes *= "," * transform_passes
+    end
+    if hlo_optimize && lower_comms
         func_passes =
             func_passes *
             ",enzyme-hlo-generate-td{patterns=" *
             lower_passes_str *
             "},transform-interpreter,enzyme-hlo-remove-transform"
     end
-    if CONCATS_TO_DUS[]
+    if hlo_optimize && CONCATS_TO_DUS[]
         func_passes *= ",enzyme-hlo-generate-td{patterns=concat_to_onedim_dus},transform-interpreter,enzyme-hlo-remove-transform"
     end
     passes = String[]
