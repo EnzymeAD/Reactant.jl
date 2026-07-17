@@ -869,7 +869,7 @@ this emits just the type, which is what you want when interpolating it into MLIR
 source text.
 """
 function Base.print(io::IO, type::Type)
-    c_print_callback = @cfunction(API.print_callback, Cvoid, (API.MlirStringRef, Any))
+    c_print_callback = @cfunction(print_callback, Cvoid, (API.MlirStringRef, Any))
     ref = Ref(io)
     API.mlirTypePrint(type, c_print_callback, ref)
     return nothing
