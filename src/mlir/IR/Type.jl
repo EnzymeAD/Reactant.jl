@@ -861,10 +861,22 @@ function julia_type(type::Type)
     end
 end
 
-function Base.show(io::IO, type::Type)
-    print(io, "Type(#= ")
-    c_print_callback = @cfunction(print_callback, Cvoid, (API.MlirStringRef, Any))
+"""
+    print(io, type)
+
+Print `type` in MLIR's textual form, e.g. `memref<1024xi32>`. Unlike [`show`](@ref),
+this emits just the type, which is what you want when interpolating it into MLIR
+source text.
+"""
+function Base.print(io::IO, type::Type)
+    c_print_callback = @cfunction(API.print_callback, Cvoid, (API.MlirStringRef, Any))
     ref = Ref(io)
     API.mlirTypePrint(type, c_print_callback, ref)
+    return nothing
+end
+
+function Base.show(io::IO, type::Type)
+    print(io, "Type(#= ")
+    print(io, type)
     return print(io, " =#)")
 end
