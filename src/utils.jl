@@ -119,8 +119,6 @@ function apply(f::F, args...; kwargs...) where {F}
     return f(args...; kwargs...)
 end
 
-function call_with_reactant end
-
 function maybe_argextype(@nospecialize(x), src)
     return try
         Core.Compiler.argextype(x, src)
@@ -377,8 +375,6 @@ function is_reactant_method(mi::Core.MethodInstance)
     mt = meth.external_mt
     return mt === REACTANT_METHOD_TABLE
 end
-
-struct EnsureReturnType{T} end
 
 @generated function applyiterate_with_reactant(
     ert::EnsureReturnType, iteratefn, applyfn, args::Vararg{Any,N}

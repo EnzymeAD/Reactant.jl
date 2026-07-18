@@ -104,6 +104,12 @@ include("xla/XLA.jl")
 include("Configuration.jl")
 include("Sharding.jl")
 include("Devices.jl")
+# `set_reactant_abi` in Interpreter.jl handles calls to these bindings. Declare them
+# before loading the interpreter so Julia's inference machinery sees stable globals.
+function call_with_reactant end
+function should_rewrite_call end
+struct EnsureReturnType{T} end
+
 include("Interpreter.jl")
 include("Profiler.jl")
 include("Types.jl")

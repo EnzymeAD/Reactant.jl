@@ -85,7 +85,12 @@ end
         return Core.Compiler.abstract_call(interp, arginfo2::ArgInfo, si2, sv, max_methods)
     end
 
-    if !should_rewrite_call(Core.Typeof(f))
+    # `should_rewrite_call` is installed later in Reactant's initialization (after
+    # the traced types it inspects).  This callback can outlive that loading world,
+    # so evaluate the host-side predicate in the current world.
+    if !Core._call_in_world_total(
+        Base.get_world_counter(), should_rewrite_call, Core.Typeof(f)
+    )
         ninterp = Core.Compiler.NativeInterpreter(interp.world)
         # Note: mildly sus, but gabe said this was fine?
         @static if VERSION >= v"1.12"

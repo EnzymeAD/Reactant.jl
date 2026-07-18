@@ -391,6 +391,20 @@ function Base.copyto!(dest::AnyTracedRArray, src::Array)
     return copyto!(dest, Reactant.promote_to(TracedRArray, src))
 end
 
+_elementwise_apply(f, args...) = TracedUtils.elem_apply(f, args...)
+
+# `enzyme.batch` handles general broadcasted Julia functions.  Unary `tanh` has a
+# direct StableHLO operation, though, and keeping it as such lets Enzyme's forward
+# pass see its tensor shape instead of scalarizing a batched derivative.
+function _elementwise_tanh(x::AnyTracedRArray{<:AbstractFloat})
+    op = MLIR.Dialects.stablehlo.tanh(get_mlir_data(x))
+    return TracedRArray(MLIR.IR.result(op, 1))
+end
+_elementwise_apply(::typeof(Base.tanh), x::AnyTracedRArray{<:AbstractFloat}) =
+    _elementwise_tanh(x)
+_elementwise_apply(::typeof(Base.FastMath.tanh_fast), x::AnyTracedRArray{<:AbstractFloat}) =
+    _elementwise_tanh(x)
+
 function _copyto!(dest::AnyTracedRArray, bc::Broadcasted)
     axes(dest) == axes(bc) || Broadcast.throwdm(axes(dest), axes(bc))
     isempty(dest) && return dest
@@ -398,7 +412,7 @@ function _copyto!(dest::AnyTracedRArray, bc::Broadcasted)
 
     args = (Reactant.broadcast_to_size(Base.materialize(a), size(bc)) for a in bc.args)
 
-    res0 = TracedUtils.elem_apply(bc.f, args...)
+    res0 = _elementwise_apply(bc.f, args...)
     if !(res0 isa Reactant.TracedType)
         # `bc.f` returned a constant that does not depend on its arguments:
         res0 = Reactant.broadcast_to_size(res0, size(dest))

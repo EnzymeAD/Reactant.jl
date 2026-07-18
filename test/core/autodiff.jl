@@ -236,6 +236,23 @@ end
     @test res2[1][4] ≈ 8
     @test res2[1][5] ≈ 10
     @test res2[1][6] ≈ 12
+
+    # Keep the batch axis stacked through a broadcasted nonlinearity.  Splitting
+    # it into scalar slices leaves `enzyme.extract` operations that XLA cannot
+    # lower, while scalarizing `tanh` loses the batch axis during forward AD.
+    W = Float32[1 4; 2 5; 3 6]
+    b = Float32[1, 2, 3]
+    x_dense = Float32[1, 2]
+    dx_dense = Float32[1 0; 0 1]
+    W_ra, b_ra, x_dense_ra, dx_dense_ra = Reactant.to_rarray((W, b, x_dense, dx_dense))
+    dense_tanh(x) = tanh.(W_ra * x .+ b_ra)
+
+    dense_res = @jit Enzyme.autodiff(
+        Forward, dense_tanh, StackedBatchDuplicated(x_dense_ra, dx_dense_ra)
+    )
+    dense_primal = W * x_dense .+ b
+    dense_expected = (1 .- tanh.(dense_primal) .^ 2) .* W
+    @test only(dense_res) ≈ dense_expected
 end
 
 function fn2!(y, x)

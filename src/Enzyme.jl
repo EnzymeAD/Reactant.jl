@@ -325,6 +325,9 @@ function overload_autodiff(
     if width == 0
         throw(ErrorException("Cannot differentiate with a batch size of 0"))
     end
+    stacked_batch = any(
+        a -> a isa Union{StackedBatchDuplicated,StackedBatchDuplicatedNoNeed}, args
+    )
 
     primf = f.val
     primargs = ((v.val for v in args)...,)
@@ -494,6 +497,8 @@ function overload_autodiff(
     dresult = if CMode <: ForwardMode && !(A <: Const)
         if width == 1
             deepcopy(result)
+        elseif stacked_batch
+            nothing
         else
             ntuple(Val(width)) do i
                 Base.@_inline_meta
@@ -517,6 +522,13 @@ function overload_autodiff(
                 tval = TracedUtils.transpose_val(MLIR.IR.result(res, residx))
                 if width == 1
                     TracedUtils.set!(dresult, path[2:end], tval)
+                elseif stacked_batch
+                    dresult === nothing || throw(
+                        ArgumentError(
+                            "StackedBatchDuplicated currently requires a single array result."
+                        ),
+                    )
+                    dresult = TracedRArray(tval)
                 else
                     ttval = TracedRArray(tval)
                     for (i, sl) in enumerate(eachslice(ttval; dims=ndims(ttval)))
