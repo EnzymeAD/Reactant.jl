@@ -103,6 +103,13 @@ end
 function (obj::KA.Kernel{ReactantBackend})(args...; ndrange=nothing, workgroupsize=nothing)
     if Reactant.precompiling()
         Reactant.@code_hlo optimize = false tokw(ndrange, workgroupsize, obj, args...)
+    elseif any(x -> x isa Reactant.TracedRArray, args)
+        # Already within a tracing context (e.g., called from call_with_native).
+        # Route through call_with_reactant to avoid nested compilation and ensure
+        # proper argument adaptation (TracedRArray → CuTracedArray).
+        Reactant.call_with_reactant(
+            Reactant.ka_with_reactant, ndrange, workgroupsize, obj, args...
+        )
     else
         Reactant.@jit tokw(ndrange, workgroupsize, obj, args...)
     end
