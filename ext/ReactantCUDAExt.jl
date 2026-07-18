@@ -144,7 +144,7 @@ Base.OneTo(x::CuTracedRNumber{<:Integer}) = Base.OneTo(x[])
     end
 end
 
-@inline function Base.convert(CT::Type{CuTracedRNumber{Float64,1}}, x::Number)
+@inline function Base.convert(CT::Type{<:CuTracedRNumber{Float64,1}}, x::Number)
     return CT(
         Base.reinterpret(
             Core.LLVMPtr{Float64,1},
@@ -168,7 +168,7 @@ end
     )
 end
 
-@inline function Base.convert(CT::Type{CuTracedRNumber{Float32,1}}, x::Number)
+@inline function Base.convert(CT::Type{<:CuTracedRNumber{Float32,1}}, x::Number)
     return CT(
         Base.reinterpret(
             Core.LLVMPtr{Float32,1},

@@ -163,6 +163,22 @@ end
         @test !(all(Array(fn_compiled(seed1)) .≈ Array(fn_compiled(seed2))))
     end
 
+    @testset "Seeding with Integer" begin
+        fn() = begin
+            rng = Random.default_rng()
+            Random.seed!(rng, 42)
+            a = rand(rng, 3)
+            Random.seed!(rng, 42)
+            b = rand(rng, 3)
+            Random.seed!(rng, 99)
+            c = rand(rng, 3)
+            return a, b, c
+        end
+        a, b, c = @jit fn()
+        @test Array(a) == Array(b)
+        @test Array(a) != Array(c)
+    end
+
     @testset "Correct Distribution" begin
         X = Array(@jit(randn(StableRNG(0), 10000)))
         sw_test = ShapiroWilkTest(X)

@@ -45,13 +45,14 @@ fitted value `slope · x_i + intercept` with fixed noise (standard deviation 1).
 
 ### The data
 
-Synthetic data drawn from `slope = -2, intercept = 10`. The `xs` /
-`ys` pair is what we'll condition on.
+We start by drawing synthetic data using a known slope and intercept of `-2` and `10` respectively.
 
 ```@example probprog_index
-xs = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0]
-ys = [8.23, 5.87, 3.99, 2.59, 0.23, -0.66, -3.53, -6.91, -7.24, -9.90]
-nothing # hide
+true_slope, true_intercept = -2.0, 10.0
+
+xs = collect(Float64, 1:10)
+ys = (true_slope .* xs) .+ true_intercept .+ randn(length(xs))
+(xs, ys)
 ```
 
 ### Describing the Model
@@ -165,27 +166,24 @@ The `compiled_fn` is a callable object that takes the same arguments as
 trace_tensor = compiled_fn(rng, xs, obs_tensor, step_size, inverse_mass_matrix)
 ```
 
-Each row is one post-warmup sample; columns hold the sampled values for each selected site:
+In this array, each row is one post-warmup sample, and each column is a parameter.
+The columns follow the order that we passed to `ProbProg.select` above, i.e., `:slope` first, then `:intercept`.
 
 ```text
-            :intercept   :slope
-sample 1:      ...         ...
-sample 2:      ...         ...
-   ⋮            ⋮           ⋮
-sample N:      ...         ...
+           :slope   :intercept
+sample 1:    ...       ...    
+sample 2:    ...       ...    
+   ⋮          ⋮         ⋮     
+sample N:    ...       ...    
 ```
 
-From the sampler output, the posterior mean is:
+The posterior means obtained are:
 
 ```@example probprog_index
-(
-    posterior_mean_intercept = mean(trace_tensor[:, 1]),
-    posterior_mean_slope     = mean(trace_tensor[:, 2]),
-)
+mean(trace_tensor, dims=1)
 ```
 
-The data were generated from `slope = -2, intercept = 10`; NUTS recovers
-both posterior means.
+We can see that NUTS recovers the values that were used to generate the data.
 
 ## Custom logpdf mode
 

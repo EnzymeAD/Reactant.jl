@@ -484,6 +484,13 @@ end
 
 Base.similar(a::ConcretePJRTArray, dims::Dims) = similar(a, eltype(a), dims)
 
+# A concrete array asked for a traced element type (e.g. via LinearAlgebra's
+# generic `similar`/`\` while tracing) cannot hold traced values in its device
+# buffer, so produce a traced array instead.
+function Base.similar(::ConcretePJRTArray, ::Type{S}, dims::Dims) where {S<:TracedRNumber}
+    return similar(TracedRArray{unwrapped_eltype(S)}, dims)
+end
+
 function Base.similar(AT::Type{<:ConcretePJRTArray{T}}, dims::Dims; kwargs...) where {T}
     return similar(AT, T, dims; kwargs...)
 end
@@ -492,6 +499,9 @@ function Base.similar(a::ConcreteIFRTArray{T}, ::Type{S}=T, dims::Dims=size(a)) 
     return ConcreteIFRTArray(
         Array{S}(undef, dims); client=XLA.client(a), device=XLA.device(a), a.sharding
     )
+end
+function Base.similar(::ConcreteIFRTArray, ::Type{S}, dims::Dims) where {S<:TracedRNumber}
+    return similar(TracedRArray{unwrapped_eltype(S)}, dims)
 end
 Base.similar(a::ConcreteIFRTArray, dims::Dims) = similar(a, eltype(a), dims)
 function Base.similar(::Type{ConcreteIFRTArray{T}}, dims::Dims) where {T}
@@ -725,9 +735,9 @@ for aType in (:ConcretePJRTArray, :ConcreteIFRTArray)
         end
 
         function Base.copyto!(
-            dest::SubArray{TracedRNumber{T1},<:Any,<:$(aType)},
-            src::SubArray{TracedRNumber{T2},<:Any,<:Array},
-        ) where {T1,T2}
+            dest::SubArray{<:TracedRNumber,<:Any,<:$(aType)},
+            src::SubArray{<:TracedRNumber,<:Any,<:Array},
+        )
             throw(MethodError(copyto!, (dest, src)))
         end
     end
@@ -770,9 +780,7 @@ function Base.zero(x::ConcreteIFRTArray{T,N}) where {T,N}
     )
 end
 
-function Base.fill!(
-    a::ConcretePJRTArray{TracedRNumber{T},N}, val::TracedRNumber{T2}
-) where {T,T2,N}
+function Base.fill!(a::ConcretePJRTArray{<:TracedRNumber}, val::TracedRNumber)
     throw(MethodError(fill!, (a, val)))
 end
 
@@ -804,9 +812,7 @@ function Base.fill!(a::ConcreteIFRTArray{T,N}, val) where {T,N}
     return a
 end
 
-function Base.fill!(
-    a::ConcreteIFRTArray{TracedRNumber{T},N}, val::TracedRNumber{T2}
-) where {T,T2,N}
+function Base.fill!(a::ConcreteIFRTArray{<:TracedRNumber}, val::TracedRNumber)
     throw(MethodError(fill!, (a, val)))
 end
 
