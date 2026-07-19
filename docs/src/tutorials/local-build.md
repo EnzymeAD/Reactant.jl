@@ -49,11 +49,11 @@ optional arguments:
   --gcc_host_compiler_path GCC_HOST_COMPILER_PATH
                         Path to the gcc host compiler. (default:
                         "/usr/bin/gcc")
-  --cc CC                (default: "/opt/homebrew/opt/llvm/bin/clang")
+  --cc CC                (default: "/usr/bin/cc")
   --hermetic_python_version HERMETIC_PYTHON_VERSION
                         Hermetic Python version. (default: "3.12")
   --jobs JOBS           Number of parallel jobs. (type: Int64,
-                        default: 5)
+                        default: Sys.CPU_THREADS)
   --copt COPT           Options to be passed to the C compiler.  Can
                         be used multiple times.
   --cxxopt CXXOPT       Options to be passed to the C++ compiler.  Can
@@ -62,7 +62,7 @@ optional arguments:
                         used multiple times.
   --color COLOR         Set to `yes` to enable color output, or `no`
                         to disable it. Defaults to same color setting
-                        as the Julia process. (default: "no")
+                        as the Julia process.
   --cache               Build with bazel cache.
   --push-cache          Build and store to bazel cache.
   -h, --help            show this help message and exit
