@@ -56,6 +56,7 @@ Reactant = {path = ".."}
 
 [compat]
 Adapt = "4.1"
+Aqua = "0.8.16"
 ArrayInterface = "7.17.1"
 CUDA = "5.9, 6"
 DLFP8Types = "0.1"
