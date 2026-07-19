@@ -175,13 +175,13 @@ The direct solution is to disable the universal build by changing `_universal` t
 The least intrusive way to do this is to edit `ReactantExtra/WORKSPACE` to add a new patch to the XLA dependency.
 Replace the line which reads
 
-```starlark
+```
 NEW_XLA_PATCHES = []
 ```
 
 with
 
-```starlark
+```
 NEW_XLA_PATCHES = [
     r"""cat >> third_party/grpc/grpc.patch << 'GRPC_PATCH'
 
@@ -201,8 +201,9 @@ GRPC_PATCH""",
 ]
 ```
 
-(Don't be confused by the `-` and `+`'s here: copy the text above *verbatim* into the `WORKSPACE` file.
-It's a command that *generates* a patch file, not a patch itself.)
+(or if `NEW_XLA_PATCHES` already contains some patches, just add the `cat >> ...` command to the list).
+Don't be confused by the `-` and `+`'s here: copy the text above *verbatim* into the `WORKSPACE` file.
+The text above represents a *command that modifies a patch file*, it's not itself a patch.
 
 What's going on here?
 Because grpc isn't a direct dependency, we can't easily add a patch to it in Reactant.
