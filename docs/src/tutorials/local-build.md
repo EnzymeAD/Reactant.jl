@@ -132,23 +132,7 @@ If you want to use the local build in a different environment:
 
 ## Troubleshooting macOS builds
 
-#### MacOS deployment target
-
-Bazel by default attempts to build a binary that will work on older versions of macOS.
-However, some of the C++ code in Reactant's deps requires features that are only present on newer versions' C++ standard libraries.
-If you are building on macOS and you see an error such as
-
-```console
-external/riegeli/riegeli/base/new_aligned.h:137:27: error: aligned allocation function of type 'void *(std::size_t, std::align_val_t)' is only available on macOS 10.13 or newer
-```
-
-(note that this error can be triggered from multiple different source files), this can be fixed by adding the options
-
-```console
-julia [...] --copt "-mmacosx-version-min=11.0" --extraopt "--host_copt=-mmacosx-version-min=11.0"
-```
-
-#### Abseil module dependency
+### Abseil module dependency
 
 Depending on your compiler toolchain and Bazel version you may encounter an error like:
 
@@ -162,7 +146,7 @@ This is caused by Bazel performing a strict version of dependency checking betwe
 julia [...] --extraopt "--features=-layering_check" --extraopt "--host_features=-layering_check"
 ```
 
-#### Toolchain for Intel macOS
+### Toolchain for Intel macOS
 
 One of Reactant's transitive dependencies, grpc, has a Bazel build configuration which [instructs it to build universal binaries on macOS](https://github.com/grpc/grpc/blob/8542e01ff47eb07247ff6cfbd545f3b6f4e9b5d3/bazel/grpc_build_system.bzl#L215-L225) (i.e., binaries which work on both Intel and Apple Silicon Macs).
 If your toolchain is not set up to do this, you may encounter a fairly cryptic error like:
