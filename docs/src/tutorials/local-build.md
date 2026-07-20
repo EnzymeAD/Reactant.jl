@@ -33,7 +33,6 @@ julia --project build_local.jl --help
 
 which prints the following (note that the output may be out of date; you should run it locally to see the options available to you):
 
-```console
 usage: build_local.jl [--debug] [--backend BACKEND]
                       [--gcc_host_compiler_path GCC_HOST_COMPILER_PATH]
                       [--cc CC]
@@ -120,7 +119,7 @@ If you instantiate this environment, Reactant will automatically use the new loc
 You can check that the local build is being used by running
 
 ```julia
-using Reactant; Reactant.Reactant_jll.libReactantExtra_path
+using Reactant_jll; Reactant_jll.libReactantExtra_path
 ```
 
 which should point to the locally built library.
