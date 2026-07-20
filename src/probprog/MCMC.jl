@@ -72,7 +72,9 @@ function mcmc(
     trace_type = MLIR.IR.TensorType(
         [collection_size, selection_pos_size], MLIR.IR.Type(Float64)
     )
-    diagnostics_type = MLIR.IR.TensorType([Int64(collection_size)], MLIR.IR.Type(Bool))
+    n_diagnostics = 2  # is_accepted and is_divergent
+    diagnostics_type = MLIR.IR.TensorType([Int64(collection_size), n_diagnostics], MLIR.IR.Type(Bool))
+    log_densities_type = MLIR.IR.TensorType([Int64(collection_size)], MLIR.IR.Type(Float64))
 
     position_type = MLIR.IR.TensorType([1, selection_pos_size], MLIR.IR.Type(Float64))
     scalar_type = MLIR.IR.TensorType(Int64[], MLIR.IR.Type(Float64))
@@ -127,6 +129,7 @@ function mcmc(
         step_size=step_size_val,
         trace=trace_type,
         diagnostics=diagnostics_type,
+        log_densities=log_densities_type,
         output_rng_state=mlir_result_types[1],
         final_position=position_type,
         final_gradient=position_type,
@@ -153,31 +156,32 @@ function mcmc(
         fnwrapped,
         resprefix,
         argprefix,
-        2,
+        3,
         true,
     )
 
     new_trace = TracedRArray{Float64,2}(
         (), MLIR.IR.result(mcmc_op, 1), (collection_size, selection_pos_size)
     )
-    diagnostics = TracedRArray{Bool,1}((), MLIR.IR.result(mcmc_op, 2), (collection_size,))
+    diagnostics = TracedRArray{Bool,2}((), MLIR.IR.result(mcmc_op, 2), (collection_size, n_diagnostics))
+    log_densities = TracedRArray{Float64,1}((), MLIR.IR.result(mcmc_op, 3), (collection_size,))
 
     inv_mass_shape =
         isnothing(inverse_mass_matrix) ? (1, selection_pos_size) : size(inverse_mass_matrix)
 
     state = MCMCState(
-        TracedRArray{Float64,2}((), MLIR.IR.result(mcmc_op, 4), (1, selection_pos_size)),
         TracedRArray{Float64,2}((), MLIR.IR.result(mcmc_op, 5), (1, selection_pos_size)),
-        TracedRArray{Float64,0}((), MLIR.IR.result(mcmc_op, 6), ()),
+        TracedRArray{Float64,2}((), MLIR.IR.result(mcmc_op, 6), (1, selection_pos_size)),
         TracedRArray{Float64,0}((), MLIR.IR.result(mcmc_op, 7), ()),
-        TracedRArray{Float64,2}((), MLIR.IR.result(mcmc_op, 8), inv_mass_shape),
-        TracedRArray{UInt64,1}((), MLIR.IR.result(mcmc_op, 3), size(rng.seed));
+        TracedRArray{Float64,0}((), MLIR.IR.result(mcmc_op, 8), ()),
+        TracedRArray{Float64,2}((), MLIR.IR.result(mcmc_op, 9), inv_mass_shape),
+        TracedRArray{UInt64,1}((), MLIR.IR.result(mcmc_op, 4), size(rng.seed));
         config=MCMCConfig(;
             algorithm, max_tree_depth, max_delta_energy, trajectory_length, thinning
         ),
     )
 
-    return new_trace, diagnostics, traced_result, state
+    return new_trace, diagnostics, log_densities, traced_result, state
 end
 
 function _infer(
@@ -274,6 +278,7 @@ function _infer(
     collection_size = num_samples ÷ thinning
     trace_type = MLIR.IR.TensorType([collection_size, pos_size], MLIR.IR.Type(Float64))
     diagnostics_type = MLIR.IR.TensorType([Int64(collection_size)], MLIR.IR.Type(Bool))
+    log_densities_type = MLIR.IR.TensorType([Int64(collection_size)], MLIR.IR.Type(Float64))
 
     position_type = MLIR.IR.TensorType([1, pos_size], MLIR.IR.Type(Float64))
     scalar_type = MLIR.IR.TensorType(Int64[], MLIR.IR.Type(Float64))
@@ -326,6 +331,7 @@ function _infer(
         warmup_offset=warmup_offset_val,
         trace=trace_type,
         diagnostics=diagnostics_type,
+        log_densities=log_densities_type,
         output_rng_state=mlir_result_types[1],
         final_position=position_type,
         final_gradient=position_type,
@@ -356,7 +362,7 @@ function _infer(
         fnwrapped,
         resprefix,
         argprefix,
-        2,
+        3,
         true,
     )
 
@@ -364,44 +370,45 @@ function _infer(
         (), MLIR.IR.result(mcmc_op, 1), (collection_size, pos_size)
     )
     diagnostics = TracedRArray{Bool,1}((), MLIR.IR.result(mcmc_op, 2), (collection_size,))
+    log_densities = TracedRArray{Float64,1}((), MLIR.IR.result(mcmc_op, 3), (collection_size,))
 
     inv_mass_shape =
         isnothing(inverse_mass_matrix) ? (1, pos_size) : size(inverse_mass_matrix)
     inv_mass_ndims = length(inv_mass_shape)
 
     inv_mass_traced = if inv_mass_ndims == 1
-        TracedRArray{Float64,1}((), MLIR.IR.result(mcmc_op, 8), inv_mass_shape)
+        TracedRArray{Float64,1}((), MLIR.IR.result(mcmc_op, 9), inv_mass_shape)
     else
-        TracedRArray{Float64,2}((), MLIR.IR.result(mcmc_op, 8), inv_mass_shape)
+        TracedRArray{Float64,2}((), MLIR.IR.result(mcmc_op, 9), inv_mass_shape)
     end
 
     da = DualAveragingState(
-        TracedRArray{Float64,0}((), MLIR.IR.result(mcmc_op, 9), ()),
         TracedRArray{Float64,0}((), MLIR.IR.result(mcmc_op, 10), ()),
         TracedRArray{Float64,0}((), MLIR.IR.result(mcmc_op, 11), ()),
-        TracedRArray{Int64,0}((), MLIR.IR.result(mcmc_op, 12), ()),
-        TracedRArray{Float64,0}((), MLIR.IR.result(mcmc_op, 13), ()),
+        TracedRArray{Float64,0}((), MLIR.IR.result(mcmc_op, 12), ()),
+        TracedRArray{Int64,0}((), MLIR.IR.result(mcmc_op, 13), ()),
+        TracedRArray{Float64,0}((), MLIR.IR.result(mcmc_op, 14), ()),
     )
     welford_m2 = if diagonal
-        TracedRArray{Float64,1}((), MLIR.IR.result(mcmc_op, 15), (pos_size,))
+        TracedRArray{Float64,1}((), MLIR.IR.result(mcmc_op, 16), (pos_size,))
     else
-        TracedRArray{Float64,2}((), MLIR.IR.result(mcmc_op, 15), (pos_size, pos_size))
+        TracedRArray{Float64,2}((), MLIR.IR.result(mcmc_op, 16), (pos_size, pos_size))
     end
     welford = WelfordState(
-        TracedRArray{Float64,1}((), MLIR.IR.result(mcmc_op, 14), (pos_size,)),
+        TracedRArray{Float64,1}((), MLIR.IR.result(mcmc_op, 15), (pos_size,)),
         welford_m2,
-        TracedRArray{Int64,0}((), MLIR.IR.result(mcmc_op, 16), ()),
+        TracedRArray{Int64,0}((), MLIR.IR.result(mcmc_op, 17), ()),
     )
-    window_idx = TracedRArray{Int64,0}((), MLIR.IR.result(mcmc_op, 17), ())
+    window_idx = TracedRArray{Int64,0}((), MLIR.IR.result(mcmc_op, 18), ())
     adaptation = AdaptationState(da, welford, window_idx)
 
     state = MCMCState(
-        TracedRArray{Float64,2}((), MLIR.IR.result(mcmc_op, 4), (1, pos_size)),
         TracedRArray{Float64,2}((), MLIR.IR.result(mcmc_op, 5), (1, pos_size)),
-        TracedRArray{Float64,0}((), MLIR.IR.result(mcmc_op, 6), ()),
+        TracedRArray{Float64,2}((), MLIR.IR.result(mcmc_op, 6), (1, pos_size)),
         TracedRArray{Float64,0}((), MLIR.IR.result(mcmc_op, 7), ()),
+        TracedRArray{Float64,0}((), MLIR.IR.result(mcmc_op, 8), ()),
         inv_mass_traced,
-        TracedRArray{UInt64,1}((), MLIR.IR.result(mcmc_op, 3), size(rng.seed)),
+        TracedRArray{UInt64,1}((), MLIR.IR.result(mcmc_op, 4), size(rng.seed)),
         adaptation;
         config=MCMCConfig(;
             algorithm,
@@ -413,7 +420,7 @@ function _infer(
         ),
     )
 
-    return new_trace, diagnostics, traced_result, state
+    return new_trace, diagnostics, log_densities, traced_result, state
 end
 
 function _infer(
@@ -787,7 +794,7 @@ function run_chain(
 
     if !progress_bar && isnothing(callback) && num_samples > 0
         monolithic_fn = function (rng, logpdf_fn, pos, grad, pe, ss, imm)
-            s, _, _, st = mcmc_logpdf(
+            s, _, _, _, st = mcmc_logpdf(
                 rng,
                 logpdf_fn,
                 pos;
