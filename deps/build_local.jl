@@ -275,6 +275,13 @@ push!(build_cmd_list, "--spawn_strategy=local")
 
 push!(build_cmd_list, "--linkopt=-fuse-ld=lld")
 
+# Many deps require C++17 aligned allocation which is not available on
+# old macOS libc++
+if Sys.isapple()
+    push!(build_cmd_list, "--copt=-mmacosx-version-min=11.0")
+    push!(build_cmd_list, "--host_copt=-mmacosx-version-min=11.0")
+end
+
 for opt in parsed_args["copt"]
     push!(build_cmd_list, "--copt=$(opt)")
 end
@@ -309,7 +316,7 @@ push!(build_cmd_list, "--copt=-Wno-private-header")
 push!(build_cmd_list, "--color=$(parsed_args["color"])")
 push!(build_cmd_list, ":libReactantExtra.so")
 
-@info "About to run Bazel" build_cmd_list
+@info "About to run Bazel\n" * join(build_cmd_list, " \\\n  ")
 run(Cmd(Cmd(build_cmd_list); dir=source_dir))
 
 # Discover built libraries
