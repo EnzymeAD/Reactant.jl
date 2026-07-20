@@ -229,14 +229,55 @@ function Base.mapreducedim!(
     A::Base.AbstractArrayOrBroadcasted,
 ) where {T,N}
     @assert length(size(R)) == length(size(A))
-    dims = map(enumerate(zip(size(R), size(A)))) do (i, (sR, sA))
-        sR == sA && return nothing
-        @assert sR == 1
-        return i
+    dims = Int64[]
+    for (i, (sR, sA)) in enumerate(zip(size(R), size(A)))
+        if sR != sA
+            @assert sR == 1
+            push!(dims, i)
+        end
     end
-    tmp = mapreduce(f, op, A; dims=filter(!isnothing, dims))
+    if A isa Base.Broadcast.Broadcasted
+        A = Base.Broadcast.materialize(A)
+    end
+    tmp = overloaded_mapreduce(f, op, A; dims)
     copyto!(R, op.(R, tmp))
     return R
+end
+
+function Base._mapreduce_dim(
+    @nospecialize(f), @nospecialize(op), @nospecialize(init), A::AnyTracedRArray, dims
+)
+    return overloaded_mapreduce(f, op, A; dims, init)
+end
+
+function Base._mapreduce_dim(
+    @nospecialize(f), @nospecialize(op), @nospecialize(init::Base._InitialValue), A::AnyTracedRArray, dims
+)
+    return overloaded_mapreduce(f, op, A; dims, init)
+end
+
+function Base._mapreduce_dim(
+    @nospecialize(f), @nospecialize(op), @nospecialize(init::Base._InitialValue), A::AnyTracedRArray, dims::AbstractVector{<:Integer}
+)
+    return overloaded_mapreduce(f, op, A; dims, init)
+end
+
+function Base._mapreduce_dim(
+    @nospecialize(f), @nospecialize(op), @nospecialize(init::Base._InitialValue), A::AnyTracedRArray, dims::Colon
+)
+    return overloaded_mapreduce(f, op, A; dims, init)
+end
+
+function Base._mapreduce_dim(
+    @nospecialize(f), @nospecialize(op), @nospecialize(init), A::AnyTracedRArray, dims::AbstractVector{<:Integer}
+)
+    return overloaded_mapreduce(f, op, A; dims, init)
+end
+
+function Base._mapreduce_dim(
+    @nospecialize(f), @nospecialize(op), @nospecialize(init), A::AnyTracedRArray, dims::Colon
+)
+    return overloaded_mapreduce(f, op, A; dims, init)
 end
 
 function Base.fill!(A::AnyTracedRArray{T,N}, x) where {T,N}
@@ -951,6 +992,14 @@ function overloaded_map(f, x::AbstractArray, xs::AbstractArray...)
         length(inputs) == 1 && return unrolled_map(f, only(inputs))
         return unrolled_map(splat(f), zip(inputs...))
     end
+    if !isempty(first(inputs))
+        first_args = map(first_scalar, inputs)
+        res_tmp = Reactant.call_with_reactant(f, first_args...)
+        if !(res_tmp isa TracedRNumber)
+            length(inputs) == 1 && return unrolled_map(f, only(inputs))
+            return unrolled_map(splat(f), zip(inputs...))
+        end
+    end
     return TracedUtils.elem_apply(f, inputs...)
 end
 
@@ -1327,7 +1376,7 @@ end
 
 # Note: once traced_call supports internal mutations, we can use traced_call here
 function unrolled_map(f::F, itr) where {F}
-    y = Reactant.call_with_reactant(iterate, itr)
+    y = @allowscalar Reactant.call_with_reactant(iterate, itr)
     y === nothing && return []
 
     first, state = y
@@ -1335,7 +1384,7 @@ function unrolled_map(f::F, itr) where {F}
     result = [res_first]
 
     while true
-        y = Reactant.call_with_reactant(iterate, itr, state)
+        y = @allowscalar Reactant.call_with_reactant(iterate, itr, state)
         y === nothing && break
 
         val, state = y
