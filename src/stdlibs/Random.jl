@@ -9,6 +9,7 @@ using ..Reactant.Ops: @opcall
 import ..Reactant: ReactantRNG
 
 using Random: Random, AbstractRNG
+using SHA: SHA
 
 @noinline function should_warn_if_not_natively_supported(rng::AbstractRNG)
     @warn "The RNG $(typeof(rng)) is not natively supported by Reactant. We will convert \
@@ -27,7 +28,26 @@ end
                `TracedRArray` of the appropriate size instead.")
     end
 
-    seed = reinterpret(UInt64, Random.hash_seed(seed))
+    hashed = @static if isdefined(Random, :hash_seed)
+        Random.hash_seed(seed)
+    else
+        # Not present < Julia 1.11
+        ctx = SHA.SHA2_256_CTX()
+        neg = signbit(seed)
+        if neg
+            seed = ~seed
+        end
+        @assert seed >= 0
+        while true
+            word = (seed % UInt32) & 0xffffffff
+            seed >>>= 32
+            SHA.update!(ctx, reinterpret(NTuple{4,UInt8}, word))
+            iszero(seed) && break
+        end
+        neg && SHA.update!(ctx, (0x01,))
+        SHA.digest!(ctx)
+    end
+    seed = reinterpret(UInt64, hashed)
     return Random.seed!(rng, seed[1:length(rng.seed)])
 end
 
