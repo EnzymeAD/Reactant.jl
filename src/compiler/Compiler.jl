@@ -1086,15 +1086,20 @@ function compile_mlir!(
     results_mask = falses(length(results))
 
     for (i, op) in enumerate(results)
+        arg_num = MLIR.IR.is_block_arg(op) ? MLIR.IR.block_arg_num(op) : -1
+        # Preservation is safe only when the result IS the same traced object as the arg at
+        # block_arg_num's position. Cross-arg aliasing (e.g. state.u⁰ capturing state.u's
+        # block arg) must go through XLA explicitly to avoid in-place buffer corruption.
         if !MLIR.IR.is_block_arg(op) ||
-            !Reactant.TracedUtils.has_idx(linear_results[i], :args) # new buffer
+            !Reactant.TracedUtils.has_idx(linear_results[i], :args) || # new buffer
+            linear_results[i] !== linear_args[arg_num + 1] # cross-arg aliasing
             push!(nresults, op)
             push!(linear_results2, linear_results[i])
             results_mask[i] = true
             continue
         end
 
-        push!(preserved_args, (linear_results[i], MLIR.IR.block_arg_num(op)))
+        push!(preserved_args, (linear_results[i], arg_num))
     end
 
     MLIR.IR.dispose(ret)
@@ -1145,10 +1150,15 @@ function compile_mlir!(
     # Add a `donated` attr to the function arguments. This doesn't affect XLA, but lets us
     # check which arguments were donated.
     preserved_args_idx = last.(preserved_args)
+    # If a block arg for arg k appears directly in nresults (cross-arg aliasing), donating
+    # arg k would allow XLA to modify its buffer in-place, corrupting the returned value.
+    block_arg_outputs = Set{Int}(
+        MLIR.IR.block_arg_num(op) for op in nresults if MLIR.IR.is_block_arg(op)
+    )
     donated_args_mask = Vector{Bool}(undef, length(linear_args))
     for (i, arg) in enumerate(linear_args)
         if compile_options.donated_args == :auto
-            if (i - 1) ∉ preserved_args_idx
+            if (i - 1) ∉ preserved_args_idx && (i - 1) ∉ block_arg_outputs
                 donated_args_mask[i] = true
 
                 residx = findfirst(Base.Fix1(===, arg), linear_results2)
