@@ -2442,9 +2442,11 @@ end
         )
     end
 
-    return map(enumerate(linear_args)) do (i, arg)
-        return Reactant.TracedUtils.set_mlir_data!(arg, MLIR.IR.result(while_op, i))
+    for (i, arg) in enumerate(linear_args)
+        Reactant.TracedUtils.set_mlir_data!(arg, MLIR.IR.result(while_op, i))
     end
+
+    return Tuple(traced_args)
 end
 
 @noinline function if_condition(

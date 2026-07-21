@@ -441,6 +441,8 @@ function trace_while(expr; track_numbers, mincut, checkpointing, first_arg=nothi
     )
     varnames_expr = Expr(:tuple, QuoteNode.(external_syms)...)
 
+    args_res_sym = gensym("args_res")
+
     reactant_code_block = quote
         let $args_sym = $(args_init)
             $pre_alias_ids_sym = $(pre_ids_expr)
@@ -480,7 +482,9 @@ function trace_while(expr; track_numbers, mincut, checkpointing, first_arg=nothi
     return quote
         if $(within_compile)() &&
             $(any)($(is_traced), $(Expr(:tuple, cond_val.(all_syms.args)...)))
-            $(reactant_code_block)
+            local $args_res_sym = $(reactant_code_block)
+            $([:($s = $args_res_sym[$i][]) for (i, s) in enumerate(external_syms)]...)
+            nothing
         else
             $(expr)
         end
