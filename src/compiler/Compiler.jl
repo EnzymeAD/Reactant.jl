@@ -68,7 +68,7 @@ function compile_mlir(
     try
         mod = MLIR.IR.Module(MLIR.IR.Location())
 
-        compile_options, kwargs_inner = __get_compile_options_and_kwargs(; kwargs...)
+        compile_options, kwargs_inner = __get_compile_options_and_kwargs(; client, kwargs...)
 
         # Wrap compile_mlir! to catch pass pipeline failures
         mlir_fn_res = try
@@ -119,6 +119,10 @@ function compile_mlir(
         __add_mhlo_attributes_and_name!(
             mod, f; mlir_fn_res.num_partitions, mlir_fn_res.num_replicas
         )
+
+        if compile_options.emulate_complex
+            run_pass_pipeline!(mod, "lower-complex-operations", "lower_complex_operations")
+        end
 
         if drop_unsupported_attributes
             # Drop some of our attributes
@@ -284,6 +288,7 @@ function compile_mlir!(
             true;
             runtime,
             compile_options.optimize_then_pad,
+            emulate_complex=compile_options.emulate_complex,
             kwargs...,
         )
     finally
@@ -1326,7 +1331,7 @@ function compile_xla(
         # compile function to MLIR module
         mod = MLIR.IR.Module(MLIR.IR.Location())
 
-        compile_options, kwargs = __get_compile_options_and_kwargs(; kwargs...)
+        compile_options, kwargs = __get_compile_options_and_kwargs(; client, kwargs...)
 
         mlir_fn_res = compile_mlir!(
             mod,
@@ -1405,7 +1410,7 @@ function compile_xla(
 
         finalize(mod)
 
-        return exec, hlo_modules, mlir_fn_res, device, client, module_string
+        return exec, hlo_modules, mlir_fn_res, device, client, module_string, compile_options
     finally
         MLIR.IR.deactivate(ctx)
     end
@@ -1417,11 +1422,9 @@ function compile(f, args; kwargs...)
     end
 end
 
-function compile(ctx, f, args; kwargs...)
-    compile_options, kwargs = __get_compile_options_and_kwargs(; kwargs...)
-
-    exec, _, mlir_fn_res, device, client, str = compile_xla(
-        ctx, f, args; compile_options, kwargs...
+function compile(ctx, f, args; client=nothing, kwargs...)
+    exec, _, mlir_fn_res, device, client, str, compile_options = compile_xla(
+        ctx, f, args; client, kwargs...
     )
     (; linear_args, seen_args, linear_results, preserved_args, concrete_result) =
         mlir_fn_res

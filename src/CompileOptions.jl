@@ -224,6 +224,7 @@ struct CompileOptions
     raise_first::Bool
     # dialect specific options
     legalize_chlo_to_stablehlo::Bool
+    emulate_complex::Bool
     # backend specific options
     cudnn_hlo_optimize::Bool
     # sharding options
@@ -269,6 +270,8 @@ function CompileOptions(;
     raise::Union{Bool,String}=false,
     raise_first::Bool=false,
     legalize_chlo_to_stablehlo::Bool=false,
+    client::Union{Nothing,XLA.AbstractClient}=nothing,
+    emulate_complex::Union{Nothing,Bool}=nothing,
     cudnn_hlo_optimize::Bool=false,
     shardy_passes::Union{Symbol,ShardyPropagationOptions}=:post_sdy_propagation,
     optimize_then_pad::Bool=true,
@@ -324,6 +327,8 @@ function CompileOptions(;
         @assert shardy_passes in [:none, :to_mhlo_shardings, :post_sdy_propagation]
     end
 
+    emulate_complex_val = emulate_complex === nothing ? (client === nothing ? false : !XLA.supports_complex(client)) : emulate_complex
+
     return CompileOptions(
         optimization_passes,
         no_nan,
@@ -335,6 +340,7 @@ function CompileOptions(;
         raise,
         raise_first,
         legalize_chlo_to_stablehlo,
+        emulate_complex_val,
         cudnn_hlo_optimize,
         shardy_passes,
         optimize_then_pad,
@@ -367,10 +373,11 @@ end
 function __compile_options_from_kwargs(;
     compile_options::Union{Missing,CompileOptions}=missing,
     optimize::Union{Bool,Symbol,String}=true,
+    client::Union{Nothing,XLA.AbstractClient}=nothing,
     kwargs...,
 )
     compile_options isa CompileOptions && return compile_options
-    return CompileOptions(; optimization_passes=optimize, kwargs...)
+    return CompileOptions(; optimization_passes=optimize, client, kwargs...)
 end
 
 function __reverse_propagation(sym::Symbol)
@@ -392,6 +399,7 @@ function __compile_options_with_reversed_propagation(compile_options::CompileOpt
         compile_options.raise,
         compile_options.raise_first,
         compile_options.legalize_chlo_to_stablehlo,
+        compile_options.emulate_complex,
         compile_options.cudnn_hlo_optimize,
         compile_options.shardy_passes,
         compile_options.optimize_then_pad,
@@ -436,6 +444,7 @@ function __compile_options_with_updated_sync(compile_options::CompileOptions, sy
         compile_options.raise,
         compile_options.raise_first,
         compile_options.legalize_chlo_to_stablehlo,
+        compile_options.emulate_complex,
         compile_options.cudnn_hlo_optimize,
         compile_options.shardy_passes,
         compile_options.optimize_then_pad,
