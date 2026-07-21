@@ -393,6 +393,20 @@ function __init__()
                    need to restart the Julia process (even if Revise.jl is loaded).",
             )
         end
+        if exc.f === Base.similar &&
+            !is_extension_loaded(Val(:StructArrays)) &&
+            length(exc.args) ≥ 2 &&
+            exc.args[1] isa
+            Broadcast.Broadcasted{<:TracedRArrayOverrides.AbstractReactantArrayStyle} &&
+            exc.args[2] isa DataType &&
+            Base.isstructtype(exc.args[2]) &&
+            fieldcount(exc.args[2]) > 0
+            print(
+                io,
+                "\nBroadcasting a function that returns tuples or structs over traced \
+                   arrays requires StructArrays.jl. Load it using `using StructArrays`.",
+            )
+        end
     end
     MLIR.Highlight.register_reactant_theme()
     return nothing
