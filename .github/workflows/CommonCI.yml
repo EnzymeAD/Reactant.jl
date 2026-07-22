@@ -248,6 +248,16 @@ jobs:
             ${{ steps.julia-cache.outputs.cache-paths }}
           key: ${{ steps.julia-cache.outputs.cache-key }}
 
+      - name: "Upload coverage data"
+        uses: actions/upload-artifact@v7
+        timeout-minutes: 10
+        if: always()
+        with:
+          name: "coverage-${{ inputs.julia_version }}-${{ inputs.os }}-${{ inputs.runtime }}-assertions=${{ inputs.assertions }}-${{ github.event_name }}-test_args=${{ inputs.test_args }}-${{ inputs.localjll || inputs.enzymejax_commit != '' }}-${{ inputs.enzymejax_commit }}"
+          path: "**/*.cov"
+          retention-days: 90
+          overwrite: false
+
       - uses: julia-actions/julia-processcoverage@v1
       - uses: codecov/codecov-action@v7
         with:
