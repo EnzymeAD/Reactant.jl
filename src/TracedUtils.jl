@@ -1381,6 +1381,9 @@ _isone(x) = isone(x)
 _isone(::CartesianIndex) = false
 
 __contiguous_indices(::Base.LogicalIndex) = false
+function __contiguous_indices(x::OrdinalRange{<:Integer,<:Integer})
+    return length(x) <= 1 || _isone(step(x))
+end
 __contiguous_indices(x) = all(_isone, diff(x))
 
 function create_index_mesh(idxs::AbstractVector...)
