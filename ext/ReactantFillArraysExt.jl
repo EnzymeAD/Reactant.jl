@@ -114,4 +114,12 @@ for AT in (Fill, Ones, Zeros, OneElement)
     end
 end
 
+function Base.Broadcast.broadcasted(
+    ::Base.Broadcast.DefaultArrayStyle,
+    ::typeof(Reactant.to_number),
+    r::FillArrays.AbstractZeros{<:Reactant.AbstractConcreteNumber},
+)
+    return Zeros{typeof(Reactant.to_number(FillArrays.getindex_value(r)))}(r.axes)
+end
+
 end
