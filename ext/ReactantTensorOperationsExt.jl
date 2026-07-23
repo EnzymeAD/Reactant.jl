@@ -17,7 +17,8 @@ function TO.tensoradd_type(TC, A::ConcreteRArray, pA::Index2Tuple, conjA::Bool)
 end
 
 function TO.tensoradd_type(TC, A::TracedRArray, pA::Index2Tuple, conjA::Bool)
-    return TracedRArray{unwrapped_eltype(TC),TO.numind(pA)}
+    T = unwrapped_eltype(TC)
+    return TracedRArray{T,TO.numind(pA),Reactant.traced_number_type(T)}
 end
 
 # backend selection

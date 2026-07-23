@@ -3,7 +3,14 @@ module TracedRArrayOverrides
 using Base: Broadcast
 using Base.Broadcast: Broadcasted, AbstractArrayStyle, instantiate
 
-using ..Reactant: Reactant, TracedRArray, TracedRNumber, AnyTracedRArray, AnyTracedRVector
+using ..Reactant:
+    Reactant,
+    TracedRArray,
+    TracedRNumber,
+    TracedRInteger,
+    TracedRReal,
+    AnyTracedRArray,
+    AnyTracedRVector
 using ..Reactant: MLIR, unwrapped_eltype
 using ..Ops: @opcall
 using ..TracedUtils: TracedUtils, get_mlir_data, set_mlir_data!, materialize_traced_array
@@ -252,7 +259,10 @@ function Base.fill!(A::AnyTracedRArray{T,N}, x::TracedRNumber{T2}) where {T,N,T2
 end
 
 function Base.fill!(A::Array{T,N}, x::TracedRNumber{T2}) where {T,N,T2}
-    throw(MethodError(fill!, (A, x)))
+    return throw(MethodError(fill!, (A, x)))
+end
+function Base.fill!(A::Union{Array{Int8},Array{UInt8}}, x::TracedRInteger)
+    return throw(MethodError(fill!, (A, x)))
 end
 
 struct AbstractReactantArrayStyle{N} <: AbstractArrayStyle{N} end
@@ -295,6 +305,10 @@ function Base.similar(
     return (@opcall fill(zero(T), dims))::TracedRArray{T,N}
 end
 
+broadcast_eltype_param(::Type{<:TracedRNumber{T}}) where {T} = T
+broadcast_eltype_param(::Type{T}) where {T<:Reactant.ReactantPrimitive} = T
+broadcast_eltype_param(@nospecialize(_)) = nothing
+
 function Base.copy(bc::Broadcasted{<:AbstractReactantArrayStyle{0}})
     ElType = Broadcast.combine_eltypes(bc.f, bc.args)
     dest = copyto!(similar(bc, ElType), bc)
@@ -315,8 +329,9 @@ function _copy(bc)
         bc.f
     end
     ElType = Broadcast.combine_eltypes(fn, bc.args)
-    # Special case a union{} return so we can see the better error message
-    if ElType === Union{} || ElType == Any || ElType == TracedRNumber
+    # Inference may return an abstract eltype (e.g. `Real` or `Union{}`); get a
+    # usable one from a sample value in that case.
+    if broadcast_eltype_param(ElType) === nothing
         ElType = Core.Typeof(fn(map(first_scalar, bc.args)...))
     end
     if ElType == Any || ElType == Union{}
@@ -1104,13 +1119,18 @@ end
 
 for (aType, xType) in (
     (AbstractRange{<:Real}, TracedRNumber{<:Real}),
+    (AbstractRange{<:Integer}, TracedRReal{<:Real}),
+    (AbstractRange{<:TracedRInteger}, TracedRReal{<:Real}),
     (AbstractRange{<:TracedRNumber}, Real),
     (AbstractRange{<:TracedRNumber}, TracedRNumber{<:Real}),
 )
     @eval function Base.searchsortedfirst(
         a::$(aType), x::$(xType), o::Base.DirectOrdering
     )::TracedRNumber{keytype(a)}
-        x = TracedUtils.promote_to(TracedRNumber{Reactant.unwrapped_eltype(a)}, x)
+        # promoting `x` to the range element type would truncate, e.g. for
+        # `searchsortedfirst(1:10, 2.5)`
+        T = Base.promote_type(Reactant.unwrapped_eltype(a), Reactant.unwrapped_eltype(x))
+        x = TracedUtils.promote_to(TracedRNumber{T}, x)
 
         f, h, l = first(a), step(a), last(a)
         n = round(Int, (x - f) / h + 1)

@@ -273,7 +273,7 @@ end
     clock = MyClock(ConcreteRNumber(0.0), 3)
     params = RawParams(ConcreteRNumber(0.1), 7)
 
-    @test_throws "GPU kernel argument of type @NamedTuple{time::Reactant.TracedRNumber{Float64}, iteration::Int64} contains an unadapted traced value at field: time" Reactant.@compile raise =
+    @test_throws "GPU kernel argument of type @NamedTuple{time::Reactant.TracedRFloat{Float64}, iteration::Int64} contains an unadapted traced value at field: time" Reactant.@compile raise =
         true raise_first = true sync = true run!(arr, clock, params)
 
     clock2 = MyClock2(ConcreteRNumber(0.0), 3)

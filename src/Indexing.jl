@@ -1,6 +1,15 @@
 module TracedIndexing
 
-using ..Reactant: Reactant, TracedRArray, TracedRNumber, TracedStepRangeLen, TracedUnitRange
+using ..Reactant:
+    Reactant,
+    TracedRArray,
+    TracedRNumber,
+    TracedRReal,
+    TracedRInteger,
+    TracedRFloat,
+    TracedRComplex,
+    TracedStepRangeLen,
+    TracedUnitRange
 using ..Reactant: AnyTracedRArray, ancestor, unwrapped_eltype
 using ..Ops: @opcall
 using ..TracedUtils: TracedUtils
@@ -68,11 +77,17 @@ function Base.getindex(a::TracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
 end
 
 ### Wrapped Array Types
-function Base.getindex(
-    a::AnyTracedRArray{T,N}, index::Vararg{Union{Int,TracedRNumber{Int}},N}
-) where {T,N}
-    ancestor, idxs = TracedUtils.get_ancestor_and_indices(a, index...)
-    return getindex(ancestor, idxs...)
+## Defined per traced element type rather than on `AnyTracedRArray`: with the
+## whole `Union` in the signature, specificity against the fixed-arity
+## structured-matrix `getindex` methods in LinearAlgebra is undecidable and
+## Julia reports ambiguities; the per-eltype signatures dominate them.
+for ET in (TracedRInteger, TracedRFloat, TracedRComplex, TracedRReal, TracedRNumber)
+    @eval function Base.getindex(
+        a::AbstractArray{$ET{T},N}, index::Vararg{Union{Int,TracedRNumber{Int}},N}
+    ) where {T,N}
+        ancestor, idxs = TracedUtils.get_ancestor_and_indices(a, index...)
+        return getindex(ancestor, idxs...)
+    end
 end
 
 # This method is needed exclusively to resolve an ambiguity
@@ -82,78 +97,71 @@ function Base.getindex(
     return getindex(Reactant.promote_to(TracedRArray{T,1}, l), index)
 end
 
+## Scalar range indexing with traced indices (and traced-eltype ranges with
+## plain indices): one implementation per range family, with the Base-facing
+## `getindex` methods below as pure dispatch shims.
+function traced_range_getindex(r::AbstractRange, index)
+    return convert(
+        TracedRNumber{Reactant.unwrapped_eltype(r)},
+        first(r) + (index - oneunit(index)) * Base.step_hp(r),
+    )
+end
+function traced_range_getindex(r::Base.OneTo, index)
+    return convert(TracedRNumber{Reactant.unwrapped_eltype(r)}, index)
+end
+function traced_range_getindex(r::StepRangeLen, index)
+    # FIXME: this crashes for some reason
+    # u = convert(TracedRNumber{Reactant.unwrapped_eltype(r)}, index) - r.offset
+    # return convert(TracedRNumber{Reactant.unwrapped_eltype(r)}, r.ref + u * r.step)
+    return @allowscalar getindex(
+        Reactant.promote_to(TracedRArray{Reactant.unwrapped_eltype(r),1}, r), index
+    )
+end
+function traced_range_getindex(r::LinRange, index)
+    # `Base.lerpi` casts its result through the element type, which a traced
+    # interpolant cannot satisfy; interpolate with traced arithmetic instead.
+    t = (index - oneunit(index)) / r.lendiv
+    return convert(
+        TracedRNumber{Reactant.unwrapped_eltype(r)}, (1 - t) * r.start + t * r.stop
+    )
+end
+
 for (aT, iT) in (
-    (AbstractRange, TracedRNumber{<:Integer}),
+    (AbstractRange, TracedRInteger),
     (AbstractRange{<:TracedRNumber}, Int),
-    (AbstractRange{<:TracedRNumber}, TracedRNumber{<:Integer}),
-    (AbstractRange{<:TracedRNumber}, TracedRNumber{Int}),
-    # 1.10 specific ambiguity fixes
-    (UnitRange{<:TracedRNumber}, Int),
+    (AbstractRange{<:TracedRNumber}, TracedRInteger),
+    (AbstractRange{<:TracedRNumber}, Union{Int,TracedRInteger{Int}}),
+    (Base.IdentityUnitRange, TracedRInteger),
 )
-    @eval function Base.getindex(a::$aT, index::$iT)
-        return convert(
-            TracedRNumber{Reactant.unwrapped_eltype(a)},
-            first(a) + (index - oneunit(index)) * Base.step_hp(a),
-        )
+    @eval Base.getindex(r::$aT, index::$iT) = traced_range_getindex(r, index)
+end
+
+## Julia 1.10's specialized range `getindex(::X{T}, ::Integer)` methods bind
+## the element type as a method typevar, and a disambiguator only dominates
+## them if it binds it the same way (`LinRange` and `StepRangeLen` share one
+## union-shaped method there). Cover each specialized range family against
+## each traced index shape.
+for R in (:(UnitRange{T}), :(Base.OneTo{T}), :(Union{LinRange{T},StepRangeLen{T}}))
+    @eval begin
+        Base.getindex(r::$R, index::TracedRInteger) where {T} =
+            traced_range_getindex(r, index)
+        function Base.getindex(r::$R, index::TracedRInteger) where {T<:TracedRNumber}
+            return traced_range_getindex(r, index)
+        end
+        function Base.getindex(r::$R, index::Int) where {T<:TracedRNumber}
+            return traced_range_getindex(r, index)
+        end
+        function Base.getindex(
+            r::$R, index::Union{Int,TracedRInteger{Int}}
+        ) where {T<:TracedRNumber}
+            return traced_range_getindex(r, index)
+        end
     end
 end
 
-for (aT, iT) in (
-    (Base.OneTo, TracedRNumber{<:Integer}),
-    (Base.OneTo{<:TracedRNumber}, Int),
-    (Base.OneTo{<:TracedRNumber}, TracedRNumber{<:Integer}),
-    (Base.OneTo{<:TracedRNumber}, TracedRNumber{Int}),
-)
-    @eval function Base.getindex(a::$aT, index::$iT)
-        return convert(TracedRNumber{Reactant.unwrapped_eltype(a)}, index)
-    end
-end
-
-for (aT, iT) in (
-    (StepRangeLen, TracedRNumber{<:Integer}),
-    (StepRangeLen{<:TracedRNumber}, Int),
-    (StepRangeLen{<:TracedRNumber}, TracedRNumber{<:Integer}),
-    (StepRangeLen{<:TracedRNumber}, TracedRNumber{Int}),
-)
-    @eval function Base.getindex(r::$aT, index::$iT)
-        # FIXME: this crashes for some reason
-        # u = convert(TracedRNumber{Reactant.unwrapped_eltype(r)}, index) - r.offset
-        # return convert(TracedRNumber{Reactant.unwrapped_eltype(r)}, r.ref + u * r.step)
-        return @allowscalar getindex(
-            Reactant.promote_to(TracedRArray{Reactant.unwrapped_eltype(r),1}, r), index
-        )
-    end
-end
-
-for (aT, iT) in (
-    (LinRange, TracedRNumber{<:Integer}),
-    (LinRange{<:TracedRNumber}, Int),
-    (LinRange{<:TracedRNumber}, TracedRNumber{<:Integer}),
-    (LinRange{<:TracedRNumber}, TracedRNumber{Int}),
-)
-    @eval function Base.getindex(r::$aT, index::$iT)
-        return convert(
-            TracedRNumber{Reactant.unwrapped_eltype(r)},
-            Base.lerpi(index - oneunit(index), r.lendiv, r.start, r.stop),
-        )
-    end
-end
-
-# v1.10 specific ambiguity fixes
-function Base.getindex(
-    a::Union{LinRange{TracedRNumber{T}},StepRangeLen{TracedRNumber{T}}}, index::Int
-) where {T}
-    return getindex(Reactant.promote_to(TracedRArray{T,1}, a), index)
-end
-
-function Base.getindex(
-    a::Union{
-        LinRange{T} where T<:Reactant.TracedRNumber,
-        StepRangeLen{T} where T<:Reactant.TracedRNumber,
-    },
-    index::Int,
-)
-    return getindex(Reactant.promote_to(TracedRArray{T,1}, a), index)
+# 1.10's overflow-safe `UnitRange` grouping needs its own exact-grouping cover
+function Base.getindex(r::UnitRange{T}, index::TracedRInteger) where {T<:Base.OverflowSafe}
+    return traced_range_getindex(r, index)
 end
 
 function Base.getindex(a::AnyTracedRArray{T,N}, linear_indices) where {T,N}
@@ -198,11 +206,30 @@ function Base.getindex(x::Base.ReshapedArray{<:TracedRNumber}, index::Base.Resha
 end
 
 function Base.getindex(
-    x::Base.Sort.WithoutMissingVector{TracedRNumber{T}}, i::Int
+    x::Base.Sort.WithoutMissingVector{<:TracedRNumber{T}}, i::Union{Int,TracedRInteger{Int}}
 ) where {T}
     out = getindex(x.data, i)
     @assert !(out isa Missing)
     return out
+end
+
+# Disambiguate the TracedRange getindex methods against the range loops above
+function Base.getindex(v::TracedUnitRange{<:TracedRNumber}, i::TracedRInteger)
+    return convert(eltype(v), v.start + (i - oneunit(i)))
+end
+function Base.getindex(v::TracedUnitRange{<:TracedRNumber}, i::TracedRInteger{Int})
+    return convert(eltype(v), v.start + (i - oneunit(i)))
+end
+function Base.getindex(
+    v::TracedUnitRange{<:TracedRNumber}, i::Union{Int,TracedRInteger{Int}}
+)
+    return convert(eltype(v), v.start + (i - oneunit(i)))
+end
+function Base.getindex(v::TracedUnitRange{<:TracedRNumber}, i::Int)
+    return convert(eltype(v), v.start + (i - oneunit(i)))
+end
+function Base.getindex(r::TracedStepRangeLen{<:TracedRNumber}, i::TracedRInteger{Int})
+    return Base.unsafe_getindex(r, i)
 end
 
 ## StepRangeLen Indexing
@@ -285,10 +312,12 @@ function Base.unsafe_getindex(r::TracedStepRangeLen, i::TracedRNumber{Int})
 end
 
 function Base.unsafe_getindex(
-    r::Union{
-        Base.StepRangeLen{T,<:TwicePrecision,<:TwicePrecision},
-        TracedStepRangeLen{T,<:TwicePrecision,<:TwicePrecision,<:TwicePrecision},
-    },
+    r::Base.StepRangeLen{T,<:TwicePrecision,<:TwicePrecision}, i::TracedRInteger{Int}
+) where {T}
+    return overloaded_unsafe_getindex(r, i)
+end
+function Base.unsafe_getindex(
+    r::TracedStepRangeLen{T,<:TwicePrecision,<:TwicePrecision,<:TwicePrecision},
     i::TracedRNumber{Int},
 ) where {T}
     return overloaded_unsafe_getindex(r, i)
@@ -306,7 +335,7 @@ end
 
 Base.getindex(v::TracedUnitRange, ::Colon) = v
 
-for iType in (Int, TracedRNumber{Int}, Integer)
+for iType in (Int, TracedRNumber{Int}, Integer, TracedRInteger, TracedRInteger{Int})
     @eval function Base.getindex(v::TracedUnitRange{T}, i::$iType) where {T}
         return convert(T, v.start + (i - oneunit(i)))
         # TODO(#2237): we should have error messages at some point.

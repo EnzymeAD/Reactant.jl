@@ -1204,3 +1204,61 @@ nmantissa(::Type{Float64}) = 52
 
 @inline _unwrap_val(x) = x
 @inline _unwrap_val(::Val{val}) where {val} = _unwrap_val(val)
+
+# Base and the stdlibs specialize the binary number operators on many types
+# (`Real`, `Rational`, `BigFloat`, ...). A wrapper-number kind that subtypes
+# `Integer`/`AbstractFloat` must forward such operators per kind and per
+# specialized argument type: a single method on the kind union would be
+# ambiguous with the specialized methods.
+const BASE_SPECIFIC_NUMBER_TYPES = (
+    :Real,
+    :Integer,
+    :Bool,
+    :Rational,
+    :BigInt,
+    :BigFloat,
+    :AbstractIrrational,
+    :AbstractFloat,
+    :Complex,
+    :(Complex{Bool}),
+)
+
+"""
+    foreach_number_kind_forwarding(f, ops, kinds; skip=(op, X) -> false)
+
+Call `f(op, TX, TY, unwrap_x, unwrap_y)` once per method signature required to
+forward the binary operators `ops` for the wrapper-number `kinds`: kind-kind
+pairs, `Number` pairs, and pairs with each Base-specialized number type (see
+`BASE_SPECIFIC_NUMBER_TYPES`; `skip(op, X)` exempts an operator from one of
+them). The `unwrap` flags mark which arguments are wrapper numbers.
+"""
+function foreach_number_kind_forwarding(f, ops, kinds; skip=(op, X) -> false)
+    for op in ops, K1 in kinds
+        f(op, K1, :Number, true, false)
+        f(op, :Number, K1, false, true)
+        for K2 in kinds
+            f(op, K1, K2, true, true)
+        end
+        for X in BASE_SPECIFIC_NUMBER_TYPES
+            skip(op, X) && continue
+            f(op, K1, X, true, false)
+            f(op, X, K1, false, true)
+        end
+    end
+    return nothing
+end
+
+# Base specializes `div` (and friends) on these single-rounding-mode method
+# shapes; disambiguators against them must enumerate the same shapes.
+const BASE_SPECIFIC_ROUNDING_MODES = (
+    RoundingMode{:FromZero},
+    RoundingMode{:Nearest},
+    RoundingMode{:NearestTiesAway},
+    RoundingMode{:NearestTiesUp},
+    RoundingMode{:Up},
+    RoundingMode{:Down},
+    # Base also groups the nearest modes into a single method
+    Union{
+        RoundingMode{:Nearest},RoundingMode{:NearestTiesAway},RoundingMode{:NearestTiesUp}
+    },
+)

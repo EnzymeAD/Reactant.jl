@@ -10,7 +10,9 @@ intout_caller(vis) = @noinline intout(vis)
 @testset "compile" begin
     vis = rand(Float64, 64)
     visr = Reactant.to_rarray(vis)
-    @test_throws MethodError @compile intout_caller(visr)
+    # Traced arrays dispatch as `AbstractArray{<:Real}` (#1570)
+    fn = @compile intout_caller(visr)
+    @test size(fn(visr)) == size(vis)
 end
 
 @testset "create_result" begin

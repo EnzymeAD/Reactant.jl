@@ -173,6 +173,18 @@ end
     @test res2 ≈ 4 * 3 * 3.1^2
 end
 
+@testset "Explicit Active scalar arguments" begin
+    x = ConcreteRNumber(3.1)
+    f(x) = x * x * x * x
+    df(x) = Enzyme.autodiff(Reverse, f, Active, Active(x))[1][1]
+    res1 = @jit df(x)
+    @test res1 ≈ 4 * 3.1^3
+    dfp(x) = Enzyme.autodiff(ReverseWithPrimal, f, Active, Active(x))
+    res2 = @jit dfp(x)
+    @test res2[1][1] ≈ 4 * 3.1^3
+    @test res2[2] ≈ 3.1^4
+end
+
 @testset "Seed initialization of Complex arrays on matmul: Issue #593" begin
     df(x, y) = Enzyme.gradient(ReverseWithPrimal, *, x, y)
     @test begin

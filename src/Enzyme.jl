@@ -61,6 +61,12 @@ end
     return zero(Core.Typeof(x))
 end
 
+# Per-kind methods: `RFloat <: AbstractFloat`, so a single `RNumber` method
+# would be ambiguous with Enzyme's methods on `AbstractFloat`.
+for RT in (:RInteger, :RFloat, :RComplex)
+    @eval @inline Enzyme.make_zero(x::$RT) = zero(Core.Typeof(x))
+end
+
 @inline function Enzyme.make_zero(x::RArray{FT,N})::RArray{FT,N} where {FT<:AbstractFloat,N}
     return Base.zero(x)
 end
@@ -97,9 +103,9 @@ end
 @register_make_zero_inplace(Enzyme.make_zero!)
 @register_make_zero_inplace(Enzyme.remake_zero!)
 
-function Enzyme.make_zero(
-    ::Type{RT}, seen::IdDict, prev::RT, ::Val{copy_if_inactive}=Val(false)
-)::RT where {copy_if_inactive,RT<:Union{RArray,RNumber}}
+function make_zero_impl(
+    ::Type{RT}, seen::IdDict, prev::RT, ::Val{copy_if_inactive}
+)::RT where {copy_if_inactive,RT}
     if haskey(seen, prev)
         return seen[prev]
     end
@@ -109,6 +115,14 @@ function Enzyme.make_zero(
     res = zero(prev)
     seen[prev] = res
     return res
+end
+
+for T in (:(Union{RArray,RNumber}), :RInteger, :RFloat, :RComplex)
+    @eval function Enzyme.make_zero(
+        ::Type{RT}, seen::IdDict, prev::RT, ::Val{copy_if_inactive}=Val(false)
+    )::RT where {copy_if_inactive,RT<:$T}
+        return make_zero_impl(RT, seen, prev, Val(copy_if_inactive))
+    end
 end
 
 function Enzyme.onehot(x::TracedRArray{T,N}) where {T,N}
@@ -144,7 +158,7 @@ function EnzymeRules.augmented_primal(
 ) where {RT}
     primargs = ntuple(Val(length(args))) do i
         Base.@_inline_meta
-        args[i].val
+        return args[i].val
     end
 
     primal = if EnzymeCore.needs_primal(config)
@@ -164,7 +178,7 @@ function EnzymeRules.augmented_primal(
         else
             ntuple(Val(EnzymeRules.width(config))) do i
                 Base.@_inline_meta
-                ConcretePJRTArray(
+                return ConcretePJRTArray(
                     zeros(T.val, primargs...);
                     client=XLA.client(uval.val),
                     device=XLA.device(uval.val),
@@ -194,7 +208,7 @@ function EnzymeRules.reverse(
 ) where {RT,N}
     ntuple(Val(N + 2)) do i
         Base.@_inline_meta
-        nothing
+        return nothing
     end
 end
 
@@ -444,7 +458,11 @@ function overload_autodiff(
                 push!(ret_activity, act)
 
                 if act == EnzymeActivity.OUT || act == EnzymeActivity.OUT_NO_NEED
-                    seed = reverse_seeds[path]
+                    seed = get(reverse_seeds, path) do
+                        # `Active` arguments have no shadow; the re-emitted
+                        # argument result receives no incoming cotangent.
+                        return TracedUtils.get_mlir_data(zero(a))
+                    end
                     push!(ad_inputs, seed)
                 end
             else
@@ -497,7 +515,7 @@ function overload_autodiff(
         else
             ntuple(Val(width)) do i
                 Base.@_inline_meta
-                deepcopy(result)
+                return deepcopy(result)
             end
         end
     else
@@ -555,7 +573,7 @@ function overload_autodiff(
         end
     end
 
-    restup = Any[(a isa Active) ? copy(a) : nothing for a in args]
+    restup = Any[nothing for _ in args]
     for a in linear_args
         idx, path = TracedUtils.get_argidx(a, argprefix)
 
@@ -566,14 +584,22 @@ function overload_autodiff(
             @assert false
         end
 
-        set_act!(
-            arg,
-            path[3:end],
-            reverse,
-            TracedUtils.transpose_val(MLIR.IR.result(res, residx));
-            width,
-            emptypath=arg isa Active,
-        )
+        if arg isa Active && width == 1 && isempty(path[3:end])
+            # `Active` arguments return their gradient in the result tuple
+            # instead of accumulating into a shadow
+            restup[idx - fnwrap] = TracedRNumber{unwrapped_eltype(arg.val)}(
+                (), TracedUtils.transpose_val(MLIR.IR.result(res, residx))
+            )
+        else
+            set_act!(
+                arg,
+                path[3:end],
+                reverse,
+                TracedUtils.transpose_val(MLIR.IR.result(res, residx));
+                width,
+                emptypath=arg isa Active,
+            )
+        end
         residx += 1
     end
 

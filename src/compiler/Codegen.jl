@@ -6,8 +6,14 @@ using ..Reactant:
     TracedRNumber,
     ConcretePJRTArray,
     ConcretePJRTNumber,
+    ConcretePJRTInteger,
+    ConcretePJRTFloat,
+    ConcretePJRTComplex,
     ConcreteIFRTArray,
     ConcreteIFRTNumber,
+    ConcreteIFRTInteger,
+    ConcreteIFRTFloat,
+    ConcreteIFRTComplex,
     AbstractConcreteArray,
     AbstractConcreteNumber,
     ancestor
@@ -284,7 +290,7 @@ Base.@nospecializeinfer function create_result(
     return result_cache[tocopy]
 end
 
-function create_result(
+function create_pjrt_number_result(
     tocopy::ConcretePJRTNumber{T,D},
     @nospecialize(path::Tuple),
     result_stores,
@@ -326,7 +332,7 @@ function create_result(
     return result_cache[tocopy]
 end
 
-function create_result(
+function create_ifrt_number_result(
     tocopy::ConcreteIFRTNumber{T},
     @nospecialize(path::Tuple),
     result_stores,
@@ -366,6 +372,48 @@ function create_result(
     end
 
     return result_cache[tocopy]
+end
+
+# The per-kind methods are needed (rather than a single `ConcretePJRTNumber`
+# method) so that integer/float scalars are not ambiguous with the
+# `create_result(::Union{Integer,AbstractFloat,...})` method below.
+for (NumT, worker) in (
+    (ConcretePJRTNumber, create_pjrt_number_result),
+    (ConcretePJRTInteger, create_pjrt_number_result),
+    (ConcretePJRTFloat, create_pjrt_number_result),
+    (ConcretePJRTComplex, create_pjrt_number_result),
+    (ConcreteIFRTNumber, create_ifrt_number_result),
+    (ConcreteIFRTInteger, create_ifrt_number_result),
+    (ConcreteIFRTFloat, create_ifrt_number_result),
+    (ConcreteIFRTComplex, create_ifrt_number_result),
+)
+    @eval function create_result(
+        tocopy::$NumT,
+        @nospecialize(path::Tuple),
+        result_stores,
+        path_to_shard_info,
+        to_unreshard_results,
+        unresharded_code::Vector{Expr},
+        unresharded_arrays_cache,
+        used_shardinfo,
+        result_cache,
+        var_idx,
+        resultgen_code,
+    )
+        return $worker(
+            tocopy,
+            path,
+            result_stores,
+            path_to_shard_info,
+            to_unreshard_results,
+            unresharded_code,
+            unresharded_arrays_cache,
+            used_shardinfo,
+            result_cache,
+            var_idx,
+            resultgen_code,
+        )
+    end
 end
 
 function create_result(
@@ -1345,7 +1393,7 @@ function codegen_xla_call(
     base_symbol_name = is_sharded ? Symbol(:result_buffer_m, ndevices, :_) : :result_buffer_
     concretized_res_names = Symbol[Symbol(base_symbol_name, i) for i in 1:nresults]
     concretized_res_code = map(enumerate(concretized_res_names)) do (i, varname)
-        :($varname = linearized_results[$i])
+        return :($varname = linearized_results[$i])
     end
 
     xla_call_code = if nresults == 0 && is_pure

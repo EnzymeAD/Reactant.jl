@@ -123,14 +123,16 @@ isa_traced_soa(::AbstractRange{<:TracedRNumber}) = true
 
 unwrapped_eltype(::Type{T}) where {T<:Number} = T
 unwrapped_eltype(::Type{<:RNumber{T}}) where {T} = T
-unwrapped_eltype(::Type{TracedRNumber{T}}) where {T} = T
 
 unwrapped_eltype(::T) where {T<:Number} = T
 unwrapped_eltype(::RNumber{T}) where {T} = T
-unwrapped_eltype(::TracedRNumber{T}) where {T} = T
 
 unwrapped_eltype(::Type{<:AbstractArray{T}}) where {T} = unwrapped_eltype(T)
 unwrapped_eltype(::AbstractArray{T}) where {T} = unwrapped_eltype(T)
+
+# `TracedRArray{T,N}` with the element-type parameter left free does not match
+# `Type{<:AbstractArray{T}}` (no single eltype), so extract `T` directly.
+unwrapped_eltype(::Type{<:TracedRArray{T}}) where {T} = T
 
 include("Ops.jl")
 Base.push!(no_rewrite_ancestor_modules, Ops)
@@ -157,7 +159,9 @@ aos_to_soa(x::AbstractArray) = x
 aos_to_soa(x::TracedRArray) = x
 aos_to_soa(x::AnyTracedRArray) = x
 
-function aos_to_soa(x::Array{TracedRNumber{T}}) where {T}
+aos_to_soa(x::Array{Union{}}) = x
+
+function aos_to_soa(x::Array{<:TracedRNumber{T}}) where {T}
     isa_traced_soa(ancestor(x)) && return x
     for i in eachindex(x)
         if !isassigned(x, i)
@@ -228,6 +232,9 @@ use_overlayed_version(::Number) = false
 use_overlayed_version(::MissingTracedValue) = true
 use_overlayed_version(rng::ReactantRNG) = use_overlayed_version(rng.seed)
 use_overlayed_version(::AbstractArray{<:TracedRNumber}) = true
+# `Union{}`-eltype (empty) arrays match the covariant traced-array patterns but
+# hold no traced values
+use_overlayed_version(::AbstractArray{Union{}}) = false
 use_overlayed_version(::TracedRArray) = true
 use_overlayed_version(::TracedRNumber) = true
 use_overlayed_version(::TracedStepRangeLen) = true

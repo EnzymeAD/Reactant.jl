@@ -9,6 +9,20 @@ using Reactant.Ops: @opcall
 # catch its methods.
 const AnyStridedTracedRArray{T,N} = StridedArray{<:TracedRNumber{T},N}
 
+# Traced reals hit the `fftfloat`-based conversion path in AbstractFFTs, whose
+# fallback only supports the BLAS float types and copies through a host array.
+function AbstractFFTs._fftfloat(::Type{T}) where {T<:TracedRNumber}
+    return Reactant.traced_number_type(AbstractFFTs._fftfloat(Reactant.unwrapped_eltype(T)))
+end
+
+function AbstractFFTs.complexfloat(x::AbstractArray{<:Reactant.TracedRReal{T}}) where {T}
+    return Reactant.promote_to(Reactant.TracedRArray{complex(float(T)),ndims(x)}, x)
+end
+
+function AbstractFFTs.realfloat(x::AbstractArray{<:Reactant.TracedRReal{T}}) where {T}
+    return Reactant.promote_to(Reactant.TracedRArray{float(T),ndims(x)}, x)
+end
+
 # To automatically convert FFT plans to traced versions
 # To extend a user needs to extend Reactant.reactant_fftplan for their plan type
 # see ReactantFFTWExt.jl for an example implementation
