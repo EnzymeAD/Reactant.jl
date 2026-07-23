@@ -96,7 +96,7 @@ trace = ProbProg.unflatten_trace(trace_tensor, weight_val, tt.entries, ())
 ## `mcmc`
 
 ```julia
-trace, diagnostics, _, state = ProbProg.mcmc(
+trace, diagnostics, log_densities, _, state = ProbProg.mcmc(
     rng,
     initial_trace,
     model,
@@ -160,8 +160,12 @@ Verify against a reference implementation for pathological problems.
 
 ### Diagnostics
 
-Per-iteration `Bool`, rank-1 of length `num_samples ÷ thinning` (scalar
-if 1). HMC: MH acceptance. NUTS: `true` if no divergence.
+`Bool` matrix of shape `(num_samples ÷ thinning, 2)`. Column 1 is
+acceptance (HMC: MH acceptance; NUTS: always `true`). Column 2 is
+divergence (HMC: always `false`; NUTS: `true` if the transition
+diverged). `log_densities` is a rank-1 `Float64` tensor of length
+`num_samples ÷ thinning` holding the log density of each collected
+sample.
 
 ## `mcmc_logpdf`
 
@@ -175,7 +179,7 @@ end
 
 initial_position = Reactant.to_rarray(zeros(d))
 
-samples, diagnostics, _, state = ProbProg.mcmc_logpdf(
+samples, diagnostics, log_densities, _, state = ProbProg.mcmc_logpdf(
     rng, logpdf, initial_position, xs, ys;
     algorithm         = :NUTS,
     step_size         = Reactant.ConcreteRNumber(0.1),
