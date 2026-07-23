@@ -92,6 +92,7 @@ jobs:
         id: julia-cache
         with:
           cache-name: julia-cache;workflow=${{ inputs.julia_version }}-${{ inputs.os }}-${{ inputs.runtime }}-assertions=${{ inputs.assertions }}-${{ github.event_name }}-${{ inputs.test_args }}-${{ inputs.downgrade_testing }}-${{ inputs.localjll || inputs.enzymejax_commit != '' }}-${{ inputs.enzymejax_commit }}
+          gcp-bucket: ${{ contains(matrix.os, 'linux') && 'enzyme-ci-transient' || '' }}
 
       - uses: julia-actions/julia-downgrade-compat@v2
         if: ${{ inputs.downgrade_testing }}
@@ -107,7 +108,7 @@ jobs:
           # Avoid downloading Bazel every time.
           bazelisk-cache: true
           # Store build cache per workflow.
-          disk-cache: ${{ github.workflow }}-${{ inputs.os }}-${{ inputs.julia_version }}
+          disk-cache: ${{ !contains(matrix.os, 'linux') && format('{0}-{1}-{2}', github.workflow, inputs.os, inputs.julia_version) || false }}
           # Share repository cache between workflows.
           repository-cache: true
           bazelisk-version: 1.x
@@ -124,7 +125,7 @@ jobs:
         if: ${{ inputs.localjll || inputs.enzymejax_commit != '' }}
         run: |
           julia --color=yes --project=deps -e 'using Pkg; Pkg.instantiate()'
-          julia --color=yes --project=deps deps/build_local.jl --cc clang  --push-cache
+          julia --color=yes --project=deps deps/build_local.jl --cc clang ${{ contains(matrix.os, 'linux') && '--push-cache' || '--cache' }}
           cp LocalPreferences.toml test/
 
       # Compile Julia if assertions are enabled
