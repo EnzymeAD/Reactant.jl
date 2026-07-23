@@ -1803,10 +1803,9 @@ gentbl_cc_library(
         ),
     ],
     tblgen = "//:mlir-jl-tblgen",
-    td_file = "@enzyme_ad//src/enzyme_ad/jax:Integrations/c/triton.td",
+    td_file = "@triton//:include/triton/Dialect/Triton/IR/TritonOps.td",
     deps = [
-        "@enzyme_ad//src/enzyme_ad/jax:TritonDialectTdFiles",
-        "@llvm-project//mlir:OpBaseTdFiles",
+        "@triton//:td_files",
     ],
 )
 
