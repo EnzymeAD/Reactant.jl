@@ -153,7 +153,6 @@ jobs:
         with:
           version: "1"
       - uses: julia-actions/cache@v3
-        gcp-bucket: ${{ contains(matrix.os, 'linux') && 'enzyme-ci-transient' || '' }}
       - uses: actions/download-artifact@v8
         with:
           pattern: benchmark-results-*
