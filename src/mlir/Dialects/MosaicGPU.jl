@@ -52,6 +52,37 @@ function arrive(barrier::Value; orders_tensor_core, location=Location())
 end
 
 """
+`assume_multiple`
+
+This operation is a hint to the compiler that the input `value` is guaranteed
+to be a multiple of `multiple`. This can be used to satisfy divisibility checks
+in some compiler passes.
+
+The result is the same as the input `value`.
+"""
+function assume_multiple(
+    value::Value; result=nothing::Union{Nothing,IR.Type}, multiple, location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[value,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[NamedAttribute("multiple", multiple),]
+    !isnothing(result) && push!(op_ty_results, result)
+
+    return create_operation(
+        "mosaic_gpu.assume_multiple",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
 `async_load`
 
 Schedules an async copy of the contents of the `source` MemRef in GMEM to
@@ -136,14 +167,18 @@ function async_load(
 end
 
 function async_load_tmem(
-    source::Value; result_0=nothing::Union{Nothing,IR.Type}, location=Location()
+    source::Value;
+    result_0=nothing::Union{Nothing,Vector{IR.Type}},
+    reduce=nothing,
+    location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[source,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
-    !isnothing(result_0) && push!(op_ty_results, result_0)
+    !isnothing(result_0) && push!(op_ty_results, result_0...)
+    !isnothing(reduce) && push!(attributes, NamedAttribute("reduce", reduce))
 
     return create_operation(
         "mosaic_gpu.async_load_tmem",
@@ -683,6 +718,39 @@ function layout_cast(
 end
 
 """
+`mma`
+
+Computes `a @ b + accumulator` synchronously using Ampere MMA instructions.
+
+The output has an identical shape and type as the input accumulator.
+"""
+function mma(
+    accumulator::Value,
+    a::Value,
+    b::Value;
+    result_0=nothing::Union{Nothing,IR.Type},
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[accumulator, a, b]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(result_0) && push!(op_ty_results, result_0)
+
+    return create_operation(
+        "mosaic_gpu.mma",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
 `multimem_load_reduce`
 
 Loads from a multicast memref specified by the `source` and reduces the
@@ -895,13 +963,19 @@ end
 The principal use case for this op is to do a single TMEM allocation and
 slice it into multiple smaller TMEM references. `source` is the large TMEM
 allocation and `offset` is the number of columns to start slicing from.
+
+`slice_tmem` may optionally carry an `alias_id` attribute that is used to
+differentiate between potentially aliasing allocations.
 """
-function slice_tmem(source::Value; result_0::IR.Type, offset, location=Location())
+function slice_tmem(
+    source::Value; result_0::IR.Type, offset, alias_id=nothing, location=Location()
+)
     op_ty_results = IR.Type[result_0,]
     operands = Value[source,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[NamedAttribute("offset", offset),]
+    !isnothing(alias_id) && push!(attributes, NamedAttribute("alias_id", alias_id))
 
     return create_operation(
         "mosaic_gpu.slice_tmem",
@@ -1182,6 +1256,39 @@ function try_cluster_cancel(
 end
 
 """
+`vector_concat`
+
+Concatenates a variadic list of operands along `dimension`.
+
+All operands must have the same rank and element type.
+This op matches the semantics of `lax.concatenate`.
+"""
+function vector_concat(
+    operands::Vector{Value};
+    result_0=nothing::Union{Nothing,IR.Type},
+    dimension,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[operands...,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[NamedAttribute("dimension", dimension),]
+    !isnothing(result_0) && push!(op_ty_results, result_0)
+
+    return create_operation(
+        "mosaic_gpu.vector_concat",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
 `vector_load`
 
 Similar to `vector.load` (vector dialect) but supports loading from
@@ -1288,7 +1395,10 @@ registers only F16 or BF16 are supported.
 
 The `accumulator` must be a vector with a FragmentedLayout. The WGMMA
 operation will be executed in the async proxy and any inputs in
-registers need to be synchronized with a memory fence.
+registers need to be synchronized with a memory fence. Note that the
+caller is responsible for fencing the `accumulator` prior to issuing
+the op, whereas `a` is fenced automatically in the lowering if it is
+passed in registers.
 
 Usually `a` is read from shared memory if it is used directly in the WGMMA
 operation. If `a` needs to be transformed before it is used in the WGMMA

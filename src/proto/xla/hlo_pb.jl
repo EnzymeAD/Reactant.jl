@@ -5,19 +5,21 @@ using ProtoBuf.EnumX: @enumx
 export ConvolutionKind, var"BufferAssignmentProto.PeakBuffers", Kind
 export var"StackFrameIndexProto.FileLocation"
 export var"HloBufferDonorProto.BufferDonorEntryProto", CustomCallApiVersion
-export var"StackFrameIndexProto.StackFrame", var"HloInputs.LiteralDescriptor", Payload
+export var"StackFrameIndexProto.StackFrame", var"HloInputs.LiteralDescriptor"
 export var"HloModuleProto.ProfileType", CustomCallSchedule, HloPassMetadata, TriState
 export var"LogicalBufferProto.Location", var"HloScheduleProto.InstructionSequence"
 export var"BufferAllocationProto.Assigned", var"MemoryUsageReportProto.AllocationEntry"
 export CrossProgramPrefetch, var"HloInstructionProto.SliceDimensions"
-export var"HeapSimulatorTrace.Event.Kind", var"HloInputOutputAliasProto.AliasEntryProto"
-export HloBufferDonorProto, StackFrameIndexProto, HloInputs
-export var"HloModuleProto.ProfileInfo", HloModuleMetadataProto, LogicalBufferProto
-export var"BufferAssignmentProto.BufferAlias", HloScheduleProto, BufferAllocationProto
+export var"HeapSimulatorTrace.Event.Kind", var"DebugAttributesProto.DebugLogModeProto"
+export var"HloInputOutputAliasProto.AliasEntryProto", HloBufferDonorProto
+export StackFrameIndexProto, HloInputs, var"HloModuleProto.ProfileInfo"
+export HloModuleMetadataProto, LogicalBufferProto, var"BufferAssignmentProto.BufferAlias"
+export HloScheduleProto, BufferAllocationProto
 export var"MemoryUsageReportProto.AllocationEntryInMemorySpace", HloInstructionProto
-export var"HeapSimulatorTrace.Event", HloInputOutputAliasProto, MemoryUsageReportProto
-export HloComputationProto, HeapSimulatorTrace, BufferAssignmentProto, HloModuleGroupProto
-export HloModuleProto, HloProto, HloSnapshot, HloUnoptimizedSnapshot
+export var"HeapSimulatorTrace.Event", DebugAttributesProto, HloInputOutputAliasProto
+export MemoryUsageReportProto, HloComputationProto, HeapSimulatorTrace
+export DebugLogBackendConfigProto, DebugAttributeTableEntryProto, BufferAssignmentProto
+export HloModuleGroupProto, HloModuleProto, HloProto, HloSnapshot, HloUnoptimizedSnapshot
 export OriginalValueRecoveryTableProto, var"OriginalValueRecoveryTableProto.Entry"
 abstract type var"##Abstract#HloProto" end
 abstract type var"##Abstract#HloModuleGroupProto" end
@@ -235,51 +237,6 @@ function PB._encoded_size(x::var"HloInputs.LiteralDescriptor")
     encoded_size = 0
     x.version != zero(Int32) && (encoded_size += PB._encoded_size(x.version, 1))
     x.argument_size_bytes != zero(UInt64) && (encoded_size += PB._encoded_size(x.argument_size_bytes, 2))
-    return encoded_size
-end
-
-struct Payload
-    payload_source::Union{Nothing,OneOf{<:Union{Vector{UInt8},Int64}}}
-end
-PB.oneof_field_types(::Type{Payload}) = (;
-    payload_source = (;value=Vector{UInt8}, id=Int64),
-)
-PB.default_values(::Type{Payload}) = (;value = UInt8[], id = zero(Int64))
-PB.field_numbers(::Type{Payload}) = (;value = 1, id = 2)
-
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:Payload}, _endpos::Int=0, _group::Bool=false)
-    payload_source = nothing
-    while !PB.message_done(d, _endpos, _group)
-        field_number, wire_type = PB.decode_tag(d)
-        if field_number == 1
-            payload_source = OneOf(:value, PB.decode(d, Vector{UInt8}))
-        elseif field_number == 2
-            payload_source = OneOf(:id, PB.decode(d, Int64))
-        else
-            Base.skip(d, wire_type)
-        end
-    end
-    return Payload(payload_source)
-end
-
-function PB.encode(e::PB.AbstractProtoEncoder, x::Payload)
-    initpos = position(e.io)
-    if isnothing(x.payload_source);
-    elseif x.payload_source.name === :value
-        PB.encode(e, 1, x.payload_source[]::Vector{UInt8})
-    elseif x.payload_source.name === :id
-        PB.encode(e, 2, x.payload_source[]::Int64)
-    end
-    return position(e.io) - initpos
-end
-function PB._encoded_size(x::Payload)
-    encoded_size = 0
-    if isnothing(x.payload_source);
-    elseif x.payload_source.name === :value
-        encoded_size += PB._encoded_size(x.payload_source[]::Vector{UInt8}, 1)
-    elseif x.payload_source.name === :id
-        encoded_size += PB._encoded_size(x.payload_source[]::Int64, 2)
-    end
     return encoded_size
 end
 
@@ -645,6 +602,8 @@ function PB._encoded_size(x::var"HloInstructionProto.SliceDimensions")
 end
 
 @enumx var"HeapSimulatorTrace.Event.Kind" ALLOC=0 FREE=1 SHARE_WITH=2
+
+@enumx var"DebugAttributesProto.DebugLogModeProto" NONE=0 DEFAULT=1 FUSION_DEBUGGER=2 NO_FUSION=3 GUARANTEED=4
 
 struct var"HloInputOutputAliasProto.AliasEntryProto"
     output_shape_index::Vector{Int64}
@@ -1268,14 +1227,15 @@ struct HloInstructionProto
     is_associative::TriState.T
     conv_kind::ConvolutionKind.T
     sparsity_config::Union{Nothing,SparsityConfig}
+    has_dynamic_root::Bool
 end
 PB.reserved_fields(::Type{HloInstructionProto}) = (names = ["parameter_name", "fused_instructions_computation", "operand_names", "control_predecessor_names", "called_computation_names", "replica_group_ids", "custom_call_opaque", "all_reduce_barrier"], numbers = Union{Int,UnitRange{Int}}[10, 12, 4, 5, 6, 44, 53, 46, 41, 42, 64, 78, 83, 84, 86])
 PB.oneof_field_types(::Type{HloInstructionProto}) = (;
     optional_cross_program_prefetch_index = (;cross_program_prefetch_index=Int32),
     replica_group_list = (;collective_device_list=CollectiveDeviceListProto, iota_collective_device_list=IotaReplicaGroupListProto, mesh_axes_replica_group_list=MeshAxesReplicaGroupListProto),
 )
-PB.default_values(::Type{HloInstructionProto}) = (;name = "", opcode = "", shape = nothing, metadata = nothing, literal = nothing, parameter_number = zero(Int64), fusion_kind = "", tuple_index = zero(Int64), dimensions = Vector{Int64}(), window = nothing, convolution_dimension_numbers = nothing, feature_group_count = zero(Int64), batch_group_count = zero(Int64), slice_dimensions = Vector{var"HloInstructionProto.SliceDimensions"}(), exponent_bits = zero(Int32), mantissa_bits = zero(Int32), dynamic_slice_sizes = Vector{Int64}(), padding_config = nothing, outfeed_config = UInt8[], distribution = RandomDistribution.RNG_INVALID, epsilon = zero(Float32), feature_index = zero(Int64), channel_id = zero(Int64), infeed_config = UInt8[], custom_call_target = "", outfeed_shape = nothing, dot_dimension_numbers = nothing, ragged_dot_dimension_numbers = nothing, fft_type = FftType.FFT, fft_length = Vector{Int64}(), comparison_direction = "", gather_dimension_numbers = nothing, gather_slice_sizes = Vector{Int64}(), id = zero(Int64), operand_ids = Vector{Int64}(), control_predecessor_ids = Vector{Int64}(), called_computation_ids = Vector{Int64}(), sharding = nothing, backend_config = UInt8[], backend_config_payload = nothing, replica_groups = Vector{ReplicaGroup}(), all_reduce_id = zero(Int64), use_global_device_ids = false, is_host_transfer = false, is_stable = false, scatter_dimension_numbers = nothing, precision_config = nothing, source_target_pairs = Vector{SourceTarget}(), domain_entry_sharding = nothing, domain_exit_sharding = nothing, constrain_layout = false, operand_shapes_with_layout = Vector{ShapeProto}(), triangular_solve_options = nothing, cholesky_options = nothing, parameter_replication = nothing, custom_call_has_side_effect = false, output_operand_aliasing = Vector{OutputOperandAliasing}(), custom_call_schedule = CustomCallSchedule.SCHEDULE_NONE, delta = zero(Int64), indices_are_sorted = false, frontend_attributes = nothing, unique_indices = false, rng_algorithm = RandomAlgorithm.RNG_DEFAULT, comparison_type = "", is_cross_program_prefetch = false, cross_program_prefetch_index = zero(Int32), padding_type = PaddingType.PADDING_INVALID, custom_call_api_version = CustomCallApiVersion.API_VERSION_UNSPECIFIED, async_execution_thread = "", k = zero(Int64), largest = false, statistics_viz = nothing, collective_device_list = nothing, iota_collective_device_list = nothing, mesh_axes_replica_group_list = nothing, original_value = nothing, is_composite = false, result_accuracy = nothing, is_reverse = false, num_carries = zero(Int64), is_associative = TriState.TRI_STATE_UNSPECIFIED, conv_kind = ConvolutionKind.CONVOLUTION_KIND_UNSET, sparsity_config = nothing)
-PB.field_numbers(::Type{HloInstructionProto}) = (;name = 1, opcode = 2, shape = 3, metadata = 7, literal = 8, parameter_number = 9, fusion_kind = 11, tuple_index = 13, dimensions = 14, window = 15, convolution_dimension_numbers = 16, feature_group_count = 50, batch_group_count = 58, slice_dimensions = 17, exponent_bits = 18, mantissa_bits = 19, dynamic_slice_sizes = 20, padding_config = 21, outfeed_config = 22, distribution = 23, epsilon = 24, feature_index = 25, channel_id = 26, infeed_config = 27, custom_call_target = 28, outfeed_shape = 29, dot_dimension_numbers = 30, ragged_dot_dimension_numbers = 90, fft_type = 31, fft_length = 32, comparison_direction = 63, gather_dimension_numbers = 33, gather_slice_sizes = 34, id = 35, operand_ids = 36, control_predecessor_ids = 37, called_computation_ids = 38, sharding = 40, backend_config = 43, backend_config_payload = 99, replica_groups = 49, all_reduce_id = 45, use_global_device_ids = 71, is_host_transfer = 47, is_stable = 60, scatter_dimension_numbers = 48, precision_config = 51, source_target_pairs = 52, domain_entry_sharding = 54, domain_exit_sharding = 55, constrain_layout = 56, operand_shapes_with_layout = 57, triangular_solve_options = 59, cholesky_options = 62, parameter_replication = 61, custom_call_has_side_effect = 65, output_operand_aliasing = 74, custom_call_schedule = 76, delta = 66, indices_are_sorted = 67, frontend_attributes = 68, unique_indices = 69, rng_algorithm = 70, comparison_type = 72, is_cross_program_prefetch = 73, cross_program_prefetch_index = 80, padding_type = 75, custom_call_api_version = 77, async_execution_thread = 79, k = 81, largest = 85, statistics_viz = 82, collective_device_list = 87, iota_collective_device_list = 92, mesh_axes_replica_group_list = 93, original_value = 88, is_composite = 89, result_accuracy = 91, is_reverse = 94, num_carries = 95, is_associative = 96, conv_kind = 97, sparsity_config = 98)
+PB.default_values(::Type{HloInstructionProto}) = (;name = "", opcode = "", shape = nothing, metadata = nothing, literal = nothing, parameter_number = zero(Int64), fusion_kind = "", tuple_index = zero(Int64), dimensions = Vector{Int64}(), window = nothing, convolution_dimension_numbers = nothing, feature_group_count = zero(Int64), batch_group_count = zero(Int64), slice_dimensions = Vector{var"HloInstructionProto.SliceDimensions"}(), exponent_bits = zero(Int32), mantissa_bits = zero(Int32), dynamic_slice_sizes = Vector{Int64}(), padding_config = nothing, outfeed_config = UInt8[], distribution = RandomDistribution.RNG_INVALID, epsilon = zero(Float32), feature_index = zero(Int64), channel_id = zero(Int64), infeed_config = UInt8[], custom_call_target = "", outfeed_shape = nothing, dot_dimension_numbers = nothing, ragged_dot_dimension_numbers = nothing, fft_type = FftType.FFT, fft_length = Vector{Int64}(), comparison_direction = "", gather_dimension_numbers = nothing, gather_slice_sizes = Vector{Int64}(), id = zero(Int64), operand_ids = Vector{Int64}(), control_predecessor_ids = Vector{Int64}(), called_computation_ids = Vector{Int64}(), sharding = nothing, backend_config = UInt8[], backend_config_payload = nothing, replica_groups = Vector{ReplicaGroup}(), all_reduce_id = zero(Int64), use_global_device_ids = false, is_host_transfer = false, is_stable = false, scatter_dimension_numbers = nothing, precision_config = nothing, source_target_pairs = Vector{SourceTarget}(), domain_entry_sharding = nothing, domain_exit_sharding = nothing, constrain_layout = false, operand_shapes_with_layout = Vector{ShapeProto}(), triangular_solve_options = nothing, cholesky_options = nothing, parameter_replication = nothing, custom_call_has_side_effect = false, output_operand_aliasing = Vector{OutputOperandAliasing}(), custom_call_schedule = CustomCallSchedule.SCHEDULE_NONE, delta = zero(Int64), indices_are_sorted = false, frontend_attributes = nothing, unique_indices = false, rng_algorithm = RandomAlgorithm.RNG_DEFAULT, comparison_type = "", is_cross_program_prefetch = false, cross_program_prefetch_index = zero(Int32), padding_type = PaddingType.PADDING_INVALID, custom_call_api_version = CustomCallApiVersion.API_VERSION_UNSPECIFIED, async_execution_thread = "", k = zero(Int64), largest = false, statistics_viz = nothing, collective_device_list = nothing, iota_collective_device_list = nothing, mesh_axes_replica_group_list = nothing, original_value = nothing, is_composite = false, result_accuracy = nothing, is_reverse = false, num_carries = zero(Int64), is_associative = TriState.TRI_STATE_UNSPECIFIED, conv_kind = ConvolutionKind.CONVOLUTION_KIND_UNSET, sparsity_config = nothing, has_dynamic_root = false)
+PB.field_numbers(::Type{HloInstructionProto}) = (;name = 1, opcode = 2, shape = 3, metadata = 7, literal = 8, parameter_number = 9, fusion_kind = 11, tuple_index = 13, dimensions = 14, window = 15, convolution_dimension_numbers = 16, feature_group_count = 50, batch_group_count = 58, slice_dimensions = 17, exponent_bits = 18, mantissa_bits = 19, dynamic_slice_sizes = 20, padding_config = 21, outfeed_config = 22, distribution = 23, epsilon = 24, feature_index = 25, channel_id = 26, infeed_config = 27, custom_call_target = 28, outfeed_shape = 29, dot_dimension_numbers = 30, ragged_dot_dimension_numbers = 90, fft_type = 31, fft_length = 32, comparison_direction = 63, gather_dimension_numbers = 33, gather_slice_sizes = 34, id = 35, operand_ids = 36, control_predecessor_ids = 37, called_computation_ids = 38, sharding = 40, backend_config = 43, backend_config_payload = 99, replica_groups = 49, all_reduce_id = 45, use_global_device_ids = 71, is_host_transfer = 47, is_stable = 60, scatter_dimension_numbers = 48, precision_config = 51, source_target_pairs = 52, domain_entry_sharding = 54, domain_exit_sharding = 55, constrain_layout = 56, operand_shapes_with_layout = 57, triangular_solve_options = 59, cholesky_options = 62, parameter_replication = 61, custom_call_has_side_effect = 65, output_operand_aliasing = 74, custom_call_schedule = 76, delta = 66, indices_are_sorted = 67, frontend_attributes = 68, unique_indices = 69, rng_algorithm = 70, comparison_type = 72, is_cross_program_prefetch = 73, cross_program_prefetch_index = 80, padding_type = 75, custom_call_api_version = 77, async_execution_thread = 79, k = 81, largest = 85, statistics_viz = 82, collective_device_list = 87, iota_collective_device_list = 92, mesh_axes_replica_group_list = 93, original_value = 88, is_composite = 89, result_accuracy = 91, is_reverse = 94, num_carries = 95, is_associative = 96, conv_kind = 97, sparsity_config = 98, has_dynamic_root = 100)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HloInstructionProto}, _endpos::Int=0, _group::Bool=false)
     name = ""
@@ -1359,6 +1319,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HloInstructionProto}, _e
     is_associative = TriState.TRI_STATE_UNSPECIFIED
     conv_kind = ConvolutionKind.CONVOLUTION_KIND_UNSET
     sparsity_config = Ref{Union{Nothing,SparsityConfig}}(nothing)
+    has_dynamic_root = false
     while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
@@ -1527,11 +1488,13 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HloInstructionProto}, _e
             conv_kind = PB.decode(d, ConvolutionKind.T)
         elseif field_number == 98
             PB.decode!(d, sparsity_config)
+        elseif field_number == 100
+            has_dynamic_root = PB.decode(d, Bool)
         else
             Base.skip(d, wire_type)
         end
     end
-    return HloInstructionProto(name, opcode, shape[], metadata[], literal[], parameter_number, fusion_kind, tuple_index, dimensions[], window[], convolution_dimension_numbers[], feature_group_count, batch_group_count, slice_dimensions[], exponent_bits, mantissa_bits, dynamic_slice_sizes[], padding_config[], outfeed_config, distribution, epsilon, feature_index, channel_id, infeed_config, custom_call_target, outfeed_shape[], dot_dimension_numbers[], ragged_dot_dimension_numbers[], fft_type, fft_length[], comparison_direction, gather_dimension_numbers[], gather_slice_sizes[], id, operand_ids[], control_predecessor_ids[], called_computation_ids[], sharding[], backend_config, backend_config_payload[], replica_groups[], all_reduce_id, use_global_device_ids, is_host_transfer, is_stable, scatter_dimension_numbers[], precision_config[], source_target_pairs[], domain_entry_sharding[], domain_exit_sharding[], constrain_layout, operand_shapes_with_layout[], triangular_solve_options[], cholesky_options[], parameter_replication[], custom_call_has_side_effect, output_operand_aliasing[], custom_call_schedule, delta, indices_are_sorted, frontend_attributes[], unique_indices, rng_algorithm, comparison_type, is_cross_program_prefetch, optional_cross_program_prefetch_index, padding_type, custom_call_api_version, async_execution_thread, k, largest, statistics_viz[], replica_group_list, original_value[], is_composite, result_accuracy[], is_reverse, num_carries, is_associative, conv_kind, sparsity_config[])
+    return HloInstructionProto(name, opcode, shape[], metadata[], literal[], parameter_number, fusion_kind, tuple_index, dimensions[], window[], convolution_dimension_numbers[], feature_group_count, batch_group_count, slice_dimensions[], exponent_bits, mantissa_bits, dynamic_slice_sizes[], padding_config[], outfeed_config, distribution, epsilon, feature_index, channel_id, infeed_config, custom_call_target, outfeed_shape[], dot_dimension_numbers[], ragged_dot_dimension_numbers[], fft_type, fft_length[], comparison_direction, gather_dimension_numbers[], gather_slice_sizes[], id, operand_ids[], control_predecessor_ids[], called_computation_ids[], sharding[], backend_config, backend_config_payload[], replica_groups[], all_reduce_id, use_global_device_ids, is_host_transfer, is_stable, scatter_dimension_numbers[], precision_config[], source_target_pairs[], domain_entry_sharding[], domain_exit_sharding[], constrain_layout, operand_shapes_with_layout[], triangular_solve_options[], cholesky_options[], parameter_replication[], custom_call_has_side_effect, output_operand_aliasing[], custom_call_schedule, delta, indices_are_sorted, frontend_attributes[], unique_indices, rng_algorithm, comparison_type, is_cross_program_prefetch, optional_cross_program_prefetch_index, padding_type, custom_call_api_version, async_execution_thread, k, largest, statistics_viz[], replica_group_list, original_value[], is_composite, result_accuracy[], is_reverse, num_carries, is_associative, conv_kind, sparsity_config[], has_dynamic_root)
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::HloInstructionProto)
@@ -1627,6 +1590,7 @@ function PB.encode(e::PB.AbstractProtoEncoder, x::HloInstructionProto)
     x.is_associative != TriState.TRI_STATE_UNSPECIFIED && PB.encode(e, 96, x.is_associative)
     x.conv_kind != ConvolutionKind.CONVOLUTION_KIND_UNSET && PB.encode(e, 97, x.conv_kind)
     !isnothing(x.sparsity_config) && PB.encode(e, 98, x.sparsity_config)
+    x.has_dynamic_root != false && PB.encode(e, 100, x.has_dynamic_root)
     return position(e.io) - initpos
 end
 function PB._encoded_size(x::HloInstructionProto)
@@ -1722,6 +1686,7 @@ function PB._encoded_size(x::HloInstructionProto)
     x.is_associative != TriState.TRI_STATE_UNSPECIFIED && (encoded_size += PB._encoded_size(x.is_associative, 96))
     x.conv_kind != ConvolutionKind.CONVOLUTION_KIND_UNSET && (encoded_size += PB._encoded_size(x.conv_kind, 97))
     !isnothing(x.sparsity_config) && (encoded_size += PB._encoded_size(x.sparsity_config, 98))
+    x.has_dynamic_root != false && (encoded_size += PB._encoded_size(x.has_dynamic_root, 100))
     return encoded_size
 end
 
@@ -1776,6 +1741,60 @@ function PB._encoded_size(x::var"HeapSimulatorTrace.Event")
     !isempty(x.computation_name) && (encoded_size += PB._encoded_size(x.computation_name, 3))
     !isempty(x.instruction_name) && (encoded_size += PB._encoded_size(x.instruction_name, 4))
     x.share_with_canonical_id != zero(Int64) && (encoded_size += PB._encoded_size(x.share_with_canonical_id, 5))
+    return encoded_size
+end
+
+struct DebugAttributesProto
+    log_mode::var"DebugAttributesProto.DebugLogModeProto".T
+    callback_id::Int64
+    op_id::Int64
+    partitioned::Bool
+    operands_sharding::String
+end
+PB.default_values(::Type{DebugAttributesProto}) = (;log_mode = var"DebugAttributesProto.DebugLogModeProto".NONE, callback_id = zero(Int64), op_id = zero(Int64), partitioned = false, operands_sharding = "")
+PB.field_numbers(::Type{DebugAttributesProto}) = (;log_mode = 1, callback_id = 2, op_id = 3, partitioned = 4, operands_sharding = 5)
+
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:DebugAttributesProto}, _endpos::Int=0, _group::Bool=false)
+    log_mode = var"DebugAttributesProto.DebugLogModeProto".NONE
+    callback_id = zero(Int64)
+    op_id = zero(Int64)
+    partitioned = false
+    operands_sharding = ""
+    while !PB.message_done(d, _endpos, _group)
+        field_number, wire_type = PB.decode_tag(d)
+        if field_number == 1
+            log_mode = PB.decode(d, var"DebugAttributesProto.DebugLogModeProto".T)
+        elseif field_number == 2
+            callback_id = PB.decode(d, Int64)
+        elseif field_number == 3
+            op_id = PB.decode(d, Int64)
+        elseif field_number == 4
+            partitioned = PB.decode(d, Bool)
+        elseif field_number == 5
+            operands_sharding = PB.decode(d, String)
+        else
+            Base.skip(d, wire_type)
+        end
+    end
+    return DebugAttributesProto(log_mode, callback_id, op_id, partitioned, operands_sharding)
+end
+
+function PB.encode(e::PB.AbstractProtoEncoder, x::DebugAttributesProto)
+    initpos = position(e.io)
+    x.log_mode != var"DebugAttributesProto.DebugLogModeProto".NONE && PB.encode(e, 1, x.log_mode)
+    x.callback_id != zero(Int64) && PB.encode(e, 2, x.callback_id)
+    x.op_id != zero(Int64) && PB.encode(e, 3, x.op_id)
+    x.partitioned != false && PB.encode(e, 4, x.partitioned)
+    !isempty(x.operands_sharding) && PB.encode(e, 5, x.operands_sharding)
+    return position(e.io) - initpos
+end
+function PB._encoded_size(x::DebugAttributesProto)
+    encoded_size = 0
+    x.log_mode != var"DebugAttributesProto.DebugLogModeProto".NONE && (encoded_size += PB._encoded_size(x.log_mode, 1))
+    x.callback_id != zero(Int64) && (encoded_size += PB._encoded_size(x.callback_id, 2))
+    x.op_id != zero(Int64) && (encoded_size += PB._encoded_size(x.op_id, 3))
+    x.partitioned != false && (encoded_size += PB._encoded_size(x.partitioned, 4))
+    !isempty(x.operands_sharding) && (encoded_size += PB._encoded_size(x.operands_sharding, 5))
     return encoded_size
 end
 
@@ -1948,6 +1967,72 @@ function PB._encoded_size(x::HeapSimulatorTrace)
     return encoded_size
 end
 
+struct DebugLogBackendConfigProto
+    debug_attributes_config::Union{Nothing,DebugAttributesProto}
+end
+PB.default_values(::Type{DebugLogBackendConfigProto}) = (;debug_attributes_config = nothing)
+PB.field_numbers(::Type{DebugLogBackendConfigProto}) = (;debug_attributes_config = 64)
+
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:DebugLogBackendConfigProto}, _endpos::Int=0, _group::Bool=false)
+    debug_attributes_config = Ref{Union{Nothing,DebugAttributesProto}}(nothing)
+    while !PB.message_done(d, _endpos, _group)
+        field_number, wire_type = PB.decode_tag(d)
+        if field_number == 64
+            PB.decode!(d, debug_attributes_config)
+        else
+            Base.skip(d, wire_type)
+        end
+    end
+    return DebugLogBackendConfigProto(debug_attributes_config[])
+end
+
+function PB.encode(e::PB.AbstractProtoEncoder, x::DebugLogBackendConfigProto)
+    initpos = position(e.io)
+    !isnothing(x.debug_attributes_config) && PB.encode(e, 64, x.debug_attributes_config)
+    return position(e.io) - initpos
+end
+function PB._encoded_size(x::DebugLogBackendConfigProto)
+    encoded_size = 0
+    !isnothing(x.debug_attributes_config) && (encoded_size += PB._encoded_size(x.debug_attributes_config, 64))
+    return encoded_size
+end
+
+struct DebugAttributeTableEntryProto
+    original_array::Union{Nothing,OriginalArrayProto}
+    debug_attributes::Vector{DebugAttributesProto}
+end
+PB.default_values(::Type{DebugAttributeTableEntryProto}) = (;original_array = nothing, debug_attributes = Vector{DebugAttributesProto}())
+PB.field_numbers(::Type{DebugAttributeTableEntryProto}) = (;original_array = 1, debug_attributes = 2)
+
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:DebugAttributeTableEntryProto}, _endpos::Int=0, _group::Bool=false)
+    original_array = Ref{Union{Nothing,OriginalArrayProto}}(nothing)
+    debug_attributes = PB.BufferedVector{DebugAttributesProto}()
+    while !PB.message_done(d, _endpos, _group)
+        field_number, wire_type = PB.decode_tag(d)
+        if field_number == 1
+            PB.decode!(d, original_array)
+        elseif field_number == 2
+            PB.decode!(d, debug_attributes)
+        else
+            Base.skip(d, wire_type)
+        end
+    end
+    return DebugAttributeTableEntryProto(original_array[], debug_attributes[])
+end
+
+function PB.encode(e::PB.AbstractProtoEncoder, x::DebugAttributeTableEntryProto)
+    initpos = position(e.io)
+    !isnothing(x.original_array) && PB.encode(e, 1, x.original_array)
+    !isempty(x.debug_attributes) && PB.encode(e, 2, x.debug_attributes)
+    return position(e.io) - initpos
+end
+function PB._encoded_size(x::DebugAttributeTableEntryProto)
+    encoded_size = 0
+    !isnothing(x.original_array) && (encoded_size += PB._encoded_size(x.original_array, 1))
+    !isempty(x.debug_attributes) && (encoded_size += PB._encoded_size(x.debug_attributes, 2))
+    return encoded_size
+end
+
 struct BufferAssignmentProto
     logical_buffers::Vector{LogicalBufferProto}
     buffer_aliases::Vector{var"BufferAssignmentProto.BufferAlias"}
@@ -2031,6 +2116,7 @@ struct var"##Stub#HloModuleProto"{T1<:var"##Abstract#OriginalValueRecoveryTableP
     frontend_attributes::Union{Nothing,FrontendAttributes}
     original_value_recovery_table::Union{Nothing,T1}
     device_type::String
+    debug_attributes::Vector{DebugAttributeTableEntryProto}
 end
 
 struct var"##Stub#HloProto"{T1<:var"##Abstract#OriginalValueRecoveryTableProto"} <: var"##Abstract#HloProto"
@@ -2096,8 +2182,8 @@ end
 
 const HloModuleProto = var"##Stub#HloModuleProto"{var"##Stub#OriginalValueRecoveryTableProto"{var"##Stub#OriginalValueRecoveryTableProto.Entry"}}
 PB.reserved_fields(::Type{HloModuleProto}) = (names = ["dynamic_parameter_binding"], numbers = Union{Int,UnitRange{Int}}[9])
-PB.default_values(::Type{HloModuleProto}) = (;name = "", entry_computation_name = "", entry_computation_id = zero(Int64), computations = Vector{HloComputationProto}(), host_program_shape = nothing, id = zero(Int64), pjrt_id = zero(Int64), schedule = nothing, input_output_alias = nothing, payloads = Vector{Vector{UInt8}}(), buffer_donor = nothing, cross_program_prefetches = Vector{CrossProgramPrefetch}(), is_dynamic = false, spmd_output_sharding = nothing, spmd_parameters_shardings = Vector{OpSharding}(), use_auto_spmd_partitioning = false, profile_info = Vector{var"HloModuleProto.ProfileInfo"}(), device_assignment = nothing, stack_frame_index = nothing, frontend_attributes = nothing, original_value_recovery_table = nothing, device_type = "")
-PB.field_numbers(::Type{HloModuleProto}) = (;name = 1, entry_computation_name = 2, entry_computation_id = 6, computations = 3, host_program_shape = 4, id = 5, pjrt_id = 23, schedule = 7, input_output_alias = 8, payloads = 22, buffer_donor = 18, cross_program_prefetches = 10, is_dynamic = 11, spmd_output_sharding = 12, spmd_parameters_shardings = 14, use_auto_spmd_partitioning = 16, profile_info = 13, device_assignment = 15, stack_frame_index = 17, frontend_attributes = 19, original_value_recovery_table = 20, device_type = 21)
+PB.default_values(::Type{HloModuleProto}) = (;name = "", entry_computation_name = "", entry_computation_id = zero(Int64), computations = Vector{HloComputationProto}(), host_program_shape = nothing, id = zero(Int64), pjrt_id = zero(Int64), schedule = nothing, input_output_alias = nothing, payloads = Vector{Vector{UInt8}}(), buffer_donor = nothing, cross_program_prefetches = Vector{CrossProgramPrefetch}(), is_dynamic = false, spmd_output_sharding = nothing, spmd_parameters_shardings = Vector{OpSharding}(), use_auto_spmd_partitioning = false, profile_info = Vector{var"HloModuleProto.ProfileInfo"}(), device_assignment = nothing, stack_frame_index = nothing, frontend_attributes = nothing, original_value_recovery_table = nothing, device_type = "", debug_attributes = Vector{DebugAttributeTableEntryProto}())
+PB.field_numbers(::Type{HloModuleProto}) = (;name = 1, entry_computation_name = 2, entry_computation_id = 6, computations = 3, host_program_shape = 4, id = 5, pjrt_id = 23, schedule = 7, input_output_alias = 8, payloads = 22, buffer_donor = 18, cross_program_prefetches = 10, is_dynamic = 11, spmd_output_sharding = 12, spmd_parameters_shardings = 14, use_auto_spmd_partitioning = 16, profile_info = 13, device_assignment = 15, stack_frame_index = 17, frontend_attributes = 19, original_value_recovery_table = 20, device_type = 21, debug_attributes = 24)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HloModuleProto}, _endpos::Int=0, _group::Bool=false)
     name = ""
@@ -2122,6 +2208,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HloModuleProto}, _endpos
     frontend_attributes = Ref{Union{Nothing,FrontendAttributes}}(nothing)
     original_value_recovery_table = Ref{Union{Nothing,OriginalValueRecoveryTableProto}}(nothing)
     device_type = ""
+    debug_attributes = PB.BufferedVector{DebugAttributeTableEntryProto}()
     while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
@@ -2168,11 +2255,13 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HloModuleProto}, _endpos
             PB.decode!(d, original_value_recovery_table)
         elseif field_number == 21
             device_type = PB.decode(d, String)
+        elseif field_number == 24
+            PB.decode!(d, debug_attributes)
         else
             Base.skip(d, wire_type)
         end
     end
-    return HloModuleProto(name, entry_computation_name, entry_computation_id, computations[], host_program_shape[], id, pjrt_id, schedule[], input_output_alias[], payloads[], buffer_donor[], cross_program_prefetches[], is_dynamic, spmd_output_sharding[], spmd_parameters_shardings[], use_auto_spmd_partitioning, profile_info[], device_assignment[], stack_frame_index[], frontend_attributes[], original_value_recovery_table[], device_type)
+    return HloModuleProto(name, entry_computation_name, entry_computation_id, computations[], host_program_shape[], id, pjrt_id, schedule[], input_output_alias[], payloads[], buffer_donor[], cross_program_prefetches[], is_dynamic, spmd_output_sharding[], spmd_parameters_shardings[], use_auto_spmd_partitioning, profile_info[], device_assignment[], stack_frame_index[], frontend_attributes[], original_value_recovery_table[], device_type, debug_attributes[])
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::HloModuleProto)
@@ -2199,6 +2288,7 @@ function PB.encode(e::PB.AbstractProtoEncoder, x::HloModuleProto)
     !isnothing(x.frontend_attributes) && PB.encode(e, 19, x.frontend_attributes)
     !isnothing(x.original_value_recovery_table) && PB.encode(e, 20, x.original_value_recovery_table)
     !isempty(x.device_type) && PB.encode(e, 21, x.device_type)
+    !isempty(x.debug_attributes) && PB.encode(e, 24, x.debug_attributes)
     return position(e.io) - initpos
 end
 function PB._encoded_size(x::HloModuleProto)
@@ -2225,6 +2315,7 @@ function PB._encoded_size(x::HloModuleProto)
     !isnothing(x.frontend_attributes) && (encoded_size += PB._encoded_size(x.frontend_attributes, 19))
     !isnothing(x.original_value_recovery_table) && (encoded_size += PB._encoded_size(x.original_value_recovery_table, 20))
     !isempty(x.device_type) && (encoded_size += PB._encoded_size(x.device_type, 21))
+    !isempty(x.debug_attributes) && (encoded_size += PB._encoded_size(x.debug_attributes, 24))
     return encoded_size
 end
 
