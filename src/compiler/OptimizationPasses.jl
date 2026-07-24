@@ -1,7 +1,12 @@
 # This file contains the MLIR optimization pass logic.
 
 using ..Reactant:
-    Reactant, MLIR, OptimizeCommunicationOptions, ShardyPropagationOptions, CompileOptions
+    Reactant,
+    MLIR,
+    ADOptimizationOptions,
+    OptimizeCommunicationOptions,
+    ShardyPropagationOptions,
+    CompileOptions
 
 const BFLOAT16_COMPILE_TYPE = Ref{DataType}(Float32)
 const DEBUG_KERNEL = Ref{Bool}(false)
@@ -172,6 +177,26 @@ end
 # However, this errs as we cannot attach the transform with to the funcop itself [as we run a functionpass].
 const enzyme_pass::String = "enzyme{postpasses=\"arith-raise{stablehlo=true},canonicalize,cse,canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math,canonicalize,cse,canonicalize,arith-raise{stablehlo=true}\"}"
 
+# Optional AD optimizations which must run while high-level enzyme.fwddiff and
+# enzyme.autodiff operations still exist. Keep phase-specific construction here so that
+# future AD optimization families do not need to duplicate pass names across the
+# predefined pipelines in Compiler.jl.
+function ad_pre_enzyme_passes(options::ADOptimizationOptions)
+    passes = String[]
+    if options.diff_batch
+        # enzyme-diff-batch introduces enzyme.concat and enzyme.extract. Legalize those
+        # helpers before core Enzyme differentiation consumes the newly batched AD op.
+        push!(passes, "enzyme-diff-batch")
+        push!(passes, "enzyme-batch-to-stablehlo")
+    end
+    return passes
+end
+
+function ad_pre_enzyme_passes(enable_all::Bool)
+    options = ADOptimizationOptions(; diff_batch=enable_all)
+    return ad_pre_enzyme_passes(options)
+end
+
 function impulse_pass(;
     debug_dump::Bool=DEBUG_PROBPROG_DUMP_VALUE[],
     disable_optimizations::Bool=DEBUG_PROBPROG_DISABLE_OPT[],
@@ -285,6 +310,7 @@ end
 function __get_compile_options_and_kwargs(;
     compile_options::Union{Missing,CompileOptions}=missing,
     optimize::Union{Bool,Symbol,String}=true,
+    ad_optimization_passes::Union{Bool,ADOptimizationOptions}=false,
     no_nan::Bool=false,
     all_finite::Bool=false,
     inline::Bool=true,
@@ -312,6 +338,7 @@ function __get_compile_options_and_kwargs(;
         Reactant.__compile_options_from_kwargs(;
             compile_options,
             optimize,
+            ad_optimization_passes,
             no_nan,
             all_finite,
             inline,

@@ -18,7 +18,11 @@ import ..Reactant:
     TracedToConcrete,
     append_path,
     TracedType
-import Reactant: OptimizeCommunicationOptions, ShardyPropagationOptions, CompileOptions
+import Reactant:
+    ADOptimizationOptions,
+    OptimizeCommunicationOptions,
+    ShardyPropagationOptions,
+    CompileOptions
 using Reactant_jll: Reactant_jll
 
 include("Macros.jl")
@@ -365,6 +369,7 @@ function compile_mlir!(
     opt_passes2 = optimization_passes(
         compile_options; sroa=false, recognize_comms, lower_comms, backend, is_sharded
     )
+    ad_pre_enzyme_pipeline = ad_pre_enzyme_passes(compile_options.ad_optimization_passes)
 
     raise_passes = if raise isa String
         # Raising passes were specified
@@ -438,6 +443,7 @@ function compile_mlir!(
                         raise_passes,
                         "enzyme-batch",
                         opt_passes2,
+                        ad_pre_enzyme_pipeline...,
                         enzyme_pass,
                         opt_passes2,
                         "canonicalize",
@@ -454,6 +460,7 @@ function compile_mlir!(
                         opt_passes,
                         "enzyme-batch",
                         opt_passes2,
+                        ad_pre_enzyme_pipeline...,
                         enzyme_pass,
                         opt_passes2,
                         "canonicalize",
@@ -483,6 +490,7 @@ function compile_mlir!(
                         opt_passes,
                         "enzyme-batch",
                         opt_passes2,
+                        ad_pre_enzyme_pipeline...,
                         enzyme_pass,
                         opt_passes2,
                         "canonicalize",
@@ -508,6 +516,7 @@ function compile_mlir!(
                         raise_passes,
                         "enzyme-batch",
                         opt_passes2,
+                        ad_pre_enzyme_pipeline...,
                         enzyme_pass,
                         opt_passes2,
                         "canonicalize",
@@ -522,6 +531,7 @@ function compile_mlir!(
                         opt_passes,
                         "enzyme-batch",
                         opt_passes2,
+                        ad_pre_enzyme_pipeline...,
                         enzyme_pass,
                         opt_passes2,
                         "canonicalize",
@@ -549,6 +559,7 @@ function compile_mlir!(
                         opt_passes,
                         "enzyme-batch",
                         opt_passes2,
+                        ad_pre_enzyme_pipeline...,
                         enzyme_pass,
                         opt_passes2,
                         "canonicalize",
@@ -572,6 +583,7 @@ function compile_mlir!(
                     opt_passes,
                     "enzyme-batch",
                     opt_passes2,
+                    ad_pre_enzyme_pipeline...,
                     enzyme_pass,
                     opt_passes2,
                     "canonicalize",
@@ -599,6 +611,7 @@ function compile_mlir!(
                         impulse_pass(),
                         "lower-impulse-to-stablehlo{backend=$backend}",
                         "outline-enzyme-regions",
+                        ad_pre_enzyme_pipeline...,
                         enzyme_pass,
                         opt_passes2,
                         "canonicalize",
@@ -625,6 +638,7 @@ function compile_mlir!(
                         impulse_pass(),
                         "lower-impulse-to-stablehlo{backend=$backend}",
                         "outline-enzyme-regions",
+                        ad_pre_enzyme_pipeline...,
                         enzyme_pass,
                         opt_passes2,
                         "canonicalize",
@@ -656,6 +670,7 @@ function compile_mlir!(
                 [
                     "mark-func-memory-effects",
                     "enzyme-batch",
+                    ad_pre_enzyme_pipeline...,
                     enzyme_pass,
                     "canonicalize",
                     "remove-unnecessary-enzyme-ops",
@@ -672,6 +687,7 @@ function compile_mlir!(
                 [
                     "mark-func-memory-effects",
                     "enzyme-batch",
+                    ad_pre_enzyme_pipeline...,
                     enzyme_pass,
                     "canonicalize",
                     "remove-unnecessary-enzyme-ops",
@@ -693,6 +709,7 @@ function compile_mlir!(
                         kern,
                         raise_passes,
                         "enzyme-batch",
+                        ad_pre_enzyme_pipeline...,
                         enzyme_pass,
                         "canonicalize",
                         "remove-unnecessary-enzyme-ops",
@@ -706,6 +723,7 @@ function compile_mlir!(
                     [
                         "mark-func-memory-effects",
                         "enzyme-batch",
+                        ad_pre_enzyme_pipeline...,
                         enzyme_pass,
                         "canonicalize",
                         "remove-unnecessary-enzyme-ops",
@@ -734,6 +752,7 @@ function compile_mlir!(
                         raise_passes,
                         "enzyme-batch",
                         opt_passes2,
+                        ad_pre_enzyme_pipeline...,
                         enzyme_pass,
                         "canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math",
                         lower_enzymexla_passes,
@@ -745,6 +764,7 @@ function compile_mlir!(
                         opt_passes,
                         "enzyme-batch",
                         opt_passes2,
+                        ad_pre_enzyme_pipeline...,
                         enzyme_pass,
                         "canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math",
                         kern,
