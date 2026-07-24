@@ -15,7 +15,7 @@ function run_nuts_sz(
     num_samples::Int,
     strong_zero::Bool,
 )
-    samples, diagnostics, rng, _ = ProbProg.mcmc_logpdf(
+    samples, diagnostics, _, rng, _ = ProbProg.mcmc_logpdf(
         rng,
         logpdf_fn,
         initial_position;
