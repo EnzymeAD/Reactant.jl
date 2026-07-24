@@ -83,9 +83,43 @@ function ensure_proto_files_staged(; force::Bool=false)
         rm(staging_dir; force=true, recursive=true)
         mkpath(staging_dir)
         run(`tar -xf $tar_file -C $staging_dir`)
+        sanitize_proto_files(staging_dir)
     end
 
     return staging_dir
+end
+
+"""
+    sanitize_proto_files(staging_dir::String)
+
+Sanitize proto files in `staging_dir` to ensure compatibility with ProtoBuf.jl parser.
+Quote unquoted identifier names in `reserved` statements inside enums/messages.
+"""
+function sanitize_proto_files(staging_dir::String)
+    for (root, dirs, files) in walkdir(staging_dir)
+        for file in files
+            if endswith(file, ".proto")
+                path = joinpath(root, file)
+                content = read(path, String)
+                new_content = replace(content, r"(\breserved\s+)([A-Za-z_][A-Za-z0-9_,\s]*);" => function (m)
+                    prefix = match(r"^\breserved\s+", m).match
+                    names_str = m[length(prefix)+1:end-1]
+                    tokens = [strip(t) for t in split(names_str, ",")]
+                    quoted_tokens = map(tokens) do t
+                        if isempty(t) || startswith(t, "\"") || tryparse(Int, t) !== nothing || contains(t, " to ")
+                            t
+                        else
+                            "\"$t\""
+                        end
+                    end
+                    return prefix * join(quoted_tokens, ", ") * ";"
+                end)
+                if new_content != content
+                    write(path, new_content)
+                end
+            end
+        end
+    end
 end
 
 """
@@ -117,6 +151,7 @@ Generate Julia bindings from proto files using ProtoBuf.jl.
 """
 function generate_bindings(staging_dir::String, output_dir::String)
     mkpath(output_dir)
+    sanitize_proto_files(staging_dir)
 
     # Find all proto files
     all_proto_files = find_proto_files(staging_dir)
