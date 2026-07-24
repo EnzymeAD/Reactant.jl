@@ -117,6 +117,33 @@ end
     @test res[1] ≈ ones(2, 2)
 end
 
+jacobian_loss(x) = sum(abs2, x)
+jacobian_forward_scalar(x) = Enzyme.jacobian(Forward, jacobian_loss, x)
+jacobian_reverse_scalar(x) = Enzyme.jacobian(Reverse, jacobian_loss, x; n_outs=Val((1,)))
+jacobian_forward_multi_active(x, y) = Enzyme.jacobian(Forward, (a, b) -> sum(a .* b), x, y)
+jacobian_reverse_missing_nouts(x) = Enzyme.jacobian(Reverse, jacobian_loss, x)
+jacobian_forward_with_shadows(x) =
+    Enzyme.jacobian(Forward, jacobian_loss, x; shadows=(nothing,))
+
+@testset "Jacobian Lowering" begin
+    x = Reactant.to_rarray([2.0, 3.0])
+    y = Reactant.to_rarray([5.0, 7.0])
+
+    # TODO: Enable these numeric runtime checks after `enzyme.jacobian` is supported
+    # for export to XLA in the lowering pipeline.
+    @test (@jit jacobian_forward_scalar(x))[1] ≈ [4.0, 6.0] skip = true
+    @test (@jit jacobian_reverse_scalar(x))[1] ≈ [4.0, 6.0] skip = true
+
+    fwd_hlo = repr(@code_hlo optimize = false jacobian_forward_scalar(x))
+    rev_hlo = repr(@code_hlo optimize = false jacobian_reverse_scalar(x))
+    @test occursin("enzyme.jacobian", fwd_hlo)
+    @test occursin("enzyme.jacobian", rev_hlo)
+
+    @test_throws ErrorException @jit jacobian_forward_multi_active(x, y)
+    @test_throws ErrorException @jit jacobian_reverse_missing_nouts(x)
+    @test_throws ErrorException @jit jacobian_forward_with_shadows(x)
+end
+
 mutable struct StateReturn
     st::Any
 end
