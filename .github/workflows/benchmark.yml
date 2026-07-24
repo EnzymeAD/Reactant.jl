@@ -5,6 +5,7 @@ permissions:
   statuses: read
   deployments: write # deployments permission to deploy GitHub pages website
   pull-requests: write
+  issues: write
 
 on:
   schedule:
