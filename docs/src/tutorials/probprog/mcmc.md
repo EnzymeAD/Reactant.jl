@@ -163,7 +163,7 @@ Verify against a reference implementation for pathological problems.
 `Bool` matrix of shape `(num_samples ÷ thinning, 2)`. Column 1 is
 acceptance (HMC: MH acceptance; NUTS: always `true`). Column 2 is
 divergence (HMC: always `false`; NUTS: `true` if the transition
-diverged). `log_densities` is a rank-1 `Float64` tensor of length
+diverged). `log_densities` is a `Vector{Float64}` of length
 `num_samples ÷ thinning` holding the log density of each collected
 sample.
 
