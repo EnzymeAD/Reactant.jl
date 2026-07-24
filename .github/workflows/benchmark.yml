@@ -128,7 +128,8 @@ jobs:
         with:
           version: "1.11"
       - uses: julia-actions/cache@v3
-        gcp-bucket: ${{ contains(matrix.os, 'linux') && 'enzyme-ci-transient' || '' }}
+        with:
+          gcp-bucket: ${{ contains(matrix.os, 'linux') && 'enzyme-ci-transient' || '' }}
       - name: "Instantiate benchmarks environment"
         run: |
           julia --color=yes --project=benchmark/${{ matrix.suite }} -e 'using Pkg; Pkg.instantiate()'
