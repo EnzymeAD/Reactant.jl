@@ -192,7 +192,8 @@ end
     )
 end
 
-Base.convert(::Type{<:CuTracedRNumber{T}}, x::CuTracedRNumber{T}) where {T} = x
+Base.convert(::Type{<:CuTracedRNumber{Float32,1}}, x::CuTracedRNumber{Float32,1}) = x
+Base.convert(::Type{<:CuTracedRNumber{Float64,1}}, x::CuTracedRNumber{Float64,1}) = x
 
 Base.one(a::CuTracedRNumber) = one(a[])
 Base.one(::Type{<:CuTracedRNumber{T,A}}) where {T,A} = one(T)
