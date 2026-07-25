@@ -812,6 +812,8 @@ REACTANT_ABI int32_t ReactantCudaDriverGetVersion() {
 extern "C" {
 void __cudaRegisterLinkedBinary_28b8d6c6_20_separate_callback_cu_a85cd5ea_29231() {
 }
+void __cudaRegisterLinkedBinary_2ad96e6e_20_separate_callback_cu_5b16570f_9301() {
+}
 }
 #endif
 
