@@ -25,7 +25,7 @@ concurrency:
   
 jobs:
   test_hardware_sweep:
-    name: Hardware
+    name: test
     strategy:
       fail-fast: false
       matrix:
@@ -46,7 +46,7 @@ jobs:
       test_args: ${{ matrix.test_group == 'core' && 'core plugins' || matrix.test_group }}
 
   test_version_sweep:
-    name: Julia Version
+    name: test
     strategy:
       fail-fast: false
       matrix:
