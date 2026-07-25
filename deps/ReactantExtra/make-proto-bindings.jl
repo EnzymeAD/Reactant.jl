@@ -101,19 +101,25 @@ function sanitize_proto_files(staging_dir::String)
             if endswith(file, ".proto")
                 path = joinpath(root, file)
                 content = read(path, String)
-                new_content = replace(content, r"(\breserved\s+)([A-Za-z_][A-Za-z0-9_,\s]*);" => function (m)
-                    prefix = match(r"^\breserved\s+", m).match
-                    names_str = m[length(prefix)+1:end-1]
-                    tokens = [strip(t) for t in split(names_str, ",")]
-                    quoted_tokens = map(tokens) do t
-                        if isempty(t) || startswith(t, "\"") || tryparse(Int, t) !== nothing || contains(t, " to ")
-                            t
-                        else
-                            "\"$t\""
+                new_content = replace(
+                    content,
+                    r"(\breserved\s+)([A-Za-z_][A-Za-z0-9_,\s]*);" => function (m)
+                        prefix = match(r"^\breserved\s+", m).match
+                        names_str = m[(length(prefix) + 1):(end - 1)]
+                        tokens = [strip(t) for t in split(names_str, ",")]
+                        quoted_tokens = map(tokens) do t
+                            if isempty(t) ||
+                                startswith(t, "\"") ||
+                                tryparse(Int, t) !== nothing ||
+                                contains(t, " to ")
+                                t
+                            else
+                                "\"$t\""
+                            end
                         end
-                    end
-                    return prefix * join(quoted_tokens, ", ") * ";"
-                end)
+                        return prefix * join(quoted_tokens, ", ") * ";"
+                    end,
+                )
                 if new_content != content
                     write(path, new_content)
                 end
