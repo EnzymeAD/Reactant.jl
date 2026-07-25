@@ -22,47 +22,38 @@ concurrency:
   # Cancel intermediate builds: only if it is a pull request build.
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ startsWith(github.ref, 'refs/pull/') }}
-
+  
 jobs:
-  test:
+  test_hardware_sweep:
+    name: Hardware
     strategy:
       fail-fast: false
       matrix:
-        version:
-          - "1.10"
-          # - 'nightly'
+        version: ["1.10"]
         os:
           - ubuntu-24.04
-          # `ubuntu-22.04-arm` is considered more stable than `ubuntu-24.04-arm`:
-          # <https://github.com/orgs/community/discussions/148648#discussioncomment-12099554>.
           - ubuntu-22.04-arm
-          # Disable `macOS-13` until
-          # <https://github.com/EnzymeAD/Reactant.jl/issues/867> is resolved.
-          # - macOS-13
           - macOS-latest
           - windows-latest
           - linux-x86-ct6e-180-4tpu
-        test_group:
-          - core
-          - nn
-          - integration
-          - probprog
-        runtime:
-          - "pjrt"
-          - "ifrt"
-        include:
-          - os: ubuntu-24.04
-            version: "1.11"
-            runtime: pjrt
-          - os: ubuntu-24.04
-            version: "1.11"
-            runtime: ifrt
-          - os: ubuntu-24.04
-            version: "1.12"
-            runtime: pjrt
-          - os: ubuntu-24.04
-            version: "1.12"
-            runtime: ifrt
+        test_group: [core, nn, integration, probprog]
+        runtime: [pjrt, ifrt]
+    uses: ./.github/workflows/CommonCI.yml
+    with:
+      julia_version: ${{ matrix.version }}
+      os: ${{ matrix.os }}
+      runtime: ${{ matrix.runtime }}
+      test_args: ${{ matrix.test_group == 'core' && 'core plugins' || matrix.test_group }}
+
+  test_version_sweep:
+    name: Julia Version
+    strategy:
+      fail-fast: false
+      matrix:
+        version: ["1.11", "1.12"]
+        os: ["ubuntu-24.04"]
+        test_group: [core, nn, integration, probprog]
+        runtime: [pjrt, ifrt]
     uses: ./.github/workflows/CommonCI.yml
     with:
       julia_version: ${{ matrix.version }}
