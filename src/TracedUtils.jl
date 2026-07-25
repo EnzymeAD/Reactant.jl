@@ -1154,6 +1154,8 @@ scalar_arg(arg) = arg isa Base.RefValue || !(arg isa AbstractArray)
 flattenarg(arg) = ReactantCore.materialize_traced_array(vec(arg))
 flattenarg(arg::Ref) = RefFillVector(arg)
 
+scalar_seed_arg(arg) = @allowscalar flattenarg(arg)[1]
+
 function elem_apply_via_while_loop!(
     result, f, args::Vararg{Any,Nargs}; kwargs...
 ) where {Nargs}
@@ -1188,7 +1190,7 @@ function elem_apply_via_while_loop(f, args::Vararg{Any,Nargs}; kwargs...) where 
     out_size = isempty(non_ref_args) ? () : size(first(non_ref_args))
 
     # This wont be a mutating function so we can safely execute it once
-    scalar_seed_args = map(arg -> @allowscalar(flattenarg(arg)[1]), args)
+    scalar_seed_args = map(scalar_seed_arg, args)
     res_tmp = @allowscalar(f(scalar_seed_args...))
 
     # TODO: perhaps instead of this logic, we should have
