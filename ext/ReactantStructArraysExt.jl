@@ -83,12 +83,17 @@ function Base.copyto!(
     return copyto!(dest, res)
 end
 
+struct AllocSArr{B,D} <: Function
+    bc::B
+    dims::D
+end
+(asa::AllocSArr)(T) = alloc_sarr(asa.bc, T, asa.dims)
+
 function alloc_sarr(bc, T, dims=axes(bc))
     # Short circuit for Complex since in Reactant they are just a regular number
     T <: Complex && return similar(bc, T, dims)
-    asa = FT -> alloc_sarr(bc, FT, dims)
     if StructArrays.isnonemptystructtype(T)
-        return StructArrays.buildfromschema(asa, T)
+        return StructArrays.buildfromschema(AllocSArr(bc, dims), T)
     else
         return similar(bc, T, dims)
     end
