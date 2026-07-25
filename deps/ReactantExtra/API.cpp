@@ -806,12 +806,17 @@ REACTANT_ABI int32_t ReactantCudaDriverGetVersion() {
   return data;
 }
 
-#if CUDA_VERSION >= 13000
+#if CUDA_VERSION >= 13030
 // This stub satisfies the linker for cuFFT's RDC callback requirements
-// without requiring an nvcc device-link step.
+// without requiring an nvcc device-link step (for CUDA 13.3.0).
 extern "C" {
-void __cudaRegisterLinkedBinary_28b8d6c6_20_separate_callback_cu_a85cd5ea_29231() {
+void __cudaRegisterLinkedBinary_2ad96e6e_20_separate_callback_cu_5b16570f_9301() {}
 }
+#elif CUDA_VERSION >= 13000
+// This stub satisfies the linker for cuFFT's RDC callback requirements
+// without requiring an nvcc device-link step (for CUDA 13.1.1).
+extern "C" {
+void __cudaRegisterLinkedBinary_28b8d6c6_20_separate_callback_cu_a85cd5ea_29231() {}
 }
 #endif
 
