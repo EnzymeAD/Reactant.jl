@@ -306,7 +306,7 @@ if !isnothing(Sys.which("lld"))
 end
 
 if build_backend isa CUDABackend && build_backend.version.major == 12
-  push!(build_cmd_list, "--copt=-mcmodel=medium")
+  push!(build_cmd_list, "--linkopt=-Wl,--no-rosegment")
 end
 
 
