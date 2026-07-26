@@ -10,6 +10,33 @@ const ReactantCUDAExt = Base.get_extension(Reactant, :ReactantCUDAExt)
     @test Base.promote_type(TFT, FT) == FT
 end
 
+function clamp_kernel!(out, val, lo, hi)
+    @inbounds out[1] = clamp(val, lo, hi)
+    return nothing
+end
+
+function clamp!(out, val, lo, hi)
+    @cuda blocks = 1 threads = 1 clamp_kernel!(out, val, lo, hi)
+    return nothing
+end
+
+# `val`, `lo`, `hi` arrive as `CuTracedRNumber` inside the compiled kernel (like
+# `w::FT` in "Convert mul" above), so `clamp(val, lo, hi)` exercises the same
+# `Base.clamp` code path that failed to compile before the identity-`convert`
+# ambiguity was fixed.
+@testset "Clamp Kernel" begin
+    for FT in (Float32, Float64)
+        lo = Reactant.ConcreteRNumber(FT(1))
+        hi = Reactant.ConcreteRNumber(FT(3))
+        for (v, expected) in ((FT(0), FT(1)), (FT(2), FT(2)), (FT(5), FT(3)))
+            out = Reactant.to_rarray(zeros(FT, 1))
+            val = Reactant.ConcreteRNumber(v)
+            @jit clamp!(out, val, lo, hi)
+            @test Array(out)[1] ≈ expected
+        end
+    end
+end
+
 function square_kernel!(x, y)
     i = threadIdx().x
     x[i] *= y[i]
