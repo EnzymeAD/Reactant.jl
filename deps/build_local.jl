@@ -298,11 +298,18 @@ if cc_is_gcc
         end
     end
 else
-    # Assume the compiler is clang if not GCC. `using_clang` is an option
-    # introduced by Enzyme-JAX.
-    push!(build_cmd_list, "--define=using_clang=true")
     push!(build_cmd_list, "--copt=-Wno-unused-command-line-argument")
 end
+
+if !isnothing(Sys.which("lld"))
+  push!(build_cmd_list, "--linkopt=-fuse-ld=lld")
+end
+
+if build_backend isa CUDABackend && build_backend.version.major == 12
+  push!(build_cmd_list, "--copt=-mcmodel=medium")
+end
+
+
 push!(build_cmd_list, "--copt=-Wno-private-header")
 push!(build_cmd_list, "--color=$(parsed_args["color"])")
 push!(build_cmd_list, ":libReactantExtra.so")
