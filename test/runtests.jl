@@ -111,7 +111,9 @@ test_worker = custom_test_worker ? tpu_custom_worker_launcher : Returns(nothing)
         @testset "MPI" begin
             using MPI
             nranks = 2
-            run(`$(mpiexec()) -n $nranks $(Base.julia_cmd()) integration/mpi.jl`)
+            run(
+                `$(mpiexec()) -n $nranks $(Base.julia_cmd()) --project=$(Base.active_project()) $(joinpath(@__DIR__, "integration", "mpi.jl"))`,
+            )
         end
     end
 
