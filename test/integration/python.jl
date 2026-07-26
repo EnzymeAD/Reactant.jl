@@ -126,11 +126,7 @@ np.save(r"$out_path", res)
         @testset "Serialize with parameters" begin
             model_path = tempdir() * "/test_saved_model_2"
             Reactant.Serialization.export_as_tf_saved_model(
-                compiled_fn,
-                model_path,
-                v"1.8.5",
-                [1, "y.x"],
-                Dict("y.x" => y.x),
+                compiled_fn, model_path, v"1.8.5", [1, "y.x"], Dict("y.x" => y.x)
             )
 
             if Sys.isapple()
