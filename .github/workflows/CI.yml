@@ -61,6 +61,22 @@ jobs:
       runtime: ${{ matrix.runtime }}
       test_args: ${{ matrix.test_group == 'core' && 'core plugins' || matrix.test_group }}
 
+  test_winversion_sweep:
+    name: test
+    strategy:
+      fail-fast: false
+      matrix:
+        version: ["1.11", "1.12"]
+        os: ["windows-latest"]
+        test_group: [core, integration]
+        runtime: [pjrt]
+    uses: ./.github/workflows/CommonCI.yml
+    with:
+      julia_version: ${{ matrix.version }}
+      os: ${{ matrix.os }}
+      runtime: ${{ matrix.runtime }}
+      test_args: ${{ matrix.test_group == 'core' && 'core plugins' || matrix.test_group }}
+      
   # This has been broken for a while, originating from CUDA.jl
   # test-assertions:
   #   strategy:
