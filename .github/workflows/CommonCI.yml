@@ -88,11 +88,12 @@ jobs:
         if: ${{ ! inputs.assertions }}
         with:
           version: ${{ inputs.julia_version }}
-      - uses: julia-actions/cache@v3
+      - uses: julia-actions/cache@v3.2.0
         id: julia-cache
         with:
           cache-name: julia-cache;workflow=${{ inputs.julia_version }}-${{ inputs.os }}-${{ inputs.runtime }}-assertions=${{ inputs.assertions }}-${{ github.event_name }}-${{ inputs.test_args }}-${{ inputs.downgrade_testing }}-${{ inputs.localjll || inputs.enzymejax_commit != '' }}-${{ inputs.enzymejax_commit }}
           gcp-bucket: ${{ contains(inputs.os, 'linux') && 'enzyme-ci-transient' || '' }}
+          key-prefix: reactantjl/
 
       - uses: julia-actions/julia-downgrade-compat@v2
         if: ${{ inputs.downgrade_testing }}
