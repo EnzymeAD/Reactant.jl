@@ -305,10 +305,6 @@ if !isnothing(Sys.which("lld"))
   push!(build_cmd_list, "--linkopt=-fuse-ld=lld")
 end
 
-if build_backend isa CUDABackend && build_backend.version.major == 12
-  push!(build_cmd_list, "--linkopt=-Wl,--no-rosegment")
-end
-
 
 push!(build_cmd_list, "--copt=-Wno-private-header")
 push!(build_cmd_list, "--color=$(parsed_args["color"])")
