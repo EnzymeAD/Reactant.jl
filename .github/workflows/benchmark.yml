@@ -129,7 +129,6 @@ jobs:
           version: "1.11"
       - uses: julia-actions/cache@v3.2.0
         with:
-          cache-name: julia-cache;workflow={{ matrix.os }}-${{ matrix.suite }}
           gcp-bucket: ${{ contains(matrix.os, 'linux') && 'enzyme-ci-transient' || '' }}
           key-prefix: reactantjl_benchmark/
       - name: "Instantiate benchmarks environment"
