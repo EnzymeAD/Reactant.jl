@@ -166,7 +166,7 @@ function wrap(x, result=nothing)
     res[4:(3 + size(x, 1))] = x
     res[(3 + size(x, 1) + 1):end] = x[1:2]
     if result !== nothing
-        copyto!(@view(result[1:size(x, 1) + 2 + 3]), res)
+        copyto!(@view(result[1:(size(x, 1) + 2 + 3)]), res)
     else
         result = res
     end
@@ -187,19 +187,19 @@ end
 
             hlo = @code_xla shardy_passes = :to_mhlo_shardings wrap(rx, ry)
 
-	    @test @filecheck begin
-	        @check_not "all-to-all"
-	        @check_not "all-reduce"
-	        @check_count 2 "%collective-permute{{(-start)?[.0-9]*}} ="
-	        @check_not "%collective-permute{{(-start)?[.0-9]*}} ="
-	        @check_count 1 "%all-gather{{(-start)?[.0-9]*}} ="
-	        @check_not "%all-gather{{(-start)?[.0-9]*}} ="
+            @test @filecheck begin
+                @check_not "all-to-all"
+                @check_not "all-reduce"
+                @check_count 2 "%collective-permute{{(-start)?[.0-9]*}} ="
+                @check_not "%collective-permute{{(-start)?[.0-9]*}} ="
+                @check_count 1 "%all-gather{{(-start)?[.0-9]*}} ="
+                @check_not "%all-gather{{(-start)?[.0-9]*}} ="
 
-	        hlo
-	    end
-            
-	    rx2 = @jit shardy_passes = :to_mhlo_shardings wrap(rx, ry)
-            @test all(y .== convert(Array, ry)[1:(Size+2+3)])
+                hlo
+            end
+
+            rx2 = @jit shardy_passes = :to_mhlo_shardings wrap(rx, ry)
+            @test all(y .== convert(Array, ry)[1:(Size + 2 + 3)])
 
             x = reshape(collect(Int32, 1:Size), Size)
             rx = Reactant.to_rarray(x; sharding)

@@ -37,7 +37,6 @@ end
             @jit clamp!(out, val, lo, hi)
             @test Array(out)[1] ≈ expected
         end
-    end
     else
         @warn "Skipping Clamp Kernel test on TPU"
     end
