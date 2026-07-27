@@ -10,6 +10,17 @@ Oceananigans.defaults.FloatType = Float64
 
 include("../utils.jl")
 
+const ReactantCUDAExt = Base.get_extension(Reactant, :ReactantCUDAExt)
+using Adapt
+
+"""Adapt `Clock` for GPU."""
+Adapt.adapt_structure(to::ReactantCUDAExt.ReactantKernelAdaptor, clock::Oceananigans.TimeSteppers.Clock) =
+    (time          = Adapt.adapt(to, clock.time),
+     last_Δt       = Adapt.adapt(to, clock.last_Δt),
+     last_stage_Δt = Adapt.adapt(to, clock.last_stage_Δt),
+     iteration     = Adapt.adapt(to, clock.iteration),
+     stage         = Adapt.adapt(to, clock.stage))
+
 graph_directory = "run_abernathy_model_ad_spinup100_100steps/"
 
 # number of grid points
