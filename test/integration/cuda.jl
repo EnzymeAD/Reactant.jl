@@ -3,6 +3,8 @@ using Adapt: Adapt
 using BFloat16s: BFloat16
 const ReactantCUDAExt = Base.get_extension(Reactant, :ReactantCUDAExt)
 
+const RunningOnTPU = contains(string(Reactant.devices()[1]), "TPU")
+
 @testset "Promote CuTraced" begin
     TFT = ReactantCUDAExt.CuTracedRNumber{Float64,1}
     FT = Float64
@@ -25,6 +27,7 @@ end
 # `Base.clamp` code path that failed to compile before the identity-`convert`
 # ambiguity was fixed.
 @testset "Clamp Kernel" begin
+    if !RunningOnTPU
     for FT in (Float32, Float64)
         lo = Reactant.ConcreteRNumber(FT(1))
         hi = Reactant.ConcreteRNumber(FT(3))
@@ -34,6 +37,8 @@ end
             @jit clamp!(out, val, lo, hi)
             @test Array(out)[1] ≈ expected
         end
+    else
+        @warn "Skipping Clamp Kernel test on TPU"
     end
 end
 

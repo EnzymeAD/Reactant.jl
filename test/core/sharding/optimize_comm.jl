@@ -160,12 +160,17 @@ if length(addressable_devices) ≥ 8
     end
 end
 
-function wrap(x)
+function wrap(x, result=nothing)
     res = similar(x, size(x, 1) + 2 + 3)
     res[1:3] = x[(end - 2):end]
     res[4:(3 + size(x, 1))] = x
     res[(3 + size(x, 1) + 1):end] = x[1:2]
-    return res
+    if result !== nothing
+        copyto!(@view(result[1:(size(x, 1) + 2 + 3)]), res)
+    else
+        result = res
+    end
+    return result
 end
 
 @testset "Wrap Size" begin
@@ -177,36 +182,27 @@ end
 
             x = reshape(collect(Int32, 1:Size), Size)
             rx = Reactant.to_rarray(x; sharding)
+            Size2 = Size + 3 + 3
+            ry = Reactant.to_rarray(reshape(collect(Int32, 1:Size2), Size2); sharding)
 
-            hlo = @code_xla shardy_passes = :to_mhlo_shardings wrap(rx)
+            hlo = @code_xla shardy_passes = :to_mhlo_shardings wrap(rx, ry)
 
-            if RunningOnTPU
-                @test_broken @filecheck begin
-                    @check_not "all-to-all"
-                    @check_not "all-reduce"
-                    @check_count 2 "%collective-permute{{(-start)?[.0-9]*}} ="
-                    @check_not "%collective-permute{{(-start)?[.0-9]*}} ="
-                    @check_count 1 "%all-gather{{(-start)?[.0-9]*}} ="
-                    @check_not "%all-gather{{(-start)?[.0-9]*}} ="
+            @test @filecheck begin
+                @check_not "all-to-all"
+                @check_not "all-reduce"
+                @check_count 2 "%collective-permute{{(-start)?[.0-9]*}} ="
+                @check_not "%collective-permute{{(-start)?[.0-9]*}} ="
+                @check_count 1 "%all-gather{{(-start)?[.0-9]*}} ="
+                @check_not "%all-gather{{(-start)?[.0-9]*}} ="
 
-                    hlo
-                end
-            else
-                @test @filecheck begin
-                    @check_not "all-to-all"
-                    @check_not "all-reduce"
-                    @check_count 2 "%collective-permute{{(-start)?[.0-9]*}} ="
-                    @check_not "%collective-permute{{(-start)?[.0-9]*}} ="
-                    @check_count 1 "%all-gather{{(-start)?[.0-9]*}} ="
-                    @check_not "%all-gather{{(-start)?[.0-9]*}} ="
-
-                    hlo
-                end
+                hlo
             end
 
-            x2 = wrap(x)
-            rx2 = @jit shardy_passes = :to_mhlo_shardings wrap(rx)
-            @test all(x .== convert(Array, rx))
+            rx2 = @jit shardy_passes = :to_mhlo_shardings wrap(rx, ry)
+            @test all(y .== convert(Array, ry)[1:(Size + 2 + 3)])
+
+            x = reshape(collect(Int32, 1:Size), Size)
+            rx = Reactant.to_rarray(x; sharding)
         end
     end
 end
