@@ -267,12 +267,18 @@ end
 	    # GPU will fuse together into a single async collective
 	    if RunningOnGPU
 	       expected_collectives = 1
+	       if expected_allgathers != 0
+		   expected_allgathers = 1
+	       end
 	    end
 
             if Nallgathers != expected_allgathers || Ncollectives != expected_collectives
                 # for debugging print hlo
                 println(hlo)
             end
+
+	    @test Nallgathers == expected_allgathers
+	    @test Ncollectives == expected_collectives
 
             @test @filecheck begin
                 @check_not "all-to-all"
