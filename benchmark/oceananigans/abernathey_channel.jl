@@ -11,7 +11,7 @@ Oceananigans.defaults.FloatType = Float64
 include("../utils.jl")
 
 const ReactantCUDAExt = Base.get_extension(Reactant, :ReactantCUDAExt)
-using Oceananigans.Adapt
+using Adapt
 
 """Adapt `Clock` for GPU."""
 Adapt.adapt_structure(to::ReactantCUDAExt.ReactantKernelAdaptor, clock::Oceananigans.TimeSteppers.Clock) =
