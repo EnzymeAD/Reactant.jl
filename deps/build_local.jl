@@ -302,9 +302,8 @@ else
 end
 
 if !isnothing(Sys.which("lld"))
-  push!(build_cmd_list, "--linkopt=-fuse-ld=lld")
+    push!(build_cmd_list, "--linkopt=-fuse-ld=lld")
 end
-
 
 push!(build_cmd_list, "--copt=-Wno-private-header")
 push!(build_cmd_list, "--color=$(parsed_args["color"])")
