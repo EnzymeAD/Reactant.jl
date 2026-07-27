@@ -3,6 +3,7 @@ using Reactant, Test, FileCheck
 const addressable_devices = Reactant.addressable_devices()
 
 const RunningOnTPU = contains(string(Reactant.devices()[1]), "TPU")
+const RunningOnGPU = contains(string(Reactant.devices()[1]), "CUDA")
 
 function rotate(x)
     y = x[1:100, :]
@@ -262,6 +263,11 @@ end
 
             expected_allgathers = size2 == sz ? 0 : length(y)
             expected_collectives = mr == multirotate_both ? 2 : 1
+
+	    # GPU will fuse together into a single async collective
+	    if RunningOnGPU
+	       expected_collectives = 1
+	    end
 
             if Nallgathers != expected_allgathers || Ncollectives != expected_collectives
                 # for debugging print hlo
