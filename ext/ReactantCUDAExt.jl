@@ -1716,7 +1716,20 @@ end
         end
 
         @compile_workload begin
-            @static if Reactant.precompilation_supported() && VERSION != v"1.11.3"
+            # On Windows, Julia v1.11 cannot link the pkgimage this workload
+            # produces. Compiling a GPU kernel during precompilation leaves an
+            # unmarked reference to the `jl_boxed_uint8_cache` runtime global in
+            # the image, and since COFF has no import thunk for data, lld
+            # rejects it:
+            #     lld: error: undefined symbol: jl_boxed_uint8_cache
+            # ReactantCUDAExt then fails to precompile and never loads at all.
+            # Skipping the workload here only costs precompilation: any package
+            # compiling a GPU kernel in its own workload hits this too, so the
+            # actual fix has to come from Julia. Narrow the bound once a v1.11
+            # carrying that fix is released.
+            @static if Reactant.precompilation_supported() &&
+                VERSION != v"1.11.3" &&
+                !(Sys.iswindows() && v"1.11" <= VERSION < v"1.12")
                 function square_kernel!(x)
                     i = CUDA.threadIdx().x
                     x[i] *= x[i]
