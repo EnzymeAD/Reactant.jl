@@ -1,6 +1,11 @@
 name: Bazel files check
 
-on: [push]
+# NOT FOR MERGE: scoped to main on the win111-repro investigation branch so the
+# only jobs that run there are the Windows probes. Restore `on: [push]`.
+on:
+  push:
+    branches:
+      - main
 
 jobs:
   formatting-check:
