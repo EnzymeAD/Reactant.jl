@@ -1,7 +1,14 @@
 # direct execute with eg:
 # REACTANT_BACKEND_GROUP="cpu" mpiexecjl -n 2 julia --color=yes --project ../test/integration/mpi.jl
 
-using Test, MPI, Reactant
+using Test
+using MPI
+
+# NOTE: must load NCCL and CUDA before Reactant
+using NCCL
+using CUDA
+
+using Reactant
 
 const BACKEND_GROUP = lowercase(get(ENV, "REACTANT_BACKEND_GROUP", "auto"))
 const CPU_MPI_BACKENDS = ("auto", "cpu")
@@ -49,8 +56,6 @@ gpu_datatypes = [Int32, UInt32, Int64, UInt64, Float32, Float64]
 MPI.Init()
 
 if RUN_GPU_MPI_TESTS
-    @eval using CUDA
-    @eval using NCCL
     ReactantNCCLExt = Base.get_extension(Reactant, :ReactantNCCLExt)
     ReactantNCCLExt === nothing &&
         error("ReactantNCCLExt is not loaded; load NCCL and MPI first")
@@ -124,7 +129,7 @@ end
                 @test expected ==
                     @jit MPI.Allreduce(ConcreteRArray(sendbuf), op, MPI.COMM_WORLD)
 
-                # debug
+                # # *debug*
                 # rank = MPI.Comm_rank(comm)
                 # rank==0 && println("")
                 # rank==0 && println("datatype=$T, op=$opname, $(expected == @jit MPI.Allreduce(ConcreteRArray(sendbuf), op, MPI.COMM_WORLD))")
@@ -156,6 +161,12 @@ end
                         result = @jit sync=true MPI.Allreduce!(
                             rsendbuf, rrecvbuf, op, comm
                         )
+
+                        # # *debug*
+                        # println("""MPI rank $(rank) 
+                        #            sendbuf = $(sendbuf) 
+                        #            result = $(Array(result)) 
+                        #            rrecvbuf = $(Array(rrecvbuf))""")
 
                         @test Array(result) == expected
                         @test Array(rrecvbuf) == expected
