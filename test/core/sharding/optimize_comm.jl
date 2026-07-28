@@ -210,7 +210,7 @@ end
                 end
             end
 
-	    y = wrap(x)
+            y = wrap(x)
 
             rx2 = @jit shardy_passes = :to_mhlo_shardings wrap(rx, ry)
             @test all(y .== convert(Array, ry)[1:(Size + 2 + 3)])
@@ -276,21 +276,21 @@ end
             expected_allgathers = size2 == sz ? 0 : length(y)
             expected_collectives = mr == multirotate_both ? 2 : 1
 
-	    # GPU will fuse together into a single async collective
-	    if RunningOnGPU
-	       expected_collectives = 1
-	       if expected_allgathers != 0
-		   expected_allgathers = 1
-	       end
-	    end
+            # GPU will fuse together into a single async collective
+            if RunningOnGPU
+                expected_collectives = 1
+                if expected_allgathers != 0
+                    expected_allgathers = 1
+                end
+            end
 
             if Nallgathers != expected_allgathers || Ncollectives != expected_collectives
                 # for debugging print hlo
                 println(hlo)
             end
 
-	    @test Nallgathers == expected_allgathers
-	    @test Ncollectives == expected_collectives
+            @test Nallgathers == expected_allgathers
+            @test Ncollectives == expected_collectives
 
             @test @filecheck begin
                 @check_not "all-to-all"
