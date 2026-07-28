@@ -13,11 +13,13 @@ if (
     "integration" ∈ parsed_args.positionals ||
     "integration/enzymejax" ∈ parsed_args.positionals
 )
-    CondaPkg.add_pip("jax"; version="==0.5")
-    try
-        CondaPkg.add_pip("enzyme_ad"; version=">=0.0.9")
-        ENZYMEJAX_INSTALLED[] = true
-    catch
+    CondaPkg.add_pip("jax"; version=">=0.9")
+    if !Sys.iswindows() && !(Sys.isapple() && Sys.ARCH === :x86_64)
+        try
+            CondaPkg.add_pip("enzyme_ad"; version=">=0.0.15")
+            ENZYMEJAX_INSTALLED[] = true
+        catch
+        end
     end
 end
 
@@ -27,7 +29,7 @@ if (
     "integration/numpyro" ∈ parsed_args.positionals
 )
     try
-        CondaPkg.add_pip("numpyro")
+        CondaPkg.add_pip("numpyro"; version=">=0.21")
         NUMPYRO_INSTALLED[] = true
     catch
     end
@@ -43,6 +45,9 @@ delete!(testsuite, "plugins/metal") # Currently completely non functional
 
 if Sys.isapple()
     delete!(testsuite, "core/custom_number_types")
+end
+
+if Sys.iswindows() || (Sys.isapple() && Sys.ARCH === :x86_64)
     delete!(testsuite, "integration/enzymejax")
 end
 
@@ -111,7 +116,9 @@ test_worker = custom_test_worker ? tpu_custom_worker_launcher : Returns(nothing)
         @testset "MPI" begin
             using MPI
             nranks = 2
-            run(`$(mpiexec()) -n $nranks $(Base.julia_cmd()) integration/mpi.jl`)
+            run(
+                `$(mpiexec()) -n $nranks $(Base.julia_cmd()) --project=$(Base.active_project()) $(joinpath(@__DIR__, "integration", "mpi.jl"))`,
+            )
         end
     end
 
