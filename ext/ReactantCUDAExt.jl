@@ -1725,11 +1725,12 @@ end
             # ReactantCUDAExt then fails to precompile and never loads at all.
             # Skipping the workload here only costs precompilation: any package
             # compiling a GPU kernel in its own workload hits this too, so the
-            # actual fix has to come from Julia. Narrow the bound once a v1.11
-            # carrying that fix is released.
+            # actual fix has to come from Julia. The upper bound assumes that
+            # fix ships in the next v1.11 patch release, so that precompilation
+            # resumes on its own; raise it if it slips.
             @static if Reactant.precompilation_supported() &&
                 VERSION != v"1.11.3" &&
-                !(Sys.iswindows() && v"1.11" <= VERSION < v"1.12")
+                !(Sys.iswindows() && v"1.11" <= VERSION <= v"1.11.9")
                 function square_kernel!(x)
                     i = CUDA.threadIdx().x
                     x[i] *= x[i]
