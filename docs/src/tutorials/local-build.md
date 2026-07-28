@@ -13,7 +13,7 @@ In the `deps/` subdirectory of the Reactant repository there is a script to do l
   Binutils `ld` won't work, don't even try using it.
   You can obtain `mold` for your platform from the [latest `rui314/mold` release](https://github.com/rui314/mold/releases/latest) and put the executable in `PATH` with name `ld.mold`.
 
-On MacOS the latter two requirements can be installed with `brew install bazelisk lld`.
+On macOS the latter two requirements can be installed with `brew install bazelisk lld`.
 
 ## Building
 
