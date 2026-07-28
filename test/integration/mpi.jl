@@ -15,6 +15,8 @@ const CPU_MPI_BACKENDS = ("auto", "cpu")
 const GPU_MPI_BACKENDS = ("cuda", "gpu")
 const RUN_CPU_MPI_TESTS = BACKEND_GROUP in CPU_MPI_BACKENDS
 const RUN_GPU_MPI_TESTS = BACKEND_GROUP in GPU_MPI_BACKENDS
+const ReactantNCCLExt = RUN_GPU_MPI_TESTS ?
+                         Base.get_extension(Reactant, :ReactantNCCLExt) : nothing
 
 if RUN_CPU_MPI_TESTS
     Reactant.set_default_backend("cpu")
@@ -50,13 +52,12 @@ datatypes = [
     Bool,
 ]
 
-# NCCL-backed MPI lowering currently supports this narrower Allreduce surface.
+# NCCL-backed datatypes
 gpu_datatypes = [Int32, UInt32, Int64, UInt64, Float32, Float64]
 
 MPI.Init()
 
 if RUN_GPU_MPI_TESTS
-    ReactantNCCLExt = Base.get_extension(Reactant, :ReactantNCCLExt)
     ReactantNCCLExt === nothing &&
         error("ReactantNCCLExt is not loaded; load NCCL and MPI first")
     ReactantNCCLExt.init_default_comm(; comm=MPI.COMM_WORLD)
@@ -64,28 +65,29 @@ end
 
 try
 
-@testset "Comm_rank" begin
-    if RUN_CPU_MPI_TESTS
+if RUN_CPU_MPI_TESTS
+    @testset "Comm_rank" begin
         comm = MPI.COMM_WORLD
         expected = MPI.Comm_rank(comm)
         @test expected == @jit MPI.Comm_rank(comm)
-    elseif RUN_GPU_MPI_TESTS
-        @info "Skipping GPU MPI Comm_rank tests; Not implemented"
     end
+elseif RUN_GPU_MPI_TESTS
+    @info "Skipping GPU MPI Comm_rank tests; Not implemented"
 end
 
-@testset "Comm_size" begin
-    if RUN_CPU_MPI_TESTS
+if RUN_CPU_MPI_TESTS
+    @testset "Comm_size" begin
         comm = MPI.COMM_WORLD
         expected = MPI.Comm_size(comm)
         @test expected == @jit MPI.Comm_size(comm)
-    elseif RUN_GPU_MPI_TESTS
-        @info "Skipping GPU MPI Comm_size tests; Not implemented"
     end
+elseif RUN_GPU_MPI_TESTS
+    @info "Skipping GPU MPI Comm_size tests; Not implemented"
 end
 
 @testset "Allreduce" begin
     if RUN_CPU_MPI_TESTS
+
         operations = [
             ("OP_NULL", MPI.OP_NULL),
             ("BAND", MPI.BAND),
@@ -138,7 +140,10 @@ end
                 # rank==0 && println("")
             end
         end
+
     elseif RUN_GPU_MPI_TESTS
+
+        # nccl-backed allreduce operations
         gpu_operations = [
             ("MAX", MPI.MAX),
             ("MIN", MPI.MIN),
@@ -174,11 +179,12 @@ end
                 end
             end
         end
+
     end
 end
 
-@testset "Barrier" begin
-    if RUN_CPU_MPI_TESTS
+if RUN_CPU_MPI_TESTS
+    @testset "Barrier" begin
         @testset "Single Barrier" begin
             comm = MPI.COMM_WORLD
             ret = @jit MPI.Barrier(comm)
@@ -191,13 +197,13 @@ end
                 @test_nowarn @jit MPI.Barrier(comm)
             end
         end
-    elseif RUN_GPU_MPI_TESTS
-        @info "Skipping GPU MPI Barrier tests; Not implemented"
     end
+elseif RUN_GPU_MPI_TESTS
+    @info "Skipping GPU MPI Barrier tests; Not implemented"
 end
 
-@testset "Send / Recv!" begin
-    if RUN_CPU_MPI_TESTS
+if RUN_CPU_MPI_TESTS
+    @testset "Send / Recv!" begin
         comm = MPI.COMM_WORLD
         rank = MPI.Comm_rank(comm)
 
@@ -266,13 +272,13 @@ end
                 rank == 1 && @test recv_buf == send_buf
             end
         end
-    elseif RUN_GPU_MPI_TESTS
-        @info "Skipping GPU MPI Send / Recv! tests; Not implemented"
     end
+elseif RUN_GPU_MPI_TESTS
+    @info "Skipping GPU MPI Send / Recv! tests; Not implemented"
 end
 
-@testset "Isend / Irecv! / Wait" begin
-    if RUN_CPU_MPI_TESTS
+if RUN_CPU_MPI_TESTS
+    @testset "Isend / Irecv! / Wait" begin
         comm = MPI.COMM_WORLD
         rank = MPI.Comm_rank(comm)
 
@@ -299,13 +305,13 @@ end
             @jit isendirecvwait(send_buf, recv_buf, rank, tag, comm)
             rank == 1 && @test recv_buf == send_buf
         end
-    elseif RUN_GPU_MPI_TESTS
-        @info "Skipping GPU MPI Isend / Irecv! / Wait tests; Not implemented"
     end
+elseif RUN_GPU_MPI_TESTS
+    @info "Skipping GPU MPI Isend / Irecv! / Wait tests; Not implemented"
 end
 
-@testset "Isend / Irecv! / Waitall" begin
-    if RUN_CPU_MPI_TESTS
+if RUN_CPU_MPI_TESTS
+    @testset "Isend / Irecv! / Waitall" begin
         comm = MPI.COMM_WORLD
         rank = MPI.Comm_rank(comm)
         tag = 42
@@ -356,13 +362,13 @@ end
 
             @test recv_buf == send_buf
         end
-    elseif RUN_GPU_MPI_TESTS
-        @info "Skipping GPU MPI Isend / Irecv! / Waitall tests; Not implemented"
     end
+elseif RUN_GPU_MPI_TESTS
+    @info "Skipping GPU MPI Isend / Irecv! / Waitall tests; Not implemented"
 end
 
-@testset "Bcast!" begin
-    if RUN_CPU_MPI_TESTS
+if RUN_CPU_MPI_TESTS
+    @testset "Bcast!" begin
         comm = MPI.COMM_WORLD
         rank = MPI.Comm_rank(comm)
         root = 0
@@ -386,14 +392,13 @@ end
                 @test expected == @jit MPI.Bcast!(ConcreteRArray(x), root, comm)
             end
         end
-    elseif RUN_GPU_MPI_TESTS
-        @info "Skipping GPU MPI Bcast! tests; Not implemented"
     end
+elseif RUN_GPU_MPI_TESTS
+    @info "Skipping GPU MPI Bcast! tests; Not implemented"
 end
 
 finally
     if RUN_GPU_MPI_TESTS
-        ReactantNCCLExt = Base.get_extension(Reactant, :ReactantNCCLExt)
         ReactantNCCLExt.destroy_default_comm()
     end
     MPI.Finalize()
