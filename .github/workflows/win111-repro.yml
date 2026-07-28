@@ -1,14 +1,19 @@
-# Throwaway investigation workflow: find *why* the ReactantCUDAExt pkgimage
-# fails to link on Windows + Julia 1.11.
+# Throwaway investigation workflow: Windows + Julia 1.11 pkgimage link failure
 #
 #   lld: error: undefined symbol: jl_boxed_uint8_cache
 #   >>> referenced by jl_XXXX.tmp(text#0.o):(.refptr.jl_boxed_uint8_cache)
 #
-# Round 1 established that the precompile flags are irrelevant (a plain load
-# reproduces) and that the ReactantCUDAExt @compile_workload is the source.
-# Round 2 captures the pkgimage archive before lld sees it, so the emitting
-# function can be identified rather than guessed -- disabling the workload is a
-# workaround, but any package precompiling GPU kernels could hit the same bug.
+# Round 1: precompile flags are irrelevant; the ReactantCUDAExt
+#          @compile_workload is the source.
+# Round 2: captured the pkgimage. In one object, `jl_boxed_int8_cache` is
+#          dllimport'd (__imp_) while its sibling `jl_boxed_uint8_cache` --
+#          emitted by the *same* line of Julia codegen -- is not. Julia applies
+#          DLLImport in JuliaVariable::realize only when the module triple is
+#          Windows, and returns early if the name already exists, so one
+#          realization in a non-Windows-triple module poisons the whole
+#          merged pkgimage.
+# Round 3 (this): is the non-Windows triple GPUCompiler's, and is the bug
+#          generic to any package that precompiles a GPU kernel compilation?
 #
 # NOT FOR MERGE.
 name: win111 repro
@@ -24,10 +29,27 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  dissect:
-    name: dissect
+  probe:
+    name: "probe (${{ matrix.label }})"
     runs-on: windows-latest
     timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Keep the Reactant tracing, drop only the @cuda call, so the
+          # workload no longer invokes GPUCompiler. If this loads cleanly the
+          # GPU compilation is what introduces the bad reference.
+          - label: no-cuda-call
+            patch: no-cuda-call
+          # Disable the extension's own workload so it links, then have a
+          # *separate* package run the same GPU compile in its own
+          # @compile_workload. If that package's pkgimage fails too, any user
+          # package doing GPU work hits this -- gating the extension is not a
+          # real fix.
+          - label: user-package
+            patch: user-package
+
     steps:
       - uses: actions/checkout@v7
 
@@ -35,7 +57,21 @@ jobs:
         with:
           version: "1.11"
 
-      # No julia-actions/cache: a restored pkgimage would hide the failure.
+      - name: "Patch: drop the @cuda call from the workload"
+        if: ${{ matrix.patch == 'no-cuda-call' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          sed -i 's/CUDA.@cuda blocks = 1 threads = length(x) square_kernel!(x)/x[1] = x[1] * x[1]/' ext/ReactantCUDAExt.jl
+          grep -n "x\[1\] = x\[1\] \* x\[1\]" ext/ReactantCUDAExt.jl
+
+      - name: "Patch: disable the extension workload (user-package case)"
+        if: ${{ matrix.patch == 'user-package' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          sed -i 's/@static if Reactant.precompilation_supported() && VERSION != v"1.11.3"/@static if false/' ext/ReactantCUDAExt.jl
+          grep -n "@static if false" ext/ReactantCUDAExt.jl
 
       - name: "Install dependencies"
         shell: bash
@@ -47,57 +83,92 @@ jobs:
           julia --color=yes --project=. -e 'import Pkg; Pkg.Registry.update(); Pkg.instantiate()'
           julia --color=yes --project=test -e 'import Pkg; Pkg.instantiate()'
 
-      # Precompile everything else first, so the capture pass only has to
-      # rebuild ReactantCUDAExt (which fails, and so is retried every load).
-      - name: "Warm up (everything except the failing extension)"
+      - name: "Create the user package"
+        if: ${{ matrix.patch == 'user-package' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p UserGPUPkg/src
+          cat > UserGPUPkg/Project.toml <<'TOML'
+          name = "UserGPUPkg"
+          uuid = "aa11bb22-cc33-dd44-ee55-ff6677889900"
+          version = "0.1.0"
+
+          [deps]
+          CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
+          PrecompileTools = "aea7be01-6a6a-4083-8856-8a6e6704d82a"
+          Reactant = "3c362404-f566-11ee-1572-e11a4b42c853"
+          TOML
+          cat > UserGPUPkg/src/UserGPUPkg.jl <<'JL'
+          module UserGPUPkg
+
+          using CUDA
+          using Reactant
+          using PrecompileTools: @setup_workload, @compile_workload
+
+          function square_kernel!(x)
+              i = CUDA.threadIdx().x
+              x[i] *= x[i]
+              return nothing
+          end
+
+          function square!(x)
+              CUDA.@cuda blocks = 1 threads = length(x) square_kernel!(x)
+              return nothing
+          end
+
+          @setup_workload begin
+              @compile_workload begin
+                  try
+                      y = Reactant.ConcreteRArray([2.0])
+                      Reactant.@code_hlo optimize = false square!(y)
+                  catch err
+                      @info "workload raised (expected without a GPU)" err
+                  end
+              end
+          end
+
+          end
+          JL
+
+      - name: "Probe"
         shell: bash
         timeout-minutes: 60
         run: |
-          julia --color=yes --project=test .github/win111_probe.jl || true
-
-      - name: "Capture pkgimage archive"
-        shell: bash
-        timeout-minutes: 30
-        env:
-          PKGIMG_CAPTURE_DIR: capture
-        run: |
           set -o pipefail
-          julia --color=yes --project=test .github/win111_dissect.jl 2>&1 | tee dissect.log || true
-          echo "=== captured ==="
-          ls -la capture/ || true
+          if [[ "${{ matrix.patch }}" == "user-package" ]]; then
+            julia --color=yes --project=test -e 'import Pkg; Pkg.develop(path="UserGPUPkg")' || true
+            julia --color=yes --project=test -e '
+              using Reactant, CUDA
+              ext = Base.get_extension(Reactant, :ReactantCUDAExt)
+              println("== ReactantCUDAExt = ", ext)
+              println(ext === nothing ? "EXT: REPRODUCED" : "EXT: OK")
+              ok = try
+                  @eval using UserGPUPkg
+                  true
+              catch err
+                  println("== UserGPUPkg failed to load: ", err)
+                  false
+              end
+              println(ok ? "RESULT: OK -- user package precompiled" :
+                           "RESULT: REPRODUCED -- user package failed")' 2>&1 | tee probe.log || true
+          else
+            julia --color=yes --project=test .github/win111_probe.jl 2>&1 | tee probe.log || true
+          fi
 
-      # Immediate answer in the log; the artifact allows deeper offline work.
-      - name: "Locate the reference"
+      - name: "Summarize"
         if: always()
         shell: bash
         run: |
-          LLVM="/c/Program Files/LLVM/bin"
-          echo "llvm-objdump: $("$LLVM/llvm-objdump" --version 2>&1 | head -2 || echo MISSING)"
-          mkdir -p dis
-          for a in capture/*.a; do
-            [ -e "$a" ] || continue
-            echo "##### archive $a"
-            "$LLVM/llvm-ar" t "$a" || continue
-            ( cd dis && "$LLVM/llvm-ar" x "../$a" ) || continue
-            for m in dis/*; do
-              [ -f "$m" ] || continue
-              if "$LLVM/llvm-objdump" -r "$m" 2>/dev/null | grep -q "jl_boxed_uint8_cache"; then
-                echo "##### FOUND jl_boxed_uint8_cache relocation in $m"
-                # Disassemble with relocations and show the enclosing symbol.
-                "$LLVM/llvm-objdump" -d -r "$m" > "$m.dis" 2>/dev/null || true
-                grep -n -B 60 "jl_boxed_uint8_cache" "$m.dis" \
-                  | grep -E "^[0-9]+-[0-9a-f]{16} <|jl_boxed_uint8_cache" \
-                  | tail -40
-              fi
-            done
-            rm -rf dis; mkdir -p dis
-          done
+          [[ -f probe.log ]] || { echo "no probe.log"; exit 0; }
+          RESULT="$(grep -m1 '^RESULT:' probe.log || echo 'RESULT: UNKNOWN')"
+          if grep -q 'jl_boxed_uint8_cache' probe.log; then LLD=yes; else LLD=no; fi
+          echo "$RESULT (jl_boxed_uint8_cache: $LLD)"
+          echo "| ${{ matrix.label }} | $RESULT | lld ref: $LLD |" >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: pkgimage-capture
-          path: |
-            capture/
-            dissect.log
+          name: "probe-${{ matrix.label }}"
+          path: probe.log
           retention-days: 14
