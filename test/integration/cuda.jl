@@ -28,16 +28,16 @@ end
 # ambiguity was fixed.
 @testset "Clamp Kernel" begin
     if !RunningOnTPU
-	    for FT in (Float32, Float64)
-		lo = Reactant.ConcreteRNumber(FT(1))
-		hi = Reactant.ConcreteRNumber(FT(3))
-		for (v, expected) in ((FT(0), FT(1)), (FT(2), FT(2)), (FT(5), FT(3)))
-		    out = Reactant.to_rarray(zeros(FT, 1))
-		    val = Reactant.ConcreteRNumber(v)
-		    @jit clamp!(out, val, lo, hi)
-		    @test Array(out)[1] ≈ expected
-		end
-	end
+        for FT in (Float32, Float64)
+            lo = Reactant.ConcreteRNumber(FT(1))
+            hi = Reactant.ConcreteRNumber(FT(3))
+            for (v, expected) in ((FT(0), FT(1)), (FT(2), FT(2)), (FT(5), FT(3)))
+                out = Reactant.to_rarray(zeros(FT, 1))
+                val = Reactant.ConcreteRNumber(v)
+                @jit clamp!(out, val, lo, hi)
+                @test Array(out)[1] ≈ expected
+            end
+        end
     else
         @warn "Skipping Clamp Kernel test on TPU"
     end
