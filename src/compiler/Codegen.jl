@@ -715,7 +715,11 @@ function assert_mismatched_sharding(
     hlo_sharding_from_executable::Reactant.XLA.HloSharding,
     _size_x,
 )
-    @assert hlo_sharding_from_executable == hlo_sharding_from_input "Sharding provided by the user ($(string(hlo_sharding_from_input))) does not match the sharding computed by XLA ($(string(hlo_sharding_from_executable))). This generally means that Reactant.jl made an error in generating the executable. Please open an issue with the error message and an MWE."
+    # The metadata is ignored on purpose: XLA attaches things like the shardy reduction op
+    # to the sharding it computes, which doesn't change how the data is laid out.
+    @assert Reactant.XLA.isequal_ignoring_metadata(
+        hlo_sharding_from_executable, hlo_sharding_from_input
+    ) "Sharding provided by the user ($(string(hlo_sharding_from_input))) does not match the sharding computed by XLA ($(string(hlo_sharding_from_executable))). This generally means that Reactant.jl made an error in generating the executable. Please open an issue with the error message and an MWE."
 end
 
 """

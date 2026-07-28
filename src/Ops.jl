@@ -355,7 +355,7 @@ function _fill_element_attr(x::Complex)
 end
 
 @noinline function concatenate(
-    inputs::Vector{TracedRArray{T,N}},
+    inputs::Vector{<:TracedRArray{T,N}},
     dimension::Int;
     location=mlir_stacktrace("fill", @__FILE__, @__LINE__),
 ) where {T,N}
@@ -869,7 +869,7 @@ end
 end
 
 function bitcast_convert(
-    ::Type{TracedRArray{U,N}},
+    ::Type{<:TracedRArray{U,N}},
     x::TracedRArray{T,N};
     location=mlir_stacktrace("bitcast_convert", @__FILE__, @__LINE__),
 ) where {T,U,N}
@@ -1738,7 +1738,7 @@ end
 end
 
 @noinline function rng_bit_generator(
-    ::Type{TracedRNumber{T}}, seed::TracedRArray{UInt64,1}, shape; kwargs...
+    ::Type{<:TracedRNumber{T}}, seed::TracedRArray{UInt64,1}, shape; kwargs...
 ) where {T}
     return rng_bit_generator(T, seed, shape; kwargs...)
 end
@@ -1798,7 +1798,7 @@ end
 end
 
 @noinline function randn(
-    ::Type{TracedRNumber{T}}, seed::TracedRArray{UInt64,1}, shape; kwargs...
+    ::Type{<:TracedRNumber{T}}, seed::TracedRArray{UInt64,1}, shape; kwargs...
 ) where {T}
     return randn(T, seed, shape; kwargs...)
 end
@@ -1841,7 +1841,7 @@ distribution with rate 1. Returns a NamedTuple with the following fields:
 end
 
 @noinline function randexp(
-    ::Type{TracedRNumber{T}}, seed::TracedRArray{UInt64,1}, shape; kwargs...
+    ::Type{<:TracedRNumber{T}}, seed::TracedRArray{UInt64,1}, shape; kwargs...
 ) where {T}
     return randexp(T, seed, shape; kwargs...)
 end
@@ -1923,7 +1923,7 @@ end
 
 # eltype conversion
 @noinline function convert(
-    ::Type{TracedRArray{T,N}},
+    ::Type{<:TracedRArray{T,N}},
     x::TracedRArray;
     location=mlir_stacktrace("convert", @__FILE__, @__LINE__),
 ) where {T,N}
@@ -1940,7 +1940,7 @@ end
 end
 
 @noinline function convert(
-    ::Type{TracedRNumber{T}},
+    ::Type{<:TracedRNumber{T}},
     x::TracedRNumber;
     location=mlir_stacktrace("convert", @__FILE__, @__LINE__),
 ) where {T}
@@ -2166,7 +2166,7 @@ end
 
 @noinline function scatter(
     f::F,
-    dest::Vector{TracedRArray{T,N}},
+    dest::Vector{<:TracedRArray{T,N}},
     scatter_indices::TracedRArray{Int64},
     updates::Vector{<:TracedRArray{T}};
     location=mlir_stacktrace("scatter", @__FILE__, @__LINE__),
@@ -2195,7 +2195,7 @@ end
 end
 
 @noinline function scatter(
-    dest::Vector{TracedRArray{T,N}},
+    dest::Vector{<:TracedRArray{T,N}},
     scatter_indices::TracedRArray{TI},
     updates::Vector{<:TracedRArray{T}};
     update_computation::MLIR.IR.Region,
@@ -3967,8 +3967,8 @@ end
 
 @noinline function reduce_window(
     f::F,
-    inputs::Vector{TracedRArray{T,N}},
-    init_values::Vector{TracedRNumber{T}};
+    inputs::Vector{<:TracedRArray{T,N}},
+    init_values::Vector{<:TracedRNumber{T}};
     window_dimensions::Vector{Int},
     window_strides::Vector{Int},
     base_dilations::Vector{Int},

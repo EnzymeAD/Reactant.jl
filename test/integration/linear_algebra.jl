@@ -546,3 +546,16 @@ diagonal_3_arg_mul(x, y) = y' * Diagonal(x) * y
 
     @test @jit(diagonal_3_arg_mul(x_ra, y_ra)) ≈ diagonal_3_arg_mul(x, y)
 end
+
+@testset "Triangular solve with captured concrete RHS" begin
+    M = collect(reshape(1.0:9.0, 3, 3)) + 10.0 * I
+    b = [1.0, 2.0, 3.0]
+    M_ra = Reactant.to_rarray(M)
+    b_ra = Reactant.to_rarray(b)
+    # `b_ra` is captured (concrete); the solve allocates its output via
+    # `similar(b_ra, <traced eltype>, ...)`, which must yield a traced array
+    # rather than hit `primitive_type` on the wrapped element type.
+    @test Array(@jit((m -> UpperTriangular(m) \ b_ra)(M_ra))) ≈ UpperTriangular(M) \ b
+    @test Array(@jit(((m, v) -> LowerTriangular(m) \ v)(M_ra, b_ra))) ≈
+        LowerTriangular(M) \ b
+end

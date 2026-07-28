@@ -23,7 +23,7 @@ Base.strides(x::TracedRArray) = Base.size_to_strides(1, size(x)...)
 
 Base.IndexStyle(::Type{<:TracedRArray}) = Base.IndexLinear()
 
-Base.elsize(::Type{TracedRArray{T,N}}) where {T,N} = sizeof(T)
+Base.elsize(::Type{<:TracedRArray{T,N}}) where {T,N} = sizeof(T)
 
 # This is required otherwise we will copy a tracedrarray each time
 # we use it
@@ -289,7 +289,7 @@ function Base.similar(
 end
 
 function Base.similar(
-    ::Broadcasted{AbstractReactantArrayStyle{N}}, ::Type{TracedRNumber{T}}, dims
+    ::Broadcasted{AbstractReactantArrayStyle{N}}, ::Type{<:TracedRNumber{T}}, dims
 ) where {T<:Reactant.ReactantPrimitive,N}
     @assert N isa Int
     return (@opcall fill(zero(T), dims))::TracedRArray{T,N}

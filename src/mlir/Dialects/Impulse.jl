@@ -283,6 +283,7 @@ function infer(
     warmup_offset=nothing::Union{Nothing,Value},
     trace::IR.Type,
     diagnostics::IR.Type,
+    log_densities::IR.Type,
     output_rng_state::IR.Type,
     final_position::IR.Type,
     final_gradient::IR.Type,
@@ -307,6 +308,7 @@ function infer(
     op_ty_results = IR.Type[
         trace,
         diagnostics,
+        log_densities,
         output_rng_state,
         final_position,
         final_gradient,

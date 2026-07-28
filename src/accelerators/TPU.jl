@@ -12,7 +12,8 @@ using ..Registration: register_backend
 const libtpu_dir = Ref{Union{Nothing,String}}(nothing)
 const RUNNING_IN_CLOUD_TPU_VM = Ref{Union{Nothing,Bool}}(nothing)
 
-const LIBTPU_VERSION = "0.0.42.dev20260520"
+# Check https://storage.googleapis.com/libtpu-wheels/index.html for latest
+const LIBTPU_VERSION = "0.0.45.dev20260728"
 const LIBTPU_SO = "libtpu-$(replace(string(LIBTPU_VERSION), '.' => '_')).so"
 
 function setup_correct_env_vars!()

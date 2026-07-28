@@ -30,12 +30,12 @@ function Base.eps(::Type{TracedRNumber{T}}) where {T}
 end
 Base.eps(x::TracedRNumber{T}) where {T} = eps(typeof(x))
 
-function Base.typemin(::Type{TracedRNumber{T}}) where {T}
+function Base.typemin(::Type{<:TracedRNumber{T}}) where {T}
     return Reactant.promote_to(TracedRNumber{T}, typemin(T))
 end
 Base.typemin(x::TracedRNumber{T}) where {T} = typemin(typeof(x))
 
-function Base.typemax(::Type{TracedRNumber{T}}) where {T}
+function Base.typemax(::Type{<:TracedRNumber{T}}) where {T}
     return Reactant.promote_to(TracedRNumber{T}, typemax(T))
 end
 Base.typemax(x::TracedRNumber{T}) where {T} = typemax(typeof(x))
@@ -1053,17 +1053,17 @@ function Base.copysign(x::S, y::TracedRNumber{T}) where {S<:Number,T}
     return copysign(Reactant.promote_to(TracedRNumber{S}, x), y)
 end
 
-function Base.zeros(::Type{TracedRNumber{T}}, dims::Dims{N}) where {T,N}
+function Base.zeros(::Type{<:TracedRNumber{T}}, dims::Dims{N}) where {T,N}
     return @opcall fill(zero(T), dims)
 end
-function Base.zeros(::Type{TracedRNumber{T}}, ::Tuple{}) where {T}
+function Base.zeros(::Type{<:TracedRNumber{T}}, ::Tuple{}) where {T}
     return @opcall fill(zero(T), ())
 end
 
-function Base.ones(::Type{TracedRNumber{T}}, dims::Dims{N}) where {T,N}
+function Base.ones(::Type{<:TracedRNumber{T}}, dims::Dims{N}) where {T,N}
     return @opcall fill(one(T), dims)
 end
-function Base.ones(::Type{TracedRNumber{T}}, ::Tuple{}) where {T}
+function Base.ones(::Type{<:TracedRNumber{T}}, ::Tuple{}) where {T}
     return @opcall fill(one(T), ())
 end
 

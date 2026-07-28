@@ -2,8 +2,8 @@ using Reactant, ParallelTestRunner, CondaPkg, Test
 
 const BACKEND = lowercase(get(ENV, "REACTANT_BACKEND_GROUP", "auto"))
 
-CondaPkg.add_pip("jax"; version="==0.9.0")
-CondaPkg.add_pip("numpyro"; version="==0.19.0")
+CondaPkg.add_pip("jax"; version=">=0.9")
+CondaPkg.add_pip("numpyro"; version=">=0.21")
 CondaPkg.resolve()
 
 testsuite = find_tests(@__DIR__)
