@@ -7,6 +7,31 @@ parsed_args = parse_args(ARGS)
 const ENZYMEJAX_INSTALLED = Ref(false)
 const NUMPYRO_INSTALLED = Ref(false)
 
+function is_python_module_installed(mod)
+    python = CondaPkg.which("python")
+    python === nothing && return false
+    return success(pipeline(`$(python) -c "import $(mod)"`; stdout=devnull, stderr=devnull))
+end
+
+# `CondaPkg.add_pip` can silently do nothing (it skips resolving based on file timestamps),
+# so check that the module is actually importable instead of trusting that no error was
+# thrown. Otherwise the corresponding test is run against a missing python package.
+function add_pip_and_check(pkg, mod; version="")
+    msg = "Could not install the python package `$(pkg)`, skipping the tests using it"
+    try
+        CondaPkg.add_pip(pkg; version)
+        is_python_module_installed(mod) && return true
+        @warn "`import $(mod)` failed after adding `$(pkg)`, forcing a re-resolve"
+        CondaPkg.resolve(; force=true)
+        is_python_module_installed(mod) && return true
+        @warn msg
+        return false
+    catch e
+        @warn msg exception = e
+        return false
+    end
+end
+
 # Install specific packages. Pkg.test doesn't pick up CondaPkg.toml in test folder
 if (
     isempty(parsed_args.positionals) ||
@@ -15,11 +40,9 @@ if (
 )
     CondaPkg.add_pip("jax"; version=">=0.9")
     if !Sys.iswindows() && !(Sys.isapple() && Sys.ARCH === :x86_64)
-        try
-            CondaPkg.add_pip("enzyme_ad"; version=">=0.0.15")
-            ENZYMEJAX_INSTALLED[] = true
-        catch
-        end
+        ENZYMEJAX_INSTALLED[] = add_pip_and_check(
+            "enzyme_ad", "enzyme_ad"; version=">=0.0.15"
+        )
     end
 end
 
@@ -28,11 +51,7 @@ if (
     "integration" ∈ parsed_args.positionals ||
     "integration/numpyro" ∈ parsed_args.positionals
 )
-    try
-        CondaPkg.add_pip("numpyro"; version=">=0.21")
-        NUMPYRO_INSTALLED[] = true
-    catch
-    end
+    NUMPYRO_INSTALLED[] = add_pip_and_check("numpyro", "numpyro"; version=">=0.21")
 end
 
 testsuite = find_tests(@__DIR__)
