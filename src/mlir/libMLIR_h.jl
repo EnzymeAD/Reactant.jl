@@ -15546,6 +15546,12 @@ function hlo_sharding_check_eq(hloSharding, other)
     )::Bool
 end
 
+function hlo_sharding_check_eq_ignoring_metadata(hloSharding, other)
+    @ccall mlir_c.hlo_sharding_check_eq_ignoring_metadata(
+        hloSharding::Ptr{HloSharding}, other::Ptr{HloSharding}
+    )::Bool
+end
+
 function ifrt_free_future(Future)
     @ccall mlir_c.ifrt_free_future(Future::Ptr{IfRtFutureType})::Cvoid
 end
