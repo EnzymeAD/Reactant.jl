@@ -88,10 +88,17 @@ given id and continue their execution.
 The default barrier id is 0 that is similar to `nvvm.barrier` Op. When 
 `barrierId` is not present, the default barrier id is used. 
 
+The `aligned` attribute, which defaults to `true`, generates the aligned
+form of the barrier (all threads in the CTA execute the same barrier
+instruction). When set to `false`, the unaligned form is generated.
+
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-bar)
 """
 function barrier_arrive(
-    barrierId=nothing::Union{Nothing,Value}; numberOfThreads::Value, location=Location()
+    barrierId=nothing::Union{Nothing,Value};
+    numberOfThreads::Value,
+    aligned=nothing,
+    location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[numberOfThreads,]
@@ -99,6 +106,7 @@ function barrier_arrive(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(barrierId) && push!(operands, barrierId)
+    !isnothing(aligned) && push!(attributes, NamedAttribute("aligned", aligned))
 
     return create_operation(
         "nvvm.barrier.arrive",
@@ -119,37 +127,36 @@ The `nvvm.barrier` operation performs barrier synchronization and communication
 within a CTA (Cooperative Thread Array). It causes executing threads to wait for 
 all non-exited threads participating in the barrier to arrive.
 
-The operation takes two optional operands:
+The operation takes the following optional operands and attributes:
 
 - `barrierId`: Specifies a logical barrier resource with value 0 through 15. 
   Each CTA instance has sixteen barriers numbered 0..15. Defaults to 0 if not specified.
 - `numberOfThreads`: Specifies the number of threads participating in the barrier. 
   When specified, the value must be a multiple of the warp size. If not specified, 
   all threads in the CTA participate in the barrier.
-- `reductionOp`: specifies the reduction operation (`popc`, `and`, `or`).
-- `reductionPredicate`: specifies the predicate to be used with the
-  `reductionOp`. 
+- `aligned`: Selects between the `.aligned` and non-`.aligned` forms of the
+  underlying `@llvm.nvvm.barrier.cta.*` intrinsic family. Defaults to true,
+  which requires every thread in the CTA to reach this same barrier
+  instruction, otherwise the behavior is undefined. Set it to false to emit
+  the non-`.aligned` form.
+
+Reduction variants of the barrier instruction are modeled by the
+`nvvm.barrier.reduction` op.
 
 The barrier operation guarantees that when the barrier completes, prior memory 
 accesses requested by participating threads are performed relative to all threads 
 participating in the barrier. It also ensures that no new memory access is 
 requested by participating threads before the barrier completes.
 
-When a barrier completes, the waiting threads are restarted without delay, and 
+When a barrier completes, the waiting threads are restarted without delay, and
 the barrier is reinitialized so that it can be immediately reused.
-
-This operation generates an aligned barrier, indicating that all threads in the CTA 
-will execute the same barrier instruction. Behavior is undefined if all threads in the 
-CTA do not reach this instruction.
 
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-bar)
 """
 function barrier(
     barrierId=nothing::Union{Nothing,Value};
     numberOfThreads=nothing::Union{Nothing,Value},
-    reductionPredicate=nothing::Union{Nothing,Value},
-    res=nothing::Union{Nothing,IR.Type},
-    reductionOp=nothing,
+    aligned=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -159,20 +166,67 @@ function barrier(
     attributes = NamedAttribute[]
     !isnothing(barrierId) && push!(operands, barrierId)
     !isnothing(numberOfThreads) && push!(operands, numberOfThreads)
-    !isnothing(reductionPredicate) && push!(operands, reductionPredicate)
     push!(
         attributes,
-        operandsegmentsizes([
-            Int(!isnothing(barrierId)),
-            Int(!isnothing(numberOfThreads)),
-            Int(!isnothing(reductionPredicate)),
-        ]),
+        operandsegmentsizes([Int(!isnothing(barrierId)), Int(!isnothing(numberOfThreads))]),
     )
-    !isnothing(res) && push!(op_ty_results, res)
-    !isnothing(reductionOp) && push!(attributes, NamedAttribute("reductionOp", reductionOp))
+    !isnothing(aligned) && push!(attributes, NamedAttribute("aligned", aligned))
 
     return create_operation(
         "nvvm.barrier",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`barrier_reduction`
+
+The `nvvm.barrier.reduction` operation performs barrier synchronization with a
+reduction across the per-thread predicates contributed by participating threads
+in a CTA.
+
+- `barrierId`: Specifies a logical barrier resource with value 0 through 15.
+  Optional; defaults to barrier id 0 when not specified.
+- `reductionOp`: The reduction kind (`popc`, `and`, `or`) applied across the
+  per-thread predicates.
+- `reductionPredicate`: The per-thread i32 predicate. It is compared against
+  zero to form the i1 value fed into the reduction.
+- `aligned`: Selects between the `.aligned` and non-`.aligned` forms of the
+  underlying `@llvm.nvvm.barrier.cta.red.*` intrinsic family. Defaults to
+  true, which requires every thread in the CTA to reach this same barrier
+  instruction, otherwise the behavior is undefined. Set it to false to emit
+  the non-`.aligned` form.
+
+The result is the i32 reduction value computed across all threads
+participating in the barrier.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-bar)
+"""
+function barrier_reduction(
+    barrierId=nothing::Union{Nothing,Value};
+    reductionPredicate::Value,
+    res=nothing::Union{Nothing,IR.Type},
+    reductionOp,
+    aligned=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[reductionPredicate,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[NamedAttribute("reductionOp", reductionOp),]
+    !isnothing(barrierId) && push!(operands, barrierId)
+    !isnothing(res) && push!(op_ty_results, res)
+    !isnothing(aligned) && push!(attributes, NamedAttribute("aligned", aligned))
+
+    return create_operation(
+        "nvvm.barrier.reduction",
         location;
         operands,
         owned_regions,
@@ -1087,18 +1141,85 @@ function convert_bf16x2_to_s2f6x2(
 end
 
 """
+`convert_f4x2_to_bf16x2`
+
+This Op converts the given f4 inputs in a packed i8 to bf16.
+
+The result `dst` is represented as a vector of bf16 elements.
+
+The `relu` attribute, when set, lowers to the \'.relu\' variant of
+the cvt instruction.
+
+The `sat` attribute specifies the saturation mode.
+
+The optional scaling-factors for each of the inputs are provided through
+the operand `scaleFactor` as a packed i16 type. Only `ue8m0` is supported
+as the type of the scale-factor currently.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
+  
+
+# Example
+
+```mlir
+// Basic conversion; the f4x2 source is packed in a single i8.
+%res1 = nvvm.convert.f4x2.to.bf16x2 %src
+    : i8 (f4E2M1FN) -> vector<2xbf16>
+
+// Conversion with relu and saturation.
+%res2 = nvvm.convert.f4x2.to.bf16x2 %src
+    {relu = true, sat = #nvvm.sat_mode<satfinite>}
+    : i8 (f4E2M1FN) -> vector<2xbf16>
+
+// Conversion with a packed ue8m0 scale-factor.
+%res3 = nvvm.convert.f4x2.to.bf16x2 %src, %scaleFactor
+    : i8 (f4E2M1FN) -> vector<2xbf16>
+```
+"""
+function convert_f4x2_to_bf16x2(
+    src::Value,
+    scaleFactor=nothing::Union{Nothing,Value};
+    dst::IR.Type,
+    srcType,
+    sat=nothing,
+    relu=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[dst,]
+    operands = Value[src,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[NamedAttribute("srcType", srcType),]
+    !isnothing(scaleFactor) && push!(operands, scaleFactor)
+    !isnothing(sat) && push!(attributes, NamedAttribute("sat", sat))
+    !isnothing(relu) && push!(attributes, NamedAttribute("relu", relu))
+
+    return create_operation(
+        "nvvm.convert.f4x2.to.bf16x2",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
 `convert_f4x2_to_f16x2`
 
 This Op converts the given f4 inputs in a packed i8 to f16.
 
 The result `dst` is represented as a vector of f16 elements.
-The `relu` attribute, when set, lowers to the \'.relu\' variant of 
-the cvt instruction.\"
+
+The `relu` attribute, when set, lowers to the \'.relu\' variant of
+the cvt instruction.
 
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
 """
 function convert_f4x2_to_f16x2(
-    src::Value; dst::IR.Type, relu=nothing, srcType, location=Location()
+    src::Value; dst::IR.Type, srcType, relu=nothing, location=Location()
 )
     op_ty_results = IR.Type[dst,]
     operands = Value[src,]
@@ -1120,18 +1241,85 @@ function convert_f4x2_to_f16x2(
 end
 
 """
+`convert_f6x2_to_bf16x2`
+
+This Op converts the given f6 inputs in a i8x2 vector to bf16.
+
+The result `dst` is represented as a vector of bf16 elements.
+
+The `relu` attribute, when set, lowers to the \'.relu\' variant of
+the cvt instruction.
+
+The `sat` attribute specifies the saturation mode.
+
+The optional scaling-factors for each of the inputs are provided through
+the operand `scaleFactor` as a packed i16 type. Only `ue8m0` is supported
+as the type of the scale-factor currently.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
+  
+
+# Example
+
+```mlir
+// Basic conversion from f6E2M3FN.
+%res1 = nvvm.convert.f6x2.to.bf16x2 %src
+    : vector<2xi8> (f6E2M3FN) -> vector<2xbf16>
+
+// Conversion from f6E3M2FN with relu and saturation.
+%res2 = nvvm.convert.f6x2.to.bf16x2 %src
+    {relu = true, sat = #nvvm.sat_mode<satfinite>}
+    : vector<2xi8> (f6E3M2FN) -> vector<2xbf16>
+
+// Conversion with a packed ue8m0 scale-factor.
+%res3 = nvvm.convert.f6x2.to.bf16x2 %src, %scaleFactor
+    : vector<2xi8> (f6E2M3FN) -> vector<2xbf16>
+```
+"""
+function convert_f6x2_to_bf16x2(
+    src::Value,
+    scaleFactor=nothing::Union{Nothing,Value};
+    dst::IR.Type,
+    srcType,
+    sat=nothing,
+    relu=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[dst,]
+    operands = Value[src,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[NamedAttribute("srcType", srcType),]
+    !isnothing(scaleFactor) && push!(operands, scaleFactor)
+    !isnothing(sat) && push!(attributes, NamedAttribute("sat", sat))
+    !isnothing(relu) && push!(attributes, NamedAttribute("relu", relu))
+
+    return create_operation(
+        "nvvm.convert.f6x2.to.bf16x2",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
 `convert_f6x2_to_f16x2`
 
 This Op converts the given f6 inputs in a i8x2 vector to f16.
 
 The result `dst` is represented as a vector of f16 elements.
-The `relu` attribute, when set, lowers to the \'.relu\' variant of 
-the cvt instruction.\"
+
+The `relu` attribute, when set, lowers to the \'.relu\' variant of
+the cvt instruction.
 
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
 """
 function convert_f6x2_to_f16x2(
-    src::Value; dst::IR.Type, relu=nothing, srcType, location=Location()
+    src::Value; dst::IR.Type, srcType, relu=nothing, location=Location()
 )
     op_ty_results = IR.Type[dst,]
     operands = Value[src,]
@@ -1159,15 +1347,52 @@ This Op converts the given f8 inputs in a i8x2 vector to bf16.
 
 The result `dst` is represented as a vector of bf16 elements.
 
+The `relu` attribute, when set, lowers to the \'.relu\' variant of
+the cvt instruction.
+
+The `sat` attribute specifies the saturation mode.
+
+The optional scaling-factors for each of the inputs are provided through
+the operand `scaleFactor` as a packed i16 type. Only `ue8m0` is supported
+as the type of the scale-factor currently.
 
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
+  
+
+# Example
+
+```mlir
+// Basic conversion from f8E4M3FN.
+%res1 = nvvm.convert.f8x2.to.bf16x2 %src
+    : vector<2xi8> (f8E4M3FN) -> vector<2xbf16>
+
+// Conversion from f8E5M2 with relu and saturation.
+%res2 = nvvm.convert.f8x2.to.bf16x2 %src
+    {relu = true, sat = #nvvm.sat_mode<satfinite>}
+    : vector<2xi8> (f8E5M2) -> vector<2xbf16>
+
+// Conversion with a packed ue8m0 scale-factor.
+%res3 = nvvm.convert.f8x2.to.bf16x2 %src, %scaleFactor
+    : vector<2xi8> (f8E4M3FN) -> vector<2xbf16>
+```
 """
-function convert_f8x2_to_bf16x2(src::Value; dst::IR.Type, srcType, location=Location())
+function convert_f8x2_to_bf16x2(
+    src::Value,
+    scaleFactor=nothing::Union{Nothing,Value};
+    dst::IR.Type,
+    srcType,
+    sat=nothing,
+    relu=nothing,
+    location=Location(),
+)
     op_ty_results = IR.Type[dst,]
     operands = Value[src,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[NamedAttribute("srcType", srcType),]
+    !isnothing(scaleFactor) && push!(operands, scaleFactor)
+    !isnothing(sat) && push!(attributes, NamedAttribute("sat", sat))
+    !isnothing(relu) && push!(attributes, NamedAttribute("relu", relu))
 
     return create_operation(
         "nvvm.convert.f8x2.to.bf16x2",
@@ -1187,13 +1412,14 @@ end
 This Op converts the given f8 inputs in a i8x2 vector to f16.
 
 The result `dst` is represented as a vector of f16 elements.
-The `relu` attribute, when set, lowers to the \'.relu\' variant of 
-the cvt instruction.\"
+
+The `relu` attribute, when set, lowers to the \'.relu\' variant of
+the cvt instruction.
 
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
 """
 function convert_f8x2_to_f16x2(
-    src::Value; dst::IR.Type, relu=nothing, srcType, location=Location()
+    src::Value; dst::IR.Type, srcType, relu=nothing, location=Location()
 )
     op_ty_results = IR.Type[dst,]
     operands = Value[src,]
@@ -2395,6 +2621,46 @@ function cp_async_wait_group(; n, location=Location())
         attributes,
         results=op_ty_results,
         result_inference=false,
+    )
+end
+
+"""
+`divf`
+
+Divides lhs by rhs, stores result in res (`res = lhs / rhs`).
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/#floating-point-instructions-div)
+"""
+function divf(
+    lhs::Value,
+    rhs::Value;
+    res=nothing::Union{Nothing,IR.Type},
+    rnd=nothing,
+    ftz=nothing,
+    approx=nothing,
+    full=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[lhs, rhs]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
+    !isnothing(rnd) && push!(attributes, NamedAttribute("rnd", rnd))
+    !isnothing(ftz) && push!(attributes, NamedAttribute("ftz", ftz))
+    !isnothing(approx) && push!(attributes, NamedAttribute("approx", approx))
+    !isnothing(full) && push!(attributes, NamedAttribute("full", full))
+
+    return create_operation(
+        "nvvm.divf",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -4805,9 +5071,9 @@ performed and is either `xor_popc` or `and_poc`. The default is `xor_popc`.
 `intOverflowBehavior` is only relevant when the `multiplicandType` attribute
 is one of `u8, s8, u4, s4`, this attribute describes how overflow is handled
 in the accumulator. When the attribute is `satfinite`, the accumulator values
-are clamped in the int32 range on overflow. This is the default behavior.
-Alternatively, accumulator behavior `wrapped` can also be specified, in
-which case overflow wraps from one end of the range to the other.
+are clamped in the int32 range on overflow. Alternatively, accumulator
+behavior `wrapped` can be specified (this is the default), in which case
+overflow wraps from one end of the range to the other.
 
 `layoutA` and `layoutB` are required and should generally be set to
 `#nvvm.mma_layout<row>` and `#nvvm.mma_layout<col>` respectively, but other
@@ -5450,6 +5716,45 @@ function redux_sync(
     )
 end
 
+"""
+`rsqrt`
+
+Computes an approximation of the reciprocal of the square root of the
+input value: `d = 1 / sqrt(a)`. Supports both f32 and f64. The maximum
+relative error for the f32 form over the entire positive finite range
+is 2^-22.9.
+
+The `ftz` attribute, when set, flushes subnormal inputs and results to
+sign-preserving zero. For f64 inputs, `ftz=true` selects a coarser
+approximation that uses only the upper 32 bits of the input (the lower
+32 bits of the result are zeroed).
+
+For more information, see PTX ISA:
+[rsqrt](https://docs.nvidia.com/cuda/parallel-thread-execution/#floating-point-instructions-rsqrt)
+"""
+function rsqrt(
+    src::Value; res=nothing::Union{Nothing,IR.Type}, ftz=nothing, location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[src,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
+    !isnothing(ftz) && push!(attributes, NamedAttribute("ftz", ftz))
+
+    return create_operation(
+        "nvvm.rsqrt",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
 function setmaxregister(; regCount, action, location=Location())
     op_ty_results = IR.Type[]
     operands = Value[]
@@ -5592,6 +5897,73 @@ function read_ptx_sreg_smid(;
 
     return create_operation(
         "nvvm.read.ptx.sreg.smid",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
+`sqrt_approx`
+
+Computes a fast approximation of the square root of the input value
+(`res = sqrt(src)`). The maximum relative error over the entire positive
+finite range is 2^-23.
+
+The `ftz` attribute, when set, flushes subnormal inputs and results to
+sign-preserving zero.
+
+For more information, see PTX ISA:
+[sqrt](https://docs.nvidia.com/cuda/parallel-thread-execution/#floating-point-instructions-sqrt)
+"""
+function sqrt_approx(
+    src::Value; res=nothing::Union{Nothing,IR.Type}, ftz=nothing, location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[src,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
+    !isnothing(ftz) && push!(attributes, NamedAttribute("ftz", ftz))
+
+    return create_operation(
+        "nvvm.sqrt.approx",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
+`sqrt`
+
+Compute sqrt(src) and store the result in res.
+
+For more information, see PTX ISA:
+[sqrt](https://docs.nvidia.com/cuda/parallel-thread-execution/#floating-point-instructions-sqrt)
+"""
+function sqrt(
+    src::Value; res=nothing::Union{Nothing,IR.Type}, rnd, ftz=nothing, location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[src,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[NamedAttribute("rnd", rnd),]
+    !isnothing(res) && push!(op_ty_results, res)
+    !isnothing(ftz) && push!(attributes, NamedAttribute("ftz", ftz))
+
+    return create_operation(
+        "nvvm.sqrt",
         location;
         operands,
         owned_regions,
@@ -6016,11 +6388,11 @@ of `num` and `shape` attributes:
 
 # Example
 ```mlir
-  %data, %redval = nvvm.tcgen05.ld,red %addr, %offset {
+  %data, %redval = nvvm.tcgen05.ld.red %addr, %offset {
     shape = #nvvm.tcgen05_ldst_shape<shape_16x32bx2>,
   } : <2xi32>, i32
 
-  %data, %redval = nvvm.tcgen05.ld,red %addr {
+  %data, %redval = nvvm.tcgen05.ld.red %addr {
     shape = #nvvm.tcgen05_ldst_shape<shape_32x32b>,
   } : <2xf32>, f32
 ```
