@@ -13376,6 +13376,7 @@ function sdyTensorShardingAttrGet(
     replicatedAxes,
     nUnreducedAxes,
     unreducedAxes,
+    reductionOp,
 )
     @ccall mlir_c.sdyTensorShardingAttrGet(
         ctx::MlirContext,
@@ -13386,7 +13387,12 @@ function sdyTensorShardingAttrGet(
         replicatedAxes::Ptr{MlirAttribute},
         nUnreducedAxes::Cptrdiff_t,
         unreducedAxes::Ptr{MlirAttribute},
+        reductionOp::UInt32,
     )::MlirAttribute
+end
+
+function sdyTensorShardingAttrGetReductionOp(attr)
+    @ccall mlir_c.sdyTensorShardingAttrGetReductionOp(attr::MlirAttribute)::UInt32
 end
 
 function sdyTensorShardingAttrGetMeshOrRef(attr)

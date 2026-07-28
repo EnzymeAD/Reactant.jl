@@ -4,6 +4,10 @@ module Sharding
 using ..Reactant: Reactant, XLA, MLIR, ShardyPropagationOptions
 using ReactantCore: ReactantCore
 
+# `mlir::sdy::ReductionOp::SUM`. The reduction op is only meaningful for shardings with
+# unreduced axes, which we never generate, so we always use the default `SUM`.
+const SDY_REDUCTION_OP_SUM = UInt32(0)
+
 """
     Mesh(devices::AbstractArray{XLA.AbstractDevice}, axis_names)
 
@@ -564,6 +568,7 @@ function get_tensor_sharding_attribute(
             MLIR.API.MlirAttribute[],
             0,
             MLIR.API.MlirAttribute[],
+            SDY_REDUCTION_OP_SUM,
         ),
     )
     return tensor_sharding_attr, :sdy
