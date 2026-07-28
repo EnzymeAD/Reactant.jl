@@ -1,19 +1,14 @@
-# Throwaway investigation workflow: isolate the Windows + Julia 1.11
-# ReactantCUDAExt pkgimage link failure
+# Throwaway investigation workflow: find *why* the ReactantCUDAExt pkgimage
+# fails to link on Windows + Julia 1.11.
 #
 #   lld: error: undefined symbol: jl_boxed_uint8_cache
 #   >>> referenced by jl_XXXX.tmp(text#0.o):(.refptr.jl_boxed_uint8_cache)
 #
-# `.refptr.<sym>` is what LLVM emits for an external *data* reference that is
-# not marked dllimport under mingw COFF, and Julia links pkgimages with
-# --disable-auto-import --disable-runtime-pseudo-reloc, so such a reference
-# cannot resolve. The failure is specific to Windows + 1.11 (1.10 and 1.12 are
-# clean) and predates any recent change.
-#
-# Each job is one variant, so the matrix answers two questions at once:
-#   - which precompile configuration triggers it (default / check-bounds /
-#     coverage / both, the last matching what Pkg.test uses), and
-#   - whether the ReactantCUDAExt precompile workload is the source.
+# Round 1 established that the precompile flags are irrelevant (a plain load
+# reproduces) and that the ReactantCUDAExt @compile_workload is the source.
+# Round 2 captures the pkgimage archive before lld sees it, so the emitting
+# function can be identified rather than guessed -- disabling the workload is a
+# workaround, but any package precompiling GPU kernels could hit the same bug.
 #
 # NOT FOR MERGE.
 name: win111 repro
@@ -29,46 +24,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  probe:
-    name: "probe (${{ matrix.label }})"
+  dissect:
+    name: dissect
     runs-on: windows-latest
     timeout-minutes: 90
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          # Does a plain pkgimage link at all?
-          - label: default
-            checkbounds: false
-            coverage: false
-            patch: none
-          # Each flag forces its own pkgimage configuration; which one breaks?
-          - label: checkbounds
-            checkbounds: true
-            coverage: false
-            patch: none
-          - label: coverage
-            checkbounds: false
-            coverage: true
-            patch: none
-          # What Pkg.test(coverage=true, julia_args=["--check-bounds=yes"])
-          # actually uses -- this is the configuration that fails in CI.
-          - label: ci-config
-            checkbounds: true
-            coverage: true
-            patch: none
-          # Same, minus the @compile_workload body: is the workload the source
-          # of the jl_boxed_uint8_cache reference, or the extension's own code?
-          - label: ci-config-no-workload
-            checkbounds: true
-            coverage: true
-            patch: no-workload
-          # Same, minus the whole @setup_workload block.
-          - label: ci-config-no-setup
-            checkbounds: true
-            coverage: true
-            patch: no-setup
-
     steps:
       - uses: actions/checkout@v7
 
@@ -76,25 +35,7 @@ jobs:
         with:
           version: "1.11"
 
-      # Deliberately no julia-actions/cache: every job must precompile from
-      # scratch, otherwise a restored pkgimage would hide the failure.
-
-      - name: "Patch: disable @compile_workload"
-        if: ${{ matrix.patch == 'no-workload' }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          sed -i 's/@static if Reactant.precompilation_supported() && VERSION != v"1.11.3"/@static if false/' ext/ReactantCUDAExt.jl
-          # Fail loudly rather than silently reporting a bogus result.
-          grep -n "@static if false" ext/ReactantCUDAExt.jl
-
-      - name: "Patch: disable @setup_workload"
-        if: ${{ matrix.patch == 'no-setup' }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          sed -i 's/@static if !Sys.isapple()/@static if false/' ext/ReactantCUDAExt.jl
-          grep -n "@static if false" ext/ReactantCUDAExt.jl
+      # No julia-actions/cache: a restored pkgimage would hide the failure.
 
       - name: "Install dependencies"
         shell: bash
@@ -106,35 +47,57 @@ jobs:
           julia --color=yes --project=. -e 'import Pkg; Pkg.Registry.update(); Pkg.instantiate()'
           julia --color=yes --project=test -e 'import Pkg; Pkg.instantiate()'
 
-      - name: "Probe"
-        shell: pwsh
+      # Precompile everything else first, so the capture pass only has to
+      # rebuild ReactantCUDAExt (which fails, and so is retried every load).
+      - name: "Warm up (everything except the failing extension)"
+        shell: bash
         timeout-minutes: 60
         run: |
-          $flags = @()
-          if ('${{ matrix.checkbounds }}' -eq 'true') { $flags += '--check-bounds=yes' }
-          if ('${{ matrix.coverage }}' -eq 'true') { $flags += "--code-coverage=@$env:GITHUB_WORKSPACE" }
-          Write-Host "julia flags: $flags"
-          julia --color=yes --project=test @flags .github/win111_probe.jl 2>&1 |
-            Tee-Object -FilePath probe.log
-          # A reproduction is a result, not a job failure.
-          exit 0
+          julia --color=yes --project=test .github/win111_probe.jl || true
 
-      - name: "Summarize"
+      - name: "Capture pkgimage archive"
+        shell: bash
+        timeout-minutes: 30
+        env:
+          PKGIMG_CAPTURE_DIR: capture
+        run: |
+          set -o pipefail
+          julia --color=yes --project=test .github/win111_dissect.jl 2>&1 | tee dissect.log || true
+          echo "=== captured ==="
+          ls -la capture/ || true
+
+      # Immediate answer in the log; the artifact allows deeper offline work.
+      - name: "Locate the reference"
         if: always()
         shell: bash
         run: |
-          if [[ ! -f probe.log ]]; then
-            echo "| ${{ matrix.label }} | probe did not run | - |" >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-          RESULT="$(grep -m1 '^RESULT:' probe.log || echo 'RESULT: UNKNOWN (no result line)')"
-          if grep -q 'jl_boxed_uint8_cache' probe.log; then LLD=yes; else LLD=no; fi
-          echo "$RESULT (jl_boxed_uint8_cache in log: $LLD)"
-          echo "| ${{ matrix.label }} | $RESULT | $LLD |" >> "$GITHUB_STEP_SUMMARY"
+          LLVM="/c/Program Files/LLVM/bin"
+          echo "llvm-objdump: $("$LLVM/llvm-objdump" --version 2>&1 | head -2 || echo MISSING)"
+          mkdir -p dis
+          for a in capture/*.a; do
+            [ -e "$a" ] || continue
+            echo "##### archive $a"
+            "$LLVM/llvm-ar" t "$a" || continue
+            ( cd dis && "$LLVM/llvm-ar" x "../$a" ) || continue
+            for m in dis/*; do
+              [ -f "$m" ] || continue
+              if "$LLVM/llvm-objdump" -r "$m" 2>/dev/null | grep -q "jl_boxed_uint8_cache"; then
+                echo "##### FOUND jl_boxed_uint8_cache relocation in $m"
+                # Disassemble with relocations and show the enclosing symbol.
+                "$LLVM/llvm-objdump" -d -r "$m" > "$m.dis" 2>/dev/null || true
+                grep -n -B 60 "jl_boxed_uint8_cache" "$m.dis" \
+                  | grep -E "^[0-9]+-[0-9a-f]{16} <|jl_boxed_uint8_cache" \
+                  | tail -40
+              fi
+            done
+            rm -rf dis; mkdir -p dis
+          done
 
       - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: "probe-${{ matrix.label }}"
-          path: probe.log
+          name: pkgimage-capture
+          path: |
+            capture/
+            dissect.log
           retention-days: 14
