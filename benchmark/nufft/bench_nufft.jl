@@ -39,21 +39,22 @@ const plan_nufft = _EXT.plan_nufft
 const set_nufft_points = _EXT.set_nufft_points
 
 """
-    type2_vjp(prep, fk, cotangent)
+    type2_vjp!(dfk, out, out_shadow, prep, fk, cotangent)
 
 Evaluate a seeded reverse-mode derivative of a prepared type-2 NUFFT with
-respect to `fk`. The prepared point set is constant. The primal output and its
-shadow are explicit buffers so `cotangent` can seed the vector-Jacobian
-product without reducing the NUFFT output to a scalar loss.
+respect to `fk`, writing the result into `dfk`. The prepared point set is
+constant. The primal output and its shadow are explicit buffers so `cotangent`
+can seed the vector-Jacobian product without reducing the NUFFT output to a
+scalar loss.
 """
-function type2_vjp(prep, fk, cotangent)
-    output = zero(cotangent)
-    dfk = zero(fk)
+function type2_vjp!(dfk, out, out_shadow, prep, fk, cotangent)
+    fill!(dfk, zero(eltype(dfk)))
+    copyto!(out_shadow, cotangent)
     Enzyme.autodiff(
         Enzyme.Reverse,
         Enzyme.Const(execute_nufft!),
         Enzyme.Const,
-        Enzyme.Duplicated(output, copy(cotangent)),
+        Enzyme.Duplicated(out, out_shadow),
         Enzyme.Const(prep),
         Enzyme.Duplicated(fk, dfk),
     )
@@ -91,18 +92,34 @@ function run_nufft_bench(; M = 100_000, N = 128, D = 2, eps = 1.0e-6,
     println("  type-1 setpts: $(round(t_setpts1; digits = 2)) s")
 
     println("Compiling…")
-    t_type2 = @elapsed comp_type2 = @compile sync=true execute_nufft(prep2, fk)
-    t_reverse = @elapsed comp_reverse = @compile sync=true type2_vjp(prep2, fk, cotangent)
-    t_adjoint = @elapsed comp_adjoint = @compile sync=true execute_nufft(prep1, cotangent)
+    out = Reactant.to_rarray(zeros(complex(T), M))
+    t_type2 = @elapsed comp_type2 = @compile(
+        sync = true,
+        assert_nonallocating = true,
+        execute_nufft!(out, prep2, fk),
+    )
+    dfk = Reactant.to_rarray(zeros(complex(T), nmodes...))
+    out_shadow = Reactant.to_rarray(zeros(complex(T), M))
+    t_reverse = @elapsed comp_reverse = @compile(
+        sync = true,
+        assert_nonallocating = true,
+        type2_vjp!(dfk, out, out_shadow, prep2, fk, cotangent),
+    )
+    out_adjoint = Reactant.to_rarray(zeros(complex(T), nmodes...))
+    t_adjoint = @elapsed comp_adjoint = @compile(
+        sync = true,
+        assert_nonallocating = true,
+        execute_nufft!(out_adjoint, prep1, cotangent),
+    )
     println("  type-2 compile:           $(round(t_type2; digits = 2)) s")
     println("  reverse-mode compile:     $(round(t_reverse; digits = 2)) s")
     println("  analytic adjoint compile: $(round(t_adjoint; digits = 2)) s")
 
     # Warm up, synchronize, and verify the differentiated VJP against the
     # analytic type-1 adjoint. None of this is part of a benchmark trial.
-    c_out = comp_type2(prep2, fk)
-    dfk_reverse = comp_reverse(prep2, fk, cotangent)
-    dfk_adjoint = comp_adjoint(prep1, cotangent)
+    c_out = comp_type2(out, prep2, fk)
+    dfk_reverse = comp_reverse(dfk, out, out_shadow, prep2, fk, cotangent)
+    dfk_adjoint = comp_adjoint(out_adjoint, prep1, cotangent)
 
     reverse_host = Array(dfk_reverse)
     adjoint_host = Array(dfk_adjoint)
@@ -112,9 +129,11 @@ function run_nufft_bench(; M = 100_000, N = 128, D = 2, eps = 1.0e-6,
     println("  reverse/adjoint max error: $max_error (relative $relative_error)")
 
     println("Executing (prepared + compiled; setpts excluded)…")
-    b_type2 = @benchmark $comp_type2($prep2, $fk)
-    b_reverse = @benchmark $comp_reverse($prep2, $fk, $cotangent)
-    b_adjoint = @benchmark $comp_adjoint($prep1, $cotangent)
+    b_type2 = @benchmark $comp_type2($out, $prep2, $fk)
+    b_reverse = @benchmark $comp_reverse(
+        $dfk, $out, $out_shadow, $prep2, $fk, $cotangent
+    )
+    b_adjoint = @benchmark $comp_adjoint($out_adjoint, $prep1, $cotangent)
 
     println("\n--- type 2 ---"); display(b_type2)
     println("\n--- reverse-mode VJP ---"); display(b_reverse)
@@ -132,6 +151,10 @@ function run_nufft_bench(; M = 100_000, N = 128, D = 2, eps = 1.0e-6,
         prep1,
         points,
         fk,
+        dfk,
+        out,
+        out_shadow,
+        out_adjoint,
         cotangent,
         nmodes,
     )
