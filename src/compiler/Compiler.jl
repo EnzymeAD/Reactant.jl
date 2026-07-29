@@ -432,34 +432,33 @@ function compile_mlir!(
     end
 
     if compile_options.optimization_passes === :all || compile_options.optimization_passes === :after_enzyme
-
-
-    elseif compile_options.optimization_passes === :after_enzyme
         raise_pass_list = String[kern, raise_passes]
         run_pass_pipeline!(
             mod,
             join(
-                String[
-                    "mark-func-memory-effects",
-                    opt_passes
-                ] +
-                (compile_options.raise_first ? raise_pass_list : String[]) +
-                ["enzyme-batch"] +
-                (compile_options.optimization_passes === :after_enzyme ? String[] : [opt_passes2]) +
-                [
-                    enzyme_pass,
-                    opt_passes2,
-                    "canonicalize",
-                    "remove-unnecessary-enzyme-ops",
-                    "enzyme-simplify-math",
-                    legalize_chlo_to_stablehlo...,
-                    opt_passes2,
-                ] + 
-                (compile_options.raise_first ? String[] : raise_pass_list) +
-                [
-                    lower_enzymexla_passes,
-                    jit,
-                ],
+                vcat(
+                    String[
+                        "mark-func-memory-effects",
+                        opt_passes,
+                    ],
+                    compile_options.raise_first ? raise_pass_list : String[],
+                    String["enzyme-batch"],
+                    compile_options.optimization_passes === :after_enzyme ? String[] : String[opt_passes2],
+                    String[
+                        enzyme_pass,
+                        opt_passes2,
+                        "canonicalize",
+                        "remove-unnecessary-enzyme-ops",
+                        "enzyme-simplify-math",
+                        legalize_chlo_to_stablehlo...,
+                        opt_passes2,
+                    ],
+                    compile_options.raise_first ? String[] : raise_pass_list,
+                    String[
+                        lower_enzymexla_passes,
+                        jit,
+                    ],
+                ),
                 ",",
             ),
             compile_options.optimization_passes === :after_enzyme ? "after_enzyme" : "all",
