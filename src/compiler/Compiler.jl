@@ -455,7 +455,7 @@ function compile_mlir!(
                     legalize_chlo_to_stablehlo...,
                     opt_passes2,
                 ] + 
-                (compile_options.raise_first ? String[] : raise_pass_list)) +
+                (compile_options.raise_first ? String[] : raise_pass_list) +
                 [
                     lower_enzymexla_passes,
                     jit,
