@@ -95,8 +95,11 @@ include("accelerators/Accelerators.jl")
 
 include("CompileOptions.jl")
 
-export OptimizeCommunicationOptions,
-    ShardyPropagationOptions, CompileOptions, MultiFloatOptions
+export ADOptimizationOptions,
+    OptimizeCommunicationOptions,
+    ShardyPropagationOptions,
+    CompileOptions,
+    MultiFloatOptions
 
 include("mlir/MLIR.jl")
 include("xla/XLA.jl")
