@@ -701,7 +701,7 @@ function compile_mlir!(
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
                         legalize_chlo_to_stablehlo...,
-                        opt_passes2,
+                        opt_passes,
                         lower_enzymexla_passes,
                         jit,
                     ]
@@ -714,7 +714,7 @@ function compile_mlir!(
                         "remove-unnecessary-enzyme-ops",
                         "enzyme-simplify-math",
                         legalize_chlo_to_stablehlo...,
-                        opt_passes2,
+                        opt_passes,
                         kern,
                         raise_passes,
                         lower_enzymexla_passes,
