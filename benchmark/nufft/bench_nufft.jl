@@ -69,8 +69,7 @@ NUFFT, its Enzyme reverse-mode VJP with respect to the uniform modes, and its
 analytic adjoint (a type-1 NUFFT with the opposite sign). Compilation and point
 setup are reported separately and excluded from the benchmark trials.
 """
-function run_nufft_bench(; M = 100_000, N = 128, D = 2, eps = 1.0e-6,
-                         T = Float64, iflag = -1, seed = 42)
+function run_nufft_bench(; M=100_000, N=128, D=2, eps=1.0e-6, T=Float64, iflag=-1, seed=42)
     nmodes = ntuple(_ -> N, D)
     println("NUFFT benchmark: D=$D  M=$M  nmodes=$nmodes  eps=$eps  eltype=$T")
 
@@ -83,7 +82,7 @@ function run_nufft_bench(; M = 100_000, N = 128, D = 2, eps = 1.0e-6,
 
     # Type 2 uses `iflag`; its analytic adjoint is type 1 with the opposite sign.
     plan2 = plan_nufft(T, 2, nmodes; iflag, eps)
-    plan1 = plan_nufft(T, 1, nmodes; iflag = -iflag, eps)
+    plan1 = plan_nufft(T, 1, nmodes; iflag=-iflag, eps)
 
     println("Preparing points (excluded from benchmark timings)…")
     t_setpts2 = @elapsed prep2 = @jit set_nufft_points(plan2, points)
@@ -94,9 +93,7 @@ function run_nufft_bench(; M = 100_000, N = 128, D = 2, eps = 1.0e-6,
     println("Compiling…")
     out = Reactant.to_rarray(zeros(complex(T), M))
     t_type2 = @elapsed comp_type2 = @compile(
-        sync = true,
-        assert_nonallocating = true,
-        execute_nufft!(out, prep2, fk),
+        sync = true, assert_nonallocating = true, execute_nufft!(out, prep2, fk),
     )
     dfk = Reactant.to_rarray(zeros(complex(T), nmodes...))
     out_shadow = Reactant.to_rarray(zeros(complex(T), M))
@@ -130,20 +127,21 @@ function run_nufft_bench(; M = 100_000, N = 128, D = 2, eps = 1.0e-6,
 
     println("Executing (prepared + compiled; setpts excluded)…")
     b_type2 = @benchmark $comp_type2($out, $prep2, $fk)
-    b_reverse = @benchmark $comp_reverse(
-        $dfk, $out, $out_shadow, $prep2, $fk, $cotangent
-    )
+    b_reverse = @benchmark $comp_reverse($dfk, $out, $out_shadow, $prep2, $fk, $cotangent)
     b_adjoint = @benchmark $comp_adjoint($out_adjoint, $prep1, $cotangent)
 
-    println("\n--- type 2 ---"); display(b_type2)
-    println("\n--- reverse-mode VJP ---"); display(b_reverse)
-    println("\n--- analytic adjoint (type 1) ---"); display(b_adjoint)
+    println("\n--- type 2 ---")
+    display(b_type2)
+    println("\n--- reverse-mode VJP ---")
+    display(b_reverse)
+    println("\n--- analytic adjoint (type 1) ---")
+    display(b_adjoint)
     println()
 
     return (;
-        type2 = b_type2,
-        reverse = b_reverse,
-        adjoint = b_adjoint,
+        type2=b_type2,
+        reverse=b_reverse,
+        adjoint=b_adjoint,
         comp_type2,
         comp_reverse,
         comp_adjoint,
@@ -163,33 +161,33 @@ end
 s = ArgParseSettings()
 @add_arg_table! s begin
     "M"
-        help = "number of non-uniform points"
-        arg_type = Int
-        default = 100_000
+    help = "number of non-uniform points"
+    arg_type = Int
+    default = 100_000
     "N"
-        help = "number of uniform modes per dimension"
-        arg_type = Int
-        default = 128
+    help = "number of uniform modes per dimension"
+    arg_type = Int
+    default = 128
     "D"
-        help = "number of dimensions"
-        arg_type = Int
-        default = 2
+    help = "number of dimensions"
+    arg_type = Int
+    default = 2
     "--eps"
-        help = "NUFFT accuracy tolerance"
-        arg_type = Float64
-        default = 1e-6
+    help = "NUFFT accuracy tolerance"
+    arg_type = Float64
+    default = 1e-6
     "--eltype"
-        help = "floating-point type (Float32 or Float64)"
-        arg_type = String
-        default = "Float64"
+    help = "floating-point type (Float32 or Float64)"
+    arg_type = String
+    default = "Float64"
     "--iflag"
-        help = "NUFFT sign flag (1 or -1)"
-        arg_type = Int
-        default = -1
+    help = "NUFFT sign flag (1 or -1)"
+    arg_type = Int
+    default = -1
     "--seed"
-        help = "random number generator seed for reproducibility"
-        arg_type = Int
-        default = 42
+    help = "random number generator seed for reproducibility"
+    arg_type = Int
+    default = 42
 end
 parsed_args = parse_args(ARGS, s)
 
