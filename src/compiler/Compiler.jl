@@ -360,8 +360,14 @@ function compile_mlir!(
     end
 
     opt_passes = optimization_passes(
-        compile_options; sroa=true, recognize_comms, lower_comms, backend, is_sharded,
-        hlo_opts=compile_options.optimization_passes !== :after_enzyme && compile_options.optimization_passes !== :only_enzyme
+        compile_options;
+        sroa=true,
+        recognize_comms,
+        lower_comms,
+        backend,
+        is_sharded,
+        hlo_opts=compile_options.optimization_passes !== :after_enzyme &&
+                 compile_options.optimization_passes !== :only_enzyme,
     )
     opt_passes2 = optimization_passes(
         compile_options; sroa=false, recognize_comms, lower_comms, backend, is_sharded
@@ -375,7 +381,7 @@ function compile_mlir!(
         # Raise enabled but use default passes
         # TODO(#2240) remove redundant libdevice raise after fixing phase ordering
         result = "canonicalize,llvm-to-memref-access,canonicalize,convert-llvm-to-cf,canonicalize,enzyme-lift-cf-to-scf,canonicalize,func.func(canonicalize-loops),canonicalize-scf-for,canonicalize,libdevice-funcs-raise,canonicalize,affine-cfg,canonicalize,func.func(canonicalize-loops),canonicalize,llvm-to-affine-access,canonicalize,delinearize-indexing,canonicalize,simplify-affine-exprs,affine-cfg,canonicalize,func.func(affine-loop-invariant-code-motion),canonicalize,sort-memory,func.func(kernelcast),raise-affine-to-stablehlo{strip_llvm_debuginfo=$(compile_options.strip_llvm_debuginfo) prefer_while_raising=false dump_failed_lockstep=$(DUMP_FAILED_LOCKSTEP[])},canonicalize,arith-raise{stablehlo=true}"
-        
+
         if compile_options.optimization_passes !== :after_enzyme &&
             compile_options.optimization_passes !== :only_enzyme
             result = result * "," * opt_passes2
@@ -431,19 +437,21 @@ function compile_mlir!(
         run_pass_pipeline!(mod, "raise-triton-custom-call", "raise_triton_custom_call")
     end
 
-    if compile_options.optimization_passes === :all || compile_options.optimization_passes === :after_enzyme
+    if compile_options.optimization_passes === :all ||
+        compile_options.optimization_passes === :after_enzyme
         raise_pass_list = String[kern, raise_passes]
         run_pass_pipeline!(
             mod,
             join(
                 vcat(
-                    String[
-                        "mark-func-memory-effects",
-                        opt_passes,
-                    ],
+                    String["mark-func-memory-effects", opt_passes],
                     compile_options.raise_first ? raise_pass_list : String[],
                     String["enzyme-batch"],
-                    compile_options.optimization_passes === :after_enzyme ? String[] : String[opt_passes2],
+                    if compile_options.optimization_passes === :after_enzyme
+                        String[]
+                    else
+                        String[opt_passes2]
+                    end,
                     String[
                         enzyme_pass,
                         opt_passes2,
@@ -454,10 +462,7 @@ function compile_mlir!(
                         opt_passes2,
                     ],
                     compile_options.raise_first ? String[] : raise_pass_list,
-                    String[
-                        lower_enzymexla_passes,
-                        jit,
-                    ],
+                    String[lower_enzymexla_passes, jit],
                 ),
                 ",",
             ),
