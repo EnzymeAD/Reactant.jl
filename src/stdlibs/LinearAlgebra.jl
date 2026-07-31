@@ -72,6 +72,27 @@ function __init__()
                 enzymexla_name, Libdl.dlsym(libblastrampoline_handle, cname)
             )
         end
+
+        # The QR lowering binds the LAPACKE (C) interface rather than the Fortran one, so
+        # these go through a separate table. Not every BLAS/LAPACK backend forwarded by
+        # libblastrampoline exposes LAPACKE, hence the non-throwing `dlsym`: a missing
+        # symbol only makes `qr` fail to compile, instead of breaking `Reactant` at load.
+        for (cname, enzymexla_name) in [
+            # QR factorization
+            (BLAS.@blasfunc(LAPACKE_sgeqrf), :enzymexla_lapacke_sgeqrf_),
+            (BLAS.@blasfunc(LAPACKE_dgeqrf), :enzymexla_lapacke_dgeqrf_),
+            (BLAS.@blasfunc(LAPACKE_cgeqrf), :enzymexla_lapacke_cgeqrf_),
+            (BLAS.@blasfunc(LAPACKE_zgeqrf), :enzymexla_lapacke_zgeqrf_),
+            # Q from the Householder reflectors
+            (BLAS.@blasfunc(LAPACKE_sorgqr), :enzymexla_lapacke_sorgqr_),
+            (BLAS.@blasfunc(LAPACKE_dorgqr), :enzymexla_lapacke_dorgqr_),
+            (BLAS.@blasfunc(LAPACKE_cungqr), :enzymexla_lapacke_cungqr_),
+            (BLAS.@blasfunc(LAPACKE_zungqr), :enzymexla_lapacke_zungqr_),
+        ]
+            ptr = Libdl.dlsym(libblastrampoline_handle, cname; throw_error=false)
+            ptr === nothing && continue
+            MLIR.API.EnzymeJaXMapSymbol(enzymexla_name, ptr)
+        end
     end
 
     return nothing

@@ -2,6 +2,7 @@ using Reactant, Test, FileCheck
 using Reactant: Ops
 using LinearAlgebra
 using SpecialFunctions: SpecialFunctions
+using StableRNGs: StableRNG
 
 const RunningOnTPU = contains(string(Reactant.devices()[1]), "TPU")
 const RunningOnAppleX86 = Sys.isapple() && Sys.ARCH === :x86_64
@@ -1347,6 +1348,64 @@ end
 
         @test @jit(recon_from_lu(lu_ra)) ≈ @jit(apply_permutation(x_ra, perm)) atol = 1e-5 rtol =
             1e-2
+    end
+end
+
+const RunningOnCPU = contains(lowercase(string(Reactant.devices()[1])), "cpu")
+
+function recon_from_qr(Q::AbstractMatrix, factors::AbstractMatrix)
+    return Q * triu(factors[1:size(Q, 2), :])
+end
+
+function qr_thin(x)
+    factors, tau, _ = Ops.geqrf(x)
+    return Ops.orgqr(factors, tau), factors
+end
+
+@testset "qr factorization" begin
+    # `geqrf` returns the packed LAPACK representation, so on CPU it must agree with the
+    # very same routine called through `LinearAlgebra.LAPACK`.
+    @testset "geqrf vs LAPACK: $(T) $(m)x$(n)" for T in
+                                                   (Float32, Float64, ComplexF32, ComplexF64),
+        (m, n) in ((6, 4), (4, 6), (5, 5))
+
+        (T == Float64 || T == ComplexF64) && RunningOnTPU && continue
+
+        # a well-conditioned input: for a rank-deficient one the trailing reflectors are
+        # arbitrary and a blocked/unblocked path difference would show up as a mismatch
+        x = rand(StableRNG(1234), T, m, n)
+        x_ra = Reactant.to_rarray(x)
+
+        factors, tau, info = @jit Ops.geqrf(x_ra)
+
+        @test size(factors) == (m, n)
+        @test size(tau) == (min(m, n),)
+        @test size(info) == ()
+
+        if RunningOnCPU
+            factors_lapack, tau_lapack = LinearAlgebra.LAPACK.geqrf!(copy(x))
+            @test Array(factors) ≈ factors_lapack atol = 1e-5 rtol = 1e-3
+            @test Array(tau) ≈ tau_lapack atol = 1e-5 rtol = 1e-3
+            @test info == 0
+        end
+    end
+
+    # `orgqr` requires a tall (or square) input; the wide case is handled one layer up, in
+    # `LinearAlgebra.qr`. These checks are sign-convention agnostic, so they hold on every
+    # backend.
+    @testset "orgqr: $(T) $(m)x$(n)" for T in (Float32, Float64, ComplexF32, ComplexF64),
+        (m, n) in ((6, 4), (5, 5))
+
+        (T == Float64 || T == ComplexF64) && RunningOnTPU && continue
+
+        x = rand(StableRNG(1234), T, m, n)
+        x_ra = Reactant.to_rarray(x)
+
+        Q, factors = @jit qr_thin(x_ra)
+
+        @test size(Q) == (m, n)
+        @test Array(Q)' * Array(Q) ≈ Matrix{T}(I, n, n) atol = 1e-4 rtol = 1e-2
+        @test recon_from_qr(Array(Q), Array(factors)) ≈ x atol = 1e-4 rtol = 1e-2
     end
 end
 

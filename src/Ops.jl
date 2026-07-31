@@ -14,6 +14,7 @@ using ..Reactant:
     unwrapped_eltype
 using ReactantCore: ReactantCore
 using GPUArraysCore: GPUArraysCore
+using LinearAlgebra: BlasInt
 
 const GELU_APPROXIMATION_MAP = Dict(
     "NONE" => MLIR.API.ENZYMEXLA_GELU_APPROXIMATION_NONE,
@@ -3963,6 +3964,101 @@ end
     end
 
     return U, S, Vt, info
+end
+
+"""
+    geqrf(
+        x::TracedRArray{T,N};
+        location=mlir_stacktrace("geqrf", @__FILE__, @__LINE__)
+    ) where {T,N}
+
+Compute the unpivoted QR factorization of `x` using Householder reflections, and return the
+factors in LAPACK's packed format, the `tau` vector of reflector scalings, and `info`.
+
+The last two dimensions of `x` are the matrix dimensions; any leading dimensions are batch
+dimensions. For an `m × n` matrix the returned `factors` has the same shape as `x` -- its
+upper triangle is `R` and the reflectors are stored in the strict lower triangle -- and
+`tau` has length `min(m, n)`. `info` is always a scalar, even for batched inputs.
+
+Use [`orgqr`](@ref) to materialize `Q` from `factors` and `tau`.
+
+!!! note
+
+    Batched (`N > 2`) inputs are only supported on the CUDA and TPU backends; the CPU
+    lowering of `enzymexla.lapack.geqrf` does not handle batch dimensions yet.
+"""
+@noinline function geqrf(
+    x::TracedRArray{T,N}; location=mlir_stacktrace("geqrf", @__FILE__, @__LINE__)
+) where {T,N}
+    @assert N >= 2
+
+    batch_shape = size(x)[1:(end - 2)]
+    m, n = size(x)[(end - 1):end]
+    tau_shape = (batch_shape..., min(m, n))
+
+    # NOTE: the CPU lowering of `enzymexla.lapack.geqrf` hardcodes these result types
+    # (packed factors with the same shape as the input, `tau` of length `min(m, n)` and a
+    # rank-0 `BlasInt` `info`) and replaces the op's uses with values of those types, so
+    # they must be declared exactly like this.
+    op = enzymexla.lapack_geqrf(
+        x.mlir_data;
+        output=mlir_type(TracedRArray{T,N}, size(x)),
+        tau=mlir_type(TracedRArray{T,N - 1}, tau_shape),
+        info=mlir_type(TracedRNumber{BlasInt}),
+        location,
+    )
+
+    factors = TracedRArray{T,N}((), MLIR.IR.result(op, 1), size(x))
+    tau = TracedRArray{T,N - 1}((), MLIR.IR.result(op, 2), tau_shape)
+    info = TracedRNumber{BlasInt}((), MLIR.IR.result(op, 3))
+
+    return factors, tau, info
+end
+
+"""
+    orgqr(
+        x::TracedRArray{T,N},
+        tau::TracedRArray{T,M};
+        location=mlir_stacktrace("orgqr", @__FILE__, @__LINE__)
+    ) where {T,N,M}
+
+Materialize the orthogonal (unitary for complex `T`) factor `Q` from the packed `factors`
+and `tau` returned by [`geqrf`](@ref). The result has the same shape as `x`.
+
+`x` must have at least as many rows as columns, and `tau` must have exactly one entry per
+column of `x`. To obtain `Q` for a wide `m × n` matrix (`m < n`), first slice the packed
+factors down to their leading `m` columns.
+
+!!! note
+
+    Batched (`N > 2`) inputs are only supported on the CUDA and TPU backends.
+"""
+@noinline function orgqr(
+    x::TracedRArray{T,N},
+    tau::TracedRArray{T,M};
+    location=mlir_stacktrace("orgqr", @__FILE__, @__LINE__),
+) where {T,N,M}
+    @assert N >= 2
+    @assert M == N - 1
+    @assert size(x)[1:(end - 2)] == size(tau)[1:(end - 1)] "x and tau must have the same \
+                                                            batch dimensions"
+    # The CPU lowering derives the number of reflectors from the column count of `x`, while
+    # cuSOLVER derives it from `tau`. Requiring a tall (or square) `x` with one `tau` entry
+    # per column makes both interpretations agree.
+    @assert size(x, N - 1) >= size(x, N) "orgqr requires a tall or square input; slice the \
+                                          packed factors to their leading rows first"
+    @assert size(x, N) == size(tau, M) "tau must have one entry per column of x"
+
+    res = MLIR.IR.result(
+        enzymexla.lapack_orgqr(
+            x.mlir_data,
+            tau.mlir_data;
+            output=mlir_type(TracedRArray{T,N}, size(x)),
+            location,
+        ),
+        1,
+    )
+    return TracedRArray{T,N}((), res, size(x))
 end
 
 @noinline function reduce_window(
