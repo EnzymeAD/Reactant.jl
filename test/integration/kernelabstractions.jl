@@ -129,3 +129,45 @@ end
         ir
     end
 end
+
+# Scratch allocated *inside* a traced call must come back traced: a concrete array cannot take
+# part in the traced program. `KA.allocate` used to return a `ConcreteRArray` unconditionally, so
+# `KA.zeros` then hit `fill!` on it, which compiles a `fill!` kernel, which traces `fill!`, which
+# recursed until the stack overflowed. Asking for a traced element type failed even earlier, while
+# trying to build an XLA buffer whose elements were `TracedRNumber`s.
+#
+# This is the shape any backend-agnostic package hits when it allocates a temporary during a
+# traced call, so both element-type spellings are covered.
+
+@kernel function double_kernel!(y, @Const(x))
+    i = @index(Global)
+    @inbounds y[i] = 2 * x[i]
+end
+
+allocate_zeros(x, ::Type{T}) where {T} =
+    KernelAbstractions.zeros(KernelAbstractions.get_backend(x), T, size(x))
+
+function allocate_and_double(x, ::Type{T}) where {T}
+    backend = KernelAbstractions.get_backend(x)
+    y = allocate_zeros(x, T)
+    double_kernel!(backend)(y, x; ndrange=size(x))
+    return y
+end
+
+@testset "KernelAbstractions allocation within compile" begin
+    x = Reactant.to_rarray(Float64[1.0, 2.0, 3.0, 4.0])
+
+    # `eltype` of a traced array is `TracedRNumber{Float64}`, which has to be unwrapped before it
+    # can name a buffer element type, so both spellings are covered.
+    concrete_zeros(x) = allocate_zeros(x, Float64)
+    traced_zeros(x) = allocate_zeros(x, eltype(x))
+
+    @test Array(Reactant.@jit concrete_zeros(x)) ≈ zeros(4)
+    @test Array(Reactant.@jit traced_zeros(x)) ≈ zeros(4)
+
+    concrete_double(x) = allocate_and_double(x, Float64)
+    traced_double(x) = allocate_and_double(x, eltype(x))
+
+    @test Array(Reactant.@jit raise = true concrete_double(x)) ≈ 2 .* Array(x)
+    @test Array(Reactant.@jit raise = true traced_double(x)) ≈ 2 .* Array(x)
+end
