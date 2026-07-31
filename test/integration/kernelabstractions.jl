@@ -144,8 +144,9 @@ end
     @inbounds y[i] = 2 * x[i]
 end
 
-allocate_zeros(x, ::Type{T}) where {T} =
-    KernelAbstractions.zeros(KernelAbstractions.get_backend(x), T, size(x))
+function allocate_zeros(x, ::Type{T}) where {T}
+    return KernelAbstractions.zeros(KernelAbstractions.get_backend(x), T, size(x))
+end
 
 function allocate_and_double(x, ::Type{T}) where {T}
     backend = KernelAbstractions.get_backend(x)
