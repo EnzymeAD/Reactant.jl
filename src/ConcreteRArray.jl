@@ -780,12 +780,24 @@ function Base.zero(x::ConcreteIFRTArray{T,N}) where {T,N}
     )
 end
 
+# `fill!` on a concrete array is implemented by compiling a `fill!` kernel and running it. Reached
+# from inside a trace, that compile step traces `fill!`, which lands back on the same method, and
+# the recursion is unbounded. It shows up whenever an array is allocated *during* tracing, since
+# allocation routines such as `KernelAbstractions.zeros` fill their result before returning it.
+#
+# Broadcast assignment lowers directly and does not re-enter `fill!`, so it is the traced path.
+@inline function fill_while_tracing!(a, val)
+    a .= val
+    return a
+end
+
 function Base.fill!(a::ConcretePJRTArray{<:TracedRNumber}, val::TracedRNumber)
     throw(MethodError(fill!, (a, val)))
 end
 
 function Base.fill!(a::ConcretePJRTArray{T,N}, val) where {T,N}
     isempty(a) && throw("Cannot setindex! to empty buffer")
+    within_compile() && return fill_while_tracing!(a, val)
 
     wait(a)
     if buffer_on_cpu(a) && !Sharding.is_sharded(a)
@@ -806,6 +818,7 @@ end
 
 function Base.fill!(a::ConcreteIFRTArray{T,N}, val) where {T,N}
     isempty(a) && throw("Cannot setindex! to empty buffer")
+    within_compile() && return fill_while_tracing!(a, val)
 
     fn = compile(fill!, (a, val))
     fn(a, val)
@@ -817,6 +830,8 @@ function Base.fill!(a::ConcreteIFRTArray{<:TracedRNumber}, val::TracedRNumber)
 end
 
 function Base.fill!(x::UnionAnyConcreteRArray, val)
+    within_compile() && return fill_while_tracing!(x, val)
+
     fn = compile(fill!, (x, val))
     fn(x, val)
     return x
