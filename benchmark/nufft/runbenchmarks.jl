@@ -29,6 +29,8 @@ using Random
 using BenchmarkTools
 using VLBISkyModels
 using ArgParse
+using FileIO
+using JLD2
 
 # The transforms are defined inside the weak-dep extension, not exported.
 const _EXT = Base.get_extension(VLBISkyModels, :VLBISkyModelsReactantExt)
@@ -69,9 +71,9 @@ NUFFT, its Enzyme reverse-mode VJP with respect to the uniform modes, and its
 analytic adjoint (a type-1 NUFFT with the opposite sign). Compilation and point
 setup are reported separately and excluded from the benchmark trials.
 """
-function run_nufft_bench(; M=100_000, N=128, D=2, eps=1.0e-6, T=Float64, iflag=-1, seed=42)
+function run_nufft_bench(; M=100_000, N=128, D=2, eps=1.0e-6, T=Float64, iflag=-1, seed=42, optimize = :all)
     nmodes = ntuple(_ -> N, D)
-    println("NUFFT benchmark: D=$D  M=$M  nmodes=$nmodes  eps=$eps  eltype=$T")
+    @info "NUFFT benchmark" D M nmodes eps eltype=T optimize
 
     rng = Random.MersenneTwister(seed)
     # Non-uniform points in [-pi, pi) per dimension.
@@ -81,29 +83,34 @@ function run_nufft_bench(; M=100_000, N=128, D=2, eps=1.0e-6, T=Float64, iflag=-
     cotangent = Reactant.to_rarray(randn(rng, complex(T), M))
 
     # Type 2 uses `iflag`; its analytic adjoint is type 1 with the opposite sign.
-    plan2 = plan_nufft(T, 2, nmodes; iflag, eps)
-    plan1 = plan_nufft(T, 1, nmodes; iflag=-iflag, eps)
+    plan2 = Reactant.to_rarray(plan_nufft(T, 2, nmodes; iflag, eps))
+    plan1 = Reactant.to_rarray(plan_nufft(T, 1, nmodes; iflag=-iflag, eps))
 
-    println("Preparing points (excluded from benchmark timings)…")
+    @info "Preparing points (excluded from benchmark timings)…"
     t_setpts2 = @elapsed prep2 = @jit set_nufft_points(plan2, points)
     t_setpts1 = @elapsed prep1 = @jit set_nufft_points(plan1, points)
     println("  type-2 setpts: $(round(t_setpts2; digits = 2)) s")
     println("  type-1 setpts: $(round(t_setpts1; digits = 2)) s")
 
-    println("Compiling…")
+    @info "Compiling…"
     out = Reactant.to_rarray(zeros(complex(T), M))
     t_type2 = @elapsed comp_type2 = @compile(
-        sync = true, assert_nonallocating = true, execute_nufft!(out, prep2, fk),
+        optimize = optimize,
+        sync = true,
+        assert_nonallocating = true,
+        execute_nufft!(out, prep2, fk),
     )
     dfk = Reactant.to_rarray(zeros(complex(T), nmodes...))
     out_shadow = Reactant.to_rarray(zeros(complex(T), M))
     t_reverse = @elapsed comp_reverse = @compile(
+        optimize = optimize,
         sync = true,
         assert_nonallocating = true,
         type2_vjp!(dfk, out, out_shadow, prep2, fk, cotangent),
     )
     out_adjoint = Reactant.to_rarray(zeros(complex(T), nmodes...))
     t_adjoint = @elapsed comp_adjoint = @compile(
+        optimize = optimize,
         sync = true,
         assert_nonallocating = true,
         execute_nufft!(out_adjoint, prep1, cotangent),
@@ -114,6 +121,7 @@ function run_nufft_bench(; M=100_000, N=128, D=2, eps=1.0e-6, T=Float64, iflag=-
 
     # Warm up, synchronize, and verify the differentiated VJP against the
     # analytic type-1 adjoint. None of this is part of a benchmark trial.
+    @info "Warming up..."
     c_out = comp_type2(out, prep2, fk)
     dfk_reverse = comp_reverse(dfk, out, out_shadow, prep2, fk, cotangent)
     dfk_adjoint = comp_adjoint(out_adjoint, prep1, cotangent)
@@ -125,18 +133,24 @@ function run_nufft_bench(; M=100_000, N=128, D=2, eps=1.0e-6, T=Float64, iflag=-
     println("  type-2 out: $(typeof(c_out)) size $(size(c_out))")
     println("  reverse/adjoint max error: $max_error (relative $relative_error)")
 
-    println("Executing (prepared + compiled; setpts excluded)…")
-    b_type2 = @benchmark $comp_type2($out, $prep2, $fk)
-    b_reverse = @benchmark $comp_reverse($dfk, $out, $out_shadow, $prep2, $fk, $cotangent)
-    b_adjoint = @benchmark $comp_adjoint($out_adjoint, $prep1, $cotangent)
-
+    @info "Executing (prepared + compiled; setpts excluded)…"
     println("\n--- type 2 ---")
+    b_type2 = @benchmark $comp_type2($out, $prep2, $fk)
     display(b_type2)
+
     println("\n--- reverse-mode VJP ---")
+    b_reverse = @benchmark $comp_reverse($dfk, $out, $out_shadow, $prep2, $fk, $cotangent)
     display(b_reverse)
+
     println("\n--- analytic adjoint (type 1) ---")
+    b_adjoint = @benchmark $comp_adjoint($out_adjoint, $prep1, $cotangent)
     display(b_adjoint)
     println()
+
+    @info "Profiling..."
+    prof_type2 = Reactant.@timed comp_type2(out, prep2, fk)
+    prof_reverse = Reactant.@timed comp_reverse(dfk, out, out_shadow, prep2, fk, cotangent)
+    prof_adjoint = Reactant.@timed comp_adjoint(out_adjoint, prep1, cotangent)
 
     return (;
         type2=b_type2,
@@ -145,6 +159,9 @@ function run_nufft_bench(; M=100_000, N=128, D=2, eps=1.0e-6, T=Float64, iflag=-
         comp_type2,
         comp_reverse,
         comp_adjoint,
+        prof_type2,
+        prof_reverse,
+        prof_adjoint,
         prep2,
         prep1,
         points,
@@ -188,6 +205,16 @@ s = ArgParseSettings()
     help = "random number generator seed for reproducibility"
     arg_type = Int
     default = 42
+    "--opt"
+    help = "optimization pass list (:all, :after_enzyme, ...)"
+    arg_type = String
+    default = "all"
+    "--backend"
+    help = "select Reactant backend (cpu, cuda, ...)"
+    arg_type = String
+    "--out"
+    help = "save benchmarks to file"
+    arg_type = String
 end
 parsed_args = parse_args(ARGS, s)
 
@@ -198,5 +225,31 @@ eps = parsed_args["eps"]
 T = eval(Meta.parse(parsed_args["eltype"]))
 iflag = parsed_args["iflag"]
 seed = parsed_args["seed"]
+optimize = Symbol(parsed_args["opt"])
+backend = parsed_args["backend"]
+out = parsed_args["out"]
 
-run_nufft_bench(; M, N, D, eps, T, iflag, seed)
+if !isnothing(backend)
+    Reactant.set_default_backend(backend)
+end
+
+data = run_nufft_bench(; M, N, D, eps, T, iflag, seed, optimize)
+
+if !isnothing(out)
+    jldsave(out;
+        M,
+        N,
+        D,
+        eps,
+        eltype = T,
+        iflag,
+        seed,
+        optimize,
+        bench_primal_type_2 = data.type2,
+        bench_revdiff_enzyme = data.reverse,
+        bench_revdiff_analytical_type_1 = data.adjoint,
+        prof_primal_type_2 = data.prof_type2,
+        prof_revdiff_enzyme = data.prof_reverse,
+        prof_revdiff_analytical_type_1 = data.prof_adjoint,
+    )
+end
