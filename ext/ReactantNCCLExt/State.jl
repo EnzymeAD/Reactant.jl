@@ -44,8 +44,9 @@ function choose_nccl_device(xla_device::Reactant.XLA.AbstractDevice)
     devices = collect(NCCL.CUDA.devices())
     isempty(devices) && error("No CUDA devices available for NCCL communicator setup")
     hardware_id = Int(Reactant.XLA.get_local_hardware_id(xla_device))
-    0 <= hardware_id < length(devices) ||
-        error("Reactant XLA device hardware id $hardware_id is out of range for $(length(devices)) CUDA devices")
+    0 <= hardware_id < length(devices) || error(
+        "Reactant XLA device hardware id $hardware_id is out of range for $(length(devices)) CUDA devices",
+    )
     return devices[hardware_id + 1]
 end
 
