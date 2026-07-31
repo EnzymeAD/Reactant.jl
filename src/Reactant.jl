@@ -9,7 +9,7 @@ using ReactantCore:
     Periodic,
     Binomial
 
-using LinearAlgebra: LinearAlgebra, RowMaximum, NoPivot
+using LinearAlgebra: LinearAlgebra, RowMaximum, NoPivot, ColumnNorm
 using Random: Random, AbstractRNG
 using EnumX: @enumx
 using Functors: Functors, @leaf

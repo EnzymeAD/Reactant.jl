@@ -5,6 +5,7 @@ using SpecialFunctions: SpecialFunctions
 using StableRNGs: StableRNG
 
 const RunningOnTPU = contains(string(Reactant.devices()[1]), "TPU")
+const RunningOnCPU = contains(lowercase(string(Reactant.devices()[1])), "cpu")
 const RunningOnAppleX86 = Sys.isapple() && Sys.ARCH === :x86_64
 
 @testset "abs" begin
@@ -1351,8 +1352,6 @@ end
     end
 end
 
-const RunningOnCPU = contains(lowercase(string(Reactant.devices()[1])), "cpu")
-
 function recon_from_qr(Q::AbstractMatrix, factors::AbstractMatrix)
     return Q * triu(factors[1:size(Q, 2), :])
 end
@@ -1365,8 +1364,9 @@ end
 @testset "qr factorization" begin
     # `geqrf` returns the packed LAPACK representation, so on CPU it must agree with the
     # very same routine called through `LinearAlgebra.LAPACK`.
-    @testset "geqrf vs LAPACK: $(T) $(m)x$(n)" for T in
-                                                   (Float32, Float64, ComplexF32, ComplexF64),
+    @testset "geqrf vs LAPACK: $(T) $(m)x$(n)" for T in (
+            Float32, Float64, ComplexF32, ComplexF64
+        ),
         (m, n) in ((6, 4), (4, 6), (5, 5))
 
         (T == Float64 || T == ComplexF64) && RunningOnTPU && continue

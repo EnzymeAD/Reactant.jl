@@ -162,6 +162,89 @@ end
     end
 end
 
+const RunningOnCPU = contains(lowercase(string(Reactant.devices()[1])), "cpu")
+
+function qr_factors(A)
+    F = qr(A)
+    return F.Q, F.R
+end
+
+function qr_destructure(A)
+    Q, R = qr(A)
+    return Q, R
+end
+
+solve_with_qr(A, b) = solve_with_fact(qr, A, b)
+
+@testset "QR Factorization" begin
+    @testset "$(T) $(m)x$(n)" for T in (Float32, Float64, ComplexF32, ComplexF64),
+        (m, n) in ((6, 4), (4, 4), (4, 6))
+
+        (T == ComplexF64 || T == Float64) && RunningOnTPU && continue
+
+        k = min(m, n)
+        A = random_matrix_with_cond(T, m, n, 10.0)
+        A_ra = Reactant.to_rarray(A)
+
+        Q, R = @jit qr_factors(A_ra)
+        Q, R = Array(Q), Array(R)
+
+        @test size(Q) == (m, k)
+        @test size(R) == (k, n)
+        @test Q' * Q ≈ Matrix{T}(I, k, k) atol = 1e-4 rtol = 1e-2
+        @test Q * R ≈ A atol = 1e-4 rtol = 1e-2
+        @test R ≈ triu(R)
+
+        # same LAPACK routine on both sides, so the sign convention matches too
+        RunningOnCPU && @test R ≈ LinearAlgebra.qr(A).R atol = 1e-4 rtol = 1e-2
+    end
+
+    @testset "destructuring" begin
+        A = random_matrix_with_cond(Float32, 6, 4, 10.0)
+        A_ra = Reactant.to_rarray(A)
+
+        Q, R = @jit qr_destructure(A_ra)
+        @test Array(Q) * Array(R) ≈ A atol = 1e-4 rtol = 1e-2
+    end
+
+    @testset "least squares: $(T) $(m)x$(n)" for T in (Float32, ComplexF32),
+        (m, n) in ((6, 4), (4, 4), (4, 6))
+
+        A = random_matrix_with_cond(T, m, n, 10.0)
+        A_ra = Reactant.to_rarray(A)
+
+        b = rand(T, m)
+        b_ra = Reactant.to_rarray(b)
+
+        B = rand(T, m, 3)
+        B_ra = Reactant.to_rarray(B)
+
+        if m >= n
+            # over-determined: the least squares solution is unique, so we can compare
+            # against Julia directly
+            @test @jit(solve_with_qr(A_ra, b_ra)) ≈ solve_with_qr(A, b) atol = 1e-4 rtol =
+                1e-2
+            @test @jit(solve_with_qr(A_ra, B_ra)) ≈ solve_with_qr(A, B) atol = 1e-4 rtol =
+                1e-2
+        else
+            # under-determined: unpivoted QR returns a basic solution, which need not be
+            # the one Julia's pivoted `\` picks, so check the residual instead
+            x = Array(@jit(solve_with_qr(A_ra, b_ra)))
+            @test maximum(abs, A * x .- b) < 1e-3
+            @test all(iszero, x[(m + 1):n])
+
+            X = Array(@jit(solve_with_qr(A_ra, B_ra)))
+            @test maximum(abs, A * X .- B) < 1e-3
+            @test all(iszero, X[(m + 1):n, :])
+        end
+    end
+
+    @testset "pivoted QR is unsupported" begin
+        A_ra = Reactant.to_rarray(rand(Float32, 4, 4))
+        @test_throws ArgumentError @jit(qr(A_ra, ColumnNorm()))
+    end
+end
+
 function get_svd_algorithms(backend::String, size=nothing)
     backend = lowercase(backend)
     algorithms = ["DEFAULT"]

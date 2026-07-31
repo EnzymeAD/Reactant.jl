@@ -345,6 +345,42 @@ for (jlop, rop, default_pivot) in (
     end
 end
 
+## `qr` needs its own loop: `LinearAlgebra.qr(A, pivot)` accepts both `NoPivot` and
+## `ColumnNorm`, and the `ColumnNorm` arm has to be intercepted too so that our error
+## surfaces instead of native `geqp3!` running on traced elements.
+for (jlop, rop) in ((:qr, :overloaded_qr), (:qr!, :overloaded_qr))
+    @eval begin
+        @reactant_overlay function LinearAlgebra.$(jlop)(x::AbstractArray; kwargs...)
+            if use_overlayed_version(x)
+                pivot = NoPivot()
+                return call_with_native(
+                    TracedLinearAlgebra.$(rop),
+                    factorization_copy(LinearAlgebra.$(jlop), x, pivot),
+                    pivot;
+                    kwargs...,
+                )
+            else
+                return call_with_native(LinearAlgebra.$(jlop), x; kwargs...)
+            end
+        end
+
+        @reactant_overlay function LinearAlgebra.$(jlop)(
+            x::AbstractArray, pivot::Union{NoPivot,ColumnNorm}; kwargs...
+        )
+            if use_overlayed_version(x)
+                return call_with_native(
+                    TracedLinearAlgebra.$(rop),
+                    factorization_copy(LinearAlgebra.$(jlop), x, pivot),
+                    pivot;
+                    kwargs...,
+                )
+            else
+                return call_with_native(LinearAlgebra.$(jlop), x, pivot; kwargs...)
+            end
+        end
+    end
+end
+
 for (jlop, rop) in ((:svd, :overloaded_svd),)
     @eval begin
         @reactant_overlay function LinearAlgebra.$(jlop)(x::AbstractArray; kwargs...)

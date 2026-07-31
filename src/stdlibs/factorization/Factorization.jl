@@ -16,6 +16,7 @@ const BatchedAdjointFactorization{T} =
 include("Cholesky.jl")
 include("LU.jl")
 include("SVD.jl")
+include("QR.jl")
 
 # Overload \ to support batched factorization
 for FT in
@@ -81,7 +82,11 @@ function Base.:(\)(
         end
         return res
     end
-    return qr(A, ColumnNorm()) \ B
+    # Base uses `qr(A, ColumnNorm())` here, but the backend has no `geqp3`. Unpivoted QR
+    # gives the same answer for full-rank over-determined systems and an equally valid (but
+    # differently sparse) basic solution for full-rank under-determined ones. It does not
+    # handle rank-deficient `A` -- use `svd(A) \ B` for that.
+    return qr(A, NoPivot()) \ B
 end
 
 function Base.:(\)(D::Diagonal{<:TracedRNumber}, B::AnyTracedRVector)
