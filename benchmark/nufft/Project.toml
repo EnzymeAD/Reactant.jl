@@ -1,0 +1,14 @@
+[deps]
+ArgParse = "c7e460c6-2fb9-53a9-8c5b-16f535851c63"
+BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
+DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
+Enzyme = "7da242da-08ed-463a-9acd-ee780be4f1d9"
+FileIO = "5789e2e9-d7fb-5bc7-8068-2c6fae9b9549"
+JLD2 = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+Reactant = "3c362404-f566-11ee-1572-e11a4b42c853"
+TidierData = "fe2206b3-d496-4ee9-a338-6a095c4ece80"
+VLBISkyModels = "d6343c73-7174-4e0f-bb64-562643efbeca"
+
+[sources]
+Reactant = {path = "../.."}

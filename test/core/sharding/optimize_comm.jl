@@ -3,6 +3,7 @@ using Reactant, Test, FileCheck
 const addressable_devices = Reactant.addressable_devices()
 
 const RunningOnTPU = contains(string(Reactant.devices()[1]), "TPU")
+const RunningOnGPU = contains(string(Reactant.devices()[1]), "CUDA")
 
 function rotate(x)
     y = x[1:100, :]
@@ -160,12 +161,17 @@ if length(addressable_devices) ≥ 8
     end
 end
 
-function wrap(x)
+function wrap(x, result=nothing)
     res = similar(x, size(x, 1) + 2 + 3)
     res[1:3] = x[(end - 2):end]
     res[4:(3 + size(x, 1))] = x
     res[(3 + size(x, 1) + 1):end] = x[1:2]
-    return res
+    if result !== nothing
+        copyto!(@view(result[1:(size(x, 1) + 2 + 3)]), res)
+    else
+        result = res
+    end
+    return result
 end
 
 @testset "Wrap Size" begin
@@ -177,16 +183,17 @@ end
 
             x = reshape(collect(Int32, 1:Size), Size)
             rx = Reactant.to_rarray(x; sharding)
+            Size2 = Size + 3 + 3
+            ry = Reactant.to_rarray(reshape(collect(Int32, 1:Size2), Size2); sharding)
 
-            hlo = @code_xla shardy_passes = :to_mhlo_shardings wrap(rx)
+            hlo = @code_xla shardy_passes = :to_mhlo_shardings wrap(rx, ry)
 
-            if RunningOnTPU
-                @test_broken @filecheck begin
+            if RunningOnGPU
+                @test @filecheck begin
                     @check_not "all-to-all"
                     @check_not "all-reduce"
-                    @check_count 2 "%collective-permute{{(-start)?[.0-9]*}} ="
+                    @check_count 1 "%collective-permute{{(-start)?[.0-9]*}} ="
                     @check_not "%collective-permute{{(-start)?[.0-9]*}} ="
-                    @check_count 1 "%all-gather{{(-start)?[.0-9]*}} ="
                     @check_not "%all-gather{{(-start)?[.0-9]*}} ="
 
                     hlo
@@ -197,16 +204,19 @@ end
                     @check_not "all-reduce"
                     @check_count 2 "%collective-permute{{(-start)?[.0-9]*}} ="
                     @check_not "%collective-permute{{(-start)?[.0-9]*}} ="
-                    @check_count 1 "%all-gather{{(-start)?[.0-9]*}} ="
                     @check_not "%all-gather{{(-start)?[.0-9]*}} ="
 
                     hlo
                 end
             end
 
-            x2 = wrap(x)
-            rx2 = @jit shardy_passes = :to_mhlo_shardings wrap(rx)
-            @test all(x .== convert(Array, rx))
+            y = wrap(x)
+
+            rx2 = @jit shardy_passes = :to_mhlo_shardings wrap(rx, ry)
+            @test all(y .== convert(Array, ry)[1:(Size + 2 + 3)])
+
+            x = reshape(collect(Int32, 1:Size), Size)
+            rx = Reactant.to_rarray(x; sharding)
         end
     end
 end
@@ -266,10 +276,21 @@ end
             expected_allgathers = size2 == sz ? 0 : length(y)
             expected_collectives = mr == multirotate_both ? 2 : 1
 
+            # GPU will fuse together into a single async collective
+            if RunningOnGPU
+                expected_collectives = 1
+                if expected_allgathers != 0
+                    expected_allgathers = 1
+                end
+            end
+
             if Nallgathers != expected_allgathers || Ncollectives != expected_collectives
                 # for debugging print hlo
                 println(hlo)
             end
+
+            @test Nallgathers == expected_allgathers
+            @test Ncollectives == expected_collectives
 
             @test @filecheck begin
                 @check_not "all-to-all"

@@ -2648,9 +2648,36 @@ hlo_sharding_tile_assignment_devices(xla::HloSharding *hloSharding,
   }
 }
 
+static void clear_op_sharding_metadata(xla::OpSharding &op_sharding) {
+  op_sharding.clear_metadata();
+  for (auto &tuple_sharding : *op_sharding.mutable_tuple_shardings())
+    clear_op_sharding_metadata(tuple_sharding);
+}
+
+// Drops the metadata of `hlo_sharding`. Round-tripping through the proto (as
+// opposed to `xla::HloSharding::WithoutMetadata`) also drops the state derived
+// from the metadata, e.g. `xla::HloSharding::reduction_op` which XLA parses out
+// of the `sdy::reduction_op` metadata entry.
+static xla::HloSharding
+hlo_sharding_without_metadata(const xla::HloSharding &hlo_sharding) {
+  xla::OpSharding op_sharding = hlo_sharding.ToProto();
+  clear_op_sharding_metadata(op_sharding);
+  return MyValueOrThrow(xla::HloSharding::FromProto(op_sharding));
+}
+
 REACTANT_ABI bool hlo_sharding_check_eq(xla::HloSharding *hloSharding,
                                         xla::HloSharding *other) {
   return *hloSharding == *other;
+}
+
+// Same as `hlo_sharding_check_eq`, but only compares how the data is laid out
+// across the devices. In particular the metadata is ignored, which
+// `xla::HloSharding::operator==` takes into account through the reduction op.
+REACTANT_ABI bool
+hlo_sharding_check_eq_ignoring_metadata(xla::HloSharding *hloSharding,
+                                        xla::HloSharding *other) {
+  return hlo_sharding_without_metadata(*hloSharding) ==
+         hlo_sharding_without_metadata(*other);
 }
 
 #pragma endregion

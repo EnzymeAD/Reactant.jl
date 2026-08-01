@@ -1,10 +1,20 @@
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
+http_archive(
+    name = "rules_ml_toolchain",
+    patch_cmds = [
+        "sed -i.bak0 '/D_FORTIFY_SOURCE/d' cc/features/BUILD gpu/cuda/legacy/crosstool/cc_toolchain_config.bzl.tpl",
+    ],
+    sha256 = "",
+    strip_prefix = "rules_ml_toolchain-d93102b7328192e6a0e4d40694dafb728f21794b",
+    urls = ["https://github.com/wsmoses/rules_ml_toolchain/archive/d93102b7328192e6a0e4d40694dafb728f21794b.tar.gz"],
+)
+
 NSYNC_COMMIT = "82b118aa7ace3132e517e2c467f8732978cf4023"
 
 NSYNC_SHA256 = ""
 
-ENZYMEXLA_COMMIT = "94c1d963b66df169478591a5539281005dd85f12"
+ENZYMEXLA_COMMIT = "f2e076ce49d9111867c09dbb29b7dde7615a32eb"
 
 ENZYMEXLA_SHA256 = ""
 

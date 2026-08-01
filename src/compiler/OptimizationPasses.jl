@@ -42,6 +42,7 @@ function optimization_passes(
     is_sharded::Bool=false,
     raise_shlo_to_blas_lapack::Bool=true,
     self_to_convolution::Bool=false,
+    hlo_opts::Bool=true,
 )
     # Build the excluded-passes pointer array. Julia Strings are null-terminated,
     # so unsafe_convert(Cstring, s) gives a stable C pointer while the String is live.
@@ -109,7 +110,11 @@ function optimization_passes(
         ],
         ",",
     )
-    func_passes = join(["canonicalize", "cse", "canonicalize", transform_passes], ",")
+    tocombine = ["canonicalize", "cse", "canonicalize"]
+    if hlo_opts
+        push!(tocombine, transform_passes)
+    end
+    func_passes = join(tocombine, ",")
     if lower_comms
         func_passes =
             func_passes *
@@ -117,7 +122,7 @@ function optimization_passes(
             lower_passes_str *
             "},transform-interpreter,enzyme-hlo-remove-transform"
     end
-    if CONCATS_TO_DUS[]
+    if CONCATS_TO_DUS[] && hlo_opts
         func_passes *= ",enzyme-hlo-generate-td{patterns=concat_to_onedim_dus},transform-interpreter,enzyme-hlo-remove-transform"
     end
     passes = String[]
