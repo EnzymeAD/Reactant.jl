@@ -282,6 +282,8 @@ qr_of_host_array(x) = x .+ sum(qr(QR_HOST_MATRIX).R)
         @test size(F.tau) == (4,)
         @test F.info == 0
 
+        @test iterate(F, Val(:done)) === nothing
+
         F2 = copy(F)
         @test Array(F2.factors) == Array(F.factors)
         @test Array(F2.tau) == Array(F.tau)
