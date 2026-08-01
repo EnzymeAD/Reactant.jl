@@ -188,9 +188,12 @@ end
 for f_wrapper in (LinearAlgebra.TransposeFactorization, LinearAlgebra.AdjointFactorization),
     aType in (:AbstractVecOrMat, :AbstractArray)
 
+    # the message has to be built here rather than interpolated into the `@eval`'d body,
+    # where `f_wrapper` would only be looked up at call time
+    msg = "`$(nameof(f_wrapper))` is not supported yet for QR."
+
     @eval function LinearAlgebra.ldiv!(F::$(f_wrapper){<:Any,<:BatchedQR}, B::$aType)
         # TODO: implement this
-        error("`$(f_wrapper)` is not supported yet for QR.")
-        return nothing
+        return error($msg)
     end
 end
