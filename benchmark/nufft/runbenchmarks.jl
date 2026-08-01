@@ -71,9 +71,11 @@ NUFFT, its Enzyme reverse-mode VJP with respect to the uniform modes, and its
 analytic adjoint (a type-1 NUFFT with the opposite sign). Compilation and point
 setup are reported separately and excluded from the benchmark trials.
 """
-function run_nufft_bench(; M=100_000, N=128, D=2, eps=1.0e-6, T=Float64, iflag=-1, seed=42, optimize = :all)
+function run_nufft_bench(;
+    M=100_000, N=128, D=2, eps=1.0e-6, T=Float64, iflag=-1, seed=42, optimize=:all
+)
     nmodes = ntuple(_ -> N, D)
-    @info "NUFFT benchmark" D M nmodes eps eltype=T optimize
+    @info "NUFFT benchmark" D M nmodes eps eltype = T optimize
 
     rng = Random.MersenneTwister(seed)
     # Non-uniform points in [-pi, pi) per dimension.
@@ -236,20 +238,21 @@ end
 data = run_nufft_bench(; M, N, D, eps, T, iflag, seed, optimize)
 
 if !isnothing(out)
-    jldsave(out;
+    jldsave(
+        out;
         M,
         N,
         D,
         eps,
-        eltype = T,
+        eltype=T,
         iflag,
         seed,
         optimize,
-        bench_primal_type_2 = data.type2,
-        bench_revdiff_enzyme = data.reverse,
-        bench_revdiff_analytical_type_1 = data.adjoint,
-        prof_primal_type_2 = data.prof_type2,
-        prof_revdiff_enzyme = data.prof_reverse,
-        prof_revdiff_analytical_type_1 = data.prof_adjoint,
+        bench_primal_type_2=data.type2,
+        bench_revdiff_enzyme=data.reverse,
+        bench_revdiff_analytical_type_1=data.adjoint,
+        prof_primal_type_2=data.prof_type2,
+        prof_revdiff_enzyme=data.prof_reverse,
+        prof_revdiff_analytical_type_1=data.prof_adjoint,
     )
 end
