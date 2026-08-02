@@ -57,3 +57,19 @@ function get_init_params(data, init_params)
     # Return a NamedTuple matching Turing's variable names
     return (alpha=alpha, beta=beta)
 end
+
+function matched_init_params(data)
+    # Deterministic canonical init (matched-init control experiment). Constrained
+    # values identical to the Impulse arm's NUTS start: alpha and beta both at
+    # MATCHED_INIT_REAL (both real support). DynamicPPL.InitFromParams treats
+    # these as constrained (original-space) values. Only used with
+    # --matched-init.
+    #
+    # NOT the origin. Turing's own Bernoulli is differentiable at 0; this arm
+    # takes the offset purely to stay matched with the NumPyro arm, which is not
+    # (see MATCHED_INIT_REAL in turing_harness.jl). All four arms of
+    # logistic_regression_matched_init.json must pin the same literal.
+    attrs = data["attrs"]
+    k = Int(attrs["k"])
+    return (alpha=MATCHED_INIT_REAL, beta=fill(MATCHED_INIT_REAL, k))
+end

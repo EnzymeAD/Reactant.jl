@@ -11,7 +11,7 @@ import numpyro
 import numpyro.distributions as dist
 import xarray as xr
 
-from .base_numpyro_impl import BaseNumPyroImplementation
+from .base_numpyro_impl import MATCHED_INIT_REAL, BaseNumPyroImplementation
 
 
 class LogisticRegression(BaseNumPyroImplementation):
@@ -23,6 +23,27 @@ class LogisticRegression(BaseNumPyroImplementation):
         self.alpha_scale = alpha_scale
         self.beta_scale = beta_scale
         self.beta_loc = beta_loc
+
+    def matched_init_params(self, data: xr.Dataset) -> Dict[str, np.ndarray]:
+        """Deterministic canonical init (matched-init control experiment).
+
+        Constrained point identical to the Impulse arm's NUTS start
+        (standard/logistic_regression.jl `build_constraint`): alpha and beta both
+        at MATCHED_INIT_REAL. Both sites have real support, so under NumPyro's
+        identity transform this is also the unconstrained point. Routed through
+        init_to_value by numpyro_harness.py; only used with --matched-init.
+
+        NOT the origin: `mu = alpha + X @ beta` is linear in these two sites, so
+        alpha = beta = 0 would put all n logits at EXACTLY 0, which is the one
+        point where numpyro's Bernoulli(logits=...) reports a wrong gradient (see
+        MATCHED_INIT_REAL in base_numpyro_impl.py). The offset must stay in step
+        with the Impulse arm's `build_constraint`, or the gate stops comparing
+        the same starting point.
+        """
+        return {
+            "alpha": np.full(1, MATCHED_INIT_REAL),
+            "beta": np.full(self.k, MATCHED_INIT_REAL),
+        }
 
     def model(self, data: xr.Dataset):
         data = data.transpose("item", "feature")

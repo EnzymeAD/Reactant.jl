@@ -262,6 +262,16 @@ function _parse_model_arg()
     error("Missing --model argument")
 end
 
+# Canonical matched-init value for a REAL-support site whose value feeds a
+# reference log-prob that is non-differentiable at the origin. MUST stay
+# bit-identical to `MATCHED_INIT_REAL` in
+# pplbench/pplbench/ppls/numpyro/base_numpyro_impl.py, which carries the full
+# rationale: numpyro's Bernoulli(logits=x).log_prob reports a gradient that is
+# wrong by exactly 0.5 per observation at x == 0, and a logit that is a linear
+# map of zero-initialised real sites is exactly 0 there. Both arms must pin the
+# same offset or --validate stops comparing the same starting point.
+const MATCHED_INIT_REAL = 1e-6
+
 const MODEL_PATH = _parse_model_arg()
 include(joinpath(@__DIR__, MODEL_PATH * ".jl"))
 

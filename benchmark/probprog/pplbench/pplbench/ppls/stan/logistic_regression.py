@@ -8,6 +8,7 @@ from typing import Dict, List
 import numpy as np
 import xarray as xr
 
+from ..base_ppl_impl import MATCHED_INIT_REAL
 from .base_stan_impl import BaseStanImplementation
 
 
@@ -17,6 +18,25 @@ class LogisticRegression(BaseStanImplementation):
         :param attrs: model arguments
         """
         self.attrs = attrs
+
+    def matched_init_params(self, data: xr.Dataset) -> Dict:
+        """Deterministic canonical init (matched-init control experiment).
+
+        Constrained values identical to the Impulse arm's NUTS start: alpha and
+        beta both at MATCHED_INIT_REAL (both real support). Stan inits live on the
+        constrained scale, so these are passed straight through as `inits`. Only
+        used with --matched-init.
+
+        NOT the origin. Stan's own `bernoulli_logit` is differentiable at 0, so
+        this arm takes the offset purely to stay matched with the NumPyro arm,
+        which is not (see MATCHED_INIT_REAL in ppls/base_ppl_impl.py). All four
+        arms of logistic_regression_matched_init.json must pin the same literal.
+        """
+        k = int(self.attrs["k"])
+        return {
+            "alpha": np.full(1, MATCHED_INIT_REAL),
+            "beta": np.full(k, MATCHED_INIT_REAL),
+        }
 
     def format_data_to_stan(self, data: xr.Dataset) -> Dict:
         """

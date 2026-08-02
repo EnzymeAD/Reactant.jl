@@ -9,7 +9,13 @@ from typing import Dict
 import jax.numpy as jnp
 import xarray as xr
 
-from ..base_ppl_impl import BasePPLImplementation
+from ..base_ppl_impl import MATCHED_INIT_REAL, BasePPLImplementation
+
+# Re-exported so numpyro model impls can import it alongside the base class.
+# The constant and its full rationale live in ppls/base_ppl_impl.py; every arm
+# (NumPyro, Stan, Impulse harness.jl, Turing turing_harness.jl) must pin the
+# same literal or the matched-init protocol stops comparing a shared point.
+__all__ = ["BaseNumPyroImplementation", "MATCHED_INIT_REAL"]
 
 
 class BaseNumPyroImplementation(BasePPLImplementation):

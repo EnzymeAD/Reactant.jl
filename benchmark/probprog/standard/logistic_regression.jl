@@ -45,13 +45,22 @@ function build_constraint(data, init_params)
     k = Int(attrs["k"])
     Y = Float64.(data["Y"])
 
-    if init_params !== nothing
-        init_alpha = Float64.(init_params["alpha"])
-        init_beta = Float64.(init_params["beta"])
-    else
-        init_alpha = [0.0]
-        init_beta = zeros(k)
-    end
+    # Matched-init protocol: deterministic canonical start. alpha and beta have
+    # real support, so constrained and unconstrained coincide. The per-trial
+    # `init_params` (a Uniform(-2, 2) draw from the upstream
+    # generate_init_params) is intentionally ignored so every Impulse trial
+    # starts from the same point as the matched-init baselines (following the
+    # annotation build_constraint pattern).
+    #
+    # Offset off the origin by MATCHED_INIT_REAL rather than pinned at 0:
+    # `logits = alpha .+ X * beta` is linear in these two sites, so 0 would put
+    # all n logits at EXACTLY 0, where the NumPyro reference arm's
+    # Bernoulli(logits=...) gradient is wrong by 0.5 per observation and the
+    # --validate gate would blame Impulse for the difference. Mirrored by
+    # LogisticRegression.matched_init_params on the NumPyro arm; the two must
+    # carry the same literal.
+    init_alpha = [MATCHED_INIT_REAL]
+    init_beta = fill(MATCHED_INIT_REAL, k)
 
     return ProbProg.Constraint(
         :alpha => init_alpha,
