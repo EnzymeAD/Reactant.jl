@@ -724,3 +724,27 @@ end
         end
     end
 end
+
+@testset "canonicalize_elementwise_shapes" begin
+    @test CompileOptions().canonicalize_elementwise_shapes
+    @test !CompileOptions(;
+        canonicalize_elementwise_shapes=false
+    ).canonicalize_elementwise_shapes
+
+    # An elementwise chain read at two bitcast-equivalent shapes is what the pass
+    # repairs; the result must not depend on whether it ran.
+    function f(x)
+        y = reshape(x, 4, 2)
+        z = abs.(y) .+ 1.0f0
+        return sum(reshape(z, 8) .* x) + sum(z)
+    end
+    x = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float32, 8))
+
+    on = Float32(@jit canonicalize_elementwise_shapes = true f(x))
+    off = Float32(@jit canonicalize_elementwise_shapes = false f(x))
+    @test on ≈ off
+
+    ∇f(x) = Enzyme.gradient(Enzyme.Reverse, f, x)[1]
+    @test Array(@jit canonicalize_elementwise_shapes = true ∇f(x)) ≈
+        Array(@jit canonicalize_elementwise_shapes = false ∇f(x))
+end

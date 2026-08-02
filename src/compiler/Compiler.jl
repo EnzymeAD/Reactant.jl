@@ -791,6 +791,18 @@ function compile_mlir!(
         )
     end
 
+    # Propagation above can leave an elementwise chain reading a value at two
+    # bitcast-equivalent shapes, which stops XLA from fusing the chain into its
+    # consumer. Give each chain a single shape again.
+    if compile_options.optimization_passes === :all &&
+        compile_options.canonicalize_elementwise_shapes
+        run_pass_pipeline!(
+            mod,
+            "canonicalize-elementwise-shapes,canonicalize,cse",
+            "canonicalize_elementwise_shapes",
+        )
+    end
+
     if backend == "cuda" && compile_options.cudnn_hlo_optimize
         run_pass_pipeline!(mod, "enzymexla-cudnn-hlo-opt", "cudnn-hlo-opt")
     end
