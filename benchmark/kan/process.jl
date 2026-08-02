@@ -9,8 +9,8 @@ using Statistics
 
 df = DataFrame()
 
-for optimize in ["all", "after_enzyme"]
-    jldopen(joinpath(@__DIR__, "$optimize-1e5.jld")) do data
+for file in filter(endswith(".jld"), readdir(@__DIR__))
+    jldopen(joinpath(@__DIR__, file)) do data
         row = (; (Symbol(key) => data[key] for key in keys(data))...)
         push!(df, row)
     end
