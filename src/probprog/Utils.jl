@@ -259,6 +259,8 @@ function _relayout_to_selection(x, ranges::Vector{UnitRange{Int}})
     isempty(ranges) && return x
     sz = size(x)
     nd = length(sz)
+    # Ops.slice rejects empty extents, and an empty array needs no permutation.
+    any(iszero, sz) && return x
     pieces = map(ranges) do r
         lo = ones(Int, nd)
         hi = collect(Int, sz)

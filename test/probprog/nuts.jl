@@ -222,6 +222,60 @@ function default_mass_program(
     return trace, diagnostics
 end
 
+# Reversing select must permute the returned columns and leave the chain itself alone.
+@testset "nuts_select_order_relayout" begin
+    xs = [-4.5, -3.5, -2.5, -1.5, -0.5, 0.5, 1.5, 2.5, 3.5, 4.5]
+    ys_a = [-2.3, -1.6, -0.4, 0.6, 1.4]
+    ys_b = [-2.6, -1.4, -0.6, 0.4, 1.6]
+
+    obs = ProbProg.Constraint(
+        :param_a => [0.0], :param_b => [0.0], :ys_a => ys_a, :ys_b => ys_b
+    )
+    constrained_addresses = ProbProg.extract_addresses(obs)
+    obs_tensor = ProbProg.flatten_constraint(obs)
+    step_size = ConcreteRNumber(0.1)
+
+    sorted_sel = ProbProg.select(ProbProg.Address(:param_a), ProbProg.Address(:param_b))
+    reversed_sel = ProbProg.select(ProbProg.Address(:param_b), ProbProg.Address(:param_a))
+
+    # Fresh RNG per draw: the thunk advances the seed in place.
+    function draw(selection, num_warmup, num_samples)
+        rng = ReactantRNG(Reactant.to_rarray(UInt64[1, 5]))
+        compiled_fn, _ = ProbProg.with_trace() do
+            @compile optimize = :probprog default_mass_program(
+                rng,
+                model,
+                xs,
+                step_size,
+                obs_tensor,
+                constrained_addresses,
+                selection,
+                num_warmup,
+                num_samples,
+            )
+        end
+        trace_tensor, _ = compiled_fn(
+            rng,
+            model,
+            xs,
+            step_size,
+            obs_tensor,
+            constrained_addresses,
+            selection,
+            num_warmup,
+            num_samples,
+        )
+        return Array(trace_tensor)
+    end
+
+    sorted_draws = draw(sorted_sel, 0, 5)
+    reversed_draws = draw(reversed_sel, 0, 5)
+    @test size(sorted_draws) == (5, 2)
+    @test size(reversed_draws) == (5, 2)
+    @test reversed_draws[:, 1] == sorted_draws[:, 2]
+    @test reversed_draws[:, 2] == sorted_draws[:, 1]
+end
+
 @testset "nuts_default_diagonal_mass" begin
     seed = Reactant.to_rarray(UInt64[1, 5])
     rng = ReactantRNG(seed)
