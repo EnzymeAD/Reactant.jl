@@ -33,3 +33,28 @@ for T in [Float32], m in [1024, 4096, 16384], optimize in [:all, :after_enzyme, 
 
     jldsave("benchmark-$m-$optimize-$T.jld"; eltype=T, m, optimize, benchmark=bench_rev, profile=prof)
 end
+
+# T = Float32
+# m = 1024
+# optimize = :after_enzyme
+
+# D = Reactant.to_rarray(Diagonal(rand(T, m)))
+# A = Reactant.to_rarray(rand(T, m, m))
+# X = Reactant.to_rarray(rand(T, m, m))
+
+# compile_options = Reactant.CompileOptions(; optimization_passes=:after_enzyme, disable_scatter_gather_optimization_passes=true)
+# @code_hlo compile_options=compile_options f(D, A, X)
+
+
+# dD = Duplicated(D, zero(D))
+# dA = Duplicated(A, zero(A))
+# dX = Duplicated(X, zero(X))
+
+# compile_options = Reactant.CompileOptions(; optimization_passes=:after_enzyme, disable_scatter_gather_optimization_passes=true)
+# @code_hlo compile_options=compile_options df(dD, dA, dX)
+
+# compile_options = Reactant.CompileOptions(; optimization_passes=:all, disable_scatter_gather_optimization_passes=true)
+# @code_hlo compile_options=compile_options df(dD, dA, dX)
+
+# compile_options = Reactant.CompileOptions(; optimization_passes=:before_enzyme, disable_scatter_gather_optimization_passes=true)
+# @code_hlo compile_options=compile_options df(dD, dA, dX)
