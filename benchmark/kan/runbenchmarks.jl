@@ -1,0 +1,172 @@
+using KolmogorovArnold
+using Random, LinearAlgebra
+using MLDataDevices, BenchmarkTools
+using Enzyme, Lux, ComponentArrays
+using Reactant
+using ArgParse
+using FileIO
+using JLD2
+
+s = ArgParseSettings()
+@add_arg_table! s begin
+    "N"
+    help = "batch size"
+    arg_type = Int
+    default = 10_000
+    "--mlp-width"
+    help = "MLP width"
+    arg_type = Int
+    default = 128
+    "--kan-width"
+    help = "KAN width"
+    arg_type = Int
+    default = 40
+    "--kan-grid"
+    help = "KAN grid size"
+    arg_type = Int
+    default = 10
+    "--seed"
+    help = "random number generator seed for reproducibility"
+    arg_type = Int
+    default = 0
+    "--opt"
+    help = "optimization pass list (:all, :after_enzyme, ...)"
+    arg_type = String
+    default = "all"
+    "--backend"
+    help = "select Reactant backend (cpu, cuda, ...)"
+    arg_type = String
+    "--out"
+    help = "save benchmarks to file"
+    arg_type = String
+end
+
+parsed_args = parse_args(ARGS, s)
+
+N = parsed_args["N"]
+wM = parsed_args["mlp-width"]
+wK = parsed_args["kan-width"]
+G = parsed_args["kan-grid"]
+seed = parsed_args["seed"]
+optimize = Symbol(parsed_args["opt"])
+backend = parsed_args["backend"]
+out = parsed_args["out"]
+
+if !isnothing(backend)
+    Reactant.set_default_backend(backend)
+end
+
+@info "Initializing models and data..."
+rng = Random.default_rng()
+Random.seed!(rng, seed)
+
+device_ra = reactant_device()
+
+x = rand32(rng, 1, N)
+y = x .^ 2
+
+mlp = Chain(
+    Dense(1, wM, tanh),
+    Dense(wM, wM, tanh),
+    Dense(wM, 1),
+)
+
+basis_func = rbf      # rbf, rswaf
+normalizer = softsign # sigmoid(_fast), tanh(_fast), softsign
+
+kan1 = Chain(
+    KDense( 1, wK, G; use_base_act = true, basis_func, normalizer),
+    KDense(wK, wK, G; use_base_act = true, basis_func, normalizer),
+    KDense(wK,  1, G; use_base_act = true, basis_func, normalizer),
+)
+
+kan2 = Chain(
+    KDense( 1, wK, G; use_base_act = false, basis_func, normalizer),
+    KDense(wK, wK, G; use_base_act = false, basis_func, normalizer),
+    KDense(wK,  1, G; use_base_act = false, basis_func, normalizer),
+)
+
+pM, stM = Lux.setup(rng, mlp)
+pK1, stK1 = Lux.setup(rng, kan1)
+pK2, stK2 = Lux.setup(rng, kan2)
+
+pM = ComponentArray(pM)
+pK1 = ComponentArray(pK1)
+pK2 = ComponentArray(pK2)
+
+function loss(model, ps, st, x, y)
+    pred, _ = model(x, ps, st)
+    return MSELoss()(pred, y)
+end
+
+x_ra = x |> device_ra
+y_ra = y |> device_ra
+
+pM_ra , stM_ra  = (pM , stM ) .|> device_ra
+pK1_ra, stK1_ra = (pK1, stK1) .|> device_ra
+pK2_ra, stK2_ra = (pK2, stK2) .|> device_ra
+
+function grad_ra(model, ps, st, x, y)
+    Enzyme.gradient(Enzyme.Reverse, Const(loss), Const(model),
+        ps, Const(st), Const(x), Const(y))[2]
+end
+
+@info "Compiling..."
+time_mlp_comp = @elapsed mlp_comp  = @compile optimize=optimize sync=true mlp( x_ra, pM_ra, stM_ra)
+println("compttime for mlp: $time_mlp_comp")
+
+time_kan1_comp = @elapsed kan1_comp = @compile optimize=optimize sync=true kan1(x_ra, pK1_ra, stK1_ra)
+println("compttime for kan1: $time_kan1_comp")
+
+time_kan2_comp = @elapsed kan2_comp = @compile optimize=optimize sync=true kan2(x_ra, pK2_ra, stK2_ra)
+println("compttime for kan2: $time_kan2_comp")
+
+time_grad_ra_comp_M = @elapsed grad_ra_comp_M  = @compile optimize=optimize sync=true grad_ra(mlp, pM_ra, stM_ra, x_ra, y_ra)
+println("compttime for grad_ra(mlp): $time_grad_ra_comp_M")
+
+time_grad_ra_comp_K1 = @elapsed grad_ra_comp_K1 = @compile optimize=optimize sync=true grad_ra(kan1, pK1_ra, stK1_ra, x_ra, y_ra)
+println("compttime for grad_ra(kan1): $time_grad_ra_comp_K1")
+
+time_grad_ra_comp_K2 = @elapsed grad_ra_comp_K2 = @compile optimize=optimize sync=true grad_ra(kan2, pK2_ra, stK2_ra, x_ra, y_ra)
+println("compttime for grad_ra(kan2): $time_grad_ra_comp_K2")
+
+@info "Benchmarking forward pass..."
+bench_mlp_comp = @benchmark $mlp_comp($x_ra, $pM_ra , $stM_ra)
+display(bench_mlp_comp)
+bench_kan1_comp = @benchmark $kan1_comp($x_ra, $pK1_ra, $stK1_ra)
+display(bench_kan1_comp)
+bench_kan2_comp = @benchmark $kan2_comp($x_ra, $pK2_ra, $stK2_ra)
+display(bench_kan2_comp)
+
+@info "Benchmarking reverse pass..."
+bench_grad_mlp_comp = @benchmark $grad_ra_comp_M($mlp, $pM_ra, $stM_ra, $x_ra, $y_ra)
+display(bench_grad_mlp_comp)
+bench_grad_kan1_comp = @benchmark $grad_ra_comp_K1($kan1, $pK1_ra, $stK1_ra, $x_ra, $y_ra)
+display(bench_grad_kan1_comp)
+bench_grad_kan2_comp = @benchmark $grad_ra_comp_K2($kan2, $pK2_ra, $stK2_ra, $x_ra, $y_ra)
+display(bench_grad_kan2_comp)
+
+if !isnothing(out)
+    jldsave(
+        out;
+        N,
+        wM,
+        wK,
+        G,
+        seed,
+        optimize,
+        backend,
+        time_mlp_comp,
+        time_kan1_comp,
+        time_kan2_comp,
+        time_grad_ra_comp_M,
+        time_grad_ra_comp_K1,
+        time_grad_ra_comp_K2,
+        bench_mlp_comp,
+        bench_kan1_comp,
+        bench_kan2_comp,
+        bench_grad_mlp_comp,
+        bench_grad_kan1_comp,
+        bench_grad_kan2_comp,
+    )
+end
