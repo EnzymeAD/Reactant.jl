@@ -12,31 +12,43 @@
 #
 # active_gumbel[:, 1] ("true") and active_gumbel[:, 2] ("false") are the two
 # Gumbel(0, 1) latent vectors (length 1+num_topics). Per topic j:
-#   active_weight_j = edge_weight[j, :] . active_true   (parents l >= j have zero
-#                     edge weight and active_true[l] = 0, so only l < j count)
+#   active_weight_j = edge_weight[j, :j] . active_true[:j]   (parents l >= j have
+#                     zero edge weight, so only l < j contribute)
 #   logit_true  = log1m_exp(-active_weight_j) + gumbel_true[j]
 #   logit_false = -active_weight_j            + gumbel_false[j]
 #   active_true[j] = softmax([logit_true, logit_false] / tau)[1]
 #                  = sigmoid((h(aw_j) + gdiff[j]) / tau),
 # with h(aw) = log1m_exp(-aw) + aw and gdiff = gumbel_true - gumbel_false.
 #
-# The active_true vector is solved as a WHOLE-VECTOR fixed point rather than a
-# per-topic slicing loop. The topic dependency edge_weight[1:P, 1:P] is strictly
-# lower triangular (parents l < j), so iterating
-#   aw = L * active;  active = sigmoid((h(aw) + gdiff) / tau)   (leak pinned to 1)
-# P times resolves one triangular level per step and lands EXACTLY on the
-# sequential solution. This is not an approximation of the relaxation; it is the
-# same relaxation, evaluated without per-element Gumbel indexing. Per-element
-# slicing (g_true[j]) is avoided on purpose: its reverse-AD scatters each
-# element's gradient into the position vector as a `pad`, which trips a buggy
-# `add(pad, y)` HLO rewrite; the fixed point keeps every Gumbel use a whole-
-# vector op whose adjoint is a clean matmul/elementwise (the same shape the
-# working single/two-site NUTS models use). Word logits reuse the solved vector:
+# The recursion is evaluated in the SAME sequential form as the NumPyro
+# reference (pplbench/pplbench/ppls/numpyro/noisy_or_topic.py) and the upstream
+# Stan `transformed parameters` block: a sweep over the topological order in
+# which topic j contracts only against the j-1 entries already solved. num_topics
+# is static, so the Julia loop traces into a chain of GROWING dots
+#   aw_j = edge_weight[j, 1:(j-1)] . active[1:(j-1)]
+# totalling sum_j (j-1) multiply-adds, with a reverse-mode adjoint of the same
+# triangular shape. The per-topic Gumbel difference is read as a 1-element slice
+# gdiff[j:j]; scalar indexing is not traceable, but the 1-element slice and the
+# 2-D mixed slice edge_weight[j:j, 1:(j-1)] both trace cleanly.
+# The match to NumPyro is STRUCTURAL: the same growing-dot sweep over the same
+# topological order. There is ONE deliberate deviation, disclosed here. The
+# reference indexes the two Gumbel vectors separately (g_true[j] and g_false[j]);
+# this model instead forms gdiff = g_true .- g_false once, as a whole-vector op,
+# and takes a single per-element slice gdiff[j:j]. The two are mathematically
+# identical. The single-slice spelling is the one that reproduces the NumPyro
+# arm pointwise (max |latent diff| ~1e-12 over the validate protocol, `active`
+# max_diff exactly 0); the two-slice spelling diverges to O(1) by the first
+# drawn sample. The forward log joint is bitwise identical between the two
+# spellings at all 25 probe points tested, so the divergence lives in the
+# reverse-mode gradient taken across two distinct sample sites, and is under
+# separate investigation. Do not switch this loop to two per-element slices
+# until that is resolved.
+# Word logits reuse the solved vector:
 #   S_weight = edge_weight[words, :] . active_true
 #   S_logit  = log1m_exp(-S_weight) + S_weight;  S ~ Bernoulli(logits = S_logit)
 # Every node has the always-on leak as a parent (edge_weight[j, 1] > 0), so
-# aw_j > 0 for real topics; only the leak row (aw_1 = 0, where h is -inf) is
-# pinned, so no non-finite value enters the differentiated path.
+# aw_j > 0 for every real topic and log1m_exp(-aw_j) stays finite; the leak
+# entry is pinned to 1 and is never fed through the transcendentals.
 
 # log(1 - exp(-x)) for x >= 0, stable branch-free enough for tracing.
 _log1mexpm(x) = log(-expm1(-x))
@@ -54,15 +66,16 @@ function noisy_or_topic(rng, edge_weight, num_topics, num_words, tau)
         rng, ProbProg.Gumbel(0.0, 1.0, (P,)); symbol=:active_gumbel_false
     )
 
+    # Julia j == NumPyro's python j + 1; on entry to iteration j the vector
+    # `active` holds the j-1 already-solved entries, so edge_weight[j:j, 1:(j-1)]
+    # is exactly NumPyro's edge_weight[j, :j].
     gdiff = g_true .- g_false                            # (P,) whole-vector
-    L = edge_weight[1:P, 1:P]                            # (P,P) topic-parent block
-    is_leak = Reactant.Ops.constant(collect(1:P)) .== 1  # (P,) leak mask
-    active = Reactant.Ops.constant(vcat(1.0, zeros(P - 1)))  # (P,), leak = 1
-    for _ in 1:P                                         # P steps: exact fixed point
-        aw_raw = L * active                             # (P,) matmul
-        aw = ifelse.(is_leak, 1.0, aw_raw)              # avoid -inf at leak (aw_1=0)
-        an = 1.0 ./ (1.0 .+ exp.(-((_log1mexpm.(aw) .+ gdiff) ./ tau)))
-        active = ifelse.(is_leak, 1.0, an)              # pin leak active to 1
+    active = Reactant.Ops.constant([1.0])                # (1,) leak, pinned to 1
+    for j in 2:P
+        row = edge_weight[j:j, 1:(j - 1)]                # (1, j-1) parent weights
+        aw = row * active                                # (1,) growing dot
+        an = 1.0 ./ (1.0 .+ exp.(-((_log1mexpm.(aw) .+ aw .+ gdiff[j:j]) ./ tau)))
+        active = vcat(active, an)
     end
 
     word_edges = edge_weight[(P + 1):(P + num_words), :]  # (num_words, P)
@@ -107,7 +120,9 @@ function setup(data)
         model_args = model_args,
         selection = selection,
         position_size = 2 * P,
-        inverse_mass_matrix = ones(Float64, 2 * P),
+        # Dense mass-adaptation protocol: fall through to the harness dense-eye
+        # default so Impulse adapts a dense Welford mass matching NumPyro/Stan/Turing.
+        # inverse_mass_matrix = ones(Float64, 2 * P),
         model_name = "Noisy-Or Topic (Gumbel-softmax relaxation)",
     )
 end
