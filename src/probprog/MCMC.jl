@@ -389,10 +389,14 @@ function mcmc(
 
     all_addresses_attr = build_selection_attr(tt)
 
+    # Positions use position_layout(selection) order; relayout restores select order.
+    layout = position_layout(selection)
+    relayout = layout_column_ranges(tt.entries, layout, selection)
+
     # Samples are constrained; NUTS state is unconstrained (narrower for SIMPLEX).
     selection_pos_size = 0
     unconstrained_pos_size = 0
-    for address in selection
+    for address in layout
         for entry in tt.entries
             entry_path = [entry.parent_path..., entry.symbol]
             if entry_path == collect(address.path)
@@ -404,7 +408,7 @@ function mcmc(
     end
 
     selection_attr = MLIR.IR.Attribute[]
-    for address in selection
+    for address in layout
         address_attr = MLIR.IR.Attribute[]
         for sym in address.path
             sym_addr = reinterpret(UInt64, pointer_from_objref(sym))
@@ -556,6 +560,7 @@ function mcmc(
             config,
             num_chains,
         )
+        new_trace = _relayout_to_selection(new_trace, relayout)
         return new_trace, diagnostics, log_densities, traced_result, state
     end
 
@@ -576,6 +581,7 @@ function mcmc(
         config,
     )
 
+    new_trace = _relayout_to_selection(new_trace, relayout)
     return new_trace, diagnostics, log_densities, traced_result, state
 end
 

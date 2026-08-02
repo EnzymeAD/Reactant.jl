@@ -195,6 +195,81 @@ function build_selection_attr(trace::TracedTrace)
     return MLIR.IR.Attribute(selection)
 end
 
+"""
+    position_layout(selection) -> Selection
+
+The single ordering convention for everything positional in an `impulse.infer`
+run: the unconstrained position vector the sampler integrates, the mass matrix
+and `initial_position` that index it, the per-site `supports` offsets, and the
+collected-samples buffer's columns. It is the order of the `selection` attribute
+handed to the op, so the C++ layout builders (`collectSupportInfoForSelection`
+and `collectSupportInfoForRegion`, both of which walk `selection`) and this
+frontend derive the layout from one place.
+
+It is deliberately NOT the caller's `ProbProg.select` argument order. Since
+upstream e0cb37d73 ("Respect order of parameter specification", #3059) that
+argument order is a user-facing choice governing the OUTPUT column order, and
+letting it also drive the integration layout made the sampler's coordinates
+model-author-dependent. In particular it broke pointwise agreement with
+NumPyro, which flattens its momentum with `ravel_pytree` over the site dict and
+`jax.tree_util` sorts dict keys, so NumPyro's layout is sorted-by-address. A
+single flat momentum draw only lands on the same coordinates in both systems
+when our layout is sorted too.
+
+The two orders are reconciled in exactly one place: `_relayout_to_selection`
+permutes the returned trace columns from this layout back to the caller's
+`select` order, so `#3059`'s output-column contract still holds.
+"""
+# Not by string.(path): String isless recurses under Reactant tracing until stack overflow.
+# Symbol order matches NumPyro's name-sorted site order.
+position_layout(selection::Selection) = Selection(sort(collect(selection); by=a -> a.path))
+
+"""
+    layout_column_ranges(entries, layout, selection) -> Vector{UnitRange{Int}}
+
+Constrained column ranges of the collected-samples buffer, one per address in
+`selection` order, addressed in `position_layout` order. Feeding these to
+`_relayout_to_selection` turns a layout-ordered buffer into a selection-ordered
+one. Returns an empty vector when the two orders already agree.
+"""
+function layout_column_ranges(
+    entries::Vector{TraceEntry}, layout::Selection, selection::Selection
+)
+    collect(layout) == collect(selection) && return UnitRange{Int}[]
+    width = Dict{Address,Int}()
+    for address in layout
+        for entry in entries
+            if [entry.parent_path..., entry.symbol] == collect(address.path)
+                width[address] = entry.num_elements
+                break
+            end
+        end
+    end
+    span = Dict{Address,UnitRange{Int}}()
+    offset = 0
+    for address in layout
+        n = get(width, address, 0)
+        span[address] = (offset + 1):(offset + n)
+        offset += n
+    end
+    return UnitRange{Int}[span[address] for address in selection]
+end
+
+function _relayout_to_selection(x, ranges::Vector{UnitRange{Int}})
+    isempty(ranges) && return x
+    sz = size(x)
+    nd = length(sz)
+    pieces = map(ranges) do r
+        lo = ones(Int, nd)
+        hi = collect(Int, sz)
+        lo[nd] = first(r)
+        hi[nd] = last(r)
+        return Ops.slice(x, lo, hi)
+    end
+    length(pieces) == 1 && return only(pieces)
+    return Ops.concatenate(pieces, nd)
+end
+
 function filter_entries_by_selection(entries::Vector{TraceEntry}, selection::Selection)
     filtered = TraceEntry[]
     new_offset = 0
