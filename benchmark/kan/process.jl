@@ -18,13 +18,14 @@ end
 
 mem(x) = prettymemory(x.memory_data["GPU_1_bfc"].peak_bytes_usage_lifetime)
 flops(x) = x.metrics_data.raw_flops / 1e9
+prettybench(x) = prettytime(time(mean(x))) * " ± " * prettytime(time(std(x)))
 
 df = @chain df begin
-    @mutate mlp = bench_mlp_comp
-    @mutate kan1 = bench_kan1_comp
-    @mutate kan2 = bench_kan2_comp
-    @mutate grad_mlp = bench_grad_mlp_comp
-    @mutate grad_kan1 = bench_grad_kan1_comp
-    @mutate grad_kan2 = bench_grad_kan2_comp
+    @mutate mlp = prettybench(bench_mlp_comp)
+    @mutate kan1 = prettybench(bench_kan1_comp)
+    @mutate kan2 = prettybench(bench_kan2_comp)
+    @mutate grad_mlp = prettybench(bench_grad_mlp_comp)
+    @mutate grad_kan1 = prettybench(bench_grad_kan1_comp)
+    @mutate grad_kan2 = prettybench(bench_grad_kan2_comp)
     @select N optimize mlp grad_mlp kan1 grad_kan1 kan2 grad_kan2
 end
