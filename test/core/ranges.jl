@@ -8,6 +8,14 @@ using Reactant, Test
     @test Array{Int64}(@jit(i:j)) == collect(5:10)
 end
 
+@testset "range getindex with a traced index" begin
+    i = Reactant.to_rarray(3; track_numbers=true)
+    lr = LinRange(0.0, 1.0, 11)
+    @test Float64(@jit(getindex(lr, i))) ≈ lr[3]
+    ur = 5:16
+    @test Int64(@jit(getindex(ur, i))) == ur[3]
+end
+
 broadcast_over_range(a, kx, ky) = a .* (kx .^ 2 .+ ky' .^ 2)
 
 @testset "broadcast over ranges" begin
