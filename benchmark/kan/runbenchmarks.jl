@@ -144,20 +144,20 @@ time_grad_ra_comp_K2 = @elapsed grad_ra_comp_K2 = @compile compile_options=compi
 println("compttime for grad_ra(kan2): $time_grad_ra_comp_K2")
 
 @info "Benchmarking forward pass..."
-bench_mlp_comp = @benchmark $mlp_comp($x_ra, $pM_ra , $stM_ra)
-display(bench_mlp_comp)
-bench_kan1_comp = @benchmark $kan1_comp($x_ra, $pK1_ra, $stK1_ra)
-display(bench_kan1_comp)
-bench_kan2_comp = @benchmark $kan2_comp($x_ra, $pK2_ra, $stK2_ra)
-display(bench_kan2_comp)
+bench_mlp = @benchmark $mlp_comp($x_ra, $pM_ra , $stM_ra)
+display(bench_mlp)
+bench_kan1 = @benchmark $kan1_comp($x_ra, $pK1_ra, $stK1_ra)
+display(bench_kan1)
+bench_kan2 = @benchmark $kan2_comp($x_ra, $pK2_ra, $stK2_ra)
+display(bench_kan2)
 
 @info "Benchmarking reverse pass..."
-bench_grad_mlp_comp = @benchmark $grad_ra_comp_M($mlp, $pM_ra, $stM_ra, $x_ra, $y_ra)
-display(bench_grad_mlp_comp)
-bench_grad_kan1_comp = @benchmark $grad_ra_comp_K1($kan1, $pK1_ra, $stK1_ra, $x_ra, $y_ra)
-display(bench_grad_kan1_comp)
-bench_grad_kan2_comp = @benchmark $grad_ra_comp_K2($kan2, $pK2_ra, $stK2_ra, $x_ra, $y_ra)
-display(bench_grad_kan2_comp)
+bench_grad_mlp = @benchmark $grad_ra_comp_M($mlp, $pM_ra, $stM_ra, $x_ra, $y_ra)
+display(bench_grad_mlp)
+bench_grad_kan1 = @benchmark $grad_ra_comp_K1($kan1, $pK1_ra, $stK1_ra, $x_ra, $y_ra)
+display(bench_grad_kan1)
+bench_grad_kan2 = @benchmark $grad_ra_comp_K2($kan2, $pK2_ra, $stK2_ra, $x_ra, $y_ra)
+display(bench_grad_kan2)
 
 if !isnothing(out)
     jldsave(
@@ -169,17 +169,17 @@ if !isnothing(out)
         seed,
         compile_options,
         backend,
-        time_mlp_comp,
-        time_kan1_comp,
-        time_kan2_comp,
-        time_grad_ra_comp_M,
-        time_grad_ra_comp_K1,
-        time_grad_ra_comp_K2,
-        bench_mlp_comp,
-        bench_kan1_comp,
-        bench_kan2_comp,
-        bench_grad_mlp_comp,
-        bench_grad_kan1_comp,
-        bench_grad_kan2_comp,
+        # time_mlp_comp,
+        # time_kan1_comp,
+        # time_kan2_comp,
+        # time_grad_ra_comp_M,
+        # time_grad_ra_comp_K1,
+        # time_grad_ra_comp_K2,
+        bench_mlp,
+        bench_kan1,
+        bench_kan2,
+        bench_grad_mlp,
+        bench_grad_kan1,
+        bench_grad_kan2,
     )
 end
