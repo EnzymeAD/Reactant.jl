@@ -33,6 +33,12 @@ s = ArgParseSettings()
     help = "optimization pass list (:all, :after_enzyme, ...)"
     arg_type = String
     default = "all"
+    "--pre-ad"
+    arg_type = String
+    default = "up"
+    "--post-ad"
+    arg_type = String
+    default = "up"
     "--backend"
     help = "select Reactant backend (cpu, cuda, ...)"
     arg_type = String
@@ -49,12 +55,19 @@ wK = parsed_args["kan-width"]
 G = parsed_args["kan-grid"]
 seed = parsed_args["seed"]
 optimize = Symbol(parsed_args["opt"])
+pre_ad = Symbol(parsed_args["pre-ad"])
+post_ad = Symbol(parsed_args["post-ad"])
 backend = parsed_args["backend"]
 out = parsed_args["out"]
 
 if !isnothing(backend)
     Reactant.set_default_backend(backend)
 end
+
+compile_options = Reactant.CompileOptions(;
+    optimization_passes = optimize,
+    reshape_propagate = Reactant.PropagationOptions(pre_ad, post_ad),
+)
 
 @info "Initializing models and data..."
 rng = Random.default_rng()
@@ -112,22 +125,22 @@ function grad_ra(model, ps, st, x, y)
 end
 
 @info "Compiling..."
-time_mlp_comp = @elapsed mlp_comp  = @compile optimize=optimize sync=true mlp( x_ra, pM_ra, stM_ra)
+time_mlp_comp = @elapsed mlp_comp  = @compile compile_options=compile_options sync=true mlp( x_ra, pM_ra, stM_ra)
 println("compttime for mlp: $time_mlp_comp")
 
-time_kan1_comp = @elapsed kan1_comp = @compile optimize=optimize sync=true kan1(x_ra, pK1_ra, stK1_ra)
+time_kan1_comp = @elapsed kan1_comp = @compile compile_options=compile_options sync=true kan1(x_ra, pK1_ra, stK1_ra)
 println("compttime for kan1: $time_kan1_comp")
 
-time_kan2_comp = @elapsed kan2_comp = @compile optimize=optimize sync=true kan2(x_ra, pK2_ra, stK2_ra)
+time_kan2_comp = @elapsed kan2_comp = @compile compile_options=compile_options sync=true kan2(x_ra, pK2_ra, stK2_ra)
 println("compttime for kan2: $time_kan2_comp")
 
-time_grad_ra_comp_M = @elapsed grad_ra_comp_M  = @compile optimize=optimize sync=true grad_ra(mlp, pM_ra, stM_ra, x_ra, y_ra)
+time_grad_ra_comp_M = @elapsed grad_ra_comp_M  = @compile compile_options=compile_options sync=true grad_ra(mlp, pM_ra, stM_ra, x_ra, y_ra)
 println("compttime for grad_ra(mlp): $time_grad_ra_comp_M")
 
-time_grad_ra_comp_K1 = @elapsed grad_ra_comp_K1 = @compile optimize=optimize sync=true grad_ra(kan1, pK1_ra, stK1_ra, x_ra, y_ra)
+time_grad_ra_comp_K1 = @elapsed grad_ra_comp_K1 = @compile compile_options=compile_options sync=true grad_ra(kan1, pK1_ra, stK1_ra, x_ra, y_ra)
 println("compttime for grad_ra(kan1): $time_grad_ra_comp_K1")
 
-time_grad_ra_comp_K2 = @elapsed grad_ra_comp_K2 = @compile optimize=optimize sync=true grad_ra(kan2, pK2_ra, stK2_ra, x_ra, y_ra)
+time_grad_ra_comp_K2 = @elapsed grad_ra_comp_K2 = @compile compile_options=compile_options sync=true grad_ra(kan2, pK2_ra, stK2_ra, x_ra, y_ra)
 println("compttime for grad_ra(kan2): $time_grad_ra_comp_K2")
 
 @info "Benchmarking forward pass..."
@@ -154,7 +167,7 @@ if !isnothing(out)
         wK,
         G,
         seed,
-        optimize,
+        compile_options,
         backend,
         time_mlp_comp,
         time_kan1_comp,
