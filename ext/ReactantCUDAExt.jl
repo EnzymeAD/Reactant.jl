@@ -794,12 +794,16 @@ function compile(job)
         end
         # LLVM.strip_debuginfo!(mod)
         dl = string(LLVM.datalayout(mod))
-        modstr = string(mod)
         # This is a bit weird since we're taking a module from julia's llvm into reactant's llvm version
-        # it is probably safer to reparse a string using the right llvm module api, so we will do that.
-        mmod = MLIR.IR.Module(
-            MLIR.API.ConvertLLVMStrToMLIR(modstr, MLIR.IR.current_context())
+        # so we serialize and reparse with the right llvm module api. Bitcode is used rather than
+        # textual IR: the bitcode reader auto-upgrades constructs whose spelling changed between the
+        # two LLVM versions (e.g. `llvm.loop.distribute.enable` metadata), whereas the .ll parser does
+        # not, and mismatches there abort the process in the verifier.
+        modbc = convert(Vector{UInt8}, mod)
+        mmodref = GC.@preserve modbc MLIR.API.ConvertLLVMBCToMLIR(
+            pointer(modbc), length(modbc), MLIR.IR.current_context()
         )
+        mmod = MLIR.IR.Module(mmodref)
         @assert mmod != C_NULL
 
         cur_module = MLIR.IR.current_module()
