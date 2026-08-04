@@ -378,6 +378,21 @@ end
     end
 end
 
+@reactant_overlay function LinearAlgebra.norm(x::AbstractArray)
+    if use_overlayed_version(x)
+        return call_with_native(TracedLinearAlgebra.overloaded_norm, x)
+    else
+        return call_with_native(LinearAlgebra.norm, x)
+    end
+end
+@reactant_overlay function LinearAlgebra.norm(x::AbstractArray, p::Real)
+    if use_overlayed_version(x)
+        return call_with_native(TracedLinearAlgebra.overloaded_norm, x, p)
+    else
+        return call_with_native(LinearAlgebra.norm, x, p)
+    end
+end
+
 # 3 arg multiplication is specialized in Base, but we can reorder the computation
 # as an MLIR optimization
 @reactant_overlay function Base.:(*)(a::AbstractArray, b::AbstractArray, c::AbstractArray)

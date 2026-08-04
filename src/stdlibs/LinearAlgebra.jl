@@ -385,8 +385,20 @@ end
 
 # LinearAlgebra defines norm with some conditionals which cannot be traced directly
 function LinearAlgebra.norm(x::TracedRArray{T,N}, p::Real=2) where {T,N}
+    return overloaded_norm(x, p)
+end
+
+function overloaded_norm(x::AbstractVector, p::Real=2)
+    # The 2-norm reuses the `dot` lowering rather than a generic mapreduce. For complex `x`,
+    # `dot(x, x)` is real-valued but complex-typed, so the real part is taken before the sqrt.
+    p == 2 && return sqrt(real(overloaded_dot(x, x)))
     isinf(p) && return maximum(abs, x)
+    T = Reactant.unwrapped_eltype(x)
     return mapreduce(Base.Fix2(^, p), +, x)^(T(1 / p))
+end
+
+function overloaded_norm(x::AbstractArray, p::Real=2)
+    return overloaded_norm(call_with_reactant(vec, x), p)
 end
 
 function LinearAlgebra._diagm(shape, kv::Pair{<:Integer,<:AnyTracedRVector}...)
