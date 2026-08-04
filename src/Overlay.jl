@@ -378,10 +378,7 @@ end
     end
 end
 
-# `norm` needs an overlay for the same reason `dot` does. Dispatching on `TracedRArray` alone is
-# not enough: an `AbstractArray` wrapper holding traced data (for example an Oceananigans `Field`)
-# never reaches that method, so it falls through to a package's own `norm`, which may allocate a
-# scratch buffer and read a scalar back out. Both are hostile to tracing.
+@reactant_overlay function LinearAlgebra.norm(x::AbstractArray)
     if use_overlayed_version(x)
         return call_with_native(TracedLinearAlgebra.overloaded_norm, x)
     else
