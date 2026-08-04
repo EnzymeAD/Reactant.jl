@@ -1212,6 +1212,17 @@ REACTANT_ABI MlirModule ConvertLLVMToMLIR(LLVMModuleRef lmod,
   return wrap(res);
 }
 
+// Hand `msg` to the Julia error hook if one has been installed, otherwise fall
+// back to stderr. Returns so callers can bail out with a null module rather
+// than continuing on with a module they failed to parse.
+static void ReportLLVMToMLIRError(llvm::StringRef msg) {
+  if (ReactantThrowError) {
+    ReactantThrowError(msg.str().c_str());
+    return;
+  }
+  llvm::errs() << "LLVMToMLIR: " << msg << "\n";
+}
+
 #include "llvm/IRReader/IRReader.h"
 REACTANT_ABI MlirModule ConvertLLVMStrToMLIR(const char *lmod,
                                              MlirContext cctx) {
@@ -1224,11 +1235,9 @@ REACTANT_ABI MlirModule ConvertLLVMStrToMLIR(const char *lmod,
     llvm::raw_string_ostream err_stream(err_str);
     Err.print(/*ProgName=*/"LLVMToMLIR", err_stream);
     err_stream.flush();
-    if (ReactantThrowError) {
-      llvm::errs() << lmod << "\n";
-      ReactantThrowError(err_str.c_str());
-      return wrap((mlir::ModuleOp) nullptr);
-    }
+    llvm::errs() << lmod << "\n";
+    ReportLLVMToMLIRError(err_str);
+    return wrap((mlir::ModuleOp) nullptr);
   }
   mlir::MLIRContext &context = *unwrap(cctx);
   auto res = mlir::translateLLVMIRToModule(std::move(llvmModule), &context,
@@ -1237,7 +1246,37 @@ REACTANT_ABI MlirModule ConvertLLVMStrToMLIR(const char *lmod,
                  .release();
   if (!res) {
     llvm::errs() << lmod << "\n";
-    ReactantThrowError("Could not translate LLVM IR to MLIR Module");
+    ReportLLVMToMLIRError("Could not translate LLVM IR to MLIR Module");
+  }
+  return wrap(res);
+}
+
+#include "llvm/Bitcode/BitcodeReader.h"
+// Prefer this over ConvertLLVMStrToMLIR: textual LLVM IR is not stable across
+// LLVM versions (the .ll parser performs no auto-upgrade), whereas the bitcode
+// reader auto-upgrades older bitcode into the form the current LLVM expects.
+// This matters when handing a module built by Julia's (older) LLVM over to the
+// LLVM linked into Reactant.
+REACTANT_ABI MlirModule ConvertLLVMBCToMLIR(const uint8_t *bc, size_t len,
+                                            MlirContext cctx) {
+  llvm::LLVMContext Context;
+  auto expectedModule = llvm::parseBitcodeFile(
+      llvm::MemoryBufferRef(
+          llvm::StringRef(reinterpret_cast<const char *>(bc), len),
+          "conversion"),
+      Context);
+  if (!expectedModule) {
+    ReportLLVMToMLIRError(llvm::toString(expectedModule.takeError()));
+    return wrap((mlir::ModuleOp) nullptr);
+  }
+
+  mlir::MLIRContext &context = *unwrap(cctx);
+  auto res = mlir::translateLLVMIRToModule(std::move(*expectedModule), &context,
+                                           /*emitExpensiveWarnings*/ false,
+                                           /*dropDICompositeElements*/ false)
+                 .release();
+  if (!res) {
+    ReportLLVMToMLIRError("Could not translate LLVM bitcode to MLIR Module");
   }
   return wrap(res);
 }
