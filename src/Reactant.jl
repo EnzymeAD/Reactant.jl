@@ -273,9 +273,15 @@ include("ControlFlow.jl")
 include("Tracing.jl")
 
 function default_nccl_comm_handle()
-    ext = Base.get_extension(@__MODULE__, :ReactantNCCLExt)
-    ext === nothing && error("ReactantNCCLExt is not loaded; load NCCL and MPI first")
+    ext = Base.get_extension(@__MODULE__, :ReactantMPIExt)
+    ext === nothing && error("ReactantMPIExt is not loaded; load MPI first")
     return ext.default_comm_handle()
+end
+
+function set_nccl_device!(::Integer)
+    return error(
+        "GPU MPI requires CUDA.jl; load CUDA before initializing the NCCL communicator"
+    )
 end
 
 include("compiler/Compiler.jl")
