@@ -36,6 +36,8 @@ const KA = KernelAbstractions
 
 Reactant.is_extension_loaded(::Val{:CUDA}) = true
 
+Reactant.set_nccl_device!(ordinal::Int) = CUDA.device!(ordinal)
+
 Base.Experimental.@MethodTable(REACTANT_CUDA_METHOD_TABLE)
 
 macro reactant_cuda_overlay(def)
