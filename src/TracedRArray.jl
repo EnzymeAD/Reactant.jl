@@ -198,15 +198,22 @@ function overloaded_mapreduce(
     dims = sort(dims)
 
     op_in_T = unwrapped_eltype(Core.Compiler.return_type(f, Tuple{T}))
-    reduce_init = __default_init(op_in_T, op)
-    riT = unwrapped_eltype(typeof(reduce_init))
-    if riT != op_in_T
-        op_in_T = riT
-        A = riT.(A)
-    end
-    reduce_init = Reactant.promote_to(TracedRNumber{op_in_T}, reduce_init)
+    # `op` may accumulate in a wider type than it consumes: `+(::Bool, ::Bool)::Int64`, so
+    # `sum` over booleans is an `Int64` in Base. `__default_init` reports that wider type
+    # (it is the type of `op`'s identity element), so reduce in it.
+    init_val = __default_init(op_in_T, op)
+    op_in_T = unwrapped_eltype(typeof(init_val))
+    reduce_init = Reactant.promote_to(TracedRNumber{op_in_T}, init_val)
 
+    # Widen *after* applying `f`, not before. `f` decides the element type actually being
+    # reduced, so converting `A` up front is undone by anything narrowing -- e.g. the
+    # predicate in `sum(x -> x == 1, a)` returns `Bool` whatever `A` was converted to.
+    # Reducing in the narrow type is silently wrong: `stablehlo.add` over `i1` is a logical
+    # `or`, and small integers wrap.
     reduce_input = materialize_traced_array(TracedUtils.elem_apply(f, A))
+    if unwrapped_eltype(reduce_input) != op_in_T
+        reduce_input = op_in_T.(reduce_input)
+    end
 
     res = @opcall reduce(reduce_input, reduce_init, dims, op)
 
