@@ -82,7 +82,7 @@ function choose_xla_device(lrank::Integer)
     return Reactant.XLA.get_addressable_device(client, lrank)
 end
 
-function choose_cuda_device(xla_device::Reactant.XLA.AbstractDevice)
+function get_hardware_id(xla_device::Reactant.XLA.AbstractDevice)
     hardware_id = Int(Reactant.XLA.get_local_hardware_id(xla_device))
     hardware_id ≥ 0 || error("Reactant XLA device has invalid hardware id $hardware_id")
     return hardware_id
@@ -95,10 +95,9 @@ function init_default_comm(; comm::MPI.Comm=MPI.COMM_WORLD)
     nranks = MPI.Comm_size(comm)
     lrank = local_rank(comm)
 
-    # pick xla device first, then make nccl follow it
-    # ensures nccl and xla are in agreement process to device mapping
+    # make sure nccl and xla are agree on process-to-device mapping
     xla_device = choose_xla_device(lrank)
-    Reactant.set_nccl_device!(choose_cuda_device(xla_device))
+    Reactant.set_nccl_device!(get_hardware_id(xla_device))
     DEFAULT_XLA_DEVICE[] = xla_device
 
     unique_id = rank == 0 ? nccl_unique_id() : ncclUniqueId(ntuple(_ -> UInt8(0), 128))
