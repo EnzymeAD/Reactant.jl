@@ -45,6 +45,7 @@ function affine_atomic_rmw(
     kind,
     map,
     alignment=nothing,
+    fastmath=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[result,]
@@ -53,6 +54,7 @@ function affine_atomic_rmw(
     successors = Block[]
     attributes = NamedAttribute[NamedAttribute("kind", kind), NamedAttribute("map", map)]
     !isnothing(alignment) && push!(attributes, NamedAttribute("alignment", alignment))
+    !isnothing(fastmath) && push!(attributes, NamedAttribute("fastmath", fastmath))
 
     return create_operation(
         "enzyme.affine_atomic_rmw",
@@ -74,6 +76,7 @@ function atomic_rmw(
     kind,
     ordering,
     alignment=nothing,
+    fastmath=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -85,6 +88,7 @@ function atomic_rmw(
     ]
     !isnothing(result) && push!(op_ty_results, result)
     !isnothing(alignment) && push!(attributes, NamedAttribute("alignment", alignment))
+    !isnothing(fastmath) && push!(attributes, NamedAttribute("fastmath", fastmath))
 
     return create_operation(
         "enzyme.atomic_rmw",
