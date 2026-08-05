@@ -3,11 +3,7 @@
 
 using Test
 using MPI
-
-# NOTE: must load NCCL and CUDA before Reactant
-using NCCL
 using CUDA
-
 using Reactant
 
 const BACKEND_GROUP = lowercase(get(ENV, "REACTANT_BACKEND_GROUP", "auto"))
@@ -15,8 +11,8 @@ const CPU_MPI_BACKENDS = ("auto", "cpu")
 const GPU_MPI_BACKENDS = ("cuda", "gpu")
 const RUN_CPU_MPI_TESTS = BACKEND_GROUP in CPU_MPI_BACKENDS
 const RUN_GPU_MPI_TESTS = BACKEND_GROUP in GPU_MPI_BACKENDS
-const ReactantNCCLExt =
-    RUN_GPU_MPI_TESTS ? Base.get_extension(Reactant, :ReactantNCCLExt) : nothing
+const ReactantMPIExt =
+    RUN_GPU_MPI_TESTS ? Base.get_extension(Reactant, :ReactantMPIExt) : nothing
 
 if RUN_CPU_MPI_TESTS
     Reactant.set_default_backend("cpu")
@@ -58,9 +54,8 @@ gpu_datatypes = [Int32, UInt32, Int64, UInt64, Float32, Float64]
 MPI.Init()
 
 if RUN_GPU_MPI_TESTS
-    ReactantNCCLExt === nothing &&
-        error("ReactantNCCLExt is not loaded; load NCCL and MPI first")
-    ReactantNCCLExt.init_default_comm(; comm=MPI.COMM_WORLD)
+    ReactantMPIExt === nothing && error("ReactantMPIExt is not loaded; load MPI first")
+    ReactantMPIExt.init_default_comm(; comm=MPI.COMM_WORLD)
 end
 
 try
@@ -393,7 +388,7 @@ try
 
 finally
     if RUN_GPU_MPI_TESTS
-        ReactantNCCLExt.destroy_default_comm()
+        ReactantMPIExt.destroy_default_comm()
     end
     MPI.Finalize()
 end
