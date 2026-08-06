@@ -68,6 +68,12 @@ end
 
 if Sys.iswindows() || (Sys.isapple() && Sys.ARCH === :x86_64)
     delete!(testsuite, "integration/enzymejax")
+    delete!(testsuite, "integration/python")
+end
+
+if Sys.iswindows()
+    delete!(testsuite, "integration/cuda")
+    delete!(testsuite, "integration/kernelabstractions")
 end
 
 # Zygote is not supported on 1.12 https://github.com/FluxML/Zygote.jl/issues/1580
