@@ -113,6 +113,12 @@ Fine-grained control over the compilation options for the Reactant compiler.
     to `:up`.
   - `reshape_propagate`: If `:up`, `stablehlo.reshape` operations will be propagated up
     the computation graph. If `:down`, they will be propagated down. Defaults to `:up`.
+  - `canonicalize_elementwise_shapes`: If `true` (default), give each chain of elementwise
+    ops a single tensor shape after differentiation. `stablehlo.reshape` preserves the
+    linearized element order, so shapes with the same element count denote the same buffer;
+    propagation may leave a chain reading a value at two such shapes, which stops XLA from
+    fusing the chain into the op consuming it. Only ever reduces the number of reshapes on
+    a chain boundary.
   - `max_constant_threshold`: If the number of elements in a constant is greater than this
     threshold (for a non-splatted constant), we will throw an error.
   - `inline`: If `true`, all functions will be inlined. (Default: `true`).
@@ -230,6 +236,7 @@ struct CompileOptions
     shardy_passes::Union{Symbol,ShardyPropagationOptions}
     optimize_then_pad::Bool
     optimize_communications::Union{Bool,OptimizeCommunicationOptions}
+    canonicalize_elementwise_shapes::Bool
     # triton_options
     raise_triton_custom_call::Bool
     lower_triton::Bool
@@ -273,6 +280,7 @@ function CompileOptions(;
     shardy_passes::Union{Symbol,ShardyPropagationOptions}=:post_sdy_propagation,
     optimize_then_pad::Bool=true,
     optimize_communications::Union{Bool,OptimizeCommunicationOptions}=true,
+    canonicalize_elementwise_shapes::Bool=true,
     assert_nonallocating::Bool=false,
     donated_args::Symbol=:auto,
     sync::Bool=false,
@@ -339,6 +347,7 @@ function CompileOptions(;
         shardy_passes,
         optimize_then_pad,
         optimize_communications,
+        canonicalize_elementwise_shapes,
         raise_triton_custom_call,
         lower_triton,
         assert_nonallocating,
@@ -396,6 +405,7 @@ function __compile_options_with_reversed_propagation(compile_options::CompileOpt
         compile_options.shardy_passes,
         compile_options.optimize_then_pad,
         compile_options.optimize_communications,
+        compile_options.canonicalize_elementwise_shapes,
         compile_options.raise_triton_custom_call,
         compile_options.lower_triton,
         compile_options.assert_nonallocating,
@@ -440,6 +450,7 @@ function __compile_options_with_updated_sync(compile_options::CompileOptions, sy
         compile_options.shardy_passes,
         compile_options.optimize_then_pad,
         compile_options.optimize_communications,
+        compile_options.canonicalize_elementwise_shapes,
         compile_options.raise_triton_custom_call,
         compile_options.lower_triton,
         compile_options.assert_nonallocating,
