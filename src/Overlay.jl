@@ -312,6 +312,8 @@ for (jlop, rop, default_pivot) in (
     (:lu!, :overloaded_lu, RowMaximum),
     (:cholesky, :overloaded_cholesky, NoPivot),
     (:cholesky!, :overloaded_cholesky, NoPivot),
+    (:qr, :overloaded_qr, NoPivot),
+    (:qr!, :overloaded_qr, NoPivot),
 )
     @eval begin
         @reactant_overlay function LinearAlgebra.$(jlop)(x::AbstractArray; kwargs...)
