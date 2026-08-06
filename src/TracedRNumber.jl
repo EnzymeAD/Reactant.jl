@@ -85,10 +85,16 @@ function Base.isapprox(
     norm::Function=abs,
 ) where {T<:AbstractFloat}
     return (x == y) |
-           (isfinite(x) & isfinite(y) & (norm(x - y) <= max(atol, rtol * max(norm(x), norm(y))))) |
+           (
+               isfinite(x) &
+               isfinite(y) &
+               (norm(x - y) <= max(atol, rtol * max(norm(x), norm(y))))
+           ) |
            (nans & isnan(x) & isnan(y))
 end
-Base.isapprox(x::Real, y::TracedRNumber{<:AbstractFloat}; kwargs...) = isapprox(y, x; kwargs...)
+function Base.isapprox(x::Real, y::TracedRNumber{<:AbstractFloat}; kwargs...)
+    return isapprox(y, x; kwargs...)
+end
 
 function Base.show(io::IOty, X::TracedRNumber{T}) where {T,IOty<:Union{IO,IOContext}}
     return print(io, "TracedRNumber{", T, "}(", X.paths, ")")
