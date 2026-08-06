@@ -163,6 +163,73 @@ end
     @test !Bool(@jit(isinf(ConcreteRNumber(true))))
 end
 
+@testset "isapprox" begin
+    # `ConcreteRNumber` forwards `isapprox` straight to `Base` on the unwrapped
+    # values (see the `AbstractConcreteNumber` methods in ConcreteRArray.jl), so
+    # it never exercises `TracedRNumber`'s own `isapprox` method. Only calling
+    # through `@jit` traces the comparison and hits the method under test.
+    float_pairs = [
+        (1.0, 1.0),                # exactly equal
+        (1.0, 1.0 + 1e-12),        # within default rtol
+        (1.0, 1.1),                # not close by default
+        (0.0, 0.0),
+        (0.0, 1e-20),
+        (-5.0, -5.0000001),
+        (1e10, 1e10 + 100.0),      # rtol-dominated at default tolerance
+        (1.0f0, 1.0f0 + 1.0f-4),
+        (1.0f0, 2.0f0),
+        (NaN, NaN),
+        (NaN, 1.0),
+        (Inf, Inf),
+        (Inf, -Inf),
+        (-Inf, -Inf),
+        (Inf, 1.0),
+    ]
+
+    kwargs_cases = [
+        (;),
+        (; atol=1.0),                 # atol>0 with no rtol must force rtol=0, like Base
+        (; atol=200.0),
+        (; atol=1e-6),
+        (; rtol=1e-3),
+        (; atol=1.0, rtol=1e-9),
+        (; nans=true),
+        (; nans=false),
+        (; norm=abs2),
+    ]
+
+    @testset "traced vs traced: x=$x, y=$y, kwargs=$kwargs" for (x, y) in float_pairs,
+        kwargs in kwargs_cases
+
+        expected = isapprox(x, y; kwargs...)
+        x_ra = Reactant.to_rarray(x; track_numbers=Number)
+        y_ra = Reactant.to_rarray(y; track_numbers=Number)
+        got = @jit isapprox(x_ra, y_ra; kwargs...)
+        @test got isa ConcreteRNumber{Bool}
+        @test Bool(got) == expected
+    end
+
+    @testset "traced vs real: x=$x, y=$y" for (x, y) in float_pairs
+        expected = isapprox(x, y)
+        x_ra = Reactant.to_rarray(x; track_numbers=Number)
+        @test Bool(@jit(isapprox(x_ra, y))) == expected
+    end
+
+    @testset "real vs traced: x=$x, y=$y" for (x, y) in float_pairs
+        expected = isapprox(x, y)
+        y_ra = Reactant.to_rarray(y; track_numbers=Number)
+        @test Bool(@jit(isapprox(x, y_ra))) == expected
+    end
+
+    @testset "≈ operator" begin
+        x_ra = Reactant.to_rarray(1.0; track_numbers=Number)
+        y_ra = Reactant.to_rarray(1.0 + 1e-12; track_numbers=Number)
+        z_ra = Reactant.to_rarray(2.0; track_numbers=Number)
+        @test Bool(@jit(x_ra ≈ y_ra))
+        @test !Bool(@jit(x_ra ≈ z_ra))
+    end
+end
+
 @testset "mod and rem" begin
     a = [-1.1, 7.7, -3.3, 9.9, -5.5]
     b = [6.6, -2.2, -8.8, 4.4, -10.1]
