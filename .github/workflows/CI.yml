@@ -29,7 +29,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        version: ["1.10"]
+        version:
+          - "1.10"
+          - "1.13-nightly"
         os:
           - ubuntu-24.04
           - ubuntu-22.04-arm

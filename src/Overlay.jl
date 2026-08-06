@@ -113,6 +113,11 @@ for randfun in (:rand, :randn, :randexp)
         @reactant_overlay function Random.$(randfun)(
             rng::AbstractRNG, ::Type{T}, dims::Dims
         ) where {T}
+            @static if isdefined(Random, :SeedHasher)
+                if rng isa Random.SeedHasher
+                    return call_with_native(Random.$(randfun), rng, T, dims)
+                end
+            end
             if unwrapped_eltype(T) <: ReactantPrimitive
                 return call_with_native(
                     TracedRandom.$(overload_randfun), rng, unwrapped_eltype(T), dims
@@ -126,12 +131,22 @@ for randfun in (:rand, :randn, :randexp)
         @reactant_overlay function Random.$(randfun)(
             rng::AbstractRNG, dim1::Integer, dims::Integer...
         )
+            @static if isdefined(Random, :SeedHasher)
+                if rng isa Random.SeedHasher
+                    return call_with_native(Random.$(randfun), rng, dim1, dims)
+                end
+            end
             return TracedRandom.$(overload_randfun)(rng, dim1, dims...)
         end
 
         @reactant_overlay function Random.$(randfun)(
             rng::AbstractRNG, ::Type{T}, dim1::Integer, dims::Integer...
         ) where {T}
+            @static if isdefined(Random, :SeedHasher)
+                if rng isa Random.SeedHasher
+                    return call_with_native(Random.$(randfun), rng, T, dim1, dims...)
+                end
+            end
             if unwrapped_eltype(T) <: ReactantPrimitive
                 return TracedRandom.$(overload_randfun)(
                     rng, unwrapped_eltype(T), dim1, dims...
