@@ -71,6 +71,31 @@ Base.isinf(x::TracedRNumber{<:Complex}) = isinf(real(x)) | isinf(imag(x))
 Base.isinf(x::TracedRNumber{<:AbstractFloat}) = @opcall is_inf(x)
 Base.isinf(::TracedRNumber{<:Integer}) = false
 
+# Base's generic `isapprox` requires both arguments to be `Real`, which
+# `TracedRNumber` (<: RNumber, not Real) never satisfies -- dispatch falls
+# through with no matching method. Reimplement the same algorithm here using
+# `&`/`|` instead of `&&`/`||`, since traced comparisons return a traced
+# boolean rather than a native `Bool` usable in short-circuiting control flow.
+function Base.isapprox(
+    x::TracedRNumber{T},
+    y::Union{Real,TracedRNumber{<:AbstractFloat}};
+    atol::Real=0,
+    rtol::Real=(atol > 0 ? zero(T) : sqrt(eps(T))),
+    nans::Bool=false,
+    norm::Function=abs,
+) where {T<:AbstractFloat}
+    return (x == y) |
+           (
+               isfinite(x) &
+               isfinite(y) &
+               (norm(x - y) <= max(atol, rtol * max(norm(x), norm(y))))
+           ) |
+           (nans & isnan(x) & isnan(y))
+end
+function Base.isapprox(x::Real, y::TracedRNumber{<:AbstractFloat}; kwargs...)
+    return isapprox(y, x; kwargs...)
+end
+
 function Base.show(io::IOty, X::TracedRNumber{T}) where {T,IOty<:Union{IO,IOContext}}
     return print(io, "TracedRNumber{", T, "}(", X.paths, ")")
 end
