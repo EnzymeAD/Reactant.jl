@@ -2339,6 +2339,83 @@ end
     )
 end
 
+# Explicitly redirect through `call_with_reactant` so that the closures are
+# always traced with the Reactant interpreter, even if the rewrite pass does
+# not rewrite the dynamic call inside these wrappers.
+#
+# `cond_fn`/`body_fn` are placed *last*, after the explicit loop args, so that
+# the while-loop operands stay ordered as (loop args..., closure captures...).
+# Enzyme's reverse-mode differentiation of `stablehlo.while` identifies the
+# counted-loop induction variable/bound heuristically and expects them near
+# the front of the operand list; putting closure-only captures (e.g. arrays
+# only read, never reassigned, inside the loop) ahead of the explicit args
+# shifts the induction variable back and confuses that heuristic, producing
+# a malformed reverse loop (mismatched operand shapes).
+function _call_while_cond(args_and_fns...)
+    cond_fn = args_and_fns[end - 1]
+    return Reactant.call_with_reactant(cond_fn, args_and_fns[1:(end - 2)]...)
+end
+function _call_while_body(args_and_fns...)
+    body_fn = args_and_fns[end]
+    return Reactant.call_with_reactant(body_fn, args_and_fns[1:(end - 2)]...)
+end
+
+# `stablehlo.while` requires both regions' block arguments to match the loop
+# operands. This holds by construction — both regions are traced over the same
+# `(cond_fn, body_fn, args...)` tuple, whose deterministic, identity-deduped
+# traversal yields the same traced leaves in the same order as the operand
+# collection — but the invariant would break if the argument graph were mutated
+# between the two traces or traversed non-deterministically. Verify it via the
+# recorded argument paths (graph positions), which is stronger than comparing
+# types: it also catches same-typed leaves being permuted between the regions.
+function _while_arg_paths(arg, prefix)
+    return sort!(
+        Any[path[2:end] for path in arg.paths if length(path) > 0 && path[1] == prefix]
+    )
+end
+
+function _while_arg_name(tails, verify_arg_names)
+    isempty(tails) && return "<no argument path>"
+    return join(
+        map(tails) do t
+            name = if verify_arg_names !== nothing && t[1] in eachindex(verify_arg_names)
+                string(verify_arg_names[t[1]])
+            else
+                "arg" * string(t[1])
+            end
+            "$name (path=$t)"
+        end,
+        " / ",
+    )
+end
+
+function _verify_while_region_args(
+    cond_args, cond_argprefix, body_args, body_argprefix, input_types, verify_arg_names
+)
+    cond_paths = [_while_arg_paths(arg, cond_argprefix) for arg in cond_args]
+    body_paths = [_while_arg_paths(arg, body_argprefix) for arg in body_args]
+    if cond_paths == body_paths && length(body_args) == length(input_types)
+        return nothing
+    end
+
+    describe(tails) = _while_arg_name(tails, verify_arg_names)
+
+    lines = String[]
+    for i in 1:max(length(cond_paths), length(body_paths))
+        c = i <= length(cond_paths) ? describe(cond_paths[i]) : "<missing>"
+        b = i <= length(body_paths) ? describe(body_paths[i]) : "<missing>"
+        c == b || push!(lines, "  block argument $i: cond=$c vs body=$b")
+    end
+    return error(
+        """
+        Traced while loop condition and body regions disagree on their block arguments,
+        or they do not match the $(length(input_types)) loop operand(s)
+        (cond: $(length(cond_args)), body: $(length(body_args))).
+        This is a bug in Reactant; please open an issue.
+        $(join(lines, "\n"))"""
+    )
+end
+
 @noinline function while_loop(
     cond_fn::CFn,
     body_fn::BFn,
@@ -2349,9 +2426,13 @@ end
     mincut=false,
     location=mlir_stacktrace("while_loop", @__FILE__, @__LINE__),
 ) where {CFn,BFn}
-    # TODO(#2250): detect and prevent mutation within the condition
+    # Mutation of traced values within the condition is detected and rejected
+    # after the condition region is traced (#2250).
 
-    # Make all the args traced or concrete
+    # Make all the args traced or concrete. The condition and body functions
+    # themselves are traced as well: traced values captured by them (e.g.
+    # through closures called inside the loop) must become while-loop operands
+    # so that the region block arguments match the loop operands.
     N = length(args)
     seen_args = Reactant.OrderedIdDict()
     traced_args = Vector{Any}(undef, N)
@@ -2362,6 +2443,20 @@ end
         )
     end
 
+    # Note: no `track_numbers` for the functions themselves — plain numbers
+    # captured by the closures (e.g. objectids captured for aliasing checks)
+    # must stay untraced, matching how `make_mlir_fn` traces the region args.
+    # These are traced *after* `args` so that traced values captured only by
+    # the closures (e.g. arrays only read, never reassigned, inside the loop)
+    # are placed after the explicit loop args in the operand list below; see
+    # `_call_while_cond`/`_call_while_body` for why the ordering matters.
+    traced_cond_fn = Reactant.make_tracer(
+        seen_args, cond_fn, (), Reactant.NoStopTracedTrack
+    )
+    traced_body_fn = Reactant.make_tracer(
+        seen_args, body_fn, (), Reactant.NoStopTracedTrack
+    )
+
     linear_args = Reactant.TracedType[]
     for (_, v) in seen_args
         v isa Reactant.TracedType || continue
@@ -2370,36 +2465,80 @@ end
 
     input_types = [mlir_type(arg) for arg in linear_args]
 
-    cond_fn_compiled =
-        Reactant.TracedUtils.make_mlir_fn(
-            cond_fn,
-            traced_args,
-            (),
-            string(gensym("cond_fn")),
-            false;
-            return_dialect=:stablehlo,
-            args_in_result=:result,
-            do_transpose=false,
-            argprefix=gensym("loop_condarg"),
-            resprefix=gensym("loop_condres"),
-            resargprefix=gensym("loop_condresarg"),
-        ).f
+    # Both regions are traced over the same argument tuple (args..., cond_fn,
+    # body_fn) so that their block arguments are identical and match the
+    # while-loop operands collected above.
+    wrapped_args = (traced_args..., traced_cond_fn, traced_body_fn)
 
-    body_fn_compiled =
-        Reactant.TracedUtils.make_mlir_fn(
-            body_fn,
-            traced_args,
-            (),
-            string(gensym("body_fn")),
-            false;
-            return_dialect=:stablehlo,
-            args_in_result=:all,
-            do_transpose=false,
-            verify_arg_names,
-            argprefix=gensym("loop_bodyarg"),
-            resprefix=gensym("loop_bodyres"),
-            resargprefix=gensym("loop_bodyresarg"),
-        ).f
+    if verify_arg_names !== nothing
+        # The macro prepends `Symbol(body_fn)` when body_fn is a closure
+        # (matching the old `Reactant.apply` wrapping); strip it and account
+        # for the two trailing function arguments instead.
+        names =
+            sizeof(BFn) != 0 ? Base.tail(Tuple(verify_arg_names)) : Tuple(verify_arg_names)
+        verify_arg_names = (names..., Symbol("cond_fn"), Symbol("body_fn"))
+    end
+
+    cond_argprefix = gensym("loop_condarg")
+    cond_fn_res = Reactant.TracedUtils.make_mlir_fn(
+        _call_while_cond,
+        wrapped_args,
+        (),
+        string(gensym("cond_fn")),
+        false;
+        return_dialect=:stablehlo,
+        args_in_result=:result,
+        do_transpose=false,
+        argprefix=cond_argprefix,
+        resprefix=gensym("loop_condres"),
+        resargprefix=gensym("loop_condresarg"),
+    )
+    cond_fn_compiled = cond_fn_res.f
+
+    # The condition region only returns the loop predicate, so mutations of
+    # traced values inside it would be silently discarded on every iteration
+    # (#2250). `make_mlir_fn` already detected which block arguments were
+    # mutated during tracing; reject them here.
+    if !isempty(cond_fn_res.mutated_args)
+        mutated_names = [
+            _while_arg_name(
+                _while_arg_paths(cond_fn_res.linear_args[i], cond_argprefix),
+                verify_arg_names,
+            ) for i in cond_fn_res.mutated_args
+        ]
+        error(
+            "Mutation of traced values inside the condition of a traced while loop " *
+            "is not supported: the condition only returns the loop predicate, so " *
+            "these mutations would be silently discarded on every iteration. " *
+            "Move them into the loop body. Mutated: $(join(mutated_names, ", "))",
+        )
+    end
+
+    body_argprefix = gensym("loop_bodyarg")
+    body_fn_res = Reactant.TracedUtils.make_mlir_fn(
+        _call_while_body,
+        wrapped_args,
+        (),
+        string(gensym("body_fn")),
+        false;
+        return_dialect=:stablehlo,
+        args_in_result=:all,
+        do_transpose=false,
+        verify_arg_names,
+        argprefix=body_argprefix,
+        resprefix=gensym("loop_bodyres"),
+        resargprefix=gensym("loop_bodyresarg"),
+    )
+    body_fn_compiled = body_fn_res.f
+
+    _verify_while_region_args(
+        cond_fn_res.linear_args,
+        cond_argprefix,
+        body_fn_res.linear_args,
+        body_argprefix,
+        input_types,
+        verify_arg_names,
+    )
 
     cond_reg = Reactant.TracedUtils.__take_region(cond_fn_compiled)
     body_reg = Reactant.TracedUtils.__take_region(body_fn_compiled)
