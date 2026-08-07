@@ -1162,7 +1162,10 @@ end
     f! = @compile sync = true simulate!(simulation)
     result = f!(simulation)
 
-    @test result == [3, 3, false]
+    @test result[1] isa TestSimulation
+    @test result[1].clock.iteration == 3
+    @test result[1].stop_iteration == 3
+    @test result[1].running == false
     @test simulation.running == false
     @test simulation.clock.iteration == 3
     @test simulation.stop_iteration == 3
@@ -1397,3 +1400,25 @@ end
     testr = @compile test.(b)
     @test testr(b) == test.(a)
 end
+
+function loop_assign_static(m::T) where {T}
+    n = 0
+    oneT = one(T)
+
+    @trace while (n < 10)
+        m += oneT
+        n += 1
+    end
+
+    return T(n)
+end
+
+@testset "loop: assignment to static/local variables" begin
+    ms = Float64[0.01,]
+    m_ra = Reactant.to_rarray(ms)
+    @test @jit(loop_assign_static.(m_ra)) == [10.0]
+
+    m_scalar = ConcreteRNumber(0.01)
+    @test @jit(loop_assign_static(m_scalar)) == 10.0
+end
+
