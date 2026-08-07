@@ -14,3 +14,15 @@ function get_addressable_device end
 function platform_name end
 
 default_device(client::AbstractClient) = first(addressable_devices(client))
+
+function supports_complex(client::AbstractClient)
+    if Reactant.precompiling()
+        return true
+    end
+    pname = lowercase(platform_name(client))
+    if pname == "neuron" || pname == "trainium"
+        return false
+    end
+    return true
+end
+
