@@ -6,9 +6,9 @@ using Static
     for (sv, T) in ((static(true), Bool), (static(2), Int), (static(1.5), Float64))
         @test Reactant.unwrapped_eltype(typeof(sv)) == T
         @test promote_type(typeof(sv), Reactant.TracedRNumber{Float64}) ==
-            Reactant.TracedRNumber{promote_type(T, Float64)}
+            Reactant.traced_number_type(promote_type(T, Float64))
         @test promote_type(Reactant.TracedRNumber{Float64}, typeof(sv)) ==
-            Reactant.TracedRNumber{promote_type(T, Float64)}
+            Reactant.traced_number_type(promote_type(T, Float64))
     end
 end
 

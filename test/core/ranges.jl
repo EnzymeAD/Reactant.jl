@@ -8,6 +8,13 @@ using Reactant, Test
     @test Array{Int64}(@jit(i:j)) == collect(5:10)
 end
 
+@testset "range getindex with traced index" begin
+    k = Reactant.ConcreteRNumber(3)
+    @test (@jit getindex(2:10, k)) == 4
+    @test (@jit getindex(LinRange(0.0, 1.0, 11), k)) ≈ 0.2
+    @test (@jit getindex(range(0.0; step=0.5, length=10), k)) ≈ 1.0
+end
+
 broadcast_over_range(a, kx, ky) = a .* (kx .^ 2 .+ ky' .^ 2)
 
 @testset "broadcast over ranges" begin

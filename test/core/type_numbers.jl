@@ -276,3 +276,87 @@ end
 
     @test res ≈ tobc((10.0, 10.0), x)
 end
+
+@testset "Number type hierarchy (#1570)" begin
+    using Reactant:
+        RInteger,
+        RFloat,
+        RComplex,
+        RReal,
+        RNumber,
+        TracedRNumber,
+        TracedRReal,
+        TracedRInteger,
+        TracedRFloat,
+        TracedRComplex,
+        ConcretePJRTInteger,
+        ConcretePJRTFloat,
+        ConcretePJRTComplex,
+        ConcreteIFRTInteger,
+        ConcreteIFRTFloat,
+        ConcreteIFRTComplex,
+        traced_number_type
+
+    @testset "abstract kinds" begin
+        @test RInteger <: Integer
+        @test RFloat <: AbstractFloat
+        @test RComplex <: Number
+        @test RReal <: Real
+    end
+
+    @testset "traced types" begin
+        @test TracedRInteger{Int64} <: RInteger{Int64} <: Integer
+        @test TracedRInteger{Bool} <: Integer
+        @test TracedRFloat{Float64} <: RFloat{Float64} <: AbstractFloat
+        @test TracedRComplex{ComplexF64} <: RComplex{ComplexF64} <: Number
+        @test TracedRReal <: Real
+        @test TracedRFloat{Float32} <: TracedRNumber{Float32}
+        @test traced_number_type(Int32) === TracedRInteger{Int32}
+        @test traced_number_type(Bool) === TracedRInteger{Bool}
+        @test traced_number_type(Float16) === TracedRFloat{Float16}
+        @test traced_number_type(ComplexF32) === TracedRComplex{ComplexF32}
+    end
+
+    @testset "concrete types" begin
+        @test ConcretePJRTInteger{Int64,1} <:
+            Reactant.AbstractConcreteInteger{Int64} <:
+            Integer
+        @test ConcretePJRTFloat{Float64,1} <:
+            Reactant.AbstractConcreteFloat{Float64} <:
+            AbstractFloat
+        @test ConcretePJRTComplex{ComplexF64,1} <: Number
+        @test ConcreteIFRTInteger{Int64} <: Integer
+        @test ConcreteIFRTFloat{Float64} <: AbstractFloat
+        @test ConcreteIFRTNumber{Float64} isa Type
+    end
+
+    @testset "traced arrays expose the numeric kind" begin
+        RT = traced_number_type(Float64)
+        @test Reactant.TracedRArray{Float64,2,RT} <: AbstractArray{<:AbstractFloat,2}
+        @test Reactant.TracedRArray{Float64,2,RT} <: AbstractArray{<:Real,2}
+        @test eltype(Reactant.TracedRArray{Int32,1,traced_number_type(Int32)}) <: Integer
+    end
+
+    @testset "promotion" begin
+        @test promote_type(TracedRFloat{Float64}, TracedRInteger{Int64}) ===
+            TracedRFloat{Float64}
+        @test promote_type(TracedRInteger{Int32}, Float64) === TracedRFloat{Float64}
+        @test promote_type(Bool, TracedRFloat{Float32}) === TracedRFloat{Float32}
+        @test promote_type(typeof(pi), TracedRFloat{Float32}) === TracedRFloat{Float32}
+        @test promote_type(TracedRReal{Float64}, TracedRComplex{ComplexF32}) ===
+            TracedRComplex{ComplexF64}
+    end
+
+    @testset "dispatch on Real/Integer while tracing" begin
+        real_only(x::Real) = 2x + 1
+        int_only(n::Integer) = n * n
+        x = Reactant.to_rarray([1.0, 2.0, 3.0])
+        res = @jit (v -> @allowscalar(real_only(v[1]) + real_only(v[2])))(x)
+        @test res isa AbstractFloat
+        @test res ≈ 8.0
+        xi = Reactant.to_rarray([2, 3, 4])
+        resi = @jit (v -> @allowscalar(int_only(v[1])))(xi)
+        @test resi isa Integer
+        @test resi == 4
+    end
+end

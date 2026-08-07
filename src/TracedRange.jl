@@ -1,6 +1,6 @@
 module TracedRangeOverrides
 
-using ..Reactant: Reactant, AbstractConcreteNumber, TracedRNumber
+using ..Reactant: Reactant, AbstractConcreteNumber, TracedRNumber, TracedRReal
 import ..Reactant: TracedStepRangeLen, TracedUnitRange
 using ..Ops: @opcall
 
@@ -182,15 +182,14 @@ function Base._reshape(parent::TracedUnitRange, dims::Dims)
     return Base.__reshape((parent, IndexStyle(parent)), dims)
 end
 
-function (C::Base.Colon)(start::TracedRNumber{T}, stop::TracedRNumber{T}) where {T}
+# These need to dominate Base's promoting `(:)(::Real, ::Real)` so that ranges
+# with traced endpoints become `TracedUnitRange` instead of Base ranges.
+function (C::Base.Colon)(start::TracedRReal{T}, stop::TracedRReal{T}) where {T}
     return TracedUnitRange(start, stop)
 end
-function (C::Base.Colon)(start::TracedRNumber{T}, stop::T) where {T}
-    return C(start, TracedRNumber{T}(stop))
-end
-function (C::Base.Colon)(start::T, stop::TracedRNumber{T}) where {T}
-    return C(TracedRNumber{T}(start), stop)
-end
+(C::Base.Colon)(start::TracedRReal, stop::TracedRReal) = C(promote(start, stop)...)
+(C::Base.Colon)(start::TracedRReal, stop::Real) = C(promote(start, stop)...)
+(C::Base.Colon)(start::Real, stop::TracedRReal) = C(promote(start, stop)...)
 
 Base.maximum(r::TracedUnitRange) = last(r)
 

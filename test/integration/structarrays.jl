@@ -26,15 +26,13 @@ using StructArrays, StaticArrays, Reactant, LinearAlgebra, Test
         Reactant.make_tracer(Reactant.OrderedIdDict(), x_ra, (), Reactant.ConcreteToTraced)
     ) == StructArray{
         @NamedTuple{
-            a::Reactant.TracedRNumber{Float64},
-            b::String,
-            c::Reactant.TracedRNumber{Float32},
+            a::Reactant.TracedRFloat{Float64}, b::String, c::Reactant.TracedRFloat{Float32}
         },
         2,
         @NamedTuple{
-            a::Reactant.TracedRArray{Float64,2},
+            a::Reactant.TracedRArray{Float64,2,Reactant.TracedRFloat{Float64}},
             b::Matrix{String},
-            c::Reactant.TracedRArray{Float32,2},
+            c::Reactant.TracedRArray{Float32,2,Reactant.TracedRFloat{Float32}},
         },
         Int64,
     }

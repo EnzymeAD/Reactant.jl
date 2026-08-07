@@ -1,6 +1,12 @@
 module TracedRationalOverrides
 
-using ..Reactant: Reactant, AbstractConcreteNumber, TracedRNumber
+using ..Reactant:
+    Reactant,
+    AbstractConcreteNumber,
+    AbstractConcreteInteger,
+    TracedRNumber,
+    TracedRInteger,
+    RInteger
 import ..Reactant: TracedRational
 using ReactantCore: ReactantCore
 
@@ -32,7 +38,7 @@ TracedRational{T}(c::AbstractChar) where {T} = TracedRational{T}(codepoint(c))
 TracedRational(c::AbstractChar) = TracedRational(codepoint(c))
 
 function TracedRational{T}(::Complex) where {T}
-    throw("Currently we dont support complex numbers in rationals")
+    return throw("Currently we dont support complex numbers in rationals")
 end
 TracedRational(::Complex) = throw("Currently we dont support complex numbers in rationals")
 
@@ -60,7 +66,7 @@ end
 # Basic properties
 Base.numerator(x::TracedRational) = x.num
 Base.denominator(x::TracedRational) = x.den
-function Base.denominator(::TracedRNumber{T}) where {T<:Integer}
+function Base.denominator(::TracedRInteger{T}) where {T}
     return Reactant.promote_to(TracedRNumber, one(T))
 end
 
@@ -78,6 +84,11 @@ end
 function Base.promote_rule(::Type{TracedRational{T}}, ::Type{Rational{S}}) where {T,S}
     return TracedRational{promote_type(T, S)}
 end
+function Base.promote_rule(
+    ::Type{TracedRational{T}}, ::Type{<:Reactant.TracedRInteger{S}}
+) where {T,S}
+    return TracedRational{promote_type(T, Reactant.TracedRInteger{S})}
+end
 function Base.promote_rule(::Type{TracedRational{T}}, ::Type{S}) where {T,S<:AbstractFloat}
     return S
 end
@@ -86,6 +97,16 @@ function Base.promote_rule(::Type{S}, ::Type{TracedRational{T}}) where {T,S<:Abs
 end
 function Base.promote_rule(::Type{BigFloat}, ::Type{Reactant.TracedRational{T}}) where {T}
     return BigFloat
+end
+function Base.promote_rule(
+    ::Type{<:Reactant.TracedRFloat{T2}}, ::Type{TracedRational{T}}
+) where {T2,T}
+    return Reactant.TracedRFloat{T2}
+end
+function Base.promote_rule(
+    ::Type{TracedRational{T}}, ::Type{<:Reactant.TracedRFloat{T2}}
+) where {T2,T}
+    return Reactant.TracedRFloat{T2}
 end
 
 # Operations
@@ -96,6 +117,9 @@ function Base.copysign(x::TracedRational, y::Real)
 end
 function Base.copysign(x::TracedRational, y::Rational)
     return TracedRational(copysign(x.num, y.num), x.den)
+end
+function Base.copysign(x::TracedRational, y::Reactant.TracedRReal)
+    return TracedRational(copysign(x.num, y), x.den)
 end
 
 Base.abs(x::TracedRational) = TracedRational(abs(x.num), x.den)
@@ -118,19 +142,30 @@ Base.:-(x::TracedRational) = TracedRational(-x.num, x.den)
 # TODO: check for overflow/underflow for integer types
 
 for op in (:+, :-, :rem, :mod)
+    @eval function Base.$(op)(x::TracedRational, y::TracedRational)
+        xd, yd = Base.divgcd(promote(x.den, y.den)...)
+        return TracedRational($(op)(x.num * yd, y.num * xd), x.den * yd)
+    end
+    for IT in (:Integer, :AbstractConcreteInteger)
+        @eval begin
+            function Base.$(op)(x::TracedRational, y::$IT)
+                return TracedRational($(op)(x.num, x.den * y), x.den)
+            end
+
+            function Base.$(op)(x::$IT, y::TracedRational)
+                return TracedRational($(op)(x * y.den, y.num), y.den)
+            end
+        end
+    end
+end
+
+# `TracedRInteger <: Integer`, so Base's checked `(Integer, Rational)`
+# arithmetic would apply; promote to `TracedRational` instead. (`mod` and
+# `rem` for these pairs are defined in TracedRNumber.jl.)
+for op in (:+, :-, :*)
     @eval begin
-        function Base.$(op)(x::TracedRational, y::TracedRational)
-            xd, yd = Base.divgcd(promote(x.den, y.den)...)
-            return TracedRational($(op)(x.num * yd, y.num * xd), x.den * yd)
-        end
-
-        function Base.$(op)(x::TracedRational, y::Union{TracedRNumber{<:Integer},Integer})
-            return TracedRational($(op)(x.num, x.den * y), x.den)
-        end
-
-        function Base.$(op)(x::Union{TracedRNumber{<:Integer},Integer}, y::TracedRational)
-            return TracedRational($(op)(x * y.den, y.num), y.den)
-        end
+        Base.$(op)(x::Reactant.TracedRInteger, y::Rational) = $(op)(promote(x, y)...)
+        Base.$(op)(x::Rational, y::Reactant.TracedRInteger) = $(op)(promote(x, y)...)
     end
 end
 
@@ -140,14 +175,18 @@ function Base.:*(x::TracedRational, y::TracedRational)
     return TracedRational(xn * yn, xd * yd)
 end
 
-function Base.:*(x::TracedRational, y::Union{TracedRNumber{<:Integer},Integer})
-    xd, yn = Base.divgcd(promote(x.den, y)...)
-    return TracedRational(x.num * yn, xd)
-end
+for IT in (:Integer, :AbstractConcreteInteger)
+    @eval begin
+        function Base.:*(x::TracedRational, y::$IT)
+            xd, yn = Base.divgcd(promote(x.den, y)...)
+            return TracedRational(x.num * yn, xd)
+        end
 
-function Base.:*(x::Union{TracedRNumber{<:Integer},Integer}, y::TracedRational)
-    xn, yd = Base.divgcd(promote(x, y.den)...)
-    return TracedRational(xn * y.num, yd)
+        function Base.:*(x::$IT, y::TracedRational)
+            xn, yd = Base.divgcd(promote(x, y.den)...)
+            return TracedRational(xn * y.num, yd)
+        end
+    end
 end
 
 Base.inv(x::TracedRational) = TracedRational(x.den, x.num)
@@ -165,6 +204,9 @@ Base.convert(::Type{TracedRational{T}}, x::TracedRational{T}) where {T} = x
 Base.convert(::Type{TracedRational{T}}, x::TracedRational) where {T} = TracedRational{T}(x)
 Base.convert(::Type{TracedRational{T}}, x::Rational) where {T} = TracedRational{T}(x)
 Base.convert(::Type{TracedRational{T}}, x::Integer) where {T} = TracedRational{T}(x)
+function Base.convert(::Type{TracedRational{T}}, x::AbstractConcreteInteger) where {T}
+    return TracedRational{T}(x)
+end
 
 # Other utility functions
 Base.zero(::Type{TracedRational{T}}) where {T} = TracedRational(zero(T), one(T))
@@ -172,13 +214,10 @@ Base.one(::Type{TracedRational{T}}) where {T} = TracedRational(one(T), one(T))
 Base.zero(::TracedRational{T}) where {T} = zero(T)
 Base.one(::TracedRational{T}) where {T} = one(T)
 
-# Rational construction with // operator
-for (T1, T2) in Iterators.product(
-    (Integer, TracedRNumber{<:Integer}, AbstractConcreteNumber{<:Integer}),
-    (Integer, TracedRNumber{<:Integer}, AbstractConcreteNumber{<:Integer}),
-)
-    T1 == T2 && T1 == Integer && continue
-
+# Rational construction with the // operator. `RInteger <: Integer` covers
+# traced and concrete Reactant integers, so three methods suffice and dominate
+# `//(::Integer, ::Integer)` in Base.
+for (T1, T2) in ((RInteger, RInteger), (RInteger, Integer), (Integer, RInteger))
     @eval function Base.://(num::$(T1), den::$(T2))
         return TracedRational(
             promote(
@@ -192,14 +231,18 @@ end
 Base.://(num::TracedRational, den::Rational) = num//TracedRational(den)
 Base.://(num::Rational, den::TracedRational) = TracedRational(num)//den
 
-function Base.://(x::TracedRational, y::Union{TracedRNumber{<:Integer},Integer})
-    xn, yn = Base.divgcd(promote(x.num, y)...)
-    return checked_den(xn, x.den * yn)
-end
+for IT in (:Integer, :AbstractConcreteInteger)
+    @eval begin
+        function Base.://(x::TracedRational, y::$IT)
+            xn, yn = Base.divgcd(promote(x.num, y)...)
+            return checked_den(xn, x.den * yn)
+        end
 
-function Base.://(x::Union{TracedRNumber{<:Integer},Integer}, y::TracedRational)
-    xn, yn = Base.divgcd(promote(x, y.num)...)
-    return checked_den(xn * y.den, yn)
+        function Base.://(x::$IT, y::TracedRational)
+            xn, yn = Base.divgcd(promote(x, y.num)...)
+            return checked_den(xn * y.den, yn)
+        end
+    end
 end
 
 function Base.://(x::TracedRational, y::TracedRational)
@@ -208,8 +251,12 @@ function Base.://(x::TracedRational, y::TracedRational)
     return checked_den(xn * yd, xd * yn)
 end
 
-Base.:/(x::TracedRational, y::Union{TracedRNumber{<:Integer},Integer}) = x//y
-Base.:/(x::Union{TracedRNumber{<:Integer},Integer}, y::TracedRational) = x//y
+for IT in (:Integer, :AbstractConcreteInteger)
+    @eval begin
+        Base.:/(x::TracedRational, y::$IT) = x//y
+        Base.:/(x::$IT, y::TracedRational) = x//y
+    end
+end
 Base.:/(x::TracedRational, y::TracedRational) = x//y
 
 end

@@ -41,7 +41,7 @@ const SVD_ALGORITHM_MAP = Dict(
 )
 
 function _function_macro_error()
-    throw(ArgumentError("`caller_function` is not available in this context"))
+    return throw(ArgumentError("`caller_function` is not available in this context"))
 end
 
 macro caller_function()
@@ -119,6 +119,11 @@ mlir_type(::MissingTracedValue) = MLIR.IR.TensorType(Int[], MLIR.IR.Type(Bool))
 function mlir_type(RT::Type{<:RArray{T,N}}, shape) where {T,N}
     @assert length(shape) == N
     return MLIR.IR.TensorType(collect(Int, shape), MLIR.IR.Type(unwrapped_eltype(RT)))
+end
+
+function mlir_type(RT::Type{<:TracedRArray{T,N}}, shape) where {T,N}
+    @assert length(shape) == N
+    return MLIR.IR.TensorType(collect(Int, shape), MLIR.IR.Type(T))
 end
 
 function mlir_type(RT::Type{<:RNumber})::MLIR.IR.Type
@@ -1504,7 +1509,7 @@ end
     @assert 1 <= dimension <= N
 
     # XLA codegen for top.k is extremely sub-optimal. For special cases we can bypass that
-    if k isa Integer && k == 1
+    if k isa Integer && !(k isa TracedRNumber) && k == 1
         values, indices = argmax(x; dimension, location)
         return (;
             values, indices=add(indices, fill(Int64(1), Tuple(size(indices))); location)
@@ -3628,14 +3633,15 @@ function standardize_start_index(
     start_index::Union{Integer,TracedRNumber{<:Integer}},
     idx::Integer,
 )
-    if (start_index isa Integer && start_index ≤ typemax(Int32)) || sz ≤ typemax(Int32)
-        if start_index isa Integer && update_sz !== nothing
+    is_static_index = !(start_index isa TracedRNumber)
+    if (is_static_index && start_index ≤ typemax(Int32)) || sz ≤ typemax(Int32)
+        if is_static_index && update_sz !== nothing
             @assert start_index + update_sz - 1 ≤ sz "Index $(idx) out of bounds: \
                                                   start_index=$(start_index), \
                                                   update_sz=$(update_sz), sz=$(sz)"
         end
         start_index = Reactant.promote_to(TracedRNumber{Int32}, start_index)
-    elseif start_index isa Integer && update_sz !== nothing
+    elseif is_static_index && update_sz !== nothing
         @assert start_index + update_sz - 1 ≤ sz "Index $(idx) out of bounds: \
                                               start_index=$(start_index), \
                                               update_sz=$(update_sz), sz=$(sz)"

@@ -81,7 +81,13 @@ function ReactantCore.materialize_traced_array(
     return permutedims(materialize_traced_array(parent(x)), perm)
 end
 
-function ReactantCore.materialize_traced_array(x::AbstractArray{TracedRNumber{T}}) where {T}
+# Guards against `Union{}`-eltype (empty) arrays, which match the covariant
+# `AnyTracedRArray` alias but carry no traced values.
+ReactantCore.materialize_traced_array(x::AbstractArray{Union{}}) = x
+
+function ReactantCore.materialize_traced_array(
+    x::AbstractArray{<:TracedRNumber{T}}
+) where {T}
     as = Reactant.aos_to_soa(x)
     if as === x
         as = x[axes(x)...]
@@ -136,7 +142,7 @@ function get_ancestor_and_indices(
             bcasted_idxs = @opcall broadcast_in_dim(
                 idx, ndims(idx) == 0 ? Int64[] : Int64[i], flattened_size
             )
-            Base.stride(x, i) .* (bcasted_idxs .- 1)
+            return Base.stride(x, i) .* (bcasted_idxs .- 1)
         end
         linear_indices = linear_indices .+ 1
         parent_linear_indices_all = collect(LinearIndices(size(parent(x))))
@@ -220,7 +226,7 @@ __to_cartesian_index(x::NTuple{N,<:TracedRNumber}) where {N} = vcat(x...)
 function _get_ancestor_and_indices_linear(x::AnyTracedRArray, indices::AbstractArray)
     pidxs = parentindices(x)
     parent_indices = map(CartesianIndices(x)[indices]) do idx
-        __to_cartesian_index(Base.reindex(pidxs, (idx.I...,)))
+        return __to_cartesian_index(Base.reindex(pidxs, (idx.I...,)))
     end
     return get_ancestor_and_indices(parent(x), reduce(vcat, parent_indices))
 end
@@ -1094,7 +1100,7 @@ function get_idx(x, prefix::Symbol)
             return path
         end
     end
-    throw(AssertionError("No path found for $x"))
+    return throw(AssertionError("No path found for $x"))
 end
 
 function get_argidx(x, prefix::Symbol)
