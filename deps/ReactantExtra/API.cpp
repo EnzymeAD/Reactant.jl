@@ -386,12 +386,6 @@ REACTANT_ABI char *GetDefaultTargetTriple(void) {
   return LLVMGetDefaultTargetTriple();
 }
 
-REACTANT_ABI MLIR_CAPI_EXPORTED MlirAttribute
-enzymeActivityAttrGet(MlirContext ctx, int32_t val) {
-  return wrap(mlir::enzyme::ActivityAttr::get(unwrap(ctx),
-                                              (mlir::enzyme::Activity)val));
-}
-
 // Create profiler session and start profiling.
 // advanced_config_keys/values are parallel arrays of key-value pairs that
 // get inserted into ProfileOptions::advanced_configuration.
