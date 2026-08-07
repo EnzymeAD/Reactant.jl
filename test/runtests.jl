@@ -125,8 +125,7 @@ test_worker = custom_test_worker ? tpu_custom_worker_launcher : Returns(nothing)
     end
 
     if (
-        # MPI is only supported on CPU
-        (BACKEND == "cpu" || BACKEND == "auto") && (
+        BACKEND in ("auto", "cpu", "cuda", "gpu") && (
             isempty(parsed_args.positionals) ||
             "integration" ∈ parsed_args.positionals ||
             "integration/mpi" ∈ parsed_args.positionals
@@ -135,9 +134,14 @@ test_worker = custom_test_worker ? tpu_custom_worker_launcher : Returns(nothing)
         @testset "MPI" begin
             using MPI
             nranks = 2
-            run(
-                `$(mpiexec()) -n $nranks $(Base.julia_cmd()) --project=$(Base.active_project()) $(joinpath(@__DIR__, "integration", "mpi.jl"))`,
-            )
+            withenv(
+                "XLA_REACTANT_GPU_MEM_FRACTION" => 1 / (nranks + 0.1),
+                "XLA_REACTANT_GPU_PREALLOCATE" => false,
+            ) do
+                run(
+                    `$(mpiexec()) -n $nranks $(Base.julia_cmd()) --project=$(Base.active_project()) $(joinpath(@__DIR__, "integration", "mpi.jl"))`,
+                )
+            end
         end
     end
 
