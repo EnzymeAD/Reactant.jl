@@ -1,6 +1,6 @@
-const ncclComm_t = Ptr{Cvoid}
+const NcclComm_t = Ptr{Cvoid}
 
-struct ncclUniqueId
+struct NcclUniqueId
     internal::NTuple{128,UInt8}
 end
 
