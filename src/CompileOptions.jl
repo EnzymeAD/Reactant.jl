@@ -84,6 +84,66 @@ sharding propagation, see the
 end
 
 """
+    PropagationOptions(; pre_ad::Symbol, post_ad::Symbol)
+
+Direction in which `stablehlo.transpose` / `stablehlo.reshape` ops are propagated,
+specified independently for the optimization passes that run **before** Enzyme's
+automatic differentiation pass and those that run **after** it.
+
+Both fields take `:up`, `:down` or `:none`, with the same meaning they have when
+`transpose_propagate` / `reshape_propagate` are given as a plain `Symbol` (which
+applies that direction to both phases).
+
+Splitting the two phases is useful because the profitability of these rewrites is not
+the same before and after differentiation. Propagating a reshape across an elementwise
+chain is free in the primal, but the differentiated program reads several of that
+chain's intermediates, so the rewrite can leave a value live at two bitcast-equivalent
+shapes. XLA groups elementwise producers into a fusion by shape, so a chain whose shape
+changes part way through can no longer be fused into the consuming transpose, and the
+transpose is emitted as a standalone kernel instead of absorbing the chain for free.
+
+## Examples
+
+```julia
+# propagate reshapes up before AD (helps raising / dedup) but leave the
+# differentiated program alone so its elementwise chains stay fusible
+@compile reshape_propagate = PropagationOptions(; pre_ad=:up, post_ad=:none) f(x)
+```
+"""
+struct PropagationOptions
+    pre_ad::Symbol
+    post_ad::Symbol
+end
+
+function PropagationOptions(; pre_ad::Symbol=:up, post_ad::Symbol=:up)
+    __assert_valid_propagation(pre_ad)
+    __assert_valid_propagation(post_ad)
+    return PropagationOptions(pre_ad, post_ad)
+end
+
+function __assert_valid_propagation(sym::Symbol)
+    sym in (:up, :down, :none) ||
+        error("Invalid propagation direction $(sym). Expected :up, :down or :none.")
+    return nothing
+end
+
+"""
+    pre_ad_propagation(x)
+
+Propagation direction to use for the passes running before Enzyme's AD pass.
+"""
+pre_ad_propagation(sym::Symbol) = sym
+pre_ad_propagation(options::PropagationOptions) = options.pre_ad
+
+"""
+    post_ad_propagation(x)
+
+Propagation direction to use for the passes running after Enzyme's AD pass.
+"""
+post_ad_propagation(sym::Symbol) = sym
+post_ad_propagation(options::PropagationOptions) = options.post_ad
+
+"""
     CompileOptions
 
 Fine-grained control over the compilation options for the Reactant compiler.
@@ -110,9 +170,12 @@ Fine-grained control over the compilation options for the Reactant compiler.
     potentially incorrect results if the function does produce Inf or -Inf values)**.
   - `transpose_propagate`: If `:up`, `stablehlo.transpose` operations will be
     propagated up the computation graph. If `:down`, they will be propagated down. Defaults
-    to `:up`.
+    to `:up`. May also be a [`PropagationOptions`](@ref) to select the direction
+    independently for the passes running before and after Enzyme's AD pass.
   - `reshape_propagate`: If `:up`, `stablehlo.reshape` operations will be propagated up
     the computation graph. If `:down`, they will be propagated down. Defaults to `:up`.
+    May also be a [`PropagationOptions`](@ref), e.g.
+    `PropagationOptions(; pre_ad=:up, post_ad=:none)`.
   - `max_constant_threshold`: If the number of elements in a constant is greater than this
     threshold (for a non-splatted constant), we will throw an error.
   - `inline`: If `true`, all functions will be inlined. (Default: `true`).
@@ -216,8 +279,8 @@ struct CompileOptions
     no_nan::Bool
     all_finite::Bool
     inline::Bool
-    transpose_propagate::Symbol
-    reshape_propagate::Symbol
+    transpose_propagate::Union{Symbol,PropagationOptions}
+    reshape_propagate::Union{Symbol,PropagationOptions}
     max_constant_threshold::Int
     # Raising options
     raise::Union{Bool,String}
@@ -263,8 +326,8 @@ function CompileOptions(;
     no_nan::Bool=false,
     all_finite::Bool=false,
     inline::Bool=true,
-    transpose_propagate::Symbol=:up,
-    reshape_propagate::Symbol=:up,
+    transpose_propagate::Union{Symbol,PropagationOptions}=:up,
+    reshape_propagate::Union{Symbol,PropagationOptions}=:up,
     max_constant_threshold::Int=1024,
     raise::Union{Bool,String}=false,
     raise_first::Bool=false,
@@ -317,8 +380,10 @@ function CompileOptions(;
         ]
     end
 
-    @assert transpose_propagate in [:up, :down, :none]
-    @assert reshape_propagate in [:up, :down, :none]
+    __assert_valid_propagation(pre_ad_propagation(transpose_propagate))
+    __assert_valid_propagation(post_ad_propagation(transpose_propagate))
+    __assert_valid_propagation(pre_ad_propagation(reshape_propagate))
+    __assert_valid_propagation(post_ad_propagation(reshape_propagate))
 
     if shardy_passes isa Symbol
         @assert shardy_passes in [:none, :to_mhlo_shardings, :post_sdy_propagation]
@@ -378,6 +443,51 @@ function __reverse_propagation(sym::Symbol)
     sym === :down && return :up
     sym == :none && return :none
     return error("Invalid value: $sym. Expected :up or :down or :none")
+end
+
+function __reverse_propagation(options::PropagationOptions)
+    return PropagationOptions(
+        __reverse_propagation(options.pre_ad), __reverse_propagation(options.post_ad)
+    )
+end
+
+"""
+    __compile_options_for_ad_phase(compile_options, phase::Symbol)
+
+Resolve `transpose_propagate` / `reshape_propagate` to plain `Symbol`s for `phase`,
+which must be `:pre_ad` or `:post_ad`. All other options are carried over unchanged.
+
+The optimization pass lists are built once per phase from the result, so the rest of
+the pipeline never has to know that these options can be phase-dependent.
+"""
+function __compile_options_for_ad_phase(compile_options::CompileOptions, phase::Symbol)
+    resolve = if phase === :pre_ad
+        pre_ad_propagation
+    elseif phase === :post_ad
+        post_ad_propagation
+    else
+        error("Invalid AD phase $(phase). Expected :pre_ad or :post_ad.")
+    end
+
+    transpose_propagate = resolve(compile_options.transpose_propagate)
+    reshape_propagate = resolve(compile_options.reshape_propagate)
+
+    # nothing to do if both are already phase-independent
+    compile_options.transpose_propagate === transpose_propagate &&
+        compile_options.reshape_propagate === reshape_propagate &&
+        return compile_options
+
+    return CompileOptions(
+        (
+            if f === :transpose_propagate
+                transpose_propagate
+            elseif f === :reshape_propagate
+                reshape_propagate
+            else
+                getfield(compile_options, f)
+            end for f in fieldnames(CompileOptions)
+        )...
+    )
 end
 
 function __compile_options_with_reversed_propagation(compile_options::CompileOptions)
