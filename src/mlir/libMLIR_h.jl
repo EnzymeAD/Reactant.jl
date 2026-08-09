@@ -15424,6 +15424,16 @@ function ReactantCudaDeviceGetProperties(jlprops, device_id)
     )::Cvoid
 end
 
+function ReactantHipDeviceGetProperties(jlprops, device_id)
+    @ccall mlir_c.ReactantHipDeviceGetProperties(
+        jlprops::Ptr{DeviceProperties}, device_id::Int32
+    )::Cvoid
+end
+
+function ReactantHipDeviceGetGCNArchName(device_id)
+    @ccall mlir_c.ReactantHipDeviceGetGCNArchName(device_id::Int32)::Cstring
+end
+
 function ReactantCudaGetRegsSpillsMaxThreadsFromBinary(
     binary, fnname, regs, spills, maxThreads
 )

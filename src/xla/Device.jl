@@ -52,11 +52,78 @@ function device_properties(device::AbstractDevice)
         GC.@preserve jldevprops begin
             MLIR.API.ReactantCudaDeviceGetProperties(jldevprops, local_hardware_id)
         end
+    elseif pname == "rocm"
+        if _has_hip_device_properties()
+            GC.@preserve jldevprops begin
+                MLIR.API.ReactantHipDeviceGetProperties(jldevprops, local_hardware_id)
+            end
+        else
+            # Older builds of libReactantExtra predate the HIP property query;
+            # fill CDNA-flavored defaults rather than hand back an unfilled Ref.
+            @warn "This build of libReactantExtra cannot query ROCm device \
+                   properties; using defaults" maxlog = 1
+            jldevprops[] = _default_rocm_device_properties()
+        end
     else
-        @warn "`get_properties` not implemented for platform: $(pname)" maxlog = 1
+        # Erroring beats the alternative: an unfilled Ref would hand the caller
+        # (and the cache) a struct of uninitialized memory.
+        error("`device_properties` is not implemented for platform: $(pname)")
     end
     DEVICE_PROPERTIES_CACHE[(local_hardware_id, pname)] = jldevprops[]
     return jldevprops[]
+end
+
+function _has_hip_device_properties()
+    return Libdl.dlsym(
+        Reactant_jll.libReactantExtra_handle,
+        :ReactantHipDeviceGetProperties;
+        throw_error=false,
+    ) !== nothing
+end
+
+# Conservative CDNA (Instinct-class) defaults, for libReactantExtra builds that
+# predate `ReactantHipDeviceGetProperties`. Sizes we cannot guess are 0.
+function _default_rocm_device_properties()
+    return MLIR.API.DeviceProperties(
+        0,                          # totalGlobalMem (unknown)
+        65536,                      # sharedMemPerBlock: 64 KiB LDS
+        65536,                      # regsPerBlock
+        64,                         # warpSize: CDNA wavefront
+        1024,                       # maxThreadsPerBlock
+        (1024, 1024, 1024),         # maxThreadsDim
+        (2147483647, 65536, 65536), # maxGridSize
+        2147483647,                 # totalConstMem
+        9,                          # major (gfx9xx)
+        0,                          # minor
+        0,                          # multiProcessorCount (unknown)
+        1,                          # canMapHostMemory
+        0,                          # l2CacheSize (unknown)
+        2048,                       # maxThreadsPerMultiProcessor
+    )
+end
+
+"""
+    device_gcn_arch(device::AbstractDevice)
+
+Return the LLVM target id of a ROCm device, e.g. `"gfx950:sramecc+:xnack-"`.
+Falls back to a generic default (with a warning) on builds of libReactantExtra
+that cannot query it.
+"""
+function device_gcn_arch(device::AbstractDevice)
+    pname = platform_name(client(device))
+    pname == "rocm" || error("`device_gcn_arch` requires a ROCm device, got: $(pname)")
+
+    if Libdl.dlsym(
+        Reactant_jll.libReactantExtra_handle,
+        :ReactantHipDeviceGetGCNArchName;
+        throw_error=false,
+    ) !== nothing
+        str = MLIR.API.ReactantHipDeviceGetGCNArchName(get_local_hardware_id(device))
+        return unsafe_string_and_free(str)
+    end
+    @warn "This build of libReactantExtra cannot query the ROCm gcn arch; \
+           defaulting to gfx942" maxlog = 1
+    return "gfx942"
 end
 
 function Base.show(io::IO, ::MIME"text/plain", props::MLIR.API.DeviceProperties)
