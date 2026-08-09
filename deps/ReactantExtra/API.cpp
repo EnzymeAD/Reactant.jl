@@ -47,6 +47,11 @@
 #include "src/enzyme_ad/jax/compile_with_xla.h"
 #include "llvm/Support/TargetSelect.h"
 
+#if defined(REACTANT_ROCM) && !defined(_WIN32)
+#include "llvm/Support/Signals.h"
+#include <csignal>
+#endif
+
 #include "mlir/Dialect/LLVMIR/Transforms/InlinerInterfaceImpl.h"
 #include "stablehlo/dialect/ChloOps.h"
 #include "stablehlo/dialect/StablehloOps.h"
@@ -354,12 +359,68 @@ T *unwrap_absl_statusor(absl::StatusOr<T> status, char **error_msg) {
 // int google::protobuf::io::CodedInputStream::default_recursion_limit_ = 100;
 // int xla::_LayoutProto_default_instance_;
 
+#if defined(REACTANT_ROCM) && !defined(_WIN32)
+// LLVM installs its crash handlers (llvm/lib/Support/Unix/Signals.inc) lazily,
+// the first time anything reaches RegisterHandlers() -- via RemoveFileOnSignal,
+// AddSignalHandler, PrintStackTraceOnErrorSignal or CrashRecoveryContext. In
+// practice XLA's AMDGPU backend gets there through
+// llvm::sys::fs::TempFile::create during kernel codegen (the in-process lld
+// link of the HSACO writes its output through FileOutputBuffer ->
+// TempFile::create -> RemoveFileOnSignal), long after Julia has installed its
+// own handlers. The NVPTX path shells out to ptxas with tsl-created temp files
+// and never reaches LLVM's signal machinery, which is why only ROCm hits this
+// today.
+//
+// That is fatal in a Julia host. Julia implements GC safepoints as a
+// read-protected page plus a SIGSEGV handler, so SIGSEGV is ordinary control
+// flow that fires constantly on every thread. LLVM registers with SA_RESETHAND:
+// the next safepoint fault is delivered to LLVM's handler, the disposition is
+// reset to SIG_DFL, and the next concurrent safepoint fault on any other thread
+// kills the process -- exit 139, with no output from either runtime. LLVM also
+// takes SIGINT, SIGUSR2 and SIGQUIT, which are Julia's Ctrl-C, profiler and
+// backtrace-dump signals respectively.
+//
+// Force that registration to happen exactly once, here, where we can still put
+// the host's handlers back. Note we deliberately do NOT call
+// llvm::sys::unregisterHandlers(): that zeroes NumRegisteredSignals and would
+// let the next RemoveFileOnSignal() re-register. Leaving the counter non-zero
+// makes every later call early-out without touching sigaction.
+//
+// Cost: LLVM no longer prints a stack trace or unlinks its temp files on an
+// abnormal exit. Julia owns the fatal-signal path in this process anyway.
+static void TameLLVMSignalHandlers() {
+  // IntSigs + KillSigs + InfoSigs from Signals.inc. SIGUSR1 (InfoSigs) is
+  // blocked process-wide by Julia and consumed via sigwait, so LLVM's handler
+  // for it could never fire -- restore it anyway rather than rely on that.
+  static const int Sigs[] = {SIGHUP,  SIGINT,  SIGTERM, SIGUSR2, SIGILL,
+                             SIGTRAP, SIGABRT, SIGFPE,  SIGBUS,  SIGSEGV,
+                             SIGQUIT, SIGSYS,  SIGXCPU, SIGXFSZ, SIGUSR1};
+  constexpr int N = sizeof(Sigs) / sizeof(Sigs[0]);
+
+  struct sigaction Host[N];
+  for (int I = 0; I < N; ++I)
+    sigaction(Sigs[I], nullptr, &Host[I]);
+
+  // Any public entry point into Signals.inc arms the registration. This one is
+  // what XLA itself reaches; the filename never exists, so the cleanup entry is
+  // inert.
+  llvm::sys::RemoveFileOnSignal("");
+
+  for (int I = 0; I < N; ++I)
+    sigaction(Sigs[I], &Host[I], nullptr);
+}
+#endif
+
 REACTANT_ABI void InitializeLogs() {
   const char *binary = "julia";
   int argc = 1;
   char *argv[] = {(char *)binary};
   char **argv2 = &argv[0];
   tsl::port::InitMain(binary, &argc, &argv2);
+
+#if defined(REACTANT_ROCM) && !defined(_WIN32)
+  TameLLVMSignalHandlers();
+#endif
   LLVMInitializeX86Target();
   LLVMInitializeX86TargetInfo();
   LLVMInitializeX86TargetMC();
