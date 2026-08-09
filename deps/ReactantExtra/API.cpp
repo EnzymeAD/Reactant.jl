@@ -1124,7 +1124,10 @@ REACTANT_ABI void CopyToBuffer(PjRtClient *client, PjRtBuffer *buffer,
   auto raw_buffer =
       MyValueOrThrow(PjRtRawBuffer::CreateRawAliasOfBuffer(buffer));
   auto future = raw_buffer->CopyRawHostToDevice(data, offset, size);
-  future.Await();
+  auto status = future.Await();
+  if (!status.ok()) {
+    ReactantThrowError(status.ToString().c_str());
+  }
 #if 0
   if (buffer->IsOnCpu()) {
     memcpy((char*)client->UnsafeBufferPointer(buffer) + offset, data, size);
@@ -1165,7 +1168,11 @@ REACTANT_ABI void BufferToHost(PjRtBuffer *buffer, void *data) {
   MutableBorrowingLiteral literal((const char *)data, shape);
   auto status = buffer->ToLiteralSync(&literal);
   if (!status.ok()) {
-    printf("error copying to host: %s\n", status.ToString().c_str());
+    // A failed copy must not return: the destination holds uninitialized
+    // memory, and a caller that reads it would silently compute on garbage
+    // (e.g. after a device-side allocation failure whose only prior sign was
+    // an allocator warning in the C++ logs).
+    ReactantThrowError(status.ToString().c_str());
   }
 }
 
@@ -1182,7 +1189,12 @@ REACTANT_ABI void CopyFromBuffer(PjRtClient *client, PjRtBuffer *buffer,
   }
 
   auto future = buffer->CopyRawToHost(data, offset, size);
-  future.Await();
+  auto status = future.Await();
+  if (!status.ok()) {
+    // See BufferToHost: returning here would hand the caller uninitialized
+    // host memory with no signal that anything failed.
+    ReactantThrowError(status.ToString().c_str());
+  }
 #if 0
   if (buffer->IsOnCpu()) {
     memcpy((char*)client->UnsafeBufferPointer(buffer) + offset, data, size);
@@ -1349,7 +1361,16 @@ REACTANT_ABI uint8_t FutureIsReady(FutureType *Future) {
   return Future->IsReady();
 }
 
-REACTANT_ABI void FutureAwait(FutureType *Future) { Future->Await(); }
+REACTANT_ABI void FutureAwait(FutureType *Future) {
+  // The future of an async execution resolves to the execution's status.
+  // Discarding it would report a failed execution (e.g. RESOURCE_EXHAUSTED
+  // when a temp buffer did not fit in device memory) as success, leaving the
+  // caller to read whatever happens to be in the output buffers.
+  auto status = Future->Await();
+  if (!status.ok()) {
+    ReactantThrowError(status.ToString().c_str());
+  }
+}
 
 xla::CompileOptions GenerateCompileOptions(
     int64_t device_id, const int64_t *mesh_ids, int64_t num_mesh_ids,
@@ -2790,7 +2811,13 @@ REACTANT_ABI uint8_t ifrt_future_is_ready(IfRtFutureType *Future) {
   return Future->IsReady();
 }
 
-REACTANT_ABI void ifrt_future_await(IfRtFutureType *Future) { Future->Await(); }
+REACTANT_ABI void ifrt_future_await(IfRtFutureType *Future) {
+  // See FutureAwait: the status carries execution failure.
+  auto status = Future->Await();
+  if (!status.ok()) {
+    ReactantThrowError(status.ToString().c_str());
+  }
+}
 
 #pragma region IfRtArray
 
@@ -2826,7 +2853,12 @@ REACTANT_ABI void ifrt_array_copy_to_host_buffer(HeldIfrtArray *array,
   std::optional<absl::Span<const int64_t>> byte_strides;
   auto future = array->obj()->CopyToHostBuffer(
       data, byte_strides, static_cast<ifrt::ArrayCopySemantics>(0));
-  future.Await();
+  auto status = future.Await();
+  if (!status.ok()) {
+    // See BufferToHost: returning here would hand the caller uninitialized
+    // host memory with no signal that anything failed.
+    ReactantThrowError(status.ToString().c_str());
+  }
   return;
 }
 
