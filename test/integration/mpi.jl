@@ -1,6 +1,3 @@
-# direct execute with eg:
-# REACTANT_BACKEND_GROUP="cpu" mpiexecjl -n 2 julia --color=yes --project ../test/integration/mpi.jl
-
 using Test
 using MPI
 using CUDA
