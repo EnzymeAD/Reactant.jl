@@ -125,7 +125,7 @@ test_worker = custom_test_worker ? tpu_custom_worker_launcher : Returns(nothing)
     end
 
     if (
-        BACKEND in ("auto", "cpu", "cuda", "gpu") && (
+        BACKEND in ("auto", "cpu", "cuda") && (
             isempty(parsed_args.positionals) ||
             "integration" ∈ parsed_args.positionals ||
             "integration/mpi" ∈ parsed_args.positionals
