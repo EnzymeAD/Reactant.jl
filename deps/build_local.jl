@@ -296,6 +296,13 @@ if cc_is_gcc
             # TODO(#2247): this is not sufficient to complete a build with GCC 10.
             push!(build_cmd_list, "--define=xnn_enable_avxvnni=false")
         end
+    elseif arch == "aarch64"
+        if gcc_version < v"15"
+            # ynnpack's FP8 kernels use the ARM FP8 ACLE (mfloat8 types,
+            # __arm_fpm_init), which GCC only has from 15 on.
+            push!(build_cmd_list, "--define=ynn_enable_arm64_neonfp8=false")
+            push!(build_cmd_list, "--define=ynn_enable_arm64_neonfp8dot4=false")
+        end
     end
 else
     push!(build_cmd_list, "--copt=-Wno-unused-command-line-argument")
