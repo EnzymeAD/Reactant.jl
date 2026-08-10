@@ -1385,8 +1385,6 @@ xla::CompileOptions GenerateCompileOptions(
   debug_options->set_xla_gpu_cuda_data_dir(xla_gpu_cuda_data_dir);
   debug_options->set_xla_enable_enzyme_comms_opt(xla_enable_enzyme_comms_opt);
 
-  debug_options->set_xla_gpu_experimental_use_raft_select_k(true);
-
   if (kernel_cache_enabled) {
     debug_options->set_xla_gpu_kernel_cache_file(kernel_cache_path);
   }
