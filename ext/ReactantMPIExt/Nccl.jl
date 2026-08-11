@@ -130,3 +130,5 @@ function default_comm_handle()
     DEFAULT_COMM[] == C_NULL && error("Default NCCL communicator has not been initialized")
     return DEFAULT_COMM_HANDLE[]
 end
+
+Reactant.default_nccl_comm_handle() = default_comm_handle()
