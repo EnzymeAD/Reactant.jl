@@ -1527,12 +1527,7 @@ end
     # debug option that used to force this is gone upstream and the raft path
     # is only taken for top_k ops declared unstable.
     op = chlo.top_k(
-        x.mlir_data;
-        values,
-        indices,
-        k,
-        is_stable=MLIR.IR.Attribute(is_stable),
-        location,
+        x.mlir_data; values, indices, k, is_stable=MLIR.IR.Attribute(is_stable), location
     )
     indices = add(
         TracedRArray{Int32,N}((), MLIR.IR.result(op, 2), rsize),
