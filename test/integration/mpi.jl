@@ -5,7 +5,7 @@ using Reactant
 
 const BACKEND_GROUP = lowercase(get(ENV, "REACTANT_BACKEND_GROUP", "auto"))
 const CPU_MPI_BACKENDS = ("auto", "cpu")
-const GPU_MPI_BACKENDS = ("cuda")
+const GPU_MPI_BACKENDS = ("cuda",)
 const RUN_CPU_MPI_TESTS = BACKEND_GROUP in CPU_MPI_BACKENDS
 const RUN_GPU_MPI_TESTS = BACKEND_GROUP in GPU_MPI_BACKENDS
 const ReactantMPIExt =
