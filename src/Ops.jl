@@ -1527,12 +1527,7 @@ end
     # debug option that used to force this is gone upstream and the raft path
     # is only taken for top_k ops declared unstable.
     op = chlo.top_k(
-        x.mlir_data;
-        values,
-        indices,
-        k,
-        is_stable=MLIR.IR.Attribute(is_stable),
-        location,
+        x.mlir_data; values, indices, k, is_stable=MLIR.IR.Attribute(is_stable), location
     )
     indices = add(
         TracedRArray{Int32,N}((), MLIR.IR.result(op, 2), rsize),
@@ -2432,26 +2427,18 @@ end
     end
 
     if checkpointing isa ReactantCore.Periodic
-        MLIR.IR.setattr!(
-            while_op, "enzyme.enable_checkpointing", MLIR.IR.Attribute(true)
-        )
+        MLIR.IR.setattr!(while_op, "enzyme.enable_checkpointing", MLIR.IR.Attribute(true))
         MLIR.IR.setattr!(
             while_op, "enzyme.checkpoint_period", MLIR.IR.Attribute(checkpointing.n)
         )
     elseif checkpointing isa ReactantCore.Binomial
-        MLIR.IR.setattr!(
-            while_op, "enzyme.enable_checkpointing", MLIR.IR.Attribute(true)
-        )
-        MLIR.IR.setattr!(
-            while_op, "enzyme.binomial_checkpointing", MLIR.IR.UnitAttribute()
-        )
+        MLIR.IR.setattr!(while_op, "enzyme.enable_checkpointing", MLIR.IR.Attribute(true))
+        MLIR.IR.setattr!(while_op, "enzyme.binomial_checkpointing", MLIR.IR.UnitAttribute())
         MLIR.IR.setattr!(
             while_op, "enzyme.checkpoint_period", MLIR.IR.Attribute(checkpointing.budget)
         )
     elseif checkpointing === true
-        MLIR.IR.setattr!(
-            while_op, "enzyme.enable_checkpointing", MLIR.IR.Attribute(true)
-        )
+        MLIR.IR.setattr!(while_op, "enzyme.enable_checkpointing", MLIR.IR.Attribute(true))
     end
 
     return map(enumerate(linear_args)) do (i, arg)
