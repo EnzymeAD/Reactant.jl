@@ -4,7 +4,7 @@ struct NcclUniqueId
     internal::NTuple{128,UInt8}
 end
 
-const DEFAULT_COMM = Ref{ncclComm_t}(C_NULL)
+const DEFAULT_COMM = Ref{NcclComm_t}(C_NULL)
 const DEFAULT_COMM_HANDLE = Ref{UInt}(0)
 const DEFAULT_XLA_DEVICE = Ref{Union{Nothing,Reactant.XLA.AbstractDevice}}(nothing)
 
@@ -20,26 +20,26 @@ function check_nccl(status::Cint, operation::AbstractString)
 end
 
 function nccl_unique_id()
-    id = Ref{ncclUniqueId}()
+    id = Ref{NcclUniqueId}()
     ptr = nccl_symbol(:ncclGetUniqueId)
-    status = @ccall $ptr(id::Ref{ncclUniqueId})::Cint
+    status = @ccall $ptr(id::Ref{NcclUniqueId})::Cint
     check_nccl(status, "ncclGetUniqueId")
     return id[]
 end
 
-function nccl_comm_init(nranks::Integer, rank::Integer, id::ncclUniqueId)
-    comm = Ref{ncclComm_t}(C_NULL)
+function nccl_comm_init(nranks::Integer, rank::Integer, id::NcclUniqueId)
+    comm = Ref{NcclComm_t}(C_NULL)
     ptr = nccl_symbol(:ncclCommInitRank)
     status = @ccall $ptr(
-        comm::Ref{ncclComm_t}, nranks::Cint, id::ncclUniqueId, rank::Cint
+        comm::Ref{NcclComm_t}, nranks::Cint, id::NcclUniqueId, rank::Cint
     )::Cint
     check_nccl(status, "ncclCommInitRank")
     return comm[]
 end
 
-function nccl_comm_destroy(comm::ncclComm_t)
+function nccl_comm_destroy(comm::NcclComm_t)
     ptr = nccl_symbol(:ncclCommDestroy)
-    status = @ccall $ptr(comm::ncclComm_t)::Cint
+    status = @ccall $ptr(comm::NcclComm_t)::Cint
     check_nccl(status, "ncclCommDestroy")
     return nothing
 end
@@ -100,10 +100,10 @@ function init_default_comm(; comm::MPI.Comm=MPI.COMM_WORLD)
     Reactant.set_nccl_device!(get_hardware_id(xla_device))
     DEFAULT_XLA_DEVICE[] = xla_device
 
-    unique_id = rank == 0 ? nccl_unique_id() : ncclUniqueId(ntuple(_ -> UInt8(0), 128))
+    unique_id = rank == 0 ? nccl_unique_id() : NcclUniqueId(ntuple(_ -> UInt8(0), 128))
     unique_id_bytes = collect(unique_id.internal)
     MPI.Bcast!(unique_id_bytes, 0, comm)
-    nccl_comm = nccl_comm_init(nranks, rank, ncclUniqueId(Tuple(unique_id_bytes)))
+    nccl_comm = nccl_comm_init(nranks, rank, NcclUniqueId(Tuple(unique_id_bytes)))
 
     DEFAULT_COMM[] = nccl_comm
     DEFAULT_COMM_HANDLE[] = UInt(nccl_comm)
