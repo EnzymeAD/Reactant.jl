@@ -1,6 +1,149 @@
 using LLVM: LLVM
 using GPUCompiler: GPUCompiler
 
+# ---------------------------------------------------------------------------
+# Trace method-instance recording
+#
+# Reactant's tracer processes each method specialization by lowering a call to
+# it into a `call_with_reactant` wrapper (see `call_llvm_generator`). The
+# recording mechanism below lets external code (e.g. Revise-based invalidation
+# tracking) collect the exact set of `Core.MethodInstance`s that a trace went
+# through, so it can later check whether any of them have been invalidated
+# (their world age changed) and decide whether a compiled program needs to be
+# re-traced.
+#
+# Recording is done into a task-local buffer: the tracer only pushes
+# `MethodInstance`s (pure data), so no user code is ever dispatched from inside
+# a generated function (where world-age restrictions apply). The callback
+# registered via `compile_with_trace_callback` is invoked with the recorded
+# set from normal code, once the trace has completed.
+# ---------------------------------------------------------------------------
+
+# Task-local stack of active recording buffers. Mirrors the `activate_*!`
+# pattern used for the compile caches (see Compiler.jl).
+const _TRACE_RECORDING_KEY = :_reactant_trace_recording
+
+function _trace_recording_stack()
+    return get!(task_local_storage(), _TRACE_RECORDING_KEY) do
+        return Base.IdSet{Core.MethodInstance}[]
+    end::Vector{Base.IdSet{Core.MethodInstance}}
+end
+
+# Invoked by the tracer (from the `call_with_reactant` wrapper bodies) for
+# every method specialization that the trace executes. Only pushes data; never
+# dispatches user code.
+@inline function record_traced_method(mi::Core.MethodInstance)
+    stack = _trace_recording_stack()
+    if !isempty(stack)
+        push!(last(stack), mi)
+    end
+    return nothing
+end
+
+"""
+    compile_with_trace_callback(cb, f, args...; kwargs...) -> result
+
+Compile `f(args...)` with Reactant (like [`compile`](@ref)/`@compile`) and invoke
+`cb(trace_world, recorded_mis)` afterwards with the world counter at the time
+of the trace and the exact set of `Core.MethodInstance`s that the trace went
+through (a `Base.IdSet{Core.MethodInstance}`), so that the caller can track
+whether any of them are later invalidated (e.g. by Revise) and recompile
+accordingly. The callback is invoked in normal code after the compile
+finishes, so it may use any methods.
+
+Recording happens at execution time (inside the generated `call_with_reactant`
+wrappers), so the recorded set is independent of whether the wrappers were
+already generated in this session: it is exactly the set of method
+specializations the trace executed.
+
+See also [`is_traced_method_invalidated`](@ref) and
+[`invalidated_traced_methods`](@ref).
+"""
+function compile_with_trace_callback(cb, f, args...; kwargs...)
+    trace_world = Base.get_world_counter()
+    buf = Base.IdSet{Core.MethodInstance}()
+    push!(_trace_recording_stack(), buf)
+    result = try
+        compile(f, args; kwargs...)
+    finally
+        pop!(_trace_recording_stack())
+    end
+    Base.invokelatest(cb, trace_world, buf)
+    return result
+end
+
+"""
+    is_traced_method_invalidated(mi, trace_world) -> Bool
+
+Return `true` if `mi` (a `Core.MethodInstance` recorded by
+`compile_with_trace_callback`) is no longer valid: i.e. its defining method has
+been redefined, replaced or shadowed since the trace performed at world
+`trace_world` (e.g. by Revise), meaning a program that traced through `mi` may
+need to be re-traced.
+
+Two signals are checked:
+- the method's own `primary_world` moved past `trace_world` (this is what
+  happens when Revise updates a method in place on Julia 1.12+);
+- re-running the method lookup for the recorded specialization at the current
+  world no longer resolves to the same method (method replaced, deleted or
+  shadowed by a more specific one).
+"""
+function is_traced_method_invalidated(mi::Core.MethodInstance, trace_world::UInt)
+    def = mi.def
+    def isa Core.Method || return true
+    # If the world counter hasn't moved since the trace, no method can have
+    # been defined, redefined or deleted in the meantime, so nothing can be
+    # invalidated: O(1) clean check instead of a per-MI method-table lookup.
+    Base.get_world_counter() == trace_world && return false
+    # Only dispatchable (concrete) specializations can be checked via re-lookup;
+    # abstract-signature frames are inference-internal and get re-inferred from
+    # their (tracked) concrete callers, so they cannot meaningfully be
+    # invalidated on their own.
+    Core.Compiler.isdispatchtuple(mi.specTypes) || return false
+    # The method itself was (re)defined after the trace (e.g. Revise updated it
+    # in place on Julia 1.12+): invalidated.
+    def.primary_world > trace_world && return true
+    # Re-run the method lookup for the recorded specialization signature at the
+    # current world and check that it still resolves to the same method. If a
+    # more specific method was added, or the method was redefined/replaced
+    # (e.g. by Revise), the lookup will return a different method and the
+    # recorded specialization is considered invalidated.
+    check_world = Base.get_world_counter()
+    if is_reactant_method(mi)
+        # `@reactant_overlay` methods are only visible through the Reactant
+        # overlay method table; use the same table the tracer uses.
+        min_world = Ref{UInt}(typemin(UInt))
+        max_world = Ref{UInt}(typemax(UInt))
+        result = Enzyme.lookup_world(
+            mi.specTypes, check_world, REACTANT_METHOD_TABLE, min_world, max_world
+        )
+        result === nothing && return true
+        result isa Core.MethodMatch || return true
+        return result.method !== def
+    else
+        # Fast path: default dispatch lookup (~2.5us vs ~140us for the
+        # overlay-aware lookup).
+        found = Core.Compiler._findsup(mi.specTypes, nothing, check_world)
+        found === nothing && return true
+        match = found[1]::Core.MethodMatch
+        return match.method !== def
+    end
+end
+
+"""
+    invalidated_traced_methods(mis, trace_world) -> Vector{Core.MethodInstance}
+
+Given a collection of `Core.MethodInstance`s recorded by
+`compile_with_trace_callback` for a trace performed at world `trace_world`,
+return the subset that have been invalidated since. See
+[`is_traced_method_invalidated`](@ref).
+"""
+function invalidated_traced_methods(mis, trace_world::UInt)
+    return Core.MethodInstance[
+        mi for mi in mis if is_traced_method_invalidated(mi, trace_world)
+    ]
+end
+
 struct CompilerParams <: GPUCompiler.AbstractCompilerParams
     use_native_interp::Bool
 end
@@ -820,6 +963,10 @@ function call_llvm_generator(
     end
 
     if use_native_interpreter
+        # Record this specialization when the generated code executes (not when
+        # it is generated), so that the recorded set is independent of whether
+        # the generated code was already cached from an earlier compile.
+        push_inst!(overdubbed_code, Expr(:call, record_traced_method, mi))
         result = push_inst!(overdubbed_code, Expr(:call, f_arg, fn_args...))
         if DEBUG_INTERP[]
             push_inst!(overdubbed_code, Expr(:call, safe_print2, "resultNative", result))
@@ -1045,6 +1192,33 @@ function call_llvm_generator(
                     push!(profile_llvm_fns, gval)
                 end
 
+                # Record this specialization when the wrapper executes (not when it
+                # is generated), so that the recorded set of traced method
+                # specializations is independent of whether the generated code was
+                # already cached from an earlier compile in this session.
+                trace_mi_gval = LLVM.load!(
+                    builder,
+                    jlvaluet,
+                    LLVM.gep!(
+                        builder,
+                        jlvaluet,
+                        args[4],
+                        LLVM.Value[LLVM.ConstantInt(length(globals))],
+                    ),
+                )
+                push!(globals, mi)
+                trace_record_fn_gval = LLVM.load!(
+                    builder,
+                    jlvaluet,
+                    LLVM.gep!(
+                        builder,
+                        jlvaluet,
+                        args[4],
+                        LLVM.Value[LLVM.ConstantInt(length(globals))],
+                    ),
+                )
+                push!(globals, record_traced_method)
+
                 stringv = traced_mi(mi)
 
                 fname = LLVM.globalstring_ptr!(builder, stringv, "mi_name")
@@ -1069,6 +1243,10 @@ function call_llvm_generator(
 
                 Enzyme.Compiler.emit_apply_generic!(
                     builder, LLVM.Value[profile_llvm_fns[1], fname, file, line]
+                )
+
+                Enzyme.Compiler.emit_apply_generic!(
+                    builder, LLVM.Value[trace_record_fn_gval, trace_mi_gval]
                 )
 
                 res = LLVM.call!(builder, LLVM.function_type(p.entry), p.entry, args[1:3])
