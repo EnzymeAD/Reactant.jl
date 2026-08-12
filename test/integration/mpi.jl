@@ -48,14 +48,18 @@ datatypes = [
 # NCCL-backed datatypes
 gpu_datatypes = [Int32, UInt32, Int64, UInt64, Float32, Float64]
 
-MPI.Init()
-
-if RUN_GPU_MPI_TESTS
-    ReactantMPIExt === nothing && error("ReactantMPIExt is not loaded; load MPI first")
-    ReactantMPIExt.init_default_comm(; comm=MPI.COMM_WORLD)
-end
-
+mpi_initialized = false
 try
+    # intialize
+    MPI.Init()
+    mpi_initialized = true
+
+    if RUN_GPU_MPI_TESTS
+        ReactantMPIExt === nothing && error("ReactantMPIExt is not loaded; load MPI first")
+        ReactantMPIExt.init_default_comm(; comm=MPI.COMM_WORLD)
+    end
+
+    # run tests
     if RUN_CPU_MPI_TESTS
         @testset "Comm_rank" begin
             comm = MPI.COMM_WORLD
@@ -384,8 +388,8 @@ try
     end
 
 finally
-    if RUN_GPU_MPI_TESTS
+    if RUN_GPU_MPI_TESTS && ReactantMPIExt !== nothing
         ReactantMPIExt.destroy_default_comm()
     end
-    MPI.Finalize()
+    mpi_initialized && MPI.Finalize()
 end
