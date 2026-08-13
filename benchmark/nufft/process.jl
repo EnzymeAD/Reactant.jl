@@ -1,3 +1,9 @@
+# Aggregate the JLD2 files written by `sweep.jl` into a table. Each file comes
+# from one sweep run, e.g. for the M=1e5, N=128, optimize=all entry below:
+#
+#     julia --project=benchmark/nufft benchmark/nufft/sweep.jl 100000 128 2 \
+#         --opt all --out bench-1e5-128-all.jld
+
 using DataFrames
 using TidierData
 using FileIO

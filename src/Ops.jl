@@ -1499,6 +1499,7 @@ end
     x::TracedRArray{T,N},
     k::Integer;
     dimension::Integer=N,
+    is_stable::Bool=false,
     location=mlir_stacktrace("top_k", @__FILE__, @__LINE__),
 ) where {T,N}
     @assert 1 <= dimension <= N
@@ -1521,7 +1522,13 @@ end
     rsize = [size(x)[1:(end - 1)]..., k]
     values = mlir_type(TracedRArray{T,N}, rsize)
     indices = mlir_type(TracedRArray{Int32,N}, rsize)
-    op = chlo.top_k(x.mlir_data; values, indices, k, location)
+    # is_stable=false lets XLA:GPU dispatch eligible shapes to
+    # raft::matrix::select_k instead of full sort + slice (issue #886); the
+    # debug option that used to force this is gone upstream and the raft path
+    # is only taken for top_k ops declared unstable.
+    op = chlo.top_k(
+        x.mlir_data; values, indices, k, is_stable=MLIR.IR.Attribute(is_stable), location
+    )
     indices = add(
         TracedRArray{Int32,N}((), MLIR.IR.result(op, 2), rsize),
         fill(Int32(1), Tuple(rsize)),

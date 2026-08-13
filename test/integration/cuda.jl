@@ -5,6 +5,23 @@ const ReactantCUDAExt = Base.get_extension(Reactant, :ReactantCUDAExt)
 
 const RunningOnTPU = contains(string(Reactant.devices()[1]), "TPU")
 
+# LLVM's X86 backend marks bf16 vector types legal on hosts advertising avx512_bf16 but has
+# no selection patterns for them, so vectorized bf16 code aborts during instruction
+# selection. With LLVM.jl loaded (which installs a throwing fatal-error handler) that abort
+# instead unwinds out of the codegen lock and hangs the session, ignoring SIGTERM -- which
+# is a miserable thing to hit while bisecting something unrelated.
+#
+# Bounded by Julia version rather than by LLVM version: this is fixed in LLVM 19, but Julia
+# may equally ship a workaround in a 1.12 patch release while still on LLVM 18, and then
+# the test should start running again on its own.
+# See JuliaLang/julia#62666 and JuliaLLVM/LLVM.jl#581.
+const BF16IselBroken =
+    Sys.ARCH === :x86_64 &&
+    VERSION <= v"1.12.6" &&
+    Sys.islinux() &&
+    isfile("/proc/cpuinfo") &&
+    occursin("avx512_bf16", read("/proc/cpuinfo", String))
+
 @testset "Promote CuTraced" begin
     TFT = ReactantCUDAExt.CuTracedRNumber{Float64,1}
     FT = Float64
@@ -67,13 +84,21 @@ end
 end
 
 @static if VERSION >= v"1.12"
-    @testset "Square BF16 raised Kernel" begin
-        oA = collect(BFloat16, 1:1:64)
-        A = Reactant.to_rarray(oA)
-        B = Reactant.to_rarray(100 .* oA)
-        @jit raise = true square!(A, B)
-        @test all(Array(A) .≈ (oA .* oA .* 100))
-        @test all(Array(B) .≈ (oA .* 100))
+    if BF16IselBroken
+        @warn "Skipping BF16 kernel tests: this host advertises avx512_bf16 and Julia's \
+               LLVM ($(Base.libllvm_version)) cannot select bf16 vectors, so the test \
+               would abort or hang rather than fail. Re-run with \
+               `--cpu-target=$(Sys.CPU_NAME),-avx512bf16` to exercise them. \
+               See JuliaLang/julia#62666."
+    else
+        @testset "Square BF16 raised Kernel" begin
+            oA = collect(BFloat16, 1:1:64)
+            A = Reactant.to_rarray(oA)
+            B = Reactant.to_rarray(100 .* oA)
+            @jit raise = true square!(A, B)
+            @test all(Array(A) .≈ (oA .* oA .* 100))
+            @test all(Array(B) .≈ (oA .* 100))
+        end
     end
 end
 
