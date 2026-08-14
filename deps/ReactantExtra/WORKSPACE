@@ -4,7 +4,7 @@ NSYNC_COMMIT = "82b118aa7ace3132e517e2c467f8732978cf4023"
 
 NSYNC_SHA256 = ""
 
-ENZYMEXLA_COMMIT = "82ef2692f8b774101444f5209df1913d7e55d818"
+ENZYMEXLA_COMMIT = "0e39029b11fb9b133464bb9d8b8c66851baccc0e"
 
 ENZYMEXLA_SHA256 = ""
 
@@ -132,8 +132,8 @@ xla_workspace(NEW_XLA_PATCHES)
 #
 # pip_install_dependencies()
 
-load("@enzyme_ad//third_party/enzyme:workspace.bzl", enzyme_workspace = "repo")
 load("@enzyme_ad//third_party/cuda_tile:workspace.bzl", cuda_tile_workspace = "repo")
+load("@enzyme_ad//third_party/enzyme:workspace.bzl", enzyme_workspace = "repo")
 
 enzyme_workspace()
 
@@ -242,9 +242,9 @@ test_shard_count_repository(
     name = "test_shard_count",
 )
 
+load("@jax//third_party/rocm_wheels:workspace.bzl", "rocm_wheels_repository")
 load("@jax_wheel//:wheel.bzl", "WHEEL_VERSION")
 load("@python_version_repo//:py_version.bzl", "HERMETIC_PYTHON_VERSION")
-load("@jax//third_party/rocm_wheels:workspace.bzl", "rocm_wheels_repository")
 
 # Pre-built ROCm wheels from a GitHub release (ROCm/rocm-jax).
 rocm_wheels_repository(
@@ -262,8 +262,6 @@ external_deps_repository(
         "@rocm_wheels//:rocm_plugin_py_import",
     ],
 )
-
-load("@jax//jaxlib:jax_python_wheel.bzl", "jax_python_wheel_repository")
 
 jax_python_wheel_repository(
     name = "jax_wheel",

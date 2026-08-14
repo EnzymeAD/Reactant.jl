@@ -1,0 +1,4 @@
+[deps]
+MPI = "da04e1cc-30fd-572f-bb4f-1f8673147195"
+Reactant = "3c362404-f566-11ee-1572-e11a4b42c853"
+Reactant_jll = "0192cb87-2b54-54ad-80e0-3be72ad8a3c0"

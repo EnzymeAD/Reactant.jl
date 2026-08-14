@@ -1268,6 +1268,7 @@ cc_library(
             "-Wl,-exported_symbol,_ReactantCompileMhloToLLVM",
             "-Wl,-exported_symbol,_ReactantFreeLocalExecutable",
             "-Wl,-exported_symbol,_ReactantCreateLLVMMod",
+            "-Wl,-exported_symbol,_enzymexla_*",
         ],
     }),
     linkstatic = True,
