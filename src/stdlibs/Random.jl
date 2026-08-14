@@ -28,8 +28,11 @@ end
                `TracedRArray` of the appropriate size instead.")
     end
 
-    hashed = @static if isdefined(Random, :hash_seed)
+    hashed = @static if isdefined(Random, :hash_seed) && VERSION < v"1.13.0-rc1"
         Random.hash_seed(seed)
+    elseif isdefined(Random, :has_seed)
+        ctx = SHA.SHA2_256_CTX()
+        Random.hash_seed(seed, ctx)
     else
         # Not present < Julia 1.11
         ctx = SHA.SHA2_256_CTX()
