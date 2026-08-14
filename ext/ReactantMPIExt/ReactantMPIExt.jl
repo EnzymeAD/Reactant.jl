@@ -2,6 +2,7 @@ module ReactantMPIExt
 
 using Reactant
 using Reactant: Reactant, Distributed, MLIR
+using Reactant_jll
 using MPI: MPI
 using Libdl: Libdl
 
@@ -54,6 +55,21 @@ function __init__()
         MLIR.API.EnzymeJaXMapSymbol(name, Libdl.dlsym(MPI.API.libmpi_handle, name))
     end
     #! explicit-imports: on
+
+    mpi_handle = MPI.API.libmpi_handle
+    @ccall Reactant_jll.libReactantExtra.enzymexla_set_mpi_comm_rank(Libdl.dlsym(mpi_handle, :MPI_Comm_rank)::Ptr{Cvoid})::Cvoid
+    @ccall Reactant_jll.libReactantExtra.enzymexla_set_mpi_comm_size(Libdl.dlsym(mpi_handle, :MPI_Comm_size)::Ptr{Cvoid})::Cvoid
+    @ccall Reactant_jll.libReactantExtra.enzymexla_set_mpi_comm_split(Libdl.dlsym(mpi_handle, :MPI_Comm_split)::Ptr{Cvoid})::Cvoid
+    @ccall Reactant_jll.libReactantExtra.enzymexla_set_mpi_barrier(Libdl.dlsym(mpi_handle, :MPI_Barrier)::Ptr{Cvoid})::Cvoid
+    @ccall Reactant_jll.libReactantExtra.enzymexla_set_mpi_send(Libdl.dlsym(mpi_handle, :MPI_Send)::Ptr{Cvoid})::Cvoid
+    @ccall Reactant_jll.libReactantExtra.enzymexla_set_mpi_isend(Libdl.dlsym(mpi_handle, :MPI_Isend)::Ptr{Cvoid})::Cvoid
+    @ccall Reactant_jll.libReactantExtra.enzymexla_set_mpi_recv(Libdl.dlsym(mpi_handle, :MPI_Recv)::Ptr{Cvoid})::Cvoid
+    @ccall Reactant_jll.libReactantExtra.enzymexla_set_mpi_irecv(Libdl.dlsym(mpi_handle, :MPI_Irecv)::Ptr{Cvoid})::Cvoid
+    @ccall Reactant_jll.libReactantExtra.enzymexla_set_mpi_wait(Libdl.dlsym(mpi_handle, :MPI_Wait)::Ptr{Cvoid})::Cvoid
+    @ccall Reactant_jll.libReactantExtra.enzymexla_set_mpi_waitall(Libdl.dlsym(mpi_handle, :MPI_Waitall)::Ptr{Cvoid})::Cvoid
+    @ccall Reactant_jll.libReactantExtra.enzymexla_set_mpi_allreduce(Libdl.dlsym(mpi_handle, :MPI_Allreduce)::Ptr{Cvoid})::Cvoid
+    @ccall Reactant_jll.libReactantExtra.enzymexla_set_mpi_bcast(Libdl.dlsym(mpi_handle, :MPI_Bcast)::Ptr{Cvoid})::Cvoid
+    @ccall Reactant_jll.libReactantExtra.enzymexla_set_mpi_status_size(MPI.STATUS_SIZE::Csize_t)::Cvoid
 
     # register MPI constants
     # NOTE these symbols are not ABI-stable until MPI 5.0, but in practice, they are represented as word-size values (i.e. `int` or ptr)
