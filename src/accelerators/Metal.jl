@@ -4,6 +4,7 @@ using Reactant: Reactant
 using Scratch: @get_scratch!
 using Downloads: Downloads
 using p7zip_jll: p7zip
+using FileWatching: mkpidlock
 
 const metal_pjrt_plugin_dir = Ref{Union{Nothing,String}}(nothing)
 
@@ -36,25 +37,34 @@ function download_metal_pjrt_plugin_if_needed(path=nothing)
 
     metal_pjrt_plugin_path = joinpath(path, "pjrt_plugin_metal_14.dylib")
     if !isfile(metal_pjrt_plugin_path)
-        zip_file_path = joinpath(path, "pjrt-plugin-metal.zip")
-        tmp_dir = joinpath(path, "tmp")
-        Downloads.download(
-            if Sys.ARCH === :aarch64
-                "https://files.pythonhosted.org/packages/09/dc/6d8fbfc29d902251cf333414cf7dcfaf4b252a9920c881354584ed36270d/jax_metal-0.1.1-py3-none-macosx_13_0_arm64.whl"
-            elseif Sys.ARCH === :x86_64
-                "https://files.pythonhosted.org/packages/87/ec/9bb7f7f0ffd06c3fb89813126b2f698636ac7a4263ed7bdd1ff7d7c94f8f/jax_metal-0.1.1-py3-none-macosx_10_14_x86_64.whl"
-            else
-                error("Unsupported architecture: $(Sys.ARCH)")
-            end,
-            zip_file_path,
-        )
-        run(pipeline(`$(p7zip()) x -tzip -o$(tmp_dir) -- $(zip_file_path)`, devnull))
-        mv(
-            joinpath(tmp_dir, "jax_plugins", "metal_plugin", "pjrt_plugin_metal_14.dylib"),
-            metal_pjrt_plugin_path,
-        )
-        rm(tmp_dir; recursive=true)
-        rm(zip_file_path; recursive=true)
+        # Ensure path exists before creating lock file
+        !isdir(path) && mkpath(path)
+        mkpidlock(joinpath(path, "download_metal_pjrt_plugin.lock")) do
+            if !isfile(metal_pjrt_plugin_path)
+                tmp_dir = mktempdir(path)
+                zip_file_path = joinpath(tmp_dir, "pjrt-plugin-metal.zip")
+                Downloads.download(
+                    if Sys.ARCH === :aarch64
+                        "https://files.pythonhosted.org/packages/09/dc/6d8fbfc29d902251cf333414cf7dcfaf4b252a9920c881354584ed36270d/jax_metal-0.1.1-py3-none-macosx_13_0_arm64.whl"
+                    elseif Sys.ARCH === :x86_64
+                        "https://files.pythonhosted.org/packages/87/ec/9bb7f7f0ffd06c3fb89813126b2f698636ac7a4263ed7bdd1ff7d7c94f8f/jax_metal-0.1.1-py3-none-macosx_10_14_x86_64.whl"
+                    else
+                        error("Unsupported architecture: $(Sys.ARCH)")
+                    end,
+                    zip_file_path,
+                )
+                run(
+                    pipeline(`$(p7zip()) x -tzip -o$(tmp_dir) -- $(zip_file_path)`, devnull)
+                )
+                mv(
+                    joinpath(
+                        tmp_dir, "jax_plugins", "metal_plugin", "pjrt_plugin_metal_14.dylib"
+                    ),
+                    metal_pjrt_plugin_path,
+                )
+                rm(tmp_dir; recursive=true)
+            end
+        end
     end
 end
 

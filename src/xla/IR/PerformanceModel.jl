@@ -13,7 +13,7 @@ function GPUPerformanceModel(
 )
     GC.@preserve device_description begin
         return GPUPerformanceModel(
-            MLIR.API.CreateGPUPerformanceModel(mlir_context, device_description.ptr)
+            MLIR.API.CreateGPUPerformanceModel(device_description.ptr)
         )
     end
 end

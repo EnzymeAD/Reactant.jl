@@ -107,7 +107,7 @@ function set_mlir_data!(x::TracedRArray, data)
     return x
 end
 
-function set_mlir_data!(x::Base.ReshapedArray{TracedRNumber{T}}, data) where {T}
+function set_mlir_data!(x::Base.ReshapedArray{<:TracedRNumber{T}}, data) where {T}
     set_mlir_data!(
         parent(x),
         get_mlir_data(@opcall(reshape(TracedRArray{T}(data), size(parent(x))...))),
@@ -116,16 +116,16 @@ function set_mlir_data!(x::Base.ReshapedArray{TracedRNumber{T}}, data) where {T}
 end
 
 function get_ancestor_and_indices(
-    x::Base.ReshapedArray{TracedRNumber{T},N}, indices::Vector{CartesianIndex{N}}
-) where {T,N}
+    x::Base.ReshapedArray{<:TracedRNumber,N}, indices::Vector{CartesianIndex{N}}
+) where {N}
     linear_indices = LinearIndices(size(x))[indices]
     parent_linear_indices = LinearIndices(size(parent(x)))[linear_indices]
     return (parent(x), (parent_linear_indices,))
 end
 
 function get_ancestor_and_indices(
-    x::Base.ReshapedArray{TracedRNumber{T},N}, indices...
-) where {T,N}
+    x::Base.ReshapedArray{<:TracedRNumber,N}, indices...
+) where {N}
     @assert length(indices) == N "Expected $N indices, got $(length(indices))"
     indices = Base.to_indices(x, indices)
     if any(is_traced, indices)
@@ -160,7 +160,7 @@ function get_ancestor_and_indices(
 end
 
 function set_mlir_data!(
-    x::PermutedDimsArray{TracedRNumber{T},N,perm,iperm}, data
+    x::PermutedDimsArray{<:TracedRNumber{T},N,perm,iperm}, data
 ) where {T,N,perm,iperm}
     set_mlir_data!(parent(x), get_mlir_data(permutedims(TracedRArray{T}(data), iperm)))
     return x
@@ -343,7 +343,7 @@ function make_mlir_fn(
         return mlir_fn_res
     end
 
-    (; N, traced_args, linear_args, inv_map, in_tys, sym_visibility, mod, traced_args_to_shardings, func, fnbody, seen_args, skipped_args) = prepare_mlir_fn_args(
+    (; N, traced_args, linear_args, inv_map, in_tys, sym_visibility, mod, traced_args_to_shardings, func, fnbody, seen_args, skipped_args, any_input_sharding) = prepare_mlir_fn_args(
         args,
         name,
         concretein,
@@ -363,6 +363,12 @@ function make_mlir_fn(
     # both compile-time and relocatability issues
     MLIR.IR.activate(fnbody)
 
+    force_raising = any_input_sharding && !Reactant.Compiler.raising()
+
+    if force_raising
+        Reactant.Compiler.activate_raising!(true)
+    end
+
     result = try
         process_linear_args!(linear_args, fnbody, do_transpose, optimize_then_pad, inv_map)
 
@@ -374,6 +380,9 @@ function make_mlir_fn(
     finally
         MLIR.IR.deactivate(fnbody)
         Ops.deactivate_constant_context!(fnbody)
+        if force_raising
+            Reactant.Compiler.deactivate_raising!(true)
+        end
     end
 
     # check which arguments have been mutated
@@ -526,20 +535,23 @@ function prepare_mlir_fn_args(
 
     # Insert meshes for the sharded arguments
     traced_args_to_shardings = OrderedIdDict()
+    any_input_sharding = false
     for (k, v) in seen_args
         if k isa Reactant.AbstractConcreteNumber || k isa Reactant.AbstractConcreteArray
             if Reactant.Sharding.is_sharded(k)
                 @opcall mesh(k.sharding.mesh)
                 traced_args_to_shardings[v] = k.sharding
+                any_input_sharding = true
             elseif input_shardings !== nothing && haskey(input_shardings, k)
                 @opcall mesh(input_shardings[k].mesh)
                 traced_args_to_shardings[v] = input_shardings[k]
+                any_input_sharding = true
             end
         end
     end
 
-    func = MLIR.IR.with_block(MLIR.IR.body(mod)) do
-        return MLIR.Dialects.func.func_(;
+    func = MLIR.IR.@with_block MLIR.IR.body(mod) begin
+        MLIR.Dialects.func.func_(;
             sym_name=name * "_tmp",
             function_type=MLIR.IR.FunctionType(in_tys, Vector{MLIR.IR.Type}(undef, 0)),
             body=MLIR.IR.Region(),
@@ -589,6 +601,7 @@ function prepare_mlir_fn_args(
         fnbody,
         seen_args,
         skipped_args,
+        any_input_sharding,
     )
 end
 
@@ -877,8 +890,8 @@ function finalize_mlir_fn(
         MLIR.IR.deactivate(fnbody)
     end
 
-    func2 = MLIR.IR.with_block(MLIR.IR.body(mod)) do
-        return MLIR.Dialects.func.func_(;
+    func2 = MLIR.IR.@with_block MLIR.IR.body(mod) begin
+        MLIR.Dialects.func.func_(;
             sym_name=__lookup_unique_name_in_module(mod, name),
             function_type=MLIR.IR.FunctionType(in_tys, out_tys),
             body=MLIR.IR.Region(),
@@ -1112,7 +1125,7 @@ function set!(x, path, tostore; emptypath=false)
 end
 
 function __elem_apply_loop_condition(idx_ref, fn_ref::F, res_ref, args_ref, L_ref) where {F}
-    return idx_ref[] < L_ref[]
+    return @allowscalar(idx_ref[]) < L_ref[]
 end
 
 struct RefFillVector{T}
@@ -1126,12 +1139,12 @@ function __elem_apply_loop_body(idx_ref, fn_ref::F, res_ref, args_ref, L_ref) wh
     args = args_ref[]
     fn = fn_ref[]
     res = res_ref[]
-    idx = idx_ref[] + 1
+    idx = @allowscalar(idx_ref[]) + 1
 
     scalar_args = [@allowscalar(arg[idx]) for arg in args]
     @allowscalar res[idx] = fn(scalar_args...)
 
-    idx_ref[] = idx
+    @allowscalar idx_ref[] = idx
     res_ref[] = res
     return nothing
 end
@@ -1141,7 +1154,7 @@ scalar_arg(arg) = arg isa Base.RefValue || !(arg isa AbstractArray)
 flattenarg(arg) = ReactantCore.materialize_traced_array(vec(arg))
 flattenarg(arg::Ref) = RefFillVector(arg)
 
-function elem_apply_via_while_loop(f, args::Vararg{Any,Nargs}) where {Nargs}
+function elem_apply_via_while_loop(f, args::Vararg{Any,Nargs}; kwargs...) where {Nargs}
     non_ref_args = [arg for arg in args if !scalar_arg(arg)]
     if !isempty(non_ref_args)
         @assert allequal(size.(non_ref_args)) "All args must have the same size"
@@ -1170,7 +1183,7 @@ function elem_apply_via_while_loop(f, args::Vararg{Any,Nargs}) where {Nargs}
     bc = Base.Broadcast.Broadcasted(f, Tuple(args))
     result = similar(bc, T_res)
 
-    ind_var = Ref(0)
+    ind_var = zeros(TracedRArray{Int}, ())
     f_ref = Ref(f)
     result_ref = Ref(result)
     args_ref = Ref(flat_args)
@@ -1179,7 +1192,8 @@ function elem_apply_via_while_loop(f, args::Vararg{Any,Nargs}) where {Nargs}
     ReactantCore.traced_while(
         __elem_apply_loop_condition,
         __elem_apply_loop_body,
-        (ind_var, f_ref, result_ref, args_ref, limit_ref),
+        (ind_var, f_ref, result_ref, args_ref, limit_ref);
+        kwargs...,
     )
 
     return ReactantCore.materialize_traced_array(reshape(result, out_size))

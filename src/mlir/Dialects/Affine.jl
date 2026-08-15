@@ -543,17 +543,16 @@ In the above example, `%linear_index` conceptually holds the following:
 function linearize_index(
     multi_index::Vector{Value},
     dynamic_basis::Vector{Value};
-    linear_index=nothing::Union{Nothing,IR.Type},
+    linear_index::IR.Type,
     static_basis,
     location=Location(),
 )
-    op_ty_results = IR.Type[]
+    op_ty_results = IR.Type[linear_index,]
     operands = Value[multi_index..., dynamic_basis...]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[NamedAttribute("static_basis", static_basis),]
     push!(attributes, operandsegmentsizes([length(multi_index), length(dynamic_basis)]))
-    !isnothing(linear_index) && push!(op_ty_results, linear_index)
 
     return create_operation(
         "affine.linearize_index",
@@ -562,8 +561,8 @@ function linearize_index(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=op_ty_results,
+        result_inference=false,
     )
 end
 

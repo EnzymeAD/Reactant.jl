@@ -18,7 +18,8 @@ export Trace, Constraint, Selection, Address, TraceEntry, TracedTrace, MCMCState
 export Distribution, Normal, Exponential, LogNormal, Bernoulli
 
 # Utility functions.
-export get_choices, select, unflatten_trace, filter_entries_by_selection, with_trace
+export get_choices,
+    select, unflatten_trace, filter_entries_by_selection, with_trace, flatten_constraint
 
 # MCMC Statistics.
 export mcmc_summary

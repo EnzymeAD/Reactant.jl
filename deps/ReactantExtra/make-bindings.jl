@@ -16,6 +16,7 @@ dialect_files = [
     "Func.jl",
     "Enzyme.jl",
     "EnzymeXLA.jl",
+    "Impulse.jl",
     "StableHLO.jl",
     "CHLO.jl",
     "VHLO.jl",

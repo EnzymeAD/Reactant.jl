@@ -19,6 +19,7 @@ within_compile
 
 ```@docs
 @trace
+Binomial
 Periodic
 ```
 
@@ -81,6 +82,7 @@ Reactant.Profiler.@timed
 Reactant.Profiler.@profile
 Reactant.Profiler.profiler_activity_start
 Reactant.Profiler.profiler_activity_end
+Reactant.Profiler.get_total_program_roofline
 Reactant.Profiler.DEFAULT_PM_COUNTERS
 ```
 

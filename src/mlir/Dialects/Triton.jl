@@ -240,6 +240,43 @@ function atomic_cas(
 end
 
 """
+`atomic_poll`
+
+Repeatedly load from \$ptr with relaxed semantics on a single thread
+until the loaded value equals \$expected. For acquire semantics, issue
+an acquire fence only after a successful poll. Other threads wait for
+the polling thread to finish.
+"""
+function atomic_poll(
+    ptr::Value,
+    expected::Value,
+    timeout=nothing::Union{Nothing,Value};
+    result=nothing::Union{Nothing,IR.Type},
+    sem,
+    scope,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[ptr, expected]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[NamedAttribute("sem", sem), NamedAttribute("scope", scope)]
+    !isnothing(timeout) && push!(operands, timeout)
+    !isnothing(result) && push!(op_ty_results, result)
+
+    return create_operation(
+        "tt.atomic_poll",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
 `atomic_rmw`
 
 load data at \$ptr, do \$rmw_op with \$val, and store result to \$ptr.

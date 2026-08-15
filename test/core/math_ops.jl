@@ -2,6 +2,8 @@
 using Reactant, Test
 
 const RunningOnTPU = contains(string(Reactant.devices()[1]), "TPU")
+const RunningOnCUDA = contains(string(Reactant.devices()[1]), "CUDA")
+const RunningOnCPU = contains(string(Reactant.devices()[1]), "CPU")
 
 sinexp(x) = sin(exp(x))
 sinexpbc(x) = sinexp.(x)
@@ -92,6 +94,38 @@ end
         @test res[1] isa ConcreteRNumber{Float32}
         @test res[2] isa ConcreteRNumber{Float32}
     end
+    @testset for fn in (cispi, cis)
+        res = @jit fn(x_ra)
+        @test res ≈ fn(x)
+        @test res isa ConcreteRNumber{Complex{Float32}}
+    end
+
+    @testset "sinc" begin
+        x = Reactant.TestUtils.construct_test_array(Float32, 4, 16)[:, 1:7]
+        x_ra = Reactant.to_rarray(x)
+
+        @test @jit(sinc.(x_ra)) ≈ sinc.(x)
+        @test @jit(sinc.(x_ra)) isa ConcreteRArray{Float32,2}
+
+        xz = ConcreteRNumber(0.0)
+        xinf = ConcreteRNumber(Inf)
+        @test @jit(sinc(ConcreteRNumber(0.0))) ≈ sinc(0.0)
+        @test @jit(sinc(ConcreteRNumber(Inf))) ≈ sinc(Inf)
+
+        # Complex test
+        xc = Reactant.TestUtils.construct_test_array(ComplexF32, 4, 16)[:, 1:7]
+        xc_ra = Reactant.to_rarray(xc)
+
+        @test @jit(sinc.(xc_ra)) ≈ sinc.(xc)
+        @test @jit(sinc.(xc_ra)) isa ConcreteRArray{ComplexF32,2}
+
+        # Ensure we hit the small-argument branch
+        xz0 = ComplexF32(1e-5 - 2e-5im)
+        xz = ConcreteRNumber(xz0) # Below the threshold
+        xinf = ConcreteRNumber(ComplexF32(Inf + 1im))
+        @test @jit(sinc(xz)) ≈ sinc(xz0)
+        @test @jit(sinc(xinf)) ≈ sinc(Inf + 1im)
+    end
 end
 
 @testset "isfinite" begin
@@ -129,15 +163,81 @@ end
     @test !Bool(@jit(isinf(ConcreteRNumber(true))))
 end
 
+@testset "isapprox" begin
+    # `ConcreteRNumber` forwards `isapprox` straight to `Base` on the unwrapped
+    # values (see the `AbstractConcreteNumber` methods in ConcreteRArray.jl), so
+    # it never exercises `TracedRNumber`'s own `isapprox` method. Only calling
+    # through `@jit` traces the comparison and hits the method under test.
+    float_pairs = [
+        (1.0, 1.0),                # exactly equal
+        (1.0, 1.0 + 1e-12),        # within default rtol
+        (1.0, 1.1),                # not close by default
+        (0.0, 0.0),
+        (0.0, 1e-20),
+        (-5.0, -5.0000001),
+        (1e10, 1e10 + 100.0),      # rtol-dominated at default tolerance
+        (1.0f0, 1.0f0 + 1.0f-4),
+        (1.0f0, 2.0f0),
+        (NaN, NaN),
+        (NaN, 1.0),
+        (Inf, Inf),
+        (Inf, -Inf),
+        (-Inf, -Inf),
+        (Inf, 1.0),
+    ]
+
+    kwargs_cases = [
+        (;),
+        (; atol=1.0),                 # atol>0 with no rtol must force rtol=0, like Base
+        (; atol=200.0),
+        (; atol=1e-6),
+        (; rtol=1e-3),
+        (; atol=1.0, rtol=1e-9),
+        (; nans=true),
+        (; nans=false),
+        (; norm=abs2),
+    ]
+
+    @testset "traced vs traced: x=$x, y=$y, kwargs=$kwargs" for (x, y) in float_pairs,
+        kwargs in kwargs_cases
+
+        expected = isapprox(x, y; kwargs...)
+        x_ra = Reactant.to_rarray(x; track_numbers=Number)
+        y_ra = Reactant.to_rarray(y; track_numbers=Number)
+        got = @jit isapprox(x_ra, y_ra; kwargs...)
+        @test got isa ConcreteRNumber{Bool}
+        @test Bool(got) == expected
+    end
+
+    @testset "traced vs real: x=$x, y=$y" for (x, y) in float_pairs
+        expected = isapprox(x, y)
+        x_ra = Reactant.to_rarray(x; track_numbers=Number)
+        @test Bool(@jit(isapprox(x_ra, y))) == expected
+    end
+
+    @testset "real vs traced: x=$x, y=$y" for (x, y) in float_pairs
+        expected = isapprox(x, y)
+        y_ra = Reactant.to_rarray(y; track_numbers=Number)
+        @test Bool(@jit(isapprox(x, y_ra))) == expected
+    end
+
+    @testset "≈ operator" begin
+        x_ra = Reactant.to_rarray(1.0; track_numbers=Number)
+        y_ra = Reactant.to_rarray(1.0 + 1e-12; track_numbers=Number)
+        z_ra = Reactant.to_rarray(2.0; track_numbers=Number)
+        @test Bool(@jit(x_ra ≈ y_ra))
+        @test !Bool(@jit(x_ra ≈ z_ra))
+    end
+end
+
 @testset "mod and rem" begin
     a = [-1.1, 7.7, -3.3, 9.9, -5.5]
     b = [6.6, -2.2, -8.8, 4.4, -10.1]
 
     expected_mod = mod.(a, b)
-    @test @jit(mod.(Reactant.to_rarray(a), Reactant.to_rarray(b))) ≈ expected_mod broken =
-        RunningOnTPU
-    @test @jit(mod.(a, Reactant.to_rarray(b))) ≈ expected_mod broken = RunningOnTPU
-    @test @jit(mod.(Reactant.to_rarray(a), b)) ≈ expected_mod broken = RunningOnTPU
+    @test @jit(mod.(Reactant.to_rarray(a), Reactant.to_rarray(b))) ≈ expected_mod
+    @test @jit(mod.(a, Reactant.to_rarray(b))) ≈ expected_mod
+    @test @jit(mod.(Reactant.to_rarray(a), b)) ≈ expected_mod
 
     expected_rem = rem.(a, b)
     @test @jit(rem.(Reactant.to_rarray(a), Reactant.to_rarray(b))) ≈ expected_rem
@@ -203,8 +303,7 @@ end
 
 @testset "signbit" begin
     @testset "$(typeof(x))" for x in (-4, -3.14, -0.0f0, 0.0, 0, 5, 6.28f0)
-        @test @jit(signbit(ConcreteRNumber(x))) == signbit(x) broken =
-            RunningOnTPU && eltype(x) == Float64
+        @test @jit(signbit(ConcreteRNumber(x))) == signbit(x)
     end
 end
 
@@ -213,7 +312,7 @@ end
         b in (-7, -0.57, -0.0, 1, 3.14)
 
         @test Reactant.to_number(@jit(copysign(ConcreteRNumber(a), ConcreteRNumber(b)))) ≈
-            copysign(a, b) broken = RunningOnTPU && eltype(b) == Float64
+            copysign(a, b)
     end
 end
 
@@ -395,4 +494,31 @@ end
     @test yd isa ConcreteRNumber{UInt64}
     @test xd == 1
     @test yd == 4
+end
+
+@testset "hypot" begin
+    x = ConcreteRNumber(3.0)
+    y = ConcreteRNumber(4.0)
+    @test @jit(hypot(x, y)) ≈ 5.0
+    @test @jit(hypot(x, y)) isa ConcreteRNumber{Float64}
+
+    # Mixed: one traced, one plain
+    @test @jit(hypot(x, 4.0)) ≈ 5.0
+    @test @jit(hypot(3.0, y)) ≈ 5.0
+
+    # Zero edge case
+    @test @jit(hypot(ConcreteRNumber(0.0), ConcreteRNumber(0.0))) ≈ 0.0
+
+    # Large values that would overflow with naive x^2 + y^2
+    large = ConcreteRNumber(floatmax(Float64) / 2)
+    @test @jit(hypot(large, large)) ≈ large * sqrt(2) broken = RunningOnTPU
+
+    # Small values that would underflow with naive x^2 + y^2
+    small = ConcreteRNumber(2 * nextfloat(0.0))
+    @test @jit(hypot(small, small)) ≈ small * sqrt(2) broken = RunningOnCPU
+
+    # Broadcast over arrays
+    xs = Reactant.to_rarray([3.0, 5.0, 8.0])
+    ys = Reactant.to_rarray([4.0, 12.0, 15.0])
+    @test @jit(hypot.(xs, ys)) ≈ [5.0, 13.0, 17.0]
 end

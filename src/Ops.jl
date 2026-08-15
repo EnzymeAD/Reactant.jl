@@ -15,6 +15,31 @@ using ..Reactant:
 using ReactantCore: ReactantCore
 using GPUArraysCore: GPUArraysCore
 
+const GELU_APPROXIMATION_MAP = Dict(
+    "NONE" => MLIR.API.ENZYMEXLA_GELU_APPROXIMATION_NONE,
+    "TANH" => MLIR.API.ENZYMEXLA_GELU_APPROXIMATION_TANH,
+    "SIGMOID" => MLIR.API.ENZYMEXLA_GELU_APPROXIMATION_SIGMOID,
+)
+
+const LAPACK_TRANSPOSE_MAP = Dict(
+    'N' => MLIR.API.ENZYMEXLA_LAPACK_TRANSPOSE_NONE,
+    'T' => MLIR.API.ENZYMEXLA_LAPACK_TRANSPOSE_TRANSPOSE,
+    'C' => MLIR.API.ENZYMEXLA_LAPACK_TRANSPOSE_CONJUGATE_TRANSPOSE,
+)
+
+const LAPACK_UPLO_MAP = Dict(
+    'U' => MLIR.API.ENZYMEXLA_LAPACK_UPLO_UPPER,
+    'L' => MLIR.API.ENZYMEXLA_LAPACK_UPLO_LOWER,
+    'F' => MLIR.API.ENZYMEXLA_LAPACK_UPLO_FULL,
+)
+
+const SVD_ALGORITHM_MAP = Dict(
+    "DEFAULT" => MLIR.API.ENZYMEXLA_SVD_ALGORITHM_NONE,
+    "QRIteration" => MLIR.API.ENZYMEXLA_SVD_ALGORITHM_QRITERATION,
+    "Jacobi" => MLIR.API.ENZYMEXLA_SVD_ALGORITHM_JACOBI,
+    "DivideAndConquer" => MLIR.API.ENZYMEXLA_SVD_ALGORITHM_DIVIDEANDCONQUER,
+)
+
 function _function_macro_error()
     throw(ArgumentError("`caller_function` is not available in this context"))
 end
@@ -330,7 +355,7 @@ function _fill_element_attr(x::Complex)
 end
 
 @noinline function concatenate(
-    inputs::Vector{TracedRArray{T,N}},
+    inputs::Vector{<:TracedRArray{T,N}},
     dimension::Int;
     location=mlir_stacktrace("fill", @__FILE__, @__LINE__),
 ) where {T,N}
@@ -407,8 +432,8 @@ for (dialect, op) in [
     (:chlo, :erfc),
     (:chlo, :lgamma),
     (:chlo, :sinh),
-    (:enzymexla, :ml_softplus),
-    (:enzymexla, :ml_relu),
+    (:enzymexla, :math_softplus),
+    (:enzymexla, :math_relu),
 ]
     @eval begin
         @noinline function $op(
@@ -438,7 +463,7 @@ for (dialect, op) in [
 end
 
 # These are only defined for floating point types. So integers are typecast
-for op in (:ml_softplus,)
+for op in (:math_softplus,)
     @eval begin
         @noinline function $op(
             x::TracedRArray{T,N};
@@ -459,7 +484,7 @@ end
 @noinline function log1pexp(
     x::TracedRNumber{T}; location=mlir_stacktrace("log1pexp", @__FILE__, @__LINE__)
 ) where {T<:Real}
-    return ml_softplus(x; location)
+    return math_softplus(x; location)
 end
 
 # stablehlo doesn't allow unsigned integers should should anyways produce a no-op
@@ -563,6 +588,32 @@ for (dialect, op) in [
     end
 end
 
+@noinline function hypot(
+    a::TracedRArray{T,N},
+    b::TracedRArray{T,N};
+    location=mlir_stacktrace("hypot", @__FILE__, @__LINE__),
+) where {T,N}
+    res = MLIR.IR.result(
+        enzymexla.math_hypot(
+            a.mlir_data, b.mlir_data; result=mlir_type(TracedRArray{T,N}, size(a)), location
+        ),
+    )
+    return TracedRArray{T,N}((), res, size(a))
+end
+
+@noinline function hypot(
+    a::TracedRNumber{T},
+    b::TracedRNumber{T};
+    location=mlir_stacktrace("hypot", @__FILE__, @__LINE__),
+) where {T}
+    res = MLIR.IR.result(
+        enzymexla.math_hypot(
+            a.mlir_data, b.mlir_data; result=mlir_type(TracedRArray{T,0}, ()), location
+        ),
+    )
+    return TracedRNumber{T}((), res)
+end
+
 # is* checks
 for (dialect, op) in
     [(:stablehlo, :is_finite), (:chlo, :is_inf), (:chlo, :is_neg_inf), (:chlo, :is_pos_inf)]
@@ -625,6 +676,8 @@ end
     dims::Vector{Int};
     location=mlir_stacktrace("reshape", @__FILE__, @__LINE__),
 ) where {T,N}
+    @assert length(x) == prod(dims)
+
     # HLO reshape semantics collapse the opposite way
     res1 = transpose(x, Int64[N:-1:1...])
     restype = mlir_type(TracedRArray{T,length(dims)}, collect(Int64, Base.reverse(dims)))
@@ -816,7 +869,7 @@ end
 end
 
 function bitcast_convert(
-    ::Type{TracedRArray{U,N}},
+    ::Type{<:TracedRArray{U,N}},
     x::TracedRArray{T,N};
     location=mlir_stacktrace("bitcast_convert", @__FILE__, @__LINE__),
 ) where {T,U,N}
@@ -1446,6 +1499,7 @@ end
     x::TracedRArray{T,N},
     k::Integer;
     dimension::Integer=N,
+    is_stable::Bool=false,
     location=mlir_stacktrace("top_k", @__FILE__, @__LINE__),
 ) where {T,N}
     @assert 1 <= dimension <= N
@@ -1468,7 +1522,13 @@ end
     rsize = [size(x)[1:(end - 1)]..., k]
     values = mlir_type(TracedRArray{T,N}, rsize)
     indices = mlir_type(TracedRArray{Int32,N}, rsize)
-    op = chlo.top_k(x.mlir_data; values, indices, k, location)
+    # is_stable=false lets XLA:GPU dispatch eligible shapes to
+    # raft::matrix::select_k instead of full sort + slice (issue #886); the
+    # debug option that used to force this is gone upstream and the raft path
+    # is only taken for top_k ops declared unstable.
+    op = chlo.top_k(
+        x.mlir_data; values, indices, k, is_stable=MLIR.IR.Attribute(is_stable), location
+    )
     indices = add(
         TracedRArray{Int32,N}((), MLIR.IR.result(op, 2), rsize),
         fill(Int32(1), Tuple(rsize)),
@@ -1685,7 +1745,7 @@ end
 end
 
 @noinline function rng_bit_generator(
-    ::Type{TracedRNumber{T}}, seed::TracedRArray{UInt64,1}, shape; kwargs...
+    ::Type{<:TracedRNumber{T}}, seed::TracedRArray{UInt64,1}, shape; kwargs...
 ) where {T}
     return rng_bit_generator(T, seed, shape; kwargs...)
 end
@@ -1745,7 +1805,7 @@ end
 end
 
 @noinline function randn(
-    ::Type{TracedRNumber{T}}, seed::TracedRArray{UInt64,1}, shape; kwargs...
+    ::Type{<:TracedRNumber{T}}, seed::TracedRArray{UInt64,1}, shape; kwargs...
 ) where {T}
     return randn(T, seed, shape; kwargs...)
 end
@@ -1788,7 +1848,7 @@ distribution with rate 1. Returns a NamedTuple with the following fields:
 end
 
 @noinline function randexp(
-    ::Type{TracedRNumber{T}}, seed::TracedRArray{UInt64,1}, shape; kwargs...
+    ::Type{<:TracedRNumber{T}}, seed::TracedRArray{UInt64,1}, shape; kwargs...
 ) where {T}
     return randexp(T, seed, shape; kwargs...)
 end
@@ -1870,7 +1930,7 @@ end
 
 # eltype conversion
 @noinline function convert(
-    ::Type{TracedRArray{T,N}},
+    ::Type{<:TracedRArray{T,N}},
     x::TracedRArray;
     location=mlir_stacktrace("convert", @__FILE__, @__LINE__),
 ) where {T,N}
@@ -1887,7 +1947,7 @@ end
 end
 
 @noinline function convert(
-    ::Type{TracedRNumber{T}},
+    ::Type{<:TracedRNumber{T}},
     x::TracedRNumber;
     location=mlir_stacktrace("convert", @__FILE__, @__LINE__),
 ) where {T}
@@ -2113,7 +2173,7 @@ end
 
 @noinline function scatter(
     f::F,
-    dest::Vector{TracedRArray{T,N}},
+    dest::Vector{<:TracedRArray{T,N}},
     scatter_indices::TracedRArray{Int64},
     updates::Vector{<:TracedRArray{T}};
     location=mlir_stacktrace("scatter", @__FILE__, @__LINE__),
@@ -2142,7 +2202,7 @@ end
 end
 
 @noinline function scatter(
-    dest::Vector{TracedRArray{T,N}},
+    dest::Vector{<:TracedRArray{T,N}},
     scatter_indices::TracedRArray{TI},
     updates::Vector{<:TracedRArray{T}};
     update_computation::MLIR.IR.Region,
@@ -2367,16 +2427,18 @@ end
     end
 
     if checkpointing isa ReactantCore.Periodic
+        MLIR.IR.setattr!(while_op, "enzyme.enable_checkpointing", MLIR.IR.Attribute(true))
         MLIR.IR.setattr!(
-            while_op, "enzymexla.enable_checkpointing", MLIR.IR.Attribute(true)
+            while_op, "enzyme.checkpoint_period", MLIR.IR.Attribute(checkpointing.n)
         )
+    elseif checkpointing isa ReactantCore.Binomial
+        MLIR.IR.setattr!(while_op, "enzyme.enable_checkpointing", MLIR.IR.Attribute(true))
+        MLIR.IR.setattr!(while_op, "enzyme.binomial_checkpointing", MLIR.IR.UnitAttribute())
         MLIR.IR.setattr!(
-            while_op, "enzymexla.checkpoints", MLIR.IR.Attribute(checkpointing.n)
+            while_op, "enzyme.checkpoint_period", MLIR.IR.Attribute(checkpointing.budget)
         )
     elseif checkpointing === true
-        MLIR.IR.setattr!(
-            while_op, "enzymexla.enable_checkpointing", MLIR.IR.Attribute(true)
-        )
+        MLIR.IR.setattr!(while_op, "enzyme.enable_checkpointing", MLIR.IR.Attribute(true))
     end
 
     return map(enumerate(linear_args)) do (i, arg)
@@ -2440,8 +2502,8 @@ end
 
     # compile the true branch without any returns first
     true_fn_mod = MLIR.IR.current_module()
-    true_func_tmp = MLIR.IR.with_block(MLIR.IR.body(true_fn_mod)) do
-        return MLIR.Dialects.func.func_(;
+    true_func_tmp = MLIR.IR.@with_block MLIR.IR.body(true_fn_mod) begin
+        MLIR.Dialects.func.func_(;
             sym_name=string(true_fn) * "_tb_tmp",
             function_type=MLIR.IR.FunctionType(input_types, []),
             body=MLIR.IR.Region(),
@@ -2506,8 +2568,8 @@ end
 
     # compile the false branch without any returns similar to the true branch
     false_fn_mod = MLIR.IR.current_module()
-    false_func_tmp = MLIR.IR.with_block(MLIR.IR.body(false_fn_mod)) do
-        return MLIR.Dialects.func.func_(;
+    false_func_tmp = MLIR.IR.@with_block MLIR.IR.body(false_fn_mod) begin
+        MLIR.Dialects.func.func_(;
             sym_name=string(false_fn) * "_fb_tmp",
             function_type=MLIR.IR.FunctionType(input_types, []),
             body=MLIR.IR.Region(),
@@ -2734,8 +2796,8 @@ end
     # With the corrected results, we can compile the true and false branches
     tb_out_types = [mlir_type(tr) for tr in tb_corrected_linear_results]
 
-    true_fn_compiled = MLIR.IR.with_block(MLIR.IR.body(true_fn_mod)) do
-        return MLIR.Dialects.func.func_(;
+    true_fn_compiled = MLIR.IR.@with_block MLIR.IR.body(true_fn_mod) begin
+        MLIR.Dialects.func.func_(;
             sym_name=Reactant.TracedUtils.__lookup_unique_name_in_module(
                 true_fn_mod, string(true_fn) * "_tb"
             ),
@@ -2751,8 +2813,8 @@ end
 
     fb_out_types = [mlir_type(fr) for fr in fb_corrected_linear_results]
 
-    false_fn_compiled = MLIR.IR.with_block(MLIR.IR.body(false_fn_mod)) do
-        return MLIR.Dialects.func.func_(;
+    false_fn_compiled = MLIR.IR.@with_block MLIR.IR.body(false_fn_mod) begin
+        MLIR.Dialects.func.func_(;
             sym_name=Reactant.TracedUtils.__lookup_unique_name_in_module(
                 false_fn_mod, string(false_fn) * "_fb"
             ),
@@ -2912,8 +2974,8 @@ result = Ops.case(
     branch_results = Vector{Any}(undef, n_branches)
 
     for b in 1:n_branches
-        branch_func_tmps[b] = MLIR.IR.with_block(MLIR.IR.body(branch_mods[b])) do
-            return MLIR.Dialects.func.func_(;
+        branch_func_tmps[b] = MLIR.IR.@with_block MLIR.IR.body(branch_mods[b]) begin
+            MLIR.Dialects.func.func_(;
                 sym_name=string(branch_fns[b]) * "_branch$(b)_tmp",
                 function_type=MLIR.IR.FunctionType(input_types, []),
                 body=MLIR.IR.Region(),
@@ -3113,8 +3175,8 @@ result = Ops.case(
     for b in 1:n_branches
         branch_out_types = [mlir_type(tr) for tr in branch_corrected_linear_results[b]]
 
-        branch_fn_compiled = MLIR.IR.with_block(MLIR.IR.body(branch_mods[b])) do
-            return MLIR.Dialects.func.func_(;
+        branch_fn_compiled = MLIR.IR.@with_block MLIR.IR.body(branch_mods[b]) begin
+            MLIR.Dialects.func.func_(;
                 sym_name=Reactant.TracedUtils.__lookup_unique_name_in_module(
                     branch_mods[b], string(branch_fns[b]) * "_branch$(b)"
                 ),
@@ -3363,8 +3425,8 @@ end
 
     sym_name = Reactant.TracedUtils.__lookup_unique_name_in_module(mod, sym_name)
 
-    mesh_op = MLIR.IR.with_module(mod) do
-        return MLIR.Dialects.sdy.mesh(; sym_name, mesh=mesh_attr, location)
+    mesh_op = MLIR.IR.@with_module mod begin
+        MLIR.Dialects.sdy.mesh(; sym_name, mesh=mesh_attr, location)
     end
 
     # mesh_op needs to be moved to the beginning of the module
@@ -3587,7 +3649,7 @@ function standardize_start_indices(
     operand::TracedRArray{T,N}, update, start_indices::Vector
 ) where {T,N}
     @assert length(start_indices) == N
-    return [
+    return MLIR.IR.Value[
         standardize_start_index(
             size(operand, i),
             update === nothing ? nothing : size(update, i),
@@ -3876,18 +3938,6 @@ end
     Vt_size = (batch_sizes..., full ? n : r, n)
     info_size = batch_sizes
 
-    if algorithm == "DEFAULT"
-        algint = 0
-    elseif algorithm == "QRIteration"
-        algint = 1
-    elseif algorithm == "DivideAndConquer"
-        algint = 2
-    elseif algorithm == "Jacobi"
-        algint = 3
-    else
-        error("Unsupported SVD algorithm: $algorithm")
-    end
-
     svd_op = enzymexla.linalg_svd(
         x.mlir_data;
         U=mlir_type(TracedRArray{T,N}, U_size),
@@ -3895,7 +3945,9 @@ end
         Vt=mlir_type(TracedRArray{T,N}, Vt_size),
         info=mlir_type(TracedRArray{iT,N - 2}, info_size),
         full=full,
-        algorithm=MLIR.API.enzymexlaSVDAlgorithmAttrGet(MLIR.IR.current_context(), algint),
+        algorithm=MLIR.API.enzymexlaSVDAlgorithmAttrGet(
+            MLIR.IR.current_context(), SVD_ALGORITHM_MAP[algorithm]
+        ),
         location,
     )
 
@@ -3914,8 +3966,8 @@ end
 
 @noinline function reduce_window(
     f::F,
-    inputs::Vector{TracedRArray{T,N}},
-    init_values::Vector{TracedRNumber{T}};
+    inputs::Vector{<:TracedRArray{T,N}},
+    init_values::Vector{<:TracedRNumber{T}};
     window_dimensions::Vector{Int},
     window_strides::Vector{Int},
     base_dilations::Vector{Int},
@@ -4098,26 +4150,20 @@ end
     end
 end
 
-@noinline function ml_gelu(
+@noinline function math_gelu(
     x::Union{TracedRArray,TracedRNumber},
     approximation::String;
     location=mlir_stacktrace("ml.gelu", @__FILE__, @__LINE__),
 )
-    approx = if approximation == "NONE"
-        0
-    elseif approximation == "TANH"
-        1
-    elseif approximation == "SIGMOID"
-        2
-    else
-        error("Invalid gelu approximation: $approximation")
-    end
-    approx = MLIR.API.enzymexlaGeluApproximationAttrGet(
-        MLIR.IR.current_context(), Int32(approx)
-    )
-
     res = MLIR.IR.result(
-        enzymexla.ml_gelu(x.mlir_data; gelu_approximation=approx, location), 1
+        enzymexla.math_gelu(
+            x.mlir_data;
+            gelu_approximation=MLIR.API.enzymexlaGeluApproximationAttrGet(
+                MLIR.IR.current_context(), GELU_APPROXIMATION_MAP[approximation]
+            ),
+            location,
+        ),
+        1,
     )
 
     if x isa TracedRArray
@@ -4210,41 +4256,19 @@ end
     location=mlir_stacktrace("syrk", @__FILE__, @__LINE__),
 ) where {T,N}
     ctx = MLIR.IR.current_context()
-    uplo_attr = MLIR.API.enzymexlaLapackUploAttrGet(
-        ctx,
-        if uplo == 'U'
-            Int32(1)
-        elseif uplo == 'L'
-            Int32(0)
-        else
-            Int32(2)
-        end,
-    )
-    transpose_attr = MLIR.API.enzymexlaLapackTransposeAttrGet(
-        ctx,
-        if transpose_a == 'N'
-            Int32(0)
-        elseif transpose_a == 'T'
-            Int32(1)
-        elseif transpose_a == 'C'
-            Int32(2)
-        else
-            error("Unknown transpose mode: $transpose_a")
-        end,
-    )
-
-    alpha_ = constant(alpha; location)
-    beta_ = constant(beta; location)
+    uplo_attr = MLIR.API.enzymexlaLapackUploAttrGet(ctx, LAPACK_UPLO_MAP[uplo])
 
     res = MLIR.IR.result(
         enzymexla.blas_syrk(
             A.mlir_data,
             C.mlir_data,
-            alpha_.mlir_data,
-            beta_.mlir_data;
+            constant(alpha; location).mlir_data,
+            constant(beta; location).mlir_data;
             uplo=uplo_attr,
             output_uplo=uplo_attr,
-            transpose=transpose_attr,
+            transpose=MLIR.API.enzymexlaLapackTransposeAttrGet(
+                ctx, LAPACK_TRANSPOSE_MAP[transpose_a]
+            ),
             output=mlir_type(TracedRArray{T,N}, size(C)),
             location,
         ),
@@ -4508,6 +4532,31 @@ function julia_callback(
         return results[1]
     end
     return Tuple(results)
+end
+
+@noinline function softmax(
+    x::TracedRArray{T,N};
+    dims::Vector{Int64},
+    location=mlir_stacktrace("softmax", @__FILE__, @__LINE__),
+) where {T,N}
+    max_val = Reactant.call_with_reactant(Core.kwcall, (; dims,), Base.maximum, x)
+    exp_diff = exponential(x .- max_val; location)
+    denom = Reactant.call_with_reactant(Core.kwcall, (; dims,), Base.sum, exp_diff)
+    return exp_diff ./ denom
+end
+
+@noinline function logsoftmax(
+    x::TracedRArray{T,N};
+    dims::Vector{Int64},
+    location=mlir_stacktrace("logsoftmax", @__FILE__, @__LINE__),
+) where {T,N}
+    max_val = Reactant.call_with_reactant(Core.kwcall, (; dims,), Base.maximum, x)
+    diff = x .- max_val
+    exp_diff = exponential(diff; location)
+    reduced_exp_diff = Reactant.call_with_reactant(
+        Core.kwcall, (; dims,), Base.sum, exp_diff
+    )
+    return diff .- log(reduced_exp_diff; location)
 end
 
 end # module Ops

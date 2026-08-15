@@ -81,30 +81,30 @@ include("factorization/Factorization.jl")
 
 # Various Wrapper Arrays defined in LinearAlgebra
 function ReactantCore.materialize_traced_array(
-    x::Transpose{TracedRNumber{T},<:AnyTracedRArray}
-) where {T}
+    x::Transpose{<:TracedRNumber,<:AnyTracedRArray}
+)
     px = materialize_traced_array(parent(x))
     A = ndims(px) == 1 ? reshape(px, :, 1) : px
     return permutedims(A, (2, 1))
 end
 
 function ReactantCore.materialize_traced_array(
-    x::Adjoint{TracedRNumber{T},<:AnyTracedRArray}
-) where {T}
+    x::Adjoint{<:TracedRNumber,<:AnyTracedRArray}
+)
     return @opcall conj(
         materialize_traced_array(transpose(materialize_traced_array(parent(x))))
     )
 end
 
 function ReactantCore.materialize_traced_array(
-    x::Diagonal{TracedRNumber{T},<:AnyTracedRVector}
-) where {T}
+    x::Diagonal{<:TracedRNumber,<:AnyTracedRVector}
+)
     return diagm(materialize_traced_array(parent(x)))
 end
 
 function ReactantCore.materialize_traced_array(
-    x::Tridiagonal{TracedRNumber{T},<:AnyTracedRVector}
-) where {T}
+    x::Tridiagonal{<:TracedRNumber,<:AnyTracedRVector}
+)
     return diagm(-1 => x.dl, 0 => x.d, 1 => x.du)
 end
 
@@ -112,8 +112,8 @@ for (AT, comp) in ((:LowerTriangular, "GE"), (:UpperTriangular, "LE"))
     uAT = Symbol(:Unit, AT)
     @eval begin
         function ReactantCore.materialize_traced_array(
-            x::LinearAlgebra.$(AT){TracedRNumber{T},<:AnyTracedRMatrix}
-        ) where {T}
+            x::LinearAlgebra.$(AT){<:TracedRNumber,<:AnyTracedRMatrix}
+        )
             m, n = size(x)
             px = materialize_traced_array(parent(x))
             row_idxs = @opcall iota(Int, [m, n]; iota_dimension=1)
@@ -123,8 +123,8 @@ for (AT, comp) in ((:LowerTriangular, "GE"), (:UpperTriangular, "LE"))
         end
 
         function ReactantCore.materialize_traced_array(
-            x::LinearAlgebra.$(uAT){TracedRNumber{T},<:AnyTracedRMatrix}
-        ) where {T}
+            x::LinearAlgebra.$(uAT){<:TracedRNumber,<:AnyTracedRMatrix}
+        )
             m, n = size(x)
             px = materialize_traced_array(parent(x))
             row_idxs = @opcall iota(Int, [m, n]; iota_dimension=1)
@@ -139,8 +139,8 @@ for (AT, comp) in ((:LowerTriangular, "GE"), (:UpperTriangular, "LE"))
 end
 
 function ReactantCore.materialize_traced_array(
-    x::Hermitian{TracedRNumber{T},<:AnyTracedRMatrix}
-) where {T}
+    x::Hermitian{<:TracedRNumber,<:AnyTracedRMatrix}
+)
     m, n = size(x)
     row_idxs = @opcall iota(Int, [m, n]; iota_dimension=1)
     col_idxs = @opcall iota(Int, [m, n]; iota_dimension=2)
@@ -152,8 +152,8 @@ function ReactantCore.materialize_traced_array(
 end
 
 function ReactantCore.materialize_traced_array(
-    x::Symmetric{TracedRNumber{T},<:AnyTracedRMatrix}
-) where {T}
+    x::Symmetric{<:TracedRNumber,<:AnyTracedRMatrix}
+)
     m, n = size(x)
     row_idxs = @opcall iota(Int, [m, n]; iota_dimension=1)
     col_idxs = @opcall iota(Int, [m, n]; iota_dimension=2)
@@ -165,7 +165,7 @@ function ReactantCore.materialize_traced_array(
 end
 
 function TracedUtils.set_mlir_data!(
-    x::Transpose{TracedRNumber{T},TracedRArray{T,N}}, data
+    x::Transpose{<:TracedRNumber{T},<:TracedRArray{T,N}}, data
 ) where {T,N}
     tdata = TracedRArray{T}(data)
     px = parent(x)
@@ -180,7 +180,7 @@ function TracedUtils.set_mlir_data!(
 end
 
 function TracedUtils.set_mlir_data!(
-    x::Adjoint{TracedRNumber{T},TracedRArray{T,N}}, data
+    x::Adjoint{<:TracedRNumber{T},<:TracedRArray{T,N}}, data
 ) where {T,N}
     tdata = TracedRArray{T}(data)
     px = parent(x)
@@ -194,7 +194,7 @@ function TracedUtils.set_mlir_data!(
 end
 
 function TracedUtils.set_mlir_data!(
-    x::Diagonal{TracedRNumber{T},TracedRArray{T,1}}, data
+    x::Diagonal{<:TracedRNumber{T},<:TracedRArray{T,1}}, data
 ) where {T}
     parent(x).mlir_data = diag(TracedRArray{T}(data)).mlir_data
     return x
@@ -207,7 +207,7 @@ for (AT, dcomp, ocomp) in (
     (:UnitUpperTriangular, "LT", "GE"),
 )
     @eval function TracedUtils.set_mlir_data!(
-        x::LinearAlgebra.$(AT){TracedRNumber{T},<:AnyTracedRMatrix}, data
+        x::LinearAlgebra.$(AT){<:TracedRNumber{T},<:AnyTracedRMatrix}, data
     ) where {T}
         tdata = TracedRArray{T}(data)
         z = zero(tdata)
@@ -227,9 +227,16 @@ for (AT, dcomp, ocomp) in (
     end
 end
 
-function TracedUtils.set_mlir_data!(
-    x::Hermitian{TracedRNumber{T},<:AnyTracedRMatrix}, data
-) where {T}
+function TracedUtils.set_mlir_data!(x::Hermitian{<:TracedRNumber,<:AnyTracedRMatrix}, data)
+    if x.uplo == 'L'
+        set_mlir_data!(LowerTriangular(parent(x)), data)
+    else
+        set_mlir_data!(UpperTriangular(parent(x)), data)
+    end
+    return x
+end
+
+function TracedUtils.set_mlir_data!(x::Symmetric{<:TracedRNumber,<:AnyTracedRMatrix}, data)
     if x.uplo == 'L'
         set_mlir_data!(LowerTriangular(parent(x)), data)
     else
@@ -239,18 +246,7 @@ function TracedUtils.set_mlir_data!(
 end
 
 function TracedUtils.set_mlir_data!(
-    x::Symmetric{TracedRNumber{T},<:AnyTracedRMatrix}, data
-) where {T}
-    if x.uplo == 'L'
-        set_mlir_data!(LowerTriangular(parent(x)), data)
-    else
-        set_mlir_data!(UpperTriangular(parent(x)), data)
-    end
-    return x
-end
-
-function TracedUtils.set_mlir_data!(
-    x::Tridiagonal{TracedRNumber{T},<:AnyTracedRVector}, data
+    x::Tridiagonal{<:TracedRNumber{T},<:AnyTracedRVector}, data
 ) where {T}
     tdata = TracedRArray{T}(data)
     set_mlir_data!(x.dl, materialize_traced_array(diag(tdata, -1)).mlir_data)
@@ -259,7 +255,7 @@ function TracedUtils.set_mlir_data!(
     return x
 end
 
-Reactant.aos_to_soa(x::Tridiagonal{TracedRNumber{T}}) where {T} = x
+Reactant.aos_to_soa(x::Tridiagonal{<:TracedRNumber}) = x
 
 # Core functions
 function overloaded_mul(
@@ -318,8 +314,9 @@ function overloaded_mul!(
         if β_is_zero
             res = α_res
         else
+            C_mat = materialize_traced_array(C)
             β_C = @opcall multiply(
-                C, @opcall(fill(Reactant.promote_to(TracedRNumber{T}, β), size(C)))
+                C_mat, @opcall(fill(Reactant.promote_to(TracedRNumber{T}, β), size(C_mat)))
             )
             res = @opcall add(α_res, β_C)
         end
@@ -388,8 +385,20 @@ end
 
 # LinearAlgebra defines norm with some conditionals which cannot be traced directly
 function LinearAlgebra.norm(x::TracedRArray{T,N}, p::Real=2) where {T,N}
+    return overloaded_norm(x, p)
+end
+
+function overloaded_norm(x::AbstractVector, p::Real=2)
+    # The 2-norm reuses the `dot` lowering rather than a generic mapreduce. For complex `x`,
+    # `dot(x, x)` is real-valued but complex-typed, so the real part is taken before the sqrt.
+    p == 2 && return sqrt(real(overloaded_dot(x, x)))
     isinf(p) && return maximum(abs, x)
+    T = Reactant.unwrapped_eltype(x)
     return mapreduce(Base.Fix2(^, p), +, x)^(T(1 / p))
+end
+
+function overloaded_norm(x::AbstractArray, p::Real=2)
+    return overloaded_norm(call_with_reactant(vec, x), p)
 end
 
 function LinearAlgebra._diagm(shape, kv::Pair{<:Integer,<:AnyTracedRVector}...)
@@ -521,7 +530,9 @@ function LinearAlgebra.axpy!(α::Number, x::TracedRArray{T}, y::TracedRArray{T})
             ),
         )
     end
-    ax = @opcall multiply(x, Reactant.broadcast_to_size(T(α), size(x)))
+    T1 = unwrapped_eltype(T)
+    α = Reactant.promote_to(TracedRNumber{T1}, α)
+    ax = @opcall multiply(x, Reactant.broadcast_to_size(α, size(x)))
 
     set_mlir_data!(y, get_mlir_data(@opcall add(y, ax)))
     return y
@@ -537,8 +548,11 @@ function LinearAlgebra.axpby!(
             ),
         )
     end
-    ax = @opcall multiply(x, Reactant.broadcast_to_size(T(α), size(x)))
-    by = @opcall multiply(y, Reactant.broadcast_to_size(T(β), size(y)))
+    T1 = unwrapped_eltype(T)
+    α = Reactant.promote_to(TracedRNumber{T1}, α)
+    β = Reactant.promote_to(TracedRNumber{T1}, β)
+    ax = @opcall multiply(x, Reactant.broadcast_to_size(α, size(x)))
+    by = @opcall multiply(y, Reactant.broadcast_to_size(β, size(y)))
 
     set_mlir_data!(y, get_mlir_data(@opcall add(ax, by)))
     return y
@@ -616,7 +630,7 @@ tfun_to_char(::typeof(transpose)) = 'T'
 tfun_to_char(::typeof(adjoint)) = 'C'
 
 function LinearAlgebra.generic_trimatdiv!(
-    C::AbstractVecOrMat{TracedRNumber{T}},
+    C::AbstractVecOrMat{<:TracedRNumber{T}},
     uploc,
     isunitc,
     tfun::Function,
@@ -639,7 +653,7 @@ function LinearAlgebra.generic_trimatdiv!(
 end
 
 function LinearAlgebra.generic_trimatdiv!(
-    C::AbstractVecOrMat{TracedRNumber{T}},
+    C::AbstractVecOrMat{<:TracedRNumber{T}},
     uploc,
     isunitc,
     tfun::Function,
@@ -653,7 +667,7 @@ function LinearAlgebra.generic_trimatdiv!(
 end
 
 function LinearAlgebra.generic_mattridiv!(
-    C::AbstractMatrix{TracedRNumber{T}},
+    C::AbstractMatrix{<:TracedRNumber{T}},
     uploc,
     isunitc,
     tfun::Function,
@@ -676,7 +690,7 @@ function LinearAlgebra.generic_mattridiv!(
 end
 
 function LinearAlgebra.generic_mattridiv!(
-    C::AbstractMatrix{TracedRNumber{T}},
+    C::AbstractMatrix{<:TracedRNumber{T}},
     uploc,
     isunitc,
     tfun::Function,

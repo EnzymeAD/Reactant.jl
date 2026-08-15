@@ -45,7 +45,7 @@ LogExpFunctions.logistic(x::TracedRNumber) = @opcall logistic(x)
 LogExpFunctions.log1psq(x::TracedRNumber{<:Real}) = log1p(abs2(x))
 
 # log1pexp: log(1+exp(x)) with careful evaluation
-LogExpFunctions.log1pexp(x::TracedRNumber{<:Real}) = @opcall ml_softplus(x)
+LogExpFunctions.log1pexp(x::TracedRNumber{<:Real}) = @opcall math_softplus(x)
 
 # log1mexp: log(1 - exp(x))
 function LogExpFunctions.log1mexp(x::TracedRNumber{<:Real})
@@ -96,11 +96,16 @@ end
 function LogExpFunctions.softmax!(
     r::AnyTracedRArray{<:Real}, x::AnyTracedRArray{<:Real}=r; dims=:
 )
-    return LogExpFunctions._softmax!(r, x, dims)
+    dims isa Colon && (dims = 1:ndims(x))
+    res = @opcall softmax(x; dims=vec(collect(Int64, dims)))
+    copyto!(r, res)
+    return r
 end
 
 function LogExpFunctions.softmax(x::AnyTracedRArray{<:Real}; dims=:)
-    return LogExpFunctions._softmax!(similar(x, float(eltype(x))), x, dims)
+    dims isa Colon && (dims = 1:ndims(x))
+    res = @opcall softmax(x; dims=vec(collect(Int64, dims)))
+    return res
 end
 
 for (T1, T2) in [(TracedRNumber, Number), (Number, TracedRNumber)]

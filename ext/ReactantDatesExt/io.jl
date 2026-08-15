@@ -35,3 +35,18 @@ for date_type in (:ReactantDate, :ReactantDateTime)
     # Parsable output (i.e. ReactantDate("2012-01-01"))
     @eval Base.show(io::IO, dt::$date_type) = print(io, typeof(dt), "(\"", dt, "\")")
 end
+
+# _units is defined per concrete Period type in Dates for printing periods
+for (T, unit) in (
+    (:ReactantYear, "years"),
+    (:ReactantMonth, "months"),
+    (:ReactantDay, "days"),
+    (:ReactantHour, "hours"),
+    (:ReactantMinute, "minutes"),
+    (:ReactantSecond, "seconds"),
+    (:ReactantMillisecond, "milliseconds"),
+    (:ReactantMicrosecond, "microseconds"),
+    (:ReactantNanosecond, "nanoseconds"),
+)
+    @eval Dates._units(::$T) = " " * $unit
+end

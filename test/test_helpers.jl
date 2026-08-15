@@ -37,11 +37,6 @@ for tpu in available_tpus
     push!(test_worker_processes, (tpu, nothing))
 end
 
-if NTPUs > 0 || BACKEND == "tpu"
-    # Force download here, else we might try to download on each worker
-    Reactant.Accelerators.TPU.setup_libtpu!()
-end
-
 function tpu_custom_worker_launcher(name)
     tpu_id, idx = Base.@lock procs_lock begin
         _idx = findfirst(test_worker_processes) do (tpu, proc)

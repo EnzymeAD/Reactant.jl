@@ -19,9 +19,10 @@ struct var"AutotuneResult.TritonGemmKey"
     num_ctas::Int64
     is_tma_allowed::Bool
     is_warp_specialization_allowed::Bool
+    waves_per_eu::Int64
 end
-PB.default_values(::Type{var"AutotuneResult.TritonGemmKey"}) = (;block_m = zero(Int64), block_n = zero(Int64), block_k = zero(Int64), split_k = zero(Int64), num_stages = zero(Int64), num_warps = zero(Int64), num_ctas = zero(Int64), is_tma_allowed = false, is_warp_specialization_allowed = false)
-PB.field_numbers(::Type{var"AutotuneResult.TritonGemmKey"}) = (;block_m = 1, block_n = 2, block_k = 3, split_k = 4, num_stages = 5, num_warps = 6, num_ctas = 7, is_tma_allowed = 8, is_warp_specialization_allowed = 9)
+PB.default_values(::Type{var"AutotuneResult.TritonGemmKey"}) = (;block_m = zero(Int64), block_n = zero(Int64), block_k = zero(Int64), split_k = zero(Int64), num_stages = zero(Int64), num_warps = zero(Int64), num_ctas = zero(Int64), is_tma_allowed = false, is_warp_specialization_allowed = false, waves_per_eu = zero(Int64))
+PB.field_numbers(::Type{var"AutotuneResult.TritonGemmKey"}) = (;block_m = 1, block_n = 2, block_k = 3, split_k = 4, num_stages = 5, num_warps = 6, num_ctas = 7, is_tma_allowed = 8, is_warp_specialization_allowed = 9, waves_per_eu = 10)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"AutotuneResult.TritonGemmKey"}, _endpos::Int=0, _group::Bool=false)
     block_m = zero(Int64)
@@ -33,6 +34,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"AutotuneResult.Trito
     num_ctas = zero(Int64)
     is_tma_allowed = false
     is_warp_specialization_allowed = false
+    waves_per_eu = zero(Int64)
     while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
@@ -53,11 +55,13 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"AutotuneResult.Trito
             is_tma_allowed = PB.decode(d, Bool)
         elseif field_number == 9
             is_warp_specialization_allowed = PB.decode(d, Bool)
+        elseif field_number == 10
+            waves_per_eu = PB.decode(d, Int64)
         else
             Base.skip(d, wire_type)
         end
     end
-    return var"AutotuneResult.TritonGemmKey"(block_m, block_n, block_k, split_k, num_stages, num_warps, num_ctas, is_tma_allowed, is_warp_specialization_allowed)
+    return var"AutotuneResult.TritonGemmKey"(block_m, block_n, block_k, split_k, num_stages, num_warps, num_ctas, is_tma_allowed, is_warp_specialization_allowed, waves_per_eu)
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::var"AutotuneResult.TritonGemmKey")
@@ -71,6 +75,7 @@ function PB.encode(e::PB.AbstractProtoEncoder, x::var"AutotuneResult.TritonGemmK
     x.num_ctas != zero(Int64) && PB.encode(e, 7, x.num_ctas)
     x.is_tma_allowed != false && PB.encode(e, 8, x.is_tma_allowed)
     x.is_warp_specialization_allowed != false && PB.encode(e, 9, x.is_warp_specialization_allowed)
+    x.waves_per_eu != zero(Int64) && PB.encode(e, 10, x.waves_per_eu)
     return position(e.io) - initpos
 end
 function PB._encoded_size(x::var"AutotuneResult.TritonGemmKey")
@@ -84,6 +89,7 @@ function PB._encoded_size(x::var"AutotuneResult.TritonGemmKey")
     x.num_ctas != zero(Int64) && (encoded_size += PB._encoded_size(x.num_ctas, 7))
     x.is_tma_allowed != false && (encoded_size += PB._encoded_size(x.is_tma_allowed, 8))
     x.is_warp_specialization_allowed != false && (encoded_size += PB._encoded_size(x.is_warp_specialization_allowed, 9))
+    x.waves_per_eu != zero(Int64) && (encoded_size += PB._encoded_size(x.waves_per_eu, 10))
     return encoded_size
 end
 
@@ -160,44 +166,45 @@ function PB._encoded_size(x::var"AutotuneResult.ConvKey")
 end
 
 struct CudnnVersion
-    major::Int32
-    minor::Int32
-    patch::Int32
+    major_version::Int32
+    minor_version::Int32
+    patch_version::Int32
 end
-PB.default_values(::Type{CudnnVersion}) = (;major = zero(Int32), minor = zero(Int32), patch = zero(Int32))
-PB.field_numbers(::Type{CudnnVersion}) = (;major = 1, minor = 2, patch = 3)
+PB.reserved_fields(::Type{CudnnVersion}) = (names = ["major", "minor", "patch"], numbers = Union{Int,UnitRange{Int}}[1, 2, 3])
+PB.default_values(::Type{CudnnVersion}) = (;major_version = zero(Int32), minor_version = zero(Int32), patch_version = zero(Int32))
+PB.field_numbers(::Type{CudnnVersion}) = (;major_version = 4, minor_version = 5, patch_version = 6)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:CudnnVersion}, _endpos::Int=0, _group::Bool=false)
-    major = zero(Int32)
-    minor = zero(Int32)
-    patch = zero(Int32)
+    major_version = zero(Int32)
+    minor_version = zero(Int32)
+    patch_version = zero(Int32)
     while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
-        if field_number == 1
-            major = PB.decode(d, Int32)
-        elseif field_number == 2
-            minor = PB.decode(d, Int32)
-        elseif field_number == 3
-            patch = PB.decode(d, Int32)
+        if field_number == 4
+            major_version = PB.decode(d, Int32)
+        elseif field_number == 5
+            minor_version = PB.decode(d, Int32)
+        elseif field_number == 6
+            patch_version = PB.decode(d, Int32)
         else
             Base.skip(d, wire_type)
         end
     end
-    return CudnnVersion(major, minor, patch)
+    return CudnnVersion(major_version, minor_version, patch_version)
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::CudnnVersion)
     initpos = position(e.io)
-    x.major != zero(Int32) && PB.encode(e, 1, x.major)
-    x.minor != zero(Int32) && PB.encode(e, 2, x.minor)
-    x.patch != zero(Int32) && PB.encode(e, 3, x.patch)
+    x.major_version != zero(Int32) && PB.encode(e, 4, x.major_version)
+    x.minor_version != zero(Int32) && PB.encode(e, 5, x.minor_version)
+    x.patch_version != zero(Int32) && PB.encode(e, 6, x.patch_version)
     return position(e.io) - initpos
 end
 function PB._encoded_size(x::CudnnVersion)
     encoded_size = 0
-    x.major != zero(Int32) && (encoded_size += PB._encoded_size(x.major, 1))
-    x.minor != zero(Int32) && (encoded_size += PB._encoded_size(x.minor, 2))
-    x.patch != zero(Int32) && (encoded_size += PB._encoded_size(x.patch, 3))
+    x.major_version != zero(Int32) && (encoded_size += PB._encoded_size(x.major_version, 4))
+    x.minor_version != zero(Int32) && (encoded_size += PB._encoded_size(x.minor_version, 5))
+    x.patch_version != zero(Int32) && (encoded_size += PB._encoded_size(x.patch_version, 6))
     return encoded_size
 end
 
@@ -300,38 +307,39 @@ function PB._encoded_size(x::var"AutotuneResult.CudaConvPlanKey")
 end
 
 struct ComputeCapability
-    major::Int32
-    minor::Int32
+    major_version::Int32
+    minor_version::Int32
 end
-PB.default_values(::Type{ComputeCapability}) = (;major = zero(Int32), minor = zero(Int32))
-PB.field_numbers(::Type{ComputeCapability}) = (;major = 1, minor = 2)
+PB.reserved_fields(::Type{ComputeCapability}) = (names = ["major", "minor"], numbers = Union{Int,UnitRange{Int}}[1, 2])
+PB.default_values(::Type{ComputeCapability}) = (;major_version = zero(Int32), minor_version = zero(Int32))
+PB.field_numbers(::Type{ComputeCapability}) = (;major_version = 3, minor_version = 4)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ComputeCapability}, _endpos::Int=0, _group::Bool=false)
-    major = zero(Int32)
-    minor = zero(Int32)
+    major_version = zero(Int32)
+    minor_version = zero(Int32)
     while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
-        if field_number == 1
-            major = PB.decode(d, Int32)
-        elseif field_number == 2
-            minor = PB.decode(d, Int32)
+        if field_number == 3
+            major_version = PB.decode(d, Int32)
+        elseif field_number == 4
+            minor_version = PB.decode(d, Int32)
         else
             Base.skip(d, wire_type)
         end
     end
-    return ComputeCapability(major, minor)
+    return ComputeCapability(major_version, minor_version)
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::ComputeCapability)
     initpos = position(e.io)
-    x.major != zero(Int32) && PB.encode(e, 1, x.major)
-    x.minor != zero(Int32) && PB.encode(e, 2, x.minor)
+    x.major_version != zero(Int32) && PB.encode(e, 3, x.major_version)
+    x.minor_version != zero(Int32) && PB.encode(e, 4, x.minor_version)
     return position(e.io) - initpos
 end
 function PB._encoded_size(x::ComputeCapability)
     encoded_size = 0
-    x.major != zero(Int32) && (encoded_size += PB._encoded_size(x.major, 1))
-    x.minor != zero(Int32) && (encoded_size += PB._encoded_size(x.minor, 2))
+    x.major_version != zero(Int32) && (encoded_size += PB._encoded_size(x.major_version, 3))
+    x.minor_version != zero(Int32) && (encoded_size += PB._encoded_size(x.minor_version, 4))
     return encoded_size
 end
 

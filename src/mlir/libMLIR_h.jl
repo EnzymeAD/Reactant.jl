@@ -340,6 +340,10 @@ struct MlirSymbolTable
     ptr::Ptr{Cvoid}
 end
 
+struct MlirIRMapping
+    ptr::Ptr{Cvoid}
+end
+
 struct MlirAttribute
     ptr::Ptr{Cvoid}
 end
@@ -488,6 +492,17 @@ Gets the dialect instance owned by the given context using the dialect namespace
 """
 function mlirContextGetOrLoadDialect(context, name)
     @ccall mlir_c.mlirContextGetOrLoadDialect(
+        context::MlirContext, name::MlirStringRef
+    )::MlirDialect
+end
+
+"""
+    mlirContextGetLoadedDialect(context, name)
+
+Gets the dialect instance owned by the given context using the dialect namespace to identify it. If the dialect is not loaded by the context, returns null. Use [`mlirContextGetOrLoadDialect`](@ref) to load a dialect if it is registered with the context.
+"""
+function mlirContextGetLoadedDialect(context, name)
+    @ccall mlir_c.mlirContextGetLoadedDialect(
         context::MlirContext, name::MlirStringRef
     )::MlirDialect
 end
@@ -929,6 +944,24 @@ Creates a location with unknown position owned by the given context.
 """
 function mlirLocationUnknownGet(context)
     @ccall mlir_c.mlirLocationUnknownGet(context::MlirContext)::MlirLocation
+end
+
+"""
+    mlirLocationUnknownGetTypeID()
+
+TypeID Getter for Unknown.
+"""
+function mlirLocationUnknownGetTypeID()
+    @ccall mlir_c.mlirLocationUnknownGetTypeID()::MlirTypeID
+end
+
+"""
+    mlirLocationIsAUnknown(location)
+
+Checks whether the given location is an Unknown.
+"""
+function mlirLocationIsAUnknown(location)
+    @ccall mlir_c.mlirLocationIsAUnknown(location::MlirLocation)::Bool
 end
 
 """
@@ -2781,6 +2814,210 @@ function mlirSymbolTableWalkSymbolTables(from, allSymUsesVisible, callback, user
         callback::Ptr{Cvoid},
         userData::Ptr{Cvoid},
     )::Cvoid
+end
+
+"""
+    mlirIRMappingCreate()
+
+Creates a new empty IRMapping.
+"""
+function mlirIRMappingCreate()
+    @ccall mlir_c.mlirIRMappingCreate()::MlirIRMapping
+end
+
+"""
+    mlirIRMappingDestroy(mapping)
+
+Destroys the given IRMapping.
+"""
+function mlirIRMappingDestroy(mapping)
+    @ccall mlir_c.mlirIRMappingDestroy(mapping::MlirIRMapping)::Cvoid
+end
+
+"""
+    mlirIRMappingIsNull(mapping)
+
+Checks whether an IRMapping is null.
+"""
+function mlirIRMappingIsNull(mapping)
+    @ccall mlir_c.mlirIRMappingIsNull(mapping::MlirIRMapping)::Bool
+end
+
+"""
+    mlirIRMappingMapValue(mapping, from, to)
+
+Maps a Value in the mapping.
+"""
+function mlirIRMappingMapValue(mapping, from, to)
+    @ccall mlir_c.mlirIRMappingMapValue(
+        mapping::MlirIRMapping, from::MlirValue, to::MlirValue
+    )::Cvoid
+end
+
+"""
+    mlirIRMappingMapBlock(mapping, from, to)
+
+Maps a Block in the mapping.
+"""
+function mlirIRMappingMapBlock(mapping, from, to)
+    @ccall mlir_c.mlirIRMappingMapBlock(
+        mapping::MlirIRMapping, from::MlirBlock, to::MlirBlock
+    )::Cvoid
+end
+
+"""
+    mlirIRMappingMapOperation(mapping, from, to)
+
+Maps an [`Operation`](@ref) in the mapping.
+"""
+function mlirIRMappingMapOperation(mapping, from, to)
+    @ccall mlir_c.mlirIRMappingMapOperation(
+        mapping::MlirIRMapping, from::MlirOperation, to::MlirOperation
+    )::Cvoid
+end
+
+"""
+    mlirIRMappingClear(mapping)
+
+Clears all mappings.
+"""
+function mlirIRMappingClear(mapping)
+    @ccall mlir_c.mlirIRMappingClear(mapping::MlirIRMapping)::Cvoid
+end
+
+"""
+    mlirIRMappingLookupOrDefaultValue(mapping, from)
+
+Looks up a mapped Value. Returns the mapped value, or the input value if no mapping exists.
+"""
+function mlirIRMappingLookupOrDefaultValue(mapping, from)
+    @ccall mlir_c.mlirIRMappingLookupOrDefaultValue(
+        mapping::MlirIRMapping, from::MlirValue
+    )::MlirValue
+end
+
+"""
+    mlirIRMappingLookupOrNullValue(mapping, from)
+
+Looks up a mapped Value. Returns a null [`MlirValue`](@ref) if no mapping exists.
+"""
+function mlirIRMappingLookupOrNullValue(mapping, from)
+    @ccall mlir_c.mlirIRMappingLookupOrNullValue(
+        mapping::MlirIRMapping, from::MlirValue
+    )::MlirValue
+end
+
+"""
+    mlirIRMappingLookupOrDefaultBlock(mapping, from)
+
+Looks up a mapped Block. Returns the mapped block, or the input block if no mapping exists.
+"""
+function mlirIRMappingLookupOrDefaultBlock(mapping, from)
+    @ccall mlir_c.mlirIRMappingLookupOrDefaultBlock(
+        mapping::MlirIRMapping, from::MlirBlock
+    )::MlirBlock
+end
+
+"""
+    mlirIRMappingLookupOrNullBlock(mapping, from)
+
+Looks up a mapped Block. Returns a null [`MlirBlock`](@ref) if no mapping exists.
+"""
+function mlirIRMappingLookupOrNullBlock(mapping, from)
+    @ccall mlir_c.mlirIRMappingLookupOrNullBlock(
+        mapping::MlirIRMapping, from::MlirBlock
+    )::MlirBlock
+end
+
+"""
+    mlirIRMappingLookupOrDefaultOperation(mapping, from)
+
+Looks up a mapped [`Operation`](@ref). Returns the mapped operation, or the input operation if no mapping exists.
+"""
+function mlirIRMappingLookupOrDefaultOperation(mapping, from)
+    @ccall mlir_c.mlirIRMappingLookupOrDefaultOperation(
+        mapping::MlirIRMapping, from::MlirOperation
+    )::MlirOperation
+end
+
+"""
+    mlirIRMappingLookupOrNullOperation(mapping, from)
+
+Looks up a mapped [`Operation`](@ref). Returns a null [`MlirOperation`](@ref) if no mapping exists.
+"""
+function mlirIRMappingLookupOrNullOperation(mapping, from)
+    @ccall mlir_c.mlirIRMappingLookupOrNullOperation(
+        mapping::MlirIRMapping, from::MlirOperation
+    )::MlirOperation
+end
+
+"""
+    mlirIRMappingContainsValue(mapping, value)
+
+Returns true if the mapping contains a mapping for the given value.
+"""
+function mlirIRMappingContainsValue(mapping, value)
+    @ccall mlir_c.mlirIRMappingContainsValue(mapping::MlirIRMapping, value::MlirValue)::Bool
+end
+
+"""
+    mlirIRMappingContainsBlock(mapping, block)
+
+Returns true if the mapping contains a mapping for the given block.
+"""
+function mlirIRMappingContainsBlock(mapping, block)
+    @ccall mlir_c.mlirIRMappingContainsBlock(mapping::MlirIRMapping, block::MlirBlock)::Bool
+end
+
+"""
+    mlirIRMappingContainsOperation(mapping, op)
+
+Returns true if the mapping contains a mapping for the given operation.
+"""
+function mlirIRMappingContainsOperation(mapping, op)
+    @ccall mlir_c.mlirIRMappingContainsOperation(
+        mapping::MlirIRMapping, op::MlirOperation
+    )::Bool
+end
+
+"""
+    mlirIRMappingEraseValue(mapping, value)
+
+Erases a value mapping.
+"""
+function mlirIRMappingEraseValue(mapping, value)
+    @ccall mlir_c.mlirIRMappingEraseValue(mapping::MlirIRMapping, value::MlirValue)::Cvoid
+end
+
+"""
+    mlirIRMappingEraseBlock(mapping, block)
+
+Erases a block mapping.
+"""
+function mlirIRMappingEraseBlock(mapping, block)
+    @ccall mlir_c.mlirIRMappingEraseBlock(mapping::MlirIRMapping, block::MlirBlock)::Cvoid
+end
+
+"""
+    mlirIRMappingEraseOperation(mapping, op)
+
+Erases an operation mapping.
+"""
+function mlirIRMappingEraseOperation(mapping, op)
+    @ccall mlir_c.mlirIRMappingEraseOperation(
+        mapping::MlirIRMapping, op::MlirOperation
+    )::Cvoid
+end
+
+"""
+    mlirOperationCloneWithMapping(op, mapping)
+
+Clones the operation with the given mapping. The mapping is updated with the cloned operation's results and regions.
+"""
+function mlirOperationCloneWithMapping(op, mapping)
+    @ccall mlir_c.mlirOperationCloneWithMapping(
+        op::MlirOperation, mapping::MlirIRMapping
+    )::MlirOperation
 end
 
 struct MlirAffineExpr
@@ -7675,7 +7912,7 @@ function mlirLLVMDICompositeTypeAttrGetRecSelf(recId)
 end
 
 """
-    mlirLLVMDICompositeTypeAttrGet(ctx, recId, isRecSelf, tag, name, file, line, scope, baseType, flags, sizeInBits, alignInBits, nElements, elements, dataLocation, rank, allocated, associated)
+    mlirLLVMDICompositeTypeAttrGet(ctx, recId, isRecSelf, tag, name, file, line, scope, baseType, flags, sizeInBits, alignInBits, nElements, elements, dataLocation, rank, allocated, associated, identifier, discriminator)
 
 Creates a LLVM DICompositeType attribute.
 """
@@ -7698,6 +7935,8 @@ function mlirLLVMDICompositeTypeAttrGet(
     rank,
     allocated,
     associated,
+    identifier,
+    discriminator,
 )
     @ccall mlir_c.mlirLLVMDICompositeTypeAttrGet(
         ctx::MlirContext,
@@ -7718,6 +7957,8 @@ function mlirLLVMDICompositeTypeAttrGet(
         rank::MlirAttribute,
         allocated::MlirAttribute,
         associated::MlirAttribute,
+        identifier::MlirAttribute,
+        discriminator::MlirAttribute,
     )::MlirAttribute
 end
 
@@ -7835,12 +8076,23 @@ end
 end
 
 """
-    mlirLLVMDICompileUnitAttrGet(ctx, id, sourceLanguage, file, producer, isOptimized, emissionKind, isDebugInfoForProfiling, nameTableKind, splitDebugFilename, nImportedEntities, importedEntities)
+    mlirLLVMDICompileUnitAttrGetRecSelf(recId)
+
+Creates a self-referencing LLVM DICompileUnitAttr attribute.
+"""
+function mlirLLVMDICompileUnitAttrGetRecSelf(recId)
+    @ccall mlir_c.mlirLLVMDICompileUnitAttrGetRecSelf(recId::MlirAttribute)::MlirAttribute
+end
+
+"""
+    mlirLLVMDICompileUnitAttrGet(ctx, recId, isRecSelf, id, sourceLanguage, file, producer, isOptimized, emissionKind, isDebugInfoForProfiling, nameTableKind, splitDebugFilename, nImportedEntities, importedEntities)
 
 Creates a LLVM DICompileUnit attribute.
 """
 function mlirLLVMDICompileUnitAttrGet(
     ctx,
+    recId,
+    isRecSelf,
     id,
     sourceLanguage,
     file,
@@ -7855,6 +8107,8 @@ function mlirLLVMDICompileUnitAttrGet(
 )
     @ccall mlir_c.mlirLLVMDICompileUnitAttrGet(
         ctx::MlirContext,
+        recId::MlirAttribute,
+        isRecSelf::Bool,
         id::MlirAttribute,
         sourceLanguage::Cuint,
         file::MlirAttribute,
@@ -8370,6 +8624,12 @@ end
 function mlirLinalgInferConvolutionDimensions(op)
     @ccall mlir_c.mlirLinalgInferConvolutionDimensions(
         op::MlirOperation
+    )::MlirLinalgConvolutionDimensions
+end
+
+function mlirLinalgInferConvolutionDimensionsFromMaps(indexingMaps, numMaps)
+    @ccall mlir_c.mlirLinalgInferConvolutionDimensionsFromMaps(
+        indexingMaps::Ptr{MlirAffineMap}, numMaps::Csize_t
     )::MlirLinalgConvolutionDimensions
 end
 
@@ -9484,7 +9744,19 @@ function mlirGetDialectHandle__tosa__()
     @ccall mlir_c.mlirGetDialectHandle__tosa__()::MlirDialectHandle
 end
 
+struct MlirMemoryEffect
+    ptr::Ptr{Cvoid}
+end
+
+struct MlirMemoryEffectInstance
+    ptr::Ptr{Cvoid}
+end
+
 struct MlirMemoryEffectInstancesList
+    ptr::Ptr{Cvoid}
+end
+
+struct MlirSideEffectResource
     ptr::Ptr{Cvoid}
 end
 
@@ -9604,6 +9876,224 @@ function mlirInferShapedTypeOpInterfaceInferReturnTypes(
         callback::MlirShapedTypeComponentsCallback,
         userData::Ptr{Cvoid},
     )::MlirLogicalResult
+end
+
+"""
+    MlirSpeculatability
+
+Enum representing the speculatability of an operation.
+"""
+@cenum MlirSpeculatability::UInt32 begin
+    MlirSpeculatabilityNotSpeculatable = 0x0000000000000000
+    MlirSpeculatabilitySpeculatable = 0x0000000000000001
+    MlirSpeculatabilityRecursivelySpeculatable = 0x0000000000000002
+end
+
+"""
+    mlirConditionallySpeculatableOpInterfaceTypeID()
+
+Returns the interface TypeID of the ConditionallySpeculatable interface.
+"""
+function mlirConditionallySpeculatableOpInterfaceTypeID()
+    @ccall mlir_c.mlirConditionallySpeculatableOpInterfaceTypeID()::MlirTypeID
+end
+
+"""
+    MlirConditionallySpeculatableOpInterfaceCallbacks
+
+Callbacks for implementing ConditionallySpeculatable from external code.
+
+| Field              | Note                                                               |
+| :----------------- | :----------------------------------------------------------------- |
+| construct          | Optional constructor for user data. Set to nullptr to disable it.  |
+| destruct           | Optional destructor for user data. Set to nullptr to disable it.   |
+| getSpeculatability | Returns the speculatability of the given operation.                |
+"""
+struct MlirConditionallySpeculatableOpInterfaceCallbacks
+    construct::Ptr{Cvoid}
+    destruct::Ptr{Cvoid}
+    getSpeculatability::Ptr{Cvoid}
+    userData::Ptr{Cvoid}
+end
+
+"""
+    mlirConditionallySpeculatableOpInterfaceAttachFallbackModel(ctx, opName, callbacks)
+
+Attach a new FallbackModel for the ConditionallySpeculatable interface to the named operation. The FallbackModel will call the provided callbacks.
+"""
+function mlirConditionallySpeculatableOpInterfaceAttachFallbackModel(ctx, opName, callbacks)
+    @ccall mlir_c.mlirConditionallySpeculatableOpInterfaceAttachFallbackModel(
+        ctx::MlirContext,
+        opName::MlirStringRef,
+        callbacks::MlirConditionallySpeculatableOpInterfaceCallbacks,
+    )::Cvoid
+end
+
+"""
+    mlirConditionallySpeculatableOpInterfaceGetSpeculatability(operation)
+
+Returns the speculatability of the given operation.
+
+The operation must implement the ConditionallySpeculatable interface.
+"""
+function mlirConditionallySpeculatableOpInterfaceGetSpeculatability(operation)
+    @ccall mlir_c.mlirConditionallySpeculatableOpInterfaceGetSpeculatability(
+        operation::MlirOperation
+    )::MlirSpeculatability
+end
+
+"""
+    mlirMemoryEffectsAllocateGet()
+
+Returns the borrowed singleton instance of the allocate memory effect.
+"""
+function mlirMemoryEffectsAllocateGet()
+    @ccall mlir_c.mlirMemoryEffectsAllocateGet()::MlirMemoryEffect
+end
+
+"""
+    mlirMemoryEffectsFreeGet()
+
+Returns the borrowed singleton instance of the free memory effect.
+"""
+function mlirMemoryEffectsFreeGet()
+    @ccall mlir_c.mlirMemoryEffectsFreeGet()::MlirMemoryEffect
+end
+
+"""
+    mlirMemoryEffectsReadGet()
+
+Returns the borrowed singleton instance of the read memory effect.
+"""
+function mlirMemoryEffectsReadGet()
+    @ccall mlir_c.mlirMemoryEffectsReadGet()::MlirMemoryEffect
+end
+
+"""
+    mlirMemoryEffectsWriteGet()
+
+Returns the borrowed singleton instance of the write memory effect.
+"""
+function mlirMemoryEffectsWriteGet()
+    @ccall mlir_c.mlirMemoryEffectsWriteGet()::MlirMemoryEffect
+end
+
+"""
+    mlirSideEffectsDefaultResourceGet()
+
+Returns the borrowed singleton instance of the default side effect resource.
+"""
+function mlirSideEffectsDefaultResourceGet()
+    @ccall mlir_c.mlirSideEffectsDefaultResourceGet()::MlirSideEffectResource
+end
+
+"""
+    mlirMemoryEffectInstanceCreate(effect, parameters, stage, effectOnFullRegion, resource)
+
+Creates a memory effect instance without an associated IR entity. `parameters` may be a null attribute. The caller owns the returned instance and must destroy it with [`mlirMemoryEffectInstanceDestroy`](@ref).
+"""
+function mlirMemoryEffectInstanceCreate(
+    effect, parameters, stage, effectOnFullRegion, resource
+)
+    @ccall mlir_c.mlirMemoryEffectInstanceCreate(
+        effect::MlirMemoryEffect,
+        parameters::MlirAttribute,
+        stage::Cint,
+        effectOnFullRegion::Bool,
+        resource::MlirSideEffectResource,
+    )::MlirMemoryEffectInstance
+end
+
+"""
+    mlirMemoryEffectInstanceCreateForOpOperand(effect, opOperand, parameters, stage, effectOnFullRegion, resource)
+
+Creates a memory effect instance associated with an operation operand. `parameters` may be a null attribute. The caller owns the returned instance and must destroy it with [`mlirMemoryEffectInstanceDestroy`](@ref).
+"""
+function mlirMemoryEffectInstanceCreateForOpOperand(
+    effect, opOperand, parameters, stage, effectOnFullRegion, resource
+)
+    @ccall mlir_c.mlirMemoryEffectInstanceCreateForOpOperand(
+        effect::MlirMemoryEffect,
+        opOperand::MlirOpOperand,
+        parameters::MlirAttribute,
+        stage::Cint,
+        effectOnFullRegion::Bool,
+        resource::MlirSideEffectResource,
+    )::MlirMemoryEffectInstance
+end
+
+"""
+    mlirMemoryEffectInstanceCreateForOpResult(effect, result, parameters, stage, effectOnFullRegion, resource)
+
+Creates a memory effect instance associated with an operation result. `result` must wrap an OpResult. `parameters` may be a null attribute. The caller owns the returned instance and must destroy it with [`mlirMemoryEffectInstanceDestroy`](@ref).
+"""
+function mlirMemoryEffectInstanceCreateForOpResult(
+    effect, result, parameters, stage, effectOnFullRegion, resource
+)
+    @ccall mlir_c.mlirMemoryEffectInstanceCreateForOpResult(
+        effect::MlirMemoryEffect,
+        result::MlirValue,
+        parameters::MlirAttribute,
+        stage::Cint,
+        effectOnFullRegion::Bool,
+        resource::MlirSideEffectResource,
+    )::MlirMemoryEffectInstance
+end
+
+"""
+    mlirMemoryEffectInstanceCreateForBlockArgument(effect, blockArgument, parameters, stage, effectOnFullRegion, resource)
+
+Creates a memory effect instance associated with a block argument. `blockArgument` must wrap a BlockArgument. `parameters` may be a null attribute. The caller owns the returned instance and must destroy it with [`mlirMemoryEffectInstanceDestroy`](@ref).
+"""
+function mlirMemoryEffectInstanceCreateForBlockArgument(
+    effect, blockArgument, parameters, stage, effectOnFullRegion, resource
+)
+    @ccall mlir_c.mlirMemoryEffectInstanceCreateForBlockArgument(
+        effect::MlirMemoryEffect,
+        blockArgument::MlirValue,
+        parameters::MlirAttribute,
+        stage::Cint,
+        effectOnFullRegion::Bool,
+        resource::MlirSideEffectResource,
+    )::MlirMemoryEffectInstance
+end
+
+"""
+    mlirMemoryEffectInstanceCreateForSymbol(effect, symbol, parameters, stage, effectOnFullRegion, resource)
+
+Creates a memory effect instance associated with a symbol. `symbol` must be a SymbolRefAttr. `parameters` may be a null attribute. The caller owns the returned instance and must destroy it with [`mlirMemoryEffectInstanceDestroy`](@ref).
+"""
+function mlirMemoryEffectInstanceCreateForSymbol(
+    effect, symbol, parameters, stage, effectOnFullRegion, resource
+)
+    @ccall mlir_c.mlirMemoryEffectInstanceCreateForSymbol(
+        effect::MlirMemoryEffect,
+        symbol::MlirAttribute,
+        parameters::MlirAttribute,
+        stage::Cint,
+        effectOnFullRegion::Bool,
+        resource::MlirSideEffectResource,
+    )::MlirMemoryEffectInstance
+end
+
+"""
+    mlirMemoryEffectInstanceDestroy(instance)
+
+Destroys a memory effect instance created by one of the functions above.
+"""
+function mlirMemoryEffectInstanceDestroy(instance)
+    @ccall mlir_c.mlirMemoryEffectInstanceDestroy(instance::MlirMemoryEffectInstance)::Cvoid
+end
+
+"""
+    mlirMemoryEffectInstancesListAppend(list, instance)
+
+Appends a copy of `instance` to the given list. This does not take ownership of `instance`; the caller remains responsible for destroying it.
+"""
+function mlirMemoryEffectInstancesListAppend(list, instance)
+    @ccall mlir_c.mlirMemoryEffectInstancesListAppend(
+        list::MlirMemoryEffectInstancesList, instance::MlirMemoryEffectInstance
+    )::Cvoid
 end
 
 """
@@ -9861,6 +10351,17 @@ Creates a deep copy of this operation but keep the operation regions empty.
 function mlirRewriterBaseCloneWithoutRegions(rewriter, op)
     @ccall mlir_c.mlirRewriterBaseCloneWithoutRegions(
         rewriter::MlirRewriterBase, op::MlirOperation
+    )::MlirOperation
+end
+
+"""
+    mlirRewriterBaseCloneWithMapping(rewriter, op, mapping)
+
+Clones the given operation using the rewriter and the provided IRMapping. The mapping is updated with the results of the cloned operation.
+"""
+function mlirRewriterBaseCloneWithMapping(rewriter, op, mapping)
+    @ccall mlir_c.mlirRewriterBaseCloneWithMapping(
+        rewriter::MlirRewriterBase, op::MlirOperation, mapping::MlirIRMapping
     )::MlirOperation
 end
 
@@ -10491,6 +10992,23 @@ function mlirConversionPatternRewriterConvertRegionTypes(rewriter, region, typeC
 end
 
 """
+    mlirConversionPatternRewriterReplaceOpWithMultiple(rewriter, op, nRanges, rangeSizes, values)
+
+Replace the given operation with multiple value ranges -- one range per result of `op` -- and erase it. `nRanges` must equal the number of results of `op`. `rangeSizes[i]` is the number of values in the i-th range, and `values` is the flat concatenation of all ranges (its length is the sum of `rangeSizes[0..nRanges)`).
+"""
+function mlirConversionPatternRewriterReplaceOpWithMultiple(
+    rewriter, op, nRanges, rangeSizes, values
+)
+    @ccall mlir_c.mlirConversionPatternRewriterReplaceOpWithMultiple(
+        rewriter::MlirConversionPatternRewriter,
+        op::MlirOperation,
+        nRanges::Cptrdiff_t,
+        rangeSizes::Ptr{Cptrdiff_t},
+        values::Ptr{MlirValue},
+    )::Cvoid
+end
+
+"""
     mlirConversionTargetCreate(context)
 
 Create an empty ConversionTarget.
@@ -10553,6 +11071,80 @@ function mlirConversionTargetAddIllegalDialect(target, dialectName)
 end
 
 """
+    MlirConversionTargetLegality
+
+Result of a dynamic legality callback.
+"""
+@cenum MlirConversionTargetLegality::UInt32 begin
+    MLIR_CONVERSION_TARGET_LEGALITY_LEGAL = 0x0000000000000000
+    MLIR_CONVERSION_TARGET_LEGALITY_ILLEGAL = 0x0000000000000001
+    MLIR_CONVERSION_TARGET_LEGALITY_NO_OPINION = 0x0000000000000002
+end
+
+# typedef MlirConversionTargetLegality ( * MlirConversionTargetDynamicLegalityCallback ) ( MlirOperation op , void * userData )
+"""
+Callback for dynamic legality checks. Returns the legality of the given operation instance (see [`MlirConversionTargetLegality`](@ref)).
+"""
+const MlirConversionTargetDynamicLegalityCallback = Ptr{Cvoid}
+
+"""
+    mlirConversionTargetAddDynamicallyLegalOp(target, opName, callback, userData)
+
+Register the given operation as dynamically legal, with a callback to determine per-instance legality. The callback must not be NULL.
+"""
+function mlirConversionTargetAddDynamicallyLegalOp(target, opName, callback, userData)
+    @ccall mlir_c.mlirConversionTargetAddDynamicallyLegalOp(
+        target::MlirConversionTarget,
+        opName::MlirStringRef,
+        callback::MlirConversionTargetDynamicLegalityCallback,
+        userData::Ptr{Cvoid},
+    )::Cvoid
+end
+
+"""
+    mlirConversionTargetAddDynamicallyLegalDialect(target, dialectName, callback, userData)
+
+Register the given dialect as dynamically legal, with a callback to determine per-instance legality for all operations in the dialect. The callback must not be NULL.
+"""
+function mlirConversionTargetAddDynamicallyLegalDialect(
+    target, dialectName, callback, userData
+)
+    @ccall mlir_c.mlirConversionTargetAddDynamicallyLegalDialect(
+        target::MlirConversionTarget,
+        dialectName::MlirStringRef,
+        callback::MlirConversionTargetDynamicLegalityCallback,
+        userData::Ptr{Cvoid},
+    )::Cvoid
+end
+
+"""
+    mlirConversionTargetMarkOpRecursivelyLegal(target, opName, callback, userData)
+
+Mark the given operation as recursively legal. The optional callback (may be NULL) determines whether a specific instance is recursively legal; a NULL callback marks the operation as unconditionally recursively legal.
+"""
+function mlirConversionTargetMarkOpRecursivelyLegal(target, opName, callback, userData)
+    @ccall mlir_c.mlirConversionTargetMarkOpRecursivelyLegal(
+        target::MlirConversionTarget,
+        opName::MlirStringRef,
+        callback::MlirConversionTargetDynamicLegalityCallback,
+        userData::Ptr{Cvoid},
+    )::Cvoid
+end
+
+"""
+    mlirConversionTargetMarkUnknownOpDynamicallyLegal(target, callback, userData)
+
+Mark unknown operations as dynamically legal, with a callback. The callback must not be NULL.
+"""
+function mlirConversionTargetMarkUnknownOpDynamicallyLegal(target, callback, userData)
+    @ccall mlir_c.mlirConversionTargetMarkUnknownOpDynamicallyLegal(
+        target::MlirConversionTarget,
+        callback::MlirConversionTargetDynamicLegalityCallback,
+        userData::Ptr{Cvoid},
+    )::Cvoid
+end
+
+"""
     mlirTypeConverterCreate()
 
 Create a TypeConverter.
@@ -10570,9 +11162,20 @@ function mlirTypeConverterDestroy(typeConverter)
     @ccall mlir_c.mlirTypeConverterDestroy(typeConverter::MlirTypeConverter)::Cvoid
 end
 
-# typedef MlirLogicalResult ( * MlirTypeConverterConversionCallback ) ( MlirType type , MlirType * convertedType , void * userData )
 """
-Callback type for type conversion functions. Returns failure or sets convertedType to [`MlirType`](@ref){NULL} to indicate failure. If failure is returned, the converter is allowed to try another conversion function to perform the conversion.
+    MlirTypeConverterConversionStatus
+
+Outcome of a type conversion callback. Mirrors the three states of the underlying C++ `std::optional<LogicalResult>` conversion result.
+"""
+@cenum MlirTypeConverterConversionStatus::UInt32 begin
+    MlirTypeConverterConversionStatusSuccess = 0x0000000000000000
+    MlirTypeConverterConversionStatusFailure = 0x0000000000000001
+    MlirTypeConverterConversionStatusDeclined = 0x0000000000000002
+end
+
+# typedef MlirTypeConverterConversionStatus ( * MlirTypeConverterConversionCallback ) ( MlirType type , MlirType * convertedType , void * userData )
+"""
+Callback type for type conversion functions. On success the callback sets `*convertedType` to the converted type and returns MlirTypeConverterConversionStatusSuccess. Returning MlirTypeConverterConversionStatusDeclined leaves the type unconverted and allows another registered conversion function to be tried; returning MlirTypeConverterConversionStatusFailure fails the conversion without trying any further function.
 """
 const MlirTypeConverterConversionCallback = Ptr{Cvoid}
 
@@ -10590,9 +11193,48 @@ function mlirTypeConverterAddConversion(typeConverter, convertType, userData)
 end
 
 """
+    MlirTypeConverterConversionResults
+
+Opaque accumulator for the result types of a 1:N type conversion. It is passed to a [`MlirTypeConverter1ToNConversionCallback`](@ref), which appends converted types to it via [`mlirTypeConverterConversionResultsAppend`](@ref).
+"""
+struct MlirTypeConverterConversionResults
+    ptr::Ptr{Cvoid}
+end
+
+"""
+    mlirTypeConverterConversionResultsAppend(results, type)
+
+Append a converted result type to the given 1:N conversion result accumulator.
+"""
+function mlirTypeConverterConversionResultsAppend(results, type)
+    @ccall mlir_c.mlirTypeConverterConversionResultsAppend(
+        results::MlirTypeConverterConversionResults, type::MlirType
+    )::Cvoid
+end
+
+# typedef MlirTypeConverterConversionStatus ( * MlirTypeConverter1ToNConversionCallback ) ( MlirType type , MlirTypeConverterConversionResults results , void * userData )
+"""
+Callback type for 1:N type conversion functions. For the given `type`, the callback appends zero or more converted result types to `results` (via [`mlirTypeConverterConversionResultsAppend`](@ref)) and returns a status. On MlirTypeConverterConversionStatusSuccess the appended types make up the conversion: appending a single type is a 1:1 conversion, appending several is a 1:N conversion, and appending none erases the type. Returning MlirTypeConverterConversionStatusDeclined lets another conversion function be tried; MlirTypeConverterConversionStatusFailure fails the conversion without trying another. Any types appended before a non-success status are discarded.
+"""
+const MlirTypeConverter1ToNConversionCallback = Ptr{Cvoid}
+
+"""
+    mlirTypeConverterAdd1ToNConversion(typeConverter, convertType, userData)
+
+Add a 1:N type conversion function to the given TypeConverter.
+"""
+function mlirTypeConverterAdd1ToNConversion(typeConverter, convertType, userData)
+    @ccall mlir_c.mlirTypeConverterAdd1ToNConversion(
+        typeConverter::MlirTypeConverter,
+        convertType::MlirTypeConverter1ToNConversionCallback,
+        userData::Ptr{Cvoid},
+    )::Cvoid
+end
+
+"""
     mlirTypeConverterConvertType(typeConverter, type)
 
-Convert the given type using the given TypeConverter.
+Convert the given type using the given TypeConverter. This is the 1:1 convenience form: it returns the single converted type, or a null [`MlirType`](@ref) on failure or if the type converts to anything other than exactly one type (e.g. a 1:N conversion registered via [`mlirTypeConverterAdd1ToNConversion`](@ref), or an erasure to zero types).
 """
 function mlirTypeConverterConvertType(typeConverter, type)
     @ccall mlir_c.mlirTypeConverterConvertType(
@@ -10600,21 +11242,82 @@ function mlirTypeConverterConvertType(typeConverter, type)
     )::MlirType
 end
 
+# typedef MlirValue ( * MlirTypeConverterSourceMaterializationCallback ) ( MlirRewriterBase rewriter , MlirType outputType , intptr_t nInputs , MlirValue * inputs , MlirLocation loc , void * userData )
+"""
+Callback type for source materializations. Given a builder (passed as a rewriter), the desired output type, the input values, and a location, the callback must build a cast-like operation that produces a single value of `outputType` and return it. Returning a null [`MlirValue`](@ref) indicates failure, in which case another registered materialization may be attempted.
+"""
+const MlirTypeConverterSourceMaterializationCallback = Ptr{Cvoid}
+
+# typedef MlirValue ( * MlirTypeConverterTargetMaterializationCallback ) ( MlirRewriterBase rewriter , MlirType outputType , intptr_t nInputs , MlirValue * inputs , MlirLocation loc , MlirType originalType , void * userData )
+"""
+Callback type for 1:1 target materializations. Behaves like [`MlirTypeConverterSourceMaterializationCallback`](@ref), but additionally receives `originalType`: the original type of the SSA value being materialized.
+
+Note: This callback is single-output. For the 1:N (multiple-output) form, use [`MlirTypeConverter1ToNTargetMaterializationCallback`](@ref).
+"""
+const MlirTypeConverterTargetMaterializationCallback = Ptr{Cvoid}
+
+"""
+    mlirTypeConverterAddSourceMaterialization(typeConverter, callback, userData)
+
+Register a source materialization with the given TypeConverter. This is invoked when a replacement value must be converted back to its original source type because some uses persist beyond the main conversion.
+"""
+function mlirTypeConverterAddSourceMaterialization(typeConverter, callback, userData)
+    @ccall mlir_c.mlirTypeConverterAddSourceMaterialization(
+        typeConverter::MlirTypeConverter,
+        callback::MlirTypeConverterSourceMaterializationCallback,
+        userData::Ptr{Cvoid},
+    )::Cvoid
+end
+
+"""
+    mlirTypeConverterAddTargetMaterialization(typeConverter, callback, userData)
+
+Register a target materialization with the given TypeConverter. This is invoked when a value must be converted to a target type according to a pattern's type converter.
+"""
+function mlirTypeConverterAddTargetMaterialization(typeConverter, callback, userData)
+    @ccall mlir_c.mlirTypeConverterAddTargetMaterialization(
+        typeConverter::MlirTypeConverter,
+        callback::MlirTypeConverterTargetMaterializationCallback,
+        userData::Ptr{Cvoid},
+    )::Cvoid
+end
+
+# typedef MlirLogicalResult ( * MlirTypeConverter1ToNTargetMaterializationCallback ) ( MlirRewriterBase rewriter , intptr_t nOutputTypes , MlirType * outputTypes , intptr_t nInputs , MlirValue * inputs , MlirLocation loc , MlirType originalType , MlirValue * outputs , void * userData )
+"""
+Callback type for 1:N target materializations. Like [`MlirTypeConverterTargetMaterializationCallback`](@ref), but produces a value for each of the `nOutputTypes` requested output types instead of a single value. On success the callback must fill `outputs` -- a caller-allocated array of length `nOutputTypes` -- with that many non-null values; succeeding while leaving any entry null asserts. Returning failure signals that this materialization declined (so another may be attempted); in that case `outputs` is ignored. `originalType` carries the original type of the value being materialized and may be a null [`MlirType`](@ref).
+"""
+const MlirTypeConverter1ToNTargetMaterializationCallback = Ptr{Cvoid}
+
+"""
+    mlirTypeConverterAdd1ToNTargetMaterialization(typeConverter, callback, userData)
+
+Register a 1:N target materialization with the given TypeConverter.
+"""
+function mlirTypeConverterAdd1ToNTargetMaterialization(typeConverter, callback, userData)
+    @ccall mlir_c.mlirTypeConverterAdd1ToNTargetMaterialization(
+        typeConverter::MlirTypeConverter,
+        callback::MlirTypeConverter1ToNTargetMaterializationCallback,
+        userData::Ptr{Cvoid},
+    )::Cvoid
+end
+
 """
     MlirConversionPatternCallbacks
 
 ConversionPattern API
 
-| Field           | Note                                                                                                                                                                                                |
-| :-------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| construct       | Optional constructor for the user data. Set to nullptr to disable it.                                                                                                                               |
-| destruct        | Optional destructor for the user data. Set to nullptr to disable it.                                                                                                                                |
-| matchAndRewrite | The callback function to match against code rooted at the specified operation, and perform the conversion rewrite if the match is successful, corresponding to ConversionPattern::matchAndRewrite.  |
+| Field               | Note                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| :------------------ | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| construct           | Optional constructor for the user data. Set to nullptr to disable it.                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| destruct            | Optional destructor for the user data. Set to nullptr to disable it.                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| matchAndRewrite     | The callback function to match against code rooted at the specified operation, and perform the conversion rewrite if the match is successful, corresponding to ConversionPattern::matchAndRewrite.                                                                                                                                                                                                                                                                                                                                            |
+| matchAndRewrite1ToN | Optional callback corresponding to the 1:N ConversionPattern::matchAndRewrite([`Operation`](@ref) *, ArrayRef<ValueRange>, ...) overload, used when one or more operands are remapped to several values (e.g. under a 1:N type conversion). `operands` is the flat concatenation of all operand ranges; there are `nRanges` ranges (one per original operand) and `rangeSizes[i]` is the number of values in the i-th range. When this is non-null it takes precedence; when null, the driver falls back to the 1:1 `matchAndRewrite` above.  |
 """
 struct MlirConversionPatternCallbacks
     construct::Ptr{Cvoid}
     destruct::Ptr{Cvoid}
     matchAndRewrite::Ptr{Cvoid}
+    matchAndRewrite1ToN::Ptr{Cvoid}
 end
 
 """
@@ -11236,6 +11939,200 @@ end
 
 function mlirGetDialectHandle__xevm__()
     @ccall mlir_c.mlirGetDialectHandle__xevm__()::MlirDialectHandle
+end
+
+struct MlirDominanceInfo
+    ptr::Ptr{Cvoid}
+end
+
+struct MlirPostDominanceInfo
+    ptr::Ptr{Cvoid}
+end
+
+"""
+    mlirDominanceInfoCreate(op)
+
+Creates a DominanceInfo for the given operation (typically a FuncOp or ModuleOp). The caller owns the returned object and must destroy it.
+"""
+function mlirDominanceInfoCreate(op)
+    @ccall mlir_c.mlirDominanceInfoCreate(op::MlirOperation)::MlirDominanceInfo
+end
+
+"""
+    mlirDominanceInfoDestroy(info)
+
+Destroys the given DominanceInfo.
+"""
+function mlirDominanceInfoDestroy(info)
+    @ccall mlir_c.mlirDominanceInfoDestroy(info::MlirDominanceInfo)::Cvoid
+end
+
+"""
+    mlirDominanceInfoProperlyDominatesOperation(info, a, b)
+
+Returns true if operation A properly dominates operation B.
+"""
+function mlirDominanceInfoProperlyDominatesOperation(info, a, b)
+    @ccall mlir_c.mlirDominanceInfoProperlyDominatesOperation(
+        info::MlirDominanceInfo, a::MlirOperation, b::MlirOperation
+    )::Bool
+end
+
+"""
+    mlirDominanceInfoDominatesOperation(info, a, b)
+
+Returns true if operation A dominates operation B (A == B or A properly dominates B).
+"""
+function mlirDominanceInfoDominatesOperation(info, a, b)
+    @ccall mlir_c.mlirDominanceInfoDominatesOperation(
+        info::MlirDominanceInfo, a::MlirOperation, b::MlirOperation
+    )::Bool
+end
+
+"""
+    mlirDominanceInfoValueProperlyDominates(info, a, b)
+
+Returns true if value A properly dominates operation B.
+"""
+function mlirDominanceInfoValueProperlyDominates(info, a, b)
+    @ccall mlir_c.mlirDominanceInfoValueProperlyDominates(
+        info::MlirDominanceInfo, a::MlirValue, b::MlirOperation
+    )::Bool
+end
+
+"""
+    mlirDominanceInfoValueDominates(info, a, b)
+
+Returns true if value A dominates operation B (the operation defining A is B or A properly dominates B).
+"""
+function mlirDominanceInfoValueDominates(info, a, b)
+    @ccall mlir_c.mlirDominanceInfoValueDominates(
+        info::MlirDominanceInfo, a::MlirValue, b::MlirOperation
+    )::Bool
+end
+
+"""
+    mlirDominanceInfoProperlyDominatesBlock(info, a, b)
+
+Returns true if block A properly dominates block B.
+"""
+function mlirDominanceInfoProperlyDominatesBlock(info, a, b)
+    @ccall mlir_c.mlirDominanceInfoProperlyDominatesBlock(
+        info::MlirDominanceInfo, a::MlirBlock, b::MlirBlock
+    )::Bool
+end
+
+"""
+    mlirDominanceInfoDominatesBlock(info, a, b)
+
+Returns true if block A dominates block B.
+"""
+function mlirDominanceInfoDominatesBlock(info, a, b)
+    @ccall mlir_c.mlirDominanceInfoDominatesBlock(
+        info::MlirDominanceInfo, a::MlirBlock, b::MlirBlock
+    )::Bool
+end
+
+"""
+    mlirDominanceInfoFindNearestCommonDominator(info, a, b)
+
+Finds the nearest common dominator of blocks A and B. Returns a null block if none exists.
+"""
+function mlirDominanceInfoFindNearestCommonDominator(info, a, b)
+    @ccall mlir_c.mlirDominanceInfoFindNearestCommonDominator(
+        info::MlirDominanceInfo, a::MlirBlock, b::MlirBlock
+    )::MlirBlock
+end
+
+"""
+    mlirDominanceInfoIsReachableFromEntry(info, block)
+
+Returns true if the given block is reachable from the entry block of its region.
+"""
+function mlirDominanceInfoIsReachableFromEntry(info, block)
+    @ccall mlir_c.mlirDominanceInfoIsReachableFromEntry(
+        info::MlirDominanceInfo, block::MlirBlock
+    )::Bool
+end
+
+"""
+    mlirDominanceInfoInvalidate(info)
+
+Invalidates all cached dominance information.
+"""
+function mlirDominanceInfoInvalidate(info)
+    @ccall mlir_c.mlirDominanceInfoInvalidate(info::MlirDominanceInfo)::Cvoid
+end
+
+"""
+    mlirPostDominanceInfoCreate(op)
+
+Creates a PostDominanceInfo for the given operation.
+"""
+function mlirPostDominanceInfoCreate(op)
+    @ccall mlir_c.mlirPostDominanceInfoCreate(op::MlirOperation)::MlirPostDominanceInfo
+end
+
+"""
+    mlirPostDominanceInfoDestroy(info)
+
+Destroys the given PostDominanceInfo.
+"""
+function mlirPostDominanceInfoDestroy(info)
+    @ccall mlir_c.mlirPostDominanceInfoDestroy(info::MlirPostDominanceInfo)::Cvoid
+end
+
+"""
+    mlirPostDominanceInfoProperlyPostDominatesOperation(info, a, b)
+
+Returns true if operation A properly post-dominates operation B.
+"""
+function mlirPostDominanceInfoProperlyPostDominatesOperation(info, a, b)
+    @ccall mlir_c.mlirPostDominanceInfoProperlyPostDominatesOperation(
+        info::MlirPostDominanceInfo, a::MlirOperation, b::MlirOperation
+    )::Bool
+end
+
+"""
+    mlirPostDominanceInfoPostDominatesOperation(info, a, b)
+
+Returns true if operation A post-dominates operation B.
+"""
+function mlirPostDominanceInfoPostDominatesOperation(info, a, b)
+    @ccall mlir_c.mlirPostDominanceInfoPostDominatesOperation(
+        info::MlirPostDominanceInfo, a::MlirOperation, b::MlirOperation
+    )::Bool
+end
+
+"""
+    mlirPostDominanceInfoProperlyPostDominatesBlock(info, a, b)
+
+Returns true if block A properly post-dominates block B.
+"""
+function mlirPostDominanceInfoProperlyPostDominatesBlock(info, a, b)
+    @ccall mlir_c.mlirPostDominanceInfoProperlyPostDominatesBlock(
+        info::MlirPostDominanceInfo, a::MlirBlock, b::MlirBlock
+    )::Bool
+end
+
+"""
+    mlirPostDominanceInfoPostDominatesBlock(info, a, b)
+
+Returns true if block A post-dominates block B.
+"""
+function mlirPostDominanceInfoPostDominatesBlock(info, a, b)
+    @ccall mlir_c.mlirPostDominanceInfoPostDominatesBlock(
+        info::MlirPostDominanceInfo, a::MlirBlock, b::MlirBlock
+    )::Bool
+end
+
+"""
+    mlirPostDominanceInfoInvalidate(info)
+
+Invalidates all cached post-dominance information.
+"""
+function mlirPostDominanceInfoInvalidate(info)
+    @ccall mlir_c.mlirPostDominanceInfoInvalidate(info::MlirPostDominanceInfo)::Cvoid
 end
 
 struct MlirExecutionEngine
@@ -11995,7 +12892,7 @@ const LLVMMemoryBufferRef = Ptr{LLVMOpaqueMemoryBuffer}
 mutable struct LLVMOpaqueContext end
 
 """
-The top-level container for all LLVM global data. See the LLVMContext class.
+The top-level container for all LLVM global data. See the [`LLVMContext`](@ref) class.
 """
 const LLVMContextRef = Ptr{LLVMOpaqueContext}
 
@@ -12005,7 +12902,7 @@ mutable struct LLVMOpaqueModule end
 The top-level container for all other LLVM Intermediate Representation (IR) objects.
 
 # See also
-llvm::Module
+llvm::[`Module`](@ref)
 """
 const LLVMModuleRef = Ptr{LLVMOpaqueModule}
 
@@ -12085,7 +12982,7 @@ const LLVMDIBuilderRef = Ptr{LLVMOpaqueDIBuilder}
 mutable struct LLVMOpaqueModuleProvider end
 
 """
-Interface used to provide a module to JIT or interpreter. This is now just a synonym for llvm::Module, but we have to keep using the different type to keep binary compatibility.
+Interface used to provide a module to JIT or interpreter. This is now just a synonym for llvm::[`Module`](@ref), but we have to keep using the different type to keep binary compatibility.
 """
 const LLVMModuleProviderRef = Ptr{LLVMOpaqueModuleProvider}
 
@@ -12145,7 +13042,7 @@ mutable struct LLVMOpaqueModuleFlagEntry end
 
 """
 # See also
-llvm::Module::ModuleFlagEntry
+llvm::[`Module`](@ref)::ModuleFlagEntry
 """
 const LLVMModuleFlagEntry = LLVMOpaqueModuleFlagEntry
 
@@ -12193,7 +13090,7 @@ end
 Translate operation that satisfies LLVM dialect module requirements into an LLVM IR module living in the given context. This translates operations from any dilalect that has a registered implementation of LLVMTranslationDialectInterface.
 
 # Returns
-the generated LLVM IR Module from the translated MLIR module, it is owned by the caller.
+the generated LLVM IR [`Module`](@ref) from the translated MLIR module, it is owned by the caller.
 """
 function mlirTranslateModuleToLLVMIR(_module, context)
     @ccall mlir_c.mlirTranslateModuleToLLVMIR(
@@ -12947,6 +13844,100 @@ function stablehloResultAccuracyAttrGetMode(attr)
     @ccall mlir_c.stablehloResultAccuracyAttrGetMode(attr::MlirAttribute)::MlirAttribute
 end
 
+function stablehloSubAxisInfoAttrGet(ctx, preSize, size)
+    @ccall mlir_c.stablehloSubAxisInfoAttrGet(
+        ctx::MlirContext, preSize::Int64, size::Int64
+    )::MlirAttribute
+end
+
+function stablehloAttributeIsASubAxisInfoAttr(attr)
+    @ccall mlir_c.stablehloAttributeIsASubAxisInfoAttr(attr::MlirAttribute)::Bool
+end
+
+function stablehloSubAxisInfoAttrGetPreSize(attr)
+    @ccall mlir_c.stablehloSubAxisInfoAttrGetPreSize(attr::MlirAttribute)::Int64
+end
+
+function stablehloSubAxisInfoAttrGetSize(attr)
+    @ccall mlir_c.stablehloSubAxisInfoAttrGetSize(attr::MlirAttribute)::Int64
+end
+
+function stablehloAxisRefAttrGet(ctx, name, subAxisInfo)
+    @ccall mlir_c.stablehloAxisRefAttrGet(
+        ctx::MlirContext, name::MlirStringRef, subAxisInfo::MlirAttribute
+    )::MlirAttribute
+end
+
+function stablehloAttributeIsAnAxisRefAttr(attr)
+    @ccall mlir_c.stablehloAttributeIsAnAxisRefAttr(attr::MlirAttribute)::Bool
+end
+
+function stablehloAxisRefAttrGetName(attr)
+    @ccall mlir_c.stablehloAxisRefAttrGetName(attr::MlirAttribute)::MlirStringRef
+end
+
+function stablehloAxisRefAttrGetSubAxisInfo(attr)
+    @ccall mlir_c.stablehloAxisRefAttrGetSubAxisInfo(attr::MlirAttribute)::MlirAttribute
+end
+
+function stablehloReplicaGroupMeshAxesAttrGet(ctx, mesh, axes)
+    @ccall mlir_c.stablehloReplicaGroupMeshAxesAttrGet(
+        ctx::MlirContext, mesh::MlirAttribute, axes::MlirAttribute
+    )::MlirAttribute
+end
+
+function stablehloAttributeIsAReplicaGroupMeshAxesAttr(attr)
+    @ccall mlir_c.stablehloAttributeIsAReplicaGroupMeshAxesAttr(attr::MlirAttribute)::Bool
+end
+
+function stablehloReplicaGroupMeshAxesAttrGetMesh(attr)
+    @ccall mlir_c.stablehloReplicaGroupMeshAxesAttrGetMesh(
+        attr::MlirAttribute
+    )::MlirAttribute
+end
+
+function stablehloReplicaGroupMeshAxesAttrGetAxes(attr)
+    @ccall mlir_c.stablehloReplicaGroupMeshAxesAttrGetAxes(
+        attr::MlirAttribute
+    )::MlirAttribute
+end
+
+function stablehloMeshAxisAttrGet(ctx, name, size)
+    @ccall mlir_c.stablehloMeshAxisAttrGet(
+        ctx::MlirContext, name::MlirStringRef, size::Int64
+    )::MlirAttribute
+end
+
+function stablehloAttributeIsAMeshAxisAttr(attr)
+    @ccall mlir_c.stablehloAttributeIsAMeshAxisAttr(attr::MlirAttribute)::Bool
+end
+
+function stablehloMeshAxisAttrGetName(attr)
+    @ccall mlir_c.stablehloMeshAxisAttrGetName(attr::MlirAttribute)::MlirStringRef
+end
+
+function stablehloMeshAxisAttrGetSize(attr)
+    @ccall mlir_c.stablehloMeshAxisAttrGetSize(attr::MlirAttribute)::Int64
+end
+
+function stablehloMeshAttrGet(ctx, axes, deviceIds)
+    @ccall mlir_c.stablehloMeshAttrGet(
+        ctx::MlirContext, axes::MlirAttribute, deviceIds::MlirAttribute
+    )::MlirAttribute
+end
+
+function stablehloAttributeIsAMeshAttr(attr)
+    @ccall mlir_c.stablehloAttributeIsAMeshAttr(attr::MlirAttribute)::Bool
+end
+
+function stablehloMeshAttrGetAxes(attr)
+    @ccall mlir_c.stablehloMeshAttrGetAxes(attr::MlirAttribute)::MlirAttribute
+end
+
+function stablehloMeshAttrGetDeviceIds(attr)
+    @ccall mlir_c.stablehloMeshAttrGetDeviceIds(attr::MlirAttribute)::MlirAttribute
+end
+
 function mlirGetDialectHandle__stablehlo__()
     @ccall mlir_c.mlirGetDialectHandle__stablehlo__()::MlirDialectHandle
 end
@@ -13032,6 +14023,24 @@ end
 
 function stablehloTypeIsAToken(type)
     @ccall mlir_c.stablehloTypeIsAToken(type::MlirType)::Bool
+end
+
+function stablehloFutureTypeGet(ctx, nTypes, types)
+    @ccall mlir_c.stablehloFutureTypeGet(
+        ctx::MlirContext, nTypes::Cptrdiff_t, types::Ptr{MlirType}
+    )::MlirType
+end
+
+function stablehloTypeIsAFuture(type)
+    @ccall mlir_c.stablehloTypeIsAFuture(type::MlirType)::Bool
+end
+
+function stablehloFutureTypeGetNumTypes(type)
+    @ccall mlir_c.stablehloFutureTypeGetNumTypes(type::MlirType)::Cptrdiff_t
+end
+
+function stablehloFutureTypeGetType(type, pos)
+    @ccall mlir_c.stablehloFutureTypeGetType(type::MlirType, pos::Cptrdiff_t)::MlirType
 end
 
 function sdyAttributeIsAMeshAxisAttr(attr)
@@ -13165,6 +14174,7 @@ function sdyTensorShardingAttrGet(
     replicatedAxes,
     nUnreducedAxes,
     unreducedAxes,
+    reductionOp,
 )
     @ccall mlir_c.sdyTensorShardingAttrGet(
         ctx::MlirContext,
@@ -13175,7 +14185,12 @@ function sdyTensorShardingAttrGet(
         replicatedAxes::Ptr{MlirAttribute},
         nUnreducedAxes::Cptrdiff_t,
         unreducedAxes::Ptr{MlirAttribute},
+        reductionOp::UInt32,
     )::MlirAttribute
+end
+
+function sdyTensorShardingAttrGetReductionOp(attr)
+    @ccall mlir_c.sdyTensorShardingAttrGetReductionOp(attr::MlirAttribute)::UInt32
 end
 
 function sdyTensorShardingAttrGetMeshOrRef(attr)
@@ -13428,6 +14443,231 @@ function sdyManualAxesAttrGetAxesElem(attr, pos)
     )::MlirStringRef
 end
 
+@cenum EnzymeXlaLapackLayout::UInt32 begin
+    ENZYMEXLA_LAPACK_LAYOUT_COLUMN_MAJOR = 0x0000000000000000
+    ENZYMEXLA_LAPACK_LAYOUT_ROW_MAJOR = 0x0000000000000001
+end
+
+function enzymexlaLapackLayoutAttrGet(ctx, layout)
+    @ccall mlir_c.enzymexlaLapackLayoutAttrGet(
+        ctx::MlirContext, layout::EnzymeXlaLapackLayout
+    )::MlirAttribute
+end
+
+@cenum EnzymeXlaLapackTranspose::UInt32 begin
+    ENZYMEXLA_LAPACK_TRANSPOSE_NONE = 0x0000000000000000
+    ENZYMEXLA_LAPACK_TRANSPOSE_TRANSPOSE = 0x0000000000000001
+    ENZYMEXLA_LAPACK_TRANSPOSE_CONJUGATE_TRANSPOSE = 0x0000000000000002
+end
+
+function enzymexlaLapackTransposeAttrGet(ctx, transpose)
+    @ccall mlir_c.enzymexlaLapackTransposeAttrGet(
+        ctx::MlirContext, transpose::EnzymeXlaLapackTranspose
+    )::MlirAttribute
+end
+
+@cenum EnzymeXlaLapackSide::UInt32 begin
+    ENZYMEXLA_LAPACK_SIDE_LEFT = 0x0000000000000000
+    ENZYMEXLA_LAPACK_SIDE_RIGHT = 0x0000000000000001
+end
+
+function enzymexlaLapackSideAttrGet(ctx, side)
+    @ccall mlir_c.enzymexlaLapackSideAttrGet(
+        ctx::MlirContext, side::EnzymeXlaLapackSide
+    )::MlirAttribute
+end
+
+@cenum EnzymeXlaLapackUplo::UInt32 begin
+    ENZYMEXLA_LAPACK_UPLO_LOWER = 0x0000000000000000
+    ENZYMEXLA_LAPACK_UPLO_UPPER = 0x0000000000000001
+    ENZYMEXLA_LAPACK_UPLO_FULL = 0x0000000000000002
+end
+
+function enzymexlaLapackUploAttrGet(ctx, uplo)
+    @ccall mlir_c.enzymexlaLapackUploAttrGet(
+        ctx::MlirContext, uplo::EnzymeXlaLapackUplo
+    )::MlirAttribute
+end
+
+@cenum EnzymeXlaQRAlgorithm::UInt32 begin
+    ENZYMEXLA_QR_ALGORITHM_NONE = 0x0000000000000000
+    ENZYMEXLA_QR_ALGORITHM_HOUSEHOLDER = 0x0000000000000001
+end
+
+function enzymexlaQRAlgorithmAttrGet(ctx, algorithm)
+    @ccall mlir_c.enzymexlaQRAlgorithmAttrGet(
+        ctx::MlirContext, algorithm::EnzymeXlaQRAlgorithm
+    )::MlirAttribute
+end
+
+@cenum EnzymeXlaSVDAlgorithm::UInt32 begin
+    ENZYMEXLA_SVD_ALGORITHM_NONE = 0x0000000000000000
+    ENZYMEXLA_SVD_ALGORITHM_QRITERATION = 0x0000000000000001
+    ENZYMEXLA_SVD_ALGORITHM_DIVIDEANDCONQUER = 0x0000000000000002
+    ENZYMEXLA_SVD_ALGORITHM_JACOBI = 0x0000000000000003
+end
+
+function enzymexlaSVDAlgorithmAttrGet(ctx, algorithm)
+    @ccall mlir_c.enzymexlaSVDAlgorithmAttrGet(
+        ctx::MlirContext, algorithm::EnzymeXlaSVDAlgorithm
+    )::MlirAttribute
+end
+
+@cenum EnzymeXlaGeluApproximation::UInt32 begin
+    ENZYMEXLA_GELU_APPROXIMATION_NONE = 0x0000000000000000
+    ENZYMEXLA_GELU_APPROXIMATION_TANH = 0x0000000000000001
+    ENZYMEXLA_GELU_APPROXIMATION_SIGMOID = 0x0000000000000002
+end
+
+function enzymexlaGeluApproximationAttrGet(ctx, approximation)
+    @ccall mlir_c.enzymexlaGeluApproximationAttrGet(
+        ctx::MlirContext, approximation::EnzymeXlaGeluApproximation
+    )::MlirAttribute
+end
+
+@cenum EnzymeXlaMPIDatatype::UInt32 begin
+    ENZYMEXLA_MPI_DATATYPE_NULL = 0x0000000000000000
+    ENZYMEXLA_MPI_INT8_T = 0x0000000000000001
+    ENZYMEXLA_MPI_UINT8_T = 0x0000000000000002
+    ENZYMEXLA_MPI_INT16_T = 0x0000000000000003
+    ENZYMEXLA_MPI_UINT16_T = 0x0000000000000004
+    ENZYMEXLA_MPI_INT32_T = 0x0000000000000005
+    ENZYMEXLA_MPI_UINT32_T = 0x0000000000000006
+    ENZYMEXLA_MPI_INT64_T = 0x0000000000000007
+    ENZYMEXLA_MPI_UINT64_T = 0x0000000000000008
+    ENZYMEXLA_MPI_BYTE = 0x0000000000000009
+    ENZYMEXLA_MPI_SHORT = 0x000000000000000a
+    ENZYMEXLA_MPI_UNSIGNED_SHORT = 0x000000000000000b
+    ENZYMEXLA_MPI_INT = 0x000000000000000c
+    ENZYMEXLA_MPI_UNSIGNED = 0x000000000000000d
+    ENZYMEXLA_MPI_LONG = 0x000000000000000e
+    ENZYMEXLA_MPI_UNSIGNED_LONG = 0x000000000000000f
+    ENZYMEXLA_MPI_LONG_LONG_INT = 0x0000000000000010
+    ENZYMEXLA_MPI_UNSIGNED_LONG_LONG = 0x0000000000000011
+    ENZYMEXLA_MPI_CHAR = 0x0000000000000012
+    ENZYMEXLA_MPI_SIGNED_CHAR = 0x0000000000000013
+    ENZYMEXLA_MPI_UNSIGNED_CHAR = 0x0000000000000014
+    ENZYMEXLA_MPI_WCHAR = 0x0000000000000015
+    ENZYMEXLA_MPI_FLOAT = 0x0000000000000016
+    ENZYMEXLA_MPI_DOUBLE = 0x0000000000000017
+    ENZYMEXLA_MPI_C_FLOAT_COMPLEX = 0x0000000000000018
+    ENZYMEXLA_MPI_C_DOUBLE_COMPLEX = 0x0000000000000019
+    ENZYMEXLA_MPI_C_BOOL = 0x000000000000001a
+end
+
+function enzymexlaMPIDatatypeAttrGet(ctx, datatype)
+    @ccall mlir_c.enzymexlaMPIDatatypeAttrGet(
+        ctx::MlirContext, datatype::EnzymeXlaMPIDatatype
+    )::MlirAttribute
+end
+
+@cenum EnzymeXlaMPIOp::UInt32 begin
+    ENZYMEXLA_MPI_OP_NULL = 0x0000000000000000
+    ENZYMEXLA_MPI_BAND = 0x0000000000000001
+    ENZYMEXLA_MPI_BOR = 0x0000000000000002
+    ENZYMEXLA_MPI_BXOR = 0x0000000000000003
+    ENZYMEXLA_MPI_LAND = 0x0000000000000004
+    ENZYMEXLA_MPI_LOR = 0x0000000000000005
+    ENZYMEXLA_MPI_LXOR = 0x0000000000000006
+    ENZYMEXLA_MPI_MAX = 0x0000000000000007
+    ENZYMEXLA_MPI_MIN = 0x0000000000000008
+    ENZYMEXLA_MPI_PROD = 0x0000000000000009
+    ENZYMEXLA_MPI_REPLACE = 0x000000000000000a
+    ENZYMEXLA_MPI_SUM = 0x000000000000000b
+    ENZYMEXLA_MPI_NO_OP = 0x000000000000000c
+end
+
+function enzymexlaMPIOpAttrGet(ctx, op)
+    @ccall mlir_c.enzymexlaMPIOpAttrGet(ctx::MlirContext, op::EnzymeXlaMPIOp)::MlirAttribute
+end
+
+@cenum EnzymeXlaGuaranteedAnalysisResult::UInt32 begin
+    ENZYMEXLA_GUARANTEED_ANALYSIS_RESULT_GUARANTEED = 0x0000000000000000
+    ENZYMEXLA_GUARANTEED_ANALYSIS_RESULT_NOTGUARANTEED = 0x0000000000000001
+    ENZYMEXLA_GUARANTEED_ANALYSIS_RESULT_UNKNOWN = 0x0000000000000002
+end
+
+function enzymexlaGuaranteedAnalysisResultAttrGet(ctx, result)
+    @ccall mlir_c.enzymexlaGuaranteedAnalysisResultAttrGet(
+        ctx::MlirContext, result::EnzymeXlaGuaranteedAnalysisResult
+    )::MlirAttribute
+end
+
+"""
+    EnzymeXLAPropagateDirection
+
+Enum for propagation direction (reshape/transpose).
+"""
+@cenum EnzymeXLAPropagateDirection::UInt32 begin
+    ENZYMEXLA_PROPAGATE_NONE = 0x0000000000000000
+    ENZYMEXLA_PROPAGATE_UP = 0x0000000000000001
+    ENZYMEXLA_PROPAGATE_DOWN = 0x0000000000000002
+end
+
+"""
+    EnzymeXLATransformPassesOptions
+
+Options that control which transform passes are generated.
+"""
+struct EnzymeXLATransformPassesOptions
+    max_constant_threshold::Int64
+    while_unroll_threshold::Int64
+    reshape_propagate::EnzymeXLAPropagateDirection
+    transpose_propagate::EnzymeXLAPropagateDirection
+    no_nan::Bool
+    all_finite::Bool
+    dus_to_concat::Bool
+    dus_slice_simplify::Bool
+    sum_to_reducewindow::Bool
+    sum_to_conv::Bool
+    aggressive_sum_to_conv::Bool
+    while_concat::Bool
+    aggressive_propagation::Bool
+    is_sharded::Bool
+    raise_shlo_to_blas_lapack::Bool
+    recognize_comms::Bool
+    lower_comms::Bool
+    enable_self_to_convolution_like_passes::Bool
+    enable_structured_tensors_detection_passes::Bool
+    enable_structured_tensors_passes::Bool
+    enable_scatter_gather_optimization_passes::Bool
+    enable_slice_to_batch_passes::Bool
+    enable_reduce_slice_fusion_passes::Bool
+    enable_concat_to_batch_passes::Bool
+    enable_loop_raising_passes::Bool
+    enable_licm_optimization_passes::Bool
+    loop_unswitch_threshold::Int64
+    enable_pad_optimization_passes::Bool
+    excluded_passes::Ptr{Cstring}
+    num_excluded_passes::Csize_t
+end
+
+"""
+    enzymexlaGetTransformPassesList(options, mainPasses, lowerPasses)
+
+Returns the transform passes list as a semicolon-separated string. The caller must free the returned string using [`enzymexlaFreeTransformPassesList`](@ref).
+
+Two separate lists are produced: - `mainPasses`: the primary transform pass list - `lowerPasses`: the lowering transform pass list (for lower\\_comms)
+
+Each is returned as a semicolon-separated string of pass patterns.
+"""
+function enzymexlaGetTransformPassesList(options, mainPasses, lowerPasses)
+    @ccall mlir_c.enzymexlaGetTransformPassesList(
+        options::Ptr{EnzymeXLATransformPassesOptions},
+        mainPasses::Ptr{Cstring},
+        lowerPasses::Ptr{Cstring},
+    )::Cvoid
+end
+
+"""
+    enzymexlaFreeTransformPassesList(passes)
+
+Free a string returned by [`enzymexlaGetTransformPassesList`](@ref).
+"""
+function enzymexlaFreeTransformPassesList(passes)
+    @ccall mlir_c.enzymexlaFreeTransformPassesList(passes::Cstring)::Cvoid
+end
+
 function mlirGetDialectHandle__triton__()
     @ccall mlir_c.mlirGetDialectHandle__triton__()::MlirDialectHandle
 end
@@ -13490,42 +14730,20 @@ function mlirMosaicGpuIsATileTransformAttr(attr)
     @ccall mlir_c.mlirMosaicGpuIsATileTransformAttr(attr::MlirAttribute)::Bool
 end
 
-function mlirMosaicGpuTileTransformAttrGet(ctx, tiling, tiling_size)
+function mlirMosaicGpuTileTransformAttrGet(ctx, tiling)
     @ccall mlir_c.mlirMosaicGpuTileTransformAttrGet(
-        ctx::MlirContext, tiling::Ptr{Int32}, tiling_size::Int32
+        ctx::MlirContext, tiling::MlirAttribute
     )::MlirAttribute
 end
 
-function mlirMosaicGpuTileTransformAttrGetTilingSize(attr)
-    @ccall mlir_c.mlirMosaicGpuTileTransformAttrGetTilingSize(attr::MlirAttribute)::Int32
-end
-
-function mlirMosaicGpuTileTransformAttrGetTiling(attr, index)
+function mlirMosaicGpuTileTransformAttrGetTiling(attr)
     @ccall mlir_c.mlirMosaicGpuTileTransformAttrGetTiling(
-        attr::MlirAttribute, index::Int32
-    )::Int32
-end
-
-function mlirMosaicGpuIsATransposeTransformAttr(attr)
-    @ccall mlir_c.mlirMosaicGpuIsATransposeTransformAttr(attr::MlirAttribute)::Bool
-end
-
-function mlirMosaicGpuTransposeTransformAttrGet(ctx, permutation, permutation_size)
-    @ccall mlir_c.mlirMosaicGpuTransposeTransformAttrGet(
-        ctx::MlirContext, permutation::Ptr{Int32}, permutation_size::Int32
+        attr::MlirAttribute
     )::MlirAttribute
 end
 
-function mlirMosaicGpuTransposeTransformAttrGetPermutationSize(attr)
-    @ccall mlir_c.mlirMosaicGpuTransposeTransformAttrGetPermutationSize(
-        attr::MlirAttribute
-    )::Int32
-end
-
-function mlirMosaicGpuTransposeTransformAttrGetPermutation(attr, index)
-    @ccall mlir_c.mlirMosaicGpuTransposeTransformAttrGetPermutation(
-        attr::MlirAttribute, index::Int32
-    )::Int32
+function mlirMosaicGpuTileTransformAttrGetTypeID()
+    @ccall mlir_c.mlirMosaicGpuTileTransformAttrGetTypeID()::MlirTypeID
 end
 
 function mlirMosaicGpuIsASwizzleTransformAttr(attr)
@@ -13542,6 +14760,146 @@ function mlirMosaicGpuSwizzleTransformAttrGetSwizzle(attr)
     @ccall mlir_c.mlirMosaicGpuSwizzleTransformAttrGetSwizzle(attr::MlirAttribute)::Int32
 end
 
+function mlirMosaicGpuSwizzleTransformAttrGetTypeID()
+    @ccall mlir_c.mlirMosaicGpuSwizzleTransformAttrGetTypeID()::MlirTypeID
+end
+
+function mlirMosaicGpuIsAWGSplatFragLayoutAttr(attr)
+    @ccall mlir_c.mlirMosaicGpuIsAWGSplatFragLayoutAttr(attr::MlirAttribute)::Bool
+end
+
+function mlirMosaicGpuWGSplatFragLayoutAttrGetTypeID()
+    @ccall mlir_c.mlirMosaicGpuWGSplatFragLayoutAttrGetTypeID()::MlirTypeID
+end
+
+function mlirMosaicGpuWGSplatFragLayoutAttrGet(ctx, shape)
+    @ccall mlir_c.mlirMosaicGpuWGSplatFragLayoutAttrGet(
+        ctx::MlirContext, shape::MlirAttribute
+    )::MlirAttribute
+end
+
+function mlirMosaicGpuWGSplatFragLayoutAttrGetShape(attr)
+    @ccall mlir_c.mlirMosaicGpuWGSplatFragLayoutAttrGetShape(
+        attr::MlirAttribute
+    )::MlirAttribute
+end
+
+function mlirMosaicGpuIsAWGStridedFragLayoutAttr(attr)
+    @ccall mlir_c.mlirMosaicGpuIsAWGStridedFragLayoutAttr(attr::MlirAttribute)::Bool
+end
+
+function mlirMosaicGpuWGStridedFragLayoutAttrGetTypeID()
+    @ccall mlir_c.mlirMosaicGpuWGStridedFragLayoutAttrGetTypeID()::MlirTypeID
+end
+
+function mlirMosaicGpuWGStridedFragLayoutAttrGet(ctx, shape, vector_size)
+    @ccall mlir_c.mlirMosaicGpuWGStridedFragLayoutAttrGet(
+        ctx::MlirContext, shape::MlirAttribute, vector_size::Int32
+    )::MlirAttribute
+end
+
+function mlirMosaicGpuWGStridedFragLayoutAttrGetShape(attr)
+    @ccall mlir_c.mlirMosaicGpuWGStridedFragLayoutAttrGetShape(
+        attr::MlirAttribute
+    )::MlirAttribute
+end
+
+function mlirMosaicGpuWGStridedFragLayoutAttrGetVectorSize(attr)
+    @ccall mlir_c.mlirMosaicGpuWGStridedFragLayoutAttrGetVectorSize(
+        attr::MlirAttribute
+    )::Int32
+end
+
+function mlirMosaicGpuIsAReplicatedAttr(attr)
+    @ccall mlir_c.mlirMosaicGpuIsAReplicatedAttr(attr::MlirAttribute)::Bool
+end
+
+function mlirMosaicGpuReplicatedAttrGetTypeID()
+    @ccall mlir_c.mlirMosaicGpuReplicatedAttrGetTypeID()::MlirTypeID
+end
+
+function mlirMosaicGpuReplicatedAttrGet(ctx, times)
+    @ccall mlir_c.mlirMosaicGpuReplicatedAttrGet(
+        ctx::MlirContext, times::Int32
+    )::MlirAttribute
+end
+
+function mlirMosaicGpuReplicatedAttrGetTimes(attr)
+    @ccall mlir_c.mlirMosaicGpuReplicatedAttrGetTimes(attr::MlirAttribute)::Int32
+end
+
+function mlirMosaicGpuIsATiledLayoutAttr(attr)
+    @ccall mlir_c.mlirMosaicGpuIsATiledLayoutAttr(attr::MlirAttribute)::Bool
+end
+
+function mlirMosaicGpuTiledLayoutAttrGetTypeID()
+    @ccall mlir_c.mlirMosaicGpuTiledLayoutAttrGetTypeID()::MlirTypeID
+end
+
+function mlirMosaicGpuTiledLayoutAttrGet(ctx, tiling, warp_dims, lane_dims, vector_dim)
+    @ccall mlir_c.mlirMosaicGpuTiledLayoutAttrGet(
+        ctx::MlirContext,
+        tiling::MlirAttribute,
+        warp_dims::MlirAttribute,
+        lane_dims::MlirAttribute,
+        vector_dim::Int32,
+    )::MlirAttribute
+end
+
+function mlirMosaicGpuTiledLayoutAttrGetTiling(attr)
+    @ccall mlir_c.mlirMosaicGpuTiledLayoutAttrGetTiling(attr::MlirAttribute)::MlirAttribute
+end
+
+function mlirMosaicGpuTiledLayoutAttrGetWarpDims(attr)
+    @ccall mlir_c.mlirMosaicGpuTiledLayoutAttrGetWarpDims(
+        attr::MlirAttribute
+    )::MlirAttribute
+end
+
+function mlirMosaicGpuTiledLayoutAttrGetLaneDims(attr)
+    @ccall mlir_c.mlirMosaicGpuTiledLayoutAttrGetLaneDims(
+        attr::MlirAttribute
+    )::MlirAttribute
+end
+
+function mlirMosaicGpuTiledLayoutAttrGetVectorDim(attr)
+    @ccall mlir_c.mlirMosaicGpuTiledLayoutAttrGetVectorDim(attr::MlirAttribute)::Int32
+end
+
+function mlirMosaicGpuIsACopyPartitionAttr(attr)
+    @ccall mlir_c.mlirMosaicGpuIsACopyPartitionAttr(attr::MlirAttribute)::Bool
+end
+
+function mlirMosaicGpuIsACopyReplicatedAttr(attr)
+    @ccall mlir_c.mlirMosaicGpuIsACopyReplicatedAttr(attr::MlirAttribute)::Bool
+end
+
+function mlirMosaicGpuCopyReplicatedAttrGet(ctx)
+    @ccall mlir_c.mlirMosaicGpuCopyReplicatedAttrGet(ctx::MlirContext)::MlirAttribute
+end
+
+function mlirMosaicGpuCopyReplicatedAttrGetTypeID()
+    @ccall mlir_c.mlirMosaicGpuCopyReplicatedAttrGetTypeID()::MlirTypeID
+end
+
+function mlirMosaicGpuIsACopyPartitionedAttr(attr)
+    @ccall mlir_c.mlirMosaicGpuIsACopyPartitionedAttr(attr::MlirAttribute)::Bool
+end
+
+function mlirMosaicGpuCopyPartitionedAttrGet(ctx, axis)
+    @ccall mlir_c.mlirMosaicGpuCopyPartitionedAttrGet(
+        ctx::MlirContext, axis::Int32
+    )::MlirAttribute
+end
+
+function mlirMosaicGpuCopyPartitionedAttrGetAxis(attr)
+    @ccall mlir_c.mlirMosaicGpuCopyPartitionedAttrGetAxis(attr::MlirAttribute)::Int32
+end
+
+function mlirMosaicGpuCopyPartitionedAttrGetTypeID()
+    @ccall mlir_c.mlirMosaicGpuCopyPartitionedAttrGetTypeID()::MlirTypeID
+end
+
 function mlirGetDialectHandle__mosaic_gpu__()
     @ccall mlir_c.mlirGetDialectHandle__mosaic_gpu__()::MlirDialectHandle
 end
@@ -13552,126 +14910,22 @@ function mlirDialectRegistryInsertMosaicGpuInlinerExtensions(registry)
     )::Cvoid
 end
 
-function enzymexlaLapackLayoutAttrGet(ctx, col_major)
-    @ccall mlir_c.enzymexlaLapackLayoutAttrGet(
-        ctx::MlirContext, col_major::UInt8
-    )::MlirAttribute
+function mlirMosaicGpuIsABarrierType(type)
+    @ccall mlir_c.mlirMosaicGpuIsABarrierType(type::MlirType)::Bool
 end
 
-function enzymexlaLapackTransposeAttrGet(ctx, mode)
-    @ccall mlir_c.enzymexlaLapackTransposeAttrGet(
-        ctx::MlirContext, mode::Int32
-    )::MlirAttribute
+function mlirMosaicGpuBarrierTypeGet(ctx, orders_tensor_core)
+    @ccall mlir_c.mlirMosaicGpuBarrierTypeGet(
+        ctx::MlirContext, orders_tensor_core::Bool
+    )::MlirType
 end
 
-function enzymexlaLapackSideAttrGet(ctx, left_side)
-    @ccall mlir_c.enzymexlaLapackSideAttrGet(
-        ctx::MlirContext, left_side::UInt8
-    )::MlirAttribute
+function mlirMosaicGpuBarrierTypeGetOrdersTensorCore(type)
+    @ccall mlir_c.mlirMosaicGpuBarrierTypeGetOrdersTensorCore(type::MlirType)::Bool
 end
 
-function enzymexlaLapackUploAttrGet(ctx, mode)
-    @ccall mlir_c.enzymexlaLapackUploAttrGet(ctx::MlirContext, mode::Int32)::MlirAttribute
-end
-
-function enzymexlaQRAlgorithmAttrGet(ctx, mode)
-    @ccall mlir_c.enzymexlaQRAlgorithmAttrGet(ctx::MlirContext, mode::Int32)::MlirAttribute
-end
-
-function enzymexlaSVDAlgorithmAttrGet(ctx, mode)
-    @ccall mlir_c.enzymexlaSVDAlgorithmAttrGet(ctx::MlirContext, mode::Int32)::MlirAttribute
-end
-
-function enzymexlaGeluApproximationAttrGet(ctx, mode)
-    @ccall mlir_c.enzymexlaGeluApproximationAttrGet(
-        ctx::MlirContext, mode::Int32
-    )::MlirAttribute
-end
-
-function enzymexlaMPIDatatypeAttrGet(ctx, mode)
-    @ccall mlir_c.enzymexlaMPIDatatypeAttrGet(ctx::MlirContext, mode::Int32)::MlirAttribute
-end
-
-function enzymexlaMPIOpAttrGet(ctx, mode)
-    @ccall mlir_c.enzymexlaMPIOpAttrGet(ctx::MlirContext, mode::Int32)::MlirAttribute
-end
-
-function enzymexlaGuaranteedAnalysisResultAttrGet(ctx, mode)
-    @ccall mlir_c.enzymexlaGuaranteedAnalysisResultAttrGet(
-        ctx::MlirContext, mode::Int32
-    )::MlirAttribute
-end
-
-"""
-    EnzymeXLAPropagateDirection
-
-Enum for propagation direction (reshape/transpose).
-"""
-@cenum EnzymeXLAPropagateDirection::UInt32 begin
-    ENZYMEXLA_PROPAGATE_NONE = 0x0000000000000000
-    ENZYMEXLA_PROPAGATE_UP = 0x0000000000000001
-    ENZYMEXLA_PROPAGATE_DOWN = 0x0000000000000002
-end
-
-"""
-    EnzymeXLATransformPassesOptions
-
-Options that control which transform passes are generated.
-"""
-struct EnzymeXLATransformPassesOptions
-    max_constant_threshold::Int64
-    while_unroll_threshold::Int64
-    reshape_propagate::EnzymeXLAPropagateDirection
-    transpose_propagate::EnzymeXLAPropagateDirection
-    no_nan::Bool
-    all_finite::Bool
-    dus_to_concat::Bool
-    dus_slice_simplify::Bool
-    sum_to_reducewindow::Bool
-    sum_to_conv::Bool
-    aggressive_sum_to_conv::Bool
-    while_concat::Bool
-    aggressive_propagation::Bool
-    is_sharded::Bool
-    raise_shlo_to_blas_lapack::Bool
-    recognize_comms::Bool
-    lower_comms::Bool
-    enable_self_to_convolution_like_passes::Bool
-    enable_structured_tensors_detection_passes::Bool
-    enable_structured_tensors_passes::Bool
-    enable_scatter_gather_optimization_passes::Bool
-    enable_slice_to_batch_passes::Bool
-    enable_reduce_slice_fusion_passes::Bool
-    enable_concat_to_batch_passes::Bool
-    enable_loop_raising_passes::Bool
-    enable_licm_optimization_passes::Bool
-    enable_pad_optimization_passes::Bool
-end
-
-"""
-    enzymexlaGetTransformPassesList(options, mainPasses, lowerPasses)
-
-Returns the transform passes list as a semicolon-separated string. The caller must free the returned string using [`enzymexlaFreeTransformPassesList`](@ref).
-
-Two separate lists are produced: - `mainPasses`: the primary transform pass list - `lowerPasses`: the lowering transform pass list (for lower\\_comms)
-
-Each is returned as a semicolon-separated string of pass patterns.
-"""
-function enzymexlaGetTransformPassesList(options, mainPasses, lowerPasses)
-    @ccall mlir_c.enzymexlaGetTransformPassesList(
-        options::Ptr{EnzymeXLATransformPassesOptions},
-        mainPasses::Ptr{Cstring},
-        lowerPasses::Ptr{Cstring},
-    )::Cvoid
-end
-
-"""
-    enzymexlaFreeTransformPassesList(passes)
-
-Free a string returned by [`enzymexlaGetTransformPassesList`](@ref).
-"""
-function enzymexlaFreeTransformPassesList(passes)
-    @ccall mlir_c.enzymexlaFreeTransformPassesList(passes::Cstring)::Cvoid
+function mlirMosaicGpuBarrierTypeGetTypeID()
+    @ccall mlir_c.mlirMosaicGpuBarrierTypeGetTypeID()::MlirTypeID
 end
 
 @cenum EnzymeRngDistribution::UInt32 begin
@@ -13849,6 +15103,10 @@ const HeldDistributedRuntimeClient = Cvoid
 
 const DistributedRuntimeService = Cvoid
 
+const Module = Cvoid
+
+const LLVMContext = Cvoid
+
 const GrpcServer = Cvoid
 
 const HloInstruction = Cvoid
@@ -13866,6 +15124,8 @@ const MemoryKind = Cvoid
 const PjRtDevice = Cvoid
 
 const ProfilerSession = Cvoid
+
+const LocalExecutable = Cvoid
 
 const OpSharding = Cvoid
 
@@ -14275,6 +15535,12 @@ end
 
 function ConvertLLVMStrToMLIR(lmod, cctx)
     @ccall mlir_c.ConvertLLVMStrToMLIR(lmod::Cstring, cctx::MlirContext)::MlirModule
+end
+
+function ConvertLLVMBCToMLIR(bc, len, cctx)
+    @ccall mlir_c.ConvertLLVMBCToMLIR(
+        bc::Ptr{UInt8}, len::Csize_t, cctx::MlirContext
+    )::MlirModule
 end
 
 function FreeFuture(Future)
@@ -15070,6 +16336,12 @@ function hlo_sharding_check_eq(hloSharding, other)
     )::Bool
 end
 
+function hlo_sharding_check_eq_ignoring_metadata(hloSharding, other)
+    @ccall mlir_c.hlo_sharding_check_eq_ignoring_metadata(
+        hloSharding::Ptr{HloSharding}, other::Ptr{HloSharding}
+    )::Bool
+end
+
 function ifrt_free_future(Future)
     @ccall mlir_c.ifrt_free_future(Future::Ptr{IfRtFutureType})::Cvoid
 end
@@ -15478,9 +16750,9 @@ function hloInstructionFusedInstructionsComputation(hlo_instruction)
     )::Ptr{HloComputation}
 end
 
-function CreateGPUPerformanceModel(ctx, device_description)
+function CreateGPUPerformanceModel(device_description)
     @ccall mlir_c.CreateGPUPerformanceModel(
-        ctx::MlirContext, device_description::Ptr{DeviceDescription}
+        device_description::Ptr{DeviceDescription}
     )::Ptr{GPUPerformanceModel}
 end
 
@@ -15550,6 +16822,76 @@ end
 
 function ReactantGetCompileOptions(size)
     @ccall mlir_c.ReactantGetCompileOptions(size::Ptr{Csize_t})::Ptr{Cvoid}
+end
+
+function ReactantCompileMhloToLLVM(
+    mhlo_text, mhlo_text_len, out_output_str, xla_runtime, pass_pipeline
+)
+    @ccall mlir_c.ReactantCompileMhloToLLVM(
+        mhlo_text::Cstring,
+        mhlo_text_len::Csize_t,
+        out_output_str::Ptr{Cstring},
+        xla_runtime::UInt8,
+        pass_pipeline::Cstring,
+    )::Ptr{LocalExecutable}
+end
+
+function ReactantFreeLocalExecutable(exec)
+    @ccall mlir_c.ReactantFreeLocalExecutable(exec::Ptr{LocalExecutable})::Cvoid
+end
+
+function ReactantCreateLLVMMod(
+    fn_str,
+    fn_len,
+    source_str,
+    source_len,
+    out_shapes_data,
+    out_shapes_sizes,
+    num_out_shapes,
+    out_names_data,
+    num_out_names,
+    in_shapes_data,
+    in_shapes_sizes,
+    num_in_shapes,
+    in_names_data,
+    num_in_names,
+    argv_data,
+    num_argv,
+    mode_enum,
+    lang_enum,
+    xla_runtime,
+    pass_pipeline,
+    out_module,
+    out_context,
+    out_off,
+    out_tmp_buf,
+)
+    @ccall mlir_c.ReactantCreateLLVMMod(
+        fn_str::Cstring,
+        fn_len::Csize_t,
+        source_str::Cstring,
+        source_len::Csize_t,
+        out_shapes_data::Ptr{Int64},
+        out_shapes_sizes::Ptr{Csize_t},
+        num_out_shapes::Csize_t,
+        out_names_data::Ptr{Cstring},
+        num_out_names::Csize_t,
+        in_shapes_data::Ptr{Int64},
+        in_shapes_sizes::Ptr{Csize_t},
+        num_in_shapes::Csize_t,
+        in_names_data::Ptr{Cstring},
+        num_in_names::Csize_t,
+        argv_data::Ptr{Cstring},
+        num_argv::Csize_t,
+        mode_enum::Cint,
+        lang_enum::Cint,
+        xla_runtime::UInt8,
+        pass_pipeline::Cstring,
+        out_module::Ptr{Ptr{Module}},
+        out_context::Ptr{Ptr{LLVMContext}},
+        out_off::Ptr{Csize_t},
+        out_tmp_buf::Ptr{Csize_t},
+    )::Cvoid
 end
 
 function ReactantLexMLIR(

@@ -1,12 +1,63 @@
-using Reactant, Test, CUDA
-
+using Reactant, Test, CUDA, KernelAbstractions
+using Adapt: Adapt
+using BFloat16s: BFloat16
 const ReactantCUDAExt = Base.get_extension(Reactant, :ReactantCUDAExt)
+
+const RunningOnTPU = contains(string(Reactant.devices()[1]), "TPU")
+
+# LLVM's X86 backend marks bf16 vector types legal on hosts advertising avx512_bf16 but has
+# no selection patterns for them, so vectorized bf16 code aborts during instruction
+# selection. With LLVM.jl loaded (which installs a throwing fatal-error handler) that abort
+# instead unwinds out of the codegen lock and hangs the session, ignoring SIGTERM -- which
+# is a miserable thing to hit while bisecting something unrelated.
+#
+# Bounded by Julia version rather than by LLVM version: this is fixed in LLVM 19, but Julia
+# may equally ship a workaround in a 1.12 patch release while still on LLVM 18, and then
+# the test should start running again on its own.
+# See JuliaLang/julia#62666 and JuliaLLVM/LLVM.jl#581.
+const BF16IselBroken =
+    Sys.ARCH === :x86_64 &&
+    VERSION <= v"1.12.6" &&
+    Sys.islinux() &&
+    isfile("/proc/cpuinfo") &&
+    occursin("avx512_bf16", read("/proc/cpuinfo", String))
 
 @testset "Promote CuTraced" begin
     TFT = ReactantCUDAExt.CuTracedRNumber{Float64,1}
     FT = Float64
     @test Reactant.promote_traced_type(TFT, FT) == TFT
     @test Base.promote_type(TFT, FT) == FT
+end
+
+function clamp_kernel!(out, val, lo, hi)
+    @inbounds out[1] = clamp(val, lo, hi)
+    return nothing
+end
+
+function clamp!(out, val, lo, hi)
+    @cuda blocks = 1 threads = 1 clamp_kernel!(out, val, lo, hi)
+    return nothing
+end
+
+# `val`, `lo`, `hi` arrive as `CuTracedRNumber` inside the compiled kernel (like
+# `w::FT` in "Convert mul" above), so `clamp(val, lo, hi)` exercises the same
+# `Base.clamp` code path that failed to compile before the identity-`convert`
+# ambiguity was fixed.
+@testset "Clamp Kernel" begin
+    if !RunningOnTPU
+        for FT in (Float32, Float64)
+            lo = Reactant.ConcreteRNumber(FT(1))
+            hi = Reactant.ConcreteRNumber(FT(3))
+            for (v, expected) in ((FT(0), FT(1)), (FT(2), FT(2)), (FT(5), FT(3)))
+                out = Reactant.to_rarray(zeros(FT, 1))
+                val = Reactant.ConcreteRNumber(v)
+                @jit clamp!(out, val, lo, hi)
+                @test Array(out)[1] ≈ expected
+            end
+        end
+    else
+        @warn "Skipping Clamp Kernel test on TPU"
+    end
 end
 
 function square_kernel!(x, y)
@@ -30,6 +81,25 @@ end
     @jit square!(A, B)
     @test all(Array(A) .≈ (oA .* oA .* 100))
     @test all(Array(B) .≈ (oA .* 100))
+end
+
+@static if VERSION >= v"1.12"
+    if BF16IselBroken
+        @warn "Skipping BF16 kernel tests: this host advertises avx512_bf16 and Julia's \
+               LLVM ($(Base.libllvm_version)) cannot select bf16 vectors, so the test \
+               would abort or hang rather than fail. Re-run with \
+               `--cpu-target=$(Sys.CPU_NAME),-avx512bf16` to exercise them. \
+               See JuliaLang/julia#62666."
+    else
+        @testset "Square BF16 raised Kernel" begin
+            oA = collect(BFloat16, 1:1:64)
+            A = Reactant.to_rarray(oA)
+            B = Reactant.to_rarray(100 .* oA)
+            @jit raise = true square!(A, B)
+            @test all(Array(A) .≈ (oA .* oA .* 100))
+            @test all(Array(B) .≈ (oA .* 100))
+        end
+    end
 end
 
 function sin_kernel!(x, y)
@@ -218,4 +288,58 @@ end
     @jit convert_mul!(Gu, w)
     Gui = Array((Gu))
     @test Gui[1] ≈ 0.3
+end
+
+struct MyClock{T}
+    time::T        # ConcreteRNumber{Float64} → TracedRNumber{Float64} inside @compile
+    iteration::Int
+end
+
+Adapt.adapt_structure(to, c::MyClock) = (time=c.time, iteration=c.iteration)
+
+# ── Case 2: no adapt_structure at all ─────────────────────────────────────
+struct RawParams{T}
+    dt::T          # same story — a traced scalar
+    nsteps::Int
+end
+
+Adapt.@adapt_structure RawParams
+
+struct MyClock2{T}
+    time::T        # ConcreteRNumber{Float64} → TracedRNumber{Float64} inside @compile
+    iteration::Int
+end
+
+function Adapt.adapt_structure(to, c::MyClock2)
+    return (time=Adapt.adapt(to, c.time), iteration=c.iteration)
+end
+
+@kernel function _touch!(arr, clock, params)
+    i = @index(Global)
+    @inbounds arr[i] = arr[i] + Float64(clock.iteration) + Float64(params.nsteps)
+end
+
+function run!(arr, clock, params)
+    backend = KernelAbstractions.get_backend(arr)
+    _touch!(backend)(arr, clock, params; ndrange=length(arr))
+    KernelAbstractions.synchronize(backend)
+    return nothing
+end
+
+@testset "Oceananigans Clock" begin
+    arr = Reactant.to_rarray(zeros(Float64, 16))
+    clock = MyClock(ConcreteRNumber(0.0), 3)
+    params = RawParams(ConcreteRNumber(0.1), 7)
+
+    @test_throws "GPU kernel argument of type @NamedTuple{time::Reactant.TracedRNumber{Float64}, iteration::Int64} contains an unadapted traced value at field: time" Reactant.@compile raise =
+        true raise_first = true sync = true run!(arr, clock, params)
+
+    clock2 = MyClock2(ConcreteRNumber(0.0), 3)
+
+    r_run! = Reactant.@compile raise = true raise_first = true sync = true run!(
+        arr, clock2, params
+    )
+    r_run!(arr, clock2, params)
+
+    @test all(==(10), Array(arr))
 end

@@ -9,5 +9,6 @@ include("GPU.jl") # TODO: disambiguate between CUDA/ROCM
 include("TPU.jl")
 include("Metal.jl")
 include("TT.jl")
+include("Trainium.jl")
 
 end

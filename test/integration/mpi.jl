@@ -266,6 +266,32 @@ end
     end
 end
 
+@testset "Bcast!" begin
+    comm = MPI.COMM_WORLD
+    rank = MPI.Comm_rank(comm)
+    root = 0
+
+    for T in datatypes
+        @testset "Type: $T" begin
+            # just the root have the real values, others have zeros
+            if rank == root
+                x = ones(T, 5)
+            else
+                x = zeros(T, 5)
+            end
+            # try block catches any invalid combinations we missed above, depending on
+            # mpi implem
+            expected = try
+                ConcreteRArray(MPI.Bcast!(x, root, comm))
+            catch
+                continue
+            end
+
+            @test expected == @jit MPI.Bcast!(ConcreteRArray(x), root, comm)
+        end
+    end
+end
+
 MPI.Finalize()
 
 Reactant.set_default_backend(client)

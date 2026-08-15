@@ -1,4 +1,4 @@
-using CUDA, KernelAbstractions, Reactant, Test
+using CUDA, KernelAbstractions, Reactant, Test, FileCheck
 
 # Simple kernel for matrix multiplication
 @kernel function matmul_kernel!(output, a)
@@ -42,12 +42,28 @@ end
     @inbounds y[i] = x[i] * x[i]
 end
 
+@kernel function weno_weights_kernel!(out, @Const(c))
+    i = @index(Global)
+    @inbounds begin
+        α1 = (2 / 3) / c[i]
+        α2 = (1 / 3) / c[i + 1]
+
+        out[i] = α1 + α2   # bare sum of the two lanes
+    end
+end
+
 function square(x)
     y = similar(x)
     backend = KernelAbstractions.get_backend(x)
     kernel! = square_kernel!(backend)
     kernel!(y, x; ndrange=length(x))
     return y
+end
+
+function run_weno!(out, c)
+    backend = KernelAbstractions.get_backend(out)
+    weno_weights_kernel!(backend)(out, c; ndrange=length(out))
+    return KernelAbstractions.synchronize(backend)
 end
 
 @testset "KernelAbstractions Square" begin
@@ -72,4 +88,87 @@ end
     end
 
     @test all(Array(@jit(raise = raise, square(x))) .≈ Array(x) .* Array(x))
+end
+
+@testset "KernelAbstractions WENO weights" begin
+    N = 64
+    c = Reactant.to_rarray(sin.((1:(N + 2)) ./ 3.0))
+    out = Reactant.to_rarray(zeros(N))
+
+    compiled! = Reactant.@compile raise = true run_weno!(out, c)
+    compiled!(out, c)
+
+    c_cpu = sin.((1:(N + 2)) ./ 3.0)
+    expected = (2 / 3) ./ c_cpu[1:N] .+ (1 / 3) ./ c_cpu[2:(N + 1)]
+    @test Array(out) ≈ expected
+end
+
+@kernel function fma_kernel!(out, @Const(a), @Const(b), @Const(c))
+    i = @index(Global)
+    @inbounds out[i] = fma(a[i], b[i], c[i])
+end
+
+function run_fma!(out, a, b, c)
+    backend = KernelAbstractions.get_backend(out)
+    kernel! = fma_kernel!(backend)
+    kernel!(out, a, b, c; ndrange=length(out))
+    return out
+end
+
+@testset "Compile FMA" begin
+    a = Reactant.to_rarray(Float64[1.0, 2.0, 3.0, 4.0])
+    b = Reactant.to_rarray(Float64[2.0, 3.0, 4.0, 5.0])
+    c = Reactant.to_rarray(Float64[0.5, 0.5, 0.5, 0.5])
+    out = Reactant.to_rarray(zeros(Float64, 4))
+
+    ir = repr(Reactant.@code_hlo raise = true run_fma!(out, a, b, c))
+    @test @filecheck begin
+        @check "%0 = stablehlo.multiply %arg1, %arg2 : tensor<4xf64>"
+        @check_next "%1 = stablehlo.add %0, %arg3 : tensor<4xf64>"
+        @check_next "return %1 : tensor<4xf64>"
+        ir
+    end
+end
+
+# Scratch allocated *inside* a traced call must come back traced: a concrete array cannot take
+# part in the traced program. `KA.allocate` used to return a `ConcreteRArray` unconditionally, so
+# `KA.zeros` then hit `fill!` on it, which compiles a `fill!` kernel, which traces `fill!`, which
+# recursed until the stack overflowed. Asking for a traced element type failed even earlier, while
+# trying to build an XLA buffer whose elements were `TracedRNumber`s.
+#
+# This is the shape any backend-agnostic package hits when it allocates a temporary during a
+# traced call, so both element-type spellings are covered.
+
+@kernel function double_kernel!(y, @Const(x))
+    i = @index(Global)
+    @inbounds y[i] = 2 * x[i]
+end
+
+function allocate_zeros(x, ::Type{T}) where {T}
+    return KernelAbstractions.zeros(KernelAbstractions.get_backend(x), T, size(x))
+end
+
+function allocate_and_double(x, ::Type{T}) where {T}
+    backend = KernelAbstractions.get_backend(x)
+    y = allocate_zeros(x, T)
+    double_kernel!(backend)(y, x; ndrange=size(x))
+    return y
+end
+
+@testset "KernelAbstractions allocation within compile" begin
+    x = Reactant.to_rarray(Float64[1.0, 2.0, 3.0, 4.0])
+
+    # `eltype` of a traced array is `TracedRNumber{Float64}`, which has to be unwrapped before it
+    # can name a buffer element type, so both spellings are covered.
+    concrete_zeros(x) = allocate_zeros(x, Float64)
+    traced_zeros(x) = allocate_zeros(x, eltype(x))
+
+    @test Array(Reactant.@jit concrete_zeros(x)) ≈ zeros(4)
+    @test Array(Reactant.@jit traced_zeros(x)) ≈ zeros(4)
+
+    concrete_double(x) = allocate_and_double(x, Float64)
+    traced_double(x) = allocate_and_double(x, eltype(x))
+
+    @test Array(Reactant.@jit raise = true concrete_double(x)) ≈ 2 .* Array(x)
+    @test Array(Reactant.@jit raise = true traced_double(x)) ≈ 2 .* Array(x)
 end

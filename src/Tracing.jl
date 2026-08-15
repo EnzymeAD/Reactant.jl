@@ -460,6 +460,21 @@ Base.@nospecializeinfer function traced_type_inner(
 end
 
 Base.@nospecializeinfer function traced_type_inner(
+    A::Type{AbstractArray{<:T,N}},
+    seen,
+    mode::TraceMode,
+    @nospecialize(track_numbers::Type),
+    @nospecialize(ndevices),
+    @nospecialize(runtime)
+) where {T,N}
+    T2 = A.var.ub
+    T´ = traced_type_inner(T2, seen, mode, track_numbers, ndevices, runtime)
+    T´var = Core.TypeVar(gensym(), T´)
+    typ = Core.apply_type(AbstractArray, T´var, N)
+    return Core.UnionAll(T´var, typ)
+end
+
+Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(A::Type{<:Array}),
     seen,
     mode::TraceMode,

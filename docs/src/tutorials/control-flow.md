@@ -188,6 +188,4 @@ This implementation runs the algorithm until convergence (the transport plan has
 
 !!! warning "Current limitations"
 
-    It is currently not allowed to include mutations as part of the while loop condition.
-
-    The for loop tracing does not support any arbitrary iterable. It supports integer ranges.
+    The for loop tracing does not support any arbitrary iterable. It supports integer and floating point ranges.

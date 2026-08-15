@@ -5,6 +5,18 @@ struct CompilerParams <: GPUCompiler.AbstractCompilerParams
     use_native_interp::Bool
 end
 
+struct UnboundTypeParamError <: Exception
+    mi::Core.MethodInstance
+end
+
+function Base.showerror(io::IO, e::UnboundTypeParamError)
+    println(
+        io,
+        "UnboundTypeParamError: Calling method with unbound type parameters is unsupported by GPUCompiler and thus Reactant",
+    )
+    return Enzyme.Compiler.pretty_print_mi(e.mi, io)
+end
+
 NativeCompilerJob = GPUCompiler.CompilerJob{GPUCompiler.NativeCompilerTarget,CompilerParams}
 GPUCompiler.can_throw(@nospecialize(job::NativeCompilerJob)) = true
 function GPUCompiler.method_table(@nospecialize(job::NativeCompilerJob))
@@ -37,13 +49,15 @@ function Core.Compiler.optimize(
             opt.src, opt, caller
         )
         Core.Compiler.ipo_dataflow_analysis!(interp, ir, caller)
-    else
+    elseif VERSION < v"1.13.0-rc1"
         Core.Compiler.@timeit "optimizer" ir = Core.Compiler.run_passes_ipo_safe(
             opt.src, opt
         )
         Core.Compiler.ipo_dataflow_analysis!(interp, opt, ir, caller)
+    else
+        Core.Compiler.@zone "optimizer" ir = Core.Compiler.run_passes_ipo_safe(opt.src, opt)
+        Core.Compiler.ipo_dataflow_analysis!(interp, opt, ir, caller)
     end
-    mi = opt.linfo
     if DEBUG_INTERP[]
         safe_print("pre rewrite_insts", ir)
     end
@@ -52,9 +66,14 @@ function Core.Compiler.optimize(
         safe_print("post rewrite_insts", ir)
     end
     Core.Compiler.verify_ir(ir)
-    res = Core.Compiler.finish(interp, opt, ir, caller)
 
-    return res
+    @static if VERSION < v"1.13.0-rc1"
+        Core.Compiler.finish(interp, opt, ir, caller)
+    else
+        Core.Compiler.finishopt!(interp, opt, ir)
+    end
+
+    return nothing
 end
 
 @noinline call_with_native(
@@ -184,8 +203,16 @@ const __skip_rewrite_func_set = Set([
     typeof(Base.StackTraces.show_spec_sig),
     typeof(Core.throw_inexacterror),
     typeof(Base.throw_boundserror),
-    typeof(Base._shrink),
-    typeof(Base._shrink!),
+    @static(
+        if VERSION < v"1.13.0-rc1"
+            typeof(Base._shrink)
+        end
+    ),
+    @static(
+        if VERSION < v"1.13.0-rc1"
+            typeof(Base._shrink!)
+        end
+    ),
     typeof(Base.ht_keyindex),
     typeof(Base.checkindex),
     typeof(Base.to_index),
@@ -753,14 +780,7 @@ function call_llvm_generator(
 
     for svar in mi.sparam_vals
         if svar isa TypeVar
-            errstr = sprint() do io
-                println(
-                    io,
-                    "Calling method with unbound type parameters is unsupported by GPUCompiler and thus Reactant",
-                )
-                Enzyme.Compiler.pretty_print_mi(mi, io)
-            end
-            method_error = :(throw(AssertionError($errstr)))
+            method_error = :(throw($(UnboundTypeParamError)($mi)))
             return stub(world, source, method_error)
         end
     end
@@ -1192,9 +1212,7 @@ end
     return $(Expr(:meta, :generated, call_llvm_generator))
 end
 
-@static if isdefined(Core, :BFloat16)
-    nmantissa(::Type{Core.BFloat16}) = 7
-end
+nmantissa(::Type{BFloat16}) = 7
 nmantissa(::Type{Float16}) = 10
 nmantissa(::Type{Float32}) = 23
 nmantissa(::Type{Float64}) = 52

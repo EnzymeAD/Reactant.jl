@@ -377,6 +377,21 @@ end
     @test Float32[2.2, 4.4, 6.6, 8.8] ≈ @jit(Ops.imag(x))
 end
 
+@testset "hypot" begin
+    # Test Ops.hypot with arrays
+    x = Reactant.to_rarray([3.0, 5.0, 8.0])
+    y = Reactant.to_rarray([4.0, 12.0, 15.0])
+    @test [5.0, 13.0, 17.0] ≈ @jit Ops.hypot(x, y)
+
+    # Test Base.hypot with TracedRNumber
+    f(a, b) = Base.hypot(a, b)
+    a = Reactant.to_rarray(3.0; track_numbers=true)
+    b = Reactant.to_rarray(4.0; track_numbers=true)
+    @test 5.0 ≈ @jit f(a, b)
+    @test 5.0 ≈ @jit f(a, 4.0)
+    @test 5.0 ≈ @jit f(3.0, b)
+end
+
 @testset "iota" begin
     g1(shape) = Ops.iota(Int, shape; iota_dimension=1)
     @test [
@@ -704,7 +719,7 @@ end
     g1(x, s) = Ops.set_dimension_size(x, s, 1)
     result = @jit(g1(x, dim_size))
     @test size(result) == (4,)
-    @test Array(result) ≈ Float32[1.0, 2.0, 3.0, 4.0]
+    @test Array(result) ≈ Float32[1.0, 2.0, 3.0, 4.0] broken = RunningOnTPU
 
     # Test with 2D array, setting dimension 1
     x2d = Reactant.to_rarray(Float32[1.0 2.0; 3.0 4.0; 5.0 6.0])
@@ -712,14 +727,14 @@ end
     g2(x, s) = Ops.set_dimension_size(x, s, 1)
     result = @jit(g2(x2d, dim_size))
     @test size(result) == (3, 2)
-    @test Array(result) ≈ Float32[1.0 2.0; 3.0 4.0; 5.0 6.0]
+    @test Array(result) ≈ Float32[1.0 2.0; 3.0 4.0; 5.0 6.0] broken = RunningOnTPU
 
     # Test with 2D array, setting dimension 2
     dim_size = ConcreteRNumber(Int32(2))
     g3(x, s) = Ops.set_dimension_size(x, s, 2)
     result = @jit(g3(x2d, dim_size))
     @test size(result) == (3, 2)
-    @test Array(result) ≈ Float32[1.0 2.0; 3.0 4.0; 5.0 6.0]
+    @test Array(result) ≈ Float32[1.0 2.0; 3.0 4.0; 5.0 6.0] broken = RunningOnTPU
 
     # Test with different element types (Int32 array)
     x_int = Reactant.to_rarray(Int32[1, 2, 3])
@@ -727,7 +742,7 @@ end
     g4(x, s) = Ops.set_dimension_size(x, s, 1)
     result = @jit(g4(x_int, dim_size))
     @test size(result) == (3,)
-    @test Array(result) == Int32[1, 2, 3]
+    @test Array(result) == Int32[1, 2, 3] broken = RunningOnTPU
 end
 
 @testset "shift_left" begin

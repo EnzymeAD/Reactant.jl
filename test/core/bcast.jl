@@ -16,7 +16,7 @@ end
 end
 
 function test()
-    MLIR.IR.with_context() do ctx
+    MLIR.IR.@with_context Reactant.ReactantContext() begin
         mod = MLIR.IR.Module(MLIR.IR.Location())
         modbody = MLIR.IR.body(mod)
 
@@ -32,14 +32,14 @@ function test()
         push!(MLIR.IR.region(func, 1), fnbody)
 
         GC.@preserve mod func fnbody begin
-            MLIR.IR.with_block(fnbody) do
+            MLIR.IR.@with_block fnbody begin
                 a = ones(4)
                 b = ones(4)
                 d = Data(
                     Reactant.TracedRArray{Float64,1}((), MLIR.IR.argument(fnbody, 1), (4,))
                 )
 
-                return tmp(a, b, d)
+                tmp(a, b, d)
             end
         end
 
@@ -277,4 +277,14 @@ end
     du_jl = zeros(8)
     views_bcast!(du_jl, u_jl)
     @test Array(du_ra) ≈ du_jl
+end
+
+@testset "broadcasted function with constant result" begin
+    x = Reactant.ConcreteRArray(rand(10))
+
+    f(x) = broadcast(xj -> true, x)
+    @test Array(@jit f(x)) == fill(true, 10)
+
+    g(x) = all(broadcast(xj -> true, x))
+    @test Bool(@jit g(x))
 end

@@ -49,8 +49,24 @@ end
     @testset "Unbound Args" begin
         methods_with_unbound_args = Aqua.detect_unbound_args_recursively(Reactant)
         num_unbound_args = 0
+        allowed_methods_with_unbound_args = [
+            only(
+                methods(
+                    Reactant.traced_type_inner,
+                    (
+                        Type{AbstractArray{<:Integer,TypeVar(:N)}},
+                        Any,
+                        Reactant.TraceMode,
+                        Type,
+                        Any,
+                        Any,
+                    ),
+                ),
+            ),
+        ]
         for method in methods_with_unbound_args
-            if !issubmodule(parentmodule(method), Reactant.Proto)
+            if !issubmodule(parentmodule(method), Reactant.Proto) &&
+                method ∉ allowed_methods_with_unbound_args
                 num_unbound_args += 1
                 @warn "Method $(method) has unbound args"
             end
@@ -84,34 +100,28 @@ end
 end
 
 @testset "ExplicitImports" begin
+    unanalyzable_modules = (
+        Reactant.DotGeneralAlgorithmPreset,
+        Reactant.MLIR.Dialects,
+        get_all_submodules(Reactant.MLIR.Dialects)...,
+        get_all_submodules(Reactant.Proto)...,
+        Reactant.XLA.OpShardingType,
+        Reactant.Accelerators.TPU.TPUVersion,
+        Reactant.PrecisionConfig,
+        Reactant.InterpolationType,
+        ReactantMPIExt.Ops,
+        Reactant.EnzymeActivity,
+    )
+
     test_explicit_imports(
         Reactant;
         no_implicit_imports=(;
-            allow_unanalyzable=(
-                Reactant.DotGeneralAlgorithmPreset,
-                Reactant.MLIR.Dialects,
-                get_all_submodules(Reactant.MLIR.Dialects)...,
-                get_all_submodules(Reactant.Proto)...,
-                Reactant.XLA.OpShardingType,
-                Reactant.Accelerators.TPU.TPUVersion,
-                Reactant.PrecisionConfig,
-                ReactantMPIExt.Ops,
-            ),
-            ignore=(Reactant.Proto,),
+            allow_unanalyzable=unanalyzable_modules, ignore=(Reactant.Proto,)
         ),
         all_explicit_imports_are_public=false,
         all_explicit_imports_via_owners=true,
         no_stale_explicit_imports=(;
-            allow_unanalyzable=(
-                Reactant.DotGeneralAlgorithmPreset,
-                Reactant.MLIR.Dialects,
-                get_all_submodules(Reactant.MLIR.Dialects)...,
-                get_all_submodules(Reactant.Proto)...,
-                Reactant.XLA.OpShardingType,
-                Reactant.Accelerators.TPU.TPUVersion,
-                Reactant.PrecisionConfig,
-                ReactantMPIExt.Ops,
-            ),
+            allow_unanalyzable=unanalyzable_modules,
             ignore=(
                 Reactant.Proto,
                 Reactant.MLIR.IR,
@@ -125,6 +135,7 @@ end
                 :code_mhlo,
                 :code_xla,
                 :Periodic,
+                :Binomial,
             ),
         ),
         all_qualified_accesses_via_owners=true,

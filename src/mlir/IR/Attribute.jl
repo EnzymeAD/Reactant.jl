@@ -612,15 +612,13 @@ function DenseElementsAttribute(values::AbstractArray{Float64})
     )
 end
 
-if isdefined(Core, :BFloat16)
-    function DenseElementsAttribute(values::AbstractArray{Core.BFloat16})
-        shaped_type = TensorType(collect(Int, size(values)), Type(Core.BFloat16))
-        return Attribute(
-            API.mlirDenseElementsAttrBFloat16Get(
-                shaped_type, length(values), to_row_major(values)
-            ),
-        )
-    end
+function DenseElementsAttribute(values::AbstractArray{BFloat16})
+    shaped_type = TensorType(collect(Int, size(values)), Type(BFloat16))
+    return Attribute(
+        API.mlirDenseElementsAttrBFloat16Get(
+            shaped_type, length(values), to_row_major(values)
+        ),
+    )
 end
 
 function DenseElementsAttribute(values::AbstractArray{Float16})
@@ -905,11 +903,23 @@ function Base.getindex(attr::Attribute)
     end
 end
 
-function Base.show(io::IO, attribute::Attribute)
-    print(io, "Attribute(#= ")
+"""
+    print(io, attribute)
+
+Print `attribute` in MLIR's textual form, e.g. `#aie<bd_dim_layout_array[]>`.
+Unlike [`show`](@ref), this emits just the attribute, which is what you want when
+interpolating it into MLIR source text.
+"""
+function Base.print(io::IO, attribute::Attribute)
     c_print_callback = @cfunction(print_callback, Cvoid, (API.MlirStringRef, Any))
     ref = Ref(io)
     API.mlirAttributePrint(attribute, c_print_callback, ref)
+    return nothing
+end
+
+function Base.show(io::IO, attribute::Attribute)
+    print(io, "Attribute(#= ")
+    print(io, attribute)
     return print(io, " =#)")
 end
 

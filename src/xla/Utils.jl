@@ -5,7 +5,9 @@ struct ReactantInternalError <: Base.Exception
 end
 
 function Base.showerror(io::IO, ece::ReactantInternalError)
-    return print(io, ece.msg, '\n')
+    print(io, ece.msg, '\n')
+    Base.Experimental.show_error_hints(io, ece)
+    return nothing
 end
 
 function reactant_err(msg::Cstring)::Cvoid
@@ -35,9 +37,7 @@ primitive_types_list = [
     (18, Complex{Float64}),
 ]
 
-@static if isdefined(Core, :BFloat16)
-    push!(primitive_types_list, (16, Core.BFloat16))
-end
+push!(primitive_types_list, (16, Reactant.BFloat16))
 
 for (int_val, jl_type) in primitive_types_list
     @eval begin

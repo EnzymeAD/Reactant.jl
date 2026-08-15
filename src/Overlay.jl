@@ -25,11 +25,11 @@ end
 # Enzyme.jl overlays
 const WITHIN_AUTODIFF = Ref(false)
 
-@reactant_overlay @noinline function Enzyme.within_autodiff()
+@reactant_overlay function Enzyme.within_autodiff()
     return WITHIN_AUTODIFF[]
 end
 
-@reactant_overlay @noinline function Enzyme.autodiff_deferred(
+@reactant_overlay function Enzyme.autodiff_deferred(
     rmode::Enzyme.Mode, f::FA, args::Vararg{Annotation,Nargs}
 ) where {FA<:Annotation,Nargs}
     original_within_autodiff = WITHIN_AUTODIFF[]
@@ -41,7 +41,7 @@ end
     end
 end
 
-@reactant_overlay @noinline function Enzyme.autodiff(
+@reactant_overlay function Enzyme.autodiff(
     rmode::Enzyme.Mode, f::FA, args::Vararg{Annotation,Nargs}
 ) where {FA<:Annotation,Nargs}
     original_within_autodiff = WITHIN_AUTODIFF[]
@@ -53,7 +53,7 @@ end
     end
 end
 
-@reactant_overlay @noinline function Enzyme.autodiff_deferred(
+@reactant_overlay function Enzyme.autodiff_deferred(
     rmode::Enzyme.Mode, f::FA, rt::Type{A}, args::Vararg{Annotation,Nargs}
 ) where {FA<:Annotation,A<:Annotation,Nargs}
     original_within_autodiff = WITHIN_AUTODIFF[]
@@ -65,7 +65,7 @@ end
     end
 end
 
-@reactant_overlay @noinline function Enzyme.autodiff(
+@reactant_overlay function Enzyme.autodiff(
     rmode::Enzyme.Mode, f::FA, rt::Type{A}, args::Vararg{Annotation,Nargs}
 ) where {FA<:Annotation,A<:Annotation,Nargs}
     original_within_autodiff = WITHIN_AUTODIFF[]
@@ -92,11 +92,11 @@ end
 end
 
 # Random.jl overlays
-@reactant_overlay @noinline function Random.default_rng()
+@reactant_overlay function Random.default_rng()
     return call_with_reactant(TracedRandom.default_rng)
 end
 
-@reactant_overlay @noinline function TracedRandom.default_rng()
+@reactant_overlay function TracedRandom.default_rng()
     return ReactantRNG(
         promote_to(TracedRArray{UInt64,1}, TracedRandom.make_seed()), "DEFAULT"
     )
@@ -110,9 +110,14 @@ for randfun in (:rand, :randn, :randexp)
     overload_randfun! = Symbol(:overload_, randfun!)
 
     @eval begin
-        @reactant_overlay @noinline function Random.$(randfun)(
+        @reactant_overlay function Random.$(randfun)(
             rng::AbstractRNG, ::Type{T}, dims::Dims
         ) where {T}
+            @static if isdefined(Random, :SeedHasher)
+                if rng isa Random.SeedHasher
+                    return call_with_native(Random.$(randfun), rng, T, dims)
+                end
+            end
             if unwrapped_eltype(T) <: ReactantPrimitive
                 return call_with_native(
                     TracedRandom.$(overload_randfun), rng, unwrapped_eltype(T), dims
@@ -123,15 +128,25 @@ for randfun in (:rand, :randn, :randexp)
             return call_with_native(Random.$(randfun), rng, T, dims)
         end
 
-        @reactant_overlay @noinline function Random.$(randfun)(
+        @reactant_overlay function Random.$(randfun)(
             rng::AbstractRNG, dim1::Integer, dims::Integer...
         )
+            @static if isdefined(Random, :SeedHasher)
+                if rng isa Random.SeedHasher
+                    return call_with_native(Random.$(randfun), rng, dim1, dims)
+                end
+            end
             return TracedRandom.$(overload_randfun)(rng, dim1, dims...)
         end
 
-        @reactant_overlay @noinline function Random.$(randfun)(
+        @reactant_overlay function Random.$(randfun)(
             rng::AbstractRNG, ::Type{T}, dim1::Integer, dims::Integer...
         ) where {T}
+            @static if isdefined(Random, :SeedHasher)
+                if rng isa Random.SeedHasher
+                    return call_with_native(Random.$(randfun), rng, T, dim1, dims...)
+                end
+            end
             if unwrapped_eltype(T) <: ReactantPrimitive
                 return TracedRandom.$(overload_randfun)(
                     rng, unwrapped_eltype(T), dim1, dims...
@@ -143,7 +158,7 @@ for randfun in (:rand, :randn, :randexp)
         end
 
         # scalars
-        @reactant_overlay @noinline function Random.$(randfun)(
+        @reactant_overlay function Random.$(randfun)(
             rng::AbstractRNG, ::Type{T}=Float64
         ) where {T}
             if unwrapped_eltype(T) <: ReactantPrimitive
@@ -155,12 +170,10 @@ for randfun in (:rand, :randn, :randexp)
         end
 
         # inplace
-        @reactant_overlay @noinline function Random.$(randfun!)(
-            rng::AbstractRNG, A::AnyTracedRArray
-        )
+        @reactant_overlay function Random.$(randfun!)(rng::AbstractRNG, A::AnyTracedRArray)
             return call_with_native(TracedRandom.$(overload_randfun!), rng, A)
         end
-        @reactant_overlay @noinline function Random.$(randfun!)(A::AnyTracedRArray)
+        @reactant_overlay function Random.$(randfun!)(A::AnyTracedRArray)
             return TracedRandom.$(overload_randfun!)(
                 call_with_reactant(TracedRandom.default_rng), A
             )
@@ -176,7 +189,7 @@ for (cT, aT, bT) in (
     (:AbstractMatrix, :AbstractMatrix, :AbstractVecOrMat),
 )
     @eval begin
-        @reactant_overlay @noinline function LinearAlgebra.mul!(
+        @reactant_overlay function LinearAlgebra.mul!(
             C::CT, A::AT, B::BT, α::Number, β::Number
         ) where {CT<:$cT,AT<:$aT,BT<:$bT}
             A, B = aos_to_soa(A), aos_to_soa(B)
@@ -196,7 +209,7 @@ for (cT, aT, bT) in (
         end
 
         # Needed mostly for 1.10 where 3-arg mul is often specialized
-        @reactant_overlay @noinline function LinearAlgebra.mul!(
+        @reactant_overlay function LinearAlgebra.mul!(
             C::CT, A::AT, B::BT
         ) where {CT<:$cT,AT<:$aT,BT<:$bT}
             call_with_reactant(LinearAlgebra.mul!, C, A, B, true, false)
@@ -206,7 +219,7 @@ for (cT, aT, bT) in (
 end
 
 # Base overloads
-@reactant_overlay @noinline function Base._stack(dims::Union{Integer,Colon}, iter)
+@reactant_overlay function Base._stack(dims::Union{Integer,Colon}, iter)
     if use_overlayed_version(iter)
         return call_with_native(TracedRArrayOverrides.overloaded_stack, dims, iter)
     else
@@ -223,7 +236,7 @@ end
 end
 
 ## fixes #493
-@reactant_overlay @noinline function Base._unique_dims(A::AbstractArray, dims::Colon)
+@reactant_overlay function Base._unique_dims(A::AbstractArray, dims::Colon)
     if use_overlayed_version(A)
         error("Reactant doesn't have a `Base._unique_dims` with the current interpreter.")
     else
@@ -231,7 +244,7 @@ end
     end
 end
 
-@reactant_overlay @noinline function Base.mapreduce(
+@reactant_overlay function Base.mapreduce(
     f,
     op,
     A::Union{AbstractArray,Base.Iterators.Zip,Base.Iterators.Enumerate,Base.Generator};
@@ -248,7 +261,7 @@ end
     end
 end
 
-@reactant_overlay @noinline function Base.map(f, x::AbstractArray, ys::AbstractArray...)
+@reactant_overlay function Base.map(f, x::AbstractArray, ys::AbstractArray...)
     if (
         use_overlayed_version(x) ||
         use_overlayed_version(f) ||
@@ -260,7 +273,7 @@ end
     end
 end
 
-@reactant_overlay @noinline function Base.map!(
+@reactant_overlay function Base.map!(
     f, y::AbstractArray, x::AbstractArray, xs::AbstractArray...
 )
     if (
@@ -275,7 +288,7 @@ end
     end
 end
 
-@reactant_overlay @noinline function Base._all(f, x::AbstractArray, dims)
+@reactant_overlay function Base._all(f, x::AbstractArray, dims)
     if use_overlayed_version(x) || use_overlayed_version(f)
         return call_with_native(TracedRArrayOverrides.overloaded_mapreduce, f, &, x; dims)
     else
@@ -283,7 +296,7 @@ end
     end
 end
 
-@reactant_overlay @noinline function Base._any(f, x::AbstractArray, dims)
+@reactant_overlay function Base._any(f, x::AbstractArray, dims)
     if use_overlayed_version(x) || use_overlayed_version(f)
         return call_with_native(TracedRArrayOverrides.overloaded_mapreduce, f, |, x; dims)
     else
@@ -291,7 +304,7 @@ end
     end
 end
 
-@reactant_overlay @noinline function Base._getindex(
+@reactant_overlay function Base._getindex(
     ::IndexLinear, x::Array{T,N}, idxs::Vararg{Any,N}
 ) where {T,N}
     if use_overlayed_version(idxs)
@@ -316,9 +329,7 @@ for (jlop, rop, default_pivot) in (
     (:cholesky!, :overloaded_cholesky, NoPivot),
 )
     @eval begin
-        @reactant_overlay @noinline function LinearAlgebra.$(jlop)(
-            x::AbstractArray; kwargs...
-        )
+        @reactant_overlay function LinearAlgebra.$(jlop)(x::AbstractArray; kwargs...)
             if use_overlayed_version(x)
                 pivot = $(default_pivot)()
                 return call_with_native(
@@ -332,7 +343,7 @@ for (jlop, rop, default_pivot) in (
             end
         end
 
-        @reactant_overlay @noinline function LinearAlgebra.$(jlop)(
+        @reactant_overlay function LinearAlgebra.$(jlop)(
             x::AbstractArray, pivot::$(default_pivot); kwargs...
         )
             if use_overlayed_version(x)
@@ -351,9 +362,7 @@ end
 
 for (jlop, rop) in ((:svd, :overloaded_svd),)
     @eval begin
-        @reactant_overlay @noinline function LinearAlgebra.$(jlop)(
-            x::AbstractArray; kwargs...
-        )
+        @reactant_overlay function LinearAlgebra.$(jlop)(x::AbstractArray; kwargs...)
             if use_overlayed_version(x)
                 return call_with_native(
                     TracedLinearAlgebra.$(rop),
@@ -367,14 +376,14 @@ for (jlop, rop) in ((:svd, :overloaded_svd),)
     end
 end
 
-@reactant_overlay @noinline function LinearAlgebra.dot(x::AbstractArray, y::AbstractArray)
+@reactant_overlay function LinearAlgebra.dot(x::AbstractArray, y::AbstractArray)
     if use_overlayed_version(x) || use_overlayed_version(y)
         return call_with_native(TracedLinearAlgebra.overloaded_dot, x, y)
     else
         return call_with_native(LinearAlgebra.dot, x, y)
     end
 end
-@reactant_overlay @noinline function LinearAlgebra.dot(
+@reactant_overlay function LinearAlgebra.dot(
     x::AbstractVector, A::AbstractMatrix, y::AbstractVector
 )
     if use_overlayed_version(x) || use_overlayed_version(A) || use_overlayed_version(y)
@@ -384,11 +393,48 @@ end
     end
 end
 
+@reactant_overlay function LinearAlgebra.norm(x::AbstractArray)
+    if use_overlayed_version(x)
+        return call_with_native(TracedLinearAlgebra.overloaded_norm, x)
+    else
+        return call_with_native(LinearAlgebra.norm, x)
+    end
+end
+@reactant_overlay function LinearAlgebra.norm(x::AbstractArray, p::Real)
+    if use_overlayed_version(x)
+        return call_with_native(TracedLinearAlgebra.overloaded_norm, x, p)
+    else
+        return call_with_native(LinearAlgebra.norm, x, p)
+    end
+end
+
+# `*` allocates its destination from one of its operands -- `similar(B, TS, ...)` for
+# matrix-matrix, `similar(x, TS, axes(A, 1))` for matrix-vector -- so a traced matrix times
+# an untraced right-hand side lands in an `Array{TracedRNumber}` that then costs one traced
+# op per element to fill, overflowing inference's constant-propagation stack once the output
+# is large enough (#3167). Only this operand order is affected: with the right-hand side
+# traced, `similar` is called on a `TracedRArray` and already does the right thing.
+#
+# Deliberately restricted to genuine traced matrices rather than `AbstractMatrix`:
+#  * an `Adjoint`/`Transpose` of a *vector* is also an `AbstractMatrix`, but `x' * y` is a
+#    scalar dot product, and an overlay matching it would win over Base's more specific
+#    method and silently return a 1-element array;
+#  * structured wrappers (`Diagonal`, `UpperTriangular`, ...) keep Base's dispatch, which
+#    picks destinations that preserve their structure.
+@reactant_overlay function Base.:(*)(
+    a::Union{
+        TracedRArray{T,2},
+        LinearAlgebra.Adjoint{TracedRNumber{T},<:TracedRArray{T,2}},
+        LinearAlgebra.Transpose{TracedRNumber{T},<:TracedRArray{T,2}},
+    },
+    b::AbstractVecOrMat,
+) where {T}
+    return call_with_native(TracedLinearAlgebra.overloaded_mul, a, b)
+end
+
 # 3 arg multiplication is specialized in Base, but we can reorder the computation
 # as an MLIR optimization
-@reactant_overlay @noinline function Base.:(*)(
-    a::AbstractArray, b::AbstractArray, c::AbstractArray
-)
+@reactant_overlay function Base.:(*)(a::AbstractArray, b::AbstractArray, c::AbstractArray)
     if use_overlayed_version((a, b, c))
         ab = call_with_native(TracedLinearAlgebra.overloaded_mul, a, b)
         return call_with_native(TracedLinearAlgebra.overloaded_mul, ab, c)
@@ -397,7 +443,7 @@ end
     end
 end
 
-@reactant_overlay @noinline function Base.:(*)(
+@reactant_overlay function Base.:(*)(
     a::AbstractArray, b::AbstractArray, c::AbstractArray, d::AbstractArray
 )
     if use_overlayed_version((a, b, c, d))

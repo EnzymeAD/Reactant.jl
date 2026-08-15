@@ -165,10 +165,13 @@ end
 """
 `barrier`
 
-The `barrier` op synchronizes all work items of a workgroup. It is used
-to coordinate communication between the work items of the workgroup.
+The `barrier` op synchronizes work items within the specified execution
+scope. By default, the scope is `workgroup`, synchronizing all work items
+in a workgroup.
 
 ```mlir
+// Synchronize all work items in the workgroup, making all prior
+// memory accesses visible.
 gpu.barrier
 ```
 
@@ -178,17 +181,35 @@ visible to all work items in the workgroup. Data hazards between work items
 accessing the same memory can be avoided by synchronizing work items
 in-between these accesses.
 
-If the `memfence` attribute is specified, the set of memory accesses that must
-by completed after the barrier resolves is limited to only those accesses that
-read from or write to the specified address spaces (though accesses to other
-address spaces may be completed as well, especially if a particular combination
-of address spaces is not supported on a given backend). In particular,
-specifying `memfence []` creates a barrier that is not required to affect
-the visibility of any memory operations and is purely used for synchronizing
-work items.
+The `scope` attribute controls the execution scope of the barrier:
 
 ```mlir
-// Only workgroup address spaces accesses required to be visible.
+// Synchronize within a subgroup (warp/wavefront).
+gpu.barrier scope <subgroup>
+// Synchronize within a cluster.
+gpu.barrier scope <cluster>
+```
+
+A `named` barrier allows synchronizing a specific subset of subgroups
+that have been associated with a named barrier handle. Named barriers
+require workgroup scope.
+
+```mlir
+// Initialize a named barrier for 4 participating members.
+%nb = gpu.initialize_named_barrier %c4 : i32 -> !gpu.named_barrier
+// Wait on the named barrier.
+gpu.barrier named(%nb : !gpu.named_barrier)
+```
+
+If the `memfence` attribute is specified, the set of memory accesses that
+must be completed after the barrier resolves is limited to only those
+accesses that read from or write to the specified address spaces. In
+particular, specifying `memfence []` creates a barrier that is not required
+to affect the visibility of any memory operations and is purely used for
+synchronizing work items.
+
+```mlir
+// Only workgroup address space accesses required to be visible.
 gpu.barrier memfence [#gpu.address_space<workgroup>]
 // No memory accesses required to be visible.
 gpu.barrier memfence []
@@ -196,17 +217,38 @@ gpu.barrier memfence []
 gpu.barrier
 ```
 
-Either none or all work items of a workgroup need to execute this op
-in convergence.
+The three clauses can be combined in any order, but not all combinations may
+be supported on a given target:
+
+```mlir
+// Named barrier with a workgroup-only memory fence.
+gpu.barrier named(%nb : !gpu.named_barrier) memfence [#gpu.address_space<workgroup>]
+// Subgroup barrier with a global fence.
+gpu.barrier memfence [#gpu.address_space<global>] scope <subgroup>
+```
+
+Once one thread of execution in a given scope (say, thread in a workgroup)
+has executed a particular dynamic instance of `gpu.barrier`, all other threads
+in that scope are required to execute the same dynamic instance of `gpu.barrier`
+before any thread executes any other instance of it. That is, you cannot, for
+example, have the two subgroups of a workgroup arrive at `gpu.barrier` ops in
+different branches of an if statement and have this work.
 """
-function barrier(; address_spaces=nothing, location=Location())
+function barrier(
+    named_barrier=nothing::Union{Nothing,Value};
+    address_spaces=nothing,
+    scope=nothing,
+    location=Location(),
+)
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(named_barrier) && push!(operands, named_barrier)
     !isnothing(address_spaces) &&
         push!(attributes, NamedAttribute("address_spaces", address_spaces))
+    !isnothing(scope) && push!(attributes, NamedAttribute("scope", scope))
 
     return create_operation(
         "gpu.barrier",
@@ -1159,6 +1201,8 @@ function func(;
     known_block_size=nothing,
     known_grid_size=nothing,
     known_cluster_size=nothing,
+    workgroup_attributions=nothing,
+    kernel=nothing,
     body::Region,
     location=Location(),
 )
@@ -1179,6 +1223,9 @@ function func(;
         push!(attributes, NamedAttribute("known_grid_size", known_grid_size))
     !isnothing(known_cluster_size) &&
         push!(attributes, NamedAttribute("known_cluster_size", known_cluster_size))
+    !isnothing(workgroup_attributions) &&
+        push!(attributes, NamedAttribute("workgroup_attributions", workgroup_attributions))
+    !isnothing(kernel) && push!(attributes, NamedAttribute("kernel", kernel))
 
     return create_operation(
         "gpu.func",
@@ -1414,6 +1461,39 @@ function host_unregister(value::Value; location=Location())
 end
 
 """
+`initialize_named_barrier`
+
+Initializes a named barrier object with the given number of participating
+members (subgroups) and returns a handle to it. All members that will
+synchronize on this barrier must be accounted for in the count.
+
+```mlir
+%nb = gpu.initialize_named_barrier %num_members : i32 -> !gpu.named_barrier
+```
+"""
+function initialize_named_barrier(
+    member_count::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[member_count,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(result) && push!(op_ty_results, result)
+
+    return create_operation(
+        "gpu.initialize_named_barrier",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
 `lane_id`
 
 Returns the lane id within the subgroup (warp/wave).
@@ -1490,6 +1570,11 @@ supported by the target architecture. The cluster size can be set by
 arguments are present, the Op launches a kernel that clusters the given
 thread blocks. This feature is exclusive to certain architectures.
 
+The `cooperative` attribute indicates that the kernel should be launched
+cooperatively, guaranteeing that all thread blocks in the grid are
+co-resident on the GPU simultaneously. This enables grid-wide
+synchronization patterns.
+
 # Example
 
 ```mlir
@@ -1564,6 +1649,7 @@ function launch_func(
     asyncObject=nothing::Union{Nothing,Value},
     asyncToken=nothing::Union{Nothing,IR.Type},
     kernel,
+    cooperative=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -1604,6 +1690,7 @@ function launch_func(
         ]),
     )
     !isnothing(asyncToken) && push!(op_ty_results, asyncToken)
+    !isnothing(cooperative) && push!(attributes, NamedAttribute("cooperative", cooperative))
 
     return create_operation(
         "gpu.launch_func",
@@ -1748,8 +1835,10 @@ function launch(
     clusterSizeZ=nothing::Union{Nothing,Value},
     dynamicSharedMemorySize=nothing::Union{Nothing,Value},
     asyncToken=nothing::Union{Nothing,IR.Type},
+    cooperative=nothing,
     module_=nothing,
     function_=nothing,
+    workgroup_attributions=nothing,
     body::Region,
     location=Location(),
 )
@@ -1787,8 +1876,11 @@ function launch(
         ]),
     )
     !isnothing(asyncToken) && push!(op_ty_results, asyncToken)
+    !isnothing(cooperative) && push!(attributes, NamedAttribute("cooperative", cooperative))
     !isnothing(module_) && push!(attributes, NamedAttribute("module", module_))
     !isnothing(function_) && push!(attributes, NamedAttribute("function", function_))
+    !isnothing(workgroup_attributions) &&
+        push!(attributes, NamedAttribute("workgroup_attributions", workgroup_attributions))
 
     return create_operation(
         "gpu.launch",
@@ -3116,6 +3208,9 @@ determined using `indices`. The matrix being loaded into is the result.  The
 matrix which eventually allows the lowering to determine the size of each
 row.  If the `transpose` attribute is present then the op does a transposed load.
 
+The memory indices along each dimension must be in-bounds for that dimension
+as with an ordinary `memref.load`.
+
 For integer types, the resulting `!gpu.mma_matrix` type needs to specify the
 signedness of the data if the matrix type is an `A` or `B` operand for
 `gpu.subgroup_mma_compute`.
@@ -3172,6 +3267,9 @@ specifies the leading dimension of the destination matrix. If the
 
 This op is often meant to be used along with `gpu.subgroup_mma_load_matrix` and
 `gpu.subgroup_mma_compute`.
+
+The memory indices along each dimension must be in-bounds for that dimension
+as with an ordinary `memref.load`.
 
 # Example
 

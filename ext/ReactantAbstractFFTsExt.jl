@@ -7,7 +7,7 @@ using Reactant.Ops: @opcall
 
 # FFTW.jl defines methods on StridedArrays, and we have to be more specific than FFTW to
 # catch its methods.
-const AnyStridedTracedRArray{T,N} = StridedArray{TracedRNumber{T},N}
+const AnyStridedTracedRArray{T,N} = StridedArray{<:TracedRNumber{T},N}
 
 # To automatically convert FFT plans to traced versions
 # To extend a user needs to extend Reactant.reactant_fftplan for their plan type

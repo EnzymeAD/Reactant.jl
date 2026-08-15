@@ -38,8 +38,7 @@ steps:
               using Pkg
               Pkg.test(; coverage="user", test_args=["{{matrix.group}}"])'
         agents:
-          queue: "juliagpu"
-          cuda: "*"
+          queue: "cuda"
         env:
           JULIA_DEBUG: "Reactant,Reactant_jll"
           CUDA_VISIBLE_DEVICES: 0
@@ -68,8 +67,7 @@ steps:
   #           - ext
   #           - lib/ReactantCore/src
   #   agents:
-  #     queue: "juliagpu"
-  #     rocm: "*"
+  #     queue: "rocm"
   #   commands: |
   #     touch LocalPreferences.toml
 
