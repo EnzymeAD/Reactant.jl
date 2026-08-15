@@ -2127,7 +2127,7 @@ REACTANT_ABI HeldIfrtLoadedExecutable *ifrt_deserialize_and_load(
   auto loaded = MyValueOrThrow(
       compiler
           ->DeserializeLoadedExecutable(
-              absl::string_view(serialized_bytes, serialized_size),
+              absl::Cord(absl::string_view(serialized_bytes, serialized_size)),
               std::move(options))
           .Await());
   return reactant::capture(
@@ -3685,7 +3685,7 @@ REACTANT_ABI void reactantXLAFree(LinkableRuntime **__restrict__ lrtP,
     return;
   auto lrt = *lrtP;
   void *buffer = *(void **)buffer0;
-  auto erased = lrt->allocations.erase((void*)buffer0);
+  auto erased = lrt->allocations.erase((void *)buffer0);
   assert(erased == 1);
   (void)erased;
   free(buffer0);
@@ -4154,7 +4154,8 @@ REACTANT_ABI void ReactantCreateLLVMMod(
     llvm::LLVMContext **out_context, size_t *out_off, size_t *out_tmp_buf) {
 
   std::string fn(fn_str ? std::string(fn_str, fn_len) : std::string());
-  llvm::StringRef source(source_str ? llvm::StringRef(source_str, source_len) : llvm::StringRef());
+  llvm::StringRef source(source_str ? llvm::StringRef(source_str, source_len)
+                                    : llvm::StringRef());
 
   std::vector<llvm::SmallVector<int64_t>> out_shapes;
   out_shapes.reserve(num_out_shapes);
