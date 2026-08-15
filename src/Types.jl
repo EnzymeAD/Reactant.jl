@@ -722,15 +722,21 @@ const UnionAnyConcreteRArray{T,N,S} = Union{
 
 for aType in (:ConcretePJRTArray, :ConcreteIFRTArray)
     @eval begin
-        function $(aType){T}(::UndefInitializer, shape::Vararg{Integer,N}; kwargs...) where {T,N}
+        function $(aType){T}(
+            ::UndefInitializer, shape::Vararg{Integer,N}; kwargs...
+        ) where {T,N}
             return $(aType){T,N}(undef, Dims(shape); kwargs...)
         end
 
-        function $(aType){T}(::UndefInitializer, shape::NTuple{N,Integer}; kwargs...) where {T,N}
+        function $(aType){T}(
+            ::UndefInitializer, shape::NTuple{N,Integer}; kwargs...
+        ) where {T,N}
             return $(aType){T,N}(undef, Dims(shape); kwargs...)
         end
 
-        function $(aType){T,N}(::UndefInitializer, shape::Vararg{Integer,N}; kwargs...) where {T,N}
+        function $(aType){T,N}(
+            ::UndefInitializer, shape::Vararg{Integer,N}; kwargs...
+        ) where {T,N}
             return $(aType){T,N}(undef, Dims(shape); kwargs...)
         end
     end
