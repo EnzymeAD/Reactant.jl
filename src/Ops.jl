@@ -2427,26 +2427,18 @@ end
     end
 
     if checkpointing isa ReactantCore.Periodic
+        MLIR.IR.setattr!(while_op, "enzyme.enable_checkpointing", MLIR.IR.Attribute(true))
         MLIR.IR.setattr!(
-            while_op, "enzymexla.enable_checkpointing", MLIR.IR.Attribute(true)
-        )
-        MLIR.IR.setattr!(
-            while_op, "enzymexla.checkpoint_period", MLIR.IR.Attribute(checkpointing.n)
+            while_op, "enzyme.checkpoint_period", MLIR.IR.Attribute(checkpointing.n)
         )
     elseif checkpointing isa ReactantCore.Binomial
+        MLIR.IR.setattr!(while_op, "enzyme.enable_checkpointing", MLIR.IR.Attribute(true))
+        MLIR.IR.setattr!(while_op, "enzyme.binomial_checkpointing", MLIR.IR.UnitAttribute())
         MLIR.IR.setattr!(
-            while_op, "enzymexla.enable_checkpointing", MLIR.IR.Attribute(true)
-        )
-        MLIR.IR.setattr!(
-            while_op, "enzymexla.binomial_checkpointing", MLIR.IR.UnitAttribute()
-        )
-        MLIR.IR.setattr!(
-            while_op, "enzymexla.checkpoint_period", MLIR.IR.Attribute(checkpointing.budget)
+            while_op, "enzyme.checkpoint_period", MLIR.IR.Attribute(checkpointing.budget)
         )
     elseif checkpointing === true
-        MLIR.IR.setattr!(
-            while_op, "enzymexla.enable_checkpointing", MLIR.IR.Attribute(true)
-        )
+        MLIR.IR.setattr!(while_op, "enzyme.enable_checkpointing", MLIR.IR.Attribute(true))
     end
 
     return map(enumerate(linear_args)) do (i, arg)
