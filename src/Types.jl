@@ -79,7 +79,7 @@ mutable struct TracedRArray{T,N} <: RArray{TracedRNumber{T},N}
         return new{T,N}(paths, mlir_data, shape)
     end
 
-    function TracedRArray{T,N}(::UndefInitializer, shape::Integer...) where {T,N}
+    function TracedRArray{T,N}(::UndefInitializer, shape::Vararg{Integer,N}) where {T,N}
         return similar(TracedRArray{T,N}, shape...)
     end
 
@@ -721,36 +721,44 @@ const UnionAnyConcreteRArray{T,N,S} = Union{
 }
 
 for aType in (:ConcretePJRTArray, :ConcreteIFRTArray)
-    @eval function $(aType){T}(::UndefInitializer, shape::Integer...; kwargs...) where {T}
-        return $(aType){T}(undef, Dims(shape); kwargs...)
+    @eval begin
+        function $(aType){T}(::UndefInitializer, shape::Vararg{Integer,N}; kwargs...) where {T,N}
+            return $(aType){T,N}(undef, Dims(shape); kwargs...)
+        end
+
+        function $(aType){T}(::UndefInitializer, shape::NTuple{N,Integer}; kwargs...) where {T,N}
+            return $(aType){T,N}(undef, Dims(shape); kwargs...)
+        end
+
+        function $(aType){T,N}(::UndefInitializer, shape::Vararg{Integer,N}; kwargs...) where {T,N}
+            return $(aType){T,N}(undef, Dims(shape); kwargs...)
+        end
     end
 end
 
-function ConcretePJRTArray{T}(
+function ConcretePJRTArray{T,N}(
     ::UndefInitializer,
-    shape::Dims;
+    shape::Dims{N};
     client::Union{Nothing,XLA.AbstractClient}=nothing,
     idx::Union{Int,Nothing}=nothing,
     device::Union{Nothing,XLA.AbstractDevice}=nothing,
     sharding::Sharding.AbstractSharding=Sharding.NoSharding(),
-) where {T}
+) where {T,N}
     theclient, thedevice = _select_client_and_device(client, idx, device, sharding)
     sharded_data, shardinfo = sharding(theclient, thedevice, T, shape)
-    N = length(shape)
     nsharded = length(sharded_data)
     return ConcretePJRTArray{T,N,nsharded}(sharded_data, shape, shardinfo)
 end
 
-function ConcreteIFRTArray{T}(
+function ConcreteIFRTArray{T,N}(
     ::UndefInitializer,
-    shape::Dims;
+    shape::Dims{N};
     client::Union{Nothing,XLA.AbstractClient}=nothing,
     idx::Union{Int,Nothing}=nothing,
     device::Union{Nothing,XLA.AbstractDevice}=nothing,
     sharding::Sharding.AbstractSharding=Sharding.NoSharding(),
-) where {T}
+) where {T,N}
     theclient, thedevice = _select_client_and_device(client, idx, device, sharding)
-    N = length(shape)
     # ToDo: How to avoid allocating dummy array on host?
     dummy_array = Array{T}(undef, shape)
     # ToDo: How to use specified device (non-sharded case)?
