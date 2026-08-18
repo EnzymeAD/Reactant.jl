@@ -24,6 +24,7 @@ using Reactant_jll: Reactant_jll
 include("Macros.jl")
 include("CompilationError.jl")
 include("OptimizationPasses.jl")
+include("SparseLowering.jl")
 include("Codegen.jl")
 include("Thunk.jl")
 
@@ -429,6 +430,14 @@ function compile_mlir!(
         end
 
     legal_to_run_shardy_passes = compile_options.optimization_passes === :all
+
+    # Lower sparse_tensor CSR products to library custom calls before any pass
+    # pipeline runs: XLA cannot consume sparse-encoded tensors and the
+    # sparse-encoded ops must never reach the verifier. With `:none` the sparse
+    # IR is kept as-is for inspection.
+    if compile_options.optimization_passes !== :none
+        lower_sparse_ops!(mod)
+    end
 
     # Raise any triton kernel that might exist as a custom call
     # We will lower them back later on, but having the full triton IR enables
