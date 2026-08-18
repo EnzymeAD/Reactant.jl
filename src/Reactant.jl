@@ -271,6 +271,7 @@ const TracedType = Union{TracedRArray,TracedRNumber,MissingTracedValue}
 
 include("ControlFlow.jl")
 include("Tracing.jl")
+include("SparseTensors.jl")
 
 include("compiler/Compiler.jl")
 
@@ -305,7 +306,8 @@ export ConcreteRArray,
     @code_xla,
     @jit,
     @trace,
-    within_compile
+    within_compile,
+    CSRMatrix
 
 @static if VERSION ≥ v"1.11"
     @eval $(Expr(:public, :Periodic, :Binomial))

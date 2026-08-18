@@ -1390,6 +1390,7 @@ cc_library(
         "@com_google_absl//absl/log:globals",
         "@llvm-project//mlir:CAPIIRObjects",
         "@llvm-project//mlir:CAPILLVMObjects",
+        "@llvm-project//mlir:CAPISparseTensorObjects",
 
         # Broken upstream x/ref https://github.com/jax-ml/jax/issues/33344
         # "@jax//jaxlib/mosaic:tpu_dialect_capi_objects",
@@ -1427,6 +1428,9 @@ cc_library(
         "@xla//xla/stream_executor:cuda_platform",
         "@xla//xla/stream_executor:kernel",
         "@xla//xla/stream_executor/cuda:all_runtime",
+        # cuSPARSE (dlopen stub) + headers for the reactant_csr_matmul FFI handler
+        "@xla//xla/tsl/cuda:cusparse",
+        "@local_config_cuda//cuda:cuda_headers",
     ]) + if_rocm([
         "@xla//xla/service:gpu_plugin",
         "@xla//xla/pjrt/c:pjrt_c_api_gpu",
@@ -1435,6 +1439,9 @@ cc_library(
         "@xla//xla/stream_executor:rocm_platform",
         "@xla//xla/service/gpu:amdgpu_compiler",
         "@xla//xla/backends/profiler/gpu:device_tracer",
+        # hipSPARSE + headers for the reactant_csr_matmul FFI handler
+        "@local_config_rocm//rocm:hipsparse",
+        "@local_config_rocm//rocm:rocm_headers",
     ]) + select({
         # gloo tcp transport only builds on linux
         "@xla//xla/tsl:macos": [
