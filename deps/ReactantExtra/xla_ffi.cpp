@@ -125,7 +125,7 @@ XLA_FFI_DEFINE_HANDLER(
 // the accumulated-into operand is aliased to out by the lowering, so it is
 // copied into out first if XLA did not reuse the buffer).
 static ffi::Error csrMatmulCudaImpl(cudaStream_t stream,
-                                    ffi::ScratchAllocator scratch,
+                                    ffi::ScratchAllocator &scratch,
                                     ffi::AnyBuffer rowptr,
                                     ffi::AnyBuffer colind, ffi::AnyBuffer nzval,
                                     ffi::AnyBuffer dense, ffi::AnyBuffer *acc,
@@ -368,7 +368,7 @@ XLA_FFI_DEFINE_HANDLER(csrMatmulAccHandlerCUDA, csrMatmulAccCuda,
 // the accumulated-into operand is aliased to out by the lowering, so it is
 // copied into out first if XLA did not reuse the buffer).
 static ffi::Error csrMatmulRocmImpl(hipStream_t stream,
-                                    ffi::ScratchAllocator scratch,
+                                    ffi::ScratchAllocator &scratch,
                                     ffi::AnyBuffer rowptr,
                                     ffi::AnyBuffer colind, ffi::AnyBuffer nzval,
                                     ffi::AnyBuffer dense, ffi::AnyBuffer *acc,
