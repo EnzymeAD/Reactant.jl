@@ -35,8 +35,8 @@ end
 
     hlo = @code_hlo optimize = :none spmv(A_ra, x_ra)
     @test @filecheck begin
-        @check "sparse_tensor.assemble"
         @check "#sparse_tensor.encoding"
+        @check "sparse_tensor.assemble"
         @check "stablehlo.dot_general"
         hlo
     end
