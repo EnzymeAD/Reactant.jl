@@ -199,9 +199,15 @@ struct SerializedExecutableArtifact
     num_partitions::Int64
     # Sharding info for each linear result (from the concrete_result at compile time).
     # Each entry is the ShardInfo of the corresponding result array, or nothing if unsharded.
-    result_shardings::Vector{Any}
+    result_shardings::Union{Vector{Any},Missing}
     # Sharding info for preserved args (same indexing as artifact.preserved_args)
-    preserved_shardings::Vector{Any}
+    preserved_shardings::Union{Vector{Any},Missing}
+    # Type metadata for each linear (non-preserved) result, needed to wrap the raw
+    # XLA buffers returned by `XLA.execute` back into Concrete{IFRT,PJRT}{Array,Number}
+    # since `load_compiled_executable` executes directly and skips `hlo_call`.
+    result_eltypes::Vector{DataType}
+    result_is_scalar::Vector{Bool}
+    result_shapes::Vector{Tuple}
 end
 
 """
@@ -333,6 +339,17 @@ function save_compiled_executable(
 
         result_shardings = mlir_fn_res.result_shardings
 
+        result_eltypes = DataType[
+            Reactant.unwrapped_eltype(res) for res in mlir_fn_res.linear_results
+        ]
+        result_is_scalar = Bool[
+            res isa Reactant.TracedRNumber for res in mlir_fn_res.linear_results
+        ]
+        result_shapes = Tuple[
+            res isa Reactant.TracedRArray ? size(res) : () for
+            res in mlir_fn_res.linear_results
+        ]
+
         serialized = SerializedExecutableArtifact(
             artifact,
             executable_bytes,
@@ -343,6 +360,9 @@ function save_compiled_executable(
             Int64(mlir_fn_res.num_partitions),
             result_shardings,
             preserved_shardings,
+            result_eltypes,
+            result_is_scalar,
+            result_shapes,
         )
 
         open(path, "w") do io
@@ -403,7 +423,7 @@ function load_compiled_executable(
             xla_compile_options=compile_options.xla_compile_options,
             xla_debug_options=compile_options.xla_debug_options,
             xla_executable_build_options=merge(
-                (; use_shardy_partitioner=true, use_spmd_partitioning=true),
+                (; use_shardy_partitioner=false, use_spmd_partitioning=false),
                 compile_options.xla_executable_build_options,
             ),
         )
@@ -424,8 +444,6 @@ function load_compiled_executable(
     # Linearize args: extract XLA buffers
     artifact = serialized.artifact
     linear_args = _linearize_concrete_args(args, artifact.arg_paths)
-
-    @info "linae" linear_args
 
     for (i, lina) in enumerate(linear_args), (j, linb) in enumerate(linear_args)
         i == j && continue
@@ -459,17 +477,25 @@ function load_compiled_executable(
 
     linear_ptrs = Tuple((XLA.synced_buffer(arr.data).buffer for arr in linear_args))
 
-    @info "sending" n_ptrs = length(unique(linear_ptrs))
-
     num_outs = Int(serialized.num_outputs)
     donated_arr = Tuple(UInt8(d) for d in artifact.donated_args_mask)
 
     output_arr = XLA.execute(exec, linear_ptrs, donated_arr, Val(num_outs))
 
-    @show output_arr
+    # Wrap the raw XLA buffers into Concrete{Array,Number} using the saved type
+    # metadata, since we bypassed `hlo_call` (which would have done this for us).
+    wrapped_results = ntuple(num_outs) do i
+        T = serialized.result_eltypes[i]
+        if serialized.result_is_scalar[i]
+            Reactant.ConcreteIFRTNumber{T}(output_arr[i])
+        else
+            shape = serialized.result_shapes[i]
+            Reactant.ConcreteIFRTArray{T,length(shape)}(output_arr[i], shape)
+        end
+    end
 
     # Delinearize: wrap results back
-    return _delinearize_results(args, output_arr, artifact)
+    return _delinearize_results(args, wrapped_results, artifact)
 end
 
 function _linearize_concrete_args(args, arg_paths::Vector{Tuple})

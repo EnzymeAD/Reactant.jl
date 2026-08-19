@@ -16502,7 +16502,6 @@ end
 function ifrt_loaded_executable_execute(
     exec, num_args, op_args, is_arg_donatable, num_results, op_results, futures, status
 )
-    @info "EXECUTING" num_args
     @ccall mlir_c.ifrt_loaded_executable_execute(
         exec::Ptr{HeldIfrtLoadedExecutable},
         num_args::Cint,

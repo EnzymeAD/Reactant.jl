@@ -2120,8 +2120,20 @@ REACTANT_ABI HeldIfrtLoadedExecutable *ifrt_deserialize_and_load(
   xla::CompileOptions compile_options =
       GenerateCompileOptions(compile_options_proto, compile_options_proto_size);
   auto compiler = client->GetDefaultCompiler();
-  auto device_list =
-      MyValueOrThrow(client->MakeDeviceList(client->GetAllDevices()));
+  // The executable was AOT-compiled against a (possibly mock) topology with
+  // num_replicas * num_partitions devices, which may be fewer than the
+  // devices available on this client (e.g. compiled for 1 GPU, loaded on a
+  // host with 2). Only bind as many devices as the executable expects,
+  // otherwise IFRT tries to assign it across all of the client's devices.
+  int64_t num_devices_needed =
+      compile_options.executable_build_options.num_replicas() *
+      compile_options.executable_build_options.num_partitions();
+  absl::Span<xla::ifrt::Device *const> all_devices = client->GetAllDevices();
+  if (num_devices_needed > 0 &&
+      num_devices_needed < static_cast<int64_t>(all_devices.size())) {
+    all_devices = all_devices.subspan(0, num_devices_needed);
+  }
+  auto device_list = MyValueOrThrow(client->MakeDeviceList(all_devices));
   auto options = std::make_unique<xla::ifrt::XlaDeserializeExecutableOptions>(
       compile_options, device_list);
   auto loaded = MyValueOrThrow(
