@@ -34,7 +34,7 @@ end
         z = @opcall slice(y, start_indices, limit_indices; strides=_strides)
         return StridedView(z, size(z), strides(z), 0, x.op)
     else
-        call_with_native(SV.sreshape, x, newsize)
+        call_with_native(Base.getindex, x, I)
     end
 end
 
