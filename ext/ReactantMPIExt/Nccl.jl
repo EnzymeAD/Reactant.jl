@@ -70,7 +70,7 @@ function initialize!(comm::MPI.Comm)
 
     Reactant.XLA.has_initialized_client("gpu") && error(
         "A GPU XLA client already exists - ReactantMPIExt.initialize! must be called before \
-        any GPU XLA client is created."
+        any GPU XLA client is created.",
     )
 
     Reactant.XLA.claim_gpu_device_mapping!(:mpi)
@@ -110,4 +110,3 @@ function Reactant.default_nccl_comm_handle()
     DEFAULT_COMM[] == C_NULL && error("Default NCCL communicator has not been initialized")
     return DEFAULT_COMM_HANDLE[]
 end
-
