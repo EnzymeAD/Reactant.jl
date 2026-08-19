@@ -6,7 +6,6 @@ end
 
 const DEFAULT_COMM = Ref{NcclComm_t}(C_NULL)
 const DEFAULT_COMM_HANDLE = Ref{UInt}(0)
-const DEFAULT_XLA_DEVICE = Ref{Union{Nothing,Reactant.XLA.AbstractDevice}}(nothing)
 
 function nccl_symbol(name::Symbol)
     Reactant_jll.is_available() ||
@@ -44,27 +43,6 @@ function nccl_comm_destroy(comm::NcclComm_t)
     return nothing
 end
 
-function default_xla_device()
-    return DEFAULT_XLA_DEVICE[]
-end
-
-function require_default_xla_device(client)
-    override = default_xla_device()
-    override === nothing &&
-        error("ReactantMPIExt default XLA device has not been initialized")
-    Reactant.XLA.client(override) == client ||
-        error("ReactantMPIExt default XLA device does not belong to the active client")
-    return override
-end
-
-function Reactant.XLA.default_device(client::Reactant.XLA.PJRT.Client)
-    return require_default_xla_device(client)
-end
-
-function Reactant.XLA.default_device(client::Reactant.XLA.IFRT.Client)
-    return require_default_xla_device(client)
-end
-
 function local_rank(comm::MPI.Comm)
     shared = MPI.Comm_split_type(comm, MPI.COMM_TYPE_SHARED, 0)
     try
@@ -74,32 +52,40 @@ function local_rank(comm::MPI.Comm)
     end
 end
 
-function choose_xla_device(lrank::Integer)
-    client = Reactant.XLA.default_backend()
-    nd = Int(Reactant.XLA.num_addressable_devices(client))
-    lrank < nd ||
-        error("MPI local rank $lrank exceeds Reactant addressable device count $nd")
-    return Reactant.XLA.get_addressable_device(client, lrank)
-end
-
 function get_hardware_id(xla_device::Reactant.XLA.AbstractDevice)
     hardware_id = Int(Reactant.XLA.get_local_hardware_id(xla_device))
     hardware_id ≥ 0 || error("Reactant XLA device has invalid hardware id $hardware_id")
     return hardware_id
 end
 
-function init_default_comm(; comm::MPI.Comm=MPI.COMM_WORLD)
-    DEFAULT_COMM[] != C_NULL && return DEFAULT_COMM[]
+"""
+    initialize!(comm::MPI.Comm)
+
+Initialize MPI GPU support for `MPI.COMM_WORLD`. Each local MPI rank is assigned
+one GPU, which is the only GPU exposed to the XLA client and to NCCL.
+"""
+function initialize!(comm::MPI.Comm)
+    MPI.Initialized() || MPI.Init()
+    @assert comm == MPI.COMM_WORLD "Only MPI.COMM_WORLD is supported currently"
+
+    Reactant.XLA.has_initialized_client("gpu") && error(
+        "A GPU XLA client already exists - ReactantMPIExt.initialize! must be called before \
+        any GPU XLA client is created."
+    )
+
+    Reactant.XLA.claim_gpu_device_mapping!(:mpi)
+    lrank = local_rank(comm)
+    Reactant.XLA.global_state.local_gpu_device_ids = [lrank]
+
+    client = Reactant.XLA.client("gpu")
+    xla_devices = Reactant.XLA.addressable_devices(client)
+    @assert length(xla_devices) == 1 "GPU MPI requires exactly one addressable \
+        GPU per local MPI rank; \
+        XLA exposed $(length(xla_devices)) devices for local rank $lrank",
+    Reactant.set_nccl_device!(get_hardware_id(only(xla_devices)))
 
     rank = MPI.Comm_rank(comm)
     nranks = MPI.Comm_size(comm)
-    lrank = local_rank(comm)
-
-    # make sure nccl and xla are agree on process-to-device mapping
-    xla_device = choose_xla_device(lrank)
-    Reactant.set_nccl_device!(get_hardware_id(xla_device))
-    DEFAULT_XLA_DEVICE[] = xla_device
-
     unique_id = rank == 0 ? nccl_unique_id() : NcclUniqueId(ntuple(_ -> UInt8(0), 128))
     unique_id_bytes = collect(unique_id.internal)
     MPI.Bcast!(unique_id_bytes, 0, comm)
@@ -107,7 +93,8 @@ function init_default_comm(; comm::MPI.Comm=MPI.COMM_WORLD)
 
     DEFAULT_COMM[] = nccl_comm
     DEFAULT_COMM_HANDLE[] = UInt(nccl_comm)
-    return nccl_comm
+
+    return nothing
 end
 
 function destroy_default_comm()
@@ -116,19 +103,11 @@ function destroy_default_comm()
         DEFAULT_COMM[] = C_NULL
         DEFAULT_COMM_HANDLE[] = 0
     end
-    DEFAULT_XLA_DEVICE[] = nothing
     return nothing
 end
 
-function default_comm()
-    comm = DEFAULT_COMM[]
-    comm == C_NULL && error("Default NCCL communicator has not been initialized")
-    return comm
-end
-
-function default_comm_handle()
+function Reactant.default_nccl_comm_handle()
     DEFAULT_COMM[] == C_NULL && error("Default NCCL communicator has not been initialized")
     return DEFAULT_COMM_HANDLE[]
 end
 
-Reactant.default_nccl_comm_handle() = default_comm_handle()
