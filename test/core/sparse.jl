@@ -37,14 +37,14 @@ end
     @test @filecheck begin
         @check "#sparse_tensor.encoding"
         @check "sparse_tensor.assemble"
-        @check "stablehlo.dot_general"
+        @check "enzymexla.sparse.spmm"
         hlo
     end
 
     hlo = @code_hlo optimize = :none spmm(A_ra, B_ra)
     @test @filecheck begin
         @check "sparse_tensor.assemble"
-        @check "stablehlo.dot_general"
+        @check "enzymexla.sparse.spmm"
         hlo
     end
 end
@@ -56,11 +56,7 @@ end
     B_ra = Reactant.to_rarray(rand(rng, 8, 3))
     C_ra = Reactant.to_rarray(rand(rng, 10))
 
-    for hlo in (
-        @code_hlo(spmv(A_ra, x_ra)),
-        @code_hlo(spmm(A_ra, B_ra)),
-        @code_hlo(spmv_mul!(C_ra, A_ra, x_ra, 2.0, 3.0)),
-    )
+    for hlo in (@code_hlo(spmv(A_ra, x_ra)), @code_hlo(spmm(A_ra, B_ra)))
         @test @filecheck begin
             @check "stablehlo.custom_call"
             @check "reactant_csr_matmul"
@@ -68,6 +64,32 @@ end
         end
         @test !contains(repr(hlo), "sparse_tensor")
     end
+
+    # Constant α/β are fused into a single accumulating library call with C
+    # aliased to the output.
+    hlo = @code_hlo spmv_mul!(C_ra, A_ra, x_ra, 2.0, 3.0)
+    @test @filecheck begin
+        @check "stablehlo.custom_call"
+        @check "reactant_csr_matmul_acc"
+        @check "output_operand_alias"
+        hlo
+    end
+    @test !contains(repr(hlo), "sparse_tensor")
+
+    # Traced (runtime) α/β fall back to explicit scaling around the plain
+    # product.
+    α_rn = Reactant.ConcreteRNumber(2.0)
+    β_rn = Reactant.ConcreteRNumber(3.0)
+    hlo = @code_hlo spmv_mul!(C_ra, A_ra, x_ra, α_rn, β_rn)
+    @test @filecheck begin
+        @check "stablehlo.custom_call"
+        @check "reactant_csr_matmul"
+        @check "stablehlo.multiply"
+        @check "stablehlo.add"
+        hlo
+    end
+    @test !contains(repr(hlo), "reactant_csr_matmul_acc")
+    @test !contains(repr(hlo), "sparse_tensor")
 end
 
 @testset "numerical correctness" begin
@@ -90,6 +112,13 @@ end
 
             C_ra = Reactant.to_rarray(C)
             @jit spmv_mul!(C_ra, A_ra, x_ra, T(2), T(3))
+            @test Array(C_ra) ≈ 2 .* (A * x) .+ 3 .* C atol = 1e-5 rtol = 1e-5
+
+            # runtime α/β
+            C_ra = Reactant.to_rarray(C)
+            α_rn = Reactant.ConcreteRNumber(T(2))
+            β_rn = Reactant.ConcreteRNumber(T(3))
+            @jit spmv_mul!(C_ra, A_ra, x_ra, α_rn, β_rn)
             @test Array(C_ra) ≈ 2 .* (A * x) .+ 3 .* C atol = 1e-5 rtol = 1e-5
         end
     end
