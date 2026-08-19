@@ -135,8 +135,7 @@ Reserve GPU device mapping configuration for `owner`. Distributed XLA and MPI/NC
 use incompatible process-to-device setup, so only one of them may configure it.
 """
 function claim_gpu_device_mapping!(owner::Symbol)
-    owner in (:distributed, :mpi) ||
-        error("Unknown GPU device mapping owner: $owner")
+    owner in (:distributed, :mpi) || error("Unknown GPU device mapping owner: $owner")
 
     current_owner = global_state.gpu_device_mapping_owner
     if current_owner == :none
