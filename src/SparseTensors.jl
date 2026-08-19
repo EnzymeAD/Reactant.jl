@@ -4,10 +4,12 @@
 # never swept into the dense `AnyTracedRArray` overloads) holding the three CSR
 # buffers. At trace time `A * x` / `A * B` / `mul!` emit a
 # `sparse_tensor.assemble` producing a `tensor<m x n x T, #sparse_tensor.encoding>`
-# value consumed by a `stablehlo.dot_general`. The Enzyme-JAX `lower-sparse-csr`
-# pass rewrites that pair into a `stablehlo.custom_call @reactant_csr_matmul`
-# handled by cuSPARSE/hipSPARSE (see deps/ReactantExtra/xla_ffi.cpp) before
-# XLA sees the sparse-encoded types.
+# value consumed by an `enzymexla.sparse.spmm` (alpha * A * B + beta * C). The
+# Enzyme-JAX `lower-sparse-csr` pass rewrites that pair into a
+# `stablehlo.custom_call @reactant_csr_matmul[_acc]` handled by
+# cuSPARSE/hipSPARSE (see deps/ReactantExtra/xla_ffi.cpp) before XLA sees the
+# sparse-encoded types; constant alpha/beta (e.g. the scalars of a 5-arg
+# `mul!`) are fused into a single library call.
 
 """
     CSRMatrix{T,Ti}(m, n, rowptr, colind, nzval)
@@ -108,22 +110,30 @@ function _with_nzval_eltype(::Core.Type{T}, A::TracedCSRMatrix{T2,Ti}) where {T,
 end
 
 """
-    sparse_csr_dot(A::TracedCSRMatrix, B::TracedRArray)
+    sparse_csr_spmm(alpha, A::TracedCSRMatrix, B, beta, C)
 
-Emits `sparse_tensor.assemble` + `stablehlo.dot_general` computing `A * B` (spmv
-for vector `B`, spmm for matrix `B`) and returns the dense result. The emitted
-pair is lowered to a library call by the Enzyme-JAX `lower-sparse-csr` pass.
+Emits `sparse_tensor.assemble` + `enzymexla.sparse.spmm` computing
+`alpha * A * B + beta * C` (spmv for vector `B`, spmm for matrix `B`) and
+returns the dense result. The emitted pair is lowered to a library call by the
+Enzyme-JAX `lower-sparse-csr` pass; when `alpha`/`beta` trace to constants the
+scaling and accumulation are fused into that call.
 """
-function sparse_csr_dot(
+function sparse_csr_spmm(
+    alpha::TracedRNumber{T},
     A::TracedCSRMatrix{T,Ti},
-    B::TracedRArray{T};
-    location=Ops.mlir_stacktrace("sparse_csr_dot", @__FILE__, @__LINE__),
+    B::TracedRArray{T},
+    beta::TracedRNumber{T},
+    C::TracedRArray{T};
+    location=Ops.mlir_stacktrace("sparse_csr_spmm", @__FILE__, @__LINE__),
 ) where {T,Ti}
     ndims(B) in (1, 2) ||
         throw(ArgumentError("Only vectors and matrices can be multiplied by a CSRMatrix"))
     size(B, 1) == A.n ||
         throw(DimensionMismatch("A has size $(size(A)), B has size $(size(B))"))
     ressize = ndims(B) == 1 ? Int[A.m] : Int[A.m, size(B, 2)]
+    ndims(C) == ndims(B) && size(C) == Tuple(ressize) || throw(
+        DimensionMismatch("C has size $(size(C)), expected $(Tuple(ressize))")
+    )
 
     sparse_type = MLIR.IR.TensorType(Int[A.m, A.n], MLIR.IR.Type(T), _csr_encoding(Ti))
     asm = MLIR.Dialects.sparse_tensor.assemble(
@@ -133,32 +143,14 @@ function sparse_csr_dot(
         location,
     )
 
-    ctx = MLIR.IR.current_context()
-    batching_dimensions = Int64[]
-    lhs_contracting_dimensions = Int64[1]
-    rhs_contracting_dimensions = Int64[0]
-    dot_dimension_numbers = GC.@preserve ctx batching_dimensions lhs_contracting_dimensions rhs_contracting_dimensions begin
-        MLIR.IR.Attribute(
-            MLIR.API.stablehloDotDimensionNumbersGet(
-                ctx,
-                0,
-                batching_dimensions,
-                0,
-                batching_dimensions,
-                1,
-                lhs_contracting_dimensions,
-                1,
-                rhs_contracting_dimensions,
-            ),
-        )
-    end
-
     res = MLIR.IR.result(
-        MLIR.Dialects.stablehlo.dot_general(
+        MLIR.Dialects.enzymexla.sparse_spmm(
+            alpha.mlir_data,
             MLIR.IR.result(asm, 1),
-            B.mlir_data;
-            result_0=MLIR.IR.TensorType(ressize, MLIR.IR.Type(T)),
-            dot_dimension_numbers,
+            B.mlir_data,
+            beta.mlir_data,
+            C.mlir_data;
+            output=MLIR.IR.TensorType(ressize, MLIR.IR.Type(T)),
             location,
         ),
     )
@@ -183,30 +175,20 @@ function LinearAlgebra.mul!(
     size(C, 2) == size(B, 2) ||
         throw(DimensionMismatch("C has size $(size(C)), B has size $(size(B))"))
 
-    tmp = sparse_csr_dot(_with_nzval_eltype(T, A), B)
+    # Non-traced α/β become constants that `lower-sparse-csr` fuses into a
+    # single library call; in particular a constant β == 0 never reads C.
+    alpha = promote_to(TracedRNumber{T}, α)
+    beta = promote_to(TracedRNumber{T}, β)
 
-    β_is_zero = !(β isa TracedRNumber) && iszero(β)
-    α_is_one = !(α isa TracedRNumber) && isone(α)
-
-    if α_is_one && β_is_zero
-        res = tmp
-    else
-        α_res = if α_is_one
-            tmp
-        else
-            Ops.multiply(tmp, Ops.fill(promote_to(TracedRNumber{T}, α), size(tmp)))
-        end
-        if β_is_zero
-            res = α_res
-        else
-            C_mat = ReactantCore.materialize_traced_array(C)
-            β_C = Ops.multiply(C_mat, Ops.fill(promote_to(TracedRNumber{T}, β), size(C_mat)))
-            res = Ops.add(α_res, β_C)
-        end
+    ressize = ndims(B) == 1 ? (size(A, 1),) : (size(A, 1), size(B, 2))
+    C_arr = ReactantCore.materialize_traced_array(C)
+    if ndims(C_arr) != ndims(B)
+        C_arr = ReactantCore.materialize_traced_array(reshape(C_arr, ressize...))
     end
 
-    if ndims(C) == 2 && size(C, 2) == 1 && ndims(res) == 1
-        res = reshape(res, size(C))
+    res = sparse_csr_spmm(alpha, _with_nzval_eltype(T, A), B, beta, C_arr)
+    if size(res) != size(C)
+        res = ReactantCore.materialize_traced_array(reshape(res, size(C)))
     end
 
     TracedUtils.set_mlir_data!(C, TracedUtils.get_mlir_data(res))
@@ -215,7 +197,15 @@ end
 
 function _sparse_mul(A::TracedCSRMatrix{T}, B::AbstractVecOrMat) where {T}
     T2 = Base.promote_op(*, T, unwrapped_eltype(eltype(B)))
-    return sparse_csr_dot(_with_nzval_eltype(T2, A), promote_to(TracedRArray{T2}, B))
+    B2 = promote_to(TracedRArray{T2}, B)
+    ressize = ndims(B2) == 1 ? (A.m,) : (A.m, size(B2, 2))
+    return sparse_csr_spmm(
+        promote_to(TracedRNumber{T2}, 1),
+        _with_nzval_eltype(T2, A),
+        B2,
+        promote_to(TracedRNumber{T2}, 0),
+        Ops.fill(zero(T2), ressize),
+    )
 end
 
 Base.:*(A::TracedCSRMatrix, x::AbstractVector) = _sparse_mul(A, x)

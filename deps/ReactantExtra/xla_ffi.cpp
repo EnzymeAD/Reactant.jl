@@ -94,12 +94,16 @@ XLA_FFI_DEFINE_HANDLER(
 // ============================================================================
 // CSR sparse matrix products (spmv / spmm) via cuSPARSE / hipSPARSE.
 //
-// The Enzyme-JAX pass `lower-sparse-csr` emits a
-// stablehlo.custom_call targeting "reactant_csr_matmul" with api_version = 4
-// (TYPED_FFI). Operands are (rowptr, colind, nzval, dense) with column-major
-// layouts pinned; the result is dense. The backend_config dict carries i64
-// attributes "m", "n", "transpose" (must be 0 for now), and "index_base"
-// (0 or 1; sparse_tensor-dialect buffers are 0-based).
+// The Enzyme-JAX pass `lower-sparse-csr` emits stablehlo.custom_calls with
+// api_version = 4 (TYPED_FFI) targeting either
+//   - "reactant_csr_matmul":     out = alpha * A * dense, with operands
+//     (rowptr, colind, nzval, dense), or
+//   - "reactant_csr_matmul_acc": out = alpha * A * dense + beta * acc, with
+//     operands (rowptr, colind, nzval, dense, acc) and acc aliased to out.
+// Column-major layouts are pinned; the result is dense. The backend_config
+// dict carries i64 attributes "m", "n", "transpose" (must be 0 for now) and
+// "index_base" (0 or 1; sparse_tensor-dialect buffers are 0-based), plus f64
+// "alpha" (and "beta" for the accumulating variant).
 // ============================================================================
 
 #if defined(REACTANT_CUDA)
@@ -117,13 +121,18 @@ XLA_FFI_DEFINE_HANDLER(
     }                                                                          \
   } while (0)
 
-static ffi::Error csrMatmulCuda(cudaStream_t stream,
-                                ffi::ScratchAllocator scratch,
-                                ffi::AnyBuffer rowptr, ffi::AnyBuffer colind,
-                                ffi::AnyBuffer nzval, ffi::AnyBuffer dense,
-                                ffi::Result<ffi::AnyBuffer> out, int64_t m,
-                                int64_t n, int64_t transpose,
-                                int64_t index_base) {
+// Computes out = alpha_v * A * dense (+ beta_v * *acc when acc != nullptr;
+// the accumulated-into operand is aliased to out by the lowering, so it is
+// copied into out first if XLA did not reuse the buffer).
+static ffi::Error csrMatmulCudaImpl(cudaStream_t stream,
+                                    ffi::ScratchAllocator scratch,
+                                    ffi::AnyBuffer rowptr,
+                                    ffi::AnyBuffer colind, ffi::AnyBuffer nzval,
+                                    ffi::AnyBuffer dense, ffi::AnyBuffer *acc,
+                                    ffi::Result<ffi::AnyBuffer> out, int64_t m,
+                                    int64_t n, int64_t transpose,
+                                    int64_t index_base, double alpha_v,
+                                    double beta_v) {
   if (transpose != 0) {
     return ffi::Error(
         ffi::ErrorCode::kUnimplemented,
@@ -149,18 +158,22 @@ static ffi::Error csrMatmulCuda(cudaStream_t stream,
         "reactant_csr_matmul: index buffers must be i32 or i64");
   }
 
-  static const float alpha_f = 1.0f, beta_f = 0.0f;
-  static const double alpha_d = 1.0, beta_d = 0.0;
+  const float alpha_f = static_cast<float>(alpha_v),
+              beta_f = static_cast<float>(beta_v);
+  const double alpha_d = alpha_v, beta_d = beta_v;
   cudaDataType value_type;
+  size_t value_bytes;
   const void *alpha, *beta;
   switch (nzval.element_type()) {
   case ffi::DataType::F32:
     value_type = CUDA_R_32F;
+    value_bytes = sizeof(float);
     alpha = &alpha_f;
     beta = &beta_f;
     break;
   case ffi::DataType::F64:
     value_type = CUDA_R_64F;
+    value_bytes = sizeof(double);
     alpha = &alpha_d;
     beta = &beta_d;
     break;
@@ -170,10 +183,25 @@ static ffi::Error csrMatmulCuda(cudaStream_t stream,
         "reactant_csr_matmul: only f32 and f64 values are supported");
   }
   if (dense.element_type() != nzval.element_type() ||
-      out->element_type() != nzval.element_type()) {
+      out->element_type() != nzval.element_type() ||
+      (acc != nullptr && acc->element_type() != nzval.element_type())) {
     return ffi::Error(
         ffi::ErrorCode::kInvalidArgument,
         "reactant_csr_matmul: value, operand and result dtypes must match");
+  }
+  if (acc != nullptr && acc->untyped_data() != out->untyped_data()) {
+    cudaError_t copy_status = cudaMemcpyAsync(
+        out->untyped_data(), acc->untyped_data(),
+        static_cast<size_t>(out->element_count()) * value_bytes,
+        cudaMemcpyDeviceToDevice, stream);
+    if (copy_status != cudaSuccess) {
+      return ffi::Error(
+          ffi::ErrorCode::kInternal,
+          absl::StrFormat(
+              "reactant_csr_matmul: copying the accumulated-into operand "
+              "failed: %s",
+              cudaGetErrorString(copy_status)));
+    }
   }
 
   static thread_local cusparseHandle_t handle = nullptr;
@@ -262,6 +290,31 @@ static ffi::Error csrMatmulCuda(cudaStream_t stream,
   return err;
 }
 
+static ffi::Error csrMatmulCuda(cudaStream_t stream,
+                                ffi::ScratchAllocator scratch,
+                                ffi::AnyBuffer rowptr, ffi::AnyBuffer colind,
+                                ffi::AnyBuffer nzval, ffi::AnyBuffer dense,
+                                ffi::Result<ffi::AnyBuffer> out, int64_t m,
+                                int64_t n, int64_t transpose,
+                                int64_t index_base, double alpha) {
+  return csrMatmulCudaImpl(stream, scratch, rowptr, colind, nzval, dense,
+                           /*acc=*/nullptr, out, m, n, transpose, index_base,
+                           alpha, /*beta_v=*/0.0);
+}
+
+static ffi::Error csrMatmulAccCuda(cudaStream_t stream,
+                                   ffi::ScratchAllocator scratch,
+                                   ffi::AnyBuffer rowptr, ffi::AnyBuffer colind,
+                                   ffi::AnyBuffer nzval, ffi::AnyBuffer dense,
+                                   ffi::AnyBuffer acc,
+                                   ffi::Result<ffi::AnyBuffer> out, int64_t m,
+                                   int64_t n, int64_t transpose,
+                                   int64_t index_base, double alpha,
+                                   double beta) {
+  return csrMatmulCudaImpl(stream, scratch, rowptr, colind, nzval, dense, &acc,
+                           out, m, n, transpose, index_base, alpha, beta);
+}
+
 XLA_FFI_DEFINE_HANDLER(csrMatmulHandlerCUDA, csrMatmulCuda,
                        xla::ffi::Ffi::Bind()
                            .Ctx<ffi::PlatformStream<cudaStream_t>>()
@@ -274,7 +327,25 @@ XLA_FFI_DEFINE_HANDLER(csrMatmulHandlerCUDA, csrMatmulCuda,
                            .Attr<int64_t>("m")
                            .Attr<int64_t>("n")
                            .Attr<int64_t>("transpose")
-                           .Attr<int64_t>("index_base"));
+                           .Attr<int64_t>("index_base")
+                           .Attr<double>("alpha"));
+
+XLA_FFI_DEFINE_HANDLER(csrMatmulAccHandlerCUDA, csrMatmulAccCuda,
+                       xla::ffi::Ffi::Bind()
+                           .Ctx<ffi::PlatformStream<cudaStream_t>>()
+                           .Ctx<ffi::ScratchAllocator>()
+                           .Arg<ffi::AnyBuffer>()  // rowptr
+                           .Arg<ffi::AnyBuffer>()  // colind
+                           .Arg<ffi::AnyBuffer>()  // nzval
+                           .Arg<ffi::AnyBuffer>()  // dense
+                           .Arg<ffi::AnyBuffer>()  // acc (aliased to out)
+                           .Ret<ffi::AnyBuffer>()  // out
+                           .Attr<int64_t>("m")
+                           .Attr<int64_t>("n")
+                           .Attr<int64_t>("transpose")
+                           .Attr<int64_t>("index_base")
+                           .Attr<double>("alpha")
+                           .Attr<double>("beta"));
 #endif // REACTANT_CUDA
 
 #if defined(REACTANT_ROCM)
@@ -293,13 +364,18 @@ XLA_FFI_DEFINE_HANDLER(csrMatmulHandlerCUDA, csrMatmulCuda,
     }                                                                          \
   } while (0)
 
-static ffi::Error csrMatmulRocm(hipStream_t stream,
-                                ffi::ScratchAllocator scratch,
-                                ffi::AnyBuffer rowptr, ffi::AnyBuffer colind,
-                                ffi::AnyBuffer nzval, ffi::AnyBuffer dense,
-                                ffi::Result<ffi::AnyBuffer> out, int64_t m,
-                                int64_t n, int64_t transpose,
-                                int64_t index_base) {
+// Computes out = alpha_v * A * dense (+ beta_v * *acc when acc != nullptr;
+// the accumulated-into operand is aliased to out by the lowering, so it is
+// copied into out first if XLA did not reuse the buffer).
+static ffi::Error csrMatmulRocmImpl(hipStream_t stream,
+                                    ffi::ScratchAllocator scratch,
+                                    ffi::AnyBuffer rowptr,
+                                    ffi::AnyBuffer colind, ffi::AnyBuffer nzval,
+                                    ffi::AnyBuffer dense, ffi::AnyBuffer *acc,
+                                    ffi::Result<ffi::AnyBuffer> out, int64_t m,
+                                    int64_t n, int64_t transpose,
+                                    int64_t index_base, double alpha_v,
+                                    double beta_v) {
   if (transpose != 0) {
     return ffi::Error(
         ffi::ErrorCode::kUnimplemented,
@@ -325,18 +401,22 @@ static ffi::Error csrMatmulRocm(hipStream_t stream,
         "reactant_csr_matmul: index buffers must be i32 or i64");
   }
 
-  static const float alpha_f = 1.0f, beta_f = 0.0f;
-  static const double alpha_d = 1.0, beta_d = 0.0;
+  const float alpha_f = static_cast<float>(alpha_v),
+              beta_f = static_cast<float>(beta_v);
+  const double alpha_d = alpha_v, beta_d = beta_v;
   hipDataType value_type;
+  size_t value_bytes;
   const void *alpha, *beta;
   switch (nzval.element_type()) {
   case ffi::DataType::F32:
     value_type = HIP_R_32F;
+    value_bytes = sizeof(float);
     alpha = &alpha_f;
     beta = &beta_f;
     break;
   case ffi::DataType::F64:
     value_type = HIP_R_64F;
+    value_bytes = sizeof(double);
     alpha = &alpha_d;
     beta = &beta_d;
     break;
@@ -346,10 +426,25 @@ static ffi::Error csrMatmulRocm(hipStream_t stream,
         "reactant_csr_matmul: only f32 and f64 values are supported");
   }
   if (dense.element_type() != nzval.element_type() ||
-      out->element_type() != nzval.element_type()) {
+      out->element_type() != nzval.element_type() ||
+      (acc != nullptr && acc->element_type() != nzval.element_type())) {
     return ffi::Error(
         ffi::ErrorCode::kInvalidArgument,
         "reactant_csr_matmul: value, operand and result dtypes must match");
+  }
+  if (acc != nullptr && acc->untyped_data() != out->untyped_data()) {
+    hipError_t copy_status = hipMemcpyAsync(
+        out->untyped_data(), acc->untyped_data(),
+        static_cast<size_t>(out->element_count()) * value_bytes,
+        hipMemcpyDeviceToDevice, stream);
+    if (copy_status != hipSuccess) {
+      return ffi::Error(
+          ffi::ErrorCode::kInternal,
+          absl::StrFormat(
+              "reactant_csr_matmul: copying the accumulated-into operand "
+              "failed: %s",
+              hipGetErrorString(copy_status)));
+    }
   }
 
   static thread_local hipsparseHandle_t handle = nullptr;
@@ -439,6 +534,31 @@ static ffi::Error csrMatmulRocm(hipStream_t stream,
   return err;
 }
 
+static ffi::Error csrMatmulRocm(hipStream_t stream,
+                                ffi::ScratchAllocator scratch,
+                                ffi::AnyBuffer rowptr, ffi::AnyBuffer colind,
+                                ffi::AnyBuffer nzval, ffi::AnyBuffer dense,
+                                ffi::Result<ffi::AnyBuffer> out, int64_t m,
+                                int64_t n, int64_t transpose,
+                                int64_t index_base, double alpha) {
+  return csrMatmulRocmImpl(stream, scratch, rowptr, colind, nzval, dense,
+                           /*acc=*/nullptr, out, m, n, transpose, index_base,
+                           alpha, /*beta_v=*/0.0);
+}
+
+static ffi::Error csrMatmulAccRocm(hipStream_t stream,
+                                   ffi::ScratchAllocator scratch,
+                                   ffi::AnyBuffer rowptr, ffi::AnyBuffer colind,
+                                   ffi::AnyBuffer nzval, ffi::AnyBuffer dense,
+                                   ffi::AnyBuffer acc,
+                                   ffi::Result<ffi::AnyBuffer> out, int64_t m,
+                                   int64_t n, int64_t transpose,
+                                   int64_t index_base, double alpha,
+                                   double beta) {
+  return csrMatmulRocmImpl(stream, scratch, rowptr, colind, nzval, dense, &acc,
+                           out, m, n, transpose, index_base, alpha, beta);
+}
+
 XLA_FFI_DEFINE_HANDLER(csrMatmulHandlerROCM, csrMatmulRocm,
                        xla::ffi::Ffi::Bind()
                            .Ctx<ffi::PlatformStream<hipStream_t>>()
@@ -451,7 +571,25 @@ XLA_FFI_DEFINE_HANDLER(csrMatmulHandlerROCM, csrMatmulRocm,
                            .Attr<int64_t>("m")
                            .Attr<int64_t>("n")
                            .Attr<int64_t>("transpose")
-                           .Attr<int64_t>("index_base"));
+                           .Attr<int64_t>("index_base")
+                           .Attr<double>("alpha"));
+
+XLA_FFI_DEFINE_HANDLER(csrMatmulAccHandlerROCM, csrMatmulAccRocm,
+                       xla::ffi::Ffi::Bind()
+                           .Ctx<ffi::PlatformStream<hipStream_t>>()
+                           .Ctx<ffi::ScratchAllocator>()
+                           .Arg<ffi::AnyBuffer>()  // rowptr
+                           .Arg<ffi::AnyBuffer>()  // colind
+                           .Arg<ffi::AnyBuffer>()  // nzval
+                           .Arg<ffi::AnyBuffer>()  // dense
+                           .Arg<ffi::AnyBuffer>()  // acc (aliased to out)
+                           .Ret<ffi::AnyBuffer>()  // out
+                           .Attr<int64_t>("m")
+                           .Attr<int64_t>("n")
+                           .Attr<int64_t>("transpose")
+                           .Attr<int64_t>("index_base")
+                           .Attr<double>("alpha")
+                           .Attr<double>("beta"));
 #endif // REACTANT_ROCM
 
 void registerReactantXLAInternalFFI() {
@@ -462,10 +600,14 @@ void registerReactantXLAInternalFFI() {
                            "CUDA", juliaCallbackHandlerCUDA);
   XLA_FFI_REGISTER_HANDLER(xla::ffi::GetXlaFfiApi(), "reactant_csr_matmul",
                            "CUDA", csrMatmulHandlerCUDA);
+  XLA_FFI_REGISTER_HANDLER(xla::ffi::GetXlaFfiApi(), "reactant_csr_matmul_acc",
+                           "CUDA", csrMatmulAccHandlerCUDA);
 #endif
 #if defined(REACTANT_ROCM)
   XLA_FFI_REGISTER_HANDLER(xla::ffi::GetXlaFfiApi(), "reactant_csr_matmul",
                            "ROCM", csrMatmulHandlerROCM);
+  XLA_FFI_REGISTER_HANDLER(xla::ffi::GetXlaFfiApi(), "reactant_csr_matmul_acc",
+                           "ROCM", csrMatmulAccHandlerROCM);
 #endif
 }
 

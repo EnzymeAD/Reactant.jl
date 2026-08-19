@@ -1951,6 +1951,43 @@ function math_softplus(
     )
 end
 
+"""
+`sparse_spmm`
+
+output := alpha * A * B + beta * C
+
+where `A` is a 2-d sparse tensor (e.g. the result of a
+`sparse_tensor.assemble`) and `B`, `C` and `output` are dense vectors
+(spmv) or matrices (spmm) of matching shapes. `alpha` and `beta` are 0-d
+tensors.
+"""
+function sparse_spmm(
+    alpha::Value,
+    A::Value,
+    B::Value,
+    beta::Value,
+    C::Value;
+    output::IR.Type,
+    location=Location(),
+)
+    op_ty_results = IR.Type[output,]
+    operands = Value[alpha, A, B, beta, C]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "enzymexla.sparse.spmm",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function special_sphericalbesselj(
     nu::Value, z::Value; res=nothing::Union{Nothing,IR.Type}, location=Location()
 )
