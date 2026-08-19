@@ -79,9 +79,7 @@ function initialize!(comm::MPI.Comm)
 
     client = Reactant.XLA.client("gpu")
     xla_devices = Reactant.XLA.addressable_devices(client)
-    @assert length(xla_devices) == 1 "GPU MPI requires exactly one addressable \
-        GPU per local MPI rank; \
-        XLA exposed $(length(xla_devices)) devices for local rank $lrank",
+    # NCCL requires exactly one device per MPI rank
     Reactant.set_nccl_device!(get_hardware_id(only(xla_devices)))
 
     rank = MPI.Comm_rank(comm)
