@@ -13,8 +13,6 @@ const ReactantMPIExt =
 
 if RUN_CPU_MPI_TESTS
     Reactant.set_default_backend("cpu")
-elseif RUN_GPU_MPI_TESTS
-    Reactant.set_default_backend("gpu")
 end
 
 # Julia types which map surjectively to MPI datatypes in MPI.jl
@@ -50,14 +48,13 @@ gpu_datatypes = [Int32, UInt32, Int64, UInt64, Float32, Float64]
 
 mpi_initialized = false
 try
-    # intialize
-    MPI.Init()
-    mpi_initialized = true
-
     if RUN_GPU_MPI_TESTS
         ReactantMPIExt === nothing && error("ReactantMPIExt is not loaded; load MPI first")
-        ReactantMPIExt.init_default_comm(; comm=MPI.COMM_WORLD)
+        ReactantMPIExt.initialize!(MPI.COMM_WORLD)
+    else
+        MPI.Init()
     end
+    mpi_initialized = true
 
     # run tests
     if RUN_CPU_MPI_TESTS
