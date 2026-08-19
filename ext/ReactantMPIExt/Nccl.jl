@@ -4,8 +4,8 @@ struct NcclUniqueId
     internal::NTuple{128,UInt8}
 end
 
-const DEFAULT_COMM = Ref{NcclComm_t}(C_NULL)
-const DEFAULT_COMM_HANDLE = Ref{UInt}(0)
+const NCCL_COMM = Ref{NcclComm_t}(C_NULL)
+const NCCL_COMM_HANDLE = Ref{UInt}(0)
 
 function nccl_symbol(name::Symbol)
     Reactant_jll.is_available() ||
@@ -91,22 +91,22 @@ function initialize!(comm::MPI.Comm)
     MPI.Bcast!(unique_id_bytes, 0, comm)
     nccl_comm = nccl_comm_init(nranks, rank, NcclUniqueId(Tuple(unique_id_bytes)))
 
-    DEFAULT_COMM[] = nccl_comm
-    DEFAULT_COMM_HANDLE[] = UInt(nccl_comm)
+    NCCL_COMM[] = nccl_comm
+    NCCL_COMM_HANDLE[] = UInt(nccl_comm)
 
     return nothing
 end
 
 function destroy_default_comm()
-    if DEFAULT_COMM[] != C_NULL
-        nccl_comm_destroy(DEFAULT_COMM[])
-        DEFAULT_COMM[] = C_NULL
-        DEFAULT_COMM_HANDLE[] = 0
+    if NCCL_COMM[] != C_NULL
+        nccl_comm_destroy(NCCL_COMM[])
+        NCCL_COMM[] = C_NULL
+        NCCL_COMM_HANDLE[] = 0
     end
     return nothing
 end
 
 function Reactant.default_nccl_comm_handle()
-    DEFAULT_COMM[] == C_NULL && error("Default NCCL communicator has not been initialized")
-    return DEFAULT_COMM_HANDLE[]
+    NCCL_COMM[] == C_NULL && error("Default NCCL communicator has not been initialized")
+    return NCCL_COMM_HANDLE[]
 end
