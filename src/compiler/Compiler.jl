@@ -24,9 +24,25 @@ using Reactant_jll: Reactant_jll
 include("Macros.jl")
 include("CompilationError.jl")
 include("OptimizationPasses.jl")
-include("SparseLowering.jl")
 include("Codegen.jl")
 include("Thunk.jl")
+
+function has_sparse_tensor_ops(mod::MLIR.IR.Module)
+    found = false
+    function visit(op)
+        found && return nothing
+        startswith(MLIR.IR.name(op), "sparse_tensor.") && (found = true; return nothing)
+        for region in op, block in region, inner in block
+            visit(inner)
+        end
+        return nothing
+    end
+    for op in MLIR.IR.body(mod)
+        visit(op)
+        found && break
+    end
+    return found
+end
 
 const DEBUG_PRINT_CODEGEN = Ref(false)
 
@@ -431,12 +447,11 @@ function compile_mlir!(
 
     legal_to_run_shardy_passes = compile_options.optimization_passes === :all
 
-    # Lower sparse_tensor CSR products to library custom calls before any pass
-    # pipeline runs: XLA cannot consume sparse-encoded tensors and the
-    # sparse-encoded ops must never reach the verifier. With `:none` the sparse
-    # IR is kept as-is for inspection.
-    if compile_options.optimization_passes !== :none
-        lower_sparse_ops!(mod)
+    # Lower sparse_tensor CSR products to library custom calls before anything
+    # else runs: XLA cannot consume sparse-encoded tensor types. With `:none`
+    # the sparse IR is kept as-is for inspection.
+    if compile_options.optimization_passes !== :none && has_sparse_tensor_ops(mod)
+        run_pass_pipeline!(mod, "lower-sparse-csr", "lower_sparse_csr")
     end
 
     # Raise any triton kernel that might exist as a custom call

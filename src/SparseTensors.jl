@@ -4,17 +4,17 @@
 # never swept into the dense `AnyTracedRArray` overloads) holding the three CSR
 # buffers. At trace time `A * x` / `A * B` / `mul!` emit a
 # `sparse_tensor.assemble` producing a `tensor<m x n x T, #sparse_tensor.encoding>`
-# value consumed by a `stablehlo.dot_general`. `Compiler.lower_sparse_ops!`
-# rewrites that pair into a `stablehlo.custom_call @reactant_csr_matmul` handled
-# by cuSPARSE/hipSPARSE (see deps/ReactantExtra/xla_ffi.cpp) before any pass
-# pipeline (and hence the verifier or XLA) sees the sparse-encoded types.
+# value consumed by a `stablehlo.dot_general`. The Enzyme-JAX `lower-sparse-csr`
+# pass rewrites that pair into a `stablehlo.custom_call @reactant_csr_matmul`
+# handled by cuSPARSE/hipSPARSE (see deps/ReactantExtra/xla_ffi.cpp) before
+# XLA sees the sparse-encoded types.
 
 """
     CSRMatrix{T,Ti}(m, n, rowptr, colind, nzval)
 
 An opaque `m × n` sparse matrix in CSR format with element type `T` and index
 type `Ti`. `rowptr` has length `m + 1` and `colind`/`nzval` have length `nnz`;
-all indices are 1-based.
+all indices are 0-based, as required by the MLIR `sparse_tensor` dialect.
 
 Construct one from a `SparseArrays.SparseMatrixCSC` via `CSRMatrix(A)` (requires
 loading SparseArrays), and pass it through [`Reactant.to_rarray`](@ref) like any
@@ -112,7 +112,7 @@ end
 
 Emits `sparse_tensor.assemble` + `stablehlo.dot_general` computing `A * B` (spmv
 for vector `B`, spmm for matrix `B`) and returns the dense result. The emitted
-pair is lowered to a library call by `Compiler.lower_sparse_ops!`.
+pair is lowered to a library call by the Enzyme-JAX `lower-sparse-csr` pass.
 """
 function sparse_csr_dot(
     A::TracedCSRMatrix{T,Ti},

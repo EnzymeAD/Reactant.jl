@@ -94,12 +94,12 @@ XLA_FFI_DEFINE_HANDLER(
 // ============================================================================
 // CSR sparse matrix products (spmv / spmm) via cuSPARSE / hipSPARSE.
 //
-// The Julia side (src/compiler/SparseLowering.jl) emits a
+// The Enzyme-JAX pass `lower-sparse-csr` emits a
 // stablehlo.custom_call targeting "reactant_csr_matmul" with api_version = 4
 // (TYPED_FFI). Operands are (rowptr, colind, nzval, dense) with column-major
 // layouts pinned; the result is dense. The backend_config dict carries i64
 // attributes "m", "n", "transpose" (must be 0 for now), and "index_base"
-// (0 or 1; the Julia side emits 1-based CSR buffers).
+// (0 or 1; sparse_tensor-dialect buffers are 0-based).
 // ============================================================================
 
 #if defined(REACTANT_CUDA)
