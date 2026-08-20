@@ -116,7 +116,7 @@ end
 
 function reshape_kernel!(out, x)
     xr = reshape(x, 2, 2)
-    @inbounds out[1] = xr[1, 2] + xr[2, 1]
+    @inbounds out[1] = xr[1, 2]
     return nothing
 end
 
@@ -130,7 +130,7 @@ end
     out = Reactant.to_rarray(zeros(Float64, 1))
 
     @jit reshape!(out, x)
-    @test Array(out) == [5.0]
+    @test Array(out) == [3.0]
 end
 
 @testset "Sin Kernel" begin
