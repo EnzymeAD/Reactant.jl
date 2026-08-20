@@ -48,7 +48,8 @@ gpu_datatypes = [Int32, UInt32, Int64, UInt64, Float32, Float64]
 let mpi_initialized = false
     try
         if RUN_GPU_MPI_TESTS
-            ReactantMPIExt === nothing && error("ReactantMPIExt is not loaded; load MPI first")
+            ReactantMPIExt === nothing &&
+                error("ReactantMPIExt is not loaded; load MPI first")
             ReactantMPIExt.initialize!(MPI.COMM_WORLD)
         else
             MPI.Init()
@@ -118,8 +119,9 @@ let mpi_initialized = false
                             continue
                         end
 
-                        @test expected ==
-                            @jit MPI.Allreduce(ConcreteRArray(sendbuf), op, MPI.COMM_WORLD)
+                        @test expected == @jit MPI.Allreduce(
+                            ConcreteRArray(sendbuf), op, MPI.COMM_WORLD
+                        )
 
                         # # *debug*
                         # rank = MPI.Comm_rank(comm)
