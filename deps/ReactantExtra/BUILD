@@ -1428,6 +1428,7 @@ cc_library(
         "@xla//xla/stream_executor:kernel",
         "@xla//xla/stream_executor/cuda:all_runtime",
     ]) + if_rocm([
+        "@local_config_rocm//rocm:rocm_headers",
         "@xla//xla/service:gpu_plugin",
         "@xla//xla/pjrt/c:pjrt_c_api_gpu",
         "@xla//xla/pjrt/gpu:se_gpu_pjrt_client",

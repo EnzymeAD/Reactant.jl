@@ -327,14 +327,30 @@ function compile_mlir!(
             jit = "lower-jit{openmp=$(OpenMP[]) backend=cpu},symbol-dce"
         end
     else
+        is_rocm = lowercase(XLA.platform_name(client)) == "rocm"
+        gpu_backend = is_rocm ? "rocm" : "cuda"
+        # HSACO serialization links the ROCm device libraries from the toolkit.
+        is_rocm && (toolkit = get(ENV, "ROCM_PATH", "/opt/rocm"))
+
         kern = if is_raising
             "lower-kernel{backend=cpu},symbol-dce,canonicalize"
         else
-            "lower-kernel,canonicalize"
+            "lower-kernel{backend=$(gpu_backend)},canonicalize"
         end
 
-        device_properties = XLA.device_properties(XLA.default_device(client))
-        cubinChip = "sm_$(device_properties.major)$(device_properties.minor)"
+        if is_rocm
+            # LLVM target id, e.g. "gfx950:sramecc+:xnack-": the token before
+            # the first ':' is the chip; the remaining tokens are target
+            # features in "name±" form, which LLVM spells "±name".
+            arch = XLA.device_gcn_arch(XLA.default_device(client))
+            parts = split(arch, ':')
+            cubinChip = String(first(parts))
+            chipFeatures = join(("$(p[end])$(p[1:(end - 1)])" for p in parts[2:end]), ",")
+        else
+            device_properties = XLA.device_properties(XLA.default_device(client))
+            cubinChip = "sm_$(device_properties.major)$(device_properties.minor)"
+            chipFeatures = cubinFeatures()
+        end
 
         if DEBUG_KERNEL[]
             curesulthandler = dlsym(
@@ -346,7 +362,7 @@ function compile_mlir!(
         else
             extra_lowerjit_options = ""
         end
-        jit = "lower-jit{$(extra_lowerjit_options)cuOptLevel=$(cuOptLevel[]) cubinFormat=$(cubinFormat[]) indexBitWidth=$(cuindexBitWidth[])  cubinChip=$(cubinChip) cubinFeatures=$(cubinFeatures()) run_init=true toolkitPath=$toolkit},symbol-dce"
+        jit = "lower-jit{$(extra_lowerjit_options)backend=$(gpu_backend) cuOptLevel=$(cuOptLevel[]) cubinFormat=$(cubinFormat[]) indexBitWidth=$(cuindexBitWidth[])  cubinChip=$(cubinChip) cubinFeatures=$(chipFeatures) run_init=true toolkitPath=$toolkit},symbol-dce"
     end
 
     recognize_comms = true

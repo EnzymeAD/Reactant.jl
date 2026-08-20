@@ -363,6 +363,23 @@ function initialize_ptrs()
             )
         end
     end
+    # On ROCm builds libReactantExtra links the HIP runtime; map the module
+    # API for lower-jit's generated launch code (the HIP twin of the cu* set
+    # above).
+    if Libdl.dlsym(
+        Reactant_jll.libReactantExtra_handle, :hipModuleLoadData; throw_error=false
+    ) !== nothing
+        for name in (
+            "hipModuleLaunchKernel",
+            "hipModuleLoadData",
+            "hipModuleGetFunction",
+            "hipStreamSynchronize",
+        )
+            MLIR.API.EnzymeJaXMapSymbol(
+                name, Libdl.dlsym(Reactant_jll.libReactantExtra_handle, name)
+            )
+        end
+    end
 end
 
 function __init__()
