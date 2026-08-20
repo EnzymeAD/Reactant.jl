@@ -131,9 +131,8 @@ function sparse_csr_spmm(
     size(B, 1) == A.n ||
         throw(DimensionMismatch("A has size $(size(A)), B has size $(size(B))"))
     ressize = ndims(B) == 1 ? Int[A.m] : Int[A.m, size(B, 2)]
-    ndims(C) == ndims(B) && size(C) == Tuple(ressize) || throw(
-        DimensionMismatch("C has size $(size(C)), expected $(Tuple(ressize))")
-    )
+    ndims(C) == ndims(B) && size(C) == Tuple(ressize) ||
+        throw(DimensionMismatch("C has size $(size(C)), expected $(Tuple(ressize))"))
 
     sparse_type = MLIR.IR.TensorType(Int[A.m, A.n], MLIR.IR.Type(T), _csr_encoding(Ti))
     asm = MLIR.Dialects.sparse_tensor.assemble(
