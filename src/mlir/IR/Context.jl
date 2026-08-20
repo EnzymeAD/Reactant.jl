@@ -45,8 +45,13 @@ function activate(ctx::Context)
 end
 
 function deactivate(ctx::Context)
-    current_context() == ctx || error("Deactivating wrong context")
-    return Base.pop!(task_local_storage(:mlir_context_stack)::Vector{Context})
+    stack = task_local_storage(:mlir_context_stack)::Vector{Context}
+    if isempty(stack)
+        unbalanced_teardown("Deactivating a context but no context is active")
+        return nothing
+    end
+    last(stack) == ctx || unbalanced_teardown("Deactivating wrong context")
+    return Base.pop!(stack)
 end
 
 function has_context()
