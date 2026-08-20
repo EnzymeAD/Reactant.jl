@@ -15,6 +15,7 @@ const BatchedAdjointFactorization{T} =
 
 include("Cholesky.jl")
 include("LU.jl")
+include("QR.jl")
 include("SVD.jl")
 
 # Overload \ to support batched factorization
