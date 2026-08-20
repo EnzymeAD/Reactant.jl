@@ -15,7 +15,12 @@ using Reactant.Ops: @opcall
 using Enzyme
 using Adapt: Adapt, adapt
 using CUDA: CUDA, CuDim, DenseCuArray, unsafe_cached_load
-# Compatibility for CUDA v5 and v6
+@static if isdefined(CUDA, :_derived_array)
+    # Extend CUDA's internal derived-array helper so traced arrays follow the
+    # same reshape/reinterpret reconstruction path when it is available; the
+    # CuTracedArray-specific method is defined alongside reshape below.
+    import CUDA: _derived_array
+end
 
 const CUVERSION = isdefined(CUDA, :CUDACore) ? 6 : 5
 if CUVERSION == 6
