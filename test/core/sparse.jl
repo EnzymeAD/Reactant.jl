@@ -24,7 +24,10 @@ spmv_mul!(C, A, B, α, β) = LinearAlgebra.mul!(C, A, B, α, β)
     @test A_ra.rowptr isa ConcreteRArray
     @test A_ra.colind isa ConcreteRArray
     @test A_ra.nzval isa ConcreteRArray
-    @test SparseMatrixCSC(A_ra) == A
+    A_rt = SparseMatrixCSC(A_ra)
+    @test nnz(A_rt) == nnz(A)
+    # TPUs emulate Float64, so the value round trip is only approximate there.
+    @test A_rt ≈ A
 end
 
 @testset "sparse_tensor IR" begin
