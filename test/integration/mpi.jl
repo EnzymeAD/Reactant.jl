@@ -3,17 +3,16 @@ using MPI
 using CUDA
 using Reactant
 
-const BACKEND_GROUP = lowercase(get(ENV, "REACTANT_BACKEND_GROUP", "auto"))
-const CPU_MPI_BACKENDS = ("auto", "cpu")
-const GPU_MPI_BACKENDS = ("cuda",)
-const RUN_CPU_MPI_TESTS = BACKEND_GROUP in CPU_MPI_BACKENDS
-const RUN_GPU_MPI_TESTS = BACKEND_GROUP in GPU_MPI_BACKENDS
+const MPI_BACKEND = lowercase(ENV["REACTANT_MPI_BACKEND"])
+
+const RUN_CPU_MPI_TESTS = MPI_BACKEND == "cpu"
+RUN_CPU_MPI_TESTS && Reactant.set_default_backend("cpu")
+
+const RUN_GPU_MPI_TESTS = MPI_BACKEND == "cuda" # rocm not currently supported
+# gpu backend gets set in ReactantMPIExt.initialize! below
+
 const ReactantMPIExt =
     RUN_GPU_MPI_TESTS ? Base.get_extension(Reactant, :ReactantMPIExt) : nothing
-
-if RUN_CPU_MPI_TESTS
-    Reactant.set_default_backend("cpu")
-end
 
 # Julia types which map surjectively to MPI datatypes in MPI.jl
 datatypes = [
