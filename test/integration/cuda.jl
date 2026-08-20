@@ -114,6 +114,25 @@ function sin!(x, y)
     return nothing
 end
 
+function reshape_kernel!(out, x)
+    xr = reshape(x, 2, 2)
+    @inbounds out[1] = xr[1, 2] + xr[2, 1]
+    return nothing
+end
+
+function reshape!(out, x)
+    @cuda blocks = 1 threads = 1 reshape_kernel!(out, x)
+    return nothing
+end
+
+@testset "Reshape Kernel" begin
+    x = Reactant.to_rarray([1.0, 2.0, 3.0, 4.0])
+    out = Reactant.to_rarray(zeros(Float64, 1))
+
+    @jit reshape!(out, x)
+    @test Array(out) == [5.0]
+end
+
 @testset "Sin Kernel" begin
     oA = collect(Float64, 1:1:64)
     A = Reactant.to_rarray(oA)
