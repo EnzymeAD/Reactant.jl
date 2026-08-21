@@ -36,6 +36,13 @@ ConcreteRArray
 ConcreteRNumber
 ```
 
+## Sparse arrays
+
+```@docs
+Reactant.CSRMatrix
+Reactant.sparse_csr_spmm
+```
+
 ## Inspect Generated HLO
 
 ```@docs

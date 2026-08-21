@@ -4,9 +4,14 @@ NSYNC_COMMIT = "82b118aa7ace3132e517e2c467f8732978cf4023"
 
 NSYNC_SHA256 = ""
 
-ENZYMEXLA_COMMIT = "51a4cd6c58b1950f28b650167d1e946eec8ec0d5"
+# [do not merge] sds/sparse_csr branch of simeonschaub/Enzyme-JAX (see
+# ENZYMEXLA_REPO below); switch back to an EnzymeAD/Enzyme-JAX commit once
+# https://github.com/EnzymeAD/Enzyme-JAX merges the sparse support.
+ENZYMEXLA_COMMIT = "8508ac2af05574b59653c079a6c907e0a985cc9e"
 
 ENZYMEXLA_SHA256 = ""
+
+ENZYMEXLA_REPO = "https://github.com/simeonschaub/Enzyme-JAX"
 
 http_archive(
     name = "nsync",
@@ -48,7 +53,7 @@ sed -i.bak0 "s,//:patches,@enzyme_ad//:patches,g" third_party/*/workspace.bzl
     ],
     sha256 = ENZYMEXLA_SHA256,
     strip_prefix = "Enzyme-JAX-" + ENZYMEXLA_COMMIT,
-    urls = ["https://github.com/EnzymeAD/Enzyme-JAX/archive/{commit}.tar.gz".format(commit = ENZYMEXLA_COMMIT)],
+    urls = ["{repo}/archive/{commit}.tar.gz".format(commit = ENZYMEXLA_COMMIT, repo = ENZYMEXLA_REPO)],
 )
 
 NEW_XLA_PATCHES = []

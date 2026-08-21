@@ -27,6 +27,23 @@ include("OptimizationPasses.jl")
 include("Codegen.jl")
 include("Thunk.jl")
 
+function has_sparse_tensor_ops(mod::MLIR.IR.Module)
+    found = false
+    function visit(op)
+        found && return nothing
+        startswith(MLIR.IR.name(op), "sparse_tensor.") && (found = true; return nothing)
+        for region in op, block in region, inner in block
+            visit(inner)
+        end
+        return nothing
+    end
+    for op in MLIR.IR.body(mod)
+        visit(op)
+        found && break
+    end
+    return found
+end
+
 const DEBUG_PRINT_CODEGEN = Ref(false)
 
 const __module_gc_vector = Dict{MLIR.IR.Module,Vector{Union{TracedRArray,TracedRNumber}}}()
@@ -429,6 +446,13 @@ function compile_mlir!(
         end
 
     legal_to_run_shardy_passes = compile_options.optimization_passes === :all
+
+    # Lower sparse_tensor CSR products to library custom calls before anything
+    # else runs: XLA cannot consume sparse-encoded tensor types. With `:none`
+    # the sparse IR is kept as-is for inspection.
+    if compile_options.optimization_passes !== :none && has_sparse_tensor_ops(mod)
+        run_pass_pipeline!(mod, "lower-enzymexla-sparse", "lower_enzymexla_sparse")
+    end
 
     # Raise any triton kernel that might exist as a custom call
     # We will lower them back later on, but having the full triton IR enables
