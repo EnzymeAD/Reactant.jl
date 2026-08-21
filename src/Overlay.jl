@@ -113,6 +113,11 @@ for randfun in (:rand, :randn, :randexp)
         @reactant_overlay function Random.$(randfun)(
             rng::AbstractRNG, ::Type{T}, dims::Dims
         ) where {T}
+            @static if isdefined(Random, :SeedHasher)
+                if rng isa Random.SeedHasher
+                    return call_with_native(Random.$(randfun), rng, T, dims)
+                end
+            end
             if unwrapped_eltype(T) <: ReactantPrimitive
                 return call_with_native(
                     TracedRandom.$(overload_randfun), rng, unwrapped_eltype(T), dims
@@ -126,12 +131,22 @@ for randfun in (:rand, :randn, :randexp)
         @reactant_overlay function Random.$(randfun)(
             rng::AbstractRNG, dim1::Integer, dims::Integer...
         )
+            @static if isdefined(Random, :SeedHasher)
+                if rng isa Random.SeedHasher
+                    return call_with_native(Random.$(randfun), rng, dim1, dims)
+                end
+            end
             return TracedRandom.$(overload_randfun)(rng, dim1, dims...)
         end
 
         @reactant_overlay function Random.$(randfun)(
             rng::AbstractRNG, ::Type{T}, dim1::Integer, dims::Integer...
         ) where {T}
+            @static if isdefined(Random, :SeedHasher)
+                if rng isa Random.SeedHasher
+                    return call_with_native(Random.$(randfun), rng, T, dim1, dims...)
+                end
+            end
             if unwrapped_eltype(T) <: ReactantPrimitive
                 return TracedRandom.$(overload_randfun)(
                     rng, unwrapped_eltype(T), dim1, dims...
@@ -376,6 +391,45 @@ end
     else
         return call_with_native(LinearAlgebra.dot, x, A, y)
     end
+end
+
+@reactant_overlay function LinearAlgebra.norm(x::AbstractArray)
+    if use_overlayed_version(x)
+        return call_with_native(TracedLinearAlgebra.overloaded_norm, x)
+    else
+        return call_with_native(LinearAlgebra.norm, x)
+    end
+end
+@reactant_overlay function LinearAlgebra.norm(x::AbstractArray, p::Real)
+    if use_overlayed_version(x)
+        return call_with_native(TracedLinearAlgebra.overloaded_norm, x, p)
+    else
+        return call_with_native(LinearAlgebra.norm, x, p)
+    end
+end
+
+# `*` allocates its destination from one of its operands -- `similar(B, TS, ...)` for
+# matrix-matrix, `similar(x, TS, axes(A, 1))` for matrix-vector -- so a traced matrix times
+# an untraced right-hand side lands in an `Array{TracedRNumber}` that then costs one traced
+# op per element to fill, overflowing inference's constant-propagation stack once the output
+# is large enough (#3167). Only this operand order is affected: with the right-hand side
+# traced, `similar` is called on a `TracedRArray` and already does the right thing.
+#
+# Deliberately restricted to genuine traced matrices rather than `AbstractMatrix`:
+#  * an `Adjoint`/`Transpose` of a *vector* is also an `AbstractMatrix`, but `x' * y` is a
+#    scalar dot product, and an overlay matching it would win over Base's more specific
+#    method and silently return a 1-element array;
+#  * structured wrappers (`Diagonal`, `UpperTriangular`, ...) keep Base's dispatch, which
+#    picks destinations that preserve their structure.
+@reactant_overlay function Base.:(*)(
+    a::Union{
+        TracedRArray{T,2},
+        LinearAlgebra.Adjoint{TracedRNumber{T},<:TracedRArray{T,2}},
+        LinearAlgebra.Transpose{TracedRNumber{T},<:TracedRArray{T,2}},
+    },
+    b::AbstractVecOrMat,
+) where {T}
+    return call_with_native(TracedLinearAlgebra.overloaded_mul, a, b)
 end
 
 # 3 arg multiplication is specialized in Base, but we can reorder the computation

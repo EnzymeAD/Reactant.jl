@@ -100,8 +100,32 @@ for jlop in (
     :(Base.:-),
     :(Base.:*),
     :(Base.:/),
+    :(Base.:\),
     :(Base.:^),
     :(Base.rem),
+    :(Base.mod1),
+    :(Base.ldexp),
+    :(Base.lcm),
+    :(Base.div),
+    :(Base.fld),
+    :(Base.cld),
+    :(Base.divrem),
+    :(Base.fldmod),
+    :(Base.hypot),
+    :(Base.atan),
+    :(Base.atand),
+    :(Base.copysign),
+    :(Base.flipsign),
+    :(Base.complex),
+    :(Base.gcd),
+    :(Base.:&),
+    :(Base.:|),
+    :(Base.xor),
+    :(Base.nand),
+    :(Base.nor),
+    :(Base.:(<<)),
+    :(Base.:(>>)),
+    :(Base.:(>>>)),
     :(Base.isless),
     :(Base.:(==)),
     :(Base.:(!=)),
@@ -130,7 +154,71 @@ Base.@constprop :aggressive @inline Base.:^(
 @inline Base.unsafe_trunc(::Type{T}, a::CuTracedRNumber) where {T} =
     Base.unsafe_trunc(T, a[])
 
-for jlop in (:(Base.:+), :(Base.:-), :(Base.isnan), :(Base.isfinite), :(Base.isinf))
+for jlop in (
+    :(Base.:+),
+    :(Base.:-),
+    :(Base.abs),
+    :(Base.sign),
+    :(Base.signbit),
+    :(Base.conj),
+    :(Base.real),
+    :(Base.imag),
+    :(Base.sin),
+    :(Base.cos),
+    :(Base.tan),
+    :(Base.sinh),
+    :(Base.cosh),
+    :(Base.tanh),
+    :(Base.asin),
+    :(Base.acos),
+    :(Base.atan),
+    :(Base.asinh),
+    :(Base.acosh),
+    :(Base.atanh),
+    :(Base.sinpi),
+    :(Base.cospi),
+    :(Base.tanpi),
+    :(Base.sincospi),
+    :(Base.sinc),
+    :(Base.cis),
+    :(Base.cispi),
+    :(Base.complex),
+    :(Base.exp),
+    :(Base.exp2),
+    :(Base.exp10),
+    :(Base.expm1),
+    :(Base.log),
+    :(Base.log2),
+    :(Base.log10),
+    :(Base.log1p),
+    :(Base.sqrt),
+    :(Base.cbrt),
+    :(Base.frexp),
+    :(Base.modf),
+    :(Base.isqrt),
+    :(Base.:~),
+    :(Base.leading_zeros),
+    :(Base.trailing_zeros),
+    :(Base.count_ones),
+    :(Base.bswap),
+    :(Base.typemin),
+    :(Base.typemax),
+    :(Base.isnan),
+    :(Base.isfinite),
+    :(Base.isinf),
+    :(Base.isreal),
+    :(Base.isinteger),
+    :(Base.iseven),
+    :(Base.isodd),
+    :(Base.floor),
+    :(Base.ceil),
+    :(Base.round),
+    :(Base.trunc),
+    :(Base.float),
+    :(Base.nextfloat),
+    :(Base.prevfloat),
+    :(Base.:!),
+)
     @eval begin
         @inline $jlop(a::CuTracedRNumber) = $jlop(a[])
     end
@@ -144,7 +232,7 @@ Base.OneTo(x::CuTracedRNumber{<:Integer}) = Base.OneTo(x[])
     end
 end
 
-@inline function Base.convert(CT::Type{CuTracedRNumber{Float64,1}}, x::Number)
+@inline function Base.convert(CT::Type{<:CuTracedRNumber{Float64,1}}, x::Number)
     return CT(
         Base.reinterpret(
             Core.LLVMPtr{Float64,1},
@@ -168,7 +256,7 @@ end
     )
 end
 
-@inline function Base.convert(CT::Type{CuTracedRNumber{Float32,1}}, x::Number)
+@inline function Base.convert(CT::Type{<:CuTracedRNumber{Float32,1}}, x::Number)
     return CT(
         Base.reinterpret(
             Core.LLVMPtr{Float32,1},
@@ -193,6 +281,9 @@ end
 end
 
 Base.convert(::Type{<:CuTracedRNumber{T}}, x::CuTracedRNumber{T}) where {T} = x
+Base.convert(::Type{<:CuTracedRNumber{BFloat16,1}}, x::CuTracedRNumber{BFloat16,1}) = x
+Base.convert(::Type{<:CuTracedRNumber{Float32,1}}, x::CuTracedRNumber{Float32,1}) = x
+Base.convert(::Type{<:CuTracedRNumber{Float64,1}}, x::CuTracedRNumber{Float64,1}) = x
 
 Base.one(a::CuTracedRNumber) = one(a[])
 Base.one(::Type{<:CuTracedRNumber{T,A}}) where {T,A} = one(T)
@@ -791,12 +882,16 @@ function compile(job)
         end
         # LLVM.strip_debuginfo!(mod)
         dl = string(LLVM.datalayout(mod))
-        modstr = string(mod)
         # This is a bit weird since we're taking a module from julia's llvm into reactant's llvm version
-        # it is probably safer to reparse a string using the right llvm module api, so we will do that.
-        mmod = MLIR.IR.Module(
-            MLIR.API.ConvertLLVMStrToMLIR(modstr, MLIR.IR.current_context())
+        # so we serialize and reparse with the right llvm module api. Bitcode is used rather than
+        # textual IR: the bitcode reader auto-upgrades constructs whose spelling changed between the
+        # two LLVM versions (e.g. `llvm.loop.distribute.enable` metadata), whereas the .ll parser does
+        # not, and mismatches there abort the process in the verifier.
+        modbc = convert(Vector{UInt8}, mod)
+        mmodref = GC.@preserve modbc MLIR.API.ConvertLLVMBCToMLIR(
+            pointer(modbc), length(modbc), MLIR.IR.current_context()
         )
+        mmod = MLIR.IR.Module(mmodref)
         @assert mmod != C_NULL
 
         cur_module = MLIR.IR.current_module()
@@ -1713,7 +1808,21 @@ end
         end
 
         @compile_workload begin
-            @static if Reactant.precompilation_supported() && VERSION != v"1.11.3"
+            # On Windows, Julia v1.11 cannot link the pkgimage this workload
+            # produces. Compiling a GPU kernel during precompilation leaves an
+            # unmarked reference to the `jl_boxed_uint8_cache` runtime global in
+            # the image, and since COFF has no import thunk for data, lld
+            # rejects it:
+            #     lld: error: undefined symbol: jl_boxed_uint8_cache
+            # ReactantCUDAExt then fails to precompile and never loads at all.
+            # Skipping the workload here only costs precompilation: any package
+            # compiling a GPU kernel in its own workload hits this too, so the
+            # actual fix has to come from Julia. The upper bound assumes that
+            # fix ships in the next v1.11 patch release, so that precompilation
+            # resumes on its own; raise it if it slips.
+            @static if Reactant.precompilation_supported() &&
+                VERSION != v"1.11.3" &&
+                !(Sys.iswindows() && v"1.11" <= VERSION <= v"1.11.9")
                 function square_kernel!(x)
                     i = CUDA.threadIdx().x
                     x[i] *= x[i]

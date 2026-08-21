@@ -903,11 +903,23 @@ function Base.getindex(attr::Attribute)
     end
 end
 
-function Base.show(io::IO, attribute::Attribute)
-    print(io, "Attribute(#= ")
+"""
+    print(io, attribute)
+
+Print `attribute` in MLIR's textual form, e.g. `#aie<bd_dim_layout_array[]>`.
+Unlike [`show`](@ref), this emits just the attribute, which is what you want when
+interpolating it into MLIR source text.
+"""
+function Base.print(io::IO, attribute::Attribute)
     c_print_callback = @cfunction(print_callback, Cvoid, (API.MlirStringRef, Any))
     ref = Ref(io)
     API.mlirAttributePrint(attribute, c_print_callback, ref)
+    return nothing
+end
+
+function Base.show(io::IO, attribute::Attribute)
+    print(io, "Attribute(#= ")
+    print(io, attribute)
     return print(io, " =#)")
 end
 

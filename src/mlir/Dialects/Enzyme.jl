@@ -44,6 +44,8 @@ function affine_atomic_rmw(
     result::IR.Type,
     kind,
     map,
+    alignment=nothing,
+    fastmath=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[result,]
@@ -51,6 +53,8 @@ function affine_atomic_rmw(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[NamedAttribute("kind", kind), NamedAttribute("map", map)]
+    !isnothing(alignment) && push!(attributes, NamedAttribute("alignment", alignment))
+    !isnothing(fastmath) && push!(attributes, NamedAttribute("fastmath", fastmath))
 
     return create_operation(
         "enzyme.affine_atomic_rmw",
@@ -64,6 +68,40 @@ function affine_atomic_rmw(
     )
 end
 
+function atomic_rmw(
+    value::Value,
+    memref::Value,
+    indices::Vector{Value};
+    result=nothing::Union{Nothing,IR.Type},
+    kind,
+    ordering,
+    alignment=nothing,
+    fastmath=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[value, memref, indices...]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[
+        NamedAttribute("kind", kind), NamedAttribute("ordering", ordering)
+    ]
+    !isnothing(result) && push!(op_ty_results, result)
+    !isnothing(alignment) && push!(attributes, NamedAttribute("alignment", alignment))
+    !isnothing(fastmath) && push!(attributes, NamedAttribute("fastmath", fastmath))
+
+    return create_operation(
+        "enzyme.atomic_rmw",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
 function autodiff(
     inputs::Vector{Value};
     outputs::Vector{IR.Type},
@@ -72,6 +110,7 @@ function autodiff(
     ret_activity,
     width=nothing,
     strong_zero=nothing,
+    atomic_add=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[outputs...,]
@@ -85,6 +124,7 @@ function autodiff(
     ]
     !isnothing(width) && push!(attributes, NamedAttribute("width", width))
     !isnothing(strong_zero) && push!(attributes, NamedAttribute("strong_zero", strong_zero))
+    !isnothing(atomic_add) && push!(attributes, NamedAttribute("atomic_add", atomic_add))
 
     return create_operation(
         "enzyme.autodiff",
@@ -105,6 +145,7 @@ function autodiff_region(
     ret_activity,
     width=nothing,
     strong_zero=nothing,
+    atomic_add=nothing,
     fn=nothing,
     body::Region,
     location=Location(),
@@ -118,6 +159,7 @@ function autodiff_region(
     ]
     !isnothing(width) && push!(attributes, NamedAttribute("width", width))
     !isnothing(strong_zero) && push!(attributes, NamedAttribute("strong_zero", strong_zero))
+    !isnothing(atomic_add) && push!(attributes, NamedAttribute("atomic_add", atomic_add))
     !isnothing(fn) && push!(attributes, NamedAttribute("fn", fn))
 
     return create_operation(
@@ -152,6 +194,65 @@ function batch(
         attributes,
         results=op_ty_results,
         result_inference=false,
+    )
+end
+
+"""
+`binomial_progress`
+
+Given `num_steps` remaining iterations and a `budget` of available
+checkpoints, returns how many steps to advance before placing the next
+checkpoint. This is the classic Revolve \"split\" function used for binomial
+checkpointing of loops.
+
+Writing `beta(s, t) = C(s + t, t)` for the longest chain reversible with `s`
+checkpoints and at most `t` recomputations of each step, and taking `t`
+minimal with `beta(budget, t) >= num_steps`, every advance in
+
+    [ num_steps - beta(budget-1, t) , beta(budget, t-1) ]
+
+attains that optimal `t`, and the interval is non-empty by Pascal\'s rule
+`beta(s,t) = beta(s-1,t) + beta(s,t-1)`. This op returns the lower edge,
+clamped to `[1, num_steps-1]`, which also lands within a few percent of the
+minimal *total* recomputation.
+
+Two boundary cases matter to callers. `num_steps <= 1` returns `num_steps`
+(so 0 or 1). `budget <= 1` returns `num_steps`: with one checkpoint left the
+entire remaining stretch is replayed from it, so the advance covers all of
+it. That is also what makes the advances chosen for successive slots sum to
+exactly the trip count across `budget` slots, which lets a driver that
+iterates once per checkpoint still reach the end of the primal.
+
+The result is an advance *distance*, not a repetition count: it grows like
+`num_steps`, not like `num_steps^(1/budget)`.
+
+`num_steps` and `budget` may be an index, a signless integer of any
+width, or a tensor thereof (with the result taking the same type). The
+tensor forms carry the scalar computation for dialects whose scalars are
+tensors: stablehlo callers use `tensor<i64>`, a rank-0 ranked tensor.
+"""
+function binomial_progress(
+    num_steps::Value,
+    budget::Value;
+    result=nothing::Union{Nothing,IR.Type},
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[num_steps, budget]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(result) && push!(op_ty_results, result)
+
+    return create_operation(
+        "enzyme.binomial_progress",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -244,6 +345,25 @@ function extract(input::Value; output::IR.Type, index, location=Location())
 
     return create_operation(
         "enzyme.extract",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+function fill_zero(memref::Value; location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[memref,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "enzyme.fill_zero",
         location;
         operands,
         owned_regions,
@@ -358,12 +478,13 @@ function genericAdjoint(
     )
 end
 
-function get(gradient::Value; result::IR.Type, location=Location())
-    op_ty_results = IR.Type[result,]
+function get(gradient::Value; result=nothing::Union{Nothing,IR.Type}, location=Location())
+    op_ty_results = IR.Type[]
     operands = Value[gradient,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(result) && push!(op_ty_results, result)
 
     return create_operation(
         "enzyme.get",
@@ -372,8 +493,8 @@ function get(gradient::Value; result::IR.Type, location=Location())
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -449,12 +570,21 @@ function jacobian(
     )
 end
 
-function load(cache::Value, indices::Vector{Value}; result::IR.Type, location=Location())
-    op_ty_results = IR.Type[result,]
-    operands = Value[cache, indices...]
+function load(
+    memref::Value,
+    indices::Vector{Value},
+    sizes::Vector{Value};
+    result=nothing::Union{Nothing,IR.Type},
+    static_sizes,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[memref, indices..., sizes...]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[]
+    attributes = NamedAttribute[NamedAttribute("static_sizes", static_sizes),]
+    push!(attributes, operandsegmentsizes([1, length(indices), length(sizes)]))
+    !isnothing(result) && push!(op_ty_results, result)
 
     return create_operation(
         "enzyme.load",
@@ -463,8 +593,8 @@ function load(cache::Value, indices::Vector{Value}; result::IR.Type, location=Lo
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -487,12 +617,13 @@ function placeholder(; output::IR.Type, location=Location())
     )
 end
 
-function pop(cache::Value; output::IR.Type, location=Location())
-    op_ty_results = IR.Type[output,]
+function pop(cache::Value; output=nothing::Union{Nothing,IR.Type}, location=Location())
+    op_ty_results = IR.Type[]
     operands = Value[cache,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(output) && push!(op_ty_results, output)
 
     return create_operation(
         "enzyme.pop",
@@ -501,8 +632,8 @@ function pop(cache::Value; output::IR.Type, location=Location())
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -544,12 +675,20 @@ function set(gradient::Value, value::Value; location=Location())
     )
 end
 
-function store(value::Value, cache::Value, indices::Vector{Value}; location=Location())
+function store(
+    value::Value,
+    memref::Value,
+    indices::Vector{Value},
+    sizes::Vector{Value};
+    static_sizes,
+    location=Location(),
+)
     op_ty_results = IR.Type[]
-    operands = Value[value, cache, indices...]
+    operands = Value[value, memref, indices..., sizes...]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[]
+    attributes = NamedAttribute[NamedAttribute("static_sizes", static_sizes),]
+    push!(attributes, operandsegmentsizes([1, 1, length(indices), length(sizes)]))
 
     return create_operation(
         "enzyme.store",

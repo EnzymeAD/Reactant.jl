@@ -163,6 +163,22 @@ end
         @test !(all(Array(fn_compiled(seed1)) .≈ Array(fn_compiled(seed2))))
     end
 
+    @testset "Seeding with Integer" begin
+        fn() = begin
+            rng = Random.default_rng()
+            Random.seed!(rng, 42)
+            a = rand(rng, 3)
+            Random.seed!(rng, 42)
+            b = rand(rng, 3)
+            Random.seed!(rng, 99)
+            c = rand(rng, 3)
+            return a, b, c
+        end
+        a, b, c = @jit fn()
+        @test Array(a) == Array(b)
+        @test Array(a) != Array(c)
+    end
+
     @testset "Correct Distribution" begin
         X = Array(@jit(randn(StableRNG(0), 10000)))
         sw_test = ShapiroWilkTest(X)
@@ -270,5 +286,31 @@ end
         @test rng_ra isa Reactant.ReactantRNG
         @test rng_ra.seed ≈ UInt64[rng.ctr1, rng.ctr2, rng.key]
         @test rng_ra.algorithm == "PHILOX"
+    end
+end
+
+function _rand_foo3(rng, α)
+    T = typeof(α)
+    boost = one(T)
+    @trace if α < one(T)
+        boost = rand(rng, T)^inv(α)
+    end
+    dv = zero(T)
+    i = 0
+    @trace while (dv == zero(dv))
+        x = rand(rng, T) - 0.5
+        dv = ifelse(x > 0, x, dv)
+    end
+    return boost * dv
+end
+
+@testset "Random state mutation across conditional branches and while loop" begin
+    for val in (0.5, 1.0, 1.5, 2.0)
+        rng = Reactant.ReactantRNG()
+        a = ConcreteRNumber(val)
+        rg = @compile _rand_foo3(rng, a)
+        res1 = rg(rng, a)
+        res2 = rg(rng, a)
+        @test res1 != res2
     end
 end

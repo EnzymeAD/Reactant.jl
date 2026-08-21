@@ -254,6 +254,7 @@ cc_toolchain_config(
     builtin_sysroot = "/opt/x86_64-linux-musl/bin/../x86_64-linux-musl/sys-root",
     compile_flags = [
         "-stdlib=libstdc++",
+        "-DREACTANT_TOOLCHAIN_IS_BB",
     ],
     compiler = "clang",
     coverage_compile_flags = ["--coverage"],
@@ -378,6 +379,7 @@ cc_toolchain_config(
         "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION/backward",
         "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION/parallel",
         "-stdlib=libstdc++",
+        "-DREACTANT_TOOLCHAIN_IS_BB",
     ],
     compiler = "clang",
     coverage_compile_flags = ["--coverage"],
@@ -506,6 +508,7 @@ cc_toolchain_config(
         "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION/BB_TARGET",
         "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION/backward",
         "-isystem /opt/BB_TARGET/BB_TARGET/include/c++/GCC_VERSION/parallel",
+        "-DREACTANT_TOOLCHAIN_IS_BB",
     ],
     compiler = "clang",
     coverage_compile_flags = ["--coverage"],
@@ -622,6 +625,7 @@ cc_toolchain_config(
     builtin_sysroot = "/opt/BB_TARGET/BB_TARGET/sys-root/",
     compile_flags = [
         "-stdlib=libc++",
+        "-DREACTANT_TOOLCHAIN_IS_BB",
     ],
     compiler = "clang",
     coverage_compile_flags = ["--coverage"],
@@ -742,6 +746,7 @@ cc_toolchain_config(
     builtin_sysroot = "/opt/BB_TARGET/BB_TARGET/sys-root/",
     compile_flags = [
         "-stdlib=libc++",
+        "-DREACTANT_TOOLCHAIN_IS_BB",
     ],
     compiler = "clang",
     coverage_compile_flags = ["--coverage"],
@@ -863,6 +868,7 @@ cc_toolchain_config(
     builtin_sysroot = "/opt/BB_TARGET/BB_TARGET/sys-root/",
     compile_flags = [
         "-stdlib=libstdc++",
+        "-DREACTANT_TOOLCHAIN_IS_BB",
     ],
     compiler = "clang",
     coverage_compile_flags = ["--coverage"],
@@ -1155,6 +1161,7 @@ cc_library(
             "-Wl,-exported_symbol,_ClientCompile",
             "-Wl,-exported_symbol,_ClientCompileWithProto",
             "-Wl,-exported_symbol,_ConvertLLVMStrToMLIR",
+            "-Wl,-exported_symbol,_ConvertLLVMBCToMLIR",
             "-Wl,-exported_symbol,_LinkInModule",
             "-Wl,-exported_symbol,_FreeFuture",
             "-Wl,-exported_symbol,_FutureIsReady",
@@ -1294,6 +1301,7 @@ cc_library(
         "@llvm-project//mlir:LLVMIRToLLVMTranslation",
         "@llvm-project//mlir:LLVMIRToNVVMTranslation",
         "@llvm-project//mlir:LLVMIRTransforms",
+        "@llvm-project//llvm:BitReader",
         "@llvm-project//llvm:IRReader",
         "@llvm-project//llvm:Support",
         "@llvm-project//llvm:AArch64AsmParser",
@@ -1326,9 +1334,6 @@ cc_library(
         "@xla//xla/service:metrics_proto_cc_impl",
         "@xla//xla/service:custom_call_target_registry",
         "@xla//xla/service/cpu:cpu_compiler",
-        "@xla//xla/stream_executor/tpu:tpu_on_demand_compiler",
-        "@xla//xla/stream_executor/tpu:tpu_executor",
-        "@xla//xla/stream_executor/tpu:tpu_transfer_manager",
         "@xla//xla/service/cpu:cpu_transfer_manager",
         "@xla//xla/tsl/protobuf:protos_all_cc_impl",
         "@xla//xla/tsl/framework:allocator_registry_impl",
@@ -1388,7 +1393,7 @@ cc_library(
 
         # Broken upstream x/ref https://github.com/jax-ml/jax/issues/33344
         # "@jax//jaxlib/mosaic:tpu_dialect_capi_objects",
-        "@jax//jaxlib/triton:triton_dialect_capi_objects",
+        "@enzyme_ad//src/enzyme_ad/jax:triton_dialect_capi_objects",
         "@xla//xla/pjrt/plugin/xla_cpu:xla_cpu_pjrt_client",
         "@stablehlo//:linalg_passes",
         "@stablehlo//:tosa_passes",
@@ -1800,9 +1805,8 @@ gentbl_cc_library(
         ),
     ],
     tblgen = "//:mlir-jl-tblgen",
-    td_file = "@jax//jaxlib/triton:triton.td",
+    td_file = "@triton//:include/triton/Dialect/Triton/IR/TritonOps.td",
     deps = [
-        "@llvm-project//mlir:OpBaseTdFiles",
         "@triton//:td_files",
     ],
 )
@@ -1954,7 +1958,7 @@ genrule(
         "@stablehlo//:stablehlo/integrations/c/StablehloDialectApi.h",
         "@stablehlo//:stablehlo/integrations/c/StablehloTypes.h",
         "@shardy//shardy/integrations/c:attributes.h",
-        "@jax//jaxlib/triton:triton_dialect_capi.h",
+        "@enzyme_ad//src/enzyme_ad/jax:Integrations/c/triton_dialect_capi.h",
         "@jax//jaxlib/mosaic:dialect/tpu/integrations/c/tpu_dialect.h",
         "@jax//jaxlib/mosaic:dialect/tpu/integrations/c/tpu_passes.capi.h.inc",
         "@jax//jaxlib/mosaic/dialect/gpu:integrations/c/attributes.h",
@@ -1970,7 +1974,7 @@ genrule(
         "//:make.jl",
     ],
     outs = ["libMLIR_h.jl"],
-    cmd = "$$JULIA \"--color=yes\" \"--project=$(location //:Project.toml)\" \"$(location //:make.jl)\" \"--extract-api\" \"$(location @llvm-project//mlir:include/mlir-c/Bindings/Python/Interop.h)\" \"$(location @llvm-project//llvm:include/llvm-c/Support.h)\" \"$(locations @llvm-project//mlir:ConversionPassIncGen_filegroup)\" \"$(location @stablehlo//:stablehlo/integrations/c/StablehloAttributes.h)\" \"$(location @shardy//shardy/integrations/c:attributes.h)\" \"$(location @jax//jaxlib/triton:triton_dialect_capi.h)\" \"$(location @jax//jaxlib/mosaic:dialect/tpu/integrations/c/tpu_dialect.h)\" \"$(location @jax//jaxlib/mosaic/dialect/gpu:integrations/c/gpu_dialect.h)\" \"$(location @enzyme_ad//src/enzyme_ad/jax:Integrations/c/EnzymeXLA.h)\" \"$(location @enzyme//:Enzyme/MLIR/Integrations/c/EnzymeMLIR.h)\" \"$@\"",
+    cmd = "$$JULIA \"--color=yes\" \"--project=$(location //:Project.toml)\" \"$(location //:make.jl)\" \"--extract-api\" \"$(location @llvm-project//mlir:include/mlir-c/Bindings/Python/Interop.h)\" \"$(location @llvm-project//llvm:include/llvm-c/Support.h)\" \"$(locations @llvm-project//mlir:ConversionPassIncGen_filegroup)\" \"$(location @stablehlo//:stablehlo/integrations/c/StablehloAttributes.h)\" \"$(location @shardy//shardy/integrations/c:attributes.h)\" \"$(location @enzyme_ad//src/enzyme_ad/jax:Integrations/c/triton_dialect_capi.h)\" \"$(location @jax//jaxlib/mosaic:dialect/tpu/integrations/c/tpu_dialect.h)\" \"$(location @jax//jaxlib/mosaic/dialect/gpu:integrations/c/gpu_dialect.h)\" \"$(location @enzyme_ad//src/enzyme_ad/jax:Integrations/c/EnzymeXLA.h)\" \"$(location @enzyme//:Enzyme/MLIR/Integrations/c/EnzymeMLIR.h)\" \"$@\"",
     tags = [
         "jlrule",
     ],

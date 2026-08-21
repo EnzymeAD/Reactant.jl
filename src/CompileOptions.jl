@@ -193,6 +193,10 @@ Fine-grained control over the compilation options for the Reactant compiler.
     `false` by default.
   - `disable_licm_optimization_passes`: Disables the Loop Invariant Code Motion (LICM)
     optimization passes. (Default: `false`).
+  - `loop_unswitch_threshold`: Threshold passed to the `loop_unswitch` pattern inside the
+    LICM pass group. A negative value disables the pattern entirely. (Default: `10`).
+  - `excluded_passes`: A list of pass base-names (e.g. `["loop_unswitch"]`) that should be
+    omitted from the generated pass pipeline. (Default: `String[]`).
   - `disable_reduce_slice_fusion_passes`: Disables fusion of slice elementwise and reduce
     operations. (Default `false`).
   - `disable_slice_to_batch_passes`: Disables the slice to batch fusion optimization passes.
@@ -241,6 +245,8 @@ struct CompileOptions
     disable_scatter_gather_optimization_passes::Bool
     disable_pad_optimization_passes::Bool
     disable_licm_optimization_passes::Bool
+    loop_unswitch_threshold::Int
+    excluded_passes::Vector{String}
     disable_reduce_slice_fusion_passes::Bool
     disable_slice_to_batch_passes::Bool
     disable_concat_to_batch_passes::Bool
@@ -276,6 +282,8 @@ function CompileOptions(;
     disable_scatter_gather_optimization_passes::Bool=false,
     disable_pad_optimization_passes::Bool=false,
     disable_licm_optimization_passes::Bool=false,
+    loop_unswitch_threshold::Int=10,
+    excluded_passes::Vector{String}=String[],
     disable_reduce_slice_fusion_passes::Bool=false,
     disable_slice_to_batch_passes::Bool=true, # expensive + introduces all-to-all in GB25
     disable_concat_to_batch_passes::Bool=false,
@@ -342,6 +350,8 @@ function CompileOptions(;
         disable_scatter_gather_optimization_passes,
         disable_pad_optimization_passes,
         disable_licm_optimization_passes,
+        loop_unswitch_threshold,
+        excluded_passes,
         disable_reduce_slice_fusion_passes,
         disable_slice_to_batch_passes,
         disable_concat_to_batch_passes,
@@ -397,6 +407,8 @@ function __compile_options_with_reversed_propagation(compile_options::CompileOpt
         compile_options.disable_scatter_gather_optimization_passes,
         compile_options.disable_pad_optimization_passes,
         compile_options.disable_licm_optimization_passes,
+        compile_options.loop_unswitch_threshold,
+        compile_options.excluded_passes,
         compile_options.disable_reduce_slice_fusion_passes,
         compile_options.disable_slice_to_batch_passes,
         compile_options.disable_concat_to_batch_passes,
@@ -439,6 +451,8 @@ function __compile_options_with_updated_sync(compile_options::CompileOptions, sy
         compile_options.disable_scatter_gather_optimization_passes,
         compile_options.disable_pad_optimization_passes,
         compile_options.disable_licm_optimization_passes,
+        compile_options.loop_unswitch_threshold,
+        compile_options.excluded_passes,
         compile_options.disable_reduce_slice_fusion_passes,
         compile_options.disable_slice_to_batch_passes,
         compile_options.disable_concat_to_batch_passes,

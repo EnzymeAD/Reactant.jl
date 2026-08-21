@@ -355,7 +355,7 @@ function _fill_element_attr(x::Complex)
 end
 
 @noinline function concatenate(
-    inputs::Vector{TracedRArray{T,N}},
+    inputs::Vector{<:TracedRArray{T,N}},
     dimension::Int;
     location=mlir_stacktrace("fill", @__FILE__, @__LINE__),
 ) where {T,N}
@@ -869,7 +869,7 @@ end
 end
 
 function bitcast_convert(
-    ::Type{TracedRArray{U,N}},
+    ::Type{<:TracedRArray{U,N}},
     x::TracedRArray{T,N};
     location=mlir_stacktrace("bitcast_convert", @__FILE__, @__LINE__),
 ) where {T,U,N}
@@ -1499,6 +1499,7 @@ end
     x::TracedRArray{T,N},
     k::Integer;
     dimension::Integer=N,
+    is_stable::Bool=false,
     location=mlir_stacktrace("top_k", @__FILE__, @__LINE__),
 ) where {T,N}
     @assert 1 <= dimension <= N
@@ -1521,7 +1522,13 @@ end
     rsize = [size(x)[1:(end - 1)]..., k]
     values = mlir_type(TracedRArray{T,N}, rsize)
     indices = mlir_type(TracedRArray{Int32,N}, rsize)
-    op = chlo.top_k(x.mlir_data; values, indices, k, location)
+    # is_stable=false lets XLA:GPU dispatch eligible shapes to
+    # raft::matrix::select_k instead of full sort + slice (issue #886); the
+    # debug option that used to force this is gone upstream and the raft path
+    # is only taken for top_k ops declared unstable.
+    op = chlo.top_k(
+        x.mlir_data; values, indices, k, is_stable=MLIR.IR.Attribute(is_stable), location
+    )
     indices = add(
         TracedRArray{Int32,N}((), MLIR.IR.result(op, 2), rsize),
         fill(Int32(1), Tuple(rsize)),
@@ -1738,7 +1745,7 @@ end
 end
 
 @noinline function rng_bit_generator(
-    ::Type{TracedRNumber{T}}, seed::TracedRArray{UInt64,1}, shape; kwargs...
+    ::Type{<:TracedRNumber{T}}, seed::TracedRArray{UInt64,1}, shape; kwargs...
 ) where {T}
     return rng_bit_generator(T, seed, shape; kwargs...)
 end
@@ -1798,7 +1805,7 @@ end
 end
 
 @noinline function randn(
-    ::Type{TracedRNumber{T}}, seed::TracedRArray{UInt64,1}, shape; kwargs...
+    ::Type{<:TracedRNumber{T}}, seed::TracedRArray{UInt64,1}, shape; kwargs...
 ) where {T}
     return randn(T, seed, shape; kwargs...)
 end
@@ -1841,7 +1848,7 @@ distribution with rate 1. Returns a NamedTuple with the following fields:
 end
 
 @noinline function randexp(
-    ::Type{TracedRNumber{T}}, seed::TracedRArray{UInt64,1}, shape; kwargs...
+    ::Type{<:TracedRNumber{T}}, seed::TracedRArray{UInt64,1}, shape; kwargs...
 ) where {T}
     return randexp(T, seed, shape; kwargs...)
 end
@@ -1923,7 +1930,7 @@ end
 
 # eltype conversion
 @noinline function convert(
-    ::Type{TracedRArray{T,N}},
+    ::Type{<:TracedRArray{T,N}},
     x::TracedRArray;
     location=mlir_stacktrace("convert", @__FILE__, @__LINE__),
 ) where {T,N}
@@ -1940,7 +1947,7 @@ end
 end
 
 @noinline function convert(
-    ::Type{TracedRNumber{T}},
+    ::Type{<:TracedRNumber{T}},
     x::TracedRNumber;
     location=mlir_stacktrace("convert", @__FILE__, @__LINE__),
 ) where {T}
@@ -2166,7 +2173,7 @@ end
 
 @noinline function scatter(
     f::F,
-    dest::Vector{TracedRArray{T,N}},
+    dest::Vector{<:TracedRArray{T,N}},
     scatter_indices::TracedRArray{Int64},
     updates::Vector{<:TracedRArray{T}};
     location=mlir_stacktrace("scatter", @__FILE__, @__LINE__),
@@ -2195,7 +2202,7 @@ end
 end
 
 @noinline function scatter(
-    dest::Vector{TracedRArray{T,N}},
+    dest::Vector{<:TracedRArray{T,N}},
     scatter_indices::TracedRArray{TI},
     updates::Vector{<:TracedRArray{T}};
     update_computation::MLIR.IR.Region,
@@ -2420,26 +2427,18 @@ end
     end
 
     if checkpointing isa ReactantCore.Periodic
+        MLIR.IR.setattr!(while_op, "enzyme.enable_checkpointing", MLIR.IR.Attribute(true))
         MLIR.IR.setattr!(
-            while_op, "enzymexla.enable_checkpointing", MLIR.IR.Attribute(true)
-        )
-        MLIR.IR.setattr!(
-            while_op, "enzymexla.checkpoint_period", MLIR.IR.Attribute(checkpointing.n)
+            while_op, "enzyme.checkpoint_period", MLIR.IR.Attribute(checkpointing.n)
         )
     elseif checkpointing isa ReactantCore.Binomial
+        MLIR.IR.setattr!(while_op, "enzyme.enable_checkpointing", MLIR.IR.Attribute(true))
+        MLIR.IR.setattr!(while_op, "enzyme.binomial_checkpointing", MLIR.IR.UnitAttribute())
         MLIR.IR.setattr!(
-            while_op, "enzymexla.enable_checkpointing", MLIR.IR.Attribute(true)
-        )
-        MLIR.IR.setattr!(
-            while_op, "enzymexla.binomial_checkpointing", MLIR.IR.UnitAttribute()
-        )
-        MLIR.IR.setattr!(
-            while_op, "enzymexla.checkpoint_period", MLIR.IR.Attribute(checkpointing.budget)
+            while_op, "enzyme.checkpoint_period", MLIR.IR.Attribute(checkpointing.budget)
         )
     elseif checkpointing === true
-        MLIR.IR.setattr!(
-            while_op, "enzymexla.enable_checkpointing", MLIR.IR.Attribute(true)
-        )
+        MLIR.IR.setattr!(while_op, "enzyme.enable_checkpointing", MLIR.IR.Attribute(true))
     end
 
     return map(enumerate(linear_args)) do (i, arg)
@@ -3967,8 +3966,8 @@ end
 
 @noinline function reduce_window(
     f::F,
-    inputs::Vector{TracedRArray{T,N}},
-    init_values::Vector{TracedRNumber{T}};
+    inputs::Vector{<:TracedRArray{T,N}},
+    init_values::Vector{<:TracedRNumber{T}};
     window_dimensions::Vector{Int},
     window_strides::Vector{Int},
     base_dilations::Vector{Int},
