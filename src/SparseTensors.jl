@@ -5,7 +5,7 @@
 # buffers. At trace time `A * x` / `A * B` / `mul!` emit a
 # `sparse_tensor.assemble` producing a `tensor<m x n x T, #sparse_tensor.encoding>`
 # value consumed by an `enzymexla.sparse.spmm` (alpha * A * B + beta * C). The
-# Enzyme-JAX `lower-sparse-csr` pass rewrites that pair into a
+# Enzyme-JAX `lower-enzymexla-sparse` pass rewrites that pair into a
 # `stablehlo.custom_call @reactant_csr_matmul[_acc]` handled by
 # cuSPARSE/hipSPARSE (see deps/ReactantExtra/xla_ffi.cpp) before XLA sees the
 # sparse-encoded types; constant alpha/beta (e.g. the scalars of a 5-arg
@@ -115,7 +115,7 @@ end
 Emits `sparse_tensor.assemble` + `enzymexla.sparse.spmm` computing
 `alpha * A * B + beta * C` (spmv for vector `B`, spmm for matrix `B`) and
 returns the dense result. The emitted pair is lowered to a library call by the
-Enzyme-JAX `lower-sparse-csr` pass; when `alpha`/`beta` trace to constants the
+Enzyme-JAX `lower-enzymexla-sparse` pass; when `alpha`/`beta` trace to constants the
 scaling and accumulation are fused into that call.
 """
 function sparse_csr_spmm(
@@ -174,7 +174,7 @@ function LinearAlgebra.mul!(
     size(C, 2) == size(B, 2) ||
         throw(DimensionMismatch("C has size $(size(C)), B has size $(size(B))"))
 
-    # Non-traced α/β become constants that `lower-sparse-csr` fuses into a
+    # Non-traced α/β become constants that `lower-enzymexla-sparse` fuses into a
     # single library call; in particular a constant β == 0 never reads C.
     alpha = promote_to(TracedRNumber{T}, α)
     beta = promote_to(TracedRNumber{T}, β)

@@ -451,7 +451,7 @@ function compile_mlir!(
     # else runs: XLA cannot consume sparse-encoded tensor types. With `:none`
     # the sparse IR is kept as-is for inspection.
     if compile_options.optimization_passes !== :none && has_sparse_tensor_ops(mod)
-        run_pass_pipeline!(mod, "lower-sparse-csr", "lower_sparse_csr")
+        run_pass_pipeline!(mod, "lower-enzymexla-sparse", "lower_enzymexla_sparse")
     end
 
     # Raise any triton kernel that might exist as a custom call
