@@ -1,0 +1,43 @@
+{
+  "model": {
+    "class": "robust_regression.RobustRegression",
+    "args": {
+      "n": 10000,
+      "k": 10
+    },
+    "seed": 12345
+  },
+  "iterations": 200,
+  "num_warmup": 0,
+  "trials": 4,
+  "ppls": [
+    {
+      "name": "stan",
+      "inference": {
+        "class": "inference.SVI",
+        "infer_args": {
+          "step_size": 0.01,
+          "num_steps": 2000,
+          "num_particles": 1,
+          "init_scale": 0.1,
+          "guide": "AutoNormal",
+          "optimizer": "Adam",
+          "matched_init": true,
+          "vi_grad_samples": 10,
+          "vi_adapt_iter": 200,
+          "vi_iter": 30000
+        }
+      },
+      "legend": {
+        "name": "Stan",
+        "color": "green"
+      },
+      "trials": 4
+    }
+  ],
+  "save_samples": true,
+  "figures": {
+    "generate_pll": true,
+    "suffix": "png"
+  }
+}

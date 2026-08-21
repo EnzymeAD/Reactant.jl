@@ -1,0 +1,237 @@
+{
+  "_provenance": {
+    "experiment": "Wall-clock re-measurement of the Impulse NUTS implementations of the two PPLBench models whose position vectors are entirely REAL-support, logistic_regression and noisy_or_topic. These were the last two Impulse numbers in the paper still coming from older builds (logistic from the 2026-07-14-era build, noisy-or from the 2026-07-16 build); every other Impulse number already came from the build named below.",
+    "date": "2026-07-30",
+    "cause": "Single-build consistency, user-ordered. Both models were skipped by the FIX-1 re-measurement (nuts_fix1_impulse_rerun_2026-07-30.json) as provable no-ops: their supports are all REAL, so impulse::constrainPosition and impulse::unconstrainPosition take the `if (!hasConstraints || supports.empty()) return constrained;` early return (Enzyme/enzyme/Enzyme/MLIR/Interfaces/HMCUtils.cpp lines 2094 and 2178) and the FIX-1 code is unreachable. However a build-level wall-time drift was observed on n_schools in that run (chains bitwise identical, wall 1.9347 -> 2.1804 s/trial), so every Impulse number in the paper must come from one build. Re-run ordered on that basis.",
+    "binary": "libReactantExtra.so at /mnt/sbrantq/probprog/oopsla/Reactant.jl/deps/ReactantExtra/bazel-bin/libReactantExtra.so, md5 88ec2c261e1d5069b0dfa91ce6c7d505, 5082202064 bytes, built 2026-07-29 20:25. Verified by md5sum before the runs and confirmed in every run log by the line 'Using libReactantExtra from ...'. This is the path named by Reactant.jl/LocalPreferences.toml and benchmark/probprog/LocalPreferences.toml.",
+    "systems_re_run": "Impulse only. The NumPyro, Stan and Turing.jl numbers of both models are unchanged and are reused from sec53_matched_init_suite_2026-07-14.json.",
+    "protocol": "Unchanged standard PPLBench protocol, identical to nuts_fix1_impulse_rerun_2026-07-30.json: 4000 iterations, 1000 warmup, 4 trials as chains, model seed 12345, step_size 0.1, max_tree_depth 10, adapt_step_size true, adapt_mass_matrix true with an all-DENSE inverse mass matrix, matched deterministic initialization, cpu, 32 threads, CUDA_VISIBLE_DEVICES empty. Adaptation is ON.",
+    "replication": "Each model's Impulse configuration was run end to end several times, each run being one complete 4-trial protocol run. The reported wall is the MEDIAN of the replicate steady-state means and the reported n_eff/s is recomputed from it.",
+    "machine": "192 cores, 503 GB. Every replicate was gated on a 1-minute load average below 12 measured immediately before launch; the recorded gate readings were 1.14 to 3.89. See contaminated_runs for the replicates that the gate rejected or that overlapped another user's parallel compile.",
+    "contaminated_runs": "At 2026-07-30T19:39 another user started a large parallel C++ build that took the 1-minute load average from 5 to 227. (1) The first noisy-or replicate, outputs/2026-07-30_19:29:57, had the tail of its trial 3 overlap the load ramp; it is EXCLUDED from the reported aggregate and recorded under models.noisy_or_topic.excluded_replicate. Its chain is bitwise identical to the three clean replicates, and its steady wall of 156.5977 s in fact lands between them, so the contamination was mild, but it is excluded on protocol. (2) Two further noisy-or replicates were launched at 19:40:18 and were correctly REJECTED by the load gate at load 47.84 without running. The three reported clean replicates were run afterwards at gate readings 3.89, 2.12 and 2.75, each after the 1-minute load average had been below 12 for three consecutive 60-second checks. All three logistic replicates predate the contention entirely (gate 1.14, 1.44, 1.81).",
+    "commands": {
+      "logistic": "CUDA_VISIBLE_DEVICES=\"\" ./run_pplbench.sh --device cpu --threads 32 --ppls impulse standard/logistic_regression_matched_init",
+      "noisy_or": "CUDA_VISIBLE_DEVICES=\"\" ./run_pplbench.sh --device cpu --threads 32 --ppls impulse standard/noisy_or_topic_matched_init"
+    }
+  },
+  "models": {
+    "logistic_regression": {
+      "config": "standard/logistic_regression_matched_init",
+      "position_supports": "2 sites, both REAL (alpha Normal, beta Normal); 11 position elements",
+      "old_2026_07_14": {
+        "source": "sec53_matched_init_suite_2026-07-14.json models.logistic_regression.Impulse.matched_init",
+        "per_trial_wall_s": [
+          2.8159,
+          2.5085,
+          2.8258,
+          2.564
+        ],
+        "steady_wall_s_mean": 2.6328,
+        "n_eff": {
+          "min": 14129.585686596758,
+          "median": 15148.37473150951,
+          "max": 21234.357829370714
+        },
+        "n_eff_per_s_median": 5753.7829993067135,
+        "per_trial_final_pll": [
+          -30.6799,
+          -30.0814,
+          -30.3544,
+          -30.3233
+        ],
+        "output_dir": "outputs/2026-07-14_16:59:03"
+      },
+      "new_2026_07_30": {
+        "n_replicate_runs": 3,
+        "gate_load1_per_run": [
+          1.14,
+          1.44,
+          1.81
+        ],
+        "steady_wall_s_mean_per_run": [
+          2.5214,
+          2.6388,
+          2.6368
+        ],
+        "steady_wall_s_mean": 2.6368,
+        "steady_wall_s_mean_min": 2.5214,
+        "steady_wall_s_mean_max": 2.6388,
+        "all_trial_s_per_run": [
+          [
+            2.72993655,
+            2.15532055,
+            2.72639071,
+            2.68251298
+          ],
+          [
+            2.76835912,
+            2.46857341,
+            2.62172026,
+            2.82624069
+          ],
+          [
+            2.78316207,
+            2.4929677,
+            2.66638921,
+            2.75091163
+          ]
+        ],
+        "n_eff": {
+          "min": 14129.585686596758,
+          "median": 15148.37473150951,
+          "max": 21234.357829370714
+        },
+        "n_eff_identical_across_replicates": true,
+        "per_trial_final_pll_identical_across_replicates": true,
+        "n_eff_per_s_median": 5745.07982437326,
+        "n_eff_per_s_median_per_run": [
+          6007.90282369,
+          5740.53268146,
+          5745.07982437
+        ],
+        "per_trial_final_pll": [
+          -30.6799,
+          -30.0814,
+          -30.3544,
+          -30.3233
+        ],
+        "output_dirs": [
+          "./outputs/2026-07-30_19:27:06",
+          "./outputs/2026-07-30_19:28:00",
+          "./outputs/2026-07-30_19:28:36"
+        ]
+      },
+      "output_equivalence_vs_previous_build": "BITWISE IDENTICAL to the 2026-07-14 build. xarray comparison of samples.nc over both variables (alpha, and beta over 10 features) across all 4 chains x 4000 draws gives max absolute difference 0.0, for EACH of the 3 replicates independently. n_eff (min/median/max) and all four per-trial PLLs reproduce to every printed digit. This is the expected result: FIX 1 is unreachable for an all-REAL position."
+    },
+    "noisy_or_topic": {
+      "config": "standard/noisy_or_topic_matched_init",
+      "position_supports": "2 sites, both REAL (active_gumbel_true and active_gumbel_false, ProbProg.Gumbel(0.0, 1.0, (51,)); support(::Type{<:Gumbel}) = :real at Reactant.jl/src/probprog/Distributions.jl:539); 102 position elements",
+      "old_2026_07_16": {
+        "source": "mass_protocol_dense_impulse_rerun_2026-07-16.json noisy_or_topic.Impulse_dense_new_2026_07_16",
+        "per_trial_wall_s": [
+          138.0379,
+          280.3194,
+          143.7976,
+          219.3381
+        ],
+        "steady_wall_s_mean": 214.485,
+        "n_eff": {
+          "min": 1446.1344607183607,
+          "median": 6172.373433671124,
+          "max": 12026.365438899575
+        },
+        "n_eff_per_s_median": 28.777643622774534,
+        "per_trial_final_pll": [
+          -28.7619,
+          -27.8877,
+          -28.8838,
+          -28.2232
+        ],
+        "final_pll_mean": -28.4391,
+        "output_dir": "outputs/2026-07-16_19:03:42"
+      },
+      "new_2026_07_30": {
+        "n_replicate_runs": 3,
+        "gate_load1_per_run": [
+          3.89,
+          2.12,
+          2.75
+        ],
+        "steady_wall_s_mean_per_run": [
+          163.7286,
+          154.9132,
+          149.6723
+        ],
+        "steady_wall_s_mean": 154.9132,
+        "steady_wall_s_mean_min": 149.6723,
+        "steady_wall_s_mean_max": 163.7286,
+        "all_trial_s_per_run": [
+          [
+            124.82824011,
+            132.40638102,
+            225.58613743,
+            133.1932454
+          ],
+          [
+            118.19949297,
+            128.72644229,
+            211.03873564,
+            124.97434622
+          ],
+          [
+            117.89106748,
+            122.33070362,
+            205.25173543,
+            121.4346072
+          ]
+        ],
+        "n_eff": {
+          "min": 1137.3314944218944,
+          "median": 5897.4368168561905,
+          "max": 12020.621392410909
+        },
+        "n_eff_identical_across_replicates": true,
+        "per_trial_final_pll_identical_across_replicates": true,
+        "n_eff_per_s_median": 38.06930448389877,
+        "n_eff_per_s_median_per_run": [
+          36.01959127,
+          38.06930448,
+          39.40231356
+        ],
+        "per_trial_final_pll": [
+          -28.725,
+          -28.7714,
+          -28.6724,
+          -28.3664
+        ],
+        "output_dirs": [
+          "./outputs/2026-07-30_19:53:28",
+          "./outputs/2026-07-30_20:06:19",
+          "./outputs/2026-07-30_20:18:37"
+        ]
+      },
+      "excluded_replicate": {
+        "reason": "Tail of trial 3 overlapped the start of another user's parallel build. Chain bitwise identical to the three clean replicates; timing excluded on protocol.",
+        "steady_wall_s_mean": 156.5977,
+        "all_trial_s": [
+          117.55157091,
+          123.85564317,
+          218.91681499,
+          127.02074663
+        ],
+        "n_eff_per_s_median": 37.65978364560876,
+        "output_dir": "./outputs/2026-07-30_19:29:57"
+      },
+      "speedup_wall": 1.3845497672634308,
+      "speedup_n_eff_per_s": 1.3228777513170273,
+      "output_equivalence_vs_previous_build": "*** NOT BITWISE IDENTICAL to the 2026-07-16 build, and this was NOT expected. *** Both latent sites are ProbProg.Gumbel, whose support is REAL (Reactant.jl/src/probprog/Distributions.jl:539), so impulse::unconstrainPosition and impulse::constrainPosition take the `if (!hasConstraints || supports.empty()) return constrained;` early return at HMCUtils.cpp:2094 and 2178 and the FIX-1 code is unreachable. The model should therefore have reproduced exactly, as logistic_regression did. It did not. Extent of the divergence, measured on samples.nc `active` (4 chains x 4000 draws x 51 topics = 816000 recorded binary states): 100763 entries differ (12.35 percent); per chain 14.60 / 11.69 / 10.31 / 12.79 percent; every chain differs at its FIRST recorded post-warmup draw, so the divergence originates in warmup; 48 of 51 topics differ somewhere; the per-topic posterior activation probability moves by up to 0.187 (topic 37: 0.898 -> 0.712) with a mean absolute move of 0.0246; and the set of topics with posterior activation above 0.5 changes from 4 topics to 3. Derived metrics move accordingly: n_eff median 6172.3734 -> 5897.4368 (-4.5 percent), and the per-trial PLL vector [-28.7619, -27.8877, -28.8838, -28.2232] (mean -28.4391) becomes [-28.7250, -28.7714, -28.6724, -28.3664] (mean -28.6338).",
+      "determinism_probe": "Run-to-run nondeterminism is EXCLUDED as the explanation. (a) All four full-protocol runs taken on the current build (outputs/2026-07-30_19:29:57, 19:53:28, 20:06:19, 20:18:37) are BITWISE IDENTICAL to one another: max absolute difference 0.0 over all 816000 entries, with identical n_eff triples and identical per-trial PLL vectors, despite steady walls spanning 149.67 to 163.73 s. (b) An independent reduced probe, 300 iterations / 100 warmup / 2 trials, config pplbench_configs/standard/noisy_or_topic_determinism_probe.json, run twice back to back at 1-minute load averages of 227.12 and 131.71 (outputs/2026-07-30_19:45:01 and outputs/2026-07-30_19:47:25), is also bitwise identical across the two runs. The model is deterministic on this build at both scales and under wildly different machine load, so the difference against 2026-07-16 is a deterministic BUILD-LEVEL change.",
+      "cause_status": "UNRESOLVED and flagged for review. FIX 1 is excluded by construction (its code is unreachable for an all-REAL position, and logistic_regression, also all-REAL, reproduced bitwise against its own 2026-07-14 baseline). No Julia source under Reactant.jl/src changed after 2026-07-16 00:30 (the noisy-or run was 19:03 that day), standard/noisy_or_topic.jl was last modified 2026-07-16 18:39 (before the run), harness.jl 2026-07-16 01:59, and every modified Enzyme-JAX source has an mtime of 2026-07-10 or earlier, so the only tracked source delta between the two binaries is HMCUtils.cpp. That leaves an untracked difference in the 2026-07-16 binary itself, or in the persistent XLA compile / autotune caches that the harness enables (see the 'Persistent compilation cache enabled' and 'Autotune cache enabled: true' lines in every run log), as the remaining candidates. Not investigated further here.",
+      "impact": "The figure value changes: 28.7776 -> 38.0693 n_eff/s, +32.29 percent, far outside the replicate spread (36.02 to 39.40), so it is updated rather than left alone. Most of the wall-time move is a DIFFERENT TRAJECTORY doing different work rather than a faster kernel: within any single run the per-trial walls range from 118 to 226 s because NUTS tree depth varies by chain. The paper's ordering claim is unaffected, Impulse stays behind Stan (98.2076) and NumPyro (48.2354) and ahead of Turing (4.9010). The paper's predictive log-likelihood band for noisy-or does move: the four per-system means become Impulse -28.6338, NumPyro -28.3510, Stan -28.4682, Turing -28.2763, so the stated band -28.2 to -28.5 becomes -28.2 to -28.7."
+    }
+  },
+  "continuous_nuts_geomeans": {
+    "definition": "Geometric mean over logistic_regression, robust_regression and n_schools of (Impulse n_eff/s median) / (reference n_eff/s median). Reference values are the matched-init numbers of sec53_matched_init_suite_2026-07-14.json and are unchanged.",
+    "impulse_inputs_old": {
+      "logistic_regression": 5753.7829993067135,
+      "robust_regression": 13057.8194,
+      "n_schools": 7550.0403
+    },
+    "impulse_inputs_new": {
+      "logistic_regression": 5745.079824373261,
+      "robust_regression": 13057.8194,
+      "n_schools": 7550.0403
+    },
+    "old": {
+      "NumPyro": 1.5706,
+      "Stan": 5.5132,
+      "Turing.jl": 48.3911
+    },
+    "new": {
+      "NumPyro": 1.5698,
+      "Stan": 5.5104,
+      "Turing.jl": 48.3666
+    },
+    "paper_precision": "The paper states 1.6 / 5.5 / 48 in abstract.tex, introduction.tex and CaseStudies.tex. All three round identically before and after, so no sentence was edited; a provenance comment was added at each of the three sites."
+  }
+}

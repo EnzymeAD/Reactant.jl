@@ -18,6 +18,23 @@ class RobustRegression(BaseStanImplementation):
         """
         self.attrs = attrs
 
+    def matched_init_params(self, data: xr.Dataset) -> Dict:
+        """Deterministic canonical init (matched-init control experiment).
+
+        Constrained values identical to the Impulse arm's NUTS start: alpha = 0,
+        beta = 0 (real support), sigma = 1 and nu = 1 (positive support with an
+        exp transform, so constrained 1 == unconstrained 0). Stan inits live on
+        the constrained scale, so these are passed straight through as `inits`.
+        Only used with --matched-init.
+        """
+        k = int(self.attrs["k"])
+        return {
+            "alpha": np.zeros(1),
+            "beta": np.zeros(k),
+            "sigma": np.ones(1),
+            "nu": np.ones(1),
+        }
+
     def format_data_to_stan(self, data: xr.Dataset) -> Dict:
         """
         Take data from the model generator and the previously passed model

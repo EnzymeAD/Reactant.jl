@@ -109,23 +109,20 @@ function build_constraint(data, init_params)
 
     num_districts_total = num_states * num_districts_per_state
 
-    if init_params !== nothing
-        init_sigma_state = Float64.(init_params["sigma_state"])
-        init_sigma_district = Float64.(init_params["sigma_district"])
-        init_sigma_type = Float64.(init_params["sigma_type"])
-        init_beta_baseline = Float64.(init_params["beta_baseline"])
-        init_beta_state = Float64.(init_params["beta_state"])
-        init_beta_district_flat = Float64.(init_params["beta_district_flat"])
-        init_beta_type = Float64.(init_params["beta_type"])
-    else
-        init_sigma_state = [1.0]
-        init_sigma_district = [1.0]
-        init_sigma_type = [1.0]
-        init_beta_baseline = [0.0]
-        init_beta_state = zeros(num_states)
-        init_beta_district_flat = zeros(num_districts_total)
-        init_beta_type = zeros(num_types)
-    end
+    # Matched-init protocol: deterministic canonical start, the constrained image
+    # of unconstrained zeros. sigma_* (HalfCauchy) are positive with an exp
+    # transform, so their canonical value is exp(0) = 1; beta_* are real, so
+    # canonical is 0. The per-trial `init_params` draw from the upstream
+    # generate_init_params is intentionally ignored so every Impulse trial starts
+    # from the same point as the matched-init baselines (following the annotation
+    # build_constraint pattern).
+    init_sigma_state = [1.0]
+    init_sigma_district = [1.0]
+    init_sigma_type = [1.0]
+    init_beta_baseline = [0.0]
+    init_beta_state = zeros(num_states)
+    init_beta_district_flat = zeros(num_districts_total)
+    init_beta_type = zeros(num_types)
 
     return ProbProg.Constraint(
         :sigma_state => init_sigma_state,

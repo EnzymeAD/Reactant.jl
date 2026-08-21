@@ -1,0 +1,171 @@
+{
+  "_provenance": {
+    "experiment": "Re-run of the Stan ADVI arm of the three SVI PPLBench models under a single uniform CmdStan ADVI budget setting that lets Stan's own convergence heuristic actually fire on logistic_regression. Supersedes the Stan ADVI entries of sec53_matched_init_suite_2026-07-14.json (stan_advi_matched_init) as the source for the Stan (VI) bars of paper/figures/baselines_bar_v2_data.json.",
+    "date": "2026-07-29",
+    "motivation": "Under the previous setting the Stan ADVI arm failed CmdStan's own convergence check on ALL FOUR logistic-regression trials, so the bar was drawn hollow/hatched in fig:baselines-bar.",
+    "diagnostic_mechanism": {
+      "emitter": "CmdStan stan/src/stan/variational/advi.hpp:430-439 prints 'Informational Message: The maximum number of iterations is reached! The algorithm may not have converged.' when the stochastic-gradient-ascent loop exits because iter_counter == max_iterations instead of because the rolling relative-ELBO test fired.",
+      "test": "advi.hpp:400-408. Every eval_elbo (default 100) iterations CmdStan estimates the ELBO from elbo_samples (default 100) draws, pushes rel_difference(elbo, elbo_prev) = |elbo_prev - elbo| / |elbo| into a circular buffer of size cb_size = max(0.1 * iter / eval_elbo, 2), and stops when the buffer MEAN or MEDIAN drops below tol_rel_obj (default 0.01).",
+      "consumer": "cmdstanpy 1.3.0 model.py:1565-1582 regex-matches the literal 'The algorithm may not have converged.' in the CmdStan console transcript; with require_converged=True it raises RuntimeError, with require_converged=False (what the harness uses) it downgrades to a logged WARNING and returns the fit. Nothing machine-readable was recorded before 2026-07-29.",
+      "harness_recording_added_2026-07-29": "stan_harness.py _advi_transcript_diagnostics() now parses the same transcript and records converged / stop_reason / final_iter / final_elbo / delta_elbo_mean / delta_elbo_med / the last ten ELBO rows into outputs/<run>/svi_diagnostics/stan_<model>_seed<seed>.json, and prints one 'Stan ADVI [seed N]: converged=...' line per trial."
+    },
+    "root_cause": "NOT an iteration-budget problem and NOT a bad optimum. CmdStan's eta (step-size) adaptation is a greedy scan over eta in {100, 10, 1, 0.1, 0.01} that runs adapt_iter (default 50) SGD steps per candidate and stops at the first candidate whose post-scan ELBO is worse than the previous candidate's (advi.hpp:163-291). With the harness's protocol-matching grad_samples=1 the per-candidate ELBO estimate is so noisy that the scan stops one step early on roughly half the trial seeds and returns eta=10. At eta=10 the iterate random-walks with an amplitude that keeps the rolling relative-ELBO difference near 0.1-0.2 forever: raising iter to 100000 does not help (see ladder rung C2, delta_elbo_mean still 0.082 after 100000 iterations / 123 s). logistic_regression is the only one of the three models exposed to this because its |ELBO| is about 50, so the same absolute ELBO jitter is 60x larger relative to |ELBO| than on robust (|ELBO| ~ 7700) or n_schools (|ELBO| ~ 7070), whose median test clears 0.01 within a few hundred iterations.",
+    "chosen_setting": {
+      "statement": "Stan's ADVI runs its own algorithm with THREE budgets raised: grad_samples = 10 (CmdStan 2.38 default 1), adapt_iter = 200 (CmdStan default 50), iter = 30000 (CmdStan default 10000). algorithm = meanfield, elbo_samples = 100, eta adaptation engaged, tol_rel_obj = 0.01, eval_elbo = 100 are all left at CmdStan's defaults. draws = 200 = the protocol's K. Same matched CmdStan `inits` as before.",
+      "cmdstan_2_38_defaults_verified": "Read from CmdStan 2.38.0 stan/src/stan/services/experimental/advi/defaults.hpp (gradient_samples::default_value() = 1, adapt_iterations::default_value() = 50, elbo_samples = 100, max_iterations = 10000, tol_rel_obj = 0.01, eval_elbo = 100) and cross-checked against the CmdStan console banner, which prints 'grad_samples = 1 (Default)'. NOTE: cmdstanpy 1.3.0's own docstring (model.py:1473-1474) claims 'grad_samples ... Default is 10', which is WRONG for CmdStan 2.38; do not cite it. The harness's previous grad_samples = 1 therefore coincided with CmdStan's default, so raising it to 10 is a genuine third deviation, not the removal of an imposed one.",
+      "why_grad_samples_10_is_load_bearing": "grad_samples = 10 is what makes CmdStan's greedy eta scan reliable. At grad_samples = 1 no adapt_iter value works: adapt_iter = 50 returns eta = 10 on some seeds (ladder L0/C1), and adapt_iter = 100/200/500 returns eta = 100 on seed 2993578, which diverges to ELBO -4.5e5 .. -4.1e7 and held-out PLL -4.0e5 .. -4.1e7 while still reporting 'converged' because a static astronomically-bad ELBO trivially satisfies the relative test (ladder C4/C6/C9/C10). A hollow bar is preferable to that. Raising grad_samples when ADVI misbehaves is also what the cmdstanpy interface itself suggests (model.py:1593-1596 emits 'Double the value of argument \"grad_samples\"' on a gradient failure), though that message targets a gradient exception rather than non-convergence.",
+      "why_eta_cannot_simply_be_pinned": "adapt_engaged = 0 (pin eta to CmdStan's default value 1) is not usable with cmdstanpy 1.3.0: CmdStanVB.__init__ -> stancsv.parse_variational_eta requires the 'Stepsize adaptation complete. / eta = X' comment block that CmdStan only writes when adaptation is engaged, so the fit dies with 'ValueError: Unable to parse eta from Stan CSV, adaptation block not found' (ladder C8).",
+      "uniformity": "The identical three-knob setting is applied to the Stan ADVI arm of ALL THREE SVI models. It is recorded in pplbench_configs/svi/{logistic_regression,robust_regression,n_schools}_matched_init.json (the Stan-only protocol configs that produced the figure numbers) and in the stan block of pplbench_configs/svi/{logistic_regression,robust_regression,n_schools}.json.",
+      "not_changed": "model, data, generator seed, metric, K = 200 draws, 4 trials, matched init point, thread count, and every other arm."
+    },
+    "commands": {
+      "logistic": "CUDA_VISIBLE_DEVICES=\"\" ./run_pplbench.sh --device cpu --threads 32 --ppls stan svi/logistic_regression_matched_init",
+      "robust": "CUDA_VISIBLE_DEVICES=\"\" ./run_pplbench.sh --device cpu --threads 32 --ppls stan svi/robust_regression_matched_init",
+      "nschools": "CUDA_VISIBLE_DEVICES=\"\" ./run_pplbench.sh --device cpu --threads 32 --ppls stan svi/n_schools_matched_init"
+    },
+    "env": "CPU only (CUDA_VISIBLE_DEVICES=''), 32 threads, 192 cores, cmdstanpy 1.3.0, CmdStan 2.38.0, probprog-bench python. Sole benchmark job on the machine.",
+    "protocol": "PPLBench trials-as-chains SVI, unchanged: iterations = 200 (K = 200 draws from the fitted mean-field guide), num_warmup = 0, 4 trials, model seed 12345, shared trial seeds [1396133, 2993578, 6164479, 9523583]. Only the guide fit is timed; compile is separate. overall n_eff = arviz ESS over all latent sites with the 4 trials as 4 chains; n_eff/s median = n_eff median / steady-state (trials 1..3) fit wall time. PLL = per-trial final cumulative (logsumexp-over-draws) predictive log-likelihood on the held-out items.",
+    "harness_changes": [
+      "stan_harness.py: added --vi-elbo-samples / --vi-tol-rel-obj / --vi-eval-elbo / --vi-eta / --vi-adapt-iter / --vi-no-adapt / --vi-show-console (each defaults to None/False == not passed to CmdStan, so CmdStan's default applies); _collect_advi_opts(); _advi_transcript_diagnostics(); run_vi_trial now returns (samples, diagnostics); _vi_write_diagnostics records advi_settings + advi_convergence; _report_advi_convergence prints one line per trial. The NUTS path is untouched.",
+      "pplbench/pplbench/ppls/stan/inference.py: SVI._get_server_cmd forwards vi_elbo_samples / vi_tol_rel_obj / vi_eval_elbo / vi_eta / vi_adapt_iter / vi_no_adapt / vi_show_console when the config sets them, and honours a Stan-only vi_grad_samples override of the shared num_particles. The MCMC class is untouched.",
+      "pplbench_configs/svi/{logistic_regression,robust_regression,n_schools}{,_matched_init}.json: added vi_grad_samples/vi_adapt_iter/vi_iter to the stan arm only.",
+      "pplbench_configs/svi_stan_ladder/*.json: the exploratory ladder configs (kept as provenance for the settings-vs-outcome table below)."
+    ],
+    "settings_ladder": [
+      {"rung": "L0", "setting": "as previously published: grad_samples=1, iter=10000 (default), adapt_iter=50 (default), elbo_samples=100, tol_rel_obj=0.01", "trials": 2, "converged": "0/2", "eta_selected": "10, 1", "final_delta_elbo_mean": [0.201, 0.039], "pll": [-69.3751, -28.4844], "note": "reproduces the recorded 2026-07-14 failure bit-for-bit (same PLLs)"},
+      {"rung": "L1", "setting": "grad_samples=10, otherwise defaults", "trials": 2, "converged": "0/2", "eta_selected": "1, 1", "final_delta_elbo_mean": [0.035, 0.012], "pll": [-29.0107, -30.8916], "note": "quality already excellent, just short of the tolerance at the 10000-iteration cap"},
+      {"rung": "L2", "setting": "grad_samples=1, iter=100000", "trials": 2, "converged": "1/2", "eta_selected": "10, 1", "final_delta_elbo_mean": [0.099, 0.013], "pll": [-35.4183, -29.9417], "note": "the eta=10 seed still fails after 100000 iterations: budget alone cannot fix it"},
+      {"rung": "L3", "setting": "grad_samples=1, elbo_samples=10000", "trials": 2, "converged": "0/2", "final_delta_elbo_mean": [0.231, 0.053], "pll": [-110.4438, -37.1843], "note": "a less noisy ELBO estimator does not help; the ITERATE, not the estimator, is what moves"},
+      {"rung": "L5", "setting": "grad_samples=1, tol_rel_obj=0.05", "trials": 2, "converged": "1/2", "final_delta_elbo_mean": [0.201, 0.07], "pll": [-69.3751, -26.3861], "note": "relaxing the tolerance 5x still leaves the eta=10 seed at 0.176"},
+      {"rung": "C1", "setting": "grad_samples=10, iter=30000, adapt_iter=50 (default)", "trials": 4, "converged": "3/4", "final_iter": [16400, 17600, 14600, 30000], "pll": [-27.4537, -29.1679, -29.016, -33.2522], "note": "seed 9523583 still draws a bad eta from the 50-iteration scan"},
+      {"rung": "C2", "setting": "grad_samples=10, iter=100000, adapt_iter=50 (default)", "trials": 4, "converged": "3/4", "final_iter": [21600, 22200, 22700, 100000], "wall_s": [22.05, 22.16, 24.17, 122.76], "note": "same seed still fails after 100000 iterations / 123 s: proof that the iteration cap is not the binding constraint"},
+      {"rung": "C4", "setting": "grad_samples=1, adapt_iter=500, iter=10000 (default)", "trials": 4, "converged": "2/4 nominally", "eta_selected": "1, 100, 1, 1", "pll": [-27.7295, -1502798.949, -27.6045, -26.7], "note": "REJECTED: seed 2993578's eta scan returns 100 and diverges, yet reports converged. A longer scan at grad_samples=1 makes things worse, not better"},
+      {"rung": "C6", "setting": "grad_samples=1, adapt_iter=500, iter=30000", "trials": 4, "converged": "3/4 nominally", "eta_selected": "1, 100, 1, 1", "pll": [-28.4001, -1502798.949, -28.2568, -27.6819], "note": "REJECTED: same eta=100 blow-up"},
+      {"rung": "C9", "setting": "grad_samples=1, adapt_iter=200, iter=30000", "trials": 4, "converged": "4/4 nominally", "eta_selected": "1, 100, 1, 1", "pll": [-28.3981, -41446995.5685, -26.5712, -27.6955], "note": "REJECTED: nominally 4/4 converged but seed 2993578 diverges to PLL -4.1e7"},
+      {"rung": "C10", "setting": "grad_samples=1, adapt_iter=100, iter=30000", "trials": 4, "converged": "4/4 nominally", "eta_selected": "1, 100, 1, 1", "pll": [-30.9117, -396768.9397, -26.5858, -27.5982], "note": "REJECTED: same"},
+      {"rung": "C8", "setting": "grad_samples=1, adapt_engaged=0 (eta=1, CmdStan's default value), iter=30000", "trials": "n/a", "converged": "run aborts", "note": "REJECTED: cmdstanpy 1.3.0 cannot parse a variational CSV without the eta-adaptation comment block (ValueError: Unable to parse eta from Stan CSV, adaptation block not found)"},
+      {"rung": "C5", "setting": "grad_samples=10, adapt_iter=500, iter=10000 (default)", "trials": 4, "converged": "3/4", "eta_selected": "1, 1, 1, 1", "final_iter": [8600, 10000, 5400, 8400], "note": "eta scan now reliable, but the default 10000-iteration cap is still too small for one seed"},
+      {"rung": "C3", "setting": "grad_samples=10, adapt_iter=500, iter=30000", "trials": 4, "converged": "4/4", "final_iter": [14500, 14700, 11300, 15000], "wall_s": [16.88, 16.92, 13.6, 17.82], "pll": [-28.6615, -27.856, -27.5933, -26.246], "note": "works, but the 5 x 500 adaptation iterations dominate the cheap models (n_schools 12.8/6.85/8.45/7.56 s, n_eff/s median 0.94; robust n_eff/s median 0.84)"},
+      {"rung": "C7 (CHOSEN)", "setting": "grad_samples=10, adapt_iter=200, iter=30000", "trials": 4, "converged": "4/4 on all three models", "note": "same reliability as C3 at roughly half the adaptation overhead; this is the published setting"}
+    ],
+    "quality_check_against_nuts": {
+      "logistic_regression_nuts_reference": "All four NUTS arms of sec53_matched_init_suite_2026-07-14.json agree on this model: held-out PLL -30.23 to -30.72, posterior alpha = -12.55 +/- 2.06, beta = [2.766, 0.725, -0.577, 0.755, -2.583, -2.975, -0.299, 1.009, -4.312, 5.153] (recomputed from outputs/2026-07-14_16:56:57 / 16:59:03 / 16:59:39 samples.nc, post-warmup).",
+      "verdict": "Judged against that NUTS posterior the CONVERGED Stan ADVI fit is the BEST of the three mean-field VI fits on logistic regression, not a worse one. Pooled posterior means: Stan ADVI new alpha -9.887 (sd 0.539), beta [2.175, 0.555, -0.448, 0.556, -2.066, -2.342, -0.358, 0.786, -3.389, 4.058]; Stan ADVI old (non-converged) alpha -24.388 (sd 8.706), beta up to 10.136, i.e. overshooting by ~2x with an 8.7-wide alpha; NumPyro/Impulse/Turing ADVI alpha -1.62 (sd 0.155), beta [0.354, 0.503, -0.086, 0.209, -0.41, -0.384, -0.556, 0.111, -0.55, 0.66], i.e. still essentially at the loc = 0 initialization.",
+      "consequence_for_the_paper_band": "The -71.6 / -72.1 / -76.0 logistic VI 'band' is where a FIXED 2000-step Adam(0.01) budget lands, not where the model's posterior is. The converged Stan ADVI PLL of -27.30 is above that band and next to the NUTS value of -30.3 (PLL is a logsumexp over the K draws, so a guide whose scales match the posterior scores higher than a near-degenerate one). Any prose that treats -72 as the reference band for this model needs this caveat."
+    },
+    "n_eff_caveat": "For a VI arm the PPLBench trials-as-chains ESS measures across-restart reproducibility RELATIVE TO the fitted guide's own scale, so a tight-but-reproducible under-converged guide scores far higher than a converged guide with SGD restart noise. On logistic the converged Stan guide has across-trial location spread ~0.09-0.20 on beta while its own fitted sd on the well-identified coordinates beta[8], beta[9] is only 0.0075 / 0.0089, a ratio of ~18, so split-Rhat is large and the pooled ESS stays around 19 even though the four fits agree on the ELBO to ~1% and on the site means to ~2-4%. Converging harder cannot close this: the SGD stopping-point noise falls only as 1/sqrt(iterations), so an 18x reduction would need ~300x the budget."
+  },
+  "protocol": "PPLBench SVI (trials-as-chains)",
+  "iterations": 200,
+  "num_warmup": 0,
+  "trials": 4,
+  "advi_setting": {
+    "algorithm": "meanfield",
+    "grad_samples": 10,
+    "adapt_iter": 200,
+    "iter": 30000,
+    "elbo_samples": "CmdStan default (100)",
+    "tol_rel_obj": "CmdStan default (0.01)",
+    "eval_elbo": "CmdStan default (100)",
+    "adapt_engaged": "CmdStan default (true)",
+    "draws": 200,
+    "require_converged": false,
+    "matched_init": true
+  },
+  "models": {
+    "svi/logistic_regression": {
+      "model_class": "logistic_regression.LogisticRegression",
+      "model_args": {"n": 10000, "k": 10, "rho": 3.0},
+      "seed": 12345,
+      "Stan": {
+        "converged": true,
+        "trials_converged": "4/4",
+        "per_trial_stop_reason": ["MEDIAN ELBO CONVERGED", "MEDIAN ELBO CONVERGED", "MEDIAN ELBO CONVERGED", "MEDIAN ELBO CONVERGED"],
+        "per_trial_stop_iter": [22100, 14900, 14200, 13200],
+        "per_trial_final_elbo": [-50.388, -50.221, -51.094, -50.671],
+        "per_trial_delta_elbo_mean": [0.012, 0.012, 0.017, 0.019],
+        "per_trial_delta_elbo_med": [0.01, 0.009, 0.01, 0.009],
+        "per_trial_wall_s": [22.6694, 15.9544, 15.0661, 14.1448],
+        "steady_wall_s_mean": 15.0551,
+        "compile_time_s": 5.5159,
+        "n_eff": {"min": 4.790467421735044, "median": 18.81339837140205, "max": 838.1871053601534},
+        "n_eff_per_s": {"min": 0.3181954283924024, "median": 1.2496353335259776, "max": 55.67458905011484},
+        "per_trial_final_pll": [-27.2591, -27.8427, -26.8219, -27.2822],
+        "final_pll_mean": -27.3015,
+        "output_dir": "outputs/2026-07-29_19:11:24",
+        "previous": {
+          "source": "sec53_matched_init_suite_2026-07-14.json stan_advi_matched_init.models.logistic_regression.matched_init",
+          "converged": false,
+          "trials_converged": "0/4",
+          "n_eff_per_s_median": 2.4305774405209117,
+          "final_pll_mean": -83.1366,
+          "output_dir": "outputs/2026-07-14_20:15:12"
+        }
+      }
+    },
+    "svi/robust_regression": {
+      "model_class": "robust_regression.RobustRegression",
+      "model_args": {"n": 10000, "k": 10},
+      "seed": 12345,
+      "Stan": {
+        "converged": true,
+        "trials_converged": "4/4",
+        "per_trial_stop_reason": ["MEDIAN ELBO CONVERGED", "MEDIAN ELBO CONVERGED", "MEDIAN ELBO CONVERGED", "MEDIAN ELBO CONVERGED"],
+        "per_trial_stop_iter": [1900, 1700, 1700, 1900],
+        "per_trial_final_elbo": [-7710.682, -7714.233, -7720.734, -7703.327],
+        "per_trial_wall_s": [4.7802, 3.8076, 3.6762, 4.142],
+        "steady_wall_s_mean": 3.8753,
+        "compile_time_s": 5.8329,
+        "n_eff": {"min": 5.051901562138192, "median": 6.533116962504271, "max": 911.4983312999283},
+        "n_eff_per_s": {"min": 1.3036278212339452, "median": 1.6858509468049294, "max": 235.209369991758},
+        "per_trial_final_pll": [-7423.6781, -7480.9178, -7477.6852, -7458.6644],
+        "final_pll_mean": -7460.2363,
+        "output_dir": "outputs/2026-07-29_19:12:40",
+        "site_means_vs_numpyro": "alpha -14.229 vs -14.231 and all ten betas match to 3 digits; nu 43.66 vs 8.08 and sigma 1.088 vs 0.939, i.e. the SAME stable-but-worse optimum with the Student-t degrees of freedom inflated as before. Behaviour unchanged in kind; PLL moves from -7395.36 to -7460.24.",
+        "previous": {
+          "source": "sec53_matched_init_suite_2026-07-14.json stan_advi_matched_init.models.robust_regression.matched_init",
+          "converged": true,
+          "n_eff_per_s_median": 8.45708793252332,
+          "final_pll_mean": -7395.3638,
+          "output_dir": "outputs/2026-07-14_20:15:30"
+        }
+      }
+    },
+    "svi/n_schools": {
+      "model_class": "n_schools.NSchools",
+      "model_args": {"n": 10000},
+      "seed": 12345,
+      "Stan": {
+        "converged": true,
+        "trials_converged": "4/4",
+        "per_trial_stop_reason": ["MEDIAN ELBO CONVERGED", "MEDIAN ELBO CONVERGED", "MEDIAN ELBO CONVERGED", "MEDIAN ELBO CONVERGED"],
+        "per_trial_stop_iter": [300, 700, 500, 500],
+        "per_trial_final_elbo": [-7076.389, -7070.375, -7063.473, -7089.123],
+        "per_trial_wall_s": [3.8096, 4.4283, 3.5942, 3.7683],
+        "steady_wall_s_mean": 3.9303,
+        "compile_time_s": 6.1169,
+        "n_eff": {"min": 5.089891479200048, "median": 9.119414978686917, "max": 783.2316176804345},
+        "n_eff_per_s": {"min": 1.295052567177022, "median": 2.3203091514943686, "max": 199.28246433471602},
+        "per_trial_final_pll": [-6893.2055, -6890.0212, -6882.2622, -6895.533],
+        "final_pll_mean": -6890.2555,
+        "output_dir": "outputs/2026-07-29_19:13:06",
+        "site_means_vs_numpyro": "sigma_state 3.103 vs 2.898, sigma_district 2.725 vs 2.871, sigma_type 3.344 vs 3.402, beta_baseline -3.162 vs -3.243. In band, as before.",
+        "previous": {
+          "source": "sec53_matched_init_suite_2026-07-14.json stan_advi_matched_init.models.n_schools.matched_init",
+          "converged": true,
+          "n_eff_per_s_median": 22.310949052112672,
+          "final_pll_mean": -6891.2539,
+          "output_dir": "outputs/2026-07-14_20:15:42"
+        }
+      }
+    }
+  },
+  "figure_data_delta": {
+    "file": "paper/figures/baselines_bar_v2_data.json",
+    "vi_logistic_regression.values.Stan": {"old": 2.4305774405209117, "new": 1.2496353335259776},
+    "vi_logistic_regression.flags": {"old": {"Stan": "diverged"}, "new": "key removed (bar drawn solid)"},
+    "vi_robust_regression.values.Stan": {"old": 8.45708793252332, "new": 1.6858509468049294},
+    "vi_n_schools.values.Stan": {"old": 22.310949052112672, "new": 2.3203091514943686},
+    "why_all_three_drop": "grad_samples = 10 is 10x the per-iteration work of CmdStan's default grad_samples = 1, and the eta scan now costs 5 x 200 instead of 5 x 50 iterations. On logistic that buys convergence (n_eff median 5.48 -> 18.81) but the fit wall time rises 2.26 s -> 15.06 s. robust and n_schools already converged, so for them the uniform setting is pure added cost (3.88 s and 3.93 s per fit against 0.65 s and 0.46 s)."
+  }
+}

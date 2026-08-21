@@ -60,17 +60,17 @@ function build_constraint(data, init_params)
     k = Int(attrs["k"])
     Y = Float64.(data["Y"])
 
-    if init_params !== nothing
-        init_alpha = Float64.(init_params["alpha"])
-        init_beta = Float64.(init_params["beta"])
-        init_nu = Float64.(init_params["nu"])
-        init_sigma = Float64.(init_params["sigma"])
-    else
-        init_alpha = [0.0]
-        init_beta = zeros(k)
-        init_nu = [20.0]     # Gamma(2, 0.1) mean = 20
-        init_sigma = [10.0]  # Exponential(1/sigma_mean) mean = sigma_mean
-    end
+    # Matched-init protocol: deterministic canonical start, the constrained image
+    # of unconstrained zeros. alpha and beta are real, so canonical is 0; nu
+    # (Gamma) and sigma (Exponential) are positive with an exp transform, so their
+    # canonical value is exp(0) = 1. The per-trial `init_params` draw from the
+    # upstream generate_init_params is intentionally ignored so every Impulse trial
+    # starts from the same point as the matched-init baselines (following the
+    # annotation build_constraint pattern).
+    init_alpha = [0.0]
+    init_beta = zeros(k)
+    init_nu = [1.0]
+    init_sigma = [1.0]
 
     return ProbProg.Constraint(
         :alpha => init_alpha,

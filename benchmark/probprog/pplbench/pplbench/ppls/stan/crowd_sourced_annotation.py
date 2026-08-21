@@ -18,6 +18,21 @@ class CrowdSourcedAnnotation(BaseStanImplementation):
         """
         self.attrs = attrs
 
+    def matched_init_params(self, data: xr.Dataset) -> Dict:
+        """Deterministic uniform-simplex init (matched-init control experiment).
+
+        Constrained values identical to the Impulse arm's NUTS start: prev is
+        the uniform K-simplex and every confusion row is the uniform K-simplex.
+        Stan inits live on the constrained scale, so these are passed straight
+        through as `inits`. Only used when the harness runs with --matched-init.
+        """
+        K = int(self.attrs["num_categories"])
+        k = int(self.attrs["k"])
+        return {
+            "prev": np.full((K,), 1.0 / K),
+            "confusion_matrix": np.full((k, K, K), 1.0 / K),
+        }
+
     def format_data_to_stan(self, data: xr.Dataset) -> Dict:
         """
         Take data from the model generator and the previously passed model

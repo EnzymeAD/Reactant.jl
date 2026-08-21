@@ -1,0 +1,320 @@
+{
+ "_provenance": {
+  "experiment": "Wall-clock re-measurement of the Impulse NUTS implementations of the three PPLBench models whose position vectors carry non-REAL supports, under the FIX-1 build.",
+  "date": "2026-07-30",
+  "cause": "FIX 1: per-site whole-slice DynamicUpdateSlice in impulse::constrainPosition / impulse::unconstrainPosition (Enzyme/enzyme/Enzyme/MLIR/Interfaces/HMCUtils.cpp, 26 insertions / 48 deletions in the working tree of /mnt/sbrantq/probprog/oopsla/Enzyme, branch oopsla). The previous form reassembled the transformed position one ELEMENT at a time, costing 6 ops per element (2 index constants, dynamic_slice, two round-trip reshapes, dynamic_update_slice) in a serial chain that reverse-mode AD mirrored into a per-element slice/pad/accumulate thunk sequence on every leapfrog step. The new form writes each already-transformed slice in whole at its running offset, O(number of sites) instead of O(number of elements).",
+  "binary": "libReactantExtra.so at /mnt/sbrantq/probprog/oopsla/Reactant.jl/deps/ReactantExtra/bazel-bin/libReactantExtra.so, md5 88ec2c261e1d5069b0dfa91ce6c7d505 (the FIX-1 prototype build), 5082202064 bytes, built 2026-07-29 20:25. This is the path named by Reactant.jl/LocalPreferences.toml and benchmark/probprog/LocalPreferences.toml, and confirmed in every run log by the line 'Using libReactantExtra from ...'.",
+  "systems_re_run": "Impulse only. The NumPyro, Stan and Turing.jl numbers of these models are unchanged and are reused from sec53_matched_init_suite_2026-07-14.json and annotation_matched_init_results_2026-07-14.json.",
+  "models_not_re_run": "logistic_regression and noisy_or_topic. Both are all-REAL-support (logistic: alpha and beta Normal; noisy_or: active_gumbel_true and active_gumbel_false Gumbel), so impulse::unconstrainPosition / impulse::constrainPosition return their input unchanged (the hasConstraints early return) and FIX 1 cannot affect them.",
+  "protocol": "Unchanged standard PPLBench protocol: 4000 iterations, 1000 warmup, 4 trials as chains, model seed 12345, step_size 0.1, max_tree_depth 10, adapt_step_size true, adapt_mass_matrix true with an all-DENSE inverse mass matrix, matched deterministic initialization, cpu, 32 threads, CUDA_VISIBLE_DEVICES empty. Adaptation is ON.",
+  "replication": "Each model's Impulse configuration was run 3 times end to end (5 times for n_schools), each run being one complete 4-trial protocol run. n_eff is deterministic given the seeds, so replicates differ only in wall time. The reported wall is the MEDIAN of the replicate steady-state means and the reported n_eff/s is recomputed from it. The 2026-07-14 and 2026-07-16 reference numbers are single runs.",
+  "machine": "192 cores, 503 GB. Every replicate was gated on a 1-minute load average below 12 measured immediately before launch; the recorded gate readings were 1.29 to 2.43. Two earlier exploratory runs taken while another user held the machine at load 73 to 92 are excluded from the aggregates and listed under contaminated_runs.",
+  "commands": {
+   "annotation": "CUDA_VISIBLE_DEVICES=\"\" ./run_pplbench.sh --device cpu --threads 32 --ppls impulse standard/crowd_sourced_annotation",
+   "robust": "CUDA_VISIBLE_DEVICES=\"\" ./run_pplbench.sh --device cpu --threads 32 --ppls impulse standard/robust_regression_matched_init",
+   "n_schools": "CUDA_VISIBLE_DEVICES=\"\" ./run_pplbench.sh --device cpu --threads 32 --ppls impulse standard/n_schools_matched_init"
+  }
+ },
+ "models": {
+  "crowd_sourced_annotation": {
+   "config": "standard/crowd_sourced_annotation",
+   "position_supports": "31 SIMPLEX sites (prev, plus 10 labelers x 3 categories confusion rows); 93 constrained / 62 unconstrained position elements",
+   "old_2026_07_14_or_16": {
+    "source": "mass_protocol_dense_impulse_rerun_2026-07-16.json crowd_sourced_annotation.Impulse_dense_new_2026_07_16",
+    "per_trial_wall_s": [
+     12.0514,
+     10.9406,
+     11.6516,
+     11.8764
+    ],
+    "steady_wall_s_mean": 11.4895,
+    "n_eff": {
+     "min": 12081.561850901377,
+     "median": 18316.622934628384,
+     "max": 23836.19373909194
+    },
+    "n_eff_per_s_median": 1594.19862275062,
+    "per_trial_final_pll": [
+     -1807.9216,
+     -1809.426,
+     -1806.5584,
+     -1806.9222
+    ],
+    "output_dir": "outputs/2026-07-16_18:53:28"
+   },
+   "new_2026_07_30_fix1": {
+    "n_replicate_runs": 3,
+    "steady_wall_s_mean_per_run": [
+     7.6128,
+     7.9264,
+     7.4666
+    ],
+    "steady_wall_s_mean": 7.6128,
+    "steady_wall_s_mean_min": 7.4666,
+    "steady_wall_s_mean_max": 7.9264,
+    "all_trial_s_per_run": [
+     [
+      7.82245778,
+      7.50236115,
+      7.62933571,
+      7.70657723
+     ],
+     [
+      7.93190649,
+      7.97314852,
+      7.8175249,
+      7.98848739
+     ],
+     [
+      7.79608987,
+      7.39933333,
+      7.33199155,
+      7.66861647
+     ]
+    ],
+    "n_eff": {
+     "min": 12803.863067965936,
+     "median": 18747.41995822029,
+     "max": 24109.860662348405
+    },
+    "n_eff_per_s_median": 2462.6317931479416,
+    "n_eff_per_s_median_per_run": [
+     2462.63179326,
+     2365.19111569,
+     2510.82174763
+    ],
+    "per_trial_final_pll": [
+     -1804.6394,
+     -1806.7109,
+     -1805.3662,
+     -1809.3103
+    ],
+    "output_dirs": [
+     "./outputs/2026-07-30_18:15:32",
+     "./outputs/2026-07-30_18:20:07",
+     "./outputs/2026-07-30_18:24:47"
+    ]
+   },
+   "speedup_wall": 1.5092344472467423,
+   "speedup_n_eff_per_s": 1.544745904308293,
+   "output_equivalence_vs_previous_build": "NOT bitwise identical to the 2026-07-16 build. The chains diverge from the first recorded draw (chain 0 draw 0 prev: old [0.02330083, 0.88414833, 0.09255084] vs new [0.02455572, 0.87145277, 0.10399150]), i.e. the difference originates in warmup. The sampled posterior is the same: overall prev mean old [0.020109, 0.888514, 0.091377] vs new [0.019393, 0.889949, 0.090657], R-hat ~1.0, per-trial PLL in the same dominant-mode band, n_eff median within 2.4 percent.",
+   "verdict": "IMPROVED, large and reproducible. Steady wall 11.4895 -> 7.6128 s (1.509x faster), n_eff/s median 1594.19862275062 -> 2462.6318 (1.545x). All 3 clean replicates lie in 7.4666 to 7.9264 s, far below the previous 11.4895 s. Impulse now LEADS NumPyro on this model (7.6128 s against 8.5277 s, 2462.63 against 2227.51 n_eff/s), where it previously trailed. This is the model with the largest reassembly: 31 sites and 93 constrained position elements."
+  },
+  "robust_regression": {
+   "config": "standard/robust_regression_matched_init",
+   "position_supports": "4 sites, 2 non-REAL (nu Gamma, sigma Exponential); 13 position elements",
+   "old_2026_07_14_or_16": {
+    "source": "sec53_matched_init_suite_2026-07-14.json models.robust_regression.Impulse.matched_init",
+    "per_trial_wall_s": [
+     2.3299,
+     2.1968,
+     1.6357,
+     2.0877
+    ],
+    "steady_wall_s_mean": 1.9734,
+    "n_eff": {
+     "min": 6534.613023876063,
+     "median": 24976.72517353452,
+     "max": 30078.623473771346
+    },
+    "n_eff_per_s_median": 12656.662326481071,
+    "per_trial_final_pll": [
+     -7184.4497,
+     -7184.4699,
+     -7184.6518,
+     -7184.2587
+    ],
+    "output_dir": "outputs/2026-07-14_17:05:13"
+   },
+   "new_2026_07_30_fix1": {
+    "n_replicate_runs": 3,
+    "steady_wall_s_mean_per_run": [
+     1.9128,
+     1.8801,
+     1.9295
+    ],
+    "steady_wall_s_mean": 1.9128,
+    "steady_wall_s_mean_min": 1.8801,
+    "steady_wall_s_mean_max": 1.9295,
+    "all_trial_s_per_run": [
+     [
+      2.17374297,
+      2.1879291,
+      1.56253423,
+      1.98787421
+     ],
+     [
+      2.12216896,
+      2.13003093,
+      1.54005387,
+      1.97025795
+     ],
+     [
+      2.17584465,
+      2.24843558,
+      1.54259119,
+      1.99735055
+     ]
+    ],
+    "n_eff": {
+     "min": 6534.613023876063,
+     "median": 24976.72517353452,
+     "max": 30078.623473771346
+    },
+    "n_eff_per_s_median": 13057.819446536698,
+    "n_eff_per_s_median_per_run": [
+     13057.81944426,
+     13284.68477926,
+     12944.93626888
+    ],
+    "per_trial_final_pll": [
+     -7184.4497,
+     -7184.4699,
+     -7184.6518,
+     -7184.2587
+    ],
+    "output_dirs": [
+     "./outputs/2026-07-30_18:17:31",
+     "./outputs/2026-07-30_18:22:11",
+     "./outputs/2026-07-30_18:26:45"
+    ]
+   },
+   "speedup_wall": 1.03168130489335,
+   "speedup_n_eff_per_s": 1.031695332442922,
+   "output_equivalence_vs_previous_build": "BITWISE IDENTICAL to the 2026-07-14 build: xarray comparison of samples.nc alpha over all 4 chains x 4000 draws gives max absolute difference 0.0. n_eff and every per-trial PLL reproduce to all printed digits.",
+   "verdict": "IMPROVED, small and consistent. Steady wall 1.9734 -> 1.9128 s (1.032x faster), n_eff/s median 12656.662326481071 -> 13057.8194 (1.032x). All 3 clean replicates (1.8801, 1.9128, 1.9295) are below the previous 1.9734 s, and every one of the four per-trial times is lower than its 2026-07-14 counterpart. Only 13 position elements pass through the reassembly, so the effect is correspondingly small."
+  },
+  "n_schools": {
+   "config": "standard/n_schools_matched_init",
+   "position_supports": "7 sites, 3 non-REAL (sigma_state / sigma_district / sigma_type, HalfCauchy); 57 position elements",
+   "old_2026_07_14_or_16": {
+    "source": "sec53_matched_init_suite_2026-07-14.json models.n_schools.Impulse.matched_init",
+    "per_trial_wall_s": [
+     2.6961,
+     1.7568,
+     2.1867,
+     1.8607
+    ],
+    "steady_wall_s_mean": 1.9347,
+    "n_eff": {
+     "min": 9509.24896671635,
+     "median": 16462.01794073267,
+     "max": 19080.218671829807
+    },
+    "n_eff_per_s_median": 8508.680341285619,
+    "per_trial_final_pll": [
+     -6871.5203,
+     -6870.9424,
+     -6872.4183,
+     -6871.5246
+    ],
+    "output_dir": "outputs/2026-07-14_17:13:20"
+   },
+   "new_2026_07_30_fix1": {
+    "n_replicate_runs": 5,
+    "steady_wall_s_mean_per_run": [
+     2.1379,
+     2.1804,
+     2.1315,
+     2.332,
+     2.2173
+    ],
+    "steady_wall_s_mean": 2.1804,
+    "steady_wall_s_mean_min": 2.1315,
+    "steady_wall_s_mean_max": 2.332,
+    "all_trial_s_per_run": [
+     [
+      2.55834794,
+      1.74980412,
+      2.16487645,
+      2.49904668
+     ],
+     [
+      2.51355478,
+      1.77181919,
+      2.17260122,
+      2.59674386
+     ],
+     [
+      2.59333603,
+      1.76298413,
+      2.76878595,
+      1.86278752
+     ],
+     [
+      2.61194546,
+      1.88036678,
+      3.28441163,
+      1.83133051
+     ],
+     [
+      2.52373311,
+      1.73032629,
+      3.13996943,
+      1.78162392
+     ]
+    ],
+    "n_eff": {
+     "min": 9509.24896671635,
+     "median": 16462.01794073267,
+     "max": 19080.218671829807
+    },
+    "n_eff_per_s_median": 7550.0402961441,
+    "n_eff_per_s_median_per_run": [
+     7700.05519728,
+     7550.04030307,
+     7723.13848326,
+     7059.07445862,
+     7424.33109462
+    ],
+    "per_trial_final_pll": [
+     -6871.5203,
+     -6870.9424,
+     -6872.4183,
+     -6871.5246
+    ],
+    "output_dirs": [
+     "./outputs/2026-07-30_18:18:50",
+     "./outputs/2026-07-30_18:23:30",
+     "./outputs/2026-07-30_18:28:04",
+     "./outputs/2026-07-30_18:29:21",
+     "./outputs/2026-07-30_18:30:40"
+    ]
+   },
+   "speedup_wall": 0.8873142542652724,
+   "speedup_n_eff_per_s": 0.8873338747384799,
+   "output_equivalence_vs_previous_build": "BITWISE IDENTICAL to the 2026-07-14 build: xarray comparison of samples.nc beta_baseline over all 4 chains x 4000 draws gives max absolute difference 0.0. n_eff and every per-trial PLL reproduce to all printed digits.",
+   "verdict": "REGRESSED against the previous measurement, reproducibly. Steady wall 1.9347 -> 2.1804 s (0.887x, i.e. 12.7 percent slower), n_eff/s median 8508.680341285619 -> 7550.0403. All 5 clean replicates (2.1315, 2.1379, 2.1804, 2.2173, 2.3320) exceed the previous 1.9347 s. Per-trial structure: trial 0 is faster than before (2.51 to 2.61 against 2.6961) and trial 1 is unchanged (1.73 to 1.88 against 1.7568), but trials 2 and 3 together cost more (sum 4.63 to 5.12 against 4.047). Trials 2 and 3 are bimodal and anti-correlated across replicates: when trial 2 is low (2.16, 2.17) trial 3 is high (2.50, 2.60), and when trial 2 is high (2.77, 3.28, 3.14) trial 3 is low (1.86, 1.83, 1.78). Because the chains are bitwise identical to the previous build, the arithmetic performed is the same, so this is a codegen or scheduling effect rather than extra work. CAVEAT: the previous value is a single run of a different build, and this binary carries every compiler change between 2026-07-14 and 2026-07-29, not FIX 1 alone; the regression is therefore attributed to the build, not specifically to FIX 1."
+  }
+ },
+ "continuous_nuts_geomean_impact": {
+  "note": "Impulse over each reference system on the three continuous NUTS models. Reference n_eff/s are the unchanged matched-init values of sec53_matched_init_suite_2026-07-14.json. logistic_regression's Impulse value 5753.7829993067135 is unchanged (all-REAL support, not re-run).",
+  "old": {
+   "NumPyro": 1.6175,
+   "Stan": 5.6779,
+   "Turing.jl": 49.837
+  },
+  "new": {
+   "NumPyro": 1.5706,
+   "Stan": 5.5132,
+   "Turing.jl": 48.3911
+  },
+  "per_model_new": {
+   "vs_NumPyro": {
+    "logistic_regression": 1.675,
+    "robust_regression": 1.5655,
+    "n_schools": 1.4776
+   },
+   "vs_Stan": {
+    "logistic_regression": 4.973,
+    "robust_regression": 4.8599,
+    "n_schools": 6.9336
+   },
+   "vs_Turing.jl": {
+    "logistic_regression": 18.5761,
+    "robust_regression": 46.786,
+    "n_schools": 130.3844
+   }
+  }
+ }
+}

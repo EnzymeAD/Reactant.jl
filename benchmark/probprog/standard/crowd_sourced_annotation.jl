@@ -90,7 +90,9 @@ function setup(data)
         model_args = model_args,
         selection = selection,
         position_size = position_size,
-        inverse_mass_matrix = ones(Float64, position_size),
+        # Dense mass-adaptation protocol: fall through to the harness dense-eye
+        # default so Impulse adapts a dense Welford mass matching NumPyro/Stan/Turing.
+        # inverse_mass_matrix = ones(Float64, position_size),
         model_name = "Crowd-Sourced Annotation",
     )
 end

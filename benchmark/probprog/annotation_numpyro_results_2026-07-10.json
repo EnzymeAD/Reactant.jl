@@ -1,0 +1,71 @@
+{
+  "_provenance": {
+    "description": "Cross-framework results for the crowd-sourced annotation (Dawid-Skene, marginalized) model under the STANDARD PPLBench protocol. NumPyro was added 2026-07-10; Impulse and Stan rows are reused verbatim from the G4 run (paper_data_G4_2026-07-06_052754.json / g4_results_G4_2026-07-06_052754.json).",
+    "config": "pplbench_configs/standard/crowd_sourced_annotation.json (model seed 12345, n=2000 -> 1000 train items, k=10, num_categories=3, expected_correctness=0.8, num_labels_per_item=3, concentration=10; iterations=4000, num_warmup=1000, trials=4, single chain per trial)",
+    "protocol": "PPLBench trials-as-chains: overall n_eff = arviz.ess (min/median/max over all 62 params, 4 trials as 4 chains); n_eff/s = overall n_eff / mean steady-state (trials 1..3) inference wall time; PLL = per-trial final cumulative predictive log-likelihood on the held-out 1000 test items.",
+    "numpyro_run": {
+      "env": "conda probprog-bench python (numpyro 0.19.0, jax 0.9.0), matching how the other standard-model NumPyro bars were produced by run_pplbench.sh; NOT the local probprog/jax+numpyro tree (different jax version) so the bar is comparable to the other baselines.",
+      "command": "./run_pplbench.sh --device cpu --threads 32 --ppls numpyro standard/crowd_sourced_annotation",
+      "output_dir": "outputs/2026-07-10_03:18:27",
+      "model_impl": "pplbench/pplbench/ppls/numpyro/crowd_sourced_annotation.py (marginalized Dawid-Skene; analytic logsumexp over the discrete true label, matching the Stan and Impulse references)",
+      "cpu_cores": 192,
+      "date": "2026-07-10"
+    }
+  },
+  "config_name": "standard/crowd_sourced_annotation",
+  "model_class": "crowd_sourced_annotation.CrowdSourcedAnnotation",
+  "model_args": {
+    "n": 2000, "k": 10, "num_categories": 3, "expected_correctness": 0.8,
+    "num_labels_per_item": 3, "concentration": 10
+  },
+  "iterations": 4000,
+  "num_warmup": 1000,
+  "num_chains": 1,
+  "frameworks": {
+    "Impulse": {
+      "source": "G4 run (reused)",
+      "compile_time_s": 47.384455836,
+      "infer_per_trial_s": [3.9966, 3.6924, 3.7545, 3.6881],
+      "total_s_mean": 3.7828829849999996,
+      "n_trials": 4,
+      "neff_min": 11416.896212560785,
+      "neff_median": 17395.215910748226,
+      "neff_max": 24006.852562379976,
+      "neff_per_s_median": 4686.652801819547,
+      "pll_per_trial": [-1807.9325, -1808.9163, -1807.6618, -1809.2533],
+      "pll_final_mean": -1808.440975
+    },
+    "NumPyro": {
+      "source": "new 2026-07-10 run (outputs/2026-07-10_03:18:27)",
+      "compile_time_s": 12.69505262374878,
+      "infer_per_trial_s": [8.6028, 8.7422, 8.5805, 7.6508],
+      "steady_mean_run_s": 8.324510971705118,
+      "n_trials": 4,
+      "neff_min": 7.07302499571123,
+      "neff_median": 8.125424459941653,
+      "neff_max": 20535.25645324727,
+      "neff_per_s_min": 0.8496625230902248,
+      "neff_per_s_median": 0.9760842994333052,
+      "neff_per_s_max": 2466.8423794558366,
+      "pll_per_trial": [-1807.2438, -1808.0851, -1807.9044, -1849.5191],
+      "pll_final_mean": -1818.1881
+    },
+    "Stan": {
+      "source": "G4 run (reused)",
+      "compile_time_s": 6.959553003311157,
+      "infer_per_trial_s": [93.9803, 96.6177, 84.1274, 95.1369],
+      "total_s_mean": 92.4655659198761,
+      "n_trials": 4,
+      "neff_min": 7.071809616133783,
+      "neff_median": 8.057134121557441,
+      "neff_max": 19775.15221993426,
+      "neff_per_s_median": 0.08761501172653978,
+      "pll_per_trial": [-1806.7229, -1804.7935, -1847.4124, -1807.9978],
+      "pll_final_mean": -1816.73165
+    },
+    "Turing.jl": {
+      "status": "not-implemented",
+      "note": "No marginalized Dawid-Skene Turing model exists in the tree (pplbench/pplbench/ppls/turing/ has no crowd_sourced_annotation.py). Turing does not auto-marginalize discrete latents, so a comparable arm would require a hand-written marginalized model; not created per task scope."
+    }
+  }
+}

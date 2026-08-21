@@ -1,0 +1,409 @@
+{
+  "svi/logistic_regression": {
+    "model": "logistic_regression.LogisticRegression",
+    "model_args": {
+      "n": 10000,
+      "k": 10,
+      "rho": 3.0,
+      "seed": 12345
+    },
+    "seed": 12345,
+    "inference": "SVI",
+    "num_steps": 20,
+    "step_size": 0.01,
+    "init_scale": 0.1,
+    "trials": 2,
+    "ppl_a": "numpyro",
+    "ppl_b": "impulse",
+    "atol": 0.0001,
+    "rtol": 0.001,
+    "shared_seeds": [
+      1396133,
+      2993578
+    ],
+    "all_close": true,
+    "per_seed": {
+      "1396133": {
+        "loc": {
+          "alpha": {
+            "max_diff": 5.551115123125783e-17,
+            "pass": true,
+            "exactly_zero": false
+          },
+          "beta": {
+            "max_diff": 1.942890293094024e-16,
+            "pass": true,
+            "exactly_zero": false
+          }
+        },
+        "scale": {
+          "alpha": {
+            "max_diff": 4.163336342344337e-17,
+            "pass": true,
+            "exactly_zero": false
+          },
+          "beta": {
+            "max_diff": 5.551115123125783e-17,
+            "pass": true,
+            "exactly_zero": false
+          }
+        },
+        "elbo": {
+          "max_diff": 2.9103830456733704e-11,
+          "pass": true,
+          "exactly_zero": false,
+          "constant_offset": null
+        }
+      },
+      "2993578": {
+        "loc": {
+          "alpha": {
+            "max_diff": 5.551115123125783e-17,
+            "pass": true,
+            "exactly_zero": false
+          },
+          "beta": {
+            "max_diff": 1.8171228410857054e-16,
+            "pass": true,
+            "exactly_zero": false
+          }
+        },
+        "scale": {
+          "alpha": {
+            "max_diff": 4.163336342344337e-17,
+            "pass": true,
+            "exactly_zero": false
+          },
+          "beta": {
+            "max_diff": 6.938893903907228e-17,
+            "pass": true,
+            "exactly_zero": false
+          }
+        },
+        "elbo": {
+          "max_diff": 2.1827872842550278e-11,
+          "pass": true,
+          "exactly_zero": false,
+          "constant_offset": null
+        }
+      }
+    }
+  },
+  "svi/robust_regression": {
+    "model": "robust_regression.RobustRegression",
+    "model_args": {
+      "n": 10000,
+      "k": 10,
+      "seed": 12345
+    },
+    "seed": 12345,
+    "inference": "SVI",
+    "num_steps": 20,
+    "step_size": 0.01,
+    "init_scale": 0.1,
+    "trials": 2,
+    "ppl_a": "numpyro",
+    "ppl_b": "impulse",
+    "atol": 0.0001,
+    "rtol": 0.001,
+    "shared_seeds": [
+      1396133,
+      2993578
+    ],
+    "all_close": true,
+    "per_seed": {
+      "1396133": {
+        "loc": {
+          "alpha": {
+            "max_diff": 5.551115123125783e-17,
+            "pass": true,
+            "exactly_zero": false
+          },
+          "beta": {
+            "max_diff": 2.636779683484747e-16,
+            "pass": true,
+            "exactly_zero": false
+          },
+          "nu": {
+            "max_diff": 0.0,
+            "pass": true,
+            "exactly_zero": true
+          },
+          "sigma": {
+            "max_diff": 2.7755575615628914e-17,
+            "pass": true,
+            "exactly_zero": false
+          }
+        },
+        "scale": {
+          "alpha": {
+            "max_diff": 4.163336342344337e-17,
+            "pass": true,
+            "exactly_zero": false
+          },
+          "beta": {
+            "max_diff": 8.326672684688674e-17,
+            "pass": true,
+            "exactly_zero": false
+          },
+          "nu": {
+            "max_diff": 5.551115123125783e-17,
+            "pass": true,
+            "exactly_zero": false
+          },
+          "sigma": {
+            "max_diff": 4.163336342344337e-17,
+            "pass": true,
+            "exactly_zero": false
+          }
+        },
+        "elbo": {
+          "max_diff": 1.4551915228366852e-11,
+          "pass": true,
+          "exactly_zero": false,
+          "constant_offset": null
+        }
+      },
+      "2993578": {
+        "loc": {
+          "alpha": {
+            "max_diff": 5.551115123125783e-17,
+            "pass": true,
+            "exactly_zero": false
+          },
+          "beta": {
+            "max_diff": 1.6653345369377348e-16,
+            "pass": true,
+            "exactly_zero": false
+          },
+          "nu": {
+            "max_diff": 5.551115123125783e-17,
+            "pass": true,
+            "exactly_zero": false
+          },
+          "sigma": {
+            "max_diff": 0.0,
+            "pass": true,
+            "exactly_zero": true
+          }
+        },
+        "scale": {
+          "alpha": {
+            "max_diff": 4.163336342344337e-17,
+            "pass": true,
+            "exactly_zero": false
+          },
+          "beta": {
+            "max_diff": 8.326672684688674e-17,
+            "pass": true,
+            "exactly_zero": false
+          },
+          "nu": {
+            "max_diff": 4.163336342344337e-17,
+            "pass": true,
+            "exactly_zero": false
+          },
+          "sigma": {
+            "max_diff": 4.163336342344337e-17,
+            "pass": true,
+            "exactly_zero": false
+          }
+        },
+        "elbo": {
+          "max_diff": 1.4551915228366852e-11,
+          "pass": true,
+          "exactly_zero": false,
+          "constant_offset": null
+        }
+      }
+    }
+  },
+  "svi/n_schools": {
+    "model": "n_schools.NSchools",
+    "model_args": {
+      "n": 10000,
+      "seed": 12345
+    },
+    "seed": 12345,
+    "inference": "SVI",
+    "num_steps": 20,
+    "step_size": 0.01,
+    "init_scale": 0.1,
+    "trials": 2,
+    "ppl_a": "numpyro",
+    "ppl_b": "impulse",
+    "atol": 0.0001,
+    "rtol": 0.001,
+    "shared_seeds": [
+      1396133,
+      2993578
+    ],
+    "all_close": true,
+    "per_seed": {
+      "1396133": {
+        "loc": {
+          "beta_baseline": {
+            "max_diff": 2.7755575615628914e-17,
+            "pass": true,
+            "exactly_zero": false
+          },
+          "beta_district_flat": {
+            "max_diff": 5.551115123125783e-17,
+            "pass": true,
+            "exactly_zero": false
+          },
+          "beta_state": {
+            "max_diff": 8.326672684688674e-17,
+            "pass": true,
+            "exactly_zero": false
+          },
+          "beta_type": {
+            "max_diff": 2.7755575615628914e-17,
+            "pass": true,
+            "exactly_zero": false
+          },
+          "sigma_district": {
+            "max_diff": 0.0,
+            "pass": true,
+            "exactly_zero": true
+          },
+          "sigma_state": {
+            "max_diff": 0.0,
+            "pass": true,
+            "exactly_zero": true
+          },
+          "sigma_type": {
+            "max_diff": 2.7755575615628914e-17,
+            "pass": true,
+            "exactly_zero": false
+          }
+        },
+        "scale": {
+          "beta_baseline": {
+            "max_diff": 4.163336342344337e-17,
+            "pass": true,
+            "exactly_zero": false
+          },
+          "beta_district_flat": {
+            "max_diff": 5.551115123125783e-17,
+            "pass": true,
+            "exactly_zero": false
+          },
+          "beta_state": {
+            "max_diff": 4.163336342344337e-17,
+            "pass": true,
+            "exactly_zero": false
+          },
+          "beta_type": {
+            "max_diff": 5.551115123125783e-17,
+            "pass": true,
+            "exactly_zero": false
+          },
+          "sigma_district": {
+            "max_diff": 4.163336342344337e-17,
+            "pass": true,
+            "exactly_zero": false
+          },
+          "sigma_state": {
+            "max_diff": 5.551115123125783e-17,
+            "pass": true,
+            "exactly_zero": false
+          },
+          "sigma_type": {
+            "max_diff": 5.551115123125783e-17,
+            "pass": true,
+            "exactly_zero": false
+          }
+        },
+        "elbo": {
+          "max_diff": 1.1641532182693481e-10,
+          "pass": true,
+          "exactly_zero": false,
+          "constant_offset": null
+        }
+      },
+      "2993578": {
+        "loc": {
+          "beta_baseline": {
+            "max_diff": 0.0,
+            "pass": true,
+            "exactly_zero": true
+          },
+          "beta_district_flat": {
+            "max_diff": 8.326672684688674e-17,
+            "pass": true,
+            "exactly_zero": false
+          },
+          "beta_state": {
+            "max_diff": 1.1102230246251565e-16,
+            "pass": true,
+            "exactly_zero": false
+          },
+          "beta_type": {
+            "max_diff": 2.7755575615628914e-17,
+            "pass": true,
+            "exactly_zero": false
+          },
+          "sigma_district": {
+            "max_diff": 5.551115123125783e-17,
+            "pass": true,
+            "exactly_zero": false
+          },
+          "sigma_state": {
+            "max_diff": 0.0,
+            "pass": true,
+            "exactly_zero": true
+          },
+          "sigma_type": {
+            "max_diff": 0.0,
+            "pass": true,
+            "exactly_zero": true
+          }
+        },
+        "scale": {
+          "beta_baseline": {
+            "max_diff": 4.163336342344337e-17,
+            "pass": true,
+            "exactly_zero": false
+          },
+          "beta_district_flat": {
+            "max_diff": 8.326672684688674e-17,
+            "pass": true,
+            "exactly_zero": false
+          },
+          "beta_state": {
+            "max_diff": 5.551115123125783e-17,
+            "pass": true,
+            "exactly_zero": false
+          },
+          "beta_type": {
+            "max_diff": 5.551115123125783e-17,
+            "pass": true,
+            "exactly_zero": false
+          },
+          "sigma_district": {
+            "max_diff": 4.163336342344337e-17,
+            "pass": true,
+            "exactly_zero": false
+          },
+          "sigma_state": {
+            "max_diff": 4.163336342344337e-17,
+            "pass": true,
+            "exactly_zero": false
+          },
+          "sigma_type": {
+            "max_diff": 5.551115123125783e-17,
+            "pass": true,
+            "exactly_zero": false
+          }
+        },
+        "elbo": {
+          "max_diff": 1.1641532182693481e-10,
+          "pass": true,
+          "exactly_zero": false,
+          "constant_offset": null
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,80 @@
+{
+  "model": {
+    "class": "noisy_or_topic.NoisyOrTopic",
+    "args": {
+      "n": 2,
+      "num_topics": 50,
+      "num_words": 100,
+      "avg_fanout": 3.0,
+      "avg_leak_weight": 0.1,
+      "avg_topic_weight": 1.0
+    },
+    "seed": 12345
+  },
+  "iterations": 4000,
+  "num_warmup": 1000,
+  "trials": 4,
+  "ppls": [
+    {
+      "name": "numpyro",
+      "inference": {
+        "class": "inference.MCMC",
+        "infer_args": {
+          "step_size": 0.1,
+          "max_tree_depth": 10,
+          "adapt_step_size": true,
+          "adapt_mass_matrix": true,
+          "matched_init": true
+        }
+      },
+      "legend": { "name": "NumPyro", "color": "blue" },
+      "trials": 4
+    },
+    {
+      "name": "impulse",
+      "inference": {
+        "class": "inference.MCMC",
+        "infer_args": {
+          "step_size": 0.1,
+          "max_tree_depth": 10,
+          "adapt_step_size": true,
+          "adapt_mass_matrix": true
+        }
+      },
+      "legend": { "name": "Impulse", "color": "red" },
+      "trials": 4
+    },
+    {
+      "name": "turing",
+      "inference": {
+        "class": "inference.MCMC",
+        "infer_args": {
+          "step_size": 0.1,
+          "max_tree_depth": 10,
+          "adapt_step_size": true,
+          "adapt_mass_matrix": true,
+          "matched_init": true
+        }
+      },
+      "legend": { "name": "Turing.jl", "color": "purple" },
+      "trials": 4
+    },
+    {
+      "name": "stan",
+      "inference": {
+        "class": "inference.MCMC",
+        "infer_args": {
+          "step_size": 0.1,
+          "max_tree_depth": 10,
+          "adapt_step_size": true,
+          "adapt_mass_matrix": true,
+          "matched_init": true
+        }
+      },
+      "legend": { "name": "Stan", "color": "green" },
+      "trials": 4
+    }
+  ],
+  "save_samples": true,
+  "figures": { "generate_pll": true, "suffix": "png" }
+}

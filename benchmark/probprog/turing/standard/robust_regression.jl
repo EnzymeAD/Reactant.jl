@@ -64,3 +64,14 @@ function get_init_params(data, init_params)
     sigma = Float64(init_params["sigma"][1])
     return (alpha=alpha, beta=beta, nu=nu, sigma=sigma)
 end
+
+function matched_init_params(data)
+    # Deterministic canonical init (matched-init control experiment). Constrained
+    # values identical to the Impulse arm's NUTS start: alpha = 0, beta = 0 (real
+    # support), nu = 1 and sigma = 1 (positive support with an exp transform, so
+    # constrained 1 == unconstrained 0). DynamicPPL.InitFromParams treats these as
+    # constrained (original-space) values. Only used with --matched-init.
+    attrs = data["attrs"]
+    k = Int(attrs["k"])
+    return (alpha=0.0, beta=zeros(k), nu=1.0, sigma=1.0)
+end

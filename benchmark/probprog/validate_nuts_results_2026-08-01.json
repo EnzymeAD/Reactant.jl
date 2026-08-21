@@ -1,0 +1,195 @@
+{
+  "standard/logistic_regression": {
+    "model": "logistic_regression.LogisticRegression",
+    "model_args": {
+      "n": 10000,
+      "k": 10,
+      "rho": 3.0,
+      "seed": 12345
+    },
+    "seed": 12345,
+    "iterations": 5,
+    "num_warmup": 0,
+    "trials": 2,
+    "ppl_a": "NumPyro",
+    "ppl_b": "Impulse",
+    "step_size": 0.1,
+    "max_tree_depth": 10,
+    "atol": 0.0001,
+    "rtol": 0.001,
+    "all_close": true,
+    "variables": {
+      "alpha": {
+        "max_diff": 0.0,
+        "pass": true,
+        "exactly_zero": true
+      },
+      "beta": {
+        "max_diff": 0.0,
+        "pass": true,
+        "exactly_zero": true
+      }
+    }
+  },
+  "standard/robust_regression": {
+    "model": "robust_regression.RobustRegression",
+    "model_args": {
+      "n": 10000,
+      "k": 10,
+      "seed": 12345
+    },
+    "seed": 12345,
+    "iterations": 5,
+    "num_warmup": 0,
+    "trials": 2,
+    "ppl_a": "NumPyro",
+    "ppl_b": "Impulse",
+    "step_size": 0.1,
+    "max_tree_depth": 10,
+    "atol": 0.0001,
+    "rtol": 0.001,
+    "all_close": true,
+    "variables": {
+      "alpha": {
+        "max_diff": 0.0,
+        "pass": true,
+        "exactly_zero": true
+      },
+      "beta": {
+        "max_diff": 0.0,
+        "pass": true,
+        "exactly_zero": true
+      },
+      "nu": {
+        "max_diff": 0.0,
+        "pass": true,
+        "exactly_zero": true
+      },
+      "sigma": {
+        "max_diff": 0.0,
+        "pass": true,
+        "exactly_zero": true
+      }
+    }
+  },
+  "standard/n_schools": {
+    "model": "n_schools.NSchools",
+    "model_args": {
+      "n": 10000,
+      "seed": 12345
+    },
+    "seed": 12345,
+    "iterations": 5,
+    "num_warmup": 0,
+    "trials": 2,
+    "ppl_a": "NumPyro",
+    "ppl_b": "Impulse",
+    "step_size": 0.1,
+    "max_tree_depth": 10,
+    "atol": 0.0001,
+    "rtol": 0.001,
+    "all_close": true,
+    "variables": {
+      "sigma_state": {
+        "max_diff": 0.0,
+        "pass": true,
+        "exactly_zero": true
+      },
+      "sigma_district": {
+        "max_diff": 0.0,
+        "pass": true,
+        "exactly_zero": true
+      },
+      "sigma_type": {
+        "max_diff": 0.0,
+        "pass": true,
+        "exactly_zero": true
+      },
+      "beta_baseline": {
+        "max_diff": 0.0,
+        "pass": true,
+        "exactly_zero": true
+      },
+      "beta_state": {
+        "max_diff": 0.0,
+        "pass": true,
+        "exactly_zero": true
+      },
+      "beta_district": {
+        "max_diff": 0.0,
+        "pass": true,
+        "exactly_zero": true
+      },
+      "beta_type": {
+        "max_diff": 0.0,
+        "pass": true,
+        "exactly_zero": true
+      }
+    }
+  },
+  "standard/crowd_sourced_annotation": {
+    "model": "crowd_sourced_annotation.CrowdSourcedAnnotation",
+    "model_args": {
+      "n": 2000,
+      "k": 10,
+      "num_categories": 3,
+      "expected_correctness": 0.8,
+      "num_labels_per_item": 3,
+      "concentration": 10,
+      "seed": 12345
+    },
+    "seed": 12345,
+    "iterations": 5,
+    "num_warmup": 0,
+    "trials": 2,
+    "ppl_a": "NumPyro",
+    "ppl_b": "Impulse",
+    "step_size": 0.1,
+    "max_tree_depth": 10,
+    "atol": 0.0001,
+    "rtol": 0.001,
+    "all_close": true,
+    "variables": {
+      "prev": {
+        "max_diff": 3.93574062229618e-14,
+        "pass": true,
+        "exactly_zero": false
+      },
+      "confusion_matrix": {
+        "max_diff": 9.603429163007604e-14,
+        "pass": true,
+        "exactly_zero": false
+      }
+    }
+  },
+  "standard/noisy_or_topic": {
+    "model": "noisy_or_topic.NoisyOrTopic",
+    "model_args": {
+      "n": 2,
+      "num_topics": 50,
+      "num_words": 100,
+      "avg_fanout": 3.0,
+      "avg_leak_weight": 0.1,
+      "avg_topic_weight": 1.0,
+      "seed": 12345
+    },
+    "seed": 12345,
+    "iterations": 5,
+    "num_warmup": 0,
+    "trials": 2,
+    "ppl_a": "NumPyro",
+    "ppl_b": "Impulse",
+    "step_size": 0.1,
+    "max_tree_depth": 10,
+    "atol": 0.0001,
+    "rtol": 0.001,
+    "all_close": true,
+    "variables": {
+      "active": {
+        "max_diff": 0.0,
+        "pass": true,
+        "exactly_zero": true
+      }
+    }
+  }
+}

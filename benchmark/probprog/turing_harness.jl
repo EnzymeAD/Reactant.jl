@@ -14,6 +14,12 @@ using Turing, Random, LinearAlgebra, JSON3
 using Turing: NUTS, sample, DynamicPPL
 using AdvancedHMC: DenseEuclideanMetric
 
+# Turing.Variational re-exports the AdvancedVI machinery. AdvancedVI is only a
+# transitive dependency (not in turing_env/Project.toml), so it is reached
+# through the Turing.Variational namespace rather than a direct `import`.
+const TV = Turing.Variational
+const AVI = Turing.Variational.AdvancedVI
+
 # =============================================================================
 # Parse --model early and include at top level (avoids world-age issues)
 # =============================================================================
@@ -76,6 +82,181 @@ function run_turing_nuts(
 end
 
 # =============================================================================
+# Run ADVI (mean-field) via Turing.Variational / AdvancedVI
+# =============================================================================
+#
+# Mirrors the Impulse / NumPyro SVI protocol as closely as this Turing version
+# allows:
+#   * mean-field Gaussian guide (== NumPyro AutoNormal), initialized at
+#     unconstrained loc = 0, diagonal scale = init_scale;
+#   * reparameterization-gradient ELBO with `n_particles` MC samples per step
+#     (== num_particles);
+#   * Optimisers.Adam(lr) with lr = step_size, `num_steps` iterations;
+#   * NoAveraging (return the last iterate, matching Adam's final params rather
+#     than a Polyak average);
+#   * ClipScale operator (AdvancedVI's recommended safeguard against a singular
+#     scale for MvLocationScale families; not an optimizer change).
+# AdvancedVI 0.6's ADVI == KLMinRepGradDescent. The prox-descent variant that
+# Turing's `vi` uses by default only accepts DoG/DoWG/Descent, so Adam requires
+# KLMinRepGradDescent explicitly.
+
+function svi_draw_and_extract(model, q, vi_linked, rng, K)
+    # q is a Bijectors.TransformedDistribution wrapping the unconstrained
+    # MvLocationScale (q.dist) in the model's canonical linked ordering. Draw in
+    # unconstrained space, then unflatten + invlink each draw to constrained
+    # space and read named sites, so the output layout matches the MCMC
+    # extractor (one JSON key per model site).
+    qd = q.dist
+    zs = rand(rng, qd, K)  # d x K, unconstrained
+    scalar_acc = Dict{String,Vector{Float64}}()
+    vector_acc = Dict{String,Vector{Vector{Float64}}}()
+    for j in 1:K
+        z = zs[:, j]
+        vc = DynamicPPL.invlink(DynamicPPL.unflatten(vi_linked, z), model)
+        for (vn, val) in DynamicPPL.values_as(vc, Dict)
+            name = string(vn)
+            if val isa AbstractArray
+                push!(get!(vector_acc, name, Vector{Vector{Float64}}()),
+                      Float64.(vec(val)))
+            else
+                push!(get!(scalar_acc, name, Float64[]), Float64(val))
+            end
+        end
+    end
+    out = Dict{String,Any}()
+    for (nm, v) in scalar_acc
+        out[nm] = v
+    end
+    for (nm, v) in vector_acc
+        out[nm] = v  # draw-major: K entries, each a per-draw vector
+    end
+    return out
+end
+
+function run_turing_advi(
+    model, seed, num_steps, lr, n_particles, init_scale, K, guide, optimizer,
+)
+    @assert guide == "AutoNormal" "Turing ADVI arm only supports the AutoNormal (mean-field Gaussian) guide; got $guide"
+    @assert optimizer == "Adam" "Turing ADVI arm only supports the Adam optimizer; got $optimizer"
+
+    rng = Xoshiro(seed)
+    adtype = Turing.DEFAULT_ADTYPE  # AutoForwardDiff(); only AD backend in turing_env
+
+    vi_linked = DynamicPPL.link(DynamicPPL.VarInfo(model), model)
+    d = length(vi_linked[:])
+
+    q0 = TV.q_meanfield_gaussian(
+        model; location=zeros(d), scale=Diagonal(fill(init_scale, d))
+    )
+    alg = TV.KLMinRepGradDescent(
+        adtype;
+        optimizer = AVI.Optimisers.Adam(lr),
+        n_samples = n_particles,
+        averager = AVI.NoAveraging(),
+        operator = AVI.ClipScale(),
+    )
+
+    local q, info
+    fit_time = @elapsed begin
+        q, info, _ = TV.vi(
+            rng, model, q0, num_steps;
+            algorithm=alg, adtype=adtype, show_progress=false,
+        )
+    end
+    elbo_traj = Float64[Float64(nt.elbo) for nt in info]
+
+    out = svi_draw_and_extract(model, q, vi_linked, rng, K)
+    return out, elbo_traj, fit_time
+end
+
+function svi_write_diagnostics(model_path, seed, elbo_traj, fit_time, num_steps)
+    diag_dir = joinpath(
+        get(ENV, "PPLBENCH_OUTPUT_DIR", "outputs"), "svi_diagnostics"
+    )
+    try
+        mkpath(diag_dir)
+        safe = replace(String(model_path), r"[^A-Za-z0-9_]" => "_")
+        path = joinpath(diag_dir, "turing_$(safe)_seed$(seed).json")
+        open(path, "w") do f
+            JSON3.write(f, Dict(
+                "model" => String(model_path),
+                "seed" => Int(seed),
+                "num_steps" => Int(num_steps),
+                "per_step_s" => num_steps > 0 ? fit_time / num_steps : NaN,
+                "final_elbo" => isempty(elbo_traj) ? NaN : elbo_traj[end],
+                "elbo_trajectory" => elbo_traj,
+            ))
+        end
+    catch e
+        @warn "Failed to write SVI diagnostics" exception=e
+    end
+end
+
+function svi_main(
+    spec, data, output_path, seed, num_steps, lr, n_particles, init_scale, K,
+    guide, optimizer, server_mode,
+)
+    model = spec.turing_model
+    println("Turing.jl ADVI: $(spec.model_name)")
+    println("  model=$MODEL_PATH")
+    println("  num_steps=$num_steps, lr(step_size)=$lr, num_particles=$n_particles")
+    println("  init_scale=$init_scale, K(draws)=$K, guide=$guide, optimizer=$optimizer")
+
+    # JIT warmup: a short fit compiles the ADVI / AD / draw code paths.
+    print("JIT warmup... ")
+    compile_time = @elapsed begin
+        _ = run_turing_advi(model, seed, 2, lr, n_particles, init_scale, 2, guide, optimizer)
+    end
+    println("$(round(compile_time * 1000, digits=2)) ms")
+
+    print("Running ADVI fit... ")
+    out, elbo_traj, fit_time = run_turing_advi(
+        model, seed, num_steps, lr, n_particles, init_scale, K, guide, optimizer
+    )
+    final_elbo = isempty(elbo_traj) ? NaN : elbo_traj[end]
+    println("$(round(fit_time * 1000, digits=2)) ms  final_elbo=$(round(final_elbo, digits=6))")
+    svi_write_diagnostics(MODEL_PATH, seed, elbo_traj, fit_time, num_steps)
+
+    out["compile_time"] = compile_time
+    out["run_time"] = fit_time
+    open(output_path, "w") do f
+        JSON3.write(f, out)
+    end
+    println("Output written to $output_path")
+
+    if server_mode
+        flush(stdout)
+        println("###READY###")
+        flush(stdout)
+        while !eof(stdin)
+            line = readline(stdin)
+            stripped = strip(line)
+            isempty(stripped) && continue
+            stripped == "EXIT" && break
+
+            req = JSON3.read(stripped)
+            new_seed = Int(req["seed"])
+            new_output_path = String(req["output"])
+            println("Server ADVI trial: seed=$new_seed, output=$new_output_path")
+            flush(stdout)
+
+            new_out, new_elbo, new_fit_time = run_turing_advi(
+                model, new_seed, num_steps, lr, n_particles, init_scale, K,
+                guide, optimizer,
+            )
+            svi_write_diagnostics(MODEL_PATH, new_seed, new_elbo, new_fit_time, num_steps)
+            new_out["compile_time"] = 0.0
+            new_out["run_time"] = new_fit_time
+            open(new_output_path, "w") do f
+                JSON3.write(f, new_out)
+            end
+            println("###DONE### $(round(new_fit_time * 1000, digits=2)) ms")
+            flush(stdout)
+        end
+    end
+end
+
+# =============================================================================
 # Main
 # =============================================================================
 
@@ -90,6 +271,13 @@ function main()
     adapt_step_size = false
     adapt_mass_matrix = false
     server_mode = false
+    method = "nuts"
+    num_steps = 300
+    num_particles = 1
+    init_scale = 0.1
+    guide = "AutoNormal"
+    optimizer = "Adam"
+    matched_init = false
 
     i = 1
     while i <= length(ARGS)
@@ -114,6 +302,20 @@ function main()
             adapt_step_size = true
         elseif arg == "--adapt-mass-matrix"
             adapt_mass_matrix = true
+        elseif arg == "--method"
+            i += 1; method = ARGS[i]
+        elseif arg == "--num-steps"
+            i += 1; num_steps = parse(Int, ARGS[i])
+        elseif arg == "--num-particles"
+            i += 1; num_particles = parse(Int, ARGS[i])
+        elseif arg == "--init-scale"
+            i += 1; init_scale = parse(Float64, ARGS[i])
+        elseif arg == "--guide"
+            i += 1; guide = ARGS[i]
+        elseif arg == "--optimizer"
+            i += 1; optimizer = ARGS[i]
+        elseif arg == "--matched-init"
+            matched_init = true
         elseif arg == "--server"
             server_mode = true
         else
@@ -131,6 +333,15 @@ function main()
     # Model-specific setup
     spec = setup(data)
 
+    # SVI (ADVI) path: separate from the NUTS path below (which is unchanged).
+    if method == "svi"
+        svi_main(
+            spec, data, output_path, seed, num_steps, step_size, num_particles,
+            init_scale, num_samples, guide, optimizer, server_mode,
+        )
+        return
+    end
+
     println("Turing.jl Benchmark: $(spec.model_name)")
     println("  model=$MODEL_PATH")
     println("  num_warmup=$num_warmup, num_samples=$num_samples, seed=$seed")
@@ -139,6 +350,25 @@ function main()
 
     # Build initial params
     init_params = get_init_params(data, get(data, "init_params", nothing))
+
+    # Matched-init control experiment: deterministic uniform-simplex init,
+    # identical to the Impulse arm's NUTS start. DynamicPPL.InitFromParams treats
+    # these as constrained (original-space) values. Only the start point changes;
+    # the NUTS kernel is otherwise unchanged vs the standard protocol.
+    if matched_init && isdefined(@__MODULE__, :matched_init_params)
+        init_params = matched_init_params(data)
+        println("Turing.jl: --matched-init constrained point:")
+        for (nm, val) in pairs(init_params)
+            v = vec(collect(val))
+            println("  $nm = ", v[1:min(length(v), 3)], " ... (len $(length(v)))")
+        end
+        try
+            lj = DynamicPPL.logjoint(spec.turing_model, init_params)
+            println("  logjoint at matched-init point = ", lj)
+        catch e
+            @warn "logjoint check skipped" exception=e
+        end
+    end
 
     # JIT warmup: run a minimal sample() to trigger Julia compilation of all
     # NUTS internals (leapfrog, tree doubling, AD, adaptation).
@@ -195,8 +425,10 @@ function main()
             println("Server trial: seed=$new_seed, output=$new_output_path")
             flush(stdout)
 
+            # Matched init (when set) wins over any per-trial driver init: keep
+            # the fixed matched init_params for EVERY trial.
             new_init_params = init_params
-            if haskey(req, "init_params") && req["init_params"] !== nothing
+            if !matched_init && haskey(req, "init_params") && req["init_params"] !== nothing
                 new_init_params = get_init_params(data, req["init_params"])
             end
 

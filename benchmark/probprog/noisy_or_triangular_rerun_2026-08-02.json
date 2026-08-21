@@ -1,0 +1,737 @@
+{
+  "_provenance": {
+    "experiment": "Noisy-or topic model re-measurement on the current oopsla build after (a) four Enzyme-JAX compiler fixes, the last of which (pad-concat-to-concat-pad, aadeda680) repaired a silent wrong-gradient miscompile, and (b) an uncommitted rewrite of the noisy-or model to a growing-dot triangular recursion that cut leapfrog-body dot MACs from 291210 to 33657. Also records a full five-model hardened --validate re-baseline used as the blast-radius check for the four fixes.",
+    "date": "2026-08-02",
+    "binary": "libReactantExtra.so at /mnt/sbrantq/probprog/oopsla/Reactant.jl/deps/ReactantExtra/bazel-bin/libReactantExtra.so, md5 11df3276c222c8bd7cfd9e039fc57750, 7585514848 bytes, mtime 2026-08-02 01:10:51 -0500. md5 verified identical before the first run and after the last. NOTHING WAS REBUILT: no bazel invocation, no make-bindings.jl. Confirmed in every run log by the line 'Using libReactantExtra from /mnt/sbrantq/probprog/oopsla/Reactant.jl/deps/ReactantExtra/bazel-bin/libReactantExtra.so'.",
+    "git": {
+      "Enzyme": {
+        "branch": "oopsla",
+        "head": "bacdfc8e396cb7763f811cd1df75613b83f02b74",
+        "diff_sha256": "98a248040cb8c61eaf2b3c3eaf5999cfe185671a4609caf1aa3341ba4528d083"
+      },
+      "Enzyme-JAX": {
+        "branch": "oopsla",
+        "head": "aadeda6802d2df8dfb101a16d4a3fbff95a27503",
+        "diff_sha256": "20ebd10a5712e3046cd764437eb96a4916b31ff45d87698535f566bfee41c641"
+      },
+      "Reactant.jl": {
+        "branch": "oopsla",
+        "head": "1b9019692f4a32d544fbec738cdb2801d640ea48",
+        "diff_sha256": "5b92a8f89eb8b16fc9763e9d06c392970b5e178349fbfec849e4b64327d7739f"
+      }
+    },
+    "compiler_fixes_in_binary": [
+      "c83547cd3 document why binop-pad-to-concat's type guard is load-bearing",
+      "ae576721e add-pad-pad-to-concat: require matching interior padding on non-concat dims",
+      "9e0b408f1 strided slice adjoint: trailing pad from the last scattered index",
+      "aadeda680 pad-concat-to-concat-pad: do not hoist concat-dim padding (fixed a SILENT WRONG-GRADIENT bug)"
+    ],
+    "model_file": {
+      "path": "/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/standard/noisy_or_topic.jl",
+      "sha256": "f5500fc21070146e087c9f3e99ce2e54be1a42f820facfa5d72c6babc3860ec9",
+      "note": "Uncommitted growing-dot triangular recursion rewrite. Because it reassociates the floating-point work, the sampled chain is NOT bitwise equal to the 2026-07-30 whole-vector baseline; per-trial PLL and n_eff both move. This is expected and is reported, not smoothed over."
+    },
+    "protocol": "Standard PPLBench, identical to the 2026-07-30 baseline: config standard/noisy_or_topic_matched_init, 4000 iterations, 1000 warmup, 4 trials as chains, model seed 12345, step_size 0.1, max_tree_depth 10, adapt_step_size true, adapt_mass_matrix true, dense inverse mass matrix via the harness dense-eye default (the config deliberately omits inverse_mass_matrix), cpu, 32 threads, CUDA_VISIBLE_DEVICES empty.",
+    "replication": "Impulse: 3 clean replicates, each a complete 4-trial protocol run. NumPyro: 1 run under the identical protocol, for a contemporaneous reference wall. Headline wall is the MEDIAN of the replicate steady-state means; steady mean = mean of trials 1..3, dropping trial 0. Headline n_eff/s is the n_eff/s median of the replicate whose steady mean is the median. This is the same reduction used by nuts_allreal_impulse_rerun_2026-07-30.json and was verified to reproduce that file's numbers exactly before being applied here.",
+    "machine": "192 cores, 503 GB, shared. Every replicate gated on 1-minute load average below 12 immediately before launch. Gate readings 4.52 / 4.74 / 4.46 for the three Impulse replicates and 3.87 for NumPyro. These are somewhat higher than the 2026-07-30 baseline's 3.89 / 2.12 / 2.75 because other users were active; all four passed the gate and no replicate overlapped another benchmark of ours.",
+    "commands": {
+      "gate": "cd /mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog && THREADS=32 VALIDATE_LOG_DIR=<scratch>/gate VALIDATE_RESULTS_JSON=<scratch>/gate_results.json ./run_all_validate.sh",
+      "impulse": "cd /mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog && CUDA_VISIBLE_DEVICES=\"\" ./run_pplbench.sh --device cpu --threads 32 --ppls impulse standard/noisy_or_topic_matched_init",
+      "numpyro": "cd /mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog && CUDA_VISIBLE_DEVICES=\"\" ./run_pplbench.sh --device cpu --threads 32 --ppls numpyro standard/noisy_or_topic_matched_init"
+    },
+    "logs": {
+      "gate_driver": "/tmp/claude-140061798/-mnt-sbrantq-probprog/737ce4ec-680c-4cdc-b0ab-99a0a04c8218/scratchpad/bench/gate_driver.log",
+      "gate_per_model": "/tmp/claude-140061798/-mnt-sbrantq-probprog/737ce4ec-680c-4cdc-b0ab-99a0a04c8218/scratchpad/bench/gate/validate_standard_*.log",
+      "gate_results_json": "/tmp/claude-140061798/-mnt-sbrantq-probprog/737ce4ec-680c-4cdc-b0ab-99a0a04c8218/scratchpad/bench/gate_results.json",
+      "gate_comparison_json": "/tmp/claude-140061798/-mnt-sbrantq-probprog/737ce4ec-680c-4cdc-b0ab-99a0a04c8218/scratchpad/bench/gate_comparison.json",
+      "impulse_driver": "/tmp/claude-140061798/-mnt-sbrantq-probprog/737ce4ec-680c-4cdc-b0ab-99a0a04c8218/scratchpad/bench/driver_impulse_tri.log",
+      "impulse_replicates": [
+        "/tmp/claude-140061798/-mnt-sbrantq-probprog/737ce4ec-680c-4cdc-b0ab-99a0a04c8218/scratchpad/bench/bench_impulse_tri_rep1.log",
+        "/tmp/claude-140061798/-mnt-sbrantq-probprog/737ce4ec-680c-4cdc-b0ab-99a0a04c8218/scratchpad/bench/bench_impulse_tri_rep2.log",
+        "/tmp/claude-140061798/-mnt-sbrantq-probprog/737ce4ec-680c-4cdc-b0ab-99a0a04c8218/scratchpad/bench/bench_impulse_tri_rep3.log"
+      ],
+      "numpyro_driver": "/tmp/claude-140061798/-mnt-sbrantq-probprog/737ce4ec-680c-4cdc-b0ab-99a0a04c8218/scratchpad/bench/driver_numpyro_tri.log",
+      "numpyro_replicate": "/tmp/claude-140061798/-mnt-sbrantq-probprog/737ce4ec-680c-4cdc-b0ab-99a0a04c8218/scratchpad/bench/bench_numpyro_tri_rep1.log"
+    }
+  },
+  "job1_hardened_gate_reBaseline": {
+    "verdict": "NO CHANGE. All 16 variables across all 5 models are bit-for-bit identical to the pre-fix reference, in max_diff AND in std_over_draws AND in min_std_over_draws. All five models PASS, any_degenerate false everywhere, every variable moved, driver exit 0.",
+    "blast_radius": "Zero on the gate. None of the five gate models exercises the pad-concat-to-concat-pad miscompile under the --validate protocol, so the fix that repaired the silent wrong-gradient bug is invisible here. This confirms the fixes perturbed nothing that was already correct; it does NOT independently re-confirm the 3.64 -> 1.08e-12 repair, which rests on the separate targeted case.",
+    "old_arm_source": "The pre-fix hardened run was still on disk and was used directly rather than relying on the quoted table: outputs/2026-08-02_00:35:32 (logistic), 00:35:58 (robust), 00:36:43 (n_schools), 00:37:28 (crowd_sourced), 00:38:32 (noisy_or). It reproduces the quoted reference max_diff table on all 16 variables. A second complete pre-fix set at outputs/2026-08-02_00:46:35..00:49:34 is byte-identical to it.",
+    "tolerances": {
+      "atol": 0.0001,
+      "rtol": 0.001
+    },
+    "note_cross_arm_ulp": "std_over_draws differs between the NumPyro and Impulse arms at ULP level on 8 of 16 variables (largest 1.010303e-14, crowd_sourced_annotation prev). Those ULP residuals are themselves byte-identical old versus new, which is stronger evidence of no change than the rounded table alone.",
+    "note_noisy_or_weak_gate": "noisy_or_topic active has min_std_over_draws exactly 0.0 on both arms (at least one of 51 topics never flips in the 5 validate draws). It passes because the gate uses max std (4.898979e-01). Identical old versus new, so it does not affect the blast-radius conclusion, but this single variable's gate is weaker than the others.",
+    "variables": [
+      {
+        "model": "standard/logistic_regression",
+        "variable": "alpha",
+        "old_max_diff": 2.168404344971009e-19,
+        "new_max_diff": 2.168404344971009e-19,
+        "max_diff_identical": true,
+        "old_std_over_draws": {
+          "NumPyro": 0.004218181775773891,
+          "Impulse": 0.004218181775773891
+        },
+        "new_std_over_draws": {
+          "NumPyro": 0.004218181775773891,
+          "Impulse": 0.004218181775773891
+        },
+        "std_identical": true,
+        "old_std_equal_across_arms": true,
+        "new_std_equal_across_arms": true,
+        "old_min_std_over_draws": {
+          "NumPyro": 0.00030014938841344484,
+          "Impulse": 0.00030014938841344484
+        },
+        "new_min_std_over_draws": {
+          "NumPyro": 0.00030014938841344484,
+          "Impulse": 0.00030014938841344484
+        },
+        "new_moved": true,
+        "new_degenerate": false,
+        "new_pass": true,
+        "step_size": 0.001
+      },
+      {
+        "model": "standard/logistic_regression",
+        "variable": "beta",
+        "old_max_diff": 1.1102230246251565e-16,
+        "new_max_diff": 1.1102230246251565e-16,
+        "max_diff_identical": true,
+        "old_std_over_draws": {
+          "NumPyro": 0.05167759867820572,
+          "Impulse": 0.051677598678205705
+        },
+        "new_std_over_draws": {
+          "NumPyro": 0.05167759867820572,
+          "Impulse": 0.051677598678205705
+        },
+        "std_identical": true,
+        "old_std_equal_across_arms": false,
+        "new_std_equal_across_arms": false,
+        "old_min_std_over_draws": {
+          "NumPyro": 0.0009525011423208265,
+          "Impulse": 0.0009525011423208264
+        },
+        "new_min_std_over_draws": {
+          "NumPyro": 0.0009525011423208265,
+          "Impulse": 0.0009525011423208264
+        },
+        "new_moved": true,
+        "new_degenerate": false,
+        "new_pass": true,
+        "step_size": 0.001
+      },
+      {
+        "model": "standard/robust_regression",
+        "variable": "alpha",
+        "old_max_diff": 3.469446951953614e-18,
+        "new_max_diff": 3.469446951953614e-18,
+        "max_diff_identical": true,
+        "old_std_over_draws": {
+          "NumPyro": 0.008217804249076147,
+          "Impulse": 0.008217804249076149
+        },
+        "new_std_over_draws": {
+          "NumPyro": 0.008217804249076147,
+          "Impulse": 0.008217804249076149
+        },
+        "std_identical": true,
+        "old_std_equal_across_arms": false,
+        "new_std_equal_across_arms": false,
+        "old_min_std_over_draws": {
+          "NumPyro": 0.002009257532560204,
+          "Impulse": 0.0020092575325602025
+        },
+        "new_min_std_over_draws": {
+          "NumPyro": 0.002009257532560204,
+          "Impulse": 0.0020092575325602025
+        },
+        "new_moved": true,
+        "new_degenerate": false,
+        "new_pass": true,
+        "step_size": 0.005
+      },
+      {
+        "model": "standard/robust_regression",
+        "variable": "beta",
+        "old_max_diff": 1.942890293094024e-16,
+        "new_max_diff": 1.942890293094024e-16,
+        "max_diff_identical": true,
+        "old_std_over_draws": {
+          "NumPyro": 0.05723613588136928,
+          "Impulse": 0.05723613588136929
+        },
+        "new_std_over_draws": {
+          "NumPyro": 0.05723613588136928,
+          "Impulse": 0.05723613588136929
+        },
+        "std_identical": true,
+        "old_std_equal_across_arms": false,
+        "new_std_equal_across_arms": false,
+        "old_min_std_over_draws": {
+          "NumPyro": 0.0052907889788670285,
+          "Impulse": 0.005290788978867026
+        },
+        "new_min_std_over_draws": {
+          "NumPyro": 0.0052907889788670285,
+          "Impulse": 0.005290788978867026
+        },
+        "new_moved": true,
+        "new_degenerate": false,
+        "new_pass": true,
+        "step_size": 0.005
+      },
+      {
+        "model": "standard/robust_regression",
+        "variable": "nu",
+        "old_max_diff": 1.1102230246251565e-16,
+        "new_max_diff": 1.1102230246251565e-16,
+        "max_diff_identical": true,
+        "old_std_over_draws": {
+          "NumPyro": 0.2352079410490106,
+          "Impulse": 0.23520794104901066
+        },
+        "new_std_over_draws": {
+          "NumPyro": 0.2352079410490106,
+          "Impulse": 0.23520794104901066
+        },
+        "std_identical": true,
+        "old_std_equal_across_arms": false,
+        "new_std_equal_across_arms": false,
+        "old_min_std_over_draws": {
+          "NumPyro": 0.19054738056614307,
+          "Impulse": 0.19054738056614307
+        },
+        "new_min_std_over_draws": {
+          "NumPyro": 0.19054738056614307,
+          "Impulse": 0.19054738056614307
+        },
+        "new_moved": true,
+        "new_degenerate": false,
+        "new_pass": true,
+        "step_size": 0.005
+      },
+      {
+        "model": "standard/robust_regression",
+        "variable": "sigma",
+        "old_max_diff": 4.440892098500626e-16,
+        "new_max_diff": 4.440892098500626e-16,
+        "max_diff_identical": true,
+        "old_std_over_draws": {
+          "NumPyro": 0.4183477968688637,
+          "Impulse": 0.41834779686886353
+        },
+        "new_std_over_draws": {
+          "NumPyro": 0.4183477968688637,
+          "Impulse": 0.41834779686886353
+        },
+        "std_identical": true,
+        "old_std_equal_across_arms": false,
+        "new_std_equal_across_arms": false,
+        "old_min_std_over_draws": {
+          "NumPyro": 0.2226430837218647,
+          "Impulse": 0.22264308372186464
+        },
+        "new_min_std_over_draws": {
+          "NumPyro": 0.2226430837218647,
+          "Impulse": 0.22264308372186464
+        },
+        "new_moved": true,
+        "new_degenerate": false,
+        "new_pass": true,
+        "step_size": 0.005
+      },
+      {
+        "model": "standard/n_schools",
+        "variable": "sigma_state",
+        "old_max_diff": 0.0,
+        "new_max_diff": 0.0,
+        "max_diff_identical": true,
+        "old_std_over_draws": {
+          "NumPyro": 0.02744605346061273,
+          "Impulse": 0.02744605346061273
+        },
+        "new_std_over_draws": {
+          "NumPyro": 0.02744605346061273,
+          "Impulse": 0.02744605346061273
+        },
+        "std_identical": true,
+        "old_std_equal_across_arms": true,
+        "new_std_equal_across_arms": true,
+        "old_min_std_over_draws": {
+          "NumPyro": 0.02717533124000276,
+          "Impulse": 0.02717533124000276
+        },
+        "new_min_std_over_draws": {
+          "NumPyro": 0.02717533124000276,
+          "Impulse": 0.02717533124000276
+        },
+        "new_moved": true,
+        "new_degenerate": false,
+        "new_pass": true,
+        "step_size": 0.01
+      },
+      {
+        "model": "standard/n_schools",
+        "variable": "sigma_district",
+        "old_max_diff": 0.0,
+        "new_max_diff": 0.0,
+        "max_diff_identical": true,
+        "old_std_over_draws": {
+          "NumPyro": 0.022561712834911506,
+          "Impulse": 0.022561712834911506
+        },
+        "new_std_over_draws": {
+          "NumPyro": 0.022561712834911506,
+          "Impulse": 0.022561712834911506
+        },
+        "std_identical": true,
+        "old_std_equal_across_arms": true,
+        "new_std_equal_across_arms": true,
+        "old_min_std_over_draws": {
+          "NumPyro": 0.01616206902490897,
+          "Impulse": 0.01616206902490897
+        },
+        "new_min_std_over_draws": {
+          "NumPyro": 0.01616206902490897,
+          "Impulse": 0.01616206902490897
+        },
+        "new_moved": true,
+        "new_degenerate": false,
+        "new_pass": true,
+        "step_size": 0.01
+      },
+      {
+        "model": "standard/n_schools",
+        "variable": "sigma_type",
+        "old_max_diff": 0.0,
+        "new_max_diff": 0.0,
+        "max_diff_identical": true,
+        "old_std_over_draws": {
+          "NumPyro": 0.02187015450858494,
+          "Impulse": 0.02187015450858494
+        },
+        "new_std_over_draws": {
+          "NumPyro": 0.02187015450858494,
+          "Impulse": 0.02187015450858494
+        },
+        "std_identical": true,
+        "old_std_equal_across_arms": true,
+        "new_std_equal_across_arms": true,
+        "old_min_std_over_draws": {
+          "NumPyro": 0.017299153700857953,
+          "Impulse": 0.017299153700857953
+        },
+        "new_min_std_over_draws": {
+          "NumPyro": 0.017299153700857953,
+          "Impulse": 0.017299153700857953
+        },
+        "new_moved": true,
+        "new_degenerate": false,
+        "new_pass": true,
+        "step_size": 0.01
+      },
+      {
+        "model": "standard/n_schools",
+        "variable": "beta_baseline",
+        "old_max_diff": 1.7763568394002505e-15,
+        "new_max_diff": 1.7763568394002505e-15,
+        "max_diff_identical": true,
+        "old_std_over_draws": {
+          "NumPyro": 1.930805183217887,
+          "Impulse": 1.930805183217887
+        },
+        "new_std_over_draws": {
+          "NumPyro": 1.930805183217887,
+          "Impulse": 1.930805183217887
+        },
+        "std_identical": true,
+        "old_std_equal_across_arms": true,
+        "new_std_equal_across_arms": true,
+        "old_min_std_over_draws": {
+          "NumPyro": 1.3964206780772928,
+          "Impulse": 1.396420678077293
+        },
+        "new_min_std_over_draws": {
+          "NumPyro": 1.3964206780772928,
+          "Impulse": 1.396420678077293
+        },
+        "new_moved": true,
+        "new_degenerate": false,
+        "new_pass": true,
+        "step_size": 0.01
+      },
+      {
+        "model": "standard/n_schools",
+        "variable": "beta_state",
+        "old_max_diff": 8.881784197001252e-16,
+        "new_max_diff": 8.881784197001252e-16,
+        "max_diff_identical": true,
+        "old_std_over_draws": {
+          "NumPyro": 2.6651380438565386,
+          "Impulse": 2.665138043856539
+        },
+        "new_std_over_draws": {
+          "NumPyro": 2.6651380438565386,
+          "Impulse": 2.665138043856539
+        },
+        "std_identical": true,
+        "old_std_equal_across_arms": false,
+        "new_std_equal_across_arms": false,
+        "old_min_std_over_draws": {
+          "NumPyro": 0.14512182566220755,
+          "Impulse": 0.14512182566220763
+        },
+        "new_min_std_over_draws": {
+          "NumPyro": 0.14512182566220755,
+          "Impulse": 0.14512182566220763
+        },
+        "new_moved": true,
+        "new_degenerate": false,
+        "new_pass": true,
+        "step_size": 0.01
+      },
+      {
+        "model": "standard/n_schools",
+        "variable": "beta_district",
+        "old_max_diff": 4.440892098500626e-16,
+        "new_max_diff": 4.440892098500626e-16,
+        "max_diff_identical": true,
+        "old_std_over_draws": {
+          "NumPyro": 0.6045974703679752,
+          "Impulse": 0.6045974703679752
+        },
+        "new_std_over_draws": {
+          "NumPyro": 0.6045974703679752,
+          "Impulse": 0.6045974703679752
+        },
+        "std_identical": true,
+        "old_std_equal_across_arms": true,
+        "new_std_equal_across_arms": true,
+        "old_min_std_over_draws": {
+          "NumPyro": 0.01924860713712728,
+          "Impulse": 0.019248607137127303
+        },
+        "new_min_std_over_draws": {
+          "NumPyro": 0.01924860713712728,
+          "Impulse": 0.019248607137127303
+        },
+        "new_moved": true,
+        "new_degenerate": false,
+        "new_pass": true,
+        "step_size": 0.01
+      },
+      {
+        "model": "standard/n_schools",
+        "variable": "beta_type",
+        "old_max_diff": 1.1102230246251565e-15,
+        "new_max_diff": 1.1102230246251565e-15,
+        "max_diff_identical": true,
+        "old_std_over_draws": {
+          "NumPyro": 1.1812400105166405,
+          "Impulse": 1.1812400105166405
+        },
+        "new_std_over_draws": {
+          "NumPyro": 1.1812400105166405,
+          "Impulse": 1.1812400105166405
+        },
+        "std_identical": true,
+        "old_std_equal_across_arms": true,
+        "new_std_equal_across_arms": true,
+        "old_min_std_over_draws": {
+          "NumPyro": 0.24037032734794744,
+          "Impulse": 0.2403703273479474
+        },
+        "new_min_std_over_draws": {
+          "NumPyro": 0.24037032734794744,
+          "Impulse": 0.2403703273479474
+        },
+        "new_moved": true,
+        "new_degenerate": false,
+        "new_pass": true,
+        "step_size": 0.01
+      },
+      {
+        "model": "standard/crowd_sourced_annotation",
+        "variable": "prev",
+        "old_max_diff": 3.93574062229618e-14,
+        "new_max_diff": 3.93574062229618e-14,
+        "max_diff_identical": true,
+        "old_std_over_draws": {
+          "NumPyro": 0.26651853112942736,
+          "Impulse": 0.26651853112941726
+        },
+        "new_std_over_draws": {
+          "NumPyro": 0.26651853112942736,
+          "Impulse": 0.26651853112941726
+        },
+        "std_identical": true,
+        "old_std_equal_across_arms": false,
+        "new_std_equal_across_arms": false,
+        "old_min_std_over_draws": {
+          "NumPyro": 0.06668010931102189,
+          "Impulse": 0.06668010931102082
+        },
+        "new_min_std_over_draws": {
+          "NumPyro": 0.06668010931102189,
+          "Impulse": 0.06668010931102082
+        },
+        "new_moved": true,
+        "new_degenerate": false,
+        "new_pass": true,
+        "step_size": 0.1
+      },
+      {
+        "model": "standard/crowd_sourced_annotation",
+        "variable": "confusion_matrix",
+        "old_max_diff": 9.603429163007604e-14,
+        "new_max_diff": 9.603429163007604e-14,
+        "max_diff_identical": true,
+        "old_std_over_draws": {
+          "NumPyro": 0.32158450053162124,
+          "Impulse": 0.32158450053162146
+        },
+        "new_std_over_draws": {
+          "NumPyro": 0.32158450053162124,
+          "Impulse": 0.32158450053162146
+        },
+        "std_identical": true,
+        "old_std_equal_across_arms": false,
+        "new_std_equal_across_arms": false,
+        "old_min_std_over_draws": {
+          "NumPyro": 0.01965869252070189,
+          "Impulse": 0.019658692520701907
+        },
+        "new_min_std_over_draws": {
+          "NumPyro": 0.01965869252070189,
+          "Impulse": 0.019658692520701907
+        },
+        "new_moved": true,
+        "new_degenerate": false,
+        "new_pass": true,
+        "step_size": 0.1
+      },
+      {
+        "model": "standard/noisy_or_topic",
+        "variable": "active",
+        "old_max_diff": 0.0,
+        "new_max_diff": 0.0,
+        "max_diff_identical": true,
+        "old_std_over_draws": {
+          "NumPyro": 0.48989794855663565,
+          "Impulse": 0.48989794855663565
+        },
+        "new_std_over_draws": {
+          "NumPyro": 0.48989794855663565,
+          "Impulse": 0.48989794855663565
+        },
+        "std_identical": true,
+        "old_std_equal_across_arms": true,
+        "new_std_equal_across_arms": true,
+        "old_min_std_over_draws": {
+          "NumPyro": 0.0,
+          "Impulse": 0.0
+        },
+        "new_min_std_over_draws": {
+          "NumPyro": 0.0,
+          "Impulse": 0.0
+        },
+        "new_moved": true,
+        "new_degenerate": false,
+        "new_pass": true,
+        "step_size": 0.1
+      }
+    ]
+  },
+  "job2_noisy_or_benchmark": {
+    "impulse": {
+      "n_replicate_runs": 3,
+      "gate_load1_per_run": [
+        4.52,
+        4.74,
+        4.46
+      ],
+      "all_trial_s_per_run": [
+        [
+          90.959562999,
+          89.238654552,
+          159.635030026,
+          131.755890671
+        ],
+        [
+          93.023723606,
+          86.373645274,
+          161.057335501,
+          127.857700579
+        ],
+        [
+          95.32997577,
+          91.113327515,
+          160.650138702,
+          124.340579986
+        ]
+      ],
+      "steady_wall_s_mean_per_run": [
+        126.8765251,
+        125.0962271,
+        125.3680154
+      ],
+      "steady_wall_s_mean": 125.36801540099998,
+      "steady_wall_s_mean_min": 125.096227118,
+      "steady_wall_s_mean_max": 126.876525083,
+      "n_eff": {
+        "min": 1575.9058071232005,
+        "median": 6974.072804233331,
+        "max": 12056.643477510604
+      },
+      "n_eff_identical_across_replicates": true,
+      "per_trial_final_pll_identical_across_replicates": true,
+      "n_eff_per_s_median": 55.62880437985862,
+      "n_eff_per_s_median_per_run": [
+        54.967400783328806,
+        55.74966539682185,
+        55.62880437985862
+      ],
+      "n_eff_per_s_full_per_run": [
+        {
+          "min": 12.42078316766853,
+          "median": 54.967400783328806,
+          "max": 95.02658958876275
+        },
+        {
+          "min": 12.59754865058152,
+          "median": 55.74966539682185,
+          "max": 96.37895366850583
+        },
+        {
+          "min": 12.570238127185274,
+          "median": 55.62880437985862,
+          "max": 96.17001145743937
+        }
+      ],
+      "per_trial_final_pll": [
+        -28.0381,
+        -28.7545,
+        -28.9365,
+        -28.3698
+      ],
+      "per_trial_final_pll_full": [
+        -28.03807326951445,
+        -28.754473595831595,
+        -28.93651679756074,
+        -28.369847518454993
+      ],
+      "output_dirs": [
+        "./outputs/2026-08-02_01:27:45",
+        "./outputs/2026-08-02_01:36:15",
+        "./outputs/2026-08-02_01:44:42"
+      ]
+    },
+    "numpyro_contemporaneous": {
+      "n_replicate_runs": 1,
+      "gate_load1": 3.87,
+      "all_trial_s": [
+        112.77460527420044,
+        141.7092945575714,
+        158.96889352798462,
+        99.45476293563843
+      ],
+      "steady_wall_s_mean": 133.37765034039816,
+      "n_eff": {
+        "min": 1158.271101880582,
+        "median": 6178.078833517182,
+        "max": 12020.621392410909
+      },
+      "n_eff_per_s": {
+        "min": 8.684146848625046,
+        "median": 46.320195458158636,
+        "max": 90.1247050141656
+      },
+      "n_eff_per_s_median": 46.320195458158636,
+      "per_trial_final_pll": [
+        -28.4023,
+        -28.4275,
+        -28.4245,
+        -28.1496
+      ],
+      "output_dir": "./outputs/2026-08-02_01:53:51",
+      "reproduces_published": {
+        "published_n_eff_per_s": 48.2354,
+        "measured_n_eff_per_s": 46.320195458158636,
+        "ratio_measured_over_published": 0.9602946271443512,
+        "verdict": "Reproduces to within 4 percent (0.9603x). The published 48.2354 predates the rebase; the contemporaneous 46.3202 is the number used for the head-to-head claim, and the conclusion is the same under either."
+      }
+    },
+    "baseline_2026_07_30_old_whole_vector_model": {
+      "source": "nuts_allreal_impulse_rerun_2026-07-30.json models.noisy_or_topic.new_2026_07_30",
+      "steady_wall_s_mean_per_run": [
+        163.7286,
+        154.9132,
+        149.6723
+      ],
+      "steady_wall_s_mean": 154.9132,
+      "all_trial_s_per_run": [
+        [
+          124.82824011,
+          132.40638102,
+          225.58613743,
+          133.1932454
+        ],
+        [
+          118.19949297,
+          128.72644229,
+          211.03873564,
+          124.97434622
+        ],
+        [
+          117.89106748,
+          122.33070362,
+          205.25173543,
+          121.4346072
+        ]
+      ],
+      "n_eff": {
+        "min": 1137.3314944218944,
+        "median": 5897.4368168561905,
+        "max": 12020.621392410909
+      },
+      "n_eff_per_s_median": 38.0693,
+      "per_trial_final_pll": [
+        -28.725,
+        -28.7714,
+        -28.6724,
+        -28.3664
+      ]
+    },
+    "improvement_vs_own_baseline": {
+      "wall_speedup": 1.235667642217174,
+      "n_eff_ratio": 1.1825599867894938,
+      "n_eff_per_s_speedup": 1.4612510442760605,
+      "decomposition": "The 1.4613x n_eff/s gain is roughly two independent factors: 1.2357x from wall time (154.9132 -> 125.3680 s/trial, the triangular recursion cutting leapfrog dot MACs 291210 -> 33657) and 1.1826x from n_eff (median 5897.4368 -> 6974.0728). The n_eff gain is a genuine change in the sampled chain caused by the model rewrite's different floating-point association, not a measurement artifact: n_eff is bitwise identical across all three replicates."
+    },
+    "head_to_head": {
+      "impulse_n_eff_per_s": 55.62880437985862,
+      "numpyro_contemporaneous_n_eff_per_s": 46.320195458158636,
+      "numpyro_published_n_eff_per_s": 48.2354,
+      "stan_published_n_eff_per_s": 98.2076,
+      "turing_published_n_eff_per_s": 4.901,
+      "impulse_over_numpyro_contemporaneous": 1.20096221161477,
+      "impulse_over_numpyro_published": 1.153277559217061,
+      "impulse_over_stan_published": 0.5664409310466667,
+      "stan_over_impulse_published": 1.765409145402337,
+      "impulse_over_turing_published": 11.350500791646322,
+      "verdict_numpyro": "IMPULSE LEADS. 55.6288 vs 46.3202 contemporaneous (1.2010x), or vs 48.2354 published (1.1533x). Impulse leads on BOTH factors: wall 125.3680 vs 133.3777 s/trial (1.0639x) and n_eff median 6974.0728 vs 6178.0788 (1.1289x). This reverses the 2026-07-30 position, where Impulse trailed NumPyro at 38.0693 vs 48.2354.",
+      "verdict_stan": "IMPULSE DOES NOT LEAD STAN. 55.6288 vs 98.2076 published, so Stan remains ahead by 1.7654x. Impulse closed the gap from 2.5797x to 1.7654x but did not close it. CAVEAT: the Stan number is the published pre-rebase value and was NOT re-measured contemporaneously in this session, so the true present-day gap is uncertain by however much Stan's own number has drifted; NumPyro's drifted by 4 percent when re-measured.",
+      "gap_decomposition_vs_stan": "Not decomposable from data collected here, because no contemporaneous Stan run exists: only Stan's n_eff/s is published, not its per-trial walls or its n_eff. What CAN be said from the Impulse side is where Impulse's own time goes. Per-trial walls remain strongly heterogeneous within a single replicate (rep3: 95.33 / 91.11 / 160.65 / 124.34 s, a 1.76x spread), and the pattern is reproducible across replicates to within about 1 percent per trial position: trial 2 is the slow one in all three runs at 159.64 / 161.06 / 160.65 s. Since all four trials do identical work apart from their RNG seed, that spread is NUTS tree depth, i.e. per-chain trajectory length, not machine noise. The heterogeneity is milder than the baseline's (118 to 226 s, 1.91x) but has the same shape. Closing the remaining 1.7654x would need either shorter trajectories at equal n_eff (better adaptation) or a further cut in per-leapfrog cost; the triangular-recursion rewrite already took the obvious algorithmic slack in the dot products."
+    }
+  },
+  "notes": {
+    "chain_not_comparable_to_baseline": "Per-trial final PLL moved from [-28.725, -28.7714, -28.6724, -28.3664] to [-28.0381, -28.7545, -28.9365, -28.3698] and n_eff median from 5897.4368 to 6974.0728. Both are expected consequences of the model rewrite reassociating the floating-point sum, and both are bitwise stable across the three replicates. The two model forms are mathematically equivalent but not numerically identical, so this is a change of chain, not a change of correctness.",
+    "shared_n_eff_max": "NumPyro's n_eff max here (12020.621392410909) is exactly the 2026-07-30 Impulse baseline's n_eff max. This is consistent with the hardened gate finding max_diff exactly 0.0 for noisy_or active: under matched initialization some topics' chains are bitwise identical between the two arms, so they yield an identical n_eff. The new Impulse max (12056.643477510604) differs because the rewrite changed the chain.",
+    "determinism": "All three Impulse replicates produced bitwise identical n_eff (min, median, max) and bitwise identical per-trial final PLL, so run-to-run nondeterminism is excluded and the wall-time spread across replicates (125.0962 to 126.8765 s, 1.4 percent) is pure machine noise."
+  }
+}

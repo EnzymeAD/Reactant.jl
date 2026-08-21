@@ -29,6 +29,20 @@ class NoisyOrTopic(BaseStanImplementation):
         """
         self.attrs = attrs
 
+    def matched_init_params(self, data: xr.Dataset) -> Dict:
+        """Deterministic canonical init (matched-init control experiment).
+
+        Constrained values identical to the Impulse arm's NUTS start: the
+        `active_gumbel` matrix ((1+num_topics) x 2) is all zeros. Gumbel support
+        is the whole real line (identity transform), so constrained 0 ==
+        unconstrained 0. Stan inits live on the constrained scale, so this is
+        passed straight through as `inits`. Only used with --matched-init.
+        """
+        P = 1 + int(self.attrs["num_topics"])
+        return {
+            "active_gumbel": np.zeros((P, 2)),
+        }
+
     def format_data_to_stan(self, data: xr.Dataset) -> Dict:
         """
         Take data from the model generator and the previously passed model

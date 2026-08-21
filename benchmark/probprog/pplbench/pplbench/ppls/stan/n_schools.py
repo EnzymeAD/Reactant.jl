@@ -18,6 +18,30 @@ class NSchools(BaseStanImplementation):
         """
         self.attrs = attrs
 
+    def matched_init_params(self, data: xr.Dataset) -> Dict:
+        """Deterministic canonical init (matched-init control experiment).
+
+        Constrained values identical to the Impulse arm's NUTS start:
+        sigma_state/district/type = 1 (positive support with an exp transform, so
+        constrained 1 == unconstrained 0), and beta_baseline/state/district/type
+        = 0 (real support). `beta_district` is Stan's (num_states x
+        num_districts_per_state) matrix. Stan inits live on the constrained scale,
+        so these are passed straight through as `inits`. Only used with
+        --matched-init.
+        """
+        num_states = int(self.attrs["num_states"])
+        num_districts = int(self.attrs["num_districts_per_state"])
+        num_types = int(self.attrs["num_types"])
+        return {
+            "sigma_state": np.ones(1),
+            "sigma_district": np.ones(1),
+            "sigma_type": np.ones(1),
+            "beta_baseline": np.zeros(1),
+            "beta_state": np.zeros(num_states),
+            "beta_district": np.zeros((num_states, num_districts)),
+            "beta_type": np.zeros(num_types),
+        }
+
     def format_data_to_stan(self, data: xr.Dataset) -> Dict:
         """
         Take data from the model generator and the previously passed model

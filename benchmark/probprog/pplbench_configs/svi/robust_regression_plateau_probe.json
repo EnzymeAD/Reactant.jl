@@ -1,0 +1,77 @@
+{
+  "model": {
+    "class": "robust_regression.RobustRegression",
+    "args": {
+      "n": 10000,
+      "k": 10
+    },
+    "seed": 12345
+  },
+  "iterations": 200,
+  "num_warmup": 0,
+  "trials": 4,
+  "ppls": [
+    {
+      "name": "numpyro",
+      "inference": {
+        "class": "inference.SVI",
+        "infer_args": {
+          "step_size": 0.01,
+          "num_steps": 20000,
+          "num_particles": 1,
+          "init_scale": 0.1,
+          "guide": "AutoNormal",
+          "optimizer": "Adam"
+        }
+      },
+      "legend": {
+        "name": "NumPyro",
+        "color": "blue"
+      },
+      "trials": 4
+    },
+    {
+      "name": "impulse",
+      "inference": {
+        "class": "inference.SVI",
+        "infer_args": {
+          "step_size": 0.01,
+          "num_steps": 20000,
+          "num_particles": 1,
+          "init_scale": 0.1,
+          "guide": "AutoNormal",
+          "optimizer": "Adam"
+        }
+      },
+      "legend": {
+        "name": "Impulse",
+        "color": "red"
+      },
+      "trials": 4
+    },
+    {
+      "name": "turing",
+      "inference": {
+        "class": "inference.SVI",
+        "infer_args": {
+          "step_size": 0.01,
+          "num_steps": 20000,
+          "num_particles": 1,
+          "init_scale": 0.1,
+          "guide": "AutoNormal",
+          "optimizer": "Adam"
+        }
+      },
+      "legend": {
+        "name": "Turing.jl",
+        "color": "purple"
+      },
+      "trials": 4
+    }
+  ],
+  "save_samples": false,
+  "figures": {
+    "generate_pll": false,
+    "suffix": "png"
+  }
+}

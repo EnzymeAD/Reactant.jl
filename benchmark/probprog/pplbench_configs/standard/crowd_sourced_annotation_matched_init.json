@@ -1,0 +1,78 @@
+{
+  "model": {
+    "class": "crowd_sourced_annotation.CrowdSourcedAnnotation",
+    "args": {
+      "n": 2000,
+      "k": 10,
+      "num_categories": 3,
+      "expected_correctness": 0.8,
+      "num_labels_per_item": 3,
+      "concentration": 10
+    },
+    "seed": 12345
+  },
+  "iterations": 4000,
+  "num_warmup": 1000,
+  "trials": 4,
+  "ppls": [
+    {
+      "name": "numpyro",
+      "inference": {
+        "class": "inference.MCMC",
+        "infer_args": {
+          "step_size": 0.1,
+          "max_tree_depth": 10,
+          "adapt_step_size": true,
+          "adapt_mass_matrix": true,
+          "matched_init": true
+        }
+      },
+      "legend": {
+        "name": "NumPyro",
+        "color": "blue"
+      },
+      "trials": 4
+    },
+    {
+      "name": "turing",
+      "inference": {
+        "class": "inference.MCMC",
+        "infer_args": {
+          "step_size": 0.1,
+          "max_tree_depth": 10,
+          "adapt_step_size": true,
+          "adapt_mass_matrix": true,
+          "matched_init": true
+        }
+      },
+      "legend": {
+        "name": "Turing.jl",
+        "color": "purple"
+      },
+      "trials": 4
+    },
+    {
+      "name": "stan",
+      "inference": {
+        "class": "inference.MCMC",
+        "infer_args": {
+          "step_size": 0.1,
+          "max_tree_depth": 10,
+          "adapt_step_size": true,
+          "adapt_mass_matrix": true,
+          "matched_init": true
+        }
+      },
+      "legend": {
+        "name": "Stan",
+        "color": "green"
+      },
+      "trials": 4
+    }
+  ],
+  "save_samples": true,
+  "figures": {
+    "generate_pll": true,
+    "suffix": "png"
+  }
+}

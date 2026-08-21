@@ -47,6 +47,8 @@ class MCMC(SubprocessMCMC):
             cmd += ["--num-chains", str(kwargs["num_chains"])]
         if kwargs.get("chain_method"):
             cmd += ["--chain-method", str(kwargs["chain_method"])]
+        if kwargs.get("matched_init", False):
+            cmd.append("--matched-init")
         return cmd
 
     def _extract_data(self, samples):
@@ -97,6 +99,10 @@ class SVI(SubprocessMCMC):
             "--optimizer", str(kwargs.get("optimizer", "Adam")),
             "--server",
         ]
+        # Validate correctness mode: switch the SVI fit to the rbg key stream that
+        # matches the Impulse arm's reparam noise (numpyro_harness.svi_main).
+        if kwargs.get("matched_init", False):
+            cmd.append("--matched-init")
         return cmd
 
     def _extract_data(self, samples):

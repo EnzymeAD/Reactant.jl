@@ -110,3 +110,26 @@ function get_init_params(data, init_params)
         beta_type=beta_type,
     )
 end
+
+function matched_init_params(data)
+    # Deterministic canonical init (matched-init control experiment). Constrained
+    # values identical to the Impulse arm's NUTS start: sigma_state/district/type
+    # = 1 (positive support with an exp transform, so constrained 1 ==
+    # unconstrained 0), and beta_baseline/state/district_flat/type = 0 (real
+    # support). DynamicPPL.InitFromParams treats these as constrained
+    # (original-space) values. Only used with --matched-init.
+    attrs = data["attrs"]
+    num_states = Int(attrs["num_states"])
+    num_districts_per_state = Int(attrs["num_districts_per_state"])
+    num_types = Int(attrs["num_types"])
+    num_districts_total = num_states * num_districts_per_state
+    return (
+        sigma_state=1.0,
+        sigma_district=1.0,
+        sigma_type=1.0,
+        beta_baseline=0.0,
+        beta_state=zeros(num_states),
+        beta_district_flat=zeros(num_districts_total),
+        beta_type=zeros(num_types),
+    )
+end

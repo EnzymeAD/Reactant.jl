@@ -15,7 +15,24 @@ ENV["JULIA_DEBUG"] = "Reactant,Reactant_jll"
 using Reactant, Random, Statistics, LinearAlgebra, JSON3, Printf
 using Reactant: ProbProg, ReactantRNG, ConcreteRNumber, ConcreteRArray
 
-Reactant.Compiler.DEBUG_PROBPROG_DUMP_VALUE[] = false
+Reactant.Compiler.DEBUG_PROBPROG_DUMP_VALUE[] = get(ENV, "PPLBENCH_DUMP_DA", "") == "1"
+
+# When probprog dumps are active, the enzyme.dump FFI callback runs on the host
+# during synchronous execution; a plain blocking Base.wait deadlocks against it.
+# Yield-based wait (per CLAUDE.md Debug Utilities) lets the callback fire.
+# Gated on the dump flag so normal timing runs keep the fast blocking wait.
+import Reactant.XLA.PJRT: Future
+if Reactant.Compiler.DEBUG_PROBPROG_DUMP_VALUE[]
+    function Base.wait(future::Future)::Nothing
+        GC.@preserve future begin
+            while !isready(future)
+                GC.safepoint()
+                yield()
+            end
+        end
+        return nothing
+    end
+end
 
 const DUMP_MLIR = haskey(ENV, "PPLBENCH_DUMP_MLIR")
 const PROFILE_XLA = haskey(ENV, "PPLBENCH_PROFILE")
@@ -144,21 +161,84 @@ function svi_guide_draws(loc, scale, selected_entries, K::Int, seed::Integer)
     return constrained
 end
 
-function _svi_write_diagnostics(model_name, seed, elbo_traj, per_step, num_steps)
+# Post-fit column layout for the VI guide. The C++ VI lowering lays the fitted
+# `loc`/`scale` (and per-step trace) out in model DECLARATION order among the
+# selected sites (`collectSupportInfoForSelection` with
+# `positionDeclarationOrder=true`, matching `build_selection_attr`'s
+# all_addresses order) so the guide's per-site RNG draw order matches NumPyro.
+# `ProbProg.filter_entries_by_selection` instead accumulates offsets in the
+# alphabetized `select()` order used by the NUTS I/O boundary. Using the latter
+# here would apply the per-site constraining bijector (`exp` for :positive) and
+# the column->site mapping to the wrong columns whenever declaration order
+# differs from alphabetical order (e.g. n_schools, whose HalfCauchy scales are
+# declared first but sort last). Rebuild the entries by walking `tt.entries` in
+# declaration order with declaration-order offsets so `svi_guide_draws` and
+# `unflatten_trace` agree with the guide's actual column layout.
+function svi_selected_entries(entries, selection)
+    filtered = ProbProg.TraceEntry[]
+    new_offset = 0
+    for entry in entries
+        entry_path = [entry.parent_path..., entry.symbol]
+        for address in selection
+            if entry_path == collect(address.path)
+                push!(
+                    filtered,
+                    ProbProg.TraceEntry(
+                        entry.symbol,
+                        entry.shape,
+                        entry.num_elements,
+                        new_offset,
+                        entry.parent_path,
+                        entry.support,
+                        entry.event_size,
+                    ),
+                )
+                new_offset += entry.num_elements
+                break
+            end
+        end
+    end
+    return filtered
+end
+
+# Per-site fitted guide params in UNCONSTRAINED latent space, keyed by site name.
+# `loc`/`scale` are 1×d laid out in model DECLARATION order (matching the C++ VI
+# lowering, see `svi_selected_entries`); slice each site by its declaration-order
+# offset so the two harnesses compare by NAME, not column position (avoids the
+# declaration-vs-alphabetical mismatch, e.g. n_schools sigma_* declared first).
+function _svi_loc_scale_by_site(loc, scale, selected_entries)
+    loc_by_site = Dict{String,Vector{Float64}}()
+    scale_by_site = Dict{String,Vector{Float64}}()
+    for entry in selected_entries
+        cols = (entry.offset + 1):(entry.offset + entry.num_elements)
+        loc_by_site[String(entry.symbol)] = Float64.(vec(loc[:, cols]))
+        scale_by_site[String(entry.symbol)] = Float64.(vec(scale[:, cols]))
+    end
+    return loc_by_site, scale_by_site
+end
+
+function _svi_write_diagnostics(model_name, seed, elbo_traj, per_step, num_steps;
+                                loc_by_site=nothing, scale_by_site=nothing)
     out_dir = get(ENV, "PPLBENCH_OUTPUT_DIR", "outputs")
     diag_dir = joinpath(out_dir, "svi_diagnostics")
     mkpath(diag_dir)
     safe = replace(String(model_name), r"[^A-Za-z0-9_]" => "_")
     path = joinpath(diag_dir, "$(safe)_seed$(seed).json")
+    payload = Dict{String,Any}(
+        "model" => String(model_name),
+        "seed" => seed,
+        "num_steps" => num_steps,
+        "per_step_s" => per_step,
+        "final_elbo" => isempty(elbo_traj) ? NaN : Float64(elbo_traj[end]),
+        "elbo_trajectory" => Float64.(elbo_traj),
+    )
+    # Fitted guide loc/scale (validate correctness compares the FIT, not draws).
+    if loc_by_site !== nothing
+        payload["loc"] = loc_by_site
+        payload["scale"] = scale_by_site
+    end
     open(path, "w") do io
-        JSON3.write(io, Dict(
-            "model" => String(model_name),
-            "seed" => seed,
-            "num_steps" => num_steps,
-            "per_step_s" => per_step,
-            "final_elbo" => isempty(elbo_traj) ? NaN : Float64(elbo_traj[end]),
-            "elbo_trajectory" => Float64.(elbo_traj),
-        ))
+        JSON3.write(io, payload)
     end
     return path
 end
@@ -310,7 +390,7 @@ function run_svi(
         end
     end
     println("$(round(compile_time * 1000, digits=2)) ms")
-    selected_entries = ProbProg.filter_entries_by_selection(tt.entries, spec.selection)
+    selected_entries = svi_selected_entries(tt.entries, spec.selection)
 
     function fit_and_sample(r, ct, ip, this_seed)
         run_time = @elapsed begin
@@ -327,7 +407,11 @@ function run_svi(
         trace = ProbProg.unflatten_trace(constrained, 0.0, selected_entries, nothing)
         out = extract_samples(trace)
         per_step = run_time / num_steps
-        _svi_write_diagnostics(spec.model_name, this_seed, vec(elbo), per_step, num_steps)
+        loc_by_site, scale_by_site = _svi_loc_scale_by_site(loc, scale, selected_entries)
+        _svi_write_diagnostics(
+            spec.model_name, this_seed, vec(elbo), per_step, num_steps;
+            loc_by_site=loc_by_site, scale_by_site=scale_by_site,
+        )
         return out, run_time, vec(elbo)
     end
 
@@ -564,12 +648,14 @@ function main()
     selected_entries = ProbProg.filter_entries_by_selection(tt.entries, spec.selection)
 
     function run_compiled(r, ct)
+        Reactant.Compiler.DEBUG_PROBPROG_DUMP_VALUE[] && ProbProg.clear_dump_buffer!()
         trace_tensor, diagnostics = compiled_fn(
             r, spec.model_fn, spec.model_args, step_size_rnum,
             max_tree_depth, num_warmup, num_samples,
             ct, constrained_addresses, spec.selection,
             adapt_step_size, adapt_mass_matrix, inverse_mass_matrix,
         )
+        Reactant.Compiler.DEBUG_PROBPROG_DUMP_VALUE[] && ProbProg.show_dumps()
         return trace_tensor, diagnostics
     end
 

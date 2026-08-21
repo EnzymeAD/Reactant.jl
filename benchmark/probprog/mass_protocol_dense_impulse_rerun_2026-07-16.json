@@ -1,0 +1,71 @@
+{
+  "_provenance": {
+    "experiment": "Dense mass-adaptation protocol fix (Option B). Re-run of the Impulse arm of the two discrete-latent PPLBench models (crowd_sourced_annotation, noisy_or_topic) under the standard matched-init protocol with a DENSE initial inverse mass matrix, so Impulse adapts a dense Welford mass consistent with the reference arms (NumPyro dense_mass=True, Stan dense_e, Turing DenseEuclideanMetric). Previously these two models passed a rank-1 (diagonal) initial inverse mass, selecting the O(N) diagonal kernel while the baselines adapted a dense O(N^2/N^3) kernel, so the n_eff/s comparison on these two models was not apples-to-apples.",
+    "date": "2026-07-16",
+    "decision": "Option B (all-dense everywhere), per oopsla/MASS_PROTOCOL_MISMATCH_CONTEXT.md.",
+    "code_change": [
+      "standard/crowd_sourced_annotation.jl: removed setup() field `inverse_mass_matrix = ones(Float64, position_size)` (commented out) so it falls through to the harness dense-eye default Matrix{Float64}(I, position_size, position_size).",
+      "standard/noisy_or_topic.jl: removed setup() field `inverse_mass_matrix = ones(Float64, 2 * P)` (commented out) likewise."
+    ],
+    "protocol": "iterations 4000, warmup 1000, 4 trials (trials-as-chains), model seed 12345, step_size 0.1, max_tree_depth 10, adapt_step_size true, adapt_mass_matrix true (DENSE), cpu, 32 threads. Impulse init already deterministic uniform/zeros (matched). Adaptation is ON.",
+    "commands": [
+      "CUDA_VISIBLE_DEVICES=\"\" ./run_pplbench.sh --device cpu --threads 32 --ppls impulse standard/crowd_sourced_annotation",
+      "CUDA_VISIBLE_DEVICES=\"\" ./run_pplbench.sh --device cpu --threads 32 --ppls impulse standard/noisy_or_topic_matched_init"
+    ],
+    "output_dirs": {
+      "crowd_sourced_annotation_impulse_dense": "outputs/2026-07-16_18:53:28",
+      "noisy_or_topic_impulse_dense": "outputs/2026-07-16_19:03:42"
+    },
+    "reference_arms_unchanged": "NumPyro/Stan/Turing arms of both models are preserved from sec53_matched_init_suite_2026-07-14.json (noisy_or) and annotation_matched_init_results_2026-07-14.json (annotation); they already adapted dense mass and are correct under Option B.",
+    "adapt_off_validate_gate": "run_all_validate.sh (adaptation OFF) re-run after the code change: 5/5 NUTS models PASS, no regression (crowd_sourced_annotation worst_max_diff 1.069145e-13 unchanged, noisy_or_topic 0.0 unchanged). The validate gate does not exercise mass adaptation and is not the deliverable; recorded only to confirm no regression.",
+    "ess_metric": "PPLBench overall_neff = arviz pooled ESS over the 4 trials-as-chains (post-warmup); median over all latent scalar params; overall_neff_per_time = pooled n_eff / steady-state per-trial inference wall (excluding trial 0). Extracted with the same matched_suite/extract_arm.py used to build the 07-14 suite."
+  },
+  "crowd_sourced_annotation": {
+    "Impulse_dense_new_2026_07_16": {
+      "n_eff": {"min": 12081.561850901377, "median": 18316.622934628384, "max": 23836.19373909194},
+      "n_eff_per_s": {"min": 1051.526219223018, "median": 1594.19862275062, "max": 2074.597886635388},
+      "per_trial_wall_s": [12.0514, 10.9406, 11.6516, 11.8764],
+      "steady_wall_s_mean": 11.4895,
+      "per_trial_final_pll": [-1807.9216, -1809.426, -1806.5584, -1806.9222],
+      "final_pll_mean": -1807.707,
+      "rhat_note": "active continuous latents R-hat ~1.0; posterior in the dominant identity-aligned mode (PLL -1806..-1809)."
+    },
+    "Impulse_diagonal_old_2026_07_14": {
+      "n_eff": {"min": 11416.896212560785, "median": 17395.215910748226, "max": 24006.852562379976},
+      "n_eff_per_s": {"min": 3075.96231615, "median": 4686.65280182, "max": 6467.97276916},
+      "per_trial_wall_s": [4.116, 3.721, 3.693, 3.812],
+      "steady_wall_s_mean": 3.742,
+      "final_pll_mean": -1808.441,
+      "note": "INVALID under Option B: diagonal mass kernel vs dense baselines."
+    },
+    "reference_arms_matched_init_2026_07_14": {
+      "NumPyro": {"n_eff_per_s_median": 2227.51017327, "steady_wall_s_mean": 8.5277},
+      "Stan": {"n_eff_per_s_median": 201.86338101, "steady_wall_s_mean": 92.367},
+      "Turing.jl": {"n_eff_per_s_median": 80.65836211, "steady_wall_s_mean": 231.0462}
+    }
+  },
+  "noisy_or_topic": {
+    "Impulse_dense_new_2026_07_16": {
+      "n_eff": {"min": 1446.1344607183607, "median": 6172.373433671124, "max": 12026.365438899575},
+      "n_eff_per_s": {"min": 6.74235650003668, "median": 28.777643622774534, "max": 56.070887867855596},
+      "per_trial_wall_s": [138.0379, 280.3194, 143.7976, 219.3381],
+      "steady_wall_s_mean": 214.485,
+      "per_trial_final_pll": [-28.7619, -27.8877, -28.8838, -28.2232],
+      "final_pll_mean": -28.4391,
+      "rhat_note": "active topics R-hat 0.9999..1.001 (leak node R-hat nan by construction, always active); ESS ~12000 top of range."
+    },
+    "Impulse_diagonal_old_2026_07_14": {
+      "n_eff": {"min": 929.1257878149181, "median": 4464.125853893247, "max": 12028.793181895493},
+      "n_eff_per_s": {"min": 19.539095116648955, "median": 93.8785477874252, "max": 252.96008054226215},
+      "per_trial_wall_s": [43.568, 42.3456, 56.9547, 43.3561],
+      "steady_wall_s_mean": 47.5521,
+      "final_pll_mean": -28.1964,
+      "note": "INVALID under Option B: diagonal mass kernel vs dense baselines. (Already post the `+aw` logit fix; the pre-fix G4 value 229.11 n_eff/s was doubly invalid.)"
+    },
+    "reference_arms_matched_init_2026_07_14": {
+      "NumPyro": {"n_eff_per_s_median": 48.23543523102166, "steady_wall_s_mean": 128.0818},
+      "Stan": {"n_eff_per_s_median": 98.20760032213434, "steady_wall_s_mean": 64.3554},
+      "Turing.jl": {"n_eff_per_s_median": 4.901038807133996, "steady_wall_s_mean": 1326.3259}
+    }
+  }
+}

@@ -40,6 +40,27 @@ class NSchools(BaseNumPyroImplementation):
         self.scale_district = scale_district
         self.scale_type = scale_type
 
+    def matched_init_params(self, data: xr.Dataset) -> Dict[str, np.ndarray]:
+        """Deterministic canonical init (matched-init control experiment).
+
+        Constrained point identical to the Impulse arm's NUTS start
+        (standard/n_schools.jl `build_constraint`): sigma_state/district/type = 1
+        (HalfCauchy, positive support with an exp transform -> z = log(1) = 0),
+        beta_baseline/state/district_flat/type = 0 (real support -> z = 0).
+        Routed through init_to_value by numpyro_harness.py; only used with
+        --matched-init.
+        """
+        num_districts_total = self.num_states * self.num_districts_per_state
+        return {
+            "sigma_state": np.ones(1),
+            "sigma_district": np.ones(1),
+            "sigma_type": np.ones(1),
+            "beta_baseline": np.zeros(1),
+            "beta_state": np.zeros(self.num_states),
+            "beta_district_flat": np.zeros(num_districts_total),
+            "beta_type": np.zeros(self.num_types),
+        }
+
     def model(self, data: xr.Dataset):
         Y = data.Y.values
         sigma = data.sigma.values

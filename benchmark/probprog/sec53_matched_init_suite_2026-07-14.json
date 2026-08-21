@@ -1,0 +1,1412 @@
+{
+ "_provenance": {
+  "experiment": "Matched-initialization protocol extended from the crowd-sourced-annotation control to the full section 5.3 PPLBench comparison suite: logistic_regression, robust_regression, n_schools, noisy_or_topic (NUTS, all four frameworks), plus a Stan ADVI matched-init attempt on the three VI models. One-stop dataset for the comparison subsection.",
+  "date": "2026-07-14",
+  "protocol_statement": "Every experiment in the comparison subsection starts from the same initial state where the framework allows it. The canonical init point is the constrained image of unconstrained zeros under the standard transforms: real-support sites at 0, positive-support sites at 1 (exp transform in all four systems), simplex sites at uniform (centered stick-breaking maps 0 to uniform), Gumbel sites (real support) at 0. Standard PPLBench protocol otherwise unchanged: iterations 4000, warmup 1000, 4 trials (trials-as-chains), model seed 12345, step_size 0.1, max_tree_depth 10, dense mass adaptation, cpu, 32 threads.",
+  "init_point_per_model": {
+   "logistic_regression": "alpha = 0, beta = zeros(k) (all real).",
+   "robust_regression": "alpha = 0, beta = zeros(k) (real); nu = 1, sigma = 1 (positive, exp transform).",
+   "n_schools": "sigma_state = sigma_district = sigma_type = 1 (positive, exp transform); beta_baseline = 0, beta_state = beta_district(_flat) = beta_type = 0 (real).",
+   "noisy_or_topic": "active_gumbel_true = active_gumbel_false = zeros(1+num_topics) (Gumbel support is all of R).",
+   "crowd_sourced_annotation": "prev and every confusion row = uniform simplex ones(K)/K (stick-breaking image of 0)."
+  },
+  "mechanism_per_system": {
+   "impulse": "build_constraint in standard/<model>.jl pins the latents to the canonical point; the constraint feeds ProbProg.generate in harness.jl nuts_program, so the NUTS chain starts there deterministically for every trial. For logistic/robust/n_schools the per-trial Uniform(-2,2) init_params from the upstream generate_init_params is now intentionally ignored (2026-07-14 change); annotation and noisy-or were already deterministic.",
+   "numpyro": "impl.matched_init_params(data) returns the constrained canonical dict; numpyro_harness.py converts it to unconstrained z via numpyro.infer.init_to_value (verified max|z| = 0) and passes init_params=z to mcmc.run for EVERY trial. Matched init overrides the driver's per-trial init_params (harness precedence fixed 2026-07-14).",
+   "stan": "impl.matched_init_params(data) returns the constrained canonical dict; stan_harness.py passes it as CmdStan `inits` (constrained scale) for every trial, overriding driver per-trial inits.",
+   "turing": "turing/standard/<model>.jl matched_init_params(data) returns a constrained NamedTuple; turing_harness.jl passes it via DynamicPPL.InitFromParams as sample()'s initial_params for every trial (server loop keeps the fixed matched init, ignoring driver per-trial inits).",
+   "stan_advi": "cmdstanpy CmdStanModel.variational(inits=<constrained canonical dict>) per trial; opt-in via svi/*_matched_init.json configs."
+  },
+  "impulse_rerun_reason": {
+   "logistic_regression": "case (b): default protocol fed a per-trial Uniform(-2,2) prior-ish draw from generate_init_params; now pinned to canonical.",
+   "robust_regression": "case (b): same, plus nu/sigma exp(Uniform(-2,2)) draws; now pinned (nu=1, sigma=1; old fallback was nu=20, sigma=10).",
+   "n_schools": "case (b): same (sigmas exp(Uniform(-2,2))); now pinned (sigmas=1).",
+   "noisy_or_topic": "init already canonical (case a: zeros, deterministic) but the arm HAD to re-run because the model itself was fixed 2026-07-14 (missing `+ aw` term in the Gumbel-softmax logit, standard/noisy_or_topic.jl line 64); old numbers targeted a different posterior.",
+   "crowd_sourced_annotation": "case (a): already canonical (uniform simplices); NOT re-run."
+  },
+  "default_init_references": {
+   "logistic_robust_nschools": "NumPyro/Impulse/Stan: paper_data_G4_2026-07-06_052754.json (run G4); Turing.jl: paper_data_G5_2026-07-06_200311.json (run G5; robust and n_schools G5 Turing arms ran only 1-2 valid trials, see caveats).",
+   "noisy_or": "Impulse/Stan: paper_data_G4 (INVALID: pre-bug-fix model); NumPyro/Turing.jl: discrete_missing_arms_results_2026-07-13.json.",
+   "stan_advi": "svi_stan_turing_results_2026-07-13.json.",
+   "annotation": "annotation_matched_init_results_2026-07-14.json (imported wholesale under annotation_import)."
+  },
+  "caveats": [
+   "Turing.jl robust_regression and n_schools default-init references (G5) pooled ESS over only 2 trials (one valid wall time each); the matched-init n_eff/s gains there (57.5->279.1 and 17.1->57.9) are roughly 2x from the 2-vs-4 pooled-chain count and 2x from the init policy; per-trial wall times are comparable (robust 95s->72-90s, n_schools 241s->265-291s). PLLs in band.",
+   "Impulse noisy-or old-vs-new is NOT an init comparison: the old model was buggy (different target). See impulse_noisy_or_fix.",
+   "The three standard models are essentially unimodal: matched-init moved NumPyro/Stan medians <10% and Impulse <15%, as expected."
+  ],
+  "config_files": [
+   "pplbench_configs/standard/logistic_regression_matched_init.json",
+   "pplbench_configs/standard/robust_regression_matched_init.json",
+   "pplbench_configs/standard/n_schools_matched_init.json",
+   "pplbench_configs/standard/noisy_or_topic_matched_init.json",
+   "pplbench_configs/svi/logistic_regression_matched_init.json",
+   "pplbench_configs/svi/robust_regression_matched_init.json",
+   "pplbench_configs/svi/n_schools_matched_init.json"
+  ],
+  "code_changes_2026_07_14": [
+   "standard/{logistic_regression,robust_regression,n_schools}.jl: build_constraint pins canonical init (ignores init_params).",
+   "pplbench/pplbench/ppls/numpyro/{logistic_regression,robust_regression,n_schools,noisy_or_topic}.py: matched_init_params hooks.",
+   "pplbench/pplbench/ppls/stan/{logistic_regression,robust_regression,n_schools,noisy_or_topic}.py: matched_init_params hooks.",
+   "turing/standard/{logistic_regression,robust_regression,n_schools,noisy_or_topic}.jl: matched_init_params hooks.",
+   "numpyro_harness.py / stan_harness.py / turing_harness.jl: matched init now overrides driver per-trial init_params.",
+   "stan_harness.py + ppls/stan/inference.py: --matched-init wired into the ADVI (variational) path via CmdStan inits."
+  ],
+  "commands_template": "CUDA_VISIBLE_DEVICES=\"\" ./run_pplbench.sh --device cpu --threads 32 --ppls <ppl> <standard|svi>/<model>_matched_init  (serial, one arm per invocation)",
+  "logs_dir": "/tmp/claude-140061798/-mnt-sbrantq-probprog/b266d213-1a56-4e76-a876-7eb59e4adb38/scratchpad/matched_suite",
+  "trials_as_chains": true,
+  "ess_metric": "arviz pooled ESS over the 4 trials-as-chains (post-warmup); median over all latent scalar params; n_eff/s = pooled n_eff median / steady-state per-trial inference wall time."
+ },
+ "annotation_import": {
+  "_provenance": {
+   "experiment": "Matched-initialization control for the crowd-sourced annotation (marginalized Dawid-Skene) benchmark",
+   "date": "2026-07-14",
+   "hypothesis": "Under the standard PPLBench protocol the three baselines (NumPyro/Stan/Turing) collapse to trials-as-chains ESS medians ~8 not because their NUTS kernels are slow, but because their default random init lets exactly one of four trials land in an inferior label-permutation mode (per-trial PLL ~-1850 vs the -1805..-1810 dominant band), which craters the pooled ESS. Impulse initializes deterministically at the uniform-simplex point (unconstrained z=0) and all its trials land in the dominant mode. Prediction: giving the baselines the SAME deterministic init removes the ~-1850 trials, recovers baseline ESS medians to thousands, and shrinks the n_eff/s gap vs Impulse to roughly the per-trial wall-time ratios (~2.2x / ~24x / ~56x).",
+   "verdict": "CONFIRMED. With matched init, every baseline trial lands in the dominant mode (no PLL ~-1850 outlier remains). ESS medians recover from ~8 to ~18600-19000 (2000x-2300x). The residual Impulse/baseline n_eff/s gap collapses to the per-trial wall-time ratio: NumPyro 2.10x (wall 2.30x), Stan 23.2x (wall 24.9x), Turing 58.1x (wall 62x). This isolates the baseline collapse as an initialization-policy artifact, not a kernel-speed difference; Impulse's remaining advantage is exactly its per-iteration wall-clock (compiler) speed.",
+   "init_point": {
+    "description": "Deterministic uniform-simplex point, identical for every trial and every system; equals Impulse's NUTS start.",
+    "constrained": {
+     "prev": "ones(K)/K = [1/3, 1/3, 1/3]  (K=num_categories=3)",
+     "confusion_matrix": "every one of k*K=30 rows = ones(K)/K = [1/3, 1/3, 1/3]  (k=10 labelers, K=3)"
+    },
+    "unconstrained": "z = 0 (62-dim: (K-1) + k*K*(K-1) = 2 + 60). Under the centered stick-breaking transform the uniform simplex is exactly the unconstrained origin, i.e. the symmetric point.",
+    "impulse_evidence": "standard/crowd_sourced_annotation.jl build_constraint L111-119: init_prev = fill(1/K, K); init_conf = fill(1/K, k, K, K); fed as the constraint to ProbProg.generate in nuts_program (harness.jl L37) so the NUTS chain starts from that trace."
+   },
+   "mechanism_per_system": {
+    "numpyro": "impl.matched_init_params(data) returns the constrained uniform dict; numpyro_harness.py converts it to unconstrained z via numpyro.infer.init_to_value (constrained_to_unconstrained) and passes init_params=z to mcmc.run for ALL trials (fixed across trials). The constrained sizes are NOT used to set inverse_mass_matrix (guarded), so the kernel is otherwise identical to the standard protocol. Verified: unconstrained z dim=62, max|z|=1.11e-16 (== symmetric point).",
+    "stan": "impl.matched_init_params(data) returns the constrained uniform dict; stan_harness.py passes it as CmdStan `inits` (Stan inits are constrained) for every trial. Verified: Stan accepted the simplex init (no rejection); init printed.",
+    "turing": "matched_init_params(data) returns NamedTuple (prev=fill(1/K,K), conf=fill(1/K,K,k*K)); turing_harness.jl passes it via DynamicPPL.InitFromParams (constrained, typed_identity) as sample()'s initial_params for every trial. Verified: logjoint at matched-init point finite (-3399.0 at k=10); init printed."
+   },
+   "config": "pplbench_configs/standard/crowd_sourced_annotation_matched_init.json (identical model block/seed 12345/iterations 4000/warmup 1000/trials 4 to the standard config; impulse arms omitted; matched_init:true added to the numpyro/stan/turing infer_args).",
+   "commands": [
+    "CUDA_VISIBLE_DEVICES=\"\" ./run_pplbench.sh --device cpu --threads 32 --ppls numpyro standard/crowd_sourced_annotation_matched_init",
+    "CUDA_VISIBLE_DEVICES=\"\" ./run_pplbench.sh --device cpu --threads 32 --ppls stan standard/crowd_sourced_annotation_matched_init",
+    "CUDA_VISIBLE_DEVICES=\"\" ./run_pplbench.sh --device cpu --threads 32 --ppls turing standard/crowd_sourced_annotation_matched_init"
+   ],
+   "output_dirs": {
+    "matched_init": {
+     "numpyro": "outputs/2026-07-14_16:08:21",
+     "stan": "outputs/2026-07-14_16:09:56",
+     "turing": "outputs/2026-07-14_16:16:38",
+     "numpyro_superseded_buggy_first_run": "outputs/2026-07-14_16:06:26 (matched init reached only trial 0; server-loop fell back to default init for trials 1-3; superseded by 16:08:21 after fix)"
+    },
+    "default_init_reference": {
+     "numpyro": "outputs/2026-07-10_03:18:27",
+     "stan_and_impulse": "outputs/2026-07-06_06:14:36",
+     "turing": "outputs/2026-07-13_22:51:11"
+    }
+   },
+   "protocol": {
+    "model_args": {
+     "n": 2000,
+     "k": 10,
+     "num_categories": 3,
+     "expected_correctness": 0.8,
+     "num_labels_per_item": 3,
+     "concentration": 10
+    },
+    "seed": 12345,
+    "iterations": 4000,
+    "num_warmup": 1000,
+    "trials": 4,
+    "threads": 32,
+    "device": "cpu",
+    "trials_as_chains": true,
+    "ess_metric": "arviz pooled ESS over the 4 trials-as-chains (post-warmup); median over all latent scalar params."
+   },
+   "notes": [
+    "Impulse is the default-protocol reference (already deterministic uniform init); it was NOT re-run.",
+    "Baseline per-trial wall times are essentially unchanged vs default init (same kernel): NumPyro 8.33->8.53s, Stan 91.96->92.37s; Turing 212.3->231.0s (a ~9% increase driven by one 247s trial; trials 0-2 were 212-228s, in line with default).",
+    "The generic SVI helper _svi_init_constrained is buggy for this model (applies stick-breaking to zeros(K), yielding a length-(K+1)=4 'simplex' at 1/4 rather than the K=3 uniform simplex), so it was NOT reused; the matched init is built directly as the constrained uniform point per system."
+   ]
+  },
+  "impulse_reference_default_and_matched": {
+   "n_eff": {
+    "min": 11416.896212560785,
+    "median": 17395.215910748226,
+    "max": 24006.852562379976
+   },
+   "n_eff_per_s": {
+    "min": 3075.96231615,
+    "median": 4686.65280182,
+    "max": 6467.97276916
+   },
+   "per_trial_wall_s": [
+    4.116,
+    3.721,
+    3.693,
+    3.812
+   ],
+   "steady_wall_s_mean": 3.742,
+   "per_trial_final_pll": [
+    -1807.9325,
+    -1808.9163,
+    -1807.6618,
+    -1809.2533
+   ],
+   "final_pll_mean": -1808.441,
+   "bad_mode_trials": []
+  },
+  "comparison": {
+   "numpyro": {
+    "default_init": {
+     "n_eff": {
+      "min": 7.07302499571123,
+      "median": 8.125424459941653,
+      "max": 20535.25645324727
+     },
+     "n_eff_per_s": {
+      "min": 0.849662523,
+      "median": 0.976084299,
+      "max": 2466.84238
+     },
+     "per_trial_wall_s": [
+      8.603,
+      8.742,
+      8.581,
+      7.651
+     ],
+     "steady_wall_s_mean": 8.3247,
+     "per_trial_final_pll": [
+      -1807.2438,
+      -1808.0851,
+      -1807.9044,
+      -1849.5191
+     ],
+     "final_pll_mean": -1818.1881,
+     "bad_mode_trials": [
+      3
+     ]
+    },
+    "matched_init": {
+     "n_eff": {
+      "min": 12346.38230730565,
+      "median": 18995.509354939913,
+      "max": 24341.630075231562
+     },
+     "n_eff_per_s": {
+      "min": 1447.79967089,
+      "median": 2227.51017327,
+      "max": 2854.42351733
+     },
+     "per_trial_wall_s": [
+      8.08356571,
+      8.52223539,
+      8.45515728,
+      8.60566807
+     ],
+     "steady_wall_s_mean": 8.5277,
+     "per_trial_final_pll": [
+      -1806.5504,
+      -1809.1322,
+      -1806.9288,
+      -1808.1441
+     ],
+     "final_pll_mean": -1807.6889,
+     "bad_mode_trials": []
+    },
+    "n_eff_median_recovery_factor": 2337.8,
+    "n_eff_per_s_median_recovery_factor": 2282.1,
+    "impulse_over_baseline_neff_per_s_ratio_matched": 2.1,
+    "impulse_over_baseline_wall_ratio_matched": 2.28
+   },
+   "stan": {
+    "default_init": {
+     "n_eff": {
+      "min": 7.071809616133783,
+      "median": 8.057134121557441,
+      "max": 19775.15221993426
+     },
+     "n_eff_per_s": {
+      "min": 0.0769003808,
+      "median": 0.0876150117,
+      "max": 215.039264
+     },
+     "per_trial_wall_s": [
+      93.98,
+      96.618,
+      84.127,
+      95.137
+     ],
+     "steady_wall_s_mean": 91.9607,
+     "per_trial_final_pll": [
+      -1806.7229,
+      -1804.7935,
+      -1847.4124,
+      -1807.9978
+     ],
+     "final_pll_mean": -1816.7316,
+     "bad_mode_trials": [
+      2
+     ]
+    },
+    "matched_init": {
+     "n_eff": {
+      "min": 11083.430380862723,
+      "median": 18645.51304159152,
+      "max": 25248.0084540812
+     },
+     "n_eff_per_s": {
+      "min": 119.99341208,
+      "median": 201.86338101,
+      "max": 273.34449521
+     },
+     "per_trial_wall_s": [
+      87.99541998,
+      92.85346413,
+      89.52678609,
+      94.72072196
+     ],
+     "steady_wall_s_mean": 92.367,
+     "per_trial_final_pll": [
+      -1807.8646,
+      -1808.3807,
+      -1802.4269,
+      -1806.3199
+     ],
+     "final_pll_mean": -1806.248,
+     "bad_mode_trials": []
+    },
+    "n_eff_median_recovery_factor": 2314.2,
+    "n_eff_per_s_median_recovery_factor": 2304.0,
+    "impulse_over_baseline_neff_per_s_ratio_matched": 23.22,
+    "impulse_over_baseline_wall_ratio_matched": 24.68
+   },
+   "turing": {
+    "default_init": {
+     "n_eff": {
+      "min": 7.067154659976427,
+      "median": 8.339322748449437,
+      "max": 20731.577535026252
+     },
+     "n_eff_per_s": {
+      "min": 0.0332843541,
+      "median": 0.0392759157,
+      "max": 97.6400263
+     },
+     "per_trial_wall_s": [
+      221.266,
+      210.296,
+      214.987,
+      211.697
+     ],
+     "steady_wall_s_mean": 212.3267,
+     "per_trial_final_pll": [
+      -1803.4985,
+      -1810.7513,
+      -1805.7221,
+      -1853.3244
+     ],
+     "final_pll_mean": -1818.3241,
+     "bad_mode_trials": [
+      3
+     ]
+    },
+    "matched_init": {
+     "n_eff": {
+      "min": 12024.588297919845,
+      "median": 18635.810559080404,
+      "max": 24780.518840463577
+     },
+     "n_eff_per_s": {
+      "min": 52.04407901,
+      "median": 80.65836211,
+      "max": 107.25350827
+     },
+     "per_trial_wall_s": [
+      212.48225797,
+      218.0843044,
+      228.03746576,
+      247.01692262
+     ],
+     "steady_wall_s_mean": 231.0462,
+     "per_trial_final_pll": [
+      -1806.602,
+      -1808.3773,
+      -1806.987,
+      -1808.2451
+     ],
+     "final_pll_mean": -1807.5529,
+     "bad_mode_trials": []
+    },
+    "n_eff_median_recovery_factor": 2234.7,
+    "n_eff_per_s_median_recovery_factor": 2053.6,
+    "impulse_over_baseline_neff_per_s_ratio_matched": 58.1,
+    "impulse_over_baseline_wall_ratio_matched": 61.74
+   }
+  }
+ },
+ "models": {
+  "logistic_regression": {
+   "NumPyro": {
+    "default_init": {
+     "n_eff": {
+      "min": 15460.393791830867,
+      "median": 16038.84686279349,
+      "max": 23438.298861009207
+     },
+     "n_eff_per_s_median": 3794.689469468554,
+     "per_trial_wall_s": [
+      3.976,
+      3.9864,
+      4.2933,
+      4.4003
+     ],
+     "per_trial_final_pll": [
+      -30.5247,
+      -30.0193,
+      -30.434,
+      -30.5718
+     ],
+     "final_pll_mean": -30.387449999999998,
+     "n_trials": 4
+    },
+    "matched_init": {
+     "n_eff": {
+      "min": 13741.207704389091,
+      "median": 14099.829400934545,
+      "max": 22618.75669748408
+     },
+     "n_eff_per_s": {
+      "min": 3347.783047077748,
+      "median": 3435.1543802121455,
+      "max": 5510.628457615616
+     },
+     "per_trial_wall_s": [
+      4.1115,
+      3.8058,
+      4.2362,
+      4.2716
+     ],
+     "steady_wall_s_mean": 4.1045,
+     "per_trial_final_pll": [
+      -29.8229,
+      -30.398,
+      -30.0658,
+      -30.6498
+     ],
+     "final_pll_mean": -30.2341,
+     "output_dir": "outputs/2026-07-14_16:56:57"
+    }
+   },
+   "Impulse": {
+    "default_init": {
+     "n_eff": {
+      "min": 14903.422211598474,
+      "median": 15651.639341395348,
+      "max": 22304.14223210854
+     },
+     "n_eff_per_s_median": 5924.433270412804,
+     "per_trial_wall_s": [
+      2.562,
+      2.5289,
+      2.636,
+      2.7608
+     ],
+     "per_trial_final_pll": [
+      -30.5147,
+      -30.2627,
+      -30.1932,
+      -30.7263
+     ],
+     "final_pll_mean": -30.424225,
+     "n_trials": 4
+    },
+    "matched_init": {
+     "n_eff": {
+      "min": 14129.585686596758,
+      "median": 15148.37473150951,
+      "max": 21234.357829370714
+     },
+     "n_eff_per_s": {
+      "min": 5366.817982240834,
+      "median": 5753.7829993067135,
+      "max": 8065.412246878963
+     },
+     "per_trial_wall_s": [
+      2.8159,
+      2.5085,
+      2.8258,
+      2.564
+     ],
+     "steady_wall_s_mean": 2.6328,
+     "per_trial_final_pll": [
+      -30.6799,
+      -30.0814,
+      -30.3544,
+      -30.3233
+     ],
+     "final_pll_mean": -30.3597,
+     "output_dir": "outputs/2026-07-14_16:59:03"
+    }
+   },
+   "Stan": {
+    "default_init": {
+     "n_eff": {
+      "min": 14067.057234707852,
+      "median": 14990.60872174374,
+      "max": 23569.751645259366
+     },
+     "n_eff_per_s_median": 1177.6681113925983,
+     "per_trial_wall_s": [
+      12.3057,
+      12.8778,
+      12.943,
+      12.3663
+     ],
+     "per_trial_final_pll": [
+      -30.4894,
+      -26.9433,
+      -30.2586,
+      -30.2247
+     ],
+     "final_pll_mean": -29.479,
+     "n_trials": 4
+    },
+    "matched_init": {
+     "n_eff": {
+      "min": 16206.776631610168,
+      "median": 16474.047939907152,
+      "max": 22554.318463554155
+     },
+     "n_eff_per_s": {
+      "min": 1138.2405964786083,
+      "median": 1157.0116982400912,
+      "max": 1584.0436062438528
+     },
+     "per_trial_wall_s": [
+      13.7191,
+      14.3575,
+      13.9199,
+      14.4379
+     ],
+     "steady_wall_s_mean": 14.2384,
+     "per_trial_final_pll": [
+      -30.2067,
+      -30.4078,
+      -30.5347,
+      -30.6632
+     ],
+     "final_pll_mean": -30.4531,
+     "output_dir": "outputs/2026-07-14_16:59:39"
+    }
+   },
+   "Turing.jl": {
+    "default_init": {
+     "n_eff": {
+      "min": 15374.881036771745,
+      "median": 16068.724957095937,
+      "max": 22376.0333332427
+     },
+     "n_eff_per_s_median": 305.82155497301954,
+     "per_trial_wall_s": [
+      49.5144,
+      52.3846,
+      56.1765,
+      49.0674
+     ],
+     "per_trial_final_pll": [
+      -30.8103,
+      -30.7411,
+      -30.4764,
+      -30.8595
+     ],
+     "final_pll_mean": -30.721825,
+     "n_trials": 4
+    },
+    "matched_init": {
+     "n_eff": {
+      "min": 15926.512066569681,
+      "median": 16762.795495147457,
+      "max": 24406.770690582754
+     },
+     "n_eff_per_s": {
+      "min": 294.2888355590674,
+      "median": 309.74161488481127,
+      "max": 450.9863864898199
+     },
+     "per_trial_wall_s": [
+      52.4408,
+      52.0414,
+      51.9685,
+      58.346
+     ],
+     "steady_wall_s_mean": 54.1186,
+     "per_trial_final_pll": [
+      -29.5468,
+      -30.3279,
+      -30.9971,
+      -30.4323
+     ],
+     "final_pll_mean": -30.326,
+     "output_dir": "outputs/2026-07-14_17:00:47"
+    }
+   }
+  },
+  "robust_regression": {
+   "NumPyro": {
+    "default_init": {
+     "n_eff": {
+      "min": 6362.312508886881,
+      "median": 26588.230943482456,
+      "max": 29696.697509951664
+     },
+     "n_eff_per_s_median": 8039.309161794669,
+     "per_trial_wall_s": [
+      3.3825,
+      3.6581,
+      2.6597,
+      3.6041
+     ],
+     "per_trial_final_pll": [
+      -7184.5985,
+      -7184.7843,
+      -7184.8518,
+      -7184.2175
+     ],
+     "final_pll_mean": -7184.613025,
+     "n_trials": 4
+    },
+    "matched_init": {
+     "n_eff": {
+      "min": 6168.9129505794135,
+      "median": 28893.805871202872,
+      "max": 32091.050328709436
+     },
+     "n_eff_per_s": {
+      "min": 1780.864104335231,
+      "median": 8341.168391559611,
+      "max": 9264.160486402418
+     },
+     "per_trial_wall_s": [
+      3.1372,
+      3.7193,
+      2.9898,
+      3.6829
+     ],
+     "steady_wall_s_mean": 3.464,
+     "per_trial_final_pll": [
+      -7184.8824,
+      -7184.6244,
+      -7184.7393,
+      -7184.8255
+     ],
+     "final_pll_mean": -7184.7679,
+     "output_dir": "outputs/2026-07-14_17:04:42"
+    }
+   },
+   "Impulse": {
+    "default_init": {
+     "n_eff": {
+      "min": 6310.834586819809,
+      "median": 26978.731469530536,
+      "max": 31043.909470392333
+     },
+     "n_eff_per_s_median": 14527.876885569965,
+     "per_trial_wall_s": [
+      2.3796,
+      1.9923,
+      1.4773,
+      2.1015
+     ],
+     "per_trial_final_pll": [
+      -7184.7192,
+      -7184.8821,
+      -7184.8591,
+      -7184.8494
+     ],
+     "final_pll_mean": -7184.827449999999,
+     "n_trials": 4
+    },
+    "matched_init": {
+     "n_eff": {
+      "min": 6534.613023876063,
+      "median": 24976.72517353452,
+      "max": 30078.623473771346
+     },
+     "n_eff_per_s": {
+      "min": 3311.3384522107362,
+      "median": 12656.662326481071,
+      "max": 15241.98940845446
+     },
+     "per_trial_wall_s": [
+      2.3299,
+      2.1968,
+      1.6357,
+      2.0877
+     ],
+     "steady_wall_s_mean": 1.9734,
+     "per_trial_final_pll": [
+      -7184.4497,
+      -7184.4699,
+      -7184.6518,
+      -7184.2587
+     ],
+     "final_pll_mean": -7184.4575,
+     "output_dir": "outputs/2026-07-14_17:05:13"
+    }
+   },
+   "Stan": {
+    "default_init": {
+     "n_eff": {
+      "min": 6036.035361905056,
+      "median": 25234.912256154184,
+      "max": 27875.08957673237
+     },
+     "n_eff_per_s_median": 2713.0278969422216,
+     "per_trial_wall_s": [
+      8.8419,
+      8.7743,
+      8.9688,
+      10.1611
+     ],
+     "per_trial_final_pll": [
+      -7185.0039,
+      -7185.2317,
+      -7184.8759,
+      -7184.4717
+     ],
+     "final_pll_mean": -7184.8958,
+     "n_trials": 4
+    },
+    "matched_init": {
+     "n_eff": {
+      "min": 5973.666641736661,
+      "median": 24890.46103516627,
+      "max": 27854.214548131986
+     },
+     "n_eff_per_s": {
+      "min": 644.8389889023028,
+      "median": 2686.8489137121715,
+      "max": 3006.7770137008333
+     },
+     "per_trial_wall_s": [
+      9.4928,
+      9.393,
+      9.0715,
+      9.3269
+     ],
+     "steady_wall_s_mean": 9.2638,
+     "per_trial_final_pll": [
+      -7185.1198,
+      -7184.249,
+      -7184.4998,
+      -7183.9368
+     ],
+     "final_pll_mean": -7184.4514,
+     "output_dir": "outputs/2026-07-14_17:06:08"
+    }
+   },
+   "Turing.jl": {
+    "default_init": {
+     "n_eff": {
+      "min": 1875.6143401119352,
+      "median": 5487.796434062999,
+      "max": 6452.939821110102
+     },
+     "n_eff_per_s_median": 57.530451071815286,
+     "per_trial_wall_s": [
+      95.3894,
+      NaN
+     ],
+     "per_trial_final_pll": [
+      -7185.0117
+     ],
+     "final_pll_mean": -7185.0117,
+     "n_trials": 2
+    },
+    "matched_init": {
+     "n_eff": {
+      "min": 6763.610399944966,
+      "median": 22609.19167378767,
+      "max": 23717.409717980325
+     },
+     "n_eff_per_s": {
+      "min": 83.49267775673682,
+      "median": 279.09679049154147,
+      "max": 292.7770716692881
+     },
+     "per_trial_wall_s": [
+      75.2553,
+      90.3234,
+      80.3227,
+      72.3791
+     ],
+     "steady_wall_s_mean": 81.0084,
+     "per_trial_final_pll": [
+      -7182.8758,
+      -7184.4759,
+      -7184.7408,
+      -7184.3677
+     ],
+     "final_pll_mean": -7184.1151,
+     "output_dir": "outputs/2026-07-14_17:07:03"
+    }
+   }
+  },
+  "n_schools": {
+   "NumPyro": {
+    "default_init": {
+     "n_eff": {
+      "min": 8887.645130110499,
+      "median": 15521.83977969854,
+      "max": 18187.745243234047
+     },
+     "n_eff_per_s_median": 5204.487964842532,
+     "per_trial_wall_s": [
+      3.1328,
+      2.9803,
+      3.1892,
+      2.7777
+     ],
+     "per_trial_final_pll": [
+      -6872.0855,
+      -6871.1332,
+      -6870.4951,
+      -6865.9108
+     ],
+     "final_pll_mean": -6869.906150000001,
+     "n_trials": 4
+    },
+    "matched_init": {
+     "n_eff": {
+      "min": 9127.646471800006,
+      "median": 15896.78432828385,
+      "max": 17506.685110792896
+     },
+     "n_eff_per_s": {
+      "min": 2933.86533133218,
+      "median": 5109.644042909487,
+      "max": 5627.108441566944
+     },
+     "per_trial_wall_s": [
+      3.0778,
+      3.1156,
+      3.3249,
+      2.893
+     ],
+     "steady_wall_s_mean": 3.1112,
+     "per_trial_final_pll": [
+      -6872.9003,
+      -6872.2081,
+      -6870.592,
+      -6867.3652
+     ],
+     "final_pll_mean": -6870.7664,
+     "output_dir": "outputs/2026-07-14_17:12:50"
+    }
+   },
+   "Impulse": {
+    "default_init": {
+     "n_eff": {
+      "min": 10871.815295980523,
+      "median": 15923.528289550088,
+      "max": 17619.40262592707
+     },
+     "n_eff_per_s_median": 8342.000096209353,
+     "per_trial_wall_s": [
+      2.3264,
+      1.871,
+      1.88,
+      1.9754
+     ],
+     "per_trial_final_pll": [
+      -6870.2195,
+      -6872.7266,
+      -6871.161,
+      -6867.34
+     ],
+     "final_pll_mean": -6870.361775,
+     "n_trials": 4
+    },
+    "matched_init": {
+     "n_eff": {
+      "min": 9509.24896671635,
+      "median": 16462.01794073267,
+      "max": 19080.218671829807
+     },
+     "n_eff_per_s": {
+      "min": 4915.020748658528,
+      "median": 8508.680341285619,
+      "max": 9861.942934634146
+     },
+     "per_trial_wall_s": [
+      2.6961,
+      1.7568,
+      2.1867,
+      1.8607
+     ],
+     "steady_wall_s_mean": 1.9347,
+     "per_trial_final_pll": [
+      -6871.5203,
+      -6870.9424,
+      -6872.4183,
+      -6871.5246
+     ],
+     "final_pll_mean": -6871.6014,
+     "output_dir": "outputs/2026-07-14_17:13:20"
+    }
+   },
+   "Stan": {
+    "default_init": {
+     "n_eff": {
+      "min": 10340.889720726645,
+      "median": 15566.728424436269,
+      "max": 17450.93157524471
+     },
+     "n_eff_per_s_median": 1014.759307893826,
+     "per_trial_wall_s": [
+      16.0264,
+      15.7137,
+      14.8662,
+      15.4411
+     ],
+     "per_trial_final_pll": [
+      -6873.2183,
+      -6869.2298,
+      -6868.7845,
+      -6869.5365
+     ],
+     "final_pll_mean": -6870.192275000001,
+     "n_trials": 4
+    },
+    "matched_init": {
+     "n_eff": {
+      "min": 10072.386905656695,
+      "median": 16952.377376922977,
+      "max": 19409.659565845326
+     },
+     "n_eff_per_s": {
+      "min": 646.9817762510772,
+      "median": 1088.9056714889098,
+      "max": 1246.7448023950378
+     },
+     "per_trial_wall_s": [
+      16.2161,
+      15.1784,
+      15.643,
+      15.8834
+     ],
+     "steady_wall_s_mean": 15.5683,
+     "per_trial_final_pll": [
+      -6871.75,
+      -6870.9217,
+      -6872.5911,
+      -6870.7938
+     ],
+     "final_pll_mean": -6871.5141,
+     "output_dir": "outputs/2026-07-14_17:14:13"
+    }
+   },
+   "Turing.jl": {
+    "default_init": {
+     "n_eff": {
+      "min": 2845.984583850345,
+      "median": 4131.903762356204,
+      "max": 5177.719115631953
+     },
+     "n_eff_per_s_median": 17.11844510120424,
+     "per_trial_wall_s": [
+      241.3714,
+      NaN
+     ],
+     "per_trial_final_pll": [
+      -6869.0194
+     ],
+     "final_pll_mean": -6869.0194,
+     "n_trials": 2
+    },
+    "matched_init": {
+     "n_eff": {
+      "min": 10474.055330679961,
+      "median": 16085.913830529002,
+      "max": 17538.311788016963
+     },
+     "n_eff_per_s": {
+      "min": 37.70447090459357,
+      "median": 57.9060211970072,
+      "max": 63.134358722549074
+     },
+     "per_trial_wall_s": [
+      279.4137,
+      264.5723,
+      278.2493,
+      290.5587
+     ],
+     "steady_wall_s_mean": 277.7934,
+     "per_trial_final_pll": [
+      -6872.6611,
+      -6868.5403,
+      -6871.2271,
+      -6872.8734
+     ],
+     "final_pll_mean": -6871.3255,
+     "output_dir": "outputs/2026-07-14_17:15:31"
+    }
+   }
+  },
+  "noisy_or_topic": {
+   "NumPyro": {
+    "default_init": {
+     "n_eff": {
+      "min": 1452.7389525731658,
+      "median": 5989.283709885144,
+      "max": 12028.501058324597
+     },
+     "n_eff_per_s_median": 52.77079737,
+     "per_trial_wall_s": [
+      99.52,
+      126.58,
+      103.88,
+      110.02
+     ],
+     "per_trial_final_pll": [
+      -28.5287,
+      -28.2776,
+      -28.6512,
+      -28.4017
+     ],
+     "final_pll_mean": -28.4648,
+     "n_trials": 4
+    },
+    "matched_init": {
+     "n_eff": {
+      "min": 1158.271101880582,
+      "median": 6178.078833517182,
+      "max": 12020.621392410909
+     },
+     "n_eff_per_s": {
+      "min": 9.043217514742889,
+      "median": 48.23543523102166,
+      "max": 93.85116639571564
+     },
+     "per_trial_wall_s": [
+      107.8263,
+      134.9414,
+      152.2974,
+      97.0065
+     ],
+     "steady_wall_s_mean": 128.0818,
+     "per_trial_final_pll": [
+      -28.4023,
+      -28.4275,
+      -28.4245,
+      -28.1496
+     ],
+     "final_pll_mean": -28.351,
+     "output_dir": "outputs/2026-07-14_17:35:21"
+    }
+   },
+   "Impulse": {
+    "default_init": {
+     "n_eff": {
+      "min": 660.5152693217889,
+      "median": 5423.2223227192635,
+      "max": 12034.420975562189
+     },
+     "n_eff_per_s_median": 229.11215316183566,
+     "per_trial_wall_s": [
+      20.0855,
+      19.2144,
+      19.6485,
+      32.1488
+     ],
+     "per_trial_final_pll": [
+      -28.176,
+      -28.312,
+      -27.9025,
+      -28.648
+     ],
+     "final_pll_mean": -28.259625,
+     "n_trials": 4
+    },
+    "matched_init": {
+     "n_eff": {
+      "min": 929.1257878149181,
+      "median": 4464.125853893247,
+      "max": 12028.793181895493
+     },
+     "n_eff_per_s": {
+      "min": 19.539095116648955,
+      "median": 93.8785477874252,
+      "max": 252.96008054226215
+     },
+     "per_trial_wall_s": [
+      43.568,
+      42.3456,
+      56.9547,
+      43.3561
+     ],
+     "steady_wall_s_mean": 47.5521,
+     "per_trial_final_pll": [
+      -28.114,
+      -28.3326,
+      -28.1322,
+      -28.2069
+     ],
+     "final_pll_mean": -28.1964,
+     "output_dir": "outputs/2026-07-14_17:45:38"
+    }
+   },
+   "Stan": {
+    "default_init": {
+     "n_eff": {
+      "min": 1669.6908775618222,
+      "median": 6809.106425241078,
+      "max": 12037.35427012731
+     },
+     "n_eff_per_s_median": 80.02573147267402,
+     "per_trial_wall_s": [
+      62.1908,
+      78.1215,
+      81.6966,
+      95.4413
+     ],
+     "per_trial_final_pll": [
+      -28.7257,
+      -28.1583,
+      -28.6389,
+      -28.3383
+     ],
+     "final_pll_mean": -28.4653,
+     "n_trials": 4
+    },
+    "matched_init": {
+     "n_eff": {
+      "min": 1339.4907728264116,
+      "median": 6320.191158446748,
+      "max": 12022.45858973295
+     },
+     "n_eff_per_s": {
+      "min": 20.813955014179093,
+      "median": 98.20760032213434,
+      "max": 186.8134647307207
+     },
+     "per_trial_wall_s": [
+      69.6935,
+      51.335,
+      72.093,
+      69.6382
+     ],
+     "steady_wall_s_mean": 64.3554,
+     "per_trial_final_pll": [
+      -28.4702,
+      -28.451,
+      -28.0651,
+      -28.8866
+     ],
+     "final_pll_mean": -28.4682,
+     "output_dir": "outputs/2026-07-14_17:49:20"
+    }
+   },
+   "Turing.jl": {
+    "default_init": {
+     "n_eff": {
+      "min": 1271.2071984388983,
+      "median": 6013.29467682544,
+      "max": 12018.326068019012
+     },
+     "n_eff_per_s_median": 4.85198976,
+     "per_trial_wall_s": [
+      1105.52,
+      957.91,
+      1626.79,
+      1133.34
+     ],
+     "per_trial_final_pll": [
+      -28.542,
+      -28.4018,
+      -28.3029,
+      -28.521
+     ],
+     "final_pll_mean": -28.441925,
+     "n_trials": 4
+    },
+    "matched_init": {
+     "n_eff": {
+      "min": 1342.9244817240424,
+      "median": 6500.37474188039,
+      "max": 12027.843825821907
+     },
+     "n_eff_per_s": {
+      "min": 1.0125147028178745,
+      "median": 4.901038807133996,
+      "max": 9.068543229778134
+     },
+     "per_trial_wall_s": [
+      1888.8312,
+      1745.6471,
+      964.6106,
+      1268.72
+     ],
+     "steady_wall_s_mean": 1326.3259,
+     "per_trial_final_pll": [
+      -27.8972,
+      -28.6356,
+      -28.098,
+      -28.4742
+     ],
+     "final_pll_mean": -28.2763,
+     "output_dir": "outputs/2026-07-14_18:37:03"
+    }
+   }
+  }
+ },
+ "impulse_noisy_or_fix": {
+  "bug": "standard/noisy_or_topic.jl line 64: the Gumbel-softmax 'true' logit was missing the `+ aw` term (h(aw) = log1m_exp(-aw) + aw); the model sampled a DIFFERENT relaxation posterior than the Stan/NumPyro/Turing baselines. Fixed 2026-07-14: line now reads `_log1mexpm.(aw) .+ aw .+ gdiff`.",
+  "old_buggy": {
+   "n_eff": {
+    "min": 660.5152693217889,
+    "median": 5423.2223227192635,
+    "max": 12034.420975562189
+   },
+   "n_eff_per_s_median": 229.11215316183566,
+   "per_trial_wall_s": [
+    20.0855,
+    19.2144,
+    19.6485,
+    32.1488
+   ],
+   "per_trial_final_pll": [
+    -28.176,
+    -28.312,
+    -27.9025,
+    -28.648
+   ],
+   "final_pll_mean": -28.259625,
+   "n_trials": 4
+  },
+  "new_fixed": {
+   "n_eff": {
+    "min": 929.1257878149181,
+    "median": 4464.125853893247,
+    "max": 12028.793181895493
+   },
+   "n_eff_per_s": {
+    "min": 19.539095116648955,
+    "median": 93.8785477874252,
+    "max": 252.96008054226215
+   },
+   "per_trial_wall_s": [
+    43.568,
+    42.3456,
+    56.9547,
+    43.3561
+   ],
+   "steady_wall_s_mean": 47.5521,
+   "per_trial_final_pll": [
+    -28.114,
+    -28.3326,
+    -28.1322,
+    -28.2069
+   ],
+   "final_pll_mean": -28.1964,
+   "output_dir": "outputs/2026-07-14_17:45:38"
+  },
+  "notes": [
+   "Old numbers (G4 2026-07-06) are INVALID: wrong target posterior.",
+   "New wall times are ~2.2x the old ones (43-57s vs 19-32s): the corrected posterior is harder (deeper NUTS trees), consistent with the baselines' wall times on the identical target (NumPyro 97-152s, Stan 51-72s).",
+   "New n_eff distribution (min 929 / med 4464 / max 12029) overlaps the baselines' on the same target (NumPyro matched med 6178, Stan matched med 6320, Turing matched: see models block).",
+   "New per-trial PLL -28.11..-28.33 sits in the same posterior region as the baselines (-28.2..-28.6)."
+  ]
+ },
+ "_commands": {
+  "logistic_numpyro": "CUDA_VISIBLE_DEVICES=\"\" ./run_pplbench.sh --device cpu --threads 32 --ppls numpyro standard/logistic_regression_matched_init",
+  "logistic_impulse": "CUDA_VISIBLE_DEVICES=\"\" ./run_pplbench.sh --device cpu --threads 32 --ppls impulse standard/logistic_regression_matched_init",
+  "logistic_stan": "CUDA_VISIBLE_DEVICES=\"\" ./run_pplbench.sh --device cpu --threads 32 --ppls stan standard/logistic_regression_matched_init",
+  "logistic_turing": "CUDA_VISIBLE_DEVICES=\"\" ./run_pplbench.sh --device cpu --threads 32 --ppls turing standard/logistic_regression_matched_init",
+  "robust_numpyro": "CUDA_VISIBLE_DEVICES=\"\" ./run_pplbench.sh --device cpu --threads 32 --ppls numpyro standard/robust_regression_matched_init",
+  "robust_impulse": "CUDA_VISIBLE_DEVICES=\"\" ./run_pplbench.sh --device cpu --threads 32 --ppls impulse standard/robust_regression_matched_init",
+  "robust_stan": "CUDA_VISIBLE_DEVICES=\"\" ./run_pplbench.sh --device cpu --threads 32 --ppls stan standard/robust_regression_matched_init",
+  "robust_turing": "CUDA_VISIBLE_DEVICES=\"\" ./run_pplbench.sh --device cpu --threads 32 --ppls turing standard/robust_regression_matched_init",
+  "nschools_numpyro": "CUDA_VISIBLE_DEVICES=\"\" ./run_pplbench.sh --device cpu --threads 32 --ppls numpyro standard/n_schools_matched_init",
+  "nschools_impulse": "CUDA_VISIBLE_DEVICES=\"\" ./run_pplbench.sh --device cpu --threads 32 --ppls impulse standard/n_schools_matched_init",
+  "nschools_stan": "CUDA_VISIBLE_DEVICES=\"\" ./run_pplbench.sh --device cpu --threads 32 --ppls stan standard/n_schools_matched_init",
+  "nschools_turing": "CUDA_VISIBLE_DEVICES=\"\" ./run_pplbench.sh --device cpu --threads 32 --ppls turing standard/n_schools_matched_init",
+  "noisyor_numpyro": "CUDA_VISIBLE_DEVICES=\"\" ./run_pplbench.sh --device cpu --threads 32 --ppls numpyro standard/noisy_or_topic_matched_init",
+  "noisyor_impulse": "CUDA_VISIBLE_DEVICES=\"\" ./run_pplbench.sh --device cpu --threads 32 --ppls impulse standard/noisy_or_topic_matched_init",
+  "noisyor_stan": "CUDA_VISIBLE_DEVICES=\"\" ./run_pplbench.sh --device cpu --threads 32 --ppls stan standard/noisy_or_topic_matched_init",
+  "noisyor_turing": "CUDA_VISIBLE_DEVICES=\"\" ./run_pplbench.sh --device cpu --threads 32 --ppls turing standard/noisy_or_topic_matched_init"
+ },
+ "stan_advi_matched_init": {
+  "interface": "cmdstanpy 1.3.0 CmdStanModel.variational accepts an `inits` parameter (constrained scale); matched init wired via stan_harness.py --method svi --matched-init (opt-in; default ADVI path unchanged).",
+  "init_point": "Same canonical constrained point as the NUTS arms (reals 0, positives 1).",
+  "models": {
+   "logistic_regression": {
+    "default_init": {
+     "compile_time_s": 5.8,
+     "infer_per_trial_s": [
+      2.628467559814453,
+      1.7236666679382324,
+      2.686657190322876,
+      1.7387287616729736
+     ],
+     "steady_mean_run_s": 2.049684206644694,
+     "n_trials": 4,
+     "neff_min": 4.7849808260778435,
+     "neff_median": 5.488357379782549,
+     "neff_max": 822.6004049625975,
+     "neff_per_s_min": 2.33449661,
+     "neff_per_s_median": 2.67765998,
+     "neff_per_s_max": 401.33031337,
+     "pll_per_trial": [
+      -69.0665,
+      -28.2789,
+      -44.9671,
+      -27.7613
+     ],
+     "pll_final_mean": -42.518454170451854,
+     "final_elbo": null,
+     "output_dir": "/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/outputs/2026-07-13_20:27:13",
+     "_source": "this run (2026-07-13)"
+    },
+    "matched_init": {
+     "n_eff": {
+      "min": 4.7798197492222165,
+      "median": 5.484400400709773,
+      "max": 845.6250250625475
+     },
+     "n_eff_per_s": {
+      "min": 2.1183212755057625,
+      "median": 2.4305774405209117,
+      "max": 374.7642328942579
+     },
+     "per_trial_wall_s": [
+      2.6616,
+      1.7266,
+      2.5433,
+      2.4994
+     ],
+     "steady_wall_s_mean": 2.2564,
+     "per_trial_final_pll": [
+      -69.3751,
+      -28.4844,
+      -45.0855,
+      -189.6013
+     ],
+     "final_pll_mean": -83.1366,
+     "output_dir": "outputs/2026-07-14_20:15:12"
+    },
+    "stan_convergence_diagnostic_failed": true,
+    "convergence_warning_count_in_log": 4
+   },
+   "robust_regression": {
+    "default_init": {
+     "compile_time_s": 6.04,
+     "infer_per_trial_s": [
+      0.7384161949157715,
+      0.6816854476928711,
+      0.6998252868652344,
+      0.6773598194122314
+     ],
+     "steady_mean_run_s": 0.6862901846567789,
+     "n_trials": 4,
+     "neff_min": 4.810502550508165,
+     "neff_median": 5.114490696809985,
+     "neff_max": 713.7091573786723,
+     "neff_per_s_min": 7.00942933,
+     "neff_per_s_median": 7.45237337,
+     "neff_per_s_max": 1039.95244772,
+     "pll_per_trial": [
+      -7333.6493,
+      -7397.9764,
+      -7329.0467,
+      -7402.4151
+     ],
+     "pll_final_mean": -7365.771877613166,
+     "final_elbo": null,
+     "output_dir": "/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/outputs/2026-07-13_20:27:31",
+     "_source": "this run (2026-07-13)"
+    },
+    "matched_init": {
+     "n_eff": {
+      "min": 4.78967415938935,
+      "median": 5.496347135325095,
+      "max": 978.6389394780526
+     },
+     "n_eff_per_s": {
+      "min": 7.369748405036754,
+      "median": 8.45708793252332,
+      "max": 1505.8065587168792
+     },
+     "per_trial_wall_s": [
+      0.7983,
+      0.5465,
+      0.6812,
+      0.7221
+     ],
+     "steady_wall_s_mean": 0.6499,
+     "per_trial_final_pll": [
+      -7336.6018,
+      -7490.7092,
+      -7423.0032,
+      -7331.1411
+     ],
+     "final_pll_mean": -7395.3638,
+     "output_dir": "outputs/2026-07-14_20:15:30"
+    },
+    "stan_convergence_diagnostic_failed": false,
+    "convergence_warning_count_in_log": 0
+   },
+   "n_schools": {
+    "default_init": {
+     "compile_time_s": 6.41,
+     "infer_per_trial_s": [
+      0.43292808532714844,
+      0.42854785919189453,
+      0.5006358623504639,
+      0.5240621566772461
+     ],
+     "steady_mean_run_s": 0.48441529273986816,
+     "n_trials": 4,
+     "neff_min": 4.775587360740922,
+     "neff_median": 5.058665327696012,
+     "neff_max": 68.38292026297701,
+     "neff_per_s_min": 9.85845706,
+     "neff_per_s_median": 10.44282747,
+     "neff_per_s_max": 141.16589895,
+     "pll_per_trial": [
+      -6892.7924,
+      -6888.4001,
+      -6891.9894,
+      -6883.0533
+     ],
+     "pll_final_mean": -6889.058783161659,
+     "final_elbo": null,
+     "output_dir": "/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/outputs/2026-07-13_20:27:43",
+     "_source": "this run (2026-07-13)"
+    },
+    "matched_init": {
+     "n_eff": {
+      "min": 5.081952058497572,
+      "median": 10.333898179881896,
+      "max": 540.1254759483364
+     },
+     "n_eff_per_s": {
+      "min": 10.97196541796334,
+      "median": 22.310949052112672,
+      "max": 1166.1341892347896
+     },
+     "per_trial_wall_s": [
+      0.4135,
+      0.4251,
+      0.4496,
+      0.5149
+     ],
+     "steady_wall_s_mean": 0.4632,
+     "per_trial_final_pll": [
+      -6892.3697,
+      -6888.3718,
+      -6888.0808,
+      -6896.1933
+     ],
+     "final_pll_mean": -6891.2539,
+     "output_dir": "outputs/2026-07-14_20:15:42"
+    },
+    "stan_convergence_diagnostic_failed": false,
+    "convergence_warning_count_in_log": 0
+   }
+  },
+  "note": "Impulse/NumPyro/Turing VI arms already start the guide at unconstrained loc = 0 (constrained: 0 for real sites, 1 for positive sites) and were NOT re-run."
+ }
+}

@@ -1,0 +1,172 @@
+{
+  "_provenance": {
+    "description": "New cross-framework arms for the two discrete-latent PPLBench models under the STANDARD protocol, filling the missing cells of the four-framework comparison figure: (1) crowd_sourced_annotation gains a Turing.jl arm; (2) noisy_or_topic gains NumPyro and Turing.jl arms. Reference (existing) rows quoted in this file are reused verbatim from annotation_numpyro_results_2026-07-10.json and g4_results_G4_2026-07-06_052754.json and were NOT re-run.",
+    "date": "2026-07-13",
+    "protocol": "PPLBench trials-as-chains: 4 trials, iterations=4000, num_warmup=1000, single chain per trial, shared trial seeds derived from model seed 12345; overall n_eff = arviz.ess over all params with the 4 trials as 4 chains; n_eff/s = overall n_eff / mean steady-state inference wall time (trials 1..3, excluding the compile trial 0); PLL = per-trial final cumulative predictive log-likelihood on the held-out test split. All runs CPU (CUDA_VISIBLE_DEVICES=\"\"), --threads 32, NUTS step_size=0.1, max_tree_depth=10, adapt_step_size, adapt_mass_matrix (Turing NUTS(n_adapts, 0.8; DenseEuclideanMetric), same harness settings as the other standard-model Turing runs; NumPyro NUTS dense_mass=True via numpyro_harness.py).",
+    "commands": {
+      "numpyro_noisy_or_topic": "./run_pplbench.sh --device cpu --threads 32 --ppls numpyro standard/noisy_or_topic",
+      "turing_noisy_or_topic": "./run_pplbench.sh --device cpu --threads 32 --ppls turing standard/noisy_or_topic",
+      "turing_crowd_sourced_annotation": "./run_pplbench.sh --device cpu --threads 32 --ppls turing standard/crowd_sourced_annotation"
+    },
+    "deviations": [
+      "The first Turing noisy_or_topic attempt was killed externally after trial 1 (a 1-hour background-task limit in the driving harness, not a benchmark failure). The arm was re-run to completion; the re-run reproduced the killed attempt's per-trial results (trial 0: 1089.46s vs 1105.52s, trial 1: 956.65s vs 957.91s; PLLs bit-identical at -28.5420 / -28.4018), confirming determinism of the seeded runs.",
+      "Turing crowd trial 3 landed in the known label-permutation mode (PLL -1853.32). The same mode appears in the reference arms under the shared trial seeds (NumPyro trial 3: -1849.52; Stan trial 2: -1847.41) and is documented in annotation_numpyro_results_2026-07-10.json; it also explains the low cross-chain min/median ESS (~7-8) seen identically in the NumPyro and Stan reference arms."
+    ],
+    "output_dirs": {
+      "numpyro_noisy_or_topic": "./outputs/2026-07-13_20:19:27",
+      "turing_noisy_or_topic": "./outputs/2026-07-13_21:30:26",
+      "turing_crowd_sourced_annotation": "./outputs/2026-07-13_22:51:11"
+    },
+    "model_math": {
+      "crowd_sourced_annotation": "Marginalized Dawid-Skene (ACL Q14-1025). Continuous latents: prev (K-simplex prevalence, Dirichlet(1/K)) and confusion_matrix (k*K independent K-simplices; row for true category c ~ Dirichlet(alpha[c]), alpha[c] = concentration * [expected_correctness on the diagonal, (1-expected_correctness)/(K-1) off-diagonal]). The discrete per-item true label is marginalized analytically: per item i, target += logsumexp_c( sum_j log conf[labeler_ij, c, label_ij] + log prev[c] ). The new Turing.jl model (turing/standard/crowd_sourced_annotation.jl) implements exactly this density: the k*K Dirichlet simplices are one matrix-variate arraydist (column (c-1)*k+l = obs-label simplex of labeler l under true category c) and the per-item logsumexp is vectorized via a precomputed column-major gather index over all 1000 train items, so Turing's NUTS targets the IDENTICAL continuous posterior as the Stan, NumPyro and Impulse reference arms. n=2000 -> 1000 train / 1000 test items, k=10 annotators, 3 categories, seed 12345.",
+      "noisy_or_topic": "Noisy-Or Topic (LAKI) boolean Bayesian network: always-on leak node, 50 topic nodes, 100 word nodes, edge_weight fixed data. The discrete topic vector `active` cannot be sampled by a continuous-only NUTS PPL, so all continuous arms (Stan upstream, Impulse, and the two new arms) use the SAME Gumbel-softmax continuous relaxation at temperature tau=0.1: two Gumbel(0,1) latent vectors g_true/g_false of length 1+num_topics; per topic j in topological order aw_j = edge_weight[j,:j] . active_true[:j], active_true[j] = sigmoid(((log1m_exp(-aw_j)+aw_j) + (g_true[j]-g_false[j]))/tau) (the softmax 'true' coordinate; leak pinned to 1); word logits S_logit = log1m_exp(-S_weight) + S_weight with S_weight = edge_weight[words,:] . active_true, S ~ Bernoulli(logits=S_logit) on the single training sentence. The posterior over (g_true, g_false) is therefore IDENTICAL to the Stan/Impulse relaxation posterior (an APPROXIMATE relaxation of the discrete model, not an exact marginalization). The boolean `active` is recovered post hoc by argmax over the 2-way relaxation (lt > lf, tau-invariant) in the extract step, exactly like the Stan extract's argmax over the size-2 axis. The new NumPyro arm (ppls/numpyro/noisy_or_topic.py) writes the recursion as a plain Python loop over the 51 static topics under JIT; the new Turing arm (turing/standard/noisy_or_topic.jl) writes it as the same sequential Julia loop. num_topics=50, num_words=100, n=2 -> 1 train / 1 test sentence, seed 12345."
+    },
+    "smoke_validation": {
+      "numpyro_noisy_or_topic": "200-iter/1-trial smoke: PLL[-1] = -29.1370 (ref band ~-28.3/-28.5), log smoke_numpyro_noisy.log",
+      "turing_noisy_or_topic": "200-iter/1-trial smoke: PLL[-1] = -29.0429, log smoke_turing_noisy2.log",
+      "turing_crowd_sourced_annotation": "100-iter/1-trial smoke (full data): PLL[-1] = -1811.1074 (ref band -1805..-1810), log smoke_turing_crowd.log"
+    },
+    "files_created": [
+      "pplbench/pplbench/ppls/numpyro/noisy_or_topic.py",
+      "pplbench/pplbench/ppls/turing/crowd_sourced_annotation.py",
+      "pplbench/pplbench/ppls/turing/noisy_or_topic.py",
+      "turing/standard/crowd_sourced_annotation.jl",
+      "turing/standard/noisy_or_topic.jl",
+      "pplbench_configs/standard/crowd_sourced_annotation_turing_smoke.json",
+      "pplbench_configs/standard/noisy_or_topic_turing_smoke.json",
+      "pplbench_configs/standard/noisy_or_topic_numpyro_smoke.json"
+    ],
+    "configs_updated": [
+      "pplbench_configs/standard/crowd_sourced_annotation.json (added turing block, legend Turing.jl/purple)",
+      "pplbench_configs/standard/noisy_or_topic.json (added numpyro block, legend NumPyro/blue; added turing block, legend Turing.jl/purple)"
+    ],
+    "environment": {
+      "numpyro": "conda probprog-bench python (numpyro 0.19.0, jax 0.9.0), same env as the other standard-model NumPyro bars",
+      "turing": "turing_env Julia project (julia 1.11.7, Turing 0.42.9, AdvancedHMC 0.8.3, DynamicPPL 0.39.15); no packages added",
+      "cpu_cores": 192
+    }
+  },
+  "models": {
+    "standard/crowd_sourced_annotation": {
+      "model_class": "crowd_sourced_annotation.CrowdSourcedAnnotation",
+      "model_args": {
+        "n": 2000,
+        "k": 10,
+        "num_categories": 3,
+        "expected_correctness": 0.8,
+        "num_labels_per_item": 3,
+        "concentration": 10
+      },
+      "iterations": 4000,
+      "num_warmup": 1000,
+      "num_chains": 1,
+      "new_arms": {
+        "Turing.jl": {
+          "source": "new 2026-07-13 run",
+          "compile_time_s": 8.58,
+          "infer_per_trial_s": [
+            221.27,
+            210.3,
+            214.99,
+            211.7
+          ],
+          "steady_mean_run_s": 212.33,
+          "n_trials": 4,
+          "neff_min": 7.067154659976427,
+          "neff_median": 8.339322748449437,
+          "neff_max": 20731.577535026252,
+          "neff_per_s_min": 0.0332843541,
+          "neff_per_s_median": 0.0392759157,
+          "neff_per_s_max": 97.6400263,
+          "pll_per_trial": [
+            -1803.4985,
+            -1810.7513,
+            -1805.7221,
+            -1853.3244
+          ],
+          "pll_final_mean": -1818.324075,
+          "output_dir": "./outputs/2026-07-13_22:51:11"
+        }
+      },
+      "reference_arms_pll_final_mean": {
+        "Impulse": -1808.440975,
+        "NumPyro": -1818.1881,
+        "Stan": -1816.73165,
+        "_note": "from annotation_numpyro_results_2026-07-10.json / g4_results_G4_2026-07-06_052754.json; NumPyro and Stan means include one -1849/-1847 label-permutation-mode trial each"
+      }
+    },
+    "standard/noisy_or_topic": {
+      "model_class": "noisy_or_topic.NoisyOrTopic",
+      "model_args": {
+        "n": 2,
+        "num_topics": 50,
+        "num_words": 100,
+        "avg_fanout": 3.0,
+        "avg_leak_weight": 0.1,
+        "avg_topic_weight": 1.0
+      },
+      "iterations": 4000,
+      "num_warmup": 1000,
+      "num_chains": 1,
+      "new_arms": {
+        "NumPyro": {
+          "source": "new 2026-07-13 run",
+          "compile_time_s": 107.15,
+          "infer_per_trial_s": [
+            99.52,
+            126.58,
+            103.88,
+            110.02
+          ],
+          "steady_mean_run_s": 113.49333333333334,
+          "n_trials": 4,
+          "neff_min": 1452.7389525731658,
+          "neff_median": 5989.283709885144,
+          "neff_max": 12028.501058324597,
+          "neff_per_s_min": 12.79989338,
+          "neff_per_s_median": 52.77079737,
+          "neff_per_s_max": 105.98155351,
+          "pll_per_trial": [
+            -28.5287,
+            -28.2776,
+            -28.6512,
+            -28.4017
+          ],
+          "pll_final_mean": -28.4648,
+          "output_dir": "./outputs/2026-07-13_20:19:27"
+        },
+        "Turing.jl": {
+          "source": "new 2026-07-13 run",
+          "compile_time_s": 8.57,
+          "infer_per_trial_s": [
+            1105.52,
+            957.91,
+            1626.79,
+            1133.34
+          ],
+          "steady_mean_run_s": 1239.3466666666666,
+          "n_trials": 4,
+          "neff_min": 1271.2071984388983,
+          "neff_median": 6013.29467682544,
+          "neff_max": 12018.326068019012,
+          "neff_per_s_min": 1.02570797,
+          "neff_per_s_median": 4.85198976,
+          "neff_per_s_max": 9.69731206,
+          "pll_per_trial": [
+            -28.542,
+            -28.4018,
+            -28.3029,
+            -28.521
+          ],
+          "pll_final_mean": -28.441925,
+          "output_dir": "./outputs/2026-07-13_21:30:26"
+        }
+      },
+      "reference_arms_pll_final_mean": {
+        "Impulse": -28.259625,
+        "Stan": -28.4653,
+        "_note": "from g4_results_G4_2026-07-06_052754.json"
+      }
+    }
+  }
+}

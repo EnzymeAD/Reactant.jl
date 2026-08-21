@@ -1,0 +1,215 @@
+{
+  "_provenance": {
+    "description": "Impulse SVI vs NumPyro SVI on the three continuous PPLBench models (logistic_regression, robust_regression, n_schools) under the SVI PPLBench protocol used by pplbench_configs/svi/{gp_pois_regr,scale_family_mvn}.json. New run 2026-07-13.",
+    "config": "pplbench_configs/svi/{logistic_regression,robust_regression,n_schools}.json (created 2026-07-13). Model blocks copied verbatim from pplbench_configs/standard/*.json so data matches the NUTS runs: logistic_regression n=10000 k=10 rho=3.0 seed 12345; robust_regression n=10000 k=10 seed 12345; n_schools n=10000 seed 12345. SVI harness: iterations=200 (K=200 posterior draws from fitted guide), num_warmup=0, trials=4.",
+    "infer_args": "step_size=0.01, num_steps=2000 (SVI optimization budget), num_particles=1, init_scale=0.1, guide=AutoNormal, optimizer=Adam (identical for both arms, mirroring the existing SVI configs).",
+    "protocol": "PPLBench trials-as-chains: overall n_eff = arviz.ess (min/median/max over all latent params, 4 trials as 4 chains); n_eff/s median = overall n_eff median / steady-state (trials 1..3) inference wall time; PLL = per-trial final cumulative predictive log-likelihood on the held-out test items using the K=200 guide draws. Only the guide FIT is timed (guide draws are a post-fit diagnostic), matching both harnesses.",
+    "iterations_vs_num_steps": "Top-level iterations=200 is K, the number of posterior draws taken from the fitted guide (NumPyro Predictive over the guide / Impulse svi_guide_draws). infer_args num_steps=2000 is the SVI optimization step budget. Confirmed in pplbench/ppls/{impulse,numpyro}/inference.py SVI docstrings and numpyro_harness.py / harness.jl run_svi.",
+    "command": "CUDA_VISIBLE_DEVICES='' ./run_pplbench.sh --device cpu --threads 32 svi/<model>  (run without --ppls so the non-optional numpyro + impulse arms run; the optional 'Impulse (no opt)' arm was skipped by default, mirroring the existing SVI configs which mark it optional).",
+    "env": "conda probprog-bench python (numpyro/jax) for NumPyro; Julia + Reactant.jl @ d4020dba5 (frozen post-migration stack, build as of 2026-07-10) for Impulse. CPU only (CUDA_VISIBLE_DEVICES=''), 32 threads.",
+    "cpu_cores": 192,
+    "date": "2026-07-13",
+    "output_dirs": {
+      "svi/logistic_regression": "outputs/2026-07-13_19:15:03",
+      "svi/robust_regression": "outputs/2026-07-13_19:15:57",
+      "svi/n_schools": "outputs/2026-07-13_19:16:55"
+    },
+    "logs": {
+      "svi/logistic_regression": "scratchpad/svi_logs/smoke_logistic_regression.log (also served as smoke test)",
+      "svi/robust_regression": "scratchpad/svi_logs/svi_robust_regression.log",
+      "svi/n_schools": "scratchpad/svi_logs/svi_n_schools.log"
+    },
+    "sanity": {
+      "svi/logistic_regression": "OK: Impulse PLL_final_mean -72.13 vs NumPyro -71.55; same band.",
+      "svi/robust_regression": "OK: Impulse PLL_final_mean -7211.06 vs NumPyro -7212.84; same band.",
+      "svi/n_schools": "ANOMALY (not a hard failure; run completed and produced numbers): Impulse PLL_final_mean -191634.29 vs NumPyro -6886.01, ~28x worse and out of band. Impulse final training ELBO (-7085.45) is comparable-to-slightly-better than NumPyro (-7120.22), so the guide fit converged, but to a poor local optimum: HalfCauchy scale sites collapsed (posterior-draw means sigma_state 0.118 vs NumPyro 2.898; sigma_district 0.0138 vs 2.871; sigma_type 0.309 vs 3.402) and beta_baseline is mislocated (+1.082 vs -3.243), so the held-out predictive mean is systematically off. This is a mean-field SVI inference-quality divergence between the two backends on the identical AutoNormal/Adam/num_steps setup (funnel-style collapse), not a compile/crash. n_eff/n_eff/s are unaffected (draws are internally consistent). Diagnostic from outputs/2026-07-13_19:16:55/samples.nc."
+    }
+  },
+  "protocol": "PPLBench SVI (trials-as-chains)",
+  "iterations": 200,
+  "num_warmup": 0,
+  "num_steps": 2000,
+  "trials": 4,
+  "models": {
+    "svi/logistic_regression": {
+      "model_class": "logistic_regression.LogisticRegression",
+      "model_args": {
+        "n": 10000,
+        "k": 10,
+        "rho": 3.0
+      },
+      "seed": 12345,
+      "frameworks": {
+        "NumPyro": {
+          "compile_time_s": 2.99,
+          "infer_per_trial_s": [
+            0.39485097,
+            0.3865149,
+            0.42619228,
+            0.45726037
+          ],
+          "steady_mean_run_s": 0.4233225166666667,
+          "n_trials": 4,
+          "neff_min": 15.580486957910468,
+          "neff_median": 649.8222699506705,
+          "neff_max": 826.0978697300499,
+          "neff_per_s_min": 36.80524014,
+          "neff_per_s_median": 1535.05245126,
+          "neff_per_s_max": 1951.46214364,
+          "pll_per_trial": [
+            -70.9625,
+            -71.0361,
+            -72.9254,
+            -71.2789
+          ],
+          "pll_final_mean": -71.550725,
+          "final_elbo": -114.372198
+        },
+        "Impulse": {
+          "compile_time_s": 12.99,
+          "infer_per_trial_s": [
+            0.08017941,
+            0.07533816,
+            0.07611057,
+            0.07609568
+          ],
+          "steady_mean_run_s": 0.07584813666666666,
+          "n_trials": 4,
+          "neff_min": 10.512738023737652,
+          "neff_median": 297.1737336003514,
+          "neff_max": 835.9319041819998,
+          "neff_per_s_min": 138.60244989,
+          "neff_per_s_median": 3918.0095069,
+          "neff_per_s_max": 11021.12595223,
+          "pll_per_trial": [
+            -70.0311,
+            -73.3696,
+            -71.2648,
+            -73.8736
+          ],
+          "pll_final_mean": -72.13477499999999,
+          "final_elbo": -122.56274434504195
+        }
+      }
+    },
+    "svi/robust_regression": {
+      "model_class": "robust_regression.RobustRegression",
+      "model_args": {
+        "n": 10000,
+        "k": 10
+      },
+      "seed": 12345,
+      "frameworks": {
+        "NumPyro": {
+          "compile_time_s": 4.26,
+          "infer_per_trial_s": [
+            0.71517873,
+            0.6771481,
+            0.69824743,
+            0.77844548
+          ],
+          "steady_mean_run_s": 0.7179470033333333,
+          "n_trials": 4,
+          "neff_min": 5.713554567632154,
+          "neff_median": 17.362024458718576,
+          "neff_max": 698.3281515441018,
+          "neff_per_s_min": 7.95818426,
+          "neff_per_s_median": 24.18287744,
+          "neff_per_s_max": 972.67367297,
+          "pll_per_trial": [
+            -7214.1279,
+            -7217.8403,
+            -7217.3112,
+            -7202.0869
+          ],
+          "pll_final_mean": -7212.841575,
+          "final_elbo": -7446.625636
+        },
+        "Impulse": {
+          "compile_time_s": 29.97,
+          "infer_per_trial_s": [
+            0.1333173,
+            0.12334972,
+            0.12356976,
+            0.1219715
+          ],
+          "steady_mean_run_s": 0.12296365999999999,
+          "n_trials": 4,
+          "neff_min": 5.582276549150327,
+          "neff_median": 10.723106054979047,
+          "neff_max": 863.4122130367862,
+          "neff_per_s_min": 45.39777372,
+          "neff_per_s_median": 87.20548651,
+          "neff_per_s_max": 7021.68585395,
+          "pll_per_trial": [
+            -7214.0108,
+            -7204.5758,
+            -7212.1552,
+            -7213.5152
+          ],
+          "pll_final_mean": -7211.064249999999,
+          "final_elbo": -7461.111451112017
+        }
+      }
+    },
+    "svi/n_schools": {
+      "model_class": "n_schools.NSchools",
+      "model_args": {
+        "n": 10000
+      },
+      "seed": 12345,
+      "frameworks": {
+        "NumPyro": {
+          "compile_time_s": 6.15,
+          "infer_per_trial_s": [
+            0.9190526,
+            0.94442272,
+            0.88615346,
+            0.92663455
+          ],
+          "steady_mean_run_s": 0.9190702433333332,
+          "n_trials": 4,
+          "neff_min": 265.3041976890001,
+          "neff_median": 789.187065082124,
+          "neff_max": 886.2534101832787,
+          "neff_per_s_min": 288.66585494,
+          "neff_per_s_median": 858.67981297,
+          "neff_per_s_max": 964.29344343,
+          "pll_per_trial": [
+            -6883.504,
+            -6891.5698,
+            -6878.6857,
+            -6890.2995
+          ],
+          "pll_final_mean": -6886.01475,
+          "final_elbo": -7120.219899
+        },
+        "Impulse": {
+          "compile_time_s": 28.56,
+          "infer_per_trial_s": [
+            0.08247475,
+            0.07419595,
+            0.07386974,
+            0.07409374
+          ],
+          "steady_mean_run_s": 0.07405314333333333,
+          "n_trials": 4,
+          "neff_min": 358.2198458212189,
+          "neff_median": 762.3144991700137,
+          "neff_max": 940.9741471891149,
+          "neff_per_s_min": 4837.33471477,
+          "neff_per_s_median": 10294.15436755,
+          "neff_per_s_max": 12706.74129587,
+          "pll_per_trial": [
+            -192525.6796,
+            -192144.939,
+            -192120.1126,
+            -189746.4323
+          ],
+          "pll_final_mean": -191634.290875,
+          "final_elbo": -7085.446431247636
+        }
+      }
+    }
+  }
+}

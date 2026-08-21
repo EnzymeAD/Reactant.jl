@@ -31,6 +31,22 @@ class RobustRegression(BaseNumPyroImplementation):
         self.beta_loc = beta_loc
         self.sigma_mean = sigma_mean
 
+    def matched_init_params(self, data: xr.Dataset) -> Dict[str, np.ndarray]:
+        """Deterministic canonical init (matched-init control experiment).
+
+        Constrained point identical to the Impulse arm's NUTS start
+        (standard/robust_regression.jl `build_constraint`): alpha = 0, beta = 0
+        (real support -> z = 0), nu = 1 and sigma = 1 (positive support with an
+        exp transform -> z = log(1) = 0). Routed through init_to_value by
+        numpyro_harness.py; only used with --matched-init.
+        """
+        return {
+            "alpha": np.zeros(1),
+            "beta": np.zeros(self.k),
+            "nu": np.ones(1),
+            "sigma": np.ones(1),
+        }
+
     def model(self, data: xr.Dataset):
         data = data.transpose("item", "feature")
         X, Y = data.X.values, data.Y.values

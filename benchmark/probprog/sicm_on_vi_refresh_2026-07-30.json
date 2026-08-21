@@ -1,0 +1,203 @@
+{
+ "_provenance": {
+  "experiment": "Refresh of the SICM-on-variational-inference per-step ablation that produced the Design-section 5.11x and 3.51x numbers.",
+  "date": "2026-07-30",
+  "cause": "FIX 1 (per-site whole-slice DynamicUpdateSlice in impulse::constrainPosition / impulse::unconstrainPosition) changes gp_pois_regr's per-step cost, which selects two sites (alpha, HalfNormal, positive support; f_tilde, Normal, real support) and therefore reassembles 9 position elements through the transform path. scale_family_mvn selects a single site (tau) and takes the pre-existing single-slice bypass in both functions ('if (slices.size() == 1) result1D = slices[0];'), so it is structurally unaffected by FIX 1 and serves as the control.",
+  "driver": "Reactant.jl/test/probprog/svi_sicm_benchmark.jl, unchanged. Same methodology as the 2026-07-05 evidence: n = 8, 300 SVI steps, AutoNormal guide, Adam learning rate 0.01, 1 particle, init_scale 0.1; per-step cost is the best of 8 timed repetitions divided by 300; SICM is toggled with Reactant.Compiler.DEBUG_PROBPROG_DISABLE_SICM (DEBUG_PROBPROG_DISABLE_OPT is held false in both settings, so this isolates SICM and is not the flat-versus-region ablation).",
+  "environment": "julia --project=test -t 32, CUDA_VISIBLE_DEVICES empty, JULIA_NUM_THREADS / OPENBLAS / MKL / OMP = 32, XLA_FLAGS=--xla_cpu_multi_thread_eigen=true, matching run_pplbench.sh --device cpu --threads 32. Reactant.jl/test/LocalPreferences.toml points at the same libReactantExtra.so as the benchmark tree (md5 88ec2c261e1d5069b0dfa91ce6c7d505).",
+  "replication": "The driver was run 3 times end to end; per-step values and ratios are reported per run with the median.",
+  "caveat": "The 2026-07-05 reference numbers were produced on a different build of the compiler stack. scale_family_mvn is the control: it is provably untouched by FIX 1, so any movement in its ratio is attributable to other compiler changes between 2026-07-05 and this build, not to FIX 1."
+ },
+ "models": {
+  "scale_family_mvn": {
+   "affected_by_fix1": false,
+   "role": "control (single-site bypass)",
+   "old_2026_07_05": {
+    "per_step_us_sicm_on": 2.012,
+    "per_step_us_sicm_off": 10.279,
+    "ratio": 5.11,
+    "numpyro_per_step_us": 16753.546,
+    "final_elbo": -1.2291404509471786,
+    "elbo_max_abs_diff_vs_numpyro": 6.306066779870889e-14
+   },
+   "new_2026_07_30": {
+    "n_replicate_runs": 3,
+    "per_step_us_sicm_on_per_run": [
+     2.212,
+     2.005,
+     2.048
+    ],
+    "per_step_us_sicm_on_median": 2.048,
+    "per_step_us_sicm_off_per_run": [
+     7.664,
+     7.954,
+     7.378
+    ],
+    "per_step_us_sicm_off_median": 7.664,
+    "ratio_per_run": [
+     3.464,
+     3.968,
+     3.603
+    ],
+    "ratio_median": 3.603,
+    "ratio_from_median_per_step": 3.7421874999999996,
+    "numpyro_per_step_us_per_run": [
+     16291.396,
+     16787.044,
+     16500.76
+    ],
+    "final_elbo_per_run": [
+     -1.2291404509471793,
+     -1.2291404509471793,
+     -1.2291404509471793
+    ],
+    "elbo_max_abs_diff_vs_numpyro_per_run": [
+     6.394884621840902e-14,
+     6.394884621840902e-14,
+     6.394884621840902e-14
+    ],
+    "cholesky_placement_per_run": [
+     {
+      "in_while_sicm_on": 0,
+      "in_while_sicm_off": 1,
+      "before_while_sicm_on": 1
+     },
+     {
+      "in_while_sicm_on": 0,
+      "in_while_sicm_off": 1,
+      "before_while_sicm_on": 1
+     },
+     {
+      "in_while_sicm_on": 0,
+      "in_while_sicm_off": 1,
+      "before_while_sicm_on": 1
+     }
+    ]
+   },
+   "ratio_delta": {
+    "old": 5.11,
+    "new_median": 3.603
+   }
+  },
+  "gp_pois_regr": {
+   "affected_by_fix1": true,
+   "role": "treatment (2 sites, 9 position elements)",
+   "old_2026_07_05": {
+    "per_step_us_sicm_on": 1.918,
+    "per_step_us_sicm_off": 6.726,
+    "ratio": 3.507,
+    "numpyro_per_step_us": null,
+    "final_elbo": -17.626465946963776,
+    "elbo_max_abs_diff_vs_numpyro": null
+   },
+   "new_2026_07_30": {
+    "n_replicate_runs": 3,
+    "per_step_us_sicm_on_per_run": [
+     2.138,
+     2.074,
+     2.049
+    ],
+    "per_step_us_sicm_on_median": 2.074,
+    "per_step_us_sicm_off_per_run": [
+     7.294,
+     7.092,
+     7.276
+    ],
+    "per_step_us_sicm_off_median": 7.276,
+    "ratio_per_run": [
+     3.411,
+     3.42,
+     3.55
+    ],
+    "ratio_median": 3.42,
+    "ratio_from_median_per_step": 3.5081967213114758,
+    "numpyro_per_step_us_per_run": [
+     null,
+     null,
+     null
+    ],
+    "final_elbo_per_run": [
+     -17.626465946963776,
+     -17.626465946963776,
+     -17.626465946963776
+    ],
+    "elbo_max_abs_diff_vs_numpyro_per_run": [
+     NaN,
+     NaN,
+     NaN
+    ],
+    "cholesky_placement_per_run": [
+     {
+      "in_while_sicm_on": 0,
+      "in_while_sicm_off": 1,
+      "before_while_sicm_on": 1
+     },
+     {
+      "in_while_sicm_on": 0,
+      "in_while_sicm_off": 1,
+      "before_while_sicm_on": 1
+     },
+     {
+      "in_while_sicm_on": 0,
+      "in_while_sicm_off": 1,
+      "before_while_sicm_on": 1
+     }
+    ]
+   },
+   "ratio_delta": {
+    "old": 3.507,
+    "new_median": 3.42
+   }
+  }
+ },
+ "hlo_structural_check": {
+  "purpose": "Direct confirmation that FIX 1 is live in the loaded binary. The 2026-07-05 gp_pois_regr HLO carries one dynamic_slice and one dynamic_update_slice per position ELEMENT from the old per-element reassembly (9 elements: alpha 1 + f_tilde 8). Under FIX 1 the reassembly emits one dynamic_update_slice per SITE (2) and no dynamic_slice.",
+  "counts": {
+   "gp_pois_regr_sicm_on": {
+    "old_2026_07_05": {
+     "dynamic_update_slice": 11,
+     "dynamic_slice": 9
+    },
+    "new_2026_07_30": {
+     "dynamic_update_slice": 4,
+     "dynamic_slice": 0
+    },
+    "new_file": "logs/sicm_on_vi_run1/gp_pois_regr_hlo_sicm_on.mlir"
+   },
+   "gp_pois_regr_sicm_off": {
+    "old_2026_07_05": {
+     "dynamic_update_slice": 11,
+     "dynamic_slice": 9
+    },
+    "new_2026_07_30": {
+     "dynamic_update_slice": 4,
+     "dynamic_slice": 0
+    },
+    "new_file": "logs/sicm_on_vi_run1/gp_pois_regr_hlo_sicm_off.mlir"
+   },
+   "scale_family_mvn_sicm_on": {
+    "old_2026_07_05": {
+     "dynamic_update_slice": 2,
+     "dynamic_slice": 0
+    },
+    "new_2026_07_30": {
+     "dynamic_update_slice": 2,
+     "dynamic_slice": 0
+    },
+    "new_file": "logs/sicm_on_vi_run1/scale_family_mvn_hlo_sicm_on.mlir"
+   },
+   "scale_family_mvn_sicm_off": {
+    "old_2026_07_05": {
+     "dynamic_update_slice": 2,
+     "dynamic_slice": 0
+    },
+    "new_2026_07_30": {
+     "dynamic_update_slice": 2,
+     "dynamic_slice": 0
+    },
+    "new_file": "logs/sicm_on_vi_run1/scale_family_mvn_hlo_sicm_off.mlir"
+   }
+  }
+ },
+ "verdict": "The HLO structural check confirms FIX 1 is live in the loaded binary and confirms the intended split between the two models: gp_pois_regr's emitted HLO loses all 9 per-element dynamic_slice operations (one per position element: alpha 1 plus f_tilde 8) and drops from 11 to 4 dynamic_update_slice operations, while scale_family_mvn's counts are unchanged at 2 dynamic_update_slice and 0 dynamic_slice because its single selected site takes the bypass. Despite that op-count reduction, gp_pois_regr's SICM on-versus-off ratio barely moves against the 2026-07-05 reference, whereas scale_family_mvn's ratio, which FIX 1 cannot touch, moves a great deal. The control moving more than the treatment means the ratio change recorded here is not attributable to FIX 1: at n = 8 the position reassembly is simply not a measurable share of the per-step cost of the variational loop. The movement in scale_family_mvn's ratio comes from other compiler changes between 2026-07-05 and this build, concentrated in the SICM-off setting."
+}

@@ -90,6 +90,80 @@ def constrained_to_unconstrained(model_fn, data, constrained_init):
     return init_info.z
 
 
+def check_matched_init_differentiable(model_fn, data, z):
+    """Fail loudly if the reference gradient at the matched init is a tie-break.
+
+    The `--validate` gate is only meaningful if the NumPyro arm's gradient at the
+    shared starting point is the actual derivative. It is not, if that point sits
+    on a branch point of the reference log-prob's algebraic form.
+
+    This has happened once and cost a full investigation: numpyro's
+    `Bernoulli(logits=x).log_prob(y)` routes through
+      binary_cross_entropy_with_logits(x, y) = clip(x, 0) + log1p(exp(-|x|)) - x*y
+    whose two pieces are each non-differentiable at x = 0, and JAX resolves them
+    with inconsistent conventions (clip'(0) = 0.5 centred, |x|'(0) = +1
+    one-sided). The kinks fail to cancel, so the reported gradient of log p is
+    `y` rather than the true `y - 0.5`. Any logit that is a linear map of
+    zero-initialised real-support sites is exactly 0, so a canonical all-zero
+    init puts every observation on it, and the gate reports the resulting
+    trajectory difference as an Impulse defect.
+
+    THE CHECK. Displace every coordinate by d and recompute the gradient, for d
+    over a range of vanishingly small magnitudes. Any d here is far below the ULP
+    of every coordinate and of every intermediate, so a genuinely differentiable
+    log-density returns a bit-identical gradient (the induced change is bounded by
+    |Hessian| * d, roughly 1e-94 for these models). A branch point instead flips
+    the tie-break and changes the gradient by O(1). That gives a separation of
+    ~90 orders of magnitude, so the threshold below needs no tuning; it is set
+    only loose enough to tolerate a benign tie in a numerical-stability `max`
+    (logsumexp's amax, which is stop_gradient'ed and measures exactly 0 here).
+
+    Several magnitudes are used because a single one is not robust: a displacement
+    must survive the model's own arithmetic to be observable. 1 ULP (5e-324 at the
+    origin) is annihilated by `X @ beta`, and 1e-300 would be annihilated by a
+    model that rescales its inputs sharply. The largest surviving magnitude wins.
+
+    SCOPE. This detects a kink AT a coordinate's current value, which is the
+    structural case that actually bites: a canonical zero-valued site feeding a
+    log-prob whose kink sits at the origin. It is silent for a coordinate that is
+    already nonzero, where a kink would require a numerical coincidence
+    (noisy_or_topic's Bernoulli logits sit 0.57 away from theirs).
+
+    The fix when this fires is to offset the offending real-support site off the
+    origin on BOTH arms (base_numpyro_impl.MATCHED_INIT_REAL and harness.jl
+    MATCHED_INIT_REAL), never to relax the gate's tolerances.
+    """
+    from numpyro.infer.util import potential_energy
+
+    def U(zz):
+        return potential_energy(model_fn, (data,), {}, zz)
+
+    g0 = jax.grad(U)(z)
+    worst, worst_site, worst_d = 0.0, None, None
+    for mag in (1e-100, 1e-200, 1e-300):
+        for d in (mag, -mag):
+            gp = jax.grad(U)({k: v + d for k, v in z.items()})
+            for k in z:
+                delta = float(jnp.max(jnp.abs(g0[k] - gp[k])))
+                if delta > worst:
+                    worst, worst_site, worst_d = delta, k, d
+    scale = max(1.0, max(float(jnp.max(jnp.abs(g0[k]))) for k in z))
+    print(f"NumPyro: matched-init branch-point check: max gradient change under "
+          f"an infinitesimal displacement = {worst:.6e} (gradient scale "
+          f"{scale:.6e}, worst site '{worst_site}', d={worst_d})", flush=True)
+    if worst > 1e-8 * scale:
+        raise RuntimeError(
+            f"Matched init sits on a non-differentiable point of the NumPyro "
+            f"reference log-prob: displacing the init by {worst_d} changes dU/dz "
+            f"by {worst:.6e} at site '{worst_site}' (gradient scale "
+            f"{scale:.6e}). The gradient at this point is a tie-break, not a "
+            f"derivative, so --validate would compare Impulse against a wrong "
+            f"reference. Offset the affected real-support site off the origin on "
+            f"BOTH arms using MATCHED_INIT_REAL; do NOT loosen the validate "
+            f"tolerances."
+        )
+
+
 def dump_mcmc_hlo(mcmc, rng_key, data, jax_init, module_name):
     """Dump the HLO of the full MCMC run (init + warmup + sampling).
 
@@ -190,29 +264,64 @@ def _build_svi(model, data, guide_name, optimizer_name, step_size,
     return svi, guide
 
 
-def _svi_write_diagnostics(model_name, seed, elbo_traj, per_step, num_steps):
+def _svi_guide_loc_scale(params):
+    """Per-site AutoNormal guide params in UNCONSTRAINED latent space.
+
+    NumPyro's AutoNormal names its params ``{site}_auto_loc`` (guide mean) and
+    ``{site}_auto_scale`` (softplus-positive std). Return two dicts keyed by the
+    bare site name so the two harnesses compare by NAME rather than column
+    position; this sidesteps the declaration-vs-alphabetical ordering issue that
+    bit the n_schools guide draws (declaration-first sigma_* sort last)."""
+    loc, scale = {}, {}
+    for k, v in params.items():
+        arr = [float(x) for x in np.asarray(v, dtype=float).reshape(-1)]
+        if k.endswith("_auto_loc"):
+            loc[k[: -len("_auto_loc")]] = arr
+        elif k.endswith("_auto_scale"):
+            scale[k[: -len("_auto_scale")]] = arr
+    return loc, scale
+
+
+def _svi_write_diagnostics(model_name, seed, elbo_traj, per_step, num_steps,
+                           guide_loc=None, guide_scale=None):
     diag_dir = os.path.join(
         os.environ.get("PPLBENCH_OUTPUT_DIR", "outputs"), "svi_diagnostics"
     )
     os.makedirs(diag_dir, exist_ok=True)
     safe = "".join(c if c.isalnum() or c == "_" else "_" for c in str(model_name))
     path = os.path.join(diag_dir, f"numpyro_{safe}_seed{seed}.json")
+    payload = {
+        "model": str(model_name),
+        "seed": int(seed),
+        "num_steps": int(num_steps),
+        "per_step_s": float(per_step),
+        "final_elbo": float(elbo_traj[-1]) if len(elbo_traj) else float("nan"),
+        "elbo_trajectory": [float(x) for x in elbo_traj],
+    }
+    # Fitted guide loc/scale (validate correctness compares the FIT, not draws).
+    if guide_loc is not None:
+        payload["loc"] = guide_loc
+        payload["scale"] = guide_scale
     with open(path, "w") as f:
-        json.dump({
-            "model": str(model_name),
-            "seed": int(seed),
-            "num_steps": int(num_steps),
-            "per_step_s": float(per_step),
-            "final_elbo": float(elbo_traj[-1]) if len(elbo_traj) else float("nan"),
-            "elbo_trajectory": [float(x) for x in elbo_traj],
-        }, f)
+        json.dump(payload, f)
 
 
-def run_svi_trial(svi, guide, rng_key, data, num_steps, num_draws):
+def run_svi_trial(svi, guide, rng_key, data, num_steps, num_draws, matched=False):
     """Fit for num_steps (timed) then draw num_draws from the fitted guide via
     sample_posterior (Predictive over the guide, constrained space). Only the fit
-    is timed, matching the Impulse harness (guide draws are a post-fit diagnostic)."""
-    fit_key, draw_key = jax.random.split(rng_key)
+    is timed, matching the Impulse harness (guide draws are a post-fit diagnostic).
+
+    When `matched` (validate correctness mode), the fit consumes `rng_key`
+    DIRECTLY (an rbg key from make_rng_key) so the reparameterization-noise stream
+    is byte-identical to the Impulse SVI arm, whose enzyme.random DEFAULT algorithm
+    is jax's rbg generator seeded from [seed, 0]. The draw key is derived
+    separately (guide draws are not part of the compared FIT). The normal
+    benchmark path keeps the historical split(rng_key) -> (fit_key, draw_key)."""
+    if matched:
+        fit_key = rng_key
+        draw_key = jax.random.split(rng_key)[0]
+    else:
+        fit_key, draw_key = jax.random.split(rng_key)
     t0 = time.time()
     res = svi.run(fit_key, num_steps, data, progress_bar=False)
     res.losses.block_until_ready()
@@ -222,7 +331,7 @@ def run_svi_trial(svi, guide, rng_key, data, num_steps, num_draws):
     draws = guide.sample_posterior(draw_key, params, sample_shape=(num_draws,))
     jax.block_until_ready(draws)
     samples = {k: np.asarray(v) for k, v in draws.items()}
-    return samples, (-losses).tolist(), run_time
+    return samples, (-losses).tolist(), run_time, params
 
 
 def svi_main(args, impl, data, module_path):
@@ -235,18 +344,25 @@ def svi_main(args, impl, data, module_path):
     K = args.num_samples
 
     def one_trial(seed):
-        rng_key = jax.random.PRNGKey(int(seed))
+        # Validate correctness (`--matched-init`): seed the fit with the rbg key
+        # from [seed, 0] (make_rng_key) so the reparam-noise stream matches the
+        # Impulse SVI arm exactly. Normal benchmark path keeps threefry PRNGKey.
+        rng_key = (make_rng_key(int(seed)) if args.matched_init
+                   else jax.random.PRNGKey(int(seed)))
         svi, guide = _build_svi(
             impl.model, data, args.guide, args.optimizer, args.step_size,
             args.num_particles, args.init_scale, seed,
         )
         # JIT warm (discarded), then a timed fit.
-        run_svi_trial(svi, guide, rng_key, data, args.num_steps, K)
-        samples, elbo_traj, run_time = run_svi_trial(
-            svi, guide, rng_key, data, args.num_steps, K
+        run_svi_trial(svi, guide, rng_key, data, args.num_steps, K,
+                      matched=args.matched_init)
+        samples, elbo_traj, run_time, params = run_svi_trial(
+            svi, guide, rng_key, data, args.num_steps, K, matched=args.matched_init
         )
+        guide_loc, guide_scale = _svi_guide_loc_scale(params)
         _svi_write_diagnostics(
-            model_name, seed, elbo_traj, run_time / args.num_steps, args.num_steps
+            model_name, seed, elbo_traj, run_time / args.num_steps, args.num_steps,
+            guide_loc=guide_loc, guide_scale=guide_scale,
         )
         return samples, elbo_traj, run_time
 
@@ -311,6 +427,7 @@ def main():
     parser.add_argument("--init-scale", type=float, default=0.1)
     parser.add_argument("--guide", default="AutoNormal")
     parser.add_argument("--optimizer", default="Adam")
+    parser.add_argument("--matched-init", action="store_true")
     parser.add_argument("--server", action="store_true")
     args = parser.parse_args()
 
@@ -329,8 +446,27 @@ def main():
         svi_main(args, impl, data, module_path)
         return
 
+    # Matched-init control experiment: replace the default prior/z=0 init with a
+    # deterministic model-specific constrained point (uniform simplices) provided
+    # by the impl. This is a CONSTRAINED init routed through init_to_value below,
+    # so its per-variable sizes are the constrained event sizes and must NOT feed
+    # the unconstrained inverse_mass_matrix override (`position_size`). The kernel
+    # is otherwise unchanged vs the standard protocol; only the start point moves.
+    matched_fn = getattr(impl, "matched_init_params", None)
+    matched = bool(args.matched_init and matched_fn is not None)
+    if matched:
+        # Matched init overrides any driver-supplied per-trial init_params (a
+        # model with generate_init_params, e.g. the regression models, sends a
+        # per-trial Uniform(-2,2) draw; matched-init must ignore it so every trial
+        # and every system starts from the same deterministic point).
+        init_params_raw = {k: np.asarray(v).tolist()
+                           for k, v in matched_fn(data).items()}
+        print("NumPyro: --matched-init constrained point: "
+              + ", ".join(f"{k}={np.asarray(v).reshape(-1)[:3]}"
+                          for k, v in init_params_raw.items()), flush=True)
+
     position_size = None
-    if init_params_raw:
+    if init_params_raw and not matched:
         position_size = sum(np.array(v).size for v in init_params_raw.values())
 
     kernel = infer.NUTS(
@@ -378,6 +514,18 @@ def main():
 
     jax_init = prep_init(init_params_raw)
 
+    if matched and jax_init is not None:
+        max_absz = max(float(jnp.max(jnp.abs(v))) for v in jax_init.values())
+        tot = sum(int(jnp.size(v)) for v in jax_init.values())
+        print(f"NumPyro: matched-init unconstrained z: dim={tot}, "
+              f"max|z|={max_absz:.3e} (0 == symmetric point)", flush=True)
+        # The gate is vacuous if the reference gradient here is a tie-break.
+        # `jax_init` may carry a leading chain dim; check the single-chain point.
+        check_matched_init_differentiable(
+            impl.model, data,
+            {k: (v[0] if group_by_chain else v) for k, v in jax_init.items()},
+        )
+
     # JIT warmup
     print("NumPyro: JIT warmup...", flush=True)
     jit_start = time.time()
@@ -409,7 +557,20 @@ def main():
             req = json.loads(stripped)
             new_seed = req["seed"]
             new_output_path = req["output"]
-            new_init = prep_init(req.get("init_params"))
+            # Per-trial init: a model that supplies generate_init_params sends a
+            # fresh (seed-dependent) init per trial; otherwise, under --matched-init
+            # reuse the fixed deterministic matched init (`jax_init`) for every
+            # trial (identical start across trials, matching the Impulse/Stan/Turing
+            # arms). Only when neither applies do we fall back to NumPyro's default.
+            new_raw = req.get("init_params")
+            if matched:
+                # Matched init wins over any per-trial driver init: reuse the
+                # fixed deterministic matched init (`jax_init`) for EVERY trial.
+                new_init = jax_init
+            elif new_raw is not None:
+                new_init = prep_init(new_raw)
+            else:
+                new_init = None
 
             new_rng = make_rng_key(new_seed)
             profile_dir = req.get("profile")

@@ -1,0 +1,624 @@
+{
+ "_provenance": {
+  "experiment": "Stochastic variational inference under the plateau-budget protocol: each externally-budgeted system runs until its ELBO plateaus, and the per-model step budget is the smallest at which every such system has plateaued.",
+  "date": "2026-07-30",
+  "cause": [
+   "VI plateau-budget protocol. The previous fixed budget of 2000 optimizer steps was far short of convergence on logistic regression: at 2000 steps the fitted intercept is -1.61 against a posterior value near -12.6, i.e. the fit had barely left its initialization at 0.",
+   "FIX 1 timing, for the Impulse implementations of robust_regression and n_schools, whose position vectors carry non-REAL supports (nu Gamma and sigma Exponential; sigma_state / sigma_district / sigma_type HalfCauchy)."
+  ],
+  "stan_untouched": "Stan's ADVI self-terminates under its own convergence heuristic and was NOT re-run. Its numbers are reused verbatim from svi_stan_advi_converged_results_2026-07-29.json. Its own recorded stop iterations provide an independent cross-check of the budgets chosen here.",
+  "protocol_unchanged": "PPLBench trials-as-chains SVI: iterations = 200 (K = 200 draws from the fitted mean-field guide), num_warmup = 0, 4 trials, model seed 12345, shared trial seeds [1396133, 2993578, 6164479, 9523583]. Adam, learning rate (step_size) 0.01, num_particles 1, init_scale 0.1, AutoNormal guide, matched deterministic guide initialization at unconstrained loc = 0. Only the guide fit is timed. cpu, 32 threads, CUDA_VISIBLE_DEVICES empty. The ONLY protocol change is num_steps.",
+  "binary": "libReactantExtra.so md5 88ec2c261e1d5069b0dfa91ce6c7d505 (FIX-1 prototype build)."
+ },
+ "plateau_criterion_and_budgets": {
+  "criterion": {
+   "statement": "A system's ELBO has plateaued at step S when the relative change of the ELBO between consecutive windows, |w_k - w_{k-1}| / |w_k|, is below 0.01 for at least 2 consecutive windows, S being the last step of the second passing window.",
+   "provenance": "Mirrors CmdStan ADVI's tol_rel_obj test, stan/src/stan/variational/advi.hpp:400-408, which forms rel_difference(elbo, elbo_prev) = |elbo_prev - elbo| / |elbo| every eval_elbo = 100 iterations and stops when the rolling buffer MEAN or MEDIAN falls below tol_rel_obj = 0.01.",
+   "data_source": "The per-step ELBO trajectory each harness already records: harness.jl:220-244 (_svi_write_diagnostics, Impulse), numpyro_harness.py:211-233 (from svi.run's returned losses), turing_harness.jl:161-183 (from AdvancedVI's per-step info). All three write outputs/<run>/svi_diagnostics/<model>_seed<seed>.json with an elbo_trajectory array. No harness change was needed and no chunked/warm-start scheme was needed.",
+   "adaptation_1_window_statistic": "The window statistic is the MEDIAN of the recorded per-step ELBO, not the mean. CmdStan re-estimates the ELBO from elbo_samples = 100 fresh draws at the current parameter; the harnesses instead record the single-particle (num_particles = 1) ELBO the optimizer already computed. Turing's recorded trajectory carries rare heavy excursions (tail minimum -5928 on a trajectory whose level is -50), each of which corrupts an entire window mean. The median is the robust analogue and CmdStan's own test already admits a median form. Mean-based results are reported alongside for sensitivity.",
+   "adaptation_2_window_width": "The width is chosen per model so that the window statistic's own sampling error is below the 0.01 tolerance in the region where the decision is made. Measured robust standard error of the window statistic, as a fraction of |ELBO|: see window_width_evidence. On logistic regression the specified 100-step window has a standard error of 1.5 to 5.8 percent of |ELBO|, i.e. up to 5.8x the tolerance itself, so that window measures its own Monte-Carlo noise rather than ELBO drift and fires spuriously (one Impulse seed is declared plateaued at step 1500 while its ELBO is still descending from -166 to -49). It is therefore widened to 1000 steps for that model only. On robust regression and N-Schools the 100-step window is already 2x to 100x below the tolerance and is kept as specified."
+  },
+  "window_width_evidence": {
+   "units": "robust standard error of the window statistic divided by |ELBO|, at the decision region; tolerance is 0.01",
+   "logistic_regression": {
+    "W100": "0.0146 - 0.0581",
+    "W1000": "0.0012 - 0.0048",
+    "chosen": 1000
+   },
+   "robust_regression": {
+    "W100": "0.0001 - 0.0052",
+    "chosen": 100
+   },
+   "n_schools": {
+    "W100": "0.0001 - 0.0007",
+    "chosen": 100
+   }
+  },
+  "per_system_plateau_step": {
+   "logistic_regression": {
+    "window": 1000,
+    "Impulse": {
+     "per_seed": [
+      20000,
+      18000,
+      22000,
+      23000
+     ],
+     "max": 23000
+    },
+    "NumPyro": {
+     "per_seed": [
+      21000,
+      20000,
+      20000,
+      21000
+     ],
+     "max": 21000
+    },
+    "Turing.jl": {
+     "per_seed": [
+      17000,
+      17000,
+      21000,
+      30000
+     ],
+     "max": 30000
+    },
+    "binding_system": "Turing.jl",
+    "smallest_common": 23000,
+    "note": "smallest_common is the max over systems of the per-system plateau step; the binding value is Turing.jl's 30000"
+   },
+   "robust_regression": {
+    "window": 100,
+    "Impulse": {
+     "per_seed": [
+      1200,
+      1200,
+      1200,
+      1200
+     ],
+     "max": 1200
+    },
+    "NumPyro": {
+     "per_seed": [
+      1200,
+      1200,
+      1200,
+      1200
+     ],
+     "max": 1200
+    },
+    "Turing.jl": {
+     "per_seed": [
+      1300,
+      1400,
+      1700,
+      1500
+     ],
+     "max": 1700
+    },
+    "binding_system": "Turing.jl"
+   },
+   "n_schools": {
+    "window": 100,
+    "Impulse": {
+     "per_seed": [
+      1500,
+      1500,
+      1500,
+      1500
+     ],
+     "max": 1500
+    },
+    "NumPyro": {
+     "per_seed": [
+      1500,
+      1500,
+      1500,
+      1500
+     ],
+     "max": 1500
+    },
+    "Turing.jl": {
+     "per_seed": [
+      1500,
+      1500,
+      1500,
+      1500
+     ],
+     "max": 1500
+    }
+   }
+  },
+  "chosen_budgets": {
+   "logistic_regression": {
+    "budget": 30000,
+    "old_budget": 2000,
+    "changed": true
+   },
+   "robust_regression": {
+    "budget": 2000,
+    "old_budget": 2000,
+    "changed": false
+   },
+   "n_schools": {
+    "budget": 2000,
+    "old_budget": 2000,
+    "changed": false
+   }
+  },
+  "probes": {
+   "logistic_regression": {
+    "cap": 100000,
+    "trials": 4,
+    "config": "pplbench_configs/svi/logistic_regression_plateau_probe.json",
+    "output_dirs": {
+     "Impulse": "outputs/2026-07-30_17:57:43",
+     "NumPyro": "outputs/2026-07-30_17:58:17",
+     "Turing.jl": "outputs/2026-07-30_17:59:06"
+    }
+   },
+   "robust_regression": {
+    "cap": 20000,
+    "trials": 4,
+    "config": "pplbench_configs/svi/robust_regression_plateau_probe.json",
+    "output_dirs": {
+     "Impulse": "outputs/2026-07-30_18:06:05",
+     "NumPyro": "outputs/2026-07-30_18:06:49",
+     "Turing.jl": "outputs/2026-07-30_18:07:12"
+    },
+    "reason": "Turing's 2000-step window means still appeared to be climbing (-7940 at step 1000 to -7723 at step 2000), so the 2000-step trajectory alone could not settle whether the level had stopped improving."
+   },
+   "n_schools": {
+    "cap": null,
+    "reason": "No probe needed. In the recorded 2026-07-13 2000-step trajectories every system's per-window relative change is 0.0001-0.0020 over steps 1500-2000, 5x to 100x below the tolerance, monotone and settled, and the window statistic's standard error is 0.0001-0.0007."
+   }
+  },
+  "cross_checks": {
+   "trajectory_prefix_determinism": "The ELBO trajectory prefix does not depend on the step budget. The 100000-step Impulse logistic run reproduces the 2000-step run's first eight window means exactly (-3998.29, -1102.77, -862.46, -653.65, -438.37, -376.98, -360.56, -292.22 for seed 1396133). The 20000-step Turing robust run reproduces the 2000-step run's per-seed plateau steps exactly ([1300, 1400, 1700, 1500]). Plateau steps read off the probes therefore apply to the shorter production runs.",
+   "turing_robust_stationarity": "In the 20000-step probe Turing's robust window medians lie in -7400 to -7880 from step 1100 to step 19600 with no trend (-7607 at step 1600 versus -7710 at step 19600), while the per-trial fit cost rises from 12.02 s at 2000 steps to 105.85 s at 20000 steps. The apparent climb inside the first 2000 steps is the tail of the initial descent plus stationary oscillation, not continued improvement.",
+   "independent_agreement_with_stan": {
+    "statement": "CmdStan's ADVI applies the same 0.01 relative-ELBO tolerance with the same 100-iteration evaluation interval and the same mean-or-median rolling test, entirely independently of this analysis, and it recorded where it stopped on each trial of each model in svi_stan_advi_converged_results_2026-07-29.json. Its stop iterations land in the same range as the budgets chosen here on all three models.",
+    "stan_self_terminated_stop_iter": {
+     "logistic_regression": [
+      22100,
+      14900,
+      14200,
+      13200
+     ],
+     "robust_regression": [
+      1900,
+      1700,
+      1700,
+      1900
+     ],
+     "n_schools": [
+      300,
+      700,
+      500,
+      500
+     ]
+    },
+    "comparison": {
+     "logistic_regression": "Stan max 22100 against Impulse 23000, NumPyro 21000, Turing 30000; budget 30000.",
+     "robust_regression": "Stan max 1900 against Impulse 1200, NumPyro 1200, Turing 1700; budget 2000.",
+     "n_schools": "Stan max 700 against Impulse 1500, NumPyro 1500, Turing 1500; budget 2000."
+    },
+    "converged_elbo_agreement": "Stan's converged ELBO on logistic regression is -50.2 to -51.1 across its four trials. Impulse, NumPyro and Turing all reach -45 to -53 once run to their plateau, against -110 to -197 at the previous 2000-step budget. All four systems therefore find the same optimum; the 2000-step budget was simply far short of it."
+   }
+  }
+ },
+ "models": {
+  "logistic_regression": {
+   "chosen_budget_steps": 30000,
+   "previous_budget_steps": 2000,
+   "budget_changed": true,
+   "systems": {
+    "Impulse": {
+     "steps": 30000,
+     "status": "re-run at the new budget",
+     "new": {
+      "steady_wall_s": 0.8299678199999999,
+      "all_trial_s": [
+       0.83573139,
+       0.82620507,
+       0.83417927,
+       0.82951912
+      ],
+      "n_eff": {
+       "min": 7.331753650197593,
+       "median": 253.93678134592577,
+       "max": 840.1720961334331
+      },
+      "n_eff_per_s_median": 305.9597916,
+      "per_trial_final_pll": [
+       -25.7377,
+       -29.869,
+       -27.5208,
+       -27.1795
+      ],
+      "output_dir": "./outputs/2026-07-30_18:47:44",
+      "log": "B2_final_impulse.log"
+     },
+     "previous_at_2000_steps": {
+      "steady_wall_s": 0.0786559967,
+      "n_eff_median": 297.1737336003514,
+      "n_eff_per_s_median": 3778.1446897,
+      "pll_final_mean": -72.134775,
+      "final_elbo": -122.56274434504195
+     }
+    },
+    "NumPyro": {
+     "steps": 30000,
+     "status": "re-run at the new budget",
+     "new": {
+      "steady_wall_s": 1.7623221866666665,
+      "all_trial_s": [
+       1.76517963,
+       1.7752316,
+       1.76227951,
+       1.74945545
+      ],
+      "n_eff": {
+       "min": 7.206230315229357,
+       "median": 612.0198294677405,
+       "max": 825.1065293362775
+      },
+      "n_eff_per_s_median": 347.28032924,
+      "per_trial_final_pll": [
+       -26.8971,
+       -28.5411,
+       -27.48,
+       -29.5319
+      ],
+      "output_dir": "./outputs/2026-07-30_18:48:36",
+      "log": "B2_final_numpyro.log"
+     },
+     "previous_at_2000_steps": {
+      "steady_wall_s": 0.4031342667,
+      "n_eff_median": 649.8222699506705,
+      "n_eff_per_s_median": 1611.9251671,
+      "pll_final_mean": -71.550725,
+      "final_elbo": -114.372198
+     }
+    },
+    "Turing.jl": {
+     "steps": 30000,
+     "status": "re-run at the new budget",
+     "new": {
+      "steady_wall_s": 67.74464053666667,
+      "all_trial_s": [
+       68.20675058,
+       67.69501588,
+       67.81864906,
+       67.72025667
+      ],
+      "n_eff": {
+       "min": 7.664798907963257,
+       "median": 689.0483725940531,
+       "max": 829.6781807434799
+      },
+      "n_eff_per_s_median": 10.1712603,
+      "per_trial_final_pll": [
+       -27.993,
+       -28.922,
+       -28.6954,
+       -28.6164
+      ],
+      "output_dir": "./outputs/2026-07-30_18:49:21",
+      "log": "B2_final_turing.log"
+     },
+     "previous_at_2000_steps": {
+      "steady_wall_s": 4.584965180666667,
+      "n_eff_median": 21.83232578310976,
+      "n_eff_per_s_median": 4.76172117,
+      "pll_final_mean": -75.9591805025674,
+      "final_elbo": -123.23457289607606
+     }
+    },
+    "Stan": {
+     "steps": "self-terminated, see self_terminated_stop_iter",
+     "status": "reused unchanged",
+     "value": {
+      "steady_wall_s": 15.0551,
+      "n_eff_median": 18.81339837140205,
+      "n_eff_per_s_median": 1.2496353335259776,
+      "pll_final_mean": -27.3015,
+      "self_terminated_stop_iter": [
+       22100,
+       14900,
+       14200,
+       13200
+      ],
+      "final_elbo": [
+       -50.388,
+       -50.221,
+       -51.094,
+       -50.671
+      ]
+     }
+    }
+   }
+  },
+  "robust_regression": {
+   "chosen_budget_steps": 2000,
+   "previous_budget_steps": 2000,
+   "budget_changed": false,
+   "systems": {
+    "Impulse": {
+     "steps": 2000,
+     "status": "re-run (FIX-1 wall-time change only; budget unchanged)",
+     "new": {
+      "n_replicate_runs": 3,
+      "steady_wall_s_mean_per_run": [
+       0.1076,
+       0.1187,
+       0.1079
+      ],
+      "steady_wall_s_mean": 0.1079,
+      "n_eff": {
+       "min": 5.582276549150327,
+       "median": 10.723106054979047,
+       "max": 863.4122130367862
+      },
+      "n_eff_per_s_median": 99.33406220493542,
+      "per_trial_final_pll": [
+       -7214.0108,
+       -7204.5758,
+       -7212.1552,
+       -7213.5152
+      ],
+      "output_dirs": [
+       "./outputs/2026-07-30_18:31:57",
+       "./outputs/2026-07-30_18:34:07",
+       "./outputs/2026-07-30_18:38:27"
+      ]
+     },
+     "previous_at_2000_steps": {
+      "steady_wall_s": 0.1078861033,
+      "n_eff_median": 10.723106054979047,
+      "n_eff_per_s_median": 99.39283921,
+      "pll_final_mean": -7211.06425,
+      "final_elbo": -7461.111451112017
+     }
+    },
+    "NumPyro": {
+     "steps": 2000,
+     "status": "reused unchanged (plateaued well inside 2000)",
+     "value": {
+      "steady_wall_s": 0.72909093,
+      "n_eff_median": 17.362024458718576,
+      "n_eff_per_s_median": 23.81324985,
+      "pll_final_mean": -7212.841575,
+      "final_elbo": -7446.625636
+     }
+    },
+    "Turing.jl": {
+     "steps": 2000,
+     "status": "reused unchanged (plateaued well inside 2000)",
+     "value": {
+      "steady_wall_s": 12.023913362666667,
+      "n_eff_median": 16.842717952175434,
+      "n_eff_per_s_median": 1.40076841,
+      "pll_final_mean": -7243.161024514939,
+      "final_elbo": -7721.504042468236
+     }
+    },
+    "Stan": {
+     "steps": "self-terminated",
+     "status": "reused unchanged",
+     "value": {
+      "steady_wall_s": 3.8753,
+      "n_eff_median": 6.533116962504271,
+      "n_eff_per_s_median": 1.6858509468049294,
+      "pll_final_mean": -7460.2363,
+      "self_terminated_stop_iter": [
+       1900,
+       1700,
+       1700,
+       1900
+      ],
+      "final_elbo": [
+       -7710.682,
+       -7714.233,
+       -7720.734,
+       -7703.327
+      ]
+     }
+    }
+   }
+  },
+  "n_schools": {
+   "chosen_budget_steps": 2000,
+   "previous_budget_steps": 2000,
+   "budget_changed": false,
+   "systems": {
+    "Impulse": {
+     "steps": 2000,
+     "status": "re-run (FIX-1 wall-time change only; budget unchanged)",
+     "new": {
+      "n_replicate_runs": 3,
+      "steady_wall_s_mean_per_run": [
+       0.0689,
+       0.0759,
+       0.0691
+      ],
+      "steady_wall_s_mean": 0.0691,
+      "n_eff": {
+       "min": 358.2198458212189,
+       "median": 762.3144991700137,
+       "max": 940.9741471891149
+      },
+      "n_eff_per_s_median": 11037.753512669846,
+      "per_trial_final_pll": [
+       -6889.9042,
+       -6891.6733,
+       -6889.7623,
+       -6885.3277
+      ],
+      "output_dirs": [
+       "./outputs/2026-07-30_18:33:02",
+       "./outputs/2026-07-30_18:35:52",
+       "./outputs/2026-07-30_18:39:32"
+      ]
+     },
+     "previous_at_2000_steps": {
+      "steady_wall_s": 0.0751307457,
+      "n_eff_median": 762.3144991700137,
+      "n_eff_per_s_median": 10146.50516783,
+      "pll_final_mean": -6889.166875,
+      "final_elbo": -7085.446431247636
+     }
+    },
+    "NumPyro": {
+     "steps": 2000,
+     "status": "reused unchanged (plateaued well inside 2000)",
+     "value": {
+      "steady_wall_s": 1.0072611167,
+      "n_eff_median": 789.187065082124,
+      "n_eff_per_s_median": 783.49799424,
+      "pll_final_mean": -6886.01475,
+      "final_elbo": -7120.219899
+     }
+    },
+    "Turing.jl": {
+     "steps": 2000,
+     "status": "reused unchanged (plateaued well inside 2000)",
+     "value": {
+      "steady_wall_s": 19.630986099666668,
+      "n_eff_median": 669.6802886630508,
+      "n_eff_per_s_median": 34.11343094,
+      "pll_final_mean": -6878.161395285607,
+      "final_elbo": -7060.287254851406
+     }
+    },
+    "Stan": {
+     "steps": "self-terminated",
+     "status": "reused unchanged",
+     "value": {
+      "steady_wall_s": 3.9303,
+      "n_eff_median": 9.119414978686917,
+      "n_eff_per_s_median": 2.3203091514943686,
+      "pll_final_mean": -6890.2555,
+      "self_terminated_stop_iter": [
+       300,
+       700,
+       500,
+       500
+      ],
+      "final_elbo": [
+       -7076.389,
+       -7070.375,
+       -7063.473,
+       -7089.123
+      ]
+     }
+    }
+   }
+  }
+ },
+ "b2_sanity": {
+  "predictive_log_likelihood": {
+   "question": "Do the fitted predictive log-likelihoods approach the NUTS-consistent value once the budget reaches the plateau?",
+   "answer": "YES. Per-trial means at the 30000-step budget: Impulse -27.5768, NumPyro -28.1125, Turing.jl -28.5567, against Stan's self-terminated converged -27.3015. At the previous 2000-step budget the same three systems reported -72.1348, -71.5507 and -75.9592. The four NUTS runs of this model report -30.3.",
+   "per_trial": {
+    "Impulse": [
+     -25.7377,
+     -29.869,
+     -27.5208,
+     -27.1795
+    ],
+    "NumPyro": [
+     -26.8971,
+     -28.5411,
+     -27.48,
+     -29.5319
+    ],
+    "Turing.jl": [
+     -27.993,
+     -28.922,
+     -28.6954,
+     -28.6164
+    ],
+    "Stan": [
+     -27.2591,
+     -27.8427,
+     -26.8219,
+     -27.2822
+    ]
+   }
+  },
+  "fitted_intercept": {
+   "question": "Do the fitted parameters reach the known posterior intercept, near -12.6?",
+   "answer": "NO, and this is reported as a finding rather than a tuning failure. At the 30000-step plateau budget the fitted intercept is -9.66 for Impulse, -9.64 for NumPyro and -9.10 for Turing.jl, against a posterior value near -12.6. Running the probe out to 100000 steps moves Impulse to -12.30 and NumPyro to -12.36, yet the ELBO is already flat across that range (window level -50.5 at step 30000 against -50.1 at step 100000, a change of 0.8 percent) and the held-out predictive log-likelihood does NOT improve over it (Impulse's per-trial mean is -27.58 at 30000 steps and -29.67 at 100000 steps). The mean-field ELBO is very flat along the intercept direction on this badly scaled design, so a relative-ELBO criterion is satisfied well before the location parameter settles. Stan's own convergence heuristic, which uses the same 0.01 relative-ELBO tolerance and is entirely independent of this analysis, stops in the same range (13200 to 22100 iterations) and reaches the same converged ELBO (-50.2 to -51.1) and the same predictive quality (-27.30). All four systems therefore share the behaviour; none of them is mis-tuned relative to the others.",
+   "measurements": {
+    "unconstrained_guide_loc_alpha_at_30000": {
+     "Impulse": [
+      -9.6868,
+      -9.6652,
+      -9.7331,
+      -9.5622
+     ],
+     "NumPyro": [
+      -9.6005,
+      -9.6496,
+      -9.6267,
+      -9.68
+     ]
+    },
+    "guide_draw_alpha_mean_at_30000": {
+     "Impulse": [
+      -9.6582,
+      -9.6667,
+      -9.6904,
+      -9.5483
+     ],
+     "NumPyro": [
+      -9.6119,
+      -9.6581,
+      -9.6229,
+      -9.6845
+     ],
+     "Turing.jl": [
+      -9.0852,
+      -9.1031,
+      -9.0444,
+      -9.1625
+     ]
+    },
+    "guide_draw_alpha_mean_at_2000_steps_2026_07_13": {
+     "Impulse": [
+      -1.6496,
+      -1.6405,
+      -1.5765,
+      -1.6117
+     ],
+     "NumPyro": [
+      -1.6487,
+      -1.5561,
+      -1.5761,
+      -1.6072
+     ]
+    },
+    "unconstrained_guide_loc_alpha_at_100000_probe": {
+     "Impulse": [
+      -12.2968,
+      -12.31,
+      -12.3772,
+      -12.343
+     ],
+     "NumPyro": [
+      -12.3561,
+      -12.3098,
+      -12.4171,
+      -12.3382
+     ]
+    },
+    "nuts_reference_alpha_posterior_mean": {
+     "Impulse_NUTS_2026_07_14": -12.3597,
+     "NumPyro_NUTS_2026_07_14": -12.6602
+    }
+   }
+  }
+ }
+}

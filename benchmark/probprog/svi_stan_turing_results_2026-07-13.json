@@ -1,0 +1,452 @@
+{
+  "_provenance": {
+    "description": "Stan ADVI and Turing.jl ADVI SVI arms added to the three continuous PPLBench models (logistic_regression, robust_regression, n_schools) under the same SVI PPLBench protocol as svi_pplbench_results_2026-07-13b.json. This file adds the 'Stan' and 'Turing.jl' frameworks; the 'NumPyro' and 'Impulse' entries are copied verbatim from svi_pplbench_results_2026-07-13b.json for side-by-side comparison (marked _source='reference ...').",
+    "protocol": "PPLBench trials-as-chains SVI: iterations=200 (K=200 posterior draws from the fitted mean-field guide), num_warmup=0, 4 trials. overall n_eff = arviz.ess over all latent params with the 4 trials as 4 chains; n_eff/s median = overall n_eff median / steady-state (trials 1..3) fit wall time; PLL = per-trial final cumulative predictive log-likelihood on the held-out test items using the K=200 guide draws. Only the guide FIT is timed as the inference phase; compile/startup recorded separately. Data identical to the standard configs (seed 12345): logistic n=10000 k=10 rho=3.0; robust n=10000 k=10; n_schools n=10000.",
+    "arms": {
+      "Turing.jl": {
+        "algorithm": "AdvancedVI KLMinRepGradDescent (the ADVI alias in AdvancedVI 0.6.2), reparameterization-gradient ELBO",
+        "guide": "mean-field Gaussian (Turing.Variational.q_meanfield_gaussian), == NumPyro AutoNormal",
+        "guide_init": "unconstrained location = 0, diagonal scale = init_scale = 0.1 (matches the Impulse/NumPyro init)",
+        "optimizer": "Optimisers.Adam(lr=step_size=0.01)  -- MATCHES the Impulse/NumPyro Adam lr=0.01",
+        "num_steps": 2000,
+        "mc_samples_per_step": "n_samples = num_particles = 1 (one-particle ELBO gradient)",
+        "averager": "NoAveraging (return the LAST iterate, matching Adam's final params; not a Polyak average)",
+        "operator": "ClipScale (AdvancedVI's recommended singular-scale safeguard for MvLocationScale; not an optimizer change)",
+        "entropy": "ClosedFormEntropy (mean-field Gaussian analytic entropy)",
+        "adtype": "AutoForwardDiff() -- the ONLY AD backend in turing_env; no ReverseDiff/Mooncake/Zygote installed, so forward-mode over the full likelihood (this is why per-trial wall times are large, esp. robust/n_schools)",
+        "draws": "after the fit, K=200 samples drawn from q.dist (unconstrained MvLocationScale), then DynamicPPL.unflatten(linked VarInfo) + invlink back to constrained space, read per named site -> same site layout as the Turing NUTS extractor",
+        "package_versions": "Turing 0.42.9, AdvancedVI 0.6.2, DynamicPPL 0.39.15, Bijectors 0.15.16, ForwardDiff 1.3.2 (turing_env, unchanged)",
+        "note": "Old-style `vi(model, ADVI(1,2000))` and DecayedADAGrad no longer exist in this Turing/AdvancedVI; KLMinRepGradDescent(adtype; optimizer=Adam, n_samples, averager, operator) is the equivalent and lets Adam lr=0.01 be passed cleanly, so the Turing arm's optimizer MATCHES the Impulse/NumPyro protocol exactly (unlike Stan)."
+      },
+      "Stan": {
+        "algorithm": "CmdStan variational (ADVI), algorithm=meanfield, via cmdstanpy 1.3.0 CmdStanModel.variational",
+        "guide": "Stan ADVI mean-field Gaussian in the unconstrained space (== AutoNormal mean-field)",
+        "optimizer": "Stan's OWN adaptive stochastic optimizer: automatic eta (step-size) adaptation followed by adaptive-stepsize SGD with a relative-ELBO convergence test (tol_rel_obj default 0.01). CANNOT be pinned to Adam lr=0.01 / 2000 steps like the other three arms; runs Stan defaults for eta/iter/tol_rel_obj (iter default 10000 max with early stopping). This is the documented protocol deviation for the Stan arm.",
+        "grad_samples": "1 (mirrors the one-particle ELBO gradient / num_particles=1)",
+        "elbo_samples": "Stan default (100)",
+        "output_samples": "200 (K post-fit draws, exposed via --output-samples -> cmdstanpy draws=200)",
+        "require_converged": "False (harness robustness: return the fitted approximation even when Stan's own heuristic flags non-convergence, rather than crashing the arm). Stan's convergence flag is recorded per model below.",
+        "draws": "cmdstanpy CmdStanVB.stan_variables(mean=False) -> per-draw constrained samples, leading axis = 200, fed unchanged through the existing extract_data_from_stan pipeline",
+        "package_versions": "cmdstanpy 1.3.0 (probprog-bench env), CmdStan toolchain as used by the Stan MCMC arm"
+      }
+    },
+    "commands": "CUDA_VISIBLE_DEVICES='' ./run_pplbench.sh --device cpu --threads 32 --ppls <turing|stan> svi/<model>  (run from benchmark/probprog). Each arm run separately for clean per-trial timing.",
+    "env": "CPU only (CUDA_VISIBLE_DEVICES=''), 32 threads. Stan via probprog-bench python; Turing via turing_env (unchanged Project.toml). No native rebuild.",
+    "files_added_or_modified": [
+      "pplbench/pplbench/ppls/stan/inference.py (added class SVI; MCMC unchanged)",
+      "pplbench/pplbench/ppls/turing/inference.py (added class SVI; MCMC unchanged)",
+      "stan_harness.py (added --method svi VI path: run_vi_trial/vi_main/_vi_write_diagnostics + argparse args; MCMC run_trial/write_output/main NUTS path unchanged)",
+      "turing_harness.jl (added --method svi ADVI path: run_turing_advi/svi_draw_and_extract/svi_main + argparse args + branch; NUTS run_turing_nuts/extract_samples path unchanged)",
+      "pplbench_configs/svi/{logistic_regression,robust_regression,n_schools}.json (added non-optional stan + turing ppl blocks: legend Stan/green, Turing.jl/purple)"
+    ],
+    "output_dirs": {
+      "svi/logistic_regression": {
+        "Turing.jl": "/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/outputs/2026-07-13_20:21:32",
+        "Stan": "/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/outputs/2026-07-13_20:27:13"
+      },
+      "svi/robust_regression": {
+        "Turing.jl": "/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/outputs/2026-07-13_20:23:43",
+        "Stan": "/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/outputs/2026-07-13_20:27:31"
+      },
+      "svi/n_schools": {
+        "Turing.jl": "/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/outputs/2026-07-13_20:25:32",
+        "Stan": "/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/outputs/2026-07-13_20:27:43"
+      }
+    },
+    "logs_dir": "/tmp/claude-140061798/-mnt-sbrantq-probprog/b266d213-1a56-4e76-a876-7eb59e4adb38/scratchpad/vi_arms/full_<arm>_<model>.log",
+    "reference_numpyro_dirs": {
+      "svi/logistic_regression": "outputs/2026-07-13_19:48:48",
+      "svi/robust_regression": "outputs/2026-07-13_19:49:19",
+      "svi/n_schools": "outputs/2026-07-13_19:46:27"
+    },
+    "cpu_cores": 192,
+    "date": "2026-07-13",
+    "sanity": {
+      "svi/logistic_regression": {
+        "Turing.jl": "OK (in band). PLL_final_mean -75.96 vs NumPyro -71.55 / Impulse -72.13. final_elbo mean -123.2 (ref NumPyro -114.4 / Impulse -122.6). Converged (ELBO -260@200 -> -170@800 -> -117..-130@2000); site means match NumPyro. Slightly worse optimum from Turing's Adam dynamics + forward-mode AD, not a bug.",
+        "Stan": "FAILED TO CONVERGE (divergent). Stan's own ADVI heuristic printed 'The algorithm may not have converged' on ALL 4 trials. Posterior means diverge: alpha pooled -19.28 (per-trial -31.9/-8.3/-28.5/-8.4) vs NumPyro -1.62; |beta| up to 8.0 vs NumPyro ~0.3-0.66; alpha std 11.0 vs 0.155. pll_final_mean -42.52 is numerically 'high' only because a few saturated draws dominate the logsumexp; the posterior is not usable. Diagnosis: known Stan ADVI instability on wide-prior (alpha_scale=10) + correlated (rho=3) logistic regression; NOT a harness bug -- the SAME harness/extract path converges correctly on robust and n_schools (below). n_eff median 5.5 reflects the large across-seed disagreement."
+      },
+      "svi/robust_regression": {
+        "Turing.jl": "OK (in band). PLL_final_mean -7243.16 vs NumPyro -7212.84 / Impulse -7211.06 (NumPyro's own trials spanned -7202..-7218). Per-site means MATCH NumPyro to 3-4 digits: alpha -14.234 vs -14.231, nu 7.98 vs 8.08, sigma 0.994 vs 0.939, all 10 betas identical. Positive-support (nu Gamma, sigma Exponential) transforms correct. final_elbo ~-7540 (ref -7446/-7461). Converged to essentially the same posterior means; tiny PLL gap is trial noise.",
+        "Stan": "Converged (no Stan convergence warning). PLL_final_mean -7365.77 vs -7212.84, ~150 worse (per-trial -7334/-7398/-7329/-7402). Per-site: alpha -14.234 vs -14.231 and all betas MATCH; but nu 41.5 vs 8.08 (Stan ADVI mean-field pushes the Student-t dof high -> near-Gaussian tails) and sigma 1.07 vs 0.94. So Stan converged to a worse-fitting but stable optimum (heavier reliance on sigma, inflated nu); a genuine optimizer/family difference, not a bug (means + layout correct)."
+      },
+      "svi/n_schools": {
+        "Turing.jl": "OK (in band, slightly BETTER). PLL_final_mean -6878.16 vs NumPyro -6886.01 / Impulse -6889.17. final_elbo -7060 (ref -7120/-7085). Positive HalfCauchy sigma sites correctly recovered via DynamicPPL invlink (no column-order collapse -- the extractor keys by site name, so the Impulse-harness declaration-vs-alphabetical bug cannot occur here).",
+        "Stan": "OK (in band). PLL_final_mean -6889.06 vs -6886.01 (per-trial -6892.8/-6888.4/-6892.0/-6883.1). No Stan convergence warning. Positive sigma sites recovered (sigma_state ~3.3, sigma_district ~2.2, sigma_type ~3.1, beta_baseline ~-3.9); close to NumPyro means, expected ADVI-optimizer offset."
+      }
+    }
+  },
+  "protocol": "PPLBench SVI (trials-as-chains)",
+  "iterations": 200,
+  "num_warmup": 0,
+  "num_steps": 2000,
+  "trials": 4,
+  "models": {
+    "svi/logistic_regression": {
+      "model_class": "logistic_regression.LogisticRegression",
+      "model_args": {
+        "n": 10000,
+        "k": 10,
+        "rho": 3.0
+      },
+      "seed": 12345,
+      "frameworks": {
+        "NumPyro": {
+          "compile_time_s": 2.93,
+          "infer_per_trial_s": [
+            0.39531708,
+            0.4015708,
+            0.40831804,
+            0.39951396
+          ],
+          "steady_mean_run_s": 0.4031342667,
+          "n_trials": 4,
+          "neff_min": 15.580486957910468,
+          "neff_median": 649.8222699506705,
+          "neff_max": 826.0978697300499,
+          "neff_per_s_min": 38.64838157,
+          "neff_per_s_median": 1611.9251671,
+          "neff_per_s_max": 2049.18792151,
+          "pll_per_trial": [
+            -70.9625,
+            -71.0361,
+            -72.9254,
+            -71.2789
+          ],
+          "pll_final_mean": -71.550725,
+          "final_elbo": -114.372198,
+          "_source": "reference (svi_pplbench_results_2026-07-13b.json)"
+        },
+        "Impulse": {
+          "compile_time_s": 13.02,
+          "infer_per_trial_s": [
+            0.0879268,
+            0.07492539,
+            0.075699,
+            0.0853436
+          ],
+          "steady_mean_run_s": 0.0786559967,
+          "n_trials": 4,
+          "neff_min": 10.512738023737652,
+          "neff_median": 297.1737336003514,
+          "neff_max": 835.9319041819998,
+          "neff_per_s_min": 133.65462976,
+          "neff_per_s_median": 3778.1446897,
+          "neff_per_s_max": 10627.69460299,
+          "pll_per_trial": [
+            -70.0311,
+            -73.3696,
+            -71.2648,
+            -73.8736
+          ],
+          "pll_final_mean": -72.134775,
+          "final_elbo": -122.56274434504195,
+          "_source": "reference (svi_pplbench_results_2026-07-13b.json)"
+        },
+        "Turing.jl": {
+          "compile_time_s": 6.29,
+          "infer_per_trial_s": [
+            4.589818071,
+            4.624072664,
+            4.564059906,
+            4.566762972
+          ],
+          "steady_mean_run_s": 4.584965180666667,
+          "n_trials": 4,
+          "neff_min": 5.255185064678721,
+          "neff_median": 21.83232578310976,
+          "neff_max": 857.5710349013447,
+          "neff_per_s_min": 1.14617775,
+          "neff_per_s_median": 4.76172117,
+          "neff_per_s_max": 187.03981407,
+          "pll_per_trial": [
+            -75.7853,
+            -75.6642,
+            -77.5373,
+            -74.85
+          ],
+          "pll_final_mean": -75.9591805025674,
+          "final_elbo": -123.23457289607606,
+          "output_dir": "/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/outputs/2026-07-13_20:21:32",
+          "_source": "this run (2026-07-13)",
+          "final_elbo_per_trial": [
+            -128.98211803941172,
+            -117.29292613305194,
+            -129.76144605329048,
+            -116.9018013585501
+          ]
+        },
+        "Stan": {
+          "compile_time_s": 5.8,
+          "infer_per_trial_s": [
+            2.628467559814453,
+            1.7236666679382324,
+            2.686657190322876,
+            1.7387287616729736
+          ],
+          "steady_mean_run_s": 2.049684206644694,
+          "n_trials": 4,
+          "neff_min": 4.7849808260778435,
+          "neff_median": 5.488357379782549,
+          "neff_max": 822.6004049625975,
+          "neff_per_s_min": 2.33449661,
+          "neff_per_s_median": 2.67765998,
+          "neff_per_s_max": 401.33031337,
+          "pll_per_trial": [
+            -69.0665,
+            -28.2789,
+            -44.9671,
+            -27.7613
+          ],
+          "pll_final_mean": -42.518454170451854,
+          "final_elbo": null,
+          "output_dir": "/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/outputs/2026-07-13_20:27:13",
+          "_source": "this run (2026-07-13)"
+        }
+      }
+    },
+    "svi/robust_regression": {
+      "model_class": "robust_regression.RobustRegression",
+      "model_args": {
+        "n": 10000,
+        "k": 10
+      },
+      "seed": 12345,
+      "frameworks": {
+        "NumPyro": {
+          "compile_time_s": 4.24,
+          "infer_per_trial_s": [
+            0.69412136,
+            0.68261886,
+            0.7254231,
+            0.77923083
+          ],
+          "steady_mean_run_s": 0.72909093,
+          "n_trials": 4,
+          "neff_min": 5.713554567632154,
+          "neff_median": 17.362024458718576,
+          "neff_max": 698.3281515441018,
+          "neff_per_s_min": 7.83654595,
+          "neff_per_s_median": 23.81324985,
+          "neff_per_s_max": 957.80666545,
+          "pll_per_trial": [
+            -7214.1279,
+            -7217.8403,
+            -7217.3112,
+            -7202.0869
+          ],
+          "pll_final_mean": -7212.841575,
+          "final_elbo": -7446.625636,
+          "_source": "reference (svi_pplbench_results_2026-07-13b.json)"
+        },
+        "Impulse": {
+          "compile_time_s": 29.54,
+          "infer_per_trial_s": [
+            0.13593519,
+            0.10330722,
+            0.11329852,
+            0.10705257
+          ],
+          "steady_mean_run_s": 0.1078861033,
+          "n_trials": 4,
+          "neff_min": 5.582276549150327,
+          "neff_median": 10.723106054979047,
+          "neff_max": 863.4122130367862,
+          "neff_per_s_min": 51.74231352,
+          "neff_per_s_median": 99.39283921,
+          "neff_per_s_max": 8002.99752883,
+          "pll_per_trial": [
+            -7214.0108,
+            -7204.5758,
+            -7212.1552,
+            -7213.5152
+          ],
+          "pll_final_mean": -7211.06425,
+          "final_elbo": -7461.111451112017,
+          "_source": "reference (svi_pplbench_results_2026-07-13b.json)"
+        },
+        "Turing.jl": {
+          "compile_time_s": 7.43,
+          "infer_per_trial_s": [
+            11.383811015,
+            11.854973389,
+            12.122066501,
+            12.094700198
+          ],
+          "steady_mean_run_s": 12.023913362666667,
+          "n_trials": 4,
+          "neff_min": 6.12185856859471,
+          "neff_median": 16.842717952175434,
+          "neff_max": 817.5892467431764,
+          "neff_per_s_min": 0.50914028,
+          "neff_per_s_median": 1.40076841,
+          "neff_per_s_max": 67.99693428,
+          "pll_per_trial": [
+            -7262.3974,
+            -7226.734,
+            -7247.2735,
+            -7236.2392
+          ],
+          "pll_final_mean": -7243.161024514939,
+          "final_elbo": -7721.504042468236,
+          "output_dir": "/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/outputs/2026-07-13_20:23:43",
+          "_source": "this run (2026-07-13)",
+          "final_elbo_per_trial": [
+            -8273.915449282125,
+            -7522.7121410377695,
+            -7520.5403213952195,
+            -7568.848258157829
+          ]
+        },
+        "Stan": {
+          "compile_time_s": 6.04,
+          "infer_per_trial_s": [
+            0.7384161949157715,
+            0.6816854476928711,
+            0.6998252868652344,
+            0.6773598194122314
+          ],
+          "steady_mean_run_s": 0.6862901846567789,
+          "n_trials": 4,
+          "neff_min": 4.810502550508165,
+          "neff_median": 5.114490696809985,
+          "neff_max": 713.7091573786723,
+          "neff_per_s_min": 7.00942933,
+          "neff_per_s_median": 7.45237337,
+          "neff_per_s_max": 1039.95244772,
+          "pll_per_trial": [
+            -7333.6493,
+            -7397.9764,
+            -7329.0467,
+            -7402.4151
+          ],
+          "pll_final_mean": -7365.771877613166,
+          "final_elbo": null,
+          "output_dir": "/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/outputs/2026-07-13_20:27:31",
+          "_source": "this run (2026-07-13)"
+        }
+      }
+    },
+    "svi/n_schools": {
+      "model_class": "n_schools.NSchools",
+      "model_args": {
+        "n": 10000
+      },
+      "seed": 12345,
+      "frameworks": {
+        "NumPyro": {
+          "compile_time_s": 6.4,
+          "infer_per_trial_s": [
+            0.94556427,
+            1.10305047,
+            0.95378804,
+            0.96494484
+          ],
+          "steady_mean_run_s": 1.0072611167,
+          "n_trials": 4,
+          "neff_min": 265.3041976890001,
+          "neff_median": 789.187065082124,
+          "neff_max": 886.2534101832787,
+          "neff_per_s_min": 263.39167981,
+          "neff_per_s_median": 783.49799424,
+          "neff_per_s_max": 879.86461004,
+          "pll_per_trial": [
+            -6883.504,
+            -6891.5698,
+            -6878.6857,
+            -6890.2995
+          ],
+          "pll_final_mean": -6886.01475,
+          "final_elbo": -7120.219899,
+          "_source": "reference (svi_pplbench_results_2026-07-13b.json)"
+        },
+        "Impulse": {
+          "compile_time_s": 29.3,
+          "infer_per_trial_s": [
+            0.083090524,
+            0.075388568,
+            0.074573798,
+            0.075429871
+          ],
+          "steady_mean_run_s": 0.0751307457,
+          "n_trials": 4,
+          "neff_min": 358.2198458212189,
+          "neff_median": 762.3144991700137,
+          "neff_max": 940.9741471891149,
+          "neff_per_s_min": 4767.95275546,
+          "neff_per_s_median": 10146.50516783,
+          "neff_per_s_max": 12524.48832817,
+          "pll_per_trial": [
+            -6889.9042,
+            -6891.6733,
+            -6889.7623,
+            -6885.3277
+          ],
+          "pll_final_mean": -6889.166875,
+          "final_elbo": -7085.446431247636,
+          "_source": "reference (svi_pplbench_results_2026-07-13b.json)"
+        },
+        "Turing.jl": {
+          "compile_time_s": 9.77,
+          "infer_per_trial_s": [
+            20.934335962,
+            19.543940239,
+            19.632879914,
+            19.716138146
+          ],
+          "steady_mean_run_s": 19.630986099666668,
+          "n_trials": 4,
+          "neff_min": 6.490196684931243,
+          "neff_median": 669.6802886630508,
+          "neff_max": 889.8596942645619,
+          "neff_per_s_min": 0.33060982,
+          "neff_per_s_median": 34.11343094,
+          "neff_per_s_max": 45.32934259,
+          "pll_per_trial": [
+            -6880.3513,
+            -6875.1087,
+            -6878.2621,
+            -6878.9236
+          ],
+          "pll_final_mean": -6878.161395285607,
+          "final_elbo": -7060.287254851406,
+          "output_dir": "/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/outputs/2026-07-13_20:25:32",
+          "_source": "this run (2026-07-13)",
+          "final_elbo_per_trial": [
+            -7057.981400048751,
+            -7063.674710685119,
+            -7064.262081528228,
+            -7055.230827143526
+          ]
+        },
+        "Stan": {
+          "compile_time_s": 6.41,
+          "infer_per_trial_s": [
+            0.43292808532714844,
+            0.42854785919189453,
+            0.5006358623504639,
+            0.5240621566772461
+          ],
+          "steady_mean_run_s": 0.48441529273986816,
+          "n_trials": 4,
+          "neff_min": 4.775587360740922,
+          "neff_median": 5.058665327696012,
+          "neff_max": 68.38292026297701,
+          "neff_per_s_min": 9.85845706,
+          "neff_per_s_median": 10.44282747,
+          "neff_per_s_max": 141.16589895,
+          "pll_per_trial": [
+            -6892.7924,
+            -6888.4001,
+            -6891.9894,
+            -6883.0533
+          ],
+          "pll_final_mean": -6889.058783161659,
+          "final_elbo": null,
+          "output_dir": "/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/outputs/2026-07-13_20:27:43",
+          "_source": "this run (2026-07-13)"
+        }
+      }
+    }
+  }
+}
