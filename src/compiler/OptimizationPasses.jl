@@ -24,6 +24,7 @@ const AGGRESSIVE_PROPAGATION = Ref(false)
 const DUS_SLICE_SIMPLIFY = Ref(true)
 const CONCATS_TO_DUS = Ref(false)
 const WHILE_UNROLL_THRESHOLD = Ref(4)
+const SPECULATE_PARTIAL_IF = Ref(true)
 
 function _propagate_direction(sym::Symbol)
     sym === :up && return MLIR.API.ENZYMEXLA_PROPAGATE_UP
