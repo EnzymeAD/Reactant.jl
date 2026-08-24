@@ -70,8 +70,7 @@ jobs:
         if: ${{ inputs.enzymejax_commit != '' }}
         shell: bash
         run: |
-          sed -i.bak 's/ENZYMEXLA_COMMIT = "[^"]*"/ENZYMEXLA_COMMIT = "${{ inputs.enzymejax_commit }}"/' deps/ReactantExtra/WORKSPACE
-          sed -i.bak 's/ENZYMEXLA_SHA256 = "[^"]*"/ENZYMEXLA_SHA256 = ""/' deps/ReactantExtra/WORKSPACE
+          deps/ReactantExtra/set_enzyme_jax_commit.sh "${{ inputs.enzymejax_commit }}"
           echo "ENZYMEXLA_COMMIT = ${{ inputs.enzymejax_commit }}" >> $GITHUB_STEP_SUMMARY
 
       - name: Set TMPDIR and create directory

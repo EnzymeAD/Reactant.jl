@@ -8,8 +8,8 @@ on:
       - ".github/workflows/build-reactantjll.yml"
       - "deps/ReactantExtra/API.cpp"
       - "deps/ReactantExtra/BUILD"
-      - "deps/ReactantExtra/WORKSPACE"
-      - "deps/ReactantExtra/workspace.bzl"
+      - "deps/ReactantExtra/MODULE.bazel"
+      - "deps/ReactantExtra/*.MODULE.bazel"
 
 concurrency:
   # Skip intermediate builds: always.
@@ -19,7 +19,7 @@ concurrency:
 
 jobs:
   enzyme-jax-commit:
-    name: Extract ENZYMEXLA_COMMIT from WORKSPACE
+    name: Extract ENZYMEXLA_COMMIT from MODULE.bazel
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -27,10 +27,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Extract ENZYMEXLA_COMMIT from WORKSPACE
+      - name: Extract ENZYMEXLA_COMMIT from MODULE.bazel
         id: extract_enzyme_jax_commit
         run: |
-          ENZYMEXLA_COMMIT=$(grep -oP 'ENZYMEXLA_COMMIT = "\K[^"]+' deps/ReactantExtra/WORKSPACE)
+          ENZYMEXLA_COMMIT=$(grep -oP 'ENZYMEXLA_COMMIT = "\K[^"]+' deps/ReactantExtra/MODULE.bazel)
           echo "enzyme_jax_commit=$ENZYMEXLA_COMMIT" >> $GITHUB_OUTPUT
     outputs:
       enzyme_jax_commit: ${{ steps.extract_enzyme_jax_commit.outputs.enzyme_jax_commit }}

@@ -24,5 +24,7 @@ jobs:
       upstream_repo: 'EnzymeAD/Enzyme-JAX'
       upstream_commit: ${{ inputs.enzyme_jax_commit }}
       variable_name: 'ENZYMEXLA_COMMIT'
-      workspace_path: 'deps/ReactantExtra/WORKSPACE'
+      workspace_path: 'deps/ReactantExtra/MODULE.bazel'
+      # Also refresh the copy of Enzyme-JAX's xla_deps.MODULE.bazel.
+      post_update_command: deps/ReactantExtra/set_enzyme_jax_commit.sh "${NEW_UPSTREAM_COMMIT}"
     secrets: inherit

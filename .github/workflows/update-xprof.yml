@@ -25,5 +25,5 @@ jobs:
       upstream_commit: ${{ inputs.xprof_commit }}
       upstream_branch: 'master'
       variable_name: 'XPROF_COMMIT'
-      workspace_path: 'deps/ReactantExtra/WORKSPACE'
+      workspace_path: 'deps/ReactantExtra/MODULE.bazel'
     secrets: inherit
