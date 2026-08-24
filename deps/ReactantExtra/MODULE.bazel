@@ -1,6 +1,105 @@
-###############################################################################
-# Bazel now uses Bzlmod by default to manage external dependencies.
-# Please consider migrating your external dependencies from WORKSPACE to MODULE.bazel.
-#
-# For more details, please check https://github.com/bazelbuild/bazel/issues/18958
-###############################################################################
+module(name = "reactant_extra")
+
+##############################################################
+# Enzyme-JAX
+##############################################################
+
+# Updated by .github/workflows/update-enzyme-jax.yml and set_enzyme_jax_commit.sh,
+# keep the `NAME = "..."` form on a single line.
+ENZYMEXLA_COMMIT = "4766eab832b4f93c324bea65b1f81a610df00908"
+
+bazel_dep(name = "enzyme_ad")
+archive_override(
+    module_name = "enzyme_ad",
+    strip_prefix = "Enzyme-JAX-" + ENZYMEXLA_COMMIT,
+    urls = ["https://github.com/EnzymeAD/Enzyme-JAX/archive/{}.tar.gz".format(ENZYMEXLA_COMMIT)],
+)
+
+# The JAX / XLA / LLVM stack (pins, patches, overrides, module extension usages)
+# is a verbatim copy of the marked region of Enzyme-JAX's MODULE.bazel at
+# ENZYMEXLA_COMMIT, and patches/ is a copy of Enzyme-JAX's: bzlmod ignores
+# overrides declared by non-root modules, so they have to be repeated by every
+# root module, and override patches must live in the main repository.
+# set_enzyme_jax_commit.sh refreshes both copies.
+include("//:xla_deps.MODULE.bazel")
+
+# Enzyme and cuda-tile, shared with Enzyme-JAX through its module extension.
+enzyme_deps = use_extension("@enzyme_ad//third_party:extensions.bzl", "enzyme_deps")
+use_repo(enzyme_deps, "cuda_tile", "enzyme")
+
+##############################################################
+# Python toolchain
+##############################################################
+
+python = use_extension("@rules_python//python/extensions:python.bzl", "python")
+python.defaults(
+    # The environment variable takes precedence if set.
+    python_version = "3.12",
+    python_version_env = "HERMETIC_PYTHON_VERSION",
+)
+python.toolchain(python_version = "3.11")
+python.toolchain(python_version = "3.12")
+python.toolchain(python_version = "3.13")
+python.toolchain(python_version = "3.14")
+
+##############################################################
+# XProf (no MODULE.bazel upstream, fetched as a plain repository whose BUILD
+# files resolve labels through this module's dependencies)
+##############################################################
+
+# Updated by .github/workflows/update-xprof.yml.
+XPROF_COMMIT = "7f2296530fbbd8fc69dfaf6f6cde5edd6b3f18ed"
+
+http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+
+http_archive(
+    name = "org_xprof",
+    patch_cmds = [
+        # XLA's proto macros refer to gRPC as @grpc (its Bazel module name).
+        "find . -type f -name BUILD -exec sed -i.bak 's,@com_github_grpc_grpc//,@grpc//,g' {} +",
+    ],
+    strip_prefix = "xprof-" + XPROF_COMMIT,
+    urls = ["https://github.com/openxla/xprof/archive/{}.tar.gz".format(XPROF_COMMIT)],
+)
+
+bazel_dep(name = "abseil-py", version = "2.1.0", repo_name = "absl_py")
+bazel_dep(name = "nlohmann_json", version = "3.11.3", repo_name = "com_github_nlohmann_json")
+bazel_dep(name = "re2", version = "2025-11-05.bcr.1", repo_name = "com_googlesource_code_re2")
+
+# perfetto, for xprof's megascale trace writer.
+PERFETTO_VERSION = "53.0"
+
+# Required by perfetto's Bazel rules.
+bazel_dep(name = "rules_android", version = "0.7.1")
+
+http_archive(
+    name = "perfetto",
+    strip_prefix = "perfetto-" + PERFETTO_VERSION,
+    urls = ["https://github.com/google/perfetto/archive/refs/tags/v{}.tar.gz".format(PERFETTO_VERSION)],
+)
+
+http_archive(
+    name = "perfetto_cfg",
+    build_file_content = "exports_files([\"perfetto_cfg.bzl\"])",
+    strip_prefix = "perfetto-" + PERFETTO_VERSION + "/bazel/standalone",
+    urls = ["https://github.com/google/perfetto/archive/refs/tags/v{}.tar.gz".format(PERFETTO_VERSION)],
+)
+
+# google-cloud-cpp, for xprof's GCS support.
+bazel_dep(name = "boringssl", version = "0.20250818.0")
+bazel_dep(name = "crc32c", version = "1.1.0", repo_name = "com_github_google_crc32c")
+bazel_dep(name = "curl", version = "8.12.0.bcr.1")
+bazel_dep(name = "opentelemetry-cpp", version = "1.19.0")
+
+http_archive(
+    name = "com_github_googlecloudplatform_google_cloud_cpp",
+    patch_cmds = [
+        """find . -type f -name '*.cc' -exec sed -i.bak -e 's/Windows.h/windows.h/g' -e 's/Ntstatus.h/ntstatus.h/g' {} +""",
+        # Rename the repositories to the names visible from this module
+        # (`repo_mapping` is not available to bzlmod repository rules).
+        """find . -type f \\( -name 'BUILD*' -o -name '*.bzl' \\) -exec sed -i.bak -e 's,@com_github_curl_curl//,@curl//,g' -e 's,@abseil-cpp//,@com_google_absl//,g' -e 's,@nlohmann_json//,@com_github_nlohmann_json//,g' {} +""",
+    ],
+    sha256 = "e868bdb537121d2169fbc1ef69b81f4b4f96e97891c4567a6533d4adf62bffde",
+    strip_prefix = "google-cloud-cpp-3.1.0",
+    urls = ["https://github.com/googleapis/google-cloud-cpp/archive/v3.1.0.tar.gz"],
+)

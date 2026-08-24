@@ -1,0 +1,18 @@
+diff --git a/jaxlib/mosaic/BUILD b/jaxlib/mosaic/BUILD
+index cb2c243b2..b9be72179 100644
+--- a/jaxlib/mosaic/BUILD
++++ b/jaxlib/mosaic/BUILD
+@@ -44,10 +44,9 @@ cc_library(
+         "dialect/tpu/tpu_ops.cc",
+         "dialect/tpu/util.cc",
+     ],
+-    hdrs = [
+-        "dialect/tpu/tpu_dialect.h",
+-        "dialect/tpu/util.h",
+-    ],
++    hdrs = glob([
++        "**/*.h",
++    ]),
+     # compatible with libtpu
+     deps = [
+         ":stringify_util",

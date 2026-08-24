@@ -1,0 +1,452 @@
+# BEGIN: xla_deps.MODULE.bazel
+#
+# Everything up to the matching END marker declares the JAX / XLA / LLVM
+# dependency stack: pins, patches, the overrides that XLA/JAX apply to their
+# Bazel Central Registry dependencies, and the module extension usages.
+#
+# bzlmod ignores `archive_override`/`single_version_override` declared by
+# non-root modules and only accepts override patches from the main
+# repository, so downstream projects consuming Enzyme-JAX as a Bazel module
+# (Reactant.jl's ReactantExtra) copy this region verbatim into their own
+# `xla_deps.MODULE.bazel` (which they `include()`) together with the
+# `patches/` directory.  Keep the region self-contained.
+#
+# The commits below are updated by .github/workflows/update-dependency.yml;
+# keep the `NAME = "..."` form on a single line.
+
+JAX_COMMIT = "cec06d116c05f0d52adfceee3d3b730fdbcb0ce5"
+
+# Must match @jax//third_party/xla:revision.bzl at JAX_COMMIT.
+XLA_COMMIT = "9862401b5d9444686cd1bc9283991f6b834b58d3"
+
+# Must match the archive_override of rules_ml_toolchain in @jax//:MODULE.bazel at JAX_COMMIT.
+RULES_ML_TOOLCHAIN_COMMIT = "b11745590f513ec55b32e2d126073576fde18c71"
+
+# Fork of hedronvision/bazel-compile-commands-extractor used by Enzyme.
+HEDRON_COMPILE_COMMANDS_COMMIT = "84c8aadfeee9a09105ec22cc85d0f478c90a788a"
+
+LLVM_TARGETS = [
+    "X86",
+    "AArch64",
+    "AMDGPU",
+    "NVPTX",
+]
+
+XLA_PATCHES = [
+    """
+    # Use clang not msvc
+    sed -i.bak0 "s|/std:c++17|-std=c++17|g" third_party/mkl_dnn/mkldnn_v1.BUILD
+    """,
+    """
+    # Fix support for rocm ygg build
+    sed -i.bak0 "s|clang/18/include|clang/22/include|g" third_party/gpus/rocm_configure.bzl
+    """,
+    """
+    # The hermetic rocm toolchain compiles through the repository's own
+    # rocm_dist copy of hipcc, whose resource headers the crosstool never
+    # declared: the absolute-path inclusion check then rejects every
+    # device compile. Declare that resource directory both by package
+    # token and by its resolved path, since the dependency file can
+    # spell it either way depending on how the distribution was reached.
+    sed -i.bak1 "s|cxx_builtin_include_directories = _LOCAL_CLANG.include_directories,|cxx_builtin_include_directories = _LOCAL_CLANG.include_directories + [\\\"%package(@local_config_rocm//rocm)%/rocm_dist/lib/llvm/lib/clang/22/include\\\", \\\"%{hipcc_resource_dir}\\\", \\\"%{hipcc_resource_dir_realpath}\\\"],|" third_party/gpus/crosstool/BUILD.rocm.tpl
+    perl -0777 -pi -e 's|(tpl_paths\\["crosstool:BUILD.rocm"\\],)|$1\\n        {"%{hipcc_resource_dir}": str(repository_ctx.path("rocm/rocm_dist/lib/llvm/lib/clang/22/include")), "%{hipcc_resource_dir_realpath}": str(repository_ctx.path("rocm/rocm_dist/lib/llvm/lib/clang/22/include").realpath)},|' third_party/gpus/rocm_configure.bzl
+    """,
+    """
+    # Fix support for musl stacktrace issue where execinfo.h is otherwise included
+    sed -i.bak0 "s/defined(__clang__) || defined(__GNUC__)/defined(__GLIBC__)/g" xla/tsl/platform/default/stacktrace.h
+    """,
+    """
+    sed -i.bak0 "s/\\\"-lamd_comgr\\\",//g" third_party/gpus/rocm/BUILD.tpl 
+    """,
+    """
+    sed -i.bak0 "s/return TryDlopenCUDALibraries()/LOG(INFO) << \\"GPU libraries are statically linked, skip dlopen check.\\";\\nreturn absl::OkStatus();/g" xla/tsl/platform/default/dlopen_checker.cc
+""",
+    """
+    sed -i.bak0 "s/namespace/THIS_SHOULD_NEVER_BE_COMPILED/g" xla/tsl/cuda/{cublas,cublasLt,cufft,cusolver,cusparse,cudnn,cudart}_stub.cc
+""",
+    """
+	sed -i.bak0 "/amdgpu_backend/d" xla/backends/gpu/codegen/triton/BUILD
+    """,
+    """
+    	sed -i.bak0 "s/\\\"\\/\\/xla\\/service\\/gpu\\/llvm_gpu_backend:nvptx_backend\\\"/\\0]) + if_rocm_is_configured([\\\"\\/\\/xla\\/service\\/gpu\\/llvm_gpu_backend:amdgpu_backend\\\"/g" xla/backends/gpu/codegen/triton/BUILD
+    """,
+    """
+    sed -i.bak0 "s/load(\\\"\\/\\/xla\\/tsl:tsl.bzl\\\", \\\"if_google\\\")/load(\\\"\\/\\/xla\\/tsl:tsl.bzl\\\", \\\"if_google\\\")\\nload(\\\"@local_config_rocm\\/\\/rocm:build_defs.bzl\\\", \\\"if_rocm_is_configured\\\")/g" xla/backends/gpu/codegen/triton/BUILD
+    """,
+    """
+    sed -i.bak0 "s,third_party/llvm/llvm-project/llvm/include/,,g" third_party/stablehlo/temporary.patch
+    sed -i.bak0 "s,third_party/llvm/llvm-project/mlir/include/,,g" third_party/stablehlo/temporary.patch
+    """,
+    """
+    # Required for windows due to mingw std::call_once issue in ygg
+
+echo "" >> third_party/stablehlo/temporary.patch
+echo "diff --git a/stablehlo/reference/InterpreterOps.cpp b/stablehlo/reference/InterpreterOps.cpp" >> third_party/stablehlo/temporary.patch
+echo "--- a/stablehlo/reference/InterpreterOps.cpp" >> third_party/stablehlo/temporary.patch
+echo "+++ b/stablehlo/reference/InterpreterOps.cpp" >> third_party/stablehlo/temporary.patch
+echo "@@ -172,6 +172,10 @@" >> third_party/stablehlo/temporary.patch
+echo " SmallVector<InterpreterValue> evalRunParallelOp(" >> third_party/stablehlo/temporary.patch
+echo "     ArrayRef<InterpreterValue> inputs, std::queue<StringAttr>& infeed," >> third_party/stablehlo/temporary.patch
+echo "     SmallVector<SmallVector<StringAttr>> programs, SymbolTable& symbolTable," >> third_party/stablehlo/temporary.patch
+echo "     InterpreterFallback* fallback) {" >> third_party/stablehlo/temporary.patch
+echo "+#if (defined(_WIN32) || defined(__CYGWIN__))" >> third_party/stablehlo/temporary.patch
+echo "+  llvm::report_fatal_error(\\"Op not supported on windows due to std::future\\");" >> third_party/stablehlo/temporary.patch
+echo "+#else" >> third_party/stablehlo/temporary.patch
+echo "   llvm::DefaultThreadPool threadPool;" >> third_party/stablehlo/temporary.patch
+echo "   SmallVector<std::shared_future<SmallVector<InterpreterValue>>> futures;" >> third_party/stablehlo/temporary.patch
+echo "@@ -207,6 +211,7 @@" >> third_party/stablehlo/temporary.patch
+echo "   for (auto& future : futures) results.append(future.get());" >> third_party/stablehlo/temporary.patch
+echo "   // TODO(#1725): Figure out how to test the outfeed queue." >> third_party/stablehlo/temporary.patch
+echo "   return results;" >> third_party/stablehlo/temporary.patch
+echo "+#endif" >> third_party/stablehlo/temporary.patch
+echo " }" >> third_party/stablehlo/temporary.patch
+echo " " >> third_party/stablehlo/temporary.patch
+echo " llvm::Error evalPrintOp(PrintOp& op, InterpreterValue operand) {" >> third_party/stablehlo/temporary.patch
+    """,
+    """
+    sed -i.bak0 "s/\\/\\/third_party:repo.bzl/@bazel_tools\\/\\/tools\\/build_defs\\/repo:http.bzl/g" third_party/llvm/workspace.bzl
+    """,
+    """
+    sed -i.bak0 "s/patch_file/patch_args = [\\\"-p1\\\"],patches/g" third_party/llvm/workspace.bzl
+    """,
+    """
+    sed -i.bak0 "s/Node::Leaf(std::forward<decltype(value)>/Node::Leaf(std::forward<T>/g" xla/tuple_tree.h
+    """,
+    """
+    sed -i.bak0 "/link_file/d" third_party/llvm/workspace.bzl
+    """,
+    """
+    sed -i.bak0 "s/build_file.*/build_file_content = \\\"# empty\\\",/g" third_party/llvm/workspace.bzl
+    """,
+    """
+    sed -i.bak0 "s/\\/\\/third_party/@xla\\/\\/third_party/g" third_party/llvm/workspace.bzl
+    """,
+    """
+    sed -i.bak0 "s/tf_http_archive/http_archive/g" third_party/llvm/workspace.bzl
+    """,
+    """
+    sed -i.bak0 "s/def repo/load(\\\"@bazel_tools\\/\\/tools\\/build_defs\\/repo:http.bzl\\\", \\\"http_archive\\\")\\ndef repo/g" third_party/pthreadpool/workspace.bzl
+    """,
+    """
+    sed -i.bak0 "s/tf_http_archive(/http_archive(/g" third_party/pthreadpool/workspace.bzl
+    """,
+    """
+    sed -i.bak0 "s/strip_prefix/patch_cmds = [\\\"sed -i.bak0 's\\/_MSC_VER\\/_WIN32\\/g' src\\/pthreads.c\\\"], strip_prefix/g" third_party/pthreadpool/workspace.bzl
+    """,
+    """
+    # The second command disables llvm's use of __builtin_cpu_supports on apple
+    # platforms (e.g. clang's SSE4.2 identifier lexer fast path).  The darwin
+    # compiler-rt shipped by the cross toolchain does not provide __cpu_model,
+    # so leaving it enabled breaks linking libReactantExtra on x86_64-apple-darwin.
+    sed -i.bak0 "s/strip_prefix/patch_cmds = [\\\"find . -type f -name config.bzl -exec sed -i.bak0 's\\/HAVE_BACKTRACE=1\\/NO_HAVE_BACKTRACE=0\\/g' {} +\\\", \\\"sed -i.bak0 's\\/ || defined(__APPLE__))\\/)\\/' llvm\\/include\\/llvm\\/Support\\/Compiler.h\\\"], strip_prefix/g" third_party/llvm/workspace.bzl
+    """,
+    "find . -type f -name BUILD -exec sed -i.bak1 's/\\/\\/third_party\\/py\\/enzyme_ad\\/\\.\\.\\./public/g' {} +",
+    "find . -type f -name BUILD -exec sed -i.bak2 's/\\/\\/xla\\/mlir\\/memref:friends/\\/\\/visibility:public/g' {} +",
+    "find xla/mlir -type f -name BUILD -exec sed -i.bak3 's/\\/\\/xla:internal/\\/\\/\\/\\/visibility:public/g' {} +",
+    """
+sed -i.bak0 's/registry\\["__chkstk"\\] = SymbolDef(__chkstk)/registry["__chkstk"] = SymbolDef(__chkstk_ms);\\nregistry["__chkstk_ms"] = SymbolDef(__chkstk_ms)/g' xla/backends/cpu/codegen/builtin_definition_generator.cc
+""",
+    """
+sed -i.bak0 's/void __chkstk(size_t)/void __chkstk_ms(size_t)/g' xla/backends/cpu/codegen/builtin_definition_generator.cc
+""",
+    """
+sed -i.bak0 "1s/^/#include \\"llvm\\/Support\\/DynamicLibrary.h\\"\\n/g" xla/backends/cpu/codegen/builtin_definition_generator.cc
+""",
+    """
+sed -i.bak0 "s/SymbolDef(__chkstk_ms)/SymbolDef(reinterpret_cast<void* (*)(size_t)>(llvm::sys::DynamicLibrary::SearchForAddressOfSymbol(\\"__chkstk_ms\\")))/g" xla/backends/cpu/codegen/builtin_definition_generator.cc
+""",
+    """
+sed -i.bak0 "s/Shlwapi/shlwapi/g" xla/tsl/platform/windows/load_library.cc xla/tsl/platform/windows/windows_file_system.cc xla/tsl/platform/windows/env.cc
+""",
+    """
+sed -i.bak0 "1s/^/#ifdef PLATFORM_WINDOWS\\n#include <immintrin.h>\\n#include <intrin.h>\\n#endif/g" third_party/tsl/tsl/platform/cpu_info.cc
+""",
+    """
+sed -i.bak0 "1s/^/#define _USE_MATH_DEFINES\\n/g" xla/fp_util.h xla/hlo/builder/lib/prng.cc xla/literal_comparison.cc xla/hlo/builder/lib/math.cc xla/service/spmd/fft_handler.cc xla/service/cpu/onednn_contraction_rewriter.cc xla/hlo/evaluator/hlo_evaluator.cc
+""",
+    """
+sed -i.bak0 "s/Windows\\.h/windows\\.h/g" xla/tsl/platform/windows/port.cc xla/tsl/platform/windows/wide_char.cc xla/tsl/platform/windows/env.cc xla/tsl/platform/windows/windows_file_system.cc
+""",
+    """
+sed -i.bak0 "/D_FORTIFY_SOURCE/d" third_party/gpus/crosstool/cc_toolchain_config.bzl.tpl tools/toolchains/cross_compile/cc/BUILD tools/toolchains/clang6/CROSSTOOL.tpl third_party/gpus/crosstool/BUILD.rocm.tpl
+""",
+    """
+sed -i.bak0 "s/i64/LL/g" xla/tsl/platform/windows/env_time.cc
+""",
+    """
+sed -i.bak0 "s/\\/D/-D/g" third_party/farmhash/farmhash.BUILD
+""",
+    """
+sed -i.bak0 "s/Node::Leaf(std::forward<decltype(pair.second)>/Node::Leaf(std::forward<T>/g" xla/tuple_tree.h
+""",
+    """
+sed -i.bak0 "s/kDeprecatedFlags({/kDeprecatedFlags(absl::flat_hash_set<std::string>{/g" xla/debug_options_flags.cc
+""",
+    """
+sed -i.bak0 "s/kStableFlags({/kStableFlags(absl::flat_hash_set<std::string>{/g" xla/debug_options_flags.cc
+""",
+    """
+sed -i.bak0 "s/cupti_driver_cbid/cupti/g" xla/backends/profiler/gpu/cupti_tracer.cc
+""",
+    """
+sed -i.bak0 "s/patch_cmds = \\[/patch_cmds = \\[\\\"find . -type f -name config.bzl -exec sed -i.bak0 's\\/HAVE_LINK_H=1\\/HAVE_LINK_H=0\\/g' {} +\\\",/g" third_party/llvm/workspace.bzl
+""",
+    """
+# arith.extui's fold merges extui(extui(x)) by swapping the outer op's source
+# while keeping its nneg flag. The flag asserts the source is non-negative as
+# a signed value, about which the outer flag says nothing once the source
+# changes: extui nneg i8->i32 over extui i1->i8 becomes extui nneg i1->i32,
+# poison whenever the bool is true. Keep nneg only if the inner ext had it.
+sed -i.bak0 "s/patch_cmds = \\[/patch_cmds = \\[\\\"sed -i.baknneg 's\\/auto lhs = getIn().getDefiningOp<ExtUIOp>()) {\\/auto lhs = getIn().getDefiningOp<ExtUIOp>()) { setNonNeg(lhs.getNonNeg());\\/' mlir\\/lib\\/Dialect\\/Arith\\/IR\\/ArithOps.cpp\\\",/g" third_party/llvm/workspace.bzl
+""",
+    """
+sed -i.bak0 "s/patch_cmds = \\[/patch_cmds = \\[\\\"find . -type f -name config.bzl -exec sed -i.bak0 's\\/LLVM_ENABLE_THREADS=1\\/LLVM_ENABLE_THREADS=0\\/g' {} +\\\",/g" third_party/llvm/workspace.bzl
+""",
+    """
+sed -i.bak0 "s/patch_cmds = \\[/patch_cmds = \\[\\\"find . -type f -name config.bzl -exec sed -i.bak0 's\\/HAVE_MALLINFO=1\\/DONT_HAVE_ANY_MALLINFO=0\\/g' {} +\\\",/g" third_party/llvm/workspace.bzl
+""",
+    """
+sed -i.bak0 "s/patch_cmds = \\[/patch_cmds = \\[\\\"find . -type f -name config.bzl -exec sed -i.bak0 's\\/HAVE_PTHREAD_GETNAME_NP=1\\/FAKE_HAVE_PTHREAD_GETNAME_NP=0\\/g' {} +\\\",/g" third_party/llvm/workspace.bzl
+""",
+    """
+sed -i.bak0 "s/patch_cmds = \\[/patch_cmds = \\[\\\"find . -type f -name config.bzl -exec sed -i.bak0 's\\/HAVE_PTHREAD_SETNAME_NP=1\\/FAKE_HAVE_PTHREAD_SETNAME_NP=0\\/g' {} +\\\",/g" third_party/llvm/workspace.bzl
+""",
+    """
+sed -i.bak0 "s/patch_cmds = \\[/patch_cmds = \\[\\\"find . -type f -name config.h -exec sed -i.bak0 's\\/ENABLE_CRASH_OVERRIDES 1\\/ENABLE_CRASH_OVERRIDES 0\\/g' {} +\\\",/g" third_party/llvm/workspace.bzl
+""",
+    """
+sed -i.bak0 "s/patch_cmds = \\[/patch_cmds = \\[\\\"find . -type f -name config.h -exec sed -i.bak0 's\\/HAVE_PTHREAD_GETNAME_NP\\/FAKE_HAVE_PTHREAD_GETNAME_NP\\/g' {} +\\\",/g" third_party/llvm/workspace.bzl
+""",
+    """
+sed -i.bak0 "s/patch_cmds = \\[/patch_cmds = \\[\\\"find . -type f -name config.h -exec sed -i.bak0 's\\/HAVE_PTHREAD_SETNAME_NP\\/FAKE_HAVE_PTHREAD_SETNAME_NP\\/g' {} +\\\",/g" third_party/llvm/workspace.bzl
+""",
+    """
+    sed -i.bak0 "s/def repo/load(\\\"@bazel_tools\\/\\/tools\\/build_defs\\/repo:http.bzl\\\", \\\"http_archive\\\")\\ndef repo/g" third_party/eigen3/workspace.bzl
+    sed -i.bak0 "s/tf_http_archive(/http_archive(/g" third_party/eigen3/workspace.bzl
+    sed -i.bak0 "s/build_file = \\\"/build_file = \\\"@xla/g" third_party/eigen3/workspace.bzl
+
+    sed -i.bak0 "s/urls = /patch_cmds = \\[\\\"sed -i.bak -e 's\\/return PACKET_TYPE(0) == PACKET_TYPE(0);\\/return (PACKET_TYPE)(PACKET_TYPE(0) == PACKET_TYPE(0));\\/g' -e 's\\/return CAST_FROM_INT(CAST_TO_INT(a) == CAST_TO_INT(a));\\/return CAST_FROM_INT((decltype(CAST_TO_INT(a)))(CAST_TO_INT(a) == CAST_TO_INT(a)));\\/' Eigen\\/src\\/Core\\/arch\\/clang\\/PacketMath.h\\\"\\],urls = /g" third_party/eigen3/workspace.bzl
+    """,
+    """
+    echo '#ifdef REACTANT_TOOLCHAIN_IS_BB' >> xla/tsl/util/filewrapper.cc
+    echo '#include <cstdio>' >> xla/tsl/util/filewrapper.cc
+    echo 'namespace std { __attribute__((weak)) void __throw_bad_array_new_length() { fprintf(stderr, "erring in throw_bad_array_new_length\\n"); __builtin_trap(); } }' >> xla/tsl/util/filewrapper.cc
+    echo '#endif' >> xla/tsl/util/filewrapper.cc
+    """,
+    """
+    # XLA's llvm module extension hard-codes a large target list (ARM, PowerPC,
+    # RISCV, SystemZ, SPIRV, ...).  Restrict it to LLVM_TARGETS.
+    perl -0777 -pi -e 's/targets = \\[[^\\]]*\\]/targets = {}/' third_party/extensions/llvm.bzl
+    """.format(str(LLVM_TARGETS)),
+]
+
+JAX_PATCHES = [
+    """
+    sed -i.bak0 "s/\\/\\/jaxlib\\/.../public/g" jaxlib/symlink_files.bzl
+    """,
+    """
+    sed -i.bak0 "s/jax\\/experimental:mosaic_users/visibility:public/g" jaxlib/mosaic/BUILD
+    """,
+    """
+    sed -i.bak0 "s/#include \\"jaxlib\\/mosaic\\/dialect\\/tpu\\/tpu_enums.h.inc/#undef ARG_MAX\\n#include \\"jaxlib\\/mosaic\\/dialect\\/tpu\\/tpu_enums.h.inc/g" jaxlib/mosaic/dialect/tpu/tpu_dialect.h
+    """,
+    """
+    sed -i.bak0 "/ \\"\\/\\/jax:internal/d" jaxlib/gpu/BUILD
+    sed -i.bak0 "s,//third_party/py/enzyme_ad:__subpackages__,//visibility:public,g" jaxlib/gpu/BUILD
+    """,
+    """
+    sed -i.bak0 "/:mosaic_gpu_support/d" jaxlib/cuda/BUILD
+    """,
+]
+
+ML_TOOLCHAIN_PATCHES = [
+    """
+       sed -i.bak0 "/D_FORTIFY_SOURCE/d" cc/features/BUILD gpu/cuda/legacy/crosstool/cc_toolchain_config.bzl.tpl
+	""",
+]
+
+##############################################################
+# Bazel Central Registry dependencies referenced directly by our BUILD files.
+# Versions follow @jax//:MODULE.bazel and @xla//:MODULE.bazel.
+##############################################################
+
+bazel_dep(name = "abseil-cpp", version = "20260526.0", repo_name = "com_google_absl")
+bazel_dep(name = "bazel_features", version = "1.43.0")
+bazel_dep(name = "bazel_skylib", version = "1.9.0")
+bazel_dep(name = "googletest", version = "1.17.0.bcr.2", repo_name = "com_google_googletest")
+bazel_dep(name = "grpc", version = "1.81.0")
+bazel_dep(name = "platforms", version = "1.1.0")
+bazel_dep(name = "protobuf", version = "32.1", repo_name = "com_google_protobuf")
+bazel_dep(name = "pybind11_bazel", version = "3.0.0")
+bazel_dep(name = "rules_cc", version = "0.2.18")
+bazel_dep(name = "rules_python", version = "2.2.0")
+bazel_dep(name = "zlib", version = "1.3.2")
+
+##############################################################
+# JAX, XLA, rules_ml_toolchain and hedron are not on the BCR: pin them here.
+##############################################################
+
+bazel_dep(name = "jax")
+archive_override(
+    module_name = "jax",
+    patch_cmds = JAX_PATCHES,
+    patch_strip = 1,
+    patches = ["//patches:jax.patch"],
+    strip_prefix = "jax-" + JAX_COMMIT,
+    urls = ["https://github.com/jax-ml/jax/archive/{}.tar.gz".format(JAX_COMMIT)],
+)
+
+bazel_dep(name = "xla")
+archive_override(
+    module_name = "xla",
+    patch_cmds = XLA_PATCHES,
+    patch_strip = 1,
+    patches = [
+        "//patches:xla.patch",
+        "//patches:xla_win.patch",
+        "//patches:xla_trainium.patch",
+    ],
+    strip_prefix = "xla-" + XLA_COMMIT,
+    urls = ["https://github.com/openxla/xla/archive/{}.tar.gz".format(XLA_COMMIT)],
+)
+
+bazel_dep(name = "rules_ml_toolchain")
+archive_override(
+    module_name = "rules_ml_toolchain",
+    patch_cmds = ML_TOOLCHAIN_PATCHES,
+    strip_prefix = "rules_ml_toolchain-" + RULES_ML_TOOLCHAIN_COMMIT,
+    urls = ["https://github.com/google-ml-infra/rules_ml_toolchain/archive/{}.tar.gz".format(RULES_ML_TOOLCHAIN_COMMIT)],
+)
+
+bazel_dep(name = "hedron_compile_commands")
+archive_override(
+    module_name = "hedron_compile_commands",
+    strip_prefix = "bazel-compile-commands-extractor-" + HEDRON_COMPILE_COMMANDS_COMMIT,
+    urls = ["https://github.com/vimarsh6739/bazel-compile-commands-extractor/archive/{}.tar.gz".format(HEDRON_COMPILE_COMMANDS_COMMIT)],
+)
+
+##############################################################
+# Overrides that @xla//:MODULE.bazel and @jax//:MODULE.bazel apply to their
+# BCR dependencies.  Non-root overrides are ignored, so repeat them here.
+# The patch files are vendored by scripts/sync_upstream_patches.sh.
+##############################################################
+
+single_version_override(
+    module_name = "grpc",
+    patch_strip = 1,
+    patches = ["//patches/upstream:grpc.patch"],
+    version = "1.81.0",
+)
+
+single_version_override(
+    module_name = "protobuf",
+    patch_strip = 1,
+    patches = [
+        "//patches/upstream:protobuf_arena.patch",
+        "//patches/upstream:fix_message_lite_incomplete_type.patch",
+        "//patches/upstream:fix_python_dist_package.patch",
+        # Ours: nvcc cannot digest glibc's <byteswap.h>.
+        "//patches:protobuf_nvcc_byteswap.patch",
+    ],
+    version = "32.1",
+)
+
+single_version_override(
+    module_name = "abseil-cpp",
+    patch_strip = 1,
+    patches = [
+        "//patches/upstream:btree.patch",
+        "//patches/upstream:build_dll.patch",
+        "//patches/upstream:endian.patch",
+        "//patches/upstream:raw_hash_set.patch",
+    ],
+    version = "20260526.0",
+)
+
+##############################################################
+# Repositories defined by XLA's and rules_ml_toolchain's module extensions.
+##############################################################
+
+tsl_extension = use_extension("@xla//third_party/extensions:tsl.bzl", "tsl_extension")
+use_repo(tsl_extension, "tsl")
+
+llvm = use_extension("@xla//third_party/extensions:llvm.bzl", "llvm_extension")
+use_repo(llvm, "llvm-project")
+
+third_party = use_extension("@xla//third_party/extensions:third_party.bzl", "third_party_ext")
+use_repo(
+    third_party,
+    "compute_library",
+    "dlpack",
+    "eigen_archive",
+    "gloo",
+    "mpitrampoline",
+    "nanobind",
+    "shardy",
+    "stablehlo",
+    "triton",
+)
+
+rocm = use_extension("@xla//third_party/extensions:rocm_configure.bzl", "rocm_configure_ext")
+use_repo(rocm, "local_config_rocm")
+
+python_version_ext = use_extension("@rules_ml_toolchain//extensions:python_version.bzl", "python_version_ext")
+use_repo(python_version_ext, "python_version_repo")
+
+sycl = use_extension("@rules_ml_toolchain//extensions:sycl_configure.bzl", "sycl_configure_ext")
+use_repo(sycl, "local_config_sycl")
+
+pybind11_internal_configure = use_extension(
+    "@pybind11_bazel//:internal_configure.bzl",
+    "internal_configure_extension",
+)
+use_repo(pybind11_internal_configure, "pybind11")
+
+### CUDA / NCCL / NVSHMEM (rules_ml_toolchain)
+cuda_configure = use_extension("@rules_ml_toolchain//extensions:cuda_configure.bzl", "cuda_configure_ext")
+use_repo(cuda_configure, "local_config_cuda")
+
+cuda_json_ext = use_extension("@rules_ml_toolchain//extensions:cuda_json.bzl", "cuda_json_ext")
+use_repo(cuda_json_ext, "cuda_redist_json")
+
+cuda_redist_init_ext = use_extension("@rules_ml_toolchain//extensions:cuda_redist_init.bzl", "cuda_redist_init_ext")
+use_repo(
+    cuda_redist_init_ext,
+    "cuda_crt",
+    "cuda_cublas",
+    "cuda_cudart",
+    "cuda_cudnn",
+    "cuda_cufft",
+    "cuda_cupti",
+    "cuda_curand",
+    "cuda_cusolver",
+    "cuda_cusparse",
+    "cuda_driver",
+    "cuda_nvcc",
+    "cuda_nvdisasm",
+    "cuda_nvjitlink",
+    "cuda_nvml",
+    "cuda_nvrtc",
+    "cuda_nvtx",
+    "cuda_nvvm",
+)
+
+nccl_configure = use_extension("@rules_ml_toolchain//extensions:nccl_configure.bzl", "nccl_configure_ext")
+use_repo(nccl_configure, "local_config_nccl")
+
+nccl_redist = use_extension("@rules_ml_toolchain//extensions:nccl_redist.bzl", "nccl_redist_ext")
+use_repo(nccl_redist, "cuda_nccl")
+
+nvshmem_redist = use_extension("@rules_ml_toolchain//extensions:nvshmem_redist.bzl", "nvshmem_redist_ext")
+use_repo(nvshmem_redist, "nvidia_nvshmem")
+
+# Use the newer version of cuda_cccl from XLA.
+cccl_extension = use_extension("@xla//third_party/cccl:cccl_extension.bzl", "cccl_extension")
+use_repo(cccl_extension, "cuda_cccl")
+
+override_repo(
+    cuda_redist_init_ext,
+    cuda_cccl = "cuda_cccl",
+)
+
+# END: xla_deps.MODULE.bazel

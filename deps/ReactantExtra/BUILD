@@ -1882,7 +1882,8 @@ gentbl_cc_library(
 
 gentbl_cc_library(
     name = "ShardyJLIncGen",
-    includes = ["external/shardy"],
+    # The external directory is named after the canonical repository name.
+    includes = ["external/" + package_relative_label("@shardy//shardy/dialect/sdy/ir:ops.td").workspace_name],
     tbl_outs = [
         (
             [
