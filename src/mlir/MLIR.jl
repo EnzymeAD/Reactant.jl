@@ -8,6 +8,8 @@ module API
     using Reactant_jll: Reactant_jll
     using Libdl: Libdl
 
+    mlir_c::Union{Missing,String} = missing
+
     function __init__()
         global mlir_c
         if Reactant_jll.is_available()
