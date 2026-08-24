@@ -21,6 +21,7 @@ module API
 
     function __init__()
         init_mlir_c()
+        return
     end
 
     # MLIR C API
