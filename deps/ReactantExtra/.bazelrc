@@ -18,7 +18,12 @@ common --experimental_repo_remote_exec
 common --cxxopt=-std=c++17 --host_cxxopt=-std=c++17
 common --cxxopt=-w --host_cxxopt=-w
 common --define=grpc_no_ares=true
-common --noenable_bzlmod
+# Dependencies are managed with bzlmod (MODULE.bazel); there is no WORKSPACE.
+common --enable_bzlmod --noenable_workspace
+# Canonical repo names use `+` (Bazel 8 default), e.g. bazel-bin/external/xla+/...
+common --incompatible_use_plus_in_repo_names
+# Upstream commits are bumped daily; a lockfile would only churn.
+common --lockfile_mode=off
 
 build --copt=-DMLIR_CAPI_BUILDING_LIBRARY=1
 build --copt=-DMLIR_CAPI_ENABLE_WINDOWS_DLL_DECLSPEC=1

@@ -328,18 +328,22 @@ if build_backend isa CUDABackend
     )
         full_path = joinpath(source_dir, "bazel-bin", "cuda", path)
         if !Base.Filesystem.ispath(full_path)
+            runfiles_dir = joinpath(source_dir, "bazel-bin", "libReactantExtra.so.runfiles")
+            # libdevice's directory was moved in CUDA 13, before was in same
+            # dir as ptxas and fatbinary
+            repo = if contains(basename(path), "libdevice") && build_backend.version >= v"13"
+                "cuda_nvvm"
+            else
+                "cuda_nvcc"
+            end
+            # With bzlmod the runfiles directory is named after the canonical
+            # repository name, e.g. `rules_ml_toolchain++cuda_redist_init_ext+cuda_nvcc`.
+            repo_dirs = filter(readdir(runfiles_dir; join=true)) do dir
+                name = basename(dir)
+                return name == repo || endswith(name, "+" * repo) || endswith(name, "~" * repo)
+            end
             source = joinpath(
-                source_dir,
-                "bazel-bin",
-                "libReactantExtra.so.runfiles",
-                # libdevice's directory was moved in CUDA 13, before was in same
-                # dir as ptxas and fatbinary
-                if contains(basename(path), "libdevice") && build_backend.version >= v"13"
-                    "cuda_nvvm"
-                else
-                    "cuda_nvcc"
-                end,
-                path,
+                isempty(repo_dirs) ? joinpath(runfiles_dir, repo) : first(repo_dirs), path
             )
             if !Base.Filesystem.ispath(source)
                 error(

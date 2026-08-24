@@ -1,0 +1,665 @@
+diff --git a/xla/backends/gpu/collectives/nccl_collectives.cc b/xla/backends/gpu/collectives/nccl_collectives.cc
+index 28ef611fa7..c6708577f1 100644
+--- a/xla/backends/gpu/collectives/nccl_collectives.cc
++++ b/xla/backends/gpu/collectives/nccl_collectives.cc
+@@ -59,12 +59,12 @@ limitations under the License.
+ #include "xla/stream_executor/stream_executor.h"
+ #include "xla/tsl/platform/env.h"
+ #include "xla/tsl/platform/logging.h"
++#include "xla/tsl/platform/status_macros.h"
+ #include "xla/tsl/platform/threadpool.h"
+ #include "xla/util.h"
+ #include "tsl/platform/casts.h"
+ #include "tsl/platform/numbers.h"
+ #include "tsl/profiler/lib/traceme.h"
+-#include "xla/tsl/platform/status_macros.h"
+ 
+ namespace xla::gpu {
+ 
+@@ -113,8 +113,16 @@ class NcclIdStore {
+                          : 1;
+ 
+     // Create a KV store key for the given root process and captured clique key.
++    // We construct the key from the full (non-truncated) device list and
++    // exclude `num_local_participants` because it can differ across hosts for
++    // the same logical clique (e.g. P2P cliques from connected components).
+     auto kv_key = [&](ProcessId root_process) {
+-      return absl::StrFormat("root_process: %v; clique: %v", root_process, key);
++      return absl::StrFormat(
++          "root_process: %v; clique: devices=[%s]; communication_id=%v; "
++          "incarnations=[%s]",
++          root_process, absl::StrJoin(key.devices(), ","),
++          gpu_key->communication_id(),
++          absl::StrJoin(gpu_key->incarnations(), ","));
+     };
+ 
+     // Global devices that are responsible for generating clique ids.
+diff --git a/xla/backends/gpu/runtime/BUILD b/xla/backends/gpu/runtime/BUILD
+index d57ef7812f..5289fd111e 100644
+--- a/xla/backends/gpu/runtime/BUILD
++++ b/xla/backends/gpu/runtime/BUILD
+@@ -2084,6 +2084,7 @@ cc_library(
+         "//xla/hlo/ir:collective_op_group_mode",
+         "//xla/hlo/ir:hlo",
+         "//xla/runtime:buffer_use",
++        "//xla/runtime:device_id",
+         "//xla/service:buffer_assignment",
+         "//xla/service:computation_placer",
+         "//xla/service:rendezvous",
+@@ -2125,16 +2126,22 @@ xla_test(
+         ":command_buffer_thunk",
+         ":command_executor",
+         ":execution_stream_id",
++        ":p2p_thunk_common",
+         ":thunk",
+         ":thunk_executor",
+         ":thunk_proto_cc",
+         "//xla:shape_util",
+         "//xla:util",
+         "//xla:xla_data_proto_cc",
++        "//xla:xla_proto_cc",
++        "//xla/backends/gpu/collectives:gpu_clique_key",
++        "//xla/hlo/ir:collective_op_group_mode",
+         "//xla/hlo/ir:hlo",
+         "//xla/hlo/testlib:verified_hlo_module",
++        "//xla/runtime:device_id",
+         "//xla/service:backend",
+         "//xla/service:buffer_assignment",
++        "//xla/service:computation_placer",
+         "//xla/service:executable",
+         "//xla/service:hlo_module_config",
+         "//xla/service/gpu:gpu_constants",
+@@ -2147,6 +2154,8 @@ xla_test(
+         "//xla/tsl/platform:test",
+         "//xla/tsl/util/proto:parse_text_proto",
+         "//xla/tsl/util/proto:proto_matchers",
++        "@com_google_absl//absl/algorithm:container",
++        "@com_google_absl//absl/container:flat_hash_map",
+         "@com_google_googletest//:gtest_main",
+         "@tsl//tsl/platform:casts",
+     ],
+diff --git a/xla/backends/gpu/runtime/collective_permute_thunk.cc b/xla/backends/gpu/runtime/collective_permute_thunk.cc
+index 3877665ce7..2888fe2518 100644
+--- a/xla/backends/gpu/runtime/collective_permute_thunk.cc
++++ b/xla/backends/gpu/runtime/collective_permute_thunk.cc
+@@ -20,12 +20,14 @@ limitations under the License.
+ #include <cstdint>
+ #include <iterator>
+ #include <memory>
++#include <numeric>
+ #include <optional>
+ #include <string>
+ #include <utility>
+ #include <vector>
+ 
+ #include "absl/algorithm/container.h"
++#include "absl/container/flat_hash_map.h"
+ #include "absl/log/check.h"
+ #include "absl/log/log.h"
+ #include "absl/status/status.h"
+@@ -48,20 +50,21 @@ limitations under the License.
+ #include "xla/hlo/ir/collective_op_group_mode.h"
+ #include "xla/hlo/ir/hlo_instruction.h"
+ #include "xla/hlo/ir/hlo_instructions.h"
++#include "xla/runtime/device_id.h"
+ #include "xla/service/buffer_assignment.h"
++#include "xla/service/computation_placer.h"
+ #include "xla/service/gpu/backend_configs.pb.h"
+ #include "xla/service/rendezvous.h"
+ #include "xla/stream_executor/device_address.h"
+ #include "xla/stream_executor/stream.h"
+ #include "xla/tsl/platform/errors.h"
++#include "xla/tsl/platform/status_macros.h"
+ #include "xla/tsl/platform/statusor.h"
+ #include "xla/util.h"
+ #include "xla/xla_data.pb.h"
+ #include "tsl/platform/casts.h"
+-#include "xla/tsl/platform/status_macros.h"
+ 
+-namespace xla {
+-namespace gpu {
++namespace xla::gpu {
+ namespace {
+ 
+ bool IsLocalPeerTransfer(const P2PConfig::SourceTargetMapEntry& source_target,
+@@ -107,7 +110,7 @@ CollectivePermuteThunk::CollectivePermuteThunk(
+       buffers_(buffers),
+       p2p_memcpy_enabled_(p2p_memcpy_enabled) {}
+ 
+-/*static*/ P2PConfig CollectivePermuteThunk::GetP2PConfig(
++P2PConfig CollectivePermuteThunk::GetP2PConfig(
+     const HloCollectivePermuteInstruction* instr, int64_t replica_count,
+     int64_t partition_count) {
+   P2PConfig collective_permute_config;
+@@ -122,36 +125,38 @@ CollectivePermuteThunk::CollectivePermuteThunk(
+   }
+   config.group_mode = GetGroupMode(instr);
+ 
+-  // With a collective permute, all execution instances together form one
+-  // replica group.
+   const int64_t num_participants =
+       config.group_mode ==
+               CollectiveOpGroupMode::COLLECTIVE_OP_GROUP_MODE_CROSS_REPLICA
+           ? replica_count
+           : partition_count;
+-  config.replica_groups.emplace_back();
+-  ReplicaGroup& replica_group = config.replica_groups.front();
+-  for (int i = 0; i < num_participants; ++i) {
+-    replica_group.add_replica_ids(i);
+-  }
+ 
+   const std::vector<std::pair<int64_t, int64_t>>& source_target_pairs =
+       instr->source_target_pairs();
+ 
+-  for (const std::pair<int64_t, int64_t>& source_target : source_target_pairs) {
+-    int64_t source = source_target.first;
+-    int64_t target = source_target.second;
+-
++  for (const auto& [source, target] : source_target_pairs) {
+     collective_permute_config.id_to_source_target.insert({target, {}})
+         .first->second.source = source;
+     collective_permute_config.id_to_source_target.insert({source, {}})
+         .first->second.target = target;
+   }
+ 
++  // Build replica groups from connected components of the source-target pairs
++  // graph. This ensures the GPU clique only includes devices that actually
++  // communicate, rather than all devices in the computation.
++  auto connected_components =
++      SourceTargetConnectedComponents(num_participants, source_target_pairs);
++  for (auto& [root, members] : connected_components) {
++    ReplicaGroup& group = config.replica_groups.emplace_back();
++    for (int64_t id : members) {
++      group.add_replica_ids(id);
++    }
++  }
++
+   return collective_permute_config;
+ }
+ 
+-/*static*/ bool CollectivePermuteThunk::IsDegenerate(
++bool CollectivePermuteThunk::IsDegenerate(
+     const HloCollectivePermuteInstruction* instr, int64_t replica_count,
+     int64_t partition_count) {
+   // The collective permute is degenerate if all source-target pairs are
+@@ -170,7 +175,7 @@ CollectivePermuteThunk::CollectivePermuteThunk(
+                         });
+ }
+ 
+-/*static*/ CollectiveOpGroupMode CollectivePermuteThunk::GetGroupMode(
++CollectiveOpGroupMode CollectivePermuteThunk::GetGroupMode(
+     const HloCollectivePermuteInstruction* instr) {
+   return GetCollectiveOpGroupMode(instr->channel_id().has_value(), std::nullopt)
+       .value();
+@@ -359,9 +364,18 @@ absl::Status CollectivePermuteThunk::RunCollective(
+     }
+   }
+ 
++  // Remap source/target from logical IDs to communicator-local ranks.
++  TF_ASSIGN_OR_RETURN(
++      auto remapped_source_target,
++      RemapSourceTargetToCliqueRanks(
++          source_target, clique_key, *params.collective_params->device_assn,
++          config_.config.group_mode,
++          params.collective_params->global_device_id));
++
+   TF_RETURN_IF_ERROR(::xla::gpu::RunCollectivePermute(
+-      source_target, device_buffers, stream, comm, device_string, current_id,
+-      use_memcpy, &recv_ptr_map_, config_.config.use_symmetric_buffer));
++      remapped_source_target, device_buffers, stream, comm, device_string,
++      current_id, use_memcpy, &recv_ptr_map_,
++      config_.config.use_symmetric_buffer));
+ 
+   if (use_memcpy) {
+     std::optional<int64_t> source_id = source_target.source;
+@@ -527,5 +541,85 @@ absl::Status RunCollectivePermute(
+   return absl::OkStatus();
+ }
+ 
+-}  // namespace gpu
+-}  // namespace xla
++//===----------------------------------------------------------------------===//
++// Collective-permute communicating cliques helpers.
++//===----------------------------------------------------------------------===//
++
++absl::flat_hash_map<int64_t, std::vector<int64_t>>
++SourceTargetConnectedComponents(
++    int64_t num_participants,
++    absl::Span<const std::pair<int64_t, int64_t>> source_target_pairs) {
++  std::vector<int64_t> parent(num_participants);
++  std::iota(parent.begin(), parent.end(), 0);
++
++  // Find component root with path compression.
++  auto find = [&](int64_t x) {
++    while (parent[x] != x) {
++      parent[x] = parent[parent[x]];
++      x = parent[x];
++    }
++    return x;
++  };
++
++  for (const auto& [source, target] : source_target_pairs) {
++    int64_t root_a = find(source);
++    int64_t root_b = find(target);
++    if (root_a != root_b) {
++      parent[root_a] = root_b;
++    }
++  }
++
++  // Group participants by component root; sort members for determinism.
++  absl::flat_hash_map<int64_t, std::vector<int64_t>> components;
++  for (int64_t i = 0; i < num_participants; ++i) {
++    components[find(i)].push_back(i);
++  }
++  for (auto& [root, members] : components) {
++    absl::c_sort(members);
++  }
++
++  return components;
++}
++
++absl::StatusOr<P2PConfig::SourceTargetMapEntry> RemapSourceTargetToCliqueRanks(
++    const P2PConfig::SourceTargetMapEntry& source_target,
++    const GpuCliqueKey& clique_key, const DeviceAssignment& device_assn,
++    CollectiveOpGroupMode group_mode, GlobalDeviceId global_device_id) {
++  TF_ASSIGN_OR_RETURN(auto logical_id,
++                      device_assn.LogicalIdForDevice(global_device_id));
++
++  // Map a logical ID (partition or replica) to its GlobalDeviceId.
++  auto id_to_global = [&](int64_t id) -> GlobalDeviceId {
++    if (group_mode ==
++        CollectiveOpGroupMode::COLLECTIVE_OP_GROUP_MODE_CROSS_REPLICA) {
++      return GlobalDeviceId(device_assn(id, logical_id.computation_id));
++    }
++    return GlobalDeviceId(device_assn(logical_id.replica_id, id));
++  };
++
++  P2PConfig::SourceTargetMapEntry remapped;
++
++  if (source_target.source) {
++    GlobalDeviceId source_global = id_to_global(*source_target.source);
++    std::optional<RankId> rank = clique_key.rank(source_global);
++    if (!rank) {
++      return Internal("Source device %v not found in clique key %v",
++                      source_global, clique_key);
++    }
++    remapped.source = rank->value();
++  }
++
++  if (source_target.target) {
++    GlobalDeviceId target_global = id_to_global(*source_target.target);
++    std::optional<RankId> rank = clique_key.rank(target_global);
++    if (!rank) {
++      return Internal("Target device %v not found in clique key %v",
++                      target_global, clique_key);
++    }
++    remapped.target = rank->value();
++  }
++
++  return remapped;
++}
++
++}  // namespace xla::gpu
+diff --git a/xla/backends/gpu/runtime/collective_permute_thunk.h b/xla/backends/gpu/runtime/collective_permute_thunk.h
+index 08044dc2f8..12c586b88d 100644
+--- a/xla/backends/gpu/runtime/collective_permute_thunk.h
++++ b/xla/backends/gpu/runtime/collective_permute_thunk.h
+@@ -1,6 +1,3 @@
+-#include "xla/backends/gpu/collectives/gpu_clique_key.h"
+-#include "xla/runtime/buffer_use.h"
+-#include "xla/service/buffer_assignment.h"
+ /* Copyright 2021 The OpenXLA Authors.
+ 
+ Licensed under the Apache License, Version 2.0 (the "License");
+@@ -21,6 +18,7 @@ limitations under the License.
+ 
+ #include <cstdint>
+ #include <memory>
++#include <utility>
+ #include <vector>
+ 
+ #include "absl/base/thread_annotations.h"
+@@ -33,17 +31,22 @@ limitations under the License.
+ #include "absl/strings/string_view.h"
+ #include "absl/synchronization/mutex.h"
+ #include "absl/types/span.h"
++#include "xla/backends/gpu/collectives/gpu_clique_key.h"
+ #include "xla/backends/gpu/runtime/collective_thunk.h"
+ #include "xla/backends/gpu/runtime/p2p_thunk_common.h"
+ #include "xla/backends/gpu/runtime/thunk.h"
+ #include "xla/core/collectives/communicator.h"
++#include "xla/hlo/ir/collective_op_group_mode.h"
+ #include "xla/hlo/ir/hlo_instructions.h"
++#include "xla/runtime/buffer_use.h"
++#include "xla/runtime/device_id.h"
++#include "xla/service/buffer_assignment.h"
++#include "xla/service/computation_placer.h"
+ #include "xla/stream_executor/event.h"
+ #include "xla/stream_executor/stream.h"
+ #include "xla/tsl/concurrency/async_value_ref.h"
+ 
+-namespace xla {
+-namespace gpu {
++namespace xla::gpu {
+ 
+ using tsl::AsyncValueRef;
+ 
+@@ -168,7 +171,29 @@ absl::Status RunCollectivePermute(
+     const CollectivePermuteThunk::RecvPtrMap* recv_ptr_map = nullptr,
+     bool use_symmetric_buffer = false);
+ 
+-}  // namespace gpu
+-}  // namespace xla
++//===----------------------------------------------------------------------===//
++// Collective-permute communicating cliques helpers.
++//===----------------------------------------------------------------------===//
++
++// Computes connected components of the source-target pairs graph using
++// Union-Find. Returns a map from component root to sorted member IDs. All IDs
++// in [0, num_participants) are included; IDs not in any pair become singleton
++// components.
++absl::flat_hash_map<int64_t, std::vector<int64_t>>
++SourceTargetConnectedComponents(
++    int64_t num_participants,
++    absl::Span<const std::pair<int64_t, int64_t>> source_target_pairs);
++
++// Remaps source/target IDs from partition/replica space to communicator-local
++// ranks. When communicators are scoped to connected components (subsets of
++// devices), the partition/replica IDs used in HLO source_target_pairs don't
++// correspond to NCCL ranks. This function translates them via:
++//   logical_id -> GlobalDeviceId -> clique_key.rank().
++absl::StatusOr<P2PConfig::SourceTargetMapEntry> RemapSourceTargetToCliqueRanks(
++    const P2PConfig::SourceTargetMapEntry& source_target,
++    const GpuCliqueKey& clique_key, const DeviceAssignment& device_assn,
++    CollectiveOpGroupMode group_mode, GlobalDeviceId global_device_id);
++
++}  // namespace xla::gpu
+ 
+ #endif  // XLA_BACKENDS_GPU_RUNTIME_COLLECTIVE_PERMUTE_THUNK_H_
+diff --git a/xla/backends/gpu/runtime/collective_permute_thunk_test.cc b/xla/backends/gpu/runtime/collective_permute_thunk_test.cc
+index 81b63ed892..66180185be 100644
+--- a/xla/backends/gpu/runtime/collective_permute_thunk_test.cc
++++ b/xla/backends/gpu/runtime/collective_permute_thunk_test.cc
+@@ -17,26 +17,34 @@ limitations under the License.
+ 
+ #include <cstdint>
+ #include <memory>
++#include <optional>
+ #include <string>
+ #include <utility>
+ #include <vector>
+ 
+ #include <gmock/gmock.h>
+ #include <gtest/gtest.h>
++#include "absl/algorithm/container.h"
++#include "absl/container/flat_hash_map.h"
++#include "xla/backends/gpu/collectives/gpu_clique_key.h"
+ #include "xla/backends/gpu/runtime/async_thunk.h"
+ #include "xla/backends/gpu/runtime/command_buffer_cmd_emitter.h"
+ #include "xla/backends/gpu/runtime/command_buffer_thunk.h"
+ #include "xla/backends/gpu/runtime/command_executor.h"
+ #include "xla/backends/gpu/runtime/execution_stream_id.h"
++#include "xla/backends/gpu/runtime/p2p_thunk_common.h"
+ #include "xla/backends/gpu/runtime/thunk.h"
+ #include "xla/backends/gpu/runtime/thunk.pb.h"
+ #include "xla/backends/gpu/runtime/thunk_executor.h"
++#include "xla/hlo/ir/collective_op_group_mode.h"
+ #include "xla/hlo/ir/hlo_instruction.h"
+ #include "xla/hlo/ir/hlo_instructions.h"
+ #include "xla/hlo/ir/hlo_opcode.h"
+ #include "xla/hlo/testlib/verified_hlo_module.h"
++#include "xla/runtime/device_id.h"
+ #include "xla/service/backend.h"
+ #include "xla/service/buffer_assignment.h"
++#include "xla/service/computation_placer.h"
+ #include "xla/service/executable.h"
+ #include "xla/service/gpu/gpu_constants.h"
+ #include "xla/service/gpu/gpu_executable.h"
+@@ -52,6 +60,7 @@ limitations under the License.
+ #include "xla/tsl/util/proto/parse_text_proto.h"
+ #include "xla/tsl/util/proto/proto_matchers.h"
+ #include "xla/util.h"
++#include "xla/xla.pb.h"
+ #include "xla/xla_data.pb.h"
+ #include "tsl/platform/casts.h"
+ 
+@@ -83,8 +92,8 @@ ENTRY test_computation {
+   debug_options.add_xla_gpu_enable_command_buffer(DebugOptions::COLLECTIVES);
+   config.set_debug_options(debug_options);
+ 
+-  TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<VerifiedHloModule> module,
+-                          ParseAndReturnVerifiedModule(hlo_text, config));
++  ASSERT_OK_AND_ASSIGN(std::unique_ptr<VerifiedHloModule> module,
++                       ParseAndReturnVerifiedModule(hlo_text, config));
+ 
+   // Get CollectivePermute Instruction
+   const HloInstruction* root_instr =
+@@ -148,8 +157,8 @@ ENTRY test_computation {
+   // Use LHS synchronization mode to append Done command
+   conv_options.synchronization_mode =
+       CommandExecutor::SynchronizationMode::kLHS;
+-  TF_ASSERT_OK_AND_ASSIGN(CommandExecutor cb_cmd_executor,
+-                          ConvertToCommands(thunk_sequence, conv_options));
++  ASSERT_OK_AND_ASSIGN(CommandExecutor cb_cmd_executor,
++                       ConvertToCommands(thunk_sequence, conv_options));
+ 
+   // AsyncStart inlines its nested thunk as a command, and AsyncDone
+   // with no control predecessors is a no-op, so we get 1 command.
+@@ -175,17 +184,17 @@ ENTRY test_computation {
+   debug_options.add_xla_gpu_enable_command_buffer(DebugOptions::COLLECTIVES);
+   config.set_debug_options(debug_options);
+ 
+-  TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<VerifiedHloModule> module,
+-                          ParseAndReturnVerifiedModule(hlo_text, config));
++  ASSERT_OK_AND_ASSIGN(std::unique_ptr<VerifiedHloModule> module,
++                       ParseAndReturnVerifiedModule(hlo_text, config));
+ 
+   se::StreamExecutor* executor = backend().default_stream_executor();
+ 
+-  TF_ASSERT_OK_AND_ASSIGN(
++  ASSERT_OK_AND_ASSIGN(
+       std::unique_ptr<HloModule> compiled_module,
+       backend().compiler()->RunHloPasses(module->Clone(), executor,
+                                          /*device_allocator=*/nullptr));
+ 
+-  TF_ASSERT_OK_AND_ASSIGN(
++  ASSERT_OK_AND_ASSIGN(
+       std::unique_ptr<Executable> executable,
+       backend().compiler()->RunBackend(std::move(compiled_module), executor,
+                                        /*device_allocator=*/nullptr));
+@@ -269,5 +278,152 @@ TEST(CollectiveThunkTest, SyncCollective) {
+                            buffer_allocations));
+ }
+ 
++// Helper to extract just the sorted component member lists (ignoring root keys)
++// for easier comparison.
++std::vector<std::vector<int64_t>> ComponentValues(
++    const absl::flat_hash_map<int64_t, std::vector<int64_t>>& components) {
++  std::vector<std::vector<int64_t>> result;
++  result.reserve(components.size());
++  for (const auto& [root, members] : components) {
++    result.push_back(members);
++  }
++  absl::c_sort(result);
++  return result;
++}
++
++TEST(SourceTargetConnectedComponentsTest, SingleComponent) {
++  // Ring pattern: 0->1->2->3->0, all connected.
++  std::vector<std::pair<int64_t, int64_t>> pairs = {
++      {0, 1}, {1, 2}, {2, 3}, {3, 0}};
++  auto components = SourceTargetConnectedComponents(4, pairs);
++  EXPECT_THAT(ComponentValues(components),
++              ElementsAre(ElementsAre(0, 1, 2, 3)));
++}
++
++TEST(SourceTargetConnectedComponentsTest, TwoDisjointRings) {
++  // Two 4-device rings on a 2-node setup: {0..3} and {4..7}.
++  std::vector<std::pair<int64_t, int64_t>> pairs = {
++      {0, 1}, {1, 2}, {2, 3}, {3, 0}, {4, 5}, {5, 6}, {6, 7}, {7, 4}};
++  auto components = SourceTargetConnectedComponents(8, pairs);
++  EXPECT_THAT(ComponentValues(components),
++              ElementsAre(ElementsAre(0, 1, 2, 3), ElementsAre(4, 5, 6, 7)));
++}
++
++TEST(SourceTargetConnectedComponentsTest, IsolatedDevices) {
++  // Only devices 0 and 1 communicate; device 2 is isolated.
++  std::vector<std::pair<int64_t, int64_t>> pairs = {{0, 1}};
++  auto components = SourceTargetConnectedComponents(3, pairs);
++  EXPECT_THAT(ComponentValues(components),
++              ElementsAre(ElementsAre(0, 1), ElementsAre(2)));
++}
++
++TEST(SourceTargetConnectedComponentsTest, AllIsolated) {
++  // No pairs at all — every device is its own singleton.
++  std::vector<std::pair<int64_t, int64_t>> pairs = {};
++  auto components = SourceTargetConnectedComponents(4, pairs);
++  EXPECT_THAT(ComponentValues(components),
++              ElementsAre(ElementsAre(0), ElementsAre(1), ElementsAre(2),
++                          ElementsAre(3)));
++}
++
++TEST(SourceTargetConnectedComponentsTest, ChainNotRing) {
++  // Chain: 0->1->2->3 (no wrap). All connected via transitivity.
++  std::vector<std::pair<int64_t, int64_t>> pairs = {{0, 1}, {1, 2}, {2, 3}};
++  auto components = SourceTargetConnectedComponents(4, pairs);
++  EXPECT_THAT(ComponentValues(components),
++              ElementsAre(ElementsAre(0, 1, 2, 3)));
++}
++
++TEST(SourceTargetConnectedComponentsTest, SinglePairManyDevices) {
++  // 16 devices, only 0->1 communicates.
++  std::vector<std::pair<int64_t, int64_t>> pairs = {{0, 1}};
++  auto components = SourceTargetConnectedComponents(16, pairs);
++  // Should have {0,1} and 14 singletons.
++  EXPECT_EQ(components.size(), 15);
++  // Check the communicating pair is together.
++  bool found_pair = false;
++  for (const auto& [root, members] : components) {
++    if (members.size() == 2) {
++      EXPECT_THAT(members, ElementsAre(0, 1));
++      found_pair = true;
++    }
++  }
++  EXPECT_TRUE(found_pair);
++}
++
++TEST(RemapSourceTargetToCliqueRanksTest, CrossPartitionRemapsToCliqueRanks) {
++  // 4 devices, partition IDs 0-3. Clique only has devices {2, 3} (mapped to
++  // GlobalDeviceIds {2, 3}). Source-target pair: 2->3.
++  DeviceAssignment device_assn(/*replica_count=*/1, /*computation_count=*/4);
++  device_assn(0, 0) = 0;
++  device_assn(0, 1) = 1;
++  device_assn(0, 2) = 2;
++  device_assn(0, 3) = 3;
++
++  // Clique with devices {2, 3} — rank 0 = device 2, rank 1 = device 3.
++  GpuCliqueKey clique_key({GlobalDeviceId(2), GlobalDeviceId(3)},
++                          /*num_local_participants=*/2);
++
++  P2PConfig::SourceTargetMapEntry source_target;
++  source_target.source = 2;  // Partition ID 2 sends to us.
++  source_target.target = 3;  // We send to partition ID 3.
++
++  ASSERT_OK_AND_ASSIGN(
++      auto remapped,
++      RemapSourceTargetToCliqueRanks(
++          source_target, clique_key, device_assn,
++          CollectiveOpGroupMode::COLLECTIVE_OP_GROUP_MODE_CROSS_PARTITION,
++          GlobalDeviceId(3)));
++
++  // Partition 2 -> GlobalDeviceId 2 -> clique rank 0.
++  EXPECT_EQ(remapped.source, 0);
++  // Partition 3 -> GlobalDeviceId 3 -> clique rank 1.
++  EXPECT_EQ(remapped.target, 1);
++}
++
++TEST(RemapSourceTargetToCliqueRanksTest, NoSourceOrTarget) {
++  // Device is isolated — no source or target.
++  DeviceAssignment device_assn(/*replica_count=*/1, /*computation_count=*/2);
++  device_assn(0, 0) = 0;
++  device_assn(0, 1) = 1;
++
++  GpuCliqueKey clique_key({GlobalDeviceId(0)},
++                          /*num_local_participants=*/1);
++
++  P2PConfig::SourceTargetMapEntry source_target;  // Both nullopt.
++
++  ASSERT_OK_AND_ASSIGN(
++      auto remapped,
++      RemapSourceTargetToCliqueRanks(
++          source_target, clique_key, device_assn,
++          CollectiveOpGroupMode::COLLECTIVE_OP_GROUP_MODE_CROSS_PARTITION,
++          GlobalDeviceId(0)));
++
++  EXPECT_EQ(remapped.source, std::nullopt);
++  EXPECT_EQ(remapped.target, std::nullopt);
++}
++
++TEST(RemapSourceTargetToCliqueRanksTest, DeviceNotInCliqueReturnsError) {
++  DeviceAssignment device_assn(/*replica_count=*/1, /*computation_count=*/4);
++  device_assn(0, 0) = 0;
++  device_assn(0, 1) = 1;
++  device_assn(0, 2) = 2;
++  device_assn(0, 3) = 3;
++
++  // Clique only has device {0, 1}.
++  GpuCliqueKey clique_key({GlobalDeviceId(0), GlobalDeviceId(1)},
++                          /*num_local_participants=*/2);
++
++  P2PConfig::SourceTargetMapEntry source_target;
++  source_target.target = 3;  // Partition 3 -> GlobalDeviceId 3, not in clique.
++
++  auto result = RemapSourceTargetToCliqueRanks(
++      source_target, clique_key, device_assn,
++      CollectiveOpGroupMode::COLLECTIVE_OP_GROUP_MODE_CROSS_PARTITION,
++      GlobalDeviceId(0));
++
++  EXPECT_FALSE(result.ok());
++}
++
+ }  // namespace
+ }  // namespace xla::gpu
+diff --git a/xla/backends/gpu/runtime/command_buffer_cmd.cc b/xla/backends/gpu/runtime/command_buffer_cmd.cc
+index 1a6ba331f4..9693aeb8ae 100644
+--- a/xla/backends/gpu/runtime/command_buffer_cmd.cc
++++ b/xla/backends/gpu/runtime/command_buffer_cmd.cc
+@@ -113,13 +113,13 @@ limitations under the License.
+ #include "xla/stream_executor/trace_command_buffer_factory.h"
+ #include "xla/tsl/platform/env.h"
+ #include "xla/tsl/platform/errors.h"
++#include "xla/tsl/platform/status_macros.h"
+ #include "xla/tsl/platform/statusor.h"
+ #include "xla/tsl/util/unique_any.h"
+ #include "xla/types.h"  // IWYU pragma: keep
+ #include "xla/util.h"
+ #include "xla/xla_data.pb.h"
+ #include "tsl/profiler/lib/scoped_annotation.h"
+-#include "xla/tsl/platform/status_macros.h"
+ 
+ namespace xla::gpu {
+ 
+@@ -2027,12 +2027,20 @@ absl::StatusOr<const se::CommandBuffer::Command*> CollectivePermuteCmd::Record(
+   const P2PConfig::SourceTargetMapEntry source_target =
+       P2PConfig::GetSourceTarget(p2p_config_.id_to_source_target, current_id);
+ 
+-  // MemCpy case is not currently supported in CommandBuffer.
++  // Remap source/target from logical IDs to communicator-local ranks.
++  TF_ASSIGN_OR_RETURN(
++      auto remapped_source_target,
++      RemapSourceTargetToCliqueRanks(
++          source_target, clique_key,
++          *execute_params.collective_params->device_assn, config().group_mode,
++          execute_params.collective_params->global_device_id));
++
++  // Memcpy case is not currently supported in CommandBuffer.
+   return RecordTracedCommand(
+       execute_params, record_params, std::move(record_action), command_buffer,
+       [&](se::Stream* stream) {
+-        return RunCollectivePermute(source_target, device_buffers, *stream,
+-                                    *comm, device_string, current_id,
++        return RunCollectivePermute(remapped_source_target, device_buffers,
++                                    *stream, *comm, device_string, current_id,
+                                     /*use_memcpy=*/false,
+                                     /*recv_ptr_map=*/nullptr,
+                                     use_symmetric_buffer);
