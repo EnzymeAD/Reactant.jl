@@ -1774,6 +1774,9 @@ gentbl_cc_library(
 
 gentbl_cc_library(
     name = "TPUJLIncGen",
+    # tpu_ops.td includes its siblings relative to the JAX repository root,
+    # whose external directory is named after the canonical repository name.
+    includes = ["external/" + package_relative_label("@jax//jaxlib/mosaic:BUILD").workspace_name],
     tbl_outs = [
         (
             [
@@ -1784,7 +1787,7 @@ gentbl_cc_library(
         ),
     ],
     tblgen = "//:mlir-jl-tblgen",
-    td_file = "@jax//jaxlib/mosaic:dialect/tpu/tpu.td",
+    td_file = "@jax//jaxlib/mosaic:dialect/tpu/tpu_ops.td",
     deps = [
         "@jax//jaxlib/mosaic:tpu_td_files",
     ],
