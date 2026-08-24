@@ -12,6 +12,8 @@ module API
         global mlir_c
         if Reactant_jll.is_available()
             mlir_c = Reactant_jll.libReactantExtra
+        else
+            @warn "No libReactantExtra artifact is available"
         end
     end
 
