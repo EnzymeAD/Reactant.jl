@@ -10,13 +10,17 @@ module API
 
     mlir_c::Union{Missing,String} = missing
 
-    function __init__()
+    function init_mlir_c()
         global mlir_c
         if Reactant_jll.is_available()
             mlir_c = Reactant_jll.libReactantExtra
         else
             @warn "No libReactantExtra artifact is available"
         end
+    end
+
+    function __init__()
+        init_mlir_c()
     end
 
     # MLIR C API
