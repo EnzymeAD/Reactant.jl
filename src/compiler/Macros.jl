@@ -383,5 +383,6 @@ function get_common_compile_options()
         :legalize_chlo_to_stablehlo => false,
         :compile_options => missing,
         :strip_llvm_debuginfo => false,
+        :speculate_partial_ifs => false,
     )
 end

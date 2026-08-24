@@ -311,6 +311,7 @@ function __get_compile_options_and_kwargs(;
     xla_compile_options=(;),
     strip=:all,
     strip_llvm_debuginfo=false,
+    speculate_partial_ifs=false,
     kwargs...,
 )
     return (
@@ -337,6 +338,8 @@ function __get_compile_options_and_kwargs(;
             xla_executable_build_options,
             xla_compile_options,
             strip,
+            strip_llvm_debuginfo,
+            speculate_partial_ifs,
         ),
         kwargs,
     )
