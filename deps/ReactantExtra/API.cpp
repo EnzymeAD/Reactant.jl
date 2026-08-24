@@ -47,6 +47,11 @@
 #include "src/enzyme_ad/jax/compile_with_xla.h"
 #include "llvm/Support/TargetSelect.h"
 
+#if defined(REACTANT_ROCM) && !defined(_WIN32)
+#include "llvm/Support/Signals.h"
+#include <csignal>
+#endif
+
 #include "mlir/Dialect/LLVMIR/Transforms/InlinerInterfaceImpl.h"
 #include "stablehlo/dialect/ChloOps.h"
 #include "stablehlo/dialect/StablehloOps.h"
@@ -354,12 +359,68 @@ T *unwrap_absl_statusor(absl::StatusOr<T> status, char **error_msg) {
 // int google::protobuf::io::CodedInputStream::default_recursion_limit_ = 100;
 // int xla::_LayoutProto_default_instance_;
 
+#if defined(REACTANT_ROCM) && !defined(_WIN32)
+// LLVM installs its crash handlers (llvm/lib/Support/Unix/Signals.inc) lazily,
+// the first time anything reaches RegisterHandlers() -- via RemoveFileOnSignal,
+// AddSignalHandler, PrintStackTraceOnErrorSignal or CrashRecoveryContext. In
+// practice XLA's AMDGPU backend gets there through
+// llvm::sys::fs::TempFile::create during kernel codegen (the in-process lld
+// link of the HSACO writes its output through FileOutputBuffer ->
+// TempFile::create -> RemoveFileOnSignal), long after Julia has installed its
+// own handlers. The NVPTX path shells out to ptxas with tsl-created temp files
+// and never reaches LLVM's signal machinery, which is why only ROCm hits this
+// today.
+//
+// That is fatal in a Julia host. Julia implements GC safepoints as a
+// read-protected page plus a SIGSEGV handler, so SIGSEGV is ordinary control
+// flow that fires constantly on every thread. LLVM registers with SA_RESETHAND:
+// the next safepoint fault is delivered to LLVM's handler, the disposition is
+// reset to SIG_DFL, and the next concurrent safepoint fault on any other thread
+// kills the process -- exit 139, with no output from either runtime. LLVM also
+// takes SIGINT, SIGUSR2 and SIGQUIT, which are Julia's Ctrl-C, profiler and
+// backtrace-dump signals respectively.
+//
+// Force that registration to happen exactly once, here, where we can still put
+// the host's handlers back. Note we deliberately do NOT call
+// llvm::sys::unregisterHandlers(): that zeroes NumRegisteredSignals and would
+// let the next RemoveFileOnSignal() re-register. Leaving the counter non-zero
+// makes every later call early-out without touching sigaction.
+//
+// Cost: LLVM no longer prints a stack trace or unlinks its temp files on an
+// abnormal exit. Julia owns the fatal-signal path in this process anyway.
+static void TameLLVMSignalHandlers() {
+  // IntSigs + KillSigs + InfoSigs from Signals.inc. SIGUSR1 (InfoSigs) is
+  // blocked process-wide by Julia and consumed via sigwait, so LLVM's handler
+  // for it could never fire -- restore it anyway rather than rely on that.
+  static const int Sigs[] = {SIGHUP,  SIGINT,  SIGTERM, SIGUSR2, SIGILL,
+                             SIGTRAP, SIGABRT, SIGFPE,  SIGBUS,  SIGSEGV,
+                             SIGQUIT, SIGSYS,  SIGXCPU, SIGXFSZ, SIGUSR1};
+  constexpr int N = sizeof(Sigs) / sizeof(Sigs[0]);
+
+  struct sigaction Host[N];
+  for (int I = 0; I < N; ++I)
+    sigaction(Sigs[I], nullptr, &Host[I]);
+
+  // Any public entry point into Signals.inc arms the registration. This one is
+  // what XLA itself reaches; the filename never exists, so the cleanup entry is
+  // inert.
+  llvm::sys::RemoveFileOnSignal("");
+
+  for (int I = 0; I < N; ++I)
+    sigaction(Sigs[I], &Host[I], nullptr);
+}
+#endif
+
 REACTANT_ABI void InitializeLogs() {
   const char *binary = "julia";
   int argc = 1;
   char *argv[] = {(char *)binary};
   char **argv2 = &argv[0];
   tsl::port::InitMain(binary, &argc, &argv2);
+
+#if defined(REACTANT_ROCM) && !defined(_WIN32)
+  TameLLVMSignalHandlers();
+#endif
   LLVMInitializeX86Target();
   LLVMInitializeX86TargetInfo();
   LLVMInitializeX86TargetMC();
@@ -1063,7 +1124,10 @@ REACTANT_ABI void CopyToBuffer(PjRtClient *client, PjRtBuffer *buffer,
   auto raw_buffer =
       MyValueOrThrow(PjRtRawBuffer::CreateRawAliasOfBuffer(buffer));
   auto future = raw_buffer->CopyRawHostToDevice(data, offset, size);
-  future.Await();
+  auto status = future.Await();
+  if (!status.ok()) {
+    ReactantThrowError(status.ToString().c_str());
+  }
 #if 0
   if (buffer->IsOnCpu()) {
     memcpy((char*)client->UnsafeBufferPointer(buffer) + offset, data, size);
@@ -1104,7 +1168,11 @@ REACTANT_ABI void BufferToHost(PjRtBuffer *buffer, void *data) {
   MutableBorrowingLiteral literal((const char *)data, shape);
   auto status = buffer->ToLiteralSync(&literal);
   if (!status.ok()) {
-    printf("error copying to host: %s\n", status.ToString().c_str());
+    // A failed copy must not return: the destination holds uninitialized
+    // memory, and a caller that reads it would silently compute on garbage
+    // (e.g. after a device-side allocation failure whose only prior sign was
+    // an allocator warning in the C++ logs).
+    ReactantThrowError(status.ToString().c_str());
   }
 }
 
@@ -1121,7 +1189,12 @@ REACTANT_ABI void CopyFromBuffer(PjRtClient *client, PjRtBuffer *buffer,
   }
 
   auto future = buffer->CopyRawToHost(data, offset, size);
-  future.Await();
+  auto status = future.Await();
+  if (!status.ok()) {
+    // See BufferToHost: returning here would hand the caller uninitialized
+    // host memory with no signal that anything failed.
+    ReactantThrowError(status.ToString().c_str());
+  }
 #if 0
   if (buffer->IsOnCpu()) {
     memcpy((char*)client->UnsafeBufferPointer(buffer) + offset, data, size);
@@ -1212,6 +1285,17 @@ REACTANT_ABI MlirModule ConvertLLVMToMLIR(LLVMModuleRef lmod,
   return wrap(res);
 }
 
+// Hand `msg` to the Julia error hook if one has been installed, otherwise fall
+// back to stderr. Returns so callers can bail out with a null module rather
+// than continuing on with a module they failed to parse.
+static void ReportLLVMToMLIRError(llvm::StringRef msg) {
+  if (ReactantThrowError) {
+    ReactantThrowError(msg.str().c_str());
+    return;
+  }
+  llvm::errs() << "LLVMToMLIR: " << msg << "\n";
+}
+
 #include "llvm/IRReader/IRReader.h"
 REACTANT_ABI MlirModule ConvertLLVMStrToMLIR(const char *lmod,
                                              MlirContext cctx) {
@@ -1224,11 +1308,9 @@ REACTANT_ABI MlirModule ConvertLLVMStrToMLIR(const char *lmod,
     llvm::raw_string_ostream err_stream(err_str);
     Err.print(/*ProgName=*/"LLVMToMLIR", err_stream);
     err_stream.flush();
-    if (ReactantThrowError) {
-      llvm::errs() << lmod << "\n";
-      ReactantThrowError(err_str.c_str());
-      return wrap((mlir::ModuleOp) nullptr);
-    }
+    llvm::errs() << lmod << "\n";
+    ReportLLVMToMLIRError(err_str);
+    return wrap((mlir::ModuleOp) nullptr);
   }
   mlir::MLIRContext &context = *unwrap(cctx);
   auto res = mlir::translateLLVMIRToModule(std::move(llvmModule), &context,
@@ -1237,7 +1319,37 @@ REACTANT_ABI MlirModule ConvertLLVMStrToMLIR(const char *lmod,
                  .release();
   if (!res) {
     llvm::errs() << lmod << "\n";
-    ReactantThrowError("Could not translate LLVM IR to MLIR Module");
+    ReportLLVMToMLIRError("Could not translate LLVM IR to MLIR Module");
+  }
+  return wrap(res);
+}
+
+#include "llvm/Bitcode/BitcodeReader.h"
+// Prefer this over ConvertLLVMStrToMLIR: textual LLVM IR is not stable across
+// LLVM versions (the .ll parser performs no auto-upgrade), whereas the bitcode
+// reader auto-upgrades older bitcode into the form the current LLVM expects.
+// This matters when handing a module built by Julia's (older) LLVM over to the
+// LLVM linked into Reactant.
+REACTANT_ABI MlirModule ConvertLLVMBCToMLIR(const uint8_t *bc, size_t len,
+                                            MlirContext cctx) {
+  llvm::LLVMContext Context;
+  auto expectedModule = llvm::parseBitcodeFile(
+      llvm::MemoryBufferRef(
+          llvm::StringRef(reinterpret_cast<const char *>(bc), len),
+          "conversion"),
+      Context);
+  if (!expectedModule) {
+    ReportLLVMToMLIRError(llvm::toString(expectedModule.takeError()));
+    return wrap((mlir::ModuleOp) nullptr);
+  }
+
+  mlir::MLIRContext &context = *unwrap(cctx);
+  auto res = mlir::translateLLVMIRToModule(std::move(*expectedModule), &context,
+                                           /*emitExpensiveWarnings*/ false,
+                                           /*dropDICompositeElements*/ false)
+                 .release();
+  if (!res) {
+    ReportLLVMToMLIRError("Could not translate LLVM bitcode to MLIR Module");
   }
   return wrap(res);
 }
@@ -1249,7 +1361,16 @@ REACTANT_ABI uint8_t FutureIsReady(FutureType *Future) {
   return Future->IsReady();
 }
 
-REACTANT_ABI void FutureAwait(FutureType *Future) { Future->Await(); }
+REACTANT_ABI void FutureAwait(FutureType *Future) {
+  // The future of an async execution resolves to the execution's status.
+  // Discarding it would report a failed execution (e.g. RESOURCE_EXHAUSTED
+  // when a temp buffer did not fit in device memory) as success, leaving the
+  // caller to read whatever happens to be in the output buffers.
+  auto status = Future->Await();
+  if (!status.ok()) {
+    ReactantThrowError(status.ToString().c_str());
+  }
+}
 
 xla::CompileOptions GenerateCompileOptions(
     int64_t device_id, const int64_t *mesh_ids, int64_t num_mesh_ids,
@@ -1263,8 +1384,6 @@ xla::CompileOptions GenerateCompileOptions(
 
   debug_options->set_xla_gpu_cuda_data_dir(xla_gpu_cuda_data_dir);
   debug_options->set_xla_enable_enzyme_comms_opt(xla_enable_enzyme_comms_opt);
-
-  debug_options->set_xla_gpu_experimental_use_raft_select_k(true);
 
   if (kernel_cache_enabled) {
     debug_options->set_xla_gpu_kernel_cache_file(kernel_cache_path);
@@ -2690,7 +2809,13 @@ REACTANT_ABI uint8_t ifrt_future_is_ready(IfRtFutureType *Future) {
   return Future->IsReady();
 }
 
-REACTANT_ABI void ifrt_future_await(IfRtFutureType *Future) { Future->Await(); }
+REACTANT_ABI void ifrt_future_await(IfRtFutureType *Future) {
+  // See FutureAwait: the status carries execution failure.
+  auto status = Future->Await();
+  if (!status.ok()) {
+    ReactantThrowError(status.ToString().c_str());
+  }
+}
 
 #pragma region IfRtArray
 
@@ -2726,7 +2851,12 @@ REACTANT_ABI void ifrt_array_copy_to_host_buffer(HeldIfrtArray *array,
   std::optional<absl::Span<const int64_t>> byte_strides;
   auto future = array->obj()->CopyToHostBuffer(
       data, byte_strides, static_cast<ifrt::ArrayCopySemantics>(0));
-  future.Await();
+  auto status = future.Await();
+  if (!status.ok()) {
+    // See BufferToHost: returning here would hand the caller uninitialized
+    // host memory with no signal that anything failed.
+    ReactantThrowError(status.ToString().c_str());
+  }
   return;
 }
 

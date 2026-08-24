@@ -34,8 +34,15 @@ genrule(
         "@xla//xla:xla_data.proto",
         "@xla//xla:autotuning.proto",
         "@xla//xla:autotune_results.proto",
+        "@xla//xla/service:buffer_assignment.proto",
+        "@xla//xla/service:gpu_topology.proto",
         "@xla//xla/service:hlo.proto",
         "@xla//xla/service:metrics.proto",
+        "@xla//xla/service:shaped_slice.proto",
+        "@xla//xla/service/cpu:executable.proto",
+        "@xla//xla/backends/cpu:xnn_fusion_options.proto",
+        "@xla//xla/backends/cpu:ynn_fusion_options.proto",
+        "@xla//xla/backends/cpu/runtime:thunk.proto",
         "@xla//xla/pjrt/proto:execute_options.proto",
         "@xla//xla/pjrt/proto:compile_options.proto",
         "@xla//xla/stream_executor:device_description.proto",
@@ -84,6 +91,8 @@ genrule(
         mkdir -p $$STAGING/xla
         mkdir -p $$STAGING/xla/pjrt/proto
         mkdir -p $$STAGING/xla/service
+        mkdir -p $$STAGING/xla/service/cpu
+        mkdir -p $$STAGING/xla/backends/cpu/runtime
         mkdir -p $$STAGING/xla/stream_executor/cuda
         mkdir -p $$STAGING/xla/stream_executor/sycl
         mkdir -p $$STAGING/xla/backends/autotuner
@@ -99,8 +108,14 @@ genrule(
                 # Handle well-known types from @com_google_protobuf
                 mkdir -p $$STAGING/google/protobuf
                 cp $$src $$STAGING/google/protobuf/
+            elif echo "$$src" | grep -q "xla/service/cpu/"; then
+                cp $$src $$STAGING/xla/service/cpu/
             elif echo "$$src" | grep -q "xla/service/"; then
                 cp $$src $$STAGING/xla/service/
+            elif echo "$$src" | grep -q "xla/backends/cpu/runtime/"; then
+                cp $$src $$STAGING/xla/backends/cpu/runtime/
+            elif echo "$$src" | grep -q "xla/backends/cpu/"; then
+                cp $$src $$STAGING/xla/backends/cpu/
             elif echo "$$src" | grep -q "xla/pjrt/proto/"; then
                 cp $$src $$STAGING/xla/pjrt/proto/
             elif echo "$$src" | grep -q "xla/stream_executor/cuda/"; then
@@ -1161,6 +1176,7 @@ cc_library(
             "-Wl,-exported_symbol,_ClientCompile",
             "-Wl,-exported_symbol,_ClientCompileWithProto",
             "-Wl,-exported_symbol,_ConvertLLVMStrToMLIR",
+            "-Wl,-exported_symbol,_ConvertLLVMBCToMLIR",
             "-Wl,-exported_symbol,_LinkInModule",
             "-Wl,-exported_symbol,_FreeFuture",
             "-Wl,-exported_symbol,_FutureIsReady",
@@ -1300,6 +1316,7 @@ cc_library(
         "@llvm-project//mlir:LLVMIRToLLVMTranslation",
         "@llvm-project//mlir:LLVMIRToNVVMTranslation",
         "@llvm-project//mlir:LLVMIRTransforms",
+        "@llvm-project//llvm:BitReader",
         "@llvm-project//llvm:IRReader",
         "@llvm-project//llvm:Support",
         "@llvm-project//llvm:AArch64AsmParser",

@@ -712,8 +712,8 @@ end
     ir = @code_hlo optimize = "enzyme-batch" for_no_track_numbers(x_ra, n_ra)
     @test @filecheck begin
         @check_dag "enzyme.disable_mincut"
-        @check_dag "enzymexla.enable_checkpointing"
-        @check_dag "enzymexla.checkpoint_period = 3"
+        @check_dag "enzyme.enable_checkpointing"
+        @check_dag "enzyme.checkpoint_period = 3"
         ir
     end
 end
@@ -742,8 +742,8 @@ end
         show, @code_hlo optimize = "enzyme-batch" for_explicit_checkpoints(x_ra, n_ra)
     )
     @test @filecheck begin
-        @check_dag "enzymexla.enable_checkpointing"
-        @check_dag "enzymexla.checkpoint_period = 5"
+        @check_dag "enzyme.enable_checkpointing"
+        @check_dag "enzyme.checkpoint_period = 5"
         ir
     end
 end
@@ -768,8 +768,8 @@ end
 
     ir = sprint(show, @code_hlo while_explicit_checkpoints(x_ra, n_ra))
     @test @filecheck begin
-        @check_dag "enzymexla.enable_checkpointing"
-        @check_dag "enzymexla.checkpoint_period = 5"
+        @check_dag "enzyme.enable_checkpointing"
+        @check_dag "enzyme.checkpoint_period = 5"
         ir
     end
 end
@@ -794,7 +794,7 @@ end
     ir = sprint(show, @code_hlo optimize = "enzyme-batch" for_default_checkpoints(x_ra))
     @test @filecheck begin
         @check_dag "enzyme.disable_mincut"
-        @check_dag "enzymexla.enable_checkpointing"
+        @check_dag "enzyme.enable_checkpointing"
         ir
     end
 end
@@ -841,9 +841,9 @@ end
 
     ir = sprint(show, @code_hlo optimize = "enzyme-batch" for_binomial_ir_check(x_ra))
     @test @filecheck begin
-        @check_dag "enzymexla.enable_checkpointing"
-        @check_dag "enzymexla.binomial_checkpointing"
-        @check_dag "enzymexla.checkpoint_period = 4"
+        @check_dag "enzyme.enable_checkpointing"
+        @check_dag "enzyme.binomial_checkpointing"
+        @check_dag "enzyme.checkpoint_period = 4"
         ir
     end
 end

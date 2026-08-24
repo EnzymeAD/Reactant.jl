@@ -15537,6 +15537,12 @@ function ConvertLLVMStrToMLIR(lmod, cctx)
     @ccall mlir_c.ConvertLLVMStrToMLIR(lmod::Cstring, cctx::MlirContext)::MlirModule
 end
 
+function ConvertLLVMBCToMLIR(bc, len, cctx)
+    @ccall mlir_c.ConvertLLVMBCToMLIR(
+        bc::Ptr{UInt8}, len::Csize_t, cctx::MlirContext
+    )::MlirModule
+end
+
 function FreeFuture(Future)
     @ccall mlir_c.FreeFuture(Future::Ptr{FutureType})::Cvoid
 end
