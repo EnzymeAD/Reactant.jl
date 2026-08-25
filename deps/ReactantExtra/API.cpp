@@ -3573,7 +3573,7 @@ REACTANT_ABI void reactantXLAFree(LinkableRuntime **__restrict__ lrtP,
   PjRtBufferFree((PjRtBuffer *)buffer);
 }
 
-REACTANT_ABI void reactantXLAExecSpec(LinkableRuntime **__restrict__ lrtP,
+REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
                                       const char *modstr, int64_t argcnt,
                                       void **args, int64_t constcnt,
                                       const int64_t *consts) {
@@ -3719,12 +3719,6 @@ REACTANT_ABI void reactantXLAExecSpec(LinkableRuntime **__restrict__ lrtP,
       FreeFuture(future_results[i]);
     }
   }
-}
-
-REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
-                                  const char *modstr, int64_t argcnt,
-                                  void **args) {
-  reactantXLAExecSpec(lrtP, modstr, argcnt, args, 0, nullptr);
 }
 
 REACTANT_ABI HeldHloModule *convertMlirModuleToHloModule(MlirModule mod) {
