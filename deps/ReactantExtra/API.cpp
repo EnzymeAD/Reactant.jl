@@ -3566,7 +3566,7 @@ REACTANT_ABI void reactantXLAFree(LinkableRuntime **__restrict__ lrtP,
     return;
   auto lrt = *lrtP;
   void *buffer = *(void **)buffer0;
-  auto erased = lrt->allocations.erase((void*)buffer0);
+  auto erased = lrt->allocations.erase((void *)buffer0);
   assert(erased == 1);
   (void)erased;
   free(buffer0);
@@ -3574,15 +3574,16 @@ REACTANT_ABI void reactantXLAFree(LinkableRuntime **__restrict__ lrtP,
 }
 
 REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
-                                  const char *modstr, int64_t argcnt,
-                                  void **args) {
+                                      const char *modstr, int64_t argcnt,
+                                      void **args, int64_t constcnt,
+                                      const int64_t *consts) {
   auto lrt = *lrtP;
   auto &cache = lrt->executables[modstr];
   std::vector<PjRtBuffer *> baseArrays(argcnt);
   std::vector<PjRtBuffer **> basePtrs(argcnt);
 
   std::vector<std::vector<int64_t>> sizeKey;
-  sizeKey.reserve(argcnt);
+  sizeKey.reserve(argcnt + (constcnt ? 1 : 0));
   for (int64_t i = 0; i < argcnt; i++) {
     auto &&[argB, argO, argP] = bufferAndOffset(lrt, args[i]);
     if (argO != 0) {
@@ -3595,6 +3596,11 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
     auto dims = argB->on_device_shape().dimensions();
     sizeKey.emplace_back(dims.begin(), dims.end());
   }
+
+  // The specialized scalars are part of what the executable was compiled
+  // for, so they are part of what it is cached under.
+  if (constcnt)
+    sizeKey.emplace_back(consts, consts + constcnt);
 
   auto iter = cache.find(sizeKey);
 
@@ -3617,6 +3623,39 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
     funcOp.setSymName(builder.getStringAttr("main"));
     funcOp.setVisibility(SymbolTable::Visibility::Public);
 
+    // The trailing constcnt arguments are the scalars this executable is
+    // specialized over: replace each with a constant of its value so the
+    // shape refinement and simplification below fold them through.
+    if (funcOp.getNumArguments() != argcnt + constcnt) {
+      llvm::errs() << " xla exec function expected " << argcnt + constcnt
+                   << " arguments, found " << funcOp.getNumArguments() << "\n"
+                   << " modstr:\n"
+                   << modstr << "\n";
+      exit(1);
+    }
+    for (int64_t i = constcnt - 1; i >= 0; i--) {
+      auto arg = funcOp.getArgument(argcnt + i);
+      auto TT = dyn_cast<mlir::RankedTensorType>(arg.getType());
+      auto IT = TT ? dyn_cast<mlir::IntegerType>(TT.getElementType())
+                   : mlir::IntegerType();
+      bool scalarLike =
+          TT && IT &&
+          (TT.getRank() == 0 || (TT.getRank() == 1 && TT.getDimSize(0) == 1));
+      if (!scalarLike) {
+        llvm::errs() << " specialized argument " << i
+                     << " must be a single-element integer tensor, found "
+                     << arg.getType() << "\n";
+        exit(1);
+      }
+      mlir::OpBuilder b(&funcOp.getBody().front(),
+                        funcOp.getBody().front().begin());
+      auto cst = b.create<mlir::stablehlo::ConstantOp>(
+          funcOp.getLoc(),
+          mlir::SplatElementsAttr::get(TT, b.getIntegerAttr(IT, consts[i])));
+      arg.replaceAllUsesWith(cst);
+      funcOp.eraseArgument(argcnt + i);
+    }
+
     for (int64_t i = 0; i < argcnt; i++) {
       funcOp.setArgAttr(i, "tf.aliasing_output", builder.getI64IntegerAttr(i));
     }
@@ -3628,6 +3667,14 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
       auto RTT = MyValueOrThrow(xla::ConvertShapeToType<mlir::RankedTensorType>(
           baseArrays[i]->on_device_shape(), builder));
       types.push_back(RTT);
+    }
+    if (constcnt) {
+      // The injected constants make the dynamic shape operands static;
+      // statify the module before argument refinement so the result types
+      // it pins are consistent with the body throughout.
+      pm.addNestedPass<mlir::func::FuncOp>(
+          stablehlo::createStablehloCanonicalizeDynamismPass());
+      pm.addPass(mlir::stablehlo::createStablehloRefineShapesPass());
     }
     pm.addPass(mlir::enzyme::createEnzymeRefineArgumentsPass(types));
     pm.addPass(mlir::stablehlo::createStablehloRefineShapesPass());
@@ -4035,7 +4082,8 @@ REACTANT_ABI void ReactantCreateLLVMMod(
     llvm::LLVMContext **out_context, size_t *out_off, size_t *out_tmp_buf) {
 
   std::string fn(fn_str ? std::string(fn_str, fn_len) : std::string());
-  llvm::StringRef source(source_str ? llvm::StringRef(source_str, source_len) : llvm::StringRef());
+  llvm::StringRef source(source_str ? llvm::StringRef(source_str, source_len)
+                                    : llvm::StringRef());
 
   std::vector<llvm::SmallVector<int64_t>> out_shapes;
   out_shapes.reserve(num_out_shapes);
