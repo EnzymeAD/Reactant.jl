@@ -3460,6 +3460,13 @@ struct LinkableRuntime {
       int num_allowed_devices = 0;
       double mem_fraction = 0.75;
       bool gpu_preallocate = true;
+      // Every linked translation unit constructs its own runtime, so a
+      // preallocating fraction per client exhausts the device; let the
+      // environment scale it down.
+      if (const char *frac = getenv("REACTANT_XLA_MEM_FRACTION"))
+        mem_fraction = atof(frac);
+      if (const char *pre = getenv("REACTANT_XLA_PREALLOCATE"))
+        gpu_preallocate = atoi(pre) != 0;
       const char *refstr;
       const char *platform = "gpu";
       void *distributed_runtime_client = NULL;
@@ -3506,12 +3513,18 @@ REACTANT_ABI void reactantXLAThrow(const char *str) {
 
 REACTANT_ABI void reactantXLAInit(LinkableRuntime **__restrict__ lrtP,
                                   const char *__restrict__ backend) {
+  // Every translation unit registers a constructor, but the linkonce data
+  // slot they pass is merged at link time: initialize it exactly once.
+  if (*lrtP)
+    return;
   *lrtP = new LinkableRuntime(backend);
   ReactantThrowError = reactantXLAThrow;
 }
 
 REACTANT_ABI void reactantXLADeInit(LinkableRuntime **__restrict__ lrt) {
+  // One destructor per translation unit reaches the shared slot too.
   delete *lrt;
+  *lrt = nullptr;
 }
 
 REACTANT_ABI void reactantXLAMemcpy(LinkableRuntime **__restrict__ lrtP,
@@ -3574,9 +3587,9 @@ REACTANT_ABI void reactantXLAFree(LinkableRuntime **__restrict__ lrtP,
 }
 
 REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
-                                      const char *modstr, int64_t argcnt,
-                                      void **args, int64_t constcnt,
-                                      const int64_t *consts) {
+                                  const char *modstr, int64_t argcnt,
+                                  void **args, int64_t constcnt,
+                                  const int64_t *consts) {
   auto lrt = *lrtP;
   auto &cache = lrt->executables[modstr];
   std::vector<PjRtBuffer *> baseArrays(argcnt);
