@@ -14,8 +14,8 @@ export ScatterDimensionNumbers, SourceTarget, ExecutionHandle, GlobalDataHandle
 export var"WhileLoopBackendConfig.DynamicVariable", FftType, ProfileSource
 export DotDimensionNumbers, DeviceHandle, var"OpSharding.Type", var"CubScanOptions.Kind"
 export WindowDimension, ConvolutionDimensionNumbers, IotaReplicaGroupListProto
-export OriginalArrayProto, ComputationStats, ProfileType, AsyncStreamKind
-export FrontendAttributes, var"WhileLoopBackendConfig.KnownInductionVariable"
+export OriginalArrayProto, ComputationStats, ProfileType, FrontendAttributes
+export var"WhileLoopBackendConfig.KnownInductionVariable"
 export var"PaddingConfig.PaddingConfigDimension", GemmPerfTableEntry, OutputOperandAliasing
 export var"PrecisionConfig.Precision", ExecutionProfile, var"AxisRefProto.SubAxis"
 export var"SparsityConfig.TensorSparsityConfig", ProfileGenerationStrategy, PaddingType
@@ -1083,8 +1083,6 @@ function PB._encoded_size(x::ComputationStats)
 end
 
 @enumx ProfileType INVALID=0 WINDOW=1 FLAG=2 INTEGER=3
-
-@enumx AsyncStreamKind ASYNC_STREAM_KIND_COLLECTIVE=0 ASYNC_STREAM_KIND_P2P0=1 ASYNC_STREAM_KIND_P2P1=2 ASYNC_STREAM_KIND_MEMCPYP2P=3
 
 struct FrontendAttributes
     map::Dict{String,String}

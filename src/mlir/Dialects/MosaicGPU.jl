@@ -13,12 +13,38 @@ import ...IR:
 import ..Dialects: operandsegmentsizes, resultsegmentsizes
 import ...API
 
-function arrive_expect_tx(barrier::Value; expect_tx, location=Location())
+function arrive_dyn_expect_tx_supported(; location=Location())
     op_ty_results = IR.Type[]
-    operands = Value[barrier,]
+    operands = Value[]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[NamedAttribute("expect_tx", expect_tx),]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "mosaic_gpu.arrive_dyn_expect_tx_supported",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`arrive_expect_tx`
+
+Executes an arrive.expect_tx operation on the given barrier.
+
+    `expect_tx` must be positive or 0. If `expect_tx` is negative, behavior is undefined.
+"""
+function arrive_expect_tx(barrier::Value, expect_tx::Value; location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[barrier, expect_tx]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
 
     return create_operation(
         "mosaic_gpu.arrive_expect_tx",
@@ -122,7 +148,10 @@ performs a partitioned collective copy along the given axis. If
 `CopyReplicated`, all blocks load the same data.
 
 The `predicate` allows scheduling the transfer conditionally. The async copy
-   is always scheduled by at most a single lane in the warpgroup.
+is always scheduled by at most a single lane in the warpgroup.
+
+The `gmem_peer_id` parameter specifies a particular device id to load from
+in a multi-GPU setting.
 """
 function async_load(
     source::Value,
@@ -130,6 +159,7 @@ function async_load(
     barrier::Value,
     indices::Vector{Value},
     predicate=nothing::Union{Nothing,Value};
+    gmem_peer_id=nothing::Union{Nothing,Value},
     leader_tracked=nothing,
     slice_lengths,
     collective,
@@ -145,9 +175,17 @@ function async_load(
         NamedAttribute("collective", collective),
     ]
     !isnothing(predicate) && push!(operands, predicate)
+    !isnothing(gmem_peer_id) && push!(operands, gmem_peer_id)
     push!(
         attributes,
-        operandsegmentsizes([1, 1, 1, length(indices), Int(!isnothing(predicate))]),
+        operandsegmentsizes([
+            1,
+            1,
+            1,
+            length(indices),
+            Int(!isnothing(predicate)),
+            Int(!isnothing(gmem_peer_id)),
+        ]),
     )
     !isnothing(leader_tracked) &&
         push!(attributes, NamedAttribute("leader_tracked", leader_tracked))
@@ -740,33 +778,6 @@ function mma(
 
     return create_operation(
         "mosaic_gpu.mma",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
-    )
-end
-
-"""
-`memref_reshape`
-
-Reshapes `source` to the target `shape`.
-"""
-function memref_reshape(
-    source::Value; result=nothing::Union{Nothing,IR.Type}, shape, location=Location()
-)
-    op_ty_results = IR.Type[]
-    operands = Value[source,]
-    owned_regions = Region[]
-    successors = Block[]
-    attributes = NamedAttribute[NamedAttribute("shape", shape),]
-    !isnothing(result) && push!(op_ty_results, result)
-
-    return create_operation(
-        "mosaic_gpu.memref_reshape",
         location;
         operands,
         owned_regions,

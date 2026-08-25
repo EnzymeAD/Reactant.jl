@@ -3965,16 +3965,22 @@ This op allows using PTX directly within the NVVM
     `BasicPtxBuilderInterface` to abstract away low-level details of 
     PTX assembly formatting.
 
-    The `predicate` attribute is used to specify a predicate for the 
+    The `predicate` attribute is used to specify a predicate for the
     PTX instruction.
+
+    The `memory_clobber` attribute appends a \"~{memory}\" clobber to the
+    constraints of the generated inline assembly. Set it when the PTX reads
+    or writes memory beyond its listed operands (e.g. stores, atomics, or
+    instructions with acquire/release semantics such as mbarrier), so that
+    LLVM does not reorder memory accesses across the inline assembly.
 
     Example 1: Read-only Parameters
     ```mlir
-    nvvm.inline_ptx \"mbarrier.init.b64 [\$0], \$1;\" (%barrier_gen, %count) : !llvm.ptr, i32
+    nvvm.inline_ptx \"mbarrier.init.b64 [\$0], \$1;\" ro(%barrier_gen, %count : !llvm.ptr, i32) memory_clobber = true
 
     // Lowers to:
-    llvm.inline_asm has_side_effects asm_dialect = att 
-      \"mbarrier.init.b64 [\$0], \$1;\", \"l,r\" %arg0, %arg2 : (!llvm.ptr, i32) -> ()
+    llvm.inline_asm has_side_effects asm_dialect = att
+      \"mbarrier.init.b64 [\$0], \$1;\", \"l,r,~{memory}\" %arg0, %arg2 : (!llvm.ptr, i32) -> ()
     ```
 
     Example 2: Read-only and Write-only Parameters
@@ -4003,6 +4009,7 @@ function inline_ptx(
     predicate=nothing::Union{Nothing,Value};
     writeOnlyArgs::Vector{IR.Type},
     ptxCode,
+    memoryClobber=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[writeOnlyArgs...,]
@@ -4017,6 +4024,8 @@ function inline_ptx(
             length(readOnlyArgs), length(readWriteArgs), Int(!isnothing(predicate))
         ]),
     )
+    !isnothing(memoryClobber) &&
+        push!(attributes, NamedAttribute("memoryClobber", memoryClobber))
 
     return create_operation(
         "nvvm.inline_ptx",
