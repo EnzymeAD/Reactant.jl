@@ -1413,10 +1413,45 @@ end
 """
     mlirOperationHashValue(op)
 
-Compute a hash for the given operation.
+Compute a hash for the given operation. Operand and result SSA values are hashed by identity and locations are significant, so equivalent-but-distinct operations hash differently; use [`mlirOperationStructuralHashValue`](@ref) for a hash that pairs with [`mlirOperationIsStructurallyEquivalent`](@ref).
 """
 function mlirOperationHashValue(op)
     @ccall mlir_c.mlirOperationHashValue(op::MlirOperation)::Csize_t
+end
+
+"""
+    MlirOperationEquivalenceFlags
+
+Flags controlling structural operation equivalence and hashing. These mirror `mlir::OperationEquivalence::Flags` and may be combined with bitwise OR.
+"""
+@cenum MlirOperationEquivalenceFlags::UInt32 begin
+    MLIR_OPERATION_EQUIVALENCE_NONE = 0x0000000000000000
+    MLIR_OPERATION_EQUIVALENCE_IGNORE_LOCATIONS = 0x0000000000000001
+    MLIR_OPERATION_EQUIVALENCE_IGNORE_DISCARDABLE_ATTRS = 0x0000000000000002
+    MLIR_OPERATION_EQUIVALENCE_IGNORE_PROPERTIES = 0x0000000000000004
+    MLIR_OPERATION_EQUIVALENCE_IGNORE_COMMUTATIVITY = 0x0000000000000008
+end
+
+"""
+    mlirOperationIsStructurallyEquivalent(lhs, rhs, flags)
+
+Checks whether two operations are structurally equivalent, i.e. they have the same name, attributes, operand and result types, and recursively equivalent regions. Operand equivalence is tracked structurally while recursing into regions, so operands defined inside the compared regions need not be the exact same SSA values; operands defined outside must be. `flags` is a bitwise OR of [`MlirOperationEquivalenceFlags`](@ref) values.
+"""
+function mlirOperationIsStructurallyEquivalent(lhs, rhs, flags)
+    @ccall mlir_c.mlirOperationIsStructurallyEquivalent(
+        lhs::MlirOperation, rhs::MlirOperation, flags::UInt32
+    )::Bool
+end
+
+"""
+    mlirOperationStructuralHashValue(op, flags)
+
+Computes a hash for the given operation that pairs with [`mlirOperationIsStructurallyEquivalent`](@ref): two operations that are structurally equivalent under the same `flags` hash equally. Operands are hashed by identity, results are not hashed at all, and regions do not participate in the hash. `flags` is a bitwise OR of [`MlirOperationEquivalenceFlags`](@ref) values.
+"""
+function mlirOperationStructuralHashValue(op, flags)
+    @ccall mlir_c.mlirOperationStructuralHashValue(
+        op::MlirOperation, flags::UInt32
+    )::Csize_t
 end
 
 """
@@ -2439,6 +2474,26 @@ function mlirValueReplaceAllUsesExcept(of, with, numExceptions, exceptions)
         with::MlirValue,
         numExceptions::Cptrdiff_t,
         exceptions::Ptr{MlirOperation},
+    )::Cvoid
+end
+
+# typedef bool ( * MlirOpOperandReplaceFilterCallback ) ( MlirOpOperand opOperand , void * userData )
+"""
+Callback deciding whether a particular use should be replaced. It is passed the use as an [`MlirOpOperand`](@ref) (from which the owner operation, operand number and value can be queried) and the user-provided `userData`. Returns true to replace this use.
+"""
+const MlirOpOperandReplaceFilterCallback = Ptr{Cvoid}
+
+"""
+    mlirValueReplaceUsesWithIf(of, with, filter, userData)
+
+Replace uses of 'of' value with 'with' value, but only for the uses for which the `filter` callback returns true. `filter` must not be NULL; this is only checked by an assertion, i.e. in builds with assertions enabled.
+"""
+function mlirValueReplaceUsesWithIf(of, with, filter, userData)
+    @ccall mlir_c.mlirValueReplaceUsesWithIf(
+        of::MlirValue,
+        with::MlirValue,
+        filter::MlirOpOperandReplaceFilterCallback,
+        userData::Ptr{Cvoid},
     )::Cvoid
 end
 
@@ -5868,6 +5923,37 @@ function mlirFloat8E8M0FNUTypeGetName()
 end
 
 """
+    mlirFloat8E5M3FNUTypeGetTypeID()
+
+Returns the typeID of a Float8E5M3FNU type.
+"""
+function mlirFloat8E5M3FNUTypeGetTypeID()
+    @ccall mlir_c.mlirFloat8E5M3FNUTypeGetTypeID()::MlirTypeID
+end
+
+"""
+    mlirTypeIsAFloat8E5M3FNU(type)
+
+Checks whether the given type is an f8E5M3FNU type.
+"""
+function mlirTypeIsAFloat8E5M3FNU(type)
+    @ccall mlir_c.mlirTypeIsAFloat8E5M3FNU(type::MlirType)::Bool
+end
+
+"""
+    mlirFloat8E5M3FNUTypeGet(ctx)
+
+Creates an f8E5M3FNU type in the given context. The type is owned by the context.
+"""
+function mlirFloat8E5M3FNUTypeGet(ctx)
+    @ccall mlir_c.mlirFloat8E5M3FNUTypeGet(ctx::MlirContext)::MlirType
+end
+
+function mlirFloat8E5M3FNUTypeGetName()
+    @ccall mlir_c.mlirFloat8E5M3FNUTypeGetName()::MlirStringRef
+end
+
+"""
     mlirBFloat16TypeGetTypeID()
 
 Returns the typeID of an BFloat16 type.
@@ -8488,41 +8574,41 @@ function mlirLLVMMDConstantAttrGetValue(attr)
 end
 
 """
-    mlirLLVMMDFuncAttrGet(ctx, name)
+    mlirLLVMMDGlobalValueAttrGet(ctx, name)
 
-Creates an LLVM MDFuncAttr referencing a function symbol.
+Creates an LLVM MDGlobalValueAttr referencing a symbol-backed global value.
 """
-function mlirLLVMMDFuncAttrGet(ctx, name)
-    @ccall mlir_c.mlirLLVMMDFuncAttrGet(
+function mlirLLVMMDGlobalValueAttrGet(ctx, name)
+    @ccall mlir_c.mlirLLVMMDGlobalValueAttrGet(
         ctx::MlirContext, name::MlirAttribute
     )::MlirAttribute
 end
 
 """
-    mlirLLVMAttrIsAMDFuncAttr(attr)
+    mlirLLVMAttrIsAMDGlobalValueAttr(attr)
 
-Returns `true` if the attribute is an LLVM MDFuncAttr.
+Returns `true` if the attribute is an LLVM MDGlobalValueAttr.
 """
-function mlirLLVMAttrIsAMDFuncAttr(attr)
-    @ccall mlir_c.mlirLLVMAttrIsAMDFuncAttr(attr::MlirAttribute)::Bool
+function mlirLLVMAttrIsAMDGlobalValueAttr(attr)
+    @ccall mlir_c.mlirLLVMAttrIsAMDGlobalValueAttr(attr::MlirAttribute)::Bool
 end
 
 """
-    mlirLLVMMDFuncAttrGetTypeID()
+    mlirLLVMMDGlobalValueAttrGetTypeID()
 
-Returns the TypeID of MDFuncAttr.
+Returns the TypeID of MDGlobalValueAttr.
 """
-function mlirLLVMMDFuncAttrGetTypeID()
-    @ccall mlir_c.mlirLLVMMDFuncAttrGetTypeID()::MlirTypeID
+function mlirLLVMMDGlobalValueAttrGetTypeID()
+    @ccall mlir_c.mlirLLVMMDGlobalValueAttrGetTypeID()::MlirTypeID
 end
 
 """
-    mlirLLVMMDFuncAttrGetName(attr)
+    mlirLLVMMDGlobalValueAttrGetName(attr)
 
-Returns the symbol name of an LLVM MDFuncAttr.
+Returns the symbol name of an LLVM MDGlobalValueAttr.
 """
-function mlirLLVMMDFuncAttrGetName(attr)
-    @ccall mlir_c.mlirLLVMMDFuncAttrGetName(attr::MlirAttribute)::MlirAttribute
+function mlirLLVMMDGlobalValueAttrGetName(attr)
+    @ccall mlir_c.mlirLLVMMDGlobalValueAttrGetName(attr::MlirAttribute)::MlirAttribute
 end
 
 """
@@ -10302,6 +10388,38 @@ function mlirRewriterBaseGetOperationAfterInsertion(rewriter)
     @ccall mlir_c.mlirRewriterBaseGetOperationAfterInsertion(
         rewriter::MlirRewriterBase
     )::MlirOperation
+end
+
+"""
+    MlirRewriterBaseInsertPoint
+
+A saved insertion point: a (block, operationAfter) pair. `operationAfter` is the operation that subsequent insertions go before. If `operationAfter` is null, the insertion point is at the end of `block`. If `block` is null, the insertion point is not set (cleared).
+"""
+struct MlirRewriterBaseInsertPoint
+    block::MlirBlock
+    operationAfter::MlirOperation
+end
+
+"""
+    mlirRewriterBaseSaveInsertionPoint(rewriter)
+
+Returns the current insertion point of the rewriter so that it can be restored later with [`mlirRewriterBaseRestoreInsertionPoint`](@ref).
+"""
+function mlirRewriterBaseSaveInsertionPoint(rewriter)
+    @ccall mlir_c.mlirRewriterBaseSaveInsertionPoint(
+        rewriter::MlirRewriterBase
+    )::MlirRewriterBaseInsertPoint
+end
+
+"""
+    mlirRewriterBaseRestoreInsertionPoint(rewriter, insertPoint)
+
+Restores a previously saved insertion point.
+"""
+function mlirRewriterBaseRestoreInsertionPoint(rewriter, insertPoint)
+    @ccall mlir_c.mlirRewriterBaseRestoreInsertionPoint(
+        rewriter::MlirRewriterBase, insertPoint::MlirRewriterBaseInsertPoint
+    )::Cvoid
 end
 
 """
@@ -12278,6 +12396,24 @@ Get the type ID of the dynamic op trait that indicates the operation is a termin
 """
 function mlirDynamicOpTraitIsTerminatorGetTypeID()
     @ccall mlir_c.mlirDynamicOpTraitIsTerminatorGetTypeID()::MlirTypeID
+end
+
+"""
+    mlirDynamicOpTraitIsIsolatedFromAboveCreate()
+
+Get the dynamic op trait that indicates regions are isolated from above.
+"""
+function mlirDynamicOpTraitIsIsolatedFromAboveCreate()
+    @ccall mlir_c.mlirDynamicOpTraitIsIsolatedFromAboveCreate()::MlirDynamicOpTrait
+end
+
+"""
+    mlirDynamicOpTraitIsIsolatedFromAboveGetTypeID()
+
+Get the type ID of the dynamic op trait that indicates regions are isolated from above.
+"""
+function mlirDynamicOpTraitIsIsolatedFromAboveGetTypeID()
+    @ccall mlir_c.mlirDynamicOpTraitIsIsolatedFromAboveGetTypeID()::MlirTypeID
 end
 
 """
@@ -14926,6 +15062,42 @@ end
 
 function mlirMosaicGpuBarrierTypeGetTypeID()
     @ccall mlir_c.mlirMosaicGpuBarrierTypeGetTypeID()::MlirTypeID
+end
+
+function mlirMosaicGpuIsAB6x16P32Type(type)
+    @ccall mlir_c.mlirMosaicGpuIsAB6x16P32Type(type::MlirType)::Bool
+end
+
+function mlirMosaicGpuB6x16P32TypeGet(ctx, element_type)
+    @ccall mlir_c.mlirMosaicGpuB6x16P32TypeGet(
+        ctx::MlirContext, element_type::MlirType
+    )::MlirType
+end
+
+function mlirMosaicGpuB6x16P32TypeGetElementType(type)
+    @ccall mlir_c.mlirMosaicGpuB6x16P32TypeGetElementType(type::MlirType)::MlirType
+end
+
+function mlirMosaicGpuB6x16P32TypeGetTypeID()
+    @ccall mlir_c.mlirMosaicGpuB6x16P32TypeGetTypeID()::MlirTypeID
+end
+
+function mlirMosaicGpuIsAP2B6Type(type)
+    @ccall mlir_c.mlirMosaicGpuIsAP2B6Type(type::MlirType)::Bool
+end
+
+function mlirMosaicGpuP2B6TypeGet(ctx, element_type)
+    @ccall mlir_c.mlirMosaicGpuP2B6TypeGet(
+        ctx::MlirContext, element_type::MlirType
+    )::MlirType
+end
+
+function mlirMosaicGpuP2B6TypeGetElementType(type)
+    @ccall mlir_c.mlirMosaicGpuP2B6TypeGetElementType(type::MlirType)::MlirType
+end
+
+function mlirMosaicGpuP2B6TypeGetTypeID()
+    @ccall mlir_c.mlirMosaicGpuP2B6TypeGetTypeID()::MlirTypeID
 end
 
 @cenum EnzymeRngDistribution::UInt32 begin

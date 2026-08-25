@@ -389,6 +389,42 @@ function extend(
     )
 end
 
+"""
+`math_fmuladd`
+
+Carries the semantics of the `llvm.fmuladd` intrinsic through the round
+trip: compute `a * b + c`, fused into a single rounding only when the
+target can do so profitably, otherwise as an ordinary multiply and add.
+This is a *permission* to fuse, unlike `math.fma`, whose single rounding
+is required and whose honest lowering on a target without FMA units is a
+libm call. Raised from `llvm.intr.fmuladd`; lowered back to the same.
+"""
+function math_fmuladd(
+    a::Value,
+    b::Value,
+    c::Value;
+    result=nothing::Union{Nothing,IR.Type},
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[a, b, c]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(result) && push!(op_ty_results, result)
+
+    return create_operation(
+        "enzymexla.math.fmuladd",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
 function gpu_block(
     blockIndexX::Value,
     blockIndexY::Value,

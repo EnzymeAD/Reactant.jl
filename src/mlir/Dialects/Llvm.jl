@@ -1885,6 +1885,7 @@ function invoke(
     res_attrs=nothing,
     branch_weights=nothing,
     CConv=nothing,
+    default_func_attrs=nothing,
     op_bundle_sizes,
     op_bundle_tags=nothing,
     normalDest::Block,
@@ -1919,6 +1920,8 @@ function invoke(
     !isnothing(branch_weights) &&
         push!(attributes, NamedAttribute("branch_weights", branch_weights))
     !isnothing(CConv) && push!(attributes, NamedAttribute("CConv", CConv))
+    !isnothing(default_func_attrs) &&
+        push!(attributes, NamedAttribute("default_func_attrs", default_func_attrs))
     !isnothing(op_bundle_tags) &&
         push!(attributes, NamedAttribute("op_bundle_tags", op_bundle_tags))
 
@@ -2340,7 +2343,8 @@ must be one of the LLVM dialect\'s metadata-attribute classes:
 
 * `#llvm.md_string<\"...\">` -> `llvm::MDString`.
 * `#llvm.md_const<...>` -> `llvm::ConstantAsMetadata`.
-* `#llvm.md_func<@symbol>` -> `llvm::ValueAsMetadata` of a function.
+* `#llvm.md_global_value<@symbol>` -> `llvm::ValueAsMetadata` of a
+  symbol-backed global value.
 * `#llvm.md_node<...>` -> `llvm::MDNode` over any of the above.
 
 These can be nested arbitrarily to form metadata trees. Lowering to LLVM
@@ -2462,7 +2466,7 @@ llvm.named_metadata \"foo.version\" [
 ]
 llvm.named_metadata \"foo.kernel\" [
   #llvm.md_node<
-    #llvm.md_func<@my_kernel>,
+    #llvm.md_global_value<@my_kernel>,
     #llvm.md_node<>,
     #llvm.md_node<
       #llvm.md_node<#llvm.md_const<0 : i32>,
