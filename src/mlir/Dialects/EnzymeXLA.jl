@@ -2380,7 +2380,12 @@ function wrap(
 end
 
 function xla_wrapper(
-    inputs::Vector{Value}; fn, arg_attrs=nothing, res_attrs=nothing, location=Location()
+    inputs::Vector{Value};
+    fn,
+    arg_attrs=nothing,
+    res_attrs=nothing,
+    num_specialized=nothing,
+    location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[inputs...,]
@@ -2389,6 +2394,8 @@ function xla_wrapper(
     attributes = NamedAttribute[NamedAttribute("fn", fn),]
     !isnothing(arg_attrs) && push!(attributes, NamedAttribute("arg_attrs", arg_attrs))
     !isnothing(res_attrs) && push!(attributes, NamedAttribute("res_attrs", res_attrs))
+    !isnothing(num_specialized) &&
+        push!(attributes, NamedAttribute("num_specialized", num_specialized))
 
     return create_operation(
         "enzymexla.xla_wrapper",
