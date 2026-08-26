@@ -16826,12 +16826,14 @@ function reactantXLAFree(lrtP, buffer0)
     )::Cvoid
 end
 
-function reactantXLAExec(lrtP, modstr, argcnt, args)
+function reactantXLAExec(lrtP, modstr, argcnt, args, constcnt, consts)
     @ccall mlir_c.reactantXLAExec(
         lrtP::Ptr{Ptr{LinkableRuntime}},
         modstr::Cstring,
         argcnt::Int64,
         args::Ptr{Ptr{Cvoid}},
+        constcnt::Int64,
+        consts::Ptr{Int64},
     )::Cvoid
 end
 
