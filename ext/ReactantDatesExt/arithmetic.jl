@@ -156,3 +156,42 @@ end
 (+)(y::Period, x::ReactantDateTime) = x + y
 (+)(y::Period, x::ReactantDate) = x + y
 (+)(y::TimePeriod, x::ReactantTime) = x + y
+
+# CONCRETE TimeType ± TRACED period.
+#
+# The mirror of `ReactantDateTime ± Period` above: there the datetime is traced and the period may be
+# concrete; here the datetime is concrete and the period is traced. That combination arises whenever
+# a wall-clock epoch is advanced by a traced offset, e.g. `epoch + Millisecond(round(Int, 1000t))`
+# for a traced elapsed time `t`.
+#
+# Without these, Base's `+(::DateTime, ::Period)` builds a
+# `UTInstant{ReactantMillisecond{TracedRNumber}}` and then tries to pour it into a plain `DateTime`,
+# whose instant must hold a concrete `Int64`:
+#
+#     MethodError: no method matching Int64(::UTInstant{ReactantMillisecond{TracedRNumber{Int64}}})
+#
+# Promoting the datetime to its Reactant counterpart first is the only representable answer.
+const ReactantDatePeriod = Union{
+    ReactantYear,ReactantQuarter,ReactantMonth,ReactantWeek,ReactantDay
+}
+const ReactantTimePeriod = Union{
+    ReactantHour,
+    ReactantMinute,
+    ReactantSecond,
+    ReactantMillisecond,
+    ReactantMicrosecond,
+    ReactantNanosecond,
+}
+const ReactantPeriod = Union{ReactantDatePeriod,ReactantTimePeriod}
+
+(+)(x::DateTime, y::ReactantPeriod) = ReactantDateTime(x) + y
+(-)(x::DateTime, y::ReactantPeriod) = ReactantDateTime(x) - y
+(+)(y::ReactantPeriod, x::DateTime) = x + y
+
+(+)(x::Date, y::ReactantDatePeriod) = ReactantDate(x) + y
+(-)(x::Date, y::ReactantDatePeriod) = ReactantDate(x) - y
+(+)(y::ReactantDatePeriod, x::Date) = x + y
+
+(+)(x::Time, y::ReactantTimePeriod) = ReactantTime(x) + y
+(-)(x::Time, y::ReactantTimePeriod) = ReactantTime(x) - y
+(+)(y::ReactantTimePeriod, x::Time) = x + y

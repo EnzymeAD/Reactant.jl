@@ -1,7 +1,7 @@
 # Straight conversions from Dates.jl types to Reactant* types
 
-# Period conversions
-for (S, T) in (
+# Dates period type paired with its Reactant counterpart.
+const _PERIOD_PAIRS = (
     (:Year, :ReactantYear),
     (:Quarter, :ReactantQuarter),
     (:Month, :ReactantMonth),
@@ -14,6 +14,9 @@ for (S, T) in (
     (:Microsecond, :ReactantMicrosecond),
     (:Nanosecond, :ReactantNanosecond),
 )
+
+# Period conversions
+for (S, T) in _PERIOD_PAIRS
     @eval Base.convert(::Type{$T}, x::Dates.$S) = $T(value(x))
     @eval Base.convert(::Type{$T{Int64}}, x::Dates.$S) = $T(value(x))
     @eval Base.convert(::Type{$T{I}}, x::Dates.$S) where {I} = $T(convert(I, value(x)))
@@ -22,6 +25,22 @@ for (S, T) in (
 
     # e.g. for conversions from Int64 to ConcretePJRTNumber
     @eval Base.convert(::Type{$T{I}}, x::$T{J}) where {I,J} = $T(convert(I, value(x)))
+end
+
+# Constructing a Dates period FROM A TRACED NUMBER yields the Reactant counterpart.
+#
+# `Dates.Second`, `Dates.Millisecond` and friends store a concrete `Int64`, so they cannot hold a
+# traced value at all:
+#
+#     julia> Dates.Second(x::TracedRNumber{Int64})
+#     ERROR: MethodError: no method matching Int64(::TracedRNumber{Int64})
+#
+# Without these methods, ordinary date arithmetic written against `Dates` fails the moment its
+# operand becomes traced, even though every Reactant counterpart type already exists. Returning the
+# Reactant period is the only representable answer, and it keeps generic code — code that says
+# `Millisecond(round(Int, 1000t))` without knowing whether `t` is traced — working unchanged.
+for (S, T) in _PERIOD_PAIRS
+    @eval Dates.$S(x::Reactant.TracedRNumber) = $T(x)
 end
 
 # Cross-period conversions: Dates.Source → ReactantTarget (where Source ≠ Target)

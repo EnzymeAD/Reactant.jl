@@ -3,8 +3,21 @@ using Reactant
 
 using Dates
 using Dates: value, UTInstant
+using Adapt: Adapt
 
 const RDExt = Base.get_extension(Reactant, :ReactantDatesExt)
+
+# Marker adaptor for the Adapt tests below: reports whether `Adapt` reached the wrapped payload,
+# without needing a GPU. Defined at top level because `@testset` bodies are a local scope.
+#
+# The marker is a distinctive NUMBER rather than, say, a Symbol: the period wrappers accept only
+# `Number` (`ReactantMillisecond(v::Number)`), which is exactly the contract the real
+# `ReactantKernelAdaptor` satisfies by returning a `CuTracedRNumber`.
+const ADAPT_MARKER = Int32(-12345)
+
+struct MarkerAdaptor end
+Adapt.adapt_storage(::MarkerAdaptor, ::Reactant.TracedRNumber) = ADAPT_MARKER
+Adapt.adapt_storage(::MarkerAdaptor, ::Number) = ADAPT_MARKER
 
 # Preparations for timestepper MWE unit test in the end
 # Can't do that in the @testset scope, as scope issues occur
@@ -760,5 +773,65 @@ end
         @jit(timestepping!(state_jit))
 
         @test DateTime(state_jit.clock.time) == state.clock.time
+    end
+
+    @testset "Dates period constructors from traced numbers" begin
+        # `Dates.Second` and friends store a concrete Int64, so constructing one from a traced
+        # number must yield the Reactant counterpart rather than throwing.
+        for (D, R) in (
+            (Dates.Day, RDExt.ReactantDay),
+            (Dates.Hour, RDExt.ReactantHour),
+            (Dates.Minute, RDExt.ReactantMinute),
+            (Dates.Second, RDExt.ReactantSecond),
+            (Dates.Millisecond, RDExt.ReactantMillisecond),
+        )
+            p = @jit((n -> D(n))(Reactant.ConcreteRNumber(7)))
+            @test p isa R
+            @test Reactant.to_number(value(p)) == 7
+        end
+    end
+
+    @testset "Concrete TimeType ± traced period" begin
+        epoch = DateTime(2025, 12, 7, 12, 0, 0)
+
+        # The motivating case: a wall-clock epoch advanced by a traced elapsed time, written
+        # generically as `epoch + Millisecond(round(Int, 1000t))` with no knowledge of tracing.
+        advance(t) = epoch + Dates.Millisecond(round(Int, 1000t))
+        got = @jit(advance(Reactant.ConcreteRNumber(21600.0)))
+        @test got isa RDExt.ReactantDateTime
+        @test Reactant.to_number(value(got)) == value(epoch + Dates.Millisecond(21_600_000))
+
+        # Subtraction, and a period other than milliseconds.
+        rewind(t) = epoch - Dates.Second(round(Int, t))
+        back = @jit(rewind(Reactant.ConcreteRNumber(3600.0)))
+        @test Reactant.to_number(value(back)) == value(epoch - Dates.Second(3600))
+
+        # Commutative form.
+        flipped(t) = Dates.Millisecond(round(Int, 1000t)) + epoch
+        @test Reactant.to_number(value(@jit(flipped(Reactant.ConcreteRNumber(60.0))))) ==
+            value(epoch + Dates.Millisecond(60_000))
+
+        # Date with a traced DatePeriod.
+        d = Date(2025, 12, 7)
+        shift(n) = d + Dates.Day(n)
+        @test Reactant.to_number(value(@jit(shift(Reactant.ConcreteRNumber(3))))) ==
+            value(d + Dates.Day(3))
+    end
+
+    @testset "Adapt recurses into Reactant date types" begin
+        # Kernel arguments are walked by Adapt; a type with no `adapt_structure` is opaque and its
+        # traced payload survives to the device unadapted. `MarkerAdaptor` (top of file) reports
+        # whether the payload was reached, without needing a GPU.
+        dt = RDExt.ReactantDateTime(UTInstant(RDExt.ReactantMillisecond(12_345)))
+        @test value(Adapt.adapt(MarkerAdaptor(), dt)) === ADAPT_MARKER
+
+        d = RDExt.ReactantDate(UTInstant(RDExt.ReactantDay(7)))
+        @test value(Adapt.adapt(MarkerAdaptor(), d)) === ADAPT_MARKER
+
+        t = RDExt.ReactantTime(RDExt.ReactantNanosecond(99))
+        @test value(Adapt.adapt(MarkerAdaptor(), t)) === ADAPT_MARKER
+
+        p = RDExt.ReactantSecond(42)
+        @test value(Adapt.adapt(MarkerAdaptor(), p)) === ADAPT_MARKER
     end
 end
