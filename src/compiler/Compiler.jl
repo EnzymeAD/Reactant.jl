@@ -739,11 +739,12 @@ function compile_mlir!(
             is_sharded,
             raise_shlo_to_blas_lapack=false,
         )
+        cleanup_opts = Reactant.__compile_options_without_batching_passes(compile_options)
         opt_passes_down = optimization_passes(
-            Reactant.__compile_options_with_reversed_propagation(compile_options);
+            Reactant.__compile_options_with_reversed_propagation(cleanup_opts);
             common_kwargs...,
         )
-        opt_passes_up = optimization_passes(compile_options; common_kwargs...)
+        opt_passes_up = optimization_passes(cleanup_opts; common_kwargs...)
         run_pass_pipeline!(
             mod,
             join([opt_passes_down, opt_passes_up, opt_passes_down], ","),

@@ -427,6 +427,53 @@ function __compile_options_with_reversed_propagation(compile_options::CompileOpt
     )
 end
 
+# Copy of `compile_options` with the concat/slice-to-batch rewrites turned off. Used for
+# the post-optimization transpose/reshape cleanup: under reversed propagation
+# `concat_insert_dim_elementwise` and the reshape-propagation patterns rewrite each other
+# in a cycle and the greedy rewriter never terminates, and batching has already been
+# applied by the main pipeline anyway.
+function __compile_options_without_batching_passes(compile_options::CompileOptions)
+    return CompileOptions(
+        compile_options.optimization_passes,
+        compile_options.no_nan,
+        compile_options.all_finite,
+        compile_options.inline,
+        compile_options.transpose_propagate,
+        compile_options.reshape_propagate,
+        compile_options.max_constant_threshold,
+        compile_options.raise,
+        compile_options.raise_first,
+        compile_options.legalize_chlo_to_stablehlo,
+        compile_options.cudnn_hlo_optimize,
+        compile_options.shardy_passes,
+        compile_options.optimize_then_pad,
+        compile_options.optimize_communications,
+        compile_options.raise_triton_custom_call,
+        compile_options.lower_triton,
+        compile_options.assert_nonallocating,
+        compile_options.donated_args,
+        compile_options.sync,
+        compile_options.xla_executable_build_options,
+        compile_options.xla_compile_options,
+        compile_options.xla_debug_options,
+        compile_options.disable_scatter_gather_optimization_passes,
+        compile_options.disable_pad_optimization_passes,
+        compile_options.disable_licm_optimization_passes,
+        compile_options.loop_unswitch_threshold,
+        compile_options.excluded_passes,
+        compile_options.disable_reduce_slice_fusion_passes,
+        true, # disable_slice_to_batch_passes
+        true, # disable_concat_to_batch_passes
+        compile_options.disable_loop_raising_passes,
+        compile_options.disable_structured_tensors_detection_passes,
+        compile_options.disable_structured_tensors_passes,
+        compile_options.strip_llvm_debuginfo,
+        compile_options.speculate_partial_ifs,
+        compile_options.strip,
+        compile_options.multifloat,
+    )
+end
+
 function __compile_options_with_updated_sync(compile_options::CompileOptions, sync::Bool)
     if compile_options.sync == sync
         return compile_options
