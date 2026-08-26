@@ -1,3 +1,4 @@
+#include <sys/mman.h>
 #include <iostream>
 
 #include "mlir-c/IR.h"
@@ -3428,8 +3429,14 @@ struct LinkableRuntime {
                                   xla::PjRtLoadedExecutable *>>
       executables;
 
-  // Set of allocated pointers to size
-  std::set<void *, std::greater<void *>> allocations;
+  // Each allocation reserves an inaccessible address range as large as the
+  // buffer it stands for, so pointer arithmetic on the handle stays inside
+  // its own range (and a stray dereference faults at the offender).
+  struct AllocationInfo {
+    xla::PjRtBuffer *buffer;
+    size_t size;
+  };
+  std::map<void *, AllocationInfo, std::greater<void *>> allocations;
 
   LinkableRuntime(const std::string &backend) : registry() {
     InitializeRegistry(wrap(&registry));
@@ -3500,10 +3507,15 @@ struct LinkableRuntime {
 static std::tuple<PjRtBuffer *, /*offset*/ size_t, PjRtBuffer **>
 bufferAndOffset(LinkableRuntime *__restrict__ lrt, void *ptr) {
   auto found = lrt->allocations.lower_bound(ptr);
-  assert(found != lrt->allocations.end());
-  auto start = (PjRtBuffer **)(*found);
+  if (found == lrt->allocations.end() ||
+      (size_t)ptr >= (size_t)found->first + found->second.size) {
+    llvm::errs() << "pointer " << ptr
+                 << " does not belong to any reactant allocation\n";
+    exit(1);
+  }
   return std::tuple<PjRtBuffer *, /*offset*/ size_t, PjRtBuffer **>(
-      *start, (size_t)ptr - (size_t)start, start);
+      found->second.buffer, (size_t)ptr - (size_t)found->first,
+      &found->second.buffer);
 }
 
 REACTANT_ABI void reactantXLAThrow(const char *str) {
@@ -3564,13 +3576,26 @@ REACTANT_ABI void *reactantXLAMalloc(LinkableRuntime **__restrict__ lrtP,
   PjRtDevice *device = ClientGetDevice(lrt->client, lrt->device);
 
   auto xbuffer0 = UninitPJRTBuffer(lrt->client, device, ptype, shapeLen, shape);
-  void **xbuffer = (void **)malloc(sizeof(void *));
-  xbuffer[0] = xbuffer0;
-  auto pair = lrt->allocations.insert((void *)xbuffer);
+  size_t nbytes = 1;
+  {
+    auto sz = xbuffer0->GetOnDeviceSizeInBytes();
+    if (sz.ok() && *sz)
+      nbytes = *sz;
+  }
+  void *base = mmap(nullptr, nbytes, PROT_NONE,
+                    MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
+  if (base == MAP_FAILED) {
+    llvm::errs() << "failed to reserve handle range of " << nbytes
+                 << " bytes\n";
+    exit(1);
+  }
+  auto pair = lrt->allocations.try_emplace(
+      base, LinkableRuntime::AllocationInfo{(xla::PjRtBuffer *)xbuffer0,
+                                            nbytes});
   (void)pair;
   // Assert that it was actually inserted
   assert(pair.second);
-  return xbuffer;
+  return base;
 }
 
 REACTANT_ABI void reactantXLAFree(LinkableRuntime **__restrict__ lrtP,
@@ -3578,12 +3603,16 @@ REACTANT_ABI void reactantXLAFree(LinkableRuntime **__restrict__ lrtP,
   if (!buffer0)
     return;
   auto lrt = *lrtP;
-  void *buffer = *(void **)buffer0;
-  auto erased = lrt->allocations.erase((void *)buffer0);
-  assert(erased == 1);
-  (void)erased;
-  free(buffer0);
-  PjRtBufferFree((PjRtBuffer *)buffer);
+  auto found = lrt->allocations.find((void *)buffer0);
+  if (found == lrt->allocations.end()) {
+    llvm::errs() << "freeing pointer " << buffer0
+                 << " that is not a reactant allocation\n";
+    exit(1);
+  }
+  PjRtBuffer *buffer = found->second.buffer;
+  munmap(buffer0, found->second.size);
+  lrt->allocations.erase(found);
+  PjRtBufferFree(buffer);
 }
 
 REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
@@ -3601,7 +3630,8 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
     auto &&[argB, argO, argP] = bufferAndOffset(lrt, args[i]);
     if (argO != 0) {
       llvm::errs() << "only zero-offset execution supported, argument " << i
-                   << " had byte offset of " << argO << "\n";
+                   << " had byte offset of " << argO << " (ptr=" << args[i]
+                   << ", resolved base=" << (void *)argP << ")\n";
       exit(1);
     }
     baseArrays[i] = argB;
