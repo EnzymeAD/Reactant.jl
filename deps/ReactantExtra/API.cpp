@@ -3561,8 +3561,15 @@ REACTANT_ABI void reactantXLAMemcpy(LinkableRuntime **__restrict__ lrtP,
     break;
   }
   case 3: // cudaMemcpyDeviceToDevice
-    llvm_unreachable("device to device copy unsupported");
+  {
+    // PJRT exposes no raw buffer-to-buffer copy; stage through the host.
+    auto &&[srcB, srcO, srcStart] = bufferAndOffset(lrt, src);
+    auto &&[dstB, dstO, dstStart] = bufferAndOffset(lrt, dst);
+    std::vector<char> tmp(size);
+    CopyFromBuffer(lrt->client, srcB, tmp.data(), srcO, size, srcStart);
+    CopyToBuffer(lrt->client, dstB, tmp.data(), dstO, size, dstStart);
     break;
+  }
   default: // cudaMemcpyDeviceToDevice
     llvm_unreachable("unknown copy unsupported");
     break;
