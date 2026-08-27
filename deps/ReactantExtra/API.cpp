@@ -3504,8 +3504,25 @@ struct LinkableRuntime {
   }
 };
 
+static void *reactantXLAMallocImpl(LinkableRuntime *__restrict__ lrt,
+                                   uint64_t ptype, uint64_t shapeLen,
+                                   uint64_t *__restrict__ shape);
+
 static std::tuple<PjRtBuffer *, /*offset*/ size_t, PjRtBuffer **>
 bufferAndOffset(LinkableRuntime *__restrict__ lrt, void *ptr) {
+  // Kernels take optional buffers as null pointers (mfem's
+  // `geom ? geom->J.Read() : nullptr`) and guard every access on a flag;
+  // hand the executable a small dummy buffer for those arguments.
+  if (!ptr) {
+    // Fresh per use: arguments are donated, and one buffer cannot be
+    // donated twice in a single call.
+    uint64_t shape[1] = {256};
+    void *dummy = reactantXLAMallocImpl(lrt, /*s8*/ 2, 1, shape);
+    auto found = lrt->allocations.find(dummy);
+    assert(found != lrt->allocations.end());
+    return std::tuple<PjRtBuffer *, size_t, PjRtBuffer **>(
+        found->second.buffer, 0, &found->second.buffer);
+  }
   auto found = lrt->allocations.lower_bound(ptr);
   if (found == lrt->allocations.end() ||
       (size_t)ptr >= (size_t)found->first + found->second.size) {
@@ -3576,10 +3593,9 @@ REACTANT_ABI void reactantXLAMemcpy(LinkableRuntime **__restrict__ lrtP,
   }
 }
 
-REACTANT_ABI void *reactantXLAMalloc(LinkableRuntime **__restrict__ lrtP,
-                                     uint64_t ptype, uint64_t shapeLen,
-                                     uint64_t *__restrict__ shape) {
-  auto lrt = *lrtP;
+static void *reactantXLAMallocImpl(LinkableRuntime *__restrict__ lrt,
+                                   uint64_t ptype, uint64_t shapeLen,
+                                   uint64_t *__restrict__ shape) {
   PjRtDevice *device = ClientGetDevice(lrt->client, lrt->device);
 
   auto xbuffer0 = UninitPJRTBuffer(lrt->client, device, ptype, shapeLen, shape);
@@ -3603,6 +3619,12 @@ REACTANT_ABI void *reactantXLAMalloc(LinkableRuntime **__restrict__ lrtP,
   // Assert that it was actually inserted
   assert(pair.second);
   return base;
+}
+
+REACTANT_ABI void *reactantXLAMalloc(LinkableRuntime **__restrict__ lrtP,
+                                     uint64_t ptype, uint64_t shapeLen,
+                                     uint64_t *__restrict__ shape) {
+  return reactantXLAMallocImpl(*lrtP, ptype, shapeLen, shape);
 }
 
 REACTANT_ABI void reactantXLAFree(LinkableRuntime **__restrict__ lrtP,
@@ -3732,6 +3754,12 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
         stablehlo::createStablehloCanonicalizeDynamismPass());
     pm.addPass(mlir::enzyme::createEnzymeHLOOptPass());
 
+    if (getenv("REACTANT_XLA_DEBUG_EXEC")) {
+      for (int64_t i = 0; i < argcnt; i++)
+        llvm::errs() << " exec arg " << i << ": "
+                     << baseArrays[i]->on_device_shape().ToString() << "\n";
+    }
+
     if (!mlir::succeeded(pm.run(*module))) {
       llvm::errs() << " failed to run passes\n";
       llvm::errs() << " modstr:\n" << modstr << "\n";
@@ -3742,6 +3770,10 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
       exit(1);
     }
 
+    if (getenv("REACTANT_XLA_DEBUG_EXEC")) {
+      llvm::errs() << " exec module after passes:\n";
+      module->print(llvm::errs());
+    }
     auto exec =
         ClientCompileWithProto(lrt->client, wrap(module.get()), nullptr, 0);
 
@@ -3758,6 +3790,18 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
   std::vector<uint8_t> futures(argcnt, 0);
   std::vector<FutureType *> future_results(argcnt, nullptr);
   PjRtDevice *device = ClientGetDevice(lrt->client, lrt->device);
+  bool dbg = getenv("REACTANT_XLA_DEBUG_EXEC") != nullptr;
+  if (dbg) {
+    for (int64_t i = 0; i < argcnt; i++) {
+      auto sz = baseArrays[i]->GetOnDeviceSizeInBytes();
+      if (sz.ok() && *sz <= 64) {
+        auto lit = baseArrays[i]->ToLiteralSync();
+        if (lit.ok())
+          llvm::errs() << " exec in[" << i << "] = " << (*lit)->ToString()
+                       << "\n";
+      }
+    }
+  }
   XLAExecuteSharded(exec, argcnt, baseArrays.data(), device, is_arg_donatable,
                     num_results, results.data(), futures.data(),
                     future_results.data());
@@ -3767,6 +3811,17 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
     if (futures[i]) {
       FutureAwait(future_results[i]);
       FreeFuture(future_results[i]);
+    }
+  }
+  if (dbg) {
+    for (int64_t i = 0; i < argcnt; i++) {
+      auto sz = results[i]->GetOnDeviceSizeInBytes();
+      if (sz.ok() && *sz <= 64) {
+        auto lit = results[i]->ToLiteralSync();
+        if (lit.ok())
+          llvm::errs() << " exec out[" << i << "] = " << (*lit)->ToString()
+                       << "\n";
+      }
     }
   }
 }
