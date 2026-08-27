@@ -72,17 +72,14 @@ end
 end
 
 @inline function Enzyme.tupstack(
-    data::Tuple{<:RArray, Vararg{<:RArray}},
+    data::Tuple{<:RArray,Vararg{<:RArray}},
     outshape::Tuple{Vararg{Int}},
     inshape::Tuple{Vararg{Int}},
 )
-    res = similar(first(data), outshape..., inshape...)
-    c = CartesianIndices(outshape)
-    tail_dims = map(Returns(:), inshape)
-    for (i, val) in enumerate(data)
-        @inbounds res[c[i], tail_dims...] = val
-    end
-    return res
+    # `data[i]` is the derivative w.r.t. the i-th input element, so the tuple index
+    # enumerates the trailing `inshape` dims and each entry fills the leading
+    # `outshape` dims -- matching `Enzyme.tupstack`'s column-major layout for `Array`.
+    return reshape(reduce(hcat, map(vec, data)), outshape..., inshape...)
 end
 
 macro register_make_zero_inplace(sym)
