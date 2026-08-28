@@ -3515,6 +3515,9 @@ static void *reactantXLAMallocImpl(LinkableRuntime *__restrict__ lrt,
                                    uint64_t ptype, uint64_t shapeLen,
                                    uint64_t *__restrict__ shape);
 
+
+static const char *g_current_modstr = nullptr;
+
 static std::tuple<PjRtBuffer *, /*offset*/ size_t, PjRtBuffer **>
 bufferAndOffset(LinkableRuntime *__restrict__ lrt, void *ptr) {
   // Kernels take optional buffers as null pointers (mfem's
@@ -3535,6 +3538,9 @@ bufferAndOffset(LinkableRuntime *__restrict__ lrt, void *ptr) {
       (size_t)ptr >= (size_t)found->first + found->second.size) {
     llvm::errs() << "pointer " << ptr
                  << " does not belong to any reactant allocation\n";
+  if (const char *m = getenv("REACTANT_XLA_DUMP_MOD_ON_ERR"))
+    if (g_current_modstr)
+      llvm::errs() << " current modstr:\n" << g_current_modstr << "\n";
     exit(1);
   }
   return std::tuple<PjRtBuffer *, /*offset*/ size_t, PjRtBuffer **>(
@@ -3651,11 +3657,13 @@ REACTANT_ABI void reactantXLAFree(LinkableRuntime **__restrict__ lrtP,
   PjRtBufferFree(buffer);
 }
 
+
 REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
                                   const char *modstr, int64_t argcnt,
                                   void **args, int64_t constcnt,
                                   const int64_t *consts) {
   auto lrt = *lrtP;
+  g_current_modstr = modstr;
   auto &cache = lrt->executables[modstr];
   std::vector<PjRtBuffer *> baseArrays(argcnt);
   std::vector<PjRtBuffer **> basePtrs(argcnt);
@@ -3663,6 +3671,8 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
   std::vector<std::vector<int64_t>> sizeKey;
   sizeKey.reserve(argcnt + (constcnt ? 1 : 0));
   for (int64_t i = 0; i < argcnt; i++) {
+    if (getenv("REACTANT_XLA_DEBUG_EXEC"))
+      llvm::errs() << " resolving arg " << i << " ptr " << args[i] << "\n";
     auto &&[argB, argO, argP] = bufferAndOffset(lrt, args[i]);
     if (argO != 0) {
       llvm::errs() << "only zero-offset execution supported, argument " << i
@@ -3793,10 +3803,80 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
     }
 
     bool passesOk = mlir::succeeded(pm.run(*module));
+    if (passesOk && failed(mlir::verify(*module))) {
+      // A hlo-opt pattern interplay (slice-of-broadcast motion) can leave
+      // type-inconsistent IR; retry the whole pipeline without that
+      // pattern group rather than dying.
+      llvm::errs() << " exec pipeline produced invalid IR; retrying without "
+                      "slice-motion patterns\n";
+      module = mlir::OwningOpRef<mlir::ModuleOp>(
+          mlir::ModuleOp::create(mlir::OpBuilder(&context).getUnknownLoc()));
+      if (failed(parseSourceString(modstr, module->getBody(), config))) {
+        llvm::errs() << " failed to re-parse module\n";
+        exit(1);
+      }
+      auto funcOp2 = cast<func::FuncOp>(&module->getBody()->back());
+      funcOp2.setSymName(builder.getStringAttr("main"));
+      funcOp2.setVisibility(SymbolTable::Visibility::Public);
+      for (int64_t i = constcnt - 1; i >= 0; i--) {
+        auto arg = funcOp2.getArgument(argcnt + i);
+        auto TT = dyn_cast<mlir::RankedTensorType>(arg.getType());
+        auto IT = dyn_cast_or_null<mlir::IntegerType>(
+            TT ? TT.getElementType() : nullptr);
+        if (!TT || !IT) {
+          llvm::errs() << " non-integer specialized scalar\n";
+          exit(1);
+        }
+        mlir::OpBuilder b2(&funcOp2.getBody().front(),
+                           funcOp2.getBody().front().begin());
+        auto cst = b2.create<mlir::stablehlo::ConstantOp>(
+            funcOp2.getLoc(),
+            mlir::SplatElementsAttr::get(TT, b2.getIntegerAttr(IT, consts[i])));
+        arg.replaceAllUsesWith(cst);
+        funcOp2.eraseArgument(argcnt + i);
+      }
+      for (int64_t i = 0; i < argcnt; i++) {
+        if (dupOf[i] < 0 && !hasDup[i])
+          funcOp2.setArgAttr(i, "tf.aliasing_output",
+                             builder.getI64IntegerAttr(i));
+      }
+      PassManager pm2(module->getContext());
+      pm2.enableVerifier(false);
+      if (constcnt) {
+        pm2.addNestedPass<mlir::func::FuncOp>(
+            stablehlo::createStablehloCanonicalizeDynamismPass());
+        pm2.addPass(mlir::stablehlo::createStablehloRefineShapesPass());
+      }
+      pm2.addPass(mlir::enzyme::createEnzymeRefineArgumentsPass(types));
+      pm2.addPass(mlir::stablehlo::createStablehloRefineShapesPass());
+      pm2.addNestedPass<mlir::func::FuncOp>(
+          stablehlo::createStablehloCanonicalizeDynamismPass());
+      {
+        mlir::enzyme::EnzymeHLOOptPassOptions opts;
+        opts.passses = 24575 & ~1ull;
+        pm2.addPass(mlir::enzyme::createEnzymeHLOOptPass(opts));
+      }
+      passesOk = mlir::succeeded(pm2.run(*module));
+      // Later writtenness analysis reads from the current module's func.
+      funcOp = funcOp2;
+    }
     // The pipeline runs unverified; catch what it produced either way.
     if (!passesOk || failed(mlir::verify(*module))) {
       llvm::errs() << " failed to run passes\n";
       llvm::errs() << " modstr:\n" << modstr << "\n";
+      {
+        std::error_code ec;
+        llvm::raw_fd_ostream fs("/tmp/claude-1000/failing_modstr.mlir", ec);
+        if (!ec)
+          fs << modstr;
+        llvm::raw_fd_ostream fp("/tmp/claude-1000/failing_postpass.mlir", ec);
+        if (!ec)
+          module->print(fp);
+        llvm::errs() << " types:";
+        for (auto ty : types)
+          llvm::errs() << " " << ty;
+        llvm::errs() << "\n";
+      }
       pm.dump();
       for (auto ty : types) {
         llvm::errs() << " arg: " << ty << "\n";
