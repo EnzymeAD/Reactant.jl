@@ -668,3 +668,59 @@ end
         x
     ))
 end
+
+@testset "PropagationOptions" begin
+    @testset "construction and validation" begin
+        @test PropagationOptions(; pre_ad=:up, post_ad=:none) ==
+            PropagationOptions(:up, :none)
+        @test PropagationOptions() == PropagationOptions(:up, :up)
+        @test_throws ErrorException PropagationOptions(; pre_ad=:sideways)
+        @test_throws ErrorException PropagationOptions(; post_ad=:sideways)
+        @test_throws ErrorException CompileOptions(;
+            reshape_propagate=PropagationOptions(:up, :sideways)
+        )
+    end
+
+    @testset "resolution per AD phase" begin
+        options = CompileOptions(;
+            transpose_propagate=:down,
+            reshape_propagate=PropagationOptions(; pre_ad=:none, post_ad=:up),
+        )
+        pre = Reactant.__compile_options_for_ad_phase(options, :pre_ad)
+        post = Reactant.__compile_options_for_ad_phase(options, :post_ad)
+
+        @test pre.reshape_propagate === :none
+        @test post.reshape_propagate === :up
+        # phase-independent options are carried over untouched
+        @test pre.transpose_propagate === :down
+        @test post.transpose_propagate === :down
+
+        @test_throws ErrorException Reactant.__compile_options_for_ad_phase(
+            options, :mid_ad
+        )
+
+        # a plain Symbol applies to both phases, and is returned as-is
+        symbolic = CompileOptions(; reshape_propagate=:down)
+        @test Reactant.__compile_options_for_ad_phase(symbolic, :pre_ad) === symbolic
+        @test Reactant.__compile_options_for_ad_phase(symbolic, :post_ad) === symbolic
+    end
+
+    @testset "gradients agree across phase settings" begin
+        f(x) = sum(abs2, tanh.(reshape(x, 4, 2) .+ 1.0f0))
+        x = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float32, 8))
+        ∇f(x) = Enzyme.gradient(Enzyme.Reverse, f, x)[1]
+
+        expected = Array(@jit(∇f(x)))
+        for propagate in (
+            :up,
+            :none,
+            PropagationOptions(; pre_ad=:none, post_ad=:up),
+            PropagationOptions(; pre_ad=:up, post_ad=:none),
+        )
+            got = Array(
+                @jit reshape_propagate = propagate transpose_propagate = propagate ∇f(x)
+            )
+            @test got ≈ expected
+        end
+    end
+end
