@@ -139,6 +139,13 @@ end
     end
 end
 
+function XLA.free_buffer!(buffer::Array)
+    isempty(buffer) && return nothing # idempotent; never touch shared empty sentinels
+    XLA.free_buffer(buffer)
+    buffer.buffer = C_NULL # make the finalizer a no-op (no double free)
+    return nothing
+end
+
 Base.ndims(buffer::Array) = GC.@preserve buffer begin
     MLIR.API.ifrt_array_ndims(buffer.buffer)
 end
@@ -158,12 +165,14 @@ function Base.eltype(buffer::Array)
 end
 
 function XLA.device(buffer::Array)
+    isempty(buffer) && XLA.throw_empty_buffer("get the device of")
     devices = XLA.devices(XLA.sharding(buffer))
     length(devices) == 1 && return only(devices)
     return nothing
 end
 
 function XLA.client(buffer::Array)
+    isempty(buffer) && XLA.throw_empty_buffer("get the client of")
     GC.@preserve buffer begin
         client_ptr = MLIR.API.ifrt_array_to_client(buffer.buffer)
     end
@@ -359,6 +368,7 @@ function XLA.copy_buffer_to_device(::Array, ::Device)
 end
 
 function XLA.sharding(buffer::Array)
+    isempty(buffer) && XLA.throw_empty_buffer("get the sharding of")
     GC.@preserve buffer begin
         sharding_ptr = MLIR.API.ifrt_array_to_sharding(buffer.buffer)
     end
@@ -385,5 +395,6 @@ function copy_arrays_to_device_with_sharding(buffers::Vector{Array}, sharding::S
 end
 
 Base.copy(b::Array) = Array(GC.@preserve b begin
+    isempty(b) && XLA.throw_empty_buffer("copy")
     MLIR.API.ifrt_copy_array(b.buffer)
 end)
