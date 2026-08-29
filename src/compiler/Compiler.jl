@@ -209,10 +209,16 @@ function activate_raising!(is_raising::Bool)
 end
 
 function deactivate_raising!(is_raising::Bool)
-    key = :reactant_is_raising
-    is_raising === last(task_local_storage(key)::Vector{Bool}) ||
-        error("Deactivating wrong Reactant raising context")
-    return pop!(task_local_storage(key)::Vector{Bool})
+    stack = task_local_storage(:reactant_is_raising)::Vector{Bool}
+    if isempty(stack)
+        MLIR.IR.unbalanced_teardown(
+            "Deactivating a Reactant raising context but none is active"
+        )
+        return nothing
+    end
+    is_raising === last(stack) ||
+        MLIR.IR.unbalanced_teardown("Deactivating wrong Reactant raising context")
+    return pop!(stack)
 end
 
 function raising(; throw_error::Bool=true)
@@ -1526,9 +1532,13 @@ for cache_type in (:callcache, :sdycache, :sdygroupidcache, :debugcache)
         end
 
         function $(deactivate_fn)(cache)
-            cache === last(task_local_storage($(Meta.quot(cache_type)))::Vector) ||
-                error("Deactivating wrong cache")
-            return pop!(task_local_storage($(Meta.quot(cache_type)))::Vector)
+            stack = task_local_storage($(Meta.quot(cache_type)))::Vector
+            if isempty(stack) || !isassigned(stack, lastindex(stack))
+                MLIR.IR.unbalanced_teardown("Deactivating a cache but none is active")
+                return nothing
+            end
+            cache === last(stack) || MLIR.IR.unbalanced_teardown("Deactivating wrong cache")
+            return pop!(stack)
         end
 
         function $(has_fn)()
