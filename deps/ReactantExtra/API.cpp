@@ -1067,6 +1067,71 @@ CudaGetStreamExecutorDeviceDescription(int32_t device_id) {
 
 #endif
 
+#ifdef REACTANT_ROCM
+
+#include "rocm/include/hip/hip_runtime.h"
+
+REACTANT_ABI void ReactantHipDeviceGetProperties(DeviceProperties *jlprops,
+                                                 int32_t device_id) {
+  hipDeviceProp_t props;
+  hipError_t err = hipGetDeviceProperties(&props, device_id);
+  if (err != hipSuccess) {
+    ReactantThrowError((std::string("hipGetDeviceProperties failed: ") +
+                        hipGetErrorString(err))
+                           .c_str());
+    return;
+  }
+
+  jlprops->totalGlobalMem = props.totalGlobalMem;
+  jlprops->sharedMemPerBlock = props.sharedMemPerBlock;
+  jlprops->regsPerBlock = props.regsPerBlock;
+  jlprops->warpSize = props.warpSize;
+  jlprops->maxThreadsPerBlock = props.maxThreadsPerBlock;
+  jlprops->maxThreadsDim[0] = props.maxThreadsDim[0];
+  jlprops->maxThreadsDim[1] = props.maxThreadsDim[1];
+  jlprops->maxThreadsDim[2] = props.maxThreadsDim[2];
+  jlprops->maxGridSize[0] = props.maxGridSize[0];
+  jlprops->maxGridSize[1] = props.maxGridSize[1];
+  jlprops->maxGridSize[2] = props.maxGridSize[2];
+  jlprops->totalConstMem = props.totalConstMem;
+  jlprops->major = props.major;
+  jlprops->minor = props.minor;
+  jlprops->multiProcessorCount = props.multiProcessorCount;
+  jlprops->canMapHostMemory = props.canMapHostMemory;
+  jlprops->l2CacheSize = props.l2CacheSize;
+  jlprops->maxThreadsPerMultiProcessor = props.maxThreadsPerMultiProcessor;
+}
+
+// Returns the LLVM target id of the device, e.g. "gfx950:sramecc+:xnack-".
+// The caller owns the returned string.
+REACTANT_ABI const char *ReactantHipDeviceGetGCNArchName(int32_t device_id) {
+  hipDeviceProp_t props;
+  hipError_t err = hipGetDeviceProperties(&props, device_id);
+  if (err != hipSuccess) {
+    ReactantThrowError((std::string("hipGetDeviceProperties failed: ") +
+                        hipGetErrorString(err))
+                           .c_str());
+    return nullptr;
+  }
+  return cstr_from_string(props.gcnArchName);
+}
+
+#else
+
+REACTANT_ABI void ReactantHipDeviceGetProperties(DeviceProperties *jlprops,
+                                                 int32_t device_id) {
+  ReactantThrowError("ReactantHipDeviceGetProperties: this build of "
+                     "libReactantExtra was compiled without ROCm support");
+}
+
+REACTANT_ABI const char *ReactantHipDeviceGetGCNArchName(int32_t device_id) {
+  ReactantThrowError("ReactantHipDeviceGetGCNArchName: this build of "
+                     "libReactantExtra was compiled without ROCm support");
+  return nullptr;
+}
+
+#endif
+
 REACTANT_ABI const char *
 deviceDescriptionToString(stream_executor::DeviceDescription *device) {
   return cstr_from_string(device->ToString());
