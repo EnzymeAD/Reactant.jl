@@ -385,7 +385,15 @@ end
         hlo
     end
 end
-
+@testset "@code_xla_llvm" begin
+    x_ra = Reactant.to_rarray(ones(Float32, 4))
+    llvm_ir = @code_xla_llvm(sin.(x_ra))
+    @test @filecheck begin
+        @check "xla"
+        @check "sine"
+        llvm_ir
+    end
+end
 @testset "Raise keyword" begin
     v = Reactant.TestUtils.construct_test_array(Float32, 16)
     rv = Reactant.to_rarray(v)
