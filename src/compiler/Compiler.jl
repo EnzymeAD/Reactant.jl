@@ -26,6 +26,7 @@ include("CompilationError.jl")
 include("OptimizationPasses.jl")
 include("Codegen.jl")
 include("Thunk.jl")
+include("CompiledArtifact.jl")
 
 const DEBUG_PRINT_CODEGEN = Ref(false)
 
