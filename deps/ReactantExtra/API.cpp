@@ -3825,7 +3825,8 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
     pm.addPass(mlir::stablehlo::createStablehloRefineShapesPass());
     pm.addNestedPass<mlir::func::FuncOp>(
         stablehlo::createStablehloCanonicalizeDynamismPass());
-    pm.addPass(mlir::enzyme::createEnzymeHLOOptPass());
+    if (!getenv("REACTANT_XLA_NO_HLO_OPT"))
+      pm.addPass(mlir::enzyme::createEnzymeHLOOptPass());
 
     if (getenv("REACTANT_XLA_DEBUG_EXEC")) {
       for (int64_t i = 0; i < argcnt; i++)
