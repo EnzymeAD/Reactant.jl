@@ -3670,15 +3670,46 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
 
   std::vector<std::vector<int64_t>> sizeKey;
   sizeKey.reserve(argcnt + (constcnt ? 1 : 0));
+  // A kernel argument may point into the middle of an allocation (a block
+  // operator's sub-vector view); materialize the tail as its own buffer
+  // through staged copies and write it back after the launch.
+  struct OffsetView {
+    void *tmp;
+    void *orig;
+    size_t size;
+  };
+  std::vector<OffsetView> offsetViews;
   for (int64_t i = 0; i < argcnt; i++) {
     if (getenv("REACTANT_XLA_DEBUG_EXEC"))
       llvm::errs() << " resolving arg " << i << " ptr " << args[i] << "\n";
-    auto &&[argB, argO, argP] = bufferAndOffset(lrt, args[i]);
+    auto &&[argB0, argO0, argP0] = bufferAndOffset(lrt, args[i]);
+    auto argB = argB0;
+    auto argO = argO0;
+    auto argP = argP0;
     if (argO != 0) {
-      llvm::errs() << "only zero-offset execution supported, argument " << i
-                   << " had byte offset of " << argO << " (ptr=" << args[i]
-                   << ", resolved base=" << (void *)argP << ")\n";
-      exit(1);
+      void *basePtr = (void *)((size_t)args[i] - argO);
+      auto fullIt = lrt->allocations.find(basePtr);
+      if (fullIt == lrt->allocations.end()) {
+        llvm::errs() << "offset view of unknown allocation, argument " << i
+                     << " ptr=" << args[i] << "\n";
+        exit(1);
+      }
+      size_t viewSize = fullIt->second.size - argO;
+      uint64_t shape[1] = {viewSize};
+      void *tmp = reactantXLAMallocImpl(lrt, /*s8*/ 2, 1, shape);
+      auto tmpIt = lrt->allocations.find(tmp);
+      {
+        std::vector<char> host(viewSize);
+        CopyFromBuffer(lrt->client, argB, host.data(), argO, viewSize, argP);
+        CopyToBuffer(lrt->client, tmpIt->second.buffer, host.data(), 0,
+                     viewSize, &tmpIt->second.buffer);
+      }
+      offsetViews.push_back({tmp, args[i], viewSize});
+      if (getenv("REACTANT_XLA_DEBUG_EXEC"))
+        llvm::errs() << " staged offset view arg " << i << " off " << argO
+                     << " size " << viewSize << "\n";
+      args[i] = tmp;
+      std::tie(argB, argO, argP) = bufferAndOffset(lrt, tmp);
     }
     baseArrays[i] = argB;
     basePtrs[i] = argP;
@@ -3859,6 +3890,56 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
       passesOk = mlir::succeeded(pm2.run(*module));
       // Later writtenness analysis reads from the current module's func.
       funcOp = funcOp2;
+    }
+    if (passesOk && failed(mlir::verify(*module))) {
+      // Still inconsistent: run without the hlo optimizer entirely —
+      // slower kernels beat dying.
+      llvm::errs() << " exec pipeline still invalid; retrying without "
+                      "enzyme-hlo-opt\n";
+      module = mlir::OwningOpRef<mlir::ModuleOp>(
+          mlir::ModuleOp::create(mlir::OpBuilder(&context).getUnknownLoc()));
+      if (failed(parseSourceString(modstr, module->getBody(), config))) {
+        llvm::errs() << " failed to re-parse module\n";
+        exit(1);
+      }
+      auto funcOp3 = cast<func::FuncOp>(&module->getBody()->back());
+      funcOp3.setSymName(builder.getStringAttr("main"));
+      funcOp3.setVisibility(SymbolTable::Visibility::Public);
+      for (int64_t i = constcnt - 1; i >= 0; i--) {
+        auto arg = funcOp3.getArgument(argcnt + i);
+        auto TT = dyn_cast<mlir::RankedTensorType>(arg.getType());
+        auto IT = dyn_cast_or_null<mlir::IntegerType>(
+            TT ? TT.getElementType() : nullptr);
+        if (!TT || !IT) {
+          llvm::errs() << " non-integer specialized scalar\n";
+          exit(1);
+        }
+        mlir::OpBuilder b3(&funcOp3.getBody().front(),
+                           funcOp3.getBody().front().begin());
+        auto cst = b3.create<mlir::stablehlo::ConstantOp>(
+            funcOp3.getLoc(),
+            mlir::SplatElementsAttr::get(TT, b3.getIntegerAttr(IT, consts[i])));
+        arg.replaceAllUsesWith(cst);
+        funcOp3.eraseArgument(argcnt + i);
+      }
+      for (int64_t i = 0; i < argcnt; i++) {
+        if (dupOf[i] < 0 && !hasDup[i])
+          funcOp3.setArgAttr(i, "tf.aliasing_output",
+                             builder.getI64IntegerAttr(i));
+      }
+      PassManager pm3(module->getContext());
+      pm3.enableVerifier(false);
+      if (constcnt) {
+        pm3.addNestedPass<mlir::func::FuncOp>(
+            stablehlo::createStablehloCanonicalizeDynamismPass());
+        pm3.addPass(mlir::stablehlo::createStablehloRefineShapesPass());
+      }
+      pm3.addPass(mlir::enzyme::createEnzymeRefineArgumentsPass(types));
+      pm3.addPass(mlir::stablehlo::createStablehloRefineShapesPass());
+      pm3.addNestedPass<mlir::func::FuncOp>(
+          stablehlo::createStablehloCanonicalizeDynamismPass());
+      passesOk = mlir::succeeded(pm3.run(*module));
+      funcOp = funcOp3;
     }
     // The pipeline runs unverified; catch what it produced either way.
     if (!passesOk || failed(mlir::verify(*module))) {
@@ -4044,6 +4125,14 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
     } else {
       *basePtrs[i] = results[i];
     }
+  }
+  for (auto &ov : offsetViews) {
+    auto &&[tB, tO, tP] = bufferAndOffset(lrt, ov.tmp);
+    auto &&[oB, oO, oP] = bufferAndOffset(lrt, ov.orig);
+    std::vector<char> host(ov.size);
+    CopyFromBuffer(lrt->client, tB, host.data(), 0, ov.size, tP);
+    CopyToBuffer(lrt->client, oB, host.data(), oO, ov.size, oP);
+    reactantXLAFree(lrtP, ov.tmp);
   }
 }
 
