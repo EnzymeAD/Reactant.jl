@@ -190,10 +190,30 @@ end
 function get_ancestor_and_indices_inner(
     x::AnyTracedRArray{T,N}, indices::Vararg{Any,N}
 ) where {T,N}
-    return get_ancestor_and_indices(parent(x), Base.reindex(parentindices(x), indices)...)
+    p = parent(x)
+    if p === x
+        error(
+            "Reactant: `get_ancestor_and_indices` hit a non-wrapper `AbstractArray` " *
+            "with traced element type ($(typeof(x))). This type matches " *
+            "`AnyTracedRArray` but does not implement a proper `Base.parent` method. " *
+            "Consider adding a `set_mlir_data!` method or a `get_ancestor_and_indices` " *
+            "method for this type.",
+        )
+    end
+    return get_ancestor_and_indices(p, Base.reindex(parentindices(x), indices)...)
 end
 function get_ancestor_and_indices_inner(x::AnyTracedRArray{T,1}, indices) where {T}
-    return get_ancestor_and_indices(parent(x), Base.reindex(parentindices(x), indices))
+    p = parent(x)
+    if p === x
+        error(
+            "Reactant: `get_ancestor_and_indices` hit a non-wrapper `AbstractArray` " *
+            "with traced element type ($(typeof(x))). This type matches " *
+            "`AnyTracedRArray` but does not implement a proper `Base.parent` method. " *
+            "Consider adding a `set_mlir_data!` method or a `get_ancestor_and_indices` " *
+            "method for this type.",
+        )
+    end
+    return get_ancestor_and_indices(p, Base.reindex(parentindices(x), indices))
 end
 function get_ancestor_and_indices_inner(x::AnyTracedRArray{T,N}, linear_index) where {T,N}
     return get_ancestor_and_indices_inner(x, [linear_index])
