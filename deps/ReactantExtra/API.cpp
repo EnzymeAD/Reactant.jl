@@ -11,6 +11,7 @@ void reactantReleaseAddressRange(void *base, size_t nbytes);
 
 #include "mlir/CAPI/IR.h"
 #include "mlir/CAPI/Wrap.h"
+#include "mlir/IR/Verifier.h"
 #include "mlir/Pass/PassManager.h"
 
 #include "Enzyme/MLIR/Dialect/Dialect.h"
@@ -3430,8 +3431,14 @@ struct LinkableRuntime {
   xla::PjRtClient *client;
   int device;
   bool shouldFreeClient;
-  DenseMap<const char *, std::map<std::vector<std::vector<int64_t>>,
-                                  xla::PjRtLoadedExecutable *>>
+  struct CachedExec {
+    xla::PjRtLoadedExecutable *exec;
+    // Per argument view: does the kernel store through it? (a view whose
+    // result is the argument passed through unchanged is read-only)
+    std::vector<uint8_t> written;
+  };
+  DenseMap<const char *,
+           std::map<std::vector<std::vector<int64_t>>, CachedExec>>
       executables;
 
   // Each allocation reserves an inaccessible address range as large as the
@@ -3509,6 +3516,8 @@ struct LinkableRuntime {
   }
 };
 
+static const char *g_current_modstr = nullptr;
+
 static std::tuple<PjRtBuffer *, /*offset*/ size_t, PjRtBuffer **>
 bufferAndOffset(LinkableRuntime *__restrict__ lrt, void *ptr) {
   auto found = lrt->allocations.lower_bound(ptr);
@@ -3516,6 +3525,9 @@ bufferAndOffset(LinkableRuntime *__restrict__ lrt, void *ptr) {
       (size_t)ptr >= (size_t)found->first + found->second.size) {
     llvm::errs() << "pointer " << ptr
                  << " does not belong to any reactant allocation\n";
+    if (const char *m = getenv("REACTANT_XLA_DUMP_MOD_ON_ERR"))
+      if (g_current_modstr)
+        llvm::errs() << " current modstr:\n" << g_current_modstr << "\n";
     exit(1);
   }
   return std::tuple<PjRtBuffer *, /*offset*/ size_t, PjRtBuffer **>(
@@ -3631,6 +3643,7 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
                                   void **args, int64_t constcnt,
                                   const int64_t *consts) {
   auto lrt = *lrtP;
+  g_current_modstr = modstr;
   auto &cache = lrt->executables[modstr];
   std::vector<PjRtBuffer *> baseArrays(argcnt);
   std::vector<PjRtBuffer **> basePtrs(argcnt);
@@ -3647,6 +3660,8 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
   };
   std::vector<OffsetView> offsetViews;
   for (int64_t i = 0; i < argcnt; i++) {
+    if (getenv("REACTANT_XLA_DEBUG_EXEC"))
+      llvm::errs() << " resolving arg " << i << " ptr " << args[i] << "\n";
     auto &&[argB0, argO0, argP0] = bufferAndOffset(lrt, args[i]);
     auto argB = argB0;
     auto argO = argO0;
@@ -3670,6 +3685,9 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
                      viewSize, &tmpIt->second.buffer);
       }
       offsetViews.push_back({tmp, args[i], viewSize});
+      if (getenv("REACTANT_XLA_DEBUG_EXEC"))
+        llvm::errs() << " staged offset view arg " << i << " off " << argO
+                     << " size " << viewSize << "\n";
       args[i] = tmp;
       std::tie(argB, argO, argP) = bufferAndOffset(lrt, tmp);
     }
@@ -3683,6 +3701,24 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
   // for, so they are part of what it is cached under.
   if (constcnt)
     sizeKey.emplace_back(consts, consts + constcnt);
+
+  // A kernel called with two pointers into the same allocation (mfem's
+  // Dot(x, x)) resolves to the same buffer twice: XLA forbids donating a
+  // buffer twice AND passing a donated buffer as any other argument, so
+  // the whole duplicate group is passed undonated. The first view's result
+  // (a fresh buffer) replaces the allocation's buffer; the other results
+  // are dropped, so writes are only kept through the first view. The
+  // aliasing attrs differ per pattern, so it is part of the cache key.
+  std::vector<int64_t> dupOf(argcnt, -1);
+  std::vector<uint8_t> hasDup(argcnt, 0);
+  for (int64_t i = 0; i < argcnt; i++)
+    for (int64_t j = 0; j < i; j++)
+      if (baseArrays[i] == baseArrays[j]) {
+        dupOf[i] = j;
+        hasDup[j] = 1;
+        break;
+      }
+  sizeKey.emplace_back(dupOf.begin(), dupOf.end());
 
   auto iter = cache.find(sizeKey);
 
@@ -3739,10 +3775,15 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
     }
 
     for (int64_t i = 0; i < argcnt; i++) {
-      funcOp.setArgAttr(i, "tf.aliasing_output", builder.getI64IntegerAttr(i));
+      if (dupOf[i] < 0 && !hasDup[i])
+        funcOp.setArgAttr(i, "tf.aliasing_output",
+                          builder.getI64IntegerAttr(i));
     }
 
     PassManager pm(module->getContext());
+    // Argument refinement leaves the body dynamic until the shape
+    // refinement pass catches up; the intermediate module does not verify.
+    pm.enableVerifier(false);
 
     SmallVector<mlir::Type> types;
     for (int64_t i = 0; i < argcnt; i++) {
@@ -3762,9 +3803,18 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
     pm.addPass(mlir::stablehlo::createStablehloRefineShapesPass());
     pm.addNestedPass<mlir::func::FuncOp>(
         stablehlo::createStablehloCanonicalizeDynamismPass());
-    pm.addPass(mlir::enzyme::createEnzymeHLOOptPass());
+    if (!getenv("REACTANT_XLA_NO_HLO_OPT"))
+      pm.addPass(mlir::enzyme::createEnzymeHLOOptPass());
 
-    if (!mlir::succeeded(pm.run(*module))) {
+    if (getenv("REACTANT_XLA_DEBUG_EXEC")) {
+      for (int64_t i = 0; i < argcnt; i++)
+        llvm::errs() << " exec arg " << i << ": "
+                     << baseArrays[i]->on_device_shape().ToString() << "\n";
+    }
+
+    bool passesOk = mlir::succeeded(pm.run(*module));
+    // The pipeline runs unverified; catch what it produced either way.
+    if (!passesOk || failed(mlir::verify(*module))) {
       llvm::errs() << " failed to run passes\n";
       llvm::errs() << " modstr:\n" << modstr << "\n";
       pm.dump();
@@ -3774,31 +3824,163 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
       exit(1);
     }
 
+    if (getenv("REACTANT_XLA_DEBUG_EXEC")) {
+      llvm::errs() << " exec module after passes:\n";
+      module->print(llvm::errs());
+    }
+
+    // A view the kernel never stores through returns its argument
+    // unchanged. The unchanged copy may be wrapped in layout ops and
+    // threaded through while loops as an untouched iter arg, so walk the
+    // provenance back to the argument. Record it so duplicate views of one
+    // buffer keep the written view's result.
+    std::vector<uint8_t> written(argcnt, 1);
+    {
+      auto ret = cast<func::ReturnOp>(funcOp.getBody().front().back());
+      auto resolvesToArg = [&](mlir::Value v, mlir::Value arg) {
+        while (v != arg) {
+          mlir::Operation *op = v.getDefiningOp();
+          if (!op)
+            return false;
+          if (isa<mlir::stablehlo::ReshapeOp,
+                  mlir::stablehlo::BitcastConvertOp>(op)) {
+            v = op->getOperand(0);
+            continue;
+          }
+          if (auto wh = dyn_cast<mlir::stablehlo::WhileOp>(op)) {
+            unsigned k = cast<mlir::OpResult>(v).getResultNumber();
+            mlir::Block &body = wh.getBody().front();
+            if (body.getTerminator()->getOperand(k) != body.getArgument(k))
+              return false;
+            v = wh->getOperand(k);
+            continue;
+          }
+          return false;
+        }
+        return true;
+      };
+      for (int64_t i = 0; i < argcnt && i < (int64_t)ret.getNumOperands(); i++)
+        written[i] = !resolvesToArg(ret.getOperand(i), funcOp.getArgument(i));
+    }
     auto exec =
         ClientCompileWithProto(lrt->client, wrap(module.get()), nullptr, 0);
 
-    iter = cache.try_emplace(sizeKey, exec).first;
+    iter =
+        cache
+            .try_emplace(sizeKey,
+                         LinkableRuntime::CachedExec{exec, std::move(written)})
+            .first;
   }
 
-  auto exec = iter->second;
+  auto exec = iter->second.exec;
+  auto &written = iter->second.written;
 
   uint8_t *is_arg_donatable = (uint8_t *)malloc(argcnt);
   for (int i = 0; i < argcnt; i++)
-    is_arg_donatable[i] = 1;
+    is_arg_donatable[i] = (dupOf[i] < 0 && !hasDup[i]) ? 1 : 0;
   int num_results = argcnt;
   std::vector<PjRtBuffer *> results(argcnt);
   std::vector<uint8_t> futures(argcnt, 0);
   std::vector<FutureType *> future_results(argcnt, nullptr);
   PjRtDevice *device = ClientGetDevice(lrt->client, lrt->device);
+  bool dbg = getenv("REACTANT_XLA_DEBUG_EXEC") != nullptr;
+  if (dbg) {
+    for (int64_t i = 0; i < argcnt; i++) {
+      auto sz = baseArrays[i]->GetOnDeviceSizeInBytes();
+      if (sz.ok() && *sz <= 64) {
+        auto lit = baseArrays[i]->ToLiteralSync();
+        if (lit.ok())
+          llvm::errs() << " exec in[" << i << "] = " << (*lit)->ToString()
+                       << "\n";
+      }
+    }
+  }
+  if (const char *dumpDir = getenv("REACTANT_XLA_DUMP_DIR")) {
+    static std::atomic<int64_t> inCounter{0};
+    int64_t execId = inCounter++;
+    for (int64_t i = 0; i < argcnt; i++) {
+      auto lit = baseArrays[i]->ToLiteralSync();
+      if (!lit.ok())
+        continue;
+      std::string path = std::string(dumpDir) + "/exec" +
+                         std::to_string(execId) + "_in" + std::to_string(i) +
+                         ".bin";
+      FILE *f = fopen(path.c_str(), "wb");
+      if (f) {
+        fwrite((*lit)->untyped_data(), 1, (*lit)->size_bytes(), f);
+        fclose(f);
+      }
+    }
+  }
   XLAExecuteSharded(exec, argcnt, baseArrays.data(), device, is_arg_donatable,
                     num_results, results.data(), futures.data(),
                     future_results.data());
   free(is_arg_donatable);
   for (int64_t i = 0; i < argcnt; i++) {
-    *basePtrs[i] = results[i];
     if (futures[i]) {
       FutureAwait(future_results[i]);
       FreeFuture(future_results[i]);
+    }
+  }
+  if (const char *dumpDir = getenv("REACTANT_XLA_DUMP_DIR")) {
+    static std::atomic<int64_t> execCounter{0};
+    int64_t execId = execCounter++;
+    for (int64_t i = 0; i < argcnt; i++) {
+      auto lit = results[i]->ToLiteralSync();
+      if (!lit.ok())
+        continue;
+      std::string path = std::string(dumpDir) + "/exec" +
+                         std::to_string(execId) + "_out" + std::to_string(i) +
+                         ".bin";
+      FILE *f = fopen(path.c_str(), "wb");
+      if (f) {
+        fwrite((*lit)->untyped_data(), 1, (*lit)->size_bytes(), f);
+        fclose(f);
+      }
+    }
+  }
+  if (dbg) {
+    for (int64_t i = 0; i < argcnt; i++) {
+      auto sz = results[i]->GetOnDeviceSizeInBytes();
+      if (sz.ok() && *sz <= 64) {
+        auto lit = results[i]->ToLiteralSync();
+        if (lit.ok())
+          llvm::errs() << " exec out[" << i << "] = " << (*lit)->ToString()
+                       << "\n";
+      }
+    }
+    llvm::errs() << " dup info:";
+    for (int64_t i = 0; i < argcnt; i++)
+      llvm::errs() << " [" << i << "] dupOf=" << dupOf[i]
+                   << " hasDup=" << (int)hasDup[i] << " written="
+                   << (i < (int64_t)written.size() ? (int)written[i] : -1);
+    llvm::errs() << "\n";
+  }
+  // Each duplicate group keeps the result of the view the kernel stores
+  // through (a read-only view's result is just the stale input); with no
+  // written view any result is that same input, so the leader's serves.
+  std::vector<int64_t> keepFor(argcnt, -1);
+  for (int64_t i = 0; i < argcnt; i++) {
+    int64_t leader = dupOf[i] >= 0 ? dupOf[i] : (hasDup[i] ? i : -1);
+    if (leader >= 0 && keepFor[leader] < 0 &&
+        (leader < (int64_t)written.size() ? written[i] : 1))
+      keepFor[leader] = i;
+  }
+  for (int64_t i = 0; i < argcnt; i++)
+    if (hasDup[i] && keepFor[i] < 0)
+      keepFor[i] = i;
+  for (int64_t i = 0; i < argcnt; i++) {
+    if (dupOf[i] >= 0 || hasDup[i]) {
+      int64_t leader = dupOf[i] >= 0 ? dupOf[i] : i;
+      if (keepFor[leader] == i) {
+        // Undonated: the exec did not consume the old buffer.
+        PjRtBufferFree(*basePtrs[i]);
+        *basePtrs[i] = results[i];
+      } else {
+        PjRtBufferFree(results[i]);
+      }
+    } else {
+      *basePtrs[i] = results[i];
     }
   }
   for (auto &ov : offsetViews) {
