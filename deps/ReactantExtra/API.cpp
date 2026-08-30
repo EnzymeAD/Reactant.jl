@@ -3497,8 +3497,23 @@ struct LinkableRuntime {
   }
 };
 
+static void *reactantXLAMallocImpl(LinkableRuntime *__restrict__ lrt,
+                                   uint64_t ptype, uint64_t shapeLen,
+                                   uint64_t *__restrict__ shape);
+
 static std::tuple<PjRtBuffer *, /*offset*/ size_t, PjRtBuffer **>
 bufferAndOffset(LinkableRuntime *__restrict__ lrt, void *ptr) {
+  // Kernels take optional buffers as null pointers (mfem's
+  // `geom ? geom->J.Read() : nullptr`) and guard every access on a flag;
+  // hand the executable a small dummy buffer for those arguments.
+  if (!ptr) {
+    // Fresh per use: arguments are donated, and one buffer cannot be
+    // donated twice in a single call.
+    uint64_t shape[1] = {256};
+    void *dummy = reactantXLAMallocImpl(lrt, /*s8*/ 2, 1, shape);
+    auto start = (PjRtBuffer **)dummy;
+    return std::tuple<PjRtBuffer *, size_t, PjRtBuffer **>(*start, 0, start);
+  }
   auto found = lrt->allocations.lower_bound(ptr);
   assert(found != lrt->allocations.end());
   auto start = (PjRtBuffer **)(*found);
@@ -3557,10 +3572,9 @@ REACTANT_ABI void reactantXLAMemcpy(LinkableRuntime **__restrict__ lrtP,
   }
 }
 
-REACTANT_ABI void *reactantXLAMalloc(LinkableRuntime **__restrict__ lrtP,
-                                     uint64_t ptype, uint64_t shapeLen,
-                                     uint64_t *__restrict__ shape) {
-  auto lrt = *lrtP;
+static void *reactantXLAMallocImpl(LinkableRuntime *__restrict__ lrt,
+                                   uint64_t ptype, uint64_t shapeLen,
+                                   uint64_t *__restrict__ shape) {
   PjRtDevice *device = ClientGetDevice(lrt->client, lrt->device);
 
   auto xbuffer0 = UninitPJRTBuffer(lrt->client, device, ptype, shapeLen, shape);
@@ -3571,6 +3585,12 @@ REACTANT_ABI void *reactantXLAMalloc(LinkableRuntime **__restrict__ lrtP,
   // Assert that it was actually inserted
   assert(pair.second);
   return xbuffer;
+}
+
+REACTANT_ABI void *reactantXLAMalloc(LinkableRuntime **__restrict__ lrtP,
+                                     uint64_t ptype, uint64_t shapeLen,
+                                     uint64_t *__restrict__ shape) {
+  return reactantXLAMallocImpl(*lrtP, ptype, shapeLen, shape);
 }
 
 REACTANT_ABI void reactantXLAFree(LinkableRuntime **__restrict__ lrtP,
@@ -3704,7 +3724,6 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
       }
       exit(1);
     }
-
     auto exec =
         ClientCompileWithProto(lrt->client, wrap(module.get()), nullptr, 0);
 
