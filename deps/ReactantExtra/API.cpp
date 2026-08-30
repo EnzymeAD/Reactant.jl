@@ -3516,6 +3516,8 @@ struct LinkableRuntime {
   }
 };
 
+static const char *g_current_modstr = nullptr;
+
 static std::tuple<PjRtBuffer *, /*offset*/ size_t, PjRtBuffer **>
 bufferAndOffset(LinkableRuntime *__restrict__ lrt, void *ptr) {
   auto found = lrt->allocations.lower_bound(ptr);
@@ -3523,6 +3525,9 @@ bufferAndOffset(LinkableRuntime *__restrict__ lrt, void *ptr) {
       (size_t)ptr >= (size_t)found->first + found->second.size) {
     llvm::errs() << "pointer " << ptr
                  << " does not belong to any reactant allocation\n";
+    if (const char *m = getenv("REACTANT_XLA_DUMP_MOD_ON_ERR"))
+      if (g_current_modstr)
+        llvm::errs() << " current modstr:\n" << g_current_modstr << "\n";
     exit(1);
   }
   return std::tuple<PjRtBuffer *, /*offset*/ size_t, PjRtBuffer **>(
@@ -3638,6 +3643,7 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
                                   void **args, int64_t constcnt,
                                   const int64_t *consts) {
   auto lrt = *lrtP;
+  g_current_modstr = modstr;
   auto &cache = lrt->executables[modstr];
   std::vector<PjRtBuffer *> baseArrays(argcnt);
   std::vector<PjRtBuffer **> basePtrs(argcnt);
@@ -3654,6 +3660,8 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
   };
   std::vector<OffsetView> offsetViews;
   for (int64_t i = 0; i < argcnt; i++) {
+    if (getenv("REACTANT_XLA_DEBUG_EXEC"))
+      llvm::errs() << " resolving arg " << i << " ptr " << args[i] << "\n";
     auto &&[argB0, argO0, argP0] = bufferAndOffset(lrt, args[i]);
     auto argB = argB0;
     auto argO = argO0;
@@ -3677,6 +3685,9 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
                      viewSize, &tmpIt->second.buffer);
       }
       offsetViews.push_back({tmp, args[i], viewSize});
+      if (getenv("REACTANT_XLA_DEBUG_EXEC"))
+        llvm::errs() << " staged offset view arg " << i << " off " << argO
+                     << " size " << viewSize << "\n";
       args[i] = tmp;
       std::tie(argB, argO, argP) = bufferAndOffset(lrt, tmp);
     }
@@ -3792,7 +3803,14 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
     pm.addPass(mlir::stablehlo::createStablehloRefineShapesPass());
     pm.addNestedPass<mlir::func::FuncOp>(
         stablehlo::createStablehloCanonicalizeDynamismPass());
-    pm.addPass(mlir::enzyme::createEnzymeHLOOptPass());
+    if (!getenv("REACTANT_XLA_NO_HLO_OPT"))
+      pm.addPass(mlir::enzyme::createEnzymeHLOOptPass());
+
+    if (getenv("REACTANT_XLA_DEBUG_EXEC")) {
+      for (int64_t i = 0; i < argcnt; i++)
+        llvm::errs() << " exec arg " << i << ": "
+                     << baseArrays[i]->on_device_shape().ToString() << "\n";
+    }
 
     bool passesOk = mlir::succeeded(pm.run(*module));
     // The pipeline runs unverified; catch what it produced either way.
@@ -3804,6 +3822,11 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
         llvm::errs() << " arg: " << ty << "\n";
       }
       exit(1);
+    }
+
+    if (getenv("REACTANT_XLA_DEBUG_EXEC")) {
+      llvm::errs() << " exec module after passes:\n";
+      module->print(llvm::errs());
     }
 
     // A view the kernel never stores through returns its argument
@@ -3860,6 +3883,35 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
   std::vector<uint8_t> futures(argcnt, 0);
   std::vector<FutureType *> future_results(argcnt, nullptr);
   PjRtDevice *device = ClientGetDevice(lrt->client, lrt->device);
+  bool dbg = getenv("REACTANT_XLA_DEBUG_EXEC") != nullptr;
+  if (dbg) {
+    for (int64_t i = 0; i < argcnt; i++) {
+      auto sz = baseArrays[i]->GetOnDeviceSizeInBytes();
+      if (sz.ok() && *sz <= 64) {
+        auto lit = baseArrays[i]->ToLiteralSync();
+        if (lit.ok())
+          llvm::errs() << " exec in[" << i << "] = " << (*lit)->ToString()
+                       << "\n";
+      }
+    }
+  }
+  if (const char *dumpDir = getenv("REACTANT_XLA_DUMP_DIR")) {
+    static std::atomic<int64_t> inCounter{0};
+    int64_t execId = inCounter++;
+    for (int64_t i = 0; i < argcnt; i++) {
+      auto lit = baseArrays[i]->ToLiteralSync();
+      if (!lit.ok())
+        continue;
+      std::string path = std::string(dumpDir) + "/exec" +
+                         std::to_string(execId) + "_in" + std::to_string(i) +
+                         ".bin";
+      FILE *f = fopen(path.c_str(), "wb");
+      if (f) {
+        fwrite((*lit)->untyped_data(), 1, (*lit)->size_bytes(), f);
+        fclose(f);
+      }
+    }
+  }
   XLAExecuteSharded(exec, argcnt, baseArrays.data(), device, is_arg_donatable,
                     num_results, results.data(), futures.data(),
                     future_results.data());
@@ -3869,6 +3921,40 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
       FutureAwait(future_results[i]);
       FreeFuture(future_results[i]);
     }
+  }
+  if (const char *dumpDir = getenv("REACTANT_XLA_DUMP_DIR")) {
+    static std::atomic<int64_t> execCounter{0};
+    int64_t execId = execCounter++;
+    for (int64_t i = 0; i < argcnt; i++) {
+      auto lit = results[i]->ToLiteralSync();
+      if (!lit.ok())
+        continue;
+      std::string path = std::string(dumpDir) + "/exec" +
+                         std::to_string(execId) + "_out" + std::to_string(i) +
+                         ".bin";
+      FILE *f = fopen(path.c_str(), "wb");
+      if (f) {
+        fwrite((*lit)->untyped_data(), 1, (*lit)->size_bytes(), f);
+        fclose(f);
+      }
+    }
+  }
+  if (dbg) {
+    for (int64_t i = 0; i < argcnt; i++) {
+      auto sz = results[i]->GetOnDeviceSizeInBytes();
+      if (sz.ok() && *sz <= 64) {
+        auto lit = results[i]->ToLiteralSync();
+        if (lit.ok())
+          llvm::errs() << " exec out[" << i << "] = " << (*lit)->ToString()
+                       << "\n";
+      }
+    }
+    llvm::errs() << " dup info:";
+    for (int64_t i = 0; i < argcnt; i++)
+      llvm::errs() << " [" << i << "] dupOf=" << dupOf[i]
+                   << " hasDup=" << (int)hasDup[i] << " written="
+                   << (i < (int64_t)written.size() ? (int)written[i] : -1);
+    llvm::errs() << "\n";
   }
   // Each duplicate group keeps the result of the view the kernel stores
   // through (a read-only view's result is just the stale input); with no
