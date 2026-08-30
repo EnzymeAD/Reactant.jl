@@ -3637,13 +3637,41 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
 
   std::vector<std::vector<int64_t>> sizeKey;
   sizeKey.reserve(argcnt + (constcnt ? 1 : 0));
+  // A kernel argument may point into the middle of an allocation (a block
+  // operator's sub-vector view); materialize the tail as its own buffer
+  // through staged copies and write it back after the launch.
+  struct OffsetView {
+    void *tmp;
+    void *orig;
+    size_t size;
+  };
+  std::vector<OffsetView> offsetViews;
   for (int64_t i = 0; i < argcnt; i++) {
-    auto &&[argB, argO, argP] = bufferAndOffset(lrt, args[i]);
+    auto &&[argB0, argO0, argP0] = bufferAndOffset(lrt, args[i]);
+    auto argB = argB0;
+    auto argO = argO0;
+    auto argP = argP0;
     if (argO != 0) {
-      llvm::errs() << "only zero-offset execution supported, argument " << i
-                   << " had byte offset of " << argO << " (ptr=" << args[i]
-                   << ", resolved base=" << (void *)argP << ")\n";
-      exit(1);
+      void *basePtr = (void *)((size_t)args[i] - argO);
+      auto fullIt = lrt->allocations.find(basePtr);
+      if (fullIt == lrt->allocations.end()) {
+        llvm::errs() << "offset view of unknown allocation, argument " << i
+                     << " ptr=" << args[i] << "\n";
+        exit(1);
+      }
+      size_t viewSize = fullIt->second.size - argO;
+      uint64_t shape[1] = {viewSize};
+      void *tmp = reactantXLAMalloc(lrtP, /*s8*/ 2, 1, shape);
+      auto tmpIt = lrt->allocations.find(tmp);
+      {
+        std::vector<char> host(viewSize);
+        CopyFromBuffer(lrt->client, argB, host.data(), argO, viewSize, argP);
+        CopyToBuffer(lrt->client, tmpIt->second.buffer, host.data(), 0,
+                     viewSize, &tmpIt->second.buffer);
+      }
+      offsetViews.push_back({tmp, args[i], viewSize});
+      args[i] = tmp;
+      std::tie(argB, argO, argP) = bufferAndOffset(lrt, tmp);
     }
     baseArrays[i] = argB;
     basePtrs[i] = argP;
@@ -3772,6 +3800,14 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
       FutureAwait(future_results[i]);
       FreeFuture(future_results[i]);
     }
+  }
+  for (auto &ov : offsetViews) {
+    auto &&[tB, tO, tP] = bufferAndOffset(lrt, ov.tmp);
+    auto &&[oB, oO, oP] = bufferAndOffset(lrt, ov.orig);
+    std::vector<char> host(ov.size);
+    CopyFromBuffer(lrt->client, tB, host.data(), 0, ov.size, tP);
+    CopyToBuffer(lrt->client, oB, host.data(), oO, ov.size, oP);
+    reactantXLAFree(lrtP, ov.tmp);
   }
 }
 
