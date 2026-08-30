@@ -3789,10 +3789,80 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
     pm.addPass(mlir::enzyme::createEnzymeHLOOptPass());
 
     bool passesOk = mlir::succeeded(pm.run(*module));
+    if (passesOk && failed(mlir::verify(*module))) {
+      // A hlo-opt pattern interplay (slice-of-broadcast motion) can leave
+      // type-inconsistent IR; retry the whole pipeline without that
+      // pattern group rather than dying.
+      llvm::errs() << " exec pipeline produced invalid IR; retrying without "
+                      "slice-motion patterns\n";
+      module = mlir::OwningOpRef<mlir::ModuleOp>(
+          mlir::ModuleOp::create(mlir::OpBuilder(&context).getUnknownLoc()));
+      if (failed(parseSourceString(modstr, module->getBody(), config))) {
+        llvm::errs() << " failed to re-parse module\n";
+        exit(1);
+      }
+      auto funcOp2 = cast<func::FuncOp>(&module->getBody()->back());
+      funcOp2.setSymName(builder.getStringAttr("main"));
+      funcOp2.setVisibility(SymbolTable::Visibility::Public);
+      for (int64_t i = constcnt - 1; i >= 0; i--) {
+        auto arg = funcOp2.getArgument(argcnt + i);
+        auto TT = dyn_cast<mlir::RankedTensorType>(arg.getType());
+        auto IT = dyn_cast_or_null<mlir::IntegerType>(TT ? TT.getElementType()
+                                                         : nullptr);
+        if (!TT || !IT) {
+          llvm::errs() << " non-integer specialized scalar\n";
+          exit(1);
+        }
+        mlir::OpBuilder b2(&funcOp2.getBody().front(),
+                           funcOp2.getBody().front().begin());
+        auto cst = b2.create<mlir::stablehlo::ConstantOp>(
+            funcOp2.getLoc(),
+            mlir::SplatElementsAttr::get(TT, b2.getIntegerAttr(IT, consts[i])));
+        arg.replaceAllUsesWith(cst);
+        funcOp2.eraseArgument(argcnt + i);
+      }
+      for (int64_t i = 0; i < argcnt; i++) {
+        if (dupOf[i] < 0 && !hasDup[i])
+          funcOp2.setArgAttr(i, "tf.aliasing_output",
+                             builder.getI64IntegerAttr(i));
+      }
+      PassManager pm2(module->getContext());
+      pm2.enableVerifier(false);
+      if (constcnt) {
+        pm2.addNestedPass<mlir::func::FuncOp>(
+            stablehlo::createStablehloCanonicalizeDynamismPass());
+        pm2.addPass(mlir::stablehlo::createStablehloRefineShapesPass());
+      }
+      pm2.addPass(mlir::enzyme::createEnzymeRefineArgumentsPass(types));
+      pm2.addPass(mlir::stablehlo::createStablehloRefineShapesPass());
+      pm2.addNestedPass<mlir::func::FuncOp>(
+          stablehlo::createStablehloCanonicalizeDynamismPass());
+      {
+        mlir::enzyme::EnzymeHLOOptPassOptions opts;
+        opts.passses = 24575 & ~1ull;
+        pm2.addPass(mlir::enzyme::createEnzymeHLOOptPass(opts));
+      }
+      passesOk = mlir::succeeded(pm2.run(*module));
+      // Later writtenness analysis reads from the current module's func.
+      funcOp = funcOp2;
+    }
     // The pipeline runs unverified; catch what it produced either way.
     if (!passesOk || failed(mlir::verify(*module))) {
       llvm::errs() << " failed to run passes\n";
       llvm::errs() << " modstr:\n" << modstr << "\n";
+      {
+        std::error_code ec;
+        llvm::raw_fd_ostream fs("/tmp/claude-1000/failing_modstr.mlir", ec);
+        if (!ec)
+          fs << modstr;
+        llvm::raw_fd_ostream fp("/tmp/claude-1000/failing_postpass.mlir", ec);
+        if (!ec)
+          module->print(fp);
+        llvm::errs() << " types:";
+        for (auto ty : types)
+          llvm::errs() << " " << ty;
+        llvm::errs() << "\n";
+      }
       pm.dump();
       for (auto ty : types) {
         llvm::errs() << " arg: " << ty << "\n";
