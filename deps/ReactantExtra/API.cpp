@@ -3786,7 +3786,8 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
     pm.addPass(mlir::stablehlo::createStablehloRefineShapesPass());
     pm.addNestedPass<mlir::func::FuncOp>(
         stablehlo::createStablehloCanonicalizeDynamismPass());
-    pm.addPass(mlir::enzyme::createEnzymeHLOOptPass());
+    if (!getenv("REACTANT_XLA_NO_HLO_OPT"))
+      pm.addPass(mlir::enzyme::createEnzymeHLOOptPass());
 
     bool passesOk = mlir::succeeded(pm.run(*module));
     if (passesOk && failed(mlir::verify(*module))) {
@@ -3845,6 +3846,56 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
       passesOk = mlir::succeeded(pm2.run(*module));
       // Later writtenness analysis reads from the current module's func.
       funcOp = funcOp2;
+    }
+    if (passesOk && failed(mlir::verify(*module))) {
+      // Still inconsistent: run without the hlo optimizer entirely —
+      // slower kernels beat dying.
+      llvm::errs() << " exec pipeline still invalid; retrying without "
+                      "enzyme-hlo-opt\n";
+      module = mlir::OwningOpRef<mlir::ModuleOp>(
+          mlir::ModuleOp::create(mlir::OpBuilder(&context).getUnknownLoc()));
+      if (failed(parseSourceString(modstr, module->getBody(), config))) {
+        llvm::errs() << " failed to re-parse module\n";
+        exit(1);
+      }
+      auto funcOp3 = cast<func::FuncOp>(&module->getBody()->back());
+      funcOp3.setSymName(builder.getStringAttr("main"));
+      funcOp3.setVisibility(SymbolTable::Visibility::Public);
+      for (int64_t i = constcnt - 1; i >= 0; i--) {
+        auto arg = funcOp3.getArgument(argcnt + i);
+        auto TT = dyn_cast<mlir::RankedTensorType>(arg.getType());
+        auto IT = dyn_cast_or_null<mlir::IntegerType>(TT ? TT.getElementType()
+                                                         : nullptr);
+        if (!TT || !IT) {
+          llvm::errs() << " non-integer specialized scalar\n";
+          exit(1);
+        }
+        mlir::OpBuilder b3(&funcOp3.getBody().front(),
+                           funcOp3.getBody().front().begin());
+        auto cst = b3.create<mlir::stablehlo::ConstantOp>(
+            funcOp3.getLoc(),
+            mlir::SplatElementsAttr::get(TT, b3.getIntegerAttr(IT, consts[i])));
+        arg.replaceAllUsesWith(cst);
+        funcOp3.eraseArgument(argcnt + i);
+      }
+      for (int64_t i = 0; i < argcnt; i++) {
+        if (dupOf[i] < 0 && !hasDup[i])
+          funcOp3.setArgAttr(i, "tf.aliasing_output",
+                             builder.getI64IntegerAttr(i));
+      }
+      PassManager pm3(module->getContext());
+      pm3.enableVerifier(false);
+      if (constcnt) {
+        pm3.addNestedPass<mlir::func::FuncOp>(
+            stablehlo::createStablehloCanonicalizeDynamismPass());
+        pm3.addPass(mlir::stablehlo::createStablehloRefineShapesPass());
+      }
+      pm3.addPass(mlir::enzyme::createEnzymeRefineArgumentsPass(types));
+      pm3.addPass(mlir::stablehlo::createStablehloRefineShapesPass());
+      pm3.addNestedPass<mlir::func::FuncOp>(
+          stablehlo::createStablehloCanonicalizeDynamismPass());
+      passesOk = mlir::succeeded(pm3.run(*module));
+      funcOp = funcOp3;
     }
     // The pipeline runs unverified; catch what it produced either way.
     if (!passesOk || failed(mlir::verify(*module))) {
