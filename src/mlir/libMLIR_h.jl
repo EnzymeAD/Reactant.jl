@@ -15174,6 +15174,11 @@ struct JLHloCostAnalysisProperties
     reserved0::Cfloat
 end
 
+struct AllocationInfo
+    buffer::Ptr{Cint}
+    size::Csize_t
+end
+
 struct JLEstimateRunTimeData
     flops::Int64
     bytes_read::Int64
