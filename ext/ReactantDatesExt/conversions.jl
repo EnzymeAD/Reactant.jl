@@ -27,22 +27,6 @@ for (S, T) in _PERIOD_PAIRS
     @eval Base.convert(::Type{$T{I}}, x::$T{J}) where {I,J} = $T(convert(I, value(x)))
 end
 
-# Constructing a Dates period FROM A TRACED NUMBER yields the Reactant counterpart.
-#
-# `Dates.Second`, `Dates.Millisecond` and friends store a concrete `Int64`, so they cannot hold a
-# traced value at all:
-#
-#     julia> Dates.Second(x::TracedRNumber{Int64})
-#     ERROR: MethodError: no method matching Int64(::TracedRNumber{Int64})
-#
-# Without these methods, ordinary date arithmetic written against `Dates` fails the moment its
-# operand becomes traced, even though every Reactant counterpart type already exists. Returning the
-# Reactant period is the only representable answer, and it keeps generic code — code that says
-# `Millisecond(round(Int, 1000t))` without knowing whether `t` is traced — working unchanged.
-for (S, T) in _PERIOD_PAIRS
-    @eval Dates.$S(x::Reactant.TracedRNumber) = $T(x)
-end
-
 # Cross-period conversions: Dates.Source → ReactantTarget (where Source ≠ Target)
 # Uses Dates' own conversion logic first, then converts to the Reactant type.
 # This covers all pairs that Dates.convert supports natively.
