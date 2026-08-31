@@ -359,8 +359,24 @@ function compile_mlir!(
         lower_comms = false
     end
 
+    # `transpose_propagate` / `reshape_propagate` may be configured independently for the
+    # passes running before and after Enzyme's AD pass, so resolve both phases up front and
+    # build one pass list per phase.
+    pre_ad_compile_options = Reactant.__compile_options_for_ad_phase(
+        compile_options, :pre_ad
+    )
+    post_ad_compile_options = Reactant.__compile_options_for_ad_phase(
+        compile_options, :post_ad
+    )
+    # the raising passes are scheduled before AD iff `raise_first` is set
+    raise_compile_options = if compile_options.raise_first
+        pre_ad_compile_options
+    else
+        post_ad_compile_options
+    end
+
     opt_passes = optimization_passes(
-        compile_options;
+        pre_ad_compile_options;
         sroa=true,
         recognize_comms,
         lower_comms,
@@ -369,8 +385,22 @@ function compile_mlir!(
         hlo_opts=compile_options.optimization_passes !== :after_enzyme &&
                  compile_options.optimization_passes !== :only_enzyme,
     )
+    # runs between `enzyme-batch` and the AD pass
+    opt_passes_pre_ad = optimization_passes(
+        pre_ad_compile_options;
+        sroa=false,
+        recognize_comms,
+        lower_comms,
+        backend,
+        is_sharded,
+    )
     opt_passes2 = optimization_passes(
-        compile_options; sroa=false, recognize_comms, lower_comms, backend, is_sharded
+        post_ad_compile_options;
+        sroa=false,
+        recognize_comms,
+        lower_comms,
+        backend,
+        is_sharded,
     )
 
     raise_passes = if raise isa String
@@ -384,11 +414,21 @@ function compile_mlir!(
 
         if compile_options.optimization_passes !== :after_enzyme &&
             compile_options.optimization_passes !== :only_enzyme
-            result = result * "," * opt_passes2
+            result =
+                result *
+                "," *
+                optimization_passes(
+                    raise_compile_options;
+                    sroa=false,
+                    recognize_comms,
+                    lower_comms,
+                    backend,
+                    is_sharded,
+                )
 
             if DUS_TO_CONCAT[]
                 opt_passes3 = optimization_passes(
-                    compile_options;
+                    raise_compile_options;
                     sroa=false,
                     dus_to_concat=true,
                     recognize_comms,
@@ -450,7 +490,7 @@ function compile_mlir!(
                     if compile_options.optimization_passes === :after_enzyme
                         String[]
                     else
-                        String[opt_passes2]
+                        String[opt_passes_pre_ad]
                     end,
                     String[
                         enzyme_pass,
@@ -479,7 +519,7 @@ function compile_mlir!(
                         "mark-func-memory-effects",
                         opt_passes,
                         "enzyme-batch",
-                        opt_passes2,
+                        opt_passes_pre_ad,
                         enzyme_pass,
                         opt_passes2,
                         "canonicalize",
@@ -504,7 +544,7 @@ function compile_mlir!(
                         kern,
                         raise_passes,
                         "enzyme-batch",
-                        opt_passes2,
+                        opt_passes_pre_ad,
                         enzyme_pass,
                         opt_passes2,
                         "canonicalize",
@@ -518,7 +558,7 @@ function compile_mlir!(
                         "mark-func-memory-effects",
                         opt_passes,
                         "enzyme-batch",
-                        opt_passes2,
+                        opt_passes_pre_ad,
                         enzyme_pass,
                         opt_passes2,
                         "canonicalize",
@@ -545,7 +585,7 @@ function compile_mlir!(
                         "mark-func-memory-effects",
                         opt_passes,
                         "enzyme-batch",
-                        opt_passes2,
+                        opt_passes_pre_ad,
                         enzyme_pass,
                         opt_passes2,
                         "canonicalize",
@@ -568,7 +608,7 @@ function compile_mlir!(
                     "mark-func-memory-effects",
                     opt_passes,
                     "enzyme-batch",
-                    opt_passes2,
+                    opt_passes_pre_ad,
                     enzyme_pass,
                     opt_passes2,
                     "canonicalize",
@@ -592,7 +632,7 @@ function compile_mlir!(
                         kern,
                         raise_passes,
                         "enzyme-batch",
-                        opt_passes2,
+                        opt_passes_pre_ad,
                         impulse_pass(),
                         "lower-impulse-to-stablehlo{backend=$backend}",
                         "outline-enzyme-regions",
@@ -618,7 +658,7 @@ function compile_mlir!(
                         "mark-func-memory-effects",
                         opt_passes,
                         "enzyme-batch",
-                        opt_passes2,
+                        opt_passes_pre_ad,
                         impulse_pass(),
                         "lower-impulse-to-stablehlo{backend=$backend}",
                         "outline-enzyme-regions",
@@ -691,7 +731,7 @@ function compile_mlir!(
                         kern,
                         raise_passes,
                         "enzyme-batch",
-                        opt_passes2,
+                        opt_passes_pre_ad,
                         enzyme_pass,
                         "canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math",
                         lower_enzymexla_passes,
@@ -702,7 +742,7 @@ function compile_mlir!(
                         "mark-func-memory-effects",
                         opt_passes,
                         "enzyme-batch",
-                        opt_passes2,
+                        opt_passes_pre_ad,
                         enzyme_pass,
                         "canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math",
                         kern,
@@ -726,8 +766,8 @@ function compile_mlir!(
     if compile_options.optimization_passes isa Symbol &&
         compile_options.optimization_passes === :all &&
         (
-            compile_options.transpose_propagate === :up ||
-            compile_options.reshape_propagate === :up
+            post_ad_compile_options.transpose_propagate === :up ||
+            post_ad_compile_options.reshape_propagate === :up
         )
         # We tried propagating reshapes and transposes up. If at this point we are left
         # with them, we propagate them down to minimize the number of Ops in the IR.
@@ -740,14 +780,26 @@ function compile_mlir!(
             raise_shlo_to_blas_lapack=false,
         )
         opt_passes_down = optimization_passes(
-            Reactant.__compile_options_with_reversed_propagation(compile_options);
+            Reactant.__compile_options_with_reversed_propagation(post_ad_compile_options);
             common_kwargs...,
         )
-        opt_passes_up = optimization_passes(compile_options; common_kwargs...)
+        opt_passes_up = optimization_passes(post_ad_compile_options; common_kwargs...)
         run_pass_pipeline!(
             mod,
             join([opt_passes_down, opt_passes_up, opt_passes_down], ","),
             "post_op_transpose_reshape",
+        )
+    end
+
+    # Propagation above can leave an elementwise chain reading a value at two
+    # bitcast-equivalent shapes, which stops XLA from fusing the chain into its
+    # consumer. Give each chain a single shape again.
+    if compile_options.optimization_passes === :all &&
+        compile_options.canonicalize_elementwise_shapes
+        run_pass_pipeline!(
+            mod,
+            "canonicalize-elementwise-shapes,canonicalize,cse",
+            "canonicalize_elementwise_shapes",
         )
     end
 
@@ -889,11 +941,19 @@ function compile_mlir!(
 
             # we just need the ops to potentially remove slices / paddings
             if compile_options.optimization_passes === :all
+                # this runs after AD, so use the post-AD propagation directions
                 run_pass_pipeline!(
                     mod,
                     join(
                         [
-                            opt_passes,
+                            optimization_passes(
+                                post_ad_compile_options;
+                                sroa=true,
+                                recognize_comms,
+                                lower_comms,
+                                backend,
+                                is_sharded,
+                            ),
                             "canonicalize",
                             "cse",
                             "canonicalize",
