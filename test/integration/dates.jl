@@ -7,21 +7,11 @@ using Adapt: Adapt
 
 const RDExt = Base.get_extension(Reactant, :ReactantDatesExt)
 
-# Marker adaptor for the Adapt tests below: reports whether `Adapt` reached the wrapped payload,
-# without needing a GPU. Defined at top level because `@testset` bodies are a local scope.
-#
-# The marker is a distinctive NUMBER rather than, say, a Symbol: the period wrappers accept only
-# `Number` (`ReactantMillisecond(v::Number)`), which is exactly the contract the real
-# `ReactantKernelAdaptor` satisfies by returning a `CuTracedRNumber`.
 const ADAPT_MARKER = Int32(-12345)
 
 struct MarkerAdaptor end
 Adapt.adapt_storage(::MarkerAdaptor, ::Reactant.TracedRNumber) = ADAPT_MARKER
 Adapt.adapt_storage(::MarkerAdaptor, ::Number) = ADAPT_MARKER
-
-# Preparations for timestepper MWE unit test in the end
-# Can't do that in the @testset scope, as scope issues occur
-# Inspired by the usage in SpeedyWeather.jl
 
 # Minimal clock-like mutable struct
 mutable struct Clock{I,T,TS}
