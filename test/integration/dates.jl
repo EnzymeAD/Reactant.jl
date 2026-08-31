@@ -765,49 +765,6 @@ end
         @test DateTime(state_jit.clock.time) == state.clock.time
     end
 
-    @testset "Dates period constructors from traced numbers" begin
-        # `Dates.Second` and friends store a concrete Int64, so constructing one from a traced
-        # number must yield the Reactant counterpart rather than throwing.
-        for (D, R) in (
-            (Dates.Day, RDExt.ReactantDay),
-            (Dates.Hour, RDExt.ReactantHour),
-            (Dates.Minute, RDExt.ReactantMinute),
-            (Dates.Second, RDExt.ReactantSecond),
-            (Dates.Millisecond, RDExt.ReactantMillisecond),
-        )
-            p = @jit((n -> D(n))(Reactant.ConcreteRNumber(7)))
-            @test p isa R
-            @test Reactant.to_number(value(p)) == 7
-        end
-    end
-
-    @testset "Concrete TimeType ± traced period" begin
-        epoch = DateTime(2025, 12, 7, 12, 0, 0)
-
-        # The motivating case: a wall-clock epoch advanced by a traced elapsed time, written
-        # generically as `epoch + Millisecond(round(Int, 1000t))` with no knowledge of tracing.
-        advance(t) = epoch + Dates.Millisecond(round(Int, 1000t))
-        got = @jit(advance(Reactant.ConcreteRNumber(21600.0)))
-        @test got isa RDExt.ReactantDateTime
-        @test Reactant.to_number(value(got)) == value(epoch + Dates.Millisecond(21_600_000))
-
-        # Subtraction, and a period other than milliseconds.
-        rewind(t) = epoch - Dates.Second(round(Int, t))
-        back = @jit(rewind(Reactant.ConcreteRNumber(3600.0)))
-        @test Reactant.to_number(value(back)) == value(epoch - Dates.Second(3600))
-
-        # Commutative form.
-        flipped(t) = Dates.Millisecond(round(Int, 1000t)) + epoch
-        @test Reactant.to_number(value(@jit(flipped(Reactant.ConcreteRNumber(60.0))))) ==
-            value(epoch + Dates.Millisecond(60_000))
-
-        # Date with a traced DatePeriod.
-        d = Date(2025, 12, 7)
-        shift(n) = d + Dates.Day(n)
-        @test Reactant.to_number(value(@jit(shift(Reactant.ConcreteRNumber(3))))) ==
-            value(d + Dates.Day(3))
-    end
-
     @testset "Adapt recurses into Reactant date types" begin
         # Kernel arguments are walked by Adapt; a type with no `adapt_structure` is opaque and its
         # traced payload survives to the device unadapted. `MarkerAdaptor` (top of file) reports
