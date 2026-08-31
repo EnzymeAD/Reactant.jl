@@ -3,7 +3,7 @@ using Reactant, Test, FileCheck
 const addressable_devices = Reactant.addressable_devices()
 
 const RunningOnTPU = contains(string(Reactant.devices()[1]), "TPU")
-const RunningOnGPU = contains(string(Reactant.devices()[1]), "CUDA")
+const RunningOnGPU = Reactant.XLA.platform_name(Reactant.XLA.default_backend()) != "cpu"
 
 function rotate(x)
     y = x[1:100, :]
