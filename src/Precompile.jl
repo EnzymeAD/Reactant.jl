@@ -9,6 +9,7 @@ function clear_oc_cache() end
 
 if Reactant_jll.is_available()
     @setup_workload begin
+        MLIR.API.init_mlir_c()
         initialize_dialect()
 
         if XLA.REACTANT_XLA_RUNTIME == "PJRT"

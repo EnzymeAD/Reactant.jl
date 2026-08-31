@@ -8,10 +8,20 @@ module API
     using Reactant_jll: Reactant_jll
     using Libdl: Libdl
 
-    const mlir_c = if Reactant_jll.is_available()
-        Reactant_jll.libReactantExtra
-    else
-        missing
+    mlir_c::Union{Missing,String} = missing
+
+    function init_mlir_c()
+        global mlir_c
+        if Reactant_jll.is_available()
+            mlir_c = Reactant_jll.libReactantExtra
+        else
+            @warn "No libReactantExtra artifact is available"
+        end
+    end
+
+    function __init__()
+        init_mlir_c()
+        return nothing
     end
 
     # MLIR C API
