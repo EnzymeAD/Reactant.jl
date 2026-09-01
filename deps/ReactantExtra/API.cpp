@@ -150,6 +150,7 @@ void reactantReleaseAddressRange(void *base, size_t nbytes);
 #include "xla/python/ifrt/index_domain.h"
 #include "xla/python/ifrt/ir/ifrt_ir_program.h"
 #include "xla/python/ifrt/memory.h"
+#include "xla/python/ifrt/rtti.h"
 #include "xla/python/ifrt/shape.h"
 #include "xla/python/ifrt/sharding.h"
 #include "xla/python/ifrt/topology.h"
@@ -772,11 +773,11 @@ REACTANT_ABI void PjRtDeviceGetAllocatorStats(PjRtDevice *device,
 
 REACTANT_ABI void ifrt_device_get_allocator_stats(ifrt::Device *device,
                                                   JLAllocatorStats *jlstats) {
-  if (!llvm::isa<ifrt::PjRtDevice>(device)) {
+  if (!ifrt::isa<ifrt::PjRtDevice>(device)) {
     ReactantThrowError(
         "ifrt_device_get_allocator_stats: only supported for ifrt-pjrt.");
   }
-  auto ifrt_pjrt_device = llvm::dyn_cast<ifrt::PjRtDevice>(device);
+  auto ifrt_pjrt_device = ifrt::dyn_cast<ifrt::PjRtDevice>(device);
   PjRtDeviceGetAllocatorStats(ifrt_pjrt_device->pjrt_device(), jlstats);
 }
 
@@ -2409,11 +2410,11 @@ REACTANT_ABI bool ifrt_DeviceIsAddressable(ifrt::Device *device) {
 }
 
 REACTANT_ABI int64_t ifrt_DeviceGetLocalHardwareId(ifrt::Device *device) {
-  if (!llvm::isa<ifrt::PjRtDevice>(device)) {
+  if (!ifrt::isa<ifrt::PjRtDevice>(device)) {
     ReactantThrowError(
         "ifrt_DeviceGetLocalHardwareId: only supported for ifrt-pjrt.");
   }
-  auto ifrt_pjrt_device = llvm::dyn_cast<ifrt::PjRtDevice>(device);
+  auto ifrt_pjrt_device = ifrt::dyn_cast<ifrt::PjRtDevice>(device);
   return ifrt_pjrt_device->pjrt_device()->local_hardware_id().value();
 }
 
@@ -2650,9 +2651,9 @@ REACTANT_ABI HeldIfrtSharding *ifrt_sharding_from_xla_hlo_sharding(
 REACTANT_ABI xla::HloSharding *
 ifrt_sharding_to_xla_hlo_sharding(HeldIfrtSharding *sharding) {
   const ifrt::Sharding *val = sharding->obj().get();
-  if (!llvm::isa<ifrt::HloSharding>(val))
+  if (!ifrt::isa<ifrt::HloSharding>(val))
     ReactantThrowError("Expected a HloSharding");
-  auto ifrt_hlo_sharding = llvm::dyn_cast<const ifrt::HloSharding>(val);
+  auto ifrt_hlo_sharding = ifrt::dyn_cast<ifrt::HloSharding>(val);
   xla::HloSharding *xla_hlo_sharding =
       new xla::HloSharding(ifrt_hlo_sharding->xla_hlo_sharding());
   return xla_hlo_sharding;
@@ -2660,7 +2661,7 @@ ifrt_sharding_to_xla_hlo_sharding(HeldIfrtSharding *sharding) {
 
 REACTANT_ABI bool
 ifrt_sharding_is_single_device_sharding(HeldIfrtSharding *sharding) {
-  return llvm::isa<const ifrt::SingleDeviceSharding>(sharding->obj().get());
+  return ifrt::isa<ifrt::SingleDeviceSharding>(sharding->obj().get());
 }
 
 REACTANT_ABI bool
@@ -3268,8 +3269,8 @@ REACTANT_ABI void pjrt_hlo_module_cost_analysis_properties(
 REACTANT_ABI void ifrt_hlo_module_cost_analysis_properties(
     ifrt::Client *client, HeldHloModule *hlo_module,
     JLHloCostAnalysisProperties *jlproperties) {
-  if (llvm::isa<ifrt::PjRtClient>(client)) {
-    auto ifrt_pjrt_client = llvm::dyn_cast<ifrt::PjRtClient>(client);
+  if (ifrt::isa<ifrt::PjRtClient>(client)) {
+    auto ifrt_pjrt_client = ifrt::dyn_cast<ifrt::PjRtClient>(client);
     return pjrt_hlo_module_cost_analysis_properties(
         ifrt_pjrt_client->pjrt_client(), hlo_module, jlproperties);
   }
@@ -3401,20 +3402,22 @@ REACTANT_ABI void addSdyPropagationPipeline(
     uint8_t debugPropagationEdgeSharding /*false*/,
     uint8_t skipConvertToReshard /*false*/, uint8_t skipInline /*false*/,
     uint8_t enableInsertExplicitCollectives /*false*/) {
-  const mlir::sdy::PropagationOptions options{keepShardingRules != 0,
-                                              "",
-                                              conservativePropagation != 0,
-                                              debugShardingOrigins != 0,
-                                              debugPropagationEdgeSharding != 0,
-                                              skipConvertToReshard != 0,
-                                              skipInline != 0,
-                                              enableInsertExplicitCollectives !=
-                                                  0};
+  // Set the options by name: shardy adds fields to this struct, and has
+  // dropped the ones skipConvertToReshard and skipInline named, which no
+  // longer have anything behind them to ask for.
+  (void)skipConvertToReshard;
+  (void)skipInline;
+  mlir::sdy::PropagationOptions options;
+  options.keepShardingRules = keepShardingRules != 0;
+  options.conservativePropagation = conservativePropagation != 0;
+  options.debugShardingOrigins = debugShardingOrigins != 0;
+  options.debugPropagationEdgeSharding = debugPropagationEdgeSharding != 0;
+  options.enableInsertExplicitCollectives = enableInsertExplicitCollectives != 0;
   mlir::sdy::addPropagationPipeline(pm, options);
 }
 
 REACTANT_ABI HeldIfrtArray *ifrt_copy_array(HeldIfrtArray *array) {
-  auto pjrtArray = dyn_cast<ifrt::PjRtArray>(array->obj().get());
+  auto pjrtArray = ifrt::dyn_cast<ifrt::PjRtArray>(array->obj().get());
   if (pjrtArray) {
     std::optional<ifrt::DeviceListRef> devices;
     std::optional<ifrt::MemoryKind> memory_kind;
