@@ -4,7 +4,7 @@ NSYNC_COMMIT = "82b118aa7ace3132e517e2c467f8732978cf4023"
 
 NSYNC_SHA256 = ""
 
-ENZYMEXLA_COMMIT = "af6d59c71707931e9d1e1788bec24f8fc2aea861"
+ENZYMEXLA_COMMIT = "86e525e57796acc0c0f4548f71d2b048307332b1"
 
 ENZYMEXLA_SHA256 = ""
 
@@ -150,10 +150,6 @@ cuda_tile_workspace("@enzyme_ad")
 #     url = "https://github.com/protocolbuffers/upb/archive/9effcbcb27f0a665f9f345030188c0b291e32482.tar.gz"
 # )
 
-load("@jax//third_party/xla:workspace.bzl", jax_xla_workspace = "repo")
-
-jax_xla_workspace()
-
 load("@xla//:workspace4.bzl", "xla_workspace4")
 
 xla_workspace4()
@@ -228,7 +224,7 @@ python_wheel_version_suffix_repository(
     name = "jax_wheel_version_suffix",
 )
 
-load("@jax//third_party/flatbuffers:workspace.bzl", flatbuffers = "repo")
+load("@enzyme_ad//third_party/flatbuffers:workspace.bzl", flatbuffers = "repo")
 
 flatbuffers()
 
