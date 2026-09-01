@@ -1337,6 +1337,7 @@ function compile_xla(
                 num_replicas=mlir_fn_res.num_replicas,
                 num_partitions=mlir_fn_res.num_partitions,
                 mesh_ids=mlir_fn_res.is_sharded ? global_device_ids : nothing,
+                platform=lowercase(XLA.platform_name(client)),
                 xla_debug_options=compile_options.xla_debug_options,
                 xla_executable_build_options=merge(
                     (;
