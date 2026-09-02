@@ -2,6 +2,7 @@
 
 using ..Reactant:
     Reactant, MLIR, OptimizeCommunicationOptions, ShardyPropagationOptions, CompileOptions
+using Reactant_jll: Reactant_jll
 
 const BFLOAT16_COMPILE_TYPE = Ref{DataType}(Float32)
 const DEBUG_KERNEL = Ref{Bool}(false)
@@ -235,7 +236,7 @@ function run_pass_pipeline!(
     MLIR.IR.enable_verifier!(pm, enable_verifier)
     opm = MLIR.IR.OpPassManager(pm)
     # TODO: why isn't this being auto-generated?
-    @ccall MLIR.API.mlir_c.addSdyPropagationPipeline(
+    @ccall Reactant_jll.libReactantExtra.addSdyPropagationPipeline(
         opm::MLIR.API.MlirOpPassManager,
         propagation_options.keep_sharding_rules::UInt8,
         propagation_options.conservative_propagation::UInt8,

@@ -1,5 +1,5 @@
 [general]
-library_name = "mlir_c"
+library_name = "Reactant_jll.libReactantExtra"
 output_file_path = "./libMLIR_h.jl"
 prologue_file_path = "./missing_defs.jl"
 epilogue_file_path = ""
