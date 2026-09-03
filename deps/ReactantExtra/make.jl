@@ -262,7 +262,9 @@ let options = deepcopy(options)
     not_a_header(header) = !endswith(header, ".h")
 
     headers = [
-        detect_headers(joinpath(include_dir, "mlir-c"), args, Dict(), endswith("Python/Interop.h"))...,
+        detect_headers(
+            joinpath(include_dir, "mlir-c"), args, Dict(), endswith("Python/Interop.h")
+        )...,
         detect_headers(hlo_include_dir, args, Dict(), not_a_header)...,
         detect_headers(sdy_include_dir, args, Dict(), not_a_header)...,
         detect_headers(triton_include_dir, args, Dict(), not_a_header)...,
