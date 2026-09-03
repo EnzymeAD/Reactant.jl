@@ -259,15 +259,17 @@ let options = deepcopy(options)
         end
     end
 
+    not_a_header(header) = !endswith(header, ".h")
+
     headers = [
-        detect_headers(include_dir, args, Dict(), endswith("Python/Interop.h"))...,
-        detect_headers(hlo_include_dir, args, Dict())...,
-        detect_headers(sdy_include_dir, args, Dict())...,
-        detect_headers(triton_include_dir, args, Dict())...,
-        detect_headers(mosaic_tpu_include_dir, args, Dict())...,
-        detect_headers(mosaic_gpu_include_dir, args, Dict())...,
-        detect_headers(enzymexla_include_dir, args, Dict())...,
-        detect_headers(enzymemlir_include_dir, args, Dict())...,
+        detect_headers(joinpath(include_dir, "mlir-c"), args, Dict(), endswith("Python/Interop.h"))...,
+        detect_headers(hlo_include_dir, args, Dict(), not_a_header)...,
+        detect_headers(sdy_include_dir, args, Dict(), not_a_header)...,
+        detect_headers(triton_include_dir, args, Dict(), not_a_header)...,
+        detect_headers(mosaic_tpu_include_dir, args, Dict(), not_a_header)...,
+        detect_headers(mosaic_gpu_include_dir, args, Dict(), not_a_header)...,
+        detect_headers(enzymexla_include_dir, args, Dict(), not_a_header)...,
+        detect_headers(enzymemlir_include_dir, args, Dict(), not_a_header)...,
     ]
     if extract_api
         push!(headers, extracted_api_path)
