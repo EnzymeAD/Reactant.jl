@@ -10,6 +10,7 @@ void reactantReleaseAddressRange(void *base, size_t nbytes);
 #include "mlir-c/Support.h"
 
 #include "mlir/CAPI/IR.h"
+#include "mlir/CAPI/Pass.h"
 #include "mlir/CAPI/Wrap.h"
 #include "mlir/Pass/PassManager.h"
 
@@ -3395,7 +3396,7 @@ REACTANT_ABI HeldIfrtArray *ifrt_make_array_from_host_buffer_shards(
 }
 
 REACTANT_ABI void addSdyPropagationPipeline(
-    mlir::OpPassManager &pm, uint8_t keepShardingRules /*false*/,
+    MlirOpPassManager pm, uint8_t keepShardingRules /*false*/,
     uint8_t conservativePropagation /*false*/,
     uint8_t debugShardingOrigins /*false*/,
     uint8_t debugPropagationEdgeSharding /*false*/,
@@ -3410,7 +3411,7 @@ REACTANT_ABI void addSdyPropagationPipeline(
                                               skipInline != 0,
                                               enableInsertExplicitCollectives !=
                                                   0};
-  mlir::sdy::addPropagationPipeline(pm, options);
+  mlir::sdy::addPropagationPipeline(*unwrap(pm), options);
 }
 
 REACTANT_ABI HeldIfrtArray *ifrt_copy_array(HeldIfrtArray *array) {

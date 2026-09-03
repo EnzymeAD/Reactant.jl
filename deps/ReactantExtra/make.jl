@@ -99,6 +99,7 @@ let options = deepcopy(options)
     #endif
 
     #include "mlir-c/IR.h"
+    #include "mlir-c/Pass.h"
     #include "mlir-c/Support.h"
 
     #ifndef MLIR_CAPI_EXPORTED
