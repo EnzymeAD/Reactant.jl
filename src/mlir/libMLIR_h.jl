@@ -16868,7 +16868,7 @@ function ClientCompileWithProto(
     @ccall Reactant_jll.libReactantExtra.ClientCompileWithProto(
         client::Ptr{PjRtClient},
         cmod::MlirModule,
-        compile_options_proto::Cstring,
+        compile_options_proto::Ptr{UInt8},
         compile_options_proto_size::Csize_t,
     )::Ptr{PjRtLoadedExecutable}
 end
@@ -17163,7 +17163,7 @@ function ifrt_compile_with_proto(
     @ccall Reactant_jll.libReactantExtra.ifrt_compile_with_proto(
         client::Ptr{Client},
         cmod::MlirModule,
-        compile_options_proto::Cstring,
+        compile_options_proto::Ptr{UInt8},
         compile_options_proto_size::Csize_t,
     )::Ptr{HeldIfrtLoadedExecutable}
 end

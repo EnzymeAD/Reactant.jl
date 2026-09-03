@@ -1466,7 +1466,7 @@ xla::CompileOptions GenerateCompileOptions(
   return options;
 }
 
-xla::CompileOptions GenerateCompileOptions(const char *compile_options_proto,
+xla::CompileOptions GenerateCompileOptions(const uint8_t *compile_options_proto,
                                            size_t compile_options_proto_size) {
   if (compile_options_proto == nullptr || compile_options_proto_size == 0) {
     return xla::CompileOptions();
@@ -1534,7 +1534,7 @@ ClientCompile(PjRtClient *client, MlirModule cmod, int64_t device_id,
 
 REACTANT_ABI xla::PjRtLoadedExecutable *
 ClientCompileWithProto(PjRtClient *client, MlirModule cmod,
-                       const char *compile_options_proto,
+                       const uint8_t *compile_options_proto,
                        size_t compile_options_proto_size) {
   return ClientCompileInternal(
       client, cmod,
@@ -2044,7 +2044,7 @@ ifrt_compile(ifrt::Client *client, MlirModule cmod, int64_t device_id,
 
 REACTANT_ABI HeldIfrtLoadedExecutable *
 ifrt_compile_with_proto(ifrt::Client *client, MlirModule cmod,
-                        const char *compile_options_proto,
+                        const uint8_t *compile_options_proto,
                         size_t compile_options_proto_size) {
   return ifrt_compile_internal(
       client, cmod,
