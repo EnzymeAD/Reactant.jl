@@ -10,6 +10,7 @@ void reactantReleaseAddressRange(void *base, size_t nbytes);
 #include "mlir-c/Support.h"
 
 #include "mlir/CAPI/IR.h"
+#include "mlir/CAPI/Pass.h"
 #include "mlir/CAPI/Wrap.h"
 #include "mlir/Pass/PassManager.h"
 
@@ -1465,7 +1466,7 @@ xla::CompileOptions GenerateCompileOptions(
   return options;
 }
 
-xla::CompileOptions GenerateCompileOptions(const char *compile_options_proto,
+xla::CompileOptions GenerateCompileOptions(const uint8_t *compile_options_proto,
                                            size_t compile_options_proto_size) {
   if (compile_options_proto == nullptr || compile_options_proto_size == 0) {
     return xla::CompileOptions();
@@ -1533,7 +1534,7 @@ ClientCompile(PjRtClient *client, MlirModule cmod, int64_t device_id,
 
 REACTANT_ABI xla::PjRtLoadedExecutable *
 ClientCompileWithProto(PjRtClient *client, MlirModule cmod,
-                       const char *compile_options_proto,
+                       const uint8_t *compile_options_proto,
                        size_t compile_options_proto_size) {
   return ClientCompileInternal(
       client, cmod,
@@ -2043,7 +2044,7 @@ ifrt_compile(ifrt::Client *client, MlirModule cmod, int64_t device_id,
 
 REACTANT_ABI HeldIfrtLoadedExecutable *
 ifrt_compile_with_proto(ifrt::Client *client, MlirModule cmod,
-                        const char *compile_options_proto,
+                        const uint8_t *compile_options_proto,
                         size_t compile_options_proto_size) {
   return ifrt_compile_internal(
       client, cmod,
@@ -3395,7 +3396,7 @@ REACTANT_ABI HeldIfrtArray *ifrt_make_array_from_host_buffer_shards(
 }
 
 REACTANT_ABI void addSdyPropagationPipeline(
-    mlir::OpPassManager &pm, uint8_t keepShardingRules /*false*/,
+    MlirOpPassManager pm, uint8_t keepShardingRules /*false*/,
     uint8_t conservativePropagation /*false*/,
     uint8_t debugShardingOrigins /*false*/,
     uint8_t debugPropagationEdgeSharding /*false*/,
@@ -3410,7 +3411,7 @@ REACTANT_ABI void addSdyPropagationPipeline(
                                               skipInline != 0,
                                               enableInsertExplicitCollectives !=
                                                   0};
-  mlir::sdy::addPropagationPipeline(pm, options);
+  mlir::sdy::addPropagationPipeline(*unwrap(pm), options);
 }
 
 REACTANT_ABI HeldIfrtArray *ifrt_copy_array(HeldIfrtArray *array) {
