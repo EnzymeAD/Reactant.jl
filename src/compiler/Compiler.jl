@@ -420,7 +420,8 @@ function compile_mlir!(
     elseif backend == "cuda"
         default_comm_handle = Reactant.default_nccl_comm_handle()
         "lower-enzymexla-mpi{backend=cuda ncclCommPtr=$default_comm_handle}"
-    else 
+    else
+        # mpi only supported on cpu and cuda, don't run pass otherwise  
         nothing
     end
     lower_enzymexla_passes = filter(!isnothing, [
