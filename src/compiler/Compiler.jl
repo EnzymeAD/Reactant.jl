@@ -424,11 +424,10 @@ function compile_mlir!(
         # mpi only supported on cpu and cuda, don't run pass otherwise  
         nothing
     end
-    lower_enzymexla_passes = filter(!isnothing, [
-        lower_enzymexla_linalg_pass,
-        lower_enzymexla_math_pass,
-        lower_enzymexla_mpi_pass,
-    ])
+    lower_enzymexla_passes = filter(
+        !isnothing,
+        [lower_enzymexla_linalg_pass, lower_enzymexla_math_pass, lower_enzymexla_mpi_pass],
+    )
     lower_enzymexla_passes = join(lower_enzymexla_passes, ",")
 
     legalize_chlo_to_stablehlo =
