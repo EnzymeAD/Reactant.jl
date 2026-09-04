@@ -25,6 +25,13 @@ fresh() = Reactant.to_rarray(Float32[1, 1])   # sum == 2
         @test Int(res) === 1
         @test Int32(@jit(f_ifelse(Reactant.to_rarray(Float32[0, 0])))) ===
             Int32(Code.MaxIters)
+
+        res2 = @jit f_ifelse(fresh())
+        @test res2 !== res
+        @test isequal(res, res2)
+        @test hash(res) == hash(res2) == hash(Code.Success)
+        @test length(Set([res, res2])) == 1
+        @test Dict(res => 1)[res2] == 1
     end
 
     @testset "comparisons and conversions inside the kernel" begin

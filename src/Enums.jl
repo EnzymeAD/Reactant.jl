@@ -59,6 +59,13 @@ function Base.convert(::Type{E}, x::TracedEnum{E}) where {E<:Base.Enum}
 end
 (::Type{E})(x::TracedEnum{E}) where {E<:Base.Enum} = convert(E, x)
 
+# With a concrete payload the wrapper is value-equal to `E`, so it hashes like `E` too.
+function Base.hash(x::TracedEnum{E}, h::UInt) where {E<:Base.Enum}
+    v = _enum_payload(x)
+    v isa TracedRNumber && return hash(v, h)
+    return hash(E(Integer(_payload_integer(v))), h)
+end
+
 function Base.convert(::Type{TracedEnum{E}}, x::E) where {E<:Base.Enum}
     return ReactantCore.promote_to_traced(x)
 end
