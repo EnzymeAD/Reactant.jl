@@ -18015,6 +18015,28 @@ function ifrt_make_array_from_host_buffer_shards(
     )::Ptr{HeldIfrtArray}
 end
 
+function addSdyPropagationPipeline(
+    pm,
+    keepShardingRules,
+    conservativePropagation,
+    debugShardingOrigins,
+    debugPropagationEdgeSharding,
+    skipConvertToReshard,
+    skipInline,
+    enableInsertExplicitCollectives,
+)
+    @ccall Reactant_jll.libReactantExtra.addSdyPropagationPipeline(
+        pm::MlirOpPassManager,
+        keepShardingRules::UInt8,
+        conservativePropagation::UInt8,
+        debugShardingOrigins::UInt8,
+        debugPropagationEdgeSharding::UInt8,
+        skipConvertToReshard::UInt8,
+        skipInline::UInt8,
+        enableInsertExplicitCollectives::UInt8,
+    )::Cvoid
+end
+
 function ifrt_copy_array(array)
     @ccall Reactant_jll.libReactantExtra.ifrt_copy_array(
         array::Ptr{HeldIfrtArray}
@@ -18343,25 +18365,3 @@ function registerReactantXLAFFI()
 end
 
 const MLIR_CAPI_DWARF_ADDRESS_SPACE_NULL = -1
-
-function addSdyPropagationPipeline(
-    pm,
-    keepShardingRules,
-    conservativePropagation,
-    debugShardingOrigins,
-    debugPropagationEdgeSharding,
-    skipConvertToReshard,
-    skipInline,
-    enableInsertExplicitCollectives,
-)
-    @ccall Reactant_jll.libReactantExtra.addSdyPropagationPipeline(
-        pm::MlirOpPassManager,
-        keepShardingRules::UInt8,
-        conservativePropagation::UInt8,
-        debugShardingOrigins::UInt8,
-        debugPropagationEdgeSharding::UInt8,
-        skipConvertToReshard::UInt8,
-        skipInline::UInt8,
-        enableInsertExplicitCollectives::UInt8,
-    )::Cvoid
-end
