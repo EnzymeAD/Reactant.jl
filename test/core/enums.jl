@@ -103,6 +103,27 @@ fresh() = Reactant.to_rarray(Float32[1, 1])   # sum == 2
         end
         @test @jit(f_field(fresh(), 1.0f0)) == (Code.Success, true)
         @test @jit(f_field(fresh(), 3.0f0)) == (Code.Default, false)
+
+        # A plain enum in the field has nothing the branch result can be written into, the
+        # same as a plain number; the assignment must error rather than be dropped.
+        function f_field_plain(u, threshold)
+            c = EnumCache(u, Code.Default, Reactant.ReactantCore.promote_to_traced(false))
+            @trace if sum(c.u) > threshold
+                c.code = Code.Success
+                c.done = true
+            end
+            return c.code, c.done
+        end
+        @test_throws "untraced location" @jit f_field_plain(fresh(), 1.0f0)
+
+        function f_field_untouched(u, threshold)
+            c = EnumCache(u, Code.Default, Reactant.ReactantCore.promote_to_traced(false))
+            @trace if sum(c.u) > threshold
+                c.done = true
+            end
+            return c.code, c.done
+        end
+        @test @jit(f_field_untouched(fresh(), 1.0f0)) == (Code.Default, true)
     end
 
     @testset "@trace while carrying an enum" begin
