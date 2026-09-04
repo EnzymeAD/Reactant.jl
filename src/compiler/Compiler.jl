@@ -415,11 +415,20 @@ function compile_mlir!(
         ",",
     )
     lower_enzymexla_math_pass = "lower-enzymexla-math"
-    lower_enzymexla_mpi_pass = "lower-enzymexla-mpi{backend=$backend}"
-    lower_enzymexla_passes = join(
+    lower_enzymexla_mpi_pass = if backend == "cpu"
+        "lower-enzymexla-mpi{backend=cpu}"
+    elseif backend == "cuda"
+        default_comm_handle = Reactant.default_nccl_comm_handle()
+        "lower-enzymexla-mpi{backend=cuda ncclCommPtr=$default_comm_handle}"
+    else
+        # mpi only supported on cpu and cuda, don't run pass otherwise  
+        nothing
+    end
+    lower_enzymexla_passes = filter(
+        !isnothing,
         [lower_enzymexla_linalg_pass, lower_enzymexla_math_pass, lower_enzymexla_mpi_pass],
-        ",",
     )
+    lower_enzymexla_passes = join(lower_enzymexla_passes, ",")
 
     legalize_chlo_to_stablehlo =
         if legalize_stablehlo_to_mhlo || compile_options.legalize_chlo_to_stablehlo
