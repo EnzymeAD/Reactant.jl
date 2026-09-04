@@ -16,6 +16,7 @@ printer_blacklist = [
 output_ignorelist = [
     "MLIR_PYTHON_API_EXPORTED",
     "MLIR_CAPI_EXPORTED",
+    "_PJRT_API_STRUCT_FIELD",
 ]
 
 [codegen]
