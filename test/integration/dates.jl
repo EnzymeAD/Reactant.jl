@@ -3,12 +3,15 @@ using Reactant
 
 using Dates
 using Dates: value, UTInstant
+using Adapt: Adapt
 
 const RDExt = Base.get_extension(Reactant, :ReactantDatesExt)
 
-# Preparations for timestepper MWE unit test in the end
-# Can't do that in the @testset scope, as scope issues occur
-# Inspired by the usage in SpeedyWeather.jl
+const ADAPT_MARKER = Int32(-12345)
+
+struct MarkerAdaptor end
+Adapt.adapt_storage(::MarkerAdaptor, ::Reactant.TracedRNumber) = ADAPT_MARKER
+Adapt.adapt_storage(::MarkerAdaptor, ::Number) = ADAPT_MARKER
 
 # Minimal clock-like mutable struct
 mutable struct Clock{I,T,TS}
@@ -760,5 +763,22 @@ end
         @jit(timestepping!(state_jit))
 
         @test DateTime(state_jit.clock.time) == state.clock.time
+    end
+
+    @testset "Adapt recurses into Reactant date types" begin
+        # Kernel arguments are walked by Adapt; a type with no `adapt_structure` is opaque and its
+        # traced payload survives to the device unadapted. `MarkerAdaptor` (top of file) reports
+        # whether the payload was reached, without needing a GPU.
+        dt = RDExt.ReactantDateTime(UTInstant(RDExt.ReactantMillisecond(12_345)))
+        @test value(Adapt.adapt(MarkerAdaptor(), dt)) === ADAPT_MARKER
+
+        d = RDExt.ReactantDate(UTInstant(RDExt.ReactantDay(7)))
+        @test value(Adapt.adapt(MarkerAdaptor(), d)) === ADAPT_MARKER
+
+        t = RDExt.ReactantTime(RDExt.ReactantNanosecond(99))
+        @test value(Adapt.adapt(MarkerAdaptor(), t)) === ADAPT_MARKER
+
+        p = RDExt.ReactantSecond(42)
+        @test value(Adapt.adapt(MarkerAdaptor(), p)) === ADAPT_MARKER
     end
 end

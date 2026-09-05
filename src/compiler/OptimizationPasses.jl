@@ -234,17 +234,16 @@ function run_pass_pipeline!(
     pm = MLIR.IR.PassManager()
     MLIR.IR.enable_verifier!(pm, enable_verifier)
     opm = MLIR.IR.OpPassManager(pm)
-    # TODO: why isn't this being auto-generated?
-    @ccall MLIR.API.mlir_c.addSdyPropagationPipeline(
-        opm::MLIR.API.MlirOpPassManager,
-        propagation_options.keep_sharding_rules::UInt8,
-        propagation_options.conservative_propagation::UInt8,
-        propagation_options.debug_sharding_origins::UInt8,
-        propagation_options.debug_propagation_edge_sharding::UInt8,
-        propagation_options.skip_convert_to_reshard::UInt8,
-        propagation_options.skip_inline::UInt8,
-        propagation_options.enable_insert_explicit_collectives::UInt8,
-    )::Cvoid
+    MLIR.API.addSdyPropagationPipeline(
+        opm,
+        propagation_options.keep_sharding_rules,
+        propagation_options.conservative_propagation,
+        propagation_options.debug_sharding_origins,
+        propagation_options.debug_propagation_edge_sharding,
+        propagation_options.skip_convert_to_reshard,
+        propagation_options.skip_inline,
+        propagation_options.enable_insert_explicit_collectives,
+    )
     run!(pm, mod, "sdy_prop")
     return mod
 end
