@@ -46,8 +46,56 @@ class LinearMixedModel(BaseModel):
         true_sigma_u: float = 1.0,
         true_sigma_e: float = 0.5,
         train_frac: float = 1.0,
+        dataset: str = None,
     ) -> Tuple[xr.Dataset, xr.Dataset]:
         rng = np.random.default_rng(seed)
+
+        if dataset == "radon_mn":
+            # Marginalized county-intercept model on the Minnesota radon data
+            # (posteriordb radon_mn; Gelman & Hill 2007): y = log radon,
+            # X = [1, floor], Z = county indicators, so
+            # y ~ MVN(X beta, sigma_u^2 Z Z' + sigma_e^2 I). A fixed-seed
+            # subsample of n homes keeps the No-SICM arm's per-step O(n^3)
+            # factorization affordable; counties are re-indexed to those
+            # present in the subsample.
+            import json as _json
+            import os as _os
+
+            path = _os.path.join(
+                _os.path.dirname(_os.path.abspath(__file__)),
+                "real_data", "radon_mn.json")
+            with open(path) as f:
+                raw = _json.load(f)
+            N_full = int(raw["N"])
+            idx = np.sort(rng.choice(N_full, size=min(n, N_full), replace=False))
+            n = len(idx)
+            floor = np.asarray(raw["floor_measure"], dtype=np.float64)[idx]
+            y = np.asarray(raw["log_radon"], dtype=np.float64)[idx]
+            county = np.asarray(raw["county_idx"], dtype=np.int64)[idx]
+            counties = np.unique(county)
+            q = len(counties)
+            remap = {c: j for j, c in enumerate(counties)}
+            X = np.column_stack([np.ones(n), floor])
+            k = X.shape[1]
+            Z = np.zeros((n, q))
+            for i in range(n):
+                Z[i, remap[county[i]]] = 1.0
+            K_re = Z @ Z.T
+            data = xr.Dataset(
+                {
+                    "X": (["obs", "feature"], X),
+                    "K_re": (["i", "j"], K_re),
+                    "Y": (["obs"], y),
+                },
+                coords={
+                    "obs": np.arange(n),
+                    "feature": np.arange(k),
+                    "i": np.arange(n),
+                    "j": np.arange(n),
+                },
+                attrs={"n": n, "k": k, "q": q},
+            )
+            return data, data
 
         # Fixed effects design
         X = rng.standard_normal((n, k))

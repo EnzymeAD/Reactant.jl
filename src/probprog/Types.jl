@@ -88,8 +88,17 @@ mutable struct TracedTrace
     entries::Vector{TraceEntry}
     position_size::Int
     address_stack::Vector{Symbol}
+    has_branches::Bool
 end
-TracedTrace() = TracedTrace(TraceEntry[], 0, Symbol[])
+TracedTrace() = TracedTrace(TraceEntry[], 0, Symbol[], false)
+
+# Straight-line top-level models append one score per site (delta-weight MH).
+function trace_width(tt::TracedTrace)
+    if tt.has_branches || any(e -> !isempty(e.parent_path), tt.entries)
+        return tt.position_size
+    end
+    return tt.position_size + length(tt.entries)
+end
 
 mutable struct DualAveragingState
     log_step_size::Any

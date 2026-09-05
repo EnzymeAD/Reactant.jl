@@ -1,0 +1,3374 @@
+{
+  "batches": {
+    "batch1": {
+      "meta": {
+        "cells": {
+          "car_spatial_scotland": {
+            "start": "2026-08-25T01:03:51-05:00",
+            "loadavg before": "3.87 5.41 3.66 4/11115 1552640",
+            "md5 before": "21a6bd08b37b54d2b8a20d8924a2bbb2",
+            "end": "2026-08-25T01:05:50-05:00",
+            "loadavg after": "18.65 8.21 4.76 2/11109 1557126",
+            "md5 after": "21a6bd08b37b54d2b8a20d8924a2bbb2",
+            "output dir": "./outputs/2026-08-25_01:04:00",
+            "script exit": "COMMAND_EXIT_CODE=\"0\""
+          },
+          "lmm_radon": {
+            "start": "2026-08-25T01:05:59-05:00",
+            "loadavg before": "16.32 8.05 4.74 2/11112 1557233",
+            "md5 before": "21a6bd08b37b54d2b8a20d8924a2bbb2",
+            "end": "2026-08-25T01:07:14-05:00",
+            "loadavg after": "20.92 10.04 5.62 2/11110 1560183",
+            "md5 after": "21a6bd08b37b54d2b8a20d8924a2bbb2",
+            "output dir": "./outputs/2026-08-25_01:06:08",
+            "script exit": "COMMAND_EXIT_CODE=\"0\""
+          },
+          "hierarchical_mvn": {
+            "start": "2026-08-25T01:07:22-05:00",
+            "loadavg before": "18.09 9.80 5.59 2/11124 1560278",
+            "md5 before": "21a6bd08b37b54d2b8a20d8924a2bbb2",
+            "end": "2026-08-25T01:09:14-05:00",
+            "loadavg after": "32.87 15.31 7.93 4/11114 1563860",
+            "md5 after": "21a6bd08b37b54d2b8a20d8924a2bbb2",
+            "output dir": "./outputs/2026-08-25_01:07:31",
+            "script exit": "COMMAND_EXIT_CODE=\"0\""
+          },
+          "phylo_pois": {
+            "start": "2026-08-25T01:09:23-05:00",
+            "loadavg before": "28.21 14.89 7.87 3/11130 1564020",
+            "md5 before": "21a6bd08b37b54d2b8a20d8924a2bbb2",
+            "end": "2026-08-25T01:26:55-05:00",
+            "loadavg after": "98.89 94.63 64.29 3/10938 1587537",
+            "md5 after": "21a6bd08b37b54d2b8a20d8924a2bbb2",
+            "output dir": "./outputs/2026-08-25_01:09:32",
+            "script exit": "COMMAND_EXIT_CODE=\"0\""
+          }
+        },
+        "md5 at batch start": "21a6bd08b37b54d2b8a20d8924a2bbb2",
+        "md5 at batch end": "21a6bd08b37b54d2b8a20d8924a2bbb2",
+        "loadavg at batch start": "3.94 5.45 3.66 3/11115 1552634",
+        "loadavg at batch end": "71.81 88.72 62.99 3/11167 1588350",
+        "start": "2026-08-25T01:03:43-05:00",
+        "end": "2026-08-25T01:27:03-05:00",
+        "mtime": "2026-08-24 14:59:21.983624227 -0500",
+        "nproc": "192",
+        "sibling taskset processes": "nproc: 192"
+      },
+      "cells": {
+        "car_spatial_scotland": {
+          "run_dir": "/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/outputs/2026-08-25_01:04:00",
+          "config": {
+            "model": {
+              "class": "car_spatial.CARSpatial",
+              "args": {
+                "dataset": "scotland",
+                "rho": 0.99,
+                "n": 56
+              },
+              "seed": 12345
+            },
+            "iterations": 500,
+            "num_warmup": 200,
+            "trials": 2,
+            "ppls": [
+              {
+                "name": "impulse",
+                "inference": {
+                  "class": "inference.MCMC",
+                  "infer_args": {
+                    "step_size": 0.05,
+                    "max_tree_depth": 10,
+                    "adapt_step_size": true,
+                    "adapt_mass_matrix": true
+                  }
+                },
+                "legend": {
+                  "name": "SICM",
+                  "color": "red"
+                },
+                "trials": 2
+              },
+              {
+                "name": "impulse",
+                "inference": {
+                  "class": "inference.MCMC",
+                  "infer_args": {
+                    "step_size": 0.05,
+                    "max_tree_depth": 10,
+                    "adapt_step_size": true,
+                    "adapt_mass_matrix": true,
+                    "disable_sicm": true
+                  }
+                },
+                "legend": {
+                  "name": "NoSICM",
+                  "color": "gray"
+                },
+                "trials": 2
+              }
+            ],
+            "save_samples": true,
+            "figures": {
+              "generate_pll": true,
+              "suffix": "png"
+            },
+            "__path__": {}
+          },
+          "ppls": [
+            "SICM",
+            "No SICM"
+          ],
+          "arms": {
+            "SICM": {
+              "all_trial_times_s": [
+                2.067255362,
+                1.91457179
+              ],
+              "compile_time_s": 32.931147654,
+              "last_trial_s": 1.91457179,
+              "trial_median_s": 1.990913576,
+              "steady_mean_s": 1.91457179,
+              "neff": [
+                345.13564892377656,
+                566.1919881039873,
+                607.4091585324915
+              ],
+              "rhat": [
+                0.9976939530641912,
+                1.0005573672901953,
+                1.0055004139921087
+              ],
+              "neff_per_s_last_trial": [
+                180.26780229733592,
+                295.7277397803857,
+                317.25588024698277
+              ],
+              "movement": {
+                "alpha": {
+                  "unique_per_chain": [
+                    300,
+                    300
+                  ],
+                  "max_std_per_chain": [
+                    1.1332445430043843,
+                    1.2460083612970525
+                  ],
+                  "n_draws": 300
+                },
+                "sigma_phi": {
+                  "unique_per_chain": [
+                    300,
+                    300
+                  ],
+                  "max_std_per_chain": [
+                    0.1345002389753699,
+                    0.12621381028224618
+                  ],
+                  "n_draws": 300
+                },
+                "phi": {
+                  "unique_per_chain": [
+                    16800,
+                    16800
+                  ],
+                  "max_std_per_chain": [
+                    1.2151378784831428,
+                    1.3212121260497958
+                  ],
+                  "n_draws": 300
+                }
+              },
+              "pll_last_per_chain": [
+                -125.89181761934627,
+                -125.66053655318407
+              ]
+            },
+            "No SICM": {
+              "all_trial_times_s": [
+                10.441520406,
+                10.061160543
+              ],
+              "compile_time_s": 36.385323334,
+              "last_trial_s": 10.061160543,
+              "trial_median_s": 10.251340474500001,
+              "steady_mean_s": 10.061160543,
+              "neff": [
+                372.2957345543474,
+                459.3697991831981,
+                541.4830332673685
+              ],
+              "rhat": [
+                1.0019018006310474,
+                1.004762065154794,
+                1.0084855933440104
+              ],
+              "neff_per_s_last_trial": [
+                37.00325951098854,
+                45.65773473347488,
+                53.81914252865217
+              ],
+              "movement": {
+                "alpha": {
+                  "unique_per_chain": [
+                    300,
+                    300
+                  ],
+                  "max_std_per_chain": [
+                    1.1317197114502804,
+                    1.1657718533423134
+                  ],
+                  "n_draws": 300
+                },
+                "sigma_phi": {
+                  "unique_per_chain": [
+                    300,
+                    300
+                  ],
+                  "max_std_per_chain": [
+                    0.1333982776149649,
+                    0.12425301923873953
+                  ],
+                  "n_draws": 300
+                },
+                "phi": {
+                  "unique_per_chain": [
+                    16800,
+                    16800
+                  ],
+                  "max_std_per_chain": [
+                    1.2233931023379838,
+                    1.2391484598653804
+                  ],
+                  "n_draws": 300
+                }
+              },
+              "pll_last_per_chain": [
+                -124.66976959813128,
+                -126.25082182620852
+              ]
+            }
+          },
+          "arm_agreement_max_abs_diff": {
+            "alpha": 6.460265720172678,
+            "sigma_phi": 0.5169188737212386,
+            "phi": 7.300359992913611,
+            "__pll__": 3.3792015437552436
+          },
+          "batch_cell_meta": {
+            "start": "2026-08-25T01:03:51-05:00",
+            "loadavg before": "3.87 5.41 3.66 4/11115 1552640",
+            "md5 before": "21a6bd08b37b54d2b8a20d8924a2bbb2",
+            "end": "2026-08-25T01:05:50-05:00",
+            "loadavg after": "18.65 8.21 4.76 2/11109 1557126",
+            "md5 after": "21a6bd08b37b54d2b8a20d8924a2bbb2",
+            "output dir": "./outputs/2026-08-25_01:04:00",
+            "script exit": "COMMAND_EXIT_CODE=\"0\""
+          }
+        },
+        "lmm_radon": {
+          "run_dir": "/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/outputs/2026-08-25_01:06:08",
+          "config": {
+            "model": {
+              "class": "linear_mixed_model.LinearMixedModel",
+              "args": {
+                "dataset": "radon_mn",
+                "n": 250,
+                "k": 2
+              },
+              "seed": 12345
+            },
+            "iterations": 500,
+            "num_warmup": 200,
+            "trials": 2,
+            "ppls": [
+              {
+                "name": "impulse",
+                "inference": {
+                  "class": "inference.MCMC",
+                  "infer_args": {
+                    "step_size": 0.05,
+                    "max_tree_depth": 10,
+                    "adapt_step_size": true,
+                    "adapt_mass_matrix": true
+                  }
+                },
+                "legend": {
+                  "name": "SICM",
+                  "color": "red"
+                },
+                "trials": 2
+              },
+              {
+                "name": "impulse",
+                "inference": {
+                  "class": "inference.MCMC",
+                  "infer_args": {
+                    "step_size": 0.05,
+                    "max_tree_depth": 10,
+                    "adapt_step_size": true,
+                    "adapt_mass_matrix": true,
+                    "disable_sicm": true
+                  }
+                },
+                "legend": {
+                  "name": "NoSICM",
+                  "color": "gray"
+                },
+                "trials": 2
+              }
+            ],
+            "save_samples": true,
+            "figures": {
+              "generate_pll": true,
+              "suffix": "png"
+            },
+            "__path__": {}
+          },
+          "ppls": [
+            "SICM",
+            "No SICM"
+          ],
+          "arms": {
+            "SICM": {
+              "all_trial_times_s": [
+                0.619251397,
+                0.151558509
+              ],
+              "compile_time_s": 18.388574108,
+              "last_trial_s": 0.151558509,
+              "trial_median_s": 0.385404953,
+              "steady_mean_s": 0.151558509,
+              "neff": [
+                367.16944976757736,
+                516.777059443144,
+                591.112369366402
+              ],
+              "rhat": [
+                0.9983179933992069,
+                1.0028530719484274,
+                1.0043876666356277
+              ],
+              "neff_per_s_last_trial": [
+                2422.6251115176738,
+                3409.7528594923297,
+                3900.2255516145387
+              ],
+              "movement": {
+                "beta": {
+                  "unique_per_chain": [
+                    596,
+                    594
+                  ],
+                  "max_std_per_chain": [
+                    0.13868030496479197,
+                    0.133475960349029
+                  ],
+                  "n_draws": 300
+                },
+                "sigma_u": {
+                  "unique_per_chain": [
+                    298,
+                    297
+                  ],
+                  "max_std_per_chain": [
+                    0.09498439827371839,
+                    0.08170247704109476
+                  ],
+                  "n_draws": 300
+                },
+                "sigma_e": {
+                  "unique_per_chain": [
+                    298,
+                    297
+                  ],
+                  "max_std_per_chain": [
+                    0.0356593760021869,
+                    0.03694416432237049
+                  ],
+                  "n_draws": 300
+                }
+              },
+              "pll_last_per_chain": [
+                -290.69516271910857,
+                -290.6550416199084
+              ]
+            },
+            "No SICM": {
+              "all_trial_times_s": [
+                6.583216815,
+                5.179207255
+              ],
+              "compile_time_s": 16.949269488,
+              "last_trial_s": 5.179207255,
+              "trial_median_s": 5.881212035,
+              "steady_mean_s": 5.179207255,
+              "neff": [
+                409.9241687691108,
+                432.962136731368,
+                521.0089250361235
+              ],
+              "rhat": [
+                1.0035020866235231,
+                1.0058230234468526,
+                1.0068110681675775
+              ],
+              "neff_per_s_last_trial": [
+                79.14805270118714,
+                83.59621760905338,
+                100.59626876934539
+              ],
+              "movement": {
+                "beta": {
+                  "unique_per_chain": [
+                    600,
+                    590
+                  ],
+                  "max_std_per_chain": [
+                    0.12744199959112457,
+                    0.13622956999883085
+                  ],
+                  "n_draws": 300
+                },
+                "sigma_u": {
+                  "unique_per_chain": [
+                    300,
+                    295
+                  ],
+                  "max_std_per_chain": [
+                    0.08329719194265145,
+                    0.07504085745322198
+                  ],
+                  "n_draws": 300
+                },
+                "sigma_e": {
+                  "unique_per_chain": [
+                    300,
+                    295
+                  ],
+                  "max_std_per_chain": [
+                    0.036196146290673525,
+                    0.03613307282981047
+                  ],
+                  "n_draws": 300
+                }
+              },
+              "pll_last_per_chain": [
+                -290.6725284277556,
+                -289.9425582434866
+              ]
+            }
+          },
+          "arm_agreement_max_abs_diff": {
+            "beta": 0.6368626466137437,
+            "sigma_u": 0.36296889827196266,
+            "sigma_e": 0.20747476871964932,
+            "__pll__": 2.7958265452667774
+          },
+          "batch_cell_meta": {
+            "start": "2026-08-25T01:05:59-05:00",
+            "loadavg before": "16.32 8.05 4.74 2/11112 1557233",
+            "md5 before": "21a6bd08b37b54d2b8a20d8924a2bbb2",
+            "end": "2026-08-25T01:07:14-05:00",
+            "loadavg after": "20.92 10.04 5.62 2/11110 1560183",
+            "md5 after": "21a6bd08b37b54d2b8a20d8924a2bbb2",
+            "output dir": "./outputs/2026-08-25_01:06:08",
+            "script exit": "COMMAND_EXIT_CODE=\"0\""
+          }
+        },
+        "hierarchical_mvn": {
+          "run_dir": "/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/outputs/2026-08-25_01:07:31",
+          "config": {
+            "model": {
+              "class": "hierarchical_mvn.HierarchicalMVN",
+              "args": {
+                "n": 60,
+                "K": 60,
+                "J": 2
+              },
+              "seed": 12345
+            },
+            "iterations": 200,
+            "num_warmup": 50,
+            "trials": 2,
+            "ppls": [
+              {
+                "name": "impulse",
+                "inference": {
+                  "class": "inference.MCMC",
+                  "infer_args": {
+                    "step_size": 0.01,
+                    "max_tree_depth": 10,
+                    "adapt_step_size": true,
+                    "adapt_mass_matrix": true
+                  }
+                },
+                "legend": {
+                  "name": "SICM",
+                  "color": "red"
+                },
+                "trials": 2
+              },
+              {
+                "name": "impulse",
+                "inference": {
+                  "class": "inference.MCMC",
+                  "infer_args": {
+                    "step_size": 0.01,
+                    "max_tree_depth": 10,
+                    "adapt_step_size": true,
+                    "adapt_mass_matrix": true,
+                    "disable_sicm": true
+                  }
+                },
+                "legend": {
+                  "name": "NoSICM",
+                  "color": "gray"
+                },
+                "trials": 2
+              }
+            ],
+            "save_samples": true,
+            "figures": {
+              "generate_pll": true,
+              "suffix": "png"
+            },
+            "__path__": {}
+          },
+          "ppls": [
+            "SICM",
+            "No SICM"
+          ],
+          "arms": {
+            "SICM": {
+              "all_trial_times_s": [
+                4.324200361,
+                4.079756391
+              ],
+              "compile_time_s": 20.835488768,
+              "last_trial_s": 4.079756391,
+              "trial_median_s": 4.201978376,
+              "steady_mean_s": 4.079756391,
+              "neff": [
+                4.3748624402562095,
+                28.889939151818393,
+                84.85230833102152
+              ],
+              "rhat": [
+                0.9985734905375377,
+                1.061202000933538,
+                1.4498884519677948
+              ],
+              "neff_per_s_last_trial": [
+                1.0723342329721495,
+                7.08129024947421,
+                20.798376226141077
+              ],
+              "movement": {
+                "mu": {
+                  "unique_per_chain": [
+                    9000,
+                    9000
+                  ],
+                  "max_std_per_chain": [
+                    1.5363204353782551,
+                    2.109236690266258
+                  ],
+                  "n_draws": 150
+                },
+                "sigma_k": {
+                  "unique_per_chain": [
+                    9000,
+                    9000
+                  ],
+                  "max_std_per_chain": [
+                    0.7037606536656452,
+                    0.8014130746070297
+                  ],
+                  "n_draws": 150
+                },
+                "sigma_obs": {
+                  "unique_per_chain": [
+                    150,
+                    150
+                  ],
+                  "max_std_per_chain": [
+                    0.18046510784837716,
+                    0.1823789562910954
+                  ],
+                  "n_draws": 150
+                },
+                "eta": {
+                  "unique_per_chain": [
+                    18000,
+                    18000
+                  ],
+                  "max_std_per_chain": [
+                    1.2027325729835212,
+                    1.2564987320567051
+                  ],
+                  "n_draws": 150
+                }
+              },
+              "pll_last_per_chain": [
+                -165.0595786768342,
+                -168.83665006957796
+              ]
+            },
+            "No SICM": {
+              "all_trial_times_s": [
+                18.010077513,
+                16.903172365
+              ],
+              "compile_time_s": 22.249887184,
+              "last_trial_s": 16.903172365,
+              "trial_median_s": 17.456624939,
+              "steady_mean_s": 16.903172365,
+              "neff": [
+                3.8500862514608265,
+                25.729600755805976,
+                122.63371893382387
+              ],
+              "rhat": [
+                0.9971598636145681,
+                1.0704080226083377,
+                1.5108138191295617
+              ],
+              "neff_per_s_last_trial": [
+                0.22777299836525844,
+                1.5221758496104631,
+                7.255071195259854
+              ],
+              "movement": {
+                "mu": {
+                  "unique_per_chain": [
+                    9000,
+                    9000
+                  ],
+                  "max_std_per_chain": [
+                    1.6098297307038616,
+                    2.232750941343798
+                  ],
+                  "n_draws": 150
+                },
+                "sigma_k": {
+                  "unique_per_chain": [
+                    9000,
+                    9000
+                  ],
+                  "max_std_per_chain": [
+                    0.7636188301077026,
+                    0.7884497698965426
+                  ],
+                  "n_draws": 150
+                },
+                "sigma_obs": {
+                  "unique_per_chain": [
+                    150,
+                    150
+                  ],
+                  "max_std_per_chain": [
+                    0.1775231277774272,
+                    0.15719573723508956
+                  ],
+                  "n_draws": 150
+                },
+                "eta": {
+                  "unique_per_chain": [
+                    18000,
+                    18000
+                  ],
+                  "max_std_per_chain": [
+                    1.1465095673280696,
+                    1.166056069581542
+                  ],
+                  "n_draws": 150
+                }
+              },
+              "pll_last_per_chain": [
+                -158.4871858800328,
+                -172.45948554666265
+              ]
+            }
+          },
+          "arm_agreement_max_abs_diff": {
+            "mu": 3.914727797103259,
+            "sigma_k": 3.361407592059396,
+            "sigma_obs": 0.6341743418484078,
+            "eta": 3.1236340346892613,
+            "__pll__": 8.672831386722919
+          },
+          "batch_cell_meta": {
+            "start": "2026-08-25T01:07:22-05:00",
+            "loadavg before": "18.09 9.80 5.59 2/11124 1560278",
+            "md5 before": "21a6bd08b37b54d2b8a20d8924a2bbb2",
+            "end": "2026-08-25T01:09:14-05:00",
+            "loadavg after": "32.87 15.31 7.93 4/11114 1563860",
+            "md5 after": "21a6bd08b37b54d2b8a20d8924a2bbb2",
+            "output dir": "./outputs/2026-08-25_01:07:31",
+            "script exit": "COMMAND_EXIT_CODE=\"0\""
+          }
+        },
+        "phylo_pois": {
+          "run_dir": "/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/outputs/2026-08-25_01:09:32",
+          "config": {
+            "model": {
+              "class": "phylo_pois.PhyloPois",
+              "args": {
+                "n": 200
+              },
+              "seed": 12345
+            },
+            "iterations": 500,
+            "num_warmup": 200,
+            "trials": 2,
+            "ppls": [
+              {
+                "name": "impulse",
+                "inference": {
+                  "class": "inference.MCMC",
+                  "infer_args": {
+                    "step_size": 0.1,
+                    "max_tree_depth": 10,
+                    "adapt_step_size": true,
+                    "adapt_mass_matrix": true
+                  }
+                },
+                "legend": {
+                  "name": "SICM",
+                  "color": "red"
+                },
+                "trials": 2
+              },
+              {
+                "name": "impulse",
+                "inference": {
+                  "class": "inference.MCMC",
+                  "infer_args": {
+                    "step_size": 0.1,
+                    "max_tree_depth": 10,
+                    "adapt_step_size": true,
+                    "adapt_mass_matrix": true,
+                    "disable_sicm": true
+                  }
+                },
+                "legend": {
+                  "name": "NoSICM",
+                  "color": "gray"
+                },
+                "trials": 2
+              }
+            ],
+            "save_samples": true,
+            "figures": {
+              "generate_pll": true,
+              "suffix": "png"
+            },
+            "__path__": {}
+          },
+          "ppls": [
+            "SICM",
+            "No SICM"
+          ],
+          "arms": {
+            "SICM": {
+              "all_trial_times_s": [
+                19.205737984,
+                20.353813685
+              ],
+              "compile_time_s": 40.58900424,
+              "last_trial_s": 20.353813685,
+              "trial_median_s": 19.7797758345,
+              "steady_mean_s": 20.353813685,
+              "neff": [
+                10.659339090729496,
+                68.9820239845942,
+                161.94079481992864
+              ],
+              "rhat": [
+                0.998827266156982,
+                1.025954034095649,
+                1.15865385304872
+              ],
+              "neff_per_s_last_trial": [
+                0.5237023024626108,
+                3.3891449068059116,
+                7.956287569796955
+              ],
+              "movement": {
+                "sigma_sq": {
+                  "unique_per_chain": [
+                    300,
+                    300
+                  ],
+                  "max_std_per_chain": [
+                    0.04651522793830649,
+                    0.05904437624720323
+                  ],
+                  "n_draws": 300
+                },
+                "eta": {
+                  "unique_per_chain": [
+                    60000,
+                    60000
+                  ],
+                  "max_std_per_chain": [
+                    1.2577490799304387,
+                    1.209588721704582
+                  ],
+                  "n_draws": 300
+                },
+                "b0": {
+                  "unique_per_chain": [
+                    300,
+                    300
+                  ],
+                  "max_std_per_chain": [
+                    0.12706916596704698,
+                    0.1427954350017264
+                  ],
+                  "n_draws": 300
+                },
+                "b1": {
+                  "unique_per_chain": [
+                    300,
+                    300
+                  ],
+                  "max_std_per_chain": [
+                    0.0656692643956931,
+                    0.06835037614746156
+                  ],
+                  "n_draws": 300
+                },
+                "sigma_obs": {
+                  "unique_per_chain": [
+                    300,
+                    300
+                  ],
+                  "max_std_per_chain": [
+                    0.05234387232792667,
+                    0.08138165694937242
+                  ],
+                  "n_draws": 300
+                },
+                "eps": {
+                  "unique_per_chain": [
+                    60000,
+                    60000
+                  ],
+                  "max_std_per_chain": [
+                    1.2218379430028776,
+                    1.2242183814675158
+                  ],
+                  "n_draws": 300
+                }
+              },
+              "pll_last_per_chain": [
+                -313.42865221116085,
+                -312.9154376043563
+              ]
+            },
+            "No SICM": {
+              "all_trial_times_s": [
+                459.085138144,
+                445.755567777
+              ],
+              "compile_time_s": 39.622114898,
+              "last_trial_s": 445.755567777,
+              "trial_median_s": 452.4203529605,
+              "steady_mean_s": 445.755567777,
+              "neff": [
+                7.077064522520072,
+                68.10953857719173,
+                308.9311269741196
+              ],
+              "rhat": [
+                0.9982647824080496,
+                1.025447509518047,
+                1.2283803145628875
+              ],
+              "neff_per_s_last_trial": [
+                0.015876558890365995,
+                0.15279571025182387,
+                0.6930505176071515
+              ],
+              "movement": {
+                "sigma_sq": {
+                  "unique_per_chain": [
+                    300,
+                    300
+                  ],
+                  "max_std_per_chain": [
+                    0.041729937124122596,
+                    0.06104647955459919
+                  ],
+                  "n_draws": 300
+                },
+                "eta": {
+                  "unique_per_chain": [
+                    60000,
+                    60000
+                  ],
+                  "max_std_per_chain": [
+                    1.3725610415533898,
+                    1.2430477042732362
+                  ],
+                  "n_draws": 300
+                },
+                "b0": {
+                  "unique_per_chain": [
+                    300,
+                    300
+                  ],
+                  "max_std_per_chain": [
+                    0.1406296133318503,
+                    0.14447647609202688
+                  ],
+                  "n_draws": 300
+                },
+                "b1": {
+                  "unique_per_chain": [
+                    300,
+                    300
+                  ],
+                  "max_std_per_chain": [
+                    0.06534589137538552,
+                    0.06542153183253417
+                  ],
+                  "n_draws": 300
+                },
+                "sigma_obs": {
+                  "unique_per_chain": [
+                    300,
+                    300
+                  ],
+                  "max_std_per_chain": [
+                    0.06374399090564022,
+                    0.07730014227045581
+                  ],
+                  "n_draws": 300
+                },
+                "eps": {
+                  "unique_per_chain": [
+                    60000,
+                    60000
+                  ],
+                  "max_std_per_chain": [
+                    1.287287951162993,
+                    1.2207341338867113
+                  ],
+                  "n_draws": 300
+                }
+              },
+              "pll_last_per_chain": [
+                -312.0330188725077,
+                -318.57254331834775
+              ]
+            }
+          },
+          "arm_agreement_max_abs_diff": {
+            "sigma_sq": 0.29299607922332127,
+            "eta": 5.369031742451206,
+            "b0": 0.5110208496239415,
+            "b1": 0.31773533240933327,
+            "sigma_obs": 0.24904120356479686,
+            "eps": 3.913230319784057,
+            "__pll__": 9.356391642084532
+          },
+          "batch_cell_meta": {
+            "start": "2026-08-25T01:09:23-05:00",
+            "loadavg before": "28.21 14.89 7.87 3/11130 1564020",
+            "md5 before": "21a6bd08b37b54d2b8a20d8924a2bbb2",
+            "end": "2026-08-25T01:26:55-05:00",
+            "loadavg after": "98.89 94.63 64.29 3/10938 1587537",
+            "md5 after": "21a6bd08b37b54d2b8a20d8924a2bbb2",
+            "output dir": "./outputs/2026-08-25_01:09:32",
+            "script exit": "COMMAND_EXIT_CODE=\"0\""
+          }
+        }
+      }
+    },
+    "batch2": {
+      "meta": {
+        "cells": {
+          "car_spatial_scotland": {
+            "start": "2026-08-25T01:30:27-05:00",
+            "loadavg before": "5.39 47.83 51.72 2/11140 1592916",
+            "md5 before": "21a6bd08b37b54d2b8a20d8924a2bbb2",
+            "end": "2026-08-25T01:32:27-05:00",
+            "loadavg after": "19.67 37.44 47.33 3/11142 1596740",
+            "md5 after": "21a6bd08b37b54d2b8a20d8924a2bbb2",
+            "output dir": "./outputs/2026-08-25_01:30:37",
+            "script exit": "COMMAND_EXIT_CODE=\"0\""
+          },
+          "lmm_radon": {
+            "start": "2026-08-25T01:32:35-05:00",
+            "loadavg before": "18.34 36.87 47.09 2/11149 1597042",
+            "md5 before": "21a6bd08b37b54d2b8a20d8924a2bbb2",
+            "end": "2026-08-25T01:33:53-05:00",
+            "loadavg after": "26.91 33.59 45.00 3/11133 1599644",
+            "md5 after": "21a6bd08b37b54d2b8a20d8924a2bbb2",
+            "output dir": "./outputs/2026-08-25_01:32:44",
+            "script exit": "COMMAND_EXIT_CODE=\"0\""
+          },
+          "hierarchical_mvn": {
+            "start": "2026-08-25T01:34:01-05:00",
+            "loadavg before": "25.16 33.11 44.78 3/11140 1599745",
+            "md5 before": "21a6bd08b37b54d2b8a20d8924a2bbb2",
+            "end": "2026-08-25T01:35:53-05:00",
+            "loadavg after": "30.21 29.87 42.07 3/11139 1603701",
+            "md5 after": "21a6bd08b37b54d2b8a20d8924a2bbb2",
+            "output dir": "./outputs/2026-08-25_01:34:10",
+            "script exit": "COMMAND_EXIT_CODE=\"0\""
+          },
+          "phylo_pois": {
+            "start": "2026-08-25T01:36:02-05:00",
+            "loadavg before": "26.03 28.98 41.65 3/11146 1603848",
+            "md5 before": "21a6bd08b37b54d2b8a20d8924a2bbb2",
+            "end": "2026-08-25T01:53:38-05:00",
+            "loadavg after": "92.13 93.89 75.14 3/10940 1630564",
+            "md5 after": "21a6bd08b37b54d2b8a20d8924a2bbb2",
+            "output dir": "./outputs/2026-08-25_01:36:11",
+            "script exit": "COMMAND_EXIT_CODE=\"0\""
+          }
+        },
+        "md5 at batch start": "21a6bd08b37b54d2b8a20d8924a2bbb2",
+        "md5 at batch end": "21a6bd08b37b54d2b8a20d8924a2bbb2",
+        "loadavg at batch start": "5.39 47.83 51.72 3/11140 1592909",
+        "loadavg at batch end": "72.32 89.42 73.98 10/10937 1630847",
+        "start": "2026-08-25T01:30:19-05:00",
+        "end": "2026-08-25T01:53:45-05:00",
+        "mtime": "2026-08-24 14:59:21.983624227 -0500",
+        "nproc": "192",
+        "sibling taskset processes": "nproc: 192"
+      },
+      "cells": {
+        "car_spatial_scotland": {
+          "run_dir": "/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/outputs/2026-08-25_01:30:37",
+          "config": {
+            "model": {
+              "class": "car_spatial.CARSpatial",
+              "args": {
+                "dataset": "scotland",
+                "rho": 0.99,
+                "n": 56
+              },
+              "seed": 12345
+            },
+            "iterations": 500,
+            "num_warmup": 200,
+            "trials": 2,
+            "ppls": [
+              {
+                "name": "impulse",
+                "inference": {
+                  "class": "inference.MCMC",
+                  "infer_args": {
+                    "step_size": 0.05,
+                    "max_tree_depth": 10,
+                    "adapt_step_size": true,
+                    "adapt_mass_matrix": true
+                  }
+                },
+                "legend": {
+                  "name": "SICM",
+                  "color": "red"
+                },
+                "trials": 2
+              },
+              {
+                "name": "impulse",
+                "inference": {
+                  "class": "inference.MCMC",
+                  "infer_args": {
+                    "step_size": 0.05,
+                    "max_tree_depth": 10,
+                    "adapt_step_size": true,
+                    "adapt_mass_matrix": true,
+                    "disable_sicm": true
+                  }
+                },
+                "legend": {
+                  "name": "NoSICM",
+                  "color": "gray"
+                },
+                "trials": 2
+              }
+            ],
+            "save_samples": true,
+            "figures": {
+              "generate_pll": true,
+              "suffix": "png"
+            },
+            "__path__": {}
+          },
+          "ppls": [
+            "SICM",
+            "No SICM"
+          ],
+          "arms": {
+            "SICM": {
+              "all_trial_times_s": [
+                2.102237326,
+                1.906165893
+              ],
+              "compile_time_s": 35.218128225,
+              "last_trial_s": 1.906165893,
+              "trial_median_s": 2.0042016095,
+              "steady_mean_s": 1.906165893,
+              "neff": [
+                345.13564892377656,
+                566.1919881039873,
+                607.4091585324915
+              ],
+              "rhat": [
+                0.9976939530641912,
+                1.0005573672901953,
+                1.0055004139921087
+              ],
+              "neff_per_s_last_trial": [
+                181.06275544600595,
+                297.0318534096168,
+                318.65492964860823
+              ],
+              "movement": {
+                "alpha": {
+                  "unique_per_chain": [
+                    300,
+                    300
+                  ],
+                  "max_std_per_chain": [
+                    1.1332445430043843,
+                    1.2460083612970525
+                  ],
+                  "n_draws": 300
+                },
+                "sigma_phi": {
+                  "unique_per_chain": [
+                    300,
+                    300
+                  ],
+                  "max_std_per_chain": [
+                    0.1345002389753699,
+                    0.12621381028224618
+                  ],
+                  "n_draws": 300
+                },
+                "phi": {
+                  "unique_per_chain": [
+                    16800,
+                    16800
+                  ],
+                  "max_std_per_chain": [
+                    1.2151378784831428,
+                    1.3212121260497958
+                  ],
+                  "n_draws": 300
+                }
+              },
+              "pll_last_per_chain": [
+                -125.89181761934627,
+                -125.66053655318407
+              ]
+            },
+            "No SICM": {
+              "all_trial_times_s": [
+                10.550692837,
+                10.062833038
+              ],
+              "compile_time_s": 34.710369673,
+              "last_trial_s": 10.062833038,
+              "trial_median_s": 10.3067629375,
+              "steady_mean_s": 10.062833038,
+              "neff": [
+                372.2957345543474,
+                459.3697991831981,
+                541.4830332673685
+              ],
+              "rhat": [
+                1.0019018006310474,
+                1.004762065154794,
+                1.0084855933440104
+              ],
+              "neff_per_s_last_trial": [
+                36.99710937749411,
+                45.650146181347985,
+                53.810197508254475
+              ],
+              "movement": {
+                "alpha": {
+                  "unique_per_chain": [
+                    300,
+                    300
+                  ],
+                  "max_std_per_chain": [
+                    1.1317197114502804,
+                    1.1657718533423134
+                  ],
+                  "n_draws": 300
+                },
+                "sigma_phi": {
+                  "unique_per_chain": [
+                    300,
+                    300
+                  ],
+                  "max_std_per_chain": [
+                    0.1333982776149649,
+                    0.12425301923873953
+                  ],
+                  "n_draws": 300
+                },
+                "phi": {
+                  "unique_per_chain": [
+                    16800,
+                    16800
+                  ],
+                  "max_std_per_chain": [
+                    1.2233931023379838,
+                    1.2391484598653804
+                  ],
+                  "n_draws": 300
+                }
+              },
+              "pll_last_per_chain": [
+                -124.66976959813128,
+                -126.25082182620852
+              ]
+            }
+          },
+          "arm_agreement_max_abs_diff": {
+            "alpha": 6.460265720172678,
+            "sigma_phi": 0.5169188737212386,
+            "phi": 7.300359992913611,
+            "__pll__": 3.3792015437552436
+          },
+          "batch_cell_meta": {
+            "start": "2026-08-25T01:30:27-05:00",
+            "loadavg before": "5.39 47.83 51.72 2/11140 1592916",
+            "md5 before": "21a6bd08b37b54d2b8a20d8924a2bbb2",
+            "end": "2026-08-25T01:32:27-05:00",
+            "loadavg after": "19.67 37.44 47.33 3/11142 1596740",
+            "md5 after": "21a6bd08b37b54d2b8a20d8924a2bbb2",
+            "output dir": "./outputs/2026-08-25_01:30:37",
+            "script exit": "COMMAND_EXIT_CODE=\"0\""
+          }
+        },
+        "lmm_radon": {
+          "run_dir": "/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/outputs/2026-08-25_01:32:44",
+          "config": {
+            "model": {
+              "class": "linear_mixed_model.LinearMixedModel",
+              "args": {
+                "dataset": "radon_mn",
+                "n": 250,
+                "k": 2
+              },
+              "seed": 12345
+            },
+            "iterations": 500,
+            "num_warmup": 200,
+            "trials": 2,
+            "ppls": [
+              {
+                "name": "impulse",
+                "inference": {
+                  "class": "inference.MCMC",
+                  "infer_args": {
+                    "step_size": 0.05,
+                    "max_tree_depth": 10,
+                    "adapt_step_size": true,
+                    "adapt_mass_matrix": true
+                  }
+                },
+                "legend": {
+                  "name": "SICM",
+                  "color": "red"
+                },
+                "trials": 2
+              },
+              {
+                "name": "impulse",
+                "inference": {
+                  "class": "inference.MCMC",
+                  "infer_args": {
+                    "step_size": 0.05,
+                    "max_tree_depth": 10,
+                    "adapt_step_size": true,
+                    "adapt_mass_matrix": true,
+                    "disable_sicm": true
+                  }
+                },
+                "legend": {
+                  "name": "NoSICM",
+                  "color": "gray"
+                },
+                "trials": 2
+              }
+            ],
+            "save_samples": true,
+            "figures": {
+              "generate_pll": true,
+              "suffix": "png"
+            },
+            "__path__": {}
+          },
+          "ppls": [
+            "SICM",
+            "No SICM"
+          ],
+          "arms": {
+            "SICM": {
+              "all_trial_times_s": [
+                0.551312688,
+                0.14847044
+              ],
+              "compile_time_s": 17.280572235,
+              "last_trial_s": 0.14847044,
+              "trial_median_s": 0.349891564,
+              "steady_mean_s": 0.14847044,
+              "neff": [
+                367.16944976757736,
+                516.777059443144,
+                591.112369366402
+              ],
+              "rhat": [
+                0.9983179933992069,
+                1.0028530719484274,
+                1.0043876666356277
+              ],
+              "neff_per_s_last_trial": [
+                2473.013818559286,
+                3480.67305143801,
+                3981.3471918477644
+              ],
+              "movement": {
+                "beta": {
+                  "unique_per_chain": [
+                    596,
+                    594
+                  ],
+                  "max_std_per_chain": [
+                    0.13868030496479197,
+                    0.133475960349029
+                  ],
+                  "n_draws": 300
+                },
+                "sigma_u": {
+                  "unique_per_chain": [
+                    298,
+                    297
+                  ],
+                  "max_std_per_chain": [
+                    0.09498439827371839,
+                    0.08170247704109476
+                  ],
+                  "n_draws": 300
+                },
+                "sigma_e": {
+                  "unique_per_chain": [
+                    298,
+                    297
+                  ],
+                  "max_std_per_chain": [
+                    0.0356593760021869,
+                    0.03694416432237049
+                  ],
+                  "n_draws": 300
+                }
+              },
+              "pll_last_per_chain": [
+                -290.69516271910857,
+                -290.6550416199084
+              ]
+            },
+            "No SICM": {
+              "all_trial_times_s": [
+                7.512445674,
+                8.048346957
+              ],
+              "compile_time_s": 17.484811274,
+              "last_trial_s": 8.048346957,
+              "trial_median_s": 7.7803963155,
+              "steady_mean_s": 8.048346957,
+              "neff": [
+                409.9241687691108,
+                432.962136731368,
+                521.0089250361235
+              ],
+              "rhat": [
+                1.0035020866235231,
+                1.0058230234468526,
+                1.0068110681675775
+              ],
+              "neff_per_s_last_trial": [
+                50.932715868142566,
+                53.79516303715037,
+                64.73489870898014
+              ],
+              "movement": {
+                "beta": {
+                  "unique_per_chain": [
+                    600,
+                    590
+                  ],
+                  "max_std_per_chain": [
+                    0.12744199959112457,
+                    0.13622956999883085
+                  ],
+                  "n_draws": 300
+                },
+                "sigma_u": {
+                  "unique_per_chain": [
+                    300,
+                    295
+                  ],
+                  "max_std_per_chain": [
+                    0.08329719194265145,
+                    0.07504085745322198
+                  ],
+                  "n_draws": 300
+                },
+                "sigma_e": {
+                  "unique_per_chain": [
+                    300,
+                    295
+                  ],
+                  "max_std_per_chain": [
+                    0.036196146290673525,
+                    0.03613307282981047
+                  ],
+                  "n_draws": 300
+                }
+              },
+              "pll_last_per_chain": [
+                -290.6725284277556,
+                -289.9425582434866
+              ]
+            }
+          },
+          "arm_agreement_max_abs_diff": {
+            "beta": 0.6368626466137437,
+            "sigma_u": 0.36296889827196266,
+            "sigma_e": 0.20747476871964932,
+            "__pll__": 2.7958265452667774
+          },
+          "batch_cell_meta": {
+            "start": "2026-08-25T01:32:35-05:00",
+            "loadavg before": "18.34 36.87 47.09 2/11149 1597042",
+            "md5 before": "21a6bd08b37b54d2b8a20d8924a2bbb2",
+            "end": "2026-08-25T01:33:53-05:00",
+            "loadavg after": "26.91 33.59 45.00 3/11133 1599644",
+            "md5 after": "21a6bd08b37b54d2b8a20d8924a2bbb2",
+            "output dir": "./outputs/2026-08-25_01:32:44",
+            "script exit": "COMMAND_EXIT_CODE=\"0\""
+          }
+        },
+        "hierarchical_mvn": {
+          "run_dir": "/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/outputs/2026-08-25_01:34:10",
+          "config": {
+            "model": {
+              "class": "hierarchical_mvn.HierarchicalMVN",
+              "args": {
+                "n": 60,
+                "K": 60,
+                "J": 2
+              },
+              "seed": 12345
+            },
+            "iterations": 200,
+            "num_warmup": 50,
+            "trials": 2,
+            "ppls": [
+              {
+                "name": "impulse",
+                "inference": {
+                  "class": "inference.MCMC",
+                  "infer_args": {
+                    "step_size": 0.01,
+                    "max_tree_depth": 10,
+                    "adapt_step_size": true,
+                    "adapt_mass_matrix": true
+                  }
+                },
+                "legend": {
+                  "name": "SICM",
+                  "color": "red"
+                },
+                "trials": 2
+              },
+              {
+                "name": "impulse",
+                "inference": {
+                  "class": "inference.MCMC",
+                  "infer_args": {
+                    "step_size": 0.01,
+                    "max_tree_depth": 10,
+                    "adapt_step_size": true,
+                    "adapt_mass_matrix": true,
+                    "disable_sicm": true
+                  }
+                },
+                "legend": {
+                  "name": "NoSICM",
+                  "color": "gray"
+                },
+                "trials": 2
+              }
+            ],
+            "save_samples": true,
+            "figures": {
+              "generate_pll": true,
+              "suffix": "png"
+            },
+            "__path__": {}
+          },
+          "ppls": [
+            "SICM",
+            "No SICM"
+          ],
+          "arms": {
+            "SICM": {
+              "all_trial_times_s": [
+                4.218593028,
+                3.953973928
+              ],
+              "compile_time_s": 20.9733798,
+              "last_trial_s": 3.953973928,
+              "trial_median_s": 4.086283478,
+              "steady_mean_s": 3.953973928,
+              "neff": [
+                4.3748624402562095,
+                28.889939151818393,
+                84.85230833102152
+              ],
+              "rhat": [
+                0.9985734905375377,
+                1.061202000933538,
+                1.4498884519677948
+              ],
+              "neff_per_s_last_trial": [
+                1.1064469619477495,
+                7.306557827110284,
+                21.46000704004175
+              ],
+              "movement": {
+                "mu": {
+                  "unique_per_chain": [
+                    9000,
+                    9000
+                  ],
+                  "max_std_per_chain": [
+                    1.5363204353782551,
+                    2.109236690266258
+                  ],
+                  "n_draws": 150
+                },
+                "sigma_k": {
+                  "unique_per_chain": [
+                    9000,
+                    9000
+                  ],
+                  "max_std_per_chain": [
+                    0.7037606536656452,
+                    0.8014130746070297
+                  ],
+                  "n_draws": 150
+                },
+                "sigma_obs": {
+                  "unique_per_chain": [
+                    150,
+                    150
+                  ],
+                  "max_std_per_chain": [
+                    0.18046510784837716,
+                    0.1823789562910954
+                  ],
+                  "n_draws": 150
+                },
+                "eta": {
+                  "unique_per_chain": [
+                    18000,
+                    18000
+                  ],
+                  "max_std_per_chain": [
+                    1.2027325729835212,
+                    1.2564987320567051
+                  ],
+                  "n_draws": 150
+                }
+              },
+              "pll_last_per_chain": [
+                -165.0595786768342,
+                -168.83665006957796
+              ]
+            },
+            "No SICM": {
+              "all_trial_times_s": [
+                18.324959869,
+                17.305047368
+              ],
+              "compile_time_s": 20.833138523,
+              "last_trial_s": 17.305047368,
+              "trial_median_s": 17.8150036185,
+              "steady_mean_s": 17.305047368,
+              "neff": [
+                3.8500862514608265,
+                25.729600755805976,
+                122.63371893382387
+              ],
+              "rhat": [
+                0.9971598636145681,
+                1.0704080226083377,
+                1.5108138191295617
+              ],
+              "neff_per_s_last_trial": [
+                0.22248342749874792,
+                1.4868263697090145,
+                7.086586723859227
+              ],
+              "movement": {
+                "mu": {
+                  "unique_per_chain": [
+                    9000,
+                    9000
+                  ],
+                  "max_std_per_chain": [
+                    1.6098297307038616,
+                    2.232750941343798
+                  ],
+                  "n_draws": 150
+                },
+                "sigma_k": {
+                  "unique_per_chain": [
+                    9000,
+                    9000
+                  ],
+                  "max_std_per_chain": [
+                    0.7636188301077026,
+                    0.7884497698965426
+                  ],
+                  "n_draws": 150
+                },
+                "sigma_obs": {
+                  "unique_per_chain": [
+                    150,
+                    150
+                  ],
+                  "max_std_per_chain": [
+                    0.1775231277774272,
+                    0.15719573723508956
+                  ],
+                  "n_draws": 150
+                },
+                "eta": {
+                  "unique_per_chain": [
+                    18000,
+                    18000
+                  ],
+                  "max_std_per_chain": [
+                    1.1465095673280696,
+                    1.166056069581542
+                  ],
+                  "n_draws": 150
+                }
+              },
+              "pll_last_per_chain": [
+                -158.4871858800328,
+                -172.45948554666265
+              ]
+            }
+          },
+          "arm_agreement_max_abs_diff": {
+            "mu": 3.914727797103259,
+            "sigma_k": 3.361407592059396,
+            "sigma_obs": 0.6341743418484078,
+            "eta": 3.1236340346892613,
+            "__pll__": 8.672831386722919
+          },
+          "batch_cell_meta": {
+            "start": "2026-08-25T01:34:01-05:00",
+            "loadavg before": "25.16 33.11 44.78 3/11140 1599745",
+            "md5 before": "21a6bd08b37b54d2b8a20d8924a2bbb2",
+            "end": "2026-08-25T01:35:53-05:00",
+            "loadavg after": "30.21 29.87 42.07 3/11139 1603701",
+            "md5 after": "21a6bd08b37b54d2b8a20d8924a2bbb2",
+            "output dir": "./outputs/2026-08-25_01:34:10",
+            "script exit": "COMMAND_EXIT_CODE=\"0\""
+          }
+        },
+        "phylo_pois": {
+          "run_dir": "/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/outputs/2026-08-25_01:36:11",
+          "config": {
+            "model": {
+              "class": "phylo_pois.PhyloPois",
+              "args": {
+                "n": 200
+              },
+              "seed": 12345
+            },
+            "iterations": 500,
+            "num_warmup": 200,
+            "trials": 2,
+            "ppls": [
+              {
+                "name": "impulse",
+                "inference": {
+                  "class": "inference.MCMC",
+                  "infer_args": {
+                    "step_size": 0.1,
+                    "max_tree_depth": 10,
+                    "adapt_step_size": true,
+                    "adapt_mass_matrix": true
+                  }
+                },
+                "legend": {
+                  "name": "SICM",
+                  "color": "red"
+                },
+                "trials": 2
+              },
+              {
+                "name": "impulse",
+                "inference": {
+                  "class": "inference.MCMC",
+                  "infer_args": {
+                    "step_size": 0.1,
+                    "max_tree_depth": 10,
+                    "adapt_step_size": true,
+                    "adapt_mass_matrix": true,
+                    "disable_sicm": true
+                  }
+                },
+                "legend": {
+                  "name": "NoSICM",
+                  "color": "gray"
+                },
+                "trials": 2
+              }
+            ],
+            "save_samples": true,
+            "figures": {
+              "generate_pll": true,
+              "suffix": "png"
+            },
+            "__path__": {}
+          },
+          "ppls": [
+            "SICM",
+            "No SICM"
+          ],
+          "arms": {
+            "SICM": {
+              "all_trial_times_s": [
+                19.204042068,
+                20.913511688
+              ],
+              "compile_time_s": 39.509143253,
+              "last_trial_s": 20.913511688,
+              "trial_median_s": 20.058776878,
+              "steady_mean_s": 20.913511688,
+              "neff": [
+                10.659339090729496,
+                68.9820239845942,
+                161.94079481992864
+              ],
+              "rhat": [
+                0.998827266156982,
+                1.025954034095649,
+                1.15865385304872
+              ],
+              "neff_per_s_last_trial": [
+                0.5096867159256537,
+                3.2984428925045393,
+                7.7433573679952055
+              ],
+              "movement": {
+                "sigma_sq": {
+                  "unique_per_chain": [
+                    300,
+                    300
+                  ],
+                  "max_std_per_chain": [
+                    0.04651522793830649,
+                    0.05904437624720323
+                  ],
+                  "n_draws": 300
+                },
+                "eta": {
+                  "unique_per_chain": [
+                    60000,
+                    60000
+                  ],
+                  "max_std_per_chain": [
+                    1.2577490799304387,
+                    1.209588721704582
+                  ],
+                  "n_draws": 300
+                },
+                "b0": {
+                  "unique_per_chain": [
+                    300,
+                    300
+                  ],
+                  "max_std_per_chain": [
+                    0.12706916596704698,
+                    0.1427954350017264
+                  ],
+                  "n_draws": 300
+                },
+                "b1": {
+                  "unique_per_chain": [
+                    300,
+                    300
+                  ],
+                  "max_std_per_chain": [
+                    0.0656692643956931,
+                    0.06835037614746156
+                  ],
+                  "n_draws": 300
+                },
+                "sigma_obs": {
+                  "unique_per_chain": [
+                    300,
+                    300
+                  ],
+                  "max_std_per_chain": [
+                    0.05234387232792667,
+                    0.08138165694937242
+                  ],
+                  "n_draws": 300
+                },
+                "eps": {
+                  "unique_per_chain": [
+                    60000,
+                    60000
+                  ],
+                  "max_std_per_chain": [
+                    1.2218379430028776,
+                    1.2242183814675158
+                  ],
+                  "n_draws": 300
+                }
+              },
+              "pll_last_per_chain": [
+                -313.42865221116085,
+                -312.9154376043563
+              ]
+            },
+            "No SICM": {
+              "all_trial_times_s": [
+                466.541582913,
+                444.51560125
+              ],
+              "compile_time_s": 38.351274348,
+              "last_trial_s": 444.51560125,
+              "trial_median_s": 455.5285920815,
+              "steady_mean_s": 444.51560125,
+              "neff": [
+                7.077064522520072,
+                68.10953857719173,
+                308.9311269741196
+              ],
+              "rhat": [
+                0.9982647824080496,
+                1.025447509518047,
+                1.2283803145628875
+              ],
+              "neff_per_s_last_trial": [
+                0.015920846203415617,
+                0.1532219305366658,
+                0.6949837668360568
+              ],
+              "movement": {
+                "sigma_sq": {
+                  "unique_per_chain": [
+                    300,
+                    300
+                  ],
+                  "max_std_per_chain": [
+                    0.041729937124122596,
+                    0.06104647955459919
+                  ],
+                  "n_draws": 300
+                },
+                "eta": {
+                  "unique_per_chain": [
+                    60000,
+                    60000
+                  ],
+                  "max_std_per_chain": [
+                    1.3725610415533898,
+                    1.2430477042732362
+                  ],
+                  "n_draws": 300
+                },
+                "b0": {
+                  "unique_per_chain": [
+                    300,
+                    300
+                  ],
+                  "max_std_per_chain": [
+                    0.1406296133318503,
+                    0.14447647609202688
+                  ],
+                  "n_draws": 300
+                },
+                "b1": {
+                  "unique_per_chain": [
+                    300,
+                    300
+                  ],
+                  "max_std_per_chain": [
+                    0.06534589137538552,
+                    0.06542153183253417
+                  ],
+                  "n_draws": 300
+                },
+                "sigma_obs": {
+                  "unique_per_chain": [
+                    300,
+                    300
+                  ],
+                  "max_std_per_chain": [
+                    0.06374399090564022,
+                    0.07730014227045581
+                  ],
+                  "n_draws": 300
+                },
+                "eps": {
+                  "unique_per_chain": [
+                    60000,
+                    60000
+                  ],
+                  "max_std_per_chain": [
+                    1.287287951162993,
+                    1.2207341338867113
+                  ],
+                  "n_draws": 300
+                }
+              },
+              "pll_last_per_chain": [
+                -312.0330188725077,
+                -318.57254331834775
+              ]
+            }
+          },
+          "arm_agreement_max_abs_diff": {
+            "sigma_sq": 0.29299607922332127,
+            "eta": 5.369031742451206,
+            "b0": 0.5110208496239415,
+            "b1": 0.31773533240933327,
+            "sigma_obs": 0.24904120356479686,
+            "eps": 3.913230319784057,
+            "__pll__": 9.356391642084532
+          },
+          "batch_cell_meta": {
+            "start": "2026-08-25T01:36:02-05:00",
+            "loadavg before": "26.03 28.98 41.65 3/11146 1603848",
+            "md5 before": "21a6bd08b37b54d2b8a20d8924a2bbb2",
+            "end": "2026-08-25T01:53:38-05:00",
+            "loadavg after": "92.13 93.89 75.14 3/10940 1630564",
+            "md5 after": "21a6bd08b37b54d2b8a20d8924a2bbb2",
+            "output dir": "./outputs/2026-08-25_01:36:11",
+            "script exit": "COMMAND_EXIT_CODE=\"0\""
+          }
+        }
+      }
+    },
+    "batch3": {
+      "meta": {
+        "cells": {
+          "car_spatial_scotland": {
+            "start": "2026-08-25T01:59:00-05:00",
+            "loadavg before": "7.12 36.21 54.87 15/11266 1639282",
+            "md5 before": "21a6bd08b37b54d2b8a20d8924a2bbb2",
+            "end": "2026-08-25T02:01:10-05:00",
+            "loadavg after": "30.57 37.89 53.32 2/11305 1704498",
+            "md5 after": "21a6bd08b37b54d2b8a20d8924a2bbb2",
+            "output dir": "./outputs/2026-08-25_01:59:10",
+            "script exit": "COMMAND_EXIT_CODE=\"0\""
+          },
+          "car_spatial_nyc": {
+            "start": "2026-08-25T02:01:18-05:00",
+            "loadavg before": "26.34 36.74 52.78 3/11296 1704595",
+            "md5 before": "21a6bd08b37b54d2b8a20d8924a2bbb2"
+          }
+        },
+        "md5 at batch start": "21a6bd08b37b54d2b8a20d8924a2bbb2",
+        "loadavg at batch start": "7.12 36.21 54.87 21/11261 1639271",
+        "start": "2026-08-25T01:58:52-05:00",
+        "mtime": "2026-08-24 14:59:21.983624227 -0500",
+        "nproc": "192",
+        "sibling taskset processes": "nproc: 192"
+      },
+      "cells": {
+        "car_spatial_scotland": {
+          "run_dir": "/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/outputs/2026-08-25_01:59:10",
+          "config": {
+            "model": {
+              "class": "car_spatial.CARSpatial",
+              "args": {
+                "dataset": "scotland",
+                "rho": 0.99,
+                "n": 56
+              },
+              "seed": 12345
+            },
+            "iterations": 500,
+            "num_warmup": 200,
+            "trials": 2,
+            "ppls": [
+              {
+                "name": "impulse",
+                "inference": {
+                  "class": "inference.MCMC",
+                  "infer_args": {
+                    "step_size": 0.05,
+                    "max_tree_depth": 10,
+                    "adapt_step_size": true,
+                    "adapt_mass_matrix": true
+                  }
+                },
+                "legend": {
+                  "name": "SICM",
+                  "color": "red"
+                },
+                "trials": 2
+              },
+              {
+                "name": "impulse",
+                "inference": {
+                  "class": "inference.MCMC",
+                  "infer_args": {
+                    "step_size": 0.05,
+                    "max_tree_depth": 10,
+                    "adapt_step_size": true,
+                    "adapt_mass_matrix": true,
+                    "disable_sicm": true
+                  }
+                },
+                "legend": {
+                  "name": "NoSICM",
+                  "color": "gray"
+                },
+                "trials": 2
+              }
+            ],
+            "save_samples": true,
+            "figures": {
+              "generate_pll": true,
+              "suffix": "png"
+            },
+            "__path__": {}
+          },
+          "ppls": [
+            "SICM",
+            "No SICM"
+          ],
+          "arms": {
+            "SICM": {
+              "all_trial_times_s": [
+                2.100579568,
+                1.769319751
+              ],
+              "compile_time_s": 41.065915158,
+              "last_trial_s": 1.769319751,
+              "trial_median_s": 1.9349496595,
+              "steady_mean_s": 1.769319751,
+              "neff": [
+                345.13564892377656,
+                566.1919881039873,
+                607.4091585324915
+              ],
+              "rhat": [
+                0.9976939530641912,
+                1.0005573672901953,
+                1.0055004139921087
+              ],
+              "neff_per_s_last_trial": [
+                195.0668604296706,
+                320.0054641248321,
+                343.3009540469949
+              ],
+              "movement": {
+                "alpha": {
+                  "unique_per_chain": [
+                    300,
+                    300
+                  ],
+                  "max_std_per_chain": [
+                    1.1332445430043843,
+                    1.2460083612970525
+                  ],
+                  "n_draws": 300
+                },
+                "sigma_phi": {
+                  "unique_per_chain": [
+                    300,
+                    300
+                  ],
+                  "max_std_per_chain": [
+                    0.1345002389753699,
+                    0.12621381028224618
+                  ],
+                  "n_draws": 300
+                },
+                "phi": {
+                  "unique_per_chain": [
+                    16800,
+                    16800
+                  ],
+                  "max_std_per_chain": [
+                    1.2151378784831428,
+                    1.3212121260497958
+                  ],
+                  "n_draws": 300
+                }
+              },
+              "pll_last_per_chain": [
+                -125.89181761934627,
+                -125.66053655318407
+              ]
+            },
+            "No SICM": {
+              "all_trial_times_s": [
+                10.546062227,
+                10.499796459
+              ],
+              "compile_time_s": 35.468545499,
+              "last_trial_s": 10.499796459,
+              "trial_median_s": 10.522929343000001,
+              "steady_mean_s": 10.499796459,
+              "neff": [
+                372.2957345543474,
+                459.3697991831981,
+                541.4830332673685
+              ],
+              "rhat": [
+                1.0019018006310474,
+                1.004762065154794,
+                1.0084855933440104
+              ],
+              "neff_per_s_last_trial": [
+                35.4574239613217,
+                43.750352778452665,
+                51.57081238496115
+              ],
+              "movement": {
+                "alpha": {
+                  "unique_per_chain": [
+                    300,
+                    300
+                  ],
+                  "max_std_per_chain": [
+                    1.1317197114502804,
+                    1.1657718533423134
+                  ],
+                  "n_draws": 300
+                },
+                "sigma_phi": {
+                  "unique_per_chain": [
+                    300,
+                    300
+                  ],
+                  "max_std_per_chain": [
+                    0.1333982776149649,
+                    0.12425301923873953
+                  ],
+                  "n_draws": 300
+                },
+                "phi": {
+                  "unique_per_chain": [
+                    16800,
+                    16800
+                  ],
+                  "max_std_per_chain": [
+                    1.2233931023379838,
+                    1.2391484598653804
+                  ],
+                  "n_draws": 300
+                }
+              },
+              "pll_last_per_chain": [
+                -124.66976959813128,
+                -126.25082182620852
+              ]
+            }
+          },
+          "arm_agreement_max_abs_diff": {
+            "alpha": 6.460265720172678,
+            "sigma_phi": 0.5169188737212386,
+            "phi": 7.300359992913611,
+            "__pll__": 3.3792015437552436
+          },
+          "batch_cell_meta": {
+            "start": "2026-08-25T01:59:00-05:00",
+            "loadavg before": "7.12 36.21 54.87 15/11266 1639282",
+            "md5 before": "21a6bd08b37b54d2b8a20d8924a2bbb2",
+            "end": "2026-08-25T02:01:10-05:00",
+            "loadavg after": "30.57 37.89 53.32 2/11305 1704498",
+            "md5 after": "21a6bd08b37b54d2b8a20d8924a2bbb2",
+            "output dir": "./outputs/2026-08-25_01:59:10",
+            "script exit": "COMMAND_EXIT_CODE=\"0\""
+          }
+        },
+        "car_spatial_nyc": {
+          "error": "FileNotFoundError: [Errno 2] Unable to synchronously open file (unable to open file: name = '/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/outputs/2026-08-25_02:01:27/samples.nc', errno = 2, error message = 'No such file or directory', flags = 0, o_flags = 0)",
+          "run_dir": "/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/outputs/2026-08-25_02:01:27"
+        }
+      }
+    },
+    "batch4": {
+      "meta": {
+        "cells": {
+          "car_spatial_scotland": {
+            "start": "2026-08-25T02:28:34-05:00",
+            "loadavg before": "21.81 70.84 72.84 3/11408 1735458",
+            "md5 before": "21a6bd08b37b54d2b8a20d8924a2bbb2",
+            "end": "2026-08-25T02:30:37-05:00",
+            "loadavg after": "23.63 52.60 65.72 3/11399 1739602",
+            "md5 after": "21a6bd08b37b54d2b8a20d8924a2bbb2",
+            "output dir": "./outputs/2026-08-25_02:28:43",
+            "script exit": "COMMAND_EXIT_CODE=\"0\""
+          },
+          "car_spatial_nyc": {
+            "start": "2026-08-25T02:30:45-05:00",
+            "loadavg before": "21.98 51.78 65.39 2/11391 1739740",
+            "md5 before": "21a6bd08b37b54d2b8a20d8924a2bbb2",
+            "end": "2026-08-25T02:57:59-05:00",
+            "loadavg after": "91.45 96.53 84.41 2/10907 1761374",
+            "md5 after": "21a6bd08b37b54d2b8a20d8924a2bbb2",
+            "output dir": "./outputs/2026-08-25_02:30:55",
+            "script exit": "COMMAND_EXIT_CODE=\"0\""
+          },
+          "lmm_radon": {
+            "start": "2026-08-25T02:58:07-05:00",
+            "loadavg before": "84.36 94.98 83.97 3/10887 1761409",
+            "md5 before": "21a6bd08b37b54d2b8a20d8924a2bbb2",
+            "end": "2026-08-25T02:59:26-05:00",
+            "loadavg after": "41.46 77.41 78.63 2/10927 1763493",
+            "md5 after": "21a6bd08b37b54d2b8a20d8924a2bbb2",
+            "output dir": "./outputs/2026-08-25_02:58:17",
+            "script exit": "COMMAND_EXIT_CODE=\"0\""
+          },
+          "hierarchical_mvn": {
+            "start": "2026-08-25T02:59:35-05:00",
+            "loadavg before": "35.70 75.00 77.83 3/10892 1763537",
+            "md5 before": "21a6bd08b37b54d2b8a20d8924a2bbb2",
+            "end": "2026-08-25T03:01:27-05:00",
+            "loadavg after": "36.84 60.58 72.12 3/10927 1765750",
+            "md5 after": "21a6bd08b37b54d2b8a20d8924a2bbb2",
+            "output dir": "./outputs/2026-08-25_02:59:44",
+            "script exit": "COMMAND_EXIT_CODE=\"0\""
+          }
+        },
+        "md5 at batch start": "21a6bd08b37b54d2b8a20d8924a2bbb2",
+        "md5 at batch end": "21a6bd08b37b54d2b8a20d8924a2bbb2",
+        "loadavg at batch start": "21.81 70.84 72.84 3/11408 1735452",
+        "loadavg at batch end": "27.16 56.83 70.64 2/10891 1765812",
+        "start": "2026-08-25T02:28:26-05:00",
+        "end": "2026-08-25T03:01:35-05:00",
+        "mtime": "2026-08-24 14:59:21.983624227 -0500",
+        "nproc": "192",
+        "sibling taskset processes": "nproc: 192"
+      },
+      "cells": {
+        "car_spatial_scotland": {
+          "run_dir": "/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/outputs/2026-08-25_02:28:43",
+          "config": {
+            "model": {
+              "class": "car_spatial.CARSpatial",
+              "args": {
+                "dataset": "scotland",
+                "rho": 0.99,
+                "n": 56
+              },
+              "seed": 12345
+            },
+            "iterations": 500,
+            "num_warmup": 200,
+            "trials": 2,
+            "ppls": [
+              {
+                "name": "impulse",
+                "inference": {
+                  "class": "inference.MCMC",
+                  "infer_args": {
+                    "step_size": 0.05,
+                    "max_tree_depth": 10,
+                    "adapt_step_size": true,
+                    "adapt_mass_matrix": true
+                  }
+                },
+                "legend": {
+                  "name": "SICM",
+                  "color": "red"
+                },
+                "trials": 2
+              },
+              {
+                "name": "impulse",
+                "inference": {
+                  "class": "inference.MCMC",
+                  "infer_args": {
+                    "step_size": 0.05,
+                    "max_tree_depth": 10,
+                    "adapt_step_size": true,
+                    "adapt_mass_matrix": true,
+                    "disable_sicm": true
+                  }
+                },
+                "legend": {
+                  "name": "NoSICM",
+                  "color": "gray"
+                },
+                "trials": 2
+              }
+            ],
+            "save_samples": true,
+            "figures": {
+              "generate_pll": true,
+              "suffix": "png"
+            },
+            "__path__": {}
+          },
+          "ppls": [
+            "SICM",
+            "No SICM"
+          ],
+          "arms": {
+            "SICM": {
+              "all_trial_times_s": [
+                2.071230612,
+                1.846296212
+              ],
+              "compile_time_s": 35.65504756,
+              "last_trial_s": 1.846296212,
+              "trial_median_s": 1.958763412,
+              "steady_mean_s": 1.846296212,
+              "neff": [
+                345.13564892377656,
+                566.1919881039873,
+                607.4091585324915
+              ],
+              "rhat": [
+                0.9976939530641912,
+                1.0005573672901953,
+                1.0055004139921087
+              ],
+              "neff_per_s_last_trial": [
+                186.93406111141203,
+                306.6636785711974,
+                328.98792435614416
+              ],
+              "movement": {
+                "alpha": {
+                  "unique_per_chain": [
+                    300,
+                    300
+                  ],
+                  "max_std_per_chain": [
+                    1.1332445430043843,
+                    1.2460083612970525
+                  ],
+                  "n_draws": 300
+                },
+                "sigma_phi": {
+                  "unique_per_chain": [
+                    300,
+                    300
+                  ],
+                  "max_std_per_chain": [
+                    0.1345002389753699,
+                    0.12621381028224618
+                  ],
+                  "n_draws": 300
+                },
+                "phi": {
+                  "unique_per_chain": [
+                    16800,
+                    16800
+                  ],
+                  "max_std_per_chain": [
+                    1.2151378784831428,
+                    1.3212121260497958
+                  ],
+                  "n_draws": 300
+                }
+              },
+              "pll_last_per_chain": [
+                -125.89181761934627,
+                -125.66053655318407
+              ]
+            },
+            "No SICM": {
+              "all_trial_times_s": [
+                10.506251412,
+                10.099133057
+              ],
+              "compile_time_s": 36.79509477,
+              "last_trial_s": 10.099133057,
+              "trial_median_s": 10.3026922345,
+              "steady_mean_s": 10.099133057,
+              "neff": [
+                372.2957345543474,
+                459.3697991831981,
+                541.4830332673685
+              ],
+              "rhat": [
+                1.0019018006310474,
+                1.004762065154794,
+                1.0084855933440104
+              ],
+              "neff_per_s_last_trial": [
+                36.86412808437042,
+                45.48606267394365,
+                53.616783758686196
+              ],
+              "movement": {
+                "alpha": {
+                  "unique_per_chain": [
+                    300,
+                    300
+                  ],
+                  "max_std_per_chain": [
+                    1.1317197114502804,
+                    1.1657718533423134
+                  ],
+                  "n_draws": 300
+                },
+                "sigma_phi": {
+                  "unique_per_chain": [
+                    300,
+                    300
+                  ],
+                  "max_std_per_chain": [
+                    0.1333982776149649,
+                    0.12425301923873953
+                  ],
+                  "n_draws": 300
+                },
+                "phi": {
+                  "unique_per_chain": [
+                    16800,
+                    16800
+                  ],
+                  "max_std_per_chain": [
+                    1.2233931023379838,
+                    1.2391484598653804
+                  ],
+                  "n_draws": 300
+                }
+              },
+              "pll_last_per_chain": [
+                -124.66976959813128,
+                -126.25082182620852
+              ]
+            }
+          },
+          "arm_agreement_max_abs_diff": {
+            "alpha": 6.460265720172678,
+            "sigma_phi": 0.5169188737212386,
+            "phi": 7.300359992913611,
+            "__pll__": 3.3792015437552436
+          },
+          "batch_cell_meta": {
+            "start": "2026-08-25T02:28:34-05:00",
+            "loadavg before": "21.81 70.84 72.84 3/11408 1735458",
+            "md5 before": "21a6bd08b37b54d2b8a20d8924a2bbb2",
+            "end": "2026-08-25T02:30:37-05:00",
+            "loadavg after": "23.63 52.60 65.72 3/11399 1739602",
+            "md5 after": "21a6bd08b37b54d2b8a20d8924a2bbb2",
+            "output dir": "./outputs/2026-08-25_02:28:43",
+            "script exit": "COMMAND_EXIT_CODE=\"0\""
+          }
+        },
+        "car_spatial_nyc": {
+          "run_dir": "/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/outputs/2026-08-25_02:30:55",
+          "config": {
+            "model": {
+              "class": "car_spatial.CARSpatial",
+              "args": {
+                "dataset": "nyc_traffic",
+                "rho": 0.99,
+                "n": 250
+              },
+              "seed": 12345
+            },
+            "iterations": 500,
+            "num_warmup": 200,
+            "trials": 2,
+            "ppls": [
+              {
+                "name": "impulse",
+                "inference": {
+                  "class": "inference.MCMC",
+                  "infer_args": {
+                    "step_size": 0.05,
+                    "max_tree_depth": 10,
+                    "adapt_step_size": true,
+                    "adapt_mass_matrix": true
+                  }
+                },
+                "legend": {
+                  "name": "SICM",
+                  "color": "red"
+                },
+                "trials": 2
+              },
+              {
+                "name": "impulse",
+                "inference": {
+                  "class": "inference.MCMC",
+                  "infer_args": {
+                    "step_size": 0.05,
+                    "max_tree_depth": 10,
+                    "adapt_step_size": true,
+                    "adapt_mass_matrix": true,
+                    "disable_sicm": true
+                  }
+                },
+                "legend": {
+                  "name": "NoSICM",
+                  "color": "gray"
+                },
+                "trials": 2
+              }
+            ],
+            "save_samples": true,
+            "figures": {
+              "generate_pll": true,
+              "suffix": "png"
+            },
+            "__path__": {}
+          },
+          "ppls": [
+            "SICM",
+            "No SICM"
+          ],
+          "arms": {
+            "SICM": {
+              "all_trial_times_s": [
+                151.390487905,
+                153.061804312
+              ],
+              "compile_time_s": 35.480077457,
+              "last_trial_s": 153.061804312,
+              "trial_median_s": 152.2261461085,
+              "steady_mean_s": 153.061804312,
+              "neff": [
+                34.43856421844695,
+                39.130234923160884,
+                273.25154968567216
+              ],
+              "rhat": [
+                0.9997723194546033,
+                1.0138633276890434,
+                1.0372815691775812
+              ],
+              "neff_per_s_last_trial": [
+                0.22499776723033818,
+                0.2556498997189274,
+                1.7852366951632057
+              ],
+              "movement": {
+                "alpha": {
+                  "unique_per_chain": [
+                    300,
+                    300
+                  ],
+                  "max_std_per_chain": [
+                    1.04997729446992,
+                    1.4660757027911073
+                  ],
+                  "n_draws": 300
+                },
+                "sigma_phi": {
+                  "unique_per_chain": [
+                    300,
+                    300
+                  ],
+                  "max_std_per_chain": [
+                    0.15488582754644734,
+                    0.16236949307005816
+                  ],
+                  "n_draws": 300
+                },
+                "phi": {
+                  "unique_per_chain": [
+                    75000,
+                    75000
+                  ],
+                  "max_std_per_chain": [
+                    1.609738269780422,
+                    1.8374246727810304
+                  ],
+                  "n_draws": 300
+                }
+              },
+              "pll_last_per_chain": [
+                -468.3031285175803,
+                -458.80979447330935
+              ]
+            },
+            "No SICM": {
+              "all_trial_times_s": [
+                631.992315338,
+                600.298121595
+              ],
+              "compile_time_s": 34.431059397,
+              "last_trial_s": 600.298121595,
+              "trial_median_s": 616.1452184665,
+              "steady_mean_s": 600.298121595,
+              "neff": [
+                3.4325451747573945,
+                3.9255430846501778,
+                155.0909877286049
+              ],
+              "rhat": [
+                1.0190485735368195,
+                1.4976562266086306,
+                1.6529044241756181
+              ],
+              "neff_per_s_last_trial": [
+                0.005718067492260474,
+                0.006539322618934669,
+                0.2583566100732184
+              ],
+              "movement": {
+                "alpha": {
+                  "unique_per_chain": [
+                    300,
+                    300
+                  ],
+                  "max_std_per_chain": [
+                    0.8956952036849328,
+                    0.9860930444552484
+                  ],
+                  "n_draws": 300
+                },
+                "sigma_phi": {
+                  "unique_per_chain": [
+                    300,
+                    300
+                  ],
+                  "max_std_per_chain": [
+                    0.16069002133258106,
+                    0.16385743735922198
+                  ],
+                  "n_draws": 300
+                },
+                "phi": {
+                  "unique_per_chain": [
+                    75000,
+                    75000
+                  ],
+                  "max_std_per_chain": [
+                    1.4470392407815558,
+                    1.547318974288668
+                  ],
+                  "n_draws": 300
+                }
+              },
+              "pll_last_per_chain": [
+                -469.0177265375043,
+                -464.5192930731944
+              ]
+            }
+          },
+          "arm_agreement_max_abs_diff": {
+            "alpha": 5.987865410420302,
+            "sigma_phi": 0.522368137034384,
+            "phi": 8.170039231623807,
+            "__pll__": 17.863276188230998
+          },
+          "batch_cell_meta": {
+            "start": "2026-08-25T02:30:45-05:00",
+            "loadavg before": "21.98 51.78 65.39 2/11391 1739740",
+            "md5 before": "21a6bd08b37b54d2b8a20d8924a2bbb2",
+            "end": "2026-08-25T02:57:59-05:00",
+            "loadavg after": "91.45 96.53 84.41 2/10907 1761374",
+            "md5 after": "21a6bd08b37b54d2b8a20d8924a2bbb2",
+            "output dir": "./outputs/2026-08-25_02:30:55",
+            "script exit": "COMMAND_EXIT_CODE=\"0\""
+          }
+        },
+        "lmm_radon": {
+          "run_dir": "/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/outputs/2026-08-25_02:58:17",
+          "config": {
+            "model": {
+              "class": "linear_mixed_model.LinearMixedModel",
+              "args": {
+                "dataset": "radon_mn",
+                "n": 250,
+                "k": 2
+              },
+              "seed": 12345
+            },
+            "iterations": 500,
+            "num_warmup": 200,
+            "trials": 2,
+            "ppls": [
+              {
+                "name": "impulse",
+                "inference": {
+                  "class": "inference.MCMC",
+                  "infer_args": {
+                    "step_size": 0.05,
+                    "max_tree_depth": 10,
+                    "adapt_step_size": true,
+                    "adapt_mass_matrix": true
+                  }
+                },
+                "legend": {
+                  "name": "SICM",
+                  "color": "red"
+                },
+                "trials": 2
+              },
+              {
+                "name": "impulse",
+                "inference": {
+                  "class": "inference.MCMC",
+                  "infer_args": {
+                    "step_size": 0.05,
+                    "max_tree_depth": 10,
+                    "adapt_step_size": true,
+                    "adapt_mass_matrix": true,
+                    "disable_sicm": true
+                  }
+                },
+                "legend": {
+                  "name": "NoSICM",
+                  "color": "gray"
+                },
+                "trials": 2
+              }
+            ],
+            "save_samples": true,
+            "figures": {
+              "generate_pll": true,
+              "suffix": "png"
+            },
+            "__path__": {}
+          },
+          "ppls": [
+            "SICM",
+            "No SICM"
+          ],
+          "arms": {
+            "SICM": {
+              "all_trial_times_s": [
+                0.596212455,
+                0.14980524
+              ],
+              "compile_time_s": 17.947461016,
+              "last_trial_s": 0.14980524,
+              "trial_median_s": 0.37300884749999996,
+              "steady_mean_s": 0.14980524,
+              "neff": [
+                367.16944976757736,
+                516.777059443144,
+                591.112369366402
+              ],
+              "rhat": [
+                0.9983179933992069,
+                1.0028530719484274,
+                1.0043876666356277
+              ],
+              "neff_per_s_last_trial": [
+                2450.978682505214,
+                3449.659434096858,
+                3945.8724498982947
+              ],
+              "movement": {
+                "beta": {
+                  "unique_per_chain": [
+                    596,
+                    594
+                  ],
+                  "max_std_per_chain": [
+                    0.13868030496479197,
+                    0.133475960349029
+                  ],
+                  "n_draws": 300
+                },
+                "sigma_u": {
+                  "unique_per_chain": [
+                    298,
+                    297
+                  ],
+                  "max_std_per_chain": [
+                    0.09498439827371839,
+                    0.08170247704109476
+                  ],
+                  "n_draws": 300
+                },
+                "sigma_e": {
+                  "unique_per_chain": [
+                    298,
+                    297
+                  ],
+                  "max_std_per_chain": [
+                    0.0356593760021869,
+                    0.03694416432237049
+                  ],
+                  "n_draws": 300
+                }
+              },
+              "pll_last_per_chain": [
+                -290.69516271910857,
+                -290.6550416199084
+              ]
+            },
+            "No SICM": {
+              "all_trial_times_s": [
+                8.149538167,
+                6.45602034
+              ],
+              "compile_time_s": 17.484966293,
+              "last_trial_s": 6.45602034,
+              "trial_median_s": 7.3027792535,
+              "steady_mean_s": 6.45602034,
+              "neff": [
+                409.9241687691108,
+                432.962136731368,
+                521.0089250361235
+              ],
+              "rhat": [
+                1.0035020866235231,
+                1.0058230234468526,
+                1.0068110681675775
+              ],
+              "neff_per_s_last_trial": [
+                63.49486946769916,
+                67.06331670748236,
+                80.70125210233205
+              ],
+              "movement": {
+                "beta": {
+                  "unique_per_chain": [
+                    600,
+                    590
+                  ],
+                  "max_std_per_chain": [
+                    0.12744199959112457,
+                    0.13622956999883085
+                  ],
+                  "n_draws": 300
+                },
+                "sigma_u": {
+                  "unique_per_chain": [
+                    300,
+                    295
+                  ],
+                  "max_std_per_chain": [
+                    0.08329719194265145,
+                    0.07504085745322198
+                  ],
+                  "n_draws": 300
+                },
+                "sigma_e": {
+                  "unique_per_chain": [
+                    300,
+                    295
+                  ],
+                  "max_std_per_chain": [
+                    0.036196146290673525,
+                    0.03613307282981047
+                  ],
+                  "n_draws": 300
+                }
+              },
+              "pll_last_per_chain": [
+                -290.6725284277556,
+                -289.9425582434866
+              ]
+            }
+          },
+          "arm_agreement_max_abs_diff": {
+            "beta": 0.6368626466137437,
+            "sigma_u": 0.36296889827196266,
+            "sigma_e": 0.20747476871964932,
+            "__pll__": 2.7958265452667774
+          },
+          "batch_cell_meta": {
+            "start": "2026-08-25T02:58:07-05:00",
+            "loadavg before": "84.36 94.98 83.97 3/10887 1761409",
+            "md5 before": "21a6bd08b37b54d2b8a20d8924a2bbb2",
+            "end": "2026-08-25T02:59:26-05:00",
+            "loadavg after": "41.46 77.41 78.63 2/10927 1763493",
+            "md5 after": "21a6bd08b37b54d2b8a20d8924a2bbb2",
+            "output dir": "./outputs/2026-08-25_02:58:17",
+            "script exit": "COMMAND_EXIT_CODE=\"0\""
+          }
+        },
+        "hierarchical_mvn": {
+          "run_dir": "/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/outputs/2026-08-25_02:59:44",
+          "config": {
+            "model": {
+              "class": "hierarchical_mvn.HierarchicalMVN",
+              "args": {
+                "n": 60,
+                "K": 60,
+                "J": 2
+              },
+              "seed": 12345
+            },
+            "iterations": 200,
+            "num_warmup": 50,
+            "trials": 2,
+            "ppls": [
+              {
+                "name": "impulse",
+                "inference": {
+                  "class": "inference.MCMC",
+                  "infer_args": {
+                    "step_size": 0.01,
+                    "max_tree_depth": 10,
+                    "adapt_step_size": true,
+                    "adapt_mass_matrix": true
+                  }
+                },
+                "legend": {
+                  "name": "SICM",
+                  "color": "red"
+                },
+                "trials": 2
+              },
+              {
+                "name": "impulse",
+                "inference": {
+                  "class": "inference.MCMC",
+                  "infer_args": {
+                    "step_size": 0.01,
+                    "max_tree_depth": 10,
+                    "adapt_step_size": true,
+                    "adapt_mass_matrix": true,
+                    "disable_sicm": true
+                  }
+                },
+                "legend": {
+                  "name": "NoSICM",
+                  "color": "gray"
+                },
+                "trials": 2
+              }
+            ],
+            "save_samples": true,
+            "figures": {
+              "generate_pll": true,
+              "suffix": "png"
+            },
+            "__path__": {}
+          },
+          "ppls": [
+            "SICM",
+            "No SICM"
+          ],
+          "arms": {
+            "SICM": {
+              "all_trial_times_s": [
+                4.254599567,
+                3.808131787
+              ],
+              "compile_time_s": 21.436656825,
+              "last_trial_s": 3.808131787,
+              "trial_median_s": 4.031365677,
+              "steady_mean_s": 3.808131787,
+              "neff": [
+                4.3748624402562095,
+                28.889939151818393,
+                84.85230833102152
+              ],
+              "rhat": [
+                0.9985734905375377,
+                1.061202000933538,
+                1.4498884519677948
+              ],
+              "neff_per_s_last_trial": [
+                1.1488211766175962,
+                7.586381135873855,
+                22.281872864979583
+              ],
+              "movement": {
+                "mu": {
+                  "unique_per_chain": [
+                    9000,
+                    9000
+                  ],
+                  "max_std_per_chain": [
+                    1.5363204353782551,
+                    2.109236690266258
+                  ],
+                  "n_draws": 150
+                },
+                "sigma_k": {
+                  "unique_per_chain": [
+                    9000,
+                    9000
+                  ],
+                  "max_std_per_chain": [
+                    0.7037606536656452,
+                    0.8014130746070297
+                  ],
+                  "n_draws": 150
+                },
+                "sigma_obs": {
+                  "unique_per_chain": [
+                    150,
+                    150
+                  ],
+                  "max_std_per_chain": [
+                    0.18046510784837716,
+                    0.1823789562910954
+                  ],
+                  "n_draws": 150
+                },
+                "eta": {
+                  "unique_per_chain": [
+                    18000,
+                    18000
+                  ],
+                  "max_std_per_chain": [
+                    1.2027325729835212,
+                    1.2564987320567051
+                  ],
+                  "n_draws": 150
+                }
+              },
+              "pll_last_per_chain": [
+                -165.0595786768342,
+                -168.83665006957796
+              ]
+            },
+            "No SICM": {
+              "all_trial_times_s": [
+                17.828307694,
+                17.529013983
+              ],
+              "compile_time_s": 20.846670434,
+              "last_trial_s": 17.529013983,
+              "trial_median_s": 17.6786608385,
+              "steady_mean_s": 17.529013983,
+              "neff": [
+                3.8500862514608265,
+                25.729600755805976,
+                122.63371893382387
+              ],
+              "rhat": [
+                0.9971598636145681,
+                1.0704080226083377,
+                1.5108138191295617
+              ],
+              "neff_per_s_last_trial": [
+                0.21964077701088722,
+                1.4678293246134138,
+                6.996042050782583
+              ],
+              "movement": {
+                "mu": {
+                  "unique_per_chain": [
+                    9000,
+                    9000
+                  ],
+                  "max_std_per_chain": [
+                    1.6098297307038616,
+                    2.232750941343798
+                  ],
+                  "n_draws": 150
+                },
+                "sigma_k": {
+                  "unique_per_chain": [
+                    9000,
+                    9000
+                  ],
+                  "max_std_per_chain": [
+                    0.7636188301077026,
+                    0.7884497698965426
+                  ],
+                  "n_draws": 150
+                },
+                "sigma_obs": {
+                  "unique_per_chain": [
+                    150,
+                    150
+                  ],
+                  "max_std_per_chain": [
+                    0.1775231277774272,
+                    0.15719573723508956
+                  ],
+                  "n_draws": 150
+                },
+                "eta": {
+                  "unique_per_chain": [
+                    18000,
+                    18000
+                  ],
+                  "max_std_per_chain": [
+                    1.1465095673280696,
+                    1.166056069581542
+                  ],
+                  "n_draws": 150
+                }
+              },
+              "pll_last_per_chain": [
+                -158.4871858800328,
+                -172.45948554666265
+              ]
+            }
+          },
+          "arm_agreement_max_abs_diff": {
+            "mu": 3.914727797103259,
+            "sigma_k": 3.361407592059396,
+            "sigma_obs": 0.6341743418484078,
+            "eta": 3.1236340346892613,
+            "__pll__": 8.672831386722919
+          },
+          "batch_cell_meta": {
+            "start": "2026-08-25T02:59:35-05:00",
+            "loadavg before": "35.70 75.00 77.83 3/10892 1763537",
+            "md5 before": "21a6bd08b37b54d2b8a20d8924a2bbb2",
+            "end": "2026-08-25T03:01:27-05:00",
+            "loadavg after": "36.84 60.58 72.12 3/10927 1765750",
+            "md5 after": "21a6bd08b37b54d2b8a20d8924a2bbb2",
+            "output dir": "./outputs/2026-08-25_02:59:44",
+            "script exit": "COMMAND_EXIT_CODE=\"0\""
+          }
+        }
+      }
+    }
+  },
+  "summary": {
+    "car_spatial_scotland": {
+      "batch1": {
+        "sicm_last_s": 1.91457179,
+        "nosicm_last_s": 10.061160543,
+        "speedup_last": 5.255044807173305,
+        "sicm_median_s": 1.990913576,
+        "nosicm_median_s": 10.251340474500001,
+        "speedup_median": 5.1490635244430125,
+        "sicm_trials": [
+          2.067255362,
+          1.91457179
+        ],
+        "nosicm_trials": [
+          10.441520406,
+          10.061160543
+        ],
+        "run_dir": "/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/outputs/2026-08-25_01:04:00"
+      },
+      "batch2": {
+        "sicm_last_s": 1.906165893,
+        "nosicm_last_s": 10.062833038,
+        "speedup_last": 5.279096155772,
+        "sicm_median_s": 2.0042016095,
+        "nosicm_median_s": 10.3067629375,
+        "speedup_median": 5.142577916635488,
+        "sicm_trials": [
+          2.102237326,
+          1.906165893
+        ],
+        "nosicm_trials": [
+          10.550692837,
+          10.062833038
+        ],
+        "run_dir": "/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/outputs/2026-08-25_01:30:37"
+      },
+      "batch3": {
+        "sicm_last_s": 1.769319751,
+        "nosicm_last_s": 10.499796459,
+        "speedup_last": 5.934369100365059,
+        "sicm_median_s": 1.9349496595,
+        "nosicm_median_s": 10.522929343000001,
+        "speedup_median": 5.4383478615765,
+        "sicm_trials": [
+          2.100579568,
+          1.769319751
+        ],
+        "nosicm_trials": [
+          10.546062227,
+          10.499796459
+        ],
+        "run_dir": "/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/outputs/2026-08-25_01:59:10"
+      },
+      "batch4": {
+        "sicm_last_s": 1.846296212,
+        "nosicm_last_s": 10.099133057,
+        "speedup_last": 5.469941925548402,
+        "sicm_median_s": 1.958763412,
+        "nosicm_median_s": 10.3026922345,
+        "speedup_median": 5.2597940983492295,
+        "sicm_trials": [
+          2.071230612,
+          1.846296212
+        ],
+        "nosicm_trials": [
+          10.506251412,
+          10.099133057
+        ],
+        "run_dir": "/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/outputs/2026-08-25_02:28:43"
+      }
+    },
+    "car_spatial_nyc": {
+      "batch4": {
+        "sicm_last_s": 153.061804312,
+        "nosicm_last_s": 600.298121595,
+        "speedup_last": 3.921932870798759,
+        "sicm_median_s": 152.2261461085,
+        "nosicm_median_s": 616.1452184665,
+        "speedup_median": 4.0475649828731735,
+        "sicm_trials": [
+          151.390487905,
+          153.061804312
+        ],
+        "nosicm_trials": [
+          631.992315338,
+          600.298121595
+        ],
+        "run_dir": "/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/outputs/2026-08-25_02:30:55"
+      }
+    },
+    "lmm_radon": {
+      "batch1": {
+        "sicm_last_s": 0.151558509,
+        "nosicm_last_s": 5.179207255,
+        "speedup_last": 34.172988960982714,
+        "sicm_median_s": 0.385404953,
+        "nosicm_median_s": 5.881212035,
+        "speedup_median": 15.259824735568461,
+        "sicm_trials": [
+          0.619251397,
+          0.151558509
+        ],
+        "nosicm_trials": [
+          6.583216815,
+          5.179207255
+        ],
+        "run_dir": "/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/outputs/2026-08-25_01:06:08"
+      },
+      "batch2": {
+        "sicm_last_s": 0.14847044,
+        "nosicm_last_s": 8.048346957,
+        "speedup_last": 54.20841318312251,
+        "sicm_median_s": 0.349891564,
+        "nosicm_median_s": 7.7803963155,
+        "speedup_median": 22.23659303629281,
+        "sicm_trials": [
+          0.551312688,
+          0.14847044
+        ],
+        "nosicm_trials": [
+          7.512445674,
+          8.048346957
+        ],
+        "run_dir": "/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/outputs/2026-08-25_01:32:44"
+      },
+      "batch4": {
+        "sicm_last_s": 0.14980524,
+        "nosicm_last_s": 6.45602034,
+        "speedup_last": 43.09609156528837,
+        "sicm_median_s": 0.37300884749999996,
+        "nosicm_median_s": 7.3027792535,
+        "speedup_median": 19.578032270400772,
+        "sicm_trials": [
+          0.596212455,
+          0.14980524
+        ],
+        "nosicm_trials": [
+          8.149538167,
+          6.45602034
+        ],
+        "run_dir": "/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/outputs/2026-08-25_02:58:17"
+      }
+    },
+    "hierarchical_mvn": {
+      "batch1": {
+        "sicm_last_s": 4.079756391,
+        "nosicm_last_s": 16.903172365,
+        "speedup_last": 4.143181784649847,
+        "sicm_median_s": 4.201978376,
+        "nosicm_median_s": 17.456624939,
+        "speedup_median": 4.154382382999679,
+        "sicm_trials": [
+          4.324200361,
+          4.079756391
+        ],
+        "nosicm_trials": [
+          18.010077513,
+          16.903172365
+        ],
+        "run_dir": "/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/outputs/2026-08-25_01:07:31"
+      },
+      "batch2": {
+        "sicm_last_s": 3.953973928,
+        "nosicm_last_s": 17.305047368,
+        "speedup_last": 4.376621516255987,
+        "sicm_median_s": 4.086283478,
+        "nosicm_median_s": 17.8150036185,
+        "speedup_median": 4.359708207816119,
+        "sicm_trials": [
+          4.218593028,
+          3.953973928
+        ],
+        "nosicm_trials": [
+          18.324959869,
+          17.305047368
+        ],
+        "run_dir": "/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/outputs/2026-08-25_01:34:10"
+      },
+      "batch4": {
+        "sicm_last_s": 3.808131787,
+        "nosicm_last_s": 17.529013983,
+        "speedup_last": 4.603048151547597,
+        "sicm_median_s": 4.031365677,
+        "nosicm_median_s": 17.6786608385,
+        "speedup_median": 4.385278403138024,
+        "sicm_trials": [
+          4.254599567,
+          3.808131787
+        ],
+        "nosicm_trials": [
+          17.828307694,
+          17.529013983
+        ],
+        "run_dir": "/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/outputs/2026-08-25_02:59:44"
+      }
+    },
+    "phylo_pois": {
+      "batch1": {
+        "sicm_last_s": 20.353813685,
+        "nosicm_last_s": 445.755567777,
+        "speedup_last": 21.900346277882324,
+        "sicm_median_s": 19.7797758345,
+        "nosicm_median_s": 452.4203529605,
+        "speedup_median": 22.872875645606953,
+        "sicm_trials": [
+          19.205737984,
+          20.353813685
+        ],
+        "nosicm_trials": [
+          459.085138144,
+          445.755567777
+        ],
+        "run_dir": "/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/outputs/2026-08-25_01:09:32"
+      },
+      "batch2": {
+        "sicm_last_s": 20.913511688,
+        "nosicm_last_s": 444.51560125,
+        "speedup_last": 21.254947895960456,
+        "sicm_median_s": 20.058776878,
+        "nosicm_median_s": 455.5285920815,
+        "speedup_median": 22.70968937199322,
+        "sicm_trials": [
+          19.204042068,
+          20.913511688
+        ],
+        "nosicm_trials": [
+          466.541582913,
+          444.51560125
+        ],
+        "run_dir": "/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/outputs/2026-08-25_01:36:11"
+      }
+    }
+  }
+}

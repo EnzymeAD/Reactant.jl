@@ -1,0 +1,25 @@
+{
+  "model": "pgls",
+  "num_samples": 20,
+  "adapted_step_size": 0.6536560747172686,
+  "inverse_mass_shape": [
+    3,
+    3
+  ],
+  "offdiag_max": 0.009964683583470905,
+  "reinjection_max_diff": 0.0,
+  "controls": {
+    "identity_mass": 0.8084887281935016,
+    "diagonal_only_mass": 0.5062317674541049,
+    "offdiag_scaled": 1.0532907298937524,
+    "half_step": 1.0235232558745642
+  },
+  "arms_max_diff": 1.1657341758564144e-15,
+  "arms_rel_diff": 1.3601198106285152e-15,
+  "arms_ok": true,
+  "arm_times": {
+    "sicm": 0.455244218,
+    "nosicm": 0.546775351
+  },
+  "pass": true
+}

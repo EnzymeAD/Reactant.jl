@@ -12,6 +12,7 @@
 
 using Turing, Random, LinearAlgebra, JSON3
 using Turing: NUTS, sample, DynamicPPL
+using ReverseDiff  # backend for AutoReverseDiff (--adtype reversediff)
 using AdvancedHMC: DenseEuclideanMetric
 
 # Turing.Variational re-exports the AdvancedVI machinery. AdvancedVI is only a
@@ -53,18 +54,37 @@ include(joinpath(@__DIR__, "turing", MODEL_PATH * ".jl"))
 # Run NUTS via Turing
 # =============================================================================
 
+"""Resolve an `--adtype` CLI name to an ADTypes backend.
+
+`forwarddiff` is Turing's own default (`Turing.DEFAULT_ADTYPE`), best for
+low-dimensional models; `reversediff` is compiled-tape ReverseDiff, the backend
+Turing's performance documentation recommends for high-dimensional models.
+`compile=true` is safe for every benchmark model here: all are fixed-structure
+with no parameter-value-dependent control flow.
+"""
+function resolve_adtype(adtype_name)
+    if adtype_name == "forwarddiff"
+        return AutoForwardDiff()
+    elseif adtype_name == "reversediff"
+        return AutoReverseDiff(compile=true)
+    else
+        error("Unknown --adtype: $adtype_name (expected forwarddiff|reversediff)")
+    end
+end
+
 function run_turing_nuts(
     model, seed, num_warmup, num_samples, step_size, max_tree_depth,
-    adapt_step_size, adapt_mass_matrix, init_params,
+    adapt_step_size, adapt_mass_matrix, init_params, adtype_name,
 )
     rng = Xoshiro(seed)
     total_samples = num_warmup + num_samples
+    adtype = resolve_adtype(adtype_name)
 
     if adapt_step_size || adapt_mass_matrix
         n_adapts = num_warmup
-        sampler = NUTS(n_adapts, 0.8; max_depth=max_tree_depth, init_ϵ=step_size, metricT=DenseEuclideanMetric)
+        sampler = NUTS(n_adapts, 0.8; max_depth=max_tree_depth, init_ϵ=step_size, metricT=DenseEuclideanMetric, adtype=adtype)
     else
-        sampler = NUTS(0, 0.8; max_depth=max_tree_depth, init_ϵ=step_size, metricT=DenseEuclideanMetric)
+        sampler = NUTS(0, 0.8; max_depth=max_tree_depth, init_ϵ=step_size, metricT=DenseEuclideanMetric, adtype=adtype)
     end
 
     sample_kwargs = Dict{Symbol,Any}(
@@ -140,7 +160,11 @@ function run_turing_advi(
     @assert optimizer == "Adam" "Turing ADVI arm only supports the Adam optimizer; got $optimizer"
 
     rng = Xoshiro(seed)
-    adtype = Turing.DEFAULT_ADTYPE  # AutoForwardDiff(); only AD backend in turing_env
+    # Forward-mode AD, deliberately: the SVI rows run only the three continuous
+    # models (d <= ~57), where forward mode is the appropriate default. The NUTS
+    # path selects its backend per model via --adtype (ReverseDiff is in the env
+    # since 2026-08-24); switching the VI backend is a separate decision.
+    adtype = Turing.DEFAULT_ADTYPE  # AutoForwardDiff()
 
     vi_linked = DynamicPPL.link(DynamicPPL.VarInfo(model), model)
     d = length(vi_linked[:])
@@ -278,6 +302,7 @@ function main()
     guide = "AutoNormal"
     optimizer = "Adam"
     matched_init = false
+    adtype_name = "forwarddiff"
 
     i = 1
     while i <= length(ARGS)
@@ -316,6 +341,8 @@ function main()
             i += 1; optimizer = ARGS[i]
         elseif arg == "--matched-init"
             matched_init = true
+        elseif arg == "--adtype"
+            i += 1; adtype_name = ARGS[i]
         elseif arg == "--server"
             server_mode = true
         else
@@ -347,6 +374,7 @@ function main()
     println("  num_warmup=$num_warmup, num_samples=$num_samples, seed=$seed")
     println("  step_size=$step_size, max_tree_depth=$max_tree_depth")
     println("  adapt_step_size=$adapt_step_size, adapt_mass_matrix=$adapt_mass_matrix")
+    println("  adtype=$adtype_name")
 
     # Build initial params
     init_params = get_init_params(data, get(data, "init_params", nothing))
@@ -378,7 +406,7 @@ function main()
     compile_time = @elapsed begin
         _ = run_turing_nuts(
             spec.turing_model, seed, 0, 2, step_size, max_tree_depth,
-            false, false, init_params,
+            false, false, init_params, adtype_name,
         )
     end
     println("$(round(compile_time * 1000, digits=2)) ms")
@@ -389,7 +417,7 @@ function main()
         chain = run_turing_nuts(
             spec.turing_model, seed, num_warmup, num_samples,
             step_size, max_tree_depth, adapt_step_size, adapt_mass_matrix,
-            init_params,
+            init_params, adtype_name,
         )
     end
     println("$(round(run_time * 1000, digits=2)) ms")
@@ -436,7 +464,7 @@ function main()
                 new_chain = run_turing_nuts(
                     spec.turing_model, new_seed, num_warmup, num_samples,
                     step_size, max_tree_depth, adapt_step_size, adapt_mass_matrix,
-                    new_init_params,
+                    new_init_params, adtype_name,
                 )
             end
 

@@ -232,10 +232,13 @@ end
 function run_numpyro(spec, num_steps, lr)
     model = build_numpyro_model(spec)
     rng_key = seed_to_rbg_key(UInt64[0, 0])
+    # Constrained values of Impulse's unconstrained loc=0: exp(0) = 1 for HalfNormal sites.
+    # f_tilde must be a jax array: a raw juliacall Vector fails in numpyro's jnp.matmul.
+    jnp_init = pyimport("jax.numpy")
     init_vals = if spec.name == "scale_family_mvn"
         Dict(:tau => 1.0)
     else
-        Dict(:alpha => 1.0, :f_tilde => zeros(spec.n))
+        Dict(:alpha => 1.0, :f_tilde => jnp_init.array(zeros(spec.n)))
     end
     kw = (;
         model=model,
@@ -260,7 +263,7 @@ end
 
 const NUM_STEPS = 300
 rows = Any[]
-for spec in (spec_mvn(8), spec_gp(8))
+for spec in (spec_mvn(200), spec_gp(200))
     @info "==== $(spec.name) (n=$(spec.n), pos=$(spec.pos)) ===="
     seed = Reactant.to_rarray(UInt64[0, 0])
     rng = ReactantRNG(seed)

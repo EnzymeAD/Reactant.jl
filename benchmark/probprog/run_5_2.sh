@@ -22,7 +22,9 @@ RUN="$SCRIPT_DIR/run_pplbench.sh"
 EXTRACT="$SCRIPT_DIR/extract_results.py"
 LOG="/tmp/bench_section52.log"
 CSV="/tmp/section52_results.csv"
-THREADS=32
+# Cross-system comparison: single-threaded per the 2026-08-24 thread policy
+# (affinity-enforced in run_pplbench.sh; Impulse-only runs use --threads all).
+THREADS=1
 PPLS="numpyro,impulse,stan"
 
 BENCHMARKS=(

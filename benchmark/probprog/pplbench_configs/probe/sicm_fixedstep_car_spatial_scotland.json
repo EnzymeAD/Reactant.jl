@@ -1,0 +1,56 @@
+{
+  "model": {
+    "class": "car_spatial.CARSpatial",
+    "args": {
+      "dataset": "scotland",
+      "rho": 0.99,
+      "n": 56
+    },
+    "seed": 12345
+  },
+  "iterations": 300,
+  "num_warmup": 0,
+  "trials": 2,
+  "ppls": [
+    {
+      "name": "impulse",
+      "inference": {
+        "class": "inference.MCMC",
+        "infer_args": {
+          "step_size": 0.05,
+          "max_tree_depth": 10,
+          "adapt_step_size": false,
+          "adapt_mass_matrix": false
+        }
+      },
+      "legend": {
+        "name": "SICM",
+        "color": "red"
+      },
+      "trials": 2
+    },
+    {
+      "name": "impulse",
+      "inference": {
+        "class": "inference.MCMC",
+        "infer_args": {
+          "step_size": 0.05,
+          "max_tree_depth": 10,
+          "adapt_step_size": false,
+          "adapt_mass_matrix": false,
+          "disable_sicm": true
+        }
+      },
+      "legend": {
+        "name": "No SICM",
+        "color": "gray"
+      },
+      "trials": 2
+    }
+  ],
+  "save_samples": true,
+  "figures": {
+    "generate_pll": true,
+    "suffix": "png"
+  }
+}

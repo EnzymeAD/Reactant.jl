@@ -2,11 +2,7 @@
 using Reactant, Random, LinearAlgebra, Printf, Statistics
 using Reactant: ProbProg, ReactantRNG, ConcreteRNumber
 
-const OUT = get(
-    ENV,
-    "E2_OUT",
-    "/tmp/claude-140061798/-mnt-sbrantq-probprog/9007adff-5119-4ba4-8ced-2cd50c62b05e/scratchpad/sdd/e2-paper-artifacts",
-)
+const OUT = get(ENV, "E2_OUT", "/mnt/sbrantq/probprog/oopsla/evidence/programmable_mh")
 mkpath(OUT)
 
 _force(x) = x isa AbstractArray ? Array(x) : Float64(x)

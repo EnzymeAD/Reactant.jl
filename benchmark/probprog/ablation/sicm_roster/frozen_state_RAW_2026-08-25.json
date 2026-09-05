@@ -1,0 +1,253 @@
+{
+  "protocol": "frozen-adapted-state, adaptation OFF both arms, matched seeds, in-process repeats",
+  "tags": [
+    "frozen1"
+  ],
+  "rows": [
+    {
+      "key": "car_spatial_scotland",
+      "pattern": "CholScale",
+      "label": "Lip Cancer CAR",
+      "size": "n=56",
+      "sicm_median": 0.080987202,
+      "nosicm_median": 0.409289499,
+      "sicm_geomean": 0.07827947046777065,
+      "nosicm_geomean": 0.4072313364637609,
+      "ratio_median": 5.053755271110614,
+      "ratio_geomean": 5.202275054114308,
+      "arms_max_diff": 1.0407896766650993e-11,
+      "arms_rel_diff": 1.8922013276329126e-12,
+      "arms_ok": true,
+      "adapted_step_size": 0.4088858323737176,
+      "initial_step_size": 0.05,
+      "inverse_mass_shape": [
+        58,
+        58
+      ],
+      "sicm_times": [
+        0.087509917,
+        0.072695069,
+        0.080987202,
+        0.086168006,
+        0.06620865
+      ],
+      "nosicm_times": [
+        0.440018107,
+        0.403329876,
+        0.409289499,
+        0.444067177,
+        0.347212803
+      ]
+    },
+    {
+      "key": "car_spatial_nyc",
+      "pattern": "CholScale",
+      "label": "NYC Traffic CAR",
+      "size": "n=250",
+      "sicm_median": 7.802587618,
+      "nosicm_median": 36.255457916,
+      "sicm_geomean": 8.030961739606838,
+      "nosicm_geomean": 35.89564721437094,
+      "ratio_median": 4.646594141712847,
+      "ratio_geomean": 4.469657355898229,
+      "arms_max_diff": 2.3822499528591834e-11,
+      "arms_rel_diff": 2.6056136500991663e-12,
+      "arms_ok": true,
+      "adapted_step_size": 0.17742612466984364,
+      "initial_step_size": 0.05,
+      "inverse_mass_shape": [
+        252,
+        252
+      ],
+      "sicm_times": [
+        7.802587618,
+        7.671109388,
+        7.108188384,
+        9.357229945,
+        8.391405795
+      ],
+      "nosicm_times": [
+        36.957896296,
+        36.944131923,
+        34.487366174,
+        34.907826554,
+        36.255457916
+      ]
+    },
+    {
+      "key": "pgls",
+      "pattern": "TriSolveScale",
+      "label": "Shorebird PGLS",
+      "size": "n=71",
+      "sicm_median": 0.00173403,
+      "nosicm_median": 0.021091363,
+      "sicm_geomean": 0.0018624793944212452,
+      "nosicm_geomean": 0.020728278723668697,
+      "ratio_median": 12.163205365535775,
+      "ratio_geomean": 11.129400296055296,
+      "arms_max_diff": 2.220446049250313e-15,
+      "arms_rel_diff": 2.527600263263424e-15,
+      "arms_ok": true,
+      "adapted_step_size": 0.6536560747172686,
+      "initial_step_size": 0.05,
+      "inverse_mass_shape": [
+        3,
+        3
+      ],
+      "sicm_times": [
+        0.00276927,
+        0.001366523,
+        0.001983838,
+        0.00173403,
+        0.001721521
+      ],
+      "nosicm_times": [
+        0.019913416,
+        0.015857205,
+        0.021091363,
+        0.026103743,
+        0.022010827
+      ]
+    },
+    {
+      "key": "hierarchical_mvn",
+      "pattern": "OuterProdScale",
+      "label": "Hier. MVN",
+      "size": "K=60, J=2",
+      "sicm_median": 0.499790753,
+      "nosicm_median": 2.297763596,
+      "sicm_geomean": 0.5057550385534253,
+      "nosicm_geomean": 2.319044968944249,
+      "ratio_median": 4.597451197741547,
+      "ratio_geomean": 4.585312635890384,
+      "arms_max_diff": 8.77854474292672e-05,
+      "arms_rel_diff": 1.525351985332311e-05,
+      "arms_ok": false,
+      "adapted_step_size": 0.09052237966532697,
+      "initial_step_size": 0.01,
+      "inverse_mass_shape": [
+        241,
+        241
+      ],
+      "sicm_times": [
+        0.499790753,
+        0.491384657,
+        0.502752642,
+        0.547449255,
+        0.489545487
+      ],
+      "nosicm_times": [
+        2.297763596,
+        2.289026507,
+        2.284303953,
+        2.299376068,
+        2.427871999
+      ]
+    },
+    {
+      "key": "lmm_radon",
+      "pattern": "EigenLift",
+      "label": "Radon LMM",
+      "size": "n=250",
+      "sicm_median": 0.010778491,
+      "nosicm_median": 0.279602151,
+      "sicm_geomean": 0.010867632580966893,
+      "nosicm_geomean": 0.2710701479513827,
+      "ratio_median": 25.940750982674665,
+      "ratio_geomean": 24.942888520736645,
+      "arms_max_diff": 4.440892098500626e-16,
+      "arms_rel_diff": 2.7316609386181785e-16,
+      "arms_ok": true,
+      "adapted_step_size": 0.7928641636633602,
+      "initial_step_size": 0.05,
+      "inverse_mass_shape": [
+        4,
+        4
+      ],
+      "sicm_times": [
+        0.010565449,
+        0.011082592,
+        0.010778491,
+        0.011216805,
+        0.010708245
+      ],
+      "nosicm_times": [
+        0.239404807,
+        0.279602151,
+        0.283889186,
+        0.288349083,
+        0.267096173
+      ]
+    },
+    {
+      "key": "sar_columbus",
+      "pattern": "DotScale",
+      "label": "Columbus SAR",
+      "size": "n=49",
+      "sicm_median": 0.009906538,
+      "nosicm_median": 0.01052853,
+      "sicm_geomean": 0.010014623593676582,
+      "nosicm_geomean": 0.010670617472775874,
+      "ratio_median": 1.0627860106123854,
+      "ratio_geomean": 1.0655035981096184,
+      "arms_max_diff": 0.4110847103429054,
+      "arms_rel_diff": 0.3069869574316415,
+      "arms_ok": false,
+      "adapted_step_size": 0.6329229288261851,
+      "initial_step_size": 0.05,
+      "inverse_mass_shape": [
+        5,
+        5
+      ],
+      "sicm_times": [
+        0.011402034,
+        0.00922741,
+        0.010590454,
+        0.009906538,
+        0.009125875
+      ],
+      "nosicm_times": [
+        0.01200056,
+        0.0091553,
+        0.011397927,
+        0.010492526,
+        0.01052853
+      ]
+    },
+    {
+      "key": "diamonds",
+      "pattern": "GaussianSufficientStats",
+      "label": "Diamonds Regr.",
+      "size": "N=5000, K=25",
+      "sicm_median": 0.008961995,
+      "nosicm_median": 0.027552525,
+      "sicm_geomean": 0.00898454578952964,
+      "nosicm_geomean": 0.026956448505633186,
+      "ratio_median": 3.0743740651495566,
+      "ratio_geomean": 3.000312885827522,
+      "arms_max_diff": 8.348877145181177e-14,
+      "arms_rel_diff": 1.0714902678758827e-14,
+      "arms_ok": true,
+      "adapted_step_size": 0.10098891276421164,
+      "initial_step_size": 0.05,
+      "inverse_mass_shape": [
+        26,
+        26
+      ],
+      "sicm_times": [
+        0.009320428,
+        0.00887264,
+        0.00875434,
+        0.009023267,
+        0.008961995
+      ],
+      "nosicm_times": [
+        0.026567883,
+        0.027728251,
+        0.027552525,
+        0.025293132,
+        0.027724896
+      ]
+    }
+  ]
+}

@@ -1,0 +1,4 @@
+arm sicm     ALL ops: total 4318, at depth>=1 3252, at depth 3 920
+           tensor<506x506xf64> ops at depth>=1: 38 sites -> {'stablehlo.add': 6, 'stablehlo.custom_call': 6, 'stablehlo.select': 6, 'stablehlo.transpose': 6, 'stablehlo.multiply': 4, 'stablehlo.reshape': 4}
+arm nosicm   ALL ops: total 4326, at depth>=1 3258, at depth 3 926
+           tensor<506x506xf64> ops at depth>=1: 48 sites -> {'stablehlo.dot_general': 10, 'stablehlo.multiply': 6, 'stablehlo.add': 6, 'stablehlo.custom_call': 6, 'stablehlo.select': 6, 'stablehlo.transpose': 6}

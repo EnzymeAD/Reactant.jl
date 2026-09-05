@@ -1,0 +1,215 @@
+{
+  "model": {
+    "class": "heat_gp_fused.HeatGPFused",
+    "args": {
+      "n": 30,
+      "T": 10,
+      "M_obs": 2,
+      "S": 8,
+      "rho": 0.1,
+      "sigma": 0.02,
+      "kappa_true": 0.5,
+      "tau_true": 0.3,
+      "T_final": 0.02
+    },
+    "seed": 12345
+  },
+  "iterations": 80,
+  "num_warmup": 40,
+  "trials": 2,
+  "ppls": [
+    {
+      "name": "stan",
+      "package": "pplbench.ppls.stan_ladder_fused.naive",
+      "inference": {
+        "class": "inference.MCMC",
+        "infer_args": {
+          "step_size": 0.05,
+          "max_tree_depth": 5,
+          "adapt_step_size": true,
+          "adapt_mass_matrix": true,
+          "metric": "diag_e"
+        }
+      },
+      "legend": {
+        "name": "Fused Stan (naive)",
+        "color": "#cccccc"
+      },
+      "trials": 2
+    },
+    {
+      "name": "stan",
+      "package": "pplbench.ppls.stan_ladder_fused.slicstan",
+      "inference": {
+        "class": "inference.MCMC",
+        "infer_args": {
+          "step_size": 0.05,
+          "max_tree_depth": 5,
+          "adapt_step_size": true,
+          "adapt_mass_matrix": true,
+          "metric": "diag_e"
+        }
+      },
+      "legend": {
+        "name": "Fused Stan (SlicStan)",
+        "color": "#999999"
+      },
+      "trials": 2
+    },
+    {
+      "name": "stan",
+      "package": "pplbench.ppls.stan_ladder_fused.slicstan_subst",
+      "inference": {
+        "class": "inference.MCMC",
+        "infer_args": {
+          "step_size": 0.05,
+          "max_tree_depth": 5,
+          "adapt_step_size": true,
+          "adapt_mass_matrix": true,
+          "metric": "diag_e"
+        }
+      },
+      "legend": {
+        "name": "Fused Stan (SlicStan, substitution)",
+        "color": "#b3b3b3"
+      },
+      "trials": 2
+    },
+    {
+      "name": "stan",
+      "package": "pplbench.ppls.stan_ladder_fused.expert_a",
+      "inference": {
+        "class": "inference.MCMC",
+        "infer_args": {
+          "step_size": 0.05,
+          "max_tree_depth": 5,
+          "adapt_step_size": true,
+          "adapt_mass_matrix": true,
+          "metric": "diag_e"
+        }
+      },
+      "legend": {
+        "name": "Fused Stan (expert A, LICM)",
+        "color": "#777777"
+      },
+      "trials": 2
+    },
+    {
+      "name": "stan",
+      "package": "pplbench.ppls.stan_ladder_fused.expert_b",
+      "inference": {
+        "class": "inference.MCMC",
+        "infer_args": {
+          "step_size": 0.05,
+          "max_tree_depth": 5,
+          "adapt_step_size": true,
+          "adapt_mass_matrix": true,
+          "metric": "diag_e"
+        }
+      },
+      "legend": {
+        "name": "Fused Stan (expert B, +CholScale)",
+        "color": "#555555"
+      },
+      "trials": 2
+    },
+    {
+      "name": "stan",
+      "package": "pplbench.ppls.stan_ladder_fused.expert_c",
+      "inference": {
+        "class": "inference.MCMC",
+        "infer_args": {
+          "step_size": 0.05,
+          "max_tree_depth": 5,
+          "adapt_step_size": true,
+          "adapt_mass_matrix": true,
+          "metric": "diag_e"
+        }
+      },
+      "legend": {
+        "name": "Fused Stan (expert C, +EigenLift)",
+        "color": "#333333"
+      },
+      "trials": 2
+    },
+    {
+      "name": "impulse",
+      "inference": {
+        "class": "inference.MCMC",
+        "infer_args": {
+          "step_size": 0.05,
+          "max_tree_depth": 5,
+          "adapt_step_size": true,
+          "adapt_mass_matrix": true,
+          "no_opt": true,
+          "disable_licm": true,
+          "disable_sicm": true
+        }
+      },
+      "legend": {
+        "name": "Impulse (arm A, no pre-opt)",
+        "color": "#f4a582"
+      },
+      "trials": 2
+    },
+    {
+      "name": "impulse",
+      "inference": {
+        "class": "inference.MCMC",
+        "infer_args": {
+          "step_size": 0.05,
+          "max_tree_depth": 5,
+          "adapt_step_size": true,
+          "adapt_mass_matrix": true,
+          "no_opt": true,
+          "disable_sicm": true
+        }
+      },
+      "legend": {
+        "name": "Impulse (arm B, std passes)",
+        "color": "#d6604d"
+      },
+      "trials": 2
+    },
+    {
+      "name": "impulse",
+      "inference": {
+        "class": "inference.MCMC",
+        "infer_args": {
+          "step_size": 0.05,
+          "max_tree_depth": 5,
+          "adapt_step_size": true,
+          "adapt_mass_matrix": true,
+          "disable_sicm": true
+        }
+      },
+      "legend": {
+        "name": "Impulse (arm R, region only)",
+        "color": "#b2182b"
+      },
+      "trials": 2
+    },
+    {
+      "name": "impulse",
+      "inference": {
+        "class": "inference.MCMC",
+        "infer_args": {
+          "step_size": 0.05,
+          "max_tree_depth": 5,
+          "adapt_step_size": true,
+          "adapt_mass_matrix": true
+        }
+      },
+      "legend": {
+        "name": "Impulse (arm C, SICM)",
+        "color": "#67001f"
+      },
+      "trials": 2
+    }
+  ],
+  "save_samples": true,
+  "figures": {
+    "generate_pll": true,
+    "suffix": "png"
+  }
+}

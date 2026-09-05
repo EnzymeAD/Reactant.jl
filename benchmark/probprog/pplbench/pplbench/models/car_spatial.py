@@ -1,7 +1,9 @@
 # Copyright Contributors to the Enzyme project.
 # SPDX-License-Identifier: Apache-2.0
 
+import json
 import logging
+import os
 from typing import Dict, Tuple
 
 import numpy as np
@@ -11,6 +13,18 @@ from scipy.special import gammaln
 from .base_model import BaseModel
 
 LOGGER = logging.getLogger(__name__)
+
+REAL_DATA_DIR = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "real_data"
+)
+
+# Real areal-count data sets this model can be fitted to. Both files carry
+# N, y (observed counts), E (exposure / expected counts) and W (dense 0/1
+# adjacency); see real_data/README.md for provenance.
+REAL_DATASETS = {
+    "scotland": "scotland_lip_cancer.json",
+    "nyc_traffic": "nyc_traffic_submap.json",
+}
 
 
 def _random_adjacency(rng, n, avg_neighbors=4):
@@ -55,8 +69,53 @@ class CARSpatial(BaseModel):
         true_sigma_phi: float = 0.8,
         avg_neighbors: int = 4,
         train_frac: float = 1.0,
+        dataset: str = None,
     ) -> Tuple[xr.Dataset, xr.Dataset]:
         rng = np.random.default_rng(seed)
+
+        if dataset in REAL_DATASETS:
+            # Real data. Both branches carry the observed count vector as Y and
+            # the recorded exposure/expected counts as the offset; `seed` is
+            # unused (nothing is simulated). See real_data/README.md.
+            #   scotland    Scotland lip cancer, 56 districts (Clayton & Kaldor
+            #               1987; Breslow & Clayton 1993; BUGS examples), from
+            #               the Stan ICAR case study data file.
+            #   nyc_traffic 250-tract contiguous sub-map of the posteriordb
+            #               `traffic_accident_nyc` data (1921 tracts).
+            with open(os.path.join(REAL_DATA_DIR, REAL_DATASETS[dataset])) as f:
+                raw = json.load(f)
+            n = int(raw["N"])
+            W = np.asarray(raw["W"], dtype=np.float64)
+            D = np.diag(np.sum(W, axis=1))
+
+            # Same Leroux construction as the synthetic branch below.
+            Q = rho * (D - W) + (1 - rho) * np.eye(n)
+            Q_inv = np.linalg.inv(Q)
+            Q_inv = 0.5 * (Q_inv + Q_inv.T)
+            Q_inv += 1e-6 * np.eye(n)
+
+            log_E = np.log(np.asarray(raw["E"], dtype=np.float64))
+            y = np.asarray(raw["y"], dtype=np.float64)
+
+            LOGGER.info(
+                f"car_spatial[{dataset}]: n={n}, edges={int(W.sum() // 2)}, "
+                f"cond(Q)={np.linalg.cond(Q):.4g}, sum(y)={y.sum():.0f}"
+            )
+
+            data = xr.Dataset(
+                {
+                    "Q_inv": (["i", "j"], Q_inv),
+                    "log_E": (["area"], log_E),
+                    "Y": (["area"], y),
+                },
+                coords={
+                    "i": np.arange(n),
+                    "j": np.arange(n),
+                    "area": np.arange(n),
+                },
+                attrs={"n": n, "rho": rho},
+            )
+            return data, data
 
         # Adjacency matrix
         W = _random_adjacency(rng, n, avg_neighbors)

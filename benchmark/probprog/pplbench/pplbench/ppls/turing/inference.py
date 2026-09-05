@@ -25,7 +25,7 @@ class MCMC(SubprocessMCMC):
     ) -> List[str]:
         cmd = [
             "julia",
-            "-t", os.environ.get("JULIA_NUM_THREADS", "32"),
+            "-t", os.environ.get("JULIA_NUM_THREADS", "auto"),
             f"--project={os.path.join(BENCHMARK_DIR, 'turing_env')}",
             os.path.join(BENCHMARK_DIR, "turing_harness.jl"),
             "--model", self.impl.julia_model_path,
@@ -44,6 +44,10 @@ class MCMC(SubprocessMCMC):
             cmd.append("--adapt-mass-matrix")
         if kwargs.get("matched_init", False):
             cmd.append("--matched-init")
+        # AD backend: forwarddiff (Turing's default; low-dimensional models) or
+        # reversediff (compiled tape; Turing's documented recommendation for
+        # high-dimensional models). Set per model in the config's infer_args.
+        cmd += ["--adtype", str(kwargs.get("adtype", "forwarddiff"))]
         return cmd
 
     def _extract_data(self, samples):
@@ -77,7 +81,7 @@ class SVI(SubprocessMCMC):
     ) -> List[str]:
         cmd = [
             "julia",
-            "-t", os.environ.get("JULIA_NUM_THREADS", "32"),
+            "-t", os.environ.get("JULIA_NUM_THREADS", "auto"),
             f"--project={os.path.join(BENCHMARK_DIR, 'turing_env')}",
             os.path.join(BENCHMARK_DIR, "turing_harness.jl"),
             "--model", self.impl.julia_model_path,

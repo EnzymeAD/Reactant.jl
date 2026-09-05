@@ -1,0 +1,17 @@
+dataset: scotland
+arm SICM
+  posterior mean alpha = 0.0982   mean sigma_phi = 0.8823 (sd 0.1304)
+  corr(mean phi, log SMR)  pearson r=0.9653 p=5.41e-32  (54 districts with y>0)
+  corr(mean phi, SMR)      spearman rho=0.9606 p=1.07e-31
+  corr(posterior RR, SMR)  spearman rho=0.9606
+  top-5 SMR districts   idx=[np.int64(0), np.int64(1), np.int64(2), np.int64(3), np.int64(4)] SMR=[6.43, 4.48, 3.67, 3.6, 3.49]  RR=[4.33, 4.29, 3.4, 2.43, 3.24]
+  bottom-5 SMR districts idx=[np.int64(54), np.int64(55), np.int64(53), np.int64(52), np.int64(51)] SMR=[0.0, 0.0, 0.14, 0.18, 0.28]  RR=[0.64, 0.65, 0.37, 0.37, 0.44]
+  RR range [0.353, 4.335], SMR range [0.000, 6.429]
+arm No SICM
+  posterior mean alpha = 0.1519   mean sigma_phi = 0.8742 (sd 0.1290)
+  corr(mean phi, log SMR)  pearson r=0.9631 p=2.61e-31  (54 districts with y>0)
+  corr(mean phi, SMR)      spearman rho=0.9619 p=4.31e-32
+  corr(posterior RR, SMR)  spearman rho=0.9619
+  top-5 SMR districts   idx=[np.int64(0), np.int64(1), np.int64(2), np.int64(3), np.int64(4)] SMR=[6.43, 4.48, 3.67, 3.6, 3.49]  RR=[4.27, 4.29, 3.45, 2.4, 3.22]
+  bottom-5 SMR districts idx=[np.int64(54), np.int64(55), np.int64(53), np.int64(52), np.int64(51)] SMR=[0.0, 0.0, 0.14, 0.18, 0.28]  RR=[0.62, 0.65, 0.39, 0.36, 0.43]
+  RR range [0.352, 4.290], SMR range [0.000, 6.429]

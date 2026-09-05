@@ -1,0 +1,12 @@
+arm SICM
+  beta[0] (intercept) mean 1.4745 sd 0.0725   95% CI [1.3433, 1.6161]
+  beta[1] (floor)     mean -0.5972 sd 0.1361   95% CI [-0.8535, -0.3230]   P(beta1<0)=1.000
+  sigma_u mean 0.2703 sd 0.0887 ; sigma_e mean 0.7442 sd 0.0364 ; ICC=0.1165
+  county shrinkage weight n_j su^2/(n_j su^2 + se^2): n_j=1 -> 0.117, median county (n_j=2) -> 0.209, largest (n_j=31) -> 0.803
+  74 counties, sizes min/med/max = 1/2/31
+arm No SICM
+  beta[0] (intercept) mean 1.4770 sd 0.0736   95% CI [1.3430, 1.6239]
+  beta[1] (floor)     mean -0.5931 sd 0.1323   95% CI [-0.8517, -0.3352]   P(beta1<0)=1.000
+  sigma_u mean 0.2692 sd 0.0793 ; sigma_e mean 0.7389 sd 0.0362 ; ICC=0.1172
+  county shrinkage weight n_j su^2/(n_j su^2 + se^2): n_j=1 -> 0.117, median county (n_j=2) -> 0.210, largest (n_j=31) -> 0.805
+  74 counties, sizes min/med/max = 1/2/31

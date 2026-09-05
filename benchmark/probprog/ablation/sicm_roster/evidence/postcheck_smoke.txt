@@ -1,0 +1,76 @@
+==============================================================================
+RUN outputs/2026-08-25_00:57:05
+  model: car_spatial.CARSpatial {'dataset': 'scotland', 'rho': 0.99, 'n': 56}
+  iterations=20 num_warmup=10 trials=2
+  -- arm SICM       compile=35.76s  trials=0.485;0.015  LAST=0.015s  MEDIAN=0.250s
+     n_eff[min,med,max] = [7.5, 16.3, 26.0]   Rhat[min,med,max] = [0.9667, 1.1342, 1.5014]
+     PLL[-1] per chain: ['-126.5585', '-128.9702']
+     move alpha        uniq/chain=[10, 10] (of 10 draws)  max_std/chain=['0.192', '0.159']
+     move sigma_phi    uniq/chain=[10, 10] (of 10 draws)  max_std/chain=['0.12', '0.111']
+     move phi          uniq/chain=[560, 560] (of 10 draws)  max_std/chain=['0.706', '0.717']
+  -- arm No SICM    compile=35.94s  trials=0.495;0.067  LAST=0.067s  MEDIAN=0.281s
+     n_eff[min,med,max] = [7.5, 16.3, 26.0]   Rhat[min,med,max] = [0.9667, 1.1342, 1.5014]
+     PLL[-1] per chain: ['-126.5585', '-128.9702']
+     move alpha        uniq/chain=[10, 10] (of 10 draws)  max_std/chain=['0.192', '0.159']
+     move sigma_phi    uniq/chain=[10, 10] (of 10 draws)  max_std/chain=['0.12', '0.111']
+     move phi          uniq/chain=[560, 560] (of 10 draws)  max_std/chain=['0.706', '0.717']
+  -- arm agreement (max |arm0 - arm1|):
+     alpha          1.75709e-12
+     sigma_phi      2.82618e-12
+     phi            6.37368e-12
+     __pll__        1.58309e-11
+  GATE: pass (chains move, Rhat sane)
+==============================================================================
+RUN outputs/2026-08-25_00:58:35
+  model: linear_mixed_model.LinearMixedModel {'dataset': 'radon_mn', 'n': 250, 'k': 2}
+  iterations=20 num_warmup=10 trials=2
+  -- arm SICM       compile=16.77s  trials=0.476;0.014  LAST=0.014s  MEDIAN=0.245s
+     n_eff[min,med,max] = [6.8, 15.1, 26.0]   Rhat[min,med,max] = [1.0884, 1.2347, 1.6833]
+     PLL[-1] per chain: ['-290.4731', '-291.1032']
+     move beta         uniq/chain=[20, 20] (of 10 draws)  max_std/chain=['0.073', '0.235']
+     move sigma_u      uniq/chain=[10, 10] (of 10 draws)  max_std/chain=['0.0649', '0.19']
+     move sigma_e      uniq/chain=[10, 10] (of 10 draws)  max_std/chain=['0.0232', '0.0233']
+  -- arm No SICM    compile=17.06s  trials=1.266;0.362  LAST=0.362s  MEDIAN=0.814s
+     n_eff[min,med,max] = [6.8, 15.1, 26.0]   Rhat[min,med,max] = [1.0884, 1.2390, 1.6833]
+     PLL[-1] per chain: ['-290.4731', '-291.1032']
+     move beta         uniq/chain=[20, 20] (of 10 draws)  max_std/chain=['0.073', '0.235']
+     move sigma_u      uniq/chain=[10, 10] (of 10 draws)  max_std/chain=['0.0649', '0.19']
+     move sigma_e      uniq/chain=[10, 10] (of 10 draws)  max_std/chain=['0.0232', '0.0233']
+  -- arm agreement (max |arm0 - arm1|):
+     beta           6.73461e-13
+     sigma_u        3.81251e-13
+     sigma_e        1.62426e-13
+     __pll__        4.10409e-11
+  GATE: pass (chains move, Rhat sane)
+==============================================================================
+RUN outputs/2026-08-25_00:59:28
+  model: phylo_pois.PhyloPois {'n': 200}
+  iterations=20 num_warmup=10 trials=2
+  -- arm SICM       compile=41.17s  trials=0.853;0.255  LAST=0.255s  MEDIAN=0.554s
+     n_eff[min,med,max] = [12.6, 26.0, 26.0]   Rhat[min,med,max] = [0.9052, 1.0482, 1.7348]
+     PLL[-1] per chain: ['-318.3067', '-318.9687']
+     move sigma_sq     uniq/chain=[10, 10] (of 10 draws)  max_std/chain=['0.034', '0.038']
+     move eta          uniq/chain=[2000, 2000] (of 10 draws)  max_std/chain=['1.86', '2.53']
+     move b0           uniq/chain=[10, 10] (of 10 draws)  max_std/chain=['0.13', '0.0832']
+     move b1           uniq/chain=[10, 10] (of 10 draws)  max_std/chain=['0.0535', '0.0409']
+     move sigma_obs    uniq/chain=[10, 10] (of 10 draws)  max_std/chain=['0.0428', '0.0817']
+     move eps          uniq/chain=[2000, 2000] (of 10 draws)  max_std/chain=['1.53', '1.83']
+  -- arm No SICM    compile=38.90s  trials=9.482;6.250  LAST=6.250s  MEDIAN=7.866s
+     n_eff[min,med,max] = [12.6, 26.0, 26.0]   Rhat[min,med,max] = [0.9052, 1.0504, 1.7166]
+     PLL[-1] per chain: ['-318.3067', '-318.9687']
+     move sigma_sq     uniq/chain=[10, 10] (of 10 draws)  max_std/chain=['0.034', '0.038']
+     move eta          uniq/chain=[2000, 2000] (of 10 draws)  max_std/chain=['1.86', '2.53']
+     move b0           uniq/chain=[10, 10] (of 10 draws)  max_std/chain=['0.13', '0.0832']
+     move b1           uniq/chain=[10, 10] (of 10 draws)  max_std/chain=['0.0535', '0.0409']
+     move sigma_obs    uniq/chain=[10, 10] (of 10 draws)  max_std/chain=['0.0428', '0.0817']
+     move eps          uniq/chain=[2000, 2000] (of 10 draws)  max_std/chain=['1.53', '1.83']
+  -- arm agreement (max |arm0 - arm1|):
+     sigma_sq       2.62083e-12
+     eta            4.4736e-11
+     b0             1.45347e-11
+     b1             2.23652e-11
+     sigma_obs      2.50716e-11
+     eps            5.06447e-11
+     __pll__        4.81521e-10
+  GATE: pass (chains move, Rhat sane)
+wrote ablation/sicm_roster/logs/postcheck_smoke.json

@@ -1,0 +1,177 @@
+{
+  "_provenance": "SICM ablation row for the GaussianSufficientStats pattern family on the posteriordb diamonds-diamonds regression (brms log-log price model, N=5000, K=25). Run 2026-08-25 from pplbench_configs/sicm_ablation/diamonds.json via ablation/sicm_roster/run_diamonds.sh. The pattern pre-existed in Enzyme-JAX commit 0c6a4a61c; no compiler pattern was written and libReactantExtra.so was NOT rebuilt, so this row ran on the same binary as every other figure row.",
+  "pattern": "GaussianSufficientStats",
+  "form_measured": "QR (default). Gram is the opt-in variant and was not timed.",
+  "model": {
+    "class": "diamonds_regression.DiamondsRegression",
+    "N": 5000,
+    "K": 25,
+    "data": "pplbench/pplbench/models/real_data/diamonds.json",
+    "data_md5": "b7e51f0db63b8bd047f029b4990af235"
+  },
+  "config": {
+    "iterations": 500,
+    "num_warmup": 200,
+    "trials": 2,
+    "seed": 12345,
+    "step_size": 0.05,
+    "max_tree_depth": 10,
+    "adapt_step_size": true,
+    "adapt_mass_matrix": true,
+    "threads": "all (uncapped)"
+  },
+  "binary": {
+    "path": "/mnt/sbrantq/probprog/oopsla/Reactant.jl/deps/ReactantExtra/bazel-bin/libReactantExtra.so",
+    "md5_before": "21a6bd08b37b54d2b8a20d8924a2bbb2",
+    "md5_after": "21a6bd08b37b54d2b8a20d8924a2bbb2",
+    "built": "2026-08-24 14:59",
+    "note": "same binary as the other sicm_ablation rows; no rebuild performed"
+  },
+  "load": {
+    "loadavg_before": "2.30 4.15 24.01",
+    "loadavg_after": "2.64 3.79 22.04",
+    "concurrent_runs": "none (runner collision guard verified)"
+  },
+  "output_dir": "outputs/2026-08-25_03:19:53",
+  "arms": {
+    "SICM": {
+      "compile_s": 29.76,
+      "trial_times_s": [
+        0.645,
+        0.128
+      ],
+      "last_trial_s": 0.128,
+      "trial_median_s": 0.387,
+      "n_eff": {
+        "min": 145.2,
+        "median": 573.8,
+        "max": 1035.8
+      },
+      "rhat": {
+        "min": 0.9971,
+        "median": 1.0011,
+        "max": 1.015
+      },
+      "pll_last_per_chain": [
+        3401.3325,
+        3405.2659
+      ]
+    },
+    "No SICM": {
+      "compile_s": 31.33,
+      "trial_times_s": [
+        1.964,
+        1.331
+      ],
+      "last_trial_s": 1.331,
+      "trial_median_s": 1.648,
+      "n_eff": {
+        "min": 169.5,
+        "median": 574.3,
+        "max": 1125.1
+      },
+      "rhat": {
+        "min": 0.9981,
+        "median": 1.0014,
+        "max": 1.0077
+      },
+      "pll_last_per_chain": [
+        3400.4286,
+        3405.4721
+      ]
+    }
+  },
+  "speedup": {
+    "last_trial": 10.4,
+    "trial_median": 4.3,
+    "note": "Both reported because they diverge. Trial 0 carries first-call warm-up in both arms and dominates a two-trial median; it is 5.0x trial 1 for SICM but only 1.5x for No SICM, so the shared fixed overhead is a larger fraction of the faster arm and compresses the median ratio. Same phenomenon as the sibling radon row (43x vs 20x)."
+  },
+  "gates": {
+    "chains_move_and_mix": "PASS (no stuck chain; all 7500 beta values distinct per chain; max Rhat 1.0150)",
+    "arm_posterior_agreement": {
+      "verdict": "PASS",
+      "beta_max_z": 1.3,
+      "beta_median_z": 0.42,
+      "sigma_z": 0.69,
+      "method": "|mean_SICM - mean_NoSICM| / sqrt(sd^2/ESS + sd^2/ESS), arviz ESS on post-warmup draws",
+      "note": "Adaptation is on, so arms take different trajectories and pointwise equality is not expected; postcheck.py's pointwise max|arm0-arm1| of 1.617 on beta is the wrong statistic here.",
+      "ols_cross_check": {
+        "intercept": {
+          "SICM": 7.78806,
+          "No SICM": 7.78805,
+          "OLS": 7.788
+        },
+        "sigma": {
+          "SICM": 0.122864,
+          "No SICM": 0.122811,
+          "OLS": 0.1221
+        }
+      }
+    },
+    "ir_evidence": {
+      "verdict": "PASS",
+      "sicm_pipeline": "sicm{gram-form-sufficient-stats=false max-iterations=10}",
+      "nosicm_pipeline": "sicm{gram-form-sufficient-stats=false max-iterations=0}",
+      "sicm": {
+        "hoisted_NK_dots": 3,
+        "in_loop_K_dots": 6,
+        "len5000_elementwise": 4,
+        "cpu_lapack_custom_calls": 6
+      },
+      "nosicm": {
+        "in_loop_NK_dots": 6,
+        "in_loop_NK_reverse_adjoints": 3,
+        "in_loop_K_dots": 0,
+        "len5000_elementwise": 33,
+        "cpu_lapack_custom_calls": 4
+      }
+    },
+    "on_chain_numerics_nats": {
+      "verdict": "PASS",
+      "SICM": {
+        "draws": 600,
+        "qr_max": 5.415e-11,
+        "qr_median": 1.398e-11,
+        "gram_max": 4.681e-08,
+        "gram_median": 3.259e-08
+      },
+      "No SICM": {
+        "draws": 600,
+        "qr_max": 6.65e-11,
+        "qr_median": 1.399e-11,
+        "gram_max": 4.675e-08,
+        "gram_median": 3.214e-08
+      }
+    },
+    "single_build": "PASS (md5 identical before and after every stage)"
+  },
+  "blocker_found": {
+    "symptom": "JIT session error: Symbols not found: [ enzymexla_lapack_dgeqrf_ ], [ enzymexla_lapack_dorgqr_ ]",
+    "cause": "Reactant.jl/src/stdlibs/LinearAlgebra.jl TracedLinearAlgebra.__init__ maps gtsv, getrf, gesvd, gesdd, gesvj, syevd, syrk, trmm, symm, potrf and trsm but has no geqrf/orgqr entry, so the QR form of the rule was not executable on CPU in this tree at all.",
+    "workaround": "register_qr_lapack_symbols!() local to sicm/diamonds_regression.jl (additive; shared file untouched)",
+    "recommended_upstream_patch": [
+      "(BLAS.@blasfunc(sgeqrf_), :enzymexla_lapack_sgeqrf_)",
+      "(BLAS.@blasfunc(dgeqrf_), :enzymexla_lapack_dgeqrf_)",
+      "(BLAS.@blasfunc(sorgqr_), :enzymexla_lapack_sorgqr_)",
+      "(BLAS.@blasfunc(dorgqr_), :enzymexla_lapack_dorgqr_)"
+    ],
+    "implication": "Prior CPU claims from sicm/linreg_qr_stats.jl and sicm/radon_qr_stats.jl should be re-checked."
+  },
+  "figure_row_last_trial": {
+    "pattern": "GaussianSufficientStats",
+    "label": "Diamonds Regr.",
+    "size": "$N{=}5000,\\,K{=}25$",
+    "sicm_s": 0.13,
+    "nosicm_s": 1.33,
+    "speedup": "10\u00d7"
+  },
+  "figure_row_trial_median": {
+    "pattern": "GaussianSufficientStats",
+    "label": "Diamonds Regr.",
+    "size": "$N{=}5000,\\,K{=}25$",
+    "sicm_s": 0.39,
+    "nosicm_s": 1.65,
+    "speedup": "4.3\u00d7"
+  },
+  "caveat": "Absolute times are small (0.128 s fast arm) versus the GP rows at 7.7 s and 377.1 s, so this row has less headroom above timer and scheduler noise. Same caveat as the sibling radon row at 0.15 s. The honest remedy is more trials or more iterations, not a different statistic."
+}

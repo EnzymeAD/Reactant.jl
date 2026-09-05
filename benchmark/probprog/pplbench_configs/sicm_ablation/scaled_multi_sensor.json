@@ -1,7 +1,10 @@
 {
   "model": {
     "class": "scaled_multi_sensor.ScaledMultiSensor",
-    "args": {"n": 200, "d_state": 200},
+    "args": {
+      "n": 200,
+      "d_state": 200
+    },
     "seed": 12345
   },
   "iterations": 500,
@@ -19,7 +22,10 @@
           "adapt_mass_matrix": true
         }
       },
-      "legend": {"name": "SICM", "color": "red"},
+      "legend": {
+        "name": "SICM",
+        "color": "red"
+      },
       "trials": 2
     },
     {
@@ -34,10 +40,16 @@
           "disable_sicm": true
         }
       },
-      "legend": {"name": "No SICM", "color": "gray"},
+      "legend": {
+        "name": "No SICM",
+        "color": "gray"
+      },
       "trials": 2
     }
   ],
   "save_samples": true,
-  "figures": {"generate_pll": true, "suffix": "png"}
+  "figures": {
+    "generate_pll": true,
+    "suffix": "png"
+  }
 }

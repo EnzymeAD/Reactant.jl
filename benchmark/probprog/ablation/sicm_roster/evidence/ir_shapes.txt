@@ -1,0 +1,70 @@
+== hlo/car_spatial_scotland_nosicm.mlir
+   depth=0  (tensor<56x56xf64>, tensor<i64>)                        x2
+   depth=0  (tensor<58x58xf64>, tensor<i64>)                        x1
+   depth=0  tensor<56x1xf64>                                        x6
+   depth=0  tensor<56x56xf64>                                       x2
+   depth=0  tensor<58x58xf64>                                       x1
+   depth=1  (tensor<58x58xf64>, tensor<i64>)                        x1
+   depth=1  tensor<58x58xf64>                                       x1
+   depth=3  (tensor<56x56xf64>, tensor<i64>)                        x2
+   depth=3  tensor<56x1xf64>                                        x8
+   depth=3  tensor<56x56xf64>                                       x4
+== hlo/car_spatial_scotland_sicm.mlir
+   depth=0  (tensor<56x56xf64>, tensor<i64>)                        x1
+   depth=0  (tensor<58x58xf64>, tensor<i64>)                        x1
+   depth=0  tensor<56x1xf64>                                        x6
+   depth=0  tensor<58x58xf64>                                       x1
+   depth=1  (tensor<58x58xf64>, tensor<i64>)                        x1
+   depth=1  tensor<58x58xf64>                                       x1
+   depth=3  tensor<56x1xf64>                                        x8
+== hlo/car_spatial_nyc_nosicm.mlir
+   depth=0  (tensor<250x250xf64>, tensor<i64>)                      x2
+   depth=0  (tensor<252x252xf64>, tensor<i64>)                      x1
+   depth=0  tensor<250x1xf64>                                       x6
+   depth=0  tensor<250x250xf64>                                     x2
+   depth=0  tensor<252x252xf64>                                     x1
+   depth=1  (tensor<252x252xf64>, tensor<i64>)                      x1
+   depth=1  tensor<252x252xf64>                                     x1
+   depth=3  (tensor<250x250xf64>, tensor<i64>)                      x2
+   depth=3  tensor<250x1xf64>                                       x8
+   depth=3  tensor<250x250xf64>                                     x4
+== hlo/car_spatial_nyc_sicm.mlir
+   depth=0  (tensor<250x250xf64>, tensor<i64>)                      x1
+   depth=0  (tensor<252x252xf64>, tensor<i64>)                      x1
+   depth=0  tensor<250x1xf64>                                       x6
+   depth=0  tensor<252x252xf64>                                     x1
+   depth=1  (tensor<252x252xf64>, tensor<i64>)                      x1
+   depth=1  tensor<252x252xf64>                                     x1
+   depth=3  tensor<250x1xf64>                                       x8
+== hlo/lmm_radon_nosicm.mlir
+   depth=0  (tensor<250x250xf64>, tensor<i64>)                      x2
+   depth=0  (tensor<4x4xf64>, tensor<i64>)                          x1
+   depth=0  tensor<250x1xf64>                                       x6
+   depth=0  tensor<250x250xf64>                                     x2
+   depth=0  tensor<4x4xf64>                                         x1
+   depth=1  (tensor<4x4xf64>, tensor<i64>)                          x1
+   depth=1  tensor<4x4xf64>                                         x1
+   depth=3  (tensor<250x250xf64>, tensor<i64>)                      x2
+   depth=3  tensor<250x1xf64>                                       x8
+   depth=3  tensor<250x250xf64>                                     x4
+== hlo/lmm_radon_sicm.mlir
+   depth=0  (tensor<250x250xf64>, tensor<250xf64>, tensor<i64>)     x1
+   depth=0  (tensor<4x4xf64>, tensor<i64>)                          x1
+   depth=0  tensor<4x4xf64>                                         x1
+   depth=1  (tensor<4x4xf64>, tensor<i64>)                          x1
+   depth=1  tensor<4x4xf64>                                         x1
+== hlo/hierarchical_mvn_nosicm.mlir
+   depth=0  (tensor<241x241xf64>, tensor<i64>)                      x1
+   depth=0  (tensor<60x60xf64>, tensor<i64>)                        x2
+   depth=0  tensor<241x241xf64>                                     x1
+   depth=0  tensor<60x60xf64>                                       x2
+   depth=1  (tensor<241x241xf64>, tensor<i64>)                      x1
+   depth=1  tensor<241x241xf64>                                     x1
+   depth=3  (tensor<60x60xf64>, tensor<i64>)                        x2
+   depth=3  tensor<60x60xf64>                                       x4
+== hlo/hierarchical_mvn_sicm.mlir
+   depth=0  (tensor<241x241xf64>, tensor<i64>)                      x1
+   depth=0  (tensor<60x60xf64>, tensor<i64>)                        x1
+   depth=0  tensor<241x241xf64>                                     x1
+   depth=1  (tensor<241x241xf64>, tensor<i64>)                      x1
+   depth=1  tensor<241x241xf64>                                     x1

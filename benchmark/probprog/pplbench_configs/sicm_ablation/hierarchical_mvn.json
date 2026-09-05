@@ -1,7 +1,11 @@
 {
   "model": {
     "class": "hierarchical_mvn.HierarchicalMVN",
-    "args": {"n": 60, "K": 40, "J": 2},
+    "args": {
+      "n": 60,
+      "K": 60,
+      "J": 2
+    },
     "seed": 12345
   },
   "iterations": 200,
@@ -19,7 +23,10 @@
           "adapt_mass_matrix": true
         }
       },
-      "legend": {"name": "SICM", "color": "red"},
+      "legend": {
+        "name": "SICM",
+        "color": "red"
+      },
       "trials": 2
     },
     {
@@ -34,10 +41,16 @@
           "disable_sicm": true
         }
       },
-      "legend": {"name": "No SICM", "color": "gray"},
+      "legend": {
+        "name": "No SICM",
+        "color": "gray"
+      },
       "trials": 2
     }
   ],
   "save_samples": true,
-  "figures": {"generate_pll": true, "suffix": "png"}
+  "figures": {
+    "generate_pll": true,
+    "suffix": "png"
+  }
 }

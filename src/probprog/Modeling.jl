@@ -229,6 +229,8 @@ end
 # Emits impulse.if (not stablehlo.if) so expand-impulse threads the trace through it.
 # Each thunk takes no arguments; both must return the same MLIR type.
 function if_(rng::AbstractRNG, cond, then_thunk::Function, else_thunk::Function)
+    tt = TRACING_TRACE[]
+    tt !== nothing && (tt.has_branches = true)
     cond_val = TracedUtils.get_mlir_data(cond)
     snap = TracedUtils.get_mlir_data(rng.seed)
 
@@ -328,7 +330,9 @@ function simulate(rng::AbstractRNG, f::Function, args::Vararg{Any,Nargs}) where 
     selection_attr = build_selection_attr(tt)
     pos_size = tt.position_size
 
-    trace_type = MLIR.IR.TensorType([1, pos_size], MLIR.IR.Type(Float64))
+    width = trace_width(tt)
+
+    trace_type = MLIR.IR.TensorType([1, width], MLIR.IR.Type(Float64))
     weight_type = MLIR.IR.TensorType(Int64[], MLIR.IR.Type(Float64))
 
     simulate_op = MLIR.Dialects.impulse.simulate(
@@ -352,7 +356,7 @@ function simulate(rng::AbstractRNG, f::Function, args::Vararg{Any,Nargs}) where 
         2,
     )
 
-    trace_val = TracedRArray{Float64,2}((), MLIR.IR.result(simulate_op, 1), (1, pos_size))
+    trace_val = TracedRArray{Float64,2}((), MLIR.IR.result(simulate_op, 1), (1, width))
     weight_val = TracedRArray{Float64,0}((), MLIR.IR.result(simulate_op, 2), ())
 
     return trace_val, weight_val, traced_result
@@ -455,7 +459,9 @@ function generate(
     selection_attr = build_selection_attr(tt)
     pos_size = tt.position_size
 
-    trace_type = MLIR.IR.TensorType([1, pos_size], MLIR.IR.Type(Float64))
+    width = trace_width(tt)
+
+    trace_type = MLIR.IR.TensorType([1, width], MLIR.IR.Type(Float64))
     weight_type = MLIR.IR.TensorType(Int64[], MLIR.IR.Type(Float64))
 
     constraint_mlir = TracedUtils.get_mlir_data(constraint_tensor)
@@ -483,7 +489,7 @@ function generate(
         2,
     )
 
-    trace_val = TracedRArray{Float64,2}((), MLIR.IR.result(generate_op, 1), (1, pos_size))
+    trace_val = TracedRArray{Float64,2}((), MLIR.IR.result(generate_op, 1), (1, width))
     weight_val = TracedRArray{Float64,0}((), MLIR.IR.result(generate_op, 2), ())
 
     return trace_val, weight_val, traced_result

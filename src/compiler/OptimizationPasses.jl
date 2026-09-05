@@ -12,6 +12,7 @@ const SROA_ATTRIBUTOR = Ref{Union{Bool,Symbol}}(true)
 const DEBUG_PROBPROG_DUMP_VALUE = Ref(false)
 const DEBUG_PROBPROG_DISABLE_OPT = Ref(true)
 const DEBUG_PROBPROG_DISABLE_SICM = Ref(false)
+const DEBUG_PASS_TIMING = Ref(false)
 const DEBUG_PROBPROG_DISABLE_REGION = Ref(false)
 const DEBUG_PROBPROG_DUMP_PASSES = Ref(false)
 const DEBUG_MLIR_DIAGNOSTIC_LEVEL = Ref{MLIR.API.MlirDiagnosticSeverity}(
@@ -251,7 +252,11 @@ function run_pass_pipeline!(mod, pass_pipeline, key=""; enable_verifier=true)
     pm = MLIR.IR.PassManager()
     id = nothing
     try
-        MLIR.API.mlirPassManagerEnableXLATraceTiming(pm)
+        if DEBUG_PASS_TIMING[]
+            MLIR.API.mlirPassManagerEnableTiming(pm)
+        else
+            MLIR.API.mlirPassManagerEnableXLATraceTiming(pm)
+        end
         MLIR.IR.enable_verifier!(pm, enable_verifier)
         opm = MLIR.IR.OpPassManager(pm)
         MLIR.IR.add_pipeline!(opm, pass_pipeline)

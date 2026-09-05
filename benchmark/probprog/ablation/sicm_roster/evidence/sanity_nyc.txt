@@ -1,0 +1,17 @@
+dataset: nyc_traffic
+arm SICM
+  posterior mean alpha = -6.9187   mean sigma_phi = 2.1395 (sd 0.1589)
+  corr(mean phi, log SMR)  pearson r=0.9293 p=1.78e-91  (209 districts with y>0)
+  corr(mean phi, SMR)      spearman rho=0.9466 p=6.71e-124
+  corr(posterior RR, SMR)  spearman rho=0.9466
+  top-5 SMR districts   idx=[np.int64(130), np.int64(133), np.int64(105), np.int64(87), np.int64(56)] SMR=[0.7, 0.4, 0.1, 0.02, 0.01]  RR=[0.12, 0.08, 0.0, 0.02, 0.01]
+  bottom-5 SMR districts idx=[np.int64(0), np.int64(2), np.int64(5), np.int64(10), np.int64(15)] SMR=[0.0, 0.0, 0.0, 0.0, 0.0]  RR=[0.0, 0.0, 0.0, 0.0, 0.0]
+  RR range [0.000, 0.123], SMR range [0.000, 0.700]
+arm No SICM
+  posterior mean alpha = -6.9950   mean sigma_phi = 2.1445 (sd 0.1635)
+  corr(mean phi, log SMR)  pearson r=0.9312 p=1.09e-92  (209 districts with y>0)
+  corr(mean phi, SMR)      spearman rho=0.9473 p=1.41e-124
+  corr(posterior RR, SMR)  spearman rho=0.9473
+  top-5 SMR districts   idx=[np.int64(130), np.int64(133), np.int64(105), np.int64(87), np.int64(56)] SMR=[0.7, 0.4, 0.1, 0.02, 0.01]  RR=[0.12, 0.08, 0.0, 0.02, 0.01]
+  bottom-5 SMR districts idx=[np.int64(0), np.int64(2), np.int64(5), np.int64(10), np.int64(15)] SMR=[0.0, 0.0, 0.0, 0.0, 0.0]  RR=[0.0, 0.0, 0.0, 0.0, 0.0]
+  RR range [0.000, 0.123], SMR range [0.000, 0.700]

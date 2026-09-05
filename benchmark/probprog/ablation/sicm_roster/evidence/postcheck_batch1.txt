@@ -1,0 +1,101 @@
+==============================================================================
+RUN outputs/2026-08-25_01:04:00
+  model: car_spatial.CARSpatial {'dataset': 'scotland', 'rho': 0.99, 'n': 56}
+  iterations=500 num_warmup=200 trials=2
+  -- arm SICM       compile=32.93s  trials=2.067;1.915  LAST=1.915s  MEDIAN=1.991s
+     n_eff[min,med,max] = [345.1, 566.2, 607.4]   Rhat[min,med,max] = [0.9977, 1.0006, 1.0055]
+     PLL[-1] per chain: ['-125.8918', '-125.6605']
+     move alpha        uniq/chain=[300, 300] (of 300 draws)  max_std/chain=['1.13', '1.25']
+     move sigma_phi    uniq/chain=[300, 300] (of 300 draws)  max_std/chain=['0.135', '0.126']
+     move phi          uniq/chain=[16800, 16800] (of 300 draws)  max_std/chain=['1.22', '1.32']
+  -- arm No SICM    compile=36.39s  trials=10.442;10.061  LAST=10.061s  MEDIAN=10.251s
+     n_eff[min,med,max] = [372.3, 459.4, 541.5]   Rhat[min,med,max] = [1.0019, 1.0048, 1.0085]
+     PLL[-1] per chain: ['-124.6698', '-126.2508']
+     move alpha        uniq/chain=[300, 300] (of 300 draws)  max_std/chain=['1.13', '1.17']
+     move sigma_phi    uniq/chain=[300, 300] (of 300 draws)  max_std/chain=['0.133', '0.124']
+     move phi          uniq/chain=[16800, 16800] (of 300 draws)  max_std/chain=['1.22', '1.24']
+  -- arm agreement (max |arm0 - arm1|):
+     alpha          6.46027
+     sigma_phi      0.516919
+     phi            7.30036
+     __pll__        3.3792
+  GATE: pass (chains move, Rhat sane)
+==============================================================================
+RUN outputs/2026-08-25_01:06:08
+  model: linear_mixed_model.LinearMixedModel {'dataset': 'radon_mn', 'n': 250, 'k': 2}
+  iterations=500 num_warmup=200 trials=2
+  -- arm SICM       compile=18.39s  trials=0.619;0.152  LAST=0.152s  MEDIAN=0.385s
+     n_eff[min,med,max] = [367.2, 516.8, 591.1]   Rhat[min,med,max] = [0.9983, 1.0029, 1.0044]
+     PLL[-1] per chain: ['-290.6952', '-290.6550']
+     move beta         uniq/chain=[596, 594] (of 300 draws)  max_std/chain=['0.139', '0.133']
+     move sigma_u      uniq/chain=[298, 297] (of 300 draws)  max_std/chain=['0.095', '0.0817']
+     move sigma_e      uniq/chain=[298, 297] (of 300 draws)  max_std/chain=['0.0357', '0.0369']
+  -- arm No SICM    compile=16.95s  trials=6.583;5.179  LAST=5.179s  MEDIAN=5.881s
+     n_eff[min,med,max] = [409.9, 433.0, 521.0]   Rhat[min,med,max] = [1.0035, 1.0058, 1.0068]
+     PLL[-1] per chain: ['-290.6725', '-289.9426']
+     move beta         uniq/chain=[600, 590] (of 300 draws)  max_std/chain=['0.127', '0.136']
+     move sigma_u      uniq/chain=[300, 295] (of 300 draws)  max_std/chain=['0.0833', '0.075']
+     move sigma_e      uniq/chain=[300, 295] (of 300 draws)  max_std/chain=['0.0362', '0.0361']
+  -- arm agreement (max |arm0 - arm1|):
+     beta           0.636863
+     sigma_u        0.362969
+     sigma_e        0.207475
+     __pll__        2.79583
+  GATE: pass (chains move, Rhat sane)
+==============================================================================
+RUN outputs/2026-08-25_01:07:31
+  model: hierarchical_mvn.HierarchicalMVN {'n': 60, 'K': 60, 'J': 2}
+  iterations=200 num_warmup=50 trials=2
+  -- arm SICM       compile=20.84s  trials=4.324;4.080  LAST=4.080s  MEDIAN=4.202s
+     n_eff[min,med,max] = [4.4, 28.9, 84.9]   Rhat[min,med,max] = [0.9986, 1.0612, 1.4499]
+     PLL[-1] per chain: ['-165.0596', '-168.8367']
+     move mu           uniq/chain=[9000, 9000] (of 150 draws)  max_std/chain=['1.54', '2.11']
+     move sigma_k      uniq/chain=[9000, 9000] (of 150 draws)  max_std/chain=['0.704', '0.801']
+     move sigma_obs    uniq/chain=[150, 150] (of 150 draws)  max_std/chain=['0.18', '0.182']
+     move eta          uniq/chain=[18000, 18000] (of 150 draws)  max_std/chain=['1.2', '1.26']
+  -- arm No SICM    compile=22.25s  trials=18.010;16.903  LAST=16.903s  MEDIAN=17.457s
+     n_eff[min,med,max] = [3.9, 25.7, 122.6]   Rhat[min,med,max] = [0.9972, 1.0704, 1.5108]
+     PLL[-1] per chain: ['-158.4872', '-172.4595']
+     move mu           uniq/chain=[9000, 9000] (of 150 draws)  max_std/chain=['1.61', '2.23']
+     move sigma_k      uniq/chain=[9000, 9000] (of 150 draws)  max_std/chain=['0.764', '0.788']
+     move sigma_obs    uniq/chain=[150, 150] (of 150 draws)  max_std/chain=['0.178', '0.157']
+     move eta          uniq/chain=[18000, 18000] (of 150 draws)  max_std/chain=['1.15', '1.17']
+  -- arm agreement (max |arm0 - arm1|):
+     mu             3.91473
+     sigma_k        3.36141
+     sigma_obs      0.634174
+     eta            3.12363
+     __pll__        8.67283
+  GATE: pass (chains move, Rhat sane)
+==============================================================================
+RUN outputs/2026-08-25_01:09:32
+  model: phylo_pois.PhyloPois {'n': 200}
+  iterations=500 num_warmup=200 trials=2
+  -- arm SICM       compile=40.59s  trials=19.206;20.354  LAST=20.354s  MEDIAN=19.780s
+     n_eff[min,med,max] = [10.7, 69.0, 161.9]   Rhat[min,med,max] = [0.9988, 1.0260, 1.1587]
+     PLL[-1] per chain: ['-313.4287', '-312.9154']
+     move sigma_sq     uniq/chain=[300, 300] (of 300 draws)  max_std/chain=['0.0465', '0.059']
+     move eta          uniq/chain=[60000, 60000] (of 300 draws)  max_std/chain=['1.26', '1.21']
+     move b0           uniq/chain=[300, 300] (of 300 draws)  max_std/chain=['0.127', '0.143']
+     move b1           uniq/chain=[300, 300] (of 300 draws)  max_std/chain=['0.0657', '0.0684']
+     move sigma_obs    uniq/chain=[300, 300] (of 300 draws)  max_std/chain=['0.0523', '0.0814']
+     move eps          uniq/chain=[60000, 60000] (of 300 draws)  max_std/chain=['1.22', '1.22']
+  -- arm No SICM    compile=39.62s  trials=459.085;445.756  LAST=445.756s  MEDIAN=452.420s
+     n_eff[min,med,max] = [7.1, 68.1, 308.9]   Rhat[min,med,max] = [0.9983, 1.0254, 1.2284]
+     PLL[-1] per chain: ['-312.0330', '-318.5725']
+     move sigma_sq     uniq/chain=[300, 300] (of 300 draws)  max_std/chain=['0.0417', '0.061']
+     move eta          uniq/chain=[60000, 60000] (of 300 draws)  max_std/chain=['1.37', '1.24']
+     move b0           uniq/chain=[300, 300] (of 300 draws)  max_std/chain=['0.141', '0.144']
+     move b1           uniq/chain=[300, 300] (of 300 draws)  max_std/chain=['0.0653', '0.0654']
+     move sigma_obs    uniq/chain=[300, 300] (of 300 draws)  max_std/chain=['0.0637', '0.0773']
+     move eps          uniq/chain=[60000, 60000] (of 300 draws)  max_std/chain=['1.29', '1.22']
+  -- arm agreement (max |arm0 - arm1|):
+     sigma_sq       0.292996
+     eta            5.36903
+     b0             0.511021
+     b1             0.317735
+     sigma_obs      0.249041
+     eps            3.91323
+     __pll__        9.35639
+  GATE: pass (chains move, Rhat sane)
+wrote /dev/null

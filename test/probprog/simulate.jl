@@ -55,7 +55,8 @@ end
 
         compiled = @compile optimize = :probprog ProbProg.simulate(rng, model, μ, σ, shape)
         trace_t, weight, _ = compiled(rng, model, μ, σ, shape)
-        @test size(trace_t) == (1, 54)
+        # 2 sites x 27 values + 2 site scores.
+        @test size(trace_t) == (1, 56)
         @test ndims(weight) == 0
     end
 

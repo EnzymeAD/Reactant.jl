@@ -1,0 +1,36 @@
+######## pgls
+== pgls_sicm.mlir
+   potrf                        size=3          depth=0  x1
+   potrf                        size=3          depth=1  x1
+   potrf                        size=71         depth=0  x1
+   trsm                         size=3          depth=0  x1
+   trsm                         size=3          depth=1  x1
+   trsm                         size=71         depth=0  x2
+== pgls_nosicm.mlir
+   potrf                        size=3          depth=0  x1
+   potrf                        size=3          depth=1  x1
+   potrf                        size=71         depth=0  x2
+   potrf                        size=71         depth=3  x2
+   trsm                         size=3          depth=0  x1
+   trsm                         size=3          depth=1  x1
+   trsm                         size=71         depth=0  x8
+   trsm                         size=71         depth=3  x12
+######## sar_boston
+== sar_boston_sicm.mlir
+   potrf                        size=16         depth=0  x1
+   potrf                        size=16         depth=1  x1
+   potrf                        size=506        depth=0  x1
+   potrf                        size=506        depth=3  x2
+   trsm                         size=16         depth=0  x1
+   trsm                         size=16         depth=1  x1
+   trsm                         size=506        depth=0  x2
+   trsm                         size=506        depth=3  x4
+== sar_boston_nosicm.mlir
+   potrf                        size=16         depth=0  x1
+   potrf                        size=16         depth=1  x1
+   potrf                        size=506        depth=0  x1
+   potrf                        size=506        depth=3  x2
+   trsm                         size=16         depth=0  x1
+   trsm                         size=16         depth=1  x1
+   trsm                         size=506        depth=0  x2
+   trsm                         size=506        depth=3  x4

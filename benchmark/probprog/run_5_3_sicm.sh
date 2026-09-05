@@ -19,7 +19,9 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 RUN="$SCRIPT_DIR/run_pplbench.sh"
 LOG="/tmp/bench_sicm_ablation.log"
 RESULTS="/tmp/sicm_ablation_results.txt"
-THREADS=32
+# Impulse-only ablation: fully uncapped per the 2026-08-24 thread policy
+# (cross-system runs use --threads 1; Impulse/NumPyro-only runs use no cap).
+THREADS=all
 
 # Pattern -> config mapping
 declare -A PATTERN_NAMES

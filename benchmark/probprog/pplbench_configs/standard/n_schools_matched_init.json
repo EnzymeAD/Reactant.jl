@@ -54,7 +54,8 @@
           "max_tree_depth": 10,
           "adapt_step_size": true,
           "adapt_mass_matrix": true,
-          "matched_init": true
+          "matched_init": true,
+          "adtype": "reversediff"
         }
       },
       "legend": {

@@ -23,7 +23,8 @@ class MCMC(SubprocessMCMC):
         adapt_step_size: bool, adapt_mass_matrix: bool,
         **kwargs,
     ) -> List[str]:
-        module_name = self.impl.__class__.__module__.split(".")[-1]
+        impl_module = self.impl.__class__.__module__
+        package, module_name = impl_module.rsplit(".", 1)
         class_name = self.impl.__class__.__name__
         cmd = [
             sys.executable,
@@ -36,6 +37,7 @@ class MCMC(SubprocessMCMC):
             "--seed", str(seed),
             "--step-size", str(step_size),
             "--max-tree-depth", str(max_tree_depth),
+            "--metric", str(kwargs.get("metric", "dense_e")),
             "--server",
         ]
         if adapt_step_size:
@@ -48,6 +50,11 @@ class MCMC(SubprocessMCMC):
             cmd += ["--chain-method", str(kwargs["chain_method"])]
         if kwargs.get("matched_init", False):
             cmd.append("--matched-init")
+        if package != "pplbench.ppls.stan":
+            # Variant packages (e.g. pplbench.ppls.stan_ladder.<variant>) reuse
+            # this driver via a config-level `package` override; tell the
+            # harness subprocess where to re-import the implementation from.
+            cmd += ["--package", package]
         return cmd
 
     def _extract_data(self, samples):

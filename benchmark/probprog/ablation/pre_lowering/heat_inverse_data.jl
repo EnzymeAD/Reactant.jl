@@ -28,9 +28,15 @@ function heat_config(scale::Int)
     elseif scale == 1
         D, T, M_obs = 100, 100, 10   # Row 1: LICM-dominant
     elseif scale == 2
-        D, T, M_obs = 300, 30, 6     # Row 2: EigenLift-dominant
+        D, T, M_obs = 300, 30, 6     # EigenLift-dominant regime (SICM tier)
+    elseif scale == 3
+        D, T, M_obs = 300, 100, 10   # same T as Row 1, 3x D
+    elseif scale == 4
+        D, T, M_obs = 60, 100, 10    # same T as Row 1, 0.6x D
+    elseif scale == 5
+        D, T, M_obs = 60, 50, 10     # Cubic-Kernel-(small)-style scale
     else
-        error("unknown scale $scale (use 0, 1, or 2)")
+        error("unknown scale $scale (use 0-5)")
     end
     S = 8
     T_final = 0.25                    # total physical simulation time

@@ -1,0 +1,32 @@
+== outputs/2026-08-25_01:04:00   car_spatial.CARSpatial ({'dataset': 'scotland', 'rho': 0.99, 'n': 56})
+   arms: SICM vs No SICM ; 300 post-warmup draws x 2 chains
+   alpha        |z| max   0.73  median  0.73   sd ratio [1.036, 1.036]   (k=1 components)
+   sigma_phi    |z| max   0.85  median  0.85   sd ratio [1.011, 1.011]   (k=1 components)
+   phi          |z| max   1.19  median  0.75   sd ratio [0.985, 1.068]   (k=56 components)
+   PLL[-1]: SICM = ['-125.892', '-125.661'] ; No SICM = ['-124.670', '-126.251'] ; cross-arm gap 0.316 vs within-arm chain spread 0.231 / 1.581
+   VERDICT: max |z| over all components = 1.19  (consistent with one target distribution)
+== outputs/2026-08-25_01:06:08   linear_mixed_model.LinearMixedModel ({'dataset': 'radon_mn', 'n': 250, 'k': 2})
+   arms: SICM vs No SICM ; 300 post-warmup draws x 2 chains
+   beta         |z| max   0.51  median  0.49   sd ratio [0.985, 1.029]   (k=2 components)
+   sigma_u      |z| max   0.17  median  0.17   sd ratio [1.118, 1.118]   (k=1 components)
+   sigma_e      |z| max   2.46  median  2.46   sd ratio [1.006, 1.006]   (k=1 components)
+   PLL[-1]: SICM = ['-290.695', '-290.655'] ; No SICM = ['-290.673', '-289.943'] ; cross-arm gap 0.368 vs within-arm chain spread 0.040 / 0.730
+   VERDICT: max |z| over all components = 2.46  (consistent with one target distribution)
+== outputs/2026-08-25_01:07:31   hierarchical_mvn.HierarchicalMVN ({'n': 60, 'K': 60, 'J': 2})
+   arms: SICM vs No SICM ; 150 post-warmup draws x 2 chains
+   mu           |z| max   1.03  median  0.20   sd ratio [0.841, 1.286]   (k=60 components)
+   sigma_k      |z| max   1.39  median  0.29   sd ratio [0.821, 1.336]   (k=60 components)
+   sigma_obs    |z| max   0.76  median  0.76   sd ratio [1.084, 1.084]   (k=1 components)
+   eta          |z| max   1.41  median  0.16   sd ratio [0.877, 1.102]   (k=120 components)
+   PLL[-1]: SICM = ['-165.060', '-168.837'] ; No SICM = ['-158.487', '-172.459'] ; cross-arm gap 1.475 vs within-arm chain spread 3.777 / 13.972
+   VERDICT: max |z| over all components = 1.41  (consistent with one target distribution)
+== outputs/2026-08-25_01:09:32   phylo_pois.PhyloPois ({'n': 200})
+   arms: SICM vs No SICM ; 300 post-warmup draws x 2 chains
+   sigma_sq     |z| max   0.18  median  0.18   sd ratio [1.047, 1.047]   (k=1 components)
+   eta          |z| max   2.09  median  0.28   sd ratio [0.850, 1.234]   (k=200 components)
+   b0           |z| max   0.74  median  0.74   sd ratio [0.947, 0.947]   (k=1 components)
+   b1           |z| max   0.10  median  0.10   sd ratio [1.025, 1.025]   (k=1 components)
+   sigma_obs    |z| max   0.16  median  0.16   sd ratio [0.942, 0.942]   (k=1 components)
+   eps          |z| max   0.80  median  0.18   sd ratio [0.908, 1.120]   (k=200 components)
+   PLL[-1]: SICM = ['-313.429', '-312.915'] ; No SICM = ['-312.033', '-318.573'] ; cross-arm gap 2.131 vs within-arm chain spread 0.513 / 6.540
+   VERDICT: max |z| over all components = 2.09  (consistent with one target distribution)

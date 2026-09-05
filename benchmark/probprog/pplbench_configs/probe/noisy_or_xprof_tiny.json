@@ -1,0 +1,35 @@
+{
+  "model": {
+    "class": "noisy_or_topic.NoisyOrTopic",
+    "args": {
+      "n": 2,
+      "num_topics": 50,
+      "num_words": 100,
+      "avg_fanout": 3.0,
+      "avg_leak_weight": 0.1,
+      "avg_topic_weight": 1.0
+    },
+    "seed": 12345
+  },
+  "iterations": 40,
+  "num_warmup": 20,
+  "trials": 2,
+  "ppls": [
+    {
+      "name": "impulse",
+      "inference": {
+        "class": "inference.MCMC",
+        "infer_args": {
+          "step_size": 0.1,
+          "max_tree_depth": 10,
+          "adapt_step_size": true,
+          "adapt_mass_matrix": true
+        }
+      },
+      "legend": { "name": "Impulse", "color": "red" },
+      "trials": 2
+    }
+  ],
+  "save_samples": true,
+  "figures": { "generate_pll": false, "suffix": "png" }
+}

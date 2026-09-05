@@ -19,7 +19,11 @@
 #   --profile-breakdown Per-op runtime percentage breakdown
 #   --validate          Run NumPyro + Impulse with num_samples=5, num_warmup=0,
 #                       no adaptation, compare outputs for numerical agreement
-#   --threads N         Set intra-op thread count for all frameworks (default: 32)
+#   --threads N|all     Thread policy (default: all). "all" = fully uncapped, for
+#                       Impulse/NumPyro-only runs (ablations). "1" = the
+#                       cross-system comparison protocol: single-threaded,
+#                       enforced by CPU affinity (use for any run that includes
+#                       Stan/Turing). Numeric N>1 = affinity-enforced budget.
 
 set -euo pipefail
 
@@ -28,7 +32,7 @@ DEVICE="cpu"
 CONFIG_NAME=""
 VALIDATE=""
 PPLS_FILTER=""
-NTHREADS=32
+NTHREADS=all
 
 # Use conda probprog-bench environment Python (has JAX, NumPyro, PyMC, etc.)
 PYTHON="${PYTHON:-/home/sbrantq/anaconda3/envs/probprog-bench/bin/python}"
@@ -111,30 +115,41 @@ else
     exit 1
 fi
 
-# Thread configuration: enforce uniform intra-op parallelism across all frameworks.
-# Pass --threads 1 for a single-threaded pure algorithmic/compiler comparison.
-
-# Julia (Turing.jl, Impulse)
-export JULIA_NUM_THREADS=$NTHREADS
-
-# BLAS backends (PyMC via OpenBLAS, Turing via Julia's OpenBLAS)
-export OPENBLAS_NUM_THREADS=$NTHREADS
-export MKL_NUM_THREADS=$NTHREADS
-export OMP_NUM_THREADS=$NTHREADS
-
-# XLA — Eigen threadpool.
-# --xla_cpu_multi_thread_eigen is understood by both JAX's XLA and Reactant's XLA.
-# --intra_op_parallelism_threads is JAX-only; Reactant's XLA fatally rejects it.
-# We set the shared flag here; the JAX-only flag is set in numpyro_harness.py.
-if [ "$NTHREADS" -eq 1 ]; then
-    export XLA_FLAGS="${XLA_FLAGS:+${XLA_FLAGS} }--xla_cpu_multi_thread_eigen=false"
+# Thread policy (2026-08-24, user decision):
+#   all (default): no caps anywhere. XLA's Eigen pool sizes itself from the
+#                  host, BLAS pools use library defaults, no CPU affinity.
+#                  For Impulse/NumPyro-only experiments (ablations).
+#   1:             cross-system protocol. Single-threaded, ENFORCED by taskset
+#                  below (env vars alone cannot cap XLA: both JAX's and
+#                  Reactant's XLA fatally reject --intra_op_parallelism_threads,
+#                  audited 2026-08-23; the pool is sized from sched_getaffinity
+#                  at client creation).
+if [ "$NTHREADS" = "all" ]; then
+    # Uncapped mode: inference.py falls back to "-t 32" when JULIA_NUM_THREADS
+    # is unset, which caps only the Julia frontend (the measured sampling runs
+    # inside the XLA executable, whose pool is sized from CPU affinity), but
+    # "no cap" should hold to the letter: let julia size itself too.
+    export JULIA_NUM_THREADS=auto
 else
-    export XLA_FLAGS="${XLA_FLAGS:+${XLA_FLAGS} }--xla_cpu_multi_thread_eigen=true"
-fi
+    # Julia (Turing.jl, Impulse)
+    export JULIA_NUM_THREADS=$NTHREADS
 
-# Stan / CmdStan (TBB threadpool, reduce_sum parallelism)
-export STAN_NUM_THREADS=$NTHREADS
-export TBB_NUM_THREADS=$NTHREADS
+    # BLAS backends (Turing via Julia's OpenBLAS)
+    export OPENBLAS_NUM_THREADS=$NTHREADS
+    export MKL_NUM_THREADS=$NTHREADS
+    export OMP_NUM_THREADS=$NTHREADS
+
+    # XLA multithreaded codegen off only at the single-thread budget.
+    if [ "$NTHREADS" -eq 1 ]; then
+        export XLA_FLAGS="${XLA_FLAGS:+${XLA_FLAGS} }--xla_cpu_multi_thread_eigen=false"
+    else
+        export XLA_FLAGS="${XLA_FLAGS:+${XLA_FLAGS} }--xla_cpu_multi_thread_eigen=true"
+    fi
+
+    # Stan / CmdStan (TBB threadpool, reduce_sum parallelism)
+    export STAN_NUM_THREADS=$NTHREADS
+    export TBB_NUM_THREADS=$NTHREADS
+fi
 
 # PyTensor BLAS: use conda openblas for PyMC performance.
 # Only set PYTENSOR_FLAGS (not LD_LIBRARY_PATH, which would pollute Stan/clang).
@@ -142,7 +157,7 @@ export TBB_NUM_THREADS=$NTHREADS
 CONDA_LIB="$(dirname "$PYTHON")/../lib"
 export PPLBENCH_CONDA_LIB="${CONDA_LIB}"
 PYTENSOR_EXTRA="mode=FAST_RUN"
-if [ "$NTHREADS" -eq 1 ]; then
+if [ "$NTHREADS" = "1" ]; then
     PYTENSOR_EXTRA="${PYTENSOR_EXTRA},openmp=False"
 else
     PYTENSOR_EXTRA="${PYTENSOR_EXTRA},openmp=True,openmp_elemwise_minsize=10"
@@ -155,12 +170,32 @@ EXTRA_ARGS=()
 [ -n "$VALIDATE" ] && EXTRA_ARGS+=(--validate)
 [ -n "$PPLS_FILTER" ] && EXTRA_ARGS+=("${PPLS_FLAG:-"--ppls"}" "$PPLS_FILTER")
 
+# Enforce the thread budget with CPU affinity. XLA sizes its Eigen pool from
+# sched_getaffinity, and the affinity is inherited by every framework subprocess
+# (julia, CmdStan binaries, BLAS/OpenMP pools), so this caps all frameworks
+# uniformly; the env vars above only shape how each pool uses the budget.
+# CPUs 0-95 are distinct physical cores on this machine (SMT siblings are
+# 96-191), so -c 0-(N-1) pins to N physical cores.
+TASKSET=()
+if [ "$NTHREADS" != "all" ]; then
+    # getconf, NOT nproc: GNU nproc honors OMP_NUM_THREADS, which this script
+    # exports above, so nproc would report the budget instead of the machine.
+    NPROC=$(getconf _NPROCESSORS_ONLN)
+    if [ "$NTHREADS" -lt "$NPROC" ]; then
+        # PPLBENCH_TASKSET_CPUS lets concurrent single-threaded sessions use
+        # disjoint cores (e.g. another agent pinned to CPU 60).
+        CPUS="${PPLBENCH_TASKSET_CPUS:-0-$((NTHREADS-1))}"
+        TASKSET=(taskset -c "$CPUS")
+        echo "CPU affinity: ${TASKSET[*]}"
+    fi
+fi
+
 if [ -n "$VALIDATE" ]; then
     echo "Running validation (NumPyro vs Impulse, 5 samples, no warmup, no adaptation)..."
 else
     echo "Running benchmark..."
 fi
-"$PYTHON" -m pplbench "$CONFIG_FILE" "${EXTRA_ARGS[@]}"
+"${TASKSET[@]}" "$PYTHON" -m pplbench "$CONFIG_FILE" "${EXTRA_ARGS[@]}"
 
 if [ -n "${PPLBENCH_PROFILE:-}" ]; then
     echo ""

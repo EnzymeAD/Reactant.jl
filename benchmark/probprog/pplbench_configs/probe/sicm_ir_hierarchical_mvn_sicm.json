@@ -1,0 +1,38 @@
+{
+  "model": {
+    "class": "hierarchical_mvn.HierarchicalMVN",
+    "args": {
+      "n": 60,
+      "K": 60,
+      "J": 2
+    },
+    "seed": 12345
+  },
+  "iterations": 6,
+  "num_warmup": 3,
+  "trials": 2,
+  "ppls": [
+    {
+      "name": "impulse",
+      "inference": {
+        "class": "inference.MCMC",
+        "infer_args": {
+          "step_size": 0.01,
+          "max_tree_depth": 10,
+          "adapt_step_size": true,
+          "adapt_mass_matrix": true
+        }
+      },
+      "legend": {
+        "name": "SICM",
+        "color": "red"
+      },
+      "trials": 2
+    }
+  ],
+  "save_samples": false,
+  "figures": {
+    "generate_pll": false,
+    "suffix": "png"
+  }
+}

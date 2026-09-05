@@ -84,12 +84,17 @@ function model_hierarchical_mvn(rng, Omega, K, J)
     C = cholesky(cov)
 
     # Batched NCP: theta_j = mu + L * eta_j
-    eta_matrix = reshape(eta, K, J)
+    # eta's FLAT layout must match the Python reference and shared PLL
+    # evaluator, which use NumPy row-major reshape(K, J): eta[k*J + j].
+    # Julia's column-major reshape(eta, K, J) would silently relabel the
+    # (exchangeable) eta components — an equivalent model whose samples the
+    # shared evaluator then mis-scores.
+    eta_matrix = permutedims(reshape(eta, J, K))   # (k, j) = eta[(k-1)J + j]
     mu_col = reshape(mu, K, 1)
     theta = mu_col .+ C.factors' * eta_matrix   # K x J
 
-    # Observations: y_{jk} ~ Normal(theta_{jk}, sigma_obs)
-    theta_flat = reshape(theta, J * K, 1)[:, 1]
+    # Observations, flattened row-major like NumPy theta.ravel(): d = (k-1)J + j.
+    theta_flat = reshape(permutedims(theta), J * K, 1)[:, 1]
     _, obs = ProbProg.sample(
         rng, ProbProg.Normal(theta_flat, sigma_obs, (J * K,)); symbol=:y
     )
@@ -133,7 +138,8 @@ function build_constraint(data, init_params)
 
     y_raw = data["Y"]
     y_matrix = [Float64(y_raw[k][j]) for k in 1:K, j in 1:J]
-    y_flat = vec(y_matrix)
+    # Row-major flatten to pair with theta_flat above.
+    y_flat = vec(permutedims(y_matrix))
 
     if init_params !== nothing
         init_mu = Float64.(init_params["mu"])

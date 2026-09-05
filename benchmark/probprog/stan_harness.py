@@ -32,7 +32,7 @@ def reconstruct_dataset(data_dict):
 
 def run_trial(model, stan_data, num_warmup, num_samples, seed,
               step_size, max_tree_depth, adapt_step_size, adapt_mass_matrix,
-              init_params, num_chains=1):
+              init_params, num_chains=1, metric="dense_e"):
     inits = None
     if init_params is not None:
         inits = {}
@@ -48,14 +48,61 @@ def run_trial(model, stan_data, num_warmup, num_samples, seed,
         iter_sampling=num_samples,
         seed=seed,
         step_size=step_size,
-        metric='dense_e',
+        metric=metric,
         max_treedepth=max_tree_depth,
         adapt_engaged=adapt_step_size or adapt_mass_matrix,
         inits=inits,
         show_console=False,
         show_progress=False,
     )
+    _write_nuts_diag(fit, seed)
     return fit.stan_variables()
+
+
+_DIAG_TAG = "stan"
+
+
+def _write_nuts_diag(fit, seed):
+    """Optional per-trial NUTS diagnostics side file (default off).
+
+    When LADDER_DIAG_DIR is set, records the total leapfrog count over the
+    sampling draws (CmdStan `n_leapfrog__`) and CmdStan's own warm-up /
+    sampling elapsed times (parsed from the CSV trailer), so that a
+    per-gradient-evaluation time (sampling elapsed / leapfrogs) can be formed
+    independently of the adaptation phase. Never touches the sample output.
+    """
+    diag_dir = os.environ.get("LADDER_DIAG_DIR")
+    if not diag_dir:
+        return
+    try:
+        mv = fit.method_variables()
+        n_leapfrog = float(np.sum(mv["n_leapfrog__"]))
+        treedepth_mean = float(np.mean(mv["treedepth__"]))
+        n_draws = int(np.size(mv["n_leapfrog__"]))
+        elapsed = {}
+        for csv in fit.runset.csv_files:
+            with open(csv) as f:
+                tail = f.read()[-2000:]
+            for phase in ("Warm-up", "Sampling", "Total"):
+                m = re.search(r"([0-9.eE+-]+) seconds \(%s\)" % phase, tail)
+                if m:
+                    elapsed[phase] = elapsed.get(phase, 0.0) + float(m.group(1))
+        rec = {
+            "seed": int(seed),
+            "n_leapfrog_sampling_total": n_leapfrog,
+            "n_draws_sampling": n_draws,
+            "treedepth_mean": treedepth_mean,
+            "elapsed_warmup_s": elapsed.get("Warm-up"),
+            "elapsed_sampling_s": elapsed.get("Sampling"),
+            "elapsed_total_s": elapsed.get("Total"),
+            "model_class": _DIAG_TAG,
+        }
+        os.makedirs(diag_dir, exist_ok=True)
+        tag = rec["model_class"] or "stan"
+        with open(os.path.join(diag_dir, f"{tag}_seed{int(seed)}.json"), "w") as f:
+            json.dump(rec, f, indent=1)
+    except Exception as exc:  # diagnostics must never fail a trial
+        print(f"Stan: nuts diag not written ({exc})", flush=True)
 
 
 # =============================================================================
@@ -341,6 +388,11 @@ def main():
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--step-size", type=float, default=0.1)
     parser.add_argument("--max-tree-depth", type=int, default=10)
+    # CmdStan metric. Default `dense_e` preserves every existing config
+    # (incl. the GP ladder) bit-for-bit; set `diag_e` per-config where a
+    # dense metric is not estimable from the warmup budget.
+    parser.add_argument("--metric", default="dense_e",
+                        choices=["dense_e", "diag_e", "unit_e"])
     parser.add_argument("--adapt-step-size", action="store_true")
     parser.add_argument("--adapt-mass-matrix", action="store_true")
     parser.add_argument("--num-chains", type=int, default=1)
@@ -375,6 +427,9 @@ def main():
     parser.add_argument("--require-converged", action="store_true")
     parser.add_argument("--matched-init", action="store_true")
     parser.add_argument("--server", action="store_true")
+    parser.add_argument("--package", default="pplbench.ppls.stan",
+                        help="package to import --model-class from (config "
+                             "`package` override, e.g. pplbench.ppls.stan_ladder.naive)")
     args = parser.parse_args()
 
     with open(args.data) as f:
@@ -383,7 +438,9 @@ def main():
     data = reconstruct_dataset(data_dict)
 
     module_path, class_name = args.model_class.rsplit(".", 1)
-    mod = importlib.import_module(f"pplbench.ppls.stan.{module_path}")
+    mod = importlib.import_module(f"{args.package}.{module_path}")
+    global _DIAG_TAG
+    _DIAG_TAG = f"{args.package.rsplit('.', 1)[-1]}.{module_path}"
     impl_class = getattr(mod, class_name)
     impl = impl_class(**data.attrs)
 
@@ -444,7 +501,7 @@ def main():
             args.num_warmup, args.num_samples, args.seed,
             args.step_size, args.max_tree_depth,
             args.adapt_step_size, args.adapt_mass_matrix,
-            first_init, num_chains,
+            first_init, num_chains, args.metric,
         )
         run_time = time.time() - t0
 
@@ -477,7 +534,7 @@ def main():
                     args.num_warmup, args.num_samples, new_seed,
                     args.step_size, args.max_tree_depth,
                     args.adapt_step_size, args.adapt_mass_matrix,
-                    new_init, num_chains,
+                    new_init, num_chains, args.metric,
                 )
                 new_run_time = time.time() - t0
 

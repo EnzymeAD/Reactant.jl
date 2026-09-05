@@ -1,0 +1,68 @@
+######## car_spatial_scotland
+== car_spatial_scotland_sicm.mlir
+   potrf                        size=56         depth=0  x1
+   potrf                        size=58         depth=0  x1
+   potrf                        size=58         depth=1  x1
+   trsm                         size=56         depth=0  x6
+   trsm                         size=56         depth=3  x8
+   trsm                         size=58         depth=0  x1
+   trsm                         size=58         depth=1  x1
+== car_spatial_scotland_nosicm.mlir
+   potrf                        size=56         depth=0  x2
+   potrf                        size=56         depth=3  x2
+   potrf                        size=58         depth=0  x1
+   potrf                        size=58         depth=1  x1
+   trsm                         size=56         depth=0  x8
+   trsm                         size=56         depth=3  x12
+   trsm                         size=58         depth=0  x1
+   trsm                         size=58         depth=1  x1
+######## car_spatial_nyc
+== car_spatial_nyc_sicm.mlir
+   potrf                        size=250        depth=0  x1
+   potrf                        size=252        depth=0  x1
+   potrf                        size=252        depth=1  x1
+   trsm                         size=250        depth=0  x6
+   trsm                         size=250        depth=3  x8
+   trsm                         size=252        depth=0  x1
+   trsm                         size=252        depth=1  x1
+== car_spatial_nyc_nosicm.mlir
+   potrf                        size=250        depth=0  x2
+   potrf                        size=250        depth=3  x2
+   potrf                        size=252        depth=0  x1
+   potrf                        size=252        depth=1  x1
+   trsm                         size=250        depth=0  x8
+   trsm                         size=250        depth=3  x12
+   trsm                         size=252        depth=0  x1
+   trsm                         size=252        depth=1  x1
+######## lmm_radon
+== lmm_radon_sicm.mlir
+   potrf                        size=4          depth=0  x1
+   potrf                        size=4          depth=1  x1
+   syevd                        size=250        depth=0  x1
+   trsm                         size=4          depth=0  x1
+   trsm                         size=4          depth=1  x1
+== lmm_radon_nosicm.mlir
+   potrf                        size=250        depth=0  x2
+   potrf                        size=250        depth=3  x2
+   potrf                        size=4          depth=0  x1
+   potrf                        size=4          depth=1  x1
+   trsm                         size=250        depth=0  x8
+   trsm                         size=250        depth=3  x12
+   trsm                         size=4          depth=0  x1
+   trsm                         size=4          depth=1  x1
+######## hierarchical_mvn
+== hierarchical_mvn_sicm.mlir
+   potrf                        size=241        depth=0  x1
+   potrf                        size=241        depth=1  x1
+   potrf                        size=60         depth=0  x1
+   trsm                         size=241        depth=0  x1
+   trsm                         size=241        depth=1  x1
+== hierarchical_mvn_nosicm.mlir
+   potrf                        size=241        depth=0  x1
+   potrf                        size=241        depth=1  x1
+   potrf                        size=60         depth=0  x2
+   potrf                        size=60         depth=3  x2
+   trsm                         size=241        depth=0  x1
+   trsm                         size=241        depth=1  x1
+   trsm                         size=60         depth=0  x2
+   trsm                         size=60         depth=3  x4

@@ -1,7 +1,9 @@
 {
   "model": {
     "class": "eigenlift_solve.EigenLiftSolve",
-    "args": {"n": 50},
+    "args": {
+      "n": 200
+    },
     "seed": 12345
   },
   "iterations": 200,
@@ -19,7 +21,10 @@
           "adapt_mass_matrix": true
         }
       },
-      "legend": {"name": "SICM", "color": "red"},
+      "legend": {
+        "name": "SICM",
+        "color": "red"
+      },
       "trials": 2
     },
     {
@@ -34,10 +39,16 @@
           "disable_sicm": true
         }
       },
-      "legend": {"name": "No SICM", "color": "gray"},
+      "legend": {
+        "name": "No SICM",
+        "color": "gray"
+      },
       "trials": 2
     }
   ],
   "save_samples": true,
-  "figures": {"generate_pll": true, "suffix": "png"}
+  "figures": {
+    "generate_pll": true,
+    "suffix": "png"
+  }
 }

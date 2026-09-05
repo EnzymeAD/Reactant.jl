@@ -619,6 +619,7 @@ Base.@nospecializeinfer function compile_mlir!(
                             end
                         )...,
                         opt_passes2,
+                        "stablehlo-to-lapack{backend=$backend}",
                         lower_enzymexla_passes,
                         "lower-impulse-trace-ops{backend=$backend}",
                         jit,
@@ -647,6 +648,7 @@ Base.@nospecializeinfer function compile_mlir!(
                         opt_passes2,
                         kern,
                         raise_passes,
+                        "stablehlo-to-lapack{backend=$backend}",
                         lower_enzymexla_passes,
                         "lower-impulse-trace-ops{backend=$backend}",
                         jit,

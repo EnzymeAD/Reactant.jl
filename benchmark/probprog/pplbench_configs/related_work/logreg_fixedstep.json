@@ -1,0 +1,39 @@
+{
+  "model": {
+    "class": "logistic_regression.LogisticRegression",
+    "args": {
+      "n": 10000,
+      "k": 10,
+      "rho": 3.0
+    },
+    "seed": 12345
+  },
+  "iterations": 500,
+  "num_warmup": 200,
+  "trials": 2,
+  "ppls": [
+    {
+      "name": "impulse",
+      "seed": 20260822,
+      "inference": {
+        "class": "inference.MCMC",
+        "infer_args": {
+          "step_size": 0.00745939,
+          "max_tree_depth": 10,
+          "adapt_step_size": false,
+          "adapt_mass_matrix": false
+        }
+      },
+      "legend": {
+        "name": "Impulse (fixed step, identity mass)",
+        "color": "red"
+      },
+      "trials": 2
+    }
+  ],
+  "save_samples": true,
+  "figures": {
+    "generate_pll": true,
+    "suffix": "png"
+  }
+}

@@ -37,6 +37,11 @@ function __init__()
             (BLAS.@blasfunc(dgetrf_), :enzymexla_lapack_dgetrf_),
             (BLAS.@blasfunc(cgetrf_), :enzymexla_lapack_cgetrf_),
             (BLAS.@blasfunc(zgetrf_), :enzymexla_lapack_zgetrf_),
+            # QR
+            (BLAS.@blasfunc(sgeqrf_), :enzymexla_lapack_sgeqrf_),
+            (BLAS.@blasfunc(dgeqrf_), :enzymexla_lapack_dgeqrf_),
+            (BLAS.@blasfunc(sorgqr_), :enzymexla_lapack_sorgqr_),
+            (BLAS.@blasfunc(dorgqr_), :enzymexla_lapack_dorgqr_),
             # SVD QR Iteration
             (BLAS.@blasfunc(sgesvd_), :enzymexla_lapack_sgesvd_),
             (BLAS.@blasfunc(dgesvd_), :enzymexla_lapack_dgesvd_),
@@ -70,6 +75,12 @@ function __init__()
             (BLAS.@blasfunc(dsymm_), :enzymexla_blas_dsymm_),
             (BLAS.@blasfunc(csymm_), :enzymexla_blas_csymm_),
             (BLAS.@blasfunc(zsymm_), :enzymexla_blas_zsymm_),
+            # cholesky (potrf)
+            (BLAS.@blasfunc(spotrf_), :enzymexla_lapack_spotrf_),
+            (BLAS.@blasfunc(dpotrf_), :enzymexla_lapack_dpotrf_),
+            # triangular solve (trsm)
+            (BLAS.@blasfunc(strsm_), :enzymexla_blas_strsm_),
+            (BLAS.@blasfunc(dtrsm_), :enzymexla_blas_dtrsm_),
         ]
             MLIR.API.EnzymeJaXMapSymbol(
                 enzymexla_name, Libdl.dlsym(libblastrampoline_handle, cname)

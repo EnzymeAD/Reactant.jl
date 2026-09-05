@@ -1,0 +1,92 @@
+==============================================================================
+RUN outputs/2026-08-25_02:28:43
+  model: car_spatial.CARSpatial {'dataset': 'scotland', 'rho': 0.99, 'n': 56}
+  iterations=500 num_warmup=200 trials=2
+  -- arm SICM       compile=35.66s  trials=2.071;1.846  LAST=1.846s  MEDIAN=1.959s
+     n_eff[min,med,max] = [345.1, 566.2, 607.4]   Rhat[min,med,max] = [0.9977, 1.0006, 1.0055]
+     PLL[-1] per chain: ['-125.8918', '-125.6605']
+     move alpha        uniq/chain=[300, 300] (of 300 draws)  max_std/chain=['1.13', '1.25']
+     move sigma_phi    uniq/chain=[300, 300] (of 300 draws)  max_std/chain=['0.135', '0.126']
+     move phi          uniq/chain=[16800, 16800] (of 300 draws)  max_std/chain=['1.22', '1.32']
+  -- arm No SICM    compile=36.80s  trials=10.506;10.099  LAST=10.099s  MEDIAN=10.303s
+     n_eff[min,med,max] = [372.3, 459.4, 541.5]   Rhat[min,med,max] = [1.0019, 1.0048, 1.0085]
+     PLL[-1] per chain: ['-124.6698', '-126.2508']
+     move alpha        uniq/chain=[300, 300] (of 300 draws)  max_std/chain=['1.13', '1.17']
+     move sigma_phi    uniq/chain=[300, 300] (of 300 draws)  max_std/chain=['0.133', '0.124']
+     move phi          uniq/chain=[16800, 16800] (of 300 draws)  max_std/chain=['1.22', '1.24']
+  -- arm agreement (max |arm0 - arm1|):
+     alpha          6.46027
+     sigma_phi      0.516919
+     phi            7.30036
+     __pll__        3.3792
+  GATE: pass (chains move, Rhat sane)
+==============================================================================
+RUN outputs/2026-08-25_02:30:55
+  model: car_spatial.CARSpatial {'dataset': 'nyc_traffic', 'rho': 0.99, 'n': 250}
+  iterations=500 num_warmup=200 trials=2
+  -- arm SICM       compile=35.48s  trials=151.390;153.062  LAST=153.062s  MEDIAN=152.226s
+     n_eff[min,med,max] = [34.4, 39.1, 273.3]   Rhat[min,med,max] = [0.9998, 1.0139, 1.0373]
+     PLL[-1] per chain: ['-468.3031', '-458.8098']
+     move alpha        uniq/chain=[300, 300] (of 300 draws)  max_std/chain=['1.05', '1.47']
+     move sigma_phi    uniq/chain=[300, 300] (of 300 draws)  max_std/chain=['0.155', '0.162']
+     move phi          uniq/chain=[75000, 75000] (of 300 draws)  max_std/chain=['1.61', '1.84']
+  -- arm No SICM    compile=34.43s  trials=631.992;600.298  LAST=600.298s  MEDIAN=616.145s
+     n_eff[min,med,max] = [3.4, 3.9, 155.1]   Rhat[min,med,max] = [1.0190, 1.4977, 1.6529]
+     PLL[-1] per chain: ['-469.0177', '-464.5193']
+     move alpha        uniq/chain=[300, 300] (of 300 draws)  max_std/chain=['0.896', '0.986']
+     move sigma_phi    uniq/chain=[300, 300] (of 300 draws)  max_std/chain=['0.161', '0.164']
+     move phi          uniq/chain=[75000, 75000] (of 300 draws)  max_std/chain=['1.45', '1.55']
+  -- arm agreement (max |arm0 - arm1|):
+     alpha          5.98787
+     sigma_phi      0.522368
+     phi            8.17004
+     __pll__        17.8633
+  GATE: pass (chains move, Rhat sane)
+==============================================================================
+RUN outputs/2026-08-25_02:58:17
+  model: linear_mixed_model.LinearMixedModel {'dataset': 'radon_mn', 'n': 250, 'k': 2}
+  iterations=500 num_warmup=200 trials=2
+  -- arm SICM       compile=17.95s  trials=0.596;0.150  LAST=0.150s  MEDIAN=0.373s
+     n_eff[min,med,max] = [367.2, 516.8, 591.1]   Rhat[min,med,max] = [0.9983, 1.0029, 1.0044]
+     PLL[-1] per chain: ['-290.6952', '-290.6550']
+     move beta         uniq/chain=[596, 594] (of 300 draws)  max_std/chain=['0.139', '0.133']
+     move sigma_u      uniq/chain=[298, 297] (of 300 draws)  max_std/chain=['0.095', '0.0817']
+     move sigma_e      uniq/chain=[298, 297] (of 300 draws)  max_std/chain=['0.0357', '0.0369']
+  -- arm No SICM    compile=17.48s  trials=8.150;6.456  LAST=6.456s  MEDIAN=7.303s
+     n_eff[min,med,max] = [409.9, 433.0, 521.0]   Rhat[min,med,max] = [1.0035, 1.0058, 1.0068]
+     PLL[-1] per chain: ['-290.6725', '-289.9426']
+     move beta         uniq/chain=[600, 590] (of 300 draws)  max_std/chain=['0.127', '0.136']
+     move sigma_u      uniq/chain=[300, 295] (of 300 draws)  max_std/chain=['0.0833', '0.075']
+     move sigma_e      uniq/chain=[300, 295] (of 300 draws)  max_std/chain=['0.0362', '0.0361']
+  -- arm agreement (max |arm0 - arm1|):
+     beta           0.636863
+     sigma_u        0.362969
+     sigma_e        0.207475
+     __pll__        2.79583
+  GATE: pass (chains move, Rhat sane)
+==============================================================================
+RUN outputs/2026-08-25_02:59:44
+  model: hierarchical_mvn.HierarchicalMVN {'n': 60, 'K': 60, 'J': 2}
+  iterations=200 num_warmup=50 trials=2
+  -- arm SICM       compile=21.44s  trials=4.255;3.808  LAST=3.808s  MEDIAN=4.031s
+     n_eff[min,med,max] = [4.4, 28.9, 84.9]   Rhat[min,med,max] = [0.9986, 1.0612, 1.4499]
+     PLL[-1] per chain: ['-165.0596', '-168.8367']
+     move mu           uniq/chain=[9000, 9000] (of 150 draws)  max_std/chain=['1.54', '2.11']
+     move sigma_k      uniq/chain=[9000, 9000] (of 150 draws)  max_std/chain=['0.704', '0.801']
+     move sigma_obs    uniq/chain=[150, 150] (of 150 draws)  max_std/chain=['0.18', '0.182']
+     move eta          uniq/chain=[18000, 18000] (of 150 draws)  max_std/chain=['1.2', '1.26']
+  -- arm No SICM    compile=20.85s  trials=17.828;17.529  LAST=17.529s  MEDIAN=17.679s
+     n_eff[min,med,max] = [3.9, 25.7, 122.6]   Rhat[min,med,max] = [0.9972, 1.0704, 1.5108]
+     PLL[-1] per chain: ['-158.4872', '-172.4595']
+     move mu           uniq/chain=[9000, 9000] (of 150 draws)  max_std/chain=['1.61', '2.23']
+     move sigma_k      uniq/chain=[9000, 9000] (of 150 draws)  max_std/chain=['0.764', '0.788']
+     move sigma_obs    uniq/chain=[150, 150] (of 150 draws)  max_std/chain=['0.178', '0.157']
+     move eta          uniq/chain=[18000, 18000] (of 150 draws)  max_std/chain=['1.15', '1.17']
+  -- arm agreement (max |arm0 - arm1|):
+     mu             3.91473
+     sigma_k        3.36141
+     sigma_obs      0.634174
+     eta            3.12363
+     __pll__        8.67283
+  GATE: pass (chains move, Rhat sane)
+wrote ablation/sicm_roster/logs/postcheck_batch4.json

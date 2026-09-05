@@ -1,0 +1,20 @@
+######## car_spatial_scotland n=56
+  arm nosicm   tensor<56x56xf64> multiply/divide by depth: {0: 4, 3: 6}
+            log of an n-vector by depth:  {0: 2, 3: 4}
+  arm sicm     tensor<56x56xf64> multiply/divide by depth: {0: 3, 3: 4}
+            log of an n-vector by depth:  {0: 2, 3: 4}
+######## car_spatial_nyc n=250
+  arm nosicm   tensor<250x250xf64> multiply/divide by depth: {0: 4, 3: 6}
+            log of an n-vector by depth:  {0: 2, 3: 4}
+  arm sicm     tensor<250x250xf64> multiply/divide by depth: {0: 3, 3: 4}
+            log of an n-vector by depth:  {0: 2, 3: 4}
+######## hierarchical_mvn n=60
+  arm nosicm   tensor<60x60xf64> multiply/divide by depth: {0: 7, 3: 10}
+            log of an n-vector by depth:  {0: 2}
+  arm sicm     tensor<60x60xf64> multiply/divide by depth: {0: 2, 3: 2}
+            log of an n-vector by depth:  {0: 2}
+######## lmm_radon n=250
+  arm nosicm   tensor<250x250xf64> multiply/divide by depth: {0: 7, 3: 10}
+            log of an n-vector by depth:  {0: 1, 3: 2}
+  arm sicm     tensor<250x250xf64> multiply/divide by depth: none
+            log of an n-vector by depth:  {0: 1, 3: 2}

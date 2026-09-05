@@ -25,7 +25,7 @@ class MCMC(SubprocessMCMC):
     ) -> List[str]:
         cmd = [
             "julia",
-            "-t", os.environ.get("JULIA_NUM_THREADS", "32"),
+            "-t", os.environ.get("JULIA_NUM_THREADS", "auto"),
             f"--project={BENCHMARK_DIR}",
             os.path.join(BENCHMARK_DIR, "harness.jl"),
             "--model", self.impl.julia_model_path,
@@ -56,6 +56,8 @@ class MCMC(SubprocessMCMC):
             cmd.append("--no-opt")
         if kwargs.get("post_sicm", False):
             cmd.append("--post-sicm")
+        if kwargs.get("disable_licm", False):
+            cmd.append("--disable-licm")
         return cmd
 
     def _extract_data(self, samples):
@@ -89,7 +91,7 @@ class SVI(SubprocessMCMC):
     ) -> List[str]:
         cmd = [
             "julia",
-            "-t", os.environ.get("JULIA_NUM_THREADS", "32"),
+            "-t", os.environ.get("JULIA_NUM_THREADS", "auto"),
             f"--project={BENCHMARK_DIR}",
             os.path.join(BENCHMARK_DIR, "harness.jl"),
             "--model", self.impl.julia_model_path,

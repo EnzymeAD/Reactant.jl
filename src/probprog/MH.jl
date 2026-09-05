@@ -48,7 +48,9 @@ function mh(
         push!(regenerate_attr, MLIR.IR.Attribute(address_attr))
     end
 
-    trace_type = MLIR.IR.TensorType([1, pos_size], MLIR.IR.Type(Float64))
+    # Input width, not pos_size: the trace may carry a score tail.
+    width = size(original_trace, 2)
+    trace_type = MLIR.IR.TensorType([1, width], MLIR.IR.Type(Float64))
     weight_type = MLIR.IR.TensorType(Int64[], MLIR.IR.Type(Float64))
     accepted_type = MLIR.IR.TensorType(Int64[], MLIR.IR.Type(Bool))
     log_densities_type = MLIR.IR.TensorType(Int64[], MLIR.IR.Type(Float64))
@@ -119,7 +121,7 @@ function mh(
             true,
         )
 
-        new_trace = TracedRArray{Float64,2}((), MLIR.IR.result(infer_op, 1), (1, pos_size))
+        new_trace = TracedRArray{Float64,2}((), MLIR.IR.result(infer_op, 1), (1, width))
         accepted = TracedRArray{Bool,0}((), MLIR.IR.result(infer_op, 2), ())
         new_weight = TracedRArray{Float64,0}((), MLIR.IR.result(infer_op, 5), ())
 
@@ -154,7 +156,7 @@ function mh(
         true,
     )
 
-    new_trace = TracedRArray{Float64,2}((), MLIR.IR.result(mh_op, 1), (1, pos_size))
+    new_trace = TracedRArray{Float64,2}((), MLIR.IR.result(mh_op, 1), (1, width))
     new_weight = TracedRArray{Float64,0}((), MLIR.IR.result(mh_op, 2), ())
     accepted = TracedRArray{Bool,0}((), MLIR.IR.result(mh_op, 3), ())
 

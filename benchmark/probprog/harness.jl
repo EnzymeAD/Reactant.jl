@@ -12,7 +12,7 @@
 
 ENV["JULIA_DEBUG"] = "Reactant,Reactant_jll"
 
-using Reactant, Random, Statistics, LinearAlgebra, JSON3, Printf
+using Reactant, Random, Statistics, LinearAlgebra, JSON3, Printf, Dates
 using Reactant: ProbProg, ReactantRNG, ConcreteRNumber, ConcreteRArray
 
 Reactant.Compiler.DEBUG_PROBPROG_DUMP_VALUE[] = get(ENV, "PPLBENCH_DUMP_DA", "") == "1"
@@ -61,6 +61,45 @@ function nuts_program(
         adapt_step_size, adapt_mass_matrix,
     )
     return t, diagnostics
+end
+
+# Frozen-adapted-state protocol (2026-08-25), ADDITIVE: identical to
+# `nuts_program` except that it also returns the post-run `MCMCState`'s adapted
+# step size and inverse mass matrix, which is what a warmup run has to hand back
+# so both measured arms can later be started from the same adapted state with
+# adaptation off. `ProbProg.mcmc` already returns that state as its 5th value;
+# nothing in the sampler or the compiler changes. Used only by `--save-state`;
+# the measured path still goes through `nuts_program` untouched.
+function nuts_state_program(
+    rng, model, model_args, step_size, max_tree_depth,
+    num_warmup, num_samples, constraint_tensor, constrained_addresses,
+    selection, adapt_step_size, adapt_mass_matrix, inverse_mass_matrix,
+)
+    t, _, _ = ProbProg.generate(
+        rng, constraint_tensor, model, model_args...; constrained_addresses
+    )
+    t, diagnostics, _, _, state = ProbProg.mcmc(
+        rng, t, model, model_args...;
+        selection, algorithm=:NUTS, inverse_mass_matrix,
+        step_size, max_tree_depth, num_warmup, num_samples,
+        adapt_step_size, adapt_mass_matrix,
+    )
+    return t, diagnostics, state.step_size, state.inverse_mass_matrix
+end
+
+# Convert `extract_samples` output (per-address draws) into the flat
+# `init_params` shape that every model's `build_constraint` already consumes,
+# taking the LAST draw. Reusing that path means the injected position travels
+# the same route pplbench's per-trial init_params already travel, in constrained
+# space, so no unconstrained/constrained conversion is introduced here.
+function last_draw_init_params(samples::AbstractDict)
+    out = Dict{String,Any}()
+    for (k, v) in samples
+        isempty(v) && continue
+        last = v[end]
+        out[k] = last isa AbstractVector ? collect(Float64, last) : Float64[last]
+    end
+    return out
 end
 
 function flatten_constraint(constraint::ProbProg.Constraint)
@@ -481,6 +520,11 @@ function main()
     disable_region = false
     no_opt = false
     post_sicm = false
+    disable_licm = false
+    # Frozen-adapted-state protocol (additive; both default off = old behaviour).
+    save_state_path = ""
+    load_state_path = ""
+    repeat_runs = 1
     dump_passes = false
     profile_breakdown = false
     server_mode = false
@@ -541,6 +585,17 @@ function main()
             disable_region = true
         elseif arg == "--no-opt"
             no_opt = true
+        elseif arg == "--repeat"
+            i += 1; repeat_runs = parse(Int, ARGS[i])
+        elseif arg == "--save-state"
+            i += 1; save_state_path = ARGS[i]
+        elseif arg == "--load-state"
+            i += 1; load_state_path = ARGS[i]
+        elseif arg == "--disable-licm"
+            # Strip the `*_licm` pattern subset from the standard passes
+            # (CompileOptions.disable_licm_optimization_passes). Combined with
+            # --no-opt this is the "no pre-lowering optimization" ladder arm.
+            disable_licm = true
         elseif arg == "--post-sicm"
             post_sicm = true
         elseif arg == "--dump-passes"
@@ -581,6 +636,16 @@ function main()
         Reactant.MLIR.IR.DUMP_MLIR_DIR[] = dump_passes_dir
         println("SICM pass dumps enabled → $dump_passes_dir")
     end
+    if get(ENV, "PPLBENCH_DUMP_MLIR_ALWAYS", "") == "1"
+        # Dump every compiled module (pre/post optimization), independent of
+        # the SICM-pass dumper, which only fires on the region pipeline. Used
+        # for IR evidence on flat-path (--no-opt) arms.
+        always_dir = joinpath(get(ENV, "PPLBENCH_OUTPUT_DIR", "outputs"), "mlir_dumps")
+        mkpath(always_dir)
+        Reactant.MLIR.IR.DUMP_MLIR_DIR[] = always_dir
+        Reactant.MLIR.IR.DUMP_MLIR_ALWAYS[] = true
+        println("MLIR dumps (always) → $always_dir")
+    end
 
     if device == "cuda"
         Reactant.set_default_backend("gpu")
@@ -610,8 +675,44 @@ function main()
     println("  step_size=$step_size, max_tree_depth=$max_tree_depth")
     println("  adapt_step_size=$adapt_step_size, adapt_mass_matrix=$adapt_mass_matrix")
 
-    # Build initial constraint
-    constraint = build_constraint( data, get(data, "init_params", nothing))
+    # Build initial constraint. Under `--load-state` the initial position comes
+    # from the saved post-warmup draw instead of the caller's init_params, and
+    # the adapted step size / inverse mass replace the CLI values with
+    # adaptation forced off, so both arms start from one shared adapted state.
+    init_override = get(data, "init_params", nothing)
+    loaded_inverse_mass = nothing
+    if !isempty(load_state_path)
+        st = JSON3.read(read(load_state_path, String))
+        init_override = st["post_warmup_init_params"]
+        step_size = Float64(st["adapted_step_size"])
+        imm = st["adapted_inverse_mass"]
+        rank_saved = haskey(st, "inverse_mass_rank") ? Int(st["inverse_mass_rank"]) :
+                     (length(imm) > 0 && imm[1] isa AbstractVector ? 2 : 1)
+        loaded_inverse_mass = if rank_saved == 2
+            n_r = length(imm)
+            imm[1] isa AbstractVector ||
+                error("--load-state: inverse_mass_rank=2 but the saved matrix is " *
+                      "flat (length $(length(imm))). Re-save with a harness that " *
+                      "writes nested rows; a flat array would be silently read " *
+                      "as a diagonal-mass vector.")
+            [Float64(imm[r][c]) for r in 1:n_r, c in 1:length(imm[1])]
+        else
+            collect(Float64, imm)
+        end
+        # Hard shape gate: a mis-shaped inverse mass corrupts every measurement
+        # downstream and does so silently, so fail loudly here instead.
+        let P = spec.position_size, sz = size(loaded_inverse_mass)
+            (rank_saved == 2 ? sz == (P, P) : sz == (P,)) || error(
+                "--load-state: inverse mass $(sz) does not match position_size $P")
+        end
+        adapt_step_size = false
+        adapt_mass_matrix = false
+        num_warmup = 0
+        println("Loaded adapted state from $load_state_path")
+        println("  adapted step_size = $step_size, inverse mass ",
+                size(loaded_inverse_mass), ", adaptation forced OFF")
+    end
+    constraint = build_constraint(data, init_override)
     constraint_tensor, constrained_addresses = flatten_constraint(constraint)
 
     # RNG
@@ -622,21 +723,98 @@ function main()
     # diagonal-mass path); otherwise default to a dense identity.
     step_size_rnum = ConcreteRNumber(step_size)
     inverse_mass_matrix = Reactant.to_rarray(
+        loaded_inverse_mass !== nothing ? loaded_inverse_mass :
         hasproperty(spec, :inverse_mass_matrix) ? spec.inverse_mass_matrix :
         Matrix{Float64}(I, spec.position_size, spec.position_size),
     )
 
+    # `--save-state`: run the warmup once with adaptation ON and write the
+    # adapted state (step size, inverse mass, post-warmup draw) to JSON, then
+    # exit. Uses `nuts_state_program`, which differs from the measured path only
+    # in also returning the state; the measured path below is untouched.
+    if !isempty(save_state_path)
+        println("Saving adapted state after $num_warmup warmup iterations ...")
+        compiled_state_fn, tt_s = ProbProg.with_trace() do
+            @compile sync = true optimize = :probprog nuts_state_program(
+                rng, spec.model_fn, spec.model_args, step_size_rnum,
+                max_tree_depth, num_warmup, 1,
+                constraint_tensor, constrained_addresses, spec.selection,
+                true, true, inverse_mass_matrix,
+            )
+        end
+        trace_tensor_s, _, ss_out, imm_out = compiled_state_fn(
+            rng, spec.model_fn, spec.model_args, step_size_rnum,
+            max_tree_depth, num_warmup, 1,
+            constraint_tensor, constrained_addresses, spec.selection,
+            true, true, inverse_mass_matrix,
+        )
+        sel_s = ProbProg.filter_entries_by_selection(tt_s.entries, spec.selection)
+        trace_s = ProbProg.unflatten_trace(
+            Array(trace_tensor_s), 0.0, sel_s, nothing
+        )
+        samples_s = extract_samples(trace_s)
+        adapted_ss = Float64(Array(ss_out)[])
+        adapted_imm = Array(imm_out)
+        state_out = Dict{String,Any}(
+            "protocol" => "frozen-adapted-state: warm up once with adaptation ON, " *
+                          "then both arms measure adaptation-OFF from this shared state",
+            "model" => MODEL_PATH,
+            "created" => string(Dates.now()),
+            "num_warmup" => num_warmup,
+            "warmup_seed" => seed,
+            "initial_step_size" => step_size,
+            "max_tree_depth" => max_tree_depth,
+            "adapted_step_size" => adapted_ss,
+            # Serialize a 2D inverse mass as nested ROWS. JSON3 flattens a Julia
+            # Matrix to a column-major vector, which a reader would then take for
+            # a diagonal-mass vector: a silent, measurement-corrupting shape bug.
+            # Nested rows round-trip the rank explicitly.
+            "adapted_inverse_mass" => (
+                ndims(adapted_imm) == 2 ?
+                [collect(Float64, adapted_imm[r, :]) for r in 1:size(adapted_imm, 1)] :
+                collect(Float64, adapted_imm)
+            ),
+            "inverse_mass_rank" => ndims(adapted_imm),
+            "inverse_mass_shape" => collect(size(adapted_imm)),
+            "position_size" => spec.position_size,
+            "post_warmup_init_params" => last_draw_init_params(samples_s),
+        )
+        open(save_state_path, "w") do io
+            JSON3.write(io, state_out)
+        end
+        println("  adapted step_size = $adapted_ss (from $step_size), " *
+                "inverse mass $(size(adapted_imm))")
+        println("  wrote $save_state_path")
+        return
+    end
+
     # Compile
     opt_pipeline = :probprog
+    # NOTE: when `compile_options` is given, @compile ignores its other
+    # kwargs (incl. `sync`), so sync must live inside CompileOptions.
+    licm_off_opts = Reactant.CompileOptions(;
+        optimization_passes=opt_pipeline,
+        disable_licm_optimization_passes=true,
+        sync=true,
+    )
     print("Compiling... ")
     compile_time = @elapsed begin
         compiled_fn, tt = ProbProg.with_trace() do
-            @compile sync = true optimize = opt_pipeline nuts_program(
-                rng, spec.model_fn, spec.model_args, step_size_rnum,
-                max_tree_depth, num_warmup, num_samples,
-                constraint_tensor, constrained_addresses, spec.selection,
-                adapt_step_size, adapt_mass_matrix, inverse_mass_matrix,
-            )
+            if disable_licm
+                @compile compile_options = licm_off_opts nuts_program(
+                    rng, spec.model_fn, spec.model_args, step_size_rnum,
+                    max_tree_depth, num_warmup, num_samples,
+                    constraint_tensor, constrained_addresses, spec.selection,
+                    adapt_step_size, adapt_mass_matrix, inverse_mass_matrix,
+                )
+            else
+                @compile sync = true optimize = opt_pipeline nuts_program(
+                    rng, spec.model_fn, spec.model_args, step_size_rnum,
+                    max_tree_depth, num_warmup, num_samples,
+                    constraint_tensor, constrained_addresses, spec.selection,
+                    adapt_step_size, adapt_mass_matrix, inverse_mass_matrix,
+                )
+            end
         end
     end
     println("$(round(compile_time * 1000, digits=2)) ms")
@@ -717,6 +895,26 @@ function main()
 
     output["compile_time"] = compile_time
     output["run_time"] = run_time
+
+    # `--repeat N`: additional timed executions of the SAME compiled thunk in
+    # this process. The first execution above pays first-call warm-up, which on
+    # short cells dominates and dilutes an arm ratio; pplbench avoids that by
+    # discarding trial 0 in its server, and the pre-lowering harnesses by taking
+    # medians of repeated runs. `repeat_times_s` therefore excludes the first
+    # call and is the steady-state series to summarize.
+    if repeat_runs > 1 && !multichain
+        rts = Float64[]
+        for _ in 2:repeat_runs
+            t = @elapsed begin
+                tt_r, _ = run_compiled(rng, constraint_tensor)
+                Array(tt_r)
+            end
+            push!(rts, t)
+        end
+        output["repeat_times_s"] = rts
+        println("  repeats (steady state, s): ",
+                join([string(round(t; digits=5)) for t in rts], ", "))
+    end
 
     open(output_path, "w") do f
         JSON3.write(f, output)

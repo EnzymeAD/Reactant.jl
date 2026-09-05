@@ -1,0 +1,18 @@
+== sar_columbus_sicm.mlir
+   potrf                        size=49         depth=0  x1
+   potrf                        size=49         depth=3  x2
+   potrf                        size=5          depth=0  x1
+   potrf                        size=5          depth=1  x1
+   trsm                         size=49         depth=0  x2
+   trsm                         size=49         depth=3  x4
+   trsm                         size=5          depth=0  x1
+   trsm                         size=5          depth=1  x1
+== sar_columbus_nosicm.mlir
+   potrf                        size=49         depth=0  x1
+   potrf                        size=49         depth=3  x2
+   potrf                        size=5          depth=0  x1
+   potrf                        size=5          depth=1  x1
+   trsm                         size=49         depth=0  x2
+   trsm                         size=49         depth=3  x4
+   trsm                         size=5          depth=0  x1
+   trsm                         size=5          depth=1  x1

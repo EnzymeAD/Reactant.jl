@@ -27,7 +27,10 @@
           "matched_init": true
         }
       },
-      "legend": { "name": "NumPyro", "color": "blue" },
+      "legend": {
+        "name": "NumPyro",
+        "color": "blue"
+      },
       "trials": 4
     },
     {
@@ -41,7 +44,10 @@
           "adapt_mass_matrix": true
         }
       },
-      "legend": { "name": "Impulse", "color": "red" },
+      "legend": {
+        "name": "Impulse",
+        "color": "red"
+      },
       "trials": 4
     },
     {
@@ -53,10 +59,14 @@
           "max_tree_depth": 10,
           "adapt_step_size": true,
           "adapt_mass_matrix": true,
-          "matched_init": true
+          "matched_init": true,
+          "adtype": "reversediff"
         }
       },
-      "legend": { "name": "Turing.jl", "color": "purple" },
+      "legend": {
+        "name": "Turing.jl",
+        "color": "purple"
+      },
       "trials": 4
     },
     {
@@ -71,10 +81,16 @@
           "matched_init": true
         }
       },
-      "legend": { "name": "Stan", "color": "green" },
+      "legend": {
+        "name": "Stan",
+        "color": "green"
+      },
       "trials": 4
     }
   ],
   "save_samples": true,
-  "figures": { "generate_pll": true, "suffix": "png" }
+  "figures": {
+    "generate_pll": true,
+    "suffix": "png"
+  }
 }

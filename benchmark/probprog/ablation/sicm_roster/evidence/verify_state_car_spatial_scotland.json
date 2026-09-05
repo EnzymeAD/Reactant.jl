@@ -1,0 +1,25 @@
+{
+  "model": "car_spatial_scotland",
+  "num_samples": 20,
+  "adapted_step_size": 0.4088858323737176,
+  "inverse_mass_shape": [
+    58,
+    58
+  ],
+  "offdiag_max": 0.526800067394039,
+  "reinjection_max_diff": 0.0,
+  "controls": {
+    "identity_mass": 8.444243001436035,
+    "diagonal_only_mass": 8.444243001436035,
+    "offdiag_scaled": 5.721774955781532,
+    "half_step": 5.356819687173008
+  },
+  "arms_max_diff": 1.5283330156989905e-11,
+  "arms_rel_diff": 2.352671461230141e-12,
+  "arms_ok": true,
+  "arm_times": {
+    "sicm": 0.595085943,
+    "nosicm": 0.91868706
+  },
+  "pass": true
+}
