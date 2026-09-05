@@ -1168,6 +1168,35 @@ end
     @test simulation.stop_iteration == 3
 end
 
+mutable struct PlainFieldCache{U,C,B}
+    u::U
+    count::C
+    done::B
+end
+
+function plain_field_assigned(u, threshold)
+    c = PlainFieldCache(u, 0, ReactantCore.promote_to_traced(false))
+    @trace if sum(u) > threshold
+        c.count = 1
+        c.done = true
+    end
+    return c.count, c.done
+end
+
+function plain_field_untouched(u, threshold)
+    c = PlainFieldCache(u, 0, ReactantCore.promote_to_traced(false))
+    @trace if sum(u) > threshold
+        c.done = true
+    end
+    return c.count, c.done
+end
+
+@testset "if: assignment to an untraced struct field" begin
+    u = Reactant.to_rarray(Float32[1, 1])
+    @test_throws "untraced location" @jit plain_field_assigned(u, 1.0f0)
+    @test @jit(plain_field_untouched(u, 1.0f0)) == (0, true)
+end
+
 function ternary_max(x, y)
     @trace result = x > y ? x : y
     return result

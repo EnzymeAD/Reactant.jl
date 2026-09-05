@@ -120,6 +120,55 @@ In our simple example, the condition is passed directly as an argument but
 the same mechanism is applied to conditions which are computed from within
 a function from traced arguments, leading to a traced condition.
 
+### Enum state
+
+Values created by `@enum` or EnumX's `@enumx` can pass through traced control flow.
+A runtime-dependent enum result is a [`Reactant.TracedEnum`](@ref), which supports
+comparisons with the original enum and conversion back to it after execution.
+
+```@example control_flow_tutorial
+@enum SolverStatus Initial Success
+
+function choose_status(x)
+    status = Initial
+    @trace if sum(x) > 0
+        status = Success
+    end
+    return status
+end
+
+status = @jit choose_status(Reactant.to_rarray(Float32[1]))
+@assert status == Success
+@assert SolverStatus(status) === Success
+```
+
+For mutable struct fields, parameterize the field type and make its initial value
+traced before entering the branch. This requirement also applies to numeric fields.
+Assigning a different value to an untraced field inside `@trace if` raises an error.
+
+```@example control_flow_tutorial
+using ReactantCore: promote_to_traced
+
+mutable struct SolverState{S}
+    status::S
+end
+
+function update_status(x)
+    state = SolverState(promote_to_traced(Initial))
+    @trace if sum(x) > 0
+        state.status = Success
+    end
+    return state.status
+end
+
+@assert @jit(update_status(Reactant.to_rarray(Float32[1]))) == Success
+@assert @jit(update_status(Reactant.to_rarray(Float32[-1]))) == Initial
+```
+
+For enum state carried by `@trace while`, also initialize it with
+`promote_to_traced`. To pass an enum as a runtime input, convert it with
+`Reactant.to_rarray(value; track_numbers=Number)` before compilation.
+
 ### Loops
 
 In addition to conditional evaluations, [`@trace`](@ref) also supports capturing
