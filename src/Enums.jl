@@ -5,7 +5,7 @@
 # is mutable with an untyped slot because the result write-back machinery replaces traced
 # payloads with concrete numbers via `setfield!`.
 
-const enum_basetype = Base.Enums.basetype
+enum_basetype(::Type{<:Base.Enum{T}}) where {T} = T
 
 """
     TracedEnum{E <: Base.Enum}

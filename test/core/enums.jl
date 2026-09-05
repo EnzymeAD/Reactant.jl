@@ -72,15 +72,21 @@ fresh() = Reactant.to_rarray(Float32[1, 1])   # sum == 2
         @test @jit(f_two_armed(fresh(), 1.0f0)) == Code.Success
         @test @jit(f_two_armed(fresh(), 3.0f0)) == Code.MaxIters
 
-        function f_one_armed(u, threshold)
-            code = Reactant.ReactantCore.promote_to_traced(Code.Default)
+        function f_one_armed(u, threshold, promote)
+            code = if promote
+                Reactant.ReactantCore.promote_to_traced(Code.Default)
+            else
+                Code.Default
+            end
             @trace if sum(u) > threshold
                 code = Code.Success
             end
             return code
         end
-        @test @jit(f_one_armed(fresh(), 1.0f0)) == Code.Success
-        @test @jit(f_one_armed(fresh(), 3.0f0)) == Code.Default
+        for promote in (false, true)
+            @test @jit(f_one_armed(fresh(), 1.0f0, promote)) == Code.Success
+            @test @jit(f_one_armed(fresh(), 3.0f0, promote)) == Code.Default
+        end
     end
 
     @testset "mutable struct field" begin
@@ -103,6 +109,21 @@ fresh() = Reactant.to_rarray(Float32[1, 1])   # sum == 2
         end
         @test @jit(f_field(fresh(), 1.0f0)) == (Code.Success, true)
         @test @jit(f_field(fresh(), 3.0f0)) == (Code.Default, false)
+
+        function f_update(c, threshold)
+            @trace if sum(c.u) > threshold
+                c.code = Code.Success
+                c.done = true
+            end
+            return c.code, c.done
+        end
+        for (threshold, expected) in ((1.0f0, Code.Success), (3.0f0, Code.Default))
+            c = Reactant.to_rarray(
+                EnumCache(Float32[1, 1], Code.Default, false); track_numbers=Number
+            )
+            @test @jit(f_update(c, threshold)) == (expected, expected == Code.Success)
+            @test c.code == expected
+        end
 
         # A plain enum in the field has nothing the branch result can be written into, the
         # same as a plain number; the assignment must error rather than be dropped.
