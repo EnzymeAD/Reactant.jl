@@ -16541,7 +16541,9 @@ function enzymeNUTSConfigAttrGet(
 end
 
 function enzymeMHConfigAttrGet(ctx)
-    @ccall mlir_c.enzymeMHConfigAttrGet(ctx::MlirContext)::MlirAttribute
+    @ccall Reactant_jll.libReactantExtra.enzymeMHConfigAttrGet(
+        ctx::MlirContext
+    )::MlirAttribute
 end
 
 function enzymeSymbolAttrGet(ctx, ptr)
@@ -16575,7 +16577,7 @@ function enzymeVIConfigAttrGet(
     rmspropEps,
     stableUpdate,
 )
-    @ccall mlir_c.enzymeVIConfigAttrGet(
+    @ccall Reactant_jll.libReactantExtra.enzymeVIConfigAttrGet(
         ctx::MlirContext,
         guideKind::Int32,
         optimizerKind::Int32,
