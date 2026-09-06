@@ -258,10 +258,10 @@ macro trace(args...)
     Meta.isexpr(expr, :if) && return esc(trace_if(expr; track_numbers))
 
     Meta.isexpr(expr, :for) &&
-        return (esc(trace_for(expr; track_numbers, checkpointing, mincut)))
+        return (esc(trace_for(__module__, expr; track_numbers, checkpointing, mincut)))
 
     Meta.isexpr(expr, :while) &&
-        return (esc(trace_while(expr; track_numbers, checkpointing, mincut)))
+        return (esc(trace_while(__module__, expr; track_numbers, checkpointing, mincut)))
 
     return error(
         "Only `if-elseif-else` blocks, function definitions, `function calls`, `for` and \
@@ -370,7 +370,7 @@ function _check_aliasing_unchanged(pre_ids::Tuple, post_ids::Tuple, varnames::Tu
     end
 end
 
-function trace_while(expr; track_numbers, mincut, checkpointing, first_arg=nothing)
+function trace_while(mod, expr; track_numbers, mincut, checkpointing, first_arg=nothing)
     Meta.isexpr(expr, :while, 2) || error("expected while expr")
     cond, body = expr.args
 
@@ -397,6 +397,20 @@ function trace_while(expr; track_numbers, mincut, checkpointing, first_arg=nothi
     union!(external_syms, cond_symbols.assignments)
     union!(external_syms, body_symbols.references)
     union!(external_syms, body_symbols.assignments)
+    # Locally defined callables (e.g. closures over traced values) that are
+    # called in the loop must become loop-carried arguments as well, so that
+    # traced values captured by them become while-loop operands instead of
+    # closure captures of the generated body function (which would result in
+    # region block arguments without matching operands). Only plain names that
+    # don't resolve to globals of the calling module can refer to local
+    # callables:
+    for symbols_state in (cond_symbols, body_symbols)
+        for fn in symbols_state.funccalls
+            if length(fn.parts) == 1 && !isdefined(mod, only(fn.parts))
+                union!(external_syms, fn.parts)
+            end
+        end
+    end
     filter!(∉(SPECIAL_SYMBOLS), external_syms)
 
     all_syms = Expr(:tuple, external_syms...)
@@ -487,7 +501,7 @@ function trace_while(expr; track_numbers, mincut, checkpointing, first_arg=nothi
     end
 end
 
-function trace_for(expr; track_numbers, checkpointing, mincut)
+function trace_for(mod, expr; track_numbers, checkpointing, mincut)
     Meta.isexpr(expr, :for, 2) || error("expected for expr")
     assign, body = expr.args
 
@@ -577,6 +591,7 @@ function trace_for(expr; track_numbers, checkpointing, mincut)
         $num_iters += one($num_iters)
 
         $(trace_while(
+            mod,
             Expr(
                 :while,
                 quote
