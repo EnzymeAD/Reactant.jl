@@ -966,6 +966,12 @@ function overloaded_map!(f, y::AnyTracedRArray, x::AbstractArray, xs::AbstractAr
     return y
 end
 
+# Fallback for untraced destinations (e.g. a plain `Vector` holding traced
+# arrays), which the `Base.map!` overlay also routes here.
+function overloaded_map!(f, y::AbstractArray, x::AbstractArray, xs::AbstractArray...)
+    return Base.map!(Reactant.CallWithReactant(f), y, x, xs...)
+end
+
 function Base.mapslices(f::F, A::AnyTracedRArray; dims) where {F}
     return mapslices(f, materialize_traced_array(A); dims)
 end
