@@ -29,20 +29,23 @@ const MPI_COMM_MAP = Dict(
     MPI.COMM_SELF => MLIR.API.ENZYMEXLA_COMM_MPI_COMM_SELF,
 )
 
-@noinline function constant(comm::MPI.Comm; location=mlir_stacktrace("comm.mpi.constant", @__FILE__, @__LINE__))
+@noinline function constant(
+    comm::MPI.Comm; location=mlir_stacktrace("comm.mpi.constant", @__FILE__, @__LINE__)
+)
     if comm != MPI.COMM_WORLD || comm != MPI.COMM_SELF || comm != MPI.COMM_NULL
         throw(ArgumentError("Only MPI communicator constants are supported currently"))
     end
     type_result = mlir_type(TracedCommunicator)
     value = MLIR.API.enzymexlaCommMpiCommAttrGet(IR.current_context(), MPI_COMM_MAP[comm])
-    op = comm.mpi_constant(comm; result = type_result, location)
+    op = comm.mpi_constant(comm; result=type_result, location)
     return TracedCommunicator((), IR.result(op))
 end
 
-@noinline function comm_rank(comm::TracedCommunicator;
-    location=mlir_stacktrace("comm.mpi.comm_rank", @__FILE__, @__LINE__)
+@noinline function comm_rank(
+    comm::TracedCommunicator;
+    location=mlir_stacktrace("comm.mpi.comm_rank", @__FILE__, @__LINE__),
 )
-    op = comm.mpi_comm_rank(get_mlir_data(comm); rank = type_rank, location)
+    op = comm.mpi_comm_rank(get_mlir_data(comm); rank=type_rank, location)
     return TracedRNumber{Int32}((), IR.result(op))
 end
 
@@ -50,7 +53,7 @@ end
     location=mlir_stacktrace("comm.mpi.comm_size", @__FILE__, @__LINE__)
 )
     type_size = mlir_type(TracedRArray{Int32,0}, ())
-    op = comm.mpi_comm_size(; size = type_size, location)
+    op = comm.mpi_comm_size(; size=type_size, location)
     return TracedRNumber{Int32}((), IR.result(op))
 end
 
@@ -58,14 +61,23 @@ end
     comm::TracedCommunicator,
     color::TracedRNumber,
     key::TracedRNumber;
-    location=mlir_stacktrace("comm.mpi.comm_split", @__FILE__, @__LINE__)
+    location=mlir_stacktrace("comm.mpi.comm_split", @__FILE__, @__LINE__),
 )
     type_newcomm = mlir_type(TracedCommunicator)
-    op = comm.mpi_comm_split(get_mlir_data(comm), get_mlir_data(color), get_mlir_data(key); newcomm = type_newcomm, location)
+    op = comm.mpi_comm_split(
+        get_mlir_data(comm),
+        get_mlir_data(color),
+        get_mlir_data(key);
+        newcomm=type_newcomm,
+        location,
+    )
     return TracedCommunicator((), IR.result(op))
 end
 
-@noinline function barrier(comm::TracedCommunicator; location=mlir_stacktrace("comm.mpi.barrier", @__FILE__, @__LINE__))
+@noinline function barrier(
+    comm::TracedCommunicator;
+    location=mlir_stacktrace("comm.mpi.barrier", @__FILE__, @__LINE__),
+)
     comm.mpi_barrier(get_mlir_data(comm); location)
     return nothing
 end
@@ -77,7 +89,13 @@ end
     comm::TracedCommunicator;
     location=mlir_stacktrace("comm.mpi.send", @__FILE__, @__LINE__),
 )
-    comm.mpi_send(get_mlir_data(buf), get_mlir_data(dest), get_mlir_data(tag), get_mlir_data(comm); location)
+    comm.mpi_send(
+        get_mlir_data(buf),
+        get_mlir_data(dest),
+        get_mlir_data(tag),
+        get_mlir_data(comm);
+        location,
+    )
     return nothing
 end
 
@@ -89,7 +107,14 @@ end
     location=mlir_stacktrace("comm.mpi.isend", @__FILE__, @__LINE__),
 )
     type_result = mlir_type(TracedRequest)
-    op = comm.mpi_send(get_mlir_data(buf), get_mlir_data(dest), get_mlir_data(tag), get_mlir_data(comm); request = type_result, location)
+    op = comm.mpi_send(
+        get_mlir_data(buf),
+        get_mlir_data(dest),
+        get_mlir_data(tag),
+        get_mlir_data(comm);
+        request=type_result,
+        location,
+    )
     return TracedRequest((), IR.result(op))
 end
 
@@ -100,7 +125,14 @@ end
     comm::TracedCommunicator;
     location=mlir_stacktrace("comm.mpi.recv", @__FILE__, @__LINE__),
 )
-    op = comm.mpi_recv(get_mlir_data(buf), get_mlir_data(src), get_mlir_data(tag), get_mlir_data(comm); outbuf = mlir_type(buf), location)
+    op = comm.mpi_recv(
+        get_mlir_data(buf),
+        get_mlir_data(src),
+        get_mlir_data(tag),
+        get_mlir_data(comm);
+        outbuf=mlir_type(buf),
+        location,
+    )
     set_mlir_data!(buf, IR.result(op))
     return buf
 end
@@ -112,7 +144,15 @@ end
     comm::TracedCommunicator;
     location=mlir_stacktrace("comm.mpi.irecv", @__FILE__, @__LINE__),
 )
-    op = comm.mpi_irecv(get_mlir_data(buf), get_mlir_data(src), get_mlir_data(tag), get_mlir_data(comm); outbuf = mlir_type(buf), request = mlir_type(TracedRequest), location)
+    op = comm.mpi_irecv(
+        get_mlir_data(buf),
+        get_mlir_data(src),
+        get_mlir_data(tag),
+        get_mlir_data(comm);
+        outbuf=mlir_type(buf),
+        request=mlir_type(TracedRequest),
+        location,
+    )
     set_mlir_data!(buf, IR.result(op, 1))
 
     return TracedRequest((), IR.result(op, 2))
@@ -126,7 +166,8 @@ end
 end
 
 @noinline function waitall(
-    requests::Vector{TracedRequest}; location=mlir_stacktrace("comm.mpi.waitall", @__FILE__, @__LINE__)
+    requests::Vector{TracedRequest};
+    location=mlir_stacktrace("comm.mpi.waitall", @__FILE__, @__LINE__),
 )
     comm.mpi_waitall(get_mlir_data.(requests); location)
     return nothing
@@ -143,7 +184,13 @@ end
     mapped_mpi_op = MPI_OP_MAP[mpi_op]
     mpi_op_attr = MLIR.API.enzymexlaCommMpiOpAttrGet(IR.current_context(), mapped_mpi_op)
     type_recvbuf = mlir_type(recvbuff)
-    op = comm.mpi_allreduce(get_mlir_data(sendbuff), get_mlir_data(comm); recvbuf = type_recvbuf, reduceOp = mpi_op_attr, location)
+    op = comm.mpi_allreduce(
+        get_mlir_data(sendbuff),
+        get_mlir_data(comm);
+        recvbuf=type_recvbuf,
+        reduceOp=mpi_op_attr,
+        location,
+    )
     set_mlir_data!(recvbuff, IR.result(op))
     return recvbuff
 end
@@ -155,7 +202,13 @@ end
     comm::TracedCommunicator;
     location=mlir_stacktrace("comm.mpi.bcast", @__FILE__, @__LINE__),
 )
-    op = comm.mpi_bcast(get_mlir_data(buf), get_mlir_data(root), get_mlir_data(comm); outbuf = mlir_type(buf), location)
+    op = comm.mpi_bcast(
+        get_mlir_data(buf),
+        get_mlir_data(root),
+        get_mlir_data(comm);
+        outbuf=mlir_type(buf),
+        location,
+    )
     set_mlir_data!(buf, IR.result(op))
     return buf
 end
