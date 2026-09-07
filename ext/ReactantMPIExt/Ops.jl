@@ -115,8 +115,7 @@ end
     op = comm.mpi_irecv(get_mlir_data(buf), get_mlir_data(src), get_mlir_data(tag), get_mlir_data(comm); outbuf = mlir_type(buf), request = mlir_type(TracedRequest), location)
     set_mlir_data!(buf, IR.result(op, 1))
 
-    # return only request?
-    return buf, TracedRequest((), IR.result(op, 2))
+    return TracedRequest((), IR.result(op, 2))
 end
 
 @noinline function wait(
@@ -135,9 +134,9 @@ end
 
 # TODO inplace and outplace versions?
 @noinline function allreduce(
-    mpi_op::MPI.Op,
     sendbuff::TracedRArray,
     recvbuff::TracedRArray,
+    mpi_op::MPI.Op,
     comm::TracedCommunicator;
     location=mlir_stacktrace("comm.mpi.allreduce", @__FILE__, @__LINE__),
 )
