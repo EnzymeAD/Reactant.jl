@@ -3,28 +3,6 @@ using Reactant: MLIR, Sharding
 using Reactant.TracedUtils: get_mlir_data, set_mlir_data!, get_paths, set_paths!
 using MPI
 
-const MPI_OP_MAP = Dict(
-    MPI.OP_NULL => MLIR.API.ENZYMEXLA_COMM_MPI_OP_NULL,
-    MPI.BAND => MLIR.API.ENZYMEXLA_COMM_MPI_BAND,
-    MPI.BOR => MLIR.API.ENZYMEXLA_COMM_MPI_BOR,
-    MPI.BXOR => MLIR.API.ENZYMEXLA_COMM_MPI_BXOR,
-    MPI.LAND => MLIR.API.ENZYMEXLA_COMM_MPI_LAND,
-    MPI.LOR => MLIR.API.ENZYMEXLA_COMM_MPI_LOR,
-    MPI.LXOR => MLIR.API.ENZYMEXLA_COMM_MPI_LXOR,
-    MPI.MAX => MLIR.API.ENZYMEXLA_COMM_MPI_MAX,
-    MPI.MIN => MLIR.API.ENZYMEXLA_COMM_MPI_MIN,
-    MPI.PROD => MLIR.API.ENZYMEXLA_COMM_MPI_PROD,
-    MPI.REPLACE => MLIR.API.ENZYMEXLA_COMM_MPI_REPLACE,
-    MPI.SUM => MLIR.API.ENZYMEXLA_COMM_MPI_SUM,
-    MPI.NO_OP => MLIR.API.ENZYMEXLA_COMM_MPI_NO_OP,
-)
-
-const MPI_COMM_MAP = Dict(
-    MPI.COMM_NULL => MLIR.API.ENZYMEXLA_COMM_MPI_COMM_NULL,
-    MPI.COMM_WORLD => MLIR.API.ENZYMEXLA_COMM_MPI_COMM_WORLD,
-    MPI.COMM_SELF => MLIR.API.ENZYMEXLA_COMM_MPI_COMM_SELF,
-)
-
 for (name, supertype, julia_type) in [(:Communicator, Any, MPI.Comm), (:Request, MPI.AbstractRequest, MPI.Request)]
     traced_type = Symbol("Traced", name)
     concrete_type = Symbol("Concrete", name)

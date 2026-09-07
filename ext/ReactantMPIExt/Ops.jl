@@ -7,8 +7,34 @@ using Reactant.MLIR.Dialects: comm
 using Reactant.Ops: mlir_stacktrace, mlir_type
 using MPI: MPI
 
+const MPI_OP_MAP = Dict(
+    MPI.OP_NULL => MLIR.API.ENZYMEXLA_COMM_MPI_OP_NULL,
+    MPI.BAND => MLIR.API.ENZYMEXLA_COMM_MPI_BAND,
+    MPI.BOR => MLIR.API.ENZYMEXLA_COMM_MPI_BOR,
+    MPI.BXOR => MLIR.API.ENZYMEXLA_COMM_MPI_BXOR,
+    MPI.LAND => MLIR.API.ENZYMEXLA_COMM_MPI_LAND,
+    MPI.LOR => MLIR.API.ENZYMEXLA_COMM_MPI_LOR,
+    MPI.LXOR => MLIR.API.ENZYMEXLA_COMM_MPI_LXOR,
+    MPI.MAX => MLIR.API.ENZYMEXLA_COMM_MPI_MAX,
+    MPI.MIN => MLIR.API.ENZYMEXLA_COMM_MPI_MIN,
+    MPI.PROD => MLIR.API.ENZYMEXLA_COMM_MPI_PROD,
+    MPI.REPLACE => MLIR.API.ENZYMEXLA_COMM_MPI_REPLACE,
+    MPI.SUM => MLIR.API.ENZYMEXLA_COMM_MPI_SUM,
+    MPI.NO_OP => MLIR.API.ENZYMEXLA_COMM_MPI_NO_OP,
+)
+
+const MPI_COMM_MAP = Dict(
+    MPI.COMM_NULL => MLIR.API.ENZYMEXLA_COMM_MPI_COMM_NULL,
+    MPI.COMM_WORLD => MLIR.API.ENZYMEXLA_COMM_MPI_COMM_WORLD,
+    MPI.COMM_SELF => MLIR.API.ENZYMEXLA_COMM_MPI_COMM_SELF,
+)
+
 @noinline function constant(comm::MPI.Comm; location=mlir_stacktrace("comm.mpi.constant", @__FILE__, @__LINE__))
+    if comm != MPI.COMM_WORLD || comm != MPI.COMM_SELF || comm != MPI.COMM_NULL
+        throw(ArgumentError("Only MPI communicator constants are supported currently"))
+    end
     type_result = mlir_type(TracedCommunicator)
+    value = MLIR.API.enzymexlaCommMpiCommAttrGet(IR.current_context(), MPI_COMM_MAP[comm])
     op = comm.mpi_constant(comm; result = type_result, location)
     return TracedCommunicator((), IR.result(op))
 end
