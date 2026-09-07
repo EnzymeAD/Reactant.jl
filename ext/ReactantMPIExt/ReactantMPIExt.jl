@@ -37,6 +37,8 @@ function Distributed.get_local_process_id(::Distributed.MPIEnvDetector)
 end
 
 function __init__()
+    mpi_handle = MPI.API.libmpi_handle
+
     # register MPI routines
     #! explicit-imports: off
     for name in [
@@ -44,37 +46,22 @@ function __init__()
         :MPI_Finalize,
         :MPI_Comm_rank,
         :MPI_Comm_size,
+        :MPI_Comm_split,
         :MPI_Send,
-        :MPI_Recv,
         :MPI_Isend,
+        :MPI_Recv,
         :MPI_Irecv,
         :MPI_Barrier,
         :MPI_Wait,
+        :MPI_Waitall,
         :MPI_Request_free,
+        :MPI_Allreduce,
+        :MPI_Bcast,
+        :MPI_Error_string,
     ]
-        MLIR.API.EnzymeJaXMapSymbol(name, Libdl.dlsym(MPI.API.libmpi_handle, name))
+        MLIR.API.EnzymeJaXMapSymbol(name, Libdl.dlsym(mpi_handle, name))
     end
     #! explicit-imports: on
-
-    mpi_handle = MPI.API.libmpi_handle
-    status_size = sizeof(MPI.API.MPI_Status)
-    @ccall Reactant_jll.libReactantExtra.enzymexla_ffi_set_mpi_comm_rank(Libdl.dlsym(mpi_handle, :MPI_Comm_rank)::Ptr{Cvoid})::Cvoid
-    @ccall Reactant_jll.libReactantExtra.enzymexla_ffi_set_mpi_comm_size(Libdl.dlsym(mpi_handle, :MPI_Comm_size)::Ptr{Cvoid})::Cvoid
-    @ccall Reactant_jll.libReactantExtra.enzymexla_ffi_set_mpi_comm_split(Libdl.dlsym(mpi_handle, :MPI_Comm_split)::Ptr{Cvoid})::Cvoid
-    @ccall Reactant_jll.libReactantExtra.enzymexla_ffi_set_mpi_barrier(Libdl.dlsym(mpi_handle, :MPI_Barrier)::Ptr{Cvoid})::Cvoid
-    @ccall Reactant_jll.libReactantExtra.enzymexla_ffi_set_mpi_send(Libdl.dlsym(mpi_handle, :MPI_Send)::Ptr{Cvoid})::Cvoid
-    @ccall Reactant_jll.libReactantExtra.enzymexla_ffi_set_mpi_isend(Libdl.dlsym(mpi_handle, :MPI_Isend)::Ptr{Cvoid})::Cvoid
-    @ccall Reactant_jll.libReactantExtra.enzymexla_ffi_set_mpi_recv(Libdl.dlsym(mpi_handle, :MPI_Recv)::Ptr{Cvoid})::Cvoid
-    @ccall Reactant_jll.libReactantExtra.enzymexla_ffi_set_mpi_irecv(Libdl.dlsym(mpi_handle, :MPI_Irecv)::Ptr{Cvoid})::Cvoid
-    @ccall Reactant_jll.libReactantExtra.enzymexla_ffi_set_mpi_wait(Libdl.dlsym(mpi_handle, :MPI_Wait)::Ptr{Cvoid})::Cvoid
-    @ccall Reactant_jll.libReactantExtra.enzymexla_ffi_set_mpi_waitall(Libdl.dlsym(mpi_handle, :MPI_Waitall)::Ptr{Cvoid})::Cvoid
-    @ccall Reactant_jll.libReactantExtra.enzymexla_ffi_set_mpi_allreduce(Libdl.dlsym(mpi_handle, :MPI_Allreduce)::Ptr{Cvoid})::Cvoid
-    @ccall Reactant_jll.libReactantExtra.enzymexla_ffi_set_mpi_bcast(Libdl.dlsym(mpi_handle, :MPI_Bcast)::Ptr{Cvoid})::Cvoid
-    @ccall Reactant_jll.libReactantExtra.enzymexla_ffi_set_mpi_bcast(Libdl.dlsym(mpi_handle, :MPI_Error_string)::Ptr{Cvoid})::Cvoid
-    @ccall Reactant_jll.libReactantExtra.enzymexla_ffi_set_mpi_status_size(status_size::Cint)::Cvoid
-    @ccall Reactant_jll.libReactantExtra.enzymexla_ffi_set_mpi_success(MPI.API.MPI_SUCCESS[]::Cint)::Cvoid
-    @ccall Reactant_jll.libReactantExtra.enzymexla_ffi_set_mpi_max_error_string(MPI.API.MPI_MAX_ERROR_STRING::Cint)::Cvoid
-
 
     # register MPI constants
     # NOTE these symbols are not ABI-stable until MPI 5.0, but in practice, they are represented as word-size values (i.e. `int` or ptr)
@@ -83,6 +70,7 @@ function __init__()
         :MPI_COMM_WORLD,
         :MPI_COMM_SELF,
         :MPI_COMM_NULL,
+        # communicator types
         :MPI_COMM_TYPE_SHARED,
         # datatypes
         :MPI_DATATYPE_NULL,
@@ -148,93 +136,22 @@ function __init__()
         # status
         :MPI_STATUS_IGNORE,
         :MPI_STATUSES_IGNORE,
+        :MPI_STATUS_SIZE,
         # error
         :MPI_SUCCESS,
-        :MPI_ERR_BUFFER,
-        :MPI_ERR_COUNT,
-        :MPI_ERR_TYPE,
-        :MPI_ERR_TAG,
-        :MPI_ERR_COMM,
-        :MPI_ERR_RANK,
-        :MPI_ERR_REQUEST,
-        :MPI_ERR_ROOT,
-        :MPI_ERR_GROUP,
-        :MPI_ERR_OP,
-        :MPI_ERR_TOPOLOGY,
-        :MPI_ERR_DIMS,
-        :MPI_ERR_ARG,
-        :MPI_ERR_UNKNOWN,
-        :MPI_ERR_TRUNCATE,
-        :MPI_ERR_OTHER,
-        :MPI_ERR_INTERN,
-        :MPI_ERR_IN_STATUS,
-        :MPI_ERR_PENDING,
-        :MPI_ERR_ACCESS,
-        :MPI_ERR_AMODE,
-        :MPI_ERR_ASSERT,
-        :MPI_ERR_BAD_FILE,
-        :MPI_ERR_BASE,
-        :MPI_ERR_CONVERSION,
-        :MPI_ERR_DISP,
-        :MPI_ERR_DUP_DATAREP,
-        :MPI_ERR_FILE_EXISTS,
-        :MPI_ERR_FILE_IN_USE,
-        :MPI_ERR_FILE,
-        :MPI_ERR_INFO_KEY,
-        :MPI_ERR_INFO_NOKEY,
-        :MPI_ERR_INFO_VALUE,
-        :MPI_ERR_INFO,
-        :MPI_ERR_IO,
-        :MPI_ERR_KEYVAL,
-        :MPI_ERR_LOCKTYPE,
-        :MPI_ERR_NAME,
-        :MPI_ERR_NO_MEM,
-        :MPI_ERR_NOT_SAME,
-        :MPI_ERR_NO_SPACE,
-        :MPI_ERR_NO_SUCH_FILE,
-        :MPI_ERR_PORT,
-        :MPI_ERR_QUOTA,
-        :MPI_ERR_READ_ONLY,
-        :MPI_ERR_RMA_CONFLICT,
-        :MPI_ERR_RMA_SYNC,
-        :MPI_ERR_SERVICE,
-        :MPI_ERR_SIZE,
-        :MPI_ERR_SPAWN,
-        :MPI_ERR_UNSUPPORTED_DATAREP,
-        :MPI_ERR_UNSUPPORTED_OPERATION,
-        :MPI_ERR_WIN,
-        # :MPI_T_ERR_MEMORY,
-        # :MPI_T_ERR_NOT_INITIALIZED,
-        # :MPI_T_ERR_CANNOT_INIT,
-        # :MPI_T_ERR_INVALID_INDEX,
-        # :MPI_T_ERR_INVALID_ITEM,
-        # :MPI_T_ERR_INVALID_HANDLE,
-        # :MPI_T_ERR_OUT_OF_HANDLES,
-        # :MPI_T_ERR_OUT_OF_SESSIONS,
-        # :MPI_T_ERR_INVALID_SESSION,
-        # :MPI_T_ERR_CVAR_SET_NOT_NOW,
-        # :MPI_T_ERR_CVAR_SET_NEVER,
-        # :MPI_T_ERR_PVAR_NO_STARTSTOP,
-        # :MPI_T_ERR_PVAR_NO_WRITE,
-        # :MPI_T_ERR_PVAR_NO_ATOMIC,
-        :MPI_ERR_RMA_RANGE,
-        :MPI_ERR_RMA_ATTACH,
-        :MPI_ERR_RMA_FLAVOR,
-        :MPI_ERR_RMA_SHARED,
-        # :MPI_T_ERR_INVALID,
-        # :MPI_T_ERR_INVALID_NAME,
-        # :MPI_ERR_PROC_ABORTED,
-        # :MPI_ERR_PROC_FAILED,
-        # :MPI_ERR_PROC_FAILED_PENDING,
-        # :MPI_ERR_REVOKED,
+        # other
+        :MPI_MAX_ERROR_STRING,
     ]
         !isdefined(MPI.API, name) && continue
         value = getproperty(MPI.API, name)
         if value isa Base.RefValue
             value = value[]
         end
-        MLIR.API.EnzymeJaXMapSymbol(name, convert(Int, value))
+        MLIR.API.EnzymeJaXMapSymbol(name, convert(Int64, value))
     end
+
+    # register MPI_STATUS_SIZE constant (which is not directly present in MPI.jl)
+    MLIR.API.EnzymeJaXMapSymbol(:MPI_STATUS_SIZE, convert(Int64, status_size))
 end
 
 # # NOTE: We currently do not allow a Request to cross the compile boundary. The commented
