@@ -158,11 +158,4 @@ function __init__()
     MLIR.API.EnzymeJaXMapSymbol(:MPI_STATUS_SIZE, convert(Int64, status_size))
 end
 
-# # NOTE: We currently do not allow a Request to cross the compile boundary. The commented
-# out code below is the beginning of what would be required to implement that
-# mutable struct TracedRequest <: MPI.AbstractRequest
-#     paths::Tuple
-#     mlir_data::Union{Nothing,Reactant.MLIR.IR.Value}
-
-
 end # module
