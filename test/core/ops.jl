@@ -1303,7 +1303,8 @@ end
         y_ra = @jit fn(x_ra)
         @test y_ra isa ConcreteRArray{Float32,2}
         @test Array(y_ra) == ones(Float32, 2, 3)
-        @test Base.return_types(() -> fill(zero(Reactant.TracedRNumber{Float32}), 2, 3)) |> first == Reactant.TracedRArray{Float32, 2}
+        @test Base.return_types(() -> fill(zero(Reactant.TracedRNumber{Float32}), 2, 3)) |>
+              first == Reactant.TracedRArray{Float32,2}
     end
 end
 
