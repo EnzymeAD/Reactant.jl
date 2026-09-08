@@ -8,26 +8,42 @@ using Reactant.Ops: mlir_stacktrace, mlir_type
 using MPI: MPI
 
 const MPI_OP_MAP = Dict(
-    MPI.OP_NULL => MLIR.API.ENZYMEXLA_COMM_MPI_OP_NULL,
-    MPI.BAND => MLIR.API.ENZYMEXLA_COMM_MPI_BAND,
-    MPI.BOR => MLIR.API.ENZYMEXLA_COMM_MPI_BOR,
-    MPI.BXOR => MLIR.API.ENZYMEXLA_COMM_MPI_BXOR,
-    MPI.LAND => MLIR.API.ENZYMEXLA_COMM_MPI_LAND,
-    MPI.LOR => MLIR.API.ENZYMEXLA_COMM_MPI_LOR,
-    MPI.LXOR => MLIR.API.ENZYMEXLA_COMM_MPI_LXOR,
-    MPI.MAX => MLIR.API.ENZYMEXLA_COMM_MPI_MAX,
-    MPI.MIN => MLIR.API.ENZYMEXLA_COMM_MPI_MIN,
-    MPI.PROD => MLIR.API.ENZYMEXLA_COMM_MPI_PROD,
-    MPI.REPLACE => MLIR.API.ENZYMEXLA_COMM_MPI_REPLACE,
-    MPI.SUM => MLIR.API.ENZYMEXLA_COMM_MPI_SUM,
-    MPI.NO_OP => MLIR.API.ENZYMEXLA_COMM_MPI_NO_OP,
+    MPI.OP_NULL.val => MLIR.API.ENZYMEXLA_COMM_MPI_OP_NULL,
+    MPI.BAND.val => MLIR.API.ENZYMEXLA_COMM_MPI_BAND,
+    MPI.BOR.val => MLIR.API.ENZYMEXLA_COMM_MPI_BOR,
+    MPI.BXOR.val => MLIR.API.ENZYMEXLA_COMM_MPI_BXOR,
+    MPI.LAND.val => MLIR.API.ENZYMEXLA_COMM_MPI_LAND,
+    MPI.LOR.val => MLIR.API.ENZYMEXLA_COMM_MPI_LOR,
+    MPI.LXOR.val => MLIR.API.ENZYMEXLA_COMM_MPI_LXOR,
+    MPI.MAX.val => MLIR.API.ENZYMEXLA_COMM_MPI_MAX,
+    MPI.MIN.val => MLIR.API.ENZYMEXLA_COMM_MPI_MIN,
+    MPI.PROD.val => MLIR.API.ENZYMEXLA_COMM_MPI_PROD,
+    MPI.REPLACE.val => MLIR.API.ENZYMEXLA_COMM_MPI_REPLACE,
+    MPI.SUM.val => MLIR.API.ENZYMEXLA_COMM_MPI_SUM,
+    MPI.NO_OP.val => MLIR.API.ENZYMEXLA_COMM_MPI_NO_OP,
 )
 
+function map_mpi_op(op::MPI.Op)
+    if haskey(MPI_OP_MAP, op.val)
+        return MPI_OP_MAP[op.val]
+    else
+        throw(ArgumentError("Custom MPI operations are not supported currently"))
+    end
+end
+
 const MPI_COMM_MAP = Dict(
-    MPI.COMM_NULL => MLIR.API.ENZYMEXLA_COMM_MPI_COMM_NULL,
-    MPI.COMM_WORLD => MLIR.API.ENZYMEXLA_COMM_MPI_COMM_WORLD,
-    MPI.COMM_SELF => MLIR.API.ENZYMEXLA_COMM_MPI_COMM_SELF,
+    MPI.COMM_NULL.val => MLIR.API.ENZYMEXLA_COMM_MPI_COMM_NULL,
+    MPI.COMM_WORLD.val => MLIR.API.ENZYMEXLA_COMM_MPI_COMM_WORLD,
+    MPI.COMM_SELF.val => MLIR.API.ENZYMEXLA_COMM_MPI_COMM_SELF,
 )
+
+function map_mpi_comm(comm::MPI.Comm)
+    if haskey(MPI_COMM_MAP, comm.val)
+        return MPI_COMM_MAP[comm.val]
+    else
+        throw(ArgumentError("Custom MPI communicators are not supported currently"))
+    end
+end
 
 @noinline function constant(
     comm::MPI.Comm; location=mlir_stacktrace("comm.mpi.constant", @__FILE__, @__LINE__)
@@ -36,7 +52,7 @@ const MPI_COMM_MAP = Dict(
         throw(ArgumentError("Only MPI communicator constants are supported currently"))
     end
     type_result = mlir_type(TracedCommunicator)
-    value = MLIR.API.enzymexlaCommMpiCommAttrGet(IR.current_context(), MPI_COMM_MAP[comm])
+    value = MLIR.API.enzymexlaCommMpiCommAttrGet(IR.current_context(), map_mpi_comm(comm))
     op = comm.mpi_constant(comm; result=type_result, location)
     return TracedCommunicator((), IR.result(op))
 end
@@ -181,7 +197,7 @@ end
     comm::TracedCommunicator;
     location=mlir_stacktrace("comm.mpi.allreduce", @__FILE__, @__LINE__),
 )
-    mapped_mpi_op = MPI_OP_MAP[mpi_op]
+    mapped_mpi_op = map_mpi_op(mpi_op)
     mpi_op_attr = MLIR.API.enzymexlaCommMpiOpAttrGet(IR.current_context(), mapped_mpi_op)
     type_recvbuf = mlir_type(recvbuff)
     op = comm.mpi_allreduce(
