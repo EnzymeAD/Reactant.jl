@@ -1397,3 +1397,91 @@ end
     testr = @compile test.(b)
     @test testr(b) == test.(a)
 end
+
+function while_loop_calling_closure(d, B)
+    applyA = P -> d .* P
+    X = zero(B)
+    R = copy(B)
+    conv = one(eltype(B))
+    i = 0
+    @trace while (i < 10) & (conv > 1e-12)
+        AP = applyA(R)
+        X = X .+ AP
+        R = R .- AP .* 0.5
+        conv = maximum(sum(abs2, R; dims=1))
+        i += 1
+    end
+    return X
+end
+
+function for_loop_calling_closure(d, B)
+    applyA = P -> d .* P
+    X = zero(B)
+    R = copy(B)
+    @trace for i in 1:10
+        AP = applyA(R)
+        X = X .+ AP
+        R = R .- AP .* 0.5
+    end
+    return X
+end
+
+function while_loop_closure_in_condition(d, B)
+    norm2 = P -> sum(abs2, d .* P)
+    X = copy(B)
+    i = 0
+    @trace while (i < 20) & (norm2(X) > 1e-4)
+        X = X .* 0.5
+        i += 1
+    end
+    return X
+end
+
+@testset "traced loops calling closures that capture traced values" begin
+    d = Reactant.TestUtils.construct_test_array(Float64, 3) .+ 1
+    B = Reactant.TestUtils.construct_test_array(Float64, 3, 4)
+    rd = Reactant.to_rarray(d)
+    rB = Reactant.to_rarray(B)
+
+    while_compiled = @compile while_loop_calling_closure(rd, rB)
+    @test Array(while_compiled(rd, rB)) ≈ while_loop_calling_closure(d, B)
+
+    for_compiled = @compile for_loop_calling_closure(rd, rB)
+    @test Array(for_compiled(rd, rB)) ≈ for_loop_calling_closure(d, B)
+
+    cond_compiled = @compile while_loop_closure_in_condition(rd, rB)
+    @test Array(cond_compiled(rd, rB)) ≈ while_loop_closure_in_condition(d, B)
+end
+
+# mutation inside the condition would be discarded on every iteration
+_mutating_while_condition!(X, i) = (X .= X .* 0.5; i < 3)
+
+function while_loop_mutating_condition(B)
+    X = copy(B)
+    i = 0
+    @trace while _mutating_while_condition!(X, i)
+        i += 1
+    end
+    return X
+end
+
+function while_loop_readonly_reduction_condition(B)
+    X = copy(B)
+    i = 0
+    @trace while (i < 3) & (sum(X) > 0.0)
+        X = X .* 0.5
+        i += 1
+    end
+    return X
+end
+
+@testset "mutation inside traced while condition" begin
+    B = Reactant.TestUtils.construct_test_array(Float64, 3, 4) .+ 1
+    rB = Reactant.to_rarray(B)
+
+    @test_throws "condition of a traced while loop" @jit while_loop_mutating_condition(rB)
+
+    # reading (reductions/broadcasts) in the condition must not be rejected
+    @test Array(@jit while_loop_readonly_reduction_condition(rB)) ≈
+        while_loop_readonly_reduction_condition(B)
+end

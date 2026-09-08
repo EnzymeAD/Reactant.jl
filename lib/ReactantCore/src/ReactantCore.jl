@@ -370,7 +370,9 @@ function _check_aliasing_unchanged(pre_ids::Tuple, post_ids::Tuple, varnames::Tu
     end
 end
 
-function trace_while(expr; track_numbers, mincut, checkpointing, first_arg=nothing)
+function trace_while(
+    expr; track_numbers, mincut, checkpointing, first_arg=nothing, extra_carried=Symbol[]
+)
     Meta.isexpr(expr, :while, 2) || error("expected while expr")
     cond, body = expr.args
 
@@ -389,17 +391,28 @@ function trace_while(expr; track_numbers, mincut, checkpointing, first_arg=nothi
     cond_symbols = ExpressionExplorer.compute_symbols_state(cond)
     body_symbols = ExpressionExplorer.compute_symbols_state(body)
 
+    # Only variables *assigned* in the loop need the Ref writeback machinery to
+    # become loop-carried slots. Variables that are only read (including local
+    # closures and their captures) are captured by the generated closures, and
+    # `Ops.while_loop` traces `cond_fn`/`body_fn` themselves so that traced
+    # captures become while-loop operands.
     external_syms = Symbol[]
     if !isnothing(first_arg)
         push!(external_syms, first_arg)
     end
-    union!(external_syms, cond_symbols.references)
+    union!(external_syms, extra_carried)
     union!(external_syms, cond_symbols.assignments)
-    union!(external_syms, body_symbols.references)
     union!(external_syms, body_symbols.assignments)
     filter!(∉(SPECIAL_SYMBOLS), external_syms)
 
-    all_syms = Expr(:tuple, external_syms...)
+    # The gate deciding between traced and plain execution still scans
+    # references, so that loops whose only traced values are read-only are
+    # still traced.
+    gate_syms = copy(external_syms)
+    union!(gate_syms, cond_symbols.references)
+    union!(gate_syms, body_symbols.references)
+    filter!(∉(SPECIAL_SYMBOLS), gate_syms)
+
     args_names = Expr(:tuple, external_syms...)
 
     cond_val(s) = :(@isdefined($s) ? $s : nothing)
@@ -479,7 +492,7 @@ function trace_while(expr; track_numbers, mincut, checkpointing, first_arg=nothi
 
     return quote
         if $(within_compile)() &&
-            $(any)($(is_traced), $(Expr(:tuple, cond_val.(all_syms.args)...)))
+            $(any)($(is_traced), $(Expr(:tuple, cond_val.(gate_syms)...)))
             $(reactant_code_block)
         else
             $(expr)
@@ -590,6 +603,10 @@ function trace_for(expr; track_numbers, checkpointing, mincut)
             );
             track_numbers,
             first_arg=counter,
+            # The synthesized bounds are read-only in the loop but assigned
+            # multiple times in the enclosing scope; carry them as explicit
+            # slots so the closures don't capture them as `Core.Box`es.
+            extra_carried=[num_iters, start_sym, step_sym],
             checkpointing=checkpointing_sym,
             mincut,
         ))
