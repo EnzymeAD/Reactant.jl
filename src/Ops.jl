@@ -317,7 +317,7 @@ function fill(
 end
 
 function fill(
-    v::TracedRNumber{T}, dims::Tuple{},
+    v::TracedRNumber{T}, dims::Tuple{};
     location=mlir_stacktrace("fill", @__FILE__, @__LINE__),
 ) where {T}
     return fill(v, collect(Int64, dims); location)::TracedRArray{T,0}
