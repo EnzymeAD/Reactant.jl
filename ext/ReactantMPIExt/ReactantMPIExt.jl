@@ -155,7 +155,7 @@ function __init__()
     end
 
     # register MPI_STATUS_SIZE constant (which is not directly present in MPI.jl)
-    MLIR.API.EnzymeJaXMapSymbol(:MPI_STATUS_SIZE, convert(Int64, status_size))
+    return MLIR.API.EnzymeJaXMapSymbol(:MPI_STATUS_SIZE, convert(Int64, status_size))
 end
 
 end # module
