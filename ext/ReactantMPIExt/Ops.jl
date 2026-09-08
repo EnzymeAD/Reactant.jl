@@ -65,8 +65,9 @@ end
     return TracedRNumber{Int32}((), IR.result(op))
 end
 
-@noinline function comm_size(comm::TracedCommunicator;
-    location=mlir_stacktrace("comm.mpi.comm_size", @__FILE__, @__LINE__)
+@noinline function comm_size(
+    comm::TracedCommunicator;
+    location=mlir_stacktrace("comm.mpi.comm_size", @__FILE__, @__LINE__),
 )
     type_size = mlir_type(TracedRArray{Int32,0}, ())
     op = comm.mpi_comm_size(comm; size=type_size, location)
