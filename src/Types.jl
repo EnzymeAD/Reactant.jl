@@ -670,8 +670,14 @@ Base.@deprecate_binding TracedRNG ReactantRNG
 
     ConcretePJRTArray(data::Array; kwargs...)
 
+    ConcreteRArray{T}(data::AbstractArray; kwargs...)
+
+    ConcreteRArray{T,N}(data::AbstractArray; kwargs...)
+
 Allocate an uninitialized `ConcreteRArray` of element type `T` and size
-`shape` or convert an `Array` to a `ConcreteRArray`.
+`shape` or convert an `AbstractArray` to a `ConcreteRArray`. In the parametric
+forms the data is converted to element type `T` (and must have `N` dimensions
+when `N` is given), mirroring `Array{T,N}(data)`.
 
 # Implementation
 
@@ -738,6 +744,14 @@ for aType in (:ConcretePJRTArray, :ConcreteIFRTArray)
             ::UndefInitializer, shape::Vararg{Integer,N}; kwargs...
         ) where {T,N}
             return $(aType){T,N}(undef, Dims(shape); kwargs...)
+        end
+
+        function $(aType){T}(data::AbstractArray; kwargs...) where {T}
+            return $(aType){T,ndims(data)}(data; kwargs...)
+        end
+
+        function $(aType){T,N}(data::AbstractArray; kwargs...) where {T,N}
+            return $(aType)(convert(Array{T,N}, data); kwargs...)
         end
     end
 end
