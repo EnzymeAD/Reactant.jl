@@ -733,7 +733,7 @@ function trace_if(expr; store_last_line=nothing, depth=0, track_numbers)
                         $(MissingTracedValue)()
                     end) for v in all_vars]...)
             $(result_sym) = $(true_block)
-            return ($(result_sym), $(all_output_vars...),)
+            return ($(result_sym), $(all_output_vars...))
         end
     )
     true_branch_fn = cleanup_expr_to_avoid_boxing(
@@ -749,7 +749,7 @@ function trace_if(expr; store_last_line=nothing, depth=0, track_numbers)
                         $(MissingTracedValue)()
                     end) for v in all_vars]...)
             $(result_sym) = $(false_block)
-            return ($(result_sym), $(all_output_vars...),)
+            return ($(result_sym), $(all_output_vars...))
         end
     )
     false_branch_fn = cleanup_expr_to_avoid_boxing(
@@ -769,7 +769,7 @@ function trace_if(expr; store_last_line=nothing, depth=0, track_numbers)
     reactant_code_block = quote
         $(true_branch_fn)
         $(false_branch_fn)
-        ($(result_sym), $(all_output_vars...),) = $(traced_if)(
+        ($(result_sym), $(all_output_vars...)) = $(traced_if)(
             $(cond_name),
             $(true_branch_fn_name),
             $(false_branch_fn_name),
