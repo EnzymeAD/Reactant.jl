@@ -1,4 +1,4 @@
-import Base: +, -, fld, mod, div
+import Base: +, -, *, /, fld, mod, div
 import Dates:
     Period,
     yearmonthday,
@@ -157,20 +157,6 @@ end
 (+)(y::Period, x::ReactantDate) = x + y
 (+)(y::TimePeriod, x::ReactantTime) = x + y
 
-# CONCRETE TimeType ± TRACED period.
-#
-# The mirror of `ReactantDateTime ± Period` above: there the datetime is traced and the period may be
-# concrete; here the datetime is concrete and the period is traced. That combination arises whenever
-# a wall-clock epoch is advanced by a traced offset, e.g. `epoch + Millisecond(round(Int, 1000t))`
-# for a traced elapsed time `t`.
-#
-# Without these, Base's `+(::DateTime, ::Period)` builds a
-# `UTInstant{ReactantMillisecond{TracedRNumber}}` and then tries to pour it into a plain `DateTime`,
-# whose instant must hold a concrete `Int64`:
-#
-#     MethodError: no method matching Int64(::UTInstant{ReactantMillisecond{TracedRNumber{Int64}}})
-#
-# Promoting the datetime to its Reactant counterpart first is the only representable answer.
 const ReactantDatePeriod = Union{
     ReactantYear,ReactantQuarter,ReactantMonth,ReactantWeek,ReactantDay
 }
@@ -195,3 +181,27 @@ const ReactantPeriod = Union{ReactantDatePeriod,ReactantTimePeriod}
 (+)(x::Time, y::ReactantTimePeriod) = ReactantTime(x) + y
 (-)(x::Time, y::ReactantTimePeriod) = ReactantTime(x) - y
 (+)(y::ReactantTimePeriod, x::Time) = x + y
+
+for (S, T) in (
+    (:Year, :ReactantYear),
+    (:Quarter, :ReactantQuarter),
+    (:Month, :ReactantMonth),
+    (:Week, :ReactantWeek),
+    (:Day, :ReactantDay),
+    (:Hour, :ReactantHour),
+    (:Minute, :ReactantMinute),
+    (:Second, :ReactantSecond),
+    (:Millisecond, :ReactantMillisecond),
+    (:Microsecond, :ReactantMicrosecond),
+    (:Nanosecond, :ReactantNanosecond),
+)
+    @eval begin
+        (*)(x::Dates.$S, y::Reactant.RNumber) = $T(value(x) * y)
+        (/)(x::Dates.$S, y::Reactant.RNumber) = $T(value(x) / y)
+
+        (*)(x::$T, y::Reactant.RNumber) = $T(value(x) * y)
+        (/)(x::$T, y::Reactant.RNumber) = $T(value(x) / y)
+    end
+end
+
+(*)(y::Reactant.RNumber, x::Period) = x * y

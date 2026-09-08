@@ -40,6 +40,11 @@ function timestepping!(state::State)
     return nothing
 end
 
+# Helpers for the period-scaling testset (`@jit` needs a plain call expression)
+scale_period(a, b) = a * b
+divide_period(a, b) = a / b
+advance(dt, n) = dt + Dates.Millisecond(1000) * n
+
 @testset "ReactantDatesExt" begin
 
     # --- Conversions: Dates ↔ Reactant roundtrips ---
@@ -749,6 +754,56 @@ end
         for y in (1700, 1800, 1900, 2100, 2023)
             @test Dates.isleapyear(y) == false
         end
+    end
+
+    @testset "Period scaling by Reactant numbers" begin
+        # Base only defines `*(::Period, ::Real)` / `/(::Period, ::Real)`, and Reactant
+        # numbers are `Number`s but not `Real`s, so scaling a period used to hit a
+        # MethodError inside `@jit`.
+        for (DatesT, TracedT) in (
+            (Dates.Year, RDExt.ReactantYear),
+            (Dates.Quarter, RDExt.ReactantQuarter),
+            (Dates.Month, RDExt.ReactantMonth),
+            (Dates.Week, RDExt.ReactantWeek),
+            (Dates.Day, RDExt.ReactantDay),
+            (Dates.Hour, RDExt.ReactantHour),
+            (Dates.Minute, RDExt.ReactantMinute),
+            (Dates.Second, RDExt.ReactantSecond),
+            (Dates.Millisecond, RDExt.ReactantMillisecond),
+            (Dates.Microsecond, RDExt.ReactantMicrosecond),
+            (Dates.Nanosecond, RDExt.ReactantNanosecond),
+        )
+            n = Reactant.ConcreteRNumber(3)
+
+            # Dates period scaled by a traced number becomes the traced period type
+            r = @jit(scale_period(DatesT(4), n))
+            @test r isa TracedT
+            @test value(r) == 12
+            @test convert(DatesT, r) == DatesT(4) * 3
+
+            # commutativity
+            @test value(@jit(scale_period(n, DatesT(4)))) == 12
+
+            # the traced period type scales too
+            @test value(@jit(scale_period(TracedT(4), n))) == 12
+            @test value(@jit(scale_period(n, TracedT(4)))) == 12
+
+            # division
+            @test value(@jit(divide_period(DatesT(6), n))) == 2
+            @test value(@jit(divide_period(TracedT(6), n))) == 2
+        end
+
+        # a non-integral scaling factor is kept as-is instead of erroring like `Dates`
+        x = Reactant.ConcreteRNumber(1.5f0)
+        r = @jit(scale_period(Dates.Millisecond(1000), x))
+        @test r isa RDExt.ReactantMillisecond
+        @test value(r) == 1500.0f0
+
+        # scaled periods keep working in DateTime arithmetic
+        n = Reactant.ConcreteRNumber(4)
+        dt = Reactant.to_rarray(DateTime(2002, 1, 1); track_numbers=true)
+        @test DateTime(@jit(advance(dt, n))) ==
+            DateTime(2002, 1, 1) + Dates.Millisecond(1000) * 4
     end
 
     @testset "Minimal timestepper with Dates" begin
