@@ -16,7 +16,9 @@ const DEBUG_DISABLE_RESHARDING = Ref(false)
 const DEBUG_ALIASED_BUFFER_ASSIGNMENT_ERROR = Ref(false)
 const DEBUG_BUFFER_POINTERS_STORE_DICT = Base.IdDict()
 
-function check_aliased_buffer_assignment(@nospecialize(obj), field, val, path; buffer_field = :data)
+function check_aliased_buffer_assignment(
+    @nospecialize(obj), field, val, path; buffer_field=:data
+)
     if DEBUG_ALIASED_BUFFER_ASSIGNMENT_ERROR[] && field == buffer_field
         if val ∈ keys(DEBUG_BUFFER_POINTERS_STORE_DICT)
             if obj !== DEBUG_BUFFER_POINTERS_STORE_DICT[val]
