@@ -3,7 +3,8 @@ using Reactant: MLIR, Sharding
 using Reactant.TracedUtils: get_mlir_data, set_mlir_data!, get_paths, set_paths!
 using MPI
 
-for (name, supertype, julia_type) in [(:Communicator, Any, MPI.Comm), (:Request, MPI.AbstractRequest, MPI.Request)]
+for (name, supertype, julia_type) in
+    [(:Communicator, Any, MPI.Comm), (:Request, MPI.AbstractRequest, MPI.Request)]
     traced_type = Symbol("Traced", name)
     concrete_type = Symbol("Concrete", name)
 
@@ -12,12 +13,13 @@ for (name, supertype, julia_type) in [(:Communicator, Any, MPI.Comm), (:Request,
             data::NF
         end
 
-        $concrete_type(x::$julia_type) = $concrete_type(ConcreteRNumber{Int64}(Int64(x.val)))
+        $concrete_type(x::$julia_type) =
+            $concrete_type(ConcreteRNumber{Int64}(Int64(x.val)))
         $concrete_type{NF}(x::$julia_type) where {NF} = $concrete_type{NF}(NF(Int64(x.val)))
 
         mutable struct $traced_type <: $supertype
             paths::Tuple
-            mlir_data::Union{Nothing, Reactant.MLIR.IR.Value}
+            mlir_data::Union{Nothing,Reactant.MLIR.IR.Value}
         end
 
         function Base.show(io::IOty, X::$traced_type) where {IOty<:Union{IO,IOContext}}
@@ -25,12 +27,23 @@ for (name, supertype, julia_type) in [(:Communicator, Any, MPI.Comm), (:Request,
         end
 
         Reactant.TracedUtils.get_mlir_data(x::$traced_type) = x.mlir_data
-        Reactant.TracedUtils.set_mlir_data!(x::$traced_type, data) = (x.mlir_data = data; return x)
+        Reactant.TracedUtils.set_mlir_data!(x::$traced_type, data) = (
+            x.mlir_data = data; return x
+        )
 
         Reactant.TracedUtils.get_paths(x::$traced_type) = x.paths
-        Reactant.TracedUtils.set_paths!(x::$traced_type, paths) = (x.paths = paths; return x)
+        Reactant.TracedUtils.set_paths!(x::$traced_type, paths) = (
+            x.paths = paths; return x
+        )
 
-        function Reactant.traced_type_inner(T::Type{$julia_type}, seen, mode::Reactant.TraceMode, @nospecialize(track_numbers::Type), @nospecialize(ndevices), @nospecialize(runtime))
+        function Reactant.traced_type_inner(
+            T::Type{$julia_type},
+            seen,
+            mode::Reactant.TraceMode,
+            @nospecialize(track_numbers::Type),
+            @nospecialize(ndevices),
+            @nospecialize(runtime)
+        )
             if mode == Reactant.ArrayToConcrete
                 return $concrete_type
             else
@@ -38,7 +51,14 @@ for (name, supertype, julia_type) in [(:Communicator, Any, MPI.Comm), (:Request,
             end
         end
 
-        function Reactant.traced_type_inner(T::Type{$concrete_type}, seen, mode::Reactant.TraceMode, @nospecialize(track_numbers::Type), @nospecialize(ndevices), @nospecialize(runtime))
+        function Reactant.traced_type_inner(
+            T::Type{$concrete_type},
+            seen,
+            mode::Reactant.TraceMode,
+            @nospecialize(track_numbers::Type),
+            @nospecialize(ndevices),
+            @nospecialize(runtime)
+        )
             if mode == Reactant.ConcreteToTraced
                 return $traced_type
             else
@@ -46,7 +66,14 @@ for (name, supertype, julia_type) in [(:Communicator, Any, MPI.Comm), (:Request,
             end
         end
 
-        function Reactant.traced_type_inner(T::Type{$traced_type}, seen, mode::Reactant.TraceMode, @nospecialize(track_numbers::Type), @nospecialize(ndevices), @nospecialize(runtime))
+        function Reactant.traced_type_inner(
+            T::Type{$traced_type},
+            seen,
+            mode::Reactant.TraceMode,
+            @nospecialize(track_numbers::Type),
+            @nospecialize(ndevices),
+            @nospecialize(runtime)
+        )
             if mode == Reactant.TracedToConcrete
                 return $concrete_type
             else
@@ -54,7 +81,17 @@ for (name, supertype, julia_type) in [(:Communicator, Any, MPI.Comm), (:Request,
             end
         end
 
-        function Reactant.make_tracer(seen, @nospecialize(prev::$julia_type), @nospecialize(path), mode; @nospecialize(sharding = Sharding.NoSharding()), @nospecialize(runtime = nothing), @nospecialize(device = nothing), @nospecialize(client = nothing), kwargs...)
+        function Reactant.make_tracer(
+            seen,
+            @nospecialize(prev::$julia_type),
+            @nospecialize(path),
+            mode;
+            @nospecialize(sharding = Sharding.NoSharding()),
+            @nospecialize(runtime = nothing),
+            @nospecialize(device = nothing),
+            @nospecialize(client = nothing),
+            kwargs...,
+        )
             if Sharding.is_sharded(sharding)
                 error("Simultaneous use of sharding and MPI is not supported")
             end
@@ -76,7 +113,17 @@ for (name, supertype, julia_type) in [(:Communicator, Any, MPI.Comm), (:Request,
             end
         end
 
-        function Reactant.make_tracer(seen, @nospecialize(prev::$concrete_type), @nospecialize(path), mode; @nospecialize(sharding = Sharding.NoSharding()), @nospecialize(runtime = nothing), @nospecialize(device = nothing), @nospecialize(client = nothing), kwargs...)
+        function Reactant.make_tracer(
+            seen,
+            @nospecialize(prev::$concrete_type),
+            @nospecialize(path),
+            mode;
+            @nospecialize(sharding = Sharding.NoSharding()),
+            @nospecialize(runtime = nothing),
+            @nospecialize(device = nothing),
+            @nospecialize(client = nothing),
+            kwargs...,
+        )
             if Sharding.is_sharded(sharding)
                 error("Simultaneous use of sharding and MPI is not supported")
             end
@@ -102,7 +149,15 @@ for (name, supertype, julia_type) in [(:Communicator, Any, MPI.Comm), (:Request,
         end
 
         # TODO(#2242) for this to work properly in finalize_mlir_fn(), need to add TracedRequest to TracedTypes, currently const
-        function Reactant.make_tracer(seen, @nospecialize(prev::$traced_type), @nospecialize(path), mode; @nospecialize(sharding = Sharding.NoSharding()), @nospecialize(runtime = nothing), kwargs...)
+        function Reactant.make_tracer(
+            seen,
+            @nospecialize(prev::$traced_type),
+            @nospecialize(path),
+            mode;
+            @nospecialize(sharding = Sharding.NoSharding()),
+            @nospecialize(runtime = nothing),
+            kwargs...,
+        )
             if Sharding.is_sharded(sharding)
                 error("Simultaneous use of sharding and MPI is not supported")
             end
@@ -135,7 +190,11 @@ for (name, supertype, julia_type) in [(:Communicator, Any, MPI.Comm), (:Request,
                         error("Attempting to use sharding and MPI simultaneously")
                     end
 
-                    res = $concrete_type(ConcretePJRTNumber{Int64,1}((Reactant.PJRT.AsyncEmptyBuffer,), Sharding.NoShardInfo()))
+                    res = $concrete_type(
+                        ConcretePJRTNumber{Int64,1}(
+                            (Reactant.PJRT.AsyncEmptyBuffer,), Sharding.NoShardInfo()
+                        ),
+                    )
                     seen[prev] = res
                     return res
 
@@ -145,7 +204,11 @@ for (name, supertype, julia_type) in [(:Communicator, Any, MPI.Comm), (:Request,
                         error("Attempting to use sharding and MPI simultaneously")
                     end
 
-                    res = $concrete_type(ConcreteIFRTNumber{Int64,1}((Reactant.IFRT.AsyncEmptyBuffer,), Sharding.NoShardInfo()))
+                    res = $concrete_type(
+                        ConcreteIFRTNumber{Int64,1}(
+                            (Reactant.IFRT.AsyncEmptyBuffer,), Sharding.NoShardInfo()
+                        ),
+                    )
                     seen[prev] = res
                     return res
 
@@ -188,14 +251,19 @@ for (name, supertype, julia_type) in [(:Communicator, Any, MPI.Comm), (:Request,
             delete!(result_stores, path)
 
             result = :($T(ConcretePJRTNumber{Int64}($restore)))
-            push!(resultgen_code, quote
-                $sym = $result
-            end)
+            push!(
+                resultgen_code,
+                quote
+                    $sym = $result
+                end,
+            )
 
             return result_cache[tocopy] = sym
         end
 
-        function Reactant.Compiler.traced_setfield!(@nospecialize(obj::$concrete_type), field, val, path)
+        function Reactant.Compiler.traced_setfield!(
+            @nospecialize(obj::$concrete_type), field, val, path
+        )
             Reactant.Compiler.check_aliased_buffer_assignment(obj, field, val, path)
             return Base.setproperty!(obj, field, val, path)
         end
@@ -223,5 +291,9 @@ for (name, supertype, julia_type) in [(:Communicator, Any, MPI.Comm), (:Request,
     end
 end
 
-Reactant.Ops.mlir_type(x::TracedCommunicator) = MLIR.IR.Type(MLIR.API.enzymexlaCommMpiCommTypeGet(IR.current_context()))
-Reactant.Ops.mlir_type(x::TracedRequest) = MLIR.IR.Type(MLIR.API.enzymexlaCommMpiRequestTypeGet(IR.current_context()))
+function Reactant.Ops.mlir_type(x::TracedCommunicator)
+    return MLIR.IR.Type(MLIR.API.enzymexlaCommMpiCommTypeGet(IR.current_context()))
+end
+function Reactant.Ops.mlir_type(x::TracedRequest)
+    return MLIR.IR.Type(MLIR.API.enzymexlaCommMpiRequestTypeGet(IR.current_context()))
+end
