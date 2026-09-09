@@ -472,3 +472,36 @@ mapped_sub(xs...) = stack(map(-, xs...))
         end
     end
 end
+
+# https://github.com/EnzymeAD/Reactant.jl/issues/3261
+@testset "Reductions are inferrable inside a trace" begin
+    reactant_return_type(TT) =
+        Core.Compiler._return_type(Reactant.ReactantInterpreter(), TT)
+
+    @testset for T in (Float32, Float64)
+        AT = Reactant.TracedRArray{T,1}
+
+        @testset for f in (sum, prod, maximum, minimum)
+            @test reactant_return_type(Tuple{typeof(f),AT}) === Reactant.TracedRNumber{T}
+        end
+
+        @test reactant_return_type(Tuple{typeof(sum),typeof(abs),AT}) ===
+            Reactant.TracedRNumber{T}
+    end
+
+    sum_dims1(x) = sum(x; dims=1)
+    @test reactant_return_type(
+        Tuple{typeof(sum_dims1),Reactant.TracedRArray{Float32,2}}
+    ) === Reactant.TracedRArray{Float32,2}
+
+    # `DispatchDoctor.@stable` inserts a `Base.promote_op` call like this one into every
+    # function it wraps, and throws when the result is not concrete.
+    function checked_sum(v)
+        @assert isconcretetype(Base.promote_op(sum, typeof(v)))
+        return sum(v)
+    end
+
+    x = Reactant.TestUtils.construct_test_array(Float32, 4)
+    x_ra = Reactant.to_rarray(x)
+    @test @jit(checked_sum(x_ra)) ≈ sum(x)
+end

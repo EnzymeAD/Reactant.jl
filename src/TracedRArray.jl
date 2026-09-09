@@ -191,11 +191,19 @@ function overloaded_mapreduce(
     dims=:,
     init=Base._InitialValue(),
 ) where {T,N}
-    original_dims = dims
-    dims isa Int && (dims = Int64[dims])
-    dims isa Colon && (dims = collect(Int64, 1:N))
-    dims isa Vector{Int64} || (dims = collect(Int64, dims))
-    dims = sort(dims)
+    # `dims` must not be reassigned: it is captured by the comprehension at the end of
+    # this function, and a captured variable that is also assigned to gets boxed, which
+    # erases its type (and with it the type of the whole reduction) for inference. See
+    # https://github.com/EnzymeAD/Reactant.jl/issues/3261.
+    reduce_dims = sort!(
+        if dims isa Colon
+            collect(Int64, 1:N)
+        elseif dims isa Int
+            Int64[dims]
+        else
+            collect(Int64, dims)
+        end,
+    )
 
     op_in_T = unwrapped_eltype(Core.Compiler.return_type(f, Tuple{T}))
     # `op` may accumulate in a wider type than it consumes: `+(::Bool, ::Bool)::Int64`, so
@@ -215,18 +223,29 @@ function overloaded_mapreduce(
         reduce_input = op_in_T.(reduce_input)
     end
 
-    res = @opcall reduce(reduce_input, reduce_init, dims, op)
+    res = @opcall reduce(reduce_input, reduce_init, reduce_dims, op)
 
-    (init isa Base._InitialValue || init === nothing) || (res = op.(res, init))
+    # `Ops.reduce` derives the `ndims` of its result from `length(reduce_dims)`, a runtime
+    # value, so inference only ever sees a bare `TracedRArray` here. Both the element type
+    # and the output shape *are* known statically, so build the result out of those rather
+    # than reading them back off `res`.
+    out_T = op_in_T
+    if !(init isa Base._InitialValue || init === nothing)
+        res = op.(res, init)
+        out_T = unwrapped_eltype(res)
+    end
 
-    if original_dims isa Colon
+    if dims isa Colon
         @assert size(res) == () "expected size of result to be (), got $(size(res))"
-        return TracedRNumber{unwrapped_eltype(res)}((), res.mlir_data)
+        return TracedRNumber{out_T}((), res.mlir_data)
     end
+
     if res isa TracedRNumber
-        res = TracedRArray{unwrapped_eltype(res),0}((), res.mlir_data, ())
+        res = TracedRArray{out_T,0}((), res.mlir_data, ())
     end
-    return @opcall reshape(res, [ifelse(i in dims, 1, size(A, i)) for i in 1:N])
+    out_shape = ntuple(i -> ifelse(i in reduce_dims, 1, size(A, i)), Val(N))
+    reshaped = @opcall reshape(res, collect(Int64, out_shape))
+    return TracedRArray{out_T,N}((), reshaped.mlir_data, out_shape)
 end
 
 function Base.mapreducedim!(
