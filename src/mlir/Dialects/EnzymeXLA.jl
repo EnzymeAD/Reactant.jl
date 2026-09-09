@@ -389,6 +389,42 @@ function extend(
     )
 end
 
+"""
+`math_fmuladd`
+
+Carries the semantics of the `llvm.fmuladd` intrinsic through the round
+trip: compute `a * b + c`, fused into a single rounding only when the
+target can do so profitably, otherwise as an ordinary multiply and add.
+This is a *permission* to fuse, unlike `math.fma`, whose single rounding
+is required and whose honest lowering on a target without FMA units is a
+libm call. Raised from `llvm.intr.fmuladd`; lowered back to the same.
+"""
+function math_fmuladd(
+    a::Value,
+    b::Value,
+    c::Value;
+    result=nothing::Union{Nothing,IR.Type},
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[a, b, c]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(result) && push!(op_ty_results, result)
+
+    return create_operation(
+        "enzymexla.math.fmuladd",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
 function gpu_block(
     blockIndexX::Value,
     blockIndexY::Value,
@@ -2344,7 +2380,12 @@ function wrap(
 end
 
 function xla_wrapper(
-    inputs::Vector{Value}; fn, arg_attrs=nothing, res_attrs=nothing, location=Location()
+    inputs::Vector{Value};
+    fn,
+    arg_attrs=nothing,
+    res_attrs=nothing,
+    num_specialized=nothing,
+    location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[inputs...,]
@@ -2353,6 +2394,8 @@ function xla_wrapper(
     attributes = NamedAttribute[NamedAttribute("fn", fn),]
     !isnothing(arg_attrs) && push!(attributes, NamedAttribute("arg_attrs", arg_attrs))
     !isnothing(res_attrs) && push!(attributes, NamedAttribute("res_attrs", res_attrs))
+    !isnothing(num_specialized) &&
+        push!(attributes, NamedAttribute("num_specialized", num_specialized))
 
     return create_operation(
         "enzymexla.xla_wrapper",

@@ -89,10 +89,11 @@ struct ExecutableBuildOptionsProto
     use_shardy_partitioner::Bool
     process_index::Int64
     process_count::Int64
-    slice_size::Int64
+    gpu_topology::Union{Nothing,GpuTopologyProto}
 end
-PB.default_values(::Type{ExecutableBuildOptionsProto}) = (;device_ordinal = zero(Int64), result_layout = nothing, comp_envs = nothing, debug_options = nothing, num_replicas = zero(Int64), num_partitions = zero(Int64), use_spmd_partitioning = false, use_auto_spmd_partitioning = false, exec_time_optimization_effort = zero(Float32), memory_fitting_effort = zero(Float32), optimization_level = var"ExecutionOptions.EffortLevel".EFFORT_UNKNOWN, memory_fitting_level = var"ExecutionOptions.EffortLevel".EFFORT_UNKNOWN, deduplicate_hlo = false, device_assignment = nothing, alias_passthrough_params = false, run_backend_only = false, allow_spmd_sharding_propagation_to_parameters = Vector{Bool}(), allow_spmd_sharding_propagation_to_output = Vector{Bool}(), fdo_profile = UInt8[], device_memory_size = zero(Int64), auto_spmd_partitioning_mesh_shape = Vector{Int64}(), auto_spmd_partitioning_mesh_ids = Vector{Int64}(), use_shardy_partitioner = false, process_index = zero(Int64), process_count = zero(Int64), slice_size = zero(Int64))
-PB.field_numbers(::Type{ExecutableBuildOptionsProto}) = (;device_ordinal = 1, result_layout = 2, comp_envs = 13, debug_options = 3, num_replicas = 4, num_partitions = 5, use_spmd_partitioning = 6, use_auto_spmd_partitioning = 7, exec_time_optimization_effort = 20, memory_fitting_effort = 21, optimization_level = 24, memory_fitting_level = 25, deduplicate_hlo = 8, device_assignment = 9, alias_passthrough_params = 10, run_backend_only = 11, allow_spmd_sharding_propagation_to_parameters = 18, allow_spmd_sharding_propagation_to_output = 12, fdo_profile = 14, device_memory_size = 15, auto_spmd_partitioning_mesh_shape = 16, auto_spmd_partitioning_mesh_ids = 17, use_shardy_partitioner = 19, process_index = 22, process_count = 23, slice_size = 26)
+PB.reserved_fields(::Type{ExecutableBuildOptionsProto}) = (names = ["slice_size"], numbers = Union{Int,UnitRange{Int}}[26])
+PB.default_values(::Type{ExecutableBuildOptionsProto}) = (;device_ordinal = zero(Int64), result_layout = nothing, comp_envs = nothing, debug_options = nothing, num_replicas = zero(Int64), num_partitions = zero(Int64), use_spmd_partitioning = false, use_auto_spmd_partitioning = false, exec_time_optimization_effort = zero(Float32), memory_fitting_effort = zero(Float32), optimization_level = var"ExecutionOptions.EffortLevel".EFFORT_UNKNOWN, memory_fitting_level = var"ExecutionOptions.EffortLevel".EFFORT_UNKNOWN, deduplicate_hlo = false, device_assignment = nothing, alias_passthrough_params = false, run_backend_only = false, allow_spmd_sharding_propagation_to_parameters = Vector{Bool}(), allow_spmd_sharding_propagation_to_output = Vector{Bool}(), fdo_profile = UInt8[], device_memory_size = zero(Int64), auto_spmd_partitioning_mesh_shape = Vector{Int64}(), auto_spmd_partitioning_mesh_ids = Vector{Int64}(), use_shardy_partitioner = false, process_index = zero(Int64), process_count = zero(Int64), gpu_topology = nothing)
+PB.field_numbers(::Type{ExecutableBuildOptionsProto}) = (;device_ordinal = 1, result_layout = 2, comp_envs = 13, debug_options = 3, num_replicas = 4, num_partitions = 5, use_spmd_partitioning = 6, use_auto_spmd_partitioning = 7, exec_time_optimization_effort = 20, memory_fitting_effort = 21, optimization_level = 24, memory_fitting_level = 25, deduplicate_hlo = 8, device_assignment = 9, alias_passthrough_params = 10, run_backend_only = 11, allow_spmd_sharding_propagation_to_parameters = 18, allow_spmd_sharding_propagation_to_output = 12, fdo_profile = 14, device_memory_size = 15, auto_spmd_partitioning_mesh_shape = 16, auto_spmd_partitioning_mesh_ids = 17, use_shardy_partitioner = 19, process_index = 22, process_count = 23, gpu_topology = 27)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ExecutableBuildOptionsProto}, _endpos::Int=0, _group::Bool=false)
     device_ordinal = zero(Int64)
@@ -120,7 +121,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ExecutableBuildOptionsPr
     use_shardy_partitioner = false
     process_index = zero(Int64)
     process_count = zero(Int64)
-    slice_size = zero(Int64)
+    gpu_topology = Ref{Union{Nothing,GpuTopologyProto}}(nothing)
     while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
@@ -173,13 +174,13 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ExecutableBuildOptionsPr
             process_index = PB.decode(d, Int64)
         elseif field_number == 23
             process_count = PB.decode(d, Int64)
-        elseif field_number == 26
-            slice_size = PB.decode(d, Int64)
+        elseif field_number == 27
+            PB.decode!(d, gpu_topology)
         else
             Base.skip(d, wire_type)
         end
     end
-    return ExecutableBuildOptionsProto(device_ordinal, result_layout[], comp_envs[], debug_options[], num_replicas, num_partitions, use_spmd_partitioning, use_auto_spmd_partitioning, exec_time_optimization_effort, memory_fitting_effort, optimization_level, memory_fitting_level, deduplicate_hlo, device_assignment[], alias_passthrough_params, run_backend_only, allow_spmd_sharding_propagation_to_parameters[], allow_spmd_sharding_propagation_to_output[], fdo_profile, device_memory_size, auto_spmd_partitioning_mesh_shape[], auto_spmd_partitioning_mesh_ids[], use_shardy_partitioner, process_index, process_count, slice_size)
+    return ExecutableBuildOptionsProto(device_ordinal, result_layout[], comp_envs[], debug_options[], num_replicas, num_partitions, use_spmd_partitioning, use_auto_spmd_partitioning, exec_time_optimization_effort, memory_fitting_effort, optimization_level, memory_fitting_level, deduplicate_hlo, device_assignment[], alias_passthrough_params, run_backend_only, allow_spmd_sharding_propagation_to_parameters[], allow_spmd_sharding_propagation_to_output[], fdo_profile, device_memory_size, auto_spmd_partitioning_mesh_shape[], auto_spmd_partitioning_mesh_ids[], use_shardy_partitioner, process_index, process_count, gpu_topology[])
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::ExecutableBuildOptionsProto)
@@ -209,7 +210,7 @@ function PB.encode(e::PB.AbstractProtoEncoder, x::ExecutableBuildOptionsProto)
     x.use_shardy_partitioner != false && PB.encode(e, 19, x.use_shardy_partitioner)
     x.process_index != zero(Int64) && PB.encode(e, 22, x.process_index)
     x.process_count != zero(Int64) && PB.encode(e, 23, x.process_count)
-    x.slice_size != zero(Int64) && PB.encode(e, 26, x.slice_size)
+    !isnothing(x.gpu_topology) && PB.encode(e, 27, x.gpu_topology)
     return position(e.io) - initpos
 end
 function PB._encoded_size(x::ExecutableBuildOptionsProto)
@@ -239,7 +240,7 @@ function PB._encoded_size(x::ExecutableBuildOptionsProto)
     x.use_shardy_partitioner != false && (encoded_size += PB._encoded_size(x.use_shardy_partitioner, 19))
     x.process_index != zero(Int64) && (encoded_size += PB._encoded_size(x.process_index, 22))
     x.process_count != zero(Int64) && (encoded_size += PB._encoded_size(x.process_count, 23))
-    x.slice_size != zero(Int64) && (encoded_size += PB._encoded_size(x.slice_size, 26))
+    !isnothing(x.gpu_topology) && (encoded_size += PB._encoded_size(x.gpu_topology, 27))
     return encoded_size
 end
 

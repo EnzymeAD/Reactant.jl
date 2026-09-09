@@ -135,3 +135,28 @@ end
     @test convert(Array, res[2][].data) ≈ [3.14, 1.59]
     @test res[1][].data == res[2][].data
 end
+
+@testset "Parametric construction from host arrays" begin
+    x = reshape(collect(1.0:6.0), 2, 3)
+
+    @test ConcreteRArray{Float32}(x) isa ConcreteRArray{Float32,2}
+    @test ConcreteRArray{Float32,2}(x) isa ConcreteRArray{Float32,2}
+    @test Array(ConcreteRArray{Float32,2}(x)) == Float32.(x)
+
+    # eltype is preserved when it already matches
+    @test ConcreteRArray{Float64,2}(x) isa ConcreteRArray{Float64,2}
+    @test Array(ConcreteRArray{Float64}(x)) == x
+
+    # non-`Array` hosts, i.e. the `ArrayType{T,N}(data)` form generic code uses
+    @test Array(ConcreteRArray{Float64,2}(reshape(1:6, 2, 3))) == x
+    @test Array(ConcreteRArray{Float64,1}(view(collect(1.0:4.0), 2:3))) == [2.0, 3.0]
+
+    # dimensionality mismatches are rejected
+    @test_throws MethodError ConcreteRArray{Float32,1}(x)
+
+    # both runtimes get the methods, only the active one can be constructed here
+    for AT in (ConcretePJRTArray, ConcreteIFRTArray)
+        @test hasmethod(AT{Float32}, Tuple{AbstractArray})
+        @test hasmethod(AT{Float32,2}, Tuple{AbstractArray})
+    end
+end

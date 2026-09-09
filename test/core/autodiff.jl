@@ -117,6 +117,43 @@ end
     @test res[1] ≈ ones(2, 2)
 end
 
+f_sincos(x) = map(sin, x) + map(cos, reverse(x))
+function f_sincos_jac(x)
+    return [
+        cos(x[i]) * (i == j ? 1 : 0) -
+        sin(x[end - i + 1]) * (i == (length(x) - j + 1) ? 1 : 0) for i in 1:length(x),
+        j in 1:length(x)
+    ]
+end
+
+@testset "Forward Jacobian" begin
+    jac(x) = only(Enzyme.jacobian(Enzyme.Forward, f_sincos, x))
+    x_r = Reactant.to_rarray(rand(10))
+
+    j_gt = Reactant.@allowscalar f_sincos_jac(x_r)
+    j_reactant = Reactant.@jit jac(x_r)
+
+    @test j_reactant ≈ j_gt
+end
+
+# output shape and rank both differ from the input's, so that a transposed or
+# mis-stacked jacobian cannot accidentally still line up
+f_rect(x) = map(sin, x) * [1.0, 2.0, 3.0]
+function f_rect_jac(x)
+    return [(i == a) * cos(x[a, b]) * [1.0, 2.0, 3.0][b] for i in 1:2, a in 1:2, b in 1:3]
+end
+
+@testset "Forward Jacobian (outshape != inshape)" begin
+    jac(x) = only(Enzyme.jacobian(Enzyme.Forward, f_rect, x))
+    x_r = Reactant.to_rarray(rand(2, 3))
+
+    j_gt = Reactant.@allowscalar f_rect_jac(x_r)
+    j_reactant = Reactant.@jit jac(x_r)
+
+    @test size(j_reactant) == (2, 2, 3)
+    @test j_reactant ≈ j_gt
+end
+
 mutable struct StateReturn
     st::Any
 end

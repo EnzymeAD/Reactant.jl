@@ -71,6 +71,17 @@ end
     return Base.zero(x)
 end
 
+@inline function Enzyme.tupstack(
+    data::Tuple{<:RArray,Vararg{<:RArray}},
+    outshape::Tuple{Vararg{Int}},
+    inshape::Tuple{Vararg{Int}},
+)
+    # `data[i]` is the derivative w.r.t. the i-th input element, so the tuple index
+    # enumerates the trailing `inshape` dims and each entry fills the leading
+    # `outshape` dims -- matching `Enzyme.tupstack`'s column-major layout for `Array`.
+    return reshape(reduce(hcat, map(vec, data)), outshape..., inshape...)
+end
+
 macro register_make_zero_inplace(sym)
     quote
         @inline function $sym(prev::RArray{T,N})::Nothing where {T<:AbstractFloat,N}

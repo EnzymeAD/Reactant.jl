@@ -1,7 +1,7 @@
 # Straight conversions from Dates.jl types to Reactant* types
 
-# Period conversions
-for (S, T) in (
+# Dates period type paired with its Reactant counterpart.
+const _PERIOD_PAIRS = (
     (:Year, :ReactantYear),
     (:Quarter, :ReactantQuarter),
     (:Month, :ReactantMonth),
@@ -14,6 +14,9 @@ for (S, T) in (
     (:Microsecond, :ReactantMicrosecond),
     (:Nanosecond, :ReactantNanosecond),
 )
+
+# Period conversions
+for (S, T) in _PERIOD_PAIRS
     @eval Base.convert(::Type{$T}, x::Dates.$S) = $T(value(x))
     @eval Base.convert(::Type{$T{Int64}}, x::Dates.$S) = $T(value(x))
     @eval Base.convert(::Type{$T{I}}, x::Dates.$S) where {I} = $T(convert(I, value(x)))

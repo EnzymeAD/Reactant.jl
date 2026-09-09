@@ -1,4 +1,4 @@
-import Base: +, -, fld, mod, div
+import Base: +, -, *, /, fld, mod, div
 import Dates:
     Period,
     yearmonthday,
@@ -156,3 +156,52 @@ end
 (+)(y::Period, x::ReactantDateTime) = x + y
 (+)(y::Period, x::ReactantDate) = x + y
 (+)(y::TimePeriod, x::ReactantTime) = x + y
+
+const ReactantDatePeriod = Union{
+    ReactantYear,ReactantQuarter,ReactantMonth,ReactantWeek,ReactantDay
+}
+const ReactantTimePeriod = Union{
+    ReactantHour,
+    ReactantMinute,
+    ReactantSecond,
+    ReactantMillisecond,
+    ReactantMicrosecond,
+    ReactantNanosecond,
+}
+const ReactantPeriod = Union{ReactantDatePeriod,ReactantTimePeriod}
+
+(+)(x::DateTime, y::ReactantPeriod) = ReactantDateTime(x) + y
+(-)(x::DateTime, y::ReactantPeriod) = ReactantDateTime(x) - y
+(+)(y::ReactantPeriod, x::DateTime) = x + y
+
+(+)(x::Date, y::ReactantDatePeriod) = ReactantDate(x) + y
+(-)(x::Date, y::ReactantDatePeriod) = ReactantDate(x) - y
+(+)(y::ReactantDatePeriod, x::Date) = x + y
+
+(+)(x::Time, y::ReactantTimePeriod) = ReactantTime(x) + y
+(-)(x::Time, y::ReactantTimePeriod) = ReactantTime(x) - y
+(+)(y::ReactantTimePeriod, x::Time) = x + y
+
+for (S, T) in (
+    (:Year, :ReactantYear),
+    (:Quarter, :ReactantQuarter),
+    (:Month, :ReactantMonth),
+    (:Week, :ReactantWeek),
+    (:Day, :ReactantDay),
+    (:Hour, :ReactantHour),
+    (:Minute, :ReactantMinute),
+    (:Second, :ReactantSecond),
+    (:Millisecond, :ReactantMillisecond),
+    (:Microsecond, :ReactantMicrosecond),
+    (:Nanosecond, :ReactantNanosecond),
+)
+    @eval begin
+        (*)(x::Dates.$S, y::Reactant.RNumber) = $T(value(x) * y)
+        (/)(x::Dates.$S, y::Reactant.RNumber) = $T(value(x) / y)
+
+        (*)(x::$T, y::Reactant.RNumber) = $T(value(x) * y)
+        (/)(x::$T, y::Reactant.RNumber) = $T(value(x) / y)
+    end
+end
+
+(*)(y::Reactant.RNumber, x::Period) = x * y

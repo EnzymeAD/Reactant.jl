@@ -13,7 +13,7 @@ end
 
 function Base.isready(future::Future)
     GC.@preserve future begin
-        res = MLIR.API.mlir_c.ifrt_future_is_ready(future.future)
+        res = MLIR.API.ifrt_future_is_ready(future.future)
     end
     return res != 0
 end
