@@ -192,41 +192,60 @@ function overloaded_mapreduce(
     init=Base._InitialValue(),
 ) where {T,N}
     original_dims = dims
-    dims isa Int && (dims = Int64[dims])
-    dims isa Colon && (dims = collect(Int64, 1:N))
-    dims isa Vector{Int64} || (dims = collect(Int64, dims))
-    dims = sort(dims)
+    # don't reassign dims to avoid the "captured variable in closure" type instability 
+    normalized_dims = if dims isa Int
+        Int64[dims]
+    elseif dims isa Colon
+        collect(Int64, 1:N)
+    elseif dims isa Vector{Int64}
+        dims
+    else
+        collect(Int64, dims)
+    end |> sort
 
     op_in_T = unwrapped_eltype(Core.Compiler.return_type(f, Tuple{T}))
     # `op` may accumulate in a wider type than it consumes: `+(::Bool, ::Bool)::Int64`, so
     # `sum` over booleans is an `Int64` in Base. `__default_init` reports that wider type
     # (it is the type of `op`'s identity element), so reduce in it.
     init_val = __default_init(op_in_T, op)
-    op_in_T = unwrapped_eltype(typeof(init_val))
-    reduce_init = Reactant.promote_to(TracedRNumber{op_in_T}, init_val)
+    # TODO: double-check that this is the eltype of the output
+    op_out_T = unwrapped_eltype(typeof(init_val))
+    reduce_init = Reactant.promote_to(TracedRNumber{op_out_T}, init_val)
 
     # Widen *after* applying `f`, not before. `f` decides the element type actually being
     # reduced, so converting `A` up front is undone by anything narrowing -- e.g. the
     # predicate in `sum(x -> x == 1, a)` returns `Bool` whatever `A` was converted to.
     # Reducing in the narrow type is silently wrong: `stablehlo.add` over `i1` is a logical
     # `or`, and small integers wrap.
-    reduce_input = materialize_traced_array(TracedUtils.elem_apply(f, A))
-    if unwrapped_eltype(reduce_input) != op_in_T
-        reduce_input = op_in_T.(reduce_input)
+    reduce_input_wrongtype = materialize_traced_array(TracedUtils.elem_apply(f, A))
+    # TODO: The line above is not inferred correctly, and maybe subsequent lines aren't either.
+
+    if unwrapped_eltype(reduce_input_wrongtype) != op_out_T
+        reduce_input = op_out_T.(reduce_input_wrongtype)
+    else
+        reduce_input = reduce_input_wrongtype
     end
 
-    res = @opcall reduce(reduce_input, reduce_init, dims, op)
+    res_without_init = @opcall reduce(reduce_input, reduce_init, normalized_dims, op)
 
-    (init isa Base._InitialValue || init === nothing) || (res = op.(res, init))
+    if (init isa Base._InitialValue || init === nothing)
+        res = res_without_init
+    else
+        res = op.(res_without_init, init)
+    end
 
     if original_dims isa Colon
         @assert size(res) == () "expected size of result to be (), got $(size(res))"
-        return TracedRNumber{unwrapped_eltype(res)}((), res.mlir_data)
+        return TracedRNumber{op_out_T}((), res.mlir_data)
     end
     if res isa TracedRNumber
-        res = TracedRArray{unwrapped_eltype(res),0}((), res.mlir_data, ())
+        res = TracedRArray{op_out_T,0}((), res.mlir_data, ())
     end
-    return @opcall reshape(res, [ifelse(i in dims, 1, size(A, i)) for i in 1:N])
+    # use ntuple so that the array rank is inferrable, the corresponding method for reshape was added
+    shape = ntuple(i -> ifelse(i in normalized_dims, 1, size(A, i)), Val(N))
+    res_reshaped = @opcall reshape(res, shape)
+    # force return type inference
+    return TracedRArray{op_out_T,N}((), res_reshaped.mlir_data, shape)
 end
 
 function Base.mapreducedim!(
@@ -353,7 +372,7 @@ function Base.copyto!(
     sstart::Integer,
     n::Integer,
 ) where {T}
-    setindex!(dest, src[sstart:(sstart + n - 1)], dstart:(dstart + n - 1))
+    setindex!(dest, src[sstart:(sstart+n-1)], dstart:(dstart+n-1))
     return dest
 end
 
@@ -1016,7 +1035,7 @@ end
         end
         return TracedRNumber{
             unwrapped_eltype(
-                Base._accumulate_promote_op(op, Array{T,ndims(A)}(undef, size(A)); init)
+                Base._accumulate_promote_op(op, Array{T,ndims(A)}(undef, size(A));init)
             ),
         }
     end
@@ -1221,10 +1240,10 @@ function circshift_internal!(
         amt = shiftamt[i] % size(src, i)
         amt == 0 && continue
         if amt > 0
-            src1 = selectdim(src, i, (size(src, i) - amt + 1):size(src, i))
-            src2 = selectdim(src, i, 1:(size(src, i) - amt))
+            src1 = selectdim(src, i, (size(src, i)-amt+1):size(src, i))
+            src2 = selectdim(src, i, 1:(size(src, i)-amt))
         else
-            src1 = selectdim(src, i, (-amt + 1):size(src, i))
+            src1 = selectdim(src, i, (-amt+1):size(src, i))
             src2 = selectdim(src, i, 1:(-amt))
         end
         src = cat(materialize_traced_array(src1), materialize_traced_array(src2); dims=i)

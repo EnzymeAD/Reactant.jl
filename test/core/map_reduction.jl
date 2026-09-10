@@ -1,5 +1,6 @@
 # Tests for reduction and mapreduce operations
 using Reactant, Test, Enzyme, Statistics, FileCheck
+using Reactant: TracedRArray, TracedRNumber
 
 const RunningOnTPU = contains(string(Reactant.devices()[1]), "TPU")
 
@@ -55,6 +56,24 @@ sum_compare(x) = sum(x) > 0
     # Ensure we are tracing as scalars. Else this will fail due to > not being defined on
     # arrays
     @test @jit(sum_compare(a)) == sum_compare(x)
+end
+
+@testset "Mapreduce output type inference"  begin
+    # non-regression test for https://github.com/EnzymeAD/Reactant.jl/issues/3261
+    function infer_overloaded_mapreduce(A::Type; kwargs...)
+        kwcall_args = (
+            typeof(NamedTuple(kwargs)),
+            typeof(Reactant.TracedRArrayOverrides.overloaded_mapreduce),
+            typeof(abs2),
+            typeof(+),
+            A
+        )
+        return only(Base.return_types(Core.kwcall, kwcall_args))
+    end
+
+    @test infer_overloaded_mapreduce(TracedRArray{Float32,2}; dims=:) === TracedRNumber{Float32}
+    @test infer_overloaded_mapreduce(TracedRArray{Float32,2}; dims=1) === TracedRArray{Float32,2}
+    @test infer_overloaded_mapreduce(TracedRArray{Float32,2}; dims=(1, 2)) === TracedRArray{Float32,2}
 end
 
 function mysoftmax!(x)
