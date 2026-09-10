@@ -235,10 +235,11 @@ function raising!(f, is_raising::Bool)
     end
 end
 
-function compile_mlir!(
+# The pass pipeline is independent of the model's Julia function and argument types.
+Base.@nospecializeinfer function compile_mlir!(
     mod,
-    f,
-    args,
+    @nospecialize(f),
+    @nospecialize(args),
     compile_options::CompileOptions,
     debugcache=default_debugcache(),
     callcache=default_callcache(),
