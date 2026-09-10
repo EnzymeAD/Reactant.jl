@@ -193,15 +193,17 @@ function overloaded_mapreduce(
 ) where {T,N}
     original_dims = dims
     # don't reassign dims to avoid the "captured variable in closure" type instability 
-    normalized_dims = if dims isa Int
-        Int64[dims]
-    elseif dims isa Colon
-        collect(Int64, 1:N)
-    elseif dims isa Vector{Int64}
-        dims
-    else
-        collect(Int64, dims)
-    end |> sort
+    normalized_dims = sort(
+        if dims isa Int
+            Int64[dims]
+        elseif dims isa Colon
+            collect(Int64, 1:N)
+        elseif dims isa Vector{Int64}
+            dims
+        else
+            collect(Int64, dims)
+        end,
+    )
 
     op_in_T = unwrapped_eltype(Core.Compiler.return_type(f, Tuple{T}))
     # `op` may accumulate in a wider type than it consumes: `+(::Bool, ::Bool)::Int64`, so
@@ -278,7 +280,7 @@ function Base.fill!(A::AnyTracedRArray{T,N}, x::TracedRNumber{T2}) where {T,N,T2
 end
 
 function Base.fill!(A::Array{T,N}, x::TracedRNumber{T2}) where {T,N,T2}
-    throw(MethodError(fill!, (A, x)))
+    return throw(MethodError(fill!, (A, x)))
 end
 
 struct AbstractReactantArrayStyle{N} <: AbstractArrayStyle{N} end
@@ -1035,7 +1037,7 @@ end
         end
         return TracedRNumber{
             unwrapped_eltype(
-                Base._accumulate_promote_op(op, Array{T,ndims(A)}(undef, size(A)); init)
+                Base._accumulate_promote_op(op, Array{T,ndims(A)}(undef, size(A));init)
             ),
         }
     end
