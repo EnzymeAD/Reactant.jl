@@ -372,7 +372,7 @@ function Base.copyto!(
     sstart::Integer,
     n::Integer,
 ) where {T}
-    setindex!(dest, src[sstart:(sstart+n-1)], dstart:(dstart+n-1))
+    setindex!(dest, src[sstart:(sstart + n - 1)], dstart:(dstart + n - 1))
     return dest
 end
 
@@ -1035,7 +1035,7 @@ end
         end
         return TracedRNumber{
             unwrapped_eltype(
-                Base._accumulate_promote_op(op, Array{T,ndims(A)}(undef, size(A));init)
+                Base._accumulate_promote_op(op, Array{T,ndims(A)}(undef, size(A)); init)
             ),
         }
     end
@@ -1240,10 +1240,10 @@ function circshift_internal!(
         amt = shiftamt[i] % size(src, i)
         amt == 0 && continue
         if amt > 0
-            src1 = selectdim(src, i, (size(src, i)-amt+1):size(src, i))
-            src2 = selectdim(src, i, 1:(size(src, i)-amt))
+            src1 = selectdim(src, i, (size(src, i) - amt + 1):size(src, i))
+            src2 = selectdim(src, i, 1:(size(src, i) - amt))
         else
-            src1 = selectdim(src, i, (-amt+1):size(src, i))
+            src1 = selectdim(src, i, (-amt + 1):size(src, i))
             src2 = selectdim(src, i, 1:(-amt))
         end
         src = cat(materialize_traced_array(src1), materialize_traced_array(src2); dims=i)
