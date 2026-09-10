@@ -673,9 +673,9 @@ end
 
 @noinline function reshape(
     x::TracedRArray{T,N},
-    dims::Union{Vector{Int},NTuple{M,Int}};
+    dims::Vector{Int};
     location=mlir_stacktrace("reshape", @__FILE__, @__LINE__),
-) where {T,N,M}
+) where {T,N}
     @assert length(x) == prod(dims)
 
     # HLO reshape semantics collapse the opposite way

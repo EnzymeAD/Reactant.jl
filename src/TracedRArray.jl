@@ -219,22 +219,15 @@ function overloaded_mapreduce(
     # predicate in `sum(x -> x == 1, a)` returns `Bool` whatever `A` was converted to.
     # Reducing in the narrow type is silently wrong: `stablehlo.add` over `i1` is a logical
     # `or`, and small integers wrap.
-    reduce_input_wrongtype = materialize_traced_array(TracedUtils.elem_apply(f, A))
+    reduce_input = materialize_traced_array(TracedUtils.elem_apply(f, A))
     # TODO: The line above is not inferred correctly, and maybe subsequent lines aren't either.
-
-    if unwrapped_eltype(reduce_input_wrongtype) != op_out_T
-        reduce_input = op_out_T.(reduce_input_wrongtype)
-    else
-        reduce_input = reduce_input_wrongtype
+    if unwrapped_eltype(reduce_input) != op_in_T
+        reduce_input = op_in_T.(reduce_input)
     end
 
-    res_without_init = @opcall reduce(reduce_input, reduce_init, normalized_dims, op)
+    res = @opcall reduce(reduce_input, reduce_init, dims, op)
 
-    if (init isa Base._InitialValue || init === nothing)
-        res = res_without_init
-    else
-        res = op.(res_without_init, init)
-    end
+    (init isa Base._InitialValue || init === nothing) || (res = op.(res, init))
 
     if original_dims isa Colon
         @assert size(res) == () "expected size of result to be (), got $(size(res))"
@@ -243,11 +236,10 @@ function overloaded_mapreduce(
     if res isa TracedRNumber
         res = TracedRArray{op_out_T,0}((), res.mlir_data, ())
     end
-    # use ntuple so that the array rank is inferrable, the corresponding method for reshape was added
-    shape = ntuple(i -> ifelse(i in normalized_dims, 1, size(A, i)), Val(N))
+    shape = [ifelse(i in dims, 1, size(A, i)) for i in 1:N]
     res_reshaped = @opcall reshape(res, shape)
     # force return type inference
-    return TracedRArray{op_out_T,N}((), res_reshaped.mlir_data, shape)
+    return res_reshaped::TracedRArray{op_out_T,N}
 end
 
 function Base.mapreducedim!(
@@ -1037,7 +1029,7 @@ end
         end
         return TracedRNumber{
             unwrapped_eltype(
-                Base._accumulate_promote_op(op, Array{T,ndims(A)}(undef, size(A));init)
+                Base._accumulate_promote_op(op, Array{T,ndims(A)}(undef, size(A)); init)
             ),
         }
     end
