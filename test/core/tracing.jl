@@ -455,3 +455,25 @@ end
         @test iszero(t.compile_time)
     end
 end
+
+function _sum_collected_mixed(a, b)
+    # on Julia 1.10/1.11 `collect` widens the eltype to the non-concrete
+    # `TracedRArray{<:Any,1}` via `promote_typejoin`
+    v = [x for x in (a, b)]
+    return sum(v[1]) + sum(v[2])
+end
+
+@testset "convert to non-concrete TracedRArray types" begin
+    x = Reactant.to_rarray(rand(Float32, 4))
+    x_tr = Reactant.make_tracer(Reactant.OrderedIdDict(), x, (), ConcreteToTraced)
+
+    @test convert(TracedRArray{Float32,1}, x_tr) === x_tr
+    @test convert(TracedRArray{<:Any,1}, x_tr) === x_tr
+    @test convert(TracedRArray, x_tr) === x_tr
+
+    a = rand(Float64, 4)
+    b = rand(Float32, 4)
+    a_ra = Reactant.to_rarray(a)
+    b_ra = Reactant.to_rarray(b)
+    @test @jit(_sum_collected_mixed(a_ra, b_ra)) ≈ sum(a) + sum(b)
+end
