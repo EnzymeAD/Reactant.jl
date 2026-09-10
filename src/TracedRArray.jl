@@ -210,7 +210,6 @@ function overloaded_mapreduce(
     # `sum` over booleans is an `Int64` in Base. `__default_init` reports that wider type
     # (it is the type of `op`'s identity element), so reduce in it.
     init_val = __default_init(op_in_T, op)
-    # TODO: double-check that this is the eltype of the output
     op_out_T = unwrapped_eltype(typeof(init_val))
     reduce_init = Reactant.promote_to(TracedRNumber{op_out_T}, init_val)
 
@@ -220,7 +219,7 @@ function overloaded_mapreduce(
     # Reducing in the narrow type is silently wrong: `stablehlo.add` over `i1` is a logical
     # `or`, and small integers wrap.
     reduce_input = materialize_traced_array(TracedUtils.elem_apply(f, A))
-    # TODO: The line above is not inferred correctly, and maybe subsequent lines aren't either.
+    # The line above is not inferred correctly, and maybe subsequent lines aren't either.
     if unwrapped_eltype(reduce_input) != op_in_T
         reduce_input = op_in_T.(reduce_input)
     end
