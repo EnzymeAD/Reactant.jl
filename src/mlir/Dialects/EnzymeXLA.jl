@@ -820,6 +820,36 @@ function lapack_gesvj(
     )
 end
 
+"""
+`get_global_temp`
+
+Returns the storage owned by a `temp_alloc` declaration. Repeated accesses
+to the same symbol alias the same allocation; this operation is not an
+allocation. The returned reference is borrowed and must not be freed or
+used beyond the lifetime of the owning module\'s XLA runtime.
+
+The allocation handle is stable even when the XLA runtime replaces the
+underlying PJRT buffer after execution. Its contents are not constant.
+"""
+function get_global_temp(; result::IR.Type, name, location=Location())
+    op_ty_results = IR.Type[result,]
+    operands = Value[]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[NamedAttribute("name", name),]
+
+    return create_operation(
+        "enzymexla.get_global_temp",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function get_stream(; result::IR.Type, location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[]
@@ -2171,6 +2201,48 @@ function math_tgamma(
         attributes,
         results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
         result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
+`temp_alloc`
+
+Declares uninitialized, statically shaped device storage allocated when
+the module is initialized and freed when it is finalized. The declaration
+must be private. Uses retrieve the allocation with `get_global_temp`;
+accessing it does not allocate new storage.
+
+The allocation belongs to the module\'s XLA runtime. Its contents are
+mutable and shared by all uses, so callers must synchronize overlapping
+accesses. The first write and subsequent updates remain explicit copies.
+This operation does not move copies or computations across calls or loops.
+Lowering currently requires an XLA backend and C-style memrefs.
+
+# Example
+```mlir
+enzymexla.temp_alloc \"private\" @bound : memref<i32, 1>
+```
+"""
+function temp_alloc(; sym_name, sym_visibility=nothing, type, location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[
+        NamedAttribute("sym_name", sym_name), NamedAttribute("type", type)
+    ]
+    !isnothing(sym_visibility) &&
+        push!(attributes, NamedAttribute("sym_visibility", sym_visibility))
+
+    return create_operation(
+        "enzymexla.temp_alloc",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
     )
 end
 
