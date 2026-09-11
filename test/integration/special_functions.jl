@@ -65,10 +65,22 @@ end
         1e-5 rtol = 1e-3
 end
 
+@testset "erfinv" begin
+    @test SpecialFunctions.erfinv(0.5) ≈ @jit(SpecialFunctions.erfinv(ConcreteRNumber(0.5)))
+    @test SpecialFunctions.erfinv(Int32(2)) ≈
+        @jit(SpecialFunctions.erfinv(ConcreteRNumber(Int32(2)))) atol = 1e-5 rtol = 1e-3
+end
+
 @testset "erfc" begin
     @test SpecialFunctions.erfc(0.5) ≈ @jit(SpecialFunctions.erfc(ConcreteRNumber(0.5)))
     @test SpecialFunctions.erfc(Int32(2)) ≈
         @jit(SpecialFunctions.erfc(ConcreteRNumber(Int32(2)))) atol = 1e-5 rtol = 1e-3
+end
+
+@testset "erfcinv" begin
+    @test SpecialFunctions.erfcinv(0.5) ≈ @jit(SpecialFunctions.erfcinv(ConcreteRNumber(0.5)))
+    @test SpecialFunctions.erfcinv(Int32(2)) ≈
+        @jit(SpecialFunctions.erfcinv(ConcreteRNumber(Int32(2)))) atol = 1e-5 rtol = 1e-3
 end
 
 @testset "logerf" begin
