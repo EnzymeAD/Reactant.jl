@@ -79,9 +79,7 @@ function SpecialFunctions.erf(
     return SpecialFunctions.erf(y) - SpecialFunctions.erf(x)
 end
 
-function SpecialFunctions.erfcinv(
-    x::TracedRNumber{T}
-) where {T<:ReactantFloatInt}
+function SpecialFunctions.erfcinv(x::TracedRNumber{T}) where {T<:ReactantFloatInt}
     return SpecialFunctions.erfinv(one(x) - x)
 end
 
