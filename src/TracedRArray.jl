@@ -237,7 +237,9 @@ function overloaded_mapreduce(
         return TracedRNumber{unwrapped_eltype(res)}((), res.mlir_data)::TracedRNumber{res_T}
     end
     if res isa TracedRNumber
-        res = TracedRArray{unwrapped_eltype(res),0}((), res.mlir_data, ())::TracedRArray{res_T,0}
+        res = TracedRArray{unwrapped_eltype(res),0}(
+            (), res.mlir_data, ()
+        )::TracedRArray{res_T,0}
     end
     shape = [ifelse(i in normalized_dims, 1, size(A, i)) for i in 1:N]
     res_reshaped = @opcall reshape(res, shape)
