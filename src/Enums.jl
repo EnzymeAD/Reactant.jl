@@ -166,24 +166,3 @@ Base.@nospecializeinfer function make_tracer(
     end
     return prev
 end
-
-@inline function to_rarray_internal(
-    @nospecialize(x::Base.Enum),
-    @nospecialize(track_numbers::Type),
-    @nospecialize(sharding),
-    runtime,
-    @nospecialize(device),
-    @nospecialize(client)
-)
-    should_track_enum(typeof(x), track_numbers) || return x
-    if runtime isa Val{:PJRT}
-        return TracedEnum{typeof(x)}(
-            ConcretePJRTNumber(Integer(x); sharding, device, client)
-        )
-    elseif runtime isa Val{:IFRT}
-        return TracedEnum{typeof(x)}(
-            ConcreteIFRTNumber(Integer(x); sharding, device, client)
-        )
-    end
-    return error("Unsupported runtime $runtime")
-end

@@ -143,8 +143,9 @@ status = @jit choose_status(Reactant.to_rarray(Float32[1]))
 ```
 
 For mutable struct fields, parameterize the field type and make its initial value
-traced before entering the branch. This requirement also applies to numeric fields.
-Assigning a different value to an untraced field inside `@trace if` raises an error.
+traced before entering the branch. This requirement also applies to numeric fields:
+an untraced field has no location the `if` result can be written back into, so an
+assignment to it cannot be carried out of the branch.
 
 ```@example control_flow_tutorial
 using ReactantCore: promote_to_traced
