@@ -44,8 +44,8 @@ function register_backend(
             priority,
             pjrt_initialize_function,
             ifrt_initialize_function,
-            Ref(0),
-            Ref(0),
+            Ref(Int64(0)),
+            Ref(Int64(0)),
             preinitialize_setup_function,
         )
         push!(RegisteredBackends, backend)
