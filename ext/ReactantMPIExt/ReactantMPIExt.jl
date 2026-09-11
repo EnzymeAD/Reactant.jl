@@ -2,6 +2,7 @@ module ReactantMPIExt
 
 using Reactant
 using Reactant: Reactant, Distributed, MLIR
+using Reactant_jll: Reactant_jll
 using MPI: MPI
 using Libdl: Libdl
 
@@ -321,5 +322,6 @@ end
 
 include("Ops.jl")
 include("Overrides.jl")
+include("Nccl.jl")
 
 end # module
