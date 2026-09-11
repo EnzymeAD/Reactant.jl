@@ -15709,6 +15709,54 @@ function enzymexlaMPIOpAttrGet(ctx, op)
     )::MlirAttribute
 end
 
+function enzymexlaCommMpiCommTypeGet(ctx)
+    @ccall Reactant_jll.libReactantExtra.enzymexlaCommMpiCommTypeGet(
+        ctx::MlirContext
+    )::MlirType
+end
+
+function enzymexlaCommMpiRequestTypeGet(ctx)
+    @ccall Reactant_jll.libReactantExtra.enzymexlaCommMpiRequestTypeGet(
+        ctx::MlirContext
+    )::MlirType
+end
+
+@cenum EnzymeXlaCommMpiComm::UInt32 begin
+    ENZYMEXLA_COMM_MPI_COMM_NULL = 0x0000000000000100
+    ENZYMEXLA_COMM_MPI_COMM_WORLD = 0x0000000000000101
+    ENZYMEXLA_COMM_MPI_COMM_SELF = 0x0000000000000102
+end
+
+function enzymexlaCommMpiCommAttrGet(ctx, comm)
+    @ccall Reactant_jll.libReactantExtra.enzymexlaCommMpiCommAttrGet(
+        ctx::MlirContext, comm::EnzymeXlaCommMpiComm
+    )::MlirAttribute
+end
+
+@cenum EnzymeXlaCommMpiOp::UInt32 begin
+    ENZYMEXLA_COMM_MPI_OP_NULL = 0x0000000000000020
+    ENZYMEXLA_COMM_MPI_SUM = 0x0000000000000021
+    ENZYMEXLA_COMM_MPI_MIN = 0x0000000000000022
+    ENZYMEXLA_COMM_MPI_MAX = 0x0000000000000023
+    ENZYMEXLA_COMM_MPI_PROD = 0x0000000000000024
+    ENZYMEXLA_COMM_MPI_BAND = 0x0000000000000028
+    ENZYMEXLA_COMM_MPI_BOR = 0x0000000000000029
+    ENZYMEXLA_COMM_MPI_BXOR = 0x000000000000002a
+    ENZYMEXLA_COMM_MPI_LAND = 0x0000000000000030
+    ENZYMEXLA_COMM_MPI_LOR = 0x0000000000000031
+    ENZYMEXLA_COMM_MPI_LXOR = 0x0000000000000032
+    ENZYMEXLA_COMM_MPI_MINLOC = 0x0000000000000038
+    ENZYMEXLA_COMM_MPI_MAXLOC = 0x0000000000000039
+    ENZYMEXLA_COMM_MPI_REPLACE = 0x000000000000003c
+    ENZYMEXLA_COMM_MPI_NO_OP = 0x000000000000003d
+end
+
+function enzymexlaCommMpiOpAttrGet(ctx, op)
+    @ccall Reactant_jll.libReactantExtra.enzymexlaCommMpiOpAttrGet(
+        ctx::MlirContext, op::EnzymeXlaCommMpiOp
+    )::MlirAttribute
+end
+
 @cenum EnzymeXlaGuaranteedAnalysisResult::UInt32 begin
     ENZYMEXLA_GUARANTEED_ANALYSIS_RESULT_GUARANTEED = 0x0000000000000000
     ENZYMEXLA_GUARANTEED_ANALYSIS_RESULT_NOTGUARANTEED = 0x0000000000000001
@@ -15832,36 +15880,6 @@ function mlirTritonInferReduceOpEncoding(operandEncoding, axis)
     @ccall Reactant_jll.libReactantExtra.mlirTritonInferReduceOpEncoding(
         operandEncoding::MlirAttribute, axis::Cint
     )::MlirAttribute
-end
-
-function mlirGetDialectHandle__tpu__()
-    @ccall Reactant_jll.libReactantExtra.mlirGetDialectHandle__tpu__()::MlirDialectHandle
-end
-
-function mlirTPUAnalyzePotentialCommunication(op, has_communication, has_custom_barrier)
-    @ccall Reactant_jll.libReactantExtra.mlirTPUAnalyzePotentialCommunication(
-        op::MlirOperation, has_communication::Ptr{Bool}, has_custom_barrier::Ptr{Bool}
-    )::Cvoid
-end
-
-function mlirTpuRegisterMosaicSerdePass()
-    @ccall Reactant_jll.libReactantExtra.mlirTpuRegisterMosaicSerdePass()::Cvoid
-end
-
-function mlirTpuFloat8EXMYTypeGetUnderlyingType(exmy_type)
-    @ccall Reactant_jll.libReactantExtra.mlirTpuFloat8EXMYTypeGetUnderlyingType(
-        exmy_type::MlirType
-    )::MlirType
-end
-
-function mlirTpuIsAFloat8EXMYType(type)
-    @ccall Reactant_jll.libReactantExtra.mlirTpuIsAFloat8EXMYType(type::MlirType)::Bool
-end
-
-function mlirTpuFloat8EXMYTypeGet(ctx, exmy_type)
-    @ccall Reactant_jll.libReactantExtra.mlirTpuFloat8EXMYTypeGet(
-        ctx::MlirContext, exmy_type::MlirType
-    )::MlirType
 end
 
 function mlirMosaicGpuIsATileTransformAttr(attr)
