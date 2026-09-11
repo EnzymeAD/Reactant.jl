@@ -60,23 +60,79 @@ end
 
 @testset "Mapreduce output type inference" begin
     # non-regression test for https://github.com/EnzymeAD/Reactant.jl/issues/3261
-    function infer_overloaded_mapreduce(A::Type; kwargs...)
-        kwcall_args = (
-            typeof(NamedTuple(kwargs)),
-            typeof(Reactant.TracedRArrayOverrides.overloaded_mapreduce),
-            typeof(abs2),
-            typeof(+),
-            A,
-        )
-        return only(Base.return_types(Core.kwcall, kwcall_args))
+    @testset "Inference on TracedRArray" begin
+        function infer_overloaded_mapreduce(f::Function, op::Function, A::Type; kwargs...)
+            kwcall_args = (
+                typeof(NamedTuple(kwargs)),
+                typeof(Reactant.TracedRArrayOverrides.overloaded_mapreduce),
+                typeof(f),
+                typeof(op),
+                A,
+            )
+            return only(Base.return_types(Core.kwcall, kwcall_args))
+        end
+
+        # various dims
+        @test infer_overloaded_mapreduce(abs2, +, TracedRArray{Float32,2}; dims=:) ===
+              TracedRNumber{Float32}
+        @test infer_overloaded_mapreduce(abs2, +, TracedRArray{Float32,2}; dims=1) ===
+              TracedRArray{Float32,2}
+        @test infer_overloaded_mapreduce(abs2, +, TracedRArray{Float32,2}; dims=(1, 2)) ===
+              TracedRArray{Float32,2}
+        @test infer_overloaded_mapreduce(abs2, +, TracedRArray{Float32,2}; dims=[1]) ===
+              TracedRArray{Float32,2}
+        @test infer_overloaded_mapreduce(abs2, +, TracedRArray{Float32,3}; dims=1:2) ===
+              TracedRArray{Float32,3}
+        # init of different type
+        @test infer_overloaded_mapreduce(abs2, +, TracedRArray{Float32,2}; init=1.0) ===
+              TracedRNumber{Float64}
+        @test infer_overloaded_mapreduce(abs2, +, TracedRArray{Float32,2}; dims=1, init=1.0) ===
+              TracedRArray{Float64,2}
+        # f narrowing type
+        @test infer_overloaded_mapreduce(x -> x == 1, +, TracedRArray{Float32,2}) ===
+              TracedRNumber{Int64}
     end
 
-    @test infer_overloaded_mapreduce(TracedRArray{Float32,2}; dims=:) ===
-        TracedRNumber{Float32}
-    @test infer_overloaded_mapreduce(TracedRArray{Float32,2}; dims=1) ===
-        TracedRArray{Float32,2}
-    @test infer_overloaded_mapreduce(TracedRArray{Float32,2}; dims=(1, 2)) ===
-        TracedRArray{Float32,2}
+    @testset "Inside @jit" begin
+        function strict_reduction(reduction, v)
+            T = Core.Compiler.return_type(reduction, Tuple{typeof(v)})
+            res = reduction(v)
+            if !isconcretetype(T)
+                error("Inferred return type $T / actual return type $(typeof(res))")
+            else
+                return res
+            end
+        end
+        function test_matching(a, b)
+            @test a ≈ b
+            @test Reactant.unwrapped_eltype(a) == Reactant.unwrapped_eltype(b)
+        end
+
+        x_ra = Reactant.TestUtils.construct_test_array(Float32, 4)
+
+        y=@jit strict_reduction(sum, x_ra)
+        z = sum(x_ra)
+        test_matching(y, z)
+
+        y=@jit strict_reduction(maximum, x_ra)
+        z = maximum(x_ra)
+        test_matching(y, z)
+
+        _sum1(x) = sum(x; init=1.0)
+        y=@jit strict_reduction(_sum1, x_ra)
+        z = _sum1(x_ra)
+        test_matching(y, z)
+
+        _sum2(x) = sum(x; dims=1, init=1.0)
+        y=@jit strict_reduction(_sum2, x_ra)
+        z = _sum2(x_ra)
+        test_matching(y, z)
+
+        _sum3(x) = sum(x; init=ConcreteRNumber(1.0))
+        @test_broken @jit strict_reduction(_sum3, x_ra) # TODO: why?
+        # inferred return type Union{Float64, ConcretePJRTNumber{Float64, 1}}
+        # actual return type Float64
+    end
 end
 
 function mysoftmax!(x)

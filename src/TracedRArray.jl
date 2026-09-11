@@ -191,8 +191,7 @@ function overloaded_mapreduce(
     dims=:,
     init=Base._InitialValue(),
 ) where {T,N}
-    original_dims = dims
-    # don't reassign dims to avoid the "captured variable in closure" type instability 
+    # don't reassign dims to avoid the "captured variable in closure" type instability
     normalized_dims = sort(
         if dims isa Int
             Int64[dims]
@@ -219,26 +218,30 @@ function overloaded_mapreduce(
     # Reducing in the narrow type is silently wrong: `stablehlo.add` over `i1` is a logical
     # `or`, and small integers wrap.
     reduce_input = materialize_traced_array(TracedUtils.elem_apply(f, A))
-    # The line above is not inferred correctly, and maybe subsequent lines aren't either.
-    if unwrapped_eltype(reduce_input) != op_in_T
-        reduce_input = op_in_T.(reduce_input)
+    if unwrapped_eltype(reduce_input) != op_out_T
+        reduce_input = op_out_T.(reduce_input)
     end
 
-    res = @opcall reduce(reduce_input, reduce_init, dims, op)
+    res_noinit = @opcall reduce(reduce_input, reduce_init, normalized_dims, op)
 
-    (init isa Base._InitialValue || init === nothing) || (res = op.(res, init))
+    if (init isa Base._InitialValue || init === nothing)
+        res = res_noinit
+        res_T = op_out_T
+    else
+        res = op.(res_noinit, init)
+        res_T = Base.promote_op(op, op_out_T, unwrapped_eltype(typeof(init)))
+    end
 
-    if original_dims isa Colon
+    if dims isa Colon
         @assert size(res) == () "expected size of result to be (), got $(size(res))"
-        return TracedRNumber{op_out_T}((), res.mlir_data)
+        return TracedRNumber{unwrapped_eltype(res)}((), res.mlir_data)::TracedRNumber{res_T}
     end
     if res isa TracedRNumber
-        res = TracedRArray{op_out_T,0}((), res.mlir_data, ())
+        res = TracedRArray{unwrapped_eltype(res),0}((), res.mlir_data, ())::TracedRArray{res_T,0}
     end
-    shape = [ifelse(i in dims, 1, size(A, i)) for i in 1:N]
+    shape = [ifelse(i in normalized_dims, 1, size(A, i)) for i in 1:N]
     res_reshaped = @opcall reshape(res, shape)
-    # force return type inference
-    return res_reshaped::TracedRArray{op_out_T,N}
+    return res_reshaped::TracedRArray{res_T,N}
 end
 
 function Base.mapreducedim!(
@@ -271,7 +274,7 @@ function Base.fill!(A::AnyTracedRArray{T,N}, x::TracedRNumber{T2}) where {T,N,T2
 end
 
 function Base.fill!(A::Array{T,N}, x::TracedRNumber{T2}) where {T,N,T2}
-    return throw(MethodError(fill!, (A, x)))
+    throw(MethodError(fill!, (A, x)))
 end
 
 struct AbstractReactantArrayStyle{N} <: AbstractArrayStyle{N} end
