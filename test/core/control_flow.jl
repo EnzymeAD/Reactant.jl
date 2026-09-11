@@ -1426,3 +1426,80 @@ end
     testr = @compile test.(b)
     @test testr(b) == test.(a)
 end
+
+function condition13_bareif_no_final_else(cond, numreals)
+    @trace if cond
+        1.0
+    elseif numreals == 4
+        2.0
+    elseif numreals == 2
+        3.0
+    elseif numreals == 0
+        4.0
+    end
+end
+
+@testset "condition13: bare if with no final else" begin
+    @test @jit(
+        condition13_bareif_no_final_else(ConcreteRNumber(true), ConcreteRNumber(4))
+    ) === nothing
+    @test @jit(
+        condition13_bareif_no_final_else(ConcreteRNumber(false), ConcreteRNumber(4))
+    ) === nothing
+    @test @jit(
+        condition13_bareif_no_final_else(ConcreteRNumber(false), ConcreteRNumber(2))
+    ) === nothing
+    @test @jit(
+        condition13_bareif_no_final_else(ConcreteRNumber(false), ConcreteRNumber(0))
+    ) === nothing
+    @test @jit(
+        condition13_bareif_no_final_else(ConcreteRNumber(false), ConcreteRNumber(99))
+    ) === nothing
+end
+
+function condition14_ifelse_assign_return(x)
+    return @trace y = if x > 0
+        1
+    else
+        -1
+    end
+end
+
+@testset "condition14: if/else assign returned directly" begin
+    @test @jit(condition14_ifelse_assign_return(ConcreteRNumber(1.0))) == 1
+    @test @jit(condition14_ifelse_assign_return(ConcreteRNumber(-1.0))) == -1
+end
+
+function condition15_ifelseifelse_assign_return(x)
+    return @trace y = if x > 0
+        1
+    elseif x == 0
+        0
+    else
+        -1
+    end
+end
+
+@testset "condition15: if/elseif/else assign returned directly" begin
+    @test @jit(condition15_ifelseifelse_assign_return(ConcreteRNumber(1.0))) == 1
+    @test @jit(condition15_ifelseifelse_assign_return(ConcreteRNumber(0.0))) == 0
+    @test @jit(condition15_ifelseifelse_assign_return(ConcreteRNumber(-1.0))) == -1
+end
+
+function condition16_nested_ifelse_assign_return(x)
+    return @trace y = if x > 0
+        1
+    else
+        if x == 0
+            0
+        else
+            -1
+        end
+    end
+end
+
+@testset "condition16: nested if/else assign returned directly" begin
+    @test @jit(condition16_nested_ifelse_assign_return(ConcreteRNumber(1.0))) == 1
+    @test @jit(condition16_nested_ifelse_assign_return(ConcreteRNumber(0.0))) == 0
+    @test @jit(condition16_nested_ifelse_assign_return(ConcreteRNumber(-1.0))) == -1
+end

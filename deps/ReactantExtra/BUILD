@@ -1953,6 +1953,24 @@ gentbl_cc_library(
     ],
 )
 
+gentbl_cc_library(
+    name = "CommJLIncGen",
+    tbl_outs = [
+        (
+            [
+                "--generator=jl-op-defs",
+                "--disable-module-wrap=0",
+            ],
+            "Comm.jl",
+        ),
+    ],
+    tblgen = "//:mlir-jl-tblgen",
+    td_file = "@enzyme_ad//src/enzyme_ad/jax/Dialect/Comm:Ops.td",
+    deps = [
+        "@enzyme_ad//src/enzyme_ad/jax/Dialect/Comm:CommDialectTdFiles",
+    ],
+)
+
 genrule(
     name = "libMLIR_h.jl",
     srcs = [
@@ -1975,7 +1993,7 @@ genrule(
         "@shardy//shardy/integrations/c:attributes.h",
         "@enzyme_ad//src/enzyme_ad/jax:Integrations/c/triton_dialect_capi.h",
         "@jax//jaxlib/mosaic:dialect/tpu/integrations/c/tpu_dialect.h",
-        "@jax//jaxlib/mosaic:dialect/tpu/integrations/c/tpu_passes.capi.h.inc",
+        # "@jax//jaxlib/mosaic:dialect/tpu/integrations/c/tpu_passes.capi.h.inc",
         "@jax//jaxlib/mosaic/dialect/gpu:integrations/c/attributes.h",
         "@jax//jaxlib/mosaic/dialect/gpu:integrations/c/gpu_dialect.h",
         "@enzyme_ad//src/enzyme_ad/jax:Integrations/c/EnzymeXLA.h",
