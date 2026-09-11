@@ -23,12 +23,13 @@ end
 
 function register_backend(
     platform_name::String;
-    priority::Int64,
+    priority::Integer,
     pjrt_initialize_function=nothing,
     ifrt_initialize_function=nothing,
     preinitialize_setup_function=Returns(nothing),
 )
     @assert pjrt_initialize_function !== nothing || ifrt_initialize_function !== nothing "atleast one of pjrt_initialize_function or ifrt_initialize_function must be provided."
+    priority = Int64(priority)
 
     for backend in RegisteredBackends
         @assert backend.platform_name != platform_name "Backend with platform_name: \
