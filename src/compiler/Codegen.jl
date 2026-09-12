@@ -16,6 +16,21 @@ const DEBUG_DISABLE_RESHARDING = Ref(false)
 const DEBUG_ALIASED_BUFFER_ASSIGNMENT_ERROR = Ref(false)
 const DEBUG_BUFFER_POINTERS_STORE_DICT = Base.IdDict()
 
+function check_aliased_buffer_assignment(
+    @nospecialize(obj), field, val, path; buffer_field=:data
+)
+    if DEBUG_ALIASED_BUFFER_ASSIGNMENT_ERROR[] && field == buffer_field
+        if val ∈ keys(DEBUG_BUFFER_POINTERS_STORE_DICT)
+            if obj !== DEBUG_BUFFER_POINTERS_STORE_DICT[val]
+                error("Aliased buffer cannot be assigned to multiple Concrete Structs. \
+                       Path: $path.")
+            end
+        else
+            DEBUG_BUFFER_POINTERS_STORE_DICT[val] = obj
+        end
+    end
+end
+
 @inline function traced_getfield(@nospecialize(obj::Dict), field)
     return Base.getindex(obj, field)
 end
@@ -55,17 +70,7 @@ end
 @inline function traced_setfield!(
     @nospecialize(obj::AbstractConcreteNumber), field, val, path
 )
-    if DEBUG_ALIASED_BUFFER_ASSIGNMENT_ERROR[] && field == :data
-        if val ∈ keys(DEBUG_BUFFER_POINTERS_STORE_DICT)
-            if obj !== DEBUG_BUFFER_POINTERS_STORE_DICT[val]
-                error("Aliased buffer cannot be assigned to multiple Concrete Structs. \
-                       Path: $path.")
-            end
-        else
-            DEBUG_BUFFER_POINTERS_STORE_DICT[val] = obj
-        end
-    end
-
+    check_aliased_buffer_assignment(obj, field, val, path)
     return Base.setproperty!(obj, field, val)
 end
 
@@ -96,31 +101,12 @@ end
 
 # fallback
 @inline function setfield_carray!(obj, field, val, path)
-    if DEBUG_ALIASED_BUFFER_ASSIGNMENT_ERROR[] && field == :data
-        if val ∈ keys(DEBUG_BUFFER_POINTERS_STORE_DICT)
-            if obj !== DEBUG_BUFFER_POINTERS_STORE_DICT[val]
-                error("Aliased buffer cannot be assigned to multiple Concrete Structs. \
-                       Path: $path.")
-            end
-        else
-            DEBUG_BUFFER_POINTERS_STORE_DICT[val] = obj
-        end
-    end
-
+    check_aliased_buffer_assignment(obj, field, val, path)
     return Base.setproperty!(obj, field, val)
 end
 
 @inline function setfield_carray!(obj::ConcretePJRTArray, field, val, path)
-    if DEBUG_ALIASED_BUFFER_ASSIGNMENT_ERROR[] && field == :data
-        if val ∈ keys(DEBUG_BUFFER_POINTERS_STORE_DICT)
-            if obj !== DEBUG_BUFFER_POINTERS_STORE_DICT[val]
-                error("Aliased buffer cannot be assigned to multiple Concrete Structs. \
-                       Path: $path.")
-            end
-        else
-            DEBUG_BUFFER_POINTERS_STORE_DICT[val] = obj
-        end
-    end
+    check_aliased_buffer_assignment(obj, field, val, path)
 
     if field !== :data || typeof(val) == typeof(getfield(obj, field))
         return Base.setproperty!(obj, field, val)
