@@ -91,6 +91,27 @@ end
     @test @jit(sum(sr)) ≈ sum(s2)
 end
 
+two_col_nt(x, y) = (; s=x + y, p=x * y)
+
+# Struct-array-styled broadcast over individual columns, as done e.g. by
+# PropertyFunctions.jl:
+function structbcast_over_columns(a, b)
+    style = StructArrays.StructArrayStyle{typeof(Base.Broadcast.combine_styles(a, b)),1}()
+    return Base.Broadcast.materialize(Base.Broadcast.broadcasted(style, two_col_nt, a, b))
+end
+
+@testset "struct-returning broadcast over plain columns" begin
+    a = rand(10)
+    b = rand(Float32, 10)
+    a_ra = Reactant.to_rarray(a)
+    b_ra = Reactant.to_rarray(b)
+
+    res = @jit structbcast_over_columns(a_ra, b_ra)
+    @test res isa StructVector
+    @test res.s ≈ a .+ b
+    @test res.p ≈ a .* b
+end
+
 @testset "structarray with complex numbers" begin
     s = randn(64)
 
