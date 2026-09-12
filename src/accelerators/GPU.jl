@@ -73,7 +73,7 @@ function __init__()
         if Reactant_jll.host_platform.tags["gpu"] == "cuda"
             register_backend(
                 "cuda";
-                priority=500,
+                priority=Int64(500),
                 pjrt_initialize_function=make_pjrt_client,
                 ifrt_initialize_function=make_ifrt_client,
             )
@@ -82,7 +82,7 @@ function __init__()
         if Reactant_jll.host_platform.tags["gpu"] == "rocm"
             register_backend(
                 "rocm";
-                priority=500,
+                priority=Int64(500),
                 pjrt_initialize_function=make_pjrt_client,
                 ifrt_initialize_function=make_ifrt_client,
             )

@@ -69,7 +69,7 @@ function __init__()
     if !Sys.isapple() && has_tpu() && !Reactant.precompiling()
         register_backend(
             "tpu";
-            priority=1000,
+            priority=Int64(1000),
             pjrt_initialize_function=make_pjrt_client,
             ifrt_initialize_function=make_ifrt_client,
             preinitialize_setup_function=() -> begin

@@ -49,7 +49,7 @@ end
 function __init__()
     register_backend(
         "cpu";
-        priority=100,
+        priority=Int64(100),
         pjrt_initialize_function=make_pjrt_client,
         ifrt_initialize_function=make_ifrt_client,
     )
