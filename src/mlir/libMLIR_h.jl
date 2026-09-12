@@ -16261,6 +16261,20 @@ struct JLAllocatorStats
     peak_pool_bytes::Int64
 end
 
+struct JLCompiledMemoryStats
+    generated_code_size_in_bytes::Int64
+    argument_size_in_bytes::Int64
+    output_size_in_bytes::Int64
+    alias_size_in_bytes::Int64
+    temp_size_in_bytes::Int64
+    host_generated_code_size_in_bytes::Int64
+    host_argument_size_in_bytes::Int64
+    host_output_size_in_bytes::Int64
+    host_alias_size_in_bytes::Int64
+    host_temp_size_in_bytes::Int64
+    peak_memory_in_bytes::Int64
+end
+
 struct DeviceProperties
     totalGlobalMem::Csize_t
     sharedMemPerBlock::Csize_t
@@ -16551,6 +16565,10 @@ function MakeClientFromApi(api, device_type, client_name, error)
     )::Ptr{PjRtClient}
 end
 
+function GetCpuPjrtApi()
+    @ccall Reactant_jll.libReactantExtra.GetCpuPjrtApi()::Ptr{PJRT_Api}
+end
+
 function MakeTPUClient(tpu_path, error)
     @ccall Reactant_jll.libReactantExtra.MakeTPUClient(
         tpu_path::Cstring, error::Ptr{Cstring}
@@ -16614,6 +16632,18 @@ end
 function ifrt_device_get_allocator_stats(device, jlstats)
     @ccall Reactant_jll.libReactantExtra.ifrt_device_get_allocator_stats(
         device::Ptr{Device}, jlstats::Ptr{JLAllocatorStats}
+    )::Cvoid
+end
+
+function PjRtDeviceClearMemoryStats(device)
+    @ccall Reactant_jll.libReactantExtra.PjRtDeviceClearMemoryStats(
+        device::Ptr{PjRtDevice}
+    )::Cvoid
+end
+
+function ifrt_device_clear_memory_stats(device)
+    @ccall Reactant_jll.libReactantExtra.ifrt_device_clear_memory_stats(
+        device::Ptr{Device}
     )::Cvoid
 end
 
@@ -16889,6 +16919,30 @@ function ClientCompileWithProto(
         compile_options_proto::Ptr{UInt8},
         compile_options_proto_size::Csize_t,
     )::Ptr{PjRtLoadedExecutable}
+end
+
+function PjRtLoadedExecutableSerialize(exec, size)
+    @ccall Reactant_jll.libReactantExtra.PjRtLoadedExecutableSerialize(
+        exec::Ptr{PjRtLoadedExecutable}, size::Ptr{Csize_t}
+    )::Ptr{UInt8}
+end
+
+function PjRtClientLoadSerializedExecutable(
+    client, data, size, compile_options_proto, compile_options_proto_size
+)
+    @ccall Reactant_jll.libReactantExtra.PjRtClientLoadSerializedExecutable(
+        client::Ptr{PjRtClient},
+        data::Ptr{UInt8},
+        size::Csize_t,
+        compile_options_proto::Ptr{UInt8},
+        compile_options_proto_size::Csize_t,
+    )::Ptr{PjRtLoadedExecutable}
+end
+
+function PjRtLoadedExecutableGetCompiledMemoryStats(exec, jlstats)
+    @ccall Reactant_jll.libReactantExtra.PjRtLoadedExecutableGetCompiledMemoryStats(
+        exec::Ptr{PjRtLoadedExecutable}, jlstats::Ptr{JLCompiledMemoryStats}
+    )::Cvoid
 end
 
 function PjRtLoadedExecutableGetOuputShardings(exec, op_shardings, num_op_shardings)
@@ -17931,6 +17985,30 @@ function ifrt_loaded_executable_client(exec)
     @ccall Reactant_jll.libReactantExtra.ifrt_loaded_executable_client(
         exec::Ptr{HeldIfrtLoadedExecutable}
     )::Ptr{Client}
+end
+
+function ifrt_loaded_executable_serialize(exec, size)
+    @ccall Reactant_jll.libReactantExtra.ifrt_loaded_executable_serialize(
+        exec::Ptr{HeldIfrtLoadedExecutable}, size::Ptr{Csize_t}
+    )::Ptr{UInt8}
+end
+
+function ifrt_loaded_executable_get_compiled_memory_stats(exec, jlstats)
+    @ccall Reactant_jll.libReactantExtra.ifrt_loaded_executable_get_compiled_memory_stats(
+        exec::Ptr{HeldIfrtLoadedExecutable}, jlstats::Ptr{JLCompiledMemoryStats}
+    )::Cvoid
+end
+
+function ifrt_client_load_serialized_executable(
+    client, data, size, compile_options_proto, compile_options_proto_size
+)
+    @ccall Reactant_jll.libReactantExtra.ifrt_client_load_serialized_executable(
+        client::Ptr{Client},
+        data::Ptr{UInt8},
+        size::Csize_t,
+        compile_options_proto::Ptr{UInt8},
+        compile_options_proto_size::Csize_t,
+    )::Ptr{HeldIfrtLoadedExecutable}
 end
 
 function ifrt_loaded_executable_get_parameter_shardings(

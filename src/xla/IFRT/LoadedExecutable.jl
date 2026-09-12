@@ -86,6 +86,47 @@ function XLA.compile(
     )
 end
 
+function XLA.serialize_executable(exec::LoadedExecutable)
+    size = Ref{Csize_t}(0)
+    GC.@preserve exec size begin
+        data = MLIR.API.ifrt_loaded_executable_serialize(exec.exec, size)
+    end
+    return XLA.unsafe_bytes_and_free(data, size[])
+end
+
+function XLA.load_serialized_executable(
+    client::Client,
+    serialized::Vector{UInt8};
+    compile_options::Union{Nothing,Reactant.Proto.xla.CompileOptionsProto}=nothing,
+    num_parameters::Int64,
+    num_outputs::Int64,
+    is_sharded::Bool=false,
+    num_replicas::Int64=1,
+    num_partitions::Int64=1,
+)
+    compile_options_bytes = XLA.serialized_compile_options(compile_options)
+    GC.@preserve client serialized compile_options_bytes begin
+        exec = MLIR.API.ifrt_client_load_serialized_executable(
+            client.client,
+            serialized,
+            length(serialized),
+            compile_options_bytes,
+            length(compile_options_bytes),
+        )
+    end
+    return LoadedExecutable(
+        exec, num_outputs, num_parameters, is_sharded, num_replicas, num_partitions
+    )
+end
+
+function XLA.compiled_memory_stats_internal(exec::LoadedExecutable)
+    ref = Ref{MLIR.API.JLCompiledMemoryStats}()
+    GC.@preserve exec ref begin
+        MLIR.API.ifrt_loaded_executable_get_compiled_memory_stats(exec.exec, ref)
+    end
+    return ref[]
+end
+
 @inline function XLA.execute(
     exec::LoadedExecutable,
     inputs::NTuple{N,Ptr{Cvoid}},

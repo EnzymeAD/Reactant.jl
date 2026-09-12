@@ -82,6 +82,47 @@ function XLA.compile(
     )
 end
 
+function XLA.serialize_executable(exec::LoadedExecutable)
+    size = Ref{Csize_t}(0)
+    GC.@preserve exec size begin
+        data = MLIR.API.PjRtLoadedExecutableSerialize(exec.exec, size)
+    end
+    return XLA.unsafe_bytes_and_free(data, size[])
+end
+
+function XLA.load_serialized_executable(
+    client::Client,
+    serialized::Vector{UInt8};
+    compile_options::Union{Nothing,Reactant.Proto.xla.CompileOptionsProto}=nothing,
+    num_parameters::Int64,
+    num_outputs::Int64,
+    is_sharded::Bool=false,
+    num_replicas::Int64=1,
+    num_partitions::Int64=1,
+)
+    compile_options_bytes = XLA.serialized_compile_options(compile_options)
+    GC.@preserve client serialized compile_options_bytes begin
+        exec = MLIR.API.PjRtClientLoadSerializedExecutable(
+            client.client,
+            serialized,
+            length(serialized),
+            compile_options_bytes,
+            length(compile_options_bytes),
+        )
+    end
+    return LoadedExecutable(
+        exec, num_outputs, num_parameters, is_sharded, num_replicas, num_partitions
+    )
+end
+
+function XLA.compiled_memory_stats_internal(exec::LoadedExecutable)
+    ref = Ref{MLIR.API.JLCompiledMemoryStats}()
+    GC.@preserve exec ref begin
+        MLIR.API.PjRtLoadedExecutableGetCompiledMemoryStats(exec.exec, ref)
+    end
+    return ref[]
+end
+
 function execute_ir(N, M, n_outs, with_device::Bool, nmesh_ids::Int64)
     ptr = @static if VERSION < v"1.12"
         sizeof(Int) == sizeof(Int64) ? "i64" : "i32"
