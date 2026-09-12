@@ -138,6 +138,14 @@ end
 end
 
 @testset "strided indexing" begin
+    @test Reactant.TracedIndexing.get_slice_stride(1:0) == -1
+    @test Reactant.TracedIndexing.get_slice_stride(1:4) == 1
+    @test Reactant.TracedIndexing.get_slice_stride(1:2:4) == 2
+    @test Reactant.TracedUtils.__contiguous_indices(1:4)
+    @test !Reactant.TracedUtils.__contiguous_indices(1:2:4)
+    @test Reactant.TracedIndexing.get_slice_stride(Base.Slice(Base.OneTo(4))) == 1
+    @test Reactant.TracedUtils.__contiguous_indices(Base.Slice(Base.OneTo(4)))
+
     x = reshape(collect(1:24), 4, 6)
     x_ra = Reactant.to_rarray(x)
 
