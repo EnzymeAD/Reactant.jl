@@ -23,7 +23,7 @@ end
 
 function register_backend(
     platform_name::String;
-    priority::Int64,
+    priority::Int,
     pjrt_initialize_function=nothing,
     ifrt_initialize_function=nothing,
     preinitialize_setup_function=Returns(nothing),
@@ -43,8 +43,8 @@ function register_backend(
             priority,
             pjrt_initialize_function,
             ifrt_initialize_function,
-            Ref(0),
-            Ref(0),
+            Ref(Int64(0)),
+            Ref(Int64(0)),
             preinitialize_setup_function,
         )
         push!(RegisteredBackends, backend)
