@@ -1,11 +1,11 @@
 module Ops
-using Reactant: Reactant, TracedRArray, TracedRNumber
-using Reactant.TracedUtils: get_mlir_data
-using Reactant: MLIR
+using Reactant: Reactant, MLIR, TracedRArray, TracedRNumber
+using Reactant.TracedUtils: get_mlir_data, set_mlir_data!
 using Reactant.MLIR: IR
 using Reactant.MLIR.Dialects: comm
 using Reactant.Ops: mlir_stacktrace, mlir_type
 using MPI: MPI
+using ..ReactantMPIExt: TracedCommunicator, TracedRequest
 
 const MPI_OP_MAP = Dict(
     MPI.OP_NULL.val => MLIR.API.ENZYMEXLA_COMM_MPI_OP_NULL,
@@ -37,52 +37,53 @@ const MPI_COMM_MAP = Dict(
     MPI.COMM_SELF.val => MLIR.API.ENZYMEXLA_COMM_MPI_COMM_SELF,
 )
 
-function map_mpi_comm(comm::MPI.Comm)
-    if haskey(MPI_COMM_MAP, comm.val)
-        return MPI_COMM_MAP[comm.val]
+function map_mpi_comm(c::MPI.Comm)
+    if haskey(MPI_COMM_MAP, c.val)
+        return MPI_COMM_MAP[c.val]
     else
         throw(ArgumentError("Custom MPI communicators are not supported currently"))
     end
 end
 
 @noinline function constant(
-    comm::MPI.Comm; location=mlir_stacktrace("comm.mpi.constant", @__FILE__, @__LINE__)
+    c::MPI.Comm; location=mlir_stacktrace("comm.mpi.constant", @__FILE__, @__LINE__)
 )
-    if comm != MPI.COMM_WORLD || comm != MPI.COMM_SELF || comm != MPI.COMM_NULL
+    if c != MPI.COMM_WORLD && c != MPI.COMM_SELF && c != MPI.COMM_NULL
         throw(ArgumentError("Only MPI communicator constants are supported currently"))
     end
     type_result = mlir_type(TracedCommunicator)
-    value = MLIR.API.enzymexlaCommMpiCommAttrGet(IR.current_context(), map_mpi_comm(comm))
-    op = comm.mpi_constant(comm; result=type_result, location)
+    value = MLIR.API.enzymexlaCommMpiCommAttrGet(IR.current_context(), map_mpi_comm(c))
+    op = comm.mpi_constant(; result=type_result, value, location)
     return TracedCommunicator((), IR.result(op))
 end
 
 @noinline function comm_rank(
-    comm::TracedCommunicator;
+    c::TracedCommunicator;
     location=mlir_stacktrace("comm.mpi.comm_rank", @__FILE__, @__LINE__),
 )
-    op = comm.mpi_comm_rank(get_mlir_data(comm); rank=type_rank, location)
+    type_rank = mlir_type(TracedRArray{Int32,0}, ())
+    op = comm.mpi_comm_rank(get_mlir_data(c); rank=type_rank, location)
     return TracedRNumber{Int32}((), IR.result(op))
 end
 
 @noinline function comm_size(
-    comm::TracedCommunicator;
+    c::TracedCommunicator;
     location=mlir_stacktrace("comm.mpi.comm_size", @__FILE__, @__LINE__),
 )
     type_size = mlir_type(TracedRArray{Int32,0}, ())
-    op = comm.mpi_comm_size(comm; size=type_size, location)
+    op = comm.mpi_comm_size(c; size=type_size, location)
     return TracedRNumber{Int32}((), IR.result(op))
 end
 
 @noinline function comm_split(
-    comm::TracedCommunicator,
+    c::TracedCommunicator,
     color::TracedRNumber,
     key::TracedRNumber;
     location=mlir_stacktrace("comm.mpi.comm_split", @__FILE__, @__LINE__),
 )
     type_newcomm = mlir_type(TracedCommunicator)
     op = comm.mpi_comm_split(
-        get_mlir_data(comm),
+        get_mlir_data(c),
         get_mlir_data(color),
         get_mlir_data(key);
         newcomm=type_newcomm,
@@ -92,10 +93,10 @@ end
 end
 
 @noinline function barrier(
-    comm::TracedCommunicator;
+    c::TracedCommunicator;
     location=mlir_stacktrace("comm.mpi.barrier", @__FILE__, @__LINE__),
 )
-    comm.mpi_barrier(get_mlir_data(comm); location)
+    comm.mpi_barrier(get_mlir_data(c); location)
     return nothing
 end
 
@@ -103,14 +104,14 @@ end
     buf::TracedRArray,
     dest::TracedRNumber,
     tag::TracedRNumber,
-    comm::TracedCommunicator;
+    c::TracedCommunicator;
     location=mlir_stacktrace("comm.mpi.send", @__FILE__, @__LINE__),
 )
     comm.mpi_send(
         get_mlir_data(buf),
         get_mlir_data(dest),
         get_mlir_data(tag),
-        get_mlir_data(comm);
+        get_mlir_data(c);
         location,
     )
     return nothing
@@ -120,16 +121,16 @@ end
     buf::TracedRArray,
     dest::TracedRNumber,
     tag::TracedRNumber,
-    comm::TracedCommunicator;
+    c::TracedCommunicator;
     location=mlir_stacktrace("comm.mpi.isend", @__FILE__, @__LINE__),
 )
-    type_result = mlir_type(TracedRequest)
-    op = comm.mpi_send(
+    type_request = mlir_type(TracedRequest)
+    op = comm.mpi_isend(
         get_mlir_data(buf),
         get_mlir_data(dest),
         get_mlir_data(tag),
-        get_mlir_data(comm);
-        request=type_result,
+        get_mlir_data(c);
+        request=type_request,
         location,
     )
     return TracedRequest((), IR.result(op))
@@ -139,15 +140,14 @@ end
     buf::TracedRArray,
     src::TracedRNumber,
     tag::TracedRNumber,
-    comm::TracedCommunicator;
+    c::TracedCommunicator;
     location=mlir_stacktrace("comm.mpi.recv", @__FILE__, @__LINE__),
 )
     op = comm.mpi_recv(
-        get_mlir_data(buf),
         get_mlir_data(src),
         get_mlir_data(tag),
-        get_mlir_data(comm);
-        outbuf=mlir_type(buf),
+        get_mlir_data(c);
+        buffer=mlir_type(buf),
         location,
     )
     set_mlir_data!(buf, IR.result(op))
@@ -158,15 +158,14 @@ end
     buf::TracedRArray,
     src::TracedRNumber,
     tag::TracedRNumber,
-    comm::TracedCommunicator;
+    c::TracedCommunicator;
     location=mlir_stacktrace("comm.mpi.irecv", @__FILE__, @__LINE__),
 )
     op = comm.mpi_irecv(
-        get_mlir_data(buf),
         get_mlir_data(src),
         get_mlir_data(tag),
-        get_mlir_data(comm);
-        outbuf=mlir_type(buf),
+        get_mlir_data(c);
+        buffer=mlir_type(buf),
         request=mlir_type(TracedRequest),
         location,
     )
@@ -191,11 +190,11 @@ end
 end
 
 # TODO inplace and outplace versions?
-@noinline function allreduce(
+@noinline function allreduce!(
     sendbuff::TracedRArray,
     recvbuff::TracedRArray,
     mpi_op::MPI.Op,
-    comm::TracedCommunicator;
+    c::TracedCommunicator;
     location=mlir_stacktrace("comm.mpi.allreduce", @__FILE__, @__LINE__),
 )
     mapped_mpi_op = map_mpi_op(mpi_op)
@@ -203,7 +202,7 @@ end
     type_recvbuf = mlir_type(recvbuff)
     op = comm.mpi_allreduce(
         get_mlir_data(sendbuff),
-        get_mlir_data(comm);
+        get_mlir_data(c);
         recvbuf=type_recvbuf,
         reduceOp=mpi_op_attr,
         location,
@@ -216,14 +215,14 @@ end
 @noinline function bcast!(
     buf::TracedRArray,
     root::TracedRNumber,
-    comm::TracedCommunicator;
+    c::TracedCommunicator;
     location=mlir_stacktrace("comm.mpi.bcast", @__FILE__, @__LINE__),
 )
     op = comm.mpi_bcast(
         get_mlir_data(buf),
         get_mlir_data(root),
-        get_mlir_data(comm);
-        outbuf=mlir_type(buf),
+        get_mlir_data(c);
+        outBuffer=mlir_type(buf),
         location,
     )
     set_mlir_data!(buf, IR.result(op))

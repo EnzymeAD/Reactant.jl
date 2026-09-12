@@ -1,7 +1,11 @@
 using Reactant
-using Reactant: MLIR, Sharding
+using Reactant: MLIR, Sharding, TracedRArray
 using Reactant.TracedUtils: get_mlir_data, set_mlir_data!, get_paths, set_paths!
 using MPI
+
+# NOTE crossing the Reactant boundary is not yet supported for MPI types
+# i.e. passing a ConcreteCommunicator to Reactant.compile won't work, because
+# we need to add the MPI types to Reactant.TracedTypes
 
 for (name, supertype, julia_type) in
     [(:Communicator, Any, MPI.Comm), (:Request, MPI.AbstractRequest, MPI.Request)]
@@ -22,8 +26,8 @@ for (name, supertype, julia_type) in
             mlir_data::Union{Nothing,Reactant.MLIR.IR.Value}
         end
 
-        function Base.show(io::IOty, X::$traced_type) where {IOty<:Union{IO,IOContext}}
-            return print(io, "$traced_type(paths=", X.paths, ")")
+        function Base.show(io::IOty, X::T) where {IOty<:Union{IO,IOContext},T<:$traced_type}
+            return print(io, "$T(paths=", X.paths, ")")
         end
 
         Reactant.TracedUtils.get_mlir_data(x::$traced_type) = x.mlir_data
@@ -99,9 +103,9 @@ for (name, supertype, julia_type) in
             if mode == Reactant.ArrayToConcrete
                 haskey(seen, prev) && return seen[prev]::$concrete_type
                 res = if runtime isa Val{:PJRT}
-                    $concrete_type(ConcretePJRTNumber{Int64,1}(prev; device, client))
+                    $concrete_type(ConcretePJRTNumber{Int64}(prev.val; device, client))
                 elseif runtime isa Val{:IFRT}
-                    $concrete_type(ConcreteIFRTNumber{Int64,1}(prev; device, client))
+                    $concrete_type(ConcreteIFRTNumber{Int64}(prev.val; device, client))
                 else
                     error("Unsupported runtime $runtime")
                 end
@@ -128,7 +132,7 @@ for (name, supertype, julia_type) in
                 error("Simultaneous use of sharding and MPI is not supported")
             end
 
-            if mode == ArrayToConcrete
+            if mode == Reactant.ArrayToConcrete
                 if runtime isa Val{:PJRT}
                     return $concrete_type(ConcretePJRTNumber{Int64,1}(prev; device, client))
                 elseif runtime isa Val{:IFRT}
@@ -288,12 +292,18 @@ for (name, supertype, julia_type) in
             Reactant.Compiler.check_aliased_buffer_assignment(obj, field, cval, path)
             return Base.setproperty!(obj, field, cval, path)
         end
+
+        Reactant.use_overlayed_version(x::$traced_type) = true
     end
 end
 
-function Reactant.Ops.mlir_type(x::TracedCommunicator)
-    return MLIR.IR.Type(MLIR.API.enzymexlaCommMpiCommTypeGet(IR.current_context()))
+function Reactant.Ops.mlir_type(::Type{<:TracedCommunicator})
+    return MLIR.IR.Type(MLIR.API.enzymexlaCommMpiCommTypeGet(MLIR.IR.current_context()))
 end
-function Reactant.Ops.mlir_type(x::TracedRequest)
-    return MLIR.IR.Type(MLIR.API.enzymexlaCommMpiRequestTypeGet(IR.current_context()))
+function Reactant.Ops.mlir_type(::Type{<:TracedRequest})
+    return MLIR.IR.Type(MLIR.API.enzymexlaCommMpiRequestTypeGet(MLIR.IR.current_context()))
+end
+
+function MPI.Buffer(x::TracedRArray{T}) where {T}
+    return MPI.Buffer(x, length(x), MPI.Datatype(T))
 end
