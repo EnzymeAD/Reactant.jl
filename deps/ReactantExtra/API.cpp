@@ -3431,8 +3431,15 @@ struct LinkableRuntime {
   xla::PjRtClient *client;
   int device;
   bool shouldFreeClient;
-  DenseMap<const char *, std::map<std::vector<std::vector<int64_t>>,
-                                  xla::PjRtLoadedExecutable *>>
+  struct CachedExec {
+    xla::PjRtLoadedExecutable *exec;
+    // Per argument: does the kernel store through it? An argument whose
+    // result is the argument itself passed through is read-only. Doubles as
+    // the donation mask.
+    uint8_t *written;
+  };
+  DenseMap<const char *,
+           std::map<std::vector<std::vector<int64_t>>, CachedExec>>
       executables;
 
   // Each allocation reserves an inaccessible address range as large as the
@@ -3747,32 +3754,66 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
       exit(1);
     }
 
+    // An argument the kernel never stores through comes back as itself.
+    // Such an argument is not donated and not returned: its buffer stays as
+    // it is, and the executable neither copies it into a fresh result nor
+    // hands back a future for it.
+    uint8_t *written = (uint8_t *)malloc(argcnt);
+    memset(written, 1, argcnt);
+    {
+      auto ret = cast<func::ReturnOp>(funcOp.getBody().front().back());
+      SmallVector<mlir::Value> kept;
+      SmallVector<mlir::Type> keptTypes;
+      for (int64_t i = 0; i < argcnt && i < (int64_t)ret.getNumOperands();
+           i++) {
+        written[i] = ret.getOperand(i) != funcOp.getArgument(i);
+        funcOp.removeArgAttr(i, "tf.aliasing_output");
+        if (!written[i])
+          continue;
+        funcOp.setArgAttr(i, "tf.aliasing_output",
+                          builder.getI64IntegerAttr(kept.size()));
+        kept.push_back(ret.getOperand(i));
+        keptTypes.push_back(ret.getOperand(i).getType());
+      }
+      for (int64_t i = argcnt; i < (int64_t)ret.getNumOperands(); i++) {
+        kept.push_back(ret.getOperand(i));
+        keptTypes.push_back(ret.getOperand(i).getType());
+      }
+      ret->setOperands(kept);
+      funcOp.setType(mlir::FunctionType::get(
+          module->getContext(), funcOp.getFunctionType().getInputs(),
+          keptTypes));
+    }
     auto exec =
         ClientCompileWithProto(lrt->client, wrap(module.get()), nullptr, 0);
 
-    iter = cache.try_emplace(sizeKey, exec).first;
+    iter =
+        cache.try_emplace(sizeKey, LinkableRuntime::CachedExec{exec, written})
+            .first;
   }
 
-  auto exec = iter->second;
+  auto exec = iter->second.exec;
+  uint8_t *written = iter->second.written;
 
-  uint8_t *is_arg_donatable = (uint8_t *)malloc(argcnt);
+  int num_results = 0;
   for (int i = 0; i < argcnt; i++)
-    is_arg_donatable[i] = 1;
-  int num_results = argcnt;
-  std::vector<PjRtBuffer *> results(argcnt);
-  std::vector<uint8_t> futures(argcnt, 0);
-  std::vector<FutureType *> future_results(argcnt, nullptr);
+    num_results += written[i];
+  std::vector<PjRtBuffer *> results(num_results);
+  std::vector<uint8_t> futures(num_results, 0);
+  std::vector<FutureType *> future_results(num_results, nullptr);
   PjRtDevice *device = ClientGetDevice(lrt->client, lrt->device);
-  XLAExecuteSharded(exec, argcnt, baseArrays.data(), device, is_arg_donatable,
+  XLAExecuteSharded(exec, argcnt, baseArrays.data(), device, written,
                     num_results, results.data(), futures.data(),
                     future_results.data());
-  free(is_arg_donatable);
-  for (int64_t i = 0; i < argcnt; i++) {
-    *basePtrs[i] = results[i];
-    if (futures[i]) {
-      FutureAwait(future_results[i]);
-      FreeFuture(future_results[i]);
+  for (int64_t i = 0, k = 0; i < argcnt; i++) {
+    if (!written[i])
+      continue;
+    *basePtrs[i] = results[k];
+    if (futures[k]) {
+      FutureAwait(future_results[k]);
+      FreeFuture(future_results[k]);
     }
+    k++;
   }
 }
 
