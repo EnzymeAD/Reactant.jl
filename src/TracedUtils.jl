@@ -296,10 +296,11 @@ function is_pure(func)
     return true
 end
 
-function make_mlir_fn(
-    f,
-    args,
-    kwargs,
+# The tracing driver is shared; call_with_reactant specializes the traced program.
+Base.@nospecializeinfer function make_mlir_fn(
+    @nospecialize(f),
+    @nospecialize(args),
+    @nospecialize(kwargs),
     name="main",
     concretein=true;
     toscalar=false,
@@ -455,8 +456,9 @@ function make_mlir_fn(
     )
 end
 
-function prepare_mlir_fn_args(
-    args,
+# Reuse MLIR setup across argument types; make_tracer handles each argument.
+Base.@nospecializeinfer function prepare_mlir_fn_args(
+    @nospecialize(args),
     name,
     concretein,
     toscalar,
@@ -625,8 +627,9 @@ function process_linear_args!(linear_args, fnbody, do_transpose, optimize_then_p
     end
 end
 
-function finalize_mlir_fn(
-    result,
+# Return bookkeeping is shared across traced functions and their result types.
+Base.@nospecializeinfer function finalize_mlir_fn(
+    @nospecialize(result),
     traced_args,
     linear_args,
     skipped_args,
@@ -651,7 +654,7 @@ function finalize_mlir_fn(
     num_replicas,
     runtime,
     construct_function_without_args,
-    args,
+    @nospecialize(args),
     N,
     concretein,
     toscalar,
