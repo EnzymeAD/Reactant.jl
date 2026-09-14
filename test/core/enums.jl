@@ -125,6 +125,17 @@ fresh() = Reactant.to_rarray(Float32[1, 1])   # sum == 2
             @test c.code == expected
         end
 
+        reset_cache = Reactant.to_rarray(
+            EnumCache(Float32[1, 1], Code.Default, false); track_numbers=Number
+        )
+        update = @compile f_update(reset_cache, 3.0f0)
+        @test update(reset_cache, 3.0f0) == (Code.Default, false)
+        reset_cache.code = Code.Success
+        @test reset_cache.code.value isa ConcreteRNumber{Int32}
+        @test update(reset_cache, 3.0f0) == (Code.Success, false)
+        reset_cache.code = Code.MaxIters
+        @test update(reset_cache, 3.0f0) == (Code.MaxIters, false)
+
         function f_field_untouched(u, threshold)
             c = EnumCache(u, Code.Default, Reactant.ReactantCore.promote_to_traced(false))
             @trace if sum(c.u) > threshold
@@ -177,5 +188,14 @@ fresh() = Reactant.to_rarray(Float32[1, 1])   # sum == 2
         res = @jit f_arg(fresh(), fruit)
         @test res[1] == true
         @test res[2] == 2
+    end
+
+    @testset "scalar broadcasting" begin
+        fruit = Reactant.to_rarray(banana; track_numbers=Number)
+        f_broadcast(fruit) = [apple, banana, cherry] .== fruit
+        @test f_broadcast(fruit) == [false, true, false]
+        @test @jit(f_broadcast(fruit)) == [false, true, false]
+        @test @jit(f_broadcast(Reactant.to_rarray(apple; track_numbers=Number))) ==
+            [true, false, false]
     end
 end

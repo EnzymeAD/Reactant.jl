@@ -170,6 +170,11 @@ For enum state carried by `@trace while`, also initialize it with
 `promote_to_traced`. To pass an enum as a runtime input, convert it with
 `Reactant.to_rarray(value; track_numbers=Number)` before compilation.
 
+Converted enum fields can also be assigned plain enum values outside compilation,
+for example to reset a state object between compiled calls. These assignments keep
+the field concrete and available as a runtime input. Enum wrappers behave as scalars
+in broadcasting, just like plain enums.
+
 ### Loops
 
 In addition to conditional evaluations, [`@trace`](@ref) also supports capturing

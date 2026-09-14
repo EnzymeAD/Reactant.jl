@@ -15,10 +15,15 @@ enum's base integer: a `TracedRNumber` while tracing, a concrete number in the r
 compiled call. Supports the enum operations (`==`, `!=`, ordered comparisons, `ifelse`)
 against other `TracedEnum`s and plain `E` values, `Integer`/integer-type conversion, and —
 once the payload is concrete — conversion back to `E`.
+Like plain enums, these values behave as scalars in broadcasting. Converting a plain enum
+to `TracedEnum{E}` creates a concrete payload outside compilation and a traced payload
+inside compilation.
 """
 mutable struct TracedEnum{E<:Base.Enum}
     value
 end
+
+Base.broadcastable(x::TracedEnum) = Ref(x)
 
 function ReactantCore.promote_to_traced(x::E) where {E<:Base.Enum}
     return TracedEnum{E}(promote_to(TracedRNumber{enum_basetype(E)}, Integer(x)))
@@ -67,7 +72,10 @@ function Base.hash(x::TracedEnum{E}, h::UInt) where {E<:Base.Enum}
 end
 
 function Base.convert(::Type{TracedEnum{E}}, x::E) where {E<:Base.Enum}
-    return ReactantCore.promote_to_traced(x)
+    if ReactantCore.within_compile()
+        return ReactantCore.promote_to_traced(x)
+    end
+    return to_rarray(x; track_numbers=Number)
 end
 
 # Comparisons and selection
