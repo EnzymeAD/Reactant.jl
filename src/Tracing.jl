@@ -317,7 +317,7 @@ Base.@nospecializeinfer function traced_type_inner(
     elseif mode == TracedToConcrete
         return T
     elseif mode == ArrayToConcrete
-        @assert runtime isa Val{:PJRT}
+        @assert runtime isa Val{:IFRT}
         A´ = Base.unwrap_unionall(A)
         T, N = A´.parameters
         A´´ = ConcreteIFRTArray{T,N}
