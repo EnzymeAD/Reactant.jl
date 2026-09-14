@@ -35,6 +35,7 @@ Reactant.to_rarray
 ConcreteRArray
 ConcreteRNumber
 Reactant.TracedEnum
+Reactant.ConcreteEnum
 ```
 
 ## Inspect Generated HLO

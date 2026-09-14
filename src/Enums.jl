@@ -1,35 +1,41 @@
-# `Base.Enum` values (`@enum`, EnumX's `@enumx`, ...) are isbits reinterpretations of an
-# integer. A traced enum is an enum-typed wrapper around the traced base integer — not a
-# `TracedRNumber` with an enum element type — so the payload is an ordinary traced number
-# and the wrapper rides the generic struct tracing and result reconstruction. The wrapper
-# is mutable with an untyped slot because the result write-back machinery replaces traced
-# payloads with concrete numbers via `setfield!`.
-
 enum_basetype(::Type{<:Base.Enum{T}}) where {T} = T
+
+abstract type AbstractReactantEnum{E<:Base.Enum} end
 
 """
     TracedEnum{E <: Base.Enum}
 
-A value of the enum type `E` carried through a Reactant compilation. `value` holds the
-enum's base integer: a `TracedRNumber` while tracing, a concrete number in the result of a
-compiled call. Supports the enum operations (`==`, `!=`, ordered comparisons, `ifelse`)
-against other `TracedEnum`s and plain `E` values, `Integer`/integer-type conversion, and —
-once the payload is concrete — conversion back to `E`.
-Like plain enums, these values behave as scalars in broadcasting. Converting a plain enum
-to `TracedEnum{E}` creates a concrete payload outside compilation and a traced payload
-inside compilation.
+An enum of type `E` represented by a traced integer during compilation. Supports enum
+comparisons, selection, integer conversion, and scalar broadcasting. Compiled results
+are reconstructed as [`ConcreteEnum`](@ref) values.
 """
-mutable struct TracedEnum{E<:Base.Enum}
-    value
+mutable struct TracedEnum{E<:Base.Enum} <: AbstractReactantEnum{E}
+    value::TracedRNumber
 end
 
-Base.broadcastable(x::TracedEnum) = Ref(x)
+"""
+    ConcreteEnum{E <: Base.Enum, N <: AbstractConcreteNumber}
+
+An enum of type `E` backed by a concrete runtime integer of type `N`. Created by
+`to_rarray(enum; track_numbers=Number)` and returned by compiled enum computations.
+Supports enum comparisons, integer conversion, conversion back to `E`, hashing, and
+scalar broadcasting. Assigning a plain enum to a field of this type creates a concrete
+integer of the same runtime type; it does not require an active compilation.
+"""
+mutable struct ConcreteEnum{E<:Base.Enum,N<:AbstractConcreteNumber} <:
+               AbstractReactantEnum{E}
+    value::N
+end
+
+ConcreteEnum{E}(value::N) where {E,N<:AbstractConcreteNumber} = ConcreteEnum{E,N}(value)
+
+Base.broadcastable(x::AbstractReactantEnum) = Ref(x)
 
 function ReactantCore.promote_to_traced(x::E) where {E<:Base.Enum}
     return TracedEnum{E}(promote_to(TracedRNumber{enum_basetype(E)}, Integer(x)))
 end
 
-_enum_payload(x::TracedEnum) = getfield(x, :value)
+_enum_payload(x::AbstractReactantEnum) = getfield(x, :value)
 _enum_payload(x::Base.Enum) = Integer(x)
 
 _payload_integer(v::AbstractConcreteNumber) = Integer(to_number(v))
@@ -48,33 +54,32 @@ _traced_payload(::Type{I}, x::TracedEnum) where {I} = _enum_payload(x)
 
 # Conversions
 
-Base.Integer(x::TracedEnum) = _payload_integer(_enum_payload(x))
-(::Type{T})(x::TracedEnum) where {T<:Integer} = _payload_to(T, _enum_payload(x))
+Base.Integer(x::AbstractReactantEnum) = _payload_integer(_enum_payload(x))
+(::Type{T})(x::AbstractReactantEnum) where {T<:Integer} = _payload_to(T, _enum_payload(x))
 
 # Unlike the host constructor, this does not check that the integer is a valid member.
 function (::Type{E})(x::TracedRNumber{<:Integer}) where {E<:Base.Enum}
     return TracedEnum{E}(promote_to(TracedRNumber{enum_basetype(E)}, x))
 end
 
-function Base.convert(::Type{E}, x::TracedEnum{E}) where {E<:Base.Enum}
-    v = _enum_payload(x)
-    v isa TracedRNumber &&
-        error("cannot convert a traced $E back to the plain enum during tracing")
-    return E(Integer(_payload_integer(v)))
+function Base.convert(::Type{E}, x::ConcreteEnum{E}) where {E<:Base.Enum}
+    return E(Integer(x))
 end
-(::Type{E})(x::TracedEnum{E}) where {E<:Base.Enum} = convert(E, x)
+(::Type{E})(x::ConcreteEnum{E}) where {E<:Base.Enum} = convert(E, x)
 
-# With a concrete payload the wrapper is value-equal to `E`, so it hashes like `E` too.
-function Base.hash(x::TracedEnum{E}, h::UInt) where {E<:Base.Enum}
-    v = _enum_payload(x)
-    v isa TracedRNumber && return hash(v, h)
-    return hash(E(Integer(_payload_integer(v))), h)
-end
+# Concrete enum wrappers have the same equality and hash as the plain enum.
+Base.hash(x::ConcreteEnum{E}, h::UInt) where {E} = hash(E(x), h)
+Base.hash(x::TracedEnum, h::UInt) = hash(_enum_payload(x), h)
 
 function Base.convert(::Type{TracedEnum{E}}, x::E) where {E<:Base.Enum}
-    if ReactantCore.within_compile()
-        return ReactantCore.promote_to_traced(x)
-    end
+    return ReactantCore.promote_to_traced(x)
+end
+
+function Base.convert(::Type{ConcreteEnum{E,N}}, x::E) where {E<:Base.Enum,N}
+    return ConcreteEnum{E,N}(convert(N, Integer(x)))
+end
+
+function Base.convert(::Type{ConcreteEnum{E}}, x::E) where {E<:Base.Enum}
     return to_rarray(x; track_numbers=Number)
 end
 
@@ -90,13 +95,15 @@ for jlop in (
     :(Base.isless),
 )
     @eval begin
-        function $(jlop)(lhs::TracedEnum{E}, rhs::TracedEnum{E}) where {E}
+        function $(jlop)(
+            lhs::AbstractReactantEnum{E}, rhs::AbstractReactantEnum{E}
+        ) where {E}
             return $(jlop)(_enum_payload(lhs), _enum_payload(rhs))
         end
-        function $(jlop)(lhs::TracedEnum{E}, rhs::E) where {E}
+        function $(jlop)(lhs::AbstractReactantEnum{E}, rhs::E) where {E}
             return $(jlop)(_enum_payload(lhs), _enum_payload(rhs))
         end
-        function $(jlop)(lhs::E, rhs::TracedEnum{E}) where {E}
+        function $(jlop)(lhs::E, rhs::AbstractReactantEnum{E}) where {E}
             return $(jlop)(_enum_payload(lhs), _enum_payload(rhs))
         end
     end
@@ -109,9 +116,42 @@ function Base.ifelse(
     return TracedEnum{E}(ifelse(pred, _traced_payload(I, x), _traced_payload(I, y)))
 end
 
-# Tracing. The wrapper itself is an ordinary struct handled by the generic machinery; only
-# the plain `Base.Enum` value needs entry points, and they place the payload at the
-# wrapper-relative path (`value` is field 1).
+# Both wrappers keep their integer at field 1, so generic struct tracing preserves
+# payload paths and aliases while these type mappings select the destination wrapper.
+
+Base.@nospecializeinfer function traced_type_inner(
+    @nospecialize(T::Type{<:ConcreteEnum{E,N}}),
+    seen,
+    @nospecialize(mode::TraceMode),
+    @nospecialize(track_numbers::Type),
+    @nospecialize(ndevices),
+    @nospecialize(runtime)
+) where {E,N}
+    mode == ConcreteToTraced && return TracedEnum{E}
+    if mode == ArrayToConcrete
+        N2 = traced_type_inner(N, seen, mode, track_numbers, ndevices, runtime)
+        return ConcreteEnum{E,N2}
+    end
+    return T
+end
+
+Base.@nospecializeinfer function traced_type_inner(
+    @nospecialize(T::Type{TracedEnum{E}}),
+    seen,
+    @nospecialize(mode::TraceMode),
+    @nospecialize(track_numbers::Type),
+    @nospecialize(ndevices),
+    @nospecialize(runtime)
+) where {E}
+    if mode == TracedToConcrete
+        N = traced_type_inner(
+            TracedRNumber{enum_basetype(E)}, seen, mode, track_numbers, ndevices, runtime
+        )
+        return ConcreteEnum{E,N}
+    end
+    mode == ConcreteToTraced && error("Cannot trace an existing TracedEnum")
+    return T
+end
 
 Base.@nospecializeinfer function should_track_enum(
     @nospecialize(E::Type{<:Base.Enum}), @nospecialize(track_numbers::Type)
@@ -128,10 +168,10 @@ Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(runtime)
 )
     should_track_enum(T, track_numbers) || return T
-    if mode == ArrayToConcrete ||
-        mode == NoStopTracedTrack ||
-        mode == TracedTrack ||
-        mode == TracedSetPath
+    if mode == ArrayToConcrete
+        N = traced_type_inner(enum_basetype(T), seen, mode, Number, ndevices, runtime)
+        return ConcreteEnum{T,N}
+    elseif mode == NoStopTracedTrack || mode == TracedTrack || mode == TracedSetPath
         return TracedEnum{T}
     end
     return T
@@ -156,10 +196,10 @@ Base.@nospecializeinfer function make_tracer(
     RT = Core.Typeof(prev)
     should_track_enum(RT, track_numbers) || return prev
     if mode == ArrayToConcrete
-        runtime isa Val{:PJRT} && return TracedEnum{RT}(
+        runtime isa Val{:PJRT} && return ConcreteEnum{RT}(
             ConcretePJRTNumber(Integer(prev); sharding, device, client)
         )
-        runtime isa Val{:IFRT} && return TracedEnum{RT}(
+        runtime isa Val{:IFRT} && return ConcreteEnum{RT}(
             ConcreteIFRTNumber(Integer(prev); sharding, device, client)
         )
         error("Unsupported runtime $runtime")

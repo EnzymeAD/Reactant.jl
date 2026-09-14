@@ -1,5 +1,5 @@
 using EnumX, Reactant, Test
-using Reactant: @trace, TracedEnum, ConcreteRNumber
+using Reactant: @trace, TracedEnum, ConcreteEnum, ConcreteRNumber
 
 @enum Fruit apple = 1 banana = 2 cherry = 3
 @enum Small::UInt8 low = 7 high = 200
@@ -16,7 +16,7 @@ fresh() = Reactant.to_rarray(Float32[1, 1])   # sum == 2
     @testset "ifelse" begin
         f_ifelse(u) = ifelse(sum(u) > 1, Code.Success, Code.MaxIters)
         res = @jit f_ifelse(fresh())
-        @test res isa TracedEnum{Code.T}
+        @test res isa ConcreteEnum{Code.T}
         @test res == Code.Success
         @test Code.Success == res
         @test convert(Code.T, res) === Code.Success
@@ -171,7 +171,7 @@ fresh() = Reactant.to_rarray(Float32[1, 1])   # sum == 2
     @testset "non-default base type" begin
         f_small(u) = ifelse(sum(u) > 1, high, low)
         res = @jit f_small(fresh())
-        @test res isa TracedEnum{Small}
+        @test res isa ConcreteEnum{Small}
         @test res == high
         @test Integer(res) === UInt8(200)
         f_small_int(u) = Integer(ifelse(sum(u) > 1, high, low))
@@ -182,12 +182,37 @@ fresh() = Reactant.to_rarray(Float32[1, 1])   # sum == 2
     @testset "enum arguments" begin
         f_arg(u, fruit) = (fruit == banana, Int(fruit))
         fruit = Reactant.to_rarray(banana; track_numbers=Number)
-        @test fruit isa TracedEnum{Fruit}
+        @test fruit isa ConcreteEnum{Fruit}
         @test fruit == banana
         @test Reactant.to_rarray(banana) === banana
         res = @jit f_arg(fresh(), fruit)
         @test res[1] == true
         @test res[2] == 2
+    end
+
+    @testset "concrete and traced representations" begin
+        fruit = Reactant.to_rarray(banana; track_numbers=Number)
+        @test !(fruit isa Number)
+        @test convert(typeof(fruit), apple) == apple
+        @test convert(ConcreteEnum{Fruit}, cherry) == cherry
+        @test convert(typeof(fruit), fruit) === fruit
+
+        function f_representation(fruit)
+            @assert fruit isa TracedEnum{Fruit}
+            @assert fruit.value isa Reactant.TracedRNumber{Int32}
+            return fruit, fruit
+        end
+        first, second = @jit f_representation(fruit)
+        @test first isa ConcreteEnum{Fruit}
+        @test first.value isa ConcreteRNumber{Int32}
+        @test first === second
+        @test first == banana
+        @test @jit(f_representation(first))[1] == banana
+
+        small = Reactant.to_rarray(low; track_numbers=Number)
+        converted = convert(typeof(small), high)
+        @test converted.value isa ConcreteRNumber{UInt8}
+        @test Small(converted) === high
     end
 
     @testset "scalar broadcasting" begin

@@ -123,8 +123,10 @@ a function from traced arguments, leading to a traced condition.
 ### Enum state
 
 Values created by `@enum` or EnumX's `@enumx` can pass through traced control flow.
-A runtime-dependent enum result is a [`Reactant.TracedEnum`](@ref), which supports
-comparisons with the original enum and conversion back to it after execution.
+A runtime-dependent enum result is a [`Reactant.ConcreteEnum`](@ref), which supports
+comparisons with the original enum and conversion back to it after execution. During
+compilation, the value is represented by a [`Reactant.TracedEnum`](@ref) holding a traced
+integer. Both wrappers are separate from Julia’s `Number` hierarchy.
 
 ```@example control_flow_tutorial
 @enum SolverStatus Initial Success

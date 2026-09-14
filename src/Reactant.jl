@@ -309,7 +309,7 @@ export ConcreteRArray,
     within_compile
 
 @static if VERSION ≥ v"1.11"
-    @eval $(Expr(:public, :Periodic, :Binomial, :TracedEnum))
+    @eval $(Expr(:public, :Periodic, :Binomial, :TracedEnum, :ConcreteEnum))
 end
 
 const registry = Ref{Union{Nothing,MLIR.IR.DialectRegistry}}()
