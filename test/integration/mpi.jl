@@ -77,6 +77,32 @@ let mpi_initialized = false
             @info "Skipping GPU MPI Comm_size tests; Not implemented"
         end
 
+    # # useful for isolating whether Reactant Send or Recv! is the issue
+    # @testset "MPI.jl Send / Reactant Recv!" begin
+    #     send_buf = ones(5)
+    #     tag = 43
+    #     if rank == 0
+    #         MPI.Send(send_buf, comm; dest=1, tag=tag)
+    #     elseif rank == 1
+    #         recv_buf = ConcreteRArray(zeros(5))
+    #         source = 0
+    #         @jit MPI.Recv!(recv_buf, source, tag, comm, nothing)
+    #         @test recv_buf == send_buf
+    #     end
+    # end
+    # @testset "Reactant Send / MPI.jl Recv!" begin
+    #     send_buf = ConcreteRArray(ones(5))
+    #     tag = 43
+    #     if rank == 0
+    #         dest = 1
+    #         @jit MPI.Send(send_buf, dest, tag, comm)
+    #     elseif rank == 1
+    #         recv_buf = zeros(5)
+    #         MPI.Recv!(recv_buf, comm; source=0, tag=tag)
+    #         @test recv_buf == send_buf
+    #     end
+    # end
+
         @testset "Allreduce" begin
             if RUN_CPU_MPI_TESTS
                 operations = [
@@ -307,7 +333,7 @@ let mpi_initialized = false
                 for T in datatypes
                     # NOTE: currently don't allow a request to cross the compile boundary
                     function waitall(send_buf, recv_buf)
-                        reqs = Reactant.TracedRNumber[]
+                        reqs = []
 
                         if rank == 0
                             dest = 1
