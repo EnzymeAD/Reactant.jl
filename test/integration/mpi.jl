@@ -1,6 +1,5 @@
 using Test, MPI, Reactant
 
-client = Reactant.XLA.default_backend()
 Reactant.set_default_backend("cpu")
 
 # Julia types which map surjectively to MPI datatypes in MPI.jl
@@ -293,5 +292,3 @@ end
 end
 
 MPI.Finalize()
-
-Reactant.set_default_backend(client)
