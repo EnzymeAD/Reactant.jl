@@ -120,6 +120,63 @@ In our simple example, the condition is passed directly as an argument but
 the same mechanism is applied to conditions which are computed from within
 a function from traced arguments, leading to a traced condition.
 
+### Enum state
+
+Values created by `@enum` or EnumX's `@enumx` can pass through traced control flow.
+A runtime-dependent enum result is a [`Reactant.ConcreteEnum`](@ref), which supports
+comparisons with the original enum and conversion back to it after execution. During
+compilation, the value is represented by a [`Reactant.TracedEnum`](@ref) holding a traced
+integer. Both wrappers are separate from Julia’s `Number` hierarchy.
+
+```@example control_flow_tutorial
+@enum SolverStatus Initial Success
+
+function choose_status(x)
+    status = Initial
+    @trace if sum(x) > 0
+        status = Success
+    end
+    return status
+end
+
+status = @jit choose_status(Reactant.to_rarray(Float32[1]))
+@assert status == Success
+@assert SolverStatus(status) === Success
+```
+
+For mutable struct fields, parameterize the field type and make its initial value
+traced before entering the branch. This requirement also applies to numeric fields:
+an untraced field has no location the `if` result can be written back into, so an
+assignment to it cannot be carried out of the branch.
+
+```@example control_flow_tutorial
+using ReactantCore: promote_to_traced
+
+mutable struct SolverState{S}
+    status::S
+end
+
+function update_status(x)
+    state = SolverState(promote_to_traced(Initial))
+    @trace if sum(x) > 0
+        state.status = Success
+    end
+    return state.status
+end
+
+@assert @jit(update_status(Reactant.to_rarray(Float32[1]))) == Success
+@assert @jit(update_status(Reactant.to_rarray(Float32[-1]))) == Initial
+```
+
+For enum state carried by `@trace while`, also initialize it with
+`promote_to_traced`. To pass an enum as a runtime input, convert it with
+`Reactant.to_rarray(value; track_numbers=Number)` before compilation.
+
+Converted enum fields can also be assigned plain enum values outside compilation,
+for example to reset a state object between compiled calls. These assignments keep
+the field concrete and available as a runtime input. Enum wrappers behave as scalars
+in broadcasting, just like plain enums.
+
 ### Loops
 
 In addition to conditional evaluations, [`@trace`](@ref) also supports capturing
