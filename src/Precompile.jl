@@ -33,15 +33,7 @@ if Reactant_jll.is_available()
                         end
                     end
                 end
-                if x isa ConcreteIFRTNumber
-                    XLA.free_buffer(x.data.buffer)
-                    x.data.buffer.buffer = C_NULL
-                else
-                    for dat in x.data
-                        XLA.free_buffer(dat.buffer)
-                        dat.buffer.buffer = C_NULL
-                    end
-                end
+                free!(x)
 
                 y = ConcreteRArray([2.0]; client)
                 try
@@ -51,15 +43,7 @@ if Reactant_jll.is_available()
                         rethrow()
                     end
                 end
-                if y isa ConcreteIFRTArray
-                    XLA.free_buffer(y.data.buffer)
-                    y.data.buffer.buffer = C_NULL
-                else
-                    for dat in y.data
-                        XLA.free_buffer(dat.buffer)
-                        dat.buffer.buffer = C_NULL
-                    end
-                end
+                free!(y)
             end
         end
 

@@ -34,15 +34,14 @@ end
 
 For more information, see [this XLA issue](https://github.com/openxla/xla/issues/23934).
 
-## Emptying the cache to avoid OOM issues
+## Avoiding OOM issues by freeing device memory manually
 
-When you encounter OOM (Out of Memory) errors, you can try to clear the cache by using
-Julia's builtin `GC.gc()` between memory-intensive operations.
-
-!!! note
-
-    This will only free memory which is not currently live. If the result of compiled
-    function was stored in a vector, it will still be alive and `GC.gc()` won't free it.
+Device memory backing `ConcreteRArray`s is released by finalizers when the garbage
+collector runs, so under low host GC pressure you can run out of device memory even
+though no device buffer is reachable anymore. For workloads that push large tensors to
+the device at a high rate (per-step batch tensors, model-weight swaps, ...) call
+[`Reactant.free!`](@ref) to release device buffers deterministically instead of waiting
+for the GC:
 
 ```julia
 using Reactant
@@ -57,13 +56,32 @@ end
 f = @compile sin_add(input1,input2)
 
 for i = 1:10
+   res = f(input1, input2)
+   # consume `res`, then release the result buffer immediately
+   Reactant.free!(res; sync=true)
+   @info "step $i done"
+end
+```
+
+After `free!` the array is in an empty state and must be replaced by a newly allocated
+one — it cannot be reused. See the [`free!`](@ref Reactant.free!) docstring for the exact
+semantics (deferred reclamation of in-flight buffers, the `sync` keyword, interaction
+with buffer donation).
+
+If you lost track of the arrays holding device memory, you can still fall back to
+Julia's builtin `GC.gc()` between memory-intensive operations. Note that this only frees
+memory which is not currently live — if the result of a compiled function is still
+reachable (e.g. stored in a vector), `GC.gc()` won't free it; use `free!` on it instead:
+
+```julia
+for i = 1:10
    GC.gc()
    @info "gc... $i"
    f(input1, input2) # May cause OOM here for a 24GB GPU if GC is not used
 end
 ```
 
-If you **don't** use `GC.gc()` here, this may cause an OOM:
+If you **don't** free the results (nor call `GC.gc()`), this may cause an OOM:
 
 ```bash
 [ Info: gc... 1
@@ -89,7 +107,7 @@ Stacktrace:
 Some type information was truncated. Use `show(err)` to see complete types.
 ```
 
-After using Julia's built-in `GC.gc()`:
+After freeing the results (or using Julia's built-in `GC.gc()`):
 
 ```bash
 [ Info: gc... 1
