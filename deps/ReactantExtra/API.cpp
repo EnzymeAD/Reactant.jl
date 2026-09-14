@@ -3645,19 +3645,20 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
 
   std::vector<std::vector<int64_t>> sizeKey;
   sizeKey.reserve(argcnt + (constcnt ? 1 : 0));
+  // An argument may point into the middle of an allocation (a block
+  // operator's sub-vector view). The executable then takes the whole base
+  // buffer and addresses the view as a slice of it; the offsets select the
+  // executable, so they are part of the cache key.
+  std::vector<int64_t> viewOffset(argcnt, 0);
   for (int64_t i = 0; i < argcnt; i++) {
     auto &&[argB, argO, argP] = bufferAndOffset(lrt, args[i]);
-    if (argO != 0) {
-      llvm::errs() << "only zero-offset execution supported, argument " << i
-                   << " had byte offset of " << argO << " (ptr=" << args[i]
-                   << ", resolved base=" << (void *)argP << ")\n";
-      exit(1);
-    }
+    viewOffset[i] = argO;
     baseArrays[i] = argB;
     basePtrs[i] = argP;
     auto dims = argB->on_device_shape().dimensions();
     sizeKey.emplace_back(dims.begin(), dims.end());
   }
+  sizeKey.push_back(viewOffset);
 
   // The specialized scalars are part of what the executable was compiled
   // for, so they are part of what it is cached under.
@@ -3729,6 +3730,51 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
       auto RTT = MyValueOrThrow(xla::ConvertShapeToType<mlir::RankedTensorType>(
           baseArrays[i]->on_device_shape(), builder));
       types.push_back(RTT);
+    }
+    // A view argument becomes its base buffer: every use of it reads the
+    // static slice at the view's offset, and its result is written back into
+    // the base at that offset. The optimizer folds the update of an unchanged
+    // view back to the base argument, so a read-only view is recognized by
+    // identity like any other argument.
+    {
+      auto ret = cast<func::ReturnOp>(funcOp.getBody().front().back());
+      for (int64_t i = 0; i < argcnt; i++) {
+        if (!viewOffset[i])
+          continue;
+        auto baseTy = cast<mlir::RankedTensorType>(types[i]);
+        int64_t elemBytes = baseTy.getElementTypeBitWidth() / 8;
+        if (baseTy.getRank() != 1 || elemBytes == 0 ||
+            viewOffset[i] % elemBytes) {
+          llvm::errs() << " offset view of argument " << i << " (byte offset "
+                       << viewOffset[i]
+                       << ") does not slice its buffer of type " << baseTy
+                       << "\n";
+          exit(1);
+        }
+        int64_t start = viewOffset[i] / elemBytes;
+        auto arg = funcOp.getArgument(i);
+        arg.setType(baseTy);
+        mlir::OpBuilder b(&funcOp.getBody().front(),
+                          funcOp.getBody().front().begin());
+        auto slice = b.create<mlir::stablehlo::SliceOp>(
+            funcOp.getLoc(), arg, b.getDenseI64ArrayAttr({start}),
+            b.getDenseI64ArrayAttr({baseTy.getDimSize(0)}),
+            b.getDenseI64ArrayAttr({1}));
+        arg.replaceAllUsesExcept(slice, slice);
+        mlir::OpBuilder rb(ret);
+        auto idxTy = mlir::RankedTensorType::get({}, rb.getI64Type());
+        auto startCst = rb.create<mlir::stablehlo::ConstantOp>(
+            funcOp.getLoc(), mlir::DenseElementsAttr::get(idxTy, start));
+        auto dus = rb.create<mlir::stablehlo::DynamicUpdateSliceOp>(
+            funcOp.getLoc(), arg, ret.getOperand(i),
+            mlir::ValueRange{startCst});
+        ret->setOperand(i, dus);
+      }
+      // Only the argument types change here; the result types are left to
+      // the refinement passes, which pin them from the arguments.
+      funcOp.setType(mlir::FunctionType::get(
+          module->getContext(), funcOp.getBody().front().getArgumentTypes(),
+          funcOp.getFunctionType().getResults()));
     }
     if (constcnt) {
       // The injected constants make the dynamic shape operands static;
