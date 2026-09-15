@@ -31,6 +31,7 @@ const NUMPY_SIMPLE_TYPES = Dict(
 include("TFSavedModel.jl")
 include("EnzymeJAX.jl")
 include("ReactantExport.jl")
+include("MLIRRunner.jl")
 
 """
     export_as_tf_saved_model(
@@ -130,5 +131,6 @@ end
 
 const export_to_enzymejax = EnzymeJAX.export_to_enzymejax
 const export_to_reactant_script = ReactantExport.export_to_reactant_script
+const generate_mlir_runner = MLIRRunner.generate_mlir_runner
 
 end
