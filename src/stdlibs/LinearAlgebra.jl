@@ -37,6 +37,11 @@ function __init__()
             (BLAS.@blasfunc(dgetrf_), :enzymexla_lapack_dgetrf_),
             (BLAS.@blasfunc(cgetrf_), :enzymexla_lapack_cgetrf_),
             (BLAS.@blasfunc(zgetrf_), :enzymexla_lapack_zgetrf_),
+            # QR
+            (BLAS.@blasfunc(sgeqrf_), :enzymexla_lapack_sgeqrf_),
+            (BLAS.@blasfunc(dgeqrf_), :enzymexla_lapack_dgeqrf_),
+            (BLAS.@blasfunc(cgeqrf_), :enzymexla_lapack_cgeqrf_),
+            (BLAS.@blasfunc(zgeqrf_), :enzymexla_lapack_zgeqrf_),
             # SVD QR Iteration
             (BLAS.@blasfunc(sgesvd_), :enzymexla_lapack_sgesvd_),
             (BLAS.@blasfunc(dgesvd_), :enzymexla_lapack_dgesvd_),
