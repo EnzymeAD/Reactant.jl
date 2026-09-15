@@ -16232,6 +16232,11 @@ struct JLHloCostAnalysisProperties
     reserved0::Cfloat
 end
 
+struct CachedExec
+    exec::Ptr{Cint}
+    written::Ptr{UInt8}
+end
+
 struct AllocationInfo
     buffer::Ptr{Cint}
     size::Csize_t
