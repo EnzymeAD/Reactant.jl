@@ -2,8 +2,13 @@ module ReactantMPIExt
 
 using Reactant
 using Reactant: Reactant, Distributed, MLIR
+using Reactant_jll
 using MPI: MPI
 using Libdl: Libdl
+
+include("Types.jl")
+include("Ops.jl")
+include("Overrides.jl")
 
 # https://github.com/jax-ml/jax/blob/b0117366686ab084d38ad2657d9a2ae3a581ca7e/jax/_src/clusters/mpi4py_cluster.py
 Distributed.is_env_present(::Distributed.MPIEnvDetector) = MPI.Initialized()
@@ -36,6 +41,8 @@ function Distributed.get_local_process_id(::Distributed.MPIEnvDetector)
 end
 
 function __init__()
+    mpi_handle = MPI.API.libmpi_handle
+
     # register MPI routines
     #! explicit-imports: off
     for name in [
@@ -43,15 +50,20 @@ function __init__()
         :MPI_Finalize,
         :MPI_Comm_rank,
         :MPI_Comm_size,
+        :MPI_Comm_split,
         :MPI_Send,
-        :MPI_Recv,
         :MPI_Isend,
+        :MPI_Recv,
         :MPI_Irecv,
         :MPI_Barrier,
         :MPI_Wait,
+        :MPI_Waitall,
         :MPI_Request_free,
+        :MPI_Allreduce,
+        :MPI_Bcast,
+        :MPI_Error_string,
     ]
-        MLIR.API.EnzymeJaXMapSymbol(name, Libdl.dlsym(MPI.API.libmpi_handle, name))
+        MLIR.API.EnzymeJaXMapSymbol(name, Libdl.dlsym(mpi_handle, name))
     end
     #! explicit-imports: on
 
@@ -62,6 +74,7 @@ function __init__()
         :MPI_COMM_WORLD,
         :MPI_COMM_SELF,
         :MPI_COMM_NULL,
+        # communicator types
         :MPI_COMM_TYPE_SHARED,
         # datatypes
         :MPI_DATATYPE_NULL,
@@ -127,199 +140,24 @@ function __init__()
         # status
         :MPI_STATUS_IGNORE,
         :MPI_STATUSES_IGNORE,
+        :MPI_STATUS_SIZE,
         # error
         :MPI_SUCCESS,
-        :MPI_ERR_BUFFER,
-        :MPI_ERR_COUNT,
-        :MPI_ERR_TYPE,
-        :MPI_ERR_TAG,
-        :MPI_ERR_COMM,
-        :MPI_ERR_RANK,
-        :MPI_ERR_REQUEST,
-        :MPI_ERR_ROOT,
-        :MPI_ERR_GROUP,
-        :MPI_ERR_OP,
-        :MPI_ERR_TOPOLOGY,
-        :MPI_ERR_DIMS,
-        :MPI_ERR_ARG,
-        :MPI_ERR_UNKNOWN,
-        :MPI_ERR_TRUNCATE,
-        :MPI_ERR_OTHER,
-        :MPI_ERR_INTERN,
-        :MPI_ERR_IN_STATUS,
-        :MPI_ERR_PENDING,
-        :MPI_ERR_ACCESS,
-        :MPI_ERR_AMODE,
-        :MPI_ERR_ASSERT,
-        :MPI_ERR_BAD_FILE,
-        :MPI_ERR_BASE,
-        :MPI_ERR_CONVERSION,
-        :MPI_ERR_DISP,
-        :MPI_ERR_DUP_DATAREP,
-        :MPI_ERR_FILE_EXISTS,
-        :MPI_ERR_FILE_IN_USE,
-        :MPI_ERR_FILE,
-        :MPI_ERR_INFO_KEY,
-        :MPI_ERR_INFO_NOKEY,
-        :MPI_ERR_INFO_VALUE,
-        :MPI_ERR_INFO,
-        :MPI_ERR_IO,
-        :MPI_ERR_KEYVAL,
-        :MPI_ERR_LOCKTYPE,
-        :MPI_ERR_NAME,
-        :MPI_ERR_NO_MEM,
-        :MPI_ERR_NOT_SAME,
-        :MPI_ERR_NO_SPACE,
-        :MPI_ERR_NO_SUCH_FILE,
-        :MPI_ERR_PORT,
-        :MPI_ERR_QUOTA,
-        :MPI_ERR_READ_ONLY,
-        :MPI_ERR_RMA_CONFLICT,
-        :MPI_ERR_RMA_SYNC,
-        :MPI_ERR_SERVICE,
-        :MPI_ERR_SIZE,
-        :MPI_ERR_SPAWN,
-        :MPI_ERR_UNSUPPORTED_DATAREP,
-        :MPI_ERR_UNSUPPORTED_OPERATION,
-        :MPI_ERR_WIN,
-        # :MPI_T_ERR_MEMORY,
-        # :MPI_T_ERR_NOT_INITIALIZED,
-        # :MPI_T_ERR_CANNOT_INIT,
-        # :MPI_T_ERR_INVALID_INDEX,
-        # :MPI_T_ERR_INVALID_ITEM,
-        # :MPI_T_ERR_INVALID_HANDLE,
-        # :MPI_T_ERR_OUT_OF_HANDLES,
-        # :MPI_T_ERR_OUT_OF_SESSIONS,
-        # :MPI_T_ERR_INVALID_SESSION,
-        # :MPI_T_ERR_CVAR_SET_NOT_NOW,
-        # :MPI_T_ERR_CVAR_SET_NEVER,
-        # :MPI_T_ERR_PVAR_NO_STARTSTOP,
-        # :MPI_T_ERR_PVAR_NO_WRITE,
-        # :MPI_T_ERR_PVAR_NO_ATOMIC,
-        :MPI_ERR_RMA_RANGE,
-        :MPI_ERR_RMA_ATTACH,
-        :MPI_ERR_RMA_FLAVOR,
-        :MPI_ERR_RMA_SHARED,
-        # :MPI_T_ERR_INVALID,
-        # :MPI_T_ERR_INVALID_NAME,
-        # :MPI_ERR_PROC_ABORTED,
-        # :MPI_ERR_PROC_FAILED,
-        # :MPI_ERR_PROC_FAILED_PENDING,
-        # :MPI_ERR_REVOKED,
+        # other
+        :MPI_MAX_ERROR_STRING,
     ]
         !isdefined(MPI.API, name) && continue
         value = getproperty(MPI.API, name)
         if value isa Base.RefValue
             value = value[]
         end
-        MLIR.API.EnzymeJaXMapSymbol(name, convert(Int, value))
+        MLIR.API.EnzymeJaXMapSymbol(name, convert(Int64, value))
     end
+
+    # register MPI_STATUS_SIZE constant (which is not directly present in MPI.jl)
+    # MLIR.API.EnzymeJaXMapSymbol(:MPI_STATUS_SIZE, convert(Int64, status_size))
+
+    return nothing
 end
-
-# # NOTE: We currently do not allow a Request to cross the compile boundary. The commented
-# out code below is the beginning of what would be required to implement that
-# mutable struct TracedRequest <: MPI.AbstractRequest
-#     paths::Tuple
-#     mlir_data::Union{Nothing,Reactant.MLIR.IR.Value}
-
-#     function TracedRequest(paths::Tuple, mlir_data::Union{Nothing,Reactant.MLIR.IR.Value})
-#         if !isnothing(mlir_data)
-#             @assert size(Reactant.MLIR.IR.type(mlir_data)) == ()
-#         end
-#         return new(paths, mlir_data)
-#     end
-# end
-
-# function Base.show(io::IOty, X::TracedRequest) where {IOty<:Union{IO,IOContext}}
-#     return print(io, "TracedRequest(", X.paths, ")")
-# end
-
-# #       If we ever want to return a request, the below could serve as a starting point
-# Reactant.TracedUtils.get_mlir_data(x::TracedRequest) = x.mlir_data
-# Reactant.TracedUtils.set_mlir_data!(x::TracedRequest, data) = (x.mlir_data = data; return x)
-
-# Reactant.TracedUtils.get_paths(x::TracedRequest) = x.paths
-# Reactant.TracedUtils.set_paths!(x::TracedRequest, paths) = (x.paths = paths; return x)
-#
-# function Reactant.Ops.mlir_type(x::TracedRequest)::MLIR.IR.Type
-#     # return MLIR.IR.TensorType(collect(Int, size(x)), MLIR.IR.Type(unwrapped_eltype(x)))
-#     return MLIR.IR.TensorType(collect(Int, ()), MLIR.IR.Type(Int64))
-# end
-#
-# TODO(#2242) for this to work properly in finalize_mlir_fn(), need to add TracedRequest to TracedTypes, currently const
-# Base.@nospecializeinfer function Reactant.make_tracer(
-#     seen,
-#     @nospecialize(prev::TracedRequest),
-#     @nospecialize(path),
-#     mode;
-#     tobatch=nothing,
-#     toscalar=false,
-#     @nospecialize(sharding = Sharding.NoSharding()),
-#     @nospecialize(runtime = nothing),
-#     kwargs...,
-# )
-#     if mode == Reactant.NoStopTracedTrack
-#         Reactant.TracedUtils.set_paths!(prev, (Reactant.TracedUtils.get_paths(prev)..., path))
-#         if !haskey(seen, prev)
-#             seen[prev] = prev # don't return!
-#         end
-#         return prev
-#     end
-#     if mode == Reactant.TracedToConcrete
-#         haskey(seen, prev) && return seen[prev]::MPI.Request
-#         if !Sharding.is_sharded(sharding)
-#             res = MPI.Request()
-#         else
-#             error("Attempting to use sharding and MPI simultaneously")
-#         end
-#         seen[prev] = res
-#         return res
-#     end
-#     throw("Trace mode $mode not implemented")
-# end
-#
-# function Reactant.Compiler.create_result(
-#     tocopy::MPI.Request,
-#     path,
-#     result_stores,
-#     path_to_shard_info,
-#     to_unreshard_results,
-#     unresharded_code::Vector{Expr},
-#     unresharded_arrays_cache,
-#     used_shardinfo,
-#     result_cache,
-#     var_idx,
-#     resultgen_code,
-# )
-#     if !haskey(result_cache, tocopy)
-#         sym = Symbol("result", var_idx[])
-#         var_idx[] += 1
-#
-#         @assert haskey(result_stores, path)
-#         restore = result_stores[path]
-#         delete!(result_stores, path)
-#         if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
-#             error("Attempting to use sharding and MPI simultaneously")
-#         else
-#             # TODO(#2242)
-#             # restore = result_buffer1 = linearized_results[1] = result of XLA.executesharded()
-#             # but what is actually returned from XLA.executesharded? 
-#             # Same thing as returned from MPI.Isend (ie, TracedRequest)?
-#             result = :(MPI.Request($restore))
-#         end
-#         push!(
-#             resultgen_code,
-#             quote
-#                 $sym = $result
-#             end,
-#         )
-#         result_cache[tocopy] = sym
-#     end
-#
-#     return result_cache[tocopy]
-# end
-
-include("Ops.jl")
-include("Overrides.jl")
 
 end # module

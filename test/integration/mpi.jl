@@ -1,6 +1,5 @@
 using Test, MPI, Reactant
 
-client = Reactant.XLA.default_backend()
 Reactant.set_default_backend("cpu")
 
 # Julia types which map surjectively to MPI datatypes in MPI.jl
@@ -126,7 +125,7 @@ end
     #     elseif rank == 1
     #         recv_buf = ConcreteRArray(zeros(5))
     #         source = 0
-    #         @jit MPI.Recv!(recv_buf, source, tag, comm)
+    #         @jit MPI.Recv!(recv_buf, source, tag, comm, nothing)
     #         @test recv_buf == send_buf
     #     end
     # end
@@ -155,7 +154,7 @@ end
                 elseif rank == 1
                     recv_buf = ConcreteRArray(zeros(T, 5))
                     src = 0
-                    @jit MPI.Recv!(recv_buf, src, tag, comm)
+                    @jit MPI.Recv!(recv_buf, src, tag, comm, nothing)
                     @test recv_buf == send_buf
                 end
             end
@@ -174,7 +173,7 @@ end
                     return nothing
                 elseif rank == 1
                     src = 0
-                    MPI.Recv!(recv_buf, src, tag, comm)
+                    MPI.Recv!(recv_buf, src, tag, comm, nothing)
                     return nothing
                 end
             end
@@ -293,5 +292,3 @@ end
 end
 
 MPI.Finalize()
-
-Reactant.set_default_backend(client)
