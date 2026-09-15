@@ -3712,8 +3712,8 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
       }
       mlir::OpBuilder b(&funcOp.getBody().front(),
                         funcOp.getBody().front().begin());
-      auto cst = b.create<mlir::stablehlo::ConstantOp>(
-          funcOp.getLoc(),
+      auto cst = mlir::stablehlo::ConstantOp::create(
+          b, funcOp.getLoc(),
           mlir::SplatElementsAttr::get(TT, b.getIntegerAttr(IT, consts[i])));
       arg.replaceAllUsesWith(cst);
       funcOp.eraseArgument(argcnt + i);
@@ -3725,56 +3725,28 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
 
     PassManager pm(module->getContext());
 
+    // An offset view is typed as the tail of its base buffer from the view's
+    // offset on; its element conversion is then the refinement's as for any
+    // other argument.
     SmallVector<mlir::Type> types;
+    SmallVector<int64_t> viewStart(argcnt, 0);
     for (int64_t i = 0; i < argcnt; i++) {
-      auto RTT = MyValueOrThrow(xla::ConvertShapeToType<mlir::RankedTensorType>(
-          baseArrays[i]->on_device_shape(), builder));
-      types.push_back(RTT);
-    }
-    // A view argument becomes its base buffer: every use of it reads the
-    // static slice at the view's offset, and its result is written back into
-    // the base at that offset. The optimizer folds the update of an unchanged
-    // view back to the base argument, so a read-only view is recognized by
-    // identity like any other argument.
-    {
-      auto ret = cast<func::ReturnOp>(funcOp.getBody().front().back());
-      for (int64_t i = 0; i < argcnt; i++) {
-        if (!viewOffset[i])
-          continue;
-        auto baseTy = cast<mlir::RankedTensorType>(types[i]);
-        int64_t elemBytes = baseTy.getElementTypeBitWidth() / 8;
-        if (baseTy.getRank() != 1 || elemBytes == 0 ||
-            viewOffset[i] % elemBytes) {
+      auto RTT = cast<mlir::RankedTensorType>(
+          MyValueOrThrow(xla::ConvertShapeToType<mlir::RankedTensorType>(
+              baseArrays[i]->on_device_shape(), builder)));
+      if (viewOffset[i]) {
+        int64_t elemBytes = RTT.getElementTypeBitWidth() / 8;
+        if (RTT.getRank() != 1 || elemBytes == 0 || viewOffset[i] % elemBytes) {
           llvm::errs() << " offset view of argument " << i << " (byte offset "
                        << viewOffset[i]
-                       << ") does not slice its buffer of type " << baseTy
-                       << "\n";
+                       << ") does not slice its buffer of type " << RTT << "\n";
           exit(1);
         }
-        int64_t start = viewOffset[i] / elemBytes;
-        auto arg = funcOp.getArgument(i);
-        arg.setType(baseTy);
-        mlir::OpBuilder b(&funcOp.getBody().front(),
-                          funcOp.getBody().front().begin());
-        auto slice = b.create<mlir::stablehlo::SliceOp>(
-            funcOp.getLoc(), arg, b.getDenseI64ArrayAttr({start}),
-            b.getDenseI64ArrayAttr({baseTy.getDimSize(0)}),
-            b.getDenseI64ArrayAttr({1}));
-        arg.replaceAllUsesExcept(slice, slice);
-        mlir::OpBuilder rb(ret);
-        auto idxTy = mlir::RankedTensorType::get({}, rb.getI64Type());
-        auto startCst = rb.create<mlir::stablehlo::ConstantOp>(
-            funcOp.getLoc(), mlir::DenseElementsAttr::get(idxTy, start));
-        auto dus = rb.create<mlir::stablehlo::DynamicUpdateSliceOp>(
-            funcOp.getLoc(), arg, ret.getOperand(i),
-            mlir::ValueRange{startCst});
-        ret->setOperand(i, dus);
+        viewStart[i] = viewOffset[i] / elemBytes;
+        RTT = mlir::RankedTensorType::get({RTT.getDimSize(0) - viewStart[i]},
+                                          RTT.getElementType());
       }
-      // Only the argument types change here; the result types are left to
-      // the refinement passes, which pin them from the arguments.
-      funcOp.setType(mlir::FunctionType::get(
-          module->getContext(), funcOp.getBody().front().getArgumentTypes(),
-          funcOp.getFunctionType().getResults()));
+      types.push_back(RTT);
     }
     if (constcnt) {
       // The injected constants make the dynamic shape operands static;
@@ -3814,6 +3786,34 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
            i++) {
         written[i] = ret.getOperand(i) != funcOp.getArgument(i);
         funcOp.removeArgAttr(i, "tf.aliasing_output");
+        if (viewOffset[i]) {
+          // The view becomes its base buffer: every use reads the slice at
+          // the view's offset, and a written view's result is written back
+          // into the base at that offset.
+          auto arg = funcOp.getArgument(i);
+          auto viewTy = cast<mlir::RankedTensorType>(arg.getType());
+          auto baseTy = mlir::RankedTensorType::get(
+              {viewTy.getDimSize(0) + viewStart[i]}, viewTy.getElementType());
+          arg.setType(baseTy);
+          mlir::OpBuilder b(&funcOp.getBody().front(),
+                            funcOp.getBody().front().begin());
+          auto slice = mlir::stablehlo::SliceOp::create(
+              b, funcOp.getLoc(), arg, b.getDenseI64ArrayAttr({viewStart[i]}),
+              b.getDenseI64ArrayAttr({baseTy.getDimSize(0)}),
+              b.getDenseI64ArrayAttr({1}));
+          arg.replaceAllUsesExcept(slice, slice);
+          if (written[i]) {
+            mlir::OpBuilder rb(ret);
+            auto idxTy = mlir::RankedTensorType::get({}, rb.getI64Type());
+            auto startCst = mlir::stablehlo::ConstantOp::create(
+                rb, funcOp.getLoc(),
+                mlir::DenseElementsAttr::get(idxTy, viewStart[i]));
+            auto dus = mlir::stablehlo::DynamicUpdateSliceOp::create(
+                rb, funcOp.getLoc(), arg, ret.getOperand(i),
+                mlir::ValueRange{startCst});
+            ret->setOperand(i, dus);
+          }
+        }
         if (!written[i])
           continue;
         funcOp.setArgAttr(i, "tf.aliasing_output",
@@ -3827,7 +3827,7 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
       }
       ret->setOperands(kept);
       funcOp.setType(mlir::FunctionType::get(
-          module->getContext(), funcOp.getFunctionType().getInputs(),
+          module->getContext(), funcOp.getBody().front().getArgumentTypes(),
           keptTypes));
     }
     auto exec =
