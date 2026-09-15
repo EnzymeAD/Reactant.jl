@@ -3437,6 +3437,9 @@ struct LinkableRuntime {
     // result is the argument itself passed through is read-only. Doubles as
     // the donation mask.
     uint8_t *written;
+    // Per argument: is it a parameter of the executable? An argument that
+    // resolves to the buffer of an earlier one is folded into it.
+    uint8_t *keep;
   };
   DenseMap<const char *,
            std::map<std::vector<std::vector<int64_t>>, CachedExec>>
@@ -3659,6 +3662,18 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
     sizeKey.emplace_back(dims.begin(), dims.end());
   }
   sizeKey.push_back(viewOffset);
+  // Two arguments resolving to one buffer (mfem's in-place add(r, a, z, r),
+  // a BlockVector next to one of its blocks): the kernel is compiled with
+  // the later one folded into the first, so which arguments alias is part
+  // of the cache key.
+  std::vector<int64_t> dupOf(argcnt, -1);
+  for (int64_t i = 0; i < argcnt; i++)
+    for (int64_t j = 0; j < i; j++)
+      if (baseArrays[i] == baseArrays[j]) {
+        dupOf[i] = dupOf[j] < 0 ? j : dupOf[j];
+        break;
+      }
+  sizeKey.push_back(dupOf);
 
   // The specialized scalars are part of what the executable was compiled
   // for, so they are part of what it is cached under.
@@ -3814,52 +3829,126 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
             ret->setOperand(i, dus);
           }
         }
-        if (!written[i])
+      }
+      // Arguments that resolve to one buffer are all typed as that buffer
+      // now, so the later ones are folded into the first: their uses read
+      // it, and a written one's view region is written over the first one's
+      // result. The executable then takes the buffer once.
+      for (int64_t i = 0; i < argcnt && i < (int64_t)ret.getNumOperands();
+           i++) {
+        if (dupOf[i] < 0)
           continue;
-        funcOp.setArgAttr(i, "tf.aliasing_output",
-                          builder.getI64IntegerAttr(kept.size()));
-        kept.push_back(ret.getOperand(i));
-        keptTypes.push_back(ret.getOperand(i).getType());
+        int64_t leader = dupOf[i];
+        auto arg = funcOp.getArgument(i);
+        auto leaderArg = funcOp.getArgument(leader);
+        if (arg.getType() != leaderArg.getType()) {
+          llvm::errs() << " arguments " << leader << " and " << i
+                       << " share a buffer but have types "
+                       << leaderArg.getType() << " and " << arg.getType()
+                       << "\n";
+          exit(1);
+        }
+        arg.replaceAllUsesWith(leaderArg);
+        if (written[i]) {
+          mlir::OpBuilder rb(ret);
+          auto baseTy = cast<mlir::RankedTensorType>(arg.getType());
+          mlir::Value update = ret.getOperand(i);
+          if (viewStart[i])
+            update = mlir::stablehlo::SliceOp::create(
+                rb, funcOp.getLoc(), update,
+                rb.getDenseI64ArrayAttr({viewStart[i]}),
+                rb.getDenseI64ArrayAttr({baseTy.getDimSize(0)}),
+                rb.getDenseI64ArrayAttr({1}));
+          auto idxTy = mlir::RankedTensorType::get({}, rb.getI64Type());
+          auto startCst = mlir::stablehlo::ConstantOp::create(
+              rb, funcOp.getLoc(),
+              mlir::DenseElementsAttr::get(idxTy, viewStart[i]));
+          auto merged = mlir::stablehlo::DynamicUpdateSliceOp::create(
+              rb, funcOp.getLoc(), ret.getOperand(leader), update,
+              mlir::ValueRange{startCst});
+          ret->setOperand(leader, merged);
+          written[leader] = 1;
+          written[i] = 0;
+        }
+      }
+      // (parameter position, result index) of the donated arguments
+      SmallVector<std::pair<int64_t, int64_t>> aliasing;
+      for (int64_t i = 0, pos = 0; i < argcnt; i++) {
+        if (dupOf[i] >= 0)
+          continue;
+        if (i < (int64_t)ret.getNumOperands() && written[i]) {
+          aliasing.emplace_back(pos, kept.size());
+          kept.push_back(ret.getOperand(i));
+          keptTypes.push_back(ret.getOperand(i).getType());
+        }
+        pos++;
       }
       for (int64_t i = argcnt; i < (int64_t)ret.getNumOperands(); i++) {
         kept.push_back(ret.getOperand(i));
         keptTypes.push_back(ret.getOperand(i).getType());
       }
       ret->setOperands(kept);
+      llvm::BitVector folded(funcOp.getNumArguments());
+      for (int64_t i = 0; i < argcnt; i++)
+        if (dupOf[i] >= 0)
+          folded.set(i);
+      funcOp.eraseArguments(folded);
       funcOp.setType(mlir::FunctionType::get(
           module->getContext(), funcOp.getBody().front().getArgumentTypes(),
           keptTypes));
+      for (auto [pos, res] : aliasing)
+        funcOp.setArgAttr(pos, "tf.aliasing_output",
+                          builder.getI64IntegerAttr(res));
     }
     auto exec =
         ClientCompileWithProto(lrt->client, wrap(module.get()), nullptr, 0);
 
+    // Per parameter of the executable, in order.
+    uint8_t *keep = (uint8_t *)malloc(argcnt);
+    uint8_t *writtenKept = (uint8_t *)malloc(argcnt);
+    for (int64_t i = 0, pos = 0; i < argcnt; i++) {
+      keep[i] = dupOf[i] < 0;
+      if (keep[i])
+        writtenKept[pos++] = written[i];
+    }
+    free(written);
     iter =
-        cache.try_emplace(sizeKey, LinkableRuntime::CachedExec{exec, written})
+        cache
+            .try_emplace(sizeKey,
+                         LinkableRuntime::CachedExec{exec, writtenKept, keep})
             .first;
   }
 
   auto exec = iter->second.exec;
   uint8_t *written = iter->second.written;
+  uint8_t *keep = iter->second.keep;
 
+  std::vector<PjRtBuffer *> callArgs;
+  callArgs.reserve(argcnt);
+  for (int64_t i = 0; i < argcnt; i++)
+    if (keep[i])
+      callArgs.push_back(baseArrays[i]);
   int num_results = 0;
-  for (int i = 0; i < argcnt; i++)
-    num_results += written[i];
+  for (size_t p = 0; p < callArgs.size(); p++)
+    num_results += written[p];
   std::vector<PjRtBuffer *> results(num_results);
   std::vector<uint8_t> futures(num_results, 0);
   std::vector<FutureType *> future_results(num_results, nullptr);
   PjRtDevice *device = ClientGetDevice(lrt->client, lrt->device);
-  XLAExecuteSharded(exec, argcnt, baseArrays.data(), device, written,
+  XLAExecuteSharded(exec, callArgs.size(), callArgs.data(), device, written,
                     num_results, results.data(), futures.data(),
                     future_results.data());
-  for (int64_t i = 0, k = 0; i < argcnt; i++) {
-    if (!written[i])
+  for (int64_t i = 0, p = 0, k = 0; i < argcnt; i++) {
+    if (!keep[i])
       continue;
-    *basePtrs[i] = results[k];
-    if (futures[k]) {
-      FutureAwait(future_results[k]);
-      FreeFuture(future_results[k]);
+    if (written[p++]) {
+      *basePtrs[i] = results[k];
+      if (futures[k]) {
+        FutureAwait(future_results[k]);
+        FreeFuture(future_results[k]);
+      }
+      k++;
     }
-    k++;
   }
 }
 
