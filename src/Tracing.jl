@@ -27,6 +27,12 @@ Base.@nospecializeinfer function traced_type_inner(
     return T
 end
 
+Base.@nospecializeinfer function traced_type_inner(@nospecialize(_::Type{Union{A,B}}), @nospecialize(args...)) where {A,B}
+    tA = traced_type_inner(A, args...)
+    tB = traced_type_inner(B, args...)
+    return Union{tA,tB}
+end
+
 for T in (
     DataType,
     Module,
