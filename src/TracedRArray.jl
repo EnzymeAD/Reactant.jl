@@ -406,7 +406,7 @@ function _copyto!(dest::AnyTracedRArray, bc::Broadcasted)
     args = (Reactant.broadcast_to_size(Base.materialize(a), size(bc)) for a in bc.args)
 
     res0 = TracedUtils.elem_apply(bc.f, args...)
-    if !(res0 isa Reactant.TracedType)
+    if !is_traced(res0)
         # `bc.f` returned a constant that does not depend on its arguments:
         res0 = Reactant.broadcast_to_size(res0, size(dest))
     end

@@ -91,9 +91,9 @@ function finite_difference_gradient(
         Reactant.make_tracer(seenargs, arg, (argprefix, i), Reactant.TracedSetPath)
     end
 
-    linear_args = Reactant.TracedType[]
+    linear_args = Any[]
     for (_, v) in seenargs
-        v isa Reactant.TracedType || continue
+        is_traced(v) || continue
         push!(linear_args, v)
     end
 

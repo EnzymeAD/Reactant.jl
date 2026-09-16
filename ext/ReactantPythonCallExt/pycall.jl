@@ -1,3 +1,5 @@
+using ReactantCore: is_traced
+
 Reactant.jax_dtype_struct_type(::Type{T}) where {T} = Py
 
 function Reactant.convert_to_jax_dtype_struct(x::Union{TracedRArray,TracedRNumber})
@@ -22,9 +24,9 @@ function pycall_with_jax_tracing(f::Py, args...)
         prev_len = length(seen_args)
     end
 
-    linear_args = Reactant.TracedType[]
+    linear_args = Any[]
     for (k, v) in seen_args
-        k isa Reactant.TracedType || continue
+        is_traced(k) || continue
         push!(linear_args, k)
     end
 
