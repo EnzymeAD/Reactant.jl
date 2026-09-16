@@ -1,4 +1,5 @@
 using Reactant
+using ReactantCore
 using Reactant: MLIR, Sharding, TracedRArray
 using Reactant.TracedUtils: get_mlir_data, set_mlir_data!, get_paths, set_paths!
 using MPI
@@ -25,6 +26,9 @@ for (name, supertype, julia_type) in
             paths::Tuple
             mlir_data::Union{Nothing,Reactant.MLIR.IR.Value}
         end
+
+        ReactantCore.is_traced(::$traced_type) = true
+        ReactantCore.is_traced(::$traced_type, _) = true
 
         function Base.show(io::IOty, X::T) where {IOty<:Union{IO,IOContext},T<:$traced_type}
             return print(io, "$T(paths=", X.paths, ")")
