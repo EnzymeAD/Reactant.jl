@@ -301,10 +301,10 @@ for (name, supertype, julia_type) in
     end
 end
 
-function Reactant.Ops.mlir_type(::Type{<:TracedCommunicator})
+function Reactant.Ops.mlir_type(::TracedCommunicator)
     return MLIR.IR.Type(MLIR.API.enzymexlaCommMpiCommTypeGet(MLIR.IR.current_context()))
 end
-function Reactant.Ops.mlir_type(::Type{<:TracedRequest})
+function Reactant.Ops.mlir_type(::TracedRequest)
     return MLIR.IR.Type(MLIR.API.enzymexlaCommMpiRequestTypeGet(MLIR.IR.current_context()))
 end
 
