@@ -259,7 +259,7 @@ let mpi_initialized = false
                             elseif rank == 1
                                 recv_buf = ConcreteRArray(zeros(T, 5))
                                 src = 0
-                                @jit MPI.Recv!(recv_buf, src, tag, comm)
+                                @jit MPI.Recv!(recv_buf, src, tag, comm, nothing)
                                 @test recv_buf == send_buf
                             end
                         end
@@ -278,7 +278,7 @@ let mpi_initialized = false
                                 return nothing
                             elseif rank == 1
                                 src = 0
-                                MPI.Recv!(recv_buf, src, tag, comm)
+                                MPI.Recv!(recv_buf, src, tag, comm, nothing)
                                 return nothing
                             end
                         end
