@@ -200,7 +200,7 @@ for (name, supertype, julia_type) in
 
                     res = $concrete_type(
                         ConcretePJRTNumber{Int64,1}(
-                            (Reactant.PJRT.AsyncEmptyBuffer,), Sharding.NoShardInfo()
+                            (Reactant.XLA.PJRT.AsyncEmptyBuffer,), Sharding.NoShardInfo()
                         ),
                     )
                     seen[prev] = res
@@ -214,7 +214,7 @@ for (name, supertype, julia_type) in
 
                     res = $concrete_type(
                         ConcreteIFRTNumber{Int64,1}(
-                            (Reactant.IFRT.AsyncEmptyBuffer,), Sharding.NoShardInfo()
+                            (Reactant.XLA.IFRT.AsyncEmptyBuffer,), Sharding.NoShardInfo()
                         ),
                     )
                     seen[prev] = res
