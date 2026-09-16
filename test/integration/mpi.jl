@@ -220,7 +220,7 @@ end
     for T in datatypes
         # NOTE: currently don't allow a request to cross the compile boundary
         function waitall(send_buf, recv_buf)
-            reqs = Reactant.TracedRNumber[]
+            reqs = Any[]
 
             if rank == 0
                 dest = 1
