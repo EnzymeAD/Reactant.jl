@@ -119,3 +119,13 @@ end
         @test @jit(isreal.(x_concrete)) == isreal.(x)
     end
 end
+
+@testset "forced complex emulation" begin
+    @testset "emulated complex addition" begin
+        a = Reactant.to_rarray(ones(ComplexF32, 3))
+        b = Reactant.to_rarray(ones(ComplexF32, 3))
+        c = Reactant.compile(+, (a, b); emulate_complex=true)(a, b)
+        @test c == ones(ComplexF32, 3) + ones(ComplexF32, 3)
+    end
+end
+
