@@ -3438,7 +3438,8 @@ struct LinkableRuntime {
     // the donation mask.
     uint8_t *written;
     // Per argument: is it a parameter of the executable? An argument that
-    // resolves to the buffer of an earlier one is folded into it.
+    // resolves to the buffer of an earlier one is folded into it, and a
+    // null one is a constant.
     uint8_t *keep;
   };
   DenseMap<const char *,
@@ -3653,26 +3654,34 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
   // buffer and addresses the view as a slice of it; the offsets select the
   // executable, so they are part of the cache key.
   std::vector<int64_t> viewOffset(argcnt, 0);
+  // Per argument: -1 for a parameter of the executable; j >= 0 when it
+  // resolves to the buffer of argument j (mfem's in-place add(r, a, z, r), a
+  // BlockVector next to one of its blocks), in which case it is folded into
+  // that parameter; kNullArg for a null pointer (mfem's optional
+  // `geom ? geom->J.Read() : nullptr`, guarded on a flag), which is
+  // compiled as a constant zero buffer. Both fold the argument out of the
+  // parameters, so the pattern is part of the cache key.
+  const int64_t kNullArg = -2;
+  std::vector<int64_t> dupOf(argcnt, -1);
   for (int64_t i = 0; i < argcnt; i++) {
+    if (!args[i]) {
+      dupOf[i] = kNullArg;
+      sizeKey.emplace_back();
+      continue;
+    }
     auto &&[argB, argO, argP] = bufferAndOffset(lrt, args[i]);
     viewOffset[i] = argO;
     baseArrays[i] = argB;
     basePtrs[i] = argP;
     auto dims = argB->on_device_shape().dimensions();
     sizeKey.emplace_back(dims.begin(), dims.end());
-  }
-  sizeKey.push_back(viewOffset);
-  // Two arguments resolving to one buffer (mfem's in-place add(r, a, z, r),
-  // a BlockVector next to one of its blocks): the kernel is compiled with
-  // the later one folded into the first, so which arguments alias is part
-  // of the cache key.
-  std::vector<int64_t> dupOf(argcnt, -1);
-  for (int64_t i = 0; i < argcnt; i++)
     for (int64_t j = 0; j < i; j++)
-      if (baseArrays[i] == baseArrays[j]) {
+      if (baseArrays[j] == argB) {
         dupOf[i] = dupOf[j] < 0 ? j : dupOf[j];
         break;
       }
+  }
+  sizeKey.push_back(viewOffset);
   sizeKey.push_back(dupOf);
 
   // The specialized scalars are part of what the executable was compiled
@@ -3746,6 +3755,13 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
     SmallVector<mlir::Type> types;
     SmallVector<int64_t> viewStart(argcnt, 0);
     for (int64_t i = 0; i < argcnt; i++) {
+      if (dupOf[i] == kNullArg) {
+        // Large enough for any access the guarded code makes in the raised
+        // kernel; a dynamic index into it is clamped.
+        types.push_back(
+            mlir::RankedTensorType::get({256}, builder.getI8Type()));
+        continue;
+      }
       auto RTT = cast<mlir::RankedTensorType>(
           MyValueOrThrow(xla::ConvertShapeToType<mlir::RankedTensorType>(
               baseArrays[i]->on_device_shape(), builder)));
@@ -3801,6 +3817,18 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
            i++) {
         written[i] = ret.getOperand(i) != funcOp.getArgument(i);
         funcOp.removeArgAttr(i, "tf.aliasing_output");
+        if (dupOf[i] == kNullArg) {
+          auto arg = funcOp.getArgument(i);
+          mlir::OpBuilder b(&funcOp.getBody().front(),
+                            funcOp.getBody().front().begin());
+          auto zero = mlir::stablehlo::ConstantOp::create(
+              b, funcOp.getLoc(),
+              mlir::DenseElementsAttr::get(
+                  cast<mlir::RankedTensorType>(arg.getType()),
+                  b.getI8IntegerAttr(0)));
+          arg.replaceAllUsesWith(zero);
+          written[i] = 0;
+        }
         if (viewOffset[i]) {
           // The view becomes its base buffer: every use reads the slice at
           // the view's offset, and a written view's result is written back
@@ -3874,7 +3902,7 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
       // (parameter position, result index) of the donated arguments
       SmallVector<std::pair<int64_t, int64_t>> aliasing;
       for (int64_t i = 0, pos = 0; i < argcnt; i++) {
-        if (dupOf[i] >= 0)
+        if (dupOf[i] != -1)
           continue;
         if (i < (int64_t)ret.getNumOperands() && written[i]) {
           aliasing.emplace_back(pos, kept.size());
@@ -3890,7 +3918,7 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
       ret->setOperands(kept);
       llvm::BitVector folded(funcOp.getNumArguments());
       for (int64_t i = 0; i < argcnt; i++)
-        if (dupOf[i] >= 0)
+        if (dupOf[i] != -1)
           folded.set(i);
       funcOp.eraseArguments(folded);
       funcOp.setType(mlir::FunctionType::get(
@@ -3907,7 +3935,7 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
     uint8_t *keep = (uint8_t *)malloc(argcnt);
     uint8_t *writtenKept = (uint8_t *)malloc(argcnt);
     for (int64_t i = 0, pos = 0; i < argcnt; i++) {
-      keep[i] = dupOf[i] < 0;
+      keep[i] = dupOf[i] == -1;
       if (keep[i])
         writtenKept[pos++] = written[i];
     }
