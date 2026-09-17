@@ -95,7 +95,7 @@ jobs:
           gcp-bucket: ${{ contains(inputs.os, 'linux') && 'enzyme-ci-transient' || '' }}
           key-prefix: reactantjl/
 
-      - uses: julia-actions/julia-downgrade-compat@v2
+      - uses: julia-actions/julia-downgrade-compat@v2.6.2
         if: ${{ inputs.downgrade_testing }}
         with:
           skip: "ReactantCore"
