@@ -323,6 +323,7 @@ function replicate_array_to_all_devices(array::Array, sharding, mesh, size_arr)
             device_id=-1,
             num_partitions=length(mesh.device_ids),
             mesh_ids=vec(mesh.device_ids),
+            platform=lowercase(XLA.platform_name(XLA.client(array))),
             xla_executable_build_options=(;
                 use_shardy_partitioner=true, use_spmd_partitioning=true
             ),
