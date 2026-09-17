@@ -379,6 +379,7 @@ function get_common_compile_options()
         :reshape_propagate => :(:up),
         :optimize_then_pad => true,
         :optimize_communications => true,
+        :canonicalize_elementwise_shapes => true,
         :cudnn_hlo_optimize => false,
         :legalize_chlo_to_stablehlo => false,
         :compile_options => missing,
