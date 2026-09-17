@@ -482,6 +482,20 @@ end
     @test Array(y_ra) ≈ y
 end
 
+# Untraced destination holding traced elements (SciML/OrdinaryDiffEq.jl#3369)
+function map_untraced_dest(x)
+    v = [x, x .+ 1]
+    w = map!(copy, similar(v), v)
+    return w[1] .+ w[2]
+end
+
+@testset "map! into untraced destination" begin
+    x = Reactant.TestUtils.construct_test_array(Float32, 4)
+    x_ra = Reactant.to_rarray(x)
+
+    @test Array(@jit(map_untraced_dest(x_ra))) ≈ map_untraced_dest(x)
+end
+
 map_test_1(i, xᵢ, yᵢ) = xᵢ + yᵢ + max(xᵢ, yᵢ)
 
 @testset "multi-argument map" begin
