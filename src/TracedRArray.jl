@@ -184,13 +184,21 @@ function overloaded_mapreduce(
     return overloaded_mapreduce(f, op, materialize_traced_array(A); kwargs...)
 end
 
-function overloaded_mapreduce(
+# `A` is deliberately unparameterised. A static parameter bound to an argument's type
+# forces Julia to specialize the method whatever `@nospecialize` says, and
+# `@nospecializeinfer` then has nothing to widen: inference sees a concrete `A`, walks into
+# `elem_apply` -- which traces `f` into a fresh MLIR function -- and on a large traced
+# program recurses deep enough to overflow the task stack.
+Base.@nospecializeinfer function overloaded_mapreduce(
     @nospecialize(f),
     @nospecialize(op),
-    @nospecialize(A::TracedRArray{T,N});
+    @nospecialize(A::TracedRArray);
     dims=:,
     init=Base._InitialValue(),
-) where {T,N}
+)
+    T = Reactant.unwrapped_eltype(A)
+    N = ndims(A)
+
     original_dims = dims
     dims isa Int && (dims = Int64[dims])
     dims isa Colon && (dims = collect(Int64, 1:N))
