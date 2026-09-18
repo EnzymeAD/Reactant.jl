@@ -125,19 +125,25 @@ test_worker = custom_test_worker ? tpu_custom_worker_launcher : Returns(nothing)
     end
 
     if (
-        # MPI is only supported on CPU
-        (BACKEND == "cpu" || BACKEND == "auto") && (
+        BACKEND in ("auto", "cpu", "cuda", "gpu") && (
             isempty(parsed_args.positionals) ||
             "integration" ∈ parsed_args.positionals ||
             "integration/mpi" ∈ parsed_args.positionals
         )
     )
         @testset "MPI" begin
-            using MPI
-            nranks = 2
-            run(
-                `$(mpiexec()) -n $nranks $(Base.julia_cmd()) --project=$(Base.active_project()) $(joinpath(@__DIR__, "integration", "mpi.jl"))`,
+            # Determine backend before test to avoid illegal xla client creation before nccl initialization
+            # MPI is only supported on CPU and CUDA
+            BACKEND != "auto" && Reactant.set_default_backend(BACKEND)
+            mpi_backend = lowercase(
+                Reactant.XLA.platform_name(Reactant.XLA.default_backend())
             )
+            if mpi_backend in ("cpu", "cuda")
+                using MPI
+                nranks = 2
+                cmd = `$(mpiexec()) -n $nranks $(Base.julia_cmd()) --project=$(Base.active_project()) $(joinpath(@__DIR__, "integration", "mpi.jl"))`
+                run(setenv(cmd, "REACTANT_MPI_BACKEND" => mpi_backend))
+            end
         end
     end
 
