@@ -41,6 +41,10 @@ XLA.get_output_shardings(thunk::Thunk) = XLA.get_output_shardings(thunk.exec)
 
 XLA.get_parameter_shardings(thunk::Thunk) = XLA.get_parameter_shardings(thunk.exec)
 
+XLA.serialize_executable(thunk::Thunk) = XLA.serialize_executable(thunk.exec)
+
+XLA.compiled_memory_stats(thunk::Thunk) = XLA.compiled_memory_stats(thunk.exec)
+
 struct MisMatchedThunkTypeError{ThunkTy,FoundTypes} <: Base.Exception end
 
 function Base.showerror(

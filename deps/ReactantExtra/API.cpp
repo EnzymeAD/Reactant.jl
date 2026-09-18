@@ -67,6 +67,7 @@ void reactantReleaseAddressRange(void *base, size_t nbytes);
 
 #include "absl/log/globals.h"
 #include "absl/log/initialize.h"
+#include "absl/strings/cord.h"
 
 #include "xla/mlir/utils/type_util.h"
 #include "xla/mlir_hlo/mhlo/IR/hlo_ops.h"
@@ -97,6 +98,7 @@ void reactantReleaseAddressRange(void *base, size_t nbytes);
 #include "xla/pjrt/gpu/se_gpu_pjrt_client.h"
 #endif
 #include "xla/pjrt/pjrt_api.h"
+#include "xla/pjrt/c/pjrt_c_api_cpu_internal.h"
 #include "xla/pjrt/pjrt_c_api_client.h"
 #include "xla/pjrt/pjrt_executable.h"
 #include "xla/pjrt/plugin/xla_cpu/xla_cpu_pjrt_client.h"
@@ -675,6 +677,14 @@ REACTANT_ABI PjRtClient *MakeClientFromApi(const PJRT_Api *api,
   return GetCApiClientInternal(client_name, error);
 }
 
+// The PJRT C API table of the CPU plugin. The GPU plugin exports its table
+// under the standard name `GetPjrtApi` (CUDA and ROCm builds only); the CPU
+// plugin defines that same C symbol, so the library can only export one of the
+// two under it and the CPU table is reached through this name instead.
+REACTANT_ABI const PJRT_Api *GetCpuPjrtApi() {
+  return pjrt::cpu_plugin::GetCpuPjrtApi();
+}
+
 REACTANT_ABI PjRtClient *MakeTPUClient(const char *tpu_path,
                                        const char **error) {
   // Prefer $TPU_LIBRARY_PATH if set
@@ -779,6 +789,26 @@ REACTANT_ABI void ifrt_device_get_allocator_stats(ifrt::Device *device,
   }
   auto ifrt_pjrt_device = llvm::dyn_cast<ifrt::PjRtDevice>(device);
   PjRtDeviceGetAllocatorStats(ifrt_pjrt_device->pjrt_device(), jlstats);
+}
+
+// Reset the allocator's high-water marks (`peak_bytes_in_use` and the other
+// `peak_*` fields reported by `PjRtDeviceGetAllocatorStats`) to the current
+// usage. Only devices that track allocator statistics (for example the
+// StreamExecutor GPU device) implement this; the others report an error.
+REACTANT_ABI void PjRtDeviceClearMemoryStats(PjRtDevice *device) {
+  auto status = device->ClearMemoryStats();
+  if (!status.ok()) {
+    ReactantThrowError(status.ToString().c_str());
+  }
+}
+
+REACTANT_ABI void ifrt_device_clear_memory_stats(ifrt::Device *device) {
+  if (!llvm::isa<ifrt::PjRtDevice>(device)) {
+    ReactantThrowError(
+        "ifrt_device_clear_memory_stats: only supported for ifrt-pjrt.");
+  }
+  auto ifrt_pjrt_device = llvm::dyn_cast<ifrt::PjRtDevice>(device);
+  PjRtDeviceClearMemoryStats(ifrt_pjrt_device->pjrt_device());
 }
 
 REACTANT_ABI void ExecutableFree(xla::PjRtLoadedExecutable *exec) {
@@ -1541,6 +1571,81 @@ ClientCompileWithProto(PjRtClient *client, MlirModule cmod,
       GenerateCompileOptions(compile_options_proto,
                              compile_options_proto_size));
 }
+
+#pragma region PjRtLoadedExecutable serialization and memory stats
+
+// Serialize a compiled program so that `PjRtClientLoadSerializedExecutable`
+// can load it later without compiling again. The returned buffer is malloc'd
+// and the caller releases it with `free`.
+//
+// The serialization goes through `GetExecutable()`: not every client
+// implements `SerializeExecutable` on the loaded executable itself, but all of
+// them implement it on the underlying `PjRtExecutable`.
+REACTANT_ABI uint8_t *
+PjRtLoadedExecutableSerialize(xla::PjRtLoadedExecutable *exec, size_t *size) {
+  std::string serialized =
+      MyValueOrThrow(exec->GetExecutable()->SerializeExecutable());
+  *size = serialized.size();
+  uint8_t *data = (uint8_t *)malloc(serialized.size());
+  memcpy(data, serialized.data(), serialized.size());
+  return data;
+}
+
+// Load a program produced by `PjRtLoadedExecutableSerialize`.
+// `compile_options_proto` is a serialized `CompileOptionsProto` that replaces
+// the options stored in the blob (this is how a program compiled for one
+// device ordinal is placed on another); pass nullptr / 0 to keep the stored
+// options. The caller owns the result and frees it with `ExecutableFree`.
+REACTANT_ABI xla::PjRtLoadedExecutable *PjRtClientLoadSerializedExecutable(
+    PjRtClient *client, const uint8_t *data, size_t size,
+    const uint8_t *compile_options_proto, size_t compile_options_proto_size) {
+  std::optional<xla::CompileOptions> compile_options;
+  if (compile_options_proto != nullptr && compile_options_proto_size > 0) {
+    compile_options = GenerateCompileOptions(compile_options_proto,
+                                             compile_options_proto_size);
+  }
+  auto exec = MyValueOrThrow(client->LoadSerializedExecutable(
+      std::string_view(reinterpret_cast<const char *>(data), size),
+      std::move(compile_options), xla::LoadOptions()));
+  return exec.release();
+}
+
+// Static memory accounting from XLA's buffer assignment, available without
+// running the program. Mirrors `xla::CompiledMemoryStats` minus its
+// `serialized_buffer_assignment` string, which cannot cross the C boundary.
+struct JLCompiledMemoryStats {
+  int64_t generated_code_size_in_bytes;
+  int64_t argument_size_in_bytes;
+  int64_t output_size_in_bytes;
+  int64_t alias_size_in_bytes;
+  int64_t temp_size_in_bytes;
+  int64_t host_generated_code_size_in_bytes;
+  int64_t host_argument_size_in_bytes;
+  int64_t host_output_size_in_bytes;
+  int64_t host_alias_size_in_bytes;
+  int64_t host_temp_size_in_bytes;
+  int64_t peak_memory_in_bytes;
+};
+
+REACTANT_ABI void
+PjRtLoadedExecutableGetCompiledMemoryStats(xla::PjRtLoadedExecutable *exec,
+                                           JLCompiledMemoryStats *jlstats) {
+  auto stats = MyValueOrThrow(exec->GetExecutable()->GetCompiledMemoryStats());
+  jlstats->generated_code_size_in_bytes = stats.generated_code_size_in_bytes;
+  jlstats->argument_size_in_bytes = stats.argument_size_in_bytes;
+  jlstats->output_size_in_bytes = stats.output_size_in_bytes;
+  jlstats->alias_size_in_bytes = stats.alias_size_in_bytes;
+  jlstats->temp_size_in_bytes = stats.temp_size_in_bytes;
+  jlstats->host_generated_code_size_in_bytes =
+      stats.host_generated_code_size_in_bytes;
+  jlstats->host_argument_size_in_bytes = stats.host_argument_size_in_bytes;
+  jlstats->host_output_size_in_bytes = stats.host_output_size_in_bytes;
+  jlstats->host_alias_size_in_bytes = stats.host_alias_size_in_bytes;
+  jlstats->host_temp_size_in_bytes = stats.host_temp_size_in_bytes;
+  jlstats->peak_memory_in_bytes = stats.peak_memory_in_bytes;
+}
+
+#pragma endregion
 
 REACTANT_ABI void
 PjRtLoadedExecutableGetOuputShardings(xla::PjRtLoadedExecutable *exec,
@@ -3159,6 +3264,65 @@ REACTANT_ABI void ifrt_loaded_executable_execute(
 REACTANT_ABI ifrt::Client *
 ifrt_loaded_executable_client(HeldIfrtLoadedExecutable *exec) {
   return exec->obj()->client();
+}
+
+static xla::PjRtLoadedExecutable *
+ifrt_pjrt_loaded_executable_unwrap(HeldIfrtLoadedExecutable *exec,
+                                   const char *caller) {
+  auto *pjrt_exec = llvm::dyn_cast<ifrt::PjRtLoadedExecutable>(exec->ptr());
+  if (pjrt_exec == nullptr) {
+    ReactantThrowError(
+        (std::string(caller) + ": only supported for ifrt-pjrt.").c_str());
+  }
+  return pjrt_exec->pjrt_loaded_executable();
+}
+
+// IFRT executables carry their own metadata (output dtypes, shapes, shardings)
+// next to the PJRT program, so they use IFRT's own serialization format. Bytes
+// from `ifrt_loaded_executable_serialize` load with
+// `ifrt_client_load_serialized_executable`; they are not interchangeable with
+// the PJRT counterparts above.
+REACTANT_ABI uint8_t *
+ifrt_loaded_executable_serialize(HeldIfrtLoadedExecutable *exec,
+                                 size_t *size) {
+  std::string serialized = MyValueOrThrow(exec->obj()->Serialize());
+  *size = serialized.size();
+  uint8_t *data = (uint8_t *)malloc(serialized.size());
+  memcpy(data, serialized.data(), serialized.size());
+  return data;
+}
+
+REACTANT_ABI void ifrt_loaded_executable_get_compiled_memory_stats(
+    HeldIfrtLoadedExecutable *exec, JLCompiledMemoryStats *jlstats) {
+  PjRtLoadedExecutableGetCompiledMemoryStats(
+      ifrt_pjrt_loaded_executable_unwrap(
+          exec, "ifrt_loaded_executable_get_compiled_memory_stats"),
+      jlstats);
+}
+
+// Load a program produced by `ifrt_loaded_executable_serialize`. As for the
+// PJRT version, `compile_options_proto` optionally replaces the stored compile
+// options; the device list is then derived from the loaded program's device
+// assignment, so an override that moves the program is honoured.
+REACTANT_ABI HeldIfrtLoadedExecutable *ifrt_client_load_serialized_executable(
+    ifrt::Client *client, const uint8_t *data, size_t size,
+    const uint8_t *compile_options_proto, size_t compile_options_proto_size) {
+  std::optional<xla::CompileOptions> compile_options;
+  if (compile_options_proto != nullptr && compile_options_proto_size > 0) {
+    compile_options = GenerateCompileOptions(compile_options_proto,
+                                             compile_options_proto_size);
+  }
+  auto options = std::make_unique<xla::ifrt::XlaDeserializeExecutableOptions>(
+      std::move(compile_options), /*devices=*/std::nullopt);
+
+  absl::Cord serialized(
+      absl::string_view(reinterpret_cast<const char *>(data), size));
+  std::shared_ptr<xla::ifrt::LoadedExecutable> loaded =
+      MyValueOrThrow(client->GetDefaultCompiler()
+                         ->DeserializeLoadedExecutable(serialized,
+                                                       std::move(options))
+                         .Await());
+  return reactant::capture(loaded);
 }
 
 REACTANT_ABI void

@@ -53,3 +53,10 @@ function unsafe_string_and_free(str::Cstring, args...)
     @ccall free(str::Cstring)::Cvoid
     return str_jl
 end
+
+# Copy a malloc'd buffer returned by the C++ side into a Julia array and free it.
+function unsafe_bytes_and_free(ptr::Ptr{UInt8}, len::Integer)
+    bytes = len == 0 ? UInt8[] : copy(unsafe_wrap(Array, ptr, (Int(len),); own=false))
+    @ccall free(ptr::Ptr{UInt8})::Cvoid
+    return bytes
+end
