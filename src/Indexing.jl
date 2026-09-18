@@ -365,7 +365,7 @@ function Base.setindex!(a::TracedRArray{T,N}, v, indices::Vararg{Any,N}) where {
     use_scatter_setindex = false
     for idxs in indices
         idxs isa Number && continue
-        if idxs isa Reactant.TracedType
+        if is_traced(idxs)
             use_scatter_setindex = true
             break
         end
@@ -509,7 +509,7 @@ function get_slice_stride(x)
 end
 
 function getindex_linear(a::TracedRArray{T,N}, indices::AbstractArray) where {T,N}
-    if !(indices isa Reactant.TracedType || eltype(indices) <: TracedRNumber)
+    if !(is_traced(indices) || eltype(indices) <: TracedRNumber)
         if length(indices) == 1 && first(indices) isa CartesianIndex
             # fast-path else we will end up with a gather
             return Reactant.broadcast_to_size(
@@ -561,7 +561,7 @@ function getindex_general(a::TracedRArray{T,N}, indices::Vararg{Any,N}) where {T
             push!(strides, 1)
             continue
         end
-        if idxs isa Reactant.TracedType
+        if is_traced(idxs)
             use_gather_getindex = true
             break
         end
@@ -685,7 +685,7 @@ function _setindex_scalar_cartesian!(
 end
 
 function _setindex_linear!(a::TracedRArray{T,N}, v, indices::AbstractArray) where {T,N}
-    if !(indices isa Reactant.TracedType) && TracedUtils.__contiguous_indices(vec(indices))
+    if !(is_traced(indices) || eltype(indices) <: TracedRNumber) && TracedUtils.__contiguous_indices(vec(indices))
         res = @opcall(
             reshape(
                 @opcall(

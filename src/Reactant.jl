@@ -267,8 +267,6 @@ include("Enzyme.jl")
 
 export StackedBatchDuplicated, StackedBatchDuplicatedNoNeed
 
-const TracedType = Union{TracedRArray,TracedRNumber,MissingTracedValue}
-
 include("ControlFlow.jl")
 include("Tracing.jl")
 
