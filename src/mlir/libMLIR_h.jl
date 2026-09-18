@@ -16235,6 +16235,7 @@ end
 struct CachedExec
     exec::Ptr{Cint}
     written::Ptr{UInt8}
+    keep::Ptr{UInt8}
 end
 
 struct AllocationInfo
