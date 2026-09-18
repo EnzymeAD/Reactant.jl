@@ -184,7 +184,7 @@ end
 
 The behavior of loops can be configured with the following configuration options:
 
- - `track_numbers::Union{Bool,Datatype}` - whether Julia numbers should be automatically promoted to traced numbers upon entering the loop.
+ - `track_numbers::Bool` - automatically promote numbers and enums to traced values upon entering the loop (default: `true`).
  - `checkpointing::Union{Bool,Periodic,Binomial}` - whether or not to enable checkpointing when performing reverse mode differentiation. Can be `false` (default), `true` (automatic checkpointing), or `Periodic(n)` to specify `n` checkpoints. When `true` is used, defaults to `isqrt(num_iters)` checkpoints for `for` loops with static (non-traced) bounds. `Periodic(n)` must be used for `while` loops or `for` loops with dynamic (traced) bounds when checkpointing is enabled.
  - `mincut::Bool` - whether or not to enable the mincut algorithm when performing reverse mode differentiation (default: `false`).
 """
@@ -216,7 +216,7 @@ macro trace(args...)
     end
     expr = only(args)
 
-    track_numbers = track_numbers ? Number : Union{}
+    track_numbers = track_numbers ? Union{Number,Base.Enum} : Union{}
     expr = macroexpand(__module__, expr)
 
     #! format: off

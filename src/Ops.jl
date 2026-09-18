@@ -2869,8 +2869,12 @@ end
             for p in path[2:end]
                 target = Reactant.Compiler.traced_getfield(target, p)
             end
-            if target isa
-                Union{Reactant.ConcreteRArray,Reactant.ConcreteRNumber,Reactant.TracedType}
+            if target isa Union{
+                Reactant.ConcreteRArray,
+                Reactant.ConcreteRNumber,
+                Reactant.TracedType,
+                Reactant.TracedEnum,
+            }
                 Reactant.TracedUtils.set!(
                     args, path[2:end], MLIR.IR.result(if_compiled, residx)
                 )

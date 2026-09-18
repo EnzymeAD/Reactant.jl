@@ -87,6 +87,17 @@ fresh() = Reactant.to_rarray(Float32[1, 1])
             @test @jit(f_one_armed(fresh(), 1.0f0, promote)) == Code.Success
             @test @jit(f_one_armed(fresh(), 3.0f0, promote)) == Code.Default
         end
+
+        # The other arm has a `MissingTracedValue` at this position.
+        function f_branch_local(u)
+            @trace if sum(u) > 1
+                status = Code.Success
+                u = u .* 2
+            end
+            return u
+        end
+        @test @jit(f_branch_local(fresh())) ≈ Float32[2, 2]
+        @test @jit(f_branch_local(Reactant.to_rarray(Float32[0, 0]))) ≈ Float32[0, 0]
     end
 
     @testset "mutable struct field" begin
@@ -119,14 +130,16 @@ fresh() = Reactant.to_rarray(Float32[1, 1])
         end
         for (threshold, expected) in ((1.0f0, Code.Success), (3.0f0, Code.Default))
             c = Reactant.to_rarray(
-                EnumCache(Float32[1, 1], Code.Default, false); track_numbers=Number
+                EnumCache(Float32[1, 1], Code.Default, false);
+                track_numbers=Union{Number,Base.Enum},
             )
             @test @jit(f_update(c, threshold)) == (expected, expected == Code.Success)
             @test c.code == expected
         end
 
         reset_cache = Reactant.to_rarray(
-            EnumCache(Float32[1, 1], Code.Default, false); track_numbers=Number
+            EnumCache(Float32[1, 1], Code.Default, false);
+            track_numbers=Union{Number,Base.Enum},
         )
         update = @compile f_update(reset_cache, 3.0f0)
         @test update(reset_cache, 3.0f0) == (Code.Default, false)
@@ -144,6 +157,17 @@ fresh() = Reactant.to_rarray(Float32[1, 1])
             return c.code, c.done
         end
         @test @jit(f_field_untouched(fresh(), 1.0f0)) == (Code.Default, true)
+
+        # A field declared as `ConcreteEnum{E}` cannot hold the traced representation.
+        mutable struct DeclaredEnumField{U}
+            u::U
+            code::ConcreteEnum{Code.T}
+        end
+        f_declared(c) = c.code == Code.Default
+        declared = DeclaredEnumField(
+            fresh(), Reactant.to_rarray(Code.Default; track_numbers=Base.Enum)
+        )
+        @test_throws Reactant.NoFieldMatchError @jit(f_declared(declared))
     end
 
     @testset "@trace while carrying an enum" begin
@@ -175,12 +199,12 @@ fresh() = Reactant.to_rarray(Float32[1, 1])
         @test Integer(res) === UInt8(200)
         f_small_int(u) = Integer(ifelse(sum(u) > 1, high, low))
         @test @jit(f_small_int(fresh())) isa ConcreteRNumber{UInt8}
-        @test Small(Reactant.to_rarray(low; track_numbers=Number)) === low
+        @test Small(Reactant.to_rarray(low; track_numbers=Base.Enum)) === low
     end
 
     @testset "enum arguments" begin
         f_arg(u, fruit) = (fruit == banana, Int(fruit))
-        fruit = Reactant.to_rarray(banana; track_numbers=Number)
+        fruit = Reactant.to_rarray(banana; track_numbers=Base.Enum)
         @test fruit isa ConcreteEnum{Fruit}
         @test fruit == banana
         @test Reactant.to_rarray(banana) === banana
@@ -190,14 +214,14 @@ fresh() = Reactant.to_rarray(Float32[1, 1])
     end
 
     @testset "concrete and traced representations" begin
-        fruit = Reactant.to_rarray(banana; track_numbers=Number)
+        fruit = Reactant.to_rarray(banana; track_numbers=Base.Enum)
         @test !(fruit isa Number)
         @test convert(typeof(fruit), apple) == apple
         @test convert(ConcreteEnum{Fruit}, cherry) == cherry
         @test convert(typeof(fruit), fruit) === fruit
 
         function f_representation(fruit)
-            @assert fruit isa TracedEnum{Fruit}
+            @assert fruit isa TracedEnum{Fruit,Int32}
             @assert fruit.value isa Reactant.TracedRNumber{Int32}
             return fruit, fruit
         end
@@ -208,18 +232,68 @@ fresh() = Reactant.to_rarray(Float32[1, 1])
         @test first == banana
         @test @jit(f_representation(first))[1] == banana
 
-        small = Reactant.to_rarray(low; track_numbers=Number)
+        small = Reactant.to_rarray(low; track_numbers=Base.Enum)
         converted = convert(typeof(small), high)
         @test converted.value isa ConcreteRNumber{UInt8}
         @test Small(converted) === high
     end
 
+    @testset "aliased closure captures" begin
+        first_capture = nothing
+        second_capture = nothing
+        function capture_status(u)
+            status = ifelse(sum(u) > 0, Code.Success, Code.Default)
+            first_capture = status
+            second_capture = status
+            return nothing
+        end
+        for (u, expected) in ((Float32[1], Code.Success), (Float32[-1], Code.Default))
+            @jit capture_status(Reactant.to_rarray(u))
+            @test first_capture isa ConcreteEnum{Code.T}
+            @test first_capture == expected
+            @test first_capture === second_capture
+        end
+    end
+
+    @testset "track_numbers opt-in" begin
+        # Enums are not `Number`s.
+        @test Reactant.to_rarray(banana; track_numbers=true) === banana
+        @test Reactant.to_rarray(banana; track_numbers=Number) === banana
+        @test Reactant.to_rarray(banana; track_numbers=Base.Enum) isa ConcreteEnum{Fruit}
+        numbers_only = Reactant.to_rarray(
+            EnumCache(Float32[1], Code.Default, false); track_numbers=true
+        )
+        @test numbers_only.code === Code.Default
+        @test numbers_only.done isa ConcreteRNumber{Bool}
+        both = Reactant.to_rarray(
+            EnumCache(Float32[1], Code.Default, false);
+            track_numbers=Union{Number,Base.Enum},
+        )
+        @test both.code isa ConcreteEnum{Code.T}
+        @test both.done isa ConcreteRNumber{Bool}
+    end
+
+    @testset "non-member payload" begin
+        # The traced constructor does not check membership.
+        f_invalid(u) =
+            Code.T(Int32(ifelse(sum(u) > 1, Code.Success, Code.Default)) + Int32(5))
+        r = @jit f_invalid(fresh())
+        @test Integer(r) === Int32(6)
+        @test r != Code.Success
+        @test_throws ArgumentError Code.T(r)
+        r2 = @jit f_invalid(fresh())
+        @test isequal(r, r2)
+        @test hash(r) == hash(r2)
+        @test length(Set([r, r2, Code.Success])) == 2
+        @test Dict(r => 1)[r2] == 1
+    end
+
     @testset "scalar broadcasting" begin
-        fruit = Reactant.to_rarray(banana; track_numbers=Number)
+        fruit = Reactant.to_rarray(banana; track_numbers=Base.Enum)
         f_broadcast(fruit) = [apple, banana, cherry] .== fruit
         @test f_broadcast(fruit) == [false, true, false]
         @test @jit(f_broadcast(fruit)) == [false, true, false]
-        @test @jit(f_broadcast(Reactant.to_rarray(apple; track_numbers=Number))) ==
+        @test @jit(f_broadcast(Reactant.to_rarray(apple; track_numbers=Base.Enum))) ==
             [true, false, false]
     end
 end

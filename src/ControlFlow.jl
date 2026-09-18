@@ -1,5 +1,9 @@
 function ReactantCore.traced_if(
-    cond::TracedRNumber{Bool}, true_fn::TFn, false_fn::FFn, args; track_numbers=Number
+    cond::TracedRNumber{Bool},
+    true_fn::TFn,
+    false_fn::FFn,
+    args;
+    track_numbers=Union{Number,Base.Enum},
 ) where {TFn,FFn}
     return @opcall if_condition(cond, true_fn, false_fn, args; track_numbers)
 end
@@ -12,7 +16,7 @@ function ReactantCore.traced_while(
     cond_fn::CFn,
     body_fn::BFn,
     args;
-    track_numbers=Number,
+    track_numbers=Union{Number,Base.Enum},
     verify_arg_names=nothing,
     checkpointing=false,
     mincut=false,

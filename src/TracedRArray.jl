@@ -415,11 +415,24 @@ function _copyto!(dest::AnyTracedRArray, bc::Broadcasted)
     return dest
 end
 
+# Arrays of plain enums have no tensor representation; broadcast them elementwise.
+_has_tensor_representation(@nospecialize(x)) = true
+_has_tensor_representation(::AbstractArray{<:Base.Enum}) = false
+_has_tensor_representation(x::Broadcast.Extruded) = _has_tensor_representation(x.x)
+_has_tensor_representation(bc::Broadcasted) = all(_has_tensor_representation, bc.args)
+
 function _copyto!(dest::Array{<:TracedRNumber}, bc::Broadcasted)
     axes(dest) == axes(bc) || Broadcast.throwdm(axes(dest), axes(bc))
     isempty(dest) && return dest
 
     bc = Broadcast.preprocess(dest, bc)
+
+    if !_has_tensor_representation(bc)
+        for I in eachindex(bc)
+            dest[I] = bc[I]
+        end
+        return dest
+    end
 
     args = (Reactant.broadcast_to_size(Base.materialize(a), size(bc)) for a in bc.args)
 

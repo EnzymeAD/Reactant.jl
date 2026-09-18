@@ -24,10 +24,6 @@ end
     return Base.getfield(obj, field)
 end
 
-# The other branch may hold a plain enum at a wrapper payload path.
-# Return it unchanged so callers can skip the untraced target.
-@inline traced_getfield(@nospecialize(obj::Base.Enum), field) = obj
-
 @inline function traced_getfield(
     @nospecialize(
         obj::AbstractArray{<:Union{ConcretePJRTNumber,ConcreteIFRTNumber,TracedRNumber}}
@@ -56,6 +52,10 @@ end
     return Base.getindex(obj, field)
 end
 
+# Unwrap enum arguments to access their XLA buffers.
+@inline buffer_holder(@nospecialize(x)) = x
+@inline buffer_holder(x::Reactant.ConcreteEnum) = x.value
+
 @inline function traced_setfield!(
     @nospecialize(obj::AbstractConcreteNumber), field, val, path
 )
@@ -75,6 +75,13 @@ end
 
 @inline traced_setfield!(@nospecialize(obj), field, val, _path) =
     Base.setfield!(obj, field, val)
+
+# Write enum argument buffers back to the payload.
+@inline function traced_setfield!(
+    @nospecialize(obj::Reactant.ConcreteEnum), field, val, path
+)
+    return traced_setfield!(obj.value, field, val, path)
+end
 
 @inline function traced_setfield!(
     @nospecialize(obj::AbstractArray{T}), field, val, path
@@ -146,38 +153,6 @@ function traced_setfield_buffer!(runtime::Val, cache_dict, concrete_res, obj, fi
     )
 end
 
-# Replace captured traced enums: their payload fields cannot hold concrete numbers.
-function traced_setfield_buffer_at_parent!(
-    runtime, cache_dict, concrete_res, parent, field, payload_field, path
-)
-    obj = traced_getfield(parent, field)
-    if obj isa Reactant.TracedEnum
-        if haskey(cache_dict, obj)
-            concrete_enum = cache_dict[obj]
-        else
-            payload = obj.value
-            if haskey(cache_dict, payload)
-                concrete_payload = cache_dict[payload]
-            else
-                T = Reactant.unwrapped_eltype(payload)
-                concrete_payload = if runtime isa Val{:PJRT}
-                    ConcretePJRTNumber{T}(concrete_res)
-                else
-                    ConcreteIFRTNumber{T}(concrete_res)
-                end
-                cache_dict[payload] = concrete_payload
-            end
-            E = typeof(obj).parameters[1]
-            concrete_enum = Reactant.ConcreteEnum{E}(concrete_payload)
-            cache_dict[obj] = concrete_enum
-        end
-        return traced_setfield!(parent, field, concrete_enum, path)
-    end
-    return traced_setfield_buffer!(
-        runtime, cache_dict, concrete_res, obj, payload_field, path
-    )
-end
-
 function traced_setfield_buffer!(::Val, _cache_dict, val, concrete_res, _obj, _field, path)
     return traced_setfield!(val, :data, concrete_res, path)
 end
@@ -228,6 +203,20 @@ function traced_setfield_buffer!(
         cache_dict[val] = cval
     end
     return traced_setfield!(obj, field, cval, path)
+end
+
+# Replace captured traced enums with concrete wrappers.
+function traced_setfield_buffer!(
+    runtime::Val, cache_dict, val::Reactant.TracedEnum{E}, concrete_res, obj, field, path
+) where {E}
+    if !haskey(cache_dict, val)
+        payload = Ref{Any}()
+        traced_setfield_buffer!(
+            runtime, cache_dict, val.value, concrete_res, payload, :x, path
+        )
+        cache_dict[val] = Reactant.ConcreteEnum{E}(payload[])
+    end
+    return traced_setfield!(obj, field, cache_dict[val], path)
 end
 
 Base.@nospecializeinfer function create_result(
@@ -317,6 +306,42 @@ Base.@nospecializeinfer function create_result(
         result_cache[tocopy] = sym
     end
 
+    return result_cache[tocopy]
+end
+
+# Reconstruct the payload without adding a field index to its path.
+Base.@nospecializeinfer function create_result(
+    @nospecialize(tocopy::Reactant.ConcreteEnum),
+    @nospecialize(path::Tuple),
+    result_stores,
+    path_to_shard_info,
+    to_unreshard_results,
+    unresharded_code::Vector{Expr},
+    unresharded_arrays_cache,
+    used_shardinfo,
+    result_cache,
+    var_idx,
+    resultgen_code,
+)
+    if !haskey(result_cache, tocopy)
+        payload = create_result(
+            tocopy.value,
+            path,
+            result_stores,
+            path_to_shard_info,
+            to_unreshard_results,
+            unresharded_code,
+            unresharded_arrays_cache,
+            used_shardinfo,
+            result_cache,
+            var_idx,
+            resultgen_code,
+        )
+        sym = Symbol("result", var_idx[])
+        var_idx[] += 1
+        push!(resultgen_code, :($sym = $(Expr(:new, typeof(tocopy), payload))))
+        result_cache[tocopy] = sym
+    end
     return result_cache[tocopy]
 end
 
@@ -824,6 +849,7 @@ function codegen_flatten!(
         for p in path[3:end]
             flatcode = :(traced_getfield($flatcode, $(Meta.quot(p))))
         end
+        flatcode = :(buffer_holder($flatcode))
 
         if runtime isa Val{:PJRT}
             push!(flatten_code, :($carg_sym = $flatcode))
@@ -1160,7 +1186,7 @@ function codegen_unflatten!(
                 end
 
                 path = path[3:end]
-                for p in path[1:max(0, end - 2)]
+                for p in path[1:(end - 1)]
                     unflatcode = :(traced_getfield($unflatcode, $(Meta.quot(p))))
                 end
 
@@ -1184,20 +1210,7 @@ function codegen_unflatten!(
                     concrete_res_name_final = unresharded_arrays_cache[concrete_res_name]
                 end
 
-                if length(path) > 1
-                    needs_cache_dict = true
-                    unflatcode = quote
-                        traced_setfield_buffer_at_parent!(
-                            $(runtime),
-                            $(cache_dict),
-                            $(concrete_res_name_final),
-                            $(unflatcode),
-                            $(Meta.quot(path[end - 1])),
-                            $(Meta.quot(path[end])),
-                            $(path),
-                        )
-                    end
-                elseif length(path) > 0
+                if length(path) > 0
                     needs_cache_dict = true
                     # TODO(#2233): we might need to handle sharding here
                     unflatcode = quote
@@ -1274,7 +1287,7 @@ function codegen_unflatten!(
             push!(
                 resultgen_code,
                 quote
-                    $sym = $argres.data
+                    $sym = buffer_holder($argres).data
                 end,
             )
 
@@ -1417,7 +1430,7 @@ function codegen_unflatten_aliased_args!(
                     argres = :(traced_getfield($argres, $(Meta.quot(p))))
                 end
                 argpath_value = Symbol(:argpath_value_, pi)
-                argres_data = :($(argres).data)
+                argres_data = :(buffer_holder($(argres)).data)
                 if needs_copy
                     if runtime isa Val{:PJRT}
                         argres_data = :(map(copy, $argres_data))
