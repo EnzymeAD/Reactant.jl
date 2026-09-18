@@ -5,7 +5,7 @@ using Reactant: @trace, TracedEnum, ConcreteEnum, ConcreteRNumber
 @enum Small::UInt8 low = 7 high = 200
 @enumx Code Default Success MaxIters
 
-fresh() = Reactant.to_rarray(Float32[1, 1])   # sum == 2
+fresh() = Reactant.to_rarray(Float32[1, 1])
 
 @testset "Enum tracing" begin
     @testset "constant results" begin
@@ -147,8 +147,7 @@ fresh() = Reactant.to_rarray(Float32[1, 1])   # sum == 2
     end
 
     @testset "@trace while carrying an enum" begin
-        # Loop-carried scalars must already be traced to be written back after the loop,
-        # the same as for plain numbers.
+        # Trace scalar state before the loop so updates can be written back.
         function f_while(u, threshold)
             code = Reactant.ReactantCore.promote_to_traced(Code.Default)
             i = Reactant.ReactantCore.promote_to_traced(0)

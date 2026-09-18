@@ -5,9 +5,8 @@ abstract type AbstractReactantEnum{E<:Base.Enum} end
 """
     TracedEnum{E <: Base.Enum}
 
-An enum of type `E` represented by a traced integer during compilation. Supports enum
-comparisons, selection, integer conversion, and scalar broadcasting. Compiled results
-are reconstructed as [`ConcreteEnum`](@ref) values.
+An enum of type `E` backed by a traced integer. Supports comparisons, selection,
+integer conversion, and scalar broadcasting. Compiled results use [`ConcreteEnum`](@ref).
 """
 mutable struct TracedEnum{E<:Base.Enum} <: AbstractReactantEnum{E}
     value::TracedRNumber
@@ -57,7 +56,7 @@ _traced_payload(::Type{I}, x::TracedEnum) where {I} = _enum_payload(x)
 Base.Integer(x::AbstractReactantEnum) = _payload_integer(_enum_payload(x))
 (::Type{T})(x::AbstractReactantEnum) where {T<:Integer} = _payload_to(T, _enum_payload(x))
 
-# Unlike the host constructor, this does not check that the integer is a valid member.
+# Enum membership is not checked during tracing.
 function (::Type{E})(x::TracedRNumber{<:Integer}) where {E<:Base.Enum}
     return TracedEnum{E}(promote_to(TracedRNumber{enum_basetype(E)}, x))
 end
@@ -116,8 +115,7 @@ function Base.ifelse(
     return TracedEnum{E}(ifelse(pred, _traced_payload(I, x), _traced_payload(I, y)))
 end
 
-# Both wrappers keep their integer at field 1, so generic struct tracing preserves
-# payload paths and aliases while these type mappings select the destination wrapper.
+# Both wrappers store their payload at field 1 for generic struct tracing.
 
 Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(T::Type{<:ConcreteEnum{E,N}}),

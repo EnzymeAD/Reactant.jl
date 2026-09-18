@@ -24,9 +24,8 @@ end
     return Base.getfield(obj, field)
 end
 
-# A path can address the payload inside a `TracedEnum` while the object actually present at
-# the enum's position (e.g. an untraced branch counterpart) is still the plain enum; there
-# is nothing to descend into, and callers skip untraced targets.
+# The other branch may hold a plain enum at a wrapper payload path.
+# Return it unchanged so callers can skip the untraced target.
 @inline traced_getfield(@nospecialize(obj::Base.Enum), field) = obj
 
 @inline function traced_getfield(
@@ -147,8 +146,7 @@ function traced_setfield_buffer!(runtime::Val, cache_dict, concrete_res, obj, fi
     )
 end
 
-# A captured traced enum must be replaced in its containing field: its typed payload
-# cannot accept a concrete number. Other values retain the usual payload write-back.
+# Replace captured traced enums: their payload fields cannot hold concrete numbers.
 function traced_setfield_buffer_at_parent!(
     runtime, cache_dict, concrete_res, parent, field, payload_field, path
 )
