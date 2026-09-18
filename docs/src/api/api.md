@@ -36,6 +36,12 @@ ConcreteRArray
 ConcreteRNumber
 ```
 
+## Memory Management
+
+```@docs
+Reactant.free!
+```
+
 ## Inspect Generated HLO
 
 ```@docs

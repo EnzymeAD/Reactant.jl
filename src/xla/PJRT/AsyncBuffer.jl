@@ -9,6 +9,7 @@ AsyncBuffer(args...; kwargs...) = AsyncBuffer(Buffer(args...; kwargs...), nothin
 
 function Base.copy(b::AsyncBuffer)
     Base.wait(b)
+    isempty(b) && XLA.throw_empty_buffer("copy")
     return AsyncBuffer(Base.copy(b.buffer), nothing)
 end
 
