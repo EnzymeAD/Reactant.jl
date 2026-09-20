@@ -101,3 +101,26 @@ end
     @test out isa ConcreteRArray
     @test @jit(sum(sr)) ≈ sum(s)
 end
+
+@noinline duplicate(a) = (a, a)
+@noinline sincos_pair(a) = (sin(a), cos(a))
+@noinline sincos_nt(a) = (; s=sin(a), c=cos(a))
+
+@testset "broadcasted functions returning tuples (#1566)" begin
+    x = randn(Float32, 10)
+    xr = Reactant.to_rarray(x)
+
+    out = @jit duplicate.(xr)
+    @test out isa AbstractVector{<:Tuple}
+    @test collect(out) == duplicate.(x)
+
+    out = @jit sincos_pair.(xr)
+    @test out isa AbstractVector{<:Tuple}
+    @test components(out)[1] ≈ sin.(x)
+    @test components(out)[2] ≈ cos.(x)
+
+    out = @jit sincos_nt.(xr)
+    @test out isa AbstractVector{<:NamedTuple{(:s, :c)}}
+    @test components(out).s ≈ sin.(x)
+    @test components(out).c ≈ cos.(x)
+end
