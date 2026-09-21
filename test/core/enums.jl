@@ -224,3 +224,9 @@ fresh() = Reactant.to_rarray(Float32[1, 1])   # sum == 2
             [true, false, false]
     end
 end
+
+@testset "enum payload paths" begin
+    @test Reactant.Compiler.traced_getfield(apple, 1) === apple
+    @test_throws BoundsError Reactant.Compiler.traced_getfield(apple, 2)
+    @test_throws Exception Reactant.Compiler.traced_getfield(apple, :unrelated)
+end

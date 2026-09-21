@@ -27,7 +27,11 @@ end
 # A path can address the payload inside a `TracedEnum` while the object actually present at
 # the enum's position (e.g. an untraced branch counterpart) is still the plain enum; there
 # is nothing to descend into, and callers skip untraced targets.
-@inline traced_getfield(@nospecialize(obj::Base.Enum), field) = obj
+@inline function traced_getfield(@nospecialize(obj::Base.Enum), field)
+    # Only the synthetic payload field can stand in for a plain enum.
+    field === 1 && return obj
+    return Base.getfield(obj, field)
+end
 
 @inline function traced_getfield(
     @nospecialize(
