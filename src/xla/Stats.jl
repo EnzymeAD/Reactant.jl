@@ -83,6 +83,89 @@ end
 
 function allocatorstats_internal end
 
+"""
+    clear_memory_stats!([device])
+
+Reset the high-water marks reported by [`allocatorstats`](@ref) (`peak_bytes_in_use`,
+`peak_bytes_reserved` and `peak_pool_bytes`) to the current usage, so that the peak
+reached by a following region of code can be measured on its own.
+
+!!! warning
+
+    Only devices that track allocator statistics support this (the CUDA and ROCm devices).
+    Calling it on any other device, including the CPU device, throws.
+"""
+function clear_memory_stats!(device::AbstractDevice=default_device(default_backend()))
+    clear_memory_stats_internal!(device)
+    return nothing
+end
+
+function clear_memory_stats_internal! end
+
+"""
+    CompiledMemoryStats
+
+The memory XLA's buffer assignment reserved for an executable, in bytes. Construct it with
+[`compiled_memory_stats`](@ref). Fields:
+  - `generated_code_size_in_bytes`, `argument_size_in_bytes`, `output_size_in_bytes`,
+    `alias_size_in_bytes`, `temp_size_in_bytes`: device memory
+  - the `host_` prefixed counterparts of the above: host memory
+  - `peak_memory_in_bytes`: peak device memory while the program runs
+"""
+struct CompiledMemoryStats
+    generated_code_size_in_bytes::Int64
+    argument_size_in_bytes::Int64
+    output_size_in_bytes::Int64
+    alias_size_in_bytes::Int64
+    temp_size_in_bytes::Int64
+    host_generated_code_size_in_bytes::Int64
+    host_argument_size_in_bytes::Int64
+    host_output_size_in_bytes::Int64
+    host_alias_size_in_bytes::Int64
+    host_temp_size_in_bytes::Int64
+    peak_memory_in_bytes::Int64
+end
+
+function Base.show(io::IO, ::MIME"text/plain", stats::CompiledMemoryStats)
+    return print(
+        io,
+        """
+        CompiledMemoryStats
+        -------------------
+        Generated Code: $(_format_bytes(stats.generated_code_size_in_bytes))
+        Arguments: $(_format_bytes(stats.argument_size_in_bytes))
+        Outputs: $(_format_bytes(stats.output_size_in_bytes))
+        Aliases: $(_format_bytes(stats.alias_size_in_bytes))
+        Temporaries: $(_format_bytes(stats.temp_size_in_bytes))
+        Host Generated Code: $(_format_bytes(stats.host_generated_code_size_in_bytes))
+        Host Arguments: $(_format_bytes(stats.host_argument_size_in_bytes))
+        Host Outputs: $(_format_bytes(stats.host_output_size_in_bytes))
+        Host Aliases: $(_format_bytes(stats.host_alias_size_in_bytes))
+        Host Temporaries: $(_format_bytes(stats.host_temp_size_in_bytes))
+        Peak Memory: $(_format_bytes(stats.peak_memory_in_bytes))
+        """,
+    )
+end
+
+"""
+    compiled_memory_stats(exec::AbstractLoadedExecutable)
+    compiled_memory_stats(thunk::Reactant.Thunk)
+
+Return a [`CompiledMemoryStats`](@ref) with the memory XLA's buffer assignment reserved for
+the executable. The numbers come from the compiler and are available without running the
+program. `temp_size_in_bytes` is the scratch space the program needs; the runtime allocator
+rounds allocations up and may add its own, so it is a lower bound on the scratch actually
+allocated at run time.
+"""
+function compiled_memory_stats(exec::AbstractLoadedExecutable)
+    stats = compiled_memory_stats_internal(exec)
+    return CompiledMemoryStats(
+        (getfield(stats, field) for field in fieldnames(CompiledMemoryStats))...
+    )
+end
+
+function compiled_memory_stats_internal end
+
 function Base.show(
     io::IO, ::MIME"text/plain", cost_analysis::MLIR.API.JLHloCostAnalysisProperties
 )
