@@ -48,6 +48,7 @@ void reactantReleaseAddressRange(void *base, size_t nbytes);
 #include "mlir/lib/AsmParser/Token.h"
 #include "src/enzyme_ad/jax/Dialect/Dialect.h"
 #include "src/enzyme_ad/jax/Implementations/XLADerivatives.h"
+#include "src/enzyme_ad/jax/Integrations/c/EnzymeXLA.h"
 #include "src/enzyme_ad/jax/Passes/Passes.h"
 #include "src/enzyme_ad/jax/RegistryUtils.h"
 #include "src/enzyme_ad/jax/clang_compile.h"
@@ -3791,8 +3792,71 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
     pm.addPass(mlir::stablehlo::createStablehloRefineShapesPass());
     pm.addNestedPass<mlir::func::FuncOp>(
         stablehlo::createStablehloCanonicalizeDynamismPass());
-    pm.addPass(mlir::enzyme::createEnzymeHLOOptPass());
+    // REACTANT_EXEC_OPT=transform runs the optimizer the Julia compiler
+    // runs on a traced program (the transform-dialect pattern list with its
+    // defaults) instead of the plain enzyme-hlo-opt pass.
+    static const char *execOpt = getenv("REACTANT_EXEC_OPT");
+    if (execOpt && std::string(execOpt) == "transform") {
+      EnzymeXLATransformPassesOptions opts{};
+      opts.max_constant_threshold = 1024;
+      // REACTANT_EXEC_UNROLL sets the trip count up to which while loops
+      // are unrolled. Unrolling the raised kernels' short loops (threshold
+      // 16) makes them straight-line code XLA compiles slowly: the mfem GPU
+      // suite takes 4384 s against 2899 s at threshold 1 (enzyme-hlo-opt:
+      // 2753 s), so unrolling is opt-in.
+      opts.while_unroll_threshold = getenv("REACTANT_EXEC_UNROLL")
+                                        ? atoi(getenv("REACTANT_EXEC_UNROLL"))
+                                        : 1;
+      opts.reshape_propagate = ENZYMEXLA_PROPAGATE_UP;
+      opts.transpose_propagate = ENZYMEXLA_PROPAGATE_UP;
+      opts.dus_slice_simplify = true;
+      opts.raise_shlo_to_blas_lapack = true;
+      opts.recognize_comms = true;
+      opts.lower_comms = true;
+      opts.enable_structured_tensors_passes = true;
+      opts.enable_scatter_gather_optimization_passes = true;
+      opts.enable_reduce_slice_fusion_passes = true;
+      opts.enable_concat_to_batch_passes = true;
+      opts.enable_loop_raising_passes = true;
+      opts.enable_licm_optimization_passes = true;
+      opts.loop_unswitch_threshold = 10;
+      opts.enable_pad_optimization_passes = true;
+      char *mainPasses = nullptr, *lowerPasses = nullptr;
+      enzymexlaGetTransformPassesList(&opts, &mainPasses, &lowerPasses);
+      std::string patterns(mainPasses);
+      enzymexlaFreeTransformPassesList(mainPasses);
+      enzymexlaFreeTransformPassesList(lowerPasses);
+      for (const char *drop :
+           {"convert_mul_convert;", "associative_binary_op_reordering<1>;"})
+        for (size_t at; (at = patterns.find(drop)) != std::string::npos;)
+          patterns.erase(at, strlen(drop));
+      // The main list may introduce enzymexla ops (rotate, wrap, extend)
+      // that XLA does not take; the Julia compiler lowers them before export
+      // with this second list.
+      std::string pipeline =
+          "canonicalize,cse,canonicalize,enzyme-hlo-generate-td{patterns=" +
+          patterns +
+          "},transform-interpreter,enzyme-hlo-remove-transform,canonicalize,"
+          "cse,enzyme-hlo-generate-td{patterns=lower_rotate;lower_wrap;"
+          "lower_extend;lower_updatewithoutcorners;lower_multislice},"
+          "transform-interpreter,enzyme-hlo-remove-transform,canonicalize,cse";
+      if (failed(mlir::parsePassPipeline(pipeline, pm))) {
+        llvm::errs() << " failed to parse the exec optimization pipeline\n";
+        exit(1);
+      }
+    } else {
+      pm.addPass(mlir::enzyme::createEnzymeHLOOptPass());
+    }
 
+    if (getenv("REACTANT_EXEC_DUMP")) {
+      llvm::errs() << "EXEC_DUMP before\n";
+      for (int64_t i = 0; i < argcnt; i++)
+        llvm::errs() << "EXEC_DUMP arg " << i << " type=" << types[i]
+                     << " offset=" << viewOffset[i] << " dup=" << dupOf[i]
+                     << "\n";
+      module->print(llvm::errs());
+      llvm::errs() << "EXEC_DUMP end\n";
+    }
     if (!mlir::succeeded(pm.run(*module))) {
       llvm::errs() << " failed to run passes\n";
       llvm::errs() << " modstr:\n" << modstr << "\n";
