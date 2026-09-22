@@ -310,14 +310,16 @@ function fill(v, ::Tuple{}; location=mlir_stacktrace("fill", @__FILE__, @__LINE_
 end
 
 function fill(
-    v::TracedRNumber{T}, dims::NTuple{N,Integer};
+    v::TracedRNumber{T},
+    dims::NTuple{N,Integer};
     location=mlir_stacktrace("fill", @__FILE__, @__LINE__),
 ) where {N,T}
     return fill(v, collect(Int64, dims); location)::TracedRArray{T,N}
 end
 
 function fill(
-    v::TracedRNumber{T}, dims::Tuple{};
+    v::TracedRNumber{T},
+    dims::Tuple{};
     location=mlir_stacktrace("fill", @__FILE__, @__LINE__),
 ) where {T}
     return fill(v, collect(Int64, dims); location)::TracedRArray{T,0}
