@@ -92,7 +92,7 @@ function XLA.serialize_executable(exec::LoadedExecutable)
         data = MLIR.API.ifrt_loaded_executable_serialize(exec.exec, size)
     end
     # malloc'd by the C++ side; the array owns the buffer and frees it when collected.
-    return unsafe_wrap(Array, data, (Int(size[]),); own=true)
+    return unsafe_wrap(Base.Array, data, (Int(size[]),); own=true)
 end
 
 function XLA.load_serialized_executable(
