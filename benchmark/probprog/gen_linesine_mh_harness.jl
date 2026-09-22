@@ -32,10 +32,11 @@ end
 Random.seed!(4242)
 macc = kern()
 best = Inf
-for _ in 1:3
+for _ in 1:20
     t = @elapsed begin
         global macc = kern()
     end
     global best = min(best, t)
+    @printf("GENJL linesine REP wall %.6f s | per-move %.4f us\n", t, t / MOVES * 1e6)
 end
 @printf("GENJL linesine per-move %.3f us | P(m=line) = %.4f\n", best / MOVES * 1e6, macc / NUM_SWEEPS)

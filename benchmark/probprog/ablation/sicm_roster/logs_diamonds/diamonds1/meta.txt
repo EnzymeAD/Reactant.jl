@@ -1,0 +1,57 @@
+=== diamonds stage=smoke tag=diamonds1
+start: 2026-08-25T03:09:00-05:00
+binary: /mnt/sbrantq/probprog/oopsla/Reactant.jl/deps/ReactantExtra/bazel-bin/libReactantExtra.so
+md5 before: 21a6bd08b37b54d2b8a20d8924a2bbb2
+so mtime: 2026-08-24 14:59:21.983624227 -0500
+loadavg before: 2.42 15.41 45.11 3/11093 1777118
+smoke exit: COMMAND_EXIT_CODE="1"
+smoke outdir: ./outputs/2026-08-25_03:09:09
+end: 2026-08-25T03:09:09-05:00
+md5 after: 21a6bd08b37b54d2b8a20d8924a2bbb2
+loadavg after: 2.46 15.21 44.89 3/11094 1777307
+=== diamonds stage=smoke tag=diamonds1
+start: 2026-08-25T03:10:36-05:00
+binary: /mnt/sbrantq/probprog/oopsla/Reactant.jl/deps/ReactantExtra/bazel-bin/libReactantExtra.so
+md5 before: 21a6bd08b37b54d2b8a20d8924a2bbb2
+so mtime: 2026-08-24 14:59:21.983624227 -0500
+loadavg before: 2.34 11.83 40.94 4/11094 1778240
+smoke exit: COMMAND_EXIT_CODE="0"
+smoke outdir: ./outputs/2026-08-25_03:10:46
+end: 2026-08-25T03:12:00-05:00
+md5 after: 21a6bd08b37b54d2b8a20d8924a2bbb2
+loadavg after: 5.00 10.17 37.80 2/11100 1780586
+=== diamonds stage=smoke tag=diamonds1
+start: 2026-08-25T03:14:22-05:00
+binary: /mnt/sbrantq/probprog/oopsla/Reactant.jl/deps/ReactantExtra/bazel-bin/libReactantExtra.so
+md5 before: 21a6bd08b37b54d2b8a20d8924a2bbb2
+so mtime: 2026-08-24 14:59:21.983624227 -0500
+loadavg before: 2.71 7.30 32.85 5/11108 1781227
+smoke exit: COMMAND_EXIT_CODE="0"
+smoke outdir: ./outputs/2026-08-25_03:14:31
+end: 2026-08-25T03:15:47-05:00
+md5 after: 21a6bd08b37b54d2b8a20d8924a2bbb2
+loadavg after: 2.88 6.22 30.23 4/11110 1784129
+=== diamonds stage=ir tag=diamonds1
+start: 2026-08-25T03:16:43-05:00
+binary: /mnt/sbrantq/probprog/oopsla/Reactant.jl/deps/ReactantExtra/bazel-bin/libReactantExtra.so
+md5 before: 21a6bd08b37b54d2b8a20d8924a2bbb2
+so mtime: 2026-08-24 14:59:21.983624227 -0500
+loadavg before: 2.53 5.54 28.61 2/11096 1784671
+ir sicm exit: COMMAND_EXIT_CODE="0"  outdir=./outputs/2026-08-25_03:16:52
+  kept 352K -> hlo/diamonds_sicm.mlir
+ir nosicm exit: COMMAND_EXIT_CODE="0"  outdir=./outputs/2026-08-25_03:17:32
+  kept 348K -> hlo/diamonds_nosicm.mlir
+end: 2026-08-25T03:18:10-05:00
+md5 after: 21a6bd08b37b54d2b8a20d8924a2bbb2
+loadavg after: 2.91 4.88 26.24 2/11093 1787845
+=== diamonds stage=timed tag=diamonds1
+start: 2026-08-25T03:19:44-05:00
+binary: /mnt/sbrantq/probprog/oopsla/Reactant.jl/deps/ReactantExtra/bazel-bin/libReactantExtra.so
+md5 before: 21a6bd08b37b54d2b8a20d8924a2bbb2
+so mtime: 2026-08-24 14:59:21.983624227 -0500
+loadavg before: 2.30 4.15 24.01 2/11097 1789018
+timed exit: COMMAND_EXIT_CODE="0"
+timed outdir: ./outputs/2026-08-25_03:19:53
+end: 2026-08-25T03:21:15-05:00
+md5 after: 21a6bd08b37b54d2b8a20d8924a2bbb2
+loadavg after: 2.64 3.79 22.04 3/11111 1792155

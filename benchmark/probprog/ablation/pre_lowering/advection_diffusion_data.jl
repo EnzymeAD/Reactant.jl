@@ -44,8 +44,19 @@ function advdiff_config(scale::Int)
         D, T, M_obs = 200, 100, 10     # table row
     elseif scale == 2
         D, T, M_obs = 100, 100, 10     # heat-D=100-matched cross-check
+    elseif scale == 3
+        # Size sweep 2026-09-10. The explicit-upwind advection half of the IMEX
+        # scheme is CFL-limited: CFL = v_true * dt * (D + 1) with dt = T_final/T,
+        # so raising D at a fixed T raises the CFL number proportionally. At
+        # D=500, T=100 the CFL would be 1.879 > 1 and the forward model would be
+        # unstable, so T is raised with D to hold the scheme in the SAME regime as
+        # the table row (CFL 0.7515 against the row's 0.7538; Peclet 15, T_final,
+        # kappa, v and sigma all unchanged).
+        D, T, M_obs = 500, 250, 10
+    elseif scale == 4
+        D, T, M_obs = 1000, 500, 10    # same construction, CFL 0.7508
     else
-        error("unknown scale $scale (use 0-2)")
+        error("unknown scale $scale (use 0-4)")
     end
     S = 8
     T_final = 0.25                     # total physical simulation time

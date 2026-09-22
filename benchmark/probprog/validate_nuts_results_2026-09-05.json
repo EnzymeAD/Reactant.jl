@@ -1,0 +1,365 @@
+{
+  "standard/logistic_regression": {
+    "model": "logistic_regression.LogisticRegression",
+    "model_args": {
+      "n": 10000,
+      "k": 10,
+      "rho": 3.0,
+      "seed": 12345
+    },
+    "seed": 12345,
+    "iterations": 5,
+    "num_warmup": 0,
+    "trials": 2,
+    "ppl_a": "NumPyro",
+    "ppl_b": "Impulse",
+    "step_size": 0.001,
+    "max_tree_depth": 10,
+    "atol": 0.0001,
+    "rtol": 0.001,
+    "all_close": true,
+    "any_degenerate": false,
+    "degenerate_variables": [],
+    "variables": {
+      "alpha": {
+        "max_diff": 2.168404344971009e-19,
+        "pass": true,
+        "exactly_zero": false,
+        "moved": true,
+        "degenerate": false,
+        "std_over_draws": {
+          "NumPyro": 0.004218181775773891,
+          "Impulse": 0.004218181775773891
+        },
+        "min_std_over_draws": {
+          "NumPyro": 0.00030014938841344484,
+          "Impulse": 0.00030014938841344484
+        }
+      },
+      "beta": {
+        "max_diff": 1.1102230246251565e-16,
+        "pass": true,
+        "exactly_zero": false,
+        "moved": true,
+        "degenerate": false,
+        "std_over_draws": {
+          "NumPyro": 0.05167759867820572,
+          "Impulse": 0.051677598678205705
+        },
+        "min_std_over_draws": {
+          "NumPyro": 0.0009525011423208265,
+          "Impulse": 0.0009525011423208264
+        }
+      }
+    }
+  },
+  "standard/robust_regression": {
+    "model": "robust_regression.RobustRegression",
+    "model_args": {
+      "n": 10000,
+      "k": 10,
+      "seed": 12345
+    },
+    "seed": 12345,
+    "iterations": 5,
+    "num_warmup": 0,
+    "trials": 2,
+    "ppl_a": "NumPyro",
+    "ppl_b": "Impulse",
+    "step_size": 0.005,
+    "max_tree_depth": 10,
+    "atol": 0.0001,
+    "rtol": 0.001,
+    "all_close": true,
+    "any_degenerate": false,
+    "degenerate_variables": [],
+    "variables": {
+      "alpha": {
+        "max_diff": 3.469446951953614e-18,
+        "pass": true,
+        "exactly_zero": false,
+        "moved": true,
+        "degenerate": false,
+        "std_over_draws": {
+          "NumPyro": 0.008217804249076147,
+          "Impulse": 0.008217804249076149
+        },
+        "min_std_over_draws": {
+          "NumPyro": 0.002009257532560204,
+          "Impulse": 0.0020092575325602025
+        }
+      },
+      "beta": {
+        "max_diff": 1.942890293094024e-16,
+        "pass": true,
+        "exactly_zero": false,
+        "moved": true,
+        "degenerate": false,
+        "std_over_draws": {
+          "NumPyro": 0.05723613588136928,
+          "Impulse": 0.05723613588136929
+        },
+        "min_std_over_draws": {
+          "NumPyro": 0.0052907889788670285,
+          "Impulse": 0.005290788978867026
+        }
+      },
+      "nu": {
+        "max_diff": 1.1102230246251565e-16,
+        "pass": true,
+        "exactly_zero": false,
+        "moved": true,
+        "degenerate": false,
+        "std_over_draws": {
+          "NumPyro": 0.2352079410490106,
+          "Impulse": 0.23520794104901066
+        },
+        "min_std_over_draws": {
+          "NumPyro": 0.19054738056614307,
+          "Impulse": 0.19054738056614307
+        }
+      },
+      "sigma": {
+        "max_diff": 4.440892098500626e-16,
+        "pass": true,
+        "exactly_zero": false,
+        "moved": true,
+        "degenerate": false,
+        "std_over_draws": {
+          "NumPyro": 0.4183477968688637,
+          "Impulse": 0.41834779686886353
+        },
+        "min_std_over_draws": {
+          "NumPyro": 0.2226430837218647,
+          "Impulse": 0.22264308372186464
+        }
+      }
+    }
+  },
+  "standard/n_schools": {
+    "model": "n_schools.NSchools",
+    "model_args": {
+      "n": 10000,
+      "seed": 12345
+    },
+    "seed": 12345,
+    "iterations": 5,
+    "num_warmup": 0,
+    "trials": 2,
+    "ppl_a": "NumPyro",
+    "ppl_b": "Impulse",
+    "step_size": 0.01,
+    "max_tree_depth": 10,
+    "atol": 0.0001,
+    "rtol": 0.001,
+    "all_close": true,
+    "any_degenerate": false,
+    "degenerate_variables": [],
+    "variables": {
+      "sigma_state": {
+        "max_diff": 0.0,
+        "pass": true,
+        "exactly_zero": true,
+        "moved": true,
+        "degenerate": false,
+        "std_over_draws": {
+          "NumPyro": 0.02744605346061273,
+          "Impulse": 0.02744605346061273
+        },
+        "min_std_over_draws": {
+          "NumPyro": 0.02717533124000276,
+          "Impulse": 0.02717533124000276
+        }
+      },
+      "sigma_district": {
+        "max_diff": 0.0,
+        "pass": true,
+        "exactly_zero": true,
+        "moved": true,
+        "degenerate": false,
+        "std_over_draws": {
+          "NumPyro": 0.022561712834911506,
+          "Impulse": 0.022561712834911506
+        },
+        "min_std_over_draws": {
+          "NumPyro": 0.01616206902490897,
+          "Impulse": 0.01616206902490897
+        }
+      },
+      "sigma_type": {
+        "max_diff": 0.0,
+        "pass": true,
+        "exactly_zero": true,
+        "moved": true,
+        "degenerate": false,
+        "std_over_draws": {
+          "NumPyro": 0.02187015450858494,
+          "Impulse": 0.02187015450858494
+        },
+        "min_std_over_draws": {
+          "NumPyro": 0.017299153700857953,
+          "Impulse": 0.017299153700857953
+        }
+      },
+      "beta_baseline": {
+        "max_diff": 1.7763568394002505e-15,
+        "pass": true,
+        "exactly_zero": false,
+        "moved": true,
+        "degenerate": false,
+        "std_over_draws": {
+          "NumPyro": 1.930805183217887,
+          "Impulse": 1.930805183217887
+        },
+        "min_std_over_draws": {
+          "NumPyro": 1.3964206780772928,
+          "Impulse": 1.396420678077293
+        }
+      },
+      "beta_state": {
+        "max_diff": 8.881784197001252e-16,
+        "pass": true,
+        "exactly_zero": false,
+        "moved": true,
+        "degenerate": false,
+        "std_over_draws": {
+          "NumPyro": 2.6651380438565386,
+          "Impulse": 2.665138043856539
+        },
+        "min_std_over_draws": {
+          "NumPyro": 0.14512182566220755,
+          "Impulse": 0.14512182566220763
+        }
+      },
+      "beta_district": {
+        "max_diff": 4.440892098500626e-16,
+        "pass": true,
+        "exactly_zero": false,
+        "moved": true,
+        "degenerate": false,
+        "std_over_draws": {
+          "NumPyro": 0.6045974703679752,
+          "Impulse": 0.6045974703679752
+        },
+        "min_std_over_draws": {
+          "NumPyro": 0.01924860713712728,
+          "Impulse": 0.019248607137127303
+        }
+      },
+      "beta_type": {
+        "max_diff": 1.1102230246251565e-15,
+        "pass": true,
+        "exactly_zero": false,
+        "moved": true,
+        "degenerate": false,
+        "std_over_draws": {
+          "NumPyro": 1.1812400105166405,
+          "Impulse": 1.1812400105166405
+        },
+        "min_std_over_draws": {
+          "NumPyro": 0.24037032734794744,
+          "Impulse": 0.2403703273479474
+        }
+      }
+    }
+  },
+  "standard/crowd_sourced_annotation": {
+    "model": "crowd_sourced_annotation.CrowdSourcedAnnotation",
+    "model_args": {
+      "n": 2000,
+      "k": 10,
+      "num_categories": 3,
+      "expected_correctness": 0.8,
+      "num_labels_per_item": 3,
+      "concentration": 10,
+      "seed": 12345
+    },
+    "seed": 12345,
+    "iterations": 5,
+    "num_warmup": 0,
+    "trials": 2,
+    "ppl_a": "NumPyro",
+    "ppl_b": "Impulse",
+    "step_size": 0.1,
+    "max_tree_depth": 10,
+    "atol": 0.0001,
+    "rtol": 0.001,
+    "all_close": true,
+    "any_degenerate": false,
+    "degenerate_variables": [],
+    "variables": {
+      "prev": {
+        "max_diff": 3.93574062229618e-14,
+        "pass": true,
+        "exactly_zero": false,
+        "moved": true,
+        "degenerate": false,
+        "std_over_draws": {
+          "NumPyro": 0.26651853112942736,
+          "Impulse": 0.26651853112941726
+        },
+        "min_std_over_draws": {
+          "NumPyro": 0.06668010931102189,
+          "Impulse": 0.06668010931102082
+        }
+      },
+      "confusion_matrix": {
+        "max_diff": 9.603429163007604e-14,
+        "pass": true,
+        "exactly_zero": false,
+        "moved": true,
+        "degenerate": false,
+        "std_over_draws": {
+          "NumPyro": 0.32158450053162124,
+          "Impulse": 0.32158450053162146
+        },
+        "min_std_over_draws": {
+          "NumPyro": 0.01965869252070189,
+          "Impulse": 0.019658692520701907
+        }
+      }
+    }
+  },
+  "standard/noisy_or_topic": {
+    "model": "noisy_or_topic.NoisyOrTopic",
+    "model_args": {
+      "n": 2,
+      "num_topics": 50,
+      "num_words": 100,
+      "avg_fanout": 3.0,
+      "avg_leak_weight": 0.1,
+      "avg_topic_weight": 1.0,
+      "seed": 12345
+    },
+    "seed": 12345,
+    "iterations": 5,
+    "num_warmup": 0,
+    "trials": 2,
+    "ppl_a": "NumPyro",
+    "ppl_b": "Impulse",
+    "step_size": 0.1,
+    "max_tree_depth": 10,
+    "atol": 0.0001,
+    "rtol": 0.001,
+    "all_close": true,
+    "any_degenerate": false,
+    "degenerate_variables": [],
+    "variables": {
+      "active": {
+        "max_diff": 0.0,
+        "pass": true,
+        "exactly_zero": true,
+        "moved": true,
+        "degenerate": false,
+        "std_over_draws": {
+          "NumPyro": 0.48989794855663565,
+          "Impulse": 0.48989794855663565
+        },
+        "min_std_over_draws": {
+          "NumPyro": 0.0,
+          "Impulse": 0.0
+        }
+      }
+    }
+  }
+}

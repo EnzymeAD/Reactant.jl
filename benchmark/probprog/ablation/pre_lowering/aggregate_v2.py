@@ -11,6 +11,22 @@ import statistics
 import sys
 
 DIR = os.path.dirname(os.path.abspath(__file__))
+SO = os.path.join(DIR, "..", "..", "..", "..", "deps", "ReactantExtra",
+                  "bazel-bin", "libReactantExtra.so")
+
+
+def _so_md5():
+    """md5 of the binary these numbers were measured on, read at aggregation
+    time from the file itself."""
+    import hashlib
+    try:
+        h = hashlib.md5()
+        with open(SO, "rb") as f:
+            for chunk in iter(lambda: f.read(1 << 22), b""):
+                h.update(chunk)
+        return h.hexdigest()
+    except OSError:
+        return None
 
 # (row label, size label, arm-B log tag, arm-A log tag, heat parity scale or None,
 #  log dir override or None meaning "the batch dir passed on the command line")
@@ -24,11 +40,20 @@ ROWS = [
     ("Heat Equation (large)", "D=300, T=100", "heat_s3_B",  "heat_s3_A",  None, None),
     ("Advection-Diffusion",   "D=200, T=100", "advdiff_B",  "advdiff_A",  None, None),
     ("STAR (ILINet)",         "N=47, T=104",  "star_B",     "star_A",     None, None),
+    # Added 2026-09-08: the two synthetic rows retired from the figure in
+    # 2026-08-25, re-measured under the frozen-adapted protocol for the first
+    # time (their harnesses only had the naive fixed-step path until now).
+    ("Cubic Kernel",          "D=60, T=50",   "cubic_s1_B", "cubic_s1_A", None, None),
+    ("Cubic Kernel (large)",  "D=100, T=100", "cubic_s2_B", "cubic_s2_A", None, None),
+    ("Projected Dynamics",    "D=100, T=100", "projected_B", "projected_A", None, None),
 ]
 WARMUP_TAG = {"Heat Equation": "heat_s1_warmup",
               "Heat Equation (large)": "heat_s3_warmup",
               "Advection-Diffusion": "advdiff_warmup",
-              "STAR (ILINet)": "star_warmup"}
+              "STAR (ILINet)": "star_warmup",
+              "Cubic Kernel": "cubic_s1_warmup",
+              "Cubic Kernel (large)": "cubic_s2_warmup",
+              "Projected Dynamics": "projected_warmup"}
 CELL_JSON = {
     "advdiff_B": "advdiff_scale1_armB.json",
     "advdiff_A": "advdiff_scale1_armA.json",
@@ -36,11 +61,51 @@ CELL_JSON = {
     "star_A": "star_recur_armA.json",
     "heat_s1_B": "heat_scale1_armB.json", "heat_s1_A": "heat_scale1_armA.json",
     "heat_s3_B": "heat_scale3_armB.json", "heat_s3_A": "heat_scale3_armA.json",
+    "cubic_s1_B": "cubic_small_armB.json", "cubic_s1_A": "cubic_small_armA.json",
+    "cubic_s2_B": "cubic_large_armB.json", "cubic_s2_A": "cubic_large_armA.json",
+    # note the `armlarge` infix: it is in the harness's cell-file name only
+    "projected_B": "projected_armlarge_armB.json",
+    "projected_A": "projected_armlarge_armA.json",
 }
 STATE_JSON = {"Heat Equation": "heat_scale1.json",
               "Heat Equation (large)": "heat_scale3.json",
               "Advection-Diffusion": "advdiff_scale1.json",
-              "STAR (ILINet)": "star_recur.json"}
+              "STAR (ILINet)": "star_recur.json",
+              "Cubic Kernel": "cubic_small.json",
+              "Cubic Kernel (large)": "cubic_large.json",
+              "Projected Dynamics": "projected.json"}
+
+# Problem-size sweep, 2026-09-10. Selected with AGG_ROWS=sweep so the default
+# behaviour of this script (the frozen figure-9 rows) is untouched.
+SWEEP_ROWS = [
+    ("Heat Equation (large)",  "D=300, T=100",  "heat_s3_B",    "heat_s3_A",    None, None),
+    ("Heat Equation T=400",    "D=300, T=400",  "heat_s7_B",    "heat_s7_A",    None, None),
+    ("Heat Equation D=1000",   "D=1000, T=100", "heat_s6_B",    "heat_s6_A",    None, None),
+    ("Advection-Diffusion",    "D=200, T=100",  "advdiff_B",    "advdiff_A",    None, None),
+    ("Adv-Diff D=500",         "D=500, T=250",  "advdiff_s3_B", "advdiff_s3_A", None, None),
+    ("Adv-Diff D=1000",        "D=1000, T=500", "advdiff_s4_B", "advdiff_s4_A", None, None),
+]
+SWEEP_CELL_JSON = {
+    "heat_s6_B": "heat_scale6_armB.json", "heat_s6_A": "heat_scale6_armA.json",
+    "heat_s7_B": "heat_scale7_armB.json", "heat_s7_A": "heat_scale7_armA.json",
+    "advdiff_s3_B": "advdiff_scale3_armB.json",
+    "advdiff_s3_A": "advdiff_scale3_armA.json",
+    "advdiff_s4_B": "advdiff_scale4_armB.json",
+    "advdiff_s4_A": "advdiff_scale4_armA.json",
+}
+SWEEP_STATE_JSON = {"Heat Equation T=400": "heat_scale7.json",
+                    "Heat Equation D=1000": "heat_scale6.json",
+                    "Adv-Diff D=500": "advdiff_scale3.json",
+                    "Adv-Diff D=1000": "advdiff_scale4.json"}
+SWEEP_WARMUP_TAG = {"Heat Equation T=400": "heat_s7_warmup",
+                    "Heat Equation D=1000": "heat_s6_warmup",
+                    "Adv-Diff D=500": "advdiff_s3_warmup",
+                    "Adv-Diff D=1000": "advdiff_s4_warmup"}
+if os.environ.get("AGG_ROWS") == "sweep":
+    ROWS = SWEEP_ROWS
+    CELL_JSON.update(SWEEP_CELL_JSON)
+    STATE_JSON.update(SWEEP_STATE_JSON)
+    WARMUP_TAG.update(SWEEP_WARMUP_TAG)
 
 ALL_RE = re.compile(r"All:\s*\[([^\]]*)\]ms")
 MED_RE = re.compile(r"Median \(20 NUTS samples\):\s*([0-9.]+)ms")
@@ -50,7 +115,13 @@ IR_RE = re.compile(r"^\s+(\S+)\s+in=(\d+)\s+out=(\d+)\s+total=(\d+)\s*$")
 
 
 def parse_log(logs, tag):
-    txt = open(os.path.join(logs, tag + ".log"), errors="replace").read()
+    path = os.path.join(logs, tag + ".log")
+    if not os.path.exists(path):
+        # A partial batch (a row not yet measured) must not abort the whole
+        # aggregation; the row is reported as failed instead.
+        return {"log": tag + ".log", "times_ms": None, "median_ms": None,
+                "geomean_ms": None, "compile_s": None, "ir": {}, "missing": True}
+    txt = open(path, errors="replace").read()
     m = ALL_RE.search(txt)
     d = {"log": tag + ".log",
          "times_ms": [float(x) for x in m.group(1).split(",")] if m else None,
@@ -231,7 +302,9 @@ if __name__ == "__main__":
             "step size, inverse mass matrix and post-warmup position, with matched "
             "seeds, so the arms walk bit-identical trajectories."),
         "headline_batch": present[0] if present else None,
-        "libReactantExtra_md5": "21a6bd08b37b54d2b8a20d8924a2bbb2",
+        # Read from the binary rather than hard-coded, so a re-freeze cannot
+        # inherit a previous campaign's md5.
+        "libReactantExtra_md5": _so_md5(),
         "libReactantExtra_path":
             "oopsla/Reactant.jl/deps/ReactantExtra/bazel-bin/libReactantExtra.so",
         "machine": "AMD Ryzen Threadripper PRO 7995WX, 96 cores / 192 threads, 1 NUMA node",
@@ -239,7 +312,10 @@ if __name__ == "__main__":
         "batches": batches,
         "cross_batch_summary": summary,
     }
-    dest = os.path.join(DIR, "advdiff_star_RAW_2026-08-25.json")
+    # The destination is settable so a new campaign cannot overwrite a previous
+    # one's frozen RAW file (which the paper's figure provenance cites by name).
+    dest = os.environ.get(
+        "PRELOWER_RAW_OUT", os.path.join(DIR, "advdiff_star_RAW_2026-08-25.json"))
     json.dump(out, open(dest, "w"), indent=2)
     print("\nwrote %s" % dest)
 

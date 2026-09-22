@@ -273,7 +273,14 @@ function evidence_cov(n)
 end
 
 function run_arm(
-    prog, rng, args...; disable_opt::Bool, disable_sicm::Bool, num_steps::Int, reps::Int=8
+    prog,
+    rng,
+    args...;
+    disable_opt::Bool,
+    disable_sicm::Bool,
+    num_steps::Int,
+    reps::Int=20,
+    label::String="arm",
 )
     Reactant.Compiler.DEBUG_PROBPROG_DISABLE_OPT[] = disable_opt
     Reactant.Compiler.DEBUG_PROBPROG_DISABLE_SICM[] = disable_sicm
@@ -293,6 +300,12 @@ function run_arm(
             end
         end
         best = min(best, t)
+        @printf(
+            "SCALEDCOV %s REP wall %.6f s | per-move %.4f us\n",
+            label,
+            t,
+            t / num_steps * 1e6
+        )
     end
     Reactant.Compiler.DEBUG_PROBPROG_DISABLE_OPT[] = true
     Reactant.Compiler.DEBUG_PROBPROG_DISABLE_SICM[] = false
@@ -322,6 +335,7 @@ function benchmark_cov(n, num_iters)
         disable_opt=false,
         disable_sicm=false,
         num_steps=num_steps,
+        label="sicm",
     )
     region_nosicm = run_arm(
         programmable_mh_cov,
@@ -334,6 +348,7 @@ function benchmark_cov(n, num_iters)
         disable_opt=false,
         disable_sicm=true,
         num_steps=num_steps,
+        label="region_nosicm",
     )
     noopt = run_arm(
         programmable_mh_cov,
@@ -346,6 +361,7 @@ function benchmark_cov(n, num_iters)
         disable_opt=true,
         disable_sicm=false,
         num_steps=num_steps,
+        label="noopt_flat",
     )
 
     trS, wS, accS = sicm.out
@@ -373,10 +389,13 @@ function benchmark_cov(n, num_iters)
     )
 end
 
-println("==== E2: programmable-MH evidence + benchmark ====")
+const E2_N = parse(Int, get(ENV, "E2_N", "8"))
+const E2_ITERS = parse(Int, get(ENV, "E2_ITERS", "500"))
+
+println("==== E2: programmable-MH evidence + benchmark (n=$E2_N, iters=$E2_ITERS) ====")
 reb = evidence_rebuttal()
-covir = evidence_cov(8)
-bench = benchmark_cov(8, 500)
+covir = evidence_cov(E2_N)
+bench = benchmark_cov(E2_N, E2_ITERS)
 
 sp_flat = bench.noopt.per_step / bench.sicm.per_step
 sp_isol = bench.region_nosicm.per_step / bench.sicm.per_step

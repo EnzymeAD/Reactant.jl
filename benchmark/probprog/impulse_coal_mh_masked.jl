@@ -58,11 +58,12 @@ end
 @printf("compile %.1fs\n", ct)
 hist = Array(compiled(rng, coal_masked, tvec, lg, bins, ot, constrained, ConcreteRNumber(NUM_SWEEPS)))[:]
 best = Inf
-for _ in 1:3
+for _ in 1:20
     t = @elapsed begin
         global hist = Array(compiled(rng, coal_masked, tvec, lg, bins, ot, constrained, ConcreteRNumber(NUM_SWEEPS)))[:]
     end
     global best = min(best, t)
+    @printf("IMPULSE-MASKED coal REP wall %.6f s | per-move %.4f us\n", t, t / (3 * NUM_SWEEPS) * 1e6)
 end
 smap = argmax(hist) - 1
 @printf("IMPULSE-MASKED coal per-move %.3f us | MAP s = %d | mass[34,46] = %.4f\n",

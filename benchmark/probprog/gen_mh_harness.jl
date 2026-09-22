@@ -108,12 +108,13 @@ function kernel(model, args, obs, addr1, addr2, num_iters)
     return tr, acc
 end
 
-function time_arm(f; reps::Int=8)
+function time_arm(f; reps::Int=20, label::String="arm", steps::Int=1)
     out = f()   # warm
     best = Inf
     for _ in 1:reps
         t = @elapsed f()
         best = min(best, t)
+        @printf("GENJL %s REP wall %.6f s | per-move %.4f us\n", label, t, t / steps * 1e6)
     end
     return best, out
 end
@@ -138,7 +139,7 @@ for (label, model, args, obs, a1, a2) in (
     ("cov_static", cov_static, (dB.xs, dB.R), obsB, :slope, :tau),
 )
     Random.seed!(1)
-    best, (tr, acc) = time_arm(() -> kernel(model, args, obs, a1, a2, NUM_ITERS))
+    best, (tr, acc) = time_arm(() -> kernel(model, args, obs, a1, a2, NUM_ITERS); label=label, steps=NUM_STEPS)
     per_move_us = best / NUM_STEPS * 1e6
     ch = get_choices(tr)
     v1 = ch[a1]
@@ -181,7 +182,7 @@ for n in (8, 32, 64, 128, 256)
     d = data_cov(n)
     obs = choicemap((:y, d.y))
     Random.seed!(1)
-    best, (tr, acc) = time_arm(() -> kernel(cov_dynamic, (d.xs, d.R), obs, :slope, :tau, NUM_ITERS))
+    best, (tr, acc) = time_arm(() -> kernel(cov_dynamic, (d.xs, d.R), obs, :slope, :tau, NUM_ITERS); label="cov_dynamic_n$(n)", steps=NUM_STEPS)
     per_move_us = best / NUM_STEPS * 1e6
     sweep[n] = (per_move_us=per_move_us, accepts=acc)
     @printf("cov_dynamic n=%-4d per-move %10.3f us | accepts %4d/%d\n", n, per_move_us, acc, NUM_STEPS)

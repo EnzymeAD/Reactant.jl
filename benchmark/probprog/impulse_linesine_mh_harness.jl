@@ -66,12 +66,13 @@ end
 @printf("compile %.1fs\n", ct)
 out = compiled(rng, linesine_model, xs, ot, constrained, ConcreteRNumber(NUM_SWEEPS))
 best = Inf
-for _ in 1:3
+for _ in 1:20
     t = @elapsed begin
         global out = compiled(rng, linesine_model, xs, ot, constrained, ConcreteRNumber(NUM_SWEEPS))
         Array(out[1])
     end
     global best = min(best, t)
+    @printf("IMPULSE linesine REP wall %.6f s | per-move %.4f us\n", t, t / MOVES * 1e6)
 end
 pline = Float64(out[3]) / NUM_SWEEPS
 @printf("IMPULSE linesine per-move %.3f us | P(m=line) = %.4f\n", best / MOVES * 1e6, pline)

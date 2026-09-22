@@ -1,0 +1,75 @@
+batch tag: frozen1
+protocol: frozen adapted state, adaptation OFF both arms, matched seeds
+num_samples=20 num_exec=5 warmup=200
+ext_cpu_limit=1000% load_gate=12 max_retries=3
+start: 2026-08-25T17:12:46-05:00
+md5 at batch start: 21a6bd08b37b54d2b8a20d8924a2bbb2
+--- warmup car_spatial_scotland: reusing existing /mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/ablation/sicm_roster/adapted_states/car_spatial_scotland.json
+--- cell car_spatial_scotland_sicm (attempt 1) ext_before=457% load=6.65 2026-08-25T17:12:56-05:00
+    OK car_spatial_scotland_sicm repeats (steady state, s): 0.08751, 0.0727, 0.08099, 0.08617, 0.06621 ext_max=462% md5=21a6bd08b37b54d2b8a20d8924a2bbb2
+--- cell car_spatial_scotland_nosicm (attempt 1) ext_before=457% load=6.55 2026-08-25T17:13:50-05:00
+    OK car_spatial_scotland_nosicm repeats (steady state, s): 0.44002, 0.40333, 0.40929, 0.44407, 0.34721 ext_max=458% md5=21a6bd08b37b54d2b8a20d8924a2bbb2
+--- warmup car_spatial_nyc  2026-08-25T17:14:48-05:00  ext=717%
+  adapted step_size = 0.17742612466984364 (from 0.05), inverse mass (252, 252)
+  wrote /mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/ablation/sicm_roster/adapted_states/car_spatial_nyc.json
+--- cell car_spatial_nyc_sicm (attempt 1) ext_before=478% load=8.08 2026-08-25T17:16:07-05:00
+!! CONTAMINATED/FAILED car_spatial_nyc_sicm (rc=0 ext_max=5459% limit=1000%)
+--- cell car_spatial_nyc_sicm (attempt 2) ext_before=362% load=9.80 2026-08-25T17:18:51-05:00
+    OK car_spatial_nyc_sicm repeats (steady state, s): 7.80259, 7.67111, 7.10819, 9.35723, 8.39141 ext_max=801% md5=21a6bd08b37b54d2b8a20d8924a2bbb2
+    waiting 0s: sibling=0 load1=12 ext=566% 2026-08-25T17:20:34-05:00
+    (waited 30s; load1=11 ext=566%)
+--- cell car_spatial_nyc_nosicm (attempt 1) ext_before=566% load=11.10 2026-08-25T17:21:05-05:00
+    OK car_spatial_nyc_nosicm repeats (steady state, s): 36.9579, 36.94413, 34.48737, 34.90783, 36.25546 ext_max=630% md5=21a6bd08b37b54d2b8a20d8924a2bbb2
+--- warmup pgls: reusing existing /mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/ablation/sicm_roster/adapted_states/pgls.json
+    waiting 0s: sibling=0 load1=85 ext=484% 2026-08-25T17:25:39-05:00
+    (waited 180s; load1=9 ext=478%)
+--- cell pgls_sicm (attempt 1) ext_before=477% load=9.83 2026-08-25T17:28:40-05:00
+    OK pgls_sicm repeats (steady state, s): 0.00277, 0.00137, 0.00198, 0.00173, 0.00172 ext_max=477% md5=21a6bd08b37b54d2b8a20d8924a2bbb2
+--- cell pgls_nosicm (attempt 1) ext_before=474% load=8.15 2026-08-25T17:29:19-05:00
+    OK pgls_nosicm repeats (steady state, s): 0.01991, 0.01586, 0.02109, 0.0261, 0.02201 ext_max=474% md5=21a6bd08b37b54d2b8a20d8924a2bbb2
+--- warmup hierarchical_mvn  2026-08-25T17:29:58-05:00  ext=473%
+  adapted step_size = 0.09052237966532697 (from 0.01), inverse mass (241, 241)
+  wrote /mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/ablation/sicm_roster/adapted_states/hierarchical_mvn.json
+--- cell hierarchical_mvn_sicm (attempt 1) ext_before=577% load=8.02 2026-08-25T17:30:33-05:00
+    OK hierarchical_mvn_sicm repeats (steady state, s): 0.49979, 0.49138, 0.50275, 0.54745, 0.48955 ext_max=673% md5=21a6bd08b37b54d2b8a20d8924a2bbb2
+--- cell hierarchical_mvn_nosicm (attempt 1) ext_before=372% load=10.38 2026-08-25T17:31:17-05:00
+    OK hierarchical_mvn_nosicm repeats (steady state, s): 2.29776, 2.28903, 2.2843, 2.29938, 2.42787 ext_max=675% md5=21a6bd08b37b54d2b8a20d8924a2bbb2
+    waiting 0s: sibling=0 load1=19 ext=579% 2026-08-25T17:32:11-05:00
+    (waited 60s; load1=11 ext=994%)
+--- warmup lmm_radon  2026-08-25T17:33:11-05:00  ext=991%
+  adapted step_size = 0.7928641636633602 (from 0.05), inverse mass (4, 4)
+  wrote /mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/ablation/sicm_roster/adapted_states/lmm_radon.json
+    waiting 0s: sibling=0 load1=10 ext=2386% 2026-08-25T17:33:38-05:00
+    (waited 210s; load1=9 ext=855%)
+--- cell lmm_radon_sicm (attempt 1) ext_before=855% load=9.94 2026-08-25T17:37:10-05:00
+!! CONTAMINATED/FAILED lmm_radon_sicm (rc=0 ext_max=1409% limit=1000%)
+    waiting 0s: sibling=0 load1=13 ext=5353% 2026-08-25T17:38:46-05:00
+    (waited 30s; load1=10 ext=899%)
+--- cell lmm_radon_sicm (attempt 2) ext_before=898% load=10.92 2026-08-25T17:39:16-05:00
+    OK lmm_radon_sicm repeats (steady state, s): 0.01057, 0.01108, 0.01078, 0.01122, 0.01071 ext_max=898% md5=21a6bd08b37b54d2b8a20d8924a2bbb2
+--- cell lmm_radon_nosicm (attempt 1) ext_before=825% load=9.71 2026-08-25T17:39:51-05:00
+    OK lmm_radon_nosicm repeats (steady state, s): 0.2394, 0.2796, 0.28389, 0.28835, 0.2671 ext_max=961% md5=21a6bd08b37b54d2b8a20d8924a2bbb2
+--- warmup sar_columbus  2026-08-25T17:40:29-05:00  ext=891%
+  adapted step_size = 0.6329229288261851 (from 0.05), inverse mass (5, 5)
+  wrote /mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/ablation/sicm_roster/adapted_states/sar_columbus.json
+    waiting 0s: sibling=0 load1=15 ext=669% 2026-08-25T17:41:06-05:00
+    (waited 90s; load1=11 ext=934%)
+--- cell sar_columbus_sicm (attempt 1) ext_before=934% load=11.72 2026-08-25T17:42:37-05:00
+    OK sar_columbus_sicm repeats (steady state, s): 0.0114, 0.00923, 0.01059, 0.00991, 0.00913 ext_max=934% md5=21a6bd08b37b54d2b8a20d8924a2bbb2
+--- cell sar_columbus_nosicm (attempt 1) ext_before=781% load=9.33 2026-08-25T17:43:24-05:00
+    OK sar_columbus_nosicm repeats (steady state, s): 0.012, 0.00916, 0.0114, 0.01049, 0.01053 ext_max=781% md5=21a6bd08b37b54d2b8a20d8924a2bbb2
+--- warmup diamonds  2026-08-25T17:44:10-05:00  ext=716%
+  adapted step_size = 0.10098891276421164 (from 0.05), inverse mass (26, 26)
+  wrote /mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/ablation/sicm_roster/adapted_states/diamonds.json
+--- cell diamonds_sicm (attempt 1) ext_before=824% load=7.66 2026-08-25T17:44:53-05:00
+!! CONTAMINATED/FAILED diamonds_sicm (rc=0 ext_max=3758% limit=1000%)
+    waiting 0s: sibling=0 load1=14 ext=955% 2026-08-25T17:46:42-05:00
+    (waited 180s; load1=11 ext=480%)
+--- cell diamonds_sicm (attempt 2) ext_before=480% load=11.36 2026-08-25T17:49:43-05:00
+!! CONTAMINATED/FAILED diamonds_sicm (rc=0 ext_max=6405% limit=1000%)
+--- cell diamonds_sicm (attempt 3) ext_before=900% load=10.84 2026-08-25T17:51:32-05:00
+    OK diamonds_sicm repeats (steady state, s): 0.00932, 0.00887, 0.00875, 0.00902, 0.00896 ext_max=900% md5=21a6bd08b37b54d2b8a20d8924a2bbb2
+--- cell diamonds_nosicm (attempt 1) ext_before=809% load=9.22 2026-08-25T17:52:20-05:00
+    OK diamonds_nosicm repeats (steady state, s): 0.02657, 0.02773, 0.02755, 0.02529, 0.02772 ext_max=927% md5=21a6bd08b37b54d2b8a20d8924a2bbb2
+end: 2026-08-25T17:53:13-05:00
+md5 at batch end: 21a6bd08b37b54d2b8a20d8924a2bbb2

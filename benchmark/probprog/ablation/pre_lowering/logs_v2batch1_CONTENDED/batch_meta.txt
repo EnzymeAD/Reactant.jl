@@ -1,0 +1,28 @@
+batch start: 2026-08-25T12:58:13-05:00
+so mtime: 2026-08-24 14:59:21.983624227 -0500 7623329272
+so md5:   21a6bd08b37b54d2b8a20d8924a2bbb2
+loadavg:  15.94 17.43 14.91 6/13039 2686756
+nproc:    192
+julia:    julia version 1.11.7
+--- cell heat_s1_B  load_before=8.90 14.66 14.15  sibling=0  2026-08-25T12:59:44-05:00
+    rc=0  md5=21a6bd08b37b54d2b8a20d8924a2bbb2  load_after=15.09 15.22 14.36  2026-08-25T13:00:34-05:00
+  Median (20 NUTS samples): 496.2ms
+  All: [496.2, 416.6, 545.8, 487.2, 517.4]ms
+--- cell heat_s1_A  load_before=9.66 13.64 13.87  sibling=0  2026-08-25T13:01:34-05:00
+    rc=0  md5=21a6bd08b37b54d2b8a20d8924a2bbb2  load_after=30.38 18.19 15.37  2026-08-25T13:02:38-05:00
+  Median (20 NUTS samples): 3132.6ms
+  All: [3052.4, 2549.3, 3498.5, 3132.6, 3383.7]ms
+--- cell heat_s3_B  load_before=10.95 14.84 14.44  sibling=0  2026-08-25T13:04:08-05:00
+    rc=0  md5=21a6bd08b37b54d2b8a20d8924a2bbb2  load_after=26.70 18.80 15.84  2026-08-25T13:05:28-05:00
+  Median (20 NUTS samples): 2883.3ms
+  All: [2676.8, 2440.6, 3261.0, 2883.3, 3088.4]ms
+--- cell heat_s3_A  load_before=10.00 15.04 14.81  sibling=0  2026-08-25T13:07:29-05:00
+    rc=0  md5=21a6bd08b37b54d2b8a20d8924a2bbb2  load_after=70.54 44.66 26.37  2026-08-25T13:10:48-05:00
+  Median (20 NUTS samples): 23444.9ms
+  All: [18775.1, 17277.9, 27967.9, 23444.9, 27170.5]ms
+--- cell advdiff_B  load_before=9.92 27.91 23.10  sibling=0  2026-08-25T13:13:49-05:00
+    rc=0  md5=21a6bd08b37b54d2b8a20d8924a2bbb2  load_after=53.32 36.29 26.38  2026-08-25T13:15:12-05:00
+  stability: dt / explicit-diffusion-limit = 101.0x (implicit stepping required); advection CFL = v*dt/h = 0.2513 (< 1, explicit OK)
+  Median (20 NUTS samples): 3817.1ms
+  All: [4244.8, 3309.2, 3817.1, 4206.9, 3577.3]ms
+  verification (seed [7,11]): n_accepted=20 n_diverging=0

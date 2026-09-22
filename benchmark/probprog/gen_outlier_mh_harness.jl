@@ -29,11 +29,12 @@ end
 Random.seed!(777)
 tr = kern()
 best = Inf
-for _ in 1:3
+for _ in 1:20
     t = @elapsed begin
         global tr = kern()
     end
     global best = min(best, t)
+    @printf("GENJL outlier REP wall %.6f s | per-move %.4f us\n", t, t / MOVES * 1e6)
 end
 flags = [Int(tr[(:o, i)]) for i in 1:N]
 @printf("GENJL outlier per-move %.3f us | slope = %.3f | flags = %s\n",

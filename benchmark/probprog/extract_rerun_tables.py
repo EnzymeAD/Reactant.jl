@@ -120,13 +120,56 @@ def max_load_in_window(samples, t0, t1):
     return max(vals) if vals else None
 
 
+def load_pplbench_config(path):
+    """Load a PPLBench output directory's config.json.
+
+    PPLBench does not write this file with json.dump. lib/utils.py's
+    convert_to_readable_string strips every space in the document and inserts a
+    newline plus indent after every comma, with no notion of string context, so
+    any string value containing a comma is emitted as a literal broken across
+    two lines, which is not valid JSON. The ladder configuration
+    "Stan (SlicStan, locals)" is the first legend name in this suite to contain
+    one.
+
+    The measurement is unaffected: the legend that identifies a cell is read
+    from metrics.nc, written by xarray, and this config is used only for the
+    model key, the iteration counts and the NUTS/SVI mode lookup.
+
+    Parse normally, and on failure drop the newline-and-indent runs that fall
+    inside a string literal and parse again. The spaces the writer stripped are
+    not recoverable, so a repaired legend reads "Stan(SlicStan,locals)"; the
+    mode lookup that consumes it falls back to "nuts" when it does not match.
+    """
+    text = open(path).read()
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+    out, in_str, esc, i = [], False, False, 0
+    while i < len(text):
+        c = text[i]
+        if esc:
+            out.append(c); esc = False; i += 1; continue
+        if c == "\\":
+            out.append(c); esc = True; i += 1; continue
+        if c == '"':
+            in_str = not in_str; out.append(c); i += 1; continue
+        if in_str and c == "\n":
+            i += 1
+            while i < len(text) and text[i] == " ":
+                i += 1
+            continue
+        out.append(c); i += 1
+    return json.loads("".join(out))
+
+
 def read_output_dir(outdir):
     """Return list of per-ppl cell measurement dicts from one PPLBench output dir."""
     cfg_path = os.path.join(outdir, "config.json")
     nc_path = os.path.join(outdir, "metrics.nc")
     if not (os.path.isfile(cfg_path) and os.path.isfile(nc_path)):
         return []
-    config = json.load(open(cfg_path))
+    config = load_pplbench_config(cfg_path)
     mkey = model_key(config)
     legend_to_mode = {}
     for p in config.get("ppls", []):
@@ -276,7 +319,10 @@ def main():
     md.append(f"# Benchmark tables{(' - ' + args.label) if args.label else ''}\n")
     md.append("Protocol: single-threaded, taskset-pinned (cross-system rows); "
               "steady wall = mean over trials 1..N-1; headline = median-wall "
-              "replicate; n_eff/s = median n_eff / steady wall.\n")
+              "replicate; n_eff/s = median n_eff / steady wall. SVI speed metric = "
+              "steady fit wall in seconds (time to the per-model ELBO-plateau "
+              "step budget); the SVI n_eff/s columns are over the K post-fit "
+              "guide draws and are kept for the ledger only.\n")
 
     summaries = {}
     for mode, title in [("nuts", "NUTS"), ("svi", "SVI")]:
@@ -325,6 +371,27 @@ def main():
             md.append(f"Geomean Impulse speedup over ({', '.join(base_models)}): "
                       + "; ".join(f"{s}: {v:.2f}x" for s, v in sorted(
                           ratios.items(), key=lambda kv: order_key(SYSTEM_ORDER)(kv[0]))))
+
+        # SVI: the canonical speed metric is the fit wall (seconds to the
+        # plateau budget), so report the geomean wall ratio as well.
+        if mode == "svi":
+            wall_ratios = {}
+            for s in systems:
+                if s == "Impulse":
+                    continue
+                rs = []
+                for model in base_models:
+                    hi = rows.get(model, {}).get("Impulse", {}).get("headline")
+                    hb = rows.get(model, {}).get(s, {}).get("headline")
+                    if hi and hb and hi["steady_wall_s_mean"] > 0:
+                        rs.append(hb["steady_wall_s_mean"] / hi["steady_wall_s_mean"])
+                if len(rs) == len(base_models):
+                    wall_ratios[s] = geomean(rs)
+            if wall_ratios:
+                summaries["svi_fit_wall"] = wall_ratios
+                md.append(f"Geomean Impulse fit-wall speedup over ({', '.join(base_models)}): "
+                          + "; ".join(f"{s}: {v:.2f}x" for s, v in sorted(
+                              wall_ratios.items(), key=lambda kv: order_key(SYSTEM_ORDER)(kv[0]))))
 
     if ledger["flags"]:
         md.append("\n## Anomaly flags (rerun candidates)\n")

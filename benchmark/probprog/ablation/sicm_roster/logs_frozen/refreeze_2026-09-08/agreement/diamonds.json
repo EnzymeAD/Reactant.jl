@@ -1,0 +1,31 @@
+{
+ "n_draws": 20,
+ "tol": 1e-08,
+ "per_draw_max_rel_diff": [
+  5.017316181252347e-15,
+  6.04668999227055e-15,
+  4.788027293695254e-15,
+  7.75587594453544e-15,
+  5.701695964937596e-15,
+  8.89359768742681e-15,
+  7.071144934843843e-15,
+  5.701085362869939e-15,
+  5.245345086111315e-15,
+  3.421489193199985e-15,
+  4.7889687625283e-15,
+  3.0801037503732608e-15,
+  2.8500255844226432e-15,
+  2.6236970036173435e-15,
+  2.3945089500538016e-15,
+  2.395133002437526e-15,
+  2.735719832874594e-15,
+  2.508710608615551e-15,
+  4.560460386266771e-15,
+  4.449043532177033e-15
+ ],
+ "matched_prefix": 20,
+ "window_max_rel_diff": 8.89359768742681e-15,
+ "pass": true,
+ "sicm": "/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/ablation/sicm_roster/logs_frozen/refreeze_2026-09-08/diamonds_sicm.out.json",
+ "nosicm": "/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/ablation/sicm_roster/logs_frozen/refreeze_2026-09-08/diamonds_nosicm.out.json"
+}

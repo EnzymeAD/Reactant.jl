@@ -46,8 +46,10 @@ def kernel(key):
 key = jax.random.PRNGKey(4242)
 out = kernel(key); jax.block_until_ready(out)
 best = float("inf")
-for _ in range(3):
+for _ in range(20):
     t0 = time.perf_counter()
     out = kernel(key); jax.block_until_ready(out)
-    best = min(best, time.perf_counter() - t0)
+    t = time.perf_counter() - t0
+    best = min(best, t)
+    print(f"GENJAX linesine REP wall {t:.6f} s | per-move {t/MOVES*1e6:.4f} us", flush=True)
 print(f"GENJAX linesine per-move {best/MOVES*1e6:.3f} us | P(m=line) = {int(out)/NUM_SWEEPS:.4f}")

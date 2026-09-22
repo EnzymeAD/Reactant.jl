@@ -1,0 +1,41 @@
+batch start: 2026-08-25T13:26:42-05:00
+so mtime: 2026-08-24 14:59:21.983624227 -0500 7623329272
+so md5:   21a6bd08b37b54d2b8a20d8924a2bbb2
+loadavg:  129.84 137.26 85.36 110/14548 2813826
+nproc:    192
+julia:    julia version 1.11.7
+load gate: load1 < 8 and no pplbench/harness.jl, NO ceiling
+    waiting for quiet: 0s elapsed, sibling=5 load1=129 2026-08-25T13:26:42-05:00
+    waiting for quiet: 600s elapsed, sibling=5 load1=145 2026-08-25T13:36:46-05:00
+    waiting for quiet: 1200s elapsed, sibling=5 load1=136 2026-08-25T13:46:50-05:00
+    waiting for quiet: 1800s elapsed, sibling=0 load1=133 2026-08-25T13:56:54-05:00
+    (waited 2130s for quiet; load1=7 sibling=0)
+--- cell advdiff_B  load_before=7.44 52.25 96.18  sibling=0  2026-08-25T14:02:26-05:00
+    rc=0  md5=21a6bd08b37b54d2b8a20d8924a2bbb2  sibling_after=0  load_after=23.68 47.88 91.67  2026-08-25T14:03:35-05:00
+  stability: dt / explicit-diffusion-limit = 20.2x (implicit stepping required); advection CFL = v*dt/h = 0.7538 (< 1, explicit OK); Peclet = v*L/kappa = 15.0
+  Median (20 NUTS samples): 2314.6ms
+  All: [2618.8, 1509.4, 2173.1, 2352.3, 2314.6]ms
+  verification (seed [7,11]): n_accepted=20 n_diverging=0
+    waiting for quiet: 0s elapsed, sibling=0 load1=23 2026-08-25T14:03:35-05:00
+    (waited 270s for quiet; load1=7 sibling=0)
+--- cell advdiff_A  load_before=7.29 24.82 70.76  sibling=0  2026-08-25T14:08:06-05:00
+    rc=0  md5=21a6bd08b37b54d2b8a20d8924a2bbb2  sibling_after=0  load_after=76.94 53.38 72.83  2026-08-25T14:11:32-05:00
+  stability: dt / explicit-diffusion-limit = 20.2x (implicit stepping required); advection CFL = v*dt/h = 0.7538 (< 1, explicit OK); Peclet = v*L/kappa = 15.0
+  Median (20 NUTS samples): 22871.0ms
+  All: [26552.9, 15187.3, 20928.2, 22871.0, 23994.9]ms
+  verification (seed [7,11]): n_accepted=20 n_diverging=0
+    waiting for quiet: 0s elapsed, sibling=0 load1=76 2026-08-25T14:11:32-05:00
+    (waited 270s for quiet; load1=7 sibling=0)
+--- cell star_B  load_before=7.66 26.94 56.81  sibling=0  2026-08-25T14:16:04-05:00
+    rc=0  md5=21a6bd08b37b54d2b8a20d8924a2bbb2  sibling_after=0  load_after=7.02 24.36 54.68  2026-08-25T14:16:43-05:00
+  Median (20 NUTS samples): 29.1ms
+  All: [24.8, 29.1, 32.3, 31.6, 25.2]ms
+  verification (seed [7,11]): n_accepted=20 n_diverging=0
+--- cell star_A  load_before=7.02 24.36 54.68  sibling=0  2026-08-25T14:16:44-05:00
+    rc=0  md5=21a6bd08b37b54d2b8a20d8924a2bbb2  sibling_after=0  load_after=6.72 22.11 52.65  2026-08-25T14:17:24-05:00
+  Median (20 NUTS samples): 204.4ms
+  All: [195.0, 204.4, 234.4, 234.7, 183.5]ms
+  verification (seed [7,11]): n_accepted=20 n_diverging=0
+batch end: 2026-08-25T14:17:24-05:00
+so md5:   21a6bd08b37b54d2b8a20d8924a2bbb2
+loadavg:  6.84 21.63 52.16 7/13657 2899798

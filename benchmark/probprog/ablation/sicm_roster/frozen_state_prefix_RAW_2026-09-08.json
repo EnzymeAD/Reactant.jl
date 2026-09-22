@@ -1,0 +1,60 @@
+{
+  "protocol": "frozen-adapted-state, adaptation OFF both arms, matched seeds, in-process repeats",
+  "tags": [
+    "refreeze_2026-09-08_prefix"
+  ],
+  "rows": [
+    {
+      "key": "hierarchical_mvn",
+      "state_suffix": "",
+      "pattern": "OuterProdScale",
+      "label": "Hier. MVN",
+      "size": "K=60, J=2",
+      "sicm_median": 0.301096954,
+      "nosicm_median": 1.382328707,
+      "sicm_geomean": 0.3019936053775109,
+      "nosicm_geomean": 1.3825030477425122,
+      "ratio_median": 4.590975393925771,
+      "ratio_geomean": 4.577921595440065,
+      "arms_max_diff": 1.2176342045755462e-08,
+      "arms_rel_diff": 2.115750167878757e-09,
+      "arms_ok": true,
+      "n_draws": 12,
+      "matched_prefix": 12,
+      "per_draw_max_rel_diff": [
+        1.9372282607820852e-12,
+        1.281910501133035e-12,
+        1.3340729765755085e-11,
+        1.1473446244350558e-11,
+        2.2031371927270375e-11,
+        2.4262443569114098e-11,
+        3.8135575279765125e-11,
+        7.192502719474924e-11,
+        4.057192993078839e-10,
+        1.3775741499823355e-09,
+        1.6801177681627384e-09,
+        5.418005103636018e-09
+      ],
+      "adapted_step_size": 0.09052237966532697,
+      "initial_step_size": 0.01,
+      "inverse_mass_shape": [
+        241,
+        241
+      ],
+      "sicm_times": [
+        0.310163572,
+        0.302032179,
+        0.301096954,
+        0.300576497,
+        0.296267047
+      ],
+      "nosicm_times": [
+        1.374079629,
+        1.425861459,
+        1.397298654,
+        1.33456794,
+        1.382328707
+      ]
+    }
+  ]
+}

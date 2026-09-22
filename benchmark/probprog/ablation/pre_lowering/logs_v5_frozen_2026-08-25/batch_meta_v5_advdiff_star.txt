@@ -1,0 +1,81 @@
+batch start: 2026-08-25T15:56:17-05:00
+protocol: frozen-adapted-state, MEASURED phase only (adapted states reused from v4)
+so md5:   21a6bd08b37b54d2b8a20d8924a2bbb2
+loadavg:  10.55 26.96 41.70 6/12664 3202424
+nproc:    192
+gate: load1 < 8, no pplbench/harness.jl, NO ceiling
+contamination test: max external (non-sbrantq) CPU during cell < 1000%; retries 3
+    waiting: 0s, sibling=0 load1=10 ext=559% 2026-08-25T15:56:17-05:00
+    (waited 60s; load1=7 ext=444% sibling=0)
+--- cell heat_s1_B (attempt 1)  load_before=7.86 23.20 39.48  ext_before=444%  2026-08-25T15:57:18-05:00
+    rc=0  md5=21a6bd08b37b54d2b8a20d8924a2bbb2  ext_max=882%  sibling_after=0  load_after=7.74 20.80 37.81  2026-08-25T15:58:09-05:00
+  frozen-adapted state: /mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/ablation/pre_lowering/adapted_states/heat_scale1.json
+    step=0.7666150831284337  inv_mass_rank=2  warmup=200 by arm B
+  Median (20 NUTS samples): 319.9ms
+  Geomean (20 NUTS samples): 336.1ms
+  All: [365.3, 293.1, 318.5, 392.9, 319.9]ms
+--- cell heat_s1_A (attempt 1)  load_before=7.74 20.80 37.81  ext_before=542%  2026-08-25T15:58:10-05:00
+    rc=0  md5=21a6bd08b37b54d2b8a20d8924a2bbb2  ext_max=643%  sibling_after=0  load_after=25.37 22.86 37.41  2026-08-25T15:59:11-05:00
+  frozen-adapted state: /mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/ablation/pre_lowering/adapted_states/heat_scale1.json
+    step=0.7666150831284337  inv_mass_rank=2  warmup=200 by arm B
+  Median (20 NUTS samples): 2031.4ms
+  Geomean (20 NUTS samples): 2128.4ms
+  All: [2300.4, 1852.9, 2030.0, 2485.0, 2031.4]ms
+    waiting: 0s, sibling=0 load1=25 ext=439% 2026-08-25T15:59:12-05:00
+    (waited 150s; load1=7 ext=433% sibling=0)
+--- cell heat_s3_B (attempt 1)  load_before=7.67 16.20 32.64  ext_before=599%  2026-08-25T16:01:43-05:00
+    rc=0  md5=21a6bd08b37b54d2b8a20d8924a2bbb2  ext_max=699%  sibling_after=0  load_after=23.16 18.78 32.23  2026-08-25T16:03:00-05:00
+  frozen-adapted state: /mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/ablation/pre_lowering/adapted_states/heat_scale3.json
+    step=0.6428269627609144  inv_mass_rank=2  warmup=200 by arm B
+  Median (20 NUTS samples): 2228.9ms
+  Geomean (20 NUTS samples): 2425.7ms
+  All: [2228.9, 2211.7, 2031.4, 3223.0, 2602.2]ms
+    waiting: 0s, sibling=0 load1=23 ext=532% 2026-08-25T16:03:01-05:00
+    (waited 180s; load1=7 ext=525% sibling=0)
+--- cell heat_s3_A (attempt 1)  load_before=7.57 13.41 27.77  ext_before=525%  2026-08-25T16:06:02-05:00
+    rc=0  md5=21a6bd08b37b54d2b8a20d8924a2bbb2  ext_max=842%  sibling_after=0  load_after=61.36 37.12 34.36  2026-08-25T16:08:49-05:00
+  frozen-adapted state: /mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/ablation/pre_lowering/adapted_states/heat_scale3.json
+    step=0.6428269627609144  inv_mass_rank=2  warmup=200 by arm B
+  Median (20 NUTS samples): 16652.3ms
+  Geomean (20 NUTS samples): 17181.1ms
+  All: [16651.3, 17263.3, 14606.4, 21412.4, 16652.3]ms
+    waiting: 0s, sibling=0 load1=61 ext=645% 2026-08-25T16:08:49-05:00
+    (waited 210s; load1=7 ext=515% sibling=0)
+--- cell advdiff_B (attempt 1)  load_before=7.31 21.27 28.57  ext_before=515%  2026-08-25T16:12:20-05:00
+    rc=0  md5=21a6bd08b37b54d2b8a20d8924a2bbb2  ext_max=518%  sibling_after=0  load_after=20.98 22.45 28.47  2026-08-25T16:13:23-05:00
+  frozen-adapted state: /mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/ablation/pre_lowering/adapted_states/advdiff_scale1.json
+    step=0.7405686679549195  inv_mass_rank=2  warmup=200 by arm B
+  Median (20 NUTS samples): 1277.3ms
+  Geomean (20 NUTS samples): 1257.7ms
+  All: [1469.3, 1105.8, 1016.7, 1491.3, 1277.3]ms
+  verification (seed [7, 11]): n_accepted=20 n_diverging=0
+    waiting: 0s, sibling=0 load1=20 ext=513% 2026-08-25T16:13:23-05:00
+    (waited 120s; load1=7 ext=511% sibling=0)
+--- cell advdiff_A (attempt 1)  load_before=7.77 16.91 25.70  ext_before=511%  2026-08-25T16:15:24-05:00
+    rc=0  md5=21a6bd08b37b54d2b8a20d8924a2bbb2  ext_max=595%  sibling_after=0  load_after=64.43 36.63 31.69  2026-08-25T16:17:44-05:00
+  frozen-adapted state: /mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/ablation/pre_lowering/adapted_states/advdiff_scale1.json
+    step=0.7405686679549195  inv_mass_rank=2  warmup=200 by arm B
+  Median (20 NUTS samples): 12614.9ms
+  Geomean (20 NUTS samples): 12583.7ms
+  All: [14301.5, 12153.2, 12614.9, 15146.2, 9501.3]ms
+  verification (seed [7, 11]): n_accepted=20 n_diverging=0
+    waiting: 0s, sibling=0 load1=64 ext=508% 2026-08-25T16:17:44-05:00
+    (waited 210s; load1=7 ext=503% sibling=0)
+--- cell star_B (attempt 1)  load_before=7.53 21.04 26.43  ext_before=503%  2026-08-25T16:21:16-05:00
+    rc=0  md5=21a6bd08b37b54d2b8a20d8924a2bbb2  ext_max=710%  sibling_after=0  load_after=7.30 19.09 25.51  2026-08-25T16:21:57-05:00
+  frozen-adapted state: /mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/ablation/pre_lowering/adapted_states/star_recur.json
+    step=0.42555497129063863  inv_mass_rank=2  warmup=200 by arm B
+  Median (20 NUTS samples): 20.2ms
+  Geomean (20 NUTS samples): 20.2ms
+  All: [20.6, 20.1, 24.6, 20.2, 16.2]ms
+  verification (seed [7, 11]): n_accepted=20 n_diverging=0
+--- cell star_A (attempt 1)  load_before=7.30 19.09 25.51  ext_before=503%  2026-08-25T16:21:57-05:00
+    rc=0  md5=21a6bd08b37b54d2b8a20d8924a2bbb2  ext_max=503%  sibling_after=0  load_after=6.87 17.67 24.80  2026-08-25T16:22:37-05:00
+  frozen-adapted state: /mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/ablation/pre_lowering/adapted_states/star_recur.json
+    step=0.42555497129063863  inv_mass_rank=2  warmup=200 by arm B
+  Median (20 NUTS samples): 147.6ms
+  Geomean (20 NUTS samples): 150.3ms
+  All: [147.6, 144.4, 174.1, 158.8, 130.2]ms
+  verification (seed [7, 11]): n_accepted=20 n_diverging=0
+batch end: 2026-08-25T16:22:37-05:00
+so md5:   21a6bd08b37b54d2b8a20d8924a2bbb2

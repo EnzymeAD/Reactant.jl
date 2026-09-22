@@ -65,12 +65,13 @@ end
 @printf("compile %.1fs\n", ct)
 out = compiled(rng, outlier_model, xs, lg, ot, constrained, ConcreteRNumber(NUM_SWEEPS))
 best = Inf
-for _ in 1:3
+for _ in 1:20
     t = @elapsed begin
         global out = compiled(rng, outlier_model, xs, lg, ot, constrained, ConcreteRNumber(NUM_SWEEPS))
         Array(out[1])
     end
     global best = min(best, t)
+    @printf("IMPULSE outlier REP wall %.6f s | per-move %.4f us\n", t, t / MOVES * 1e6)
 end
 trace = ProbProg.unflatten_trace(out[1], out[2], tt.entries, ())
 slope_f = trace.choices[:slope][1, 1]

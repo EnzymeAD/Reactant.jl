@@ -1,0 +1,31 @@
+{
+ "n_draws": 20,
+ "tol": 1e-08,
+ "per_draw_max_rel_diff": [
+  5.241037490881855e-13,
+  4.254920584458879e-13,
+  1.0323672774117323e-12,
+  1.222769405026694e-12,
+  7.93470145428903e-13,
+  9.017109633281482e-13,
+  9.20894275515887e-13,
+  1.3182694486418961e-12,
+  1.26434608291605e-12,
+  1.8709744161749245e-12,
+  2.928735063387526e-12,
+  2.4115502147440617e-12,
+  3.528334128401384e-12,
+  3.1481161115527824e-12,
+  2.5339113103341984e-12,
+  3.631434899958879e-12,
+  4.012372356027868e-12,
+  3.344785867850066e-12,
+  4.530715305066612e-12,
+  5.009465288539282e-12
+ ],
+ "matched_prefix": 20,
+ "window_max_rel_diff": 5.009465288539282e-12,
+ "pass": true,
+ "sicm": "/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/ablation/sicm_roster/logs_frozen/refreeze_2026-09-08/phylo_pois_sicm.out.json",
+ "nosicm": "/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/ablation/sicm_roster/logs_frozen/refreeze_2026-09-08/phylo_pois_nosicm.out.json"
+}

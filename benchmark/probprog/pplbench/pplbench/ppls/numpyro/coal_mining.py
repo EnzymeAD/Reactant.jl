@@ -28,6 +28,17 @@ class CoalMining(BaseNumPyroImplementation):
         self.l1_true = l1_true
         self.l2_true = l2_true
 
+    def matched_init_params(self, data: xr.Dataset) -> Dict[str, np.ndarray]:
+        """Deterministic canonical init (matched-init protocol).
+
+        Constrained point identical to the Impulse arm's NUTS start
+        (standard/coal_mining.jl `build_constraint`): l1 = l2 = 1, the two
+        positive-support Gamma sites at the image of unconstrained zero under
+        the exp transform. Both sites are scalar in this model. Routed through
+        init_to_value by numpyro_harness.py; only used with --matched-init.
+        """
+        return {"l1": np.array(1.0), "l2": np.array(1.0)}
+
     def model(self, data: xr.Dataset):
         y = jnp.asarray(data.y.values)  # (T,)
         T = y.shape[0]

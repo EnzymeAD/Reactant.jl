@@ -90,8 +90,19 @@ def create_subdir(output_dir: str, name: str) -> str:
     :name: subdir name
     :returns: name of new subdirectory
     """
+    # Concurrent pinned runs (one benchmark cell per core, several cells of one
+    # model row started within the same second) would otherwise collide on this
+    # second-resolution timestamp and one of them would die with FileExistsError.
+    # Append a disambiguating suffix instead.
     subdir_name = os.path.join(output_dir, name)
-    os.mkdir(subdir_name)
+    for attempt in range(1, 200):
+        try:
+            os.mkdir(subdir_name)
+            break
+        except FileExistsError:
+            subdir_name = os.path.join(output_dir, f"{name}.{attempt}")
+    else:
+        raise RuntimeError(f"could not create an output subdir under {output_dir}")
     LOGGER.debug(f"Created subdir {subdir_name}")
     return subdir_name
 

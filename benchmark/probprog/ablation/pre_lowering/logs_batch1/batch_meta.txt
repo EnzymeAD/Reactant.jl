@@ -1,0 +1,67 @@
+batch start: 2026-08-24T20:59:02-05:00
+so mtime: 2026-08-24 14:59:21.983624227 -0500 7623329272
+so md5:   21a6bd08b37b54d2b8a20d8924a2bbb2
+loadavg:  4.21 6.47 5.25 2/11733 1060476
+nproc:    192
+julia:    julia version 1.11.7
+--- cell cubic_small_B  load_before=4.21 6.47 5.25  2026-08-24T20:59:10-05:00
+    rc=0  load_after=3.66 6.16 5.18  2026-08-24T20:59:36-05:00
+  Median (20 NUTS samples): 58.8ms
+  All: [50.1, 59.2, 48.4, 62.9, 58.8]ms
+  verification (seed [7,11]): n_accepted=20
+--- cell cubic_small_A  load_before=3.66 6.16 5.18  2026-08-24T20:59:36-05:00
+    rc=0  load_after=3.61 5.87 5.12  2026-08-24T21:00:09-05:00
+  Median (20 NUTS samples): 1137.2ms
+  All: [984.9, 1173.9, 932.7, 1197.9, 1137.2]ms
+  verification (seed [7,11]): n_accepted=20
+--- cell cubic_large_B  load_before=3.61 5.87 5.12  2026-08-24T21:00:09-05:00
+    rc=0  load_after=3.26 5.60 5.05  2026-08-24T21:00:35-05:00
+  Median (20 NUTS samples): 162.3ms
+  All: [103.3, 147.8, 162.3, 232.6, 250.0]ms
+  verification (seed [7,11]): n_accepted=20
+--- cell cubic_large_A  load_before=3.26 5.60 5.05  2026-08-24T21:00:35-05:00
+    rc=0  load_after=3.52 5.18 4.94  2026-08-24T21:01:46-05:00
+  Median (20 NUTS samples): 5203.2ms
+  All: [3764.6, 5203.2, 4703.7, 8265.0, 7914.6]ms
+  verification (seed [7,11]): n_accepted=20
+--- cell projected_B  load_before=3.52 5.18 4.94  2026-08-24T21:01:47-05:00
+    rc=0  load_after=3.46 5.02 4.89  2026-08-24T21:02:12-05:00
+  Median (20 NUTS samples): 34.3ms
+  All: [28.1, 65.2, 25.7, 36.2, 34.3]ms
+  verification (seed [7,11]): n_accepted=20
+--- cell projected_A  load_before=3.46 5.02 4.89  2026-08-24T21:02:12-05:00
+    rc=0  load_after=3.35 4.88 4.85  2026-08-24T21:02:38-05:00
+  Median (20 NUTS samples): 145.1ms
+  All: [114.9, 275.7, 113.6, 163.8, 145.1]ms
+  verification (seed [7,11]): n_accepted=20
+--- cell heat_s1_B  load_before=3.35 4.88 4.85  2026-08-24T21:02:38-05:00
+    rc=0  load_after=9.89 6.11 5.25  2026-08-24T21:03:15-05:00
+  Median (20 NUTS samples): 451.9ms
+  All: [451.9, 385.8, 511.2, 448.6, 496.9]ms
+--- cell heat_s1_A  load_before=9.89 6.11 5.25  2026-08-24T21:03:15-05:00
+    rc=0  load_after=30.22 11.55 7.10  2026-08-24T21:04:08-05:00
+  Median (20 NUTS samples): 3005.1ms
+  All: [2929.8, 2460.4, 3363.3, 3005.1, 3273.1]ms
+--- cell heat_s3_B  load_before=30.22 11.55 7.10  2026-08-24T21:04:08-05:00
+    rc=0  load_after=30.87 14.49 8.35  2026-08-24T21:05:12-05:00
+  Median (20 NUTS samples): 2764.9ms
+  All: [2567.0, 2228.1, 3063.8, 2764.9, 2975.4]ms
+--- cell heat_s3_A  load_before=30.87 14.49 8.35  2026-08-24T21:05:12-05:00
+    rc=0  load_after=74.00 38.74 18.27  2026-08-24T21:07:52-05:00
+  Median (20 NUTS samples): 18635.3ms
+  All: [17180.0, 15071.4, 20687.6, 18635.3, 20071.7]ms
+--- cell heat_parity_s1_B  load_before=74.00 38.74 18.27  2026-08-24T21:07:52-05:00
+    rc=0  load_after=42.61 34.79 17.70  2026-08-24T21:08:24-05:00
+  wrote julia samples. n_accepted=27
+--- cell heat_parity_s1_A  load_before=42.61 34.79 17.70  2026-08-24T21:08:24-05:00
+    rc=0  load_after=32.52 32.80 17.65  2026-08-24T21:08:59-05:00
+  wrote julia samples. n_accepted=27
+--- cell heat_parity_s3_B  load_before=32.52 32.80 17.65  2026-08-24T21:08:59-05:00
+    rc=0  load_after=26.15 30.71 17.57  2026-08-24T21:09:39-05:00
+  wrote julia samples. n_accepted=26
+--- cell heat_parity_s3_A  load_before=26.15 30.71 17.57  2026-08-24T21:09:39-05:00
+    rc=0  load_after=39.88 32.34 18.80  2026-08-24T21:10:36-05:00
+  wrote julia samples. n_accepted=26
+batch end: 2026-08-24T21:10:36-05:00
+so md5:   21a6bd08b37b54d2b8a20d8924a2bbb2
+loadavg:  34.05 31.34 18.62 2/11653 1086082

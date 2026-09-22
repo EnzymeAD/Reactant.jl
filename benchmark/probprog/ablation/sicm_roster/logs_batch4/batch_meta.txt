@@ -1,0 +1,47 @@
+batch tag: batch4
+start: 2026-08-25T02:28:26-05:00
+binary: /mnt/sbrantq/probprog/oopsla/Reactant.jl/deps/ReactantExtra/bazel-bin/libReactantExtra.so
+md5 at batch start: 21a6bd08b37b54d2b8a20d8924a2bbb2
+mtime: 2026-08-24 14:59:21.983624227 -0500
+loadavg at batch start: 21.81 70.84 72.84 3/11408 1735452
+sibling taskset processes: 
+nproc: 192
+--- cell car_spatial_scotland
+  start: 2026-08-25T02:28:34-05:00
+  loadavg before: 21.81 70.84 72.84 3/11408 1735458
+  md5 before: 21a6bd08b37b54d2b8a20d8924a2bbb2
+  end: 2026-08-25T02:30:37-05:00
+  loadavg after: 23.63 52.60 65.72 3/11399 1739602
+  md5 after: 21a6bd08b37b54d2b8a20d8924a2bbb2
+  output dir: ./outputs/2026-08-25_02:28:43
+  script exit: COMMAND_EXIT_CODE="0"
+--- cell car_spatial_nyc
+  start: 2026-08-25T02:30:45-05:00
+  loadavg before: 21.98 51.78 65.39 2/11391 1739740
+  md5 before: 21a6bd08b37b54d2b8a20d8924a2bbb2
+  end: 2026-08-25T02:57:59-05:00
+  loadavg after: 91.45 96.53 84.41 2/10907 1761374
+  md5 after: 21a6bd08b37b54d2b8a20d8924a2bbb2
+  output dir: ./outputs/2026-08-25_02:30:55
+  script exit: COMMAND_EXIT_CODE="0"
+--- cell lmm_radon
+  start: 2026-08-25T02:58:07-05:00
+  loadavg before: 84.36 94.98 83.97 3/10887 1761409
+  md5 before: 21a6bd08b37b54d2b8a20d8924a2bbb2
+  end: 2026-08-25T02:59:26-05:00
+  loadavg after: 41.46 77.41 78.63 2/10927 1763493
+  md5 after: 21a6bd08b37b54d2b8a20d8924a2bbb2
+  output dir: ./outputs/2026-08-25_02:58:17
+  script exit: COMMAND_EXIT_CODE="0"
+--- cell hierarchical_mvn
+  start: 2026-08-25T02:59:35-05:00
+  loadavg before: 35.70 75.00 77.83 3/10892 1763537
+  md5 before: 21a6bd08b37b54d2b8a20d8924a2bbb2
+  end: 2026-08-25T03:01:27-05:00
+  loadavg after: 36.84 60.58 72.12 3/10927 1765750
+  md5 after: 21a6bd08b37b54d2b8a20d8924a2bbb2
+  output dir: ./outputs/2026-08-25_02:59:44
+  script exit: COMMAND_EXIT_CODE="0"
+end: 2026-08-25T03:01:35-05:00
+md5 at batch end: 21a6bd08b37b54d2b8a20d8924a2bbb2
+loadavg at batch end: 27.16 56.83 70.64 2/10891 1765812

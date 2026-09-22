@@ -36,16 +36,25 @@ constrained = ProbProg.extract_addresses(obs)
 obs_tensor = ProbProg.flatten_constraint(obs)
 N = ConcreteRNumber(500)
 rng = ReactantRNG(Reactant.to_rarray(UInt64[1, 5]))
-Reactant.Compiler.DEBUG_PROBPROG_DISABLE_OPT[] = false
+# Arm select. The figure cell is the BEST encoding per system, which for this
+# model is the flat expansion (IMPULSE_MH_ARM=flat); "region" is the region+SICM
+# pipeline. Default keeps the historical committed behaviour (region).
+const MH_ARM = get(ENV, "IMPULSE_MH_ARM", "region")
+@assert MH_ARM in ("flat", "region") "IMPULSE_MH_ARM must be flat or region"
+Reactant.Compiler.DEBUG_PROBPROG_DISABLE_OPT[] = (MH_ARM == "flat")
 compiled, _ = ProbProg.with_trace() do
     @compile optimize = :probprog programmable_mh_linreg(rng, xs, N, obs_tensor, constrained)
 end
 out = compiled(rng, xs, N, obs_tensor, constrained); for o in out; _force(o); end
 best = Inf
-for _ in 1:8
+for _ in 1:20
+    gc0 = Base.gc_num().total_time
     t = @elapsed begin
         o = compiled(rng, xs, N, obs_tensor, constrained); for x in o; _force(x); end
     end
+    gc_s = (Base.gc_num().total_time - gc0) / 1e9
     global best = min(best, t)
+    @printf("IMPULSE linreg REP wall %.6f s | per-move %.4f us | gc %.6f s\n",
+            t, t / 1000 * 1e6, gc_s)
 end
-@printf("IMPULSE linreg per-move %.3f us\n", best / 1000 * 1e6)
+@printf("IMPULSE linreg per-move %.3f us | arm = %s\n", best / 1000 * 1e6, MH_ARM)

@@ -1,0 +1,19 @@
+batch tag: size_sweep_2026-09-10
+protocol: frozen adapted state, adaptation OFF both arms, matched seeds
+num_samples=20 num_exec=5 warmup=200 seed=1396133
+ext_cpu_limit=1000% start_ext_cpu=700% load_gate=8 max_retries=60
+start: 2026-09-10T19:01:41-05:00
+md5 at batch start: 95aeb90de165d03c09db5736d67951cc
+    (waited 25s; procs_running=3 load1=45 ext=274%)
+--- warmup car_spatial_nyc_n1921  2026-09-10T19:02:15-05:00  ext=275%
+  adapted step_size = 0.07086793177074849 (from 0.05), inverse mass (1923, 1923)
+  wrote /mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/ablation/sicm_roster/adapted_states/car_spatial_nyc_n1921.json
+    waiting 10s: sibling=0 procs_running=9 load1=9 ext=287% 2026-09-10T19:28:16-05:00
+    (waited 65s; procs_running=3 load1=21 ext=233%)
+--- cell car_spatial_nyc_n1921_sicm (attempt 1) ext_before=235% load=21.86 2026-09-10T19:29:12-05:00
+    OK car_spatial_nyc_n1921_sicm repeats (steady state, s): 249.99694, 249.604, 250.59817, 250.20567, 249.91681 ext_max=616% load1_max=47.80 md5=95aeb90de165d03c09db5736d67951cc
+    (waited 25s; procs_running=3 load1=14 ext=216%)
+--- cell car_spatial_nyc_n1921_nosicm (attempt 1) ext_before=216% load=14.02 2026-09-10T19:56:44-05:00
+    OK car_spatial_nyc_n1921_nosicm repeats (steady state, s): 1123.76105, 1195.11662, 1189.99689, 1204.96105, 1157.22273 ext_max=612% load1_max=156.15 md5=95aeb90de165d03c09db5736d67951cc
+end: 2026-09-10T21:54:53-05:00
+md5 at batch end: 95aeb90de165d03c09db5736d67951cc

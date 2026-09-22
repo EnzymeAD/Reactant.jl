@@ -1,0 +1,31 @@
+{
+ "n_draws": 20,
+ "tol": 1e-08,
+ "per_draw_max_rel_diff": [
+  1.282109405534817e-13,
+  2.7159167613275515e-13,
+  1.3944956300804279e-12,
+  2.14528395048319e-12,
+  1.081752790592462e-12,
+  6.089906356976371e-12,
+  2.8823655932415825e-12,
+  2.4578453123381987e-12,
+  2.5058448083989477e-12,
+  2.7068770898370633e-12,
+  5.074345971169795e-12,
+  4.061625239934297e-12,
+  3.6458613905665516e-12,
+  3.1415980927818055e-12,
+  1.3506288494727295e-12,
+  3.1225030262065146e-12,
+  2.8171732468713275e-12,
+  3.5107683274556927e-12,
+  7.0534689200485445e-12,
+  5.139106130334389e-12
+ ],
+ "matched_prefix": 20,
+ "window_max_rel_diff": 7.0534689200485445e-12,
+ "pass": true,
+ "sicm": "/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/ablation/sicm_roster/logs_frozen/refreeze_2026-09-08/car_spatial_scotland_sicm.out.json",
+ "nosicm": "/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/ablation/sicm_roster/logs_frozen/refreeze_2026-09-08/car_spatial_scotland_nosicm.out.json"
+}

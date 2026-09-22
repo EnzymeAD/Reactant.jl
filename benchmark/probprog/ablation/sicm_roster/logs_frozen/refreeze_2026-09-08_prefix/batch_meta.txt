@@ -1,0 +1,15 @@
+batch tag: refreeze_2026-09-08_prefix
+protocol: frozen adapted state, adaptation OFF both arms, matched seeds
+num_samples=12 num_exec=5 warmup=200 seed=1396133
+ext_cpu_limit=1000% start_ext_cpu=900% load_gate=12 max_retries=400
+start: 2026-09-08T20:55:41-05:00
+md5 at batch start: 95aeb90de165d03c09db5736d67951cc
+--- warmup hierarchical_mvn: reusing existing /mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/ablation/sicm_roster/adapted_states/hierarchical_mvn.json
+    (waited 10s; procs_running=3 load1=5 ext=438%)
+--- cell hierarchical_mvn_sicm (attempt 1) ext_before=438% load=5.14 2026-09-08T20:55:59-05:00
+    OK hierarchical_mvn_sicm repeats (steady state, s): 0.31016, 0.30203, 0.3011, 0.30058, 0.29627 ext_max=438% load1_max=5.14 md5=95aeb90de165d03c09db5736d67951cc
+    (waited 10s; procs_running=3 load1=4 ext=406%)
+--- cell hierarchical_mvn_nosicm (attempt 1) ext_before=405% load=4.39 2026-09-08T20:56:48-05:00
+    OK hierarchical_mvn_nosicm repeats (steady state, s): 1.37408, 1.42586, 1.3973, 1.33457, 1.38233 ext_max=432% load1_max=14.00 md5=95aeb90de165d03c09db5736d67951cc
+end: 2026-09-08T20:57:33-05:00
+md5 at batch end: 95aeb90de165d03c09db5736d67951cc

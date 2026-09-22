@@ -1,0 +1,104 @@
+batch start: 2026-08-25T14:46:09-05:00
+protocol: frozen-adapted-state (warmup adaptation ON in arm B, both arms measured adaptation OFF from that state)
+warmup iterations: 200
+so mtime: 2026-08-24 14:59:21.983624227 -0500 7623329272
+so md5:   21a6bd08b37b54d2b8a20d8924a2bbb2
+loadavg:  6.66 7.33 15.69 7/13429 2969316
+nproc:    192
+julia:    julia version 1.11.7
+load gate: load1 < 8 and no pplbench/harness.jl, NO ceiling
+--- cell heat_s1_warmup  load_before=6.66 7.33 15.69  sibling=0  2026-08-25T14:46:09-05:00
+    rc=0  md5=21a6bd08b37b54d2b8a20d8924a2bbb2  sibling_after=0  load_after=13.12 8.75 15.71  2026-08-25T14:46:58-05:00
+    adapted step size = 0.7666150831284337
+    waiting for quiet: 0s elapsed, sibling=0 load1=13 2026-08-25T14:46:58-05:00
+    (waited 90s for quiet; load1=7 sibling=0)
+--- cell heat_s1_B  load_before=7.20 7.92 14.78  sibling=0  2026-08-25T14:48:29-05:00
+    rc=0  md5=21a6bd08b37b54d2b8a20d8924a2bbb2  sibling_after=0  load_after=6.56 7.64 14.32  2026-08-25T14:49:18-05:00
+  frozen-adapted state: /mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/ablation/pre_lowering/adapted_states/heat_scale1.json
+    step=0.7666150831284337  inv_mass_rank=2  warmup=200 by arm B
+  Median (20 NUTS samples): 327.2ms
+  Geomean (20 NUTS samples): 341.9ms
+  All: [375.8, 295.2, 319.8, 402.5, 327.2]ms
+--- cell heat_s1_A  load_before=6.56 7.64 14.32  sibling=0  2026-08-25T14:49:18-05:00
+    rc=0  md5=21a6bd08b37b54d2b8a20d8924a2bbb2  sibling_after=0  load_after=17.63 10.34 14.81  2026-08-25T14:50:19-05:00
+  frozen-adapted state: /mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/ablation/pre_lowering/adapted_states/heat_scale1.json
+    step=0.7666150831284337  inv_mass_rank=2  warmup=200 by arm B
+  Median (20 NUTS samples): 1977.7ms
+  Geomean (20 NUTS samples): 2071.3ms
+  All: [2232.3, 1807.3, 1977.7, 2422.2, 1972.9]ms
+    waiting for quiet: 0s elapsed, sibling=0 load1=17 2026-08-25T14:50:19-05:00
+    (waited 90s for quiet; load1=7 sibling=0)
+--- cell heat_s3_warmup  load_before=7.98 9.00 13.92  sibling=0  2026-08-25T14:51:49-05:00
+    rc=0  md5=21a6bd08b37b54d2b8a20d8924a2bbb2  sibling_after=0  load_after=46.76 20.07 17.26  2026-08-25T14:53:19-05:00
+    adapted step size = 0.6428269627609144
+    waiting for quiet: 0s elapsed, sibling=0 load1=46 2026-08-25T14:53:19-05:00
+    (waited 180s for quiet; load1=7 sibling=0)
+--- cell heat_s3_B  load_before=7.29 13.35 15.13  sibling=0  2026-08-25T14:56:20-05:00
+    rc=0  md5=21a6bd08b37b54d2b8a20d8924a2bbb2  sibling_after=0  load_after=22.09 16.18 15.94  2026-08-25T14:57:38-05:00
+  frozen-adapted state: /mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/ablation/pre_lowering/adapted_states/heat_scale3.json
+    step=0.6428269627609144  inv_mass_rank=2  warmup=200 by arm B
+  Median (20 NUTS samples): 2338.5ms
+  Geomean (20 NUTS samples): 2393.3ms
+  All: [2338.5, 2354.5, 2063.0, 2997.2, 2306.6]ms
+    waiting for quiet: 0s elapsed, sibling=0 load1=22 2026-08-25T14:57:38-05:00
+    (waited 120s for quiet; load1=7 sibling=0)
+--- cell heat_s3_A  load_before=7.40 12.55 14.64  sibling=0  2026-08-25T14:59:39-05:00
+    rc=0  md5=21a6bd08b37b54d2b8a20d8924a2bbb2  sibling_after=0  load_after=63.14 35.90 23.06  2026-08-25T15:02:21-05:00
+  frozen-adapted state: /mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/ablation/pre_lowering/adapted_states/heat_scale3.json
+    step=0.6428269627609144  inv_mass_rank=2  warmup=200 by arm B
+  Median (20 NUTS samples): 16272.4ms
+  Geomean (20 NUTS samples): 16049.9ms
+  All: [16272.4, 15402.2, 13403.1, 19308.2, 16420.2]ms
+    waiting for quiet: 0s elapsed, sibling=0 load1=63 2026-08-25T15:02:21-05:00
+    (waited 360s for quiet; load1=7 sibling=0)
+--- cell advdiff_warmup  load_before=7.30 16.56 18.28  sibling=0  2026-08-25T15:08:23-05:00
+    rc=0  md5=21a6bd08b37b54d2b8a20d8924a2bbb2  sibling_after=0  load_after=32.98 21.19 19.70  2026-08-25T15:09:26-05:00
+  stability: dt / explicit-diffusion-limit = 20.2x (implicit stepping required); advection CFL = v*dt/h = 0.7538 (< 1, explicit OK); Peclet = v*L/kappa = 15.0
+    adapted step size = 0.7405686679549195
+    waiting for quiet: 0s elapsed, sibling=0 load1=32 2026-08-25T15:09:26-05:00
+    (waited 150s for quiet; load1=7 sibling=0)
+--- cell advdiff_B  load_before=7.34 14.75 17.48  sibling=0  2026-08-25T15:11:57-05:00
+    rc=0  md5=21a6bd08b37b54d2b8a20d8924a2bbb2  sibling_after=0  load_after=240.11 123.51 59.01  2026-08-25T15:15:12-05:00
+  stability: dt / explicit-diffusion-limit = 20.2x (implicit stepping required); advection CFL = v*dt/h = 0.7538 (< 1, explicit OK); Peclet = v*L/kappa = 15.0
+  frozen-adapted state: /mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/ablation/pre_lowering/adapted_states/advdiff_scale1.json
+    step=0.7405686679549195  inv_mass_rank=2  warmup=200 by arm B
+  Median (20 NUTS samples): 20681.7ms
+  Geomean (20 NUTS samples): 13182.4ms
+  All: [5334.9, 5875.1, 22325.4, 27507.1, 20681.7]ms
+  verification (seed [7,11]): n_accepted=20 n_diverging=0
+    waiting for quiet: 0s elapsed, sibling=0 load1=240 2026-08-25T15:15:12-05:00
+    waiting for quiet: 600s elapsed, sibling=0 load1=71 2026-08-25T15:25:21-05:00
+    (waited 930s for quiet; load1=7 sibling=0)
+--- cell advdiff_A  load_before=7.97 57.24 93.13  sibling=0  2026-08-25T15:30:53-05:00
+    rc=0  md5=21a6bd08b37b54d2b8a20d8924a2bbb2  sibling_after=0  load_after=61.79 62.13 89.54  2026-08-25T15:33:22-05:00
+  stability: dt / explicit-diffusion-limit = 20.2x (implicit stepping required); advection CFL = v*dt/h = 0.7538 (< 1, explicit OK); Peclet = v*L/kappa = 15.0
+  frozen-adapted state: /mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/ablation/pre_lowering/adapted_states/advdiff_scale1.json
+    step=0.7405686679549195  inv_mass_rank=2  warmup=200 by arm B
+  Median (20 NUTS samples): 12554.8ms
+  Geomean (20 NUTS samples): 13047.8ms
+  All: [14543.3, 12123.1, 12554.8, 15402.4, 11091.9]ms
+  verification (seed [7,11]): n_accepted=20 n_diverging=0
+    waiting for quiet: 0s elapsed, sibling=0 load1=61 2026-08-25T15:33:22-05:00
+    (waited 210s for quiet; load1=7 sibling=0)
+--- cell star_warmup  load_before=7.24 33.50 72.50  sibling=0  2026-08-25T15:36:53-05:00
+    rc=0  md5=21a6bd08b37b54d2b8a20d8924a2bbb2  sibling_after=0  load_after=7.11 30.16 69.73  2026-08-25T15:37:32-05:00
+    adapted step size = 0.42555497129063863
+--- cell star_B  load_before=7.11 30.16 69.73  sibling=0  2026-08-25T15:37:32-05:00
+    rc=0  md5=21a6bd08b37b54d2b8a20d8924a2bbb2  sibling_after=0  load_after=6.89 27.22 67.08  2026-08-25T15:38:12-05:00
+  frozen-adapted state: /mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/ablation/pre_lowering/adapted_states/star_recur.json
+    step=0.42555497129063863  inv_mass_rank=2  warmup=200 by arm B
+  Median (20 NUTS samples): 20.0ms
+  Geomean (20 NUTS samples): 20.1ms
+  All: [20.0, 18.8, 24.1, 20.6, 17.7]ms
+  verification (seed [7,11]): n_accepted=20 n_diverging=0
+--- cell star_A  load_before=6.89 27.22 67.08  sibling=0  2026-08-25T15:38:12-05:00
+    rc=0  md5=21a6bd08b37b54d2b8a20d8924a2bbb2  sibling_after=0  load_after=6.59 24.59 64.51  2026-08-25T15:38:53-05:00
+  frozen-adapted state: /mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/ablation/pre_lowering/adapted_states/star_recur.json
+    step=0.42555497129063863  inv_mass_rank=2  warmup=200 by arm B
+  Median (20 NUTS samples): 150.4ms
+  Geomean (20 NUTS samples): 148.4ms
+  All: [150.4, 143.1, 172.2, 158.3, 122.7]ms
+  verification (seed [7,11]): n_accepted=20 n_diverging=0
+batch end: 2026-08-25T15:38:53-05:00
+so md5:   21a6bd08b37b54d2b8a20d8924a2bbb2
+loadavg:  6.42 23.96 63.87 6/13234 3168788

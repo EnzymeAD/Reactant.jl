@@ -1,0 +1,155 @@
+{
+  "model": {
+    "class": "gp_pois_regr_scaled.GPPoisRegrScaled",
+    "args": {
+      "n": 200,
+      "rho": 0.15
+    },
+    "seed": 12345
+  },
+  "iterations": 500,
+  "num_warmup": 200,
+  "trials": 4,
+  "ppls": [
+    {
+      "name": "stan",
+      "package": "pplbench.ppls.stan_ladder.naive",
+      "inference": {
+        "class": "inference.MCMC",
+        "infer_args": {
+          "step_size": 0.05,
+          "max_tree_depth": 10,
+          "adapt_step_size": true,
+          "adapt_mass_matrix": true
+        }
+      },
+      "legend": {
+        "name": "Stan (naive)",
+        "color": "#bbbbbb"
+      },
+      "trials": 4,
+      "seed": 20260822
+    },
+    {
+      "name": "stan",
+      "package": "pplbench.ppls.stan_ladder.slicstan",
+      "inference": {
+        "class": "inference.MCMC",
+        "infer_args": {
+          "step_size": 0.05,
+          "max_tree_depth": 10,
+          "adapt_step_size": true,
+          "adapt_mass_matrix": true
+        }
+      },
+      "legend": {
+        "name": "Stan (SlicStan)",
+        "color": "#888888"
+      },
+      "trials": 4,
+      "seed": 20260822
+    },
+    {
+      "name": "stan",
+      "package": "pplbench.ppls.stan_ladder.slicstan_local",
+      "inference": {
+        "class": "inference.MCMC",
+        "infer_args": {
+          "step_size": 0.05,
+          "max_tree_depth": 10,
+          "adapt_step_size": true,
+          "adapt_mass_matrix": true
+        }
+      },
+      "legend": {
+        "name": "Stan (SlicStan, locals)",
+        "color": "#666666"
+      },
+      "trials": 4,
+      "seed": 20260822
+    },
+    {
+      "name": "stan",
+      "package": "pplbench.ppls.stan_ladder.expert",
+      "inference": {
+        "class": "inference.MCMC",
+        "infer_args": {
+          "step_size": 0.05,
+          "max_tree_depth": 10,
+          "adapt_step_size": true,
+          "adapt_mass_matrix": true
+        }
+      },
+      "legend": {
+        "name": "Stan (expert)",
+        "color": "#222222"
+      },
+      "trials": 4,
+      "seed": 20260822
+    },
+    {
+      "name": "impulse",
+      "inference": {
+        "class": "inference.MCMC",
+        "infer_args": {
+          "step_size": 0.05,
+          "max_tree_depth": 10,
+          "adapt_step_size": true,
+          "adapt_mass_matrix": true,
+          "no_opt": true,
+          "disable_sicm": true,
+          "disable_licm": true
+        }
+      },
+      "legend": {
+        "name": "Impulse (no pre-opt)",
+        "color": "#f4a582"
+      },
+      "trials": 4,
+      "seed": 20260822
+    },
+    {
+      "name": "impulse",
+      "inference": {
+        "class": "inference.MCMC",
+        "infer_args": {
+          "step_size": 0.05,
+          "max_tree_depth": 10,
+          "adapt_step_size": true,
+          "adapt_mass_matrix": true,
+          "no_opt": true,
+          "disable_sicm": true
+        }
+      },
+      "legend": {
+        "name": "Impulse (std passes)",
+        "color": "#d6604d"
+      },
+      "trials": 4,
+      "seed": 20260822
+    },
+    {
+      "name": "impulse",
+      "inference": {
+        "class": "inference.MCMC",
+        "infer_args": {
+          "step_size": 0.05,
+          "max_tree_depth": 10,
+          "adapt_step_size": true,
+          "adapt_mass_matrix": true
+        }
+      },
+      "legend": {
+        "name": "Impulse (SICM)",
+        "color": "#b2182b"
+      },
+      "trials": 4,
+      "seed": 20260822
+    }
+  ],
+  "save_samples": true,
+  "figures": {
+    "generate_pll": true,
+    "suffix": "png"
+  }
+}

@@ -1,0 +1,61 @@
+batch tag: refreeze_2026-09-08
+protocol: frozen adapted state, adaptation OFF both arms, matched seeds
+num_samples=20 num_exec=5 warmup=200 seed=1396133
+ext_cpu_limit=1000% start_ext_cpu=900% load_gate=12 max_retries=400
+start: 2026-09-08T20:17:58-05:00
+md5 at batch start: 95aeb90de165d03c09db5736d67951cc
+--- warmup car_spatial_scotland: reusing existing /mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/ablation/sicm_roster/adapted_states/car_spatial_scotland.json
+    (waited 10s; procs_running=2 load1=3 ext=402%)
+--- cell car_spatial_scotland_sicm (attempt 1) ext_before=402% load=3.12 2026-09-08T20:18:17-05:00
+    OK car_spatial_scotland_sicm repeats (steady state, s): 0.08279, 0.06588, 0.07499, 0.08219, 0.05985 ext_max=446% load1_max=6.97 md5=95aeb90de165d03c09db5736d67951cc
+    (waited 10s; procs_running=3 load1=5 ext=379%)
+--- cell car_spatial_scotland_nosicm (attempt 1) ext_before=379% load=5.30 2026-09-08T20:19:19-05:00
+    OK car_spatial_scotland_nosicm repeats (steady state, s): 0.37668, 0.34193, 0.35622, 0.41796, 0.32084 ext_max=400% load1_max=12.40 md5=95aeb90de165d03c09db5736d67951cc
+--- warmup car_spatial_nyc: reusing existing /mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/ablation/sicm_roster/adapted_states/car_spatial_nyc.json
+    (waited 10s; procs_running=2 load1=10 ext=381%)
+--- cell car_spatial_nyc_sicm (attempt 1) ext_before=381% load=10.44 2026-09-08T20:20:22-05:00
+    OK car_spatial_nyc_sicm repeats (steady state, s): 6.41347, 8.1226, 7.59901, 7.43661, 8.34913 ext_max=450% load1_max=14.94 md5=95aeb90de165d03c09db5736d67951cc
+    (waited 10s; procs_running=2 load1=8 ext=378%)
+--- cell car_spatial_nyc_nosicm (attempt 1) ext_before=378% load=8.50 2026-09-08T20:22:08-05:00
+    OK car_spatial_nyc_nosicm repeats (steady state, s): 31.89938, 31.85104, 32.624, 35.29292, 33.99059 ext_max=919% load1_max=99.51 md5=95aeb90de165d03c09db5736d67951cc
+--- warmup pgls: reusing existing /mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/ablation/sicm_roster/adapted_states/pgls.json
+    (waited 10s; procs_running=2 load1=72 ext=388%)
+--- cell pgls_sicm (attempt 1) ext_before=387% load=72.10 2026-09-08T20:26:28-05:00
+    OK pgls_sicm repeats (steady state, s): 0.0034, 0.00152, 0.00148, 0.00149, 0.00261 ext_max=643% load1_max=72.10 md5=95aeb90de165d03c09db5736d67951cc
+    (waited 10s; procs_running=2 load1=37 ext=435%)
+--- cell pgls_nosicm (attempt 1) ext_before=435% load=37.22 2026-09-08T20:27:16-05:00
+    OK pgls_nosicm repeats (steady state, s): 0.02338, 0.01837, 0.02483, 0.02365, 0.02253 ext_max=439% load1_max=42.25 md5=95aeb90de165d03c09db5736d67951cc
+--- warmup hierarchical_mvn: reusing existing /mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/ablation/sicm_roster/adapted_states/hierarchical_mvn.json
+    (waited 10s; procs_running=2 load1=23 ext=421%)
+--- cell hierarchical_mvn_sicm (attempt 1) ext_before=421% load=23.04 2026-09-08T20:28:04-05:00
+    OK hierarchical_mvn_sicm repeats (steady state, s): 0.48575, 0.47809, 0.49948, 0.48994, 0.50154 ext_max=421% load1_max=23.04 md5=95aeb90de165d03c09db5736d67951cc
+    waiting 10s: sibling=0 procs_running=12 load1=12 ext=412% 2026-09-08T20:28:54-05:00
+    (waited 50s; procs_running=3 load1=8 ext=389%)
+--- cell hierarchical_mvn_nosicm (attempt 1) ext_before=389% load=8.23 2026-09-08T20:29:35-05:00
+    OK hierarchical_mvn_nosicm  ext_max=408% load1_max=14.90 md5=95aeb90de165d03c09db5736d67951cc
+--- warmup lmm_radon: reusing existing /mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/ablation/sicm_roster/adapted_states/lmm_radon.json
+    (waited 10s; procs_running=2 load1=11 ext=413%)
+--- cell lmm_radon_sicm (attempt 1) ext_before=413% load=11.29 2026-09-08T20:30:35-05:00
+    OK lmm_radon_sicm repeats (steady state, s): 0.01098, 0.01089, 0.01032, 0.01043, 0.01007 ext_max=414% load1_max=11.29 md5=95aeb90de165d03c09db5736d67951cc
+    (waited 10s; procs_running=3 load1=6 ext=401%)
+--- cell lmm_radon_nosicm (attempt 1) ext_before=401% load=6.66 2026-09-08T20:31:19-05:00
+    OK lmm_radon_nosicm repeats (steady state, s): 0.19083, 0.23589, 0.24263, 0.24114, 0.22463 ext_max=602% load1_max=7.41 md5=95aeb90de165d03c09db5736d67951cc
+--- warmup diamonds: reusing existing /mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/ablation/sicm_roster/adapted_states/diamonds.json
+    (waited 10s; procs_running=3 load1=4 ext=389%)
+--- cell diamonds_sicm (attempt 1) ext_before=389% load=4.89 2026-09-08T20:32:03-05:00
+    OK diamonds_sicm repeats (steady state, s): 0.00903, 0.00817, 0.00814, 0.00777, 0.00838 ext_max=389% load1_max=4.89 md5=95aeb90de165d03c09db5736d67951cc
+    (waited 10s; procs_running=3 load1=4 ext=388%)
+--- cell diamonds_nosicm (attempt 1) ext_before=389% load=4.80 2026-09-08T20:32:58-05:00
+    OK diamonds_nosicm repeats (steady state, s): 0.02342, 0.02518, 0.02456, 0.0231, 0.02429 ext_max=593% load1_max=4.80 md5=95aeb90de165d03c09db5736d67951cc
+    (waited 10s; procs_running=3 load1=3 ext=402%)
+--- warmup phylo_pois  2026-09-08T20:33:54-05:00  ext=401%
+  adapted step_size = 0.09796703523621718 (from 0.1), inverse mass (404, 404)
+  wrote /mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/ablation/sicm_roster/adapted_states/phylo_pois.json
+    (waited 10s; procs_running=3 load1=3 ext=360%)
+--- cell phylo_pois_sicm (attempt 1) ext_before=360% load=3.52 2026-09-08T20:34:59-05:00
+    OK phylo_pois_sicm repeats (steady state, s): 0.8748, 0.88319, 0.87345, 0.89557, 0.90553 ext_max=561% load1_max=4.52 md5=95aeb90de165d03c09db5736d67951cc
+    (waited 10s; procs_running=3 load1=3 ext=365%)
+--- cell phylo_pois_nosicm (attempt 1) ext_before=365% load=3.72 2026-09-08T20:36:12-05:00
+    OK phylo_pois_nosicm repeats (steady state, s): 24.75872, 21.83243, 23.73405, 22.7509, 22.63382 ext_max=578% load1_max=91.12 md5=95aeb90de165d03c09db5736d67951cc
+end: 2026-09-08T20:39:33-05:00
+md5 at batch end: 95aeb90de165d03c09db5736d67951cc

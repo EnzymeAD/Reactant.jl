@@ -1,4 +1,4 @@
-import time, json, math
+import os, time, json, math
 import jax
 jax.config.update("jax_enable_x64", True)
 import jax.numpy as jnp
@@ -65,15 +65,18 @@ for n in (8, 32, 64, 128, 256):
     key = jax.random.PRNGKey(1)
     out = kernel(key); jax.block_until_ready(out)   # warm/compile
     best = float("inf")
-    for _ in range(8):
+    for _ in range(20):
         t0 = time.perf_counter()
         out = kernel(key); jax.block_until_ready(out)
-        best = min(best, time.perf_counter() - t0)
+        t = time.perf_counter() - t0
+        best = min(best, t)
+        print(f"GENJAX scaledcov n={n} REP wall {t:.6f} s | per-move {t/NUM_STEPS*1e6:.4f} us", flush=True)
     per_move_us = best / NUM_STEPS * 1e6
     results[n] = {"per_move_us": round(per_move_us, 4), "accepts": int(out[2])}
     print(f"n={n:<4} per-move {per_move_us:10.3f} us | accepts {int(out[2])}/1000 | slope={float(out[0]):.4f} tau={float(out[1]):.6f}")
 
-with open("/mnt/sbrantq/probprog/oopsla/evidence/programmable_mh/genjax_baseline_sweep.json", "w") as f:
+GENJAX_MH_OUT = os.environ.get("GENJAX_MH_OUT", "/mnt/sbrantq/probprog/oopsla/evidence/programmable_mh")
+with open(os.path.join(GENJAX_MH_OUT, "genjax_baseline_sweep.json"), "w") as f:
     json.dump({"genjax": "0.10.3", "jax": jax.__version__, "x64": True, "reps": 8,
                "num_iters": NUM_ITERS, "mh_steps": NUM_STEPS, "sweep": results}, f, indent=1)
 print("written genjax_baseline_sweep.json")

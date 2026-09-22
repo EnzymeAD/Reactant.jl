@@ -35,8 +35,12 @@ function heat_config(scale::Int)
         D, T, M_obs = 60, 100, 10    # same T as Row 1, 0.6x D
     elseif scale == 5
         D, T, M_obs = 60, 50, 10     # Cubic-Kernel-(small)-style scale
+    elseif scale == 6
+        D, T, M_obs = 1000, 100, 10  # size sweep 2026-09-10: same T as Row 1, 10x D
+    elseif scale == 7
+        D, T, M_obs = 300, 400, 10   # size sweep 2026-09-10: same D as Row 2, 4x T
     else
-        error("unknown scale $scale (use 0-5)")
+        error("unknown scale $scale (use 0-7)")
     end
     S = 8
     T_final = 0.25                    # total physical simulation time

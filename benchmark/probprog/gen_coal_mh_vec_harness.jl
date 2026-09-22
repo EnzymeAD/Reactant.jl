@@ -44,11 +44,12 @@ end
 Random.seed!(12345)
 hist = kern()
 best = Inf
-for _ in 1:3
+for _ in 1:20
     t = @elapsed begin
         global hist = kern()
     end
     global best = min(best, t)
+    @printf("GENJL-VEC coal REP wall %.6f s | per-move %.4f us\n", t, t / (3 * NUM_SWEEPS) * 1e6)
 end
 smap = argmax(hist) - 1
 @printf("GENJL-VEC coal per-move %.3f us | MAP s = %d | mass[34,46] = %.4f\n",

@@ -1,0 +1,21 @@
+batch tag: batch3
+start: 2026-08-25T01:58:52-05:00
+binary: /mnt/sbrantq/probprog/oopsla/Reactant.jl/deps/ReactantExtra/bazel-bin/libReactantExtra.so
+md5 at batch start: 21a6bd08b37b54d2b8a20d8924a2bbb2
+mtime: 2026-08-24 14:59:21.983624227 -0500
+loadavg at batch start: 7.12 36.21 54.87 21/11261 1639271
+sibling taskset processes: 
+nproc: 192
+--- cell car_spatial_scotland
+  start: 2026-08-25T01:59:00-05:00
+  loadavg before: 7.12 36.21 54.87 15/11266 1639282
+  md5 before: 21a6bd08b37b54d2b8a20d8924a2bbb2
+  end: 2026-08-25T02:01:10-05:00
+  loadavg after: 30.57 37.89 53.32 2/11305 1704498
+  md5 after: 21a6bd08b37b54d2b8a20d8924a2bbb2
+  output dir: ./outputs/2026-08-25_01:59:10
+  script exit: COMMAND_EXIT_CODE="0"
+--- cell car_spatial_nyc
+  start: 2026-08-25T02:01:18-05:00
+  loadavg before: 26.34 36.74 52.78 3/11296 1704595
+  md5 before: 21a6bd08b37b54d2b8a20d8924a2bbb2

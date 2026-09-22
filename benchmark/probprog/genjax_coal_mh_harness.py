@@ -47,10 +47,12 @@ def kernel(key):
 key = jax.random.PRNGKey(12345)
 hist = kernel(key); jax.block_until_ready(hist)
 best = float("inf")
-for _ in range(3):
+for _ in range(20):
     t0 = time.perf_counter()
     hist = kernel(key); jax.block_until_ready(hist)
-    best = min(best, time.perf_counter() - t0)
+    t = time.perf_counter() - t0
+    best = min(best, t)
+    print(f"GENJAX coal REP wall {t:.6f} s | per-move {t/(3*NUM_SWEEPS)*1e6:.4f} us", flush=True)
 hist = jax.device_get(hist)
 smap = int(hist.argmax())
 mass = float(hist[34:47].sum() / hist.sum())

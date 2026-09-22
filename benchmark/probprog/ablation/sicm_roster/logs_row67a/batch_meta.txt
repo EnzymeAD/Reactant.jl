@@ -1,0 +1,21 @@
+batch tag: row67a
+start: 2026-08-25T13:13:54-05:00
+binary: /mnt/sbrantq/probprog/oopsla/Reactant.jl/deps/ReactantExtra/bazel-bin/libReactantExtra.so
+md5 at batch start: 21a6bd08b37b54d2b8a20d8924a2bbb2
+mtime: 2026-08-24 14:59:21.983624227 -0500
+loadavg at batch start: 9.73 26.98 22.87 9/13474 2715394
+sibling taskset processes: 
+nproc: 192
+--- cell pgls
+  start: 2026-08-25T13:14:04-05:00
+  loadavg before: 9.73 26.98 22.87 9/13569 2715495
+  md5 before: 21a6bd08b37b54d2b8a20d8924a2bbb2
+  end: 2026-08-25T13:15:30-05:00
+  loadavg after: 43.91 35.04 26.12 7/13096 2731537
+  md5 after: 21a6bd08b37b54d2b8a20d8924a2bbb2
+  output dir: ./outputs/2026-08-25_13:14:15
+  script exit: COMMAND_EXIT_CODE="0"
+--- cell sar_boston
+  start: 2026-08-25T13:15:39-05:00
+  loadavg before: 45.32 35.68 26.43 8/13097 2733000
+  md5 before: 21a6bd08b37b54d2b8a20d8924a2bbb2

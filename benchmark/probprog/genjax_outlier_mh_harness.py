@@ -53,10 +53,12 @@ def kernel(key):
 key = jax.random.PRNGKey(777)
 out = kernel(key); jax.block_until_ready(out)
 best = float("inf")
-for _ in range(3):
+for _ in range(20):
     t0 = time.perf_counter()
     out = kernel(key); jax.block_until_ready(out)
-    best = min(best, time.perf_counter() - t0)
+    t = time.perf_counter() - t0
+    best = min(best, t)
+    print(f"GENJAX outlier REP wall {t:.6f} s | per-move {t/MOVES*1e6:.4f} us", flush=True)
 slope, flags = jax.device_get(out[0]), np.array(jax.device_get(out[1]))
 idx = ",".join(str(i + 1) for i in np.where(flags > 0.5)[0])
 print(f"GENJAX outlier per-move {best/MOVES*1e6:.3f} us | slope = {float(slope):.3f} | flags = {idx}")

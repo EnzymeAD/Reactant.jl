@@ -1,0 +1,41 @@
+{
+  "model": {
+    "class": "gp_pois_regr_scaled.GPPoisRegrScaled",
+    "args": {
+      "n": 200,
+      "rho": 0.15
+    },
+    "seed": 12345
+  },
+  "iterations": 500,
+  "num_warmup": 200,
+  "trials": 4,
+  "ppls": [
+    {
+      "name": "impulse",
+      "inference": {
+        "class": "inference.MCMC",
+        "infer_args": {
+          "step_size": 0.05,
+          "max_tree_depth": 10,
+          "adapt_step_size": true,
+          "adapt_mass_matrix": true,
+          "no_opt": true,
+          "disable_sicm": true,
+          "disable_licm": true
+        }
+      },
+      "legend": {
+        "name": "Impulse (no pre-opt)",
+        "color": "#f4a582"
+      },
+      "trials": 4,
+      "seed": 20260822
+    }
+  ],
+  "save_samples": true,
+  "figures": {
+    "generate_pll": true,
+    "suffix": "png"
+  }
+}

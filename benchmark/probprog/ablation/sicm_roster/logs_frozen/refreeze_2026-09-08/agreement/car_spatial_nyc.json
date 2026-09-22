@@ -1,0 +1,31 @@
+{
+ "n_draws": 20,
+ "tol": 1e-08,
+ "per_draw_max_rel_diff": [
+  9.754652346855778e-14,
+  1.3219844802885735e-13,
+  2.2842661261770136e-13,
+  3.310540326858315e-13,
+  3.4094756393187507e-13,
+  2.3072373588442583e-13,
+  2.142887275411454e-13,
+  2.5155631170323653e-13,
+  6.405560717727925e-13,
+  4.3529344196304433e-13,
+  3.7180804972130324e-13,
+  3.780350128513501e-13,
+  2.8798398995091523e-13,
+  5.289121351560536e-13,
+  5.505321332038955e-13,
+  2.5102556436727902e-12,
+  1.1145384675630305e-12,
+  8.736572089382367e-13,
+  7.520662648454475e-13,
+  6.315698561520123e-13
+ ],
+ "matched_prefix": 20,
+ "window_max_rel_diff": 2.5102556436727902e-12,
+ "pass": true,
+ "sicm": "/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/ablation/sicm_roster/logs_frozen/refreeze_2026-09-08/car_spatial_nyc_sicm.out.json",
+ "nosicm": "/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/ablation/sicm_roster/logs_frozen/refreeze_2026-09-08/car_spatial_nyc_nosicm.out.json"
+}
