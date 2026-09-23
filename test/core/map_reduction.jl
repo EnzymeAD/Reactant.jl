@@ -97,6 +97,35 @@ end
     @test @jit(sum(x_ra)) == sum(x)
 end
 
+# The reduction must run in the type `op` accumulates in, not the type `f` returns.
+# Reducing a predicate's `Bool` in `i1` made `sum` a logical `or`, so this returned
+# `true` rather than the count.
+sum_eq1(x) = sum(y -> y == 1, x)
+sum_eq1_dims(x) = sum(y -> y == 1, x; dims=1)
+sum_eq1_init(x) = sum(y -> y == 1, x; init=10)
+
+@testset "reduce over a narrowing map (#3161)" begin
+    x = [1, 1, 2, 1]
+    x_ra = Reactant.to_rarray(x)
+
+    @test @jit(sum_eq1(x_ra)) == sum_eq1(x)
+    @test Reactant.unwrapped_eltype(@jit(sum_eq1(x_ra))) === typeof(sum_eq1(x))
+    @test @jit(sum_eq1_init(x_ra)) == sum_eq1_init(x)
+
+    m = [1 1; 1 2]
+    m_ra = Reactant.to_rarray(m)
+
+    @test Array(@jit(sum_eq1_dims(m_ra))) == sum_eq1_dims(m)
+    @test eltype(Array(@jit(sum_eq1_dims(m_ra)))) === eltype(sum_eq1_dims(m))
+
+    # reductions whose `op` does not widen must keep Base's narrower type
+    b = [true, false, true]
+    b_ra = Reactant.to_rarray(b)
+
+    @test Reactant.unwrapped_eltype(@jit(prod(b_ra))) === typeof(prod(b))
+    @test Reactant.unwrapped_eltype(@jit(maximum(b_ra))) === typeof(maximum(b))
+end
+
 function fntest1(x)
     y = similar(x, 1, 1, 8)
     sum!(y, x)

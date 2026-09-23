@@ -107,7 +107,7 @@ function set_mlir_data!(x::TracedRArray, data)
     return x
 end
 
-function set_mlir_data!(x::Base.ReshapedArray{TracedRNumber{T}}, data) where {T}
+function set_mlir_data!(x::Base.ReshapedArray{<:TracedRNumber{T}}, data) where {T}
     set_mlir_data!(
         parent(x),
         get_mlir_data(@opcall(reshape(TracedRArray{T}(data), size(parent(x))...))),
@@ -116,16 +116,16 @@ function set_mlir_data!(x::Base.ReshapedArray{TracedRNumber{T}}, data) where {T}
 end
 
 function get_ancestor_and_indices(
-    x::Base.ReshapedArray{TracedRNumber{T},N}, indices::Vector{CartesianIndex{N}}
-) where {T,N}
+    x::Base.ReshapedArray{<:TracedRNumber,N}, indices::Vector{CartesianIndex{N}}
+) where {N}
     linear_indices = LinearIndices(size(x))[indices]
     parent_linear_indices = LinearIndices(size(parent(x)))[linear_indices]
     return (parent(x), (parent_linear_indices,))
 end
 
 function get_ancestor_and_indices(
-    x::Base.ReshapedArray{TracedRNumber{T},N}, indices...
-) where {T,N}
+    x::Base.ReshapedArray{<:TracedRNumber,N}, indices...
+) where {N}
     @assert length(indices) == N "Expected $N indices, got $(length(indices))"
     indices = Base.to_indices(x, indices)
     if any(is_traced, indices)
@@ -160,7 +160,7 @@ function get_ancestor_and_indices(
 end
 
 function set_mlir_data!(
-    x::PermutedDimsArray{TracedRNumber{T},N,perm,iperm}, data
+    x::PermutedDimsArray{<:TracedRNumber{T},N,perm,iperm}, data
 ) where {T,N,perm,iperm}
     set_mlir_data!(parent(x), get_mlir_data(permutedims(TracedRArray{T}(data), iperm)))
     return x
@@ -296,10 +296,11 @@ function is_pure(func)
     return true
 end
 
-function make_mlir_fn(
-    f,
-    args,
-    kwargs,
+# The tracing driver is shared; call_with_reactant specializes the traced program.
+Base.@nospecializeinfer function make_mlir_fn(
+    @nospecialize(f),
+    @nospecialize(args),
+    @nospecialize(kwargs),
     name="main",
     concretein=true;
     toscalar=false,
@@ -455,8 +456,9 @@ function make_mlir_fn(
     )
 end
 
-function prepare_mlir_fn_args(
-    args,
+# Reuse MLIR setup across argument types; make_tracer handles each argument.
+Base.@nospecializeinfer function prepare_mlir_fn_args(
+    @nospecialize(args),
     name,
     concretein,
     toscalar,
@@ -625,8 +627,9 @@ function process_linear_args!(linear_args, fnbody, do_transpose, optimize_then_p
     end
 end
 
-function finalize_mlir_fn(
-    result,
+# Return bookkeeping is shared across traced functions and their result types.
+Base.@nospecializeinfer function finalize_mlir_fn(
+    @nospecialize(result),
     traced_args,
     linear_args,
     skipped_args,
@@ -651,7 +654,7 @@ function finalize_mlir_fn(
     num_replicas,
     runtime,
     construct_function_without_args,
-    args,
+    @nospecialize(args),
     N,
     concretein,
     toscalar,

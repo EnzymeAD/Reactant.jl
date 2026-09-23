@@ -310,6 +310,22 @@ function fill(v, ::Tuple{}; location=mlir_stacktrace("fill", @__FILE__, @__LINE_
 end
 
 function fill(
+    v::TracedRNumber{T},
+    dims::NTuple{N,Integer};
+    location=mlir_stacktrace("fill", @__FILE__, @__LINE__),
+) where {N,T}
+    return fill(v, collect(Int64, dims); location)::TracedRArray{T,N}
+end
+
+function fill(
+    v::TracedRNumber{T},
+    dims::Tuple{};
+    location=mlir_stacktrace("fill", @__FILE__, @__LINE__),
+) where {T}
+    return fill(v, collect(Int64, dims); location)::TracedRArray{T,0}
+end
+
+function fill(
     number::TracedRNumber{T},
     shape::Vector{Int};
     location=mlir_stacktrace("fill", @__FILE__, @__LINE__),
@@ -355,7 +371,7 @@ function _fill_element_attr(x::Complex)
 end
 
 @noinline function concatenate(
-    inputs::Vector{TracedRArray{T,N}},
+    inputs::Vector{<:TracedRArray{T,N}},
     dimension::Int;
     location=mlir_stacktrace("fill", @__FILE__, @__LINE__),
 ) where {T,N}
@@ -869,7 +885,7 @@ end
 end
 
 function bitcast_convert(
-    ::Type{TracedRArray{U,N}},
+    ::Type{<:TracedRArray{U,N}},
     x::TracedRArray{T,N};
     location=mlir_stacktrace("bitcast_convert", @__FILE__, @__LINE__),
 ) where {T,U,N}
@@ -1499,6 +1515,7 @@ end
     x::TracedRArray{T,N},
     k::Integer;
     dimension::Integer=N,
+    is_stable::Bool=false,
     location=mlir_stacktrace("top_k", @__FILE__, @__LINE__),
 ) where {T,N}
     @assert 1 <= dimension <= N
@@ -1521,7 +1538,13 @@ end
     rsize = [size(x)[1:(end - 1)]..., k]
     values = mlir_type(TracedRArray{T,N}, rsize)
     indices = mlir_type(TracedRArray{Int32,N}, rsize)
-    op = chlo.top_k(x.mlir_data; values, indices, k, location)
+    # is_stable=false lets XLA:GPU dispatch eligible shapes to
+    # raft::matrix::select_k instead of full sort + slice (issue #886); the
+    # debug option that used to force this is gone upstream and the raft path
+    # is only taken for top_k ops declared unstable.
+    op = chlo.top_k(
+        x.mlir_data; values, indices, k, is_stable=MLIR.IR.Attribute(is_stable), location
+    )
     indices = add(
         TracedRArray{Int32,N}((), MLIR.IR.result(op, 2), rsize),
         fill(Int32(1), Tuple(rsize)),
@@ -1738,7 +1761,7 @@ end
 end
 
 @noinline function rng_bit_generator(
-    ::Type{TracedRNumber{T}}, seed::TracedRArray{UInt64,1}, shape; kwargs...
+    ::Type{<:TracedRNumber{T}}, seed::TracedRArray{UInt64,1}, shape; kwargs...
 ) where {T}
     return rng_bit_generator(T, seed, shape; kwargs...)
 end
@@ -1798,7 +1821,7 @@ end
 end
 
 @noinline function randn(
-    ::Type{TracedRNumber{T}}, seed::TracedRArray{UInt64,1}, shape; kwargs...
+    ::Type{<:TracedRNumber{T}}, seed::TracedRArray{UInt64,1}, shape; kwargs...
 ) where {T}
     return randn(T, seed, shape; kwargs...)
 end
@@ -1841,7 +1864,7 @@ distribution with rate 1. Returns a NamedTuple with the following fields:
 end
 
 @noinline function randexp(
-    ::Type{TracedRNumber{T}}, seed::TracedRArray{UInt64,1}, shape; kwargs...
+    ::Type{<:TracedRNumber{T}}, seed::TracedRArray{UInt64,1}, shape; kwargs...
 ) where {T}
     return randexp(T, seed, shape; kwargs...)
 end
@@ -1923,7 +1946,7 @@ end
 
 # eltype conversion
 @noinline function convert(
-    ::Type{TracedRArray{T,N}},
+    ::Type{<:TracedRArray{T,N}},
     x::TracedRArray;
     location=mlir_stacktrace("convert", @__FILE__, @__LINE__),
 ) where {T,N}
@@ -1940,7 +1963,7 @@ end
 end
 
 @noinline function convert(
-    ::Type{TracedRNumber{T}},
+    ::Type{<:TracedRNumber{T}},
     x::TracedRNumber;
     location=mlir_stacktrace("convert", @__FILE__, @__LINE__),
 ) where {T}
@@ -2166,7 +2189,7 @@ end
 
 @noinline function scatter(
     f::F,
-    dest::Vector{TracedRArray{T,N}},
+    dest::Vector{<:TracedRArray{T,N}},
     scatter_indices::TracedRArray{Int64},
     updates::Vector{<:TracedRArray{T}};
     location=mlir_stacktrace("scatter", @__FILE__, @__LINE__),
@@ -2195,7 +2218,7 @@ end
 end
 
 @noinline function scatter(
-    dest::Vector{TracedRArray{T,N}},
+    dest::Vector{<:TracedRArray{T,N}},
     scatter_indices::TracedRArray{TI},
     updates::Vector{<:TracedRArray{T}};
     update_computation::MLIR.IR.Region,
@@ -2420,26 +2443,18 @@ end
     end
 
     if checkpointing isa ReactantCore.Periodic
+        MLIR.IR.setattr!(while_op, "enzyme.enable_checkpointing", MLIR.IR.Attribute(true))
         MLIR.IR.setattr!(
-            while_op, "enzymexla.enable_checkpointing", MLIR.IR.Attribute(true)
-        )
-        MLIR.IR.setattr!(
-            while_op, "enzymexla.checkpoint_period", MLIR.IR.Attribute(checkpointing.n)
+            while_op, "enzyme.checkpoint_period", MLIR.IR.Attribute(checkpointing.n)
         )
     elseif checkpointing isa ReactantCore.Binomial
+        MLIR.IR.setattr!(while_op, "enzyme.enable_checkpointing", MLIR.IR.Attribute(true))
+        MLIR.IR.setattr!(while_op, "enzyme.binomial_checkpointing", MLIR.IR.UnitAttribute())
         MLIR.IR.setattr!(
-            while_op, "enzymexla.enable_checkpointing", MLIR.IR.Attribute(true)
-        )
-        MLIR.IR.setattr!(
-            while_op, "enzymexla.binomial_checkpointing", MLIR.IR.UnitAttribute()
-        )
-        MLIR.IR.setattr!(
-            while_op, "enzymexla.checkpoint_period", MLIR.IR.Attribute(checkpointing.budget)
+            while_op, "enzyme.checkpoint_period", MLIR.IR.Attribute(checkpointing.budget)
         )
     elseif checkpointing === true
-        MLIR.IR.setattr!(
-            while_op, "enzymexla.enable_checkpointing", MLIR.IR.Attribute(true)
-        )
+        MLIR.IR.setattr!(while_op, "enzyme.enable_checkpointing", MLIR.IR.Attribute(true))
     end
 
     return map(enumerate(linear_args)) do (i, arg)
@@ -2875,11 +2890,36 @@ end
                 Reactant.TracedUtils.set!(
                     args, path[2:end], MLIR.IR.result(if_compiled, residx)
                 )
+            else
+                check_untraced_branch_state(
+                    target, tb_traced_args, fb_traced_args, path[2:end]
+                )
             end
         end
     end
 
     return corrected_traced_results
+end
+
+# An untraced location in a mutable argument (e.g. a struct field holding a plain number)
+# has nothing the `if` result can be written back into, so a branch that assigned it a new
+# value would be a silent no-op. Note this only inspects collected result paths: a leaf the
+# tracing machinery never tracks cannot be detected here.
+function check_untraced_branch_state(target, tb_traced_args, fb_traced_args, path)
+    for branch_args in (tb_traced_args, fb_traced_args)
+        leaf = branch_args
+        for p in path
+            leaf = Reactant.Compiler.traced_getfield(leaf, p)
+        end
+        leaf === target && continue
+        error(
+            "if_condition: a branch assigned a value of type $(typeof(leaf)) to an untraced \
+             location holding $(repr(target)) (path $(path)); the assignment cannot be \
+             carried out of the branch. Make the initial value traced before the `if`, e.g. \
+             with `Reactant.ReactantCore.promote_to_traced`.",
+        )
+    end
+    return nothing
 end
 
 """
@@ -3967,8 +4007,8 @@ end
 
 @noinline function reduce_window(
     f::F,
-    inputs::Vector{TracedRArray{T,N}},
-    init_values::Vector{TracedRNumber{T}};
+    inputs::Vector{<:TracedRArray{T,N}},
+    init_values::Vector{<:TracedRNumber{T}};
     window_dimensions::Vector{Int},
     window_strides::Vector{Int},
     base_dilations::Vector{Int},

@@ -93,6 +93,7 @@ function all_reduce(
     tensor::Value;
     result=nothing::Union{Nothing,IR.Type},
     reduction_axes,
+    reduction_op=nothing,
     out_sharding,
     location=Location(),
 )
@@ -105,6 +106,8 @@ function all_reduce(
         NamedAttribute("out_sharding", out_sharding),
     ]
     !isnothing(result) && push!(op_ty_results, result)
+    !isnothing(reduction_op) &&
+        push!(attributes, NamedAttribute("reduction_op", reduction_op))
 
     return create_operation(
         "sdy.all_reduce",
@@ -641,6 +644,7 @@ function reduce_scatter(
     tensor::Value;
     result=nothing::Union{Nothing,IR.Type},
     reduce_scatter_axes,
+    reduction_op=nothing,
     out_sharding,
     location=Location(),
 )
@@ -653,6 +657,8 @@ function reduce_scatter(
         NamedAttribute("out_sharding", out_sharding),
     ]
     !isnothing(result) && push!(op_ty_results, result)
+    !isnothing(reduction_op) &&
+        push!(attributes, NamedAttribute("reduction_op", reduction_op))
 
     return create_operation(
         "sdy.reduce_scatter",

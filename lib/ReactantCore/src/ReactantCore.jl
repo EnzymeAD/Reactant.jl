@@ -732,6 +732,8 @@ function trace_if(expr; store_last_line=nothing, depth=0, track_numbers)
 
     all_vars = unique(all_input_vars ∪ all_output_vars)
 
+    result_sym = gensym(:if_result)
+
     true_branch_fn = :(
         (args,) -> begin
             $([:($v = if hasproperty(args, $(QuoteNode(v)))
@@ -739,8 +741,8 @@ function trace_if(expr; store_last_line=nothing, depth=0, track_numbers)
                     else
                         $(MissingTracedValue)()
                     end) for v in all_vars]...)
-            $(true_block)
-            return ($(all_output_vars...),)
+            $(result_sym) = $(true_block)
+            return ($(result_sym), $(all_output_vars...))
         end
     )
     true_branch_fn = cleanup_expr_to_avoid_boxing(
@@ -755,8 +757,8 @@ function trace_if(expr; store_last_line=nothing, depth=0, track_numbers)
                     else
                         $(MissingTracedValue)()
                     end) for v in all_vars]...)
-            $(false_block)
-            return ($(all_output_vars...),)
+            $(result_sym) = $(false_block)
+            return ($(result_sym), $(all_output_vars...))
         end
     )
     false_branch_fn = cleanup_expr_to_avoid_boxing(
@@ -776,13 +778,14 @@ function trace_if(expr; store_last_line=nothing, depth=0, track_numbers)
     reactant_code_block = quote
         $(true_branch_fn)
         $(false_branch_fn)
-        ($(all_output_vars...),) = $(traced_if)(
+        ($(result_sym), $(all_output_vars...)) = $(traced_if)(
             $(cond_name),
             $(true_branch_fn_name),
             $(false_branch_fn_name),
             $(args_expr);
             track_numbers=($(track_numbers)),
         )
+        $(result_sym)
     end
 
     non_reactant_code_block = Expr(:if, cond_name, original_expr.args[2])
@@ -798,7 +801,7 @@ function trace_if(expr; store_last_line=nothing, depth=0, track_numbers)
             $(cond_name) = $(cond_expr)
             $(reactant_code_block)
         end,
-        (true_branch_fn_name, false_branch_fn_name),
+        (true_branch_fn_name, false_branch_fn_name, result_sym),
         all_check_vars,
     )
 
@@ -893,7 +896,7 @@ end
 """
     materialize_traced_array(AbstractArray{<:TracedRNumber})::TracedRArray
 
-Given an AbstractArray{TracedRNumber}, return or create an equivalent TracedRArray.
+Given an AbstractArray{<:TracedRNumber}, return or create an equivalent TracedRArray.
 
 """
 function materialize_traced_array end

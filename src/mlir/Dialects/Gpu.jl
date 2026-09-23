@@ -165,10 +165,13 @@ end
 """
 `barrier`
 
-The `barrier` op synchronizes all work items of a workgroup. It is used
-to coordinate communication between the work items of the workgroup.
+The `barrier` op synchronizes work items within the specified execution
+scope. By default, the scope is `workgroup`, synchronizing all work items
+in a workgroup.
 
 ```mlir
+// Synchronize all work items in the workgroup, making all prior
+// memory accesses visible.
 gpu.barrier
 ```
 
@@ -178,17 +181,35 @@ visible to all work items in the workgroup. Data hazards between work items
 accessing the same memory can be avoided by synchronizing work items
 in-between these accesses.
 
-If the `memfence` attribute is specified, the set of memory accesses that must
-by completed after the barrier resolves is limited to only those accesses that
-read from or write to the specified address spaces (though accesses to other
-address spaces may be completed as well, especially if a particular combination
-of address spaces is not supported on a given backend). In particular,
-specifying `memfence []` creates a barrier that is not required to affect
-the visibility of any memory operations and is purely used for synchronizing
-work items.
+The `scope` attribute controls the execution scope of the barrier:
 
 ```mlir
-// Only workgroup address spaces accesses required to be visible.
+// Synchronize within a subgroup (warp/wavefront).
+gpu.barrier scope <subgroup>
+// Synchronize within a cluster.
+gpu.barrier scope <cluster>
+```
+
+A `named` barrier allows synchronizing a specific subset of subgroups
+that have been associated with a named barrier handle. Named barriers
+require workgroup scope.
+
+```mlir
+// Initialize a named barrier for 4 participating members.
+%nb = gpu.initialize_named_barrier %c4 : i32 -> !gpu.named_barrier
+// Wait on the named barrier.
+gpu.barrier named(%nb : !gpu.named_barrier)
+```
+
+If the `memfence` attribute is specified, the set of memory accesses that
+must be completed after the barrier resolves is limited to only those
+accesses that read from or write to the specified address spaces. In
+particular, specifying `memfence []` creates a barrier that is not required
+to affect the visibility of any memory operations and is purely used for
+synchronizing work items.
+
+```mlir
+// Only workgroup address space accesses required to be visible.
 gpu.barrier memfence [#gpu.address_space<workgroup>]
 // No memory accesses required to be visible.
 gpu.barrier memfence []
@@ -196,17 +217,38 @@ gpu.barrier memfence []
 gpu.barrier
 ```
 
-Either none or all work items of a workgroup need to execute this op
-in convergence.
+The three clauses can be combined in any order, but not all combinations may
+be supported on a given target:
+
+```mlir
+// Named barrier with a workgroup-only memory fence.
+gpu.barrier named(%nb : !gpu.named_barrier) memfence [#gpu.address_space<workgroup>]
+// Subgroup barrier with a global fence.
+gpu.barrier memfence [#gpu.address_space<global>] scope <subgroup>
+```
+
+Once one thread of execution in a given scope (say, thread in a workgroup)
+has executed a particular dynamic instance of `gpu.barrier`, all other threads
+in that scope are required to execute the same dynamic instance of `gpu.barrier`
+before any thread executes any other instance of it. That is, you cannot, for
+example, have the two subgroups of a workgroup arrive at `gpu.barrier` ops in
+different branches of an if statement and have this work.
 """
-function barrier(; address_spaces=nothing, location=Location())
+function barrier(
+    named_barrier=nothing::Union{Nothing,Value};
+    address_spaces=nothing,
+    scope=nothing,
+    location=Location(),
+)
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(named_barrier) && push!(operands, named_barrier)
     !isnothing(address_spaces) &&
         push!(attributes, NamedAttribute("address_spaces", address_spaces))
+    !isnothing(scope) && push!(attributes, NamedAttribute("scope", scope))
 
     return create_operation(
         "gpu.barrier",
@@ -1419,6 +1461,39 @@ function host_unregister(value::Value; location=Location())
 end
 
 """
+`initialize_named_barrier`
+
+Initializes a named barrier object with the given number of participating
+members (subgroups) and returns a handle to it. All members that will
+synchronize on this barrier must be accounted for in the count.
+
+```mlir
+%nb = gpu.initialize_named_barrier %num_members : i32 -> !gpu.named_barrier
+```
+"""
+function initialize_named_barrier(
+    member_count::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[member_count,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(result) && push!(op_ty_results, result)
+
+    return create_operation(
+        "gpu.initialize_named_barrier",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
 `lane_id`
 
 Returns the lane id within the subgroup (warp/wave).
@@ -1470,13 +1545,21 @@ to have the `gpu.container_module` attribute. The `gpu.launch_func`
 operation has a symbol attribute named `kernel` to identify the fully
 specified kernel function to launch (both the gpu.module and func).
 
-The `gpu.launch_func` supports async dependencies: the kernel does not start
+By default, the host implicitly blocks until kernel execution has completed.
+
+Otherwise, the operation supports two async models.
+
+The first one is dependency-based and is enabled when the `async` keyword is
+present in text form, and corresponds to when the operation produces the
+optional token result of type `!gpu.async.token`. Other async GPU ops can
+take this token as dependency. In this case, the `gpu.launch_func` does not
+block, and supports specifying async dependencies: the kernel does not start
 executing until the ops producing those async dependencies have completed.
 
-By the default, the host implicitly blocks until kernel execution has
-completed. If the `async` keyword is present, the host does not block but
-instead a `!gpu.async.token` is returned. Other async GPU ops can take this
-token as dependency.
+The second async model is stream-based. When `asyncObject` is present, the
+launch operation is queued to execute on the queue represented by it.
+
+The two async models are mutually exclusive.
 
 The operation requires at least the grid and block sizes along the x,y,z
 dimensions as arguments. When a lower-dimensional kernel is required,
@@ -1633,14 +1716,10 @@ end
 `launch`
 
 Launch a kernel on the specified grid of thread blocks. The body of the
-kernel is defined by the single region that this operation contains. The
-operation takes an optional list of async dependencies followed by six
-operands and an optional operand.
+kernel is defined by the single region that this operation contains.
 
-The `async` keyword indicates the kernel should be launched asynchronously;
-the operation returns a new !gpu.async.token when the keyword is specified.
-The kernel launched does not start executing until the ops producing its
-async dependencies (optional operands) have completed.
+The async execution model is equivalent to the `gpu.launch_func` op, refer
+to its description.
 
 The first three operands (following any async dependencies) are grid sizes
 along the x,y,z dimensions and the following three are block sizes along the
@@ -1759,6 +1838,7 @@ function launch(
     clusterSizeY=nothing::Union{Nothing,Value},
     clusterSizeZ=nothing::Union{Nothing,Value},
     dynamicSharedMemorySize=nothing::Union{Nothing,Value},
+    asyncObject=nothing::Union{Nothing,Value},
     asyncToken=nothing::Union{Nothing,IR.Type},
     cooperative=nothing,
     module_=nothing,
@@ -1784,6 +1864,7 @@ function launch(
     !isnothing(clusterSizeY) && push!(operands, clusterSizeY)
     !isnothing(clusterSizeZ) && push!(operands, clusterSizeZ)
     !isnothing(dynamicSharedMemorySize) && push!(operands, dynamicSharedMemorySize)
+    !isnothing(asyncObject) && push!(operands, asyncObject)
     push!(
         attributes,
         operandsegmentsizes([
@@ -1798,6 +1879,7 @@ function launch(
             Int(!isnothing(clusterSizeY)),
             Int(!isnothing(clusterSizeZ)),
             Int(!isnothing(dynamicSharedMemorySize)),
+            Int(!isnothing(asyncObject)),
         ]),
     )
     !isnothing(asyncToken) && push!(op_ty_results, asyncToken)

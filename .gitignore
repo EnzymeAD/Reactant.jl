@@ -255,6 +255,9 @@ Manifest-v*.toml
 .CondaPkg
 LocalPreferences.toml
 
+# JLD2
+*.jld
+
 .vscode/*
 .vscode/settings.json
 !.vscode/tasks.json

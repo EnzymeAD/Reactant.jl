@@ -19,7 +19,7 @@ function warmup_program(
     num_warmup::Int,
     num_samples::Int,
 )
-    samples, diagnostics, _, state = ProbProg.mcmc_logpdf(
+    samples, diagnostics, _, _, state = ProbProg.mcmc_logpdf(
         rng,
         logpdf_fn,
         initial_position;
@@ -45,7 +45,7 @@ function continuation_program(
     state_inverse_mass_matrix,
     num_samples::Int,
 )
-    samples, diagnostics, _, state = ProbProg.mcmc_logpdf(
+    samples, diagnostics, _, _, state = ProbProg.mcmc_logpdf(
         ReactantRNG(state_rng),
         logpdf_fn,
         state_position;
@@ -73,7 +73,7 @@ function continuation_with_state_program(
     state_inverse_mass_matrix,
     num_samples::Int,
 )
-    samples, diagnostics, _, state = ProbProg.mcmc_logpdf(
+    samples, diagnostics, _, _, state = ProbProg.mcmc_logpdf(
         ReactantRNG(state_rng),
         logpdf_fn,
         state_position;
@@ -100,7 +100,7 @@ function combined_program(
     num_warmup::Int,
     num_samples::Int,
 )
-    samples, diagnostics, _, _ = ProbProg.mcmc_logpdf(
+    samples, diagnostics, _, _, _ = ProbProg.mcmc_logpdf(
         rng,
         logpdf_fn,
         initial_position;

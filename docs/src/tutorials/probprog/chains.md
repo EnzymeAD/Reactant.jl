@@ -89,14 +89,14 @@ samples, state = ProbProg.run_chain(state, logpdf_fn;
 )
 
 # Or trace-based:
-trace, diag, _, state = ProbProg.mcmc(
+trace, diag, log_densities, _, state = ProbProg.mcmc(
     state, trace, model, args...;
     selection = ProbProg.select(ProbProg.Address(:θ)),
     num_samples = 500,
 )
 
 # Or logpdf-based:
-samples, diag, _, state = ProbProg.mcmc_logpdf(
+samples, diag, log_densities, _, state = ProbProg.mcmc_logpdf(
     state, logpdf_fn, args...;
     num_samples = 500,
 )

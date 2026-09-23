@@ -5,6 +5,7 @@ permissions:
   statuses: read
   deployments: write # deployments permission to deploy GitHub pages website
   pull-requests: write
+  issues: write
 
 on:
   schedule:
@@ -126,7 +127,10 @@ jobs:
       - uses: julia-actions/setup-julia@v3
         with:
           version: "1.11"
-      - uses: julia-actions/cache@v3
+      - uses: julia-actions/cache@v3.2.0
+        with:
+          gcp-bucket: ${{ contains(matrix.os, 'linux') && 'enzyme-ci-transient' || '' }}
+          key-prefix: reactantjl_benchmark/
       - name: "Instantiate benchmarks environment"
         run: |
           julia --color=yes --project=benchmark/${{ matrix.suite }} -e 'using Pkg; Pkg.instantiate()'
@@ -151,7 +155,7 @@ jobs:
       - uses: julia-actions/setup-julia@v3
         with:
           version: "1"
-      - uses: julia-actions/cache@v3
+      - uses: julia-actions/cache@v3.2.0
       - uses: actions/download-artifact@v8
         with:
           pattern: benchmark-results-*

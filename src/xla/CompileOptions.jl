@@ -41,7 +41,6 @@ function get_debug_options(; kwargs...)
     # default overrides. can we changed by the user by passing in kwargs
     @set! debug_options.xla_gpu_cuda_data_dir = CUDA_DATA_DIR[]
     @set! debug_options.xla_enable_enzyme_comms_opt = true
-    @set! debug_options.xla_gpu_experimental_use_raft_select_k = true
 
     if Reactant.PersistentCompileCache.kernel_cache_enabled()
         @set! debug_options.xla_gpu_kernel_cache_file = Reactant.PersistentCompileCache.get_kernel_cache_path()

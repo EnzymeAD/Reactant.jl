@@ -34,8 +34,15 @@ genrule(
         "@xla//xla:xla_data.proto",
         "@xla//xla:autotuning.proto",
         "@xla//xla:autotune_results.proto",
+        "@xla//xla/service:buffer_assignment.proto",
+        "@xla//xla/service:gpu_topology.proto",
         "@xla//xla/service:hlo.proto",
         "@xla//xla/service:metrics.proto",
+        "@xla//xla/service:shaped_slice.proto",
+        "@xla//xla/service/cpu:executable.proto",
+        "@xla//xla/backends/cpu:xnn_fusion_options.proto",
+        "@xla//xla/backends/cpu:ynn_fusion_options.proto",
+        "@xla//xla/backends/cpu/runtime:thunk.proto",
         "@xla//xla/pjrt/proto:execute_options.proto",
         "@xla//xla/pjrt/proto:compile_options.proto",
         "@xla//xla/stream_executor:device_description.proto",
@@ -84,6 +91,8 @@ genrule(
         mkdir -p $$STAGING/xla
         mkdir -p $$STAGING/xla/pjrt/proto
         mkdir -p $$STAGING/xla/service
+        mkdir -p $$STAGING/xla/service/cpu
+        mkdir -p $$STAGING/xla/backends/cpu/runtime
         mkdir -p $$STAGING/xla/stream_executor/cuda
         mkdir -p $$STAGING/xla/stream_executor/sycl
         mkdir -p $$STAGING/xla/backends/autotuner
@@ -99,8 +108,14 @@ genrule(
                 # Handle well-known types from @com_google_protobuf
                 mkdir -p $$STAGING/google/protobuf
                 cp $$src $$STAGING/google/protobuf/
+            elif echo "$$src" | grep -q "xla/service/cpu/"; then
+                cp $$src $$STAGING/xla/service/cpu/
             elif echo "$$src" | grep -q "xla/service/"; then
                 cp $$src $$STAGING/xla/service/
+            elif echo "$$src" | grep -q "xla/backends/cpu/runtime/"; then
+                cp $$src $$STAGING/xla/backends/cpu/runtime/
+            elif echo "$$src" | grep -q "xla/backends/cpu/"; then
+                cp $$src $$STAGING/xla/backends/cpu/
             elif echo "$$src" | grep -q "xla/pjrt/proto/"; then
                 cp $$src $$STAGING/xla/pjrt/proto/
             elif echo "$$src" | grep -q "xla/stream_executor/cuda/"; then
@@ -1141,12 +1156,14 @@ cc_library(
             "-Wl,-exported_symbol,_InitializePjrtPlugin",
             "-Wl,-exported_symbol,_MakeClientUsingPluginAPI",
             "-Wl,-exported_symbol,_MakeClientFromApi",
+            "-Wl,-exported_symbol,_GetCpuPjrtApi",
             "-Wl,-exported_symbol,_ClientNumDevices",
             "-Wl,-exported_symbol,_ClientNumAddressableDevices",
             "-Wl,-exported_symbol,_ClientProcessIndex",
             "-Wl,-exported_symbol,_ClientGetDevice",
             "-Wl,-exported_symbol,_ClientGetAddressableDevice",
             "-Wl,-exported_symbol,_PjRtDeviceGetAllocatorStats",
+            "-Wl,-exported_symbol,_PjRtDeviceClearMemoryStats",
             "-Wl,-exported_symbol,_ExecutableFree",
             "-Wl,-exported_symbol,_BufferToDevice",
             "-Wl,-exported_symbol,_BufferToClient",
@@ -1160,7 +1177,11 @@ cc_library(
             "-Wl,-exported_symbol,_FreeClient",
             "-Wl,-exported_symbol,_ClientCompile",
             "-Wl,-exported_symbol,_ClientCompileWithProto",
+            "-Wl,-exported_symbol,_PjRtLoadedExecutableSerialize",
+            "-Wl,-exported_symbol,_PjRtClientLoadSerializedExecutable",
+            "-Wl,-exported_symbol,_PjRtLoadedExecutableGetCompiledMemoryStats",
             "-Wl,-exported_symbol,_ConvertLLVMStrToMLIR",
+            "-Wl,-exported_symbol,_ConvertLLVMBCToMLIR",
             "-Wl,-exported_symbol,_LinkInModule",
             "-Wl,-exported_symbol,_FreeFuture",
             "-Wl,-exported_symbol,_FutureIsReady",
@@ -1300,6 +1321,7 @@ cc_library(
         "@llvm-project//mlir:LLVMIRToLLVMTranslation",
         "@llvm-project//mlir:LLVMIRToNVVMTranslation",
         "@llvm-project//mlir:LLVMIRTransforms",
+        "@llvm-project//llvm:BitReader",
         "@llvm-project//llvm:IRReader",
         "@llvm-project//llvm:Support",
         "@llvm-project//llvm:AArch64AsmParser",
@@ -1391,8 +1413,9 @@ cc_library(
 
         # Broken upstream x/ref https://github.com/jax-ml/jax/issues/33344
         # "@jax//jaxlib/mosaic:tpu_dialect_capi_objects",
-        "@jax//jaxlib/triton:triton_dialect_capi_objects",
+        "@enzyme_ad//src/enzyme_ad/jax:triton_dialect_capi_objects",
         "@xla//xla/pjrt/plugin/xla_cpu:xla_cpu_pjrt_client",
+        "@xla//xla/pjrt/c:pjrt_c_api_cpu_internal",
         "@stablehlo//:linalg_passes",
         "@stablehlo//:tosa_passes",
         "@stablehlo//:stablehlo_passes",
@@ -1803,9 +1826,8 @@ gentbl_cc_library(
         ),
     ],
     tblgen = "//:mlir-jl-tblgen",
-    td_file = "@jax//jaxlib/triton:triton.td",
+    td_file = "@triton//:include/triton/Dialect/Triton/IR/TritonOps.td",
     deps = [
-        "@llvm-project//mlir:OpBaseTdFiles",
         "@triton//:td_files",
     ],
 )
@@ -1937,6 +1959,24 @@ gentbl_cc_library(
     ],
 )
 
+gentbl_cc_library(
+    name = "CommJLIncGen",
+    tbl_outs = [
+        (
+            [
+                "--generator=jl-op-defs",
+                "--disable-module-wrap=0",
+            ],
+            "Comm.jl",
+        ),
+    ],
+    tblgen = "//:mlir-jl-tblgen",
+    td_file = "@enzyme_ad//src/enzyme_ad/jax/Dialect/Comm:Ops.td",
+    deps = [
+        "@enzyme_ad//src/enzyme_ad/jax/Dialect/Comm:CommDialectTdFiles",
+    ],
+)
+
 genrule(
     name = "libMLIR_h.jl",
     srcs = [
@@ -1957,9 +1997,9 @@ genrule(
         "@stablehlo//:stablehlo/integrations/c/StablehloDialectApi.h",
         "@stablehlo//:stablehlo/integrations/c/StablehloTypes.h",
         "@shardy//shardy/integrations/c:attributes.h",
-        "@jax//jaxlib/triton:triton_dialect_capi.h",
+        "@enzyme_ad//src/enzyme_ad/jax:Integrations/c/triton_dialect_capi.h",
         "@jax//jaxlib/mosaic:dialect/tpu/integrations/c/tpu_dialect.h",
-        "@jax//jaxlib/mosaic:dialect/tpu/integrations/c/tpu_passes.capi.h.inc",
+        # "@jax//jaxlib/mosaic:dialect/tpu/integrations/c/tpu_passes.capi.h.inc",
         "@jax//jaxlib/mosaic/dialect/gpu:integrations/c/attributes.h",
         "@jax//jaxlib/mosaic/dialect/gpu:integrations/c/gpu_dialect.h",
         "@enzyme_ad//src/enzyme_ad/jax:Integrations/c/EnzymeXLA.h",
@@ -1973,7 +2013,7 @@ genrule(
         "//:make.jl",
     ],
     outs = ["libMLIR_h.jl"],
-    cmd = "$$JULIA \"--color=yes\" \"--project=$(location //:Project.toml)\" \"$(location //:make.jl)\" \"--extract-api\" \"$(location @llvm-project//mlir:include/mlir-c/Bindings/Python/Interop.h)\" \"$(location @llvm-project//llvm:include/llvm-c/Support.h)\" \"$(locations @llvm-project//mlir:ConversionPassIncGen_filegroup)\" \"$(location @stablehlo//:stablehlo/integrations/c/StablehloAttributes.h)\" \"$(location @shardy//shardy/integrations/c:attributes.h)\" \"$(location @jax//jaxlib/triton:triton_dialect_capi.h)\" \"$(location @jax//jaxlib/mosaic:dialect/tpu/integrations/c/tpu_dialect.h)\" \"$(location @jax//jaxlib/mosaic/dialect/gpu:integrations/c/gpu_dialect.h)\" \"$(location @enzyme_ad//src/enzyme_ad/jax:Integrations/c/EnzymeXLA.h)\" \"$(location @enzyme//:Enzyme/MLIR/Integrations/c/EnzymeMLIR.h)\" \"$@\"",
+    cmd = "$$JULIA \"--color=yes\" \"--project=$(location //:Project.toml)\" \"$(location //:make.jl)\" \"--extract-api\" \"$(location @llvm-project//mlir:include/mlir-c/Bindings/Python/Interop.h)\" \"$(location @llvm-project//llvm:include/llvm-c/Support.h)\" \"$(locations @llvm-project//mlir:ConversionPassIncGen_filegroup)\" \"$(location @stablehlo//:stablehlo/integrations/c/StablehloAttributes.h)\" \"$(location @shardy//shardy/integrations/c:attributes.h)\" \"$(location @enzyme_ad//src/enzyme_ad/jax:Integrations/c/triton_dialect_capi.h)\" \"$(location @jax//jaxlib/mosaic:dialect/tpu/integrations/c/tpu_dialect.h)\" \"$(location @jax//jaxlib/mosaic/dialect/gpu:integrations/c/gpu_dialect.h)\" \"$(location @enzyme_ad//src/enzyme_ad/jax:Integrations/c/EnzymeXLA.h)\" \"$(location @enzyme//:Enzyme/MLIR/Integrations/c/EnzymeMLIR.h)\" \"$@\"",
     tags = [
         "jlrule",
     ],

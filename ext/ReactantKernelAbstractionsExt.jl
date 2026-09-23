@@ -25,7 +25,15 @@ function Base.getproperty(x::ReactantBackend, sym::Symbol)
 end
 
 function KA.allocate(::ReactantBackend, ::Type{T}, dims::Tuple) where {T}
-    return Reactant.ConcreteRArray{T}(undef, dims)
+    ET = Reactant.unwrapped_eltype(T)
+
+    # Inside a trace there is no uninitialized device memory to hand back, and a concrete array
+    # cannot take part in the traced program: filling or otherwise mutating one re-enters the
+    # compiler. Return a traced array instead, mirroring what `similar` already does when it is
+    # asked for a traced element type.
+    Reactant.within_compile() && return Reactant.Ops.fill(zero(ET), dims)
+
+    return Reactant.ConcreteRArray{ET}(undef, dims)
 end
 
 function KA.zeros(b::ReactantBackend, ::Type{T}, dims::Tuple) where {T}

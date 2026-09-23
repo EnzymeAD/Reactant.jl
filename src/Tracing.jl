@@ -238,7 +238,7 @@ Base.@nospecializeinfer function traced_type_inner(
     elseif mode == ArrayToConcrete
         @assert runtime isa Val{:PJRT}
         if T0 isa UnionAll
-            return ConcretePJRTNumbe{T,_unwrap_val(ndevices)} where {T}
+            return ConcretePJRTNumber{T,_unwrap_val(ndevices)} where {T}
         else
             return ConcretePJRTNumber{T,_unwrap_val(ndevices)}
         end

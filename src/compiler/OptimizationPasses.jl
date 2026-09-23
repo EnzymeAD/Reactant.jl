@@ -42,6 +42,7 @@ function optimization_passes(
     is_sharded::Bool=false,
     raise_shlo_to_blas_lapack::Bool=true,
     self_to_convolution::Bool=false,
+    hlo_opts::Bool=true,
 )
     # Build the excluded-passes pointer array. Julia Strings are null-terminated,
     # so unsafe_convert(Cstring, s) gives a stable C pointer while the String is live.
@@ -109,7 +110,11 @@ function optimization_passes(
         ],
         ",",
     )
-    func_passes = join(["canonicalize", "cse", "canonicalize", transform_passes], ",")
+    tocombine = ["canonicalize", "cse", "canonicalize"]
+    if hlo_opts
+        push!(tocombine, transform_passes)
+    end
+    func_passes = join(tocombine, ",")
     if lower_comms
         func_passes =
             func_passes *
@@ -117,7 +122,7 @@ function optimization_passes(
             lower_passes_str *
             "},transform-interpreter,enzyme-hlo-remove-transform"
     end
-    if CONCATS_TO_DUS[]
+    if CONCATS_TO_DUS[] && hlo_opts
         func_passes *= ",enzyme-hlo-generate-td{patterns=concat_to_onedim_dus},transform-interpreter,enzyme-hlo-remove-transform"
     end
     passes = String[]
@@ -229,17 +234,16 @@ function run_pass_pipeline!(
     pm = MLIR.IR.PassManager()
     MLIR.IR.enable_verifier!(pm, enable_verifier)
     opm = MLIR.IR.OpPassManager(pm)
-    # TODO: why isn't this being auto-generated?
-    @ccall MLIR.API.mlir_c.addSdyPropagationPipeline(
-        opm::MLIR.API.MlirOpPassManager,
-        propagation_options.keep_sharding_rules::UInt8,
-        propagation_options.conservative_propagation::UInt8,
-        propagation_options.debug_sharding_origins::UInt8,
-        propagation_options.debug_propagation_edge_sharding::UInt8,
-        propagation_options.skip_convert_to_reshard::UInt8,
-        propagation_options.skip_inline::UInt8,
-        propagation_options.enable_insert_explicit_collectives::UInt8,
-    )::Cvoid
+    MLIR.API.addSdyPropagationPipeline(
+        opm,
+        propagation_options.keep_sharding_rules,
+        propagation_options.conservative_propagation,
+        propagation_options.debug_sharding_origins,
+        propagation_options.debug_propagation_edge_sharding,
+        propagation_options.skip_convert_to_reshard,
+        propagation_options.skip_inline,
+        propagation_options.enable_insert_explicit_collectives,
+    )
     run!(pm, mod, "sdy_prop")
     return mod
 end
@@ -306,6 +310,7 @@ function __get_compile_options_and_kwargs(;
     xla_compile_options=(;),
     strip=:all,
     strip_llvm_debuginfo=false,
+    speculate_partial_ifs=false,
     kwargs...,
 )
     return (
@@ -332,6 +337,8 @@ function __get_compile_options_and_kwargs(;
             xla_executable_build_options,
             xla_compile_options,
             strip,
+            strip_llvm_debuginfo,
+            speculate_partial_ifs,
         ),
         kwargs,
     )

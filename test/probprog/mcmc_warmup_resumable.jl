@@ -7,7 +7,7 @@ using Reactant.ProbProg: MCMCState
 standard_normal_logpdf(x) = -0.5 * sum(x .^ 2)
 
 function combined_program(rng, logpdf_fn, pos, ss, imm, num_warmup::Int, num_samples::Int)
-    samples, _, _, _ = ProbProg.mcmc_logpdf(
+    samples, _, _, _, _ = ProbProg.mcmc_logpdf(
         rng,
         logpdf_fn,
         pos;

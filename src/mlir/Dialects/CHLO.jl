@@ -1343,6 +1343,39 @@ function lgamma(operand::Value; result=nothing::Union{Nothing,IR.Type}, location
 end
 
 """
+`mulhi`
+
+Performs element-wise multiplication of two N-bit integer tensors
+`lhs` and `rhs`, returning a N-bit integer `result` tensor containing
+the most significant N bits of the upcasted (N+N-bit) product.
+
+\$\$
+\\text{mulhi}(x, y) = \\text{downcast}((\\text{upcast}(x) * \\text{upcast}(y)) >> N)
+\$\$
+"""
+function mulhi(
+    lhs::Value, rhs::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[lhs, rhs]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(result) && push!(op_ty_results, result)
+
+    return create_operation(
+        "chlo.mulhi",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
 `next_after`
 
 Returns the next representable value of `x` in the direction of `y`,
@@ -1605,13 +1638,16 @@ row (resp. vector along the last dimension).  Thus,
 values.shape = indices.shape = input.shape[:-1] + [k]
 ```
 
-If two elements are equal, the lower-index element appears first.
+If `is_stable` is true, the sort is stable: if two elements are equal, the
+lower-index element appears first. If false, the relative order of equal
+elements is implementation-defined.
 """
 function top_k(
     operand::Value;
     values=nothing::Union{Nothing,IR.Type},
     indices=nothing::Union{Nothing,IR.Type},
     k,
+    is_stable=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -1621,6 +1657,7 @@ function top_k(
     attributes = NamedAttribute[NamedAttribute("k", k),]
     !isnothing(values) && push!(op_ty_results, values)
     !isnothing(indices) && push!(op_ty_results, indices)
+    !isnothing(is_stable) && push!(attributes, NamedAttribute("is_stable", is_stable))
 
     return create_operation(
         "chlo.top_k",

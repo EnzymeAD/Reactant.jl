@@ -294,6 +294,5 @@ end
 get_choices(trace::Trace) = trace.choices
 
 function select(addrs::Address...)
-    sorted_addrs = sort(collect(addrs); by=a -> Tuple(string.(a.path)))
-    return OrderedSet{Address}(sorted_addrs)
+    return OrderedSet{Address}(collect(addrs))
 end

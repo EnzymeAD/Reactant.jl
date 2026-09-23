@@ -35,6 +35,7 @@ dialect_files = [
     "Shape.jl",
     "TritonExt.jl",
     "CUDATile.jl",
+    "Comm.jl",
 ]
 
 other_files = ["libMLIR_h.jl"]

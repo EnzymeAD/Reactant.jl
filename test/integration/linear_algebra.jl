@@ -119,6 +119,54 @@ end
     @test C5_ra ≈ C5 atol = 1e-3 rtol = 1e-2
 end
 
+# A traced operand multiplied by an ordinary array used to allocate its destination via
+# `similar(::Matrix, TracedRNumber, ...)`, i.e. an array-of-structs, and then fill it one
+# traced op per element. Big enough outputs overflowed inference's const-prop stack.
+struct ConstMatMul{X}
+    X::X
+end
+(m::ConstMatMul)(W) = sum(W * m.X)
+
+@testset "Multiplication with an untraced operand (#3167)" begin
+    A, B, C = 9, 40, 50
+    X = Reactant.TestUtils.construct_test_array(Float32, B, C)
+    W = Reactant.TestUtils.construct_test_array(Float32, A, B)
+    W_ra = Reactant.to_rarray(W)
+
+    m = ConstMatMul(X)
+    @test @jit(m(W_ra)) ≈ m(W) rtol = 1e-3
+
+    mul_const_rhs(w) = w * X
+    @test Array(@jit(mul_const_rhs(W_ra))) ≈ W * X rtol = 1e-3
+
+    # the untraced operand on the left, and the matrix-vector case
+    X_ra = Reactant.to_rarray(X)
+    mul_const_lhs(x) = W * x
+    @test Array(@jit(mul_const_lhs(X_ra))) ≈ W * X rtol = 1e-3
+
+    # matrix-vector allocates its destination separately from matrix-matrix (and does not
+    # go through `matprod_dest`), so exercise it with an output big enough to have blown
+    # the const-prop stack too
+    v = Reactant.TestUtils.construct_test_array(Float32, B)
+    mul_const_vec(w) = w * v
+    @test Array(@jit(mul_const_vec(W_ra))) ≈ W * v rtol = 1e-3
+
+    tall = Reactant.TestUtils.construct_test_array(Float32, 600, B)
+    tall_ra = Reactant.to_rarray(tall)
+    @test Array(@jit(mul_const_vec(tall_ra))) ≈ tall * v rtol = 1e-3
+
+    # one `dot_general`, not one op per output element
+    hlo = repr(@code_hlo(optimize = false, mul_const_rhs(W_ra)))
+    @test count("stablehlo.dot_general", hlo) == 1
+    @test count("stablehlo.concatenate", hlo) == 0
+
+    # `x' * y` is a scalar dot product, not a matmul; it must not be diverted
+    u = Reactant.TestUtils.construct_test_array(Float32, B)
+    u_ra = Reactant.to_rarray(u)
+    dot_prod(x) = x' * x
+    @test Reactant.to_number(@jit(dot_prod(u_ra))) ≈ u' * u rtol = 1e-3
+end
+
 @testset "triu & tril" begin
     A = Reactant.TestUtils.construct_test_array(Float32, 4, 6)
     A_ra = Reactant.to_rarray(A)
@@ -545,4 +593,17 @@ diagonal_3_arg_mul(x, y) = y' * Diagonal(x) * y
     y_ra = Reactant.to_rarray(y)
 
     @test @jit(diagonal_3_arg_mul(x_ra, y_ra)) ≈ diagonal_3_arg_mul(x, y)
+end
+
+@testset "Triangular solve with captured concrete RHS" begin
+    M = collect(reshape(1.0:9.0, 3, 3)) + 10.0 * I
+    b = [1.0, 2.0, 3.0]
+    M_ra = Reactant.to_rarray(M)
+    b_ra = Reactant.to_rarray(b)
+    # `b_ra` is captured (concrete); the solve allocates its output via
+    # `similar(b_ra, <traced eltype>, ...)`, which must yield a traced array
+    # rather than hit `primitive_type` on the wrapped element type.
+    @test Array(@jit((m -> UpperTriangular(m) \ b_ra)(M_ra))) ≈ UpperTriangular(M) \ b
+    @test Array(@jit(((m, v) -> LowerTriangular(m) \ v)(M_ra, b_ra))) ≈
+        LowerTriangular(M) \ b
 end

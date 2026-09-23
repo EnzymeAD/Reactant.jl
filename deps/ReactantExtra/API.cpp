@@ -1,9 +1,16 @@
+#include <cstddef>
 #include <iostream>
+
+// AddressReservation.cpp; reserves inaccessible address ranges used as opaque
+// allocation handles.
+void *reactantReserveAddressRange(size_t nbytes);
+void reactantReleaseAddressRange(void *base, size_t nbytes);
 
 #include "mlir-c/IR.h"
 #include "mlir-c/Support.h"
 
 #include "mlir/CAPI/IR.h"
+#include "mlir/CAPI/Pass.h"
 #include "mlir/CAPI/Wrap.h"
 #include "mlir/Pass/PassManager.h"
 
@@ -41,11 +48,17 @@
 #include "mlir/lib/AsmParser/Token.h"
 #include "src/enzyme_ad/jax/Dialect/Dialect.h"
 #include "src/enzyme_ad/jax/Implementations/XLADerivatives.h"
+#include "src/enzyme_ad/jax/Integrations/c/EnzymeXLA.h"
 #include "src/enzyme_ad/jax/Passes/Passes.h"
 #include "src/enzyme_ad/jax/RegistryUtils.h"
 #include "src/enzyme_ad/jax/clang_compile.h"
 #include "src/enzyme_ad/jax/compile_with_xla.h"
 #include "llvm/Support/TargetSelect.h"
+
+#if defined(REACTANT_ROCM) && !defined(_WIN32)
+#include "llvm/Support/Signals.h"
+#include <csignal>
+#endif
 
 #include "mlir/Dialect/LLVMIR/Transforms/InlinerInterfaceImpl.h"
 #include "stablehlo/dialect/ChloOps.h"
@@ -55,6 +68,7 @@
 
 #include "absl/log/globals.h"
 #include "absl/log/initialize.h"
+#include "absl/strings/cord.h"
 
 #include "xla/mlir/utils/type_util.h"
 #include "xla/mlir_hlo/mhlo/IR/hlo_ops.h"
@@ -84,6 +98,7 @@
 #if defined(REACTANT_CUDA) || defined(REACTANT_ROCM)
 #include "xla/pjrt/gpu/se_gpu_pjrt_client.h"
 #endif
+#include "xla/pjrt/c/pjrt_c_api_cpu_internal.h"
 #include "xla/pjrt/pjrt_api.h"
 #include "xla/pjrt/pjrt_c_api_client.h"
 #include "xla/pjrt/pjrt_executable.h"
@@ -354,12 +369,68 @@ T *unwrap_absl_statusor(absl::StatusOr<T> status, char **error_msg) {
 // int google::protobuf::io::CodedInputStream::default_recursion_limit_ = 100;
 // int xla::_LayoutProto_default_instance_;
 
+#if defined(REACTANT_ROCM) && !defined(_WIN32)
+// LLVM installs its crash handlers (llvm/lib/Support/Unix/Signals.inc) lazily,
+// the first time anything reaches RegisterHandlers() -- via RemoveFileOnSignal,
+// AddSignalHandler, PrintStackTraceOnErrorSignal or CrashRecoveryContext. In
+// practice XLA's AMDGPU backend gets there through
+// llvm::sys::fs::TempFile::create during kernel codegen (the in-process lld
+// link of the HSACO writes its output through FileOutputBuffer ->
+// TempFile::create -> RemoveFileOnSignal), long after Julia has installed its
+// own handlers. The NVPTX path shells out to ptxas with tsl-created temp files
+// and never reaches LLVM's signal machinery, which is why only ROCm hits this
+// today.
+//
+// That is fatal in a Julia host. Julia implements GC safepoints as a
+// read-protected page plus a SIGSEGV handler, so SIGSEGV is ordinary control
+// flow that fires constantly on every thread. LLVM registers with SA_RESETHAND:
+// the next safepoint fault is delivered to LLVM's handler, the disposition is
+// reset to SIG_DFL, and the next concurrent safepoint fault on any other thread
+// kills the process -- exit 139, with no output from either runtime. LLVM also
+// takes SIGINT, SIGUSR2 and SIGQUIT, which are Julia's Ctrl-C, profiler and
+// backtrace-dump signals respectively.
+//
+// Force that registration to happen exactly once, here, where we can still put
+// the host's handlers back. Note we deliberately do NOT call
+// llvm::sys::unregisterHandlers(): that zeroes NumRegisteredSignals and would
+// let the next RemoveFileOnSignal() re-register. Leaving the counter non-zero
+// makes every later call early-out without touching sigaction.
+//
+// Cost: LLVM no longer prints a stack trace or unlinks its temp files on an
+// abnormal exit. Julia owns the fatal-signal path in this process anyway.
+static void TameLLVMSignalHandlers() {
+  // IntSigs + KillSigs + InfoSigs from Signals.inc. SIGUSR1 (InfoSigs) is
+  // blocked process-wide by Julia and consumed via sigwait, so LLVM's handler
+  // for it could never fire -- restore it anyway rather than rely on that.
+  static const int Sigs[] = {SIGHUP,  SIGINT,  SIGTERM, SIGUSR2, SIGILL,
+                             SIGTRAP, SIGABRT, SIGFPE,  SIGBUS,  SIGSEGV,
+                             SIGQUIT, SIGSYS,  SIGXCPU, SIGXFSZ, SIGUSR1};
+  constexpr int N = sizeof(Sigs) / sizeof(Sigs[0]);
+
+  struct sigaction Host[N];
+  for (int I = 0; I < N; ++I)
+    sigaction(Sigs[I], nullptr, &Host[I]);
+
+  // Any public entry point into Signals.inc arms the registration. This one is
+  // what XLA itself reaches; the filename never exists, so the cleanup entry is
+  // inert.
+  llvm::sys::RemoveFileOnSignal("");
+
+  for (int I = 0; I < N; ++I)
+    sigaction(Sigs[I], &Host[I], nullptr);
+}
+#endif
+
 REACTANT_ABI void InitializeLogs() {
   const char *binary = "julia";
   int argc = 1;
   char *argv[] = {(char *)binary};
   char **argv2 = &argv[0];
   tsl::port::InitMain(binary, &argc, &argv2);
+
+#if defined(REACTANT_ROCM) && !defined(_WIN32)
+  TameLLVMSignalHandlers();
+#endif
   LLVMInitializeX86Target();
   LLVMInitializeX86TargetInfo();
   LLVMInitializeX86TargetMC();
@@ -607,6 +678,14 @@ REACTANT_ABI PjRtClient *MakeClientFromApi(const PJRT_Api *api,
   return GetCApiClientInternal(client_name, error);
 }
 
+// The PJRT C API table of the CPU plugin. The GPU plugin exports its table
+// under the standard name `GetPjrtApi` (CUDA and ROCm builds only); the CPU
+// plugin defines that same C symbol, so the library can only export one of the
+// two under it and the CPU table is reached through this name instead.
+REACTANT_ABI const PJRT_Api *GetCpuPjrtApi() {
+  return pjrt::cpu_plugin::GetCpuPjrtApi();
+}
+
 REACTANT_ABI PjRtClient *MakeTPUClient(const char *tpu_path,
                                        const char **error) {
   // Prefer $TPU_LIBRARY_PATH if set
@@ -711,6 +790,26 @@ REACTANT_ABI void ifrt_device_get_allocator_stats(ifrt::Device *device,
   }
   auto ifrt_pjrt_device = llvm::dyn_cast<ifrt::PjRtDevice>(device);
   PjRtDeviceGetAllocatorStats(ifrt_pjrt_device->pjrt_device(), jlstats);
+}
+
+// Reset the allocator's high-water marks (`peak_bytes_in_use` and the other
+// `peak_*` fields reported by `PjRtDeviceGetAllocatorStats`) to the current
+// usage. Only devices that track allocator statistics (for example the
+// StreamExecutor GPU device) implement this; the others report an error.
+REACTANT_ABI void PjRtDeviceClearMemoryStats(PjRtDevice *device) {
+  auto status = device->ClearMemoryStats();
+  if (!status.ok()) {
+    ReactantThrowError(status.ToString().c_str());
+  }
+}
+
+REACTANT_ABI void ifrt_device_clear_memory_stats(ifrt::Device *device) {
+  if (!llvm::isa<ifrt::PjRtDevice>(device)) {
+    ReactantThrowError(
+        "ifrt_device_clear_memory_stats: only supported for ifrt-pjrt.");
+  }
+  auto ifrt_pjrt_device = llvm::dyn_cast<ifrt::PjRtDevice>(device);
+  PjRtDeviceClearMemoryStats(ifrt_pjrt_device->pjrt_device());
 }
 
 REACTANT_ABI void ExecutableFree(xla::PjRtLoadedExecutable *exec) {
@@ -1063,7 +1162,10 @@ REACTANT_ABI void CopyToBuffer(PjRtClient *client, PjRtBuffer *buffer,
   auto raw_buffer =
       MyValueOrThrow(PjRtRawBuffer::CreateRawAliasOfBuffer(buffer));
   auto future = raw_buffer->CopyRawHostToDevice(data, offset, size);
-  future.Await();
+  auto status = future.Await();
+  if (!status.ok()) {
+    ReactantThrowError(status.ToString().c_str());
+  }
 #if 0
   if (buffer->IsOnCpu()) {
     memcpy((char*)client->UnsafeBufferPointer(buffer) + offset, data, size);
@@ -1104,7 +1206,11 @@ REACTANT_ABI void BufferToHost(PjRtBuffer *buffer, void *data) {
   MutableBorrowingLiteral literal((const char *)data, shape);
   auto status = buffer->ToLiteralSync(&literal);
   if (!status.ok()) {
-    printf("error copying to host: %s\n", status.ToString().c_str());
+    // A failed copy must not return: the destination holds uninitialized
+    // memory, and a caller that reads it would silently compute on garbage
+    // (e.g. after a device-side allocation failure whose only prior sign was
+    // an allocator warning in the C++ logs).
+    ReactantThrowError(status.ToString().c_str());
   }
 }
 
@@ -1121,7 +1227,12 @@ REACTANT_ABI void CopyFromBuffer(PjRtClient *client, PjRtBuffer *buffer,
   }
 
   auto future = buffer->CopyRawToHost(data, offset, size);
-  future.Await();
+  auto status = future.Await();
+  if (!status.ok()) {
+    // See BufferToHost: returning here would hand the caller uninitialized
+    // host memory with no signal that anything failed.
+    ReactantThrowError(status.ToString().c_str());
+  }
 #if 0
   if (buffer->IsOnCpu()) {
     memcpy((char*)client->UnsafeBufferPointer(buffer) + offset, data, size);
@@ -1212,6 +1323,17 @@ REACTANT_ABI MlirModule ConvertLLVMToMLIR(LLVMModuleRef lmod,
   return wrap(res);
 }
 
+// Hand `msg` to the Julia error hook if one has been installed, otherwise fall
+// back to stderr. Returns so callers can bail out with a null module rather
+// than continuing on with a module they failed to parse.
+static void ReportLLVMToMLIRError(llvm::StringRef msg) {
+  if (ReactantThrowError) {
+    ReactantThrowError(msg.str().c_str());
+    return;
+  }
+  llvm::errs() << "LLVMToMLIR: " << msg << "\n";
+}
+
 #include "llvm/IRReader/IRReader.h"
 REACTANT_ABI MlirModule ConvertLLVMStrToMLIR(const char *lmod,
                                              MlirContext cctx) {
@@ -1224,11 +1346,9 @@ REACTANT_ABI MlirModule ConvertLLVMStrToMLIR(const char *lmod,
     llvm::raw_string_ostream err_stream(err_str);
     Err.print(/*ProgName=*/"LLVMToMLIR", err_stream);
     err_stream.flush();
-    if (ReactantThrowError) {
-      llvm::errs() << lmod << "\n";
-      ReactantThrowError(err_str.c_str());
-      return wrap((mlir::ModuleOp) nullptr);
-    }
+    llvm::errs() << lmod << "\n";
+    ReportLLVMToMLIRError(err_str);
+    return wrap((mlir::ModuleOp) nullptr);
   }
   mlir::MLIRContext &context = *unwrap(cctx);
   auto res = mlir::translateLLVMIRToModule(std::move(llvmModule), &context,
@@ -1237,7 +1357,37 @@ REACTANT_ABI MlirModule ConvertLLVMStrToMLIR(const char *lmod,
                  .release();
   if (!res) {
     llvm::errs() << lmod << "\n";
-    ReactantThrowError("Could not translate LLVM IR to MLIR Module");
+    ReportLLVMToMLIRError("Could not translate LLVM IR to MLIR Module");
+  }
+  return wrap(res);
+}
+
+#include "llvm/Bitcode/BitcodeReader.h"
+// Prefer this over ConvertLLVMStrToMLIR: textual LLVM IR is not stable across
+// LLVM versions (the .ll parser performs no auto-upgrade), whereas the bitcode
+// reader auto-upgrades older bitcode into the form the current LLVM expects.
+// This matters when handing a module built by Julia's (older) LLVM over to the
+// LLVM linked into Reactant.
+REACTANT_ABI MlirModule ConvertLLVMBCToMLIR(const uint8_t *bc, size_t len,
+                                            MlirContext cctx) {
+  llvm::LLVMContext Context;
+  auto expectedModule = llvm::parseBitcodeFile(
+      llvm::MemoryBufferRef(
+          llvm::StringRef(reinterpret_cast<const char *>(bc), len),
+          "conversion"),
+      Context);
+  if (!expectedModule) {
+    ReportLLVMToMLIRError(llvm::toString(expectedModule.takeError()));
+    return wrap((mlir::ModuleOp) nullptr);
+  }
+
+  mlir::MLIRContext &context = *unwrap(cctx);
+  auto res = mlir::translateLLVMIRToModule(std::move(*expectedModule), &context,
+                                           /*emitExpensiveWarnings*/ false,
+                                           /*dropDICompositeElements*/ false)
+                 .release();
+  if (!res) {
+    ReportLLVMToMLIRError("Could not translate LLVM bitcode to MLIR Module");
   }
   return wrap(res);
 }
@@ -1249,7 +1399,16 @@ REACTANT_ABI uint8_t FutureIsReady(FutureType *Future) {
   return Future->IsReady();
 }
 
-REACTANT_ABI void FutureAwait(FutureType *Future) { Future->Await(); }
+REACTANT_ABI void FutureAwait(FutureType *Future) {
+  // The future of an async execution resolves to the execution's status.
+  // Discarding it would report a failed execution (e.g. RESOURCE_EXHAUSTED
+  // when a temp buffer did not fit in device memory) as success, leaving the
+  // caller to read whatever happens to be in the output buffers.
+  auto status = Future->Await();
+  if (!status.ok()) {
+    ReactantThrowError(status.ToString().c_str());
+  }
+}
 
 xla::CompileOptions GenerateCompileOptions(
     int64_t device_id, const int64_t *mesh_ids, int64_t num_mesh_ids,
@@ -1263,8 +1422,6 @@ xla::CompileOptions GenerateCompileOptions(
 
   debug_options->set_xla_gpu_cuda_data_dir(xla_gpu_cuda_data_dir);
   debug_options->set_xla_enable_enzyme_comms_opt(xla_enable_enzyme_comms_opt);
-
-  debug_options->set_xla_gpu_experimental_use_raft_select_k(true);
 
   if (kernel_cache_enabled) {
     debug_options->set_xla_gpu_kernel_cache_file(kernel_cache_path);
@@ -1340,7 +1497,7 @@ xla::CompileOptions GenerateCompileOptions(
   return options;
 }
 
-xla::CompileOptions GenerateCompileOptions(const char *compile_options_proto,
+xla::CompileOptions GenerateCompileOptions(const uint8_t *compile_options_proto,
                                            size_t compile_options_proto_size) {
   if (compile_options_proto == nullptr || compile_options_proto_size == 0) {
     return xla::CompileOptions();
@@ -1408,13 +1565,88 @@ ClientCompile(PjRtClient *client, MlirModule cmod, int64_t device_id,
 
 REACTANT_ABI xla::PjRtLoadedExecutable *
 ClientCompileWithProto(PjRtClient *client, MlirModule cmod,
-                       const char *compile_options_proto,
+                       const uint8_t *compile_options_proto,
                        size_t compile_options_proto_size) {
   return ClientCompileInternal(
       client, cmod,
       GenerateCompileOptions(compile_options_proto,
                              compile_options_proto_size));
 }
+
+#pragma region PjRtLoadedExecutable serialization and memory stats
+
+// Serialize a compiled program so that `PjRtClientLoadSerializedExecutable`
+// can load it later without compiling again. The returned buffer is malloc'd
+// and the caller releases it with `free`.
+//
+// The serialization goes through `GetExecutable()`: not every client
+// implements `SerializeExecutable` on the loaded executable itself, but all of
+// them implement it on the underlying `PjRtExecutable`.
+REACTANT_ABI uint8_t *
+PjRtLoadedExecutableSerialize(xla::PjRtLoadedExecutable *exec, size_t *size) {
+  std::string serialized =
+      MyValueOrThrow(exec->GetExecutable()->SerializeExecutable());
+  *size = serialized.size();
+  uint8_t *data = (uint8_t *)malloc(serialized.size());
+  memcpy(data, serialized.data(), serialized.size());
+  return data;
+}
+
+// Load a program produced by `PjRtLoadedExecutableSerialize`.
+// `compile_options_proto` is a serialized `CompileOptionsProto` that replaces
+// the options stored in the blob (this is how a program compiled for one
+// device ordinal is placed on another); pass nullptr / 0 to keep the stored
+// options. The caller owns the result and frees it with `ExecutableFree`.
+REACTANT_ABI xla::PjRtLoadedExecutable *PjRtClientLoadSerializedExecutable(
+    PjRtClient *client, const uint8_t *data, size_t size,
+    const uint8_t *compile_options_proto, size_t compile_options_proto_size) {
+  std::optional<xla::CompileOptions> compile_options;
+  if (compile_options_proto != nullptr && compile_options_proto_size > 0) {
+    compile_options = GenerateCompileOptions(compile_options_proto,
+                                             compile_options_proto_size);
+  }
+  auto exec = MyValueOrThrow(client->LoadSerializedExecutable(
+      std::string_view(reinterpret_cast<const char *>(data), size),
+      std::move(compile_options), xla::LoadOptions()));
+  return exec.release();
+}
+
+// Static memory accounting from XLA's buffer assignment, available without
+// running the program. Mirrors `xla::CompiledMemoryStats` minus its
+// `serialized_buffer_assignment` string, which cannot cross the C boundary.
+struct JLCompiledMemoryStats {
+  int64_t generated_code_size_in_bytes;
+  int64_t argument_size_in_bytes;
+  int64_t output_size_in_bytes;
+  int64_t alias_size_in_bytes;
+  int64_t temp_size_in_bytes;
+  int64_t host_generated_code_size_in_bytes;
+  int64_t host_argument_size_in_bytes;
+  int64_t host_output_size_in_bytes;
+  int64_t host_alias_size_in_bytes;
+  int64_t host_temp_size_in_bytes;
+  int64_t peak_memory_in_bytes;
+};
+
+REACTANT_ABI void
+PjRtLoadedExecutableGetCompiledMemoryStats(xla::PjRtLoadedExecutable *exec,
+                                           JLCompiledMemoryStats *jlstats) {
+  auto stats = MyValueOrThrow(exec->GetExecutable()->GetCompiledMemoryStats());
+  jlstats->generated_code_size_in_bytes = stats.generated_code_size_in_bytes;
+  jlstats->argument_size_in_bytes = stats.argument_size_in_bytes;
+  jlstats->output_size_in_bytes = stats.output_size_in_bytes;
+  jlstats->alias_size_in_bytes = stats.alias_size_in_bytes;
+  jlstats->temp_size_in_bytes = stats.temp_size_in_bytes;
+  jlstats->host_generated_code_size_in_bytes =
+      stats.host_generated_code_size_in_bytes;
+  jlstats->host_argument_size_in_bytes = stats.host_argument_size_in_bytes;
+  jlstats->host_output_size_in_bytes = stats.host_output_size_in_bytes;
+  jlstats->host_alias_size_in_bytes = stats.host_alias_size_in_bytes;
+  jlstats->host_temp_size_in_bytes = stats.host_temp_size_in_bytes;
+  jlstats->peak_memory_in_bytes = stats.peak_memory_in_bytes;
+}
+
+#pragma endregion
 
 REACTANT_ABI void
 PjRtLoadedExecutableGetOuputShardings(xla::PjRtLoadedExecutable *exec,
@@ -1918,7 +2150,7 @@ ifrt_compile(ifrt::Client *client, MlirModule cmod, int64_t device_id,
 
 REACTANT_ABI HeldIfrtLoadedExecutable *
 ifrt_compile_with_proto(ifrt::Client *client, MlirModule cmod,
-                        const char *compile_options_proto,
+                        const uint8_t *compile_options_proto,
                         size_t compile_options_proto_size) {
   return ifrt_compile_internal(
       client, cmod,
@@ -2648,9 +2880,36 @@ hlo_sharding_tile_assignment_devices(xla::HloSharding *hloSharding,
   }
 }
 
+static void clear_op_sharding_metadata(xla::OpSharding &op_sharding) {
+  op_sharding.clear_metadata();
+  for (auto &tuple_sharding : *op_sharding.mutable_tuple_shardings())
+    clear_op_sharding_metadata(tuple_sharding);
+}
+
+// Drops the metadata of `hlo_sharding`. Round-tripping through the proto (as
+// opposed to `xla::HloSharding::WithoutMetadata`) also drops the state derived
+// from the metadata, e.g. `xla::HloSharding::reduction_op` which XLA parses out
+// of the `sdy::reduction_op` metadata entry.
+static xla::HloSharding
+hlo_sharding_without_metadata(const xla::HloSharding &hlo_sharding) {
+  xla::OpSharding op_sharding = hlo_sharding.ToProto();
+  clear_op_sharding_metadata(op_sharding);
+  return MyValueOrThrow(xla::HloSharding::FromProto(op_sharding));
+}
+
 REACTANT_ABI bool hlo_sharding_check_eq(xla::HloSharding *hloSharding,
                                         xla::HloSharding *other) {
   return *hloSharding == *other;
+}
+
+// Same as `hlo_sharding_check_eq`, but only compares how the data is laid out
+// across the devices. In particular the metadata is ignored, which
+// `xla::HloSharding::operator==` takes into account through the reduction op.
+REACTANT_ABI bool
+hlo_sharding_check_eq_ignoring_metadata(xla::HloSharding *hloSharding,
+                                        xla::HloSharding *other) {
+  return hlo_sharding_without_metadata(*hloSharding) ==
+         hlo_sharding_without_metadata(*other);
 }
 
 #pragma endregion
@@ -2663,7 +2922,13 @@ REACTANT_ABI uint8_t ifrt_future_is_ready(IfRtFutureType *Future) {
   return Future->IsReady();
 }
 
-REACTANT_ABI void ifrt_future_await(IfRtFutureType *Future) { Future->Await(); }
+REACTANT_ABI void ifrt_future_await(IfRtFutureType *Future) {
+  // See FutureAwait: the status carries execution failure.
+  auto status = Future->Await();
+  if (!status.ok()) {
+    ReactantThrowError(status.ToString().c_str());
+  }
+}
 
 #pragma region IfRtArray
 
@@ -2699,7 +2964,12 @@ REACTANT_ABI void ifrt_array_copy_to_host_buffer(HeldIfrtArray *array,
   std::optional<absl::Span<const int64_t>> byte_strides;
   auto future = array->obj()->CopyToHostBuffer(
       data, byte_strides, static_cast<ifrt::ArrayCopySemantics>(0));
-  future.Await();
+  auto status = future.Await();
+  if (!status.ok()) {
+    // See BufferToHost: returning here would hand the caller uninitialized
+    // host memory with no signal that anything failed.
+    ReactantThrowError(status.ToString().c_str());
+  }
   return;
 }
 
@@ -2997,6 +3267,63 @@ ifrt_loaded_executable_client(HeldIfrtLoadedExecutable *exec) {
   return exec->obj()->client();
 }
 
+static xla::PjRtLoadedExecutable *
+ifrt_pjrt_loaded_executable_unwrap(HeldIfrtLoadedExecutable *exec,
+                                   const char *caller) {
+  auto *pjrt_exec = llvm::dyn_cast<ifrt::PjRtLoadedExecutable>(exec->ptr());
+  if (pjrt_exec == nullptr) {
+    ReactantThrowError(
+        (std::string(caller) + ": only supported for ifrt-pjrt.").c_str());
+  }
+  return pjrt_exec->pjrt_loaded_executable();
+}
+
+// IFRT executables carry their own metadata (output dtypes, shapes, shardings)
+// next to the PJRT program, so they use IFRT's own serialization format. Bytes
+// from `ifrt_loaded_executable_serialize` load with
+// `ifrt_client_load_serialized_executable`; they are not interchangeable with
+// the PJRT counterparts above.
+REACTANT_ABI uint8_t *
+ifrt_loaded_executable_serialize(HeldIfrtLoadedExecutable *exec, size_t *size) {
+  std::string serialized = MyValueOrThrow(exec->obj()->Serialize());
+  *size = serialized.size();
+  uint8_t *data = (uint8_t *)malloc(serialized.size());
+  memcpy(data, serialized.data(), serialized.size());
+  return data;
+}
+
+REACTANT_ABI void ifrt_loaded_executable_get_compiled_memory_stats(
+    HeldIfrtLoadedExecutable *exec, JLCompiledMemoryStats *jlstats) {
+  PjRtLoadedExecutableGetCompiledMemoryStats(
+      ifrt_pjrt_loaded_executable_unwrap(
+          exec, "ifrt_loaded_executable_get_compiled_memory_stats"),
+      jlstats);
+}
+
+// Load a program produced by `ifrt_loaded_executable_serialize`. As for the
+// PJRT version, `compile_options_proto` optionally replaces the stored compile
+// options; the device list is then derived from the loaded program's device
+// assignment, so an override that moves the program is honoured.
+REACTANT_ABI HeldIfrtLoadedExecutable *ifrt_client_load_serialized_executable(
+    ifrt::Client *client, const uint8_t *data, size_t size,
+    const uint8_t *compile_options_proto, size_t compile_options_proto_size) {
+  std::optional<xla::CompileOptions> compile_options;
+  if (compile_options_proto != nullptr && compile_options_proto_size > 0) {
+    compile_options = GenerateCompileOptions(compile_options_proto,
+                                             compile_options_proto_size);
+  }
+  auto options = std::make_unique<xla::ifrt::XlaDeserializeExecutableOptions>(
+      std::move(compile_options), /*devices=*/std::nullopt);
+
+  absl::Cord serialized(
+      absl::string_view(reinterpret_cast<const char *>(data), size));
+  std::shared_ptr<xla::ifrt::LoadedExecutable> loaded = MyValueOrThrow(
+      client->GetDefaultCompiler()
+          ->DeserializeLoadedExecutable(serialized, std::move(options))
+          .Await());
+  return reactant::capture(loaded);
+}
+
 REACTANT_ABI void
 ifrt_loaded_executable_get_parameter_shardings(HeldIfrtLoadedExecutable *exec,
                                                xla::OpSharding **op_shardings,
@@ -3232,7 +3559,7 @@ REACTANT_ABI HeldIfrtArray *ifrt_make_array_from_host_buffer_shards(
 }
 
 REACTANT_ABI void addSdyPropagationPipeline(
-    mlir::OpPassManager &pm, uint8_t keepShardingRules /*false*/,
+    MlirOpPassManager pm, uint8_t keepShardingRules /*false*/,
     uint8_t conservativePropagation /*false*/,
     uint8_t debugShardingOrigins /*false*/,
     uint8_t debugPropagationEdgeSharding /*false*/,
@@ -3247,7 +3574,7 @@ REACTANT_ABI void addSdyPropagationPipeline(
                                               skipInline != 0,
                                               enableInsertExplicitCollectives !=
                                                   0};
-  mlir::sdy::addPropagationPipeline(pm, options);
+  mlir::sdy::addPropagationPipeline(*unwrap(pm), options);
 }
 
 REACTANT_ABI HeldIfrtArray *ifrt_copy_array(HeldIfrtArray *array) {
@@ -3267,12 +3594,29 @@ struct LinkableRuntime {
   xla::PjRtClient *client;
   int device;
   bool shouldFreeClient;
-  DenseMap<const char *, std::map<std::vector<std::vector<int64_t>>,
-                                  xla::PjRtLoadedExecutable *>>
+  struct CachedExec {
+    xla::PjRtLoadedExecutable *exec;
+    // Per argument: does the kernel store through it? An argument whose
+    // result is the argument itself passed through is read-only. Doubles as
+    // the donation mask.
+    uint8_t *written;
+    // Per argument: is it a parameter of the executable? An argument that
+    // resolves to the buffer of an earlier one is folded into it, and a
+    // null one is a constant.
+    uint8_t *keep;
+  };
+  DenseMap<const char *,
+           std::map<std::vector<std::vector<int64_t>>, CachedExec>>
       executables;
 
-  // Set of allocated pointers to size
-  std::set<void *, std::greater<void *>> allocations;
+  // Each allocation reserves an inaccessible address range as large as the
+  // buffer it stands for, so pointer arithmetic on the handle stays inside
+  // its own range (and a stray dereference faults at the offender).
+  struct AllocationInfo {
+    xla::PjRtBuffer *buffer;
+    size_t size;
+  };
+  std::map<void *, AllocationInfo, std::greater<void *>> allocations;
 
   LinkableRuntime(const std::string &backend) : registry() {
     InitializeRegistry(wrap(&registry));
@@ -3303,6 +3647,13 @@ struct LinkableRuntime {
       int num_allowed_devices = 0;
       double mem_fraction = 0.75;
       bool gpu_preallocate = true;
+      // Every linked translation unit constructs its own runtime, so a
+      // preallocating fraction per client exhausts the device; let the
+      // environment scale it down.
+      if (const char *frac = getenv("REACTANT_XLA_MEM_FRACTION"))
+        mem_fraction = atof(frac);
+      if (const char *pre = getenv("REACTANT_XLA_PREALLOCATE"))
+        gpu_preallocate = atoi(pre) != 0;
       const char *refstr;
       const char *platform = "gpu";
       void *distributed_runtime_client = NULL;
@@ -3336,10 +3687,15 @@ struct LinkableRuntime {
 static std::tuple<PjRtBuffer *, /*offset*/ size_t, PjRtBuffer **>
 bufferAndOffset(LinkableRuntime *__restrict__ lrt, void *ptr) {
   auto found = lrt->allocations.lower_bound(ptr);
-  assert(found != lrt->allocations.end());
-  auto start = (PjRtBuffer **)(*found);
+  if (found == lrt->allocations.end() ||
+      (size_t)ptr >= (size_t)found->first + found->second.size) {
+    llvm::errs() << "pointer " << ptr
+                 << " does not belong to any reactant allocation\n";
+    exit(1);
+  }
   return std::tuple<PjRtBuffer *, /*offset*/ size_t, PjRtBuffer **>(
-      *start, (size_t)ptr - (size_t)start, start);
+      found->second.buffer, (size_t)ptr - (size_t)found->first,
+      &found->second.buffer);
 }
 
 REACTANT_ABI void reactantXLAThrow(const char *str) {
@@ -3349,12 +3705,18 @@ REACTANT_ABI void reactantXLAThrow(const char *str) {
 
 REACTANT_ABI void reactantXLAInit(LinkableRuntime **__restrict__ lrtP,
                                   const char *__restrict__ backend) {
+  // Every translation unit registers a constructor, but the linkonce data
+  // slot they pass is merged at link time: initialize it exactly once.
+  if (*lrtP)
+    return;
   *lrtP = new LinkableRuntime(backend);
   ReactantThrowError = reactantXLAThrow;
 }
 
 REACTANT_ABI void reactantXLADeInit(LinkableRuntime **__restrict__ lrt) {
+  // One destructor per translation unit reaches the shared slot too.
   delete *lrt;
+  *lrt = nullptr;
 }
 
 REACTANT_ABI void reactantXLAMemcpy(LinkableRuntime **__restrict__ lrtP,
@@ -3379,8 +3741,15 @@ REACTANT_ABI void reactantXLAMemcpy(LinkableRuntime **__restrict__ lrtP,
     break;
   }
   case 3: // cudaMemcpyDeviceToDevice
-    llvm_unreachable("device to device copy unsupported");
+  {
+    // PJRT exposes no raw buffer-to-buffer copy; stage through the host.
+    auto &&[srcB, srcO, srcStart] = bufferAndOffset(lrt, src);
+    auto &&[dstB, dstO, dstStart] = bufferAndOffset(lrt, dst);
+    std::vector<char> tmp(size);
+    CopyFromBuffer(lrt->client, srcB, tmp.data(), srcO, size, srcStart);
+    CopyToBuffer(lrt->client, dstB, tmp.data(), dstO, size, dstStart);
     break;
+  }
   default: // cudaMemcpyDeviceToDevice
     llvm_unreachable("unknown copy unsupported");
     break;
@@ -3394,13 +3763,25 @@ REACTANT_ABI void *reactantXLAMalloc(LinkableRuntime **__restrict__ lrtP,
   PjRtDevice *device = ClientGetDevice(lrt->client, lrt->device);
 
   auto xbuffer0 = UninitPJRTBuffer(lrt->client, device, ptype, shapeLen, shape);
-  void **xbuffer = (void **)malloc(sizeof(void *));
-  xbuffer[0] = xbuffer0;
-  auto pair = lrt->allocations.insert((void *)xbuffer);
+  size_t nbytes = 1;
+  {
+    auto sz = xbuffer0->GetOnDeviceSizeInBytes();
+    if (sz.ok() && *sz)
+      nbytes = *sz;
+  }
+  void *base = reactantReserveAddressRange(nbytes);
+  if (!base) {
+    llvm::errs() << "failed to reserve handle range of " << nbytes
+                 << " bytes\n";
+    exit(1);
+  }
+  auto pair = lrt->allocations.try_emplace(
+      base,
+      LinkableRuntime::AllocationInfo{(xla::PjRtBuffer *)xbuffer0, nbytes});
   (void)pair;
   // Assert that it was actually inserted
   assert(pair.second);
-  return xbuffer;
+  return base;
 }
 
 REACTANT_ABI void reactantXLAFree(LinkableRuntime **__restrict__ lrtP,
@@ -3408,36 +3789,68 @@ REACTANT_ABI void reactantXLAFree(LinkableRuntime **__restrict__ lrtP,
   if (!buffer0)
     return;
   auto lrt = *lrtP;
-  void *buffer = *(void **)buffer0;
-  auto erased = lrt->allocations.erase((void*)buffer0);
-  assert(erased == 1);
-  (void)erased;
-  free(buffer0);
-  PjRtBufferFree((PjRtBuffer *)buffer);
+  auto found = lrt->allocations.find((void *)buffer0);
+  if (found == lrt->allocations.end()) {
+    llvm::errs() << "freeing pointer " << buffer0
+                 << " that is not a reactant allocation\n";
+    exit(1);
+  }
+  PjRtBuffer *buffer = found->second.buffer;
+  reactantReleaseAddressRange(buffer0, found->second.size);
+  lrt->allocations.erase(found);
+  PjRtBufferFree(buffer);
 }
 
 REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
                                   const char *modstr, int64_t argcnt,
-                                  void **args) {
+                                  void **args, int64_t constcnt,
+                                  const int64_t *consts) {
   auto lrt = *lrtP;
   auto &cache = lrt->executables[modstr];
   std::vector<PjRtBuffer *> baseArrays(argcnt);
   std::vector<PjRtBuffer **> basePtrs(argcnt);
 
   std::vector<std::vector<int64_t>> sizeKey;
-  sizeKey.reserve(argcnt);
+  sizeKey.reserve(argcnt + (constcnt ? 1 : 0));
+  // An argument may point into the middle of an allocation (a block
+  // operator's sub-vector view). The executable then takes the whole base
+  // buffer and addresses the view as a slice of it; the offsets select the
+  // executable, so they are part of the cache key.
+  std::vector<int64_t> viewOffset(argcnt, 0);
+  // Per argument: -1 for a parameter of the executable; j >= 0 when it
+  // resolves to the buffer of argument j (mfem's in-place add(r, a, z, r), a
+  // BlockVector next to one of its blocks), in which case it is folded into
+  // that parameter; kNullArg for a null pointer (mfem's optional
+  // `geom ? geom->J.Read() : nullptr`, guarded on a flag), which is
+  // compiled as a constant zero buffer. Both fold the argument out of the
+  // parameters, so the pattern is part of the cache key.
+  const int64_t kNullArg = -2;
+  std::vector<int64_t> dupOf(argcnt, -1);
   for (int64_t i = 0; i < argcnt; i++) {
-    auto &&[argB, argO, argP] = bufferAndOffset(lrt, args[i]);
-    if (argO != 0) {
-      llvm::errs() << "only zero-offset execution supported, argument " << i
-                   << " had byte offset of " << argO << "\n";
-      exit(1);
+    if (!args[i]) {
+      dupOf[i] = kNullArg;
+      sizeKey.emplace_back();
+      continue;
     }
+    auto &&[argB, argO, argP] = bufferAndOffset(lrt, args[i]);
+    viewOffset[i] = argO;
     baseArrays[i] = argB;
     basePtrs[i] = argP;
     auto dims = argB->on_device_shape().dimensions();
     sizeKey.emplace_back(dims.begin(), dims.end());
+    for (int64_t j = 0; j < i; j++)
+      if (baseArrays[j] == argB) {
+        dupOf[i] = dupOf[j] < 0 ? j : dupOf[j];
+        break;
+      }
   }
+  sizeKey.push_back(viewOffset);
+  sizeKey.push_back(dupOf);
+
+  // The specialized scalars are part of what the executable was compiled
+  // for, so they are part of what it is cached under.
+  if (constcnt)
+    sizeKey.emplace_back(consts, consts + constcnt);
 
   auto iter = cache.find(sizeKey);
 
@@ -3460,24 +3873,152 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
     funcOp.setSymName(builder.getStringAttr("main"));
     funcOp.setVisibility(SymbolTable::Visibility::Public);
 
+    // The trailing constcnt arguments are the scalars this executable is
+    // specialized over: replace each with a constant of its value so the
+    // shape refinement and simplification below fold them through.
+    if (funcOp.getNumArguments() != argcnt + constcnt) {
+      llvm::errs() << " xla exec function expected " << argcnt + constcnt
+                   << " arguments, found " << funcOp.getNumArguments() << "\n"
+                   << " modstr:\n"
+                   << modstr << "\n";
+      exit(1);
+    }
+    for (int64_t i = constcnt - 1; i >= 0; i--) {
+      auto arg = funcOp.getArgument(argcnt + i);
+      auto TT = dyn_cast<mlir::RankedTensorType>(arg.getType());
+      auto IT = TT ? dyn_cast<mlir::IntegerType>(TT.getElementType())
+                   : mlir::IntegerType();
+      bool scalarLike =
+          TT && IT &&
+          (TT.getRank() == 0 || (TT.getRank() == 1 && TT.getDimSize(0) == 1));
+      if (!scalarLike) {
+        llvm::errs() << " specialized argument " << i
+                     << " must be a single-element integer tensor, found "
+                     << arg.getType() << "\n";
+        exit(1);
+      }
+      mlir::OpBuilder b(&funcOp.getBody().front(),
+                        funcOp.getBody().front().begin());
+      auto cst = mlir::stablehlo::ConstantOp::create(
+          b, funcOp.getLoc(),
+          mlir::SplatElementsAttr::get(TT, b.getIntegerAttr(IT, consts[i])));
+      arg.replaceAllUsesWith(cst);
+      funcOp.eraseArgument(argcnt + i);
+    }
+
     for (int64_t i = 0; i < argcnt; i++) {
       funcOp.setArgAttr(i, "tf.aliasing_output", builder.getI64IntegerAttr(i));
     }
 
     PassManager pm(module->getContext());
 
+    // An offset view is typed as the tail of its base buffer from the view's
+    // offset on; its element conversion is then the refinement's as for any
+    // other argument.
     SmallVector<mlir::Type> types;
+    SmallVector<int64_t> viewStart(argcnt, 0);
     for (int64_t i = 0; i < argcnt; i++) {
-      auto RTT = MyValueOrThrow(xla::ConvertShapeToType<mlir::RankedTensorType>(
-          baseArrays[i]->on_device_shape(), builder));
+      if (dupOf[i] == kNullArg) {
+        // Large enough for any access the guarded code makes in the raised
+        // kernel; a dynamic index into it is clamped.
+        types.push_back(
+            mlir::RankedTensorType::get({256}, builder.getI8Type()));
+        continue;
+      }
+      auto RTT = cast<mlir::RankedTensorType>(
+          MyValueOrThrow(xla::ConvertShapeToType<mlir::RankedTensorType>(
+              baseArrays[i]->on_device_shape(), builder)));
+      if (viewOffset[i]) {
+        int64_t elemBytes = RTT.getElementTypeBitWidth() / 8;
+        if (RTT.getRank() != 1 || elemBytes == 0 || viewOffset[i] % elemBytes) {
+          llvm::errs() << " offset view of argument " << i << " (byte offset "
+                       << viewOffset[i]
+                       << ") does not slice its buffer of type " << RTT << "\n";
+          exit(1);
+        }
+        viewStart[i] = viewOffset[i] / elemBytes;
+        RTT = mlir::RankedTensorType::get({RTT.getDimSize(0) - viewStart[i]},
+                                          RTT.getElementType());
+      }
       types.push_back(RTT);
+    }
+    if (constcnt) {
+      // The injected constants make the dynamic shape operands static;
+      // statify the module before argument refinement so the result types
+      // it pins are consistent with the body throughout.
+      pm.addNestedPass<mlir::func::FuncOp>(
+          stablehlo::createStablehloCanonicalizeDynamismPass());
+      pm.addPass(mlir::stablehlo::createStablehloRefineShapesPass());
     }
     pm.addPass(mlir::enzyme::createEnzymeRefineArgumentsPass(types));
     pm.addPass(mlir::stablehlo::createStablehloRefineShapesPass());
     pm.addNestedPass<mlir::func::FuncOp>(
         stablehlo::createStablehloCanonicalizeDynamismPass());
-    pm.addPass(mlir::enzyme::createEnzymeHLOOptPass());
+    // REACTANT_EXEC_OPT=transform runs the optimizer the Julia compiler
+    // runs on a traced program (the transform-dialect pattern list with its
+    // defaults) instead of the plain enzyme-hlo-opt pass.
+    static const char *execOpt = getenv("REACTANT_EXEC_OPT");
+    if (execOpt && std::string(execOpt) == "transform") {
+      EnzymeXLATransformPassesOptions opts{};
+      opts.max_constant_threshold = 1024;
+      // REACTANT_EXEC_UNROLL sets the trip count up to which while loops
+      // are unrolled. Unrolling the raised kernels' short loops (threshold
+      // 16) makes them straight-line code XLA compiles slowly: the mfem GPU
+      // suite takes 4384 s against 2899 s at threshold 1 (enzyme-hlo-opt:
+      // 2753 s), so unrolling is opt-in.
+      opts.while_unroll_threshold = getenv("REACTANT_EXEC_UNROLL")
+                                        ? atoi(getenv("REACTANT_EXEC_UNROLL"))
+                                        : 1;
+      opts.reshape_propagate = ENZYMEXLA_PROPAGATE_UP;
+      opts.transpose_propagate = ENZYMEXLA_PROPAGATE_UP;
+      opts.dus_slice_simplify = true;
+      opts.raise_shlo_to_blas_lapack = true;
+      opts.recognize_comms = true;
+      opts.lower_comms = true;
+      opts.enable_structured_tensors_passes = true;
+      opts.enable_scatter_gather_optimization_passes = true;
+      opts.enable_reduce_slice_fusion_passes = true;
+      opts.enable_concat_to_batch_passes = true;
+      opts.enable_loop_raising_passes = true;
+      opts.enable_licm_optimization_passes = true;
+      opts.loop_unswitch_threshold = 10;
+      opts.enable_pad_optimization_passes = true;
+      char *mainPasses = nullptr, *lowerPasses = nullptr;
+      enzymexlaGetTransformPassesList(&opts, &mainPasses, &lowerPasses);
+      std::string patterns(mainPasses);
+      enzymexlaFreeTransformPassesList(mainPasses);
+      enzymexlaFreeTransformPassesList(lowerPasses);
+      for (const char *drop :
+           {"convert_mul_convert;", "associative_binary_op_reordering<1>;"})
+        for (size_t at; (at = patterns.find(drop)) != std::string::npos;)
+          patterns.erase(at, strlen(drop));
+      // The main list may introduce enzymexla ops (rotate, wrap, extend)
+      // that XLA does not take; the Julia compiler lowers them before export
+      // with this second list.
+      std::string pipeline =
+          "canonicalize,cse,canonicalize,enzyme-hlo-generate-td{patterns=" +
+          patterns +
+          "},transform-interpreter,enzyme-hlo-remove-transform,canonicalize,"
+          "cse,enzyme-hlo-generate-td{patterns=lower_rotate;lower_wrap;"
+          "lower_extend;lower_updatewithoutcorners;lower_multislice},"
+          "transform-interpreter,enzyme-hlo-remove-transform,canonicalize,cse";
+      if (failed(mlir::parsePassPipeline(pipeline, pm))) {
+        llvm::errs() << " failed to parse the exec optimization pipeline\n";
+        exit(1);
+      }
+    } else {
+      pm.addPass(mlir::enzyme::createEnzymeHLOOptPass());
+    }
 
+    if (getenv("REACTANT_EXEC_DUMP")) {
+      llvm::errs() << "EXEC_DUMP before\n";
+      for (int64_t i = 0; i < argcnt; i++)
+        llvm::errs() << "EXEC_DUMP arg " << i << " type=" << types[i]
+                     << " offset=" << viewOffset[i] << " dup=" << dupOf[i]
+                     << "\n";
+      module->print(llvm::errs());
+      llvm::errs() << "EXEC_DUMP end\n";
+    }
     if (!mlir::succeeded(pm.run(*module))) {
       llvm::errs() << " failed to run passes\n";
       llvm::errs() << " modstr:\n" << modstr << "\n";
@@ -3488,31 +4029,179 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
       exit(1);
     }
 
+    // An argument the kernel never stores through comes back as itself.
+    // Such an argument is not donated and not returned: its buffer stays as
+    // it is, and the executable neither copies it into a fresh result nor
+    // hands back a future for it.
+    uint8_t *written = (uint8_t *)malloc(argcnt);
+    memset(written, 1, argcnt);
+    {
+      auto ret = cast<func::ReturnOp>(funcOp.getBody().front().back());
+      SmallVector<mlir::Value> kept;
+      SmallVector<mlir::Type> keptTypes;
+      for (int64_t i = 0; i < argcnt && i < (int64_t)ret.getNumOperands();
+           i++) {
+        written[i] = ret.getOperand(i) != funcOp.getArgument(i);
+        funcOp.removeArgAttr(i, "tf.aliasing_output");
+        if (dupOf[i] == kNullArg) {
+          auto arg = funcOp.getArgument(i);
+          mlir::OpBuilder b(&funcOp.getBody().front(),
+                            funcOp.getBody().front().begin());
+          auto zero = mlir::stablehlo::ConstantOp::create(
+              b, funcOp.getLoc(),
+              mlir::DenseElementsAttr::get(
+                  cast<mlir::RankedTensorType>(arg.getType()),
+                  b.getI8IntegerAttr(0)));
+          arg.replaceAllUsesWith(zero);
+          written[i] = 0;
+        }
+        if (viewOffset[i]) {
+          // The view becomes its base buffer: every use reads the slice at
+          // the view's offset, and a written view's result is written back
+          // into the base at that offset.
+          auto arg = funcOp.getArgument(i);
+          auto viewTy = cast<mlir::RankedTensorType>(arg.getType());
+          auto baseTy = mlir::RankedTensorType::get(
+              {viewTy.getDimSize(0) + viewStart[i]}, viewTy.getElementType());
+          arg.setType(baseTy);
+          mlir::OpBuilder b(&funcOp.getBody().front(),
+                            funcOp.getBody().front().begin());
+          auto slice = mlir::stablehlo::SliceOp::create(
+              b, funcOp.getLoc(), arg, b.getDenseI64ArrayAttr({viewStart[i]}),
+              b.getDenseI64ArrayAttr({baseTy.getDimSize(0)}),
+              b.getDenseI64ArrayAttr({1}));
+          arg.replaceAllUsesExcept(slice, slice);
+          if (written[i]) {
+            mlir::OpBuilder rb(ret);
+            auto idxTy = mlir::RankedTensorType::get({}, rb.getI64Type());
+            auto startCst = mlir::stablehlo::ConstantOp::create(
+                rb, funcOp.getLoc(),
+                mlir::DenseElementsAttr::get(idxTy, viewStart[i]));
+            auto dus = mlir::stablehlo::DynamicUpdateSliceOp::create(
+                rb, funcOp.getLoc(), arg, ret.getOperand(i),
+                mlir::ValueRange{startCst});
+            ret->setOperand(i, dus);
+          }
+        }
+      }
+      // Arguments that resolve to one buffer are all typed as that buffer
+      // now, so the later ones are folded into the first: their uses read
+      // it, and a written one's view region is written over the first one's
+      // result. The executable then takes the buffer once.
+      for (int64_t i = 0; i < argcnt && i < (int64_t)ret.getNumOperands();
+           i++) {
+        if (dupOf[i] < 0)
+          continue;
+        int64_t leader = dupOf[i];
+        auto arg = funcOp.getArgument(i);
+        auto leaderArg = funcOp.getArgument(leader);
+        if (arg.getType() != leaderArg.getType()) {
+          llvm::errs() << " arguments " << leader << " and " << i
+                       << " share a buffer but have types "
+                       << leaderArg.getType() << " and " << arg.getType()
+                       << "\n";
+          exit(1);
+        }
+        arg.replaceAllUsesWith(leaderArg);
+        if (written[i]) {
+          mlir::OpBuilder rb(ret);
+          auto baseTy = cast<mlir::RankedTensorType>(arg.getType());
+          mlir::Value update = ret.getOperand(i);
+          if (viewStart[i])
+            update = mlir::stablehlo::SliceOp::create(
+                rb, funcOp.getLoc(), update,
+                rb.getDenseI64ArrayAttr({viewStart[i]}),
+                rb.getDenseI64ArrayAttr({baseTy.getDimSize(0)}),
+                rb.getDenseI64ArrayAttr({1}));
+          auto idxTy = mlir::RankedTensorType::get({}, rb.getI64Type());
+          auto startCst = mlir::stablehlo::ConstantOp::create(
+              rb, funcOp.getLoc(),
+              mlir::DenseElementsAttr::get(idxTy, viewStart[i]));
+          auto merged = mlir::stablehlo::DynamicUpdateSliceOp::create(
+              rb, funcOp.getLoc(), ret.getOperand(leader), update,
+              mlir::ValueRange{startCst});
+          ret->setOperand(leader, merged);
+          written[leader] = 1;
+          written[i] = 0;
+        }
+      }
+      // (parameter position, result index) of the donated arguments
+      SmallVector<std::pair<int64_t, int64_t>> aliasing;
+      for (int64_t i = 0, pos = 0; i < argcnt; i++) {
+        if (dupOf[i] != -1)
+          continue;
+        if (i < (int64_t)ret.getNumOperands() && written[i]) {
+          aliasing.emplace_back(pos, kept.size());
+          kept.push_back(ret.getOperand(i));
+          keptTypes.push_back(ret.getOperand(i).getType());
+        }
+        pos++;
+      }
+      for (int64_t i = argcnt; i < (int64_t)ret.getNumOperands(); i++) {
+        kept.push_back(ret.getOperand(i));
+        keptTypes.push_back(ret.getOperand(i).getType());
+      }
+      ret->setOperands(kept);
+      llvm::BitVector folded(funcOp.getNumArguments());
+      for (int64_t i = 0; i < argcnt; i++)
+        if (dupOf[i] != -1)
+          folded.set(i);
+      funcOp.eraseArguments(folded);
+      funcOp.setType(mlir::FunctionType::get(
+          module->getContext(), funcOp.getBody().front().getArgumentTypes(),
+          keptTypes));
+      for (auto [pos, res] : aliasing)
+        funcOp.setArgAttr(pos, "tf.aliasing_output",
+                          builder.getI64IntegerAttr(res));
+    }
     auto exec =
         ClientCompileWithProto(lrt->client, wrap(module.get()), nullptr, 0);
 
-    iter = cache.try_emplace(sizeKey, exec).first;
+    // Per parameter of the executable, in order.
+    uint8_t *keep = (uint8_t *)malloc(argcnt);
+    uint8_t *writtenKept = (uint8_t *)malloc(argcnt);
+    for (int64_t i = 0, pos = 0; i < argcnt; i++) {
+      keep[i] = dupOf[i] == -1;
+      if (keep[i])
+        writtenKept[pos++] = written[i];
+    }
+    free(written);
+    iter =
+        cache
+            .try_emplace(sizeKey,
+                         LinkableRuntime::CachedExec{exec, writtenKept, keep})
+            .first;
   }
 
-  auto exec = iter->second;
+  auto exec = iter->second.exec;
+  uint8_t *written = iter->second.written;
+  uint8_t *keep = iter->second.keep;
 
-  uint8_t *is_arg_donatable = (uint8_t *)malloc(argcnt);
-  for (int i = 0; i < argcnt; i++)
-    is_arg_donatable[i] = 1;
-  int num_results = argcnt;
-  std::vector<PjRtBuffer *> results(argcnt);
-  std::vector<uint8_t> futures(argcnt, 0);
-  std::vector<FutureType *> future_results(argcnt, nullptr);
+  std::vector<PjRtBuffer *> callArgs;
+  callArgs.reserve(argcnt);
+  for (int64_t i = 0; i < argcnt; i++)
+    if (keep[i])
+      callArgs.push_back(baseArrays[i]);
+  int num_results = 0;
+  for (size_t p = 0; p < callArgs.size(); p++)
+    num_results += written[p];
+  std::vector<PjRtBuffer *> results(num_results);
+  std::vector<uint8_t> futures(num_results, 0);
+  std::vector<FutureType *> future_results(num_results, nullptr);
   PjRtDevice *device = ClientGetDevice(lrt->client, lrt->device);
-  XLAExecuteSharded(exec, argcnt, baseArrays.data(), device, is_arg_donatable,
+  XLAExecuteSharded(exec, callArgs.size(), callArgs.data(), device, written,
                     num_results, results.data(), futures.data(),
                     future_results.data());
-  free(is_arg_donatable);
-  for (int64_t i = 0; i < argcnt; i++) {
-    *basePtrs[i] = results[i];
-    if (futures[i]) {
-      FutureAwait(future_results[i]);
-      FreeFuture(future_results[i]);
+  for (int64_t i = 0, p = 0, k = 0; i < argcnt; i++) {
+    if (!keep[i])
+      continue;
+    if (written[p++]) {
+      *basePtrs[i] = results[k];
+      if (futures[k]) {
+        FutureAwait(future_results[k]);
+        FreeFuture(future_results[k]);
+      }
+      k++;
     }
   }
 }
@@ -3878,7 +4567,8 @@ REACTANT_ABI void ReactantCreateLLVMMod(
     llvm::LLVMContext **out_context, size_t *out_off, size_t *out_tmp_buf) {
 
   std::string fn(fn_str ? std::string(fn_str, fn_len) : std::string());
-  llvm::StringRef source(source_str ? llvm::StringRef(source_str, source_len) : llvm::StringRef());
+  llvm::StringRef source(source_str ? llvm::StringRef(source_str, source_len)
+                                    : llvm::StringRef());
 
   std::vector<llvm::SmallVector<int64_t>> out_shapes;
   out_shapes.reserve(num_out_shapes);

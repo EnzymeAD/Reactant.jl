@@ -1885,6 +1885,7 @@ function invoke(
     res_attrs=nothing,
     branch_weights=nothing,
     CConv=nothing,
+    default_func_attrs=nothing,
     op_bundle_sizes,
     op_bundle_tags=nothing,
     normalDest::Block,
@@ -1919,6 +1920,8 @@ function invoke(
     !isnothing(branch_weights) &&
         push!(attributes, NamedAttribute("branch_weights", branch_weights))
     !isnothing(CConv) && push!(attributes, NamedAttribute("CConv", CConv))
+    !isnothing(default_func_attrs) &&
+        push!(attributes, NamedAttribute("default_func_attrs", default_func_attrs))
     !isnothing(op_bundle_tags) &&
         push!(attributes, NamedAttribute("op_bundle_tags", op_bundle_tags))
 
@@ -1962,6 +1965,11 @@ llvm.func internal @internal_func() {
   llvm.return
 }
 ```
+
+The `function_entry_count` attribute models function-level `!prof`
+entry-count metadata. It stores the entry count, whether the count is real
+or synthetic, and any trailing import GUID operands in a single
+`#llvm.function_entry_count` attribute.
 """
 function func(;
     sym_name,
@@ -2322,11 +2330,69 @@ function load(
 end
 
 """
+`mlir_metadata_as_value`
+
+Materializes an `!llvm.metadata` SSA value that mirrors LLVM IR\'s
+`llvm::MetadataAsValue`: a wrapper that lifts an arbitrary
+`llvm::Metadata` node into the value domain so it can be used as an
+operand to instructions that take `metadata` arguments (for example the
+constrained floating-point intrinsics or `llvm.read_register`).
+
+The wrapped metadata is described by the `metadata` attribute, which
+must be one of the LLVM dialect\'s metadata-attribute classes:
+
+* `#llvm.md_string<\"...\">` -> `llvm::MDString`.
+* `#llvm.md_const<...>` -> `llvm::ConstantAsMetadata`.
+* `#llvm.md_global_value<@symbol>` -> `llvm::ValueAsMetadata` of a
+  symbol-backed global value.
+* `#llvm.md_node<...>` -> `llvm::MDNode` over any of the above.
+
+These can be nested arbitrarily to form metadata trees. Lowering to LLVM
+IR materialises the corresponding `llvm::Metadata` via the dialect\'s
+metadata-attribute converter and wraps the result with
+`llvm::MetadataAsValue::get(ctx, md)`.
+
+# Example
+
+```mlir
+// Rounding-mode operand of a constrained-FP intrinsic:
+%rm = llvm.mlir.metadata_as_value #llvm.md_string<\"round.tonearest\">
+    : !llvm.metadata
+// Named-register metadata for llvm.read_register:
+%nr = llvm.mlir.metadata_as_value #llvm.md_node<#llvm.md_string<\"sp\">>
+    : !llvm.metadata
+```
+"""
+function mlir_metadata_as_value(;
+    res=nothing::Union{Nothing,IR.Type}, metadata, location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[NamedAttribute("metadata", metadata),]
+    !isnothing(res) && push!(op_ty_results, res)
+
+    return create_operation(
+        "llvm.mlir.metadata_as_value",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
 `module_flags`
 
 Represents the equivalent in MLIR for LLVM\'s `llvm.module.flags` metadata,
-which requires a list of metadata triplets. Each triplet entry is described
-by a `ModuleFlagAttr`.
+which requires a list of metadata triplets (combining kind, name, value),
+either specified directly by a `ModuleFlagAttr` or defined by an attribute
+implementing `ModuleFlagAttrInterface` (which is used to wrap the details
+of metadata combining, provided other verifications, etc.)
 
 # Example
 ```mlir
@@ -2400,7 +2466,7 @@ llvm.named_metadata \"foo.version\" [
 ]
 llvm.named_metadata \"foo.kernel\" [
   #llvm.md_node<
-    #llvm.md_func<@my_kernel>,
+    #llvm.md_global_value<@my_kernel>,
     #llvm.md_node<>,
     #llvm.md_node<
       #llvm.md_node<#llvm.md_const<0 : i32>,
@@ -2435,15 +2501,14 @@ end
 """
 `mlir_none`
 
-Unlike LLVM IR, MLIR does not have first-class token values. They must be
-explicitly created as SSA values using `llvm.mlir.none`. This operation has
-no operands or attributes, and returns a none token value of a wrapped LLVM IR
-pointer type.
+MLIR does not have a way to spell the LLVM IR `none` token literal. This
+operation produces a builtin `!token` SSA value that lowers to
+`llvm::ConstantTokenNone` in LLVM IR.
 
 Examples:
 
 ```mlir
-%0 = llvm.mlir.none : !llvm.token
+%0 = llvm.mlir.none : !token
 ```
 """
 function mlir_none(; res=nothing::Union{Nothing,IR.Type}, location=Location())

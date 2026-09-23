@@ -712,8 +712,8 @@ end
     ir = @code_hlo optimize = "enzyme-batch" for_no_track_numbers(x_ra, n_ra)
     @test @filecheck begin
         @check_dag "enzyme.disable_mincut"
-        @check_dag "enzymexla.enable_checkpointing"
-        @check_dag "enzymexla.checkpoint_period = 3"
+        @check_dag "enzyme.enable_checkpointing"
+        @check_dag "enzyme.checkpoint_period = 3"
         ir
     end
 end
@@ -742,8 +742,8 @@ end
         show, @code_hlo optimize = "enzyme-batch" for_explicit_checkpoints(x_ra, n_ra)
     )
     @test @filecheck begin
-        @check_dag "enzymexla.enable_checkpointing"
-        @check_dag "enzymexla.checkpoint_period = 5"
+        @check_dag "enzyme.enable_checkpointing"
+        @check_dag "enzyme.checkpoint_period = 5"
         ir
     end
 end
@@ -768,8 +768,8 @@ end
 
     ir = sprint(show, @code_hlo while_explicit_checkpoints(x_ra, n_ra))
     @test @filecheck begin
-        @check_dag "enzymexla.enable_checkpointing"
-        @check_dag "enzymexla.checkpoint_period = 5"
+        @check_dag "enzyme.enable_checkpointing"
+        @check_dag "enzyme.checkpoint_period = 5"
         ir
     end
 end
@@ -794,7 +794,7 @@ end
     ir = sprint(show, @code_hlo optimize = "enzyme-batch" for_default_checkpoints(x_ra))
     @test @filecheck begin
         @check_dag "enzyme.disable_mincut"
-        @check_dag "enzymexla.enable_checkpointing"
+        @check_dag "enzyme.enable_checkpointing"
         ir
     end
 end
@@ -841,9 +841,9 @@ end
 
     ir = sprint(show, @code_hlo optimize = "enzyme-batch" for_binomial_ir_check(x_ra))
     @test @filecheck begin
-        @check_dag "enzymexla.enable_checkpointing"
-        @check_dag "enzymexla.binomial_checkpointing"
-        @check_dag "enzymexla.checkpoint_period = 4"
+        @check_dag "enzyme.enable_checkpointing"
+        @check_dag "enzyme.binomial_checkpointing"
+        @check_dag "enzyme.checkpoint_period = 4"
         ir
     end
 end
@@ -1168,6 +1168,36 @@ end
     @test simulation.stop_iteration == 3
 end
 
+mutable struct PlainFieldCache{U,C,B}
+    u::U
+    count::C
+    done::B
+end
+
+function plain_field_assigned(u, threshold, init, assigned)
+    c = PlainFieldCache(u, init, ReactantCore.promote_to_traced(false))
+    @trace if sum(u) > threshold
+        c.count = assigned
+        c.done = true
+    end
+    return c.count, c.done
+end
+
+function plain_field_untouched(u, threshold)
+    c = PlainFieldCache(u, 0, ReactantCore.promote_to_traced(false))
+    @trace if sum(u) > threshold
+        c.done = true
+    end
+    return c.count, c.done
+end
+
+@testset "if: assignment to an untraced struct field" begin
+    u = Reactant.to_rarray(Float32[1, 1])
+    @test_throws "untraced location" @jit plain_field_assigned(u, 1.0f0, 0, 1)
+    @test_throws "untraced location" @jit plain_field_assigned(u, 1.0f0, 0.5, 2.5)
+    @test @jit(plain_field_untouched(u, 1.0f0)) == (0, true)
+end
+
 function ternary_max(x, y)
     @trace result = x > y ? x : y
     return result
@@ -1437,4 +1467,81 @@ end
 
     for_compiled = @compile for_loop_calling_closure(rd, rB)
     @test Array(for_compiled(rd, rB)) ≈ for_loop_calling_closure(d, B)
+end  
+
+function condition13_bareif_no_final_else(cond, numreals)
+    @trace if cond
+        1.0
+    elseif numreals == 4
+        2.0
+    elseif numreals == 2
+        3.0
+    elseif numreals == 0
+        4.0
+    end
+end
+
+@testset "condition13: bare if with no final else" begin
+    @test @jit(
+        condition13_bareif_no_final_else(ConcreteRNumber(true), ConcreteRNumber(4))
+    ) === nothing
+    @test @jit(
+        condition13_bareif_no_final_else(ConcreteRNumber(false), ConcreteRNumber(4))
+    ) === nothing
+    @test @jit(
+        condition13_bareif_no_final_else(ConcreteRNumber(false), ConcreteRNumber(2))
+    ) === nothing
+    @test @jit(
+        condition13_bareif_no_final_else(ConcreteRNumber(false), ConcreteRNumber(0))
+    ) === nothing
+    @test @jit(
+        condition13_bareif_no_final_else(ConcreteRNumber(false), ConcreteRNumber(99))
+    ) === nothing
+end
+
+function condition14_ifelse_assign_return(x)
+    return @trace y = if x > 0
+        1
+    else
+        -1
+    end
+end
+
+@testset "condition14: if/else assign returned directly" begin
+    @test @jit(condition14_ifelse_assign_return(ConcreteRNumber(1.0))) == 1
+    @test @jit(condition14_ifelse_assign_return(ConcreteRNumber(-1.0))) == -1
+end
+
+function condition15_ifelseifelse_assign_return(x)
+    return @trace y = if x > 0
+        1
+    elseif x == 0
+        0
+    else
+        -1
+    end
+end
+
+@testset "condition15: if/elseif/else assign returned directly" begin
+    @test @jit(condition15_ifelseifelse_assign_return(ConcreteRNumber(1.0))) == 1
+    @test @jit(condition15_ifelseifelse_assign_return(ConcreteRNumber(0.0))) == 0
+    @test @jit(condition15_ifelseifelse_assign_return(ConcreteRNumber(-1.0))) == -1
+end
+
+function condition16_nested_ifelse_assign_return(x)
+    return @trace y = if x > 0
+        1
+    else
+        if x == 0
+            0
+        else
+            -1
+        end
+    end
+end
+
+@testset "condition16: nested if/else assign returned directly" begin
+    @test @jit(condition16_nested_ifelse_assign_return(ConcreteRNumber(1.0))) == 1
+    @test @jit(condition16_nested_ifelse_assign_return(ConcreteRNumber(0.0))) == 0
+    @test @jit(condition16_nested_ifelse_assign_return(ConcreteRNumber(-1.0))) == -1
 end

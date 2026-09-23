@@ -1504,6 +1504,7 @@ function custom_call(
     operand_layouts=nothing,
     result_layouts=nothing,
     output_operand_aliases=nothing,
+    result_tilings=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[result_0...,]
@@ -1524,6 +1525,8 @@ function custom_call(
         push!(attributes, NamedAttribute("result_layouts", result_layouts))
     !isnothing(output_operand_aliases) &&
         push!(attributes, NamedAttribute("output_operand_aliases", output_operand_aliases))
+    !isnothing(result_tilings) &&
+        push!(attributes, NamedAttribute("result_tilings", result_tilings))
 
     return create_operation(
         "stablehlo.custom_call",

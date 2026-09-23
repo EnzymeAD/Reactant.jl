@@ -40,8 +40,8 @@ function check_numpyro_available()
         return false
     end
     try
-        CondaPkg.add_pip("jax"; version="==0.9.0")
-        CondaPkg.add_pip("numpyro"; version="==0.19.0")
+        CondaPkg.add_pip("jax"; version=">=0.9")
+        CondaPkg.add_pip("numpyro"; version=">=0.21")
 
         os = pyimport("os")
         os.environ.__setitem__("JAX_ENABLE_X64", "1")

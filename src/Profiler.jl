@@ -731,8 +731,15 @@ function Base.show(io::IO, summary::Proto.tensorflow.profiler.MemoryProfileSumma
 end
 
 function get_aggregate_memory_statistics(xplane_file::String)
-    data = JSON.parse(xspace_to_tools_data([xplane_file], "memory_profile")[1])
+    raw_data = xspace_to_tools_data([xplane_file], "memory_profile")[1]
     memory_data = Dict{String,Proto.tensorflow.profiler.MemoryProfileSummary}()
+    if isempty(raw_data)
+        # A program that doesn't allocate (e.g. one compiled with
+        # `assert_nonallocating`) records no memory events at all.
+        @debug "`memory_profile` returned no data" xplane_file
+        return memory_data
+    end
+    data = JSON.parse(raw_data)
     for (k, v) in data[:memoryProfilePerAllocator]
         profile_summary = v[:profileSummary]
         memory_data[k] = Proto.tensorflow.profiler.MemoryProfileSummary(
@@ -808,7 +815,12 @@ function Base.show(io::IO, flops::Proto.tensorflow.profiler.op_profile.Metrics)
 end
 
 function get_aggregate_metrics(xplane_file::String, nrepeat::Int)
-    data = JSON.parse(xspace_to_tools_data([xplane_file], "op_profile")[1])
+    raw_data = xspace_to_tools_data([xplane_file], "op_profile")[1]
+    if isempty(raw_data)
+        @debug "`op_profile` returned no data" xplane_file
+        return nothing
+    end
+    data = JSON.parse(raw_data)
     if !haskey(data, :byProgram) || !haskey(data[:byProgram], :metrics)
         data_available_keys = keys(data)
         by_program_available_keys =

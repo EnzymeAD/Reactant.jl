@@ -327,12 +327,16 @@ struct GpuDeviceInfoProto
     device_address_bits::Int64
     pcie_bandwidth::Int64
     ecc_enabled::Bool
+    mem_clock_ghz::Float32
+    reserved_shared_memory_per_block::Int64
+    max_blocks_per_multiprocessor::Int64
+    collective_memory_granularity::Int64
 end
 PB.oneof_field_types(::Type{GpuDeviceInfoProto}) = (;
     compute_capability = (;cuda_compute_capability=CudaComputeCapabilityProto, rocm_compute_capability=RocmComputeCapabilityProto, oneapi_compute_capability=OneAPIComputeCapabilityProto),
 )
-PB.default_values(::Type{GpuDeviceInfoProto}) = (;device_vendor = "", platform_version = "", pci_bus_id = "", name = "", model_str = "", threads_per_block_limit = zero(Int32), threads_per_warp = zero(Int32), shared_memory_per_block = zero(Int32), shared_memory_per_core = zero(Int32), threads_per_core_limit = zero(Int32), core_count = zero(Int32), fpus_per_core = zero(Int64), block_dim_limit_x = zero(Int64), block_dim_limit_y = zero(Int64), block_dim_limit_z = zero(Int64), memory_bandwidth = zero(Int64), l2_cache_size = zero(Int64), clock_rate_ghz = zero(Float32), device_memory_size = zero(Int64), shared_memory_per_block_optin = zero(Int32), cuda_compute_capability = nothing, rocm_compute_capability = nothing, oneapi_compute_capability = nothing, registers_per_core_limit = zero(Int64), registers_per_block_limit = zero(Int64), scalar_unit_description = nothing, matrix_unit_description = nothing, driver_version = "", kernel_mode_driver_version = "", runtime_version = "", compile_time_toolkit_version = "", dnn_version = "", cub_version = "", device_interconnect_info = nothing, numa_node = zero(Int32), thread_dim_limit_x = zero(Int64), thread_dim_limit_y = zero(Int64), thread_dim_limit_z = zero(Int64), device_address_bits = zero(Int64), pcie_bandwidth = zero(Int64), ecc_enabled = false)
-PB.field_numbers(::Type{GpuDeviceInfoProto}) = (;device_vendor = 30, platform_version = 31, pci_bus_id = 32, name = 34, model_str = 35, threads_per_block_limit = 1, threads_per_warp = 2, shared_memory_per_block = 3, shared_memory_per_core = 4, threads_per_core_limit = 5, core_count = 6, fpus_per_core = 7, block_dim_limit_x = 8, block_dim_limit_y = 9, block_dim_limit_z = 10, memory_bandwidth = 11, l2_cache_size = 12, clock_rate_ghz = 13, device_memory_size = 14, shared_memory_per_block_optin = 15, cuda_compute_capability = 16, rocm_compute_capability = 17, oneapi_compute_capability = 22, registers_per_core_limit = 18, registers_per_block_limit = 19, scalar_unit_description = 20, matrix_unit_description = 21, driver_version = 23, kernel_mode_driver_version = 24, runtime_version = 25, compile_time_toolkit_version = 26, dnn_version = 27, cub_version = 28, device_interconnect_info = 29, numa_node = 36, thread_dim_limit_x = 37, thread_dim_limit_y = 38, thread_dim_limit_z = 39, device_address_bits = 40, pcie_bandwidth = 41, ecc_enabled = 42)
+PB.default_values(::Type{GpuDeviceInfoProto}) = (;device_vendor = "", platform_version = "", pci_bus_id = "", name = "", model_str = "", threads_per_block_limit = zero(Int32), threads_per_warp = zero(Int32), shared_memory_per_block = zero(Int32), shared_memory_per_core = zero(Int32), threads_per_core_limit = zero(Int32), core_count = zero(Int32), fpus_per_core = zero(Int64), block_dim_limit_x = zero(Int64), block_dim_limit_y = zero(Int64), block_dim_limit_z = zero(Int64), memory_bandwidth = zero(Int64), l2_cache_size = zero(Int64), clock_rate_ghz = zero(Float32), device_memory_size = zero(Int64), shared_memory_per_block_optin = zero(Int32), cuda_compute_capability = nothing, rocm_compute_capability = nothing, oneapi_compute_capability = nothing, registers_per_core_limit = zero(Int64), registers_per_block_limit = zero(Int64), scalar_unit_description = nothing, matrix_unit_description = nothing, driver_version = "", kernel_mode_driver_version = "", runtime_version = "", compile_time_toolkit_version = "", dnn_version = "", cub_version = "", device_interconnect_info = nothing, numa_node = zero(Int32), thread_dim_limit_x = zero(Int64), thread_dim_limit_y = zero(Int64), thread_dim_limit_z = zero(Int64), device_address_bits = zero(Int64), pcie_bandwidth = zero(Int64), ecc_enabled = false, mem_clock_ghz = zero(Float32), reserved_shared_memory_per_block = zero(Int64), max_blocks_per_multiprocessor = zero(Int64), collective_memory_granularity = zero(Int64))
+PB.field_numbers(::Type{GpuDeviceInfoProto}) = (;device_vendor = 30, platform_version = 31, pci_bus_id = 32, name = 34, model_str = 35, threads_per_block_limit = 1, threads_per_warp = 2, shared_memory_per_block = 3, shared_memory_per_core = 4, threads_per_core_limit = 5, core_count = 6, fpus_per_core = 7, block_dim_limit_x = 8, block_dim_limit_y = 9, block_dim_limit_z = 10, memory_bandwidth = 11, l2_cache_size = 12, clock_rate_ghz = 13, device_memory_size = 14, shared_memory_per_block_optin = 15, cuda_compute_capability = 16, rocm_compute_capability = 17, oneapi_compute_capability = 22, registers_per_core_limit = 18, registers_per_block_limit = 19, scalar_unit_description = 20, matrix_unit_description = 21, driver_version = 23, kernel_mode_driver_version = 24, runtime_version = 25, compile_time_toolkit_version = 26, dnn_version = 27, cub_version = 28, device_interconnect_info = 29, numa_node = 36, thread_dim_limit_x = 37, thread_dim_limit_y = 38, thread_dim_limit_z = 39, device_address_bits = 40, pcie_bandwidth = 41, ecc_enabled = 42, mem_clock_ghz = 43, reserved_shared_memory_per_block = 44, max_blocks_per_multiprocessor = 45, collective_memory_granularity = 46)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:GpuDeviceInfoProto}, _endpos::Int=0, _group::Bool=false)
     device_vendor = ""
@@ -374,6 +378,10 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:GpuDeviceInfoProto}, _en
     device_address_bits = zero(Int64)
     pcie_bandwidth = zero(Int64)
     ecc_enabled = false
+    mem_clock_ghz = zero(Float32)
+    reserved_shared_memory_per_block = zero(Int64)
+    max_blocks_per_multiprocessor = zero(Int64)
+    collective_memory_granularity = zero(Int64)
     while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 30
@@ -458,11 +466,19 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:GpuDeviceInfoProto}, _en
             pcie_bandwidth = PB.decode(d, Int64)
         elseif field_number == 42
             ecc_enabled = PB.decode(d, Bool)
+        elseif field_number == 43
+            mem_clock_ghz = PB.decode(d, Float32)
+        elseif field_number == 44
+            reserved_shared_memory_per_block = PB.decode(d, Int64)
+        elseif field_number == 45
+            max_blocks_per_multiprocessor = PB.decode(d, Int64)
+        elseif field_number == 46
+            collective_memory_granularity = PB.decode(d, Int64)
         else
             Base.skip(d, wire_type)
         end
     end
-    return GpuDeviceInfoProto(device_vendor, platform_version, pci_bus_id, name, model_str, threads_per_block_limit, threads_per_warp, shared_memory_per_block, shared_memory_per_core, threads_per_core_limit, core_count, fpus_per_core, block_dim_limit_x, block_dim_limit_y, block_dim_limit_z, memory_bandwidth, l2_cache_size, clock_rate_ghz, device_memory_size, shared_memory_per_block_optin, compute_capability, registers_per_core_limit, registers_per_block_limit, scalar_unit_description[], matrix_unit_description[], driver_version, kernel_mode_driver_version, runtime_version, compile_time_toolkit_version, dnn_version, cub_version, device_interconnect_info[], numa_node, thread_dim_limit_x, thread_dim_limit_y, thread_dim_limit_z, device_address_bits, pcie_bandwidth, ecc_enabled)
+    return GpuDeviceInfoProto(device_vendor, platform_version, pci_bus_id, name, model_str, threads_per_block_limit, threads_per_warp, shared_memory_per_block, shared_memory_per_core, threads_per_core_limit, core_count, fpus_per_core, block_dim_limit_x, block_dim_limit_y, block_dim_limit_z, memory_bandwidth, l2_cache_size, clock_rate_ghz, device_memory_size, shared_memory_per_block_optin, compute_capability, registers_per_core_limit, registers_per_block_limit, scalar_unit_description[], matrix_unit_description[], driver_version, kernel_mode_driver_version, runtime_version, compile_time_toolkit_version, dnn_version, cub_version, device_interconnect_info[], numa_node, thread_dim_limit_x, thread_dim_limit_y, thread_dim_limit_z, device_address_bits, pcie_bandwidth, ecc_enabled, mem_clock_ghz, reserved_shared_memory_per_block, max_blocks_per_multiprocessor, collective_memory_granularity)
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::GpuDeviceInfoProto)
@@ -513,6 +529,10 @@ function PB.encode(e::PB.AbstractProtoEncoder, x::GpuDeviceInfoProto)
     x.device_address_bits != zero(Int64) && PB.encode(e, 40, x.device_address_bits)
     x.pcie_bandwidth != zero(Int64) && PB.encode(e, 41, x.pcie_bandwidth)
     x.ecc_enabled != false && PB.encode(e, 42, x.ecc_enabled)
+    x.mem_clock_ghz !== zero(Float32) && PB.encode(e, 43, x.mem_clock_ghz)
+    x.reserved_shared_memory_per_block != zero(Int64) && PB.encode(e, 44, x.reserved_shared_memory_per_block)
+    x.max_blocks_per_multiprocessor != zero(Int64) && PB.encode(e, 45, x.max_blocks_per_multiprocessor)
+    x.collective_memory_granularity != zero(Int64) && PB.encode(e, 46, x.collective_memory_granularity)
     return position(e.io) - initpos
 end
 function PB._encoded_size(x::GpuDeviceInfoProto)
@@ -563,6 +583,10 @@ function PB._encoded_size(x::GpuDeviceInfoProto)
     x.device_address_bits != zero(Int64) && (encoded_size += PB._encoded_size(x.device_address_bits, 40))
     x.pcie_bandwidth != zero(Int64) && (encoded_size += PB._encoded_size(x.pcie_bandwidth, 41))
     x.ecc_enabled != false && (encoded_size += PB._encoded_size(x.ecc_enabled, 42))
+    x.mem_clock_ghz !== zero(Float32) && (encoded_size += PB._encoded_size(x.mem_clock_ghz, 43))
+    x.reserved_shared_memory_per_block != zero(Int64) && (encoded_size += PB._encoded_size(x.reserved_shared_memory_per_block, 44))
+    x.max_blocks_per_multiprocessor != zero(Int64) && (encoded_size += PB._encoded_size(x.max_blocks_per_multiprocessor, 45))
+    x.collective_memory_granularity != zero(Int64) && (encoded_size += PB._encoded_size(x.collective_memory_granularity, 46))
     return encoded_size
 end
 

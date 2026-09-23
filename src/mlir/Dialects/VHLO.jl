@@ -1053,6 +1053,48 @@ function custom_call_v1(
     )
 end
 
+function custom_call_v2(
+    inputs::Vector{Value};
+    results::Vector{IR.Type},
+    call_target_name,
+    has_side_effect,
+    backend_config,
+    api_version,
+    called_computations,
+    operand_layouts,
+    result_layouts,
+    output_operand_aliases,
+    result_tilings,
+    location=Location(),
+)
+    op_ty_results = IR.Type[results...,]
+    operands = Value[inputs...,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[
+        NamedAttribute("call_target_name", call_target_name),
+        NamedAttribute("has_side_effect", has_side_effect),
+        NamedAttribute("backend_config", backend_config),
+        NamedAttribute("api_version", api_version),
+        NamedAttribute("called_computations", called_computations),
+        NamedAttribute("operand_layouts", operand_layouts),
+        NamedAttribute("result_layouts", result_layouts),
+        NamedAttribute("output_operand_aliases", output_operand_aliases),
+        NamedAttribute("result_tilings", result_tilings),
+    ]
+
+    return create_operation(
+        "vhlo.custom_call_v2",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function divide_v1(lhs::Value, rhs::Value; result::IR.Type, location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[lhs, rhs]
