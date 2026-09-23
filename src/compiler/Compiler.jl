@@ -16,9 +16,9 @@ import ..Reactant:
     OrderedIdDict,
     make_tracer,
     TracedToConcrete,
-    append_path,
-    TracedType
+    append_path
 import Reactant: OptimizeCommunicationOptions, ShardyPropagationOptions, CompileOptions
+using ReactantCore: is_traced
 using Reactant_jll: Reactant_jll
 
 include("Macros.jl")
@@ -765,7 +765,7 @@ Base.@nospecializeinfer function compile_mlir!(
         padded_inputs = IdDict()
         has_padded_inputs = false
         for (k, v) in seen_args
-            v isa Reactant.TracedType || continue
+            is_traced(v) || continue
             if Reactant.has_padding(k)
                 has_padded_inputs = true
                 padded_inputs[v] = Reactant.get_padding(k)
@@ -1038,10 +1038,10 @@ Base.@nospecializeinfer function compile_mlir!(
     fnbody = MLIR.IR.first_block(MLIR.IR.region(func_op, 1))::MLIR.IR.Block
     ret = MLIR.IR.terminator(fnbody)::MLIR.IR.Operation
 
-    preserved_args = Tuple{TracedType,Int}[]
+    preserved_args = Tuple{Any,Int}[]
     results = [MLIR.IR.operand(ret, i) for i in 1:MLIR.IR.noperands(ret)]
     nresults = MLIR.IR.Value[]
-    linear_results2 = TracedType[]
+    linear_results2 = Any[]
     results_mask = falses(length(results))
 
     for (i, op) in enumerate(results)
@@ -1575,7 +1575,7 @@ function default_callcache()
             mlir_result_types::Vector{MLIR.IR.Type},
             traced_result::Any,
             mutated_args::Vector{Int},
-            linear_results::Vector{Reactant.TracedType},
+            linear_results::Vector{Any},
             fnwrapped::Bool,
             argprefix::Symbol,
             resprefix::Symbol,
