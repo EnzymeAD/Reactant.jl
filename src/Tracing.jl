@@ -835,6 +835,64 @@ Base.@nospecializeinfer function traced_type_inner(
     throw(NoFieldMatchError(T, TT2, subTys))
 end
 
+Base.@nospecializeinfer function traced_type_inner(
+    @nospecialize(T::Type{ConcreteEnum{E,N}}),
+    seen,
+    @nospecialize(mode::TraceMode),
+    @nospecialize(track_numbers::Type),
+    @nospecialize(ndevices),
+    @nospecialize(runtime)
+) where {E,N}
+    mode == ConcreteToTraced && return TracedEnum{E}
+    if mode == ArrayToConcrete
+        N2 = traced_type_inner(N, seen, mode, track_numbers, ndevices, runtime)
+        return ConcreteEnum{E,N2}
+    end
+    return T
+end
+
+Base.@nospecializeinfer function traced_type_inner(
+    @nospecialize(T::Type{TracedEnum{E}}),
+    seen,
+    @nospecialize(mode::TraceMode),
+    @nospecialize(track_numbers::Type),
+    @nospecialize(ndevices),
+    @nospecialize(runtime)
+) where {E}
+    if mode == TracedToConcrete
+        N = traced_type_inner(
+            TracedRNumber{enum_basetype(E)}, seen, mode, track_numbers, ndevices, runtime
+        )
+        return ConcreteEnum{E,N}
+    end
+    mode == ConcreteToTraced && error("Cannot trace an existing TracedEnum")
+    return T
+end
+
+Base.@nospecializeinfer function should_track_enum(
+    @nospecialize(E::Type{<:Base.Enum}), @nospecialize(track_numbers::Type)
+)
+    return E <: track_numbers || enum_basetype(E) <: track_numbers
+end
+
+Base.@nospecializeinfer function traced_type_inner(
+    @nospecialize(T::Type{<:Base.Enum}),
+    seen,
+    @nospecialize(mode::TraceMode),
+    @nospecialize(track_numbers::Type),
+    @nospecialize(ndevices),
+    @nospecialize(runtime)
+)
+    should_track_enum(T, track_numbers) || return T
+    if mode == ArrayToConcrete
+        N = traced_type_inner(enum_basetype(T), seen, mode, track_numbers, ndevices, runtime)
+        return ConcreteEnum{T,N}
+    elseif mode == NoStopTracedTrack || mode == TracedTrack || mode == TracedSetPath
+        return TracedEnum{T}
+    end
+    return T
+end
+
 const traced_type_cache = Dict{Tuple{TraceMode,Type,Any},Dict{Type,Type}}()
 
 # function traced_type_generator(world::UInt, source, self, @nospecialize(T::Type), @nospecialize(mode::Type{<:Val}), @nospecialize(track_numbers::Type))
@@ -2478,65 +2536,6 @@ end
 
 # Both wrappers keep their integer at field 1, so generic struct tracing preserves
 # payload paths and aliases while these type mappings select the destination wrapper.
-
-Base.@nospecializeinfer function traced_type_inner(
-    @nospecialize(T::Type{<:ConcreteEnum{E,N}}),
-    seen,
-    @nospecialize(mode::TraceMode),
-    @nospecialize(track_numbers::Type),
-    @nospecialize(ndevices),
-    @nospecialize(runtime)
-) where {E,N}
-    mode == ConcreteToTraced && return TracedEnum{E}
-    if mode == ArrayToConcrete
-        N2 = traced_type_inner(N, seen, mode, track_numbers, ndevices, runtime)
-        return ConcreteEnum{E,N2}
-    end
-    return T
-end
-
-Base.@nospecializeinfer function traced_type_inner(
-    @nospecialize(T::Type{TracedEnum{E}}),
-    seen,
-    @nospecialize(mode::TraceMode),
-    @nospecialize(track_numbers::Type),
-    @nospecialize(ndevices),
-    @nospecialize(runtime)
-) where {E}
-    if mode == TracedToConcrete
-        N = traced_type_inner(
-            TracedRNumber{enum_basetype(E)}, seen, mode, track_numbers, ndevices, runtime
-        )
-        return ConcreteEnum{E,N}
-    end
-    mode == ConcreteToTraced && error("Cannot trace an existing TracedEnum")
-    return T
-end
-
-Base.@nospecializeinfer function should_track_enum(
-    @nospecialize(E::Type{<:Base.Enum}), @nospecialize(track_numbers::Type)
-)
-    return E <: track_numbers || enum_basetype(E) <: track_numbers
-end
-
-Base.@nospecializeinfer function traced_type_inner(
-    @nospecialize(T::Type{<:Base.Enum}),
-    seen,
-    @nospecialize(mode::TraceMode),
-    @nospecialize(track_numbers::Type),
-    @nospecialize(ndevices),
-    @nospecialize(runtime)
-)
-    should_track_enum(T, track_numbers) || return T
-    if mode == ArrayToConcrete
-        N = traced_type_inner(enum_basetype(T), seen, mode, Number, ndevices, runtime)
-        return ConcreteEnum{T,N}
-    elseif mode == NoStopTracedTrack
-        return TracedEnum{T}
-    end
-    return T
-end
-
 Base.@nospecializeinfer function make_tracer(
     seen,
     @nospecialize(prev::Base.Enum),
@@ -2563,7 +2562,7 @@ Base.@nospecializeinfer function make_tracer(
             ConcreteIFRTNumber(Integer(prev); sharding, device, client)
         )
         error("Unsupported runtime $runtime")
-    elseif mode == NoStopTracedTrack
+    elseif mode == TracedTrack || mode == NoStopTracedTrack || mode == TracedSetPath
         # Plain enum branch results need the same constant promotion as numbers.
         payload = make_tracer(
             seen,
