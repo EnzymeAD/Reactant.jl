@@ -885,6 +885,10 @@ void __cudaRegisterLinkedBinary_28b8d6c6_20_separate_callback_cu_a85cd5ea_29231(
 
 REACTANT_ABI int32_t ReactantHermeticCudaGetVersion() { return CUDA_VERSION; }
 
+REACTANT_ABI int32_t ReactantCudaSetDevice(int32_t device_id) {
+  return static_cast<int32_t>(cudaSetDevice(device_id));
+}
+
 REACTANT_ABI int32_t ReactantCudaDeviceGetComputeCapalilityMajor() {
   CUdevice cuDevice;
   ReactantHandleCuResult(cuDeviceGet(&cuDevice, 0));
@@ -1053,6 +1057,8 @@ CudaGetStreamExecutorDeviceDescription(int32_t device_id) {
 REACTANT_ABI int32_t ReactantCudaDriverGetVersion() { return 0; }
 
 REACTANT_ABI int32_t ReactantHermeticCudaGetVersion() { return 0; }
+
+REACTANT_ABI int32_t ReactantCudaSetDevice(int32_t) { return -1; }
 
 REACTANT_ABI int32_t ReactantCudaDeviceGetComputeCapalilityMajor() { return 0; }
 

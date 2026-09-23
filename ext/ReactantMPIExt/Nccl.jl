@@ -58,6 +58,12 @@ function get_hardware_id(xla_device::Reactant.XLA.AbstractDevice)
     return hardware_id
 end
 
+function set_nccl_device!(ordinal::Integer)
+    status = MLIR.API.ReactantCudaSetDevice(ordinal)
+    status == 0 || error("cudaSetDevice($ordinal) failed with CUDA status $status")
+    return nothing
+end
+
 """
     initialize!(comm::MPI.Comm)
 
@@ -80,7 +86,7 @@ function initialize!(comm::MPI.Comm)
     client = Reactant.XLA.client("gpu")
     xla_devices = Reactant.XLA.addressable_devices(client)
     # NCCL requires exactly one device per MPI rank
-    Reactant.set_nccl_device!(get_hardware_id(only(xla_devices)))
+    set_nccl_device!(get_hardware_id(only(xla_devices)))
 
     rank = MPI.Comm_rank(comm)
     nranks = MPI.Comm_size(comm)

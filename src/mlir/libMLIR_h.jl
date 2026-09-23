@@ -16682,6 +16682,10 @@ function ReactantHermeticCudaGetVersion()
     @ccall Reactant_jll.libReactantExtra.ReactantHermeticCudaGetVersion()::Int32
 end
 
+function ReactantCudaSetDevice(device_id)
+    @ccall Reactant_jll.libReactantExtra.ReactantCudaSetDevice(device_id::Int32)::Int32
+end
+
 function ReactantCudaDeviceGetComputeCapalilityMajor()
     @ccall Reactant_jll.libReactantExtra.ReactantCudaDeviceGetComputeCapalilityMajor()::Int32
 end
