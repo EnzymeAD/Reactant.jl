@@ -48,6 +48,7 @@ void reactantReleaseAddressRange(void *base, size_t nbytes);
 #include "mlir/lib/AsmParser/Token.h"
 #include "src/enzyme_ad/jax/Dialect/Dialect.h"
 #include "src/enzyme_ad/jax/Implementations/XLADerivatives.h"
+#include "src/enzyme_ad/jax/Integrations/c/EnzymeXLA.h"
 #include "src/enzyme_ad/jax/Passes/Passes.h"
 #include "src/enzyme_ad/jax/RegistryUtils.h"
 #include "src/enzyme_ad/jax/clang_compile.h"
@@ -67,6 +68,7 @@ void reactantReleaseAddressRange(void *base, size_t nbytes);
 
 #include "absl/log/globals.h"
 #include "absl/log/initialize.h"
+#include "absl/strings/cord.h"
 
 #include "xla/mlir/utils/type_util.h"
 #include "xla/mlir_hlo/mhlo/IR/hlo_ops.h"
@@ -96,6 +98,7 @@ void reactantReleaseAddressRange(void *base, size_t nbytes);
 #if defined(REACTANT_CUDA) || defined(REACTANT_ROCM)
 #include "xla/pjrt/gpu/se_gpu_pjrt_client.h"
 #endif
+#include "xla/pjrt/c/pjrt_c_api_cpu_internal.h"
 #include "xla/pjrt/pjrt_api.h"
 #include "xla/pjrt/pjrt_c_api_client.h"
 #include "xla/pjrt/pjrt_executable.h"
@@ -675,6 +678,14 @@ REACTANT_ABI PjRtClient *MakeClientFromApi(const PJRT_Api *api,
   return GetCApiClientInternal(client_name, error);
 }
 
+// The PJRT C API table of the CPU plugin. The GPU plugin exports its table
+// under the standard name `GetPjrtApi` (CUDA and ROCm builds only); the CPU
+// plugin defines that same C symbol, so the library can only export one of the
+// two under it and the CPU table is reached through this name instead.
+REACTANT_ABI const PJRT_Api *GetCpuPjrtApi() {
+  return pjrt::cpu_plugin::GetCpuPjrtApi();
+}
+
 REACTANT_ABI PjRtClient *MakeTPUClient(const char *tpu_path,
                                        const char **error) {
   // Prefer $TPU_LIBRARY_PATH if set
@@ -779,6 +790,26 @@ REACTANT_ABI void ifrt_device_get_allocator_stats(ifrt::Device *device,
   }
   auto ifrt_pjrt_device = llvm::dyn_cast<ifrt::PjRtDevice>(device);
   PjRtDeviceGetAllocatorStats(ifrt_pjrt_device->pjrt_device(), jlstats);
+}
+
+// Reset the allocator's high-water marks (`peak_bytes_in_use` and the other
+// `peak_*` fields reported by `PjRtDeviceGetAllocatorStats`) to the current
+// usage. Only devices that track allocator statistics (for example the
+// StreamExecutor GPU device) implement this; the others report an error.
+REACTANT_ABI void PjRtDeviceClearMemoryStats(PjRtDevice *device) {
+  auto status = device->ClearMemoryStats();
+  if (!status.ok()) {
+    ReactantThrowError(status.ToString().c_str());
+  }
+}
+
+REACTANT_ABI void ifrt_device_clear_memory_stats(ifrt::Device *device) {
+  if (!llvm::isa<ifrt::PjRtDevice>(device)) {
+    ReactantThrowError(
+        "ifrt_device_clear_memory_stats: only supported for ifrt-pjrt.");
+  }
+  auto ifrt_pjrt_device = llvm::dyn_cast<ifrt::PjRtDevice>(device);
+  PjRtDeviceClearMemoryStats(ifrt_pjrt_device->pjrt_device());
 }
 
 REACTANT_ABI void ExecutableFree(xla::PjRtLoadedExecutable *exec) {
@@ -1541,6 +1572,81 @@ ClientCompileWithProto(PjRtClient *client, MlirModule cmod,
       GenerateCompileOptions(compile_options_proto,
                              compile_options_proto_size));
 }
+
+#pragma region PjRtLoadedExecutable serialization and memory stats
+
+// Serialize a compiled program so that `PjRtClientLoadSerializedExecutable`
+// can load it later without compiling again. The returned buffer is malloc'd
+// and the caller releases it with `free`.
+//
+// The serialization goes through `GetExecutable()`: not every client
+// implements `SerializeExecutable` on the loaded executable itself, but all of
+// them implement it on the underlying `PjRtExecutable`.
+REACTANT_ABI uint8_t *
+PjRtLoadedExecutableSerialize(xla::PjRtLoadedExecutable *exec, size_t *size) {
+  std::string serialized =
+      MyValueOrThrow(exec->GetExecutable()->SerializeExecutable());
+  *size = serialized.size();
+  uint8_t *data = (uint8_t *)malloc(serialized.size());
+  memcpy(data, serialized.data(), serialized.size());
+  return data;
+}
+
+// Load a program produced by `PjRtLoadedExecutableSerialize`.
+// `compile_options_proto` is a serialized `CompileOptionsProto` that replaces
+// the options stored in the blob (this is how a program compiled for one
+// device ordinal is placed on another); pass nullptr / 0 to keep the stored
+// options. The caller owns the result and frees it with `ExecutableFree`.
+REACTANT_ABI xla::PjRtLoadedExecutable *PjRtClientLoadSerializedExecutable(
+    PjRtClient *client, const uint8_t *data, size_t size,
+    const uint8_t *compile_options_proto, size_t compile_options_proto_size) {
+  std::optional<xla::CompileOptions> compile_options;
+  if (compile_options_proto != nullptr && compile_options_proto_size > 0) {
+    compile_options = GenerateCompileOptions(compile_options_proto,
+                                             compile_options_proto_size);
+  }
+  auto exec = MyValueOrThrow(client->LoadSerializedExecutable(
+      std::string_view(reinterpret_cast<const char *>(data), size),
+      std::move(compile_options), xla::LoadOptions()));
+  return exec.release();
+}
+
+// Static memory accounting from XLA's buffer assignment, available without
+// running the program. Mirrors `xla::CompiledMemoryStats` minus its
+// `serialized_buffer_assignment` string, which cannot cross the C boundary.
+struct JLCompiledMemoryStats {
+  int64_t generated_code_size_in_bytes;
+  int64_t argument_size_in_bytes;
+  int64_t output_size_in_bytes;
+  int64_t alias_size_in_bytes;
+  int64_t temp_size_in_bytes;
+  int64_t host_generated_code_size_in_bytes;
+  int64_t host_argument_size_in_bytes;
+  int64_t host_output_size_in_bytes;
+  int64_t host_alias_size_in_bytes;
+  int64_t host_temp_size_in_bytes;
+  int64_t peak_memory_in_bytes;
+};
+
+REACTANT_ABI void
+PjRtLoadedExecutableGetCompiledMemoryStats(xla::PjRtLoadedExecutable *exec,
+                                           JLCompiledMemoryStats *jlstats) {
+  auto stats = MyValueOrThrow(exec->GetExecutable()->GetCompiledMemoryStats());
+  jlstats->generated_code_size_in_bytes = stats.generated_code_size_in_bytes;
+  jlstats->argument_size_in_bytes = stats.argument_size_in_bytes;
+  jlstats->output_size_in_bytes = stats.output_size_in_bytes;
+  jlstats->alias_size_in_bytes = stats.alias_size_in_bytes;
+  jlstats->temp_size_in_bytes = stats.temp_size_in_bytes;
+  jlstats->host_generated_code_size_in_bytes =
+      stats.host_generated_code_size_in_bytes;
+  jlstats->host_argument_size_in_bytes = stats.host_argument_size_in_bytes;
+  jlstats->host_output_size_in_bytes = stats.host_output_size_in_bytes;
+  jlstats->host_alias_size_in_bytes = stats.host_alias_size_in_bytes;
+  jlstats->host_temp_size_in_bytes = stats.host_temp_size_in_bytes;
+  jlstats->peak_memory_in_bytes = stats.peak_memory_in_bytes;
+}
+
+#pragma endregion
 
 REACTANT_ABI void
 PjRtLoadedExecutableGetOuputShardings(xla::PjRtLoadedExecutable *exec,
@@ -3161,6 +3267,63 @@ ifrt_loaded_executable_client(HeldIfrtLoadedExecutable *exec) {
   return exec->obj()->client();
 }
 
+static xla::PjRtLoadedExecutable *
+ifrt_pjrt_loaded_executable_unwrap(HeldIfrtLoadedExecutable *exec,
+                                   const char *caller) {
+  auto *pjrt_exec = llvm::dyn_cast<ifrt::PjRtLoadedExecutable>(exec->ptr());
+  if (pjrt_exec == nullptr) {
+    ReactantThrowError(
+        (std::string(caller) + ": only supported for ifrt-pjrt.").c_str());
+  }
+  return pjrt_exec->pjrt_loaded_executable();
+}
+
+// IFRT executables carry their own metadata (output dtypes, shapes, shardings)
+// next to the PJRT program, so they use IFRT's own serialization format. Bytes
+// from `ifrt_loaded_executable_serialize` load with
+// `ifrt_client_load_serialized_executable`; they are not interchangeable with
+// the PJRT counterparts above.
+REACTANT_ABI uint8_t *
+ifrt_loaded_executable_serialize(HeldIfrtLoadedExecutable *exec, size_t *size) {
+  std::string serialized = MyValueOrThrow(exec->obj()->Serialize());
+  *size = serialized.size();
+  uint8_t *data = (uint8_t *)malloc(serialized.size());
+  memcpy(data, serialized.data(), serialized.size());
+  return data;
+}
+
+REACTANT_ABI void ifrt_loaded_executable_get_compiled_memory_stats(
+    HeldIfrtLoadedExecutable *exec, JLCompiledMemoryStats *jlstats) {
+  PjRtLoadedExecutableGetCompiledMemoryStats(
+      ifrt_pjrt_loaded_executable_unwrap(
+          exec, "ifrt_loaded_executable_get_compiled_memory_stats"),
+      jlstats);
+}
+
+// Load a program produced by `ifrt_loaded_executable_serialize`. As for the
+// PJRT version, `compile_options_proto` optionally replaces the stored compile
+// options; the device list is then derived from the loaded program's device
+// assignment, so an override that moves the program is honoured.
+REACTANT_ABI HeldIfrtLoadedExecutable *ifrt_client_load_serialized_executable(
+    ifrt::Client *client, const uint8_t *data, size_t size,
+    const uint8_t *compile_options_proto, size_t compile_options_proto_size) {
+  std::optional<xla::CompileOptions> compile_options;
+  if (compile_options_proto != nullptr && compile_options_proto_size > 0) {
+    compile_options = GenerateCompileOptions(compile_options_proto,
+                                             compile_options_proto_size);
+  }
+  auto options = std::make_unique<xla::ifrt::XlaDeserializeExecutableOptions>(
+      std::move(compile_options), /*devices=*/std::nullopt);
+
+  absl::Cord serialized(
+      absl::string_view(reinterpret_cast<const char *>(data), size));
+  std::shared_ptr<xla::ifrt::LoadedExecutable> loaded = MyValueOrThrow(
+      client->GetDefaultCompiler()
+          ->DeserializeLoadedExecutable(serialized, std::move(options))
+          .Await());
+  return reactant::capture(loaded);
+}
+
 REACTANT_ABI void
 ifrt_loaded_executable_get_parameter_shardings(HeldIfrtLoadedExecutable *exec,
                                                xla::OpSharding **op_shardings,
@@ -3431,8 +3594,19 @@ struct LinkableRuntime {
   xla::PjRtClient *client;
   int device;
   bool shouldFreeClient;
-  DenseMap<const char *, std::map<std::vector<std::vector<int64_t>>,
-                                  xla::PjRtLoadedExecutable *>>
+  struct CachedExec {
+    xla::PjRtLoadedExecutable *exec;
+    // Per argument: does the kernel store through it? An argument whose
+    // result is the argument itself passed through is read-only. Doubles as
+    // the donation mask.
+    uint8_t *written;
+    // Per argument: is it a parameter of the executable? An argument that
+    // resolves to the buffer of an earlier one is folded into it, and a
+    // null one is a constant.
+    uint8_t *keep;
+  };
+  DenseMap<const char *,
+           std::map<std::vector<std::vector<int64_t>>, CachedExec>>
       executables;
 
   // Each allocation reserves an inaccessible address range as large as the
@@ -3638,19 +3812,40 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
 
   std::vector<std::vector<int64_t>> sizeKey;
   sizeKey.reserve(argcnt + (constcnt ? 1 : 0));
+  // An argument may point into the middle of an allocation (a block
+  // operator's sub-vector view). The executable then takes the whole base
+  // buffer and addresses the view as a slice of it; the offsets select the
+  // executable, so they are part of the cache key.
+  std::vector<int64_t> viewOffset(argcnt, 0);
+  // Per argument: -1 for a parameter of the executable; j >= 0 when it
+  // resolves to the buffer of argument j (mfem's in-place add(r, a, z, r), a
+  // BlockVector next to one of its blocks), in which case it is folded into
+  // that parameter; kNullArg for a null pointer (mfem's optional
+  // `geom ? geom->J.Read() : nullptr`, guarded on a flag), which is
+  // compiled as a constant zero buffer. Both fold the argument out of the
+  // parameters, so the pattern is part of the cache key.
+  const int64_t kNullArg = -2;
+  std::vector<int64_t> dupOf(argcnt, -1);
   for (int64_t i = 0; i < argcnt; i++) {
-    auto &&[argB, argO, argP] = bufferAndOffset(lrt, args[i]);
-    if (argO != 0) {
-      llvm::errs() << "only zero-offset execution supported, argument " << i
-                   << " had byte offset of " << argO << " (ptr=" << args[i]
-                   << ", resolved base=" << (void *)argP << ")\n";
-      exit(1);
+    if (!args[i]) {
+      dupOf[i] = kNullArg;
+      sizeKey.emplace_back();
+      continue;
     }
+    auto &&[argB, argO, argP] = bufferAndOffset(lrt, args[i]);
+    viewOffset[i] = argO;
     baseArrays[i] = argB;
     basePtrs[i] = argP;
     auto dims = argB->on_device_shape().dimensions();
     sizeKey.emplace_back(dims.begin(), dims.end());
+    for (int64_t j = 0; j < i; j++)
+      if (baseArrays[j] == argB) {
+        dupOf[i] = dupOf[j] < 0 ? j : dupOf[j];
+        break;
+      }
   }
+  sizeKey.push_back(viewOffset);
+  sizeKey.push_back(dupOf);
 
   // The specialized scalars are part of what the executable was compiled
   // for, so they are part of what it is cached under.
@@ -3704,8 +3899,8 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
       }
       mlir::OpBuilder b(&funcOp.getBody().front(),
                         funcOp.getBody().front().begin());
-      auto cst = b.create<mlir::stablehlo::ConstantOp>(
-          funcOp.getLoc(),
+      auto cst = mlir::stablehlo::ConstantOp::create(
+          b, funcOp.getLoc(),
           mlir::SplatElementsAttr::get(TT, b.getIntegerAttr(IT, consts[i])));
       arg.replaceAllUsesWith(cst);
       funcOp.eraseArgument(argcnt + i);
@@ -3717,10 +3912,34 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
 
     PassManager pm(module->getContext());
 
+    // An offset view is typed as the tail of its base buffer from the view's
+    // offset on; its element conversion is then the refinement's as for any
+    // other argument.
     SmallVector<mlir::Type> types;
+    SmallVector<int64_t> viewStart(argcnt, 0);
     for (int64_t i = 0; i < argcnt; i++) {
-      auto RTT = MyValueOrThrow(xla::ConvertShapeToType<mlir::RankedTensorType>(
-          baseArrays[i]->on_device_shape(), builder));
+      if (dupOf[i] == kNullArg) {
+        // Large enough for any access the guarded code makes in the raised
+        // kernel; a dynamic index into it is clamped.
+        types.push_back(
+            mlir::RankedTensorType::get({256}, builder.getI8Type()));
+        continue;
+      }
+      auto RTT = cast<mlir::RankedTensorType>(
+          MyValueOrThrow(xla::ConvertShapeToType<mlir::RankedTensorType>(
+              baseArrays[i]->on_device_shape(), builder)));
+      if (viewOffset[i]) {
+        int64_t elemBytes = RTT.getElementTypeBitWidth() / 8;
+        if (RTT.getRank() != 1 || elemBytes == 0 || viewOffset[i] % elemBytes) {
+          llvm::errs() << " offset view of argument " << i << " (byte offset "
+                       << viewOffset[i]
+                       << ") does not slice its buffer of type " << RTT << "\n";
+          exit(1);
+        }
+        viewStart[i] = viewOffset[i] / elemBytes;
+        RTT = mlir::RankedTensorType::get({RTT.getDimSize(0) - viewStart[i]},
+                                          RTT.getElementType());
+      }
       types.push_back(RTT);
     }
     if (constcnt) {
@@ -3735,8 +3954,71 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
     pm.addPass(mlir::stablehlo::createStablehloRefineShapesPass());
     pm.addNestedPass<mlir::func::FuncOp>(
         stablehlo::createStablehloCanonicalizeDynamismPass());
-    pm.addPass(mlir::enzyme::createEnzymeHLOOptPass());
+    // REACTANT_EXEC_OPT=transform runs the optimizer the Julia compiler
+    // runs on a traced program (the transform-dialect pattern list with its
+    // defaults) instead of the plain enzyme-hlo-opt pass.
+    static const char *execOpt = getenv("REACTANT_EXEC_OPT");
+    if (execOpt && std::string(execOpt) == "transform") {
+      EnzymeXLATransformPassesOptions opts{};
+      opts.max_constant_threshold = 1024;
+      // REACTANT_EXEC_UNROLL sets the trip count up to which while loops
+      // are unrolled. Unrolling the raised kernels' short loops (threshold
+      // 16) makes them straight-line code XLA compiles slowly: the mfem GPU
+      // suite takes 4384 s against 2899 s at threshold 1 (enzyme-hlo-opt:
+      // 2753 s), so unrolling is opt-in.
+      opts.while_unroll_threshold = getenv("REACTANT_EXEC_UNROLL")
+                                        ? atoi(getenv("REACTANT_EXEC_UNROLL"))
+                                        : 1;
+      opts.reshape_propagate = ENZYMEXLA_PROPAGATE_UP;
+      opts.transpose_propagate = ENZYMEXLA_PROPAGATE_UP;
+      opts.dus_slice_simplify = true;
+      opts.raise_shlo_to_blas_lapack = true;
+      opts.recognize_comms = true;
+      opts.lower_comms = true;
+      opts.enable_structured_tensors_passes = true;
+      opts.enable_scatter_gather_optimization_passes = true;
+      opts.enable_reduce_slice_fusion_passes = true;
+      opts.enable_concat_to_batch_passes = true;
+      opts.enable_loop_raising_passes = true;
+      opts.enable_licm_optimization_passes = true;
+      opts.loop_unswitch_threshold = 10;
+      opts.enable_pad_optimization_passes = true;
+      char *mainPasses = nullptr, *lowerPasses = nullptr;
+      enzymexlaGetTransformPassesList(&opts, &mainPasses, &lowerPasses);
+      std::string patterns(mainPasses);
+      enzymexlaFreeTransformPassesList(mainPasses);
+      enzymexlaFreeTransformPassesList(lowerPasses);
+      for (const char *drop :
+           {"convert_mul_convert;", "associative_binary_op_reordering<1>;"})
+        for (size_t at; (at = patterns.find(drop)) != std::string::npos;)
+          patterns.erase(at, strlen(drop));
+      // The main list may introduce enzymexla ops (rotate, wrap, extend)
+      // that XLA does not take; the Julia compiler lowers them before export
+      // with this second list.
+      std::string pipeline =
+          "canonicalize,cse,canonicalize,enzyme-hlo-generate-td{patterns=" +
+          patterns +
+          "},transform-interpreter,enzyme-hlo-remove-transform,canonicalize,"
+          "cse,enzyme-hlo-generate-td{patterns=lower_rotate;lower_wrap;"
+          "lower_extend;lower_updatewithoutcorners;lower_multislice},"
+          "transform-interpreter,enzyme-hlo-remove-transform,canonicalize,cse";
+      if (failed(mlir::parsePassPipeline(pipeline, pm))) {
+        llvm::errs() << " failed to parse the exec optimization pipeline\n";
+        exit(1);
+      }
+    } else {
+      pm.addPass(mlir::enzyme::createEnzymeHLOOptPass());
+    }
 
+    if (getenv("REACTANT_EXEC_DUMP")) {
+      llvm::errs() << "EXEC_DUMP before\n";
+      for (int64_t i = 0; i < argcnt; i++)
+        llvm::errs() << "EXEC_DUMP arg " << i << " type=" << types[i]
+                     << " offset=" << viewOffset[i] << " dup=" << dupOf[i]
+                     << "\n";
+      module->print(llvm::errs());
+      llvm::errs() << "EXEC_DUMP end\n";
+    }
     if (!mlir::succeeded(pm.run(*module))) {
       llvm::errs() << " failed to run passes\n";
       llvm::errs() << " modstr:\n" << modstr << "\n";
@@ -3747,31 +4029,179 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
       exit(1);
     }
 
+    // An argument the kernel never stores through comes back as itself.
+    // Such an argument is not donated and not returned: its buffer stays as
+    // it is, and the executable neither copies it into a fresh result nor
+    // hands back a future for it.
+    uint8_t *written = (uint8_t *)malloc(argcnt);
+    memset(written, 1, argcnt);
+    {
+      auto ret = cast<func::ReturnOp>(funcOp.getBody().front().back());
+      SmallVector<mlir::Value> kept;
+      SmallVector<mlir::Type> keptTypes;
+      for (int64_t i = 0; i < argcnt && i < (int64_t)ret.getNumOperands();
+           i++) {
+        written[i] = ret.getOperand(i) != funcOp.getArgument(i);
+        funcOp.removeArgAttr(i, "tf.aliasing_output");
+        if (dupOf[i] == kNullArg) {
+          auto arg = funcOp.getArgument(i);
+          mlir::OpBuilder b(&funcOp.getBody().front(),
+                            funcOp.getBody().front().begin());
+          auto zero = mlir::stablehlo::ConstantOp::create(
+              b, funcOp.getLoc(),
+              mlir::DenseElementsAttr::get(
+                  cast<mlir::RankedTensorType>(arg.getType()),
+                  b.getI8IntegerAttr(0)));
+          arg.replaceAllUsesWith(zero);
+          written[i] = 0;
+        }
+        if (viewOffset[i]) {
+          // The view becomes its base buffer: every use reads the slice at
+          // the view's offset, and a written view's result is written back
+          // into the base at that offset.
+          auto arg = funcOp.getArgument(i);
+          auto viewTy = cast<mlir::RankedTensorType>(arg.getType());
+          auto baseTy = mlir::RankedTensorType::get(
+              {viewTy.getDimSize(0) + viewStart[i]}, viewTy.getElementType());
+          arg.setType(baseTy);
+          mlir::OpBuilder b(&funcOp.getBody().front(),
+                            funcOp.getBody().front().begin());
+          auto slice = mlir::stablehlo::SliceOp::create(
+              b, funcOp.getLoc(), arg, b.getDenseI64ArrayAttr({viewStart[i]}),
+              b.getDenseI64ArrayAttr({baseTy.getDimSize(0)}),
+              b.getDenseI64ArrayAttr({1}));
+          arg.replaceAllUsesExcept(slice, slice);
+          if (written[i]) {
+            mlir::OpBuilder rb(ret);
+            auto idxTy = mlir::RankedTensorType::get({}, rb.getI64Type());
+            auto startCst = mlir::stablehlo::ConstantOp::create(
+                rb, funcOp.getLoc(),
+                mlir::DenseElementsAttr::get(idxTy, viewStart[i]));
+            auto dus = mlir::stablehlo::DynamicUpdateSliceOp::create(
+                rb, funcOp.getLoc(), arg, ret.getOperand(i),
+                mlir::ValueRange{startCst});
+            ret->setOperand(i, dus);
+          }
+        }
+      }
+      // Arguments that resolve to one buffer are all typed as that buffer
+      // now, so the later ones are folded into the first: their uses read
+      // it, and a written one's view region is written over the first one's
+      // result. The executable then takes the buffer once.
+      for (int64_t i = 0; i < argcnt && i < (int64_t)ret.getNumOperands();
+           i++) {
+        if (dupOf[i] < 0)
+          continue;
+        int64_t leader = dupOf[i];
+        auto arg = funcOp.getArgument(i);
+        auto leaderArg = funcOp.getArgument(leader);
+        if (arg.getType() != leaderArg.getType()) {
+          llvm::errs() << " arguments " << leader << " and " << i
+                       << " share a buffer but have types "
+                       << leaderArg.getType() << " and " << arg.getType()
+                       << "\n";
+          exit(1);
+        }
+        arg.replaceAllUsesWith(leaderArg);
+        if (written[i]) {
+          mlir::OpBuilder rb(ret);
+          auto baseTy = cast<mlir::RankedTensorType>(arg.getType());
+          mlir::Value update = ret.getOperand(i);
+          if (viewStart[i])
+            update = mlir::stablehlo::SliceOp::create(
+                rb, funcOp.getLoc(), update,
+                rb.getDenseI64ArrayAttr({viewStart[i]}),
+                rb.getDenseI64ArrayAttr({baseTy.getDimSize(0)}),
+                rb.getDenseI64ArrayAttr({1}));
+          auto idxTy = mlir::RankedTensorType::get({}, rb.getI64Type());
+          auto startCst = mlir::stablehlo::ConstantOp::create(
+              rb, funcOp.getLoc(),
+              mlir::DenseElementsAttr::get(idxTy, viewStart[i]));
+          auto merged = mlir::stablehlo::DynamicUpdateSliceOp::create(
+              rb, funcOp.getLoc(), ret.getOperand(leader), update,
+              mlir::ValueRange{startCst});
+          ret->setOperand(leader, merged);
+          written[leader] = 1;
+          written[i] = 0;
+        }
+      }
+      // (parameter position, result index) of the donated arguments
+      SmallVector<std::pair<int64_t, int64_t>> aliasing;
+      for (int64_t i = 0, pos = 0; i < argcnt; i++) {
+        if (dupOf[i] != -1)
+          continue;
+        if (i < (int64_t)ret.getNumOperands() && written[i]) {
+          aliasing.emplace_back(pos, kept.size());
+          kept.push_back(ret.getOperand(i));
+          keptTypes.push_back(ret.getOperand(i).getType());
+        }
+        pos++;
+      }
+      for (int64_t i = argcnt; i < (int64_t)ret.getNumOperands(); i++) {
+        kept.push_back(ret.getOperand(i));
+        keptTypes.push_back(ret.getOperand(i).getType());
+      }
+      ret->setOperands(kept);
+      llvm::BitVector folded(funcOp.getNumArguments());
+      for (int64_t i = 0; i < argcnt; i++)
+        if (dupOf[i] != -1)
+          folded.set(i);
+      funcOp.eraseArguments(folded);
+      funcOp.setType(mlir::FunctionType::get(
+          module->getContext(), funcOp.getBody().front().getArgumentTypes(),
+          keptTypes));
+      for (auto [pos, res] : aliasing)
+        funcOp.setArgAttr(pos, "tf.aliasing_output",
+                          builder.getI64IntegerAttr(res));
+    }
     auto exec =
         ClientCompileWithProto(lrt->client, wrap(module.get()), nullptr, 0);
 
-    iter = cache.try_emplace(sizeKey, exec).first;
+    // Per parameter of the executable, in order.
+    uint8_t *keep = (uint8_t *)malloc(argcnt);
+    uint8_t *writtenKept = (uint8_t *)malloc(argcnt);
+    for (int64_t i = 0, pos = 0; i < argcnt; i++) {
+      keep[i] = dupOf[i] == -1;
+      if (keep[i])
+        writtenKept[pos++] = written[i];
+    }
+    free(written);
+    iter =
+        cache
+            .try_emplace(sizeKey,
+                         LinkableRuntime::CachedExec{exec, writtenKept, keep})
+            .first;
   }
 
-  auto exec = iter->second;
+  auto exec = iter->second.exec;
+  uint8_t *written = iter->second.written;
+  uint8_t *keep = iter->second.keep;
 
-  uint8_t *is_arg_donatable = (uint8_t *)malloc(argcnt);
-  for (int i = 0; i < argcnt; i++)
-    is_arg_donatable[i] = 1;
-  int num_results = argcnt;
-  std::vector<PjRtBuffer *> results(argcnt);
-  std::vector<uint8_t> futures(argcnt, 0);
-  std::vector<FutureType *> future_results(argcnt, nullptr);
+  std::vector<PjRtBuffer *> callArgs;
+  callArgs.reserve(argcnt);
+  for (int64_t i = 0; i < argcnt; i++)
+    if (keep[i])
+      callArgs.push_back(baseArrays[i]);
+  int num_results = 0;
+  for (size_t p = 0; p < callArgs.size(); p++)
+    num_results += written[p];
+  std::vector<PjRtBuffer *> results(num_results);
+  std::vector<uint8_t> futures(num_results, 0);
+  std::vector<FutureType *> future_results(num_results, nullptr);
   PjRtDevice *device = ClientGetDevice(lrt->client, lrt->device);
-  XLAExecuteSharded(exec, argcnt, baseArrays.data(), device, is_arg_donatable,
+  XLAExecuteSharded(exec, callArgs.size(), callArgs.data(), device, written,
                     num_results, results.data(), futures.data(),
                     future_results.data());
-  free(is_arg_donatable);
-  for (int64_t i = 0; i < argcnt; i++) {
-    *basePtrs[i] = results[i];
-    if (futures[i]) {
-      FutureAwait(future_results[i]);
-      FreeFuture(future_results[i]);
+  for (int64_t i = 0, p = 0, k = 0; i < argcnt; i++) {
+    if (!keep[i])
+      continue;
+    if (written[p++]) {
+      *basePtrs[i] = results[k];
+      if (futures[k]) {
+        FutureAwait(future_results[k]);
+        FreeFuture(future_results[k]);
+      }
+      k++;
     }
   }
 }

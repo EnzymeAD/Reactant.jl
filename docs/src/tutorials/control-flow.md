@@ -120,6 +120,13 @@ In our simple example, the condition is passed directly as an argument but
 the same mechanism is applied to conditions which are computed from within
 a function from traced arguments, leading to a traced condition.
 
+Branches can also mutate fields of a captured mutable struct, but only when
+the field already holds a traced value — the `if` result is written back into
+that location. A field holding a plain number or other untraced value has no
+location to write into, so assigning it inside `@trace if` raises an error.
+Parameterize the field type and initialize it with a traced value, e.g. via
+`ReactantCore.promote_to_traced`.
+
 ### Enum state
 
 Values created by `@enum` or EnumX's `@enumx` can pass through traced control flow.
@@ -144,10 +151,8 @@ status = @jit choose_status(Reactant.to_rarray(Float32[1]))
 @assert SolverStatus(status) === Success
 ```
 
-For mutable struct fields, parameterize the field type and make its initial value
-traced before entering the branch. This requirement also applies to numeric fields:
-an untraced field has no location the `if` result can be written back into, so an
-assignment to it cannot be carried out of the branch.
+Enum fields of mutable structs follow the same rule as numeric fields above:
+parameterize the field type and make its initial value traced before entering the branch.
 
 ```@example control_flow_tutorial
 using ReactantCore: promote_to_traced

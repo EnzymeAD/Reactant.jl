@@ -310,6 +310,22 @@ function fill(v, ::Tuple{}; location=mlir_stacktrace("fill", @__FILE__, @__LINE_
 end
 
 function fill(
+    v::TracedRNumber{T},
+    dims::NTuple{N,Integer};
+    location=mlir_stacktrace("fill", @__FILE__, @__LINE__),
+) where {N,T}
+    return fill(v, collect(Int64, dims); location)::TracedRArray{T,N}
+end
+
+function fill(
+    v::TracedRNumber{T},
+    dims::Tuple{};
+    location=mlir_stacktrace("fill", @__FILE__, @__LINE__),
+) where {T}
+    return fill(v, collect(Int64, dims); location)::TracedRArray{T,0}
+end
+
+function fill(
     number::TracedRNumber{T},
     shape::Vector{Int};
     location=mlir_stacktrace("fill", @__FILE__, @__LINE__),
@@ -2874,11 +2890,36 @@ end
                 Reactant.TracedUtils.set!(
                     args, path[2:end], MLIR.IR.result(if_compiled, residx)
                 )
+            else
+                check_untraced_branch_state(
+                    target, tb_traced_args, fb_traced_args, path[2:end]
+                )
             end
         end
     end
 
     return corrected_traced_results
+end
+
+# An untraced location in a mutable argument (e.g. a struct field holding a plain number)
+# has nothing the `if` result can be written back into, so a branch that assigned it a new
+# value would be a silent no-op. Note this only inspects collected result paths: a leaf the
+# tracing machinery never tracks cannot be detected here.
+function check_untraced_branch_state(target, tb_traced_args, fb_traced_args, path)
+    for branch_args in (tb_traced_args, fb_traced_args)
+        leaf = branch_args
+        for p in path
+            leaf = Reactant.Compiler.traced_getfield(leaf, p)
+        end
+        leaf === target && continue
+        error(
+            "if_condition: a branch assigned a value of type $(typeof(leaf)) to an untraced \
+             location holding $(repr(target)) (path $(path)); the assignment cannot be \
+             carried out of the branch. Make the initial value traced before the `if`, e.g. \
+             with `Reactant.ReactantCore.promote_to_traced`.",
+        )
+    end
+    return nothing
 end
 
 """

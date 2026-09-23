@@ -3517,22 +3517,24 @@ struct PJRT_Gpu_Register_Custom_Call_Args
     handler_prepare::Ptr{Cvoid}
     handler_initialize::Ptr{Cvoid}
     handler_execute::Ptr{Cvoid}
+    traits::UInt32
 end
 
 @cenum __JL_Ctag_661::UInt32 begin
-    PJRT_Gpu_Register_Custom_Call_Args_STRUCT_SIZE = 0x0000000000000040
+    PJRT_Gpu_Register_Custom_Call_Args_STRUCT_SIZE = 0x0000000000000044
 end
 
 # typedef PJRT_Error * PJRT_Gpu_Register_Custom_Call ( PJRT_Gpu_Register_Custom_Call_Args * args )
 const PJRT_Gpu_Register_Custom_Call = Cvoid
 
 struct PJRT_Gpu_Custom_Call
-    data::NTuple{32,UInt8}
+    data::NTuple{40,UInt8}
 end
 
 function Base.getproperty(x::Ptr{PJRT_Gpu_Custom_Call}, f::Symbol)
     f === :base && return Ptr{PJRT_Extension_Base}(x + 0)
     f === :custom_call && return Ptr{Ptr{PJRT_Gpu_Register_Custom_Call}}(x + 24)
+    f === :custom_call_handles_traits && return Ptr{Bool}(x + 32)
     return getfield(x, f)
 end
 
@@ -3548,15 +3550,17 @@ function Base.setproperty!(x::Ptr{PJRT_Gpu_Custom_Call}, f::Symbol, v)
 end
 
 function Base.propertynames(x::PJRT_Gpu_Custom_Call, private::Bool=false)
-    return (:base, :custom_call, if private
-        fieldnames(typeof(x))
-    else
-        ()
-    end...)
+    return (
+        :base, :custom_call, :custom_call_handles_traits, if private
+            fieldnames(typeof(x))
+        else
+            ()
+        end...
+    )
 end
 
 @cenum __JL_Ctag_662::UInt32 begin
-    PJRT_Gpu_Custom_Call_STRUCT_SIZE = 0x0000000000000020
+    PJRT_Gpu_Custom_Call_STRUCT_SIZE = 0x0000000000000021
 end
 
 mutable struct PJRT_Layouts_MemoryLayout end
@@ -4884,7 +4888,7 @@ const PJRT_API_CUSTOM_PARTITIONER_EXTENSION_VERSION = 1
 
 const PJRT_API_FFI_EXTENSION_VERSION = 3
 
-const PJRT_API_GPU_EXTENSION_VERSION = 2
+const PJRT_API_GPU_EXTENSION_VERSION = 3
 
 const PJRT_API_LAYOUTS_EXTENSION_VERSION = 4
 
