@@ -403,6 +403,8 @@ function set_default_backend(backend::Union{String,XLA.AbstractClient})
     return nothing
 end
 
+include("KernelInterface.jl")
+
 # Not part of the public API. Exclusively for testing purposes.
 include("TestUtils.jl")
 
