@@ -20,6 +20,7 @@ function replicate_array_to_all_devices(array::AsyncArray, args...)
 end
 
 function XLA.to_host(array::AsyncArray, data, reactant_sharding)
+    isempty(array) && XLA.throw_empty_buffer("copy to host from")
     wait(array)
     return XLA.to_host(array.buffer, data, reactant_sharding)
 end
@@ -28,5 +29,6 @@ XLA.sharding(x::AsyncArray) = XLA.sharding(x.buffer)
 
 function Base.copy(b::AsyncArray)
     Base.wait(b)
+    isempty(b) && XLA.throw_empty_buffer("copy")
     return AsyncArray(Base.copy(b.buffer), nothing)
 end
