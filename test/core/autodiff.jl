@@ -717,18 +717,13 @@ batch_extract_rhs(u) = vcat(u .* u, sin.(u) .* sum(u))
 
 function batch_extract_fwd(u, seeds)
     return Enzyme.autodiff(
-        Forward,
-        Const(batch_extract_rhs),
-        BatchDuplicated,
-        BatchDuplicated(u, seeds),
+        Forward, Const(batch_extract_rhs), BatchDuplicated, BatchDuplicated(u, seeds)
     )
 end
 
 function batch_extract_fwd_serial(u, seed)
     return only(
-        Enzyme.autodiff(
-            Forward, Const(batch_extract_rhs), Duplicated, Duplicated(u, seed)
-        ),
+        Enzyme.autodiff(Forward, Const(batch_extract_rhs), Duplicated, Duplicated(u, seed))
     )
 end
 
