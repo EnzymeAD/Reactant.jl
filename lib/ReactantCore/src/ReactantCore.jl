@@ -397,13 +397,7 @@ function trace_while(mod, expr; track_numbers, mincut, checkpointing, first_arg=
     union!(external_syms, cond_symbols.assignments)
     union!(external_syms, body_symbols.references)
     union!(external_syms, body_symbols.assignments)
-    # Locally defined callables (e.g. closures over traced values) that are
-    # called in the loop must become loop-carried arguments as well, so that
-    # traced values captured by them become while-loop operands instead of
-    # closure captures of the generated body function (which would result in
-    # region block arguments without matching operands). Only plain names that
-    # don't resolve to globals of the calling module can refer to local
-    # callables:
+    # Add func calls to closures as references
     for symbols_state in (cond_symbols, body_symbols)
         for fn in symbols_state.funccalls
             if length(fn.parts) == 1 && !isdefined(mod, only(fn.parts))
