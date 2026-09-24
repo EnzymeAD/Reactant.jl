@@ -215,10 +215,14 @@ tensorboard --logdir ./
 ## Adding Custom Annotations
 
 By default, the traces contain only information captured from within XLA.
-The [`Reactant.Profiler.annotate`](@ref) function can be used to annotate traces for Julia code evaluated *during tracing*.
+The [`ReactantCore.annotate`](@ref) function can be used to annotate traces. It is a no-op
+when only ReactantCore is loaded, allowing libraries to add annotations without depending on
+Reactant. Loading Reactant activates the annotations in host-side profiles.
 
 ```julia
-Reactant.Profiler.annotate("my_annotation") do
+using ReactantCore
+
+ReactantCore.annotate("my_annotation") do
     # Do things...
 end
 ```
