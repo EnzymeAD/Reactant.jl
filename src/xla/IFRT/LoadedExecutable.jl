@@ -88,7 +88,7 @@ end
 
 function XLA.serialize_executable(exec::LoadedExecutable)
     size = Ref{Csize_t}(0)
-    GC.@preserve exec size begin
+    GC.@preserve exec begin
         data = MLIR.API.ifrt_loaded_executable_serialize(exec.exec, size)
     end
     # malloc'd by the C++ side; the array owns the buffer and frees it when collected.
@@ -106,7 +106,7 @@ function XLA.load_serialized_executable(
     num_partitions::Int64=1,
 )
     compile_options_bytes = XLA.serialized_compile_options(compile_options)
-    GC.@preserve client serialized compile_options_bytes begin
+    GC.@preserve client begin
         exec = MLIR.API.ifrt_client_load_serialized_executable(
             client.client,
             serialized,
@@ -122,7 +122,7 @@ end
 
 function XLA.compiled_memory_stats_internal(exec::LoadedExecutable)
     ref = Ref{MLIR.API.JLCompiledMemoryStats}()
-    GC.@preserve exec ref begin
+    GC.@preserve exec begin
         MLIR.API.ifrt_loaded_executable_get_compiled_memory_stats(exec.exec, ref)
     end
     return ref[]
