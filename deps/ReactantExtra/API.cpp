@@ -262,8 +262,8 @@ protected:
     std::lock_guard<std::mutex> lock(timerMutex);
     auto &timer = nestedTimers[parent][id];
     if (!timer)
-      timer = std::make_unique<TimerHandle>(
-          TimerHandle{"MLIR: " + nameBuilder()});
+      timer =
+          std::make_unique<TimerHandle>(TimerHandle{"MLIR: " + nameBuilder()});
     return timer.get();
   }
 
@@ -371,8 +371,7 @@ REACTANT_ABI void ReactantHandleCuResult(uint32_t curesult) {
 #pragma region MLIR Extra
 REACTANT_ABI void
 mlirPassManagerEnableXLATraceTiming(MlirPassManager passManager) {
-  unwrap(passManager)
-      ->enableTiming(std::make_unique<XlaTraceTimingManager>());
+  unwrap(passManager)->enableTiming(std::make_unique<XlaTraceTimingManager>());
 }
 
 REACTANT_ABI bool mlirOperationInject(MlirContext ctx, MlirBlock block,
