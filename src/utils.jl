@@ -1,40 +1,8 @@
 using LLVM: LLVM
 using GPUCompiler: GPUCompiler
 
-# ---------------------------------------------------------------------------
-# Trace recording
-#
-# Reactant's tracer processes each method specialization by lowering a call to
-# it into a `call_with_reactant` wrapper (see `call_llvm_generator`). The
-# recording mechanism below lets external code (e.g. Revise-based invalidation
-# tracking) collect the code that a trace went through, so it can later check
-# whether any of it has been invalidated and decide whether a compiled program
-# needs to be re-traced.
-#
-# Each wrapper records one of:
-# - the `Core.CodeInstance` of the specialization it compiled (Reactant
-#   interpreter path). Julia registers backedges from a `CodeInstance` to
-#   everything its body depends on, including callees that were inlined into it
-#   and therefore never went through a `call_with_reactant` wrapper of their
-#   own. When any of those is redefined, Julia lowers the `CodeInstance`'s
-#   `max_world`, so checking `max_world` covers the inlined callees for free.
-#   Redefining the specialization's own method does not lower its own
-#   `max_world`, so that method is checked by lookup as well.
-# - the `Core.MethodInstance` it calls (native interpreter path), where no
-#   `CodeInstance` is available when the wrapper is generated. These are
-#   checked by re-running the method lookup.
-#
-# Recording is done into a task-local buffer: the tracer only pushes data, so no
-# user code is ever dispatched from inside a generated function (where
-# world-age restrictions apply). The callback registered via
-# `compile_with_trace_callback` is invoked with the recorded set from normal
-# code, once the trace has completed.
-# ---------------------------------------------------------------------------
-
 const TracedCode = Union{Core.MethodInstance,Core.CodeInstance}
 
-# Task-local stack of active recording buffers. Mirrors the `activate_*!`
-# pattern used for the compile caches (see Compiler.jl).
 const _TRACE_RECORDING_KEY = :_reactant_trace_recording
 
 function _trace_recording_stack()
@@ -45,9 +13,6 @@ function _trace_recording_stack()
     end::Vector{Base.IdSet{TracedCode}}
 end
 
-# Invoked by the tracer (from the `call_with_reactant` wrapper bodies) for
-# every method specialization that the trace executes. Only pushes data; never
-# dispatches user code.
 @inline function record_traced_method(code::TracedCode)
     stack = _trace_recording_stack()
     if !isempty(stack)
