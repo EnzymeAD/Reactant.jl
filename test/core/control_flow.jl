@@ -1467,7 +1467,7 @@ end
 
     for_compiled = @compile for_loop_calling_closure(rd, rB)
     @test Array(for_compiled(rd, rB)) ≈ for_loop_calling_closure(d, B)
-end  
+end
 
 function condition13_bareif_no_final_else(cond, numreals)
     @trace if cond
