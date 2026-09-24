@@ -177,6 +177,28 @@ end
 # However, this errs as we cannot attach the transform with to the funcop itself [as we run a functionpass].
 const enzyme_pass::String = "enzyme{postpasses=\"arith-raise{stablehlo=true},canonicalize,cse,canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math,canonicalize,cse,canonicalize,arith-raise{stablehlo=true}\"}"
 
+# `jit_backend` is the backend `lower-jit` targets (`cpu` or `cuda`)
+function enzyme_pass_pipeline(;
+    check_nan_gradients::Bool=DEBUG_NAN_GRADIENTS[], jit_backend::String="cuda"
+)
+    check_nan_gradients || return enzyme_pass
+    # The NaN check must run before remove-unnecessary-enzyme-ops, so that pass (and
+    # everything after it) is hoisted out of the enzyme postpasses. See NaNGradientCheck.jl.
+    return join(
+        [
+            "enzyme{postpasses=\"arith-raise{stablehlo=true},canonicalize,cse,canonicalize\"}",
+            "$(NAN_GRADIENT_CHECK_PASS){backend=$(jit_backend)}",
+            "remove-unnecessary-enzyme-ops",
+            "enzyme-simplify-math",
+            "canonicalize",
+            "cse",
+            "canonicalize",
+            "arith-raise{stablehlo=true}",
+        ],
+        ',',
+    )
+end
+
 function impulse_pass(;
     debug_dump::Bool=DEBUG_PROBPROG_DUMP_VALUE[],
     disable_optimizations::Bool=DEBUG_PROBPROG_DISABLE_OPT[],
@@ -223,7 +245,7 @@ function run_pass_pipeline!(mod, pass_pipeline, key=""; enable_verifier=true)
     pm = MLIR.IR.PassManager()
     MLIR.IR.enable_verifier!(pm, enable_verifier)
     opm = MLIR.IR.OpPassManager(pm)
-    MLIR.IR.add_pipeline!(opm, pass_pipeline)
+    add_pipeline_with_julia_passes!(pm, opm, pass_pipeline)
     run!(pm, MLIR.IR.Operation(mod), key)
     return mod
 end

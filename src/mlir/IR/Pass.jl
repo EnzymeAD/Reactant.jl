@@ -361,7 +361,7 @@ function _pass_run(rawop, external_pass, handle::ExternalPassHandle)
 end
 
 function create_external_pass!(oppass::OpPassManager, args...)
-    return create_external_pass!(oppass.ref, args...)
+    return create_external_pass!(oppass.pass, args...)
 end
 
 function create_external_pass!(

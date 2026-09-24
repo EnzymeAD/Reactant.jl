@@ -24,6 +24,7 @@ using Reactant_jll: Reactant_jll
 include("Macros.jl")
 include("CompilationError.jl")
 include("OptimizationPasses.jl")
+include("NaNGradientCheck.jl")
 include("Codegen.jl")
 include("Thunk.jl")
 
@@ -430,6 +431,14 @@ Base.@nospecializeinfer function compile_mlir!(
         end
 
     legal_to_run_shardy_passes = compile_options.optimization_passes === :all
+
+    enzyme_pass = enzyme_pass_pipeline(;
+        jit_backend=if backend in ("cpu", "tpu", "neuron", "trainium")
+            "cpu"
+        else
+            "cuda"
+        end
+    )
 
     # Raise any triton kernel that might exist as a custom call
     # We will lower them back later on, but having the full triton IR enables
