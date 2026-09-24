@@ -16392,12 +16392,6 @@ function ReactantHandleCuResult(curesult)
     @ccall Reactant_jll.libReactantExtra.ReactantHandleCuResult(curesult::UInt32)::Cvoid
 end
 
-function mlirPassManagerEnableXLATraceTiming(pm)
-    @ccall Reactant_jll.libReactantExtra.mlirPassManagerEnableXLATraceTiming(
-        pm::MlirPassManager
-    )::Cvoid
-end
-
 function mlirOperationInject(ctx, block, code, location, verify_after_parse)
     @ccall Reactant_jll.libReactantExtra.mlirOperationInject(
         ctx::MlirContext,
