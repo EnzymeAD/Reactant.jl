@@ -2,40 +2,56 @@ using LLVM: LLVM
 using GPUCompiler: GPUCompiler
 
 # ---------------------------------------------------------------------------
-# Trace method-instance recording
+# Trace recording
 #
 # Reactant's tracer processes each method specialization by lowering a call to
 # it into a `call_with_reactant` wrapper (see `call_llvm_generator`). The
 # recording mechanism below lets external code (e.g. Revise-based invalidation
-# tracking) collect the exact set of `Core.MethodInstance`s that a trace went
-# through, so it can later check whether any of them have been invalidated
-# (their world age changed) and decide whether a compiled program needs to be
-# re-traced.
+# tracking) collect the code that a trace went through, so it can later check
+# whether any of it has been invalidated and decide whether a compiled program
+# needs to be re-traced.
 #
-# Recording is done into a task-local buffer: the tracer only pushes
-# `MethodInstance`s (pure data), so no user code is ever dispatched from inside
-# a generated function (where world-age restrictions apply). The callback
-# registered via `compile_with_trace_callback` is invoked with the recorded
-# set from normal code, once the trace has completed.
+# Each wrapper records one of:
+# - the `Core.CodeInstance` of the specialization it compiled (Reactant
+#   interpreter path). Julia registers backedges from a `CodeInstance` to
+#   everything its body depends on, including callees that were inlined into it
+#   and therefore never went through a `call_with_reactant` wrapper of their
+#   own. When any of those is redefined, Julia lowers the `CodeInstance`'s
+#   `max_world`, so checking `max_world` covers the inlined callees for free.
+#   Redefining the specialization's own method does not lower its own
+#   `max_world`, so that method is checked by lookup as well.
+# - the `Core.MethodInstance` it calls (native interpreter path), where no
+#   `CodeInstance` is available when the wrapper is generated. These are
+#   checked by re-running the method lookup.
+#
+# Recording is done into a task-local buffer: the tracer only pushes data, so no
+# user code is ever dispatched from inside a generated function (where
+# world-age restrictions apply). The callback registered via
+# `compile_with_trace_callback` is invoked with the recorded set from normal
+# code, once the trace has completed.
 # ---------------------------------------------------------------------------
+
+const TracedCode = Union{Core.MethodInstance,Core.CodeInstance}
 
 # Task-local stack of active recording buffers. Mirrors the `activate_*!`
 # pattern used for the compile caches (see Compiler.jl).
 const _TRACE_RECORDING_KEY = :_reactant_trace_recording
 
 function _trace_recording_stack()
-    return get!(task_local_storage(), _TRACE_RECORDING_KEY) do
-        return Base.IdSet{Core.MethodInstance}[]
-    end::Vector{Base.IdSet{Core.MethodInstance}}
+    return get!(
+        task_local_storage(), _TRACE_RECORDING_KEY
+    ) do
+        return Base.IdSet{TracedCode}[]
+    end::Vector{Base.IdSet{TracedCode}}
 end
 
 # Invoked by the tracer (from the `call_with_reactant` wrapper bodies) for
 # every method specialization that the trace executes. Only pushes data; never
 # dispatches user code.
-@inline function record_traced_method(mi::Core.MethodInstance)
+@inline function record_traced_method(code::TracedCode)
     stack = _trace_recording_stack()
     if !isempty(stack)
-        push!(last(stack), mi)
+        push!(last(stack), code)
     end
     return nothing
 end
@@ -44,24 +60,28 @@ end
     compile_with_trace_callback(cb, f, args...; kwargs...) -> result
 
 Compile `f(args...)` with Reactant (like [`compile`](@ref)/`@compile`) and invoke
-`cb(trace_world, recorded_mis)` afterwards with the world counter at the time
-of the trace and the exact set of `Core.MethodInstance`s that the trace went
-through (a `Base.IdSet{Core.MethodInstance}`), so that the caller can track
-whether any of them are later invalidated (e.g. by Revise) and recompile
+`cb(trace_world, recorded)` afterwards with the world counter at the time of the
+trace and the set of code that the trace went through (a
+`Base.IdSet{Union{Core.MethodInstance,Core.CodeInstance}}`), so that the caller
+can track whether any of it is later invalidated (e.g. by Revise) and recompile
 accordingly. The callback is invoked in normal code after the compile
 finishes, so it may use any methods.
 
+Specializations compiled by Reactant's interpreter are recorded as their
+`Core.CodeInstance`, whose validity also reflects every callee that was inlined
+into them. Specializations called through the native interpreter are recorded
+as their `Core.MethodInstance`.
+
 Recording happens at execution time (inside the generated `call_with_reactant`
 wrappers), so the recorded set is independent of whether the wrappers were
-already generated in this session: it is exactly the set of method
-specializations the trace executed.
+already generated in this session.
 
 See also [`is_traced_method_invalidated`](@ref) and
 [`invalidated_traced_methods`](@ref).
 """
 function compile_with_trace_callback(cb, f, args...; kwargs...)
     trace_world = Base.get_world_counter()
-    buf = Base.IdSet{Core.MethodInstance}()
+    buf = Base.IdSet{TracedCode}()
     push!(_trace_recording_stack(), buf)
     result = try
         compile(f, args; kwargs...)
@@ -73,21 +93,41 @@ function compile_with_trace_callback(cb, f, args...; kwargs...)
 end
 
 """
-    is_traced_method_invalidated(mi, trace_world) -> Bool
+    is_traced_method_invalidated(code, trace_world) -> Bool
 
-Return `true` if `mi` (a `Core.MethodInstance` recorded by
-`compile_with_trace_callback`) is no longer valid: i.e. its defining method has
-been redefined, replaced or shadowed since the trace performed at world
-`trace_world` (e.g. by Revise), meaning a program that traced through `mi` may
-need to be re-traced.
+Return `true` if `code` (a `Core.CodeInstance` or `Core.MethodInstance`
+recorded by `compile_with_trace_callback`) is no longer valid since the trace
+performed at world `trace_world` (e.g. because Revise redefined a method),
+meaning a program that traced through it may need to be re-traced.
 
-Two signals are checked:
+For a `Core.CodeInstance`, this checks whether Julia has invalidated it, which
+happens when any method it depends on (including callees inlined into it) is
+redefined, replaced or shadowed. Because redefining a method does not
+invalidate that method's own `CodeInstance`, the method it was specialized from
+is also checked as below.
+
+For a `Core.MethodInstance`, two signals are checked:
 - the method's own `primary_world` moved past `trace_world` (this is what
   happens when Revise updates a method in place on Julia 1.12+);
 - re-running the method lookup for the recorded specialization at the current
   world no longer resolves to the same method (method replaced, deleted or
   shadowed by a more specific one).
 """
+function is_traced_method_invalidated(ci::Core.CodeInstance, trace_world::UInt)
+    # If the world counter hasn't moved since the trace, nothing can have been
+    # invalidated in the meantime.
+    Base.get_world_counter() == trace_world && return false
+    # Invalidating a dependency (including an inlined callee) lowers `max_world`
+    # from `typemax(UInt)` to the last world in which the code was valid.
+    ci.max_world != typemax(UInt) && return true
+    # Redefining the method itself invalidates its callers but leaves its own
+    # `CodeInstance` valid, so also check the method it was specialized from.
+    # On Julia 1.12+ `ci.def` may be an `ABIOverride` wrapping the instance.
+    mi = ci.def
+    mi isa Core.MethodInstance || (mi = getfield(mi, :def))
+    return is_traced_method_invalidated(mi::Core.MethodInstance, trace_world)
+end
+
 function is_traced_method_invalidated(mi::Core.MethodInstance, trace_world::UInt)
     def = mi.def
     def isa Core.Method || return true
@@ -131,16 +171,16 @@ function is_traced_method_invalidated(mi::Core.MethodInstance, trace_world::UInt
 end
 
 """
-    invalidated_traced_methods(mis, trace_world) -> Vector{Core.MethodInstance}
+    invalidated_traced_methods(recorded, trace_world) -> Vector{Union{Core.MethodInstance,Core.CodeInstance}}
 
-Given a collection of `Core.MethodInstance`s recorded by
-`compile_with_trace_callback` for a trace performed at world `trace_world`,
+Given a collection of `Core.CodeInstance`s and `Core.MethodInstance`s recorded
+by `compile_with_trace_callback` for a trace performed at world `trace_world`,
 return the subset that have been invalidated since. See
 [`is_traced_method_invalidated`](@ref).
 """
-function invalidated_traced_methods(mis, trace_world::UInt)
-    return Core.MethodInstance[
-        mi for mi in mis if is_traced_method_invalidated(mi, trace_world)
+function invalidated_traced_methods(recorded, trace_world::UInt)
+    return TracedCode[
+        code for code in recorded if is_traced_method_invalidated(code, trace_world)
     ]
 end
 
@@ -1206,7 +1246,9 @@ function call_llvm_generator(
                         LLVM.Value[LLVM.ConstantInt(length(globals))],
                     ),
                 )
-                push!(globals, mi)
+                # The `CodeInstance` rather than `mi`: its validity also covers
+                # callees that were inlined into this specialization.
+                push!(globals, p.compiled[mi].ci)
                 trace_record_fn_gval = LLVM.load!(
                     builder,
                     jlvaluet,
