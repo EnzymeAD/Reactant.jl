@@ -1206,6 +1206,7 @@ cc_library(
             "-Wl,-exported_symbol,_ReactantFuncSetArgAttr",
             "-Wl,-exported_symbol,_ReactantHermeticCudaGetVersion",
             "-Wl,-exported_symbol,_ReactantCudaDriverGetVersion",
+            "-Wl,-exported_symbol,_ReactantCudaSetDevice",
             "-Wl,-exported_symbol,_ReactantLLVMParseCommandLineOptions",
             "-Wl,-exported_symbol,_ReactantCudaDeviceGetComputeCapalilityMajor",
             "-Wl,-exported_symbol,_ReactantCudaDeviceGetComputeCapalilityMinor",
