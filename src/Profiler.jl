@@ -284,15 +284,34 @@ macro annotate(name, func_def=nothing)
     noname = isnothing(func_def)
     func_def = something(func_def, name)
 
-    if !Meta.isexpr(func_def, :function)
-        error("not a function definition: $func_def")
+    id = gensym(:id)
+    name = noname ? string(func_def.args[1].args[1]) : name
+
+    if Meta.isexpr(func_def, :block)
+        if noname
+            error("The block version of @annotate requires a name")
+        end
+        return quote
+            $id = profiler_activity_start($(esc(name)), TRACE_ME_LEVEL_CRITICAL, nothing)
+            try
+                $(esc(code))
+            finally
+                profiler_activity_end($id)
+            end
+        end
+    else if !Meta.isexpr(func_def, :function)
+        error("not a function definition or block: $func_def")
     end
 
-    name = noname ? string(func_def.args[1].args[1]) : name
     code = func_def.args[2]
 
     code = quote
-        annotate(() -> $(esc(code)), $(esc(name)))
+        $id = profiler_activity_start($(esc(name)), TRACE_ME_LEVEL_CRITICAL, nothing)
+        try
+            $(esc(code))
+        finally
+            profiler_activity_end($id)
+        end
     end
 
     return Expr(:function, esc(func_def.args[1]), code)

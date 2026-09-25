@@ -220,13 +220,15 @@ function run!(pm::MLIR.IR.PassManager, op, key::String="")
     return result
 end
 
-@annotate function run_pass_pipeline!(mod, pass_pipeline, key=""; enable_verifier=true)
+function run_pass_pipeline!(mod, pass_pipeline, key=""; enable_verifier=true)
     pm = MLIR.IR.PassManager()
     MLIR.IR.enable_verifier!(pm, enable_verifier)
     opm = MLIR.IR.OpPassManager(pm)
     MLIR.IR.add_pipeline!(opm, pass_pipeline)
     MLIR.API.mlirPassManagerEnableXLATraceTiming(pm)
-    run!(pm, MLIR.IR.Operation(mod), key)
+    @annotate "run_pass_pipeline! $key" begin
+        run!(pm, MLIR.IR.Operation(mod), key)
+    end
     return mod
 end
 
