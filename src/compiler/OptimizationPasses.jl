@@ -2,7 +2,7 @@
 
 using ..Reactant:
     Reactant, MLIR, OptimizeCommunicationOptions, ShardyPropagationOptions, CompileOptions
-using ..Reactant.Profiler: @annotate
+using ..Reactant.Profiler: annotate
 
 const BFLOAT16_COMPILE_TYPE = Ref{DataType}(Float32)
 const DEBUG_KERNEL = Ref{Bool}(false)
@@ -226,7 +226,7 @@ function run_pass_pipeline!(mod, pass_pipeline, key=""; enable_verifier=true)
     opm = MLIR.IR.OpPassManager(pm)
     MLIR.IR.add_pipeline!(opm, pass_pipeline)
     MLIR.API.mlirPassManagerEnableXLATraceTiming(pm)
-    @annotate "run_pass_pipeline! $key" begin
+    annotate("run_pass_pipeline! $key") do
         run!(pm, MLIR.IR.Operation(mod), key)
     end
     return mod
