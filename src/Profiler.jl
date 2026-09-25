@@ -299,7 +299,7 @@ macro annotate(name, func_def=nothing)
                 profiler_activity_end($id)
             end
         end
-    else if !Meta.isexpr(func_def, :function)
+    elseif !Meta.isexpr(func_def, :function)
         error("not a function definition or block: $func_def")
     end
 
