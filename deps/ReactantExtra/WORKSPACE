@@ -158,6 +158,18 @@ load("@xla//:workspace3.bzl", "xla_workspace3")
 
 xla_workspace3()
 
+# XLA's own WORKSPACE runs both of these right after workspace3, and a
+# WORKSPACE build has to ask for them by hand: rules_cc 0.2.20 and up put
+# @rules_cc//cc/compiler:compiler behind a repository the module extension sets
+# up, and that repository reads the version bazel_features_deps() defines.
+load("@bazel_features//:deps.bzl", "bazel_features_deps")
+
+bazel_features_deps()
+
+load("@rules_cc//cc:extensions.bzl", "compatibility_proxy_repo")
+
+compatibility_proxy_repo()
+
 load("@xla//third_party/py:python_init_rules.bzl", "python_init_rules")
 
 python_init_rules()
