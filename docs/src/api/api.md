@@ -19,6 +19,8 @@ within_compile
 
 ```@docs
 @trace
+ReactantCore.@annotate
+ReactantCore.annotate
 Binomial
 Periodic
 ```
