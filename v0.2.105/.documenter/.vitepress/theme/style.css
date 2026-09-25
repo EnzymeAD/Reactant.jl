@@ -1,0 +1,175 @@
+/* Customize default theme styling by overriding CSS variables:
+https://github.com/vuejs/vitepress/blob/main/src/client/theme-default/styles/vars.css */
+/* Example */
+/* https://github.com/vuejs/vitepress/blob/main/template/.vitepress/theme/style.css */
+
+.VPHero .clip {
+  white-space: pre;
+  max-width: 600px;
+}
+
+/* Fonts */
+@font-face {
+  font-family: JuliaMono-Regular;
+  src: url("https://cdn.jsdelivr.net/gh/cormullion/juliamono/webfonts/JuliaMono-Regular.woff2");
+}
+
+:root {
+/* Typography */
+--vp-font-family-base: "Barlow", "Inter var experimental", "Inter var",
+  -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu,
+  Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+
+/* Code Snippet font */
+--vp-font-family-mono: JuliaMono-Regular, monospace;
+}
+
+/* Disable contextual alternates (kind of like ligatures but different) in monospace, 
+ which turns `/>` to an up arrow and `|>` (the Julia pipe symbol) to an up arrow as well. */
+.mono-no-substitutions {
+font-family: "JuliaMono-Regular", monospace;
+font-feature-settings: "calt" off;
+}
+
+.mono-no-substitutions-alt {
+font-family: "JuliaMono-Regular", monospace;
+font-variant-ligatures: none;
+}
+
+pre, code {
+font-family: "JuliaMono-Regular", monospace;
+font-feature-settings: "calt" off;
+}
+
+/* Colors */
+:root {
+  --julia-blue: #4063D8;
+  --julia-purple: #9558B2;
+  --julia-red: #CB3C33;
+  --julia-green: #389826;
+
+  --vp-c-brand: #0087d7;
+  --vp-c-brand-1: #0890df;
+  --vp-c-brand-2: #0599ef;
+  --vp-c-brand-3: #0c9ff4;
+  --vp-c-brand-light: #0087d7;
+  --vp-c-brand-dark: #5fd7ff;
+  --vp-c-brand-dimm: #212425;
+
+  /* Greens */
+  --vp-dark-green: #155f3e; /* Main accent green */
+  --vp-dark-green-dark: #2b855c;
+  --vp-dark-green-light: #42d392;
+  --vp-dark-green-lighter: #35eb9a;
+    /* Complementary Colors */
+  --vp-dark-gray: #1e1e1e;
+  --vp-dark-gray-soft: #2a2a2a;
+  --vp-dark-gray-mute: #242424;
+  --vp-light-gray: #d1d5db;
+  --vp-tip-bg: rgb(254, 254, 254);
+
+  /* Text Colors */
+  --vp-dark-text: #e5e5e5; /* Primary text color */
+  --vp-dark-subtext: #c1c1c1; /* Subtle text */
+  --vp-source-text: #e5e5e5;
+  /* custom tip */
+  --vp-custom-block-tip-border: var(--vp-c-brand-light);
+  --vp-custom-block-tip-bg: var(--vp-tip-bg);
+}
+
+ /* Component: Button */
+:root {
+  --vp-button-brand-border: var(--vp-light-gray);
+  --vp-button-brand-bg: var(--vp-c-brand-light);
+  --vp-button-brand-hover-border: var(--vp-c-bg-alt);
+  --vp-button-brand-hover-bg: var(--julia-blue);
+}
+
+/* Component: Home */
+:root {
+  --vp-home-hero-name-color: transparent;
+  --vp-home-hero-name-background: -webkit-linear-gradient(
+    120deg,
+    #9558B2 30%,
+    #CB3C33
+  );
+
+  --vp-home-hero-image-background-image: linear-gradient(
+    -145deg,
+    #9558b282 30%,
+    #3798269a 30%,
+    #cb3d33e3 
+  );
+  --vp-home-hero-image-filter: blur(40px);
+}
+
+/* Hero Section */
+:root.dark {
+  --vp-home-hero-name-color: transparent;
+  --vp-home-hero-name-background: -webkit-linear-gradient(
+    120deg,
+    var(--julia-purple) 15%,
+    var(--vp-dark-green-light),
+    var(--vp-dark-green)
+
+  );
+  --vp-home-hero-image-background-image: linear-gradient(
+    -45deg,
+    var(--vp-dark-green) 30%,
+    var(--vp-dark-green-light),
+    var(--vp-dark-gray) 30%
+  );
+  --vp-home-hero-image-filter: blur(56px);
+}
+
+:root.dark {
+  /* custom tip */
+  --vp-custom-block-tip-border: var(--vp-dark-green-dark);
+  --vp-custom-block-tip-text: var(--vp-dark-subtext);
+  --vp-custom-block-tip-bg: var(--vp-dark-gray-mute);
+}
+
+/**
+ * Colors links
+ * -------------------------------------------------------------------------- */
+
+.dark {
+  --vp-c-brand: var(--vp-dark-green-light);
+  --vp-button-brand-border: var(--vp-dark-green-lighter);
+  --vp-button-brand-bg: var(--vp-dark-green);
+  --vp-c-brand-1: var(--vp-dark-green-light);
+  --vp-c-brand-2: var(--vp-dark-green-lighter);
+  --vp-c-brand-3: var(--vp-dark-green);
+}
+
+@media (min-width: 640px) {
+  :root {
+    --vp-home-hero-image-filter: blur(56px);
+  }
+}
+
+@media (min-width: 960px) {
+  :root {
+    --vp-home-hero-image-filter: blur(72px);
+  }
+}
+/* Component: MathJax */
+
+mjx-container > svg {
+  display: block;
+  margin: auto;
+}
+
+mjx-container {
+  padding: 0.5rem 0;
+}
+
+mjx-container {
+  display: inline;
+  margin: auto 2px -2px;
+}
+
+mjx-container > svg {
+  margin: auto;
+  display: inline-block;
+}
