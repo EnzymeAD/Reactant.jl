@@ -16218,29 +16218,10 @@ function enzymeSymbolAttrGet(ctx, ptr)
     )::MlirAttribute
 end
 
-struct JLHloCostAnalysisProperties
-    flops::Cfloat
-    transcendentals::Cfloat
-    bytes_accessed::Cfloat
-    optimal_seconds::Cfloat
-    utilization::Cfloat
-    operand0_utilization::Cfloat
-    operand1_utilization::Cfloat
-    operand0_bytes_accessed::Cfloat
-    operand1_bytes_accessed::Cfloat
-    output_root_bytes_accessed::Cfloat
-    reserved0::Cfloat
-end
-
 struct CachedExec
     exec::Ptr{Cint}
     written::Ptr{UInt8}
     keep::Ptr{UInt8}
-end
-
-struct AllocationInfo
-    buffer::Ptr{Cint}
-    size::Csize_t
 end
 
 struct JLCompiledMemoryStats
@@ -16257,14 +16238,8 @@ struct JLCompiledMemoryStats
     peak_memory_in_bytes::Int64
 end
 
-struct JLEstimateRunTimeData
-    flops::Int64
-    bytes_read::Int64
-    bytes_written::Int64
-    read_time_ns::Int64
-    write_time_ns::Int64
-    compute_time_ns::Int64
-    execution_time_ns::Int64
+struct TimerHandle
+    name::Cint
 end
 
 struct JLAllocatorStats
@@ -16279,6 +16254,35 @@ struct JLAllocatorStats
     largest_free_block_bytes::Int64
     pool_bytes::Int64
     peak_pool_bytes::Int64
+end
+
+struct JLHloCostAnalysisProperties
+    flops::Cfloat
+    transcendentals::Cfloat
+    bytes_accessed::Cfloat
+    optimal_seconds::Cfloat
+    utilization::Cfloat
+    operand0_utilization::Cfloat
+    operand1_utilization::Cfloat
+    operand0_bytes_accessed::Cfloat
+    operand1_bytes_accessed::Cfloat
+    output_root_bytes_accessed::Cfloat
+    reserved0::Cfloat
+end
+
+struct AllocationInfo
+    buffer::Ptr{Cint}
+    size::Csize_t
+end
+
+struct JLEstimateRunTimeData
+    flops::Int64
+    bytes_read::Int64
+    bytes_written::Int64
+    read_time_ns::Int64
+    write_time_ns::Int64
+    compute_time_ns::Int64
+    execution_time_ns::Int64
 end
 
 struct DeviceProperties
@@ -16390,6 +16394,12 @@ const HeldIfrtArray = Cvoid
 
 function ReactantHandleCuResult(curesult)
     @ccall Reactant_jll.libReactantExtra.ReactantHandleCuResult(curesult::UInt32)::Cvoid
+end
+
+function mlirPassManagerEnableXLATraceTiming(passManager)
+    @ccall Reactant_jll.libReactantExtra.mlirPassManagerEnableXLATraceTiming(
+        passManager::MlirPassManager
+    )::Cvoid
 end
 
 function mlirOperationInject(ctx, block, code, location, verify_after_parse)
