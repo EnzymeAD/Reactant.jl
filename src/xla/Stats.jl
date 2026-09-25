@@ -92,8 +92,8 @@ reached by a following region of code can be measured on its own.
 
 !!! warning
 
-    Only devices that track allocator statistics support this (the CUDA and ROCm devices).
-    Calling it on any other device, including the CPU device, throws.
+    Only devices that track allocator statistics support this (for example CUDA, ROCm and
+    TPU devices). Calling it on the CPU device throws.
 """
 function clear_memory_stats!(device::AbstractDevice=default_device(default_backend()))
     clear_memory_stats_internal!(device)
