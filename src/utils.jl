@@ -395,6 +395,10 @@ end
 
 struct EnsureReturnType{T} end
 
+# Carries the signature of the method a `Core.invoke` named, so that tracing
+# dispatches to that method rather than re-resolving on the argument types.
+struct InvokeSignature{S} end
+
 @generated function applyiterate_with_reactant(
     ert::EnsureReturnType, iteratefn, applyfn, args::Vararg{Any,N}
 ) where {N}
@@ -459,12 +463,41 @@ function rewrite_inst(inst, ir, interp, RT)
             min_world = Ref{UInt}(typemin(UInt))
             max_world = Ref{UInt}(typemax(UInt))
 
+            # A `Core.invoke` may name a method that ordinary dispatch on these
+            # argument types would not select -- that is the whole point of
+            # `@invoke`. Tracing resolves the call afresh from the argument
+            # types, so unless the named method is carried along we land back on
+            # the more specific one, which is frequently the very method holding
+            # the invoke, and recurse until the stack runs out. Pass the named
+            # signature through when the two disagree.
+            invoke_marker = nothing
+            let dispatched = Enzyme.lookup_world(
+                    sig,
+                    interp.world,
+                    Core.Compiler.method_table(interp),
+                    Ref{UInt}(typemin(UInt)),
+                    Ref{UInt}(typemax(UInt)),
+                )
+                if !(dispatched isa Core.MethodMatch) || dispatched.method !== method
+                    invoke_marker = InvokeSignature{method.sig}
+                end
+            end
+
             # RT = Any
 
             if !method.isva || !Base.isvarargtype(sig.parameters[end])
-                sig2 = Tuple{
-                    typeof(call_with_reactant),EnsureReturnType{RT0},sig.parameters...
-                }
+                sig2 = if invoke_marker === nothing
+                    Tuple{
+                        typeof(call_with_reactant),EnsureReturnType{RT0},sig.parameters...
+                    }
+                else
+                    Tuple{
+                        typeof(call_with_reactant),
+                        EnsureReturnType{RT0},
+                        invoke_marker,
+                        sig.parameters...,
+                    }
+                end
             else
                 vartup = inst.args[end]
                 ns = Type[]
@@ -472,12 +505,22 @@ function rewrite_inst(inst, ir, interp, RT)
                 for i in 1:(length(inst.args) - 1 - (length(sig.parameters) - 1))
                     push!(ns, eT)
                 end
-                sig2 = Tuple{
-                    typeof(call_with_reactant),
-                    EnsureReturnType{RT0},
-                    sig.parameters[1:(end - 1)]...,
-                    ns...,
-                }
+                sig2 = if invoke_marker === nothing
+                    Tuple{
+                        typeof(call_with_reactant),
+                        EnsureReturnType{RT0},
+                        sig.parameters[1:(end - 1)]...,
+                        ns...,
+                    }
+                else
+                    Tuple{
+                        typeof(call_with_reactant),
+                        EnsureReturnType{RT0},
+                        invoke_marker,
+                        sig.parameters[1:(end - 1)]...,
+                        ns...,
+                    }
+                end
             end
 
             all_datatype = true
@@ -488,9 +531,22 @@ function rewrite_inst(inst, ir, interp, RT)
                 end
             end
             if !all_datatype
-                rep = Expr(
-                    :call, call_with_reactant, EnsureReturnType{RT0}(), inst.args[2:end]...
-                )
+                rep = if invoke_marker === nothing
+                    Expr(
+                        :call,
+                        call_with_reactant,
+                        EnsureReturnType{RT0}(),
+                        inst.args[2:end]...,
+                    )
+                else
+                    Expr(
+                        :call,
+                        call_with_reactant,
+                        EnsureReturnType{RT0}(),
+                        invoke_marker(),
+                        inst.args[2:end]...,
+                    )
+                end
                 return true, rep, RT0
             end
 
@@ -509,19 +565,43 @@ function rewrite_inst(inst, ir, interp, RT)
                 match.sparams,
             )
             if is_reactant_method(mi)
-                rep = Expr(
-                    :call, call_with_reactant, EnsureReturnType{RT0}(), inst.args[2:end]...
-                )
+                rep = if invoke_marker === nothing
+                    Expr(
+                        :call,
+                        call_with_reactant,
+                        EnsureReturnType{RT0}(),
+                        inst.args[2:end]...,
+                    )
+                else
+                    Expr(
+                        :call,
+                        call_with_reactant,
+                        EnsureReturnType{RT0}(),
+                        invoke_marker(),
+                        inst.args[2:end]...,
+                    )
+                end
                 return true, rep, RT0
             end
             n_method_args = method.nargs
-            rep = Expr(
-                :invoke,
-                mi,
-                call_with_reactant,
-                EnsureReturnType{RT0}(),
-                inst.args[2:end]...,
-            )
+            rep = if invoke_marker === nothing
+                Expr(
+                    :invoke,
+                    mi,
+                    call_with_reactant,
+                    EnsureReturnType{RT0}(),
+                    inst.args[2:end]...,
+                )
+            else
+                Expr(
+                    :invoke,
+                    mi,
+                    call_with_reactant,
+                    EnsureReturnType{RT0}(),
+                    invoke_marker(),
+                    inst.args[2:end]...,
+                )
+            end
             return true, rep, RT0
         end
     end
@@ -724,6 +804,12 @@ function call_llvm_generator(
         args = args[2:end]
         ensure_return_type = true
     end
+    invoke_sig = nothing
+    if args[1] <: InvokeSignature
+        invoke_sig = args[1].parameters[1]
+        args = args[2:end]
+    end
+    nmarkers = (RT !== nothing) + (invoke_sig !== nothing)
     f = args[1]
     tt = Tuple{f,args[2:end]...}
     min_world = Ref{UInt}(typemin(UInt))
@@ -742,7 +828,11 @@ function call_llvm_generator(
     end
 
     lookup_result = Enzyme.lookup_world(
-        tt, world, Core.Compiler.method_table(interp), min_world, max_world
+        invoke_sig === nothing ? tt : invoke_sig,
+        world,
+        Core.Compiler.method_table(interp),
+        min_world,
+        max_world,
     )
 
     stub = Core.GeneratedFunctionStub(
@@ -764,14 +854,30 @@ function call_llvm_generator(
 
     match = lookup_result::Core.MethodMatch
 
-    mi = ccall(
-        :jl_specializations_get_linfo,
-        Ref{Core.MethodInstance},
-        (Any, Any, Any),
-        match.method,
-        match.spec_types,
-        match.sparams,
-    )
+    mi = if invoke_sig === nothing
+        ccall(
+            :jl_specializations_get_linfo,
+            Ref{Core.MethodInstance},
+            (Any, Any, Any),
+            match.method,
+            match.spec_types,
+            match.sparams,
+        )
+    else
+        # `invoke_sig` only named the method; specialize it on what is actually
+        # being passed, the way Core.invoke does.
+        ti, env = ccall(
+            :jl_type_intersection_with_env, Any, (Any, Any), tt, match.method.sig
+        )::Core.SimpleVector
+        ccall(
+            :jl_specializations_get_linfo,
+            Ref{Core.MethodInstance},
+            (Any, Any, Any),
+            match.method,
+            ti,
+            env,
+        )
+    end
     method = mi.def
 
     if DEBUG_INTERP[]
@@ -795,7 +901,7 @@ function call_llvm_generator(
     f_arg = push_inst!(
         overdubbed_code,
         Expr(
-            :call, Core.GlobalRef(Core, :getfield), Core.SlotNumber(2), 1 + (RT !== nothing)
+            :call, Core.GlobalRef(Core, :getfield), Core.SlotNumber(2), 1 + nmarkers
         ),
     )
     if DEBUG_INTERP[]
@@ -808,7 +914,7 @@ function call_llvm_generator(
                 :call,
                 Core.GlobalRef(Core, :getfield),
                 Core.SlotNumber(2),
-                i + (RT !== nothing),
+                i + nmarkers,
             ),
         )
         if DEBUG_INTERP[]
