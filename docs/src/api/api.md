@@ -113,6 +113,14 @@ EnzymeCore.ignore_derivatives
 clear_compilation_cache!
 ```
 
+## Trace Invalidation
+
+```@docs
+Reactant.compile_with_trace_callback
+Reactant.is_traced_method_invalidated
+Reactant.invalidated_traced_methods
+```
+
 ## Internal utils
 
 ```@docs
