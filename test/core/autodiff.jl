@@ -711,3 +711,73 @@ fwd_nocap(x) = complex.(x .* 2.0, x .* 3.0)
     @test dy isa ConcreteRArray{ComplexF64,1}
     @test dy ≈ complex.(v .* 2.0, v .* 3.0)
 end
+
+# https://github.com/EnzymeAD/Reactant.jl/issues/3217
+batch_extract_rhs(u) = vcat(u .* u, sin.(u) .* sum(u))
+
+function batch_extract_fwd(u, seeds)
+    return Enzyme.autodiff(
+        Forward, Const(batch_extract_rhs), BatchDuplicated, BatchDuplicated(u, seeds)
+    )
+end
+
+function batch_extract_fwd_serial(u, seed)
+    return only(
+        Enzyme.autodiff(Forward, Const(batch_extract_rhs), Duplicated, Duplicated(u, seed))
+    )
+end
+
+@testset "Batched forward mode lowers enzyme.extract (#3217)" begin
+    N, NS = 12, 4
+    u = Reactant.to_rarray(collect(1.0:N))
+    seeds = ntuple(s -> Reactant.to_rarray(Float64[i == s ? 1 : 0 for i in 1:N]), NS)
+
+    batched = @jit batch_extract_fwd(u, seeds)
+
+    for s in 1:NS
+        serial = @jit batch_extract_fwd_serial(u, seeds[s])
+        @test Array(batched[1][s]) ≈ Array(serial)
+    end
+end
+
+function batch_fwd(umat, seedmat)
+    NS = size(umat, 1)
+    @assert size(seedmat, 1) == NS
+    return only(
+        Reactant.Ops.batch([umat, seedmat], [NS]) do uu, vv
+            only(
+                Enzyme.autodiff(
+                    Forward, Const(batch_extract_rhs), Duplicated, Duplicated(uu, vv)
+                ),
+            )
+        end,
+    )
+end
+
+@testset "Forward mode inside Ops.batch" begin
+    N = 10
+    u = reshape(collect(1.0:(N^2)), N, N)
+    seeds = Float64[i == j ? 1 : 0 for i in 1:N, j in 1:N]
+    u_ra = Reactant.to_rarray(u)
+    seeds_ra = Reactant.to_rarray(seeds)
+
+    res = @jit batch_fwd(u_ra, seeds_ra)
+
+    expected = stack(
+        only(
+            Enzyme.autodiff(
+                Forward,
+                Const(batch_extract_rhs),
+                Duplicated,
+                Duplicated(u[i, :], seeds[i, :]),
+            ),
+        ) for i in 1:N;
+        dims=1,
+    )
+
+    @test size(res) == (N, 2N)
+    @test Array(res) ≈ expected
+
+    @test Array(u_ra) ≈ u
+    @test Array(seeds_ra) ≈ seeds
+end

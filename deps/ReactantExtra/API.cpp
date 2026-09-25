@@ -1,5 +1,13 @@
+#include <cassert>
 #include <cstddef>
+#include <cstdint>
 #include <iostream>
+#include <memory>
+#include <mutex>
+#include <string>
+#include <unordered_map>
+#include <utility>
+#include <vector>
 
 // AddressReservation.cpp; reserves inaccessible address ranges used as opaque
 // allocation handles.
@@ -13,6 +21,7 @@ void reactantReleaseAddressRange(void *base, size_t nbytes);
 #include "mlir/CAPI/Pass.h"
 #include "mlir/CAPI/Wrap.h"
 #include "mlir/Pass/PassManager.h"
+#include "mlir/Support/Timing.h"
 
 #include "Enzyme/MLIR/Dialect/Dialect.h"
 #include "Enzyme/MLIR/Dialect/Ops.h"
@@ -209,6 +218,76 @@ using namespace mlir;
 using namespace xla;
 using ::tensorflow::profiler::ToolOptions;
 
+namespace {
+
+// A TimingManager implementation that emits MLIR pass timing scopes as XLA
+// TraceMe activities. PassManager's timing instrumentation is responsible for
+// constructing the pipeline/pass/analysis hierarchy and for handling passes
+// that dispatch work to other threads.
+class XlaTraceTimingManager final : public mlir::TimingManager {
+public:
+  XlaTraceTimingManager() = default;
+
+protected:
+  std::optional<void *> rootTimer() override { return &rootTimerHandle; }
+
+  void startTimer(void *handle) override {
+    auto *timer = static_cast<TimerHandle *>(handle);
+    // The root scope lives from enableTiming() until the pass manager is
+    // destroyed, rather than for one pass-manager run. Do not emit that as an
+    // activity; the top-level pipeline nested beneath it has the desired
+    // lifetime.
+    if (timer == &rootTimerHandle)
+      return;
+
+    int64_t activity =
+        tsl::profiler::TraceMe::ActivityStart(timer->name.c_str(), 2);
+    activeTimers().emplace_back(timer, activity);
+  }
+
+  void stopTimer(void *handle) override {
+    auto *timer = static_cast<TimerHandle *>(handle);
+    if (timer == &rootTimerHandle)
+      return;
+
+    auto &timers = activeTimers();
+    assert(!timers.empty() && timers.back().first == timer &&
+           "unbalanced MLIR timing scopes");
+    tsl::profiler::TraceMe::ActivityEnd(timers.back().second);
+    timers.pop_back();
+  }
+
+  void *nestTimer(void *parent, const void *id,
+                  function_ref<std::string()> nameBuilder) override {
+    std::lock_guard<std::mutex> lock(timerMutex);
+    auto &timer = nestedTimers[parent][id];
+    if (!timer)
+      timer =
+          std::make_unique<TimerHandle>(TimerHandle{"MLIR: " + nameBuilder()});
+    return timer.get();
+  }
+
+private:
+  struct TimerHandle {
+    std::string name;
+  };
+
+  using ActiveTimer = std::pair<TimerHandle *, int64_t>;
+
+  static std::vector<ActiveTimer> &activeTimers() {
+    thread_local std::vector<ActiveTimer> timers;
+    return timers;
+  }
+
+  TimerHandle rootTimerHandle;
+  std::mutex timerMutex;
+  std::unordered_map<
+      void *, std::unordered_map<const void *, std::unique_ptr<TimerHandle>>>
+      nestedTimers;
+};
+
+} // namespace
+
 namespace mlir {
 namespace enzyme {
 void registerRemoveTransformPass();
@@ -290,6 +369,11 @@ REACTANT_ABI void ReactantHandleCuResult(uint32_t curesult) {
 
 // MLIR C-API extras
 #pragma region MLIR Extra
+REACTANT_ABI void
+mlirPassManagerEnableXLATraceTiming(MlirPassManager passManager) {
+  unwrap(passManager)->enableTiming(std::make_unique<XlaTraceTimingManager>());
+}
+
 REACTANT_ABI bool mlirOperationInject(MlirContext ctx, MlirBlock block,
                                       MlirStringRef code, MlirLocation location,
                                       bool verify_after_parse) {

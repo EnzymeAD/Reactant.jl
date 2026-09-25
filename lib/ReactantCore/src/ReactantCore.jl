@@ -3,7 +3,14 @@ module ReactantCore
 using ExpressionExplorer: ExpressionExplorer
 using MacroTools: MacroTools, @capture
 
-export @trace, within_compile, MissingTracedValue, promote_to_traced, Periodic, Binomial
+export @annotate,
+    @trace,
+    annotate,
+    within_compile,
+    MissingTracedValue,
+    promote_to_traced,
+    Periodic,
+    Binomial
 
 """
     Periodic(n::Int)
@@ -89,6 +96,49 @@ function promote_to_traced end
 Returns true if this function is executed in a Reactant compilation context, otherwise false.
 """
 @inline within_compile() = false # behavior is overwritten in Interpreter.jl
+
+"""
+    annotate(f, name, args...; kwargs...)
+
+Run `f` with a named annotation. This is a no-op annotation unless a package providing an
+annotation backend, such as Reactant, is loaded.
+
+# Example
+```julia
+annotate("my_operation") do
+    # ... do work ...
+end
+```
+"""
+function annotate(f, name, args...; kwargs...)
+    return f()
+end
+
+"""
+    @annotate [name] function foo(a, b, c)
+        # ...
+    end
+
+Annotate each call to the function. The annotation is a no-op unless an annotation backend,
+such as Reactant, is loaded.
+"""
+macro annotate(name, func_def=nothing)
+    noname = isnothing(func_def)
+    func_def = something(func_def, name)
+
+    if !Meta.isexpr(func_def, :function)
+        error("not a function definition: $func_def")
+    end
+
+    name = noname ? string(func_def.args[1].args[1]) : name
+    code = func_def.args[2]
+
+    code = quote
+        ReactantCore.annotate(() -> $(esc(code)), $(esc(name)))
+    end
+
+    return Expr(:function, esc(func_def.args[1]), code)
+end
 
 # Code generation
 """

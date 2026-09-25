@@ -19,6 +19,8 @@ within_compile
 
 ```@docs
 @trace
+ReactantCore.@annotate
+ReactantCore.annotate
 Binomial
 Periodic
 ```
@@ -34,6 +36,8 @@ Reactant.to_rarray
 ```@docs
 ConcreteRArray
 ConcreteRNumber
+Reactant.TracedEnum
+Reactant.ConcreteEnum
 ```
 
 ## Inspect Generated HLO

@@ -1,6 +1,7 @@
 module Profiler
 
 using ..Reactant: Reactant, Proto
+using ReactantCore: ReactantCore, annotate, @annotate
 using Sockets: Sockets
 using JSON: JSON
 using PrettyTables: PrettyTables, pretty_table
@@ -259,7 +260,7 @@ annotate("my_operation"; metadata=Dict("key1" => "value1", "key2" => 42)) do
 end
 ```
 """
-function annotate(
+function ReactantCore.annotate(
     f,
     name,
     level=TRACE_ME_LEVEL_CRITICAL;
@@ -271,50 +272,6 @@ function annotate(
     finally
         profiler_activity_end(id)
     end
-end
-
-"""
-    @annotate [name] function foo(a, b, c)
-        ...
-    end
-
-The created function will generate an annotation in the captured XLA profiles.
-"""
-macro annotate(name, func_def=nothing)
-    noname = isnothing(func_def)
-    func_def = something(func_def, name)
-
-    id = gensym(:id)
-    name = noname ? string(func_def.args[1].args[1]) : name
-
-    if Meta.isexpr(func_def, :block)
-        if noname
-            error("The block version of @annotate requires a name")
-        end
-        return quote
-            $id = profiler_activity_start($(esc(name)), TRACE_ME_LEVEL_CRITICAL, nothing)
-            try
-                $(esc(code))
-            finally
-                profiler_activity_end($id)
-            end
-        end
-    elseif !Meta.isexpr(func_def, :function)
-        error("not a function definition or block: $func_def")
-    end
-
-    code = func_def.args[2]
-
-    code = quote
-        $id = profiler_activity_start($(esc(name)), TRACE_ME_LEVEL_CRITICAL, nothing)
-        try
-            $(esc(code))
-        finally
-            profiler_activity_end($id)
-        end
-    end
-
-    return Expr(:function, esc(func_def.args[1]), code)
 end
 
 function serve_to_perfetto(path_to_trace_file)

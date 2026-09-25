@@ -835,6 +835,64 @@ Base.@nospecializeinfer function traced_type_inner(
     throw(NoFieldMatchError(T, TT2, subTys))
 end
 
+Base.@nospecializeinfer function traced_type_inner(
+    @nospecialize(T::Type{ConcreteEnum{E,N}}),
+    seen,
+    @nospecialize(mode::TraceMode),
+    @nospecialize(track_numbers::Type),
+    @nospecialize(ndevices),
+    @nospecialize(runtime)
+) where {E,N}
+    mode == ConcreteToTraced && return TracedEnum{E}
+    if mode == ArrayToConcrete
+        N2 = traced_type_inner(N, seen, mode, track_numbers, ndevices, runtime)
+        return ConcreteEnum{E,N2}
+    end
+    return T
+end
+
+Base.@nospecializeinfer function traced_type_inner(
+    @nospecialize(T::Type{TracedEnum{E}}),
+    seen,
+    @nospecialize(mode::TraceMode),
+    @nospecialize(track_numbers::Type),
+    @nospecialize(ndevices),
+    @nospecialize(runtime)
+) where {E}
+    if mode == TracedToConcrete
+        N = traced_type_inner(
+            TracedRNumber{enum_basetype(E)}, seen, mode, track_numbers, ndevices, runtime
+        )
+        return ConcreteEnum{E,N}
+    end
+    mode == ConcreteToTraced && error("Cannot trace an existing TracedEnum")
+    return T
+end
+
+Base.@nospecializeinfer function should_track_enum(
+    @nospecialize(E::Type{<:Base.Enum}), @nospecialize(track_numbers::Type)
+)
+    return E <: track_numbers || enum_basetype(E) <: track_numbers
+end
+
+Base.@nospecializeinfer function traced_type_inner(
+    @nospecialize(T::Type{<:Base.Enum}),
+    seen,
+    @nospecialize(mode::TraceMode),
+    @nospecialize(track_numbers::Type),
+    @nospecialize(ndevices),
+    @nospecialize(runtime)
+)
+    should_track_enum(T, track_numbers) || return T
+    if mode == ArrayToConcrete
+        N = traced_type_inner(enum_basetype(T), seen, mode, track_numbers, ndevices, runtime)
+        return ConcreteEnum{T,N}
+    elseif mode == NoStopTracedTrack
+        return TracedEnum{T}
+    end
+    return T
+end
+
 const traced_type_cache = Dict{Tuple{TraceMode,Type,Any},Dict{Type,Type}}()
 
 # function traced_type_generator(world::UInt, source, self, @nospecialize(T::Type), @nospecialize(mode::Type{<:Val}), @nospecialize(track_numbers::Type))
@@ -2474,4 +2532,60 @@ function make_tracer(
     kwargs...,
 )
     return prev
+end
+
+# Both wrappers keep their integer at field 1, so generic struct tracing preserves
+# payload paths and aliases while these type mappings select the destination wrapper.
+Base.@nospecializeinfer function make_tracer(
+    seen,
+    @nospecialize(prev::Base.Enum),
+    @nospecialize(path),
+    mode;
+    @nospecialize(track_numbers::Type = Union{}),
+    @nospecialize(sharding = Sharding.NoSharding()),
+    @nospecialize(runtime = nothing),
+    @nospecialize(device = nothing),
+    @nospecialize(client = nothing),
+    kwargs...,
+)
+    if mode == TracedToTypes
+        push!(path, prev)
+        return nothing
+    end
+    RT = Core.Typeof(prev)
+    should_track_enum(RT, track_numbers) || return prev
+    if mode == ArrayToConcrete
+        runtime isa Val{:PJRT} && return ConcreteEnum{RT}(
+            ConcretePJRTNumber(Integer(prev); sharding, device, client)
+        )
+        runtime isa Val{:IFRT} && return ConcreteEnum{RT}(
+            ConcreteIFRTNumber(Integer(prev); sharding, device, client)
+        )
+        error("Unsupported runtime $runtime")
+    elseif mode == NoStopTracedTrack
+        # Plain enum branch results need the same constant promotion as numbers.
+        payload = make_tracer(
+            seen,
+            Integer(prev),
+            append_path(path, 1),
+            mode;
+            track_numbers=Number,
+            sharding,
+            runtime,
+            device,
+            client,
+            kwargs...,
+        )
+        return TracedEnum{RT}(payload)
+    elseif mode == TracedToConcrete
+        throw("Input is not a traced-type: $(RT)")
+    end
+    return prev
+end
+
+# Keep wrapper identity, payload aliases, and path handling in the generic struct walker.
+Base.@nospecializeinfer function make_tracer(
+    seen, @nospecialize(prev::AbstractReactantEnum), @nospecialize(path), mode; kwargs...
+)
+    return make_tracer_unknown(seen, prev, path, mode; kwargs...)
 end

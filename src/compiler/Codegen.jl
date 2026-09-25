@@ -24,6 +24,15 @@ end
     return Base.getfield(obj, field)
 end
 
+# A path can address the payload inside a `TracedEnum` while the object actually present at
+# the enum's position (e.g. an untraced branch counterpart) is still the plain enum; there
+# is nothing to descend into, and callers skip untraced targets.
+@inline function traced_getfield(@nospecialize(obj::Base.Enum), field)
+    # Only the synthetic payload field can stand in for a plain enum.
+    field === 1 && return obj
+    return Base.getfield(obj, field)
+end
+
 @inline function traced_getfield(
     @nospecialize(
         obj::AbstractArray{<:Union{ConcretePJRTNumber,ConcreteIFRTNumber,TracedRNumber}}
@@ -139,6 +148,39 @@ end
 function traced_setfield_buffer!(runtime::Val, cache_dict, concrete_res, obj, field, path)
     return traced_setfield_buffer!(
         runtime, cache_dict, traced_getfield(obj, field), concrete_res, obj, field, path
+    )
+end
+
+# A captured traced enum must be replaced in its containing field: its typed payload
+# cannot accept a concrete number. Other values retain the usual payload write-back.
+function traced_setfield_buffer_at_parent!(
+    runtime, cache_dict, concrete_res, parent, field, payload_field, path
+)
+    obj = traced_getfield(parent, field)
+    if obj isa Reactant.TracedEnum
+        if haskey(cache_dict, obj)
+            concrete_enum = cache_dict[obj]
+        else
+            payload = obj.value
+            if haskey(cache_dict, payload)
+                concrete_payload = cache_dict[payload]
+            else
+                T = Reactant.unwrapped_eltype(payload)
+                concrete_payload = if runtime isa Val{:PJRT}
+                    ConcretePJRTNumber{T}(concrete_res)
+                else
+                    ConcreteIFRTNumber{T}(concrete_res)
+                end
+                cache_dict[payload] = concrete_payload
+            end
+            E = typeof(obj).parameters[1]
+            concrete_enum = Reactant.ConcreteEnum{E}(concrete_payload)
+            cache_dict[obj] = concrete_enum
+        end
+        return traced_setfield!(parent, field, concrete_enum, path)
+    end
+    return traced_setfield_buffer!(
+        runtime, cache_dict, concrete_res, obj, payload_field, path
     )
 end
 
@@ -1124,7 +1166,7 @@ function codegen_unflatten!(
                 end
 
                 path = path[3:end]
-                for p in path[1:(end - 1)]
+                for p in path[1:max(0, end - 2)]
                     unflatcode = :(traced_getfield($unflatcode, $(Meta.quot(p))))
                 end
 
@@ -1148,7 +1190,20 @@ function codegen_unflatten!(
                     concrete_res_name_final = unresharded_arrays_cache[concrete_res_name]
                 end
 
-                if length(path) > 0
+                if length(path) > 1
+                    needs_cache_dict = true
+                    unflatcode = quote
+                        traced_setfield_buffer_at_parent!(
+                            $(runtime),
+                            $(cache_dict),
+                            $(concrete_res_name_final),
+                            $(unflatcode),
+                            $(Meta.quot(path[end - 1])),
+                            $(Meta.quot(path[end])),
+                            $(path),
+                        )
+                    end
+                elseif length(path) > 0
                     needs_cache_dict = true
                     # TODO(#2233): we might need to handle sharding here
                     unflatcode = quote
@@ -1174,7 +1229,12 @@ function codegen_unflatten!(
     if needs_cache_dict
         pushfirst!(
             unflatten_code,
-            :($cache_dict = IdDict{Union{TracedRArray,TracedRNumber},$ctypes}()),
+            :(
+                $cache_dict = IdDict{
+                    Union{TracedRArray,TracedRNumber,Reactant.TracedEnum},
+                    Union{$ctypes,Reactant.ConcreteEnum},
+                }()
+            ),
         )
     end
 
