@@ -79,7 +79,10 @@ end
     device = XLA.default_device()
     platform = XLA.platform_name(XLA.client(device))
 
-    if platform in ("cuda", "rocm")
+    if lowercase(platform) == "cpu"
+        # The CPU device does not track allocator statistics, so there is nothing to reset.
+        @test_throws XLA.ReactantInternalError XLA.clear_memory_stats!(device)
+    elseif platform in ("cuda", "rocm")
         # Allocate and release a buffer so that the recorded peak exceeds the bytes in use.
         scratch = Reactant.to_rarray(zeros(Float32, 1024, 1024))
         scratch = nothing
@@ -89,7 +92,9 @@ end
         stats = XLA.allocatorstats(device)
         @test stats.peak_bytes_in_use == stats.bytes_in_use
     else
-        # Only devices with allocator statistics support the reset.
-        @test_throws XLA.ReactantInternalError XLA.clear_memory_stats!(device)
+        # Other accelerators (e.g. TPU) support the reset, but their allocators do not
+        # document that the peak is reset to exactly the bytes in use.
+        @test XLA.clear_memory_stats!(device) === nothing
+        @test XLA.allocatorstats(device) isa XLA.AllocatorStats
     end
 end
