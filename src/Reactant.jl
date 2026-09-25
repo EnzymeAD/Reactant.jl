@@ -270,6 +270,7 @@ export StackedBatchDuplicated, StackedBatchDuplicatedNoNeed
 const TracedType = Union{TracedRArray,TracedRNumber,MissingTracedValue}
 
 include("ControlFlow.jl")
+include("Enums.jl")
 include("Tracing.jl")
 
 include("compiler/Compiler.jl")
@@ -308,7 +309,7 @@ export ConcreteRArray,
     within_compile
 
 @static if VERSION ≥ v"1.11"
-    @eval $(Expr(:public, :Periodic, :Binomial))
+    @eval $(Expr(:public, :Periodic, :Binomial, :TracedEnum, :ConcreteEnum))
 end
 
 const registry = Ref{Union{Nothing,MLIR.IR.DialectRegistry}}()
