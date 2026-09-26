@@ -3020,12 +3020,12 @@ function mlirSymbolTableGetSymbolAttributeName()
 end
 
 """
-    mlirSymbolTableGetVisibilityAttributeName()
+    mlirSymbolTableGetDefaultVisibilityAttributeName()
 
-Returns the name of the attribute used to store symbol visibility.
+Returns the name of the attribute used by default to store symbol visibility.
 """
-function mlirSymbolTableGetVisibilityAttributeName()
-    @ccall Reactant_jll.libReactantExtra.mlirSymbolTableGetVisibilityAttributeName()::MlirStringRef
+function mlirSymbolTableGetDefaultVisibilityAttributeName()
+    @ccall Reactant_jll.libReactantExtra.mlirSymbolTableGetDefaultVisibilityAttributeName()::MlirStringRef
 end
 
 """
