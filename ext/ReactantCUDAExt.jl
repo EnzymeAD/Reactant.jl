@@ -784,11 +784,29 @@ AddKernelStatePass() = LLVM.NewPMModulePass("AddKernelStatePass", kern_pass)
 LowerKernelStatePass() = LLVM.NewPMFunctionPass("LowerKernelStatePass", noop_pass)
 CleanupKernelStatePass() = LLVM.NewPMModulePass("CleanupKernelStatePass", noop_pass)
 
-# compile to executable machine code
+# LLVM bitcode of a kernel, ready to be linked into an MLIR module.  This is a mutable
+# struct so that it's hashed by identity when used as key of the per-module caches.
+mutable struct KernelBitcode
+    const bitcode::Vector{UInt8}
+    const entryname::String
+    const datalayout::String
+end
+
+# Kernels compiled with GPUCompiler, shared across all MLIR modules.  Compiling a kernel with
+# GPUCompiler is expensive and, in current versions of Julia, leaks the whole LLVM module
+# and context of the compilation (the native code descriptor returned by
+# `jl_emit_native`/`jl_create_native` can't be freed), so we want to do it at most once per
+# kernel, instead of once per MLIR module (e.g. at every eager kernel launch).
+# NOTE: this is global mutable state, it must only be accessed while holding
+# `CUDACore.cufunction_lock` (see the `CUDA.cufunction` overlay below): the lock inside
+# `GPUCompiler.cached_compilation` alone isn't sufficient, as not all cache writes take it.
+const KERNEL_BITCODE_CACHE = Dict{Any,KernelBitcode}()
+
+# compile to LLVM bitcode
 function compile(job)
     # lower to PTX
     # TODO(#2240): on 1.9, this actually creates a context. cache those.
-    entry = GPUCompiler.JuliaContext() do ctx
+    return GPUCompiler.JuliaContext() do ctx
         mod, meta = GPUCompiler.compile(
             # :llvm, job; optimize=false, cleanup=false, validate=false, libraries=true
             :llvm,
@@ -890,29 +908,33 @@ function compile(job)
         # textual IR: the bitcode reader auto-upgrades constructs whose spelling changed between the
         # two LLVM versions (e.g. `llvm.loop.distribute.enable` metadata), whereas the .ll parser does
         # not, and mismatches there abort the process in the verifier.
-        modbc = convert(Vector{UInt8}, mod)
-        mmodref = GC.@preserve modbc MLIR.API.ConvertLLVMBCToMLIR(
-            pointer(modbc), length(modbc), MLIR.IR.current_context()
-        )
-        mmod = MLIR.IR.Module(mmodref)
-        @assert mmod != C_NULL
+        KernelBitcode(convert(Vector{UInt8}, mod), entryname, dl)
+    end
+end
 
-        cur_module = MLIR.IR.current_module()
-        linkRes = MLIR.API.LinkInModule(cur_module, mmod, entryname)
+# link the compiled kernel into the current MLIR module, return the name of the entry point
+function link_into_current_module(compiled::KernelBitcode)
+    modbc = compiled.bitcode
+    mmodref = GC.@preserve modbc MLIR.API.ConvertLLVMBCToMLIR(
+        pointer(modbc), length(modbc), MLIR.IR.current_context()
+    )
+    mmod = MLIR.IR.Module(mmodref)
+    @assert mmod != C_NULL
 
-        dl_attr_name = "llvm.data_layout"
-        prevdlattr = MLIR.IR.getattr(MLIR.IR.Operation(cur_module), dl_attr_name)
-        if !isnothing(prevdlattr)
-            prevdl = String(prevdlattr)
-            @assert prevdl == dl "data layout mismatch, tried compiling cuda kernels for different target machines?"
-        else
-            MLIR.IR.setattr!(MLIR.IR.Operation(cur_module), dl_attr_name, MLIR.IR.Attribute(dl))
-        end
+    cur_module = MLIR.IR.current_module()
+    linkRes = MLIR.API.LinkInModule(cur_module, mmod, compiled.entryname)
 
-        String(Reactant.TracedUtils.get_attribute_by_name(linkRes, "sym_name"))
+    dl = compiled.datalayout
+    dl_attr_name = "llvm.data_layout"
+    prevdlattr = MLIR.IR.getattr(MLIR.IR.Operation(cur_module), dl_attr_name)
+    if !isnothing(prevdlattr)
+        prevdl = String(prevdlattr)
+        @assert prevdl == dl "data layout mismatch, tried compiling cuda kernels for different target machines?"
+    else
+        MLIR.IR.setattr!(MLIR.IR.Operation(cur_module), dl_attr_name, MLIR.IR.Attribute(dl))
     end
 
-    return LLVMFunc{job.source.specTypes.parameters[1],job.source.specTypes}(nothing, entry)
+    return String(Reactant.TracedUtils.get_attribute_by_name(linkRes, "sym_name"))
 end
 
 # link into an executable kernel
@@ -1681,7 +1703,14 @@ Reactant.@reactant_overlay function CUDA.cufunction(
             validate=false,
             libraries=false,
         )
-        GPUCompiler.cached_compilation(cache, source, config, compile, link)
+        # While precompiling, the runtime library isn't linked in, don't let those kernels
+        # end up in the global cache.
+        bitcode_cache = Reactant.precompiling() ? Dict{Any,KernelBitcode}() : KERNEL_BITCODE_CACHE
+        compiled = GPUCompiler.cached_compilation(bitcode_cache, source, config, compile, link)
+        get!(cache, compiled) do
+            entry = link_into_current_module(compiled)
+            LLVMFunc{source.specTypes.parameters[1],source.specTypes}(nothing, entry)
+        end
     end
     return Core.Typeof(res)(f, res.entry)
 end
