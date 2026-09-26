@@ -928,12 +928,16 @@ function abi_sizeof(@nospecialize(x::CUDA.CuDeviceArray))
     return sizeof(Ptr)
 end
 
+# Int8 rather than UInt8: these bytes become an llvm.mlir.constant of type
+# !llvm.array<N x i8>, and llvm.mlir.constant requires the attribute's integer
+# element type to match the result's. A UInt8 array yields tensor<Nxui8>, which
+# the verifier rejects against i8.
 function to_bytes(x)
     sz = abi_sizeof(x)
     ref = Ref(x)
     GC.@preserve ref begin
-        ptr = Base.reinterpret(Ptr{UInt8}, Base.unsafe_convert(Ptr{Cvoid}, ref))
-        vec = Vector{UInt8}(undef, sz)
+        ptr = Base.reinterpret(Ptr{Int8}, Base.unsafe_convert(Ptr{Cvoid}, ref))
+        vec = Vector{Int8}(undef, sz)
         for i in 1:sz
             @inbounds vec[i] = Base.unsafe_load(ptr, i)
         end
