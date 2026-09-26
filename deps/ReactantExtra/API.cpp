@@ -2155,10 +2155,9 @@ REACTANT_ABI HeldIfrtArray *
 ifrt_client_make_single_shard_array_from_host_buffer(
     ifrt::Client *client, void *data, int dtype_kind, int ndims,
     const int64_t *c_shape, int c_semantics, ifrt::Device *device,
-    const char *mem_kind) {
-  auto memory_kind = ifrt::MemoryKind(std::string(mem_kind));
+    ifrt::MemoryKind *mem_kind) {
   auto sharding = reactant::capture(std::shared_ptr<const ifrt::Sharding>(
-      ifrt::SingleDeviceSharding::Create(device, memory_kind).release()));
+      ifrt::SingleDeviceSharding::Create(device, *mem_kind).release()));
   return ifrt_client_make_array_from_host_buffer(
       client, data, dtype_kind, ndims, c_shape, sharding, c_semantics);
 }

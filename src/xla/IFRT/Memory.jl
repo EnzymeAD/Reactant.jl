@@ -41,6 +41,8 @@ function Base.:(==)(a::MemoryKind, b::MemoryKind)
     end
 end
 
+# For display only: an unset MemoryKind has no name, and "<null>" is not one
+# IFRT accepts. Pass a MemoryKind itself across the API rather than its string.
 function Base.string(memory_kind::MemoryKind)
     isempty(memory_kind) && return "<null>"
     GC.@preserve memory_kind begin
