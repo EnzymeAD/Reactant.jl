@@ -347,6 +347,11 @@ function deinitialize_dialect()
 end
 
 function initialize_ptrs()
+    for name in ("ProfilerActivityStart", "ProfilerActivityEnd")
+        MLIR.API.EnzymeJaXMapSymbol(
+            name, Libdl.dlsym(Reactant_jll.libReactantExtra_handle, name)
+        )
+    end
     for name in (
         "__kmpc_barrier",
         "__kmpc_global_thread_num",
