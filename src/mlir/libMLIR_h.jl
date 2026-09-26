@@ -17187,7 +17187,7 @@ function ifrt_client_make_single_shard_array_from_host_buffer(
         c_shape::Ptr{Int64},
         c_semantics::Cint,
         device::Ptr{Device},
-        mem_kind::Cstring,
+        mem_kind::Ptr{MemoryKind},
     )::Ptr{HeldIfrtArray}
 end
 
