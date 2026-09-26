@@ -704,6 +704,39 @@ function collective_permute_v1(
     )
 end
 
+function collective_reduce_v1(
+    operands::Vector{Value};
+    results::Vector{IR.Type},
+    replica_groups,
+    channel_id,
+    use_global_device_ids,
+    has_dynamic_root,
+    computation::Region,
+    location=Location(),
+)
+    op_ty_results = IR.Type[results...,]
+    operands = Value[operands...,]
+    owned_regions = Region[computation,]
+    successors = Block[]
+    attributes = NamedAttribute[
+        NamedAttribute("replica_groups", replica_groups),
+        NamedAttribute("channel_id", channel_id),
+        NamedAttribute("use_global_device_ids", use_global_device_ids),
+        NamedAttribute("has_dynamic_root", has_dynamic_root),
+    ]
+
+    return create_operation(
+        "vhlo.collective_reduce_v1",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function compare_v1(
     lhs::Value,
     rhs::Value;

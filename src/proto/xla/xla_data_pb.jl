@@ -1397,15 +1397,17 @@ struct var"SparsityConfig.TensorSparsityConfig"
     block_size::Int64
     dimension::Int64
     stride::Int64
+    idx::Int32
 end
-PB.default_values(::Type{var"SparsityConfig.TensorSparsityConfig"}) = (;num_non_zero = zero(Int64), block_size = zero(Int64), dimension = zero(Int64), stride = zero(Int64))
-PB.field_numbers(::Type{var"SparsityConfig.TensorSparsityConfig"}) = (;num_non_zero = 1, block_size = 2, dimension = 3, stride = 4)
+PB.default_values(::Type{var"SparsityConfig.TensorSparsityConfig"}) = (;num_non_zero = zero(Int64), block_size = zero(Int64), dimension = zero(Int64), stride = zero(Int64), idx = zero(Int32))
+PB.field_numbers(::Type{var"SparsityConfig.TensorSparsityConfig"}) = (;num_non_zero = 1, block_size = 2, dimension = 3, stride = 4, idx = 5)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"SparsityConfig.TensorSparsityConfig"}, _endpos::Int=0, _group::Bool=false)
     num_non_zero = zero(Int64)
     block_size = zero(Int64)
     dimension = zero(Int64)
     stride = zero(Int64)
+    idx = zero(Int32)
     while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
@@ -1416,11 +1418,13 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"SparsityConfig.Tenso
             dimension = PB.decode(d, Int64)
         elseif field_number == 4
             stride = PB.decode(d, Int64)
+        elseif field_number == 5
+            idx = PB.decode(d, Int32)
         else
             Base.skip(d, wire_type)
         end
     end
-    return var"SparsityConfig.TensorSparsityConfig"(num_non_zero, block_size, dimension, stride)
+    return var"SparsityConfig.TensorSparsityConfig"(num_non_zero, block_size, dimension, stride, idx)
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::var"SparsityConfig.TensorSparsityConfig")
@@ -1429,6 +1433,7 @@ function PB.encode(e::PB.AbstractProtoEncoder, x::var"SparsityConfig.TensorSpars
     x.block_size != zero(Int64) && PB.encode(e, 2, x.block_size)
     x.dimension != zero(Int64) && PB.encode(e, 3, x.dimension)
     x.stride != zero(Int64) && PB.encode(e, 4, x.stride)
+    x.idx != zero(Int32) && PB.encode(e, 5, x.idx)
     return position(e.io) - initpos
 end
 function PB._encoded_size(x::var"SparsityConfig.TensorSparsityConfig")
@@ -1437,6 +1442,7 @@ function PB._encoded_size(x::var"SparsityConfig.TensorSparsityConfig")
     x.block_size != zero(Int64) && (encoded_size += PB._encoded_size(x.block_size, 2))
     x.dimension != zero(Int64) && (encoded_size += PB._encoded_size(x.dimension, 3))
     x.stride != zero(Int64) && (encoded_size += PB._encoded_size(x.stride, 4))
+    x.idx != zero(Int32) && (encoded_size += PB._encoded_size(x.idx, 5))
     return encoded_size
 end
 

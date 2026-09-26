@@ -8831,6 +8831,47 @@ function mlirLLVMDICompileUnitAttrGet(
     )::MlirAttribute
 end
 
+"""
+    mlirLLVMDICompileUnitAttrGetWithSourceLanguageDialect(ctx, recId, isRecSelf, id, sourceLanguage, sourceLanguageDialect, file, producer, isOptimized, emissionKind, isDebugInfoForProfiling, nameTableKind, splitDebugFilename, nImportedEntities, importedEntities)
+
+Creates a LLVM DICompileUnit attribute with a source language dialect.
+"""
+function mlirLLVMDICompileUnitAttrGetWithSourceLanguageDialect(
+    ctx,
+    recId,
+    isRecSelf,
+    id,
+    sourceLanguage,
+    sourceLanguageDialect,
+    file,
+    producer,
+    isOptimized,
+    emissionKind,
+    isDebugInfoForProfiling,
+    nameTableKind,
+    splitDebugFilename,
+    nImportedEntities,
+    importedEntities,
+)
+    @ccall Reactant_jll.libReactantExtra.mlirLLVMDICompileUnitAttrGetWithSourceLanguageDialect(
+        ctx::MlirContext,
+        recId::MlirAttribute,
+        isRecSelf::Bool,
+        id::MlirAttribute,
+        sourceLanguage::Cuint,
+        sourceLanguageDialect::Cuint,
+        file::MlirAttribute,
+        producer::MlirAttribute,
+        isOptimized::Bool,
+        emissionKind::MlirLLVMDIEmissionKind,
+        isDebugInfoForProfiling::Bool,
+        nameTableKind::MlirLLVMDINameTableKind,
+        splitDebugFilename::MlirAttribute,
+        nImportedEntities::Cptrdiff_t,
+        importedEntities::Ptr{MlirAttribute},
+    )::MlirAttribute
+end
+
 function mlirLLVMDICompileUnitAttrGetName()
     @ccall Reactant_jll.libReactantExtra.mlirLLVMDICompileUnitAttrGetName()::MlirStringRef
 end
@@ -10554,10 +10595,6 @@ struct MlirMemoryEffectInstance
     ptr::Ptr{Cvoid}
 end
 
-struct MlirMemoryEffectInstancesList
-    ptr::Ptr{Cvoid}
-end
-
 struct MlirSideEffectResource
     ptr::Ptr{Cvoid}
 end
@@ -10747,7 +10784,7 @@ end
 """
     mlirMemoryEffectsAllocateGet()
 
-Returns the borrowed singleton instance of the allocate memory effect.
+Returns the singleton instance of the allocate memory effect.
 """
 function mlirMemoryEffectsAllocateGet()
     @ccall Reactant_jll.libReactantExtra.mlirMemoryEffectsAllocateGet()::MlirMemoryEffect
@@ -10756,7 +10793,7 @@ end
 """
     mlirMemoryEffectsFreeGet()
 
-Returns the borrowed singleton instance of the free memory effect.
+Returns the singleton instance of the free memory effect.
 """
 function mlirMemoryEffectsFreeGet()
     @ccall Reactant_jll.libReactantExtra.mlirMemoryEffectsFreeGet()::MlirMemoryEffect
@@ -10765,7 +10802,7 @@ end
 """
     mlirMemoryEffectsReadGet()
 
-Returns the borrowed singleton instance of the read memory effect.
+Returns the singleton instance of the read memory effect.
 """
 function mlirMemoryEffectsReadGet()
     @ccall Reactant_jll.libReactantExtra.mlirMemoryEffectsReadGet()::MlirMemoryEffect
@@ -10774,16 +10811,27 @@ end
 """
     mlirMemoryEffectsWriteGet()
 
-Returns the borrowed singleton instance of the write memory effect.
+Returns the singleton instance of the write memory effect.
 """
 function mlirMemoryEffectsWriteGet()
     @ccall Reactant_jll.libReactantExtra.mlirMemoryEffectsWriteGet()::MlirMemoryEffect
 end
 
 """
+    mlirMemoryEffectGetEffectID(effect)
+
+Returns the TypeID identifying the concrete type of the given memory effect.
+"""
+function mlirMemoryEffectGetEffectID(effect)
+    @ccall Reactant_jll.libReactantExtra.mlirMemoryEffectGetEffectID(
+        effect::MlirMemoryEffect
+    )::MlirTypeID
+end
+
+"""
     mlirSideEffectsDefaultResourceGet()
 
-Returns the borrowed singleton instance of the default side effect resource.
+Returns the singleton instance of the default side effect resource.
 """
 function mlirSideEffectsDefaultResourceGet()
     @ccall Reactant_jll.libReactantExtra.mlirSideEffectsDefaultResourceGet()::MlirSideEffectResource
@@ -10879,9 +10927,20 @@ function mlirMemoryEffectInstanceCreateForSymbol(
 end
 
 """
+    mlirMemoryEffectInstanceClone(instance)
+
+Creates a copy of a memory effect instance. The caller must destroy the returned instance with [`mlirMemoryEffectInstanceDestroy`](@ref).
+"""
+function mlirMemoryEffectInstanceClone(instance)
+    @ccall Reactant_jll.libReactantExtra.mlirMemoryEffectInstanceClone(
+        instance::MlirMemoryEffectInstance
+    )::MlirMemoryEffectInstance
+end
+
+"""
     mlirMemoryEffectInstanceDestroy(instance)
 
-Destroys a memory effect instance created by one of the functions above.
+Destroys a memory effect instance created or cloned by APIs above.
 """
 function mlirMemoryEffectInstanceDestroy(instance)
     @ccall Reactant_jll.libReactantExtra.mlirMemoryEffectInstanceDestroy(
@@ -10890,15 +10949,87 @@ function mlirMemoryEffectInstanceDestroy(instance)
 end
 
 """
-    mlirMemoryEffectInstancesListAppend(list, instance)
+    mlirMemoryEffectInstanceGetEffect(instance)
 
-Appends a copy of `instance` to the given list. This does not take ownership of `instance`; the caller remains responsible for destroying it.
+Returns the memory effect of the given instance.
 """
-function mlirMemoryEffectInstancesListAppend(list, instance)
-    @ccall Reactant_jll.libReactantExtra.mlirMemoryEffectInstancesListAppend(
-        list::MlirMemoryEffectInstancesList, instance::MlirMemoryEffectInstance
-    )::Cvoid
+function mlirMemoryEffectInstanceGetEffect(instance)
+    @ccall Reactant_jll.libReactantExtra.mlirMemoryEffectInstanceGetEffect(
+        instance::MlirMemoryEffectInstance
+    )::MlirMemoryEffect
 end
+
+"""
+    mlirMemoryEffectInstanceGetResource(instance)
+
+Returns the side effect resource of the given instance.
+"""
+function mlirMemoryEffectInstanceGetResource(instance)
+    @ccall Reactant_jll.libReactantExtra.mlirMemoryEffectInstanceGetResource(
+        instance::MlirMemoryEffectInstance
+    )::MlirSideEffectResource
+end
+
+"""
+    mlirMemoryEffectInstanceGetStage(instance)
+
+Returns the stage of the given instance.
+"""
+function mlirMemoryEffectInstanceGetStage(instance)
+    @ccall Reactant_jll.libReactantExtra.mlirMemoryEffectInstanceGetStage(
+        instance::MlirMemoryEffectInstance
+    )::Cint
+end
+
+"""
+    mlirMemoryEffectInstanceGetEffectOnFullRegion(instance)
+
+Returns true if the given instance has effect on every single value of the resource.
+"""
+function mlirMemoryEffectInstanceGetEffectOnFullRegion(instance)
+    @ccall Reactant_jll.libReactantExtra.mlirMemoryEffectInstanceGetEffectOnFullRegion(
+        instance::MlirMemoryEffectInstance
+    )::Bool
+end
+
+"""
+    mlirMemoryEffectInstanceGetParameters(instance)
+
+Returns the parameters of the given instance, or a null attribute if there are no parameters.
+"""
+function mlirMemoryEffectInstanceGetParameters(instance)
+    @ccall Reactant_jll.libReactantExtra.mlirMemoryEffectInstanceGetParameters(
+        instance::MlirMemoryEffectInstance
+    )::MlirAttribute
+end
+
+"""
+    mlirMemoryEffectInstanceGetValue(instance)
+
+Returns the value (OpOperand, OpResult, or BlockArgument) of the given instance, or a null value if there is no associated value.
+"""
+function mlirMemoryEffectInstanceGetValue(instance)
+    @ccall Reactant_jll.libReactantExtra.mlirMemoryEffectInstanceGetValue(
+        instance::MlirMemoryEffectInstance
+    )::MlirValue
+end
+
+"""
+    mlirMemoryEffectInstanceGetSymbolRef(instance)
+
+Returns the symbol reference of the given instance, or a null attribute if there is no associated symbol.
+"""
+function mlirMemoryEffectInstanceGetSymbolRef(instance)
+    @ccall Reactant_jll.libReactantExtra.mlirMemoryEffectInstanceGetSymbolRef(
+        instance::MlirMemoryEffectInstance
+    )::MlirAttribute
+end
+
+# typedef void ( * MlirMemoryEffectInstancesCallback ) ( intptr_t numEffects , MlirMemoryEffectInstance * effects , void * userData )
+"""
+Callback for receiving a batch of memory effect instances. `effects` points to `numEffects` consecutive instances. Ownership is not transferred, and the instances are valid only while `callback` is executing. The caller-provided `userData` is forwarded to the callback.
+"""
+const MlirMemoryEffectInstancesCallback = Ptr{Cvoid}
 
 """
     mlirMemoryEffectsOpInterfaceTypeID()
@@ -10914,11 +11045,11 @@ end
 
 Callbacks for implementing MemoryEffectsOpInterface from external code.
 
-| Field      | Note                                                               |
-| :--------- | :----------------------------------------------------------------- |
-| construct  | Optional constructor for user data. Set to nullptr to disable it.  |
-| destruct   | Optional destructor for user data. Set to nullptr to disable it.   |
-| getEffects | Get memory effects callback.                                       |
+| Field      | Note                                                                                                                                                                                                                                                              |
+| :--------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| construct  | Optional constructor for user data. Set to nullptr to disable it.                                                                                                                                                                                                 |
+| destruct   | Optional destructor for user data. Set to nullptr to disable it.                                                                                                                                                                                                  |
+| getEffects | Get memory effects callback. Implementations report effects by invoking `callback` before returning. The supplied callback copies the instances, so implementations retain ownership of the instances and only need to keep them valid until `callback` returns.  |
 """
 struct MlirMemoryEffectsOpInterfaceCallbacks
     construct::Ptr{Cvoid}
@@ -10937,6 +11068,19 @@ function mlirMemoryEffectsOpInterfaceAttachFallbackModel(ctx, opName, callbacks)
         ctx::MlirContext,
         opName::MlirStringRef,
         callbacks::MlirMemoryEffectsOpInterfaceCallbacks,
+    )::Cvoid
+end
+
+"""
+    mlirMemoryEffectsOpInterfaceGetEffects(operation, callback, userData)
+
+Gets the memory effects of the given operation. The operation must implement the MemoryEffectsOpInterface. Invokes `callback` once with all effects. Ownership is not transferred; call [`mlirMemoryEffectInstanceClone`](@ref) from the callback to keep a copy after the callback returns.
+"""
+function mlirMemoryEffectsOpInterfaceGetEffects(operation, callback, userData)
+    @ccall Reactant_jll.libReactantExtra.mlirMemoryEffectsOpInterfaceGetEffects(
+        operation::MlirOperation,
+        callback::MlirMemoryEffectInstancesCallback,
+        userData::Ptr{Cvoid},
     )::Cvoid
 end
 
@@ -12642,63 +12786,66 @@ function mlirPatternDescriptorOpInterfaceAttachFallbackModel(ctx, opName, callba
 end
 
 """
-    mlirTransformOnlyReadsHandle(operands, numOperands, effects)
+    mlirTransformOnlyReadsHandle(operands, numOperands, callback, userData)
 
-Helper to mark operands as only reading handles.
+Invokes `callback` with `OnlyReadsHandle` effects corresponding to operands which have been marked as having those effects.
 """
-function mlirTransformOnlyReadsHandle(operands, numOperands, effects)
+function mlirTransformOnlyReadsHandle(operands, numOperands, callback, userData)
     @ccall Reactant_jll.libReactantExtra.mlirTransformOnlyReadsHandle(
         operands::Ptr{MlirOpOperand},
         numOperands::Cptrdiff_t,
-        effects::MlirMemoryEffectInstancesList,
+        callback::MlirMemoryEffectInstancesCallback,
+        userData::Ptr{Cvoid},
     )::Cvoid
 end
 
 """
-    mlirTransformConsumesHandle(operands, numOperands, effects)
+    mlirTransformConsumesHandle(operands, numOperands, callback, userData)
 
-Helper to mark operands as consuming handles.
+Invokes `callback` with `ConsumesHandle` effects corresponding to operands which have been marked as having those effects.
 """
-function mlirTransformConsumesHandle(operands, numOperands, effects)
+function mlirTransformConsumesHandle(operands, numOperands, callback, userData)
     @ccall Reactant_jll.libReactantExtra.mlirTransformConsumesHandle(
         operands::Ptr{MlirOpOperand},
         numOperands::Cptrdiff_t,
-        effects::MlirMemoryEffectInstancesList,
+        callback::MlirMemoryEffectInstancesCallback,
+        userData::Ptr{Cvoid},
     )::Cvoid
 end
 
 """
-    mlirTransformProducesHandle(results, numResults, effects)
+    mlirTransformProducesHandle(results, numResults, callback, userData)
 
-Helper to mark results as producing handles.
+Invokes `callback` with `ProducesHandle` effects corresponding to results which have been marked as having those effects.
 """
-function mlirTransformProducesHandle(results, numResults, effects)
+function mlirTransformProducesHandle(results, numResults, callback, userData)
     @ccall Reactant_jll.libReactantExtra.mlirTransformProducesHandle(
         results::Ptr{MlirValue},
         numResults::Cptrdiff_t,
-        effects::MlirMemoryEffectInstancesList,
+        callback::MlirMemoryEffectInstancesCallback,
+        userData::Ptr{Cvoid},
     )::Cvoid
 end
 
 """
-    mlirTransformModifiesPayload(effects)
+    mlirTransformModifiesPayload(callback, userData)
 
-Helper to mark potential modifications to the payload IR.
+Invokes `callback` with `ModifiesPayload` effects.
 """
-function mlirTransformModifiesPayload(effects)
+function mlirTransformModifiesPayload(callback, userData)
     @ccall Reactant_jll.libReactantExtra.mlirTransformModifiesPayload(
-        effects::MlirMemoryEffectInstancesList
+        callback::MlirMemoryEffectInstancesCallback, userData::Ptr{Cvoid}
     )::Cvoid
 end
 
 """
-    mlirTransformOnlyReadsPayload(effects)
+    mlirTransformOnlyReadsPayload(callback, userData)
 
-Helper to mark potential reads from the payload IR.
+Invokes `callback` with `OnlyReadsPayload` effects.
 """
-function mlirTransformOnlyReadsPayload(effects)
+function mlirTransformOnlyReadsPayload(callback, userData)
     @ccall Reactant_jll.libReactantExtra.mlirTransformOnlyReadsPayload(
-        effects::MlirMemoryEffectInstancesList
+        callback::MlirMemoryEffectInstancesCallback, userData::Ptr{Cvoid}
     )::Cvoid
 end
 
