@@ -593,15 +593,27 @@ Example 2: Uses `symbol` keyword for symbols `%n` and `%m`.
 ```mlir
 %1 = affine.load %0[%i0 + symbol(%n), %i1 + symbol(%m)] : memref<100x100xf32>
 ```
+
+An optional `alignment` attribute allows to specify the byte alignment of
+the load operation. It must be a positive power of 2. The operation must
+access memory at an address aligned to this boundary. Violations may lead
+to architecture-specific faults or performance penalties.
+A value of 0 indicates no specific alignment requirement.
 """
 function load(
-    memref::Value, indices::Vector{Value}; result::IR.Type, map, location=Location()
+    memref::Value,
+    indices::Vector{Value};
+    result::IR.Type,
+    map,
+    alignment=nothing,
+    location=Location(),
 )
     op_ty_results = IR.Type[result,]
     operands = Value[memref, indices...]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[NamedAttribute("map", map),]
+    !isnothing(alignment) && push!(attributes, NamedAttribute("alignment", alignment))
 
     return create_operation(
         "affine.load",
@@ -878,15 +890,27 @@ Example 2: Uses `symbol` keyword for symbols `%n` and `%m`.
 ```mlir
 affine.store %v0, %0[%i0 + symbol(%n), %i1 + symbol(%m)] : memref<100x100xf32>
 ```
+
+An optional `alignment` attribute allows to specify the byte alignment of
+the store operation. It must be a positive power of 2. The operation must
+access memory at an address aligned to this boundary. Violations may lead
+to architecture-specific faults or performance penalties.
+A value of 0 indicates no specific alignment requirement.
 """
 function store(
-    value::Value, memref::Value, indices::Vector{Value}; map, location=Location()
+    value::Value,
+    memref::Value,
+    indices::Vector{Value};
+    map,
+    alignment=nothing,
+    location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[value, memref, indices...]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[NamedAttribute("map", map),]
+    !isnothing(alignment) && push!(attributes, NamedAttribute("alignment", alignment))
 
     return create_operation(
         "affine.store",
@@ -940,13 +964,19 @@ TODOs:
 (see [vector.transfer_read](../Vector/#vectortransfer_read-mlirvectortransferreadop)).
 """
 function vector_load(
-    memref::Value, indices::Vector{Value}; result::IR.Type, map, location=Location()
+    memref::Value,
+    indices::Vector{Value};
+    result::IR.Type,
+    map,
+    alignment=nothing,
+    location=Location(),
 )
     op_ty_results = IR.Type[result,]
     operands = Value[memref, indices...]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[NamedAttribute("map", map),]
+    !isnothing(alignment) && push!(attributes, NamedAttribute("alignment", alignment))
 
     return create_operation(
         "affine.vector_load",
@@ -1002,13 +1032,19 @@ TODOs:
 (see [vector.transfer_write](../Vector/#vectortransfer_write-mlirvectortransferwriteop)).
 """
 function vector_store(
-    value::Value, memref::Value, indices::Vector{Value}; map, location=Location()
+    value::Value,
+    memref::Value,
+    indices::Vector{Value};
+    map,
+    alignment=nothing,
+    location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[value, memref, indices...]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[NamedAttribute("map", map),]
+    !isnothing(alignment) && push!(attributes, NamedAttribute("alignment", alignment))
 
     return create_operation(
         "affine.vector_store",

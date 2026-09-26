@@ -179,7 +179,7 @@ function mlir_alias(;
     sym_name,
     linkage,
     dso_local=nothing,
-    thread_local_=nothing,
+    tls_mode=nothing,
     unnamed_addr=nothing,
     visibility_=nothing,
     initializer::Region,
@@ -195,8 +195,7 @@ function mlir_alias(;
         NamedAttribute("linkage", linkage),
     ]
     !isnothing(dso_local) && push!(attributes, NamedAttribute("dso_local", dso_local))
-    !isnothing(thread_local_) &&
-        push!(attributes, NamedAttribute("thread_local_", thread_local_))
+    !isnothing(tls_mode) && push!(attributes, NamedAttribute("tls_mode", tls_mode))
     !isnothing(unnamed_addr) &&
         push!(attributes, NamedAttribute("unnamed_addr", unnamed_addr))
     !isnothing(visibility_) && push!(attributes, NamedAttribute("visibility_", visibility_))
@@ -1531,7 +1530,7 @@ function mlir_global(;
     sym_name,
     linkage,
     dso_local=nothing,
-    thread_local_=nothing,
+    tls_mode=nothing,
     externally_initialized=nothing,
     value=nothing,
     alignment=nothing,
@@ -1556,8 +1555,7 @@ function mlir_global(;
     ]
     !isnothing(constant) && push!(attributes, NamedAttribute("constant", constant))
     !isnothing(dso_local) && push!(attributes, NamedAttribute("dso_local", dso_local))
-    !isnothing(thread_local_) &&
-        push!(attributes, NamedAttribute("thread_local_", thread_local_))
+    !isnothing(tls_mode) && push!(attributes, NamedAttribute("tls_mode", tls_mode))
     !isnothing(externally_initialized) &&
         push!(attributes, NamedAttribute("externally_initialized", externally_initialized))
     !isnothing(value) && push!(attributes, NamedAttribute("value", value))

@@ -6,11 +6,12 @@ export ConvolutionKind, var"BufferAssignmentProto.PeakBuffers", Kind
 export var"StackFrameIndexProto.FileLocation"
 export var"HloBufferDonorProto.BufferDonorEntryProto", CustomCallApiVersion
 export var"StackFrameIndexProto.StackFrame", var"HloInputs.LiteralDescriptor"
-export var"HloModuleProto.ProfileType", CustomCallSchedule, HloPassMetadata, TriState
-export var"LogicalBufferProto.Location", var"HloScheduleProto.InstructionSequence"
-export var"BufferAllocationProto.Assigned", var"MemoryUsageReportProto.AllocationEntry"
-export CrossProgramPrefetch, var"HloInstructionProto.SliceDimensions"
-export var"HeapSimulatorTrace.Event.Kind", var"DebugAttributesProto.DebugLogModeProto"
+export X64ConfigProto, var"HloModuleProto.ProfileType", CustomCallSchedule, HloPassMetadata
+export TriState, var"LogicalBufferProto.Location"
+export var"HloScheduleProto.InstructionSequence", var"BufferAllocationProto.Assigned"
+export var"MemoryUsageReportProto.AllocationEntry", CrossProgramPrefetch
+export var"HloInstructionProto.SliceDimensions", var"HeapSimulatorTrace.Event.Kind"
+export var"DebugAttributesProto.DebugLogModeProto"
 export var"HloInputOutputAliasProto.AliasEntryProto", HloBufferDonorProto
 export StackFrameIndexProto, HloInputs, var"HloModuleProto.ProfileInfo"
 export HloModuleMetadataProto, LogicalBufferProto, var"BufferAssignmentProto.BufferAlias"
@@ -18,8 +19,8 @@ export HloScheduleProto, BufferAllocationProto
 export var"MemoryUsageReportProto.AllocationEntryInMemorySpace", HloInstructionProto
 export var"HeapSimulatorTrace.Event", DebugAttributesProto, HloInputOutputAliasProto
 export MemoryUsageReportProto, HloComputationProto, HeapSimulatorTrace
-export DebugLogBackendConfigProto, DebugAttributeTableEntryProto, BufferAssignmentProto
-export HloModuleGroupProto, HloModuleProto, HloProto, HloSnapshot, HloUnoptimizedSnapshot
+export DebugAttributeTableEntryProto, BufferAssignmentProto, HloModuleGroupProto
+export HloModuleProto, HloProto, HloSnapshot, HloUnoptimizedSnapshot
 export OriginalValueRecoveryTableProto, var"OriginalValueRecoveryTableProto.Entry"
 abstract type var"##Abstract#HloProto" end
 abstract type var"##Abstract#HloModuleGroupProto" end
@@ -237,6 +238,48 @@ function PB._encoded_size(x::var"HloInputs.LiteralDescriptor")
     encoded_size = 0
     x.version != zero(Int32) && (encoded_size += PB._encoded_size(x.version, 1))
     x.argument_size_bytes != zero(UInt64) && (encoded_size += PB._encoded_size(x.argument_size_bytes, 2))
+    return encoded_size
+end
+
+struct X64ConfigProto
+    xprecision_64bit_fragment::String
+    original_log_instruction_name::String
+    xprecision_64bit_original_type::String
+end
+PB.default_values(::Type{X64ConfigProto}) = (;xprecision_64bit_fragment = "", original_log_instruction_name = "", xprecision_64bit_original_type = "")
+PB.field_numbers(::Type{X64ConfigProto}) = (;xprecision_64bit_fragment = 1, original_log_instruction_name = 2, xprecision_64bit_original_type = 3)
+
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:X64ConfigProto}, _endpos::Int=0, _group::Bool=false)
+    xprecision_64bit_fragment = ""
+    original_log_instruction_name = ""
+    xprecision_64bit_original_type = ""
+    while !PB.message_done(d, _endpos, _group)
+        field_number, wire_type = PB.decode_tag(d)
+        if field_number == 1
+            xprecision_64bit_fragment = PB.decode(d, String)
+        elseif field_number == 2
+            original_log_instruction_name = PB.decode(d, String)
+        elseif field_number == 3
+            xprecision_64bit_original_type = PB.decode(d, String)
+        else
+            Base.skip(d, wire_type)
+        end
+    end
+    return X64ConfigProto(xprecision_64bit_fragment, original_log_instruction_name, xprecision_64bit_original_type)
+end
+
+function PB.encode(e::PB.AbstractProtoEncoder, x::X64ConfigProto)
+    initpos = position(e.io)
+    !isempty(x.xprecision_64bit_fragment) && PB.encode(e, 1, x.xprecision_64bit_fragment)
+    !isempty(x.original_log_instruction_name) && PB.encode(e, 2, x.original_log_instruction_name)
+    !isempty(x.xprecision_64bit_original_type) && PB.encode(e, 3, x.xprecision_64bit_original_type)
+    return position(e.io) - initpos
+end
+function PB._encoded_size(x::X64ConfigProto)
+    encoded_size = 0
+    !isempty(x.xprecision_64bit_fragment) && (encoded_size += PB._encoded_size(x.xprecision_64bit_fragment, 1))
+    !isempty(x.original_log_instruction_name) && (encoded_size += PB._encoded_size(x.original_log_instruction_name, 2))
+    !isempty(x.xprecision_64bit_original_type) && (encoded_size += PB._encoded_size(x.xprecision_64bit_original_type, 3))
     return encoded_size
 end
 
@@ -1750,9 +1793,10 @@ struct DebugAttributesProto
     op_id::Int64
     partitioned::Bool
     operands_sharding::String
+    x64_config::Union{Nothing,X64ConfigProto}
 end
-PB.default_values(::Type{DebugAttributesProto}) = (;log_mode = var"DebugAttributesProto.DebugLogModeProto".NONE, callback_id = zero(Int64), op_id = zero(Int64), partitioned = false, operands_sharding = "")
-PB.field_numbers(::Type{DebugAttributesProto}) = (;log_mode = 1, callback_id = 2, op_id = 3, partitioned = 4, operands_sharding = 5)
+PB.default_values(::Type{DebugAttributesProto}) = (;log_mode = var"DebugAttributesProto.DebugLogModeProto".NONE, callback_id = zero(Int64), op_id = zero(Int64), partitioned = false, operands_sharding = "", x64_config = nothing)
+PB.field_numbers(::Type{DebugAttributesProto}) = (;log_mode = 1, callback_id = 2, op_id = 3, partitioned = 4, operands_sharding = 5, x64_config = 6)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:DebugAttributesProto}, _endpos::Int=0, _group::Bool=false)
     log_mode = var"DebugAttributesProto.DebugLogModeProto".NONE
@@ -1760,6 +1804,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:DebugAttributesProto}, _
     op_id = zero(Int64)
     partitioned = false
     operands_sharding = ""
+    x64_config = Ref{Union{Nothing,X64ConfigProto}}(nothing)
     while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
@@ -1772,11 +1817,13 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:DebugAttributesProto}, _
             partitioned = PB.decode(d, Bool)
         elseif field_number == 5
             operands_sharding = PB.decode(d, String)
+        elseif field_number == 6
+            PB.decode!(d, x64_config)
         else
             Base.skip(d, wire_type)
         end
     end
-    return DebugAttributesProto(log_mode, callback_id, op_id, partitioned, operands_sharding)
+    return DebugAttributesProto(log_mode, callback_id, op_id, partitioned, operands_sharding, x64_config[])
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::DebugAttributesProto)
@@ -1786,6 +1833,7 @@ function PB.encode(e::PB.AbstractProtoEncoder, x::DebugAttributesProto)
     x.op_id != zero(Int64) && PB.encode(e, 3, x.op_id)
     x.partitioned != false && PB.encode(e, 4, x.partitioned)
     !isempty(x.operands_sharding) && PB.encode(e, 5, x.operands_sharding)
+    !isnothing(x.x64_config) && PB.encode(e, 6, x.x64_config)
     return position(e.io) - initpos
 end
 function PB._encoded_size(x::DebugAttributesProto)
@@ -1795,6 +1843,7 @@ function PB._encoded_size(x::DebugAttributesProto)
     x.op_id != zero(Int64) && (encoded_size += PB._encoded_size(x.op_id, 3))
     x.partitioned != false && (encoded_size += PB._encoded_size(x.partitioned, 4))
     !isempty(x.operands_sharding) && (encoded_size += PB._encoded_size(x.operands_sharding, 5))
+    !isnothing(x.x64_config) && (encoded_size += PB._encoded_size(x.x64_config, 6))
     return encoded_size
 end
 
@@ -1964,36 +2013,6 @@ function PB._encoded_size(x::HeapSimulatorTrace)
     !isempty(x.events) && (encoded_size += PB._encoded_size(x.events, 1))
     x.whole_module_simulation != false && (encoded_size += PB._encoded_size(x.whole_module_simulation, 2))
     x.buffer_allocation_index != zero(Int64) && (encoded_size += PB._encoded_size(x.buffer_allocation_index, 3))
-    return encoded_size
-end
-
-struct DebugLogBackendConfigProto
-    debug_attributes_config::Union{Nothing,DebugAttributesProto}
-end
-PB.default_values(::Type{DebugLogBackendConfigProto}) = (;debug_attributes_config = nothing)
-PB.field_numbers(::Type{DebugLogBackendConfigProto}) = (;debug_attributes_config = 64)
-
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:DebugLogBackendConfigProto}, _endpos::Int=0, _group::Bool=false)
-    debug_attributes_config = Ref{Union{Nothing,DebugAttributesProto}}(nothing)
-    while !PB.message_done(d, _endpos, _group)
-        field_number, wire_type = PB.decode_tag(d)
-        if field_number == 64
-            PB.decode!(d, debug_attributes_config)
-        else
-            Base.skip(d, wire_type)
-        end
-    end
-    return DebugLogBackendConfigProto(debug_attributes_config[])
-end
-
-function PB.encode(e::PB.AbstractProtoEncoder, x::DebugLogBackendConfigProto)
-    initpos = position(e.io)
-    !isnothing(x.debug_attributes_config) && PB.encode(e, 64, x.debug_attributes_config)
-    return position(e.io) - initpos
-end
-function PB._encoded_size(x::DebugLogBackendConfigProto)
-    encoded_size = 0
-    !isnothing(x.debug_attributes_config) && (encoded_size += PB._encoded_size(x.debug_attributes_config, 64))
     return encoded_size
 end
 
