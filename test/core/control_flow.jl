@@ -413,7 +413,8 @@ end
     y_ra = Reactant.to_rarray(y)
     z_ra = Reactant.to_rarray(z)
 
-    @test @jit(condition11_nested_ifff(x_ra, y_ra, z_ra)) ≈ condition11_nested_ifff(x, y, z)
+    @test @jit(condition11_nested_ifff(x_ra, y_ra, z_ra)) ≈ condition11_nested_ifff(x, y, z) atol =
+        1e-10
 
     x = -Reactant.TestUtils.construct_test_array(Float64, 2, 10)
     y = -Reactant.TestUtils.construct_test_array(Float64, 2, 10)
@@ -422,7 +423,12 @@ end
     y_ra = Reactant.to_rarray(y)
     z_ra = Reactant.to_rarray(z)
 
-    @test @jit(condition11_nested_ifff(x_ra, y_ra, z_ra)) ≈ condition11_nested_ifff(x, y, z)
+    # x and y hold the same values here, so this branch returns x_sum - y_sum and
+    # the reference is exactly 0.0. isapprox defaults to atol = 0, so it only
+    # holds while both reductions are computed bit for bit alike; a one ulp
+    # difference between them is enough to fail it.
+    @test @jit(condition11_nested_ifff(x_ra, y_ra, z_ra)) ≈ condition11_nested_ifff(x, y, z) atol =
+        1e-10
 end
 
 function condition12_compile_test(x, y, z)
