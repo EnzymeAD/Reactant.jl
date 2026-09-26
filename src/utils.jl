@@ -487,9 +487,7 @@ function rewrite_inst(inst, ir, interp, RT)
 
             if !method.isva || !Base.isvarargtype(sig.parameters[end])
                 sig2 = if invoke_marker === nothing
-                    Tuple{
-                        typeof(call_with_reactant),EnsureReturnType{RT0},sig.parameters...
-                    }
+                    Tuple{typeof(call_with_reactant),EnsureReturnType{RT0},sig.parameters...}
                 else
                     Tuple{
                         typeof(call_with_reactant),
@@ -900,9 +898,7 @@ function call_llvm_generator(
     fn_args = Core.SSAValue[]
     f_arg = push_inst!(
         overdubbed_code,
-        Expr(
-            :call, Core.GlobalRef(Core, :getfield), Core.SlotNumber(2), 1 + nmarkers
-        ),
+        Expr(:call, Core.GlobalRef(Core, :getfield), Core.SlotNumber(2), 1 + nmarkers),
     )
     if DEBUG_INTERP[]
         push_inst!(overdubbed_code, Expr(:call, safe_print2, "f_arg", f_arg))
@@ -910,12 +906,7 @@ function call_llvm_generator(
     for i in 2:length(args)
         named_tuple_ssa = push_inst!(
             overdubbed_code,
-            Expr(
-                :call,
-                Core.GlobalRef(Core, :getfield),
-                Core.SlotNumber(2),
-                i + nmarkers,
-            ),
+            Expr(:call, Core.GlobalRef(Core, :getfield), Core.SlotNumber(2), i + nmarkers),
         )
         if DEBUG_INTERP[]
             push_inst!(
