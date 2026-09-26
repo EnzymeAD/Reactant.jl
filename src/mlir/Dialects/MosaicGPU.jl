@@ -116,7 +116,15 @@ the `destination` MemRef in SMEM. The `destination` MemRef in SMEM must be
 contiguous.
 
 Upon completion of the copy, the `complete-tx(complete-count)` operation
-will always be executed on the provided `barrier`.
+will be executed on the provided `barrier`, if one is given.
+
+The `barrier` is required on Hopper and newer GPUs, which use the TMA
+implementation, and must be omitted on pre-Hopper GPUs, which use the
+`cp.async` implementation. In that case, completion is tracked via cp.async
+commit groups and has to be awaited with `nvvm.cp_async_wait_group` rather
+than the barrier. When the `barrier` is omitted, `collective` and
+`leader_tracked` must not be set, and `oob_fill_mode` must be
+`promise_in_bounds`.
 
 The `indices` and `slice_lengths` inputs define what slice of the GMEM
 `source` corresponds to the SMEM `destination`. Both `indices` and
@@ -140,12 +148,18 @@ grouped together in a cluster and need to load the same data. Each block in
 a cluster will first load a slice from GMEM to SMEM and then the slices will
 be multicast to all other blocks in the cluster. In this way TMA multicast
 guarantees L2 cache hits. The `collective` attribute is the list of
-cluster dimensions along which to partition the input data loads.
+cluster dimensions along which to partition the input data loads. Only
+supported with TMA (Hopper and newer).
 
 The `leader_tracked` attribute can be provided to only track the completion
 of the copy in the leader block in the cluster. If `CopyPartitioned(axis)`,
 performs a partitioned collective copy along the given axis. If
-`CopyReplicated`, all blocks load the same data.
+`CopyReplicated`, all blocks load the same data. Only supported with TMA
+(Hopper and newer).
+
+The `oob_fill_mode` attribute controls the behavior of out-of-bounds
+accesses. `zeros` and `undefined` are only supported with TMA (Hopper and
+newer); the `cp.async` implementation only supports `promise_in_bounds`.
 
 The `predicate` allows scheduling the transfer conditionally. The async copy
 is always scheduled by at most a single lane in the warpgroup.
@@ -156,9 +170,9 @@ in a multi-GPU setting.
 function async_load(
     source::Value,
     destination::Value,
-    barrier::Value,
+    barrier=nothing::Union{Nothing,Value};
     indices::Vector{Value},
-    predicate=nothing::Union{Nothing,Value};
+    predicate=nothing::Union{Nothing,Value},
     gmem_peer_id=nothing::Union{Nothing,Value},
     leader_tracked=nothing,
     slice_lengths,
@@ -167,13 +181,14 @@ function async_load(
     location=Location(),
 )
     op_ty_results = IR.Type[]
-    operands = Value[source, destination, barrier, indices...]
+    operands = Value[source, destination, indices...]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
         NamedAttribute("slice_lengths", slice_lengths),
         NamedAttribute("collective", collective),
     ]
+    !isnothing(barrier) && push!(operands, barrier)
     !isnothing(predicate) && push!(operands, predicate)
     !isnothing(gmem_peer_id) && push!(operands, gmem_peer_id)
     push!(
@@ -181,7 +196,7 @@ function async_load(
         operandsegmentsizes([
             1,
             1,
-            1,
+            Int(!isnothing(barrier)),
             length(indices),
             Int(!isnothing(predicate)),
             Int(!isnothing(gmem_peer_id)),
