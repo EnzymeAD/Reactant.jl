@@ -377,16 +377,10 @@ end
     NF_traced = TracedRNumber{Float64}
     @test Reactant.apply_type_with_promotion(
         MockContainer,
-        [
-            Float64,
-            MockGrid{NF_traced,TracedRArray{Float64,1}},
-            MockBar{Float64,Float64},
-        ],
+        [Float64, MockGrid{NF_traced,TracedRArray{Float64,1}}, MockBar{Float64,Float64}],
     ) == (
         MockContainer{
-            NF_traced,
-            MockGrid{NF_traced,TracedRArray{Float64,1}},
-            MockBar{NF_traced,Float64},
+            NF_traced,MockGrid{NF_traced,TracedRArray{Float64,1}},MockBar{NF_traced,Float64}
         },
         [true, false, true],
     )
