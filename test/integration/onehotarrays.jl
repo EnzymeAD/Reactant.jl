@@ -5,7 +5,12 @@ using Reactant, Test, OneHotArrays, Random
     r_m = Reactant.to_rarray(m)
     a = Reactant.TestUtils.construct_test_array(Float32, 100, 4)
     r_a = Reactant.to_rarray(a)
-    r_res = @jit r_a * r_m
+    # At the default precision a TPU does this Float32 matmul in bfloat16, and
+    # the result is off by ~1e-3 relative; the test is about the one-hot
+    # lowering, not the accelerator's default precision.
+    r_res = Reactant.with_config(; dot_general_precision=PrecisionConfig.HIGHEST) do
+        @jit r_a * r_m
+    end
     res = a * m
     @test convert(Array, r_res) ≈ res
 end
