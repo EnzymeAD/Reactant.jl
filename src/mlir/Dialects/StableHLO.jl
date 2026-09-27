@@ -1029,6 +1029,64 @@ function collective_permute(
 end
 
 """
+`collective_reduce`
+
+Within each process group in the process grid, applies a reduction function
+`computation` to the values of the `operands` from each process and produces
+a `result` tensor on the root rank of the group. The root rank is determined
+by `has_dynamic_root`: if false, the root is the 0-th rank in the replica
+group; if true, the last operand is an i32 tensor specifying per-operand
+root indices.
+
+See:
+https://github.com/openxla/stablehlo/blob/main/docs/spec.md#collective_reduce
+
+# Example
+```mlir
+%result = \"stablehlo.collective_reduce\"(%operand) ({
+  ^bb0(%arg0: tensor<i64>, %arg1: tensor<i64>):
+    %0 = \"stablehlo.add\"(%arg0, %arg1) : (tensor<i64>, tensor<i64>) -> tensor<i64>
+    \"stablehlo.return\"(%0) : (tensor<i64>) -> ()
+}) {
+  replica_groups = dense<[[0, 1]]> : tensor<1x2xi64>
+} : (tensor<4xi64>) -> tensor<4xi64>
+```
+"""
+function collective_reduce(
+    operands::Vector{Value};
+    result_0::Vector{IR.Type},
+    replica_groups,
+    channel_handle=nothing,
+    use_global_device_ids=nothing,
+    has_dynamic_root=nothing,
+    computation::Region,
+    location=Location(),
+)
+    op_ty_results = IR.Type[result_0...,]
+    operands = Value[operands...,]
+    owned_regions = Region[computation,]
+    successors = Block[]
+    attributes = NamedAttribute[NamedAttribute("replica_groups", replica_groups),]
+    !isnothing(channel_handle) &&
+        push!(attributes, NamedAttribute("channel_handle", channel_handle))
+    !isnothing(use_global_device_ids) &&
+        push!(attributes, NamedAttribute("use_global_device_ids", use_global_device_ids))
+    !isnothing(has_dynamic_root) &&
+        push!(attributes, NamedAttribute("has_dynamic_root", has_dynamic_root))
+
+    return create_operation(
+        "stablehlo.collective_reduce",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
 `compare`
 
 Performs element-wise comparison of `lhs` and `rhs` tensors according to

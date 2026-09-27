@@ -952,10 +952,11 @@ end
 end
 
 @testset "digamma" begin
-    # small divergence between chlo.digamma and SpecialFunctions.digamma:
-    # on <=0, chlo.digamma returns NaN, SpecialFunctions.digamma returns Inf
+    # small divergence between chlo.digamma and SpecialFunctions.digamma: at the
+    # negative integer poles chlo.digamma returns NaN where SpecialFunctions.digamma
+    # returns -Inf. At 0 the two agree on -Inf.
     x = Reactant.to_rarray([-1.0, 0.0, 1.0])
-    @test [NaN, NaN, SpecialFunctions.digamma(1.0)] ≈ @jit(Ops.digamma(x)) nans = true skip =
+    @test [NaN, -Inf, SpecialFunctions.digamma(1.0)] ≈ @jit(Ops.digamma(x)) nans = true skip =
         RunningOnAppleX86
 end
 

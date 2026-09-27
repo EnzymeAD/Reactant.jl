@@ -222,12 +222,17 @@ end
 
 function run_pass_pipeline!(mod, pass_pipeline, key=""; enable_verifier=true)
     pm = MLIR.IR.PassManager()
-    MLIR.IR.enable_verifier!(pm, enable_verifier)
-    opm = MLIR.IR.OpPassManager(pm)
-    MLIR.IR.add_pipeline!(opm, pass_pipeline)
-    MLIR.API.mlirPassManagerEnableXLATraceTiming(pm)
-    annotate("run_pass_pipeline! $key") do
+    id = nothing
+    try
+        MLIR.API.mlirPassManagerEnableXLATraceTiming(pm)
+        MLIR.IR.enable_verifier!(pm, enable_verifier)
+        opm = MLIR.IR.OpPassManager(pm)
+        MLIR.IR.add_pipeline!(opm, pass_pipeline)
+        id = Reactant.Profiler.profiler_activity_start("run_pass_pipeline! $key", Reactant.Profiler.TRACE_ME_LEVEL_CRITICAL)
         run!(pm, MLIR.IR.Operation(mod), key)
+    finally
+        !isnothing(id) && Reactant.Profiler.profiler_activity_end(id)
+        MLIR.IR.dispose(pm)
     end
     return mod
 end
@@ -235,20 +240,21 @@ end
 function run_pass_pipeline!(
     mod, propagation_options::ShardyPropagationOptions; enable_verifier=true
 )
-    pm = MLIR.IR.PassManager()
-    MLIR.IR.enable_verifier!(pm, enable_verifier)
-    opm = MLIR.IR.OpPassManager(pm)
-    MLIR.API.addSdyPropagationPipeline(
-        opm,
-        propagation_options.keep_sharding_rules,
-        propagation_options.conservative_propagation,
-        propagation_options.debug_sharding_origins,
-        propagation_options.debug_propagation_edge_sharding,
-        propagation_options.skip_convert_to_reshard,
-        propagation_options.skip_inline,
-        propagation_options.enable_insert_explicit_collectives,
-    )
-    run!(pm, mod, "sdy_prop")
+    MLIR.IR.@dispose pm = MLIR.IR.PassManager() begin
+        MLIR.IR.enable_verifier!(pm, enable_verifier)
+        opm = MLIR.IR.OpPassManager(pm)
+        MLIR.API.addSdyPropagationPipeline(
+            opm,
+            propagation_options.keep_sharding_rules,
+            propagation_options.conservative_propagation,
+            propagation_options.debug_sharding_origins,
+            propagation_options.debug_propagation_edge_sharding,
+            propagation_options.skip_convert_to_reshard,
+            propagation_options.skip_inline,
+            propagation_options.enable_insert_explicit_collectives,
+        )
+        run!(pm, mod, "sdy_prop")
+    end
     return mod
 end
 

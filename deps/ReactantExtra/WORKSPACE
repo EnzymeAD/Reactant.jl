@@ -4,7 +4,7 @@ NSYNC_COMMIT = "82b118aa7ace3132e517e2c467f8732978cf4023"
 
 NSYNC_SHA256 = ""
 
-ENZYMEXLA_COMMIT = "af6d59c71707931e9d1e1788bec24f8fc2aea861"
+ENZYMEXLA_COMMIT = "a86561d8de4dd8bc9b25f083032738c62b0dc416"
 
 ENZYMEXLA_SHA256 = ""
 
@@ -150,10 +150,6 @@ cuda_tile_workspace("@enzyme_ad")
 #     url = "https://github.com/protocolbuffers/upb/archive/9effcbcb27f0a665f9f345030188c0b291e32482.tar.gz"
 # )
 
-load("@jax//third_party/xla:workspace.bzl", jax_xla_workspace = "repo")
-
-jax_xla_workspace()
-
 load("@xla//:workspace4.bzl", "xla_workspace4")
 
 xla_workspace4()
@@ -161,6 +157,18 @@ xla_workspace4()
 load("@xla//:workspace3.bzl", "xla_workspace3")
 
 xla_workspace3()
+
+# XLA's own WORKSPACE runs both of these right after workspace3, and a
+# WORKSPACE build has to ask for them by hand: rules_cc 0.2.20 and up put
+# @rules_cc//cc/compiler:compiler behind a repository the module extension sets
+# up, and that repository reads the version bazel_features_deps() defines.
+load("@bazel_features//:deps.bzl", "bazel_features_deps")
+
+bazel_features_deps()
+
+load("@rules_cc//cc:extensions.bzl", "compatibility_proxy_repo")
+
+compatibility_proxy_repo()
 
 load("@xla//third_party/py:python_init_rules.bzl", "python_init_rules")
 
@@ -228,7 +236,7 @@ python_wheel_version_suffix_repository(
     name = "jax_wheel_version_suffix",
 )
 
-load("@jax//third_party/flatbuffers:workspace.bzl", flatbuffers = "repo")
+load("@enzyme_ad//third_party/flatbuffers:workspace.bzl", flatbuffers = "repo")
 
 flatbuffers()
 

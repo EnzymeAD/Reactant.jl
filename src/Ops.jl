@@ -2083,7 +2083,7 @@ module @reactant_hlo_call attributes {mhlo.num_partitions = 1 : i64, mhlo.num_re
                 # Set function private
                 MLIR.IR.setattr!(
                     op,
-                    MLIR.API.mlirSymbolTableGetVisibilityAttributeName(),
+                    MLIR.API.mlirSymbolTableGetDefaultVisibilityAttributeName(),
                     MLIR.IR.Attribute("private"),
                 )
 

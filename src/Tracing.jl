@@ -885,7 +885,9 @@ Base.@nospecializeinfer function traced_type_inner(
 )
     should_track_enum(T, track_numbers) || return T
     if mode == ArrayToConcrete
-        N = traced_type_inner(enum_basetype(T), seen, mode, track_numbers, ndevices, runtime)
+        N = traced_type_inner(
+            enum_basetype(T), seen, mode, track_numbers, ndevices, runtime
+        )
         return ConcreteEnum{T,N}
     elseif mode == NoStopTracedTrack
         return TracedEnum{T}

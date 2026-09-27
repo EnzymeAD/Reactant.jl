@@ -80,6 +80,75 @@ function read_ptx_sreg_aggr_smem_size(;
 end
 
 """
+`store_async_global`
+
+Performs an asynchronous store to global memory to the address given by 
+`addr`.
+The `value` operand specifies the value to store.
+The `scope` operand specifies the scope of the store and must be one of the 
+following:
+- `sys`: Synchronization with all threads in the system.
+- `gpu`: Synchronization with all threads in the same GPU.
+The `multimem` operand specifies whether the store is performed on a 
+multimem address.
+The `mmio` operand specifies whether this is an MMIO operation.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-st-async)
+"""
+function store_async_global(
+    addr::Value, value::Value; scope, multimem=nothing, mmio=nothing, location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[addr, value]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[NamedAttribute("scope", scope),]
+    !isnothing(multimem) && push!(attributes, NamedAttribute("multimem", multimem))
+    !isnothing(mmio) && push!(attributes, NamedAttribute("mmio", mmio))
+
+    return create_operation(
+        "nvvm.store.async.global",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`store_async_shared`
+
+Performs an asynchronous store to shared cluster memory to the address 
+given by `addr`.
+The `value` operand specifies the value to store.
+The `mbarrier` operand specifies the mbarrier object which signals the 
+completion of the store.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-st-async)
+"""
+function store_async_shared(addr::Value, value::Value, mbarrier::Value; location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[addr, value, mbarrier]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "nvvm.store.async.shared",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
 `barrier_arrive`
 
 Thread that executes this op announces their arrival at the barrier with 
@@ -6144,14 +6213,18 @@ async-tcgen05 operations initiated by the executing thread.
 The multicast variants allow signaling on the *mbarrier objects*
 of multiple CTAs within the cluster. Operand `multicastMask`,
 when present, specifies the destination CTAs in the cluster such
-that each bit position in the 16-bit `multicastMask` operand
+that each bit position in the 16-bit or 32-bit `multicastMask` operand
 corresponds to the `nvvm.read.ptx.sreg.ctaid` of the destination CTA.
+When present, the `smem_a_read` attribute restricts tracking to
+shared-memory reads of matrix A performed by prior `tcgen05.mma`
+operations.
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/#tcgen-async-sync-operations-commit)
 """
 function tcgen05_commit(
     addr::Value,
     multicastMask=nothing::Union{Nothing,Value};
     group=nothing,
+    smem_a_read=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -6161,6 +6234,7 @@ function tcgen05_commit(
     attributes = NamedAttribute[]
     !isnothing(multicastMask) && push!(operands, multicastMask)
     !isnothing(group) && push!(attributes, NamedAttribute("group", group))
+    !isnothing(smem_a_read) && push!(attributes, NamedAttribute("smem_a_read", smem_a_read))
 
     return create_operation(
         "nvvm.tcgen05.commit",
@@ -6472,6 +6546,7 @@ Required Attributes:
 
 Default Attributes:
 - collectorOp is a Tcgen05MMACollectorOp attribute with matrix A as the collector buffer
+- collectorOpB is a Tcgen05MMACollectorOp attribute with matrix B as the collector buffer
 
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/#tcgen05-mma-instructions-mma)
 """
@@ -6487,6 +6562,7 @@ function tcgen05_mma_block_scale(
     ctaGroup,
     blockScale=nothing,
     collectorOp=nothing,
+    collectorOpB=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -6498,6 +6574,8 @@ function tcgen05_mma_block_scale(
     ]
     !isnothing(blockScale) && push!(attributes, NamedAttribute("blockScale", blockScale))
     !isnothing(collectorOp) && push!(attributes, NamedAttribute("collectorOp", collectorOp))
+    !isnothing(collectorOpB) &&
+        push!(attributes, NamedAttribute("collectorOpB", collectorOpB))
 
     return create_operation(
         "nvvm.tcgen05.mma.block_scale",
@@ -6550,6 +6628,7 @@ Required Attributes:
 
 Default Attributes:
 - collectorOp is a Tcgen05MMACollectorOp attribute with matrix A as the collector buffer
+- collectorOpB is a Tcgen05MMACollectorOp attribute with matrix B as the collector buffer
 
 - `aShift` shifts the rows of the A matrix down by one row and can only be
    applied if A is in tensor memory
@@ -6567,6 +6646,7 @@ function tcgen05_mma(
     kind,
     ctaGroup,
     collectorOp=nothing,
+    collectorOpB=nothing,
     aShift=nothing,
     location=Location(),
 )
@@ -6586,6 +6666,8 @@ function tcgen05_mma(
         ]),
     )
     !isnothing(collectorOp) && push!(attributes, NamedAttribute("collectorOp", collectorOp))
+    !isnothing(collectorOpB) &&
+        push!(attributes, NamedAttribute("collectorOpB", collectorOpB))
     !isnothing(aShift) && push!(attributes, NamedAttribute("aShift", aShift))
 
     return create_operation(
@@ -6637,6 +6719,7 @@ function tcgen05_mma_sp_block_scale(
     ctaGroup,
     blockScale=nothing,
     collectorOp=nothing,
+    collectorOpB=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -6650,6 +6733,8 @@ function tcgen05_mma_sp_block_scale(
     ]
     !isnothing(blockScale) && push!(attributes, NamedAttribute("blockScale", blockScale))
     !isnothing(collectorOp) && push!(attributes, NamedAttribute("collectorOp", collectorOp))
+    !isnothing(collectorOpB) &&
+        push!(attributes, NamedAttribute("collectorOpB", collectorOpB))
 
     return create_operation(
         "nvvm.tcgen05.mma.sp.block_scale",
@@ -6700,6 +6785,7 @@ function tcgen05_mma_sp(
     kind,
     ctaGroup,
     collectorOp=nothing,
+    collectorOpB=nothing,
     aShift=nothing,
     location=Location(),
 )
@@ -6726,6 +6812,8 @@ function tcgen05_mma_sp(
         ]),
     )
     !isnothing(collectorOp) && push!(attributes, NamedAttribute("collectorOp", collectorOp))
+    !isnothing(collectorOpB) &&
+        push!(attributes, NamedAttribute("collectorOpB", collectorOpB))
     !isnothing(aShift) && push!(attributes, NamedAttribute("aShift", aShift))
 
     return create_operation(
