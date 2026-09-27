@@ -848,8 +848,10 @@ function compile(job)
                 GPUCompiler.current_job = prev_job
             end
             # The target machine isn't owned by the LLVM context: dispose it explicitly,
-            # otherwise it's leaked at every kernel compilation.
-            LLVM.dispose(tm)
+            # otherwise it's leaked at every kernel compilation. There is none when
+            # LLVM was built without the NVPTX backend (macOS), where llvm_machine
+            # returns nothing and the passes above run without one.
+            tm === nothing || LLVM.dispose(tm)
         end
 
         for fname in ("gpu_report_exception", "gpu_signal_exception")
