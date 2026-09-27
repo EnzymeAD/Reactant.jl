@@ -1362,7 +1362,9 @@ function compile_xla(
             hlo_modules = length(hlo_modules) == 1 ? only(hlo_modules) : hlo_modules
         end
 
-        finalize(mod)
+        # `MLIR.IR.Module` has no finalizer and XLA doesn't take ownership of it: destroy it
+        # explicitly, otherwise the whole module is leaked at every compilation.
+        MLIR.IR.dispose(mod)
 
         return exec, hlo_modules, mlir_fn_res, device, client, module_string
     finally
