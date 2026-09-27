@@ -91,7 +91,12 @@ end
 end
 
 @testset "ifelse" begin
-    @test 1.0 == @test_warn r"`ifelse` with different element-types" @jit(
+    # The warning is `maxlog = 1`, so whether the process has already emitted it
+    # depends on which test files the worker ran before this one. @test_logs
+    # installs a fresh TestLogger with its own maxlog count, so it sees the
+    # warning either way; @test_warn only reads what reaches stderr.
+    @test 1.0 ==
+        @test_logs (:warn, r"`ifelse` with different element-types") match_mode = :any @jit(
         ifelse(ConcreteRNumber(true), ConcreteRNumber(1.0), ConcreteRNumber(0.0f0))
     )
     @test @jit(
