@@ -228,7 +228,9 @@ function run_pass_pipeline!(mod, pass_pipeline, key=""; enable_verifier=true)
         MLIR.IR.enable_verifier!(pm, enable_verifier)
         opm = MLIR.IR.OpPassManager(pm)
         MLIR.IR.add_pipeline!(opm, pass_pipeline)
-        id = Reactant.Profiler.profiler_activity_start("run_pass_pipeline! $key", Reactant.Profiler.TRACE_ME_LEVEL_CRITICAL)
+        id = Reactant.Profiler.profiler_activity_start(
+            "run_pass_pipeline! $key", Reactant.Profiler.TRACE_ME_LEVEL_CRITICAL
+        )
         run!(pm, MLIR.IR.Operation(mod), key)
     finally
         !isnothing(id) && Reactant.Profiler.profiler_activity_end(id)
