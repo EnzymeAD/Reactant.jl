@@ -220,31 +220,35 @@ function run!(pm::MLIR.IR.PassManager, op, key::String="")
 end
 
 function run_pass_pipeline!(mod, pass_pipeline, key=""; enable_verifier=true)
-    pm = MLIR.IR.PassManager()
-    MLIR.IR.enable_verifier!(pm, enable_verifier)
-    opm = MLIR.IR.OpPassManager(pm)
-    MLIR.IR.add_pipeline!(opm, pass_pipeline)
-    run!(pm, MLIR.IR.Operation(mod), key)
+    # `PassManager` has no finalizer: dispose it explicitly, otherwise the pass manager and
+    # all the passes it owns (including their pattern sets) are leaked at every call.
+    MLIR.IR.@dispose pm = MLIR.IR.PassManager() begin
+        MLIR.IR.enable_verifier!(pm, enable_verifier)
+        opm = MLIR.IR.OpPassManager(pm)
+        MLIR.IR.add_pipeline!(opm, pass_pipeline)
+        run!(pm, MLIR.IR.Operation(mod), key)
+    end
     return mod
 end
 
 function run_pass_pipeline!(
     mod, propagation_options::ShardyPropagationOptions; enable_verifier=true
 )
-    pm = MLIR.IR.PassManager()
-    MLIR.IR.enable_verifier!(pm, enable_verifier)
-    opm = MLIR.IR.OpPassManager(pm)
-    MLIR.API.addSdyPropagationPipeline(
-        opm,
-        propagation_options.keep_sharding_rules,
-        propagation_options.conservative_propagation,
-        propagation_options.debug_sharding_origins,
-        propagation_options.debug_propagation_edge_sharding,
-        propagation_options.skip_convert_to_reshard,
-        propagation_options.skip_inline,
-        propagation_options.enable_insert_explicit_collectives,
-    )
-    run!(pm, mod, "sdy_prop")
+    MLIR.IR.@dispose pm = MLIR.IR.PassManager() begin
+        MLIR.IR.enable_verifier!(pm, enable_verifier)
+        opm = MLIR.IR.OpPassManager(pm)
+        MLIR.API.addSdyPropagationPipeline(
+            opm,
+            propagation_options.keep_sharding_rules,
+            propagation_options.conservative_propagation,
+            propagation_options.debug_sharding_origins,
+            propagation_options.debug_propagation_edge_sharding,
+            propagation_options.skip_convert_to_reshard,
+            propagation_options.skip_inline,
+            propagation_options.enable_insert_explicit_collectives,
+        )
+        run!(pm, mod, "sdy_prop")
+    end
     return mod
 end
 
