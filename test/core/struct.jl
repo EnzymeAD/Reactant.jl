@@ -111,4 +111,35 @@ end
 
         @test isapprox(@allowscalar(sum(x3)), only(@jit(sum(x3))))
     end
+
+    # Regression: concrete subtype (Bar{NF,A}) has more type params than the abstract
+    # bound used in the container (AbstractFoo{NF} has 1, Bar has 2).  Previously this
+    # caused a BoundsError inside apply_type_with_promotion when it tried to recurse
+    # using the abstract bound as the wrapper instead of Bar's own wrapper.
+    @testset "abstract bound fewer params than concrete subtype" begin
+        abstract type AbstractBar{NF} end
+        abstract type AbstractBaz{NF} end
+
+        struct Bar{NF,A} <: AbstractBar{NF}
+            a::A
+        end
+        struct Baz{NF,A<:AbstractVector{NF}} <: AbstractBaz{NF}
+            z::A
+        end
+        struct Container{NF,G<:AbstractBaz{NF},F<:AbstractBar{NF}}
+            grid::G
+            foo::F
+        end
+
+        f_container(c) = sum(c.grid.z) + c.foo.a
+
+        z = Float32[1, 2, 3, 4]
+        zr = Reactant.to_rarray(z)
+        cr = Container{Float32,Baz{Float32,typeof(zr)},Bar{Float32,Float32}}(
+            Baz{Float32,typeof(zr)}(zr), Bar{Float32,Float32}(1.0f0)
+        )
+
+        result = @jit f_container(cr)
+        @test @allowscalar(result) ≈ sum(z) + 1.0f0
+    end
 end
