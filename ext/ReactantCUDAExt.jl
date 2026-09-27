@@ -847,6 +847,9 @@ function compile(job)
             if isdefined(GPUCompiler, :current_job)
                 GPUCompiler.current_job = prev_job
             end
+            # The target machine isn't owned by the LLVM context: dispose it explicitly,
+            # otherwise it's leaked at every kernel compilation.
+            LLVM.dispose(tm)
         end
 
         for fname in ("gpu_report_exception", "gpu_signal_exception")
