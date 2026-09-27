@@ -109,14 +109,16 @@ end
 
 # overloads to prevent ambiguity
 for AT in (Fill, Ones, Zeros, OneElement)
-    @eval function Base.getindex(x::$AT{<:TracedRNumber}, idxs::Vararg{Union{Int64, Reactant.TracedRNumber{Int64}}, N}) where {N}
+    @eval function Base.getindex(
+        x::$AT{<:TracedRNumber}, idxs::Vararg{Union{Int64,Reactant.TracedRNumber{Int64}},N}
+    ) where {N}
         @boundscheck checkbounds(x, idxs...)
-        FillArrays.getindex_value(x)
+        return FillArrays.getindex_value(x)
     end
     @eval function Base.getindex(x::$AT{<:TracedRNumber}, idxs...)
         @boundscheck checkbounds(x, idxs...)
         shape = Base.index_shape(idxs...)
-        FillArrays.fillsimilar(x, shape)
+        return FillArrays.fillsimilar(x, shape)
     end
 end
 
