@@ -6,6 +6,16 @@ CondaPkg.add_pip("jax"; version=">=0.9")
 CondaPkg.add_pip("numpyro"; version=">=0.21")
 CondaPkg.resolve()
 
+# The environment is resolved once, here. Each worker's `using PythonCall` would
+# otherwise resolve it again from PythonCall's `__init__` (CondaPkg.resolve takes
+# the environment's lock file before it decides there is nothing to do), so all
+# the workers race for one lock at startup. On Windows that race can end in
+# EACCES rather than EEXIST from Pidfile.tryopen_exclusive, which is not
+# retried, and the worker fails to load PythonCall. Hand the workers the Python
+# resolved above and the activated environment, so they never touch CondaPkg.
+CondaPkg.activate!(ENV)
+ENV["JULIA_PYTHONCALL_EXE"] = CondaPkg.which("python")
+
 testsuite = find_tests(@__DIR__)
 delete!(testsuite, "common")
 
