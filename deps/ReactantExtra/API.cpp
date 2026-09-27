@@ -4047,21 +4047,44 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
     pm.addPass(mlir::stablehlo::createStablehloRefineShapesPass());
     pm.addNestedPass<mlir::func::FuncOp>(
         stablehlo::createStablehloCanonicalizeDynamismPass());
-    // REACTANT_EXEC_OPT=transform runs the optimizer the Julia compiler
-    // runs on a traced program (the transform-dialect pattern list with its
-    // defaults) instead of the plain enzyme-hlo-opt pass.
+    // The exec-time optimizer runs the pattern list the Julia compiler runs
+    // on a traced program (the transform-dialect list with its defaults);
+    // REACTANT_EXEC_OPT=hlo-opt runs the plain enzyme-hlo-opt pass instead.
+    // REACTANT_EXEC_UNROLL sets the trip count up to which while loops are
+    // unrolled. Unrolling the raised kernels' short loops (threshold 16)
+    // makes them straight-line code XLA compiles slowly: the mfem GPU suite
+    // takes 4384 s against 2899 s at threshold 1, so unrolling is opt-in.
     static const char *execOpt = getenv("REACTANT_EXEC_OPT");
-    if (execOpt && std::string(execOpt) == "transform") {
+    static const int unrollThreshold =
+        getenv("REACTANT_EXEC_UNROLL") ? atoi(getenv("REACTANT_EXEC_UNROLL"))
+                                       : 1;
+    if (execOpt && std::string(execOpt) == "hlo-opt") {
+      // The parallel loops of a raised kernel (its dynamic-extent dimensions,
+      // peeled into host-driven whiles) are batched into scatters by
+      // ParallelWhileToBatchedScatter, once the constant-trip loops nested in
+      // them are unrolled; enzyme-hlo-opt runs neither by default. Only that
+      // pattern is wanted here: the rest of the auto batching set searches
+      // every slice of an operand on each visit, which on a raised kernel
+      // takes the greedy driver from under a second to over seven minutes.
+      mlir::enzyme::EnzymeHLOUnrollPassOptions unroll;
+      unroll.maxNumIterations = unrollThreshold;
+      unroll.maxOperationThreshold = 128;
+      pm.addPass(mlir::enzyme::createEnzymeHLOUnrollPass(unroll));
+      mlir::enzyme::AutoBatchingPassOptions batching;
+      batching.concat_insert_dim_passes = false;
+      batching.slice_to_batch_passes = false;
+      batching.while_loop_batching_mode = "none";
+      batching.while_elementwise_reduction_to_reduce_passes = false;
+      batching.while_is_copy_simplify_passes = false;
+      batching.while_remove_loop_carried_dependencies_from_load_operations =
+          false;
+      batching.parallel_while_to_batched_scatter_passes = true;
+      pm.addPass(mlir::enzyme::createAutoBatchingPass(batching));
+      pm.addPass(mlir::enzyme::createEnzymeHLOOptPass());
+    } else {
       EnzymeXLATransformPassesOptions opts{};
       opts.max_constant_threshold = 1024;
-      // REACTANT_EXEC_UNROLL sets the trip count up to which while loops
-      // are unrolled. Unrolling the raised kernels' short loops (threshold
-      // 16) makes them straight-line code XLA compiles slowly: the mfem GPU
-      // suite takes 4384 s against 2899 s at threshold 1 (enzyme-hlo-opt:
-      // 2753 s), so unrolling is opt-in.
-      opts.while_unroll_threshold = getenv("REACTANT_EXEC_UNROLL")
-                                        ? atoi(getenv("REACTANT_EXEC_UNROLL"))
-                                        : 1;
+      opts.while_unroll_threshold = unrollThreshold;
       opts.reshape_propagate = ENZYMEXLA_PROPAGATE_UP;
       opts.transpose_propagate = ENZYMEXLA_PROPAGATE_UP;
       opts.dus_slice_simplify = true;
@@ -4099,8 +4122,6 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
         llvm::errs() << " failed to parse the exec optimization pipeline\n";
         exit(1);
       }
-    } else {
-      pm.addPass(mlir::enzyme::createEnzymeHLOOptPass());
     }
 
     if (getenv("REACTANT_EXEC_DUMP")) {
