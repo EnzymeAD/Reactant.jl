@@ -107,8 +107,8 @@ function ReactantCore.materialize_traced_array(x::OneElement{T}) where {T}
     return y
 end
 
-# overloads to prevent ambiguity
 for AT in (Fill, Ones, Zeros, OneElement)
+    # overloads to prevent ambiguity
     @eval function Base.getindex(
         x::$AT{<:TracedRNumber}, idxs::Vararg{Union{Int64,Reactant.TracedRNumber{Int64}},N}
     ) where {N}
@@ -120,15 +120,14 @@ for AT in (Fill, Ones, Zeros, OneElement)
         shape = Base.index_shape(idxs...)
         return FillArrays.fillsimilar(x, shape)
     end
-end
 
-# some functions to avoid bad performance
-for AT in (Fill, Ones, Zeros, OneElement)
+    # for performance improvements
     @eval function Base.similar(x::$AT{<:TracedRNumber}, ::Type{T}, dims::Dims) where {T}
         return Reactant.broadcast_to_size(unwrapped_eltype(T)(0), dims)
     end
 end
 
+# for performance improvements
 function Base.Broadcast.broadcasted(
     ::Base.Broadcast.DefaultArrayStyle,
     ::typeof(Reactant.to_number),
