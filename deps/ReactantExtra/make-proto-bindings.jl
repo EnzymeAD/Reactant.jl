@@ -195,6 +195,8 @@ function generate_bindings(staging_dir::String, output_dir::String)
         always_use_modules=true,
         parametrize_oneofs=false,
         add_kwarg_constructors=false,
+        mutable_structs=true,
+        struct_fields_constant=true,
     )
 
     # Fix up the order of the `include`s inside each generated module
