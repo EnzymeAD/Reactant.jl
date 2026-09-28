@@ -162,6 +162,28 @@ end
     end
 end
 
+@testset "QR Factorization" begin
+    @testset "$case [$T]" for case in (:square, :tall, :wide), T in (Float32, Float64, ComplexF32, ComplexF64)
+        (T == ComplexF64 || T == Float64) && RunningOnTPU && continue
+
+        Asize = if case === :square
+            (4, 4)
+        elseif case === :tall
+            (6, 4)
+        else
+            (4, 6)
+        end
+
+        A = construct_test_array(T, Asize[1], Asize[2])
+        Are = Reactant.to_rarray(A)
+
+        Qre, Rre = @jit qr(Are)
+        Are_reconstruct = @jit Qre * Rre
+
+        @test Are_reconstruct ≈ A atol = 1e-4 rtol = 1e-2
+    end
+end
+
 function get_svd_algorithms(backend::String, size=nothing)
     backend = lowercase(backend)
     algorithms = ["DEFAULT"]
