@@ -39,6 +39,7 @@ communication.
     multirotate_custom_call::Int = 1
     multislice_custom_call::Int = 1
     wrap_custom_call::Int = 1
+    multi_buffer::Int = 1
 end
 
 function Base.String(options::OptimizeCommunicationOptions)
