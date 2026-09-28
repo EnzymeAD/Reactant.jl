@@ -1775,7 +1775,7 @@ gentbl_cc_library(
     tblgen = "//:mlir-jl-tblgen",
     td_file = "@cuda_tile//:include/cuda_tile/Dialect/CudaTile/IR/Ops.td",
     deps = [
-        "@cuda_tile//:CudaTileDialectTdFiles",
+        "@cuda_tile//:CudaTileTdFiles",
     ],
 )
 
