@@ -191,11 +191,18 @@ function overloaded_mapreduce(
     dims=:,
     init=Base._InitialValue(),
 ) where {T,N}
-    original_dims = dims
-    dims isa Int && (dims = Int64[dims])
-    dims isa Colon && (dims = collect(Int64, 1:N))
-    dims isa Vector{Int64} || (dims = collect(Int64, dims))
-    dims = sort(dims)
+    # don't reassign dims to avoid the "captured variable in closure" type instability
+    normalized_dims = sort(
+        if dims isa Int
+            Int64[dims]
+        elseif dims isa Colon
+            collect(Int64, 1:N)
+        elseif dims isa Vector{Int64}
+            dims
+        else
+            collect(Int64, dims)
+        end,
+    )
 
     op_in_T = unwrapped_eltype(Core.Compiler.return_type(f, Tuple{T}))
     # `op` may accumulate in a wider type than it consumes: `+(::Bool, ::Bool)::Int64`, so
@@ -215,18 +222,28 @@ function overloaded_mapreduce(
         reduce_input = op_in_T.(reduce_input)
     end
 
-    res = @opcall reduce(reduce_input, reduce_init, dims, op)
+    res_noinit = @opcall reduce(reduce_input, reduce_init, normalized_dims, op)
 
-    (init isa Base._InitialValue || init === nothing) || (res = op.(res, init))
+    if (init isa Base._InitialValue || init === nothing)
+        res = res_noinit
+        res_T = op_in_T
+    else
+        res = op.(res_noinit, init)
+        res_T = Base.promote_op(op, op_in_T, unwrapped_eltype(typeof(init)))
+    end
 
-    if original_dims isa Colon
+    if dims isa Colon
         @assert size(res) == () "expected size of result to be (), got $(size(res))"
-        return TracedRNumber{unwrapped_eltype(res)}((), res.mlir_data)
+        return TracedRNumber{unwrapped_eltype(res)}((), res.mlir_data)::TracedRNumber{res_T}
     end
     if res isa TracedRNumber
-        res = TracedRArray{unwrapped_eltype(res),0}((), res.mlir_data, ())
+        res = TracedRArray{unwrapped_eltype(res),0}(
+            (), res.mlir_data, ()
+        )::TracedRArray{res_T,0}
     end
-    return @opcall reshape(res, [ifelse(i in dims, 1, size(A, i)) for i in 1:N])
+    shape = [ifelse(i in normalized_dims, 1, size(A, i)) for i in 1:N]
+    res_reshaped = @opcall reshape(res, shape)
+    return res_reshaped::TracedRArray{res_T,N}
 end
 
 function Base.mapreducedim!(
