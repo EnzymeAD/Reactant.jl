@@ -2,7 +2,6 @@
 
 using ..Reactant:
     Reactant, MLIR, OptimizeCommunicationOptions, ShardyPropagationOptions, CompileOptions
-using ..Reactant.Profiler: annotate
 
 const BFLOAT16_COMPILE_TYPE = Ref{DataType}(Float32)
 const DEBUG_KERNEL = Ref{Bool}(false)
