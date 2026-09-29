@@ -4,7 +4,7 @@ NSYNC_COMMIT = "82b118aa7ace3132e517e2c467f8732978cf4023"
 
 NSYNC_SHA256 = ""
 
-ENZYMEXLA_COMMIT = "3ba74e8e7cc55241b62e6c0bb51a69d217ab4b17"
+ENZYMEXLA_COMMIT = "4f9fff76082dc107f60ca977c7775aa00671fd3b"
 
 ENZYMEXLA_SHA256 = ""
 
@@ -391,4 +391,4 @@ hedron_compile_commands_setup_transitive_transitive_transitive()
 
 load("@enzyme_ad//third_party/z3:workspace.bzl", z3_workspace = "repo")
 
-z3_workspace()
+z3_workspace(build_file = "@enzyme_ad//third_party/z3:BUILD")
