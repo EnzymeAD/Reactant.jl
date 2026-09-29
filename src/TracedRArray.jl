@@ -209,8 +209,8 @@ function overloaded_mapreduce(
     # `sum` over booleans is an `Int64` in Base. `__default_init` reports that wider type
     # (it is the type of `op`'s identity element), so reduce in it.
     init_val = __default_init(op_in_T, op)
-    op_out_T = unwrapped_eltype(typeof(init_val))
-    reduce_init = Reactant.promote_to(TracedRNumber{op_out_T}, init_val)
+    op_in_T = unwrapped_eltype(typeof(init_val))
+    reduce_init = Reactant.promote_to(TracedRNumber{op_in_T}, init_val)
 
     # Widen *after* applying `f`, not before. `f` decides the element type actually being
     # reduced, so converting `A` up front is undone by anything narrowing -- e.g. the
@@ -218,18 +218,18 @@ function overloaded_mapreduce(
     # Reducing in the narrow type is silently wrong: `stablehlo.add` over `i1` is a logical
     # `or`, and small integers wrap.
     reduce_input = materialize_traced_array(TracedUtils.elem_apply(f, A))
-    if unwrapped_eltype(reduce_input) != op_out_T
-        reduce_input = op_out_T.(reduce_input)
+    if unwrapped_eltype(reduce_input) != op_in_T
+        reduce_input = op_in_T.(reduce_input)
     end
 
     res_noinit = @opcall reduce(reduce_input, reduce_init, normalized_dims, op)
 
     if (init isa Base._InitialValue || init === nothing)
         res = res_noinit
-        res_T = op_out_T
+        res_T = op_in_T
     else
         res = op.(res_noinit, init)
-        res_T = Base.promote_op(op, op_out_T, unwrapped_eltype(typeof(init)))
+        res_T = Base.promote_op(op, op_in_T, unwrapped_eltype(typeof(init)))
     end
 
     if dims isa Colon
