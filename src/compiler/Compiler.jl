@@ -277,16 +277,18 @@ Base.@nospecializeinfer function compile_mlir!(
 
     fnname = string(f)
     mlir_fn_res = try
-        Reactant.TracedUtils.make_mlir_fn(
-            f,
-            args,
-            fn_kwargs,
-            fnname,
-            true;
-            runtime,
-            compile_options.optimize_then_pad,
-            kwargs...,
-        )
+        Reactant.Profiler.annotate("trace $fnname") do
+            Reactant.TracedUtils.make_mlir_fn(
+                f,
+                args,
+                fn_kwargs,
+                fnname,
+                true;
+                runtime,
+                compile_options.optimize_then_pad,
+                kwargs...,
+            )
+        end
     finally
         deactivate_raising!(is_raising)
         deactivate_sdycache!(sdycache)
@@ -1262,7 +1264,13 @@ function compile_xla(f, args; kwargs...)
     end
 end
 
-function compile_xla(
+function compile_xla(ctx, f, args; kwargs...)
+    return Reactant.Profiler.annotate("compile $(string(f))") do
+        _compile_xla(ctx, f, args; kwargs...)
+    end
+end
+
+function _compile_xla(
     ctx,
     f,
     args;
@@ -1348,16 +1356,18 @@ function compile_xla(
                 ),
             )
 
-            exec = XLA.compile(
-                client,
-                mod;
-                compile_options=xla_compile_options,
-                num_outputs=length(mlir_fn_res.linear_results),
-                num_parameters=length(mlir_fn_res.linear_args),
-                mlir_fn_res.is_sharded,
-                mlir_fn_res.num_replicas,
-                mlir_fn_res.num_partitions,
-            )
+            exec = Reactant.Profiler.annotate("XLA compile $(string(f))") do
+                XLA.compile(
+                    client,
+                    mod;
+                    compile_options=xla_compile_options,
+                    num_outputs=length(mlir_fn_res.linear_results),
+                    num_parameters=length(mlir_fn_res.linear_args),
+                    mlir_fn_res.is_sharded,
+                    mlir_fn_res.num_replicas,
+                    mlir_fn_res.num_partitions,
+                )
+            end
             hlo_modules = XLA.get_hlo_modules(exec)
             hlo_modules = length(hlo_modules) == 1 ? only(hlo_modules) : hlo_modules
         end
