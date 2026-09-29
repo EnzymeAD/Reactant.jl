@@ -2,6 +2,7 @@
 
 using ..Reactant:
     Reactant, MLIR, OptimizeCommunicationOptions, ShardyPropagationOptions, CompileOptions
+using ..Reactant.Profiler: annotate
 
 const BFLOAT16_COMPILE_TYPE = Ref{DataType}(Float32)
 const DEBUG_KERNEL = Ref{Bool}(false)
@@ -220,13 +221,20 @@ function run!(pm::MLIR.IR.PassManager, op, key::String="")
 end
 
 function run_pass_pipeline!(mod, pass_pipeline, key=""; enable_verifier=true)
-    # `PassManager` has no finalizer: dispose it explicitly, otherwise the pass manager and
-    # all the passes it owns (including their pattern sets) are leaked at every call.
-    MLIR.IR.@dispose pm = MLIR.IR.PassManager() begin
+    pm = MLIR.IR.PassManager()
+    id = nothing
+    try
+        MLIR.API.mlirPassManagerEnableXLATraceTiming(pm)
         MLIR.IR.enable_verifier!(pm, enable_verifier)
         opm = MLIR.IR.OpPassManager(pm)
         MLIR.IR.add_pipeline!(opm, pass_pipeline)
+        id = Reactant.Profiler.profiler_activity_start(
+            "run_pass_pipeline! $key", Reactant.Profiler.TRACE_ME_LEVEL_CRITICAL
+        )
         run!(pm, MLIR.IR.Operation(mod), key)
+    finally
+        !isnothing(id) && Reactant.Profiler.profiler_activity_end(id)
+        MLIR.IR.dispose(pm)
     end
     return mod
 end
