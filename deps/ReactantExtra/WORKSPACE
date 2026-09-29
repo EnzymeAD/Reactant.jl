@@ -390,4 +390,5 @@ load("@hedron_compile_commands//:workspace_setup_transitive_transitive_transitiv
 hedron_compile_commands_setup_transitive_transitive_transitive()
 
 load("@enzyme_ad//third_party/z3:workspace.bzl", z3_workspace = "repo")
+
 z3_workspace()
