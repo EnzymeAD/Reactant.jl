@@ -82,8 +82,9 @@ MissingTracedValue() = MissingTracedValue(())
 
 Base.zero(::MissingTracedValue) = MissingTracedValue()
 
+# Indexing begin/end are resolved by Julia lowering, not captured as variables.
 const SPECIAL_SYMBOLS = [
-    :(:), :nothing, :missing, :Inf, :Inf16, :Inf32, :Inf64, :Base, :Core
+    :(:), :begin, :end, :nothing, :missing, :Inf, :Inf16, :Inf32, :Inf64, :Base, :Core
 ]
 
 # Function definitions needed to be defined for loop tracing
@@ -697,6 +698,7 @@ function trace_if(expr; store_last_line=nothing, depth=0, track_numbers)
 
     cond_expr = remove_shortcircuiting(expr.args[1])
     condition_vars = [ExpressionExplorer.compute_symbols_state(cond_expr).references...]
+    filter!(∉(SPECIAL_SYMBOLS), condition_vars)
 
     true_block = if store_last_line !== nothing
         if expr.args[2] isa Expr
