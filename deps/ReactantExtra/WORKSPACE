@@ -391,4 +391,4 @@ hedron_compile_commands_setup_transitive_transitive_transitive()
 
 load("@enzyme_ad//third_party/z3:workspace.bzl", z3_workspace = "repo")
 
-z3_workspace(build_file = "@enzyme_ad//third_party/z3:BUILD")
+z3_workspace()
