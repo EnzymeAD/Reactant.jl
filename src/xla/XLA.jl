@@ -27,6 +27,7 @@ function LLVMclopts(opts...)
     return MLIR.API.ReactantLLVMParseCommandLineOptions(length(args), args, C_NULL)
 end
 
+include("NVRTC.jl")
 include("Distributed.jl")
 include("Client.jl")
 include("Device.jl")
@@ -207,6 +208,10 @@ function __init__()
 
         initLogs = Libdl.dlsym(Reactant_jll.libReactantExtra_handle, "InitializeLogs")
         ccall(initLogs, Cvoid, ())
+
+        # Let cuDNN's runtime-compiled engines (fused attention) find a shared NVRTC.
+        # Has to happen before cuDNN builds its first such plan; see `NVRTC.jl`.
+        configure_cudnn_nvrtc_override!()
         # Add most log level
         # SetLogLevel(0)
 
