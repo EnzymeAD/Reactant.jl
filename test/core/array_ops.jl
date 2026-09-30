@@ -265,10 +265,12 @@ end
     end
 
     @testset "view of TracedRArray" begin
-        view_ra = view(x_ra, 1:2, 1:3)
-        y = @jit(collect(view_ra))
-        @test y ≈ x
-        @test y !== x_ra
+        for idxs in ((1:2, 2:3), (2, 1:3))
+            view_ra = view(x_ra, idxs...)
+            y = @jit(collect(view_ra))
+            @test y ≈ x[idxs...]
+            @test y isa ConcreteRArray{Float64}
+        end
     end
 
     x = 5
