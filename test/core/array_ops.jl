@@ -264,6 +264,13 @@ end
         @test y !== x_ra
     end
 
+    @testset "view of TracedRArray" begin
+        view_ra = view(x_ra, 1:2, 1:3)
+        y = @jit(collect(view_ra))
+        @test y ≈ x
+        @test y !== x_ra
+    end
+
     x = 5
     x_ra = ConcreteRNumber(x)
 
