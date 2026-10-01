@@ -782,115 +782,123 @@ function compile(job)
             # :llvm, job; optimize=false, cleanup=false, validate=true, libraries=false
             # :llvm, job; optimize=false, cleanup=false, validate=false, libraries=false
         )
-
-        if !Reactant.precompiling()
-            runtime, runtime_relocs = GPUCompiler.load_runtime(job)
-            LLVM.link!(mod, runtime)
-            GPUCompiler.apply_relocations!(mod, runtime_relocs)
-        end
-        entryname = meta.entry.name
-
-        if Reactant.Compiler.DUMP_LLVMIR[]
-            println("cuda.jl immediate IR\n", string(mod))
-        end
-        opt_level = 2
-        tm = GPUCompiler.llvm_machine(job.config.target)
-
-        if isdefined(GPUCompiler, :current_job)
-            prev_job = GPUCompiler.current_job
-            GPUCompiler.current_job = job
-        end
-
-        try
-            LLVM.@dispose pb = LLVM.PassBuilder() begin
-                LLVM.register!(pb, GPUCompiler.GPULowerCPUFeaturesPass(job))
-                LLVM.register!(pb, GPUCompiler.GPULowerPTLSPass(job))
-                LLVM.register!(pb, GPUCompiler.GPULowerGCFramePass(job, meta.relocations))
-                LLVM.register!(pb, AddKernelStatePass())
-                LLVM.register!(pb, LowerKernelStatePass())
-                LLVM.register!(pb, CleanupKernelStatePass())
-
-                LLVM.add!(pb, LLVM.ModulePassManager()) do mpm
-                    GPUCompiler.buildNewPMPipeline!(mpm, job, opt_level)
-                end
-                LLVM.run!(pb, mod, tm)
+        # the module is ours: it is serialized into the MLIR module below
+        LLVM.@dispose mod = mod begin
+            if !Reactant.precompiling()
+                runtime, runtime_relocs = GPUCompiler.load_runtime(job)
+                LLVM.link!(mod, runtime)
+                GPUCompiler.apply_relocations!(mod, runtime_relocs)
             end
+            entryname = meta.entry.name
+
             if Reactant.Compiler.DUMP_LLVMIR[]
-                println("cuda.jl pre vendor IR\n", string(mod))
+                println("cuda.jl immediate IR\n", string(mod))
             end
+            opt_level = 2
+            tm = GPUCompiler.llvm_machine(job.config.target)
 
-            LLVM.run!(LLVM.AlwaysInlinerPass(), mod, tm)
-
-            GPUCompiler.optimize_module!(job, mod)
-            if Reactant.Compiler.DUMP_LLVMIR[]
-                println("cuda.jl post vendor IR\n", string(mod))
-            end
-            LLVM.run!(LLVM.DeadArgumentEliminationPass(), mod, tm)
-        finally
             if isdefined(GPUCompiler, :current_job)
-                GPUCompiler.current_job = prev_job
+                prev_job = GPUCompiler.current_job
+                GPUCompiler.current_job = job
             end
-            # The target machine isn't owned by the LLVM context: dispose it explicitly,
-            # otherwise it's leaked at every kernel compilation. There is none when
-            # LLVM was built without the NVPTX backend (macOS), where llvm_machine
-            # returns nothing and the passes above run without one.
-            tm === nothing || LLVM.dispose(tm)
-        end
 
-        for fname in ("gpu_report_exception", "gpu_signal_exception")
-            fn = get(mod.functions, fname, nothing)
-            if fn !== nothing
-                for inst in collect(LLVM.Instruction, fn.users)
-                    LLVM.erase!(inst)
+            try
+                LLVM.@dispose pb = LLVM.PassBuilder() begin
+                    LLVM.register!(pb, GPUCompiler.GPULowerCPUFeaturesPass(job))
+                    LLVM.register!(pb, GPUCompiler.GPULowerPTLSPass(job))
+                    LLVM.register!(
+                        pb, GPUCompiler.GPULowerGCFramePass(job, meta.relocations)
+                    )
+                    LLVM.register!(pb, AddKernelStatePass())
+                    LLVM.register!(pb, LowerKernelStatePass())
+                    LLVM.register!(pb, CleanupKernelStatePass())
+
+                    LLVM.add!(pb, LLVM.ModulePassManager()) do mpm
+                        GPUCompiler.buildNewPMPipeline!(mpm, job, opt_level)
+                    end
+                    LLVM.run!(pb, mod, tm)
                 end
-                LLVM.erase!(fn)
-            end
-        end
+                if Reactant.Compiler.DUMP_LLVMIR[]
+                    println("cuda.jl pre vendor IR\n", string(mod))
+                end
 
-        errors = GPUCompiler.check_ir!(job, GPUCompiler.IRError[], mod, meta.relocations)
-        unique!(errors)
-        filter!(errors) do err
-            (kind, bt, meta) = err
-            if meta !== nothing
-                if kind == GPUCompiler.UNKNOWN_FUNCTION && startswith(meta, "__nv")
-                    return false
+                LLVM.run!(LLVM.AlwaysInlinerPass(), mod, tm)
+
+                GPUCompiler.optimize_module!(job, mod)
+                if Reactant.Compiler.DUMP_LLVMIR[]
+                    println("cuda.jl post vendor IR\n", string(mod))
+                end
+                LLVM.run!(LLVM.DeadArgumentEliminationPass(), mod, tm)
+            finally
+                if isdefined(GPUCompiler, :current_job)
+                    GPUCompiler.current_job = prev_job
+                end
+                # The target machine isn't owned by the LLVM context: dispose it explicitly,
+                # otherwise it's leaked at every kernel compilation. There is none when
+                # LLVM was built without the NVPTX backend (macOS), where llvm_machine
+                # returns nothing and the passes above run without one.
+                tm === nothing || LLVM.dispose(tm)
+            end
+
+            for fname in ("gpu_report_exception", "gpu_signal_exception")
+                fn = get(mod.functions, fname, nothing)
+                if fn !== nothing
+                    for inst in collect(LLVM.Instruction, fn.users)
+                        LLVM.erase!(inst)
+                    end
+                    LLVM.erase!(fn)
                 end
             end
-            return true
-        end
-        if Reactant.Compiler.DUMP_LLVMIR[]
-            println("cuda.jl postopt IR\n", string(mod))
-        end
-        if !isempty(errors)
-            throw(GPUCompiler.InvalidIRError(job, errors))
-        end
-        # LLVM.strip_debuginfo!(mod)
-        dl = string(mod.datalayout)
-        # This is a bit weird since we're taking a module from julia's llvm into reactant's llvm version
-        # so we serialize and reparse with the right llvm module api. Bitcode is used rather than
-        # textual IR: the bitcode reader auto-upgrades constructs whose spelling changed between the
-        # two LLVM versions (e.g. `llvm.loop.distribute.enable` metadata), whereas the .ll parser does
-        # not, and mismatches there abort the process in the verifier.
-        modbc = convert(Vector{UInt8}, mod)
-        mmodref = GC.@preserve modbc MLIR.API.ConvertLLVMBCToMLIR(
-            pointer(modbc), length(modbc), MLIR.IR.current_context()
-        )
-        mmod = MLIR.IR.Module(mmodref)
-        @assert mmod != C_NULL
 
-        cur_module = MLIR.IR.current_module()
-        linkRes = MLIR.API.LinkInModule(cur_module, mmod, entryname)
+            errors = GPUCompiler.check_ir!(
+                job, GPUCompiler.IRError[], mod, meta.relocations
+            )
+            unique!(errors)
+            filter!(errors) do err
+                (kind, bt, meta) = err
+                if meta !== nothing
+                    if kind == GPUCompiler.UNKNOWN_FUNCTION && startswith(meta, "__nv")
+                        return false
+                    end
+                end
+                return true
+            end
+            if Reactant.Compiler.DUMP_LLVMIR[]
+                println("cuda.jl postopt IR\n", string(mod))
+            end
+            if !isempty(errors)
+                throw(GPUCompiler.InvalidIRError(job, errors))
+            end
+            # LLVM.strip_debuginfo!(mod)
+            dl = string(mod.datalayout)
+            # This is a bit weird since we're taking a module from julia's llvm into reactant's llvm version
+            # so we serialize and reparse with the right llvm module api. Bitcode is used rather than
+            # textual IR: the bitcode reader auto-upgrades constructs whose spelling changed between the
+            # two LLVM versions (e.g. `llvm.loop.distribute.enable` metadata), whereas the .ll parser does
+            # not, and mismatches there abort the process in the verifier.
+            modbc = convert(Vector{UInt8}, mod)
+            mmodref = GC.@preserve modbc MLIR.API.ConvertLLVMBCToMLIR(
+                pointer(modbc), length(modbc), MLIR.IR.current_context()
+            )
+            mmod = MLIR.IR.Module(mmodref)
+            @assert mmod != C_NULL
 
-        dl_attr_name = "llvm.data_layout"
-        prevdlattr = MLIR.IR.getattr(MLIR.IR.Operation(cur_module), dl_attr_name)
-        if !isnothing(prevdlattr)
-            prevdl = String(prevdlattr)
-            @assert prevdl == dl "data layout mismatch, tried compiling cuda kernels for different target machines?"
-        else
-            MLIR.IR.setattr!(MLIR.IR.Operation(cur_module), dl_attr_name, MLIR.IR.Attribute(dl))
+            cur_module = MLIR.IR.current_module()
+            linkRes = MLIR.API.LinkInModule(cur_module, mmod, entryname)
+
+            dl_attr_name = "llvm.data_layout"
+            prevdlattr = MLIR.IR.getattr(MLIR.IR.Operation(cur_module), dl_attr_name)
+            if !isnothing(prevdlattr)
+                prevdl = String(prevdlattr)
+                @assert prevdl == dl "data layout mismatch, tried compiling cuda kernels for different target machines?"
+            else
+                MLIR.IR.setattr!(
+                    MLIR.IR.Operation(cur_module), dl_attr_name, MLIR.IR.Attribute(dl)
+                )
+            end
+
+            String(Reactant.TracedUtils.get_attribute_by_name(linkRes, "sym_name"))
         end
-
-        String(Reactant.TracedUtils.get_attribute_by_name(linkRes, "sym_name"))
     end
 
     return LLVMFunc{job.source.specTypes.parameters[1],job.source.specTypes}(nothing, entry)
