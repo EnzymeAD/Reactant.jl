@@ -8,7 +8,7 @@ end
 Creates an MLIR context.
 """
 function Context(registry=DialectRegistry(); threading::Bool=false)
-    return Context(mark_alloc(API.mlirContextCreateWithRegistry(registry, threading)))
+    return mark_alloc(Context(API.mlirContextCreateWithRegistry(registry, threading)))
 end
 
 """
