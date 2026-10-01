@@ -819,12 +819,7 @@ function compile(job)
                 println("cuda.jl pre vendor IR\n", string(mod))
             end
 
-            LLVM.@dispose pb = LLVM.PassBuilder() begin
-                LLVM.add!(pb, LLVM.ModulePassManager()) do mpm
-                    LLVM.add!(mpm, LLVM.AlwaysInlinerPass())
-                end
-                LLVM.run!(pb, mod, tm)
-            end
+            LLVM.run!(LLVM.AlwaysInlinerPass(), mod, tm)
 
             GPUCompiler.optimize_module!(job, mod)
             if Reactant.Compiler.DUMP_LLVMIR[]
