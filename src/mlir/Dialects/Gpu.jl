@@ -288,7 +288,13 @@ Examples:
   gpu.binary @myobject <#gpu.select_object<#rocdl.target>> [#gpu.object<...>, #gpu.object<#rocdl.target, ...>]
 ```
 """
-function binary(; sym_name, offloadingHandler=nothing, objects, location=Location())
+function binary(;
+    sym_name,
+    sym_visibility=nothing,
+    offloadingHandler=nothing,
+    objects,
+    location=Location(),
+)
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
@@ -296,6 +302,8 @@ function binary(; sym_name, offloadingHandler=nothing, objects, location=Locatio
     attributes = NamedAttribute[
         NamedAttribute("sym_name", sym_name), NamedAttribute("objects", objects)
     ]
+    !isnothing(sym_visibility) &&
+        push!(attributes, NamedAttribute("sym_visibility", sym_visibility))
     !isnothing(offloadingHandler) &&
         push!(attributes, NamedAttribute("offloadingHandler", offloadingHandler))
 
@@ -1193,6 +1201,8 @@ Note the non-default memory spaces used in memref types in memory
 attribution.
 """
 function func(;
+    sym_name,
+    sym_visibility=nothing,
     function_type,
     arg_attrs=nothing,
     res_attrs=nothing,
@@ -1210,7 +1220,11 @@ function func(;
     operands = Value[]
     owned_regions = Region[body,]
     successors = Block[]
-    attributes = NamedAttribute[NamedAttribute("function_type", function_type),]
+    attributes = NamedAttribute[
+        NamedAttribute("sym_name", sym_name), NamedAttribute("function_type", function_type)
+    ]
+    !isnothing(sym_visibility) &&
+        push!(attributes, NamedAttribute("sym_visibility", sym_visibility))
     !isnothing(arg_attrs) && push!(attributes, NamedAttribute("arg_attrs", arg_attrs))
     !isnothing(res_attrs) && push!(attributes, NamedAttribute("res_attrs", res_attrs))
     !isnothing(workgroup_attrib_attrs) &&
@@ -1280,6 +1294,7 @@ gpu.module @symbol_name2 <#gpu.select_object<1>> [
 """
 function module_(;
     sym_name,
+    sym_visibility=nothing,
     targets=nothing,
     offloadingHandler=nothing,
     bodyRegion::Region,
@@ -1290,6 +1305,8 @@ function module_(;
     owned_regions = Region[bodyRegion,]
     successors = Block[]
     attributes = NamedAttribute[NamedAttribute("sym_name", sym_name),]
+    !isnothing(sym_visibility) &&
+        push!(attributes, NamedAttribute("sym_visibility", sym_visibility))
     !isnothing(targets) && push!(attributes, NamedAttribute("targets", targets))
     !isnothing(offloadingHandler) &&
         push!(attributes, NamedAttribute("offloadingHandler", offloadingHandler))

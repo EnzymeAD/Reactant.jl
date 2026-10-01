@@ -361,25 +361,6 @@ function broadcast(src::Value; result::IR.Type, location=Location())
     )
 end
 
-function cat(lhs::Value, rhs::Value; result::IR.Type, location=Location())
-    op_ty_results = IR.Type[result,]
-    operands = Value[lhs, rhs]
-    owned_regions = Region[]
-    successors = Block[]
-    attributes = NamedAttribute[]
-
-    return create_operation(
-        "tt.cat",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
-        results=op_ty_results,
-        result_inference=false,
-    )
-end
-
 """
 `clampf`
 
