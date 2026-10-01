@@ -7,10 +7,10 @@ end
 
 Creates a symbol table for the given operation. If the operation does not have the SymbolTable trait, returns a null symbol table.
 """
-SymbolTable(op::Operation) = SymbolTable(mark_alloc(API.mlirSymbolTableCreate(op)))
+SymbolTable(op::Operation) = mark_alloc(SymbolTable(API.mlirSymbolTableCreate(op)))
 SymbolTable(mod::Module) = SymbolTable(Operation(mod))
 
-dispose(st::SymbolTable) = mark_dispose(API.mlirSymbolTableDestroy(st))
+dispose(st::SymbolTable) = mark_dispose(API.mlirSymbolTableDestroy, st)
 
 Base.cconvert(::Core.Type{API.MlirSymbolTable}, st::SymbolTable) = st
 Base.unsafe_convert(::Core.Type{API.MlirSymbolTable}, st::SymbolTable) = mark_use(st).ref

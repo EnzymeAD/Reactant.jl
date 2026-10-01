@@ -27,9 +27,9 @@ Base.hash(typeid::TypeID) = API.mlirTypeIDHashValue(typeid)
     ref::API.MlirTypeIDAllocator
 end
 
-TypeIDAllocator() = TypeIDAllocator(mark_alloc(API.mlirTypeIDAllocatorCreate()))
+TypeIDAllocator() = mark_alloc(TypeIDAllocator(API.mlirTypeIDAllocatorCreate()))
 
-dispose(alloc::TypeIDAllocator) = mark_dispose(API.mlirTypeIDAllocatorDestroy(alloc))
+dispose(alloc::TypeIDAllocator) = mark_dispose(API.mlirTypeIDAllocatorDestroy, alloc)
 
 Base.cconvert(::Core.Type{API.MlirTypeIDAllocator}, alloc::TypeIDAllocator) = alloc
 function Base.unsafe_convert(::Core.Type{API.MlirTypeIDAllocator}, alloc::TypeIDAllocator)
@@ -37,5 +37,6 @@ function Base.unsafe_convert(::Core.Type{API.MlirTypeIDAllocator}, alloc::TypeID
 end
 
 function TypeID(alloc::TypeIDAllocator)
-    return TypeID(mark_alloc(API.mlirTypeIDAllocatorAllocateTypeID(alloc)))
+    # the type ID lives as long as its allocator
+    return mark_alloc(TypeID(API.mlirTypeIDAllocatorAllocateTypeID(alloc)); owner=alloc)
 end
