@@ -13,7 +13,7 @@ The pool is not owned by the contexts it is attached to with
 """
 function ThreadPool(; max_threads::Integer=0)
     max_threads >= 0 || throw(ArgumentError("max_threads must be non-negative"))
-    return ThreadPool(mark_alloc(API.mlirLlvmThreadPoolCreateWithMaxThreads(max_threads)))
+    return mark_alloc(ThreadPool(API.mlirLlvmThreadPoolCreateWithMaxThreads(max_threads)))
 end
 
 """
