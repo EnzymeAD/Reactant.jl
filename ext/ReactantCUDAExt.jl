@@ -1208,105 +1208,106 @@ Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
     )
 
     trueidx = 1
-    allocs = Union{Tuple{MLIR.IR.Value,MLIR.IR.Type,Type},Nothing}[]
+    allocs = Union{Tuple{MLIR.IR.Value,MLIR.IR.Type,Int},Nothing}[]
 
     llvmptr = MLIR.IR.Type(MLIR.API.mlirLLVMPointerTypeGet(ctx, 0))
     i8 = MLIR.IR.Type(UInt8)
     allargs = Any[func.f, args...]
-    ctx = LLVM.Context()
-    LLVM.activate(ctx)
-    for a in allargs
-        if sizeof(a) == 0
-            push!(allocs, nothing)
-            continue
-        end
-
-        # TODO(#2240): check for only integer and explicitly non cutraced types
-        MLIR.IR.@with_block wrapbody begin
-            argty = MLIR.IR.Type(
-                MLIR.API.mlirLLVMFunctionTypeGetInput(gpu_function_type, trueidx - 1)
-            )
-            trueidx += 1
-            jltyp = Core.Typeof(a)
-            if Enzyme.Compiler.inline_roots_type(jltyp) != 0
-                trueidx += 1
+    # `inline_roots_type` converts Julia types to LLVM types, which needs a context
+    LLVM.Context() do _
+        for a in allargs
+            if sizeof(a) == 0
+                push!(allocs, nothing)
+                continue
             end
-            c1 = MLIR.IR.result(
-                MLIR.Dialects.llvm.mlir_constant(;
-                    res=MLIR.IR.Type(Int64), value=MLIR.IR.Attribute(1)
-                ),
-                1,
-            )
-            alloc = MLIR.IR.result(
-                MLIR.Dialects.llvm.alloca(
-                    c1; elem_type=MLIR.IR.Attribute(argty), res=llvmptr
-                ),
-                1,
-            )
-            push!(allocs, (alloc, argty, jltyp))
 
-            if has_cast_float_type
-                # The argument `a` has BFloat16 fields but the GPU function was
-                # compiled with a substitute type (e.g. Float32). We need to:
-                # 1. Create an alloca with the bf16 layout
-                # 2. Store the raw bf16 bytes into it
-                # 3. Load, walk the struct fields, extend bf16→f32, store into alloc
-                compile_float_ty = MLIR.IR.Type(bfloat16_compile_type)
-                bf16_float_ty = MLIR.IR.Type(BFloat16)
-                bf16_ty = _replace_float_in_llvm_type(
-                    argty, compile_float_ty, bf16_float_ty
+            # TODO(#2240): check for only integer and explicitly non cutraced types
+            MLIR.IR.@with_block wrapbody begin
+                argty = MLIR.IR.Type(
+                    MLIR.API.mlirLLVMFunctionTypeGetInput(gpu_function_type, trueidx - 1)
                 )
-
-                bf16_c1 = MLIR.IR.result(
+                trueidx += 1
+                jltyp = Core.Typeof(a)
+                nroots = Enzyme.Compiler.inline_roots_type(jltyp)
+                if nroots != 0
+                    trueidx += 1
+                end
+                c1 = MLIR.IR.result(
                     MLIR.Dialects.llvm.mlir_constant(;
                         res=MLIR.IR.Type(Int64), value=MLIR.IR.Attribute(1)
                     ),
                     1,
                 )
-                bf16_alloc = MLIR.IR.result(
+                alloc = MLIR.IR.result(
                     MLIR.Dialects.llvm.alloca(
-                        bf16_c1; elem_type=MLIR.IR.Attribute(bf16_ty), res=llvmptr
+                        c1; elem_type=MLIR.IR.Attribute(argty), res=llvmptr
                     ),
                     1,
                 )
+                push!(allocs, (alloc, argty, nroots))
 
-                sz = abi_sizeof(a)
-                val = to_bytes(a)
-                array_ty = MLIR.IR.Type(
-                    MLIR.API.mlirLLVMArrayTypeGet(MLIR.IR.Type(Int8), sz)
-                )
-                cdata = MLIR.IR.result(
-                    MLIR.Dialects.llvm.mlir_constant(;
-                        res=array_ty, value=MLIR.IR.DenseElementsAttribute(val)
-                    ),
-                    1,
-                )
-                MLIR.Dialects.llvm.store(cdata, bf16_alloc)
+                if has_cast_float_type
+                    # The argument `a` has BFloat16 fields but the GPU function was
+                    # compiled with a substitute type (e.g. Float32). We need to:
+                    # 1. Create an alloca with the bf16 layout
+                    # 2. Store the raw bf16 bytes into it
+                    # 3. Load, walk the struct fields, extend bf16→f32, store into alloc
+                    compile_float_ty = MLIR.IR.Type(bfloat16_compile_type)
+                    bf16_float_ty = MLIR.IR.Type(BFloat16)
+                    bf16_ty = _replace_float_in_llvm_type(
+                        argty, compile_float_ty, bf16_float_ty
+                    )
 
-                bf16_val = MLIR.IR.result(
-                    MLIR.Dialects.llvm.load(bf16_alloc; res=bf16_ty), 1
-                )
-                converted_val = _convert_bf16_value(
-                    bf16_val, bf16_ty, argty, bf16_float_ty, compile_float_ty
-                )
-                MLIR.Dialects.llvm.store(converted_val, alloc)
-            else
-                sz = abi_sizeof(a)
-                val = to_bytes(a)
-                array_ty = MLIR.IR.Type(
-                    MLIR.API.mlirLLVMArrayTypeGet(MLIR.IR.Type(Int8), sz)
-                )
-                cdata = MLIR.IR.result(
-                    MLIR.Dialects.llvm.mlir_constant(;
-                        res=array_ty, value=MLIR.IR.DenseElementsAttribute(val)
-                    ),
-                    1,
-                )
-                MLIR.Dialects.llvm.store(cdata, alloc)
+                    bf16_c1 = MLIR.IR.result(
+                        MLIR.Dialects.llvm.mlir_constant(;
+                            res=MLIR.IR.Type(Int64), value=MLIR.IR.Attribute(1)
+                        ),
+                        1,
+                    )
+                    bf16_alloc = MLIR.IR.result(
+                        MLIR.Dialects.llvm.alloca(
+                            bf16_c1; elem_type=MLIR.IR.Attribute(bf16_ty), res=llvmptr
+                        ),
+                        1,
+                    )
+
+                    sz = abi_sizeof(a)
+                    val = to_bytes(a)
+                    array_ty = MLIR.IR.Type(
+                        MLIR.API.mlirLLVMArrayTypeGet(MLIR.IR.Type(Int8), sz)
+                    )
+                    cdata = MLIR.IR.result(
+                        MLIR.Dialects.llvm.mlir_constant(;
+                            res=array_ty, value=MLIR.IR.DenseElementsAttribute(val)
+                        ),
+                        1,
+                    )
+                    MLIR.Dialects.llvm.store(cdata, bf16_alloc)
+
+                    bf16_val = MLIR.IR.result(
+                        MLIR.Dialects.llvm.load(bf16_alloc; res=bf16_ty), 1
+                    )
+                    converted_val = _convert_bf16_value(
+                        bf16_val, bf16_ty, argty, bf16_float_ty, compile_float_ty
+                    )
+                    MLIR.Dialects.llvm.store(converted_val, alloc)
+                else
+                    sz = abi_sizeof(a)
+                    val = to_bytes(a)
+                    array_ty = MLIR.IR.Type(
+                        MLIR.API.mlirLLVMArrayTypeGet(MLIR.IR.Type(Int8), sz)
+                    )
+                    cdata = MLIR.IR.result(
+                        MLIR.Dialects.llvm.mlir_constant(;
+                            res=array_ty, value=MLIR.IR.DenseElementsAttribute(val)
+                        ),
+                        1,
+                    )
+                    MLIR.Dialects.llvm.store(cdata, alloc)
+                end
             end
         end
     end
-    LLVM.deactivate(ctx)
 
     argidx = 1
     for arg in values(seen)
@@ -1377,17 +1378,16 @@ Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
             if arg === nothing
                 continue
             end
-            alloc, argty, jltyp = arg
+            alloc, argty, roots_count = arg
             argres = MLIR.IR.result(MLIR.Dialects.llvm.load(alloc; res=argty), 1)
             push!(wrapargs, argres)
-            if Enzyme.Compiler.inline_roots_type(jltyp) != 0
+            if roots_count != 0
                 c1 = MLIR.IR.result(
                     MLIR.Dialects.llvm.mlir_constant(;
                         res=MLIR.IR.Type(Int64), value=MLIR.IR.Attribute(1)
                     ),
                     1,
                 )
-                roots_count = Enzyme.Compiler.inline_roots_type(jltyp)
                 jlvaluet = MLIR.IR.Type(MLIR.API.mlirLLVMPointerTypeGet(ctx, 10))
                 njlvaluet = MLIR.IR.Type(
                     MLIR.API.mlirLLVMArrayTypeGet(jlvaluet, roots_count)
