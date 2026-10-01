@@ -752,27 +752,23 @@ function noop_pass(x)
 end
 function kern_pass(mod)
     for fname in ("julia.gpu.state_getter",)
-        if LLVM.haskey(LLVM.functions(mod), fname)
-            fn = LLVM.functions(mod)[fname]
-            insts = LLVM.Instruction[]
-            for u in LLVM.uses(fn)
-                u = LLVM.user(u)
-                LLVM.replace_uses!(u, LLVM.UndefValue(LLVM.value_type(u)))
-                push!(insts, u)
-            end
+        fn = get(mod.functions, fname, nothing)
+        if fn !== nothing
+            insts = collect(LLVM.Instruction, fn.users)
             for inst in insts
-                Reactant.Enzyme.Compiler.eraseInst(LLVM.parent(inst), inst)
+                LLVM.replace_uses!(inst, LLVM.UndefValue(inst.value_type))
+                LLVM.erase!(inst)
             end
-            Reactant.Enzyme.Compiler.eraseInst(mod, fn)
+            LLVM.erase!(fn)
         end
     end
 
     return true
 end
 
-AddKernelStatePass() = LLVM.NewPMModulePass("AddKernelStatePass", kern_pass)
-LowerKernelStatePass() = LLVM.NewPMFunctionPass("LowerKernelStatePass", noop_pass)
-CleanupKernelStatePass() = LLVM.NewPMModulePass("CleanupKernelStatePass", noop_pass)
+AddKernelStatePass() = LLVM.ModulePass("AddKernelStatePass", kern_pass)
+LowerKernelStatePass() = LLVM.FunctionPass("LowerKernelStatePass", noop_pass)
+CleanupKernelStatePass() = LLVM.ModulePass("CleanupKernelStatePass", noop_pass)
 
 # compile to executable machine code
 function compile(job)
@@ -792,7 +788,7 @@ function compile(job)
             LLVM.link!(mod, runtime)
             GPUCompiler.apply_relocations!(mod, runtime_relocs)
         end
-        entryname = LLVM.name(meta.entry)
+        entryname = meta.entry.name
 
         if Reactant.Compiler.DUMP_LLVMIR[]
             println("cuda.jl immediate IR\n", string(mod))
@@ -806,15 +802,15 @@ function compile(job)
         end
 
         try
-            LLVM.@dispose pb = LLVM.NewPMPassBuilder() begin
+            LLVM.@dispose pb = LLVM.PassBuilder() begin
                 LLVM.register!(pb, GPUCompiler.GPULowerCPUFeaturesPass(job))
                 LLVM.register!(pb, GPUCompiler.GPULowerPTLSPass(job))
-                LLVM.register!(pb, GPUCompiler.GPULowerGCFramePass(job))
+                LLVM.register!(pb, GPUCompiler.GPULowerGCFramePass(job, meta.relocations))
                 LLVM.register!(pb, AddKernelStatePass())
                 LLVM.register!(pb, LowerKernelStatePass())
                 LLVM.register!(pb, CleanupKernelStatePass())
 
-                LLVM.add!(pb, LLVM.NewPMModulePassManager()) do mpm
+                LLVM.add!(pb, LLVM.ModulePassManager()) do mpm
                     GPUCompiler.buildNewPMPipeline!(mpm, job, opt_level)
                 end
                 LLVM.run!(pb, mod, tm)
@@ -823,8 +819,8 @@ function compile(job)
                 println("cuda.jl pre vendor IR\n", string(mod))
             end
 
-            LLVM.@dispose pb = LLVM.NewPMPassBuilder() begin
-                LLVM.add!(pb, LLVM.NewPMModulePassManager()) do mpm
+            LLVM.@dispose pb = LLVM.PassBuilder() begin
+                LLVM.add!(pb, LLVM.ModulePassManager()) do mpm
                     LLVM.add!(mpm, LLVM.AlwaysInlinerPass())
                 end
                 LLVM.run!(pb, mod, tm)
@@ -834,7 +830,7 @@ function compile(job)
             if Reactant.Compiler.DUMP_LLVMIR[]
                 println("cuda.jl post vendor IR\n", string(mod))
             end
-            LLVM.run!(GPUCompiler.DeadArgumentEliminationPass(), mod, tm)
+            LLVM.run!(LLVM.DeadArgumentEliminationPass(), mod, tm)
         finally
             if isdefined(GPUCompiler, :current_job)
                 GPUCompiler.current_job = prev_job
@@ -847,16 +843,12 @@ function compile(job)
         end
 
         for fname in ("gpu_report_exception", "gpu_signal_exception")
-            if LLVM.haskey(LLVM.functions(mod), fname)
-                fn = LLVM.functions(mod)[fname]
-                insts = LLVM.Instruction[]
-                for u in LLVM.uses(fn)
-                    push!(insts, LLVM.user(u))
+            fn = get(mod.functions, fname, nothing)
+            if fn !== nothing
+                for inst in collect(LLVM.Instruction, fn.users)
+                    LLVM.erase!(inst)
                 end
-                for inst in insts
-                    Reactant.Enzyme.Compiler.eraseInst(LLVM.parent(inst), inst)
-                end
-                Reactant.Enzyme.Compiler.eraseInst(mod, fn)
+                LLVM.erase!(fn)
             end
         end
 
@@ -878,7 +870,7 @@ function compile(job)
             throw(GPUCompiler.InvalidIRError(job, errors))
         end
         # LLVM.strip_debuginfo!(mod)
-        dl = string(LLVM.datalayout(mod))
+        dl = string(mod.datalayout)
         # This is a bit weird since we're taking a module from julia's llvm into reactant's llvm version
         # so we serialize and reparse with the right llvm module api. Bitcode is used rather than
         # textual IR: the bitcode reader auto-upgrades constructs whose spelling changed between the

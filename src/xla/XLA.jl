@@ -5,7 +5,6 @@ using Reactant_jll: Reactant_jll
 using LLVM: LLVM
 using Libdl: Libdl
 using EnumX: @enumx
-using Enzyme: Compiler
 using Preferences: load_preference
 using UUIDs: UUID
 using ScopedValues: ScopedValue, with
@@ -245,16 +244,20 @@ function __init__()
 
         @static if !Sys.isapple()
             lljit = LLVM.JuliaOJIT()
-            jd_main = LLVM.JITDylib(lljit)
-
+            # Define the symbols where the code that Julia compiles finds them, so that
+            # the call in `XLA.execute_sharded` resolves: in the JITDylib that all users
+            # of Julia's JIT share, or, on Julia 1.14, which doesn't have one, in Julia's
+            # `JuliaGlobals` JITDylib, which the JITDylibs of compiled code link to.
+            jd_main = if LLVM.supports_jit_dylib_creation(lljit)
+                something(LLVM.lookup_dylib(lljit.execution_session, "JuliaGlobals"))
+            else
+                lljit.external_dylib
+            end
             for name in
                 ("XLAExecute", "XLAExecuteSharded", "ifrt_loaded_executable_execute")
                 ptr = Libdl.dlsym(Reactant_jll.libReactantExtra_handle, name)
-                LLVM.define(
-                    jd_main,
-                    Compiler.JIT.absolute_symbol_materialization(
-                        LLVM.mangle(lljit, name), ptr
-                    ),
+                LLVM.define!(
+                    jd_main, LLVM.absolute_symbols(LLVM.mangle(lljit, name) => ptr)
                 )
             end
         end
