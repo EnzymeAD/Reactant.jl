@@ -35,6 +35,57 @@ function GPUCompiler.get_interpreter(@nospecialize(job::NativeCompilerJob))
     end
 end
 
+# GPUCompiler looks up (and filters) the code instances it compiles by the job's cache
+# owner, so that has to be the owner the interpreter above caches them under.
+@static if GPUCompiler.HAS_INTEGRATED_CACHE
+    function GPUCompiler.cache_owner(@nospecialize(job::NativeCompilerJob))
+        return job.config.params.use_native_interp ? nothing : ReactantCacheToken()
+    end
+end
+
+# GPUCompiler 2 generates code from the sources that inference stored in the code
+# instances, where GPUCompiler 1 re-inferred every method it compiled. With Reactant's
+# interpreter, some of the stored sources give wrong results (as if Reactant's overlays
+# weren't applied, e.g., in the LU tests of core/ops), so re-infer them like GPUCompiler 1
+# did, and store the result for GPUCompiler to compile.
+@static if VERSION >= v"1.12.0-DEV.1434"
+    function GPUCompiler.drive_inference!(interp::ReactantInterp, mi::Core.MethodInstance)
+        ci = Core.Compiler.typeinf_ext(interp, mi, Core.Compiler.SOURCE_MODE_NOT_REQUIRED)
+        ci === nothing && return nothing
+        has_compilequeue =
+            VERSION >= v"1.13.0-DEV.499" || v"1.12-beta3" <= VERSION < v"1.13-"
+        if has_compilequeue
+            workqueue = Core.Compiler.CompilationQueue(; interp)
+            push!(workqueue, ci)
+        else
+            workqueue = Core.CodeInstance[ci]
+            inspected = Base.IdSet{Core.CodeInstance}()
+        end
+        while !isempty(workqueue)
+            callee = pop!(workqueue)
+            if has_compilequeue
+                Core.Compiler.isinspected(workqueue, callee) && continue
+                Core.Compiler.markinspected!(workqueue, callee)
+            else
+                callee in inspected && continue
+                push!(inspected, callee)
+            end
+            Core.Compiler.use_const_api(callee) && continue
+            callee_mi = Core.Compiler.get_ci_mi(callee)
+            src = Core.Compiler.typeinf_code(interp, callee_mi, true)
+            src isa Core.CodeInfo || continue
+            if has_compilequeue
+                sptypes = Core.Compiler.sptypes_from_meth_instance(callee_mi)
+                Core.Compiler.collectinvokes!(workqueue, src, sptypes)
+            else
+                Core.Compiler.collectinvokes!(workqueue, src)
+            end
+            @atomic :release callee.inferred = src
+        end
+        return ci
+    end
+end
+
 function Core.Compiler.optimize(
     interp::ReactantInterp,
     opt::Core.Compiler.OptimizationState,
@@ -985,21 +1036,35 @@ function call_llvm_generator(
             ctx = LLVM.context(ts_ctx)
             LLVM.activate(ctx)
             obj = try
-                llvm_module, p = GPUCompiler.emit_llvm(job)
+                # Keep the references to Julia values symbolic: the entry wrapper below
+                # loads them from an array that is passed in at run time, so that no
+                # addresses get baked into the IR.
+                llvm_module, p = GPUCompiler.emit_llvm(job; resolve_relocations=false)
 
-                gmap = p.gv_to_value
+                # the address of the Julia value referenced by each global
+                gmap = Dict{String,Ptr{Cvoid}}()
+                for (rec, word) in GPUCompiler.resolved_relocations(p.relocations)
+                    if rec.kind === GPUCompiler.SlotSite
+                        gmap[rec.name] = reinterpret(Ptr{Cvoid}, word)
+                    end
+                end
                 for g in LLVM.globals(llvm_module)
-                    if haskey(LLVM.metadata(g), "julia.constgv") &&
-                        !LLVM.isnull(LLVM.initializer(g))
-                        addr = LLVM.initializer(g)
+                    haskey(LLVM.metadata(g), "julia.constgv") || continue
+                    init = LLVM.initializer(g)
+                    if init === nothing
+                        # a relocation slot: define it, so that the wrapper can fill it
+                        LLVM.linkage!(g, LLVM.API.LLVMExternalLinkage)
+                        LLVM.initializer!(g, LLVM.null(LLVM.global_value_type(g)))
+                    elseif !LLVM.isnull(init)
+                        # on Julia versions without relocatable IR, codegen initializes
+                        # the global with the address of the value instead
                         addr, _ = Enzyme.Compiler.get_base_and_offset(
-                            addr; offsetAllowed=false, inttoptr=true
+                            init; offsetAllowed=false, inttoptr=true
                         )
                         @assert isa(addr, LLVM.ConstantInt)
+                        gmap[LLVM.name(g)] = reinterpret(Ptr{Cvoid}, convert(UInt, addr))
                         LLVM.linkage!(g, LLVM.API.LLVMExternalLinkage)
-                        LLVM.initializer!(
-                            g, LLVM.null(LLVM.value_type(LLVM.initializer(g)))
-                        )
+                        LLVM.initializer!(g, LLVM.null(LLVM.value_type(init)))
                     end
                 end
 

@@ -686,6 +686,26 @@ end
 Reactant.@reactant_overlay function CUDA.cudaconvert(arg)
     return recudaconvert(arg)
 end
+# CUDA.jl 6.4's `@cuda` converts the arguments, compiles and launches the kernel behind the
+# `compile_and_launch` function barrier: intercept that as a whole, with Reactant's argument
+# conversion and kernel object.
+Reactant.@reactant_overlay function CUDACore.compile_and_launch(
+    backend::CUDACore.LLVMBackend,
+    f::F,
+    args::Tuple,
+    ::Val{launch},
+    launch_kwargs::NamedTuple,
+    compiler_kwargs::NamedTuple,
+) where {F,launch}
+    kernel_f = recudaconvert(f)
+    kernel_args = map(recudaconvert, args)
+    kernel_tt = Tuple{map(Core.Typeof, kernel_args)...}
+    kernel = CUDA.cufunction(kernel_f, kernel_tt; compiler_kwargs...)
+    if launch
+        kernel(kernel_args...; launch_kwargs..., convert=Val(false))
+    end
+    return kernel
+end
 
 function Adapt.adapt_storage(::ReactantKernelAdaptor, xs::TracedRArray{T,N}) where {T,N}
     res = CuTracedArray{T,N,CUDA.AS.Global,size(xs)}(xs)
@@ -727,36 +747,6 @@ end
     )
 end
 
-function GPULowerCPUFeaturesPass(job)
-    return LLVM.NewPMModulePass(
-        "GPULowerCPUFeatures",
-        if isdefined(GPUCompiler, :CPUFeatures)
-            GPUCompiler.CPUFeatures(job)
-        else
-            GPUCompiler.cpu_features!
-        end,
-    )
-end
-function GPULowerPTLSPass(job)
-    return LLVM.NewPMModulePass(
-        "GPULowerPTLS",
-        if isdefined(GPUCompiler, :LowerPTLS)
-            GPUCompiler.LowerPTLS(job)
-        else
-            GPUCompiler.lower_ptls!
-        end,
-    )
-end
-function GPULowerGCFramePass(job)
-    return LLVM.NewPMFunctionPass(
-        "GPULowerGCFrame",
-        if isdefined(GPUCompiler, :LowerGCFrame)
-            GPUCompiler.LowerGCFrame(job)
-        else
-            GPUCompiler.lower_gc_frame!
-        end,
-    )
-end
 function noop_pass(x)
     return false
 end
@@ -798,7 +788,9 @@ function compile(job)
         )
 
         if !Reactant.precompiling()
-            LLVM.link!(mod, GPUCompiler.load_runtime(job))
+            runtime, runtime_relocs = GPUCompiler.load_runtime(job)
+            LLVM.link!(mod, runtime)
+            GPUCompiler.apply_relocations!(mod, runtime_relocs)
         end
         entryname = LLVM.name(meta.entry)
 
@@ -815,9 +807,9 @@ function compile(job)
 
         try
             LLVM.@dispose pb = LLVM.NewPMPassBuilder() begin
-                LLVM.register!(pb, GPULowerCPUFeaturesPass(job))
-                LLVM.register!(pb, GPULowerPTLSPass(job))
-                LLVM.register!(pb, GPULowerGCFramePass(job))
+                LLVM.register!(pb, GPUCompiler.GPULowerCPUFeaturesPass(job))
+                LLVM.register!(pb, GPUCompiler.GPULowerPTLSPass(job))
+                LLVM.register!(pb, GPUCompiler.GPULowerGCFramePass(job))
                 LLVM.register!(pb, AddKernelStatePass())
                 LLVM.register!(pb, LowerKernelStatePass())
                 LLVM.register!(pb, CleanupKernelStatePass())
@@ -868,7 +860,7 @@ function compile(job)
             end
         end
 
-        errors = GPUCompiler.check_ir!(job, GPUCompiler.IRError[], mod)
+        errors = GPUCompiler.check_ir!(job, GPUCompiler.IRError[], mod, meta.relocations)
         unique!(errors)
         filter!(errors) do err
             (kind, bt, meta) = err
@@ -1618,6 +1610,9 @@ const ReactantCUDAJob = GPUCompiler.CompilerJob{
     GPUCompiler.PTXCompilerTarget,ReactantCUDACompilerParams
 }
 GPUCompiler.can_vectorize(job::ReactantCUDAJob) = !job.config.params.raising
+# The kernel's IR is linked into the MLIR module rather than loaded by CUDA.jl, so resolve
+# the references to Julia values into the IR, instead of the patchable globals CUDA.jl uses.
+GPUCompiler.relocation_lowering(@nospecialize(job::ReactantCUDAJob)) = :bake
 function GPUCompiler.optimization_options(job::ReactantCUDAJob)
     raising = job.config.params.raising
     return (; instcombine=!raising, fastmath=!raising, aggressiveinstcombine=!raising)
@@ -1683,7 +1678,11 @@ Reactant.@reactant_overlay function CUDA.cufunction(
             validate=false,
             libraries=false,
         )
-        GPUCompiler.cached_compilation(cache, source, config, compile, link)
+        # Compile natively: tracing into GPUCompiler would also trace the Julia compiler
+        # that it drives, which GPUCompiler 2 does through calls that Reactant doesn't skip.
+        call_with_native(
+            GPUCompiler.cached_compilation, cache, source, config, compile, link
+        )
     end
     return Core.Typeof(res)(f, res.entry)
 end
