@@ -62,6 +62,7 @@ function Base.size(x::TracedRArray, i::TracedRNumber{<:Integer})
 end
 
 Base.collect(x::TracedRArray) = copy(x)
+Base.collect(x::SubArray{<:TracedRNumber,<:Any,<:TracedRArray}) = copy(x)
 
 Base.copy(A::TracedRArray{T,N}) where {T,N} = TracedRArray{T,N}((), A.mlir_data, size(A))
 
