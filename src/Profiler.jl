@@ -183,6 +183,169 @@ function with_profiler(
     return results
 end
 
+function load_xspace(path)
+    return open(
+        io -> ProtoBuf.decode(ProtoBuf.ProtoDecoder(io), Proto.tensorflow.profiler.XSpace),
+        path,
+    )
+end
+
+struct TraceNode
+    name::String
+    start_ps::Int64
+    duration_ps::Int64
+    stats::Dict{String,Any}
+    children::Vector{TraceNode}
+end
+
+function _stats(plane, stats)
+    d = Dict{String,Any}()
+    for s in stats
+        s.value === nothing && continue
+        key = plane.stat_metadata[s.metadata_id].name
+        v = s.value[]
+        # ref_value points at another stat_metadata entry that holds the string
+        d[key] = s.value.name === :ref_value ? plane.stat_metadata[Int64(v)].name : v
+    end
+    return d
+end
+
+function line_tree(
+    plane::Proto.tensorflow.profiler.XPlane, line::Proto.tensorflow.profiler.XLine
+)
+    evs = [e for e in line.events if e.data !== nothing && e.data.name === :offset_ps]
+    # parents first: sort by start, and by longer duration when starts tie
+    sort!(evs; by=e -> (e.data[], -e.duration_ps))
+    roots = TraceNode[]
+    stack = TraceNode[]
+    for e in evs
+        md = plane.event_metadata[e.metadata_id]
+        node = TraceNode(
+            isempty(md.display_name) ? md.name : md.display_name,
+            line.timestamp_ns * 1000 + e.data[],
+            e.duration_ps,
+            merge(_stats(plane, md.stats), _stats(plane, e.stats)),
+            TraceNode[],
+        )
+        while !isempty(stack) &&
+            node.start_ps >= stack[end].start_ps + stack[end].duration_ps
+            pop!(stack)
+        end
+        push!(isempty(stack) ? roots : stack[end].children, node)
+        push!(stack, node)
+    end
+    return roots
+end
+
+# Dict of plane => line => roots
+function trace_trees(xspace::Proto.tensorflow.profiler.XSpace)
+    return Dict(
+        p.name => Dict(l.name => line_tree(p, l) for l in p.lines) for p in xspace.planes
+    )
+end
+
+"""
+    ProfilingSummary
+
+Compilation timings extracted from the host traces recorded by
+[`@timed_compile`](@ref). Each time is the sum of the durations of the outermost
+trace events of that kind, in nanoseconds:
+
+  - `total_compile_time_ns`: `compile <fn>` events (the whole Reactant compilation)
+  - `tracing_time_ns`: `trace <fn>` events (tracing the Julia function into MLIR)
+  - `mlir_time_ns`: `run_pass_pipeline!` events (MLIR pass pipelines)
+  - `xla_time_ns`: `XLA compile <fn>` events (compiling the MLIR module with XLA)
+
+`traces` holds the reconstructed trace trees as a `Dict` mapping each plane name (e.g.
+`"/host:CPU"`) to a `Dict` mapping each line (thread or stream) name to its root
+`TraceNode`s. Each `TraceNode` has a `name`, a `start_ps` and `duration_ps` in picoseconds,
+its `stats`, and its nested `children`.
+"""
+struct ProfilingSummary
+    total_compile_time_ns::Int64
+    tracing_time_ns::Int64
+    mlir_time_ns::Int64
+    xla_time_ns::Int64
+
+    traces::Dict{String,Any}
+end
+
+function Base.show(io::IO, summary::ProfilingSummary)
+    println(io, "ProfilingSummary(")
+    println(io, "    total_compile_time = $(_timestr(summary.total_compile_time_ns))s,")
+    println(io, "    tracing_time = $(_timestr(summary.tracing_time_ns))s,")
+    println(io, "    mlir_time = $(_timestr(summary.mlir_time_ns))s,")
+    println(io, "    xla_time = $(_timestr(summary.xla_time_ns))s,")
+    print(io, ")")
+    return nothing
+end
+
+function find_xplane_file(profile_dir::String)
+    trace_output_dir = joinpath(profile_dir, "plugins", "profile")
+    date = maximum(readdir(trace_output_dir))
+    traces_path = joinpath(trace_output_dir, date)
+    filename = findfirst(endswith(".xplane.pb"), readdir(traces_path))
+    @assert filename !== nothing "No xplane file found in $traces_path"
+    return joinpath(traces_path, readdir(traces_path)[filename])
+end
+
+# Sum the durations (in ps) of the outermost events whose name starts with `prefix`, so
+# that nested events of the same kind are not counted twice.
+function _outermost_duration_ps(nodes::Vector{TraceNode}, prefix::String)
+    total = Int64(0)
+    for node in nodes
+        if startswith(node.name, prefix)
+            total += node.duration_ps
+        else
+            total += _outermost_duration_ps(node.children, prefix)
+        end
+    end
+    return total
+end
+
+function _total_duration_ns(traces, prefix::String)
+    total_ps = sum(
+        _outermost_duration_ps(roots, prefix) for lines in values(traces) for
+        roots in values(lines);
+        init=Int64(0),
+    )
+    return total_ps ÷ 1000
+end
+
+function compile_timings(compile_thunk)
+    trace_output_dir = mktempdir(PROFILING_DIR[])
+    with_profiler(
+        compile_thunk, trace_output_dir; trace_device=false, create_perfetto_link=false
+    )
+
+    traces = trace_trees(load_xspace(find_xplane_file(trace_output_dir)))
+    return ProfilingSummary(
+        _total_duration_ns(traces, "compile "),
+        _total_duration_ns(traces, "trace "),
+        _total_duration_ns(traces, "run_pass_pipeline!"),
+        _total_duration_ns(traces, "XLA compile "),
+        traces,
+    )
+end
+
+"""
+    @timed_compile [options...] f(args...)
+
+Like [`@compile`](@ref) (and accepting the same options), but records host traces while
+compiling and returns a [`ProfilingSummary`](@ref) of the time spent in the different
+stages of compilation instead of the compiled function.
+
+```julia
+summary = Profiler.@timed_compile myfunc(x, y, z)
+```
+"""
+macro timed_compile(args...)
+    compile_expr = Expr(
+        :macrocall, GlobalRef(Reactant.Compiler, Symbol("@compile")), __source__, args...
+    )
+    return esc(:($(compile_timings)(() -> $compile_expr)))
+end
+
 # https://github.com/google/tsl/blob/ffeadbc9111309a845ab07df3ff41d59cb005afb/tsl/profiler/lib/traceme.h#L49-L53
 const TRACE_ME_LEVEL_CRITICAL = Cint(1)
 const TRACE_ME_LEVEL_INFO = Cint(2)
@@ -619,14 +782,7 @@ function profile_and_get_xplane_file(
         end
     end
 
-    trace_output_dir = joinpath(profile_dir, "plugins", "profile")
-    date = maximum(readdir(trace_output_dir))
-    traces_path = joinpath(trace_output_dir, date)
-    filename = first(f for f in readdir(traces_path) if endswith(f, ".xplane.pb"))
-    @assert filename !== nothing "No xplane file found in $traces_path"
-    xplane_file = joinpath(traces_path, filename)
-
-    return (; val=val, xplane_file=xplane_file)
+    return (; val=val, xplane_file=find_xplane_file(profile_dir))
 end
 
 function _show_with_indent(
@@ -1516,6 +1672,6 @@ macro profile(args...)
     )
 end
 
-export with_profiler, annotate, @annotate, @time, @timed, @profile
+export with_profiler, annotate, @annotate, @time, @timed, @profile, @timed_compile
 
 end # module Profiler
