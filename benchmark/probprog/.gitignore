@@ -20,3 +20,10 @@ __pycache__/
 
 # Julia generated
 Manifest.toml
+
+# Measurement outputs, cached warm-up states and script-built inputs stay out of the source tree.
+ablation/sicm_roster/logs_frozen/
+ablation/sicm_roster/adapted_states/
+ablation/sicm_roster/data/
+ablation/pre_lowering/adapted_states/
+linreg_tutorial_data.json
