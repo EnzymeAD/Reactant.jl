@@ -34,6 +34,6 @@ end
     @test use_overlayed_version(MockStruct([1])) == false
     @test use_overlayed_version(MockStruct(ConcreteRArray([1]))) == false
     @test use_overlayed_version(MockStruct(ConcreteRNumber(1))) == false
-    @test use_overlayed_version(MockStruct(TracedRArray{Int}((), nothing, (4,)))) == true
+    @test use_overlayed_version(MockStruct(TracedRArray{Int,1}((), nothing, (4,)))) == true
     @test use_overlayed_version(MockStruct(TracedRNumber{Int}((), nothing))) == true
 end
