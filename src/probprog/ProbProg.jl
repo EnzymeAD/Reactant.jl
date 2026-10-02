@@ -29,6 +29,7 @@ export Distribution,
     Gamma,
     StudentT,
     HalfCauchy,
+    HalfStudentT,
     Dirichlet,
     DiscreteUniform,
     Gumbel

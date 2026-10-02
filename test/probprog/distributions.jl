@@ -1,7 +1,9 @@
 using Reactant, Test
 using Reactant: ProbProg, ReactantRNG, ConcreteRNumber, ConcreteRArray
+using SpecialFunctions: loggamma
 
 include(joinpath(@__DIR__, "common.jl"))
+include(joinpath(@__DIR__, "studentt_numpyro_reference_values.jl"))
 
 @testset "Distributions" begin
     @testset "Construction" begin
@@ -392,6 +394,108 @@ include(joinpath(@__DIR__, "common.jl"))
             y_jnp = jnp.array(pylist([0.0, 0.0, 1.0]))
             numpyro_lp = pyconvert(Float64, d.log_prob(y_jnp).sum().item())
             @test reactant_lp ≈ numpyro_lp atol = 1e-10
+        end
+    end
+
+    # Reference values come from studentt_numpyro_reference.py.
+    @testset "StudentT / HalfStudentT pointwise NumPyro parity" begin
+        ulps(a, b) =
+            if a == b
+                0
+            else
+                (
+                    if signbit(a) == signbit(b)
+                        abs(reinterpret(Int64, a) - reinterpret(Int64, b))
+                    else
+                        typemax(Int64)
+                    end
+                )
+            end
+
+        function emitted_logpdf(model, nparams)
+            obs = ProbProg.Constraint(:x => [1.0])
+            ca = ProbProg.extract_addresses(obs)
+            rng = ReactantRNG(Reactant.to_rarray(UInt64[1, 4]))
+            function prog(rng, ot, a...)
+                return ProbProg.generate(rng, ot, model, a...; constrained_addresses=ca)
+            end
+            ps = ntuple(_ -> ConcreteRNumber(1.0), nparams)
+            compiled = @compile optimize = :probprog prog(
+                rng, ProbProg.flatten_constraint(obs), ps...
+            )
+            return (x, p...) -> begin
+                ot = ProbProg.flatten_constraint(ProbProg.Constraint(:x => [x]))
+                _, w, _ = compiled(rng, ot, map(ConcreteRNumber, p)...)
+                Array(w)[]
+            end
+        end
+
+        @testset "HalfStudentT construction" begin
+            d = ProbProg.HalfStudentT(3.0, 10.0)
+            @test ProbProg.params(d) == (3.0, 10.0, (1,))
+            @test ProbProg.support(ProbProg.HalfStudentT) == :positive
+            @test ProbProg.sampler_traced(ProbProg.HalfStudentT)
+            @test ProbProg.dist_spec(ProbProg.HalfStudentT) ==
+                "#impulse.dist<HALF_STUDENT_T>"
+            @test_throws ArgumentError ProbProg.HalfStudentT(3.0, 10.0, ())
+        end
+
+        @testset "HalfStudentT == TruncatedDistribution(StudentT(df, 0, scale), low=0)" begin
+            hst(rng, df, sc) =
+                ProbProg.sample(rng, ProbProg.HalfStudentT(df, sc, (1,)); symbol=:x)[2]
+            f = emitted_logpdf(hst, 2)
+            nbits = 0
+            for (df, sc, x, ref) in HALF_STUDENT_T_NUMPYRO_REF
+                v = f(x, df, sc)
+                nbits += v === ref
+                v === ref || @info "HalfStudentT mismatch" df sc x ref v ulps(v, ref)
+            end
+            @test nbits == length(HALF_STUDENT_T_NUMPYRO_REF)
+        end
+
+        @testset "StudentT == numpyro StudentT(df, loc, scale)" begin
+            st(rng, df, lc, sc) =
+                ProbProg.sample(rng, ProbProg.StudentT(df, lc, sc, (1,)); symbol=:x)[2]
+            f = emitted_logpdf(st, 3)
+            nbits = 0
+            for (df, lc, sc, x, ref) in STUDENT_T_NUMPYRO_REF
+                v = f(x, df, lc, sc)
+                nbits += v === ref
+                v === ref || @info "StudentT mismatch" df lc sc x ref v ulps(v, ref)
+            end
+            @test nbits == length(STUDENT_T_NUMPYRO_REF)
+        end
+
+        @testset "HalfStudentT sampler" begin
+            n = 200_000
+            df, sc = 10.0, 2.0
+            rng = ReactantRNG(Reactant.to_rarray(UInt64[3, 17]))
+            draws = Array(
+                @jit ProbProg.sampler(ProbProg.HalfStudentT)(
+                    rng, ConcreteRNumber(df), ConcreteRNumber(sc), (n,)
+                )
+            )
+            rng2 = ReactantRNG(Reactant.to_rarray(UInt64[3, 17]))
+            t_draws = Array(
+                @jit ProbProg.sampler(ProbProg.StudentT)(
+                    rng2,
+                    ConcreteRNumber(df),
+                    ConcreteRNumber(0.0),
+                    ConcreteRNumber(sc),
+                    (n,),
+                )
+            )
+            @test draws == abs.(t_draws)
+            @test all(>(0.0), draws)
+            m1 =
+                2 * sc * sqrt(df / π) * exp(loggamma((df + 1) / 2) - loggamma(df / 2)) /
+                (df - 1)
+            m2 = sc^2 * df / (df - 2)
+            m4 = sc^4 * 3 * df^2 / ((df - 2) * (df - 4))
+            se1 = sqrt((m2 - m1^2) / n)
+            se2 = sqrt((m4 - m2^2) / n)
+            @test abs(sum(draws) / n - m1) < 5 * se1
+            @test abs(sum(draws .^ 2) / n - m2) < 5 * se2
         end
     end
 end

@@ -890,12 +890,10 @@ traced sampler (the rejection-loop natives, generative sub-calls, or the
 custom-logpdf escape hatch) carries `fn`; a custom-logpdf site additionally
 carries `logpdf`. The verifier requires either `fn` or `dist` to be present.
 
-Round-trip limitation: with `fn` absent the pretty form prints as
-`impulse.sample(%inputs) ...`, which the generic MLIR parser cannot round-trip
-(the leading `(` after the op name is read as the start of a type). Passes
-operate on the in-memory op, so this affects only textual `.mlir` inputs; write
-an fn-absent site in generic op form (`\"impulse.sample\"(...) {...} : ...`) when
-a test must parse one from text.
+With `fn` absent the pretty form is `impulse.sample(%inputs) ...`. The callee
+is parsed by the `OptionalCallee` directive, which only consumes a `@symbol`,
+so both spellings round-trip (the same holds for `impulse.infer` and
+`impulse.infer_region` in custom-logpdf mode).
 """
 function sample(
     inputs::Vector{Value};

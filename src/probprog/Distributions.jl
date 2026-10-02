@@ -1,12 +1,6 @@
 using Random: randexp
 using LinearAlgebra: cholesky, I
 
-# The rejection-loop natives (Gamma, StudentT, Poisson) and Dirichlet keep their
-# traced *sampler* bodies by design: their RNG streams are `@trace while`
-# rejection/log-space loops not reproducible by an emitted `impulse.while`. Their
-# *logpdf* is still emitted. The custom-logpdf escape hatch (`sample(rng, f;
-# logpdf=g)`, Modeling.jl) is unchanged and lowers to user-traced symbols.
-
 abstract type AbstractDistribution end
 const Distribution = AbstractDistribution
 
@@ -420,6 +414,39 @@ HalfCauchy(scale) = HalfCauchy(scale, (1,))
 params(d::HalfCauchy) = (d.scale, d.shape)
 support(::Type{<:HalfCauchy}) = :positive
 dist_spec(::Type{<:HalfCauchy}) = _dist_spec("HALF_CAUCHY")
+
+#==============================================================================#
+# HalfStudentT Distribution
+#==============================================================================#
+
+struct HalfStudentT{Tdf,Tscale,S<:Tuple} <: AbstractDistribution
+    df::Tdf
+    scale::Tscale
+    shape::S
+
+    function HalfStudentT{Tdf,Tscale,S}(
+        df::Tdf, scale::Tscale, shape::S
+    ) where {Tdf,Tscale,S<:Tuple}
+        isempty(shape) && throw(ArgumentError("shape cannot be empty"))
+        return new{Tdf,Tscale,S}(df, scale, shape)
+    end
+end
+
+function HalfStudentT(df::Tdf, scale::Tscale, shape::S) where {Tdf,Tscale,S<:Tuple}
+    return HalfStudentT{Tdf,Tscale,S}(df, scale, shape)
+end
+HalfStudentT(df, scale) = HalfStudentT(df, scale, (1,))
+
+params(d::HalfStudentT) = (d.df, d.scale, d.shape)
+
+function _halfstudentt_sampler(rng, df, scale, shape)
+    return abs.(_studentt_sampler(rng, df, 0.0, scale, shape))
+end
+
+sampler(::Type{<:HalfStudentT}) = _halfstudentt_sampler
+sampler_traced(::Type{<:HalfStudentT}) = true
+support(::Type{<:HalfStudentT}) = :positive
+dist_spec(::Type{<:HalfStudentT}) = _dist_spec("HALF_STUDENT_T")
 
 #==============================================================================#
 # Dirichlet Distribution (simplex along the last axis)
