@@ -48,6 +48,8 @@ ladder_impulse_no_preopt impulse gp_pois_regr_ladder_4trials_impulse_no_preopt 3
 ladder_impulse_std_passes impulse gp_pois_regr_ladder_4trials_impulse_std_passes 2h
 ladder_impulse_sicm impulse gp_pois_regr_ladder_4trials_impulse_sicm 2h
 EOQ
+# VARIANT_FILTER (2026-09-22): keep only matching queue lines, e.g. "^ladder_impulse_".
+if [ -n "${VARIANT_FILTER:-}" ]; then grep -E "$VARIANT_FILTER" "$QUEUE" > "$QUEUE.f"; mv "$QUEUE.f" "$QUEUE"; fi
 
 pop() {
   local line

@@ -1,0 +1,39 @@
+{
+  "model": {
+    "class": "phylo_pois.PhyloPois",
+    "args": {
+      "n": 200
+    },
+    "seed": 12345
+  },
+  "iterations": 40,
+  "num_warmup": 20,
+  "trials": 2,
+  "ppls": [
+    {
+      "name": "impulse",
+      "inference": {
+        "class": "inference.MCMC",
+        "infer_args": {
+          "step_size": 0.05,
+          "max_tree_depth": 10,
+          "adapt_step_size": true,
+          "adapt_mass_matrix": true,
+          "no_opt": true,
+          "disable_sicm": true
+        }
+      },
+      "legend": {
+        "name": "Impulse (std passes)",
+        "color": "#d6604d"
+      },
+      "trials": 2,
+      "seed": 20260822
+    }
+  ],
+  "save_samples": true,
+  "figures": {
+    "generate_pll": true,
+    "suffix": "png"
+  }
+}

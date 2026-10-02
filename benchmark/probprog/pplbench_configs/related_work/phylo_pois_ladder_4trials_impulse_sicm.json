@@ -1,0 +1,37 @@
+{
+  "model": {
+    "class": "phylo_pois.PhyloPois",
+    "args": {
+      "n": 200
+    },
+    "seed": 12345
+  },
+  "iterations": 500,
+  "num_warmup": 200,
+  "trials": 4,
+  "ppls": [
+    {
+      "name": "impulse",
+      "inference": {
+        "class": "inference.MCMC",
+        "infer_args": {
+          "step_size": 0.05,
+          "max_tree_depth": 10,
+          "adapt_step_size": true,
+          "adapt_mass_matrix": true
+        }
+      },
+      "legend": {
+        "name": "Impulse (SICM)",
+        "color": "#b2182b"
+      },
+      "trials": 4,
+      "seed": 20260822
+    }
+  ],
+  "save_samples": true,
+  "figures": {
+    "generate_pll": true,
+    "suffix": "png"
+  }
+}
