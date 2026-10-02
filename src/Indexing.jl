@@ -176,6 +176,9 @@ end
 function Base.getindex(
     a::Union{Adjoint{<:TracedRNumber},Transpose{<:TracedRNumber}}, indices::AbstractArray
 )
+    if !(indices isa Reactant.TracedType || eltype(indices) <: TracedRNumber)
+        indices = LinearIndices(a)[indices]
+    end
     return getindex(materialize_traced_array(a), indices)
 end
 

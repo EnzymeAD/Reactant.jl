@@ -323,7 +323,15 @@ end
         x_ra = Reactant.to_rarray(x)
         indices = [3, 1, 3, 2]
         cartesian = CartesianIndices(op(x))[indices]
-        for idx in (indices, 3:-1:1, reshape(indices, 2, 2), cartesian)
+        mask = [isodd(i) for i in eachindex(x)]
+        for idx in (
+            indices,
+            3:-1:1,
+            reshape(indices, 2, 2),
+            cartesian,
+            reshape(cartesian[1:1], 1, 1),
+            mask,
+        )
             f = x -> op(x)[idx]
             result = @jit f(x_ra)
             @test size(result) == size(f(x))
@@ -332,6 +340,11 @@ end
         f = (x, idx) -> op(x)[idx]
         idx_ra = Reactant.to_rarray(indices)
         @test Array(@jit f(x_ra, idx_ra)) ≈ f(x, indices)
+        for idx in ([1.0, 2.0], [0], [length(x) + 1], trues(length(x) + 1))
+            f = x -> op(x)[idx]
+            error_type = eltype(idx) <: AbstractFloat ? ArgumentError : BoundsError
+            @test_throws error_type @jit f(x_ra)
+        end
     end
 end
 
