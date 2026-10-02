@@ -175,7 +175,7 @@ end
 
 @kernel function scale!(y, x, α)
     I = @index(Global, Cartesian)
-    return y[I] = α * x[I]
+    @inbounds y[I] = α * x[I]
 end
 
 function f(x, y, n)
