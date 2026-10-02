@@ -216,7 +216,10 @@ include("Indexing.jl")
 
 include("ConcreteRArray.jl")
 
-use_overlayed_version(x) = false
+function use_overlayed_version(x::T) where {T}
+    isstructtype(T) || return false
+    return looped_any(use_overlayed_version ∘ Base.Fix1(getfield, x), 1:nfields(x))
+end
 function use_overlayed_version(x::F) where {F<:Function}
     return use_overlayed_version(getfield.(Ref(x), fieldnames(F)))
 end
@@ -229,13 +232,13 @@ use_overlayed_version(iter::NamedTuple) = looped_any(use_overlayed_version, valu
 use_overlayed_version(::Number) = false
 use_overlayed_version(::MissingTracedValue) = true
 use_overlayed_version(rng::ReactantRNG) = use_overlayed_version(rng.seed)
-use_overlayed_version(::AbstractArray{<:TracedRNumber}) = true
 use_overlayed_version(::TracedRArray) = true
 use_overlayed_version(::TracedRNumber) = true
 use_overlayed_version(::TracedStepRangeLen) = true
 use_overlayed_version(::TracedUnitRange) = true
 use_overlayed_version(::TracedRational) = true
 function use_overlayed_version(x::AbstractArray)
+    use_overlayed_version(eltype(x)) && return true
     a = ancestor(x)
     a === x && return false
     return use_overlayed_version(a)
