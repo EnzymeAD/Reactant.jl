@@ -157,3 +157,135 @@ end
         @test 0.97 <= phat <= 0.99
     end
 end
+
+# MH must read top-level latents from the trace, not from the constraint that lists them.
+const _COALIF_Y = [5.0, 4.0, 1.0, 0.0, 1.0]
+const _COALIF_T = length(_COALIF_Y)
+
+function _coalif_model(rng)
+    _, s = ProbProg.sample(
+        rng, ProbProg.DiscreteUniform(0.0, Float64(_COALIF_T)); symbol=:s
+    )
+    _, l1 = ProbProg.sample(rng, ProbProg.Gamma(3.0, 1.0, (1,)); symbol=:l1)
+    _, l2 = ProbProg.sample(rng, ProbProg.Gamma(3.0, 1.0, (1,)); symbol=:l2)
+    for t in 0:(_COALIF_T - 1)
+        ProbProg.if_(
+            rng,
+            sum(s) > Float64(t),
+            () -> ProbProg.sample(
+                rng, _pois_sampler, l1; symbol=Symbol("ye_", t), logpdf=_pois_logpdf
+            )[2],
+            () -> ProbProg.sample(
+                rng, _pois_sampler, l2; symbol=Symbol("yl_", t), logpdf=_pois_logpdf
+            )[2],
+        )
+    end
+    return nothing
+end
+
+function _coalif_chain(rng, model, bins, ot, constrained, n)
+    trace, weight, _ = ProbProg.generate(rng, ot, model; constrained_addresses=constrained)
+    hist = zero.(bins)
+    a1 = zero.(bins[1:1, 1:1])
+    a2 = zero.(a1)
+    q1 = zero.(a1)
+    q2 = zero.(a1)
+    @trace for _ in 1:n
+        trace, weight, _ = ProbProg.mh(
+            rng,
+            trace,
+            weight,
+            model;
+            selection=ProbProg.select(ProbProg.Address(:s)),
+            constraint=ot,
+            constrained_addresses=constrained,
+        )
+        trace, weight, _ = ProbProg.mh(
+            rng,
+            trace,
+            weight,
+            model;
+            selection=ProbProg.select(ProbProg.Address(:l1)),
+            constraint=ot,
+            constrained_addresses=constrained,
+        )
+        trace, weight, _ = ProbProg.mh(
+            rng,
+            trace,
+            weight,
+            model;
+            selection=ProbProg.select(ProbProg.Address(:l2)),
+            constraint=ot,
+            constrained_addresses=constrained,
+        )
+        sv = sum(trace[1:1, 1:1])
+        hist = hist .+ ifelse.(abs.(bins .- sv) .< 0.5, 1.0, 0.0)
+        x = trace[1:1, 2:2]
+        y = trace[1:1, 3:3]
+        a1 = a1 .+ x
+        a2 = a2 .+ y
+        q1 = q1 .+ x .* x
+        q2 = q2 .+ y .* y
+    end
+    return hist, a1, a2, q1, q2
+end
+
+# Exact posterior by Gamma-Poisson conjugacy: p(s | y), E and sd of l1, l2.
+function _coalif_exact()
+    a, b = 3.0, 1.0
+    T, Y = _COALIF_T, _COALIF_Y
+    lg(x) = sum(log, 1.0:1.0:(x - 1.0); init=0.0)  # log Gamma(x), integer x
+    logG(S, n) = lg(a + S) - lg(a) - (a + S) * log(b + n)
+    lp = zeros(T + 1)
+    m1 = zeros(T + 1)
+    m2 = zeros(T + 1)
+    v1 = zeros(T + 1)
+    v2 = zeros(T + 1)
+    for s in 0:T
+        S1, n1 = sum(Y[1:s]), s
+        S2, n2 = sum(Y[(s + 1):end]), T - s
+        lp[s + 1] = logG(S1, n1) + logG(S2, n2)
+        m1[s + 1] = (a + S1) / (b + n1)
+        m2[s + 1] = (a + S2) / (b + n2)
+        v1[s + 1] = (a + S1) / (b + n1)^2
+        v2[s + 1] = (a + S2) / (b + n2)^2
+    end
+    p = exp.(lp .- maximum(lp))
+    p ./= sum(p)
+    E1, E2 = sum(p .* m1), sum(p .* m2)
+    sd1 = sqrt(sum(p .* (v1 .+ m1 .^ 2)) - E1^2)
+    sd2 = sqrt(sum(p .* (v2 .+ m2 .^ 2)) - E2^2)
+    return p, E1, sd1, E2, sd2
+end
+
+@testset "coal_if_branch_exact_posterior" begin
+    p, E1, sd1, E2, sd2 = _coalif_exact()
+    pairs = Pair{Symbol,Any}[:l1 => [3.0], :l2 => [0.9]]
+    for t in 0:(_COALIF_T - 1)
+        push!(pairs, Symbol("ye_", t) => [_COALIF_Y[t + 1]])
+        push!(pairs, Symbol("yl_", t) => [_COALIF_Y[t + 1]])
+    end
+    obs = ProbProg.Constraint(pairs...)
+    constrained = ProbProg.extract_addresses(obs)
+    ot = ProbProg.flatten_constraint(obs)
+    bins = Reactant.to_rarray(reshape(Float64.(0:_COALIF_T), 1, _COALIF_T + 1))
+    N = 200000
+    rng = ReactantRNG(Reactant.to_rarray(UInt64[11, 12]))
+    compiled, _ = ProbProg.with_trace() do
+        @compile optimize = :probprog _coalif_chain(
+            rng, _coalif_model, bins, ot, constrained, ConcreteRNumber(N)
+        )
+    end
+    hist, a1, a2, q1, q2 = compiled(
+        rng, _coalif_model, bins, ot, constrained, ConcreteRNumber(N)
+    )
+    num(x) = x isa Number ? Float64(x) : sum(Array(x))
+    m1, m2 = num(a1) / N, num(a2) / N
+    s1, s2 = sqrt(num(q1) / N - m1^2), sqrt(num(q2) / N - m2^2)
+    q = vec(Array(hist)) ./ N
+    @test 0.5 * sum(abs.(q .- p)) < 0.03
+    @test m1 ≈ E1 atol = 0.08
+    @test m2 ≈ E2 atol = 0.06
+    @test 0.9 < s1 / sd1 < 1.1
+    @test 0.9 < s2 / sd2 < 1.1
+end
