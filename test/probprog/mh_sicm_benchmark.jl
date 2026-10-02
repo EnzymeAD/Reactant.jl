@@ -195,8 +195,19 @@ function evidence_rebuttal()
     @info "[rebuttal] final HLO SICM ON : body-arith=$(on.body_arith) prologue-arith=$(on.pre_arith) total-hlo-ops=$(on.total)"
     @info "[rebuttal] final HLO SICM OFF: body-arith=$(off.body_arith) prologue-arith=$(off.pre_arith) total-hlo-ops=$(off.total)"
     sicm_neutral = (on.body_arith == off.body_arith) && (on.total == off.total)
-    @info "[rebuttal] SICM-neutral (on==off in/around loop)? $sicm_neutral  (region-pipeline win here is LICM/CSE)"
-    return (n_region=n_region, n_flat=n_flat, on=on, off=off, sicm_neutral=sicm_neutral)
+    qr_re = r"geqrf|linalg\.qr"
+    qr_on = count_matches(qr_re, hlo_on)
+    qr_off = count_matches(qr_re, hlo_off)
+    @info "[rebuttal] SICM-neutral (on==off in/around loop)? $sicm_neutral | QR mentions SICM on=$qr_on off=$qr_off (GaussianSufficientStats)"
+    return (
+        n_region=n_region,
+        n_flat=n_flat,
+        on=on,
+        off=off,
+        sicm_neutral=sicm_neutral,
+        qr_on=qr_on,
+        qr_off=qr_off,
+    )
 end
 
 function evidence_cov(n)
@@ -527,7 +538,10 @@ using Test
 @testset "E2 programmable-MH" begin
     @test reb.n_region == 2
     @test reb.n_flat == 0
-    @test reb.sicm_neutral                       # plain-Normal density has no SICM target
+    # Below the N*K >= 64 work guard, GaussianSufficientStats does not fire.
+    @test reb.sicm_neutral
+    @test reb.qr_on == 0
+    @test reb.qr_off == 0
     @test covir.on.sqrt_body >= 1
     @test covir.off.sqrt_body == 0
     @test covir.chol_above_region >= 1
