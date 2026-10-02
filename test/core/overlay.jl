@@ -10,7 +10,7 @@ end
     @test use_overlayed_version(Int(1)) == false
     @test use_overlayed_version(Float32(1.0)) == false
     @test use_overlayed_version(Float64(1.0)) == false
-    @test use_overlayed_version(1.0+1.0im) == false
+    @test use_overlayed_version(1.0 + 1.0im) == false
 
     # concrete types
     @test use_overlayed_version(ConcreteRArray([1])) == false
