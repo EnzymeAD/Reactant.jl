@@ -51,7 +51,19 @@ sed -i.bak0 "s,//:patches,@enzyme_ad//:patches,g" third_party/*/workspace.bzl
     urls = ["https://github.com/EnzymeAD/Enzyme-JAX/archive/{commit}.tar.gz".format(commit = ENZYMEXLA_COMMIT)],
 )
 
-NEW_XLA_PATCHES = []
+# patch_cmds do not track the patch file; update the sha256 on every patch edit.
+XLA_CPU_RUNTIME_LEVERS_PATCH = __workspace_dir__ + "/xla_cpu_runtime_levers.patch"
+
+XLA_CPU_RUNTIME_LEVERS_SHA256 = "4ff52c2d66f3f00ad2e7f16bf5f43446465f28a81276e5dfe2202226cf50aae3"
+
+NEW_XLA_PATCHES = [
+    """
+echo "{sha}  {path}" | sha256sum -c - && patch -p1 --forward < {path}
+""".format(
+        path = XLA_CPU_RUNTIME_LEVERS_PATCH,
+        sha = XLA_CPU_RUNTIME_LEVERS_SHA256,
+    ),
+]
 
 LLVM_TARGETS = [
     "AMDGPU",

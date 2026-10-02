@@ -1,0 +1,289 @@
+diff --git a/xla/backends/cpu/runtime/buffer_allocations.h b/xla/backends/cpu/runtime/buffer_allocations.h
+index a0d11f6..1164e89 100644
+--- a/xla/backends/cpu/runtime/buffer_allocations.h
++++ b/xla/backends/cpu/runtime/buffer_allocations.h
+@@ -16,6 +16,7 @@ limitations under the License.
+ #ifndef XLA_BACKENDS_CPU_RUNTIME_BUFFER_ALLOCATIONS_H_
+ #define XLA_BACKENDS_CPU_RUNTIME_BUFFER_ALLOCATIONS_H_
+ 
++#include <atomic>
+ #include <cstddef>
+ #include <cstdint>
+ #include <utility>
+@@ -63,10 +64,21 @@ class BufferAllocations {
+   se::DeviceAddressBase GetDeviceAddressUnchecked(
+       BufferAllocation::Slice slice) const;
+ 
++  // Impulse lever B: id under which KernelThunk may cache resolved kernel
++  // arguments for this execution. 0 (the default) disables the cache; only an
++  // execution that owns its executable's in-flight guard (see cpu_client.cc)
++  // enables it, which assigns a fresh, never reused id.
++  uint64_t kernel_args_cache_id() const { return kernel_args_cache_id_; }
++  void EnableKernelArgsCache() {
++    static std::atomic<uint64_t> next_id{1};
++    kernel_args_cache_id_ = next_id.fetch_add(1, std::memory_order_relaxed);
++  }
++
+  private:
+   absl::InlinedVector<se::DeviceAddressBase, 8> buffers_;
+   se::DeviceAddressBase* buffers_data_;  // buffers_.data()
+   size_t num_buffers_;
++  uint64_t kernel_args_cache_id_ = 0;
+ };
+ 
+ inline BufferAllocations::BufferAllocations(Buffers buffers)
+diff --git a/xla/backends/cpu/runtime/kernel_thunk.cc b/xla/backends/cpu/runtime/kernel_thunk.cc
+index abb161e..39281fc 100644
+--- a/xla/backends/cpu/runtime/kernel_thunk.cc
++++ b/xla/backends/cpu/runtime/kernel_thunk.cc
+@@ -170,28 +170,47 @@ KernelThunk<num_arguments, num_results>::ExecuteInternal(
+       kernel_name_, arguments_buffers_.size(), results_buffers_.size(),
+       num_workgroups_);
+ 
+-  alignas(64) KernelArgs kernel_args = kernel_args_;
+-  XLA_CPU_KernelArg* kernel_args_ptr = kernel_args.data();
+-
+   const BufferAllocations* allocations = params.buffer_allocations;
+ 
+-  for (const ShapedSlice& buffer : arguments_buffers_) {
+-    if constexpr (ShouldCheckBufferSlices()) {
+-      ABSL_ASSIGN_OR_RETURN(auto mem, allocations->GetDeviceAddress(buffer.slice));
+-      kernel_args_ptr++->data = mem.opaque();
+-    } else {
+-      auto mem = allocations->GetDeviceAddressUnchecked(buffer.slice);
+-      kernel_args_ptr++->data = mem.opaque();
++  // Impulse lever B: buffer addresses depend only on the BufferAllocations of
++  // the current execution, so when the cache is enabled for this execution
++  // (id != 0), arguments resolved on the first run of this thunk are reused by
++  // every later run within the same execution (e.g. while-loop bodies).
++  // Otherwise resolve into a stack copy exactly as before.
++  const uint64_t cache_id = allocations->kernel_args_cache_id();
++  alignas(64) KernelArgs stack_kernel_args;
++  KernelArgs& kernel_args =
++      cache_id != 0 ? cached_kernel_args_ : stack_kernel_args;
++
++  if (cache_id == 0 || cached_allocations_id_ != cache_id) {
++    kernel_args = kernel_args_;
++    XLA_CPU_KernelArg* kernel_args_ptr = kernel_args.data();
++
++    for (const ShapedSlice& buffer : arguments_buffers_) {
++      if constexpr (ShouldCheckBufferSlices()) {
++        ABSL_ASSIGN_OR_RETURN(auto mem, allocations->GetDeviceAddress(buffer.slice));
++        kernel_args_ptr++->data = mem.opaque();
++      } else {
++        auto mem = allocations->GetDeviceAddressUnchecked(buffer.slice);
++        kernel_args_ptr++->data = mem.opaque();
++      }
+     }
+-  }
+ 
+-  for (const ShapedSlice& buffer : results_buffers_) {
+-    if constexpr (ShouldCheckBufferSlices()) {
+-      ABSL_ASSIGN_OR_RETURN(auto mem, allocations->GetDeviceAddress(buffer.slice));
+-      kernel_args_ptr++->data = mem.opaque();
+-    } else {
+-      auto mem = allocations->GetDeviceAddressUnchecked(buffer.slice);
+-      kernel_args_ptr++->data = mem.opaque();
++    for (const ShapedSlice& buffer : results_buffers_) {
++      if constexpr (ShouldCheckBufferSlices()) {
++        ABSL_ASSIGN_OR_RETURN(auto mem, allocations->GetDeviceAddress(buffer.slice));
++        kernel_args_ptr++->data = mem.opaque();
++      } else {
++        auto mem = allocations->GetDeviceAddressUnchecked(buffer.slice);
++        kernel_args_ptr++->data = mem.opaque();
++      }
++    }
++
++    // Mark the cache valid only after a complete resolution, so an error
++    // return above never leaves a partially filled cache marked valid. An
++    // uncached execution (id 0) never writes the cache members.
++    if (cache_id != 0) {
++      cached_allocations_id_ = cache_id;
+     }
+   }
+ 
+diff --git a/xla/backends/cpu/runtime/kernel_thunk.h b/xla/backends/cpu/runtime/kernel_thunk.h
+index e8949a8..46c0281 100644
+--- a/xla/backends/cpu/runtime/kernel_thunk.h
++++ b/xla/backends/cpu/runtime/kernel_thunk.h
+@@ -165,6 +165,13 @@ class KernelThunk : public KernelThunkBase {
+   // before the kernel launch. Align `KernelArgs` to 64 bytes to allow aligned
+   // moves on a hot path.
+   alignas(64) KernelArgs kernel_args_;
++
++  // Impulse lever B: kernel arguments resolved for the execution whose
++  // BufferAllocations::kernel_args_cache_id() equals `cached_allocations_id_`
++  // (0 = empty). Touched only by executions that own the executable's
++  // in-flight guard, so executions never race on it.
++  uint64_t cached_allocations_id_ = 0;
++  alignas(64) KernelArgs cached_kernel_args_;
+ };
+ 
+ }  // namespace internal
+diff --git a/xla/backends/cpu/runtime/thunk_executor.cc b/xla/backends/cpu/runtime/thunk_executor.cc
+index c45f8e3..87a81e1 100644
+--- a/xla/backends/cpu/runtime/thunk_executor.cc
++++ b/xla/backends/cpu/runtime/thunk_executor.cc
+@@ -160,6 +160,15 @@ ThunkExecutor::ThunkExecutor(ThunkSequence thunk_sequence,
+   // Xprof traces easier to read.
+   is_sequential_ |= UseBlockingThunkExecutor();
+ 
++  // Impulse lever A: force sequential execution (see GetImpulseRuntimeLevers
++  // for the default and the env override). On one core the async executor's
++  // per-execution state, per-node atomics and ready queues are pure overhead;
++  // sequential execution runs the same thunks in a valid topological order,
++  // so results are unchanged.
++  static const bool force_sequential =
++      GetImpulseRuntimeLevers().force_sequential;
++  is_sequential_ |= force_sequential;
++
+   VLOG(2) << absl::StreamFormat(
+       "Constructed ThunkExecutor with %d thunks: #source_nodes=%d "
+       "#sink_nodes=%d, is_sequential=%v, small_buffers=%v",
+diff --git a/xla/backends/cpu/runtime/thunk_executor.h b/xla/backends/cpu/runtime/thunk_executor.h
+index e1908ba..48079d7 100644
+--- a/xla/backends/cpu/runtime/thunk_executor.h
++++ b/xla/backends/cpu/runtime/thunk_executor.h
+@@ -19,6 +19,8 @@ limitations under the License.
+ #include <atomic>
+ #include <cstddef>
+ #include <cstdint>
++#include <cstdio>
++#include <cstdlib>
+ #include <memory>
+ #include <queue>
+ #include <string>
+@@ -39,8 +41,59 @@ limitations under the License.
+ #include "xla/runtime/execution_graph.h"
+ #include "xla/tsl/concurrency/async_value_ref.h"
+ 
++#if defined(__linux__)
++#include <sched.h>
++#endif
++
+ namespace xla::cpu {
+ 
++// Impulse XLA:CPU runtime levers, decided once per process at first use.
++//   A: force the sequential thunk executor (thunk_executor.cc).
++//   B: cache resolved kernel arguments per executable (kernel_thunk.cc, guarded
++//      in cpu_client.cc).
++// Default: ON only when the process is confined to at most two CPUs (one
++// physical core with or without its SMT sibling), where a parallel thunk
++// executor is pure overhead and the argument cache is worth its guard; OFF
++// otherwise, so multi-core runs execute the stock code paths. Per lever, env
++// XLA_CPU_FORCE_SEQUENTIAL_THUNK_EXECUTOR / XLA_CPU_CACHE_KERNEL_ARGS set to
++// exactly "0" forces it off and exactly "1" forces it on; anything else
++// (including unset) uses the affinity rule. XLA_CPU_RUNTIME_LEVERS_DEBUG=1
++// prints the affinity count and both decisions to stderr once.
++struct ImpulseRuntimeLevers {
++  int affinity_cpus;  // CPU_COUNT of sched_getaffinity, -1 if unavailable
++  bool force_sequential;
++  bool cache_kernel_args;
++};
++
++inline const ImpulseRuntimeLevers& GetImpulseRuntimeLevers() {
++  static const ImpulseRuntimeLevers levers = [] {
++    int cpus = -1;
++#if defined(__linux__)
++    cpu_set_t set;
++    if (sched_getaffinity(0, sizeof(set), &set) == 0) cpus = CPU_COUNT(&set);
++#endif
++    const bool one_core = cpus > 0 && cpus <= 2;
++    auto decide = [one_core](const char* name) {
++      const char* v = std::getenv(name);
++      if (v != nullptr && v[0] == '0' && v[1] == '\0') return false;
++      if (v != nullptr && v[0] == '1' && v[1] == '\0') return true;
++      return one_core;
++    };
++    ImpulseRuntimeLevers l{cpus,
++                           decide("XLA_CPU_FORCE_SEQUENTIAL_THUNK_EXECUTOR"),
++                           decide("XLA_CPU_CACHE_KERNEL_ARGS")};
++    const char* dbg = std::getenv("XLA_CPU_RUNTIME_LEVERS_DEBUG");
++    if (dbg != nullptr && dbg[0] == '1' && dbg[1] == '\0') {
++      std::fprintf(stderr,
++                   "XLA_CPU_RUNTIME_LEVERS affinity_cpus=%d "
++                   "force_sequential=%d cache_kernel_args=%d\n",
++                   l.affinity_cpus, l.force_sequential, l.cache_kernel_args);
++    }
++    return l;
++  }();
++  return levers;
++}
++
+ // A dataflow-style (run when ready) executor for a ThunkSequence that depends
+ // on buffer uses to build a DAG defining execution order. At run time executes
+ // thunks concurrently in a given thread pool.
+diff --git a/xla/pjrt/cpu/cpu_client.cc b/xla/pjrt/cpu/cpu_client.cc
+index 2ef62a4..b5bb2e1 100644
+--- a/xla/pjrt/cpu/cpu_client.cc
++++ b/xla/pjrt/cpu/cpu_client.cc
+@@ -1842,6 +1842,23 @@ PjRtRawLoadedExecutable::RawExecuteResult CpuPjRtRawLoadedExecutable::Execute(
+         static_cast<uint64_t>(static_cast<uint32_t>(run_options.rng_seed())),
+     };
+ 
++    // Impulse lever B (default and env override: cpu::GetImpulseRuntimeLevers):
++    // the KernelThunk argument caches belong to the executable, so only one
++    // execution at a time may use them. Claim the executable's in-flight flag;
++    // an execution that finds it already set (overlapping execution from
++    // another thread) runs uncached and re-resolves its arguments. Results are
++    // identical either way. The flag is released only after every thunk of
++    // this execution has completed (BlockUntilReady below).
++    static const bool cache_kernel_args =
++        cpu::GetImpulseRuntimeLevers().cache_kernel_args;
++    const bool owns_kernel_args_cache =
++        cache_kernel_args &&
++        !cpu_executable->kernel_args_cache_in_flight().exchange(
++            true, std::memory_order_acquire);
++    if (owns_kernel_args_cache) {
++      allocations.EnableKernelArgsCache();
++    }
++
+     auto thunks_execute_event =
+         cpu_executable->thunks().Execute(execute_params);
+ 
+@@ -1852,6 +1869,10 @@ PjRtRawLoadedExecutable::RawExecuteResult CpuPjRtRawLoadedExecutable::Execute(
+            {"device_ordinal", run_options.device_ordinal()}});
+     });
+     tsl::BlockUntilReady(thunks_execute_event);
++    if (owns_kernel_args_cache) {
++      cpu_executable->kernel_args_cache_in_flight().store(
++          false, std::memory_order_release);
++    }
+     return thunks_execute_event;
+   };
+ 
+diff --git a/xla/service/cpu/cpu_executable.h b/xla/service/cpu/cpu_executable.h
+index e265123..63223a2 100644
+--- a/xla/service/cpu/cpu_executable.h
++++ b/xla/service/cpu/cpu_executable.h
+@@ -16,6 +16,7 @@ limitations under the License.
+ #ifndef XLA_SERVICE_CPU_CPU_EXECUTABLE_H_
+ #define XLA_SERVICE_CPU_CPU_EXECUTABLE_H_
+ 
++#include <atomic>
+ #include <cstdint>
+ #include <memory>
+ #include <optional>
+@@ -128,6 +129,13 @@ class CpuExecutable : public Executable {
+   bool has_thunks() const { return thunks_.has_value(); }
+   ThunkExecutor& thunks() { return *thunks_; }
+ 
++  // Impulse lever B overlap guard: true while one execution of this executable
++  // owns the KernelThunk argument caches. An execution that starts while the
++  // flag is set runs with the cache disabled (see cpu_client.cc).
++  std::atomic<bool>& kernel_args_cache_in_flight() {
++    return kernel_args_cache_in_flight_;
++  }
++
+   bool has_xnn_fusions() const { return has_xnn_fusions_; }
+   bool has_ynn_fusions() const { return has_ynn_fusions_; }
+ 
+@@ -247,6 +255,8 @@ class CpuExecutable : public Executable {
+   // Entry function name for the computation.
+   std::string entry_function_name_;
+ 
++  std::atomic<bool> kernel_args_cache_in_flight_{false};
++
+   CpuExecutable(std::unique_ptr<HloModule> hlo_module,
+                 std::unique_ptr<BufferAssignment> assignment,
+                 TargetMachineOptions target_machine_options,
