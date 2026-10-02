@@ -156,6 +156,18 @@ function __default_init(T::Type{<:Reactant.ReactantFloat8}, op::F) where {F}
     return Reactant.promote_to(TracedRNumber{T}, __default_init(Float16, op))
 end
 
+function materialize_mapreduce_input(mapped, ::Type{T}, ::Val{N}) where {T,N}
+    input = materialize_traced_array(mapped)
+    return unwrapped_eltype(input) == T ? input : T.(input)
+end
+
+function materialize_mapreduce_input(mapped, ::Type{T}, ::Val{0}) where {T}
+    # `elem_apply` scalarizes rank-zero arrays. Restore the array expected by
+    # `Ops.reduce` after converting the mapped value to the accumulator type.
+    scalar = Reactant.promote_to(TracedRNumber{T}, mapped)
+    return Reactant.promote_to(TracedRArray{T,0}, scalar)
+end
+
 function overloaded_mapreduce(
     @nospecialize(f), @nospecialize(op), @nospecialize(A); dims=:, init=Base._InitialValue()
 )
@@ -218,10 +230,7 @@ function overloaded_mapreduce(
     # predicate in `sum(x -> x == 1, a)` returns `Bool` whatever `A` was converted to.
     # Reducing in the narrow type is silently wrong: `stablehlo.add` over `i1` is a logical
     # `or`, and small integers wrap.
-    reduce_input = materialize_traced_array(TracedUtils.elem_apply(f, A))
-    if unwrapped_eltype(reduce_input) != op_in_T
-        reduce_input = op_in_T.(reduce_input)
-    end
+    reduce_input = materialize_mapreduce_input(TracedUtils.elem_apply(f, A), op_in_T, Val(N))
 
     res_noinit = @opcall reduce(reduce_input, reduce_init, normalized_dims, op)
 
@@ -242,7 +251,7 @@ function overloaded_mapreduce(
             (), res.mlir_data, ()
         )::TracedRArray{res_T,0}
     end
-    shape = [ifelse(i in normalized_dims, 1, size(A, i)) for i in 1:N]
+    shape = Int[ifelse(i in normalized_dims, 1, size(A, i)) for i in 1:N]
     res_reshaped = @opcall reshape(res, shape)
     return res_reshaped::TracedRArray{res_T,N}
 end
