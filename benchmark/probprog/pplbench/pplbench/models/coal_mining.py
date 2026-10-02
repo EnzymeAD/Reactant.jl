@@ -3,6 +3,8 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
+import json
+import os
 from typing import Dict, Tuple
 
 import numpy as np
@@ -10,6 +12,12 @@ import xarray as xr
 from scipy.special import gammaln, logsumexp
 
 from .base_model import BaseModel
+
+REAL_DATA_DIR = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "real_data"
+)
+# Recorded series this model can be fitted to; see real_data/README.md.
+REAL_DATASETS = {"jarrett": "coal_mining_jarrett.json"}
 
 
 class CoalMining(BaseModel):
@@ -39,11 +47,17 @@ class CoalMining(BaseModel):
 
     Continuous latents l1, l2 are inferred in log space (positive support).
 
-    The dataset has a single variable ``y`` over the ``year`` dimension and
-    the attributes T, s_true, l1_true, l2_true. Train and test are both the
-    full series: a change-point time series does not split i.i.d., so the
-    per-draw predictive metric is the in-sample marginal log-likelihood
-    logsumexp_s(lp_s) on the full series.
+    The dataset has the variables ``y`` (counts) and ``observed`` (0/1) over
+    the ``year`` dimension. Simulated data (the default) has every year
+    observed and the attributes n, s_true, l1_true, l2_true. The recorded
+    series (``dataset="jarrett"``, British coal-mining disasters 1851 to 1961,
+    real_data/coal_mining_jarrett.json) has n = 111 and two missing years;
+    a missing year carries y = 0 and observed = 0 and contributes no
+    likelihood term (a_t and b_t are multiplied by ``observed``), while every
+    year keeps its calendar position and s still ranges over 0..n. Train and
+    test are both the full series: a change-point time series does not split
+    i.i.d., so the per-draw predictive metric is the in-sample marginal
+    log-likelihood logsumexp_s(lp_s) on the full series.
     """
 
     @staticmethod
@@ -67,19 +81,38 @@ class CoalMining(BaseModel):
         l1_true: float = 3.0,
         l2_true: float = 0.9,
         train_frac: float = 1.0,
+        dataset: str = "simulated",
     ) -> Tuple[xr.Dataset, xr.Dataset]:
         """
         :param n: length of the series (default 112, the coal-mining span).
         :param s_true: true switch position (default 40).
         :param l1_true, l2_true: true pre/post-switch Poisson rates.
         :param train_frac: unused; the full series is both train and test.
+        :param dataset: "simulated" (default) draws the counts from the
+            arguments above; "jarrett" loads the recorded series and ignores
+            n, s_true, l1_true, l2_true and seed (nothing is simulated).
         """
+        if dataset in REAL_DATASETS:
+            with open(os.path.join(REAL_DATA_DIR, REAL_DATASETS[dataset])) as f:
+                raw = json.load(f)
+            counts = raw["counts"]
+            n = len(counts)
+            observed = np.array([c is not None for c in counts], dtype=np.float64)
+            y = np.array([0 if c is None else c for c in counts], dtype=np.int64)
+            data = xr.Dataset(
+                {"y": (["year"], y), "observed": (["year"], observed)},
+                coords={"year": np.arange(n)},
+                attrs={"n": n, "dataset": dataset,
+                       "first_year": int(raw["first_year"])},
+            )
+            return data, data
+        assert dataset == "simulated", dataset
         rng = np.random.default_rng(seed)
         rates = np.where(np.arange(n) < s_true, l1_true, l2_true)
         y = rng.poisson(rates).astype(np.int64)
 
         data = xr.Dataset(
-            {"y": (["year"], y)},
+            {"y": (["year"], y), "observed": (["year"], np.ones(n))},
             coords={"year": np.arange(n)},
             attrs={
                 "n": n,
@@ -103,12 +136,13 @@ class CoalMining(BaseModel):
         l1 = np.asarray(samples.l1.values).reshape(-1)  # (draws,)
         l2 = np.asarray(samples.l2.values).reshape(-1)  # (draws,)
         y = np.asarray(test.y.values).reshape(-1)       # (T,)
+        m = np.asarray(test.observed.values).reshape(-1)  # (T,) 0/1
         T = y.shape[0]
         lgam = gammaln(y + 1.0)                          # (T,)
 
-        # a, b : (draws, T)
-        a = y[None, :] * np.log(l1)[:, None] - l1[:, None] - lgam[None, :]
-        b = y[None, :] * np.log(l2)[:, None] - l2[:, None] - lgam[None, :]
+        # a, b : (draws, T); a missing year contributes nothing
+        a = m[None, :] * (y[None, :] * np.log(l1)[:, None] - l1[:, None] - lgam[None, :])
+        b = m[None, :] * (y[None, :] * np.log(l2)[:, None] - l2[:, None] - lgam[None, :])
 
         draws = l1.shape[0]
         zeros = np.zeros((draws, 1))

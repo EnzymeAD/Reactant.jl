@@ -5,6 +5,14 @@ import jax.numpy as jnp
 import numpy as np
 import genjax
 from genjax import ChoiceMap, Regenerate, Selection
+# 2026-09-29: MH acceptance fixed. In GenJAX 0.10.3 the weight of a Regenerate
+# edit is the joint score difference log p(t') - log p(t), which includes the
+# regenerated site's own prior ratio (distribution.py edit_regenerate,
+# `incremental_w = w - trace.get_score()`). Used as the acceptance ratio of a
+# prior-resimulation proposal it counts that prior twice (the chain targeted
+# prior^2 x likelihood). The proposal term log p_sel(v') - log p_sel(v) is now
+# subtracted via Trace.project; see
+# oopsla/evidence/coal_jarrett_2026-09-29/GENJAX_REGENERATE_WEIGHT.md.
 
 N = 20
 X = jnp.array([-3.0, -2.6842, -2.3684, -2.0526, -1.7368, -1.4211, -1.1053, -0.7895, -0.4737, -0.1579, 0.1579, 0.4737, 0.7895, 1.1053, 1.4211, 1.7368, 2.0526, 2.3684, 2.6842, 3.0])
@@ -37,6 +45,8 @@ def step(i, carry):
     for req in reqs:
         key, k1, k2 = jax.random.split(key, 3)
         new_tr, w, _, _ = tr.edit(k1, req)
+        # before 2026-09-29: a = jnp.log(jax.random.uniform(k2)) < w
+        w = w - (new_tr.project(k1, req.selection) - tr.project(k1, req.selection))
         a = jnp.log(jax.random.uniform(k2)) < w
         tr = jax.lax.cond(a, lambda x, y: x, lambda x, y: y, new_tr, tr)
     return (tr, key)

@@ -5,6 +5,14 @@ import jax.numpy as jnp
 import numpy as np
 import genjax
 from genjax import ChoiceMap, Regenerate, Selection
+# 2026-09-29: MH acceptance fixed. In GenJAX 0.10.3 the weight of a Regenerate
+# edit is the joint score difference log p(t') - log p(t), which includes the
+# regenerated site's own prior ratio (distribution.py edit_regenerate,
+# `incremental_w = w - trace.get_score()`). Used as the acceptance ratio of a
+# prior-resimulation proposal it counts that prior twice (the chain targeted
+# prior^2 x likelihood). The proposal term log p_sel(v') - log p_sel(v) is now
+# subtracted via Trace.project; see
+# oopsla/evidence/coal_jarrett_2026-09-29/GENJAX_REGENERATE_WEIGHT.md.
 
 X = jnp.array([0.0, 0.2759, 0.5517, 0.8276, 1.1034, 1.3793, 1.6552, 1.931, 2.2069, 2.4828, 2.7586, 3.0345, 3.3103, 3.5862, 3.8621, 4.1379, 4.4138, 4.6897, 4.9655, 5.2414, 5.5172, 5.7931, 6.069, 6.3448, 6.6207, 6.8966, 7.1724, 7.4483, 7.7241, 8.0])
 Y = jnp.array([-0.4453, -0.8217, -0.4477, -0.3201, -0.9794, -0.1994, 0.5287, 0.1443, 1.2569, 1.8079, 1.0433, 1.9606, 2.2105, 3.1492, 2.9465, 3.6189, 2.5726, 3.3957, 3.6323, 4.1488, 5.7783, 4.2277, 5.3055, 5.5581, 5.9808, 5.735, 6.3052, 6.6012, 5.8466, 6.8494])
@@ -32,6 +40,8 @@ def step(i, carry):
     for req in reqs:
         key, k1, k2 = jax.random.split(key, 3)
         new_tr, w, _, _ = tr.edit(k1, req)
+        # before 2026-09-29: a = jnp.log(jax.random.uniform(k2)) < w
+        w = w - (new_tr.project(k1, req.selection) - tr.project(k1, req.selection))
         a = jnp.log(jax.random.uniform(k2)) < w
         tr = jax.lax.cond(a, lambda x, y: x, lambda x, y: y, new_tr, tr)
     return (tr, key, macc + tr.get_choices()["m"])

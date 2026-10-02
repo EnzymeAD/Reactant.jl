@@ -64,12 +64,18 @@ function setup(data)
 
     lg = [_logfactorial(Int(round(y[t]))) for t in 1:T]
 
+    # Observation mask (0/1): a missing year of a recorded series
+    # (dataset="jarrett") contributes no likelihood term. It is folded into the
+    # constant matrices below, so the model and logpdf are unchanged and a
+    # fully observed series builds exactly the unmasked matrices.
+    obs_mask = haskey(data, "observed") ? Float64.(collect(data["observed"])) : ones(T)
+
     # Cumulative-sum matrices (constant): A_s = MA*a, B_s = MB*b, s = 0..T.
     MA = zeros(Float64, T + 1, T)
     MB = zeros(Float64, T + 1, T)
     for r in 1:(T + 1), c in 1:T
-        MA[r, c] = c < r ? 1.0 : 0.0    # t < s
-        MB[r, c] = c >= r ? 1.0 : 0.0   # t >= s
+        MA[r, c] = c < r ? obs_mask[c] : 0.0    # t < s
+        MB[r, c] = c >= r ? obs_mask[c] : 0.0   # t >= s
     end
 
     lg_r = Reactant.to_rarray(lg)

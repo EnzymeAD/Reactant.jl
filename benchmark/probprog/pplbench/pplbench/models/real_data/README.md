@@ -334,6 +334,66 @@ priors are carried over exactly.
 
 ---
 
+## `coal_mining_jarrett.json`
+
+**Used by** `models/coal_mining.py`, branch `dataset="jarrett"` (change point
+with the discrete switch marginalized, NUTS on the two rates;
+`standard/coal_mining.jl` on the Impulse side, `ppls/numpyro/coal_mining.py`
+on the NumPyro side), and by the programmable MH harnesses of the generality
+figure under `COAL_DATA=jarrett` (`impulse_coal_mh_masked.jl`,
+`gen_coal_mh_vec_harness.jl`, `gen_coal_mh_harness.jl`,
+`genjax_coal_mh_harness.py`).
+
+**Contents**
+
+| key | shape | meaning |
+|---|---|---|
+| `years` | (111,) | calendar years 1851 to 1961 |
+| `counts` | (111,) | recorded coal-mining disasters per year; `null` for the two missing years |
+| `missing_years` | (2,) | 1890 and 1934 |
+| `first_year`, `last_year`, `n_years` | scalar | 1851, 1961, 111 |
+| `_provenance` | string | source and missing-year handling, restated in the file itself |
+
+**Provenance.** Yearly counts of British coal-mining disasters, transcribed
+from the PyMC listing as printed in Salvatier, Wiecki and Fonnesbeck (2016,
+PyMC3 case study 2, p15 to 16, a NumPy masked array with `-999` as the missing
+sentinel) and checked value by value against the same listing in Abril-Pla et
+al. (2023, Code 1, p13 to 14, a pandas Series with `np.nan`). The two listings
+agree on all 111 entries; 109 years are observed and sum to 188 disasters.
+Both papers cite Jarrett (1979) as the source, which corrected the widely
+reprinted series of Maguire, Pearson and Wynn (1952). The values here were not
+re-transcribed from Jarrett's own table.
+
+References:
+- Jarrett, R. G. (1979). A note on the intervals between coal-mining disasters.
+  *Biometrika* 66(1), 191-193.
+- Maguire, B. A., Pearson, E. S. and Wynn, A. H. A. (1952). The time intervals
+  between industrial accidents. *Biometrika* 39(1/2), 168-180.
+- Salvatier, J., Wiecki, T. V. and Fonnesbeck, C. (2016). Probabilistic
+  programming in Python using PyMC3. *PeerJ Computer Science* 2:e55.
+- Abril-Pla, O. et al. (2023). PyMC: a modern and comprehensive probabilistic
+  programming framework in Python. *PeerJ Computer Science* 9:e1516.
+
+**Missing years.** A missing year contributes no likelihood term. Every other
+year keeps its calendar position `t = year - 1851`, and the switch ranges over
+all 112 boundaries `s = 0..111` (the late regime starts in year `1851 + s`).
+This is the posterior over the switch and the two rates that the PyMC papers'
+imputation gives, because an unobserved Poisson count sums to one; it is also
+the one handling that all four implementations can share without an extra
+latent per missing year. The MH harnesses pass only the 109 observed counts
+together with their year indices (the rate for year `t` is the early rate when
+`t < s`). The PPLBench model keeps all 111 positions, fills the two missing
+counts with 0 and carries a 0/1 variable `observed`; the marginalized
+likelihood and the predictive log-likelihood multiply every per-year term by
+it (Impulse folds the mask into its constant prefix and suffix matrices).
+
+**What the model does with it.** The model is the existing benchmark
+specification, unchanged: `l1, l2 ~ Gamma(3, 1)`, `s ~ DiscreteUniform{0..T}`
+with `T = 111`, `y_t ~ Poisson(t < s ? l1 : l2)`. The priors are the
+benchmark's, not the PyMC papers' `Exponential(1)`.
+
+---
+
 ## Subsample policy
 
 Two of the benchmark rows need an `n` small enough that the SICM-off arm, which

@@ -19,10 +19,13 @@ class CoalMining(BaseNumPyroImplementation):
     def __init__(
         self,
         n: int,
-        s_true: int,
-        l1_true: float,
-        l2_true: float,
+        s_true: int = None,
+        l1_true: float = None,
+        l2_true: float = None,
+        **attrs,
     ) -> None:
+        # The recorded series (dataset="jarrett") has no true values; its
+        # attrs are n, dataset, first_year.
         self.n = n
         self.s_true = s_true
         self.l1_true = l1_true
@@ -47,6 +50,13 @@ class CoalMining(BaseNumPyroImplementation):
         # Discrete switch s marginalized via prefix/suffix cumsums.
         a = dist.Poisson(l1).log_prob(y)  # (T,)
         b = dist.Poisson(l2).log_prob(y)  # (T,)
+        # A missing year (observed = 0) contributes no likelihood term. The
+        # mask is host data, so a fully observed series (the simulated
+        # default) traces exactly the unmasked program.
+        m = np.asarray(data.observed.values)  # (T,)
+        if not np.all(m == 1.0):
+            a = jnp.asarray(m) * a
+            b = jnp.asarray(m) * b
         A = jnp.concatenate([jnp.zeros(1), jnp.cumsum(a)])           # (T+1,)
         B = jnp.concatenate([jnp.cumsum(b[::-1])[::-1], jnp.zeros(1)])  # (T+1,)
         lp = -jnp.log(T + 1.0) + A + B                              # (T+1,)

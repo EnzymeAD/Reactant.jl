@@ -10,10 +10,13 @@ class CoalMining(BaseImpulseImplementation):
     def __init__(
         self,
         n: int,
-        s_true: int,
-        l1_true: float,
-        l2_true: float,
+        s_true: int = None,
+        l1_true: float = None,
+        l2_true: float = None,
+        **attrs,
     ) -> None:
+        # The recorded series (dataset="jarrett") has no true values; its
+        # attrs are n, dataset, first_year.
         self.n = n
         self.s_true = s_true
         self.l1_true = l1_true
