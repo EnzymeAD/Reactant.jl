@@ -216,7 +216,10 @@ include("Indexing.jl")
 
 include("ConcreteRArray.jl")
 
-use_overlayed_version(x) = false
+function use_overlayed_version(x::T) where {T}
+    isstructtype(T) || return false
+    return looped_any(use_overlayed_version ∘ Base.Fix1(getfield, x), 1:nfields(x))
+end
 function use_overlayed_version(x::F) where {F<:Function}
     return use_overlayed_version(getfield.(Ref(x), fieldnames(F)))
 end
