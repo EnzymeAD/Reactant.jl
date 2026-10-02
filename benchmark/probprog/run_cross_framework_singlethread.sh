@@ -87,7 +87,7 @@ wait_for_quiet() {
   local waited=0 l e s
   while :; do
     l="$(ambient_load1 | cut -d. -f1)"; e="$(external_cpu)"; s="$(sibling_count)"
-    if [ "$l" -lt "$LOAD_GATE" ] && [ "$e" -lt "$EXT_CPU_LIMIT" ] && [ "$s" -eq 0 ]; then
+    if [ "$l" -lt "$LOAD_GATE" ] && [ "$e" -lt "${START_EXT_CPU:-$EXT_CPU_LIMIT}" ] && [ "$s" -eq 0 ] && ! /mnt4/sbrantq/probprog/oopsla/tools/bazel_building.sh; then
       [ "$waited" -gt 0 ] && note "  (waited ${waited}s for quiet; load1=$l ext=${e}%)"
       return 0
     fi
@@ -141,6 +141,8 @@ start_watchdog() {
 spawn() {   # spawn <label> <slot> <timeout> <run_pplbench args...>
   local label="$1" slot="$2" tmo="$3"; shift 3
   local core="${CORES[$slot]}"
+  # ONLY_PPL (2026-09-22): run only the cells of one system, e.g. ONLY_PPL=impulse.
+  if [ -n "${ONLY_PPL:-}" ] && [[ " $* " != *" --ppls $ONLY_PPL "* ]]; then return 0; fi
   note "SPAWN $label (core $core): run_pplbench.sh $*"
   CELLSTART[$label]=$(date +%s)
   # /usr/bin/time records this cell's OWN cpu seconds; cpu/wall on a
@@ -205,6 +207,9 @@ wait_row() {   # wait_row <rowid>
     } > "$LOGDIR/cells/${label}.gate.txt"
     if [ "$rc" -ne 0 ]; then
       note "END   $label: FAILED (rc=$rc) load1_max=$lmax extcpu_max=$emax"
+      ROW_FAILED=1
+    elif [ "${STRICT:-0}" = "1" ] && [ "$emax" -ge "$EXT_CPU_LIMIT" ]; then
+      note "END   $label: CONTAMINATED (strict: extcpu instantaneous max=$emax >= $EXT_CPU_LIMIT)"
       ROW_FAILED=1
     elif awk -v l="$asus" -v m="$LOAD_MAX" 'BEGIN{exit !(l>m)}'; then
       note "END   $label: CONTAMINATED (ambient load1 sustained 5-min mean=$asus > $LOAD_MAX; instantaneous max=$amax, raw load1 max=$lmax, extcpu_max=$emax)"

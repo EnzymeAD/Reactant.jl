@@ -85,7 +85,7 @@ wait_for_quiet () {
     load1="$(cut -d' ' -f1 /proc/loadavg | cut -d. -f1)"
     ext="$(external_cpu)"
     run="$(procs_running)"
-    if [ "$busy" -eq 0 ] && [ "$run" -lt "$LOAD_GATE" ] && [ "$ext" -lt "$START_EXT_CPU" ]; then
+    if [ "$busy" -eq 0 ] && [ "$run" -lt "$LOAD_GATE" ] && [ "$ext" -lt "$START_EXT_CPU" ] && ! /mnt4/sbrantq/probprog/oopsla/tools/bazel_building.sh; then
       held=$((held + 5))
       if [ "$held" -ge "$QUIET_HOLD" ]; then
         [ "$waited" -gt 0 ] && \

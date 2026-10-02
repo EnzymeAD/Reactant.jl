@@ -29,7 +29,7 @@ run impulse_linesine 40m "$JULIA_ENV julia -t 1 --project=. impulse_linesine_mh_
 run impulse_coal     40m "$JULIA_ENV julia -t 1 --project=. impulse_coal_mh_masked.jl"
 run impulse_scaledcov_sicm_triple 90m \
   "$JULIA_ENV E2_OUT=$LOG/out/scaledcov julia -t 1 --project=$B $ROOT/test/probprog/mh_sicm_benchmark.jl"
-EV200="/mnt/sbrantq/probprog/oopsla/evidence/refreeze_2026-09-08/fig13_generality/scaledcov_n200"
+EV200="${EV200:-/mnt/sbrantq/probprog/oopsla/evidence/refreeze_2026-09-08/fig13_generality/scaledcov_n200}"
 mkdir -p "$EV200"
 run impulse_scaledcov_sicm_triple_n200 120m \
   "$JULIA_ENV E2_N=200 E2_ITERS=500 E2_OUT=$EV200 julia -t 1 --project=$B $ROOT/test/probprog/mh_sicm_benchmark.jl"

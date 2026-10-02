@@ -13,8 +13,9 @@
 set -uo pipefail
 BENCH="/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog"
 ROOT="/mnt/sbrantq/probprog/oopsla/Reactant.jl"
-EV="/mnt/sbrantq/probprog/oopsla/evidence/refreeze_2026-09-08"
-LOGS="$BENCH/logs/refreeze_2026-09-08"
+CAMPAIGN="${CAMPAIGN:-refreeze_2026-09-08}"
+EV="${CAMPAIGN_EV:-/mnt/sbrantq/probprog/oopsla/evidence/refreeze_2026-09-08}"
+LOGS="$BENCH/logs/$CAMPAIGN"
 cd "$BENCH" || exit 1
 mkdir -p "$LOGS/uncapped" "$EV"
 DRV="$LOGS/uncapped/driver.log"
@@ -76,7 +77,7 @@ hierarchical_mvn:sicm/hierarchical_mvn:0.01:10
 lmm_radon:sicm/linear_mixed_model:0.05:10
 diamonds:sicm/diamonds_regression:0.05:10
 phylo_pois:motivating/phylo_pois:0.1:10
-" bash "$BENCH/ablation/sicm_roster/run_frozen_batch.sh" refreeze_2026-09-08 \
+" bash "$BENCH/ablation/sicm_roster/run_frozen_batch.sh" "$CAMPAIGN" \
     > "$LOGS/uncapped/roster.log" 2>&1
   note "STAGE roster rc=$?"
   ;;
@@ -107,10 +108,10 @@ svi)
 
 ir)
   note "STAGE ir: section-2 phylogenetic Poisson regression IR dumps"
-  IR_MODELS="phylo_pois" bash - <<'IRSH' > "$LOGS/uncapped/ir_phylo.log" 2>&1
+  CAMPAIGN="$CAMPAIGN" IR_HLO_DIR="${IR_HLO_DIR:-}" IR_MODELS="phylo_pois" bash - <<'IRSH' > "$LOGS/uncapped/ir_phylo.log" 2>&1
 BENCH="/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog"
-HLO="$BENCH/ablation/sicm_roster/hlo"
-LOG="$BENCH/logs/refreeze_2026-09-08/uncapped"
+HLO="${IR_HLO_DIR:-$BENCH/ablation/sicm_roster/hlo}"
+LOG="$BENCH/logs/${CAMPAIGN:-refreeze_2026-09-08}/uncapped"
 mkdir -p "$HLO" "$LOG"
 cd "$BENCH" || exit 1
 for arm in sicm nosicm; do

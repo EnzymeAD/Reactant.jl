@@ -90,7 +90,7 @@ wait_for_quiet () {
   while :; do
     busy="$(sibling_count)"; load1="$(cut -d' ' -f1 /proc/loadavg | cut -d. -f1)"
     ext="$(external_cpu)"; run="$(procs_running)"
-    if [ "$busy" -eq 0 ] && [ "$run" -lt "$LOAD_GATE" ] && [ "$ext" -lt "$START_EXT_CPU" ]; then
+    if [ "$busy" -eq 0 ] && [ "$run" -lt "$LOAD_GATE" ] && [ "$ext" -lt "$START_EXT_CPU" ] && ! /mnt4/sbrantq/probprog/oopsla/tools/bazel_building.sh; then
       held=$((held + 5))
       if [ "$held" -ge "$QUIET_HOLD" ]; then
         [ "$waited" -gt 0 ] && echo "    (waited ${waited}s; procs_running=$run load1=$load1 ext=${ext}%)" >> "$META"
@@ -141,7 +141,9 @@ for spec in $CELLS; do
   [ -f "$state" ] || { echo "!! warmup failed for $key" >> "$META"; continue; }
 
   # ---- measured executions, both arms ---------------------------------
-  for arm in sicm nosicm; do
+  # FROZEN_ARMS (additive, default both): re-measure one configuration of a
+  # row whose other configuration is already accepted in this tag.
+  for arm in ${FROZEN_ARMS:-sicm nosicm}; do
     flag=""; [ "$arm" = "nosicm" ] && flag="--disable-sicm"
     for e in 1; do
       tag="${key}${STATE_SUFFIX}_${arm}"

@@ -67,7 +67,7 @@ while :; do
   waited=0
   while :; do
     l="$(ambient_load1 | cut -d. -f1)"; e="$(external_cpu)"
-    [ "$l" -lt "$LOAD_GATE" ] && [ "$e" -lt "$START_EXT_CPU" ] && break
+    [ "$l" -lt "$LOAD_GATE" ] && [ "$e" -lt "$START_EXT_CPU" ] && ! /mnt4/sbrantq/probprog/oopsla/tools/bazel_building.sh && break
     [ $((waited % 900)) -eq 0 ] && \
       echo "[$(date '+%F %T')] $LABEL waiting ${waited}s (attempt $ATTEMPT): ambient load1=$l external CPU=${e}%"
     sleep 30; waited=$((waited + 30))
@@ -145,6 +145,10 @@ while :; do
     && VERDICT="CONTAMINATED(ambient load1 5-min mean $ASUS)"
   [ "$VERDICT" = "CLEAN" ] && awk -v e="$ESUS" -v m="$EXT_CPU_LIMIT" 'BEGIN{exit !(e>=m)}' \
     && VERDICT="CONTAMINATED(external CPU 5-min mean $ESUS)"
+  # STRICT=1 (2026-09-22): instantaneous acceptance, any 5 s sample at or over
+  # EXT_CPU_LIMIT fails the attempt.
+  [ "$VERDICT" = "CLEAN" ] && [ "${STRICT:-0}" = "1" ] && [ "$EMAX" -ge "$EXT_CPU_LIMIT" ] \
+    && VERDICT="CONTAMINATED(strict: external CPU max $EMAX)"
   [ "$MD5_BEFORE" != "$MD5_AFTER" ] && VERDICT="BINARY_CHANGED"
 
   {

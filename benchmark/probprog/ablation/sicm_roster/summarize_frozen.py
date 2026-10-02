@@ -62,6 +62,17 @@ if os.environ.get("FROZEN_ROWS") == "sweep":
     })
 
 
+# Estimated-parameter rows, 2026-09-24 (rho / Pagel's lambda sampled instead of
+# fixed). Selected with FROZEN_ROWS=estimated; the default rows are untouched.
+if os.environ.get("FROZEN_ROWS") == "estimated":
+    ORDER = ["car_leroux_scotland", "car_leroux_nyc_n1921", "pgls_lambda"]
+    LABEL.update({
+        "car_leroux_scotland": ("EigenLift", "Lip Cancer CAR, rho est.", "n=56"),
+        "car_leroux_nyc_n1921": ("EigenLift", "NYC Traffic CAR, rho est.", "n=1921"),
+        "pgls_lambda": ("EigenLift", "Shorebird PGLS, lambda est.", "n=71"),
+    })
+
+
 def geomean(x):
     x = np.asarray(x, dtype=float)
     return float(np.exp(np.mean(np.log(x))))
