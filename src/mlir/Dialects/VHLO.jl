@@ -680,6 +680,36 @@ function collective_broadcast_v1(
     )
 end
 
+function collective_broadcast_v2(
+    operands::Vector{Value};
+    results::Vector{IR.Type},
+    replica_groups,
+    channel_id,
+    has_dynamic_root,
+    location=Location(),
+)
+    op_ty_results = IR.Type[results...,]
+    operands = Value[operands...,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[
+        NamedAttribute("replica_groups", replica_groups),
+        NamedAttribute("channel_id", channel_id),
+        NamedAttribute("has_dynamic_root", has_dynamic_root),
+    ]
+
+    return create_operation(
+        "vhlo.collective_broadcast_v2",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function collective_permute_v1(
     operand::Value; result::IR.Type, source_target_pairs, channel_id, location=Location()
 )
