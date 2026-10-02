@@ -1,4 +1,4 @@
-using Reactant, Test, Statistics, NNlib, LinearAlgebra, FileCheck
+using Reactant, Test, Statistics, NNlib, LinearAlgebra, FileCheck, Enzyme
 
 function view_getindex_1(x)
     x = view(x, 2:3, 1:2, :)
@@ -309,4 +309,39 @@ end
     B_ra = Reactant.to_rarray(B)
 
     @test Array(@jit(permutedims!_reshaped(A_ra, B_ra))) ≈ permutedims!_reshaped(A, B)
+end
+
+@testset "Linear indexing of transpose/adjoint wrappers" begin
+    @testset "$T, $dims, $op" for T in (Float64, ComplexF64),
+        dims in ((3,), (2, 3)),
+        op in (transpose, adjoint)
+
+        x = reshape(T.(1:prod(dims)), dims)
+        if T <: Complex
+            x = x .+ im .* reverse(x)
+        end
+        x_ra = Reactant.to_rarray(x)
+        indices = [3, 1, 3, 2]
+        cartesian = CartesianIndices(op(x))[indices]
+        for idx in (indices, 3:-1:1, reshape(indices, 2, 2), cartesian)
+            f = x -> op(x)[idx]
+            result = @jit f(x_ra)
+            @test size(result) == size(f(x))
+            @test Array(result) ≈ f(x)
+        end
+        f = (x, idx) -> op(x)[idx]
+        idx_ra = Reactant.to_rarray(indices)
+        @test Array(@jit f(x_ra, idx_ra)) ≈ f(x, indices)
+    end
+end
+
+@testset "Repeated transpose/adjoint gather gradients" begin
+    x = [1.0, 2.0, 3.0]
+    x_ra = Reactant.to_rarray(x)
+    indices = [3, 1, 3, 2]
+    for op in (transpose, adjoint)
+        f = x -> sum(abs2, op(x)[indices])
+        gradient = x -> Enzyme.gradient(Enzyme.Reverse, f, x)[1]
+        @test Array(@jit gradient(x_ra)) ≈ [2.0, 4.0, 12.0]
+    end
 end

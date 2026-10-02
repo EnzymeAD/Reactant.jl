@@ -10,6 +10,7 @@ using ReactantCore: materialize_traced_array
 using StructUtils: Selectors
 
 using Base: TwicePrecision
+using LinearAlgebra: Adjoint, Transpose
 
 function overloaded_unsafe_getindex end
 
@@ -172,6 +173,12 @@ function Base.getindex(a::AnyTracedRArray{T,N}, indices::Vararg{Any,N}) where {T
 end
 
 ### Specialize certain dispatches for better codegen
+function Base.getindex(
+    a::Union{Adjoint{<:TracedRNumber},Transpose{<:TracedRNumber}}, indices::AbstractArray
+)
+    return getindex(materialize_traced_array(a), indices)
+end
+
 for aType in (Base.ReshapedArray{<:TracedRNumber}, PermutedDimsArray{<:TracedRNumber})
     @eval begin
         function Base.getindex(a::$(aType), indices::Union{Int,TracedRNumber{Int}}...)
