@@ -19,6 +19,22 @@ ENV["JULIA_PYTHONCALL_EXE"] = CondaPkg.which("python")
 testsuite = find_tests(@__DIR__)
 delete!(testsuite, "common")
 
+# Gitignored input, built by ablation/sicm_roster/build_estimated_parameter_rows.py.
+const SVI_REAL_DATA_INPUT = joinpath(
+    @__DIR__,
+    "..",
+    "..",
+    "benchmark",
+    "probprog",
+    "ablation",
+    "sicm_roster",
+    "data",
+    "car_leroux_scotland.json",
+)
+if !isfile(SVI_REAL_DATA_INPUT)
+    delete!(testsuite, "svi_sicm_real_data_benchmark")
+end
+
 include("../test_helpers.jl")
 
 if NTPUs > 0 || BACKEND == "tpu"

@@ -16,11 +16,11 @@
 # parameters and priors. The pplbench model class does the centering and hands
 # this file the augmented X.
 #
-# Prior substitution (one, documented): ProbProg has no half-student-t, so
-# sigma uses HalfCauchy(10), i.e. the half student-t with df = 1 rather than
-# df = 3, at the same scale 10 and on the same support. Both are weakly
-# informative on a residual SD whose posterior is pinned by N = 5000
-# observations at R^2 = 0.986, so the choice does not move the posterior.
+# Every prior is the Stan file's. sigma's is ProbProg.HalfStudentT(3, 10), the
+# student_t(3, 0, 10) density truncated to sigma > 0, i.e. Stan's
+# student_t_lpdf(sigma | 3, 0, 10) - student_t_lccdf(0 | 3, 0, 10) (the
+# normalizer is log(0.5)); in NumPyro,
+# TruncatedDistribution(StudentT(3, 0, 10), low=0).
 #
 # SICM GaussianSufficientStats pattern:
 #   sum((y - X beta)^2) is answered from the thin QR of the sample-invariant X:
@@ -76,9 +76,10 @@ function model_diamonds(rng, X, N, K)
         rng, ProbProg.Normal(0.0, 1.0, (Kc,)); symbol=:b
     )
 
-    # Stan: half student_t(3, 0, 10); see the prior-substitution note above.
+    # Stan: target += student_t_lpdf(sigma | 3, 0, 10)
+    #                 - 1 * student_t_lccdf(0 | 3, 0, 10)
     _, sigma = ProbProg.sample(
-        rng, ProbProg.HalfCauchy(10.0, (1,)); symbol=:sigma
+        rng, ProbProg.HalfStudentT(3.0, 10.0, (1,)); symbol=:sigma
     )
 
     # beta = [Intercept; b], so mu = X * beta = Intercept + Xc * b.
