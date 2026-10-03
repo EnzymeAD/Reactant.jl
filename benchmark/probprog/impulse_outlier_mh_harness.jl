@@ -1,12 +1,6 @@
 using Reactant, Random, LinearAlgebra, Statistics, Printf
 using Reactant: ProbProg, ReactantRNG, ConcreteRNumber
-import Reactant.XLA.PJRT: Future
-function Base.wait(future::Future)::Nothing
-    GC.@preserve future begin
-        while !isready(future); GC.safepoint(); yield(); end
-    end
-    return nothing
-end
+# Stock Base.wait (blocks, like JAX's block_until_ready): a spin-yield override competed with the PJRT worker thread on one pinned CPU.
 Reactant.set_default_backend("cpu")
 const N = 20
 const X = [-3.0, -2.6842, -2.3684, -2.0526, -1.7368, -1.4211, -1.1053, -0.7895, -0.4737, -0.1579, 0.1579, 0.4737, 0.7895, 1.1053, 1.4211, 1.7368, 2.0526, 2.3684, 2.6842, 3.0]

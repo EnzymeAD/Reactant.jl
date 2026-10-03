@@ -23,16 +23,7 @@
 using Reactant, Random, LinearAlgebra, Printf, Statistics
 using Reactant: ProbProg, ReactantRNG, ConcreteRNumber
 _force(x) = x isa AbstractArray ? Array(x) : Float64(x)
-import Reactant.XLA.PJRT: Future
-function Base.wait(future::Future)::Nothing
-    GC.@preserve future begin
-        while !isready(future)
-            GC.safepoint()
-            yield()
-        end
-    end
-    return nothing
-end
+# Stock Base.wait (blocks, like JAX's block_until_ready): a spin-yield override competed with the PJRT worker thread on one pinned CPU.
 Reactant.set_default_backend("cpu")
 
 const DATA = length(ARGS) >= 1 ? ARGS[1] : joinpath(@__DIR__, "linreg_tutorial_data.json")
