@@ -717,3 +717,248 @@ end
     @test _num(sl1) / N ≈ El1 atol = 0.014
     @test _num(sl2) / N ≈ El2 atol = 0.007
 end
+
+# Gen tutorial line-vs-sine data; _LS_E_SLOPE is the exact posterior mean by quadrature.
+# Region ops capture slope etc. from above, so a move on them must dirty the observation.
+
+const _LS_X = [
+    0.0,
+    0.2759,
+    0.5517,
+    0.8276,
+    1.1034,
+    1.3793,
+    1.6552,
+    1.931,
+    2.2069,
+    2.4828,
+    2.7586,
+    3.0345,
+    3.3103,
+    3.5862,
+    3.8621,
+    4.1379,
+    4.4138,
+    4.6897,
+    4.9655,
+    5.2414,
+    5.5172,
+    5.7931,
+    6.069,
+    6.3448,
+    6.6207,
+    6.8966,
+    7.1724,
+    7.4483,
+    7.7241,
+    8.0,
+]
+const _LS_Y = [
+    -0.4453,
+    -0.8217,
+    -0.4477,
+    -0.3201,
+    -0.9794,
+    -0.1994,
+    0.5287,
+    0.1443,
+    1.2569,
+    1.8079,
+    1.0433,
+    1.9606,
+    2.2105,
+    3.1492,
+    2.9465,
+    3.6189,
+    2.5726,
+    3.3957,
+    3.6323,
+    4.1488,
+    5.7783,
+    4.2277,
+    5.3055,
+    5.5581,
+    5.9808,
+    5.735,
+    6.3052,
+    6.6012,
+    5.8466,
+    6.8494,
+]
+const _LS_E_SLOPE = 1.0217303713623416
+
+_ls_unif_sampler(rng, shape) = Float64(2π) .* rand(rng, shape...)
+_ls_unif_logpdf(x, _) = -log(2π) .+ 0.0 .* sum(x)
+_ls_y_sampler(rng, mu) = zero.(mu)
+_ls_y_logpdf(yv, mu) = sum(.-log(0.5) .- 0.5 * log(2π) .- (yv .- mu) .^ 2 ./ (2 * 0.5^2))
+
+function _ls_sites(rng)
+    _, m = ProbProg.sample(rng, ProbProg.Bernoulli(0.0, (1,)); symbol=:m)
+    _, slope = ProbProg.sample(rng, ProbProg.Normal(0.0, 2.0, (1,)); symbol=:slope)
+    _, intercept = ProbProg.sample(rng, ProbProg.Normal(0.0, 3.0, (1,)); symbol=:intercept)
+    _, amp = ProbProg.sample(rng, ProbProg.Normal(0.0, 3.0, (1,)); symbol=:amp)
+    _, phase = ProbProg.sample(
+        rng, _ls_unif_sampler, (1,); symbol=:phase, logpdf=_ls_unif_logpdf
+    )
+    return m, slope, intercept, amp, phase
+end
+
+# Index 0 = sine, 1 = line.
+function _ls_mean_case(m, slope, intercept, amp, phase, xs)
+    return Reactant.Ops.case(
+        convert(Reactant.TracedRNumber{Int32}, sum(m)),
+        [
+            (xv, sl, ic, am, ph) -> sum(am) .* sin.(Float64(2π) .* xv ./ 4.0 .+ sum(ph)),
+            (xv, sl, ic, am, ph) -> sum(sl) .* xv .+ sum(ic),
+        ],
+        xs,
+        slope,
+        intercept,
+        amp,
+        phase;
+        track_numbers=Number,
+    )
+end
+
+# Literal 2π/4: @trace if passes every name its branches read, and π cannot be traced.
+function _ls_mean_traceif(m, slope, intercept, amp, phase, xs)
+    @trace if sum(m) > 0.5
+        mu = sum(slope) .* xs .+ sum(intercept)
+    else
+        mu = sum(amp) .* sin.(xs .* 1.5707963267948966 .+ sum(phase))
+    end
+    return mu
+end
+
+for enc in (:case, :traceif)
+    meanfn = Symbol(:_ls_mean_, enc)
+    @eval function $(Symbol(:_ls_model_, enc))(rng, xs)
+        mu = $meanfn(_ls_sites(rng)..., xs)
+        _, _ = ProbProg.sample(rng, _ls_y_sampler, mu; symbol=:y, logpdf=_ls_y_logpdf)
+        return nothing
+    end
+    @eval function $(Symbol(:_ls_prior_, enc))(rng, xs)
+        $meanfn(_ls_sites(rng)..., xs)
+        return nothing
+    end
+end
+
+function _ls_chain(rng, model, xs, ot, constrained, n, burn)
+    trace, weight, _ = ProbProg.generate(
+        rng, ot, model, xs; constrained_addresses=constrained
+    )
+    # Distinct objects: each accumulator is its own loop-carried value.
+    a_m, a_sl, a_ic, a_am, a_ph = ntuple(_ -> weight .* 0.0, 5)
+    s1, s2, i1, i2 = ntuple(_ -> weight .* 0.0, 4)
+    @trace for it in 1:n
+        trace, weight, acc, _ = ProbProg.mh(
+            rng, trace, weight, model, xs; selection=ProbProg.select(ProbProg.Address(:m))
+        )
+        a_m = a_m .+ ifelse.(acc, 1.0, 0.0)
+        trace, weight, acc, _ = ProbProg.mh(
+            rng,
+            trace,
+            weight,
+            model,
+            xs;
+            selection=ProbProg.select(ProbProg.Address(:slope)),
+        )
+        a_sl = a_sl .+ ifelse.(acc, 1.0, 0.0)
+        trace, weight, acc, _ = ProbProg.mh(
+            rng,
+            trace,
+            weight,
+            model,
+            xs;
+            selection=ProbProg.select(ProbProg.Address(:intercept)),
+        )
+        a_ic = a_ic .+ ifelse.(acc, 1.0, 0.0)
+        trace, weight, acc, _ = ProbProg.mh(
+            rng, trace, weight, model, xs; selection=ProbProg.select(ProbProg.Address(:amp))
+        )
+        a_am = a_am .+ ifelse.(acc, 1.0, 0.0)
+        trace, weight, acc, _ = ProbProg.mh(
+            rng,
+            trace,
+            weight,
+            model,
+            xs;
+            selection=ProbProg.select(ProbProg.Address(:phase)),
+        )
+        a_ph = a_ph .+ ifelse.(acc, 1.0, 0.0)
+        keep = ifelse(it > burn, 1.0, 0.0)
+        sl = sum(trace[1:1, 2:2])
+        ic = sum(trace[1:1, 3:3])
+        s1 = s1 .+ keep .* sl
+        s2 = s2 .+ keep .* sl .* sl
+        i1 = i1 .+ keep .* ic
+        i2 = i2 .+ keep .* ic .* ic
+    end
+    return a_m, a_sl, a_ic, a_am, a_ph, s1, s2, i1, i2
+end
+
+@testset "mh_delta_region_op_mean" begin
+    xs = Reactant.to_rarray(_LS_X)
+    for (k, enc) in enumerate((:case, :traceif))
+        @testset "$enc posterior" begin
+            model = getfield(@__MODULE__, Symbol(:_ls_model_, enc))
+            obs = ProbProg.Constraint(:y => _LS_Y)
+            constrained = ProbProg.extract_addresses(obs)
+            ot = ProbProg.flatten_constraint(obs)
+            N, burn = 5000, 1000
+            rng = ReactantRNG(Reactant.to_rarray(UInt64[4242, k]))
+            compiled, _ = ProbProg.with_trace() do
+                @compile optimize = :probprog _ls_chain(
+                    rng,
+                    model,
+                    xs,
+                    ot,
+                    constrained,
+                    ConcreteRNumber(N),
+                    ConcreteRNumber(burn),
+                )
+            end
+            a_m, a_sl, a_ic, a_am, a_ph, s1, s2, i1, i2 = compiled(
+                rng, model, xs, ot, constrained, ConcreteRNumber(N), ConcreteRNumber(burn)
+            )
+            # A chain ignoring the observation accepts all of these (correct: ~2%, 5%).
+            @test 0 < _num(a_sl) / N < 0.5
+            @test 0 < _num(a_ic) / N < 0.5
+            kept = N - burn
+            @test _num(s1) / kept ≈ _LS_E_SLOPE atol = 0.1
+        end
+    end
+    for (k, enc) in enumerate((:case, :traceif))
+        @testset "$enc prior invariance" begin
+            model = getfield(@__MODULE__, Symbol(:_ls_prior_, enc))
+            obs = ProbProg.Constraint(:slope => [0.0])
+            constrained = ProbProg.extract_addresses(obs)
+            ot = ProbProg.flatten_constraint(obs)
+            N = 20000
+            rng = ReactantRNG(Reactant.to_rarray(UInt64[777, k]))
+            compiled, _ = ProbProg.with_trace() do
+                @compile optimize = :probprog _ls_chain(
+                    rng,
+                    model,
+                    xs,
+                    ot,
+                    constrained,
+                    ConcreteRNumber(N),
+                    ConcreteRNumber(0),
+                )
+            end
+            a_m, a_sl, a_ic, a_am, a_ph, s1, s2, i1, i2 = compiled(
+                rng, model, xs, ot, constrained, ConcreteRNumber(N), ConcreteRNumber(0)
+            )
+            # Nothing observed: every move is accepted; slope, intercept keep their priors.
+            for a in (a_m, a_sl, a_ic, a_am, a_ph)
+                @test _num(a) / N > 0.999
+            end
+            ms, mi = _num(s1) / N, _num(i1) / N
+            @test ms ≈ 0.0 atol = 0.1
+            @test _num(s2) / N - ms^2 ≈ 4.0 atol = 0.3
+            @test mi ≈ 0.0 atol = 0.15
+            @test _num(i2) / N - mi^2 ≈ 9.0 atol = 0.6
+        end
+    end
+end

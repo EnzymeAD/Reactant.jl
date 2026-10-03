@@ -226,6 +226,30 @@ function _if_wrap(template::Reactant.TracedRNumber{T}, value) where {T}
     return Reactant.TracedRNumber{T}((), value)
 end
 
+function _traced_leaves!(leaves::IdDict{Any,Nothing}, visited::IdDict{Any,Nothing}, x)
+    if x isa Union{TracedRArray,Reactant.TracedRNumber}
+        leaves[x] = nothing
+        return leaves
+    end
+    (isbitstype(typeof(x)) || x isa Union{Module,Type,Symbol,AbstractString}) &&
+        return leaves
+    if ismutable(x)
+        haskey(visited, x) && return leaves
+        visited[x] = nothing
+    end
+    if x isa Array
+        isbitstype(eltype(x)) && return leaves
+        for i in eachindex(x)
+            isassigned(x, i) && _traced_leaves!(leaves, visited, x[i])
+        end
+        return leaves
+    end
+    for i in 1:nfields(x)
+        isdefined(x, i) && _traced_leaves!(leaves, visited, getfield(x, i))
+    end
+    return leaves
+end
+
 # Emits impulse.if (not stablehlo.if) so expand-impulse threads the trace through it.
 # Each thunk takes no arguments; both must return the same MLIR type.
 function if_(rng::AbstractRNG, cond, then_thunk::Function, else_thunk::Function)
@@ -233,6 +257,17 @@ function if_(rng::AbstractRNG, cond, then_thunk::Function, else_thunk::Function)
     tt !== nothing && (tt.has_branches = true)
     cond_val = TracedUtils.get_mlir_data(cond)
     snap = TracedUtils.get_mlir_data(rng.seed)
+
+    # Tracing a branch can rebind captured values to SSA values inside it; restore them.
+    captured = collect(
+        keys(
+            _traced_leaves!(
+                IdDict{Any,Nothing}(), IdDict{Any,Nothing}(), (then_thunk, else_thunk)
+            ),
+        ),
+    )
+    captured_data = map(TracedUtils.get_mlir_data, captured)
+    restore_captured!() = foreach(TracedUtils.set_mlir_data!, captured, captured_data)
 
     trace_branch =
         (block, thunk) -> begin
@@ -256,15 +291,18 @@ function if_(rng::AbstractRNG, cond, then_thunk::Function, else_thunk::Function)
     then_region = MLIR.IR.Region()
     push!(then_region, then_block)
     then_val = trace_branch(then_block, then_thunk)
+    val_type = MLIR.IR.type(TracedUtils.get_mlir_data(then_val))
 
+    restore_captured!()
     TracedUtils.set_mlir_data!(rng.seed, snap)
 
     else_block = MLIR.IR.Block()
     else_region = MLIR.IR.Region()
     push!(else_region, else_block)
     trace_branch(else_block, else_thunk)
+    restore_captured!()
 
-    result_types = [MLIR.IR.type(snap), MLIR.IR.type(TracedUtils.get_mlir_data(then_val))]
+    result_types = [MLIR.IR.type(snap), val_type]
 
     if_op = MLIR.Dialects.impulse.if_(
         cond_val; results=result_types, trueBranch=then_region, falseBranch=else_region

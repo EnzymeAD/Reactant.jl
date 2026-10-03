@@ -289,3 +289,28 @@ end
     @test 0.9 < s1 / sd1 < 1.1
     @test 0.9 < s2 / sd2 < 1.1
 end
+
+# Tracing one arm must not rebind the captured slope to an SSA value inside that arm.
+function _shared_arm_model(rng, xs, cond)
+    _, slope = ProbProg.sample(rng, ProbProg.Normal(0.0, 1.0, (1,)); symbol=:slope)
+    mu = ProbProg.if_(rng, cond, () -> sum(slope) .* xs, () -> sum(slope) .* xs .+ 1.0)
+    _, y = ProbProg.sample(
+        rng, ProbProg.Normal(mu .+ sum(slope), 0.5, (length(xs),)); symbol=:y
+    )
+    return y
+end
+
+@testset "if_shared_arm_expression" begin
+    x = collect(range(0.0, 1.0; length=5))
+    xs = Reactant.to_rarray(x)
+    lpN(v, m, s) = -0.5 * log(2π) - log(s) - (v - m)^2 / (2 * s^2)
+    for c in (true, false)
+        rng = ReactantRNG(Reactant.to_rarray(UInt64[5, c ? 1 : 2]))
+        tr, w = ProbProg.simulate_(rng, _shared_arm_model, xs, ConcreteRNumber(c))
+        ch = ProbProg.get_choices(tr)
+        sl = ch[:slope][1, 1]
+        yv = vec(ch[:y])
+        mean_y = sl .* x .+ (c ? 0.0 : 1.0) .+ sl
+        @test w ≈ lpN(sl, 0.0, 1.0) + sum(lpN.(yv, mean_y, 0.5)) atol = 1e-8
+    end
+end
