@@ -58,12 +58,18 @@ function arrive_expect_tx(barrier::Value, expect_tx::Value; location=Location())
     )
 end
 
-function arrive(barrier::Value; orders_tensor_core, location=Location())
+function arrive(
+    barrier::Value,
+    predicate=nothing::Union{Nothing,Value};
+    orders_tensor_core,
+    location=Location(),
+)
     op_ty_results = IR.Type[]
     operands = Value[barrier,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[NamedAttribute("orders_tensor_core", orders_tensor_core),]
+    !isnothing(predicate) && push!(operands, predicate)
 
     return create_operation(
         "mosaic_gpu.arrive",

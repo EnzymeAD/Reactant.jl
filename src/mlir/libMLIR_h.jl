@@ -606,6 +606,39 @@ function mlirContextGetThreadPool(context)
 end
 
 """
+    mlirContextBeginTransientScope(context)
+
+Begins a transient scope on the context, freezing the base layer (loaded dialects, registered operations, interface models, and existing types/attributes). Precondition: The context must not already be in a transient scope.
+"""
+function mlirContextBeginTransientScope(context)
+    @ccall Reactant_jll.libReactantExtra.mlirContextBeginTransientScope(
+        context::MlirContext
+    )::Cvoid
+end
+
+"""
+    mlirContextEndTransientScope(context)
+
+Ends the transient scope and resets the context to the base state, pruning transient types, attributes, affine expressions, distinct attributes, and unregistered operations added during the transient scope.
+"""
+function mlirContextEndTransientScope(context)
+    @ccall Reactant_jll.libReactantExtra.mlirContextEndTransientScope(
+        context::MlirContext
+    )::Cvoid
+end
+
+"""
+    mlirContextIsInTransientScope(context)
+
+Returns whether the context is currently in a transient scope.
+"""
+function mlirContextIsInTransientScope(context)
+    @ccall Reactant_jll.libReactantExtra.mlirContextIsInTransientScope(
+        context::MlirContext
+    )::Bool
+end
+
+"""
     mlirDialectGetContext(dialect)
 
 Returns the context that owns the dialect.
@@ -8872,6 +8905,49 @@ function mlirLLVMDICompileUnitAttrGetWithSourceLanguageDialect(
     )::MlirAttribute
 end
 
+"""
+    mlirLLVMDICompileUnitAttrGetWithSourceLanguageName(ctx, recId, isRecSelf, id, sourceLanguageName, sourceLanguageVersion, sourceLanguageDialect, file, producer, isOptimized, emissionKind, isDebugInfoForProfiling, nameTableKind, splitDebugFilename, nImportedEntities, importedEntities)
+
+Creates an LLVM DICompileUnit attribute with a DWARF v6 source language name, version, and optional source language dialect.
+"""
+function mlirLLVMDICompileUnitAttrGetWithSourceLanguageName(
+    ctx,
+    recId,
+    isRecSelf,
+    id,
+    sourceLanguageName,
+    sourceLanguageVersion,
+    sourceLanguageDialect,
+    file,
+    producer,
+    isOptimized,
+    emissionKind,
+    isDebugInfoForProfiling,
+    nameTableKind,
+    splitDebugFilename,
+    nImportedEntities,
+    importedEntities,
+)
+    @ccall Reactant_jll.libReactantExtra.mlirLLVMDICompileUnitAttrGetWithSourceLanguageName(
+        ctx::MlirContext,
+        recId::MlirAttribute,
+        isRecSelf::Bool,
+        id::MlirAttribute,
+        sourceLanguageName::Cuint,
+        sourceLanguageVersion::UInt32,
+        sourceLanguageDialect::Cuint,
+        file::MlirAttribute,
+        producer::MlirAttribute,
+        isOptimized::Bool,
+        emissionKind::MlirLLVMDIEmissionKind,
+        isDebugInfoForProfiling::Bool,
+        nameTableKind::MlirLLVMDINameTableKind,
+        splitDebugFilename::MlirAttribute,
+        nImportedEntities::Cptrdiff_t,
+        importedEntities::Ptr{MlirAttribute},
+    )::MlirAttribute
+end
+
 function mlirLLVMDICompileUnitAttrGetName()
     @ccall Reactant_jll.libReactantExtra.mlirLLVMDICompileUnitAttrGetName()::MlirStringRef
 end
@@ -13365,6 +13441,24 @@ Get the type ID of the dynamic op trait that indicates regions have no terminato
 """
 function mlirDynamicOpTraitNoTerminatorGetTypeID()
     @ccall Reactant_jll.libReactantExtra.mlirDynamicOpTraitNoTerminatorGetTypeID()::MlirTypeID
+end
+
+"""
+    mlirDynamicOpTraitRecursiveMemoryEffectsCreate()
+
+Get the dynamic op trait that indicates memory effects of an operation includes the effects of operations nested within its regions.
+"""
+function mlirDynamicOpTraitRecursiveMemoryEffectsCreate()
+    @ccall Reactant_jll.libReactantExtra.mlirDynamicOpTraitRecursiveMemoryEffectsCreate()::MlirDynamicOpTrait
+end
+
+"""
+    mlirDynamicOpTraitRecursiveMemoryEffectsGetTypeID()
+
+Get the type ID of the dynamic op trait that indicates memory effects of an operation includes the effects of operations nested within its regions.
+"""
+function mlirDynamicOpTraitRecursiveMemoryEffectsGetTypeID()
+    @ccall Reactant_jll.libReactantExtra.mlirDynamicOpTraitRecursiveMemoryEffectsGetTypeID()::MlirTypeID
 end
 
 """
