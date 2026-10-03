@@ -119,6 +119,19 @@ function random_matrix_with_cond(
 end
 
 @testset "Cholesky Factorization" begin
+    @testset "properties" begin
+        function f(A, sym1, sym2)
+            c = Cholesky(A, sym1, 0)
+            return Base.getproperty(c, sym2)
+        end
+        A = let B = randn(4, 4); B * B' + 4I end
+
+        for sym1 in (:U, :L), sym2 in (:U, :L, :UL)
+            rA = Reactant.to_rarray(A)
+            @test @jit(f(rA, sym1, sym2)) ≈ Reactant.to_rarray(f(A, sym1, sym2))
+        end
+    end
+
     @testset "Un-batched" begin
         @testset for T in (Float32, Float64, ComplexF32, ComplexF64)
             (T == ComplexF64 || T == Float64) && RunningOnTPU && continue
