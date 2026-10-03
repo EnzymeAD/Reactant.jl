@@ -7,7 +7,7 @@ end
 
 Creates a new empty region and transfers ownership to the caller.
 """
-Region() = Region(mark_alloc(API.mlirRegionCreate()))
+Region() = mark_alloc(Region(API.mlirRegionCreate()))
 
 """
     dispose(region::Region)
@@ -62,7 +62,8 @@ end
 Takes a block owned by the caller and appends it to the given region.
 """
 function Base.push!(region::Region, block::Block)
-    API.mlirRegionAppendOwnedBlock(region, mark_donate(block))
+    API.mlirRegionAppendOwnedBlock(region, block)
+    mark_untracked(block)
     return block
 end
 
@@ -72,7 +73,8 @@ end
 Takes a block owned by the caller and inserts it at `index` to the given region. This is an expensive operation that linearly scans the region, prefer insertAfter/Before instead.
 """
 function Base.insert!(region::Region, index, block::Block)
-    API.mlirRegionInsertOwnedBlock(region, index - 1, mark_donate(block))
+    API.mlirRegionInsertOwnedBlock(region, index - 1, block)
+    mark_untracked(block)
     return block
 end
 
@@ -87,7 +89,9 @@ end
 Takes a block owned by the caller and inserts it after the (non-owned) reference block in the given region. The reference block must belong to the region. If the reference block is null, prepends the block to the region.
 """
 function insert_after!(region::Region, reference::Block, block::Block)
-    return API.mlirRegionInsertOwnedBlockAfter(region, reference, mark_donate(block))
+    API.mlirRegionInsertOwnedBlockAfter(region, reference, block)
+    mark_untracked(block)
+    return nothing
 end
 
 """
@@ -96,7 +100,9 @@ end
 Takes a block owned by the caller and inserts it before the (non-owned) reference block in the given region. The reference block must belong to the region. If the reference block is null, appends the block to the region.
 """
 function insert_before!(region::Region, reference::Block, block::Block)
-    return API.mlirRegionInsertOwnedBlockBefore(region, reference, mark_donate(block))
+    API.mlirRegionInsertOwnedBlockBefore(region, reference, block)
+    mark_untracked(block)
+    return nothing
 end
 
 """

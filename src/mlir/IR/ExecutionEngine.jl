@@ -19,8 +19,8 @@ function ExecutionEngine(
     sharedlibs::Vector{String}=String[],
     enableObjectDump::Bool=false,
 )
-    return ExecutionEngine(
-        mark_alloc(
+    return mark_alloc(
+        ExecutionEngine(
             API.mlirExecutionEngineCreate(
                 mod, optLevel, length(sharedlibs), sharedlibs, enableObjectDump
             ),
@@ -28,7 +28,7 @@ function ExecutionEngine(
     )
 end
 
-dispose(engine::ExecutionEngine) = API.mlirExecutionEngineDestroy(engine)
+dispose(engine::ExecutionEngine) = mark_dispose(API.mlirExecutionEngineDestroy, engine)
 
 Base.cconvert(::Core.Type{API.MlirExecutionEngine}, engine::ExecutionEngine) = engine
 function Base.unsafe_convert(::Core.Type{API.MlirExecutionEngine}, engine::ExecutionEngine)

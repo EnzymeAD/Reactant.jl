@@ -686,6 +686,26 @@ end
 Reactant.@reactant_overlay function CUDA.cudaconvert(arg)
     return recudaconvert(arg)
 end
+# CUDA.jl 6.4's `@cuda` converts the arguments, compiles and launches the kernel behind the
+# `compile_and_launch` function barrier: intercept that as a whole, with Reactant's argument
+# conversion and kernel object.
+Reactant.@reactant_overlay function CUDACore.compile_and_launch(
+    backend::CUDACore.LLVMBackend,
+    f::F,
+    args::Tuple,
+    ::Val{launch},
+    launch_kwargs::NamedTuple,
+    compiler_kwargs::NamedTuple,
+) where {F,launch}
+    kernel_f = recudaconvert(f)
+    kernel_args = map(recudaconvert, args)
+    kernel_tt = Tuple{map(Core.Typeof, kernel_args)...}
+    kernel = CUDA.cufunction(kernel_f, kernel_tt; compiler_kwargs...)
+    if launch
+        kernel(kernel_args...; launch_kwargs..., convert=Val(false))
+    end
+    return kernel
+end
 
 function Adapt.adapt_storage(::ReactantKernelAdaptor, xs::TracedRArray{T,N}) where {T,N}
     res = CuTracedArray{T,N,CUDA.AS.Global,size(xs)}(xs)
@@ -727,62 +747,28 @@ end
     )
 end
 
-function GPULowerCPUFeaturesPass(job)
-    return LLVM.NewPMModulePass(
-        "GPULowerCPUFeatures",
-        if isdefined(GPUCompiler, :CPUFeatures)
-            GPUCompiler.CPUFeatures(job)
-        else
-            GPUCompiler.cpu_features!
-        end,
-    )
-end
-function GPULowerPTLSPass(job)
-    return LLVM.NewPMModulePass(
-        "GPULowerPTLS",
-        if isdefined(GPUCompiler, :LowerPTLS)
-            GPUCompiler.LowerPTLS(job)
-        else
-            GPUCompiler.lower_ptls!
-        end,
-    )
-end
-function GPULowerGCFramePass(job)
-    return LLVM.NewPMFunctionPass(
-        "GPULowerGCFrame",
-        if isdefined(GPUCompiler, :LowerGCFrame)
-            GPUCompiler.LowerGCFrame(job)
-        else
-            GPUCompiler.lower_gc_frame!
-        end,
-    )
-end
 function noop_pass(x)
     return false
 end
 function kern_pass(mod)
     for fname in ("julia.gpu.state_getter",)
-        if LLVM.haskey(LLVM.functions(mod), fname)
-            fn = LLVM.functions(mod)[fname]
-            insts = LLVM.Instruction[]
-            for u in LLVM.uses(fn)
-                u = LLVM.user(u)
-                LLVM.replace_uses!(u, LLVM.UndefValue(LLVM.value_type(u)))
-                push!(insts, u)
-            end
+        fn = get(mod.functions, fname, nothing)
+        if fn !== nothing
+            insts = collect(LLVM.Instruction, fn.users)
             for inst in insts
-                Reactant.Enzyme.Compiler.eraseInst(LLVM.parent(inst), inst)
+                LLVM.replace_uses!(inst, LLVM.UndefValue(inst.value_type))
+                LLVM.erase!(inst)
             end
-            Reactant.Enzyme.Compiler.eraseInst(mod, fn)
+            LLVM.erase!(fn)
         end
     end
 
     return true
 end
 
-AddKernelStatePass() = LLVM.NewPMModulePass("AddKernelStatePass", kern_pass)
-LowerKernelStatePass() = LLVM.NewPMFunctionPass("LowerKernelStatePass", noop_pass)
-CleanupKernelStatePass() = LLVM.NewPMModulePass("CleanupKernelStatePass", noop_pass)
+AddKernelStatePass() = LLVM.ModulePass("AddKernelStatePass", kern_pass)
+LowerKernelStatePass() = LLVM.FunctionPass("LowerKernelStatePass", noop_pass)
+CleanupKernelStatePass() = LLVM.ModulePass("CleanupKernelStatePass", noop_pass)
 
 # compile to executable machine code
 function compile(job)
@@ -796,122 +782,123 @@ function compile(job)
             # :llvm, job; optimize=false, cleanup=false, validate=true, libraries=false
             # :llvm, job; optimize=false, cleanup=false, validate=false, libraries=false
         )
-
-        if !Reactant.precompiling()
-            LLVM.link!(mod, GPUCompiler.load_runtime(job))
-        end
-        entryname = LLVM.name(meta.entry)
-
-        if Reactant.Compiler.DUMP_LLVMIR[]
-            println("cuda.jl immediate IR\n", string(mod))
-        end
-        opt_level = 2
-        tm = GPUCompiler.llvm_machine(job.config.target)
-
-        if isdefined(GPUCompiler, :current_job)
-            prev_job = GPUCompiler.current_job
-            GPUCompiler.current_job = job
-        end
-
-        try
-            LLVM.@dispose pb = LLVM.NewPMPassBuilder() begin
-                LLVM.register!(pb, GPULowerCPUFeaturesPass(job))
-                LLVM.register!(pb, GPULowerPTLSPass(job))
-                LLVM.register!(pb, GPULowerGCFramePass(job))
-                LLVM.register!(pb, AddKernelStatePass())
-                LLVM.register!(pb, LowerKernelStatePass())
-                LLVM.register!(pb, CleanupKernelStatePass())
-
-                LLVM.add!(pb, LLVM.NewPMModulePassManager()) do mpm
-                    GPUCompiler.buildNewPMPipeline!(mpm, job, opt_level)
-                end
-                LLVM.run!(pb, mod, tm)
+        # the module is ours: it is serialized into the MLIR module below
+        LLVM.@dispose mod = mod begin
+            if !Reactant.precompiling()
+                runtime, runtime_relocs = GPUCompiler.load_runtime(job)
+                LLVM.link!(mod, runtime)
+                GPUCompiler.apply_relocations!(mod, runtime_relocs)
             end
+            entryname = meta.entry.name
+
             if Reactant.Compiler.DUMP_LLVMIR[]
-                println("cuda.jl pre vendor IR\n", string(mod))
+                println("cuda.jl immediate IR\n", string(mod))
             end
+            opt_level = 2
+            tm = GPUCompiler.llvm_machine(job.config.target)
 
-            LLVM.@dispose pb = LLVM.NewPMPassBuilder() begin
-                LLVM.add!(pb, LLVM.NewPMModulePassManager()) do mpm
-                    LLVM.add!(mpm, LLVM.AlwaysInlinerPass())
-                end
-                LLVM.run!(pb, mod, tm)
-            end
-
-            GPUCompiler.optimize_module!(job, mod)
-            if Reactant.Compiler.DUMP_LLVMIR[]
-                println("cuda.jl post vendor IR\n", string(mod))
-            end
-            LLVM.run!(GPUCompiler.DeadArgumentEliminationPass(), mod, tm)
-        finally
             if isdefined(GPUCompiler, :current_job)
-                GPUCompiler.current_job = prev_job
+                prev_job = GPUCompiler.current_job
+                GPUCompiler.current_job = job
             end
-            # The target machine isn't owned by the LLVM context: dispose it explicitly,
-            # otherwise it's leaked at every kernel compilation. There is none when
-            # LLVM was built without the NVPTX backend (macOS), where llvm_machine
-            # returns nothing and the passes above run without one.
-            tm === nothing || LLVM.dispose(tm)
-        end
 
-        for fname in ("gpu_report_exception", "gpu_signal_exception")
-            if LLVM.haskey(LLVM.functions(mod), fname)
-                fn = LLVM.functions(mod)[fname]
-                insts = LLVM.Instruction[]
-                for u in LLVM.uses(fn)
-                    push!(insts, LLVM.user(u))
+            try
+                LLVM.@dispose pb = LLVM.PassBuilder() begin
+                    LLVM.register!(pb, GPUCompiler.GPULowerCPUFeaturesPass(job))
+                    LLVM.register!(pb, GPUCompiler.GPULowerPTLSPass(job))
+                    LLVM.register!(
+                        pb, GPUCompiler.GPULowerGCFramePass(job, meta.relocations)
+                    )
+                    LLVM.register!(pb, AddKernelStatePass())
+                    LLVM.register!(pb, LowerKernelStatePass())
+                    LLVM.register!(pb, CleanupKernelStatePass())
+
+                    LLVM.add!(pb, LLVM.ModulePassManager()) do mpm
+                        GPUCompiler.buildNewPMPipeline!(mpm, job, opt_level)
+                    end
+                    LLVM.run!(pb, mod, tm)
                 end
-                for inst in insts
-                    Reactant.Enzyme.Compiler.eraseInst(LLVM.parent(inst), inst)
+                if Reactant.Compiler.DUMP_LLVMIR[]
+                    println("cuda.jl pre vendor IR\n", string(mod))
                 end
-                Reactant.Enzyme.Compiler.eraseInst(mod, fn)
+
+                LLVM.run!(LLVM.AlwaysInlinerPass(), mod, tm)
+
+                GPUCompiler.optimize_module!(job, mod)
+                if Reactant.Compiler.DUMP_LLVMIR[]
+                    println("cuda.jl post vendor IR\n", string(mod))
+                end
+                LLVM.run!(LLVM.DeadArgumentEliminationPass(), mod, tm)
+            finally
+                if isdefined(GPUCompiler, :current_job)
+                    GPUCompiler.current_job = prev_job
+                end
+                # The target machine isn't owned by the LLVM context: dispose it explicitly,
+                # otherwise it's leaked at every kernel compilation. There is none when
+                # LLVM was built without the NVPTX backend (macOS), where llvm_machine
+                # returns nothing and the passes above run without one.
+                tm === nothing || LLVM.dispose(tm)
             end
-        end
 
-        errors = GPUCompiler.check_ir!(job, GPUCompiler.IRError[], mod)
-        unique!(errors)
-        filter!(errors) do err
-            (kind, bt, meta) = err
-            if meta !== nothing
-                if kind == GPUCompiler.UNKNOWN_FUNCTION && startswith(meta, "__nv")
-                    return false
+            for fname in ("gpu_report_exception", "gpu_signal_exception")
+                fn = get(mod.functions, fname, nothing)
+                if fn !== nothing
+                    for inst in collect(LLVM.Instruction, fn.users)
+                        LLVM.erase!(inst)
+                    end
+                    LLVM.erase!(fn)
                 end
             end
-            return true
-        end
-        if Reactant.Compiler.DUMP_LLVMIR[]
-            println("cuda.jl postopt IR\n", string(mod))
-        end
-        if !isempty(errors)
-            throw(GPUCompiler.InvalidIRError(job, errors))
-        end
-        # LLVM.strip_debuginfo!(mod)
-        dl = string(LLVM.datalayout(mod))
-        # This is a bit weird since we're taking a module from julia's llvm into reactant's llvm version
-        # so we serialize and reparse with the right llvm module api. Bitcode is used rather than
-        # textual IR: the bitcode reader auto-upgrades constructs whose spelling changed between the
-        # two LLVM versions (e.g. `llvm.loop.distribute.enable` metadata), whereas the .ll parser does
-        # not, and mismatches there abort the process in the verifier.
-        modbc = convert(Vector{UInt8}, mod)
-        mmodref = GC.@preserve modbc MLIR.API.ConvertLLVMBCToMLIR(
-            pointer(modbc), length(modbc), MLIR.IR.current_context()
-        )
-        mmod = MLIR.IR.Module(mmodref)
-        @assert mmod != C_NULL
 
-        cur_module = MLIR.IR.current_module()
-        linkRes = MLIR.API.LinkInModule(cur_module, mmod, entryname)
+            errors = GPUCompiler.check_ir!(
+                job, GPUCompiler.IRError[], mod, meta.relocations
+            )
+            unique!(errors)
+            filter!(errors) do err
+                (kind, bt, meta) = err
+                if meta !== nothing
+                    if kind == GPUCompiler.UNKNOWN_FUNCTION && startswith(meta, "__nv")
+                        return false
+                    end
+                end
+                return true
+            end
+            if Reactant.Compiler.DUMP_LLVMIR[]
+                println("cuda.jl postopt IR\n", string(mod))
+            end
+            if !isempty(errors)
+                throw(GPUCompiler.InvalidIRError(job, errors))
+            end
+            # LLVM.strip_debuginfo!(mod)
+            dl = string(mod.datalayout)
+            # This is a bit weird since we're taking a module from julia's llvm into reactant's llvm version
+            # so we serialize and reparse with the right llvm module api. Bitcode is used rather than
+            # textual IR: the bitcode reader auto-upgrades constructs whose spelling changed between the
+            # two LLVM versions (e.g. `llvm.loop.distribute.enable` metadata), whereas the .ll parser does
+            # not, and mismatches there abort the process in the verifier.
+            modbc = convert(Vector{UInt8}, mod)
+            mmodref = GC.@preserve modbc MLIR.API.ConvertLLVMBCToMLIR(
+                pointer(modbc), length(modbc), MLIR.IR.current_context()
+            )
+            mmod = MLIR.IR.Module(mmodref)
+            @assert mmod != C_NULL
 
-        dl_attr_name = "llvm.data_layout"
-        prevdlattr = MLIR.IR.getattr(MLIR.IR.Operation(cur_module), dl_attr_name)
-        if !isnothing(prevdlattr)
-            prevdl = String(prevdlattr)
-            @assert prevdl == dl "data layout mismatch, tried compiling cuda kernels for different target machines?"
-        else
-            MLIR.IR.setattr!(MLIR.IR.Operation(cur_module), dl_attr_name, MLIR.IR.Attribute(dl))
+            cur_module = MLIR.IR.current_module()
+            linkRes = MLIR.API.LinkInModule(cur_module, mmod, entryname)
+
+            dl_attr_name = "llvm.data_layout"
+            prevdlattr = MLIR.IR.getattr(MLIR.IR.Operation(cur_module), dl_attr_name)
+            if !isnothing(prevdlattr)
+                prevdl = String(prevdlattr)
+                @assert prevdl == dl "data layout mismatch, tried compiling cuda kernels for different target machines?"
+            else
+                MLIR.IR.setattr!(
+                    MLIR.IR.Operation(cur_module), dl_attr_name, MLIR.IR.Attribute(dl)
+                )
+            end
+
+            String(Reactant.TracedUtils.get_attribute_by_name(linkRes, "sym_name"))
         end
-
-        String(Reactant.TracedUtils.get_attribute_by_name(linkRes, "sym_name"))
     end
 
     return LLVMFunc{job.source.specTypes.parameters[1],job.source.specTypes}(nothing, entry)
@@ -1229,105 +1216,106 @@ Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
     )
 
     trueidx = 1
-    allocs = Union{Tuple{MLIR.IR.Value,MLIR.IR.Type,Type},Nothing}[]
+    allocs = Union{Tuple{MLIR.IR.Value,MLIR.IR.Type,Int},Nothing}[]
 
     llvmptr = MLIR.IR.Type(MLIR.API.mlirLLVMPointerTypeGet(ctx, 0))
     i8 = MLIR.IR.Type(UInt8)
     allargs = Any[func.f, args...]
-    ctx = LLVM.Context()
-    LLVM.activate(ctx)
-    for a in allargs
-        if sizeof(a) == 0
-            push!(allocs, nothing)
-            continue
-        end
-
-        # TODO(#2240): check for only integer and explicitly non cutraced types
-        MLIR.IR.@with_block wrapbody begin
-            argty = MLIR.IR.Type(
-                MLIR.API.mlirLLVMFunctionTypeGetInput(gpu_function_type, trueidx - 1)
-            )
-            trueidx += 1
-            jltyp = Core.Typeof(a)
-            if Enzyme.Compiler.inline_roots_type(jltyp) != 0
-                trueidx += 1
+    # `inline_roots_type` converts Julia types to LLVM types, which needs a context
+    LLVM.Context() do _
+        for a in allargs
+            if sizeof(a) == 0
+                push!(allocs, nothing)
+                continue
             end
-            c1 = MLIR.IR.result(
-                MLIR.Dialects.llvm.mlir_constant(;
-                    res=MLIR.IR.Type(Int64), value=MLIR.IR.Attribute(1)
-                ),
-                1,
-            )
-            alloc = MLIR.IR.result(
-                MLIR.Dialects.llvm.alloca(
-                    c1; elem_type=MLIR.IR.Attribute(argty), res=llvmptr
-                ),
-                1,
-            )
-            push!(allocs, (alloc, argty, jltyp))
 
-            if has_cast_float_type
-                # The argument `a` has BFloat16 fields but the GPU function was
-                # compiled with a substitute type (e.g. Float32). We need to:
-                # 1. Create an alloca with the bf16 layout
-                # 2. Store the raw bf16 bytes into it
-                # 3. Load, walk the struct fields, extend bf16→f32, store into alloc
-                compile_float_ty = MLIR.IR.Type(bfloat16_compile_type)
-                bf16_float_ty = MLIR.IR.Type(BFloat16)
-                bf16_ty = _replace_float_in_llvm_type(
-                    argty, compile_float_ty, bf16_float_ty
+            # TODO(#2240): check for only integer and explicitly non cutraced types
+            MLIR.IR.@with_block wrapbody begin
+                argty = MLIR.IR.Type(
+                    MLIR.API.mlirLLVMFunctionTypeGetInput(gpu_function_type, trueidx - 1)
                 )
-
-                bf16_c1 = MLIR.IR.result(
+                trueidx += 1
+                jltyp = Core.Typeof(a)
+                nroots = Enzyme.Compiler.inline_roots_type(jltyp)
+                if nroots != 0
+                    trueidx += 1
+                end
+                c1 = MLIR.IR.result(
                     MLIR.Dialects.llvm.mlir_constant(;
                         res=MLIR.IR.Type(Int64), value=MLIR.IR.Attribute(1)
                     ),
                     1,
                 )
-                bf16_alloc = MLIR.IR.result(
+                alloc = MLIR.IR.result(
                     MLIR.Dialects.llvm.alloca(
-                        bf16_c1; elem_type=MLIR.IR.Attribute(bf16_ty), res=llvmptr
+                        c1; elem_type=MLIR.IR.Attribute(argty), res=llvmptr
                     ),
                     1,
                 )
+                push!(allocs, (alloc, argty, nroots))
 
-                sz = abi_sizeof(a)
-                val = to_bytes(a)
-                array_ty = MLIR.IR.Type(
-                    MLIR.API.mlirLLVMArrayTypeGet(MLIR.IR.Type(Int8), sz)
-                )
-                cdata = MLIR.IR.result(
-                    MLIR.Dialects.llvm.mlir_constant(;
-                        res=array_ty, value=MLIR.IR.DenseElementsAttribute(val)
-                    ),
-                    1,
-                )
-                MLIR.Dialects.llvm.store(cdata, bf16_alloc)
+                if has_cast_float_type
+                    # The argument `a` has BFloat16 fields but the GPU function was
+                    # compiled with a substitute type (e.g. Float32). We need to:
+                    # 1. Create an alloca with the bf16 layout
+                    # 2. Store the raw bf16 bytes into it
+                    # 3. Load, walk the struct fields, extend bf16→f32, store into alloc
+                    compile_float_ty = MLIR.IR.Type(bfloat16_compile_type)
+                    bf16_float_ty = MLIR.IR.Type(BFloat16)
+                    bf16_ty = _replace_float_in_llvm_type(
+                        argty, compile_float_ty, bf16_float_ty
+                    )
 
-                bf16_val = MLIR.IR.result(
-                    MLIR.Dialects.llvm.load(bf16_alloc; res=bf16_ty), 1
-                )
-                converted_val = _convert_bf16_value(
-                    bf16_val, bf16_ty, argty, bf16_float_ty, compile_float_ty
-                )
-                MLIR.Dialects.llvm.store(converted_val, alloc)
-            else
-                sz = abi_sizeof(a)
-                val = to_bytes(a)
-                array_ty = MLIR.IR.Type(
-                    MLIR.API.mlirLLVMArrayTypeGet(MLIR.IR.Type(Int8), sz)
-                )
-                cdata = MLIR.IR.result(
-                    MLIR.Dialects.llvm.mlir_constant(;
-                        res=array_ty, value=MLIR.IR.DenseElementsAttribute(val)
-                    ),
-                    1,
-                )
-                MLIR.Dialects.llvm.store(cdata, alloc)
+                    bf16_c1 = MLIR.IR.result(
+                        MLIR.Dialects.llvm.mlir_constant(;
+                            res=MLIR.IR.Type(Int64), value=MLIR.IR.Attribute(1)
+                        ),
+                        1,
+                    )
+                    bf16_alloc = MLIR.IR.result(
+                        MLIR.Dialects.llvm.alloca(
+                            bf16_c1; elem_type=MLIR.IR.Attribute(bf16_ty), res=llvmptr
+                        ),
+                        1,
+                    )
+
+                    sz = abi_sizeof(a)
+                    val = to_bytes(a)
+                    array_ty = MLIR.IR.Type(
+                        MLIR.API.mlirLLVMArrayTypeGet(MLIR.IR.Type(Int8), sz)
+                    )
+                    cdata = MLIR.IR.result(
+                        MLIR.Dialects.llvm.mlir_constant(;
+                            res=array_ty, value=MLIR.IR.DenseElementsAttribute(val)
+                        ),
+                        1,
+                    )
+                    MLIR.Dialects.llvm.store(cdata, bf16_alloc)
+
+                    bf16_val = MLIR.IR.result(
+                        MLIR.Dialects.llvm.load(bf16_alloc; res=bf16_ty), 1
+                    )
+                    converted_val = _convert_bf16_value(
+                        bf16_val, bf16_ty, argty, bf16_float_ty, compile_float_ty
+                    )
+                    MLIR.Dialects.llvm.store(converted_val, alloc)
+                else
+                    sz = abi_sizeof(a)
+                    val = to_bytes(a)
+                    array_ty = MLIR.IR.Type(
+                        MLIR.API.mlirLLVMArrayTypeGet(MLIR.IR.Type(Int8), sz)
+                    )
+                    cdata = MLIR.IR.result(
+                        MLIR.Dialects.llvm.mlir_constant(;
+                            res=array_ty, value=MLIR.IR.DenseElementsAttribute(val)
+                        ),
+                        1,
+                    )
+                    MLIR.Dialects.llvm.store(cdata, alloc)
+                end
             end
         end
     end
-    LLVM.deactivate(ctx)
 
     argidx = 1
     for arg in values(seen)
@@ -1398,17 +1386,16 @@ Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
             if arg === nothing
                 continue
             end
-            alloc, argty, jltyp = arg
+            alloc, argty, roots_count = arg
             argres = MLIR.IR.result(MLIR.Dialects.llvm.load(alloc; res=argty), 1)
             push!(wrapargs, argres)
-            if Enzyme.Compiler.inline_roots_type(jltyp) != 0
+            if roots_count != 0
                 c1 = MLIR.IR.result(
                     MLIR.Dialects.llvm.mlir_constant(;
                         res=MLIR.IR.Type(Int64), value=MLIR.IR.Attribute(1)
                     ),
                     1,
                 )
-                roots_count = Enzyme.Compiler.inline_roots_type(jltyp)
                 jlvaluet = MLIR.IR.Type(MLIR.API.mlirLLVMPointerTypeGet(ctx, 10))
                 njlvaluet = MLIR.IR.Type(
                     MLIR.API.mlirLLVMArrayTypeGet(jlvaluet, roots_count)
@@ -1618,6 +1605,9 @@ const ReactantCUDAJob = GPUCompiler.CompilerJob{
     GPUCompiler.PTXCompilerTarget,ReactantCUDACompilerParams
 }
 GPUCompiler.can_vectorize(job::ReactantCUDAJob) = !job.config.params.raising
+# The kernel's IR is linked into the MLIR module rather than loaded by CUDA.jl, so resolve
+# the references to Julia values into the IR, instead of the patchable globals CUDA.jl uses.
+GPUCompiler.relocation_lowering(@nospecialize(job::ReactantCUDAJob)) = :bake
 function GPUCompiler.optimization_options(job::ReactantCUDAJob)
     raising = job.config.params.raising
     return (; instcombine=!raising, fastmath=!raising, aggressiveinstcombine=!raising)
@@ -1683,7 +1673,11 @@ Reactant.@reactant_overlay function CUDA.cufunction(
             validate=false,
             libraries=false,
         )
-        GPUCompiler.cached_compilation(cache, source, config, compile, link)
+        # Compile natively: tracing into GPUCompiler would also trace the Julia compiler
+        # that it drives, which GPUCompiler 2 does through calls that Reactant doesn't skip.
+        call_with_native(
+            GPUCompiler.cached_compilation, cache, source, config, compile, link
+        )
     end
     return Core.Typeof(res)(f, res.entry)
 end
