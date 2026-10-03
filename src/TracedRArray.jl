@@ -1197,8 +1197,9 @@ end
 function Base.reverse(
     v::AnyTracedRVector{T}, start::Integer, stop::Integer=lastindex(v)
 ) where {T}
-    v[start:stop] = reverse!(v[start:stop])
-    return v
+    reversed = copy(v)
+    reversed[start:stop] = reverse!(v[start:stop])
+    return reversed
 end
 
 function Base.reverse!(
