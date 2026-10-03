@@ -96,13 +96,19 @@ ct = @elapsed begin
         @compile sync = true optimize = :probprog prog(args...)
     end
 end
-@printf("compile %.1fs\n", ct)
-hist = Array(compiled(args...))[:]
+# Timed span (2026-10-03, FIX_LEDGER H1): one call of the program compiled with
+# sync = true, which returns after the stock Base.wait on every output, as
+# GenJAX's span ends with block_until_ready. The arguments (the sweep count
+# included) are device values built once, and the host conversion of the
+# outputs runs after the span.
+@printf("compile %.1fs sync=%s\n", ct, compiled.compiled_with_sync)
+hist = Array(compiled(args...))[:]   # warm-up, discarded
 best = Inf
 for _ in 1:20
     t = @elapsed begin
-        global hist = Array(compiled(args...))[:]
+        global out = compiled(args...)
     end
+    global hist = Array(out)[:]   # host conversion, untimed
     global best = min(best, t)
     @printf("IMPULSE-MASKED coal REP wall %.6f s | per-move %.4f us\n", t, t / (3 * NUM_SWEEPS) * 1e6)
 end

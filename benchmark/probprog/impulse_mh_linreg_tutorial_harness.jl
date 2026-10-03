@@ -5,9 +5,13 @@
 # intercept, 0.1)), with the observations as one vector site (the encoding the
 # other figure-13 Impulse cells use). Kernel: the block prior-resimulation move
 # of "Iterative Inference in Gen", mh(tr, select(:slope, :intercept)), once per
-# sweep, 500 sweeps, after generate with the ys observed. The timed span is
-# the same as impulse_mh_linreg_harness.jl (generate + loop, 20 repetitions after
-# one discarded warm-up); per-move = wall / 500.
+# sweep, 500 sweeps, after generate with the ys observed. The timed span is one
+# call of the compiled program (generate + loop), 20 repetitions after one
+# discarded warm-up; per-move = wall / 500. The program is compiled with
+# sync = true, so the call returns only after the stock Base.wait on every
+# output's PJRT future, and the span ends there, as GenJAX's span ends with
+# block_until_ready. The host conversions of the outputs (_force) run after the
+# span, untimed (2026-10-03, FIX_LEDGER H1; they had cost 24 to 35 us per call).
 #
 # Arms (IMPULSE_LT_ARMS, default "sicm nosicm"): both run the region pipeline
 # (DEBUG_PROBPROG_DISABLE_OPT = false); "nosicm" sets DEBUG_PROBPROG_DISABLE_SICM.
@@ -262,7 +266,7 @@ function run_arm(arm)
             )
         end
     end
-    @printf("%s compile %.1fs\n", label(arm), ct)
+    @printf("%s compile %.1fs sync=%s\n", label(arm), ct, compiled.compiled_with_sync)
     out = compiled(rng, margs()..., iters, obs_tensor, constrained)
     for o in out
         _force(o)
@@ -271,10 +275,10 @@ function run_arm(arm)
     for _ in 1:NREPS
         t = @elapsed begin
             out = compiled(rng, margs()..., iters, obs_tensor, constrained)
-            for o in out
-                _force(o)
-            end
         end
+        for o in out
+            _force(o)
+        end   # host conversion, untimed
         push!(walls, t)
         @printf(
             "%s REP wall %.6f s | per-move %.4f us\n", label(arm), t, t / NUM_SWEEPS * 1e6

@@ -39,16 +39,40 @@ import tensorflow_probability.substrates.jax as tfp
 tfd = tfp.distributions
 ind_pois = genjax.tfp_distribution(lambda lam: tfd.Independent(tfd.Poisson(rate=lam), 1))
 
-@genjax.gen
-def coal(T_range, logits):
-    s = genjax.categorical(logits) @ "s"
-    l1 = genjax.gamma(jnp.float64(3.0), jnp.float64(1.0)) @ "l1"
-    l2 = genjax.gamma(jnp.float64(3.0), jnp.float64(1.0)) @ "l2"
-    lam = jnp.where(T_range < s, l1, l2)
-    ys = ind_pois(lam) @ "ys"
-    return ys
+# GENJAX_COAL_LOGITS (2026-10-03, figure 13 round 2):
+#   arg    (default) the uniform switch prior's logits are a model argument, as
+#          through the 2026-10-03 single window; they are carried in the trace,
+#          so every move on s recomputes their logsumexp (112 exps and a log)
+#   const  the logits are a constant written in the model, the form a GenJAX user
+#          writes for a fixed prior; XLA folds the logsumexp, so the per-move work
+#          matches Impulse's DiscreteUniform and Gen.jl's uniform_discrete
+#          (constant log density). Same distribution, same draws.
+COAL_LOGITS = os.environ.get("GENJAX_COAL_LOGITS", "arg")
+assert COAL_LOGITS in ("arg", "const"), COAL_LOGITS
+LABEL, TAG = ("GENJAX coal", "genjax") if COAL_LOGITS == "arg" else ("GENJAX coal_constlogits", "genjax-constlogits")
 
-args = (TIDX, jnp.zeros(T + 1))
+if COAL_LOGITS == "arg":
+    @genjax.gen
+    def coal(T_range, logits):
+        s = genjax.categorical(logits) @ "s"
+        l1 = genjax.gamma(jnp.float64(3.0), jnp.float64(1.0)) @ "l1"
+        l2 = genjax.gamma(jnp.float64(3.0), jnp.float64(1.0)) @ "l2"
+        lam = jnp.where(T_range < s, l1, l2)
+        ys = ind_pois(lam) @ "ys"
+        return ys
+
+    args = (TIDX, jnp.zeros(T + 1))
+else:
+    @genjax.gen
+    def coal(T_range):
+        s = genjax.categorical(jnp.zeros(T + 1)) @ "s"
+        l1 = genjax.gamma(jnp.float64(3.0), jnp.float64(1.0)) @ "l1"
+        l2 = genjax.gamma(jnp.float64(3.0), jnp.float64(1.0)) @ "l2"
+        lam = jnp.where(T_range < s, l1, l2)
+        ys = ind_pois(lam) @ "ys"
+        return ys
+
+    args = (TIDX,)
 if COAL_DATA == "jarrett":
     chm = ChoiceMap.d({"ys": Y})
 else:
@@ -85,16 +109,16 @@ for _ in range(20):
     hist = kernel(key); jax.block_until_ready(hist)
     t = time.perf_counter() - t0
     best = min(best, t)
-    print(f"GENJAX coal REP wall {t:.6f} s | per-move {t/(3*NUM_SWEEPS)*1e6:.4f} us", flush=True)
+    print(f"{LABEL} REP wall {t:.6f} s | per-move {t/(3*NUM_SWEEPS)*1e6:.4f} us", flush=True)
 hist = jax.device_get(hist)
 smap = int(hist.argmax())
 mass = float(hist[34:47].sum() / hist.sum())
-print(f"GENJAX coal per-move {best/(3*NUM_SWEEPS)*1e6:.3f} us | MAP s = {smap} | mass[34,46] = {mass:.4f}")
+print(f"{LABEL} per-move {best/(3*NUM_SWEEPS)*1e6:.3f} us | MAP s = {smap} | mass[34,46] = {mass:.4f}")
 
 if COAL_DATA == "jarrett":
     # Validation (untimed): the timed histogram, then one longer chain that
     # also accumulates the two rates.
-    print("COAL-HIST genjax timed " + " ".join(str(int(v)) for v in hist), flush=True)
+    print(f"COAL-HIST {TAG} timed " + " ".join(str(int(v)) for v in hist), flush=True)
     NUM_VAL = int(os.environ.get("COAL_VAL_SWEEPS", "50000"))
 
     def step_stats(i, carry):
@@ -112,6 +136,6 @@ if COAL_DATA == "jarrett":
         return h, m / NUM_VAL
 
     vh, vm = jax.device_get(kernel_stats(jax.random.PRNGKey(54321)))
-    print("COAL-HIST genjax val " + " ".join(str(int(v)) for v in vh), flush=True)
-    print(f"COAL-VAL genjax sweeps={NUM_VAL} E[l1]={vm[0]:.4f} E[l2]={vm[1]:.4f} "
+    print(f"COAL-HIST {TAG} val " + " ".join(str(int(v)) for v in vh), flush=True)
+    print(f"COAL-VAL {TAG} sweeps={NUM_VAL} E[l1]={vm[0]:.4f} E[l2]={vm[1]:.4f} "
           f"MAP year={1851 + int(vh.argmax())}", flush=True)

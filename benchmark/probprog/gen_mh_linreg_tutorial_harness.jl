@@ -14,8 +14,19 @@
 #   vec_dynamic  one vector site ys ~ broadcasted_normal (the encoding of
 #                gen_mh_harness.jl's linreg_dynamic)
 #   vec_static   the same in the static modeling language
+#   vec_custom   one vector site ys ~ fused_normal(mu, 0.1): a user-defined
+#                vector-normal distribution with a scalar std and a one-pass
+#                logpdf, -N log s - N/2 log 2pi - sum((y - mu)^2) / (2 s^2), the
+#                density formula of the Impulse harness's normal_logpdf, in the
+#                style of the coal row's custom VecPoisson (2026-10-03,
+#                FIX_LEDGER C2; Gen's broadcasted_normal takes the log of the
+#                std per point even for a scalar std, 42 of about 60 us per move
+#                at N=10000)
+#   vec_custom_static  the same in the static modeling language
 # After the timed repetitions (untimed): the trace score of a fixed trace against
-# the hand-computed joint log density, acceptance count, final slope/intercept.
+# the hand-computed joint log density, acceptance count, final slope/intercept,
+# and a record run (Random.seed!(1), the warm-up's chain) that prints every
+# accepted sweep and the final state exactly, for comparison between encodings.
 #
 # Usage: julia --project=gen_env gen_mh_linreg_tutorial_harness.jl <data.json> <A|B>
 using Gen, Random, Printf, Statistics
@@ -73,6 +84,42 @@ line_mu(slope, intercept, xs) = slope .* xs .+ intercept
     return ys
 end
 
+# Custom distribution of vec_custom(_static), as in the checker's prototype
+# (oopsla/evidence/speedup_prediction_2026-10-03/fig13_generality/scripts/genjl/gen_models.jl).
+struct FusedNormalScalar <: Gen.Distribution{Vector{Float64}} end
+const fused_normal = FusedNormalScalar()
+function Gen.random(::FusedNormalScalar, mu::Vector{Float64}, sig::Float64)
+    return mu .+ sig .* randn(length(mu))
+end
+function Gen.logpdf(::FusedNormalScalar, y::Vector{Float64}, mu::Vector{Float64}, sig::Float64)
+    s = 0.0
+    @inbounds @simd for i in eachindex(y)
+        d = y[i] - mu[i]
+        s += d * d
+    end
+    n = length(y)
+    return -s / (2 * sig^2) - n * log(sig) - n / 2 * log(2π)
+end
+Gen.logpdf_grad(::FusedNormalScalar, y, mu, sig) = (nothing, nothing, nothing)
+Gen.has_output_grad(::FusedNormalScalar) = false
+Gen.has_argument_grads(::FusedNormalScalar) = (false, false)
+Gen.is_discrete(::FusedNormalScalar) = false
+(::FusedNormalScalar)(mu, sig) = Gen.random(fused_normal, mu, sig)
+
+@gen function line_model_custom(xs::Vector{Float64}, sig::Float64)
+    slope = ({:slope} ~ normal(0, 1))
+    intercept = ({:intercept} ~ normal(0, 2))
+    ys ~ fused_normal(slope .* xs .+ intercept, sig)
+    return ys
+end
+@gen (static) function line_model_custom_static(xs::Vector{Float64}, sig::Float64)
+    slope ~ normal(0, 1)
+    intercept ~ normal(0, 2)
+    mu = line_mu(slope, intercept, xs)
+    ys ~ fused_normal(mu, sig)
+    return ys
+end
+
 sig = fill(0.1, N)
 function setup(enc)
     if enc == "tutorial"
@@ -85,6 +132,10 @@ function setup(enc)
         return line_model_vec, (xs, sig), choicemap((:ys, ys))
     elseif enc == "vec_static"
         return line_model_vec_static, (xs, sig), choicemap((:ys, ys))
+    elseif enc == "vec_custom"
+        return line_model_custom, (xs, 0.1), choicemap((:ys, ys))
+    elseif enc == "vec_custom_static"
+        return line_model_custom_static, (xs, 0.1), choicemap((:ys, ys))
     end
     return error("unknown encoding $enc")
 end
@@ -98,6 +149,17 @@ function kernel(model, args, obs, num_sweeps)
         acc += a
     end
     return tr, acc
+end
+# Untimed validation program: the same chain, also recording every sweep's decision.
+function kernel_record(model, args, obs, num_sweeps)
+    tr, _ = generate(model, args, obs)
+    dec = falses(num_sweeps)
+    block = select(:slope, :intercept)
+    for k in 1:num_sweeps
+        tr, a = mh(tr, block)
+        dec[k] = a
+    end
+    return tr, dec
 end
 
 lp(x, mu, s) = -0.5 * log(2π) - log(s) - (x - mu)^2 / (2s^2)
@@ -149,6 +211,12 @@ for enc in ENCODINGS
         sc,
         hand,
         abs(sc - hand)
+    )
+    Random.seed!(1)
+    trr, dec = kernel_record(model, args, obs, NUM_SWEEPS)
+    println(
+        "$label record: accepts $(count(dec))/$(NUM_SWEEPS), accepted sweeps $(findall(dec)), ",
+        "final slope=$(repr(trr[:slope])) intercept=$(repr(trr[:intercept]))",
     )
 end
 

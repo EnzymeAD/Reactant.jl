@@ -64,14 +64,20 @@ ct = @elapsed begin
             rng, outlier_model, xs, lg, ot, constrained, ConcreteRNumber(NUM_SWEEPS))
     end
 end
-@printf("compile %.1fs\n", ct)
-out = compiled(rng, outlier_model, xs, lg, ot, constrained, ConcreteRNumber(NUM_SWEEPS))
+# Timed span (2026-10-03, FIX_LEDGER H1): one call of the program compiled with
+# sync = true, which returns after the stock Base.wait on every output, as
+# GenJAX's span ends with block_until_ready. The sweep count is converted to a
+# device scalar once, and the host conversion of the outputs runs after the span.
+@printf("compile %.1fs sync=%s\n", ct, compiled.compiled_with_sync)
+iters = ConcreteRNumber(NUM_SWEEPS)
+out = compiled(rng, outlier_model, xs, lg, ot, constrained, iters)
+Array(out[1])   # warm-up, discarded
 best = Inf
 for _ in 1:20
     t = @elapsed begin
-        global out = compiled(rng, outlier_model, xs, lg, ot, constrained, ConcreteRNumber(NUM_SWEEPS))
-        Array(out[1])
+        global out = compiled(rng, outlier_model, xs, lg, ot, constrained, iters)
     end
+    Array(out[1])   # host conversion, untimed
     global best = min(best, t)
     @printf("IMPULSE outlier_select_lp REP wall %.6f s | per-move %.4f us\n", t, t / MOVES * 1e6)
 end

@@ -89,14 +89,20 @@ ct = @elapsed begin
         @compile sync = true optimize = :probprog switch_prog_prior(args...)
     end
 end
-@printf("compile %.1fs\n", ct)
+# Timed span (2026-10-03, FIX_LEDGER H1): one call of the program compiled with
+# sync = true, which returns after the stock Base.wait on every output, as
+# GenJAX's span ends with block_until_ready. The arguments (the sweep count
+# included) are device values built once, and the host conversion of the
+# outputs runs after the span.
+@printf("compile %.1fs sync=%s\n", ct, compiled.compiled_with_sync)
 out = compiled(args...)
+Array(out[1])   # warm-up, discarded
 best = Inf
 for _ in 1:20
     t = @elapsed begin
         global out = compiled(args...)
-        Array(out[1])
     end
+    Array(out[1])   # host conversion, untimed
     global best = min(best, t)
     @printf("IMPULSE linesine_period_branch REP wall %.6f s | per-move %.4f us\n", t, t / MOVES * 1e6)
 end

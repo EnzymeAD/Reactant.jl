@@ -7,7 +7,16 @@ Inference in Gen", regenerate {slope, intercept} once per sweep, 500 sweeps,
 after importance with the ys observed. Timed span: importance + loop in one
 jitted kernel, 20 repetitions after one discarded warm-up; per-move = wall/500.
 
-Encoding: one vector site ys ~ mv_normal_diag (as genjax_mh_linreg_harness.py).
+Encodings (GENJAX_LT_ENCODINGS, default "vec"):
+  vec   one vector site ys ~ mv_normal_diag(mu, sig) with sig = jnp.full(N, 0.1)
+        a model argument (as genjax_mh_linreg_harness.py; the figure's encoding
+        through the 2026-10-03 single window)
+  scal  one vector site ys ~ genjax.normal(mu, 0.1), a scalar scale written in
+        the model as in the tutorial (2026-10-03, FIX_LEDGER C1). The scale is
+        a constant of the program rather than a vector carried in the trace, so
+        the per-point log of sigma is not recomputed in every move (vec spends
+        30 of 39 us per move at N=10000 on it). Same density, same kernel; the
+        validation below checks that both encodings give the same chain.
 The per-point counterpart of the tutorial's (:y, i) loop (genjax.normal
 vmapped over the points, encoding "vmap") cannot run this kernel in GenJAX
 0.10.3: Vmap.edit implements only Update and IndexRequest and raises
@@ -21,7 +30,9 @@ genjax_coal_mh_harness.py (oopsla/evidence/coal_jarrett_2026-09-29/
 GENJAX_REGENERATE_WEIGHT.md).
 
 After the timed repetitions (untimed): assess() of a fixed choice map against
-the hand-computed joint log density, acceptance count, final slope/intercept.
+the hand-computed joint log density, acceptance count, final slope/intercept,
+and a record run of the same chain (same key) that prints every accepted sweep
+and the final state exactly, for comparison between encodings.
 
 Usage: python genjax_mh_linreg_tutorial_harness.py <data.json> <A|B>
 """
@@ -60,31 +71,66 @@ def line_vmap(xs, sig):
     return ys
 
 
-MODELS = {"vec": line_vec, "vmap": line_vmap}
+@genjax.gen
+def line_scal(xs):
+    slope = genjax.normal(jnp.float64(0.0), jnp.float64(1.0)) @ "slope"
+    intercept = genjax.normal(jnp.float64(0.0), jnp.float64(2.0)) @ "intercept"
+    ys = genjax.normal(slope * xs + intercept, jnp.float64(0.1)) @ "ys"
+    return ys
+
+
+# encoding -> (model, model arguments)
+MODELS = {"vec": (line_vec, (XS, SIG)), "vmap": (line_vmap, (XS, SIG)), "scal": (line_scal, (XS,))}
 REQ = Regenerate(Selection.at["slope"] | Selection.at["intercept"])
 
 
-def make_kernel(model):
+def mh_move(tr, key):
+    key, k1, k2 = jax.random.split(key, 3)
+    new_tr, w, _, _ = tr.edit(k1, REQ)
+    w = w - (new_tr.project(k1, REQ.selection) - tr.project(k1, REQ.selection))
+    a = jnp.log(jax.random.uniform(k2)) < w
+    tr = jax.lax.cond(a, lambda x, y: x, lambda x, y: y, new_tr, tr)
+    return tr, key, a
+
+
+def make_kernel(model, args):
     chm = ChoiceMap.d({"ys": YS})
 
     def step(i, carry):
         tr, key, acc = carry
-        key, k1, k2 = jax.random.split(key, 3)
-        new_tr, w, _, _ = tr.edit(k1, REQ)
-        w = w - (new_tr.project(k1, REQ.selection) - tr.project(k1, REQ.selection))
-        a = jnp.log(jax.random.uniform(k2)) < w
-        tr = jax.lax.cond(a, lambda x, y: x, lambda x, y: y, new_tr, tr)
+        tr, key, a = mh_move(tr, key)
         return (tr, key, acc + a)
 
     @jax.jit
     def kernel(key):
         kg, kl = jax.random.split(key)
-        tr, _ = model.importance(kg, chm, (XS, SIG))
+        tr, _ = model.importance(kg, chm, args)
         tr, _, acc = jax.lax.fori_loop(0, NUM_SWEEPS, step, (tr, kl, jnp.array(0)))
         ch = tr.get_choices()
         return ch["slope"], ch["intercept"], acc
 
     return kernel
+
+
+# Untimed validation program: the timed kernel's chain (same key, same moves),
+# also recording every sweep's decision.
+def make_record(model, args):
+    chm = ChoiceMap.d({"ys": YS})
+
+    def step(i, carry):
+        tr, key, dec = carry
+        tr, key, a = mh_move(tr, key)
+        return (tr, key, dec.at[i].set(a))
+
+    @jax.jit
+    def record(key):
+        kg, kl = jax.random.split(key)
+        tr, _ = model.importance(kg, chm, args)
+        tr, _, dec = jax.lax.fori_loop(0, NUM_SWEEPS, step, (tr, kl, jnp.zeros(NUM_SWEEPS, dtype=bool)))
+        ch = tr.get_choices()
+        return dec, ch["slope"], ch["intercept"]
+
+    return record
 
 
 def lp(x, mu, s):
@@ -98,8 +144,8 @@ hand = lp(slope0, 0.0, 1.0) + lp(intercept0, 0.0, 2.0) + np.sum(lp(ys_np, slope0
 print(f"config: row {ROW} N={N} sweeps={NUM_SWEEPS} reps={NREPS} encodings={','.join(ENCODINGS)} "
       f"jax={jax.__version__} devices={jax.devices()}", flush=True)
 for enc in ENCODINGS:
-    model = MODELS[enc]
-    kernel = make_kernel(model)
+    model, args = MODELS[enc]
+    kernel = make_kernel(model, args)
     label = f"GENJAX linreg_tutorial_{ROW} {enc}"
     key = jax.random.PRNGKey(1)
     out = kernel(key); jax.block_until_ready(out)          # warm-up, discarded
@@ -115,8 +161,11 @@ for enc in ENCODINGS:
           f"min {min(walls) / NUM_SWEEPS * 1e6:.4f} us | accepts {acc}/{NUM_SWEEPS} | "
           f"slope={s:.10f} intercept={i:.10f}", flush=True)
     chm_fixed = ChoiceMap.d({"ys": YS, "slope": jnp.float64(slope0), "intercept": jnp.float64(intercept0)})
-    score, _ = model.assess(chm_fixed, (XS, SIG))
+    score, _ = model.assess(chm_fixed, args)
     print(f"{label} joint density: genjax={float(score):.12f} hand={hand:.12f} |diff|={abs(float(score) - hand):.3e}", flush=True)
+    dec, rs, ri = jax.device_get(make_record(model, args)(key))
+    print(f"{label} record: accepts {int(dec.sum())}/{NUM_SWEEPS}, accepted sweeps {[int(k) + 1 for k in np.flatnonzero(dec)]}, "
+          f"final slope={float(rs)!r} intercept={float(ri)!r}", flush=True)
 
 # Prior invariance of the block move (no data): the same step on a prior-only
 # model (slope, intercept, no ys site). A correct prior-resimulation MH accepts
