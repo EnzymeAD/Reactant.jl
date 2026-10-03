@@ -36,15 +36,20 @@ using JSON3
 
 include(joinpath(@__DIR__, "heat_inverse_data.jl"))
 
+# Yield-based wait so the enzyme.dump FFI callback can fire during synchronous
+# execution; gated on the dump flag (as in harness.jl) so timing runs keep the
+# stock blocking wait.
 import Reactant.XLA.PJRT: Future
-function Base.wait(future::Future)::Nothing
-    GC.@preserve future begin
-        while !isready(future)
-            GC.safepoint()
-            yield()
+if Reactant.Compiler.DEBUG_PROBPROG_DUMP_VALUE[]
+    function Base.wait(future::Future)::Nothing
+        GC.@preserve future begin
+            while !isready(future)
+                GC.safepoint()
+                yield()
+            end
         end
+        return nothing
     end
-    return nothing
 end
 
 # ── CLI ──────────────────────────────────────────────────────────────────────

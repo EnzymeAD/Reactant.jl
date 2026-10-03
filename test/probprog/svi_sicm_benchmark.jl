@@ -10,15 +10,18 @@ const OUT = get(
 )
 mkpath(OUT)
 
+# Yielding wait lets the enzyme.dump FFI callback fire; only used when dumping.
 import Reactant.XLA.PJRT: Future
-function Base.wait(future::Future)::Nothing
-    GC.@preserve future begin
-        while !isready(future)
-            GC.safepoint()
-            yield()
+if Reactant.Compiler.DEBUG_PROBPROG_DUMP_VALUE[]
+    function Base.wait(future::Future)::Nothing
+        GC.@preserve future begin
+            while !isready(future)
+                GC.safepoint()
+                yield()
+            end
         end
+        return nothing
     end
-    return nothing
 end
 
 function model_scale_family_mvn(rng, R_data, y)

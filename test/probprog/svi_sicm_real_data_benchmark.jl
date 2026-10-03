@@ -8,15 +8,18 @@ const OUT = get(ENV, "D3_OUT", joinpath(tempdir(), "sbrantq-svi-real-data"))
 mkpath(OUT)
 const MODEL_KEY = get(ENV, "SVI_REAL_DATA_MODEL", "car_leroux_scotland")
 
+# Yielding wait lets the enzyme.dump FFI callback fire; only used when dumping.
 import Reactant.XLA.PJRT: Future
-function Base.wait(future::Future)::Nothing
-    GC.@preserve future begin
-        while !isready(future)
-            GC.safepoint()
-            yield()
+if Reactant.Compiler.DEBUG_PROBPROG_DUMP_VALUE[]
+    function Base.wait(future::Future)::Nothing
+        GC.@preserve future begin
+            while !isready(future)
+                GC.safepoint()
+                yield()
+            end
         end
+        return nothing
     end
-    return nothing
 end
 
 include(joinpath(BENCH, "sicm", "car_leroux.jl"))

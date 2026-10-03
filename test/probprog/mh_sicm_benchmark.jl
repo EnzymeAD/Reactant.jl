@@ -7,15 +7,18 @@ mkpath(OUT)
 
 _force(x) = x isa AbstractArray ? Array(x) : Float64(x)
 
+# Yielding wait lets the enzyme.dump FFI callback fire; only used when dumping.
 import Reactant.XLA.PJRT: Future
-function Base.wait(future::Future)::Nothing
-    GC.@preserve future begin
-        while !isready(future)
-            GC.safepoint()
-            yield()
+if Reactant.Compiler.DEBUG_PROBPROG_DUMP_VALUE[]
+    function Base.wait(future::Future)::Nothing
+        GC.@preserve future begin
+            while !isready(future)
+                GC.safepoint()
+                yield()
+            end
         end
+        return nothing
     end
-    return nothing
 end
 
 normal(rng, μ, σ, shape) = μ .+ σ .* randn(rng, shape)
