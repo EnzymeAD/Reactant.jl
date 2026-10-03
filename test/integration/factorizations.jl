@@ -124,7 +124,9 @@ end
             c = cholesky(A)
             return Base.getproperty(c, sym)
         end
-        A = let B = randn(4, 4); B * B' + 4I end
+        A = let B = randn(4, 4)
+            B * B' + 4I
+        end
 
         for sym in (:U, :L, :UL)
             rA = Reactant.to_rarray(A)
