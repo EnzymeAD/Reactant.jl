@@ -18,11 +18,11 @@ LOG=$E/logs/passes_driver.log
 note () { echo "$(date -Is) $*" >> "$LOG"; }
 eval "$(sed -n '/^capped_julia ()/,/^}/p;/^attest ()/,/^}/p' "$P/run_cochlear_nightly.sh")"
 landed () { [ "$(grep -c '^    rc=0 ' "$1/batch_meta.txt" 2>/dev/null)" -ge 4 ]; }
-last_night="$(date -d '-7 hours' +%F)"   # pass 2 already ran in the current night
+last_night="${LAST_NIGHT:-$(date -d '-7 hours' +%F)}"   # night (date of its evening) of the last landed pass; pass 2 ran in night 2026-10-01
 for pass in "$@"; do
   while :; do
     night="$(date -d '-7 hours' +%F)"
-    if [ "$((10#$(date +%H)))" -ge 7 ] || [ "$night" = "$last_night" ]; then
+    if false; then  # 2026-10-02 user: no night window
       wake=$(date -d 'tomorrow 00:00:30' +%s)
       note "$pass: waiting for the next window, sleeping until $(date -d @$wake -Is)"
       sleep $(( wake - $(date +%s) )); continue

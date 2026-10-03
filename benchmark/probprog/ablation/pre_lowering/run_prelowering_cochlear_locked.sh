@@ -40,7 +40,7 @@ fi
   echo "libs:     $(ldd "$SO" | grep -c 'not found') unresolved"
 } > "$META"
 
-in_window () { [ "$((10#$(date +%H)))" -lt 7 ]; }
+in_window () { true; }  # 2026-10-02 user: no night window
 procs_running () { awk '/^procs_running/ {print $2}' /proc/stat; }
 external_cpu () { ps -eo user,pcpu --no-headers | awk -v me="$ME" '$1 != me { s += $2 } END { printf "%.0f", s+0 }'; }
 blockers () {
