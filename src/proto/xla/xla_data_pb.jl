@@ -4,13 +4,15 @@ using ProtoBuf.EnumX: @enumx
 
 export RandomDistribution, Statistic, var"TriangularSolveOptions.Transpose"
 export var"WhileLoopBackendConfig.KnownInitStep", var"ResultAccuracy.Mode"
-export GatherDimensionNumbers, var"DeviceAssignmentProto.ComputationDevice"
-export SplitConfigProto, var"PrecisionConfig.Algorithm", RandomAlgorithm, DimLevelType
+export var"ShuffleMode.Rotate", GatherDimensionNumbers
+export var"DeviceAssignmentProto.ComputationDevice", SplitConfigProto
+export var"PrecisionConfig.Algorithm", RandomAlgorithm, DimLevelType
 export var"WhileLoopBackendConfig.KnownTripCount", CollectiveOpGroupMode, PrimitiveType
 export ParameterReplication, CompilationEvent, var"ChannelHandle.ChannelType"
 export var"NamedShardingProto.ReductionOpProto", SortOptions, ReplicaGroup
 export var"ResultAccuracy.Tolerance", var"MeshProto.IotaTransform", Payload, TileProto
-export ScatterDimensionNumbers, SourceTarget, ExecutionHandle, GlobalDataHandle
+export ScatterDimensionNumbers, var"BlockScalingConfig.TensorBlockScalingConfig"
+export SourceTarget, ExecutionHandle, GlobalDataHandle
 export var"WhileLoopBackendConfig.DynamicVariable", FftType, ProfileSource
 export DotDimensionNumbers, DeviceHandle, var"OpSharding.Type", var"CubScanOptions.Kind"
 export WindowDimension, ConvolutionDimensionNumbers, IotaReplicaGroupListProto
@@ -20,14 +22,14 @@ export var"PaddingConfig.PaddingConfigDimension", GemmPerfTableEntry, OutputOper
 export var"PrecisionConfig.Precision", ExecutionProfile, var"AxisRefProto.SubAxis"
 export var"SparsityConfig.TensorSparsityConfig", ProfileGenerationStrategy, PaddingType
 export var"MeshProto.MeshAxis", var"OpSharding.ShardGroupType", CholeskyOptions
-export StatisticsViz, TriangularSolveOptions, DeviceAssignmentProto, ChannelHandle
-export CollectiveDeviceListProto, ResultAccuracy, RaggedDotDimensionNumbers, CubScanOptions
-export Window, OriginalValueElementProto, WhileLoopBackendConfig, PaddingConfig
-export GemmPerfTableEntryValues, PrecisionConfig, AxisRefProto, SparsityConfig
-export var"OpMetadata.ProfileInfo", MeshProto, OriginalValueProto, GemmPerfTable
-export var"NamedShardingProto.DimensionSharding", OpMetadata, MeshAxesReplicaGroupListProto
-export NamedShardingProto, LayoutProto, LiteralProto, OpSharding, ProgramShapeProto
-export ShapeProto
+export StatisticsViz, TriangularSolveOptions, ShuffleMode, DeviceAssignmentProto
+export ChannelHandle, CollectiveDeviceListProto, ResultAccuracy, BlockScalingConfig
+export RaggedDotDimensionNumbers, CubScanOptions, Window, OriginalValueElementProto
+export WhileLoopBackendConfig, PaddingConfig, GemmPerfTableEntryValues, PrecisionConfig
+export AxisRefProto, SparsityConfig, var"OpMetadata.ProfileInfo", MeshProto
+export OriginalValueProto, GemmPerfTable, var"NamedShardingProto.DimensionSharding"
+export OpMetadata, MeshAxesReplicaGroupListProto, NamedShardingProto, LayoutProto
+export LiteralProto, OpSharding, ProgramShapeProto, ShapeProto
 abstract type var"##Abstract#LiteralProto" end
 abstract type var"##Abstract#ShapeProto" end
 abstract type var"##Abstract#OpSharding" end
@@ -112,6 +114,36 @@ function PB._encoded_size(x::var"WhileLoopBackendConfig.KnownInitStep")
 end
 
 @enumx var"ResultAccuracy.Mode" DEFAULT=0 HIGHEST=1
+
+struct var"ShuffleMode.Rotate"
+    shifts::Vector{Int64}
+end
+PB.default_values(::Type{var"ShuffleMode.Rotate"}) = (;shifts = Vector{Int64}())
+PB.field_numbers(::Type{var"ShuffleMode.Rotate"}) = (;shifts = 1)
+
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"ShuffleMode.Rotate"}, _endpos::Int=0, _group::Bool=false)
+    shifts = PB.BufferedVector{Int64}()
+    while !PB.message_done(d, _endpos, _group)
+        field_number, wire_type = PB.decode_tag(d)
+        if field_number == 1
+            PB.decode!(d, wire_type, shifts)
+        else
+            Base.skip(d, wire_type)
+        end
+    end
+    return var"ShuffleMode.Rotate"(shifts[])
+end
+
+function PB.encode(e::PB.AbstractProtoEncoder, x::var"ShuffleMode.Rotate")
+    initpos = position(e.io)
+    !isempty(x.shifts) && PB.encode(e, 1, x.shifts)
+    return position(e.io) - initpos
+end
+function PB._encoded_size(x::var"ShuffleMode.Rotate")
+    encoded_size = 0
+    !isempty(x.shifts) && (encoded_size += PB._encoded_size(x.shifts, 1))
+    return encoded_size
+end
 
 struct GatherDimensionNumbers
     offset_dims::Vector{Int64}
@@ -585,6 +617,54 @@ function PB._encoded_size(x::ScatterDimensionNumbers)
     x.index_vector_dim != zero(Int64) && (encoded_size += PB._encoded_size(x.index_vector_dim, 4))
     !isempty(x.input_batching_dims) && (encoded_size += PB._encoded_size(x.input_batching_dims, 5))
     !isempty(x.scatter_indices_batching_dims) && (encoded_size += PB._encoded_size(x.scatter_indices_batching_dims, 6))
+    return encoded_size
+end
+
+struct var"BlockScalingConfig.TensorBlockScalingConfig"
+    scale_idx::Int32
+    zero_idx::Int32
+    strides::Vector{Int64}
+    steps::Vector{Int64}
+end
+PB.default_values(::Type{var"BlockScalingConfig.TensorBlockScalingConfig"}) = (;scale_idx = zero(Int32), zero_idx = zero(Int32), strides = Vector{Int64}(), steps = Vector{Int64}())
+PB.field_numbers(::Type{var"BlockScalingConfig.TensorBlockScalingConfig"}) = (;scale_idx = 1, zero_idx = 2, strides = 3, steps = 4)
+
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"BlockScalingConfig.TensorBlockScalingConfig"}, _endpos::Int=0, _group::Bool=false)
+    scale_idx = zero(Int32)
+    zero_idx = zero(Int32)
+    strides = PB.BufferedVector{Int64}()
+    steps = PB.BufferedVector{Int64}()
+    while !PB.message_done(d, _endpos, _group)
+        field_number, wire_type = PB.decode_tag(d)
+        if field_number == 1
+            scale_idx = PB.decode(d, Int32)
+        elseif field_number == 2
+            zero_idx = PB.decode(d, Int32)
+        elseif field_number == 3
+            PB.decode!(d, wire_type, strides)
+        elseif field_number == 4
+            PB.decode!(d, wire_type, steps)
+        else
+            Base.skip(d, wire_type)
+        end
+    end
+    return var"BlockScalingConfig.TensorBlockScalingConfig"(scale_idx, zero_idx, strides[], steps[])
+end
+
+function PB.encode(e::PB.AbstractProtoEncoder, x::var"BlockScalingConfig.TensorBlockScalingConfig")
+    initpos = position(e.io)
+    x.scale_idx != zero(Int32) && PB.encode(e, 1, x.scale_idx)
+    x.zero_idx != zero(Int32) && PB.encode(e, 2, x.zero_idx)
+    !isempty(x.strides) && PB.encode(e, 3, x.strides)
+    !isempty(x.steps) && PB.encode(e, 4, x.steps)
+    return position(e.io) - initpos
+end
+function PB._encoded_size(x::var"BlockScalingConfig.TensorBlockScalingConfig")
+    encoded_size = 0
+    x.scale_idx != zero(Int32) && (encoded_size += PB._encoded_size(x.scale_idx, 1))
+    x.zero_idx != zero(Int32) && (encoded_size += PB._encoded_size(x.zero_idx, 2))
+    !isempty(x.strides) && (encoded_size += PB._encoded_size(x.strides, 3))
+    !isempty(x.steps) && (encoded_size += PB._encoded_size(x.steps, 4))
     return encoded_size
 end
 
@@ -1602,6 +1682,45 @@ function PB._encoded_size(x::TriangularSolveOptions)
     return encoded_size
 end
 
+struct ShuffleMode
+    mode::Union{Nothing,OneOf{var"ShuffleMode.Rotate"}}
+end
+PB.oneof_field_types(::Type{ShuffleMode}) = (;
+    mode = (;rotate=var"ShuffleMode.Rotate"),
+)
+PB.default_values(::Type{ShuffleMode}) = (;rotate = nothing)
+PB.field_numbers(::Type{ShuffleMode}) = (;rotate = 1)
+
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ShuffleMode}, _endpos::Int=0, _group::Bool=false)
+    mode = nothing
+    while !PB.message_done(d, _endpos, _group)
+        field_number, wire_type = PB.decode_tag(d)
+        if field_number == 1
+            mode = OneOf(:rotate, PB.decode(d, Ref{var"ShuffleMode.Rotate"}))
+        else
+            Base.skip(d, wire_type)
+        end
+    end
+    return ShuffleMode(mode)
+end
+
+function PB.encode(e::PB.AbstractProtoEncoder, x::ShuffleMode)
+    initpos = position(e.io)
+    if isnothing(x.mode);
+    elseif x.mode.name === :rotate
+        PB.encode(e, 1, x.mode[]::var"ShuffleMode.Rotate")
+    end
+    return position(e.io) - initpos
+end
+function PB._encoded_size(x::ShuffleMode)
+    encoded_size = 0
+    if isnothing(x.mode);
+    elseif x.mode.name === :rotate
+        encoded_size += PB._encoded_size(x.mode[]::var"ShuffleMode.Rotate", 1)
+    end
+    return encoded_size
+end
+
 struct DeviceAssignmentProto
     replica_count::Int32
     computation_count::Int32
@@ -1753,6 +1872,42 @@ function PB._encoded_size(x::ResultAccuracy)
     elseif x.specs.name === :tolerance
         encoded_size += PB._encoded_size(x.specs[]::var"ResultAccuracy.Tolerance", 2)
     end
+    return encoded_size
+end
+
+struct BlockScalingConfig
+    lhs::Union{Nothing,var"BlockScalingConfig.TensorBlockScalingConfig"}
+    rhs::Union{Nothing,var"BlockScalingConfig.TensorBlockScalingConfig"}
+end
+PB.default_values(::Type{BlockScalingConfig}) = (;lhs = nothing, rhs = nothing)
+PB.field_numbers(::Type{BlockScalingConfig}) = (;lhs = 1, rhs = 2)
+
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:BlockScalingConfig}, _endpos::Int=0, _group::Bool=false)
+    lhs = Ref{Union{Nothing,var"BlockScalingConfig.TensorBlockScalingConfig"}}(nothing)
+    rhs = Ref{Union{Nothing,var"BlockScalingConfig.TensorBlockScalingConfig"}}(nothing)
+    while !PB.message_done(d, _endpos, _group)
+        field_number, wire_type = PB.decode_tag(d)
+        if field_number == 1
+            PB.decode!(d, lhs)
+        elseif field_number == 2
+            PB.decode!(d, rhs)
+        else
+            Base.skip(d, wire_type)
+        end
+    end
+    return BlockScalingConfig(lhs[], rhs[])
+end
+
+function PB.encode(e::PB.AbstractProtoEncoder, x::BlockScalingConfig)
+    initpos = position(e.io)
+    !isnothing(x.lhs) && PB.encode(e, 1, x.lhs)
+    !isnothing(x.rhs) && PB.encode(e, 2, x.rhs)
+    return position(e.io) - initpos
+end
+function PB._encoded_size(x::BlockScalingConfig)
+    encoded_size = 0
+    !isnothing(x.lhs) && (encoded_size += PB._encoded_size(x.lhs, 1))
+    !isnothing(x.rhs) && (encoded_size += PB._encoded_size(x.rhs, 2))
     return encoded_size
 end
 
@@ -2234,36 +2389,42 @@ end
 struct OriginalValueProto
     elements::Vector{OriginalValueElementProto}
     is_synthetic_call::Bool
+    call_hierarchy::String
 end
-PB.default_values(::Type{OriginalValueProto}) = (;elements = Vector{OriginalValueElementProto}(), is_synthetic_call = false)
-PB.field_numbers(::Type{OriginalValueProto}) = (;elements = 1, is_synthetic_call = 2)
+PB.default_values(::Type{OriginalValueProto}) = (;elements = Vector{OriginalValueElementProto}(), is_synthetic_call = false, call_hierarchy = "")
+PB.field_numbers(::Type{OriginalValueProto}) = (;elements = 1, is_synthetic_call = 2, call_hierarchy = 3)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OriginalValueProto}, _endpos::Int=0, _group::Bool=false)
     elements = PB.BufferedVector{OriginalValueElementProto}()
     is_synthetic_call = false
+    call_hierarchy = ""
     while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, elements)
         elseif field_number == 2
             is_synthetic_call = PB.decode(d, Bool)
+        elseif field_number == 3
+            call_hierarchy = PB.decode(d, String)
         else
             Base.skip(d, wire_type)
         end
     end
-    return OriginalValueProto(elements[], is_synthetic_call)
+    return OriginalValueProto(elements[], is_synthetic_call, call_hierarchy)
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::OriginalValueProto)
     initpos = position(e.io)
     !isempty(x.elements) && PB.encode(e, 1, x.elements)
     x.is_synthetic_call != false && PB.encode(e, 2, x.is_synthetic_call)
+    !isempty(x.call_hierarchy) && PB.encode(e, 3, x.call_hierarchy)
     return position(e.io) - initpos
 end
 function PB._encoded_size(x::OriginalValueProto)
     encoded_size = 0
     !isempty(x.elements) && (encoded_size += PB._encoded_size(x.elements, 1))
     x.is_synthetic_call != false && (encoded_size += PB._encoded_size(x.is_synthetic_call, 2))
+    !isempty(x.call_hierarchy) && (encoded_size += PB._encoded_size(x.call_hierarchy, 3))
     return encoded_size
 end
 

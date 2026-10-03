@@ -353,7 +353,7 @@ region of memory that will be indexed is aligned at the specified byte
 boundary.
 
 ```mlir
-%0 = memref.alloc()[%s] {alignment = 8} :
+%0 = memref.alloc()[%s] alignment = 8 :
   memref<8x64xf32, affine_map<(d0, d1)[s0] -> ((d0 + s0), d1)>, 1>
 ```
 """
@@ -1113,7 +1113,7 @@ given global variable will always return the same memref descriptor).
 memref.global \"private\" @x : memref<2xf32> = dense<[0.0, 2.0]>
 
 // Private variable with an initial value and an alignment (power of 2).
-memref.global \"private\" @x : memref<2xf32> = dense<[0.0, 2.0]> {alignment = 64}
+memref.global \"private\" @x : memref<2xf32> = dense<[0.0, 2.0]> alignment = 64
 
 // Declaration of an external variable.
 memref.global \"private\" @y : memref<4xi32>
@@ -1334,7 +1334,7 @@ nor realloc supports alignment, though there is aligned_alloc but not
 aligned_realloc.
 
 ```mlir
-%3 = memref.realloc %src {alignment = 8} : memref<64xf32> to memref<124xf32>
+%3 = memref.realloc %src alignment = 8 : memref<64xf32> to memref<124xf32>
 ```
 
 Referencing the memref through the old SSA value after realloc is undefined
