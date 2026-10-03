@@ -40,6 +40,12 @@ Reactant.TracedEnum
 Reactant.ConcreteEnum
 ```
 
+## Memory Management
+
+```@docs
+Reactant.free!
+```
+
 ## Inspect Generated HLO
 
 ```@docs

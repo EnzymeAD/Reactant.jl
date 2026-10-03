@@ -3,10 +3,15 @@ function get_buffer(
 )
     if Sharding.is_sharded(x.sharding)
         # For scalars this is mostly replicated
-        no_error_for_scalar && return first(x.data).buffer
+        no_error_for_scalar && return _checked_buffer(first(x.data).buffer)
         error("`x` is sharded, so `get_buffer` is not defined")
     end
-    return only(x.data).buffer
+    return _checked_buffer(only(x.data).buffer)
+end
+
+function _checked_buffer(buffer::XLA.AbstractBuffer)
+    isempty(buffer) && XLA.throw_empty_buffer("get")
+    return buffer
 end
 
 for runtime in (:PJRT, :IFRT)
@@ -119,6 +124,7 @@ function Base.convert(::Type{<:Array}, X::AbstractConcreteArray{T,N}) where {T,N
 end
 
 function write_to_host_buffer!(data::Array, X::ConcretePJRTArray{T,N}) where {T,N}
+    isempty(X) && XLA.throw_empty_buffer("copy to host from")
     if Sharding.is_sharded(X)
         completed = Set{eltype(X.sharding.device_to_array_slices)}()
         for idx in 1:length(X.data)
@@ -136,6 +142,7 @@ function write_to_host_buffer!(data::Array, X::ConcretePJRTArray{T,N}) where {T,
 end
 
 function write_to_host_buffer!(data::Array, X::ConcreteIFRTArray{T,N}) where {T,N}
+    isempty(X) && XLA.throw_empty_buffer("copy to host from")
     XLA.to_host(X.data, data, X.sharding)
     return nothing
 end
@@ -171,6 +178,81 @@ end
 function synchronize(x::Union{ConcreteIFRTArray,ConcreteIFRTNumber})
     wait(x.data)
     return nothing
+end
+
+"""
+    free!(x; sync::Bool=false)
+
+Immediately release the device memory associated with `x` without waiting for the Julia
+garbage collector. `x` may be a `ConcreteRArray`, `ConcreteRNumber` (or their
+`ConcretePJRT*`/`ConcreteIFRT*` variants), any wrapped view of one (in which case the
+entire underlying array is freed), or any other object (in which case the call is a
+no-op, mirroring [`synchronize`](@ref)).
+
+This is meant for applications that transfer large amounts of data to the device at a
+high rate — e.g. training loops freeing batch tensors at the end of each step, or
+inference servers freeing model weights before loading new ones — and need device memory
+to be reclaimed deterministically instead of waiting for GC pressure.
+
+# Behavior
+
+- The buffer is released to the runtime immediately. If `sync=true`, `free!` first
+  blocks until any pending computation involving `x` completes, guaranteeing the memory
+  is reclaimable when `free!` returns. Otherwise the runtime defers actual reclamation
+  until in-flight work using the buffer finishes — exactly like the buffer's finalizer,
+  just at a deterministic point in time.
+- After `free!`, `x` is in the empty state (`isempty(x) == true`): printing shows
+  `<Empty Buffer ...>` and any further use (indexing, `convert(Array, x)`, passing `x`
+  to a compiled function) throws an error. Freeing an array does not make it reusable —
+  allocate a new one instead.
+- The call is idempotent: freeing the same object twice, or freeing it and then running
+  the GC, is a no-op.
+- If the buffer backing `x` was donated to a compiled executable, `free!` throws: the
+  underlying buffer is owned by XLA and will be released by its finalizer.
+
+See also [`synchronize`](@ref), [`XLA.free_buffer!`](@ref), and
+`clear_compilation_cache!`.
+
+For background on why explicit freeing is needed, see
+[issue #3168](https://github.com/EnzymeAD/Reactant.jl/issues/3168).
+"""
+function free! end
+
+free!(::Any) = nothing
+
+function free!(x::Union{ConcretePJRTArray,ConcretePJRTNumber}; sync::Bool=false)
+    if getfield(x, :donated)
+        error(
+            "Cannot `free!` a $(typeof(x)) whose buffer was donated to a compiled ",
+            "executable. The underlying buffer is owned by XLA and will be released by ",
+            "its finalizer.",
+        )
+    end
+    sync && wait(x)
+    foreach(XLA.free_buffer!, getfield(x, :data))
+    return nothing
+end
+
+function free!(x::Union{ConcreteIFRTArray,ConcreteIFRTNumber}; sync::Bool=false)
+    if getfield(x, :donated)
+        error(
+            "Cannot `free!` a $(typeof(x)) whose buffer was donated to a compiled ",
+            "executable. The underlying buffer is owned by XLA and will be released by ",
+            "its finalizer.",
+        )
+    end
+    sync && wait(x)
+    XLA.free_buffer!(getfield(x, :data))
+    return nothing
+end
+
+# Wrapped arrays (views, reshapes, adjoints, ...) of concrete arrays: free the whole
+# underlying concrete array. For any other array (host arrays, traced arrays, ...) this
+# is a no-op.
+function free!(x::AbstractArray; kwargs...)
+    a = ancestor(x)
+    a === x && return nothing
+    return free!(a; kwargs...)
 end
 
 function to_number(tp::Base.TwicePrecision)
