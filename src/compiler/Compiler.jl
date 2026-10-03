@@ -603,6 +603,8 @@ Base.@nospecializeinfer function compile_mlir!(
                         raise_passes,
                         "enzyme-batch",
                         opt_passes2,
+                        # Dedupe ops hoisted by opt_passes2 (its cse runs before LICM).
+                        "cse",
                         impulse_pass(; backend=backend),
                         "lower-impulse-to-stablehlo{backend=$backend}",
                         "outline-enzyme-regions",
@@ -630,6 +632,8 @@ Base.@nospecializeinfer function compile_mlir!(
                         opt_passes,
                         "enzyme-batch",
                         opt_passes2,
+                        # Dedupe ops hoisted by opt_passes2 (its cse runs before LICM).
+                        "cse",
                         impulse_pass(; backend=backend),
                         "lower-impulse-to-stablehlo{backend=$backend}",
                         "outline-enzyme-regions",
