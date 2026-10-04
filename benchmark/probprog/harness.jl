@@ -432,16 +432,19 @@ function run_svi(
     selected_entries = svi_selected_entries(tt.entries, spec.selection)
 
     function fit_and_sample(r, ct, ip, this_seed)
+        # Only the fit is timed (sync=true: the span ends when the fitted
+        # parameters are complete on the device); host copies follow, as
+        # NumPyro's span ends at block_until_ready on its losses.
         run_time = @elapsed begin
             elbo_t, loc_t, scale_t = compiled_fn(
                 r, spec.model_fn, spec.model_args, step_size_rnum, num_steps,
                 num_particles, init_scale, guide, optimizer, ct,
                 constrained_addresses, spec.selection, ip,
             )
-            elbo = Array(elbo_t)
-            loc = Array(loc_t)
-            scale = Array(scale_t)
         end
+        elbo = Array(elbo_t)
+        loc = Array(loc_t)
+        scale = Array(scale_t)
         constrained = svi_guide_draws(loc, scale, selected_entries, num_draws, this_seed)
         trace = ProbProg.unflatten_trace(constrained, 0.0, selected_entries, nothing)
         out = extract_samples(trace)
@@ -837,6 +840,16 @@ function main()
         return trace_tensor, diagnostics
     end
 
+    # Draws (device) -> host arrays -> the harness's output dict. Called after
+    # the timed span ends.
+    function draws_to_output(trace_tensor, diagnostics)
+        trace_host = Array(trace_tensor)
+        Array(diagnostics)
+        return extract_samples(
+            ProbProg.unflatten_trace(trace_host, 0.0, selected_entries, nothing)
+        )
+    end
+
     # One chain's samples from private copies of every donated concrete input,
     # so the shared compiled thunk is safe to run concurrently across chains.
     function run_one_chain(key_c, ct)
@@ -884,12 +897,13 @@ function main()
         else
             trace_tensor, diagnostics = run_compiled(rng, constraint_tensor)
         end
-        if !multichain
-            trace_tensor = Array(trace_tensor)
-            diagnostics = Array(diagnostics)
-            trace = ProbProg.unflatten_trace(trace_tensor, 0.0, selected_entries, nothing)
-            output = extract_samples( trace)
-        end
+    end
+    # Host conversion and unflattening of the draws stay outside the timed span
+    # (the thunk is compiled with sync=true, so the span already ends when the
+    # draws are complete on the device), as NumPyro's span ends at
+    # block_until_ready on its draws.
+    if !multichain
+        output = draws_to_output(trace_tensor, diagnostics)
     end
     println("$(round(run_time * 1000, digits=2)) ms")
 
@@ -907,8 +921,8 @@ function main()
         for _ in 2:repeat_runs
             t = @elapsed begin
                 tt_r, _ = run_compiled(rng, constraint_tensor)
-                Array(tt_r)
             end
+            Array(tt_r)
             push!(rts, t)
         end
         output["repeat_times_s"] = rts
@@ -966,17 +980,13 @@ function main()
                     new_trace_tensor, new_diagnostics = Reactant.Profiler.with_profiler(profile_dir) do
                         run_compiled(new_rng, new_constraint_tensor)
                     end
-                    new_trace_tensor = Array(new_trace_tensor)
-                    new_diagnostics = Array(new_diagnostics)
-                    new_trace = ProbProg.unflatten_trace(new_trace_tensor, 0.0, selected_entries, nothing)
-                    new_output = extract_samples( new_trace)
                 else
                     new_trace_tensor, new_diagnostics = run_compiled(new_rng, new_constraint_tensor)
-                    new_trace_tensor = Array(new_trace_tensor)
-                    new_diagnostics = Array(new_diagnostics)
-                    new_trace = ProbProg.unflatten_trace(new_trace_tensor, 0.0, selected_entries, nothing)
-                    new_output = extract_samples( new_trace)
                 end
+            end
+            # Host conversion outside the timed span (see the first trial).
+            if !multichain
+                new_output = draws_to_output(new_trace_tensor, new_diagnostics)
             end
             new_output["compile_time"] = 0.0
             new_output["run_time"] = new_run_time

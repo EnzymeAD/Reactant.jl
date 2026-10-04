@@ -3,11 +3,19 @@
 
 using Turing, Distributions, LinearAlgebra
 
+const _log1pexp = Turing.StatsFuns.log1pexp
+
 @model function turing_logistic_regression(X, Y, n, k, alpha_scale, beta_scale, beta_loc)
     alpha ~ Normal(0.0, alpha_scale)
     beta ~ filldist(Normal(beta_loc, beta_scale), k)
     mu = alpha .+ X * beta
-    Turing.@addlogprob! sum(logpdf.(BernoulliLogit.(mu), Y))
+    # Bernoulli-logit log likelihood sum_i logpdf(BernoulliLogit(mu_i), Y_i)
+    # written out, sum_i y_i mu_i - log(1 + exp(mu_i)), as robust regression's
+    # Student-t is: the same log density, and it differentiates under
+    # ReverseDiff, where the broadcast logpdf.(BernoulliLogit.(mu), Y) returns
+    # -Inf (ReverseDiff's broadcast passes Y as dual numbers, which fail
+    # BernoulliLogit's x == 0 / x == 1 support branches).
+    Turing.@addlogprob! dot(Y, mu) - sum(_log1pexp.(mu))
 end
 
 function setup(data)

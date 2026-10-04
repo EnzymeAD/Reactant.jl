@@ -119,27 +119,28 @@ parameters {
 }
 
 model {
-  int labeler;
-  int label;
-  real inner_sum;
-  array[num_categories] real log_prob;
+  // The same density as sum_j categorical_lpmf(label | confusion_matrix[labeler, c])
+  // + log(prev[c]) per item and category, written with the logs of the
+  // parameters taken once per gradient (k * num_categories^2 + num_categories
+  // logs) and gathered per label, as the other three systems compute it,
+  // instead of one categorical_lpmf (a log and a simplex check) per item,
+  // label and category.
+  array[k] matrix[num_categories, num_categories] log_conf;
+  vector[num_categories] log_prev = log(prev);
   prev ~ dirichlet(beta);
   for (j in 1:k) {
     for (c in 1:num_categories) {
       confusion_matrix[j,c,:] ~ dirichlet(alpha[c,:]);
+      log_conf[j][c] = log(confusion_matrix[j,c])';
     }
   }
   for (i in 1:n) {
-    for (c in 1:num_categories) {
-      inner_sum = 0.0;
-      for (j in 1:num_labels_per_item) {
-        label = labels[i,j];
-        labeler = labelers[i, j];
-        inner_sum += categorical_lpmf(label | confusion_matrix[labeler, c]);
-      }
-      log_prob[c] = inner_sum + log(prev[c]);
+    vector[num_categories] lp = log_prev;
+    for (j in 1:num_labels_per_item) {
+      // column labels[i,j] of the labeler's log confusion matrix: log P(label | c)
+      lp += log_conf[labelers[i, j]][:, labels[i, j]];
     }
-    target += log_sum_exp(log_prob);
+    target += log_sum_exp(lp);
   }
 }
 """
