@@ -130,7 +130,11 @@ end
 
         for sym in (:U, :L, :UL)
             rA = Reactant.to_rarray(A)
-            @test @jit(f(rA, sym)) ≈ Reactant.to_rarray(f(A, sym))
+            # Compare against the host result directly: on Julia 1.10, comparing two
+            # concrete arrays converts `LowerTriangular{<:Adjoint{<:ConcretePJRTArray}}`
+            # to `Array` via `copyto!(::Matrix, ::Adjoint{<:ConcretePJRTArray})`, which
+            # is currently broken.
+            @test @jit(f(rA, sym)) ≈ f(A, sym)
         end
     end
 
