@@ -79,7 +79,7 @@
         "name": "Turing.jl",
         "color": "purple"
       },
-      "trials": 1
+      "trials": 4
     },
     {
       "name": "stan",
