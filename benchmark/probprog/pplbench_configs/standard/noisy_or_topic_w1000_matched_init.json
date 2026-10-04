@@ -78,7 +78,7 @@
           "adapt_step_size": true,
           "adapt_mass_matrix": true,
           "matched_init": true,
-          "adtype": "reversediff"
+          "adtype": "forwarddiff"
         }
       },
       "legend": {

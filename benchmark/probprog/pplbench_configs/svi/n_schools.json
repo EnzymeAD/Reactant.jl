@@ -58,7 +58,8 @@
           "num_particles": 1,
           "init_scale": 0.1,
           "guide": "AutoNormal",
-          "optimizer": "Adam"
+          "optimizer": "Adam",
+          "adtype": "reversediff"
         }
       },
       "legend": {

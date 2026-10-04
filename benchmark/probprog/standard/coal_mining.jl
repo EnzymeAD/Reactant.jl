@@ -97,13 +97,15 @@ end
 function build_constraint(data, init_params)
     y, _ = _read_counts(data)
 
-    if init_params !== nothing
-        init_l1 = Float64.(init_params["l1"])
-        init_l2 = Float64.(init_params["l2"])
-    else
-        init_l1 = [1.0]
-        init_l2 = [1.0]
-    end
+    # Matched-init protocol: deterministic canonical start, the constrained image
+    # of unconstrained zeros. l1 and l2 are positive (Gamma) with an exp
+    # transform, so their canonical value is exp(0) = 1, the point the NumPyro
+    # arm pins (numpyro/coal_mining.py matched_init_params). The per-trial
+    # `init_params` draw from the upstream generate_init_params is intentionally
+    # ignored so every Impulse trial starts from the same point as the
+    # matched-init baselines (as in the other models' build_constraint).
+    init_l1 = [1.0]
+    init_l2 = [1.0]
 
     return ProbProg.Constraint(
         :l1 => init_l1,

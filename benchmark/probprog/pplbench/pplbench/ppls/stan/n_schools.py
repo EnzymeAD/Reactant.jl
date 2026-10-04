@@ -144,17 +144,18 @@ parameters {
   vector[num_types] beta_type;
 }
 
-transformed parameters {
-    vector[n] Yhat;
-    for (i in 1:n) {
-        Yhat[i] = beta_baseline
-                + beta_state[state_idx[i]]
-                + beta_district[state_idx[i], district_idx[i]]
-                + beta_type[type_idx[i]];
-    }
-}
-
 model {
+  // A model-block local, not a transformed parameter: the same log density,
+  // but CmdStan does not write n = 10000 columns of Yhat for every draw
+  // (upstream PPLBench sampled through PyStan with pars=get_pars(), which never
+  // wrote Yhat).
+  vector[n] Yhat;
+  for (i in 1:n) {
+      Yhat[i] = beta_baseline
+              + beta_state[state_idx[i]]
+              + beta_district[state_idx[i], district_idx[i]]
+              + beta_type[type_idx[i]];
+  }
   sigma_state ~ cauchy(0, scale_state);
   sigma_district ~ cauchy(0, scale_district);
   sigma_type ~ cauchy(0, scale_type);

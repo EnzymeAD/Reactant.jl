@@ -27,7 +27,24 @@
 #   cells/<label>.gate.txt   per-cell load1/extcpu min-max-samples
 #
 # Env knobs: LOAD_GATE (24), LOAD_MAX (24), EXT_CPU_LIMIT (1000),
-#            MAX_ROW_RETRIES (3), ROWS (space-separated row ids), LOGDIR.
+#            MAX_ROW_RETRIES (3), ROWS (space-separated row ids), LOGDIR,
+#            NO_GATE (0). NO_GATE=1 (user policy 2026-10-02: time on the machine
+#            as it is, record the ambient, rerun later if the noise is large):
+#            no start gate, no watchdog abort, no contamination rerun; the
+#            per-cell gate files and load_samples.csv still record the ambient.
+#
+# Harness fixes of 2026-10-04 (oopsla/evidence/fig11_harness_fixes_2026-10-04/,
+# from the 2026-10-03 figure-11 check): NumPyro compiles its sampler and its
+# SVI step program once, outside the timed trials (X1, X2); Stan keeps the
+# per-observation quantities as model-block locals instead of writing them per
+# draw (X3); Turing writes per-observation constants once and takes its AD
+# backend from the config on both the NUTS and the VI path (X4); Impulse coal
+# starts at the matched init (X5). Stan's VI is CmdStan's standard ADVI, a
+# different algorithm from the Adam / one-particle loop the other three systems
+# run (own eta adaptation, 10 gradient draws per iteration, own relative-ELBO
+# stopping rule); it is kept as the most commonly available Stan VI (X6), and
+# all three Stan VI rows start from the matched init (the */_matched_init
+# configs), as the logistic row already did.
 
 set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -85,6 +102,10 @@ sibling_count() {
 
 wait_for_quiet() {
   local waited=0 l e s
+  if [ "${NO_GATE:-0}" = "1" ]; then
+    note "  (no gate: load1=$(load1) ambient=$(ambient_load1) ext=$(external_cpu)%)"
+    return 0
+  fi
   while :; do
     l="$(ambient_load1 | cut -d. -f1)"; e="$(external_cpu)"; s="$(sibling_count)"
     if [ "$l" -lt "$LOAD_GATE" ] && [ "$e" -lt "${START_EXT_CPU:-$EXT_CPU_LIMIT}" ] && [ "$s" -eq 0 ] && ! /mnt4/sbrantq/probprog/oopsla/tools/bazel_building.sh; then
@@ -116,6 +137,7 @@ kill_tree() {
 # away: the retry then starts in the next quiet window instead of hours later.
 start_watchdog() {
   local pids="$1"
+  [ "${NO_GATE:-0}" = "1" ] && { WATCHDOG_PID=""; return 0; }
   ( bad=0
     while :; do
       sleep 5
@@ -208,6 +230,8 @@ wait_row() {   # wait_row <rowid>
     if [ "$rc" -ne 0 ]; then
       note "END   $label: FAILED (rc=$rc) load1_max=$lmax extcpu_max=$emax"
       ROW_FAILED=1
+    elif [ "${NO_GATE:-0}" = "1" ]; then
+      note "END   $label: OK (no gate) load1_max=$lmax ambient_max=$amax ambient_sustained=$asus extcpu_max=$emax extcpu_sustained=$esus frac_over=$efrac dur=$((t1-t0))s"
     elif [ "${STRICT:-0}" = "1" ] && [ "$emax" -ge "$EXT_CPU_LIMIT" ]; then
       note "END   $label: CONTAMINATED (strict: extcpu instantaneous max=$emax >= $EXT_CPU_LIMIT)"
       ROW_FAILED=1
@@ -282,12 +306,25 @@ run_row() {   # run_row <rowid>
         spawn "svi_robust_regression_numpyro${sfx}" 0 4h --threads 1 --ppls numpyro svi/robust_regression
         spawn "svi_robust_regression_impulse${sfx}" 1 4h --threads 1 --ppls impulse svi/robust_regression
         spawn "svi_robust_regression_turing${sfx}"  2 4h --threads 1 --ppls turing  svi/robust_regression
-        spawn "svi_robust_regression_stan${sfx}"    3 4h --threads 1 --ppls stan    svi/robust_regression ;;
+        spawn "svi_robust_regression_stan${sfx}"    3 4h --threads 1 --ppls stan    svi/robust_regression_matched_init ;;
       svi_n_schools)
         spawn "svi_n_schools_numpyro${sfx}" 0 4h --threads 1 --ppls numpyro svi/n_schools
         spawn "svi_n_schools_impulse${sfx}" 1 4h --threads 1 --ppls impulse svi/n_schools
         spawn "svi_n_schools_turing${sfx}"  2 4h --threads 1 --ppls turing  svi/n_schools
-        spawn "svi_n_schools_stan${sfx}"    3 4h --threads 1 --ppls stan    svi/n_schools ;;
+        spawn "svi_n_schools_stan${sfx}"    3 4h --threads 1 --ppls stan    svi/n_schools_matched_init ;;
+      coal)
+        # Coal change-point, s marginalized, NUTS (CaseStudies section 5, coal
+        # sentence): NumPyro and Impulse only, as in the config.
+        spawn "nuts_coal_mining_jarrett_numpyro${sfx}" 0 2h --threads 1 --ppls numpyro standard/coal_mining_jarrett_matched_init
+        spawn "nuts_coal_mining_jarrett_impulse${sfx}" 1 2h --threads 1 --ppls impulse standard/coal_mining_jarrett_matched_init ;;
+      gp_pois_regr)
+        # GP Poisson regression (fixed lengthscale), kept in the figure data for
+        # composition B only (not in the rendered figure); per-trial random
+        # inits as in its original G4 run (no matched-init config exists).
+        spawn "nuts_gp_pois_regr_numpyro${sfx}" 0 6h --threads 1 --ppls numpyro motivating/gp_pois_regr
+        spawn "nuts_gp_pois_regr_impulse${sfx}" 1 6h --threads 1 --ppls impulse motivating/gp_pois_regr
+        spawn "nuts_gp_pois_regr_turing${sfx}"  2 6h --threads 1 --ppls turing  motivating/gp_pois_regr
+        spawn "nuts_gp_pois_regr_stan${sfx}"    3 6h --threads 1 --ppls stan    motivating/gp_pois_regr ;;
       *) note "!! unknown row $row"; return 1 ;;
     esac
     start_watchdog "${!PIDS[*]}"

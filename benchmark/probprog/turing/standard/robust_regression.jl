@@ -3,13 +3,23 @@
 
 using Turing, Distributions, LinearAlgebra
 
+const _loggamma = Distributions.SpecialFunctions.loggamma
+
 @model function turing_robust_regression(X, Y, n, k, alpha_scale, beta_scale, beta_loc, sigma_mean)
     alpha ~ Normal(0.0, alpha_scale)
     beta ~ filldist(Normal(beta_loc, beta_scale), k)
     nu ~ Gamma(2.0, 1.0 / 0.1)
     sigma ~ Exponential(sigma_mean)
     mu = alpha .+ X * beta
-    Turing.@addlogprob! sum(logpdf.(LocationScale.(mu, sigma, TDist(nu)), Y))
+    # Student-t log likelihood sum_i logpdf(LocationScale(mu_i, sigma, TDist(nu)), Y_i)
+    # with its observation-independent terms (two loggamma, log(nu pi), log sigma)
+    # written once, as Stan's student_t_lpdf and NumPyro's StudentT.log_prob with
+    # a scalar df compute them, instead of once per observation as the broadcast
+    # logpdf.(LocationScale.(mu, sigma, TDist(nu)), Y) does. Same log density
+    # (StatsFuns.tdistlogpdf term by term).
+    z = (Y .- mu) ./ sigma
+    Turing.@addlogprob! n * (_loggamma((nu + 1) / 2) - _loggamma(nu / 2) - log(nu * pi) / 2 - log(sigma)) -
+                        (nu + 1) / 2 * sum(log1p.(z .^ 2 ./ nu))
 end
 
 function setup(data)

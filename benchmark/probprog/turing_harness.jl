@@ -155,16 +155,17 @@ end
 
 function run_turing_advi(
     model, seed, num_steps, lr, n_particles, init_scale, K, guide, optimizer,
+    adtype_name,
 )
     @assert guide == "AutoNormal" "Turing ADVI arm only supports the AutoNormal (mean-field Gaussian) guide; got $guide"
     @assert optimizer == "Adam" "Turing ADVI arm only supports the Adam optimizer; got $optimizer"
 
     rng = Xoshiro(seed)
-    # Forward-mode AD, deliberately: the SVI rows run only the three continuous
-    # models (d <= ~57), where forward mode is the appropriate default. The NUTS
-    # path selects its backend per model via --adtype (ReverseDiff is in the env
-    # since 2026-08-24); switching the VI backend is a separate decision.
-    adtype = Turing.DEFAULT_ADTYPE  # AutoForwardDiff()
+    # AD backend from the config's `adtype` (--adtype), as on the NUTS path:
+    # forwarddiff is Turing's default, reversediff (compiled tape) is faster on
+    # the larger models (the 2026-10-03 figure-11 check measured a 2000-step
+    # N-Schools fit at 39.4 s with ForwardDiff and 1.22 s with ReverseDiff).
+    adtype = resolve_adtype(adtype_name)
 
     vi_linked = DynamicPPL.link(DynamicPPL.VarInfo(model), model)
     d = length(vi_linked[:])
@@ -218,24 +219,26 @@ end
 
 function svi_main(
     spec, data, output_path, seed, num_steps, lr, n_particles, init_scale, K,
-    guide, optimizer, server_mode,
+    guide, optimizer, adtype_name, server_mode,
 )
     model = spec.turing_model
     println("Turing.jl ADVI: $(spec.model_name)")
     println("  model=$MODEL_PATH")
     println("  num_steps=$num_steps, lr(step_size)=$lr, num_particles=$n_particles")
     println("  init_scale=$init_scale, K(draws)=$K, guide=$guide, optimizer=$optimizer")
+    println("  adtype=$adtype_name")
 
     # JIT warmup: a short fit compiles the ADVI / AD / draw code paths.
     print("JIT warmup... ")
     compile_time = @elapsed begin
-        _ = run_turing_advi(model, seed, 2, lr, n_particles, init_scale, 2, guide, optimizer)
+        _ = run_turing_advi(model, seed, 2, lr, n_particles, init_scale, 2, guide, optimizer, adtype_name)
     end
     println("$(round(compile_time * 1000, digits=2)) ms")
 
     print("Running ADVI fit... ")
     out, elbo_traj, fit_time = run_turing_advi(
-        model, seed, num_steps, lr, n_particles, init_scale, K, guide, optimizer
+        model, seed, num_steps, lr, n_particles, init_scale, K, guide, optimizer,
+        adtype_name,
     )
     final_elbo = isempty(elbo_traj) ? NaN : elbo_traj[end]
     println("$(round(fit_time * 1000, digits=2)) ms  final_elbo=$(round(final_elbo, digits=6))")
@@ -266,7 +269,7 @@ function svi_main(
 
             new_out, new_elbo, new_fit_time = run_turing_advi(
                 model, new_seed, num_steps, lr, n_particles, init_scale, K,
-                guide, optimizer,
+                guide, optimizer, adtype_name,
             )
             svi_write_diagnostics(MODEL_PATH, new_seed, new_elbo, new_fit_time, num_steps)
             new_out["compile_time"] = 0.0
@@ -364,7 +367,7 @@ function main()
     if method == "svi"
         svi_main(
             spec, data, output_path, seed, num_steps, step_size, num_particles,
-            init_scale, num_samples, guide, optimizer, server_mode,
+            init_scale, num_samples, guide, optimizer, adtype_name, server_mode,
         )
         return
     end

@@ -6,7 +6,8 @@ using Turing, Distributions, LinearAlgebra
 @model function turing_n_schools(
     Y, sigma_data, state_idx, district_idx, type_idx,
     n, num_states, num_districts_per_state, num_types,
-    dof_baseline, scale_baseline, scale_state, scale_district, scale_type
+    dof_baseline, scale_baseline, scale_state, scale_district, scale_type,
+    loglik_const,
 )
     sigma_state ~ truncated(Cauchy(0.0, scale_state), 0.0, Inf)
     sigma_district ~ truncated(Cauchy(0.0, scale_district), 0.0, Inf)
@@ -23,7 +24,12 @@ using Turing, Distributions, LinearAlgebra
 
     flat_di = (state_idx .- 1) .* num_districts_per_state .+ district_idx
     Yhat = beta_baseline .+ beta_state[state_idx] .+ beta_district_flat[flat_di] .+ beta_type[type_idx]
-    Turing.@addlogprob! sum(logpdf.(Normal.(Yhat, sigma_data), Y))
+    # Normal(Yhat_i, sigma_i) log likelihood with the data-only terms
+    # -sum(log sigma_i) - n log(2 pi) / 2 computed once in `setup`
+    # (`loglik_const`), instead of once per observation per gradient as the
+    # broadcast logpdf.(Normal.(Yhat, sigma_data), Y) does. Same log density
+    # (Distributions' normlogpdf term by term).
+    Turing.@addlogprob! loglik_const - sum(((Y .- Yhat) ./ sigma_data) .^ 2) / 2
 end
 
 function setup(data)
@@ -46,10 +52,14 @@ function setup(data)
     district_idx = Int.(attrs["district_idx"]) .+ 1
     type_idx = Int.(attrs["type_idx"]) .+ 1
 
+    # Observation-only terms of the Normal log likelihood (data, not parameters).
+    loglik_const = -sum(log.(sigma_data)) - n * log(2pi) / 2
+
     model = turing_n_schools(
         Y, sigma_data, state_idx, district_idx, type_idx,
         n, num_states, num_districts_per_state, num_types,
         dof_baseline, scale_baseline, scale_state, scale_district, scale_type,
+        loglik_const,
     )
 
     return (

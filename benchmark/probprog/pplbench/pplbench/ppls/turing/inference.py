@@ -98,6 +98,9 @@ class SVI(SubprocessMCMC):
             "--optimizer", str(kwargs.get("optimizer", "Adam")),
             "--server",
         ]
+        # AD backend for the ELBO gradient, from the config's infer_args as on
+        # the NUTS path (default forwarddiff, Turing's own default).
+        cmd += ["--adtype", str(kwargs.get("adtype", "forwarddiff"))]
         return cmd
 
     def _extract_data(self, samples):

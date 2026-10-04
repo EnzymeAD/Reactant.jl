@@ -164,25 +164,44 @@ def check_matched_init_differentiable(model_fn, data, z):
         )
 
 
-def dump_mcmc_hlo(mcmc, rng_key, data, jax_init, module_name):
-    """Dump the HLO of the full MCMC run (init + warmup + sampling).
+def make_compiled_run(mcmc, data, group_by_chain=False):
+    """The whole MCMC run (kernel init + warmup + sampling) as one function of
+    the trial's RNG key and initial point, wrapped in jax.jit ONCE and reused by
+    every trial.
 
-    With progress_bar=False, NumPyro's mcmc.run compiles down to a single
-    lax.scan program. We wrap mcmc.run in jax.jit and lower it to get the
-    exact same HLO that XLA compiles during benchmarking.
-    """
+    Why: numpyro 0.19 `util.fori_collect` (progress_bar=False) wraps a fresh
+    `loop_fn` closure, with the initial sampler state baked in, in jax.jit on
+    every `MCMC.run`, so calling `mcmc.run` per trial re-traces the model and
+    recompiles the whole sampler inside every timed trial (3.5 to 5.3 s per
+    trial on the continuous models, about 48 s on noisy-or; the 2026-10-03
+    figure-11 check, oopsla/evidence/speedup_prediction_2026-10-03/
+    fig11_crossframework, finding F1). The other three systems compile outside
+    their timed span. Wrapping `mcmc.run` in jax.jit (the construction
+    `dump_mcmc_hlo` lowers) gives the same kernel, settings, key and init in one
+    program that is compiled by the untimed warm-up call and then reused.
+
+    The initial point is a traced argument (not closed over), so a config that
+    sends a different init per trial (no --matched-init, e.g. the GP row) also
+    compiles once; under --matched-init every trial passes the same point."""
+
+    def mcmc_run(rng_key, init_params):
+        mcmc.run(rng_key, data, init_params=init_params)
+        return mcmc.get_samples(group_by_chain=group_by_chain)
+
+    return jax.jit(mcmc_run)
+
+
+def dump_mcmc_hlo(compiled_run, rng_key, jax_init, module_name):
+    """Dump the HLO of the full MCMC run (init + warmup + sampling): the
+    lowering of the exact jitted program the timed trials execute."""
     dump_dir = os.path.join(
         os.environ.get("PPLBENCH_OUTPUT_DIR", "outputs"), "mlir_dumps", "numpyro"
     )
     os.makedirs(dump_dir, exist_ok=True)
 
-    def mcmc_run(rng_key):
-        mcmc.run(rng_key, data, init_params=jax_init)
-        return mcmc.get_samples()
-
     print("NumPyro: Lowering mcmc.run for HLO dump...", flush=True)
     t0 = time.time()
-    lowered = jax.jit(mcmc_run).lower(rng_key)
+    lowered = compiled_run.lower(rng_key, jax_init)
     hlo = lowered.as_text()
     dt = time.time() - t0
 
@@ -194,10 +213,22 @@ def dump_mcmc_hlo(mcmc, rng_key, data, jax_init, module_name):
 
 
 def run_trial(mcmc, rng_key, data, jax_init, group_by_chain=False):
+    """Eager per-call `mcmc.run` (recompiles the sampler on every call, see
+    `make_compiled_run`). Not used by `main()`; kept because the 2026-10-03
+    check's probes (fig11_crossframework/scripts/numpyro_probe.py) time it as
+    the as-run reference."""
     mcmc._last_state = None
     mcmc.run(rng_key, data, init_params=jax_init)
     jax.block_until_ready(mcmc.get_samples())
     return mcmc.get_samples(group_by_chain=group_by_chain)
+
+
+def run_compiled_trial(compiled_run, rng_key, jax_init):
+    """One timed trial: execute the once-compiled MCMC program and wait for
+    the draws (the same span `run_trial` timed, without the recompilation)."""
+    samples = compiled_run(rng_key, jax_init)
+    jax.block_until_ready(samples)
+    return samples
 
 
 # =============================================================================
@@ -283,7 +314,7 @@ def _svi_guide_loc_scale(params):
 
 
 def _svi_write_diagnostics(model_name, seed, elbo_traj, per_step, num_steps,
-                           guide_loc=None, guide_scale=None):
+                           guide_loc=None, guide_scale=None, svi_init_s=None):
     diag_dir = os.path.join(
         os.environ.get("PPLBENCH_OUTPUT_DIR", "outputs"), "svi_diagnostics"
     )
@@ -298,6 +329,10 @@ def _svi_write_diagnostics(model_name, seed, elbo_traj, per_step, num_steps,
         "final_elbo": float(elbo_traj[-1]) if len(elbo_traj) else float("nan"),
         "elbo_trajectory": [float(x) for x in elbo_traj],
     }
+    # Share of the timed fit spent in svi.init (eager guide/model trace that
+    # builds the per-seed SVIState); the rest is the compiled update scan.
+    if svi_init_s is not None:
+        payload["svi_init_s"] = float(svi_init_s)
     # Fitted guide loc/scale (validate correctness compares the FIT, not draws).
     if guide_loc is not None:
         payload["loc"] = guide_loc
@@ -306,8 +341,58 @@ def _svi_write_diagnostics(model_name, seed, elbo_traj, per_step, num_steps,
         json.dump(payload, f)
 
 
+def make_compiled_svi_fit(svi, data, num_steps):
+    """`num_steps` SVI updates as one lax.scan, wrapped in jax.jit ONCE.
+
+    Why: `svi.run(progress_bar=False)` runs an eager lax.scan over a fresh body
+    closure, so every call re-traces the model and guide and recompiles the
+    step program inside the timed fit (2.2 to 5.7 s per fit against fits of 0.18
+    to 2.7 s; the 2026-10-03 figure-11 check, finding F5). This is the scan
+    `svi.run` builds (`self.update(svi_state, *args)` per step, reverse-mode,
+    no stable_update), compiled by the untimed warm-up fit and reused."""
+
+    def fit(svi_state):
+        def body(state, _):
+            return svi.update(state, data)
+
+        return jax.lax.scan(body, svi_state, None, length=num_steps)
+
+    return jax.jit(fit)
+
+
+def run_compiled_svi_trial(svi, guide, compiled_fit, rng_key, data, num_draws,
+                           matched=False):
+    """One timed fit with the step program compiled once: `svi.init` (the
+    per-seed SVIState, as `svi.run` creates it) plus the compiled scan of
+    updates, i.e. the work `run_svi_trial` timed without the re-trace and
+    recompilation. Then draw num_draws from the fitted guide (untimed). Key
+    handling is `run_svi_trial`'s (see there)."""
+    if matched:
+        fit_key = rng_key
+        draw_key = jax.random.split(rng_key)[0]
+    else:
+        fit_key, draw_key = jax.random.split(rng_key)
+    t0 = time.time()
+    svi_state = svi.init(fit_key, data)
+    jax.block_until_ready(svi_state)
+    init_time = time.time() - t0
+    svi_state, losses = compiled_fit(svi_state)
+    losses.block_until_ready()
+    run_time = time.time() - t0
+    params = svi.get_params(svi_state)
+    losses = np.asarray(losses)
+    draws = guide.sample_posterior(draw_key, params, sample_shape=(num_draws,))
+    jax.block_until_ready(draws)
+    samples = {k: np.asarray(v) for k, v in draws.items()}
+    return samples, (-losses).tolist(), run_time, params, init_time
+
+
 def run_svi_trial(svi, guide, rng_key, data, num_steps, num_draws, matched=False):
-    """Fit for num_steps (timed) then draw num_draws from the fitted guide via
+    """As-run reference (`svi.run` per call, which recompiles every call; see
+    `make_compiled_svi_fit`). Not used by `svi_main`; kept because the
+    2026-10-03 check's probes time it.
+
+    Fit for num_steps (timed) then draw num_draws from the fitted guide via
     sample_posterior (Predictive over the guide, constrained space). Only the fit
     is timed, matching the Impulse harness (guide draws are a post-fit diagnostic).
 
@@ -343,32 +428,38 @@ def svi_main(args, impl, data, module_path):
     model_name = module_path
     K = args.num_samples
 
-    def one_trial(seed):
+    # SVI, guide and the compiled fit are built ONCE per server (the guide's
+    # init point and every setting are seed-independent; only the key varies
+    # per trial). The first fit below compiles the step program (untimed).
+    svi, guide = _build_svi(
+        impl.model, data, args.guide, args.optimizer, args.step_size,
+        args.num_particles, args.init_scale, args.seed,
+    )
+    compiled_fit = make_compiled_svi_fit(svi, data, args.num_steps)
+
+    def one_trial(seed, warm=False):
         # Validate correctness (`--matched-init`): seed the fit with the rbg key
         # from [seed, 0] (make_rng_key) so the reparam-noise stream matches the
         # Impulse SVI arm exactly. Normal benchmark path keeps threefry PRNGKey.
         rng_key = (make_rng_key(int(seed)) if args.matched_init
                    else jax.random.PRNGKey(int(seed)))
-        svi, guide = _build_svi(
-            impl.model, data, args.guide, args.optimizer, args.step_size,
-            args.num_particles, args.init_scale, seed,
-        )
-        # JIT warm (discarded), then a timed fit.
-        run_svi_trial(svi, guide, rng_key, data, args.num_steps, K,
-                      matched=args.matched_init)
-        samples, elbo_traj, run_time, params = run_svi_trial(
-            svi, guide, rng_key, data, args.num_steps, K, matched=args.matched_init
+        if warm:
+            # JIT warm-up fit (discarded): compiles the step program once.
+            run_compiled_svi_trial(svi, guide, compiled_fit, rng_key, data, K,
+                                   matched=args.matched_init)
+        samples, elbo_traj, run_time, params, init_time = run_compiled_svi_trial(
+            svi, guide, compiled_fit, rng_key, data, K, matched=args.matched_init
         )
         guide_loc, guide_scale = _svi_guide_loc_scale(params)
         _svi_write_diagnostics(
             model_name, seed, elbo_traj, run_time / args.num_steps, args.num_steps,
-            guide_loc=guide_loc, guide_scale=guide_scale,
+            guide_loc=guide_loc, guide_scale=guide_scale, svi_init_s=init_time,
         )
         return samples, elbo_traj, run_time
 
     print("NumPyro SVI: JIT warmup + first trial...", flush=True)
     jit_start = time.time()
-    samples, elbo_traj, run_time = one_trial(args.seed)
+    samples, elbo_traj, run_time = one_trial(args.seed, warm=True)
     jit_time = time.time() - jit_start
     write_output(args.output, samples, impl, jit_time, run_time)
     final = elbo_traj[-1] if elbo_traj else float("nan")
@@ -526,19 +617,23 @@ def main():
             {k: (v[0] if group_by_chain else v) for k, v in jax_init.items()},
         )
 
-    # JIT warmup
+    # The whole sampler as one program, compiled once by the untimed JIT
+    # warmup below and reused by every timed trial (see make_compiled_run).
+    compiled_run = make_compiled_run(mcmc, data, group_by_chain)
+
+    # JIT warmup (untimed)
     print("NumPyro: JIT warmup...", flush=True)
     jit_start = time.time()
-    run_trial(mcmc, rng_key, data, jax_init, group_by_chain)
+    run_compiled_trial(compiled_run, rng_key, jax_init)
     jit_time = time.time() - jit_start
     print(f"NumPyro: JIT warmup done ({jit_time:.2f}s)", flush=True)
 
     if os.environ.get("PPLBENCH_DUMP_MLIR"):
-        dump_mcmc_hlo(mcmc, rng_key, data, jax_init, module_path.replace(".", "_"))
+        dump_mcmc_hlo(compiled_run, rng_key, jax_init, module_path.replace(".", "_"))
 
     # First real trial
     t0 = time.time()
-    samples = run_trial(mcmc, rng_key, data, jax_init, group_by_chain)
+    samples = run_compiled_trial(compiled_run, rng_key, jax_init)
     run_time = time.time() - t0
 
     write_output(args.output, samples, impl, jit_time, run_time)
@@ -580,11 +675,11 @@ def main():
                 print(f"Profiling -> {profile_dir}", flush=True)
                 with jax.profiler.trace(profile_dir, create_perfetto_link=False):
                     t0 = time.time()
-                    new_samples = run_trial(mcmc, new_rng, data, new_init, group_by_chain)
+                    new_samples = run_compiled_trial(compiled_run, new_rng, new_init)
                     new_run_time = time.time() - t0
             else:
                 t0 = time.time()
-                new_samples = run_trial(mcmc, new_rng, data, new_init, group_by_chain)
+                new_samples = run_compiled_trial(compiled_run, new_rng, new_init)
                 new_run_time = time.time() - t0
 
             write_output(new_output_path, new_samples, impl, 0.0, new_run_time)

@@ -196,6 +196,13 @@ def run_vi_trial(model, stan_data, seed, output_samples, grad_samples,
                  advi_opts=None, show_console=False):
     """Run one Stan ADVI (variational) fit and return per-draw samples.
 
+    Figure 11 (user decision 2026-10-04): Stan's VI system is CmdStan's
+    standard ADVI, the most commonly available Stan VI, even though it is a
+    different algorithm from the Adam / one-particle / fixed-budget loop the
+    other three systems run (it adapts eta, draws grad_samples gradients per
+    iteration, evaluates the ELBO every eval_elbo iterations and stops on its
+    own relative-ELBO rule); no BridgeStan reimplementation of the shared loop.
+
     Only this call is timed as the inference phase by the caller (compile is
     timed separately at CmdStanModel construction). Stan ADVI runs its OWN
     adaptive stochastic optimizer (eta adaptation + RMSProp-style updates with a

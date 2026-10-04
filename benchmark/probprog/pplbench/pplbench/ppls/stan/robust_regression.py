@@ -120,12 +120,13 @@ parameters {
   // degrees of freedom;
   real<lower=0> nu;
 }
-transformed parameters {
+model {
+  // A model-block local, not a transformed parameter: the same log density,
+  // but CmdStan does not write n = 10000 columns of mu for every draw (upstream
+  // PPLBench sampled through PyStan with pars=get_pars(), which never wrote mu).
   vector[n] mu;
 
   mu = alpha + X * beta;
-}
-model {
   // priors
   alpha ~ normal(0.0, alpha_scale);
   beta ~ normal(beta_loc, beta_scale);

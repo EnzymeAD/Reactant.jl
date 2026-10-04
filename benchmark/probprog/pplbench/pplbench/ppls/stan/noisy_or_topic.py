@@ -114,35 +114,36 @@ parameters {
   matrix[1 + num_topics, 2] active_gumbel;
 }
 
+// `active` (the extracted output, get_pars()) is the only transformed
+// parameter. The per-topic weight is a loop local and S_weight / S_logit are
+// model-block locals: the same log density, but CmdStan does not write
+// 1 + num_topics + 2 * num_words extra columns for every draw (upstream
+// PPLBench sampled through PyStan with pars=get_pars(), which wrote only
+// `active`).
 transformed parameters {
-  // for each topic the weight is the negative log of one minus probability
-  vector<lower = 0> [1 + num_topics] active_weight;
   matrix<lower = 0, upper = 1> [1 + num_topics, 2] active;
-  vector<lower = 0> [num_words] S_weight;
-  vector [num_words] S_logit;
 
   // leak node
   active[1] = [1, 0];
-  active_weight[1] = 0; //unused but needs to be initialized
 
   for (j in 2:(1+num_topics)) {
+      // for each topic the weight is the negative log of one minus probability
       // note: that this is not the exact model since we are multiplying
       // the edge_weight with the softmax of active rather than argmax
-      active_weight[j] = edge_weight[j, :(j-1)] * active[:(j-1), 1];
+      real active_weight = edge_weight[j, :(j-1)] * active[:(j-1), 1];
       // note: argmax(log(p) + gumbel, log(1-p) + gumbel)
       // is the same as sampling with Bernoulli(p)
       active[j] = softmax(
-          ([log1m_exp(-active_weight[j]), -active_weight[j]]+ active_gumbel[j])' / tau
+          ([log1m_exp(-active_weight), -active_weight]+ active_gumbel[j])' / tau
       )';
   }
-
-  S_weight = edge_weight[(1+num_topics+1):] * active[:, 1];
-
-  // note: if p = 1 - exp(-w), then logit(p)=log(1-exp(-w)) + w
-  S_logit = log1m_exp(-S_weight) + S_weight;
 }
 
 model {
+  vector[num_words] S_weight = edge_weight[(1+num_topics+1):] * active[:, 1];
+  // note: if p = 1 - exp(-w), then logit(p)=log(1-exp(-w)) + w
+  vector[num_words] S_logit = log1m_exp(-S_weight) + S_weight;
+
   active_gumbel[:, 1] ~ gumbel(0, 1);
   active_gumbel[:, 2] ~ gumbel(0, 1);
   S ~ bernoulli_logit(S_logit);
