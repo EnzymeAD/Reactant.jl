@@ -17,7 +17,7 @@
         "class": "inference.SVI",
         "infer_args": {
           "step_size": 0.01,
-          "num_steps": 2000,
+          "num_steps": 2100,
           "num_particles": 1,
           "init_scale": 0.1,
           "guide": "AutoNormal",
@@ -36,7 +36,7 @@
         "class": "inference.SVI",
         "infer_args": {
           "step_size": 0.01,
-          "num_steps": 2000,
+          "num_steps": 2100,
           "num_particles": 1,
           "init_scale": 0.1,
           "guide": "AutoNormal",
@@ -55,7 +55,7 @@
         "class": "inference.SVI",
         "infer_args": {
           "step_size": 0.01,
-          "num_steps": 2000,
+          "num_steps": 2100,
           "num_particles": 1,
           "init_scale": 0.1,
           "guide": "AutoNormal",
@@ -97,7 +97,7 @@
         "class": "inference.SVI",
         "infer_args": {
           "step_size": 0.01,
-          "num_steps": 2000,
+          "num_steps": 2100,
           "num_particles": 1,
           "init_scale": 0.1,
           "guide": "AutoNormal",
