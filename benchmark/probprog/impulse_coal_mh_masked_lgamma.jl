@@ -13,6 +13,10 @@ using Reactant, Random, LinearAlgebra, Statistics, Printf
 using Reactant: ProbProg, ReactantRNG, ConcreteRNumber, TracedRNumber
 # Stock Base.wait (blocks, like JAX's block_until_ready): a spin-yield override competed with the PJRT worker thread on one pinned CPU.
 Reactant.set_default_backend("cpu")
+# Region pipeline (inline-infer-regions + SICM), the configuration of figures 10
+# and 11 (2026-10-04, FIX_LEDGER H2): Reactant's DEBUG_PROBPROG_DISABLE_OPT
+# defaults to true, which runs the flat lowering without SICM.
+Reactant.Compiler.DEBUG_PROBPROG_DISABLE_OPT[] = false
 # COAL_DATA selects the series:
 #   simulated (default)  T = 56 simulated counts, chain warm-started at the
 #                        simulation's true rates (l1 = 3.0, l2 = 0.9)
