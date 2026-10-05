@@ -702,7 +702,7 @@ end
 @testset "loops: untraced accumulator" begin
     xs = Reactant.to_rarray([1.0, 2.0, 3.0])
 
-    @test @allowscalar(@jit(for_untraced_accumulator(xs))) ≈ 6.0 broken=true
+    @test @allowscalar(@jit(for_untraced_accumulator(xs))) ≈ 6.0
     s, i = @allowscalar @jit(while_untraced_accumulator(xs))
     @test s ≈ 6.0
     @test i == 4
