@@ -3,8 +3,8 @@ module ReactantVectorInterfaceExt
 using Reactant: Reactant, TracedRArray, TracedRNumber, promote_to
 using VectorInterface: VectorInterface, Zero, One
 
-Reactant.TracedRNumber{T}(::Zero) = promote_to(TracedRNumber{T}, Zero())
-Reactant.TracedRNumber{T}(::One) = promote_to(TracedRNumber{T}, One())
+Reactant.TracedRNumber{T}(::Zero) where {T} = promote_to(TracedRNumber{T}, Zero())
+Reactant.TracedRNumber{T}(::One) where {T} = promote_to(TracedRNumber{T}, One())
 
 Reactant.promote_to(TT::Type{TracedRNumber{T}}, ::Zero) where {T} = promote_to(TT, zero(T))
 Reactant.promote_to(TT::Type{TracedRNumber{T}}, ::One) where {T} = promote_to(TT, one(T))
