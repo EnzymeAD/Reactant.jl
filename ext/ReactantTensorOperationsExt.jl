@@ -40,7 +40,7 @@ end
         )
         return C
     else
-        return Reactant.call_with_native(C, A, pA, B, pB, pAB, α, β)
+        return Reactant.call_with_native(TO._unsafe_blas_contract!, C, A, pA, B, pB, pAB, α, β)
     end
 end
 
@@ -56,7 +56,7 @@ end
         TO.Strided._mapreducedim!(TO.Scaler(α), TO.Adder(), TO.Scaler(β), size(C), (C, Ap))
         return C
     else
-        return Reactant.call_with_native(C, A, pA, α, β)
+        return Reactant.call_with_native(TO.stridedtensoradd!, C, A, pA, α, β)
     end
 end
 
