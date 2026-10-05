@@ -274,6 +274,14 @@ function ReactantCore.annotate(
     end
 end
 
+function ReactantCore.annotate_start(
+    name, level=TRACE_ME_LEVEL_CRITICAL; metadata::Union{Dict{String,<:Any},Nothing}=nothing
+)
+    return profiler_activity_start(name, level, metadata)
+end
+
+ReactantCore.annotate_end(id::Int64) = profiler_activity_end(id)
+
 function serve_to_perfetto(path_to_trace_file)
     port_hint = 9001
     port, server = Sockets.listenany(port_hint)
@@ -613,7 +621,7 @@ function profile_and_get_xplane_file(
     # profile
     with_profiler(profile_dir; pm_counters, advanced_config) do
         for i in 1:nrepeat
-            annotate("bench"; metadata=Dict("step_num" => i, "_r" => 1)) do
+            @annotate "bench" metadata = Dict("step_num" => i, "_r" => 1) begin
                 fn(args...; kwargs...)
             end
         end
