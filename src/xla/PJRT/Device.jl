@@ -10,7 +10,7 @@ end
 
 function XLA.device_ordinal(device::Device)
     GC.@preserve device begin
-        return MLIR.API.PjRtDeviceGetLocalDeviceId(device.device)
+        return MLIR.API.PjRtDeviceGetGlobalDeviceId(device.device)
     end
 end
 
