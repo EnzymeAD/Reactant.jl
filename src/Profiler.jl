@@ -724,7 +724,13 @@ function get_aggregate_memory_statistics(xplane_file::String)
                 parse(Int64, profile_summary[:peakStats][:stackReservedBytes]),
                 parse(Int64, profile_summary[:peakStats][:heapAllocatedBytes]),
                 parse(Int64, profile_summary[:peakStats][:freeMemoryBytes]),
-                profile_summary[:peakStats][:fragmentation],
+                let fragmentation = profile_summary[:peakStats][:fragmentation]
+                    if fragmentation isa AbstractString
+                        parse(Float64, fragmentation)
+                    else
+                        Float64(fragmentation)
+                    end
+                end,
                 parse(Int64, profile_summary[:peakStats][:peakBytesInUse]),
             ),
             parse(Int64, profile_summary[:peakStatsTimePs]),
