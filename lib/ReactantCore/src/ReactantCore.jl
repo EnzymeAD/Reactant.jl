@@ -461,7 +461,7 @@ function trace_while(mod, expr; track_numbers, mincut, checkpointing, first_arg=
     args_names = Expr(:tuple, external_syms...)
 
     cond_val(s) = :(@isdefined($s) ? $s : nothing)
-    args_init = Expr(:tuple, (:(Ref($(cond_val(s)))) for s in external_syms)...)
+    args_init = Expr(:tuple, (:(Ref{Any}($(cond_val(s)))) for s in external_syms)...)
 
     ref_syms = Symbol[Symbol(string(sym), "_ref") for sym in external_syms]
     arg_syms = Expr(:tuple, ref_syms...)
@@ -480,11 +480,10 @@ function trace_while(mod, expr; track_numbers, mincut, checkpointing, first_arg=
     args_sym = gensym(:args)
 
     assigned_syms = body_symbols.assignments
-    traced_args_sym = gensym(:traced_args)
     rebind_outputs = [
         quote
-            if !isnothing($(traced_args_sym)[$i][])
-                $s = $(traced_args_sym)[$i][]
+            if !isnothing($(args_sym)[$i][])
+                $s = $(args_sym)[$i][]
             end
         end for (i, s) in enumerate(external_syms) if s ∈ assigned_syms
     ]
@@ -534,7 +533,7 @@ function trace_while(mod, expr; track_numbers, mincut, checkpointing, first_arg=
                 ($(QuoteNode.(args_names.args)...),)
             end
 
-            $(traced_args_sym) = $(ReactantCore).traced_while(
+            $(ReactantCore).traced_while(
                 $(cond_fn_sym),
                 $(body_fn_sym),
                 $(args_sym);
@@ -542,7 +541,6 @@ function trace_while(mod, expr; track_numbers, mincut, checkpointing, first_arg=
                 verify_arg_names=($(verify_arg_names_sym)),
                 mincut=($(mincut)),
                 checkpointing=($(checkpointing)),
-                return_args=true,
             )
             $(rebind_outputs...)
             nothing

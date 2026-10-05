@@ -2370,7 +2370,6 @@ end
     verify_arg_names=nothing,
     checkpointing=false,
     mincut=false,
-    return_args=false,
     location=mlir_stacktrace("while_loop", @__FILE__, @__LINE__),
 ) where {CFn,BFn}
     # TODO(#2250): detect and prevent mutation within the condition
@@ -2463,8 +2462,13 @@ end
     end
 
     # Values promoted to traced ones (e.g. Julia numbers with `track_numbers`) are new
-    # objects that only `traced_args` refers to, so callers need them to observe the result
-    return_args && return traced_args
+    # objects that only `traced_args` refers to, write them back into the caller's `Ref`s
+    for (prev, traced) in zip(args, traced_args)
+        if prev isa Base.RefValue && prev !== traced && traced[] isa eltype(prev)
+            prev[] = traced[]
+        end
+    end
+
     return results
 end
 
