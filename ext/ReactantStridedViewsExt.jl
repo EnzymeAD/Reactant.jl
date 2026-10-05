@@ -52,8 +52,10 @@ function ReactantCore.materialize_traced_array(x::StridedView)
         end
         xp_shape[end] = length(x) ÷ stride(x,ndims(x))
         xp = @opcall reshape(xp, xp_shape)
-    elseif isperm || isview && isreshape
-        error("Not implemented")
+    elseif isperm && !isview
+        xp_strides = collect(strides(x)) 
+        sp = invperm(sortperm(xp_strides))
+        xp = permutedims(xp, sp)
     end
 
     # x.offset is "0-indexed"
@@ -61,8 +63,7 @@ function ReactantCore.materialize_traced_array(x::StridedView)
 
     start_indices = offset
     limit_indices = collect(size(x)) + offset .- 1
-    _strides = collect(strides(x))
-    y = @opcall slice(xp, start_indices, limit_indices; strides=_strides)
+    y = @opcall slice(xp, start_indices, limit_indices)
     return y
 end
 

@@ -26,6 +26,8 @@ end
 fcontract1(A, B) = @tensor C[] := A[a, b, c] * B[c, a, b]
 fcontract2(A, B) = @tensor C[d, e] := A[a, d, b, c] * B[c, a, e, b]
 
+backend_contract(b, A, B) = @tensor backend = b C1[a, g, e, d, f] := A[a, b, c, d, e] * B[c, f, b, g]
+
 @testset "tensorcontract!" begin
     @testset let
         a = construct_test_array(Float64, 5, 5, 5)
@@ -41,6 +43,15 @@ fcontract2(A, B) = @tensor C[d, e] := A[a, d, b, c] * B[c, a, e, b]
         a_re = Reactant.to_rarray(a)
         b_re = Reactant.to_rarray(b)
         @test fcontract2(a, b) ≈ @jit fcontract2(a_re, b_re)
+    end
+
+    @testset let
+        a = construct_test_array(Float64, 3, 20, 5, 3, 4)
+        b = construct_test_array(Float64, 5, 6, 20, 3)
+        backendlist = (TensorOperations.BaseCopy(), TensorOperations.BaseView(), TensorOperations.StridedNative(), TensorOperations.StridedBLAS())
+        for backend in backendlist
+            @test backend_contract(backend, a, b) ≈ @jit backend_contract(backend, a, b)
+        end
     end
 end
 
