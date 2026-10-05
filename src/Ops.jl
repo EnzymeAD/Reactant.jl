@@ -2370,6 +2370,7 @@ end
     verify_arg_names=nothing,
     checkpointing=false,
     mincut=false,
+    return_args=false,
     location=mlir_stacktrace("while_loop", @__FILE__, @__LINE__),
 ) where {CFn,BFn}
     # TODO(#2250): detect and prevent mutation within the condition
@@ -2457,9 +2458,14 @@ end
         MLIR.IR.setattr!(while_op, "enzyme.enable_checkpointing", MLIR.IR.Attribute(true))
     end
 
-    return map(enumerate(linear_args)) do (i, arg)
+    results = map(enumerate(linear_args)) do (i, arg)
         return Reactant.TracedUtils.set_mlir_data!(arg, MLIR.IR.result(while_op, i))
     end
+
+    # Values promoted to traced ones (e.g. Julia numbers with `track_numbers`) are new
+    # objects that only `traced_args` refers to, so callers need them to observe the result
+    return_args && return traced_args
+    return results
 end
 
 @noinline function if_condition(

@@ -681,6 +681,33 @@ end
     @test @jit(for_eachindex(s, x)) == 6
 end
 
+function for_untraced_accumulator(xs)
+    s = 0.0
+    @trace for i in eachindex(xs)
+        s += xs[i]
+    end
+    return s
+end
+
+function while_untraced_accumulator(xs)
+    s = 0.0
+    i = 1
+    @trace while i <= length(xs)
+        s += xs[i]
+        i += 1
+    end
+    return s, i
+end
+
+@testset "loops: untraced accumulator" begin
+    xs = Reactant.to_rarray([1.0, 2.0, 3.0])
+
+    @test @allowscalar(@jit(for_untraced_accumulator(xs))) ≈ 6.0
+    s, i = @allowscalar @jit(while_untraced_accumulator(xs))
+    @test s ≈ 6.0
+    @test i == 4
+end
+
 function while_convergence(x, y)
     diff = x .- y
     @trace while sum(diff) >= 10
