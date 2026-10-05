@@ -193,7 +193,8 @@ function get_ancestor_and_indices_inner(
     return get_ancestor_and_indices(parent(x), Base.reindex(parentindices(x), indices)...)
 end
 function get_ancestor_and_indices_inner(x::AnyTracedRArray{T,1}, indices) where {T}
-    return get_ancestor_and_indices(parent(x), Base.reindex(parentindices(x), indices))
+    indices = Base.to_indices(x, (indices,))
+    return get_ancestor_and_indices(parent(x), Base.reindex(parentindices(x), indices)...)
 end
 function get_ancestor_and_indices_inner(x::AnyTracedRArray{T,N}, linear_index) where {T,N}
     return get_ancestor_and_indices_inner(x, [linear_index])
