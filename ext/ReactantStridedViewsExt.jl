@@ -15,7 +15,9 @@ using StridedViews: StridedViews as SV, StridedView
     end
 end
 
-@reactant_overlay function Base.getindex(x::StridedView{T,N}, I::Vararg{SV.SliceIndex,N}) where {T,N}
+@reactant_overlay function Base.getindex(
+    x::StridedView{T,N}, I::Vararg{SV.SliceIndex,N}
+) where {T,N}
     if use_overlayed_version(x)
         y = ReactantCore.materialize_traced_array(x)
 
@@ -40,20 +42,20 @@ end
 
 function ReactantCore.materialize_traced_array(x::StridedView)
     xp = ReactantCore.materialize_traced_array(parent(x))
-    
+
     isview = length(x) != length(xp)
     isreshape = size(x) != size(xp)
     isperm = !issorted(strides(x))
 
     if isreshape && !isview && !isperm
         xp_shape = zeros(Int, ndims(x))
-        for d in 1:ndims(x)-1
-            xp_shape[d] = stride(x,d+1) ÷ stride(x,d)
+        for d in 1:(ndims(x) - 1)
+            xp_shape[d] = stride(x, d + 1) ÷ stride(x, d)
         end
-        xp_shape[end] = length(x) ÷ stride(x,ndims(x))
+        xp_shape[end] = length(x) ÷ stride(x, ndims(x))
         xp = @opcall reshape(xp, xp_shape)
     elseif isperm && !isview
-        xp_strides = collect(strides(x)) 
+        xp_strides = collect(strides(x))
         sp = invperm(sortperm(xp_strides))
         xp = permutedims(xp, sp)
     end

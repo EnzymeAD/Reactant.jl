@@ -10,7 +10,14 @@ using Reactant:
     TracedRNumber,
     unwrapped_eltype,
     promote_to
-using TensorOperations: TensorOperations as TO, StridedView, TupleTools, Index2Tuple, IndexTuple, stridedtensoradd!, _unsafe_blas_contract!
+using TensorOperations:
+    TensorOperations as TO,
+    StridedView,
+    TupleTools,
+    Index2Tuple,
+    IndexTuple,
+    stridedtensoradd!,
+    _unsafe_blas_contract!
 
 # allocation
 function TO.tensoradd_type(TC, A::ConcreteRArray, pA::Index2Tuple, conjA::Bool)
@@ -22,8 +29,15 @@ function TO.tensoradd_type(TC, A::TracedRArray, pA::Index2Tuple, conjA::Bool)
 end
 
 @reactant_overlay function TO._unsafe_blas_contract!(
-        C::StridedView, A::StridedView, pA, B::StridedView, pB, pAB::IndexTuple, α::Number, β::Number,
-    )
+    C::StridedView,
+    A::StridedView,
+    pA,
+    B::StridedView,
+    pB,
+    pAB::IndexTuple,
+    α::Number,
+    β::Number,
+)
     if use_overlayed_version(C) || use_overlayed_version(A) || use_overlayed_version(B)
         sizeA = size(A)
         sizeB = size(B)
@@ -36,21 +50,25 @@ end
             TO.sreshape(permutedims(C, pAB), (prod(osizeA), prod(osizeB))),
             TO.sreshape(permutedims(A, TO.linearize(pA)), (prod(osizeA), prod(csizeA))),
             TO.sreshape(permutedims(B, TO.linearize(pB)), (prod(csizeB), prod(osizeB))),
-            α, β
+            α,
+            β,
         )
         return C
     else
-        return Reactant.call_with_native(TO._unsafe_blas_contract!, C, A, pA, B, pB, pAB, α, β)
+        return Reactant.call_with_native(
+            TO._unsafe_blas_contract!, C, A, pA, B, pB, pAB, α, β
+        )
     end
 end
 
 @reactant_overlay function TO.stridedtensoradd!(
-        C::StridedView, A::StridedView, pA::IndexTuple, α::Number, β::Number,
-    )
+    C::StridedView, A::StridedView, pA::IndexTuple, α::Number, β::Number
+)
     if use_overlayed_version(C) || use_overlayed_version(A)
         TO.argcheck_tensoradd(C, A, pA)
         TO.dimcheck_tensoradd(C, A, pA)
-        !TO.istrivialpermutation(pA) && Base.mightalias(C, A) &&
+        !TO.istrivialpermutation(pA) &&
+            Base.mightalias(C, A) &&
             throw(ArgumentError("output tensor must not be aliased with input tensor"))
         Ap = permutedims(A, pA)
         TO.Strided._mapreducedim!(TO.Scaler(α), TO.Adder(), TO.Scaler(β), size(C), (C, Ap))
