@@ -260,9 +260,9 @@ end
 
 The behavior of loops can be configured with the following configuration options:
 
- - `track_numbers::Union{Bool,DataType}` - whether Julia numbers should be automatically promoted to traced numbers upon entering the loop.
- - `checkpointing::Union{Bool,Periodic,Binomial}` - whether or not to enable checkpointing when performing reverse mode differentiation. Can be `false` (default), `true` (automatic checkpointing), or `Periodic(n)` to specify `n` checkpoints. When `true` is used, defaults to `isqrt(num_iters)` checkpoints for `for` loops with static (non-traced) bounds. `Periodic(n)` must be used for `while` loops or `for` loops with dynamic (traced) bounds when checkpointing is enabled.
- - `mincut::Bool` - whether or not to enable the mincut algorithm when performing reverse mode differentiation (default: `false`).
+ - `track_numbers::Union{Bool,DataType} = true` - whether Julia numbers should be automatically promoted to traced numbers upon entering the loop.
+ - `checkpointing::Union{Bool,Periodic,Binomial} = false` - whether or not to enable checkpointing when performing reverse mode differentiation. Can be `false` (default), `true` (automatic checkpointing), or `Periodic(n)` to specify `n` checkpoints. When `true` is used, defaults to `isqrt(num_iters)` checkpoints for `for` loops with static (non-traced) bounds. `Periodic(n)` must be used for `while` loops or `for` loops with dynamic (traced) bounds when checkpointing is enabled.
+ - `mincut::Bool = false` - whether or not to enable the mincut algorithm when performing reverse mode differentiation (default: `false`).
 """
 macro trace(args...)
     track_numbers = true
@@ -493,7 +493,7 @@ function trace_while(mod, expr; track_numbers, mincut, checkpointing, first_arg=
     args_names = Expr(:tuple, external_syms...)
 
     cond_val(s) = :(@isdefined($s) ? $s : nothing)
-    args_init = Expr(:tuple, (:(Ref($(cond_val(s)))) for s in external_syms)...)
+    args_init = Expr(:tuple, (:(Ref{Any}($(cond_val(s)))) for s in external_syms)...)
 
     ref_syms = Symbol[Symbol(string(sym), "_ref") for sym in external_syms]
     arg_syms = Expr(:tuple, ref_syms...)
@@ -510,6 +510,16 @@ function trace_while(mod, expr; track_numbers, mincut, checkpointing, first_arg=
     body_fn_sym = gensym(:body_fn)
     cond_fn_sym = gensym(:cond_fn)
     args_sym = gensym(:args)
+
+    assigned_syms = body_symbols.assignments
+    rebind_outputs = [
+        quote
+            if !isnothing($(args_sym)[$i][])
+                $s = $(args_sym)[$i][]
+            end
+        end for (i, s) in enumerate(external_syms) if s ∈ assigned_syms
+    ]
+
     verify_arg_names_sym = gensym(:verify_arg_names)
     pre_alias_ids_sym = gensym(:pre_alias_ids)
 
@@ -564,6 +574,8 @@ function trace_while(mod, expr; track_numbers, mincut, checkpointing, first_arg=
                 mincut=($(mincut)),
                 checkpointing=($(checkpointing)),
             )
+            $(rebind_outputs...)
+            nothing
         end
     end
 
