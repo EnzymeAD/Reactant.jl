@@ -274,6 +274,14 @@ function ReactantCore.annotate(
     end
 end
 
+function ReactantCore.annotate_start(
+    name, level=TRACE_ME_LEVEL_CRITICAL; metadata::Union{Dict{String,<:Any},Nothing}=nothing
+)
+    return profiler_activity_start(name, level, metadata)
+end
+
+ReactantCore.annotate_end(id::Int64) = profiler_activity_end(id)
+
 function serve_to_perfetto(path_to_trace_file)
     port_hint = 9001
     port, server = Sockets.listenany(port_hint)
@@ -613,7 +621,7 @@ function profile_and_get_xplane_file(
     # profile
     with_profiler(profile_dir; pm_counters, advanced_config) do
         for i in 1:nrepeat
-            annotate("bench"; metadata=Dict("step_num" => i, "_r" => 1)) do
+            @annotate "bench" metadata = Dict("step_num" => i, "_r" => 1) begin
                 fn(args...; kwargs...)
             end
         end
@@ -724,7 +732,13 @@ function get_aggregate_memory_statistics(xplane_file::String)
                 parse(Int64, profile_summary[:peakStats][:stackReservedBytes]),
                 parse(Int64, profile_summary[:peakStats][:heapAllocatedBytes]),
                 parse(Int64, profile_summary[:peakStats][:freeMemoryBytes]),
-                profile_summary[:peakStats][:fragmentation],
+                let fragmentation = profile_summary[:peakStats][:fragmentation]
+                    if fragmentation isa AbstractString
+                        parse(Float64, fragmentation)
+                    else
+                        Float64(fragmentation)
+                    end
+                end,
                 parse(Int64, profile_summary[:peakStats][:peakBytesInUse]),
             ),
             parse(Int64, profile_summary[:peakStatsTimePs]),
