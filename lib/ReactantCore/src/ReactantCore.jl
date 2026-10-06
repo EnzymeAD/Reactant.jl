@@ -114,30 +114,56 @@ function annotate(f, name, args...; kwargs...)
     return f()
 end
 
+annotate_start(name, args...; kwargs...) = nothing
+
+annotate_end(id) = nothing
+
 """
-    @annotate [name] function foo(a, b, c)
+    @annotate [name] [key=val...] function foo(a, b, c)
         # ...
     end
 
-Annotate each call to the function. The annotation is a no-op unless an annotation backend,
-such as Reactant, is loaded.
+    @annotate name [key=val...] begin
+        # ...
+    end
+
+Annotate each call to the function, or the execution of the block. The annotation is a
+no-op unless an annotation backend, such as Reactant, is loaded. Keyword arguments (e.g.
+`metadata=Dict(...)`) are forwarded to the annotation backend.
 """
-macro annotate(name, func_def=nothing)
-    noname = isnothing(func_def)
-    func_def = something(func_def, name)
+macro annotate(name, args...)
+    noname = isempty(args)
+    func_def = noname ? name : last(args)
+    kws = noname ? () : args[1:(end - 1)]
+    for kw in kws
+        Meta.isexpr(kw, :(=)) || error("expected a `key=value` argument, got: $kw")
+    end
+    kws = [Expr(:kw, kw.args[1], esc(kw.args[2])) for kw in kws]
+
+    if Meta.isexpr(func_def, :block)
+        noname && error("@annotate on a block requires a name")
+        return annotate_block(esc(func_def), esc(name), kws)
+    end
 
     if !Meta.isexpr(func_def, :function)
-        error("not a function definition: $func_def")
+        error("not a function definition or block: $func_def")
     end
 
-    name = noname ? string(func_def.args[1].args[1]) : name
-    code = func_def.args[2]
-
-    code = quote
-        ReactantCore.annotate(() -> $(esc(code)), $(esc(name)))
-    end
+    name = noname ? string(func_def.args[1].args[1]) : esc(name)
+    code = annotate_block(esc(func_def.args[2]), name, kws)
 
     return Expr(:function, esc(func_def.args[1]), code)
+end
+
+function annotate_block(code, name, kws)
+    return quote
+        id = ReactantCore.annotate_start($name; $(kws...))
+        try
+            $code
+        finally
+            ReactantCore.annotate_end(id)
+        end
+    end
 end
 
 # Code generation
