@@ -1264,13 +1264,7 @@ function compile_xla(f, args; kwargs...)
     end
 end
 
-function compile_xla(ctx, f, args; kwargs...)
-    return Reactant.Profiler.annotate("compile $(string(f))") do
-        _compile_xla(ctx, f, args; kwargs...)
-    end
-end
-
-function _compile_xla(
+Reactant.@annotate "compile $(string(f))" function compile_xla(
     ctx,
     f,
     args;
