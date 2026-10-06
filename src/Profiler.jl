@@ -2,6 +2,7 @@ module Profiler
 
 using ..Reactant: Reactant, Proto
 using ReactantCore: ReactantCore, annotate, @annotate
+using Dates: Dates, Microsecond
 using Sockets: Sockets
 using JSON: JSON
 using PrettyTables: PrettyTables, pretty_table
@@ -245,37 +246,37 @@ function trace_trees(xspace::Proto.tensorflow.profiler.XSpace)
 end
 
 """
-    ProfilingSummary
+    CompileTimings
 
 Compilation timings extracted from the host traces recorded by
 [`@timed_compile`](@ref). Each time is the sum of the durations of the outermost
-trace events of that kind, in nanoseconds:
+trace events of that kind, as a `Dates.Microsecond`:
 
-  - `total_compile_time_ns`: `compile <fn>` events (the whole Reactant compilation)
-  - `tracing_time_ns`: `trace <fn>` events (tracing the Julia function into MLIR)
-  - `mlir_time_ns`: `run_pass_pipeline!` events (MLIR pass pipelines)
-  - `xla_time_ns`: `XLA compile <fn>` events (compiling the MLIR module with XLA)
+  - `total_compile_time`: `compile <fn>` events (the whole Reactant compilation)
+  - `tracing_time`: `trace <fn>` events (tracing the Julia function into MLIR)
+  - `mlir_time`: `run_pass_pipeline!` events (MLIR pass pipelines)
+  - `xla_time`: `XLA compile <fn>` events (compiling the MLIR module with XLA)
 
 `traces` holds the reconstructed trace trees as a `Dict` mapping each plane name (e.g.
 `"/host:CPU"`) to a `Dict` mapping each line (thread or stream) name to its root
 `TraceNode`s. Each `TraceNode` has a `name`, a `start_ps` and `duration_ps` in picoseconds,
 its `stats`, and its nested `children`.
 """
-struct ProfilingSummary
-    total_compile_time_ns::Int64
-    tracing_time_ns::Int64
-    mlir_time_ns::Int64
-    xla_time_ns::Int64
+struct CompileTimings
+    total_compile_time::Microsecond
+    tracing_time::Microsecond
+    mlir_time::Microsecond
+    xla_time::Microsecond
 
     traces::Dict{String,Any}
 end
 
-function Base.show(io::IO, summary::ProfilingSummary)
-    println(io, "ProfilingSummary(")
-    println(io, "    total_compile_time = $(_timestr(summary.total_compile_time_ns))s,")
-    println(io, "    tracing_time = $(_timestr(summary.tracing_time_ns))s,")
-    println(io, "    mlir_time = $(_timestr(summary.mlir_time_ns))s,")
-    println(io, "    xla_time = $(_timestr(summary.xla_time_ns))s,")
+function Base.show(io::IO, summary::CompileTimings)
+    println(io, "CompileTimings(")
+    println(io, "    total_compile_time = $(_periodstr(summary.total_compile_time)),")
+    println(io, "    tracing_time = $(_periodstr(summary.tracing_time)),")
+    println(io, "    mlir_time = $(_periodstr(summary.mlir_time)),")
+    println(io, "    xla_time = $(_periodstr(summary.xla_time)),")
     print(io, ")")
     return nothing
 end
@@ -303,13 +304,13 @@ function _outermost_duration_ps(nodes::Vector{TraceNode}, prefix::String)
     return total
 end
 
-function _total_duration_ns(traces, prefix::String)
+function _total_duration(traces, prefix::String)
     total_ps = sum(
         _outermost_duration_ps(roots, prefix) for lines in values(traces) for
         roots in values(lines);
         init=Int64(0),
     )
-    return total_ps ÷ 1000
+    return Microsecond(total_ps ÷ 1_000_000)
 end
 
 function compile_timings(compile_thunk)
@@ -319,11 +320,11 @@ function compile_timings(compile_thunk)
     )
 
     traces = trace_trees(load_xspace(find_xplane_file(trace_output_dir)))
-    return result, ProfilingSummary(
-        _total_duration_ns(traces, "compile "),
-        _total_duration_ns(traces, "trace "),
-        _total_duration_ns(traces, "run_pass_pipeline!"),
-        _total_duration_ns(traces, "XLA compile "),
+    return result, CompileTimings(
+        _total_duration(traces, "compile "),
+        _total_duration(traces, "trace "),
+        _total_duration(traces, "run_pass_pipeline!"),
+        _total_duration(traces, "XLA compile "),
         traces,
     )
 end
@@ -332,18 +333,18 @@ end
     @timed_compile [options...] f(args...)
 
 Like [`@compile`](@ref) (and accepting the same options), but records host traces while
-compiling and returns a [`ProfilingSummary`](@ref) of the time spent in the different
+compiling and returns a [`CompileTimings`](@ref) of the time spent in the different
 stages of compilation instead of the compiled function.
 
 ```julia-repl
 julia> myfunc_compiled, summary = Profiler.@timed_compile myfunc(x, y, z);
 
 julia> summary
-ProfilingSummary(
-    total_compile_time = 1.02691200s,
-    tracing_time = 0.65992800s,
-    mlir_time = 0.01838500s,
-    xla_time = 0.00943100s,
+CompileTimings(
+    total_compile_time = 1 second, 26 milliseconds, 912 microseconds,
+    tracing_time = 659 milliseconds, 928 microseconds,
+    mlir_time = 18 milliseconds, 385 microseconds,
+    xla_time = 9 milliseconds, 431 microseconds,
 )
 ```
 """
@@ -1008,6 +1009,7 @@ struct AggregateProfilingResult
     metrics_data::Union{Nothing,Proto.tensorflow.profiler.op_profile.Metrics}
 end
 
+_periodstr(p::Dates.Period) = string(Dates.canonicalize(p))
 _timestr(time_ns) = Base.Ryu.writefixed(Float64(time_ns / 1e9), 8)
 
 function Base.show(io::IO, result::AggregateProfilingResult)
