@@ -242,7 +242,9 @@ use_overlayed_version(::TracedStepRangeLen) = true
 use_overlayed_version(::TracedUnitRange) = true
 use_overlayed_version(::TracedRational) = true
 function use_overlayed_version(x::AbstractArray)
-    use_overlayed_version(eltype(x)) && return true
+    T = eltype(x)
+    # `Union{}` is a subtype of everything, but an array of it holds no traced values.
+    T !== Union{} && T <: TracedRNumber && return true
     a = ancestor(x)
     a === x && return false
     return use_overlayed_version(a)

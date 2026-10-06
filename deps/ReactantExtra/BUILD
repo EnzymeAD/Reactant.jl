@@ -2028,7 +2028,6 @@ genrule(
         "@xla//xla/pjrt/c:pjrt_c_api_tpu_topology_extension.h",
         "@xla//xla/pjrt/c:pjrt_c_api_ffi_extension.h",
         "@xla//xla/pjrt/c:pjrt_c_api_phase_compile_extension.h",
-        "@xla//xla/pjrt/c:pjrt_c_api_triton_extension.h",
         "@xla//xla/pjrt/c:pjrt_c_api_gpu_extension.h",
         "@xla//xla/pjrt/c:pjrt_c_api_stream_extension.h",
         "@xla//xla/pjrt/c:pjrt_c_api_profiler_extension.h",
@@ -2049,7 +2048,6 @@ genrule(
         \"$(location @xla//xla/pjrt/c:pjrt_c_api_tpu_topology_extension.h)\" \
         \"$(location @xla//xla/pjrt/c:pjrt_c_api_ffi_extension.h)\" \
         \"$(location @xla//xla/pjrt/c:pjrt_c_api_phase_compile_extension.h)\" \
-        \"$(location @xla//xla/pjrt/c:pjrt_c_api_triton_extension.h)\" \
         \"$(location @xla//xla/pjrt/c:pjrt_c_api_gpu_extension.h)\" \
         \"$(location @xla//xla/pjrt/c:pjrt_c_api_stream_extension.h)\" \
         \"$(location @xla//xla/pjrt/c:pjrt_c_api_profiler_extension.h)\" \

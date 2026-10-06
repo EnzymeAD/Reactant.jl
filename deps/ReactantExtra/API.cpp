@@ -3474,7 +3474,13 @@ ifrt_loaded_executable_get_hlo_modules(HeldIfrtLoadedExecutable *exec,
 
 REACTANT_ABI int32_t
 ifrt_loaded_executable_num_devices(HeldIfrtLoadedExecutable *exec) {
-  return static_cast<int32_t>(exec->obj()->num_devices());
+  if (auto *pjrt_exec =
+          ifrt::dyn_cast<ifrt::PjRtLoadedExecutable>(exec->ptr())) {
+    auto *pjrt = pjrt_exec->pjrt_loaded_executable();
+    return static_cast<int32_t>(pjrt->num_replicas() * pjrt->num_partitions());
+  }
+  std::optional<ifrt::DeviceListRef> devices = exec->obj()->devices();
+  return devices ? static_cast<int32_t>((*devices)->size()) : 0;
 }
 
 #pragma endregion
