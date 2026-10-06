@@ -335,11 +335,17 @@ end
     struct VarargField{T}
         xs::Tuple{Vararg{T}}
     end
-    for ty in (Tuple{Vararg{Float64}}, VarargField{Float64})
+    for ty in (Tuple{Vararg{Float64}}, Tuple{Int,Vararg}, VarargField{Float64})
         @test traced_type(
             ty, Val(ConcreteToTraced), Union{}, Sharding.NoSharding(), Reactant.XLA.runtime()
         ) == ty
     end
+
+    # A bare `Vararg` has neither `T` nor `N`; inside a `Tuple` it normalizes to
+    # `Vararg{Any}`, so only a direct call reaches it.
+    @test Reactant.traced_type_inner(
+        Vararg, Dict{Type,Type}(), ConcreteToTraced, Union{}, nothing, Reactant.XLA.runtime()
+    ) === Vararg
 end
 
 @testset "apply_type_with_promotion" begin
