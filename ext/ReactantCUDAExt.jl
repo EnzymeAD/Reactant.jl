@@ -1162,7 +1162,7 @@ Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
     for (i, prev) in enumerate(Any[func.f, args...])
         Reactant.make_tracer(seen, prev, (kernelargsym, i), Reactant.NoStopTracedTrack)
     end
-    bfloat16_compile_type = Reactant.Compiler.BFLOAT16_COMPILE_TYPE[]
+    bfloat16_compile_type = _bfloat16_compile_type()
     has_cast_float_type =
         bfloat16_compile_type !== BFloat16 && any(values(seen)) do arg
             (arg isa TracedRArray || arg isa TracedRNumber) &&
@@ -1484,6 +1484,8 @@ Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
     end
 end
 
+_bfloat16_compile_type() = raising() ? Reactant.Compiler.BFLOAT16_COMPILE_TYPE[] : BFloat16
+
 function _bfloat16_to_ft_type(@nospecialize(T), @nospecialize(FT))
     T === BFloat16 && return FT
     T isa DataType || return T
@@ -1659,9 +1661,7 @@ Reactant.@reactant_overlay function CUDA.cufunction(
     res = Base.@lock CUDACore.cufunction_lock begin
         # compile the function
         cache = llvm_compiler_cache(MLIR.IR.current_module())
-        effective_tt = _substitute_bfloat16_tt(
-            tt, Reactant.Compiler.BFLOAT16_COMPILE_TYPE[]
-        )
+        effective_tt = _substitute_bfloat16_tt(tt, _bfloat16_compile_type())
         source = GPUCompiler.methodinstance(F, effective_tt)
         # cuda = CUDA.active_state()
         device = nothing # cuda.device

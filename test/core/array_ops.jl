@@ -318,6 +318,23 @@ end
     @test @jit(circshift(x_ra, (5, 2))) ≈ circshift(x, (5, 2))
 end
 
+reverse_view(x) = reverse(view(x, 2:4))
+
+@testset "reverse does not mutate its argument" begin
+    x = collect(Float32, 1:4)
+
+    @testset "$(name)" for (name, reverse_fn) in [
+        ("whole vector", reverse),
+        ("start and stop", v -> reverse(v, 2, 3)),
+        ("start only", v -> reverse(v, 2)),
+        ("view", reverse_view),
+    ]
+        x_ra = Reactant.to_rarray(x)
+        @test @jit(reverse_fn(x_ra)) == reverse_fn(x)
+        @test Array(x_ra) == x
+    end
+end
+
 function meshgrid(args::AbstractVector...)
     return let N = length(args)
         stack(enumerate(args)) do (i, arg)
