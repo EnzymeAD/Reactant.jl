@@ -93,6 +93,51 @@ end
 
 Adapt.adapt_storage(::Type{T}, x::AbstractArray) where {T<:AbstractConcreteArray} = T(x)
 
+"""
+    ConcreteRArrayAdaptor(; materialize_ranges=false)
+
+An [Adapt.jl](https://github.com/JuliaGPU/Adapt.jl) adaptor that converts the arrays inside
+a structure into `ConcreteRArray`s:
+
+```julia
+Adapt.adapt(Reactant.ConcreteRArrayAdaptor(), x)
+```
+
+`Adapt.adapt` recurses through every type that defines `Adapt.adapt_structure`, so any
+structure that can be moved to a GPU array type this way can be moved to `ConcreteRArray`s
+too, without Reactant knowing about its type. Numbers and `nothing` pass through
+unchanged.
+
+## Keyword Arguments
+
+- `materialize_ranges::Bool = false`: Adapt rebuilds ranges (`UnitRange`, `StepRange`,
+  `StepRangeLen`, `LinRange`, `Base.OneTo`) from their endpoints, so by default they stay
+  CPU ranges, as with `Adapt.adapt(ConcreteRArray, x)`. With `materialize_ranges=true`
+  they are collected into `ConcreteRArray`s instead.
+
+See also [`to_rarray`](@ref), which traverses arbitrary structures with Reactant's own
+tracing machinery and does not require `Adapt.adapt_structure` methods.
+"""
+struct ConcreteRArrayAdaptor
+    materialize_ranges::Bool
+end
+
+function ConcreteRArrayAdaptor(; materialize_ranges::Bool=false)
+    return ConcreteRArrayAdaptor(materialize_ranges)
+end
+
+Adapt.adapt_storage(::ConcreteRArrayAdaptor, x::AbstractConcreteArray) = x
+function Adapt.adapt_storage(::ConcreteRArrayAdaptor, x::AbstractArray)
+    return ConcreteRArray(convert(Array, x))
+end
+
+for R in (UnitRange, Base.OneTo, StepRange, StepRangeLen, LinRange)
+    @eval function Adapt.adapt_structure(to::ConcreteRArrayAdaptor, r::$R)
+        to.materialize_ranges || return @invoke Adapt.adapt_structure(to::Any, r::$R)
+        return ConcreteRArray(collect(r))
+    end
+end
+
 Base.size(x::AbstractConcreteArray) = x.shape
 
 function Base.isempty(x::Union{AbstractConcreteArray,AbstractConcreteNumber})
