@@ -314,12 +314,12 @@ end
 
 function compile_timings(compile_thunk)
     trace_output_dir = mktempdir(PROFILING_DIR[])
-    with_profiler(
+    result = with_profiler(
         compile_thunk, trace_output_dir; trace_device=false, create_perfetto_link=false
     )
 
     traces = trace_trees(load_xspace(find_xplane_file(trace_output_dir)))
-    return ProfilingSummary(
+    return result, ProfilingSummary(
         _total_duration_ns(traces, "compile "),
         _total_duration_ns(traces, "trace "),
         _total_duration_ns(traces, "run_pass_pipeline!"),
@@ -335,8 +335,16 @@ Like [`@compile`](@ref) (and accepting the same options), but records host trace
 compiling and returns a [`ProfilingSummary`](@ref) of the time spent in the different
 stages of compilation instead of the compiled function.
 
-```julia
-summary = Profiler.@timed_compile myfunc(x, y, z)
+```julia-repl
+julia> myfunc_compiled, summary = Profiler.@timed_compile myfunc(x, y, z);
+
+julia> summary
+ProfilingSummary(
+    total_compile_time = 1.02691200s,
+    tracing_time = 0.65992800s,
+    mlir_time = 0.01838500s,
+    xla_time = 0.00943100s,
+)
 ```
 """
 macro timed_compile(args...)
