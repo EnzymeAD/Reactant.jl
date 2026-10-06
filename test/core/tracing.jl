@@ -326,6 +326,28 @@ end
     )
 end
 
+@testset "length-free Vararg" begin
+    deps = IdSet{TypeVar}()
+    @test isnothing(Reactant.collect_tvars_in_type!(deps, Vararg{Float64}))
+    @test isnothing(Reactant.collect_tvars_in_type!(deps, Vararg))
+    @test isempty(deps)
+
+    struct VarargField{T}
+        xs::Tuple{Vararg{T}}
+    end
+    for ty in (Tuple{Vararg{Float64}}, Tuple{Int,Vararg}, VarargField{Float64})
+        @test traced_type(
+            ty, Val(ConcreteToTraced), Union{}, Sharding.NoSharding(), Reactant.XLA.runtime()
+        ) == ty
+    end
+
+    # A bare `Vararg` has neither `T` nor `N`; inside a `Tuple` it normalizes to
+    # `Vararg{Any}`, so only a direct call reaches it.
+    @test Reactant.traced_type_inner(
+        Vararg, Dict{Type,Type}(), ConcreteToTraced, Union{}, nothing, Reactant.XLA.runtime()
+    ) === Vararg
+end
+
 @testset "apply_type_with_promotion" begin
     struct Bar{T}
         b::T

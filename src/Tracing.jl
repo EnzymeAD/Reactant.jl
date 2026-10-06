@@ -139,7 +139,10 @@ Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(ndevices),
     @nospecialize(runtime)
 )
-    return Vararg{traced_type_inner(T.T, seen, mode, track_numbers, ndevices, runtime),T.N}
+    # `Vararg{T}` leaves `N` unset and bare `Vararg` leaves both unset.
+    isdefined(T, :T) || return T
+    TT = traced_type_inner(T.T, seen, mode, track_numbers, ndevices, runtime)
+    return isdefined(T, :N) ? Vararg{TT,T.N} : Vararg{TT}
 end
 
 Base.@nospecializeinfer function traced_type_inner(
@@ -657,9 +660,15 @@ function collect_tvars_in_type!(dependencies, @nospecialize(t))
         collect_tvars_in_type!(dependencies, t.var.ub)
         collect_tvars_in_type!(dependencies, t.body)
     elseif t isa Core.TypeofVararg
-        collect_tvars_in_type!(dependencies, t.T)
-        collect_tvars_in_type!(dependencies, t.N)
+        # `Vararg{T}` leaves `N` unset and bare `Vararg` leaves both unset.
+        if isdefined(t, :T)
+            collect_tvars_in_type!(dependencies, t.T)
+        end
+        if isdefined(t, :N)
+            collect_tvars_in_type!(dependencies, t.N)
+        end
     end
+    return nothing
 end
 
 Base.@nospecializeinfer function traced_type_inner(
