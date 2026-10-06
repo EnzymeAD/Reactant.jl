@@ -266,7 +266,7 @@ for (name, supertype, julia_type) in
                 end,
             )
 
-            return result_cache[tocopy] = sym
+            return result_cache[tocopy]
         end
 
         function Reactant.Compiler.traced_setfield!(
@@ -278,7 +278,6 @@ for (name, supertype, julia_type) in
 
         function Reactant.Compiler.traced_setfield_buffer!(
             ::Val{:PJRT},
-            prev,
             cache_dict,
             val::$traced_type,
             concrete_res,
@@ -301,10 +300,10 @@ for (name, supertype, julia_type) in
     end
 end
 
-function Reactant.Ops.mlir_type(::TracedCommunicator)
+function Reactant.Ops.mlir_type(::Type{TracedCommunicator})
     return MLIR.IR.Type(MLIR.API.enzymexlaCommMpiCommTypeGet(MLIR.IR.current_context()))
 end
-function Reactant.Ops.mlir_type(::TracedRequest)
+function Reactant.Ops.mlir_type(::Type{TracedRequest})
     return MLIR.IR.Type(MLIR.API.enzymexlaCommMpiRequestTypeGet(MLIR.IR.current_context()))
 end
 
