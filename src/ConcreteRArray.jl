@@ -127,14 +127,14 @@ function ConcreteRArrayAdaptor(; materialize_ranges::Bool=false)
 end
 
 Adapt.adapt_storage(::ConcreteRArrayAdaptor, x::AbstractConcreteArray) = x
-function Adapt.adapt_storage(::ConcreteRArrayAdaptor, x::AbstractArray)
-    return ConcreteRArray(convert(Array, x))
-end
+Adapt.adapt_storage(::ConcreteRArrayAdaptor, x::Array) = to_rarray(x)
+# `to_rarray` traverses other AbstractArrays as structures, so materialize them first
+Adapt.adapt_storage(::ConcreteRArrayAdaptor, x::AbstractArray) = to_rarray(collect(x))
 
 for R in (UnitRange, Base.OneTo, StepRange, StepRangeLen, LinRange)
     @eval function Adapt.adapt_structure(to::ConcreteRArrayAdaptor, r::$R)
         to.materialize_ranges || return @invoke Adapt.adapt_structure(to::Any, r::$R)
-        return ConcreteRArray(collect(r))
+        return to_rarray(collect(r))
     end
 end
 
