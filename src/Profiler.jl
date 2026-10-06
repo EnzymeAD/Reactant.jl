@@ -1,6 +1,6 @@
 module Profiler
 
-using ..Reactant: Reactant, Proto
+using ..Reactant: Reactant, Proto, MLIR
 using ReactantCore: ReactantCore, annotate, @annotate
 using Sockets: Sockets
 using JSON: JSON
@@ -8,9 +8,11 @@ using PrettyTables: PrettyTables, pretty_table
 using Crayons: Crayon
 using Scratch: @get_scratch!
 using ProtoBuf: ProtoBuf
+using ScopedValues: ScopedValues, ScopedValue
 
 const PROFILING_DIR = Ref{Union{Nothing,String}}(nothing)
 const GRPC_SERVER_STARTED = Ref{Bool}(false)
+const ENABLE_RUNTIME_TRACING = ScopedValue(false)
 
 function __init__()
     GRPC_SERVER_STARTED[] = false
@@ -19,7 +21,8 @@ function __init__()
 end
 
 """
-    with_profiler(f, trace_output_dir::String; trace_device=true, trace_host=true, create_perfetto_link=false)
+    with_profiler(f, trace_output_dir::String; trace_device=true, trace_host=true,
+                  create_perfetto_link=false, runtime_tracing=true)
 
 Runs the provided function under a profiler for XLA (similar to [JAX's profiler](https://jax.readthedocs.io/en/latest/profiling.html)).
 The traces will be exported in the provided folder and can be seen
@@ -91,7 +94,8 @@ const DEFAULT_PM_COUNTERS = join(
 
 """
     with_profiler(f, trace_output_dir; trace_device=true, trace_host=true,
-                  create_perfetto_link=false, pm_counters=nothing, advanced_config=Dict())
+                  create_perfetto_link=false, runtime_tracing=true,
+                  pm_counters=nothing, advanced_config=Dict())
 
 Runs the provided function under a profiler for XLA. The `pm_counters` keyword
 enables CUPTI hardware counter collection via the PM sampling API. Pass a
@@ -106,6 +110,12 @@ with_profiler("./traces"; pm_counters=Profiler.DEFAULT_PM_COUNTERS) do
     compiled_fn(args...)
 end
 ```
+
+!!! note
+    Runtime tracing puts trace activities in the compiled programs. Note
+    that Reactant can move code around during the optimization process. As
+    such, the time of the trace may not correspond faithfully to what was
+    originally traced.
 """
 function with_profiler(
     f,
@@ -113,6 +123,7 @@ function with_profiler(
     trace_device=true,
     trace_host=true,
     create_perfetto_link=false,
+    runtime_tracing::Bool=true,
     pm_counters::Union{String,Nothing}=nothing,
     advanced_config::Dict{String,String}=Dict{String,String}(),
 )
@@ -165,7 +176,7 @@ function with_profiler(
     end
 
     results = try
-        f()
+        ScopedValues.with(f, ENABLE_RUNTIME_TRACING => runtime_tracing)
     finally
         Reactant.MLIR.API.ProfilerSessionCollectData(profiler, trace_output_dir)
         Reactant.MLIR.API.ProfilerSessionDelete(profiler)
@@ -220,7 +231,231 @@ profiler_activity_end(id)
 ```
 """
 function profiler_activity_start(name::String, level::Cint)
+    if ReactantCore.within_compile()
+        ENABLE_RUNTIME_TRACING[] || return Int64(0)
+        return compiled_profiler_activity_start(name, level)
+    end
     return Reactant.MLIR.API.ProfilerActivityStart(name, level)
+end
+
+const COMPILED_ACTIVITY_COUNTER = Threads.Atomic{Int64}(0)
+
+function compiled_activity_caches()
+    return get!(
+        Dict{Int64,Reactant.MLIR.IR.Value},
+        task_local_storage(),
+        :reactant_profiler_activity_caches,
+    )
+end
+
+function llvm_linkage(linkage)
+    ctx = Reactant.MLIR.IR.current_context()
+    return Reactant.MLIR.IR.Attribute(
+        Reactant.MLIR.API.mlirLLVMLinkageAttrGet(ctx, linkage)
+    )
+end
+
+function declare_profiler_activity_function(name::String, function_type)
+    mod = Reactant.MLIR.IR.current_module()
+    symtab = Reactant.MLIR.IR.SymbolTable(Reactant.MLIR.IR.Operation(mod))
+    existing = Reactant.MLIR.IR.lookup(symtab, name)
+    existing !== nothing && return existing
+
+    return Reactant.MLIR.IR.@with_block Reactant.MLIR.IR.body(mod) begin
+        Reactant.MLIR.Dialects.llvm.func(;
+            sym_name=name,
+            function_type,
+            linkage=llvm_linkage(Reactant.MLIR.API.MlirLLVMLinkageExternal),
+            body=Reactant.MLIR.IR.Region(),
+        )
+    end
+end
+
+function create_profiler_activity_start_wrapper(name::String, level::Cint)
+    MLIR = Reactant.MLIR
+    mod = MLIR.IR.current_module()
+    ctx = MLIR.IR.current_context()
+    ptr_type = MLIR.IR.Type(MLIR.API.mlirLLVMPointerTypeGet(ctx, 0))
+    void_type = MLIR.IR.Type(MLIR.API.mlirLLVMVoidTypeGet(ctx))
+    i32_type = MLIR.IR.Type(Int32)
+    i64_type = MLIR.IR.Type(Int64)
+
+    api_function_type = MLIR.IR.Type(
+        MLIR.API.mlirLLVMFunctionTypeGet(i64_type, 2, [ptr_type, i32_type], false)
+    )
+    declare_profiler_activity_function("ProfilerActivityStart", api_function_type)
+
+    global_name = String(gensym("profiler_activity_name"))
+    global_type = MLIR.IR.Type(
+        MLIR.API.mlirLLVMArrayTypeGet(MLIR.IR.Type(UInt8), ncodeunits(name) + 1)
+    )
+    wrapper_name = String(gensym("profiler_activity_start"))
+    wrapper_type = MLIR.IR.Type(
+        MLIR.API.mlirLLVMFunctionTypeGet(void_type, 1, [ptr_type], false)
+    )
+
+    Reactant.MLIR.IR.@with_block MLIR.IR.body(mod) begin
+        MLIR.Dialects.llvm.mlir_global(;
+            global_type=MLIR.IR.Attribute(global_type),
+            constant=MLIR.IR.UnitAttribute(),
+            sym_name=global_name,
+            linkage=llvm_linkage(MLIR.API.MlirLLVMLinkageInternal),
+            value=MLIR.IR.Attribute(name * '\0'),
+            initializer=MLIR.IR.Region(),
+        )
+    end
+    wrapper = Reactant.MLIR.IR.@with_block MLIR.IR.body(mod) begin
+        MLIR.Dialects.llvm.func(;
+            sym_name=wrapper_name,
+            sym_visibility=MLIR.IR.Attribute("private"),
+            function_type=wrapper_type,
+            body=MLIR.IR.Region(),
+        )
+    end
+    block = MLIR.IR.Block([ptr_type], [MLIR.IR.Location()])
+    push!(MLIR.IR.region(wrapper, 1), block)
+    Reactant.MLIR.IR.@with_block block begin
+        name_pointer = MLIR.IR.result(
+            MLIR.Dialects.llvm.mlir_addressof(;
+                res=ptr_type, global_name=MLIR.IR.FlatSymbolRefAttribute(global_name)
+            ),
+        )
+        level_value = MLIR.IR.result(
+            MLIR.Dialects.llvm.mlir_constant(;
+                res=i32_type, value=MLIR.IR.Attribute(Int32(level))
+            ),
+        )
+        activity = MLIR.IR.result(
+            MLIR.Dialects.llvm.call(
+                [name_pointer, level_value],
+                MLIR.IR.Value[];
+                result=i64_type,
+                callee=MLIR.IR.FlatSymbolRefAttribute("ProfilerActivityStart"),
+                op_bundle_sizes=MLIR.IR.Attribute(Int32[]),
+            ),
+        )
+        MLIR.Dialects.llvm.store(activity, MLIR.IR.argument(block, 1))
+        MLIR.Dialects.llvm.return_(nothing)
+    end
+    return wrapper_name
+end
+
+function create_profiler_activity_end_wrapper()
+    MLIR = Reactant.MLIR
+    mod = MLIR.IR.current_module()
+    ctx = MLIR.IR.current_context()
+    ptr_type = MLIR.IR.Type(MLIR.API.mlirLLVMPointerTypeGet(ctx, 0))
+    void_type = MLIR.IR.Type(MLIR.API.mlirLLVMVoidTypeGet(ctx))
+    i64_type = MLIR.IR.Type(Int64)
+
+    api_function_type = MLIR.IR.Type(
+        MLIR.API.mlirLLVMFunctionTypeGet(void_type, 1, [i64_type], false)
+    )
+    declare_profiler_activity_function("ProfilerActivityEnd", api_function_type)
+
+    wrapper_name = String(gensym("profiler_activity_end"))
+    wrapper_type = MLIR.IR.Type(
+        MLIR.API.mlirLLVMFunctionTypeGet(void_type, 1, [ptr_type], false)
+    )
+    wrapper = Reactant.MLIR.IR.@with_block MLIR.IR.body(mod) begin
+        MLIR.Dialects.llvm.func(;
+            sym_name=wrapper_name,
+            sym_visibility=MLIR.IR.Attribute("private"),
+            function_type=wrapper_type,
+            body=MLIR.IR.Region(),
+        )
+    end
+    block = MLIR.IR.Block([ptr_type], [MLIR.IR.Location()])
+    push!(MLIR.IR.region(wrapper, 1), block)
+    Reactant.MLIR.IR.@with_block block begin
+        activity = MLIR.IR.result(
+            MLIR.Dialects.llvm.load(MLIR.IR.argument(block, 1); res=i64_type)
+        )
+        MLIR.Dialects.llvm.call(
+            [activity],
+            MLIR.IR.Value[];
+            callee=MLIR.IR.FlatSymbolRefAttribute("ProfilerActivityEnd"),
+            op_bundle_sizes=MLIR.IR.Attribute(Int32[]),
+        )
+        MLIR.Dialects.llvm.return_(nothing)
+    end
+    return wrapper_name
+end
+
+function insert_cache_init!(tensor_type)
+    constant_blk, _ = Reactant.Ops.constant_context()
+    parent = MLIR.IR.parent_op(constant_blk)
+    @assert MLIR.IR.name(parent) != "builtin.module"
+
+    cache_type = parse(MLIR.IR.Type, "!enzyme.Cache<$(tensor_type)>")
+
+    return Reactant.MLIR.IR.@with_block constant_blk begin
+        MLIR.IR.result(MLIR.Dialects.enzyme.init(; result_0=cache_type))
+    end
+end
+
+function compiled_profiler_activity_start(name::String, level::Cint)
+    MLIR = Reactant.MLIR
+    initial_value = Reactant.Ops.constant(Int64(0)).mlir_data
+    tensor_type = MLIR.IR.type(initial_value)
+    wrapper_name = create_profiler_activity_start_wrapper(name, level)
+
+    alias = MLIR.IR.Attribute(
+        MLIR.API.stablehloOutputOperandAliasGet(
+            MLIR.IR.current_context(), 0, C_NULL, 0, 0, C_NULL
+        ),
+    )
+    call = MLIR.Dialects.enzymexla.jit_call(
+        [initial_value];
+        result_0=[tensor_type],
+        fn=MLIR.IR.FlatSymbolRefAttribute(wrapper_name),
+        output_operand_aliases=MLIR.IR.Attribute([alias]),
+    )
+    activity = MLIR.IR.result(call)
+    cache = insert_cache_init!(tensor_type)
+    MLIR.Dialects.enzyme.push(cache, activity)
+
+    id = Threads.atomic_add!(COMPILED_ACTIVITY_COUNTER, Int64(1)) + 1
+    compiled_activity_caches()[id] = cache
+    return id
+end
+
+function compiled_profiler_activity_end(id::Int64)
+    caches = compiled_activity_caches()
+    haskey(caches, id) || error("No compiled profiler activity with id $id")
+    cache = pop!(caches, id)
+
+    constant_blk, _ = Reactant.Ops.constant_context()
+    # We are in another function that the one where the trace was started
+    if constant_blk != MLIR.IR.block(MLIR.IR.op_owner(cache))
+        init_op = MLIR.IR.op_owner(cache)
+        push_op = nothing
+
+        use = MLIR.IR.first_use(cache)
+        while !isnothing(use)
+            @assert isnothing(push_op) "multiple push to trace"
+            push_op = MLIR.IR.owner(use)
+            use = MLIR.IR.next(use)
+        end
+
+        jit_call_op = MLIR.IR.op_owner(MLIR.IR.operand(push_op, 2))
+
+        MLIR.IR.dispose(MLIR.IR.rmfromparent!(push_op))
+        MLIR.IR.dispose(MLIR.IR.rmfromparent!(jit_call_op))
+        MLIR.IR.dispose(MLIR.IR.rmfromparent!(init_op))
+
+        @warn "Could not embed runtime trace because start and end are in a different function body" id
+
+        return nothing
+    end
+
+    tensor_type = MLIR.IR.TensorType(Int[], MLIR.IR.Type(Int64))
+    activity = MLIR.IR.result(MLIR.Dialects.enzyme.pop(cache; output=tensor_type))
+    wrapper_name = create_profiler_activity_end_wrapper()
+    MLIR.Dialects.enzymexla.jit_call(
+        [activity]; result_0=MLIR.IR.Type[], fn=MLIR.IR.FlatSymbolRefAttribute(wrapper_name)
+    )
+    return nothing
 end
 
 function profiler_activity_start(name::String, level::Cint, ::Nothing)
@@ -241,6 +476,10 @@ end
 End a profiler activity. See [`profiler_activity_start`](@ref) for more information.
 """
 function profiler_activity_end(id::Int64)
+    if ReactantCore.within_compile()
+        ENABLE_RUNTIME_TRACING[] || return nothing
+        return compiled_profiler_activity_end(id)
+    end
     return Reactant.MLIR.API.ProfilerActivityEnd(id)
 end
 
