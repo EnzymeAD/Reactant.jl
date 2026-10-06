@@ -277,7 +277,7 @@ Base.@nospecializeinfer function compile_mlir!(
 
     fnname = string(f)
     mlir_fn_res = try
-        Reactant.Profiler.annotate("trace $fnname") do
+        Reactant.Profiler.@annotate "trace $fnname" begin
             Reactant.TracedUtils.make_mlir_fn(
                 f,
                 args,
@@ -1350,7 +1350,7 @@ Reactant.@annotate "compile $(string(f))" function compile_xla(
                 ),
             )
 
-            exec = Reactant.Profiler.annotate("XLA compile $(string(f))") do
+            exec = Reactant.Profiler.@annotate "XLA compile $(string(f))" begin
                 XLA.compile(
                     client,
                     mod;
