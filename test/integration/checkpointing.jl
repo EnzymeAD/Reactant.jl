@@ -48,6 +48,9 @@ sin_reference(x, n) = Enzyme.gradient(
 
 const N = 10
 
+# A traced loop writes its final value back into the buffer of the argument it
+# started from, so every `@jit` call gets a fresh copy of `x`.
+
 @testset "@ad_checkpoint $(nameof(typeof(scheme))) becomes a checkpointed loop" for (
     scheme, attrs
 ) in (
@@ -55,13 +58,15 @@ const N = 10
     (Periodic(3), ("enzyme.enable_checkpointing", "enzyme.checkpoint_period = 3")),
 )
     x = Float32[1.0, 0.5, -0.5]
-    x_ra = Reactant.to_rarray(x)
 
-    @test @jit(sin_loop(x_ra, N, scheme)) ≈ sin_loop(x, N, scheme)
-    @test Array(@jit(sin_loop_grad(x_ra, N, scheme))) ≈ sin_reference(x, N)
+    @test @jit(sin_loop(Reactant.to_rarray(x), N, scheme)) ≈ sin_loop(x, N, scheme)
+    @test Array(@jit(sin_loop_grad(Reactant.to_rarray(x), N, scheme))) ≈
+        sin_reference(x, N)
 
     # The loop is traced once, not unrolled.
-    ir = sprint(show, @code_hlo optimize = false sin_loop(x_ra, N, scheme))
+    ir = sprint(
+        show, @code_hlo optimize = false sin_loop(Reactant.to_rarray(x), N, scheme)
+    )
     @test count("stablehlo.while", ir) == 1
     for attr in attrs
         @test occursin(attr, ir)
