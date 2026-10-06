@@ -150,7 +150,7 @@ end
     @test count(==("enzyme-diff-batch"), enabled) == 1
     @test count(==("enzyme-batch-to-stablehlo"), enabled) == 1
 
-    @test @filecheck implicit_check_not="width =" begin
+    @test @filecheck implicit_check_not = "width =" begin
         @check_count 2 "enzyme.fwddiff"
         @check_not "enzyme.fwddiff"
         Compiler.run_pass_pipeline_on_source(DIFF_BATCH_SOURCE, "canonicalize")
@@ -159,7 +159,7 @@ end
     transformed = repr(
         Compiler.run_pass_pipeline_on_source(DIFF_BATCH_SOURCE, join(enabled, ','))
     )
-    @test @filecheck implicit_check_not=[
+    @test @filecheck implicit_check_not = [
         "enzyme.fwddiff", "enzyme.concat", "enzyme.extract", "stablehlo.slice"
     ] begin
         @check "stablehlo.concatenate"
@@ -174,7 +174,7 @@ end
             DIFF_BATCH_SOURCE, join([enabled..., Compiler.enzyme_pass], ',')
         ),
     )
-    @test @filecheck implicit_check_not=[
+    @test @filecheck implicit_check_not = [
         "enzyme.fwddiff", "enzyme.concat", "enzyme.extract"
     ] begin
         @check "func.func @two_directions"
