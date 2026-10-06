@@ -681,6 +681,33 @@ end
     @test @jit(for_eachindex(s, x)) == 6
 end
 
+function for_untraced_accumulator(xs)
+    s = 0.0
+    @trace for i in eachindex(xs)
+        s += xs[i]
+    end
+    return s
+end
+
+function while_untraced_accumulator(xs)
+    s = 0.0
+    i = 1
+    @trace while i <= length(xs)
+        s += xs[i]
+        i += 1
+    end
+    return s, i
+end
+
+@testset "loops: untraced accumulator" begin
+    xs = Reactant.to_rarray([1.0, 2.0, 3.0])
+
+    @test @allowscalar(@jit(for_untraced_accumulator(xs))) ≈ 6.0
+    s, i = @allowscalar @jit(while_untraced_accumulator(xs))
+    @test s ≈ 6.0
+    @test i == 4
+end
+
 function while_convergence(x, y)
     diff = x .- y
     @trace while sum(diff) >= 10
@@ -699,9 +726,9 @@ end
     @test @jit(while_convergence(x_ra, y_ra)) ≈ while_convergence(x, y)
 end
 
-function for_no_track_numbers(x, n)
+function for_no_track_numbers(x, n, tn)
     # Periodic(n) required for dynamic bounds (n:16 where n is traced)
-    @trace mincut = false checkpointing = Periodic(3) track_numbers = false for i in n:16
+    @trace mincut = false checkpointing = Periodic(3) track_numbers = tn for i in n:16
         x = x .+ 1
     end
     return x
@@ -716,11 +743,11 @@ end
 
     # set optimize to only do enzyme-batch to prevent crash in opt
     for_no_track_numbers_ra = @compile optimize = "enzyme-batch" for_no_track_numbers(
-        x_ra, n_ra
+        x_ra, n_ra, false
     )
-    @test for_no_track_numbers_ra(x_ra, n_ra) == for_no_track_numbers(x, n)
+    @test for_no_track_numbers_ra(x_ra, n_ra, false) == for_no_track_numbers(x, n, false)
 
-    ir = @code_hlo optimize = "enzyme-batch" for_no_track_numbers(x_ra, n_ra)
+    ir = @code_hlo optimize = "enzyme-batch" for_no_track_numbers(x_ra, n_ra, false)
     @test @filecheck begin
         @check_dag "enzyme.disable_mincut"
         @check_dag "enzyme.enable_checkpointing"
