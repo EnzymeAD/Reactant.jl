@@ -216,10 +216,17 @@ include("Indexing.jl")
 
 include("ConcreteRArray.jl")
 
-use_overlayed_version(x) = false
-function use_overlayed_version(x::F) where {F<:Function}
-    return use_overlayed_version(getfield.(Ref(x), fieldnames(F)))
+function use_overlayed_version(x::T) where {T}
+    isstructtype(T) || return false
+    return looped_any(use_overlayed_version ∘ Base.Fix1(getfield, x), 1:nfields(x))
 end
+use_overlayed_version(::Symbol) = false
+use_overlayed_version(::Module) = false
+use_overlayed_version(::Core.SimpleVector) = false
+use_overlayed_version(::DataType) = false
+use_overlayed_version(::Exception) = false
+use_overlayed_version(::Nothing) = false
+use_overlayed_version(::Missing) = false
 use_overlayed_version(x::Base.Generator) = use_overlayed_version((x.f, x.iter))
 use_overlayed_version(x::Base.Iterators.Zip) = use_overlayed_version(x.is)
 use_overlayed_version(x::Base.Iterators.Enumerate) = use_overlayed_version(x.itr)
