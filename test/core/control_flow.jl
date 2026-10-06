@@ -699,9 +699,9 @@ end
     @test @jit(while_convergence(x_ra, y_ra)) ≈ while_convergence(x, y)
 end
 
-function for_no_track_numbers(x, n)
+function for_no_track_numbers(x, n, tn)
     # Periodic(n) required for dynamic bounds (n:16 where n is traced)
-    @trace mincut = false checkpointing = Periodic(3) track_numbers = false for i in n:16
+    @trace mincut = false checkpointing = Periodic(3) track_numbers = tn for i in n:16
         x = x .+ 1
     end
     return x
@@ -716,11 +716,11 @@ end
 
     # set optimize to only do enzyme-batch to prevent crash in opt
     for_no_track_numbers_ra = @compile optimize = "enzyme-batch" for_no_track_numbers(
-        x_ra, n_ra
+        x_ra, n_ra, false
     )
-    @test for_no_track_numbers_ra(x_ra, n_ra) == for_no_track_numbers(x, n)
+    @test for_no_track_numbers_ra(x_ra, n_ra, false) == for_no_track_numbers(x, n, false)
 
-    ir = @code_hlo optimize = "enzyme-batch" for_no_track_numbers(x_ra, n_ra)
+    ir = @code_hlo optimize = "enzyme-batch" for_no_track_numbers(x_ra, n_ra, false)
     @test @filecheck begin
         @check_dag "enzyme.disable_mincut"
         @check_dag "enzyme.enable_checkpointing"
