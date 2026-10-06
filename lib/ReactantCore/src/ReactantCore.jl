@@ -292,7 +292,13 @@ macro trace(args...)
     end
     expr = only(args)
 
-    track_numbers = track_numbers ? Number : Union{}
+    track_numbers = :(
+        if $(track_numbers) isa Bool
+            ($(track_numbers) ? Number : Union{})
+        else
+            $(track_numbers)::DataType
+        end
+    )
     expr = macroexpand(__module__, expr)
 
     #! format: off
