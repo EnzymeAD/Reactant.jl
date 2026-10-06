@@ -2,53 +2,10 @@ import ProtoBuf as PB
 using ProtoBuf: OneOf
 using ProtoBuf.EnumX: @enumx
 
-export RuntimeVersionProto, RocmComputeCapabilityProto
-export var"ExecutionUnitDescriptionProto.RateInfoProto", DeviceInterconnectInfoProto
-export DnnVersionInfoProto, GpuComputeCapabilityProto, ExecutionUnitDescriptionProto
-export GpuDeviceInfoProto, GpuTargetConfigProto
+export RocmComputeCapabilityProto, var"ExecutionUnitDescriptionProto.RateInfoProto"
+export DeviceInterconnectInfoProto, RuntimeVersionProto, GpuComputeCapabilityProto
+export ExecutionUnitDescriptionProto, GpuDeviceInfoProto, GpuTargetConfigProto
 
-
-struct RuntimeVersionProto
-    major::Int32
-    minor::Int32
-    patch::Int32
-end
-PB.default_values(::Type{RuntimeVersionProto}) = (;major = zero(Int32), minor = zero(Int32), patch = zero(Int32))
-PB.field_numbers(::Type{RuntimeVersionProto}) = (;major = 1, minor = 2, patch = 3)
-
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:RuntimeVersionProto}, _endpos::Int=0, _group::Bool=false)
-    major = zero(Int32)
-    minor = zero(Int32)
-    patch = zero(Int32)
-    while !PB.message_done(d, _endpos, _group)
-        field_number, wire_type = PB.decode_tag(d)
-        if field_number == 1
-            major = PB.decode(d, Int32)
-        elseif field_number == 2
-            minor = PB.decode(d, Int32)
-        elseif field_number == 3
-            patch = PB.decode(d, Int32)
-        else
-            Base.skip(d, wire_type)
-        end
-    end
-    return RuntimeVersionProto(major, minor, patch)
-end
-
-function PB.encode(e::PB.AbstractProtoEncoder, x::RuntimeVersionProto)
-    initpos = position(e.io)
-    x.major != zero(Int32) && PB.encode(e, 1, x.major)
-    x.minor != zero(Int32) && PB.encode(e, 2, x.minor)
-    x.patch != zero(Int32) && PB.encode(e, 3, x.patch)
-    return position(e.io) - initpos
-end
-function PB._encoded_size(x::RuntimeVersionProto)
-    encoded_size = 0
-    x.major != zero(Int32) && (encoded_size += PB._encoded_size(x.major, 1))
-    x.minor != zero(Int32) && (encoded_size += PB._encoded_size(x.minor, 2))
-    x.patch != zero(Int32) && (encoded_size += PB._encoded_size(x.patch, 3))
-    return encoded_size
-end
 
 struct RocmComputeCapabilityProto
     gcn_arch_name::String
@@ -164,15 +121,15 @@ function PB._encoded_size(x::DeviceInterconnectInfoProto)
     return encoded_size
 end
 
-struct DnnVersionInfoProto
+struct RuntimeVersionProto
     major::Int32
     minor::Int32
     patch::Int32
 end
-PB.default_values(::Type{DnnVersionInfoProto}) = (;major = zero(Int32), minor = zero(Int32), patch = zero(Int32))
-PB.field_numbers(::Type{DnnVersionInfoProto}) = (;major = 1, minor = 2, patch = 3)
+PB.default_values(::Type{RuntimeVersionProto}) = (;major = zero(Int32), minor = zero(Int32), patch = zero(Int32))
+PB.field_numbers(::Type{RuntimeVersionProto}) = (;major = 1, minor = 2, patch = 3)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:DnnVersionInfoProto}, _endpos::Int=0, _group::Bool=false)
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:RuntimeVersionProto}, _endpos::Int=0, _group::Bool=false)
     major = zero(Int32)
     minor = zero(Int32)
     patch = zero(Int32)
@@ -188,17 +145,17 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:DnnVersionInfoProto}, _e
             Base.skip(d, wire_type)
         end
     end
-    return DnnVersionInfoProto(major, minor, patch)
+    return RuntimeVersionProto(major, minor, patch)
 end
 
-function PB.encode(e::PB.AbstractProtoEncoder, x::DnnVersionInfoProto)
+function PB.encode(e::PB.AbstractProtoEncoder, x::RuntimeVersionProto)
     initpos = position(e.io)
     x.major != zero(Int32) && PB.encode(e, 1, x.major)
     x.minor != zero(Int32) && PB.encode(e, 2, x.minor)
     x.patch != zero(Int32) && PB.encode(e, 3, x.patch)
     return position(e.io) - initpos
 end
-function PB._encoded_size(x::DnnVersionInfoProto)
+function PB._encoded_size(x::RuntimeVersionProto)
     encoded_size = 0
     x.major != zero(Int32) && (encoded_size += PB._encoded_size(x.major, 1))
     x.minor != zero(Int32) && (encoded_size += PB._encoded_size(x.minor, 2))
@@ -593,19 +550,17 @@ end
 struct GpuTargetConfigProto
     gpu_device_info::Union{Nothing,GpuDeviceInfoProto}
     platform_name::String
-    dnn_version_info::Union{Nothing,DnnVersionInfoProto}
     runtime_version::Union{Nothing,RuntimeVersionProto}
     autotune_results::Union{Nothing,xla_autotuning.AutotuneResults}
     device_description_str::String
 end
-PB.reserved_fields(::Type{GpuTargetConfigProto}) = (names = ["cuda_compute_capability", "rocm_compute_capability"], numbers = Union{Int,UnitRange{Int}}[2, 3])
-PB.default_values(::Type{GpuTargetConfigProto}) = (;gpu_device_info = nothing, platform_name = "", dnn_version_info = nothing, runtime_version = nothing, autotune_results = nothing, device_description_str = "")
-PB.field_numbers(::Type{GpuTargetConfigProto}) = (;gpu_device_info = 1, platform_name = 4, dnn_version_info = 5, runtime_version = 8, autotune_results = 6, device_description_str = 7)
+PB.reserved_fields(::Type{GpuTargetConfigProto}) = (names = ["cuda_compute_capability", "rocm_compute_capability", "dnn_version_info"], numbers = Union{Int,UnitRange{Int}}[2, 3, 5])
+PB.default_values(::Type{GpuTargetConfigProto}) = (;gpu_device_info = nothing, platform_name = "", runtime_version = nothing, autotune_results = nothing, device_description_str = "")
+PB.field_numbers(::Type{GpuTargetConfigProto}) = (;gpu_device_info = 1, platform_name = 4, runtime_version = 8, autotune_results = 6, device_description_str = 7)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:GpuTargetConfigProto}, _endpos::Int=0, _group::Bool=false)
     gpu_device_info = Ref{Union{Nothing,GpuDeviceInfoProto}}(nothing)
     platform_name = ""
-    dnn_version_info = Ref{Union{Nothing,DnnVersionInfoProto}}(nothing)
     runtime_version = Ref{Union{Nothing,RuntimeVersionProto}}(nothing)
     autotune_results = Ref{Union{Nothing,xla_autotuning.AutotuneResults}}(nothing)
     device_description_str = ""
@@ -615,8 +570,6 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:GpuTargetConfigProto}, _
             PB.decode!(d, gpu_device_info)
         elseif field_number == 4
             platform_name = PB.decode(d, String)
-        elseif field_number == 5
-            PB.decode!(d, dnn_version_info)
         elseif field_number == 8
             PB.decode!(d, runtime_version)
         elseif field_number == 6
@@ -627,14 +580,13 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:GpuTargetConfigProto}, _
             Base.skip(d, wire_type)
         end
     end
-    return GpuTargetConfigProto(gpu_device_info[], platform_name, dnn_version_info[], runtime_version[], autotune_results[], device_description_str)
+    return GpuTargetConfigProto(gpu_device_info[], platform_name, runtime_version[], autotune_results[], device_description_str)
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::GpuTargetConfigProto)
     initpos = position(e.io)
     !isnothing(x.gpu_device_info) && PB.encode(e, 1, x.gpu_device_info)
     !isempty(x.platform_name) && PB.encode(e, 4, x.platform_name)
-    !isnothing(x.dnn_version_info) && PB.encode(e, 5, x.dnn_version_info)
     !isnothing(x.runtime_version) && PB.encode(e, 8, x.runtime_version)
     !isnothing(x.autotune_results) && PB.encode(e, 6, x.autotune_results)
     !isempty(x.device_description_str) && PB.encode(e, 7, x.device_description_str)
@@ -644,7 +596,6 @@ function PB._encoded_size(x::GpuTargetConfigProto)
     encoded_size = 0
     !isnothing(x.gpu_device_info) && (encoded_size += PB._encoded_size(x.gpu_device_info, 1))
     !isempty(x.platform_name) && (encoded_size += PB._encoded_size(x.platform_name, 4))
-    !isnothing(x.dnn_version_info) && (encoded_size += PB._encoded_size(x.dnn_version_info, 5))
     !isnothing(x.runtime_version) && (encoded_size += PB._encoded_size(x.runtime_version, 8))
     !isnothing(x.autotune_results) && (encoded_size += PB._encoded_size(x.autotune_results, 6))
     !isempty(x.device_description_str) && (encoded_size += PB._encoded_size(x.device_description_str, 7))

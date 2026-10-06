@@ -79,8 +79,6 @@ See the [profiling tutorial](@ref profiling) for more details.
 
 ```@docs
 Reactant.Profiler.with_profiler
-Reactant.Profiler.annotate
-Reactant.Profiler.@annotate
 Reactant.Profiler.@time
 Reactant.Profiler.@timed
 Reactant.Profiler.@profile

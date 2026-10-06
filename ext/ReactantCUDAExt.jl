@@ -847,6 +847,11 @@ function compile(job)
             if isdefined(GPUCompiler, :current_job)
                 GPUCompiler.current_job = prev_job
             end
+            # The target machine isn't owned by the LLVM context: dispose it explicitly,
+            # otherwise it's leaked at every kernel compilation. There is none when
+            # LLVM was built without the NVPTX backend (macOS), where llvm_machine
+            # returns nothing and the passes above run without one.
+            tm === nothing || LLVM.dispose(tm)
         end
 
         for fname in ("gpu_report_exception", "gpu_signal_exception")
@@ -928,12 +933,16 @@ function abi_sizeof(@nospecialize(x::CUDA.CuDeviceArray))
     return sizeof(Ptr)
 end
 
+# Int8 rather than UInt8: these bytes become an llvm.mlir.constant of type
+# !llvm.array<N x i8>, and llvm.mlir.constant requires the attribute's integer
+# element type to match the result's. A UInt8 array yields tensor<Nxui8>, which
+# the verifier rejects against i8.
 function to_bytes(x)
     sz = abi_sizeof(x)
     ref = Ref(x)
     GC.@preserve ref begin
-        ptr = Base.reinterpret(Ptr{UInt8}, Base.unsafe_convert(Ptr{Cvoid}, ref))
-        vec = Vector{UInt8}(undef, sz)
+        ptr = Base.reinterpret(Ptr{Int8}, Base.unsafe_convert(Ptr{Cvoid}, ref))
+        vec = Vector{Int8}(undef, sz)
         for i in 1:sz
             @inbounds vec[i] = Base.unsafe_load(ptr, i)
         end
@@ -1152,7 +1161,7 @@ Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
     for (i, prev) in enumerate(Any[func.f, args...])
         Reactant.make_tracer(seen, prev, (kernelargsym, i), Reactant.NoStopTracedTrack)
     end
-    bfloat16_compile_type = Reactant.Compiler.BFLOAT16_COMPILE_TYPE[]
+    bfloat16_compile_type = _bfloat16_compile_type()
     has_cast_float_type =
         bfloat16_compile_type !== BFloat16 && any(values(seen)) do arg
             (arg isa TracedRArray || arg isa TracedRNumber) &&
@@ -1465,6 +1474,8 @@ Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
     end
 end
 
+_bfloat16_compile_type() = raising() ? Reactant.Compiler.BFLOAT16_COMPILE_TYPE[] : BFloat16
+
 function _bfloat16_to_ft_type(@nospecialize(T), @nospecialize(FT))
     T === BFloat16 && return FT
     T isa DataType || return T
@@ -1640,9 +1651,7 @@ Reactant.@reactant_overlay function CUDA.cufunction(
     res = Base.@lock CUDACore.cufunction_lock begin
         # compile the function
         cache = llvm_compiler_cache(MLIR.IR.current_module())
-        effective_tt = _substitute_bfloat16_tt(
-            tt, Reactant.Compiler.BFLOAT16_COMPILE_TYPE[]
-        )
+        effective_tt = _substitute_bfloat16_tt(tt, _bfloat16_compile_type())
         source = GPUCompiler.methodinstance(F, effective_tt)
         # cuda = CUDA.active_state()
         device = nothing # cuda.device

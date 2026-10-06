@@ -85,6 +85,9 @@ function ReactantCore.materialize_traced_array(x::AbstractArray{TracedRNumber{T}
     as = Reactant.aos_to_soa(x)
     if as === x
         as = x[axes(x)...]
+        if as === x
+            error("Throwing before stack overflow due to infinite recursion")
+        end
     end
     return ReactantCore.materialize_traced_array(as)
 end

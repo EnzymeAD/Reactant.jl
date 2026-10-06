@@ -885,7 +885,9 @@ Base.@nospecializeinfer function traced_type_inner(
 )
     should_track_enum(T, track_numbers) || return T
     if mode == ArrayToConcrete
-        N = traced_type_inner(enum_basetype(T), seen, mode, track_numbers, ndevices, runtime)
+        N = traced_type_inner(
+            enum_basetype(T), seen, mode, track_numbers, ndevices, runtime
+        )
         return ConcreteEnum{T,N}
     elseif mode == NoStopTracedTrack
         return TracedEnum{T}
@@ -1058,11 +1060,13 @@ function apply_type_with_promotion(wrapper, params, relevant_typevars=typevar_di
 
                     if value != resolved
                         # This happens when `value` lost the promotion battle.
-                        # At this point, we need to update the problematic parameter in`value`.
+                        # At this point, we need to update the problematic parameter in `param`.
                         d = typevar_dict(rewrapped)
                         v = Any[param.parameters...]
                         v[d[typevar]] = resolved
-                        params[i], _changed_params = apply_type_with_promotion(rewrapped, v)
+                        params[i], _changed_params = apply_type_with_promotion(
+                            param.name.wrapper, v
+                        )
                     end
                     changed = true
                 end
