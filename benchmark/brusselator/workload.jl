@@ -108,10 +108,7 @@ leaves every numerical equation unchanged and makes the compiled state a tuple o
 `N x N` arrays.
 """
 function brusselator_2d_components(
-    u_species::AbstractMatrix,
-    v_species::AbstractMatrix,
-    coordinates,
-    p,
+    u_species::AbstractMatrix, v_species::AbstractMatrix, coordinates, p
 )
     A, B, alpha, dx = p
     scaled_alpha = alpha / dx^2
@@ -173,15 +170,17 @@ Compute and return `J(u) * du_seed` with Enzyme forward mode. The result is a tu
 the two `N x N` species tangents.
 """
 function residual_jvp(u, du_seed, coordinates, p)
-    return only(Enzyme.autodiff(
-        Enzyme.Forward,
-        brusselator_2d_components,
-        Enzyme.Duplicated,
-        Enzyme.Duplicated(u[1], du_seed[1]),
-        Enzyme.Duplicated(u[2], du_seed[2]),
-        Enzyme.Const(coordinates),
-        Enzyme.Const(p),
-    ))
+    return only(
+        Enzyme.autodiff(
+            Enzyme.Forward,
+            brusselator_2d_components,
+            Enzyme.Duplicated,
+            Enzyme.Duplicated(u[1], du_seed[1]),
+            Enzyme.Duplicated(u[2], du_seed[2]),
+            Enzyme.Const(coordinates),
+            Enzyme.Const(p),
+        ),
+    )
 end
 
 """
@@ -230,9 +229,7 @@ function jacobian_chunk_k4!(compressed, u, seeds, coordinates, p)
     derivative2 = residual_jvp(u, seeds[2], coordinates, p)
     derivative3 = residual_jvp(u, seeds[3], coordinates, p)
     derivative4 = residual_jvp(u, seeds[4], coordinates, p)
-    store_compressed_jvps!(
-        compressed, (derivative1, derivative2, derivative3, derivative4)
-    )
+    store_compressed_jvps!(compressed, (derivative1, derivative2, derivative3, derivative4))
     return nothing
 end
 

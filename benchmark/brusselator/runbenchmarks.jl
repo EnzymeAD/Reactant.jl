@@ -68,22 +68,19 @@ function flatten_states(states)
     return arrays
 end
 
-function brusselator_compile_options(
-    diff_batch::Bool; post_optimization::Bool=true
-)
-    post_optimization || throw(ArgumentError(
-        "The current baseline requires normal post-Enzyme HLO optimization; " *
-        "the post-opt=false ablation is deferred to L4.",
-    ))
+function brusselator_compile_options(diff_batch::Bool; post_optimization::Bool=true)
+    post_optimization || throw(
+        ArgumentError(
+            "The current baseline requires normal post-Enzyme HLO optimization; " *
+            "the post-opt=false ablation is deferred to L4.",
+        ),
+    )
     ad_optimization_passes = if diff_batch
         Reactant.ADOptimizationOptions(; diff_batch=true)
     else
         false
     end
-    return Reactant.CompileOptions(;
-        sync=true,
-        ad_optimization_passes,
-    )
+    return Reactant.CompileOptions(; sync=true, ad_optimization_passes)
 end
 
 function compile_timed(f, args, compile_options::Reactant.CompileOptions)
@@ -216,9 +213,7 @@ function run_brusselator_validation(;
     )
 
     fd_jvps = map(seeds_3d) do seed
-        return finite_difference_jvp(
-            problem.u, seed, problem.coordinates, problem.p; epsilon
-        )
+        return finite_difference_jvp(problem.u, seed, problem.coordinates, problem.p; epsilon)
     end
 
     native_jvps = map(seeds) do seed
@@ -230,11 +225,7 @@ function run_brusselator_validation(;
     native_jvp_ok = passes(native_jvps[1], fd_jvps[1]; atol=jvp_atol, rtol=jvp_rtol)
 
     single_args = Reactant.to_rarray((
-        zero_state(state),
-        state,
-        seeds[1],
-        problem.coordinates,
-        problem.p,
+        zero_state(state), state, seeds[1], problem.coordinates, problem.p
     ))
     single_compiled, single_compile_seconds = compile_timed(
         residual_jvp!, single_args, compile_options
@@ -256,11 +247,7 @@ function run_brusselator_validation(;
 
     individual_reactant_jvps = map(seeds) do seed
         args = Reactant.to_rarray((
-            zero_state(state),
-            state,
-            seed,
-            problem.coordinates,
-            problem.p,
+            zero_state(state), state, seed, problem.coordinates, problem.p
         ))
         single_compiled(args...)
         return host_state(args[1])
@@ -299,10 +286,11 @@ function run_brusselator_validation(;
             chunk_output, native_reference; atol=primal_atol, rtol=primal_rtol
         )
         shape_ok = size(chunk_output) == (2 * N^2, K)
-        inputs_unchanged = host_state(chunk_args[2]) == state &&
-                           map(host_state, chunk_args[3]) == chunk_seeds
-        chunk_ok = alias_ok && individual_ok && native_ok && fd_ok && shape_ok &&
-                   inputs_unchanged
+        inputs_unchanged =
+            host_state(chunk_args[2]) == state &&
+            map(host_state, chunk_args[3]) == chunk_seeds
+        chunk_ok =
+            alias_ok && individual_ok && native_ok && fd_ok && shape_ok && inputs_unchanged
         chunks_ok &= chunk_ok
 
         chunk_results[K] = (;
@@ -452,11 +440,7 @@ function run_brusselator_performance(;
     GC.gc(true)
 
     single_args = Reactant.to_rarray((
-        zero_state(state),
-        state,
-        seeds[1],
-        problem.coordinates,
-        problem.p,
+        zero_state(state), state, seeds[1], problem.coordinates, problem.p
     ))
     single_compiled, single_compile_seconds = compile_timed(
         residual_jvp!, single_args, compile_options
@@ -580,15 +564,7 @@ function parse_command_line(args)
     backend in ("auto", "cpu", "gpu") ||
         throw(ArgumentError("backend must be auto, cpu, or gpu"))
     return (;
-        mode,
-        N,
-        Ks,
-        seed_kind,
-        epsilon,
-        samples,
-        diff_batch,
-        post_optimization,
-        backend,
+        mode, N, Ks, seed_kind, epsilon, samples, diff_batch, post_optimization, backend
     )
 end
 

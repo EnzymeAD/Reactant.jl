@@ -349,17 +349,7 @@ function overload_autodiff(
     cache = Compiler.autodiffcache(; throw_error=false)
 
     if cache !== nothing && haskey(cache, cache_key)
-        (;
-            f_name,
-            result,
-            linear_args,
-            in_tys,
-            linear_results,
-            fnwrap,
-            argprefix,
-            resprefix,
-            resargprefix,
-        ) = cache[cache_key]
+        (; f_name, result, linear_args, in_tys, linear_results, fnwrap, argprefix, resprefix, resargprefix) = cache[cache_key]
         result = deepcopy(result)
     else
         argprefix::Symbol = gensym("autodiffarg")
@@ -379,9 +369,7 @@ function overload_autodiff(
         )
         (; result, linear_args, in_tys, linear_results) = mlir_fn_res
         fnwrap = mlir_fn_res.fnwrapped
-        f_name = Base.String(
-            TracedUtils.get_attribute_by_name(mlir_fn_res.f, "sym_name")
-        )
+        f_name = Base.String(TracedUtils.get_attribute_by_name(mlir_fn_res.f, "sym_name"))
         if cache !== nothing
             cache[cache_key] = (;
                 f_name,

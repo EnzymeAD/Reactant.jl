@@ -111,16 +111,14 @@ function capture_production(wrapper, args, options, directory)
         Reactant.MLIR.IR.DUMP_MLIR_ALWAYS[] = dump_always
         Reactant.MLIR.IR.DUMP_MLIR_DIR[] = dump_dir
     end
-    source_path = only(filter(
-        path -> endswith(path, "_pre_all_pm.mlir"), readdir(directory; join=true)
-    ))
+    source_path = only(
+        filter(path -> endswith(path, "_pre_all_pm.mlir"), readdir(directory; join=true))
+    )
     source = read(source_path, String)
     return source, production_pipeline(source), Array(args[1])
 end
 
-function inspect_brusselator_mlir(;
-    N=16, Ks=SUPPORTED_CHUNKS, output_dir, backend="gpu"
-)
+function inspect_brusselator_mlir(; N=16, Ks=SUPPORTED_CHUNKS, output_dir, backend="gpu")
     Reactant.set_default_backend(backend)
     mkpath(output_dir)
     summaries = []
@@ -129,7 +127,8 @@ function inspect_brusselator_mlir(;
         for diff_batch in (false, true)
             directory = joinpath(output_dir, "k$K", diff_batch ? "on" : "off")
             # Refuse stale captures: every file in this directory must come from this run.
-            isdir(directory) && !isempty(readdir(directory)) &&
+            isdir(directory) &&
+                !isempty(readdir(directory)) &&
                 error("Use an empty output directory: $directory")
             options = brusselator_compile_options(diff_batch)
             source, pipeline, output = capture_production(
@@ -164,16 +163,25 @@ function inspect_brusselator_mlir(;
                 legal = run_pipeline(after, stages[position + 1])
                 save_stage(directory, "after-batch-legalization", legal)
             end
-            push!(summaries, (; K, diff_batch, initial_count=initial.count,
-                              before_count=before_details.count,
-                              final_count=diff_batch ? 1 : K,
-                              width=diff_batch ? K : 1))
+            push!(
+                summaries,
+                (;
+                    K,
+                    diff_batch,
+                    initial_count=initial.count,
+                    before_count=before_details.count,
+                    final_count=diff_batch ? 1 : K,
+                    width=diff_batch ? K : 1,
+                ),
+            )
         end
         @assert passes(outputs[true], outputs[false]; atol=1e-10, rtol=1e-10)
         println("K=$K production execution and off/on equivalence: PASS")
     end
     open(joinpath(output_dir, "summary.tsv"), "w") do io
-        println(io, "K\tdiff_batch\tinitial_requests\tbefore_requests\tafter_requests\twidth")
+        println(
+            io, "K\tdiff_batch\tinitial_requests\tbefore_requests\tafter_requests\twidth"
+        )
         for s in summaries
             println(io, join(Tuple(s), '\t'))
         end

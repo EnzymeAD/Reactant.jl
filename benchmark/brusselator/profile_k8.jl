@@ -63,18 +63,14 @@ function save_profile_reports(profile_dir, xplane_file)
     return kernel_stats, framework_stats
 end
 
-function profile_k8(;
-    N, samples, warmup, diff_batch, post_optimization, profile_dir
-)
+function profile_k8(; N, samples, warmup, diff_batch, post_optimization, profile_dir)
     K = 8
     problem = brusselator_problem(N)
     state = split_state(problem.u)
     seeds = make_tangent_seeds(state, K; kind=:onehot)
     compressed = zero_compressed_jacobian(state, K)
     args = Reactant.to_rarray((compressed, state, seeds, problem.coordinates, problem.p))
-    compile_options = brusselator_compile_options(
-        diff_batch; post_optimization
-    )
+    compile_options = brusselator_compile_options(diff_batch; post_optimization)
     compiled, compile_seconds = compile_timed(chunk_function(K), args, compile_options)
 
     for _ in 1:warmup
@@ -95,11 +91,7 @@ function profile_k8(;
     if !isempty(profile_dir)
         mkpath(profile_dir)
         profile = Reactant.Profiler.profile_and_get_xplane_file(
-            compiled,
-            args...;
-            nrepeat=samples,
-            warmup=warmup,
-            profile_dir,
+            compiled, args...; nrepeat=samples, warmup=warmup, profile_dir
         )
         kernel_stats, framework_stats = save_profile_reports(
             profile_dir, profile.xplane_file
