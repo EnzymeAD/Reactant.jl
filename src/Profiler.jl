@@ -313,14 +313,50 @@ function _total_duration(traces, prefix::String)
     return Microsecond(total_ps ÷ 1_000_000)
 end
 
-function compile_timings(compile_thunk)
-    trace_output_dir = mktempdir(PROFILING_DIR[])
+"""
+    profile_compile_timings(f, [trace_output_dir]; kwargs...)
+
+Run `f()` under [`with_profiler`](@ref) (same arguments and keyword arguments; host
+tracing only by default) and return `(result, timings)` where `timings` is a
+[`CompileTimings`](@ref) summarizing the time spent in the different stages of
+compilation. If `trace_output_dir` is omitted, a temporary directory is used.
+
+```julia-repl
+julia> myfunc_compiled, summary = Profiler.profile_compile_timings() do
+         @compile sync=true myfunc(x, y, z)
+       end;
+
+julia> summary
+CompileTimings(
+    total_compile_time = 1 second, 26 milliseconds, 912 microseconds,
+    tracing_time = 659 milliseconds, 928 microseconds,
+    mlir_time = 18 milliseconds, 385 microseconds,
+    xla_time = 9 milliseconds, 431 microseconds,
+)
+```
+"""
+function profile_compile_timings(f, args...; kwargs...)
+    if isempty(args)
+        return mktempdir(PROFILING_DIR[]) do trace_output_dir
+            return _profile_compile_timings(f, trace_output_dir; kwargs...)
+        end
+    end
+    return _profile_compile_timings(f, args...; kwargs...)
+end
+
+function _profile_compile_timings(f, trace_output_dir, rest...; kwargs...)
     result = with_profiler(
-        compile_thunk, trace_output_dir; trace_device=false, create_perfetto_link=false
+        f,
+        trace_output_dir,
+        rest...;
+        trace_device=false,
+        create_perfetto_link=false,
+        kwargs...,
     )
 
     traces = trace_trees(load_xspace(find_xplane_file(trace_output_dir)))
-    return result, CompileTimings(
+    return result,
+    CompileTimings(
         _total_duration(traces, "compile "),
         _total_duration(traces, "trace "),
         _total_duration(traces, "run_pass_pipeline!"),
@@ -352,7 +388,7 @@ macro timed_compile(args...)
     compile_expr = Expr(
         :macrocall, GlobalRef(Reactant.Compiler, Symbol("@compile")), __source__, args...
     )
-    return esc(:($(compile_timings)(() -> $compile_expr)))
+    return esc(:($(profile_compile_timings)(() -> $compile_expr)))
 end
 
 # https://github.com/google/tsl/blob/ffeadbc9111309a845ab07df3ff41d59cb005afb/tsl/profiler/lib/traceme.h#L49-L53
@@ -1696,6 +1732,7 @@ macro profile(args...)
     )
 end
 
-export with_profiler, annotate, @annotate, @time, @timed, @profile, @timed_compile
+export with_profiler,
+    annotate, @annotate, @time, @timed, @profile, @timed_compile, profile_compile_timings
 
 end # module Profiler
