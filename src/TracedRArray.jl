@@ -62,6 +62,7 @@ function Base.size(x::TracedRArray, i::TracedRNumber{<:Integer})
 end
 
 Base.collect(x::TracedRArray) = copy(x)
+Base.collect(x::SubArray{<:TracedRNumber,<:Any,<:TracedRArray}) = copy(x)
 
 Base.copy(A::TracedRArray{T,N}) where {T,N} = TracedRArray{T,N}((), A.mlir_data, size(A))
 
@@ -1196,8 +1197,9 @@ end
 function Base.reverse(
     v::AnyTracedRVector{T}, start::Integer, stop::Integer=lastindex(v)
 ) where {T}
-    v[start:stop] = reverse!(v[start:stop])
-    return v
+    reversed = copy(v)
+    reversed[start:stop] = reverse!(v[start:stop])
+    return reversed
 end
 
 function Base.reverse!(
