@@ -67,7 +67,9 @@ module {
     disabled_ad = ADOptimizationOptions()
     enabled_ad = ADOptimizationOptions(; diff_batch=true)
 
+    @test !disabled_ad.activity
     @test !disabled_ad.diff_batch
+    @test !disabled_ad.region_hoist
     @test enabled_ad.diff_batch
     @test CompileOptions().ad_optimization_passes === false
     @test CompileOptions(; ad_optimization_passes=false).ad_optimization_passes === false
@@ -131,13 +133,20 @@ end
     explicit_disabled = Compiler.ad_pre_enzyme_passes(ADOptimizationOptions())
     enabled = Compiler.ad_pre_enzyme_passes(true)
     explicit_enabled = Compiler.ad_pre_enzyme_passes(
-        ADOptimizationOptions(; diff_batch=true)
+        ADOptimizationOptions(; activity=true, diff_batch=true, region_hoist=true)
     )
 
     @test isempty(disabled)
     @test isempty(explicit_disabled)
     @test enabled == explicit_enabled
-    @test enabled == ["enzyme-diff-batch", "enzyme-batch-to-stablehlo"]
+    @test enabled == [
+        "enzyme-activity-opt",
+        "enzyme-diff-batch",
+        "enzyme-batch-to-stablehlo",
+        "inline-enzyme-regions",
+        "hoist-enzyme-regions",
+        "outline-enzyme-regions",
+    ]
     @test count(==("enzyme-diff-batch"), enabled) == 1
     @test count(==("enzyme-batch-to-stablehlo"), enabled) == 1
 
@@ -233,6 +242,8 @@ end
     @test pass_count(custom_pipeline, "canonicalize") == 1
     @test pass_count(custom_pipeline, "enzyme-batch") == 0
     @test pass_count(custom_pipeline, "enzyme-diff-batch") == 0
+    @test pass_count(custom_pipeline, "enzyme-activity-opt") == 0
+    @test pass_count(custom_pipeline, "hoist-enzyme-regions") == 0
     @test pass_count(custom_pipeline, "enzyme-batch-to-stablehlo") == 0
     @test !occursin("enzyme{", custom_pipeline)
 end
@@ -283,5 +294,27 @@ end
         )
         @test options.optimization_passes === mode
         @test repr(@code_hlo compile_options = options identity(x)) isa String
+    end
+end
+
+@testset "Independent AD controls and pass order" begin
+    for activity in (false, true),
+        diff_batch in (false, true),
+        region_hoist in (false, true)
+
+        ad = ADOptimizationOptions(; activity, diff_batch, region_hoist)
+        options = ad_test_compile_options(; ad_optimization_passes=ad)
+        pipeline = dumped_pass_pipeline(options, "all")
+        @test pass_count(pipeline, "enzyme-activity-opt") == activity
+        @test pass_count(pipeline, "enzyme-diff-batch") == diff_batch
+        @test pass_count(pipeline, "inline-enzyme-regions") == region_hoist
+        @test pass_count(pipeline, "hoist-enzyme-regions") == region_hoist
+        @test pass_count(pipeline, "outline-enzyme-regions") == region_hoist
+        @test pass_count(pipeline, "enzyme-batch-to-stablehlo") == 1 + diff_batch
+        # Check the production pipeline, including required helper legalization.
+        selected = Compiler.ad_pre_enzyme_passes(ad)
+        positions = [first(findfirst(pass, pipeline)) for pass in selected]
+        push!(positions, first(findfirst("enzyme{", pipeline)))
+        @test issorted(positions; lt=<)
     end
 end

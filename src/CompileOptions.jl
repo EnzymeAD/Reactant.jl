@@ -12,7 +12,7 @@ function Base.String(options::MultiFloatOptions)
 end
 
 """
-    ADOptimizationOptions(; diff_batch=false)
+    ADOptimizationOptions(; activity=false, diff_batch=false, region_hoist=false)
 
 Fine-grained control over optional AD-aware optimization passes. These passes optimize
 high-level Enzyme differentiation operations but are not required for differentiation
@@ -20,18 +20,35 @@ itself.
 
 ## Options
 
+  - `activity::Bool`: refine result activities of forward and reverse
+    differentiation requests using `enzyme-activity-opt` with its classical activity
+    analysis. Runs before batching, so
+    requests are grouped using their refined activities. Defaults to `false`.
   - `diff_batch::Bool`: merge compatible repeated `enzyme.fwddiff` and
     `enzyme.autodiff` operations into a wider differentiation operation using
-    `enzyme-diff-batch`. The `enzyme.concat` and `enzyme.extract` helpers introduced by
+    `enzyme-diff-batch`. Only width-one requests with matching activities and
+    differentiation attributes are merged; conflicting memory effects prevent merging.
+    The `enzyme.concat` and `enzyme.extract` helpers introduced by
     that pass are subsequently legalized to StableHLO with
     `enzyme-batch-to-stablehlo`. Defaults to `false`.
+  - `region_hoist::Bool`: inline differentiation requests into AD regions, move
+    independent primal work out with `hoist-enzyme-regions`, and outline the regions
+    again before differentiation. Runs after batching to preserve shared callees
+    while grouping requests. Defaults to `false`.
+
+Region motion is experimental. It requires a native build containing Enzyme's capture
+fixes (#3424 and #3431). Validated cases are pure tensor computations and the capture
+regressions; conditional effects, control-flow loops, traps, nontermination, and
+unrecognized LLVM calls are outside the validated scope of the hoisting pass.
 
 This is distinct from Reactant's existing `enzyme-batch` pass, which lowers
 `enzyme.batch` operations by producing batched callees. Differentiation batching does not
 remove, replace, or duplicate that pass.
 """
 Base.@kwdef struct ADOptimizationOptions
+    activity::Bool = false
     diff_batch::Bool = false
+    region_hoist::Bool = false
 end
 
 # TODO(#2265): document these options at some point
@@ -129,8 +146,8 @@ Fine-grained control over the compilation options for the Reactant compiler.
     pipelines that run core Enzyme differentiation. Valid values are:
     - `false`: disable all optional AD-aware optimizations. This is the default and
       preserves the existing Reactant pipeline.
-    - `true`: enable all currently supported AD-aware optimizations. Currently this is
-      equivalent to `ADOptimizationOptions(; diff_batch=true)`.
+    - `true`: enable all three optional families, equivalent to
+      `ADOptimizationOptions(; activity=true, diff_batch=true, region_hoist=true)`.
     - [`ADOptimizationOptions`](@ref): enable only the selected optimization families.
 
     Core Enzyme differentiation and its required batch-helper lowering remain enabled

@@ -186,11 +186,28 @@ const enzyme_pass::String = "enzyme{postpasses=\"arith-raise{stablehlo=true},enz
 # Helper lowering here complements the mandatory lowering in Enzyme's postpasses: both
 # derivative batching and derivative generation can introduce batch helper operations.
 function ad_pre_enzyme_passes(options::ADOptimizationOptions)
-    return options.diff_batch ? ["enzyme-diff-batch", "enzyme-batch-to-stablehlo"] : String[]
+    passes = String[]
+    options.activity && push!(passes, "enzyme-activity-opt")
+    if options.diff_batch
+        append!(passes, ["enzyme-diff-batch", "enzyme-batch-to-stablehlo"])
+    end
+    if options.region_hoist
+        # Batch while requests still share a callee. Outlining after hoisting can
+        # give each request its own function, preventing compatible calls merging.
+        append!(
+            passes,
+            ["inline-enzyme-regions", "hoist-enzyme-regions", "outline-enzyme-regions"],
+        )
+    end
+    return passes
 end
 
 function ad_pre_enzyme_passes(enable_all::Bool)
-    return ad_pre_enzyme_passes(ADOptimizationOptions(; diff_batch=enable_all))
+    return ad_pre_enzyme_passes(
+        ADOptimizationOptions(;
+            activity=enable_all, diff_batch=enable_all, region_hoist=enable_all
+        ),
+    )
 end
 
 function impulse_pass(;
