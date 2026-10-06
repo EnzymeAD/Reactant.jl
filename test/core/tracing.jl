@@ -326,6 +326,22 @@ end
     )
 end
 
+@testset "length-free Vararg" begin
+    deps = IdSet{TypeVar}()
+    @test isnothing(Reactant.collect_tvars_in_type!(deps, Vararg{Float64}))
+    @test isnothing(Reactant.collect_tvars_in_type!(deps, Vararg))
+    @test isempty(deps)
+
+    struct VarargField{T}
+        xs::Tuple{Vararg{T}}
+    end
+    for ty in (Tuple{Vararg{Float64}}, VarargField{Float64})
+        @test traced_type(
+            ty, Val(ConcreteToTraced), Union{}, Sharding.NoSharding(), Reactant.XLA.runtime()
+        ) == ty
+    end
+end
+
 @testset "apply_type_with_promotion" begin
     struct Bar{T}
         b::T
