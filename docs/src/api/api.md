@@ -54,6 +54,7 @@ Reactant.code_xla
 ## Compile Options
 
 ```@docs
+ADOptimizationOptions
 CompileOptions
 Reactant.DefaultXLACompileOptions
 ```
