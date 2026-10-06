@@ -7,13 +7,14 @@ module {
   func.func @main(%arg0: tensor<1024xf32>, %arg1: tensor<1024xf32>) -> tensor<1024xf32> {
     %c = stablehlo.constant dense<16> : tensor<i64>
     %c_0 = stablehlo.constant dense<1> : tensor<i64>
-    %0 = enzymexla_tt_ext.call @triton_module::@triton_module_inner::@add_kernel clusters in(%c_0, %c_0, %c_0) blocks in(%c, %c_0, %c_0) (%arg0, %arg1) : (tensor<1024xf32>, tensor<1024xf32>) -> tensor<1024xf32>
+    %cst = stablehlo.constant dense<0.000000e+00> : tensor<1024xf32>
+    %0 = enzymexla_tt_ext.call @triton_module::@triton_module_inner::@add_kernel clusters in(%c_0, %c_0, %c_0) blocks in(%c, %c_0, %c_0) (%arg0, %arg1, %cst) <{output_operand_aliases = [#stablehlo.output_operand_alias<output_tuple_indices = [], operand_index = 2, operand_tuple_indices = []>]}> : (tensor<1024xf32>, tensor<1024xf32>, tensor<1024xf32>) -> tensor<1024xf32>
     return %0 : tensor<1024xf32>
   }
   enzymexla_tt_ext.module @triton_module {
     builtin.module @triton_module_inner attributes {enzymexla.num_stages = 3 : i32, enzymexla.num_warps = 4 : i32} {
       tt.func public @add_kernel(%arg0: !tt.ptr<f32> {tt.divisibility = 16 : i32}, %arg1: !tt.ptr<f32> {tt.divisibility = 16 : i32}, %arg2: !tt.ptr<f32> {tt.divisibility = 16 : i32}) attributes {noinline = false} {
-        %cst = arith.constant dense<98432> : tensor<1024xi32>
+        %cst = arith.constant dense<1024> : tensor<1024xi32>
         %c1024_i32 = arith.constant 1024 : i32
         %0 = tt.get_program_id x : i32
         %1 = arith.muli %0, %c1024_i32 : i32
