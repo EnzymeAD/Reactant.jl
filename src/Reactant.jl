@@ -377,6 +377,12 @@ function initialize_ptrs()
             )
         end
     end
+    # LLVM lowers float -> bfloat truncation to a compiler-rt libcall on targets without
+    # native bf16 conversions.
+    @static if Sys.iswindows() && VERSION >= v"1.11"
+        MLIR.API.EnzymeJaXMapSymbol("__truncsfbf2", cglobal(:julia__truncsfbf2))
+        MLIR.API.EnzymeJaXMapSymbol("__truncdfbf2", cglobal(:julia__truncdfbf2))
+    end
 end
 
 function __init__()
