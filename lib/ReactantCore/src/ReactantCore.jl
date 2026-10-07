@@ -352,11 +352,13 @@ macro trace(args...)
 
     Meta.isexpr(expr, :if) && return esc(mark_traced(trace_if(expr; track_numbers)))
 
-    Meta.isexpr(expr, :for) &&
-        return esc(mark_traced(trace_for(__module__, expr; track_numbers, checkpointing, mincut)))
+    Meta.isexpr(expr, :for) && return esc(
+        mark_traced(trace_for(__module__, expr; track_numbers, checkpointing, mincut))
+    )
 
-    Meta.isexpr(expr, :while) &&
-        return esc(mark_traced(trace_while(__module__, expr; track_numbers, checkpointing, mincut)))
+    Meta.isexpr(expr, :while) && return esc(
+        mark_traced(trace_while(__module__, expr; track_numbers, checkpointing, mincut))
+    )
 
     return error(
         "Only `if-elseif-else` blocks, function definitions, `function calls`, `for` and \
