@@ -1205,6 +1205,33 @@ function elem_apply_via_while_loop(f, args::Vararg{Any,Nargs}; kwargs...) where 
     return ReactantCore.materialize_traced_array(reshape(result, out_size))
 end
 
+"""
+    direct_elem_apply(f, args...)
+
+Lower an elementwise application of `f` directly to whole-array ops, instead of tracing a
+scalar function and batching it (which emits a new function into the module for every
+broadcast). Returns `nothing` when no direct lowering is available.
+"""
+direct_elem_apply(f, args...) = nothing
+
+for (jlop, hloop) in ((:(Base.:+), :add), (:(Base.:-), :subtract), (:(Base.:*), :multiply))
+    @eval function direct_elem_apply(
+        ::typeof($jlop), x::TracedRArray{T1,N}, y::TracedRArray{T2,N}
+    ) where {T1,T2,N}
+        # Bool has special promotion rules in Base
+        (T1 === Bool || T2 === Bool || size(x) != size(y)) && return nothing
+        T = promote_type(T1, T2)
+        return @opcall $(hloop)(elem_apply(T, x), elem_apply(T, y))
+    end
+end
+function direct_elem_apply(::typeof(Base.:-), x::TracedRArray{T}) where {T}
+    return T === Bool ? nothing : @opcall(negate(x))
+end
+direct_elem_apply(::typeof(Base.conj), x::TracedRArray) = @opcall conj(x)
+function direct_elem_apply(::TypeCast{T}, x::TracedRArray{T2,N}) where {T,T2,N}
+    return @opcall convert(TracedRArray{T,N}, x)
+end
+
 function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
     if all(iszero ∘ ndims, args)
         scalar_args = map(args) do arg
@@ -1215,6 +1242,9 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
         end
         return Reactant.call_with_reactant(f, scalar_args...)
     end
+
+    direct = direct_elem_apply(f, args...)
+    direct === nothing || return direct
 
     # we can expand the scope of this later to support cases where the output
     # doesn't align with `Ops.batch`. For now we just handle cases that would

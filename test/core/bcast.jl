@@ -288,3 +288,60 @@ end
     g(x) = all(broadcast(xj -> true, x))
     @test Bool(@jit g(x))
 end
+
+@testset "Direct elementwise lowering" begin
+    x = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float32, 3, 4))
+    y = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float32, 3, 4))
+    xi = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Int32, 3, 4))
+    xc = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(ComplexF32, 3, 4))
+    xb = Reactant.to_rarray(rand(Bool, 3, 4))
+
+    @testset for (op, hloop) in ((+, "add"), (-, "subtract"), (*, "multiply"))
+        f(a, b) = op.(a, b)
+        hlo = repr(@code_hlo optimize = false f(x, y))
+        @test @filecheck begin
+            @check_not "enzyme.batch"
+            @check "stablehlo.$(hloop)"
+            hlo
+        end
+        @test @jit(f(x, y)) ≈ f(Array(x), Array(y))
+
+        # mixed element types are promoted before the op
+        hlo = repr(@code_hlo optimize = false f(x, xi))
+        @test !occursin("enzyme.batch", hlo)
+        @test @jit(f(x, xi)) ≈ f(Array(x), Array(xi))
+
+        # Bool falls back to the generic path but must still be correct
+        @test @jit(f(xb, xi)) == f(Array(xb), Array(xi))
+    end
+
+    @testset "unary" begin
+        neg(a) = .-a
+        hlo = repr(@code_hlo optimize = false neg(x))
+        @test !occursin("enzyme.batch", hlo)
+        @test occursin("stablehlo.negate", hlo)
+        @test @jit(neg(x)) ≈ .-Array(x)
+
+        cj(a) = conj.(a)
+        hlo = repr(@code_hlo optimize = false cj(xc))
+        @test !occursin("enzyme.batch", hlo)
+        @test @jit(cj(xc)) ≈ conj.(Array(xc))
+        @test @jit(cj(x)) ≈ Array(x)
+    end
+
+    @testset "type cast" begin
+        tof64(a) = Float64.(a)
+        hlo = repr(@code_hlo optimize = false tof64(x))
+        @test !occursin("enzyme.batch", hlo)
+        @test occursin("stablehlo.convert", hlo)
+        res = @jit tof64(x)
+        @test eltype(res) == Float64
+        @test res ≈ Float64.(Array(x))
+    end
+
+    @testset "size mismatch falls back to broadcasting" begin
+        z = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float32, 3, 1))
+        g(a, b) = a .+ b
+        @test @jit(g(x, z)) ≈ g(Array(x), Array(z))
+    end
+end
