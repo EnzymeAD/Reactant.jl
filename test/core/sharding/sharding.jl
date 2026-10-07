@@ -663,3 +663,24 @@ end
     end
 end
 =#
+
+struct WrapTest{A}
+    data::A
+end
+
+wrap_f(a) = WrapTest(a .* a)
+
+@testset "Wrapped Sharded Array" begin
+    if length(addressable_devices) ≥ 2
+        ndev = length(addressable_devices)
+        mesh = Sharding.Mesh(reshape(addressable_devices, ndev), (:dev,))
+        sh = Sharding.DimsSharding(mesh, (1,), (:dev,))
+
+        x = Reactant.to_rarray(collect(Float64, 1:64); sharding = sh)
+        r = @jit(wrap_f(x))
+        @test r isa WrapTest
+        @test Array(r.data) ≈ collect(Float64, 1:64) .^ 2
+    else
+        @warn "Not enough addressable devices to run wrapped sharded array tests"
+    end
+end

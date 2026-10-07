@@ -1582,7 +1582,10 @@ Base.@nospecializeinfer function make_tracer(
                     (XLA.PJRT.AsyncEmptyBuffer,), size(prev), Sharding.NoShardInfo()
                 )
             else
-                error("TODO(#2230): implement sharding")
+                ndev = Sharding.ndevices(sharding)
+                res = ConcretePJRTArray{T,N,ndev}(
+                    ntuple(Returns(XLA.PJRT.AsyncEmptyBuffer), ndev), size(prev), Sharding.NoShardInfo()
+                )
             end
             seen[prev] = res
             return res
@@ -1593,7 +1596,9 @@ Base.@nospecializeinfer function make_tracer(
                     XLA.IFRT.AsyncEmptyArray, size(prev), Sharding.NoShardInfo()
                 )
             else
-                error("TODO(#2230): implement sharding")
+                res = ConcreteIFRTArray{T,N}(
+                    XLA.IFRT.AsyncEmptyArray, size(prev), Sharding.NoShardInfo()
+                )
             end
             seen[prev] = res
             return res
