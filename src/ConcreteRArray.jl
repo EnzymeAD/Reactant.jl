@@ -105,7 +105,8 @@ Adapt.adapt(Reactant.ConcreteRArrayAdaptor(), x)
 
 `Adapt.adapt` recurses through every type that defines `Adapt.adapt_structure`, so any
 structure that can be moved to a GPU array type this way can be moved to `ConcreteRArray`s
-too, without Reactant knowing about its type. Numbers and `nothing` pass through
+too, without Reactant knowing about its type. Only arrays whose element type is a
+`ReactantPrimitive` are converted; other arrays, numbers and `nothing` pass through
 unchanged.
 
 ## Keyword Arguments
@@ -127,14 +128,16 @@ function ConcreteRArrayAdaptor(; materialize_ranges::Bool=false)
 end
 
 Adapt.adapt_storage(::ConcreteRArrayAdaptor, x::AbstractConcreteArray) = x
-Adapt.adapt_storage(::ConcreteRArrayAdaptor, x::Array) = to_rarray(x)
-# `to_rarray` traverses other AbstractArrays as structures, so materialize them first
-Adapt.adapt_storage(::ConcreteRArrayAdaptor, x::AbstractArray) = to_rarray(collect(x))
+function Adapt.adapt_storage(::ConcreteRArrayAdaptor, x::AbstractArray{<:ReactantPrimitive})
+    return to_rarray(x)
+end
 
 for R in (UnitRange, Base.OneTo, StepRange, StepRangeLen, LinRange)
     @eval function Adapt.adapt_structure(to::ConcreteRArrayAdaptor, r::$R)
-        to.materialize_ranges || return @invoke Adapt.adapt_structure(to::Any, r::$R)
-        return to_rarray(collect(r))
+        if to.materialize_ranges && eltype(r) <: ReactantPrimitive
+            return to_rarray(collect(r))
+        end
+        return @invoke Adapt.adapt_structure(to::Any, r::$R)
     end
 end
 

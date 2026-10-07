@@ -27,6 +27,13 @@ end
         rb = Adapt.adapt(to, trues(3))
         @test rb isa ConcreteRArray{Bool,1}
         @test Array(rb) == [true, true, true]
+
+        # Arrays whose element type is not a ReactantPrimitive are left alone
+        strings = ["a", "b"]
+        @test Adapt.adapt(to, strings) === strings
+        nested = [collect(1:2), collect(3:4)]
+        @test Adapt.adapt(to, nested) === nested
+        @test Adapt.adapt(to_materialized, big(1):big(3)) == big(1):big(3)
     end
 
     @testset "offset arrays" begin
