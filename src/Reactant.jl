@@ -341,7 +341,8 @@ end
 
 const passes_initialized = Ref(false)
 function initialize_dialect()
-    registry[] = MLIR.IR.DialectRegistry()
+    # (lives as long as the process)
+    registry[] = MLIR.IR.mark_untracked(MLIR.IR.DialectRegistry())
     MLIR.API.InitializeRegistry(registry[])
     if !passes_initialized[]
         MLIR.API.InitializePasses(registry[])

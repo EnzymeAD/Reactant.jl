@@ -1052,10 +1052,12 @@ end
 
 function __lookup_unique_name_in_module(mod, name)
     new_name = name
-    tab = MLIR.IR.SymbolTable(MLIR.IR.Operation(mod))
-    for i in 0:10000
-        new_name = i == 0 ? name : name * "_" * string(i)
-        MLIR.IR.mlirIsNull(MLIR.API.mlirSymbolTableLookup(tab, new_name)) && return new_name
+    MLIR.IR.@dispose tab = MLIR.IR.SymbolTable(MLIR.IR.Operation(mod)) begin
+        for i in 0:10000
+            new_name = i == 0 ? name : name * "_" * string(i)
+            MLIR.IR.mlirIsNull(MLIR.API.mlirSymbolTableLookup(tab, new_name)) &&
+                return new_name
+        end
     end
     modstr = string(mod)
     return error("Mod\n$modstr\nCould not find unique name for $name")

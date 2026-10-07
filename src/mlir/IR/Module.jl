@@ -7,9 +7,10 @@ end
 
 Creates a new, empty module and transfers ownership to the caller.
 """
-Module(loc::Location=Location()) = Module(mark_alloc(API.mlirModuleCreateEmpty(loc)))
+Module(loc::Location=Location()) = mark_alloc(Module(API.mlirModuleCreateEmpty(loc)))
 
-Module(op::Operation) = Module(API.mlirModuleFromOperation(mark_donate(op)))
+# a view of the operation as a module, which doesn't take ownership of it
+Module(op::Operation) = Module(API.mlirModuleFromOperation(op))
 
 """
     dispose(module)
@@ -28,7 +29,7 @@ Base.unsafe_convert(::Core.Type{API.MlirModule}, module_::Module) = mark_use(mod
 Parses a module from the string and transfers ownership to the caller.
 """
 function Base.parse(::Core.Type{Module}, module_; context::Context=current_context())
-    return Module(API.mlirModuleCreateParse(context, module_))
+    return mark_alloc(Module(API.mlirModuleCreateParse(context, module_)))
 end
 
 macro mlir_str(code)
@@ -59,7 +60,13 @@ Views the module as a generic operation.
 """
 Operation(module_::Module) = Operation(API.mlirModuleGetOperation(module_))
 
-Base.copy(mod::Module) = Module(copy(Operation(mod)))
+function Base.copy(mod::Module)
+    op = copy(Operation(mod))
+    # the module (a view of the copied operation) takes over ownership of it
+    mod = Module(op)
+    mark_untracked(op)
+    return mark_alloc(mod)
+end
 
 Base.show(io::IO, module_::Module) = show(io, Operation(module_))
 
