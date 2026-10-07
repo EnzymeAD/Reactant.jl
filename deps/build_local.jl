@@ -301,10 +301,14 @@ else
     push!(build_cmd_list, "--copt=-Wno-unused-command-line-argument")
 end
 
-# With only the Command Line Tools installed (no Xcode.app), Bazel can't detect any
-# Xcode version and falls back to its default macOS SDK (10.11), which `xcrun` can't
-# find. Pass the SDK version actually available on this machine.
 if Sys.isapple()
+    # Native macOS build: use the local Apple toolchain. The jll builds cross-compile
+    # from Linux with `--config=macos` instead, so keep these flags out of that config.
+    push!(build_cmd_list, "--config=macos_local")
+
+    # With only the Command Line Tools installed (no Xcode.app), Bazel can't detect any
+    # Xcode version and falls back to its default macOS SDK (10.11), which `xcrun` can't
+    # find. Pass the SDK version actually available on this machine.
     macos_sdk_version = strip(read(`xcrun --sdk macosx --show-sdk-version`, String))
     push!(build_cmd_list, "--macos_sdk_version=$(macos_sdk_version)")
 end
