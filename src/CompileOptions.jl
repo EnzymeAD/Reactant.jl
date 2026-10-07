@@ -11,6 +11,46 @@ function Base.String(options::MultiFloatOptions)
     )
 end
 
+"""
+    ADOptimizationOptions(; activity=false, diff_batch=false, region_hoist=false)
+
+Fine-grained control over optional AD-aware optimization passes. These passes optimize
+high-level Enzyme differentiation operations but are not required for differentiation
+itself.
+
+## Options
+
+  - `activity::Bool`: refine result activities of forward and reverse
+    differentiation requests using `enzyme-activity-opt` with its classical activity
+    analysis. Runs before batching, so
+    requests are grouped using their refined activities. Defaults to `false`.
+  - `diff_batch::Bool`: merge compatible repeated `enzyme.fwddiff` and
+    `enzyme.autodiff` operations into a wider differentiation operation using
+    `enzyme-diff-batch`. Only width-one requests with matching activities and
+    differentiation attributes are merged; conflicting memory effects prevent merging.
+    The `enzyme.concat` and `enzyme.extract` helpers introduced by
+    that pass are subsequently legalized to StableHLO with
+    `enzyme-batch-to-stablehlo`. Defaults to `false`.
+  - `region_hoist::Bool`: inline differentiation requests into AD regions, move
+    independent primal work out with `hoist-enzyme-regions`, and outline the regions
+    again before differentiation. Runs after batching to preserve shared callees
+    while grouping requests. Defaults to `false`.
+
+Region motion is experimental. It requires a native build containing Enzyme's capture
+fixes (#3424 and #3431). Validated cases are pure tensor computations and the capture
+regressions; conditional effects, control-flow loops, traps, nontermination, and
+unrecognized LLVM calls are outside the validated scope of the hoisting pass.
+
+This is distinct from Reactant's existing `enzyme-batch` pass, which lowers
+`enzyme.batch` operations by producing batched callees. Differentiation batching does not
+remove, replace, or duplicate that pass.
+"""
+Base.@kwdef struct ADOptimizationOptions
+    activity::Bool = false
+    diff_batch::Bool = false
+    region_hoist::Bool = false
+end
+
 # TODO(#2265): document these options at some point
 """
     OptimizeCommunicationOptions
@@ -102,6 +142,18 @@ Fine-grained control over the compilation options for the Reactant compiler.
        2. `:none`: No optimization passes will be run.
        3.  Other predefined options are: `:before_kernel`, `:before_jit`, `:before_raise`,
           `:before_enzyme`, `:after_enzyme`, `:just_batch`, `:canonicalize`, `:only_enzyme`.
+  - `ad_optimization_passes`: Optional AD-aware optimizations to add to predefined
+    pipelines that run core Enzyme differentiation. Valid values are:
+    - `false`: disable all optional AD-aware optimizations. This is the default and
+      preserves the existing Reactant pipeline.
+    - `true`: enable all three optional families, equivalent to
+      `ADOptimizationOptions(; activity=true, diff_batch=true, region_hoist=true)`.
+    - [`ADOptimizationOptions`](@ref): enable only the selected optimization families.
+
+    Core Enzyme differentiation and its required batch-helper lowering remain enabled
+    when this setting is `false`. This setting does not alter custom pass-pipeline
+    strings or the `:just_batch`, `:canonicalize`, and `:none` predefined modes. In
+    particular, `:just_batch` continues to run only the existing `enzyme-batch` pass.
   - `no_nan`: If `true`, the optimization passes will assume that the function does not
     produce NaN values. This can lead to more aggressive optimizations **(and potentially
     incorrect results if the function does produce NaN values)**.
@@ -215,6 +267,7 @@ Fine-grained control over the compilation options for the Reactant compiler.
 """
 struct CompileOptions
     optimization_passes::Union{Symbol,String}
+    ad_optimization_passes::Union{Bool,ADOptimizationOptions}
     no_nan::Bool
     all_finite::Bool
     inline::Bool
@@ -263,6 +316,7 @@ end
 
 function CompileOptions(;
     optimization_passes::Union{Bool,Symbol,String}=:all,
+    ad_optimization_passes::Union{Bool,ADOptimizationOptions}=false,
     no_nan::Bool=false,
     all_finite::Bool=false,
     inline::Bool=true,
@@ -330,6 +384,7 @@ function CompileOptions(;
 
     return CompileOptions(
         optimization_passes,
+        ad_optimization_passes,
         no_nan,
         all_finite,
         inline,
@@ -388,6 +443,7 @@ end
 function __compile_options_with_reversed_propagation(compile_options::CompileOptions)
     return CompileOptions(
         compile_options.optimization_passes,
+        compile_options.ad_optimization_passes,
         compile_options.no_nan,
         compile_options.all_finite,
         compile_options.inline,
@@ -433,6 +489,7 @@ function __compile_options_with_updated_sync(compile_options::CompileOptions, sy
     end
     return CompileOptions(
         compile_options.optimization_passes,
+        compile_options.ad_optimization_passes,
         compile_options.no_nan,
         compile_options.all_finite,
         compile_options.inline,

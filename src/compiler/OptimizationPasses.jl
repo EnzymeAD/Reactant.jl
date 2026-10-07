@@ -1,7 +1,12 @@
 # This file contains the MLIR optimization pass logic.
 
 using ..Reactant:
-    Reactant, MLIR, OptimizeCommunicationOptions, ShardyPropagationOptions, CompileOptions
+    Reactant,
+    MLIR,
+    ADOptimizationOptions,
+    OptimizeCommunicationOptions,
+    ShardyPropagationOptions,
+    CompileOptions
 
 const BFLOAT16_COMPILE_TYPE = Ref{DataType}(Float32)
 const DEBUG_KERNEL = Ref{Bool}(false)
@@ -177,6 +182,34 @@ end
 # However, this errs as we cannot attach the transform with to the funcop itself [as we run a functionpass].
 const enzyme_pass::String = "enzyme{postpasses=\"arith-raise{stablehlo=true},enzyme-batch-to-stablehlo,canonicalize,cse,canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math,canonicalize,cse,canonicalize,arith-raise{stablehlo=true}\"}"
 
+# These optional passes act on high-level differentiation requests, before core Enzyme.
+# Helper lowering here complements the mandatory lowering in Enzyme's postpasses: both
+# derivative batching and derivative generation can introduce batch helper operations.
+function ad_pre_enzyme_passes(options::ADOptimizationOptions)
+    passes = String[]
+    options.activity && push!(passes, "enzyme-activity-opt")
+    if options.diff_batch
+        append!(passes, ["enzyme-diff-batch", "enzyme-batch-to-stablehlo"])
+    end
+    if options.region_hoist
+        # Batch while requests still share a callee. Outlining after hoisting can
+        # give each request its own function, preventing compatible calls merging.
+        append!(
+            passes,
+            ["inline-enzyme-regions", "hoist-enzyme-regions", "outline-enzyme-regions"],
+        )
+    end
+    return passes
+end
+
+function ad_pre_enzyme_passes(enable_all::Bool)
+    return ad_pre_enzyme_passes(
+        ADOptimizationOptions(;
+            activity=enable_all, diff_batch=enable_all, region_hoist=enable_all
+        ),
+    )
+end
+
 function impulse_pass(;
     debug_dump::Bool=DEBUG_PROBPROG_DUMP_VALUE[],
     disable_optimizations::Bool=DEBUG_PROBPROG_DISABLE_OPT[],
@@ -300,6 +333,7 @@ end
 function __get_compile_options_and_kwargs(;
     compile_options::Union{Missing,CompileOptions}=missing,
     optimize::Union{Bool,Symbol,String}=true,
+    ad_optimization_passes::Union{Bool,ADOptimizationOptions}=false,
     no_nan::Bool=false,
     all_finite::Bool=false,
     inline::Bool=true,
@@ -328,6 +362,7 @@ function __get_compile_options_and_kwargs(;
         Reactant.__compile_options_from_kwargs(;
             compile_options,
             optimize,
+            ad_optimization_passes,
             no_nan,
             all_finite,
             inline,
