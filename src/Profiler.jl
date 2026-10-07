@@ -2,7 +2,6 @@ module Profiler
 
 using ..Reactant: Reactant, Proto
 using ReactantCore: ReactantCore, annotate, @annotate
-using Dates: Dates, Microsecond
 using Sockets: Sockets
 using JSON: JSON
 using PrettyTables: PrettyTables, pretty_table
@@ -250,12 +249,12 @@ end
 
 Compilation timings extracted from the host traces recorded by
 [`@timed_compile`](@ref). Each time is the sum of the durations of the outermost
-trace events of that kind, as a `Dates.Microsecond`:
+trace events of that kind, in microseconds:
 
-  - `total_compile_time`: `compile <fn>` events (the whole Reactant compilation)
-  - `tracing_time`: `trace <fn>` events (tracing the Julia function into MLIR)
-  - `mlir_time`: `run_pass_pipeline!` events (MLIR pass pipelines)
-  - `xla_time`: `XLA compile <fn>` events (compiling the MLIR module with XLA)
+  - `total_compile_time_μs`: `compile <fn>` events (the whole Reactant compilation)
+  - `tracing_time_μs`: `trace <fn>` events (tracing the Julia function into MLIR)
+  - `mlir_time_μs`: `run_pass_pipeline!` events (MLIR pass pipelines)
+  - `xla_time_μs`: `XLA compile <fn>` events (compiling the MLIR module with XLA)
 
 `traces` holds the reconstructed trace trees as a `Dict` mapping each plane name (e.g.
 `"/host:CPU"`) to a `Dict` mapping each line (thread or stream) name to its root
@@ -263,20 +262,26 @@ trace events of that kind, as a `Dates.Microsecond`:
 its `stats`, and its nested `children`.
 """
 struct CompileTimings
-    total_compile_time::Microsecond
-    tracing_time::Microsecond
-    mlir_time::Microsecond
-    xla_time::Microsecond
+    total_compile_time_μs::Int64
+    tracing_time_μs::Int64
+    mlir_time_μs::Int64
+    xla_time_μs::Int64
 
     traces::Dict{String,Any}
 end
 
+function _μsstr(t::Integer)
+    t < 1_000 && return "$t μs"
+    t < 1_000_000 && return "$(round(t / 1e3; digits=3)) ms"
+    return "$(round(t / 1e6; digits=3)) s"
+end
+
 function Base.show(io::IO, summary::CompileTimings)
     println(io, "CompileTimings(")
-    println(io, "    total_compile_time = $(_periodstr(summary.total_compile_time)),")
-    println(io, "    tracing_time = $(_periodstr(summary.tracing_time)),")
-    println(io, "    mlir_time = $(_periodstr(summary.mlir_time)),")
-    println(io, "    xla_time = $(_periodstr(summary.xla_time)),")
+    println(io, "    total_compile_time_μs = $(_μsstr(summary.total_compile_time_μs)),")
+    println(io, "    tracing_time_μs = $(_μsstr(summary.tracing_time_μs)),")
+    println(io, "    mlir_time_μs = $(_μsstr(summary.mlir_time_μs)),")
+    println(io, "    xla_time_μs = $(_μsstr(summary.xla_time_μs)),")
     print(io, ")")
     return nothing
 end
@@ -310,7 +315,7 @@ function _total_duration(traces, prefix::String)
         roots in values(lines);
         init=Int64(0),
     )
-    return Microsecond(total_ps ÷ 1_000_000)
+    return total_ps ÷ 1_000_000
 end
 
 """
@@ -328,10 +333,10 @@ julia> myfunc_compiled, summary = Profiler.profile_compile_timings() do
 
 julia> summary
 CompileTimings(
-    total_compile_time = 1 second, 26 milliseconds, 912 microseconds,
-    tracing_time = 659 milliseconds, 928 microseconds,
-    mlir_time = 18 milliseconds, 385 microseconds,
-    xla_time = 9 milliseconds, 431 microseconds,
+    total_compile_time_μs = 1.027 s,
+    tracing_time_μs = 659.928 ms,
+    mlir_time_μs = 18.385 ms,
+    xla_time_μs = 9.431 ms,
 )
 ```
 """
@@ -377,10 +382,10 @@ julia> myfunc_compiled, summary = Profiler.@timed_compile myfunc(x, y, z);
 
 julia> summary
 CompileTimings(
-    total_compile_time = 1 second, 26 milliseconds, 912 microseconds,
-    tracing_time = 659 milliseconds, 928 microseconds,
-    mlir_time = 18 milliseconds, 385 microseconds,
-    xla_time = 9 milliseconds, 431 microseconds,
+    total_compile_time_μs = 1.027 s,
+    tracing_time_μs = 659.928 ms,
+    mlir_time_μs = 18.385 ms,
+    xla_time_μs = 9.431 ms,
 )
 ```
 """
@@ -1045,7 +1050,6 @@ struct AggregateProfilingResult
     metrics_data::Union{Nothing,Proto.tensorflow.profiler.op_profile.Metrics}
 end
 
-_periodstr(p::Dates.Period) = string(Dates.canonicalize(p))
 _timestr(time_ns) = Base.Ryu.writefixed(Float64(time_ns / 1e9), 8)
 
 function Base.show(io::IO, result::AggregateProfilingResult)
