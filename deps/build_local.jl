@@ -301,6 +301,14 @@ else
     push!(build_cmd_list, "--copt=-Wno-unused-command-line-argument")
 end
 
+# With only the Command Line Tools installed (no Xcode.app), Bazel can't detect any
+# Xcode version and falls back to its default macOS SDK (10.11), which `xcrun` can't
+# find. Pass the SDK version actually available on this machine.
+if Sys.isapple()
+    macos_sdk_version = strip(read(`xcrun --sdk macosx --show-sdk-version`, String))
+    push!(build_cmd_list, "--macos_sdk_version=$(macos_sdk_version)")
+end
+
 if !isnothing(Sys.which("lld"))
     push!(build_cmd_list, "--linkopt=-fuse-ld=lld")
 end
