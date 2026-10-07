@@ -85,6 +85,9 @@ function ReactantCore.materialize_traced_array(x::AbstractArray{TracedRNumber{T}
     as = Reactant.aos_to_soa(x)
     if as === x
         as = x[axes(x)...]
+        if as === x
+            error("Throwing before stack overflow due to infinite recursion")
+        end
     end
     return ReactantCore.materialize_traced_array(as)
 end
@@ -107,7 +110,7 @@ function set_mlir_data!(x::TracedRArray, data)
     return x
 end
 
-function set_mlir_data!(x::Base.ReshapedArray{TracedRNumber{T}}, data) where {T}
+function set_mlir_data!(x::Base.ReshapedArray{<:TracedRNumber{T}}, data) where {T}
     set_mlir_data!(
         parent(x),
         get_mlir_data(@opcall(reshape(TracedRArray{T}(data), size(parent(x))...))),
@@ -116,16 +119,16 @@ function set_mlir_data!(x::Base.ReshapedArray{TracedRNumber{T}}, data) where {T}
 end
 
 function get_ancestor_and_indices(
-    x::Base.ReshapedArray{TracedRNumber{T},N}, indices::Vector{CartesianIndex{N}}
-) where {T,N}
+    x::Base.ReshapedArray{<:TracedRNumber,N}, indices::Vector{CartesianIndex{N}}
+) where {N}
     linear_indices = LinearIndices(size(x))[indices]
     parent_linear_indices = LinearIndices(size(parent(x)))[linear_indices]
     return (parent(x), (parent_linear_indices,))
 end
 
 function get_ancestor_and_indices(
-    x::Base.ReshapedArray{TracedRNumber{T},N}, indices...
-) where {T,N}
+    x::Base.ReshapedArray{<:TracedRNumber,N}, indices...
+) where {N}
     @assert length(indices) == N "Expected $N indices, got $(length(indices))"
     indices = Base.to_indices(x, indices)
     if any(is_traced, indices)
@@ -160,7 +163,7 @@ function get_ancestor_and_indices(
 end
 
 function set_mlir_data!(
-    x::PermutedDimsArray{TracedRNumber{T},N,perm,iperm}, data
+    x::PermutedDimsArray{<:TracedRNumber{T},N,perm,iperm}, data
 ) where {T,N,perm,iperm}
     set_mlir_data!(parent(x), get_mlir_data(permutedims(TracedRArray{T}(data), iperm)))
     return x
@@ -296,10 +299,11 @@ function is_pure(func)
     return true
 end
 
-function make_mlir_fn(
-    f,
-    args,
-    kwargs,
+# The tracing driver is shared; call_with_reactant specializes the traced program.
+Base.@nospecializeinfer function make_mlir_fn(
+    @nospecialize(f),
+    @nospecialize(args),
+    @nospecialize(kwargs),
     name="main",
     concretein=true;
     toscalar=false,
@@ -343,7 +347,7 @@ function make_mlir_fn(
         return mlir_fn_res
     end
 
-    (; N, traced_args, linear_args, inv_map, in_tys, sym_visibility, mod, traced_args_to_shardings, func, fnbody, seen_args, skipped_args) = prepare_mlir_fn_args(
+    (; N, traced_args, linear_args, inv_map, in_tys, sym_visibility, mod, traced_args_to_shardings, func, fnbody, seen_args, skipped_args, any_input_sharding) = prepare_mlir_fn_args(
         args,
         name,
         concretein,
@@ -363,6 +367,12 @@ function make_mlir_fn(
     # both compile-time and relocatability issues
     MLIR.IR.activate(fnbody)
 
+    force_raising = any_input_sharding && !Reactant.Compiler.raising()
+
+    if force_raising
+        Reactant.Compiler.activate_raising!(true)
+    end
+
     result = try
         process_linear_args!(linear_args, fnbody, do_transpose, optimize_then_pad, inv_map)
 
@@ -374,6 +384,9 @@ function make_mlir_fn(
     finally
         MLIR.IR.deactivate(fnbody)
         Ops.deactivate_constant_context!(fnbody)
+        if force_raising
+            Reactant.Compiler.deactivate_raising!(true)
+        end
     end
 
     # check which arguments have been mutated
@@ -446,8 +459,9 @@ function make_mlir_fn(
     )
 end
 
-function prepare_mlir_fn_args(
-    args,
+# Reuse MLIR setup across argument types; make_tracer handles each argument.
+Base.@nospecializeinfer function prepare_mlir_fn_args(
+    @nospecialize(args),
     name,
     concretein,
     toscalar,
@@ -526,20 +540,23 @@ function prepare_mlir_fn_args(
 
     # Insert meshes for the sharded arguments
     traced_args_to_shardings = OrderedIdDict()
+    any_input_sharding = false
     for (k, v) in seen_args
         if k isa Reactant.AbstractConcreteNumber || k isa Reactant.AbstractConcreteArray
             if Reactant.Sharding.is_sharded(k)
                 @opcall mesh(k.sharding.mesh)
                 traced_args_to_shardings[v] = k.sharding
+                any_input_sharding = true
             elseif input_shardings !== nothing && haskey(input_shardings, k)
                 @opcall mesh(input_shardings[k].mesh)
                 traced_args_to_shardings[v] = input_shardings[k]
+                any_input_sharding = true
             end
         end
     end
 
-    func = MLIR.IR.with_block(MLIR.IR.body(mod)) do
-        return MLIR.Dialects.func.func_(;
+    func = MLIR.IR.@with_block MLIR.IR.body(mod) begin
+        MLIR.Dialects.func.func_(;
             sym_name=name * "_tmp",
             function_type=MLIR.IR.FunctionType(in_tys, Vector{MLIR.IR.Type}(undef, 0)),
             body=MLIR.IR.Region(),
@@ -589,6 +606,7 @@ function prepare_mlir_fn_args(
         fnbody,
         seen_args,
         skipped_args,
+        any_input_sharding,
     )
 end
 
@@ -612,8 +630,9 @@ function process_linear_args!(linear_args, fnbody, do_transpose, optimize_then_p
     end
 end
 
-function finalize_mlir_fn(
-    result,
+# Return bookkeeping is shared across traced functions and their result types.
+Base.@nospecializeinfer function finalize_mlir_fn(
+    @nospecialize(result),
     traced_args,
     linear_args,
     skipped_args,
@@ -638,7 +657,7 @@ function finalize_mlir_fn(
     num_replicas,
     runtime,
     construct_function_without_args,
-    args,
+    @nospecialize(args),
     N,
     concretein,
     toscalar,
@@ -877,8 +896,8 @@ function finalize_mlir_fn(
         MLIR.IR.deactivate(fnbody)
     end
 
-    func2 = MLIR.IR.with_block(MLIR.IR.body(mod)) do
-        return MLIR.Dialects.func.func_(;
+    func2 = MLIR.IR.@with_block MLIR.IR.body(mod) begin
+        MLIR.Dialects.func.func_(;
             sym_name=__lookup_unique_name_in_module(mod, name),
             function_type=MLIR.IR.FunctionType(in_tys, out_tys),
             body=MLIR.IR.Region(),
@@ -1114,34 +1133,65 @@ function set!(x, path, tostore; emptypath=false)
 end
 
 function __elem_apply_loop_condition(idx_ref, fn_ref::F, res_ref, args_ref, L_ref) where {F}
-    return idx_ref[] < L_ref[]
+    return @allowscalar(idx_ref[]) < L_ref[]
 end
+
+struct RefFillVector{T}
+    data::T
+end
+
+Base.getindex(rv::RefFillVector, i) = rv.data[]
+Base.broadcastable(x::RefFillVector) = x
 
 function __elem_apply_loop_body(idx_ref, fn_ref::F, res_ref, args_ref, L_ref) where {F}
     args = args_ref[]
     fn = fn_ref[]
     res = res_ref[]
-    idx = idx_ref[] + 1
+    idx = @allowscalar(idx_ref[]) + 1
 
     scalar_args = [@allowscalar(arg[idx]) for arg in args]
     @allowscalar res[idx] = fn(scalar_args...)
 
-    idx_ref[] = idx
+    @allowscalar idx_ref[] = idx
     res_ref[] = res
     return nothing
 end
 
-function elem_apply_via_while_loop(f, args::Vararg{Any,Nargs}) where {Nargs}
-    @assert allequal(size.(args)) "All args must have the same size"
-    L = length(first(args))
+scalar_arg(arg) = arg isa Base.RefValue || !(arg isa AbstractArray)
+
+flattenarg(arg) = ReactantCore.materialize_traced_array(vec(arg))
+flattenarg(arg::Ref) = RefFillVector(arg)
+
+function elem_apply_via_while_loop(f, args::Vararg{Any,Nargs}; kwargs...) where {Nargs}
+    non_ref_args = [arg for arg in args if !scalar_arg(arg)]
+    if !isempty(non_ref_args)
+        @assert allequal(size.(non_ref_args)) "All args must have the same size"
+    end
+    out_size = isempty(non_ref_args) ? () : size(first(non_ref_args))
+    L = isempty(non_ref_args) ? 1 : length(first(non_ref_args))
     # flattening the tensors makes the auto-batching pass work nicer
-    flat_args = [ReactantCore.materialize_traced_array(vec(arg)) for arg in args]
+    flat_args = [flattenarg(arg) for arg in args]
 
     # This wont be a mutating function so we can safely execute it once
-    res_tmp = @allowscalar(f([@allowscalar(arg[1]) for arg in flat_args]...))
-    result = similar(first(flat_args), Reactant.unwrapped_eltype(res_tmp), L)
+    scalar_seed_args = [@allowscalar(arg[1]) for arg in flat_args]
+    res_tmp = @allowscalar(f(scalar_seed_args...))
 
-    ind_var = Ref(0)
+    # TODO: perhaps instead of this logic, we should have
+    # `similar(::TracedRArray, TracedRNumber{T}) where T = similar(::TracedRArray, T)`
+    # and just not unwrap here?
+    T_res = if typeof(res_tmp) <: TracedRNumber
+        Reactant.unwrapped_eltype(res_tmp)
+    else
+        typeof(res_tmp)
+    end
+
+    # Before we selected the output container based on the first argument
+    # That doesn't work for cases when StructArrays are involved
+    # Since this is essentially a broadcast I'm reusing this machinery
+    bc = Base.Broadcast.Broadcasted(f, Tuple(args))
+    result = similar(bc, T_res)
+
+    ind_var = zeros(TracedRArray{Int}, ())
     f_ref = Ref(f)
     result_ref = Ref(result)
     args_ref = Ref(flat_args)
@@ -1150,16 +1200,20 @@ function elem_apply_via_while_loop(f, args::Vararg{Any,Nargs}) where {Nargs}
     ReactantCore.traced_while(
         __elem_apply_loop_condition,
         __elem_apply_loop_body,
-        (ind_var, f_ref, result_ref, args_ref, limit_ref),
+        (ind_var, f_ref, result_ref, args_ref, limit_ref);
+        kwargs...,
     )
 
-    return ReactantCore.materialize_traced_array(reshape(result, size(first(args))))
+    return ReactantCore.materialize_traced_array(reshape(result, out_size))
 end
 
 function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
     if all(iszero ∘ ndims, args)
         scalar_args = map(args) do arg
-            return promote_to(TracedRNumber{Reactant.unwrapped_eltype(arg)}, arg)
+            if arg isa Number || arg isa TracedRArray{<:Any,0}
+                return promote_to(TracedRNumber, arg)
+            end
+            return arg
         end
         return Reactant.call_with_reactant(f, scalar_args...)
     end

@@ -1,7 +1,15 @@
 module Reactant
 
 using ReactantCore:
-    ReactantCore, @trace, within_compile, MissingTracedValue, materialize_traced_array
+    ReactantCore,
+    @annotate,
+    @trace,
+    annotate,
+    within_compile,
+    MissingTracedValue,
+    materialize_traced_array,
+    Periodic,
+    Binomial
 
 using LinearAlgebra: LinearAlgebra, RowMaximum, NoPivot
 using Random: Random, AbstractRNG
@@ -13,6 +21,7 @@ using Reactant_jll: Reactant_jll
 using LLVMOpenMP_jll: LLVMOpenMP_jll
 
 using Adapt: Adapt, WrappedArray
+using BFloat16s: BFloat16s, BFloat16
 using GPUArraysCore: GPUArraysCore, @allowscalar, allowscalar
 
 using Enzyme: Enzyme
@@ -88,7 +97,8 @@ include("accelerators/Accelerators.jl")
 
 include("CompileOptions.jl")
 
-export OptimizeCommunicationOptions, ShardyPropagationOptions, CompileOptions
+export OptimizeCommunicationOptions,
+    ShardyPropagationOptions, CompileOptions, MultiFloatOptions
 
 include("mlir/MLIR.jl")
 include("xla/XLA.jl")
@@ -121,8 +131,8 @@ unwrapped_eltype(::T) where {T<:Number} = T
 unwrapped_eltype(::RNumber{T}) where {T} = T
 unwrapped_eltype(::TracedRNumber{T}) where {T} = T
 
-unwrapped_eltype(::Type{<:AbstractArray{T,N}}) where {T,N} = unwrapped_eltype(T)
-unwrapped_eltype(::AbstractArray{T,N}) where {T,N} = unwrapped_eltype(T)
+unwrapped_eltype(::Type{<:AbstractArray{T}}) where {T} = unwrapped_eltype(T)
+unwrapped_eltype(::AbstractArray{T}) where {T} = unwrapped_eltype(T)
 
 include("Ops.jl")
 Base.push!(no_rewrite_ancestor_modules, Ops)
@@ -201,14 +211,22 @@ Base.push!(no_rewrite_ancestor_modules, TracedUtils)
 include("TracedRNumber.jl")
 include("TracedRArray.jl")
 include("TracedRange.jl")
+include("TracedRational.jl")
 include("Indexing.jl")
 
 include("ConcreteRArray.jl")
 
-use_overlayed_version(x) = false
-function use_overlayed_version(x::F) where {F<:Function}
-    return use_overlayed_version(getfield.(Ref(x), fieldnames(F)))
+function use_overlayed_version(x::T) where {T}
+    isstructtype(T) || return false
+    return looped_any(use_overlayed_version ∘ Base.Fix1(getfield, x), 1:nfields(x))
 end
+use_overlayed_version(::Symbol) = false
+use_overlayed_version(::Module) = false
+use_overlayed_version(::Core.SimpleVector) = false
+use_overlayed_version(::DataType) = false
+use_overlayed_version(::Exception) = false
+use_overlayed_version(::Nothing) = false
+use_overlayed_version(::Missing) = false
 use_overlayed_version(x::Base.Generator) = use_overlayed_version((x.f, x.iter))
 use_overlayed_version(x::Base.Iterators.Zip) = use_overlayed_version(x.is)
 use_overlayed_version(x::Base.Iterators.Enumerate) = use_overlayed_version(x.itr)
@@ -218,12 +236,15 @@ use_overlayed_version(iter::NamedTuple) = looped_any(use_overlayed_version, valu
 use_overlayed_version(::Number) = false
 use_overlayed_version(::MissingTracedValue) = true
 use_overlayed_version(rng::ReactantRNG) = use_overlayed_version(rng.seed)
-use_overlayed_version(::AbstractArray{<:TracedRNumber}) = true
 use_overlayed_version(::TracedRArray) = true
 use_overlayed_version(::TracedRNumber) = true
 use_overlayed_version(::TracedStepRangeLen) = true
 use_overlayed_version(::TracedUnitRange) = true
+use_overlayed_version(::TracedRational) = true
 function use_overlayed_version(x::AbstractArray)
+    T = eltype(x)
+    # `Union{}` is a subtype of everything, but an array of it holds no traced values.
+    T !== Union{} && T <: TracedRNumber && return true
     a = ancestor(x)
     a === x && return false
     return use_overlayed_version(a)
@@ -250,6 +271,7 @@ end
 include("stdlibs/LinearAlgebra.jl")
 include("stdlibs/Random.jl")
 include("stdlibs/Base.jl")
+include("stdlibs/BLAS.jl")
 
 # Other Integrations
 include("Enzyme.jl")
@@ -259,9 +281,10 @@ export StackedBatchDuplicated, StackedBatchDuplicatedNoNeed
 const TracedType = Union{TracedRArray,TracedRNumber,MissingTracedValue}
 
 include("ControlFlow.jl")
+include("Enums.jl")
 include("Tracing.jl")
 
-include("Compiler.jl")
+include("compiler/Compiler.jl")
 
 include("Overlay.jl")
 
@@ -294,12 +317,18 @@ export ConcreteRArray,
     @code_xla,
     @jit,
     @trace,
-    within_compile
+    within_compile,
+    @annotate,
+    annotate
+
+@static if VERSION ≥ v"1.11"
+    @eval $(Expr(:public, :Periodic, :Binomial, :TracedEnum, :ConcreteEnum))
+end
 
 const registry = Ref{Union{Nothing,MLIR.IR.DialectRegistry}}()
 
 function register_enzymexla_dialects(ctx::MLIR.IR.Context)
-    @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
+    MLIR.API.RegisterDialects(ctx)
     return nothing
 end
 
@@ -313,13 +342,9 @@ end
 const passes_initialized = Ref(false)
 function initialize_dialect()
     registry[] = MLIR.IR.DialectRegistry()
-    @ccall MLIR.API.mlir_c.InitializeRegistry(
-        registry[]::MLIR.API.MlirDialectRegistry
-    )::Cvoid
+    MLIR.API.InitializeRegistry(registry[])
     if !passes_initialized[]
-        @ccall MLIR.API.mlir_c.InitializePasses(
-            registry[]::MLIR.API.MlirDialectRegistry
-        )::Cvoid
+        MLIR.API.InitializePasses(registry[])
         passes_initialized[] = true
     end
     return nothing
@@ -338,18 +363,18 @@ function initialize_ptrs()
         "__kmpc_for_static_init_8u",
         "__kmpc_fork_call",
     )
-        sym = Libdl.dlsym(LLVMOpenMP_jll.libomp_handle, name)
-        @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(name::Cstring, sym::Ptr{Cvoid})::Cvoid
+        MLIR.API.EnzymeJaXMapSymbol(name, Libdl.dlsym(LLVMOpenMP_jll.libomp_handle, name))
     end
-    if (@ccall MLIR.API.mlir_c.ReactantHermeticCudaGetVersion()::UInt32) != 0
+    if MLIR.API.ReactantHermeticCudaGetVersion() != 0
         for name in (
             "cuLaunchKernel",
             "cuModuleLoadData",
             "cuModuleGetFunction",
             "cuStreamSynchronize",
         )
-            sym = Libdl.dlsym(Reactant_jll.libReactantExtra_handle, name)
-            @ccall MLIR.API.mlir_c.EnzymeJaXMapSymbol(name::Cstring, sym::Ptr{Cvoid})::Cvoid
+            MLIR.API.EnzymeJaXMapSymbol(
+                name, Libdl.dlsym(Reactant_jll.libReactantExtra_handle, name)
+            )
         end
     end
 end
@@ -362,17 +387,28 @@ function __init__()
         @warn "Reactant_jll isn't availble for your platform $(Reactant_jll.host_platform)"
     end
 
+    Base.Experimental.register_error_hint(XLA.ReactantInternalError) do io, exc
+        if occursin("'stablehlo.dynamic_pad' op can't be translated to XLA HLO", exc.msg) &&
+            occursin("stablehlo.while", exc.msg)
+            print(
+                io,
+                "\nAttempted to perform automatic differentation of a loop with non-statically known bounds. Try using `checkpointing=Reactant.Binomial(budget)` where `budget` is an integer specifying the maximum number of checkpoints Reactant is able to take during the augmented primal computation.",
+            )
+        end
+    end
+
     Base.Experimental.register_error_hint(MethodError) do io, exc, argtypes, kwargs
         if string(exc.f) == "ka_with_reactant" && !is_extension_loaded(Val(:CUDA))
             print(
                 io,
                 "\nAttempted to raise a KernelAbstractions kernel with Reactant \
-                   but CUDA.jl is not loaded.\nLoad CUDA.jl using `using CUDA`. You might \
+                   but CUDA.jl is not loaded. Note that CUDA.jl is needed regardless of the \
+                   target backend. \nLoad CUDA.jl using `using CUDA`. You might \
                    need to restart the Julia process (even if Revise.jl is loaded).",
             )
         end
     end
-
+    MLIR.Highlight.register_reactant_theme()
     return nothing
 end
 

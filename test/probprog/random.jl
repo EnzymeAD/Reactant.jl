@@ -2,29 +2,10 @@ using Reactant, Test
 using Reactant:
     TracedRArray, TracedRNumber, MLIR, TracedUtils, ConcreteRArray, ConcreteRNumber
 using Reactant.MLIR: IR
-using Reactant.MLIR.Dialects: enzyme
+using Reactant.MLIR.Dialects: impulse
 using Statistics
 
 include(joinpath(@__DIR__, "common.jl"))
-
-const _JAX_AVAILABLE = Ref{Union{Nothing,Bool}}(nothing)
-
-function check_jax_available()
-    if _JAX_AVAILABLE[] !== nothing
-        return _JAX_AVAILABLE[]
-    end
-    try
-        os = pyimport("os")
-        os.environ.__setitem__("JAX_ENABLE_X64", "1")
-        jax = pyimport("jax")
-        jax.config.update("jax_enable_x64", true)
-        _JAX_AVAILABLE[] = true
-    catch e
-        @warn "JAX not available, skipping pointwise comparison tests" exception = e
-        _JAX_AVAILABLE[] = false
-    end
-    return _JAX_AVAILABLE[]
-end
 
 function jax_uniform(seed::Vector{UInt64}, a::Float64, b::Float64, shape::Tuple)
     jax_random = pyimport("jax.random")
@@ -42,17 +23,17 @@ function jax_normal(seed::Vector{UInt64}, μ::Float64, σ::Float64, shape::Tuple
     return pyconvert(Vector{Float64}, np.asarray(samples).flatten())
 end
 
-# `enzyme.randomSplit` op is not intended to be emitted directly in Reactant-land.
-# It is solely an intermediate representation within the `enzyme.mcmc` op lowering.
+# `impulse.randomSplit` op is not intended to be emitted directly in Reactant-land.
+# It is solely an intermediate representation within the `impulse.infer` op lowering.
 function random_split(rng_state::TracedRArray{UInt64,1}, ::Val{N}) where {N}
     rng_mlir = TracedUtils.get_mlir_data(rng_state)
     rng_state_type = IR.TensorType([2], IR.Type(UInt64))
     output_types = [rng_state_type for _ in 1:N]
-    op = enzyme.randomSplit(rng_mlir; output_rng_states=output_types)
+    op = impulse.randomSplit(rng_mlir; output_rng_states=output_types)
     return ntuple(i -> TracedRArray{UInt64,1}((), IR.result(op, i), (2,)), Val(N))
 end
 
-@testset "enzyme.randomSplit op" begin
+@testset "impulse.randomSplit op" begin
     @testset "N=2, Seed [0, 42]" begin
         seed = ConcreteRArray(UInt64[0, 42])
         k1, k2 = @jit optimize = :probprog random_split(seed, Val(2))
@@ -110,17 +91,13 @@ end
     end
 end
 
-# Similarly, `enzyme.random` op is not intended to be emitted directly in Reactant-land.
-# It is solely an intermediate representation within the `enzyme.mcmc` op lowering.
-function rng_distribution_attr(distribution::Int32)
-    return @ccall MLIR.API.mlir_c.enzymeRngDistributionAttrGet(
-        MLIR.IR.current_context()::MLIR.API.MlirContext, distribution::Int32
-    )::MLIR.IR.Attribute
+# Similarly, `impulse.random` op is not intended to be emitted directly in Reactant-land.
+# It is solely an intermediate representation within the `impulse.infer` op lowering.
+function rng_distribution_attr(distribution)
+    return MLIR.IR.Attribute(
+        MLIR.API.enzymeRngDistributionAttrGet(MLIR.IR.current_context(), distribution)
+    )
 end
-
-const RNG_UNIFORM = Int32(0)
-const RNG_NORMAL = Int32(1)
-const RNG_MULTINORMAL = Int32(2)
 
 function uniform_batch(
     rng_state::TracedRArray{UInt64,1},
@@ -134,9 +111,9 @@ function uniform_batch(
 
     rng_state_type = IR.TensorType([2], IR.Type(UInt64))
     result_type = IR.TensorType([BatchSize], IR.Type(Float64))
-    dist_attr = rng_distribution_attr(RNG_UNIFORM)
+    dist_attr = rng_distribution_attr(MLIR.API.EnzymeRngDistribution_Uniform)
 
-    op = enzyme.random(
+    op = impulse.random(
         rng_mlir,
         a_mlir,
         b_mlir;
@@ -162,9 +139,9 @@ function normal_batch(
 
     rng_state_type = IR.TensorType([2], IR.Type(UInt64))
     result_type = IR.TensorType([BatchSize], IR.Type(Float64))
-    dist_attr = rng_distribution_attr(RNG_NORMAL)
+    dist_attr = rng_distribution_attr(MLIR.API.EnzymeRngDistribution_Normal)
 
-    op = enzyme.random(
+    op = impulse.random(
         rng_mlir,
         μ_mlir,
         σ_mlir;
@@ -190,9 +167,9 @@ function multinormal_sample(
 
     rng_state_type = IR.TensorType([2], IR.Type(UInt64))
     result_type = IR.TensorType([Dim], IR.Type(Float64))
-    dist_attr = rng_distribution_attr(RNG_MULTINORMAL)
+    dist_attr = rng_distribution_attr(MLIR.API.EnzymeRngDistribution_MultiNormal)
 
-    op = enzyme.random(
+    op = impulse.random(
         rng_mlir,
         μ_mlir,
         Σ_mlir;
@@ -206,7 +183,7 @@ function multinormal_sample(
     return final_rng, sample
 end
 
-@testset "Pointwise comparison of enzyme.random vs jax.random.uniform (rbg keys)" begin
+@testset "Pointwise comparison of impulse.random vs jax.random.uniform (rbg keys)" begin
     if !check_jax_available()
         @test_skip "JAX not available"
     else
@@ -256,7 +233,7 @@ end
     end
 end
 
-@testset "Pointwise comparison of enzyme.random vs jax.random.normal (rbg keys)" begin
+@testset "Pointwise comparison of impulse.random vs jax.random.normal (rbg keys)" begin
     if !check_jax_available()
         @test_skip "JAX not available"
     else
@@ -314,7 +291,7 @@ se_std(σ, n) = σ / sqrt(2 * (n - 1))
 se_cov(σᵢ, σⱼ, ρ, n) = sqrt((σᵢ^2 * σⱼ^2 + (ρ * σᵢ * σⱼ)^2) / (n - 1))  # ρ = correlation
 
 const N_SIGMA = 5
-@testset "Statistical properties of enzyme.random op - UNIFORM distribution" begin
+@testset "Statistical properties of impulse.random op - UNIFORM distribution" begin
     batch_size = 10000
     n_batches = 10
     n_samples = batch_size * n_batches
@@ -404,7 +381,7 @@ const N_SIGMA = 5
     end
 end
 
-@testset "Statistical properties of enzyme.random op - NORMAL distribution" begin
+@testset "Statistical properties of impulse.random op - NORMAL distribution" begin
     batch_size = 10000
     n_batches = 10
     n_samples = batch_size * n_batches
@@ -476,7 +453,7 @@ end
     end
 end
 
-@testset "Statistical properties of enzyme.random op - MULTINORMAL distribution" begin
+@testset "Statistical properties of impulse.random op - MULTINORMAL distribution" begin
     n_samples = 2000
 
     @testset "2D Standard Multivariate Normal" begin

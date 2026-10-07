@@ -32,16 +32,17 @@ floating point tensor.
 
 // Tensor addition.
 %x = arith.addf %y, %z : tensor<4x?xbf16>
-```
 
-TODO: In the distant future, this will accept optional attributes for fast
-math, contraction, rounding mode, and other controls.
+// Scalar addition with rounding mode.
+%a = arith.addf %b, %c to_nearest_even : f64
+```
 """
 function addf(
     lhs::Value,
     rhs::Value;
     result=nothing::Union{Nothing,IR.Type},
     fastmath=nothing,
+    roundingmode=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -51,6 +52,8 @@ function addf(
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
     !isnothing(fastmath) && push!(attributes, NamedAttribute("fastmath", fastmath))
+    !isnothing(roundingmode) &&
+        push!(attributes, NamedAttribute("roundingmode", roundingmode))
 
     return create_operation(
         "arith.addf",
@@ -510,11 +513,65 @@ function constant(; result=nothing::Union{Nothing,IR.Type}, value, location=Loca
     )
 end
 
+"""
+`convertf`
+
+Cast a floating-point value to a different floating-point type of the same
+bitwidth. This operation handles conversions between types that have the
+same bitwidth but different semantics (e.g., f16 to bf16), which cannot
+be represented by `arith.extf` or `arith.truncf`.
+
+The source and destination element types must be different and must have
+the same bitwidth. When operating on vectors, casts elementwise.
+"""
+function convertf(
+    in::Value; out::IR.Type, roundingmode=nothing, fastmath=nothing, location=Location()
+)
+    op_ty_results = IR.Type[out,]
+    operands = Value[in,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(roundingmode) &&
+        push!(attributes, NamedAttribute("roundingmode", roundingmode))
+    !isnothing(fastmath) && push!(attributes, NamedAttribute("fastmath", fastmath))
+
+    return create_operation(
+        "arith.convertf",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`divf`
+
+The `divf` operation takes two operands and returns one result, each of
+these is required to be the same type. This type may be a floating point
+scalar type, a vector whose element type is a floating point type, or a
+floating point tensor.
+
+# Example
+
+```mlir
+// Scalar division.
+%a = arith.divf %b, %c : f64
+
+// Scalar division with rounding mode.
+%a = arith.divf %b, %c toward_zero : f64
+```
+"""
 function divf(
     lhs::Value,
     rhs::Value;
     result=nothing::Union{Nothing,IR.Type},
     fastmath=nothing,
+    roundingmode=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -524,6 +581,8 @@ function divf(
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
     !isnothing(fastmath) && push!(attributes, NamedAttribute("fastmath", fastmath))
+    !isnothing(roundingmode) &&
+        push!(attributes, NamedAttribute("roundingmode", roundingmode))
 
     return create_operation(
         "arith.divf",
@@ -725,6 +784,11 @@ width M and an integer destination type of width N. The destination
 bit-width must be larger than the input bit-width (N > M).
 The top-most (N - M) bits of the output are filled with zeros.
 
+When the `nneg` flag is present, the operand is assumed to have
+the most significant bit set to 0. In this case, zero extension is
+equivalent to sign extension. When this assumption is violated, the
+result is poison.
+
 # Example
 
 ```mlir
@@ -734,14 +798,18 @@ The top-most (N - M) bits of the output are filled with zeros.
   %4 = arith.extui %3 : i3 to i6  // %4 is 0b000010
 
   %5 = arith.extui %0 : vector<2 x i32> to vector<2 x i64>
+
+  // Zero extension with nneg flag.
+  %6 = arith.extui %3 nneg : i3 to i6
 ```
 """
-function extui(in::Value; out::IR.Type, location=Location())
+function extui(in::Value; out::IR.Type, nonNeg=nothing, location=Location())
     op_ty_results = IR.Type[out,]
     operands = Value[in,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(nonNeg) && push!(attributes, NamedAttribute("nonNeg", nonNeg))
 
     return create_operation(
         "arith.extui",
@@ -848,6 +916,64 @@ function floordivsi(
 end
 
 """
+`flush_denormals`
+
+The `flush_denormals` operation takes a floating-point value and returns
+the input value if it is a normal (or zero, infinity, or NaN) value, or
+a zero of the same type if the input is a denormal (subnormal) value.
+The sign of zero is preserved when flushing a denormal: negative
+denormals flush to `-0.0`, positive denormals flush to `+0.0`.
+
+A denormal number (\"subnormal number\" in IEEE-754) is a non-zero floating
+point number that is smaller (closer to zero) than the smallest normal
+number. Denormals fill the underflow gap around zero in floating-point
+arithmetics, but may come at a runtime cost on some architectures.
+
+The input and result are required to be the same type. This type may be
+a floating-point scalar type, a vector whose element type is a
+floating-point type, or a tensor of floats. When operating on vectors
+or tensors, the operation is applied elementwise.
+
+# Example
+
+```mlir
+// Scalar denormal flushing.
+%a = arith.flush_denormals %b : f32
+
+// SIMD vector element-wise denormal flushing.
+%f = arith.flush_denormals %g : vector<4xf32>
+
+// Tensor element-wise denormal flushing.
+%x = arith.flush_denormals %y : tensor<4x?xbf16>
+```
+"""
+function flush_denormals(
+    operand::Value;
+    result=nothing::Union{Nothing,IR.Type},
+    fastmath=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[operand,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(result) && push!(op_ty_results, result)
+    !isnothing(fastmath) && push!(attributes, NamedAttribute("fastmath", fastmath))
+
+    return create_operation(
+        "arith.flush_denormals",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
 `index_cast`
 
 Casts between scalar or vector integers and corresponding \'index\' scalar or
@@ -881,13 +1007,27 @@ Casts between scalar or vector integers and corresponding \'index\' scalar or
 vectors. Index is an integer of platform-specific bit width. If casting to
 a wider integer, the value is zero-extended. If casting to a narrower
 integer, the value is truncated.
+
+When the `nneg` flag is present, the operand is assumed to have
+the most significant bit set to 0. In this case, zero extension
+is equivalent to sign extension. When this assumption is violated,
+the result is poison.
+
+# Example
+
+```mlir
+  %0 = arith.index_castui %a : i32 to index
+  %1 = arith.index_castui %a nneg : i32 to index
+  %2 = arith.index_castui %b nneg : index to i64
+```
 """
-function index_castui(in::Value; out::IR.Type, location=Location())
+function index_castui(in::Value; out::IR.Type, nonNeg=nothing, location=Location())
     op_ty_results = IR.Type[out,]
     operands = Value[in,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(nonNeg) && push!(attributes, NamedAttribute("nonNeg", nonNeg))
 
     return create_operation(
         "arith.index_castui",
@@ -1170,16 +1310,17 @@ floating point tensor.
 
 // Tensor pointwise multiplication.
 %x = arith.mulf %y, %z : tensor<4x?xbf16>
-```
 
-TODO: In the distant future, this will accept optional attributes for fast
-math, contraction, rounding mode, and other controls.
+// Scalar multiplication with rounding mode.
+%a = arith.mulf %b, %c upward : f64
+```
 """
 function mulf(
     lhs::Value,
     rhs::Value;
     result=nothing::Union{Nothing,IR.Type},
     fastmath=nothing,
+    roundingmode=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -1189,6 +1330,8 @@ function mulf(
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
     !isnothing(fastmath) && push!(attributes, NamedAttribute("fastmath", fastmath))
+    !isnothing(roundingmode) &&
+        push!(attributes, NamedAttribute("roundingmode", roundingmode))
 
     return create_operation(
         "arith.mulf",
@@ -1455,6 +1598,8 @@ end
 
 Returns the floating point division remainder.
 The remainder has the same sign as the dividend (lhs operand).
+
+TODO: Add support for rounding modes.
 """
 function remf(
     lhs::Value,
@@ -1577,9 +1722,7 @@ end
 `sitofp`
 
 Cast from a value interpreted as a signed integer to the corresponding
-floating-point value. If the value cannot be exactly represented, it is
-rounded using the default rounding mode. When operating on vectors, casts
-elementwise.
+floating-point value. When operating on vectors, casts elementwise.
 """
 function sitofp(in::Value; out::IR.Type, location=Location())
     op_ty_results = IR.Type[out,]
@@ -1919,16 +2062,17 @@ floating point tensor.
 
 // Tensor subtraction.
 %x = arith.subf %y, %z : tensor<4x?xbf16>
-```
 
-TODO: In the distant future, this will accept optional attributes for fast
-math, contraction, rounding mode, and other controls.
+// Scalar subtraction with rounding mode.
+%a = arith.subf %b, %c downward : f64
+```
 """
 function subf(
     lhs::Value,
     rhs::Value;
     result=nothing::Union{Nothing,IR.Type},
     fastmath=nothing,
+    roundingmode=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -1938,6 +2082,8 @@ function subf(
     attributes = NamedAttribute[]
     !isnothing(result) && push!(op_ty_results, result)
     !isnothing(fastmath) && push!(attributes, NamedAttribute("fastmath", fastmath))
+    !isnothing(roundingmode) &&
+        push!(attributes, NamedAttribute("roundingmode", roundingmode))
 
     return create_operation(
         "arith.subf",
@@ -2014,12 +2160,53 @@ function subi(
 end
 
 """
+`subui_extended`
+
+Performs (N+1)-bit subtraction on zero-extended operands. Returns two
+results: the N-bit difference (same type as both operands), and the borrow
+bit (boolean-like), where `1` indicates unsigned subtraction underflow
+(i.e. `lhs < rhs` when interpreted as unsigned), while `0` indicates no
+underflow.
+
+# Example
+
+```mlir
+// Scalar subtraction.
+%diff, %borrow = arith.subui_extended %b, %c : i64, i1
+
+// Vector element-wise subtraction.
+%d:2 = arith.subui_extended %e, %f : vector<4xi32>, vector<4xi1>
+
+// Tensor element-wise subtraction.
+%x:2 = arith.subui_extended %y, %z : tensor<4x?xi8>, tensor<4x?xi1>
+```
+"""
+function subui_extended(
+    lhs::Value, rhs::Value; diff::IR.Type, borrow::IR.Type, location=Location()
+)
+    op_ty_results = IR.Type[diff, borrow]
+    operands = Value[lhs, rhs]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "arith.subui_extended",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
 `truncf`
 
 Truncate a floating-point value to a smaller floating-point-typed value.
 The destination type must be strictly narrower than the source type.
-If the value cannot be exactly represented, it is rounded using the
-provided rounding mode or the default one if no rounding mode is provided.
 When operating on vectors, casts elementwise.
 """
 function truncf(
@@ -2100,16 +2287,30 @@ end
 `uitofp`
 
 Cast from a value interpreted as unsigned integer to the corresponding
-floating-point value. If the value cannot be exactly represented, it is
-rounded using the default rounding mode. When operating on vectors, casts
-elementwise.
+floating-point value. When operating on vectors, casts elementwise.
+
+When the `nneg` flag is present, the operand is assumed to have
+the most significant bit set to 0. In this case, zero extension is
+equivalent to sign extension. When this assumption is violated, the
+result is poison.
+
+# Example
+
+```mlir
+  // Without nneg flag.
+  %0 = arith.uitofp %a : i32 to f64
+
+  // With nneg flag.
+  %1 = arith.uitofp %a nneg : i32 to f64
+```
 """
-function uitofp(in::Value; out::IR.Type, location=Location())
+function uitofp(in::Value; out::IR.Type, nonNeg=nothing, location=Location())
     op_ty_results = IR.Type[out,]
     operands = Value[in,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(nonNeg) && push!(attributes, NamedAttribute("nonNeg", nonNeg))
 
     return create_operation(
         "arith.uitofp",

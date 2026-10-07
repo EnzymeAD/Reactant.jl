@@ -2,7 +2,7 @@
 # This script locates subdirectories with runbenchmarks.jl, runs each in a separate
 # Julia process, and aggregates the results from saved JSON files.
 
-using JSON3: JSON3
+using JSON: JSON
 
 """
     find_benchmark_dirs(base_dir::String) -> Vector{String}
@@ -97,7 +97,7 @@ function load_results_from_dir(benchmark_dir::String, backend::String)
         # Only load files matching the current backend
         if endswith(filename, ".json") && contains(filename, backend)
             filepath = joinpath(results_dir, filename)
-            results = JSON3.read(read(filepath, String), Vector{Dict{String,Any}})
+            results = JSON.parsefile(filepath; dicttype=Dict{String,Any})
 
             for result in results
                 if result["unit"] == "s"
@@ -134,11 +134,14 @@ function run_all_benchmarks(backend::String)
     end
 
     # Aggregate results from saved files
-    all_results = Dict{String,Dict{String,Float64}}()
+    all_results = Dict(
+        "Runtime (s)" => Dict{String,Float64}(), "TFLOP/s" => Dict{String,Float64}()
+    )
 
     for dir in benchmark_dirs
         results = load_results_from_dir(dir, backend)
-        merge!(all_results, results)
+        merge!(all_results["Runtime (s)"], results["Runtime (s)"])
+        merge!(all_results["TFLOP/s"], results["TFLOP/s"])
     end
 
     @info "Aggregated $(length(all_results["Runtime (s)"])) total benchmark results"
@@ -167,7 +170,7 @@ function aggregate_saved_results(base_dir::String)
             if endswith(filename, ".json")
                 filepath = joinpath(results_dir, filename)
                 try
-                    results = JSON3.read(read(filepath, String), Vector{Dict{String,Any}})
+                    results = JSON.parsefile(filepath; dicttype=Dict{String,Any})
                     append!(all_results, results)
                     @info "Loaded $(length(results)) results from $(filepath)"
                 catch e

@@ -7,22 +7,24 @@ export var"WhileLoopBackendConfig.KnownInitStep", var"ResultAccuracy.Mode"
 export GatherDimensionNumbers, var"DeviceAssignmentProto.ComputationDevice"
 export SplitConfigProto, var"PrecisionConfig.Algorithm", RandomAlgorithm, DimLevelType
 export var"WhileLoopBackendConfig.KnownTripCount", CollectiveOpGroupMode, PrimitiveType
-export ParameterReplication, CompilationEvent, var"ChannelHandle.ChannelType", SortOptions
-export ReplicaGroup, var"ResultAccuracy.Tolerance", TileProto, ScatterDimensionNumbers
-export SourceTarget, ExecutionHandle, GlobalDataHandle, FftType, ProfileSource
-export DotDimensionNumbers, DeviceHandle, var"OpSharding.Type", WindowDimension
-export ConvolutionDimensionNumbers, IotaReplicaGroupListProto, OriginalArrayProto
-export ComputationStats, FrontendAttributes, ProfileType, AsyncStreamKind
+export ParameterReplication, CompilationEvent, var"ChannelHandle.ChannelType"
+export var"NamedShardingProto.ReductionOpProto", SortOptions, ReplicaGroup
+export var"ResultAccuracy.Tolerance", var"MeshProto.IotaTransform", Payload, TileProto
+export ScatterDimensionNumbers, SourceTarget, ExecutionHandle, GlobalDataHandle
+export var"WhileLoopBackendConfig.DynamicVariable", FftType, ProfileSource
+export DotDimensionNumbers, DeviceHandle, var"OpSharding.Type", var"CubScanOptions.Kind"
+export WindowDimension, ConvolutionDimensionNumbers, IotaReplicaGroupListProto
+export OriginalArrayProto, ComputationStats, ProfileType, FrontendAttributes
 export var"WhileLoopBackendConfig.KnownInductionVariable"
 export var"PaddingConfig.PaddingConfigDimension", GemmPerfTableEntry, OutputOperandAliasing
 export var"PrecisionConfig.Precision", ExecutionProfile, var"AxisRefProto.SubAxis"
-export ProfileGenerationStrategy, PaddingType, var"MeshProto.MeshAxis"
-export var"OpSharding.ShardGroupType", CholeskyOptions, StatisticsViz
-export TriangularSolveOptions, DeviceAssignmentProto, ChannelHandle, ResultAccuracy
-export RaggedDotDimensionNumbers, Window, CollectiveDeviceListProto
-export OriginalValueElementProto, WhileLoopBackendConfig, PaddingConfig
-export GemmPerfTableEntryValues, PrecisionConfig, AxisRefProto, var"OpMetadata.ProfileInfo"
-export MeshProto, OriginalValueProto, GemmPerfTable
+export var"SparsityConfig.TensorSparsityConfig", ProfileGenerationStrategy, PaddingType
+export var"MeshProto.MeshAxis", var"OpSharding.ShardGroupType", CholeskyOptions
+export StatisticsViz, TriangularSolveOptions, DeviceAssignmentProto, ChannelHandle
+export CollectiveDeviceListProto, ResultAccuracy, RaggedDotDimensionNumbers, CubScanOptions
+export Window, OriginalValueElementProto, WhileLoopBackendConfig, PaddingConfig
+export GemmPerfTableEntryValues, PrecisionConfig, AxisRefProto, SparsityConfig
+export var"OpMetadata.ProfileInfo", MeshProto, OriginalValueProto, GemmPerfTable
 export var"NamedShardingProto.DimensionSharding", OpMetadata, MeshAxesReplicaGroupListProto
 export NamedShardingProto, LayoutProto, LiteralProto, OpSharding, ProgramShapeProto
 export ShapeProto
@@ -42,10 +44,10 @@ end
 PB.default_values(::Type{Statistic}) = (;stat_name = "", stat_val = zero(Float64))
 PB.field_numbers(::Type{Statistic}) = (;stat_name = 1, stat_val = 2)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:Statistic})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:Statistic}, _endpos::Int=0, _group::Bool=false)
     stat_name = ""
     stat_val = zero(Float64)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             stat_name = PB.decode(d, String)
@@ -80,10 +82,10 @@ end
 PB.default_values(::Type{var"WhileLoopBackendConfig.KnownInitStep"}) = (;init = zero(Int64), step = zero(Int64))
 PB.field_numbers(::Type{var"WhileLoopBackendConfig.KnownInitStep"}) = (;init = 1, step = 2)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"WhileLoopBackendConfig.KnownInitStep"})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"WhileLoopBackendConfig.KnownInitStep"}, _endpos::Int=0, _group::Bool=false)
     init = zero(Int64)
     step = zero(Int64)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             init = PB.decode(d, Int64)
@@ -122,14 +124,14 @@ end
 PB.default_values(::Type{GatherDimensionNumbers}) = (;offset_dims = Vector{Int64}(), collapsed_slice_dims = Vector{Int64}(), start_index_map = Vector{Int64}(), index_vector_dim = zero(Int64), operand_batching_dims = Vector{Int64}(), start_indices_batching_dims = Vector{Int64}())
 PB.field_numbers(::Type{GatherDimensionNumbers}) = (;offset_dims = 1, collapsed_slice_dims = 2, start_index_map = 3, index_vector_dim = 4, operand_batching_dims = 5, start_indices_batching_dims = 6)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:GatherDimensionNumbers})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:GatherDimensionNumbers}, _endpos::Int=0, _group::Bool=false)
     offset_dims = PB.BufferedVector{Int64}()
     collapsed_slice_dims = PB.BufferedVector{Int64}()
     start_index_map = PB.BufferedVector{Int64}()
     index_vector_dim = zero(Int64)
     operand_batching_dims = PB.BufferedVector{Int64}()
     start_indices_batching_dims = PB.BufferedVector{Int64}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, wire_type, offset_dims)
@@ -177,9 +179,9 @@ end
 PB.default_values(::Type{var"DeviceAssignmentProto.ComputationDevice"}) = (;replica_device_ids = Vector{Int64}())
 PB.field_numbers(::Type{var"DeviceAssignmentProto.ComputationDevice"}) = (;replica_device_ids = 1)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"DeviceAssignmentProto.ComputationDevice"})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"DeviceAssignmentProto.ComputationDevice"}, _endpos::Int=0, _group::Bool=false)
     replica_device_ids = PB.BufferedVector{Int64}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, wire_type, replica_device_ids)
@@ -208,10 +210,10 @@ end
 PB.default_values(::Type{SplitConfigProto}) = (;dimension = zero(Int64), split_indices = Vector{Int64}())
 PB.field_numbers(::Type{SplitConfigProto}) = (;dimension = 1, split_indices = 2)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:SplitConfigProto})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:SplitConfigProto}, _endpos::Int=0, _group::Bool=false)
     dimension = zero(Int64)
     split_indices = PB.BufferedVector{Int64}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             dimension = PB.decode(d, Int64)
@@ -249,9 +251,9 @@ end
 PB.default_values(::Type{var"WhileLoopBackendConfig.KnownTripCount"}) = (;n = zero(Int64))
 PB.field_numbers(::Type{var"WhileLoopBackendConfig.KnownTripCount"}) = (;n = 1)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"WhileLoopBackendConfig.KnownTripCount"})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"WhileLoopBackendConfig.KnownTripCount"}, _endpos::Int=0, _group::Bool=false)
     n = zero(Int64)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             n = PB.decode(d, Int64)
@@ -275,7 +277,7 @@ end
 
 @enumx CollectiveOpGroupMode COLLECTIVE_OP_GROUP_MODE_CROSS_REPLICA=0 COLLECTIVE_OP_GROUP_MODE_CROSS_PARTITION=1 COLLECTIVE_OP_GROUP_MODE_CROSS_REPLICA_AND_PARTITION=2 COLLECTIVE_OP_GROUP_MODE_FLATTENED_ID=3
 
-@enumx PrimitiveType PRIMITIVE_TYPE_INVALID=0 PRED=1 S1=30 S2=26 S4=21 S8=2 S16=3 S32=4 S64=5 U1=31 U2=27 U4=22 U8=6 U16=7 U32=8 U64=9 F16=10 F32=11 BF16=16 F64=12 F8E5M2=19 F8E4M3=28 F8E4M3FN=20 F8E4M3B11FNUZ=23 F8E3M4=29 F8E5M2FNUZ=24 F8E4M3FNUZ=25 F4E2M1FN=32 F8E8M0FNU=33 C64=15 C128=18 TUPLE=13 OPAQUE_TYPE=14 TOKEN=17 BUFFER=34
+@enumx PrimitiveType PRIMITIVE_TYPE_INVALID=0 PRED=1 S1=30 S2=26 S4=21 S8=2 S16=3 S32=4 S64=5 U1=31 U2=27 U4=22 U8=6 U16=7 U32=8 U64=9 F16=10 F32=11 BF16=16 F64=12 F8E5M2=19 F8E4M3=28 F8E4M3FN=20 F8E4M3B11FNUZ=23 F8E3M4=29 F8E5M2FNUZ=24 F8E4M3FNUZ=25 F4E2M1FN=32 F8E8M0FNU=33 F6E3M2FN=35 F6E2M3FN=36 C64=15 C128=18 TUPLE=13 OPAQUE_TYPE=14 TOKEN=17 BUFFER=34
 
 struct ParameterReplication
     replicated_at_leaf_buffers::Vector{Bool}
@@ -283,9 +285,9 @@ end
 PB.default_values(::Type{ParameterReplication}) = (;replicated_at_leaf_buffers = Vector{Bool}())
 PB.field_numbers(::Type{ParameterReplication}) = (;replicated_at_leaf_buffers = 1)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ParameterReplication})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ParameterReplication}, _endpos::Int=0, _group::Bool=false)
     replicated_at_leaf_buffers = PB.BufferedVector{Bool}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, wire_type, replicated_at_leaf_buffers)
@@ -311,15 +313,17 @@ end
 
 @enumx var"ChannelHandle.ChannelType" CHANNEL_TYPE_INVALID=0 DEVICE_TO_DEVICE=1 DEVICE_TO_HOST=2 HOST_TO_DEVICE=3
 
+@enumx var"NamedShardingProto.ReductionOpProto" SUM=0 MAX=1 MIN=2
+
 struct SortOptions
     descending::Bool
 end
 PB.default_values(::Type{SortOptions}) = (;descending = false)
 PB.field_numbers(::Type{SortOptions}) = (;descending = 1)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:SortOptions})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:SortOptions}, _endpos::Int=0, _group::Bool=false)
     descending = false
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             descending = PB.decode(d, Bool)
@@ -347,9 +351,9 @@ end
 PB.default_values(::Type{ReplicaGroup}) = (;replica_ids = Vector{Int64}())
 PB.field_numbers(::Type{ReplicaGroup}) = (;replica_ids = 1)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ReplicaGroup})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ReplicaGroup}, _endpos::Int=0, _group::Bool=false)
     replica_ids = PB.BufferedVector{Int64}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, wire_type, replica_ids)
@@ -379,11 +383,11 @@ end
 PB.default_values(::Type{var"ResultAccuracy.Tolerance"}) = (;atol = zero(Float64), rtol = zero(Float64), ulps = zero(Int64))
 PB.field_numbers(::Type{var"ResultAccuracy.Tolerance"}) = (;atol = 1, rtol = 2, ulps = 3)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"ResultAccuracy.Tolerance"})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"ResultAccuracy.Tolerance"}, _endpos::Int=0, _group::Bool=false)
     atol = zero(Float64)
     rtol = zero(Float64)
     ulps = zero(Int64)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             atol = PB.decode(d, Float64)
@@ -413,15 +417,96 @@ function PB._encoded_size(x::var"ResultAccuracy.Tolerance")
     return encoded_size
 end
 
+struct var"MeshProto.IotaTransform"
+    reshape_dims::Vector{Int64}
+    transpose_perm::Vector{Int64}
+end
+PB.default_values(::Type{var"MeshProto.IotaTransform"}) = (;reshape_dims = Vector{Int64}(), transpose_perm = Vector{Int64}())
+PB.field_numbers(::Type{var"MeshProto.IotaTransform"}) = (;reshape_dims = 1, transpose_perm = 2)
+
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"MeshProto.IotaTransform"}, _endpos::Int=0, _group::Bool=false)
+    reshape_dims = PB.BufferedVector{Int64}()
+    transpose_perm = PB.BufferedVector{Int64}()
+    while !PB.message_done(d, _endpos, _group)
+        field_number, wire_type = PB.decode_tag(d)
+        if field_number == 1
+            PB.decode!(d, wire_type, reshape_dims)
+        elseif field_number == 2
+            PB.decode!(d, wire_type, transpose_perm)
+        else
+            Base.skip(d, wire_type)
+        end
+    end
+    return var"MeshProto.IotaTransform"(reshape_dims[], transpose_perm[])
+end
+
+function PB.encode(e::PB.AbstractProtoEncoder, x::var"MeshProto.IotaTransform")
+    initpos = position(e.io)
+    !isempty(x.reshape_dims) && PB.encode(e, 1, x.reshape_dims)
+    !isempty(x.transpose_perm) && PB.encode(e, 2, x.transpose_perm)
+    return position(e.io) - initpos
+end
+function PB._encoded_size(x::var"MeshProto.IotaTransform")
+    encoded_size = 0
+    !isempty(x.reshape_dims) && (encoded_size += PB._encoded_size(x.reshape_dims, 1))
+    !isempty(x.transpose_perm) && (encoded_size += PB._encoded_size(x.transpose_perm, 2))
+    return encoded_size
+end
+
+struct Payload
+    payload_source::Union{Nothing,OneOf{<:Union{Vector{UInt8},Int64}}}
+end
+PB.oneof_field_types(::Type{Payload}) = (;
+    payload_source = (;value=Vector{UInt8}, id=Int64),
+)
+PB.default_values(::Type{Payload}) = (;value = UInt8[], id = zero(Int64))
+PB.field_numbers(::Type{Payload}) = (;value = 1, id = 2)
+
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:Payload}, _endpos::Int=0, _group::Bool=false)
+    payload_source = nothing
+    while !PB.message_done(d, _endpos, _group)
+        field_number, wire_type = PB.decode_tag(d)
+        if field_number == 1
+            payload_source = OneOf(:value, PB.decode(d, Vector{UInt8}))
+        elseif field_number == 2
+            payload_source = OneOf(:id, PB.decode(d, Int64))
+        else
+            Base.skip(d, wire_type)
+        end
+    end
+    return Payload(payload_source)
+end
+
+function PB.encode(e::PB.AbstractProtoEncoder, x::Payload)
+    initpos = position(e.io)
+    if isnothing(x.payload_source);
+    elseif x.payload_source.name === :value
+        PB.encode(e, 1, x.payload_source[]::Vector{UInt8})
+    elseif x.payload_source.name === :id
+        PB.encode(e, 2, x.payload_source[]::Int64)
+    end
+    return position(e.io) - initpos
+end
+function PB._encoded_size(x::Payload)
+    encoded_size = 0
+    if isnothing(x.payload_source);
+    elseif x.payload_source.name === :value
+        encoded_size += PB._encoded_size(x.payload_source[]::Vector{UInt8}, 1)
+    elseif x.payload_source.name === :id
+        encoded_size += PB._encoded_size(x.payload_source[]::Int64, 2)
+    end
+    return encoded_size
+end
+
 struct TileProto
     dimensions::Vector{Int64}
 end
 PB.default_values(::Type{TileProto}) = (;dimensions = Vector{Int64}())
 PB.field_numbers(::Type{TileProto}) = (;dimensions = 1)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:TileProto})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:TileProto}, _endpos::Int=0, _group::Bool=false)
     dimensions = PB.BufferedVector{Int64}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, wire_type, dimensions)
@@ -454,14 +539,14 @@ end
 PB.default_values(::Type{ScatterDimensionNumbers}) = (;update_window_dims = Vector{Int64}(), inserted_window_dims = Vector{Int64}(), scatter_dims_to_operand_dims = Vector{Int64}(), index_vector_dim = zero(Int64), input_batching_dims = Vector{Int64}(), scatter_indices_batching_dims = Vector{Int64}())
 PB.field_numbers(::Type{ScatterDimensionNumbers}) = (;update_window_dims = 1, inserted_window_dims = 2, scatter_dims_to_operand_dims = 3, index_vector_dim = 4, input_batching_dims = 5, scatter_indices_batching_dims = 6)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ScatterDimensionNumbers})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ScatterDimensionNumbers}, _endpos::Int=0, _group::Bool=false)
     update_window_dims = PB.BufferedVector{Int64}()
     inserted_window_dims = PB.BufferedVector{Int64}()
     scatter_dims_to_operand_dims = PB.BufferedVector{Int64}()
     index_vector_dim = zero(Int64)
     input_batching_dims = PB.BufferedVector{Int64}()
     scatter_indices_batching_dims = PB.BufferedVector{Int64}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, wire_type, update_window_dims)
@@ -510,10 +595,10 @@ end
 PB.default_values(::Type{SourceTarget}) = (;source = zero(Int64), target = zero(Int64))
 PB.field_numbers(::Type{SourceTarget}) = (;source = 1, target = 2)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:SourceTarget})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:SourceTarget}, _endpos::Int=0, _group::Bool=false)
     source = zero(Int64)
     target = zero(Int64)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             source = PB.decode(d, Int64)
@@ -545,9 +630,9 @@ end
 PB.default_values(::Type{ExecutionHandle}) = (;handle = zero(Int64))
 PB.field_numbers(::Type{ExecutionHandle}) = (;handle = 1)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ExecutionHandle})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ExecutionHandle}, _endpos::Int=0, _group::Bool=false)
     handle = zero(Int64)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             handle = PB.decode(d, Int64)
@@ -575,9 +660,9 @@ end
 PB.default_values(::Type{GlobalDataHandle}) = (;handle = zero(Int64))
 PB.field_numbers(::Type{GlobalDataHandle}) = (;handle = 1)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:GlobalDataHandle})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:GlobalDataHandle}, _endpos::Int=0, _group::Bool=false)
     handle = zero(Int64)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             handle = PB.decode(d, Int64)
@@ -599,6 +684,48 @@ function PB._encoded_size(x::GlobalDataHandle)
     return encoded_size
 end
 
+struct var"WhileLoopBackendConfig.DynamicVariable"
+    tuple_index::Int64
+    init::Int64
+    step::Int64
+end
+PB.default_values(::Type{var"WhileLoopBackendConfig.DynamicVariable"}) = (;tuple_index = zero(Int64), init = zero(Int64), step = zero(Int64))
+PB.field_numbers(::Type{var"WhileLoopBackendConfig.DynamicVariable"}) = (;tuple_index = 1, init = 2, step = 3)
+
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"WhileLoopBackendConfig.DynamicVariable"}, _endpos::Int=0, _group::Bool=false)
+    tuple_index = zero(Int64)
+    init = zero(Int64)
+    step = zero(Int64)
+    while !PB.message_done(d, _endpos, _group)
+        field_number, wire_type = PB.decode_tag(d)
+        if field_number == 1
+            tuple_index = PB.decode(d, Int64)
+        elseif field_number == 2
+            init = PB.decode(d, Int64)
+        elseif field_number == 3
+            step = PB.decode(d, Int64)
+        else
+            Base.skip(d, wire_type)
+        end
+    end
+    return var"WhileLoopBackendConfig.DynamicVariable"(tuple_index, init, step)
+end
+
+function PB.encode(e::PB.AbstractProtoEncoder, x::var"WhileLoopBackendConfig.DynamicVariable")
+    initpos = position(e.io)
+    x.tuple_index != zero(Int64) && PB.encode(e, 1, x.tuple_index)
+    x.init != zero(Int64) && PB.encode(e, 2, x.init)
+    x.step != zero(Int64) && PB.encode(e, 3, x.step)
+    return position(e.io) - initpos
+end
+function PB._encoded_size(x::var"WhileLoopBackendConfig.DynamicVariable")
+    encoded_size = 0
+    x.tuple_index != zero(Int64) && (encoded_size += PB._encoded_size(x.tuple_index, 1))
+    x.init != zero(Int64) && (encoded_size += PB._encoded_size(x.init, 2))
+    x.step != zero(Int64) && (encoded_size += PB._encoded_size(x.step, 3))
+    return encoded_size
+end
+
 @enumx FftType FFT=0 IFFT=1 RFFT=2 IRFFT=3
 
 @enumx ProfileSource PROFILE_SOURCE_UNKNOWN_SOURCE=0 PROFILE_SOURCE_EMBEDDED=1 PROFILE_SOURCE_REMOTE=2
@@ -612,12 +739,12 @@ end
 PB.default_values(::Type{DotDimensionNumbers}) = (;lhs_contracting_dimensions = Vector{Int64}(), rhs_contracting_dimensions = Vector{Int64}(), lhs_batch_dimensions = Vector{Int64}(), rhs_batch_dimensions = Vector{Int64}())
 PB.field_numbers(::Type{DotDimensionNumbers}) = (;lhs_contracting_dimensions = 1, rhs_contracting_dimensions = 2, lhs_batch_dimensions = 3, rhs_batch_dimensions = 4)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:DotDimensionNumbers})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:DotDimensionNumbers}, _endpos::Int=0, _group::Bool=false)
     lhs_contracting_dimensions = PB.BufferedVector{Int64}()
     rhs_contracting_dimensions = PB.BufferedVector{Int64}()
     lhs_batch_dimensions = PB.BufferedVector{Int64}()
     rhs_batch_dimensions = PB.BufferedVector{Int64}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, wire_type, lhs_contracting_dimensions)
@@ -658,10 +785,10 @@ end
 PB.default_values(::Type{DeviceHandle}) = (;handle = zero(Int64), device_count = zero(Int64))
 PB.field_numbers(::Type{DeviceHandle}) = (;handle = 1, device_count = 2)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:DeviceHandle})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:DeviceHandle}, _endpos::Int=0, _group::Bool=false)
     handle = zero(Int64)
     device_count = zero(Int64)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             handle = PB.decode(d, Int64)
@@ -689,6 +816,8 @@ end
 
 @enumx var"OpSharding.Type" REPLICATED=0 MAXIMAL=1 TUPLE=2 OTHER=3 MANUAL=4 UNKNOWN=5 UNREDUCED=6
 
+@enumx var"CubScanOptions.Kind" KIND_INVALID=0 SUM=1
+
 struct WindowDimension
     size::Int64
     stride::Int64
@@ -701,7 +830,7 @@ end
 PB.default_values(::Type{WindowDimension}) = (;size = zero(Int64), stride = zero(Int64), padding_low = zero(Int64), padding_high = zero(Int64), window_dilation = zero(Int64), base_dilation = zero(Int64), window_reversal = false)
 PB.field_numbers(::Type{WindowDimension}) = (;size = 1, stride = 2, padding_low = 3, padding_high = 4, window_dilation = 5, base_dilation = 6, window_reversal = 7)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:WindowDimension})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:WindowDimension}, _endpos::Int=0, _group::Bool=false)
     size = zero(Int64)
     stride = zero(Int64)
     padding_low = zero(Int64)
@@ -709,7 +838,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:WindowDimension})
     window_dilation = zero(Int64)
     base_dilation = zero(Int64)
     window_reversal = false
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             size = PB.decode(d, Int64)
@@ -769,7 +898,7 @@ end
 PB.default_values(::Type{ConvolutionDimensionNumbers}) = (;input_batch_dimension = zero(Int64), input_feature_dimension = zero(Int64), input_spatial_dimensions = Vector{Int64}(), kernel_input_feature_dimension = zero(Int64), kernel_output_feature_dimension = zero(Int64), kernel_spatial_dimensions = Vector{Int64}(), output_batch_dimension = zero(Int64), output_feature_dimension = zero(Int64), output_spatial_dimensions = Vector{Int64}())
 PB.field_numbers(::Type{ConvolutionDimensionNumbers}) = (;input_batch_dimension = 7, input_feature_dimension = 8, input_spatial_dimensions = 11, kernel_input_feature_dimension = 3, kernel_output_feature_dimension = 4, kernel_spatial_dimensions = 6, output_batch_dimension = 9, output_feature_dimension = 10, output_spatial_dimensions = 12)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ConvolutionDimensionNumbers})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ConvolutionDimensionNumbers}, _endpos::Int=0, _group::Bool=false)
     input_batch_dimension = zero(Int64)
     input_feature_dimension = zero(Int64)
     input_spatial_dimensions = PB.BufferedVector{Int64}()
@@ -779,7 +908,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ConvolutionDimensionNumb
     output_batch_dimension = zero(Int64)
     output_feature_dimension = zero(Int64)
     output_spatial_dimensions = PB.BufferedVector{Int64}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 7
             input_batch_dimension = PB.decode(d, Int64)
@@ -842,12 +971,12 @@ end
 PB.default_values(::Type{IotaReplicaGroupListProto}) = (;num_replica_groups = zero(Int64), num_devices_per_group = zero(Int64), iota_reshape_dims = Vector{Int64}(), iota_transpose_perm = Vector{Int32}())
 PB.field_numbers(::Type{IotaReplicaGroupListProto}) = (;num_replica_groups = 1, num_devices_per_group = 2, iota_reshape_dims = 3, iota_transpose_perm = 4)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:IotaReplicaGroupListProto})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:IotaReplicaGroupListProto}, _endpos::Int=0, _group::Bool=false)
     num_replica_groups = zero(Int64)
     num_devices_per_group = zero(Int64)
     iota_reshape_dims = PB.BufferedVector{Int64}()
     iota_transpose_perm = PB.BufferedVector{Int32}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             num_replica_groups = PB.decode(d, Int64)
@@ -888,10 +1017,10 @@ end
 PB.default_values(::Type{OriginalArrayProto}) = (;instruction_name = "", shape_index = Vector{Int64}())
 PB.field_numbers(::Type{OriginalArrayProto}) = (;instruction_name = 1, shape_index = 2)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OriginalArrayProto})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OriginalArrayProto}, _endpos::Int=0, _group::Bool=false)
     instruction_name = ""
     shape_index = PB.BufferedVector{Int64}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             instruction_name = PB.decode(d, String)
@@ -924,10 +1053,10 @@ end
 PB.default_values(::Type{ComputationStats}) = (;flop_count = zero(Float64), transcendental_count = zero(Float64))
 PB.field_numbers(::Type{ComputationStats}) = (;flop_count = 1, transcendental_count = 2)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ComputationStats})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ComputationStats}, _endpos::Int=0, _group::Bool=false)
     flop_count = zero(Float64)
     transcendental_count = zero(Float64)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             flop_count = PB.decode(d, Float64)
@@ -953,15 +1082,17 @@ function PB._encoded_size(x::ComputationStats)
     return encoded_size
 end
 
+@enumx ProfileType INVALID=0 WINDOW=1 FLAG=2 INTEGER=3
+
 struct FrontendAttributes
     map::Dict{String,String}
 end
 PB.default_values(::Type{FrontendAttributes}) = (;map = Dict{String,String}())
 PB.field_numbers(::Type{FrontendAttributes}) = (;map = 1)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:FrontendAttributes})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:FrontendAttributes}, _endpos::Int=0, _group::Bool=false)
     map = Dict{String,String}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, map)
@@ -983,19 +1114,15 @@ function PB._encoded_size(x::FrontendAttributes)
     return encoded_size
 end
 
-@enumx ProfileType INVALID=0 WINDOW=1 FLAG=2 INTEGER=3
-
-@enumx AsyncStreamKind ASYNC_STREAM_KIND_COLLECTIVE=0 ASYNC_STREAM_KIND_P2P0=1 ASYNC_STREAM_KIND_P2P1=2 ASYNC_STREAM_KIND_MEMCPYP2P=3
-
 struct var"WhileLoopBackendConfig.KnownInductionVariable"
     tuple_index::Int64
 end
 PB.default_values(::Type{var"WhileLoopBackendConfig.KnownInductionVariable"}) = (;tuple_index = zero(Int64))
 PB.field_numbers(::Type{var"WhileLoopBackendConfig.KnownInductionVariable"}) = (;tuple_index = 1)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"WhileLoopBackendConfig.KnownInductionVariable"})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"WhileLoopBackendConfig.KnownInductionVariable"}, _endpos::Int=0, _group::Bool=false)
     tuple_index = zero(Int64)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             tuple_index = PB.decode(d, Int64)
@@ -1025,11 +1152,11 @@ end
 PB.default_values(::Type{var"PaddingConfig.PaddingConfigDimension"}) = (;edge_padding_low = zero(Int64), edge_padding_high = zero(Int64), interior_padding = zero(Int64))
 PB.field_numbers(::Type{var"PaddingConfig.PaddingConfigDimension"}) = (;edge_padding_low = 1, edge_padding_high = 2, interior_padding = 3)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"PaddingConfig.PaddingConfigDimension"})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"PaddingConfig.PaddingConfigDimension"}, _endpos::Int=0, _group::Bool=false)
     edge_padding_low = zero(Int64)
     edge_padding_high = zero(Int64)
     interior_padding = zero(Int64)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             edge_padding_low = PB.decode(d, Int64)
@@ -1069,13 +1196,13 @@ end
 PB.default_values(::Type{GemmPerfTableEntry}) = (;b = zero(Int64), m = zero(Int64), n = zero(Int64), k = zero(Int64), flops = Dict{String,Int64}())
 PB.field_numbers(::Type{GemmPerfTableEntry}) = (;b = 1, m = 2, n = 3, k = 4, flops = 5)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:GemmPerfTableEntry})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:GemmPerfTableEntry}, _endpos::Int=0, _group::Bool=false)
     b = zero(Int64)
     m = zero(Int64)
     n = zero(Int64)
     k = zero(Int64)
     flops = Dict{String,Int64}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             b = PB.decode(d, Int64)
@@ -1121,11 +1248,11 @@ end
 PB.default_values(::Type{OutputOperandAliasing}) = (;output_shape_index = Vector{Int64}(), operand_index = zero(Int64), operand_shape_index = Vector{Int64}())
 PB.field_numbers(::Type{OutputOperandAliasing}) = (;output_shape_index = 1, operand_index = 2, operand_shape_index = 3)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OutputOperandAliasing})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OutputOperandAliasing}, _endpos::Int=0, _group::Bool=false)
     output_shape_index = PB.BufferedVector{Int64}()
     operand_index = zero(Int64)
     operand_shape_index = PB.BufferedVector{Int64}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, wire_type, output_shape_index)
@@ -1170,7 +1297,7 @@ end
 PB.default_values(::Type{ExecutionProfile}) = (;compilation_cache_hit = false, compile_time_ms = zero(Int64), compute_cycle_count = zero(Int64), compute_time_ns = zero(Int64), compute_and_transfer_time_ns = zero(Int64), executable_size_in_bytes = zero(Int64), profile_cache_hit = false, warmup_run_executed = false)
 PB.field_numbers(::Type{ExecutionProfile}) = (;compilation_cache_hit = 1, compile_time_ms = 2, compute_cycle_count = 3, compute_time_ns = 4, compute_and_transfer_time_ns = 5, executable_size_in_bytes = 6, profile_cache_hit = 7, warmup_run_executed = 8)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ExecutionProfile})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ExecutionProfile}, _endpos::Int=0, _group::Bool=false)
     compilation_cache_hit = false
     compile_time_ms = zero(Int64)
     compute_cycle_count = zero(Int64)
@@ -1179,7 +1306,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ExecutionProfile})
     executable_size_in_bytes = zero(Int64)
     profile_cache_hit = false
     warmup_run_executed = false
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             compilation_cache_hit = PB.decode(d, Bool)
@@ -1236,10 +1363,10 @@ end
 PB.default_values(::Type{var"AxisRefProto.SubAxis"}) = (;pre_size = zero(Int64), size = zero(Int64))
 PB.field_numbers(::Type{var"AxisRefProto.SubAxis"}) = (;pre_size = 1, size = 2)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"AxisRefProto.SubAxis"})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"AxisRefProto.SubAxis"}, _endpos::Int=0, _group::Bool=false)
     pre_size = zero(Int64)
     size = zero(Int64)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             pre_size = PB.decode(d, Int64)
@@ -1265,6 +1392,60 @@ function PB._encoded_size(x::var"AxisRefProto.SubAxis")
     return encoded_size
 end
 
+struct var"SparsityConfig.TensorSparsityConfig"
+    num_non_zero::Int64
+    block_size::Int64
+    dimension::Int64
+    stride::Int64
+    idx::Int32
+end
+PB.default_values(::Type{var"SparsityConfig.TensorSparsityConfig"}) = (;num_non_zero = zero(Int64), block_size = zero(Int64), dimension = zero(Int64), stride = zero(Int64), idx = zero(Int32))
+PB.field_numbers(::Type{var"SparsityConfig.TensorSparsityConfig"}) = (;num_non_zero = 1, block_size = 2, dimension = 3, stride = 4, idx = 5)
+
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"SparsityConfig.TensorSparsityConfig"}, _endpos::Int=0, _group::Bool=false)
+    num_non_zero = zero(Int64)
+    block_size = zero(Int64)
+    dimension = zero(Int64)
+    stride = zero(Int64)
+    idx = zero(Int32)
+    while !PB.message_done(d, _endpos, _group)
+        field_number, wire_type = PB.decode_tag(d)
+        if field_number == 1
+            num_non_zero = PB.decode(d, Int64)
+        elseif field_number == 2
+            block_size = PB.decode(d, Int64)
+        elseif field_number == 3
+            dimension = PB.decode(d, Int64)
+        elseif field_number == 4
+            stride = PB.decode(d, Int64)
+        elseif field_number == 5
+            idx = PB.decode(d, Int32)
+        else
+            Base.skip(d, wire_type)
+        end
+    end
+    return var"SparsityConfig.TensorSparsityConfig"(num_non_zero, block_size, dimension, stride, idx)
+end
+
+function PB.encode(e::PB.AbstractProtoEncoder, x::var"SparsityConfig.TensorSparsityConfig")
+    initpos = position(e.io)
+    x.num_non_zero != zero(Int64) && PB.encode(e, 1, x.num_non_zero)
+    x.block_size != zero(Int64) && PB.encode(e, 2, x.block_size)
+    x.dimension != zero(Int64) && PB.encode(e, 3, x.dimension)
+    x.stride != zero(Int64) && PB.encode(e, 4, x.stride)
+    x.idx != zero(Int32) && PB.encode(e, 5, x.idx)
+    return position(e.io) - initpos
+end
+function PB._encoded_size(x::var"SparsityConfig.TensorSparsityConfig")
+    encoded_size = 0
+    x.num_non_zero != zero(Int64) && (encoded_size += PB._encoded_size(x.num_non_zero, 1))
+    x.block_size != zero(Int64) && (encoded_size += PB._encoded_size(x.block_size, 2))
+    x.dimension != zero(Int64) && (encoded_size += PB._encoded_size(x.dimension, 3))
+    x.stride != zero(Int64) && (encoded_size += PB._encoded_size(x.stride, 4))
+    x.idx != zero(Int32) && (encoded_size += PB._encoded_size(x.idx, 5))
+    return encoded_size
+end
+
 @enumx ProfileGenerationStrategy PROFILE_GENERATION_STRATEGY_UNKNOWN=0 PROFILE_GENERATION_STRATEGY_GA=1 PROFILE_GENERATION_STRATEGY_FANTA=2 PROFILE_GENERATION_STRATEGY_CFO=3 PROFILE_GENERATION_STRATEGY_EXHAUSTIVE=4 PROFILE_GENERATION_STRATEGY_LCM_GNN=5 PROFILE_GENERATION_STRATEGY_LCM_MOE=6
 
 @enumx PaddingType PADDING_INVALID=0 PADDING_VALID=1 PADDING_SAME=2
@@ -1276,10 +1457,10 @@ end
 PB.default_values(::Type{var"MeshProto.MeshAxis"}) = (;name = "", size = zero(Int64))
 PB.field_numbers(::Type{var"MeshProto.MeshAxis"}) = (;name = 1, size = 2)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"MeshProto.MeshAxis"})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"MeshProto.MeshAxis"}, _endpos::Int=0, _group::Bool=false)
     name = ""
     size = zero(Int64)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             name = PB.decode(d, String)
@@ -1313,9 +1494,9 @@ end
 PB.default_values(::Type{CholeskyOptions}) = (;lower = false)
 PB.field_numbers(::Type{CholeskyOptions}) = (;lower = 1)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:CholeskyOptions})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:CholeskyOptions}, _endpos::Int=0, _group::Bool=false)
     lower = false
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             lower = PB.decode(d, Bool)
@@ -1344,10 +1525,10 @@ end
 PB.default_values(::Type{StatisticsViz}) = (;stat_index_to_visualize = zero(Int64), statistics = Vector{Statistic}())
 PB.field_numbers(::Type{StatisticsViz}) = (;stat_index_to_visualize = 1, statistics = 2)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:StatisticsViz})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:StatisticsViz}, _endpos::Int=0, _group::Bool=false)
     stat_index_to_visualize = zero(Int64)
     statistics = PB.BufferedVector{Statistic}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             stat_index_to_visualize = PB.decode(d, Int64)
@@ -1382,12 +1563,12 @@ end
 PB.default_values(::Type{TriangularSolveOptions}) = (;left_side = false, lower = false, unit_diagonal = false, transpose_a = var"TriangularSolveOptions.Transpose".TRANSPOSE_INVALID)
 PB.field_numbers(::Type{TriangularSolveOptions}) = (;left_side = 1, lower = 2, unit_diagonal = 3, transpose_a = 4)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:TriangularSolveOptions})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:TriangularSolveOptions}, _endpos::Int=0, _group::Bool=false)
     left_side = false
     lower = false
     unit_diagonal = false
     transpose_a = var"TriangularSolveOptions.Transpose".TRANSPOSE_INVALID
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             left_side = PB.decode(d, Bool)
@@ -1429,11 +1610,11 @@ end
 PB.default_values(::Type{DeviceAssignmentProto}) = (;replica_count = zero(Int32), computation_count = zero(Int32), computation_devices = Vector{var"DeviceAssignmentProto.ComputationDevice"}())
 PB.field_numbers(::Type{DeviceAssignmentProto}) = (;replica_count = 1, computation_count = 2, computation_devices = 3)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:DeviceAssignmentProto})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:DeviceAssignmentProto}, _endpos::Int=0, _group::Bool=false)
     replica_count = zero(Int32)
     computation_count = zero(Int32)
     computation_devices = PB.BufferedVector{var"DeviceAssignmentProto.ComputationDevice"}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             replica_count = PB.decode(d, Int32)
@@ -1470,10 +1651,10 @@ end
 PB.default_values(::Type{ChannelHandle}) = (;handle = zero(Int64), var"#type" = var"ChannelHandle.ChannelType".CHANNEL_TYPE_INVALID)
 PB.field_numbers(::Type{ChannelHandle}) = (;handle = 1, var"#type" = 2)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ChannelHandle})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ChannelHandle}, _endpos::Int=0, _group::Bool=false)
     handle = zero(Int64)
     var"#type" = var"ChannelHandle.ChannelType".CHANNEL_TYPE_INVALID
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             handle = PB.decode(d, Int64)
@@ -1499,6 +1680,37 @@ function PB._encoded_size(x::ChannelHandle)
     return encoded_size
 end
 
+struct CollectiveDeviceListProto
+    replica_groups::Vector{ReplicaGroup}
+end
+PB.reserved_fields(::Type{CollectiveDeviceListProto}) = (names = ["iota_replica_group_list"], numbers = Union{Int,UnitRange{Int}}[2])
+PB.default_values(::Type{CollectiveDeviceListProto}) = (;replica_groups = Vector{ReplicaGroup}())
+PB.field_numbers(::Type{CollectiveDeviceListProto}) = (;replica_groups = 1)
+
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:CollectiveDeviceListProto}, _endpos::Int=0, _group::Bool=false)
+    replica_groups = PB.BufferedVector{ReplicaGroup}()
+    while !PB.message_done(d, _endpos, _group)
+        field_number, wire_type = PB.decode_tag(d)
+        if field_number == 1
+            PB.decode!(d, replica_groups)
+        else
+            Base.skip(d, wire_type)
+        end
+    end
+    return CollectiveDeviceListProto(replica_groups[])
+end
+
+function PB.encode(e::PB.AbstractProtoEncoder, x::CollectiveDeviceListProto)
+    initpos = position(e.io)
+    !isempty(x.replica_groups) && PB.encode(e, 1, x.replica_groups)
+    return position(e.io) - initpos
+end
+function PB._encoded_size(x::CollectiveDeviceListProto)
+    encoded_size = 0
+    !isempty(x.replica_groups) && (encoded_size += PB._encoded_size(x.replica_groups, 1))
+    return encoded_size
+end
+
 struct ResultAccuracy
     specs::Union{Nothing,OneOf{<:Union{var"ResultAccuracy.Mode".T,var"ResultAccuracy.Tolerance"}}}
 end
@@ -1508,9 +1720,9 @@ PB.oneof_field_types(::Type{ResultAccuracy}) = (;
 PB.default_values(::Type{ResultAccuracy}) = (;mode = var"ResultAccuracy.Mode".DEFAULT, tolerance = nothing)
 PB.field_numbers(::Type{ResultAccuracy}) = (;mode = 1, tolerance = 2)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ResultAccuracy})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ResultAccuracy}, _endpos::Int=0, _group::Bool=false)
     specs = nothing
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             specs = OneOf(:mode, PB.decode(d, var"ResultAccuracy.Mode".T))
@@ -1552,11 +1764,11 @@ end
 PB.default_values(::Type{RaggedDotDimensionNumbers}) = (;dot_dimension_numbers = nothing, lhs_ragged_dimensions = Vector{Int64}(), rhs_group_dimensions = Vector{Int64}())
 PB.field_numbers(::Type{RaggedDotDimensionNumbers}) = (;dot_dimension_numbers = 1, lhs_ragged_dimensions = 2, rhs_group_dimensions = 3)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:RaggedDotDimensionNumbers})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:RaggedDotDimensionNumbers}, _endpos::Int=0, _group::Bool=false)
     dot_dimension_numbers = Ref{Union{Nothing,DotDimensionNumbers}}(nothing)
     lhs_ragged_dimensions = PB.BufferedVector{Int64}()
     rhs_group_dimensions = PB.BufferedVector{Int64}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, dot_dimension_numbers)
@@ -1586,15 +1798,69 @@ function PB._encoded_size(x::RaggedDotDimensionNumbers)
     return encoded_size
 end
 
+struct CubScanOptions
+    vector_length::Int64
+    row_length::Int64
+    column_length::Int64
+    kind::var"CubScanOptions.Kind".T
+    is_reverse::Bool
+end
+PB.default_values(::Type{CubScanOptions}) = (;vector_length = zero(Int64), row_length = zero(Int64), column_length = zero(Int64), kind = var"CubScanOptions.Kind".KIND_INVALID, is_reverse = false)
+PB.field_numbers(::Type{CubScanOptions}) = (;vector_length = 1, row_length = 2, column_length = 3, kind = 4, is_reverse = 5)
+
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:CubScanOptions}, _endpos::Int=0, _group::Bool=false)
+    vector_length = zero(Int64)
+    row_length = zero(Int64)
+    column_length = zero(Int64)
+    kind = var"CubScanOptions.Kind".KIND_INVALID
+    is_reverse = false
+    while !PB.message_done(d, _endpos, _group)
+        field_number, wire_type = PB.decode_tag(d)
+        if field_number == 1
+            vector_length = PB.decode(d, Int64)
+        elseif field_number == 2
+            row_length = PB.decode(d, Int64)
+        elseif field_number == 3
+            column_length = PB.decode(d, Int64)
+        elseif field_number == 4
+            kind = PB.decode(d, var"CubScanOptions.Kind".T)
+        elseif field_number == 5
+            is_reverse = PB.decode(d, Bool)
+        else
+            Base.skip(d, wire_type)
+        end
+    end
+    return CubScanOptions(vector_length, row_length, column_length, kind, is_reverse)
+end
+
+function PB.encode(e::PB.AbstractProtoEncoder, x::CubScanOptions)
+    initpos = position(e.io)
+    x.vector_length != zero(Int64) && PB.encode(e, 1, x.vector_length)
+    x.row_length != zero(Int64) && PB.encode(e, 2, x.row_length)
+    x.column_length != zero(Int64) && PB.encode(e, 3, x.column_length)
+    x.kind != var"CubScanOptions.Kind".KIND_INVALID && PB.encode(e, 4, x.kind)
+    x.is_reverse != false && PB.encode(e, 5, x.is_reverse)
+    return position(e.io) - initpos
+end
+function PB._encoded_size(x::CubScanOptions)
+    encoded_size = 0
+    x.vector_length != zero(Int64) && (encoded_size += PB._encoded_size(x.vector_length, 1))
+    x.row_length != zero(Int64) && (encoded_size += PB._encoded_size(x.row_length, 2))
+    x.column_length != zero(Int64) && (encoded_size += PB._encoded_size(x.column_length, 3))
+    x.kind != var"CubScanOptions.Kind".KIND_INVALID && (encoded_size += PB._encoded_size(x.kind, 4))
+    x.is_reverse != false && (encoded_size += PB._encoded_size(x.is_reverse, 5))
+    return encoded_size
+end
+
 struct Window
     dimensions::Vector{WindowDimension}
 end
 PB.default_values(::Type{Window}) = (;dimensions = Vector{WindowDimension}())
 PB.field_numbers(::Type{Window}) = (;dimensions = 1)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:Window})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:Window}, _endpos::Int=0, _group::Bool=false)
     dimensions = PB.BufferedVector{WindowDimension}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, dimensions)
@@ -1616,42 +1882,6 @@ function PB._encoded_size(x::Window)
     return encoded_size
 end
 
-struct CollectiveDeviceListProto
-    replica_groups::Vector{ReplicaGroup}
-    iota_replica_group_list::Union{Nothing,IotaReplicaGroupListProto}
-end
-PB.default_values(::Type{CollectiveDeviceListProto}) = (;replica_groups = Vector{ReplicaGroup}(), iota_replica_group_list = nothing)
-PB.field_numbers(::Type{CollectiveDeviceListProto}) = (;replica_groups = 1, iota_replica_group_list = 2)
-
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:CollectiveDeviceListProto})
-    replica_groups = PB.BufferedVector{ReplicaGroup}()
-    iota_replica_group_list = Ref{Union{Nothing,IotaReplicaGroupListProto}}(nothing)
-    while !PB.message_done(d)
-        field_number, wire_type = PB.decode_tag(d)
-        if field_number == 1
-            PB.decode!(d, replica_groups)
-        elseif field_number == 2
-            PB.decode!(d, iota_replica_group_list)
-        else
-            Base.skip(d, wire_type)
-        end
-    end
-    return CollectiveDeviceListProto(replica_groups[], iota_replica_group_list[])
-end
-
-function PB.encode(e::PB.AbstractProtoEncoder, x::CollectiveDeviceListProto)
-    initpos = position(e.io)
-    !isempty(x.replica_groups) && PB.encode(e, 1, x.replica_groups)
-    !isnothing(x.iota_replica_group_list) && PB.encode(e, 2, x.iota_replica_group_list)
-    return position(e.io) - initpos
-end
-function PB._encoded_size(x::CollectiveDeviceListProto)
-    encoded_size = 0
-    !isempty(x.replica_groups) && (encoded_size += PB._encoded_size(x.replica_groups, 1))
-    !isnothing(x.iota_replica_group_list) && (encoded_size += PB._encoded_size(x.iota_replica_group_list, 2))
-    return encoded_size
-end
-
 struct OriginalValueElementProto
     shape_index::Vector{Int64}
     original_array::Union{Nothing,OriginalArrayProto}
@@ -1659,10 +1889,10 @@ end
 PB.default_values(::Type{OriginalValueElementProto}) = (;shape_index = Vector{Int64}(), original_array = nothing)
 PB.field_numbers(::Type{OriginalValueElementProto}) = (;shape_index = 1, original_array = 2)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OriginalValueElementProto})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OriginalValueElementProto}, _endpos::Int=0, _group::Bool=false)
     shape_index = PB.BufferedVector{Int64}()
     original_array = Ref{Union{Nothing,OriginalArrayProto}}(nothing)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, wire_type, shape_index)
@@ -1692,17 +1922,18 @@ struct WhileLoopBackendConfig
     known_trip_count::Union{Nothing,var"WhileLoopBackendConfig.KnownTripCount"}
     known_init_step::Union{Nothing,var"WhileLoopBackendConfig.KnownInitStep"}
     known_induction_variable::Union{Nothing,var"WhileLoopBackendConfig.KnownInductionVariable"}
-    dynamic_variable_tuple_indices::Vector{Int64}
+    dynamic_variables::Vector{var"WhileLoopBackendConfig.DynamicVariable"}
 end
-PB.default_values(::Type{WhileLoopBackendConfig}) = (;known_trip_count = nothing, known_init_step = nothing, known_induction_variable = nothing, dynamic_variable_tuple_indices = Vector{Int64}())
-PB.field_numbers(::Type{WhileLoopBackendConfig}) = (;known_trip_count = 1, known_init_step = 2, known_induction_variable = 3, dynamic_variable_tuple_indices = 4)
+PB.reserved_fields(::Type{WhileLoopBackendConfig}) = (names = ["dynamic_variable_tuple_indices"], numbers = Union{Int,UnitRange{Int}}[4])
+PB.default_values(::Type{WhileLoopBackendConfig}) = (;known_trip_count = nothing, known_init_step = nothing, known_induction_variable = nothing, dynamic_variables = Vector{var"WhileLoopBackendConfig.DynamicVariable"}())
+PB.field_numbers(::Type{WhileLoopBackendConfig}) = (;known_trip_count = 1, known_init_step = 2, known_induction_variable = 3, dynamic_variables = 5)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:WhileLoopBackendConfig})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:WhileLoopBackendConfig}, _endpos::Int=0, _group::Bool=false)
     known_trip_count = Ref{Union{Nothing,var"WhileLoopBackendConfig.KnownTripCount"}}(nothing)
     known_init_step = Ref{Union{Nothing,var"WhileLoopBackendConfig.KnownInitStep"}}(nothing)
     known_induction_variable = Ref{Union{Nothing,var"WhileLoopBackendConfig.KnownInductionVariable"}}(nothing)
-    dynamic_variable_tuple_indices = PB.BufferedVector{Int64}()
-    while !PB.message_done(d)
+    dynamic_variables = PB.BufferedVector{var"WhileLoopBackendConfig.DynamicVariable"}()
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, known_trip_count)
@@ -1710,13 +1941,13 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:WhileLoopBackendConfig})
             PB.decode!(d, known_init_step)
         elseif field_number == 3
             PB.decode!(d, known_induction_variable)
-        elseif field_number == 4
-            PB.decode!(d, wire_type, dynamic_variable_tuple_indices)
+        elseif field_number == 5
+            PB.decode!(d, dynamic_variables)
         else
             Base.skip(d, wire_type)
         end
     end
-    return WhileLoopBackendConfig(known_trip_count[], known_init_step[], known_induction_variable[], dynamic_variable_tuple_indices[])
+    return WhileLoopBackendConfig(known_trip_count[], known_init_step[], known_induction_variable[], dynamic_variables[])
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::WhileLoopBackendConfig)
@@ -1724,7 +1955,7 @@ function PB.encode(e::PB.AbstractProtoEncoder, x::WhileLoopBackendConfig)
     !isnothing(x.known_trip_count) && PB.encode(e, 1, x.known_trip_count)
     !isnothing(x.known_init_step) && PB.encode(e, 2, x.known_init_step)
     !isnothing(x.known_induction_variable) && PB.encode(e, 3, x.known_induction_variable)
-    !isempty(x.dynamic_variable_tuple_indices) && PB.encode(e, 4, x.dynamic_variable_tuple_indices)
+    !isempty(x.dynamic_variables) && PB.encode(e, 5, x.dynamic_variables)
     return position(e.io) - initpos
 end
 function PB._encoded_size(x::WhileLoopBackendConfig)
@@ -1732,7 +1963,7 @@ function PB._encoded_size(x::WhileLoopBackendConfig)
     !isnothing(x.known_trip_count) && (encoded_size += PB._encoded_size(x.known_trip_count, 1))
     !isnothing(x.known_init_step) && (encoded_size += PB._encoded_size(x.known_init_step, 2))
     !isnothing(x.known_induction_variable) && (encoded_size += PB._encoded_size(x.known_induction_variable, 3))
-    !isempty(x.dynamic_variable_tuple_indices) && (encoded_size += PB._encoded_size(x.dynamic_variable_tuple_indices, 4))
+    !isempty(x.dynamic_variables) && (encoded_size += PB._encoded_size(x.dynamic_variables, 5))
     return encoded_size
 end
 
@@ -1742,9 +1973,9 @@ end
 PB.default_values(::Type{PaddingConfig}) = (;dimensions = Vector{var"PaddingConfig.PaddingConfigDimension"}())
 PB.field_numbers(::Type{PaddingConfig}) = (;dimensions = 1)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:PaddingConfig})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:PaddingConfig}, _endpos::Int=0, _group::Bool=false)
     dimensions = PB.BufferedVector{var"PaddingConfig.PaddingConfigDimension"}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, dimensions)
@@ -1772,9 +2003,9 @@ end
 PB.default_values(::Type{GemmPerfTableEntryValues}) = (;entries = Vector{GemmPerfTableEntry}())
 PB.field_numbers(::Type{GemmPerfTableEntryValues}) = (;entries = 1)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:GemmPerfTableEntryValues})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:GemmPerfTableEntryValues}, _endpos::Int=0, _group::Bool=false)
     entries = PB.BufferedVector{GemmPerfTableEntry}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, entries)
@@ -1803,10 +2034,10 @@ end
 PB.default_values(::Type{PrecisionConfig}) = (;operand_precision = Vector{var"PrecisionConfig.Precision".T}(), algorithm = var"PrecisionConfig.Algorithm".ALG_UNSET)
 PB.field_numbers(::Type{PrecisionConfig}) = (;operand_precision = 1, algorithm = 2)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:PrecisionConfig})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:PrecisionConfig}, _endpos::Int=0, _group::Bool=false)
     operand_precision = PB.BufferedVector{var"PrecisionConfig.Precision".T}()
     algorithm = var"PrecisionConfig.Algorithm".ALG_UNSET
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, wire_type, operand_precision)
@@ -1839,10 +2070,10 @@ end
 PB.default_values(::Type{AxisRefProto}) = (;mesh_axis_index = zero(Int64), sub_axis_info = nothing)
 PB.field_numbers(::Type{AxisRefProto}) = (;mesh_axis_index = 1, sub_axis_info = 2)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:AxisRefProto})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:AxisRefProto}, _endpos::Int=0, _group::Bool=false)
     mesh_axis_index = zero(Int64)
     sub_axis_info = Ref{Union{Nothing,var"AxisRefProto.SubAxis"}}(nothing)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             mesh_axis_index = PB.decode(d, Int64)
@@ -1868,6 +2099,42 @@ function PB._encoded_size(x::AxisRefProto)
     return encoded_size
 end
 
+struct SparsityConfig
+    lhs::Union{Nothing,var"SparsityConfig.TensorSparsityConfig"}
+    rhs::Union{Nothing,var"SparsityConfig.TensorSparsityConfig"}
+end
+PB.default_values(::Type{SparsityConfig}) = (;lhs = nothing, rhs = nothing)
+PB.field_numbers(::Type{SparsityConfig}) = (;lhs = 1, rhs = 2)
+
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:SparsityConfig}, _endpos::Int=0, _group::Bool=false)
+    lhs = Ref{Union{Nothing,var"SparsityConfig.TensorSparsityConfig"}}(nothing)
+    rhs = Ref{Union{Nothing,var"SparsityConfig.TensorSparsityConfig"}}(nothing)
+    while !PB.message_done(d, _endpos, _group)
+        field_number, wire_type = PB.decode_tag(d)
+        if field_number == 1
+            PB.decode!(d, lhs)
+        elseif field_number == 2
+            PB.decode!(d, rhs)
+        else
+            Base.skip(d, wire_type)
+        end
+    end
+    return SparsityConfig(lhs[], rhs[])
+end
+
+function PB.encode(e::PB.AbstractProtoEncoder, x::SparsityConfig)
+    initpos = position(e.io)
+    !isnothing(x.lhs) && PB.encode(e, 1, x.lhs)
+    !isnothing(x.rhs) && PB.encode(e, 2, x.rhs)
+    return position(e.io) - initpos
+end
+function PB._encoded_size(x::SparsityConfig)
+    encoded_size = 0
+    !isnothing(x.lhs) && (encoded_size += PB._encoded_size(x.lhs, 1))
+    !isnothing(x.rhs) && (encoded_size += PB._encoded_size(x.rhs, 2))
+    return encoded_size
+end
+
 struct var"OpMetadata.ProfileInfo"
     profile_type::Vector{ProfileType.T}
     relative_speedup::Float64
@@ -1878,13 +2145,13 @@ end
 PB.default_values(::Type{var"OpMetadata.ProfileInfo"}) = (;profile_type = Vector{ProfileType.T}(), relative_speedup = zero(Float64), profile_source = ProfileSource.PROFILE_SOURCE_UNKNOWN_SOURCE, compilation_event = CompilationEvent.COMPILATION_EVENT_UNKNOWN_EVENT, profile_generation_strategy = ProfileGenerationStrategy.PROFILE_GENERATION_STRATEGY_UNKNOWN)
 PB.field_numbers(::Type{var"OpMetadata.ProfileInfo"}) = (;profile_type = 1, relative_speedup = 2, profile_source = 3, compilation_event = 4, profile_generation_strategy = 5)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"OpMetadata.ProfileInfo"})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"OpMetadata.ProfileInfo"}, _endpos::Int=0, _group::Bool=false)
     profile_type = PB.BufferedVector{ProfileType.T}()
     relative_speedup = zero(Float64)
     profile_source = ProfileSource.PROFILE_SOURCE_UNKNOWN_SOURCE
     compilation_event = CompilationEvent.COMPILATION_EVENT_UNKNOWN_EVENT
     profile_generation_strategy = ProfileGenerationStrategy.PROFILE_GENERATION_STRATEGY_UNKNOWN
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, wire_type, profile_type)
@@ -1925,36 +2192,42 @@ end
 struct MeshProto
     axes::Vector{var"MeshProto.MeshAxis"}
     device_ids::Vector{Int64}
+    iota_transform::Union{Nothing,var"MeshProto.IotaTransform"}
 end
-PB.default_values(::Type{MeshProto}) = (;axes = Vector{var"MeshProto.MeshAxis"}(), device_ids = Vector{Int64}())
-PB.field_numbers(::Type{MeshProto}) = (;axes = 1, device_ids = 2)
+PB.default_values(::Type{MeshProto}) = (;axes = Vector{var"MeshProto.MeshAxis"}(), device_ids = Vector{Int64}(), iota_transform = nothing)
+PB.field_numbers(::Type{MeshProto}) = (;axes = 1, device_ids = 2, iota_transform = 3)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:MeshProto})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:MeshProto}, _endpos::Int=0, _group::Bool=false)
     axes = PB.BufferedVector{var"MeshProto.MeshAxis"}()
     device_ids = PB.BufferedVector{Int64}()
-    while !PB.message_done(d)
+    iota_transform = Ref{Union{Nothing,var"MeshProto.IotaTransform"}}(nothing)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, axes)
         elseif field_number == 2
             PB.decode!(d, wire_type, device_ids)
+        elseif field_number == 3
+            PB.decode!(d, iota_transform)
         else
             Base.skip(d, wire_type)
         end
     end
-    return MeshProto(axes[], device_ids[])
+    return MeshProto(axes[], device_ids[], iota_transform[])
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::MeshProto)
     initpos = position(e.io)
     !isempty(x.axes) && PB.encode(e, 1, x.axes)
     !isempty(x.device_ids) && PB.encode(e, 2, x.device_ids)
+    !isnothing(x.iota_transform) && PB.encode(e, 3, x.iota_transform)
     return position(e.io) - initpos
 end
 function PB._encoded_size(x::MeshProto)
     encoded_size = 0
     !isempty(x.axes) && (encoded_size += PB._encoded_size(x.axes, 1))
     !isempty(x.device_ids) && (encoded_size += PB._encoded_size(x.device_ids, 2))
+    !isnothing(x.iota_transform) && (encoded_size += PB._encoded_size(x.iota_transform, 3))
     return encoded_size
 end
 
@@ -1965,10 +2238,10 @@ end
 PB.default_values(::Type{OriginalValueProto}) = (;elements = Vector{OriginalValueElementProto}(), is_synthetic_call = false)
 PB.field_numbers(::Type{OriginalValueProto}) = (;elements = 1, is_synthetic_call = 2)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OriginalValueProto})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OriginalValueProto}, _endpos::Int=0, _group::Bool=false)
     elements = PB.BufferedVector{OriginalValueElementProto}()
     is_synthetic_call = false
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, elements)
@@ -2000,9 +2273,9 @@ end
 PB.default_values(::Type{GemmPerfTable}) = (;entries = Dict{String,GemmPerfTableEntryValues}())
 PB.field_numbers(::Type{GemmPerfTable}) = (;entries = 1)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:GemmPerfTable})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:GemmPerfTable}, _endpos::Int=0, _group::Bool=false)
     entries = Dict{String,GemmPerfTableEntryValues}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, entries)
@@ -2031,10 +2304,10 @@ end
 PB.default_values(::Type{var"NamedShardingProto.DimensionSharding"}) = (;axes = Vector{AxisRefProto}(), is_closed = false)
 PB.field_numbers(::Type{var"NamedShardingProto.DimensionSharding"}) = (;axes = 1, is_closed = 2)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"NamedShardingProto.DimensionSharding"})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"NamedShardingProto.DimensionSharding"}, _endpos::Int=0, _group::Bool=false)
     axes = PB.BufferedVector{AxisRefProto}()
     is_closed = false
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, axes)
@@ -2075,12 +2348,13 @@ struct OpMetadata
     deduplicated_name::String
     stack_frame_id::Int32
     scheduling_name::String
+    metadata_payload::Union{Nothing,Payload}
 end
 PB.reserved_fields(::Type{OpMetadata}) = (names = ["creation_pass_id", "logical_creation_pass_id"], numbers = Union{Int,UnitRange{Int}}[6, 7, 11, 13, 14])
-PB.default_values(::Type{OpMetadata}) = (;op_type = "", op_name = "", source_file = "", source_line = zero(Int32), source_end_line = zero(Int32), source_column = zero(Int32), source_end_column = zero(Int32), profile_type = Vector{ProfileType.T}(), size_of_generated_code_in_bytes = zero(Int64), size_of_memory_working_set_in_bytes = zero(Int64), profile_info = nothing, deduplicated_name = "", stack_frame_id = zero(Int32), scheduling_name = "")
-PB.field_numbers(::Type{OpMetadata}) = (;op_type = 1, op_name = 2, source_file = 3, source_line = 4, source_end_line = 17, source_column = 18, source_end_column = 19, profile_type = 5, size_of_generated_code_in_bytes = 8, size_of_memory_working_set_in_bytes = 9, profile_info = 10, deduplicated_name = 12, stack_frame_id = 15, scheduling_name = 16)
+PB.default_values(::Type{OpMetadata}) = (;op_type = "", op_name = "", source_file = "", source_line = zero(Int32), source_end_line = zero(Int32), source_column = zero(Int32), source_end_column = zero(Int32), profile_type = Vector{ProfileType.T}(), size_of_generated_code_in_bytes = zero(Int64), size_of_memory_working_set_in_bytes = zero(Int64), profile_info = nothing, deduplicated_name = "", stack_frame_id = zero(Int32), scheduling_name = "", metadata_payload = nothing)
+PB.field_numbers(::Type{OpMetadata}) = (;op_type = 1, op_name = 2, source_file = 3, source_line = 4, source_end_line = 17, source_column = 18, source_end_column = 19, profile_type = 5, size_of_generated_code_in_bytes = 8, size_of_memory_working_set_in_bytes = 9, profile_info = 10, deduplicated_name = 12, stack_frame_id = 15, scheduling_name = 16, metadata_payload = 20)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OpMetadata})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OpMetadata}, _endpos::Int=0, _group::Bool=false)
     op_type = ""
     op_name = ""
     source_file = ""
@@ -2095,7 +2369,8 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OpMetadata})
     deduplicated_name = ""
     stack_frame_id = zero(Int32)
     scheduling_name = ""
-    while !PB.message_done(d)
+    metadata_payload = Ref{Union{Nothing,Payload}}(nothing)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             op_type = PB.decode(d, String)
@@ -2125,11 +2400,13 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OpMetadata})
             stack_frame_id = PB.decode(d, Int32)
         elseif field_number == 16
             scheduling_name = PB.decode(d, String)
+        elseif field_number == 20
+            PB.decode!(d, metadata_payload)
         else
             Base.skip(d, wire_type)
         end
     end
-    return OpMetadata(op_type, op_name, source_file, source_line, source_end_line, source_column, source_end_column, profile_type[], size_of_generated_code_in_bytes, size_of_memory_working_set_in_bytes, profile_info[], deduplicated_name, stack_frame_id, scheduling_name)
+    return OpMetadata(op_type, op_name, source_file, source_line, source_end_line, source_column, source_end_column, profile_type[], size_of_generated_code_in_bytes, size_of_memory_working_set_in_bytes, profile_info[], deduplicated_name, stack_frame_id, scheduling_name, metadata_payload[])
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::OpMetadata)
@@ -2148,6 +2425,7 @@ function PB.encode(e::PB.AbstractProtoEncoder, x::OpMetadata)
     !isempty(x.deduplicated_name) && PB.encode(e, 12, x.deduplicated_name)
     x.stack_frame_id != zero(Int32) && PB.encode(e, 15, x.stack_frame_id)
     !isempty(x.scheduling_name) && PB.encode(e, 16, x.scheduling_name)
+    !isnothing(x.metadata_payload) && PB.encode(e, 20, x.metadata_payload)
     return position(e.io) - initpos
 end
 function PB._encoded_size(x::OpMetadata)
@@ -2166,6 +2444,7 @@ function PB._encoded_size(x::OpMetadata)
     !isempty(x.deduplicated_name) && (encoded_size += PB._encoded_size(x.deduplicated_name, 12))
     x.stack_frame_id != zero(Int32) && (encoded_size += PB._encoded_size(x.stack_frame_id, 15))
     !isempty(x.scheduling_name) && (encoded_size += PB._encoded_size(x.scheduling_name, 16))
+    !isnothing(x.metadata_payload) && (encoded_size += PB._encoded_size(x.metadata_payload, 20))
     return encoded_size
 end
 
@@ -2176,10 +2455,10 @@ end
 PB.default_values(::Type{MeshAxesReplicaGroupListProto}) = (;mesh = nothing, axes = Vector{AxisRefProto}())
 PB.field_numbers(::Type{MeshAxesReplicaGroupListProto}) = (;mesh = 1, axes = 2)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:MeshAxesReplicaGroupListProto})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:MeshAxesReplicaGroupListProto}, _endpos::Int=0, _group::Bool=false)
     mesh = Ref{Union{Nothing,MeshProto}}(nothing)
     axes = PB.BufferedVector{AxisRefProto}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, mesh)
@@ -2210,19 +2489,23 @@ struct NamedShardingProto
     dim_shardings::Vector{var"NamedShardingProto.DimensionSharding"}
     replicated_axes::Vector{AxisRefProto}
     unreduced_axes::Vector{AxisRefProto}
+    reduction_op::var"NamedShardingProto.ReductionOpProto".T
+    manual_axes::Vector{AxisRefProto}
     metadata::Vector{OpMetadata}
 end
 PB.reserved_fields(::Type{NamedShardingProto}) = (names = String[], numbers = Union{Int,UnitRange{Int}}[1])
-PB.default_values(::Type{NamedShardingProto}) = (;mesh = nothing, dim_shardings = Vector{var"NamedShardingProto.DimensionSharding"}(), replicated_axes = Vector{AxisRefProto}(), unreduced_axes = Vector{AxisRefProto}(), metadata = Vector{OpMetadata}())
-PB.field_numbers(::Type{NamedShardingProto}) = (;mesh = 2, dim_shardings = 3, replicated_axes = 4, unreduced_axes = 5, metadata = 6)
+PB.default_values(::Type{NamedShardingProto}) = (;mesh = nothing, dim_shardings = Vector{var"NamedShardingProto.DimensionSharding"}(), replicated_axes = Vector{AxisRefProto}(), unreduced_axes = Vector{AxisRefProto}(), reduction_op = var"NamedShardingProto.ReductionOpProto".SUM, manual_axes = Vector{AxisRefProto}(), metadata = Vector{OpMetadata}())
+PB.field_numbers(::Type{NamedShardingProto}) = (;mesh = 2, dim_shardings = 3, replicated_axes = 4, unreduced_axes = 5, reduction_op = 8, manual_axes = 7, metadata = 6)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:NamedShardingProto})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:NamedShardingProto}, _endpos::Int=0, _group::Bool=false)
     mesh = Ref{Union{Nothing,MeshProto}}(nothing)
     dim_shardings = PB.BufferedVector{var"NamedShardingProto.DimensionSharding"}()
     replicated_axes = PB.BufferedVector{AxisRefProto}()
     unreduced_axes = PB.BufferedVector{AxisRefProto}()
+    reduction_op = var"NamedShardingProto.ReductionOpProto".SUM
+    manual_axes = PB.BufferedVector{AxisRefProto}()
     metadata = PB.BufferedVector{OpMetadata}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 2
             PB.decode!(d, mesh)
@@ -2232,13 +2515,17 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:NamedShardingProto})
             PB.decode!(d, replicated_axes)
         elseif field_number == 5
             PB.decode!(d, unreduced_axes)
+        elseif field_number == 8
+            reduction_op = PB.decode(d, var"NamedShardingProto.ReductionOpProto".T)
+        elseif field_number == 7
+            PB.decode!(d, manual_axes)
         elseif field_number == 6
             PB.decode!(d, metadata)
         else
             Base.skip(d, wire_type)
         end
     end
-    return NamedShardingProto(mesh[], dim_shardings[], replicated_axes[], unreduced_axes[], metadata[])
+    return NamedShardingProto(mesh[], dim_shardings[], replicated_axes[], unreduced_axes[], reduction_op, manual_axes[], metadata[])
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::NamedShardingProto)
@@ -2247,6 +2534,8 @@ function PB.encode(e::PB.AbstractProtoEncoder, x::NamedShardingProto)
     !isempty(x.dim_shardings) && PB.encode(e, 3, x.dim_shardings)
     !isempty(x.replicated_axes) && PB.encode(e, 4, x.replicated_axes)
     !isempty(x.unreduced_axes) && PB.encode(e, 5, x.unreduced_axes)
+    x.reduction_op != var"NamedShardingProto.ReductionOpProto".SUM && PB.encode(e, 8, x.reduction_op)
+    !isempty(x.manual_axes) && PB.encode(e, 7, x.manual_axes)
     !isempty(x.metadata) && PB.encode(e, 6, x.metadata)
     return position(e.io) - initpos
 end
@@ -2256,6 +2545,8 @@ function PB._encoded_size(x::NamedShardingProto)
     !isempty(x.dim_shardings) && (encoded_size += PB._encoded_size(x.dim_shardings, 3))
     !isempty(x.replicated_axes) && (encoded_size += PB._encoded_size(x.replicated_axes, 4))
     !isempty(x.unreduced_axes) && (encoded_size += PB._encoded_size(x.unreduced_axes, 5))
+    x.reduction_op != var"NamedShardingProto.ReductionOpProto".SUM && (encoded_size += PB._encoded_size(x.reduction_op, 8))
+    !isempty(x.manual_axes) && (encoded_size += PB._encoded_size(x.manual_axes, 7))
     !isempty(x.metadata) && (encoded_size += PB._encoded_size(x.metadata, 6))
     return encoded_size
 end
@@ -2310,7 +2601,10 @@ struct var"##Stub#LiteralProto"{T1<:var"##Abstract#ShapeProto"} <: var"##Abstrac
     f8e5m2fnuzs::Vector{UInt8}
     f8e5m2s::Vector{UInt8}
     f8e8m0fnus::Vector{UInt8}
+    f6e3m2fns::Vector{UInt8}
+    f6e2m3fns::Vector{UInt8}
     sparse_indices::Vector{Int64}
+    dynamic_sizes::Vector{Int32}
 end
 
 struct var"##Stub#OpSharding"{T1<:var"##Abstract#ShapeProto"} <: var"##Abstract#OpSharding"
@@ -2349,7 +2643,7 @@ PB.reserved_fields(::Type{LayoutProto}) = (names = ["padded_dimensions", "paddin
 PB.default_values(::Type{LayoutProto}) = (;minor_to_major = Vector{Int64}(), dim_level_types = Vector{DimLevelType.T}(), dim_unique = Vector{Bool}(), dim_ordered = Vector{Bool}(), tiles = Vector{TileProto}(), tail_padding_alignment_in_elements = zero(Int64), element_size_in_bits = zero(Int64), memory_space = zero(Int64), index_primitive_type = PrimitiveType.PRIMITIVE_TYPE_INVALID, pointer_primitive_type = PrimitiveType.PRIMITIVE_TYPE_INVALID, physical_shape = nothing, dynamic_shape_metadata_prefix_bytes = zero(Int64), split_configs = Vector{SplitConfigProto}())
 PB.field_numbers(::Type{LayoutProto}) = (;minor_to_major = 1, dim_level_types = 9, dim_unique = 13, dim_ordered = 14, tiles = 6, tail_padding_alignment_in_elements = 16, element_size_in_bits = 7, memory_space = 8, index_primitive_type = 11, pointer_primitive_type = 12, physical_shape = 10, dynamic_shape_metadata_prefix_bytes = 15, split_configs = 17)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:LayoutProto})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:LayoutProto}, _endpos::Int=0, _group::Bool=false)
     minor_to_major = PB.BufferedVector{Int64}()
     dim_level_types = PB.BufferedVector{DimLevelType.T}()
     dim_unique = PB.BufferedVector{Bool}()
@@ -2363,7 +2657,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:LayoutProto})
     physical_shape = Ref{Union{Nothing,ShapeProto}}(nothing)
     dynamic_shape_metadata_prefix_bytes = zero(Int64)
     split_configs = PB.BufferedVector{SplitConfigProto}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, wire_type, minor_to_major)
@@ -2434,10 +2728,10 @@ function PB._encoded_size(x::LayoutProto)
 end
 
 const LiteralProto = var"##Stub#LiteralProto"{var"##Stub#ShapeProto"}
-PB.default_values(::Type{LiteralProto}) = (;shape = nothing, preds = Vector{Bool}(), s1s = UInt8[], s2s = UInt8[], s4s = UInt8[], s8s = UInt8[], u1s = UInt8[], u2s = UInt8[], u4s = UInt8[], u8s = UInt8[], s32s = Vector{Int32}(), s64s = Vector{Int64}(), u32s = Vector{UInt32}(), u64s = Vector{UInt64}(), f32s = Vector{Float32}(), f64s = Vector{Float64}(), c64s = Vector{Float32}(), c128s = Vector{Float64}(), tuple_literals = Vector{LiteralProto}(), f16s = UInt8[], bf16s = UInt8[], u16s = UInt8[], s16s = UInt8[], f4e2m1fns = UInt8[], f8e3m4s = UInt8[], f8e4m3b11fnuzs = UInt8[], f8e4m3fns = UInt8[], f8e4m3fnuzs = UInt8[], f8e4m3s = UInt8[], f8e5m2fnuzs = UInt8[], f8e5m2s = UInt8[], f8e8m0fnus = UInt8[], sparse_indices = Vector{Int64}())
-PB.field_numbers(::Type{LiteralProto}) = (;shape = 1, preds = 2, s1s = 30, s2s = 26, s4s = 21, s8s = 15, u1s = 31, u2s = 27, u4s = 22, u8s = 3, s32s = 4, s64s = 5, u32s = 6, u64s = 7, f32s = 8, f64s = 9, c64s = 12, c128s = 18, tuple_literals = 10, f16s = 11, bf16s = 13, u16s = 16, s16s = 17, f4e2m1fns = 32, f8e3m4s = 29, f8e4m3b11fnuzs = 23, f8e4m3fns = 20, f8e4m3fnuzs = 25, f8e4m3s = 28, f8e5m2fnuzs = 24, f8e5m2s = 19, f8e8m0fnus = 33, sparse_indices = 14)
+PB.default_values(::Type{LiteralProto}) = (;shape = nothing, preds = Vector{Bool}(), s1s = UInt8[], s2s = UInt8[], s4s = UInt8[], s8s = UInt8[], u1s = UInt8[], u2s = UInt8[], u4s = UInt8[], u8s = UInt8[], s32s = Vector{Int32}(), s64s = Vector{Int64}(), u32s = Vector{UInt32}(), u64s = Vector{UInt64}(), f32s = Vector{Float32}(), f64s = Vector{Float64}(), c64s = Vector{Float32}(), c128s = Vector{Float64}(), tuple_literals = Vector{LiteralProto}(), f16s = UInt8[], bf16s = UInt8[], u16s = UInt8[], s16s = UInt8[], f4e2m1fns = UInt8[], f8e3m4s = UInt8[], f8e4m3b11fnuzs = UInt8[], f8e4m3fns = UInt8[], f8e4m3fnuzs = UInt8[], f8e4m3s = UInt8[], f8e5m2fnuzs = UInt8[], f8e5m2s = UInt8[], f8e8m0fnus = UInt8[], f6e3m2fns = UInt8[], f6e2m3fns = UInt8[], sparse_indices = Vector{Int64}(), dynamic_sizes = Vector{Int32}())
+PB.field_numbers(::Type{LiteralProto}) = (;shape = 1, preds = 2, s1s = 30, s2s = 26, s4s = 21, s8s = 15, u1s = 31, u2s = 27, u4s = 22, u8s = 3, s32s = 4, s64s = 5, u32s = 6, u64s = 7, f32s = 8, f64s = 9, c64s = 12, c128s = 18, tuple_literals = 10, f16s = 11, bf16s = 13, u16s = 16, s16s = 17, f4e2m1fns = 32, f8e3m4s = 29, f8e4m3b11fnuzs = 23, f8e4m3fns = 20, f8e4m3fnuzs = 25, f8e4m3s = 28, f8e5m2fnuzs = 24, f8e5m2s = 19, f8e8m0fnus = 33, f6e3m2fns = 35, f6e2m3fns = 36, sparse_indices = 14, dynamic_sizes = 34)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:LiteralProto})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:LiteralProto}, _endpos::Int=0, _group::Bool=false)
     shape = Ref{Union{Nothing,ShapeProto}}(nothing)
     preds = PB.BufferedVector{Bool}()
     s1s = UInt8[]
@@ -2470,8 +2764,11 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:LiteralProto})
     f8e5m2fnuzs = UInt8[]
     f8e5m2s = UInt8[]
     f8e8m0fnus = UInt8[]
+    f6e3m2fns = UInt8[]
+    f6e2m3fns = UInt8[]
     sparse_indices = PB.BufferedVector{Int64}()
-    while !PB.message_done(d)
+    dynamic_sizes = PB.BufferedVector{Int32}()
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, shape)
@@ -2537,13 +2834,19 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:LiteralProto})
             f8e5m2s = PB.decode(d, Vector{UInt8})
         elseif field_number == 33
             f8e8m0fnus = PB.decode(d, Vector{UInt8})
+        elseif field_number == 35
+            f6e3m2fns = PB.decode(d, Vector{UInt8})
+        elseif field_number == 36
+            f6e2m3fns = PB.decode(d, Vector{UInt8})
         elseif field_number == 14
             PB.decode!(d, wire_type, sparse_indices)
+        elseif field_number == 34
+            PB.decode!(d, wire_type, dynamic_sizes)
         else
             Base.skip(d, wire_type)
         end
     end
-    return LiteralProto(shape[], preds[], s1s, s2s, s4s, s8s, u1s, u2s, u4s, u8s, s32s[], s64s[], u32s[], u64s[], f32s[], f64s[], c64s[], c128s[], tuple_literals[], f16s, bf16s, u16s, s16s, f4e2m1fns, f8e3m4s, f8e4m3b11fnuzs, f8e4m3fns, f8e4m3fnuzs, f8e4m3s, f8e5m2fnuzs, f8e5m2s, f8e8m0fnus, sparse_indices[])
+    return LiteralProto(shape[], preds[], s1s, s2s, s4s, s8s, u1s, u2s, u4s, u8s, s32s[], s64s[], u32s[], u64s[], f32s[], f64s[], c64s[], c128s[], tuple_literals[], f16s, bf16s, u16s, s16s, f4e2m1fns, f8e3m4s, f8e4m3b11fnuzs, f8e4m3fns, f8e4m3fnuzs, f8e4m3s, f8e5m2fnuzs, f8e5m2s, f8e8m0fnus, f6e3m2fns, f6e2m3fns, sparse_indices[], dynamic_sizes[])
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::LiteralProto)
@@ -2580,7 +2883,10 @@ function PB.encode(e::PB.AbstractProtoEncoder, x::LiteralProto)
     !isempty(x.f8e5m2fnuzs) && PB.encode(e, 24, x.f8e5m2fnuzs)
     !isempty(x.f8e5m2s) && PB.encode(e, 19, x.f8e5m2s)
     !isempty(x.f8e8m0fnus) && PB.encode(e, 33, x.f8e8m0fnus)
+    !isempty(x.f6e3m2fns) && PB.encode(e, 35, x.f6e3m2fns)
+    !isempty(x.f6e2m3fns) && PB.encode(e, 36, x.f6e2m3fns)
     !isempty(x.sparse_indices) && PB.encode(e, 14, x.sparse_indices)
+    !isempty(x.dynamic_sizes) && PB.encode(e, 34, x.dynamic_sizes)
     return position(e.io) - initpos
 end
 function PB._encoded_size(x::LiteralProto)
@@ -2617,7 +2923,10 @@ function PB._encoded_size(x::LiteralProto)
     !isempty(x.f8e5m2fnuzs) && (encoded_size += PB._encoded_size(x.f8e5m2fnuzs, 24))
     !isempty(x.f8e5m2s) && (encoded_size += PB._encoded_size(x.f8e5m2s, 19))
     !isempty(x.f8e8m0fnus) && (encoded_size += PB._encoded_size(x.f8e8m0fnus, 33))
+    !isempty(x.f6e3m2fns) && (encoded_size += PB._encoded_size(x.f6e3m2fns, 35))
+    !isempty(x.f6e2m3fns) && (encoded_size += PB._encoded_size(x.f6e2m3fns, 36))
     !isempty(x.sparse_indices) && (encoded_size += PB._encoded_size(x.sparse_indices, 14))
+    !isempty(x.dynamic_sizes) && (encoded_size += PB._encoded_size(x.dynamic_sizes, 34))
     return encoded_size
 end
 
@@ -2625,7 +2934,7 @@ const OpSharding = var"##Stub#OpSharding"{var"##Stub#ShapeProto"}
 PB.default_values(::Type{OpSharding}) = (;var"#type" = var"OpSharding.Type".REPLICATED, tile_shape = nothing, tile_assignment_dimensions = Vector{Int64}(), tile_assignment_devices = Vector{Int64}(), tuple_shardings = Vector{OpSharding}(), replicate_on_last_tile_dim = false, metadata = Vector{OpMetadata}(), last_tile_dims = Vector{var"OpSharding.Type".T}(), iota_reshape_dims = Vector{Int64}(), iota_transpose_perm = Vector{Int32}(), is_shard_group = false, shard_group_id = zero(Int64), shard_group_type = var"OpSharding.ShardGroupType".AS, named_sharding = nothing)
 PB.field_numbers(::Type{OpSharding}) = (;var"#type" = 1, tile_shape = 2, tile_assignment_dimensions = 3, tile_assignment_devices = 4, tuple_shardings = 5, replicate_on_last_tile_dim = 6, metadata = 7, last_tile_dims = 8, iota_reshape_dims = 9, iota_transpose_perm = 10, is_shard_group = 11, shard_group_id = 12, shard_group_type = 13, named_sharding = 14)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OpSharding})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OpSharding}, _endpos::Int=0, _group::Bool=false)
     var"#type" = var"OpSharding.Type".REPLICATED
     tile_shape = Ref{Union{Nothing,ShapeProto}}(nothing)
     tile_assignment_dimensions = PB.BufferedVector{Int64}()
@@ -2640,7 +2949,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OpSharding})
     shard_group_id = zero(Int64)
     shard_group_type = var"OpSharding.ShardGroupType".AS
     named_sharding = Ref{Union{Nothing,NamedShardingProto}}(nothing)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             var"#type" = PB.decode(d, var"OpSharding.Type".T)
@@ -2718,11 +3027,11 @@ const ProgramShapeProto = var"##Stub#ProgramShapeProto"{var"##Stub#ShapeProto"}
 PB.default_values(::Type{ProgramShapeProto}) = (;parameters = Vector{ShapeProto}(), result = nothing, parameter_names = Vector{String}())
 PB.field_numbers(::Type{ProgramShapeProto}) = (;parameters = 1, result = 2, parameter_names = 3)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ProgramShapeProto})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ProgramShapeProto}, _endpos::Int=0, _group::Bool=false)
     parameters = PB.BufferedVector{ShapeProto}()
     result = Ref{Union{Nothing,ShapeProto}}(nothing)
     parameter_names = PB.BufferedVector{String}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, parameters)
@@ -2757,13 +3066,13 @@ PB.reserved_fields(::Type{ShapeProto}) = (names = ["rank"], numbers = Union{Int,
 PB.default_values(::Type{ShapeProto}) = (;element_type = PrimitiveType.PRIMITIVE_TYPE_INVALID, dimensions = Vector{Int64}(), is_dynamic_dimension = Vector{Bool}(), tuple_shapes = Vector{ShapeProto}(), layout = nothing)
 PB.field_numbers(::Type{ShapeProto}) = (;element_type = 2, dimensions = 3, is_dynamic_dimension = 6, tuple_shapes = 4, layout = 5)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ShapeProto})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ShapeProto}, _endpos::Int=0, _group::Bool=false)
     element_type = PrimitiveType.PRIMITIVE_TYPE_INVALID
     dimensions = PB.BufferedVector{Int64}()
     is_dynamic_dimension = PB.BufferedVector{Bool}()
     tuple_shapes = PB.BufferedVector{ShapeProto}()
     layout = Ref{Union{Nothing,LayoutProto}}(nothing)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 2
             element_type = PB.decode(d, PrimitiveType.T)

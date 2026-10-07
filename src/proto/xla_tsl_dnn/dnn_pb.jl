@@ -40,7 +40,7 @@ end
 PB.default_values(::Type{ConvolutionDescriptorProto}) = (;paddings = Vector{Int64}(), strides = Vector{Int64}(), dilations = Vector{Int64}(), compute_mode = var"#DataType".kFloat, group_count = zero(Int32), convolution_mode = ConvolutionMode.CROSS_CORRELATION, name = "")
 PB.field_numbers(::Type{ConvolutionDescriptorProto}) = (;paddings = 1, strides = 2, dilations = 3, compute_mode = 4, group_count = 5, convolution_mode = 6, name = 7)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ConvolutionDescriptorProto})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ConvolutionDescriptorProto}, _endpos::Int=0, _group::Bool=false)
     paddings = PB.BufferedVector{Int64}()
     strides = PB.BufferedVector{Int64}()
     dilations = PB.BufferedVector{Int64}()
@@ -48,7 +48,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ConvolutionDescriptorPro
     group_count = zero(Int32)
     convolution_mode = ConvolutionMode.CROSS_CORRELATION
     name = ""
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, wire_type, paddings)
@@ -105,13 +105,13 @@ PB.reserved_fields(::Type{AlgorithmProto}) = (names = String[], numbers = Union{
 PB.default_values(::Type{AlgorithmProto}) = (;algo_id = zero(Int64), math_type = var"AlgorithmProto.MathType".DEFAULT_MATH, tuning_knobs = Dict{Int64,Int64}(), is_cudnn_frontend = false, workspace_size = nothing)
 PB.field_numbers(::Type{AlgorithmProto}) = (;algo_id = 1, math_type = 2, tuning_knobs = 4, is_cudnn_frontend = 5, workspace_size = 6)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:AlgorithmProto})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:AlgorithmProto}, _endpos::Int=0, _group::Bool=false)
     algo_id = zero(Int64)
     math_type = var"AlgorithmProto.MathType".DEFAULT_MATH
     tuning_knobs = Dict{Int64,Int64}()
     is_cudnn_frontend = false
     workspace_size = Ref{Union{Nothing,google.protobuf.UInt64Value}}(nothing)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             algo_id = PB.decode(d, Int64)
@@ -160,11 +160,11 @@ PB.oneof_field_types(::Type{TensorDescriptorProto}) = (;
 PB.default_values(::Type{TensorDescriptorProto}) = (;dimensions = Vector{Int64}(), data_type = var"#DataType".kFloat, data_layout = DataLayout.kYXDepthBatch, filter_layout = FilterLayout.kOutputInputYX)
 PB.field_numbers(::Type{TensorDescriptorProto}) = (;dimensions = 1, data_type = 2, data_layout = 3, filter_layout = 4)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:TensorDescriptorProto})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:TensorDescriptorProto}, _endpos::Int=0, _group::Bool=false)
     dimensions = PB.BufferedVector{Int64}()
     data_type = var"#DataType".kFloat
     layout_oneof = nothing
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, wire_type, dimensions)
@@ -219,11 +219,11 @@ PB.oneof_field_types(::Type{AlgorithmConfigProto}) = (;
 PB.default_values(::Type{AlgorithmConfigProto}) = (;algorithm = nothing, algorithm_no_scratch = nothing, scratch_size = zero(Int64))
 PB.field_numbers(::Type{AlgorithmConfigProto}) = (;algorithm = 1, algorithm_no_scratch = 2, scratch_size = 3)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:AlgorithmConfigProto})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:AlgorithmConfigProto}, _endpos::Int=0, _group::Bool=false)
     optional_algorithm = nothing
     optional_algorithm_no_scratch = nothing
     optional_scratch_size = nothing
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             optional_algorithm = OneOf(:algorithm, PB.decode(d, Ref{AlgorithmProto}))

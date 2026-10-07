@@ -31,25 +31,7 @@ function is_addressable(device::AbstractDevice)
     return device ∈ addressable_devices(client(device))
 end
 
-# Keep in sync with API.cpp
-struct DeviceProperties
-    total_global_mem::Csize_t
-    shared_mem_per_block::Csize_t
-    regs_per_block::Cint
-    warp_size::Cint
-    max_threads_per_block::Cint
-    max_threads_dim::NTuple{3,Cint}
-    max_grid_size::NTuple{3,Cint}
-    total_const_mem::Csize_t
-    major::Cint
-    minor::Cint
-    multi_processor_count::Cint
-    can_map_host_memory::Cint
-    l2_cache_size::Cint
-    max_threads_per_multiprocessor::Cint
-end
-
-const DEVICE_PROPERTIES_CACHE = Dict{Tuple{Int,String},DeviceProperties}()
+const DEVICE_PROPERTIES_CACHE = Dict{Tuple{Int,String},MLIR.API.DeviceProperties}()
 
 """
     device_properties(device::AbstractDevice)
@@ -65,12 +47,10 @@ function device_properties(device::AbstractDevice)
         return DEVICE_PROPERTIES_CACHE[(local_hardware_id, pname)]
     end
 
-    jldevprops = Ref{DeviceProperties}()
+    jldevprops = Ref{MLIR.API.DeviceProperties}()
     if pname == "cuda"
         GC.@preserve jldevprops begin
-            @ccall MLIR.API.mlir_c.ReactantCudaDeviceGetProperties(
-                jldevprops::Ptr{Cvoid}, local_hardware_id::Cint
-            )::Cvoid
+            MLIR.API.ReactantCudaDeviceGetProperties(jldevprops, local_hardware_id)
         end
     else
         @warn "`get_properties` not implemented for platform: $(pname)" maxlog = 1
@@ -79,25 +59,25 @@ function device_properties(device::AbstractDevice)
     return jldevprops[]
 end
 
-function Base.show(io::IO, ::MIME"text/plain", props::DeviceProperties)
+function Base.show(io::IO, ::MIME"text/plain", props::MLIR.API.DeviceProperties)
     return print(
         io,
         """
         DeviceProperties
         ----------------
-        Total Global Mem: $(_format_bytes(props.total_global_mem))
-        Shared Mem Per Block: $(_format_bytes(props.shared_mem_per_block))
-        Regs Per Block: $(props.regs_per_block)
-        Warp Size: $(props.warp_size)
-        Max Threads Per Block: $(props.max_threads_per_block)
-        Max Threads Dim: $(props.max_threads_dim)
-        Max Grid Size: $(props.max_grid_size)
-        Total Const Mem: $(_format_bytes(props.total_const_mem))
+        Total Global Mem: $(_format_bytes(props.totalGlobalMem))
+        Shared Mem Per Block: $(_format_bytes(props.sharedMemPerBlock))
+        Regs Per Block: $(props.regsPerBlock)
+        Warp Size: $(props.warpSize)
+        Max Threads Per Block: $(props.maxThreadsPerBlock)
+        Max Threads Dim: $(props.maxThreadsDim)
+        Max Grid Size: $(props.maxGridSize)
+        Total Const Mem: $(_format_bytes(props.totalConstMem))
         Version: $(VersionNumber(props.major, props.minor))
-        Multi Processor Count: $(props.multi_processor_count)
-        Can Map Host Memory: $(props.can_map_host_memory)
-        L2 Cache Size: $(props.l2_cache_size)
-        Max Threads Per Multiprocessor: $(props.max_threads_per_multiprocessor)
+        Multi Processor Count: $(props.multiProcessorCount)
+        Can Map Host Memory: $(props.canMapHostMemory)
+        L2 Cache Size: $(props.l2CacheSize)
+        Max Threads Per Multiprocessor: $(props.maxThreadsPerMultiProcessor)
         """,
     )
 end
@@ -118,9 +98,7 @@ function StreamExecutorDeviceDescription(device::AbstractDevice)
 
     if panme == "cuda"
         return StreamExecutorDeviceDescription(
-            @ccall MLIR.API.mlir_c.CudaGetStreamExecutorDeviceDescription(
-                local_hardware_id::Int32
-            )::Ptr{Cvoid}
+            MLIR.API.CudaGetStreamExecutorDeviceDescription(local_hardware_id)
         )
     else
         error("Unsupported platform: $(panme)")
@@ -129,9 +107,7 @@ end
 
 function Base.show(io::IO, ::MIME"text/plain", props::StreamExecutorDeviceDescription)
     GC.@preserve props begin
-        str = @ccall MLIR.API.mlir_c.deviceDescriptionToString(
-            props.ptr::Ptr{Cvoid}
-        )::Cstring
+        str = MLIR.API.deviceDescriptionToString(props.ptr)
     end
     print(io, unsafe_string_and_free(str))
     return nothing

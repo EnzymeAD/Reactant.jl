@@ -13,10 +13,10 @@ end
 PB.default_values(::Type{TfFunctionMetrics}) = (;count = zero(UInt64), self_time_ps = zero(UInt64))
 PB.field_numbers(::Type{TfFunctionMetrics}) = (;count = 1, self_time_ps = 2)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:TfFunctionMetrics})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:TfFunctionMetrics}, _endpos::Int=0, _group::Bool=false)
     count = zero(UInt64)
     self_time_ps = zero(UInt64)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             count = PB.decode(d, UInt64)
@@ -55,12 +55,12 @@ end
 PB.default_values(::Type{TfFunction}) = (;metrics = Dict{Int32,TfFunctionMetrics}(), total_tracing_count = zero(Int64), compiler = TfFunctionCompiler.INVALID_COMPILER, expensive_call_percent = zero(Float64))
 PB.field_numbers(::Type{TfFunction}) = (;metrics = 1, total_tracing_count = 2, compiler = 3, expensive_call_percent = 4)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:TfFunction})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:TfFunction}, _endpos::Int=0, _group::Bool=false)
     metrics = Dict{Int32,TfFunctionMetrics}()
     total_tracing_count = zero(Int64)
     compiler = TfFunctionCompiler.INVALID_COMPILER
     expensive_call_percent = zero(Float64)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, metrics)
@@ -100,9 +100,9 @@ end
 PB.default_values(::Type{TfFunctionDb}) = (;tf_functions = Dict{String,TfFunction}())
 PB.field_numbers(::Type{TfFunctionDb}) = (;tf_functions = 1)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:TfFunctionDb})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:TfFunctionDb}, _endpos::Int=0, _group::Bool=false)
     tf_functions = Dict{String,TfFunction}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, tf_functions)

@@ -78,3 +78,51 @@ variable input `%arg0`:
 ```@example partial_evaluation_tutorial
 @code_hlo add(x, 4)
 ```
+
+## Tracking Scalar Numbers with `track_numbers`
+
+By default, [`Reactant.to_rarray`](@ref) converts arrays into `ConcreteRArray`s but
+leaves plain Julia numbers (scalars) as-is. This means scalar arguments are treated
+as compile-time constants and will be frozen at their tracing-time values.
+
+To make scalar numbers participate in tracing (so they become `ConcreteRNumber`s that
+can vary at runtime), use the `track_numbers` keyword argument:
+
+```julia
+# Default: scalar `t` is NOT tracked (frozen at trace time)
+t = Reactant.to_rarray(0.5)          # returns plain Float64, not a ConcreteRNumber
+
+# With track_numbers: scalar `t` IS tracked (varies at runtime)
+t = Reactant.to_rarray(0.5; track_numbers=true)  # returns ConcreteRNumber{Float64}
+```
+
+The `track_numbers` keyword accepts:
+- `false` (default): scalars are left as plain Julia numbers (constant at compile time)
+- `true`: all scalar numbers are converted to `ConcreteRNumber`
+- A type, e.g. `Number`, `Int`, `Float64`: only scalars matching that type are tracked
+
+This also works when converting nested structures:
+
+```julia
+struct MyParams
+    values::Vector{Float64}
+    scale::Float64
+end
+
+params = MyParams([1.0, 2.0], 3.0)
+
+# Without track_numbers: params.scale stays as Float64 (frozen)
+rparams = Reactant.to_rarray(params)
+
+# With track_numbers: params.scale becomes ConcreteRNumber{Float64}
+rparams = Reactant.to_rarray(params; track_numbers=true)
+```
+
+!!! warning "Common pitfall: frozen scalar arguments"
+    If a compiled function produces correct results at the tracing value but wrong
+    results for other inputs, check whether any scalar arguments were not tracked.
+    This is especially common when passing scalar parameters (like a time value `t`)
+    to functions inside `Enzyme.autodiff` with `Enzyme.Const` — the `Const` wrapper
+    does not cause the issue, but the underlying scalar being a plain Julia number
+    (rather than a `ConcreteRNumber`) means it was baked in as a constant during
+    compilation. Use `track_numbers=true` in `to_rarray` to fix this.

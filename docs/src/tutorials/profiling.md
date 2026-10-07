@@ -175,6 +175,23 @@ end
 !!! note
     It is recommended to use the Chrome browser to open the perfetto URL.
 
+## XProf
+
+[XProf](https://openxla.org/xprof) is a complete web UI to analyze the log files captured by Reactant.
+It can be installed in the following manner:
+
+```bash
+pip install xprof # or xprof-nightly
+```
+
+Launching xprof is then as simple as:
+
+```bash
+xprof --logdir=./
+```
+
+which will then make the xprof interface available on port `:8791` by default.
+
 ## Tensorboard
 
 ![The tensorboard interface](images/tensorboard.png)
@@ -194,13 +211,18 @@ And then run the following in the folder where the `plugins` folder was generate
 tensorboard --logdir ./
 ```
 
+
 ## Adding Custom Annotations
 
 By default, the traces contain only information captured from within XLA.
-The [`Reactant.Profiler.annotate`](@ref) function can be used to annotate traces for Julia code evaluated *during tracing*.
+The [`ReactantCore.@annotate`](@ref) macro can be used to annotate traces. It is a no-op
+when only ReactantCore is loaded, allowing libraries to add annotations without depending on
+Reactant. Loading Reactant activates the annotations in host-side profiles.
 
 ```julia
-Reactant.Profiler.annotate("my_annotation") do
+using Reactant
+
+Reactant.Profiler.@annotate "my_annotation" begin
     # Do things...
 end
 ```

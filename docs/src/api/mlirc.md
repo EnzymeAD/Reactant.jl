@@ -17,5 +17,5 @@ Modules = [Reactant.MLIR.API]
 # Other Functions
 
 ```@autodocs
-Modules = [Reactant.MLIR]
+Modules = [Reactant.MLIR, Reactant.MLIR.Highlight]
 ```

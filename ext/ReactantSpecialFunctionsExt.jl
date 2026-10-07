@@ -4,7 +4,7 @@ using SpecialFunctions: SpecialFunctions
 using Reactant: Ops, Reactant, TracedRNumber, ReactantFloat, ReactantInt, ReactantFloatInt
 using Reactant.Ops: @opcall
 
-for fn in [:digamma, :erf, :erfc, (:loggamma, :lgamma)]
+for fn in [:digamma, :erf, :erfc, (:loggamma, :lgamma), (:erfinv, :erf_inv)]
     (fns, fno) = fn isa Tuple ? fn : (fn, fn)
     @eval(function SpecialFunctions.$fns(x::TracedRNumber{<:ReactantFloatInt})
         return @opcall $fno(float(x))
@@ -79,7 +79,9 @@ function SpecialFunctions.erf(
     return SpecialFunctions.erf(y) - SpecialFunctions.erf(x)
 end
 
-#SpecialFunctions.erfcinv
+function SpecialFunctions.erfcinv(x::TracedRNumber{T}) where {T<:ReactantFloatInt}
+    return SpecialFunctions.erfinv(one(x) - x)
+end
 
 function SpecialFunctions.logerf(
     x::TracedRNumber{T}, y::TracedRNumber{T}
@@ -102,7 +104,6 @@ end
 #Unsupported complex
 #SpecialFunctions.erfi
 
-#SpecialFunctions.erfinv
 #SpecialFunctions.dawson
 #SpecialFunctions.faddeeva
 

@@ -17,13 +17,13 @@ end
 PB.default_values(::Type{InputTimeBreakdown}) = (;demanded_file_read_us = zero(Float64), advanced_file_read_us = zero(Float64), preprocessing_us = zero(Float64), enqueue_us = zero(Float64), unclassified_non_enqueue_us = zero(Float64))
 PB.field_numbers(::Type{InputTimeBreakdown}) = (;demanded_file_read_us = 1, advanced_file_read_us = 2, preprocessing_us = 3, enqueue_us = 4, unclassified_non_enqueue_us = 5)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:InputTimeBreakdown})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:InputTimeBreakdown}, _endpos::Int=0, _group::Bool=false)
     demanded_file_read_us = zero(Float64)
     advanced_file_read_us = zero(Float64)
     preprocessing_us = zero(Float64)
     enqueue_us = zero(Float64)
     unclassified_non_enqueue_us = zero(Float64)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             demanded_file_read_us = PB.decode(d, Float64)
@@ -80,7 +80,7 @@ PB.reserved_fields(::Type{PerGenericStepDetails}) = (names = String[], numbers =
 PB.default_values(::Type{PerGenericStepDetails}) = (;step_number = zero(Int32), step_name = "", step_time_ms = zero(Float64), unknown_time_ms = zero(Float64), host_wait_input_ms = zero(Float64), host_to_device_ms = zero(Float64), output_ms = zero(Float64), device_compute_ms = zero(Float64), device_to_device_ms = zero(Float64), device_collectives_ms = zero(Float64), host_compute_ms = zero(Float64), host_prepare_ms = zero(Float64), host_compile_ms = zero(Float64))
 PB.field_numbers(::Type{PerGenericStepDetails}) = (;step_number = 1, step_name = 14, step_time_ms = 2, unknown_time_ms = 3, host_wait_input_ms = 11, host_to_device_ms = 12, output_ms = 5, device_compute_ms = 6, device_to_device_ms = 7, device_collectives_ms = 13, host_compute_ms = 8, host_prepare_ms = 9, host_compile_ms = 10)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:PerGenericStepDetails})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:PerGenericStepDetails}, _endpos::Int=0, _group::Bool=false)
     step_number = zero(Int32)
     step_name = ""
     step_time_ms = zero(Float64)
@@ -94,7 +94,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:PerGenericStepDetails})
     host_compute_ms = zero(Float64)
     host_prepare_ms = zero(Float64)
     host_compile_ms = zero(Float64)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             step_number = PB.decode(d, Int32)
@@ -181,7 +181,7 @@ end
 PB.default_values(::Type{BottleneckAnalysis}) = (;input_percent = zero(Float64), output_percent = zero(Float64), idle_percent = zero(Float64), compute_percent = zero(Float64), input_classification = "", input_statement = "", kernel_launch_classification = "", kernel_launch_statement = "", all_other_classification = "", all_other_statement = "", device_collectives_classification = "", device_collectives_statement = "")
 PB.field_numbers(::Type{BottleneckAnalysis}) = (;input_percent = 7, output_percent = 8, idle_percent = 9, compute_percent = 10, input_classification = 1, input_statement = 2, kernel_launch_classification = 3, kernel_launch_statement = 4, all_other_classification = 5, all_other_statement = 6, device_collectives_classification = 11, device_collectives_statement = 12)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:BottleneckAnalysis})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:BottleneckAnalysis}, _endpos::Int=0, _group::Bool=false)
     input_percent = zero(Float64)
     output_percent = zero(Float64)
     idle_percent = zero(Float64)
@@ -194,7 +194,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:BottleneckAnalysis})
     all_other_statement = ""
     device_collectives_classification = ""
     device_collectives_statement = ""
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 7
             input_percent = PB.decode(d, Float64)
@@ -268,11 +268,11 @@ end
 PB.default_values(::Type{InputPipelineAnalysisRecommendation}) = (;details = Vector{String}(), bottleneck_analysis = nothing, summary_next_step = "")
 PB.field_numbers(::Type{InputPipelineAnalysisRecommendation}) = (;details = 1, bottleneck_analysis = 2, summary_next_step = 3)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:InputPipelineAnalysisRecommendation})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:InputPipelineAnalysisRecommendation}, _endpos::Int=0, _group::Bool=false)
     details = PB.BufferedVector{String}()
     bottleneck_analysis = Ref{Union{Nothing,google.protobuf.var"#Any"}}(nothing)
     summary_next_step = ""
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, details)
@@ -314,7 +314,7 @@ end
 PB.default_values(::Type{InputOpDetails}) = (;op_name = "", count = zero(UInt64), time_in_ms = zero(Float64), time_in_percent = zero(Float64), self_time_in_ms = zero(Float64), self_time_in_percent = zero(Float64), category = "")
 PB.field_numbers(::Type{InputOpDetails}) = (;op_name = 1, count = 2, time_in_ms = 3, time_in_percent = 4, self_time_in_ms = 5, self_time_in_percent = 6, category = 7)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:InputOpDetails})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:InputOpDetails}, _endpos::Int=0, _group::Bool=false)
     op_name = ""
     count = zero(UInt64)
     time_in_ms = zero(Float64)
@@ -322,7 +322,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:InputOpDetails})
     self_time_in_ms = zero(Float64)
     self_time_in_percent = zero(Float64)
     category = ""
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             op_name = PB.decode(d, String)
@@ -377,12 +377,12 @@ end
 PB.default_values(::Type{StepSummary}) = (;average = zero(Float64), standard_deviation = zero(Float64), minimum = zero(Float64), maximum = zero(Float64))
 PB.field_numbers(::Type{StepSummary}) = (;average = 1, standard_deviation = 2, minimum = 3, maximum = 4)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:StepSummary})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:StepSummary}, _endpos::Int=0, _group::Bool=false)
     average = zero(Float64)
     standard_deviation = zero(Float64)
     minimum = zero(Float64)
     maximum = zero(Float64)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             average = PB.decode(d, Float64)
@@ -433,7 +433,7 @@ PB.reserved_fields(::Type{GenericStepTimeBreakdown}) = (names = String[], number
 PB.default_values(::Type{GenericStepTimeBreakdown}) = (;unknown_time_ms_summary = nothing, host_wait_input_ms_summary = nothing, host_to_device_ms_summary = nothing, input_ms_summary = nothing, output_ms_summary = nothing, device_compute_ms_summary = nothing, device_to_device_ms_summary = nothing, device_collectives_ms_summary = nothing, host_compute_ms_summary = nothing, host_prepare_ms_summary = nothing, host_compile_ms_summary = nothing)
 PB.field_numbers(::Type{GenericStepTimeBreakdown}) = (;unknown_time_ms_summary = 1, host_wait_input_ms_summary = 9, host_to_device_ms_summary = 10, input_ms_summary = 11, output_ms_summary = 3, device_compute_ms_summary = 4, device_to_device_ms_summary = 5, device_collectives_ms_summary = 12, host_compute_ms_summary = 6, host_prepare_ms_summary = 7, host_compile_ms_summary = 8)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:GenericStepTimeBreakdown})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:GenericStepTimeBreakdown}, _endpos::Int=0, _group::Bool=false)
     unknown_time_ms_summary = Ref{Union{Nothing,StepSummary}}(nothing)
     host_wait_input_ms_summary = Ref{Union{Nothing,StepSummary}}(nothing)
     host_to_device_ms_summary = Ref{Union{Nothing,StepSummary}}(nothing)
@@ -445,7 +445,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:GenericStepTimeBreakdown
     host_compute_ms_summary = Ref{Union{Nothing,StepSummary}}(nothing)
     host_prepare_ms_summary = Ref{Union{Nothing,StepSummary}}(nothing)
     host_compile_ms_summary = Ref{Union{Nothing,StepSummary}}(nothing)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, unknown_time_ms_summary)
@@ -527,7 +527,7 @@ PB.reserved_fields(::Type{InputPipelineAnalysisResult}) = (names = String[], num
 PB.default_values(::Type{InputPipelineAnalysisResult}) = (;tag = false, hardware_type = "", step_time_summary = nothing, input_percent_summary = nothing, input_percent = zero(Float64), output_percent = zero(Float64), idle_percent = zero(Float64), compute_percent = zero(Float64), step_details = Vector{google.protobuf.var"#Any"}(), input_time_breakdown = nothing, input_op_details = Vector{InputOpDetails}(), recommendation = nothing, step_time_breakdown = nothing, diagnostics = nothing)
 PB.field_numbers(::Type{InputPipelineAnalysisResult}) = (;tag = 16, hardware_type = 9, step_time_summary = 2, input_percent_summary = 3, input_percent = 11, output_percent = 13, idle_percent = 14, compute_percent = 15, step_details = 4, input_time_breakdown = 5, input_op_details = 6, recommendation = 7, step_time_breakdown = 8, diagnostics = 12)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:InputPipelineAnalysisResult})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:InputPipelineAnalysisResult}, _endpos::Int=0, _group::Bool=false)
     tag = false
     hardware_type = ""
     step_time_summary = Ref{Union{Nothing,StepSummary}}(nothing)
@@ -542,7 +542,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:InputPipelineAnalysisRes
     recommendation = Ref{Union{Nothing,InputPipelineAnalysisRecommendation}}(nothing)
     step_time_breakdown = Ref{Union{Nothing,google.protobuf.var"#Any"}}(nothing)
     diagnostics = Ref{Union{Nothing,Diagnostics}}(nothing)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 16
             tag = PB.decode(d, Bool)

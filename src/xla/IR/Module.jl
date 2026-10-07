@@ -8,16 +8,12 @@ mutable struct HloModule
 end
 
 function free_hlo_module(hlo_module)
-    @ccall MLIR.API.mlir_c.FreeHloModule(hlo_module.ptr::Ptr{Cvoid})::Cvoid
+    GC.@preserve hlo_module begin
+        MLIR.API.FreeHloModule(hlo_module.ptr)
+    end
 end
 
-function HloModule(mod::MLIR.IR.Module)
-    return HloModule(
-        @ccall MLIR.API.mlir_c.convertMlirModuleToHloModule(
-            mod::MLIR.API.MlirModule
-        )::Ptr{Cvoid}
-    )
-end
+HloModule(mod::MLIR.IR.Module) = HloModule(MLIR.API.convertMlirModuleToHloModule(mod))
 
 function _iobuffer_to_hlo_print_options(io::IO)
     get(io, :compact, false) && return Int32(1) # ShortParsable
@@ -29,18 +25,14 @@ end
 
 function Base.show(io::IO, hlo_module::HloModule)
     GC.@preserve hlo_module begin
-        str = @ccall MLIR.API.mlir_c.HloModuleToString(
-            hlo_module.ptr::Ptr{Cvoid}, _iobuffer_to_hlo_print_options(io)::Int32
-        )::Cstring
+        str = MLIR.API.HloModuleToString(hlo_module.ptr, _iobuffer_to_hlo_print_options(io))
     end
     print(io, unsafe_string_and_free(str))
     return nothing
 end
 
 function Base.parse(::Type{HloModule}, str::AbstractString)
-    return HloModule(
-        @ccall MLIR.API.mlir_c.parseAndReturnUnverifiedHloModule(str::Cstring)::Ptr{Cvoid}
-    )
+    return HloModule(MLIR.API.parseAndReturnUnverifiedHloModule(str))
 end
 
 function Base.read(filename::AbstractString, ::Type{HloModule})
@@ -49,11 +41,10 @@ end
 
 function Base.getproperty(hlo_module::HloModule, sym::Symbol)
     if sym === :entry_computation
-        return HloComputation(
-            @ccall MLIR.API.mlir_c.hloModuleGetEntryComputation(
-                hlo_module.ptr::Ptr{Cvoid}
-            )::Ptr{Cvoid}
-        )
+        GC.@preserve hlo_module begin
+            ptr = MLIR.API.hloModuleGetEntryComputation(hlo_module.ptr)
+        end
+        return HloComputation(ptr)
     end
     return getfield(hlo_module, sym)
 end

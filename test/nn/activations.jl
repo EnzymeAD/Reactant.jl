@@ -138,3 +138,10 @@ end
         @test ∂x_enz!! ≈ ∂x_gt atol = 1e-5 rtol = 1e-2
     end
 end
+
+@testset "Softplus Gradient #https://github.com/EnzymeAD/Enzyme-JAX/issues/2152" begin
+    fn(x) = sum(NNlib.softplus(x))
+
+    @test @jit(Enzyme.gradient(Reverse, fn, Reactant.to_rarray([0.0f0])))[1] ≈ [0.5f0]
+    @test @jit(Enzyme.gradient(Reverse, fn, Reactant.to_rarray([100.0f0])))[1] ≈ [1.0f0]
+end

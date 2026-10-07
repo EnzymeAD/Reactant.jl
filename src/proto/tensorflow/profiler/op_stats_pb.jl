@@ -2,8 +2,9 @@ import ProtoBuf as PB
 using ProtoBuf: OneOf
 using ProtoBuf.EnumX: @enumx
 
-export HostIndependentJobInfoResult, CoreDetails, HostDependentJobInfoResult
-export SystemTopology, PerformanceCounterResult, PerfEnv, RunEnvironment, OpStats
+export HostIndependentJobInfoResult, CoreDetails, DistributionStats
+export HostDependentJobInfoResult, SystemTopology, PerformanceCounterResult, PerfEnv
+export DisaggregatedServingLatency, RunEnvironment, OpStats
 
 
 struct HostIndependentJobInfoResult
@@ -17,14 +18,14 @@ end
 PB.default_values(::Type{HostIndependentJobInfoResult}) = (;change_list = zero(Int64), workspace_id = "", snapshot = zero(Int64), build_time = zero(Int64), build_target = "", profile_duration_ms = zero(UInt32))
 PB.field_numbers(::Type{HostIndependentJobInfoResult}) = (;change_list = 1, workspace_id = 5, snapshot = 6, build_time = 2, build_target = 3, profile_duration_ms = 4)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HostIndependentJobInfoResult})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HostIndependentJobInfoResult}, _endpos::Int=0, _group::Bool=false)
     change_list = zero(Int64)
     workspace_id = ""
     snapshot = zero(Int64)
     build_time = zero(Int64)
     build_target = ""
     profile_duration_ms = zero(UInt32)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             change_list = PB.decode(d, Int64)
@@ -78,7 +79,7 @@ end
 PB.default_values(::Type{CoreDetails}) = (;hostname = "", device_ordinal = zero(UInt32), core_num = zero(UInt32), local_chip_id = zero(UInt32), global_chip_id = zero(UInt32), global_core_id = zero(UInt32), is_sparse_core = false)
 PB.field_numbers(::Type{CoreDetails}) = (;hostname = 1, device_ordinal = 2, core_num = 3, local_chip_id = 4, global_chip_id = 5, global_core_id = 6, is_sparse_core = 7)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:CoreDetails})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:CoreDetails}, _endpos::Int=0, _group::Bool=false)
     hostname = ""
     device_ordinal = zero(UInt32)
     core_num = zero(UInt32)
@@ -86,7 +87,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:CoreDetails})
     global_chip_id = zero(UInt32)
     global_core_id = zero(UInt32)
     is_sparse_core = false
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             hostname = PB.decode(d, String)
@@ -132,6 +133,60 @@ function PB._encoded_size(x::CoreDetails)
     return encoded_size
 end
 
+struct DistributionStats
+    avg::Float64
+    p50::Float64
+    p90::Float64
+    p95::Float64
+    p99::Float64
+end
+PB.default_values(::Type{DistributionStats}) = (;avg = zero(Float64), p50 = zero(Float64), p90 = zero(Float64), p95 = zero(Float64), p99 = zero(Float64))
+PB.field_numbers(::Type{DistributionStats}) = (;avg = 1, p50 = 2, p90 = 3, p95 = 4, p99 = 5)
+
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:DistributionStats}, _endpos::Int=0, _group::Bool=false)
+    avg = zero(Float64)
+    p50 = zero(Float64)
+    p90 = zero(Float64)
+    p95 = zero(Float64)
+    p99 = zero(Float64)
+    while !PB.message_done(d, _endpos, _group)
+        field_number, wire_type = PB.decode_tag(d)
+        if field_number == 1
+            avg = PB.decode(d, Float64)
+        elseif field_number == 2
+            p50 = PB.decode(d, Float64)
+        elseif field_number == 3
+            p90 = PB.decode(d, Float64)
+        elseif field_number == 4
+            p95 = PB.decode(d, Float64)
+        elseif field_number == 5
+            p99 = PB.decode(d, Float64)
+        else
+            Base.skip(d, wire_type)
+        end
+    end
+    return DistributionStats(avg, p50, p90, p95, p99)
+end
+
+function PB.encode(e::PB.AbstractProtoEncoder, x::DistributionStats)
+    initpos = position(e.io)
+    x.avg !== zero(Float64) && PB.encode(e, 1, x.avg)
+    x.p50 !== zero(Float64) && PB.encode(e, 2, x.p50)
+    x.p90 !== zero(Float64) && PB.encode(e, 3, x.p90)
+    x.p95 !== zero(Float64) && PB.encode(e, 4, x.p95)
+    x.p99 !== zero(Float64) && PB.encode(e, 5, x.p99)
+    return position(e.io) - initpos
+end
+function PB._encoded_size(x::DistributionStats)
+    encoded_size = 0
+    x.avg !== zero(Float64) && (encoded_size += PB._encoded_size(x.avg, 1))
+    x.p50 !== zero(Float64) && (encoded_size += PB._encoded_size(x.p50, 2))
+    x.p90 !== zero(Float64) && (encoded_size += PB._encoded_size(x.p90, 3))
+    x.p95 !== zero(Float64) && (encoded_size += PB._encoded_size(x.p95, 4))
+    x.p99 !== zero(Float64) && (encoded_size += PB._encoded_size(x.p99, 5))
+    return encoded_size
+end
+
 struct HostDependentJobInfoResult
     host_id::String
     command_line::String
@@ -142,13 +197,13 @@ end
 PB.default_values(::Type{HostDependentJobInfoResult}) = (;host_id = "", command_line = "", start_time = zero(Int64), bns_address = "", profile_time_ns = zero(UInt64))
 PB.field_numbers(::Type{HostDependentJobInfoResult}) = (;host_id = 1, command_line = 2, start_time = 3, bns_address = 4, profile_time_ns = 5)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HostDependentJobInfoResult})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:HostDependentJobInfoResult}, _endpos::Int=0, _group::Bool=false)
     host_id = ""
     command_line = ""
     start_time = zero(Int64)
     bns_address = ""
     profile_time_ns = zero(UInt64)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             host_id = PB.decode(d, String)
@@ -195,12 +250,12 @@ end
 PB.default_values(::Type{SystemTopology}) = (;x_dimension = zero(Int64), y_dimension = zero(Int64), z_dimension = zero(Int64), num_expected_reduced_chips = zero(Int64))
 PB.field_numbers(::Type{SystemTopology}) = (;x_dimension = 1, y_dimension = 2, z_dimension = 3, num_expected_reduced_chips = 4)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:SystemTopology})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:SystemTopology}, _endpos::Int=0, _group::Bool=false)
     x_dimension = zero(Int64)
     y_dimension = zero(Int64)
     z_dimension = zero(Int64)
     num_expected_reduced_chips = zero(Int64)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             x_dimension = PB.decode(d, Int64)
@@ -241,10 +296,10 @@ end
 PB.default_values(::Type{PerformanceCounterResult}) = (;matrix_unit_utilization_percent = zero(Float64), hbm_utilization_percent = zero(Float64))
 PB.field_numbers(::Type{PerformanceCounterResult}) = (;matrix_unit_utilization_percent = 1, hbm_utilization_percent = 2)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:PerformanceCounterResult})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:PerformanceCounterResult}, _endpos::Int=0, _group::Bool=false)
     matrix_unit_utilization_percent = zero(Float64)
     hbm_utilization_percent = zero(Float64)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             matrix_unit_utilization_percent = PB.decode(d, Float64)
@@ -283,7 +338,7 @@ end
 PB.default_values(::Type{PerfEnv}) = (;peak_tera_flops_per_second = zero(Float64), peak_bw_giga_bytes_per_second = zero(Float64), peak_hbm_bw_giga_bytes_per_second = zero(Float64), peak_bws_giga_bytes_per_second = Vector{Float64}(), ridge_point = zero(Float64), has_cmem = false, has_merged_vmem = false, has_megacore = false)
 PB.field_numbers(::Type{PerfEnv}) = (;peak_tera_flops_per_second = 1, peak_bw_giga_bytes_per_second = 4, peak_hbm_bw_giga_bytes_per_second = 2, peak_bws_giga_bytes_per_second = 5, ridge_point = 3, has_cmem = 6, has_merged_vmem = 7, has_megacore = 8)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:PerfEnv})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:PerfEnv}, _endpos::Int=0, _group::Bool=false)
     peak_tera_flops_per_second = zero(Float64)
     peak_bw_giga_bytes_per_second = zero(Float64)
     peak_hbm_bw_giga_bytes_per_second = zero(Float64)
@@ -292,7 +347,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:PerfEnv})
     has_cmem = false
     has_merged_vmem = false
     has_megacore = false
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             peak_tera_flops_per_second = PB.decode(d, Float64)
@@ -342,6 +397,54 @@ function PB._encoded_size(x::PerfEnv)
     return encoded_size
 end
 
+struct DisaggregatedServingLatency
+    prefill_step_time_us::Union{Nothing,DistributionStats}
+    num_prefill_steps::Int64
+    decode_step_time_us::Union{Nothing,DistributionStats}
+    num_decode_steps::Int64
+end
+PB.default_values(::Type{DisaggregatedServingLatency}) = (;prefill_step_time_us = nothing, num_prefill_steps = zero(Int64), decode_step_time_us = nothing, num_decode_steps = zero(Int64))
+PB.field_numbers(::Type{DisaggregatedServingLatency}) = (;prefill_step_time_us = 1, num_prefill_steps = 2, decode_step_time_us = 3, num_decode_steps = 4)
+
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:DisaggregatedServingLatency}, _endpos::Int=0, _group::Bool=false)
+    prefill_step_time_us = Ref{Union{Nothing,DistributionStats}}(nothing)
+    num_prefill_steps = zero(Int64)
+    decode_step_time_us = Ref{Union{Nothing,DistributionStats}}(nothing)
+    num_decode_steps = zero(Int64)
+    while !PB.message_done(d, _endpos, _group)
+        field_number, wire_type = PB.decode_tag(d)
+        if field_number == 1
+            PB.decode!(d, prefill_step_time_us)
+        elseif field_number == 2
+            num_prefill_steps = PB.decode(d, Int64)
+        elseif field_number == 3
+            PB.decode!(d, decode_step_time_us)
+        elseif field_number == 4
+            num_decode_steps = PB.decode(d, Int64)
+        else
+            Base.skip(d, wire_type)
+        end
+    end
+    return DisaggregatedServingLatency(prefill_step_time_us[], num_prefill_steps, decode_step_time_us[], num_decode_steps)
+end
+
+function PB.encode(e::PB.AbstractProtoEncoder, x::DisaggregatedServingLatency)
+    initpos = position(e.io)
+    !isnothing(x.prefill_step_time_us) && PB.encode(e, 1, x.prefill_step_time_us)
+    x.num_prefill_steps != zero(Int64) && PB.encode(e, 2, x.num_prefill_steps)
+    !isnothing(x.decode_step_time_us) && PB.encode(e, 3, x.decode_step_time_us)
+    x.num_decode_steps != zero(Int64) && PB.encode(e, 4, x.num_decode_steps)
+    return position(e.io) - initpos
+end
+function PB._encoded_size(x::DisaggregatedServingLatency)
+    encoded_size = 0
+    !isnothing(x.prefill_step_time_us) && (encoded_size += PB._encoded_size(x.prefill_step_time_us, 1))
+    x.num_prefill_steps != zero(Int64) && (encoded_size += PB._encoded_size(x.num_prefill_steps, 2))
+    !isnothing(x.decode_step_time_us) && (encoded_size += PB._encoded_size(x.decode_step_time_us, 3))
+    x.num_decode_steps != zero(Int64) && (encoded_size += PB._encoded_size(x.num_decode_steps, 4))
+    return encoded_size
+end
+
 struct RunEnvironment
     host_count::Int32
     task_count::Int32
@@ -362,7 +465,7 @@ PB.reserved_fields(::Type{RunEnvironment}) = (names = String[], numbers = Union{
 PB.default_values(::Type{RunEnvironment}) = (;host_count = zero(Int32), task_count = zero(Int32), hostnames = Dict{String,Bool}(), device_type = "", device_core_count = zero(Int32), host_independent_job_info = nothing, host_dependent_job_info = Vector{HostDependentJobInfoResult}(), replica_count = zero(Int32), num_cores_per_replica = zero(Int32), host_trace_level = zero(UInt32), system_topology = nothing, is_training = false, power_metrics = nothing, hardware_type = HardwareType.UNKNOWN_HARDWARE)
 PB.field_numbers(::Type{RunEnvironment}) = (;host_count = 1, task_count = 2, hostnames = 3, device_type = 4, device_core_count = 5, host_independent_job_info = 7, host_dependent_job_info = 8, replica_count = 9, num_cores_per_replica = 10, host_trace_level = 12, system_topology = 13, is_training = 14, power_metrics = 15, hardware_type = 16)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:RunEnvironment})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:RunEnvironment}, _endpos::Int=0, _group::Bool=false)
     host_count = zero(Int32)
     task_count = zero(Int32)
     hostnames = Dict{String,Bool}()
@@ -377,7 +480,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:RunEnvironment})
     is_training = false
     power_metrics = Ref{Union{Nothing,PowerMetrics}}(nothing)
     hardware_type = HardwareType.UNKNOWN_HARDWARE
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             host_count = PB.decode(d, Int32)
@@ -465,12 +568,13 @@ struct OpStats
     program_id_to_name_map::Dict{UInt64,String}
     performance_counter_result::Union{Nothing,PerformanceCounterResult}
     source_stats::Union{Nothing,SourceStats}
+    disaggregated_serving_latency::Union{Nothing,DisaggregatedServingLatency}
 end
 PB.reserved_fields(::Type{OpStats}) = (names = String[], numbers = Union{Int,UnitRange{Int}}[7])
-PB.default_values(::Type{OpStats}) = (;host_op_metrics_db = nothing, device_op_metrics_db = nothing, hlo_metrics_db_complete_steps_only = nothing, perf_env = nothing, step_db = nothing, run_environment = nothing, kernel_stats_db = nothing, tf_function_db = nothing, core_id_to_details = Dict{UInt32,CoreDetails}(), diagnostics = nothing, program_id_to_name_map = Dict{UInt64,String}(), performance_counter_result = nothing, source_stats = nothing)
-PB.field_numbers(::Type{OpStats}) = (;host_op_metrics_db = 1, device_op_metrics_db = 2, hlo_metrics_db_complete_steps_only = 10, perf_env = 3, step_db = 4, run_environment = 5, kernel_stats_db = 6, tf_function_db = 8, core_id_to_details = 11, diagnostics = 9, program_id_to_name_map = 12, performance_counter_result = 13, source_stats = 14)
+PB.default_values(::Type{OpStats}) = (;host_op_metrics_db = nothing, device_op_metrics_db = nothing, hlo_metrics_db_complete_steps_only = nothing, perf_env = nothing, step_db = nothing, run_environment = nothing, kernel_stats_db = nothing, tf_function_db = nothing, core_id_to_details = Dict{UInt32,CoreDetails}(), diagnostics = nothing, program_id_to_name_map = Dict{UInt64,String}(), performance_counter_result = nothing, source_stats = nothing, disaggregated_serving_latency = nothing)
+PB.field_numbers(::Type{OpStats}) = (;host_op_metrics_db = 1, device_op_metrics_db = 2, hlo_metrics_db_complete_steps_only = 10, perf_env = 3, step_db = 4, run_environment = 5, kernel_stats_db = 6, tf_function_db = 8, core_id_to_details = 11, diagnostics = 9, program_id_to_name_map = 12, performance_counter_result = 13, source_stats = 14, disaggregated_serving_latency = 15)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OpStats})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OpStats}, _endpos::Int=0, _group::Bool=false)
     host_op_metrics_db = Ref{Union{Nothing,OpMetricsDb}}(nothing)
     device_op_metrics_db = Ref{Union{Nothing,OpMetricsDb}}(nothing)
     hlo_metrics_db_complete_steps_only = Ref{Union{Nothing,OpMetricsDb}}(nothing)
@@ -484,7 +588,8 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OpStats})
     program_id_to_name_map = Dict{UInt64,String}()
     performance_counter_result = Ref{Union{Nothing,PerformanceCounterResult}}(nothing)
     source_stats = Ref{Union{Nothing,SourceStats}}(nothing)
-    while !PB.message_done(d)
+    disaggregated_serving_latency = Ref{Union{Nothing,DisaggregatedServingLatency}}(nothing)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, host_op_metrics_db)
@@ -512,11 +617,13 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OpStats})
             PB.decode!(d, performance_counter_result)
         elseif field_number == 14
             PB.decode!(d, source_stats)
+        elseif field_number == 15
+            PB.decode!(d, disaggregated_serving_latency)
         else
             Base.skip(d, wire_type)
         end
     end
-    return OpStats(host_op_metrics_db[], device_op_metrics_db[], hlo_metrics_db_complete_steps_only[], perf_env[], step_db[], run_environment[], kernel_stats_db[], tf_function_db[], core_id_to_details, diagnostics[], program_id_to_name_map, performance_counter_result[], source_stats[])
+    return OpStats(host_op_metrics_db[], device_op_metrics_db[], hlo_metrics_db_complete_steps_only[], perf_env[], step_db[], run_environment[], kernel_stats_db[], tf_function_db[], core_id_to_details, diagnostics[], program_id_to_name_map, performance_counter_result[], source_stats[], disaggregated_serving_latency[])
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::OpStats)
@@ -534,6 +641,7 @@ function PB.encode(e::PB.AbstractProtoEncoder, x::OpStats)
     !isempty(x.program_id_to_name_map) && PB.encode(e, 12, x.program_id_to_name_map)
     !isnothing(x.performance_counter_result) && PB.encode(e, 13, x.performance_counter_result)
     !isnothing(x.source_stats) && PB.encode(e, 14, x.source_stats)
+    !isnothing(x.disaggregated_serving_latency) && PB.encode(e, 15, x.disaggregated_serving_latency)
     return position(e.io) - initpos
 end
 function PB._encoded_size(x::OpStats)
@@ -551,5 +659,6 @@ function PB._encoded_size(x::OpStats)
     !isempty(x.program_id_to_name_map) && (encoded_size += PB._encoded_size(x.program_id_to_name_map, 12))
     !isnothing(x.performance_counter_result) && (encoded_size += PB._encoded_size(x.performance_counter_result, 13))
     !isnothing(x.source_stats) && (encoded_size += PB._encoded_size(x.source_stats, 14))
+    !isnothing(x.disaggregated_serving_latency) && (encoded_size += PB._encoded_size(x.disaggregated_serving_latency, 15))
     return encoded_size
 end

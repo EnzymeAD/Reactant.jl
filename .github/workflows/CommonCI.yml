@@ -20,6 +20,11 @@ on:
         required: false
         default: false
         type: boolean
+      ref:
+        description: "Git ref to checkout"
+        required: false
+        default: "main"
+        type: string
       localjll:
         description: "Use local libReactant"
         required: false
@@ -35,6 +40,11 @@ on:
         required: false
         default: ""
         type: string
+      enzymejax_commit:
+        description: "Enzyme-JAX commit"
+        required: false
+        default: ""
+        type: string
 
 jobs:
   test:
@@ -46,12 +56,23 @@ jobs:
         uses: jlumbroso/free-disk-space@main
         with:
           tool-cache: false
-        if: ${{ startsWith(inputs.os, 'ubuntu-') && inputs.localjll }}
+        if: ${{ startsWith(inputs.os, 'ubuntu-') && (inputs.localjll || inputs.enzymejax_commit != '') }}
       - name: Clean `/opt`
         run: sudo rm -rf /opt/*
-        if: ${{ startsWith(inputs.os, 'ubuntu-') && inputs.localjll }}
+        if: ${{ startsWith(inputs.os, 'ubuntu-') && (inputs.localjll || inputs.enzymejax_commit != '') }}
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
+        with:
+          repository: 'EnzymeAD/Reactant.jl'
+          ref: ${{ github.repository == 'EnzymeAD/Reactant.jl' && (github.event.pull_request.head.sha || github.sha) || inputs.ref }}
+
+      - name: Patch Enzyme-JAX commit
+        if: ${{ inputs.enzymejax_commit != '' }}
+        shell: bash
+        run: |
+          sed -i.bak 's/ENZYMEXLA_COMMIT = "[^"]*"/ENZYMEXLA_COMMIT = "${{ inputs.enzymejax_commit }}"/' deps/ReactantExtra/WORKSPACE
+          sed -i.bak 's/ENZYMEXLA_SHA256 = "[^"]*"/ENZYMEXLA_SHA256 = ""/' deps/ReactantExtra/WORKSPACE
+          echo "ENZYMEXLA_COMMIT = ${{ inputs.enzymejax_commit }}" >> $GITHUB_STEP_SUMMARY
 
       - name: Set TMPDIR and create directory
         # We have to use `${GITHUB_WORKSPACE}` instead of `github.workspace` because GitHub
@@ -63,14 +84,16 @@ jobs:
           mkdir -p "$TMPDIR"
           echo "TMPDIR=$TMPDIR" >> $GITHUB_ENV
 
-      - uses: julia-actions/setup-julia@v2
+      - uses: julia-actions/setup-julia@v3
         if: ${{ ! inputs.assertions }}
         with:
           version: ${{ inputs.julia_version }}
-      - uses: julia-actions/cache@v2
+      - uses: julia-actions/cache@v3.2.0
         id: julia-cache
         with:
-          cache-name: julia-cache;workflow=${{ inputs.julia_version }}-${{ inputs.os }}-${{ inputs.runtime }}-assertions=${{ inputs.assertions }}-${{ github.event_name }}-${{ inputs.test_args }}-${{ inputs.downgrade_testing }}-${{ inputs.localjll }}
+          cache-name: julia-cache;workflow=${{ inputs.julia_version }}-${{ inputs.os }}-${{ inputs.runtime }}-assertions=${{ inputs.assertions }}-${{ github.event_name }}-${{ inputs.test_args }}-${{ inputs.downgrade_testing }}-${{ inputs.localjll || inputs.enzymejax_commit != '' }}-${{ inputs.enzymejax_commit }}
+          gcp-bucket: ${{ contains(inputs.os, 'linux') && 'enzyme-ci-transient' || '' }}
+          key-prefix: reactantjl/
 
       - uses: julia-actions/julia-downgrade-compat@v2
         if: ${{ inputs.downgrade_testing }}
@@ -80,34 +103,34 @@ jobs:
 
       # Local build of libReactant
       - uses: bazel-contrib/setup-bazel@0.18.0
-        if: ${{ inputs.localjll }}
+        if: ${{ inputs.localjll || inputs.enzymejax_commit != '' }}
         name: Set up Bazel
         with:
           # Avoid downloading Bazel every time.
           bazelisk-cache: true
           # Store build cache per workflow.
-          disk-cache: ${{ github.workflow }}-${{ inputs.os }}-${{ inputs.julia_version }}
+          disk-cache: ${{ !contains(inputs.os, 'linux') && format('{0}-{1}-{2}', github.workflow, inputs.os, inputs.julia_version) || false }}
           # Share repository cache between workflows.
           repository-cache: true
           bazelisk-version: 1.x
       - name: Prepare build on macOS
-        if: ${{ startsWith(inputs.os, 'macOS-') && inputs.localjll }}
+        if: ${{ startsWith(inputs.os, 'macOS-') && (inputs.localjll || inputs.enzymejax_commit != '') }}
         run: |
           echo "SDKROOT=$(xcrun --show-sdk-path)" >> "${GITHUB_ENV}"
       - name: Install numpy
-        if: ${{ startsWith(inputs.os, 'macOS-') && inputs.localjll }}
+        if: ${{ startsWith(inputs.os, 'macOS-') && (inputs.localjll || inputs.enzymejax_commit != '') }}
         run: |
           python -m pip install numpy
       - name: Build libReactant
         timeout-minutes: 120
-        if: ${{ inputs.localjll }}
+        if: ${{ inputs.localjll || inputs.enzymejax_commit != '' }}
         run: |
           julia --color=yes --project=deps -e 'using Pkg; Pkg.instantiate()'
-          julia --color=yes --project=deps deps/build_local.jl --cc clang  --push-cache
+          julia --color=yes --project=deps deps/build_local.jl --cc clang ${{ contains(inputs.os, 'linux') && '--push-cache' || '--cache' }}
           cp LocalPreferences.toml test/
 
       # Compile Julia if assertions are enabled
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         if: ${{ inputs.assertions }}
         with:
           repository: "JuliaLang/julia"
@@ -121,6 +144,8 @@ jobs:
           echo $PWD/julia/usr/bin >> $GITHUB_PATH
 
       # Install dependencies (specifically ReactantCore subdirectory for 1.10)
+      # Disable precompile here, since it will be invalidated based on change
+      # to xla_runtime preference in the next step.
       - name: "Install Dependencies"
         run: |
           import Pkg
@@ -134,68 +159,91 @@ jobs:
         shell: julia --color=yes --code-coverage=user --depwarn=yes --project=. {0}
         # Only in Julia v1.10 we need to install `ReactantCore` manually.
         if: ${{ inputs.julia_version == '1.10' || inputs.julia_version == 'lts' }}
+        env:
+          JULIA_PKG_PRECOMPILE_AUTO: 0
+
+      - name: "Install Dependencies (1.11+)"
+        run: |
+          import Pkg
+          Pkg.Registry.update()
+          Pkg.instantiate()
+        shell: julia --color=yes --project=. {0}
+        if: ${{ inputs.julia_version != '1.10' && inputs.julia_version != 'lts' }}
+        env:
+          JULIA_PKG_PRECOMPILE_AUTO: 0
 
       # Run the tests (pjrt or ifrt or both)
       - name: "Setup Runtime Preferences (PJRT)"
         if: ${{ inputs.runtime == 'pjrt' || inputs.runtime == 'both' }}
-        uses: "DamianReeves/write-file-action@master"
-        with:
-          path: "LocalPreferences.toml"
-          write-mode: "overwrite"
-          contents: |
-            [Reactant]
-            xla_runtime = "PJRT"
+        run: |
+          using Preferences, UUIDs
+          Preferences.set_preferences!(
+            "Reactant", "xla_runtime" => "PJRT"; force=true
+          )
+        shell: julia --color=yes --project=. {0}
+      - name: "Set test arguments and other environment variables"
+        shell: bash
+        run: |
+          # Run tests in verbose mode
+          TEST_ARGS=(--verbose)
+
+          if [[ ${{ runner.os }} == "macOS" ]]; then
+              # Encourage ParallelTestRunner to use two jobs on macOS, rather
+              # than the single one it'd use by default.
+              TEST_ARGS+=(--jobs=2)
+          fi
+
+          TEST_ARGS+=(${{ inputs.test_args }})
+          echo "runtest_test_args=${TEST_ARGS[@]}" | tee "${GITHUB_ENV}"
+      - name: Install earlyoom
+        # Use it only on GitHub-hosted runners, because earlyoom seems to make
+        # self-hosted runners hang.
+        if: ${{ startsWith(inputs.os, 'ubuntu-') }}
+        shell: bash
+        run: |
+          sudo apt-get install -y earlyoom
       - name: "Run Tests (PJRT)"
         if: ${{ inputs.runtime == 'pjrt' || inputs.runtime == 'both' }}
         timeout-minutes: 120
-        uses: julia-actions/julia-runtest@v1
-        with:
-          test_args: ${{ inputs.test_args }}
-          allow_reresolve: ${{ !(inputs.downgrade_testing) }}
-          project: "."
-          coverage: true
-          depwarn: yes
+        shell: bash
+        run: |
+          if [[ ${{ startsWith(inputs.os, 'ubuntu-') }} == 'true' ]]; then
+              # We use earlyoom only on the GitHub-hosted Linux machines
+              earlyoom -m 3 -s 100 -r 300 --prefer 'julia' &
+          fi
+          julia --project --color=yes --check-bounds=yes -e 'import Pkg; Pkg.test(;coverage=true, julia_args=["--check-bounds=yes", "--compiled-modules=yes", "--depwarn=yes"], test_args=`${{ env.runtest_test_args }}`, force_latest_compatible_version=false, allow_reresolve=${{ !(inputs.downgrade_testing) }})'
 
       - name: "Setup Runtime Preferences (IFRT)"
         if: ${{ inputs.runtime == 'ifrt' || inputs.runtime == 'both' }}
-        uses: "DamianReeves/write-file-action@master"
-        with:
-          path: "LocalPreferences.toml"
-          write-mode: "overwrite"
-          contents: |
-            [Reactant]
-            xla_runtime = "IFRT"
+        run: |
+          using Preferences, UUIDs
+          Preferences.set_preferences!(
+            "Reactant", "xla_runtime" => "IFRT"; force=true
+          )
+        shell: julia --color=yes --project=. {0}
       - name: "Run Tests (IFRT)"
         if: ${{ inputs.runtime == 'ifrt' || inputs.runtime == 'both' }}
         timeout-minutes: 120
-        uses: julia-actions/julia-runtest@v1
-        with:
-          test_args: ${{ inputs.test_args }}
-          allow_reresolve: ${{ !(inputs.downgrade_testing) }}
-          project: "."
-          coverage: true
-          depwarn: yes
+        shell: bash
+        run: |
+          if [[ ${{ startsWith(inputs.os, 'ubuntu-') }} == 'true' ]]; then
+              # We use earlyoom only on the GitHub-hosted Linux machines
+              earlyoom -m 3 -s 100 -r 300 --prefer 'julia' &
+          fi
+          julia --project --color=yes --check-bounds=yes -e 'import Pkg; Pkg.test(;coverage=true, julia_args=["--check-bounds=yes", "--compiled-modules=yes", "--depwarn=yes"], test_args=`${{ env.runtest_test_args }}`, force_latest_compatible_version=false, allow_reresolve=${{ !(inputs.downgrade_testing) }})'
 
       - name: "Upload MLIR modules"
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         timeout-minutes: 10
         if: always()
         with:
-          name: "mlir-${{ inputs.julia_version }}-${{ inputs.os }}-${{ inputs.runtime }}-assertions=${{ inputs.assertions }}-${{ github.event_name }}-test_args=${{ inputs.test_args }}-${{ inputs.localjll }}"
+          name: "mlir-${{ inputs.julia_version }}-${{ inputs.os }}-${{ inputs.runtime }}-assertions=${{ inputs.assertions }}-${{ github.event_name }}-test_args=${{ inputs.test_args }}-${{ inputs.localjll || inputs.enzymejax_commit != '' }}-${{ inputs.enzymejax_commit }}"
           path: "**/*.mlir"
           retention-days: 90
           overwrite: false
 
-      - name: Save Julia depot cache on cancel or failure
-        if: cancelled() || failure()
-        uses: actions/cache/save@v4
-        with:
-          path: |
-            ${{ steps.julia-cache.outputs.cache-paths }}
-          key: ${{ steps.julia-cache.outputs.cache-key }}
-
       - uses: julia-actions/julia-processcoverage@v1
-      - uses: codecov/codecov-action@v5
+      - uses: codecov/codecov-action@v7
         with:
           files: lcov.info
           token: ${{ secrets.CODECOV_TOKEN }}

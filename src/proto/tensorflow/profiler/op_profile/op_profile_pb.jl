@@ -9,8 +9,8 @@ export Profile
 
 struct var"Node.InstructionCategory" end
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"Node.InstructionCategory"})
-    while !PB.message_done(d)
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"Node.InstructionCategory"}, _endpos::Int=0, _group::Bool=false)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         Base.skip(d, wire_type)
     end
@@ -34,11 +34,11 @@ end
 PB.default_values(::Type{var"Node.XLAInstruction.LayoutAnalysis.Dimension"}) = (;size = zero(Int32), alignment = zero(Int32), semantics = "")
 PB.field_numbers(::Type{var"Node.XLAInstruction.LayoutAnalysis.Dimension"}) = (;size = 1, alignment = 2, semantics = 3)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"Node.XLAInstruction.LayoutAnalysis.Dimension"})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"Node.XLAInstruction.LayoutAnalysis.Dimension"}, _endpos::Int=0, _group::Bool=false)
     size = zero(Int32)
     alignment = zero(Int32)
     semantics = ""
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             size = PB.decode(d, Int32)
@@ -84,7 +84,7 @@ PB.reserved_fields(::Type{Metrics}) = (names = String[], numbers = Union{Int,Uni
 PB.default_values(::Type{Metrics}) = (;flops = zero(Float64), uncapped_flops = zero(Float64), bandwidth_utils = Vector{Float64}(), raw_time = zero(Float64), raw_flops = zero(Float64), bf16_flops = zero(Float64), normalized_time_ps = zero(Float64), raw_bytes_accessed_array = Vector{Float64}(), occurrences = zero(UInt32), avg_time_ps = zero(Float64))
 PB.field_numbers(::Type{Metrics}) = (;flops = 2, uncapped_flops = 19, bandwidth_utils = 5, raw_time = 11, raw_flops = 12, bf16_flops = 18, normalized_time_ps = 20, raw_bytes_accessed_array = 15, occurrences = 16, avg_time_ps = 17)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:Metrics})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:Metrics}, _endpos::Int=0, _group::Bool=false)
     flops = zero(Float64)
     uncapped_flops = zero(Float64)
     bandwidth_utils = PB.BufferedVector{Float64}()
@@ -95,7 +95,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:Metrics})
     raw_bytes_accessed_array = PB.BufferedVector{Float64}()
     occurrences = zero(UInt32)
     avg_time_ps = zero(Float64)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 2
             flops = PB.decode(d, Float64)
@@ -159,9 +159,9 @@ end
 PB.default_values(::Type{var"Node.XLAInstruction.LayoutAnalysis"}) = (;dimensions = Vector{var"Node.XLAInstruction.LayoutAnalysis.Dimension"}())
 PB.field_numbers(::Type{var"Node.XLAInstruction.LayoutAnalysis"}) = (;dimensions = 1)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"Node.XLAInstruction.LayoutAnalysis"})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"Node.XLAInstruction.LayoutAnalysis"}, _endpos::Int=0, _group::Bool=false)
     dimensions = PB.BufferedVector{var"Node.XLAInstruction.LayoutAnalysis.Dimension"}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, dimensions)
@@ -198,7 +198,7 @@ end
 PB.default_values(::Type{var"Node.XLAInstruction"}) = (;op = "", expression = "", provenance = "", category = "", layout = nothing, computation_primitive_size = zero(UInt32), fingerprint = zero(UInt64), program_id = zero(UInt64), source_info = nothing, xprof_kernel_metadata = "")
 PB.field_numbers(::Type{var"Node.XLAInstruction"}) = (;op = 1, expression = 2, provenance = 3, category = 4, layout = 5, computation_primitive_size = 6, fingerprint = 7, program_id = 8, source_info = 9, xprof_kernel_metadata = 10)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"Node.XLAInstruction"})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"Node.XLAInstruction"}, _endpos::Int=0, _group::Bool=false)
     op = ""
     expression = ""
     provenance = ""
@@ -209,7 +209,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"Node.XLAInstruction"
     program_id = zero(UInt64)
     source_info = Ref{Union{Nothing,tensorflow.profiler.SourceInfo}}(nothing)
     xprof_kernel_metadata = ""
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             op = PB.decode(d, String)
@@ -280,13 +280,13 @@ PB.oneof_field_types(::Type{Node}) = (;
 PB.default_values(::Type{Node}) = (;name = "", metrics = nothing, children = Vector{Node}(), category = nothing, xla = nothing, num_children = zero(Int32))
 PB.field_numbers(::Type{Node}) = (;name = 1, metrics = 2, children = 3, category = 4, xla = 5, num_children = 6)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:Node})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:Node}, _endpos::Int=0, _group::Bool=false)
     name = ""
     metrics = Ref{Union{Nothing,Metrics}}(nothing)
     children = PB.BufferedVector{Node}()
     contents = nothing
     num_children = zero(Int32)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             name = PB.decode(d, String)
@@ -350,7 +350,7 @@ PB.reserved_fields(::Type{Profile}) = (names = ["by_program_structure", "per_pro
 PB.default_values(::Type{Profile}) = (;by_category = nothing, by_program = nothing, device_type = "", agg_dvfs_time_scale_multiplier = zero(Float64), by_category_exclude_idle = nothing, by_program_exclude_idle = nothing, by_provenance = nothing, by_provenance_exclude_idle = nothing)
 PB.field_numbers(::Type{Profile}) = (;by_category = 1, by_program = 4, device_type = 5, agg_dvfs_time_scale_multiplier = 10, by_category_exclude_idle = 6, by_program_exclude_idle = 7, by_provenance = 8, by_provenance_exclude_idle = 9)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:Profile})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:Profile}, _endpos::Int=0, _group::Bool=false)
     by_category = Ref{Union{Nothing,Node}}(nothing)
     by_program = Ref{Union{Nothing,Node}}(nothing)
     device_type = ""
@@ -359,7 +359,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:Profile})
     by_program_exclude_idle = Ref{Union{Nothing,Node}}(nothing)
     by_provenance = Ref{Union{Nothing,Node}}(nothing)
     by_provenance_exclude_idle = Ref{Union{Nothing,Node}}(nothing)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, by_category)

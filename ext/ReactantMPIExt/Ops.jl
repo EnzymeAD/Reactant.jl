@@ -2,10 +2,8 @@ module Ops
 using Reactant: Reactant, TracedRArray, TracedRNumber
 using Reactant: MLIR
 using Reactant.MLIR: IR
-using Reactant.MLIR.IR: @mlir_str
-using Reactant.MLIR.Dialects: mpi, func, llvm, enzymexla
+using Reactant.MLIR.Dialects: enzymexla
 using Reactant.Ops: mlir_stacktrace, mlir_type
-using ..ReactantMPIExt: TracedRequest
 using MPI: MPI
 
 # TODO(#2242)
@@ -72,7 +70,7 @@ end
     mpi_datatype = get_mpi_datatype_enum(MPI.Datatype(T))
 
     count = Reactant.Ops.constant(Int32(length(buf)))
-    request = mlir_type(TracedRArray{Int64,0}, ())
+    request = mlir_type(TracedRArray{Int32,0}, ())
 
     res = IR.result(
         enzymexla.mpi_isend(
@@ -88,7 +86,7 @@ end
         ),
     )
 
-    return TracedRNumber{Int64}((), res)
+    return TracedRNumber{Int32}((), res)
 end
 
 @noinline function recv!(
@@ -126,7 +124,7 @@ end
     mpi_datatype = get_mpi_datatype_enum(MPI.Datatype(T))
 
     count = Reactant.Ops.constant(Int32(length(buf)))
-    request = mlir_type(TracedRArray{Int64,0}, ())
+    request = mlir_type(TracedRArray{Int32,0}, ())
 
     ret = enzymexla.mpi_irecv(
         buf.mlir_data,
@@ -140,14 +138,22 @@ end
     )
 
     buf.mlir_data = IR.result(ret, 1)
-    request = TracedRNumber{Int64}((), IR.result(ret, 2))
+    request = TracedRNumber{Int32}((), IR.result(ret, 2))
     return request
 end
 
 @noinline function wait(
-    req::TracedRequest; location=mlir_stacktrace("mpi.wait", @__FILE__, @__LINE__)
+    req::TracedRNumber; location=mlir_stacktrace("mpi.wait", @__FILE__, @__LINE__)
 )
     enzymexla.mpi_wait(req.mlir_data; location)
+    return nothing
+end
+
+@noinline function waitall(
+    req::TracedRArray; location=mlir_stacktrace("mpi.waitall", @__FILE__, @__LINE__)
+)
+    count = Reactant.Ops.constant(Int32(length(req)))
+    enzymexla.mpi_waitall(count.mlir_data, req.mlir_data; location)
     return nothing
 end
 
@@ -155,7 +161,7 @@ end
     op,
     sendbuf::TracedRArray,
     recvbuf::TracedRArray;
-    location=mlir_stacktrace("mpi.wait", @__FILE__, @__LINE__),
+    location=mlir_stacktrace("mpi.allreduce", @__FILE__, @__LINE__),
 )
     mpi_op = get_mpi_op_enum(op)
 
@@ -178,36 +184,43 @@ end
     return recvbuf
 end
 
-@enum MPIOpEnum begin
-    MPI_OP_NULL_ENUM = 0
-    MPI_BAND_ENUM = 1
-    MPI_BOR_ENUM = 2
-    MPI_BXOR_ENUM = 3
-    MPI_LAND_ENUM = 4
-    MPI_LOR_ENUM = 5
-    MPI_LXOR_ENUM = 6
-    MPI_MAX_ENUM = 7
-    MPI_MIN_ENUM = 8
-    MPI_PROD_ENUM = 9
-    MPI_REPLACE_ENUM = 10
-    MPI_SUM_ENUM = 11
-    MPI_NO_OP_ENUM = 12
+@noinline function bcast!(
+    buf::TracedRArray,
+    root::TracedRNumber;
+    location=mlir_stacktrace("mpi.bcast", @__FILE__, @__LINE__),
+)
+    T = Reactant.unwrapped_eltype(buf)
+    mpi_datatype = get_mpi_datatype_enum(MPI.Datatype(T))
+
+    count = Reactant.Ops.constant(Int32(length(buf)))
+
+    ret = enzymexla.mpi_bcast(
+        buf.mlir_data,
+        count.mlir_data,
+        root.mlir_data;
+        outbuf=mlir_type(buf),
+        datatype=MLIR.API.enzymexlaMPIDatatypeAttrGet(IR.current_context(), mpi_datatype),
+        location,
+    )
+
+    buf.mlir_data = IR.result(ret)
+    return buf
 end
 
 const MPI_OP_MAP = Dict(
-    MPI.OP_NULL.val => MPI_OP_NULL_ENUM,
-    MPI.BAND.val => MPI_BAND_ENUM,
-    MPI.BOR.val => MPI_BOR_ENUM,
-    MPI.BXOR.val => MPI_BXOR_ENUM,
-    MPI.LAND.val => MPI_LAND_ENUM,
-    MPI.LOR.val => MPI_LOR_ENUM,
-    MPI.LXOR.val => MPI_LXOR_ENUM,
-    MPI.MAX.val => MPI_MAX_ENUM,
-    MPI.MIN.val => MPI_MIN_ENUM,
-    MPI.PROD.val => MPI_PROD_ENUM,
-    MPI.REPLACE.val => MPI_REPLACE_ENUM,
-    MPI.SUM.val => MPI_SUM_ENUM,
-    MPI.NO_OP.val => MPI_NO_OP_ENUM,
+    MPI.OP_NULL.val => MLIR.API.ENZYMEXLA_MPI_OP_NULL,
+    MPI.BAND.val => MLIR.API.ENZYMEXLA_MPI_BAND,
+    MPI.BOR.val => MLIR.API.ENZYMEXLA_MPI_BOR,
+    MPI.BXOR.val => MLIR.API.ENZYMEXLA_MPI_BXOR,
+    MPI.LAND.val => MLIR.API.ENZYMEXLA_MPI_LAND,
+    MPI.LOR.val => MLIR.API.ENZYMEXLA_MPI_LOR,
+    MPI.LXOR.val => MLIR.API.ENZYMEXLA_MPI_LXOR,
+    MPI.MAX.val => MLIR.API.ENZYMEXLA_MPI_MAX,
+    MPI.MIN.val => MLIR.API.ENZYMEXLA_MPI_MIN,
+    MPI.PROD.val => MLIR.API.ENZYMEXLA_MPI_PROD,
+    MPI.REPLACE.val => MLIR.API.ENZYMEXLA_MPI_REPLACE,
+    MPI.SUM.val => MLIR.API.ENZYMEXLA_MPI_SUM,
+    MPI.NO_OP.val => MLIR.API.ENZYMEXLA_MPI_NO_OP,
 )
 
 function get_mpi_op_enum(op)
@@ -216,64 +229,34 @@ function get_mpi_op_enum(op)
     end
 end
 
-@enum MPIDataTypeEnum begin
-    MPI_DATATYPE_NULL_ENUM = 0
-    MPI_INT8_T_ENUM = 1
-    MPI_UINT8_T_ENUM = 2
-    MPI_INT16_T_ENUM = 3
-    MPI_UINT16_T_ENUM = 4
-    MPI_INT32_T_ENUM = 5
-    MPI_UINT32_T_ENUM = 6
-    MPI_INT64_T_ENUM = 7
-    MPI_UINT64_T_ENUM = 8
-    MPI_BYTE_ENUM = 9
-    MPI_SHORT_ENUM = 10
-    MPI_UNSIGNED_SHORT_ENUM = 11
-    MPI_INT_ENUM = 12
-    MPI_UNSIGNED_ENUM = 13
-    MPI_LONG_ENUM = 14
-    MPI_UNSIGNED_LONG_ENUM = 15
-    MPI_LONG_LONG_INT_ENUM = 16
-    MPI_UNSIGNED_LONG_LONG_ENUM = 17
-    MPI_CHAR_ENUM = 18
-    MPI_SIGNED_CHAR_ENUM = 19
-    MPI_UNSIGNED_CHAR_ENUM = 20
-    MPI_WCHAR_ENUM = 21
-    MPI_FLOAT_ENUM = 22
-    MPI_DOUBLE_ENUM = 23
-    MPI_C_FLOAT_COMPLEX_ENUM = 24
-    MPI_C_DOUBLE_COMPLEX_ENUM = 25
-    MPI_C_BOOL_ENUM = 26
-end
-
 const MPI_DATATYPE_MAP = Dict(
-    MPI.DATATYPE_NULL.val => MPI_DATATYPE_NULL_ENUM,
-    MPI.INT8_T.val => MPI_INT8_T_ENUM,
-    MPI.UINT8_T.val => MPI_UINT8_T_ENUM,
-    MPI.INT16_T.val => MPI_INT16_T_ENUM,
-    MPI.UINT16_T.val => MPI_UINT16_T_ENUM,
-    MPI.INT32_T.val => MPI_INT32_T_ENUM,
-    MPI.UINT32_T.val => MPI_UINT32_T_ENUM,
-    MPI.INT64_T.val => MPI_INT64_T_ENUM,
-    MPI.UINT64_T.val => MPI_UINT64_T_ENUM,
-    MPI.BYTE.val => MPI_BYTE_ENUM,
-    MPI.SHORT.val => MPI_SHORT_ENUM,
-    MPI.UNSIGNED_SHORT.val => MPI_UNSIGNED_SHORT_ENUM,
-    MPI.INT.val => MPI_INT_ENUM,
-    MPI.UNSIGNED.val => MPI_UNSIGNED_ENUM,
-    MPI.LONG.val => MPI_LONG_ENUM,
-    MPI.UNSIGNED_LONG.val => MPI_UNSIGNED_LONG_ENUM,
-    MPI.LONG_LONG_INT.val => MPI_LONG_LONG_INT_ENUM,
-    MPI.UNSIGNED_LONG_LONG.val => MPI_UNSIGNED_LONG_LONG_ENUM,
-    MPI.CHAR.val => MPI_CHAR_ENUM,
-    MPI.SIGNED_CHAR.val => MPI_SIGNED_CHAR_ENUM,
-    MPI.UNSIGNED_CHAR.val => MPI_UNSIGNED_CHAR_ENUM,
-    MPI.WCHAR.val => MPI_WCHAR_ENUM,
-    MPI.FLOAT.val => MPI_FLOAT_ENUM,
-    MPI.DOUBLE.val => MPI_DOUBLE_ENUM,
-    MPI.C_FLOAT_COMPLEX.val => MPI_C_FLOAT_COMPLEX_ENUM,
-    MPI.C_DOUBLE_COMPLEX.val => MPI_C_DOUBLE_COMPLEX_ENUM,
-    MPI.C_BOOL.val => MPI_C_BOOL_ENUM,
+    MPI.DATATYPE_NULL.val => MLIR.API.ENZYMEXLA_MPI_DATATYPE_NULL,
+    MPI.INT8_T.val => MLIR.API.ENZYMEXLA_MPI_INT8_T,
+    MPI.UINT8_T.val => MLIR.API.ENZYMEXLA_MPI_UINT8_T,
+    MPI.INT16_T.val => MLIR.API.ENZYMEXLA_MPI_INT16_T,
+    MPI.UINT16_T.val => MLIR.API.ENZYMEXLA_MPI_UINT16_T,
+    MPI.INT32_T.val => MLIR.API.ENZYMEXLA_MPI_INT32_T,
+    MPI.UINT32_T.val => MLIR.API.ENZYMEXLA_MPI_UINT32_T,
+    MPI.INT64_T.val => MLIR.API.ENZYMEXLA_MPI_INT64_T,
+    MPI.UINT64_T.val => MLIR.API.ENZYMEXLA_MPI_UINT64_T,
+    MPI.BYTE.val => MLIR.API.ENZYMEXLA_MPI_BYTE,
+    MPI.SHORT.val => MLIR.API.ENZYMEXLA_MPI_SHORT,
+    MPI.UNSIGNED_SHORT.val => MLIR.API.ENZYMEXLA_MPI_UNSIGNED_SHORT,
+    MPI.INT.val => MLIR.API.ENZYMEXLA_MPI_INT,
+    MPI.UNSIGNED.val => MLIR.API.ENZYMEXLA_MPI_UNSIGNED,
+    MPI.LONG.val => MLIR.API.ENZYMEXLA_MPI_LONG,
+    MPI.UNSIGNED_LONG.val => MLIR.API.ENZYMEXLA_MPI_UNSIGNED_LONG,
+    MPI.LONG_LONG_INT.val => MLIR.API.ENZYMEXLA_MPI_LONG_LONG_INT,
+    MPI.UNSIGNED_LONG_LONG.val => MLIR.API.ENZYMEXLA_MPI_UNSIGNED_LONG_LONG,
+    MPI.CHAR.val => MLIR.API.ENZYMEXLA_MPI_CHAR,
+    MPI.SIGNED_CHAR.val => MLIR.API.ENZYMEXLA_MPI_SIGNED_CHAR,
+    MPI.UNSIGNED_CHAR.val => MLIR.API.ENZYMEXLA_MPI_UNSIGNED_CHAR,
+    MPI.WCHAR.val => MLIR.API.ENZYMEXLA_MPI_WCHAR,
+    MPI.FLOAT.val => MLIR.API.ENZYMEXLA_MPI_FLOAT,
+    MPI.DOUBLE.val => MLIR.API.ENZYMEXLA_MPI_DOUBLE,
+    MPI.C_FLOAT_COMPLEX.val => MLIR.API.ENZYMEXLA_MPI_C_FLOAT_COMPLEX,
+    MPI.C_DOUBLE_COMPLEX.val => MLIR.API.ENZYMEXLA_MPI_C_DOUBLE_COMPLEX,
+    MPI.C_BOOL.val => MLIR.API.ENZYMEXLA_MPI_C_BOOL,
 )
 
 function get_mpi_datatype_enum(datatype)

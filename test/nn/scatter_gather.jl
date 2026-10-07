@@ -1,4 +1,4 @@
-using NNlib, Reactant, Enzyme, Statistics, Test
+using NNlib, Reactant, Enzyme, Statistics, Test, FileCheck
 
 # Adapted from https://github.com/FluxML/NNlib.jl/blob/02138682a4fc5ca019759218be50e59907d4527c/test/testsuite/gather.jl#L5
 @testset "NNlib gather" begin
@@ -501,5 +501,8 @@ end
 
     @test @jit(NNlib.gather(x_ra, idxs_ra)) ≈ NNlib.gather(x, idxs)
     hlo = repr(@code_hlo(NNlib.gather(x_ra, idxs_ra)))
-    @test !contains(hlo, "i64>")
+    @test @filecheck begin
+        @check_not "i64>"
+        hlo
+    end
 end

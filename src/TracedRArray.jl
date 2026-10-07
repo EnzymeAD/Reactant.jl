@@ -23,7 +23,7 @@ Base.strides(x::TracedRArray) = Base.size_to_strides(1, size(x)...)
 
 Base.IndexStyle(::Type{<:TracedRArray}) = Base.IndexLinear()
 
-Base.elsize(::Type{TracedRArray{T,N}}) where {T,N} = sizeof(T)
+Base.elsize(::Type{<:TracedRArray{T,N}}) where {T,N} = sizeof(T)
 
 # This is required otherwise we will copy a tracedrarray each time
 # we use it
@@ -47,7 +47,13 @@ TracedRArray{T,N}(x::AbstractArray) where {T,N} = convert(TracedRArray{T,N}, x)
 Base.Tuple(x::TracedRArray) = ntuple(Base.Fix1(getindex, x), length(x))
 
 Base.size(x::TracedRArray) = x.shape
-Base.size(x::TracedRArray, i::Integer) = ifelse(i > ndims(x), 1, x.shape[i])
+function Base.size(x::TracedRArray, i::Integer)
+    if i > ndims(x)
+        1
+    else
+        x.shape[i]
+    end
+end
 
 function Base.size(x::TracedRArray, i::TracedRNumber{<:Integer})
     return @allowscalar ifelse(
@@ -56,15 +62,18 @@ function Base.size(x::TracedRArray, i::TracedRNumber{<:Integer})
 end
 
 Base.collect(x::TracedRArray) = copy(x)
+Base.collect(x::SubArray{<:TracedRNumber,<:Any,<:TracedRArray}) = copy(x)
 
 Base.copy(A::TracedRArray{T,N}) where {T,N} = TracedRArray{T,N}((), A.mlir_data, size(A))
 
 function Base.similar(::TracedRArray, ::Type{T}, dims::Dims{N}) where {T,N}
-    return @opcall fill(zero(unwrapped_eltype(T)), dims)
+    return (@opcall fill(
+        zero(unwrapped_eltype(T)), dims
+    ))::TracedRArray{unwrapped_eltype(T),N}
 end
 
 function Base.similar(::Type{<:TracedRArray{T}}, dims::Dims{N}) where {T,N}
-    return @opcall fill(zero(T), dims)
+    return (@opcall fill(zero(T), dims))::TracedRArray{T,N}
 end
 
 function Base.show(io::IOty, X::AnyTracedRArray) where {IOty<:Union{IO,IOContext}}
@@ -90,6 +99,17 @@ end
 # Override _parentsmatch to avoid pointer comparisons during tracing
 # Direct TracedRArray comparisons - they don't alias unless they're the same object
 Base._parentsmatch(A::TracedRArray, B::TracedRArray) = A === B
+# A TracedRArray and a regular Array can never share memory, so they never alias.
+# Without this, the default DenseArray/StridedArray methods call pointer() which
+# isn't defined for TracedRArray, causing "conversion to pointer not defined"
+# errors when @views creates SubArray wrappers that trigger broadcast alias checking.
+Base._parentsmatch(::TracedRArray, ::AbstractArray) = false
+Base._parentsmatch(::AbstractArray, ::TracedRArray) = false
+# Resolve method ambiguities with Base's DenseArray and StridedArray specializations
+Base._parentsmatch(::TracedRArray, ::DenseArray) = false
+Base._parentsmatch(::DenseArray, ::TracedRArray) = false
+Base._parentsmatch(::TracedRArray, ::StridedArray) = false
+Base._parentsmatch(::StridedArray, ::TracedRArray) = false
 # ReshapedArray comparisons - check if they share the same parent (more specific than StridedArray)
 function Base._parentsmatch(
     A::Base.ReshapedArray{
@@ -172,35 +192,59 @@ function overloaded_mapreduce(
     dims=:,
     init=Base._InitialValue(),
 ) where {T,N}
-    original_dims = dims
-    dims isa Int && (dims = Int64[dims])
-    dims isa Colon && (dims = collect(Int64, 1:N))
-    dims isa Vector{Int64} || (dims = collect(Int64, dims))
-    dims = sort(dims)
+    # don't reassign dims to avoid the "captured variable in closure" type instability
+    normalized_dims = sort(
+        if dims isa Int
+            Int64[dims]
+        elseif dims isa Colon
+            collect(Int64, 1:N)
+        elseif dims isa Vector{Int64}
+            dims
+        else
+            collect(Int64, dims)
+        end,
+    )
 
     op_in_T = unwrapped_eltype(Core.Compiler.return_type(f, Tuple{T}))
-    reduce_init = __default_init(op_in_T, op)
-    riT = unwrapped_eltype(typeof(reduce_init))
-    if riT != op_in_T
-        op_in_T = riT
-        A = riT.(A)
-    end
-    reduce_init = Reactant.promote_to(TracedRNumber{op_in_T}, reduce_init)
+    # `op` may accumulate in a wider type than it consumes: `+(::Bool, ::Bool)::Int64`, so
+    # `sum` over booleans is an `Int64` in Base. `__default_init` reports that wider type
+    # (it is the type of `op`'s identity element), so reduce in it.
+    init_val = __default_init(op_in_T, op)
+    op_in_T = unwrapped_eltype(typeof(init_val))
+    reduce_init = Reactant.promote_to(TracedRNumber{op_in_T}, init_val)
 
+    # Widen *after* applying `f`, not before. `f` decides the element type actually being
+    # reduced, so converting `A` up front is undone by anything narrowing -- e.g. the
+    # predicate in `sum(x -> x == 1, a)` returns `Bool` whatever `A` was converted to.
+    # Reducing in the narrow type is silently wrong: `stablehlo.add` over `i1` is a logical
+    # `or`, and small integers wrap.
     reduce_input = materialize_traced_array(TracedUtils.elem_apply(f, A))
+    if unwrapped_eltype(reduce_input) != op_in_T
+        reduce_input = op_in_T.(reduce_input)
+    end
 
-    res = @opcall reduce(reduce_input, reduce_init, dims, op)
+    res_noinit = @opcall reduce(reduce_input, reduce_init, normalized_dims, op)
 
-    (init isa Base._InitialValue || init === nothing) || (res = op.(res, init))
+    if (init isa Base._InitialValue || init === nothing)
+        res = res_noinit
+        res_T = op_in_T
+    else
+        res = op.(res_noinit, init)
+        res_T = Base.promote_op(op, op_in_T, unwrapped_eltype(typeof(init)))
+    end
 
-    if original_dims isa Colon
+    if dims isa Colon
         @assert size(res) == () "expected size of result to be (), got $(size(res))"
-        return TracedRNumber{unwrapped_eltype(res)}((), res.mlir_data)
+        return TracedRNumber{unwrapped_eltype(res)}((), res.mlir_data)::TracedRNumber{res_T}
     end
     if res isa TracedRNumber
-        res = TracedRArray{unwrapped_eltype(res),0}((), res.mlir_data, ())
+        res = TracedRArray{unwrapped_eltype(res),0}(
+            (), res.mlir_data, ()
+        )::TracedRArray{res_T,0}
     end
-    return @opcall reshape(res, [ifelse(i in dims, 1, size(A, i)) for i in 1:N])
+    shape = [ifelse(i in normalized_dims, 1, size(A, i)) for i in 1:N]
+    res_reshaped = @opcall reshape(res, shape)
+    return res_reshaped::TracedRArray{res_T,N}
 end
 
 function Base.mapreducedim!(
@@ -251,18 +295,29 @@ function Broadcast.BroadcastStyle(::Type{<:TracedRNumber})
     return AbstractReactantArrayStyle{0}()
 end
 
+function Base.zeros(::Type{T}, dims::Tuple{}) where {T<:TracedRArray}
+    return (@opcall fill(
+        zero(unwrapped_eltype(T)), dims
+    ))::TracedRArray{unwrapped_eltype(T),0}
+end
+function Base.zeros(::Type{T}, dims::NTuple{N,Int}) where {T<:TracedRArray,N}
+    return (@opcall fill(
+        zero(unwrapped_eltype(T)), dims
+    ))::TracedRArray{unwrapped_eltype(T),N}
+end
+
 function Base.similar(
     ::Broadcasted{AbstractReactantArrayStyle{N}}, ::Type{T}, dims
 ) where {T<:Reactant.ReactantPrimitive,N}
     @assert N isa Int
-    return @opcall fill(zero(unwrapped_eltype(T)), dims)
+    return (@opcall fill(zero(unwrapped_eltype(T)), dims))::TracedRArray{T,N}
 end
 
 function Base.similar(
-    ::Broadcasted{AbstractReactantArrayStyle{N}}, ::Type{TracedRNumber{T}}, dims
+    ::Broadcasted{AbstractReactantArrayStyle{N}}, ::Type{<:TracedRNumber{T}}, dims
 ) where {T<:Reactant.ReactantPrimitive,N}
     @assert N isa Int
-    return @opcall fill(zero(T), dims)
+    return (@opcall fill(zero(T), dims))::TracedRArray{T,N}
 end
 
 function Base.copy(bc::Broadcasted{<:AbstractReactantArrayStyle{0}})
@@ -274,10 +329,11 @@ end
 Base.eltype(::Broadcast.Extruded{T}) where {T} = eltype(T)
 
 first_scalar(x) = @allowscalar first(x)
+first_scalar(x::Broadcast.Extruded) = first_scalar(x.x)
 
 # we need to override the outer copy method to make sure we never fall back to scalar
 # iteration (see, e.g., CUDA.jl#145)
-function Base.copy(bc::Broadcasted{<:AbstractReactantArrayStyle})
+function _copy(bc)
     fn = if bc.f isa Type && bc.f <: Reactant.ReactantPrimitive
         TracedUtils.TypeCast{bc.f}()
     else
@@ -285,11 +341,8 @@ function Base.copy(bc::Broadcasted{<:AbstractReactantArrayStyle})
     end
     ElType = Broadcast.combine_eltypes(fn, bc.args)
     # Special case a union{} return so we can see the better error message
-    if ElType === Union{}
-        fn(map(first_scalar, bc.args)...)
-    elseif ElType == Any
-        res = fn(map(first_scalar, bc.args)...)
-        ElType = Core.Typeof(res)
+    if ElType === Union{} || ElType == Any || ElType == TracedRNumber
+        ElType = Core.Typeof(fn(map(first_scalar, bc.args)...))
     end
     if ElType == Any || ElType == Union{}
         throw(AssertionError("Failed to deduce eltype of broadcast of $fn, found $ElType"))
@@ -298,10 +351,15 @@ function Base.copy(bc::Broadcasted{<:AbstractReactantArrayStyle})
     return copyto!(sim, bc)
 end
 
+@noinline function Base.copy(bc::Broadcasted{<:AbstractReactantArrayStyle})
+    return _copy(bc)
+end
+
 function Base.materialize!(
     ::Style, dest, bc::Broadcasted
 ) where {Style<:AbstractReactantArrayStyle}
-    return _copyto!(dest, instantiate(Broadcasted{Style}(bc.f, bc.args, axes(dest))))
+    _copyto!(dest, instantiate(Broadcasted{Style}(bc.f, bc.args, axes(dest))))
+    return dest
 end
 
 Base.copyto!(dest::AnyTracedRArray, bc::Broadcasted{Nothing}) = _copyto!(dest, bc) # Keep it for ArrayConflict
@@ -361,15 +419,16 @@ end
 function _copyto!(dest::AnyTracedRArray, bc::Broadcasted)
     axes(dest) == axes(bc) || Broadcast.throwdm(axes(dest), axes(bc))
     isempty(dest) && return dest
-
     bc = Broadcast.preprocess(dest, bc)
 
     args = (Reactant.broadcast_to_size(Base.materialize(a), size(bc)) for a in bc.args)
 
-    res = Reactant.promote_to(
-        TracedRArray{unwrapped_eltype(dest),ndims(dest)},
-        TracedUtils.elem_apply(bc.f, args...),
-    )
+    res0 = TracedUtils.elem_apply(bc.f, args...)
+    if !(res0 isa Reactant.TracedType)
+        # `bc.f` returned a constant that does not depend on its arguments:
+        res0 = Reactant.broadcast_to_size(res0, size(dest))
+    end
+    res = Reactant.promote_to(TracedRArray{unwrapped_eltype(dest),ndims(dest)}, res0)
     TracedUtils.set_mlir_data!(dest, res.mlir_data)
     return dest
 end
@@ -1138,8 +1197,9 @@ end
 function Base.reverse(
     v::AnyTracedRVector{T}, start::Integer, stop::Integer=lastindex(v)
 ) where {T}
-    v[start:stop] = reverse!(v[start:stop])
-    return v
+    reversed = copy(v)
+    reversed[start:stop] = reverse!(v[start:stop])
+    return reversed
 end
 
 function Base.reverse!(
@@ -1317,10 +1377,53 @@ function Base.permutedims(A::AnyTracedRArray{T,N}, perm) where {T,N}
     return @opcall transpose(materialize_traced_array(A), Int64[perm...])
 end
 
-function Base.permutedims!(dest::TracedRArray, src::AnyTracedRArray, perm)
+function Base.permutedims!(dest::AnyTracedRArray, src::AnyTracedRArray, perm)
     result = @opcall transpose(materialize_traced_array(src), Int64[perm...])
     TracedUtils.set_mlir_data!(dest, result.mlir_data)
     return dest
 end
+
+function Base.push!(a::TracedRArray{T,1}, items...) where {T}
+    items_cat = Reactant.promote_to(TracedRArray{T,1}, [items...])
+    result = @opcall concatenate([a, items_cat], 1)
+    a.mlir_data = result.mlir_data
+    a.shape = result.shape
+    return a
+end
+
+function Base.pushfirst!(a::TracedRArray{T,1}, items...) where {T}
+    items_cat = Reactant.promote_to(TracedRArray{T,1}, [items...])
+    result = @opcall concatenate([items_cat, a], 1)
+    a.mlir_data = result.mlir_data
+    a.shape = result.shape
+    return a
+end
+
+function Base.pop!(a::TracedRArray{T,1}) where {T}
+    @assert length(a) > 0
+    val = @allowscalar a[end]
+    sliced = @opcall slice(a, [1], [length(a) - 1])
+    a.mlir_data = sliced.mlir_data
+    a.shape = sliced.shape
+    return val
+end
+
+function Base.popfirst!(a::TracedRArray{T,1}) where {T}
+    @assert length(a) > 0
+    val = @allowscalar a[1]
+    sliced = @opcall slice(a, [2], [length(a)])
+    a.mlir_data = sliced.mlir_data
+    a.shape = sliced.shape
+    return val
+end
+
+function Base.append!(a::TracedRArray{T,1}, b::TracedRArray{T,1}) where {T}
+    result = @opcall concatenate(TracedRArray{T,1}[a, b], 1)
+    a.mlir_data = result.mlir_data
+    a.shape = result.shape
+    return a
+end
+
+Base.extrema(A::TracedRArray) = minimum(A), maximum(A)
 
 end

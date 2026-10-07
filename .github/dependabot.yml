@@ -9,6 +9,7 @@ updates:
   - package-ecosystem: "julia"
     directories:
       - "/"
+      - "/benchmark"
       - "/lib/ReactantCore"
     schedule:
       interval: "weekly"

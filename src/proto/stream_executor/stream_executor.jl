@@ -2,6 +2,7 @@ module stream_executor
 
 include("../xla_autotuning/xla_autotuning.jl")
 
+include("oneapi_compute_capability_pb.jl")
 include("cuda_compute_capability_pb.jl")
 include("device_description_pb.jl")
 

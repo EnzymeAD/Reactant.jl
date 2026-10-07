@@ -19,11 +19,13 @@ struct var"AutotuneResult.TritonGemmKey"
     num_ctas::Int64
     is_tma_allowed::Bool
     is_warp_specialization_allowed::Bool
+    waves_per_eu::Int64
+    group_size::Int64
 end
-PB.default_values(::Type{var"AutotuneResult.TritonGemmKey"}) = (;block_m = zero(Int64), block_n = zero(Int64), block_k = zero(Int64), split_k = zero(Int64), num_stages = zero(Int64), num_warps = zero(Int64), num_ctas = zero(Int64), is_tma_allowed = false, is_warp_specialization_allowed = false)
-PB.field_numbers(::Type{var"AutotuneResult.TritonGemmKey"}) = (;block_m = 1, block_n = 2, block_k = 3, split_k = 4, num_stages = 5, num_warps = 6, num_ctas = 7, is_tma_allowed = 8, is_warp_specialization_allowed = 9)
+PB.default_values(::Type{var"AutotuneResult.TritonGemmKey"}) = (;block_m = zero(Int64), block_n = zero(Int64), block_k = zero(Int64), split_k = zero(Int64), num_stages = zero(Int64), num_warps = zero(Int64), num_ctas = zero(Int64), is_tma_allowed = false, is_warp_specialization_allowed = false, waves_per_eu = zero(Int64), group_size = zero(Int64))
+PB.field_numbers(::Type{var"AutotuneResult.TritonGemmKey"}) = (;block_m = 1, block_n = 2, block_k = 3, split_k = 4, num_stages = 5, num_warps = 6, num_ctas = 7, is_tma_allowed = 8, is_warp_specialization_allowed = 9, waves_per_eu = 10, group_size = 11)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"AutotuneResult.TritonGemmKey"})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"AutotuneResult.TritonGemmKey"}, _endpos::Int=0, _group::Bool=false)
     block_m = zero(Int64)
     block_n = zero(Int64)
     block_k = zero(Int64)
@@ -33,7 +35,9 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"AutotuneResult.Trito
     num_ctas = zero(Int64)
     is_tma_allowed = false
     is_warp_specialization_allowed = false
-    while !PB.message_done(d)
+    waves_per_eu = zero(Int64)
+    group_size = zero(Int64)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             block_m = PB.decode(d, Int64)
@@ -53,11 +57,15 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"AutotuneResult.Trito
             is_tma_allowed = PB.decode(d, Bool)
         elseif field_number == 9
             is_warp_specialization_allowed = PB.decode(d, Bool)
+        elseif field_number == 10
+            waves_per_eu = PB.decode(d, Int64)
+        elseif field_number == 11
+            group_size = PB.decode(d, Int64)
         else
             Base.skip(d, wire_type)
         end
     end
-    return var"AutotuneResult.TritonGemmKey"(block_m, block_n, block_k, split_k, num_stages, num_warps, num_ctas, is_tma_allowed, is_warp_specialization_allowed)
+    return var"AutotuneResult.TritonGemmKey"(block_m, block_n, block_k, split_k, num_stages, num_warps, num_ctas, is_tma_allowed, is_warp_specialization_allowed, waves_per_eu, group_size)
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::var"AutotuneResult.TritonGemmKey")
@@ -71,6 +79,8 @@ function PB.encode(e::PB.AbstractProtoEncoder, x::var"AutotuneResult.TritonGemmK
     x.num_ctas != zero(Int64) && PB.encode(e, 7, x.num_ctas)
     x.is_tma_allowed != false && PB.encode(e, 8, x.is_tma_allowed)
     x.is_warp_specialization_allowed != false && PB.encode(e, 9, x.is_warp_specialization_allowed)
+    x.waves_per_eu != zero(Int64) && PB.encode(e, 10, x.waves_per_eu)
+    x.group_size != zero(Int64) && PB.encode(e, 11, x.group_size)
     return position(e.io) - initpos
 end
 function PB._encoded_size(x::var"AutotuneResult.TritonGemmKey")
@@ -84,6 +94,8 @@ function PB._encoded_size(x::var"AutotuneResult.TritonGemmKey")
     x.num_ctas != zero(Int64) && (encoded_size += PB._encoded_size(x.num_ctas, 7))
     x.is_tma_allowed != false && (encoded_size += PB._encoded_size(x.is_tma_allowed, 8))
     x.is_warp_specialization_allowed != false && (encoded_size += PB._encoded_size(x.is_warp_specialization_allowed, 9))
+    x.waves_per_eu != zero(Int64) && (encoded_size += PB._encoded_size(x.waves_per_eu, 10))
+    x.group_size != zero(Int64) && (encoded_size += PB._encoded_size(x.group_size, 11))
     return encoded_size
 end
 
@@ -94,10 +106,10 @@ end
 PB.default_values(::Type{var"AutotuneResult.BackendConfigKey"}) = (;name = "", config = nothing)
 PB.field_numbers(::Type{var"AutotuneResult.BackendConfigKey"}) = (;name = 1, config = 2)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"AutotuneResult.BackendConfigKey"})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"AutotuneResult.BackendConfigKey"}, _endpos::Int=0, _group::Bool=false)
     name = ""
     config = Ref{Union{Nothing,google.protobuf.var"#Any"}}(nothing)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             name = PB.decode(d, String)
@@ -130,10 +142,10 @@ end
 PB.default_values(::Type{var"AutotuneResult.ConvKey"}) = (;algorithm = zero(Int64), tensor_ops_enabled = false)
 PB.field_numbers(::Type{var"AutotuneResult.ConvKey"}) = (;algorithm = 1, tensor_ops_enabled = 2)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"AutotuneResult.ConvKey"})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"AutotuneResult.ConvKey"}, _endpos::Int=0, _group::Bool=false)
     algorithm = zero(Int64)
     tensor_ops_enabled = false
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             algorithm = PB.decode(d, Int64)
@@ -160,44 +172,45 @@ function PB._encoded_size(x::var"AutotuneResult.ConvKey")
 end
 
 struct CudnnVersion
-    major::Int32
-    minor::Int32
-    patch::Int32
+    major_version::Int32
+    minor_version::Int32
+    patch_version::Int32
 end
-PB.default_values(::Type{CudnnVersion}) = (;major = zero(Int32), minor = zero(Int32), patch = zero(Int32))
-PB.field_numbers(::Type{CudnnVersion}) = (;major = 1, minor = 2, patch = 3)
+PB.reserved_fields(::Type{CudnnVersion}) = (names = ["major", "minor", "patch"], numbers = Union{Int,UnitRange{Int}}[1, 2, 3])
+PB.default_values(::Type{CudnnVersion}) = (;major_version = zero(Int32), minor_version = zero(Int32), patch_version = zero(Int32))
+PB.field_numbers(::Type{CudnnVersion}) = (;major_version = 4, minor_version = 5, patch_version = 6)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:CudnnVersion})
-    major = zero(Int32)
-    minor = zero(Int32)
-    patch = zero(Int32)
-    while !PB.message_done(d)
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:CudnnVersion}, _endpos::Int=0, _group::Bool=false)
+    major_version = zero(Int32)
+    minor_version = zero(Int32)
+    patch_version = zero(Int32)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
-        if field_number == 1
-            major = PB.decode(d, Int32)
-        elseif field_number == 2
-            minor = PB.decode(d, Int32)
-        elseif field_number == 3
-            patch = PB.decode(d, Int32)
+        if field_number == 4
+            major_version = PB.decode(d, Int32)
+        elseif field_number == 5
+            minor_version = PB.decode(d, Int32)
+        elseif field_number == 6
+            patch_version = PB.decode(d, Int32)
         else
             Base.skip(d, wire_type)
         end
     end
-    return CudnnVersion(major, minor, patch)
+    return CudnnVersion(major_version, minor_version, patch_version)
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::CudnnVersion)
     initpos = position(e.io)
-    x.major != zero(Int32) && PB.encode(e, 1, x.major)
-    x.minor != zero(Int32) && PB.encode(e, 2, x.minor)
-    x.patch != zero(Int32) && PB.encode(e, 3, x.patch)
+    x.major_version != zero(Int32) && PB.encode(e, 4, x.major_version)
+    x.minor_version != zero(Int32) && PB.encode(e, 5, x.minor_version)
+    x.patch_version != zero(Int32) && PB.encode(e, 6, x.patch_version)
     return position(e.io) - initpos
 end
 function PB._encoded_size(x::CudnnVersion)
     encoded_size = 0
-    x.major != zero(Int32) && (encoded_size += PB._encoded_size(x.major, 1))
-    x.minor != zero(Int32) && (encoded_size += PB._encoded_size(x.minor, 2))
-    x.patch != zero(Int32) && (encoded_size += PB._encoded_size(x.patch, 3))
+    x.major_version != zero(Int32) && (encoded_size += PB._encoded_size(x.major_version, 4))
+    x.minor_version != zero(Int32) && (encoded_size += PB._encoded_size(x.minor_version, 5))
+    x.patch_version != zero(Int32) && (encoded_size += PB._encoded_size(x.patch_version, 6))
     return encoded_size
 end
 
@@ -210,10 +223,10 @@ end
 PB.default_values(::Type{var"AutotuneResult.GemmKey"}) = (;algorithm = zero(Int64), autotune_workspace_size = zero(Int64))
 PB.field_numbers(::Type{var"AutotuneResult.GemmKey"}) = (;algorithm = 1, autotune_workspace_size = 2)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"AutotuneResult.GemmKey"})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"AutotuneResult.GemmKey"}, _endpos::Int=0, _group::Bool=false)
     algorithm = zero(Int64)
     autotune_workspace_size = zero(Int64)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             algorithm = PB.decode(d, Int64)
@@ -245,9 +258,9 @@ end
 PB.default_values(::Type{var"AutotuneResult.CustomKernelFusionKey"}) = (;kernel_index = zero(Int64))
 PB.field_numbers(::Type{var"AutotuneResult.CustomKernelFusionKey"}) = (;kernel_index = 1)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"AutotuneResult.CustomKernelFusionKey"})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"AutotuneResult.CustomKernelFusionKey"}, _endpos::Int=0, _group::Bool=false)
     kernel_index = zero(Int64)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             kernel_index = PB.decode(d, Int64)
@@ -275,9 +288,9 @@ end
 PB.default_values(::Type{var"AutotuneResult.CudaConvPlanKey"}) = (;exec_plan_id = "")
 PB.field_numbers(::Type{var"AutotuneResult.CudaConvPlanKey"}) = (;exec_plan_id = 1)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"AutotuneResult.CudaConvPlanKey"})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"AutotuneResult.CudaConvPlanKey"}, _endpos::Int=0, _group::Bool=false)
     exec_plan_id = ""
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             exec_plan_id = PB.decode(d, String)
@@ -300,38 +313,39 @@ function PB._encoded_size(x::var"AutotuneResult.CudaConvPlanKey")
 end
 
 struct ComputeCapability
-    major::Int32
-    minor::Int32
+    major_version::Int32
+    minor_version::Int32
 end
-PB.default_values(::Type{ComputeCapability}) = (;major = zero(Int32), minor = zero(Int32))
-PB.field_numbers(::Type{ComputeCapability}) = (;major = 1, minor = 2)
+PB.reserved_fields(::Type{ComputeCapability}) = (names = ["major", "minor"], numbers = Union{Int,UnitRange{Int}}[1, 2])
+PB.default_values(::Type{ComputeCapability}) = (;major_version = zero(Int32), minor_version = zero(Int32))
+PB.field_numbers(::Type{ComputeCapability}) = (;major_version = 3, minor_version = 4)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ComputeCapability})
-    major = zero(Int32)
-    minor = zero(Int32)
-    while !PB.message_done(d)
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ComputeCapability}, _endpos::Int=0, _group::Bool=false)
+    major_version = zero(Int32)
+    minor_version = zero(Int32)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
-        if field_number == 1
-            major = PB.decode(d, Int32)
-        elseif field_number == 2
-            minor = PB.decode(d, Int32)
+        if field_number == 3
+            major_version = PB.decode(d, Int32)
+        elseif field_number == 4
+            minor_version = PB.decode(d, Int32)
         else
             Base.skip(d, wire_type)
         end
     end
-    return ComputeCapability(major, minor)
+    return ComputeCapability(major_version, minor_version)
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::ComputeCapability)
     initpos = position(e.io)
-    x.major != zero(Int32) && PB.encode(e, 1, x.major)
-    x.minor != zero(Int32) && PB.encode(e, 2, x.minor)
+    x.major_version != zero(Int32) && PB.encode(e, 3, x.major_version)
+    x.minor_version != zero(Int32) && PB.encode(e, 4, x.minor_version)
     return position(e.io) - initpos
 end
 function PB._encoded_size(x::ComputeCapability)
     encoded_size = 0
-    x.major != zero(Int32) && (encoded_size += PB._encoded_size(x.major, 1))
-    x.minor != zero(Int32) && (encoded_size += PB._encoded_size(x.minor, 2))
+    x.major_version != zero(Int32) && (encoded_size += PB._encoded_size(x.major_version, 3))
+    x.minor_version != zero(Int32) && (encoded_size += PB._encoded_size(x.minor_version, 4))
     return encoded_size
 end
 
@@ -341,9 +355,9 @@ end
 PB.default_values(::Type{TritonGemmConfigsProto}) = (;config = Vector{var"AutotuneResult.TritonGemmKey"}())
 PB.field_numbers(::Type{TritonGemmConfigsProto}) = (;config = 1)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:TritonGemmConfigsProto})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:TritonGemmConfigsProto}, _endpos::Int=0, _group::Bool=false)
     config = PB.BufferedVector{var"AutotuneResult.TritonGemmKey"}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, config)
@@ -377,12 +391,12 @@ PB.oneof_field_types(::Type{var"AutotuneResult.FailureResult"}) = (;
 PB.default_values(::Type{var"AutotuneResult.FailureResult"}) = (;kind = var"AutotuneResult.FailureKind".UNKNOWN, msg = "", reference_conv = nothing, reference_gemm = nothing, reference_cuda_conv_plan = nothing, reference_algorithm = nothing, buffer_address = zero(Int64))
 PB.field_numbers(::Type{var"AutotuneResult.FailureResult"}) = (;kind = 1, msg = 2, reference_conv = 11, reference_gemm = 12, reference_cuda_conv_plan = 14, reference_algorithm = 15, buffer_address = 13)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"AutotuneResult.FailureResult"})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"AutotuneResult.FailureResult"}, _endpos::Int=0, _group::Bool=false)
     kind = var"AutotuneResult.FailureKind".UNKNOWN
     msg = ""
     key = nothing
     buffer_address = zero(Int64)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             kind = PB.decode(d, var"AutotuneResult.FailureKind".T)
@@ -452,12 +466,12 @@ PB.oneof_field_types(::Type{AutotuneResult}) = (;
 PB.default_values(::Type{AutotuneResult}) = (;scratch_bytes = zero(Int64), run_time = nothing, failure = nothing, conv = nothing, gemm = nothing, triton = nothing, cuda_conv_plan = nothing, custom_kernel_fusion = nothing, algorithm = nothing, other = nothing)
 PB.field_numbers(::Type{AutotuneResult}) = (;scratch_bytes = 8, run_time = 9, failure = 7, conv = 5, gemm = 6, triton = 17, cuda_conv_plan = 15, custom_kernel_fusion = 18, algorithm = 16, other = 19)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:AutotuneResult})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:AutotuneResult}, _endpos::Int=0, _group::Bool=false)
     scratch_bytes = zero(Int64)
     run_time = Ref{Union{Nothing,google.protobuf.Duration}}(nothing)
     failure = Ref{Union{Nothing,var"AutotuneResult.FailureResult"}}(nothing)
     key = nothing
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 8
             scratch_bytes = PB.decode(d, Int64)
@@ -547,7 +561,7 @@ end
 PB.default_values(::Type{AutotuningLog}) = (;instr = nothing, results = Vector{AutotuneResult}(), cudnn_version = nothing, compute_capability = nothing, device_pci_bus_id = "", blas_version = "", fusion_name = "", fusion_count = zero(Int64), selected_backend = "")
 PB.field_numbers(::Type{AutotuningLog}) = (;instr = 1, results = 2, cudnn_version = 3, compute_capability = 4, device_pci_bus_id = 5, blas_version = 6, fusion_name = 7, fusion_count = 8, selected_backend = 9)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:AutotuningLog})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:AutotuningLog}, _endpos::Int=0, _group::Bool=false)
     instr = Ref{Union{Nothing,google.protobuf.var"#Any"}}(nothing)
     results = PB.BufferedVector{AutotuneResult}()
     cudnn_version = Ref{Union{Nothing,CudnnVersion}}(nothing)
@@ -557,7 +571,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:AutotuningLog})
     fusion_name = ""
     fusion_count = zero(Int64)
     selected_backend = ""
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, instr)

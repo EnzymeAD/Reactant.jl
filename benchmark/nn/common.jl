@@ -242,10 +242,10 @@ function run_benchmark!(
     results["Runtime (s)"][full_benchmark_name] =
         prof_result.profiling_result.runtime_ns / 1e9
     results["TFLOP/s"][full_benchmark_name] =
-        if prof_result.profiling_result.flops_data === nothing
+        if prof_result.profiling_result.metrics_data === nothing
             -1
         else
-            prof_result.profiling_result.flops_data.RawFlopsRate / 1e12
+            prof_result.profiling_result.metrics_data.raw_flops_rate / 1e12
         end
 
     GC.gc(true)

@@ -9,6 +9,7 @@ using ..Reactant: Reactant, Compiler, Serialization, MLIR
         output_dir::Union{String,Nothing}=nothing,
         function_name::String=string(f),
         preserve_sharding::Bool=true,
+        export_data_as_npz::Bool=true,
         compile_options=Reactant.Compiler.CompileOptions(),
     )
 
@@ -34,9 +35,12 @@ This function:
 
   - `output_dir::Union{String,Nothing}`: Directory where output files will be saved. If
     `nothing`, uses a temporary directory and prints the path.
-  - `function_name::String`: Base name for generated files
+  - `function_name::String`: Base name for generated files.
   - `preserve_sharding::Bool`: Whether to preserve sharding information in the exported
     function. Defaults to `true`.
+  - `export_data_as_npz::Bool`: Whether to export the input data as an NPZ file. Defaults to
+    `true`. This requires `NPZ.jl` to be loaded. If `false`, the Python script will
+    initialize the inputs with random data.
   - `compile_options`: Compilation options passed to `Reactant.Compiler.compile_mlir`. See
     [`Reactant.Compiler.CompileOptions`](@ref) for more details.
 
@@ -87,6 +91,7 @@ function export_to_enzymejax(
     output_dir::Union{String,Nothing}=nothing,
     function_name::String=string(f),
     preserve_sharding::Bool=true,
+    export_data_as_npz::Bool=true,
     compile_options=Reactant.Compiler.CompileOptions(),
 )
     function_name = replace(function_name, "!" => "_")
@@ -162,12 +167,20 @@ function export_to_enzymejax(
 
         # Save all inputs to a single NPZ file
         input_path = joinpath(output_dir, "$(function_name)_$(fnid)_inputs.npz")
-        save_inputs_npz(input_path, input_data)
+        if export_data_as_npz
+            save_inputs_npz(input_path, input_data)
+        end
 
         # Generate Python script
         python_path = joinpath(output_dir, "$(function_name).py")
         _generate_python_script(
-            python_path, function_name, mlir_path, input_path, input_info; preserve_sharding
+            python_path,
+            function_name,
+            mlir_path,
+            input_path,
+            input_info;
+            export_data_as_npz,
+            preserve_sharding,
         )
         return python_path
     end
@@ -206,7 +219,8 @@ function save_inputs_npz(
 )
     if !Serialization.serialization_supported(Val(:NPZ))
         error("`NPZ.jl` is required for saving compressed arrays. Please load it with \
-               `using NPZ` and try again.")
+               `using NPZ` and try again. If saving inputs is not required, set \
+                `export_data_as_npz=false`.")
     end
     return save_inputs_npz_impl(output_path, inputs)
 end
@@ -219,6 +233,7 @@ function _generate_python_script(
     mlir_path::String,
     input_path::String,
     input_info::Vector;
+    export_data_as_npz::Bool=true,
     preserve_sharding::Bool=true,
 )
     # Get relative paths for the Python script
@@ -316,7 +331,35 @@ function _generate_python_script(
         """
     end
 
-    load_inputs = ["npz_data['$(info.key)']" for info in input_info]
+    if export_data_as_npz
+        load_inputs = ["npz_data['$(info.key)']" for info in input_info]
+
+        load_inputs_fn = """
+    def load_inputs():
+        \"\"\"Load the example inputs that were exported from Julia.\"\"\"
+        npz_data = np.load(os.path.join(_script_dir, \"$(input_rel)\"))
+        inputs = [$(join(load_inputs, ", "))]
+        return tuple(inputs)
+        """
+    else
+        load_inputs_fn = """
+    def generate_random_inputs(key, shape, dtype):
+        key1, key2 = jax.random.split(key)
+        return jax.random.normal(key1, shape, dtype), key2
+
+    def load_inputs(prng_key = None):
+        \"\"\"Load random inputs for the exported function.\"\"\"
+        if prng_key is None:
+            prng_key = jax.random.PRNGKey(0)
+
+        inputs = []"""
+
+        for (i, info) in enumerate(input_info)
+            load_inputs_fn *= """\n    tmp, prng_key = generate_random_inputs(prng_key, $(reverse(info.shape)), jnp.dtype('$(Serialization.NUMPY_SIMPLE_TYPES[info.dtype])'))\n    inputs.append(tmp)"""
+        end
+
+        load_inputs_fn *= """\n    return tuple(inputs)"""
+    end
 
     # Build the complete Python script
     script = """
@@ -340,11 +383,7 @@ function _generate_python_script(
     with open(os.path.join(_script_dir, \"$(mlir_rel)\"), \"r\") as f:
         _hlo_code = f.read()
 
-    def load_inputs():
-        \"\"\"Load the example inputs that were exported from Julia.\"\"\"
-        npz_data = np.load(os.path.join(_script_dir, \"$(input_rel)\"))
-        inputs = [$(join(load_inputs, ", "))]
-        return tuple(inputs)
+    $(load_inputs_fn)
 
     @jax.jit
     def run_$(function_name)($(arg_list)):

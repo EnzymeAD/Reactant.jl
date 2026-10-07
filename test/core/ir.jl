@@ -1,10 +1,10 @@
 using Reactant: MLIR
 
 @testset "inject" begin
-    MLIR.IR.with_context() do ctx
+    MLIR.IR.@with_context Reactant.ReactantContext() begin
         mod = MLIR.IR.Module()
 
-        MLIR.IR.with_module(mod) do
+        MLIR.IR.@with_module mod begin
             MLIR.IR.inject!(
                 "MPI_COMM_WORLD", "llvm.mlir.global constant @MPI_COMM_WORLD() : !llvm.ptr"
             )

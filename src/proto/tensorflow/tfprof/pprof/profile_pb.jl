@@ -12,10 +12,10 @@ end
 PB.default_values(::Type{Line}) = (;function_id = zero(UInt64), line = zero(Int64))
 PB.field_numbers(::Type{Line}) = (;function_id = 1, line = 2)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:Line})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:Line}, _endpos::Int=0, _group::Bool=false)
     function_id = zero(UInt64)
     line = zero(Int64)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             function_id = PB.decode(d, UInt64)
@@ -49,11 +49,11 @@ end
 PB.default_values(::Type{Label}) = (;key = zero(Int64), str = zero(Int64), num = zero(Int64))
 PB.field_numbers(::Type{Label}) = (;key = 1, str = 2, num = 3)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:Label})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:Label}, _endpos::Int=0, _group::Bool=false)
     key = zero(Int64)
     str = zero(Int64)
     num = zero(Int64)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             key = PB.decode(d, Int64)
@@ -90,10 +90,10 @@ end
 PB.default_values(::Type{ValueType}) = (;var"#type" = zero(Int64), unit = zero(Int64))
 PB.field_numbers(::Type{ValueType}) = (;var"#type" = 1, unit = 2)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ValueType})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ValueType}, _endpos::Int=0, _group::Bool=false)
     var"#type" = zero(Int64)
     unit = zero(Int64)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             var"#type" = PB.decode(d, Int64)
@@ -134,7 +134,7 @@ end
 PB.default_values(::Type{Mapping}) = (;id = zero(UInt64), memory_start = zero(UInt64), memory_limit = zero(UInt64), file_offset = zero(UInt64), filename = zero(Int64), build_id = zero(Int64), has_functions = false, has_filenames = false, has_line_numbers = false, has_inline_frames = false)
 PB.field_numbers(::Type{Mapping}) = (;id = 1, memory_start = 2, memory_limit = 3, file_offset = 4, filename = 5, build_id = 6, has_functions = 7, has_filenames = 8, has_line_numbers = 9, has_inline_frames = 10)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:Mapping})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:Mapping}, _endpos::Int=0, _group::Bool=false)
     id = zero(UInt64)
     memory_start = zero(UInt64)
     memory_limit = zero(UInt64)
@@ -145,7 +145,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:Mapping})
     has_filenames = false
     has_line_numbers = false
     has_inline_frames = false
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             id = PB.decode(d, UInt64)
@@ -213,13 +213,13 @@ end
 PB.default_values(::Type{Function}) = (;id = zero(UInt64), name = zero(Int64), system_name = zero(Int64), filename = zero(Int64), start_line = zero(Int64))
 PB.field_numbers(::Type{Function}) = (;id = 1, name = 2, system_name = 3, filename = 4, start_line = 5)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:Function})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:Function}, _endpos::Int=0, _group::Bool=false)
     id = zero(UInt64)
     name = zero(Int64)
     system_name = zero(Int64)
     filename = zero(Int64)
     start_line = zero(Int64)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             id = PB.decode(d, UInt64)
@@ -266,12 +266,12 @@ end
 PB.default_values(::Type{Location}) = (;id = zero(UInt64), mapping_id = zero(UInt64), address = zero(UInt64), line = Vector{Line}())
 PB.field_numbers(::Type{Location}) = (;id = 1, mapping_id = 2, address = 3, line = 4)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:Location})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:Location}, _endpos::Int=0, _group::Bool=false)
     id = zero(UInt64)
     mapping_id = zero(UInt64)
     address = zero(UInt64)
     line = PB.BufferedVector{Line}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             id = PB.decode(d, UInt64)
@@ -313,11 +313,11 @@ end
 PB.default_values(::Type{Sample}) = (;location_id = Vector{UInt64}(), value = Vector{Int64}(), label = Vector{Label}())
 PB.field_numbers(::Type{Sample}) = (;location_id = 1, value = 2, label = 3)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:Sample})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:Sample}, _endpos::Int=0, _group::Bool=false)
     location_id = PB.BufferedVector{UInt64}()
     value = PB.BufferedVector{Int64}()
     label = PB.BufferedVector{Label}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, wire_type, location_id)
@@ -366,7 +366,7 @@ end
 PB.default_values(::Type{Profile}) = (;sample_type = Vector{ValueType}(), sample = Vector{Sample}(), mapping = Vector{Mapping}(), location = Vector{Location}(), var"#function" = Vector{Function}(), string_table = Vector{String}(), drop_frames = zero(Int64), keep_frames = zero(Int64), time_nanos = zero(Int64), duration_nanos = zero(Int64), period_type = nothing, period = zero(Int64), comment = Vector{Int64}(), default_sample_type = zero(Int64))
 PB.field_numbers(::Type{Profile}) = (;sample_type = 1, sample = 2, mapping = 3, location = 4, var"#function" = 5, string_table = 6, drop_frames = 7, keep_frames = 8, time_nanos = 9, duration_nanos = 10, period_type = 11, period = 12, comment = 13, default_sample_type = 14)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:Profile})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:Profile}, _endpos::Int=0, _group::Bool=false)
     sample_type = PB.BufferedVector{ValueType}()
     sample = PB.BufferedVector{Sample}()
     mapping = PB.BufferedVector{Mapping}()
@@ -381,7 +381,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:Profile})
     period = zero(Int64)
     comment = PB.BufferedVector{Int64}()
     default_sample_type = zero(Int64)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, sample_type)

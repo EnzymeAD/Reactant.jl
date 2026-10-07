@@ -154,7 +154,7 @@ function Base._in_unit_range(
     return (i > 0) & (val <= v.stop) & (val >= v.start)
 end
 
-@inline function Base.length(r::TracedUnitRange{TracedRNumber{T}}) where {T}
+@inline function Base.length(r::TracedUnitRange{<:TracedRNumber})
     if r.length >= 0
         return r.length
     end
@@ -191,5 +191,7 @@ end
 function (C::Base.Colon)(start::T, stop::TracedRNumber{T}) where {T}
     return C(TracedRNumber{T}(start), stop)
 end
+
+Base.maximum(r::TracedUnitRange) = last(r)
 
 end

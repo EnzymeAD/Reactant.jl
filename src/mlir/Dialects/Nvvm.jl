@@ -13,15 +13,101 @@ import ...IR:
 import ..Dialects: operandsegmentsizes, resultsegmentsizes
 import ...API
 
-function read_ptx_sreg_aggr_smem_size(; res::IR.Type, location=Location())
-    op_ty_results = IR.Type[res,]
+"""
+`addf`
+
+The `nvvm.addf` operation performs floating point addition of two floating 
+point operands of the same type.
+
+The rounding mode is specified by the `rnd` attribute, saturation mode by 
+the `sat` attribute, and flush-to-zero by the `ftz` attribute.
+
+For more information, see PTX ISA:
+- [floating point addition](https://docs.nvidia.com/cuda/parallel-thread-execution/#floating-point-instructions-add)
+- [half-precision floating point addition](https://docs.nvidia.com/cuda/parallel-thread-execution/#half-precision-floating-point-instructions-add)
+"""
+function addf(
+    lhs::Value,
+    rhs::Value;
+    res=nothing::Union{Nothing,IR.Type},
+    rnd=nothing,
+    sat=nothing,
+    ftz=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[lhs, rhs]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
+    !isnothing(rnd) && push!(attributes, NamedAttribute("rnd", rnd))
+    !isnothing(sat) && push!(attributes, NamedAttribute("sat", sat))
+    !isnothing(ftz) && push!(attributes, NamedAttribute("ftz", ftz))
+
+    return create_operation(
+        "nvvm.addf",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+function read_ptx_sreg_aggr_smem_size(;
+    res=nothing::Union{Nothing,IR.Type}, location=Location()
+)
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
 
     return create_operation(
         "nvvm.read.ptx.sreg.aggr.smem.size",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
+`store_async_global`
+
+Performs an asynchronous store to global memory to the address given by 
+`addr`.
+The `value` operand specifies the value to store.
+The `scope` operand specifies the scope of the store and must be one of the 
+following:
+- `sys`: Synchronization with all threads in the system.
+- `gpu`: Synchronization with all threads in the same GPU.
+The `multimem` operand specifies whether the store is performed on a 
+multimem address.
+The `mmio` operand specifies whether this is an MMIO operation.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-st-async)
+"""
+function store_async_global(
+    addr::Value, value::Value; scope, multimem=nothing, mmio=nothing, location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[addr, value]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[NamedAttribute("scope", scope),]
+    !isnothing(multimem) && push!(attributes, NamedAttribute("multimem", multimem))
+    !isnothing(mmio) && push!(attributes, NamedAttribute("mmio", mmio))
+
+    return create_operation(
+        "nvvm.store.async.global",
         location;
         operands,
         owned_regions,
@@ -33,23 +119,25 @@ function read_ptx_sreg_aggr_smem_size(; res::IR.Type, location=Location())
 end
 
 """
-`barrier0`
+`store_async_shared`
 
-The `nvvm.barrier0` operation is a convenience operation that performs barrier 
-synchronization and communication within a CTA (Cooperative Thread Array) using 
-barrier ID 0. It is functionally equivalent to `nvvm.barrier` or `nvvm.barrier id=0`. 
+Performs an asynchronous store to shared cluster memory to the address 
+given by `addr`.
+The `value` operand specifies the value to store.
+The `mbarrier` operand specifies the mbarrier object which signals the 
+completion of the store.
 
-[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-bar)
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-st-async)
 """
-function barrier0(; location=Location())
+function store_async_shared(addr::Value, value::Value, mbarrier::Value; location=Location())
     op_ty_results = IR.Type[]
-    operands = Value[]
+    operands = Value[addr, value, mbarrier]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
 
     return create_operation(
-        "nvvm.barrier0",
+        "nvvm.store.async.shared",
         location;
         operands,
         owned_regions,
@@ -69,10 +157,17 @@ given id and continue their execution.
 The default barrier id is 0 that is similar to `nvvm.barrier` Op. When 
 `barrierId` is not present, the default barrier id is used. 
 
+The `aligned` attribute, which defaults to `true`, generates the aligned
+form of the barrier (all threads in the CTA execute the same barrier
+instruction). When set to `false`, the unaligned form is generated.
+
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-bar)
 """
 function barrier_arrive(
-    barrierId=nothing::Union{Nothing,Value}; numberOfThreads::Value, location=Location()
+    barrierId=nothing::Union{Nothing,Value};
+    numberOfThreads::Value,
+    aligned=nothing,
+    location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[numberOfThreads,]
@@ -80,6 +175,7 @@ function barrier_arrive(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(barrierId) && push!(operands, barrierId)
+    !isnothing(aligned) && push!(attributes, NamedAttribute("aligned", aligned))
 
     return create_operation(
         "nvvm.barrier.arrive",
@@ -100,37 +196,36 @@ The `nvvm.barrier` operation performs barrier synchronization and communication
 within a CTA (Cooperative Thread Array). It causes executing threads to wait for 
 all non-exited threads participating in the barrier to arrive.
 
-The operation takes two optional operands:
+The operation takes the following optional operands and attributes:
 
 - `barrierId`: Specifies a logical barrier resource with value 0 through 15. 
   Each CTA instance has sixteen barriers numbered 0..15. Defaults to 0 if not specified.
 - `numberOfThreads`: Specifies the number of threads participating in the barrier. 
   When specified, the value must be a multiple of the warp size. If not specified, 
   all threads in the CTA participate in the barrier.
-- `reductionOp`: specifies the reduction operation (`popc`, `and`, `or`).
-- `reductionPredicate`: specifies the predicate to be used with the
-  `reductionOp`. 
+- `aligned`: Selects between the `.aligned` and non-`.aligned` forms of the
+  underlying `@llvm.nvvm.barrier.cta.*` intrinsic family. Defaults to true,
+  which requires every thread in the CTA to reach this same barrier
+  instruction, otherwise the behavior is undefined. Set it to false to emit
+  the non-`.aligned` form.
+
+Reduction variants of the barrier instruction are modeled by the
+`nvvm.barrier.reduction` op.
 
 The barrier operation guarantees that when the barrier completes, prior memory 
 accesses requested by participating threads are performed relative to all threads 
 participating in the barrier. It also ensures that no new memory access is 
 requested by participating threads before the barrier completes.
 
-When a barrier completes, the waiting threads are restarted without delay, and 
+When a barrier completes, the waiting threads are restarted without delay, and
 the barrier is reinitialized so that it can be immediately reused.
-
-This operation generates an aligned barrier, indicating that all threads in the CTA 
-will execute the same barrier instruction. Behavior is undefined if all threads in the 
-CTA do not reach this instruction.
 
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-bar)
 """
 function barrier(
     barrierId=nothing::Union{Nothing,Value};
     numberOfThreads=nothing::Union{Nothing,Value},
-    reductionPredicate=nothing::Union{Nothing,Value},
-    res=nothing::Union{Nothing,IR.Type},
-    reductionOp=nothing,
+    aligned=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -140,17 +235,11 @@ function barrier(
     attributes = NamedAttribute[]
     !isnothing(barrierId) && push!(operands, barrierId)
     !isnothing(numberOfThreads) && push!(operands, numberOfThreads)
-    !isnothing(reductionPredicate) && push!(operands, reductionPredicate)
     push!(
         attributes,
-        operandsegmentsizes([
-            Int(!isnothing(barrierId)),
-            Int(!isnothing(numberOfThreads)),
-            Int(!isnothing(reductionPredicate)),
-        ]),
+        operandsegmentsizes([Int(!isnothing(barrierId)), Int(!isnothing(numberOfThreads))]),
     )
-    !isnothing(res) && push!(op_ty_results, res)
-    !isnothing(reductionOp) && push!(attributes, NamedAttribute("reductionOp", reductionOp))
+    !isnothing(aligned) && push!(attributes, NamedAttribute("aligned", aligned))
 
     return create_operation(
         "nvvm.barrier",
@@ -164,12 +253,68 @@ function barrier(
     )
 end
 
-function read_ptx_sreg_ntid_x(; res::IR.Type, range=nothing, location=Location())
-    op_ty_results = IR.Type[res,]
+"""
+`barrier_reduction`
+
+The `nvvm.barrier.reduction` operation performs barrier synchronization with a
+reduction across the per-thread predicates contributed by participating threads
+in a CTA.
+
+- `barrierId`: Specifies a logical barrier resource with value 0 through 15.
+  Optional; defaults to barrier id 0 when not specified.
+- `reductionOp`: The reduction kind (`popc`, `and`, `or`) applied across the
+  per-thread predicates.
+- `reductionPredicate`: The per-thread i32 predicate. It is compared against
+  zero to form the i1 value fed into the reduction.
+- `aligned`: Selects between the `.aligned` and non-`.aligned` forms of the
+  underlying `@llvm.nvvm.barrier.cta.red.*` intrinsic family. Defaults to
+  true, which requires every thread in the CTA to reach this same barrier
+  instruction, otherwise the behavior is undefined. Set it to false to emit
+  the non-`.aligned` form.
+
+The result is the i32 reduction value computed across all threads
+participating in the barrier.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-bar)
+"""
+function barrier_reduction(
+    barrierId=nothing::Union{Nothing,Value};
+    reductionPredicate::Value,
+    res=nothing::Union{Nothing,IR.Type},
+    reductionOp,
+    aligned=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[reductionPredicate,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[NamedAttribute("reductionOp", reductionOp),]
+    !isnothing(barrierId) && push!(operands, barrierId)
+    !isnothing(res) && push!(op_ty_results, res)
+    !isnothing(aligned) && push!(attributes, NamedAttribute("aligned", aligned))
+
+    return create_operation(
+        "nvvm.barrier.reduction",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+function read_ptx_sreg_ntid_x(;
+    res=nothing::Union{Nothing,IR.Type}, range=nothing, location=Location()
+)
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
     !isnothing(range) && push!(attributes, NamedAttribute("range", range))
 
     return create_operation(
@@ -179,17 +324,20 @@ function read_ptx_sreg_ntid_x(; res::IR.Type, range=nothing, location=Location()
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function read_ptx_sreg_ntid_y(; res::IR.Type, range=nothing, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_ntid_y(;
+    res=nothing::Union{Nothing,IR.Type}, range=nothing, location=Location()
+)
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
     !isnothing(range) && push!(attributes, NamedAttribute("range", range))
 
     return create_operation(
@@ -199,17 +347,20 @@ function read_ptx_sreg_ntid_y(; res::IR.Type, range=nothing, location=Location()
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function read_ptx_sreg_ntid_z(; res::IR.Type, range=nothing, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_ntid_z(;
+    res=nothing::Union{Nothing,IR.Type}, range=nothing, location=Location()
+)
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
     !isnothing(range) && push!(attributes, NamedAttribute("range", range))
 
     return create_operation(
@@ -219,17 +370,20 @@ function read_ptx_sreg_ntid_z(; res::IR.Type, range=nothing, location=Location()
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function read_ptx_sreg_ctaid_x(; res::IR.Type, range=nothing, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_ctaid_x(;
+    res=nothing::Union{Nothing,IR.Type}, range=nothing, location=Location()
+)
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
     !isnothing(range) && push!(attributes, NamedAttribute("range", range))
 
     return create_operation(
@@ -239,17 +393,20 @@ function read_ptx_sreg_ctaid_x(; res::IR.Type, range=nothing, location=Location(
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function read_ptx_sreg_ctaid_y(; res::IR.Type, range=nothing, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_ctaid_y(;
+    res=nothing::Union{Nothing,IR.Type}, range=nothing, location=Location()
+)
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
     !isnothing(range) && push!(attributes, NamedAttribute("range", range))
 
     return create_operation(
@@ -259,17 +416,20 @@ function read_ptx_sreg_ctaid_y(; res::IR.Type, range=nothing, location=Location(
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function read_ptx_sreg_ctaid_z(; res::IR.Type, range=nothing, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_ctaid_z(;
+    res=nothing::Union{Nothing,IR.Type}, range=nothing, location=Location()
+)
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
     !isnothing(range) && push!(attributes, NamedAttribute("range", range))
 
     return create_operation(
@@ -279,17 +439,20 @@ function read_ptx_sreg_ctaid_z(; res::IR.Type, range=nothing, location=Location(
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function read_ptx_sreg_cluster_ctaid_x(; res::IR.Type, range=nothing, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_cluster_ctaid_x(;
+    res=nothing::Union{Nothing,IR.Type}, range=nothing, location=Location()
+)
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
     !isnothing(range) && push!(attributes, NamedAttribute("range", range))
 
     return create_operation(
@@ -299,17 +462,20 @@ function read_ptx_sreg_cluster_ctaid_x(; res::IR.Type, range=nothing, location=L
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function read_ptx_sreg_cluster_ctaid_y(; res::IR.Type, range=nothing, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_cluster_ctaid_y(;
+    res=nothing::Union{Nothing,IR.Type}, range=nothing, location=Location()
+)
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
     !isnothing(range) && push!(attributes, NamedAttribute("range", range))
 
     return create_operation(
@@ -319,17 +485,20 @@ function read_ptx_sreg_cluster_ctaid_y(; res::IR.Type, range=nothing, location=L
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function read_ptx_sreg_cluster_ctaid_z(; res::IR.Type, range=nothing, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_cluster_ctaid_z(;
+    res=nothing::Union{Nothing,IR.Type}, range=nothing, location=Location()
+)
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
     !isnothing(range) && push!(attributes, NamedAttribute("range", range))
 
     return create_operation(
@@ -339,8 +508,8 @@ function read_ptx_sreg_cluster_ctaid_z(; res::IR.Type, range=nothing, location=L
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -400,12 +569,13 @@ function st_bulk(addr::Value, size::Value; initVal=nothing, location=Location())
     )
 end
 
-function read_ptx_sreg_clock64(; res::IR.Type, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_clock64(; res=nothing::Union{Nothing,IR.Type}, location=Location())
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
 
     return create_operation(
         "nvvm.read.ptx.sreg.clock64",
@@ -414,17 +584,18 @@ function read_ptx_sreg_clock64(; res::IR.Type, location=Location())
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function read_ptx_sreg_clock(; res::IR.Type, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_clock(; res=nothing::Union{Nothing,IR.Type}, location=Location())
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
 
     return create_operation(
         "nvvm.read.ptx.sreg.clock",
@@ -433,8 +604,8 @@ function read_ptx_sreg_clock(; res::IR.Type, location=Location())
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -503,12 +674,15 @@ function cluster_arrive_relaxed(; aligned=nothing, location=Location())
     )
 end
 
-function read_ptx_sreg_cluster_nctarank(; res::IR.Type, range=nothing, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_cluster_nctarank(;
+    res=nothing::Union{Nothing,IR.Type}, range=nothing, location=Location()
+)
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
     !isnothing(range) && push!(attributes, NamedAttribute("range", range))
 
     return create_operation(
@@ -518,17 +692,20 @@ function read_ptx_sreg_cluster_nctarank(; res::IR.Type, range=nothing, location=
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function read_ptx_sreg_cluster_nctaid_x(; res::IR.Type, range=nothing, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_cluster_nctaid_x(;
+    res=nothing::Union{Nothing,IR.Type}, range=nothing, location=Location()
+)
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
     !isnothing(range) && push!(attributes, NamedAttribute("range", range))
 
     return create_operation(
@@ -538,17 +715,20 @@ function read_ptx_sreg_cluster_nctaid_x(; res::IR.Type, range=nothing, location=
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function read_ptx_sreg_cluster_nctaid_y(; res::IR.Type, range=nothing, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_cluster_nctaid_y(;
+    res=nothing::Union{Nothing,IR.Type}, range=nothing, location=Location()
+)
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
     !isnothing(range) && push!(attributes, NamedAttribute("range", range))
 
     return create_operation(
@@ -558,17 +738,20 @@ function read_ptx_sreg_cluster_nctaid_y(; res::IR.Type, range=nothing, location=
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function read_ptx_sreg_cluster_nctaid_z(; res::IR.Type, range=nothing, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_cluster_nctaid_z(;
+    res=nothing::Union{Nothing,IR.Type}, range=nothing, location=Location()
+)
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
     !isnothing(range) && push!(attributes, NamedAttribute("range", range))
 
     return create_operation(
@@ -578,17 +761,20 @@ function read_ptx_sreg_cluster_nctaid_z(; res::IR.Type, range=nothing, location=
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function read_ptx_sreg_nclusterid_x(; res::IR.Type, range=nothing, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_nclusterid_x(;
+    res=nothing::Union{Nothing,IR.Type}, range=nothing, location=Location()
+)
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
     !isnothing(range) && push!(attributes, NamedAttribute("range", range))
 
     return create_operation(
@@ -598,17 +784,20 @@ function read_ptx_sreg_nclusterid_x(; res::IR.Type, range=nothing, location=Loca
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function read_ptx_sreg_nclusterid_y(; res::IR.Type, range=nothing, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_nclusterid_y(;
+    res=nothing::Union{Nothing,IR.Type}, range=nothing, location=Location()
+)
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
     !isnothing(range) && push!(attributes, NamedAttribute("range", range))
 
     return create_operation(
@@ -618,17 +807,20 @@ function read_ptx_sreg_nclusterid_y(; res::IR.Type, range=nothing, location=Loca
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function read_ptx_sreg_nclusterid_z(; res::IR.Type, range=nothing, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_nclusterid_z(;
+    res=nothing::Union{Nothing,IR.Type}, range=nothing, location=Location()
+)
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
     !isnothing(range) && push!(attributes, NamedAttribute("range", range))
 
     return create_operation(
@@ -638,17 +830,20 @@ function read_ptx_sreg_nclusterid_z(; res::IR.Type, range=nothing, location=Loca
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function read_ptx_sreg_cluster_ctarank(; res::IR.Type, range=nothing, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_cluster_ctarank(;
+    res=nothing::Union{Nothing,IR.Type}, range=nothing, location=Location()
+)
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
     !isnothing(range) && push!(attributes, NamedAttribute("range", range))
 
     return create_operation(
@@ -658,17 +853,20 @@ function read_ptx_sreg_cluster_ctarank(; res::IR.Type, range=nothing, location=L
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function read_ptx_sreg_clusterid_x(; res::IR.Type, range=nothing, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_clusterid_x(;
+    res=nothing::Union{Nothing,IR.Type}, range=nothing, location=Location()
+)
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
     !isnothing(range) && push!(attributes, NamedAttribute("range", range))
 
     return create_operation(
@@ -678,17 +876,20 @@ function read_ptx_sreg_clusterid_x(; res::IR.Type, range=nothing, location=Locat
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function read_ptx_sreg_clusterid_y(; res::IR.Type, range=nothing, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_clusterid_y(;
+    res=nothing::Union{Nothing,IR.Type}, range=nothing, location=Location()
+)
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
     !isnothing(range) && push!(attributes, NamedAttribute("range", range))
 
     return create_operation(
@@ -698,17 +899,20 @@ function read_ptx_sreg_clusterid_y(; res::IR.Type, range=nothing, location=Locat
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function read_ptx_sreg_clusterid_z(; res::IR.Type, range=nothing, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_clusterid_z(;
+    res=nothing::Union{Nothing,IR.Type}, range=nothing, location=Location()
+)
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
     !isnothing(range) && push!(attributes, NamedAttribute("range", range))
 
     return create_operation(
@@ -718,8 +922,8 @@ function read_ptx_sreg_clusterid_z(; res::IR.Type, range=nothing, location=Locat
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -741,13 +945,17 @@ cancel request succeeded.
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/#parallel-synchronization-and-communication-instructions-clusterlaunchcontrol-query-cancel)
 """
 function clusterlaunchcontrol_query_cancel(
-    try_cancel_response::Value; res::IR.Type, query_type, location=Location()
+    try_cancel_response::Value;
+    res=nothing::Union{Nothing,IR.Type},
+    query_type,
+    location=Location(),
 )
-    op_ty_results = IR.Type[res,]
+    op_ty_results = IR.Type[]
     operands = Value[try_cancel_response,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[NamedAttribute("query_type", query_type),]
+    !isnothing(res) && push!(op_ty_results, res)
 
     return create_operation(
         "nvvm.clusterlaunchcontrol.query.cancel",
@@ -756,8 +964,8 @@ function clusterlaunchcontrol_query_cancel(
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -833,16 +1041,90 @@ function cluster_wait(; aligned=nothing, location=Location())
 end
 
 """
+`convert_bf16x2_to_f4x2`
+
+This Op converts each of the given BF16 inputs in an bf16x2 vector to the specified fp4 type.
+The result `dst` is returned as an i8 type where the converted values are 
+packed such that the value converted from the first element of `a` is 
+stored in the lower 4 bits of `dst` and the value converted from the second 
+element of `a` is stored in the upper 4 bits of `dst`.
+The `relu` attribute, when set, lowers to the \'.relu\' variant of
+the cvt instruction.
+"""
+function convert_bf16x2_to_f4x2(
+    src::Value;
+    dst=nothing::Union{Nothing,IR.Type},
+    relu=nothing,
+    dstTy,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[src,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[NamedAttribute("dstTy", dstTy),]
+    !isnothing(dst) && push!(op_ty_results, dst)
+    !isnothing(relu) && push!(attributes, NamedAttribute("relu", relu))
+
+    return create_operation(
+        "nvvm.convert.bf16x2.to.f4x2",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
+`convert_bf16x2_to_f6x2`
+
+This Op converts each of the given BF16 inputs in an bf16x2 vector to the specified fp6 type. The result `dst` is 
+represented either as an i16 type or as a vector of two i8 types.
+If `dst` is returned as an i16 type, the converted values are packed such 
+that the value converted from the first element of `a` is stored in the 
+lower 8 bits of `dst` with 2 MSB bits padded with zeros and the value 
+converted from the second element of `a` is stored in the upper 8 bits of 
+`dst` with 2 MSB bits padded with zeros.
+If `dst` is returned as a vector type, each converted value is stored as an 
+i8 element in the vector with 2 MSB bits padded with zeros.
+The `relu` attribute, when set, lowers to the \'.relu\' variant of
+the cvt instruction.
+"""
+function convert_bf16x2_to_f6x2(
+    src::Value; dst::IR.Type, relu=nothing, dstTy, location=Location()
+)
+    op_ty_results = IR.Type[dst,]
+    operands = Value[src,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[NamedAttribute("dstTy", dstTy),]
+    !isnothing(relu) && push!(attributes, NamedAttribute("relu", relu))
+
+    return create_operation(
+        "nvvm.convert.bf16x2.to.f6x2",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
 `convert_bf16x2_to_f8x2`
 
 This Op converts the given bf16 inputs in a bf16x2 vector to the specified 
-f8 type.
-The result `dst` is represented as an i16 type or as a vector
-of two i8 types.
-If `dst` is returned as an i16 type, the converted values from `a`
-are packed such that the value converted from the first element of `a`
-is stored in the upper 8 bits of `dst` and the value converted from the
-second element of `a` is stored in the lower 8 bits of `dst`.
+f8 type. The result `dst` is represented either as a packed i16 type or as 
+a vector of two i8 types.
+If `dst` is returned as an i16 type, the converted values are packed such 
+that the value converted from the first element of `a` is stored in the 
+lower 8 bits of `dst` and the value converted from the second element of 
+`a` is stored in the upper 8 bits of `dst`.
 If `dst` is returned as a vector type, each converted value is stored as an 
 i8 element in the vector.
 The `rnd` and `sat` attributes specify the rounding and saturation modes 
@@ -851,18 +1133,138 @@ respectively.
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
 """
 function convert_bf16x2_to_f8x2(
-    a::Value; dst::IR.Type, rnd=nothing, sat=nothing, dstTy, location=Location()
+    src::Value;
+    dst::IR.Type,
+    rnd=nothing,
+    sat=nothing,
+    relu=nothing,
+    dstTy,
+    location=Location(),
 )
     op_ty_results = IR.Type[dst,]
-    operands = Value[a,]
+    operands = Value[src,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[NamedAttribute("dstTy", dstTy),]
     !isnothing(rnd) && push!(attributes, NamedAttribute("rnd", rnd))
     !isnothing(sat) && push!(attributes, NamedAttribute("sat", sat))
+    !isnothing(relu) && push!(attributes, NamedAttribute("relu", relu))
 
     return create_operation(
         "nvvm.convert.bf16x2.to.f8x2",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`convert_bf16x2_to_s2f6x2`
+
+This Op converts each of the given BF16 inputs in a bf16x2 vector to the
+S2F6x2 type. The result `dst` can be either a packed i16 type or a vector
+of two i8 types.
+If `dst` is returned as an i16 type, the converted values are packed such 
+that the value converted from the first element of `a` is stored in the 
+lower 8 bits of `dst` and the value converted from the second element of 
+`a` is stored in the upper 8 bits of `dst`.
+If `dst` is returned as a vector type, each converted value is stored as an 
+i8 element in the vector.
+The `relu` attribute, when set, lowers to the \'.relu\' variant
+of the cvt instruction.
+The optional scaling-factors for each of the inputs are provided through 
+the operand `scaleFactor` as a packed i16 type. Only `ue8m0` is supported 
+as the type of the scale-factor currently.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
+"""
+function convert_bf16x2_to_s2f6x2(
+    src::Value,
+    scaleFactor=nothing::Union{Nothing,Value};
+    dst::IR.Type,
+    relu=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[dst,]
+    operands = Value[src,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(scaleFactor) && push!(operands, scaleFactor)
+    !isnothing(relu) && push!(attributes, NamedAttribute("relu", relu))
+
+    return create_operation(
+        "nvvm.convert.bf16x2.to.s2f6x2",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`convert_f4x2_to_bf16x2`
+
+This Op converts the given f4 inputs in a packed i8 to bf16.
+
+The result `dst` is represented as a vector of bf16 elements.
+
+The `relu` attribute, when set, lowers to the \'.relu\' variant of
+the cvt instruction.
+
+The `sat` attribute specifies the saturation mode.
+
+The optional scaling-factors for each of the inputs are provided through
+the operand `scaleFactor` as a packed i16 type. Only `ue8m0` is supported
+as the type of the scale-factor currently.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
+  
+
+# Example
+
+```mlir
+// Basic conversion; the f4x2 source is packed in a single i8.
+%res1 = nvvm.convert.f4x2.to.bf16x2 %src
+    : i8 (f4E2M1FN) -> vector<2xbf16>
+
+// Conversion with relu and saturation.
+%res2 = nvvm.convert.f4x2.to.bf16x2 %src
+    {relu = true, sat = #nvvm.sat_mode<satfinite>}
+    : i8 (f4E2M1FN) -> vector<2xbf16>
+
+// Conversion with a packed ue8m0 scale-factor.
+%res3 = nvvm.convert.f4x2.to.bf16x2 %src, %scaleFactor
+    : i8 (f4E2M1FN) -> vector<2xbf16>
+```
+"""
+function convert_f4x2_to_bf16x2(
+    src::Value,
+    scaleFactor=nothing::Union{Nothing,Value};
+    dst::IR.Type,
+    srcType,
+    sat=nothing,
+    relu=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[dst,]
+    operands = Value[src,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[NamedAttribute("srcType", srcType),]
+    !isnothing(scaleFactor) && push!(operands, scaleFactor)
+    !isnothing(sat) && push!(attributes, NamedAttribute("sat", sat))
+    !isnothing(relu) && push!(attributes, NamedAttribute("relu", relu))
+
+    return create_operation(
+        "nvvm.convert.f4x2.to.bf16x2",
         location;
         operands,
         owned_regions,
@@ -879,13 +1281,14 @@ end
 This Op converts the given f4 inputs in a packed i8 to f16.
 
 The result `dst` is represented as a vector of f16 elements.
-The `relu` attribute, when set, lowers to the \'.relu\' variant of 
-the cvt instruction.\"
+
+The `relu` attribute, when set, lowers to the \'.relu\' variant of
+the cvt instruction.
 
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
 """
 function convert_f4x2_to_f16x2(
-    src::Value; dst::IR.Type, relu=nothing, srcType, location=Location()
+    src::Value; dst::IR.Type, srcType, relu=nothing, location=Location()
 )
     op_ty_results = IR.Type[dst,]
     operands = Value[src,]
@@ -907,18 +1310,85 @@ function convert_f4x2_to_f16x2(
 end
 
 """
+`convert_f6x2_to_bf16x2`
+
+This Op converts the given f6 inputs in a i8x2 vector to bf16.
+
+The result `dst` is represented as a vector of bf16 elements.
+
+The `relu` attribute, when set, lowers to the \'.relu\' variant of
+the cvt instruction.
+
+The `sat` attribute specifies the saturation mode.
+
+The optional scaling-factors for each of the inputs are provided through
+the operand `scaleFactor` as a packed i16 type. Only `ue8m0` is supported
+as the type of the scale-factor currently.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
+  
+
+# Example
+
+```mlir
+// Basic conversion from f6E2M3FN.
+%res1 = nvvm.convert.f6x2.to.bf16x2 %src
+    : vector<2xi8> (f6E2M3FN) -> vector<2xbf16>
+
+// Conversion from f6E3M2FN with relu and saturation.
+%res2 = nvvm.convert.f6x2.to.bf16x2 %src
+    {relu = true, sat = #nvvm.sat_mode<satfinite>}
+    : vector<2xi8> (f6E3M2FN) -> vector<2xbf16>
+
+// Conversion with a packed ue8m0 scale-factor.
+%res3 = nvvm.convert.f6x2.to.bf16x2 %src, %scaleFactor
+    : vector<2xi8> (f6E2M3FN) -> vector<2xbf16>
+```
+"""
+function convert_f6x2_to_bf16x2(
+    src::Value,
+    scaleFactor=nothing::Union{Nothing,Value};
+    dst::IR.Type,
+    srcType,
+    sat=nothing,
+    relu=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[dst,]
+    operands = Value[src,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[NamedAttribute("srcType", srcType),]
+    !isnothing(scaleFactor) && push!(operands, scaleFactor)
+    !isnothing(sat) && push!(attributes, NamedAttribute("sat", sat))
+    !isnothing(relu) && push!(attributes, NamedAttribute("relu", relu))
+
+    return create_operation(
+        "nvvm.convert.f6x2.to.bf16x2",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
 `convert_f6x2_to_f16x2`
 
 This Op converts the given f6 inputs in a i8x2 vector to f16.
 
 The result `dst` is represented as a vector of f16 elements.
-The `relu` attribute, when set, lowers to the \'.relu\' variant of 
-the cvt instruction.\"
+
+The `relu` attribute, when set, lowers to the \'.relu\' variant of
+the cvt instruction.
 
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
 """
 function convert_f6x2_to_f16x2(
-    src::Value; dst::IR.Type, relu=nothing, srcType, location=Location()
+    src::Value; dst::IR.Type, srcType, relu=nothing, location=Location()
 )
     op_ty_results = IR.Type[dst,]
     operands = Value[src,]
@@ -946,15 +1416,52 @@ This Op converts the given f8 inputs in a i8x2 vector to bf16.
 
 The result `dst` is represented as a vector of bf16 elements.
 
+The `relu` attribute, when set, lowers to the \'.relu\' variant of
+the cvt instruction.
+
+The `sat` attribute specifies the saturation mode.
+
+The optional scaling-factors for each of the inputs are provided through
+the operand `scaleFactor` as a packed i16 type. Only `ue8m0` is supported
+as the type of the scale-factor currently.
 
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
+  
+
+# Example
+
+```mlir
+// Basic conversion from f8E4M3FN.
+%res1 = nvvm.convert.f8x2.to.bf16x2 %src
+    : vector<2xi8> (f8E4M3FN) -> vector<2xbf16>
+
+// Conversion from f8E5M2 with relu and saturation.
+%res2 = nvvm.convert.f8x2.to.bf16x2 %src
+    {relu = true, sat = #nvvm.sat_mode<satfinite>}
+    : vector<2xi8> (f8E5M2) -> vector<2xbf16>
+
+// Conversion with a packed ue8m0 scale-factor.
+%res3 = nvvm.convert.f8x2.to.bf16x2 %src, %scaleFactor
+    : vector<2xi8> (f8E4M3FN) -> vector<2xbf16>
+```
 """
-function convert_f8x2_to_bf16x2(src::Value; dst::IR.Type, srcType, location=Location())
+function convert_f8x2_to_bf16x2(
+    src::Value,
+    scaleFactor=nothing::Union{Nothing,Value};
+    dst::IR.Type,
+    srcType,
+    sat=nothing,
+    relu=nothing,
+    location=Location(),
+)
     op_ty_results = IR.Type[dst,]
     operands = Value[src,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[NamedAttribute("srcType", srcType),]
+    !isnothing(scaleFactor) && push!(operands, scaleFactor)
+    !isnothing(sat) && push!(attributes, NamedAttribute("sat", sat))
+    !isnothing(relu) && push!(attributes, NamedAttribute("relu", relu))
 
     return create_operation(
         "nvvm.convert.f8x2.to.bf16x2",
@@ -974,13 +1481,14 @@ end
 This Op converts the given f8 inputs in a i8x2 vector to f16.
 
 The result `dst` is represented as a vector of f16 elements.
-The `relu` attribute, when set, lowers to the \'.relu\' variant of 
-the cvt instruction.\"
+
+The `relu` attribute, when set, lowers to the \'.relu\' variant of
+the cvt instruction.
 
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
 """
 function convert_f8x2_to_f16x2(
-    src::Value; dst::IR.Type, relu=nothing, srcType, location=Location()
+    src::Value; dst::IR.Type, srcType, relu=nothing, location=Location()
 )
     op_ty_results = IR.Type[dst,]
     operands = Value[src,]
@@ -991,6 +1499,81 @@ function convert_f8x2_to_f16x2(
 
     return create_operation(
         "nvvm.convert.f8x2.to.f16x2",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`convert_f16x2_to_f4x2`
+
+This Op converts each of the given F16 inputs in an f16x2 vector to the specified fp4 type.
+The result `dst` is returned as an i8 type where the converted values are 
+packed such that the value converted from the first element of `a` is 
+stored in the lower 4 bits of `dst` and the value converted from the second 
+element of `a` is stored in the upper 4 bits of `dst`.
+The `relu` attribute, when set, lowers to the \'.relu\' variant of
+the cvt instruction.
+"""
+function convert_f16x2_to_f4x2(
+    src::Value;
+    dst=nothing::Union{Nothing,IR.Type},
+    relu=nothing,
+    dstTy,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[src,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[NamedAttribute("dstTy", dstTy),]
+    !isnothing(dst) && push!(op_ty_results, dst)
+    !isnothing(relu) && push!(attributes, NamedAttribute("relu", relu))
+
+    return create_operation(
+        "nvvm.convert.f16x2.to.f4x2",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
+`convert_f16x2_to_f6x2`
+
+This Op converts each of the given F16 inputs in an f16x2 vector to the specified fp6 type. The result `dst` is 
+represented either as an i16 type or as a vector of two i8 types.
+If `dst` is returned as an i16 type, the converted values are packed such 
+that the value converted from the first element of `a` is stored in the 
+lower 8 bits of `dst` with 2 MSB bits padded with zeros and the value 
+converted from the second element of `a` is stored in the upper 8 bits of 
+`dst` with 2 MSB bits padded with zeros.
+If `dst` is returned as a vector type, each converted value is stored as an 
+i8 element in the vector with 2 MSB bits padded with zeros.
+The `relu` attribute, when set, lowers to the \'.relu\' variant of
+the cvt instruction.
+"""
+function convert_f16x2_to_f6x2(
+    src::Value; dst::IR.Type, relu=nothing, dstTy, location=Location()
+)
+    op_ty_results = IR.Type[dst,]
+    operands = Value[src,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[NamedAttribute("dstTy", dstTy),]
+    !isnothing(relu) && push!(attributes, NamedAttribute("relu", relu))
+
+    return create_operation(
+        "nvvm.convert.f16x2.to.f6x2",
         location;
         operands,
         owned_regions,
@@ -1103,13 +1686,19 @@ the cvt instruction.
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
 """
 function convert_f32x2_to_f4x2(
-    a::Value, b::Value; dst::IR.Type, relu=nothing, dstTy, location=Location()
+    a::Value,
+    b::Value;
+    dst=nothing::Union{Nothing,IR.Type},
+    relu=nothing,
+    dstTy,
+    location=Location(),
 )
-    op_ty_results = IR.Type[dst,]
+    op_ty_results = IR.Type[]
     operands = Value[a, b]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[NamedAttribute("dstTy", dstTy),]
+    !isnothing(dst) && push!(op_ty_results, dst)
     !isnothing(relu) && push!(attributes, NamedAttribute("relu", relu))
 
     return create_operation(
@@ -1119,8 +1708,8 @@ function convert_f32x2_to_f4x2(
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -1260,6 +1849,53 @@ function convert_f32x2_to_f16x2(
 end
 
 """
+`convert_f32x2_to_s2f6x2`
+
+This Op converts each of the given f32 inputs to the
+S2F6x2 type. The result `dst` can be either a packed i16 type or a vector
+of two i8 types.
+If `dst` is returned as an i16 type, the converted values are packed such 
+that the value converted from `a` is stored in the upper 8 bits of `dst` 
+and the value converted from `b` is stored in the lower 8 bits of `dst`.
+If `dst` is returned as a vector type, each converted value is stored as an 
+i8 element in the vector.
+The `relu` attribute, when set, lowers to the \'.relu\' variant
+of the cvt instruction.
+The optional scaling-factors for each of the inputs are provided through 
+the operand `scaleFactor` as a packed i16 type. Only `ue8m0` is supported 
+as the type of the scale-factor currently.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
+"""
+function convert_f32x2_to_s2f6x2(
+    a::Value,
+    b::Value,
+    scaleFactor=nothing::Union{Nothing,Value};
+    dst::IR.Type,
+    relu=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[dst,]
+    operands = Value[a, b]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(scaleFactor) && push!(operands, scaleFactor)
+    !isnothing(relu) && push!(attributes, NamedAttribute("relu", relu))
+
+    return create_operation(
+        "nvvm.convert.f32x2.to.s2f6x2",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
 `convert_f32x4_to_f4x4`
 
 Converts a vector<4xf32> to packed f4x4 format using 
@@ -1272,13 +1908,19 @@ Note: These operations always use RS rounding mode and SATFINITE saturation mode
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
 """
 function convert_f32x4_to_f4x4(
-    src::Value, rbits::Value; dst::IR.Type, relu=nothing, dstTy, location=Location()
+    src::Value,
+    rbits::Value;
+    dst=nothing::Union{Nothing,IR.Type},
+    relu=nothing,
+    dstTy,
+    location=Location(),
 )
-    op_ty_results = IR.Type[dst,]
+    op_ty_results = IR.Type[]
     operands = Value[src, rbits]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[NamedAttribute("dstTy", dstTy),]
+    !isnothing(dst) && push!(op_ty_results, dst)
     !isnothing(relu) && push!(attributes, NamedAttribute("relu", relu))
 
     return create_operation(
@@ -1288,8 +1930,8 @@ function convert_f32x4_to_f4x4(
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -1373,13 +2015,19 @@ the rounding and saturation modes respectively.
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
 """
 function convert_float_to_tf32(
-    src::Value; res::IR.Type, rnd=nothing, sat=nothing, relu=nothing, location=Location()
+    src::Value;
+    res=nothing::Union{Nothing,IR.Type},
+    rnd=nothing,
+    sat=nothing,
+    relu=nothing,
+    location=Location(),
 )
-    op_ty_results = IR.Type[res,]
+    op_ty_results = IR.Type[]
     operands = Value[src,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
     !isnothing(rnd) && push!(attributes, NamedAttribute("rnd", rnd))
     !isnothing(sat) && push!(attributes, NamedAttribute("sat", sat))
     !isnothing(relu) && push!(attributes, NamedAttribute("relu", relu))
@@ -1391,8 +2039,82 @@ function convert_float_to_tf32(
         owned_regions,
         successors,
         attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
+`convert_s2f6x2_to_bf16x2`
+
+This Op converts a pair of s2f6x2 inputs to bf16x2 type. The result `dst` 
+is represented as a vector of two bf16 elements.
+
+The `relu` attribute, when set, lowers to the \'.relu\' variant
+of the cvt instruction.
+
+The optional scaling-factors for each of the inputs are provided through 
+the operand `scaleFactor` as a packed i16 type. Only `ue8m0` is supported 
+as the type of the scale-factor currently.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
+"""
+function convert_s2f6x2_to_bf16x2(
+    src::Value,
+    scaleFactor=nothing::Union{Nothing,Value};
+    dst::IR.Type,
+    sat=nothing,
+    relu=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[dst,]
+    operands = Value[src,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(scaleFactor) && push!(operands, scaleFactor)
+    !isnothing(sat) && push!(attributes, NamedAttribute("sat", sat))
+    !isnothing(relu) && push!(attributes, NamedAttribute("relu", relu))
+
+    return create_operation(
+        "nvvm.convert.s2f6x2.to.bf16x2",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
         results=op_ty_results,
         result_inference=false,
+    )
+end
+
+"""
+`cos`
+
+Computes a fast approximation of the cosine of the input value (in
+radians). The `ftz` attribute, when set, flushes subnormal inputs
+and results to sign-preserving zero.
+"""
+function cos(
+    src::Value; res=nothing::Union{Nothing,IR.Type}, ftz=nothing, location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[src,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
+    !isnothing(ftz) && push!(attributes, NamedAttribute("ftz", ftz))
+
+    return create_operation(
+        "nvvm.cos",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -1972,6 +2694,46 @@ function cp_async_wait_group(; n, location=Location())
 end
 
 """
+`divf`
+
+Divides lhs by rhs, stores result in res (`res = lhs / rhs`).
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/#floating-point-instructions-div)
+"""
+function divf(
+    lhs::Value,
+    rhs::Value;
+    res=nothing::Union{Nothing,IR.Type},
+    rnd=nothing,
+    ftz=nothing,
+    approx=nothing,
+    full=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[lhs, rhs]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
+    !isnothing(rnd) && push!(attributes, NamedAttribute("rnd", rnd))
+    !isnothing(ftz) && push!(attributes, NamedAttribute("ftz", ftz))
+    !isnothing(approx) && push!(attributes, NamedAttribute("approx", approx))
+    !isnothing(full) && push!(attributes, NamedAttribute("full", full))
+
+    return create_operation(
+        "nvvm.divf",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
 `dot_accumulate_2way`
 
 Performs a two-way 16-bit to 8-bit dot-product which is accumulated in a 
@@ -1999,9 +2761,16 @@ signed.
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/#integer-arithmetic-instructions-dp2a)
 """
 function dot_accumulate_2way(
-    a::Value, b::Value, c::Value; res::IR.Type, a_type, b_type, b_hi, location=Location()
+    a::Value,
+    b::Value,
+    c::Value;
+    res=nothing::Union{Nothing,IR.Type},
+    a_type,
+    b_type,
+    b_hi,
+    location=Location(),
 )
-    op_ty_results = IR.Type[res,]
+    op_ty_results = IR.Type[]
     operands = Value[a, b, c]
     owned_regions = Region[]
     successors = Block[]
@@ -2010,6 +2779,7 @@ function dot_accumulate_2way(
         NamedAttribute("b_type", b_type),
         NamedAttribute("b_hi", b_hi),
     ]
+    !isnothing(res) && push!(op_ty_results, res)
 
     return create_operation(
         "nvvm.dot.accumulate.2way",
@@ -2018,8 +2788,8 @@ function dot_accumulate_2way(
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -2044,15 +2814,22 @@ treated as holding a signed integer if any of `a_type` or `b_type` is `s8`.
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/#integer-arithmetic-instructions-dp4a)
 """
 function dot_accumulate_4way(
-    a::Value, b::Value, c::Value; res::IR.Type, a_type, b_type, location=Location()
+    a::Value,
+    b::Value,
+    c::Value;
+    res=nothing::Union{Nothing,IR.Type},
+    a_type,
+    b_type,
+    location=Location(),
 )
-    op_ty_results = IR.Type[res,]
+    op_ty_results = IR.Type[]
     operands = Value[a, b, c]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[
         NamedAttribute("a_type", a_type), NamedAttribute("b_type", b_type)
     ]
+    !isnothing(res) && push!(op_ty_results, res)
 
     return create_operation(
         "nvvm.dot.accumulate.4way",
@@ -2061,17 +2838,20 @@ function dot_accumulate_4way(
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function read_ptx_sreg_dynamic_smem_size(; res::IR.Type, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_dynamic_smem_size(;
+    res=nothing::Union{Nothing,IR.Type}, location=Location()
+)
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
 
     return create_operation(
         "nvvm.read.ptx.sreg.dynamic.smem.size",
@@ -2080,8 +2860,8 @@ function read_ptx_sreg_dynamic_smem_size(; res::IR.Type, location=Location())
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -2097,14 +2877,17 @@ the leader thread, and `False` for all other threads.
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-elect-sync)
 """
 function elect_sync(
-    membermask=nothing::Union{Nothing,Value}; pred::IR.Type, location=Location()
+    membermask=nothing::Union{Nothing,Value};
+    pred=nothing::Union{Nothing,IR.Type},
+    location=Location(),
 )
-    op_ty_results = IR.Type[pred,]
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(membermask) && push!(operands, membermask)
+    !isnothing(pred) && push!(op_ty_results, pred)
 
     return create_operation(
         "nvvm.elect.sync",
@@ -2113,17 +2896,18 @@ function elect_sync(
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function read_ptx_sreg_envreg0(; res::IR.Type, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_envreg0(; res=nothing::Union{Nothing,IR.Type}, location=Location())
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
 
     return create_operation(
         "nvvm.read.ptx.sreg.envreg0",
@@ -2132,17 +2916,18 @@ function read_ptx_sreg_envreg0(; res::IR.Type, location=Location())
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function read_ptx_sreg_envreg1(; res::IR.Type, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_envreg1(; res=nothing::Union{Nothing,IR.Type}, location=Location())
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
 
     return create_operation(
         "nvvm.read.ptx.sreg.envreg1",
@@ -2151,17 +2936,18 @@ function read_ptx_sreg_envreg1(; res::IR.Type, location=Location())
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function read_ptx_sreg_envreg2(; res::IR.Type, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_envreg2(; res=nothing::Union{Nothing,IR.Type}, location=Location())
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
 
     return create_operation(
         "nvvm.read.ptx.sreg.envreg2",
@@ -2170,17 +2956,18 @@ function read_ptx_sreg_envreg2(; res::IR.Type, location=Location())
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function read_ptx_sreg_envreg3(; res::IR.Type, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_envreg3(; res=nothing::Union{Nothing,IR.Type}, location=Location())
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
 
     return create_operation(
         "nvvm.read.ptx.sreg.envreg3",
@@ -2189,17 +2976,18 @@ function read_ptx_sreg_envreg3(; res::IR.Type, location=Location())
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function read_ptx_sreg_envreg4(; res::IR.Type, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_envreg4(; res=nothing::Union{Nothing,IR.Type}, location=Location())
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
 
     return create_operation(
         "nvvm.read.ptx.sreg.envreg4",
@@ -2208,17 +2996,18 @@ function read_ptx_sreg_envreg4(; res::IR.Type, location=Location())
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function read_ptx_sreg_envreg5(; res::IR.Type, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_envreg5(; res=nothing::Union{Nothing,IR.Type}, location=Location())
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
 
     return create_operation(
         "nvvm.read.ptx.sreg.envreg5",
@@ -2227,17 +3016,18 @@ function read_ptx_sreg_envreg5(; res::IR.Type, location=Location())
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function read_ptx_sreg_envreg6(; res::IR.Type, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_envreg6(; res=nothing::Union{Nothing,IR.Type}, location=Location())
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
 
     return create_operation(
         "nvvm.read.ptx.sreg.envreg6",
@@ -2246,17 +3036,18 @@ function read_ptx_sreg_envreg6(; res::IR.Type, location=Location())
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function read_ptx_sreg_envreg7(; res::IR.Type, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_envreg7(; res=nothing::Union{Nothing,IR.Type}, location=Location())
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
 
     return create_operation(
         "nvvm.read.ptx.sreg.envreg7",
@@ -2265,17 +3056,18 @@ function read_ptx_sreg_envreg7(; res::IR.Type, location=Location())
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function read_ptx_sreg_envreg8(; res::IR.Type, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_envreg8(; res=nothing::Union{Nothing,IR.Type}, location=Location())
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
 
     return create_operation(
         "nvvm.read.ptx.sreg.envreg8",
@@ -2284,17 +3076,18 @@ function read_ptx_sreg_envreg8(; res::IR.Type, location=Location())
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function read_ptx_sreg_envreg9(; res::IR.Type, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_envreg9(; res=nothing::Union{Nothing,IR.Type}, location=Location())
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
 
     return create_operation(
         "nvvm.read.ptx.sreg.envreg9",
@@ -2303,17 +3096,18 @@ function read_ptx_sreg_envreg9(; res::IR.Type, location=Location())
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function read_ptx_sreg_envreg10(; res::IR.Type, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_envreg10(; res=nothing::Union{Nothing,IR.Type}, location=Location())
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
 
     return create_operation(
         "nvvm.read.ptx.sreg.envreg10",
@@ -2322,17 +3116,18 @@ function read_ptx_sreg_envreg10(; res::IR.Type, location=Location())
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function read_ptx_sreg_envreg11(; res::IR.Type, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_envreg11(; res=nothing::Union{Nothing,IR.Type}, location=Location())
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
 
     return create_operation(
         "nvvm.read.ptx.sreg.envreg11",
@@ -2341,17 +3136,18 @@ function read_ptx_sreg_envreg11(; res::IR.Type, location=Location())
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function read_ptx_sreg_envreg12(; res::IR.Type, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_envreg12(; res=nothing::Union{Nothing,IR.Type}, location=Location())
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
 
     return create_operation(
         "nvvm.read.ptx.sreg.envreg12",
@@ -2360,17 +3156,18 @@ function read_ptx_sreg_envreg12(; res::IR.Type, location=Location())
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function read_ptx_sreg_envreg13(; res::IR.Type, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_envreg13(; res=nothing::Union{Nothing,IR.Type}, location=Location())
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
 
     return create_operation(
         "nvvm.read.ptx.sreg.envreg13",
@@ -2379,17 +3176,18 @@ function read_ptx_sreg_envreg13(; res::IR.Type, location=Location())
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function read_ptx_sreg_envreg14(; res::IR.Type, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_envreg14(; res=nothing::Union{Nothing,IR.Type}, location=Location())
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
 
     return create_operation(
         "nvvm.read.ptx.sreg.envreg14",
@@ -2398,17 +3196,18 @@ function read_ptx_sreg_envreg14(; res::IR.Type, location=Location())
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function read_ptx_sreg_envreg15(; res::IR.Type, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_envreg15(; res=nothing::Union{Nothing,IR.Type}, location=Location())
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
 
     return create_operation(
         "nvvm.read.ptx.sreg.envreg15",
@@ -2417,17 +3216,18 @@ function read_ptx_sreg_envreg15(; res::IR.Type, location=Location())
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function read_ptx_sreg_envreg16(; res::IR.Type, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_envreg16(; res=nothing::Union{Nothing,IR.Type}, location=Location())
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
 
     return create_operation(
         "nvvm.read.ptx.sreg.envreg16",
@@ -2436,17 +3236,18 @@ function read_ptx_sreg_envreg16(; res::IR.Type, location=Location())
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function read_ptx_sreg_envreg17(; res::IR.Type, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_envreg17(; res=nothing::Union{Nothing,IR.Type}, location=Location())
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
 
     return create_operation(
         "nvvm.read.ptx.sreg.envreg17",
@@ -2455,17 +3256,18 @@ function read_ptx_sreg_envreg17(; res::IR.Type, location=Location())
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function read_ptx_sreg_envreg18(; res::IR.Type, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_envreg18(; res=nothing::Union{Nothing,IR.Type}, location=Location())
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
 
     return create_operation(
         "nvvm.read.ptx.sreg.envreg18",
@@ -2474,17 +3276,18 @@ function read_ptx_sreg_envreg18(; res::IR.Type, location=Location())
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function read_ptx_sreg_envreg19(; res::IR.Type, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_envreg19(; res=nothing::Union{Nothing,IR.Type}, location=Location())
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
 
     return create_operation(
         "nvvm.read.ptx.sreg.envreg19",
@@ -2493,17 +3296,18 @@ function read_ptx_sreg_envreg19(; res::IR.Type, location=Location())
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function read_ptx_sreg_envreg20(; res::IR.Type, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_envreg20(; res=nothing::Union{Nothing,IR.Type}, location=Location())
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
 
     return create_operation(
         "nvvm.read.ptx.sreg.envreg20",
@@ -2512,17 +3316,18 @@ function read_ptx_sreg_envreg20(; res::IR.Type, location=Location())
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function read_ptx_sreg_envreg21(; res::IR.Type, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_envreg21(; res=nothing::Union{Nothing,IR.Type}, location=Location())
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
 
     return create_operation(
         "nvvm.read.ptx.sreg.envreg21",
@@ -2531,17 +3336,18 @@ function read_ptx_sreg_envreg21(; res::IR.Type, location=Location())
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function read_ptx_sreg_envreg22(; res::IR.Type, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_envreg22(; res=nothing::Union{Nothing,IR.Type}, location=Location())
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
 
     return create_operation(
         "nvvm.read.ptx.sreg.envreg22",
@@ -2550,17 +3356,18 @@ function read_ptx_sreg_envreg22(; res::IR.Type, location=Location())
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function read_ptx_sreg_envreg23(; res::IR.Type, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_envreg23(; res=nothing::Union{Nothing,IR.Type}, location=Location())
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
 
     return create_operation(
         "nvvm.read.ptx.sreg.envreg23",
@@ -2569,17 +3376,18 @@ function read_ptx_sreg_envreg23(; res::IR.Type, location=Location())
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function read_ptx_sreg_envreg24(; res::IR.Type, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_envreg24(; res=nothing::Union{Nothing,IR.Type}, location=Location())
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
 
     return create_operation(
         "nvvm.read.ptx.sreg.envreg24",
@@ -2588,17 +3396,18 @@ function read_ptx_sreg_envreg24(; res::IR.Type, location=Location())
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function read_ptx_sreg_envreg25(; res::IR.Type, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_envreg25(; res=nothing::Union{Nothing,IR.Type}, location=Location())
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
 
     return create_operation(
         "nvvm.read.ptx.sreg.envreg25",
@@ -2607,17 +3416,18 @@ function read_ptx_sreg_envreg25(; res::IR.Type, location=Location())
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function read_ptx_sreg_envreg26(; res::IR.Type, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_envreg26(; res=nothing::Union{Nothing,IR.Type}, location=Location())
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
 
     return create_operation(
         "nvvm.read.ptx.sreg.envreg26",
@@ -2626,17 +3436,18 @@ function read_ptx_sreg_envreg26(; res::IR.Type, location=Location())
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function read_ptx_sreg_envreg27(; res::IR.Type, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_envreg27(; res=nothing::Union{Nothing,IR.Type}, location=Location())
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
 
     return create_operation(
         "nvvm.read.ptx.sreg.envreg27",
@@ -2645,17 +3456,18 @@ function read_ptx_sreg_envreg27(; res::IR.Type, location=Location())
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function read_ptx_sreg_envreg28(; res::IR.Type, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_envreg28(; res=nothing::Union{Nothing,IR.Type}, location=Location())
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
 
     return create_operation(
         "nvvm.read.ptx.sreg.envreg28",
@@ -2664,17 +3476,18 @@ function read_ptx_sreg_envreg28(; res::IR.Type, location=Location())
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function read_ptx_sreg_envreg29(; res::IR.Type, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_envreg29(; res=nothing::Union{Nothing,IR.Type}, location=Location())
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
 
     return create_operation(
         "nvvm.read.ptx.sreg.envreg29",
@@ -2683,17 +3496,18 @@ function read_ptx_sreg_envreg29(; res::IR.Type, location=Location())
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function read_ptx_sreg_envreg30(; res::IR.Type, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_envreg30(; res=nothing::Union{Nothing,IR.Type}, location=Location())
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
 
     return create_operation(
         "nvvm.read.ptx.sreg.envreg30",
@@ -2702,17 +3516,18 @@ function read_ptx_sreg_envreg30(; res::IR.Type, location=Location())
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function read_ptx_sreg_envreg31(; res::IR.Type, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_envreg31(; res=nothing::Union{Nothing,IR.Type}, location=Location())
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
 
     return create_operation(
         "nvvm.read.ptx.sreg.envreg31",
@@ -2721,8 +3536,38 @@ function read_ptx_sreg_envreg31(; res::IR.Type, location=Location())
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
+`ex2`
+
+Computes a fast approximation of 2 raised to the power of the input
+value. The `ftz` attribute, when set, flushes subnormal inputs and
+results to sign-preserving zero.
+"""
+function ex2(
+    src::Value; res=nothing::Union{Nothing,IR.Type}, ftz=nothing, location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[src,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
+    !isnothing(ftz) && push!(attributes, NamedAttribute("ftz", ftz))
+
+    return create_operation(
+        "nvvm.ex2",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -2958,12 +3803,67 @@ function fence_sync_restrict(; order, location=Location())
     )
 end
 
-function read_ptx_sreg_globaltimer_lo(; res::IR.Type, location=Location())
-    op_ty_results = IR.Type[res,]
+"""
+`fma`
+
+The `nvvm.fma` operation performs floating point fused multiply-add of 
+three operands of the same type.
+
+The rounding mode is specified by the `rnd` attribute, saturation mode by 
+the `sat` attribute, flush-to-zero by the `ftz` attribute, and ReLU by the 
+`relu` attribute.
+
+Out-of-bounds (OOB) behavior is controlled by the `oob` attribute. `oob` 
+clamps the result to 0 if either of the operands is `OOB NaN` (see [Tensors](https://docs.nvidia.com/cuda/parallel-thread-execution/#tensors)).
+
+For more information, see PTX ISA:
+- [floating point fused multiply-add](https://docs.nvidia.com/cuda/parallel-thread-execution/#floating-point-instructions-fma)
+- [half-precision floating point fused multiply-add](https://docs.nvidia.com/cuda/parallel-thread-execution/#half-precision-floating-point-instructions-fma)
+"""
+function fma(
+    a::Value,
+    b::Value,
+    c::Value;
+    res=nothing::Union{Nothing,IR.Type},
+    rnd,
+    sat=nothing,
+    ftz=nothing,
+    relu=nothing,
+    oob=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[a, b, c]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[NamedAttribute("rnd", rnd),]
+    !isnothing(res) && push!(op_ty_results, res)
+    !isnothing(sat) && push!(attributes, NamedAttribute("sat", sat))
+    !isnothing(ftz) && push!(attributes, NamedAttribute("ftz", ftz))
+    !isnothing(relu) && push!(attributes, NamedAttribute("relu", relu))
+    !isnothing(oob) && push!(attributes, NamedAttribute("oob", oob))
+
+    return create_operation(
+        "nvvm.fma",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+function read_ptx_sreg_globaltimer_lo(;
+    res=nothing::Union{Nothing,IR.Type}, location=Location()
+)
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
 
     return create_operation(
         "nvvm.read.ptx.sreg.globaltimer.lo",
@@ -2972,17 +3872,20 @@ function read_ptx_sreg_globaltimer_lo(; res::IR.Type, location=Location())
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function read_ptx_sreg_globaltimer(; res::IR.Type, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_globaltimer(;
+    res=nothing::Union{Nothing,IR.Type}, location=Location()
+)
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
 
     return create_operation(
         "nvvm.read.ptx.sreg.globaltimer",
@@ -2991,17 +3894,20 @@ function read_ptx_sreg_globaltimer(; res::IR.Type, location=Location())
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function read_ptx_sreg_nctaid_x(; res::IR.Type, range=nothing, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_nctaid_x(;
+    res=nothing::Union{Nothing,IR.Type}, range=nothing, location=Location()
+)
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
     !isnothing(range) && push!(attributes, NamedAttribute("range", range))
 
     return create_operation(
@@ -3011,17 +3917,20 @@ function read_ptx_sreg_nctaid_x(; res::IR.Type, range=nothing, location=Location
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function read_ptx_sreg_nctaid_y(; res::IR.Type, range=nothing, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_nctaid_y(;
+    res=nothing::Union{Nothing,IR.Type}, range=nothing, location=Location()
+)
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
     !isnothing(range) && push!(attributes, NamedAttribute("range", range))
 
     return create_operation(
@@ -3031,17 +3940,20 @@ function read_ptx_sreg_nctaid_y(; res::IR.Type, range=nothing, location=Location
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function read_ptx_sreg_nctaid_z(; res::IR.Type, range=nothing, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_nctaid_z(;
+    res=nothing::Union{Nothing,IR.Type}, range=nothing, location=Location()
+)
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
     !isnothing(range) && push!(attributes, NamedAttribute("range", range))
 
     return create_operation(
@@ -3051,17 +3963,20 @@ function read_ptx_sreg_nctaid_z(; res::IR.Type, range=nothing, location=Location
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function read_ptx_sreg_gridid(; res::IR.Type, range=nothing, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_gridid(;
+    res=nothing::Union{Nothing,IR.Type}, range=nothing, location=Location()
+)
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
     !isnothing(range) && push!(attributes, NamedAttribute("range", range))
 
     return create_operation(
@@ -3071,8 +3986,8 @@ function read_ptx_sreg_gridid(; res::IR.Type, range=nothing, location=Location()
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -3119,16 +4034,22 @@ This op allows using PTX directly within the NVVM
     `BasicPtxBuilderInterface` to abstract away low-level details of 
     PTX assembly formatting.
 
-    The `predicate` attribute is used to specify a predicate for the 
+    The `predicate` attribute is used to specify a predicate for the
     PTX instruction.
+
+    The `memory_clobber` attribute appends a \"~{memory}\" clobber to the
+    constraints of the generated inline assembly. Set it when the PTX reads
+    or writes memory beyond its listed operands (e.g. stores, atomics, or
+    instructions with acquire/release semantics such as mbarrier), so that
+    LLVM does not reorder memory accesses across the inline assembly.
 
     Example 1: Read-only Parameters
     ```mlir
-    nvvm.inline_ptx \"mbarrier.init.b64 [\$0], \$1;\" (%barrier_gen, %count) : !llvm.ptr, i32
+    nvvm.inline_ptx \"mbarrier.init.b64 [\$0], \$1;\" ro(%barrier_gen, %count : !llvm.ptr, i32) memory_clobber = true
 
     // Lowers to:
-    llvm.inline_asm has_side_effects asm_dialect = att 
-      \"mbarrier.init.b64 [\$0], \$1;\", \"l,r\" %arg0, %arg2 : (!llvm.ptr, i32) -> ()
+    llvm.inline_asm has_side_effects asm_dialect = att
+      \"mbarrier.init.b64 [\$0], \$1;\", \"l,r,~{memory}\" %arg0, %arg2 : (!llvm.ptr, i32) -> ()
     ```
 
     Example 2: Read-only and Write-only Parameters
@@ -3157,6 +4078,7 @@ function inline_ptx(
     predicate=nothing::Union{Nothing,Value};
     writeOnlyArgs::Vector{IR.Type},
     ptxCode,
+    memoryClobber=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[writeOnlyArgs...,]
@@ -3171,6 +4093,8 @@ function inline_ptx(
             length(readOnlyArgs), length(readWriteArgs), Int(!isnothing(predicate))
         ]),
     )
+    !isnothing(memoryClobber) &&
+        push!(attributes, NamedAttribute("memoryClobber", memoryClobber))
 
     return create_operation(
         "nvvm.inline_ptx",
@@ -3184,12 +4108,15 @@ function inline_ptx(
     )
 end
 
-function read_ptx_sreg_laneid(; res::IR.Type, range=nothing, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_laneid(;
+    res=nothing::Union{Nothing,IR.Type}, range=nothing, location=Location()
+)
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
     !isnothing(range) && push!(attributes, NamedAttribute("range", range))
 
     return create_operation(
@@ -3199,17 +4126,20 @@ function read_ptx_sreg_laneid(; res::IR.Type, range=nothing, location=Location()
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function read_ptx_sreg_lanemask_eq(; res::IR.Type, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_lanemask_eq(;
+    res=nothing::Union{Nothing,IR.Type}, location=Location()
+)
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
 
     return create_operation(
         "nvvm.read.ptx.sreg.lanemask.eq",
@@ -3218,17 +4148,20 @@ function read_ptx_sreg_lanemask_eq(; res::IR.Type, location=Location())
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function read_ptx_sreg_lanemask_ge(; res::IR.Type, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_lanemask_ge(;
+    res=nothing::Union{Nothing,IR.Type}, location=Location()
+)
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
 
     return create_operation(
         "nvvm.read.ptx.sreg.lanemask.ge",
@@ -3237,17 +4170,20 @@ function read_ptx_sreg_lanemask_ge(; res::IR.Type, location=Location())
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function read_ptx_sreg_lanemask_gt(; res::IR.Type, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_lanemask_gt(;
+    res=nothing::Union{Nothing,IR.Type}, location=Location()
+)
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
 
     return create_operation(
         "nvvm.read.ptx.sreg.lanemask.gt",
@@ -3256,17 +4192,20 @@ function read_ptx_sreg_lanemask_gt(; res::IR.Type, location=Location())
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function read_ptx_sreg_lanemask_le(; res::IR.Type, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_lanemask_le(;
+    res=nothing::Union{Nothing,IR.Type}, location=Location()
+)
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
 
     return create_operation(
         "nvvm.read.ptx.sreg.lanemask.le",
@@ -3275,17 +4214,20 @@ function read_ptx_sreg_lanemask_le(; res::IR.Type, location=Location())
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function read_ptx_sreg_lanemask_lt(; res::IR.Type, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_lanemask_lt(;
+    res=nothing::Union{Nothing,IR.Type}, location=Location()
+)
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
 
     return create_operation(
         "nvvm.read.ptx.sreg.lanemask.lt",
@@ -3294,15 +4236,21 @@ function read_ptx_sreg_lanemask_lt(; res::IR.Type, location=Location())
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
 function ldmatrix(
-    ptr::Value; res::IR.Type, num, layout, shape, eltType, location=Location()
+    ptr::Value;
+    res=nothing::Union{Nothing,IR.Type},
+    num,
+    layout,
+    shape,
+    eltType,
+    location=Location(),
 )
-    op_ty_results = IR.Type[res,]
+    op_ty_results = IR.Type[]
     operands = Value[ptr,]
     owned_regions = Region[]
     successors = Block[]
@@ -3312,6 +4260,7 @@ function ldmatrix(
         NamedAttribute("shape", shape),
         NamedAttribute("eltType", eltType),
     ]
+    !isnothing(res) && push!(op_ty_results, res)
 
     return create_operation(
         "nvvm.ldmatrix",
@@ -3320,8 +4269,38 @@ function ldmatrix(
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
+`log2`
+
+Computes a fast approximation of the base-2 logarithm of the input
+value. The `ftz` attribute, when set, flushes subnormal inputs and
+results to sign-preserving zero.
+"""
+function log2(
+    src::Value; res=nothing::Union{Nothing,IR.Type}, ftz=nothing, location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[src,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
+    !isnothing(ftz) && push!(attributes, NamedAttribute("ftz", ftz))
+
+    return create_operation(
+        "nvvm.log2",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -3358,8 +4337,8 @@ function mbarrier_arrive_drop_expect_tx(
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -3374,13 +4353,14 @@ will not cause the barrier to complete its current phase.
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-mbarrier-arrive-drop)
 """
 function mbarrier_arrive_drop_nocomplete(
-    addr::Value, count::Value; res::IR.Type, location=Location()
+    addr::Value, count::Value; res=nothing::Union{Nothing,IR.Type}, location=Location()
 )
-    op_ty_results = IR.Type[res,]
+    op_ty_results = IR.Type[]
     operands = Value[addr, count]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
 
     return create_operation(
         "nvvm.mbarrier.arrive_drop.nocomplete",
@@ -3389,8 +4369,8 @@ function mbarrier_arrive_drop_nocomplete(
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -3431,8 +4411,8 @@ function mbarrier_arrive_drop(
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -3494,8 +4474,8 @@ function mbarrier_arrive_expect_tx(
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -3527,13 +4507,14 @@ The operation takes the following operands:
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-mbarrier-arrive)
 """
 function mbarrier_arrive_nocomplete(
-    addr::Value, count::Value; res::IR.Type, location=Location()
+    addr::Value, count::Value; res=nothing::Union{Nothing,IR.Type}, location=Location()
 )
-    op_ty_results = IR.Type[res,]
+    op_ty_results = IR.Type[]
     operands = Value[addr, count]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
 
     return create_operation(
         "nvvm.mbarrier.arrive.nocomplete",
@@ -3542,8 +4523,8 @@ function mbarrier_arrive_nocomplete(
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -3607,8 +4588,8 @@ function mbarrier_arrive(
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -3816,16 +4797,17 @@ ordering guarantees hold:
 function mbarrier_test_wait(
     addr::Value,
     stateOrPhase::Value;
-    res::IR.Type,
+    res=nothing::Union{Nothing,IR.Type},
     scope=nothing,
     relaxed=nothing,
     location=Location(),
 )
-    op_ty_results = IR.Type[res,]
+    op_ty_results = IR.Type[]
     operands = Value[addr, stateOrPhase]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
     !isnothing(scope) && push!(attributes, NamedAttribute("scope", scope))
     !isnothing(relaxed) && push!(attributes, NamedAttribute("relaxed", relaxed))
 
@@ -3836,8 +4818,8 @@ function mbarrier_test_wait(
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -3861,17 +4843,18 @@ function mbarrier_try_wait(
     addr::Value,
     stateOrPhase::Value,
     ticks=nothing::Union{Nothing,Value};
-    res::IR.Type,
+    res=nothing::Union{Nothing,IR.Type},
     scope=nothing,
     relaxed=nothing,
     location=Location(),
 )
-    op_ty_results = IR.Type[res,]
+    op_ty_results = IR.Type[]
     operands = Value[addr, stateOrPhase]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(ticks) && push!(operands, ticks)
+    !isnothing(res) && push!(op_ty_results, res)
     !isnothing(scope) && push!(attributes, NamedAttribute("scope", scope))
     !isnothing(relaxed) && push!(attributes, NamedAttribute("relaxed", relaxed))
 
@@ -3882,8 +4865,8 @@ function mbarrier_try_wait(
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -3996,12 +4979,19 @@ true and the mask corresponds to the non-exited threads in the
 
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/#parallel-synchronization-and-communication-instructions-match-sync)
 """
-function match_sync(thread_mask::Value, val::Value; res::IR.Type, kind, location=Location())
-    op_ty_results = IR.Type[res,]
+function match_sync(
+    thread_mask::Value,
+    val::Value;
+    res=nothing::Union{Nothing,IR.Type},
+    kind,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
     operands = Value[thread_mask, val]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[NamedAttribute("kind", kind),]
+    !isnothing(res) && push!(op_ty_results, res)
 
     return create_operation(
         "nvvm.match.sync",
@@ -4010,8 +5000,8 @@ function match_sync(thread_mask::Value, val::Value; res::IR.Type, kind, location
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -4159,9 +5149,9 @@ performed and is either `xor_popc` or `and_poc`. The default is `xor_popc`.
 `intOverflowBehavior` is only relevant when the `multiplicandType` attribute
 is one of `u8, s8, u4, s4`, this attribute describes how overflow is handled
 in the accumulator. When the attribute is `satfinite`, the accumulator values
-are clamped in the int32 range on overflow. This is the default behavior.
-Alternatively, accumulator behavior `wrapped` can also be specified, in
-which case overflow wraps from one end of the range to the other.
+are clamped in the int32 range on overflow. Alternatively, accumulator
+behavior `wrapped` can be specified (this is the default), in which case
+overflow wraps from one end of the range to the other.
 
 `layoutA` and `layoutB` are required and should generally be set to
 `#nvvm.mma_layout<row>` and `#nvvm.mma_layout<col>` respectively, but other
@@ -4451,6 +5441,55 @@ function mma_sp_sync(
 end
 
 """
+`movmatrix`
+
+Moves a row-major matrix across all threads in a warp, reading elements
+from source `\$src`, and writing the transposed elements to destination
+`\$dst`.
+
+The `shape` attribute indicates the dimensions of the matrix being
+transposed. Each matrix element holds 16-bit data as indicated by the
+`eltType` attribute.
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/#warp-level-matrix-movmatrix-instruction)
+
+# Example
+```mlir
+%dst = nvvm.movmatrix %src {shape = #nvvm.ld_st_matrix_shape<m = 8, n = 8>,
+                            eltType = #nvvm.ld_st_matrix_elt_type<b16>} : i32
+```
+"""
+function movmatrix(
+    src::Value;
+    dst=nothing::Union{Nothing,IR.Type},
+    shape,
+    layout=nothing,
+    eltType,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[src,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[
+        NamedAttribute("shape", shape), NamedAttribute("eltType", eltType)
+    ]
+    !isnothing(dst) && push!(op_ty_results, dst)
+    !isnothing(layout) && push!(attributes, NamedAttribute("layout", layout))
+
+    return create_operation(
+        "nvvm.movmatrix",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
 `nanosleep`
 
 The op suspends the thread for a sleep duration approximately close to the 
@@ -4601,16 +5640,17 @@ function prmt(
     lo::Value,
     hi=nothing::Union{Nothing,Value};
     selector::Value,
-    res::IR.Type,
+    res=nothing::Union{Nothing,IR.Type},
     mode,
     location=Location(),
 )
-    op_ty_results = IR.Type[res,]
+    op_ty_results = IR.Type[]
     operands = Value[lo, selector]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[NamedAttribute("mode", mode),]
     !isnothing(hi) && push!(operands, hi)
+    !isnothing(res) && push!(op_ty_results, res)
 
     return create_operation(
         "nvvm.prmt",
@@ -4619,8 +5659,8 @@ function prmt(
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -4688,12 +5728,15 @@ function prefetch(
     )
 end
 
-function rcp_approx_ftz_f(arg::Value; res::IR.Type, location=Location())
-    op_ty_results = IR.Type[res,]
+function rcp_approx_ftz_f(
+    arg::Value; res=nothing::Union{Nothing,IR.Type}, location=Location()
+)
+    op_ty_results = IR.Type[]
     operands = Value[arg,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
 
     return create_operation(
         "nvvm.rcp.approx.ftz.f",
@@ -4702,8 +5745,8 @@ function rcp_approx_ftz_f(arg::Value; res::IR.Type, location=Location())
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -4724,17 +5767,18 @@ NaN.
 function redux_sync(
     val::Value,
     mask_and_clamp::Value;
-    res::IR.Type,
+    res=nothing::Union{Nothing,IR.Type},
     kind,
     abs=nothing,
     nan=nothing,
     location=Location(),
 )
-    op_ty_results = IR.Type[res,]
+    op_ty_results = IR.Type[]
     operands = Value[val, mask_and_clamp]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[NamedAttribute("kind", kind),]
+    !isnothing(res) && push!(op_ty_results, res)
     !isnothing(abs) && push!(attributes, NamedAttribute("abs", abs))
     !isnothing(nan) && push!(attributes, NamedAttribute("nan", nan))
 
@@ -4745,8 +5789,47 @@ function redux_sync(
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
+`rsqrt`
+
+Computes an approximation of the reciprocal of the square root of the
+input value: `d = 1 / sqrt(a)`. Supports both f32 and f64. The maximum
+relative error for the f32 form over the entire positive finite range
+is 2^-22.9.
+
+The `ftz` attribute, when set, flushes subnormal inputs and results to
+sign-preserving zero. For f64 inputs, `ftz=true` selects a coarser
+approximation that uses only the upper 32 bits of the input (the lower
+32 bits of the result are zeroed).
+
+For more information, see PTX ISA:
+[rsqrt](https://docs.nvidia.com/cuda/parallel-thread-execution/#floating-point-instructions-rsqrt)
+"""
+function rsqrt(
+    src::Value; res=nothing::Union{Nothing,IR.Type}, ftz=nothing, location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[src,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
+    !isnothing(ftz) && push!(attributes, NamedAttribute("ftz", ftz))
+
+    return create_operation(
+        "nvvm.rsqrt",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -4795,16 +5878,17 @@ function shfl_sync(
     val::Value,
     offset::Value,
     mask_and_clamp::Value;
-    res::IR.Type,
+    res=nothing::Union{Nothing,IR.Type},
     kind,
     return_value_and_is_valid=nothing,
     location=Location(),
 )
-    op_ty_results = IR.Type[res,]
+    op_ty_results = IR.Type[]
     operands = Value[thread_mask, val, offset, mask_and_clamp]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[NamedAttribute("kind", kind),]
+    !isnothing(res) && push!(op_ty_results, res)
     !isnothing(return_value_and_is_valid) && push!(
         attributes,
         NamedAttribute("return_value_and_is_valid", return_value_and_is_valid),
@@ -4817,17 +5901,53 @@ function shfl_sync(
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function read_ptx_sreg_nsmid(; res::IR.Type, range=nothing, location=Location())
-    op_ty_results = IR.Type[res,]
+"""
+`sin`
+
+Computes a fast approximation of the sine of the input value (in radians).
+The `ftz` attribute, when set, flushes subnormal inputs and results to
+sign-preserving zero.
+
+For more information, see PTX ISA:
+[sin](https://docs.nvidia.com/cuda/parallel-thread-execution/#floating-point-instructions-sin)
+"""
+function sin(
+    src::Value; res=nothing::Union{Nothing,IR.Type}, ftz=nothing, location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[src,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
+    !isnothing(ftz) && push!(attributes, NamedAttribute("ftz", ftz))
+
+    return create_operation(
+        "nvvm.sin",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+function read_ptx_sreg_nsmid(;
+    res=nothing::Union{Nothing,IR.Type}, range=nothing, location=Location()
+)
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
     !isnothing(range) && push!(attributes, NamedAttribute("range", range))
 
     return create_operation(
@@ -4837,17 +5957,20 @@ function read_ptx_sreg_nsmid(; res::IR.Type, range=nothing, location=Location())
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function read_ptx_sreg_smid(; res::IR.Type, range=nothing, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_smid(;
+    res=nothing::Union{Nothing,IR.Type}, range=nothing, location=Location()
+)
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
     !isnothing(range) && push!(attributes, NamedAttribute("range", range))
 
     return create_operation(
@@ -4857,8 +5980,75 @@ function read_ptx_sreg_smid(; res::IR.Type, range=nothing, location=Location())
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
+`sqrt_approx`
+
+Computes a fast approximation of the square root of the input value
+(`res = sqrt(src)`). The maximum relative error over the entire positive
+finite range is 2^-23.
+
+The `ftz` attribute, when set, flushes subnormal inputs and results to
+sign-preserving zero.
+
+For more information, see PTX ISA:
+[sqrt](https://docs.nvidia.com/cuda/parallel-thread-execution/#floating-point-instructions-sqrt)
+"""
+function sqrt_approx(
+    src::Value; res=nothing::Union{Nothing,IR.Type}, ftz=nothing, location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[src,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
+    !isnothing(ftz) && push!(attributes, NamedAttribute("ftz", ftz))
+
+    return create_operation(
+        "nvvm.sqrt.approx",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
+`sqrt`
+
+Compute sqrt(src) and store the result in res.
+
+For more information, see PTX ISA:
+[sqrt](https://docs.nvidia.com/cuda/parallel-thread-execution/#floating-point-instructions-sqrt)
+"""
+function sqrt(
+    src::Value; res=nothing::Union{Nothing,IR.Type}, rnd, ftz=nothing, location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[src,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[NamedAttribute("rnd", rnd),]
+    !isnothing(res) && push!(op_ty_results, res)
+    !isnothing(ftz) && push!(attributes, NamedAttribute("ftz", ftz))
+
+    return create_operation(
+        "nvvm.sqrt",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -4892,6 +6082,50 @@ function stmatrix(
         attributes,
         results=op_ty_results,
         result_inference=false,
+    )
+end
+
+"""
+`subf`
+
+The `nvvm.subf` operation performs floating point subtraction of two 
+operands.
+
+It supports the same type combinations and modifiers as `nvvm.addf`.
+This is equivalent to `nvvm.addf(lhs, -rhs)`.
+
+For more information, see PTX ISA:
+- [floating point subtraction](https://docs.nvidia.com/cuda/parallel-thread-execution/#floating-point-instructions-sub) 
+- [half-precision floating point subtraction](https://docs.nvidia.com/cuda/parallel-thread-execution/#half-precision-floating-point-instructions-sub)
+"""
+function subf(
+    lhs::Value,
+    rhs::Value;
+    res=nothing::Union{Nothing,IR.Type},
+    rnd=nothing,
+    sat=nothing,
+    ftz=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[lhs, rhs]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
+    !isnothing(rnd) && push!(attributes, NamedAttribute("rnd", rnd))
+    !isnothing(sat) && push!(attributes, NamedAttribute("sat", sat))
+    !isnothing(ftz) && push!(attributes, NamedAttribute("ftz", ftz))
+
+    return create_operation(
+        "nvvm.subf",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -4979,14 +6213,18 @@ async-tcgen05 operations initiated by the executing thread.
 The multicast variants allow signaling on the *mbarrier objects*
 of multiple CTAs within the cluster. Operand `multicastMask`,
 when present, specifies the destination CTAs in the cluster such
-that each bit position in the 16-bit `multicastMask` operand
+that each bit position in the 16-bit or 32-bit `multicastMask` operand
 corresponds to the `nvvm.read.ptx.sreg.ctaid` of the destination CTA.
+When present, the `smem_a_read` attribute restricts tracking to
+shared-memory reads of matrix A performed by prior `tcgen05.mma`
+operations.
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/#tcgen-async-sync-operations-commit)
 """
 function tcgen05_commit(
     addr::Value,
     multicastMask=nothing::Union{Nothing,Value};
     group=nothing,
+    smem_a_read=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -4996,6 +6234,7 @@ function tcgen05_commit(
     attributes = NamedAttribute[]
     !isnothing(multicastMask) && push!(operands, multicastMask)
     !isnothing(group) && push!(attributes, NamedAttribute("group", group))
+    !isnothing(smem_a_read) && push!(attributes, NamedAttribute("smem_a_read", smem_a_read))
 
     return create_operation(
         "nvvm.tcgen05.commit",
@@ -5194,6 +6433,88 @@ function tcgen05_ld(
 end
 
 """
+`tcgen05_ld_red`
+
+Instruction `tcgen05.ld.red` asynchronously loads data from the Tensor
+Memory at the location specified by the 32-bit address operand `addr` into
+the destination register `data`, collectively across all threads of the
+warp. The operation also performs reduction operation specified by `op` on
+the loaded data across columns in each lane and stored into `redVal`
+
+The `shape` and the `num` attribute together determines the total
+dimension of the data which is loaded from the Tensor Memory. The `shape`
+attribute indicates the base dimension of data to be accessed as described
+in the Data Movement Shape. The `num` attribute indicates the repeat
+factor on the base dimension resulting in the total dimension of the data
+that is accessed.
+
+The shape `16x32bx2` performs two accesses into Tensor Memory of the shape
+`16x32b`. The base address of the first access is specified by `addr`
+and the base address of the second access is specified by
+`addr + offset`, where `offset` is an immediate argument.
+
+The following table describes the size of the vector for various combinations
+of `num` and `shape` attributes:
+```
+|=============================================|
+| num/shape      |     16x32bx2/32x32b        |
+|=============================================|
+| x2             |             2              |
+| x4             |             4              |
+| x8             |             8              |
+| x16            |             16             |
+| x32            |             32             |
+| x64            |             64             |
+| x128           |             128            |
+|=============================================|
+```
+
+# Example
+```mlir
+  %data, %redval = nvvm.tcgen05.ld.red %addr, %offset {
+    shape = #nvvm.tcgen05_ldst_shape<shape_16x32bx2>,
+  } : <2xi32>, i32
+
+  %data, %redval = nvvm.tcgen05.ld.red %addr {
+    shape = #nvvm.tcgen05_ldst_shape<shape_32x32b>,
+  } : <2xf32>, f32
+```
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/#tcgen05-instructions-tcgen05-ld)
+"""
+function tcgen05_ld_red(
+    addr::Value,
+    offset=nothing::Union{Nothing,Value};
+    data::IR.Type,
+    redVal::IR.Type,
+    shape,
+    op,
+    abs=nothing,
+    nan=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[data, redVal]
+    operands = Value[addr,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[NamedAttribute("shape", shape), NamedAttribute("op", op)]
+    !isnothing(offset) && push!(operands, offset)
+    !isnothing(abs) && push!(attributes, NamedAttribute("abs", abs))
+    !isnothing(nan) && push!(attributes, NamedAttribute("nan", nan))
+
+    return create_operation(
+        "nvvm.tcgen05.ld.red",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
 `tcgen05_mma_block_scale`
 
 The `tcgen05.mma.block_scale` operation is an asynchronous tensor core instruction
@@ -5217,7 +6538,7 @@ The `shared memory descriptor` can be generated using `tcgen05.mma_smem_desc` Op
 - `idesc` is a 32 bit value representing the [Instruction Descriptor](https://docs.nvidia.com/cuda/parallel-thread-execution/#tcgen05-instruction-descriptor)
 
 Required Attributes:
-- `kind` is a MMABlockScaleKind attribute
+- `kind` is a Tcgen05MMAKind attribute restricted to mxf8f6f4, mxf4, or mxf4nvf4
 
 - `ctaGroup` specifies CTA group configuration
   * cta_1: MMA will be performed on the current thread\'s CTA
@@ -5225,6 +6546,7 @@ Required Attributes:
 
 Default Attributes:
 - collectorOp is a Tcgen05MMACollectorOp attribute with matrix A as the collector buffer
+- collectorOpB is a Tcgen05MMACollectorOp attribute with matrix B as the collector buffer
 
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/#tcgen05-mma-instructions-mma)
 """
@@ -5240,6 +6562,7 @@ function tcgen05_mma_block_scale(
     ctaGroup,
     blockScale=nothing,
     collectorOp=nothing,
+    collectorOpB=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -5251,6 +6574,8 @@ function tcgen05_mma_block_scale(
     ]
     !isnothing(blockScale) && push!(attributes, NamedAttribute("blockScale", blockScale))
     !isnothing(collectorOp) && push!(attributes, NamedAttribute("collectorOp", collectorOp))
+    !isnothing(collectorOpB) &&
+        push!(attributes, NamedAttribute("collectorOpB", collectorOpB))
 
     return create_operation(
         "nvvm.tcgen05.mma.block_scale",
@@ -5303,6 +6628,7 @@ Required Attributes:
 
 Default Attributes:
 - collectorOp is a Tcgen05MMACollectorOp attribute with matrix A as the collector buffer
+- collectorOpB is a Tcgen05MMACollectorOp attribute with matrix B as the collector buffer
 
 - `aShift` shifts the rows of the A matrix down by one row and can only be
    applied if A is in tensor memory
@@ -5320,6 +6646,7 @@ function tcgen05_mma(
     kind,
     ctaGroup,
     collectorOp=nothing,
+    collectorOpB=nothing,
     aShift=nothing,
     location=Location(),
 )
@@ -5339,6 +6666,8 @@ function tcgen05_mma(
         ]),
     )
     !isnothing(collectorOp) && push!(attributes, NamedAttribute("collectorOp", collectorOp))
+    !isnothing(collectorOpB) &&
+        push!(attributes, NamedAttribute("collectorOpB", collectorOpB))
     !isnothing(aShift) && push!(attributes, NamedAttribute("aShift", aShift))
 
     return create_operation(
@@ -5390,6 +6719,7 @@ function tcgen05_mma_sp_block_scale(
     ctaGroup,
     blockScale=nothing,
     collectorOp=nothing,
+    collectorOpB=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -5403,6 +6733,8 @@ function tcgen05_mma_sp_block_scale(
     ]
     !isnothing(blockScale) && push!(attributes, NamedAttribute("blockScale", blockScale))
     !isnothing(collectorOp) && push!(attributes, NamedAttribute("collectorOp", collectorOp))
+    !isnothing(collectorOpB) &&
+        push!(attributes, NamedAttribute("collectorOpB", collectorOpB))
 
     return create_operation(
         "nvvm.tcgen05.mma.sp.block_scale",
@@ -5453,6 +6785,7 @@ function tcgen05_mma_sp(
     kind,
     ctaGroup,
     collectorOp=nothing,
+    collectorOpB=nothing,
     aShift=nothing,
     location=Location(),
 )
@@ -5479,6 +6812,8 @@ function tcgen05_mma_sp(
         ]),
     )
     !isnothing(collectorOp) && push!(attributes, NamedAttribute("collectorOp", collectorOp))
+    !isnothing(collectorOpB) &&
+        push!(attributes, NamedAttribute("collectorOpB", collectorOpB))
     !isnothing(aShift) && push!(attributes, NamedAttribute("aShift", aShift))
 
     return create_operation(
@@ -5669,10 +7004,10 @@ function tcgen05_mma_smem_desc(
     baseOffset::Value,
     leadingDimMode::Value,
     swizzleMode::Value;
-    res::IR.Type,
+    res=nothing::Union{Nothing,IR.Type},
     location=Location(),
 )
-    op_ty_results = IR.Type[res,]
+    op_ty_results = IR.Type[]
     operands = Value[
         startAddr,
         leadingDimOffset,
@@ -5684,6 +7019,7 @@ function tcgen05_mma_smem_desc(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
 
     return create_operation(
         "nvvm.tcgen05.mma_smem_desc",
@@ -5692,8 +7028,8 @@ function tcgen05_mma_smem_desc(
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -5922,12 +7258,15 @@ function tensormap_replace(
     )
 end
 
-function read_ptx_sreg_tid_x(; res::IR.Type, range=nothing, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_tid_x(;
+    res=nothing::Union{Nothing,IR.Type}, range=nothing, location=Location()
+)
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
     !isnothing(range) && push!(attributes, NamedAttribute("range", range))
 
     return create_operation(
@@ -5937,17 +7276,20 @@ function read_ptx_sreg_tid_x(; res::IR.Type, range=nothing, location=Location())
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function read_ptx_sreg_tid_y(; res::IR.Type, range=nothing, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_tid_y(;
+    res=nothing::Union{Nothing,IR.Type}, range=nothing, location=Location()
+)
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
     !isnothing(range) && push!(attributes, NamedAttribute("range", range))
 
     return create_operation(
@@ -5957,17 +7299,20 @@ function read_ptx_sreg_tid_y(; res::IR.Type, range=nothing, location=Location())
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function read_ptx_sreg_tid_z(; res::IR.Type, range=nothing, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_tid_z(;
+    res=nothing::Union{Nothing,IR.Type}, range=nothing, location=Location()
+)
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
     !isnothing(range) && push!(attributes, NamedAttribute("range", range))
 
     return create_operation(
@@ -5977,17 +7322,20 @@ function read_ptx_sreg_tid_z(; res::IR.Type, range=nothing, location=Location())
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function read_ptx_sreg_total_smem_size(; res::IR.Type, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_total_smem_size(;
+    res=nothing::Union{Nothing,IR.Type}, location=Location()
+)
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
 
     return create_operation(
         "nvvm.read.ptx.sreg.total.smem.size",
@@ -5996,8 +7344,8 @@ function read_ptx_sreg_total_smem_size(; res::IR.Type, location=Location())
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -6021,12 +7369,15 @@ The vote operation kinds are:
 
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/#parallel-synchronization-and-communication-instructions-vote-sync)
 """
-function vote_sync(mask::Value, pred::Value; res::IR.Type, kind, location=Location())
-    op_ty_results = IR.Type[res,]
+function vote_sync(
+    mask::Value, pred::Value; res=nothing::Union{Nothing,IR.Type}, kind, location=Location()
+)
+    op_ty_results = IR.Type[]
     operands = Value[mask, pred]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[NamedAttribute("kind", kind),]
+    !isnothing(res) && push!(op_ty_results, res)
 
     return create_operation(
         "nvvm.vote.sync",
@@ -6035,8 +7386,8 @@ function vote_sync(mask::Value, pred::Value; res::IR.Type, kind, location=Locati
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -6150,12 +7501,15 @@ function wmma_store(
     )
 end
 
-function read_ptx_sreg_nwarpid(; res::IR.Type, range=nothing, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_nwarpid(;
+    res=nothing::Union{Nothing,IR.Type}, range=nothing, location=Location()
+)
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
     !isnothing(range) && push!(attributes, NamedAttribute("range", range))
 
     return create_operation(
@@ -6165,17 +7519,20 @@ function read_ptx_sreg_nwarpid(; res::IR.Type, range=nothing, location=Location(
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function read_ptx_sreg_warpid(; res::IR.Type, range=nothing, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_warpid(;
+    res=nothing::Union{Nothing,IR.Type}, range=nothing, location=Location()
+)
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
     !isnothing(range) && push!(attributes, NamedAttribute("range", range))
 
     return create_operation(
@@ -6185,17 +7542,20 @@ function read_ptx_sreg_warpid(; res::IR.Type, range=nothing, location=Location()
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
-function read_ptx_sreg_warpsize(; res::IR.Type, range=nothing, location=Location())
-    op_ty_results = IR.Type[res,]
+function read_ptx_sreg_warpsize(;
+    res=nothing::Union{Nothing,IR.Type}, range=nothing, location=Location()
+)
+    op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
     !isnothing(range) && push!(attributes, NamedAttribute("range", range))
 
     return create_operation(
@@ -6205,8 +7565,8 @@ function read_ptx_sreg_warpsize(; res::IR.Type, range=nothing, location=Location
         owned_regions,
         successors,
         attributes,
-        results=op_ty_results,
-        result_inference=false,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 

@@ -3,7 +3,59 @@ module ReactantCore
 using ExpressionExplorer: ExpressionExplorer
 using MacroTools: MacroTools, @capture
 
-export @trace, within_compile, MissingTracedValue, promote_to_traced
+export @annotate,
+    @trace,
+    annotate,
+    within_compile,
+    MissingTracedValue,
+    promote_to_traced,
+    Periodic,
+    Binomial
+
+"""
+    Periodic(n::Int)
+
+Checkpointing strategy for traced loops that specifies periodic checkpointing with `n` checkpoints.
+
+# Examples
+
+```julia
+# Explicit periodic checkpointing with 4 checkpoints
+@trace checkpointing=Periodic(4) for i in 1:100
+    x = x .+ 1
+end
+
+# Default periodic checkpointing (uses isqrt(num_iters) checkpoints for static bounds)
+@trace checkpointing=true for i in 1:100
+    x = x .+ 1
+end
+```
+"""
+struct Periodic
+    n::Int
+end
+
+"""
+    ReactantCore.Binomial(budget::Int)
+
+Checkpointing strategy for traced loops that uses a fixed budget for checkpoints and uses
+the revolve algorithm [1] to minimize compute around that budget.
+
+```julia
+# Explicit binomial checkpointing with 4 checkpoints
+@trace checkpointing=Binomial(4) for i in 1:100
+    x = x .+ 1
+end
+```
+
+[1] Griewank, A., & Walther, A. (2000).
+    Algorithm 799: revolve: an implementation of checkpointing for the reverse
+    or adjoint mode of computational differentiation.
+    ACM Transactions on Mathematical Software (TOMS), 26(1), 19-45.
+"""
+struct Binomial
+    budget::Int
+end
 
 # Traits
 function is_traced((@nospecialize x::T), seen=Base.IdSet()) where {T}
@@ -44,6 +96,75 @@ function promote_to_traced end
 Returns true if this function is executed in a Reactant compilation context, otherwise false.
 """
 @inline within_compile() = false # behavior is overwritten in Interpreter.jl
+
+"""
+    annotate(f, name, args...; kwargs...)
+
+Run `f` with a named annotation. This is a no-op annotation unless a package providing an
+annotation backend, such as Reactant, is loaded.
+
+# Example
+```julia
+annotate("my_operation") do
+    # ... do work ...
+end
+```
+"""
+function annotate(f, name, args...; kwargs...)
+    return f()
+end
+
+annotate_start(name, args...; kwargs...) = nothing
+
+annotate_end(id) = nothing
+
+"""
+    @annotate [name] [key=val...] function foo(a, b, c)
+        # ...
+    end
+
+    @annotate name [key=val...] begin
+        # ...
+    end
+
+Annotate each call to the function, or the execution of the block. The annotation is a
+no-op unless an annotation backend, such as Reactant, is loaded. Keyword arguments (e.g.
+`metadata=Dict(...)`) are forwarded to the annotation backend.
+"""
+macro annotate(name, args...)
+    noname = isempty(args)
+    func_def = noname ? name : last(args)
+    kws = noname ? () : args[1:(end - 1)]
+    for kw in kws
+        Meta.isexpr(kw, :(=)) || error("expected a `key=value` argument, got: $kw")
+    end
+    kws = [Expr(:kw, kw.args[1], esc(kw.args[2])) for kw in kws]
+
+    if Meta.isexpr(func_def, :block)
+        noname && error("@annotate on a block requires a name")
+        return annotate_block(esc(func_def), esc(name), kws)
+    end
+
+    if !Meta.isexpr(func_def, :function)
+        error("not a function definition or block: $func_def")
+    end
+
+    name = noname ? string(func_def.args[1].args[1]) : esc(name)
+    code = annotate_block(esc(func_def.args[2]), name, kws)
+
+    return Expr(:function, esc(func_def.args[1]), code)
+end
+
+function annotate_block(code, name, kws)
+    return quote
+        id = ReactantCore.annotate_start($name; $(kws...))
+        try
+            $code
+        finally
+            ReactantCore.annotate_end(id)
+        end
+    end
+end
 
 # Code generation
 """
@@ -139,9 +260,9 @@ end
 
 The behavior of loops can be configured with the following configuration options:
 
- - `track_numbers::Union{Bool,Datatype}` - whether Julia numbers should be automatically promoted to traced numbers upon entering the loop.
- - `checkpointing::Bool` - whether or not to enable checkpointing when performing reverse mode differentiation (default: `false`).
- - `mincut::Bool` - whether or not to enable the mincut algorithm when performing reverse mode differentiation (default: `false`).
+ - `track_numbers::Union{Bool,DataType} = true` - whether Julia numbers should be automatically promoted to traced numbers upon entering the loop.
+ - `checkpointing::Union{Bool,Periodic,Binomial} = false` - whether or not to enable checkpointing when performing reverse mode differentiation. Can be `false` (default), `true` (automatic checkpointing), or `Periodic(n)` to specify `n` checkpoints. When `true` is used, defaults to `isqrt(num_iters)` checkpoints for `for` loops with static (non-traced) bounds. `Periodic(n)` must be used for `while` loops or `for` loops with dynamic (traced) bounds when checkpointing is enabled.
+ - `mincut::Bool = false` - whether or not to enable the mincut algorithm when performing reverse mode differentiation (default: `false`).
 """
 macro trace(args...)
     track_numbers = true
@@ -171,7 +292,13 @@ macro trace(args...)
     end
     expr = only(args)
 
-    track_numbers = track_numbers ? Number : Union{}
+    track_numbers = :(
+        if $(track_numbers) isa Bool
+            ($(track_numbers) ? Number : Union{})
+        else
+            $(track_numbers)::DataType
+        end
+    )
     expr = macroexpand(__module__, expr)
 
     #! format: off
@@ -213,10 +340,10 @@ macro trace(args...)
     Meta.isexpr(expr, :if) && return esc(trace_if(expr; track_numbers))
 
     Meta.isexpr(expr, :for) &&
-        return (esc(trace_for(expr; track_numbers, checkpointing, mincut)))
+        return (esc(trace_for(__module__, expr; track_numbers, checkpointing, mincut)))
 
     Meta.isexpr(expr, :while) &&
-        return (esc(trace_while(expr; track_numbers, checkpointing, mincut)))
+        return (esc(trace_while(__module__, expr; track_numbers, checkpointing, mincut)))
 
     return error(
         "Only `if-elseif-else` blocks, function definitions, `function calls`, `for` and \
@@ -293,13 +420,55 @@ function trace_function_definition(mod, expr)
     end
 end
 
+function _check_aliasing_unchanged(pre_ids::Tuple, post_ids::Tuple, varnames::Tuple)
+    n = length(pre_ids)
+    for i in 1:n
+        isnothing(pre_ids[i]) && continue
+        for j in (i + 1):n
+            isnothing(pre_ids[j]) && continue
+            pre_alias = pre_ids[i] == pre_ids[j]
+            post_alias =
+                !isnothing(post_ids[i]) &&
+                !isnothing(post_ids[j]) &&
+                post_ids[i] == post_ids[j]
+            if pre_alias && !post_alias
+                ni, nj = varnames[i], varnames[j]
+                error(
+                    "Reactant.@trace: the aliasing pattern of loop-carried variables " *
+                    "changed during the loop body.\n`$ni` and `$nj` referred to the same " *
+                    "object before the loop body but not after.\n" *
+                    "Fix: break the aliasing before the `@trace` loop, " *
+                    "e.g. `$nj = copy($nj)`.",
+                )
+            elseif !pre_alias && post_alias
+                ni, nj = varnames[i], varnames[j]
+                error(
+                    "Reactant.@trace: the aliasing pattern of loop-carried variables " *
+                    "changed during the loop body.\n`$ni` and `$nj` did not alias before " *
+                    "the loop body but do after.\nThis is unsupported.",
+                )
+            end
+        end
+    end
+end
+
 cond_val(s) = :(@isdefined($s) ? $s : $MissingTracedValue())
 
-function trace_while(expr; track_numbers, mincut, checkpointing, first_arg=nothing)
+function trace_while(mod, expr; track_numbers, mincut, checkpointing, first_arg=nothing)
     Meta.isexpr(expr, :while, 2) || error("expected while expr")
     cond, body = expr.args
 
     error_if_any_control_flow(body)
+
+    # Validate checkpointing usage - for raw while loops (not from trace_for),
+    # Periodic(n) must be used since we can't compute default checkpoints
+    if checkpointing === true && first_arg === nothing
+        # This is a raw while loop (not from trace_for), require Periodic(n)
+        error(
+            "Reactant.Periodic(n) or Reactant.Binomial(n) must be used for while loops when checkpointing is enabled. " *
+            "Use `@trace checkpointing=Reactant.Periodic(n) while ...` where n is the number of checkpoints.",
+        )
+    end
 
     cond_symbols = ExpressionExplorer.compute_symbols_state(cond)
     body_symbols = ExpressionExplorer.compute_symbols_state(body)
@@ -312,6 +481,14 @@ function trace_while(expr; track_numbers, mincut, checkpointing, first_arg=nothi
     union!(external_syms, cond_symbols.assignments)
     union!(external_syms, body_symbols.references)
     union!(external_syms, body_symbols.assignments)
+    # Add func calls to closures as references
+    for symbols_state in (cond_symbols, body_symbols)
+        for fn in symbols_state.funccalls
+            if length(fn.parts) == 1 && !isdefined(mod, only(fn.parts))
+                union!(external_syms, fn.parts)
+            end
+        end
+    end
     filter!(∉(SPECIAL_SYMBOLS), external_syms)
 
     all_syms = Expr(:tuple, external_syms...)
@@ -334,23 +511,57 @@ function trace_while(expr; track_numbers, mincut, checkpointing, first_arg=nothi
     body_fn_sym = gensym(:body_fn)
     cond_fn_sym = gensym(:cond_fn)
     args_sym = gensym(:args)
+
+    assigned_syms = body_symbols.assignments
+    rebind_outputs = [
+        quote
+            if !isnothing($(args_sym)[$i][])
+                $s = $(args_sym)[$i][]
+            end
+        end for (i, s) in enumerate(external_syms) if s ∈ assigned_syms
+    ]
+
     verify_arg_names_sym = gensym(:verify_arg_names)
+    pre_alias_ids_sym = gensym(:pre_alias_ids)
+
+    # Capture the objectid of each loop-carried slot before traced_while is called.
+    # Non-traced values get `nothing` so they are skipped in the aliasing check.
+    pre_ids_expr = Expr(
+        :tuple,
+        [
+            :($(is_traced)($(args_sym)[$i][]) ? objectid($(args_sym)[$i][]) : nothing) for
+            i in 1:length(external_syms)
+        ]...,
+    )
+
+    # After the body runs and from_locals has written back into the refs, capture
+    # post-body objectids and verify the aliasing pattern is unchanged.
+    post_ids_expr = Expr(
+        :tuple,
+        [:($(is_traced)($ref[]) ? objectid($ref[]) : nothing) for ref in ref_syms]...,
+    )
+    varnames_expr = Expr(:tuple, QuoteNode.(external_syms)...)
 
     reactant_code_block = quote
         let $args_sym = $(args_init)
+            $pre_alias_ids_sym = $(pre_ids_expr)
             $cond_fn_sym = $(arg_syms) -> begin
                 $(to_locals...)
                 $cond
             end
-            $body_fn_sym = $(arg_syms) -> begin
-                $(to_locals...)
-                $body
-                $(from_locals...)
-                nothing
-            end
+            $body_fn_sym =
+                $(arg_syms) -> begin
+                    $(to_locals...)
+                    $body
+                    $(from_locals...)
+                    $(ReactantCore)._check_aliasing_unchanged(
+                        $pre_alias_ids_sym, $(post_ids_expr), $(varnames_expr)
+                    )
+                    nothing
+                end
 
-            $(verify_arg_names_sym) = if sizeof($(cond_fn_sym)) != 0
-                (Symbol($cond_fn_sym), $(QuoteNode.(args_names.args)...))
+            $(verify_arg_names_sym) = if sizeof($(body_fn_sym)) != 0
+                (Symbol($body_fn_sym), $(QuoteNode.(args_names.args)...))
             else
                 ($(QuoteNode.(args_names.args)...),)
             end
@@ -364,6 +575,8 @@ function trace_while(expr; track_numbers, mincut, checkpointing, first_arg=nothi
                 mincut=($(mincut)),
                 checkpointing=($(checkpointing)),
             )
+            $(rebind_outputs...)
+            nothing
         end
     end
 
@@ -377,7 +590,7 @@ function trace_while(expr; track_numbers, mincut, checkpointing, first_arg=nothi
     end
 end
 
-function trace_for(expr; track_numbers, checkpointing, mincut)
+function trace_for(mod, expr; track_numbers, checkpointing, mincut)
     Meta.isexpr(expr, :for, 2) || error("expected for expr")
     assign, body = expr.args
 
@@ -392,6 +605,7 @@ function trace_for(expr; track_numbers, checkpointing, mincut)
 
     counter = gensym(:i)
     num_iters = gensym(:num_iters)
+    checkpointing_sym = gensym(:checkpointing)
     range_sym = gensym(:range)
 
     start_sym = gensym(:start)
@@ -419,9 +633,41 @@ function trace_for(expr; track_numbers, checkpointing, mincut)
         end
     end
 
+    # Compute checkpointing value:
+    # - If checkpointing is false/nothing → false
+    # - If checkpointing is Periodic(n) → Periodic(n)
+    # - If checkpointing is true → compute Periodic(isqrt(num_iters))
+    # This must be computed BEFORE bounds are promoted to traced values
+    # If bounds are already traced (dynamic), we require Periodic(n) to be specified
+    checkpointing_computation = if checkpointing === true
+        # Default to Periodic(isqrt(num_iters)) for sqrt checkpointing behavior
+        # Computed before promotion so we get a Julia integer
+        # If any of the bounds is already traced, we error since we can't compute isqrt
+        quote
+            if $(is_traced)($start_sym) || $(is_traced)($limit_sym) || $(is_traced)($step_sym)
+                error(
+                    "Periodic(n) must be used when loop bounds are traced (dynamic). " *
+                    "Use `@trace checkpointing=Periodic(n) for i in ...` where n is the number of checkpoints.",
+                )
+            end
+            $checkpointing_sym = $(Periodic)(
+                isqrt(div($limit_sym - $start_sym, $step_sym) + 1)
+            )
+        end
+    elseif checkpointing === false
+        :($checkpointing_sym = false)
+    else
+        # Assume it's a Periodic(n) or Binomial(n) expression or variable
+        :($checkpointing_sym = $checkpointing)
+    end
+
     return quote
         local $start_sym, $limit_sym, $step_sym
         $bounds_defs
+
+        # Compute checkpointing value before promotion to traced values
+        local $checkpointing_sym
+        $checkpointing_computation
 
         if $(within_compile)()
             $start_sym = $(ReactantCore.promote_to_traced)($start_sym)
@@ -430,13 +676,15 @@ function trace_for(expr; track_numbers, checkpointing, mincut)
         end
 
         local $counter = zero($start_sym)
+        local $num_iters = div($limit_sym - $start_sym, $step_sym)
+        $num_iters += one($num_iters)
 
         $(trace_while(
+            mod,
             Expr(
                 :while,
                 quote
-                    local $num_iters = div($limit_sym - $start_sym, $step_sym)
-                    $counter < $num_iters + one($num_iters)
+                    $counter < $num_iters
                 end,
                 quote
                     local $induction = $start_sym + $counter * $step_sym
@@ -446,7 +694,7 @@ function trace_for(expr; track_numbers, checkpointing, mincut)
             );
             track_numbers,
             first_arg=counter,
-            checkpointing,
+            checkpointing=checkpointing_sym,
             mincut,
         ))
     end
@@ -473,21 +721,24 @@ end
 function trace_if(expr; store_last_line=nothing, depth=0, track_numbers)
     discard_vars_from_expansion = []
     original_expr = expr
+    depth == 0 && error_if_any_control_flow(expr)
 
-    if depth == 0
-        error_if_any_control_flow(expr)
-
-        # counter = 0
-        # expr = MacroTools.prewalk(expr) do x
-        #     counter += 1
-        #     if x isa Expr && x.head == :if && counter > 1
-        #         ex_new, dv, _ = trace_if(x; store_last_line, depth=depth + 1, track_numbers)
-        #         append!(discard_vars_from_expansion, dv)
-        #         return ex_new
-        #     end
-        #     return x
-        # end
-    end
+    expand_nested =
+        x -> begin
+            if x isa Expr && x.head == :if
+                ex_new, dv, _ = trace_if(x; store_last_line, depth=depth + 1, track_numbers)
+                append!(discard_vars_from_expansion, dv)
+                return ex_new
+            end
+            return MacroTools.walk(x, expand_nested, identity)
+        end
+    expr = Expr(
+        expr.head,
+        [
+            (i > 1 && expr.args[i] isa Expr) ? expand_nested(expr.args[i]) : expr.args[i]
+            for i in 1:length(expr.args)
+        ]...,
+    )
 
     expr_args = filter(a -> !isa(a, Core.LineNumberNode), expr.args)
     cond_expr = remove_shortcircuiting(expr_args[1])
@@ -514,11 +765,12 @@ function trace_if(expr; store_last_line=nothing, depth=0, track_numbers)
         end
     end
 
-    true_branch_symbols = ExpressionExplorer.compute_symbols_state(true_block)
+    true_branch_symbols = ExpressionExplorer.compute_symbols_state(original_expr.args[2])
     true_branch_input_list = [true_branch_symbols.references...]
     filter!(x -> x ∉ SPECIAL_SYMBOLS, true_branch_input_list)
-    true_branch_assignments = [true_branch_symbols.assignments...]
-    all_true_branch_vars = true_branch_input_list ∪ true_branch_assignments
+    true_branch_assignments = [
+        ExpressionExplorer.compute_symbols_state(true_block).assignments...
+    ]
     true_branch_fn_name = gensym(:true_branch)
 
     else_block, discard_vars, _ = if length(expr_args) == 3
@@ -560,50 +812,51 @@ function trace_if(expr; store_last_line=nothing, depth=0, track_numbers)
         end
     end
 
-    false_branch_symbols = ExpressionExplorer.compute_symbols_state(false_block)
+    false_branch_symbols = ExpressionExplorer.compute_symbols_state(
+        length(original_expr.args) > 2 ? original_expr.args[3] : Expr(:block)
+    )
     false_branch_input_list = [false_branch_symbols.references...]
     filter!(x -> x ∉ SPECIAL_SYMBOLS, false_branch_input_list)
-    false_branch_assignments = [false_branch_symbols.assignments...]
-    all_false_branch_vars = false_branch_input_list ∪ false_branch_assignments
+    false_branch_assignments = [
+        ExpressionExplorer.compute_symbols_state(false_block).assignments...
+    ]
     false_branch_fn_name = gensym(:false_branch)
 
-    all_input_vars = true_branch_input_list ∪ false_branch_input_list
-    all_output_vars = all_true_branch_vars ∪ all_false_branch_vars
+    all_input_vars = unique(true_branch_input_list ∪ false_branch_input_list)
+    all_output_vars = unique(true_branch_assignments ∪ false_branch_assignments)
     discard_vars !== nothing && setdiff!(all_output_vars, discard_vars)
 
-    all_vars = all_input_vars ∪ all_output_vars
+    all_vars = unique(all_input_vars ∪ all_output_vars)
 
-    non_existent_true_branch_vars = setdiff(
-        all_output_vars, all_true_branch_vars, all_input_vars
-    )
-    true_branch_extras = Expr(
-        :block,
-        [:($(var) = $(MissingTracedValue)()) for var in non_existent_true_branch_vars]...,
-    )
+    result_sym = gensym(:if_result)
 
-    true_branch_fn = :(($(all_input_vars...),) -> begin
-        $(true_block)
-        $(true_branch_extras)
-        return ($(all_output_vars...),)
-    end)
+    true_branch_fn = :(
+        (args,) -> begin
+            $([:($v = if hasproperty(args, $(QuoteNode(v)))
+                        getproperty(args, $(QuoteNode(v)))
+                    else
+                        $(MissingTracedValue)()
+                    end) for v in all_vars]...)
+            $(result_sym) = $(true_block)
+            return ($(result_sym), $(all_output_vars...))
+        end
+    )
     true_branch_fn = cleanup_expr_to_avoid_boxing(
         true_branch_fn, true_branch_fn_name, all_vars
     )
     true_branch_fn = :($(true_branch_fn_name) = $(true_branch_fn))
 
-    non_existent_false_branch_vars = setdiff(
-        all_output_vars, all_false_branch_vars, all_input_vars
+    false_branch_fn = :(
+        (args,) -> begin
+            $([:($v = if hasproperty(args, $(QuoteNode(v)))
+                        getproperty(args, $(QuoteNode(v)))
+                    else
+                        $(MissingTracedValue)()
+                    end) for v in all_vars]...)
+            $(result_sym) = $(false_block)
+            return ($(result_sym), $(all_output_vars...))
+        end
     )
-    false_branch_extras = Expr(
-        :block,
-        [:($(var) = $(MissingTracedValue)()) for var in non_existent_false_branch_vars]...,
-    )
-
-    false_branch_fn = :(($(all_input_vars...),) -> begin
-        $(false_block)
-        $(false_branch_extras)
-        return ($(all_output_vars...),)
-    end)
     false_branch_fn = cleanup_expr_to_avoid_boxing(
         false_branch_fn, false_branch_fn_name, all_vars
     )
@@ -612,16 +865,24 @@ function trace_if(expr; store_last_line=nothing, depth=0, track_numbers)
     cond_name = gensym(:cond)
 
     args_init = [cond_val(s) for s in all_input_vars]
+    names_expr = Expr(:tuple, [QuoteNode(v) for v in all_vars]...)
+    values_expr = Expr(
+        :tuple,
+        [:($(Expr(:isdefined, v)) ? $v : $(MissingTracedValue)()) for v in all_vars]...,
+    )
+    args_expr = :(NamedTuple{$names_expr}($values_expr))
+
     reactant_code_block = quote
         $(true_branch_fn)
         $(false_branch_fn)
-        ($(all_output_vars...),) = $(traced_if)(
+        ($(result_sym), $(all_output_vars...)) = $(traced_if)(
             $(cond_name),
             $(true_branch_fn_name),
             $(false_branch_fn_name),
-            ($(args_init...),);
+            $(args_expr);
             track_numbers=($(track_numbers)),
         )
+        $(result_sym)
     end
 
     non_reactant_code_block = Expr(:if, original_expr.args...)
@@ -635,7 +896,7 @@ function trace_if(expr; store_last_line=nothing, depth=0, track_numbers)
             $(cond_name) = $(cond_expr)
             $(reactant_code_block)
         end,
-        (true_branch_fn_name, false_branch_fn_name),
+        (true_branch_fn_name, false_branch_fn_name, result_sym),
         all_check_vars,
     )
 
@@ -748,7 +1009,7 @@ end
 """
     materialize_traced_array(AbstractArray{<:TracedRNumber})::TracedRArray
 
-Given an AbstractArray{TracedRNumber}, return or create an equivalent TracedRArray.
+Given an AbstractArray{<:TracedRNumber}, return or create an equivalent TracedRArray.
 
 """
 function materialize_traced_array end

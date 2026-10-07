@@ -1,5 +1,4 @@
-# Tests for array operations
-using Reactant, Test
+using Reactant, Test, FileCheck
 
 const RunningOnTPU = contains(string(Reactant.devices()[1]), "TPU")
 
@@ -175,7 +174,10 @@ end
 @testset "repeat specialize" begin
     x_ra = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float32, 2, 3))
     hlo = repr(@code_hlo(repeat(x_ra, 2, 3)))
-    @test !contains(hlo, "stablehlo.dynamic_update_slice")
+    @test @filecheck begin
+        @check_not "stablehlo.dynamic_update_slice"
+        hlo
+    end
 end
 
 @testset "stack" begin
@@ -262,6 +264,15 @@ end
         @test y !== x_ra
     end
 
+    @testset "view of TracedRArray" begin
+        for idxs in ((1:2, 2:3), (2, 1:3))
+            view_ra = view(x_ra, idxs...)
+            y = @jit(collect(view_ra))
+            @test y ≈ x[idxs...]
+            @test y isa ConcreteRArray{Float64}
+        end
+    end
+
     x = 5
     x_ra = ConcreteRNumber(x)
 
@@ -305,6 +316,23 @@ end
     @test @jit(circshift(x_ra, (1, 2, 3))) ≈ circshift(x, (1, 2, 3))
     @test @jit(circshift(x_ra, (-3, 2))) ≈ circshift(x, (-3, 2))
     @test @jit(circshift(x_ra, (5, 2))) ≈ circshift(x, (5, 2))
+end
+
+reverse_view(x) = reverse(view(x, 2:4))
+
+@testset "reverse does not mutate its argument" begin
+    x = collect(Float32, 1:4)
+
+    @testset "$(name)" for (name, reverse_fn) in [
+        ("whole vector", reverse),
+        ("start and stop", v -> reverse(v, 2, 3)),
+        ("start only", v -> reverse(v, 2)),
+        ("view", reverse_view),
+    ]
+        x_ra = Reactant.to_rarray(x)
+        @test @jit(reverse_fn(x_ra)) == reverse_fn(x)
+        @test Array(x_ra) == x
+    end
 end
 
 function meshgrid(args::AbstractVector...)
@@ -527,4 +555,67 @@ end
     @test @jit(size(x_ra, ConcreteRNumber(2))) == 32
     @test @jit(size(x_ra, ConcreteRNumber(3))) == 7
     @test @jit(size(x_ra, ConcreteRNumber(4))) == 1
+end
+
+@testset "push!/pop! on TracedRArray" begin
+    @testset "push!" begin
+        function f_push(x)
+            push!(x, 4.0)
+            return x
+        end
+        x = Reactant.to_rarray([1.0, 2.0, 3.0])
+        result = @jit f_push(x)
+        @test Array(result) ≈ [1.0, 2.0, 3.0, 4.0]
+    end
+
+    @testset "push! multiple" begin
+        function f_push_multi(x)
+            push!(x, 4.0, 5.0)
+            return x
+        end
+        x = Reactant.to_rarray([1.0, 2.0, 3.0])
+        result = @jit f_push_multi(x)
+        @test Array(result) ≈ [1.0, 2.0, 3.0, 4.0, 5.0]
+    end
+
+    @testset "pushfirst!" begin
+        function f_pushfirst(x)
+            pushfirst!(x, 0.0)
+            return x
+        end
+        x = Reactant.to_rarray([1.0, 2.0, 3.0])
+        result = @jit f_pushfirst(x)
+        @test Array(result) ≈ [0.0, 1.0, 2.0, 3.0]
+    end
+
+    @testset "pop!" begin
+        function f_pop(x)
+            pop!(x)
+            return x
+        end
+        x = Reactant.to_rarray([1.0, 2.0, 3.0])
+        result = @jit f_pop(x)
+        @test Array(result) ≈ [1.0, 2.0]
+    end
+
+    @testset "popfirst!" begin
+        function f_popfirst(x)
+            popfirst!(x)
+            return x
+        end
+        x = Reactant.to_rarray([1.0, 2.0, 3.0])
+        result = @jit f_popfirst(x)
+        @test Array(result) ≈ [2.0, 3.0]
+    end
+
+    @testset "append!" begin
+        function f_append(x, y)
+            append!(x, y)
+            return x
+        end
+        x = Reactant.to_rarray([1.0, 2.0])
+        y = Reactant.to_rarray([3.0, 4.0])
+        result = @jit f_append(x, y)
+        @test Array(result) ≈ [1.0, 2.0, 3.0, 4.0]
+    end
 end

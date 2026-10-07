@@ -336,6 +336,28 @@ function comm_region(; result_0::Vector{IR.Type}, body::Region, location=Locatio
     )
 end
 
+function math_cosc(
+    input::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[input,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(result) && push!(op_ty_results, result)
+
+    return create_operation(
+        "enzymexla.math.cosc",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
 function extend(
     operand::Value;
     result=nothing::Union{Nothing,IR.Type},
@@ -357,6 +379,42 @@ function extend(
 
     return create_operation(
         "enzymexla.extend",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
+`math_fmuladd`
+
+Carries the semantics of the `llvm.fmuladd` intrinsic through the round
+trip: compute `a * b + c`, fused into a single rounding only when the
+target can do so profitably, otherwise as an ordinary multiply and add.
+This is a *permission* to fuse, unlike `math.fma`, whose single rounding
+is required and whose honest lowering on a target without FMA units is a
+libm call. Raised from `llvm.intr.fmuladd`; lowered back to the same.
+"""
+function math_fmuladd(
+    a::Value,
+    b::Value,
+    c::Value;
+    result=nothing::Union{Nothing,IR.Type},
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[a, b, c]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(result) && push!(op_ty_results, result)
+
+    return create_operation(
+        "enzymexla.math.fmuladd",
         location;
         operands,
         owned_regions,
@@ -509,7 +567,7 @@ function gpu_wrapper(
     )
 end
 
-function ml_gelu(
+function math_gelu(
     input::Value;
     result=nothing::Union{Nothing,IR.Type},
     gelu_approximation,
@@ -523,7 +581,7 @@ function ml_gelu(
     !isnothing(result) && push!(op_ty_results, result)
 
     return create_operation(
-        "enzymexla.ml.gelu",
+        "enzymexla.math.gelu",
         location;
         operands,
         owned_regions,
@@ -531,6 +589,42 @@ function ml_gelu(
         attributes,
         results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
         result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
+`blas_gemm`
+
+C := alpha*op(A)*op(B) + beta*C\"
+"""
+function blas_gemm(
+    alpha::Value,
+    A::Value,
+    B::Value,
+    beta::Value,
+    C::Value;
+    output::IR.Type,
+    transa=nothing,
+    transb=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[output,]
+    operands = Value[alpha, A, B, beta, C]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(transa) && push!(attributes, NamedAttribute("transa", transa))
+    !isnothing(transb) && push!(attributes, NamedAttribute("transb", transb))
+
+    return create_operation(
+        "enzymexla.blas.gemm",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
     )
 end
 
@@ -726,6 +820,36 @@ function lapack_gesvj(
     )
 end
 
+"""
+`get_global_temp`
+
+Returns the storage owned by a `temp_alloc` declaration. Repeated accesses
+to the same symbol alias the same allocation; this operation is not an
+allocation. The returned reference is borrowed and must not be freed or
+used beyond the lifetime of the owning module\'s XLA runtime.
+
+The allocation handle is stable even when the XLA runtime replaces the
+underlying PJRT buffer after execution. Its contents are not constant.
+"""
+function get_global_temp(; result::IR.Type, name, location=Location())
+    op_ty_results = IR.Type[result,]
+    operands = Value[]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[NamedAttribute("name", name),]
+
+    return create_operation(
+        "enzymexla.get_global_temp",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function get_stream(; result::IR.Type, location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[]
@@ -824,6 +948,28 @@ function special_hankelh2x(
 
     return create_operation(
         "enzymexla.special.hankelh2x",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+function math_hypot(
+    lhs::Value, rhs::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[lhs, rhs]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(result) && push!(op_ty_results, result)
+
+    return create_operation(
+        "enzymexla.math.hypot",
         location;
         operands,
         owned_regions,
@@ -976,6 +1122,28 @@ function kernel_call(
     )
 end
 
+function math_lgamma(
+    input::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[input,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(result) && push!(op_ty_results, result)
+
+    return create_operation(
+        "enzymexla.math.lgamma",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
 function linalg_lu(
     input::Value;
     output::IR.Type,
@@ -1040,6 +1208,27 @@ function mpi_barrier(; location=Location())
 
     return create_operation(
         "enzymexla.mpi.barrier",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+function mpi_bcast(
+    inbuf::Value, count::Value, root::Value; outbuf::IR.Type, datatype, location=Location()
+)
+    op_ty_results = IR.Type[outbuf,]
+    operands = Value[inbuf, count, root]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[NamedAttribute("datatype", datatype),]
+
+    return create_operation(
+        "enzymexla.mpi.bcast",
         location;
         operands,
         owned_regions,
@@ -1210,6 +1399,60 @@ function mpi_wait(request::Value; location=Location())
     )
 end
 
+function mpi_waitall(count::Value, request::Value; location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[count, request]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "enzymexla.mpi.waitall",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`memcpy2d`
+
+The `enzymexla.memcpy2d` operation copies a 2D region from one memref to another.
+"""
+function memcpy2d(
+    asyncDependencies::Vector{Value},
+    target::Value,
+    dpitch::Value,
+    source::Value,
+    spitch::Value,
+    width::Value,
+    height::Value;
+    asyncToken=nothing::Union{Nothing,IR.Type},
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[asyncDependencies..., target, dpitch, source, spitch, width, height]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(asyncToken) && push!(op_ty_results, asyncToken)
+
+    return create_operation(
+        "enzymexla.memcpy2d",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 """
 `memcpy`
 
@@ -1264,6 +1507,76 @@ function memref2pointer(source::Value; result::IR.Type, location=Location())
 
     return create_operation(
         "enzymexla.memref2pointer",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`memset`
+
+The `enzymexla.memset` operation fills the content of a memref with a value.
+"""
+function memset(
+    asyncDependencies::Vector{Value},
+    target::Value,
+    value::Value,
+    count::Value;
+    asyncToken=nothing::Union{Nothing,IR.Type},
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[asyncDependencies..., target, value, count]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(asyncToken) && push!(op_ty_results, asyncToken)
+
+    return create_operation(
+        "enzymexla.memset",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`multi_pad`
+
+MultiPad operation produces multiple padded versions of the input tensor.
+Given dimension=D and amount=A, it produces A + 1 results.
+The i-th result corresponds to padding along dimension D by:
+- Low side: i
+- High side: A - i
+Other dimensions are not padded.
+"""
+function multi_pad(
+    operand::Value,
+    padding_value::Value;
+    results::Vector{IR.Type},
+    dimension,
+    amount,
+    location=Location(),
+)
+    op_ty_results = IR.Type[results...,]
+    operands = Value[operand, padding_value]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[
+        NamedAttribute("dimension", dimension), NamedAttribute("amount", amount)
+    ]
+
+    return create_operation(
+        "enzymexla.multi_pad",
         location;
         operands,
         owned_regions,
@@ -1515,6 +1828,27 @@ function polygeist_yield(; location=Location())
     )
 end
 
+function lapack_potrf(
+    input::Value; output::IR.Type, info::IR.Type, uplo, location=Location()
+)
+    op_ty_results = IR.Type[output, info]
+    operands = Value[input,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[NamedAttribute("uplo", uplo),]
+
+    return create_operation(
+        "enzymexla.lapack.potrf",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 """
 `linalg_qr`
 
@@ -1529,15 +1863,12 @@ will be a m x n trapezoidal matrix.
 This operation is modeled after the mathematical formulation of the QR
 factorization, and not after LAPACK\'s compact formats.
 """
-function linalg_qr(
-    input::Value; Q::IR.Type, R::IR.Type, algorithm=nothing, location=Location()
-)
-    op_ty_results = IR.Type[Q, R]
+function linalg_qr(input::Value; Q::IR.Type, R::IR.Type, info::IR.Type, location=Location())
+    op_ty_results = IR.Type[Q, R, info]
     operands = Value[input,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
-    !isnothing(algorithm) && push!(attributes, NamedAttribute("algorithm", algorithm))
 
     return create_operation(
         "enzymexla.linalg.qr",
@@ -1551,7 +1882,9 @@ function linalg_qr(
     )
 end
 
-function ml_relu(input::Value; result=nothing::Union{Nothing,IR.Type}, location=Location())
+function math_relu(
+    input::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+)
     op_ty_results = IR.Type[]
     operands = Value[input,]
     owned_regions = Region[]
@@ -1560,7 +1893,7 @@ function ml_relu(input::Value; result=nothing::Union{Nothing,IR.Type}, location=
     !isnothing(result) && push!(op_ty_results, result)
 
     return create_operation(
-        "enzymexla.ml.relu",
+        "enzymexla.math.relu",
         location;
         operands,
         owned_regions,
@@ -1637,6 +1970,50 @@ function linalg_svd(
         attributes,
         results=op_ty_results,
         result_inference=false,
+    )
+end
+
+function math_sinc(
+    input::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[input,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(result) && push!(op_ty_results, result)
+
+    return create_operation(
+        "enzymexla.math.sinc",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+function math_softplus(
+    input::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[input,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(result) && push!(op_ty_results, result)
+
+    return create_operation(
+        "enzymexla.math.softplus",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -1805,6 +2182,103 @@ function blas_syrk(
     )
 end
 
+function math_tgamma(
+    input::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[input,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(result) && push!(op_ty_results, result)
+
+    return create_operation(
+        "enzymexla.math.tgamma",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
+`temp_alloc`
+
+Declares uninitialized, statically shaped device storage allocated when
+the module is initialized and freed when it is finalized. The declaration
+must be private. Uses retrieve the allocation with `get_global_temp`;
+accessing it does not allocate new storage.
+
+The allocation belongs to the module\'s XLA runtime. Its contents are
+mutable and shared by all uses, so callers must synchronize overlapping
+accesses. The first write and subsequent updates remain explicit copies.
+This operation does not move copies or computations across calls or loops.
+Lowering currently requires an XLA backend and C-style memrefs.
+
+# Example
+```mlir
+enzymexla.temp_alloc \"private\" @bound : memref<i32, 1>
+```
+"""
+function temp_alloc(; sym_name, sym_visibility=nothing, type, location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[
+        NamedAttribute("sym_name", sym_name), NamedAttribute("type", type)
+    ]
+    !isnothing(sym_visibility) &&
+        push!(attributes, NamedAttribute("sym_visibility", sym_visibility))
+
+    return create_operation(
+        "enzymexla.temp_alloc",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`linalg_tridiagonal_solve`
+Computes the solution of a tridiagonal linear system.
+  Parameters:
+  dl: A batch of vectors with shape [..., m]. The lower diagonal of A:
+    dl[i] := A[i, i-1] for i in [0,m). Note that dl[0] = 0.
+  d: A batch of vectors with shape [..., m]. The middle diagonal of A:
+    d[i]  := A[i, i] for i in [0,m).
+  du: A batch of vectors with shape [..., m]. The upper diagonal of A:
+    du[i] := A[i, i+1] for i in [0,m). Note that dl[m-1] = 0.
+  b: Right hand side matrix.
+"""
+function linalg_tridiagonal_solve(
+    dl::Value, d::Value, du::Value, B::Value; X::IR.Type, location=Location()
+)
+    op_ty_results = IR.Type[X,]
+    operands = Value[dl, d, du, B]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "enzymexla.linalg.tridiagonal_solve",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 """
 `blas_trmm`
 
@@ -1820,6 +2294,7 @@ function blas_trmm(
     side,
     uplo,
     transpose,
+    unit_diagonal=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[output,]
@@ -1831,9 +2306,53 @@ function blas_trmm(
         NamedAttribute("uplo", uplo),
         NamedAttribute("transpose", transpose),
     ]
+    !isnothing(unit_diagonal) &&
+        push!(attributes, NamedAttribute("unit_diagonal", unit_diagonal))
 
     return create_operation(
         "enzymexla.blas.trmm",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`blas_trsm`
+
+Solves op(A) * X = alpha * B, or X * op(A) = alpha * B, where alpha is a scalar,
+X and B are m x n matrices, A is a unit, or non-unit, upper or lower triangular
+matrix, and op(A) is one of op(A) = A, or op(A) = A^T or A^H.
+"""
+function blas_trsm(
+    alpha::Value,
+    A::Value,
+    B::Value;
+    output::IR.Type,
+    side,
+    uplo,
+    transa,
+    unit_diagonal=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[output,]
+    operands = Value[alpha, A, B]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[
+        NamedAttribute("side", side),
+        NamedAttribute("uplo", uplo),
+        NamedAttribute("transa", transa),
+    ]
+    !isnothing(unit_diagonal) &&
+        push!(attributes, NamedAttribute("unit_diagonal", unit_diagonal))
+
+    return create_operation(
+        "enzymexla.blas.trsm",
         location;
         operands,
         owned_regions,
@@ -1933,7 +2452,12 @@ function wrap(
 end
 
 function xla_wrapper(
-    inputs::Vector{Value}; fn, arg_attrs=nothing, res_attrs=nothing, location=Location()
+    inputs::Vector{Value};
+    fn,
+    arg_attrs=nothing,
+    res_attrs=nothing,
+    num_specialized=nothing,
+    location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[inputs...,]
@@ -1942,6 +2466,8 @@ function xla_wrapper(
     attributes = NamedAttribute[NamedAttribute("fn", fn),]
     !isnothing(arg_attrs) && push!(attributes, NamedAttribute("arg_attrs", arg_attrs))
     !isnothing(res_attrs) && push!(attributes, NamedAttribute("res_attrs", res_attrs))
+    !isnothing(num_specialized) &&
+        push!(attributes, NamedAttribute("num_specialized", num_specialized))
 
     return create_operation(
         "enzymexla.xla_wrapper",

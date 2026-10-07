@@ -106,6 +106,32 @@ println("Gradient: ", result.derivs[1])
 nothing # hide
 ```
 
+## Scalar Arguments and `Enzyme.Const`
+
+When using `Enzyme.autodiff` inside a Reactant-compiled function, any argument
+wrapped in `Enzyme.Const` that is a plain Julia number (not a `ConcreteRNumber`)
+will be frozen at its tracing-time value. This is because Reactant's tracing
+does not track plain scalars by default — they are treated as compile-time
+constants (see [Partial Evaluation](@ref partial-evaluation) for details).
+
+For example, if you have an ODE right-hand side `f!(du, u, t)` where `t` is
+passed as `Enzyme.Const(t)`, you must ensure `t` is a `ConcreteRNumber` so its
+runtime value is used:
+
+```julia
+# WRONG: t is a plain Float64, frozen at trace time
+t = Reactant.to_rarray(0.0)  # still a Float64, not tracked!
+
+# CORRECT: use track_numbers to make t a ConcreteRNumber
+t = Reactant.to_rarray(0.0; track_numbers=true)  # ConcreteRNumber{Float64}
+```
+
+!!! tip
+    When calling `Reactant.to_rarray` on a struct or tuple that contains both
+    arrays and scalar parameters, pass `track_numbers=true` (or
+    `track_numbers=Number`) to ensure all scalar fields are tracked and will
+    respond to runtime values.
+
 ## More Examples
 
 ### Multi-argument Functions
@@ -253,11 +279,21 @@ f_checkpointing_diff(x, enable_checkpointing) =
     Enzyme.gradient(Reverse, f_checkpointing, x, Const(enable_checkpointing))
 ```
 
+By default, the checkpointing scheme is a constant periodic checkpointing scheme whose period is equal to the rounded square root of the number of iterations. It is possible to explicitely set the period by using [`Reactant.Periodic`](@ref) helper. It is also possible to use the so-called binomial checkpointing scheme using the [`Reactant.Binomial`](@ref) helper.
+
+It is important to note that while checkpointing reduces the memory requirements for computing reverse mode AD on a loop, it increases the compute requirements by trading memory for compute. It also increases the size of generated code which can have an impact on compile times.
+
+For a loop containing $S$ instructions and with $N$ iterations. The following are rough estimates of the compute / memory trade offs for each methods.
+
+| Method    | default     | `enable_checkpointing=true` | `Periodic(p)`                     | `Binomial(b)`            |
+| --------- | ----------- | --------------------------- | --------------------------------- | ------------------------ |
+| Code size | $2\times S$ | $3\times S$                 | $3\times S$                       | $4\times S$              |
+| Memory    | $N$         | $\sqrt{N}$                  | $p + N\div p$                     | $b$                      |
+| Runtime   | $N$         | $(N + \sqrt{N}) \times S$   | $(N + p\times(N\div p)) \times S$ | $\binom{N+b}{b}\times S$ |
+
 !!! note
-    The currently implemented checkpointing scheme only supports a constant number
-    of iterations which has an integer square root. If $N$ is the number of iterations,
-    the values will be cached $\sqrt N$ times against $N$ times if checkpointing
-    is disabled.
+    When using a number of iterations that is not known at compile time, it is recommended to use the [`Binomial`](@ref) checkpointing scheme.
+    Due to limitations in the XLA backend with respect to dynamic shapes, regular AD through a loop with dynamic number of operations is not supported on all platforms.
 
 ### Complete Example: Neural Network Training
 

@@ -2,8 +2,9 @@ import ProtoBuf as PB
 using ProtoBuf: OneOf
 using ProtoBuf.EnumX: @enumx
 
-export RocmComputeCapabilityProto, DnnVersionInfoProto, RuntimeVersionProto
-export GpuDeviceInfoProto, GpuComputeCapabilityProto, GpuTargetConfigProto
+export RocmComputeCapabilityProto, var"ExecutionUnitDescriptionProto.RateInfoProto"
+export DeviceInterconnectInfoProto, RuntimeVersionProto, GpuComputeCapabilityProto
+export ExecutionUnitDescriptionProto, GpuDeviceInfoProto, GpuTargetConfigProto
 
 
 struct RocmComputeCapabilityProto
@@ -12,9 +13,9 @@ end
 PB.default_values(::Type{RocmComputeCapabilityProto}) = (;gcn_arch_name = "")
 PB.field_numbers(::Type{RocmComputeCapabilityProto}) = (;gcn_arch_name = 1)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:RocmComputeCapabilityProto})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:RocmComputeCapabilityProto}, _endpos::Int=0, _group::Bool=false)
     gcn_arch_name = ""
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             gcn_arch_name = PB.decode(d, String)
@@ -36,45 +37,87 @@ function PB._encoded_size(x::RocmComputeCapabilityProto)
     return encoded_size
 end
 
-struct DnnVersionInfoProto
-    major::Int32
-    minor::Int32
-    patch::Int32
+struct var"ExecutionUnitDescriptionProto.RateInfoProto"
+    clock_rate_ghz::Float32
+    units_per_core::Int32
+    ops_per_clock::Int32
 end
-PB.default_values(::Type{DnnVersionInfoProto}) = (;major = zero(Int32), minor = zero(Int32), patch = zero(Int32))
-PB.field_numbers(::Type{DnnVersionInfoProto}) = (;major = 1, minor = 2, patch = 3)
+PB.default_values(::Type{var"ExecutionUnitDescriptionProto.RateInfoProto"}) = (;clock_rate_ghz = zero(Float32), units_per_core = zero(Int32), ops_per_clock = zero(Int32))
+PB.field_numbers(::Type{var"ExecutionUnitDescriptionProto.RateInfoProto"}) = (;clock_rate_ghz = 1, units_per_core = 2, ops_per_clock = 3)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:DnnVersionInfoProto})
-    major = zero(Int32)
-    minor = zero(Int32)
-    patch = zero(Int32)
-    while !PB.message_done(d)
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"ExecutionUnitDescriptionProto.RateInfoProto"}, _endpos::Int=0, _group::Bool=false)
+    clock_rate_ghz = zero(Float32)
+    units_per_core = zero(Int32)
+    ops_per_clock = zero(Int32)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
-            major = PB.decode(d, Int32)
+            clock_rate_ghz = PB.decode(d, Float32)
         elseif field_number == 2
-            minor = PB.decode(d, Int32)
+            units_per_core = PB.decode(d, Int32)
         elseif field_number == 3
-            patch = PB.decode(d, Int32)
+            ops_per_clock = PB.decode(d, Int32)
         else
             Base.skip(d, wire_type)
         end
     end
-    return DnnVersionInfoProto(major, minor, patch)
+    return var"ExecutionUnitDescriptionProto.RateInfoProto"(clock_rate_ghz, units_per_core, ops_per_clock)
 end
 
-function PB.encode(e::PB.AbstractProtoEncoder, x::DnnVersionInfoProto)
+function PB.encode(e::PB.AbstractProtoEncoder, x::var"ExecutionUnitDescriptionProto.RateInfoProto")
     initpos = position(e.io)
-    x.major != zero(Int32) && PB.encode(e, 1, x.major)
-    x.minor != zero(Int32) && PB.encode(e, 2, x.minor)
-    x.patch != zero(Int32) && PB.encode(e, 3, x.patch)
+    x.clock_rate_ghz !== zero(Float32) && PB.encode(e, 1, x.clock_rate_ghz)
+    x.units_per_core != zero(Int32) && PB.encode(e, 2, x.units_per_core)
+    x.ops_per_clock != zero(Int32) && PB.encode(e, 3, x.ops_per_clock)
     return position(e.io) - initpos
 end
-function PB._encoded_size(x::DnnVersionInfoProto)
+function PB._encoded_size(x::var"ExecutionUnitDescriptionProto.RateInfoProto")
     encoded_size = 0
-    x.major != zero(Int32) && (encoded_size += PB._encoded_size(x.major, 1))
-    x.minor != zero(Int32) && (encoded_size += PB._encoded_size(x.minor, 2))
-    x.patch != zero(Int32) && (encoded_size += PB._encoded_size(x.patch, 3))
+    x.clock_rate_ghz !== zero(Float32) && (encoded_size += PB._encoded_size(x.clock_rate_ghz, 1))
+    x.units_per_core != zero(Int32) && (encoded_size += PB._encoded_size(x.units_per_core, 2))
+    x.ops_per_clock != zero(Int32) && (encoded_size += PB._encoded_size(x.ops_per_clock, 3))
+    return encoded_size
+end
+
+struct DeviceInterconnectInfoProto
+    active_links::Int32
+    cluster_uuid::String
+    clique_id::String
+end
+PB.default_values(::Type{DeviceInterconnectInfoProto}) = (;active_links = zero(Int32), cluster_uuid = "", clique_id = "")
+PB.field_numbers(::Type{DeviceInterconnectInfoProto}) = (;active_links = 1, cluster_uuid = 2, clique_id = 3)
+
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:DeviceInterconnectInfoProto}, _endpos::Int=0, _group::Bool=false)
+    active_links = zero(Int32)
+    cluster_uuid = ""
+    clique_id = ""
+    while !PB.message_done(d, _endpos, _group)
+        field_number, wire_type = PB.decode_tag(d)
+        if field_number == 1
+            active_links = PB.decode(d, Int32)
+        elseif field_number == 2
+            cluster_uuid = PB.decode(d, String)
+        elseif field_number == 3
+            clique_id = PB.decode(d, String)
+        else
+            Base.skip(d, wire_type)
+        end
+    end
+    return DeviceInterconnectInfoProto(active_links, cluster_uuid, clique_id)
+end
+
+function PB.encode(e::PB.AbstractProtoEncoder, x::DeviceInterconnectInfoProto)
+    initpos = position(e.io)
+    x.active_links != zero(Int32) && PB.encode(e, 1, x.active_links)
+    !isempty(x.cluster_uuid) && PB.encode(e, 2, x.cluster_uuid)
+    !isempty(x.clique_id) && PB.encode(e, 3, x.clique_id)
+    return position(e.io) - initpos
+end
+function PB._encoded_size(x::DeviceInterconnectInfoProto)
+    encoded_size = 0
+    x.active_links != zero(Int32) && (encoded_size += PB._encoded_size(x.active_links, 1))
+    !isempty(x.cluster_uuid) && (encoded_size += PB._encoded_size(x.cluster_uuid, 2))
+    !isempty(x.clique_id) && (encoded_size += PB._encoded_size(x.clique_id, 3))
     return encoded_size
 end
 
@@ -86,11 +129,11 @@ end
 PB.default_values(::Type{RuntimeVersionProto}) = (;major = zero(Int32), minor = zero(Int32), patch = zero(Int32))
 PB.field_numbers(::Type{RuntimeVersionProto}) = (;major = 1, minor = 2, patch = 3)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:RuntimeVersionProto})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:RuntimeVersionProto}, _endpos::Int=0, _group::Bool=false)
     major = zero(Int32)
     minor = zero(Int32)
     patch = zero(Int32)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             major = PB.decode(d, Int32)
@@ -120,170 +163,25 @@ function PB._encoded_size(x::RuntimeVersionProto)
     return encoded_size
 end
 
-struct GpuDeviceInfoProto
-    threads_per_block_limit::Int32
-    threads_per_warp::Int32
-    shared_memory_per_block::Int32
-    shared_memory_per_core::Int32
-    threads_per_core_limit::Int32
-    core_count::Int32
-    fpus_per_core::Int64
-    block_dim_limit_x::Int32
-    block_dim_limit_y::Int32
-    block_dim_limit_z::Int32
-    memory_bandwidth::Int64
-    l2_cache_size::Int64
-    clock_rate_ghz::Float32
-    device_memory_size::Int64
-    shared_memory_per_block_optin::Int32
-    compute_capability::Union{Nothing,OneOf{<:Union{CudaComputeCapabilityProto,RocmComputeCapabilityProto}}}
-    registers_per_core_limit::Int64
-    registers_per_block_limit::Int64
-end
-PB.oneof_field_types(::Type{GpuDeviceInfoProto}) = (;
-    compute_capability = (;cuda_compute_capability=CudaComputeCapabilityProto, rocm_compute_capability=RocmComputeCapabilityProto),
-)
-PB.default_values(::Type{GpuDeviceInfoProto}) = (;threads_per_block_limit = zero(Int32), threads_per_warp = zero(Int32), shared_memory_per_block = zero(Int32), shared_memory_per_core = zero(Int32), threads_per_core_limit = zero(Int32), core_count = zero(Int32), fpus_per_core = zero(Int64), block_dim_limit_x = zero(Int32), block_dim_limit_y = zero(Int32), block_dim_limit_z = zero(Int32), memory_bandwidth = zero(Int64), l2_cache_size = zero(Int64), clock_rate_ghz = zero(Float32), device_memory_size = zero(Int64), shared_memory_per_block_optin = zero(Int32), cuda_compute_capability = nothing, rocm_compute_capability = nothing, registers_per_core_limit = zero(Int64), registers_per_block_limit = zero(Int64))
-PB.field_numbers(::Type{GpuDeviceInfoProto}) = (;threads_per_block_limit = 1, threads_per_warp = 2, shared_memory_per_block = 3, shared_memory_per_core = 4, threads_per_core_limit = 5, core_count = 6, fpus_per_core = 7, block_dim_limit_x = 8, block_dim_limit_y = 9, block_dim_limit_z = 10, memory_bandwidth = 11, l2_cache_size = 12, clock_rate_ghz = 13, device_memory_size = 14, shared_memory_per_block_optin = 15, cuda_compute_capability = 16, rocm_compute_capability = 17, registers_per_core_limit = 18, registers_per_block_limit = 19)
-
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:GpuDeviceInfoProto})
-    threads_per_block_limit = zero(Int32)
-    threads_per_warp = zero(Int32)
-    shared_memory_per_block = zero(Int32)
-    shared_memory_per_core = zero(Int32)
-    threads_per_core_limit = zero(Int32)
-    core_count = zero(Int32)
-    fpus_per_core = zero(Int64)
-    block_dim_limit_x = zero(Int32)
-    block_dim_limit_y = zero(Int32)
-    block_dim_limit_z = zero(Int32)
-    memory_bandwidth = zero(Int64)
-    l2_cache_size = zero(Int64)
-    clock_rate_ghz = zero(Float32)
-    device_memory_size = zero(Int64)
-    shared_memory_per_block_optin = zero(Int32)
-    compute_capability = nothing
-    registers_per_core_limit = zero(Int64)
-    registers_per_block_limit = zero(Int64)
-    while !PB.message_done(d)
-        field_number, wire_type = PB.decode_tag(d)
-        if field_number == 1
-            threads_per_block_limit = PB.decode(d, Int32)
-        elseif field_number == 2
-            threads_per_warp = PB.decode(d, Int32)
-        elseif field_number == 3
-            shared_memory_per_block = PB.decode(d, Int32)
-        elseif field_number == 4
-            shared_memory_per_core = PB.decode(d, Int32)
-        elseif field_number == 5
-            threads_per_core_limit = PB.decode(d, Int32)
-        elseif field_number == 6
-            core_count = PB.decode(d, Int32)
-        elseif field_number == 7
-            fpus_per_core = PB.decode(d, Int64)
-        elseif field_number == 8
-            block_dim_limit_x = PB.decode(d, Int32)
-        elseif field_number == 9
-            block_dim_limit_y = PB.decode(d, Int32)
-        elseif field_number == 10
-            block_dim_limit_z = PB.decode(d, Int32)
-        elseif field_number == 11
-            memory_bandwidth = PB.decode(d, Int64)
-        elseif field_number == 12
-            l2_cache_size = PB.decode(d, Int64)
-        elseif field_number == 13
-            clock_rate_ghz = PB.decode(d, Float32)
-        elseif field_number == 14
-            device_memory_size = PB.decode(d, Int64)
-        elseif field_number == 15
-            shared_memory_per_block_optin = PB.decode(d, Int32)
-        elseif field_number == 16
-            compute_capability = OneOf(:cuda_compute_capability, PB.decode(d, Ref{CudaComputeCapabilityProto}))
-        elseif field_number == 17
-            compute_capability = OneOf(:rocm_compute_capability, PB.decode(d, Ref{RocmComputeCapabilityProto}))
-        elseif field_number == 18
-            registers_per_core_limit = PB.decode(d, Int64)
-        elseif field_number == 19
-            registers_per_block_limit = PB.decode(d, Int64)
-        else
-            Base.skip(d, wire_type)
-        end
-    end
-    return GpuDeviceInfoProto(threads_per_block_limit, threads_per_warp, shared_memory_per_block, shared_memory_per_core, threads_per_core_limit, core_count, fpus_per_core, block_dim_limit_x, block_dim_limit_y, block_dim_limit_z, memory_bandwidth, l2_cache_size, clock_rate_ghz, device_memory_size, shared_memory_per_block_optin, compute_capability, registers_per_core_limit, registers_per_block_limit)
-end
-
-function PB.encode(e::PB.AbstractProtoEncoder, x::GpuDeviceInfoProto)
-    initpos = position(e.io)
-    x.threads_per_block_limit != zero(Int32) && PB.encode(e, 1, x.threads_per_block_limit)
-    x.threads_per_warp != zero(Int32) && PB.encode(e, 2, x.threads_per_warp)
-    x.shared_memory_per_block != zero(Int32) && PB.encode(e, 3, x.shared_memory_per_block)
-    x.shared_memory_per_core != zero(Int32) && PB.encode(e, 4, x.shared_memory_per_core)
-    x.threads_per_core_limit != zero(Int32) && PB.encode(e, 5, x.threads_per_core_limit)
-    x.core_count != zero(Int32) && PB.encode(e, 6, x.core_count)
-    x.fpus_per_core != zero(Int64) && PB.encode(e, 7, x.fpus_per_core)
-    x.block_dim_limit_x != zero(Int32) && PB.encode(e, 8, x.block_dim_limit_x)
-    x.block_dim_limit_y != zero(Int32) && PB.encode(e, 9, x.block_dim_limit_y)
-    x.block_dim_limit_z != zero(Int32) && PB.encode(e, 10, x.block_dim_limit_z)
-    x.memory_bandwidth != zero(Int64) && PB.encode(e, 11, x.memory_bandwidth)
-    x.l2_cache_size != zero(Int64) && PB.encode(e, 12, x.l2_cache_size)
-    x.clock_rate_ghz !== zero(Float32) && PB.encode(e, 13, x.clock_rate_ghz)
-    x.device_memory_size != zero(Int64) && PB.encode(e, 14, x.device_memory_size)
-    x.shared_memory_per_block_optin != zero(Int32) && PB.encode(e, 15, x.shared_memory_per_block_optin)
-    if isnothing(x.compute_capability);
-    elseif x.compute_capability.name === :cuda_compute_capability
-        PB.encode(e, 16, x.compute_capability[]::CudaComputeCapabilityProto)
-    elseif x.compute_capability.name === :rocm_compute_capability
-        PB.encode(e, 17, x.compute_capability[]::RocmComputeCapabilityProto)
-    end
-    x.registers_per_core_limit != zero(Int64) && PB.encode(e, 18, x.registers_per_core_limit)
-    x.registers_per_block_limit != zero(Int64) && PB.encode(e, 19, x.registers_per_block_limit)
-    return position(e.io) - initpos
-end
-function PB._encoded_size(x::GpuDeviceInfoProto)
-    encoded_size = 0
-    x.threads_per_block_limit != zero(Int32) && (encoded_size += PB._encoded_size(x.threads_per_block_limit, 1))
-    x.threads_per_warp != zero(Int32) && (encoded_size += PB._encoded_size(x.threads_per_warp, 2))
-    x.shared_memory_per_block != zero(Int32) && (encoded_size += PB._encoded_size(x.shared_memory_per_block, 3))
-    x.shared_memory_per_core != zero(Int32) && (encoded_size += PB._encoded_size(x.shared_memory_per_core, 4))
-    x.threads_per_core_limit != zero(Int32) && (encoded_size += PB._encoded_size(x.threads_per_core_limit, 5))
-    x.core_count != zero(Int32) && (encoded_size += PB._encoded_size(x.core_count, 6))
-    x.fpus_per_core != zero(Int64) && (encoded_size += PB._encoded_size(x.fpus_per_core, 7))
-    x.block_dim_limit_x != zero(Int32) && (encoded_size += PB._encoded_size(x.block_dim_limit_x, 8))
-    x.block_dim_limit_y != zero(Int32) && (encoded_size += PB._encoded_size(x.block_dim_limit_y, 9))
-    x.block_dim_limit_z != zero(Int32) && (encoded_size += PB._encoded_size(x.block_dim_limit_z, 10))
-    x.memory_bandwidth != zero(Int64) && (encoded_size += PB._encoded_size(x.memory_bandwidth, 11))
-    x.l2_cache_size != zero(Int64) && (encoded_size += PB._encoded_size(x.l2_cache_size, 12))
-    x.clock_rate_ghz !== zero(Float32) && (encoded_size += PB._encoded_size(x.clock_rate_ghz, 13))
-    x.device_memory_size != zero(Int64) && (encoded_size += PB._encoded_size(x.device_memory_size, 14))
-    x.shared_memory_per_block_optin != zero(Int32) && (encoded_size += PB._encoded_size(x.shared_memory_per_block_optin, 15))
-    if isnothing(x.compute_capability);
-    elseif x.compute_capability.name === :cuda_compute_capability
-        encoded_size += PB._encoded_size(x.compute_capability[]::CudaComputeCapabilityProto, 16)
-    elseif x.compute_capability.name === :rocm_compute_capability
-        encoded_size += PB._encoded_size(x.compute_capability[]::RocmComputeCapabilityProto, 17)
-    end
-    x.registers_per_core_limit != zero(Int64) && (encoded_size += PB._encoded_size(x.registers_per_core_limit, 18))
-    x.registers_per_block_limit != zero(Int64) && (encoded_size += PB._encoded_size(x.registers_per_block_limit, 19))
-    return encoded_size
-end
-
 struct GpuComputeCapabilityProto
-    compute_capability::Union{Nothing,OneOf{<:Union{CudaComputeCapabilityProto,RocmComputeCapabilityProto}}}
+    compute_capability::Union{Nothing,OneOf{<:Union{CudaComputeCapabilityProto,RocmComputeCapabilityProto,OneAPIComputeCapabilityProto}}}
 end
 PB.oneof_field_types(::Type{GpuComputeCapabilityProto}) = (;
-    compute_capability = (;cuda_compute_capability=CudaComputeCapabilityProto, rocm_compute_capability=RocmComputeCapabilityProto),
+    compute_capability = (;cuda_compute_capability=CudaComputeCapabilityProto, rocm_compute_capability=RocmComputeCapabilityProto, oneapi_compute_capability=OneAPIComputeCapabilityProto),
 )
-PB.default_values(::Type{GpuComputeCapabilityProto}) = (;cuda_compute_capability = nothing, rocm_compute_capability = nothing)
-PB.field_numbers(::Type{GpuComputeCapabilityProto}) = (;cuda_compute_capability = 1, rocm_compute_capability = 2)
+PB.default_values(::Type{GpuComputeCapabilityProto}) = (;cuda_compute_capability = nothing, rocm_compute_capability = nothing, oneapi_compute_capability = nothing)
+PB.field_numbers(::Type{GpuComputeCapabilityProto}) = (;cuda_compute_capability = 1, rocm_compute_capability = 2, oneapi_compute_capability = 3)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:GpuComputeCapabilityProto})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:GpuComputeCapabilityProto}, _endpos::Int=0, _group::Bool=false)
     compute_capability = nothing
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             compute_capability = OneOf(:cuda_compute_capability, PB.decode(d, Ref{CudaComputeCapabilityProto}))
         elseif field_number == 2
             compute_capability = OneOf(:rocm_compute_capability, PB.decode(d, Ref{RocmComputeCapabilityProto}))
+        elseif field_number == 3
+            compute_capability = OneOf(:oneapi_compute_capability, PB.decode(d, Ref{OneAPIComputeCapabilityProto}))
         else
             Base.skip(d, wire_type)
         end
@@ -298,6 +196,8 @@ function PB.encode(e::PB.AbstractProtoEncoder, x::GpuComputeCapabilityProto)
         PB.encode(e, 1, x.compute_capability[]::CudaComputeCapabilityProto)
     elseif x.compute_capability.name === :rocm_compute_capability
         PB.encode(e, 2, x.compute_capability[]::RocmComputeCapabilityProto)
+    elseif x.compute_capability.name === :oneapi_compute_capability
+        PB.encode(e, 3, x.compute_capability[]::OneAPIComputeCapabilityProto)
     end
     return position(e.io) - initpos
 end
@@ -308,37 +208,368 @@ function PB._encoded_size(x::GpuComputeCapabilityProto)
         encoded_size += PB._encoded_size(x.compute_capability[]::CudaComputeCapabilityProto, 1)
     elseif x.compute_capability.name === :rocm_compute_capability
         encoded_size += PB._encoded_size(x.compute_capability[]::RocmComputeCapabilityProto, 2)
+    elseif x.compute_capability.name === :oneapi_compute_capability
+        encoded_size += PB._encoded_size(x.compute_capability[]::OneAPIComputeCapabilityProto, 3)
     end
+    return encoded_size
+end
+
+struct ExecutionUnitDescriptionProto
+    rate_infos::Dict{Int32,var"ExecutionUnitDescriptionProto.RateInfoProto"}
+end
+PB.default_values(::Type{ExecutionUnitDescriptionProto}) = (;rate_infos = Dict{Int32,var"ExecutionUnitDescriptionProto.RateInfoProto"}())
+PB.field_numbers(::Type{ExecutionUnitDescriptionProto}) = (;rate_infos = 1)
+
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ExecutionUnitDescriptionProto}, _endpos::Int=0, _group::Bool=false)
+    rate_infos = Dict{Int32,var"ExecutionUnitDescriptionProto.RateInfoProto"}()
+    while !PB.message_done(d, _endpos, _group)
+        field_number, wire_type = PB.decode_tag(d)
+        if field_number == 1
+            PB.decode!(d, rate_infos)
+        else
+            Base.skip(d, wire_type)
+        end
+    end
+    return ExecutionUnitDescriptionProto(rate_infos)
+end
+
+function PB.encode(e::PB.AbstractProtoEncoder, x::ExecutionUnitDescriptionProto)
+    initpos = position(e.io)
+    !isempty(x.rate_infos) && PB.encode(e, 1, x.rate_infos)
+    return position(e.io) - initpos
+end
+function PB._encoded_size(x::ExecutionUnitDescriptionProto)
+    encoded_size = 0
+    !isempty(x.rate_infos) && (encoded_size += PB._encoded_size(x.rate_infos, 1))
+    return encoded_size
+end
+
+struct GpuDeviceInfoProto
+    device_vendor::String
+    platform_version::String
+    pci_bus_id::String
+    name::String
+    model_str::String
+    threads_per_block_limit::Int32
+    threads_per_warp::Int32
+    shared_memory_per_block::Int32
+    shared_memory_per_core::Int32
+    threads_per_core_limit::Int32
+    core_count::Int32
+    fpus_per_core::Int64
+    block_dim_limit_x::Int64
+    block_dim_limit_y::Int64
+    block_dim_limit_z::Int64
+    memory_bandwidth::Int64
+    l2_cache_size::Int64
+    clock_rate_ghz::Float32
+    device_memory_size::Int64
+    shared_memory_per_block_optin::Int32
+    compute_capability::Union{Nothing,OneOf{<:Union{CudaComputeCapabilityProto,RocmComputeCapabilityProto,OneAPIComputeCapabilityProto}}}
+    registers_per_core_limit::Int64
+    registers_per_block_limit::Int64
+    scalar_unit_description::Union{Nothing,ExecutionUnitDescriptionProto}
+    matrix_unit_description::Union{Nothing,ExecutionUnitDescriptionProto}
+    driver_version::String
+    kernel_mode_driver_version::String
+    runtime_version::String
+    compile_time_toolkit_version::String
+    dnn_version::String
+    cub_version::String
+    device_interconnect_info::Union{Nothing,DeviceInterconnectInfoProto}
+    numa_node::Int32
+    thread_dim_limit_x::Int64
+    thread_dim_limit_y::Int64
+    thread_dim_limit_z::Int64
+    device_address_bits::Int64
+    pcie_bandwidth::Int64
+    ecc_enabled::Bool
+    mem_clock_ghz::Float32
+    reserved_shared_memory_per_block::Int64
+    max_blocks_per_multiprocessor::Int64
+    collective_memory_granularity::Int64
+end
+PB.oneof_field_types(::Type{GpuDeviceInfoProto}) = (;
+    compute_capability = (;cuda_compute_capability=CudaComputeCapabilityProto, rocm_compute_capability=RocmComputeCapabilityProto, oneapi_compute_capability=OneAPIComputeCapabilityProto),
+)
+PB.default_values(::Type{GpuDeviceInfoProto}) = (;device_vendor = "", platform_version = "", pci_bus_id = "", name = "", model_str = "", threads_per_block_limit = zero(Int32), threads_per_warp = zero(Int32), shared_memory_per_block = zero(Int32), shared_memory_per_core = zero(Int32), threads_per_core_limit = zero(Int32), core_count = zero(Int32), fpus_per_core = zero(Int64), block_dim_limit_x = zero(Int64), block_dim_limit_y = zero(Int64), block_dim_limit_z = zero(Int64), memory_bandwidth = zero(Int64), l2_cache_size = zero(Int64), clock_rate_ghz = zero(Float32), device_memory_size = zero(Int64), shared_memory_per_block_optin = zero(Int32), cuda_compute_capability = nothing, rocm_compute_capability = nothing, oneapi_compute_capability = nothing, registers_per_core_limit = zero(Int64), registers_per_block_limit = zero(Int64), scalar_unit_description = nothing, matrix_unit_description = nothing, driver_version = "", kernel_mode_driver_version = "", runtime_version = "", compile_time_toolkit_version = "", dnn_version = "", cub_version = "", device_interconnect_info = nothing, numa_node = zero(Int32), thread_dim_limit_x = zero(Int64), thread_dim_limit_y = zero(Int64), thread_dim_limit_z = zero(Int64), device_address_bits = zero(Int64), pcie_bandwidth = zero(Int64), ecc_enabled = false, mem_clock_ghz = zero(Float32), reserved_shared_memory_per_block = zero(Int64), max_blocks_per_multiprocessor = zero(Int64), collective_memory_granularity = zero(Int64))
+PB.field_numbers(::Type{GpuDeviceInfoProto}) = (;device_vendor = 30, platform_version = 31, pci_bus_id = 32, name = 34, model_str = 35, threads_per_block_limit = 1, threads_per_warp = 2, shared_memory_per_block = 3, shared_memory_per_core = 4, threads_per_core_limit = 5, core_count = 6, fpus_per_core = 7, block_dim_limit_x = 8, block_dim_limit_y = 9, block_dim_limit_z = 10, memory_bandwidth = 11, l2_cache_size = 12, clock_rate_ghz = 13, device_memory_size = 14, shared_memory_per_block_optin = 15, cuda_compute_capability = 16, rocm_compute_capability = 17, oneapi_compute_capability = 22, registers_per_core_limit = 18, registers_per_block_limit = 19, scalar_unit_description = 20, matrix_unit_description = 21, driver_version = 23, kernel_mode_driver_version = 24, runtime_version = 25, compile_time_toolkit_version = 26, dnn_version = 27, cub_version = 28, device_interconnect_info = 29, numa_node = 36, thread_dim_limit_x = 37, thread_dim_limit_y = 38, thread_dim_limit_z = 39, device_address_bits = 40, pcie_bandwidth = 41, ecc_enabled = 42, mem_clock_ghz = 43, reserved_shared_memory_per_block = 44, max_blocks_per_multiprocessor = 45, collective_memory_granularity = 46)
+
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:GpuDeviceInfoProto}, _endpos::Int=0, _group::Bool=false)
+    device_vendor = ""
+    platform_version = ""
+    pci_bus_id = ""
+    name = ""
+    model_str = ""
+    threads_per_block_limit = zero(Int32)
+    threads_per_warp = zero(Int32)
+    shared_memory_per_block = zero(Int32)
+    shared_memory_per_core = zero(Int32)
+    threads_per_core_limit = zero(Int32)
+    core_count = zero(Int32)
+    fpus_per_core = zero(Int64)
+    block_dim_limit_x = zero(Int64)
+    block_dim_limit_y = zero(Int64)
+    block_dim_limit_z = zero(Int64)
+    memory_bandwidth = zero(Int64)
+    l2_cache_size = zero(Int64)
+    clock_rate_ghz = zero(Float32)
+    device_memory_size = zero(Int64)
+    shared_memory_per_block_optin = zero(Int32)
+    compute_capability = nothing
+    registers_per_core_limit = zero(Int64)
+    registers_per_block_limit = zero(Int64)
+    scalar_unit_description = Ref{Union{Nothing,ExecutionUnitDescriptionProto}}(nothing)
+    matrix_unit_description = Ref{Union{Nothing,ExecutionUnitDescriptionProto}}(nothing)
+    driver_version = ""
+    kernel_mode_driver_version = ""
+    runtime_version = ""
+    compile_time_toolkit_version = ""
+    dnn_version = ""
+    cub_version = ""
+    device_interconnect_info = Ref{Union{Nothing,DeviceInterconnectInfoProto}}(nothing)
+    numa_node = zero(Int32)
+    thread_dim_limit_x = zero(Int64)
+    thread_dim_limit_y = zero(Int64)
+    thread_dim_limit_z = zero(Int64)
+    device_address_bits = zero(Int64)
+    pcie_bandwidth = zero(Int64)
+    ecc_enabled = false
+    mem_clock_ghz = zero(Float32)
+    reserved_shared_memory_per_block = zero(Int64)
+    max_blocks_per_multiprocessor = zero(Int64)
+    collective_memory_granularity = zero(Int64)
+    while !PB.message_done(d, _endpos, _group)
+        field_number, wire_type = PB.decode_tag(d)
+        if field_number == 30
+            device_vendor = PB.decode(d, String)
+        elseif field_number == 31
+            platform_version = PB.decode(d, String)
+        elseif field_number == 32
+            pci_bus_id = PB.decode(d, String)
+        elseif field_number == 34
+            name = PB.decode(d, String)
+        elseif field_number == 35
+            model_str = PB.decode(d, String)
+        elseif field_number == 1
+            threads_per_block_limit = PB.decode(d, Int32)
+        elseif field_number == 2
+            threads_per_warp = PB.decode(d, Int32)
+        elseif field_number == 3
+            shared_memory_per_block = PB.decode(d, Int32)
+        elseif field_number == 4
+            shared_memory_per_core = PB.decode(d, Int32)
+        elseif field_number == 5
+            threads_per_core_limit = PB.decode(d, Int32)
+        elseif field_number == 6
+            core_count = PB.decode(d, Int32)
+        elseif field_number == 7
+            fpus_per_core = PB.decode(d, Int64)
+        elseif field_number == 8
+            block_dim_limit_x = PB.decode(d, Int64)
+        elseif field_number == 9
+            block_dim_limit_y = PB.decode(d, Int64)
+        elseif field_number == 10
+            block_dim_limit_z = PB.decode(d, Int64)
+        elseif field_number == 11
+            memory_bandwidth = PB.decode(d, Int64)
+        elseif field_number == 12
+            l2_cache_size = PB.decode(d, Int64)
+        elseif field_number == 13
+            clock_rate_ghz = PB.decode(d, Float32)
+        elseif field_number == 14
+            device_memory_size = PB.decode(d, Int64)
+        elseif field_number == 15
+            shared_memory_per_block_optin = PB.decode(d, Int32)
+        elseif field_number == 16
+            compute_capability = OneOf(:cuda_compute_capability, PB.decode(d, Ref{CudaComputeCapabilityProto}))
+        elseif field_number == 17
+            compute_capability = OneOf(:rocm_compute_capability, PB.decode(d, Ref{RocmComputeCapabilityProto}))
+        elseif field_number == 22
+            compute_capability = OneOf(:oneapi_compute_capability, PB.decode(d, Ref{OneAPIComputeCapabilityProto}))
+        elseif field_number == 18
+            registers_per_core_limit = PB.decode(d, Int64)
+        elseif field_number == 19
+            registers_per_block_limit = PB.decode(d, Int64)
+        elseif field_number == 20
+            PB.decode!(d, scalar_unit_description)
+        elseif field_number == 21
+            PB.decode!(d, matrix_unit_description)
+        elseif field_number == 23
+            driver_version = PB.decode(d, String)
+        elseif field_number == 24
+            kernel_mode_driver_version = PB.decode(d, String)
+        elseif field_number == 25
+            runtime_version = PB.decode(d, String)
+        elseif field_number == 26
+            compile_time_toolkit_version = PB.decode(d, String)
+        elseif field_number == 27
+            dnn_version = PB.decode(d, String)
+        elseif field_number == 28
+            cub_version = PB.decode(d, String)
+        elseif field_number == 29
+            PB.decode!(d, device_interconnect_info)
+        elseif field_number == 36
+            numa_node = PB.decode(d, Int32)
+        elseif field_number == 37
+            thread_dim_limit_x = PB.decode(d, Int64)
+        elseif field_number == 38
+            thread_dim_limit_y = PB.decode(d, Int64)
+        elseif field_number == 39
+            thread_dim_limit_z = PB.decode(d, Int64)
+        elseif field_number == 40
+            device_address_bits = PB.decode(d, Int64)
+        elseif field_number == 41
+            pcie_bandwidth = PB.decode(d, Int64)
+        elseif field_number == 42
+            ecc_enabled = PB.decode(d, Bool)
+        elseif field_number == 43
+            mem_clock_ghz = PB.decode(d, Float32)
+        elseif field_number == 44
+            reserved_shared_memory_per_block = PB.decode(d, Int64)
+        elseif field_number == 45
+            max_blocks_per_multiprocessor = PB.decode(d, Int64)
+        elseif field_number == 46
+            collective_memory_granularity = PB.decode(d, Int64)
+        else
+            Base.skip(d, wire_type)
+        end
+    end
+    return GpuDeviceInfoProto(device_vendor, platform_version, pci_bus_id, name, model_str, threads_per_block_limit, threads_per_warp, shared_memory_per_block, shared_memory_per_core, threads_per_core_limit, core_count, fpus_per_core, block_dim_limit_x, block_dim_limit_y, block_dim_limit_z, memory_bandwidth, l2_cache_size, clock_rate_ghz, device_memory_size, shared_memory_per_block_optin, compute_capability, registers_per_core_limit, registers_per_block_limit, scalar_unit_description[], matrix_unit_description[], driver_version, kernel_mode_driver_version, runtime_version, compile_time_toolkit_version, dnn_version, cub_version, device_interconnect_info[], numa_node, thread_dim_limit_x, thread_dim_limit_y, thread_dim_limit_z, device_address_bits, pcie_bandwidth, ecc_enabled, mem_clock_ghz, reserved_shared_memory_per_block, max_blocks_per_multiprocessor, collective_memory_granularity)
+end
+
+function PB.encode(e::PB.AbstractProtoEncoder, x::GpuDeviceInfoProto)
+    initpos = position(e.io)
+    !isempty(x.device_vendor) && PB.encode(e, 30, x.device_vendor)
+    !isempty(x.platform_version) && PB.encode(e, 31, x.platform_version)
+    !isempty(x.pci_bus_id) && PB.encode(e, 32, x.pci_bus_id)
+    !isempty(x.name) && PB.encode(e, 34, x.name)
+    !isempty(x.model_str) && PB.encode(e, 35, x.model_str)
+    x.threads_per_block_limit != zero(Int32) && PB.encode(e, 1, x.threads_per_block_limit)
+    x.threads_per_warp != zero(Int32) && PB.encode(e, 2, x.threads_per_warp)
+    x.shared_memory_per_block != zero(Int32) && PB.encode(e, 3, x.shared_memory_per_block)
+    x.shared_memory_per_core != zero(Int32) && PB.encode(e, 4, x.shared_memory_per_core)
+    x.threads_per_core_limit != zero(Int32) && PB.encode(e, 5, x.threads_per_core_limit)
+    x.core_count != zero(Int32) && PB.encode(e, 6, x.core_count)
+    x.fpus_per_core != zero(Int64) && PB.encode(e, 7, x.fpus_per_core)
+    x.block_dim_limit_x != zero(Int64) && PB.encode(e, 8, x.block_dim_limit_x)
+    x.block_dim_limit_y != zero(Int64) && PB.encode(e, 9, x.block_dim_limit_y)
+    x.block_dim_limit_z != zero(Int64) && PB.encode(e, 10, x.block_dim_limit_z)
+    x.memory_bandwidth != zero(Int64) && PB.encode(e, 11, x.memory_bandwidth)
+    x.l2_cache_size != zero(Int64) && PB.encode(e, 12, x.l2_cache_size)
+    x.clock_rate_ghz !== zero(Float32) && PB.encode(e, 13, x.clock_rate_ghz)
+    x.device_memory_size != zero(Int64) && PB.encode(e, 14, x.device_memory_size)
+    x.shared_memory_per_block_optin != zero(Int32) && PB.encode(e, 15, x.shared_memory_per_block_optin)
+    if isnothing(x.compute_capability);
+    elseif x.compute_capability.name === :cuda_compute_capability
+        PB.encode(e, 16, x.compute_capability[]::CudaComputeCapabilityProto)
+    elseif x.compute_capability.name === :rocm_compute_capability
+        PB.encode(e, 17, x.compute_capability[]::RocmComputeCapabilityProto)
+    elseif x.compute_capability.name === :oneapi_compute_capability
+        PB.encode(e, 22, x.compute_capability[]::OneAPIComputeCapabilityProto)
+    end
+    x.registers_per_core_limit != zero(Int64) && PB.encode(e, 18, x.registers_per_core_limit)
+    x.registers_per_block_limit != zero(Int64) && PB.encode(e, 19, x.registers_per_block_limit)
+    !isnothing(x.scalar_unit_description) && PB.encode(e, 20, x.scalar_unit_description)
+    !isnothing(x.matrix_unit_description) && PB.encode(e, 21, x.matrix_unit_description)
+    !isempty(x.driver_version) && PB.encode(e, 23, x.driver_version)
+    !isempty(x.kernel_mode_driver_version) && PB.encode(e, 24, x.kernel_mode_driver_version)
+    !isempty(x.runtime_version) && PB.encode(e, 25, x.runtime_version)
+    !isempty(x.compile_time_toolkit_version) && PB.encode(e, 26, x.compile_time_toolkit_version)
+    !isempty(x.dnn_version) && PB.encode(e, 27, x.dnn_version)
+    !isempty(x.cub_version) && PB.encode(e, 28, x.cub_version)
+    !isnothing(x.device_interconnect_info) && PB.encode(e, 29, x.device_interconnect_info)
+    x.numa_node != zero(Int32) && PB.encode(e, 36, x.numa_node)
+    x.thread_dim_limit_x != zero(Int64) && PB.encode(e, 37, x.thread_dim_limit_x)
+    x.thread_dim_limit_y != zero(Int64) && PB.encode(e, 38, x.thread_dim_limit_y)
+    x.thread_dim_limit_z != zero(Int64) && PB.encode(e, 39, x.thread_dim_limit_z)
+    x.device_address_bits != zero(Int64) && PB.encode(e, 40, x.device_address_bits)
+    x.pcie_bandwidth != zero(Int64) && PB.encode(e, 41, x.pcie_bandwidth)
+    x.ecc_enabled != false && PB.encode(e, 42, x.ecc_enabled)
+    x.mem_clock_ghz !== zero(Float32) && PB.encode(e, 43, x.mem_clock_ghz)
+    x.reserved_shared_memory_per_block != zero(Int64) && PB.encode(e, 44, x.reserved_shared_memory_per_block)
+    x.max_blocks_per_multiprocessor != zero(Int64) && PB.encode(e, 45, x.max_blocks_per_multiprocessor)
+    x.collective_memory_granularity != zero(Int64) && PB.encode(e, 46, x.collective_memory_granularity)
+    return position(e.io) - initpos
+end
+function PB._encoded_size(x::GpuDeviceInfoProto)
+    encoded_size = 0
+    !isempty(x.device_vendor) && (encoded_size += PB._encoded_size(x.device_vendor, 30))
+    !isempty(x.platform_version) && (encoded_size += PB._encoded_size(x.platform_version, 31))
+    !isempty(x.pci_bus_id) && (encoded_size += PB._encoded_size(x.pci_bus_id, 32))
+    !isempty(x.name) && (encoded_size += PB._encoded_size(x.name, 34))
+    !isempty(x.model_str) && (encoded_size += PB._encoded_size(x.model_str, 35))
+    x.threads_per_block_limit != zero(Int32) && (encoded_size += PB._encoded_size(x.threads_per_block_limit, 1))
+    x.threads_per_warp != zero(Int32) && (encoded_size += PB._encoded_size(x.threads_per_warp, 2))
+    x.shared_memory_per_block != zero(Int32) && (encoded_size += PB._encoded_size(x.shared_memory_per_block, 3))
+    x.shared_memory_per_core != zero(Int32) && (encoded_size += PB._encoded_size(x.shared_memory_per_core, 4))
+    x.threads_per_core_limit != zero(Int32) && (encoded_size += PB._encoded_size(x.threads_per_core_limit, 5))
+    x.core_count != zero(Int32) && (encoded_size += PB._encoded_size(x.core_count, 6))
+    x.fpus_per_core != zero(Int64) && (encoded_size += PB._encoded_size(x.fpus_per_core, 7))
+    x.block_dim_limit_x != zero(Int64) && (encoded_size += PB._encoded_size(x.block_dim_limit_x, 8))
+    x.block_dim_limit_y != zero(Int64) && (encoded_size += PB._encoded_size(x.block_dim_limit_y, 9))
+    x.block_dim_limit_z != zero(Int64) && (encoded_size += PB._encoded_size(x.block_dim_limit_z, 10))
+    x.memory_bandwidth != zero(Int64) && (encoded_size += PB._encoded_size(x.memory_bandwidth, 11))
+    x.l2_cache_size != zero(Int64) && (encoded_size += PB._encoded_size(x.l2_cache_size, 12))
+    x.clock_rate_ghz !== zero(Float32) && (encoded_size += PB._encoded_size(x.clock_rate_ghz, 13))
+    x.device_memory_size != zero(Int64) && (encoded_size += PB._encoded_size(x.device_memory_size, 14))
+    x.shared_memory_per_block_optin != zero(Int32) && (encoded_size += PB._encoded_size(x.shared_memory_per_block_optin, 15))
+    if isnothing(x.compute_capability);
+    elseif x.compute_capability.name === :cuda_compute_capability
+        encoded_size += PB._encoded_size(x.compute_capability[]::CudaComputeCapabilityProto, 16)
+    elseif x.compute_capability.name === :rocm_compute_capability
+        encoded_size += PB._encoded_size(x.compute_capability[]::RocmComputeCapabilityProto, 17)
+    elseif x.compute_capability.name === :oneapi_compute_capability
+        encoded_size += PB._encoded_size(x.compute_capability[]::OneAPIComputeCapabilityProto, 22)
+    end
+    x.registers_per_core_limit != zero(Int64) && (encoded_size += PB._encoded_size(x.registers_per_core_limit, 18))
+    x.registers_per_block_limit != zero(Int64) && (encoded_size += PB._encoded_size(x.registers_per_block_limit, 19))
+    !isnothing(x.scalar_unit_description) && (encoded_size += PB._encoded_size(x.scalar_unit_description, 20))
+    !isnothing(x.matrix_unit_description) && (encoded_size += PB._encoded_size(x.matrix_unit_description, 21))
+    !isempty(x.driver_version) && (encoded_size += PB._encoded_size(x.driver_version, 23))
+    !isempty(x.kernel_mode_driver_version) && (encoded_size += PB._encoded_size(x.kernel_mode_driver_version, 24))
+    !isempty(x.runtime_version) && (encoded_size += PB._encoded_size(x.runtime_version, 25))
+    !isempty(x.compile_time_toolkit_version) && (encoded_size += PB._encoded_size(x.compile_time_toolkit_version, 26))
+    !isempty(x.dnn_version) && (encoded_size += PB._encoded_size(x.dnn_version, 27))
+    !isempty(x.cub_version) && (encoded_size += PB._encoded_size(x.cub_version, 28))
+    !isnothing(x.device_interconnect_info) && (encoded_size += PB._encoded_size(x.device_interconnect_info, 29))
+    x.numa_node != zero(Int32) && (encoded_size += PB._encoded_size(x.numa_node, 36))
+    x.thread_dim_limit_x != zero(Int64) && (encoded_size += PB._encoded_size(x.thread_dim_limit_x, 37))
+    x.thread_dim_limit_y != zero(Int64) && (encoded_size += PB._encoded_size(x.thread_dim_limit_y, 38))
+    x.thread_dim_limit_z != zero(Int64) && (encoded_size += PB._encoded_size(x.thread_dim_limit_z, 39))
+    x.device_address_bits != zero(Int64) && (encoded_size += PB._encoded_size(x.device_address_bits, 40))
+    x.pcie_bandwidth != zero(Int64) && (encoded_size += PB._encoded_size(x.pcie_bandwidth, 41))
+    x.ecc_enabled != false && (encoded_size += PB._encoded_size(x.ecc_enabled, 42))
+    x.mem_clock_ghz !== zero(Float32) && (encoded_size += PB._encoded_size(x.mem_clock_ghz, 43))
+    x.reserved_shared_memory_per_block != zero(Int64) && (encoded_size += PB._encoded_size(x.reserved_shared_memory_per_block, 44))
+    x.max_blocks_per_multiprocessor != zero(Int64) && (encoded_size += PB._encoded_size(x.max_blocks_per_multiprocessor, 45))
+    x.collective_memory_granularity != zero(Int64) && (encoded_size += PB._encoded_size(x.collective_memory_granularity, 46))
     return encoded_size
 end
 
 struct GpuTargetConfigProto
     gpu_device_info::Union{Nothing,GpuDeviceInfoProto}
     platform_name::String
-    dnn_version_info::Union{Nothing,DnnVersionInfoProto}
     runtime_version::Union{Nothing,RuntimeVersionProto}
     autotune_results::Union{Nothing,xla_autotuning.AutotuneResults}
     device_description_str::String
 end
-PB.reserved_fields(::Type{GpuTargetConfigProto}) = (names = ["cuda_compute_capability", "rocm_compute_capability"], numbers = Union{Int,UnitRange{Int}}[2, 3])
-PB.default_values(::Type{GpuTargetConfigProto}) = (;gpu_device_info = nothing, platform_name = "", dnn_version_info = nothing, runtime_version = nothing, autotune_results = nothing, device_description_str = "")
-PB.field_numbers(::Type{GpuTargetConfigProto}) = (;gpu_device_info = 1, platform_name = 4, dnn_version_info = 5, runtime_version = 8, autotune_results = 6, device_description_str = 7)
+PB.reserved_fields(::Type{GpuTargetConfigProto}) = (names = ["cuda_compute_capability", "rocm_compute_capability", "dnn_version_info"], numbers = Union{Int,UnitRange{Int}}[2, 3, 5])
+PB.default_values(::Type{GpuTargetConfigProto}) = (;gpu_device_info = nothing, platform_name = "", runtime_version = nothing, autotune_results = nothing, device_description_str = "")
+PB.field_numbers(::Type{GpuTargetConfigProto}) = (;gpu_device_info = 1, platform_name = 4, runtime_version = 8, autotune_results = 6, device_description_str = 7)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:GpuTargetConfigProto})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:GpuTargetConfigProto}, _endpos::Int=0, _group::Bool=false)
     gpu_device_info = Ref{Union{Nothing,GpuDeviceInfoProto}}(nothing)
     platform_name = ""
-    dnn_version_info = Ref{Union{Nothing,DnnVersionInfoProto}}(nothing)
     runtime_version = Ref{Union{Nothing,RuntimeVersionProto}}(nothing)
     autotune_results = Ref{Union{Nothing,xla_autotuning.AutotuneResults}}(nothing)
     device_description_str = ""
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, gpu_device_info)
         elseif field_number == 4
             platform_name = PB.decode(d, String)
-        elseif field_number == 5
-            PB.decode!(d, dnn_version_info)
         elseif field_number == 8
             PB.decode!(d, runtime_version)
         elseif field_number == 6
@@ -349,14 +580,13 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:GpuTargetConfigProto})
             Base.skip(d, wire_type)
         end
     end
-    return GpuTargetConfigProto(gpu_device_info[], platform_name, dnn_version_info[], runtime_version[], autotune_results[], device_description_str)
+    return GpuTargetConfigProto(gpu_device_info[], platform_name, runtime_version[], autotune_results[], device_description_str)
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::GpuTargetConfigProto)
     initpos = position(e.io)
     !isnothing(x.gpu_device_info) && PB.encode(e, 1, x.gpu_device_info)
     !isempty(x.platform_name) && PB.encode(e, 4, x.platform_name)
-    !isnothing(x.dnn_version_info) && PB.encode(e, 5, x.dnn_version_info)
     !isnothing(x.runtime_version) && PB.encode(e, 8, x.runtime_version)
     !isnothing(x.autotune_results) && PB.encode(e, 6, x.autotune_results)
     !isempty(x.device_description_str) && PB.encode(e, 7, x.device_description_str)
@@ -366,7 +596,6 @@ function PB._encoded_size(x::GpuTargetConfigProto)
     encoded_size = 0
     !isnothing(x.gpu_device_info) && (encoded_size += PB._encoded_size(x.gpu_device_info, 1))
     !isempty(x.platform_name) && (encoded_size += PB._encoded_size(x.platform_name, 4))
-    !isnothing(x.dnn_version_info) && (encoded_size += PB._encoded_size(x.dnn_version_info, 5))
     !isnothing(x.runtime_version) && (encoded_size += PB._encoded_size(x.runtime_version, 8))
     !isnothing(x.autotune_results) && (encoded_size += PB._encoded_size(x.autotune_results, 6))
     !isempty(x.device_description_str) && (encoded_size += PB._encoded_size(x.device_description_str, 7))

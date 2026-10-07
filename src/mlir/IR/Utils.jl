@@ -49,15 +49,7 @@ function tryinject!(sym_name, code; verify=false, mod=current_module(), location
     fn = lookup(SymbolTable(Operation(mod)), sym_name)
 
     if fn === nothing
-        ctx = current_context()
-        block = body(mod)
-        return @ccall API.mlir_c.mlirOperationInject(
-            ctx::API.MlirContext,
-            block::API.MlirBlock,
-            code::API.MlirStringRef,
-            location::API.MlirLocation,
-            verify::Bool,
-        )::Bool
+        return API.mlirOperationInject(current_context(), body(mod), code, location, verify)
     else
         return false
     end

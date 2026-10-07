@@ -45,26 +45,7 @@ LogExpFunctions.logistic(x::TracedRNumber) = @opcall logistic(x)
 LogExpFunctions.log1psq(x::TracedRNumber{<:Real}) = log1p(abs2(x))
 
 # log1pexp: log(1+exp(x)) with careful evaluation
-@inline function _log1pexp_thresholds(x::TracedRNumber{T}) where {T<:Real}
-    prec = precision(x)
-    logtwo = oftype(x, IrrationalConstants.logtwo)
-    x1 = (exponent(nextfloat(zero(T))) - 1) * logtwo
-    x2 = -prec * logtwo
-    x3 = (prec - 1) * logtwo / 2
-    x4 = -x2 - log(-x2) * (1 + 1 / x2) # approximate root of e^-x == x * ϵ/2 via asymptotics of Lambert's W function
-    return (x1, x2, x3, x4)
-end
-
-function LogExpFunctions.log1pexp(x::TracedRNumber{<:Real})
-    x1, x2, x3, x4 = _log1pexp_thresholds(x)
-    return ifelse(
-        x < x1,
-        zero(x),
-        ifelse(
-            x < x2, exp(x), ifelse(x < x3, log1p(exp(x)), ifelse(x < x4, x + exp(-x), x))
-        ),
-    )
-end
+LogExpFunctions.log1pexp(x::TracedRNumber{<:Real}) = @opcall math_softplus(x)
 
 # log1mexp: log(1 - exp(x))
 function LogExpFunctions.log1mexp(x::TracedRNumber{<:Real})
@@ -115,11 +96,16 @@ end
 function LogExpFunctions.softmax!(
     r::AnyTracedRArray{<:Real}, x::AnyTracedRArray{<:Real}=r; dims=:
 )
-    return LogExpFunctions._softmax!(r, x, dims)
+    dims isa Colon && (dims = 1:ndims(x))
+    res = @opcall softmax(x; dims=vec(collect(Int64, dims)))
+    copyto!(r, res)
+    return r
 end
 
 function LogExpFunctions.softmax(x::AnyTracedRArray{<:Real}; dims=:)
-    return LogExpFunctions._softmax!(similar(x, float(eltype(x))), x, dims)
+    dims isa Colon && (dims = 1:ndims(x))
+    res = @opcall softmax(x; dims=vec(collect(Int64, dims)))
+    return res
 end
 
 for (T1, T2) in [(TracedRNumber, Number), (Number, TracedRNumber)]

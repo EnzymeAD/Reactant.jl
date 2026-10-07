@@ -37,9 +37,9 @@ function mh(
             sym_addr = reinterpret(UInt64, pointer_from_objref(sym))
             push!(
                 address_attr,
-                @ccall MLIR.API.mlir_c.enzymeSymbolAttrGet(
-                    MLIR.IR.current_context()::MLIR.API.MlirContext, sym_addr::UInt64
-                )::MLIR.IR.Attribute
+                MLIR.IR.Attribute(
+                    MLIR.API.enzymeSymbolAttrGet(MLIR.IR.current_context(), sym_addr)
+                ),
             )
         end
         push!(regenerate_attr, MLIR.IR.Attribute(address_attr))
@@ -52,7 +52,7 @@ function mh(
     trace_mlir = TracedUtils.get_mlir_data(original_trace)
     weight_mlir = TracedUtils.get_mlir_data(original_weight)
 
-    mh_op = MLIR.Dialects.enzyme.mh(
+    mh_op = MLIR.Dialects.impulse.mh(
         trace_mlir,
         weight_mlir,
         mlir_caller_args;

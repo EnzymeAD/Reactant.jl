@@ -1,18 +1,3 @@
-# To keep in sync with JLAllocatorStats in ReactantExtra/API.cpp
-struct JLAllocatorStats
-    num_allocs::Int64
-    bytes_in_use::Int64
-    peak_bytes_in_use::Int64
-    largest_alloc_size::Int64
-    bytes_limit::Int64
-    bytes_reserved::Int64
-    peak_bytes_reserved::Int64
-    bytes_reservable_limit::Int64
-    largest_free_block_bytes::Int64
-    pool_bytes::Int64
-    peak_pool_bytes::Int64
-end
-
 _format_bytes(x) = x < 0 ? nothing : Base.format_bytes(x)
 _format_bytes(x::Nothing) = x
 
@@ -98,22 +83,9 @@ end
 
 function allocatorstats_internal end
 
-# To keep in sync with JLHloCostAnalysisProperties in ReactantExtra/API.cpp
-struct HloCostAnalysisProperties
-    flops::Cfloat
-    transcendentals::Cfloat
-    bytes_accessed::Cfloat
-    optimal_seconds::Cfloat
-    utilization::Cfloat
-    operand0_utilization::Cfloat
-    operand1_utilization::Cfloat
-    operand0_bytes_accessed::Cfloat
-    operand1_bytes_accessed::Cfloat
-    output_root_bytes_accessed::Cfloat
-    reserved0::Cfloat
-end
-
-function Base.show(io::IO, ::MIME"text/plain", cost_analysis::HloCostAnalysisProperties)
+function Base.show(
+    io::IO, ::MIME"text/plain", cost_analysis::MLIR.API.JLHloCostAnalysisProperties
+)
     return print(
         io,
         """

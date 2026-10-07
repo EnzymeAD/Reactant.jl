@@ -133,7 +133,8 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#all_gather
 ```mlir
 %result:2 = \"stablehlo.all_gather\"(%operand0, %operand1) {
   all_gather_dim = 1 : i64,
-  replica_groups = dense<[[0, 1]]> : tensor<1x2xi64>,
+  replica_groups = #stablehlo.replica_group_mesh_axes<
+    mesh = #stablehlo.mesh<axes = [#stablehlo.mesh_axis<name = \"foo\", size = 2>]>, axes = [\"foo\"]>,
   channel_handle = #stablehlo.channel_handle<handle = 0, type = 0>
 } : (tensor<2x2xi64>, tensor<2x2xi64>) -> (tensor<2x4xi64>, tensor<2x4xi64>)
 ```
@@ -189,7 +190,9 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#all_reduce
   %0 = \"stablehlo.add\"(%arg0, %arg1) : (tensor<i64>, tensor<i64>) -> tensor<i64>
   \"stablehlo.return\"(%0) : (tensor<i64>) -> ()
 }) {
-  replica_groups = dense<[[0, 1]]> : tensor<1x2xi64>,
+  replica_groups = #stablehlo.replica_group_mesh_axes<
+    mesh = #stablehlo.mesh<axes = [#stablehlo.mesh_axis<name = \"foo\", size = 2>]>, axes = [\"foo\"]
+  >,
   channel_handle = #stablehlo.channel_handle<handle = 0, type = 0>
 } : (tensor<4xi64>, tensor<4xi64>) -> (tensor<4xi64>, tensor<4xi64>)
 ```
@@ -242,7 +245,9 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#all_to_all
   split_dimension = 1 : i64,
   concat_dimension = 0 : i64,
   split_count = 2 : i64,
-  replica_groups = dense<[[0, 1]]> : tensor<1x2xi64>
+  replica_groups = #stablehlo.replica_group_mesh_axes<
+    mesh = #stablehlo.mesh<axes = [#stablehlo.mesh_axis<name = \"foo\", size = 2>]>, axes = [\"foo\"]
+  >
 } : (tensor<2x4xi64>, tensor<2x4xi64>) -> (tensor<4x2xi64>, tensor<4x2xi64>)
 ```
 """
@@ -315,6 +320,88 @@ function and(
         attributes,
         results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
         result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
+`async_done`
+
+Waits for the completion of an asynchronous execution of an operation.
+
+See:
+https://github.com/openxla/stablehlo/blob/main/docs/spec.md#async_done
+
+# Example
+```mlir
+%0 = \"stablehlo.async_start\"(%arg0) ({
+  %1 = \"stablehlo.all_gather\"(%arg0) {
+    all_gather_dim = 1 : i64,
+    replica_groups = dense<[[0, 2, 4, 6], [1, 3, 5, 7]]> : tensor<2x4xi64>
+  } : (tensor<8x2xf32>) -> tensor<8x8xf32>
+  \"stablehlo.return\"(%1) : (tensor<8x8xf32>) -> ()
+}) : (tensor<8x2xf32>) -> !stablehlo.future<tensor<8x8xf32>>
+%2 = \"stablehlo.async_done\"(%0) : (!stablehlo.future<tensor<8x8xf32>>) -> tensor<8x8xf32>
+```
+"""
+function async_done(
+    operand::Value; result_0=nothing::Union{Nothing,IR.Type}, location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[operand,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(result_0) && push!(op_ty_results, result_0)
+
+    return create_operation(
+        "stablehlo.async_done",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
+`async_start`
+
+Starts an asynchronous execution of an operation.
+
+See:
+https://github.com/openxla/stablehlo/blob/main/docs/spec.md#async_start
+
+# Example
+```mlir
+%0 = \"stablehlo.async_start\"(%arg0) ({
+  %1 = \"stablehlo.all_gather\"(%arg0) {
+    all_gather_dim = 1 : i64,
+    replica_groups = dense<[[0, 2, 4, 6], [1, 3, 5, 7]]> : tensor<2x4xi64>
+  } : (tensor<8x2xf32>) -> tensor<8x8xf32>
+  \"stablehlo.return\"(%1) : (tensor<8x8xf32>) -> ()
+}) : (tensor<8x2xf32>) -> !stablehlo.future<tensor<8x8xf32>>
+```
+"""
+function async_start(
+    operands::Vector{Value}; result_0::IR.Type, body::Region, location=Location()
+)
+    op_ty_results = IR.Type[result_0,]
+    operands = Value[operands...,]
+    owned_regions = Region[body,]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "stablehlo.async_start",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
     )
 end
 
@@ -860,7 +947,9 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#collective_broadcast
 # Example
 ```mlir
 %result = \"stablehlo.collective_broadcast\"(%operand) {
-  replica_groups = dense<[[0, 1]]> : tensor<1x2xi64>,
+  replica_groups = #stablehlo.replica_group_mesh_axes<
+    mesh = #stablehlo.mesh<axes = [#stablehlo.mesh_axis<name = \"foo\", size = 2>]>, axes = [\"foo\"]
+  >,
   channel_handle = #stablehlo.channel_handle<handle = 0, type = 0>
 } : (tensor<1x2xi64>) -> tensor<1x2xi64>
 ```
@@ -936,6 +1025,64 @@ function collective_permute(
         attributes,
         results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
         result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
+`collective_reduce`
+
+Within each process group in the process grid, applies a reduction function
+`computation` to the values of the `operands` from each process and produces
+a `result` tensor on the root rank of the group. The root rank is determined
+by `has_dynamic_root`: if false, the root is the 0-th rank in the replica
+group; if true, the last operand is an i32 tensor specifying per-operand
+root indices.
+
+See:
+https://github.com/openxla/stablehlo/blob/main/docs/spec.md#collective_reduce
+
+# Example
+```mlir
+%result = \"stablehlo.collective_reduce\"(%operand) ({
+  ^bb0(%arg0: tensor<i64>, %arg1: tensor<i64>):
+    %0 = \"stablehlo.add\"(%arg0, %arg1) : (tensor<i64>, tensor<i64>) -> tensor<i64>
+    \"stablehlo.return\"(%0) : (tensor<i64>) -> ()
+}) {
+  replica_groups = dense<[[0, 1]]> : tensor<1x2xi64>
+} : (tensor<4xi64>) -> tensor<4xi64>
+```
+"""
+function collective_reduce(
+    operands::Vector{Value};
+    result_0::Vector{IR.Type},
+    replica_groups,
+    channel_handle=nothing,
+    use_global_device_ids=nothing,
+    has_dynamic_root=nothing,
+    computation::Region,
+    location=Location(),
+)
+    op_ty_results = IR.Type[result_0...,]
+    operands = Value[operands...,]
+    owned_regions = Region[computation,]
+    successors = Block[]
+    attributes = NamedAttribute[NamedAttribute("replica_groups", replica_groups),]
+    !isnothing(channel_handle) &&
+        push!(attributes, NamedAttribute("channel_handle", channel_handle))
+    !isnothing(use_global_device_ids) &&
+        push!(attributes, NamedAttribute("use_global_device_ids", use_global_device_ids))
+    !isnothing(has_dynamic_root) &&
+        push!(attributes, NamedAttribute("has_dynamic_root", has_dynamic_root))
+
+    return create_operation(
+        "stablehlo.collective_reduce",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
     )
 end
 
@@ -1031,6 +1178,10 @@ op semantics, prefer using `custom_call`.
 The `version` field (defaults to `0`) is used to denote when a composite\'s
 semantics change.
 
+The intent of `composite_regions` is to only be used to model ops with
+bodies, regions are thrown away if the fallback decomposition function gets
+inlined.
+
 See:
 https://github.com/openxla/stablehlo/blob/main/docs/spec.md#composite
 
@@ -1052,11 +1203,12 @@ function composite(
     composite_attributes=nothing,
     decomposition,
     version=nothing,
+    composite_regions::Vector{Region},
     location=Location(),
 )
     op_ty_results = IR.Type[result_0...,]
     operands = Value[inputs...,]
-    owned_regions = Region[]
+    owned_regions = Region[composite_regions...,]
     successors = Block[]
     attributes = NamedAttribute[
         NamedAttribute("name", name), NamedAttribute("decomposition", decomposition)
@@ -1410,6 +1562,7 @@ function custom_call(
     operand_layouts=nothing,
     result_layouts=nothing,
     output_operand_aliases=nothing,
+    result_tilings=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[result_0...,]
@@ -1430,6 +1583,8 @@ function custom_call(
         push!(attributes, NamedAttribute("result_layouts", result_layouts))
     !isnothing(output_operand_aliases) &&
         push!(attributes, NamedAttribute("output_operand_aliases", output_operand_aliases))
+    !isnothing(result_tilings) &&
+        push!(attributes, NamedAttribute("result_tilings", result_tilings))
 
     return create_operation(
         "stablehlo.custom_call",
@@ -3308,7 +3463,9 @@ scatters the split parts between the processes to produce the `result`.
  stablehlo.return %0 : tensor<i64>
     }) {
  scatter_dimension = 1 : i64,
- replica_groups = dense<[[0, 1]]> : tensor<1x2xi64>,
+ replica_groups = #stablehlo.replica_group_mesh_axes<
+   mesh = #stablehlo.mesh<axes = [#stablehlo.mesh_axis<name = \"foo\", size = 2>]>, axes = [\"foo\"]
+ >,
  channel_handle = #stablehlo.channel_handle<handle = 0, type = 0>
     } : (tensor<2x4xi64>) -> tensor<2x2xi64>
     ```

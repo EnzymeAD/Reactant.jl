@@ -182,25 +182,6 @@ function addptr(ptr::Value, offset::Value; result::IR.Type, location=Location())
     )
 end
 
-function advance(ptr::Value, offsets::Vector{Value}; result::IR.Type, location=Location())
-    op_ty_results = IR.Type[result,]
-    operands = Value[ptr, offsets...]
-    owned_regions = Region[]
-    successors = Block[]
-    attributes = NamedAttribute[]
-
-    return create_operation(
-        "tt.advance",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
-        results=op_ty_results,
-        result_inference=false,
-    )
-end
-
 """
 `assert`
 
@@ -255,6 +236,43 @@ function atomic_cas(
         attributes,
         results=op_ty_results,
         result_inference=false,
+    )
+end
+
+"""
+`atomic_poll`
+
+Repeatedly load from \$ptr with relaxed semantics on a single thread
+until the loaded value equals \$expected. For acquire semantics, issue
+an acquire fence only after a successful poll. Other threads wait for
+the polling thread to finish.
+"""
+function atomic_poll(
+    ptr::Value,
+    expected::Value,
+    timeout=nothing::Union{Nothing,Value};
+    result=nothing::Union{Nothing,IR.Type},
+    sem,
+    scope,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[ptr, expected]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[NamedAttribute("sem", sem), NamedAttribute("scope", scope)]
+    !isnothing(timeout) && push!(operands, timeout)
+    !isnothing(result) && push!(op_ty_results, result)
+
+    return create_operation(
+        "tt.atomic_poll",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -855,6 +873,44 @@ function get_program_id(; result=nothing::Union{Nothing,IR.Type}, axis, location
     )
 end
 
+function grid_dependency_launch_dependents(; location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "tt.grid_dependency_launch_dependents",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+function grid_dependency_wait(; location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "tt.grid_dependency_wait",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 """
 `histogram`
 
@@ -936,8 +992,6 @@ function load(
     mask=nothing::Union{Nothing,Value};
     other=nothing::Union{Nothing,Value},
     result=nothing::Union{Nothing,IR.Type},
-    boundaryCheck=nothing,
-    padding=nothing,
     cache=nothing,
     evict=nothing,
     isVolatile=nothing,
@@ -954,9 +1008,6 @@ function load(
         attributes, operandsegmentsizes([1, Int(!isnothing(mask)), Int(!isnothing(other))])
     )
     !isnothing(result) && push!(op_ty_results, result)
-    !isnothing(boundaryCheck) &&
-        push!(attributes, NamedAttribute("boundaryCheck", boundaryCheck))
-    !isnothing(padding) && push!(attributes, NamedAttribute("padding", padding))
     !isnothing(cache) && push!(attributes, NamedAttribute("cache", cache))
     !isnothing(evict) && push!(attributes, NamedAttribute("evict", evict))
     !isnothing(isVolatile) && push!(attributes, NamedAttribute("isVolatile", isVolatile))
@@ -1022,39 +1073,6 @@ function make_tensor_descriptor(
 
     return create_operation(
         "tt.make_tensor_descriptor",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
-        results=op_ty_results,
-        result_inference=false,
-    )
-end
-
-"""
-`make_tensor_ptr`
-
-`tt.make_tensor_ptr` takes both meta information of the parent tensor and the block tensor, then it returns a
-pointer to the block tensor, e.g. returns a type of `tt.ptr<tensor<8x8xf16>>`.
-"""
-function make_tensor_ptr(
-    base::Value,
-    shape::Vector{Value},
-    strides::Vector{Value},
-    offsets::Vector{Value};
-    result::IR.Type,
-    order,
-    location=Location(),
-)
-    op_ty_results = IR.Type[result,]
-    operands = Value[base, shape..., strides..., offsets...]
-    owned_regions = Region[]
-    successors = Block[]
-    attributes = NamedAttribute[NamedAttribute("order", order),]
-
-    return create_operation(
-        "tt.make_tensor_ptr",
         location;
         operands,
         owned_regions,
@@ -1425,9 +1443,9 @@ function store(
     ptr::Value,
     value::Value,
     mask=nothing::Union{Nothing,Value};
-    boundaryCheck=nothing,
     cache=nothing,
     evict=nothing,
+    ignore_cta=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -1436,10 +1454,9 @@ function store(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(mask) && push!(operands, mask)
-    !isnothing(boundaryCheck) &&
-        push!(attributes, NamedAttribute("boundaryCheck", boundaryCheck))
     !isnothing(cache) && push!(attributes, NamedAttribute("cache", cache))
     !isnothing(evict) && push!(attributes, NamedAttribute("evict", evict))
+    !isnothing(ignore_cta) && push!(attributes, NamedAttribute("ignore_cta", ignore_cta))
 
     return create_operation(
         "tt.store",

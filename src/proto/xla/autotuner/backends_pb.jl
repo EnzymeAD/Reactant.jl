@@ -1,0 +1,9 @@
+import ProtoBuf as PB
+using ProtoBuf: OneOf
+using ProtoBuf.EnumX: @enumx
+
+export Backend
+
+
+@enumx Backend UNSPECIFIED_BACKEND=0 CUDNN=1 TRITON=2 CUBLASLT=4 HIPBLASLT=6 MIOPEN=7 CUSTOM_KERNEL=8 BLOCK_LEVEL_EMITTER=9 NATIVE_EMITTER=10 LLVM_KERNEL_EMITTER=11 CUBLASLT_FISSION=13 CUSTOM_KERNEL_FISSION=14 HIPBLASLT_FISSION=16
+PB.reserved_fields(::Type{Backend.T}) = (names = ["CUBLAS", "CUBLAS_FISSION", "ROCBLAS", "ROCBLAS_FISSION"], numbers = Union{Int,UnitRange{Int}}[3, 5, 12, 15])

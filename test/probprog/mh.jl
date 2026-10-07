@@ -1,4 +1,4 @@
-using Reactant, Test, Random
+using Reactant, Test, Random, FileCheck
 using Reactant: ProbProg, ReactantRNG
 
 # Reference: https://www.gen.dev/docs/stable/getting_started/linear_regression/
@@ -82,19 +82,17 @@ end
         obs = ProbProg.Constraint(:ys => ys)
         num_iters = ConcreteRNumber(10000)
         constrained_addresses = ProbProg.extract_addresses(obs)
-
-        obs_flat = Float64[]
-        for addr in constrained_addresses
-            append!(obs_flat, vec(obs[addr]))
-        end
-        obs_tensor = Reactant.to_rarray(reshape(obs_flat, 1, :))
+        obs_tensor = ProbProg.flatten_constraint(obs)
 
         code, _ = ProbProg.with_trace() do
             @code_hlo optimize = :probprog mh_program(
                 rng, model, xs, num_iters, obs_tensor, constrained_addresses
             )
         end
-        @test !contains(repr(code), "enzyme.mh")
+        @test @filecheck begin
+            @check_not "impulse.mh"
+            repr(code)
+        end
 
         num_iters = ConcreteRNumber(1000)
         compiled_fn, tt = ProbProg.with_trace() do

@@ -1,4 +1,4 @@
-using Reactant, Test, Enzyme, InteractiveUtils
+using Reactant, Test, Enzyme, InteractiveUtils, FileCheck
 
 const RunningOnTPU = contains(string(Reactant.devices()[1]), "TPU")
 
@@ -13,75 +13,84 @@ intout_caller(vis) = @noinline intout(vis)
     @test_throws MethodError @compile intout_caller(visr)
 end
 
-@testset "compile" begin
-    @testset "create_result" begin
-        @testset "NamedTuple" begin
-            x = (; a=Reactant.TestUtils.construct_test_array(Float64, 4, 3))
-            x2 = Reactant.to_rarray(x)
+@testset "create_result" begin
+    @testset "NamedTuple" begin
+        x = (; a=Reactant.TestUtils.construct_test_array(Float64, 4, 3))
+        x2 = Reactant.to_rarray(x)
 
-            res = @jit sum(x2)
-            @test res isa NamedTuple
-            @test res.a isa ConcreteRNumber{Float64}
-            @test isapprox(res.a, sum(x.a))
+        res = @jit sum(x2)
+        @test res isa NamedTuple
+        @test res.a isa ConcreteRNumber{Float64}
+        @test isapprox(res.a, sum(x.a))
+    end
+
+    @testset "Array" begin
+        x = [1 2; 3 4; 5 6]
+        f = Reactant.compile(() -> x, ())
+        @test f() ≈ x
+    end
+
+    @testset "Enum" begin
+        @enum MyEnum begin
+            MyEnumA = 1
+            MyEnumB = 2
         end
 
-        @testset "Array" begin
-            x = [1 2; 3 4; 5 6]
-            f = Reactant.compile(() -> x, ())
-            @test f() ≈ x
-        end
+        x = MyEnumA
+        f = @compile identity(x)
+        @test f(x) == x
     end
-
-    @testset "world-age" begin
-        a = ones(2, 10)
-        b = ones(10, 2)
-        a_ra = Reactant.to_rarray(a)
-        b_ra = Reactant.to_rarray(b)
-
-        fworld(x, y) = @jit(x * y)
-
-        @test fworld(a_ra, b_ra) ≈ ones(2, 2) * 10
-    end
-
-    @testset "type casting & optimized out returns" begin
-        a = ones(2, 10)
-        a_ra = Reactant.to_rarray(a)
-
-        ftype1(x) = Float64.(x)
-        ftype2(x) = Float32.(x)
-
-        y1 = @jit ftype1(a_ra)
-        y2 = @jit ftype2(a_ra)
-
-        @test y1 isa Reactant.ConcreteRArray{Float64,2}
-        @test y2 isa Reactant.ConcreteRArray{Float32,2}
-
-        @test y1 ≈ Float64.(a)
-        @test y2 ≈ Float32.(a)
-    end
-
-    @testset "no variable name collisions in compile macros (#237)" begin
-        f(x) = x
-        g(x) = f(x)
-        x = Reactant.TestUtils.construct_test_array(Float64, 2, 2)
-        y = Reactant.to_rarray(x)
-        @test (@jit g(y); true)
-    end
-
-    # disabled due to long test time (core tests go from 2m to 7m just with this test)
-    # @testset "resource exhaustation bug (#190)" begin
-    #     x = rand(2, 2)
-    #     y = Reactant.to_rarray(x)
-    #     @test try
-    #         for _ in 1:10_000
-    #             f = @compile sum(y)
-    #         end
-    #         true
-    #     catch e
-    #         false
-    #     end
-    # end
 end
+
+@testset "world-age" begin
+    a = ones(2, 10)
+    b = ones(10, 2)
+    a_ra = Reactant.to_rarray(a)
+    b_ra = Reactant.to_rarray(b)
+
+    fworld(x, y) = @jit(x * y)
+
+    @test fworld(a_ra, b_ra) ≈ ones(2, 2) * 10
+end
+
+@testset "type casting & optimized out returns" begin
+    a = ones(2, 10)
+    a_ra = Reactant.to_rarray(a)
+
+    ftype1(x) = Float64.(x)
+    ftype2(x) = Float32.(x)
+
+    y1 = @jit ftype1(a_ra)
+    y2 = @jit ftype2(a_ra)
+
+    @test y1 isa Reactant.ConcreteRArray{Float64,2}
+    @test y2 isa Reactant.ConcreteRArray{Float32,2}
+
+    @test y1 ≈ Float64.(a)
+    @test y2 ≈ Float32.(a)
+end
+
+@testset "no variable name collisions in compile macros (#237)" begin
+    f(x) = x
+    g(x) = f(x)
+    x = Reactant.TestUtils.construct_test_array(Float64, 2, 2)
+    y = Reactant.to_rarray(x)
+    @test (@jit g(y); true)
+end
+
+# disabled due to long test time (core tests go from 2m to 7m just with this test)
+# @testset "resource exhaustation bug (#190)" begin
+#     x = rand(2, 2)
+#     y = Reactant.to_rarray(x)
+#     @test try
+#         for _ in 1:10_000
+#             f = @compile sum(y)
+#         end
+#         true
+#     catch e
+#         false
+#     end
+# end
 
 @testset "Module export" begin
     f(x) = sin.(cos.(x))
@@ -114,11 +123,17 @@ end
     fn(x) = x .- x
 
     hlo = @code_hlo fn(x_ra)
-    @test occursin("subtract", repr(hlo))
-    @test !occursin("constant", repr(hlo))
+    @test @filecheck begin
+        @check_not "constant"
+        @check "subtract"
+        repr(hlo)
+    end
     hlo = @code_hlo no_nan = true fn(x_ra)
-    @test !occursin("subtract", repr(hlo))
-    @test occursin("constant", repr(hlo))
+    @test @filecheck begin
+        @check_not "subtract"
+        @check "constant"
+        repr(hlo)
+    end
 
     fn(x, y) = begin
         c = x .+ y
@@ -126,11 +141,17 @@ end
     end
 
     hlo = @code_hlo fn(x_ra, y_ra)
-    @test occursin("subtract", repr(hlo))
-    @test occursin("add", repr(hlo))
+    @test @filecheck begin
+        @check_dag "subtract"
+        @check_dag "add"
+        repr(hlo)
+    end
     hlo = @code_hlo no_nan = true fn(x_ra, y_ra)
-    @test !occursin("subtract", repr(hlo))
-    @test !occursin("add", repr(hlo))
+    @test @filecheck begin
+        @check_not "subtract"
+        @check_not "add"
+        repr(hlo)
+    end
 end
 
 # While a bit specific, the following is used to check for a bug in `should_rewrite_call`
@@ -183,7 +204,7 @@ end
 
     function Reactant.Compiler.create_result(
         tocopy::MockTestCustomPath,
-        path,
+        path::Tuple,
         result_stores,
         path_to_shard_info,
         to_unreshard_results,
@@ -251,7 +272,10 @@ end
 @testset "chlo legalize" begin
     x_ra = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float32, 128))
     hlo = @code_hlo legalize_chlo_to_stablehlo = true fn_test(x_ra)
-    @test occursin("mhlo.topk", repr(hlo))
+    @test @filecheck begin
+        @check "mhlo.topk"
+        repr(hlo)
+    end
 end
 
 function fn_test_for_synchronize(x)
@@ -334,25 +358,32 @@ end
     W = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float32, 10, 20))
     x = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float32, 20, 5))
     res = @code_hlo W * x
-    res_repr = sprint(show, res)
 
-    @test contains(res_repr, "stablehlo.dot_general")
+    @test @filecheck begin
+        @check "stablehlo.dot_general"
+        sprint(show, res)
+    end
 end
 
 @testset "@code_hlo broadcasting" begin
     x = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float32, 2, 2))
     y = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float32, 2, 2))
     res = @code_hlo (.+)(x, y)
-    res_repr = sprint(show, res)
 
-    @test contains(res_repr, "stablehlo.add")
+    @test @filecheck begin
+        @check "stablehlo.add"
+        sprint(show, res)
+    end
 end
 
 @testset "@code_xla" begin
     x_ra = Reactant.to_rarray(ones(Float32, 4))
     hlo = repr(@code_xla(sin.(x_ra)))
-    @test contains(hlo, "HloModule")
-    @test contains(hlo, "sine")
+    @test @filecheck begin
+        @check_dag "HloModule"
+        @check_dag "sine"
+        hlo
+    end
 end
 
 @testset "Raise keyword" begin
@@ -377,23 +408,35 @@ end
     fn(x) = Reactant.broadcast_to_size(x, (length(x),))
 
     hlo = repr(@code_hlo(fn(1:10000)))
-    @test contains(hlo, "stablehlo.iota")
-    @test contains(hlo, "stablehlo.add")
+    @test @filecheck begin
+        @check_dag "stablehlo.iota"
+        @check_dag "stablehlo.add"
+        hlo
+    end
     @test Array(@jit(fn(1:10000))) ≈ collect(1:10000)
 
     hlo = repr(@code_hlo(fn(32:10000)))
-    @test contains(hlo, "stablehlo.iota")
-    @test contains(hlo, "stablehlo.add")
+    @test @filecheck begin
+        @check_dag "stablehlo.iota"
+        @check_dag "stablehlo.add"
+        hlo
+    end
     @test Array(@jit(fn(32:10000))) ≈ collect(32:10000)
 
     hlo = repr(@code_hlo(fn(0:10000)))
-    @test contains(hlo, "stablehlo.iota")
-    @test !contains(hlo, "stablehlo.add")
+    @test @filecheck begin
+        @check_not "stablehlo.add"
+        @check "stablehlo.iota"
+        hlo
+    end
     @test Array(@jit(fn(0:10000))) ≈ collect(0:10000)
 
     hlo = repr(@code_hlo(fn(Base.OneTo(10000))))
-    @test contains(hlo, "stablehlo.iota")
-    @test contains(hlo, "stablehlo.add")
+    @test @filecheck begin
+        @check_dag "stablehlo.iota"
+        @check_dag "stablehlo.add"
+        hlo
+    end
     @test Array(@jit(fn(Base.OneTo(10000)))) ≈ collect(Base.OneTo(10000))
 end
 
@@ -435,7 +478,8 @@ end
     x_ra = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float64, 4, 4))
     mul_comp = @compile x_ra * x_ra
     @test begin
-        Reactant.XLA.cost_analysis(mul_comp) isa Reactant.XLA.HloCostAnalysisProperties
+        Reactant.XLA.cost_analysis(mul_comp) isa
+        Reactant.MLIR.API.JLHloCostAnalysisProperties
     end broken = RunningOnTPU
 end
 
@@ -491,7 +535,10 @@ linrange_mat(x1, x2) = Reactant.materialize_traced_array(LinRange(x1, x2, 10024)
 
     @test @jit(linrange_mat(x1_ra, x2_ra)) ≈ collect(LinRange(x1, x2, 10024))
     hlo = repr(@code_hlo(linrange_mat(x1_ra, x2_ra)))
-    @test contains(hlo, "stablehlo.iota")
+    @test @filecheck begin
+        @check "stablehlo.iota"
+        hlo
+    end
 end
 
 @testset "chlo legalize to stablehlo" begin
@@ -501,8 +548,14 @@ end
     hlo1 = repr(@code_hlo Reactant.Ops.conj(x_ra))
     hlo2 = repr(@code_hlo legalize_chlo_to_stablehlo = true Reactant.Ops.conj(x_ra))
 
-    @test contains(hlo1, "chlo.conj")
-    @test !contains(hlo2, "chlo")
+    @test @filecheck begin
+        @check "chlo.conj"
+        hlo1
+    end
+    @test @filecheck begin
+        @check_not "chlo"
+        hlo2
+    end
 end
 
 @testset "Module printing" begin
@@ -529,7 +582,10 @@ end
         Reactant.MLIR.IR.DUMP_MLIR_DIR[] = dir
         @compile sin.(Reactant.to_rarray(Float32[1.0]))
         for mod in readdir(dir; join=true)
-            @test contains(read(mod, String), "hlo.sine")
+            @test @filecheck begin
+                @check "hlo.sine"
+                read(mod, String)
+            end
         end
     end
 
@@ -592,4 +648,23 @@ end
     @test haskey(y, :x)
     @test Array(y[:Mhalo]) ≈ [1.0f0, 2.0f0]
     @test Array(y[:x]) ≈ [2.0f0, 3.0f0]
+end
+
+@testset "debug = true" begin
+    x = Reactant.to_rarray([1, 2, 3])
+    ir = sprint(show, @code_hlo debug = true sum(x))
+    if !RunningOnTPU
+        @test @filecheck begin
+            @check_dag "loc(\"arg1 (path=(:args, 1))\")"
+            ir
+        end
+    end
+end
+
+@testset "code_hlo throws when passed a thunk" begin
+    x = Reactant.to_rarray([1, 2, 3])
+    rsum = @compile sync = true sum(x)
+    @test_throws "`@code_hlo` expects the original function, not a compiled `Thunk`." (@code_hlo rsum(
+        x
+    ))
 end

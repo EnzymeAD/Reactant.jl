@@ -1,4 +1,4 @@
-using Enzyme, Reactant, Test, Random, Statistics
+using Enzyme, Reactant, Test, Random, Statistics, FileCheck
 
 square(x) = x * 2
 
@@ -117,6 +117,43 @@ end
     @test res[1] ≈ ones(2, 2)
 end
 
+f_sincos(x) = map(sin, x) + map(cos, reverse(x))
+function f_sincos_jac(x)
+    return [
+        cos(x[i]) * (i == j ? 1 : 0) -
+        sin(x[end - i + 1]) * (i == (length(x) - j + 1) ? 1 : 0) for i in 1:length(x),
+        j in 1:length(x)
+    ]
+end
+
+@testset "Forward Jacobian" begin
+    jac(x) = only(Enzyme.jacobian(Enzyme.Forward, f_sincos, x))
+    x_r = Reactant.to_rarray(rand(10))
+
+    j_gt = Reactant.@allowscalar f_sincos_jac(x_r)
+    j_reactant = Reactant.@jit jac(x_r)
+
+    @test j_reactant ≈ j_gt
+end
+
+# output shape and rank both differ from the input's, so that a transposed or
+# mis-stacked jacobian cannot accidentally still line up
+f_rect(x) = map(sin, x) * [1.0, 2.0, 3.0]
+function f_rect_jac(x)
+    return [(i == a) * cos(x[a, b]) * [1.0, 2.0, 3.0][b] for i in 1:2, a in 1:2, b in 1:3]
+end
+
+@testset "Forward Jacobian (outshape != inshape)" begin
+    jac(x) = only(Enzyme.jacobian(Enzyme.Forward, f_rect, x))
+    x_r = Reactant.to_rarray(rand(2, 3))
+
+    j_gt = Reactant.@allowscalar f_rect_jac(x_r)
+    j_reactant = Reactant.@jit jac(x_r)
+
+    @test size(j_reactant) == (2, 2, 3)
+    @test j_reactant ≈ j_gt
+end
+
 mutable struct StateReturn
     st::Any
 end
@@ -189,8 +226,21 @@ end
 
 @testset "onehot" begin
     x = Reactant.to_rarray(ones(3, 4))
-    hlo = @code_hlo optimize = false Enzyme.onehot(x)
-    @test !contains("stablehlo.constant", repr(hlo))
+    hlo = @code_hlo compile_options = CompileOptions(; max_constant_threshold=0) Enzyme.onehot(
+        x
+    )
+    @test @filecheck begin
+        @check "%cst = stablehlo.constant dense<1.000000e+00> : tensor<f64>"
+        @check "%cst_0 = stablehlo.constant dense<0.000000e+00> : tensor<12x12xf64>"
+        @check "%cst_1 = stablehlo.constant dense<1.000000e+00> : tensor<12xf64>"
+        @check "%0 = stablehlo.iota dim = 0 : tensor<12x2xi64>"
+        @check "%1 = \"stablehlo.scatter\"(%cst_0, %0, %cst_1) <{indices_are_sorted = false, scatter_dimension_numbers = #stablehlo.scatter<inserted_window_dims = [0, 1], scatter_dims_to_operand_dims = [0, 1], index_vector_dim = 1>, unique_indices = true}> ({"
+        @check "^bb0(%arg1: tensor<f64>, %arg2: tensor<f64>):"
+        @check "stablehlo.return %cst : tensor<f64>"
+        @check "}) : (tensor<12x12xf64>, tensor<12x2xi64>, tensor<12xf64>) -> tensor<12x12xf64>"
+        @check_not "stablehlo.constant"
+        hlo
+    end
 end
 
 fn(x) = sum(abs2, x)
@@ -298,7 +348,10 @@ end
 
     @test begin
         hlo = @code_hlo gradient_fn(x, st)
-        contains(repr(hlo), "stablehlo.rng_bit_generator")
+        @filecheck begin
+            @check "stablehlo.rng_bit_generator"
+            repr(hlo)
+        end
     end
 end
 
@@ -576,4 +629,155 @@ end
         )
         @test activity <: Duplicated
     end
+end
+
+function f_ret_buf!(dx, x)
+    copyto!(dx, x)
+    return dx
+end
+
+function seeded_reverse(dx, x, λ)
+    du = zero(x)
+    Enzyme.autodiff(
+        Reverse, Const(f_ret_buf!), Const, Duplicated(dx, copy(λ)), Duplicated(x, du)
+    )
+    return du
+end
+
+@testset "Seeded reverse-mode AD" begin
+    dx = zeros(Float32, 2)
+    x = Float32[3.0, 7.0]
+    λ = ones(Float32, 2)
+    r_dx = Reactant.ConcreteRArray(dx)
+    r_x = Reactant.ConcreteRArray(x)
+    r_λ = Reactant.ConcreteRArray(λ)
+
+    res = seeded_reverse(dx, x, λ)
+    r_res = @jit seeded_reverse(r_dx, r_x, r_λ)
+
+    @test res ≈ convert(Array, r_res)
+end
+
+mutable struct TwoArgStruct{A,B}
+    clock::A
+    velocities::B
+end
+
+function two_arg_fn(model)
+    model.clock = 0
+    return nothing
+end
+
+function differentiate_two_arg_fn(model)
+    dmodel = Enzyme.make_zero(model)
+    dedν = autodiff(
+        set_strong_zero(Enzyme.ReverseWithPrimal),
+        two_arg_fn,
+        Active,
+        Duplicated(model, dmodel),
+    )
+    return dedν
+end
+
+@testset "Two Arg Struct" begin
+    model = TwoArgStruct(ConcreteRNumber(0), Reactant.to_rarray(ones(Float32, 3)))
+    @jit differentiate_two_arg_fn(model)
+end
+
+forward_to!(y, x, f) = (copyto!(y, f(x)); nothing)
+
+function jvp_constarg(fwd, x0, v, yproto)
+    y = zero(yproto)
+    dy = zero(yproto)
+    Enzyme.autodiff(
+        Enzyme.Forward,
+        forward_to!,
+        Enzyme.Const,
+        Enzyme.Duplicated(y, dy),
+        Enzyme.Duplicated(x0, v),
+        Enzyme.Const(fwd),
+    )
+    return dy
+end
+
+fwd_nocap(x) = complex.(x .* 2.0, x .* 3.0)
+
+@testset "Forward Mode with complex output and mutated Duplicated args" begin
+    N = 64
+    x0 = Reactant.to_rarray(randn(N))
+    v = Reactant.to_rarray(ones(N))
+    yc = @jit fwd_nocap(x0)
+    dy = @jit jvp_constarg(fwd_nocap, x0, v, yc)
+    @test dy isa ConcreteRArray{ComplexF64,1}
+    @test dy ≈ complex.(v .* 2.0, v .* 3.0)
+end
+
+# https://github.com/EnzymeAD/Reactant.jl/issues/3217
+batch_extract_rhs(u) = vcat(u .* u, sin.(u) .* sum(u))
+
+function batch_extract_fwd(u, seeds)
+    return Enzyme.autodiff(
+        Forward, Const(batch_extract_rhs), BatchDuplicated, BatchDuplicated(u, seeds)
+    )
+end
+
+function batch_extract_fwd_serial(u, seed)
+    return only(
+        Enzyme.autodiff(Forward, Const(batch_extract_rhs), Duplicated, Duplicated(u, seed))
+    )
+end
+
+@testset "Batched forward mode lowers enzyme.extract (#3217)" begin
+    N, NS = 12, 4
+    u = Reactant.to_rarray(collect(1.0:N))
+    seeds = ntuple(s -> Reactant.to_rarray(Float64[i == s ? 1 : 0 for i in 1:N]), NS)
+
+    batched = @jit batch_extract_fwd(u, seeds)
+
+    for s in 1:NS
+        serial = @jit batch_extract_fwd_serial(u, seeds[s])
+        @test Array(batched[1][s]) ≈ Array(serial)
+    end
+end
+
+function batch_fwd(umat, seedmat)
+    NS = size(umat, 1)
+    @assert size(seedmat, 1) == NS
+    return only(
+        Reactant.Ops.batch([umat, seedmat], [NS]) do uu, vv
+            only(
+                Enzyme.autodiff(
+                    Forward, Const(batch_extract_rhs), Duplicated, Duplicated(uu, vv)
+                ),
+            )
+        end,
+    )
+end
+
+@testset "Forward mode inside Ops.batch" begin
+    N = 10
+    u = reshape(collect(1.0:(N^2)), N, N)
+    seeds = Float64[i == j ? 1 : 0 for i in 1:N, j in 1:N]
+    u_ra = Reactant.to_rarray(u)
+    seeds_ra = Reactant.to_rarray(seeds)
+
+    res = @jit batch_fwd(u_ra, seeds_ra)
+
+    expected = stack(
+        only(
+            Enzyme.autodiff(
+                Forward,
+                Const(batch_extract_rhs),
+                Duplicated,
+                Duplicated(u[i, :], seeds[i, :]),
+            ),
+        ) for i in 1:N;
+        dims=1,
+    )
+
+    @test size(res) == (N, 2N)
+    @test Array(res) ≈ expected
+
+    @test Array(u_ra) ≈ u
+    @test Array(seeds_ra) ≈ seeds
 end

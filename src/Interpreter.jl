@@ -18,7 +18,8 @@ import Core.Compiler:
 
 Base.Experimental.@MethodTable(REACTANT_METHOD_TABLE)
 
-function var"@reactant_overlay"(__source__::LineNumberNode, __module__::Module, def)
+macro reactant_overlay(def)
+    def = Expr(:macrocall, Symbol("@noinline"), __source__, def)
     return Base.Experimental.var"@overlay"(
         __source__, __module__, :(Reactant.REACTANT_METHOD_TABLE), def
     )

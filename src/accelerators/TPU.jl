@@ -3,56 +3,139 @@ module TPU
 using Reactant: Reactant
 using EnumX: @enumx
 using Scratch: @get_scratch!
-using HTTP: HTTP
 using Downloads: Downloads
 using p7zip_jll: p7zip
+using FileWatching: mkpidlock
+
+using ..Registration: register_backend
 
 const libtpu_dir = Ref{Union{Nothing,String}}(nothing)
-const RUNNING_IN_CLOUD_TPU_VM = Ref(false)
+const RUNNING_IN_CLOUD_TPU_VM = Ref{Union{Nothing,Bool}}(nothing)
 
-const LIBTPU_VERSION = "0.0.35.dev20260129"
+# Check https://storage.googleapis.com/libtpu-wheels/index.html for latest
+const LIBTPU_VERSION = "0.0.45.dev20260728"
 const LIBTPU_SO = "libtpu-$(replace(string(LIBTPU_VERSION), '.' => '_')).so"
 
+function setup_correct_env_vars!()
+    # LIBTPU_INIT_ARGS are somewhat different from XLA_FLAGS. See
+    # https://github.com/EnzymeAD/Reactant.jl/actions/runs/22545998508/job/65308441694?pr=2571#step:22:1919
+    # │ ERROR: Unknown command line flag 'xla_enable_enzyme_comms_opt'
+    # └ ERROR: Unknown command line flag 'xla_force_host_platform_device_count'
+
+    # LibTPU has its own internal copy of XLA which does not read the regular XLA flags
+    # if !haskey(ENV, "LIBTPU_INIT_ARGS")
+    #     xla_flags = "--xla_enable_enzyme_comms_opt=true"
+    #     if haskey(ENV, "XLA_FLAGS")
+    #         xla_flags = xla_flags * " " * ENV["XLA_FLAGS"]
+    #     end
+    #     ENV["LIBTPU_INIT_ARGS"] = xla_flags
+    # end
+end
+
+function make_pjrt_client(;
+    node_id::Integer=0,
+    num_nodes::Integer=1,
+    distributed_runtime_client=nothing,
+    allowed_devices::Union{Nothing,Vector{Int}}=nothing,
+)
+    @assert node_id == 0 "`make_pjrt_client` does not support node_id"
+    @assert num_nodes == 1 "`make_pjrt_client` does not support num_nodes > 1"
+    @assert distributed_runtime_client === nothing "`make_pjrt_client` does not \
+                                                    support distributed_runtime_client"
+
+    if allowed_devices !== nothing
+        @debug "TPUClient doesn't support allowed_devices. Ignoring the kwarg."
+    end
+
+    return Reactant.XLA.PJRT.MakeClientUsingPluginAPI(get_libtpu_path(), "tpu", "TPU")
+end
+
+function make_ifrt_client(;
+    node_id::Integer=0,
+    num_nodes::Integer=1,
+    distributed_runtime_client=nothing,
+    allowed_devices::Union{Nothing,Vector{Int}}=nothing,
+)
+    if allowed_devices !== nothing
+        @debug "TPUClient doesn't support allowed_devices. Ignoring the kwarg."
+    end
+
+    return Reactant.XLA.IFRT.MakeIFRTPJRTClientViaPluginAPI(
+        get_libtpu_path(), "tpu", "TPU"; node_id, num_nodes, distributed_runtime_client
+    )
+end
+
 function __init__()
-    @static if !Sys.isapple()
-        if !Reactant.precompiling() && has_tpu()
-            setup_libtpu!()
-            cloud_tpu_init!()
-        end
+    if !Sys.isapple() && has_tpu() && !Reactant.precompiling()
+        register_backend(
+            "tpu";
+            priority=1000,
+            pjrt_initialize_function=make_pjrt_client,
+            ifrt_initialize_function=make_ifrt_client,
+            preinitialize_setup_function=() -> begin
+                setup_correct_env_vars!() # important to do this first before cloud_tpu_init!
+                setup_libtpu!()
+                cloud_tpu_init!()
+                nothing
+            end,
+        )
     end
 end
 
 function setup_libtpu!()
     path_from_env = get(ENV, "TPU_LIBRARY_PATH", nothing)
-    if path_from_env !== nothing && ispath(path_from_env)
-        libtpu_dir[] = path_from_env
+    if path_from_env !== nothing
+        @assert ispath(path_from_env) "TPU_LIBRARY_PATH is not a valid path!"
+        libtpu_dir[] = dirname(path_from_env)
     else
         libtpu_dir[] = @get_scratch!("libtpu")
+        @debug "TPU_LIBRARY_PATH not set. Manually setting up libtpu at $(libtpu_dir[])"
+        download_libtpu_if_needed(libtpu_dir[])
     end
-    download_libtpu_if_needed(libtpu_dir[])
     return nothing
 end
 
 get_libtpu_dir() = libtpu_dir[]
 
-get_libtpu_path() = joinpath(get_libtpu_dir(), LIBTPU_SO)
+function get_libtpu_path()
+    path_from_env = get(ENV, "TPU_LIBRARY_PATH", nothing)
+    # Don't override libtpu if manually set
+    if path_from_env !== nothing
+        @assert ispath(path_from_env) "TPU_LIBRARY_PATH is not a valid path!"
+        return path_from_env
+    end
+
+    return joinpath(get_libtpu_dir(), LIBTPU_SO)
+end
 
 function download_libtpu_if_needed(path=nothing)
-    path === nothing && (path = get_libtpu_dir())
+    if path === nothing
+        # Don't override libtpu if manually set
+        get(ENV, "TPU_LIBRARY_PATH", nothing) !== nothing && return nothing
+        path = get_libtpu_dir()
+    end
     @assert path !== nothing "libtpu_dir is not set!"
 
     libtpu_path = joinpath(path, LIBTPU_SO)
     if !isfile(libtpu_path)
-        zip_file_path = joinpath(path, "tpu.zip")
-        tmp_dir = joinpath(path, "tmp")
-        Downloads.download(
-            "https://storage.googleapis.com/libtpu-nightly-releases/wheels/libtpu/libtpu-$(LIBTPU_VERSION)+nightly-cp314-cp314-manylinux_2_31_x86_64.whl",
-            zip_file_path,
-        )
-        run(pipeline(`$(p7zip()) x -tzip -o$(tmp_dir) -- $(zip_file_path)`, devnull))
-        mv(joinpath(tmp_dir, "libtpu", "libtpu.so"), libtpu_path)
-        rm(tmp_dir; recursive=true)
-        rm(zip_file_path; recursive=true)
+        # Ensure path exists before creating lock file
+        !isdir(path) && mkpath(path)
+        mkpidlock(joinpath(path, "download_libtpu.lock")) do
+            if !isfile(libtpu_path)
+                @debug "Downloading libtpu: $(LIBTPU_VERSION)"
+                tmp_dir = mktempdir(path)
+                zip_file_path = joinpath(tmp_dir, "tpu.zip")
+                Downloads.download(
+                    "https://storage.googleapis.com/libtpu-nightly-releases/wheels/libtpu/libtpu-$(LIBTPU_VERSION)+nightly-cp314-cp314-manylinux_2_31_x86_64.whl",
+                    zip_file_path,
+                )
+                run(
+                    pipeline(`$(p7zip()) x -tzip -o$(tmp_dir) -- $(zip_file_path)`, devnull)
+                )
+                mv(joinpath(tmp_dir, "libtpu", "libtpu.so"), libtpu_path)
+                rm(tmp_dir; recursive=true)
+            end
+        end
     end
 end
 
@@ -70,6 +153,7 @@ const _GOOGLE_PCI_VENDOR_ID = "0x1ae0"
     v5p
     v5e
     v6e
+    tpu7x
 end
 
 const _TPU_PCI_DEVICE_IDS = Dict(
@@ -79,11 +163,32 @@ const _TPU_PCI_DEVICE_IDS = Dict(
     "0x0062" => TPUVersion.v5p,
     "0x0063" => TPUVersion.v5e,
     "0x006f" => TPUVersion.v6e,
+    "0x0076" => TPUVersion.tpu7x,
 )
 
-has_tpu() = first(num_available_tpu_chips_and_device_id()) > 0
+const NUM_AVAILABLE_TPU_CHIPS_AND_DEVICE_ID = Ref{Union{Nothing,Tuple{Int,TPUVersion.T}}}(
+    nothing
+)
+
+function has_tpu()
+    if RUNNING_IN_CLOUD_TPU_VM[] !== nothing
+        return RUNNING_IN_CLOUD_TPU_VM[]
+    end
+    num_tpu_chips, _ = num_available_tpu_chips_and_device_id()
+    RUNNING_IN_CLOUD_TPU_VM[] = num_tpu_chips > 0
+    return RUNNING_IN_CLOUD_TPU_VM[]
+end
 
 function num_available_tpu_chips_and_device_id()
+    if NUM_AVAILABLE_TPU_CHIPS_AND_DEVICE_ID[] !== nothing
+        return NUM_AVAILABLE_TPU_CHIPS_AND_DEVICE_ID[]
+    end
+
+    NUM_AVAILABLE_TPU_CHIPS_AND_DEVICE_ID[] = _num_available_tpu_chips_and_device_id()
+    return NUM_AVAILABLE_TPU_CHIPS_AND_DEVICE_ID[]
+end
+
+function _num_available_tpu_chips_and_device_id()
     Sys.islinux() || return 0, TPUVersion.Unknown
 
     devices_dir = "/sys/bus/pci/devices/"
@@ -123,9 +228,15 @@ end
 function cloud_tpu_init!()
     libtpu_dir = get_libtpu_dir()
     num_tpu_chips, tpu_version = num_available_tpu_chips_and_device_id()
-    if tpu_version != TPUVersion.Unknown &&
+    if num_tpu_chips == 0
+        ENV["TPU_SKIP_MDS_QUERY"] = "1"
+    end
+
+    if (
+        tpu_version != TPUVersion.Unknown &&
         tpu_version ≥ TPUVersion.v5e &&
         !transparent_hugepages_enabled()
+    )
         @warn "Transparent hugepages are not enabled. TPU runtime startup and \
                shutdown time should be significantly improved on TPU v5e and newer. \
                If not already set, you may need to enable transparent hugepages in \
@@ -136,8 +247,6 @@ function cloud_tpu_init!()
     if (libtpu_dir === nothing || num_tpu_chips == 0) && !force_tpu_init()
         return nothing
     end
-
-    RUNNING_IN_CLOUD_TPU_VM[] = true
 
     # Set environment variables
     ENV["GRPC_VERBOSITY"] = get(ENV, "GRPC_VERBOSITY", "ERROR")
@@ -167,24 +276,34 @@ end
 
 const _TPU_METADATA_RESPONSE_CODE_SUCCESS = 200
 
+function skip_mds_query()
+    return haskey(ENV, "TPU_SKIP_MDS_QUERY") && parse(Bool, ENV["TPU_SKIP_MDS_QUERY"])
+end
+
 function get_metadata(key)
     # Based on https://github.com/tensorflow/tensorflow/pull/40317
     gce_metadata_endpoint =
         "http://" * get(ENV, "GCE_METADATA_IP", "metadata.google.internal")
+    @debug "Getting metadata for key: $(key)" gce_metadata_endpoint
     retry_count = 0
-    retry_seconds = 0.500
+    retry_seconds = parse(Float64, get(ENV, "REACTANT_GCE_METADATA_RETRY_SECONDS", "0.5"))
+    @debug "Retry seconds: $(retry_seconds)"
     api_resp = nothing
+
+    body = nothing
 
     while retry_count < 6
         try
-            api_resp = HTTP.get(
-                "$(gce_metadata_endpoint)/computeMetadata/v1/instance/attributes/$(key)",
-                ["Metadata-Flavor" => "Google"];
-                connect_timeout=60,
-                readtimeout=60,
+            buf = IOBuffer()
+            api_resp = Downloads.request(
+                "$(gce_metadata_endpoint)/computeMetadata/v1/instance/attributes/$(key)";
+                headers=["Metadata-Flavor" => "Google"],
+                output=buf,
+                timeout=60,
             )
+            body = String(take!(buf))
 
-            HTTP.status(api_resp) == _TPU_METADATA_RESPONSE_CODE_SUCCESS && break
+            api_resp.status == _TPU_METADATA_RESPONSE_CODE_SUCCESS && break
         catch err
             @warn "Error while trying to get metadata['$(key)']. Tried \
                    [$(retry_count) / 6] times" err
@@ -198,11 +317,13 @@ function get_metadata(key)
         throw(ErrorException("Getting metadata['$(key)'] failed for 6 tries"))
     end
 
-    return String(api_resp.body), HTTP.status(api_resp)
+    return body, api_resp.status
 end
 
 function get_tpu_env_value(key)
     haskey(ENV, key) && return ENV[key]
+
+    skip_mds_query() && return nothing
 
     tpu_env_data = first(get_metadata("tpu-env"))
     key_value_pairs = split(tpu_env_data, "\n")

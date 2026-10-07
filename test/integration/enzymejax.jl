@@ -1,4 +1,4 @@
-using Reactant, Test, NPZ, PythonCall
+using Reactant, Test, NPZ, PythonCall, FileCheck
 
 function run_exported_enzymejax_function(python_file_path::String, function_name::String)
     output_dir = dirname(python_file_path)
@@ -44,8 +44,11 @@ end
 
         # Verify Python script contains key components
         python_content = read(python_file_path, String)
-        @test contains(python_content, "hlo_call")
-        @test contains(python_content, "f_simple")
+        @test @filecheck begin
+            @check_dag "hlo_call"
+            @check_dag "f_simple"
+            python_content
+        end
 
         # Run the exported script and verify results
         result = run_exported_enzymejax_function(python_file_path, "run_f_simple")
@@ -83,6 +86,24 @@ end
         # Run the exported script and verify results
         result = run_exported_enzymejax_function(python_file_path, "run_matmul")
         @test isapprox(Array(result), expected_result; atol=1e-5, rtol=1e-5)
+
+        # Export function with no data
+        python_file_path = Reactant.Serialization.export_to_enzymejax(
+            f_matmul,
+            x,
+            y;
+            output_dir=mktempdir(; cleanup=true),
+            function_name="matmul",
+            export_data_as_npz=false,
+        )
+
+        @test isfile(python_file_path)
+
+        python_content = read(python_file_path, String)
+        @test @filecheck begin
+            @check "prng_key = jax.random.PRNGKey(0)"
+            python_content
+        end
     end
 
     @testset "Complex function with multiple arguments" begin
@@ -118,7 +139,10 @@ end
         @test length(npz_files) > 0
 
         python_content = read(python_file_path, String)
-        @test contains(python_content, "complex_fn")
+        @test @filecheck begin
+            @check "complex_fn"
+            python_content
+        end
 
         # Run the exported script and verify results
         result = run_exported_enzymejax_function(python_file_path, "run_complex_fn")
@@ -203,7 +227,10 @@ end
             # Check that Python script does NOT include explicit sharding directives
             python_content = read(python_file_path, String)
             # Should have hlo_call but without the advanced sharding setup
-            @test contains(python_content, "hlo_call")
+            @test @filecheck begin
+                @check "hlo_call"
+                python_content
+            end
 
             # Run the exported script and verify results
             result = run_exported_enzymejax_function(

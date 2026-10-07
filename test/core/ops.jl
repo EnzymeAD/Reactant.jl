@@ -1,4 +1,4 @@
-using Reactant, Test
+using Reactant, Test, FileCheck
 using Reactant: Ops
 using LinearAlgebra
 using SpecialFunctions: SpecialFunctions
@@ -377,6 +377,21 @@ end
     @test Float32[2.2, 4.4, 6.6, 8.8] ≈ @jit(Ops.imag(x))
 end
 
+@testset "hypot" begin
+    # Test Ops.hypot with arrays
+    x = Reactant.to_rarray([3.0, 5.0, 8.0])
+    y = Reactant.to_rarray([4.0, 12.0, 15.0])
+    @test [5.0, 13.0, 17.0] ≈ @jit Ops.hypot(x, y)
+
+    # Test Base.hypot with TracedRNumber
+    f(a, b) = Base.hypot(a, b)
+    a = Reactant.to_rarray(3.0; track_numbers=true)
+    b = Reactant.to_rarray(4.0; track_numbers=true)
+    @test 5.0 ≈ @jit f(a, b)
+    @test 5.0 ≈ @jit f(a, 4.0)
+    @test 5.0 ≈ @jit f(3.0, b)
+end
+
 @testset "iota" begin
     g1(shape) = Ops.iota(Int, shape; iota_dimension=1)
     @test [
@@ -704,7 +719,7 @@ end
     g1(x, s) = Ops.set_dimension_size(x, s, 1)
     result = @jit(g1(x, dim_size))
     @test size(result) == (4,)
-    @test Array(result) ≈ Float32[1.0, 2.0, 3.0, 4.0]
+    @test Array(result) ≈ Float32[1.0, 2.0, 3.0, 4.0] broken = RunningOnTPU
 
     # Test with 2D array, setting dimension 1
     x2d = Reactant.to_rarray(Float32[1.0 2.0; 3.0 4.0; 5.0 6.0])
@@ -712,14 +727,14 @@ end
     g2(x, s) = Ops.set_dimension_size(x, s, 1)
     result = @jit(g2(x2d, dim_size))
     @test size(result) == (3, 2)
-    @test Array(result) ≈ Float32[1.0 2.0; 3.0 4.0; 5.0 6.0]
+    @test Array(result) ≈ Float32[1.0 2.0; 3.0 4.0; 5.0 6.0] broken = RunningOnTPU
 
     # Test with 2D array, setting dimension 2
     dim_size = ConcreteRNumber(Int32(2))
     g3(x, s) = Ops.set_dimension_size(x, s, 2)
     result = @jit(g3(x2d, dim_size))
     @test size(result) == (3, 2)
-    @test Array(result) ≈ Float32[1.0 2.0; 3.0 4.0; 5.0 6.0]
+    @test Array(result) ≈ Float32[1.0 2.0; 3.0 4.0; 5.0 6.0] broken = RunningOnTPU
 
     # Test with different element types (Int32 array)
     x_int = Reactant.to_rarray(Int32[1, 2, 3])
@@ -727,7 +742,7 @@ end
     g4(x, s) = Ops.set_dimension_size(x, s, 1)
     result = @jit(g4(x_int, dim_size))
     @test size(result) == (3,)
-    @test Array(result) == Int32[1, 2, 3]
+    @test Array(result) == Int32[1, 2, 3] broken = RunningOnTPU
 end
 
 @testset "shift_left" begin
@@ -937,10 +952,11 @@ end
 end
 
 @testset "digamma" begin
-    # small divergence between chlo.digamma and SpecialFunctions.digamma:
-    # on <=0, chlo.digamma returns NaN, SpecialFunctions.digamma returns Inf
+    # small divergence between chlo.digamma and SpecialFunctions.digamma: at the
+    # negative integer poles chlo.digamma returns NaN where SpecialFunctions.digamma
+    # returns -Inf. At 0 the two agree on -Inf.
     x = Reactant.to_rarray([-1.0, 0.0, 1.0])
-    @test [NaN, NaN, SpecialFunctions.digamma(1.0)] ≈ @jit(Ops.digamma(x)) nans = true skip =
+    @test [NaN, -Inf, SpecialFunctions.digamma(1.0)] ≈ @jit(Ops.digamma(x)) nans = true skip =
         RunningOnAppleX86
 end
 
@@ -1078,7 +1094,10 @@ end
         """;
         dummy_arguments=true,
     )
-    @test occursin("stablehlo.optimization_barrier", repr(hlo))
+    @test @filecheck begin
+        @check "stablehlo.optimization_barrier"
+        repr(hlo)
+    end
 
     hlo = @code_hlo Ops.hlo_call(
         """
@@ -1091,7 +1110,10 @@ end
         """;
         dummy_arguments=true,
     )
-    @test occursin("stablehlo.optimization_barrier", repr(hlo))
+    @test @filecheck begin
+        @check "stablehlo.optimization_barrier"
+        repr(hlo)
+    end
 end
 
 function f_repeat(x, y)
@@ -1282,6 +1304,9 @@ end
         y_ra = @jit fn(x_ra)
         @test y_ra isa ConcreteRArray{Float32,2}
         @test Array(y_ra) == ones(Float32, 2, 3)
+        @test first(
+            Base.return_types(() -> fill(zero(Reactant.TracedRNumber{Float32}), 2, 3))
+        ) == Reactant.TracedRArray{Float32,2}
     end
 end
 
@@ -1349,15 +1374,17 @@ end
             hlo = @code_hlo Ops.batch_norm_training(
                 x, scale, offset; epsilon=1e-5, feature_index=2
             )
-            @test occursin("stablehlo.batch_norm_training", repr(hlo))
+            @test @filecheck begin
+                @check "stablehlo.batch_norm_training"
+                repr(hlo)
+            end
 
             if !affine
-                @test occursin(
-                    "stablehlo.constant dense<0.000000e+00> : tensor<3xf32>", repr(hlo)
-                )
-                @test occursin(
-                    "stablehlo.constant dense<1.000000e+00> : tensor<3xf32>", repr(hlo)
-                )
+                @test @filecheck begin
+                    @check_dag "stablehlo.constant dense<0.000000e+00> : tensor<3xf32>"
+                    @check_dag "stablehlo.constant dense<1.000000e+00> : tensor<3xf32>"
+                    repr(hlo)
+                end
             end
 
             res, m, v = @jit Ops.batch_norm_training(
@@ -1391,14 +1418,16 @@ end
             hlo = @code_hlo Ops.batch_norm_inference(
                 x, scale, offset, rm, rv; epsilon=1e-5, feature_index=2
             )
-            @test occursin("stablehlo.batch_norm_inference", repr(hlo))
+            @test @filecheck begin
+                @check "stablehlo.batch_norm_inference"
+                repr(hlo)
+            end
             if !affine
-                @test occursin(
-                    "stablehlo.constant dense<0.000000e+00> : tensor<3xf32>", repr(hlo)
-                )
-                @test occursin(
-                    "stablehlo.constant dense<1.000000e+00> : tensor<3xf32>", repr(hlo)
-                )
+                @test @filecheck begin
+                    @check_dag "stablehlo.constant dense<0.000000e+00> : tensor<3xf32>"
+                    @check_dag "stablehlo.constant dense<1.000000e+00> : tensor<3xf32>"
+                    repr(hlo)
+                end
             end
 
             res = @jit Ops.batch_norm_inference(
@@ -1427,12 +1456,16 @@ end
             hlo = @code_hlo Ops.batch_norm_grad(
                 x, scale, rm, rv, gx; epsilon=1e-5, feature_index=2
             )
-            @test occursin("stablehlo.batch_norm_grad", repr(hlo))
+            @test @filecheck begin
+                @check "stablehlo.batch_norm_grad"
+                repr(hlo)
+            end
 
             if !affine
-                @test occursin(
-                    "stablehlo.constant dense<1.000000e+00> : tensor<3xf32>", repr(hlo)
-                )
+                @test @filecheck begin
+                    @check "stablehlo.constant dense<1.000000e+00> : tensor<3xf32>"
+                    repr(hlo)
+                end
             end
 
             gres, gscale, goffset = @jit Ops.batch_norm_grad(

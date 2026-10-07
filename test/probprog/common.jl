@@ -1,19 +1,45 @@
-using PythonCall, CondaPkg
+using PythonCall
 
-const _NUMPYRO_AVAILABLE = Ref{Union{Nothing,Bool}}(nothing)
+if !@isdefined(_JAX_AVAILABLE)
+    const _JAX_AVAILABLE = Ref{Union{Nothing,Bool}}(nothing)
+end
+
+function check_jax_available()
+    if _JAX_AVAILABLE[] !== nothing
+        return _JAX_AVAILABLE[]
+    end
+    if lowercase(Reactant.XLA.platform_name(Reactant.XLA.default_backend())) != "cpu"
+        @warn "Skipping JAX comparison tests on non-CPU backend"
+        _JAX_AVAILABLE[] = false
+        return false
+    end
+    try
+        os = pyimport("os")
+        os.environ.__setitem__("JAX_ENABLE_X64", "1")
+        jax = pyimport("jax")
+        jax.config.update("jax_enable_x64", true)
+        _JAX_AVAILABLE[] = true
+    catch e
+        @warn "JAX not available, skipping pointwise comparison tests" exception = e
+        _JAX_AVAILABLE[] = false
+    end
+    return _JAX_AVAILABLE[]
+end
+
+if !@isdefined(_NUMPYRO_AVAILABLE)
+    const _NUMPYRO_AVAILABLE = Ref{Union{Nothing,Bool}}(nothing)
+end
 
 function check_numpyro_available()
     if _NUMPYRO_AVAILABLE[] !== nothing
         return _NUMPYRO_AVAILABLE[]
     end
+    if lowercase(Reactant.XLA.platform_name(Reactant.XLA.default_backend())) != "cpu"
+        @warn "Skipping NumPyro comparison tests on non-CPU backend"
+        _NUMPYRO_AVAILABLE[] = false
+        return false
+    end
     try
-        CondaPkg.add_pip("numpyro")
-
-        sys = pyimport("sys")
-        for p in ["/mnt/sbrantq/probprog/numpyro", "/mnt/sbrantq/probprog/jax"]
-            sys.path.insert(0, p)
-        end
-
         os = pyimport("os")
         os.environ.__setitem__("JAX_ENABLE_X64", "1")
         jax = pyimport("jax")

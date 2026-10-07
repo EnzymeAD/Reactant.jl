@@ -1,27 +1,55 @@
 module ReactantCUDAExt
 
+using BFloat16s: BFloat16
 using Reactant:
     Reactant,
     TracedRArray,
     AnyConcretePJRTArray,
     MLIR,
     TracedRNumber,
-    ReactantPrecompilationException
+    ReactantPrecompilationException,
+    call_with_native
 using Reactant.Compiler: raising, LLVMFunc, llvm_compiler_cache
 using Reactant.Ops: @opcall
 
+using Enzyme
 using Adapt: Adapt, adapt
 using CUDA: CUDA, CuDim, DenseCuArray, unsafe_cached_load
+# Compatibility for CUDA v5 and v6
+
+const CUVERSION = isdefined(CUDA, :CUDACore) ? 6 : 5
+if CUVERSION == 6
+    using CUDA: CUDACore
+else
+    const CUDACore = CUDA
+end
 
 using GPUCompiler: GPUCompiler
+using GPUArraysCore: @allowscalar
 using KernelAbstractions: KernelAbstractions
 using LLVM: LLVM
+using Printf: Printf
 
 using PrecompileTools: @setup_workload, @compile_workload
 
 const KA = KernelAbstractions
 
 Reactant.is_extension_loaded(::Val{:CUDA}) = true
+
+Base.Experimental.@MethodTable(REACTANT_CUDA_METHOD_TABLE)
+
+macro reactant_cuda_overlay(def)
+    return Base.Experimental.var"@overlay"(
+        __source__, __module__, REACTANT_CUDA_METHOD_TABLE, def
+    )
+end
+
+# We keep this to avoid issues with raising where a bounds error is thrown. See https://github.com/EnzymeAD/Reactant.jl/issues/2964
+@reactant_cuda_overlay Base.sqrt(x::Float64) =
+    ccall("extern __nv_sqrt", llvmcall, Cdouble, (Cdouble,), x)
+@reactant_cuda_overlay Base.sqrt(x::Float32) =
+    ccall("extern __nv_sqrtf", llvmcall, Cfloat, (Cfloat,), x)
+@reactant_cuda_overlay Base.FastMath.sqrt_fast(x::Union{Float32,Float64}) = sqrt(x)
 
 struct CuTracedArray{T,N,A,Size} <: DenseArray{T,N}
     ptr::Core.LLVMPtr{T,A}
@@ -72,8 +100,32 @@ for jlop in (
     :(Base.:-),
     :(Base.:*),
     :(Base.:/),
+    :(Base.:\),
     :(Base.:^),
     :(Base.rem),
+    :(Base.mod1),
+    :(Base.ldexp),
+    :(Base.lcm),
+    :(Base.div),
+    :(Base.fld),
+    :(Base.cld),
+    :(Base.divrem),
+    :(Base.fldmod),
+    :(Base.hypot),
+    :(Base.atan),
+    :(Base.atand),
+    :(Base.copysign),
+    :(Base.flipsign),
+    :(Base.complex),
+    :(Base.gcd),
+    :(Base.:&),
+    :(Base.:|),
+    :(Base.xor),
+    :(Base.nand),
+    :(Base.nor),
+    :(Base.:(<<)),
+    :(Base.:(>>)),
+    :(Base.:(>>>)),
     :(Base.isless),
     :(Base.:(==)),
     :(Base.:(!=)),
@@ -102,7 +154,71 @@ Base.@constprop :aggressive @inline Base.:^(
 @inline Base.unsafe_trunc(::Type{T}, a::CuTracedRNumber) where {T} =
     Base.unsafe_trunc(T, a[])
 
-for jlop in (:(Base.:+), :(Base.:-), :(Base.isnan), :(Base.isfinite), :(Base.isinf))
+for jlop in (
+    :(Base.:+),
+    :(Base.:-),
+    :(Base.abs),
+    :(Base.sign),
+    :(Base.signbit),
+    :(Base.conj),
+    :(Base.real),
+    :(Base.imag),
+    :(Base.sin),
+    :(Base.cos),
+    :(Base.tan),
+    :(Base.sinh),
+    :(Base.cosh),
+    :(Base.tanh),
+    :(Base.asin),
+    :(Base.acos),
+    :(Base.atan),
+    :(Base.asinh),
+    :(Base.acosh),
+    :(Base.atanh),
+    :(Base.sinpi),
+    :(Base.cospi),
+    :(Base.tanpi),
+    :(Base.sincospi),
+    :(Base.sinc),
+    :(Base.cis),
+    :(Base.cispi),
+    :(Base.complex),
+    :(Base.exp),
+    :(Base.exp2),
+    :(Base.exp10),
+    :(Base.expm1),
+    :(Base.log),
+    :(Base.log2),
+    :(Base.log10),
+    :(Base.log1p),
+    :(Base.sqrt),
+    :(Base.cbrt),
+    :(Base.frexp),
+    :(Base.modf),
+    :(Base.isqrt),
+    :(Base.:~),
+    :(Base.leading_zeros),
+    :(Base.trailing_zeros),
+    :(Base.count_ones),
+    :(Base.bswap),
+    :(Base.typemin),
+    :(Base.typemax),
+    :(Base.isnan),
+    :(Base.isfinite),
+    :(Base.isinf),
+    :(Base.isreal),
+    :(Base.isinteger),
+    :(Base.iseven),
+    :(Base.isodd),
+    :(Base.floor),
+    :(Base.ceil),
+    :(Base.round),
+    :(Base.trunc),
+    :(Base.float),
+    :(Base.nextfloat),
+    :(Base.prevfloat),
+    :(Base.:!),
+)
     @eval begin
         @inline $jlop(a::CuTracedRNumber) = $jlop(a[])
     end
@@ -116,7 +232,7 @@ Base.OneTo(x::CuTracedRNumber{<:Integer}) = Base.OneTo(x[])
     end
 end
 
-@inline function Base.convert(CT::Type{CuTracedRNumber{Float64,1}}, x::Number)
+@inline function Base.convert(CT::Type{<:CuTracedRNumber{Float64,1}}, x::Number)
     return CT(
         Base.reinterpret(
             Core.LLVMPtr{Float64,1},
@@ -140,7 +256,7 @@ end
     )
 end
 
-@inline function Base.convert(CT::Type{CuTracedRNumber{Float32,1}}, x::Number)
+@inline function Base.convert(CT::Type{<:CuTracedRNumber{Float32,1}}, x::Number)
     return CT(
         Base.reinterpret(
             Core.LLVMPtr{Float32,1},
@@ -165,6 +281,9 @@ end
 end
 
 Base.convert(::Type{<:CuTracedRNumber{T}}, x::CuTracedRNumber{T}) where {T} = x
+Base.convert(::Type{<:CuTracedRNumber{BFloat16,1}}, x::CuTracedRNumber{BFloat16,1}) = x
+Base.convert(::Type{<:CuTracedRNumber{Float32,1}}, x::CuTracedRNumber{Float32,1}) = x
+Base.convert(::Type{<:CuTracedRNumber{Float64,1}}, x::CuTracedRNumber{Float64,1}) = x
 
 Base.one(a::CuTracedRNumber) = one(a[])
 Base.one(::Type{<:CuTracedRNumber{T,A}}) where {T,A} = one(T)
@@ -242,13 +361,11 @@ Base.@nospecializeinfer function Reactant.promote_traced_type(
 end
 
 function Base.show(io::IO, a::AT) where {AT<:CuTracedArray}
-    CUDA.Printf.@printf(io, "%s cu traced array at %p", join(size(a), '×'), Int(pointer(a)))
+    Printf.@printf(io, "%s cu traced array at %p", join(size(a), '×'), Int(pointer(a)))
 end
 
 function Base.show(io::IO, a::AT) where {AT<:CuTracedRNumber}
-    CUDA.Printf.@printf(
-        io, "%s cu traced rnumber at %p", join(size(a), '×'), Int(pointer(a))
-    )
+    Printf.@printf(io, "%s cu traced rnumber at %p", join(size(a), '×'), Int(pointer(a)))
 end
 
 ## array interface
@@ -566,7 +683,7 @@ end
 function recudaconvert(arg)
     return adapt(ReactantKernelAdaptor(), arg)
 end
-Reactant.@reactant_overlay @noinline function CUDA.cudaconvert(arg)
+Reactant.@reactant_overlay function CUDA.cudaconvert(arg)
     return recudaconvert(arg)
 end
 
@@ -604,18 +721,41 @@ end
     f::LLVMFunc{F,tt}; shmem::Union{Integer,Base.Callable}=0, max_threads::Integer=0
 ) where {F,tt}
     return CUDA.launch_configuration(
-        Base.inferencebarrier(CUDA.cufunction)(f.f, Tuple{tt.parameters[2:end]...}).fun;
+        call_with_native(CUDA.cufunction, f.f, Tuple{tt.parameters[2:end]...}).fun;
         shmem,
         max_threads,
     )
 end
 
-function GPULowerCPUFeaturesPass()
-    return LLVM.NewPMModulePass("GPULowerCPUFeatures", GPUCompiler.cpu_features!)
+function GPULowerCPUFeaturesPass(job)
+    return LLVM.NewPMModulePass(
+        "GPULowerCPUFeatures",
+        if isdefined(GPUCompiler, :CPUFeatures)
+            GPUCompiler.CPUFeatures(job)
+        else
+            GPUCompiler.cpu_features!
+        end,
+    )
 end
-GPULowerPTLSPass() = LLVM.NewPMModulePass("GPULowerPTLS", GPUCompiler.lower_ptls!)
-function GPULowerGCFramePass()
-    return LLVM.NewPMFunctionPass("GPULowerGCFrame", GPUCompiler.lower_gc_frame!)
+function GPULowerPTLSPass(job)
+    return LLVM.NewPMModulePass(
+        "GPULowerPTLS",
+        if isdefined(GPUCompiler, :LowerPTLS)
+            GPUCompiler.LowerPTLS(job)
+        else
+            GPUCompiler.lower_ptls!
+        end,
+    )
+end
+function GPULowerGCFramePass(job)
+    return LLVM.NewPMFunctionPass(
+        "GPULowerGCFrame",
+        if isdefined(GPUCompiler, :LowerGCFrame)
+            GPUCompiler.LowerGCFrame(job)
+        else
+            GPUCompiler.lower_gc_frame!
+        end,
+    )
 end
 function noop_pass(x)
     return false
@@ -639,238 +779,10 @@ function kern_pass(mod)
 
     return true
 end
+
 AddKernelStatePass() = LLVM.NewPMModulePass("AddKernelStatePass", kern_pass)
 LowerKernelStatePass() = LLVM.NewPMFunctionPass("LowerKernelStatePass", noop_pass)
 CleanupKernelStatePass() = LLVM.NewPMModulePass("CleanupKernelStatePass", noop_pass)
-
-# From https://github.com/JuliaGPU/GPUCompiler.jl/blob/7b9322faa34685026c4601a5084eecf5a5d7f3fe/src/ptx.jl#L149
-function vendored_optimize_module!(
-    @nospecialize(job), mod::LLVM.Module, instcombine::Bool=false
-)
-    tm = GPUCompiler.llvm_machine(job.config.target)
-    # TODO(#2239): Use the registered target passes (JuliaGPU/GPUCompiler.jl#450)
-    LLVM.@dispose pb = LLVM.NewPMPassBuilder() begin
-        LLVM.register!(pb, GPUCompiler.NVVMReflectPass())
-
-        LLVM.add!(pb, LLVM.NewPMFunctionPassManager()) do fpm
-            # TODO(#2239): need to run this earlier; optimize_module! is called after addOptimizationPasses!
-            LLVM.add!(fpm, GPUCompiler.NVVMReflectPass())
-
-            # needed by GemmKernels.jl-like code
-            LLVM.add!(fpm, LLVM.SpeculativeExecutionPass())
-
-            # NVPTX's target machine info enables runtime unrolling,
-            # but Julia's pass sequence only invokes the simple unroller.
-            LLVM.add!(fpm, LLVM.LoopUnrollPass(; job.config.opt_level))
-            if instcombine
-                LLVM.add!(fpm, LLVM.InstCombinePass())        # clean-up redundancy
-            else
-                LLVM.add!(fpm, LLVM.InstSimplifyPass())        # clean-up redundancy
-            end
-            LLVM.add!(fpm, LLVM.NewPMLoopPassManager(; use_memory_ssa=true)) do lpm
-                LLVM.add!(lpm, LLVM.LICMPass())           # the inner runtime check might be outer loop invariant
-            end
-
-            # the above loop unroll pass might have unrolled regular, non-runtime nested loops.
-            # that code still needs to be optimized (arguably, multiple unroll passes should be
-            # scheduled by the Julia optimizer). do so here, instead of re-optimizing entirely.
-            if job.config.opt_level == 2
-                LLVM.add!(fpm, LLVM.GVNPass())
-            elseif job.config.opt_level == 1
-                LLVM.add!(fpm, LLVM.EarlyCSEPass())
-            end
-            LLVM.add!(fpm, LLVM.DSEPass())
-
-            LLVM.add!(fpm, LLVM.SimplifyCFGPass())
-        end
-
-        # get rid of the internalized functions; now possible unused
-        LLVM.add!(pb, LLVM.GlobalDCEPass())
-
-        LLVM.run!(pb, mod, tm)
-    end
-end
-
-function vendored_buildEarlyOptimizerPipeline(
-    mpm, @nospecialize(job), opt_level; instcombine=false
-)
-    LLVM.add!(mpm, LLVM.NewPMCGSCCPassManager()) do cgpm
-        # TODO(#2239) invokeCGSCCCallbacks
-        LLVM.add!(cgpm, LLVM.NewPMFunctionPassManager()) do fpm
-            LLVM.add!(fpm, LLVM.Interop.AllocOptPass())
-            LLVM.add!(fpm, LLVM.Float2IntPass())
-            LLVM.add!(fpm, LLVM.LowerConstantIntrinsicsPass())
-        end
-    end
-    LLVM.add!(mpm, GPULowerCPUFeaturesPass())
-    if opt_level >= 1
-        LLVM.add!(mpm, LLVM.NewPMFunctionPassManager()) do fpm
-            if opt_level >= 2
-                LLVM.add!(fpm, LLVM.SROAPass())
-                if instcombine
-                    LLVM.add!(fpm, LLVM.InstCombinePass())
-                else
-                    LLVM.add!(fpm, LLVM.InstSimplifyPass())
-                end
-                LLVM.add!(fpm, LLVM.JumpThreadingPass())
-                LLVM.add!(fpm, LLVM.CorrelatedValuePropagationPass())
-                LLVM.add!(fpm, LLVM.ReassociatePass())
-                LLVM.add!(fpm, LLVM.EarlyCSEPass())
-                LLVM.add!(fpm, LLVM.Interop.AllocOptPass())
-            else
-                if instcombine
-                    LLVM.add!(fpm, LLVM.InstCombinePass())
-                else
-                    LLVM.add!(fpm, LLVM.InstSimplifyPass())
-                end
-                LLVM.add!(fpm, LLVM.EarlyCSEPass())
-            end
-        end
-        # TODO(#2239) invokePeepholeCallbacks
-    end
-end
-
-function vendored_buildIntrinsicLoweringPipeline(
-    mpm, @nospecialize(job), opt_level; instcombine::Bool=false
-)
-    GPUCompiler.add!(mpm, LLVM.Interop.RemoveNIPass())
-
-    # lower GC intrinsics
-    if !GPUCompiler.uses_julia_runtime(job)
-        LLVM.add!(mpm, LLVM.NewPMFunctionPassManager()) do fpm
-            LLVM.add!(fpm, GPULowerGCFramePass())
-        end
-    end
-
-    # lower kernel state intrinsics
-    # NOTE: we can only do so here, as GC lowering can introduce calls to the runtime,
-    #       and thus additional uses of the kernel state intrinsics.
-    if job.config.kernel
-        # TODO(#2239): now that all kernel state-related passes are being run here, merge some?
-        LLVM.add!(mpm, AddKernelStatePass())
-        LLVM.add!(mpm, LLVM.NewPMFunctionPassManager()) do fpm
-            LLVM.add!(fpm, LowerKernelStatePass())
-        end
-        LLVM.add!(mpm, CleanupKernelStatePass())
-    end
-
-    if !GPUCompiler.uses_julia_runtime(job)
-        # remove dead uses of ptls
-        LLVM.add!(mpm, LLVM.NewPMFunctionPassManager()) do fpm
-            LLVM.add!(fpm, LLVM.ADCEPass())
-        end
-        LLVM.add!(mpm, GPULowerPTLSPass())
-    end
-
-    LLVM.add!(mpm, LLVM.NewPMFunctionPassManager()) do fpm
-        # lower exception handling
-        if GPUCompiler.uses_julia_runtime(job)
-            LLVM.add!(fpm, LLVM.Interop.LowerExcHandlersPass())
-        end
-        LLVM.add!(fpm, GPUCompiler.GCInvariantVerifierPass())
-        LLVM.add!(fpm, LLVM.Interop.LateLowerGCPass())
-        if GPUCompiler.uses_julia_runtime(job) && VERSION >= v"1.11.0-DEV.208"
-            LLVM.add!(fpm, LLVM.Interop.FinalLowerGCPass())
-        end
-    end
-    if GPUCompiler.uses_julia_runtime(job) && VERSION < v"1.11.0-DEV.208"
-        LLVM.add!(mpm, LLVM.Interop.FinalLowerGCPass())
-    end
-
-    if opt_level >= 2
-        LLVM.add!(mpm, LLVM.NewPMFunctionPassManager()) do fpm
-            LLVM.add!(fpm, LLVM.GVNPass())
-            LLVM.add!(fpm, LLVM.SCCPPass())
-            LLVM.add!(fpm, LLVM.DCEPass())
-        end
-    end
-
-    # lower PTLS intrinsics
-    if GPUCompiler.uses_julia_runtime(job)
-        LLVM.add!(mpm, LLVM.Interop.LowerPTLSPass())
-    end
-
-    if opt_level >= 1
-        LLVM.add!(mpm, LLVM.NewPMFunctionPassManager()) do fpm
-            if instcombine
-                LLVM.add!(fpm, LLVM.InstCombinePass())
-            else
-                LLVM.add!(fpm, LLVM.InstSimplifyPass())
-            end
-            LLVM.add!(
-                fpm, LLVM.SimplifyCFGPass(; GPUCompiler.AggressiveSimplifyCFGOptions...)
-            )
-        end
-    end
-
-    # remove Julia address spaces
-    LLVM.add!(mpm, LLVM.Interop.RemoveJuliaAddrspacesPass())
-
-    # Julia's operand bundles confuse the inliner, so repeat here now they are gone.
-    # FIXME(#2239): we should fix the inliner so that inlined code gets optimized early-on
-    return LLVM.add!(mpm, LLVM.AlwaysInlinerPass())
-end
-
-function vendored_buildScalarOptimizerPipeline(
-    fpm, @nospecialize(job), opt_level; instcombine::Bool=false
-)
-    if opt_level >= 2
-        LLVM.add!(fpm, LLVM.Interop.AllocOptPass())
-        LLVM.add!(fpm, LLVM.SROAPass())
-        LLVM.add!(fpm, LLVM.InstSimplifyPass())
-        LLVM.add!(fpm, LLVM.GVNPass())
-        LLVM.add!(fpm, LLVM.MemCpyOptPass())
-        LLVM.add!(fpm, LLVM.SCCPPass())
-        LLVM.add!(fpm, LLVM.CorrelatedValuePropagationPass())
-        LLVM.add!(fpm, LLVM.DCEPass())
-        LLVM.add!(fpm, LLVM.IRCEPass())
-        if instcombine
-            LLVM.add!(fpm, LLVM.InstCombinePass())
-        else
-            LLVM.add!(fpm, LLVM.InstSimplifyPass())
-        end
-        LLVM.add!(fpm, LLVM.JumpThreadingPass())
-    end
-    if opt_level >= 3
-        LLVM.add!(fpm, LLVM.GVNPass())
-    end
-    if opt_level >= 2
-        LLVM.add!(fpm, LLVM.DSEPass())
-        # TODO(#2239) invokePeepholeCallbacks
-        LLVM.add!(fpm, LLVM.SimplifyCFGPass(; GPUCompiler.AggressiveSimplifyCFGOptions...))
-        LLVM.add!(fpm, LLVM.Interop.AllocOptPass())
-        LLVM.add!(fpm, LLVM.NewPMLoopPassManager()) do lpm
-            LLVM.add!(lpm, LLVM.LoopDeletionPass())
-            LLVM.add!(lpm, LLVM.LoopInstSimplifyPass())
-        end
-        LLVM.add!(fpm, LLVM.LoopDistributePass())
-    end
-    # TODO(#2239) invokeScalarOptimizerCallbacks
-end
-
-function vendored_buildNewPMPipeline!(mpm, @nospecialize(job), opt_level)
-    # Doesn't call instcombine
-    GPUCompiler.buildEarlySimplificationPipeline(mpm, job, opt_level)
-    LLVM.add!(mpm, LLVM.AlwaysInlinerPass())
-    vendored_buildEarlyOptimizerPipeline(mpm, job, opt_level)
-    LLVM.add!(mpm, LLVM.NewPMFunctionPassManager()) do fpm
-        # Doesn't call instcombine
-        GPUCompiler.buildLoopOptimizerPipeline(fpm, job, opt_level)
-        vendored_buildScalarOptimizerPipeline(fpm, job, opt_level)
-        if GPUCompiler.uses_julia_runtime(job) && opt_level >= 2
-            # TODO(#2240): we disable vectorization, as this generally isn't useful for GPU targets
-            #      and actually causes issues with some back-end compilers (like Metal).
-            # TODO(#2240): Make this not dependent on `uses_julia_runtime` (likely CPU), but it's own control
-            # Doesn't call instcombine
-            GPUCompiler.buildVectorPipeline(fpm, job, opt_level)
-        end
-        # if isdebug(:optim)
-        #     add!(fpm, WarnMissedTransformationsPass())
-        # end
-    end
-    vendored_buildIntrinsicLoweringPipeline(mpm, job, opt_level)
-    return GPUCompiler.buildCleanupPipeline(mpm, job, opt_level)
-end
 
 # compile to executable machine code
 function compile(job)
@@ -886,7 +798,7 @@ function compile(job)
         )
 
         if !Reactant.precompiling()
-            GPUCompiler.link_library!(mod, GPUCompiler.load_runtime(job))
+            LLVM.link!(mod, GPUCompiler.load_runtime(job))
         end
         entryname = LLVM.name(meta.entry)
 
@@ -895,35 +807,52 @@ function compile(job)
         end
         opt_level = 2
         tm = GPUCompiler.llvm_machine(job.config.target)
-        LLVM.@dispose pb = LLVM.NewPMPassBuilder() begin
-            LLVM.register!(pb, GPULowerCPUFeaturesPass())
-            LLVM.register!(pb, GPULowerPTLSPass())
-            LLVM.register!(pb, GPULowerGCFramePass())
-            LLVM.register!(pb, AddKernelStatePass())
-            LLVM.register!(pb, LowerKernelStatePass())
-            LLVM.register!(pb, CleanupKernelStatePass())
 
-            LLVM.add!(pb, LLVM.NewPMModulePassManager()) do mpm
-                vendored_buildNewPMPipeline!(mpm, job, opt_level)
+        if isdefined(GPUCompiler, :current_job)
+            prev_job = GPUCompiler.current_job
+            GPUCompiler.current_job = job
+        end
+
+        try
+            LLVM.@dispose pb = LLVM.NewPMPassBuilder() begin
+                LLVM.register!(pb, GPULowerCPUFeaturesPass(job))
+                LLVM.register!(pb, GPULowerPTLSPass(job))
+                LLVM.register!(pb, GPULowerGCFramePass(job))
+                LLVM.register!(pb, AddKernelStatePass())
+                LLVM.register!(pb, LowerKernelStatePass())
+                LLVM.register!(pb, CleanupKernelStatePass())
+
+                LLVM.add!(pb, LLVM.NewPMModulePassManager()) do mpm
+                    GPUCompiler.buildNewPMPipeline!(mpm, job, opt_level)
+                end
+                LLVM.run!(pb, mod, tm)
             end
-            LLVM.run!(pb, mod, tm)
-        end
-        if Reactant.Compiler.DUMP_LLVMIR[]
-            println("cuda.jl pre vendor IR\n", string(mod))
-        end
-
-        LLVM.@dispose pb = LLVM.NewPMPassBuilder() begin
-            LLVM.add!(pb, LLVM.NewPMModulePassManager()) do mpm
-                LLVM.add!(mpm, LLVM.AlwaysInlinerPass())
+            if Reactant.Compiler.DUMP_LLVMIR[]
+                println("cuda.jl pre vendor IR\n", string(mod))
             end
-            LLVM.run!(pb, mod, tm)
-        end
 
-        vendored_optimize_module!(job, mod)
-        if Reactant.Compiler.DUMP_LLVMIR[]
-            println("cuda.jl post vendor IR\n", string(mod))
+            LLVM.@dispose pb = LLVM.NewPMPassBuilder() begin
+                LLVM.add!(pb, LLVM.NewPMModulePassManager()) do mpm
+                    LLVM.add!(mpm, LLVM.AlwaysInlinerPass())
+                end
+                LLVM.run!(pb, mod, tm)
+            end
+
+            GPUCompiler.optimize_module!(job, mod)
+            if Reactant.Compiler.DUMP_LLVMIR[]
+                println("cuda.jl post vendor IR\n", string(mod))
+            end
+            LLVM.run!(GPUCompiler.DeadArgumentEliminationPass(), mod, tm)
+        finally
+            if isdefined(GPUCompiler, :current_job)
+                GPUCompiler.current_job = prev_job
+            end
+            # The target machine isn't owned by the LLVM context: dispose it explicitly,
+            # otherwise it's leaked at every kernel compilation. There is none when
+            # LLVM was built without the NVPTX backend (macOS), where llvm_machine
+            # returns nothing and the passes above run without one.
+            tm === nothing || LLVM.dispose(tm)
         end
-        LLVM.run!(GPUCompiler.DeadArgumentEliminationPass(), mod, tm)
 
         for fname in ("gpu_report_exception", "gpu_signal_exception")
             if LLVM.haskey(LLVM.functions(mod), fname)
@@ -957,21 +886,30 @@ function compile(job)
             throw(GPUCompiler.InvalidIRError(job, errors))
         end
         # LLVM.strip_debuginfo!(mod)
-        modstr = string(mod)
+        dl = string(LLVM.datalayout(mod))
         # This is a bit weird since we're taking a module from julia's llvm into reactant's llvm version
-        # it is probably safer to reparse a string using the right llvm module api, so we will do that.
-        mmod = MLIR.IR.Module(
-            @ccall MLIR.API.mlir_c.ConvertLLVMStrToMLIR(
-                modstr::Cstring, MLIR.IR.current_context()::MLIR.API.MlirContext
-            )::MLIR.API.MlirModule
+        # so we serialize and reparse with the right llvm module api. Bitcode is used rather than
+        # textual IR: the bitcode reader auto-upgrades constructs whose spelling changed between the
+        # two LLVM versions (e.g. `llvm.loop.distribute.enable` metadata), whereas the .ll parser does
+        # not, and mismatches there abort the process in the verifier.
+        modbc = convert(Vector{UInt8}, mod)
+        mmodref = GC.@preserve modbc MLIR.API.ConvertLLVMBCToMLIR(
+            pointer(modbc), length(modbc), MLIR.IR.current_context()
         )
+        mmod = MLIR.IR.Module(mmodref)
         @assert mmod != C_NULL
 
-        linkRes = @ccall MLIR.API.mlir_c.LinkInModule(
-            MLIR.IR.current_module()::MLIR.API.MlirModule,
-            mmod::MLIR.API.MlirModule,
-            entryname::Cstring,
-        )::MLIR.API.MlirOperation
+        cur_module = MLIR.IR.current_module()
+        linkRes = MLIR.API.LinkInModule(cur_module, mmod, entryname)
+
+        dl_attr_name = "llvm.data_layout"
+        prevdlattr = MLIR.IR.getattr(MLIR.IR.Operation(cur_module), dl_attr_name)
+        if !isnothing(prevdlattr)
+            prevdl = String(prevdlattr)
+            @assert prevdl == dl "data layout mismatch, tried compiling cuda kernels for different target machines?"
+        else
+            MLIR.IR.setattr!(MLIR.IR.Operation(cur_module), dl_attr_name, MLIR.IR.Attribute(dl))
+        end
 
         String(Reactant.TracedUtils.get_attribute_by_name(linkRes, "sym_name"))
     end
@@ -995,12 +933,16 @@ function abi_sizeof(@nospecialize(x::CUDA.CuDeviceArray))
     return sizeof(Ptr)
 end
 
+# Int8 rather than UInt8: these bytes become an llvm.mlir.constant of type
+# !llvm.array<N x i8>, and llvm.mlir.constant requires the attribute's integer
+# element type to match the result's. A UInt8 array yields tensor<Nxui8>, which
+# the verifier rejects against i8.
 function to_bytes(x)
     sz = abi_sizeof(x)
     ref = Ref(x)
     GC.@preserve ref begin
-        ptr = Base.reinterpret(Ptr{UInt8}, Base.unsafe_convert(Ptr{Cvoid}, ref))
-        vec = Vector{UInt8}(undef, sz)
+        ptr = Base.reinterpret(Ptr{Int8}, Base.unsafe_convert(Ptr{Cvoid}, ref))
+        vec = Vector{Int8}(undef, sz)
         for i in 1:sz
             @inbounds vec[i] = Base.unsafe_load(ptr, i)
         end
@@ -1055,8 +997,133 @@ function get_field_offset(T::Type, path)
 
     return offset
 end
+function mlir_extract_roots_from_value!(
+    val::MLIR.IR.Value,
+    roots_ptr::MLIR.IR.Value,
+    @nospecialize(argty::MLIR.IR.Type),
+    @nospecialize(njlvaluet::MLIR.IR.Type)
+)
+    ctx = MLIR.IR.current_context()
+    llvmptr = MLIR.IR.Type(MLIR.API.mlirLLVMPointerTypeGet(ctx, 0))
+    count = 0
+    # path uses Int32 for extractvalue position which takes Int32 array
+    todo = [(Int32[], argty)]
+    while !isempty(todo)
+        path, ty = popfirst!(todo)
+        if MLIR.API.mlirTypeIsALLVMPointerType(ty)
+            addrspace = MLIR.API.mlirLLVMPointerTypeGetAddressSpace(ty)
+            if 10 <= addrspace <= 12
+                extr = MLIR.IR.result(
+                    MLIR.Dialects.llvm.extractvalue(
+                        val; res=ty, position=MLIR.IR.Attribute(Int32.(path))
+                    ),
+                    1,
+                )
+                gep_ptr = MLIR.IR.result(
+                    MLIR.Dialects.llvm.getelementptr(
+                        roots_ptr,
+                        MLIR.IR.Value[];
+                        res=llvmptr,
+                        elem_type=njlvaluet,
+                        rawConstantIndices=MLIR.IR.Attribute([Int32(0), Int32(count)]),
+                    ),
+                    1,
+                )
+                MLIR.Dialects.llvm.store(extr, gep_ptr)
+                count += 1
+                continue
+            end
+        end
+        if MLIR.API.mlirTypeIsALLVMStructType(ty)
+            numfields = MLIR.API.mlirLLVMStructTypeGetNumElementTypes(ty)
+            for i in (numfields - 1):-1:0
+                fty = MLIR.API.mlirLLVMStructTypeGetElementType(ty, i)
+                npath = copy(path)
+                push!(npath, Int32(i))
+                pushfirst!(todo, (npath, MLIR.IR.Type(fty)))
+            end
+            continue
+        end
+    end
+end
 
-Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
+function _find_unadapted_traced(
+    @nospecialize(T::Type), seen::Set{Any}=Set{Any}(), path::String=""
+)
+    T isa UnionAll && return nothing
+    T in seen && return nothing
+    push!(seen, T)
+    T <: TracedRNumber && return isempty(path) ? "<arg>" : path
+    T <: TracedRArray && return isempty(path) ? "<arg>" : path
+    isbitstype(T) && return nothing
+    for i in 1:fieldcount(T)
+        FT = fieldtype(T, i)
+        subpath = isempty(path) ? string(fieldname(T, i)) : "$path.$(fieldname(T, i))"
+        !isconcretetype(FT) && return (subpath, FT)
+        FT === T && continue  # avoid infinite recursion on self-referential types
+        result = _find_unadapted_traced(FT, seen, subpath)
+        result !== nothing && return result
+    end
+    return nothing
+end
+
+# Mirror of GPUCompiler's explain_nonisbits: recursively list non-isbits fields.
+function _explain_nonbitstype(@nospecialize(dt), depth=1; maxdepth=10)
+    depth > maxdepth && return ""
+    try
+        fieldcount(dt)
+    catch
+        return ""
+    end
+    msg = ""
+    for (ft, fn) in zip(fieldtypes(dt), fieldnames(dt))
+        if !isbitstype(ft)
+            msg *= "  "^depth * ".$fn is of type $ft which is not isbits.\n"
+            msg *= _explain_nonbitstype(ft, depth + 1)
+        end
+    end
+    return msg
+end
+
+function _check_no_traced_in_kernel_arg(@nospecialize(T::Type))
+    bad = _find_unadapted_traced(T)
+    bad === nothing && return nothing
+
+    if bad isa Tuple  # (path, non-concrete-type)
+        path, FT = bad
+        explanation = _explain_nonbitstype(T)
+        error("""passing non-bitstype argument
+               Argument to your kernel function is of type $T, which is not a bitstype:
+               $(isempty(explanation) ? "" : explanation)
+               Field .$path has declared type $FT, which is not a concrete type \
+(it is a UnionAll / abstract type). Julia stores abstract-typed struct fields as \
+GC-managed heap pointers that cannot be represented in a GPU kernel.
+
+               Only bitstypes, which are "plain data" types that are immutable and \
+contain no references to other values, can be used in GPU kernels.
+               For more information, see the `Base.isbitstype` function.
+
+               Fix: replace the abstract field type with its concrete parametric form \
+(e.g. use `$(nameof(FT)){I}` instead of `$(nameof(FT))` in the struct definition).""")
+    end
+
+    # bad is a path String: a TracedRNumber/TracedRArray was not adapted
+    return error(
+        """
+      GPU kernel argument of type $T contains an unadapted traced value at field: $bad
+
+      All TracedRNumber/TracedRArray must have been replaced by their
+      CuTracedRNumber/CuTracedArray counterparts. A surviving traced value means
+      some struct in the hierarchy is missing `Adapt.@adapt_structure`, so its fields
+      were not recursed into during GPU adaptation.
+
+      Fix: add `Adapt.@adapt_structure <StructName>` to the struct that contains the
+      field at the path above.
+  """
+    )
+end
+
+Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
     args...;
     convert=Val(true),
     blocks::CuDim=1,
@@ -1071,6 +1138,10 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
 
     if convert == Val(true)
         args = recudaconvert.(args)
+    end
+
+    for arg in Any[func.f, args...]
+        _check_no_traced_in_kernel_arg(typeof(arg))
     end
 
     mlir_args = MLIR.IR.Value[]
@@ -1090,6 +1161,13 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     for (i, prev) in enumerate(Any[func.f, args...])
         Reactant.make_tracer(seen, prev, (kernelargsym, i), Reactant.NoStopTracedTrack)
     end
+    bfloat16_compile_type = _bfloat16_compile_type()
+    has_cast_float_type =
+        bfloat16_compile_type !== BFloat16 && any(values(seen)) do arg
+            (arg isa TracedRArray || arg isa TracedRNumber) &&
+                Reactant.unwrapped_eltype(typeof(arg)) === BFloat16
+        end
+
     wrapper_tys = MLIR.IR.Type[]
     for arg in values(seen)
         if !(arg isa TracedRArray || arg isa TracedRNumber)
@@ -1106,8 +1184,8 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     wrapftype = MLIR.IR.Type(
         MLIR.API.mlirLLVMFunctionTypeGet(voidty, length(wrapper_tys), wrapper_tys, false)
     )
-    wrapfunc = MLIR.IR.with_block(MLIR.IR.body(mod)) do
-        return MLIR.Dialects.llvm.func(;
+    wrapfunc = MLIR.IR.@with_block MLIR.IR.body(mod) begin
+        MLIR.Dialects.llvm.func(;
             sym_name,
             sym_visibility=MLIR.IR.Attribute("private"),
             function_type=wrapftype,
@@ -1117,13 +1195,23 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     end
     wrapbody = MLIR.IR.Block(wrapper_tys, [MLIR.IR.Location() for _ in wrapper_tys])
     push!(MLIR.IR.region(wrapfunc, 1), wrapbody)
+    if has_cast_float_type
+        MLIR.IR.setattr!(
+            wrapfunc, "enzymexla.float_type", MLIR.IR.Attribute(MLIR.IR.Type(BFloat16))
+        )
+        MLIR.IR.setattr!(
+            wrapfunc,
+            "enzymexla.src_float_type",
+            MLIR.IR.Attribute(MLIR.IR.Type(bfloat16_compile_type)),
+        )
+    end
     for i in 1:length(wrapper_tys)
-        @ccall MLIR.API.mlir_c.ReactantFuncSetArgAttr(
-            wrapfunc::MLIR.API.MlirOperation,
-            (i - 1)::Csize_t,
-            "llvm.noalias"::MLIR.API.MlirStringRef,
-            MLIR.IR.UnitAttribute()::MLIR.API.MlirAttribute,
-        )::Cvoid
+        MLIR.API.ReactantFuncSetArgAttr(
+            wrapfunc,
+            (i - 1),
+            Base.unsafe_convert(MLIR.API.MlirStringRef, "llvm.noalias"),
+            MLIR.IR.UnitAttribute(),
+        )
     end
 
     wrapargs = MLIR.IR.Value[]
@@ -1141,11 +1229,13 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     )
 
     trueidx = 1
-    allocs = Union{Tuple{MLIR.IR.Value,MLIR.IR.Type},Nothing}[]
+    allocs = Union{Tuple{MLIR.IR.Value,MLIR.IR.Type,Type},Nothing}[]
 
     llvmptr = MLIR.IR.Type(MLIR.API.mlirLLVMPointerTypeGet(ctx, 0))
     i8 = MLIR.IR.Type(UInt8)
     allargs = Any[func.f, args...]
+    ctx = LLVM.Context()
+    LLVM.activate(ctx)
     for a in allargs
         if sizeof(a) == 0
             push!(allocs, nothing)
@@ -1153,11 +1243,15 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
         end
 
         # TODO(#2240): check for only integer and explicitly non cutraced types
-        MLIR.IR.with_block(wrapbody) do
+        MLIR.IR.@with_block wrapbody begin
             argty = MLIR.IR.Type(
                 MLIR.API.mlirLLVMFunctionTypeGetInput(gpu_function_type, trueidx - 1)
             )
             trueidx += 1
+            jltyp = Core.Typeof(a)
+            if Enzyme.Compiler.inline_roots_type(jltyp) != 0
+                trueidx += 1
+            end
             c1 = MLIR.IR.result(
                 MLIR.Dialects.llvm.mlir_constant(;
                     res=MLIR.IR.Type(Int64), value=MLIR.IR.Attribute(1)
@@ -1170,19 +1264,70 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
                 ),
                 1,
             )
-            push!(allocs, (alloc, argty))
+            push!(allocs, (alloc, argty, jltyp))
 
-            sz = abi_sizeof(a)
-            array_ty = MLIR.IR.Type(MLIR.API.mlirLLVMArrayTypeGet(MLIR.IR.Type(Int8), sz))
-            cdata = MLIR.IR.result(
-                MLIR.Dialects.llvm.mlir_constant(;
-                    res=array_ty, value=MLIR.IR.DenseElementsAttribute(to_bytes(a))
-                ),
-                1,
-            )
-            MLIR.Dialects.llvm.store(cdata, alloc)
+            if has_cast_float_type
+                # The argument `a` has BFloat16 fields but the GPU function was
+                # compiled with a substitute type (e.g. Float32). We need to:
+                # 1. Create an alloca with the bf16 layout
+                # 2. Store the raw bf16 bytes into it
+                # 3. Load, walk the struct fields, extend bf16→f32, store into alloc
+                compile_float_ty = MLIR.IR.Type(bfloat16_compile_type)
+                bf16_float_ty = MLIR.IR.Type(BFloat16)
+                bf16_ty = _replace_float_in_llvm_type(
+                    argty, compile_float_ty, bf16_float_ty
+                )
+
+                bf16_c1 = MLIR.IR.result(
+                    MLIR.Dialects.llvm.mlir_constant(;
+                        res=MLIR.IR.Type(Int64), value=MLIR.IR.Attribute(1)
+                    ),
+                    1,
+                )
+                bf16_alloc = MLIR.IR.result(
+                    MLIR.Dialects.llvm.alloca(
+                        bf16_c1; elem_type=MLIR.IR.Attribute(bf16_ty), res=llvmptr
+                    ),
+                    1,
+                )
+
+                sz = abi_sizeof(a)
+                val = to_bytes(a)
+                array_ty = MLIR.IR.Type(
+                    MLIR.API.mlirLLVMArrayTypeGet(MLIR.IR.Type(Int8), sz)
+                )
+                cdata = MLIR.IR.result(
+                    MLIR.Dialects.llvm.mlir_constant(;
+                        res=array_ty, value=MLIR.IR.DenseElementsAttribute(val)
+                    ),
+                    1,
+                )
+                MLIR.Dialects.llvm.store(cdata, bf16_alloc)
+
+                bf16_val = MLIR.IR.result(
+                    MLIR.Dialects.llvm.load(bf16_alloc; res=bf16_ty), 1
+                )
+                converted_val = _convert_bf16_value(
+                    bf16_val, bf16_ty, argty, bf16_float_ty, compile_float_ty
+                )
+                MLIR.Dialects.llvm.store(converted_val, alloc)
+            else
+                sz = abi_sizeof(a)
+                val = to_bytes(a)
+                array_ty = MLIR.IR.Type(
+                    MLIR.API.mlirLLVMArrayTypeGet(MLIR.IR.Type(Int8), sz)
+                )
+                cdata = MLIR.IR.result(
+                    MLIR.Dialects.llvm.mlir_constant(;
+                        res=array_ty, value=MLIR.IR.DenseElementsAttribute(val)
+                    ),
+                    1,
+                )
+                MLIR.Dialects.llvm.store(cdata, alloc)
+            end
         end
     end
+    LLVM.deactivate(ctx)
 
     argidx = 1
     for arg in values(seen)
@@ -1223,8 +1368,15 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
             # we need to now compute the offset in bytes of the path
             julia_arg = allargs[p[2]]
 
-            offset = get_field_offset(typeof(julia_arg), p[3:end])
-            MLIR.IR.with_block(wrapbody) do
+            offset = if has_cast_float_type
+                get_field_offset(
+                    _bfloat16_to_ft_type(typeof(julia_arg), bfloat16_compile_type),
+                    p[3:end],
+                )
+            else
+                get_field_offset(typeof(julia_arg), p[3:end])
+            end
+            MLIR.IR.@with_block wrapbody begin
                 ptr = MLIR.IR.result(
                     MLIR.Dialects.llvm.getelementptr(
                         alloc,
@@ -1241,15 +1393,44 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
         argidx += 1
     end
 
-    MLIR.IR.with_block(wrapbody) do
+    MLIR.IR.@with_block wrapbody begin
         for arg in allocs
             if arg === nothing
                 continue
             end
-            alloc, argty = arg
+            alloc, argty, jltyp = arg
             argres = MLIR.IR.result(MLIR.Dialects.llvm.load(alloc; res=argty), 1)
             push!(wrapargs, argres)
+            if Enzyme.Compiler.inline_roots_type(jltyp) != 0
+                c1 = MLIR.IR.result(
+                    MLIR.Dialects.llvm.mlir_constant(;
+                        res=MLIR.IR.Type(Int64), value=MLIR.IR.Attribute(1)
+                    ),
+                    1,
+                )
+                roots_count = Enzyme.Compiler.inline_roots_type(jltyp)
+                jlvaluet = MLIR.IR.Type(MLIR.API.mlirLLVMPointerTypeGet(ctx, 10))
+                njlvaluet = MLIR.IR.Type(
+                    MLIR.API.mlirLLVMArrayTypeGet(jlvaluet, roots_count)
+                )
+                roots_ptr = MLIR.IR.result(
+                    MLIR.Dialects.llvm.alloca(
+                        c1; elem_type=MLIR.IR.Attribute(njlvaluet), res=llvmptr
+                    ),
+                    1,
+                )
+
+                mlir_extract_roots_from_value!(argres, roots_ptr, argty, njlvaluet)
+                push!(wrapargs, roots_ptr)
+            end
         end
+        nargs = MLIR.IR.nargs(MLIR.IR.first_block(MLIR.IR.region(gpufunc, 1)))
+        if length(wrapargs) != nargs
+            error(
+                "detected ABI breakage, please open an issue on https://github.com/EnzymeAD/Reactant.jl/issues/new with instructions on how to reproduce.",
+            )
+        end
+
         MLIR.Dialects.llvm.call(
             wrapargs,
             MLIR.IR.Value[];
@@ -1279,6 +1460,9 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
             "enzymexla.kernel_call", @__FILE__, @__LINE__
         ),
     )
+    if has_cast_float_type
+        MLIR.IR.setattr!(call, "cast_float_type", MLIR.IR.UnitAttribute())
+    end
 
     argidx = 1
     for arg in values(seen)
@@ -1290,13 +1474,185 @@ Reactant.@reactant_overlay @noinline function (func::LLVMFunc{F,tt})(
     end
 end
 
-Reactant.@reactant_overlay @noinline function CUDA.cufunction(
+_bfloat16_compile_type() = raising() ? Reactant.Compiler.BFLOAT16_COMPILE_TYPE[] : BFloat16
+
+function _bfloat16_to_ft_type(@nospecialize(T), @nospecialize(FT))
+    T === BFloat16 && return FT
+    T isa DataType || return T
+    isempty(T.parameters) && return T
+    new_params = Any[_bfloat16_to_ft_type(p, FT) for p in T.parameters]
+    all(p1 === p2 for (p1, p2) in zip(T.parameters, new_params)) && return T
+    return T.name.wrapper{new_params...}
+end
+
+function _substitute_bfloat16_tt(@nospecialize(tt::Type{<:Tuple}), @nospecialize(FT))
+    new_params = Any[_bfloat16_to_ft_type(T, FT) for T in tt.parameters]
+    return Tuple{new_params...}
+end
+
+"""
+    _replace_float_in_llvm_type(ty, src_float_ty, tgt_float_ty)
+
+Recursively walk an LLVM type and replace `src_float_ty` with `tgt_float_ty`.
+Handles struct types and array types.
+"""
+function _replace_float_in_llvm_type(
+    ty::MLIR.IR.Type, src_float_ty::MLIR.IR.Type, tgt_float_ty::MLIR.IR.Type
+)
+    ty == src_float_ty && return tgt_float_ty
+    if MLIR.API.mlirTypeIsALLVMStructType(ty)
+        n = MLIR.API.mlirLLVMStructTypeGetNumElementTypes(ty)
+        field_types = MLIR.IR.Type[
+            _replace_float_in_llvm_type(
+                MLIR.IR.Type(MLIR.API.mlirLLVMStructTypeGetElementType(ty, i - 1)),
+                src_float_ty,
+                tgt_float_ty,
+            ) for i in 1:n
+        ]
+        if all(
+            field_types[i] ==
+            MLIR.IR.Type(MLIR.API.mlirLLVMStructTypeGetElementType(ty, i - 1)) for i in 1:n
+        )
+            return ty
+        end
+        ctx = MLIR.IR.current_context()
+        is_packed = MLIR.API.mlirLLVMStructTypeIsPacked(ty)
+        return MLIR.IR.Type(
+            MLIR.API.mlirLLVMStructTypeLiteralGet(ctx, n, field_types, is_packed)
+        )
+    elseif MLIR.API.mlirTypeIsALLVMArrayType(ty)
+        elem_ty = MLIR.IR.Type(MLIR.API.mlirLLVMArrayTypeGetElementType(ty))
+        new_elem_ty = _replace_float_in_llvm_type(elem_ty, src_float_ty, tgt_float_ty)
+        if new_elem_ty == elem_ty
+            return ty
+        end
+        num_elems = MLIR.API.mlirLLVMArrayTypeGetNumElements(ty)
+        return MLIR.IR.Type(MLIR.API.mlirLLVMArrayTypeGet(new_elem_ty, num_elems))
+    end
+    return ty
+end
+
+"""
+    _convert_bf16_value(src_val, src_ty, tgt_ty, src_float_ty, tgt_float_ty)
+
+Recursively walk an LLVM value, converting float fields from `src_float_ty` to
+`tgt_float_ty` using arith.extf. Returns a new value of type `tgt_ty`.
+"""
+function _convert_bf16_value(
+    src_val::MLIR.IR.Value,
+    src_ty::MLIR.IR.Type,
+    tgt_ty::MLIR.IR.Type,
+    src_float_ty::MLIR.IR.Type,
+    tgt_float_ty::MLIR.IR.Type,
+)
+    src_ty == tgt_ty && return src_val
+    if src_ty == src_float_ty
+        src_width = MLIR.API.mlirFloatTypeGetWidth(src_float_ty)
+        tgt_width = MLIR.API.mlirFloatTypeGetWidth(tgt_float_ty)
+        if tgt_width > src_width
+            return MLIR.IR.result(MLIR.Dialects.llvm.fpext(src_val; res=tgt_float_ty), 1)
+        elseif tgt_width < src_width
+            return MLIR.IR.result(MLIR.Dialects.llvm.fptrunc(src_val; res=tgt_float_ty), 1)
+        else
+            return MLIR.IR.result(MLIR.Dialects.llvm.fptrunc(src_val; res=tgt_float_ty), 1)
+        end
+    end
+    if MLIR.API.mlirTypeIsALLVMStructType(src_ty)
+        n = MLIR.API.mlirLLVMStructTypeGetNumElementTypes(src_ty)
+        tgt_val = MLIR.IR.result(MLIR.Dialects.llvm.mlir_undef(; res=tgt_ty), 1)
+        for i in 0:(n - 1)
+            field_src_ty = MLIR.IR.Type(
+                MLIR.API.mlirLLVMStructTypeGetElementType(src_ty, i)
+            )
+            field_tgt_ty = MLIR.IR.Type(
+                MLIR.API.mlirLLVMStructTypeGetElementType(tgt_ty, i)
+            )
+            field_val = MLIR.IR.result(
+                MLIR.Dialects.llvm.extractvalue(
+                    src_val; res=field_src_ty, position=MLIR.IR.Attribute(Int64[i])
+                ),
+                1,
+            )
+            converted = _convert_bf16_value(
+                field_val, field_src_ty, field_tgt_ty, src_float_ty, tgt_float_ty
+            )
+            tgt_val = MLIR.IR.result(
+                MLIR.Dialects.llvm.insertvalue(
+                    tgt_val, converted; res=tgt_ty, position=MLIR.IR.Attribute(Int64[i])
+                ),
+                1,
+            )
+        end
+        return tgt_val
+    elseif MLIR.API.mlirTypeIsALLVMArrayType(src_ty)
+        num_elems = MLIR.API.mlirLLVMArrayTypeGetNumElements(src_ty)
+        elem_src_ty = MLIR.IR.Type(MLIR.API.mlirLLVMArrayTypeGetElementType(src_ty))
+        elem_tgt_ty = MLIR.IR.Type(MLIR.API.mlirLLVMArrayTypeGetElementType(tgt_ty))
+        tgt_val = MLIR.IR.result(MLIR.Dialects.llvm.mlir_undef(; res=tgt_ty), 1)
+        for i in 0:(num_elems - 1)
+            elem_val = MLIR.IR.result(
+                MLIR.Dialects.llvm.extractvalue(
+                    src_val; res=elem_src_ty, position=MLIR.IR.Attribute(Int64[i])
+                ),
+                1,
+            )
+            converted = _convert_bf16_value(
+                elem_val, elem_src_ty, elem_tgt_ty, src_float_ty, tgt_float_ty
+            )
+            tgt_val = MLIR.IR.result(
+                MLIR.Dialects.llvm.insertvalue(
+                    tgt_val, converted; res=tgt_ty, position=MLIR.IR.Attribute(Int64[i])
+                ),
+                1,
+            )
+        end
+        return tgt_val
+    end
+    return src_val
+end
+
+struct ReactantCUDACompilerParams <: CUDACore.AbstractCUDACompilerParams
+    parent::CUDACore.CUDACompilerParams
+    raising::Bool
+end
+
+const ReactantCUDAJob = GPUCompiler.CompilerJob{
+    GPUCompiler.PTXCompilerTarget,ReactantCUDACompilerParams
+}
+GPUCompiler.can_vectorize(job::ReactantCUDAJob) = !job.config.params.raising
+function GPUCompiler.optimization_options(job::ReactantCUDAJob)
+    raising = job.config.params.raising
+    return (; instcombine=!raising, fastmath=!raising, aggressiveinstcombine=!raising)
+end
+
+function GPUCompiler.method_table(@nospecialize(job::ReactantCUDAJob))
+    return job.config.params.raising ? REACTANT_CUDA_METHOD_TABLE : CUDACore.method_table
+end
+function GPUCompiler.method_table_view(@nospecialize(job::ReactantCUDAJob))
+    pview = GPUCompiler.get_method_table_view(job.world, CUDACore.method_table)
+    return if job.config.params.raising
+        GPUCompiler.StackedMethodTable(job.world, REACTANT_CUDA_METHOD_TABLE, pview)
+    else
+        pview
+    end
+end
+
+function Base.getproperty(RCP::ReactantCUDACompilerParams, field::Symbol)
+    if field == :parent || field == :raising
+        return getfield(RCP, field)
+    else
+        return Base.getproperty(getfield(RCP, :parent), field)
+    end
+end
+
+Reactant.@reactant_overlay function CUDA.cufunction(
     f::F, tt::TT=Tuple{}; kwargs...
 ) where {F,TT}
-    res = Base.@lock CUDA.cufunction_lock begin
+    res = Base.@lock CUDACore.cufunction_lock begin
         # compile the function
         cache = llvm_compiler_cache(MLIR.IR.current_module())
-        source = CUDA.methodinstance(F, tt)
+        effective_tt = _substitute_bfloat16_tt(tt, _bfloat16_compile_type())
+        source = GPUCompiler.methodinstance(F, effective_tt)
         # cuda = CUDA.active_state()
         device = nothing # cuda.device
         # config = CUDA.compiler_config(device; kwargs...)::CUDA.CUDACompilerConfig
@@ -1308,9 +1664,17 @@ Reactant.@reactant_overlay @noinline function CUDA.cufunction(
         always_inline = false
         name = nothing
         debuginfo = false
+
+        params = if CUVERSION == 6
+            llvm_sm = CUDACore.SMVersion(cuda_cap.major, cuda_cap.minor)
+            CUDACore.CUDACompilerParams(; sm=llvm_sm, ptx=cuda_ptx)
+        else
+            CUDACore.CUDACompilerParams(; cap=cuda_cap, ptx=cuda_ptx)
+        end
+
         config = GPUCompiler.CompilerConfig(
-            CUDA.PTXCompilerTarget(; cap=llvm_cap, ptx=llvm_ptx, debuginfo),
-            CUDA.CUDACompilerParams(; cap=cuda_cap, ptx=cuda_ptx);
+            GPUCompiler.PTXCompilerTarget(; cap=llvm_cap, ptx=llvm_ptx, debuginfo),
+            ReactantCUDACompilerParams(params, raising());
             kernel,
             name,
             always_inline,
@@ -1429,6 +1793,15 @@ function Reactant.make_tracer(
     return newa
 end
 
+@inline function Reactant.Ops.__construct_cuda_julia_buffer(::Type{T}, shape, ptr) where {T}
+    return unsafe_wrap(CUDA.CuArray, reinterpret(CUDA.CuPtr{T}, UInt(ptr)), shape)
+end
+@inline function Reactant.Ops.__construct_cuda_julia_buffer(
+    ::Type{T}, ::Tuple{}, ptr
+) where {T}
+    return @allowscalar Reactant.Ops.__construct_cuda_julia_buffer(T, (1,), ptr)[1]
+end
+
 # In Julia v1.11.3 precompiling this module caches bad code:
 # <https://github.com/EnzymeAD/Reactant.jl/issues/614>.
 @static if !Sys.isapple()
@@ -1436,15 +1809,29 @@ end
         Reactant.initialize_dialect()
 
         if Reactant.XLA.REACTANT_XLA_RUNTIME == "PJRT"
-            client = Reactant.XLA.PJRT.CPUClient(; checkcount=false)
+            client = Reactant.Accelerators.CPU.make_pjrt_client()
         elseif Reactant.XLA.REACTANT_XLA_RUNTIME == "IFRT"
-            client = Reactant.XLA.IFRT.CPUClient(; checkcount=false)
+            client = Reactant.Accelerators.CPU.make_ifrt_client()
         else
             error("Unsupported runtime: $(Reactant.XLA.REACTANT_XLA_RUNTIME)")
         end
 
         @compile_workload begin
-            @static if Reactant.precompilation_supported() && VERSION != v"1.11.3"
+            # On Windows, Julia v1.11 cannot link the pkgimage this workload
+            # produces. Compiling a GPU kernel during precompilation leaves an
+            # unmarked reference to the `jl_boxed_uint8_cache` runtime global in
+            # the image, and since COFF has no import thunk for data, lld
+            # rejects it:
+            #     lld: error: undefined symbol: jl_boxed_uint8_cache
+            # ReactantCUDAExt then fails to precompile and never loads at all.
+            # Skipping the workload here only costs precompilation: any package
+            # compiling a GPU kernel in its own workload hits this too, so the
+            # actual fix has to come from Julia. The upper bound assumes that
+            # fix ships in the next v1.11 patch release, so that precompilation
+            # resumes on its own; raise it if it slips.
+            @static if Reactant.precompilation_supported() &&
+                VERSION != v"1.11.3" &&
+                !(Sys.iswindows() && v"1.11" <= VERSION <= v"1.11.9")
                 function square_kernel!(x)
                     i = CUDA.threadIdx().x
                     x[i] *= x[i]
