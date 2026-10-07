@@ -390,6 +390,28 @@ end
     @test @allowscalar(x_ra[2, 1]) == 0.0
 end
 
+function condition11_nested_ifff_and_for(x, y, z, n)
+    x_sum = sum(x)
+    @trace for _ in 1:n
+        @trace if x_sum > 0
+            y_sum = sum(y)
+            @trace if y_sum > 0
+                @trace if z > 0
+                    z = x_sum + y_sum + z
+                else
+                    z = x_sum + y_sum
+                end
+            else
+                z = x_sum - y_sum
+            end
+        else
+            y_sum = sum(y)
+            z = x_sum - y_sum
+        end
+    end
+    return z
+end
+
 function condition11_nested_ifff(x, y, z)
     x_sum = sum(x)
     @trace if x_sum > 0
@@ -413,20 +435,22 @@ end
 @testset "condition11: nested if 3 levels deep" begin
     x = Reactant.TestUtils.construct_test_array(Float64, 2, 10)
     y = Reactant.TestUtils.construct_test_array(Float64, 2, 10)
-    z = Reactant.TestUtils.construct_test_array(Float64, 2, 10)
+    z = Float64(42.0)
+    n = Int64(10)
     x_ra = Reactant.to_rarray(x)
     y_ra = Reactant.to_rarray(y)
-    z_ra = Reactant.to_rarray(z)
+    z_ra = Reactant.ConcreteRNumber(z)
+    n_ra = Reactant.ConcreteRNumber(n)
 
     @test @jit(condition11_nested_ifff(x_ra, y_ra, z_ra)) ≈ condition11_nested_ifff(x, y, z) atol =
         1e-10
 
     x = -Reactant.TestUtils.construct_test_array(Float64, 2, 10)
     y = -Reactant.TestUtils.construct_test_array(Float64, 2, 10)
-    z = -Reactant.TestUtils.construct_test_array(Float64, 2, 10)
+    z = Float64(42.0)
     x_ra = Reactant.to_rarray(x)
     y_ra = Reactant.to_rarray(y)
-    z_ra = Reactant.to_rarray(z)
+    z_ra = Reactant.ConcreteRNumber(z)
 
     # x and y hold the same values here, so this branch returns x_sum - y_sum and
     # the reference is exactly 0.0. isapprox defaults to atol = 0, so it only
@@ -434,6 +458,9 @@ end
     # difference between them is enough to fail it.
     @test @jit(condition11_nested_ifff(x_ra, y_ra, z_ra)) ≈ condition11_nested_ifff(x, y, z) atol =
         1e-10
+
+    @test @jit(condition11_nested_ifff_and_for(x_ra, y_ra, z_ra, n_ra)) ≈
+        condition11_nested_ifff_and_for(x, y, z, n) atol = 1e-10
 end
 
 function condition12_compile_test(x, y, z)

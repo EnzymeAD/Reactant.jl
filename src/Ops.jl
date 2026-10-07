@@ -2380,11 +2380,9 @@ end
     traced_args = Vector{Any}(undef, N)
 
     for (i, prev) in enumerate(args)
-        @inbounds traced_args[i] = if prev isa Ref && prev[] isa MissingTracedValue
-            Ref{Nothing}(nothing)
-        else
-            Reactant.make_tracer(seen_args, prev, (), Reactant.NoStopTracedTrack; track_numbers)
-        end
+        @inbounds traced_args[i] = Reactant.make_tracer(
+            seen_args, prev, (), Reactant.NoStopTracedTrack; track_numbers
+        )
     end
 
     linear_args = Reactant.TracedType[]
