@@ -961,7 +961,7 @@ end
     MLIR.IR.@dispose ctx = Reactant.ReactantContext() begin
         ir = Reactant.code_hlo(ctx, call3, (y_ra,); optimize=false)
         ops = [op for op in Reactant.MLIR.IR.body(ir)]
-        @test length(ops) == 5 # call3, .+, .*, _call3 (2X)
+        @test length(ops) == 3 # call3, _call3 (2X); .+ and .* lower directly to stablehlo ops
         MLIR.IR.dispose(ir)
     end
 end
