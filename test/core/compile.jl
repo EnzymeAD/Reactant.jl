@@ -668,3 +668,11 @@ end
         x
     ))
 end
+
+@testset "constant results of different types don't share a thunk" begin
+    x = Reactant.to_rarray([1.0, 2.0])
+    @test @jit((x -> true)(x)) === true
+    @test @jit((x -> 1)(x)) === 1
+    @test @jit((x -> Int8(1))(x)) === Int8(1)
+    @test @jit((x -> 1.0)(x)) === 1.0
+end

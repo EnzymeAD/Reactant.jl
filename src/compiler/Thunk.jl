@@ -4,7 +4,47 @@ using ..Reactant: XLA
 
 # inspired by RuntimeGeneratedFunction.jl
 const __thunk_fwd_body_cache = Dict{Symbol,Expr}()
-const __thunk_rev_body_cache = Dict{Expr,Symbol}()
+
+# `Expr` equality compares leaves with `isequal`, under which `true`, `Int8(1)` and `1` are
+# all equal, so bodies that only differ in the type of an inlined constant would share a
+# thunk. Compare (and hash) the leaves by type as well.
+struct ThunkBodyKey
+    body::Expr
+end
+
+_strict_isequal(a::Expr, b::Expr) = a.head === b.head && _strict_isequal(a.args, b.args)
+_strict_isequal(a::QuoteNode, b::QuoteNode) = _strict_isequal(a.value, b.value)
+function _strict_isequal(a::Vector{Any}, b::Vector{Any})
+    length(a) == length(b) || return false
+    for (x, y) in zip(a, b)
+        _strict_isequal(x, y) || return false
+    end
+    return true
+end
+_strict_isequal(a, b) = typeof(a) === typeof(b) && isequal(a, b)
+
+_strict_hash(x::Expr, h::UInt) = _strict_hash(x.args, hash(x.head, h))
+_strict_hash(x::QuoteNode, h::UInt) = _strict_hash(x.value, hash(QuoteNode, h))
+function _strict_hash(x::Vector{Any}, h::UInt)
+    for y in x
+        h = _strict_hash(y, h)
+    end
+    return h
+end
+_strict_hash(x, h::UInt) = hash(x, hash(typeof(x), h))
+
+Base.:(==)(a::ThunkBodyKey, b::ThunkBodyKey) = _strict_isequal(a.body, b.body)
+Base.hash(k::ThunkBodyKey, h::UInt) = _strict_hash(k.body, hash(ThunkBodyKey, h))
+
+const __thunk_rev_body_cache = Dict{ThunkBodyKey,Symbol}()
+
+function thunk_body_tag(@nospecialize(f), body::Expr)
+    return get!(__thunk_rev_body_cache, ThunkBodyKey(body)) do
+        fname = gensym(Symbol(Symbol(f), :_reactant))
+        __thunk_fwd_body_cache[fname] = body
+        fname
+    end
+end
 
 struct Thunk{FTy,tag,IsClosure,ArgTypes,ExecTy,DeviceTy,ClientTy,GD,DAM}
     f::FTy
@@ -98,14 +138,7 @@ function register_thunk(
     donated_args_mask,
     compiled_with_sync::Bool,
 )
-    tag = if body in keys(__thunk_rev_body_cache)
-        __thunk_rev_body_cache[body]
-    else
-        fname2 = gensym(Symbol(Symbol(f), :_reactant))
-        __thunk_rev_body_cache[body] = fname2
-        __thunk_fwd_body_cache[fname2] = body
-        fname2
-    end
+    tag = thunk_body_tag(f, body)
 
     return Thunk{
         Core.Typeof(f),

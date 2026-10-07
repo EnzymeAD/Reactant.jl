@@ -1494,15 +1494,6 @@ function compile(ctx, f, args; kwargs...)
         display(mlir_fn_res.donated_args_mask)
     end
 
-    fname = if body in keys(__thunk_rev_body_cache)
-        __thunk_rev_body_cache[body]
-    else
-        fname2 = gensym(Symbol(Symbol(f), :_reactant))
-        __thunk_rev_body_cache[body] = fname2
-        __thunk_fwd_body_cache[fname2] = body
-        fname2
-    end
-
     return register_thunk(
         f,
         Tuple{map(Core.Typeof, args)...},
