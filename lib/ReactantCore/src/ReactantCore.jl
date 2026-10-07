@@ -295,6 +295,16 @@ macro trace(args...)
     track_numbers = track_numbers ? Number : Union{}
     expr = macroexpand(__module__, expr)
 
+    # A loop marked for checkpointing with a loop annotation, as
+    # CheckpointingCore's (and Checkpointing.jl's) @ad_checkpoint leave it,
+    # is checkpointed the same way, unless `checkpointing` says otherwise.
+    if checkpointing === false && Meta.isexpr(expr, (:for, :while), 2)
+        marker = take_loop_checkpoint!(expr)
+        if marker !== nothing
+            checkpointing = checkpointing_from_loop_annotation(marker...)
+        end
+    end
+
     #! format: off
     if @capture(
         expr,
@@ -568,6 +578,49 @@ function trace_while(mod, expr; track_numbers, mincut, checkpointing, first_arg=
         else
             $(expr)
         end
+    end
+end
+
+# The loop annotation a loop is marked for checkpointing with:
+# Expr(:loopinfo, (Symbol("enzyme.checkpoint"), schedule, budget)) in its
+# body, the schedules and budgets being those of Enzyme's
+# checkpoint_schedule.h. ReactantCore reads the convention and does not
+# depend on CheckpointingCore, which writes it.
+const LOOP_CHECKPOINT = Symbol("enzyme.checkpoint")
+
+# Remove the checkpointing annotation from the loop `expr`, returning its
+# schedule and budget, or `nothing`.
+function take_loop_checkpoint!(expr::Expr)
+    body = expr.args[2]
+    Meta.isexpr(body, :block) || return nothing
+    for (k, ex) in enumerate(body.args)
+        Meta.isexpr(ex, :loopinfo) || continue
+        for info in ex.args
+            if info isa Tuple && length(info) == 3 && info[1] === LOOP_CHECKPOINT
+                deleteat!(body.args, k)
+                return (info[2]::Symbol, info[3]::Int)
+            end
+        end
+    end
+    return nothing
+end
+
+# The `checkpointing` a loop annotation asks for. Enzyme-MLIR's binomial
+# schedule stands in for Revolve, which it has not got; it needs a budget of
+# at least 2. A periodic loop without a budget takes the default.
+function checkpointing_from_loop_annotation(schedule::Symbol, budget::Int)
+    if schedule === :none
+        return false
+    elseif schedule === :periodic
+        return budget > 0 ? :($(Periodic)($budget)) : true
+    elseif schedule === :binomial || schedule === :revolve
+        budget > 1 || error(
+            "@trace: a loop checkpointed with $(schedule) needs a budget of at least 2, " *
+            "as Enzyme-MLIR's binomial checkpointing does",
+        )
+        return :($(Binomial)($budget))
+    else
+        error("@trace: Reactant cannot checkpoint a loop with the schedule $(schedule)")
     end
 end
 
