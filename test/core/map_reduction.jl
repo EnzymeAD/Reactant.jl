@@ -532,3 +532,34 @@ mapped_sub(xs...) = stack(map(-, xs...))
         end
     end
 end
+
+@testset "reductions over plain values (#3410)" begin
+    x = Reactant.to_rarray([1.0, 2.0, 3.0])
+    X = Reactant.to_rarray(reshape(collect(1.0:6.0), 2, 3))
+
+    @testset "one-element reductions widen" begin
+        @test @jit((x -> sum(identity, [true]))(x)) === 1
+        @test @jit((x -> sum(Int8[1]))(x)) === 1
+        @test @jit((x -> prod(Int8[2]))(x)) === 2
+        @test @jit((x -> sum(v -> v, [UInt8(3)]))(x)) === UInt(3)
+        @test @jit((x -> maximum(Int8[1]))(x)) === Int8(1)
+    end
+
+    @testset "plain predicate over a Vector of traced arrays" begin
+        @test @jit((x -> any(isnothing, [x, x]))(x)) === false
+        @test @jit((x -> all(a -> size(a) == (3,), [x, x]))(x)) === true
+        @test @jit((x -> count(isnothing, [x, x, x]))(x)) === 0
+        @test @jit((x -> any(isnothing, [x, x]) ? x : 2 .* x)(x)) ≈ 2 .* Array(x)
+    end
+
+    @testset "plain predicate over a traced array" begin
+        @test @jit((x -> any(ismissing, x) ? zero(eltype(x)) : sum(x))(x)) ≈ 6.0
+        @test @jit((x -> all(v -> v isa Number, x))(x)) === true
+        @test @jit((x -> count(ismissing, x))(x)) === 0
+        @test @jit((x -> sum(isreal, x))(x)) === 3
+        @test @jit((x -> sum(isreal, x; init=10))(x)) === 13
+        @test @jit((X -> count(ismissing, X; dims=1))(X)) == zeros(Int, 1, 3)
+        @test @jit((X -> sum(isreal, X; dims=2))(X)) == fill(3, 2, 1)
+        @test @jit((a -> sum(isreal, a))(Reactant.to_rarray(fill(1.0)))) === 1
+    end
+end

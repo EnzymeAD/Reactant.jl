@@ -106,6 +106,10 @@ for F in (:MappingRF, :FilteringRF)
     end
 end
 
+# Base widens a one-element reduction (e.g. `sum(Int8[1])::Int`) by dispatching
+# `reduce_first` on the operator, which the wrapper would otherwise hide.
+Base.reduce_first(op::CallWithReactant, x) = Base.reduce_first(op.f, x)
+
 function Base.reduce_empty(f::Base.BottomRF{<:CallWithReactant}, T::Type)
     return Base.reduce_empty(Base.BottomRF(f.rf.f), T)
 end
