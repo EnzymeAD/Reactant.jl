@@ -512,7 +512,7 @@ function trace_while(mod, expr; track_numbers, mincut, checkpointing, first_arg=
     # A variable assigned in the body whose name is also a global function/type (e.g. `cond`
     # with `using LinearAlgebra`) would otherwise be seeded with that global by `@isdefined`.
     function loop_init_val(s)
-        s ∈ body_symbols.assignments || return cond_val(s)
+        s ∈ body_symbols.assignments || return :(@isdefined($s) ? $s : nothing)
         return :(
             if @isdefined($s) && !(
                 $s isa Union{Function,Type} &&
@@ -521,7 +521,7 @@ function trace_while(mod, expr; track_numbers, mincut, checkpointing, first_arg=
             )
                 $s
             else
-                $MissingTracedValue()
+                nothing
             end
         )
     end
