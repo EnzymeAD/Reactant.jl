@@ -1264,7 +1264,7 @@ function compile_xla(f, args; kwargs...)
     end
 end
 
-function compile_xla(
+Reactant.@annotate "compile $(string(f))" function compile_xla(
     ctx,
     f,
     args;

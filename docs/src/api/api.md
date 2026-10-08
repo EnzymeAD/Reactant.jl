@@ -81,6 +81,9 @@ See the [profiling tutorial](@ref profiling) for more details.
 Reactant.Profiler.with_profiler
 Reactant.Profiler.@time
 Reactant.Profiler.@timed
+Reactant.Profiler.@timed_compile
+Reactant.Profiler.profile_compile_timings
+Reactant.Profiler.CompileTimings
 Reactant.Profiler.@profile
 Reactant.Profiler.profiler_activity_start
 Reactant.Profiler.profiler_activity_end

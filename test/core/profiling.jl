@@ -1,4 +1,4 @@
-using Reactant
+using Reactant, Test
 
 const RunningOnCPU = contains(string(Reactant.devices()[1]), "CPU")
 const RunningOnCUDA = contains(string(Reactant.devices()[1]), "CUDA")
@@ -50,4 +50,40 @@ linear(x, W, b) = (W * x) .+ b
             x, W, b
         )
     end
+end
+
+@testset "Compile timings" begin
+    if !Sys.iswindows()
+        fn, timings = Reactant.Profiler.@timed_compile linear(x, W, b)
+        @test Array(fn(x, W, b)) ≈ linear(Array(x), Array(W), Array(b))
+
+        @test timings isa Reactant.Profiler.CompileTimings
+        @test timings.total_compile_time_μs > 0
+        @test timings.tracing_time_μs > 0
+        @test timings.xla_time_μs > 0
+        @test timings.tracing_time_μs <= timings.total_compile_time_μs
+        @test timings.mlir_time_μs <= timings.total_compile_time_μs
+        @test timings.xla_time_μs <= timings.total_compile_time_μs
+        @test !isempty(timings.traces)
+    end
+
+    # Lines (threads) sharing a name must not overwrite each other
+    XPB = Reactant.Proto.tensorflow.profiler
+    event(duration_ps) =
+        XPB.XEvent(1, XPB.OneOf(:offset_ps, Int64(0)), duration_ps, XPB.XStat[])
+    line(id, duration_ps) =
+        XPB.XLine(id, id, "worker", "", 0, duration_ps, [event(duration_ps)])
+    plane = XPB.XPlane(
+        1,
+        "/host:CPU",
+        [line(1, 1_000_000), line(2, 2_000_000)],
+        Dict(1 => XPB.XEventMetadata(1, "compile f", "", UInt8[], XPB.XStat[], Int64[])),
+        Dict{Int64,XPB.XStatMetadata}(),
+        XPB.XStat[],
+    )
+    traces = Reactant.Profiler.trace_trees(
+        XPB.XSpace([plane], String[], String[], String[])
+    )
+    @test length(traces["/host:CPU"]) == 2
+    @test Reactant.Profiler._total_duration(traces, "compile ") == 3
 end
