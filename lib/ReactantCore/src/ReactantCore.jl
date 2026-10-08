@@ -516,15 +516,10 @@ function trace_while(mod, expr; track_numbers, mincut, checkpointing, first_arg=
     all_syms = Expr(:tuple, external_syms...)
     args_names = Expr(:tuple, external_syms...)
 
-    # A variable assigned in the body whose name is also a global function/type (e.g. `cond`
-    # with `using LinearAlgebra`) would otherwise be seeded with that global by `@isdefined`.
-    # Real locals are always carried, even when they hold that same global (e.g. an argument
-    # `cond` passed `LinearAlgebra.cond`); the value-based check only applies to non-locals.
-    locals_sym = gensym(:locals)
     function loop_init_val(s)
         s ∈ body_symbols.assignments || return :(@isdefined($s) ? $s : nothing)
         return :(
-            if haskey($locals_sym, $(QuoteNode(s)))
+            if $(Expr(:islocal, s)) && @isdefined($s)
                 $s
             elseif @isdefined($s) && !(
                 $s isa Union{Function,Type} && $is_global_value($mod, $(QuoteNode(s)), $s)
@@ -584,7 +579,7 @@ function trace_while(mod, expr; track_numbers, mincut, checkpointing, first_arg=
     varnames_expr = Expr(:tuple, QuoteNode.(external_syms)...)
 
     reactant_code_block = quote
-        let $locals_sym = $(Expr(:locals)), $args_sym = $(args_init)
+        let $args_sym = $(args_init)
             $pre_alias_ids_sym = $(pre_ids_expr)
             $cond_fn_sym = $(arg_syms) -> begin
                 $(to_locals...)
