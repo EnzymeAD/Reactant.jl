@@ -469,6 +469,13 @@ end
 
 cond_val(s) = :(@isdefined($s) ? $s : $MissingTracedValue())
 
+# Kept opaque to constant propagation: inferring `getglobal(mod, :sym)` with constant
+# arguments resolves the binding, which breaks a later top-level assignment of an implicitly
+# imported name (e.g. `π = @jit f(x)` where `f` has a local `π`).
+@noinline Base.@constprop :none function is_global_value(mod::Module, s::Symbol, val)
+    return isdefined(mod, s) && val === getglobal(mod, s)
+end
+
 function trace_while(mod, expr; track_numbers, mincut, checkpointing, first_arg=nothing)
     Meta.isexpr(expr, :while, 2) || error("expected while expr")
     cond, body = expr.args
@@ -516,8 +523,7 @@ function trace_while(mod, expr; track_numbers, mincut, checkpointing, first_arg=
         return :(
             if @isdefined($s) && !(
                 $s isa Union{Function,Type} &&
-                isdefined($mod, $(QuoteNode(s))) &&
-                $s === getglobal($mod, $(QuoteNode(s)))
+                $is_global_value($mod, $(QuoteNode(s)), $s)
             )
                 $s
             else
