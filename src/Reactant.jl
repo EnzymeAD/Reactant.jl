@@ -284,6 +284,8 @@ include("ControlFlow.jl")
 include("Enums.jl")
 include("Tracing.jl")
 
+function default_nccl_comm_handle end
+
 include("compiler/Compiler.jl")
 
 include("Overlay.jl")
@@ -371,6 +373,7 @@ function initialize_ptrs()
             "cuModuleLoadData",
             "cuModuleGetFunction",
             "cuStreamSynchronize",
+            "ncclAllReduce",
         )
             MLIR.API.EnzymeJaXMapSymbol(
                 name, Libdl.dlsym(Reactant_jll.libReactantExtra_handle, name)
