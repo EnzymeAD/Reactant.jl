@@ -2555,9 +2555,6 @@ end
             if isnothing(path)
                 error("if_condition: could not find path for linear arg $i")
             end
-            if arg isa MissingTracedValue
-                continue
-            end
             Reactant.TracedUtils.set_mlir_data!(
                 arg,
                 only(
@@ -2874,15 +2871,13 @@ end
 
     corrected_traced_results =
         map(zip(traced_false_results, traced_true_results)) do (fr, tr)
-            res = if fr isa MissingTracedValue && tr isa MissingTracedValue
+            if fr isa MissingTracedValue && tr isa MissingTracedValue
                 return fr
             elseif fr isa MissingTracedValue
                 return tr
             else
                 return fr
             end
-            # @something res MissingTracedValue()
-            res
         end
 
     @assert length(all_paths) == length(result_types)
