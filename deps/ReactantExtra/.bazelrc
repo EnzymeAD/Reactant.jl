@@ -39,6 +39,12 @@ build -c opt
 
 common:macos --define ynn_enable_arm64_sme=false
 
+# Native builds on a macOS host (e.g. `deps/build_local.jl`). Do not use this for the
+# jll builds, which cross-compile from Linux with `--config=macos` and their own toolchain.
+common:macos_local --config=macos
+common:macos_local --crosstool_top=@local_config_apple_cc//:toolchain
+common:macos_local --host_crosstool_top=@local_config_apple_cc//:toolchain
+
 common:cuda --repo_env TF_NEED_CUDA=1
 common:cuda --repo_env TF_NVCC_CLANG=1
 common:cuda --repo_env TF_NCCL_USE_STUB=1
