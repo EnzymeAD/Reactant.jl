@@ -1125,9 +1125,7 @@ function set!(x, path, tostore; emptypath=false)
         x = Reactant.Compiler.traced_getfield(x, p)
     end
 
-    if is_traced(x)
-        set_mlir_data!(x, tostore)
-    end
+    set_mlir_data!(x, tostore)
 
     return emptypath && set_paths!(x, ())
 end
