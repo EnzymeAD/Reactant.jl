@@ -522,8 +522,7 @@ function trace_while(mod, expr; track_numbers, mincut, checkpointing, first_arg=
         s ∈ body_symbols.assignments || return :(@isdefined($s) ? $s : nothing)
         return :(
             if @isdefined($s) && !(
-                $s isa Union{Function,Type} &&
-                $is_global_value($mod, $(QuoteNode(s)), $s)
+                $s isa Union{Function,Type} && $is_global_value($mod, $(QuoteNode(s)), $s)
             )
                 $s
             else
