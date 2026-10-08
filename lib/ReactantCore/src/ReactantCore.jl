@@ -746,7 +746,7 @@ function trace_if_with_returns(expr; track_numbers)
     expr.args[2].args[1] = cond_name
     return quote
         $(cond_name) = $(original_cond)
-        if $(within_compile)() && $(any)($(is_traced), ($(all_check_vars...),))
+        if $(within_compile)() && $(any)($(is_traced), ($((cond_val.(all_check_vars))...),))
             $(new_expr)
         else
             $(expr)
@@ -1017,11 +1017,7 @@ end
 const CONTROL_FLOW_EXPRS = Symbol[:return, :break, :continue, :symbolicgoto, :macrocall]
 
 function prewalk_until_function_boundary(f, expr)
-    if Meta.isexpr(expr, :function) ||
-        Meta.isexpr(expr, :(->)) ||
-        (Meta.isexpr(expr, :(=), 2) && Meta.isexpr(expr.args[1], :call))
-        return expr
-    end
+    MacroTools.isdef(expr) && return expr
     if expr isa Expr
         return f(Expr(expr.head, map(f, expr.args)...))
     end
@@ -1030,11 +1026,7 @@ end
 
 error_if_any_control_flow(_) = nothing
 function error_if_any_control_flow(expr::Expr)
-    if Meta.isexpr(expr, :function) ||
-        Meta.isexpr(expr, :(->)) ||
-        (Meta.isexpr(expr, :(=), 2) && Meta.isexpr(expr.args[1], :call))
-        return expr
-    end
+    MacroTools.isdef(expr) && return expr
 
     head_idx = findfirst(==(expr.head), CONTROL_FLOW_EXPRS)
     if !isnothing(head_idx)
