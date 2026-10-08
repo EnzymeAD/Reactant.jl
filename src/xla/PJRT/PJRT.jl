@@ -6,6 +6,10 @@ using Reactant_jll: Reactant_jll
 
 using Libdl: Libdl
 
+module CAPI
+    include("CAPI.jl")
+end
+
 include("Client.jl")
 include("Device.jl")
 include("Future.jl")
