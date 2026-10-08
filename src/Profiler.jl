@@ -240,7 +240,7 @@ end
 # Dict of plane => line => roots
 function trace_trees(xspace::Proto.tensorflow.profiler.XSpace)
     return Dict(
-        p.name => Dict(l.name => line_tree(p, l) for l in p.lines) for p in xspace.planes
+        p.name => Dict(l.id => line_tree(p, l) for l in p.lines) for p in xspace.planes
     )
 end
 
@@ -257,7 +257,7 @@ trace events of that kind, in microseconds:
   - `xla_time_μs`: `XLA compile <fn>` events (compiling the MLIR module with XLA)
 
 `traces` holds the reconstructed trace trees as a `Dict` mapping each plane name (e.g.
-`"/host:CPU"`) to a `Dict` mapping each line (thread or stream) name to its root
+`"/host:CPU"`) to a `Dict` mapping each line (thread or stream) id to its root
 `TraceNode`s. Each `TraceNode` has a `name`, a `start_ps` and `duration_ps` in picoseconds,
 its `stats`, and its nested `children`.
 """
@@ -374,8 +374,9 @@ end
     @timed_compile [options...] f(args...)
 
 Like [`@compile`](@ref) (and accepting the same options), but records host traces while
-compiling and returns a [`CompileTimings`](@ref) of the time spent in the different
-stages of compilation instead of the compiled function.
+compiling and returns `(compiled, timings)` where `compiled` is the compiled function
+and `timings` is a [`CompileTimings`](@ref) of the time spent in the different stages of
+compilation.
 
 ```julia-repl
 julia> myfunc_compiled, summary = Profiler.@timed_compile myfunc(x, y, z);
