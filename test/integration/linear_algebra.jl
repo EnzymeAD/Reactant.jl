@@ -544,7 +544,7 @@ end
     @test @jit(norm(x_ra)) isa ConcreteRNumber{Float32}
 end
 
-@testset "norm $T p=$p" for T in (Float32, ComplexF64), p in (1, 2, 3, Inf, -Inf)
+@testset "norm $T p=$p" for T in (Float32, ComplexF32), p in (1, 2, 3, Inf, -Inf)
     x = Reactant.TestUtils.construct_test_array(T, 6) .- 3
     x_ra = Reactant.to_rarray(x)
     @test @jit(norm(x_ra, p)) ≈ norm(x, p)
