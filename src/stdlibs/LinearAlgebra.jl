@@ -408,7 +408,7 @@ function overloaded_norm(x::Diagonal, p::Real=2)
         T = real(Reactant.unwrapped_eltype(x))
         return Reactant.promote_to(TracedRNumber{T}, zero(T))
     end
-    return overloaded_norm(materialize_traced_array(x.diag), p)
+    return overloaded_norm(diag(x), p)
 end
 
 function LinearAlgebra._diagm(shape, kv::Pair{<:Integer,<:AnyTracedRVector}...)
