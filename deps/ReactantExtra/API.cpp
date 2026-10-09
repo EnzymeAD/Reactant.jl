@@ -146,10 +146,13 @@ void reactantReleaseAddressRange(void *base, size_t nbytes);
 #include "shardy/dialect/sdy/transforms/propagation/passes.h"
 #include "shardy/dialect/sdy/transforms/propagation/user_priority_propagation.h"
 #include "shardy/integrations/c/attributes.h"
+#include "xla/backends/gpu/collectives/gpu_collectives.h"
 #include "xla/client/local_client.h"
 #include "xla/pjrt/mlir_to_hlo.h"
 #include "xla/pjrt/se/pjrt_stream_executor_client.h"
 #include "xla/service/executable.h"
+#include "xla/service/gpu/gpu_executable_run_options.h"
+#include "xla/service/service_executable_run_options.h"
 #include "xla/service/spmd/shardy/stablehlo_round_trip/export_shardings.h"
 #include "xla/service/spmd/shardy/stablehlo_round_trip/stablehlo_export.h"
 #include "xla/service/spmd/shardy/stablehlo_round_trip/stablehlo_import.h"
@@ -3800,6 +3803,16 @@ struct LinkableRuntime {
   std::unordered_map<size_t, std::vector<se::DeviceAddressBase>> freeRaw;
   static const size_t kFreeListBytes = 256 << 10;
   static const size_t kFreeListEntries = 64;
+  // The GPU run options every run takes: the client's, with the collectives
+  // resolved once (left unset, XLA resolves them on every run, building the
+  // whole DebugOptions from the flags to do it: 5% of a solver's host time).
+  xla::gpu::GpuExecutableRunOptions gpuRunOptions;
+  // The options every run takes, built once: an executable runs through
+  // Executable::ExecuteAsyncOnStream with them, rather than through
+  // LocalExecutable::RunAsync, which checks the arguments' layouts against
+  // the computation's and builds these options again on every run (the
+  // executables are compiled for exactly the arguments they take).
+  std::optional<xla::ServiceExecutableRunOptions> runOptions;
 
   // Each allocation reserves an inaccessible address range as large as the
   // buffer it stands for, so pointer arithmetic on the handle stays inside
@@ -3911,6 +3924,21 @@ struct LinkableRuntime {
       deviceState = raw->device_state(xla::LocalDeviceId(ordinal));
       stream = deviceState->compute_stream();
       allocator = raw->allocator();
+      if (raw->gpu_run_options())
+        gpuRunOptions = *raw->gpu_run_options();
+      if (!gpuRunOptions.collectives())
+        gpuRunOptions.set_collectives(xla::gpu::GpuCollectives::Resolve(
+            stream->parent()->GetPlatform()->Name()));
+      xla::ExecutableRunOptions options;
+      options.set_stream(stream);
+      options.set_device_ordinal(ordinal);
+      options.set_allocator(allocator);
+      options.set_intra_op_thread_pool(
+          local->backend().eigen_intra_op_thread_pool_device());
+      options.set_run_id(xla::RunId::CreateUniqueId());
+      options.set_gpu_executable_run_options(&gpuRunOptions);
+      runOptions.emplace(
+          options, local->mutable_backend()->StreamBorrowerWithPriority());
       pinned = MyValueOrThrow(
           deviceState->executor()->HostMemoryAllocate(kPinnedBytes));
     }
@@ -4268,7 +4296,7 @@ static void runRaw(LinkableRuntime *__restrict__ lrt,
   inputs.reserve(exec.paramShapes.size());
   for (size_t pos = 0; pos < params.size(); pos++) {
     auto *info = params[pos];
-    inputs.emplace_back(exec.paramShapes[pos]);
+    inputs.emplace_back(&exec.paramShapes[pos]);
     if (exec.written[pos]) {
       info->generation++;
       inputs.back().SetBuffer(
@@ -4279,15 +4307,8 @@ static void runRaw(LinkableRuntime *__restrict__ lrt,
       inputs.back().SetBuffer({}, xla::MaybeOwningDeviceAddress(info->mem));
     }
   }
-  xla::ExecutableRunOptions options;
-  options.set_stream(lrt->stream);
-  options.set_device_ordinal(lrt->ordinal);
-  options.set_allocator(lrt->allocator);
-  options.set_intra_op_thread_pool(
-      lrt->local->backend().eigen_intra_op_thread_pool_device());
-  options.set_run_id(xla::RunId::CreateUniqueId());
-  options.set_gpu_executable_run_options(lrt->raw->gpu_run_options());
-  auto output = MyValueOrThrow(lexec->RunAsync(std::move(inputs), options));
+  auto output = MyValueOrThrow(lexec->executable()->ExecuteAsyncOnStream(
+      &*lrt->runOptions, std::move(inputs)));
   xla::ScopedShapedBuffer result = output.ConsumeResult();
   int64_t numResults =
       tupleResult ? result.on_device_shape().tuple_shapes().size() : 1;
