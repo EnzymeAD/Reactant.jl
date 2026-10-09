@@ -145,7 +145,10 @@ void reactantReleaseAddressRange(void *base, size_t nbytes);
 #include "shardy/dialect/sdy/transforms/propagation/passes.h"
 #include "shardy/dialect/sdy/transforms/propagation/user_priority_propagation.h"
 #include "shardy/integrations/c/attributes.h"
+#include "xla/client/local_client.h"
 #include "xla/pjrt/mlir_to_hlo.h"
+#include "xla/pjrt/se/pjrt_stream_executor_client.h"
+#include "xla/service/executable.h"
 #include "xla/service/spmd/shardy/stablehlo_round_trip/export_shardings.h"
 #include "xla/service/spmd/shardy/stablehlo_round_trip/stablehlo_export.h"
 #include "xla/service/spmd/shardy/stablehlo_round_trip/stablehlo_import.h"
@@ -3733,6 +3736,12 @@ struct LinkableRuntime {
     // resolves to the buffer of an earlier one is folded into it, and a
     // null one is a constant.
     uint8_t *keep;
+    // On a stream executor client the executable runs on raw device memory
+    // (see `raw`): the XLA executable, its parameter shapes, and whether
+    // its result is a tuple.
+    xla::LocalExecutable *lexec;
+    std::vector<xla::Shape> paramShapes;
+    bool tupleResult;
   };
   DenseMap<const char *,
            std::map<std::vector<std::vector<int64_t>>, CachedExec>>
@@ -3748,6 +3757,26 @@ struct LinkableRuntime {
   };
   std::vector<PendingExec> pending;
   uint64_t nextAllocationId = 1;
+
+  // On a stream executor client (the GPU), allocations are raw device
+  // memory and executables run through the LocalExecutable on the compute
+  // stream, every transfer on that stream too: no PJRT buffer, no event,
+  // no host callback per call (a PJRT execute costs three times a direct
+  // run, and the solver's dozen launches an iteration are all overhead).
+  // The stream orders everything, so memory freed is reused safely by the
+  // stream's own allocator. Null on other clients, which keep PJRT buffers.
+  xla::PjRtStreamExecutorRawClient *raw = nullptr;
+  xla::LocalClient *local = nullptr;
+  xla::LocalDeviceState *deviceState = nullptr;
+  se::Stream *stream = nullptr;
+  se::DeviceAddressAllocator *allocator = nullptr;
+  int ordinal = 0;
+  // Pinned host memory the host-to-device copies go through, a ring: a
+  // copy takes the next slot, and the ring waits for the stream when it
+  // wraps around, so a slot is never rewritten while the stream reads it.
+  std::unique_ptr<se::MemoryAllocation> pinned;
+  size_t pinnedOffset = 0;
+  static const size_t kPinnedBytes = 16 << 20;
 
   // Each allocation reserves an inaccessible address range as large as the
   // buffer it stands for, so pointer arithmetic on the handle stays inside
@@ -3765,6 +3794,8 @@ struct LinkableRuntime {
     // something needs it on the device (or reads it back, which then needs
     // no device at all).
     std::vector<char> hostBytes;
+    // The raw device memory, on a stream executor client.
+    se::DeviceAddressBase mem;
   };
   std::map<void *, AllocationInfo, std::greater<void *>> allocations;
   std::unordered_map<uint64_t, void *> allocationBase; // by id
@@ -3830,9 +3861,31 @@ struct LinkableRuntime {
     if (client) {
       device = min(device, client->device_count() - 1);
     }
+    // REACTANT_EXEC_PJRT_BUFFERS=1 keeps the PJRT buffers on a stream
+    // executor client too (to compare against).
+    if (client && !getenv("REACTANT_EXEC_PJRT_BUFFERS")) {
+      auto *common = dynamic_cast<xla::CommonPjRtClient *>(client);
+      raw = common ? dynamic_cast<xla::PjRtStreamExecutorRawClient *>(
+                         common->raw_client())
+                   : nullptr;
+    }
+    if (raw) {
+      local = raw->client();
+      ordinal = ClientGetDevice(client, device)->local_hardware_id().value();
+      deviceState = raw->device_state(xla::LocalDeviceId(ordinal));
+      stream = deviceState->compute_stream();
+      allocator = raw->allocator();
+      pinned = MyValueOrThrow(
+          deviceState->executor()->HostMemoryAllocate(kPinnedBytes));
+    }
   }
 
   ~LinkableRuntime() {
+    if (stream)
+      (void)stream->BlockHostUntilDone();
+    // Destroyed at exit, after the driver has gone: the pinned memory is
+    // left to the process (freeing it then fails).
+    (void)pinned.release();
     if (client && shouldFreeClient) {
       delete client;
     }
@@ -3854,6 +3907,116 @@ allocationOf(LinkableRuntime *__restrict__ lrt, void *ptr) {
 }
 
 static void runPending(LinkableRuntime *__restrict__ lrt);
+
+// Throws on a failed status.
+static void check(const absl::Status &status, const char *what) {
+  if (!status.ok())
+    ReactantThrowError((std::string(what) + ": " + status.ToString()).c_str());
+}
+
+// The device memory of the raw allocation `info` from `offset` on.
+static se::DeviceAddressBase rawAt(LinkableRuntime::AllocationInfo &info,
+                                   size_t offset, size_t size) {
+  return info.mem.GetByteSlice(offset, size);
+}
+
+// Copies `size` host bytes to `dst` on the stream: a small copy goes
+// through the pinned ring (asynchronous), a large one straight from the
+// host (the stream waits for it).
+static void rawHostToDevice(LinkableRuntime *__restrict__ lrt,
+                            se::DeviceAddressBase dst, const void *src,
+                            size_t size) {
+  if (!size)
+    return;
+  if (size > LinkableRuntime::kPinnedBytes / 4) {
+    check(lrt->stream->Memcpy(&dst, src, size), "host to device copy");
+    check(lrt->stream->BlockHostUntilDone(), "host to device copy");
+    return;
+  }
+  size_t slot = (lrt->pinnedOffset + 255) / 256 * 256;
+  if (slot + size > LinkableRuntime::kPinnedBytes) {
+    // The ring wraps: what the stream still reads from it must be done.
+    check(lrt->stream->BlockHostUntilDone(), "pinned ring");
+    slot = 0;
+  }
+  char *staged = (char *)lrt->pinned->address().opaque() + slot;
+  memcpy(staged, src, size);
+  lrt->pinnedOffset = slot + size;
+  check(lrt->stream->Memcpy(&dst, staged, size), "host to device copy");
+}
+
+// Copies `size` bytes of `src` to the host, waiting for the stream.
+static void rawDeviceToHost(LinkableRuntime *__restrict__ lrt, void *dst,
+                            se::DeviceAddressBase src, size_t size) {
+  if (!size)
+    return;
+  check(lrt->stream->Memcpy(dst, src, size), "device to host copy");
+  check(lrt->stream->BlockHostUntilDone(), "device to host copy");
+}
+
+// Runs the executable on the stream over the arguments' raw memory: a
+// written argument is donated, and comes back as the result it aliases
+// (XLA keeps it in place; should it not, the allocation takes the result's
+// memory and the old is freed, stream-ordered). Any further result of the
+// kernel is dropped.
+static void runRaw(LinkableRuntime *__restrict__ lrt,
+                   LinkableRuntime::CachedExec &exec,
+                   ArrayRef<LinkableRuntime::AllocationInfo *> argAlloc) {
+  std::vector<xla::ExecutionInput> inputs;
+  std::vector<LinkableRuntime::AllocationInfo *> params;
+  inputs.reserve(exec.paramShapes.size());
+  for (size_t i = 0, pos = 0; i < argAlloc.size(); i++) {
+    if (!exec.keep[i])
+      continue;
+    auto *info = argAlloc[i];
+    params.push_back(info);
+    inputs.emplace_back(exec.paramShapes[pos]);
+    if (exec.written[pos]) {
+      inputs.back().SetBuffer(
+          {}, xla::MaybeOwningDeviceAddress(se::ScopedDeviceAddress<uint8_t>(
+                  info->mem, lrt->ordinal, lrt->allocator)));
+      inputs.back().SetUnownedIndex({});
+    } else {
+      inputs.back().SetBuffer({}, xla::MaybeOwningDeviceAddress(info->mem));
+    }
+    pos++;
+  }
+  xla::ExecutableRunOptions options;
+  options.set_stream(lrt->stream);
+  options.set_device_ordinal(lrt->ordinal);
+  options.set_allocator(lrt->allocator);
+  options.set_intra_op_thread_pool(
+      lrt->local->backend().eigen_intra_op_thread_pool_device());
+  options.set_run_id(xla::RunId::CreateUniqueId());
+  options.set_gpu_executable_run_options(lrt->raw->gpu_run_options());
+  auto output =
+      MyValueOrThrow(exec.lexec->RunAsync(std::move(inputs), options));
+  xla::ScopedShapedBuffer result = output.ConsumeResult();
+  int64_t numResults =
+      exec.tupleResult ? result.on_device_shape().tuple_shapes().size() : 1;
+  int64_t r = 0;
+  for (size_t pos = 0; pos < params.size(); pos++) {
+    if (!exec.written[pos])
+      continue;
+    auto *info = params[pos];
+    se::DeviceAddressBase mem =
+        exec.tupleResult ? result.buffer({r}) : result.buffer({});
+    if (mem.opaque() != info->mem.opaque()) {
+      check(lrt->allocator->Deallocate(lrt->ordinal, info->mem),
+            "free of a replaced buffer");
+      info->mem = mem;
+    }
+    r++;
+  }
+  for (; r < numResults; r++)
+    check(lrt->allocator->Deallocate(lrt->ordinal, result.buffer({r})),
+          "free of an extra result");
+  // (a tuple result's table of pointers is a buffer of its own)
+  if (exec.tupleResult)
+    check(lrt->allocator->Deallocate(lrt->ordinal, result.buffer({})),
+          "free of a result tuple");
+  (void)result.release();
+}
 
 // An allocation this small the host fills whole keeps its bytes until the
 // device needs them.
@@ -4032,6 +4195,35 @@ REACTANT_ABI void reactantXLAMemcpy(LinkableRuntime **__restrict__ lrtP,
                                     void *__restrict__ src, size_t size,
                                     int32_t direction) {
   auto lrt = *lrtP;
+  if (lrt->raw) {
+    switch (direction) {
+    case 1: {
+      auto found = allocationOf(lrt, dst);
+      size_t off = (size_t)dst - (size_t)found->first;
+      rawHostToDevice(lrt, rawAt(found->second, off, size), src, size);
+      break;
+    }
+    case 2: {
+      auto found = allocationOf(lrt, src);
+      size_t off = (size_t)src - (size_t)found->first;
+      rawDeviceToHost(lrt, dst, rawAt(found->second, off, size), size);
+      break;
+    }
+    case 3: {
+      if (!size)
+        break;
+      auto dfound = allocationOf(lrt, dst), sfound = allocationOf(lrt, src);
+      auto d = rawAt(dfound->second, (size_t)dst - (size_t)dfound->first, size);
+      auto sm =
+          rawAt(sfound->second, (size_t)src - (size_t)sfound->first, size);
+      check(lrt->stream->MemcpyD2D(&d, sm, size), "device to device copy");
+      break;
+    }
+    default:
+      llvm_unreachable("unsupported copy direction");
+    }
+    return;
+  }
   switch (direction) {
   case 0: // cudaMemcpyHostToHost = 0
     llvm_unreachable("host to host copy unsupported");
@@ -4119,6 +4311,8 @@ REACTANT_ABI void *reactantXLAMalloc(LinkableRuntime **__restrict__ lrtP,
       xla::ShapeUtil::ByteSizeOfPrimitiveType((xla::PrimitiveType)ptype);
   PjRtBuffer *xbuffer0 = nullptr;
   size_t nbytes = elems * elemBytes;
+  if (nbytes == 0 && lrt->raw)
+    nbytes = 1;
   if (nbytes == 0) {
     xbuffer0 = UninitPJRTBuffer(lrt->client, device, ptype, shapeLen, shape);
     nbytes = 1;
@@ -4132,11 +4326,19 @@ REACTANT_ABI void *reactantXLAMalloc(LinkableRuntime **__restrict__ lrtP,
                  << " bytes\n";
     exit(1);
   }
+  se::DeviceAddressBase mem;
+  if (lrt->raw)
+    mem = MyValueOrThrow(lrt->allocator->Allocate(lrt->ordinal, nbytes))
+              .Release();
   auto pair = lrt->allocations.try_emplace(
       base, LinkableRuntime::AllocationInfo{
-                (xla::PjRtBuffer *)xbuffer0, nbytes, ptype,
+                (xla::PjRtBuffer *)xbuffer0,
+                nbytes,
+                ptype,
                 std::vector<int64_t>(shape, shape + shapeLen),
-                lrt->nextAllocationId++});
+                lrt->nextAllocationId++,
+                {},
+                mem});
   (void)pair;
   // Assert that it was actually inserted
   assert(pair.second);
@@ -4157,6 +4359,14 @@ REACTANT_ABI void reactantXLAFree(LinkableRuntime **__restrict__ lrtP,
   }
   uint64_t id = found->second.id;
   reactantReleaseAddressRange(buffer0, found->second.size);
+  if (lrt->raw) {
+    // Stream-ordered: whatever still uses the memory is on the stream
+    // ahead of any use of it reallocated.
+    check(lrt->allocator->Deallocate(lrt->ordinal, found->second.mem), "free");
+    lrt->allocations.erase(found);
+    lrt->allocationBase.erase(id);
+    return;
+  }
   // A pending executable may still take this allocation, or write it.
   if (!lrt->pending.empty())
     lrt->deferredFrees.emplace(id, std::move(found->second));
@@ -4530,8 +4740,32 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
         funcOp.setArgAttr(pos, "tf.aliasing_output",
                           builder.getI64IntegerAttr(res));
     }
-    auto exec =
-        ClientCompileWithProto(lrt->client, wrap(module.get()), nullptr, 0);
+    xla::PjRtLoadedExecutable *exec = nullptr;
+    xla::LocalExecutable *lexec = nullptr;
+    std::vector<xla::Shape> paramShapes;
+    bool tupleResult = false;
+    if (lrt->raw) {
+      xla::XlaComputation computation;
+      xla::ExecutableBuildOptions buildOptions;
+      buildOptions.set_device_ordinal(lrt->ordinal);
+      buildOptions.set_device_allocator(lrt->allocator);
+      check(xla::MlirToXlaComputation(*module, computation, false, false,
+                                      &buildOptions),
+            "to xla");
+      auto programShape = MyValueOrThrow(computation.GetProgramShape());
+      paramShapes.assign(programShape.parameters().begin(),
+                         programShape.parameters().end());
+      tupleResult = programShape.result().IsTuple();
+      std::vector<const xla::Shape *> shapePtrs;
+      for (auto &shape : paramShapes)
+        shapePtrs.push_back(&shape);
+      auto compiled = MyValueOrThrow(
+          lrt->local->Compile(computation, shapePtrs, buildOptions));
+      lexec = compiled[0].release();
+    } else {
+      exec =
+          ClientCompileWithProto(lrt->client, wrap(module.get()), nullptr, 0);
+    }
 
     // Per parameter of the executable, in order.
     uint8_t *keep = (uint8_t *)malloc(argcnt);
@@ -4542,11 +4776,17 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
         writtenKept[pos++] = written[i];
     }
     free(written);
-    iter =
-        cache
-            .try_emplace(sizeKey,
-                         LinkableRuntime::CachedExec{exec, writtenKept, keep})
-            .first;
+    iter = cache
+               .try_emplace(sizeKey,
+                            LinkableRuntime::CachedExec{
+                                exec, writtenKept, keep, lexec,
+                                std::move(paramShapes), tupleResult})
+               .first;
+  }
+
+  if (lrt->raw) {
+    runRaw(lrt, iter->second, argAlloc);
+    return;
   }
 
   // Queued: run before anything else touches its buffers (runPending).
