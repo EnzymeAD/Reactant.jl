@@ -1,4 +1,5 @@
 #include <cassert>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <iostream>
@@ -81,6 +82,7 @@ void reactantReleaseAddressRange(void *base, size_t nbytes);
 
 #include "xla/mlir/utils/type_util.h"
 #include "xla/mlir_hlo/mhlo/IR/hlo_ops.h"
+#include "xla/shape_util.h"
 
 #include "tsl/platform/init_main.h"
 #include "tsl/profiler/lib/profiler_session.h"
@@ -136,6 +138,7 @@ void reactantReleaseAddressRange(void *base, size_t nbytes);
 #endif // defined(__linux__)
 
 // shardy
+#include "mlir/Analysis/SliceAnalysis.h"
 #include "shardy/dialect/sdy/ir/dialect.h"
 #include "shardy/dialect/sdy/transforms/export/passes.h"
 #include "shardy/dialect/sdy/transforms/import/passes.h"
@@ -143,7 +146,10 @@ void reactantReleaseAddressRange(void *base, size_t nbytes);
 #include "shardy/dialect/sdy/transforms/propagation/passes.h"
 #include "shardy/dialect/sdy/transforms/propagation/user_priority_propagation.h"
 #include "shardy/integrations/c/attributes.h"
+#include "xla/client/local_client.h"
 #include "xla/pjrt/mlir_to_hlo.h"
+#include "xla/pjrt/se/pjrt_stream_executor_client.h"
+#include "xla/service/executable.h"
 #include "xla/service/spmd/shardy/stablehlo_round_trip/export_shardings.h"
 #include "xla/service/spmd/shardy/stablehlo_round_trip/stablehlo_export.h"
 #include "xla/service/spmd/shardy/stablehlo_round_trip/stablehlo_import.h"
@@ -1784,6 +1790,34 @@ PjRtLoadedExecutableGetParameterShardings(xla::PjRtLoadedExecutable *exec,
   for (int32_t i = 0; i < num_op_shardings; i++) {
     op_shardings[i] = new xla::OpSharding(hlo_op_shardings[i]);
   }
+}
+
+// Runs `exec` without asking for a future of the execution: the future
+// is signaled by a host callback on the compute stream, which holds the
+// stream until a host thread serves it. What needs the results waits on
+// their buffers' events instead.
+static void XLAExecuteShardedNoFuture(xla::PjRtLoadedExecutable *exec,
+                                      int num_args, PjRtBuffer **op_args,
+                                      PjRtDevice *device,
+                                      const uint8_t *is_arg_donatable,
+                                      int num_results,
+                                      PjRtBuffer **op_results) {
+  std::vector<PjRtBuffer *> argument_handles(op_args, op_args + num_args);
+  ExecuteOptions options;
+  for (size_t i = 0; i < num_args; i++)
+    if (!is_arg_donatable[i])
+      options.non_donatable_input_indices.insert(static_cast<int>(i));
+  std::optional<xla::Future<>> returned_future;
+  auto results = MyValueOrThrow(exec->ExecuteSharded(argument_handles, device,
+                                                     options, returned_future,
+                                                     /*fill_future=*/false));
+  if (results.size() != num_results)
+    ReactantThrowError(
+        ("Error: results.size()=" + std::to_string(results.size()) +
+         " does not match num_results=" + std::to_string(num_results) + "\n")
+            .c_str());
+  for (size_t i = 0; i < num_results; i++)
+    op_results[i] = results[i].release();
 }
 
 REACTANT_ABI void XLAExecuteSharded(xla::PjRtLoadedExecutable *exec,
@@ -3703,19 +3737,107 @@ struct LinkableRuntime {
     // resolves to the buffer of an earlier one is folded into it, and a
     // null one is a constant.
     uint8_t *keep;
+    // On a stream executor client the executable runs on raw device memory
+    // (see `raw`): the XLA executable, its parameter shapes, and whether
+    // its result is a tuple.
+    xla::LocalExecutable *lexec;
+    std::vector<xla::Shape> paramShapes;
+    bool tupleResult;
+    // A while loop's bound the kernel computes from its inputs (the longest
+    // row of a CSR structure) is unknown to XLA, which then reads the
+    // loop's predicate back to the host every step. The generic executable
+    // returns such bounds after its results; once read, a specialization
+    // compiled with them as constants runs instead, for as long as the
+    // inputs they derive from (`boundDeps`, by kept parameter) are the
+    // allocations observed, unwritten since (`observedDeps`).
+    std::string text; // the module, bounds returned last
+    int64_t numBounds = 0;
+    std::vector<std::vector<int64_t>> boundDeps;
+    std::vector<int64_t> observed;
+    std::vector<std::pair<uint64_t, uint64_t>> observedDeps; // id, generation
+    std::map<std::vector<int64_t>, std::pair<xla::LocalExecutable *, bool>>
+        specialized; // by bound values: executable, tuple result
+    bool specializing = true;
   };
   DenseMap<const char *,
            std::map<std::vector<std::vector<int64_t>>, CachedExec>>
       executables;
 
+  // Executables called and not yet run: run, in order, before anything
+  // reads or writes their buffers from the host (runPending).
+  struct PendingExec {
+    CachedExec *exec;
+    int64_t argcnt;
+    // Per kept parameter: the allocation the argument is in, by id.
+    std::vector<uint64_t> allocs;
+  };
+  std::vector<PendingExec> pending;
+  uint64_t nextAllocationId = 1;
+
+  // On a stream executor client (the GPU), allocations are raw device
+  // memory and executables run through the LocalExecutable on the compute
+  // stream, every transfer on that stream too: no PJRT buffer, no event,
+  // no host callback per call (a PJRT execute costs three times a direct
+  // run, and the solver's dozen launches an iteration are all overhead).
+  // The stream orders everything, so memory freed is reused safely by the
+  // stream's own allocator. Null on other clients, which keep PJRT buffers.
+  xla::PjRtStreamExecutorRawClient *raw = nullptr;
+  xla::LocalClient *local = nullptr;
+  xla::LocalDeviceState *deviceState = nullptr;
+  se::Stream *stream = nullptr;
+  se::DeviceAddressAllocator *allocator = nullptr;
+  int ordinal = 0;
+  // Pinned host memory the host-to-device copies go through, a ring: a
+  // copy takes the next slot, and the ring waits for the stream when it
+  // wraps around, so a slot is never rewritten while the stream reads it.
+  std::unique_ptr<se::MemoryAllocation> pinned;
+  size_t pinnedOffset = 0;
+  static const size_t kPinnedBytes = 16 << 20;
+  // Small raw allocations freed, kept by size for the next of that size:
+  // a solver allocates and frees the same few scalars and workspaces
+  // every iteration, and the allocator's round trip costs more than the
+  // copy into them.
+  std::unordered_map<size_t, std::vector<se::DeviceAddressBase>> freeRaw;
+  static const size_t kFreeListBytes = 256 << 10;
+  static const size_t kFreeListEntries = 64;
+
   // Each allocation reserves an inaccessible address range as large as the
   // buffer it stands for, so pointer arithmetic on the handle stays inside
   // its own range (and a stray dereference faults at the offender).
   struct AllocationInfo {
+    // Null until the allocation is first used: a small one (a kernel's
+    // scalar argument) is made from the host bytes the copy into it brings,
+    // in one call that does not wait for the transfer.
     xla::PjRtBuffer *buffer;
     size_t size;
+    uint64_t ptype;
+    std::vector<int64_t> shape;
+    uint64_t id;
+    // The bytes of a small allocation the host filled whole, kept until
+    // something needs it on the device (or reads it back, which then needs
+    // no device at all).
+    std::vector<char> hostBytes;
+    // The raw device memory, on a stream executor client, and how many
+    // times it has been written (a specialization's guard).
+    se::DeviceAddressBase mem;
+    uint64_t generation = 0;
   };
   std::map<void *, AllocationInfo, std::greater<void *>> allocations;
+  std::unordered_map<uint64_t, void *> allocationBase; // by id
+  // Allocations freed while executables that use them are pending: kept
+  // whole (their buffers made from host bytes if need be) until those have
+  // run.
+  std::map<uint64_t, AllocationInfo> deferredFrees;
+  // The handles: one inaccessible range reserved at the start, carved by
+  // size class (a power of two, 4 KB at least), classes keeping what they
+  // freed; a reservation of its own only once the range is spent. Mapping
+  // and unmapping a range per allocation cost a system call each, and the
+  // unmapping a TLB shootdown across the compiler's threads.
+  char *handleBase = nullptr;
+  size_t handleBump = 0;
+  static const size_t kHandleRange = size_t(1) << 40;
+  std::vector<std::vector<void *>> handleFree =
+      std::vector<std::vector<void *>>(64);
 
   LinkableRuntime(const std::string &backend) : registry() {
     InitializeRegistry(wrap(&registry));
@@ -3774,17 +3896,81 @@ struct LinkableRuntime {
     if (client) {
       device = min(device, client->device_count() - 1);
     }
+    // REACTANT_EXEC_PJRT_BUFFERS=1 keeps the PJRT buffers on a stream
+    // executor client too (to compare against).
+    if (client && !getenv("REACTANT_EXEC_PJRT_BUFFERS")) {
+      auto *common = dynamic_cast<xla::CommonPjRtClient *>(client);
+      raw = common ? dynamic_cast<xla::PjRtStreamExecutorRawClient *>(
+                         common->raw_client())
+                   : nullptr;
+    }
+    handleBase = (char *)reactantReserveAddressRange(kHandleRange);
+    if (raw) {
+      local = raw->client();
+      ordinal = ClientGetDevice(client, device)->local_hardware_id().value();
+      deviceState = raw->device_state(xla::LocalDeviceId(ordinal));
+      stream = deviceState->compute_stream();
+      allocator = raw->allocator();
+      pinned = MyValueOrThrow(
+          deviceState->executor()->HostMemoryAllocate(kPinnedBytes));
+    }
   }
 
   ~LinkableRuntime() {
+    if (stream)
+      (void)stream->BlockHostUntilDone();
+    // Destroyed at exit, after the driver has gone: the pinned memory is
+    // left to the process (freeing it then fails).
+    (void)pinned.release();
     if (client && shouldFreeClient) {
       delete client;
     }
   }
 };
 
-static std::tuple<PjRtBuffer *, /*offset*/ size_t, PjRtBuffer **>
-bufferAndOffset(LinkableRuntime *__restrict__ lrt, void *ptr) {
+// The size class of a handle for `nbytes`: log2 of the power of two it
+// takes, 4 KB at least.
+static int handleClass(size_t nbytes) {
+  int cls = 12;
+  while ((size_t(1) << cls) < nbytes)
+    cls++;
+  return cls;
+}
+
+// A handle for an allocation of `nbytes`: an address range as large, from
+// the reserved range while it lasts.
+static void *takeHandle(LinkableRuntime *__restrict__ lrt, size_t nbytes) {
+  int cls = handleClass(nbytes);
+  auto &freed = lrt->handleFree[cls];
+  if (!freed.empty()) {
+    void *base = freed.back();
+    freed.pop_back();
+    return base;
+  }
+  size_t size = size_t(1) << cls;
+  if (lrt->handleBase &&
+      lrt->handleBump + size <= LinkableRuntime::kHandleRange) {
+    void *base = lrt->handleBase + lrt->handleBump;
+    lrt->handleBump += size;
+    return base;
+  }
+  return reactantReserveAddressRange(nbytes);
+}
+
+static void returnHandle(LinkableRuntime *__restrict__ lrt, void *base,
+                         size_t nbytes) {
+  if (lrt->handleBase && (char *)base >= lrt->handleBase &&
+      (char *)base < lrt->handleBase + LinkableRuntime::kHandleRange) {
+    lrt->handleFree[handleClass(nbytes)].push_back(base);
+    return;
+  }
+  reactantReleaseAddressRange(base, nbytes);
+}
+
+// The allocation `ptr` points into.
+static std::map<void *, LinkableRuntime::AllocationInfo,
+                std::greater<void *>>::iterator
+allocationOf(LinkableRuntime *__restrict__ lrt, void *ptr) {
   auto found = lrt->allocations.lower_bound(ptr);
   if (found == lrt->allocations.end() ||
       (size_t)ptr >= (size_t)found->first + found->second.size) {
@@ -3792,9 +3978,463 @@ bufferAndOffset(LinkableRuntime *__restrict__ lrt, void *ptr) {
                  << " does not belong to any reactant allocation\n";
     exit(1);
   }
+  return found;
+}
+
+static void runPending(LinkableRuntime *__restrict__ lrt);
+
+// Throws on a failed status.
+static void check(const absl::Status &status, const char *what) {
+  if (!status.ok())
+    ReactantThrowError((std::string(what) + ": " + status.ToString()).c_str());
+}
+
+// The device memory of the raw allocation `info` from `offset` on.
+static se::DeviceAddressBase rawAt(LinkableRuntime::AllocationInfo &info,
+                                   size_t offset, size_t size) {
+  return info.mem.GetByteSlice(offset, size);
+}
+
+// Copies `size` host bytes to `dst` on the stream: a small copy goes
+// through the pinned ring (asynchronous), a large one straight from the
+// host (the stream waits for it).
+static void rawHostToDevice(LinkableRuntime *__restrict__ lrt,
+                            se::DeviceAddressBase dst, const void *src,
+                            size_t size) {
+  if (!size)
+    return;
+  if (size > LinkableRuntime::kPinnedBytes / 4) {
+    check(lrt->stream->Memcpy(&dst, src, size), "host to device copy");
+    check(lrt->stream->BlockHostUntilDone(), "host to device copy");
+    return;
+  }
+  size_t slot = (lrt->pinnedOffset + 255) / 256 * 256;
+  if (slot + size > LinkableRuntime::kPinnedBytes) {
+    // The ring wraps: what the stream still reads from it must be done.
+    check(lrt->stream->BlockHostUntilDone(), "pinned ring");
+    slot = 0;
+  }
+  char *staged = (char *)lrt->pinned->address().opaque() + slot;
+  memcpy(staged, src, size);
+  lrt->pinnedOffset = slot + size;
+  check(lrt->stream->Memcpy(&dst, staged, size), "host to device copy");
+}
+
+// Copies `size` bytes of `src` to the host, waiting for the stream.
+static void rawDeviceToHost(LinkableRuntime *__restrict__ lrt, void *dst,
+                            se::DeviceAddressBase src, size_t size) {
+  if (!size)
+    return;
+  check(lrt->stream->Memcpy(dst, src, size), "device to host copy");
+  check(lrt->stream->BlockHostUntilDone(), "device to host copy");
+}
+
+// The raising's marks (enzymexla.non_negative and the like) on constants
+// and on ops over constants only: they keep StableHLO's folder from folding
+// what the exec pipeline wants folded.
+static void stripMarksOnConstants(mlir::ModuleOp module) {
+  module->walk([](mlir::Operation *op) {
+    if (!matchPattern(op, mlir::m_Constant()) &&
+        (op->getNumOperands() == 0 ||
+         !llvm::all_of(op->getOperands(), [](mlir::Value v) {
+           return matchPattern(v, mlir::m_Constant());
+         })))
+      return;
+    for (auto attr : llvm::to_vector(op->getDiscardableAttrs()))
+      if (attr.getName().strref().starts_with("enzymexla."))
+        op->removeDiscardableAttr(attr.getName());
+  });
+}
+
+// The exec path's optimization of a kernel's module, before XLA: the
+// transform list (or REACTANT_EXEC_OPT=hlo-opt, the plain pass).
+static void addExecOptimizationPasses(mlir::PassManager &pm) {
+  // REACTANT_EXEC_OPT=hlo-opt runs the plain enzyme-hlo-opt pass instead.
+  // REACTANT_EXEC_UNROLL sets the trip count up to which while loops are
+  // unrolled. Unrolling the raised kernels' short loops (threshold 16)
+  // makes them straight-line code XLA compiles slowly: the mfem GPU suite
+  // takes 4384 s against 2899 s at threshold 1, so unrolling is opt-in.
+  static const char *execOpt = getenv("REACTANT_EXEC_OPT");
+  static const int unrollThreshold =
+      getenv("REACTANT_EXEC_UNROLL") ? atoi(getenv("REACTANT_EXEC_UNROLL")) : 1;
+  if (execOpt && std::string(execOpt) == "hlo-opt") {
+    // The parallel loops of a raised kernel (its dynamic-extent dimensions,
+    // peeled into host-driven whiles) are batched into scatters by the auto
+    // batching patterns, once the constant-trip loops nested in them are
+    // unrolled; enzyme-hlo-opt registers neither by default.
+    mlir::enzyme::EnzymeHLOUnrollPassOptions unroll;
+    unroll.maxNumIterations = unrollThreshold;
+    unroll.maxOperationThreshold = 128;
+    pm.addPass(mlir::enzyme::createEnzymeHLOUnrollPass(unroll));
+    mlir::enzyme::EnzymeHLOOptPassOptions opts;
+    opts.enable_auto_batching_passes = true;
+    pm.addPass(mlir::enzyme::createEnzymeHLOOptPass(opts));
+  } else {
+    EnzymeXLATransformPassesOptions opts{};
+    opts.max_constant_threshold = 1024;
+    opts.while_unroll_threshold = unrollThreshold;
+    opts.reshape_propagate = ENZYMEXLA_PROPAGATE_UP;
+    opts.transpose_propagate = ENZYMEXLA_PROPAGATE_UP;
+    opts.dus_slice_simplify = true;
+    opts.raise_shlo_to_blas_lapack = true;
+    opts.recognize_comms = true;
+    opts.lower_comms = true;
+    opts.enable_structured_tensors_passes = true;
+    opts.enable_scatter_gather_optimization_passes = true;
+    opts.enable_reduce_slice_fusion_passes = true;
+    opts.enable_concat_to_batch_passes = true;
+    opts.enable_loop_raising_passes = true;
+    opts.enable_licm_optimization_passes = true;
+    opts.loop_unswitch_threshold = 10;
+    opts.enable_pad_optimization_passes = true;
+    char *mainPasses = nullptr, *lowerPasses = nullptr;
+    enzymexlaGetTransformPassesList(&opts, &mainPasses, &lowerPasses);
+    std::string patterns(mainPasses);
+    enzymexlaFreeTransformPassesList(mainPasses);
+    enzymexlaFreeTransformPassesList(lowerPasses);
+    for (const char *drop :
+         {"convert_mul_convert;", "associative_binary_op_reordering<1>;"})
+      for (size_t at; (at = patterns.find(drop)) != std::string::npos;)
+        patterns.erase(at, strlen(drop));
+    // The main list may introduce enzymexla ops (rotate, wrap, extend)
+    // that XLA does not take; the Julia compiler lowers them before export
+    // with this second list.
+    // Before the list, rounds of folding: a raised kernel's lane index
+    // arithmetic is over constant tensors, which the list does not fold (its
+    // simplifications only drop zeros and ones) and StableHLO's folder only
+    // partly (no pad, splat broadcasts only), so the list's constant
+    // propagation and the folder alternate, three times over. With the
+    // indices constant, a lane's scratch -- stored and loaded through them,
+    // a scatter and a gather on a tensor the lane owns -- is forwarded
+    // (gather_scatter_constant_forward and the masked-store patterns) while
+    // the lanes are still a loop: once the list batches them the indices
+    // carry the lane, and the scratch is a pass over memory per access.
+    std::string folding;
+    for (const char *name :
+         {"compare_op_canon<16>", "compare_bool_const<16>",
+          "broadcast_in_dim_op_canon<16>", "convert_op_canon<16>",
+          "reduce_const_prop<16>", "reshape_op_canon<16>",
+          "concatenate_op_canon<16>(1024)", "select_op_canon<16>(1024)",
+          "and_simplify<16>", "or_simplify<16>", "slice_simplify<16>",
+          "convert_simplify<16>", "iota_simplify<16>(1024)",
+          "broadcast_in_dim_simplify<16>(1024)", "transpose_simplify<16>",
+          "pad_simplify<16>(1024)", "gather_scatter_constant_forward",
+          "gather_of_masked_scatter", "scatter_of_scatter_simplify"})
+      folding += std::string(folding.empty() ? "" : ";") + name;
+    std::string foldRound = "enzyme-hlo-generate-td{patterns=" + folding +
+                            "},transform-interpreter,"
+                            "enzyme-hlo-remove-transform,canonicalize,"
+                            "func.func(stablehlo-aggressive-folder),"
+                            "canonicalize,cse,";
+    std::string pipeline =
+        "canonicalize,cse,func.func(stablehlo-aggressive-folder),"
+        "canonicalize," +
+        foldRound + foldRound + foldRound +
+        "enzyme-hlo-generate-td{patterns=" + patterns +
+        "},transform-interpreter,enzyme-hlo-remove-transform,canonicalize,"
+        "cse,enzyme-hlo-generate-td{patterns=lower_rotate;lower_wrap;"
+        "lower_extend;lower_updatewithoutcorners;lower_multislice},"
+        "transform-interpreter,enzyme-hlo-remove-transform,canonicalize,cse";
+    if (failed(mlir::parsePassPipeline(pipeline, pm))) {
+      llvm::errs() << " failed to parse the exec optimization pipeline\n";
+      exit(1);
+    }
+  }
+}
+
+// Compiles `module` for the stream executor client: the executable, its
+// parameter shapes, whether its result is a tuple.
+static std::tuple<xla::LocalExecutable *, std::vector<xla::Shape>, bool>
+compileRaw(LinkableRuntime *__restrict__ lrt, mlir::ModuleOp module) {
+  xla::XlaComputation computation;
+  xla::ExecutableBuildOptions buildOptions;
+  buildOptions.set_device_ordinal(lrt->ordinal);
+  buildOptions.set_device_allocator(lrt->allocator);
+  check(xla::MlirToXlaComputation(module, computation, false, false,
+                                  &buildOptions),
+        "to xla");
+  auto programShape = MyValueOrThrow(computation.GetProgramShape());
+  std::vector<xla::Shape> paramShapes(programShape.parameters().begin(),
+                                      programShape.parameters().end());
+  std::vector<const xla::Shape *> shapePtrs;
+  for (auto &shape : paramShapes)
+    shapePtrs.push_back(&shape);
+  auto compiled =
+      MyValueOrThrow(lrt->local->Compile(computation, shapePtrs, buildOptions));
+  return {compiled[0].release(), std::move(paramShapes),
+          programShape.result().IsTuple()};
+}
+
+// The bound of a while loop in `funcOp` that the function computes: the
+// value its condition compares the induction variable against, when that
+// is a scalar integer neither constant nor loop-carried, defined at the
+// function's top level (so it is one value for the whole run). Returned
+// as the function's last results, each with the entry parameters it
+// derives from.
+static std::vector<std::vector<int64_t>> returnLoopBounds(func::FuncOp funcOp) {
+  SmallVector<mlir::Value> bounds;
+  funcOp.walk([&](mlir::stablehlo::WhileOp whileOp) {
+    auto &condBlock = whileOp.getCond().front();
+    auto ret = cast<mlir::stablehlo::ReturnOp>(condBlock.getTerminator());
+    auto cmp = ret.getOperand(0).getDefiningOp<mlir::stablehlo::CompareOp>();
+    if (!cmp)
+      return;
+    mlir::Value bound = cmp.getRhs();
+    if (auto arg = dyn_cast<mlir::BlockArgument>(bound)) {
+      // a loop-carried bound the body passes through: its initial value
+      if (arg.getOwner() != &condBlock)
+        return;
+      unsigned pos = arg.getArgNumber();
+      auto &bodyBlock = whileOp.getBody().front();
+      auto bodyRet = cast<mlir::stablehlo::ReturnOp>(bodyBlock.getTerminator());
+      if (bodyRet.getOperand(pos) != bodyBlock.getArgument(pos))
+        return;
+      bound = whileOp->getOperand(pos);
+    }
+    auto ty = dyn_cast<mlir::RankedTensorType>(bound.getType());
+    if (!ty || ty.getRank() != 0 || !ty.getElementType().isInteger() ||
+        matchPattern(bound, mlir::m_Constant()))
+      return;
+    Operation *def = bound.getDefiningOp();
+    if (!def || def->getParentOp() != funcOp.getOperation())
+      return;
+    if (!llvm::is_contained(bounds, bound))
+      bounds.push_back(bound);
+  });
+  std::vector<std::vector<int64_t>> deps;
+  if (bounds.empty())
+    return deps;
+  for (mlir::Value bound : bounds) {
+    // the entry parameters the bound derives from
+    SetVector<Operation *> slice;
+    (void)getBackwardSlice(bound, &slice, BackwardSliceOptions());
+    slice.insert(bound.getDefiningOp());
+    std::vector<int64_t> params;
+    for (Operation *op : slice)
+      for (mlir::Value operand : op->getOperands())
+        if (auto arg = dyn_cast<mlir::BlockArgument>(operand))
+          if (arg.getOwner() == &funcOp.getBody().front() &&
+              !llvm::is_contained(params, (int64_t)arg.getArgNumber()))
+            params.push_back(arg.getArgNumber());
+    llvm::sort(params);
+    deps.push_back(std::move(params));
+  }
+  auto ret = cast<func::ReturnOp>(funcOp.getBody().front().getTerminator());
+  SmallVector<mlir::Value> results(ret.getOperands());
+  results.append(bounds.begin(), bounds.end());
+  ret->setOperands(results);
+  funcOp.setType(mlir::FunctionType::get(
+      funcOp.getContext(), funcOp.getBody().front().getArgumentTypes(),
+      mlir::ValueRange(results).getTypes()));
+  return deps;
+}
+
+// The executable `exec` specialized to the bound values `values`: the
+// bounds (the module's last results) become constants, and are returned
+// no more.
+static std::pair<xla::LocalExecutable *, bool>
+specializeRaw(LinkableRuntime *__restrict__ lrt,
+              LinkableRuntime::CachedExec &exec, ArrayRef<int64_t> values) {
+  MLIRContext context(lrt->registry);
+  RegisterDialects(wrap(&context));
+  mlir::ParserConfig config(&context, false);
+  auto module = mlir::parseSourceString<mlir::ModuleOp>(exec.text, config);
+  if (!module)
+    ReactantThrowError("specialization: the module does not parse back");
+  auto funcOp = cast<func::FuncOp>(module->lookupSymbol("main"));
+  auto ret = cast<func::ReturnOp>(funcOp.getBody().front().getTerminator());
+  int64_t first = ret.getNumOperands() - exec.numBounds;
+  mlir::OpBuilder b(&funcOp.getBody().front(),
+                    funcOp.getBody().front().begin());
+  for (int64_t k = 0; k < exec.numBounds; k++) {
+    mlir::Value bound = ret.getOperand(first + k);
+    auto ty = cast<mlir::RankedTensorType>(bound.getType());
+    auto cst = mlir::stablehlo::ConstantOp::create(
+        b, bound.getLoc(),
+        mlir::DenseElementsAttr::get(
+            ty, b.getIntegerAttr(ty.getElementType(), values[k])));
+    bound.replaceAllUsesWith(cst);
+  }
+  SmallVector<mlir::Value> results(ret.getOperands().take_front(first));
+  ret->setOperands(results);
+  funcOp.setType(mlir::FunctionType::get(
+      funcOp.getContext(), funcOp.getBody().front().getArgumentTypes(),
+      mlir::ValueRange(results).getTypes()));
+  // Optimized again with the bounds known: the loops they bound unroll
+  // (REACTANT_EXEC_UNROLL), and what that exposes simplifies.
+  mlir::PassManager pm(&context);
+  addExecOptimizationPasses(pm);
+  stripMarksOnConstants(*module);
+  if (!mlir::succeeded(pm.run(*module)))
+    ReactantThrowError("specialization: the passes failed");
+  auto [lexec, shapes, tupleResult] = compileRaw(lrt, *module);
+  return {lexec, tupleResult};
+}
+
+// Runs the executable on the stream over the arguments' raw memory: a
+// written argument is donated, and comes back as the result it aliases
+// (XLA keeps it in place; should it not, the allocation takes the result's
+// memory and the old is freed, stream-ordered). The kernel's further
+// results are dropped, but for the loop bounds the generic executable
+// returns, which are read back for the specialization (see CachedExec).
+static void runRaw(LinkableRuntime *__restrict__ lrt,
+                   LinkableRuntime::CachedExec &exec,
+                   ArrayRef<LinkableRuntime::AllocationInfo *> argAlloc) {
+  std::vector<LinkableRuntime::AllocationInfo *> params;
+  for (size_t i = 0; i < argAlloc.size(); i++)
+    if (exec.keep[i])
+      params.push_back(argAlloc[i]);
+  // The executable to run: a specialization while the inputs its bounds
+  // derive from are those observed, unwritten since; else the generic one,
+  // whose bounds are then read.
+  xla::LocalExecutable *lexec = exec.lexec;
+  bool tupleResult = exec.tupleResult;
+  bool readBounds = false;
+  if (exec.numBounds) {
+    bool valid = !exec.observed.empty();
+    // (the deps, flattened in order over the bounds)
+    size_t d = 0;
+    for (auto &deps : exec.boundDeps)
+      for (int64_t pos : deps) {
+        if (valid && (d >= exec.observedDeps.size() ||
+                      exec.observedDeps[d].first != params[pos]->id ||
+                      exec.observedDeps[d].second != params[pos]->generation))
+          valid = false;
+        d++;
+      }
+    auto found =
+        valid ? exec.specialized.find(exec.observed) : exec.specialized.end();
+    if (found != exec.specialized.end()) {
+      lexec = found->second.first;
+      tupleResult = found->second.second;
+    } else {
+      readBounds = true;
+    }
+  }
+  std::vector<xla::ExecutionInput> inputs;
+  inputs.reserve(exec.paramShapes.size());
+  for (size_t pos = 0; pos < params.size(); pos++) {
+    auto *info = params[pos];
+    inputs.emplace_back(exec.paramShapes[pos]);
+    if (exec.written[pos]) {
+      info->generation++;
+      inputs.back().SetBuffer(
+          {}, xla::MaybeOwningDeviceAddress(se::ScopedDeviceAddress<uint8_t>(
+                  info->mem, lrt->ordinal, lrt->allocator)));
+      inputs.back().SetUnownedIndex({});
+    } else {
+      inputs.back().SetBuffer({}, xla::MaybeOwningDeviceAddress(info->mem));
+    }
+  }
+  xla::ExecutableRunOptions options;
+  options.set_stream(lrt->stream);
+  options.set_device_ordinal(lrt->ordinal);
+  options.set_allocator(lrt->allocator);
+  options.set_intra_op_thread_pool(
+      lrt->local->backend().eigen_intra_op_thread_pool_device());
+  options.set_run_id(xla::RunId::CreateUniqueId());
+  options.set_gpu_executable_run_options(lrt->raw->gpu_run_options());
+  auto output = MyValueOrThrow(lexec->RunAsync(std::move(inputs), options));
+  xla::ScopedShapedBuffer result = output.ConsumeResult();
+  int64_t numResults =
+      tupleResult ? result.on_device_shape().tuple_shapes().size() : 1;
+  int64_t r = 0;
+  for (size_t pos = 0; pos < params.size(); pos++) {
+    if (!exec.written[pos])
+      continue;
+    auto *info = params[pos];
+    se::DeviceAddressBase mem =
+        tupleResult ? result.buffer({r}) : result.buffer({});
+    if (mem.opaque() != info->mem.opaque()) {
+      check(lrt->allocator->Deallocate(lrt->ordinal, info->mem),
+            "free of a replaced buffer");
+      info->mem = mem;
+    }
+    r++;
+  }
+  int64_t firstBound = readBounds ? numResults - exec.numBounds : numResults;
+  for (; r < firstBound; r++)
+    check(lrt->allocator->Deallocate(lrt->ordinal, result.buffer({r})),
+          "free of an extra result");
+  if (readBounds) {
+    // The bounds: read (one wait), recorded with the inputs they derive
+    // from, and the specialization compiled for them, unless the values
+    // keep changing (four specializations is the limit).
+    std::vector<int64_t> values(exec.numBounds, 0);
+    for (int64_t k = 0; k < exec.numBounds; k++) {
+      auto mem =
+          tupleResult ? result.buffer({firstBound + k}) : result.buffer({});
+      check(
+          lrt->stream->Memcpy(&values[k], mem, std::min<size_t>(8, mem.size())),
+          "bound read");
+    }
+    check(lrt->stream->BlockHostUntilDone(), "bound read");
+    for (int64_t k = 0; k < exec.numBounds; k++) {
+      auto mem =
+          tupleResult ? result.buffer({firstBound + k}) : result.buffer({});
+      // (a narrower bound is the low bytes, on a little-endian host)
+      if (mem.size() == 4)
+        values[k] = (int32_t)values[k];
+      else if (mem.size() == 2)
+        values[k] = (int16_t)values[k];
+      else if (mem.size() == 1)
+        values[k] = (int8_t)values[k];
+      if (tupleResult)
+        check(lrt->allocator->Deallocate(lrt->ordinal, mem), "free of a bound");
+    }
+    exec.observed = values;
+    exec.observedDeps.clear();
+    for (auto &deps : exec.boundDeps)
+      for (int64_t pos : deps)
+        exec.observedDeps.emplace_back(params[pos]->id,
+                                       params[pos]->generation);
+    if (exec.specializing && !exec.specialized.count(values)) {
+      exec.specialized[values] = specializeRaw(lrt, exec, values);
+      if (exec.specialized.size() >= 4)
+        exec.specializing = false;
+    }
+  }
+  // (a tuple result's table of pointers is a buffer of its own)
+  if (tupleResult)
+    check(lrt->allocator->Deallocate(lrt->ordinal, result.buffer({})),
+          "free of a result tuple");
+  (void)result.release();
+}
+
+// An allocation this small the host fills whole keeps its bytes until the
+// device needs them.
+static const size_t kSmallAllocation = 64;
+// Executables queue up to this many before they are run.
+static const size_t kPendingLimit = 64;
+
+// The buffer of `info`, made now if the allocation has none yet: from the
+// bytes the host put in it, else uninitialized.
+static PjRtBuffer *materialize(LinkableRuntime *__restrict__ lrt,
+                               LinkableRuntime::AllocationInfo &info) {
+  if (info.buffer)
+    return info.buffer;
+  PjRtDevice *device = ClientGetDevice(lrt->client, lrt->device);
+  if (!info.hostBytes.empty()) {
+    info.buffer =
+        ArrayFromHostBuffer(lrt->client, info.hostBytes.data(), info.ptype,
+                            info.shape.size(), info.shape.data(), device);
+    info.hostBytes.clear();
+    info.hostBytes.shrink_to_fit();
+    return info.buffer;
+  }
+  std::vector<uint64_t> shape(info.shape.begin(), info.shape.end());
+  info.buffer = (xla::PjRtBuffer *)UninitPJRTBuffer(
+      lrt->client, device, info.ptype, shape.size(), shape.data());
+  return info.buffer;
+}
+
+static std::tuple<PjRtBuffer *, /*offset*/ size_t, PjRtBuffer **>
+bufferAndOffset(LinkableRuntime *__restrict__ lrt, void *ptr) {
+  auto found = allocationOf(lrt, ptr);
+  auto &info = found->second;
+  materialize(lrt, info);
   return std::tuple<PjRtBuffer *, /*offset*/ size_t, PjRtBuffer **>(
-      found->second.buffer, (size_t)ptr - (size_t)found->first,
-      &found->second.buffer);
+      info.buffer, (size_t)ptr - (size_t)found->first, &info.buffer);
 }
 
 REACTANT_ABI void reactantXLAThrow(const char *str) {
@@ -3814,8 +4454,123 @@ REACTANT_ABI void reactantXLAInit(LinkableRuntime **__restrict__ lrtP,
 
 REACTANT_ABI void reactantXLADeInit(LinkableRuntime **__restrict__ lrt) {
   // One destructor per translation unit reaches the shared slot too.
+  if (*lrt) {
+    runPending(*lrt);
+  }
   delete *lrt;
   *lrt = nullptr;
+}
+
+REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
+                                  const char *modstr, int64_t argcnt,
+                                  void **args, int64_t constcnt,
+                                  const int64_t *consts);
+REACTANT_ABI void *reactantXLAMalloc(LinkableRuntime **__restrict__ lrtP,
+                                     uint64_t ptype, uint64_t shapeLen,
+                                     uint64_t *__restrict__ shape);
+REACTANT_ABI void reactantXLAFree(LinkableRuntime **__restrict__ lrtP,
+                                  void *__restrict__ buffer0);
+REACTANT_ABI void reactantXLAMemcpy(LinkableRuntime **__restrict__ lrtP,
+                                    void *__restrict__ dst,
+                                    void *__restrict__ src, size_t size,
+                                    int32_t direction);
+
+// The allocation with `id`, or null once freed.
+static LinkableRuntime::AllocationInfo *
+allocationById(LinkableRuntime *__restrict__ lrt, uint64_t id) {
+  auto found = lrt->allocationBase.find(id);
+  if (found == lrt->allocationBase.end())
+    return nullptr;
+  return &lrt->allocations.find(found->second)->second;
+}
+
+// The allocation with `id`, live or freed while an executable using it
+// was pending; null otherwise.
+static LinkableRuntime::AllocationInfo *
+allocationOrFreed(LinkableRuntime *__restrict__ lrt, uint64_t id) {
+  if (auto *info = allocationById(lrt, id))
+    return info;
+  auto freed = lrt->deferredFrees.find(id);
+  return freed == lrt->deferredFrees.end() ? nullptr : &freed->second;
+}
+
+// Runs `exec` over the buffers of `allocs` (one per parameter), writing the
+// results back; a result of an allocation freed meanwhile goes.
+static void runExecutable(LinkableRuntime *__restrict__ lrt,
+                          xla::PjRtLoadedExecutable *exec,
+                          const uint8_t *written,
+                          const std::vector<uint64_t> &allocs) {
+  std::vector<PjRtBuffer *> callArgs;
+  std::vector<LinkableRuntime::AllocationInfo *> infos;
+  for (uint64_t id : allocs) {
+    auto *info = allocationOrFreed(lrt, id);
+    if (!info) {
+      llvm::errs() << "pending executable over a buffer that is gone\n";
+      exit(1);
+    }
+    callArgs.push_back(materialize(lrt, *info));
+    infos.push_back(info);
+  }
+  int num_results = 0;
+  for (size_t p = 0; p < callArgs.size(); p++)
+    num_results += written[p];
+  std::vector<PjRtBuffer *> results(num_results);
+  PjRtDevice *device = ClientGetDevice(lrt->client, lrt->device);
+  XLAExecuteShardedNoFuture(exec, callArgs.size(), callArgs.data(), device,
+                            written, num_results, results.data());
+  // Not waited for: a later executable reading a result waits on the
+  // device, a copy to the host waits for the buffer it reads.
+  for (size_t p = 0, k = 0; p < callArgs.size(); p++) {
+    if (!written[p])
+      continue;
+    // (A freed allocation's record is in deferredFrees: the result is its
+    // buffer for what is still pending, and goes with it.)
+    infos[p]->buffer = results[k];
+    k++;
+  }
+}
+
+// Runs the pending executables, in order, and frees what was freed while
+// they were pending.
+static void runPending(LinkableRuntime *__restrict__ lrt) {
+  if (lrt->pending.empty())
+    return;
+  std::vector<LinkableRuntime::PendingExec> pending;
+  pending.swap(lrt->pending);
+  for (auto &pe : pending)
+    runExecutable(lrt, pe.exec->exec, pe.exec->written, pe.allocs);
+  for (auto &[id, info] : lrt->deferredFrees)
+    if (info.buffer)
+      PjRtBufferFree(info.buffer);
+  lrt->deferredFrees.clear();
+}
+
+// The module copying `size` bytes from its second argument to its first,
+// as the exec path takes it: byte buffers of unknown extent, each returned
+// (the first written). Its string outlives the executables cached under
+// its address.
+static const char *copyModule(size_t size) {
+  static std::mutex lock;
+  static std::map<size_t, std::unique_ptr<std::string>> modules;
+  std::lock_guard<std::mutex> guard(lock);
+  auto &text = modules[size];
+  if (!text) {
+    std::string n = std::to_string(size);
+    text = std::make_unique<std::string>(
+        "func.func @main(%dst: tensor<?xi8>, %src: tensor<?xi8>) -> "
+        "(tensor<?xi8>, tensor<?xi8>) {\n"
+        "  %c0 = stablehlo.constant dense<0> : tensor<i64>\n"
+        "  %s = stablehlo.dynamic_slice %src, %c0, sizes = [" +
+        n + "] : (tensor<?xi8>, tensor<i64>) -> tensor<" + n +
+        "xi8>\n"
+        "  %d = stablehlo.dynamic_update_slice %dst, %s, %c0 : (tensor<?xi8>, "
+        "tensor<" +
+        n +
+        "xi8>, tensor<i64>) -> tensor<?xi8>\n"
+        "  return %d, %src : tensor<?xi8>, tensor<?xi8>\n"
+        "}\n");
+  }
+  return text->c_str();
 }
 
 REACTANT_ABI void reactantXLAMemcpy(LinkableRuntime **__restrict__ lrtP,
@@ -3823,30 +4578,100 @@ REACTANT_ABI void reactantXLAMemcpy(LinkableRuntime **__restrict__ lrtP,
                                     void *__restrict__ src, size_t size,
                                     int32_t direction) {
   auto lrt = *lrtP;
+  if (lrt->raw) {
+    switch (direction) {
+    case 1: {
+      auto found = allocationOf(lrt, dst);
+      size_t off = (size_t)dst - (size_t)found->first;
+      found->second.generation++;
+      rawHostToDevice(lrt, rawAt(found->second, off, size), src, size);
+      break;
+    }
+    case 2: {
+      auto found = allocationOf(lrt, src);
+      size_t off = (size_t)src - (size_t)found->first;
+      rawDeviceToHost(lrt, dst, rawAt(found->second, off, size), size);
+      break;
+    }
+    case 3: {
+      if (!size)
+        break;
+      auto dfound = allocationOf(lrt, dst), sfound = allocationOf(lrt, src);
+      dfound->second.generation++;
+      auto d = rawAt(dfound->second, (size_t)dst - (size_t)dfound->first, size);
+      auto sm =
+          rawAt(sfound->second, (size_t)src - (size_t)sfound->first, size);
+      check(lrt->stream->MemcpyD2D(&d, sm, size), "device to device copy");
+      break;
+    }
+    default:
+      llvm_unreachable("unsupported copy direction");
+    }
+    return;
+  }
   switch (direction) {
   case 0: // cudaMemcpyHostToHost = 0
     llvm_unreachable("host to host copy unsupported");
     break;
   case 1: // cudaMemcpyHostToDevice
   {
-    auto &&[dstB, dstO, start] = bufferAndOffset(lrt, dst);
-    CopyToBuffer(lrt->client, dstB, src, dstO, size, start);
+    auto found = allocationOf(lrt, dst);
+    auto &info = found->second;
+    if (!info.buffer && dst == found->first && size == info.size) {
+      // The whole of an allocation not yet made: a small one keeps the
+      // bytes for whatever needs them (materialize), a large one is made
+      // from them now.
+      if (size <= kSmallAllocation) {
+        info.hostBytes.assign((const char *)src, (const char *)src + size);
+        break;
+      }
+      PjRtDevice *device = ClientGetDevice(lrt->client, lrt->device);
+      info.buffer =
+          ArrayFromHostBuffer(lrt->client, src, info.ptype, info.shape.size(),
+                              info.shape.data(), device);
+      break;
+    }
+    // A write into a buffer in place, which what is pending may still
+    // read: a buffer made from the bytes, copied in by an executable that
+    // the exec path orders with the rest.
+    if (!size)
+      break;
+    uint64_t shape[1] = {size};
+    void *staged =
+        reactantXLAMalloc(lrtP, (uint64_t)xla::PrimitiveType::S8, 1, shape);
+    reactantXLAMemcpy(lrtP, staged, src, size, 1);
+    void *copyArgs[2] = {dst, staged};
+    reactantXLAExec(lrtP, copyModule(size), 2, copyArgs, 0, nullptr);
+    reactantXLAFree(lrtP, staged);
     break;
   }
   case 2: // cudaMemcpyDeviceToHost
   {
+    {
+      auto found = allocationOf(lrt, src);
+      auto &info = found->second;
+      if (!info.buffer && !info.hostBytes.empty()) {
+        size_t off = (size_t)src - (size_t)found->first;
+        memcpy(dst, info.hostBytes.data() + off, size);
+        break;
+      }
+    }
+    runPending(lrt);
     auto &&[srcB, srcO, start] = bufferAndOffset(lrt, src);
     CopyFromBuffer(lrt->client, srcB, dst, srcO, size, start);
     break;
   }
   case 3: // cudaMemcpyDeviceToDevice
   {
-    // PJRT exposes no raw buffer-to-buffer copy; stage through the host.
-    auto &&[srcB, srcO, srcStart] = bufferAndOffset(lrt, src);
-    auto &&[dstB, dstO, dstStart] = bufferAndOffset(lrt, dst);
-    std::vector<char> tmp(size);
-    CopyFromBuffer(lrt->client, srcB, tmp.data(), srcO, size, srcStart);
-    CopyToBuffer(lrt->client, dstB, tmp.data(), dstO, size, dstStart);
+    // PJRT exposes no raw buffer-to-buffer copy, and a copy on the raw
+    // device pointers would not see the uses PJRT still has in flight; so
+    // the copy is an executable, which the exec path orders with the rest
+    // (and addresses through views and shared buffers as for any kernel):
+    // one per size, cached under a stable module string.
+    if (!size)
+      break;
+    void *copyArgs[2] = {dst, src};
+    reactantXLAExec(lrtP, copyModule(size), 2, copyArgs, 0, nullptr);
     break;
   }
   default: // cudaMemcpyDeviceToDevice
@@ -3861,25 +4686,55 @@ REACTANT_ABI void *reactantXLAMalloc(LinkableRuntime **__restrict__ lrtP,
   auto lrt = *lrtP;
   PjRtDevice *device = ClientGetDevice(lrt->client, lrt->device);
 
-  auto xbuffer0 = UninitPJRTBuffer(lrt->client, device, ptype, shapeLen, shape);
-  size_t nbytes = 1;
-  {
+  // An allocation waits for its first use: the host bytes copied into the
+  // whole of it make it in one call (a kernel's scalar argument, a vector
+  // the host fills); any other first use makes it uninitialized.
+  size_t elems = 1;
+  for (uint64_t i = 0; i < shapeLen; i++)
+    elems *= shape[i];
+  size_t elemBytes =
+      xla::ShapeUtil::ByteSizeOfPrimitiveType((xla::PrimitiveType)ptype);
+  PjRtBuffer *xbuffer0 = nullptr;
+  size_t nbytes = elems * elemBytes;
+  if (nbytes == 0 && lrt->raw)
+    nbytes = 1;
+  if (nbytes == 0) {
+    xbuffer0 = UninitPJRTBuffer(lrt->client, device, ptype, shapeLen, shape);
+    nbytes = 1;
     auto sz = xbuffer0->GetOnDeviceSizeInBytes();
     if (sz.ok() && *sz)
       nbytes = *sz;
   }
-  void *base = reactantReserveAddressRange(nbytes);
+  void *base = takeHandle(lrt, nbytes);
   if (!base) {
     llvm::errs() << "failed to reserve handle range of " << nbytes
                  << " bytes\n";
     exit(1);
   }
+  se::DeviceAddressBase mem;
+  if (lrt->raw) {
+    auto freed = lrt->freeRaw.find(nbytes);
+    if (freed != lrt->freeRaw.end() && !freed->second.empty()) {
+      mem = freed->second.back();
+      freed->second.pop_back();
+    } else {
+      mem = MyValueOrThrow(lrt->allocator->Allocate(lrt->ordinal, nbytes))
+                .Release();
+    }
+  }
   auto pair = lrt->allocations.try_emplace(
-      base,
-      LinkableRuntime::AllocationInfo{(xla::PjRtBuffer *)xbuffer0, nbytes});
+      base, LinkableRuntime::AllocationInfo{
+                (xla::PjRtBuffer *)xbuffer0,
+                nbytes,
+                ptype,
+                std::vector<int64_t>(shape, shape + shapeLen),
+                lrt->nextAllocationId++,
+                {},
+                mem});
   (void)pair;
   // Assert that it was actually inserted
   assert(pair.second);
+  lrt->allocationBase[pair.first->second.id] = base;
   return base;
 }
 
@@ -3894,10 +4749,30 @@ REACTANT_ABI void reactantXLAFree(LinkableRuntime **__restrict__ lrtP,
                  << " that is not a reactant allocation\n";
     exit(1);
   }
-  PjRtBuffer *buffer = found->second.buffer;
-  reactantReleaseAddressRange(buffer0, found->second.size);
+  uint64_t id = found->second.id;
+  returnHandle(lrt, buffer0, found->second.size);
+  if (lrt->raw) {
+    // Stream-ordered: whatever still uses the memory is on the stream
+    // ahead of any use of it reallocated.
+    auto &info = found->second;
+    auto &freed = lrt->freeRaw[info.size];
+    if (info.size <= LinkableRuntime::kFreeListBytes &&
+        freed.size() < LinkableRuntime::kFreeListEntries &&
+        info.mem.size() == info.size)
+      freed.push_back(info.mem);
+    else
+      check(lrt->allocator->Deallocate(lrt->ordinal, info.mem), "free");
+    lrt->allocations.erase(found);
+    lrt->allocationBase.erase(id);
+    return;
+  }
+  // A pending executable may still take this allocation, or write it.
+  if (!lrt->pending.empty())
+    lrt->deferredFrees.emplace(id, std::move(found->second));
+  else if (found->second.buffer)
+    PjRtBufferFree(found->second.buffer);
   lrt->allocations.erase(found);
-  PjRtBufferFree(buffer);
+  lrt->allocationBase.erase(id);
 }
 
 REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
@@ -3906,8 +4781,9 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
                                   const int64_t *consts) {
   auto lrt = *lrtP;
   auto &cache = lrt->executables[modstr];
-  std::vector<PjRtBuffer *> baseArrays(argcnt);
-  std::vector<PjRtBuffer **> basePtrs(argcnt);
+  // The arguments' allocations: their shapes and identities are all the
+  // executable is chosen by; their buffers are taken when it runs.
+  std::vector<LinkableRuntime::AllocationInfo *> argAlloc(argcnt);
 
   std::vector<std::vector<int64_t>> sizeKey;
   sizeKey.reserve(argcnt + (constcnt ? 1 : 0));
@@ -3931,14 +4807,12 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
       sizeKey.emplace_back();
       continue;
     }
-    auto &&[argB, argO, argP] = bufferAndOffset(lrt, args[i]);
-    viewOffset[i] = argO;
-    baseArrays[i] = argB;
-    basePtrs[i] = argP;
-    auto dims = argB->on_device_shape().dimensions();
-    sizeKey.emplace_back(dims.begin(), dims.end());
+    auto found = allocationOf(lrt, args[i]);
+    viewOffset[i] = (size_t)args[i] - (size_t)found->first;
+    argAlloc[i] = &found->second;
+    sizeKey.emplace_back(found->second.shape);
     for (int64_t j = 0; j < i; j++)
-      if (baseArrays[j] == argB) {
+      if (argAlloc[j] == argAlloc[i]) {
         dupOf[i] = dupOf[j] < 0 ? j : dupOf[j];
         break;
       }
@@ -4026,7 +4900,9 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
       }
       auto RTT = cast<mlir::RankedTensorType>(
           MyValueOrThrow(xla::ConvertShapeToType<mlir::RankedTensorType>(
-              baseArrays[i]->on_device_shape(), builder)));
+              xla::ShapeUtil::MakeShape((xla::PrimitiveType)argAlloc[i]->ptype,
+                                        argAlloc[i]->shape),
+              builder)));
       if (viewOffset[i]) {
         int64_t elemBytes = RTT.getElementTypeBitWidth() / 8;
         if (RTT.getRank() != 1 || elemBytes == 0 || viewOffset[i] % elemBytes) {
@@ -4055,70 +4931,7 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
         stablehlo::createStablehloCanonicalizeDynamismPass());
     // The exec-time optimizer runs the pattern list the Julia compiler runs
     // on a traced program (the transform-dialect list with its defaults);
-    // REACTANT_EXEC_OPT=hlo-opt runs the plain enzyme-hlo-opt pass instead.
-    // REACTANT_EXEC_UNROLL sets the trip count up to which while loops are
-    // unrolled. Unrolling the raised kernels' short loops (threshold 16)
-    // makes them straight-line code XLA compiles slowly: the mfem GPU suite
-    // takes 4384 s against 2899 s at threshold 1, so unrolling is opt-in.
-    static const char *execOpt = getenv("REACTANT_EXEC_OPT");
-    static const int unrollThreshold =
-        getenv("REACTANT_EXEC_UNROLL") ? atoi(getenv("REACTANT_EXEC_UNROLL"))
-                                       : 1;
-    if (execOpt && std::string(execOpt) == "hlo-opt") {
-      // The parallel loops of a raised kernel (its dynamic-extent dimensions,
-      // peeled into host-driven whiles) are batched into scatters by the auto
-      // batching patterns, once the constant-trip loops nested in them are
-      // unrolled; enzyme-hlo-opt registers neither by default.
-      mlir::enzyme::EnzymeHLOUnrollPassOptions unroll;
-      unroll.maxNumIterations = unrollThreshold;
-      unroll.maxOperationThreshold = 128;
-      pm.addPass(mlir::enzyme::createEnzymeHLOUnrollPass(unroll));
-      mlir::enzyme::EnzymeHLOOptPassOptions opts;
-      opts.enable_auto_batching_passes = true;
-      pm.addPass(mlir::enzyme::createEnzymeHLOOptPass(opts));
-    } else {
-      EnzymeXLATransformPassesOptions opts{};
-      opts.max_constant_threshold = 1024;
-      opts.while_unroll_threshold = unrollThreshold;
-      opts.reshape_propagate = ENZYMEXLA_PROPAGATE_UP;
-      opts.transpose_propagate = ENZYMEXLA_PROPAGATE_UP;
-      opts.dus_slice_simplify = true;
-      opts.raise_shlo_to_blas_lapack = true;
-      opts.recognize_comms = true;
-      opts.lower_comms = true;
-      opts.enable_structured_tensors_passes = true;
-      opts.enable_scatter_gather_optimization_passes = true;
-      opts.enable_reduce_slice_fusion_passes = true;
-      opts.enable_concat_to_batch_passes = true;
-      opts.enable_loop_raising_passes = true;
-      opts.enable_licm_optimization_passes = true;
-      opts.loop_unswitch_threshold = 10;
-      opts.enable_pad_optimization_passes = true;
-      char *mainPasses = nullptr, *lowerPasses = nullptr;
-      enzymexlaGetTransformPassesList(&opts, &mainPasses, &lowerPasses);
-      std::string patterns(mainPasses);
-      enzymexlaFreeTransformPassesList(mainPasses);
-      enzymexlaFreeTransformPassesList(lowerPasses);
-      for (const char *drop :
-           {"convert_mul_convert;", "associative_binary_op_reordering<1>;"})
-        for (size_t at; (at = patterns.find(drop)) != std::string::npos;)
-          patterns.erase(at, strlen(drop));
-      // The main list may introduce enzymexla ops (rotate, wrap, extend)
-      // that XLA does not take; the Julia compiler lowers them before export
-      // with this second list.
-      std::string pipeline =
-          "canonicalize,cse,canonicalize,enzyme-hlo-generate-td{patterns=" +
-          patterns +
-          "},transform-interpreter,enzyme-hlo-remove-transform,canonicalize,"
-          "cse,enzyme-hlo-generate-td{patterns=lower_rotate;lower_wrap;"
-          "lower_extend;lower_updatewithoutcorners;lower_multislice},"
-          "transform-interpreter,enzyme-hlo-remove-transform,canonicalize,cse";
-      if (failed(mlir::parsePassPipeline(pipeline, pm))) {
-        llvm::errs() << " failed to parse the exec optimization pipeline\n";
-        exit(1);
-      }
-    }
-
+    addExecOptimizationPasses(pm);
     if (getenv("REACTANT_EXEC_DUMP")) {
       llvm::errs() << "EXEC_DUMP before\n";
       for (int64_t i = 0; i < argcnt; i++)
@@ -4128,6 +4941,7 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
       module->print(llvm::errs());
       llvm::errs() << "EXEC_DUMP end\n";
     }
+    stripMarksOnConstants(*module);
     if (!mlir::succeeded(pm.run(*module))) {
       llvm::errs() << " failed to run passes\n";
       llvm::errs() << " modstr:\n" << modstr << "\n";
@@ -4136,6 +4950,11 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
         llvm::errs() << " arg: " << ty << "\n";
       }
       exit(1);
+    }
+    if (getenv("REACTANT_EXEC_DUMP")) {
+      llvm::errs() << "EXEC_DUMP after\n";
+      module->print(llvm::errs());
+      llvm::errs() << "EXEC_DUMP end\n";
     }
 
     // An argument the kernel never stores through comes back as itself.
@@ -4263,8 +5082,27 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
         funcOp.setArgAttr(pos, "tf.aliasing_output",
                           builder.getI64IntegerAttr(res));
     }
-    auto exec =
-        ClientCompileWithProto(lrt->client, wrap(module.get()), nullptr, 0);
+    xla::PjRtLoadedExecutable *exec = nullptr;
+    xla::LocalExecutable *lexec = nullptr;
+    std::vector<xla::Shape> paramShapes;
+    bool tupleResult = false;
+    std::string text;
+    std::vector<std::vector<int64_t>> boundDeps;
+    if (lrt->raw) {
+      // The loop bounds the kernel computes are returned, for the
+      // specialization (REACTANT_EXEC_NO_SPECIALIZE=1 leaves them be).
+      static const bool specialize = !getenv("REACTANT_EXEC_NO_SPECIALIZE");
+      if (specialize)
+        boundDeps = returnLoopBounds(funcOp);
+      if (!boundDeps.empty()) {
+        llvm::raw_string_ostream os(text);
+        module->print(os);
+      }
+      std::tie(lexec, paramShapes, tupleResult) = compileRaw(lrt, *module);
+    } else {
+      exec =
+          ClientCompileWithProto(lrt->client, wrap(module.get()), nullptr, 0);
+    }
 
     // Per parameter of the executable, in order.
     uint8_t *keep = (uint8_t *)malloc(argcnt);
@@ -4275,44 +5113,29 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
         writtenKept[pos++] = written[i];
     }
     free(written);
-    iter =
-        cache
-            .try_emplace(sizeKey,
-                         LinkableRuntime::CachedExec{exec, writtenKept, keep})
-            .first;
+    iter = cache
+               .try_emplace(sizeKey,
+                            LinkableRuntime::CachedExec{
+                                exec, writtenKept, keep, lexec,
+                                std::move(paramShapes), tupleResult,
+                                std::move(text), (int64_t)boundDeps.size(),
+                                std::move(boundDeps)})
+               .first;
   }
 
-  auto exec = iter->second.exec;
-  uint8_t *written = iter->second.written;
-  uint8_t *keep = iter->second.keep;
+  if (lrt->raw) {
+    runRaw(lrt, iter->second, argAlloc);
+    return;
+  }
 
-  std::vector<PjRtBuffer *> callArgs;
-  callArgs.reserve(argcnt);
+  // Queued: run before anything else touches its buffers (runPending).
+  LinkableRuntime::PendingExec pendingExec{&iter->second, argcnt, {}};
   for (int64_t i = 0; i < argcnt; i++)
-    if (keep[i])
-      callArgs.push_back(baseArrays[i]);
-  int num_results = 0;
-  for (size_t p = 0; p < callArgs.size(); p++)
-    num_results += written[p];
-  std::vector<PjRtBuffer *> results(num_results);
-  std::vector<uint8_t> futures(num_results, 0);
-  std::vector<FutureType *> future_results(num_results, nullptr);
-  PjRtDevice *device = ClientGetDevice(lrt->client, lrt->device);
-  XLAExecuteSharded(exec, callArgs.size(), callArgs.data(), device, written,
-                    num_results, results.data(), futures.data(),
-                    future_results.data());
-  for (int64_t i = 0, p = 0, k = 0; i < argcnt; i++) {
-    if (!keep[i])
-      continue;
-    if (written[p++]) {
-      *basePtrs[i] = results[k];
-      if (futures[k]) {
-        FutureAwait(future_results[k]);
-        FreeFuture(future_results[k]);
-      }
-      k++;
-    }
-  }
+    if (iter->second.keep[i])
+      pendingExec.allocs.push_back(argAlloc[i]->id);
+  lrt->pending.push_back(std::move(pendingExec));
+  if (lrt->pending.size() >= kPendingLimit)
+    runPending(lrt);
 }
 
 REACTANT_ABI HeldHloModule *convertMlirModuleToHloModule(MlirModule mod) {
