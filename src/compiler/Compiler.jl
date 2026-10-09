@@ -17,7 +17,8 @@ import ..Reactant:
     make_tracer,
     TracedToConcrete,
     append_path,
-    TracedType
+    TracedType,
+    NCCL_COMM_WORLD
 import Reactant: OptimizeCommunicationOptions, ShardyPropagationOptions, CompileOptions
 using Reactant_jll: Reactant_jll
 
@@ -421,7 +422,8 @@ Base.@nospecializeinfer function compile_mlir!(
     lower_enzymexla_mpi_pass = if backend == "cpu"
         "lower-enzymexla-mpi{backend=cpu}"
     elseif backend == "cuda"
-        default_comm_handle = Reactant.default_nccl_comm_handle()
+        NCCL_COMM_WORLD[] == C_NULL && @warn "Default NCCL communicator has not been initialized"
+        default_comm_handle = UInt(NCCL_COMM_WORLD)
         "lower-enzymexla-mpi{backend=cuda ncclCommPtr=$default_comm_handle}"
     else
         # mpi only supported on cpu and cuda, don't run pass otherwise  

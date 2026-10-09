@@ -284,7 +284,10 @@ include("ControlFlow.jl")
 include("Enums.jl")
 include("Tracing.jl")
 
-function default_nccl_comm_handle end
+# contains the handler to NCCL Communicator initialized with MPI_COMM_WORLD
+# TODO will be removed when passing communicators is supported on the Reactant boundary
+const NcclComm_t = Ptr{Cvoid}
+const NCCL_COMM_WORLD = Ref{NcclComm_t}(C_NULL)
 
 include("compiler/Compiler.jl")
 
