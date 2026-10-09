@@ -76,8 +76,13 @@ function activate(blk::Module)
 end
 
 function deactivate(blk::Module)
-    current_module() == blk || error("Deactivating wrong block")
-    return Base.pop!(task_local_storage(:mlir_module)::Vector{Module})
+    stack = task_local_storage(:mlir_module)::Vector{Module}
+    if isempty(stack)
+        unbalanced_teardown("Deactivating a module but no module is active")
+        return nothing
+    end
+    last(stack) == blk || unbalanced_teardown("Deactivating wrong module")
+    return Base.pop!(stack)
 end
 
 function has_module()

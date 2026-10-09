@@ -218,8 +218,13 @@ function activate(blk::Block)
 end
 
 function deactivate(blk::Block)
-    current_block() == blk || error("Deactivating wrong block")
-    return Base.pop!(task_local_storage(:mlir_block))
+    stack = task_local_storage(:mlir_block)::Vector{Block}
+    if isempty(stack)
+        unbalanced_teardown("Deactivating a block but no block is active")
+        return nothing
+    end
+    last(stack) == blk || unbalanced_teardown("Deactivating wrong block")
+    return Base.pop!(stack)
 end
 
 function has_block()

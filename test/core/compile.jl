@@ -668,3 +668,46 @@ end
         x
     ))
 end
+
+@testset "unbalanced teardowns don't mask the in-flight exception" begin
+    IR = Reactant.MLIR.IR
+    ctx1 = IR.Context()
+    ctx2 = IR.Context()
+
+    # Outside of unwinding, a mismatched deactivate is still an error.
+    IR.activate(ctx1)
+    @test_throws "Deactivating wrong context" IR.deactivate(ctx2)
+    IR.deactivate(ctx1)
+
+    # During unwinding, the original exception must survive both a mismatched
+    # and an empty-stack teardown instead of being replaced by them.
+    err = try
+        IR.activate(ctx1)
+        try
+            error("the real error")
+        finally
+            @test_warn "Deactivating wrong context" IR.deactivate(ctx2)
+            @test_warn "no context is active" IR.deactivate(ctx1)
+        end
+    catch e
+        e
+    end
+    @test err isa ErrorException
+    @test err.msg == "the real error"
+
+    # Same for the compiler's raising-context stack.
+    err = try
+        Reactant.Compiler.activate_raising!(true)
+        try
+            error("the real error")
+        finally
+            @test_warn "Deactivating wrong Reactant raising context" Reactant.Compiler.deactivate_raising!(
+                false
+            )
+        end
+    catch e
+        e
+    end
+    @test err isa ErrorException
+    @test err.msg == "the real error"
+end

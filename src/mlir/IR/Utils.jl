@@ -2,6 +2,24 @@ function mlirIsNull(val)
     return val.ptr == C_NULL
 end
 
+"""
+    unbalanced_teardown(msg)
+
+Report an unbalanced activation-stack teardown.
+
+Teardowns run in `finally` blocks, so when a compile fails part-way the stacks
+are often legitimately unbalanced. Throwing from the `finally` would *replace*
+the in-flight exception with this secondary symptom — repeatedly, once per
+nested teardown — burying the real error. Outside of unwinding an unbalanced
+stack is a genuine bug, so throw as before; during unwinding, warn and let the
+original exception propagate.
+"""
+function unbalanced_teardown(msg::AbstractString)
+    isempty(Base.current_exceptions()) && error(msg)
+    @warn "$msg (suppressed while another exception is unwinding; the original error will propagate)"
+    return nothing
+end
+
 function print_callback(str::API.MlirStringRef, userdata)
     data = unsafe_wrap(Array, Base.convert(Ptr{Cchar}, str.data), str.length; own=false)
     write(userdata isa Base.RefValue ? userdata[] : userdata, data)
