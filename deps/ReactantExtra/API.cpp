@@ -4259,6 +4259,23 @@ static void rawDeviceToHost(LinkableRuntime *__restrict__ lrt, void *dst,
   check(lrt->stream->BlockHostUntilDone(), "device to host copy");
 }
 
+// The raising's marks (enzymexla.non_negative and the like) on constants
+// and on ops over constants only: they keep StableHLO's folder from folding
+// what the exec pipeline wants folded.
+static void stripMarksOnConstants(mlir::ModuleOp module) {
+  module->walk([](mlir::Operation *op) {
+    if (!matchPattern(op, mlir::m_Constant()) &&
+        (op->getNumOperands() == 0 ||
+         !llvm::all_of(op->getOperands(), [](mlir::Value v) {
+           return matchPattern(v, mlir::m_Constant());
+         })))
+      return;
+    for (auto attr : llvm::to_vector(op->getDiscardableAttrs()))
+      if (attr.getName().strref().starts_with("enzymexla."))
+        op->removeDiscardableAttr(attr.getName());
+  });
+}
+
 // The exec path's optimization of a kernel's module, before XLA: the
 // transform list (or REACTANT_EXEC_OPT=hlo-opt, the plain pass).
 static void addExecOptimizationPasses(mlir::PassManager &pm) {
@@ -4345,13 +4362,42 @@ static void addExecOptimizationPasses(mlir::PassManager &pm) {
     // The main list may introduce enzymexla ops (rotate, wrap, extend)
     // that XLA does not take; the Julia compiler lowers them before export
     // with this second list.
+    // Before the list, rounds of folding: a raised kernel's lane index
+    // arithmetic is over constant tensors, which the list does not fold (its
+    // simplifications only drop zeros and ones) and StableHLO's folder only
+    // partly (no pad, splat broadcasts only), so the list's constant
+    // propagation and the folder alternate, three times over. With the
+    // indices constant, a lane's scratch -- stored and loaded through them,
+    // a scatter and a gather on a tensor the lane owns -- is forwarded
+    // (gather_scatter_constant_forward and the masked-store patterns) while
+    // the lanes are still a loop: once the list batches them the indices
+    // carry the lane, and the scratch is a pass over memory per access.
+    std::string folding;
+    for (const char *name :
+         {"compare_op_canon<16>", "compare_bool_const<16>",
+          "broadcast_in_dim_op_canon<16>", "convert_op_canon<16>",
+          "reduce_const_prop<16>", "reshape_op_canon<16>",
+          "concatenate_op_canon<16>(1024)", "select_op_canon<16>(1024)",
+          "and_simplify<16>", "or_simplify<16>", "slice_simplify<16>",
+          "convert_simplify<16>", "iota_simplify<16>(1024)",
+          "broadcast_in_dim_simplify<16>(1024)", "transpose_simplify<16>",
+          "pad_simplify<16>(1024)", "gather_scatter_constant_forward",
+          "gather_of_masked_scatter", "scatter_of_scatter_simplify"})
+      folding += std::string(folding.empty() ? "" : ";") + name;
+    std::string foldRound = "enzyme-hlo-generate-td{patterns=" + folding +
+                            " max-iterations=100},transform-interpreter,"
+                            "enzyme-hlo-remove-transform,canonicalize,"
+                            "func.func(stablehlo-aggressive-folder),"
+                            "canonicalize,cse,";
     // A round converges within 10 greedy iterations on MFEM's kernels;
     // without a cap, two patterns undoing each other (Enzyme-JAX #3680 on
     // ceed BP1/2) spin the compile forever, so the cap makes that a
     // failure instead.
     std::string pipeline =
-        "canonicalize,cse,canonicalize,enzyme-hlo-generate-td{patterns=" +
-        patterns +
+        "canonicalize,cse,func.func(stablehlo-aggressive-folder),"
+        "canonicalize," +
+        foldRound + foldRound + foldRound +
+        "enzyme-hlo-generate-td{patterns=" + patterns +
         " max-iterations=100},transform-interpreter,enzyme-hlo-remove-"
         "transform,canonicalize,"
         "cse,enzyme-hlo-generate-td{patterns=lower_rotate;lower_wrap;"
@@ -4487,6 +4533,7 @@ specializeRaw(LinkableRuntime *__restrict__ lrt,
   // (REACTANT_EXEC_UNROLL), and what that exposes simplifies.
   mlir::PassManager pm(&context);
   addExecOptimizationPasses(pm);
+  stripMarksOnConstants(*module);
   if (!mlir::succeeded(pm.run(*module)))
     ReactantThrowError("specialization: the passes failed");
   auto [lexec, shapes, tupleResult] = compileRaw(lrt, *module);
@@ -5174,6 +5221,7 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
             roundCapHit = true;
           return mlir::failure();
         });
+    stripMarksOnConstants(*module);
     if (!mlir::succeeded(pm.run(*module))) {
       if (roundCapHit)
         llvm::errs() << " a pattern round of the exec pipeline hit its cap of "
@@ -5187,6 +5235,11 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
         llvm::errs() << " arg: " << ty << "\n";
       }
       exit(1);
+    }
+    if (getenv("REACTANT_EXEC_DUMP")) {
+      llvm::errs() << "EXEC_DUMP after\n";
+      module->print(llvm::errs());
+      llvm::errs() << "EXEC_DUMP end\n";
     }
 
     // An argument the kernel never stores through comes back as itself.
