@@ -60,7 +60,7 @@ function condition2_nested_if(x, y)
     x_sum = sum(x)
     @trace if x_sum > 0
         y_sum = sum(y)
-        if y_sum > 0
+        @trace if y_sum > 0
             z = x_sum + y_sum
         else
             z = x_sum - y_sum
@@ -390,12 +390,34 @@ end
     @test @allowscalar(x_ra[2, 1]) == 0.0
 end
 
+function condition11_nested_ifff_and_for(x, y, z, n)
+    x_sum = sum(x)
+    @trace for _ in 1:n
+        @trace if x_sum > 0
+            y_sum = sum(y)
+            @trace if y_sum > 0
+                @trace if z > 0
+                    z = x_sum + y_sum + z
+                else
+                    z = x_sum + y_sum
+                end
+            else
+                z = x_sum - y_sum
+            end
+        else
+            y_sum = sum(y)
+            z = x_sum - y_sum
+        end
+    end
+    return z
+end
+
 function condition11_nested_ifff(x, y, z)
     x_sum = sum(x)
     @trace if x_sum > 0
         y_sum = sum(y)
-        if y_sum > 0
-            if sum(z) > 0
+        @trace if y_sum > 0
+            @trace if sum(z) > 0
                 z = x_sum + y_sum + sum(z)
             else
                 z = x_sum + y_sum
@@ -413,20 +435,26 @@ end
 @testset "condition11: nested if 3 levels deep" begin
     x = Reactant.TestUtils.construct_test_array(Float64, 2, 10)
     y = Reactant.TestUtils.construct_test_array(Float64, 2, 10)
-    z = Reactant.TestUtils.construct_test_array(Float64, 2, 10)
+    z = Float64(42.0)
+    n = Int64(10)
     x_ra = Reactant.to_rarray(x)
     y_ra = Reactant.to_rarray(y)
-    z_ra = Reactant.to_rarray(z)
+    z_ra = Reactant.ConcreteRNumber(z)
+    n_ra = Reactant.ConcreteRNumber(n)
 
     @test @jit(condition11_nested_ifff(x_ra, y_ra, z_ra)) ≈ condition11_nested_ifff(x, y, z) atol =
         1e-10
 
+    # positive inputs take the nested branches on every iteration, so the result depends on n
+    @test @jit(condition11_nested_ifff_and_for(x_ra, y_ra, z_ra, n_ra)) ≈
+        condition11_nested_ifff_and_for(x, y, z, n) atol = 1e-10
+
     x = -Reactant.TestUtils.construct_test_array(Float64, 2, 10)
     y = -Reactant.TestUtils.construct_test_array(Float64, 2, 10)
-    z = -Reactant.TestUtils.construct_test_array(Float64, 2, 10)
+    z = Float64(42.0)
     x_ra = Reactant.to_rarray(x)
     y_ra = Reactant.to_rarray(y)
-    z_ra = Reactant.to_rarray(z)
+    z_ra = Reactant.ConcreteRNumber(z)
 
     # x and y hold the same values here, so this branch returns x_sum - y_sum and
     # the reference is exactly 0.0. isapprox defaults to atol = 0, so it only
@@ -434,6 +462,9 @@ end
     # difference between them is enough to fail it.
     @test @jit(condition11_nested_ifff(x_ra, y_ra, z_ra)) ≈ condition11_nested_ifff(x, y, z) atol =
         1e-10
+
+    @test @jit(condition11_nested_ifff_and_for(x_ra, y_ra, z_ra, n_ra)) ≈
+        condition11_nested_ifff_and_for(x, y, z, n) atol = 1e-10
 end
 
 function condition12_compile_test(x, y, z)
@@ -1582,4 +1613,72 @@ end
     @test @jit(condition16_nested_ifelse_assign_return(ConcreteRNumber(1.0))) == 1
     @test @jit(condition16_nested_ifelse_assign_return(ConcreteRNumber(0.0))) == 0
     @test @jit(condition16_nested_ifelse_assign_return(ConcreteRNumber(-1.0))) == -1
+end
+
+function myfunc_traced_if_in_for(x)  # compute sum of positive elements in x
+    s = zero(eltype(x))
+    @trace for i in eachindex(x)
+        @allowscalar cond = x[i] > 0
+        @trace if cond
+            @allowscalar s += x[i]
+        end
+    end
+    return s
+end
+
+function nested_trace_if_for(u, mask)
+    acc = zero(eltype(u))
+    n = length(u)
+    keep = sum(mask) > 0
+
+    @trace if keep
+        @trace for i in 1:n
+            acc = acc + @allowscalar(u[i])
+        end
+        out = acc
+    else
+        out = acc
+    end
+
+    return out
+end
+
+@testset "for in if and if in for" begin
+    u = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float64, 16))
+    for mask_val in (true, false)
+        mask = Reactant.ConcreteRArray(fill(mask_val, 16))
+        @test @jit(nested_trace_if_for(u, mask)) ≈
+            nested_trace_if_for(Array(u), Array(mask))
+    end
+
+    x = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float64, 10))
+    @test @jit(myfunc_traced_if_in_for(x)) ≈ myfunc_traced_if_in_for(Array(x))
+end
+
+traced_call_double(x) = x .* 2
+
+function traced_call_in_if(x)
+    @trace if sum(x) > 0
+        y = @trace traced_call_double(x)
+    else
+        y = x
+    end
+    return y
+end
+
+function traced_bcast_in_if(x)
+    @trace if sum(x) > 0
+        y = @trace sin.(x)
+    else
+        y = x
+    end
+    return y
+end
+
+@testset "@trace call inside @trace if" begin
+    for x in (ones(4), -ones(4))
+        x_ra = Reactant.to_rarray(x)
+        @test @jit(traced_call_in_if(x_ra)) ≈ traced_call_in_if(x)
+        @test @jit(traced_bcast_in_if(x_ra)) ≈ traced_bcast_in_if(x)
+    end
 end
