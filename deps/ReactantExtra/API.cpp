@@ -7,6 +7,7 @@
 #include <mutex>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -3813,6 +3814,18 @@ struct LinkableRuntime {
   // the computation's and builds these options again on every run (the
   // executables are compiled for exactly the arguments they take).
   std::optional<xla::ServiceExecutableRunOptions> runOptions;
+  // Scalars the host writes again and again with the same bytes (a kernel's
+  // length and flags, every launch): the second time a value is written
+  // whole into a small allocation, it gets a slot of its own in this
+  // arena, and from then on an allocation written with it reads the slot
+  // instead of being copied to. A slot is written once; an allocation
+  // reading one that is to be written otherwise (by a kernel, in part,
+  // from the device) first takes its own copy.
+  se::DeviceAddressBase constArena;
+  static const size_t kConstBytes = 16, kConstSlots = 4096;
+  size_t constUsed = 0;
+  std::unordered_map<std::string, char *> constSlots;
+  std::unordered_set<std::string> constSeen;
 
   // Each allocation reserves an inaccessible address range as large as the
   // buffer it stands for, so pointer arithmetic on the handle stays inside
@@ -3831,9 +3844,11 @@ struct LinkableRuntime {
     // no device at all).
     std::vector<char> hostBytes;
     // The raw device memory, on a stream executor client, and how many
-    // times it has been written (a specialization's guard).
+    // times it has been written (a specialization's guard); the constant
+    // slot it reads instead, if it reads one.
     se::DeviceAddressBase mem;
     uint64_t generation = 0;
+    char *shared = nullptr;
   };
   std::map<void *, AllocationInfo, std::greater<void *>> allocations;
   std::unordered_map<uint64_t, void *> allocationBase; // by id
@@ -3939,6 +3954,9 @@ struct LinkableRuntime {
       options.set_gpu_executable_run_options(&gpuRunOptions);
       runOptions.emplace(
           options, local->mutable_backend()->StreamBorrowerWithPriority());
+      constArena = MyValueOrThrow(
+                       allocator->Allocate(ordinal, kConstBytes * kConstSlots))
+                       .Release();
       pinned = MyValueOrThrow(
           deviceState->executor()->HostMemoryAllocate(kPinnedBytes));
     }
@@ -4018,9 +4036,27 @@ static void check(const absl::Status &status, const char *what) {
 }
 
 // The device memory of the raw allocation `info` from `offset` on.
+// The device memory the allocation `info` reads: its own, or a constant
+// slot.
+static se::DeviceAddressBase rawMem(LinkableRuntime::AllocationInfo &info) {
+  return info.shared ? se::DeviceAddressBase(info.shared, info.size) : info.mem;
+}
+
 static se::DeviceAddressBase rawAt(LinkableRuntime::AllocationInfo &info,
                                    size_t offset, size_t size) {
-  return info.mem.GetByteSlice(offset, size);
+  return rawMem(info).GetByteSlice(offset, size);
+}
+
+// Gives the allocation `info` its own copy of the constant slot it reads,
+// before it is written.
+static void ownCopy(LinkableRuntime *__restrict__ lrt,
+                    LinkableRuntime::AllocationInfo &info) {
+  if (!info.shared)
+    return;
+  se::DeviceAddressBase slot(info.shared, info.size);
+  check(lrt->stream->MemcpyD2D(&info.mem, slot, info.size),
+        "constant slot copy");
+  info.shared = nullptr;
 }
 
 // Copies `size` host bytes to `dst` on the stream: a small copy goes
@@ -4299,12 +4335,13 @@ static void runRaw(LinkableRuntime *__restrict__ lrt,
     inputs.emplace_back(&exec.paramShapes[pos]);
     if (exec.written[pos]) {
       info->generation++;
+      ownCopy(lrt, *info);
       inputs.back().SetBuffer(
           {}, xla::MaybeOwningDeviceAddress(se::ScopedDeviceAddress<uint8_t>(
                   info->mem, lrt->ordinal, lrt->allocator)));
       inputs.back().SetUnownedIndex({});
     } else {
-      inputs.back().SetBuffer({}, xla::MaybeOwningDeviceAddress(info->mem));
+      inputs.back().SetBuffer({}, xla::MaybeOwningDeviceAddress(rawMem(*info)));
     }
   }
   auto output = MyValueOrThrow(lexec->executable()->ExecuteAsyncOnStream(
@@ -4556,9 +4593,35 @@ REACTANT_ABI void reactantXLAMemcpy(LinkableRuntime **__restrict__ lrtP,
     switch (direction) {
     case 1: {
       auto found = allocationOf(lrt, dst);
+      auto &info = found->second;
       size_t off = (size_t)dst - (size_t)found->first;
-      found->second.generation++;
-      rawHostToDevice(lrt, rawAt(found->second, off, size), src, size);
+      info.generation++;
+      if (off == 0 && size == info.size &&
+          size <= LinkableRuntime::kConstBytes) {
+        // a whole small write: the value's constant slot, if it has one
+        // or is seen a second time and the arena has room
+        std::string bytes((const char *)src, size);
+        auto slot = lrt->constSlots.find(bytes);
+        if (slot == lrt->constSlots.end() && lrt->constSeen.count(bytes) &&
+            lrt->constUsed < LinkableRuntime::kConstSlots) {
+          char *at = (char *)lrt->constArena.opaque() +
+                     LinkableRuntime::kConstBytes * lrt->constUsed++;
+          rawHostToDevice(lrt, se::DeviceAddressBase(at, size), src, size);
+          slot = lrt->constSlots.emplace(bytes, at).first;
+        }
+        if (slot != lrt->constSlots.end()) {
+          info.shared = slot->second;
+          break;
+        }
+        if (lrt->constSeen.size() > (1 << 16))
+          lrt->constSeen.clear();
+        lrt->constSeen.insert(bytes);
+        info.shared = nullptr;
+        rawHostToDevice(lrt, info.mem, src, size);
+        break;
+      }
+      ownCopy(lrt, info);
+      rawHostToDevice(lrt, rawAt(info, off, size), src, size);
       break;
     }
     case 2: {
@@ -4572,6 +4635,7 @@ REACTANT_ABI void reactantXLAMemcpy(LinkableRuntime **__restrict__ lrtP,
         break;
       auto dfound = allocationOf(lrt, dst), sfound = allocationOf(lrt, src);
       dfound->second.generation++;
+      ownCopy(lrt, dfound->second);
       auto d = rawAt(dfound->second, (size_t)dst - (size_t)dfound->first, size);
       auto sm =
           rawAt(sfound->second, (size_t)src - (size_t)sfound->first, size);
