@@ -544,6 +544,20 @@ end
     @test @jit(norm(x_ra)) isa ConcreteRNumber{Float32}
 end
 
+@testset "norm $T p=$p" for T in (Float32, ComplexF64), p in (1, 2, 3, Inf, -Inf)
+    x = Reactant.TestUtils.construct_test_array(T, 6) .- 3
+    x_ra = Reactant.to_rarray(x)
+    @test @jit(norm(x_ra, p)) ≈ norm(x, p)
+
+    A = Reactant.TestUtils.construct_test_array(T, 3, 4) .- 6
+    @test @jit(norm(Reactant.to_rarray(A), p)) ≈ norm(A, p)
+
+    # off-diagonal zeros make a norm with p < 0 vanish
+    @test @jit((x -> norm(Diagonal(x), p))(x_ra)) ≈ norm(Diagonal(x), p)
+    @test @jit((x -> norm(Diagonal(view(x, 2:5)), p))(x_ra)) ≈
+        norm(Diagonal(view(x, 2:5)), p)
+end
+
 @testset "cross" begin
     x = Float32[0; 1; 0]
     x_ra = Reactant.to_rarray(x)
