@@ -28,4 +28,24 @@ function VectorInterface.scale!(x::TracedRArray, α::Number)
     return x
 end
 
+VectorInterface.add(x::TracedRNumber, α::Number) = x * α
+VectorInterface.add!!(x::TracedRNumber, α::Number) = VectorInterface.add!(x, α)
+function VectorInterface.add!(x::TracedRNumber, α::Number)
+    y = x * α
+    TracedUtils.set_mlir_data!(x, TracedUtils.get_mlir_data(y))
+    return x
+end
+
+function VectorInterface.add(y::Number, x::Number, α::TracedRNumber, ::One)
+    return ifelse(iszero(α), muladd(zero(x), α, y), muladd(x, α, y))
+end
+
+VectorInterface.add(y::TracedRArray, x::TracedRArray, α::Number, β::Number) = x * α + y * β
+VectorInterface.add!!(y::TracedRArray, x::TracedRArray, α::Number, β::Number) = VectorInterface.add!(y, x, α, β)
+function VectorInterface.add!(y::TracedRArray, x::TracedRArray, α::Number, β::Number)
+    z = y * β + x * α
+    TracedUtils.set_mlir_data!(y, TracedUtils.get_mlir_data(z))
+    return y
+end
+
 end
