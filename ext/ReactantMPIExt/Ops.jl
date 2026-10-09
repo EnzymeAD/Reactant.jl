@@ -1,268 +1,232 @@
 module Ops
-using Reactant: Reactant, TracedRArray, TracedRNumber
-using Reactant: MLIR
+using Reactant: Reactant, MLIR, TracedRArray, TracedRNumber
+using Reactant.TracedUtils: get_mlir_data, set_mlir_data!
 using Reactant.MLIR: IR
-using Reactant.MLIR.Dialects: enzymexla
+using Reactant.MLIR.Dialects: comm
 using Reactant.Ops: mlir_stacktrace, mlir_type
 using MPI: MPI
+using ..ReactantMPIExt: TracedCommunicator, TracedRequest
 
-# TODO(#2242)
-# function init(; location=mlir_stacktrace("mpi.init", @__FILE__, @__LINE__))
-#     return mpi.init(; location)
-# end
-
-# TODO(#2242)
-# function finalize(; location=mlir_stacktrace("mpi.finalize", @__FILE__, @__LINE__))
-#     return mpi.finalize(; location)
-# end
-
-@noinline function comm_rank(;
-    location=mlir_stacktrace("mpi.comm_rank", @__FILE__, @__LINE__)
+const MPI_OP_MAP = Dict(
+    MPI.OP_NULL.val => MLIR.API.ENZYMEXLA_COMM_MPI_OP_NULL,
+    MPI.BAND.val => MLIR.API.ENZYMEXLA_COMM_MPI_BAND,
+    MPI.BOR.val => MLIR.API.ENZYMEXLA_COMM_MPI_BOR,
+    MPI.BXOR.val => MLIR.API.ENZYMEXLA_COMM_MPI_BXOR,
+    MPI.LAND.val => MLIR.API.ENZYMEXLA_COMM_MPI_LAND,
+    MPI.LOR.val => MLIR.API.ENZYMEXLA_COMM_MPI_LOR,
+    MPI.LXOR.val => MLIR.API.ENZYMEXLA_COMM_MPI_LXOR,
+    MPI.MAX.val => MLIR.API.ENZYMEXLA_COMM_MPI_MAX,
+    MPI.MIN.val => MLIR.API.ENZYMEXLA_COMM_MPI_MIN,
+    MPI.PROD.val => MLIR.API.ENZYMEXLA_COMM_MPI_PROD,
+    MPI.REPLACE.val => MLIR.API.ENZYMEXLA_COMM_MPI_REPLACE,
+    MPI.SUM.val => MLIR.API.ENZYMEXLA_COMM_MPI_SUM,
+    MPI.NO_OP.val => MLIR.API.ENZYMEXLA_COMM_MPI_NO_OP,
 )
-    rank = mlir_type(TracedRArray{Int32,0}, ())
-    res = IR.result(enzymexla.mpi_comm_rank(; rank, location))
-    return TracedRNumber{Int32}((), res)
+
+function map_mpi_op(op::MPI.Op)
+    if haskey(MPI_OP_MAP, op.val)
+        return MPI_OP_MAP[op.val]
+    else
+        throw(ArgumentError("Custom MPI operations are not supported currently"))
+    end
 end
 
-@noinline function comm_size(;
-    location=mlir_stacktrace("mpi.comm_size", @__FILE__, @__LINE__)
+const MPI_COMM_MAP = Dict(
+    MPI.COMM_NULL.val => MLIR.API.ENZYMEXLA_COMM_MPI_COMM_NULL,
+    MPI.COMM_WORLD.val => MLIR.API.ENZYMEXLA_COMM_MPI_COMM_WORLD,
+    MPI.COMM_SELF.val => MLIR.API.ENZYMEXLA_COMM_MPI_COMM_SELF,
 )
-    size = mlir_type(TracedRArray{Int32,0}, ())
-    res = IR.result(enzymexla.mpi_comm_size(; size, location))
-    return TracedRNumber{Int32}((), res)
+
+function map_mpi_comm(c::MPI.Comm)
+    if haskey(MPI_COMM_MAP, c.val)
+        return MPI_COMM_MAP[c.val]
+    else
+        throw(ArgumentError("Custom MPI communicators are not supported currently"))
+    end
 end
 
-@noinline function barrier(; location=mlir_stacktrace("mpi.barrier", @__FILE__, @__LINE__))
-    enzymexla.mpi_barrier(; location)
+@noinline function constant(
+    c::MPI.Comm; location=mlir_stacktrace("comm.mpi.constant", @__FILE__, @__LINE__)
+)
+    if c != MPI.COMM_WORLD && c != MPI.COMM_SELF && c != MPI.COMM_NULL
+        throw(ArgumentError("Only MPI communicator constants are supported currently"))
+    end
+    type_result = mlir_type(TracedCommunicator)
+    value = MLIR.API.enzymexlaCommMpiCommAttrGet(IR.current_context(), map_mpi_comm(c))
+    op = comm.mpi_constant(; result=type_result, value, location)
+    return TracedCommunicator((), IR.result(op))
+end
+
+@noinline function comm_rank(
+    c::TracedCommunicator;
+    location=mlir_stacktrace("comm.mpi.comm_rank", @__FILE__, @__LINE__),
+)
+    type_rank = mlir_type(TracedRArray{Int32,0}, ())
+    op = comm.mpi_comm_rank(get_mlir_data(c); rank=type_rank, location)
+    return TracedRNumber{Int32}((), IR.result(op))
+end
+
+@noinline function comm_size(
+    c::TracedCommunicator;
+    location=mlir_stacktrace("comm.mpi.comm_size", @__FILE__, @__LINE__),
+)
+    type_size = mlir_type(TracedRArray{Int32,0}, ())
+    op = comm.mpi_comm_size(c; size=type_size, location)
+    return TracedRNumber{Int32}((), IR.result(op))
+end
+
+@noinline function comm_split(
+    c::TracedCommunicator,
+    color::TracedRNumber,
+    key::TracedRNumber;
+    location=mlir_stacktrace("comm.mpi.comm_split", @__FILE__, @__LINE__),
+)
+    type_newcomm = mlir_type(TracedCommunicator)
+    op = comm.mpi_comm_split(
+        get_mlir_data(c),
+        get_mlir_data(color),
+        get_mlir_data(key);
+        newcomm=type_newcomm,
+        location,
+    )
+    return TracedCommunicator((), IR.result(op))
+end
+
+@noinline function barrier(
+    c::TracedCommunicator;
+    location=mlir_stacktrace("comm.mpi.barrier", @__FILE__, @__LINE__),
+)
+    comm.mpi_barrier(get_mlir_data(c); location)
     return nothing
 end
 
 @noinline function send(
     buf::TracedRArray,
     dest::TracedRNumber,
-    tag::TracedRNumber;
-    location=mlir_stacktrace("mpi.send", @__FILE__, @__LINE__),
+    tag::TracedRNumber,
+    c::TracedCommunicator;
+    location=mlir_stacktrace("comm.mpi.send", @__FILE__, @__LINE__),
 )
-    T = Reactant.unwrapped_eltype(buf)
-    mpi_datatype = get_mpi_datatype_enum(MPI.Datatype(T))
-
-    count = Reactant.Ops.constant(Int32(length(buf)))
-
-    enzymexla.mpi_send(
-        buf.mlir_data,
-        count.mlir_data,
-        dest.mlir_data,
-        tag.mlir_data;
-        datatype=MLIR.API.enzymexlaMPIDatatypeAttrGet(IR.current_context(), mpi_datatype),
+    comm.mpi_send(
+        get_mlir_data(buf),
+        get_mlir_data(dest),
+        get_mlir_data(tag),
+        get_mlir_data(c);
         location,
     )
-
     return nothing
 end
 
 @noinline function isend(
     buf::TracedRArray,
     dest::TracedRNumber,
-    tag::TracedRNumber;
-    location=mlir_stacktrace("mpi.isend", @__FILE__, @__LINE__),
+    tag::TracedRNumber,
+    c::TracedCommunicator;
+    location=mlir_stacktrace("comm.mpi.isend", @__FILE__, @__LINE__),
 )
-    T = Reactant.unwrapped_eltype(buf)
-    mpi_datatype = get_mpi_datatype_enum(MPI.Datatype(T))
-
-    count = Reactant.Ops.constant(Int32(length(buf)))
-    request = mlir_type(TracedRArray{Int32,0}, ())
-
-    res = IR.result(
-        enzymexla.mpi_isend(
-            buf.mlir_data,
-            count.mlir_data,
-            dest.mlir_data,
-            tag.mlir_data;
-            request,
-            datatype=MLIR.API.enzymexlaMPIDatatypeAttrGet(
-                IR.current_context(), mpi_datatype
-            ),
-            location,
-        ),
+    type_request = mlir_type(TracedRequest)
+    op = comm.mpi_isend(
+        get_mlir_data(buf),
+        get_mlir_data(dest),
+        get_mlir_data(tag),
+        get_mlir_data(c);
+        request=type_request,
+        location,
     )
-
-    return TracedRNumber{Int32}((), res)
+    return TracedRequest((), IR.result(op))
 end
 
 @noinline function recv!(
     buf::TracedRArray,
     src::TracedRNumber,
-    tag::TracedRNumber;
-    location=mlir_stacktrace("mpi.recv", @__FILE__, @__LINE__),
+    tag::TracedRNumber,
+    c::TracedCommunicator;
+    location=mlir_stacktrace("comm.mpi.recv", @__FILE__, @__LINE__),
 )
-    T = Reactant.unwrapped_eltype(buf)
-    mpi_datatype = get_mpi_datatype_enum(MPI.Datatype(T))
-
-    count = Reactant.Ops.constant(Int32(length(buf)))
-
-    ret = enzymexla.mpi_recv(
-        buf.mlir_data,
-        count.mlir_data,
-        src.mlir_data,
-        tag.mlir_data;
-        outbuf=mlir_type(buf),
-        datatype=MLIR.API.enzymexlaMPIDatatypeAttrGet(IR.current_context(), mpi_datatype),
+    op = comm.mpi_recv(
+        get_mlir_data(src),
+        get_mlir_data(tag),
+        get_mlir_data(c);
+        buffer=mlir_type(buf),
         location,
     )
-
-    buf.mlir_data = IR.result(ret)
+    set_mlir_data!(buf, IR.result(op))
     return buf
 end
 
 @noinline function irecv!(
     buf::TracedRArray,
     src::TracedRNumber,
-    tag::TracedRNumber;
-    location=mlir_stacktrace("mpi.irecv", @__FILE__, @__LINE__),
+    tag::TracedRNumber,
+    c::TracedCommunicator;
+    location=mlir_stacktrace("comm.mpi.irecv", @__FILE__, @__LINE__),
 )
-    T = Reactant.unwrapped_eltype(buf)
-    mpi_datatype = get_mpi_datatype_enum(MPI.Datatype(T))
-
-    count = Reactant.Ops.constant(Int32(length(buf)))
-    request = mlir_type(TracedRArray{Int32,0}, ())
-
-    ret = enzymexla.mpi_irecv(
-        buf.mlir_data,
-        count.mlir_data,
-        src.mlir_data,
-        tag.mlir_data;
-        outbuf=mlir_type(buf),
-        request,
-        datatype=MLIR.API.enzymexlaMPIDatatypeAttrGet(IR.current_context(), mpi_datatype),
+    op = comm.mpi_irecv(
+        get_mlir_data(src),
+        get_mlir_data(tag),
+        get_mlir_data(c);
+        buffer=mlir_type(buf),
+        request=mlir_type(TracedRequest),
         location,
     )
+    set_mlir_data!(buf, IR.result(op, 1))
 
-    buf.mlir_data = IR.result(ret, 1)
-    request = TracedRNumber{Int32}((), IR.result(ret, 2))
-    return request
+    return TracedRequest((), IR.result(op, 2))
 end
 
 @noinline function wait(
-    req::TracedRNumber; location=mlir_stacktrace("mpi.wait", @__FILE__, @__LINE__)
+    request::TracedRequest; location=mlir_stacktrace("comm.mpi.wait", @__FILE__, @__LINE__)
 )
-    enzymexla.mpi_wait(req.mlir_data; location)
+    comm.mpi_wait(get_mlir_data(request); location)
     return nothing
 end
 
 @noinline function waitall(
-    req::TracedRArray; location=mlir_stacktrace("mpi.waitall", @__FILE__, @__LINE__)
+    requests::Vector{TracedRequest};
+    location=mlir_stacktrace("comm.mpi.waitall", @__FILE__, @__LINE__),
 )
-    count = Reactant.Ops.constant(Int32(length(req)))
-    enzymexla.mpi_waitall(count.mlir_data, req.mlir_data; location)
+    comm.mpi_waitall(get_mlir_data.(requests); location)
     return nothing
 end
 
+# TODO inplace and outplace versions?
 @noinline function allreduce!(
-    op,
-    sendbuf::TracedRArray,
-    recvbuf::TracedRArray;
-    location=mlir_stacktrace("mpi.allreduce", @__FILE__, @__LINE__),
+    sendbuff::TracedRArray,
+    recvbuff::TracedRArray,
+    mpi_op::MPI.Op,
+    c::TracedCommunicator;
+    location=mlir_stacktrace("comm.mpi.allreduce", @__FILE__, @__LINE__),
 )
-    mpi_op = get_mpi_op_enum(op)
-
-    T = Reactant.unwrapped_eltype(sendbuf)
-    mpi_datatype = get_mpi_datatype_enum(MPI.Datatype(T))
-
-    count = Reactant.Ops.constant(Int32(length(sendbuf)))
-
-    ret = enzymexla.mpi_allreduce(
-        sendbuf.mlir_data,
-        recvbuf.mlir_data,
-        count.mlir_data;
-        outbuf=mlir_type(recvbuf),
-        datatype=MLIR.API.enzymexlaMPIDatatypeAttrGet(IR.current_context(), mpi_datatype),
-        op=MLIR.API.enzymexlaMPIOpAttrGet(IR.current_context(), mpi_op),
+    mapped_mpi_op = map_mpi_op(mpi_op)
+    mpi_op_attr = MLIR.API.enzymexlaCommMpiOpAttrGet(IR.current_context(), mapped_mpi_op)
+    type_recvbuf = mlir_type(recvbuff)
+    op = comm.mpi_allreduce(
+        get_mlir_data(sendbuff),
+        get_mlir_data(c);
+        recvbuf=type_recvbuf,
+        reduceOp=mpi_op_attr,
         location,
     )
-
-    recvbuf.mlir_data = IR.result(ret)
-    return recvbuf
+    set_mlir_data!(recvbuff, IR.result(op))
+    return recvbuff
 end
 
+# TODO inplace and outplace versions?
 @noinline function bcast!(
     buf::TracedRArray,
-    root::TracedRNumber;
-    location=mlir_stacktrace("mpi.bcast", @__FILE__, @__LINE__),
+    root::TracedRNumber,
+    c::TracedCommunicator;
+    location=mlir_stacktrace("comm.mpi.bcast", @__FILE__, @__LINE__),
 )
-    T = Reactant.unwrapped_eltype(buf)
-    mpi_datatype = get_mpi_datatype_enum(MPI.Datatype(T))
-
-    count = Reactant.Ops.constant(Int32(length(buf)))
-
-    ret = enzymexla.mpi_bcast(
-        buf.mlir_data,
-        count.mlir_data,
-        root.mlir_data;
-        outbuf=mlir_type(buf),
-        datatype=MLIR.API.enzymexlaMPIDatatypeAttrGet(IR.current_context(), mpi_datatype),
+    op = comm.mpi_bcast(
+        get_mlir_data(buf),
+        get_mlir_data(root),
+        get_mlir_data(c);
+        outBuffer=mlir_type(buf),
         location,
     )
-
-    buf.mlir_data = IR.result(ret)
+    set_mlir_data!(buf, IR.result(op))
     return buf
-end
-
-const MPI_OP_MAP = Dict(
-    MPI.OP_NULL.val => MLIR.API.ENZYMEXLA_MPI_OP_NULL,
-    MPI.BAND.val => MLIR.API.ENZYMEXLA_MPI_BAND,
-    MPI.BOR.val => MLIR.API.ENZYMEXLA_MPI_BOR,
-    MPI.BXOR.val => MLIR.API.ENZYMEXLA_MPI_BXOR,
-    MPI.LAND.val => MLIR.API.ENZYMEXLA_MPI_LAND,
-    MPI.LOR.val => MLIR.API.ENZYMEXLA_MPI_LOR,
-    MPI.LXOR.val => MLIR.API.ENZYMEXLA_MPI_LXOR,
-    MPI.MAX.val => MLIR.API.ENZYMEXLA_MPI_MAX,
-    MPI.MIN.val => MLIR.API.ENZYMEXLA_MPI_MIN,
-    MPI.PROD.val => MLIR.API.ENZYMEXLA_MPI_PROD,
-    MPI.REPLACE.val => MLIR.API.ENZYMEXLA_MPI_REPLACE,
-    MPI.SUM.val => MLIR.API.ENZYMEXLA_MPI_SUM,
-    MPI.NO_OP.val => MLIR.API.ENZYMEXLA_MPI_NO_OP,
-)
-
-function get_mpi_op_enum(op)
-    return get(MPI_OP_MAP, op.val) do
-        throw(ArgumentError("Unknown MPI op `$op`"))
-    end
-end
-
-const MPI_DATATYPE_MAP = Dict(
-    MPI.DATATYPE_NULL.val => MLIR.API.ENZYMEXLA_MPI_DATATYPE_NULL,
-    MPI.INT8_T.val => MLIR.API.ENZYMEXLA_MPI_INT8_T,
-    MPI.UINT8_T.val => MLIR.API.ENZYMEXLA_MPI_UINT8_T,
-    MPI.INT16_T.val => MLIR.API.ENZYMEXLA_MPI_INT16_T,
-    MPI.UINT16_T.val => MLIR.API.ENZYMEXLA_MPI_UINT16_T,
-    MPI.INT32_T.val => MLIR.API.ENZYMEXLA_MPI_INT32_T,
-    MPI.UINT32_T.val => MLIR.API.ENZYMEXLA_MPI_UINT32_T,
-    MPI.INT64_T.val => MLIR.API.ENZYMEXLA_MPI_INT64_T,
-    MPI.UINT64_T.val => MLIR.API.ENZYMEXLA_MPI_UINT64_T,
-    MPI.BYTE.val => MLIR.API.ENZYMEXLA_MPI_BYTE,
-    MPI.SHORT.val => MLIR.API.ENZYMEXLA_MPI_SHORT,
-    MPI.UNSIGNED_SHORT.val => MLIR.API.ENZYMEXLA_MPI_UNSIGNED_SHORT,
-    MPI.INT.val => MLIR.API.ENZYMEXLA_MPI_INT,
-    MPI.UNSIGNED.val => MLIR.API.ENZYMEXLA_MPI_UNSIGNED,
-    MPI.LONG.val => MLIR.API.ENZYMEXLA_MPI_LONG,
-    MPI.UNSIGNED_LONG.val => MLIR.API.ENZYMEXLA_MPI_UNSIGNED_LONG,
-    MPI.LONG_LONG_INT.val => MLIR.API.ENZYMEXLA_MPI_LONG_LONG_INT,
-    MPI.UNSIGNED_LONG_LONG.val => MLIR.API.ENZYMEXLA_MPI_UNSIGNED_LONG_LONG,
-    MPI.CHAR.val => MLIR.API.ENZYMEXLA_MPI_CHAR,
-    MPI.SIGNED_CHAR.val => MLIR.API.ENZYMEXLA_MPI_SIGNED_CHAR,
-    MPI.UNSIGNED_CHAR.val => MLIR.API.ENZYMEXLA_MPI_UNSIGNED_CHAR,
-    MPI.WCHAR.val => MLIR.API.ENZYMEXLA_MPI_WCHAR,
-    MPI.FLOAT.val => MLIR.API.ENZYMEXLA_MPI_FLOAT,
-    MPI.DOUBLE.val => MLIR.API.ENZYMEXLA_MPI_DOUBLE,
-    MPI.C_FLOAT_COMPLEX.val => MLIR.API.ENZYMEXLA_MPI_C_FLOAT_COMPLEX,
-    MPI.C_DOUBLE_COMPLEX.val => MLIR.API.ENZYMEXLA_MPI_C_DOUBLE_COMPLEX,
-    MPI.C_BOOL.val => MLIR.API.ENZYMEXLA_MPI_C_BOOL,
-)
-
-function get_mpi_datatype_enum(datatype)
-    return get(MPI_DATATYPE_MAP, datatype.val) do
-        throw(ArgumentError("Unknown MPI datatype `$datatype`"))
-    end
 end
 
 end # module

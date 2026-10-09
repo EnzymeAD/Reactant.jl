@@ -1,5 +1,8 @@
 build --announce_rc
 
+# Automatically apply `common:macos`, `common:linux`, ... configs on the host platform.
+common --enable_platform_specific_config
+
 # Public read-only cache
 common:public_cache --remote_cache="https://storage.googleapis.com/enzyme-presubmit-bazel-cache/" --remote_upload_local_results=false
 common:jll_cache --remote_cache="https://storage.googleapis.com/jll-gcp-cache/" --remote_upload_local_results=false
@@ -38,6 +41,8 @@ build --repo_env=RULES_PYTHON_ENABLE_PYSTAR=0
 build -c opt
 
 common:macos --define ynn_enable_arm64_sme=false
+common:macos --crosstool_top=@local_config_apple_cc//:toolchain
+common:macos --host_crosstool_top=@local_config_apple_cc//:toolchain
 
 # Native builds on a macOS host (e.g. `deps/build_local.jl`). Do not use this for the
 # jll builds, which cross-compile from Linux with `--config=macos` and their own toolchain.

@@ -1,115 +1,133 @@
-using Reactant: @reactant_overlay, TracedRArray, TracedRNumber
+using Reactant: @reactant_overlay, TracedRArray, TracedRNumber, call_with_native, call_with_reactant, use_overlayed_version
+using MPI
 
-# @reactant_overlay function MPI.Init(; kwargs...)
-#     if !isempty(kwargs)
-#         @warn "Ignoring MPI.Init kwargs when tracing over MPI..." kwargs...
-#     end
-#     return Ops.init()
-# end
+const OVERLAY_NATIVE_CALLS = Ref(false)
 
-# @reactant_overlay function MPI.Finalize(; kwargs...)
-#     return Ops.finalize()
-# end
+function MPI.Comm_rank(comm::TracedCommunicator)
+    return Ops.comm_rank(comm)
+end
 
 @reactant_overlay function MPI.Comm_rank(comm::MPI.Comm)
-    @assert comm == MPI.COMM_WORLD "Only MPI.COMM_WORLD is supported currently"
-    return Ops.comm_rank()
+    if OVERLAY_NATIVE_CALLS[]
+        return Ops.comm_rank(Ops.constant(comm))
+    else
+        return call_with_native(MPI.Comm_rank, comm)
+    end
+end
+
+function MPI.Comm_size(comm::TracedCommunicator)
+    return Ops.comm_size(comm)
 end
 
 @reactant_overlay function MPI.Comm_size(comm::MPI.Comm)
-    @assert comm == MPI.COMM_WORLD "Only MPI.COMM_WORLD is supported currently"
-    return Ops.comm_size()
+    if OVERLAY_NATIVE_CALLS[]
+        return Ops.comm_size(Ops.constant(comm))
+    else
+        return call_with_native(MPI.Comm_size, comm)
+    end
+end
+
+function MPI.Barrier(comm::TracedCommunicator)
+    return Ops.barrier(comm)
 end
 
 @reactant_overlay function MPI.Barrier(comm::MPI.Comm)
-    @assert comm == MPI.COMM_WORLD "Only MPI.COMM_WORLD is supported currently"
-    return Ops.barrier()
+    if OVERLAY_NATIVE_CALLS[]
+        return Ops.barrier(Ops.constant(comm))
+    else
+        return call_with_native(MPI.Barrier, comm)
+    end
 end
 
 # TODO(#2241) status not supported yet
-function MPI.Wait(req::TracedRNumber)
+function MPI.Wait(req::TracedRequest)
     return Ops.wait(req)
 end
 
 # TODO(#2241) status not supported yet
-function MPI.Waitall(req::TracedRArray)
+function MPI.Waitall(req::AbstractVector{TracedRequest})
     return Ops.waitall(req)
 end
 
 # TODO(#2241) use `make_tracer` to linearize arbitrary types? check out `MPI.Buffer`
-function MPI.Send(buf::TracedRArray, dest::Integer, tag::Integer, comm::MPI.Comm)
-    tag = Reactant.Ops.constant(Int32(tag))
-    dest = Reactant.Ops.constant(Int32(dest))
-    return MPI.Send(buf, dest, tag, comm)
+@reactant_overlay function MPI.Send(buf, dest, tag, comm)
+    if !any(use_overlayed_version, (buf, dest, tag, comm)) && !OVERLAY_NATIVE_CALLS[]
+        return call_with_native(MPI.Send, buf, dest, tag, comm)
+    else
+        buf_traced = buf isa TracedRArray ? buf : Reactant.Ops.constant(buf)
+        dest_traced = Reactant.promote_to(TracedRNumber{Int32}, dest)
+        tag_traced = Reactant.promote_to(TracedRNumber{Int32}, tag)
+        comm_traced = comm isa TracedCommunicator ? comm : Ops.constant(comm)
+        return Ops.send(buf_traced, dest_traced, tag_traced, comm_traced)
+    end
 end
 
 # TODO(#2241) use `make_tracer` to linearize arbitrary types? check out `MPI.Buffer`
-function MPI.Send(
-    buf::TracedRArray, dest::TracedRNumber, tag::TracedRNumber, comm::MPI.Comm
-)
-    @assert comm == MPI.COMM_WORLD "Only MPI.COMM_WORLD is supported currently"
-    return Ops.send(buf, dest, tag)
-end
-
-# TODO(#2241) should we error if other `AbstractRequest` types are passed in?
-function MPI.Isend(buf::TracedRArray, dest::Integer, tag::Integer, comm::MPI.Comm)
-    dest = Reactant.Ops.constant(Int32(dest))
-    tag = Reactant.Ops.constant(Int32(tag))
-    return MPI.Isend(buf, dest, tag, comm)
-end
-
-# TODO(#2241) use `make_tracer` to linearize arbitrary types? check out `MPI.Buffer`
-function MPI.Isend(
-    buf::TracedRArray, dest::TracedRNumber, tag::TracedRNumber, comm::MPI.Comm
-)
-    @assert comm == MPI.COMM_WORLD "Only MPI.COMM_WORLD is supported currently"
-
-    return Ops.isend(buf, dest, tag)
-end
-
-function MPI.Recv!(buf::TracedRArray, source::Integer, tag::Integer, comm::MPI.Comm)
-    tag = Reactant.Ops.constant(Int32(tag))
-    source = Reactant.Ops.constant(Int32(source))
-    return MPI.Recv!(buf, source, tag, comm)
+@reactant_overlay function MPI.Isend(buf, dest, tag, comm, req)
+    if !any(use_overlayed_version, (buf, dest, tag, comm)) && !OVERLAY_NATIVE_CALLS[]
+        return call_with_native(MPI.Isend, buf, dest, tag, comm, req)
+    else
+        if !MPI.isnull(req)
+            throw(ArgumentError("Do not pass a request to MPI.Isend when using Reactant. Use the one returned."))
+        end
+        buf_traced = buf isa TracedRArray ? buf : Reactant.Ops.constant(buf)
+        dest_traced = Reactant.promote_to(TracedRNumber{Int32}, dest)
+        tag_traced = Reactant.promote_to(TracedRNumber{Int32}, tag)
+        comm_traced = comm isa TracedCommunicator ? comm : Ops.constant(comm)
+        return Ops.isend(buf_traced, dest_traced, tag_traced, comm_traced)
+    end
 end
 
 # TODO(#2241) use `make_tracer` to delinearize arbitrary types? check out `MPI.Buffer`
-function MPI.Recv!(
-    buf::TracedRArray, source::TracedRNumber, tag::TracedRNumber, comm::MPI.Comm
-)
-    @assert comm == MPI.COMM_WORLD "Only MPI.COMM_WORLD is supported currently"
-    return Ops.recv!(buf, source, tag)
-end
-
-function MPI.Irecv!(buf::TracedRArray, source::Integer, tag::Integer, comm::MPI.Comm)
-    source = Reactant.Ops.constant(Int32(source))
-    tag = Reactant.Ops.constant(Int32(tag))
-    return MPI.Irecv!(buf, source, tag, comm)
+@reactant_overlay function MPI.Recv!(buf, source, tag, comm, status)
+    if !any(use_overlayed_version, (buf, source, tag, comm)) && !OVERLAY_NATIVE_CALLS[]
+        return call_with_native(MPI.Recv!, buf, source, tag, comm)
+    else
+        if !isnothing(status)
+            throw(ArgumentError("status argument is not supported"))
+        end
+        buf_traced = buf isa TracedRArray ? buf : Reactant.Ops.constant(buf)
+        source_traced = Reactant.promote_to(TracedRNumber{Int32}, source)
+        tag_traced = Reactant.promote_to(TracedRNumber{Int32}, tag)
+        comm_traced = comm isa TracedCommunicator ? comm : Ops.constant(comm)
+        return Ops.recv!(buf_traced, source_traced, tag_traced, comm_traced)
+    end
 end
 
 # TODO(#2241) use `make_tracer` to delinearize arbitrary types? check out `MPI.Buffer`
-function MPI.Irecv!(
-    buf::TracedRArray, source::TracedRNumber, tag::TracedRNumber, comm::MPI.Comm
-)
-    @assert comm == MPI.COMM_WORLD "Only MPI.COMM_WORLD is supported currently"
-
-    return Ops.irecv!(buf, source, tag)
+@reactant_overlay function MPI.Irecv!(buf, source, tag, comm, req)
+    if !any(use_overlayed_version, (buf, source, tag, comm)) && !OVERLAY_NATIVE_CALLS[]
+        return call_with_native(MPI.Irecv!, buf, source, tag, comm, req)
+    else
+        if !MPI.isnull(req)
+            throw(ArgumentError("Do not pass a request to MPI.Isend when using Reactant. Use the one returned."))
+        end
+        buf_traced = buf isa TracedRArray ? buf : Reactant.Ops.constant(buf)
+        source_traced = Reactant.promote_to(TracedRNumber{Int32}, source)
+        tag_traced = Reactant.promote_to(TracedRNumber{Int32}, tag)
+        comm_traced = comm isa TracedCommunicator ? comm : Ops.constant(comm)
+        return Ops.irecv!(buf_traced, source_traced, tag_traced, comm_traced)
+    end
 end
 
-function MPI.Allreduce!(sendbuf::TracedRArray, recvbuf::TracedRArray, op, comm::MPI.Comm)
-    @assert comm == MPI.COMM_WORLD "Only MPI.COMM_WORLD is supported currently"
-    @assert Reactant.unwrapped_eltype(sendbuf) == Reactant.unwrapped_eltype(recvbuf)
-    @assert length(sendbuf) == length(recvbuf)
-
-    return Ops.allreduce!(op, sendbuf, recvbuf)
+@reactant_overlay function MPI.Allreduce!(sendbuf, recvbuf, op, comm)
+    if !any(use_overlayed_version, (sendbuf, recvbuf, op, comm)) && !OVERLAY_NATIVE_CALLS[]
+        return call_with_native(MPI.Allreduce!, sendbuf, recvbuf, op, comm)
+    else
+        sendbuf_traced = sendbuf isa TracedRArray ? sendbuf : Reactant.Ops.constant(sendbuf)
+        recvbuf_traced = recvbuf isa TracedRArray ? recvbuf : Reactant.Ops.constant(recvbuf)
+        comm_traced = comm isa TracedCommunicator ? comm : Ops.constant(comm)
+        return Ops.allreduce!(sendbuf_traced, recvbuf_traced, op, comm_traced)
+    end
 end
 
-function MPI.Bcast!(buf::TracedRArray, root::Integer, comm::MPI.Comm)
-    root = Reactant.Ops.constant(Int32(root))
-    return MPI.Bcast!(buf, root, comm)
-end
-
-function MPI.Bcast!(buf::TracedRArray, root::TracedRNumber, comm::MPI.Comm)
-    @assert comm == MPI.COMM_WORLD "Only MPI.COMM_WORLD is supported currently"
-    return Ops.bcast!(buf, root)
+@reactant_overlay function MPI.Bcast!(buf, root, comm)
+    if !any(use_overlayed_version, (buf, root, comm)) && !OVERLAY_NATIVE_CALLS[]
+        return call_with_native(MPI.Bcast!, buf, root, comm)
+    else
+        buf_traced = buf isa TracedRArray ? buf : Reactant.Ops.constant(buf)
+        root_traced = Reactant.promote_to(TracedRNumber{Int32}, root)
+        comm_traced = comm isa TracedCommunicator ? comm : Ops.constant(comm)
+        return Ops.bcast!(buf_traced, root_traced, comm_traced)
+    end
 end

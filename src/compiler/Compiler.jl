@@ -418,18 +418,32 @@ Base.@nospecializeinfer function compile_mlir!(
         ",",
     )
     lower_enzymexla_math_pass = "lower-enzymexla-math"
-    lower_enzymexla_mpi_pass = if backend == "cpu"
-        "lower-enzymexla-mpi{backend=cpu}"
-    elseif backend == "cuda"
-        default_comm_handle = Reactant.default_nccl_comm_handle()
-        "lower-enzymexla-mpi{backend=cuda ncclCommPtr=$default_comm_handle}"
-    else
-        # mpi only supported on cpu and cuda, don't run pass otherwise  
-        nothing
-    end
-    lower_enzymexla_passes = filter(
-        !isnothing,
-        [lower_enzymexla_linalg_pass, lower_enzymexla_math_pass, lower_enzymexla_mpi_pass],
+# <<<<<<< HEAD
+#     lower_enzymexla_mpi_pass = if backend == "cpu"
+#         "lower-enzymexla-mpi{backend=cpu}"
+#     elseif backend == "cuda"
+#         default_comm_handle = Reactant.default_nccl_comm_handle()
+#         "lower-enzymexla-mpi{backend=cuda ncclCommPtr=$default_comm_handle}"
+#     else
+#         # mpi only supported on cpu and cuda, don't run pass otherwise  
+#         nothing
+#     end
+#     lower_enzymexla_passes = filter(
+#         !isnothing,
+#         [lower_enzymexla_linalg_pass, lower_enzymexla_math_pass, lower_enzymexla_mpi_pass],
+# =======
+    # TODO legalization of comm.mpi ops to comm.nccl if compile_options.comm_options.legalize_mpi_to_nccl is true and backend is CUDA
+    lower_comm_pass = if compile_options.comm_options.lowering_target === :jit
+            "lower-comm-to-jit"
+        elseif compile_options.comm_options.lowering_target === :ffi
+            "lower-comm-to-stablehlo"
+        else
+            error("Unknown comm lowering target: $(compile_options.comm_options.lowering_target)")
+        end
+    lower_enzymexla_passes = join(
+        [lower_enzymexla_linalg_pass, lower_enzymexla_math_pass, lower_comm_pass],
+        ",",
+# >>>>>>> ss/mpi-ffi
     )
     lower_enzymexla_passes = join(lower_enzymexla_passes, ",")
 

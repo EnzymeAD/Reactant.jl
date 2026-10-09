@@ -204,7 +204,7 @@ let mpi_initialized = false
                 #     elseif rank == 1
                 #         recv_buf = ConcreteRArray(zeros(5))
                 #         source = 0
-                #         @jit MPI.Recv!(recv_buf, source, tag, comm)
+                #         @jit MPI.Recv!(recv_buf, source, tag, comm, nothing)
                 #         @test recv_buf == send_buf
                 #     end
                 # end
@@ -216,7 +216,7 @@ let mpi_initialized = false
                 #         @jit MPI.Send(send_buf, dest, tag, comm)
                 #     elseif rank == 1
                 #         recv_buf = zeros(5)
-                #         MPI.Recv!(recv_buf, comm; source=0, tag=tag)
+                #         MPI.Recv!(recv_buf, comm; source=0, tag=tag, nothing)
                 #         @test recv_buf == send_buf
                 #     end
                 # end
@@ -233,7 +233,7 @@ let mpi_initialized = false
                             elseif rank == 1
                                 recv_buf = ConcreteRArray(zeros(T, 5))
                                 src = 0
-                                @jit MPI.Recv!(recv_buf, src, tag, comm)
+                                @jit MPI.Recv!(recv_buf, src, tag, comm, nothing)
                                 @test recv_buf == send_buf
                             end
                         end
@@ -252,7 +252,7 @@ let mpi_initialized = false
                                 return nothing
                             elseif rank == 1
                                 src = 0
-                                MPI.Recv!(recv_buf, src, tag, comm)
+                                MPI.Recv!(recv_buf, src, tag, comm, nothing)
                                 return nothing
                             end
                         end
@@ -307,7 +307,7 @@ let mpi_initialized = false
                 for T in datatypes
                     # NOTE: currently don't allow a request to cross the compile boundary
                     function waitall(send_buf, recv_buf)
-                        reqs = Reactant.TracedRNumber[]
+                        reqs = Any[]
 
                         if rank == 0
                             dest = 1
