@@ -4,8 +4,8 @@ struct NcclUniqueId
     internal::NTuple{128,UInt8}
 end
 
+# contains the handler to NCCL Communicator initialized with MPI_COMM_WORLD
 const NCCL_COMM = Ref{NcclComm_t}(C_NULL)
-const NCCL_COMM_HANDLE = Ref{UInt}(0)
 
 function nccl_symbol(name::Symbol)
     Reactant_jll.is_available() ||
@@ -96,7 +96,6 @@ function initialize!(comm::MPI.Comm)
     nccl_comm = nccl_comm_init(nranks, rank, NcclUniqueId(Tuple(unique_id_bytes)))
 
     NCCL_COMM[] = nccl_comm
-    NCCL_COMM_HANDLE[] = UInt(nccl_comm)
 
     return nothing
 end
@@ -105,12 +104,11 @@ function destroy_default_comm()
     if NCCL_COMM[] != C_NULL
         nccl_comm_destroy(NCCL_COMM[])
         NCCL_COMM[] = C_NULL
-        NCCL_COMM_HANDLE[] = 0
     end
     return nothing
 end
 
 function Reactant.default_nccl_comm_handle()
-    NCCL_COMM[] == C_NULL && error("Default NCCL communicator has not been initialized")
-    return NCCL_COMM_HANDLE[]
+    NCCL_COMM[] == C_NULL && @warn "Default NCCL communicator has not been initialized"
+    return UInt(NCCL_COMM[])
 end
