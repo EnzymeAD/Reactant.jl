@@ -138,6 +138,7 @@ void reactantReleaseAddressRange(void *base, size_t nbytes);
 #endif // defined(__linux__)
 
 // shardy
+#include "mlir/Analysis/SliceAnalysis.h"
 #include "shardy/dialect/sdy/ir/dialect.h"
 #include "shardy/dialect/sdy/transforms/export/passes.h"
 #include "shardy/dialect/sdy/transforms/import/passes.h"
@@ -3742,6 +3743,21 @@ struct LinkableRuntime {
     xla::LocalExecutable *lexec;
     std::vector<xla::Shape> paramShapes;
     bool tupleResult;
+    // A while loop's bound the kernel computes from its inputs (the longest
+    // row of a CSR structure) is unknown to XLA, which then reads the
+    // loop's predicate back to the host every step. The generic executable
+    // returns such bounds after its results; once read, a specialization
+    // compiled with them as constants runs instead, for as long as the
+    // inputs they derive from (`boundDeps`, by kept parameter) are the
+    // allocations observed, unwritten since (`observedDeps`).
+    std::string text; // the module, bounds returned last
+    int64_t numBounds = 0;
+    std::vector<std::vector<int64_t>> boundDeps;
+    std::vector<int64_t> observed;
+    std::vector<std::pair<uint64_t, uint64_t>> observedDeps; // id, generation
+    std::map<std::vector<int64_t>, std::pair<xla::LocalExecutable *, bool>>
+        specialized; // by bound values: executable, tuple result
+    bool specializing = true;
   };
   DenseMap<const char *,
            std::map<std::vector<std::vector<int64_t>>, CachedExec>>
@@ -3777,6 +3793,13 @@ struct LinkableRuntime {
   std::unique_ptr<se::MemoryAllocation> pinned;
   size_t pinnedOffset = 0;
   static const size_t kPinnedBytes = 16 << 20;
+  // Small raw allocations freed, kept by size for the next of that size:
+  // a solver allocates and frees the same few scalars and workspaces
+  // every iteration, and the allocator's round trip costs more than the
+  // copy into them.
+  std::unordered_map<size_t, std::vector<se::DeviceAddressBase>> freeRaw;
+  static const size_t kFreeListBytes = 256 << 10;
+  static const size_t kFreeListEntries = 64;
 
   // Each allocation reserves an inaccessible address range as large as the
   // buffer it stands for, so pointer arithmetic on the handle stays inside
@@ -3794,8 +3817,10 @@ struct LinkableRuntime {
     // something needs it on the device (or reads it back, which then needs
     // no device at all).
     std::vector<char> hostBytes;
-    // The raw device memory, on a stream executor client.
+    // The raw device memory, on a stream executor client, and how many
+    // times it has been written (a specialization's guard).
     se::DeviceAddressBase mem;
+    uint64_t generation = 0;
   };
   std::map<void *, AllocationInfo, std::greater<void *>> allocations;
   std::unordered_map<uint64_t, void *> allocationBase; // by id
@@ -3954,24 +3979,248 @@ static void rawDeviceToHost(LinkableRuntime *__restrict__ lrt, void *dst,
   check(lrt->stream->BlockHostUntilDone(), "device to host copy");
 }
 
+// The exec path's optimization of a kernel's module, before XLA: the
+// transform list (or REACTANT_EXEC_OPT=hlo-opt, the plain pass).
+static void addExecOptimizationPasses(mlir::PassManager &pm) {
+  // REACTANT_EXEC_OPT=hlo-opt runs the plain enzyme-hlo-opt pass instead.
+  // REACTANT_EXEC_UNROLL sets the trip count up to which while loops are
+  // unrolled. Unrolling the raised kernels' short loops (threshold 16)
+  // makes them straight-line code XLA compiles slowly: the mfem GPU suite
+  // takes 4384 s against 2899 s at threshold 1, so unrolling is opt-in.
+  static const char *execOpt = getenv("REACTANT_EXEC_OPT");
+  static const int unrollThreshold =
+      getenv("REACTANT_EXEC_UNROLL") ? atoi(getenv("REACTANT_EXEC_UNROLL")) : 1;
+  if (execOpt && std::string(execOpt) == "hlo-opt") {
+    // The parallel loops of a raised kernel (its dynamic-extent dimensions,
+    // peeled into host-driven whiles) are batched into scatters by the auto
+    // batching patterns, once the constant-trip loops nested in them are
+    // unrolled; enzyme-hlo-opt registers neither by default.
+    mlir::enzyme::EnzymeHLOUnrollPassOptions unroll;
+    unroll.maxNumIterations = unrollThreshold;
+    unroll.maxOperationThreshold = 128;
+    pm.addPass(mlir::enzyme::createEnzymeHLOUnrollPass(unroll));
+    mlir::enzyme::EnzymeHLOOptPassOptions opts;
+    opts.enable_auto_batching_passes = true;
+    pm.addPass(mlir::enzyme::createEnzymeHLOOptPass(opts));
+  } else {
+    EnzymeXLATransformPassesOptions opts{};
+    opts.max_constant_threshold = 1024;
+    opts.while_unroll_threshold = unrollThreshold;
+    opts.reshape_propagate = ENZYMEXLA_PROPAGATE_UP;
+    opts.transpose_propagate = ENZYMEXLA_PROPAGATE_UP;
+    opts.dus_slice_simplify = true;
+    opts.raise_shlo_to_blas_lapack = true;
+    opts.recognize_comms = true;
+    opts.lower_comms = true;
+    opts.enable_structured_tensors_passes = true;
+    opts.enable_scatter_gather_optimization_passes = true;
+    opts.enable_reduce_slice_fusion_passes = true;
+    opts.enable_concat_to_batch_passes = true;
+    opts.enable_loop_raising_passes = true;
+    opts.enable_licm_optimization_passes = true;
+    opts.loop_unswitch_threshold = 10;
+    opts.enable_pad_optimization_passes = true;
+    char *mainPasses = nullptr, *lowerPasses = nullptr;
+    enzymexlaGetTransformPassesList(&opts, &mainPasses, &lowerPasses);
+    std::string patterns(mainPasses);
+    enzymexlaFreeTransformPassesList(mainPasses);
+    enzymexlaFreeTransformPassesList(lowerPasses);
+    for (const char *drop :
+         {"convert_mul_convert;", "associative_binary_op_reordering<1>;"})
+      for (size_t at; (at = patterns.find(drop)) != std::string::npos;)
+        patterns.erase(at, strlen(drop));
+    // The main list may introduce enzymexla ops (rotate, wrap, extend)
+    // that XLA does not take; the Julia compiler lowers them before export
+    // with this second list.
+    std::string pipeline =
+        "canonicalize,cse,canonicalize,enzyme-hlo-generate-td{patterns=" +
+        patterns +
+        "},transform-interpreter,enzyme-hlo-remove-transform,canonicalize,"
+        "cse,enzyme-hlo-generate-td{patterns=lower_rotate;lower_wrap;"
+        "lower_extend;lower_updatewithoutcorners;lower_multislice},"
+        "transform-interpreter,enzyme-hlo-remove-transform,canonicalize,cse";
+    if (failed(mlir::parsePassPipeline(pipeline, pm))) {
+      llvm::errs() << " failed to parse the exec optimization pipeline\n";
+      exit(1);
+    }
+  }
+}
+
+// Compiles `module` for the stream executor client: the executable, its
+// parameter shapes, whether its result is a tuple.
+static std::tuple<xla::LocalExecutable *, std::vector<xla::Shape>, bool>
+compileRaw(LinkableRuntime *__restrict__ lrt, mlir::ModuleOp module) {
+  xla::XlaComputation computation;
+  xla::ExecutableBuildOptions buildOptions;
+  buildOptions.set_device_ordinal(lrt->ordinal);
+  buildOptions.set_device_allocator(lrt->allocator);
+  check(xla::MlirToXlaComputation(module, computation, false, false,
+                                  &buildOptions),
+        "to xla");
+  auto programShape = MyValueOrThrow(computation.GetProgramShape());
+  std::vector<xla::Shape> paramShapes(programShape.parameters().begin(),
+                                      programShape.parameters().end());
+  std::vector<const xla::Shape *> shapePtrs;
+  for (auto &shape : paramShapes)
+    shapePtrs.push_back(&shape);
+  auto compiled =
+      MyValueOrThrow(lrt->local->Compile(computation, shapePtrs, buildOptions));
+  return {compiled[0].release(), std::move(paramShapes),
+          programShape.result().IsTuple()};
+}
+
+// The bound of a while loop in `funcOp` that the function computes: the
+// value its condition compares the induction variable against, when that
+// is a scalar integer neither constant nor loop-carried, defined at the
+// function's top level (so it is one value for the whole run). Returned
+// as the function's last results, each with the entry parameters it
+// derives from.
+static std::vector<std::vector<int64_t>> returnLoopBounds(func::FuncOp funcOp) {
+  SmallVector<mlir::Value> bounds;
+  funcOp.walk([&](mlir::stablehlo::WhileOp whileOp) {
+    auto &condBlock = whileOp.getCond().front();
+    auto ret = cast<mlir::stablehlo::ReturnOp>(condBlock.getTerminator());
+    auto cmp = ret.getOperand(0).getDefiningOp<mlir::stablehlo::CompareOp>();
+    if (!cmp)
+      return;
+    mlir::Value bound = cmp.getRhs();
+    if (auto arg = dyn_cast<mlir::BlockArgument>(bound)) {
+      // a loop-carried bound the body passes through: its initial value
+      if (arg.getOwner() != &condBlock)
+        return;
+      unsigned pos = arg.getArgNumber();
+      auto &bodyBlock = whileOp.getBody().front();
+      auto bodyRet = cast<mlir::stablehlo::ReturnOp>(bodyBlock.getTerminator());
+      if (bodyRet.getOperand(pos) != bodyBlock.getArgument(pos))
+        return;
+      bound = whileOp->getOperand(pos);
+    }
+    auto ty = dyn_cast<mlir::RankedTensorType>(bound.getType());
+    if (!ty || ty.getRank() != 0 || !ty.getElementType().isInteger() ||
+        matchPattern(bound, mlir::m_Constant()))
+      return;
+    Operation *def = bound.getDefiningOp();
+    if (!def || def->getParentOp() != funcOp.getOperation())
+      return;
+    if (!llvm::is_contained(bounds, bound))
+      bounds.push_back(bound);
+  });
+  std::vector<std::vector<int64_t>> deps;
+  if (bounds.empty())
+    return deps;
+  for (mlir::Value bound : bounds) {
+    // the entry parameters the bound derives from
+    SetVector<Operation *> slice;
+    (void)getBackwardSlice(bound, &slice, BackwardSliceOptions());
+    slice.insert(bound.getDefiningOp());
+    std::vector<int64_t> params;
+    for (Operation *op : slice)
+      for (mlir::Value operand : op->getOperands())
+        if (auto arg = dyn_cast<mlir::BlockArgument>(operand))
+          if (arg.getOwner() == &funcOp.getBody().front() &&
+              !llvm::is_contained(params, (int64_t)arg.getArgNumber()))
+            params.push_back(arg.getArgNumber());
+    llvm::sort(params);
+    deps.push_back(std::move(params));
+  }
+  auto ret = cast<func::ReturnOp>(funcOp.getBody().front().getTerminator());
+  SmallVector<mlir::Value> results(ret.getOperands());
+  results.append(bounds.begin(), bounds.end());
+  ret->setOperands(results);
+  funcOp.setType(mlir::FunctionType::get(
+      funcOp.getContext(), funcOp.getBody().front().getArgumentTypes(),
+      mlir::ValueRange(results).getTypes()));
+  return deps;
+}
+
+// The executable `exec` specialized to the bound values `values`: the
+// bounds (the module's last results) become constants, and are returned
+// no more.
+static std::pair<xla::LocalExecutable *, bool>
+specializeRaw(LinkableRuntime *__restrict__ lrt,
+              LinkableRuntime::CachedExec &exec, ArrayRef<int64_t> values) {
+  MLIRContext context(lrt->registry);
+  RegisterDialects(wrap(&context));
+  mlir::ParserConfig config(&context, false);
+  auto module = mlir::parseSourceString<mlir::ModuleOp>(exec.text, config);
+  if (!module)
+    ReactantThrowError("specialization: the module does not parse back");
+  auto funcOp = cast<func::FuncOp>(module->lookupSymbol("main"));
+  auto ret = cast<func::ReturnOp>(funcOp.getBody().front().getTerminator());
+  int64_t first = ret.getNumOperands() - exec.numBounds;
+  mlir::OpBuilder b(&funcOp.getBody().front(),
+                    funcOp.getBody().front().begin());
+  for (int64_t k = 0; k < exec.numBounds; k++) {
+    mlir::Value bound = ret.getOperand(first + k);
+    auto ty = cast<mlir::RankedTensorType>(bound.getType());
+    auto cst = mlir::stablehlo::ConstantOp::create(
+        b, bound.getLoc(),
+        mlir::DenseElementsAttr::get(
+            ty, b.getIntegerAttr(ty.getElementType(), values[k])));
+    bound.replaceAllUsesWith(cst);
+  }
+  SmallVector<mlir::Value> results(ret.getOperands().take_front(first));
+  ret->setOperands(results);
+  funcOp.setType(mlir::FunctionType::get(
+      funcOp.getContext(), funcOp.getBody().front().getArgumentTypes(),
+      mlir::ValueRange(results).getTypes()));
+  // Optimized again with the bounds known: the loops they bound unroll
+  // (REACTANT_EXEC_UNROLL), and what that exposes simplifies.
+  mlir::PassManager pm(&context);
+  addExecOptimizationPasses(pm);
+  if (!mlir::succeeded(pm.run(*module)))
+    ReactantThrowError("specialization: the passes failed");
+  auto [lexec, shapes, tupleResult] = compileRaw(lrt, *module);
+  return {lexec, tupleResult};
+}
+
 // Runs the executable on the stream over the arguments' raw memory: a
 // written argument is donated, and comes back as the result it aliases
 // (XLA keeps it in place; should it not, the allocation takes the result's
-// memory and the old is freed, stream-ordered). Any further result of the
-// kernel is dropped.
+// memory and the old is freed, stream-ordered). The kernel's further
+// results are dropped, but for the loop bounds the generic executable
+// returns, which are read back for the specialization (see CachedExec).
 static void runRaw(LinkableRuntime *__restrict__ lrt,
                    LinkableRuntime::CachedExec &exec,
                    ArrayRef<LinkableRuntime::AllocationInfo *> argAlloc) {
-  std::vector<xla::ExecutionInput> inputs;
   std::vector<LinkableRuntime::AllocationInfo *> params;
+  for (size_t i = 0; i < argAlloc.size(); i++)
+    if (exec.keep[i])
+      params.push_back(argAlloc[i]);
+  // The executable to run: a specialization while the inputs its bounds
+  // derive from are those observed, unwritten since; else the generic one,
+  // whose bounds are then read.
+  xla::LocalExecutable *lexec = exec.lexec;
+  bool tupleResult = exec.tupleResult;
+  bool readBounds = false;
+  if (exec.numBounds) {
+    bool valid = !exec.observed.empty();
+    // (the deps, flattened in order over the bounds)
+    size_t d = 0;
+    for (auto &deps : exec.boundDeps)
+      for (int64_t pos : deps) {
+        if (valid && (d >= exec.observedDeps.size() ||
+                      exec.observedDeps[d].first != params[pos]->id ||
+                      exec.observedDeps[d].second != params[pos]->generation))
+          valid = false;
+        d++;
+      }
+    auto found =
+        valid ? exec.specialized.find(exec.observed) : exec.specialized.end();
+    if (found != exec.specialized.end()) {
+      lexec = found->second.first;
+      tupleResult = found->second.second;
+    } else {
+      readBounds = true;
+    }
+  }
+  std::vector<xla::ExecutionInput> inputs;
   inputs.reserve(exec.paramShapes.size());
-  for (size_t i = 0, pos = 0; i < argAlloc.size(); i++) {
-    if (!exec.keep[i])
-      continue;
-    auto *info = argAlloc[i];
-    params.push_back(info);
+  for (size_t pos = 0; pos < params.size(); pos++) {
+    auto *info = params[pos];
     inputs.emplace_back(exec.paramShapes[pos]);
     if (exec.written[pos]) {
+      info->generation++;
       inputs.back().SetBuffer(
           {}, xla::MaybeOwningDeviceAddress(se::ScopedDeviceAddress<uint8_t>(
                   info->mem, lrt->ordinal, lrt->allocator)));
@@ -3979,7 +4228,6 @@ static void runRaw(LinkableRuntime *__restrict__ lrt,
     } else {
       inputs.back().SetBuffer({}, xla::MaybeOwningDeviceAddress(info->mem));
     }
-    pos++;
   }
   xla::ExecutableRunOptions options;
   options.set_stream(lrt->stream);
@@ -3989,18 +4237,17 @@ static void runRaw(LinkableRuntime *__restrict__ lrt,
       lrt->local->backend().eigen_intra_op_thread_pool_device());
   options.set_run_id(xla::RunId::CreateUniqueId());
   options.set_gpu_executable_run_options(lrt->raw->gpu_run_options());
-  auto output =
-      MyValueOrThrow(exec.lexec->RunAsync(std::move(inputs), options));
+  auto output = MyValueOrThrow(lexec->RunAsync(std::move(inputs), options));
   xla::ScopedShapedBuffer result = output.ConsumeResult();
   int64_t numResults =
-      exec.tupleResult ? result.on_device_shape().tuple_shapes().size() : 1;
+      tupleResult ? result.on_device_shape().tuple_shapes().size() : 1;
   int64_t r = 0;
   for (size_t pos = 0; pos < params.size(); pos++) {
     if (!exec.written[pos])
       continue;
     auto *info = params[pos];
     se::DeviceAddressBase mem =
-        exec.tupleResult ? result.buffer({r}) : result.buffer({});
+        tupleResult ? result.buffer({r}) : result.buffer({});
     if (mem.opaque() != info->mem.opaque()) {
       check(lrt->allocator->Deallocate(lrt->ordinal, info->mem),
             "free of a replaced buffer");
@@ -4008,11 +4255,50 @@ static void runRaw(LinkableRuntime *__restrict__ lrt,
     }
     r++;
   }
-  for (; r < numResults; r++)
+  int64_t firstBound = readBounds ? numResults - exec.numBounds : numResults;
+  for (; r < firstBound; r++)
     check(lrt->allocator->Deallocate(lrt->ordinal, result.buffer({r})),
           "free of an extra result");
+  if (readBounds) {
+    // The bounds: read (one wait), recorded with the inputs they derive
+    // from, and the specialization compiled for them, unless the values
+    // keep changing (four specializations is the limit).
+    std::vector<int64_t> values(exec.numBounds, 0);
+    for (int64_t k = 0; k < exec.numBounds; k++) {
+      auto mem =
+          tupleResult ? result.buffer({firstBound + k}) : result.buffer({});
+      check(
+          lrt->stream->Memcpy(&values[k], mem, std::min<size_t>(8, mem.size())),
+          "bound read");
+    }
+    check(lrt->stream->BlockHostUntilDone(), "bound read");
+    for (int64_t k = 0; k < exec.numBounds; k++) {
+      auto mem =
+          tupleResult ? result.buffer({firstBound + k}) : result.buffer({});
+      // (a narrower bound is the low bytes, on a little-endian host)
+      if (mem.size() == 4)
+        values[k] = (int32_t)values[k];
+      else if (mem.size() == 2)
+        values[k] = (int16_t)values[k];
+      else if (mem.size() == 1)
+        values[k] = (int8_t)values[k];
+      if (tupleResult)
+        check(lrt->allocator->Deallocate(lrt->ordinal, mem), "free of a bound");
+    }
+    exec.observed = values;
+    exec.observedDeps.clear();
+    for (auto &deps : exec.boundDeps)
+      for (int64_t pos : deps)
+        exec.observedDeps.emplace_back(params[pos]->id,
+                                       params[pos]->generation);
+    if (exec.specializing && !exec.specialized.count(values)) {
+      exec.specialized[values] = specializeRaw(lrt, exec, values);
+      if (exec.specialized.size() >= 4)
+        exec.specializing = false;
+    }
+  }
   // (a tuple result's table of pointers is a buffer of its own)
-  if (exec.tupleResult)
+  if (tupleResult)
     check(lrt->allocator->Deallocate(lrt->ordinal, result.buffer({})),
           "free of a result tuple");
   (void)result.release();
@@ -4200,6 +4486,7 @@ REACTANT_ABI void reactantXLAMemcpy(LinkableRuntime **__restrict__ lrtP,
     case 1: {
       auto found = allocationOf(lrt, dst);
       size_t off = (size_t)dst - (size_t)found->first;
+      found->second.generation++;
       rawHostToDevice(lrt, rawAt(found->second, off, size), src, size);
       break;
     }
@@ -4213,6 +4500,7 @@ REACTANT_ABI void reactantXLAMemcpy(LinkableRuntime **__restrict__ lrtP,
       if (!size)
         break;
       auto dfound = allocationOf(lrt, dst), sfound = allocationOf(lrt, src);
+      dfound->second.generation++;
       auto d = rawAt(dfound->second, (size_t)dst - (size_t)dfound->first, size);
       auto sm =
           rawAt(sfound->second, (size_t)src - (size_t)sfound->first, size);
@@ -4327,9 +4615,16 @@ REACTANT_ABI void *reactantXLAMalloc(LinkableRuntime **__restrict__ lrtP,
     exit(1);
   }
   se::DeviceAddressBase mem;
-  if (lrt->raw)
-    mem = MyValueOrThrow(lrt->allocator->Allocate(lrt->ordinal, nbytes))
-              .Release();
+  if (lrt->raw) {
+    auto freed = lrt->freeRaw.find(nbytes);
+    if (freed != lrt->freeRaw.end() && !freed->second.empty()) {
+      mem = freed->second.back();
+      freed->second.pop_back();
+    } else {
+      mem = MyValueOrThrow(lrt->allocator->Allocate(lrt->ordinal, nbytes))
+                .Release();
+    }
+  }
   auto pair = lrt->allocations.try_emplace(
       base, LinkableRuntime::AllocationInfo{
                 (xla::PjRtBuffer *)xbuffer0,
@@ -4362,7 +4657,14 @@ REACTANT_ABI void reactantXLAFree(LinkableRuntime **__restrict__ lrtP,
   if (lrt->raw) {
     // Stream-ordered: whatever still uses the memory is on the stream
     // ahead of any use of it reallocated.
-    check(lrt->allocator->Deallocate(lrt->ordinal, found->second.mem), "free");
+    auto &info = found->second;
+    auto &freed = lrt->freeRaw[info.size];
+    if (info.size <= LinkableRuntime::kFreeListBytes &&
+        freed.size() < LinkableRuntime::kFreeListEntries &&
+        info.mem.size() == info.size)
+      freed.push_back(info.mem);
+    else
+      check(lrt->allocator->Deallocate(lrt->ordinal, info.mem), "free");
     lrt->allocations.erase(found);
     lrt->allocationBase.erase(id);
     return;
@@ -4532,70 +4834,7 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
         stablehlo::createStablehloCanonicalizeDynamismPass());
     // The exec-time optimizer runs the pattern list the Julia compiler runs
     // on a traced program (the transform-dialect list with its defaults);
-    // REACTANT_EXEC_OPT=hlo-opt runs the plain enzyme-hlo-opt pass instead.
-    // REACTANT_EXEC_UNROLL sets the trip count up to which while loops are
-    // unrolled. Unrolling the raised kernels' short loops (threshold 16)
-    // makes them straight-line code XLA compiles slowly: the mfem GPU suite
-    // takes 4384 s against 2899 s at threshold 1, so unrolling is opt-in.
-    static const char *execOpt = getenv("REACTANT_EXEC_OPT");
-    static const int unrollThreshold =
-        getenv("REACTANT_EXEC_UNROLL") ? atoi(getenv("REACTANT_EXEC_UNROLL"))
-                                       : 1;
-    if (execOpt && std::string(execOpt) == "hlo-opt") {
-      // The parallel loops of a raised kernel (its dynamic-extent dimensions,
-      // peeled into host-driven whiles) are batched into scatters by the auto
-      // batching patterns, once the constant-trip loops nested in them are
-      // unrolled; enzyme-hlo-opt registers neither by default.
-      mlir::enzyme::EnzymeHLOUnrollPassOptions unroll;
-      unroll.maxNumIterations = unrollThreshold;
-      unroll.maxOperationThreshold = 128;
-      pm.addPass(mlir::enzyme::createEnzymeHLOUnrollPass(unroll));
-      mlir::enzyme::EnzymeHLOOptPassOptions opts;
-      opts.enable_auto_batching_passes = true;
-      pm.addPass(mlir::enzyme::createEnzymeHLOOptPass(opts));
-    } else {
-      EnzymeXLATransformPassesOptions opts{};
-      opts.max_constant_threshold = 1024;
-      opts.while_unroll_threshold = unrollThreshold;
-      opts.reshape_propagate = ENZYMEXLA_PROPAGATE_UP;
-      opts.transpose_propagate = ENZYMEXLA_PROPAGATE_UP;
-      opts.dus_slice_simplify = true;
-      opts.raise_shlo_to_blas_lapack = true;
-      opts.recognize_comms = true;
-      opts.lower_comms = true;
-      opts.enable_structured_tensors_passes = true;
-      opts.enable_scatter_gather_optimization_passes = true;
-      opts.enable_reduce_slice_fusion_passes = true;
-      opts.enable_concat_to_batch_passes = true;
-      opts.enable_loop_raising_passes = true;
-      opts.enable_licm_optimization_passes = true;
-      opts.loop_unswitch_threshold = 10;
-      opts.enable_pad_optimization_passes = true;
-      char *mainPasses = nullptr, *lowerPasses = nullptr;
-      enzymexlaGetTransformPassesList(&opts, &mainPasses, &lowerPasses);
-      std::string patterns(mainPasses);
-      enzymexlaFreeTransformPassesList(mainPasses);
-      enzymexlaFreeTransformPassesList(lowerPasses);
-      for (const char *drop :
-           {"convert_mul_convert;", "associative_binary_op_reordering<1>;"})
-        for (size_t at; (at = patterns.find(drop)) != std::string::npos;)
-          patterns.erase(at, strlen(drop));
-      // The main list may introduce enzymexla ops (rotate, wrap, extend)
-      // that XLA does not take; the Julia compiler lowers them before export
-      // with this second list.
-      std::string pipeline =
-          "canonicalize,cse,canonicalize,enzyme-hlo-generate-td{patterns=" +
-          patterns +
-          "},transform-interpreter,enzyme-hlo-remove-transform,canonicalize,"
-          "cse,enzyme-hlo-generate-td{patterns=lower_rotate;lower_wrap;"
-          "lower_extend;lower_updatewithoutcorners;lower_multislice},"
-          "transform-interpreter,enzyme-hlo-remove-transform,canonicalize,cse";
-      if (failed(mlir::parsePassPipeline(pipeline, pm))) {
-        llvm::errs() << " failed to parse the exec optimization pipeline\n";
-        exit(1);
-      }
-    }
-
+    addExecOptimizationPasses(pm);
     if (getenv("REACTANT_EXEC_DUMP")) {
       llvm::errs() << "EXEC_DUMP before\n";
       for (int64_t i = 0; i < argcnt; i++)
@@ -4744,24 +4983,19 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
     xla::LocalExecutable *lexec = nullptr;
     std::vector<xla::Shape> paramShapes;
     bool tupleResult = false;
+    std::string text;
+    std::vector<std::vector<int64_t>> boundDeps;
     if (lrt->raw) {
-      xla::XlaComputation computation;
-      xla::ExecutableBuildOptions buildOptions;
-      buildOptions.set_device_ordinal(lrt->ordinal);
-      buildOptions.set_device_allocator(lrt->allocator);
-      check(xla::MlirToXlaComputation(*module, computation, false, false,
-                                      &buildOptions),
-            "to xla");
-      auto programShape = MyValueOrThrow(computation.GetProgramShape());
-      paramShapes.assign(programShape.parameters().begin(),
-                         programShape.parameters().end());
-      tupleResult = programShape.result().IsTuple();
-      std::vector<const xla::Shape *> shapePtrs;
-      for (auto &shape : paramShapes)
-        shapePtrs.push_back(&shape);
-      auto compiled = MyValueOrThrow(
-          lrt->local->Compile(computation, shapePtrs, buildOptions));
-      lexec = compiled[0].release();
+      // The loop bounds the kernel computes are returned, for the
+      // specialization (REACTANT_EXEC_NO_SPECIALIZE=1 leaves them be).
+      static const bool specialize = !getenv("REACTANT_EXEC_NO_SPECIALIZE");
+      if (specialize)
+        boundDeps = returnLoopBounds(funcOp);
+      if (!boundDeps.empty()) {
+        llvm::raw_string_ostream os(text);
+        module->print(os);
+      }
+      std::tie(lexec, paramShapes, tupleResult) = compileRaw(lrt, *module);
     } else {
       exec =
           ClientCompileWithProto(lrt->client, wrap(module.get()), nullptr, 0);
@@ -4780,7 +5014,9 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
                .try_emplace(sizeKey,
                             LinkableRuntime::CachedExec{
                                 exec, writtenKept, keep, lexec,
-                                std::move(paramShapes), tupleResult})
+                                std::move(paramShapes), tupleResult,
+                                std::move(text), (int64_t)boundDeps.size(),
+                                std::move(boundDeps)})
                .first;
   }
 
