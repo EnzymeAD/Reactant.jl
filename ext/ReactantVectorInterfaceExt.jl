@@ -41,7 +41,9 @@ function VectorInterface.add(y::Number, x::Number, α::TracedRNumber, ::One)
 end
 
 VectorInterface.add(y::TracedRArray, x::TracedRArray, α::Number, β::Number) = x * α + y * β
-VectorInterface.add!!(y::TracedRArray, x::TracedRArray, α::Number, β::Number) = VectorInterface.add!(y, x, α, β)
+function VectorInterface.add!!(y::TracedRArray, x::TracedRArray, α::Number, β::Number)
+    return VectorInterface.add!(y, x, α, β)
+end
 function VectorInterface.add!(y::TracedRArray, x::TracedRArray, α::Number, β::Number)
     z = y * β + x * α
     TracedUtils.set_mlir_data!(y, TracedUtils.get_mlir_data(z))

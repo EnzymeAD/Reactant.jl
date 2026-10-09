@@ -25,7 +25,8 @@ same(a, b) = isapprox(a, b; nans=true)
     @test same(Array(@jit(scale_scalars(x_ra, α_ra))), scale_scalars(x, α))
     @test same(Array(@jit(add_arrays(y_ra, x_ra, α_ra, β_ra))), add_arrays(y, x, α, β))
     @test same(
-        Array(@jit(add_arrays!(copy(y_ra), x_ra, α_ra, β_ra))), add_arrays!(copy(y), x, α, β)
+        Array(@jit(add_arrays!(copy(y_ra), x_ra, α_ra, β_ra))),
+        add_arrays!(copy(y), x, α, β),
     )
     @test same(Array(@jit(scale_array(x_ra, α_ra))), scale_array(x, α))
 end
