@@ -3828,6 +3828,16 @@ struct LinkableRuntime {
   // whole (their buffers made from host bytes if need be) until those have
   // run.
   std::map<uint64_t, AllocationInfo> deferredFrees;
+  // The handles: one inaccessible range reserved at the start, carved by
+  // size class (a power of two, 4 KB at least), classes keeping what they
+  // freed; a reservation of its own only once the range is spent. Mapping
+  // and unmapping a range per allocation cost a system call each, and the
+  // unmapping a TLB shootdown across the compiler's threads.
+  char *handleBase = nullptr;
+  size_t handleBump = 0;
+  static const size_t kHandleRange = size_t(1) << 40;
+  std::vector<std::vector<void *>> handleFree =
+      std::vector<std::vector<void *>>(64);
 
   LinkableRuntime(const std::string &backend) : registry() {
     InitializeRegistry(wrap(&registry));
@@ -3894,6 +3904,7 @@ struct LinkableRuntime {
                          common->raw_client())
                    : nullptr;
     }
+    handleBase = (char *)reactantReserveAddressRange(kHandleRange);
     if (raw) {
       local = raw->client();
       ordinal = ClientGetDevice(client, device)->local_hardware_id().value();
@@ -3916,6 +3927,45 @@ struct LinkableRuntime {
     }
   }
 };
+
+// The size class of a handle for `nbytes`: log2 of the power of two it
+// takes, 4 KB at least.
+static int handleClass(size_t nbytes) {
+  int cls = 12;
+  while ((size_t(1) << cls) < nbytes)
+    cls++;
+  return cls;
+}
+
+// A handle for an allocation of `nbytes`: an address range as large, from
+// the reserved range while it lasts.
+static void *takeHandle(LinkableRuntime *__restrict__ lrt, size_t nbytes) {
+  int cls = handleClass(nbytes);
+  auto &freed = lrt->handleFree[cls];
+  if (!freed.empty()) {
+    void *base = freed.back();
+    freed.pop_back();
+    return base;
+  }
+  size_t size = size_t(1) << cls;
+  if (lrt->handleBase &&
+      lrt->handleBump + size <= LinkableRuntime::kHandleRange) {
+    void *base = lrt->handleBase + lrt->handleBump;
+    lrt->handleBump += size;
+    return base;
+  }
+  return reactantReserveAddressRange(nbytes);
+}
+
+static void returnHandle(LinkableRuntime *__restrict__ lrt, void *base,
+                         size_t nbytes) {
+  if (lrt->handleBase && (char *)base >= lrt->handleBase &&
+      (char *)base < lrt->handleBase + LinkableRuntime::kHandleRange) {
+    lrt->handleFree[handleClass(nbytes)].push_back(base);
+    return;
+  }
+  reactantReleaseAddressRange(base, nbytes);
+}
 
 // The allocation `ptr` points into.
 static std::map<void *, LinkableRuntime::AllocationInfo,
@@ -4608,7 +4658,7 @@ REACTANT_ABI void *reactantXLAMalloc(LinkableRuntime **__restrict__ lrtP,
     if (sz.ok() && *sz)
       nbytes = *sz;
   }
-  void *base = reactantReserveAddressRange(nbytes);
+  void *base = takeHandle(lrt, nbytes);
   if (!base) {
     llvm::errs() << "failed to reserve handle range of " << nbytes
                  << " bytes\n";
@@ -4653,7 +4703,7 @@ REACTANT_ABI void reactantXLAFree(LinkableRuntime **__restrict__ lrtP,
     exit(1);
   }
   uint64_t id = found->second.id;
-  reactantReleaseAddressRange(buffer0, found->second.size);
+  returnHandle(lrt, buffer0, found->second.size);
   if (lrt->raw) {
     // Stream-ordered: whatever still uses the memory is on the stream
     // ahead of any use of it reallocated.
