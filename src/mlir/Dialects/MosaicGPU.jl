@@ -13,25 +13,6 @@ import ...IR:
 import ..Dialects: operandsegmentsizes, resultsegmentsizes
 import ...API
 
-function arrive_dyn_expect_tx_supported(; location=Location())
-    op_ty_results = IR.Type[]
-    operands = Value[]
-    owned_regions = Region[]
-    successors = Block[]
-    attributes = NamedAttribute[]
-
-    return create_operation(
-        "mosaic_gpu.arrive_dyn_expect_tx_supported",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
-        results=op_ty_results,
-        result_inference=false,
-    )
-end
-
 """
 `arrive_expect_tx`
 
@@ -58,12 +39,18 @@ function arrive_expect_tx(barrier::Value, expect_tx::Value; location=Location())
     )
 end
 
-function arrive(barrier::Value; orders_tensor_core, location=Location())
+function arrive(
+    barrier::Value,
+    predicate=nothing::Union{Nothing,Value};
+    orders_tensor_core,
+    location=Location(),
+)
     op_ty_results = IR.Type[]
     operands = Value[barrier,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[NamedAttribute("orders_tensor_core", orders_tensor_core),]
+    !isnothing(predicate) && push!(operands, predicate)
 
     return create_operation(
         "mosaic_gpu.arrive",
@@ -1051,12 +1038,18 @@ tcgen05 operations.
 if `collective` is `true`, allow signaling on the `barrier` object of
 multiple CTAs within the cluster.
 """
-function tcgen05_commit_arrive(barrier::Value; collective=nothing, location=Location())
+function tcgen05_commit_arrive(
+    barrier::Value,
+    predicate=nothing::Union{Nothing,Value};
+    collective=nothing,
+    location=Location(),
+)
     op_ty_results = IR.Type[]
     operands = Value[barrier,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(predicate) && push!(operands, predicate)
     !isnothing(collective) && push!(attributes, NamedAttribute("collective", collective))
 
     return create_operation(
@@ -1348,8 +1341,7 @@ Similar to `vector.load` (vector dialect) but supports loading from
 non-contiguous memory.
 
 If `optimized` is true, raises an error if we cannot generate an optimised
-transfer. If unset, fall back to a non-optimized transfer if unable to
-generate an optimized transfer.
+transfer. `optimized` defaults to true when unset.
 """
 function vector_load(
     source::Value;
@@ -1384,8 +1376,7 @@ Similar to `vector.store` (vector dialect) but supports storing to
 non-contiguous memory.
 
 If `optimized` is true, raises an error if we cannot generate an optimised
-transfer. If unset, fall back to a non-optimized transfer if unable to
-generate an optimized transfer.
+transfer. `optimized` defaults to true when unset.
 
 If `atomic_type` is set, performs an atomic store-(add|min|...) of the value.
 

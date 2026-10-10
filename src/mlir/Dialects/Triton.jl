@@ -239,13 +239,44 @@ function atomic_cas(
     )
 end
 
+function atomic_load(
+    ptr::Value,
+    mask=nothing::Union{Nothing,Value};
+    result=nothing::Union{Nothing,IR.Type},
+    sem,
+    scope,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[ptr,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[NamedAttribute("sem", sem), NamedAttribute("scope", scope)]
+    !isnothing(mask) && push!(operands, mask)
+    !isnothing(result) && push!(op_ty_results, result)
+
+    return create_operation(
+        "tt.atomic_load",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
 """
 `atomic_poll`
 
-Repeatedly load from \$ptr with relaxed semantics on a single thread
-until the loaded value equals \$expected. For acquire semantics, issue
-an acquire fence only after a successful poll. Other threads wait for
-the polling thread to finish.
+Repeatedly load each logical element of \$ptr with relaxed semantics
+until it equals \$expected or the operation\'s timeout expires. One thread polls
+each element; threads replicating that element wait for its result.
+For acquire semantics, issue an acquire fence after each successful
+poll. The block waits for all elements to finish. The result has the
+same shape and encoding as \$ptr. All elements share one timeout budget,
+and each element is loaded at least once, even with a zero timeout.
 """
 function atomic_poll(
     ptr::Value,
@@ -316,6 +347,33 @@ function atomic_rmw(
     )
 end
 
+function atomic_store(
+    ptr::Value,
+    value::Value,
+    mask=nothing::Union{Nothing,Value};
+    sem,
+    scope,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[ptr, value]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[NamedAttribute("sem", sem), NamedAttribute("scope", scope)]
+    !isnothing(mask) && push!(operands, mask)
+
+    return create_operation(
+        "tt.atomic_store",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function bitcast(src::Value; result::IR.Type, location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[src,]
@@ -351,25 +409,6 @@ function broadcast(src::Value; result::IR.Type, location=Location())
 
     return create_operation(
         "tt.broadcast",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
-        results=op_ty_results,
-        result_inference=false,
-    )
-end
-
-function cat(lhs::Value, rhs::Value; result::IR.Type, location=Location())
-    op_ty_results = IR.Type[result,]
-    operands = Value[lhs, rhs]
-    owned_regions = Region[]
-    successors = Block[]
-    attributes = NamedAttribute[]
-
-    return create_operation(
-        "tt.cat",
         location;
         operands,
         owned_regions,
@@ -456,8 +495,7 @@ function descriptor_load(
     desc::Value,
     indices::Vector{Value};
     result::IR.Type,
-    cache=nothing,
-    evict=nothing,
+    cachePolicy=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[result,]
@@ -465,8 +503,7 @@ function descriptor_load(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
-    !isnothing(cache) && push!(attributes, NamedAttribute("cache", cache))
-    !isnothing(evict) && push!(attributes, NamedAttribute("evict", evict))
+    !isnothing(cachePolicy) && push!(attributes, NamedAttribute("cachePolicy", cachePolicy))
 
     return create_operation(
         "tt.descriptor_load",
@@ -992,8 +1029,7 @@ function load(
     mask=nothing::Union{Nothing,Value};
     other=nothing::Union{Nothing,Value},
     result=nothing::Union{Nothing,IR.Type},
-    cache=nothing,
-    evict=nothing,
+    cachePolicy=nothing,
     isVolatile=nothing,
     location=Location(),
 )
@@ -1008,8 +1044,7 @@ function load(
         attributes, operandsegmentsizes([1, Int(!isnothing(mask)), Int(!isnothing(other))])
     )
     !isnothing(result) && push!(op_ty_results, result)
-    !isnothing(cache) && push!(attributes, NamedAttribute("cache", cache))
-    !isnothing(evict) && push!(attributes, NamedAttribute("evict", evict))
+    !isnothing(cachePolicy) && push!(attributes, NamedAttribute("cachePolicy", cachePolicy))
     !isnothing(isVolatile) && push!(attributes, NamedAttribute("isVolatile", isVolatile))
 
     return create_operation(
@@ -1443,8 +1478,7 @@ function store(
     ptr::Value,
     value::Value,
     mask=nothing::Union{Nothing,Value};
-    cache=nothing,
-    evict=nothing,
+    cachePolicy=nothing,
     ignore_cta=nothing,
     location=Location(),
 )
@@ -1454,8 +1488,7 @@ function store(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(mask) && push!(operands, mask)
-    !isnothing(cache) && push!(attributes, NamedAttribute("cache", cache))
-    !isnothing(evict) && push!(attributes, NamedAttribute("evict", evict))
+    !isnothing(cachePolicy) && push!(attributes, NamedAttribute("cachePolicy", cachePolicy))
     !isnothing(ignore_cta) && push!(attributes, NamedAttribute("ignore_cta", ignore_cta))
 
     return create_operation(

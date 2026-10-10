@@ -606,6 +606,39 @@ function mlirContextGetThreadPool(context)
 end
 
 """
+    mlirContextBeginTransientScope(context)
+
+Begins a transient scope on the context, freezing the base layer (loaded dialects, registered operations, interface models, and existing types/attributes). Precondition: The context must not already be in a transient scope.
+"""
+function mlirContextBeginTransientScope(context)
+    @ccall Reactant_jll.libReactantExtra.mlirContextBeginTransientScope(
+        context::MlirContext
+    )::Cvoid
+end
+
+"""
+    mlirContextEndTransientScope(context)
+
+Ends the transient scope and resets the context to the base state, pruning transient types, attributes, affine expressions, distinct attributes, and unregistered operations added during the transient scope.
+"""
+function mlirContextEndTransientScope(context)
+    @ccall Reactant_jll.libReactantExtra.mlirContextEndTransientScope(
+        context::MlirContext
+    )::Cvoid
+end
+
+"""
+    mlirContextIsInTransientScope(context)
+
+Returns whether the context is currently in a transient scope.
+"""
+function mlirContextIsInTransientScope(context)
+    @ccall Reactant_jll.libReactantExtra.mlirContextIsInTransientScope(
+        context::MlirContext
+    )::Bool
+end
+
+"""
     mlirDialectGetContext(dialect)
 
 Returns the context that owns the dialect.
@@ -1658,6 +1691,28 @@ function mlirOperationGetParentOperation(op)
     @ccall Reactant_jll.libReactantExtra.mlirOperationGetParentOperation(
         op::MlirOperation
     )::MlirOperation
+end
+
+"""
+    mlirOperationIsAncestor(a, b)
+
+Returns true if `a` is an ancestor of `b`, i.e. `a` contains `b` or `a == b`.
+"""
+function mlirOperationIsAncestor(a, b)
+    @ccall Reactant_jll.libReactantExtra.mlirOperationIsAncestor(
+        a::MlirOperation, b::MlirOperation
+    )::Bool
+end
+
+"""
+    mlirOperationIsProperAncestor(a, b)
+
+Returns true if `a` is a proper ancestor of `b`, i.e. `a` contains `b` but `a != b`.
+"""
+function mlirOperationIsProperAncestor(a, b)
+    @ccall Reactant_jll.libReactantExtra.mlirOperationIsProperAncestor(
+        a::MlirOperation, b::MlirOperation
+    )::Bool
 end
 
 """
@@ -7561,6 +7616,28 @@ function mlirEmitError(location, message)
     )::Cvoid
 end
 
+"""
+    mlirEmitWarning(location, message)
+
+Emits a warning at the given location through the diagnostics engine. Used for testing purposes.
+"""
+function mlirEmitWarning(location, message)
+    @ccall Reactant_jll.libReactantExtra.mlirEmitWarning(
+        location::MlirLocation, message::Cstring
+    )::Cvoid
+end
+
+"""
+    mlirEmitRemark(location, message)
+
+Emits a remark at the given location through the diagnostics engine. Used for testing purposes.
+"""
+function mlirEmitRemark(location, message)
+    @ccall Reactant_jll.libReactantExtra.mlirEmitRemark(
+        location::MlirLocation, message::Cstring
+    )::Cvoid
+end
+
 function mlirGetDialectHandle__amdgpu__()
     @ccall Reactant_jll.libReactantExtra.mlirGetDialectHandle__amdgpu__()::MlirDialectHandle
 end
@@ -8859,6 +8936,49 @@ function mlirLLVMDICompileUnitAttrGetWithSourceLanguageDialect(
         isRecSelf::Bool,
         id::MlirAttribute,
         sourceLanguage::Cuint,
+        sourceLanguageDialect::Cuint,
+        file::MlirAttribute,
+        producer::MlirAttribute,
+        isOptimized::Bool,
+        emissionKind::MlirLLVMDIEmissionKind,
+        isDebugInfoForProfiling::Bool,
+        nameTableKind::MlirLLVMDINameTableKind,
+        splitDebugFilename::MlirAttribute,
+        nImportedEntities::Cptrdiff_t,
+        importedEntities::Ptr{MlirAttribute},
+    )::MlirAttribute
+end
+
+"""
+    mlirLLVMDICompileUnitAttrGetWithSourceLanguageName(ctx, recId, isRecSelf, id, sourceLanguageName, sourceLanguageVersion, sourceLanguageDialect, file, producer, isOptimized, emissionKind, isDebugInfoForProfiling, nameTableKind, splitDebugFilename, nImportedEntities, importedEntities)
+
+Creates an LLVM DICompileUnit attribute with a DWARF v6 source language name, version, and optional source language dialect.
+"""
+function mlirLLVMDICompileUnitAttrGetWithSourceLanguageName(
+    ctx,
+    recId,
+    isRecSelf,
+    id,
+    sourceLanguageName,
+    sourceLanguageVersion,
+    sourceLanguageDialect,
+    file,
+    producer,
+    isOptimized,
+    emissionKind,
+    isDebugInfoForProfiling,
+    nameTableKind,
+    splitDebugFilename,
+    nImportedEntities,
+    importedEntities,
+)
+    @ccall Reactant_jll.libReactantExtra.mlirLLVMDICompileUnitAttrGetWithSourceLanguageName(
+        ctx::MlirContext,
+        recId::MlirAttribute,
+        isRecSelf::Bool,
+        id::MlirAttribute,
+        sourceLanguageName::Cuint,
+        sourceLanguageVersion::UInt32,
         sourceLanguageDialect::Cuint,
         file::MlirAttribute,
         producer::MlirAttribute,
@@ -11634,6 +11754,21 @@ function mlirIRRewriterDestroy(rewriter)
 end
 
 """
+    mlirDialectMaterializeConstant(dialect, rewriter, value, type, loc)
+
+Materializes a constant for the given attribute `value` and `type` using the dialect's `materializeConstant` hook. The operation is created with the given rewriter (used as an OpBuilder) at its current insertion point, without changing that insertion point. Returns a null operation if the dialect does not support materializing the given constant.
+"""
+function mlirDialectMaterializeConstant(dialect, rewriter, value, type, loc)
+    @ccall Reactant_jll.libReactantExtra.mlirDialectMaterializeConstant(
+        dialect::MlirDialect,
+        rewriter::MlirRewriterBase,
+        value::MlirAttribute,
+        type::MlirType,
+        loc::MlirLocation,
+    )::MlirOperation
+end
+
+"""
     mlirFreezeRewritePattern(set)
 
 Freeze the given [`MlirRewritePatternSet`](@ref) to a [`MlirFrozenRewritePatternSet`](@ref). Note that the ownership of the input set is transferred into the frozen set after this call.
@@ -13365,6 +13500,24 @@ Get the type ID of the dynamic op trait that indicates regions have no terminato
 """
 function mlirDynamicOpTraitNoTerminatorGetTypeID()
     @ccall Reactant_jll.libReactantExtra.mlirDynamicOpTraitNoTerminatorGetTypeID()::MlirTypeID
+end
+
+"""
+    mlirDynamicOpTraitRecursiveMemoryEffectsCreate()
+
+Get the dynamic op trait that indicates memory effects of an operation includes the effects of operations nested within its regions.
+"""
+function mlirDynamicOpTraitRecursiveMemoryEffectsCreate()
+    @ccall Reactant_jll.libReactantExtra.mlirDynamicOpTraitRecursiveMemoryEffectsCreate()::MlirDynamicOpTrait
+end
+
+"""
+    mlirDynamicOpTraitRecursiveMemoryEffectsGetTypeID()
+
+Get the type ID of the dynamic op trait that indicates memory effects of an operation includes the effects of operations nested within its regions.
+"""
+function mlirDynamicOpTraitRecursiveMemoryEffectsGetTypeID()
+    @ccall Reactant_jll.libReactantExtra.mlirDynamicOpTraitRecursiveMemoryEffectsGetTypeID()::MlirTypeID
 end
 
 """
@@ -18322,6 +18475,17 @@ function reactantXLADeInit(lrt)
     )::Cvoid
 end
 
+function reactantXLAExec(lrtP, modstr, argcnt, args, constcnt, consts)
+    @ccall Reactant_jll.libReactantExtra.reactantXLAExec(
+        lrtP::Ptr{Ptr{LinkableRuntime}},
+        modstr::Cstring,
+        argcnt::Int64,
+        args::Ptr{Ptr{Cvoid}},
+        constcnt::Int64,
+        consts::Ptr{Int64},
+    )::Cvoid
+end
+
 function reactantXLAMemcpy(lrtP, dst, src, size, direction)
     @ccall Reactant_jll.libReactantExtra.reactantXLAMemcpy(
         lrtP::Ptr{Ptr{LinkableRuntime}},
@@ -18341,17 +18505,6 @@ end
 function reactantXLAFree(lrtP, buffer0)
     @ccall Reactant_jll.libReactantExtra.reactantXLAFree(
         lrtP::Ptr{Ptr{LinkableRuntime}}, buffer0::Ptr{Cvoid}
-    )::Cvoid
-end
-
-function reactantXLAExec(lrtP, modstr, argcnt, args, constcnt, consts)
-    @ccall Reactant_jll.libReactantExtra.reactantXLAExec(
-        lrtP::Ptr{Ptr{LinkableRuntime}},
-        modstr::Cstring,
-        argcnt::Int64,
-        args::Ptr{Ptr{Cvoid}},
-        constcnt::Int64,
-        consts::Ptr{Int64},
     )::Cvoid
 end
 
