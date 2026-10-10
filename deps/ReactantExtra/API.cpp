@@ -4093,13 +4093,18 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
     // on a traced program (the transform-dialect list with its defaults);
     // REACTANT_EXEC_OPT=hlo-opt runs the plain enzyme-hlo-opt pass instead.
     // REACTANT_EXEC_UNROLL sets the trip count up to which while loops are
-    // unrolled. Unrolling the raised kernels' short loops (threshold 16)
-    // makes them straight-line code XLA compiles slowly: the mfem GPU suite
-    // takes 4384 s against 2899 s at threshold 1, so unrolling is opt-in.
+    // unrolled (default 8). Unrolled, a raised kernel's short loops are
+    // straight-line code XLA compiles more slowly but runs much faster: at
+    // 8 MFEM's ex1 (order 3, partial assembly) solves in 0.056 s on
+    // star.mesh against 0.098 s at 1, and in 0.415 s against 0.468 s on
+    // fichera.mesh, with the first solve, compile included, unchanged; the
+    // mfem GPU suite, which compiles a kernel per test, takes 3204 s against
+    // 2713 s. Thresholds below 8 leave the 5- to 8-trip loops rolled and
+    // are slower still (star 0.114 s at 4); 16 runs as fast as 8.
     static const char *execOpt = getenv("REACTANT_EXEC_OPT");
     static const int unrollThreshold =
         getenv("REACTANT_EXEC_UNROLL") ? atoi(getenv("REACTANT_EXEC_UNROLL"))
-                                       : 1;
+                                       : 8;
     if (execOpt && std::string(execOpt) == "hlo-opt") {
       // The parallel loops of a raised kernel (its dynamic-extent dimensions,
       // peeled into host-driven whiles) are batched into scatters by the auto
