@@ -498,6 +498,12 @@ end
 
 get_slice_stride(::Base.LogicalIndex) = -1
 get_slice_stride(x::CartesianIndex) = -1
+function get_slice_stride(x::OrdinalRange{<:Integer,<:Integer})
+    isempty(x) && return -1
+    length(x) == 1 && return 1
+    stride = step(x)
+    return stride isa Integer ? stride : -1
+end
 function get_slice_stride(x)
     length(x) == 1 && return 1
     strides = diff(x)
