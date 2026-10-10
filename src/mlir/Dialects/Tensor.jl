@@ -383,8 +383,8 @@ between different flavors of ops on that operate on tensors.
 Note that there may be multiple ways to infer a resulting rank-reduced type.
   e.g. 1x6x1 could potentially rank-reduce to either 1x6 or 6x1 2-D shapes.
 
-To disambiguate, the inference helpers `inferCanonicalRankReducedResultType`
-only drop the first unit dimensions, in order:
+To disambiguate, canonical rank-reduction inference drops only the first
+unit dimensions, in order:
   e.g. 1x6x1 rank-reduced to 2-D will infer the 6x1 2-D shape, but not 1x6.
 
 Verification however has access to result type and does not need to infer.

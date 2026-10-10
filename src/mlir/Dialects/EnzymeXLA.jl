@@ -986,7 +986,6 @@ function jit_call(
     fn,
     backend_config=nothing,
     operand_layouts=nothing,
-    result_layouts=nothing,
     arg_attrs=nothing,
     res_attrs=nothing,
     output_operand_aliases=nothing,
@@ -1002,8 +1001,6 @@ function jit_call(
         push!(attributes, NamedAttribute("backend_config", backend_config))
     !isnothing(operand_layouts) &&
         push!(attributes, NamedAttribute("operand_layouts", operand_layouts))
-    !isnothing(result_layouts) &&
-        push!(attributes, NamedAttribute("result_layouts", result_layouts))
     !isnothing(arg_attrs) && push!(attributes, NamedAttribute("arg_attrs", arg_attrs))
     !isnothing(res_attrs) && push!(attributes, NamedAttribute("res_attrs", res_attrs))
     !isnothing(output_operand_aliases) &&
@@ -1066,7 +1063,6 @@ function kernel_call(
     fn,
     backend_config=nothing,
     operand_layouts=nothing,
-    result_layouts=nothing,
     arg_attrs=nothing,
     res_attrs=nothing,
     output_operand_aliases=nothing,
@@ -1101,8 +1097,6 @@ function kernel_call(
         push!(attributes, NamedAttribute("backend_config", backend_config))
     !isnothing(operand_layouts) &&
         push!(attributes, NamedAttribute("operand_layouts", operand_layouts))
-    !isnothing(result_layouts) &&
-        push!(attributes, NamedAttribute("result_layouts", result_layouts))
     !isnothing(arg_attrs) && push!(attributes, NamedAttribute("arg_attrs", arg_attrs))
     !isnothing(res_attrs) && push!(attributes, NamedAttribute("res_attrs", res_attrs))
     !isnothing(output_operand_aliases) &&
@@ -2451,6 +2445,13 @@ function wrap(
     )
 end
 
+"""
+`xla_wrapper`
+
+Calls a raised function whose input/output pairs represent device buffers.
+The corresponding function result replaces each buffer\'s contents. Trailing
+specialized scalar inputs are compile-time values rather than device buffers.
+"""
 function xla_wrapper(
     inputs::Vector{Value};
     fn,
