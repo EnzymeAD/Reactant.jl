@@ -4342,9 +4342,13 @@ static std::vector<std::vector<int64_t>> returnLoopBounds(func::FuncOp funcOp) {
 // The executable `exec` specialized to the bound values `values`: the
 // bounds (the module's last results) become constants, and are returned
 // no more.
+static int64_t tempBytes(xla::LocalExecutable *exec);
+static int64_t tempBudget(LinkableRuntime *lrt);
+
 static std::pair<xla::LocalExecutable *, bool>
 specializeRaw(LinkableRuntime *__restrict__ lrt,
-              LinkableRuntime::CachedExec &exec, ArrayRef<int64_t> values) {
+              LinkableRuntime::CachedExec &exec, ArrayRef<int64_t> values,
+              int64_t chunks = 1) {
   MLIRContext context(lrt->registry);
   RegisterDialects(wrap(&context));
   mlir::ParserConfig config(&context, false);
@@ -4373,11 +4377,25 @@ specializeRaw(LinkableRuntime *__restrict__ lrt,
   // Optimized again with the bounds known: the loops they bound unroll
   // (REACTANT_EXEC_UNROLL), and what that exposes simplifies.
   mlir::PassManager pm(&context);
-  addExecOptimizationPasses(pm);
+  addExecOptimizationPasses(pm, /*again=*/false, chunks);
   stripMarksOnConstants(*module);
-  if (!mlir::succeeded(pm.run(*module)) || !runExecOptimizationAgain(*module))
+  if (!mlir::succeeded(pm.run(*module)) ||
+      !runExecOptimizationAgain(*module, chunks))
     ReactantThrowError("specialization: the passes failed");
   auto [lexec, shapes, tupleResult] = compileRaw(lrt, *module);
+  // Too large to run (see reactantXLAExec): again with the parallel loops in
+  // chunks, kept when that makes it smaller.
+  if (int64_t temp = tempBytes(lexec), budget = tempBudget(lrt);
+      temp > budget && chunks < (int64_t(1) << 16)) {
+    auto smaller = specializeRaw(
+        lrt, exec, values,
+        chunks * std::max<int64_t>(2, (temp + budget - 1) / budget));
+    if (tempBytes(smaller.first) < temp) {
+      delete lexec;
+      return smaller;
+    }
+    delete smaller.first;
+  }
   return {lexec, tupleResult};
 }
 
