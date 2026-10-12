@@ -1,5 +1,5 @@
 using Reactant, Test, VectorInterface
-using VectorInterface: One
+using VectorInterface: One, Zero
 
 add_one(y, x, α) = add.(y, x, α, One())
 add_scalars(y, x, α, β) = add.(y, x, α, β)
