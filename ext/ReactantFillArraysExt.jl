@@ -9,6 +9,19 @@ using GPUArraysCore: @allowscalar
 Reactant._parent_type(T::Type{<:AbstractFill}) = T
 Reactant._parent_type(T::Type{<:OneElement}) = T
 
+# The scalar stored inside a `Fill`/`Ones`/`Zeros`/`OneElement` plays the role of the array
+# elements, so when converting to concrete arrays (`Reactant.to_rarray`) it must always be
+# promoted, exactly like the elements of an `Array{<:ReactantPrimitive}`. In every other
+# mode we must respect the caller's `track_numbers`: a plain `Fill{Float64}` passed to a
+# compiled function is a compile-time constant (just like a plain `Array{Float64}`), and
+# unconditionally tracking the number would mint a fresh `TracedRNumber` for it in
+# `TracedTrack`/`NoStopTracedTrack` mode. That value then becomes a spurious output of the
+# compiled function which the thunk tries to `setfield!` back into the immutable struct.
+@inline function _fill_track_numbers(mode::Reactant.TraceMode, @nospecialize(track_numbers))
+    mode == Reactant.ArrayToConcrete && return Number
+    return track_numbers
+end
+
 for AT in (Fill, Ones, Zeros)
     @eval Base.@nospecializeinfer function Reactant.traced_type_inner(
         @nospecialize(FA::Type{$(AT){T,N,Axes}}),
@@ -18,19 +31,32 @@ for AT in (Fill, Ones, Zeros)
         @nospecialize(ndevices),
         @nospecialize(runtime)
     ) where {T,N,Axes}
-        # T will be a number so we need to trace it
         return $(AT){
-            Reactant.traced_type_inner(T, seen, mode, Number, ndevices, runtime),N,Axes
+            Reactant.traced_type_inner(
+                T, seen, mode, _fill_track_numbers(mode, track_numbers), ndevices, runtime
+            ),
+            N,
+            Axes,
         }
     end
 end
 
 Base.@nospecializeinfer function Reactant.make_tracer(
-    seen, @nospecialize(prev::Fill{T,N,Axes}), @nospecialize(path), mode; kwargs...
+    seen,
+    @nospecialize(prev::Fill{T,N,Axes}),
+    @nospecialize(path),
+    mode;
+    @nospecialize(track_numbers::Type = Union{}),
+    kwargs...,
 ) where {T,N,Axes}
     return Fill(
         Reactant.make_tracer(
-            seen, prev.value, (path..., 1), mode; kwargs..., track_numbers=Number
+            seen,
+            prev.value,
+            (path..., 1),
+            mode;
+            kwargs...,
+            track_numbers=_fill_track_numbers(mode, track_numbers),
         ),
         prev.axes,
     )
@@ -41,11 +67,17 @@ Base.@nospecializeinfer function Reactant.make_tracer(
     @nospecialize(prev::Ones{T,N,Axes}),
     @nospecialize(path),
     mode;
+    @nospecialize(track_numbers::Type = Union{}),
     @nospecialize(sharding = Sharding.NoSharding()),
     @nospecialize(runtime = nothing),
     kwargs...,
 ) where {T,N,Axes}
-    return Ones(Reactant.traced_type(T, Val(mode), Number, sharding, runtime), prev.axes)
+    return Ones(
+        Reactant.traced_type(
+            T, Val(mode), _fill_track_numbers(mode, track_numbers), sharding, runtime
+        ),
+        prev.axes,
+    )
 end
 
 Base.@nospecializeinfer function Reactant.make_tracer(
@@ -53,11 +85,17 @@ Base.@nospecializeinfer function Reactant.make_tracer(
     @nospecialize(prev::Zeros{T,N,Axes}),
     @nospecialize(path),
     mode;
+    @nospecialize(track_numbers::Type = Union{}),
     @nospecialize(sharding = Sharding.NoSharding()),
     @nospecialize(runtime = nothing),
     kwargs...,
 ) where {T,N,Axes}
-    return Zeros(Reactant.traced_type(T, Val(mode), Number, sharding, runtime), prev.axes)
+    return Zeros(
+        Reactant.traced_type(
+            T, Val(mode), _fill_track_numbers(mode, track_numbers), sharding, runtime
+        ),
+        prev.axes,
+    )
 end
 
 Base.@nospecializeinfer function Reactant.traced_type_inner(
@@ -68,18 +106,32 @@ Base.@nospecializeinfer function Reactant.traced_type_inner(
     @nospecialize(ndevices),
     @nospecialize(runtime)
 ) where {T,N,I,A}
-    # T will be a number so we need to trace it
     return OneElement{
-        Reactant.traced_type_inner(T, seen, mode, Number, ndevices, runtime),N,I,A
+        Reactant.traced_type_inner(
+            T, seen, mode, _fill_track_numbers(mode, track_numbers), ndevices, runtime
+        ),
+        N,
+        I,
+        A,
     }
 end
 
 Base.@nospecializeinfer function Reactant.make_tracer(
-    seen, @nospecialize(prev::OneElement{T,N,I,A}), @nospecialize(path), mode; kwargs...
+    seen,
+    @nospecialize(prev::OneElement{T,N,I,A}),
+    @nospecialize(path),
+    mode;
+    @nospecialize(track_numbers::Type = Union{}),
+    kwargs...,
 ) where {T,N,I,A}
     return OneElement(
         Reactant.make_tracer(
-            seen, prev.val, (path..., 1), mode; kwargs..., track_numbers=Number
+            seen,
+            prev.val,
+            (path..., 1),
+            mode;
+            kwargs...,
+            track_numbers=_fill_track_numbers(mode, track_numbers),
         ),
         prev.ind,
         prev.axes,
