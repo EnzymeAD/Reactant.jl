@@ -24,9 +24,23 @@ function Reactant.materialize_traced_array(x::SAReact)
     return x
 end
 
-# We don't want to overload map on StaticArrays since it is likely better to just unroll things
-overloaded_map(f, a::SAReact, rest::SAReact...) = f.(a, rest...)
-overloaded_mapreduce(f, op, a::SAReact; kwargs...) = mapreduce(f, op, a, kwargs...)
+# We don't want to overload map on StaticArrays since it is likely better to just unroll
+# things. The method signatures mirror the ones StaticArrays overloads for `Base.map` (a
+# `StaticArray` in one of the first two positions). Deferring to StaticArrays' `map` keeps
+# the static return type (`SVector`, `SMatrix`, `FieldVector`, ...) regardless of whether
+# the traced values live in the static arrays, in the other arrays or in `f`. The generic
+# `overloaded_map` can't handle these since a `StaticArray` of `TracedRNumber`s is not
+# materializable into a `TracedRArray`.
+function overloaded_map(f, a::StaticArray, rest::AbstractArray...)
+    return map(Reactant.CallWithReactant(f), a, rest...)
+end
+function overloaded_map(f, a::AbstractArray, b::StaticArray, rest::AbstractArray...)
+    return map(Reactant.CallWithReactant(f), a, b, rest...)
+end
+function overloaded_map(f, a::StaticArray, b::StaticArray, rest::AbstractArray...)
+    return map(Reactant.CallWithReactant(f), a, b, rest...)
+end
+overloaded_mapreduce(f, op, a::SAReact; kwargs...) = mapreduce(f, op, a; kwargs...)
 
 function overloaded_mul(A::SAReact, B::SAReact, alpha::Number=true, beta::Number=false)
     # beta is not supported since it is zero by default in Reactant 
