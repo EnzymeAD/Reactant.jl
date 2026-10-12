@@ -1538,6 +1538,34 @@ end
     @test Array(for_compiled(rd, rB)) ≈ for_loop_calling_closure(d, B)
 end
 
+# A static parameter can't be rebound with `local`, so naming one in a traced loop body,
+# whether called or passed as a value, must still lower.
+function for_loop_using_static_param(x::AbstractVector{T}) where {T}
+    @trace for i in 1:length(x)
+        x[i] = T(0.5) * x[i] + convert(T, i)
+    end
+    return x
+end
+
+function while_loop_using_static_param(x::AbstractVector{T}, n) where {T}
+    i = 1
+    @trace while i <= n
+        x[i] = x[i] + one(T)
+        i += 1
+    end
+    return x
+end
+
+@testset "traced loops using static parameters" begin
+    x = Float32[1, 2, 3, 4]
+
+    @test Array(@jit(for_loop_using_static_param(Reactant.to_rarray(x)))) ≈
+        for_loop_using_static_param(copy(x))
+    @test Array(
+        @jit(while_loop_using_static_param(Reactant.to_rarray(x), ConcreteRNumber(3)))
+    ) ≈ while_loop_using_static_param(copy(x), 3)
+end
+
 function condition13_bareif_no_final_else(cond, numreals)
     @trace if cond
         1.0
