@@ -76,6 +76,8 @@ void reactantReleaseAddressRange(void *base, size_t nbytes);
 #include "stablehlo/dialect/StablehloOps.h"
 #include "stablehlo/transforms/Passes.h"
 #include "stablehlo/transforms/optimization/Passes.h"
+#include "xla/service/gpu/gpu_executable.h"
+#include "xla/stream_executor/integrations/tf_allocator_adapter.h"
 
 #include "absl/log/globals.h"
 #include "absl/log/initialize.h"
@@ -4112,7 +4114,8 @@ static void stripMarksOnConstants(mlir::ModuleOp module) {
 
 // The exec path's optimization of a kernel's module, before XLA: the
 // transform list (or REACTANT_EXEC_OPT=hlo-opt, the plain pass).
-static void addExecOptimizationPasses(mlir::PassManager &pm) {
+static void addExecOptimizationPasses(mlir::PassManager &pm, bool again = false,
+                                      int64_t chunks = 1) {
   // REACTANT_EXEC_OPT=hlo-opt runs the plain enzyme-hlo-opt pass instead.
   // REACTANT_EXEC_UNROLL sets the trip count up to which while loops are
   // unrolled. Unrolling the raised kernels' short loops (threshold 16)
@@ -4122,6 +4125,8 @@ static void addExecOptimizationPasses(mlir::PassManager &pm) {
   static const int unrollThreshold =
       getenv("REACTANT_EXEC_UNROLL") ? atoi(getenv("REACTANT_EXEC_UNROLL")) : 1;
   if (execOpt && std::string(execOpt) == "hlo-opt") {
+    if (again)
+      return;
     // The parallel loops of a raised kernel (its dynamic-extent dimensions,
     // peeled into host-driven whiles) are batched into scatters by the auto
     // batching patterns, once the constant-trip loops nested in them are
@@ -4160,6 +4165,19 @@ static void addExecOptimizationPasses(mlir::PassManager &pm) {
          {"convert_mul_convert;", "associative_binary_op_reordering<1>;"})
       for (size_t at; (at = patterns.find(drop)) != std::string::npos;)
         patterns.erase(at, strlen(drop));
+    // Asked for chunks (see reactantXLAExec): a tagged parallel loop is
+    // batched a chunk at a time, and fission, which lifts ops out of a loop
+    // over all its iterations at once, is left out.
+    if (chunks > 1) {
+      const std::string whole = "parallel_while_to_batched_scatter;";
+      if (size_t at = patterns.find(whole); at != std::string::npos)
+        patterns.replace(at, whole.size(),
+                         "parallel_while_to_batched_scatter_chunked(" +
+                             std::to_string(chunks) + ");");
+      const std::string fission = "greedy_while_loop_batch_fission;";
+      if (size_t at = patterns.find(fission); at != std::string::npos)
+        patterns.erase(at, fission.size());
+    }
     // The main list may introduce enzymexla ops (rotate, wrap, extend)
     // that XLA does not take; the Julia compiler lowers them before export
     // with this second list.
@@ -4190,10 +4208,13 @@ static void addExecOptimizationPasses(mlir::PassManager &pm) {
                             "enzyme-hlo-remove-transform,canonicalize,"
                             "func.func(stablehlo-aggressive-folder),"
                             "canonicalize,cse,";
+    // Again (see runExecOptimizationAgain): one round of folding, then the
+    // list.
     std::string pipeline =
-        "canonicalize,cse,func.func(stablehlo-aggressive-folder),"
-        "canonicalize," +
-        foldRound + foldRound + foldRound +
+        (again ? foldRound
+               : "canonicalize,cse,func.func(stablehlo-aggressive-folder),"
+                 "canonicalize," +
+                     foldRound + foldRound + foldRound) +
         "enzyme-hlo-generate-td{patterns=" + patterns +
         "},transform-interpreter,enzyme-hlo-remove-transform,canonicalize,"
         "cse,enzyme-hlo-generate-td{patterns=lower_rotate;lower_wrap;"
@@ -4204,6 +4225,31 @@ static void addExecOptimizationPasses(mlir::PassManager &pm) {
       exit(1);
     }
   }
+}
+
+// The list makes constants of its own: it unrolls loops whose bounds it has
+// made constant and propagates them, so the index arithmetic of a lane's
+// scratch can become constant only under it, after the folding rounds. A
+// parallel loop the raising tagged and the list could not batch, because
+// that scratch was still a scatter into a buffer broadcast to every
+// iteration, then needs a folding round to forward the scratch and the list
+// again to batch the loop. Only a module that still has such a loop pays for
+// the second round.
+static bool runExecOptimizationAgain(mlir::ModuleOp module,
+                                     int64_t chunks = 1) {
+  bool loop = false;
+  module.walk([&](mlir::stablehlo::WhileOp w) {
+    if (!w->hasAttr("enzymexla.parallel"))
+      return mlir::WalkResult::advance();
+    loop = true;
+    return mlir::WalkResult::interrupt();
+  });
+  if (!loop)
+    return true;
+  mlir::PassManager pm(module->getContext());
+  addExecOptimizationPasses(pm, /*again=*/true, chunks);
+  stripMarksOnConstants(module);
+  return mlir::succeeded(pm.run(module));
 }
 
 // Compiles `module` for the stream executor client: the executable, its
@@ -4329,7 +4375,7 @@ specializeRaw(LinkableRuntime *__restrict__ lrt,
   mlir::PassManager pm(&context);
   addExecOptimizationPasses(pm);
   stripMarksOnConstants(*module);
-  if (!mlir::succeeded(pm.run(*module)))
+  if (!mlir::succeeded(pm.run(*module)) || !runExecOptimizationAgain(*module))
     ReactantThrowError("specialization: the passes failed");
   auto [lexec, shapes, tupleResult] = compileRaw(lrt, *module);
   return {lexec, tupleResult};
@@ -4860,6 +4906,48 @@ REACTANT_ABI void reactantXLAFree(LinkableRuntime **__restrict__ lrtP,
   lrt->allocationBase.erase(id);
 }
 
+// The bytes of the temporary allocation an executable makes when it runs
+// (every value XLA keeps that is neither a parameter nor a result).
+static int64_t tempBytes(xla::LocalExecutable *exec) {
+  auto *gpu = dynamic_cast<xla::gpu::GpuExecutable *>(exec->executable());
+  if (!gpu)
+    return 0;
+  int64_t bytes = 0;
+  for (const xla::BufferAllocation *a : gpu->GetAllocations())
+    if (a->IsPreallocatedTempBuffer())
+      bytes += a->size();
+  return bytes;
+}
+
+// Executables whose temporary allocation would not fit (in what the
+// allocator has left, else half the device's memory;
+// REACTANT_EXEC_TEMP_BUDGET bytes to override) are compiled again
+// with the kernel's parallel loops batched in chunks: per module and
+// arguments, the chunks asked for and the temporary bytes it last took.
+struct ChunkRequest {
+  int64_t chunks = 1;
+  int64_t temp = 0;
+};
+static std::mutex chunkRequestsLock;
+static std::map<std::pair<const char *, std::vector<std::vector<int64_t>>>,
+                ChunkRequest>
+    chunkRequests;
+
+static int64_t tempBudget(LinkableRuntime *lrt) {
+  if (const char *env = getenv("REACTANT_EXEC_TEMP_BUDGET"))
+    return atoll(env);
+  // What the allocator has left, the arguments already in it.
+  if (auto *multi = dynamic_cast<se::MultiDeviceAdapter *>(lrt->allocator))
+    if (auto a = multi->GetAllocator(lrt->ordinal); a.ok())
+      if (auto stats = (*a)->GetStats(); stats && stats->bytes_limit)
+        return (*stats->bytes_limit - stats->bytes_in_use) / 10 * 9;
+  int64_t free = 0, total = 0;
+  if (!lrt->local->backend().default_stream_executor()->DeviceMemoryUsage(
+          &free, &total))
+    return INT64_MAX;
+  return total / 2;
+}
+
 REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
                                   const char *modstr, int64_t argcnt,
                                   void **args, int64_t constcnt,
@@ -5016,7 +5104,14 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
         stablehlo::createStablehloCanonicalizeDynamismPass());
     // The exec-time optimizer runs the pattern list the Julia compiler runs
     // on a traced program (the transform-dialect list with its defaults);
-    addExecOptimizationPasses(pm);
+    int64_t chunks = 1;
+    {
+      std::lock_guard<std::mutex> guard(chunkRequestsLock);
+      if (auto found = chunkRequests.find({modstr, sizeKey});
+          found != chunkRequests.end())
+        chunks = found->second.chunks;
+    }
+    addExecOptimizationPasses(pm, /*again=*/false, chunks);
     if (getenv("REACTANT_EXEC_DUMP")) {
       llvm::errs() << "EXEC_DUMP before\n";
       for (int64_t i = 0; i < argcnt; i++)
@@ -5027,7 +5122,8 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
       llvm::errs() << "EXEC_DUMP end\n";
     }
     stripMarksOnConstants(*module);
-    if (!mlir::succeeded(pm.run(*module))) {
+    if (!mlir::succeeded(pm.run(*module)) ||
+        !runExecOptimizationAgain(*module, chunks)) {
       llvm::errs() << " failed to run passes\n";
       llvm::errs() << " modstr:\n" << modstr << "\n";
       pm.dump();
@@ -5184,6 +5280,27 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
         module->print(os);
       }
       std::tie(lexec, paramShapes, tupleResult) = compileRaw(lrt, *module);
+      // Too large to run: compiled again from the start with the parallel
+      // loops in chunks, more of them while they still make it smaller.
+      if (int64_t temp = tempBytes(lexec), budget = tempBudget(lrt);
+          temp > budget) {
+        bool again = false;
+        {
+          std::lock_guard<std::mutex> guard(chunkRequestsLock);
+          auto &request = chunkRequests[{modstr, sizeKey}];
+          if (request.chunks == 1 || temp < request.temp / 10 * 9) {
+            request.chunks *=
+                std::max<int64_t>(2, (temp + budget - 1) / budget);
+            request.temp = temp;
+            again = request.chunks <= (int64_t(1) << 16);
+          }
+        }
+        if (again) {
+          delete lexec;
+          free(written);
+          return reactantXLAExec(lrtP, modstr, argcnt, args, constcnt, consts);
+        }
+      }
     } else {
       exec =
           ClientCompileWithProto(lrt->client, wrap(module.get()), nullptr, 0);
