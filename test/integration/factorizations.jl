@@ -119,6 +119,25 @@ function random_matrix_with_cond(
 end
 
 @testset "Cholesky Factorization" begin
+    @testset "properties" begin
+        function f(A, sym)
+            c = cholesky(A)
+            return Base.getproperty(c, sym)
+        end
+        A = let B = randn(4, 4)
+            B * B' + 4I
+        end
+
+        for sym in (:U, :L, :UL)
+            rA = Reactant.to_rarray(A)
+            # Compare against the host result directly: on Julia 1.10, comparing two
+            # concrete arrays converts `LowerTriangular{<:Adjoint{<:ConcretePJRTArray}}`
+            # to `Array` via `copyto!(::Matrix, ::Adjoint{<:ConcretePJRTArray})`, which
+            # is currently broken.
+            @test @jit(f(rA, sym)) ≈ f(A, sym)
+        end
+    end
+
     @testset "Un-batched" begin
         @testset for T in (Float32, Float64, ComplexF32, ComplexF64)
             (T == ComplexF64 || T == Float64) && RunningOnTPU && continue
