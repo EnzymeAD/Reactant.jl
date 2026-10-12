@@ -4344,6 +4344,9 @@ static std::vector<std::vector<int64_t>> returnLoopBounds(func::FuncOp funcOp) {
 // no more.
 static int64_t tempBytes(xla::LocalExecutable *exec);
 static int64_t tempBudget(LinkableRuntime *lrt);
+// Asking for more chunks than this, the attempt with the smallest temporary
+// is taken.
+static constexpr int64_t kMaxChunkRequest = 1024;
 
 static std::pair<xla::LocalExecutable *, bool>
 specializeRaw(LinkableRuntime *__restrict__ lrt,
@@ -4384,17 +4387,23 @@ specializeRaw(LinkableRuntime *__restrict__ lrt,
     ReactantThrowError("specialization: the passes failed");
   auto [lexec, shapes, tupleResult] = compileRaw(lrt, *module);
   // Too large to run (see reactantXLAExec): again with the parallel loops in
-  // chunks, kept when that makes it smaller.
+  // more chunks, up to kMaxChunkRequest, keeping the attempt that takes the
+  // least.
+  if (getenv("REACTANT_EXEC_CHUNK_LOG"))
+    llvm::errs() << "CHUNKLOG spec temp=" << tempBytes(lexec)
+                 << " budget=" << tempBudget(lrt) << " chunks=" << chunks
+                 << "\n";
   if (int64_t temp = tempBytes(lexec), budget = tempBudget(lrt);
-      temp > budget && chunks < (int64_t(1) << 16)) {
-    auto smaller = specializeRaw(
-        lrt, exec, values,
-        chunks * std::max<int64_t>(2, (temp + budget - 1) / budget));
-    if (tempBytes(smaller.first) < temp) {
-      delete lexec;
-      return smaller;
+      temp > budget) {
+    int64_t more = chunks * std::max<int64_t>(2, (temp + budget - 1) / budget);
+    if (more <= kMaxChunkRequest) {
+      auto other = specializeRaw(lrt, exec, values, more);
+      if (tempBytes(other.first) < temp) {
+        delete lexec;
+        return other;
+      }
+      delete other.first;
     }
-    delete smaller.first;
   }
   return {lexec, tupleResult};
 }
@@ -4944,7 +4953,9 @@ static int64_t tempBytes(xla::LocalExecutable *exec) {
 // arguments, the chunks asked for and the temporary bytes it last took.
 struct ChunkRequest {
   int64_t chunks = 1;
-  int64_t temp = 0;
+  // the fewest temporary bytes an attempt took, and its chunks
+  int64_t bestTemp = INT64_MAX, bestChunks = 1;
+  bool settled = false;
 };
 static std::mutex chunkRequestsLock;
 static std::map<std::pair<const char *, std::vector<std::vector<int64_t>>>,
@@ -5299,18 +5310,33 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
       }
       std::tie(lexec, paramShapes, tupleResult) = compileRaw(lrt, *module);
       // Too large to run: compiled again from the start with the parallel
-      // loops in chunks, more of them while they still make it smaller.
+      // loops in chunks (more chunks may also batch loops a whole batch could
+      // not, so a larger request can take more), up to kMaxChunkRequest;
+      // past it, the attempt that took the least.
+      if (getenv("REACTANT_EXEC_CHUNK_LOG"))
+        llvm::errs() << "CHUNKLOG exec temp=" << tempBytes(lexec)
+                     << " budget=" << tempBudget(lrt) << " chunks=" << chunks
+                     << "\n";
       if (int64_t temp = tempBytes(lexec), budget = tempBudget(lrt);
           temp > budget) {
         bool again = false;
         {
           std::lock_guard<std::mutex> guard(chunkRequestsLock);
           auto &request = chunkRequests[{modstr, sizeKey}];
-          if (request.chunks == 1 || temp < request.temp / 10 * 9) {
-            request.chunks *=
-                std::max<int64_t>(2, (temp + budget - 1) / budget);
-            request.temp = temp;
-            again = request.chunks <= (int64_t(1) << 16);
+          if (temp < request.bestTemp) {
+            request.bestTemp = temp;
+            request.bestChunks = chunks;
+          }
+          if (!request.settled) {
+            int64_t more =
+                chunks * std::max<int64_t>(2, (temp + budget - 1) / budget);
+            if (more <= kMaxChunkRequest) {
+              request.chunks = more;
+            } else {
+              request.chunks = request.bestChunks;
+              request.settled = true;
+            }
+            again = request.chunks != chunks;
           }
         }
         if (again) {
