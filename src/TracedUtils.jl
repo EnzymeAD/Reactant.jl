@@ -1160,7 +1160,9 @@ scalar_arg(arg) = arg isa Base.RefValue || !(arg isa AbstractArray)
 flattenarg(arg) = ReactantCore.materialize_traced_array(vec(arg))
 flattenarg(arg::Ref) = RefFillVector(arg)
 
-function elem_apply_via_while_loop(f, args::Vararg{Any,Nargs}; kwargs...) where {Nargs}
+function elem_apply_via_while_loop(
+    f, args::Vararg{Any,Nargs}; track_numbers=Union{}, kwargs...
+) where {Nargs}
     non_ref_args = [arg for arg in args if !scalar_arg(arg)]
     if !isempty(non_ref_args)
         @assert allequal(size.(non_ref_args)) "All args must have the same size"
@@ -1195,10 +1197,15 @@ function elem_apply_via_while_loop(f, args::Vararg{Any,Nargs}; kwargs...) where 
     args_ref = Ref(flat_args)
     limit_ref = Ref(L)
 
+    # `f` and the `Ref` arguments are loop invariant: plain Julia numbers they hold are
+    # compile-time constants of the loop body and must not be promoted to loop-carried
+    # traced values (which would also fail for structs whose number fields are not
+    # captured in their type parameters).
     ReactantCore.traced_while(
         __elem_apply_loop_condition,
         __elem_apply_loop_body,
         (ind_var, f_ref, result_ref, args_ref, limit_ref);
+        track_numbers,
         kwargs...,
     )
 
