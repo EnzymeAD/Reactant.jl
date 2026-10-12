@@ -1170,9 +1170,24 @@ function elem_apply_via_while_loop(f, args::Vararg{Any,Nargs}; kwargs...) where 
     # flattening the tensors makes the auto-batching pass work nicer
     flat_args = [flattenarg(arg) for arg in args]
 
-    # This wont be a mutating function so we can safely execute it once
+    # This wont be a mutating function so we can safely execute it once. Use
+    # `call_with_reactant` so that overlays apply inside `f` even though we may have been
+    # entered via `call_with_native` (e.g. from the `Base.map` overlay).
     scalar_seed_args = [@allowscalar(arg[1]) for arg in flat_args]
-    res_tmp = @allowscalar(f(scalar_seed_args...))
+    res_tmp = @allowscalar(Reactant.call_with_reactant(f, scalar_seed_args...))
+
+    # If `f` returns a non-scalar (e.g. an array), the results cannot be stored in a
+    # `TracedRArray`. Mirror `Base.map`/`broadcast` and return a Julia `Array` holding the
+    # per-element results instead, unrolling the loop.
+    if !(res_tmp isa TracedRNumber || res_tmp isa Reactant.ReactantPrimitive)
+        results = Vector{Any}(undef, L)
+        results[1] = res_tmp
+        for i in 2:L
+            scalar_args = [@allowscalar(arg[i]) for arg in flat_args]
+            results[i] = @allowscalar(Reactant.call_with_reactant(f, scalar_args...))
+        end
+        return reshape([r for r in results], out_size)
+    end
 
     # TODO: perhaps instead of this logic, we should have
     # `similar(::TracedRArray, TracedRNumber{T}) where T = similar(::TracedRArray, T)`

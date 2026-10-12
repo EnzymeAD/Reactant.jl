@@ -254,12 +254,19 @@ function Base.mapreducedim!(
     A::Base.AbstractArrayOrBroadcasted,
 ) where {T,N}
     @assert length(size(R)) == length(size(A))
-    dims = map(enumerate(zip(size(R), size(A)))) do (i, (sR, sA))
-        sR == sA && return nothing
+    dims = Int64[]
+    for (i, (sR, sA)) in enumerate(zip(size(R), size(A)))
+        sR == sA && continue
         @assert sR == 1
-        return i
+        push!(dims, i)
     end
-    tmp = mapreduce(f, op, A; dims=filter(!isnothing, dims))
+    A isa Broadcast.Broadcasted && (A = Broadcast.materialize(A))
+    # Call `overloaded_mapreduce` directly rather than `Base.mapreduce`. The latter only
+    # routes to the Reactant implementation when the `mapreduce` overlay is active; if this
+    # method is reached natively (e.g. from a closure executed inside `call_with_native`),
+    # `Base._mapreduce_dim` lowers the `dims` reduction back into `mapreducedim!`, which
+    # would recurse infinitely (see #2966).
+    tmp = overloaded_mapreduce(f, op, A; dims)
     copyto!(R, op.(R, tmp))
     return R
 end

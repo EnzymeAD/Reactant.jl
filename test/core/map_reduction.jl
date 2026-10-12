@@ -213,6 +213,65 @@ end
     @test Array(@jit(fntest3(x_ra))) ≈ fntest3(x)
 end
 
+# `sum(x; dims)` called from a closure that is executed outside the Reactant interpreter
+# (e.g. via the `Base.map` overlay) used to recurse infinitely through `mapreducedim!`.
+@testset "dims reduction inside closure (#2966)" begin
+    x = randn(Float32, 5, 3)
+    x_ra = Reactant.to_rarray(x)
+
+    call_forms = (
+        "top level" => x -> sum(x; dims=2),
+        "for loop" => x -> begin
+            r = nothing
+            for _ in 1:1
+                r = sum(x; dims=2)
+            end
+            r
+        end,
+        "closure call" => x -> begin
+            h = y -> sum(y; dims=2)
+            h(x)
+        end,
+        "comprehension" => x -> only([sum(x; dims=2) for _ in 1:1]),
+        "foreach + push!" => x -> begin
+            acc = Any[]
+            foreach(_ -> push!(acc, sum(x; dims=2)), 1:1)
+            only(acc)
+        end,
+        "map over range" => x -> only(map(_ -> sum(x; dims=2), 1:1)),
+        "map over vector" => x -> only(map(_ -> sum(x; dims=2), [1])),
+        "map dims=1" => x -> only(map(_ -> sum(x; dims=1), 1:1)),
+        "map dims=(1, 2)" => x -> only(map(_ -> sum(x; dims=(1, 2)), 1:1)),
+        "map prod" => x -> only(map(_ -> prod(x; dims=2), 1:1)),
+        "map maximum" => x -> only(map(_ -> maximum(x; dims=1), 1:1)),
+        "map sum(f, x; dims)" => x -> only(map(_ -> sum(abs, x; dims=1), 1:1)),
+        "map mapreduce dims" => x -> only(map(_ -> mapreduce(abs2, +, x; dims=2), 1:1)),
+        "map with init" => x -> only(map(_ -> sum(x; dims=2, init=1.0f0), 1:1)),
+        "map indexing result" => x -> map(i -> sum(x; dims=1)[1, i], 1:3),
+        "map returning arrays" => x -> begin
+            r = map(i -> sum(x; dims=2) .+ i, 1:2)
+            vcat(vec(r[1]), vec(r[2]))
+        end,
+    )
+
+    @testset "$name" for (name, f) in call_forms
+        @test Array(@jit(f(x_ra))) ≈ f(x)
+    end
+
+    @testset "preallocated output" begin
+        mrd!(R, A) = (Base.mapreducedim!(abs2, +, R, A); R)
+        sum_into!(R, A) = (sum!(R, A); R)
+        max_into!(R, A) = (maximum!(R, A); R)
+        for (fn, Rsz) in (
+            (mrd!, (5, 1)), (mrd!, (1, 3)), (mrd!, (5, 3)), (sum_into!, (5, 1)),
+            (max_into!, (1, 3)),
+        )
+            R = zeros(Float32, Rsz)
+            @test Array(@jit(fn(Reactant.to_rarray(R), x_ra))) ≈ fn(copy(R), x)
+        end
+    end
+end
+
 @testset "mapreduce with unitrange dims" begin
     x = reshape(collect(Float32, 1:64), 2, 4, 8)
     x_ra = Reactant.to_rarray(x)
