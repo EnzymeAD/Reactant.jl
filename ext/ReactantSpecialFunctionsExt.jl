@@ -109,7 +109,7 @@ end
 
 #Airy and Related Functions
 
-#Bessel ...
+include("ReactantSpecialFunctionsExt/bessel.jl")
 
 #Elliptic Integrals
 
