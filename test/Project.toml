@@ -60,6 +60,8 @@ Adapt = "4.1"
 Aqua = "0.8.16"
 ArrayInterface = "7.17.1"
 CUDA = "5.9, 6"
+# 0.2.37 fails to load when a load-path environment has no Project.toml (JuliaPy/CondaPkg.jl#235).
+CondaPkg = "0.2 - 0.2.36, 0.2.38"
 DLFP8Types = "0.1"
 Distributions = "0.25"
 Enzyme = "0.13.28"
