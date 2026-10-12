@@ -1427,6 +1427,7 @@ cc_library(
         "@xla//xla/tsl/protobuf:histogram_proto_cc",
         "@xla//xla/tsl/protobuf:histogram_proto_cc_impl",
         "@xla//xla:xla_data_proto_cc_impl",
+        "@xla//xla/stream_executor/integrations:tf_allocator_adapter",
         "@xla//xla/tsl/platform:env",
         "@xla//xla/tsl/platform:errors",
         "@xla//xla/service:hlo_proto_cc_impl",
@@ -1443,6 +1444,7 @@ cc_library(
         "@xla//xla/backends/profiler/gpu:device_tracer",
         "@xla//xla/pjrt/c:pjrt_c_api_gpu_internal",
         "@xla//xla/service/gpu:gpu_transfer_manager",
+        "@xla//xla/service/gpu:gpu_executable",
         "@xla//xla/service/gpu:nvptx_compiler",
         "@xla//xla/service/gpu/model:hlo_op_profile_proto_cc_impl",
         "@xla//xla/service/gpu/model:hlo_op_profiles",
@@ -1456,6 +1458,7 @@ cc_library(
         "@xla//xla/pjrt/plugin/xla_gpu:xla_gpu_pjrt_client",
         "@xla//xla/stream_executor:rocm_platform",
         "@xla//xla/service/gpu:amdgpu_compiler",
+        "@xla//xla/service/gpu:gpu_executable",
         "@xla//xla/backends/profiler/gpu:device_tracer",
     ]) + select({
         # gloo tcp transport only builds on linux
