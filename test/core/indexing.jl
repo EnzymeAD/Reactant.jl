@@ -693,3 +693,49 @@ end
     getview_mask(x) = view(x, 3, :)[[true, false, true, false]]
     @test @jit(getview_mask(x_ra)) ≈ getview_mask(x)
 end
+
+# broadcast assignment through a view with traced integer indices (#2960)
+issue2960_assign!(x, idxs, v) = (x[idxs] .= v; x)
+issue2960_view!(x, idxs, v) = (view(x, idxs) .= v; x)
+issue2960_scalar!(x, idxs, _) = (x[idxs] .= 2.0; x)
+issue2960_accum!(x, idxs, v) = (x[idxs] .+= v; x)
+issue2960_col!(x, idxs, v) = (x[idxs, 2] .= v; x)
+issue2960_row!(x, idxs, v) = (x[2, idxs] .= v; x)
+issue2960_rows!(x, idxs, v) = (x[idxs, :] .= v; x)
+issue2960_rows_scalar!(x, idxs, _) = (x[idxs, :] .= 3.0; x)
+
+@testset "broadcast setindex! through view with traced indices (#2960)" begin
+    x = collect(Float64, 1:10)
+    idxs = [1, 3, 4]
+    v = [10.0, 20.0, 30.0]
+    X = reshape(collect(Float64, 1:20), 5, 4)
+    v4 = [1.0, 2.0, 3.0, 4.0]
+
+    @testset "$(f)" for (f, a, i, b) in (
+        (issue2960_assign!, x, idxs, v),
+        (issue2960_view!, x, idxs, v),
+        (issue2960_scalar!, x, idxs, v),
+        (issue2960_accum!, x, idxs, v),
+        (issue2960_col!, X, idxs, v),
+        (issue2960_row!, X, idxs, v),
+        (issue2960_rows!, X, idxs, v),
+        (issue2960_rows!, X, idxs, collect(v4')),
+        (issue2960_rows_scalar!, X, idxs, v),
+    )
+        a_ra = Reactant.to_rarray(a)
+        i_ra = Reactant.to_rarray(i)
+        b_ra = Reactant.to_rarray(b)
+        hlo = repr(@code_hlo f(a_ra, i_ra, b_ra))
+        @test occursin("stablehlo.scatter", hlo)
+        @test @jit(f(a_ra, i_ra, b_ra)) ≈ f(copy(a), i, b)
+    end
+
+    # the non-broadcast form and reading through traced indices keep working
+    issue2960_setindex!(x, idxs, v) = (x[idxs] = v; x)
+    x_ra = Reactant.to_rarray(x)
+    @test @jit(issue2960_setindex!(x_ra, Reactant.to_rarray(idxs), Reactant.to_rarray(v))) ≈
+        issue2960_setindex!(copy(x), idxs, v)
+    issue2960_read(x, idxs) = x[idxs] .+ 1
+    @test @jit(issue2960_read(Reactant.to_rarray(x), Reactant.to_rarray(idxs))) ≈
+        issue2960_read(x, idxs)
+end

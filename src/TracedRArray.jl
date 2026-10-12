@@ -61,6 +61,17 @@ function Base.size(x::TracedRArray, i::TracedRNumber{<:Integer})
     )
 end
 
+# TODO(#2236): actually perform bounds checking
+# Base's fallback `checkindex(Bool, ::AbstractUnitRange, ::AbstractArray)` iterates the
+# index array on the host, which is scalar indexing for a traced index array (hit by
+# `view(x, idxs)` / `x[idxs] .= v` with traced `idxs`). The indices are only known at
+# runtime, so mirror the `TracedRNumber` behaviour and skip the check.
+function Base.checkindex(::Type{Bool}, ::AbstractUnitRange, ::TracedRArray{<:Integer})
+    @warn "Currently we don't perform bounds checking for TracedRArray indices. This \
+           will be fixed in a future version of Reactant." maxlog = 1
+    return true
+end
+
 Base.collect(x::TracedRArray) = copy(x)
 Base.collect(x::SubArray{<:TracedRNumber,<:Any,<:TracedRArray}) = copy(x)
 
