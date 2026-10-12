@@ -235,6 +235,46 @@ function raising!(f, is_raising::Bool)
     end
 end
 
+function _collect_ops_by_name!(acc::Vector{MLIR.IR.Operation}, op::MLIR.IR.Operation, name)
+    for i in 1:MLIR.IR.nregions(op), block in MLIR.IR.region(op, i), inner in block
+        MLIR.IR.name(inner) == name && push!(acc, inner)
+        _collect_ops_by_name!(acc, inner, name)
+    end
+    return acc
+end
+
+# `sdy-propagation-pipeline` lowers user `sdy.sharding_constraint`s to `sdy.reshard`s. When
+# the module is handed to XLA with sdy shardings (`:post_sdy_propagation`), XLA's Shardy
+# round-trip import discards the `sdy.sharding` attributes on all ops (it only keeps the
+# shardings of function arguments/results and of `@Sharding` custom-calls, i.e.
+# `sdy.sharding_constraint`s) and re-runs propagation from scratch. A reshard that is a
+# no-op after Reactant's propagation would be dropped by `sdy-reshard-to-collectives`, so
+# the user's constraint would silently not reach XLA. Convert the reshards back into
+# sharding constraints, which survive the round-trip and let XLA insert the reshards.
+function reshards_to_sharding_constraints!(mod::MLIR.IR.Module)
+    reshards = _collect_ops_by_name!(
+        MLIR.IR.Operation[], MLIR.IR.Operation(mod), "sdy.reshard"
+    )
+    for op in reshards
+        res = MLIR.IR.result(op, 1)
+        constraint = MLIR.IR.create_operation_common(
+            "sdy.sharding_constraint",
+            MLIR.IR.location(op);
+            results=MLIR.IR.Type[MLIR.IR.type(res)],
+            operands=MLIR.IR.Value[MLIR.IR.operand(op, 1)],
+            attributes=MLIR.IR.NamedAttribute[MLIR.IR.NamedAttribute(
+                "sharding", MLIR.IR.getattr(op, "sharding")
+            )],
+            result_inference=false,
+        )
+        MLIR.IR.insert_before!(MLIR.IR.block(op), op, constraint)
+        MLIR.API.mlirValueReplaceAllUsesOfWith(res, MLIR.IR.result(constraint, 1))
+        MLIR.IR.rmfromparent!(op)
+        MLIR.IR.dispose(op)
+    end
+    return mod
+end
+
 # The pass pipeline is independent of the model's Julia function and argument types.
 Base.@nospecializeinfer function compile_mlir!(
     mod,
@@ -983,11 +1023,16 @@ Base.@nospecializeinfer function compile_mlir!(
                         get_optimize_comms_passes(
                             compile_options.optimize_communications
                         )...,
-                        "func.func(sdy-reshard-to-collectives)",
                     ],
                     ",",
                 ),
                 "post_sdy_propagation",
+            )
+            # XLA re-runs sharding propagation and only honors sharding constraints (not
+            # the per-op shardings computed above), so keep user constraints as such.
+            reshards_to_sharding_constraints!(mod)
+            run_pass_pipeline!(
+                mod, "func.func(sdy-reshard-to-collectives)", "sdy_reshard_to_collectives"
             )
         elseif compile_options.shardy_passes isa ShardyPropagationOptions
             run_pass_pipeline!(mod, compile_options.shardy_passes)
