@@ -1285,6 +1285,20 @@ function codegen_unflatten!(
             )
 
             result_stores[path] = sym
+
+            # The result reuses the input buffer, so there is no XLA output sharding for
+            # it. Carry over the sharding of the input argument instead.
+            if path_to_shard_info !== nothing
+                shard_sym = Symbol("preserved_arg_sharding", var_idx[])
+                var_idx[] += 1
+                push!(
+                    resultgen_code,
+                    quote
+                        $shard_sym = $argres.sharding
+                    end,
+                )
+                path_to_shard_info[path] = shard_sym
+            end
         end
     end
 
