@@ -13,8 +13,12 @@ Reactant.promote_to(TT::Type{TracedRNumber{T}}, ::One) where {T} = promote_to(TT
 Reactant.promote_to(::Type{TracedRNumber}, v::Zero) = promote_to(TracedRNumber{Float64}, v)
 Reactant.promote_to(::Type{TracedRNumber}, v::One) = promote_to(TracedRNumber{Float64}, v)
 
-Base.promote_rule(::Type{One}, ::Type{TracedRNumber{T}}) where {T <: Number} = TracedRNumber{T}
-Base.promote_rule(::Type{Zero}, ::Type{TracedRNumber{T}}) where {T <: Number} = TracedRNumber{T}
+function Base.promote_rule(::Type{One}, ::Type{TracedRNumber{T}}) where {T<:Number}
+    return TracedRNumber{T}
+end
+function Base.promote_rule(::Type{Zero}, ::Type{TracedRNumber{T}}) where {T<:Number}
+    return TracedRNumber{T}
+end
 
 function VectorInterface.scale(x::Number, α::TracedRNumber)
     return ifelse(iszero(α), zero(x), x) * α
