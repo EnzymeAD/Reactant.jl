@@ -4110,22 +4110,55 @@ static void addExecOptimizationPasses(mlir::PassManager &pm) {
     // the lanes are still a loop: once the list batches them the indices
     // carry the lane, and the scratch is a pass over memory per access.
     std::string folding;
-    for (const char *name :
-         {"compare_op_canon<16>", "compare_bool_const<16>",
-          "broadcast_in_dim_op_canon<16>", "convert_op_canon<16>",
-          "reduce_const_prop<16>", "reshape_op_canon<16>",
-          "concatenate_op_canon<16>(1024)", "select_op_canon<16>(1024)",
-          "and_simplify<16>", "or_simplify<16>", "slice_simplify<16>",
-          "convert_simplify<16>", "iota_simplify<16>(1024)",
-          "broadcast_in_dim_simplify<16>(1024)", "transpose_simplify<16>",
-          "pad_simplify<16>(1024)", "gather_scatter_constant_forward",
-          "gather_of_masked_scatter", "scatter_of_scatter_simplify"})
+    for (const char *name : {"compare_op_canon<16>",
+                             "compare_bool_const<16>",
+                             "broadcast_in_dim_op_canon<16>",
+                             "convert_op_canon<16>",
+                             "reduce_const_prop<16>",
+                             "reshape_op_canon<16>",
+                             "concatenate_op_canon<16>(1024)",
+                             "select_op_canon<16>(1024)",
+                             "and_simplify<16>",
+                             "or_simplify<16>",
+                             "slice_simplify<16>",
+                             "convert_simplify<16>",
+                             "iota_simplify<16>(1024)",
+                             "broadcast_in_dim_simplify<16>(1024)",
+                             "transpose_simplify<16>",
+                             "pad_simplify<16>(1024)",
+                             "gather_scatter_constant_forward",
+                             "gather_of_masked_scatter",
+                             "scatter_of_scatter_simplify",
+                             "scatter_masked_index_slice",
+                             "scatter_out_of_bounds_noop",
+                             "slice_elementwise<1>",
+                             "slice_broadcast",
+                             "slice_gather",
+                             "slice_select_to_select_slice",
+                             "slice_slice<16>",
+                             "noop_slice<16>",
+                             "slice_concat<1>",
+                             "concat_slice<1>",
+                             "slice_transpose",
+                             "slice_reshape_transpose<1>",
+                             "slice_iota",
+                             "slice_internal",
+                             "while_slice_elementwise_carry",
+                             "while_deadresult"})
       folding += std::string(folding.empty() ? "" : ";") + name;
     std::string foldRound = "enzyme-hlo-generate-td{patterns=" + folding +
                             "},transform-interpreter,"
                             "enzyme-hlo-remove-transform,canonicalize,"
                             "func.func(stablehlo-aggressive-folder),"
                             "canonicalize,cse,";
+    // A kernel whose thread block has a run-time extent is raised with its
+    // lanes padded to a bound and every store from the padding masked. With
+    // the extent a constant, the masks are constants: the rounds also cut
+    // the masked stores to their live lanes (scatter_masked_index_slice) and
+    // move the cut up their operands, through the loops accumulating them
+    // (while_slice_elementwise_carry), so the lanes compute only the live
+    // box. Moving slices up, transposes are left where they are
+    // (slice_transpose; the list moves them up past slices).
     std::string pipeline =
         "canonicalize,cse,func.func(stablehlo-aggressive-folder),"
         "canonicalize," +
