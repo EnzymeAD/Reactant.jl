@@ -72,8 +72,21 @@ function Base.similar(::TracedRArray, ::Type{T}, dims::Dims{N}) where {T,N}
     ))::TracedRArray{unwrapped_eltype(T),N}
 end
 
+# `similar(x)` and `similar(x, T)` have the same shape as `x`, so if the sharding of `x`
+# is known at trace time, the new array is constrained to it (a fresh constant has no
+# data-flow from `x` and would otherwise be left replicated by sharding propagation).
+function Base.similar(x::TracedRArray, ::Type{T}) where {T}
+    return TracedUtils.apply_sharding_hint!(similar(x, T, size(x)), x)
+end
+
 function Base.similar(::Type{<:TracedRArray{T}}, dims::Dims{N}) where {T,N}
     return (@opcall fill(zero(T), dims))::TracedRArray{T,N}
+end
+
+function Base.zero(x::TracedRArray{T,N}) where {T,N}
+    return TracedUtils.apply_sharding_hint!(
+        (@opcall fill(zero(T), size(x)))::TracedRArray{T,N}, x
+    )
 end
 
 function Base.show(io::IOty, X::AnyTracedRArray) where {IOty<:Union{IO,IOContext}}
@@ -267,12 +280,15 @@ end
 function Base.fill!(A::AnyTracedRArray{T,N}, x) where {T,N}
     bcast = Reactant.broadcast_to_size(T(x), size(A))
     set_mlir_data!(A, get_mlir_data(bcast))
+    # the new constant has no data-flow from the previous value; keep the known sharding
+    A isa TracedRArray && TracedUtils.apply_sharding_hint!(A, A)
     return A
 end
 
 function Base.fill!(A::AnyTracedRArray{T,N}, x::TracedRNumber{T2}) where {T,N,T2}
     bcast = Reactant.broadcast_to_size(Reactant.promote_to(TracedRNumber{T}, x), size(A))
     set_mlir_data!(A, get_mlir_data(bcast))
+    A isa TracedRArray && TracedUtils.apply_sharding_hint!(A, A)
     return A
 end
 

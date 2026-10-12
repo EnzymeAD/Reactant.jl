@@ -110,6 +110,47 @@ function set_mlir_data!(x::TracedRArray, data)
     return x
 end
 
+"""
+    get_sharding_hint(x)
+
+Returns the sharding that the traced value `x` is known to have at trace time (the
+sharding of the sharded concrete input it was created from, or of the prototype it was
+derived from via `similar`/`zero`), or `nothing` if no such sharding is known.
+"""
+function get_sharding_hint(x::Union{TracedRArray,TracedRNumber})
+    cache = Reactant.Compiler.tracedshardingcache(; throw_error=false)
+    cache === nothing && return nothing
+    return get(cache, x, nothing)
+end
+get_sharding_hint(::Any) = nothing
+
+function set_sharding_hint!(
+    x::Union{TracedRArray,TracedRNumber}, sharding::Reactant.Sharding.AbstractSharding
+)
+    cache = Reactant.Compiler.tracedshardingcache(; throw_error=false)
+    cache === nothing && return x
+    cache[x] = sharding
+    return x
+end
+
+"""
+    apply_sharding_hint!(x::TracedRArray, like)
+
+If the sharding of `like` is known at trace time (see [`get_sharding_hint`](@ref)) and
+`x` has the same size as `like`, constrains `x` to that sharding (via
+`sdy.sharding_constraint`) and records the sharding for `x`. This is used for freshly
+created values like `zero(like)` or `similar(like)`, which don't have any data-flow from
+`like` and would otherwise be left replicated by sharding propagation.
+"""
+function apply_sharding_hint!(x::TracedRArray, like)
+    sharding = get_sharding_hint(like)
+    sharding === nothing && return x
+    size(x) == size(like) || return x
+    set_mlir_data!(x, get_mlir_data(@opcall(sharding_constraint(x, sharding))))
+    set_sharding_hint!(x, sharding)
+    return x
+end
+
 function set_mlir_data!(x::Base.ReshapedArray{<:TracedRNumber{T}}, data) where {T}
     set_mlir_data!(
         parent(x),
@@ -553,6 +594,11 @@ Base.@nospecializeinfer function prepare_mlir_fn_args(
                 any_input_sharding = true
             end
         end
+    end
+    # Remember the input shardings during tracing so that fresh values derived from the
+    # arguments (`zero`, `similar`, ...) can be given the same sharding.
+    for (v, sharding) in traced_args_to_shardings
+        set_sharding_hint!(v, sharding)
     end
 
     func = MLIR.IR.@with_block MLIR.IR.body(mod) begin
