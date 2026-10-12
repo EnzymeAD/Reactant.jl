@@ -739,3 +739,46 @@ issue2960_rows_scalar!(x, idxs, _) = (x[idxs, :] .= 3.0; x)
     @test @jit(issue2960_read(Reactant.to_rarray(x), Reactant.to_rarray(idxs))) ≈
         issue2960_read(x, idxs)
 end
+
+# traced-index gather of a complex array built by setindex!/vcat/hcat (#2969)
+function issue2969_dus(x, idx)
+    c = similar(x, (3, 1))
+    fill!(c, zero(eltype(c)))
+    c[1:3, 1] = x[1:3]
+    return c[idx, :]
+end
+function issue2969_vcat(x, idx)
+    c = vcat(reshape(x[1:3], :, 1), reshape(x[4:6], :, 1))
+    return c[idx, :]
+end
+function issue2969_hcat(x, idx)
+    c = hcat(x[1:3], x[4:6])
+    return c[idx, :]
+end
+issue2969_hcat_col(x, idx) = hcat(x[1:3], x[4:6])[idx, 1]
+
+@testset "traced gather of complex array built by DUS/vcat/hcat (#2969): $(T)" for T in (
+    ComplexF64, Float64
+)
+    x = T.(collect(1.0:10.0))
+    T <: Complex && (x .+= im .* collect(10.0:-1.0:1.0))
+    x_ra = Reactant.to_rarray(x)
+
+    @testset "$(f) idx=$(size(idx))" for (f, idx) in (
+        (issue2969_dus, [2, 1, 3]),
+        (issue2969_vcat, [2, 1, 3, 6, 5, 4]),
+        (issue2969_hcat, [2, 1, 3]),
+        (issue2969_dus, [2 1; 3 1]),
+        (issue2969_vcat, [2 1; 3 1]),
+        (issue2969_hcat, [2 1; 3 1]),
+        (issue2969_hcat_col, [2 1; 3 1]),
+    )
+        idx_ra = Reactant.to_rarray(idx)
+        hlo = repr(@code_hlo f(x_ra, idx_ra))
+        # must not be folded to a constant
+        @test occursin("stablehlo.gather", hlo)
+        res = @jit f(x_ra, idx_ra)
+        @test !all(iszero, Array(res))
+        @test res ≈ f(x, idx)
+    end
+end
