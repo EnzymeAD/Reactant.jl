@@ -1,4 +1,4 @@
-using SpecialFunctions, Reactant
+using SpecialFunctions, Reactant, Enzyme
 
 const RunningOnTPU = contains(string(Reactant.devices()[1]), "TPU")
 
@@ -96,6 +96,79 @@ end
     @test SpecialFunctions.erfcx(0.5) ≈ @jit(SpecialFunctions.erfcx(ConcreteRNumber(0.5)))
     @test SpecialFunctions.erfcx(Int32(2)) ≈
         @jit(SpecialFunctions.erfcx(ConcreteRNumber(Int32(2)))) atol = 1e-5 rtol = 1e-3
+end
+
+@testset "complex error functions" begin
+    # https://github.com/EnzymeAD/Reactant.jl/issues/2874
+    z = 1.0 + 0.5im
+    @test SpecialFunctions.erf(z) ≈ @jit(SpecialFunctions.erf(ConcreteRNumber(z))) rtol =
+        1e-13
+
+    grid = [Complex{Float64}(x, y) for x in -6:0.5:6, y in -6:0.5:6]
+    extra = ComplexF64[0, 1e-10, 1e-3 - 2e-3im, 0.999im, 2im, 5.0 + 1.0im, 12.0 + 3.0im]
+    pts = vcat(vec(grid), extra, -extra, conj.(extra), im .* extra)
+
+    # relative to max(|ref|, 1): erf gets huge along the imaginary axis. Points
+    # where the reference overflows (e.g. erf(-3 + 12im) in Float32) are skipped.
+    function maxerr(f, pts, got)
+        return maximum(
+            abs(ComplexF64(a) - ComplexF64(b)) / max(abs(ComplexF64(a)), 1) for
+            (a, b) in zip(f.(pts), got) if isfinite(a)
+        )
+    end
+
+    @testset "$f $T" for f in (
+            SpecialFunctions.erf,
+            SpecialFunctions.erfc,
+            SpecialFunctions.erfcx,
+            SpecialFunctions.erfi,
+            SpecialFunctions.faddeeva,
+        ),
+        (T, tol) in ((ComplexF64, 1e-13), (ComplexF32, 2e-6))
+
+        x = T.(pts)
+        x_ra = Reactant.to_rarray(x)
+        got = Array(@jit f.(x_ra))
+        @test eltype(got) == T
+        @test maxerr(f, x, got) < tol
+        # scalar
+        @test f(x[1]) ≈ @jit(f(ConcreteRNumber(x[1]))) atol = tol
+    end
+
+    # relative accuracy near the origin
+    for z in (1e-10 + 1e-10im, 1e-3 - 2e-3im, 0.3 + 0.2im)
+        @test SpecialFunctions.erf(z) ≈
+            @jit(SpecialFunctions.erf(ConcreteRNumber(z))) rtol = 1e-13
+        @test SpecialFunctions.erfi(z) ≈
+            @jit(SpecialFunctions.erfi(ConcreteRNumber(z))) rtol = 1e-13
+    end
+    # erfc keeps relative accuracy for large positive real part
+    for z in (5.0 + 1.0im, 10.0 + 3.0im, 20.0 - 2.0im)
+        @test SpecialFunctions.erfc(z) ≈
+            @jit(SpecialFunctions.erfc(ConcreteRNumber(z))) rtol = 1e-13
+    end
+    # large arguments
+    @test @jit(SpecialFunctions.erf(ConcreteRNumber(30.0 + 0.0im))) == 1
+    @test @jit(SpecialFunctions.erf(ConcreteRNumber(-30.0 + 0.0im))) == -1
+    @test @jit(SpecialFunctions.erf(ConcreteRNumber(1e200 + 0.0im))) == 1
+    @test @jit(SpecialFunctions.erfc(ConcreteRNumber(1e200 + 0.0im))) == 0
+
+    # real inputs of the newly added functions
+    @test SpecialFunctions.erfi(0.7) ≈ @jit(SpecialFunctions.erfi(ConcreteRNumber(0.7)))
+    @test SpecialFunctions.erfi(2) ≈ @jit(SpecialFunctions.erfi(ConcreteRNumber(2)))
+    @test SpecialFunctions.faddeeva(0.7) ≈
+        @jit(SpecialFunctions.faddeeva(ConcreteRNumber(0.7)))
+
+    # differentiable: d/dz erf(z) = 2/√π exp(-z²)
+    f(x, y) = sum(real.(SpecialFunctions.erf.(Complex.(x, y))))
+    xs = [1.0, 0.3, -2.0, 0.0, 0.0, 3.0, -0.7, 1e-12, 30.0]
+    ys = [0.5, -0.2, 1.5, 0.0, 2.0, 0.0, -3.1, 0.0, 1.0]
+    d = 2 / sqrt(pi) .* exp.(-Complex.(xs, ys) .^ 2)
+    gx, gy = @jit Enzyme.gradient(
+        Reverse, f, Reactant.to_rarray(xs), Reactant.to_rarray(ys)
+    )
+    @test Array(gx) ≈ real.(d) rtol = 1e-10 atol = 1e-12
+    @test Array(gy) ≈ -imag.(d) rtol = 1e-10 atol = 1e-12
 end
 
 @testset "logerfc" begin
