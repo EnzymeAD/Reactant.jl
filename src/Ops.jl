@@ -201,8 +201,13 @@ function constant_context(; throw_error::Core.Bool=true)
 end
 
 function deactivate_constant_context!(blk::MLIR.IR.Block)
-    constant_context()[1] == blk || error("Deactivating wrong block")
-    return Base.pop!(task_local_storage(:entry_block)::Vector{__TLSEntryBlockType})
+    stack = task_local_storage(:entry_block)::Vector{__TLSEntryBlockType}
+    if isempty(stack) || !isassigned(stack, lastindex(stack))
+        MLIR.IR.unbalanced_teardown("Deactivating a constant context but none is active")
+        return nothing
+    end
+    last(stack)[1] == blk || MLIR.IR.unbalanced_teardown("Deactivating wrong block")
+    return Base.pop!(stack)
 end
 
 # constant ops
