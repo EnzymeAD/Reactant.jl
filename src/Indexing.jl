@@ -376,6 +376,34 @@ function Base.setindex!(a::TracedRArray{T,N}, v, indices::Vararg{Any,N}) where {
         end
     end
 
+    # Bring `v` to an `N`-d array of shape `length.(indices)` (scalar indices become
+    # size-1 dims). Both the scatter and the dynamic_update_slice paths below rely on it.
+    target_shape = length.(indices)
+    if v isa Number
+        v = Reactant.broadcast_to_size(v, target_shape)
+        v = Reactant.promote_to(TracedRArray{T,N}, v)
+    else
+        v = Reactant.promote_to(TracedRArray{T,ndims(v)}, v)
+        if size(v) != target_shape
+            non_integer_indices = [
+                !(idx isa Union{Integer,TracedRNumber{<:Integer}}) for idx in indices
+            ]
+            broadcast_dims = findall(non_integer_indices)
+            if length(broadcast_dims) == N
+                v = Reactant.broadcast_to_size(v, target_shape)
+            elseif ndims(v) == length(broadcast_dims)
+                v = @opcall broadcast_in_dim(
+                    materialize_traced_array(v),
+                    broadcast_dims,
+                    collect(Int64, target_shape),
+                )
+            else
+                # Julia only requires `length(v) == prod(target_shape)` here.
+                v = @opcall reshape(materialize_traced_array(v), target_shape...)
+            end
+        end
+    end
+
     if use_scatter_setindex
         # TODO(#2237): This will create a dynamically sized tensor and we need to implement
         #       `findall` for it.
@@ -384,11 +412,6 @@ function Base.setindex!(a::TracedRArray{T,N}, v, indices::Vararg{Any,N}) where {
         end
 
         gather_dims = TracedUtils.indices_to_gather_dims(indices...)
-
-        v = @opcall convert(
-            TracedRArray{T,ndims(v)},
-            Reactant.promote_to(TracedRArray{unwrapped_eltype(v),ndims(v)}, v),
-        )
 
         updates = @opcall transpose(v, invperm(gather_dims.permutation))
         n_collapsed = length(gather_dims.collapsed_slice_dims)
@@ -413,26 +436,6 @@ function Base.setindex!(a::TracedRArray{T,N}, v, indices::Vararg{Any,N}) where {
         )[1]
         TracedUtils.set_mlir_data!(a, TracedUtils.get_mlir_data(res))
         return v
-    end
-
-    if v isa Number
-        v = Reactant.broadcast_to_size(v, length.(indices))
-        v = Reactant.promote_to(TracedRArray{T,N}, v)
-    else
-        v = Reactant.promote_to(TracedRArray{T,ndims(v)}, v)
-        non_integer_indices = [
-            !(idx isa Union{Integer,TracedRNumber{<:Integer}}) for idx in indices
-        ]
-        broadcast_dims = findall(non_integer_indices)
-        if length(broadcast_dims) == N
-            v = Reactant.broadcast_to_size(v, length.(indices))
-        else
-            v = @opcall broadcast_in_dim(
-                materialize_traced_array(v),
-                broadcast_dims,
-                collect(Int64, length.(indices)),
-            )
-        end
     end
 
     TracedUtils.set_mlir_data!(

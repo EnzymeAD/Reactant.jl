@@ -211,9 +211,28 @@ end
 function get_ancestor_and_indices_inner(
     x::AnyTracedRArray{T,1}, linear_indices::AbstractArray
 ) where {T}
+    # For a 1-D wrapper a linear index is also its only cartesian index, so integer
+    # indices can be reindexed into the parent directly. This keeps rectangular regions
+    # (e.g. `view(P, :, k)` or `view(P, 2:5, k)`) as `(range, k)` indices into the
+    # ancestor, which lower to `dynamic_update_slice`/`slice` instead of being flattened
+    # into a vector of `CartesianIndex` that forces the gather/scatter path.
+    if _is_integer_index_array(linear_indices)
+        # Host-side indices can be checked eagerly (traced ones cannot).
+        eltype(linear_indices) <: Integer && checkbounds(x, linear_indices)
+        a, idxs = get_ancestor_and_indices(
+            parent(x), Base.reindex(parentindices(x), (linear_indices,))...
+        )
+        return a, (idxs isa Tuple ? idxs : (idxs,))
+    end
     a, idxs = _get_ancestor_and_indices_linear(x, linear_indices)
     return a, (idxs isa Tuple ? idxs : (idxs,))
 end
+
+_is_integer_index_array(::AbstractArray{<:Bool}) = false
+_is_integer_index_array(::AbstractArray{<:Integer}) = true
+_is_integer_index_array(::AbstractArray{<:TracedRNumber{Bool}}) = false
+_is_integer_index_array(::AbstractArray{<:TracedRNumber{<:Integer}}) = true
+_is_integer_index_array(::AbstractArray) = false
 
 __to_cartesian_index(::Tuple{}) = error("Empty tuple of indices")
 __to_cartesian_index(x::NTuple{N,Int}) where {N} = CartesianIndex(x)

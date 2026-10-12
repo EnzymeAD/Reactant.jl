@@ -553,3 +553,143 @@ end
         @test @jit(getindex(x_ra, idx_ra)) ≈ getindex(x, idx)
     end
 end
+
+# https://github.com/EnzymeAD/Reactant.jl/issues/3391
+function issue3391_columns_2d(x)   # (16,) -> (16, 2)
+    P = similar(x, 16, 2)
+    view(P, :, 1) .= x
+    view(P, :, 2) .= 2 .* x
+    return P
+end
+function issue3391_trailing_3d(x)  # (16, 2) -> (16, 2, 2)
+    P = similar(x, 16, 2, 2)
+    view(P, :, :, 1) .= x
+    view(P, :, :, 2) .= 2 .* x
+    return P
+end
+function issue3391_middle_3d(x)    # (16,) -> (16, 2, 1)
+    P = similar(x, 16, 2, 1)
+    view(P, :, 1, 1) .= x
+    view(P, :, 2, 1) .= 2 .* x
+    return P
+end
+function issue3391_range_view(x)
+    P = similar(x, 16, 2)
+    P .= 0
+    view(P, 2:5, 1) .= x[2:5]
+    view(P, 2:5, 2) .= 2 .* x[2:5]
+    return P
+end
+function issue3391_setindex_col(x)
+    P = similar(x, 16, 2)
+    P .= 0
+    P[:, 1] = x
+    P[:, 2] .= 2 .* x
+    return P
+end
+function issue3391_row(x)
+    P = similar(x, 4, 16)
+    P .= 0
+    P[3, :] .= x
+    return P
+end
+function issue3391_middle_colon_3d(x)  # (16,) -> (16, 2, 3)
+    P = similar(x, 16, 2, 3)
+    P .= 0
+    view(P, :, 1, :) .= x
+    view(P, :, 2, :) .= 2 .* x
+    return P
+end
+function issue3391_nested_view(x)
+    P = similar(x, 16, 2)
+    P .= 0
+    view(view(P, :, 2), 3:6) .= x[1:4]
+    return P
+end
+function issue3391_view_of_reshape(x)
+    P = similar(x, 32)
+    P .= 0
+    view(reshape(P, 16, 2), :, 2) .= x
+    return P
+end
+function issue3391_vector_parent(x)
+    P = similar(x, 16)
+    P .= 0
+    view(P, 3:6) .= x[1:4]
+    view(P, 9:12) .+= view(x, 5:8) .* 2
+    return P
+end
+
+@testset "column setindex! on 1-D views lowers to slices, not scatter (#3391)" begin
+    x = Reactant.TestUtils.construct_test_array(Float64, 16)
+    x_ra = Reactant.to_rarray(x)
+    x2 = Reactant.TestUtils.construct_test_array(Float64, 16, 2)
+    x2_ra = Reactant.to_rarray(x2)
+
+    @testset "$(f)" for (f, a, a_ra) in (
+        (issue3391_columns_2d, x, x_ra),
+        (issue3391_trailing_3d, x2, x2_ra),
+        (issue3391_middle_3d, x, x_ra),
+        (issue3391_range_view, x, x_ra),
+        (issue3391_setindex_col, x, x_ra),
+        (issue3391_row, x, x_ra),
+        (issue3391_middle_colon_3d, x, x_ra),
+        (issue3391_nested_view, x, x_ra),
+        (issue3391_view_of_reshape, x, x_ra),
+        (issue3391_vector_parent, x, x_ra),
+    )
+        hlo = repr(@code_hlo f(a_ra))
+        @test !occursin("stablehlo.scatter", hlo)
+        @test !occursin("stablehlo.gather", hlo)
+        @test @jit(f(a_ra)) ≈ f(a)
+    end
+
+    # getindex on a 1-D view with a range should be a slice too
+    getcol_range(x) = view(x, :, 2)[2:5]
+    hlo = repr(@code_hlo getcol_range(x2_ra))
+    @test !occursin("stablehlo.gather", hlo)
+    @test @jit(getcol_range(x2_ra)) ≈ getcol_range(x2)
+
+    # out-of-bounds indices into a 1-D view still throw at trace time
+    getcol_oob(x) = view(x, :, 2)[[1, 3, 17]]
+    @test_throws BoundsError @code_hlo getcol_oob(x2_ra)
+end
+
+# irregular indices on 1-D views (and the equivalent direct setindex!) still work
+function irregular_view_setindex!(x)
+    P = similar(x, 4, 4)
+    P .= 0
+    v = view(P, :, 2)
+    v[[1, 3]] .= 7
+    v2 = view(P, 2, :)
+    v2[[true, false, true, false]] .= x[1:2, 1]
+    return P
+end
+function setindex_dropped_dim_scatter!(x)
+    P = similar(x, 4, 4)
+    P .= 0
+    P[[1, 3], 2] = x[1:2, 1]
+    P[4, [1, 3]] .= 5
+    return P
+end
+function setindex_rank_mismatch!(x)
+    P = similar(x, 4, 4)
+    P .= 0
+    P[2, :] = reshape(x[:, 1], 1, 4)
+    return P
+end
+
+@testset "irregular 1-D view / dropped-dim setindex!" begin
+    x = Reactant.TestUtils.construct_test_array(Float64, 4, 4)
+    x_ra = Reactant.to_rarray(x)
+    @test @jit(irregular_view_setindex!(x_ra)) ≈ irregular_view_setindex!(x)
+    @test @jit(setindex_dropped_dim_scatter!(x_ra)) ≈ setindex_dropped_dim_scatter!(x)
+    @test @jit(setindex_rank_mismatch!(x_ra)) ≈ setindex_rank_mismatch!(x)
+
+    getview_irregular(x) = view(x, :, 2)[[1, 3, 4]]
+    @test @jit(getview_irregular(x_ra)) ≈ getview_irregular(x)
+    getview_cartesian(x) = view(x, :, 2)[[CartesianIndex(1), CartesianIndex(4)]]
+    @test @jit(getview_cartesian(x_ra)) ≈ getview_cartesian(x)
+    getview_mask(x) = view(x, 3, :)[[true, false, true, false]]
+    @test @jit(getview_mask(x_ra)) ≈ getview_mask(x)
+end
