@@ -1542,7 +1542,7 @@ end
 # whether called or passed as a value, must still lower.
 function for_loop_using_static_param(x::AbstractVector{T}) where {T}
     @trace for i in 1:length(x)
-        x[i] = T(0.5) * x[i] + convert(T, i)
+        @allowscalar x[i] = T(0.5) * x[i] + convert(T, i)
     end
     return x
 end
@@ -1550,7 +1550,7 @@ end
 function while_loop_using_static_param(x::AbstractVector{T}, n) where {T}
     i = 1
     @trace while i <= n
-        x[i] = x[i] + one(T)
+        @allowscalar x[i] = x[i] + one(T)
         i += 1
     end
     return x
