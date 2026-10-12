@@ -76,6 +76,10 @@ void reactantReleaseAddressRange(void *base, size_t nbytes);
 #include "stablehlo/dialect/StablehloOps.h"
 #include "stablehlo/transforms/Passes.h"
 #include "stablehlo/transforms/optimization/Passes.h"
+#if defined(REACTANT_CUDA) || defined(REACTANT_ROCM)
+#include "xla/service/gpu/gpu_executable.h"
+#endif
+#include "xla/stream_executor/integrations/tf_allocator_adapter.h"
 
 #include "absl/log/globals.h"
 #include "absl/log/initialize.h"
@@ -4095,7 +4099,8 @@ static void rawDeviceToHost(LinkableRuntime *__restrict__ lrt, void *dst,
 
 // The exec path's optimization of a kernel's module, before XLA: the
 // transform list (or REACTANT_EXEC_OPT=hlo-opt, the plain pass).
-static void addExecOptimizationPasses(mlir::PassManager &pm) {
+static void addExecOptimizationPasses(mlir::PassManager &pm,
+                                      int64_t chunks = 1) {
   // REACTANT_EXEC_OPT=hlo-opt runs the plain enzyme-hlo-opt pass instead.
   // REACTANT_EXEC_UNROLL sets the trip count up to which while loops are
   // unrolled. Unrolling the raised kernels' short loops (threshold 16)
@@ -4143,6 +4148,19 @@ static void addExecOptimizationPasses(mlir::PassManager &pm) {
          {"convert_mul_convert;", "associative_binary_op_reordering<1>;"})
       for (size_t at; (at = patterns.find(drop)) != std::string::npos;)
         patterns.erase(at, strlen(drop));
+    // Asked for chunks (see reactantXLAExec): a tagged parallel loop is
+    // batched a chunk at a time, and fission, which lifts ops out of a loop
+    // over all its iterations at once, is left out.
+    if (chunks > 1) {
+      const std::string whole = "parallel_while_to_batched_scatter;";
+      if (size_t at = patterns.find(whole); at != std::string::npos)
+        patterns.replace(at, whole.size(),
+                         "parallel_while_to_batched_scatter_chunked(" +
+                             std::to_string(chunks) + ");");
+      const std::string fission = "greedy_while_loop_batch_fission;";
+      if (size_t at = patterns.find(fission); at != std::string::npos)
+        patterns.erase(at, fission.size());
+    }
     // The main list may introduce enzymexla ops (rotate, wrap, extend)
     // that XLA does not take; the Julia compiler lowers them before export
     // with this second list.
@@ -4250,9 +4268,16 @@ static std::vector<std::vector<int64_t>> returnLoopBounds(func::FuncOp funcOp) {
 // The executable `exec` specialized to the bound values `values`: the
 // bounds (the module's last results) become constants, and are returned
 // no more.
+static int64_t tempBytes(xla::LocalExecutable *exec);
+static int64_t tempBudget(LinkableRuntime *lrt);
+// Asking for more chunks than this, the attempt with the smallest temporary
+// is taken.
+static constexpr int64_t kMaxChunkRequest = 1024;
+
 static std::pair<xla::LocalExecutable *, bool>
 specializeRaw(LinkableRuntime *__restrict__ lrt,
-              LinkableRuntime::CachedExec &exec, ArrayRef<int64_t> values) {
+              LinkableRuntime::CachedExec &exec, ArrayRef<int64_t> values,
+              int64_t chunks = 1) {
   MLIRContext context(lrt->registry);
   RegisterDialects(wrap(&context));
   mlir::ParserConfig config(&context, false);
@@ -4281,10 +4306,25 @@ specializeRaw(LinkableRuntime *__restrict__ lrt,
   // Optimized again with the bounds known: the loops they bound unroll
   // (REACTANT_EXEC_UNROLL), and what that exposes simplifies.
   mlir::PassManager pm(&context);
-  addExecOptimizationPasses(pm);
+  addExecOptimizationPasses(pm, chunks);
   if (!mlir::succeeded(pm.run(*module)))
     ReactantThrowError("specialization: the passes failed");
   auto [lexec, shapes, tupleResult] = compileRaw(lrt, *module);
+  // Too large to run (see reactantXLAExec): again with the parallel loops in
+  // more chunks, up to kMaxChunkRequest, keeping the attempt that takes the
+  // least.
+  if (int64_t temp = tempBytes(lexec), budget = tempBudget(lrt);
+      temp > budget) {
+    int64_t more = chunks * std::max<int64_t>(2, (temp + budget - 1) / budget);
+    if (more <= kMaxChunkRequest) {
+      auto other = specializeRaw(lrt, exec, values, more);
+      if (tempBytes(other.first) < temp) {
+        delete lexec;
+        return other;
+      }
+      delete other.first;
+    }
+  }
   return {lexec, tupleResult};
 }
 
@@ -4813,6 +4853,54 @@ REACTANT_ABI void reactantXLAFree(LinkableRuntime **__restrict__ lrtP,
   lrt->allocationBase.erase(id);
 }
 
+// The bytes of the temporary allocation an executable makes when it runs
+// (every value XLA keeps that is neither a parameter nor a result).
+static int64_t tempBytes(xla::LocalExecutable *exec) {
+#if defined(REACTANT_CUDA) || defined(REACTANT_ROCM)
+  auto *gpu = dynamic_cast<xla::gpu::GpuExecutable *>(exec->executable());
+  if (!gpu)
+    return 0;
+  int64_t bytes = 0;
+  for (const xla::BufferAllocation *a : gpu->GetAllocations())
+    if (a->IsPreallocatedTempBuffer())
+      bytes += a->size();
+  return bytes;
+#else
+  return 0;
+#endif
+}
+
+// Executables whose temporary allocation would not fit (in what the
+// allocator has left, else half the device's memory;
+// REACTANT_EXEC_TEMP_BUDGET bytes to override) are compiled again with the
+// kernel's parallel loops batched in chunks: per module and arguments, the
+// chunks asked for and the temporary bytes it last took.
+struct ChunkRequest {
+  int64_t chunks = 1;
+  // the fewest temporary bytes an attempt took, and its chunks
+  int64_t bestTemp = INT64_MAX, bestChunks = 1;
+  bool settled = false;
+};
+static std::mutex chunkRequestsLock;
+static std::map<std::pair<const char *, std::vector<std::vector<int64_t>>>,
+                ChunkRequest>
+    chunkRequests;
+
+static int64_t tempBudget(LinkableRuntime *lrt) {
+  if (const char *env = getenv("REACTANT_EXEC_TEMP_BUDGET"))
+    return atoll(env);
+  // What the allocator has left, the arguments already in it.
+  if (auto *multi = dynamic_cast<se::MultiDeviceAdapter *>(lrt->allocator))
+    if (auto a = multi->GetAllocator(lrt->ordinal); a.ok())
+      if (auto stats = (*a)->GetStats(); stats && stats->bytes_limit)
+        return (*stats->bytes_limit - stats->bytes_in_use) / 10 * 9;
+  int64_t free = 0, total = 0;
+  if (!lrt->local->backend().default_stream_executor()->DeviceMemoryUsage(
+          &free, &total))
+    return INT64_MAX;
+  return total / 2;
+}
+
 REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
                                   const char *modstr, int64_t argcnt,
                                   void **args, int64_t constcnt,
@@ -4969,7 +5057,14 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
         stablehlo::createStablehloCanonicalizeDynamismPass());
     // The exec-time optimizer runs the pattern list the Julia compiler runs
     // on a traced program (the transform-dialect list with its defaults);
-    addExecOptimizationPasses(pm);
+    int64_t chunks = 1;
+    {
+      std::lock_guard<std::mutex> guard(chunkRequestsLock);
+      if (auto found = chunkRequests.find({modstr, sizeKey});
+          found != chunkRequests.end())
+        chunks = found->second.chunks;
+    }
+    addExecOptimizationPasses(pm, chunks);
     if (getenv("REACTANT_EXEC_DUMP")) {
       llvm::errs() << "EXEC_DUMP before\n";
       for (int64_t i = 0; i < argcnt; i++)
@@ -5131,6 +5226,38 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
         module->print(os);
       }
       std::tie(lexec, paramShapes, tupleResult) = compileRaw(lrt, *module);
+      // Too large to run: compiled again from the start with the parallel
+      // loops in chunks (more chunks may also batch loops a whole batch could
+      // not, so a larger request can take more), up to kMaxChunkRequest;
+      // past it, the attempt that took the least.
+      if (int64_t temp = tempBytes(lexec), budget = tempBudget(lrt);
+          temp > budget) {
+        bool again = false;
+        {
+          std::lock_guard<std::mutex> guard(chunkRequestsLock);
+          auto &request = chunkRequests[{modstr, sizeKey}];
+          if (temp < request.bestTemp) {
+            request.bestTemp = temp;
+            request.bestChunks = chunks;
+          }
+          if (!request.settled) {
+            int64_t more =
+                chunks * std::max<int64_t>(2, (temp + budget - 1) / budget);
+            if (more <= kMaxChunkRequest) {
+              request.chunks = more;
+            } else {
+              request.chunks = request.bestChunks;
+              request.settled = true;
+            }
+            again = request.chunks != chunks;
+          }
+        }
+        if (again) {
+          delete lexec;
+          free(written);
+          return reactantXLAExec(lrtP, modstr, argcnt, args, constcnt, consts);
+        }
+      }
     } else {
       exec =
           ClientCompileWithProto(lrt->client, wrap(module.get()), nullptr, 0);
