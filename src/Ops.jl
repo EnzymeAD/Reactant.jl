@@ -3270,9 +3270,12 @@ result = Ops.case(
     return corrected_traced_results
 end
 
-@noinline function call(f, args...; location=mlir_stacktrace("call", @__FILE__, @__LINE__))
+@noinline function call(
+    f, args...; location=mlir_stacktrace("call", @__FILE__, @__LINE__), tessera_op=nothing
+)
     seen = Reactant.OrderedIdDict()
-    cache_key = []
+    # functions annotated as different tessera ops must not share an MLIR function
+    cache_key = isnothing(tessera_op) ? [] : Any[tessera_op]
     Reactant.make_tracer(seen, (f, args...), cache_key, Reactant.TracedToTypes)
     cache = Reactant.Compiler.callcache()
     if haskey(cache, cache_key)
@@ -3298,6 +3301,9 @@ end
             resargprefix,
         )
         (; traced_result, ret, mutated_args, linear_results, fnwrapped) = temp
+        if !isnothing(tessera_op)
+            Reactant.Tessera.annotate!(temp.f, tessera_op)
+        end
         mlir_result_types = [
             MLIR.IR.type(MLIR.IR.operand(ret, i)) for i in 1:MLIR.IR.noperands(ret)
         ]

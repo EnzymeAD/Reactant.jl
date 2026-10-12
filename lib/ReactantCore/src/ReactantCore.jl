@@ -383,7 +383,7 @@ function get_argname(expr)
     return expr, expr
 end
 
-function trace_function_definition(mod, expr)
+function trace_function_definition(mod, expr; traced_call_kwargs=())
     internal_fn = MacroTools.splitdef(expr)
     orig_fname = internal_fn[:name]
 
@@ -411,12 +411,18 @@ function trace_function_definition(mod, expr)
     end
 
     if isempty(new_fn[:kwargs])
-        traced_call_expr = :($(traced_call)($(fname), $(argnames...)))
+        traced_call_expr =
+            :($(traced_call)($(fname), $(argnames...); $(traced_call_kwargs...)))
         untraced_call_expr = :($(fname)($(argnames...)))
     else
         kws = first.(get_argname.(new_fn[:kwargs]))
-        traced_call_expr =
-            :($(traced_call)(Core.kwcall, (; $(kws...)), $(fname), $(argnames...)))
+        traced_call_expr = :($(traced_call)(
+            Core.kwcall,
+            (; $(kws...)),
+            $(fname),
+            $(argnames...);
+            $(traced_call_kwargs...),
+        ))
         untraced_call_expr = :(Core.kwcall((; $(kws...)), $(fname), $(argnames...)))
     end
 
@@ -999,7 +1005,7 @@ end
 
 function traced_while end # defined inside Reactant.jl
 
-traced_call(f, args...; kwargs...) = f(args...; kwargs...)
+traced_call(f, args...; tessera_op=nothing, kwargs...) = f(args...; kwargs...)
 
 function cleanup_expr_to_avoid_boxing(expr, prepend::Symbol, all_vars)
     return MacroTools.postwalk(expr) do x

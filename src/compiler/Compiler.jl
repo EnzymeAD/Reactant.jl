@@ -122,6 +122,7 @@ function compile_mlir(
 
         if drop_unsupported_attributes
             # Drop some of our attributes
+            Reactant.Tessera.strip!(mod)
             run_pass_pipeline!(
                 mod, "drop-unsupported-attributes", "drop_enzymexla_attributes"
             )
@@ -312,6 +313,8 @@ Base.@nospecializeinfer function compile_mlir!(
         is_sharded,
     ) = mlir_fn_res
     compiled_f = mlir_fn_res.f
+
+    Reactant.Tessera.emit_rules!(mod)
 
     # Custom Kernels without Raising will lead to suboptimal codegen for is_sharded, force
     # raising
@@ -1320,6 +1323,7 @@ Reactant.@annotate "compile $(string(f))" function compile_xla(
         )
 
         # Drop some of our attributes
+        Reactant.Tessera.strip!(mod)
         run_pass_pipeline!(mod, "drop-unsupported-attributes", "drop_enzymexla_attributes")
 
         # compile MLIR module to XLA executable

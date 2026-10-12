@@ -281,6 +281,7 @@ export StackedBatchDuplicated, StackedBatchDuplicatedNoNeed
 const TracedType = Union{TracedRArray,TracedRNumber,MissingTracedValue}
 
 include("ControlFlow.jl")
+include("Tessera.jl")
 include("Enums.jl")
 include("Tracing.jl")
 
@@ -307,6 +308,7 @@ using .Compiler:
     code_xla,
     traced_getfield,
     compile
+using .Tessera: @tessera_op, @tessera_optimize
 export ConcreteRArray,
     ConcreteRNumber,
     ConcretePJRTArray,
@@ -319,6 +321,8 @@ export ConcreteRArray,
     @code_xla,
     @jit,
     @trace,
+    @tessera_op,
+    @tessera_optimize,
     within_compile,
     @annotate,
     annotate
