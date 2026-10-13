@@ -255,7 +255,7 @@ end
 @testset "svdvals" begin
     algs = get_svd_algorithms(string(Reactant.devices()[1]))
 
-    @testset "Un-batched: $(alg)" for alg in algs, T in (Float32, ComplexF32)
+    @testset "Un-batched: $(alg) - $T" for alg in algs, T in (Float32, ComplexF32)
         A = Reactant.TestUtils.construct_test_array(T, 4, 4)
         _svdvals = svdvals(A)
         A_ra = Reactant.to_rarray(A)
@@ -267,7 +267,7 @@ end
         end broken = RunningOnTPU
     end
 
-    @testset "Batched: $(alg)" for alg in algs, T in (Float32, ComplexF32) 
+    @testset "Batched: $(alg) - $T" for alg in algs, T in (Float32, ComplexF32) 
         A = Reactant.TestUtils.construct_test_array(T, 4, 4, 3, 2)
         _svdvals = reshape(mapslices(svdvals, A; dims=(1, 2)), 4, 3, 2)
         A_ra = Reactant.to_rarray(A)
