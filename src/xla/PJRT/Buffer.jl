@@ -110,6 +110,13 @@ end
     end
 end
 
+function XLA.free_buffer!(buffer::Buffer)
+    isempty(buffer) && return nothing # idempotent; never touch shared empty sentinels
+    XLA.free_buffer(buffer)
+    buffer.buffer = C_NULL # make the finalizer a no-op (no double free)
+    return nothing
+end
+
 function Base.ndims(buffer::Buffer)
     GC.@preserve buffer begin
         return MLIR.API.BufferNDimensions(buffer.buffer)
@@ -131,12 +138,14 @@ function Base.eltype(buffer::Buffer)
 end
 
 function XLA.device(buffer::Buffer)
+    isempty(buffer) && XLA.throw_empty_buffer("get the device of")
     GC.@preserve buffer begin
         return Device(MLIR.API.BufferToDevice(buffer.buffer))
     end
 end
 
 function XLA.client(buffer::Buffer)
+    isempty(buffer) && XLA.throw_empty_buffer("get the client of")
     GC.@preserve buffer begin
         return Client(MLIR.API.BufferToClient(buffer.buffer))
     end
@@ -145,6 +154,7 @@ end
 XLA.synced_buffer(buffer::Buffer) = buffer
 
 function XLA.buffer_on_cpu(buffer::Buffer)
+    isempty(buffer) && XLA.throw_empty_buffer("query the device placement of")
     GC.@preserve buffer begin
         res = MLIR.API.BufferOnCPU(buffer.buffer)
     end
@@ -153,6 +163,7 @@ end
 
 function XLA.to_host(buffer::Buffer, data, sharding)
     @assert data !== C_NULL
+    isempty(buffer) && XLA.throw_empty_buffer("copy to host from")
     @assert buffer.buffer !== C_NULL
     GC.@preserve buffer begin
         MLIR.API.BufferToHost(buffer.buffer, data)
@@ -162,12 +173,14 @@ end
 
 # TODO(#2235): users themselves need to gc preserve here
 function XLA.unsafe_buffer_pointer(buffer::Buffer)
+    isempty(buffer) && XLA.throw_empty_buffer("get the host pointer of")
     GC.@preserve buffer begin
         return MLIR.API.UnsafeBufferPointer(buffer.buffer)
     end
 end
 
 function Base.copy(buffer::Buffer)
+    isempty(buffer) && XLA.throw_empty_buffer("copy")
     dev = XLA.device(buffer)
     GC.@preserve buffer dev begin
         return Buffer(MLIR.API.CopyBufferToDevice(buffer.buffer, dev.device))
