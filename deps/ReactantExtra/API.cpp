@@ -982,6 +982,7 @@ struct DeviceProperties {
 
 #include "third_party/gpus/cuda/include/cuda.h"
 #include "third_party/gpus/cuda/include/cuda_runtime.h"
+#include "third_party/nccl/nccl.h"
 #include "xla/stream_executor/cuda/cuda_compute_capability.h"
 
 REACTANT_ABI int32_t ReactantCudaDriverGetVersion() {
@@ -1003,6 +1004,25 @@ REACTANT_ABI int32_t ReactantHermeticCudaGetVersion() { return CUDA_VERSION; }
 
 REACTANT_ABI int32_t ReactantCudaSetDevice(int32_t device_id) {
   return static_cast<int32_t>(cudaSetDevice(device_id));
+}
+
+REACTANT_ABI int32_t ReactantNcclGetUniqueId(void *id) {
+  static_assert(sizeof(ncclUniqueId) == 128);
+  return static_cast<int32_t>(ncclGetUniqueId(static_cast<ncclUniqueId *>(id)));
+}
+
+REACTANT_ABI int32_t ReactantNcclCommInitRank(void **comm, int32_t nranks,
+                                              const void *id, int32_t rank) {
+  ncclComm_t nccl_comm = nullptr;
+  auto status = ncclCommInitRank(&nccl_comm, nranks,
+                                 *static_cast<const ncclUniqueId *>(id), rank);
+  if (status == ncclSuccess)
+    *comm = nccl_comm;
+  return static_cast<int32_t>(status);
+}
+
+REACTANT_ABI int32_t ReactantNcclCommDestroy(void *comm) {
+  return static_cast<int32_t>(ncclCommDestroy(static_cast<ncclComm_t>(comm)));
 }
 
 REACTANT_ABI int32_t ReactantCudaDeviceGetComputeCapalilityMajor() {
@@ -1175,6 +1195,15 @@ REACTANT_ABI int32_t ReactantCudaDriverGetVersion() { return 0; }
 REACTANT_ABI int32_t ReactantHermeticCudaGetVersion() { return 0; }
 
 REACTANT_ABI int32_t ReactantCudaSetDevice(int32_t) { return -1; }
+
+REACTANT_ABI int32_t ReactantNcclGetUniqueId(void *) { return -1; }
+
+REACTANT_ABI int32_t ReactantNcclCommInitRank(void **, int32_t, const void *,
+                                              int32_t) {
+  return -1;
+}
+
+REACTANT_ABI int32_t ReactantNcclCommDestroy(void *) { return -1; }
 
 REACTANT_ABI int32_t ReactantCudaDeviceGetComputeCapalilityMajor() { return 0; }
 

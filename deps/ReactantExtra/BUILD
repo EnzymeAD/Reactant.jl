@@ -1207,6 +1207,9 @@ cc_library(
             "-Wl,-exported_symbol,_ReactantHermeticCudaGetVersion",
             "-Wl,-exported_symbol,_ReactantCudaDriverGetVersion",
             "-Wl,-exported_symbol,_ReactantCudaSetDevice",
+            "-Wl,-exported_symbol,_ReactantNcclGetUniqueId",
+            "-Wl,-exported_symbol,_ReactantNcclCommInitRank",
+            "-Wl,-exported_symbol,_ReactantNcclCommDestroy",
             "-Wl,-exported_symbol,_ReactantLLVMParseCommandLineOptions",
             "-Wl,-exported_symbol,_ReactantCudaDeviceGetComputeCapalilityMajor",
             "-Wl,-exported_symbol,_ReactantCudaDeviceGetComputeCapalilityMinor",
@@ -1433,6 +1436,7 @@ cc_library(
         "@xla//xla/pjrt/proto:compile_options_proto_cc_impl",
         "@com_google_absl//absl/status:statusor",
     ] + if_cuda([
+        "@xla//xla/tsl/cuda:nccl",
         "@xla//xla/stream_executor/cuda:cuda_compute_capability_proto_cc_impl",
         "@xla//xla/service:gpu_plugin",
         "@xla//xla/pjrt/c:pjrt_c_api_gpu",
