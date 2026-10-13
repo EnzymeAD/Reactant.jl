@@ -119,3 +119,13 @@ function broadcast_to_size(arg::Broadcast.Extruded, rsize)
 end
 
 broadcast_to_size(arg::Base.RefValue, rsize) = arg
+
+## Prepare the arguments of a broadcast for `TracedUtils.elem_apply`
+broadcast_arg_to_size(arg, rsize) = broadcast_to_size(arg, rsize)
+
+# XLA has no complex integer types, so scalars like `im::Complex{Bool}` or
+# `1im::Complex{Int}` cannot be materialized as a `TracedRNumber`. We keep them as plain Julia
+# constants and let the scalar `TracedRNumber` methods promote them while tracing the
+# broadcasted function. This mirrors the promotion Base performs for regular arrays (e.g.
+# `Float32 * im` gives a `ComplexF32`, while `ComplexF64 + 1im` stays a `ComplexF64`).
+broadcast_arg_to_size(arg::Complex{<:Integer}, rsize) = arg

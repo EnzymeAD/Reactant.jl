@@ -1159,6 +1159,7 @@ scalar_arg(arg) = arg isa Base.RefValue || !(arg isa AbstractArray)
 
 flattenarg(arg) = ReactantCore.materialize_traced_array(vec(arg))
 flattenarg(arg::Ref) = RefFillVector(arg)
+flattenarg(arg::Number) = RefFillVector(Ref(arg))
 
 function elem_apply_via_while_loop(f, args::Vararg{Any,Nargs}; kwargs...) where {Nargs}
     non_ref_args = [arg for arg in args if !scalar_arg(arg)]
@@ -1209,6 +1210,8 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
     if all(iszero ∘ ndims, args)
         scalar_args = map(args) do arg
             if arg isa Number || arg isa TracedRArray{<:Any,0}
+                # see `broadcast_arg_to_size` for why complex integers are left as is
+                arg isa Complex{<:Integer} && return arg
                 return promote_to(TracedRNumber, arg)
             end
             return arg

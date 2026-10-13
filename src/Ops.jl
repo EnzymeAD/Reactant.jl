@@ -397,13 +397,13 @@ end
 @noinline function fill(
     element::T, shape::Vector{Int}; location=mlir_stacktrace("fill", @__FILE__, @__LINE__)
 ) where {T<:Number}
-    tt = MLIR.IR.TensorType(shape, MLIR.IR.Type(T))
-    splatattr = MLIR.API.mlirDenseElementsAttrSplatGet(tt, _fill_element_attr(element))
     if T <: Complex{<:Integer}
         error(
             "Generating a constant of type $T is not supported, eltype of complex must be Float32 or Float64",
         )
     end
+    tt = MLIR.IR.TensorType(shape, MLIR.IR.Type(T))
+    splatattr = MLIR.API.mlirDenseElementsAttrSplatGet(tt, _fill_element_attr(element))
     cst_op = stablehlo.constant(; output=tt, value=splatattr, location=location)
     cst = MLIR.IR.result(cst_op)
     ta = TracedRArray{T,length(shape)}((), cst, shape)

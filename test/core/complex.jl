@@ -74,6 +74,47 @@ end
     @test (@jit mul_nothing(x)) == Complex(0.0f0, 0.0f0)
 end
 
+@testset "broadcasting with im / 1im (#3395)" begin
+    fns = (
+        (x, y) -> x .- im .* y,
+        (x, y) -> x .- 1im .* y,
+        (x, y) -> im .* x,
+        (x, y) -> x .* 1im,
+        (x, y) -> x .+ im,
+        (x, y) -> x .+ 1im,
+        (x, y) -> x .^ im,
+        (x, y) -> exp.(im .* x),
+        (x, y) -> ((a, b) -> a * im + b).(x, y),
+    )
+
+    @testset "$(T)" for T in (Float32, Float64, ComplexF32, ComplexF64)
+        skip_test = RunningOnTPU && (T == Float64 || T == ComplexF64)
+        x = Reactant.TestUtils.construct_test_array(T, 3)
+        y = Reactant.TestUtils.construct_test_array(T, 3)
+        x_ra = Reactant.to_rarray(x)
+        y_ra = Reactant.to_rarray(y)
+
+        @testset for f in fns
+            # eltype must follow Base's promotion (e.g. `Float32 * im` is `ComplexF32`)
+            @test begin
+                ref = f(x, y)
+                res = @jit f(x_ra, y_ra)
+                res isa Reactant.AbstractConcreteArray{eltype(ref)} && Array(res) ≈ ref
+            end skip = skip_test
+        end
+
+        # 0-dimensional broadcast with a traced scalar
+        x_rn = ConcreteRNumber(x[1])
+        @test @jit(x_rn .* im) ≈ x[1] * im skip = skip_test
+        @test @jit(x_rn .+ 1im) ≈ x[1] + 1im skip = skip_test
+    end
+
+    # XLA has no complex integer types; make sure we error with a useful message instead
+    # of returning garbage
+    x_ra = Reactant.to_rarray([1, 2, 3])
+    @test_throws "eltype of complex must be Float32 or Float64" @jit(x_ra .* 1im)
+end
+
 @testset "complex reduction" begin
     x = Reactant.TestUtils.construct_test_array(ComplexF32, 10, 10)
     x_ra = Reactant.to_rarray(x)
