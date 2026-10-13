@@ -15,7 +15,12 @@ using Reactant.Ops: @opcall
 using Enzyme
 using Adapt: Adapt, adapt
 using CUDA: CUDA, CuDim, DenseCuArray, unsafe_cached_load
-# Compatibility for CUDA v5 and v6
+@static if isdefined(CUDA, :_derived_array)
+    # Extend CUDA's internal derived-array helper so traced arrays follow the
+    # same reshape/reinterpret reconstruction path when it is available; the
+    # CuTracedArray-specific method is defined alongside reshape below.
+    import CUDA: _derived_array
+end
 
 const CUVERSION = isdefined(CUDA, :CUDACore) ? 6 : 5
 if CUVERSION == 6
@@ -57,6 +62,9 @@ struct CuTracedArray{T,N,A,Size} <: DenseArray{T,N}
     function CuTracedArray{T,N,A,Size}(xs::TracedRArray) where {T,N,A,Size}
         Reactant.Compiler.guard_from_gc_for_module(MLIR.IR.current_module(), xs)
         ptr = Base.reinterpret(Core.LLVMPtr{T,CUDA.AS.Global}, Base.pointer_from_objref(xs))
+        return new(ptr)
+    end
+    function CuTracedArray{T,N,A,Size}(ptr::Core.LLVMPtr{T,A}) where {T,N,A,Size}
         return new(ptr)
     end
 end
@@ -562,15 +570,13 @@ function Base.reinterpret(::Type{T}, a::CuTracedArray{S,N,A}) where {T,S,N,A}
     err === nothing || throw(err)
 
     if sizeof(T) == sizeof(S) # fast case
-        return CuTracedArray{T,N,A}(
-            reinterpret(Core.LLVMPtr{T,A}, a.ptr), size(a), a.maxsize
-        )
+        return _derived_array(a, T, size(a))
     end
 
     isize = size(a)
     size1 = div(isize[1] * sizeof(S), sizeof(T))
     osize = tuple(size1, Base.tail(isize)...)
-    return CuTracedArray{T,N,A}(reinterpret(Core.LLVMPtr{T,A}, a.ptr), osize, a.maxsize)
+    return _derived_array(a, T, osize)
 end
 
 ## reshape
@@ -587,6 +593,12 @@ function Base.reshape(a::CuTracedArray{T,M,A}, dims::NTuple{N,Int}) where {T,N,M
         return a
     end
     return _derived_array(a, T, dims)
+end
+
+@inline function _derived_array(
+    a::CuTracedArray{<:Any,<:Any,A}, ::Type{T}, osize::Dims{N}
+) where {T,N,A}
+    return CuTracedArray{T,N,A,osize}(reinterpret(Core.LLVMPtr{T,A}, a.ptr))
 end
 
 struct ReactantKernelAdaptor end
