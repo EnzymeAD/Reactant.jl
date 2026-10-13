@@ -277,13 +277,7 @@ for (name, supertype, julia_type) in
         end
 
         function Reactant.Compiler.traced_setfield_buffer!(
-            ::Val{:PJRT},
-            cache_dict,
-            val::$traced_type,
-            concrete_res,
-            obj,
-            field,
-            path,
+            ::Val{:PJRT}, cache_dict, val::$traced_type, concrete_res, obj, field, path
         )
             if haskey(cache_dict, val)
                 cval = cache_dict[val]

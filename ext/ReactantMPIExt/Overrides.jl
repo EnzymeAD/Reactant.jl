@@ -1,4 +1,10 @@
-using Reactant: @reactant_overlay, TracedRArray, TracedRNumber, call_with_native, call_with_reactant, use_overlayed_version
+using Reactant:
+    @reactant_overlay,
+    TracedRArray,
+    TracedRNumber,
+    call_with_native,
+    call_with_reactant,
+    use_overlayed_version
 using MPI
 
 const OVERLAY_NATIVE_CALLS = Ref(false)
@@ -68,7 +74,11 @@ end
         return call_with_native(MPI.Isend, buf, dest, tag, comm, req)
     else
         if !MPI.isnull(req)
-            throw(ArgumentError("Do not pass a request to MPI.Isend when using Reactant. Use the one returned."))
+            throw(
+                ArgumentError(
+                    "Do not pass a request to MPI.Isend when using Reactant. Use the one returned.",
+                ),
+            )
         end
         buf_traced = buf isa TracedRArray ? buf : Reactant.Ops.constant(buf)
         dest_traced = Reactant.promote_to(TracedRNumber{Int32}, dest)
@@ -100,7 +110,11 @@ end
         return call_with_native(MPI.Irecv!, buf, source, tag, comm, req)
     else
         if !MPI.isnull(req)
-            throw(ArgumentError("Do not pass a request to MPI.Isend when using Reactant. Use the one returned."))
+            throw(
+                ArgumentError(
+                    "Do not pass a request to MPI.Isend when using Reactant. Use the one returned.",
+                ),
+            )
         end
         buf_traced = buf isa TracedRArray ? buf : Reactant.Ops.constant(buf)
         source_traced = Reactant.promote_to(TracedRNumber{Int32}, source)

@@ -100,9 +100,7 @@ end
         comm = MPI.COMM_WORLD
 
         # Operations that only work with integer/boolean types
-        integer_bool_ops = Set([
-            MPI.LAND, MPI.LOR, MPI.LXOR, MPI.BAND, MPI.BOR, MPI.BXOR
-        ])
+        integer_bool_ops = Set([MPI.LAND, MPI.LOR, MPI.LXOR, MPI.BAND, MPI.BOR, MPI.BXOR])
 
         for (opname, op) in operations
             for T in datatypes
@@ -121,9 +119,8 @@ end
                     continue
                 end
 
-                @test expected == @jit MPI.Allreduce(
-                    ConcreteRArray(sendbuf), op, MPI.COMM_WORLD
-                )
+                @test expected ==
+                    @jit MPI.Allreduce(ConcreteRArray(sendbuf), op, MPI.COMM_WORLD)
 
                 # # *debug*
                 # rank = MPI.Comm_rank(comm)
