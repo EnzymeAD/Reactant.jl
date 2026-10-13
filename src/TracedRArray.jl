@@ -27,7 +27,12 @@ Base.elsize(::Type{<:TracedRArray{T,N}}) where {T,N} = sizeof(T)
 
 # This is required otherwise we will copy a tracedrarray each time
 # we use it
-Base.convert(T::Type{<:TracedRArray}, x::AbstractArray) = Reactant.promote_to(T, x)
+function Base.convert(T::Type{<:TracedRArray}, x::AbstractArray)
+    # non-concrete `T` (e.g. from `promote_typejoin` when collecting mixed-eltype
+    # traced arrays) has no `promote_to` methods; `x isa T` needs no conversion
+    x isa T && return x
+    return Reactant.promote_to(T, x)
+end
 
 # Base.complex
 Base.complex(x::TracedRArray{<:Real}) = complex.(x)
