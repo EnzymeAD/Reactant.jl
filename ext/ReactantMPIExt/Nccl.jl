@@ -14,20 +14,20 @@ end
 
 function nccl_unique_id()
     id = Ref{NcclUniqueId}()
-    status = MLIR.API.ReactantNcclGetUniqueId(id)
+    status = MLIR.API.ncclGetUniqueId(id)
     check_status(status, "ncclGetUniqueId", "NCCL")
     return id[]
 end
 
 function nccl_comm_init(nranks::Integer, rank::Integer, id::NcclUniqueId)
     comm = Ref{NcclComm_t}(C_NULL)
-    status = MLIR.API.ReactantNcclCommInitRank(comm, nranks, Ref(id), rank)
+    status = MLIR.API.ncclCommInitRank(comm, nranks, Ref(id), rank)
     check_status(status, "ncclCommInitRank", "NCCL")
     return comm[]
 end
 
 function nccl_comm_destroy(comm::NcclComm_t)
-    status = MLIR.API.ReactantNcclCommDestroy(comm)
+    status = MLIR.API.ncclCommDestroy(comm)
     check_status(status, "ncclCommDestroy", "NCCL")
     return nothing
 end
@@ -48,7 +48,7 @@ function get_hardware_id(xla_device::Reactant.XLA.AbstractDevice)
 end
 
 function set_nccl_device!(ordinal::Integer)
-    status = MLIR.API.ReactantCudaSetDevice(ordinal)
+    status = MLIR.API.cudaSetDevice(ordinal)
     check_status(status, "cudaSetDevice($ordinal)", "CUDA")
     return nothing
 end
