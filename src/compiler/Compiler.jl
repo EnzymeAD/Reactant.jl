@@ -219,7 +219,7 @@ function raising(; throw_error::Bool=true)
     key = :reactant_is_raising
     if !(
         haskey(task_local_storage(), key) &&
-        !Base.isempty(task_local_storage(key)::Vector{Bool})
+            !Base.isempty(task_local_storage(key)::Vector{Bool})
     )
         throw_error && error("No Reactant raising context")
     end
@@ -356,8 +356,8 @@ Base.@nospecializeinfer function compile_mlir!(
     lower_comms = true
     if is_sharded && (
         compile_options.shardy_passes == :to_mhlo_shardings ||
-        compile_options.shardy_passes == :post_sdy_propagation ||
-        compile_options.shardy_passes isa ShardyPropagationOptions
+            compile_options.shardy_passes == :post_sdy_propagation ||
+            compile_options.shardy_passes isa ShardyPropagationOptions
     )
         lower_comms = false
     end
@@ -370,7 +370,7 @@ Base.@nospecializeinfer function compile_mlir!(
         backend,
         is_sharded,
         hlo_opts=compile_options.optimization_passes !== :after_enzyme &&
-                 compile_options.optimization_passes !== :only_enzyme,
+            compile_options.optimization_passes !== :only_enzyme,
     )
     opt_passes2 = optimization_passes(
         compile_options; sroa=false, recognize_comms, lower_comms, backend, is_sharded
@@ -429,7 +429,6 @@ Base.@nospecializeinfer function compile_mlir!(
     lower_enzymexla_passes = join(
         [lower_enzymexla_linalg_pass, lower_enzymexla_math_pass, lower_comm_pass], ","
     )
-    lower_enzymexla_passes = join(lower_enzymexla_passes, ",")
 
     legalize_chlo_to_stablehlo =
         if legalize_stablehlo_to_mhlo || compile_options.legalize_chlo_to_stablehlo
@@ -737,7 +736,7 @@ Base.@nospecializeinfer function compile_mlir!(
         compile_options.optimization_passes === :all &&
         (
             compile_options.transpose_propagate === :up ||
-            compile_options.reshape_propagate === :up
+                compile_options.reshape_propagate === :up
         )
         # We tried propagating reshapes and transposes up. If at this point we are left
         # with them, we propagate them down to minimize the number of Ops in the IR.
@@ -961,7 +960,7 @@ Base.@nospecializeinfer function compile_mlir!(
             )
             for i in 1:length(result_attrs)
                 result_shardings[i] = Sharding.sdy_sharding_to_reactant_sharding(
-                    result_attrs[i - 1], mlir_fn_res.global_device_ids, mod_copied
+                    result_attrs[i-1], mlir_fn_res.global_device_ids, mod_copied
                 )
             end
         else
@@ -1076,7 +1075,7 @@ Base.@nospecializeinfer function compile_mlir!(
     res_attrs = MLIR.IR.getattr(compiled_f, "res_attrs")
     if res_attrs isa MLIR.IR.Attribute
         res_attrs = MLIR.IR.Attribute[
-            res_attrs[i - 1] for (i, present) in enumerate(results_mask) if present
+            res_attrs[i-1] for (i, present) in enumerate(results_mask) if present
         ]
     end
 
@@ -1407,14 +1406,14 @@ function compile(ctx, f, args; kwargs...)
         only_mesh = only(mlir_fn_res.unique_meshes)
         :(Sharding.Mesh(
             thunk.global_device_ids, # same as only_mesh.global_device_ids
-            0:(length(thunk.global_device_ids) - 1), # same as only_mesh.logical_device_ids
+            0:(length(thunk.global_device_ids)-1), # same as only_mesh.logical_device_ids
             $(only_mesh.axis_names),
             $(only_mesh.axis_sizes),
         ))
     else
         :(Sharding.Mesh(
             thunk.global_device_ids,
-            0:(length(thunk.global_device_ids) - 1),
+            0:(length(thunk.global_device_ids)-1),
             (:flat_mesh,),
             (length(thunk.global_device_ids),),
         ))
@@ -1547,7 +1546,7 @@ for cache_type in (:callcache, :sdycache, :sdygroupidcache, :debugcache)
 
         function $(has_fn)()
             return haskey(task_local_storage(), $(Meta.quot(cache_type))) &&
-                   !Base.isempty(task_local_storage($(Meta.quot(cache_type)))::Vector)
+                !Base.isempty(task_local_storage($(Meta.quot(cache_type)))::Vector)
         end
 
         function $(cache_type)(; throw_error::Bool=true)
@@ -1598,7 +1597,7 @@ function default_callcache()
 end
 
 function default_debugcache()
-    return Vector{@NamedTuple{f_name::String, file::String, line::Int64}}(undef, 0)
+    return Vector{@NamedTuple{f_name::String,file::String,line::Int64}}(undef, 0)
 end
 
 # Since we cache these objects we cannot cache data containing MLIR operations (e.g. the entry must be a string
