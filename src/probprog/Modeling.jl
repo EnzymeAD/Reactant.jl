@@ -3,17 +3,20 @@ using ..Compiler: @compile
 
 include("Utils.jl")
 
-function get_support_kind(s::Symbol)
-    s === :real && return MLIR.API.EnzymeSupportKind_Real
-    s === :positive && return MLIR.API.EnzymeSupportKind_Positive
-    s === :unit_interval && return MLIR.API.EnzymeSupportKind_UnitInterval
-    s === :interval && return MLIR.API.EnzymeSupportKind_Interval
-    s === :greater_than && return MLIR.API.EnzymeSupportKind_GreaterThan
-    s === :less_than && return MLIR.API.EnzymeSupportKind_LessThan
-    s === :simplex && return MLIR.API.EnzymeSupportKind_Simplex
-    s === :lower_cholesky && return MLIR.API.EnzymeSupportKind_LowerCholesky
-    return error("Unknown support type: $s")
-end
+# Map a `Distributions.AbstractSupport` singleton to the matching MLIR
+# Enzyme support enum. Type-dispatched so adding a new support kind only
+# requires a new struct subtype + one method here.
+
+get_support_kind(::AbstractSupport) =
+    error("Unknown support kind")  # never matched if all subtypes have a method
+get_support_kind(::RealSupport) = MLIR.API.EnzymeSupportKind_Real
+get_support_kind(::PositiveSupport) = MLIR.API.EnzymeSupportKind_Positive
+get_support_kind(::UnitIntervalSupport) = MLIR.API.EnzymeSupportKind_UnitInterval
+get_support_kind(::IntervalSupport) = MLIR.API.EnzymeSupportKind_Interval
+get_support_kind(::GreaterThanSupport) = MLIR.API.EnzymeSupportKind_GreaterThan
+get_support_kind(::LessThanSupport) = MLIR.API.EnzymeSupportKind_LessThan
+get_support_kind(::SimplexSupport) = MLIR.API.EnzymeSupportKind_Simplex
+get_support_kind(::LowerCholeskySupport) = MLIR.API.EnzymeSupportKind_LowerCholesky
 
 function sample(
     rng::AbstractRNG,
@@ -21,7 +24,7 @@ function sample(
     args::Vararg{Any,Nargs};
     symbol::Symbol=gensym("sample"),
     logpdf::Union{Nothing,Function}=nothing,
-    support::Symbol=:real,
+    support::AbstractSupport=RealSupport(),
     bounds::Tuple{Union{Nothing,Real},Union{Nothing,Real}}=(nothing, nothing),
 ) where {Nargs}
     tt = TRACING_TRACE[]
@@ -116,7 +119,8 @@ function sample(
     return sample(
         rng,
         sampler(dist_type),
-        params(dist)...;
+        params(dist)...,
+        size(dist);
         symbol=symbol,
         logpdf=logpdf_fn(dist_type),
         support=support(dist_type),
