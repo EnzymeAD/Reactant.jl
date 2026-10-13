@@ -4130,7 +4130,11 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
       opts.enable_licm_optimization_passes = true;
       opts.loop_unswitch_threshold = 10;
       opts.enable_pad_optimization_passes = true;
-      opts.enable_dot_formation_passes = true;
+      // REACTANT_EXEC_DOT_FORMATION=0 leaves contractions as reduce(mul) instead
+      // of forming dot_general.
+      const char *dotFormation = getenv("REACTANT_EXEC_DOT_FORMATION");
+      opts.enable_dot_formation_passes =
+          !dotFormation || std::string(dotFormation) != "0";
       char *mainPasses = nullptr, *lowerPasses = nullptr;
       enzymexlaGetTransformPassesList(&opts, &mainPasses, &lowerPasses);
       std::string patterns(mainPasses);
