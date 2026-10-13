@@ -111,6 +111,5 @@ function destroy_default_comm()
 end
 
 function Reactant.default_nccl_comm_handle()
-    NCCL_COMM[] == C_NULL && error("Default NCCL communicator has not been initialized")
     return NCCL_COMM_HANDLE[]
 end

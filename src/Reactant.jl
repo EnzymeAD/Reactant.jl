@@ -284,7 +284,7 @@ include("ControlFlow.jl")
 include("Enums.jl")
 include("Tracing.jl")
 
-function default_nccl_comm_handle end
+default_nccl_comm_handle(::Vararg{Nothing}) = UInt(0)
 
 include("compiler/Compiler.jl")
 

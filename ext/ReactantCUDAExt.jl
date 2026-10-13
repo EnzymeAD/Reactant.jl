@@ -1329,6 +1329,9 @@ Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
     end
     LLVM.deactivate(ctx)
 
+    # See `_to_kernel_buffer`.
+    raised_buffers = raising()
+
     argidx = 1
     for arg in values(seen)
         if !(arg isa TracedRArray || arg isa TracedRNumber)
@@ -1339,6 +1342,9 @@ Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
 
         arg = arg.mlir_data
         arg = Reactant.TracedUtils.transpose_val(arg)
+        if raised_buffers
+            arg = _to_kernel_buffer(arg)
+        end
         push!(restys, MLIR.IR.type(arg))
         push!(mlir_args, arg)
 
@@ -1469,9 +1475,103 @@ Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
         if !(arg isa TracedRArray || arg isa TracedRNumber)
             continue
         end
-        arg.mlir_data = Reactant.TracedUtils.transpose_val(MLIR.IR.result(call, argidx))
+        res = MLIR.IR.result(call, argidx)
+        T = Reactant.unwrapped_eltype(typeof(arg))
+        if raised_buffers
+            res = _from_kernel_buffer(res, T)
+        end
+        arg.mlir_data = Reactant.TracedUtils.transpose_val(res)
         argidx += 1
     end
+end
+
+# A raised kernel's buffers are typed by the operands the kernel is called with,
+# but the kernel itself moves values of its LLVM types: a complex number as its
+# `[2 x T]` aggregate, an unsigned integer as a signless one. A store through a
+# view of another element type than its buffer's is not written back when
+# raising, so hand the kernel each buffer as what it moves:
+#   - a complex buffer as the interleaved reals it is in memory (a trailing
+#     dimension of 2 in row-major order), whose fields the kernel accesses one
+#     by one;
+#   - an unsigned integer buffer as its signless bits.
+function _to_kernel_buffer(val::MLIR.IR.Value)
+    ty = MLIR.IR.type(val)
+    ety = eltype(ty)
+    shape = collect(Int64, size(ty))
+    if MLIR.IR.iscomplex(ety)
+        rty = eltype(ety)
+        parts = MLIR.IR.Value[]
+        for part in (MLIR.Dialects.stablehlo.real, MLIR.Dialects.stablehlo.imag)
+            v = MLIR.IR.result(part(val; result=MLIR.IR.TensorType(shape, rty)), 1)
+            v = MLIR.IR.result(
+                MLIR.Dialects.stablehlo.reshape(
+                    v; result_0=MLIR.IR.TensorType([shape..., 1], rty)
+                ),
+                1,
+            )
+            push!(parts, v)
+        end
+        return MLIR.IR.result(
+            MLIR.Dialects.stablehlo.concatenate(parts; dimension=length(shape)), 1
+        )
+    elseif MLIR.IR.isinteger(ety) && MLIR.IR.isunsigned(ety)
+        sty = MLIR.IR.Type(
+            MLIR.API.mlirIntegerTypeGet(MLIR.IR.current_context(), MLIR.IR.bitwidth(ety))
+        )
+        return MLIR.IR.result(
+            MLIR.Dialects.stablehlo.bitcast_convert(
+                val; result_0=MLIR.IR.TensorType(shape, sty)
+            ),
+            1,
+        )
+    end
+    return val
+end
+
+# The inverse of `_to_kernel_buffer`, back to a buffer of `T`.
+function _from_kernel_buffer(val::MLIR.IR.Value, ::Type{T}) where {T}
+    ty = MLIR.IR.type(val)
+    ety = eltype(ty)
+    full = collect(Int64, size(ty))
+    if T <: Complex
+        shape = full[1:(end - 1)]
+        parts = MLIR.IR.Value[]
+        for k in 0:1
+            start = zeros(Int64, length(full))
+            start[end] = k
+            limit = copy(full)
+            limit[end] = k + 1
+            v = MLIR.IR.result(
+                MLIR.Dialects.stablehlo.slice(
+                    val;
+                    result_0=MLIR.IR.TensorType([shape..., 1], ety),
+                    start_indices=MLIR.IR.DenseArrayAttribute(start),
+                    limit_indices=MLIR.IR.DenseArrayAttribute(limit),
+                    strides=MLIR.IR.DenseArrayAttribute(ones(Int64, length(full))),
+                ),
+                1,
+            )
+            v = MLIR.IR.result(
+                MLIR.Dialects.stablehlo.reshape(v; result_0=MLIR.IR.TensorType(shape, ety)),
+                1,
+            )
+            push!(parts, v)
+        end
+        return MLIR.IR.result(
+            MLIR.Dialects.stablehlo.complex(
+                parts[1], parts[2]; result=MLIR.IR.TensorType(shape, MLIR.IR.Type(T))
+            ),
+            1,
+        )
+    elseif T <: Unsigned
+        return MLIR.IR.result(
+            MLIR.Dialects.stablehlo.bitcast_convert(
+                val; result_0=MLIR.IR.TensorType(full, MLIR.IR.Type(T))
+            ),
+            1,
+        )
+    end
+    return val
 end
 
 _bfloat16_compile_type() = raising() ? Reactant.Compiler.BFLOAT16_COMPILE_TYPE[] : BFloat16

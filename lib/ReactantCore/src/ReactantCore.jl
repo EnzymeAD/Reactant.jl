@@ -535,7 +535,11 @@ function trace_while(mod, expr; track_numbers, mincut, checkpointing, first_arg=
     ref_syms = Symbol[Symbol(string(sym), "_ref") for sym in external_syms]
     arg_syms = Expr(:tuple, ref_syms...)
 
-    to_locals = [:(local $s = $ref[]) for (s, ref) in zip(external_syms, ref_syms)]
+    # Bound with `let` rather than `local`, which Julia rejects for a name that is a
+    # static parameter of the enclosing method (e.g. `T` in `f(x::T) where {T}`).
+    to_locals = Expr(
+        :block, [:($s = $ref[]) for (s, ref) in zip(external_syms, ref_syms)]...
+    )
     from_locals = [(
         quote
             if !isnothing($ref[])
@@ -581,15 +585,17 @@ function trace_while(mod, expr; track_numbers, mincut, checkpointing, first_arg=
     reactant_code_block = quote
         let $args_sym = $(args_init)
             $pre_alias_ids_sym = $(pre_ids_expr)
-            $cond_fn_sym = $(arg_syms) -> begin
-                $(to_locals...)
-                $cond
-            end
+            $cond_fn_sym = $(arg_syms) -> $(Expr(:let, to_locals, cond))
             $body_fn_sym =
                 $(arg_syms) -> begin
-                    $(to_locals...)
-                    $body
-                    $(from_locals...)
+                    $(Expr(
+                        :let,
+                        to_locals,
+                        quote
+                            $body
+                            $(from_locals...)
+                        end,
+                    ))
                     $(ReactantCore)._check_aliasing_unchanged(
                         $pre_alias_ids_sym, $(post_ids_expr), $(varnames_expr)
                     )

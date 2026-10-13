@@ -3818,6 +3818,39 @@ REACTANT_ABI void reactantXLADeInit(LinkableRuntime **__restrict__ lrt) {
   *lrt = nullptr;
 }
 
+REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
+                                  const char *modstr, int64_t argcnt,
+                                  void **args, int64_t constcnt,
+                                  const int64_t *consts);
+
+// The module copying `size` bytes from its second argument to its first,
+// as the exec path takes it: byte buffers of unknown extent, each returned
+// (the first written). Its string outlives the executables cached under
+// its address.
+static const char *copyModule(size_t size) {
+  static std::mutex lock;
+  static std::map<size_t, std::unique_ptr<std::string>> modules;
+  std::lock_guard<std::mutex> guard(lock);
+  auto &text = modules[size];
+  if (!text) {
+    std::string n = std::to_string(size);
+    text = std::make_unique<std::string>(
+        "func.func @main(%dst: tensor<?xi8>, %src: tensor<?xi8>) -> "
+        "(tensor<?xi8>, tensor<?xi8>) {\n"
+        "  %c0 = stablehlo.constant dense<0> : tensor<i64>\n"
+        "  %s = stablehlo.dynamic_slice %src, %c0, sizes = [" +
+        n + "] : (tensor<?xi8>, tensor<i64>) -> tensor<" + n +
+        "xi8>\n"
+        "  %d = stablehlo.dynamic_update_slice %dst, %s, %c0 : (tensor<?xi8>, "
+        "tensor<" +
+        n +
+        "xi8>, tensor<i64>) -> tensor<?xi8>\n"
+        "  return %d, %src : tensor<?xi8>, tensor<?xi8>\n"
+        "}\n");
+  }
+  return text->c_str();
+}
+
 REACTANT_ABI void reactantXLAMemcpy(LinkableRuntime **__restrict__ lrtP,
                                     void *__restrict__ dst,
                                     void *__restrict__ src, size_t size,
@@ -3841,12 +3874,15 @@ REACTANT_ABI void reactantXLAMemcpy(LinkableRuntime **__restrict__ lrtP,
   }
   case 3: // cudaMemcpyDeviceToDevice
   {
-    // PJRT exposes no raw buffer-to-buffer copy; stage through the host.
-    auto &&[srcB, srcO, srcStart] = bufferAndOffset(lrt, src);
-    auto &&[dstB, dstO, dstStart] = bufferAndOffset(lrt, dst);
-    std::vector<char> tmp(size);
-    CopyFromBuffer(lrt->client, srcB, tmp.data(), srcO, size, srcStart);
-    CopyToBuffer(lrt->client, dstB, tmp.data(), dstO, size, dstStart);
+    // PJRT exposes no raw buffer-to-buffer copy, and a copy on the raw
+    // device pointers would not see the uses PJRT still has in flight; so
+    // the copy is an executable, which the exec path orders with the rest
+    // (and addresses through views and shared buffers as for any kernel):
+    // one per size, cached under a stable module string.
+    if (!size)
+      break;
+    void *copyArgs[2] = {dst, src};
+    reactantXLAExec(lrtP, copyModule(size), 2, copyArgs, 0, nullptr);
     break;
   }
   default: // cudaMemcpyDeviceToDevice
