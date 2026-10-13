@@ -10,8 +10,8 @@ using MPI
 
 for (name, supertype, julia_type) in
     [(:Communicator, Any, MPI.Comm), (:Request, MPI.AbstractRequest, MPI.Request)]
-    traced_type = Symbol("Traced", name)
-    concrete_type = Symbol("Concrete", name)
+    traced_type = Symbol(:Traced, name)
+    concrete_type = Symbol(:Concrete, name)
 
     @eval begin
         struct $concrete_type{NF} <: $supertype
@@ -296,7 +296,7 @@ for (name, supertype, julia_type) in
             return Base.setproperty!(obj, field, cval, path)
         end
 
-        Reactant.use_overlayed_version(x::$traced_type) = true
+        Reactant.use_overlayed_version(::$traced_type) = true
     end
 end
 
