@@ -2056,9 +2056,9 @@ module @reactant_hlo_call attributes {mhlo.num_partitions = 1 : i64, mhlo.num_re
 
     symbol_attr_name = String(MLIR.API.mlirSymbolTableGetSymbolAttributeName())
 
-    fn = MLIR.IR.lookup(
-        MLIR.IR.SymbolTable(MLIR.IR.Operation(current_module)), name_to_call
-    )
+    fn = MLIR.IR.@dispose st = MLIR.IR.SymbolTable(MLIR.IR.Operation(current_module)) begin
+        MLIR.IR.lookup(st, name_to_call)
+    end
     if isnothing(fn)
         new_mod = parse(MLIR.IR.Module, code)
         new_mod_op = MLIR.IR.Operation(new_mod)

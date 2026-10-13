@@ -35,6 +35,57 @@ function GPUCompiler.get_interpreter(@nospecialize(job::NativeCompilerJob))
     end
 end
 
+# GPUCompiler looks up (and filters) the code instances it compiles by the job's cache
+# owner, so that has to be the owner the interpreter above caches them under.
+@static if GPUCompiler.HAS_INTEGRATED_CACHE
+    function GPUCompiler.cache_owner(@nospecialize(job::NativeCompilerJob))
+        return job.config.params.use_native_interp ? nothing : ReactantCacheToken()
+    end
+end
+
+# GPUCompiler 2 generates code from the sources that inference stored in the code
+# instances, where GPUCompiler 1 re-inferred every method it compiled. With Reactant's
+# interpreter, some of the stored sources give wrong results (as if Reactant's overlays
+# weren't applied, e.g., in the LU tests of core/ops), so re-infer them like GPUCompiler 1
+# did, and store the result for GPUCompiler to compile.
+@static if VERSION >= v"1.12.0-DEV.1434"
+    function GPUCompiler.drive_inference!(interp::ReactantInterp, mi::Core.MethodInstance)
+        ci = Core.Compiler.typeinf_ext(interp, mi, Core.Compiler.SOURCE_MODE_NOT_REQUIRED)
+        ci === nothing && return nothing
+        has_compilequeue =
+            VERSION >= v"1.13.0-DEV.499" || v"1.12-beta3" <= VERSION < v"1.13-"
+        if has_compilequeue
+            workqueue = Core.Compiler.CompilationQueue(; interp)
+            push!(workqueue, ci)
+        else
+            workqueue = Core.CodeInstance[ci]
+            inspected = Base.IdSet{Core.CodeInstance}()
+        end
+        while !isempty(workqueue)
+            callee = pop!(workqueue)
+            if has_compilequeue
+                Core.Compiler.isinspected(workqueue, callee) && continue
+                Core.Compiler.markinspected!(workqueue, callee)
+            else
+                callee in inspected && continue
+                push!(inspected, callee)
+            end
+            Core.Compiler.use_const_api(callee) && continue
+            callee_mi = Core.Compiler.get_ci_mi(callee)
+            src = Core.Compiler.typeinf_code(interp, callee_mi, true)
+            src isa Core.CodeInfo || continue
+            if has_compilequeue
+                sptypes = Core.Compiler.sptypes_from_meth_instance(callee_mi)
+                Core.Compiler.collectinvokes!(workqueue, src, sptypes)
+            else
+                Core.Compiler.collectinvokes!(workqueue, src)
+            end
+            @atomic :release callee.inferred = src
+        end
+        return ci
+    end
+end
+
 function Core.Compiler.optimize(
     interp::ReactantInterp,
     opt::Core.Compiler.OptimizationState,
@@ -985,226 +1036,246 @@ function call_llvm_generator(
             ctx = LLVM.context(ts_ctx)
             LLVM.activate(ctx)
             obj = try
-                llvm_module, p = GPUCompiler.emit_llvm(job)
-
-                gmap = p.gv_to_value
-                for g in LLVM.globals(llvm_module)
-                    if haskey(LLVM.metadata(g), "julia.constgv") &&
-                        !LLVM.isnull(LLVM.initializer(g))
-                        addr = LLVM.initializer(g)
-                        addr, _ = Enzyme.Compiler.get_base_and_offset(
-                            addr; offsetAllowed=false, inttoptr=true
-                        )
-                        @assert isa(addr, LLVM.ConstantInt)
-                        LLVM.linkage!(g, LLVM.API.LLVMExternalLinkage)
-                        LLVM.initializer!(
-                            g, LLVM.null(LLVM.value_type(LLVM.initializer(g)))
-                        )
+                # Keep the references to Julia values symbolic: the entry wrapper below
+                # loads them from an array that is passed in at run time, so that no
+                # addresses get baked into the IR.
+                llvm_module, p = GPUCompiler.emit_llvm(job; resolve_relocations=false)
+                LLVM.@dispose llvm_module = llvm_module begin
+                    # the address of the Julia value referenced by each global
+                    gmap = Dict{String,Ptr{Cvoid}}()
+                    for (rec, word) in GPUCompiler.resolved_relocations(p.relocations)
+                        if rec.kind === GPUCompiler.SlotSite
+                            gmap[rec.name] = reinterpret(Ptr{Cvoid}, word)
+                        end
                     end
-                end
+                    for g in llvm_module.globals
+                        haskey(g.metadata, "julia.constgv") || continue
+                        init = g.initializer
+                        if init === nothing
+                            # a relocation slot: define it, so that the wrapper can fill it
+                            g.linkage = LLVM.Linkage.External
+                            g.initializer = LLVM.null(g.global_value_type)
+                        elseif !LLVM.isnull(init)
+                            # on Julia versions without relocatable IR, codegen initializes
+                            # the global with the address of the value instead
+                            addr, _ = Enzyme.Compiler.get_base_and_offset(
+                                init; offsetAllowed=false, inttoptr=true
+                            )
+                            @assert isa(addr, LLVM.ConstantInt)
+                            gmap[g.name] = reinterpret(Ptr{Cvoid}, convert(UInt, addr))
+                            g.linkage = LLVM.Linkage.External
+                            g.initializer = LLVM.null(init.value_type)
+                        end
+                    end
 
-                llvm_fn_name = LLVM.name(p.entry)
+                    llvm_fn_name = p.entry.name
 
-                jlvaluet = convert(LLVM.LLVMType, Any; allow_boxed=true)
-                ptrt = convert(LLVM.LLVMType, Core.LLVMPtr{Any,0}; allow_boxed=true)
-                wrapper_ft = LLVM.FunctionType(
-                    jlvaluet, LLVM.LLVMType[jlvaluet, ptrt, LLVM.Int32Type(), ptrt]
-                )
-                wrapper_f = LLVM.Function(llvm_module, "entry", wrapper_ft)
+                    jlvaluet = convert(LLVM.LLVMType, Any; allow_boxed=true)
+                    ptrt = convert(LLVM.LLVMType, Core.LLVMPtr{Any,0}; allow_boxed=true)
+                    wrapper_ft = LLVM.FunctionType(
+                        jlvaluet,
+                        LLVM.LLVMType[jlvaluet, ptrt, LLVM.Int32Type(), ptrt],
+                    )
+                    wrapper_f = LLVM.Function(llvm_module, "entry", wrapper_ft)
 
-                sfn = LLVM.subprogram(p.entry)
-                if sfn !== nothing
-                    LLVM.set_subprogram!(wrapper_f, sfn)
-                end
+                    sfn = p.entry.subprogram
+                    if sfn !== nothing
+                        wrapper_f.subprogram = sfn
+                    end
 
-                for f in LLVM.functions(llvm_module)
-                    for b in LLVM.blocks(f)
-                        term = LLVM.terminator(b)
-                        if isa(term, LLVM.UnreachableInst)
-                            shouldemit = true
-                            tmp = term
-                            while true
-                                tmp = LLVM.API.LLVMGetPreviousInstruction(tmp)
-                                if tmp == C_NULL
-                                    break
-                                end
-                                tmp = LLVM.Instruction(tmp)
-                                if isa(tmp, LLVM.CallInst)
-                                    cf = LLVM.called_operand(tmp)
-                                    if isa(cf, LLVM.Function)
-                                        nm = LLVM.name(cf)
-                                        if nm == "gpu_signal_exception" ||
-                                            nm == "gpu_report_exception" ||
-                                            nm == "ijl_throw" ||
-                                            nm == "jl_throw"
-                                            shouldemit = false
-                                            break
+                    for f in llvm_module.functions
+                        for b in f.blocks
+                            term = b.terminator
+                            if isa(term, LLVM.UnreachableInst)
+                                shouldemit = true
+                                tmp = term
+                                while true
+                                    tmp = tmp.prev
+                                    if tmp === nothing
+                                        break
+                                    end
+                                    if isa(tmp, LLVM.CallInst)
+                                        cf = tmp.called_function
+                                        if cf !== nothing
+                                            nm = cf.name
+                                            if nm == "gpu_signal_exception" ||
+                                                nm == "gpu_report_exception" ||
+                                                nm == "ijl_throw" ||
+                                                nm == "jl_throw"
+                                                shouldemit = false
+                                                break
+                                            end
                                         end
                                     end
                                 end
-                            end
 
-                            if shouldemit
-                                b = LLVM.IRBuilder()
-                                LLVM.position!(b, term)
+                                if shouldemit
+                                    LLVM.@dispose b = LLVM.IRBuilder() begin
+                                        LLVM.position!(b, LLVM.before(term))
 
-                                if LLVM.subprogram(f) !== nothing
-                                    LLVM.debuglocation!(
-                                        b, LLVM.DILocation(0, 0, LLVM.subprogram(f))
-                                    )
+                                        if f.subprogram !== nothing
+                                            b.debug_location = LLVM.DILocation(
+                                                0, 0, f.subprogram
+                                            )
+                                        end
+                                        Enzyme.Compiler.emit_error(
+                                            b,
+                                            term,
+                                            "Reactant: The original primal code hits this error condition, thus differentiating it does not make sense",
+                                            ReactantRuntimeException,
+                                        )
+                                    end
                                 end
-                                Enzyme.Compiler.emit_error(
-                                    b,
-                                    term,
-                                    "Reactant: The original primal code hits this error condition, thus differentiating it does not make sense",
-                                    ReactantRuntimeException,
-                                )
                             end
                         end
-                    end
-                    if false && !isempty(LLVM.blocks(f))
-                        LLVM.name!(f, "reactant\$" * LLVM.name(f))
-                        if Enzyme.Compiler.has_fn_attr(f, LLVM.EnumAttribute("optnone"))
-                            delete!(LLVM.function_attributes(f), LLVM.EnumAttribute("optnone"))
+                        if false && !isempty(f.blocks)
+                            f.name = "reactant\$" * f.name
+                            delete!(f.function_attributes, :optnone)
+                            delete!(f.function_attributes, :noinline)
+                            f.linkage = LLVM.Linkage.Internal
                         end
-                        if Enzyme.Compiler.has_fn_attr(f, LLVM.EnumAttribute("noinline"))
-                            delete!(LLVM.function_attributes(f), LLVM.EnumAttribute("noinline"))
+                    end
+
+                    globals = Any[]
+                    LLVM.@dispose builder = LLVM.IRBuilder() begin
+                        entry = LLVM.BasicBlock(wrapper_f, "entry")
+                        if wrapper_f.subprogram !== nothing
+                            builder.debug_location = LLVM.DILocation(0, 0, wrapper_f.subprogram)
                         end
-                        LLVM.linkage!(f, LLVM.API.LLVMInternalLinkage)
-                    end
-                end
+                        LLVM.position!(builder, LLVM.at_end(entry))
 
-                builder = LLVM.IRBuilder()
-                entry = LLVM.BasicBlock(wrapper_f, "entry")
-                if LLVM.subprogram(wrapper_f) !== nothing
-                    LLVM.debuglocation!(
-                        builder, LLVM.DILocation(0, 0, LLVM.subprogram(wrapper_f))
-                    )
-                end
-                LLVM.position!(builder, entry)
-
-                args = collect(LLVM.Value, LLVM.parameters(wrapper_f))
-                args[2] = LLVM.bitcast!(builder, args[2], LLVM.PointerType(jlvaluet))
-                args[4] = LLVM.bitcast!(builder, args[4], LLVM.PointerType(jlvaluet))
-
-                globals = Any[]
-                for g in LLVM.globals(llvm_module)
-                    if LLVM.initializer(g) !== nothing
-                        LLVM.linkage!(g, LLVM.API.LLVMInternalLinkage)
-                    end
-                    if !haskey(LLVM.metadata(g), "julia.constgv")
-                        continue
-                    end
-                    if !haskey(gmap, LLVM.name(g)) || gmap[LLVM.name(g)] == C_NULL
-                        if precompiling()
-                            throw(ReactantPrecompilationException(LLVM.name(g)))
-                        end
-                        continue
-                    end
-                    gval = LLVM.load!(
-                        builder,
-                        jlvaluet,
-                        LLVM.gep!(
-                            builder,
-                            jlvaluet,
-                            args[4],
-                            LLVM.Value[LLVM.ConstantInt(length(globals))],
-                        ),
-                    )
-                    push!(
-                        globals,
-                        unsafe_pointer_to_objref(
-                            Base.reinterpret(Ptr{Cvoid}, gmap[LLVM.name(g)])
-                        ),
-                    )
-                    LLVM.store!(
-                        builder,
-                        gval,
-                        LLVM.bitcast!(builder, g, LLVM.PointerType(jlvaluet)),
-                    )
-                end
-
-                profile_julia_fns = Any[push_debug_stack!, pop_debug_stack!]
-
-                profile_llvm_fns = LLVM.Value[]
-                for f in profile_julia_fns
-                    gval = LLVM.load!(
-                        builder,
-                        jlvaluet,
-                        LLVM.gep!(
-                            builder,
-                            jlvaluet,
-                            args[4],
-                            LLVM.Value[LLVM.ConstantInt(length(globals))],
-                        ),
-                    )
-                    push!(globals, f)
-                    push!(profile_llvm_fns, gval)
-                end
-
-                stringv = traced_mi(mi)
-
-                fname = LLVM.globalstring_ptr!(builder, stringv, "mi_name")
-
-                m = mi.def
-
-                tv, decls, file, line = Base.arg_decl_parts(m)
-                file = LLVM.globalstring_ptr!(builder, file, "mi_file")
-
-                jl_cstr_to_string, FT = Enzyme.Compiler.get_function!(
-                    llvm_module,
-                    "ijl_cstr_to_string",
-                    LLVM.FunctionType(jlvaluet, [LLVM.PointerType(LLVM.IntType(8))]),
-                )
-                fname = LLVM.call!(builder, FT, jl_cstr_to_string, [fname])
-
-                file = LLVM.call!(builder, FT, jl_cstr_to_string, [file])
-
-                line = Enzyme.Compiler.emit_box_int64!(
-                    builder, LLVM.ConstantInt(Int64(line))
-                )
-
-                Enzyme.Compiler.emit_apply_generic!(
-                    builder, LLVM.Value[profile_llvm_fns[1], fname, file, line]
-                )
-
-                res = LLVM.call!(builder, LLVM.function_type(p.entry), p.entry, args[1:3])
-
-                Enzyme.Compiler.emit_apply_generic!(
-                    builder, LLVM.Value[profile_llvm_fns[2]]
-                )
-
-                LLVM.ret!(builder, res)
-                push!(
-                    LLVM.function_attributes(wrapper_f),
-                    LLVM.EnumAttribute("alwaysinline"),
-                )
-
-                LLVM.run!(LLVM.GlobalOptPass(), llvm_module)
-
-                # Required for windows
-                for f in LLVM.functions(llvm_module)
-                    if isempty(LLVM.blocks(f))
-                        continue
-                    end
-                    if !Enzyme.Compiler.has_fn_attr(
-                        f, LLVM.StringAttribute("frame-pointer")
-                    )
-                        push!(
-                            LLVM.function_attributes(f),
-                            LLVM.StringAttribute("frame-pointer", "all"),
+                        args = collect(LLVM.Value, wrapper_f.parameters)
+                        args[2] = LLVM.bitcast!(
+                            builder, args[2], LLVM.PointerType(jlvaluet)
                         )
-                    end
-                end
+                        args[4] = LLVM.bitcast!(
+                            builder, args[4], LLVM.PointerType(jlvaluet)
+                        )
 
-                if DEBUG_INTERP[]
-                    Enzyme.API.EnzymeDumpModuleRef(llvm_module.ref)
+                        for g in llvm_module.globals
+                            if g.initializer !== nothing
+                                g.linkage = LLVM.Linkage.Internal
+                            end
+                            if !haskey(g.metadata, "julia.constgv")
+                                continue
+                            end
+                            if !haskey(gmap, g.name) || gmap[g.name] == C_NULL
+                                if precompiling()
+                                    throw(ReactantPrecompilationException(g.name))
+                                end
+                                continue
+                            end
+                            gval = LLVM.load!(
+                                builder,
+                                jlvaluet,
+                                LLVM.gep!(
+                                    builder,
+                                    jlvaluet,
+                                    args[4],
+                                    LLVM.Value[LLVM.ConstantInt(length(globals))],
+                                ),
+                            )
+                            push!(
+                                globals,
+                                unsafe_pointer_to_objref(
+                                    Base.reinterpret(Ptr{Cvoid}, gmap[g.name])
+                                ),
+                            )
+                            LLVM.store!(
+                                builder,
+                                gval,
+                                LLVM.bitcast!(builder, g, LLVM.PointerType(jlvaluet)),
+                            )
+                        end
+
+                        profile_julia_fns = Any[push_debug_stack!, pop_debug_stack!]
+
+                        profile_llvm_fns = LLVM.Value[]
+                        for f in profile_julia_fns
+                            gval = LLVM.load!(
+                                builder,
+                                jlvaluet,
+                                LLVM.gep!(
+                                    builder,
+                                    jlvaluet,
+                                    args[4],
+                                    LLVM.Value[LLVM.ConstantInt(length(globals))],
+                                ),
+                            )
+                            push!(globals, f)
+                            push!(profile_llvm_fns, gval)
+                        end
+
+                        stringv = traced_mi(mi)
+
+                        fname = LLVM.globalstring_ptr!(builder, stringv, "mi_name")
+
+                        m = mi.def
+
+                        tv, decls, file, line = Base.arg_decl_parts(m)
+                        file = LLVM.globalstring_ptr!(builder, file, "mi_file")
+
+                        FT = LLVM.FunctionType(
+                            jlvaluet, [LLVM.PointerType(LLVM.IntType(8))]
+                        )
+                        jl_cstr_to_string =
+                            get!(llvm_module.functions, "ijl_cstr_to_string") do
+                                LLVM.Function(llvm_module, "ijl_cstr_to_string", FT)
+                            end
+                        # an existing declaration can have another type (with typed pointers)
+                        PT_cstr = LLVM.PointerType(FT)
+                        if jl_cstr_to_string.value_type != PT_cstr
+                            jl_cstr_to_string = LLVM.const_pointercast(
+                                jl_cstr_to_string, PT_cstr
+                            )
+                        end
+                        fname = LLVM.call!(builder, FT, jl_cstr_to_string, [fname])
+
+                        file = LLVM.call!(builder, FT, jl_cstr_to_string, [file])
+
+                        line = Enzyme.Compiler.emit_box_int64!(
+                            builder, LLVM.ConstantInt(Int64(line))
+                        )
+
+                        Enzyme.Compiler.emit_apply_generic!(
+                            builder,
+                            LLVM.Value[profile_llvm_fns[1], fname, file, line],
+                        )
+
+                        res = LLVM.call!(builder, p.entry.function_type, p.entry, args[1:3])
+
+                        Enzyme.Compiler.emit_apply_generic!(
+                            builder, LLVM.Value[profile_llvm_fns[2]]
+                        )
+
+                        LLVM.ret!(builder, res)
+                    end
+                    push!(wrapper_f.function_attributes, LLVM.EnumAttribute("alwaysinline"))
+
+                    LLVM.run!(LLVM.GlobalOptPass(), llvm_module)
+
+                    # Required for windows
+                    for f in llvm_module.functions
+                        if isempty(f.blocks)
+                            continue
+                        end
+                        if !haskey(f.function_attributes, "frame-pointer")
+                            push!(
+                                f.function_attributes,
+                                LLVM.StringAttribute("frame-pointer", "all"),
+                            )
+                        end
+                    end
+
+                    if DEBUG_INTERP[]
+                        Enzyme.API.EnzymeDumpModuleRef(llvm_module.ref)
+                    end
+                    mod = string(llvm_module)
+                    if VERSION < v"1.11" && occursin("inttoptr", mod) && precompiling()
+                        throw(ReactantPrecompilationException("Baked in global"))
+                    end
+                    mod, p.compiled[mi].ci.rettype, globals
                 end
-                mod = string(llvm_module)
-                if VERSION < v"1.11" && occursin("inttoptr", mod) && precompiling()
-                    throw(ReactantPrecompilationException("Baked in global"))
-                end
-                mod, p.compiled[mi].ci.rettype, globals
             finally
                 LLVM.deactivate(ctx)
                 LLVM.dispose(ts_ctx)
