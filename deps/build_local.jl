@@ -221,6 +221,18 @@ bazel_cmd = if !isnothing(Sys.which("bazelisk"))
     "bazelisk"
 elseif !isnothing(Sys.which("bazel"))
     "bazel"
+elseif Sys.islinux() && Sys.ARCH === :x86_64
+    bazelversion_path = isfile(joinpath(source_dir, ".bazelversion")) ?
+        joinpath(source_dir, ".bazelversion") : joinpath(@__DIR__, ".bazelversion")
+    if !isfile(bazelversion_path)
+        error("Could not find `.bazelversion` file at $bazelversion_path")
+    end
+    bazel_version = strip(read(bazelversion_path, String))
+    @info "No `bazel` or `bazelisk` found in PATH. Using Bazel_jll v$(bazel_version) for x86 Linux"
+    using Pkg
+    Pkg.add(Pkg.PackageSpec(; name="Bazel_jll", version=bazel_version))
+    using Bazel_jll
+    Bazel_jll.bazel_path
 else
     error("Could not find `bazel` or `bazelisk` in PATH!")
 end
