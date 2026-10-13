@@ -4130,6 +4130,7 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
       opts.enable_licm_optimization_passes = true;
       opts.loop_unswitch_threshold = 10;
       opts.enable_pad_optimization_passes = true;
+      opts.enable_dot_formation_passes = true;
       char *mainPasses = nullptr, *lowerPasses = nullptr;
       enzymexlaGetTransformPassesList(&opts, &mainPasses, &lowerPasses);
       std::string patterns(mainPasses);
