@@ -523,6 +523,7 @@ function BLAS.syrk!(
         alpha,
         beta;
         uplo=uplo,
+        output_uplo='F', # TODO: this is a temporary patch. Why is the default flipped?
         transpose_a=trans,
     )
     copyto!(C, res)
