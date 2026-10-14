@@ -7,7 +7,7 @@ using Reactant.Ops: mlir_stacktrace, mlir_type
 using MPI: MPI
 using ..ReactantMPIExt: TracedCommunicator, TracedRequest
 
-const MPI_OP_MAP = Dict{Ptr{Cvoid},MLIR.API.EnzymeXlaCommMpiOp}()
+const MPI_OP_MAP = Dict{MPI.API.MPI_Request,MLIR.API.EnzymeXlaCommMpiOp}()
 
 function map_mpi_op(op::MPI.Op)
     if haskey(MPI_OP_MAP, op.val)
@@ -17,7 +17,7 @@ function map_mpi_op(op::MPI.Op)
     end
 end
 
-const MPI_COMM_MAP = Dict{Ptr{Cvoid},MLIR.API.EnzymeXlaCommMpiComm}()
+const MPI_COMM_MAP = Dict{MPI.API.MPI_Op,MLIR.API.EnzymeXlaCommMpiComm}()
 
 function map_mpi_comm(c::MPI.Comm)
     if haskey(MPI_COMM_MAP, c.val)
