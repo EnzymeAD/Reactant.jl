@@ -100,7 +100,10 @@ Fine-grained control over the compilation options for the Reactant compiler.
           and may change in future versions of Reactant. It is recommended to use this
           option for most users.
        2. `:none`: No optimization passes will be run.
-       3.  Other predefined options are: `:before_kernel`, `:before_jit`, `:before_raise`,
+       3. `:kernelad`: Same as `:all`, but kernel calls are exposed to Enzyme as
+          `gpu_wrapper` regions containing `affine.parallel` loops so that they can be
+          differentiated, and lowered back to kernel calls after differentiation.
+       4.  Other predefined options are: `:before_kernel`, `:before_jit`, `:before_raise`,
           `:before_enzyme`, `:after_enzyme`, `:just_batch`, `:canonicalize`, `:only_enzyme`.
   - `no_nan`: If `true`, the optimization passes will assume that the function does not
     produce NaN values. This can lead to more aggressive optimizations **(and potentially
@@ -311,6 +314,7 @@ function CompileOptions(;
     if optimization_passes isa Symbol
         @assert optimization_passes in [
             :all,
+            :kernelad,
             :before_kernel,
             :before_jit,
             :before_raise,
