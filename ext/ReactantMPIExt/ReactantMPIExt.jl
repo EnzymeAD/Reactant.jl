@@ -1,7 +1,7 @@
 module ReactantMPIExt
 
 using Reactant
-using Reactant: Reactant, Distributed, MLIR
+using Reactant: Reactant, Distributed, MLIR, MPI_REQUEST_WIDTH
 using Reactant_jll: Reactant_jll
 using MPI: MPI
 using Libdl: Libdl
@@ -157,6 +157,10 @@ function __init__()
 
     # register MPI_STATUS_SIZE constant (which is not directly present in MPI.jl)
     # MLIR.API.EnzymeJaXMapSymbol(:MPI_STATUS_SIZE, convert(Int64, status_size))
+
+    # `MPI_Request` width is implementation-defined, and the `lower-comm-to-jit` pass needs it
+    # to lay out arrays of requests (e.g. in `MPI_Waitall`)
+    MPI_REQUEST_WIDTH[] = sizeof(MPI.API.MPI_Request) * 8
 
     return nothing
 end

@@ -3,6 +3,9 @@ using MPI
 using CUDA
 using Reactant
 
+enable_native_mpi_overlay() = Reactant.MPI_OVERLAY_NATIVE_CALLS[] = true
+disable_native_mpi_overlay() = Reactant.MPI_OVERLAY_NATIVE_CALLS[] = false
+
 const MPI_BACKEND = lowercase(ENV["REACTANT_MPI_BACKEND"])
 
 const RUN_CPU_MPI_TESTS = MPI_BACKEND == "cpu"
@@ -49,10 +52,7 @@ if RUN_CPU_MPI_TESTS
     atexit(MPI.Finalize)
 
 elseif RUN_GPU_MPI_TESTS
-    # TODO `Base.get_extension` is internal and it is not allowed to be used
-    # it being public was a mistake
-    const ReactantMPIExt = Base.get_extension(Reactant, :ReactantMPIExt)
-    ReactantMPIExt.initialize!(MPI.COMM_WORLD)
+    Reactant.initialize_nccl_comm!(MPI.COMM_WORLD)
 
     # finalize at exit instead of using a big `try...finaly...end` block
     atexit(ReactantMPIExt.destroy_default_comm)
@@ -61,9 +61,11 @@ end
 # run tests
 if RUN_CPU_MPI_TESTS
     @testset "Comm_rank" begin
+        enable_native_mpi_overlay()
         comm = MPI.COMM_WORLD
         expected = MPI.Comm_rank(comm)
         @test expected == @jit MPI.Comm_rank(comm)
+        disable_native_mpi_overlay()
     end
 elseif RUN_GPU_MPI_TESTS
     @info "Skipping GPU MPI Comm_rank tests; Not implemented"
@@ -71,9 +73,11 @@ end
 
 if RUN_CPU_MPI_TESTS
     @testset "Comm_size" begin
+        enable_native_mpi_overlay()
         comm = MPI.COMM_WORLD
         expected = MPI.Comm_size(comm)
         @test expected == @jit MPI.Comm_size(comm)
+        disable_native_mpi_overlay()
     end
 elseif RUN_GPU_MPI_TESTS
     @info "Skipping GPU MPI Comm_size tests; Not implemented"

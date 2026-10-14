@@ -4,17 +4,16 @@ using Reactant:
     TracedRNumber,
     call_with_native,
     call_with_reactant,
-    use_overlayed_version
+    use_overlayed_version,
+    MPI_OVERLAY_NATIVE_CALLS
 using MPI
-
-const OVERLAY_NATIVE_CALLS = Ref(false)
 
 function MPI.Comm_rank(comm::TracedCommunicator)
     return Ops.comm_rank(comm)
 end
 
 @reactant_overlay function MPI.Comm_rank(comm::MPI.Comm)
-    if OVERLAY_NATIVE_CALLS[]
+    if MPI_OVERLAY_NATIVE_CALLS[]
         return Ops.comm_rank(Ops.constant(comm))
     else
         return call_with_native(MPI.Comm_rank, comm)
@@ -26,7 +25,7 @@ function MPI.Comm_size(comm::TracedCommunicator)
 end
 
 @reactant_overlay function MPI.Comm_size(comm::MPI.Comm)
-    if OVERLAY_NATIVE_CALLS[]
+    if MPI_OVERLAY_NATIVE_CALLS[]
         return Ops.comm_size(Ops.constant(comm))
     else
         return call_with_native(MPI.Comm_size, comm)
@@ -38,7 +37,7 @@ function MPI.Barrier(comm::TracedCommunicator)
 end
 
 @reactant_overlay function MPI.Barrier(comm::MPI.Comm)
-    if OVERLAY_NATIVE_CALLS[]
+    if MPI_OVERLAY_NATIVE_CALLS[]
         return Ops.barrier(Ops.constant(comm))
     else
         return call_with_native(MPI.Barrier, comm)
@@ -57,7 +56,7 @@ end
 
 # TODO(#2241) use `make_tracer` to linearize arbitrary types? check out `MPI.Buffer`
 @reactant_overlay function MPI.Send(buf, dest, tag, comm)
-    if !any(use_overlayed_version, (buf, dest, tag, comm)) && !OVERLAY_NATIVE_CALLS[]
+    if !any(use_overlayed_version, (buf, dest, tag, comm)) && !MPI_OVERLAY_NATIVE_CALLS[]
         return call_with_native(MPI.Send, buf, dest, tag, comm)
     else
         buf_traced = buf isa TracedRArray ? buf : Reactant.Ops.constant(buf)
@@ -70,7 +69,7 @@ end
 
 # TODO(#2241) use `make_tracer` to linearize arbitrary types? check out `MPI.Buffer`
 @reactant_overlay function MPI.Isend(buf, dest, tag, comm, req)
-    if !any(use_overlayed_version, (buf, dest, tag, comm)) && !OVERLAY_NATIVE_CALLS[]
+    if !any(use_overlayed_version, (buf, dest, tag, comm)) && !MPI_OVERLAY_NATIVE_CALLS[]
         return call_with_native(MPI.Isend, buf, dest, tag, comm, req)
     else
         if !MPI.isnull(req)
@@ -90,7 +89,7 @@ end
 
 # TODO(#2241) use `make_tracer` to delinearize arbitrary types? check out `MPI.Buffer`
 @reactant_overlay function MPI.Recv!(buf, source, tag, comm, status)
-    if !any(use_overlayed_version, (buf, source, tag, comm)) && !OVERLAY_NATIVE_CALLS[]
+    if !any(use_overlayed_version, (buf, source, tag, comm)) && !MPI_OVERLAY_NATIVE_CALLS[]
         return call_with_native(MPI.Recv!, buf, source, tag, comm)
     else
         if !isnothing(status)
@@ -106,7 +105,7 @@ end
 
 # TODO(#2241) use `make_tracer` to delinearize arbitrary types? check out `MPI.Buffer`
 @reactant_overlay function MPI.Irecv!(buf, source, tag, comm, req)
-    if !any(use_overlayed_version, (buf, source, tag, comm)) && !OVERLAY_NATIVE_CALLS[]
+    if !any(use_overlayed_version, (buf, source, tag, comm)) && !MPI_OVERLAY_NATIVE_CALLS[]
         return call_with_native(MPI.Irecv!, buf, source, tag, comm, req)
     else
         if !MPI.isnull(req)
@@ -125,7 +124,7 @@ end
 end
 
 @reactant_overlay function MPI.Allreduce!(sendbuf, recvbuf, op, comm)
-    if !any(use_overlayed_version, (sendbuf, recvbuf, op, comm)) && !OVERLAY_NATIVE_CALLS[]
+    if !any(use_overlayed_version, (sendbuf, recvbuf, op, comm)) && !MPI_OVERLAY_NATIVE_CALLS[]
         return call_with_native(MPI.Allreduce!, sendbuf, recvbuf, op, comm)
     else
         sendbuf_traced = sendbuf isa TracedRArray ? sendbuf : Reactant.Ops.constant(sendbuf)
@@ -136,7 +135,7 @@ end
 end
 
 @reactant_overlay function MPI.Bcast!(buf, root, comm)
-    if !any(use_overlayed_version, (buf, root, comm)) && !OVERLAY_NATIVE_CALLS[]
+    if !any(use_overlayed_version, (buf, root, comm)) && !MPI_OVERLAY_NATIVE_CALLS[]
         return call_with_native(MPI.Bcast!, buf, root, comm)
     else
         buf_traced = buf isa TracedRArray ? buf : Reactant.Ops.constant(buf)
