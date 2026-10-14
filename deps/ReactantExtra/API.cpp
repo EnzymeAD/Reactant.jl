@@ -4135,6 +4135,9 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
       const char *dotFormation = getenv("REACTANT_EXEC_DOT_FORMATION");
       opts.enable_dot_formation_passes =
           !dotFormation || std::string(dotFormation) != "0";
+      // Fold small results (index and mask computations) even when a
+      // non-splat constant operand stays alive.
+      opts.max_reused_const_prop_size = 1024;
       // REACTANT_EXEC_EXCLUDED_PASSES is a comma-separated list of pattern
       // base names (e.g. "scatter_op_canon,reduce_mul_to_dot_general") left
       // out of the list.
