@@ -208,6 +208,9 @@ Fine-grained control over the compilation options for the Reactant compiler.
     optimization passes. (Default: `false`).
   - `disable_pad_optimization_passes`: Disables the pad optimization passes. This is
     `false` by default.
+  - `disable_dot_formation_passes`: Disables turning contractions written as
+    `reduce(mul)` into `dot_general`. On GPU, small contractions can run faster as fused
+    reductions. (Default: `false`).
   - `disable_licm_optimization_passes`: Disables the Loop Invariant Code Motion (LICM)
     optimization passes. (Default: `false`).
   - `loop_unswitch_threshold`: Threshold passed to the `loop_unswitch` pattern inside the
@@ -265,6 +268,7 @@ struct CompileOptions
     ## private options for ablation studies
     disable_scatter_gather_optimization_passes::Bool
     disable_pad_optimization_passes::Bool
+    disable_dot_formation_passes::Bool
     disable_licm_optimization_passes::Bool
     loop_unswitch_threshold::Int
     excluded_passes::Vector{String}
@@ -304,6 +308,7 @@ function CompileOptions(;
     xla_debug_options::NamedTuple=NamedTuple(),
     disable_scatter_gather_optimization_passes::Bool=false,
     disable_pad_optimization_passes::Bool=false,
+    disable_dot_formation_passes::Bool=false,
     disable_licm_optimization_passes::Bool=false,
     loop_unswitch_threshold::Int=10,
     excluded_passes::Vector{String}=String[],
@@ -374,6 +379,7 @@ function CompileOptions(;
         xla_debug_options,
         disable_scatter_gather_optimization_passes,
         disable_pad_optimization_passes,
+        disable_dot_formation_passes,
         disable_licm_optimization_passes,
         loop_unswitch_threshold,
         excluded_passes,
@@ -433,6 +439,7 @@ function __compile_options_with_reversed_propagation(compile_options::CompileOpt
         compile_options.xla_debug_options,
         compile_options.disable_scatter_gather_optimization_passes,
         compile_options.disable_pad_optimization_passes,
+        compile_options.disable_dot_formation_passes,
         compile_options.disable_licm_optimization_passes,
         compile_options.loop_unswitch_threshold,
         compile_options.excluded_passes,
@@ -479,6 +486,7 @@ function __compile_options_with_updated_sync(compile_options::CompileOptions, sy
         compile_options.xla_debug_options,
         compile_options.disable_scatter_gather_optimization_passes,
         compile_options.disable_pad_optimization_passes,
+        compile_options.disable_dot_formation_passes,
         compile_options.disable_licm_optimization_passes,
         compile_options.loop_unswitch_threshold,
         compile_options.excluded_passes,

@@ -4130,6 +4130,30 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
       opts.enable_licm_optimization_passes = true;
       opts.loop_unswitch_threshold = 10;
       opts.enable_pad_optimization_passes = true;
+      // REACTANT_EXEC_DOT_FORMATION=0 leaves contractions as reduce(mul)
+      // instead of forming dot_general.
+      const char *dotFormation = getenv("REACTANT_EXEC_DOT_FORMATION");
+      opts.enable_dot_formation_passes =
+          !dotFormation || std::string(dotFormation) != "0";
+      // REACTANT_EXEC_EXCLUDED_PASSES is a comma-separated list of pattern
+      // base names (e.g. "scatter_op_canon,reduce_mul_to_dot_general") left
+      // out of the list.
+      std::vector<std::string> excludedNames;
+      if (const char *excluded = getenv("REACTANT_EXEC_EXCLUDED_PASSES")) {
+        std::string list(excluded);
+        for (size_t begin = 0, end; begin < list.size(); begin = end + 1) {
+          end = list.find(',', begin);
+          if (end == std::string::npos)
+            end = list.size();
+          if (end > begin)
+            excludedNames.push_back(list.substr(begin, end - begin));
+        }
+      }
+      std::vector<const char *> excludedPtrs;
+      for (const std::string &name : excludedNames)
+        excludedPtrs.push_back(name.c_str());
+      opts.excluded_passes = excludedPtrs.data();
+      opts.num_excluded_passes = excludedPtrs.size();
       char *mainPasses = nullptr, *lowerPasses = nullptr;
       enzymexlaGetTransformPassesList(&opts, &mainPasses, &lowerPasses);
       std::string patterns(mainPasses);
