@@ -9,6 +9,7 @@ using Libdl: Libdl
 include("Types.jl")
 include("Ops.jl")
 include("Overrides.jl")
+include("Nccl.jl")
 
 # https://github.com/jax-ml/jax/blob/b0117366686ab084d38ad2657d9a2ae3a581ca7e/jax/_src/clusters/mpi4py_cluster.py
 Distributed.is_env_present(::Distributed.MPIEnvDetector) = MPI.Initialized()
@@ -159,10 +160,5 @@ function __init__()
 
     return nothing
 end
-
-include("Types.jl")
-include("Ops.jl")
-include("Overrides.jl")
-include("Nccl.jl")
 
 end # module
