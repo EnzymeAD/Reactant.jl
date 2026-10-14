@@ -17,7 +17,8 @@ import ..Reactant:
     make_tracer,
     TracedToConcrete,
     append_path,
-    TracedType
+    TracedType,
+    MPI_REQUEST_WIDTH
 import Reactant: OptimizeCommunicationOptions, ShardyPropagationOptions, CompileOptions
 using Reactant_jll: Reactant_jll
 
@@ -420,7 +421,7 @@ Base.@nospecializeinfer function compile_mlir!(
     lower_enzymexla_math_pass = "lower-enzymexla-math"
     # TODO legalization of comm.mpi ops to comm.nccl if compile_options.comm_options.legalize_mpi_to_nccl is true and backend is CUDA
     lower_comm_pass = if compile_options.comm_options.lowering_target === :jit
-        "lower-comm-to-jit"
+        "lower-comm-to-jit{mpi_request_width=$(MPI_REQUEST_WIDTH[])}"
     elseif compile_options.comm_options.lowering_target === :ffi
         "lower-comm-to-stablehlo"
     else
