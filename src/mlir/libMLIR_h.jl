@@ -15962,6 +15962,7 @@ struct EnzymeXLATransformPassesOptions
     loop_unswitch_threshold::Int64
     enable_pad_optimization_passes::Bool
     enable_dot_formation_passes::Bool
+    max_reused_const_prop_size::Int64
     excluded_passes::Ptr{Cstring}
     num_excluded_passes::Csize_t
 end
