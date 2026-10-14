@@ -124,7 +124,8 @@ end
 end
 
 @reactant_overlay function MPI.Allreduce!(sendbuf, recvbuf, op, comm)
-    if !any(use_overlayed_version, (sendbuf, recvbuf, op, comm)) && !MPI_OVERLAY_NATIVE_CALLS[]
+    if !any(use_overlayed_version, (sendbuf, recvbuf, op, comm)) &&
+        !MPI_OVERLAY_NATIVE_CALLS[]
         return call_with_native(MPI.Allreduce!, sendbuf, recvbuf, op, comm)
     else
         sendbuf_traced = sendbuf isa TracedRArray ? sendbuf : Reactant.Ops.constant(sendbuf)
