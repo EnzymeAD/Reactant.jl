@@ -65,17 +65,17 @@ function set_nccl_device!(ordinal::Integer)
 end
 
 """
-    initialize!(comm::MPI.Comm)
+    initialize_nccl_comm!(comm::MPI.Comm)
 
 Initialize MPI GPU support for `MPI.COMM_WORLD`. Each local MPI rank is assigned
 one GPU, which is the only GPU exposed to the XLA client and to NCCL.
 """
-function initialize!(comm::MPI.Comm)
+function Reactant.initialize_nccl_comm!(comm::MPI.Comm)
     MPI.Initialized() || MPI.Init()
     @assert comm == MPI.COMM_WORLD "Only MPI.COMM_WORLD is supported currently"
 
     Reactant.XLA.has_initialized_client("gpu") && error(
-        "A GPU XLA client already exists - ReactantMPIExt.initialize! must be called before \
+        "A GPU XLA client already exists - Reactant.initialize_nccl_comm! must be called before \
         any GPU XLA client is created.",
     )
 

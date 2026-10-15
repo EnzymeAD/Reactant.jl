@@ -65,6 +65,12 @@ OptimizeCommunicationOptions
 ShardyPropagationOptions
 ```
 
+### Communications Specific Options (MPI, NCCL, ...)
+
+```@docs
+Reactant.CommOptions
+```
+
 ## Tracing customization
 
 ```@docs
