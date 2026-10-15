@@ -81,6 +81,7 @@ void reactantReleaseAddressRange(void *base, size_t nbytes);
 
 #include "xla/mlir/utils/type_util.h"
 #include "xla/mlir_hlo/mhlo/IR/hlo_ops.h"
+#include "xla/shape_util.h"
 
 #include "tsl/platform/init_main.h"
 #include "tsl/profiler/lib/profiler_session.h"
@@ -3712,8 +3713,13 @@ struct LinkableRuntime {
   // buffer it stands for, so pointer arithmetic on the handle stays inside
   // its own range (and a stray dereference faults at the offender).
   struct AllocationInfo {
+    // Null until the allocation is first used: a small one (a kernel's
+    // scalar argument) is made from the host bytes the copy into it brings,
+    // in one call that does not wait for the transfer.
     xla::PjRtBuffer *buffer;
     size_t size;
+    uint64_t ptype;
+    std::vector<int64_t> shape;
   };
   std::map<void *, AllocationInfo, std::greater<void *>> allocations;
 
@@ -3783,8 +3789,10 @@ struct LinkableRuntime {
   }
 };
 
-static std::tuple<PjRtBuffer *, /*offset*/ size_t, PjRtBuffer **>
-bufferAndOffset(LinkableRuntime *__restrict__ lrt, void *ptr) {
+// The allocation `ptr` points into.
+static std::map<void *, LinkableRuntime::AllocationInfo,
+                std::greater<void *>>::iterator
+allocationOf(LinkableRuntime *__restrict__ lrt, void *ptr) {
   auto found = lrt->allocations.lower_bound(ptr);
   if (found == lrt->allocations.end() ||
       (size_t)ptr >= (size_t)found->first + found->second.size) {
@@ -3792,9 +3800,21 @@ bufferAndOffset(LinkableRuntime *__restrict__ lrt, void *ptr) {
                  << " does not belong to any reactant allocation\n";
     exit(1);
   }
+  return found;
+}
+
+static std::tuple<PjRtBuffer *, /*offset*/ size_t, PjRtBuffer **>
+bufferAndOffset(LinkableRuntime *__restrict__ lrt, void *ptr) {
+  auto found = allocationOf(lrt, ptr);
+  auto &info = found->second;
+  if (!info.buffer) {
+    PjRtDevice *device = ClientGetDevice(lrt->client, lrt->device);
+    std::vector<uint64_t> shape(info.shape.begin(), info.shape.end());
+    info.buffer = (xla::PjRtBuffer *)UninitPJRTBuffer(
+        lrt->client, device, info.ptype, shape.size(), shape.data());
+  }
   return std::tuple<PjRtBuffer *, /*offset*/ size_t, PjRtBuffer **>(
-      found->second.buffer, (size_t)ptr - (size_t)found->first,
-      &found->second.buffer);
+      info.buffer, (size_t)ptr - (size_t)found->first, &info.buffer);
 }
 
 REACTANT_ABI void reactantXLAThrow(const char *str) {
@@ -3862,6 +3882,16 @@ REACTANT_ABI void reactantXLAMemcpy(LinkableRuntime **__restrict__ lrtP,
     break;
   case 1: // cudaMemcpyHostToDevice
   {
+    auto found = allocationOf(lrt, dst);
+    auto &info = found->second;
+    if (!info.buffer && dst == found->first && size == info.size) {
+      // The whole of an allocation not yet made: made from these bytes.
+      PjRtDevice *device = ClientGetDevice(lrt->client, lrt->device);
+      info.buffer =
+          ArrayFromHostBuffer(lrt->client, src, info.ptype, info.shape.size(),
+                              info.shape.data(), device);
+      break;
+    }
     auto &&[dstB, dstO, start] = bufferAndOffset(lrt, dst);
     CopyToBuffer(lrt->client, dstB, src, dstO, size, start);
     break;
@@ -3897,9 +3927,19 @@ REACTANT_ABI void *reactantXLAMalloc(LinkableRuntime **__restrict__ lrtP,
   auto lrt = *lrtP;
   PjRtDevice *device = ClientGetDevice(lrt->client, lrt->device);
 
-  auto xbuffer0 = UninitPJRTBuffer(lrt->client, device, ptype, shapeLen, shape);
-  size_t nbytes = 1;
-  {
+  // A small allocation (a kernel's scalar argument, say) waits for its
+  // first use: the host bytes copied into it make it in one call.
+  size_t elems = 1;
+  for (uint64_t i = 0; i < shapeLen; i++)
+    elems *= shape[i];
+  size_t elemBytes =
+      xla::ShapeUtil::ByteSizeOfPrimitiveType((xla::PrimitiveType)ptype);
+  const size_t lazyBytes = 64;
+  PjRtBuffer *xbuffer0 = nullptr;
+  size_t nbytes = elems * elemBytes;
+  if (nbytes > lazyBytes || nbytes == 0) {
+    xbuffer0 = UninitPJRTBuffer(lrt->client, device, ptype, shapeLen, shape);
+    nbytes = 1;
     auto sz = xbuffer0->GetOnDeviceSizeInBytes();
     if (sz.ok() && *sz)
       nbytes = *sz;
@@ -3911,8 +3951,9 @@ REACTANT_ABI void *reactantXLAMalloc(LinkableRuntime **__restrict__ lrtP,
     exit(1);
   }
   auto pair = lrt->allocations.try_emplace(
-      base,
-      LinkableRuntime::AllocationInfo{(xla::PjRtBuffer *)xbuffer0, nbytes});
+      base, LinkableRuntime::AllocationInfo{
+                (xla::PjRtBuffer *)xbuffer0, nbytes, ptype,
+                std::vector<int64_t>(shape, shape + shapeLen)});
   (void)pair;
   // Assert that it was actually inserted
   assert(pair.second);
@@ -3933,7 +3974,8 @@ REACTANT_ABI void reactantXLAFree(LinkableRuntime **__restrict__ lrtP,
   PjRtBuffer *buffer = found->second.buffer;
   reactantReleaseAddressRange(buffer0, found->second.size);
   lrt->allocations.erase(found);
-  PjRtBufferFree(buffer);
+  if (buffer)
+    PjRtBufferFree(buffer);
 }
 
 REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
