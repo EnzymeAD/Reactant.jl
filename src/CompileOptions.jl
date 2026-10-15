@@ -211,6 +211,10 @@ Fine-grained control over the compilation options for the Reactant compiler.
   - `disable_dot_formation_passes`: Disables turning contractions written as
     `reduce(mul)` into `dot_general`. On GPU, small contractions can run faster as fused
     reductions. (Default: `false`).
+  - `max_reused_const_prop_size`: Constant propagation folds an op whose non-splat
+    constant operand has other users (so the folded constant is added beside it) only when
+    the result has at most this many elements, e.g. small index and mask computations. `0`
+    folds such an op only when a non-splat operand dies with it. (Default: `1024`).
   - `disable_licm_optimization_passes`: Disables the Loop Invariant Code Motion (LICM)
     optimization passes. (Default: `false`).
   - `loop_unswitch_threshold`: Threshold passed to the `loop_unswitch` pattern inside the
@@ -269,6 +273,7 @@ struct CompileOptions
     disable_scatter_gather_optimization_passes::Bool
     disable_pad_optimization_passes::Bool
     disable_dot_formation_passes::Bool
+    max_reused_const_prop_size::Int
     disable_licm_optimization_passes::Bool
     loop_unswitch_threshold::Int
     excluded_passes::Vector{String}
@@ -309,6 +314,7 @@ function CompileOptions(;
     disable_scatter_gather_optimization_passes::Bool=false,
     disable_pad_optimization_passes::Bool=false,
     disable_dot_formation_passes::Bool=false,
+    max_reused_const_prop_size::Int=1024,
     disable_licm_optimization_passes::Bool=false,
     loop_unswitch_threshold::Int=10,
     excluded_passes::Vector{String}=String[],
@@ -380,6 +386,7 @@ function CompileOptions(;
         disable_scatter_gather_optimization_passes,
         disable_pad_optimization_passes,
         disable_dot_formation_passes,
+        max_reused_const_prop_size,
         disable_licm_optimization_passes,
         loop_unswitch_threshold,
         excluded_passes,
@@ -440,6 +447,7 @@ function __compile_options_with_reversed_propagation(compile_options::CompileOpt
         compile_options.disable_scatter_gather_optimization_passes,
         compile_options.disable_pad_optimization_passes,
         compile_options.disable_dot_formation_passes,
+        compile_options.max_reused_const_prop_size,
         compile_options.disable_licm_optimization_passes,
         compile_options.loop_unswitch_threshold,
         compile_options.excluded_passes,
@@ -487,6 +495,7 @@ function __compile_options_with_updated_sync(compile_options::CompileOptions, sy
         compile_options.disable_scatter_gather_optimization_passes,
         compile_options.disable_pad_optimization_passes,
         compile_options.disable_dot_formation_passes,
+        compile_options.max_reused_const_prop_size,
         compile_options.disable_licm_optimization_passes,
         compile_options.loop_unswitch_threshold,
         compile_options.excluded_passes,
