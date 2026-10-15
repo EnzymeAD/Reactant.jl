@@ -177,16 +177,20 @@ end
 if RUN_CPU_MPI_TESTS
     @testset "Barrier" begin
         @testset "Single Barrier" begin
+            enable_native_mpi_overlay()
             comm = MPI.COMM_WORLD
             ret = @jit MPI.Barrier(comm)
             @test ret === nothing
+            disable_native_mpi_overlay()
         end
 
         @testset "Consecutive Barriers" begin
+            enable_native_mpi_overlay()
             comm = MPI.COMM_WORLD
             for i in 1:3
                 @test_nowarn @jit MPI.Barrier(comm)
             end
+            disable_native_mpi_overlay()
         end
     end
 elseif RUN_GPU_MPI_TESTS
