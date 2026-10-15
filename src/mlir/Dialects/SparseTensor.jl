@@ -560,7 +560,7 @@ can be dynamically-sized.
 # Example
 
 ```mlir
-%0 = sparse_tensor.concatenate %1, %2 { dimension = 0 : index }
+%0 = sparse_tensor.concatenate %1, %2 dimension = 0
   : tensor<64x64xf64, #CSR>, tensor<64x64xf64, #CSR> to tensor<128x64xf64, #CSR>
 ```
 """
@@ -869,7 +869,7 @@ sparse_tensor.foreach in %0 : tensor<2x3xf64, #ROW_MAJOR> do {
 }
 
 // foreach on a row-major dense tensor but visit column first
-sparse_tensor.foreach in %0 {order=affine_map<(i,j)->(j,i)>}: tensor<2x3xf64> do {
+sparse_tensor.foreach in %0 order = affine_map<(i,j)->(j,i)> : tensor<2x3xf64> do {
  ^bb0(%row: index, %col: index, %arg3: f64):
     // [%row, %col] -> [0, 0], [1, 0], [2, 0], [0, 1], [1, 1], [2, 1]
 }
@@ -1059,11 +1059,11 @@ If the level index is out of bounds, the behavior is undefined.
 %c0 = arith.constant 0 : index
 %x = sparse_tensor.lvl %A, %c0 : tensor<4x?xf32, #BSR>
 
-// Return the dynamic dimension of %A computed by %j mod 3.
+// Return the dynamic level size of %A computed by j floordiv 3.
 %c1 = arith.constant 1 : index
 %y = sparse_tensor.lvl %A, %c1 : tensor<4x?xf32, #BSR>
 
-// Always return 3 (since j mod 3 < 3), can be constant fold
+// Always return 3 (since j mod 3 < 3), can be constant folded.
 %c3 = arith.constant 3 : index
 %y = sparse_tensor.lvl %A, %c3 : tensor<4x?xf32, #BSR>
 ```
@@ -1608,7 +1608,7 @@ the operator is undefined if this condition is not met.
 # Example
 
 ```mlir
-sparse_tensor.sort insertion_sort_stable %n, %x { perm_map = affine_map<(i,j) -> (j,i)> }
+sparse_tensor.sort insertion_sort_stable %n, %x perm_map = affine_map<(i,j) -> (j,i)>
   : memref<?xindex>
 ```
 """
@@ -1757,7 +1757,7 @@ Writing into the result of this operation is undefined behavior.
 # Example
 
 ```mlir
-%1 = sparse_tensor.coordinates %0 { level = 1 : index }
+%1 = sparse_tensor.coordinates %0 level = 1
    : tensor<64x64xf64, #CSR> to memref<?xindex>
 ```
 """
@@ -1799,7 +1799,7 @@ Writing into the result of this operation is undefined behavior.
 # Example
 
 ```mlir
-%1 = sparse_tensor.positions %0 { level = 1 : index }
+%1 = sparse_tensor.positions %0 level = 1
    : tensor<64x64xf64, #CSR> to memref<?xindex>
 ```
 """
