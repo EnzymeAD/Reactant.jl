@@ -4251,13 +4251,50 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
                               "enzyme-hlo-remove-transform,canonicalize,"
                               "func.func(stablehlo-aggressive-folder),"
                               "canonicalize,cse,";
+      // After the list, the layout round: an elementwise op reading a
+      // transposed view of memory (an argument the list hoisted a transpose
+      // onto, through slices) computes in the view's layout, with the
+      // transpose on its result, where the transpose-propagating patterns
+      // take it into the broadcasts of the next contraction
+      // (transposed_view_elementwise, Enzyme-JAX #3624, with the pushes that
+      // keep it there), and a contraction of a product of broadcasts reduces
+      // its trailing dimension, a row reduction XLA needs no relayout for
+      // (reduce_minor_dims, Enzyme-JAX #3627). A round of its own because in
+      // the list the first fires before the batching patterns have merged
+      // the components of a vector problem, and on the unmerged components
+      // it leaves transposes the merged form would not have (ceed BP4 apply
+      // twice as slow). REACTANT_EXEC_NOLAYOUT=1 leaves it out.
+      std::string layoutRound =
+          "enzyme-hlo-generate-td{patterns=transpose_transpose<16>;"
+          "transpose_simplify<16>;broadcast_in_dim_op_canon<16>;"
+          "cse_transpose<16>;cse_broadcast_in_dim<16>;"
+          "transpose_broadcast_in_dim_to_broadcast_in_dim<16>;transpose_slice;"
+          "transpose_like_broadcast_slice;transpose_concat;"
+          "transpose_like_broadcast_concat;transpose_iota;transpose_reduce;"
+          "transpose_dus;transpose_pad<1>;transpose_dynamic_slice;"
+          "transpose_reverse;transpose_reshape;"
+          "transpose_like_broadcast_elementwise(1);"
+          "transposed_view_elementwise;reduce_minor_dims},transform-"
+          "interpreter,"
+          "enzyme-hlo-remove-transform,canonicalize,cse,";
+      if (getenv("REACTANT_EXEC_NOLAYOUT"))
+        layoutRound = "";
+      // Values a nested expansion would recompute are materialized with an
+      // optimization_barrier (REACTANT_EXEC_NOBARRIER=1 disables).
+      std::string barrierRound =
+          "enzyme-hlo-generate-td{patterns=reread_barrier},"
+          "transform-interpreter,enzyme-hlo-remove-transform,";
+      if (getenv("REACTANT_EXEC_NOBARRIER"))
+        barrierRound = "";
       std::string pipeline =
           "canonicalize,cse,func.func(stablehlo-aggressive-folder),"
           "canonicalize," +
           foldRound + foldRound + foldRound +
           "enzyme-hlo-generate-td{patterns=" + patterns +
           "},transform-interpreter,enzyme-hlo-remove-transform,canonicalize,"
-          "cse,enzyme-hlo-generate-td{patterns=lower_rotate;lower_wrap;"
+          "cse," +
+          layoutRound + barrierRound +
+          "enzyme-hlo-generate-td{patterns=lower_rotate;lower_wrap;"
           "lower_extend;lower_updatewithoutcorners;lower_multislice},"
           "transform-interpreter,enzyme-hlo-remove-transform,canonicalize,cse";
       if (failed(mlir::parsePassPipeline(pipeline, pm))) {
