@@ -17,7 +17,8 @@ import ..Reactant:
     make_tracer,
     TracedToConcrete,
     append_path,
-    TracedType
+    TracedType,
+    MPI_REQUEST_WIDTH
 import Reactant: OptimizeCommunicationOptions, ShardyPropagationOptions, CompileOptions
 using Reactant_jll: Reactant_jll
 
@@ -418,20 +419,17 @@ Base.@nospecializeinfer function compile_mlir!(
         ",",
     )
     lower_enzymexla_math_pass = "lower-enzymexla-math"
-    lower_enzymexla_mpi_pass = if backend == "cpu"
-        "lower-enzymexla-mpi{backend=cpu}"
-    elseif backend == "cuda"
-        default_comm_handle = Reactant.default_nccl_comm_handle()
-        "lower-enzymexla-mpi{backend=cuda ncclCommPtr=$default_comm_handle}"
+    # TODO legalization of comm.mpi ops to comm.nccl if compile_options.comm_options.legalize_mpi_to_nccl is true and backend is CUDA
+    lower_comm_pass = if compile_options.comm_options.lowering_target === :jit
+        "lower-comm-to-jit{mpi_request_width=$(MPI_REQUEST_WIDTH[])}"
+    elseif compile_options.comm_options.lowering_target === :ffi
+        "lower-comm-to-stablehlo"
     else
-        # mpi only supported on cpu and cuda, don't run pass otherwise  
-        nothing
+        error("Unknown comm lowering target: $(compile_options.comm_options.lowering_target)")
     end
-    lower_enzymexla_passes = filter(
-        !isnothing,
-        [lower_enzymexla_linalg_pass, lower_enzymexla_math_pass, lower_enzymexla_mpi_pass],
+    lower_enzymexla_passes = join(
+        [lower_enzymexla_linalg_pass, lower_enzymexla_math_pass, lower_comm_pass], ","
     )
-    lower_enzymexla_passes = join(lower_enzymexla_passes, ",")
 
     legalize_chlo_to_stablehlo =
         if legalize_stablehlo_to_mhlo || compile_options.legalize_chlo_to_stablehlo

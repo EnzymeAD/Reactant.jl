@@ -25,7 +25,6 @@ function call(
     fn,
     backend_config=nothing,
     operand_layouts=nothing,
-    result_layouts=nothing,
     arg_attrs=nothing,
     res_attrs=nothing,
     output_operand_aliases=nothing,
@@ -41,8 +40,6 @@ function call(
         push!(attributes, NamedAttribute("backend_config", backend_config))
     !isnothing(operand_layouts) &&
         push!(attributes, NamedAttribute("operand_layouts", operand_layouts))
-    !isnothing(result_layouts) &&
-        push!(attributes, NamedAttribute("result_layouts", result_layouts))
     !isnothing(arg_attrs) && push!(attributes, NamedAttribute("arg_attrs", arg_attrs))
     !isnothing(res_attrs) && push!(attributes, NamedAttribute("res_attrs", res_attrs))
     !isnothing(output_operand_aliases) &&
@@ -62,12 +59,16 @@ function call(
     )
 end
 
-function module_(; sym_name, bodyRegion::Region, location=Location())
+function module_(;
+    sym_name, sym_visibility=nothing, bodyRegion::Region, location=Location()
+)
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[bodyRegion,]
     successors = Block[]
     attributes = NamedAttribute[NamedAttribute("sym_name", sym_name),]
+    !isnothing(sym_visibility) &&
+        push!(attributes, NamedAttribute("sym_visibility", sym_visibility))
 
     return create_operation(
         "enzymexla_tt_ext.module",

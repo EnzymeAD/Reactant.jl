@@ -1850,10 +1850,12 @@ struct PJRT_ExecuteOptions
     use_major_to_minor_data_layout_for_callbacks::Bool
     hlo_output_callbacks::Ptr{PJRT_HloOutputCallbackInfo}
     num_hlo_output_callbacks::Csize_t
+    custom_options::Ptr{PJRT_NamedValue}
+    num_custom_options::Csize_t
 end
 
 @cenum __JL_Ctag_103::UInt32 begin
-    PJRT_ExecuteOptions_STRUCT_SIZE = 0x0000000000000090
+    PJRT_ExecuteOptions_STRUCT_SIZE = 0x00000000000000a0
 end
 
 struct PJRT_LoadedExecutable_Execute_Args
@@ -4816,69 +4818,11 @@ end
     PJRT_TpuTopology_Extension_STRUCT_SIZE = 0x0000000000000110
 end
 
-struct PJRT_Triton_Compile_Args
-    struct_size::Csize_t
-    _module::Cstring
-    module_size::Csize_t
-    arch_name::Cstring
-    arch_name_size::Csize_t
-    num_warps::Cint
-    num_ctas::Cint
-    num_stages::Cint
-    out_asm::Cstring
-    out_asm_size::Csize_t
-    out_smem_bytes::Int64
-    out_path::Cstring
-    out_path_size::Csize_t
-end
-
-@cenum __JL_Ctag_2023::UInt32 begin
-    PJRT_Triton_Compile_Args_STRUCT_SIZE = 0x0000000000000060
-end
-
-# typedef PJRT_Error * PJRT_Triton_Compile ( PJRT_Triton_Compile_Args * args )
-const PJRT_Triton_Compile = Cvoid
-
-struct PJRT_Triton_Extension
-    data::NTuple{32,UInt8}
-end
-
-function Base.getproperty(x::Ptr{PJRT_Triton_Extension}, f::Symbol)
-    f === :base && return Ptr{PJRT_Extension_Base}(x + 0)
-    f === :compile && return Ptr{Ptr{PJRT_Triton_Compile}}(x + 24)
-    return getfield(x, f)
-end
-
-function Base.getproperty(x::PJRT_Triton_Extension, f::Symbol)
-    r = Ref{PJRT_Triton_Extension}(x)
-    ptr = Base.unsafe_convert(Ptr{PJRT_Triton_Extension}, r)
-    fptr = getproperty(ptr, f)
-    GC.@preserve r unsafe_load(fptr)
-end
-
-function Base.setproperty!(x::Ptr{PJRT_Triton_Extension}, f::Symbol, v)
-    return unsafe_store!(getproperty(x, f), v)
-end
-
-function Base.propertynames(x::PJRT_Triton_Extension, private::Bool=false)
-    return (:base, :compile, if private
-        fieldnames(typeof(x))
-    else
-        ()
-    end...)
-end
-
-const PJRT_Triton = PJRT_Triton_Extension
-
-@cenum __JL_Ctag_2024::UInt32 begin
-    PJRT_Triton_Extension_STRUCT_SIZE = 0x0000000000000020
-end
-
 const PJRT_NO_DISCARD = [[nodiscard]]
 
 const PJRT_API_MAJOR = 0
 
-const PJRT_API_MINOR = 114
+const PJRT_API_MINOR = 116
 
 const _PJRT_API_STRUCT_FIELD = fn_type(fn_type) * fn_type
 
@@ -4903,5 +4847,3 @@ const PJRT_API_RAW_BUFFER_EXTENSION_VERSION = 2
 const PJRT_API_STREAM_EXTENSION_VERSION = 0
 
 const PJRT_API_TPU_TOPOLOGY_EXTENSION_VERSION = 1
-
-const PJRT_API_TRITON_EXTENSION_VERSION = 2
