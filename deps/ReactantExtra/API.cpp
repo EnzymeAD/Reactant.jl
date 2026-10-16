@@ -1501,6 +1501,14 @@ REACTANT_ABI void FutureAwait(FutureType *Future) {
   }
 }
 
+// Future that becomes ready once `buffer`'s contents have been written (its
+// definition events have fired), or holds the producer's error. Lets a buffer
+// obtained from an asynchronous operation that does not itself hand out a
+// future (notably `CopyBufferToDevice`) be tracked like an execution result.
+REACTANT_ABI FutureType *PjRtBufferGetReadyFuture(PjRtBuffer *buffer) {
+  return new FutureType(buffer->GetReadyFuture());
+}
+
 xla::CompileOptions GenerateCompileOptions(
     int64_t device_id, const int64_t *mesh_ids, int64_t num_mesh_ids,
     const char *xla_gpu_cuda_data_dir, bool use_shardy_partitioner,
