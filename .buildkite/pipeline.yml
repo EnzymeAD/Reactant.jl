@@ -46,6 +46,40 @@ steps:
         if: build.message !~ /\[skip tests\]/
         timeout_in_minutes: 120
 
+      - label: ":julia: :apple: Metal Julia v{{matrix.version}} -- plugins/metal"
+        matrix:
+          setup:
+            version:
+              - "1.12"
+        plugins:
+          - JuliaCI/julia#v1:
+              version: "{{matrix.version}}"
+          - JuliaCI/julia-coverage#v1:
+              codecov: true
+              dirs:
+                - src
+                - ext
+        commands: |
+          julia -e 'println("--- :julia: Setting up Metal test environment")
+              using Pkg
+              Pkg.activate("metal_test_env")
+              Pkg.develop([PackageSpec(path="."), PackageSpec(path="lib/ReactantCore")])
+              # Released Metal.jl (<= 1.9.3) caps GPUCompiler below the
+              # minimum Reactant requires (>= 1.17 since #2963). Pin the
+              # Metal.jl commit that bumped GPUCompiler until a release
+              # including it is tagged.
+              Pkg.add(url="https://github.com/JuliaGPU/Metal.jl", rev="9a9d568d2895800a47edc36972b162cbd2db70ea")
+              Pkg.add(["Enzyme", "Lux", "Random", "Test"])'
+
+          julia --project=metal_test_env --code-coverage=user -e 'println("--- :julia: Run Metal plugin tests")
+              include("test/plugins/metal.jl")'
+        agents:
+          queue: "metal"
+        env:
+          JULIA_DEBUG: "Reactant,Reactant_jll"
+        if: build.message !~ /\[skip tests\]/ && build.message !~ /\[skip metal\]/
+        timeout_in_minutes: 60
+
   # - label: ":julia: :linux: AMDGPU Julia v{{matrix.version}} -- {{matrix.group}} -- {{matrix.runtime}}"
   #   matrix:
   #     setup:
