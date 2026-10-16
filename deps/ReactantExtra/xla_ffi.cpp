@@ -4,6 +4,11 @@
 #include "xla/ffi/api/ffi.h"
 #include "xla/ffi/ffi_api.h"
 
+#if defined(REACTANT_CUDA)
+#include "third_party/gpus/cuda/include/cuda.h"
+#include "third_party/gpus/cuda/include/cuda_runtime_api.h"
+#endif
+
 #include "mlir/CAPI/IR.h"
 
 #include <cstdint>
@@ -85,10 +90,24 @@ XLA_FFI_DEFINE_HANDLER(
         "callback_ptr"));
 
 #if defined(REACTANT_CUDA)
-XLA_FFI_DEFINE_HANDLER(
-    juliaCallbackHandlerCUDA, juliaCallback<2>,
-    xla::ffi::Ffi::Bind().RemainingArgs().RemainingRets().Attr<int64_t>(
-        "callback_ptr"));
+
+xla::ffi::Error juliaCUDACallback(cudaStream_t stream, ffi::RemainingArgs args,
+                                  ffi::RemainingRets rets,
+                                  int64_t callback_ptr) {
+  if (cuStreamSynchronize(stream) != cudaSuccess)
+    return xla::ffi::Error(xla::ffi::ErrorCode::kInternal,
+                           "cudaStreamSynchronize failed in julia_callback");
+
+  return juliaCallback<2>(args, rets, callback_ptr);
+}
+
+XLA_FFI_DEFINE_HANDLER(juliaCallbackHandlerCUDA, juliaCUDACallback,
+                       xla::ffi::Ffi::Bind()
+                           .Ctx<xla::ffi::PlatformStream<cudaStream_t>>()
+                           .RemainingArgs()
+                           .RemainingRets()
+                           .Attr<int64_t>("callback_ptr"));
+
 #endif
 
 void registerReactantXLAInternalFFI() {
