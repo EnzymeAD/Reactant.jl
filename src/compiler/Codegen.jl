@@ -1024,7 +1024,7 @@ function donate_argument!(
     path,
 )
     if donated_args_mask[i]
-        buffers = map(d -> d.buffer, carg.data)
+        buffers = map(Base.Fix2(getfield, :buffer), carg.data)
         if buffers in donated_buffers
             error("Donated buffer $(carg.data) is already marked as donated. Can't donate \
                    the same buffer multiple times. The argument is present at $(path)")
