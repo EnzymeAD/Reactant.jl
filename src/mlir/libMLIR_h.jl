@@ -17218,6 +17218,12 @@ function FutureAwait(Future)
     @ccall Reactant_jll.libReactantExtra.FutureAwait(Future::Ptr{FutureType})::Cvoid
 end
 
+function PjRtBufferGetReadyFuture(buffer)
+    @ccall Reactant_jll.libReactantExtra.PjRtBufferGetReadyFuture(
+        buffer::Ptr{PjRtBuffer}
+    )::Ptr{FutureType}
+end
+
 function ClientCompile(
     client,
     cmod,
