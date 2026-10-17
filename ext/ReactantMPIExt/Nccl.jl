@@ -7,39 +7,28 @@ end
 const NCCL_COMM = Ref{NcclComm_t}(C_NULL)
 const NCCL_COMM_HANDLE = Ref{UInt}(0)
 
-function nccl_symbol(name::Symbol)
-    Reactant_jll.is_available() ||
-        error("Reactant_jll is not available; bundled NCCL cannot be used")
-    return Libdl.dlsym(Reactant_jll.libReactantExtra_handle, name)
-end
-
-function check_nccl(status::Cint, operation::AbstractString)
-    status == 0 || error("$operation failed with NCCL status $status")
+function check_status(status::Cint, operation::AbstractString, library::AbstractString)
+    status == 0 || error("$operation failed with $library status $status")
     return nothing
 end
 
 function nccl_unique_id()
     id = Ref{NcclUniqueId}()
-    ptr = nccl_symbol(:ncclGetUniqueId)
-    status = @ccall $ptr(id::Ref{NcclUniqueId})::Cint
-    check_nccl(status, "ncclGetUniqueId")
+    status = MLIR.API.ncclGetUniqueId(id)
+    check_status(status, "ncclGetUniqueId", "NCCL")
     return id[]
 end
 
 function nccl_comm_init(nranks::Integer, rank::Integer, id::NcclUniqueId)
     comm = Ref{NcclComm_t}(C_NULL)
-    ptr = nccl_symbol(:ncclCommInitRank)
-    status = @ccall $ptr(
-        comm::Ref{NcclComm_t}, nranks::Cint, id::NcclUniqueId, rank::Cint
-    )::Cint
-    check_nccl(status, "ncclCommInitRank")
+    status = MLIR.API.ncclCommInitRank(comm, nranks, Ref(id), rank)
+    check_status(status, "ncclCommInitRank", "NCCL")
     return comm[]
 end
 
 function nccl_comm_destroy(comm::NcclComm_t)
-    ptr = nccl_symbol(:ncclCommDestroy)
-    status = @ccall $ptr(comm::NcclComm_t)::Cint
-    check_nccl(status, "ncclCommDestroy")
+    status = MLIR.API.ncclCommDestroy(comm)
+    check_status(status, "ncclCommDestroy", "NCCL")
     return nothing
 end
 
@@ -59,8 +48,8 @@ function get_hardware_id(xla_device::Reactant.XLA.AbstractDevice)
 end
 
 function set_nccl_device!(ordinal::Integer)
-    status = MLIR.API.ReactantCudaSetDevice(ordinal)
-    status == 0 || error("cudaSetDevice($ordinal) failed with CUDA status $status")
+    status = MLIR.API.cudaSetDevice(ordinal)
+    check_status(status, "cudaSetDevice($ordinal)", "CUDA")
     return nothing
 end
 
