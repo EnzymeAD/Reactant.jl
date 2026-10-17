@@ -3828,6 +3828,11 @@ REACTANT_ABI void reactantXLADeInit(LinkableRuntime **__restrict__ lrt) {
   *lrt = nullptr;
 }
 
+// cudaDeviceSynchronize of the raised host code: every execution issued so
+// far has completed when this returns. Executions are awaited as they are
+// issued here, so there is nothing left to wait for.
+REACTANT_ABI void reactantXLASync(LinkableRuntime **__restrict__ lrt) {}
+
 REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
                                   const char *modstr, int64_t argcnt,
                                   void **args, int64_t constcnt,
