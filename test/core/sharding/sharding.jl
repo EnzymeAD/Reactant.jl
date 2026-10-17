@@ -567,6 +567,105 @@ end
     end
 end
 
+@testset "Returning an input unchanged keeps its sharding: #3399" begin
+    if length(addressable_devices) ≥ 4
+        mesh = Sharding.Mesh(reshape(collect(Int64, 0:3), 4), (:x,))
+
+        x = Reactant.to_rarray(
+            Reactant.TestUtils.construct_test_array(Float64, 4);
+            sharding=Sharding.Replicated(mesh),
+        )
+        y = @jit identity(x)
+        @test Sharding.is_sharded(y)
+        @test y.sharding.device_to_array_slices == x.sharding.device_to_array_slices
+        @test Array(y) == Array(x)
+
+        # a sharded result returned alongside a sharded input works
+        z = @jit ((a, b) -> a .+ b)(y, x)
+        @test Array(z) ≈ 2 .* Array(x)
+
+        xd = Reactant.to_rarray(
+            Reactant.TestUtils.construct_test_array(Float64, 16, 8);
+            sharding=Sharding.DimsSharding(mesh, (2,), (:x,)),
+        )
+        yd = @jit identity(xd)
+        @test Sharding.is_sharded(yd)
+        @test yd.sharding.device_to_array_slices == xd.sharding.device_to_array_slices
+        @test Array(yd) == Array(xd)
+
+        # mix of a preserved input and a fresh result
+        fn_tuple(x) = (x, x .+ 1)
+        a, b = @jit fn_tuple(xd)
+        @test Sharding.is_sharded(a)
+        @test a.sharding.device_to_array_slices == xd.sharding.device_to_array_slices
+        @test Sharding.is_sharded(b)
+        @test Array(a) == Array(xd)
+        @test Array(b) ≈ Array(xd) .+ 1
+
+        n = ConcreteRNumber(3.0; sharding=Sharding.Replicated(mesh))
+        m = @jit identity(n)
+        @test Sharding.is_sharded(m)
+        @test Reactant.to_number(m) == 3.0
+    else
+        @warn "Not enough addressable devices to run sharding tests"
+    end
+end
+
+@testset "zero/similar of a sharded array is sharded like it: #3398" begin
+    if length(addressable_devices) ≥ 4
+        mesh = Sharding.Mesh(reshape(collect(Int64, 0:3), 4), (:x,))
+
+        G = Reactant.to_rarray(
+            Reactant.TestUtils.construct_test_array(Float64, 16, 8);
+            sharding=Sharding.DimsSharding(mesh, (2,), (:x,)),
+        )
+        G_slices = G.sharding.device_to_array_slices
+        @test allunique(G_slices)
+
+        hlo = repr(@code_hlo shardy_passes = :none zero(G))
+        @test @filecheck begin
+            @check "sdy.sharding_constraint"
+            hlo
+        end
+
+        fill_similar(x) = fill!(similar(x), 2)
+        fill_similar_T(x) = fill!(similar(x, Float32), 2)
+
+        for (name, f, expected) in (
+            ("zero", zero, zero(Array(G))),
+            ("similar", similar, nothing),
+            ("fill!(similar(x), 2)", fill_similar, fill(2.0, size(G))),
+            ("fill!(similar(x, Float32), 2)", fill_similar_T, fill(2.0f0, size(G))),
+            ("make_zero", Enzyme.make_zero, zero(Array(G))),
+        )
+            @testset "$name" begin
+                res = @jit f(G)
+                @test size(res) == size(G)
+                @test res.sharding.device_to_array_slices == G_slices
+                expected === nothing || @test Array(res) == expected
+            end
+        end
+
+        # Unsharded inputs are unaffected
+        G_unsharded = Reactant.to_rarray(Array(G))
+        hlo = repr(@code_hlo shardy_passes = :none zero(G_unsharded))
+        @test !occursin("sharding_constraint", hlo)
+        @test Array(@jit zero(G_unsharded)) == zero(Array(G))
+
+        # `Duplicated(G, zero(G))` shadow in the reverse pass of a gather keeps the
+        # sharding of `G`
+        loss_fn(g, idx) = sum(abs2, g[:, idx])
+        idx = Reactant.to_rarray([1, 3, 5])
+        gr = @jit Enzyme.gradient(Reverse, Const(loss_fn), G, Const(idx))
+        dG = zero(Array(G))
+        dG[:, [1, 3, 5]] .= 2 .* Array(G)[:, [1, 3, 5]]
+        @test Array(gr[1]) ≈ dG
+        @test gr[1].sharding.device_to_array_slices == G_slices
+    else
+        @warn "Not enough addressable devices to run sharding tests"
+    end
+end
+
 #=
 # FIXME: This is commented out since it causes a segfault currently
 @testset "InterpolateArray" begin

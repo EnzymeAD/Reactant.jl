@@ -265,6 +265,8 @@ Base.@nospecializeinfer function compile_mlir!(
     activate_debugcache!(debugcache)
     activate_sdycache!(sdycache)
     activate_sdygroupidcache!(sdygroupidcache)
+    traced_sharding_cache = default_tracedshardingcache()
+    activate_tracedshardingcache!(traced_sharding_cache)
 
     # Save in the TLS whether we are raising.  We identify that condition by
     # checking whether the user set an explicit list of passes, or chose
@@ -292,6 +294,7 @@ Base.@nospecializeinfer function compile_mlir!(
         end
     finally
         deactivate_raising!(is_raising)
+        deactivate_tracedshardingcache!(traced_sharding_cache)
         deactivate_sdycache!(sdycache)
         deactivate_sdygroupidcache!(sdygroupidcache)
         deactivate_callcache!(callcache)
@@ -1525,7 +1528,9 @@ function compile(ctx, f, args; kwargs...)
     )
 end
 
-for cache_type in (:callcache, :sdycache, :sdygroupidcache, :debugcache)
+for cache_type in (
+    :callcache, :sdycache, :sdygroupidcache, :debugcache, :tracedshardingcache
+)
     activate_fn = Symbol(:activate_, cache_type, :!)
     deactivate_fn = Symbol(:deactivate_, cache_type, :!)
     has_fn = Symbol(:_has_, cache_type)
@@ -1578,6 +1583,13 @@ end
 
 function default_sdygroupidcache()
     return SdyGroupIDCounter{Int}(0), Base.IdDict{Union{TracedRArray,TracedRNumber},Int}()
+end
+
+# Maps traced values to the sharding they were created with (sharded concrete inputs, or
+# values derived from them via `similar`/`zero`). Consulted when creating fresh constants
+# so that they can be constrained to the sharding of their prototype.
+function default_tracedshardingcache()
+    return Base.IdDict{Union{TracedRArray,TracedRNumber},Sharding.AbstractSharding}()
 end
 
 function default_callcache()
