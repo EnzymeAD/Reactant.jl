@@ -26,12 +26,13 @@ end
 
 using GPUCompiler: GPUCompiler
 using GPUArraysCore: @allowscalar
-using KernelAbstractions: KernelAbstractions
 using LLVM: LLVM
-using Printf: Printf
 
 using PrecompileTools: @setup_workload, @compile_workload
 
+# KernelAbstractions is a dependency of CUDA (CUDACore on v6), so we take it from there
+# rather than requiring it as an extension trigger.
+const KernelAbstractions = CUDACore.KernelAbstractions
 const KA = KernelAbstractions
 
 Reactant.is_extension_loaded(::Val{:CUDA}) = true
@@ -361,11 +362,11 @@ Base.@nospecializeinfer function Reactant.promote_traced_type(
 end
 
 function Base.show(io::IO, a::AT) where {AT<:CuTracedArray}
-    Printf.@printf(io, "%s cu traced array at %p", join(size(a), '×'), Int(pointer(a)))
+    print(io, join(size(a), '×'), " cu traced array at ", repr(UInt(pointer(a))))
 end
 
 function Base.show(io::IO, a::AT) where {AT<:CuTracedRNumber}
-    Printf.@printf(io, "%s cu traced rnumber at %p", join(size(a), '×'), Int(pointer(a)))
+    print(io, join(size(a), '×'), " cu traced rnumber at ", repr(UInt(pointer(a))))
 end
 
 ## array interface
