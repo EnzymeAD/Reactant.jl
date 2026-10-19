@@ -577,6 +577,10 @@ function trace_while(mod, expr; track_numbers, mincut, checkpointing, first_arg=
         ]...,
     )
 
+    function enclosed_body(body)
+        return Expr(:let, Expr(:block, (:($s = nothing) for s in external_syms)...), body)
+    end
+
     # After the body runs and from_locals has written back into the refs, capture
     # post-body objectids and verify the aliasing pattern is unchanged.
     post_ids_expr = Expr(
@@ -588,30 +592,33 @@ function trace_while(mod, expr; track_numbers, mincut, checkpointing, first_arg=
     reactant_code_block = quote
         let $args_sym = $(args_init)
             $pre_alias_ids_sym = $(pre_ids_expr)
-            $cond_fn_sym = $(arg_syms) -> $(Expr(
-                :let,
-                local_names,
-                quote
-                    $to_locals
-                    $cond
-                end,
-            ))
+            $cond_fn_sym =
+                $(arg_syms) -> $(enclosed_body(Expr(
+                    :let,
+                    local_names,
+                    quote
+                        $to_locals
+                        $cond
+                    end,
+                )))
             $body_fn_sym =
-                $(arg_syms) -> begin
-                    $(Expr(
-                        :let,
-                        local_names,
-                        quote
-                            $to_locals
-                            $body
-                            $(from_locals...)
-                        end,
-                    ))
-                    $(ReactantCore)._check_aliasing_unchanged(
-                        $pre_alias_ids_sym, $(post_ids_expr), $(varnames_expr)
-                    )
-                    nothing
-                end
+                $(arg_syms) -> $(enclosed_body(
+                    quote
+                        $(Expr(
+                            :let,
+                            local_names,
+                            quote
+                                $to_locals
+                                $body
+                                $(from_locals...)
+                            end,
+                        ))
+                        $(ReactantCore)._check_aliasing_unchanged(
+                            $pre_alias_ids_sym, $(post_ids_expr), $(varnames_expr)
+                        )
+                        nothing
+                    end,
+                ))
 
             $(verify_arg_names_sym) = if sizeof($(body_fn_sym)) != 0
                 (Symbol($body_fn_sym), $(QuoteNode.(args_names.args)...))
