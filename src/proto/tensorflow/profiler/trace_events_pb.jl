@@ -19,11 +19,11 @@ end
 PB.default_values(::Type{Resource}) = (;name = "", resource_id = zero(UInt64), num_events = zero(UInt32))
 PB.field_numbers(::Type{Resource}) = (;name = 1, resource_id = 2, num_events = 3)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:Resource})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:Resource}, _endpos::Int=0, _group::Bool=false)
     name = ""
     resource_id = zero(UInt64)
     num_events = zero(UInt32)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             name = PB.decode(d, String)
@@ -74,7 +74,7 @@ PB.oneof_field_types(::Type{TraceEvent}) = (;
 PB.default_values(::Type{TraceEvent}) = (;var"#type" = var"TraceEvent.EventType".EVENT_TYPE_UNSPECIFIED, device_id = zero(UInt32), resource_id = zero(UInt64), name = "", name_ref = zero(UInt64), group_id = Int64(-1), timestamp_ps = zero(UInt64), duration_ps = zero(UInt64), raw_data = UInt8[], flow_id = zero(UInt64), flow_entry_type = var"TraceEvent.FlowEntryType".FLOW_NONE, flow_category = zero(UInt32), serial = zero(UInt32))
 PB.field_numbers(::Type{TraceEvent}) = (;var"#type" = 14, device_id = 1, resource_id = 2, name = 3, name_ref = 12, group_id = 5, timestamp_ps = 6, duration_ps = 7, raw_data = 8, flow_id = 9, flow_entry_type = 10, flow_category = 11, serial = 13)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:TraceEvent})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:TraceEvent}, _endpos::Int=0, _group::Bool=false)
     var"#type" = var"TraceEvent.EventType".EVENT_TYPE_UNSPECIFIED
     device_id = zero(UInt32)
     resource_id = zero(UInt64)
@@ -87,7 +87,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:TraceEvent})
     flow_entry_type = var"TraceEvent.FlowEntryType".FLOW_NONE
     flow_category = zero(UInt32)
     serial = zero(UInt32)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 14
             var"#type" = PB.decode(d, var"TraceEvent.EventType".T)
@@ -174,11 +174,11 @@ PB.reserved_fields(::Type{Device}) = (names = String[], numbers = Union{Int,Unit
 PB.default_values(::Type{Device}) = (;name = "", device_id = zero(UInt32), resources = Dict{UInt64,Resource}())
 PB.field_numbers(::Type{Device}) = (;name = 1, device_id = 2, resources = 3)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:Device})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:Device}, _endpos::Int=0, _group::Bool=false)
     name = ""
     device_id = zero(UInt32)
     resources = Dict{UInt64,Resource}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             name = PB.decode(d, String)
@@ -220,14 +220,14 @@ PB.reserved_fields(::Type{Trace}) = (names = String[], numbers = Union{Int,UnitR
 PB.default_values(::Type{Trace}) = (;devices = Dict{UInt32,Device}(), tasks = Dict{UInt32,Task}(), min_timestamp_ps = zero(UInt64), max_timestamp_ps = zero(UInt64), num_events = zero(UInt64), name_table = Dict{UInt64,String}())
 PB.field_numbers(::Type{Trace}) = (;devices = 1, tasks = 6, min_timestamp_ps = 4, max_timestamp_ps = 5, num_events = 7, name_table = 8)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:Trace})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:Trace}, _endpos::Int=0, _group::Bool=false)
     devices = Dict{UInt32,Device}()
     tasks = Dict{UInt32,Task}()
     min_timestamp_ps = zero(UInt64)
     max_timestamp_ps = zero(UInt64)
     num_events = zero(UInt64)
     name_table = Dict{UInt64,String}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, devices)

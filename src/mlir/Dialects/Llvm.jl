@@ -179,9 +179,10 @@ function mlir_alias(;
     sym_name,
     linkage,
     dso_local=nothing,
-    thread_local_=nothing,
+    tls_mode=nothing,
     unnamed_addr=nothing,
     visibility_=nothing,
+    sym_visibility=nothing,
     initializer::Region,
     location=Location(),
 )
@@ -195,11 +196,12 @@ function mlir_alias(;
         NamedAttribute("linkage", linkage),
     ]
     !isnothing(dso_local) && push!(attributes, NamedAttribute("dso_local", dso_local))
-    !isnothing(thread_local_) &&
-        push!(attributes, NamedAttribute("thread_local_", thread_local_))
+    !isnothing(tls_mode) && push!(attributes, NamedAttribute("tls_mode", tls_mode))
     !isnothing(unnamed_addr) &&
         push!(attributes, NamedAttribute("unnamed_addr", unnamed_addr))
     !isnothing(visibility_) && push!(attributes, NamedAttribute("visibility_", visibility_))
+    !isnothing(sym_visibility) &&
+        push!(attributes, NamedAttribute("sym_visibility", sym_visibility))
 
     return create_operation(
         "llvm.mlir.alias",
@@ -586,6 +588,25 @@ function call(
     convergent=nothing,
     no_unwind=nothing,
     will_return=nothing,
+    noreturn=nothing,
+    returns_twice=nothing,
+    hot=nothing,
+    cold=nothing,
+    noduplicate=nothing,
+    no_caller_saved_registers=nothing,
+    nocallback=nothing,
+    modular_format=nothing,
+    nobuiltins=nothing,
+    allocsize=nothing,
+    optsize=nothing,
+    minsize=nothing,
+    builtin=nothing,
+    nobuiltin=nothing,
+    save_reg_params=nothing,
+    zero_call_used_regs=nothing,
+    trap_func_name=nothing,
+    default_func_attrs=nothing,
+    uniform_work_group_size=nothing,
     op_bundle_sizes,
     op_bundle_tags=nothing,
     arg_attrs=nothing,
@@ -622,6 +643,36 @@ function call(
     !isnothing(convergent) && push!(attributes, NamedAttribute("convergent", convergent))
     !isnothing(no_unwind) && push!(attributes, NamedAttribute("no_unwind", no_unwind))
     !isnothing(will_return) && push!(attributes, NamedAttribute("will_return", will_return))
+    !isnothing(noreturn) && push!(attributes, NamedAttribute("noreturn", noreturn))
+    !isnothing(returns_twice) &&
+        push!(attributes, NamedAttribute("returns_twice", returns_twice))
+    !isnothing(hot) && push!(attributes, NamedAttribute("hot", hot))
+    !isnothing(cold) && push!(attributes, NamedAttribute("cold", cold))
+    !isnothing(noduplicate) && push!(attributes, NamedAttribute("noduplicate", noduplicate))
+    !isnothing(no_caller_saved_registers) && push!(
+        attributes,
+        NamedAttribute("no_caller_saved_registers", no_caller_saved_registers),
+    )
+    !isnothing(nocallback) && push!(attributes, NamedAttribute("nocallback", nocallback))
+    !isnothing(modular_format) &&
+        push!(attributes, NamedAttribute("modular_format", modular_format))
+    !isnothing(nobuiltins) && push!(attributes, NamedAttribute("nobuiltins", nobuiltins))
+    !isnothing(allocsize) && push!(attributes, NamedAttribute("allocsize", allocsize))
+    !isnothing(optsize) && push!(attributes, NamedAttribute("optsize", optsize))
+    !isnothing(minsize) && push!(attributes, NamedAttribute("minsize", minsize))
+    !isnothing(builtin) && push!(attributes, NamedAttribute("builtin", builtin))
+    !isnothing(nobuiltin) && push!(attributes, NamedAttribute("nobuiltin", nobuiltin))
+    !isnothing(save_reg_params) &&
+        push!(attributes, NamedAttribute("save_reg_params", save_reg_params))
+    !isnothing(zero_call_used_regs) &&
+        push!(attributes, NamedAttribute("zero_call_used_regs", zero_call_used_regs))
+    !isnothing(trap_func_name) &&
+        push!(attributes, NamedAttribute("trap_func_name", trap_func_name))
+    !isnothing(default_func_attrs) &&
+        push!(attributes, NamedAttribute("default_func_attrs", default_func_attrs))
+    !isnothing(uniform_work_group_size) && push!(
+        attributes, NamedAttribute("uniform_work_group_size", uniform_work_group_size)
+    )
     !isnothing(op_bundle_tags) &&
         push!(attributes, NamedAttribute("op_bundle_tags", op_bundle_tags))
     !isnothing(arg_attrs) && push!(attributes, NamedAttribute("arg_attrs", arg_attrs))
@@ -663,12 +714,14 @@ llvm.comdat @__llvm_comdat {
 llvm.mlir.global internal constant @has_any_comdat(1 : i64) comdat(@__llvm_comdat::@any) : i64
 ```
 """
-function comdat(; sym_name, body::Region, location=Location())
+function comdat(; sym_name, sym_visibility=nothing, body::Region, location=Location())
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[body,]
     successors = Block[]
     attributes = NamedAttribute[NamedAttribute("sym_name", sym_name),]
+    !isnothing(sym_visibility) &&
+        push!(attributes, NamedAttribute("sym_visibility", sym_visibility))
 
     return create_operation(
         "llvm.comdat",
@@ -695,7 +748,7 @@ llvm.comdat @__llvm_comdat {
 llvm.mlir.global internal constant @has_any_comdat(1 : i64) comdat(@__llvm_comdat::@any) : i64
 ```
 """
-function comdat_selector(; sym_name, comdat, location=Location())
+function comdat_selector(; sym_name, comdat, sym_visibility=nothing, location=Location())
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
@@ -703,6 +756,8 @@ function comdat_selector(; sym_name, comdat, location=Location())
     attributes = NamedAttribute[
         NamedAttribute("sym_name", sym_name), NamedAttribute("comdat", comdat)
     ]
+    !isnothing(sym_visibility) &&
+        push!(attributes, NamedAttribute("sym_visibility", sym_visibility))
 
     return create_operation(
         "llvm.comdat_selector",
@@ -1042,12 +1097,14 @@ function fneg(
     )
 end
 
-function fpext(arg::Value; res::IR.Type, location=Location())
+function fpext(arg::Value; res::IR.Type, fastmathFlags=nothing, location=Location())
     op_ty_results = IR.Type[res,]
     operands = Value[arg,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(fastmathFlags) &&
+        push!(attributes, NamedAttribute("fastmathFlags", fastmathFlags))
 
     return create_operation(
         "llvm.fpext",
@@ -1099,12 +1156,14 @@ function fptoui(arg::Value; res::IR.Type, location=Location())
     )
 end
 
-function fptrunc(arg::Value; res::IR.Type, location=Location())
+function fptrunc(arg::Value; res::IR.Type, fastmathFlags=nothing, location=Location())
     op_ty_results = IR.Type[res,]
     operands = Value[arg,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(fastmathFlags) &&
+        push!(attributes, NamedAttribute("fastmathFlags", fastmathFlags))
 
     return create_operation(
         "llvm.fptrunc",
@@ -1231,6 +1290,14 @@ bounds), \'nusw\' (no unsigned signed wrap), and \'nuw\' (no unsigned wrap).
 Note that \'inbounds\' implies \'nusw\' which is ensured by the enum
 definition. The flags can be set individually or in combination.
 
+An optional `inrange` attribute corresponds to the LLVM IR `inrange(Start,
+End)` qualifier on constant GEP expressions. Loading from or storing to any
+pointer derived from the GEP has undefined behavior if the access would fall
+outside the half-open range `[Start, End)` from the GEP result. The bounds
+use the pointer index type: their bitwidth must match the index bitwidth of
+the base pointer in the data layout. LLVM IR permits `inrange` only on
+constant GEP expressions.
+
 Examples:
 
 ```mlir
@@ -1243,6 +1310,10 @@ Examples:
 // GEP with constant offsets into a structure
 %0 = llvm.getelementptr %1[0, 1]
    : (!llvm.ptr) -> !llvm.ptr, !llvm.struct<(i32, f32)>
+
+// Constant GEP with an inrange qualifier
+%0 = llvm.getelementptr inbounds inrange <i64, -16, 8> %1[0, 0, 2]
+   : (!llvm.ptr) -> !llvm.ptr, !llvm.struct<(array<3 x ptr>)>
 ```
 """
 function getelementptr(
@@ -1251,6 +1322,7 @@ function getelementptr(
     res::IR.Type,
     rawConstantIndices,
     elem_type,
+    inrange=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[res,]
@@ -1261,6 +1333,7 @@ function getelementptr(
         NamedAttribute("rawConstantIndices", rawConstantIndices),
         NamedAttribute("elem_type", elem_type),
     ]
+    !isnothing(inrange) && push!(attributes, NamedAttribute("inrange", inrange))
 
     return create_operation(
         "llvm.getelementptr",
@@ -1460,6 +1533,25 @@ Examples:
 llvm.mlir.global private constant @y(dense<1.0> : tensor<8xf32>) { alignment = 32 : i64 } : !llvm.array<8 x f32>
 ```
 
+The optional `associated` attribute models LLVM IR `!associated` metadata
+on a global. It is a symbol reference to another global object (or an
+alias of one) and is used to emit `SHF_LINK_ORDER` on ELF.
+
+The optional `absolute_symbol` attribute models LLVM IR `!absolute_symbol`
+metadata. It is an array of integer attributes forming one or more
+`[lower, upper)` range pairs for the global\'s address, using the same
+encoding as LLVM `range` metadata. The pair `[-1, -1]` represents the
+full set.
+
+Examples:
+
+```mlir
+llvm.mlir.global external @b(0 : i32) : i32
+llvm.mlir.global external @a(0 : i32) {associated = @b} : i32
+
+llvm.mlir.global external @abs_sym() {absolute_symbol = [0 : i64, 42 : i64]} : i8
+```
+
 The `target_specific_attrs` attribute provides a mechanism to preserve
 target-specific LLVM IR attributes that are not explicitly modeled in the
 LLVM dialect.
@@ -1482,17 +1574,20 @@ function mlir_global(;
     sym_name,
     linkage,
     dso_local=nothing,
-    thread_local_=nothing,
+    tls_mode=nothing,
     externally_initialized=nothing,
     value=nothing,
     alignment=nothing,
     addr_space=nothing,
     unnamed_addr=nothing,
     section=nothing,
+    associated=nothing,
+    absolute_symbol=nothing,
     comdat=nothing,
     dbg_exprs=nothing,
     visibility_=nothing,
     target_specific_attrs=nothing,
+    sym_visibility=nothing,
     initializer::Region,
     location=Location(),
 )
@@ -1507,8 +1602,7 @@ function mlir_global(;
     ]
     !isnothing(constant) && push!(attributes, NamedAttribute("constant", constant))
     !isnothing(dso_local) && push!(attributes, NamedAttribute("dso_local", dso_local))
-    !isnothing(thread_local_) &&
-        push!(attributes, NamedAttribute("thread_local_", thread_local_))
+    !isnothing(tls_mode) && push!(attributes, NamedAttribute("tls_mode", tls_mode))
     !isnothing(externally_initialized) &&
         push!(attributes, NamedAttribute("externally_initialized", externally_initialized))
     !isnothing(value) && push!(attributes, NamedAttribute("value", value))
@@ -1517,11 +1611,16 @@ function mlir_global(;
     !isnothing(unnamed_addr) &&
         push!(attributes, NamedAttribute("unnamed_addr", unnamed_addr))
     !isnothing(section) && push!(attributes, NamedAttribute("section", section))
+    !isnothing(associated) && push!(attributes, NamedAttribute("associated", associated))
+    !isnothing(absolute_symbol) &&
+        push!(attributes, NamedAttribute("absolute_symbol", absolute_symbol))
     !isnothing(comdat) && push!(attributes, NamedAttribute("comdat", comdat))
     !isnothing(dbg_exprs) && push!(attributes, NamedAttribute("dbg_exprs", dbg_exprs))
     !isnothing(visibility_) && push!(attributes, NamedAttribute("visibility_", visibility_))
     !isnothing(target_specific_attrs) &&
         push!(attributes, NamedAttribute("target_specific_attrs", target_specific_attrs))
+    !isnothing(sym_visibility) &&
+        push!(attributes, NamedAttribute("sym_visibility", sym_visibility))
 
     return create_operation(
         "llvm.mlir.global",
@@ -1605,6 +1704,7 @@ function mlir_ifunc(;
     address_space=nothing,
     unnamed_addr=nothing,
     visibility_=nothing,
+    sym_visibility=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -1624,6 +1724,8 @@ function mlir_ifunc(;
     !isnothing(unnamed_addr) &&
         push!(attributes, NamedAttribute("unnamed_addr", unnamed_addr))
     !isnothing(visibility_) && push!(attributes, NamedAttribute("visibility_", visibility_))
+    !isnothing(sym_visibility) &&
+        push!(attributes, NamedAttribute("sym_visibility", sym_visibility))
 
     return create_operation(
         "llvm.mlir.ifunc",
@@ -1717,6 +1819,7 @@ function inline_asm(
     has_side_effects=nothing,
     is_align_stack=nothing,
     tail_call_kind=nothing,
+    convergent=nothing,
     asm_dialect=nothing,
     operand_attrs=nothing,
     location=Location(),
@@ -1735,6 +1838,7 @@ function inline_asm(
         push!(attributes, NamedAttribute("is_align_stack", is_align_stack))
     !isnothing(tail_call_kind) &&
         push!(attributes, NamedAttribute("tail_call_kind", tail_call_kind))
+    !isnothing(convergent) && push!(attributes, NamedAttribute("convergent", convergent))
     !isnothing(asm_dialect) && push!(attributes, NamedAttribute("asm_dialect", asm_dialect))
     !isnothing(operand_attrs) &&
         push!(attributes, NamedAttribute("operand_attrs", operand_attrs))
@@ -1836,6 +1940,8 @@ function invoke(
     res_attrs=nothing,
     branch_weights=nothing,
     CConv=nothing,
+    default_func_attrs=nothing,
+    uniform_work_group_size=nothing,
     op_bundle_sizes,
     op_bundle_tags=nothing,
     normalDest::Block,
@@ -1870,6 +1976,11 @@ function invoke(
     !isnothing(branch_weights) &&
         push!(attributes, NamedAttribute("branch_weights", branch_weights))
     !isnothing(CConv) && push!(attributes, NamedAttribute("CConv", CConv))
+    !isnothing(default_func_attrs) &&
+        push!(attributes, NamedAttribute("default_func_attrs", default_func_attrs))
+    !isnothing(uniform_work_group_size) && push!(
+        attributes, NamedAttribute("uniform_work_group_size", uniform_work_group_size)
+    )
     !isnothing(op_bundle_tags) &&
         push!(attributes, NamedAttribute("op_bundle_tags", op_bundle_tags))
 
@@ -1913,6 +2024,11 @@ llvm.func internal @internal_func() {
   llvm.return
 }
 ```
+
+The `function_entry_count` attribute models function-level `!prof`
+entry-count metadata. It stores the entry count, whether the count is real
+or synthetic, and any trailing import GUID operands in a single
+`#llvm.function_entry_count` attribute.
 """
 function func(;
     sym_name,
@@ -1949,11 +2065,8 @@ function func(;
     reciprocal_estimates=nothing,
     prefer_vector_width=nothing,
     target_features=nothing,
-    no_infs_fp_math=nothing,
-    no_nans_fp_math=nothing,
     no_signed_zeros_fp_math=nothing,
-    denormal_fp_math=nothing,
-    denormal_fp_math_f32=nothing,
+    denormal_fpenv=nothing,
     fp_contract=nothing,
     instrument_function_entry=nothing,
     instrument_function_exit=nothing,
@@ -1962,12 +2075,32 @@ function func(;
     inline_hint=nothing,
     no_unwind=nothing,
     will_return=nothing,
+    noreturn=nothing,
     optimize_none=nothing,
+    returns_twice=nothing,
+    hot=nothing,
+    cold=nothing,
+    noduplicate=nothing,
+    no_caller_saved_registers=nothing,
+    nocallback=nothing,
+    modular_format=nothing,
+    nobuiltins=nothing,
+    allocsize=nothing,
+    optsize=nothing,
+    minsize=nothing,
+    save_reg_params=nothing,
+    zero_call_used_regs=nothing,
+    default_func_attrs=nothing,
+    uniform_work_group_size=nothing,
     vec_type_hint=nothing,
     work_group_size_hint=nothing,
     reqd_work_group_size=nothing,
     intel_reqd_sub_group_size=nothing,
+    function_metadata=nothing,
     uwtable_kind=nothing,
+    use_sample_profile=nothing,
+    disable_tail_calls=nothing,
+    sample_profile_suffix_elision_policy=nothing,
     body::Region,
     location=Location(),
 )
@@ -2026,17 +2159,11 @@ function func(;
         push!(attributes, NamedAttribute("prefer_vector_width", prefer_vector_width))
     !isnothing(target_features) &&
         push!(attributes, NamedAttribute("target_features", target_features))
-    !isnothing(no_infs_fp_math) &&
-        push!(attributes, NamedAttribute("no_infs_fp_math", no_infs_fp_math))
-    !isnothing(no_nans_fp_math) &&
-        push!(attributes, NamedAttribute("no_nans_fp_math", no_nans_fp_math))
     !isnothing(no_signed_zeros_fp_math) && push!(
         attributes, NamedAttribute("no_signed_zeros_fp_math", no_signed_zeros_fp_math)
     )
-    !isnothing(denormal_fp_math) &&
-        push!(attributes, NamedAttribute("denormal_fp_math", denormal_fp_math))
-    !isnothing(denormal_fp_math_f32) &&
-        push!(attributes, NamedAttribute("denormal_fp_math_f32", denormal_fp_math_f32))
+    !isnothing(denormal_fpenv) &&
+        push!(attributes, NamedAttribute("denormal_fpenv", denormal_fpenv))
     !isnothing(fp_contract) && push!(attributes, NamedAttribute("fp_contract", fp_contract))
     !isnothing(instrument_function_entry) && push!(
         attributes,
@@ -2051,8 +2178,34 @@ function func(;
     !isnothing(inline_hint) && push!(attributes, NamedAttribute("inline_hint", inline_hint))
     !isnothing(no_unwind) && push!(attributes, NamedAttribute("no_unwind", no_unwind))
     !isnothing(will_return) && push!(attributes, NamedAttribute("will_return", will_return))
+    !isnothing(noreturn) && push!(attributes, NamedAttribute("noreturn", noreturn))
     !isnothing(optimize_none) &&
         push!(attributes, NamedAttribute("optimize_none", optimize_none))
+    !isnothing(returns_twice) &&
+        push!(attributes, NamedAttribute("returns_twice", returns_twice))
+    !isnothing(hot) && push!(attributes, NamedAttribute("hot", hot))
+    !isnothing(cold) && push!(attributes, NamedAttribute("cold", cold))
+    !isnothing(noduplicate) && push!(attributes, NamedAttribute("noduplicate", noduplicate))
+    !isnothing(no_caller_saved_registers) && push!(
+        attributes,
+        NamedAttribute("no_caller_saved_registers", no_caller_saved_registers),
+    )
+    !isnothing(nocallback) && push!(attributes, NamedAttribute("nocallback", nocallback))
+    !isnothing(modular_format) &&
+        push!(attributes, NamedAttribute("modular_format", modular_format))
+    !isnothing(nobuiltins) && push!(attributes, NamedAttribute("nobuiltins", nobuiltins))
+    !isnothing(allocsize) && push!(attributes, NamedAttribute("allocsize", allocsize))
+    !isnothing(optsize) && push!(attributes, NamedAttribute("optsize", optsize))
+    !isnothing(minsize) && push!(attributes, NamedAttribute("minsize", minsize))
+    !isnothing(save_reg_params) &&
+        push!(attributes, NamedAttribute("save_reg_params", save_reg_params))
+    !isnothing(zero_call_used_regs) &&
+        push!(attributes, NamedAttribute("zero_call_used_regs", zero_call_used_regs))
+    !isnothing(default_func_attrs) &&
+        push!(attributes, NamedAttribute("default_func_attrs", default_func_attrs))
+    !isnothing(uniform_work_group_size) && push!(
+        attributes, NamedAttribute("uniform_work_group_size", uniform_work_group_size)
+    )
     !isnothing(vec_type_hint) &&
         push!(attributes, NamedAttribute("vec_type_hint", vec_type_hint))
     !isnothing(work_group_size_hint) &&
@@ -2063,8 +2216,20 @@ function func(;
         attributes,
         NamedAttribute("intel_reqd_sub_group_size", intel_reqd_sub_group_size),
     )
+    !isnothing(function_metadata) &&
+        push!(attributes, NamedAttribute("function_metadata", function_metadata))
     !isnothing(uwtable_kind) &&
         push!(attributes, NamedAttribute("uwtable_kind", uwtable_kind))
+    !isnothing(use_sample_profile) &&
+        push!(attributes, NamedAttribute("use_sample_profile", use_sample_profile))
+    !isnothing(disable_tail_calls) &&
+        push!(attributes, NamedAttribute("disable_tail_calls", disable_tail_calls))
+    !isnothing(sample_profile_suffix_elision_policy) && push!(
+        attributes,
+        NamedAttribute(
+            "sample_profile_suffix_elision_policy", sample_profile_suffix_elision_policy
+        ),
+    )
 
     return create_operation(
         "llvm.func",
@@ -2178,10 +2343,10 @@ Examples:
 %0 = llvm.load volatile %ptr : !llvm.ptr -> f32
 
 // A nontemporal load of a float variable.
-%0 = llvm.load %ptr {nontemporal} : !llvm.ptr -> f32
+%0 = llvm.load %ptr <nontemporal> : !llvm.ptr -> f32
 
 // An atomic load of an integer variable.
-%0 = llvm.load %ptr atomic monotonic {alignment = 8 : i64}
+%0 = llvm.load %ptr atomic monotonic <alignment = 8>
     : !llvm.ptr -> i64
 ```
 
@@ -2241,11 +2406,69 @@ function load(
 end
 
 """
+`mlir_metadata_as_value`
+
+Materializes an `!llvm.metadata` SSA value that mirrors LLVM IR\'s
+`llvm::MetadataAsValue`: a wrapper that lifts an arbitrary
+`llvm::Metadata` node into the value domain so it can be used as an
+operand to instructions that take `metadata` arguments (for example the
+constrained floating-point intrinsics or `llvm.read_register`).
+
+The wrapped metadata is described by the `metadata` attribute, which
+must be one of the LLVM dialect\'s metadata-attribute classes:
+
+* `#llvm.md_string<\"...\">` -> `llvm::MDString`.
+* `#llvm.md_const<...>` -> `llvm::ConstantAsMetadata`.
+* `#llvm.md_global_value<@symbol>` -> `llvm::ValueAsMetadata` of a
+  symbol-backed global value.
+* `#llvm.md_node<...>` -> `llvm::MDNode` over any of the above.
+
+These can be nested arbitrarily to form metadata trees. Lowering to LLVM
+IR materialises the corresponding `llvm::Metadata` via the dialect\'s
+metadata-attribute converter and wraps the result with
+`llvm::MetadataAsValue::get(ctx, md)`.
+
+# Example
+
+```mlir
+// Rounding-mode operand of a constrained-FP intrinsic:
+%rm = llvm.mlir.metadata_as_value #llvm.md_string<\"round.tonearest\">
+    : !llvm.metadata
+// Named-register metadata for llvm.read_register:
+%nr = llvm.mlir.metadata_as_value #llvm.md_node<#llvm.md_string<\"sp\">>
+    : !llvm.metadata
+```
+"""
+function mlir_metadata_as_value(;
+    res=nothing::Union{Nothing,IR.Type}, metadata, location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[NamedAttribute("metadata", metadata),]
+    !isnothing(res) && push!(op_ty_results, res)
+
+    return create_operation(
+        "llvm.mlir.metadata_as_value",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
 `module_flags`
 
 Represents the equivalent in MLIR for LLVM\'s `llvm.module.flags` metadata,
-which requires a list of metadata triplets. Each triplet entry is described
-by a `ModuleFlagAttr`.
+which requires a list of metadata triplets (combining kind, name, value),
+either specified directly by a `ModuleFlagAttr` or defined by an attribute
+implementing `ModuleFlagAttrInterface` (which is used to wrap the details
+of metadata combining, provided other verifications, etc.)
 
 # Example
 ```mlir
@@ -2297,17 +2520,71 @@ function mul(
 end
 
 """
+`named_metadata`
+
+Represents an LLVM named metadata node (`llvm::NamedMDNode`). Named
+metadata nodes are module-level metadata that associate a name string
+with a list of metadata nodes. Each operand must be an `#llvm.md_node`.
+
+Note: cyclic metadata graphs are not supported. Because metadata attributes
+are represented as MLIR attributes (which form a tree), there is no way to
+express a metadata node that directly or transitively references itself.
+LLVM IR permits such cycles (e.g. `!0 = !{!0}`), but they cannot be
+represented here and will not round-trip through this op.
+
+# Example
+```mlir
+llvm.named_metadata \"foo.version\" [
+  #llvm.md_node<#llvm.md_const<2 : i32>,
+                #llvm.md_const<9 : i32>,
+                #llvm.md_const<0 : i32>
+  >
+]
+llvm.named_metadata \"foo.kernel\" [
+  #llvm.md_node<
+    #llvm.md_global_value<@my_kernel>,
+    #llvm.md_node<>,
+    #llvm.md_node<
+      #llvm.md_node<#llvm.md_const<0 : i32>,
+                    #llvm.md_string<\"foo.buffer\">
+      >
+    >
+  >
+]
+```
+"""
+function named_metadata(; metadata_name, nodes, location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[
+        NamedAttribute("metadata_name", metadata_name), NamedAttribute("nodes", nodes)
+    ]
+
+    return create_operation(
+        "llvm.named_metadata",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
 `mlir_none`
 
-Unlike LLVM IR, MLIR does not have first-class token values. They must be
-explicitly created as SSA values using `llvm.mlir.none`. This operation has
-no operands or attributes, and returns a none token value of a wrapped LLVM IR
-pointer type.
+MLIR does not have a way to spell the LLVM IR `none` token literal. This
+operation produces a builtin `!token` SSA value that lowers to
+`llvm::ConstantTokenNone` in LLVM IR.
 
 Examples:
 
 ```mlir
-%0 = llvm.mlir.none : !llvm.token
+%0 = llvm.mlir.none : !token
 ```
 """
 function mlir_none(; res=nothing::Union{Nothing,IR.Type}, location=Location())
@@ -2382,6 +2659,60 @@ function mlir_poison(; res::IR.Type, location=Location())
 
     return create_operation(
         "llvm.mlir.poison",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`ptrtoaddr`
+
+Operation mirroring LLVM\'s `ptrtoaddr` operation.
+
+This operation casts a pointer (or a vector of pointers) to an integer
+(or a vector of integers) without capturing the provenance of the pointer.
+Therefore, an integer returned or derived from `llvm.ptrtoaddr` does not
+create a legal-to-access pointer when used in `llvm.inttoptr`.
+Code that only cares about the address value of a pointer
+(e.g. pointer subtraction) should prefer `llvm.ptrtoaddr` over
+`llvm.ptrtoint`.
+
+The integer type used as the result type is required to be equal in width
+to the pointer type as specified in the data layout.
+Use the `llvm-target-to-data-layout` pass to derive an MLIR datalayout from
+an LLVM datalayout.
+
+Examples:
+```
+llvm.func @default_64_bit_ptrtoaddr(%arg0 : !llvm.ptr) -> i64 {
+  %0 = llvm.ptrtoaddr %arg0 : !llvm.ptr to i64
+  llvm.return i64
+}
+
+module attributes { dlti.dl_spec = #dlti.dl_spec<
+  #dlti.dl_entry<!llvm.ptr, dense<[/*size=*/32, 32, 64]> : vector<3xi64>>
+>} {
+  llvm.func @datalayout_32_bit(%arg0 : !llvm.ptr) -> i32 {
+    %0 = llvm.ptrtoaddr %arg0 : !llvm.ptr to i32
+    llvm.return %0 : i32
+  }
+}
+```
+"""
+function ptrtoaddr(arg::Value; res::IR.Type, location=Location())
+    op_ty_results = IR.Type[res,]
+    operands = Value[arg,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "llvm.ptrtoaddr",
         location;
         operands,
         owned_regions,
@@ -2623,10 +2954,10 @@ Examples:
 llvm.store volatile %val, %ptr : f32, !llvm.ptr
 
 // A nontemporal store of a float variable.
-llvm.store %val, %ptr {nontemporal} : f32, !llvm.ptr
+llvm.store %val, %ptr <nontemporal> : f32, !llvm.ptr
 
 // An atomic store of an integer variable.
-llvm.store %val, %ptr atomic monotonic {alignment = 8 : i64}
+llvm.store %val, %ptr atomic monotonic <alignment = 8>
     : i64, !llvm.ptr
 ```
 

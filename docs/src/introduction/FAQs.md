@@ -1,5 +1,26 @@
 # FAQs
 
+## Scalar arguments are frozen at compile time / `Enzyme.Const` values don't change at runtime
+
+By default, `Reactant.to_rarray` does **not** track plain Julia numbers — they remain
+as regular scalars and are baked into the compiled code as constants. This means if
+you pass a scalar (e.g. a time value `t`) to a compiled function, it will always use
+the value from tracing, regardless of what you pass at runtime.
+
+**Fix:** Use `track_numbers=true` when converting your inputs:
+
+```julia
+# This does NOT track the scalar — t is frozen at 0.0
+t = Reactant.to_rarray(0.0)
+
+# This tracks the scalar — t becomes a ConcreteRNumber that varies at runtime
+t = Reactant.to_rarray(0.0; track_numbers=true)
+```
+
+You can also pass a type to `track_numbers` to selectively track only certain number
+types (e.g. `track_numbers=Float64`). See the [Partial Evaluation tutorial](@ref partial-evaluation)
+for more details.
+
 ## XLA auto-tuner: Results do not match the reference. This is likely a bug/unexpected loss of precision
 
 If you see this error with the CUDA backend, use a scoped value to increase the precision

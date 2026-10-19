@@ -24,7 +24,7 @@ end
 PB.default_values(::Type{KernelReport}) = (;name = "", registers_per_thread = zero(UInt32), static_shmem_bytes = zero(UInt32), dynamic_shmem_bytes = zero(UInt32), block_dim = Vector{UInt32}(), grid_dim = Vector{UInt32}(), total_duration_ns = zero(UInt64), min_duration_ns = zero(UInt64), max_duration_ns = zero(UInt64), is_kernel_using_tensor_core = false, is_op_tensor_core_eligible = false, op_name = "", occurrences = zero(UInt32), occupancy_pct = zero(Float32))
 PB.field_numbers(::Type{KernelReport}) = (;name = 1, registers_per_thread = 2, static_shmem_bytes = 3, dynamic_shmem_bytes = 4, block_dim = 5, grid_dim = 6, total_duration_ns = 7, min_duration_ns = 8, max_duration_ns = 9, is_kernel_using_tensor_core = 10, is_op_tensor_core_eligible = 11, op_name = 12, occurrences = 13, occupancy_pct = 14)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:KernelReport})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:KernelReport}, _endpos::Int=0, _group::Bool=false)
     name = ""
     registers_per_thread = zero(UInt32)
     static_shmem_bytes = zero(UInt32)
@@ -39,7 +39,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:KernelReport})
     op_name = ""
     occurrences = zero(UInt32)
     occupancy_pct = zero(Float32)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             name = PB.decode(d, String)
@@ -119,9 +119,9 @@ end
 PB.default_values(::Type{KernelStatsDb}) = (;reports = Vector{KernelReport}())
 PB.field_numbers(::Type{KernelStatsDb}) = (;reports = 1)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:KernelStatsDb})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:KernelStatsDb}, _endpos::Int=0, _group::Bool=false)
     reports = PB.BufferedVector{KernelReport}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, reports)

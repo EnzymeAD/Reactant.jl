@@ -38,6 +38,15 @@ pair = Pair(ones(3), ones(10))
 reactant_pair = Reactant.to_rarray(pair)
 ```
 
+!!! note "Tracking scalar numbers"
+    By default, `Reactant.to_rarray` only converts arrays — plain Julia numbers are left
+    as-is and treated as compile-time constants. If you need scalar values to vary at
+    runtime (e.g. a time parameter `t`), use `track_numbers=true`:
+    ```julia
+    t = Reactant.to_rarray(1.5; track_numbers=true)  # ConcreteRNumber{Float64}
+    ```
+    See the [Partial Evaluation](@ref partial-evaluation) tutorial for details.
+
 To compile programs using ConcreteRArray's, one uses the compile function, like as follows:
 
 ```@example quickstart

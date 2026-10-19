@@ -1,6 +1,9 @@
-using Reactant, Test
+using Reactant, Test, FileCheck
 using LinearAlgebra
 using Reactant.ReactantCore
+using Reactant: MLIR
+using Reactant: Periodic, Binomial
+using Enzyme
 
 function condition1(x)
     y = sum(x)
@@ -57,7 +60,7 @@ function condition2_nested_if(x, y)
     x_sum = sum(x)
     @trace if x_sum > 0
         y_sum = sum(y)
-        if y_sum > 0
+        @trace if y_sum > 0
             z = x_sum + y_sum
         else
             z = x_sum - y_sum
@@ -102,8 +105,13 @@ end
     x_ra = Reactant.to_rarray(x)
     y_ra = Reactant.to_rarray(y)
 
-    @test @jit(condition2_nested_if(x_ra, y_ra)) ≈ condition2_nested_if(x, y)
-    @test @jit(condition2_if_else_if(x_ra, y_ra)) ≈ condition2_if_else_if(x, y)
+    # x and y hold the same values here and both sums are negative, so both
+    # functions return the difference of the two sums and the reference is
+    # exactly 0.0. isapprox defaults to atol = 0, so the test only holds while
+    # the two reductions are computed bit for bit alike; a one ulp difference
+    # between them (1.8e-15 was seen on the A100 IFRT run) is enough to fail it.
+    @test @jit(condition2_nested_if(x_ra, y_ra)) ≈ condition2_nested_if(x, y) atol = 1e-10
+    @test @jit(condition2_if_else_if(x_ra, y_ra)) ≈ condition2_if_else_if(x, y) atol = 1e-10
 end
 
 function condition3_mixed_conditions(x, y)
@@ -382,12 +390,34 @@ end
     @test @allowscalar(x_ra[2, 1]) == 0.0
 end
 
+function condition11_nested_ifff_and_for(x, y, z, n)
+    x_sum = sum(x)
+    @trace for _ in 1:n
+        @trace if x_sum > 0
+            y_sum = sum(y)
+            @trace if y_sum > 0
+                @trace if z > 0
+                    z = x_sum + y_sum + z
+                else
+                    z = x_sum + y_sum
+                end
+            else
+                z = x_sum - y_sum
+            end
+        else
+            y_sum = sum(y)
+            z = x_sum - y_sum
+        end
+    end
+    return z
+end
+
 function condition11_nested_ifff(x, y, z)
     x_sum = sum(x)
     @trace if x_sum > 0
         y_sum = sum(y)
-        if y_sum > 0
-            if sum(z) > 0
+        @trace if y_sum > 0
+            @trace if sum(z) > 0
                 z = x_sum + y_sum + sum(z)
             else
                 z = x_sum + y_sum
@@ -405,21 +435,36 @@ end
 @testset "condition11: nested if 3 levels deep" begin
     x = Reactant.TestUtils.construct_test_array(Float64, 2, 10)
     y = Reactant.TestUtils.construct_test_array(Float64, 2, 10)
-    z = Reactant.TestUtils.construct_test_array(Float64, 2, 10)
+    z = Float64(42.0)
+    n = Int64(10)
     x_ra = Reactant.to_rarray(x)
     y_ra = Reactant.to_rarray(y)
-    z_ra = Reactant.to_rarray(z)
+    z_ra = Reactant.ConcreteRNumber(z)
+    n_ra = Reactant.ConcreteRNumber(n)
 
-    @test @jit(condition11_nested_ifff(x_ra, y_ra, z_ra)) ≈ condition11_nested_ifff(x, y, z)
+    @test @jit(condition11_nested_ifff(x_ra, y_ra, z_ra)) ≈ condition11_nested_ifff(x, y, z) atol =
+        1e-10
+
+    # positive inputs take the nested branches on every iteration, so the result depends on n
+    @test @jit(condition11_nested_ifff_and_for(x_ra, y_ra, z_ra, n_ra)) ≈
+        condition11_nested_ifff_and_for(x, y, z, n) atol = 1e-10
 
     x = -Reactant.TestUtils.construct_test_array(Float64, 2, 10)
     y = -Reactant.TestUtils.construct_test_array(Float64, 2, 10)
-    z = -Reactant.TestUtils.construct_test_array(Float64, 2, 10)
+    z = Float64(42.0)
     x_ra = Reactant.to_rarray(x)
     y_ra = Reactant.to_rarray(y)
-    z_ra = Reactant.to_rarray(z)
+    z_ra = Reactant.ConcreteRNumber(z)
 
-    @test @jit(condition11_nested_ifff(x_ra, y_ra, z_ra)) ≈ condition11_nested_ifff(x, y, z)
+    # x and y hold the same values here, so this branch returns x_sum - y_sum and
+    # the reference is exactly 0.0. isapprox defaults to atol = 0, so it only
+    # holds while both reductions are computed bit for bit alike; a one ulp
+    # difference between them is enough to fail it.
+    @test @jit(condition11_nested_ifff(x_ra, y_ra, z_ra)) ≈ condition11_nested_ifff(x, y, z) atol =
+        1e-10
+
+    @test @jit(condition11_nested_ifff_and_for(x_ra, y_ra, z_ra, n_ra)) ≈
+        condition11_nested_ifff_and_for(x, y, z, n) atol = 1e-10
 end
 
 function condition12_compile_test(x, y, z)
@@ -667,6 +712,33 @@ end
     @test @jit(for_eachindex(s, x)) == 6
 end
 
+function for_untraced_accumulator(xs)
+    s = 0.0
+    @trace for i in eachindex(xs)
+        s += xs[i]
+    end
+    return s
+end
+
+function while_untraced_accumulator(xs)
+    s = 0.0
+    i = 1
+    @trace while i <= length(xs)
+        s += xs[i]
+        i += 1
+    end
+    return s, i
+end
+
+@testset "loops: untraced accumulator" begin
+    xs = Reactant.to_rarray([1.0, 2.0, 3.0])
+
+    @test @allowscalar(@jit(for_untraced_accumulator(xs))) ≈ 6.0
+    s, i = @allowscalar @jit(while_untraced_accumulator(xs))
+    @test s ≈ 6.0
+    @test i == 4
+end
+
 function while_convergence(x, y)
     diff = x .- y
     @trace while sum(diff) >= 10
@@ -685,8 +757,9 @@ end
     @test @jit(while_convergence(x_ra, y_ra)) ≈ while_convergence(x, y)
 end
 
-function for_no_track_numbers(x, n)
-    @trace mincut = false checkpointing = true track_numbers = false for i in n:16
+function for_no_track_numbers(x, n, tn)
+    # Periodic(n) required for dynamic bounds (n:16 where n is traced)
+    @trace mincut = false checkpointing = Periodic(3) track_numbers = tn for i in n:16
         x = x .+ 1
     end
     return x
@@ -701,13 +774,179 @@ end
 
     # set optimize to only do enzyme-batch to prevent crash in opt
     for_no_track_numbers_ra = @compile optimize = "enzyme-batch" for_no_track_numbers(
+        x_ra, n_ra, false
+    )
+    @test for_no_track_numbers_ra(x_ra, n_ra, false) == for_no_track_numbers(x, n, false)
+
+    ir = @code_hlo optimize = "enzyme-batch" for_no_track_numbers(x_ra, n_ra, false)
+    @test @filecheck begin
+        @check_dag "enzyme.disable_mincut"
+        @check_dag "enzyme.enable_checkpointing"
+        @check_dag "enzyme.checkpoint_period = 3"
+        ir
+    end
+end
+
+function for_explicit_checkpoints(x, n)
+    @trace mincut = false checkpointing = Periodic(5) track_numbers = false for i in n:16
+        x = x .+ 1
+    end
+    return x
+end
+
+@testset "for: explicit checkpoints" begin
+    x = [1, 2, 3]
+    x_ra = Reactant.to_rarray(x)
+
+    n = 12
+    n_ra = Reactant.ConcreteRNumber(n)
+
+    # set optimize to only do enzyme-batch to prevent crash in opt
+    for_explicit_checkpoints_ra = @compile optimize = "enzyme-batch" for_explicit_checkpoints(
         x_ra, n_ra
     )
-    @test for_no_track_numbers_ra(x_ra, n_ra) == for_no_track_numbers(x, n)
+    @test for_explicit_checkpoints_ra(x_ra, n_ra) == for_explicit_checkpoints(x, n)
 
-    ir = sprint(show, @code_hlo optimize = "enzyme-batch" for_no_track_numbers(x_ra, n_ra))
-    @test contains(ir, "enzyme.disable_mincut")
-    @test contains(ir, "enzymexla.enable_checkpointing")
+    ir = sprint(
+        show, @code_hlo optimize = "enzyme-batch" for_explicit_checkpoints(x_ra, n_ra)
+    )
+    @test @filecheck begin
+        @check_dag "enzyme.enable_checkpointing"
+        @check_dag "enzyme.checkpoint_period = 5"
+        ir
+    end
+end
+
+function while_explicit_checkpoints(x, n)
+    i = zero(n)
+    @trace mincut = false checkpointing = Periodic(5) track_numbers = false while i <= n
+        x = 2 .* x
+        i += one(i)
+    end
+    return x
+end
+
+@testset "while explicit checkpoints" begin
+    n = 10
+    n_ra = Reactant.ConcreteRNumber(n)
+    x = Float32[1, 2, 3]
+    x_ra = Reactant.to_rarray(x)
+
+    while_explicit_checkpoints_ra = @compile while_explicit_checkpoints(x_ra, n_ra)
+    @test while_explicit_checkpoints(x, n) == while_explicit_checkpoints(x_ra, n_ra)
+
+    ir = sprint(show, @code_hlo while_explicit_checkpoints(x_ra, n_ra))
+    @test @filecheck begin
+        @check_dag "enzyme.enable_checkpointing"
+        @check_dag "enzyme.checkpoint_period = 5"
+        ir
+    end
+end
+
+function for_default_checkpoints(x)
+    @trace checkpointing = true track_numbers = false for i in 1:100
+        x = x .+ 1
+    end
+    return x
+end
+
+@testset "for: default checkpoints (sqrt)" begin
+    x = [1, 2, 3]
+    x_ra = Reactant.to_rarray(x)
+
+    # set optimize to only do enzyme-batch to prevent crash in opt
+    for_default_checkpoints_ra = @compile optimize = "enzyme-batch" for_default_checkpoints(
+        x_ra
+    )
+    @test for_default_checkpoints_ra(x_ra) == for_default_checkpoints(x)
+
+    ir = sprint(show, @code_hlo optimize = "enzyme-batch" for_default_checkpoints(x_ra))
+    @test @filecheck begin
+        @check_dag "enzyme.disable_mincut"
+        @check_dag "enzyme.enable_checkpointing"
+        ir
+    end
+end
+
+function for_binomial_ckpt_body(x, n, ckpt)
+    @trace checkpointing = ckpt for i in 1:n
+        x = sin.(x)
+    end
+    return sum(x)
+end
+
+function for_binomial_ckpt_grad(x, n, ckpt)
+    dx = Enzyme.make_zero(x)
+    Enzyme.autodiff(
+        Reverse, for_binomial_ckpt_body, Active, Duplicated(x, dx), Const(n), Const(ckpt)
+    )
+    return dx
+end
+
+@testset "for: binomial checkpointing autodiff matches no checkpointing" begin
+    x = Float32[1.0, 0.5, -0.5]
+    x_ra = Reactant.to_rarray(x)
+    n_ra = Reactant.ConcreteRNumber(10)
+
+    dx_binom = @jit for_binomial_ckpt_grad(x_ra, n_ra, Binomial(3))
+    # Plain Julia reference: 10 iterations of sin, same loop body
+    dx_ref = Enzyme.gradient(
+        Reverse, x -> sum(foldl((v, _) -> sin.(v), 1:10; init=x)), copy(x)
+    )[1]
+
+    @test Array(dx_binom) ≈ dx_ref
+end
+
+function for_binomial_ir_check(x)
+    @trace checkpointing = Binomial(4) track_numbers = false for i in 1:20
+        x = x .+ 1
+    end
+    return x
+end
+
+@testset "for: binomial checkpointing IR attributes" begin
+    x = [1, 2, 3]
+    x_ra = Reactant.to_rarray(x)
+
+    ir = sprint(show, @code_hlo optimize = "enzyme-batch" for_binomial_ir_check(x_ra))
+    @test @filecheck begin
+        @check_dag "enzyme.enable_checkpointing"
+        @check_dag "enzyme.binomial_checkpointing"
+        @check_dag "enzyme.checkpoint_period = 4"
+        ir
+    end
+end
+
+function while_binomial_ckpt_body(x, n, ckpt)
+    i = zero(n)
+    @trace checkpointing = ckpt track_numbers = false while i < n
+        x = sin.(x)
+        i += one(i)
+    end
+    return sum(x)
+end
+
+function while_binomial_ckpt_grad(x, n, ckpt)
+    dx = Enzyme.make_zero(x)
+    Enzyme.autodiff(
+        Reverse, while_binomial_ckpt_body, Active, Duplicated(x, dx), Const(n), Const(ckpt)
+    )
+    return dx
+end
+
+@testset "while: binomial checkpointing autodiff matches no checkpointing" begin
+    n = 10
+    n_ra = Reactant.ConcreteRNumber(n)
+    x = Float32[1.0, 0.5, -0.5]
+    x_ra = Reactant.to_rarray(x)
+
+    dx_binom = @jit while_binomial_ckpt_grad(x_ra, n_ra, Binomial(3))
+    # Plain Julia reference: 10 iterations of sin, same loop body
+    dx_ref = Enzyme.gradient(
+        Reverse, x -> sum(foldl((v, _) -> sin.(v), 1:n; init=x)), copy(x)
+    )[1]
+
+    @test Array(dx_binom) ≈ dx_ref
 end
 
 _call1(a, b) = a
@@ -726,18 +965,25 @@ end
     @test @jit(call1(a_ra, b_ra)) ≈ call1(a, b)
 
     # check whether the func for _call1 was only generated once:
-    ir = @code_hlo optimize = false call1(a_ra, b_ra)
-    ops = [op for op in Reactant.MLIR.IR.body(ir)]
-    @test length(ops) == 2 # call1, _call1
+    MLIR.IR.@dispose ctx = Reactant.ReactantContext() begin
+        ir = Reactant.code_hlo(ctx, call1, (a_ra, b_ra); optimize=false)
+        ops = [op for op in Reactant.MLIR.IR.body(ir)]
+        @test length(ops) == 2 # call1, _call1
+        MLIR.IR.dispose(ir)
+    end
 
     # With different operand sizes, different functions need to be generated:
     c = Reactant.TestUtils.construct_test_array(Float64, 4, 5)
     c_ra = Reactant.to_rarray(c)
 
     @test @jit(call1(a_ra, c_ra)) ≈ call1(a, c)
-    ir = @code_hlo optimize = false call1(a_ra, c_ra)
-    ops = [op for op in Reactant.MLIR.IR.body(ir)]
-    @test length(ops) == 3
+
+    MLIR.IR.@dispose ctx = Reactant.ReactantContext() begin
+        ir = Reactant.code_hlo(ctx, call1, (a_ra, c_ra); optimize=false)
+        ops = [op for op in Reactant.MLIR.IR.body(ir)]
+        @test length(ops) == 3
+        MLIR.IR.dispose(ir)
+    end
 end
 
 _call2(a) = a + a
@@ -770,9 +1016,12 @@ end
     y = Reactant.TestUtils.construct_test_array(Float64, 3)
     y_ra = Reactant.to_rarray(y)
 
-    ir = @code_hlo optimize = false call3(y_ra)
-    ops = [op for op in Reactant.MLIR.IR.body(ir)]
-    @test length(ops) == 5 # call3, .+, .*, _call3 (2X)
+    MLIR.IR.@dispose ctx = Reactant.ReactantContext() begin
+        ir = Reactant.code_hlo(ctx, call3, (y_ra,); optimize=false)
+        ops = [op for op in Reactant.MLIR.IR.body(ir)]
+        @test length(ops) == 5 # call3, .+, .*, _call3 (2X)
+        MLIR.IR.dispose(ir)
+    end
 end
 
 struct Foo
@@ -795,9 +1044,12 @@ end
     foo = Foo(Reactant.to_rarray(a))
     foo2 = Foo(Reactant.to_rarray(b))
     bar = Foo(Bar(Reactant.to_rarray(b))) # typeof(foo) == typeof(bar), but these don't match!
-    ir = @code_hlo optimize = false call4(foo, foo2, bar)
-    ops = [op for op in Reactant.MLIR.IR.body(ir)]
-    @test length(ops) == 3 # call4, _call4 for {foo, foo2}, and _call4 for bar
+    MLIR.IR.@dispose ctx = Reactant.ReactantContext() begin
+        ir = Reactant.code_hlo(ctx, call4, (foo, foo2, bar); optimize=false)
+        ops = [op for op in Reactant.MLIR.IR.body(ir)]
+        @test length(ops) == 3 # call4, _call4 for {foo, foo2}, and _call4 for bar
+        MLIR.IR.dispose(ir)
+    end
 end
 
 function _call5!(a, b)
@@ -834,12 +1086,15 @@ end
 
         # Should work the same as untraced when JIT compiled
         @test @jit(traced_add(a_ra, b_ra)) ≈ traced_add(a, b)
-        ir = @code_hlo optimize = false traced_add(a_ra, b_ra)
-        func_names = [
-            String(Reactant.MLIR.IR.getattr(op, "sym_name")) for
-            op in Reactant.MLIR.IR.body(ir)
-        ]
-        @test any(contains("traced_add"), func_names)
+        MLIR.IR.@dispose ctx = Reactant.ReactantContext() begin
+            ir = Reactant.code_hlo(ctx, traced_add, (a_ra, b_ra); optimize=false)
+            func_names = [
+                String(Reactant.MLIR.IR.getattr(op, "sym_name")) for
+                op in Reactant.MLIR.IR.body(ir)
+            ]
+            @test any(contains("traced_add"), func_names)
+            MLIR.IR.dispose(ir)
+        end
 
         # Should also work with regular arrays (outside compile context)
         @test traced_add(a, b) ≈ a .+ b
@@ -857,12 +1112,16 @@ end
         b_ra = Reactant.to_rarray(b)
 
         @test @jit(traced_multiply(a_ra, b_ra)) ≈ traced_multiply(a, b)
-        ir = @code_hlo optimize = false traced_multiply(a_ra, b_ra)
-        func_names = [
-            String(Reactant.MLIR.IR.getattr(op, "sym_name")) for
-            op in Reactant.MLIR.IR.body(ir)
-        ]
-        @test any(contains("traced_multiply"), func_names)
+
+        MLIR.IR.@dispose ctx = Reactant.ReactantContext() begin
+            ir = Reactant.code_hlo(ctx, traced_multiply, (a_ra, b_ra); optimize=false)
+            func_names = [
+                String(Reactant.MLIR.IR.getattr(op, "sym_name")) for
+                op in Reactant.MLIR.IR.body(ir)
+            ]
+            @test any(contains("traced_multiply"), func_names)
+            MLIR.IR.dispose(ir)
+        end
 
         @test traced_multiply(a, b) ≈ a .* b
     end
@@ -874,12 +1133,16 @@ end
         a_ra = Reactant.to_rarray(a)
 
         @test @jit(singleline(a_ra)) ≈ singleline(a)
-        ir = @code_hlo optimize = false singleline(a_ra)
-        func_names = [
-            String(Reactant.MLIR.IR.getattr(op, "sym_name")) for
-            op in Reactant.MLIR.IR.body(ir)
-        ]
-        @test any(contains("singleline"), func_names)
+
+        MLIR.IR.@dispose ctx = Reactant.ReactantContext() begin
+            ir = Reactant.code_hlo(ctx, singleline, (a_ra,); optimize=false)
+            func_names = [
+                String(Reactant.MLIR.IR.getattr(op, "sym_name")) for
+                op in Reactant.MLIR.IR.body(ir)
+            ]
+            @test any(contains("singleline"), func_names)
+            MLIR.IR.dispose(ir)
+        end
 
         @test singleline(a) ≈ a .+ 1
     end
@@ -899,12 +1162,15 @@ end
         fn1 = FunctorTest1(2.0f0)
 
         @test @jit(fn1(a_ra)) ≈ fn1(a)
-        ir = @code_hlo optimize = false fn1(a_ra)
-        func_names = [
-            String(Reactant.MLIR.IR.getattr(op, "sym_name")) for
-            op in Reactant.MLIR.IR.body(ir)
-        ]
-        @test any(contains("FunctorTest1"), func_names)
+        MLIR.IR.@dispose ctx = Reactant.ReactantContext() begin
+            ir = Reactant.code_hlo(ctx, fn1, (a_ra,); optimize=false)
+            func_names = [
+                String(Reactant.MLIR.IR.getattr(op, "sym_name")) for
+                op in Reactant.MLIR.IR.body(ir)
+            ]
+            @test any(contains("FunctorTest1"), func_names)
+            MLIR.IR.dispose(ir)
+        end
 
         @test fn1(a) ≈ a .+ 2.0f0
     end
@@ -918,12 +1184,18 @@ end
         a_ra = Reactant.to_rarray(a)
 
         @test @jit(func_with_kwargs(a_ra; y=2.0f0)) ≈ func_with_kwargs(a; y=2.0f0)
-        ir = @code_hlo optimize = false func_with_kwargs(a_ra; y=2.0f0)
-        func_names = [
-            String(Reactant.MLIR.IR.getattr(op, "sym_name")) for
-            op in Reactant.MLIR.IR.body(ir)
-        ]
-        @test any(contains("kwcall"), func_names)
+
+        MLIR.IR.@dispose ctx = Reactant.ReactantContext() begin
+            ir = Reactant.code_hlo(
+                ctx, func_with_kwargs, (a_ra,); optimize=false, fn_kwargs=(; y=2.0f0)
+            )
+            func_names = [
+                String(Reactant.MLIR.IR.getattr(op, "sym_name")) for
+                op in Reactant.MLIR.IR.body(ir)
+            ]
+            @test any(contains("kwcall"), func_names)
+            MLIR.IR.dispose(ir)
+        end
 
         @test func_with_kwargs(a; y=2.0f0) ≈ a .+ 2.0f0
     end
@@ -963,6 +1235,36 @@ end
     @test simulation.running == false
     @test simulation.clock.iteration == 3
     @test simulation.stop_iteration == 3
+end
+
+mutable struct PlainFieldCache{U,C,B}
+    u::U
+    count::C
+    done::B
+end
+
+function plain_field_assigned(u, threshold, init, assigned)
+    c = PlainFieldCache(u, init, ReactantCore.promote_to_traced(false))
+    @trace if sum(u) > threshold
+        c.count = assigned
+        c.done = true
+    end
+    return c.count, c.done
+end
+
+function plain_field_untouched(u, threshold)
+    c = PlainFieldCache(u, 0, ReactantCore.promote_to_traced(false))
+    @trace if sum(u) > threshold
+        c.done = true
+    end
+    return c.count, c.done
+end
+
+@testset "if: assignment to an untraced struct field" begin
+    u = Reactant.to_rarray(Float32[1, 1])
+    @test_throws "untraced location" @jit plain_field_assigned(u, 1.0f0, 0, 1)
+    @test_throws "untraced location" @jit plain_field_assigned(u, 1.0f0, 0.5, 2.5)
+    @test @jit(plain_field_untouched(u, 1.0f0)) == (0, true)
 end
 
 function ternary_max(x, y)
@@ -1075,4 +1377,370 @@ end
 
     @test a_ra ≈ a
     @test b_ra ≈ b
+end
+
+function f_not_traced_conditional(cond, x)
+    @trace if cond
+        x = x .* 2
+    else
+        x = x .* 3
+    end
+    return x
+end
+
+@testset "not traced conditional" begin
+    cond = false
+    x = [1, 2, 3]
+    x_ra = Reactant.to_rarray(x)
+    cond = false
+
+    @test f_not_traced_conditional(cond, x) == @jit(f_not_traced_conditional(cond, x_ra))
+end
+
+function condition_assign_static(cond, x)
+    ans = 0.0
+    @trace if cond
+        ans = sum(x)
+        nothing
+    end
+    return ans
+end
+
+function condition_assign_multiple(cond, x)
+    a = 1.0
+    b = 2.0
+    @trace if cond
+        a = sum(x)
+        b = a * 2
+    else
+        a = -sum(x)
+    end
+    return a, b
+end
+
+function condition_assign_else_only(cond, x)
+    ans = 0.0
+    @trace if cond
+        # nothing
+    else
+        ans = sum(x)
+    end
+    return ans
+end
+
+@testset "@trace if assignment to static/local variables" begin
+    @testset "assign static" begin
+        x = [1.0, 2.0, 3.0]
+        x_ra = Reactant.to_rarray(x)
+
+        cond_true = ConcreteRNumber{Bool}(true)
+        @test @jit(condition_assign_static(cond_true, x_ra)) ≈ sum(x)
+        @test condition_assign_static(true, x) ≈ sum(x)
+
+        cond_false = ConcreteRNumber{Bool}(false)
+        @test @jit(condition_assign_static(cond_false, x_ra)) ≈ 0.0
+        @test condition_assign_static(false, x) ≈ 0.0
+    end
+
+    @testset "assign multiple" begin
+        x = [1.0, 2.0, 3.0]
+        x_ra = Reactant.to_rarray(x)
+
+        cond_true = ConcreteRNumber{Bool}(true)
+        res_ra = @jit(condition_assign_multiple(cond_true, x_ra))
+        res = condition_assign_multiple(true, x)
+        @test res_ra[1] ≈ res[1]
+        @test res_ra[2] ≈ res[2]
+
+        cond_false = ConcreteRNumber{Bool}(false)
+        res_ra = @jit(condition_assign_multiple(cond_false, x_ra))
+        res = condition_assign_multiple(false, x)
+        @test res_ra[1] ≈ res[1]
+        @test res_ra[2] ≈ res[2]
+    end
+
+    @testset "assign else only" begin
+        x = [1.0, 2.0, 3.0]
+        x_ra = Reactant.to_rarray(x)
+
+        cond_true = ConcreteRNumber{Bool}(true)
+        @test @jit(condition_assign_else_only(cond_true, x_ra)) ≈ 0.0
+        @test condition_assign_else_only(true, x) ≈ 0.0
+
+        cond_false = ConcreteRNumber{Bool}(false)
+        @test @jit(condition_assign_else_only(cond_false, x_ra)) ≈ sum(x)
+        @test condition_assign_else_only(false, x) ≈ sum(x)
+    end
+end
+
+function _isreal2(num)  # 2686
+    ren, imn = reim(num)
+    ren2 = ren^2
+    imn2 = imn^2
+    return Base.:&(1, (imn2 / (imn2 + ren2)) < eps(real(num)))
+end
+
+function test(b)
+    numreals = sum(_isreal2, b)
+    ans = 0.0
+    @trace if numreals == 4
+        ans = sum(Base.real, b)
+        nothing
+    end
+    return ans
+end
+
+@testset "Issue #2686" begin
+    a = [rand(4) .+ rand(4)im, [-5.0 + 0.0im, 1.0 + 2.0im, 1.0 - 2.0im, -5.0 + 0.0im]]
+    b = Reactant.to_rarray(a)
+    testr = @compile test.(b)
+    @test testr(b) == test.(a)
+end
+
+function while_loop_calling_closure(d, B)
+    applyA = P -> d .* P
+    X = zero(B)
+    R = copy(B)
+    conv = one(eltype(B))
+    i = 0
+    @trace while (i < 10) & (conv > 1e-12)
+        AP = applyA(R)
+        X = X .+ AP
+        R = R .- AP .* 0.5
+        conv = maximum(sum(abs2, R; dims=1))
+        i += 1
+    end
+    return X
+end
+
+function for_loop_calling_closure(d, B)
+    applyA = P -> d .* P
+    X = zero(B)
+    R = copy(B)
+    @trace for i in 1:10
+        AP = applyA(R)
+        X = X .+ AP
+        R = R .- AP .* 0.5
+    end
+    return X
+end
+
+@testset "traced loops calling closures that capture traced values" begin
+    d = rand(3) .+ 1
+    B = rand(3, 4)
+    rd = Reactant.to_rarray(d)
+    rB = Reactant.to_rarray(B)
+
+    while_compiled = @compile while_loop_calling_closure(rd, rB)
+    @test Array(while_compiled(rd, rB)) ≈ while_loop_calling_closure(d, B)
+
+    for_compiled = @compile for_loop_calling_closure(rd, rB)
+    @test Array(for_compiled(rd, rB)) ≈ for_loop_calling_closure(d, B)
+end
+
+# A static parameter can't be rebound with `local`, so naming one in a traced loop body,
+# whether called or passed as a value, must still lower.
+function for_loop_using_static_param(x::AbstractVector{T}) where {T}
+    @trace for i in 1:length(x)
+        @allowscalar x[i] = T(0.5) * x[i] + convert(T, i)
+    end
+    return x
+end
+
+function while_loop_using_static_param(x::AbstractVector{T}, n) where {T}
+    i = 1
+    @trace while i <= n
+        @allowscalar x[i] = x[i] + one(T)
+        i += 1
+    end
+    return x
+end
+
+@testset "traced loops using static parameters" begin
+    x = Float32[1, 2, 3, 4]
+
+    @test Array(@jit(for_loop_using_static_param(Reactant.to_rarray(x)))) ≈
+        for_loop_using_static_param(copy(x))
+    @test Array(
+        @jit(while_loop_using_static_param(Reactant.to_rarray(x), ConcreteRNumber(3)))
+    ) ≈ while_loop_using_static_param(copy(x), 3)
+end
+
+function condition13_bareif_no_final_else(cond, numreals)
+    @trace if cond
+        1.0
+    elseif numreals == 4
+        2.0
+    elseif numreals == 2
+        3.0
+    elseif numreals == 0
+        4.0
+    end
+end
+
+@testset "condition13: bare if with no final else" begin
+    @test @jit(
+        condition13_bareif_no_final_else(ConcreteRNumber(true), ConcreteRNumber(4))
+    ) === nothing
+    @test @jit(
+        condition13_bareif_no_final_else(ConcreteRNumber(false), ConcreteRNumber(4))
+    ) === nothing
+    @test @jit(
+        condition13_bareif_no_final_else(ConcreteRNumber(false), ConcreteRNumber(2))
+    ) === nothing
+    @test @jit(
+        condition13_bareif_no_final_else(ConcreteRNumber(false), ConcreteRNumber(0))
+    ) === nothing
+    @test @jit(
+        condition13_bareif_no_final_else(ConcreteRNumber(false), ConcreteRNumber(99))
+    ) === nothing
+end
+
+function condition14_ifelse_assign_return(x)
+    return @trace y = if x > 0
+        1
+    else
+        -1
+    end
+end
+
+@testset "condition14: if/else assign returned directly" begin
+    @test @jit(condition14_ifelse_assign_return(ConcreteRNumber(1.0))) == 1
+    @test @jit(condition14_ifelse_assign_return(ConcreteRNumber(-1.0))) == -1
+end
+
+function condition15_ifelseifelse_assign_return(x)
+    return @trace y = if x > 0
+        1
+    elseif x == 0
+        0
+    else
+        -1
+    end
+end
+
+@testset "condition15: if/elseif/else assign returned directly" begin
+    @test @jit(condition15_ifelseifelse_assign_return(ConcreteRNumber(1.0))) == 1
+    @test @jit(condition15_ifelseifelse_assign_return(ConcreteRNumber(0.0))) == 0
+    @test @jit(condition15_ifelseifelse_assign_return(ConcreteRNumber(-1.0))) == -1
+end
+
+function condition16_nested_ifelse_assign_return(x)
+    return @trace y = if x > 0
+        1
+    else
+        if x == 0
+            0
+        else
+            -1
+        end
+    end
+end
+
+@testset "condition16: nested if/else assign returned directly" begin
+    @test @jit(condition16_nested_ifelse_assign_return(ConcreteRNumber(1.0))) == 1
+    @test @jit(condition16_nested_ifelse_assign_return(ConcreteRNumber(0.0))) == 0
+    @test @jit(condition16_nested_ifelse_assign_return(ConcreteRNumber(-1.0))) == -1
+end
+
+function myfunc_traced_if_in_for(x)  # compute sum of positive elements in x
+    s = zero(eltype(x))
+    @trace for i in eachindex(x)
+        @allowscalar cond = x[i] > 0
+        @trace if cond
+            @allowscalar s += x[i]
+        end
+    end
+    return s
+end
+
+function nested_trace_if_for(u, mask)
+    acc = zero(eltype(u))
+    n = length(u)
+    keep = sum(mask) > 0
+
+    @trace if keep
+        @trace for i in 1:n
+            acc = acc + @allowscalar(u[i])
+        end
+        out = acc
+    else
+        out = acc
+    end
+
+    return out
+end
+
+@testset "for in if and if in for" begin
+    u = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float64, 16))
+    for mask_val in (true, false)
+        mask = Reactant.ConcreteRArray(fill(mask_val, 16))
+        @test @jit(nested_trace_if_for(u, mask)) ≈
+            nested_trace_if_for(Array(u), Array(mask))
+    end
+
+    x = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float64, 10))
+    @test @jit(myfunc_traced_if_in_for(x)) ≈ myfunc_traced_if_in_for(Array(x))
+end
+
+traced_call_double(x) = x .* 2
+
+function traced_call_in_if(x)
+    @trace if sum(x) > 0
+        y = @trace traced_call_double(x)
+    else
+        y = x
+    end
+    return y
+end
+
+function traced_bcast_in_if(x)
+    @trace if sum(x) > 0
+        y = @trace sin.(x)
+    else
+        y = x
+    end
+    return y
+end
+
+@testset "@trace call inside @trace if" begin
+    for x in (ones(4), -ones(4))
+        x_ra = Reactant.to_rarray(x)
+        @test @jit(traced_call_in_if(x_ra)) ≈ traced_call_in_if(x)
+        @test @jit(traced_bcast_in_if(x_ra)) ≈ traced_bcast_in_if(x)
+    end
+end
+
+# Issue #3476: a zero-length array captured by a traced loop (and thus carried
+# through the `stablehlo.while`) must not end up as a `tensor.empty` in the
+# optimized module, which XLA cannot export.
+function zero_length_loop_capture!(state, n)
+    @trace track_numbers = false for _ in 1:n
+        state.x .+= length(state.empty)
+    end
+    return nothing
+end
+
+function zero_length_loop_capture_use!(state, n)
+    @trace track_numbers = false for _ in 1:n
+        state.x .+= sum(state.empty) .+ 1
+    end
+    return nothing
+end
+
+@testset "zero-length array captured by traced loop (#3476)" begin
+    state = (
+        empty=Reactant.to_rarray(zeros(Float32, 0)), x=Reactant.to_rarray(ones(Float32, 3))
+    )
+    hlo = repr(@code_hlo optimize = true zero_length_loop_capture!(state, 3))
+    @test !occursin("tensor.empty", hlo)
+    @jit zero_length_loop_capture!(state, 3)
+    @test Array(state.x) ≈ ones(Float32, 3)
+    @test length(state.empty) == 0
+
+    hlo = repr(@code_hlo optimize = true zero_length_loop_capture_use!(state, 3))
+    @test !occursin("tensor.empty", hlo)
+    @jit zero_length_loop_capture_use!(state, 3)
+    @test Array(state.x) ≈ fill(4.0f0, 3)
+    @test length(state.empty) == 0
 end

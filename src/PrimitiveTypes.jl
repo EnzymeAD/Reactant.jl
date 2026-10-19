@@ -24,10 +24,8 @@ for T in (:F8E5M2, :F8E4M3FN, :F8E4M3B11FNUZ, :F8E5M2FNUZ, :F8E4M3FNUZ)
         Base.promote_rule(::Type{Bool}, ::Type{$(T)}) = $(T)
         Base.promote_rule(::Type{$(T)}, ::Type{Bool}) = $(T)
 
-        @static if isdefined(Core, :BFloat16)
-            Base.promote_rule(::Type{$(T)}, ::Type{Core.BFloat16}) = Core.BFloat16
-            Base.promote_rule(::Type{Core.BFloat16}, ::Type{$(T)}) = Core.BFloat16
-        end
+        Base.promote_rule(::Type{$(T)}, ::Type{BFloat16}) = BFloat16
+        Base.promote_rule(::Type{BFloat16}, ::Type{$(T)}) = BFloat16
     end
 end
 
@@ -51,17 +49,17 @@ Base.convert(::Type{T}, x::T) where {T<:ReactantFloat8} = x
 
 # TODO(#2254): Quantized types
 
-@static if isdefined(Core, :BFloat16)
-    const ReactantFloat = Union{
-        Float16,Core.BFloat16,Float32,Float64,Base.uniontypes(ReactantFloat8)...
-    }
-else
-    const ReactantFloat = Union{Float16,Float32,Float64,Base.uniontypes(ReactantFloat8)...}
-end
+const ReactantFloat = Union{
+    Float16,BFloat16,Float32,Float64,Base.uniontypes(ReactantFloat8)...
+}
 
 const ReactantComplexFloat = Union{Complex{Float32},Complex{Float64}}
 
-const ReactantInt = Union{Int8,UInt8,Int16,UInt16,Int32,UInt32,Int64,UInt64}
+const ReactantSInt = Union{Int8,Int16,Int32,Int64}
+
+const ReactantUInt = Union{UInt8,UInt16,UInt32,UInt64}
+
+const ReactantInt = Union{Base.uniontypes(ReactantSInt)...,Base.uniontypes(ReactantUInt)...}
 
 const ReactantComplexInt = Union{[Complex{T} for T in Base.uniontypes(ReactantInt)]...}
 

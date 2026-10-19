@@ -257,8 +257,7 @@ function supported_lhs_eltype(dot_algorithm_preset::DotGeneralAlgorithmPreset.T)
         dot_algorithm_preset == DotGeneralAlgorithmPreset.BF16_BF16_F32_X3 ||
         dot_algorithm_preset == DotGeneralAlgorithmPreset.BF16_BF16_F32_X6 ||
         dot_algorithm_preset == DotGeneralAlgorithmPreset.BF16_BF16_F32_X9
-        isdefined(Core, :BFloat16) || error("BFloat16 is not defined!")
-        return Core.BFloat16
+        return BFloat16
     end
 
     if dot_algorithm_preset == DotGeneralAlgorithmPreset.F64_F64_F64
@@ -282,8 +281,7 @@ function accumulation_eltype(dot_algorithm_preset::DotGeneralAlgorithmPreset.T)
     dot_algorithm_preset == DotGeneralAlgorithmPreset.F16_F16_F16 && return Float16
 
     if dot_algorithm_preset == DotGeneralAlgorithmPreset.BF16_BF16_BF16
-        isdefined(Core, :BFloat16) || error("BFloat16 is not defined!")
-        return Core.BFloat16
+        return BFloat16
     end
 
     dot_algorithm_preset == DotGeneralAlgorithmPreset.F64_F64_F64 && return Float64
@@ -304,9 +302,8 @@ function supported_output_type(
     end
 
     if dot_algorithm_preset == DotGeneralAlgorithmPreset.BF16_BF16_F32
-        isdefined(Core, :BFloat16) || error("BFloat16 is not defined!")
-        return if promote_type(T1, T2) == Core.BFloat16
-            Union{Core.BFloat16,Float32}
+        return if promote_type(T1, T2) == BFloat16
+            Union{BFloat16,Float32}
         else
             Float32
         end
@@ -343,30 +340,23 @@ function DotGeneralAlgorithm(
     end
 
     if dot_algorithm_preset == DotGeneralAlgorithmPreset.BF16_BF16_BF16
-        isdefined(Core, :BFloat16) || error("BFloat16 is not defined!")
-        return DotGeneralAlgorithm{Core.BFloat16,Core.BFloat16,Core.BFloat16}(
-            1, 1, 1, false
-        )
+        return DotGeneralAlgorithm{BFloat16,BFloat16,BFloat16}(1, 1, 1, false)
     end
 
     if dot_algorithm_preset == DotGeneralAlgorithmPreset.BF16_BF16_F32
-        isdefined(Core, :BFloat16) || error("BFloat16 is not defined!")
-        return DotGeneralAlgorithm{Core.BFloat16,Core.BFloat16,Float32}(1, 1, 1, false)
+        return DotGeneralAlgorithm{BFloat16,BFloat16,Float32}(1, 1, 1, false)
     end
 
     if dot_algorithm_preset == DotGeneralAlgorithmPreset.BF16_BF16_F32_X3
-        isdefined(Core, :BFloat16) || error("BFloat16 is not defined!")
-        return DotGeneralAlgorithm{Core.BFloat16,Core.BFloat16,Float32}(1, 1, 3, false)
+        return DotGeneralAlgorithm{BFloat16,BFloat16,Float32}(1, 1, 3, false)
     end
 
     if dot_algorithm_preset == DotGeneralAlgorithmPreset.BF16_BF16_F32_X6
-        isdefined(Core, :BFloat16) || error("BFloat16 is not defined!")
-        return DotGeneralAlgorithm{Core.BFloat16,Core.BFloat16,Float32}(1, 1, 6, false)
+        return DotGeneralAlgorithm{BFloat16,BFloat16,Float32}(1, 1, 6, false)
     end
 
     if dot_algorithm_preset == DotGeneralAlgorithmPreset.BF16_BF16_F32_X9
-        isdefined(Core, :BFloat16) || error("BFloat16 is not defined!")
-        return DotGeneralAlgorithm{Core.BFloat16,Core.BFloat16,Float32}(1, 1, 9, false)
+        return DotGeneralAlgorithm{BFloat16,BFloat16,Float32}(1, 1, 9, false)
     end
 
     if dot_algorithm_preset == DotGeneralAlgorithmPreset.F32_F32_F32

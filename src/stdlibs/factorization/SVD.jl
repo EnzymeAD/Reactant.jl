@@ -19,6 +19,21 @@ function BatchedSVD(U::M, S::C, Vt::M) where {M,C}
     return BatchedSVD{eltype(U),eltype(S),M,C}(U, S, Vt)
 end
 
+function Base.getproperty(F::BatchedSVD, d::Symbol)
+    if d === :V
+        return adjoint(getfield(F, :Vt))
+    else
+        return getfield(F, d)
+    end
+end
+
+Base.propertynames(::BatchedSVD) = (:U, :S, :V, :Vt)
+
+Base.iterate(F::BatchedSVD) = (F.U, Val(:S))
+Base.iterate(F::BatchedSVD, ::Val{:S}) = (F.S, Val(:V))
+Base.iterate(F::BatchedSVD, ::Val{:V}) = (F.V, Val(:done))
+Base.iterate(::BatchedSVD, ::Val{:done}) = nothing
+
 struct DefaultEnzymeXLASVDAlgorithm <: LinearAlgebra.Algorithm end
 struct JacobiAlgorithm <: LinearAlgebra.Algorithm end
 

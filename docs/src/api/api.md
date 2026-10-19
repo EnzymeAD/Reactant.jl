@@ -19,6 +19,16 @@ within_compile
 
 ```@docs
 @trace
+ReactantCore.@annotate
+ReactantCore.annotate
+Binomial
+Periodic
+```
+
+## Converting Data
+
+```@docs
+Reactant.to_rarray
 ```
 
 ## Reactant data types
@@ -26,6 +36,8 @@ within_compile
 ```@docs
 ConcreteRArray
 ConcreteRNumber
+Reactant.TracedEnum
+Reactant.ConcreteEnum
 ```
 
 ## Inspect Generated HLO
@@ -34,6 +46,9 @@ ConcreteRNumber
 @code_hlo
 @code_mhlo
 @code_xla
+Reactant.code_hlo
+Reactant.code_mhlo
+Reactant.code_xla
 ```
 
 ## Compile Options
@@ -50,6 +65,12 @@ OptimizeCommunicationOptions
 ShardyPropagationOptions
 ```
 
+### Communications Specific Options (MPI, NCCL, ...)
+
+```@docs
+Reactant.CommOptions
+```
+
 ## Tracing customization
 
 ```@docs
@@ -64,13 +85,16 @@ See the [profiling tutorial](@ref profiling) for more details.
 
 ```@docs
 Reactant.Profiler.with_profiler
-Reactant.Profiler.annotate
-Reactant.Profiler.@annotate
 Reactant.Profiler.@time
 Reactant.Profiler.@timed
+Reactant.Profiler.@timed_compile
+Reactant.Profiler.profile_compile_timings
+Reactant.Profiler.CompileTimings
 Reactant.Profiler.@profile
 Reactant.Profiler.profiler_activity_start
 Reactant.Profiler.profiler_activity_end
+Reactant.Profiler.get_total_program_roofline
+Reactant.Profiler.DEFAULT_PM_COUNTERS
 ```
 
 ### XProf APIs

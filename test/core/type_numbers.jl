@@ -1,5 +1,5 @@
 # Tests for type handling, scalars, and number operations
-using Reactant, Test, Enzyme
+using Reactant, Test, Enzyme, FileCheck
 using ArrayInterface
 
 const RunningOnTPU = contains(string(Reactant.devices()[1]), "TPU")
@@ -91,7 +91,12 @@ end
 end
 
 @testset "ifelse" begin
-    @test 1.0 == @test_warn r"`ifelse` with different element-types" @jit(
+    # The warning is `maxlog = 1`, so whether the process has already emitted it
+    # depends on which test files the worker ran before this one. @test_logs
+    # installs a fresh TestLogger with its own maxlog count, so it sees the
+    # warning either way; @test_warn only reads what reaches stderr.
+    @test 1.0 ==
+        @test_logs (:warn, r"`ifelse` with different element-types") match_mode = :any @jit(
         ifelse(ConcreteRNumber(true), ConcreteRNumber(1.0), ConcreteRNumber(0.0f0))
     )
     @test @jit(
@@ -237,19 +242,28 @@ end
 
 @testset "AbstractRange Unwanted Promotions" begin
     hlo1 = @code_hlo Reactant.promote_to(Reactant.TracedRArray, Base.OneTo(Int32(42)))
-    @test !contains(repr(hlo1), "42xi64")
-    @test contains(repr(hlo1), "42xi32")
+    @test @filecheck begin
+        @check_not "42xi64"
+        @check "42xi32"
+        repr(hlo1)
+    end
 
     hlo2 = @code_hlo Reactant.promote_to(Reactant.TracedRArray, Int32(34):(Int32(42)))
-    @test !contains(repr(hlo2), "9xi64")
-    @test contains(repr(hlo2), "9xi32")
+    @test @filecheck begin
+        @check_not "9xi64"
+        @check "9xi32"
+        repr(hlo2)
+    end
 
     hlo3 = @code_hlo Reactant.promote_to(
         Reactant.TracedRArray, Int16(34):Int16(3):(Int16(42))
     )
-    @test !contains(repr(hlo3), "3xi64")
-    @test !contains(repr(hlo3), "3xi32")
-    @test contains(repr(hlo3), "3xi16")
+    @test @filecheck begin
+        @check_not "3xi64"
+        @check_not "3xi32"
+        @check "3xi16"
+        repr(hlo3)
+    end
 end
 
 bc_apply(t::NTuple{N,T}, x) where {N,T} = sum(ntuple(n -> t[n], Val(N))) * x

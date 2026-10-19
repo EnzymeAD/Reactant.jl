@@ -1,10 +1,5 @@
-struct IntegerSet
+@checked struct IntegerSet
     ref::API.MlirIntegerSet
-
-    function IntegerSet(set)
-        @assert !mlirIsNull(set) "cannot create IntegerSet with null MlirIntegerSet"
-        return new(set)
-    end
 end
 
 """

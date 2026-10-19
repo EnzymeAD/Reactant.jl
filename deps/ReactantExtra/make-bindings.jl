@@ -16,6 +16,7 @@ dialect_files = [
     "Func.jl",
     "Enzyme.jl",
     "EnzymeXLA.jl",
+    "Impulse.jl",
     "StableHLO.jl",
     "CHLO.jl",
     "VHLO.jl",
@@ -33,6 +34,8 @@ dialect_files = [
     "Tensor.jl",
     "Shape.jl",
     "TritonExt.jl",
+    "CUDATile.jl",
+    "Comm.jl",
 ]
 
 other_files = ["libMLIR_h.jl"]

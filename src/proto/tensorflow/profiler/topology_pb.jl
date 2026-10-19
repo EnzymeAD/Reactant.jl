@@ -14,10 +14,10 @@ end
 PB.default_values(::Type{var"LogicalTopology.HostNetworkAddress"}) = (;address = "", interface_name = "")
 PB.field_numbers(::Type{var"LogicalTopology.HostNetworkAddress"}) = (;address = 1, interface_name = 2)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"LogicalTopology.HostNetworkAddress"})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"LogicalTopology.HostNetworkAddress"}, _endpos::Int=0, _group::Bool=false)
     address = ""
     interface_name = ""
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             address = PB.decode(d, String)
@@ -56,7 +56,7 @@ end
 PB.default_values(::Type{TopologyLocation}) = (;x = zero(Int32), y = zero(Int32), z = zero(Int32), host_x = zero(Int32), host_y = zero(Int32), host_z = zero(Int32), index_on_host = zero(Int32), global_id = zero(Int32))
 PB.field_numbers(::Type{TopologyLocation}) = (;x = 1, y = 2, z = 3, host_x = 4, host_y = 5, host_z = 6, index_on_host = 7, global_id = 8)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:TopologyLocation})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:TopologyLocation}, _endpos::Int=0, _group::Bool=false)
     x = zero(Int32)
     y = zero(Int32)
     z = zero(Int32)
@@ -65,7 +65,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:TopologyLocation})
     host_z = zero(Int32)
     index_on_host = zero(Int32)
     global_id = zero(Int32)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             x = PB.decode(d, Int32)
@@ -123,11 +123,11 @@ end
 PB.default_values(::Type{TopologyDimension}) = (;x = zero(Int32), y = zero(Int32), z = zero(Int32))
 PB.field_numbers(::Type{TopologyDimension}) = (;x = 1, y = 2, z = 3)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:TopologyDimension})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:TopologyDimension}, _endpos::Int=0, _group::Bool=false)
     x = zero(Int32)
     y = zero(Int32)
     z = zero(Int32)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             x = PB.decode(d, Int32)
@@ -165,11 +165,11 @@ end
 PB.default_values(::Type{var"LogicalTopology.LogicalDevice"}) = (;global_id = zero(Int32), slice_local_id = zero(Int32), host_local_id = zero(Int32))
 PB.field_numbers(::Type{var"LogicalTopology.LogicalDevice"}) = (;global_id = 1, slice_local_id = 2, host_local_id = 3)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"LogicalTopology.LogicalDevice"})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"LogicalTopology.LogicalDevice"}, _endpos::Int=0, _group::Bool=false)
     global_id = zero(Int32)
     slice_local_id = zero(Int32)
     host_local_id = zero(Int32)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             global_id = PB.decode(d, Int32)
@@ -207,11 +207,11 @@ end
 PB.default_values(::Type{Topology}) = (;chips_per_host_bounds = nothing, host_bounds = nothing, mesh_location = Vector{TopologyLocation}())
 PB.field_numbers(::Type{Topology}) = (;chips_per_host_bounds = 1, host_bounds = 2, mesh_location = 3)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:Topology})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:Topology}, _endpos::Int=0, _group::Bool=false)
     chips_per_host_bounds = Ref{Union{Nothing,TopologyDimension}}(nothing)
     host_bounds = Ref{Union{Nothing,TopologyDimension}}(nothing)
     mesh_location = PB.BufferedVector{TopologyLocation}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, chips_per_host_bounds)
@@ -249,11 +249,11 @@ end
 PB.default_values(::Type{var"LogicalTopology.LogicalHost"}) = (;slice_local_id = zero(Int32), network_addresses = Vector{var"LogicalTopology.HostNetworkAddress"}(), devices = Vector{var"LogicalTopology.LogicalDevice"}())
 PB.field_numbers(::Type{var"LogicalTopology.LogicalHost"}) = (;slice_local_id = 1, network_addresses = 2, devices = 3)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"LogicalTopology.LogicalHost"})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"LogicalTopology.LogicalHost"}, _endpos::Int=0, _group::Bool=false)
     slice_local_id = zero(Int32)
     network_addresses = PB.BufferedVector{var"LogicalTopology.HostNetworkAddress"}()
     devices = PB.BufferedVector{var"LogicalTopology.LogicalDevice"}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             slice_local_id = PB.decode(d, Int32)
@@ -290,10 +290,10 @@ end
 PB.default_values(::Type{var"LogicalTopology.LogicalSlice"}) = (;global_id = zero(Int32), hosts = Vector{var"LogicalTopology.LogicalHost"}())
 PB.field_numbers(::Type{var"LogicalTopology.LogicalSlice"}) = (;global_id = 1, hosts = 2)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"LogicalTopology.LogicalSlice"})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"LogicalTopology.LogicalSlice"}, _endpos::Int=0, _group::Bool=false)
     global_id = zero(Int32)
     hosts = PB.BufferedVector{var"LogicalTopology.LogicalHost"}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             global_id = PB.decode(d, Int32)
@@ -325,9 +325,9 @@ end
 PB.default_values(::Type{LogicalTopology}) = (;slices = Vector{var"LogicalTopology.LogicalSlice"}())
 PB.field_numbers(::Type{LogicalTopology}) = (;slices = 1)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:LogicalTopology})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:LogicalTopology}, _endpos::Int=0, _group::Bool=false)
     slices = PB.BufferedVector{var"LogicalTopology.LogicalSlice"}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, slices)

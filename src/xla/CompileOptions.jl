@@ -12,7 +12,7 @@ function get_default_debug_options()
         return DEFAULT_XLA_DEBUG_OPTIONS[]::Reactant.Proto.xla.DebugOptions
     end
     size = Ref{Csize_t}(0)
-    data = @ccall MLIR.API.mlir_c.ReactantGetDebugOptions(size::Ptr{Csize_t})::Ptr{UInt8}
+    data = Base.unsafe_convert(Ptr{UInt8}, MLIR.API.ReactantGetDebugOptions(size))
     bytes = unsafe_wrap(Array, data, (size[],); own=false)
     proto = Reactant.ProtoUtils.proto_from_bytes(Reactant.Proto.xla.DebugOptions, bytes)
     @ccall free(data::Ptr{UInt8})::Cvoid
@@ -25,7 +25,7 @@ function get_default_compile_options()
         return DEFAULT_XLA_COMPILE_OPTIONS[]::Reactant.Proto.xla.CompileOptionsProto
     end
     size = Ref{Csize_t}(0)
-    data = @ccall MLIR.API.mlir_c.ReactantGetCompileOptions(size::Ptr{Csize_t})::Ptr{UInt8}
+    data = Base.unsafe_convert(Ptr{UInt8}, MLIR.API.ReactantGetCompileOptions(size))
     bytes = unsafe_wrap(Array, data, (size[],); own=false)
     proto = Reactant.ProtoUtils.proto_from_bytes(
         Reactant.Proto.xla.CompileOptionsProto, bytes
@@ -41,7 +41,6 @@ function get_debug_options(; kwargs...)
     # default overrides. can we changed by the user by passing in kwargs
     @set! debug_options.xla_gpu_cuda_data_dir = CUDA_DATA_DIR[]
     @set! debug_options.xla_enable_enzyme_comms_opt = true
-    @set! debug_options.xla_gpu_experimental_use_raft_select_k = true
 
     if Reactant.PersistentCompileCache.kernel_cache_enabled()
         @set! debug_options.xla_gpu_kernel_cache_file = Reactant.PersistentCompileCache.get_kernel_cache_path()

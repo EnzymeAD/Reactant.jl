@@ -1,4 +1,4 @@
-using Reactant, Test, Enzyme
+using Reactant, Test, Enzyme, FileCheck
 
 const addressable_devices = Reactant.addressable_devices()
 const RunningOnTPU = contains(string(Reactant.devices()[1]), "TPU")
@@ -14,6 +14,12 @@ end
     if length(addressable_devices) ≥ 2
         mesh = Sharding.Mesh(collect(Int64, 0:(length(addressable_devices) - 1)), ("x",))
         ConcreteRNumber(2.0; sharding=Sharding.Replicated(mesh))
+    end
+end
+
+@testset "Device Addressability" begin
+    for d in Reactant.devices()
+        @test Reactant.XLA.is_addressable(d) isa Bool
     end
 end
 
@@ -214,9 +220,15 @@ end
         end
 
         hlo = @code_hlo shardy_passes = :none fn_with_constraint(x_ra)
-        @test contains(repr(hlo), "sharding_constraint")
+        @test @filecheck begin
+            @check "sharding_constraint"
+            repr(hlo)
+        end
         hlo = @code_hlo shardy_passes = :to_mhlo_shardings fn_with_constraint(x_ra)
-        @test !contains(repr(hlo), "sharding_constraint")
+        @test @filecheck begin
+            @check_not "sharding_constraint"
+            repr(hlo)
+        end
         @test length(collect(eachmatch(r"mhlo.sharding", repr(hlo)))) == 5
 
         z = Reactant.to_rarray(x; sharding=constraint)
@@ -237,11 +249,17 @@ end
         x_ra_no_sharding = Reactant.to_rarray(x)
 
         hlo = @code_hlo shardy_passes = :none fn_with_constraint(x_ra_no_sharding)
-        @test contains(repr(hlo), "sharding_constraint")
+        @test @filecheck begin
+            @check "sharding_constraint"
+            repr(hlo)
+        end
         hlo = @code_hlo shardy_passes = :to_mhlo_shardings fn_with_constraint(
             x_ra_no_sharding
         )
-        @test !contains(repr(hlo), "sharding_constraint")
+        @test @filecheck begin
+            @check_not "sharding_constraint"
+            repr(hlo)
+        end
         @test length(collect(eachmatch(r"mhlo.sharding", repr(hlo)))) == 5
 
         res = @jit fn_with_constraint(x_ra_no_sharding)
@@ -381,9 +399,10 @@ end
 
         @jit test1!(x_ra, z_ra)
 
-        @test contains(
-            string(Reactant.XLA.sharding(z_ra.data.buffer)), "SingleDeviceSharding"
-        )
+        @test @filecheck begin
+            @check "SingleDeviceSharding"
+            string(Reactant.XLA.sharding(z_ra.data.buffer))
+        end
     else
         @warn "Not enough addressable devices to run sharding tests"
     end
@@ -481,7 +500,10 @@ end
             sharding=Sharding.NamedSharding(mesh, (:x, :y)),
         )
         hlo = @code_xla sum(x_ra)
-        contains(repr(hlo), "num_partitions=8")
+        @filecheck begin
+            @check "num_partitions=8"
+            repr(hlo)
+        end
     end skip = RunningOnTPU
 end
 
@@ -544,3 +566,100 @@ end
         @warn "Not enough addressable devices to run sharding tests"
     end
 end
+
+#=
+# FIXME: This is commented out since it causes a segfault currently
+@testset "InterpolateArray" begin
+    if Reactant.XLA.runtime() isa Val{:IFRT}
+        N = min((length(Reactant.devices()) ÷ 2) * 2, 1)
+
+        # Use 1 device if only 1 is available, or 2 if available to test actual sharding
+        if length(addressable_devices) == 1
+            mesh = Sharding.Mesh(reshape(Reactant.devices()[1:N], 1, 1), (:x,))
+            sharding = Sharding.NamedSharding(mesh, ("x", nothing, nothing))
+        else
+            mesh = Sharding.Mesh(reshape(Reactant.devices()[1:N], N ÷ 2, 2), (:x, "y"))
+            sharding = Sharding.NamedSharding(mesh, ("x", "y", nothing))
+        end
+        # Source array: 2x2x2
+        src = reshape(Float32[1:8;], 2, 2, 2)
+        final_size = (4, 4, 4)
+        # Local reference implementations
+        function local_nearest(arr, fsize)
+            res = Array{eltype(arr)}(undef, fsize)
+            for I in CartesianIndices(fsize)
+                idx = ntuple(
+                    d -> clamp(
+                        div(
+                            2 * (I.I[d] - 1) * (size(arr, d) - 1) + fsize[d] - 1,
+                            2 * (fsize[d] - 1),
+                        ) + 1,
+                        1,
+                        size(arr, d),
+                    ),
+                    ndims(arr),
+                )
+                res[I] = arr[CartesianIndex(idx)]
+            end
+            return res
+        end
+
+        function local_linear(arr, fsize)
+            res = Array{eltype(arr)}(undef, fsize)
+            dens = ntuple(d -> fsize[d] - 1, ndims(arr))
+            total_den = prod(dens)
+            for I in CartesianIndices(fsize)
+                sum_val = 0.0
+                lows = ntuple(
+                    d -> clamp(
+                        div((I.I[d] - 1) * (size(arr, d) - 1), fsize[d] - 1) + 1,
+                        1,
+                        size(arr, d),
+                    ),
+                    ndims(arr),
+                )
+                highs = ntuple(
+                    d -> clamp(
+                        div(
+                            (I.I[d] - 1) * (size(arr, d) - 1) + fsize[d] - 2,
+                            fsize[d] - 1,
+                        ) + 1,
+                        1,
+                        size(arr, d),
+                    ),
+                    ndims(arr),
+                )
+                rems = ntuple(
+                    d -> rem((I.I[d] - 1) * (size(arr, d) - 1), fsize[d] - 1), ndims(arr)
+                )
+
+                corner_space = CartesianIndices(ntuple(_ -> 2, ndims(arr)))
+                for c in corner_space
+                    idx = ntuple(d -> c[d] == 1 ? lows[d] : highs[d], ndims(arr))
+                    w_int = prod(
+                        ntuple(d -> c[d] == 1 ? (dens[d] - rems[d]) : rems[d], ndims(arr))
+                    )
+                    sum_val += w_int * arr[CartesianIndex(idx)]
+                end
+                res[I] = sum_val / total_den
+            end
+            return res
+        end
+
+        # Test Nearest Neighbor
+        carray_nearest = Reactant.InterpolateArray(
+            src, final_size, sharding, Reactant.InterpolationType.Nearest
+        )
+        @test size(carray_nearest) == final_size
+        @test Array(carray_nearest) ≈ local_nearest(src, final_size)
+        # Test Linear
+        carray_linear = Reactant.InterpolateArray(
+            src, final_size, sharding, Reactant.InterpolationType.Linear
+        )
+        @test size(carray_linear) == final_size
+        @test Array(carray_linear) ≈ local_linear(src, final_size)
+    else
+        @warn "Wrong backend type to run InterpolateArray tests"
+    end
+end
+=#

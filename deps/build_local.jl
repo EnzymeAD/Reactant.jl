@@ -46,6 +46,36 @@ function get_cuda_version()
     return current_cuda_version
 end
 
+function amdDriverInitialized()::Bool
+    amdgpu_module_path = "/sys/module/amdgpu"
+
+    # First, check if the driver's module directory exists.
+    if isdir(amdgpu_module_path)
+        initstate_path = joinpath(amdgpu_module_path, "initstate")
+
+        if isfile(initstate_path)
+            # Case 1: The driver is a loadable module.
+            # We need to read its state to see if it's 'live'.
+            # The `open...do` block ensures the file is closed automatically.
+            found = open(initstate_path) do file
+                contains(read(file, String), "live")
+            end
+            if found
+                @debug "Detected AMD live driver"
+            end
+            return true
+        else
+            # Case 2: The directory exists but `initstate` does not.
+            # This implies the driver is built into the kernel and is active.
+            @debug "Detected AMD driver built into kernel"
+            return true
+        end
+    end
+
+    # If the directory doesn't exist, the driver isn't available.
+    return false
+end
+
 s = ArgParseSettings()
 #! format: off
 @add_arg_table! s begin
@@ -87,6 +117,12 @@ s = ArgParseSettings()
         help = "Set to `yes` to enable color output, or `no` to disable it. Defaults to same color setting as the Julia process."
         default = something(Base.have_color, false) ? "yes" : "no"
         arg_type = String
+    "--cache"
+        help = "Build with bazel cache."
+        action = :store_true
+    "--push-cache"
+        help = "Build and store to bazel cache."
+        action = :store_true
 end
 #! format: on
 parsed_args = parse_args(ARGS, s)
@@ -122,6 +158,8 @@ struct CUDABackend <: AbstractBackend
     CUDABackend(ver::VersionNumber) = new(VersionNumber(ver.major))
 end
 
+struct ROCMBackend <: AbstractBackend end
+
 function parse_build_backend(str::String)::AbstractBackend
     if str == "cpu"
         return CPUBackend()
@@ -129,11 +167,15 @@ function parse_build_backend(str::String)::AbstractBackend
         return CUDABackend(v"12")
     elseif str == "cuda13"
         return CUDABackend(v"13")
+    elseif str == "rocm"
+        return ROCMBackend()
     end
 
-    if str in ("auto", "cuda")
+    if str in ("auto", "cuda", "rocm")
         cuda_ver = get_cuda_version()
-        if isnothing(cuda_ver)
+        if !isnothing(cuda_ver)
+            return CUDABackend(get_cuda_version())
+        else
             if str == "cuda"
                 throw(
                     AssertionError(
@@ -141,10 +183,19 @@ function parse_build_backend(str::String)::AbstractBackend
                     ),
                 )
             end
-            return CPUBackend()
-        else
-            return CUDABackend(get_cuda_version())
         end
+        if amdDriverInitialized()
+            return ROCMBackend()
+        else
+            if str == "rocm"
+                throw(
+                    AssertionError(
+                        "Could not detect ROCm device, but requested ROCm with auto version build",
+                    ),
+                )
+            end
+        end
+        return CPUBackend()
     else
         error("Unknown backend '$(str)'")
     end
@@ -158,6 +209,8 @@ arg = if build_backend == CUDABackend(v"12")
     "--config=cuda12"
 elseif build_backend == CUDABackend(v"13")
     "--config=cuda13"
+elseif build_backend == ROCMBackend()
+    "--config=rocm"
 elseif build_backend == CPUBackend()
     ""
 else
@@ -197,7 +250,16 @@ cc_is_gcc, gcc_version = let
 end
 
 build_cmd_list = [bazel_cmd, "build"]
-!isempty(arg) && push!(build_cmd_list, arg)
+if !isempty(arg)
+    push!(build_cmd_list, arg)
+    push!(build_cmd_list, "--config=cuda_static")
+end
+if parsed_args["cache"]
+    push!(build_cmd_list, "--config=public_cache")
+end
+if parsed_args["push-cache"]
+    push!(build_cmd_list, "--config=public_cache_push")
+end
 append!(build_cmd_list, ["-c", "$(build_kind)"])
 push!(build_cmd_list, "--action_env=JULIA=$(Base.julia_cmd().exec[1])")
 push!(build_cmd_list, "--repo_env=HERMETIC_PYTHON_VERSION=$(hermetic_python_version)")
@@ -209,9 +271,7 @@ push!(build_cmd_list, "--check_visibility=false")
 push!(build_cmd_list, "--verbose_failures")
 push!(build_cmd_list, "--jobs=$(parsed_args["jobs"])")
 push!(build_cmd_list, "--experimental_ui_max_stdouterr_bytes=-1")
-push!(build_cmd_list, "--sandbox_debug")
-
-push!(build_cmd_list, "--linkopt=-fuse-ld=lld")
+push!(build_cmd_list, "--spawn_strategy=local")
 
 for opt in parsed_args["copt"]
     push!(build_cmd_list, "--copt=$(opt)")
@@ -238,11 +298,25 @@ if cc_is_gcc
         end
     end
 else
-    # Assume the compiler is clang if not GCC. `using_clang` is an option
-    # introduced by Enzyme-JAX.
-    push!(build_cmd_list, "--define=using_clang=true")
     push!(build_cmd_list, "--copt=-Wno-unused-command-line-argument")
 end
+
+if Sys.isapple()
+    # Native macOS build: use the local Apple toolchain. The jll builds cross-compile
+    # from Linux with `--config=macos` instead, so keep these flags out of that config.
+    push!(build_cmd_list, "--config=macos_local")
+
+    # With only the Command Line Tools installed (no Xcode.app), Bazel can't detect any
+    # Xcode version and falls back to its default macOS SDK (10.11), which `xcrun` can't
+    # find. Pass the SDK version actually available on this machine.
+    macos_sdk_version = strip(read(`xcrun --sdk macosx --show-sdk-version`, String))
+    push!(build_cmd_list, "--macos_sdk_version=$(macos_sdk_version)")
+end
+
+if !isnothing(Sys.which("lld"))
+    push!(build_cmd_list, "--linkopt=-fuse-ld=lld")
+end
+
 push!(build_cmd_list, "--copt=-Wno-private-header")
 push!(build_cmd_list, "--color=$(parsed_args["color"])")
 push!(build_cmd_list, ":libReactantExtra.so")

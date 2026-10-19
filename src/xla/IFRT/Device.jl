@@ -4,25 +4,20 @@ end
 
 function XLA.client(device::Device)
     GC.@preserve device begin
-        return Client(
-            @ccall MLIR.API.mlir_c.ifrt_DeviceToClient(
-                device.device::Ptr{Cvoid}
-            )::Ptr{Cvoid}
-        )
+        client_ptr = MLIR.API.ifrt_DeviceToClient(device.device)
+        return Client(client_ptr)
     end
 end
 
 function XLA.device_ordinal(device::Device)
     GC.@preserve device begin
-        return @ccall MLIR.API.mlir_c.ifrt_DeviceGetGlobalDeviceId(
-            device.device::Ptr{Cvoid}
-        )::Int64
+        return MLIR.API.ifrt_DeviceGetGlobalDeviceId(device.device)
     end
 end
 
 function XLA.device_kind(device::Device)
     GC.@preserve device begin
-        str = @ccall MLIR.API.mlir_c.ifrt_DeviceGetKind(device.device::Ptr{Cvoid})::Cstring
+        str = MLIR.API.ifrt_DeviceGetKind(device.device)
     end
     return XLA.unsafe_string_and_free(str)
 end
@@ -33,28 +28,20 @@ end
 
 function XLA.get_local_hardware_id(device::Device)
     GC.@preserve device begin
-        return @ccall MLIR.API.mlir_c.ifrt_DeviceGetLocalHardwareId(
-            device.device::Ptr{Cvoid}
-        )::Cint
+        return MLIR.API.ifrt_DeviceGetLocalHardwareId(device.device)
     end
 end
 
 function XLA.default_memory(device::Device)
     GC.@preserve device begin
-        return Memory(
-            @ccall MLIR.API.mlir_c.ifrt_DeviceGetDefaultMemory(
-                device.device::Ptr{Cvoid}
-            )::Ptr{Cvoid}
-        )
+        return Memory(MLIR.API.ifrt_DeviceGetDefaultMemory(device.device))
     end
 end
 
 function XLA.memories(device::Device)
     memories_size = Ref{Int32}(0)
     GC.@preserve device memories_size begin
-        ptr = @ccall MLIR.API.mlir_c.ifrt_DeviceGetMemories(
-            device.device::Ptr{Cvoid}, memories_size::Ptr{Int32}
-        )::Ptr{Ptr{Cvoid}}
+        ptr = MLIR.API.ifrt_DeviceGetMemories(device.device, memories_size)
     end
     return [Memory(unsafe_load(ptr, i)) for i in 1:memories_size[]]
 end
@@ -75,16 +62,14 @@ end
 
 function XLA.is_addressable(device::Device)
     GC.@preserve device begin
-        return @ccall MLIR.API.mlir_c.ifrt_DeviceIsAddressable(
-            device.device::Ptr{Cvoid}
-        )::Bool
+        return MLIR.API.ifrt_DeviceIsAddressable(device.device)
     end
 end
 
 function XLA.allocatorstats_internal(device::Device)
-    ref = Ref{XLA.JLAllocatorStats}()
-    @ccall MLIR.API.mlir_c.ifrt_device_get_allocator_stats(
-        device.device::Ptr{Cvoid}, ref::Ptr{Cvoid}
-    )::Cvoid
+    ref = Ref{MLIR.API.JLAllocatorStats}()
+    GC.@preserve device begin
+        MLIR.API.ifrt_device_get_allocator_stats(device.device, ref)
+    end
     return ref[]
 end

@@ -19,7 +19,7 @@ end
 PB.default_values(::Type{PowerComponentMetrics}) = (;component_name = "", max_power = zero(Float64), avg_power = zero(Float64), max_moving_avg_power_100us = zero(Float64), max_moving_avg_power_1ms = zero(Float64), max_moving_avg_power_10ms = zero(Float64), timescale_us = zero(UInt32), sample_count = zero(UInt64), max_moving_avg_power_1s = zero(Float64))
 PB.field_numbers(::Type{PowerComponentMetrics}) = (;component_name = 1, max_power = 2, avg_power = 3, max_moving_avg_power_100us = 4, max_moving_avg_power_1ms = 5, max_moving_avg_power_10ms = 6, timescale_us = 7, sample_count = 8, max_moving_avg_power_1s = 9)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:PowerComponentMetrics})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:PowerComponentMetrics}, _endpos::Int=0, _group::Bool=false)
     component_name = ""
     max_power = zero(Float64)
     avg_power = zero(Float64)
@@ -29,7 +29,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:PowerComponentMetrics})
     timescale_us = zero(UInt32)
     sample_count = zero(UInt64)
     max_moving_avg_power_1s = zero(Float64)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             component_name = PB.decode(d, String)
@@ -89,9 +89,9 @@ end
 PB.default_values(::Type{PowerMetrics}) = (;power_component_metrics = Vector{PowerComponentMetrics}())
 PB.field_numbers(::Type{PowerMetrics}) = (;power_component_metrics = 1)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:PowerMetrics})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:PowerMetrics}, _endpos::Int=0, _group::Bool=false)
     power_component_metrics = PB.BufferedVector{PowerComponentMetrics}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, power_component_metrics)

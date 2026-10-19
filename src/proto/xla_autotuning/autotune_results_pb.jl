@@ -11,9 +11,9 @@ end
 PB.default_values(::Type{AutotuningLogs}) = (;logs = Vector{AutotuningLog}())
 PB.field_numbers(::Type{AutotuningLogs}) = (;logs = 1)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:AutotuningLogs})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:AutotuningLogs}, _endpos::Int=0, _group::Bool=false)
     logs = PB.BufferedVector{AutotuningLog}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             PB.decode!(d, logs)
@@ -44,12 +44,12 @@ end
 PB.default_values(::Type{var"AutotuneResults.Entry"}) = (;device = "", hlo = "", result = nothing, version = zero(Int32))
 PB.field_numbers(::Type{var"AutotuneResults.Entry"}) = (;device = 1, hlo = 2, result = 3, version = 4)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"AutotuneResults.Entry"})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"AutotuneResults.Entry"}, _endpos::Int=0, _group::Bool=false)
     device = ""
     hlo = ""
     result = Ref{Union{Nothing,AutotuneResult}}(nothing)
     version = zero(Int32)
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             device = PB.decode(d, String)
@@ -91,10 +91,10 @@ PB.reserved_fields(::Type{AutotuneResults}) = (names = String[], numbers = Union
 PB.default_values(::Type{AutotuneResults}) = (;version = zero(Int32), results = Vector{var"AutotuneResults.Entry"}())
 PB.field_numbers(::Type{AutotuneResults}) = (;version = 1, results = 4)
 
-function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:AutotuneResults})
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:AutotuneResults}, _endpos::Int=0, _group::Bool=false)
     version = zero(Int32)
     results = PB.BufferedVector{var"AutotuneResults.Entry"}()
-    while !PB.message_done(d)
+    while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             version = PB.decode(d, Int32)

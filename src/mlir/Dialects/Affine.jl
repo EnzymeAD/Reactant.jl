@@ -144,6 +144,108 @@ function delinearize_index(
 end
 
 """
+`dma_start`
+
+The `affine.dma_start` op starts a non-blocking DMA operation that
+transfers data from a source memref to a destination memref. The source and
+destination memref need not be of the same dimensionality, but need to have
+the same elemental type. The operands include the source and destination
+memref\'s each followed by its indices, size of the data transfer in terms of
+the number of elements (of the elemental type of the memref), a tag memref
+with its indices, and optionally at the end, a stride and a
+number_of_elements_per_stride arguments. The tag location is used by an
+`affine.dma_wait` to check for completion. The indices of the source memref,
+destination memref, and the tag memref have the same restrictions as any
+affine.load/store. In particular, index for each memref dimension must be an
+affine expression of loop induction variables and symbols.
+
+The optional stride arguments should be of \'index\' type, and specify a
+stride for the slower memory space (memory space with a lower memory space
+id), transferring chunks of number_of_elements_per_stride every stride until
+%num_elements are transferred. Either both or no stride arguments should be
+specified. The value of \'num_elements\' must be a multiple of
+\'number_of_elements_per_stride\'. If the source and destination locations
+overlap the behavior of this operation is not defined.
+
+# Example
+
+```mlir
+%num_elements = arith.constant 256
+%idx = arith.constant 0 : index
+%tag = memref.alloc() : memref<1xi32, 4>
+affine.dma_start %src[%i + 3, %j], %dst[%k + 7, %l], %tag[%idx],
+  %num_elements :
+    memref<40x128xf32, 0>, memref<2x1024xf32, 1>, memref<1xi32, 2>
+
+// If %stride and %num_elt_per_stride are specified, the DMA is expected to
+// transfer %num_elt_per_stride elements every %stride elements apart from
+// memory space 0 until %num_elements are transferred.
+affine.dma_start %src[%i, %j], %dst[%k, %l], %tag[%idx], %num_elements,
+  %stride, %num_elt_per_stride : ...
+```
+"""
+function dma_start(operand_0::Vector{Value}; src_map, dst_map, tag_map, location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[operand_0...,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[
+        NamedAttribute("src_map", src_map),
+        NamedAttribute("dst_map", dst_map),
+        NamedAttribute("tag_map", tag_map),
+    ]
+
+    return create_operation(
+        "affine.dma_start",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`dma_wait`
+
+The `affine.dma_wait` op blocks until the completion of a DMA operation
+associated with the tag element `%tag[%index]`. `%tag` is a memref, and
+`%index` has to be an index with the same restrictions as any load/store
+index. In particular, index for each memref dimension must be an affine
+expression of loop induction variables and symbols. `%num_elements` is the
+number of elements associated with the DMA operation.
+
+# Example
+
+```mlir
+affine.dma_start %src[%i, %j], %dst[%k, %l], %tag[%index], %num_elements :
+  memref<2048xf32, 0>, memref<256xf32, 1>, memref<1xi32, 2>
+...
+affine.dma_wait %tag[%index], %num_elements : memref<1xi32, 2>
+```
+"""
+function dma_wait(operand_0::Vector{Value}; tag_map, location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[operand_0...,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[NamedAttribute("tag_map", tag_map),]
+
+    return create_operation(
+        "affine.dma_wait",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
 `for_`
 
 # Syntax
@@ -441,17 +543,16 @@ In the above example, `%linear_index` conceptually holds the following:
 function linearize_index(
     multi_index::Vector{Value},
     dynamic_basis::Vector{Value};
-    linear_index=nothing::Union{Nothing,IR.Type},
+    linear_index::IR.Type,
     static_basis,
     location=Location(),
 )
-    op_ty_results = IR.Type[]
+    op_ty_results = IR.Type[linear_index,]
     operands = Value[multi_index..., dynamic_basis...]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[NamedAttribute("static_basis", static_basis),]
     push!(attributes, operandsegmentsizes([length(multi_index), length(dynamic_basis)]))
-    !isnothing(linear_index) && push!(op_ty_results, linear_index)
 
     return create_operation(
         "affine.linearize_index",
@@ -460,8 +561,8 @@ function linearize_index(
         owned_regions,
         successors,
         attributes,
-        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
-        result_inference=(length(op_ty_results) == 0 ? true : false),
+        results=op_ty_results,
+        result_inference=false,
     )
 end
 
@@ -492,15 +593,27 @@ Example 2: Uses `symbol` keyword for symbols `%n` and `%m`.
 ```mlir
 %1 = affine.load %0[%i0 + symbol(%n), %i1 + symbol(%m)] : memref<100x100xf32>
 ```
+
+An optional `alignment` attribute allows to specify the byte alignment of
+the load operation. It must be a positive power of 2. The operation must
+access memory at an address aligned to this boundary. Violations may lead
+to architecture-specific faults or performance penalties.
+A value of 0 indicates no specific alignment requirement.
 """
 function load(
-    memref::Value, indices::Vector{Value}; result::IR.Type, map, location=Location()
+    memref::Value,
+    indices::Vector{Value};
+    result::IR.Type,
+    map,
+    alignment=nothing,
+    location=Location(),
 )
     op_ty_results = IR.Type[result,]
     operands = Value[memref, indices...]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[NamedAttribute("map", map),]
+    !isnothing(alignment) && push!(attributes, NamedAttribute("alignment", alignment))
 
     return create_operation(
         "affine.load",
@@ -777,15 +890,27 @@ Example 2: Uses `symbol` keyword for symbols `%n` and `%m`.
 ```mlir
 affine.store %v0, %0[%i0 + symbol(%n), %i1 + symbol(%m)] : memref<100x100xf32>
 ```
+
+An optional `alignment` attribute allows to specify the byte alignment of
+the store operation. It must be a positive power of 2. The operation must
+access memory at an address aligned to this boundary. Violations may lead
+to architecture-specific faults or performance penalties.
+A value of 0 indicates no specific alignment requirement.
 """
 function store(
-    value::Value, memref::Value, indices::Vector{Value}; map, location=Location()
+    value::Value,
+    memref::Value,
+    indices::Vector{Value};
+    map,
+    alignment=nothing,
+    location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[value, memref, indices...]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[NamedAttribute("map", map),]
+    !isnothing(alignment) && push!(attributes, NamedAttribute("alignment", alignment))
 
     return create_operation(
         "affine.store",
@@ -839,13 +964,19 @@ TODOs:
 (see [vector.transfer_read](../Vector/#vectortransfer_read-mlirvectortransferreadop)).
 """
 function vector_load(
-    memref::Value, indices::Vector{Value}; result::IR.Type, map, location=Location()
+    memref::Value,
+    indices::Vector{Value};
+    result::IR.Type,
+    map,
+    alignment=nothing,
+    location=Location(),
 )
     op_ty_results = IR.Type[result,]
     operands = Value[memref, indices...]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[NamedAttribute("map", map),]
+    !isnothing(alignment) && push!(attributes, NamedAttribute("alignment", alignment))
 
     return create_operation(
         "affine.vector_load",
@@ -901,13 +1032,19 @@ TODOs:
 (see [vector.transfer_write](../Vector/#vectortransfer_write-mlirvectortransferwriteop)).
 """
 function vector_store(
-    value::Value, memref::Value, indices::Vector{Value}; map, location=Location()
+    value::Value,
+    memref::Value,
+    indices::Vector{Value};
+    map,
+    alignment=nothing,
+    location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[value, memref, indices...]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[NamedAttribute("map", map),]
+    !isnothing(alignment) && push!(attributes, NamedAttribute("alignment", alignment))
 
     return create_operation(
         "affine.vector_store",

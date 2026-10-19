@@ -4,6 +4,10 @@ module Sharding
 using ..Reactant: Reactant, XLA, MLIR, ShardyPropagationOptions
 using ReactantCore: ReactantCore
 
+# `mlir::sdy::ReductionOp::SUM`. The reduction op is only meaningful for shardings with
+# unreduced axes, which we never generate, so we always use the default `SUM`.
+const SDY_REDUCTION_OP_SUM = UInt32(0)
+
 """
     Mesh(devices::AbstractArray{XLA.AbstractDevice}, axis_names)
 
@@ -564,6 +568,7 @@ function get_tensor_sharding_attribute(
             MLIR.API.MlirAttribute[],
             0,
             MLIR.API.MlirAttribute[],
+            SDY_REDUCTION_OP_SUM,
         ),
     )
     return tensor_sharding_attr, :sdy
@@ -583,9 +588,8 @@ function sharding_to_array_slices(
 
     if needs_padding
         # MLIR for identity operation, avoid tracing here
-        ctx = MLIR.IR.Context(Reactant.registry[], false)
-        @ccall MLIR.API.mlir_c.RegisterDialects(ctx::MLIR.API.MlirContext)::Cvoid
-        MLIR.IR.activate!(ctx)
+        ctx = Reactant.ReactantContext()
+        MLIR.IR.activate(ctx)
 
         sdycache = Reactant.Compiler.default_sdycache()
         Reactant.Compiler.activate_sdycache!(sdycache)
@@ -606,11 +610,11 @@ function sharding_to_array_slices(
             )
             fnbody = MLIR.IR.Block(data_mlir_type, [MLIR.IR.Location()])
             push!(MLIR.IR.region(func, 1), fnbody)
-            MLIR.IR.activate!(fnbody)
+            MLIR.IR.activate(fnbody)
             try
                 MLIR.Dialects.func.return_([MLIR.IR.argument(fnbody, 1)])
             finally
-                MLIR.IR.deactivate!(fnbody)
+                MLIR.IR.deactivate(fnbody)
             end
             push!(MLIR.IR.body(mod), func)
 
@@ -642,7 +646,10 @@ function sharding_to_array_slices(
             @assert !needs_padding "This shouldn't happen. Open an issue on Reactant.jl.\nInput shape: $(size_x).\nOriginal Sharding: $(string(hlo_sharding.hlo_sharding)).\nNew sharding: $(string(new_hlo_sharding)).\nArray Slices: $(device_to_array_slices)."
         finally
             Reactant.Compiler.deactivate_sdycache!(sdycache)
-            MLIR.IR.deactivate!(ctx)
+            MLIR.IR.deactivate(ctx)
+            # This context is always freshly created above, so dispose it
+            # unconditionally to avoid leaking it (see issue #2944).
+            MLIR.IR.dispose(ctx)
         end
     end
 
@@ -837,23 +844,34 @@ function HloSharding(sharding::DimsSharding, size_x)
 end
 
 function Base.convert(::Type{HloSharding}, sharding::NamedSharding)
-    MLIR.IR.with_context(; allow_use_existing=true) do ctx
-        mesh_op = Reactant.Ops.mesh(
-            sharding.mesh; mod=MLIR.IR.Module(MLIR.IR.Location(; context=ctx))
-        )
+    # Reuse the active context when one exists (e.g. inside `@compile`); otherwise
+    # create a temporary one and dispose it below. MLIR contexts have no finalizer, so a
+    # locally created context must be disposed explicitly or it leaks (see issue #2944).
+    has_ctx = MLIR.IR.has_context()
+    ctx = has_ctx ? MLIR.IR.current_context() : Reactant.ReactantContext()
+    try
+        MLIR.IR.@with_context ctx begin
+            mesh_op = Reactant.Ops.mesh(
+                sharding.mesh; mod=MLIR.IR.Module(MLIR.IR.Location(; context=ctx))
+            )
 
-        tensor_sharding_attr, _ = get_tensor_sharding_attribute(
-            sharding, ctx, mesh_op.sym_name, mesh_op.mesh_attr, nothing; dialect=:sdy
-        )
+            tensor_sharding_attr, _ = get_tensor_sharding_attribute(
+                sharding, ctx, mesh_op.sym_name, mesh_op.mesh_attr, nothing; dialect=:sdy
+            )
 
-        return HloSharding(
-            hlo_sharding_from_sdy_tensor_sharding_attr(
-                tensor_sharding_attr, mesh_op.mesh_attr
-            ),
-            sharding.mesh,
-            sharding.is_closed,
-            sharding.priority,
-        )
+            # The returned `XLA.HloSharding` is a standalone object that does not reference
+            # `ctx`, so disposing the context afterwards is safe.
+            return HloSharding(
+                hlo_sharding_from_sdy_tensor_sharding_attr(
+                    tensor_sharding_attr, mesh_op.mesh_attr
+                ),
+                sharding.mesh,
+                sharding.is_closed,
+                sharding.priority,
+            )
+        end
+    finally
+        has_ctx || MLIR.IR.dispose(ctx)
     end
 end
 
@@ -861,11 +879,7 @@ function hlo_sharding_from_sdy_tensor_sharding_attr(attr, mesh_attr)
     @assert MLIR.API.sdyAttributeIsATensorShardingAttr(attr)
     @assert MLIR.API.sdyAttributeIsAMeshAttr(mesh_attr)
     GC.@preserve attr begin
-        return XLA.HloSharding(
-            @ccall MLIR.API.mlir_c.hloShardingFromTensorShardingAttr(
-                attr::MLIR.API.MlirAttribute, mesh_attr::MLIR.API.MlirAttribute
-            )::Ptr{Cvoid}
-        )
+        return XLA.HloSharding(MLIR.API.hloShardingFromTensorShardingAttr(attr, mesh_attr))
     end
 end
 
@@ -892,7 +906,7 @@ function sharding_to_array_slices(
         else
             Reactant.ConcreteRArray(ones(Float32, size_x...); kws...)
         end
-        _, exec, _, _, _, _ = Reactant.Compiler.compile_xla(
+        exec, _, _, _, _ = Reactant.Compiler.compile_xla(
             Reactant.Ops.negate, (tmp,); input_shardings=IdDict(tmp => sharding)
         )
 
@@ -1034,15 +1048,15 @@ function get_tensor_sharding_attribute(
         string_mesh_name = MLIR.IR.Attribute(MLIR.IR.flatsymbol(mesh_name); context=ctx)
         GC.@preserve sharding begin
             attr = MLIR.IR.Attribute(
-                @ccall MLIR.API.mlir_c.hloShardingToTensorShardingAttr(
-                    ctx::MLIR.API.MlirContext,
-                    sharding.hlo_sharding.ptr::Ptr{Cvoid},
-                    string_mesh_name::MLIR.API.MlirAttribute,
-                    mesh_attr::MLIR.API.MlirAttribute,
-                    Int64(length(sharding.is_closed))::Int64,
-                    Bool[sharding.is_closed...]::Ptr{Bool},
-                    Int64[sharding.priority...]::Ptr{Int64},
-                )::MLIR.API.MlirAttribute
+                MLIR.API.hloShardingToTensorShardingAttr(
+                    ctx,
+                    sharding.hlo_sharding.ptr,
+                    string_mesh_name,
+                    mesh_attr,
+                    length(sharding.is_closed),
+                    Bool[sharding.is_closed...],
+                    Int64[sharding.priority...],
+                ),
             )
         end
         return attr, :sdy
@@ -1145,17 +1159,19 @@ function sdy_sharding_to_reactant_sharding(attr, global_device_ids, mod)
         )
     end
 
-    mesh_op = MLIR.IR.Operation(
-        MLIR.API.mlirSymbolTableLookup(
-            MLIR.IR.SymbolTable(MLIR.IR.Operation(mod)),
-            MLIR.IR.leafref(
-                MLIR.IR.Attribute(MLIR.API.sdyTensorShardingAttrGetMeshOrRef(mlir_attr))
-            ),
-        ),
-        false,
-    )
+    # As the name says, this is either the mesh itself or a reference to one
+    # defined elsewhere in the module; only the latter needs looking up.
+    mesh_or_ref = MLIR.IR.Attribute(MLIR.API.sdyTensorShardingAttrGetMeshOrRef(mlir_attr))
+    mesh_attr = if MLIR.API.sdyAttributeIsAMeshAttr(mesh_or_ref)
+        mesh_or_ref
+    else
+        mesh_op = MLIR.IR.@dispose sym_table = MLIR.IR.SymbolTable(mod) begin
+            MLIR.IR.lookup(sym_table, MLIR.IR.leafref(mesh_or_ref))
+        end
+        MLIR.IR.getattr(mesh_op, "mesh")
+    end
     return sdy_tensor_sharding_to_named_sharding(
-        sdy_mesh_to_reactant_mesh(MLIR.IR.getattr(mesh_op, "mesh"), global_device_ids),
+        sdy_mesh_to_reactant_mesh(mesh_attr, global_device_ids),
         MLIR.IR.Attribute(mlir_attr),
     )
 end

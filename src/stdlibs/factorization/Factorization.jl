@@ -62,3 +62,31 @@ function _overloaded_backslash(F::BatchedAdjointFactorization, B::AbstractArray)
     ldiv!(F, BB)
     return BB[1:size(F)[2], ntuple(Returns(Colon()), ndims(B) - 1)...]
 end
+
+function Base.:(\)(
+    A::TracedRArray{<:Any,2}, B::Union{TracedRArray{<:Any,2},TracedRArray{<:Any,1}}
+)
+    m, n = size(A)
+    if m == n
+        A_is_tril = istril(A)
+        A_is_triu = istriu(A)
+        @trace if A_is_tril & A_is_triu
+            res = Diagonal(A) \ B
+        elseif A_is_tril
+            res = LowerTriangular(A) \ B
+        elseif A_is_triu
+            res = UpperTriangular(A) \ B
+        else
+            res = lu(A) \ B
+        end
+        return res
+    end
+    return qr(A, ColumnNorm()) \ B
+end
+
+function Base.:(\)(D::Diagonal{<:TracedRNumber}, B::AnyTracedRVector)
+    # TODO: errors
+    # j = findfirst(iszero, D.diag)
+    # isnothing(j) || throw(SingularException(j))
+    return D.diag .\ B
+end

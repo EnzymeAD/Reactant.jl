@@ -1,3 +1,16 @@
+@kwdef struct MultiFloatOptions
+    source::String = "f64"
+    target::String = "f32"
+    dimension::String = "first"
+    limbs::Int = 2
+end
+
+function Base.String(options::MultiFloatOptions)
+    return (
+        "multi-float-conversion{source-type=$(options.source) target-type=$(options.target) concat-dimension=$(options.dimension) expansion-size=$(options.limbs)}"
+    )
+end
+
 # TODO(#2265): document these options at some point
 """
     OptimizeCommunicationOptions
@@ -20,8 +33,12 @@ communication.
     extend_to_pad_comm2::Int = 1
     wrap_to_pad_comm::Int = 0
     rotate_spmd::Int = 1
-    wrap_to_rotate::Int = 1
+    multirotate_spmd::Int = 0
+    wrap_to_rotate::Int = 0
     updatewithoutcorners_to_select::Int = 1
+    multirotate_custom_call::Int = 1
+    multislice_custom_call::Int = 1
+    wrap_custom_call::Int = 1
 end
 
 function Base.String(options::OptimizeCommunicationOptions)
@@ -30,6 +47,23 @@ function Base.String(options::OptimizeCommunicationOptions)
         join(["$(f)=$(getfield(options, f))" for f in fieldnames(typeof(options))], " ") *
         "}"
     )
+end
+
+"""
+    CommOptions
+
+Fine-grained control over the optimization and lowering passes related to the `comm` dialect.
+
+## Options
+
+  - `lowering_target::Symbol`: the target backend for the communication operations. Valid values are `:jit` (default) and `:ffi`.
+    `:jit` lowers ops to `enzymexla.jit_call` ops, while `:ffi` lowers ops to `stablehlo.custom_call` ops.
+  - `legalize_mpi_to_nccl::Bool`: whether to legalize `comm.mpi` ops to `comm.nccl` ops when backend is CUDA.
+    Defaults to `true`.
+"""
+@kwdef struct CommOptions
+    lowering_target::Symbol = :jit
+    legalize_mpi_to_nccl::Bool = true
 end
 
 """
@@ -174,8 +208,19 @@ Fine-grained control over the compilation options for the Reactant compiler.
     optimization passes. (Default: `false`).
   - `disable_pad_optimization_passes`: Disables the pad optimization passes. This is
     `false` by default.
+  - `disable_dot_formation_passes`: Disables turning contractions written as
+    `reduce(mul)` into `dot_general`. On GPU, small contractions can run faster as fused
+    reductions. (Default: `false`).
+  - `max_reused_const_prop_size`: Constant propagation folds an op whose non-splat
+    constant operand has other users (so the folded constant is added beside it) only when
+    the result has at most this many elements, e.g. small index and mask computations. `0`
+    folds such an op only when a non-splat operand dies with it. (Default: `1024`).
   - `disable_licm_optimization_passes`: Disables the Loop Invariant Code Motion (LICM)
     optimization passes. (Default: `false`).
+  - `loop_unswitch_threshold`: Threshold passed to the `loop_unswitch` pattern inside the
+    LICM pass group. A negative value disables the pattern entirely. (Default: `10`).
+  - `excluded_passes`: A list of pass base-names (e.g. `["loop_unswitch"]`) that should be
+    omitted from the generated pass pipeline. (Default: `String[]`).
   - `disable_reduce_slice_fusion_passes`: Disables fusion of slice elementwise and reduce
     operations. (Default `false`).
   - `disable_slice_to_batch_passes`: Disables the slice to batch fusion optimization passes.
@@ -188,6 +233,9 @@ Fine-grained control over the compilation options for the Reactant compiler.
     passes. (Default `true`).
   - `disable_structured_tensors_passes`: Disables structured tensors optimization passes.
     (Default `false`).
+  - `strip_llvm_debuginfo`: Removes LLVM debug info from the generated IR.
+  - `speculate_partial_ifs`: Speculatively execute partial `if` conditions in the
+    `canonicalize-loops` pass. (Default `false`).
 """
 struct CompileOptions
     optimization_passes::Union{Symbol,String}
@@ -204,10 +252,15 @@ struct CompileOptions
     legalize_chlo_to_stablehlo::Bool
     # backend specific options
     cudnn_hlo_optimize::Bool
+    # comm dialect (MPI, NCCL, etc.) options
+    comm_options::CommOptions
     # sharding options
     shardy_passes::Union{Symbol,ShardyPropagationOptions}
     optimize_then_pad::Bool
     optimize_communications::Union{Bool,OptimizeCommunicationOptions}
+    # triton_options
+    raise_triton_custom_call::Bool
+    lower_triton::Bool
     # julia codegen options
     assert_nonallocating::Bool
     donated_args::Symbol
@@ -219,13 +272,21 @@ struct CompileOptions
     ## private options for ablation studies
     disable_scatter_gather_optimization_passes::Bool
     disable_pad_optimization_passes::Bool
+    disable_dot_formation_passes::Bool
+    max_reused_const_prop_size::Int
     disable_licm_optimization_passes::Bool
+    loop_unswitch_threshold::Int
+    excluded_passes::Vector{String}
     disable_reduce_slice_fusion_passes::Bool
     disable_slice_to_batch_passes::Bool
     disable_concat_to_batch_passes::Bool
     disable_loop_raising_passes::Bool
     disable_structured_tensors_detection_passes::Bool
     disable_structured_tensors_passes::Bool
+    strip_llvm_debuginfo::Bool
+    speculate_partial_ifs::Bool
+    strip::Union{Symbol,Vector{String}}
+    multifloat::Union{Nothing,MultiFloatOptions}
 end
 
 function CompileOptions(;
@@ -240,7 +301,8 @@ function CompileOptions(;
     raise_first::Bool=false,
     legalize_chlo_to_stablehlo::Bool=false,
     cudnn_hlo_optimize::Bool=false,
-    shardy_passes::Union{Symbol,ShardyPropagationOptions}=:to_mhlo_shardings,
+    comm_options::CommOptions=CommOptions(),
+    shardy_passes::Union{Symbol,ShardyPropagationOptions}=:post_sdy_propagation,
     optimize_then_pad::Bool=true,
     optimize_communications::Union{Bool,OptimizeCommunicationOptions}=true,
     assert_nonallocating::Bool=false,
@@ -251,13 +313,23 @@ function CompileOptions(;
     xla_debug_options::NamedTuple=NamedTuple(),
     disable_scatter_gather_optimization_passes::Bool=false,
     disable_pad_optimization_passes::Bool=false,
+    disable_dot_formation_passes::Bool=false,
+    max_reused_const_prop_size::Int=1024,
     disable_licm_optimization_passes::Bool=false,
+    loop_unswitch_threshold::Int=10,
+    excluded_passes::Vector{String}=String[],
     disable_reduce_slice_fusion_passes::Bool=false,
     disable_slice_to_batch_passes::Bool=true, # expensive + introduces all-to-all in GB25
     disable_concat_to_batch_passes::Bool=false,
     disable_loop_raising_passes::Bool=false,
     disable_structured_tensors_detection_passes::Bool=true,  # missing optimization passes currently
     disable_structured_tensors_passes::Bool=false,
+    strip_llvm_debuginfo::Bool=false,
+    speculate_partial_ifs::Bool=false,
+    strip::Union{Symbol,Vector{String}}=:all,
+    raise_triton_custom_call::Bool=true,
+    lower_triton::Bool=true,
+    multifloat::Union{Nothing,MultiFloatOptions}=nothing,
 )
     optimization_passes isa Bool &&
         (optimization_passes = ifelse(optimization_passes, :all, :none))
@@ -275,6 +347,8 @@ function CompileOptions(;
             :canonicalize,
             :just_batch,
             :none,
+            :probprog,
+            :noopt,
         ]
     end
 
@@ -297,9 +371,12 @@ function CompileOptions(;
         raise_first,
         legalize_chlo_to_stablehlo,
         cudnn_hlo_optimize,
+        comm_options,
         shardy_passes,
         optimize_then_pad,
         optimize_communications,
+        raise_triton_custom_call,
+        lower_triton,
         assert_nonallocating,
         donated_args,
         sync,
@@ -308,17 +385,25 @@ function CompileOptions(;
         xla_debug_options,
         disable_scatter_gather_optimization_passes,
         disable_pad_optimization_passes,
+        disable_dot_formation_passes,
+        max_reused_const_prop_size,
         disable_licm_optimization_passes,
+        loop_unswitch_threshold,
+        excluded_passes,
         disable_reduce_slice_fusion_passes,
         disable_slice_to_batch_passes,
         disable_concat_to_batch_passes,
         disable_loop_raising_passes,
         disable_structured_tensors_detection_passes,
         disable_structured_tensors_passes,
+        strip_llvm_debuginfo,
+        speculate_partial_ifs,
+        strip,
+        multifloat,
     )
 end
 
-function __compile_options_from_kwags(;
+function __compile_options_from_kwargs(;
     compile_options::Union{Missing,CompileOptions}=missing,
     optimize::Union{Bool,Symbol,String}=true,
     kwargs...,
@@ -347,9 +432,12 @@ function __compile_options_with_reversed_propagation(compile_options::CompileOpt
         compile_options.raise_first,
         compile_options.legalize_chlo_to_stablehlo,
         compile_options.cudnn_hlo_optimize,
+        compile_options.comm_options,
         compile_options.shardy_passes,
         compile_options.optimize_then_pad,
         compile_options.optimize_communications,
+        compile_options.raise_triton_custom_call,
+        compile_options.lower_triton,
         compile_options.assert_nonallocating,
         compile_options.donated_args,
         compile_options.sync,
@@ -358,13 +446,21 @@ function __compile_options_with_reversed_propagation(compile_options::CompileOpt
         compile_options.xla_debug_options,
         compile_options.disable_scatter_gather_optimization_passes,
         compile_options.disable_pad_optimization_passes,
+        compile_options.disable_dot_formation_passes,
+        compile_options.max_reused_const_prop_size,
         compile_options.disable_licm_optimization_passes,
+        compile_options.loop_unswitch_threshold,
+        compile_options.excluded_passes,
         compile_options.disable_reduce_slice_fusion_passes,
         compile_options.disable_slice_to_batch_passes,
         compile_options.disable_concat_to_batch_passes,
         compile_options.disable_loop_raising_passes,
         compile_options.disable_structured_tensors_detection_passes,
         compile_options.disable_structured_tensors_passes,
+        compile_options.strip_llvm_debuginfo,
+        compile_options.speculate_partial_ifs,
+        compile_options.strip,
+        compile_options.multifloat,
     )
 end
 
@@ -384,9 +480,12 @@ function __compile_options_with_updated_sync(compile_options::CompileOptions, sy
         compile_options.raise_first,
         compile_options.legalize_chlo_to_stablehlo,
         compile_options.cudnn_hlo_optimize,
+        compile_options.comm_options,
         compile_options.shardy_passes,
         compile_options.optimize_then_pad,
         compile_options.optimize_communications,
+        compile_options.raise_triton_custom_call,
+        compile_options.lower_triton,
         compile_options.assert_nonallocating,
         compile_options.donated_args,
         sync,
@@ -395,13 +494,21 @@ function __compile_options_with_updated_sync(compile_options::CompileOptions, sy
         compile_options.xla_debug_options,
         compile_options.disable_scatter_gather_optimization_passes,
         compile_options.disable_pad_optimization_passes,
+        compile_options.disable_dot_formation_passes,
+        compile_options.max_reused_const_prop_size,
         compile_options.disable_licm_optimization_passes,
+        compile_options.loop_unswitch_threshold,
+        compile_options.excluded_passes,
         compile_options.disable_reduce_slice_fusion_passes,
         compile_options.disable_slice_to_batch_passes,
         compile_options.disable_concat_to_batch_passes,
         compile_options.disable_loop_raising_passes,
         compile_options.disable_structured_tensors_detection_passes,
         compile_options.disable_structured_tensors_passes,
+        compile_options.strip_llvm_debuginfo,
+        compile_options.speculate_partial_ifs,
+        compile_options.strip,
+        compile_options.multifloat,
     )
 end
 
@@ -422,7 +529,7 @@ function DefaultXLACompileOptions(;
     donated_args=:auto, sync=false, optimize_then_pad=true, assert_nonallocating=false
 )
     return CompileOptions(;
-        optimization_passes=:only_enzyme,
+        optimization_passes=:noopt,
         inline=false,
         donated_args,
         sync,
