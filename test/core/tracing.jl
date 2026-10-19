@@ -285,7 +285,14 @@ end
 
     if isdefined(Core, :Memory)
         push!(testsuite, (Memory{UInt8}, Memory{UInt8}, Memory{TracedRNumber{UInt8}}))
-        push!(testsuite, (Memory{ConcreteRArray{Float64,1}}, Memory{TracedRArray{Float64,1}}, Memory{TracedRArray{Float64,1}}))
+        push!(
+            testsuite,
+            (
+                Memory{ConcreteRArray{Float64,1}},
+                Memory{TracedRArray{Float64,1}},
+                Memory{TracedRArray{Float64,1}},
+            ),
+        )
         push!(testsuite, (Memory, Memory, Memory))
     end
 
