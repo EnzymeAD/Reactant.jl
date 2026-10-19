@@ -1,10 +1,12 @@
-using Reactant, Enzyme, Lux, Random, Test
+using Reactant, Enzyme, Lux, Random, Test, Metal
+
+Metal.functional() || (println("SKIP: Metal not functional"); exit(0))
 
 original_backend = Reactant.XLA.default_backend()
 Reactant.set_default_backend("metal")
 
-sincos(x) = sin(cos(x))
-sumsincos(x) = sum(sincos, x)
+sincos(x) = sin.(cos.(x))
+sumsincos(x) = sum(sincos(x))
 
 @testset "Simple Function" begin
     x = reshape(collect(Float32, 1:40), 10, 4)
@@ -19,10 +21,10 @@ end
 
     @test @jit(sumsincos(x_ra)) ≈ sum(sincos, x)
 
-    @test @jit(Enzyme.gradient(Enzyme.Reverse, sumsincos, x_ra))[2] ≈
-        Enzyme.gradient(Enzyme.Reverse, sumsincos, x)[2]
-    @test @jit(Enzyme.gradient(Enzyme.Forward, sumsincos, x_ra))[2] ≈
-        Enzyme.gradient(Enzyme.Forward, sumsincos, x)[2]
+    @test @jit(Enzyme.gradient(Enzyme.Reverse, sumsincos, x_ra))[1] ≈
+        Enzyme.gradient(Enzyme.Reverse, sumsincos, x)[1]
+    @test @jit(Enzyme.gradient(Enzyme.Forward, sumsincos, x_ra))[1] ≈
+        Enzyme.gradient(Enzyme.Forward, sumsincos, x)[1]
 end
 
 @testset "CNN" begin
