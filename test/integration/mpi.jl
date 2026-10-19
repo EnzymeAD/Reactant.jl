@@ -51,14 +51,11 @@ gpu_datatypes = [Int32, UInt32, Int64, UInt64, Float32, Float64]
 if RUN_CPU_MPI_TESTS
     MPI.Init()
 
-    # finalize at exit instead of using a big `try...finaly...end` block
     atexit(MPI.Finalize)
 
 elseif RUN_GPU_MPI_TESTS
     Reactant.initialize_nccl_comm!(MPI.COMM_WORLD)
-
-    # finalize at exit instead of using a big `try...finaly...end` block
-    atexit(Base.get_extension(Reactant, :ReactantMPIExt).destroy_default_comm)
+    atexit(ReactantMPIExt.destroy_default_comm)
 end
 
 # run tests
