@@ -79,6 +79,8 @@ function optimization_passes(
         !compile_options.disable_licm_optimization_passes,           # enable_licm_optimization_passes
         Int64(compile_options.loop_unswitch_threshold),              # loop_unswitch_threshold
         !compile_options.disable_pad_optimization_passes,            # enable_pad_optimization_passes
+        !compile_options.disable_dot_formation_passes,               # enable_dot_formation_passes
+        Int64(compile_options.max_reused_const_prop_size),           # max_reused_const_prop_size
         excl_ptr,                                                    # excluded_passes
         Csize_t(length(excl_cstrs)),                                 # num_excluded_passes
     )
@@ -175,7 +177,7 @@ end
 
 # TODO(#2251) we want to be able to run the more advanced passes via transform dialect as an enzyme intermediate
 # However, this errs as we cannot attach the transform with to the funcop itself [as we run a functionpass].
-const enzyme_pass::String = "enzyme{postpasses=\"arith-raise{stablehlo=true},canonicalize,cse,canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math,canonicalize,cse,canonicalize,arith-raise{stablehlo=true}\"}"
+const enzyme_pass::String = "enzyme{postpasses=\"arith-raise{stablehlo=true},enzyme-batch-to-stablehlo,canonicalize,cse,canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math,canonicalize,cse,canonicalize,arith-raise{stablehlo=true}\"}"
 
 function impulse_pass(;
     debug_dump::Bool=DEBUG_PROBPROG_DUMP_VALUE[],
@@ -221,30 +223,41 @@ end
 
 function run_pass_pipeline!(mod, pass_pipeline, key=""; enable_verifier=true)
     pm = MLIR.IR.PassManager()
-    MLIR.IR.enable_verifier!(pm, enable_verifier)
-    opm = MLIR.IR.OpPassManager(pm)
-    MLIR.IR.add_pipeline!(opm, pass_pipeline)
-    run!(pm, MLIR.IR.Operation(mod), key)
+    id = nothing
+    try
+        MLIR.API.mlirPassManagerEnableXLATraceTiming(pm)
+        MLIR.IR.enable_verifier!(pm, enable_verifier)
+        opm = MLIR.IR.OpPassManager(pm)
+        MLIR.IR.add_pipeline!(opm, pass_pipeline)
+        id = Reactant.Profiler.profiler_activity_start(
+            "run_pass_pipeline! $key", Reactant.Profiler.TRACE_ME_LEVEL_CRITICAL
+        )
+        run!(pm, MLIR.IR.Operation(mod), key)
+    finally
+        !isnothing(id) && Reactant.Profiler.profiler_activity_end(id)
+        MLIR.IR.dispose(pm)
+    end
     return mod
 end
 
 function run_pass_pipeline!(
     mod, propagation_options::ShardyPropagationOptions; enable_verifier=true
 )
-    pm = MLIR.IR.PassManager()
-    MLIR.IR.enable_verifier!(pm, enable_verifier)
-    opm = MLIR.IR.OpPassManager(pm)
-    MLIR.API.addSdyPropagationPipeline(
-        opm,
-        propagation_options.keep_sharding_rules,
-        propagation_options.conservative_propagation,
-        propagation_options.debug_sharding_origins,
-        propagation_options.debug_propagation_edge_sharding,
-        propagation_options.skip_convert_to_reshard,
-        propagation_options.skip_inline,
-        propagation_options.enable_insert_explicit_collectives,
-    )
-    run!(pm, mod, "sdy_prop")
+    MLIR.IR.@dispose pm = MLIR.IR.PassManager() begin
+        MLIR.IR.enable_verifier!(pm, enable_verifier)
+        opm = MLIR.IR.OpPassManager(pm)
+        MLIR.API.addSdyPropagationPipeline(
+            opm,
+            propagation_options.keep_sharding_rules,
+            propagation_options.conservative_propagation,
+            propagation_options.debug_sharding_origins,
+            propagation_options.debug_propagation_edge_sharding,
+            propagation_options.skip_convert_to_reshard,
+            propagation_options.skip_inline,
+            propagation_options.enable_insert_explicit_collectives,
+        )
+        run!(pm, mod, "sdy_prop")
+    end
     return mod
 end
 

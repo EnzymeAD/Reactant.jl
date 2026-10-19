@@ -606,6 +606,39 @@ function mlirContextGetThreadPool(context)
 end
 
 """
+    mlirContextBeginTransientScope(context)
+
+Begins a transient scope on the context, freezing the base layer (loaded dialects, registered operations, interface models, and existing types/attributes). Precondition: The context must not already be in a transient scope.
+"""
+function mlirContextBeginTransientScope(context)
+    @ccall Reactant_jll.libReactantExtra.mlirContextBeginTransientScope(
+        context::MlirContext
+    )::Cvoid
+end
+
+"""
+    mlirContextEndTransientScope(context)
+
+Ends the transient scope and resets the context to the base state, pruning transient types, attributes, affine expressions, distinct attributes, and unregistered operations added during the transient scope.
+"""
+function mlirContextEndTransientScope(context)
+    @ccall Reactant_jll.libReactantExtra.mlirContextEndTransientScope(
+        context::MlirContext
+    )::Cvoid
+end
+
+"""
+    mlirContextIsInTransientScope(context)
+
+Returns whether the context is currently in a transient scope.
+"""
+function mlirContextIsInTransientScope(context)
+    @ccall Reactant_jll.libReactantExtra.mlirContextIsInTransientScope(
+        context::MlirContext
+    )::Bool
+end
+
+"""
     mlirDialectGetContext(dialect)
 
 Returns the context that owns the dialect.
@@ -1658,6 +1691,28 @@ function mlirOperationGetParentOperation(op)
     @ccall Reactant_jll.libReactantExtra.mlirOperationGetParentOperation(
         op::MlirOperation
     )::MlirOperation
+end
+
+"""
+    mlirOperationIsAncestor(a, b)
+
+Returns true if `a` is an ancestor of `b`, i.e. `a` contains `b` or `a == b`.
+"""
+function mlirOperationIsAncestor(a, b)
+    @ccall Reactant_jll.libReactantExtra.mlirOperationIsAncestor(
+        a::MlirOperation, b::MlirOperation
+    )::Bool
+end
+
+"""
+    mlirOperationIsProperAncestor(a, b)
+
+Returns true if `a` is a proper ancestor of `b`, i.e. `a` contains `b` but `a != b`.
+"""
+function mlirOperationIsProperAncestor(a, b)
+    @ccall Reactant_jll.libReactantExtra.mlirOperationIsProperAncestor(
+        a::MlirOperation, b::MlirOperation
+    )::Bool
 end
 
 """
@@ -3020,12 +3075,12 @@ function mlirSymbolTableGetSymbolAttributeName()
 end
 
 """
-    mlirSymbolTableGetVisibilityAttributeName()
+    mlirSymbolTableGetDefaultVisibilityAttributeName()
 
-Returns the name of the attribute used to store symbol visibility.
+Returns the name of the attribute used by default to store symbol visibility.
 """
-function mlirSymbolTableGetVisibilityAttributeName()
-    @ccall Reactant_jll.libReactantExtra.mlirSymbolTableGetVisibilityAttributeName()::MlirStringRef
+function mlirSymbolTableGetDefaultVisibilityAttributeName()
+    @ccall Reactant_jll.libReactantExtra.mlirSymbolTableGetDefaultVisibilityAttributeName()::MlirStringRef
 end
 
 """
@@ -7561,6 +7616,28 @@ function mlirEmitError(location, message)
     )::Cvoid
 end
 
+"""
+    mlirEmitWarning(location, message)
+
+Emits a warning at the given location through the diagnostics engine. Used for testing purposes.
+"""
+function mlirEmitWarning(location, message)
+    @ccall Reactant_jll.libReactantExtra.mlirEmitWarning(
+        location::MlirLocation, message::Cstring
+    )::Cvoid
+end
+
+"""
+    mlirEmitRemark(location, message)
+
+Emits a remark at the given location through the diagnostics engine. Used for testing purposes.
+"""
+function mlirEmitRemark(location, message)
+    @ccall Reactant_jll.libReactantExtra.mlirEmitRemark(
+        location::MlirLocation, message::Cstring
+    )::Cvoid
+end
+
 function mlirGetDialectHandle__amdgpu__()
     @ccall Reactant_jll.libReactantExtra.mlirGetDialectHandle__amdgpu__()::MlirDialectHandle
 end
@@ -8723,6 +8800,7 @@ function mlirLLVMDIStringTypeAttrGet(
     stringLengthExp,
     stringLocationExp,
     encoding,
+    charType,
 )
     @ccall Reactant_jll.libReactantExtra.mlirLLVMDIStringTypeAttrGet(
         ctx::MlirContext,
@@ -8734,6 +8812,7 @@ function mlirLLVMDIStringTypeAttrGet(
         stringLengthExp::MlirAttribute,
         stringLocationExp::MlirAttribute,
         encoding::MlirLLVMTypeEncoding,
+        charType::MlirAttribute,
     )::MlirAttribute
 end
 
@@ -8819,6 +8898,90 @@ function mlirLLVMDICompileUnitAttrGet(
         isRecSelf::Bool,
         id::MlirAttribute,
         sourceLanguage::Cuint,
+        file::MlirAttribute,
+        producer::MlirAttribute,
+        isOptimized::Bool,
+        emissionKind::MlirLLVMDIEmissionKind,
+        isDebugInfoForProfiling::Bool,
+        nameTableKind::MlirLLVMDINameTableKind,
+        splitDebugFilename::MlirAttribute,
+        nImportedEntities::Cptrdiff_t,
+        importedEntities::Ptr{MlirAttribute},
+    )::MlirAttribute
+end
+
+"""
+    mlirLLVMDICompileUnitAttrGetWithSourceLanguageDialect(ctx, recId, isRecSelf, id, sourceLanguage, sourceLanguageDialect, file, producer, isOptimized, emissionKind, isDebugInfoForProfiling, nameTableKind, splitDebugFilename, nImportedEntities, importedEntities)
+
+Creates a LLVM DICompileUnit attribute with a source language dialect.
+"""
+function mlirLLVMDICompileUnitAttrGetWithSourceLanguageDialect(
+    ctx,
+    recId,
+    isRecSelf,
+    id,
+    sourceLanguage,
+    sourceLanguageDialect,
+    file,
+    producer,
+    isOptimized,
+    emissionKind,
+    isDebugInfoForProfiling,
+    nameTableKind,
+    splitDebugFilename,
+    nImportedEntities,
+    importedEntities,
+)
+    @ccall Reactant_jll.libReactantExtra.mlirLLVMDICompileUnitAttrGetWithSourceLanguageDialect(
+        ctx::MlirContext,
+        recId::MlirAttribute,
+        isRecSelf::Bool,
+        id::MlirAttribute,
+        sourceLanguage::Cuint,
+        sourceLanguageDialect::Cuint,
+        file::MlirAttribute,
+        producer::MlirAttribute,
+        isOptimized::Bool,
+        emissionKind::MlirLLVMDIEmissionKind,
+        isDebugInfoForProfiling::Bool,
+        nameTableKind::MlirLLVMDINameTableKind,
+        splitDebugFilename::MlirAttribute,
+        nImportedEntities::Cptrdiff_t,
+        importedEntities::Ptr{MlirAttribute},
+    )::MlirAttribute
+end
+
+"""
+    mlirLLVMDICompileUnitAttrGetWithSourceLanguageName(ctx, recId, isRecSelf, id, sourceLanguageName, sourceLanguageVersion, sourceLanguageDialect, file, producer, isOptimized, emissionKind, isDebugInfoForProfiling, nameTableKind, splitDebugFilename, nImportedEntities, importedEntities)
+
+Creates an LLVM DICompileUnit attribute with a DWARF v6 source language name, version, and optional source language dialect.
+"""
+function mlirLLVMDICompileUnitAttrGetWithSourceLanguageName(
+    ctx,
+    recId,
+    isRecSelf,
+    id,
+    sourceLanguageName,
+    sourceLanguageVersion,
+    sourceLanguageDialect,
+    file,
+    producer,
+    isOptimized,
+    emissionKind,
+    isDebugInfoForProfiling,
+    nameTableKind,
+    splitDebugFilename,
+    nImportedEntities,
+    importedEntities,
+)
+    @ccall Reactant_jll.libReactantExtra.mlirLLVMDICompileUnitAttrGetWithSourceLanguageName(
+        ctx::MlirContext,
+        recId::MlirAttribute,
+        isRecSelf::Bool,
+        id::MlirAttribute,
+        sourceLanguageName::Cuint,
+        sourceLanguageVersion::UInt32,
+        sourceLanguageDialect::Cuint,
         file::MlirAttribute,
         producer::MlirAttribute,
         isOptimized::Bool,
@@ -10554,10 +10717,6 @@ struct MlirMemoryEffectInstance
     ptr::Ptr{Cvoid}
 end
 
-struct MlirMemoryEffectInstancesList
-    ptr::Ptr{Cvoid}
-end
-
 struct MlirSideEffectResource
     ptr::Ptr{Cvoid}
 end
@@ -10747,7 +10906,7 @@ end
 """
     mlirMemoryEffectsAllocateGet()
 
-Returns the borrowed singleton instance of the allocate memory effect.
+Returns the singleton instance of the allocate memory effect.
 """
 function mlirMemoryEffectsAllocateGet()
     @ccall Reactant_jll.libReactantExtra.mlirMemoryEffectsAllocateGet()::MlirMemoryEffect
@@ -10756,7 +10915,7 @@ end
 """
     mlirMemoryEffectsFreeGet()
 
-Returns the borrowed singleton instance of the free memory effect.
+Returns the singleton instance of the free memory effect.
 """
 function mlirMemoryEffectsFreeGet()
     @ccall Reactant_jll.libReactantExtra.mlirMemoryEffectsFreeGet()::MlirMemoryEffect
@@ -10765,7 +10924,7 @@ end
 """
     mlirMemoryEffectsReadGet()
 
-Returns the borrowed singleton instance of the read memory effect.
+Returns the singleton instance of the read memory effect.
 """
 function mlirMemoryEffectsReadGet()
     @ccall Reactant_jll.libReactantExtra.mlirMemoryEffectsReadGet()::MlirMemoryEffect
@@ -10774,16 +10933,27 @@ end
 """
     mlirMemoryEffectsWriteGet()
 
-Returns the borrowed singleton instance of the write memory effect.
+Returns the singleton instance of the write memory effect.
 """
 function mlirMemoryEffectsWriteGet()
     @ccall Reactant_jll.libReactantExtra.mlirMemoryEffectsWriteGet()::MlirMemoryEffect
 end
 
 """
+    mlirMemoryEffectGetEffectID(effect)
+
+Returns the TypeID identifying the concrete type of the given memory effect.
+"""
+function mlirMemoryEffectGetEffectID(effect)
+    @ccall Reactant_jll.libReactantExtra.mlirMemoryEffectGetEffectID(
+        effect::MlirMemoryEffect
+    )::MlirTypeID
+end
+
+"""
     mlirSideEffectsDefaultResourceGet()
 
-Returns the borrowed singleton instance of the default side effect resource.
+Returns the singleton instance of the default side effect resource.
 """
 function mlirSideEffectsDefaultResourceGet()
     @ccall Reactant_jll.libReactantExtra.mlirSideEffectsDefaultResourceGet()::MlirSideEffectResource
@@ -10879,9 +11049,20 @@ function mlirMemoryEffectInstanceCreateForSymbol(
 end
 
 """
+    mlirMemoryEffectInstanceClone(instance)
+
+Creates a copy of a memory effect instance. The caller must destroy the returned instance with [`mlirMemoryEffectInstanceDestroy`](@ref).
+"""
+function mlirMemoryEffectInstanceClone(instance)
+    @ccall Reactant_jll.libReactantExtra.mlirMemoryEffectInstanceClone(
+        instance::MlirMemoryEffectInstance
+    )::MlirMemoryEffectInstance
+end
+
+"""
     mlirMemoryEffectInstanceDestroy(instance)
 
-Destroys a memory effect instance created by one of the functions above.
+Destroys a memory effect instance created or cloned by APIs above.
 """
 function mlirMemoryEffectInstanceDestroy(instance)
     @ccall Reactant_jll.libReactantExtra.mlirMemoryEffectInstanceDestroy(
@@ -10890,15 +11071,87 @@ function mlirMemoryEffectInstanceDestroy(instance)
 end
 
 """
-    mlirMemoryEffectInstancesListAppend(list, instance)
+    mlirMemoryEffectInstanceGetEffect(instance)
 
-Appends a copy of `instance` to the given list. This does not take ownership of `instance`; the caller remains responsible for destroying it.
+Returns the memory effect of the given instance.
 """
-function mlirMemoryEffectInstancesListAppend(list, instance)
-    @ccall Reactant_jll.libReactantExtra.mlirMemoryEffectInstancesListAppend(
-        list::MlirMemoryEffectInstancesList, instance::MlirMemoryEffectInstance
-    )::Cvoid
+function mlirMemoryEffectInstanceGetEffect(instance)
+    @ccall Reactant_jll.libReactantExtra.mlirMemoryEffectInstanceGetEffect(
+        instance::MlirMemoryEffectInstance
+    )::MlirMemoryEffect
 end
+
+"""
+    mlirMemoryEffectInstanceGetResource(instance)
+
+Returns the side effect resource of the given instance.
+"""
+function mlirMemoryEffectInstanceGetResource(instance)
+    @ccall Reactant_jll.libReactantExtra.mlirMemoryEffectInstanceGetResource(
+        instance::MlirMemoryEffectInstance
+    )::MlirSideEffectResource
+end
+
+"""
+    mlirMemoryEffectInstanceGetStage(instance)
+
+Returns the stage of the given instance.
+"""
+function mlirMemoryEffectInstanceGetStage(instance)
+    @ccall Reactant_jll.libReactantExtra.mlirMemoryEffectInstanceGetStage(
+        instance::MlirMemoryEffectInstance
+    )::Cint
+end
+
+"""
+    mlirMemoryEffectInstanceGetEffectOnFullRegion(instance)
+
+Returns true if the given instance has effect on every single value of the resource.
+"""
+function mlirMemoryEffectInstanceGetEffectOnFullRegion(instance)
+    @ccall Reactant_jll.libReactantExtra.mlirMemoryEffectInstanceGetEffectOnFullRegion(
+        instance::MlirMemoryEffectInstance
+    )::Bool
+end
+
+"""
+    mlirMemoryEffectInstanceGetParameters(instance)
+
+Returns the parameters of the given instance, or a null attribute if there are no parameters.
+"""
+function mlirMemoryEffectInstanceGetParameters(instance)
+    @ccall Reactant_jll.libReactantExtra.mlirMemoryEffectInstanceGetParameters(
+        instance::MlirMemoryEffectInstance
+    )::MlirAttribute
+end
+
+"""
+    mlirMemoryEffectInstanceGetValue(instance)
+
+Returns the value (OpOperand, OpResult, or BlockArgument) of the given instance, or a null value if there is no associated value.
+"""
+function mlirMemoryEffectInstanceGetValue(instance)
+    @ccall Reactant_jll.libReactantExtra.mlirMemoryEffectInstanceGetValue(
+        instance::MlirMemoryEffectInstance
+    )::MlirValue
+end
+
+"""
+    mlirMemoryEffectInstanceGetSymbolRef(instance)
+
+Returns the symbol reference of the given instance, or a null attribute if there is no associated symbol.
+"""
+function mlirMemoryEffectInstanceGetSymbolRef(instance)
+    @ccall Reactant_jll.libReactantExtra.mlirMemoryEffectInstanceGetSymbolRef(
+        instance::MlirMemoryEffectInstance
+    )::MlirAttribute
+end
+
+# typedef void ( * MlirMemoryEffectInstancesCallback ) ( intptr_t numEffects , MlirMemoryEffectInstance * effects , void * userData )
+"""
+Callback for receiving a batch of memory effect instances. `effects` points to `numEffects` consecutive instances. Ownership is not transferred, and the instances are valid only while `callback` is executing. The caller-provided `userData` is forwarded to the callback.
+"""
+const MlirMemoryEffectInstancesCallback = Ptr{Cvoid}
 
 """
     mlirMemoryEffectsOpInterfaceTypeID()
@@ -10914,11 +11167,11 @@ end
 
 Callbacks for implementing MemoryEffectsOpInterface from external code.
 
-| Field      | Note                                                               |
-| :--------- | :----------------------------------------------------------------- |
-| construct  | Optional constructor for user data. Set to nullptr to disable it.  |
-| destruct   | Optional destructor for user data. Set to nullptr to disable it.   |
-| getEffects | Get memory effects callback.                                       |
+| Field      | Note                                                                                                                                                                                                                                                              |
+| :--------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| construct  | Optional constructor for user data. Set to nullptr to disable it.                                                                                                                                                                                                 |
+| destruct   | Optional destructor for user data. Set to nullptr to disable it.                                                                                                                                                                                                  |
+| getEffects | Get memory effects callback. Implementations report effects by invoking `callback` before returning. The supplied callback copies the instances, so implementations retain ownership of the instances and only need to keep them valid until `callback` returns.  |
 """
 struct MlirMemoryEffectsOpInterfaceCallbacks
     construct::Ptr{Cvoid}
@@ -10937,6 +11190,19 @@ function mlirMemoryEffectsOpInterfaceAttachFallbackModel(ctx, opName, callbacks)
         ctx::MlirContext,
         opName::MlirStringRef,
         callbacks::MlirMemoryEffectsOpInterfaceCallbacks,
+    )::Cvoid
+end
+
+"""
+    mlirMemoryEffectsOpInterfaceGetEffects(operation, callback, userData)
+
+Gets the memory effects of the given operation. The operation must implement the MemoryEffectsOpInterface. Invokes `callback` once with all effects. Ownership is not transferred; call [`mlirMemoryEffectInstanceClone`](@ref) from the callback to keep a copy after the callback returns.
+"""
+function mlirMemoryEffectsOpInterfaceGetEffects(operation, callback, userData)
+    @ccall Reactant_jll.libReactantExtra.mlirMemoryEffectsOpInterfaceGetEffects(
+        operation::MlirOperation,
+        callback::MlirMemoryEffectInstancesCallback,
+        userData::Ptr{Cvoid},
     )::Cvoid
 end
 
@@ -11487,6 +11753,21 @@ function mlirIRRewriterDestroy(rewriter)
     @ccall Reactant_jll.libReactantExtra.mlirIRRewriterDestroy(
         rewriter::MlirRewriterBase
     )::Cvoid
+end
+
+"""
+    mlirDialectMaterializeConstant(dialect, rewriter, value, type, loc)
+
+Materializes a constant for the given attribute `value` and `type` using the dialect's `materializeConstant` hook. The operation is created with the given rewriter (used as an OpBuilder) at its current insertion point, without changing that insertion point. Returns a null operation if the dialect does not support materializing the given constant.
+"""
+function mlirDialectMaterializeConstant(dialect, rewriter, value, type, loc)
+    @ccall Reactant_jll.libReactantExtra.mlirDialectMaterializeConstant(
+        dialect::MlirDialect,
+        rewriter::MlirRewriterBase,
+        value::MlirAttribute,
+        type::MlirType,
+        loc::MlirLocation,
+    )::MlirOperation
 end
 
 """
@@ -12642,63 +12923,66 @@ function mlirPatternDescriptorOpInterfaceAttachFallbackModel(ctx, opName, callba
 end
 
 """
-    mlirTransformOnlyReadsHandle(operands, numOperands, effects)
+    mlirTransformOnlyReadsHandle(operands, numOperands, callback, userData)
 
-Helper to mark operands as only reading handles.
+Invokes `callback` with `OnlyReadsHandle` effects corresponding to operands which have been marked as having those effects.
 """
-function mlirTransformOnlyReadsHandle(operands, numOperands, effects)
+function mlirTransformOnlyReadsHandle(operands, numOperands, callback, userData)
     @ccall Reactant_jll.libReactantExtra.mlirTransformOnlyReadsHandle(
         operands::Ptr{MlirOpOperand},
         numOperands::Cptrdiff_t,
-        effects::MlirMemoryEffectInstancesList,
+        callback::MlirMemoryEffectInstancesCallback,
+        userData::Ptr{Cvoid},
     )::Cvoid
 end
 
 """
-    mlirTransformConsumesHandle(operands, numOperands, effects)
+    mlirTransformConsumesHandle(operands, numOperands, callback, userData)
 
-Helper to mark operands as consuming handles.
+Invokes `callback` with `ConsumesHandle` effects corresponding to operands which have been marked as having those effects.
 """
-function mlirTransformConsumesHandle(operands, numOperands, effects)
+function mlirTransformConsumesHandle(operands, numOperands, callback, userData)
     @ccall Reactant_jll.libReactantExtra.mlirTransformConsumesHandle(
         operands::Ptr{MlirOpOperand},
         numOperands::Cptrdiff_t,
-        effects::MlirMemoryEffectInstancesList,
+        callback::MlirMemoryEffectInstancesCallback,
+        userData::Ptr{Cvoid},
     )::Cvoid
 end
 
 """
-    mlirTransformProducesHandle(results, numResults, effects)
+    mlirTransformProducesHandle(results, numResults, callback, userData)
 
-Helper to mark results as producing handles.
+Invokes `callback` with `ProducesHandle` effects corresponding to results which have been marked as having those effects.
 """
-function mlirTransformProducesHandle(results, numResults, effects)
+function mlirTransformProducesHandle(results, numResults, callback, userData)
     @ccall Reactant_jll.libReactantExtra.mlirTransformProducesHandle(
         results::Ptr{MlirValue},
         numResults::Cptrdiff_t,
-        effects::MlirMemoryEffectInstancesList,
+        callback::MlirMemoryEffectInstancesCallback,
+        userData::Ptr{Cvoid},
     )::Cvoid
 end
 
 """
-    mlirTransformModifiesPayload(effects)
+    mlirTransformModifiesPayload(callback, userData)
 
-Helper to mark potential modifications to the payload IR.
+Invokes `callback` with `ModifiesPayload` effects.
 """
-function mlirTransformModifiesPayload(effects)
+function mlirTransformModifiesPayload(callback, userData)
     @ccall Reactant_jll.libReactantExtra.mlirTransformModifiesPayload(
-        effects::MlirMemoryEffectInstancesList
+        callback::MlirMemoryEffectInstancesCallback, userData::Ptr{Cvoid}
     )::Cvoid
 end
 
 """
-    mlirTransformOnlyReadsPayload(effects)
+    mlirTransformOnlyReadsPayload(callback, userData)
 
-Helper to mark potential reads from the payload IR.
+Invokes `callback` with `OnlyReadsPayload` effects.
 """
-function mlirTransformOnlyReadsPayload(effects)
+function mlirTransformOnlyReadsPayload(callback, userData)
     @ccall Reactant_jll.libReactantExtra.mlirTransformOnlyReadsPayload(
-        effects::MlirMemoryEffectInstancesList
+        callback::MlirMemoryEffectInstancesCallback, userData::Ptr{Cvoid}
     )::Cvoid
 end
 
@@ -13218,6 +13502,24 @@ Get the type ID of the dynamic op trait that indicates regions have no terminato
 """
 function mlirDynamicOpTraitNoTerminatorGetTypeID()
     @ccall Reactant_jll.libReactantExtra.mlirDynamicOpTraitNoTerminatorGetTypeID()::MlirTypeID
+end
+
+"""
+    mlirDynamicOpTraitRecursiveMemoryEffectsCreate()
+
+Get the dynamic op trait that indicates memory effects of an operation includes the effects of operations nested within its regions.
+"""
+function mlirDynamicOpTraitRecursiveMemoryEffectsCreate()
+    @ccall Reactant_jll.libReactantExtra.mlirDynamicOpTraitRecursiveMemoryEffectsCreate()::MlirDynamicOpTrait
+end
+
+"""
+    mlirDynamicOpTraitRecursiveMemoryEffectsGetTypeID()
+
+Get the type ID of the dynamic op trait that indicates memory effects of an operation includes the effects of operations nested within its regions.
+"""
+function mlirDynamicOpTraitRecursiveMemoryEffectsGetTypeID()
+    @ccall Reactant_jll.libReactantExtra.mlirDynamicOpTraitRecursiveMemoryEffectsGetTypeID()::MlirTypeID
 end
 
 """
@@ -15814,6 +16116,8 @@ struct EnzymeXLATransformPassesOptions
     enable_licm_optimization_passes::Bool
     loop_unswitch_threshold::Int64
     enable_pad_optimization_passes::Bool
+    enable_dot_formation_passes::Bool
+    max_reused_const_prop_size::Int64
     excluded_passes::Ptr{Cstring}
     num_excluded_passes::Csize_t
 end
@@ -16086,6 +16390,28 @@ function mlirMosaicGpuCopyPartitionedAttrGetTypeID()
     @ccall Reactant_jll.libReactantExtra.mlirMosaicGpuCopyPartitionedAttrGetTypeID()::MlirTypeID
 end
 
+function mlirMosaicGpuIsASmemAllocAttr(attr)
+    @ccall Reactant_jll.libReactantExtra.mlirMosaicGpuIsASmemAllocAttr(
+        attr::MlirAttribute
+    )::Bool
+end
+
+function mlirMosaicGpuSmemAllocAttrGet(ctx, alignment)
+    @ccall Reactant_jll.libReactantExtra.mlirMosaicGpuSmemAllocAttrGet(
+        ctx::MlirContext, alignment::MlirAttribute
+    )::MlirAttribute
+end
+
+function mlirMosaicGpuSmemAllocAttrGetAlignment(attr)
+    @ccall Reactant_jll.libReactantExtra.mlirMosaicGpuSmemAllocAttrGetAlignment(
+        attr::MlirAttribute
+    )::MlirAttribute
+end
+
+function mlirMosaicGpuSmemAllocAttrGetTypeID()
+    @ccall Reactant_jll.libReactantExtra.mlirMosaicGpuSmemAllocAttrGetTypeID()::MlirTypeID
+end
+
 function mlirGetDialectHandle__mosaic_gpu__()
     @ccall Reactant_jll.libReactantExtra.mlirGetDialectHandle__mosaic_gpu__()::MlirDialectHandle
 end
@@ -16218,6 +16544,44 @@ function enzymeSymbolAttrGet(ctx, ptr)
     )::MlirAttribute
 end
 
+struct CachedExec
+    exec::Ptr{Cint}
+    written::Ptr{UInt8}
+    keep::Ptr{UInt8}
+end
+
+struct JLCompiledMemoryStats
+    generated_code_size_in_bytes::Int64
+    argument_size_in_bytes::Int64
+    output_size_in_bytes::Int64
+    alias_size_in_bytes::Int64
+    temp_size_in_bytes::Int64
+    host_generated_code_size_in_bytes::Int64
+    host_argument_size_in_bytes::Int64
+    host_output_size_in_bytes::Int64
+    host_alias_size_in_bytes::Int64
+    host_temp_size_in_bytes::Int64
+    peak_memory_in_bytes::Int64
+end
+
+struct TimerHandle
+    name::Cint
+end
+
+struct JLAllocatorStats
+    num_allocs::Int64
+    bytes_in_use::Int64
+    peak_bytes_in_use::Int64
+    largest_alloc_size::Int64
+    bytes_limit::Int64
+    bytes_reserved::Int64
+    peak_bytes_reserved::Int64
+    bytes_reservable_limit::Int64
+    largest_free_block_bytes::Int64
+    pool_bytes::Int64
+    peak_pool_bytes::Int64
+end
+
 struct JLHloCostAnalysisProperties
     flops::Cfloat
     transcendentals::Cfloat
@@ -16230,12 +16594,6 @@ struct JLHloCostAnalysisProperties
     operand1_bytes_accessed::Cfloat
     output_root_bytes_accessed::Cfloat
     reserved0::Cfloat
-end
-
-struct CachedExec
-    exec::Ptr{Cint}
-    written::Ptr{UInt8}
-    keep::Ptr{UInt8}
 end
 
 struct AllocationInfo
@@ -16251,20 +16609,6 @@ struct JLEstimateRunTimeData
     write_time_ns::Int64
     compute_time_ns::Int64
     execution_time_ns::Int64
-end
-
-struct JLAllocatorStats
-    num_allocs::Int64
-    bytes_in_use::Int64
-    peak_bytes_in_use::Int64
-    largest_alloc_size::Int64
-    bytes_limit::Int64
-    bytes_reserved::Int64
-    peak_bytes_reserved::Int64
-    bytes_reservable_limit::Int64
-    largest_free_block_bytes::Int64
-    pool_bytes::Int64
-    peak_pool_bytes::Int64
 end
 
 struct DeviceProperties
@@ -16376,6 +16720,12 @@ const HeldIfrtArray = Cvoid
 
 function ReactantHandleCuResult(curesult)
     @ccall Reactant_jll.libReactantExtra.ReactantHandleCuResult(curesult::UInt32)::Cvoid
+end
+
+function mlirPassManagerEnableXLATraceTiming(passManager)
+    @ccall Reactant_jll.libReactantExtra.mlirPassManagerEnableXLATraceTiming(
+        passManager::MlirPassManager
+    )::Cvoid
 end
 
 function mlirOperationInject(ctx, block, code, location, verify_after_parse)
@@ -16557,6 +16907,10 @@ function MakeClientFromApi(api, device_type, client_name, error)
     )::Ptr{PjRtClient}
 end
 
+function GetCpuPjrtApi()
+    @ccall Reactant_jll.libReactantExtra.GetCpuPjrtApi()::Ptr{PJRT_Api}
+end
+
 function MakeTPUClient(tpu_path, error)
     @ccall Reactant_jll.libReactantExtra.MakeTPUClient(
         tpu_path::Cstring, error::Ptr{Cstring}
@@ -16623,6 +16977,18 @@ function ifrt_device_get_allocator_stats(device, jlstats)
     )::Cvoid
 end
 
+function PjRtDeviceClearMemoryStats(device)
+    @ccall Reactant_jll.libReactantExtra.PjRtDeviceClearMemoryStats(
+        device::Ptr{PjRtDevice}
+    )::Cvoid
+end
+
+function ifrt_device_clear_memory_stats(device)
+    @ccall Reactant_jll.libReactantExtra.ifrt_device_clear_memory_stats(
+        device::Ptr{Device}
+    )::Cvoid
+end
+
 function ExecutableFree(exec)
     @ccall Reactant_jll.libReactantExtra.ExecutableFree(
         exec::Ptr{PjRtLoadedExecutable}
@@ -16681,6 +17047,10 @@ end
 
 function ReactantHermeticCudaGetVersion()
     @ccall Reactant_jll.libReactantExtra.ReactantHermeticCudaGetVersion()::Int32
+end
+
+function ReactantCudaSetDevice(device_id)
+    @ccall Reactant_jll.libReactantExtra.ReactantCudaSetDevice(device_id::Int32)::Int32
 end
 
 function ReactantCudaDeviceGetComputeCapalilityMajor()
@@ -16848,6 +17218,12 @@ function FutureAwait(Future)
     @ccall Reactant_jll.libReactantExtra.FutureAwait(Future::Ptr{FutureType})::Cvoid
 end
 
+function PjRtBufferGetReadyFuture(buffer)
+    @ccall Reactant_jll.libReactantExtra.PjRtBufferGetReadyFuture(
+        buffer::Ptr{PjRtBuffer}
+    )::Ptr{FutureType}
+end
+
 function ClientCompile(
     client,
     cmod,
@@ -16895,6 +17271,30 @@ function ClientCompileWithProto(
         compile_options_proto::Ptr{UInt8},
         compile_options_proto_size::Csize_t,
     )::Ptr{PjRtLoadedExecutable}
+end
+
+function PjRtLoadedExecutableSerialize(exec, size)
+    @ccall Reactant_jll.libReactantExtra.PjRtLoadedExecutableSerialize(
+        exec::Ptr{PjRtLoadedExecutable}, size::Ptr{Csize_t}
+    )::Ptr{UInt8}
+end
+
+function PjRtClientLoadSerializedExecutable(
+    client, data, size, compile_options_proto, compile_options_proto_size
+)
+    @ccall Reactant_jll.libReactantExtra.PjRtClientLoadSerializedExecutable(
+        client::Ptr{PjRtClient},
+        data::Ptr{UInt8},
+        size::Csize_t,
+        compile_options_proto::Ptr{UInt8},
+        compile_options_proto_size::Csize_t,
+    )::Ptr{PjRtLoadedExecutable}
+end
+
+function PjRtLoadedExecutableGetCompiledMemoryStats(exec, jlstats)
+    @ccall Reactant_jll.libReactantExtra.PjRtLoadedExecutableGetCompiledMemoryStats(
+        exec::Ptr{PjRtLoadedExecutable}, jlstats::Ptr{JLCompiledMemoryStats}
+    )::Cvoid
 end
 
 function PjRtLoadedExecutableGetOuputShardings(exec, op_shardings, num_op_shardings)
@@ -17119,7 +17519,7 @@ function ifrt_client_make_single_shard_array_from_host_buffer(
         c_shape::Ptr{Int64},
         c_semantics::Cint,
         device::Ptr{Device},
-        mem_kind::Cstring,
+        mem_kind::Ptr{MemoryKind},
     )::Ptr{HeldIfrtArray}
 end
 
@@ -17939,6 +18339,30 @@ function ifrt_loaded_executable_client(exec)
     )::Ptr{Client}
 end
 
+function ifrt_loaded_executable_serialize(exec, size)
+    @ccall Reactant_jll.libReactantExtra.ifrt_loaded_executable_serialize(
+        exec::Ptr{HeldIfrtLoadedExecutable}, size::Ptr{Csize_t}
+    )::Ptr{UInt8}
+end
+
+function ifrt_loaded_executable_get_compiled_memory_stats(exec, jlstats)
+    @ccall Reactant_jll.libReactantExtra.ifrt_loaded_executable_get_compiled_memory_stats(
+        exec::Ptr{HeldIfrtLoadedExecutable}, jlstats::Ptr{JLCompiledMemoryStats}
+    )::Cvoid
+end
+
+function ifrt_client_load_serialized_executable(
+    client, data, size, compile_options_proto, compile_options_proto_size
+)
+    @ccall Reactant_jll.libReactantExtra.ifrt_client_load_serialized_executable(
+        client::Ptr{Client},
+        data::Ptr{UInt8},
+        size::Csize_t,
+        compile_options_proto::Ptr{UInt8},
+        compile_options_proto_size::Csize_t,
+    )::Ptr{HeldIfrtLoadedExecutable}
+end
+
 function ifrt_loaded_executable_get_parameter_shardings(
     exec, op_shardings, num_op_shardings
 )
@@ -18083,6 +18507,17 @@ function reactantXLADeInit(lrt)
     )::Cvoid
 end
 
+function reactantXLAExec(lrtP, modstr, argcnt, args, constcnt, consts)
+    @ccall Reactant_jll.libReactantExtra.reactantXLAExec(
+        lrtP::Ptr{Ptr{LinkableRuntime}},
+        modstr::Cstring,
+        argcnt::Int64,
+        args::Ptr{Ptr{Cvoid}},
+        constcnt::Int64,
+        consts::Ptr{Int64},
+    )::Cvoid
+end
+
 function reactantXLAMemcpy(lrtP, dst, src, size, direction)
     @ccall Reactant_jll.libReactantExtra.reactantXLAMemcpy(
         lrtP::Ptr{Ptr{LinkableRuntime}},
@@ -18102,17 +18537,6 @@ end
 function reactantXLAFree(lrtP, buffer0)
     @ccall Reactant_jll.libReactantExtra.reactantXLAFree(
         lrtP::Ptr{Ptr{LinkableRuntime}}, buffer0::Ptr{Cvoid}
-    )::Cvoid
-end
-
-function reactantXLAExec(lrtP, modstr, argcnt, args, constcnt, consts)
-    @ccall Reactant_jll.libReactantExtra.reactantXLAExec(
-        lrtP::Ptr{Ptr{LinkableRuntime}},
-        modstr::Cstring,
-        argcnt::Int64,
-        args::Ptr{Ptr{Cvoid}},
-        constcnt::Int64,
-        consts::Ptr{Int64},
     )::Cvoid
 end
 

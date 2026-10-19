@@ -1156,12 +1156,14 @@ cc_library(
             "-Wl,-exported_symbol,_InitializePjrtPlugin",
             "-Wl,-exported_symbol,_MakeClientUsingPluginAPI",
             "-Wl,-exported_symbol,_MakeClientFromApi",
+            "-Wl,-exported_symbol,_GetCpuPjrtApi",
             "-Wl,-exported_symbol,_ClientNumDevices",
             "-Wl,-exported_symbol,_ClientNumAddressableDevices",
             "-Wl,-exported_symbol,_ClientProcessIndex",
             "-Wl,-exported_symbol,_ClientGetDevice",
             "-Wl,-exported_symbol,_ClientGetAddressableDevice",
             "-Wl,-exported_symbol,_PjRtDeviceGetAllocatorStats",
+            "-Wl,-exported_symbol,_PjRtDeviceClearMemoryStats",
             "-Wl,-exported_symbol,_ExecutableFree",
             "-Wl,-exported_symbol,_BufferToDevice",
             "-Wl,-exported_symbol,_BufferToClient",
@@ -1175,12 +1177,16 @@ cc_library(
             "-Wl,-exported_symbol,_FreeClient",
             "-Wl,-exported_symbol,_ClientCompile",
             "-Wl,-exported_symbol,_ClientCompileWithProto",
+            "-Wl,-exported_symbol,_PjRtLoadedExecutableSerialize",
+            "-Wl,-exported_symbol,_PjRtClientLoadSerializedExecutable",
+            "-Wl,-exported_symbol,_PjRtLoadedExecutableGetCompiledMemoryStats",
             "-Wl,-exported_symbol,_ConvertLLVMStrToMLIR",
             "-Wl,-exported_symbol,_ConvertLLVMBCToMLIR",
             "-Wl,-exported_symbol,_LinkInModule",
             "-Wl,-exported_symbol,_FreeFuture",
             "-Wl,-exported_symbol,_FutureIsReady",
             "-Wl,-exported_symbol,_FutureAwait",
+            "-Wl,-exported_symbol,_PjRtBufferGetReadyFuture",
             "-Wl,-exported_symbol,_XLAExecute",
             "-Wl,-exported_symbol,_RegisterDialects",
             "-Wl,-exported_symbol,_InitializeRegistry",
@@ -1201,6 +1207,7 @@ cc_library(
             "-Wl,-exported_symbol,_ReactantFuncSetArgAttr",
             "-Wl,-exported_symbol,_ReactantHermeticCudaGetVersion",
             "-Wl,-exported_symbol,_ReactantCudaDriverGetVersion",
+            "-Wl,-exported_symbol,_ReactantCudaSetDevice",
             "-Wl,-exported_symbol,_ReactantLLVMParseCommandLineOptions",
             "-Wl,-exported_symbol,_ReactantCudaDeviceGetComputeCapalilityMajor",
             "-Wl,-exported_symbol,_ReactantCudaDeviceGetComputeCapalilityMinor",
@@ -1258,11 +1265,14 @@ cc_library(
             "-Wl,-exported_symbol,_freeHloComputation",
             "-Wl,-exported_symbol,_hloComputationToString",
             "-Wl,-exported_symbol,_hloComputationGetInstructionsPostOrder",
+            "-Wl,-exported_symbol,_hloComputationInstructionCount",
             "-Wl,-exported_symbol,_freeHloInstruction",
             "-Wl,-exported_symbol,_hloInstructionToString",
             "-Wl,-exported_symbol,_hloInstructionGetOpcode",
             "-Wl,-exported_symbol,_hloInstructionIsFusion",
             "-Wl,-exported_symbol,_hloInstructionGetFusionKind",
+            "-Wl,-exported_symbol,_hloInstructionHasToApply",
+            "-Wl,-exported_symbol,_hloInstructionGetToApply",
             "-Wl,-exported_symbol,_hloOpcodeToString",
             "-Wl,-exported_symbol,_hloFusionKindToString",
             "-Wl,-exported_symbol,_hloInstructionFusedInstructionsComputation",
@@ -1283,6 +1293,10 @@ cc_library(
             "-Wl,-exported_symbol,_ReactantCompileMhloToLLVM",
             "-Wl,-exported_symbol,_ReactantFreeLocalExecutable",
             "-Wl,-exported_symbol,_ReactantCreateLLVMMod",
+            "-Wl,-exported_symbol,_reactantXLA*",
+            "-Wl,-exported_symbol,_dump_op",
+            "-Wl,-exported_symbol,_dump_mval",
+            "-Wl,-exported_symbol,_dump_string",
         ],
     }),
     linkstatic = True,
@@ -1410,6 +1424,7 @@ cc_library(
         # "@jax//jaxlib/mosaic:tpu_dialect_capi_objects",
         "@enzyme_ad//src/enzyme_ad/jax:triton_dialect_capi_objects",
         "@xla//xla/pjrt/plugin/xla_cpu:xla_cpu_pjrt_client",
+        "@xla//xla/pjrt/c:pjrt_c_api_cpu_internal",
         "@stablehlo//:linalg_passes",
         "@stablehlo//:tosa_passes",
         "@stablehlo//:stablehlo_passes",
@@ -1768,7 +1783,7 @@ gentbl_cc_library(
     tblgen = "//:mlir-jl-tblgen",
     td_file = "@cuda_tile//:include/cuda_tile/Dialect/CudaTile/IR/Ops.td",
     deps = [
-        "@cuda_tile//:CudaTileDialectTdFiles",
+        "@cuda_tile//:CudaTileTdFiles",
     ],
 )
 
@@ -2021,7 +2036,6 @@ genrule(
         "@xla//xla/pjrt/c:pjrt_c_api_tpu_topology_extension.h",
         "@xla//xla/pjrt/c:pjrt_c_api_ffi_extension.h",
         "@xla//xla/pjrt/c:pjrt_c_api_phase_compile_extension.h",
-        "@xla//xla/pjrt/c:pjrt_c_api_triton_extension.h",
         "@xla//xla/pjrt/c:pjrt_c_api_gpu_extension.h",
         "@xla//xla/pjrt/c:pjrt_c_api_stream_extension.h",
         "@xla//xla/pjrt/c:pjrt_c_api_profiler_extension.h",
@@ -2042,7 +2056,6 @@ genrule(
         \"$(location @xla//xla/pjrt/c:pjrt_c_api_tpu_topology_extension.h)\" \
         \"$(location @xla//xla/pjrt/c:pjrt_c_api_ffi_extension.h)\" \
         \"$(location @xla//xla/pjrt/c:pjrt_c_api_phase_compile_extension.h)\" \
-        \"$(location @xla//xla/pjrt/c:pjrt_c_api_triton_extension.h)\" \
         \"$(location @xla//xla/pjrt/c:pjrt_c_api_gpu_extension.h)\" \
         \"$(location @xla//xla/pjrt/c:pjrt_c_api_stream_extension.h)\" \
         \"$(location @xla//xla/pjrt/c:pjrt_c_api_profiler_extension.h)\" \

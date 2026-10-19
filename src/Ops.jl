@@ -310,6 +310,22 @@ function fill(v, ::Tuple{}; location=mlir_stacktrace("fill", @__FILE__, @__LINE_
 end
 
 function fill(
+    v::TracedRNumber{T},
+    dims::NTuple{N,Integer};
+    location=mlir_stacktrace("fill", @__FILE__, @__LINE__),
+) where {N,T}
+    return fill(v, collect(Int64, dims); location)::TracedRArray{T,N}
+end
+
+function fill(
+    v::TracedRNumber{T},
+    dims::Tuple{};
+    location=mlir_stacktrace("fill", @__FILE__, @__LINE__),
+) where {T}
+    return fill(v, collect(Int64, dims); location)::TracedRArray{T,0}
+end
+
+function fill(
     number::TracedRNumber{T},
     shape::Vector{Int};
     location=mlir_stacktrace("fill", @__FILE__, @__LINE__),
@@ -2067,7 +2083,7 @@ module @reactant_hlo_call attributes {mhlo.num_partitions = 1 : i64, mhlo.num_re
                 # Set function private
                 MLIR.IR.setattr!(
                     op,
-                    MLIR.API.mlirSymbolTableGetVisibilityAttributeName(),
+                    MLIR.API.mlirSymbolTableGetDefaultVisibilityAttributeName(),
                     MLIR.IR.Attribute("private"),
                 )
 
@@ -2441,9 +2457,19 @@ end
         MLIR.IR.setattr!(while_op, "enzyme.enable_checkpointing", MLIR.IR.Attribute(true))
     end
 
-    return map(enumerate(linear_args)) do (i, arg)
+    results = map(enumerate(linear_args)) do (i, arg)
         return Reactant.TracedUtils.set_mlir_data!(arg, MLIR.IR.result(while_op, i))
     end
+
+    # Values promoted to traced ones (e.g. Julia numbers with `track_numbers`) are new
+    # objects that only `traced_args` refers to, write them back into the caller's `Ref`s
+    for (prev, traced) in zip(args, traced_args)
+        if prev isa Base.RefValue && prev !== traced && traced[] isa eltype(prev)
+            prev[] = traced[]
+        end
+    end
+
+    return results
 end
 
 @noinline function if_condition(

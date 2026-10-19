@@ -172,3 +172,77 @@ end
     @test Array(Reactant.@jit raise = true concrete_double(x)) ≈ 2 .* Array(x)
     @test Array(Reactant.@jit raise = true traced_double(x)) ≈ 2 .* Array(x)
 end
+
+# A raised kernel reads and writes a complex number as its two fields.
+@kernel function real_to_complex_kernel!(y, @Const(x))
+    i = @index(Global)
+    @inbounds y[i] = x[i]
+end
+
+@kernel function complex_square_kernel!(y, @Const(x))
+    i = @index(Global)
+    @inbounds xr, xi = reim(x[i])
+    @inbounds y[i] = complex(xr^2 - xi^2, 2 * xr * xi)
+end
+
+@kernel function complex_to_real_kernel!(y, @Const(x))
+    i = @index(Global)
+    @inbounds y[i] = real(x[i]) + 2 * imag(x[i])
+end
+
+function launch_elementwise!(kernel, y, x)
+    kernel(KernelAbstractions.get_backend(y))(y, x; ndrange=length(y))
+    return nothing
+end
+
+@testset "KernelAbstractions complex numbers (raised)" begin
+    @testset "$T" for T in (Float32, Float64)
+        xr = T[1, 2, 3, 4, 5, 6]
+        xc = Complex{T}[1 + 2im, 3 - 4im, -5 + 6im, 7 + 8im, 0 - 1im, 2 + 0im]
+
+        @testset "real to complex" begin
+            x = Reactant.to_rarray(xr)
+            y = Reactant.to_rarray(zeros(Complex{T}, 6))
+            @jit raise = true launch_elementwise!(real_to_complex_kernel!, y, x)
+            @test Array(y) ≈ Complex{T}.(xr)
+        end
+
+        @testset "complex to complex" begin
+            x = Reactant.to_rarray(xc)
+            y = Reactant.to_rarray(zeros(Complex{T}, 6))
+            @jit raise = true launch_elementwise!(complex_square_kernel!, y, x)
+            @test Array(y) ≈ xc .^ 2
+
+            x2 = Reactant.to_rarray(reshape(xc, 2, 3))
+            y2 = Reactant.to_rarray(zeros(Complex{T}, 2, 3))
+            @jit raise = true launch_elementwise!(complex_square_kernel!, y2, x2)
+            @test Array(y2) ≈ reshape(xc, 2, 3) .^ 2
+        end
+
+        @testset "complex to real" begin
+            x = Reactant.to_rarray(xc)
+            y = Reactant.to_rarray(zeros(T, 6))
+            @jit raise = true launch_elementwise!(complex_to_real_kernel!, y, x)
+            @test Array(y) ≈ real.(xc) .+ 2 .* imag.(xc)
+        end
+    end
+end
+
+# A raised kernel stores an unsigned integer as its signless bits.
+@kernel function unsigned_branch_kernel!(out, @Const(vals))
+    i = @index(Global)
+    branch = one(eltype(out))
+    if @inbounds(vals[i]) >= 0.5
+        branch = eltype(out)(2)
+    end
+    @inbounds out[i] = branch
+end
+
+@testset "KernelAbstractions unsigned integers (raised)" begin
+    @testset "$T" for T in (UInt8, UInt32)
+        out = Reactant.to_rarray(fill(T(99), 2))
+        vals = Reactant.to_rarray([0.2, 0.7])
+        @jit raise = true launch_elementwise!(unsigned_branch_kernel!, out, vals)
+        @test Array(out) == T[1, 2]
+    end
+end

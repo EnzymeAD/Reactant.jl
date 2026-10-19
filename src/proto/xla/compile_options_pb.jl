@@ -72,8 +72,6 @@ struct ExecutableBuildOptionsProto
     num_partitions::Int64
     use_spmd_partitioning::Bool
     use_auto_spmd_partitioning::Bool
-    exec_time_optimization_effort::Float32
-    memory_fitting_effort::Float32
     optimization_level::var"ExecutionOptions.EffortLevel".T
     memory_fitting_level::var"ExecutionOptions.EffortLevel".T
     deduplicate_hlo::Bool
@@ -91,9 +89,9 @@ struct ExecutableBuildOptionsProto
     process_count::Int64
     gpu_topology::Union{Nothing,GpuTopologyProto}
 end
-PB.reserved_fields(::Type{ExecutableBuildOptionsProto}) = (names = ["slice_size"], numbers = Union{Int,UnitRange{Int}}[26])
-PB.default_values(::Type{ExecutableBuildOptionsProto}) = (;device_ordinal = zero(Int64), result_layout = nothing, comp_envs = nothing, debug_options = nothing, num_replicas = zero(Int64), num_partitions = zero(Int64), use_spmd_partitioning = false, use_auto_spmd_partitioning = false, exec_time_optimization_effort = zero(Float32), memory_fitting_effort = zero(Float32), optimization_level = var"ExecutionOptions.EffortLevel".EFFORT_UNKNOWN, memory_fitting_level = var"ExecutionOptions.EffortLevel".EFFORT_UNKNOWN, deduplicate_hlo = false, device_assignment = nothing, alias_passthrough_params = false, run_backend_only = false, allow_spmd_sharding_propagation_to_parameters = Vector{Bool}(), allow_spmd_sharding_propagation_to_output = Vector{Bool}(), fdo_profile = UInt8[], device_memory_size = zero(Int64), auto_spmd_partitioning_mesh_shape = Vector{Int64}(), auto_spmd_partitioning_mesh_ids = Vector{Int64}(), use_shardy_partitioner = false, process_index = zero(Int64), process_count = zero(Int64), gpu_topology = nothing)
-PB.field_numbers(::Type{ExecutableBuildOptionsProto}) = (;device_ordinal = 1, result_layout = 2, comp_envs = 13, debug_options = 3, num_replicas = 4, num_partitions = 5, use_spmd_partitioning = 6, use_auto_spmd_partitioning = 7, exec_time_optimization_effort = 20, memory_fitting_effort = 21, optimization_level = 24, memory_fitting_level = 25, deduplicate_hlo = 8, device_assignment = 9, alias_passthrough_params = 10, run_backend_only = 11, allow_spmd_sharding_propagation_to_parameters = 18, allow_spmd_sharding_propagation_to_output = 12, fdo_profile = 14, device_memory_size = 15, auto_spmd_partitioning_mesh_shape = 16, auto_spmd_partitioning_mesh_ids = 17, use_shardy_partitioner = 19, process_index = 22, process_count = 23, gpu_topology = 27)
+PB.reserved_fields(::Type{ExecutableBuildOptionsProto}) = (names = ["slice_size"], numbers = Union{Int,UnitRange{Int}}[26, 20, 21])
+PB.default_values(::Type{ExecutableBuildOptionsProto}) = (;device_ordinal = zero(Int64), result_layout = nothing, comp_envs = nothing, debug_options = nothing, num_replicas = zero(Int64), num_partitions = zero(Int64), use_spmd_partitioning = false, use_auto_spmd_partitioning = false, optimization_level = var"ExecutionOptions.EffortLevel".EFFORT_UNKNOWN, memory_fitting_level = var"ExecutionOptions.EffortLevel".EFFORT_UNKNOWN, deduplicate_hlo = false, device_assignment = nothing, alias_passthrough_params = false, run_backend_only = false, allow_spmd_sharding_propagation_to_parameters = Vector{Bool}(), allow_spmd_sharding_propagation_to_output = Vector{Bool}(), fdo_profile = UInt8[], device_memory_size = zero(Int64), auto_spmd_partitioning_mesh_shape = Vector{Int64}(), auto_spmd_partitioning_mesh_ids = Vector{Int64}(), use_shardy_partitioner = false, process_index = zero(Int64), process_count = zero(Int64), gpu_topology = nothing)
+PB.field_numbers(::Type{ExecutableBuildOptionsProto}) = (;device_ordinal = 1, result_layout = 2, comp_envs = 13, debug_options = 3, num_replicas = 4, num_partitions = 5, use_spmd_partitioning = 6, use_auto_spmd_partitioning = 7, optimization_level = 24, memory_fitting_level = 25, deduplicate_hlo = 8, device_assignment = 9, alias_passthrough_params = 10, run_backend_only = 11, allow_spmd_sharding_propagation_to_parameters = 18, allow_spmd_sharding_propagation_to_output = 12, fdo_profile = 14, device_memory_size = 15, auto_spmd_partitioning_mesh_shape = 16, auto_spmd_partitioning_mesh_ids = 17, use_shardy_partitioner = 19, process_index = 22, process_count = 23, gpu_topology = 27)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ExecutableBuildOptionsProto}, _endpos::Int=0, _group::Bool=false)
     device_ordinal = zero(Int64)
@@ -104,8 +102,6 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ExecutableBuildOptionsPr
     num_partitions = zero(Int64)
     use_spmd_partitioning = false
     use_auto_spmd_partitioning = false
-    exec_time_optimization_effort = zero(Float32)
-    memory_fitting_effort = zero(Float32)
     optimization_level = var"ExecutionOptions.EffortLevel".EFFORT_UNKNOWN
     memory_fitting_level = var"ExecutionOptions.EffortLevel".EFFORT_UNKNOWN
     deduplicate_hlo = false
@@ -140,10 +136,6 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ExecutableBuildOptionsPr
             use_spmd_partitioning = PB.decode(d, Bool)
         elseif field_number == 7
             use_auto_spmd_partitioning = PB.decode(d, Bool)
-        elseif field_number == 20
-            exec_time_optimization_effort = PB.decode(d, Float32)
-        elseif field_number == 21
-            memory_fitting_effort = PB.decode(d, Float32)
         elseif field_number == 24
             optimization_level = PB.decode(d, var"ExecutionOptions.EffortLevel".T)
         elseif field_number == 25
@@ -180,7 +172,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ExecutableBuildOptionsPr
             Base.skip(d, wire_type)
         end
     end
-    return ExecutableBuildOptionsProto(device_ordinal, result_layout[], comp_envs[], debug_options[], num_replicas, num_partitions, use_spmd_partitioning, use_auto_spmd_partitioning, exec_time_optimization_effort, memory_fitting_effort, optimization_level, memory_fitting_level, deduplicate_hlo, device_assignment[], alias_passthrough_params, run_backend_only, allow_spmd_sharding_propagation_to_parameters[], allow_spmd_sharding_propagation_to_output[], fdo_profile, device_memory_size, auto_spmd_partitioning_mesh_shape[], auto_spmd_partitioning_mesh_ids[], use_shardy_partitioner, process_index, process_count, gpu_topology[])
+    return ExecutableBuildOptionsProto(device_ordinal, result_layout[], comp_envs[], debug_options[], num_replicas, num_partitions, use_spmd_partitioning, use_auto_spmd_partitioning, optimization_level, memory_fitting_level, deduplicate_hlo, device_assignment[], alias_passthrough_params, run_backend_only, allow_spmd_sharding_propagation_to_parameters[], allow_spmd_sharding_propagation_to_output[], fdo_profile, device_memory_size, auto_spmd_partitioning_mesh_shape[], auto_spmd_partitioning_mesh_ids[], use_shardy_partitioner, process_index, process_count, gpu_topology[])
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::ExecutableBuildOptionsProto)
@@ -193,8 +185,6 @@ function PB.encode(e::PB.AbstractProtoEncoder, x::ExecutableBuildOptionsProto)
     x.num_partitions != zero(Int64) && PB.encode(e, 5, x.num_partitions)
     x.use_spmd_partitioning != false && PB.encode(e, 6, x.use_spmd_partitioning)
     x.use_auto_spmd_partitioning != false && PB.encode(e, 7, x.use_auto_spmd_partitioning)
-    x.exec_time_optimization_effort !== zero(Float32) && PB.encode(e, 20, x.exec_time_optimization_effort)
-    x.memory_fitting_effort !== zero(Float32) && PB.encode(e, 21, x.memory_fitting_effort)
     x.optimization_level != var"ExecutionOptions.EffortLevel".EFFORT_UNKNOWN && PB.encode(e, 24, x.optimization_level)
     x.memory_fitting_level != var"ExecutionOptions.EffortLevel".EFFORT_UNKNOWN && PB.encode(e, 25, x.memory_fitting_level)
     x.deduplicate_hlo != false && PB.encode(e, 8, x.deduplicate_hlo)
@@ -223,8 +213,6 @@ function PB._encoded_size(x::ExecutableBuildOptionsProto)
     x.num_partitions != zero(Int64) && (encoded_size += PB._encoded_size(x.num_partitions, 5))
     x.use_spmd_partitioning != false && (encoded_size += PB._encoded_size(x.use_spmd_partitioning, 6))
     x.use_auto_spmd_partitioning != false && (encoded_size += PB._encoded_size(x.use_auto_spmd_partitioning, 7))
-    x.exec_time_optimization_effort !== zero(Float32) && (encoded_size += PB._encoded_size(x.exec_time_optimization_effort, 20))
-    x.memory_fitting_effort !== zero(Float32) && (encoded_size += PB._encoded_size(x.memory_fitting_effort, 21))
     x.optimization_level != var"ExecutionOptions.EffortLevel".EFFORT_UNKNOWN && (encoded_size += PB._encoded_size(x.optimization_level, 24))
     x.memory_fitting_level != var"ExecutionOptions.EffortLevel".EFFORT_UNKNOWN && (encoded_size += PB._encoded_size(x.memory_fitting_level, 25))
     x.deduplicate_hlo != false && (encoded_size += PB._encoded_size(x.deduplicate_hlo, 8))
@@ -256,9 +244,10 @@ struct CompileOptionsProto
     allow_in_place_mlir_modification::Bool
     matrix_unit_operand_precision::var"PrecisionConfig.Precision".T
     compiler_variant::String
+    individually_defined_output_indices::Vector{Int32}
 end
-PB.default_values(::Type{CompileOptionsProto}) = (;argument_layouts = Vector{ShapeProto}(), parameter_is_tupled_arguments = false, executable_build_options = nothing, compile_portable_executable = false, profile_version = zero(Int64), serialized_multi_slice_config = UInt8[], env_option_overrides = Dict{String,OptionOverrideProto}(), target_config = nothing, allow_in_place_mlir_modification = false, matrix_unit_operand_precision = var"PrecisionConfig.Precision".DEFAULT, compiler_variant = "")
-PB.field_numbers(::Type{CompileOptionsProto}) = (;argument_layouts = 1, parameter_is_tupled_arguments = 2, executable_build_options = 3, compile_portable_executable = 4, profile_version = 5, serialized_multi_slice_config = 6, env_option_overrides = 7, target_config = 8, allow_in_place_mlir_modification = 9, matrix_unit_operand_precision = 10, compiler_variant = 11)
+PB.default_values(::Type{CompileOptionsProto}) = (;argument_layouts = Vector{ShapeProto}(), parameter_is_tupled_arguments = false, executable_build_options = nothing, compile_portable_executable = false, profile_version = zero(Int64), serialized_multi_slice_config = UInt8[], env_option_overrides = Dict{String,OptionOverrideProto}(), target_config = nothing, allow_in_place_mlir_modification = false, matrix_unit_operand_precision = var"PrecisionConfig.Precision".DEFAULT, compiler_variant = "", individually_defined_output_indices = Vector{Int32}())
+PB.field_numbers(::Type{CompileOptionsProto}) = (;argument_layouts = 1, parameter_is_tupled_arguments = 2, executable_build_options = 3, compile_portable_executable = 4, profile_version = 5, serialized_multi_slice_config = 6, env_option_overrides = 7, target_config = 8, allow_in_place_mlir_modification = 9, matrix_unit_operand_precision = 10, compiler_variant = 11, individually_defined_output_indices = 12)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:CompileOptionsProto}, _endpos::Int=0, _group::Bool=false)
     argument_layouts = PB.BufferedVector{ShapeProto}()
@@ -272,6 +261,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:CompileOptionsProto}, _e
     allow_in_place_mlir_modification = false
     matrix_unit_operand_precision = var"PrecisionConfig.Precision".DEFAULT
     compiler_variant = ""
+    individually_defined_output_indices = PB.BufferedVector{Int32}()
     while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
@@ -296,11 +286,13 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:CompileOptionsProto}, _e
             matrix_unit_operand_precision = PB.decode(d, var"PrecisionConfig.Precision".T)
         elseif field_number == 11
             compiler_variant = PB.decode(d, String)
+        elseif field_number == 12
+            PB.decode!(d, wire_type, individually_defined_output_indices)
         else
             Base.skip(d, wire_type)
         end
     end
-    return CompileOptionsProto(argument_layouts[], parameter_is_tupled_arguments, executable_build_options[], compile_portable_executable, profile_version, serialized_multi_slice_config, env_option_overrides, target_config[], allow_in_place_mlir_modification, matrix_unit_operand_precision, compiler_variant)
+    return CompileOptionsProto(argument_layouts[], parameter_is_tupled_arguments, executable_build_options[], compile_portable_executable, profile_version, serialized_multi_slice_config, env_option_overrides, target_config[], allow_in_place_mlir_modification, matrix_unit_operand_precision, compiler_variant, individually_defined_output_indices[])
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::CompileOptionsProto)
@@ -316,6 +308,7 @@ function PB.encode(e::PB.AbstractProtoEncoder, x::CompileOptionsProto)
     x.allow_in_place_mlir_modification != false && PB.encode(e, 9, x.allow_in_place_mlir_modification)
     x.matrix_unit_operand_precision != var"PrecisionConfig.Precision".DEFAULT && PB.encode(e, 10, x.matrix_unit_operand_precision)
     !isempty(x.compiler_variant) && PB.encode(e, 11, x.compiler_variant)
+    !isempty(x.individually_defined_output_indices) && PB.encode(e, 12, x.individually_defined_output_indices)
     return position(e.io) - initpos
 end
 function PB._encoded_size(x::CompileOptionsProto)
@@ -331,6 +324,7 @@ function PB._encoded_size(x::CompileOptionsProto)
     x.allow_in_place_mlir_modification != false && (encoded_size += PB._encoded_size(x.allow_in_place_mlir_modification, 9))
     x.matrix_unit_operand_precision != var"PrecisionConfig.Precision".DEFAULT && (encoded_size += PB._encoded_size(x.matrix_unit_operand_precision, 10))
     !isempty(x.compiler_variant) && (encoded_size += PB._encoded_size(x.compiler_variant, 11))
+    !isempty(x.individually_defined_output_indices) && (encoded_size += PB._encoded_size(x.individually_defined_output_indices, 12))
     return encoded_size
 end
 

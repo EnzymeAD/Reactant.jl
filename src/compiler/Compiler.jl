@@ -17,7 +17,8 @@ import ..Reactant:
     make_tracer,
     TracedToConcrete,
     append_path,
-    TracedType
+    TracedType,
+    MPI_REQUEST_WIDTH
 import Reactant: OptimizeCommunicationOptions, ShardyPropagationOptions, CompileOptions
 using Reactant_jll: Reactant_jll
 
@@ -277,16 +278,18 @@ Base.@nospecializeinfer function compile_mlir!(
 
     fnname = string(f)
     mlir_fn_res = try
-        Reactant.TracedUtils.make_mlir_fn(
-            f,
-            args,
-            fn_kwargs,
-            fnname,
-            true;
-            runtime,
-            compile_options.optimize_then_pad,
-            kwargs...,
-        )
+        Reactant.Profiler.@annotate "trace $fnname" begin
+            Reactant.TracedUtils.make_mlir_fn(
+                f,
+                args,
+                fn_kwargs,
+                fnname,
+                true;
+                runtime,
+                compile_options.optimize_then_pad,
+                kwargs...,
+            )
+        end
     finally
         deactivate_raising!(is_raising)
         deactivate_sdycache!(sdycache)
@@ -416,10 +419,16 @@ Base.@nospecializeinfer function compile_mlir!(
         ",",
     )
     lower_enzymexla_math_pass = "lower-enzymexla-math"
-    lower_enzymexla_mpi_pass = "lower-enzymexla-mpi{backend=$backend}"
+    # TODO legalization of comm.mpi ops to comm.nccl if compile_options.comm_options.legalize_mpi_to_nccl is true and backend is CUDA
+    lower_comm_pass = if compile_options.comm_options.lowering_target === :jit
+        "lower-comm-to-jit{mpi_request_width=$(MPI_REQUEST_WIDTH[])}"
+    elseif compile_options.comm_options.lowering_target === :ffi
+        "lower-comm-to-stablehlo"
+    else
+        error("Unknown comm lowering target: $(compile_options.comm_options.lowering_target)")
+    end
     lower_enzymexla_passes = join(
-        [lower_enzymexla_linalg_pass, lower_enzymexla_math_pass, lower_enzymexla_mpi_pass],
-        ",",
+        [lower_enzymexla_linalg_pass, lower_enzymexla_math_pass, lower_comm_pass], ","
     )
 
     legalize_chlo_to_stablehlo =
@@ -1262,7 +1271,7 @@ function compile_xla(f, args; kwargs...)
     end
 end
 
-function compile_xla(
+Reactant.@annotate "compile $(string(f))" function compile_xla(
     ctx,
     f,
     args;
@@ -1348,21 +1357,25 @@ function compile_xla(
                 ),
             )
 
-            exec = XLA.compile(
-                client,
-                mod;
-                compile_options=xla_compile_options,
-                num_outputs=length(mlir_fn_res.linear_results),
-                num_parameters=length(mlir_fn_res.linear_args),
-                mlir_fn_res.is_sharded,
-                mlir_fn_res.num_replicas,
-                mlir_fn_res.num_partitions,
-            )
+            exec = Reactant.Profiler.@annotate "XLA compile $(string(f))" begin
+                XLA.compile(
+                    client,
+                    mod;
+                    compile_options=xla_compile_options,
+                    num_outputs=length(mlir_fn_res.linear_results),
+                    num_parameters=length(mlir_fn_res.linear_args),
+                    mlir_fn_res.is_sharded,
+                    mlir_fn_res.num_replicas,
+                    mlir_fn_res.num_partitions,
+                )
+            end
             hlo_modules = XLA.get_hlo_modules(exec)
             hlo_modules = length(hlo_modules) == 1 ? only(hlo_modules) : hlo_modules
         end
 
-        finalize(mod)
+        # `MLIR.IR.Module` has no finalizer and XLA doesn't take ownership of it: destroy it
+        # explicitly, otherwise the whole module is leaked at every compilation.
+        MLIR.IR.dispose(mod)
 
         return exec, hlo_modules, mlir_fn_res, device, client, module_string
     finally

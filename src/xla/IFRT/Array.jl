@@ -11,7 +11,9 @@ function Array(
     client::Client,
     array::Reactant.ReactantPrimitive,
     device::Device=XLA.default_device(client),
-    memory_kind::AbstractString=string(convert(MemoryKind, XLA.default_memory(device))),
+    memory_kind::Union{AbstractString,MemoryKind}=convert(
+        MemoryKind, XLA.default_memory(device)
+    ),
 )
     return Array(client, fill(array), device, memory_kind)
 end
@@ -20,9 +22,12 @@ function Array(
     client::Client,
     array::Base.Array{T,N},
     device::Device=XLA.default_device(client),
-    memory_kind::AbstractString=string(convert(MemoryKind, XLA.default_memory(device))),
+    memory_kind::Union{AbstractString,MemoryKind}=convert(
+        MemoryKind, XLA.default_memory(device)
+    ),
 ) where {T<:Reactant.ReactantPrimitive,N}
-    GC.@preserve client device begin
+    !(memory_kind isa MemoryKind) && (memory_kind = MemoryKind(memory_kind))
+    GC.@preserve client device memory_kind begin
         buffer = MLIR.API.ifrt_client_make_single_shard_array_from_host_buffer(
             client.client,
             array,
@@ -31,7 +36,7 @@ function Array(
             collect(Int64, reverse(size(array))),
             0,
             device.device,
-            string(memory_kind),
+            memory_kind.ptr,
         )
     end
     return Array(buffer)

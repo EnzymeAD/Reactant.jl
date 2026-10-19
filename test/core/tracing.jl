@@ -353,6 +353,37 @@ end
             ConcreteRArray{Float64,1},
         ],
     ) == (Foo{Float64,Bar{Float64},ConcreteRArray{Float64,1}}, [true, true, false])
+
+    # Regression: concrete subtype has more params than the abstract bound.
+    # Container{NF, G<:AbstractGridLike{NF}, F<:AbstractFoo{NF}} where F's concrete
+    # type Bar{NF,A} has 2 params but AbstractFoo{NF} (the bound) has only 1.
+    # apply_type_with_promotion must use param.name.wrapper (Bar), not rewrapped
+    # (AbstractFoo), when recursing to fix up Bar's NF — otherwise it crashes with
+    # a BoundsError accessing index 2 on a 1-element SimpleVector.
+    abstract type AbstractMockFoo{NF} end
+    abstract type AbstractMockGrid{NF} end
+
+    struct MockBar{NF,A} <: AbstractMockFoo{NF}
+        a::A
+    end
+    struct MockGrid{NF,A<:AbstractVector{NF}} <: AbstractMockGrid{NF}
+        z::A
+    end
+    struct MockContainer{NF,G<:AbstractMockGrid{NF},F<:AbstractMockFoo{NF}}
+        grid::G
+        foo::F
+    end
+
+    NF_traced = TracedRNumber{Float64}
+    @test Reactant.apply_type_with_promotion(
+        MockContainer,
+        [Float64, MockGrid{NF_traced,TracedRArray{Float64,1}}, MockBar{Float64,Float64}],
+    ) == (
+        MockContainer{
+            NF_traced,MockGrid{NF_traced,TracedRArray{Float64,1}},MockBar{NF_traced,Float64}
+        },
+        [true, false, true],
+    )
 end
 
 @testset "specialized dispatches" begin

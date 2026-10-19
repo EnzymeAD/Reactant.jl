@@ -127,10 +127,14 @@ jobs:
       - uses: julia-actions/setup-julia@v3
         with:
           version: "1.11"
-      - uses: julia-actions/cache@v3.2.0
+      - uses: julia-actions/cache@v3.5.0
         with:
           gcp-bucket: ${{ contains(matrix.os, 'linux') && 'enzyme-ci-transient' || '' }}
-          key-prefix: reactantjl_benchmark/
+          # v2: the v1 oceananigans TPU depot holds a CUDA_Compiler_jll artifact missing
+          # libnvvm.so, which Pkg never re-downloads.
+          key-prefix: reactantjl_benchmark_v2/
+          # Don't let a failed job overwrite the cache with whatever state it left behind.
+          save-always: false
       - name: "Instantiate benchmarks environment"
         run: |
           julia --color=yes --project=benchmark/${{ matrix.suite }} -e 'using Pkg; Pkg.instantiate()'
@@ -155,7 +159,7 @@ jobs:
       - uses: julia-actions/setup-julia@v3
         with:
           version: "1"
-      - uses: julia-actions/cache@v3.2.0
+      - uses: julia-actions/cache@v3.5.0
       - uses: actions/download-artifact@v8
         with:
           pattern: benchmark-results-*
