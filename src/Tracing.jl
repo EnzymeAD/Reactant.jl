@@ -642,7 +642,8 @@ end
             return T isa Core.TypeVar ? UnionAll(traced_T, A´´) : A´´
         else
             if mode == ArrayToConcrete && T <: ReactantPrimitive
-                runtime isa Val{:PJRT} && return ConcretePJRTArray{T,1,_unwrap_val(ndevices)}
+                runtime isa Val{:PJRT} &&
+                    return ConcretePJRTArray{T,1,_unwrap_val(ndevices)}
                 if runtime isa Val{:IFRT}
                     # For IFRT, when ndevices is 1, it's not sharded
                     if ndevices isa Val{1}
