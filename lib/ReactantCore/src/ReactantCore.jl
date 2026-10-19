@@ -58,8 +58,21 @@ struct Binomial
 end
 
 # Traits
+"""
+    is_traced_leaf(x)
+
+Returns `true` if `x` is backed by a MLIR value; i.e. `x` is a leaf of the tracing tree that
+gets linearized into an argument/result of the traced function.
+
+Types other than [`Reactant.TracedType`](@ref) can opt in by overloading this method together
+with `TracedUtils.get_mlir_data`, `TracedUtils.set_mlir_data!`, `TracedUtils.get_paths`,
+`TracedUtils.set_paths!` and `Ops.mlir_type`.
+"""
+is_traced_leaf(@nospecialize(x)) = false
+
 function is_traced((@nospecialize x::T), seen=Base.IdSet()) where {T}
     if !isprimitivetype(x)
+        is_traced_leaf(x) && return true
         for fn in fieldnames(T)
             f = getfield(x, fn)
             if !(f in seen)
@@ -71,7 +84,7 @@ function is_traced((@nospecialize x::T), seen=Base.IdSet()) where {T}
     return false
 end
 
-is_traced(T::Type) = false
+is_traced(T::Type, _) = false
 
 # New Type signifying that a value is missing
 mutable struct MissingTracedValue
