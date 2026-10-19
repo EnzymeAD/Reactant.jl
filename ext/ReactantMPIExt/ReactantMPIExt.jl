@@ -42,10 +42,11 @@ function Distributed.get_local_process_id(::Distributed.MPIEnvDetector)
 end
 
 function __init__()
+    #! explicit-imports: off
+    # `libmpi_handle` is owned by the MPI binary JLL selected at runtime (e.g. MPICH_jll)
     mpi_handle = MPI.API.libmpi_handle
 
     # register MPI routines
-    #! explicit-imports: off
     for name in [
         :MPI_Init,
         :MPI_Finalize,
