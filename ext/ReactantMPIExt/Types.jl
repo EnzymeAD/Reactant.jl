@@ -1,7 +1,7 @@
 using Reactant
 using ReactantCore
 using Reactant: MLIR, Sharding, TracedRArray
-using Reactant.TracedUtils: get_mlir_data, set_mlir_data!, get_paths, set_paths!
+using Reactant.TracedUtils: get_mlir_data, get_paths, set_paths!
 using MPI
 
 # NOTE crossing the Reactant boundary is not yet supported for MPI types
