@@ -278,7 +278,7 @@ Base.@nospecializeinfer function compile_mlir!(
 
     fnname = string(f)
     mlir_fn_res = try
-        Reactant.Profiler.@annotate "trace $fnname" begin
+        res = Reactant.Profiler.@annotate "trace $fnname" begin
             Reactant.TracedUtils.make_mlir_fn(
                 f,
                 args,
@@ -290,6 +290,12 @@ Base.@nospecializeinfer function compile_mlir!(
                 kwargs...,
             )
         end
+        # Applying the rules may trace more Tessera ops, so it happens while tracing.
+        Reactant.Tessera.emit_rules!(mod)
+        if compile_options.optimization_passes !== :none
+            Reactant.Tessera.apply_rules!(mod)
+        end
+        res
     finally
         deactivate_raising!(is_raising)
         deactivate_sdycache!(sdycache)
@@ -313,8 +319,6 @@ Base.@nospecializeinfer function compile_mlir!(
         is_sharded,
     ) = mlir_fn_res
     compiled_f = mlir_fn_res.f
-
-    Reactant.Tessera.emit_rules!(mod)
 
     # Custom Kernels without Raising will lead to suboptimal codegen for is_sharded, force
     # raising

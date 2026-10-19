@@ -5,7 +5,10 @@ function ReactantCore.traced_if(
 end
 
 function ReactantCore.traced_call(f::Function, args...; tessera_op=nothing)
-    return @opcall call(f, args...; tessera_op)
+    isnothing(tessera_op) && return @opcall call(f, args...)
+    return Tessera.with_unaliased_args(args) do args
+        @opcall call(f, args...; tessera_op)
+    end
 end
 
 function ReactantCore.traced_while(

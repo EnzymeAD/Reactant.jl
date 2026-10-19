@@ -3294,7 +3294,9 @@ end
             (),
             f_name,
             false;
-            args_in_result=:all,
+            # Tessera rules match calls by their results, so a tessera op returns only
+            # its results and the arguments it mutates.
+            args_in_result=isnothing(tessera_op) ? :all : :mutated,
             do_transpose=false,
             argprefix,
             resprefix,

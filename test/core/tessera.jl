@@ -21,11 +21,20 @@ end
     return x
 end
 
+@tessera_op "tessera.add!" pure = false function tessera_add!(x, y)
+    x .+= y
+    return nothing
+end
+
 @tessera_optimize "tessera.pow(x, 2) -> tessera.mul(x, x)"
 @tessera_optimize "tessera.inv(tessera.inv(x)) -> x"
 
 double_inv(x) = tessera_inv(tessera_inv(x))
 plain(x) = x .+ 1
+# `tessera.mul`, which the rule rewrites this to, is not called by the program itself
+square(x) = tessera_power(x, Reactant.Ops.constant(Int32(2)))
+mul_self(x) = tessera_mul(x, x)
+add_self!(x) = (tessera_add!(x, x); x)
 
 unopt_hlo(f, args...) = repr(@code_hlo optimize = false f(args...))
 
@@ -71,6 +80,35 @@ unopt_hlo(f, args...) = repr(@code_hlo optimize = false f(args...))
             Reactant.Compiler.run_pass_pipeline!(mod, "parse-optimization-rules")
             @test occursin("pdl.pattern", repr(mod))
         end
+    end
+
+    @testset "applying rules" begin
+        # the inner call's result is the outer call's only operand
+        hlo = unopt_hlo(double_inv, x)
+        @test count(r"call @\S+\(%\d+\) : \(tensor<3xf32>\) -> tensor<3xf32>", hlo) == 2
+
+        hlo = repr(@code_hlo double_inv(x))
+        @test !occursin("tessera", hlo)
+        @test !occursin("divide", hlo)
+
+        hlo = repr(@code_hlo square(x))
+        @test !occursin("tessera", hlo)
+        @test !occursin("power", hlo)
+        @test occursin("multiply", hlo)
+        @test Array(@jit(square(x))) ≈ Float32[1, 4, 9]
+    end
+
+    @testset "aliased arguments" begin
+        # an argument passed twice is still two operands
+        hlo = unopt_hlo(mul_self, x)
+        @test occursin(r"call @\S+\((%\d+), \1\) :", hlo)
+        @test occursin("pure_tessera_op = \"tessera.mul(x, y)\"", hlo)
+        @test Array(@jit(mul_self(x))) ≈ Float32[1, 4, 9]
+
+        # a mutation through one alias reaches the original argument
+        y = Reactant.to_rarray(Float32[1, 2, 3])
+        @test Array(@jit(add_self!(y))) ≈ Float32[2, 4, 6]
+        @test Array(y) ≈ Float32[2, 4, 6]
     end
 
     @testset "execution" begin

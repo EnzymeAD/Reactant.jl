@@ -383,12 +383,14 @@ function get_argname(expr)
     return expr, expr
 end
 
-function trace_function_definition(mod, expr; traced_call_kwargs=())
+function trace_function_definition(
+    mod, expr; traced_call_kwargs=(), internal_name=nothing
+)
     internal_fn = MacroTools.splitdef(expr)
     orig_fname = internal_fn[:name]
 
     isfunctor = Meta.isexpr(orig_fname, :(::))
-    fname = gensym(Symbol(orig_fname, :internal))
+    fname = something(internal_name, gensym(Symbol(orig_fname, :internal)))
     internal_fn[:name] = fname
 
     if isfunctor
@@ -438,6 +440,7 @@ function trace_function_definition(mod, expr; traced_call_kwargs=())
     return quote
         $(MacroTools.combinedef(new_fn))
         $(MacroTools.combinedef(internal_fn))
+        $(new_fn[:name])
     end
 end
 

@@ -11,7 +11,8 @@ them.
   - [`@tessera_optimize`](@ref) declares a rewrite rule, the equivalent of
     `#pragma optimize "..."` in C++. Rules are emitted into the module as a
     `tessera.optimizations` region, i.e. the IR that `lift-tessera-annotations` produces for
-    C++ code.
+    C++ code, and applied by the Enzyme-JAX Tessera passes before the optimization
+    pipeline runs (unless `optimize = false`).
 """
 module Tessera
 
@@ -77,6 +78,28 @@ function annotate!(func::MLIR.IR.Operation, op::TesseraOp)
     return func
 end
 
+# Reactant traces an argument passed twice as a single function argument, but a rule sees one
+# operand per argument (`tessera.mul(x, x)` has two), so give each argument its own traced
+# value. Mutations made through a copy are written back to the argument it copies.
+unalias(x::Reactant.TracedRArray) = copy(x)
+unalias(x::Reactant.TracedRNumber{T}) where {T} = Reactant.TracedRNumber{T}((), x.mlir_data)
+unalias(x) = x
+
+function with_unaliased_args(f, args::Tuple)
+    unaliased = ntuple(length(args)) do i
+        any(Base.Fix1(===, args[i]), args[1:(i - 1)]) ? unalias(args[i]) : args[i]
+    end
+    before = map(a -> a isa Reactant.TracedType ? a.mlir_data : nothing, args)
+    res = f(unaliased)
+    for (a, u, data) in zip(args, unaliased, before)
+        a === u && continue
+        if u.mlir_data != data
+            Reactant.TracedUtils.set_mlir_data!(a, u.mlir_data)
+        end
+    end
+    return res
+end
+
 function is_annotated(op::MLIR.IR.Operation)
     return any(a -> !isnothing(MLIR.IR.getattr(op, a)), ATTRIBUTE_NAMES)
 end
@@ -134,6 +157,95 @@ function emit_rules!(mod::MLIR.IR.Module)
     )
     pushfirst!(body, optimizations)
     return mod
+end
+
+# The function implementing each Tessera op, as `(f, op::TesseraOp)`, registered by
+# `@tessera_op` as methods (like `rule`) so that they survive precompilation.
+implementation(::Val) = nothing
+
+op_symbol(op::TesseraOp) = Symbol(first(split(op.name, '('; limit=2)))
+
+function for_each_op(f, op::MLIR.IR.Operation)
+    for region in op, block in region, inner in block
+        f(inner)
+        for_each_op(f, inner)
+    end
+end
+
+"""
+    trace_missing_ops!(mod::MLIR.IR.Module)
+
+Trace the function of every Tessera op that a rewrite introduced a `tessera.call` to, but
+that is not yet defined in `mod` (e.g. `tessera.mul` in `tessera.pow(x, 2) ->
+tessera.mul(x, x)` when the program never calls `tessera.mul` itself). The function is
+traced for the types of the first call's operands, so this must run while `mod` is being
+traced.
+"""
+function trace_missing_ops!(mod::MLIR.IR.Module)
+    defined = Set{String}()
+    for op in MLIR.IR.body(mod)
+        sym = MLIR.IR.getattr(op, "sym_name")
+        isnothing(sym) || push!(defined, String(sym))
+    end
+    missing_calls = Dict{String,MLIR.IR.Operation}()
+    for_each_op(MLIR.IR.Operation(mod)) do op
+        MLIR.IR.name(op) == "tessera.call" || return nothing
+        callee = MLIR.IR.flatsymbol(MLIR.IR.getattr(op, "callee"))
+        callee in defined || get!(missing_calls, callee, op)
+        return nothing
+    end
+
+    for (callee, call) in missing_calls
+        impl = Base.invokelatest(implementation, Val(Symbol(callee)))
+        isnothing(impl) &&
+            error("A Tessera rule calls `$callee`, but no `@tessera_op` defines it.")
+        f, tessera_op = impl
+        args = map(1:MLIR.IR.noperands(call)) do i
+            value = MLIR.IR.operand(call, i)
+            T = eltype(MLIR.IR.julia_type(MLIR.IR.type(value)))
+            if ndims(MLIR.IR.type(value)) == 0
+                Reactant.TracedRNumber{T}((), value)
+            else
+                Reactant.TracedRArray{T}(value)
+            end
+        end
+        # Only the function is needed: the call to it is traced into a scratch block.
+        block = MLIR.IR.Block()
+        MLIR.IR.activate(block)
+        try
+            Reactant.Ops.call(f, args...; tessera_op)
+        finally
+            MLIR.IR.deactivate(block)
+            MLIR.IR.dispose(block)
+        end
+    end
+    return mod
+end
+
+"""
+    apply_rules!(mod::MLIR.IR.Module)
+
+Rewrite calls to [`@tessera_op`](@ref) functions in `mod` with the rules that
+[`emit_rules!`](@ref) inserted, then [`strip!`](@ref) the Tessera annotations. The rules
+match calls, so this must run before the annotated functions are inlined, and it may trace
+the functions of Tessera ops that only a rule calls, so `mod` must still be being traced.
+"""
+function apply_rules!(mod::MLIR.IR.Module)
+    any(op -> MLIR.IR.name(op) == "tessera.optimizations", MLIR.IR.body(mod)) ||
+        return mod
+    # Until `trace_missing_ops!` runs, a rewrite may have left a call to a function that
+    # does not exist yet, so the module does not verify.
+    Reactant.Compiler.run_pass_pipeline!(
+        mod,
+        "parse-optimization-rules,llvm-to-tessera,tessera-apply-pdl",
+        "tessera";
+        enable_verifier=false,
+    )
+    trace_missing_ops!(mod)
+    Reactant.Compiler.run_pass_pipeline!(
+        mod, "llvm-to-tessera,tessera-to-func", "tessera_lower"
+    )
+    return strip!(mod)
 end
 
 """
@@ -214,11 +326,23 @@ macro tessera_op(args...)
     name = something(name, string(fname))
     argnames = Tuple(string(first(ReactantCore.get_argname(a))) for a in def[:args])
     op = TesseraOp(name, argnames, pure)
+    internal_name = gensym(Symbol(fname, :internal))
 
     return esc(
-        ReactantCore.trace_function_definition(
-            __module__, expr; traced_call_kwargs=(Expr(:kw, :tessera_op, op),)
-        ),
+        quote
+            f = $(ReactantCore.trace_function_definition(
+                __module__,
+                expr;
+                traced_call_kwargs=(Expr(:kw, :tessera_op, op),),
+                internal_name,
+            ))
+            function $(GlobalRef(Tessera, :implementation))(
+                ::$(GlobalRef(Base, :Val)){$(QuoteNode(op_symbol(op)))}
+            )
+                return ($internal_name, $op)
+            end
+            f
+        end,
     )
 end
 

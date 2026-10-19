@@ -750,7 +750,8 @@ Base.@nospecializeinfer function finalize_mlir_fn(
         end
         if args_in_result != :all
             if has_idx(v, argprefix)
-                if !(args_in_result == :result && has_idx(v, resprefix))
+                # `:result` and `:mutated` keep arguments that are also returned
+                if !(args_in_result in (:result, :mutated) && has_idx(v, resprefix))
                     continue
                 end
             end
@@ -759,7 +760,9 @@ Base.@nospecializeinfer function finalize_mlir_fn(
     end
 
     if args_in_result == :mutated
-        append!(linear_results, linear_args[mutated_args])
+        for arg in linear_args[mutated_args]
+            any(Base.Fix1(===, arg), linear_results) || push!(linear_results, arg)
+        end
     end
     if !isnothing(verify_arg_names) && typeof.(linear_args) != typeof.(linear_results)
         argis = []
