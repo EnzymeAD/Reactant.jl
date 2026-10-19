@@ -284,6 +284,8 @@ include("ControlFlow.jl")
 include("Enums.jl")
 include("Tracing.jl")
 
+include("integration/MPI.jl")
+
 include("compiler/Compiler.jl")
 
 include("Overlay.jl")
@@ -371,11 +373,18 @@ function initialize_ptrs()
             "cuModuleLoadData",
             "cuModuleGetFunction",
             "cuStreamSynchronize",
+            "ncclAllReduce",
         )
             MLIR.API.EnzymeJaXMapSymbol(
                 name, Libdl.dlsym(Reactant_jll.libReactantExtra_handle, name)
             )
         end
+    end
+    # LLVM lowers float -> bfloat truncation to a compiler-rt libcall on targets without
+    # native bf16 conversions.
+    @static if Sys.iswindows() && VERSION >= v"1.11"
+        MLIR.API.EnzymeJaXMapSymbol("__truncsfbf2", cglobal(:julia__truncsfbf2))
+        MLIR.API.EnzymeJaXMapSymbol("__truncdfbf2", cglobal(:julia__truncdfbf2))
     end
 end
 

@@ -79,6 +79,8 @@ function optimization_passes(
         !compile_options.disable_licm_optimization_passes,           # enable_licm_optimization_passes
         Int64(compile_options.loop_unswitch_threshold),              # loop_unswitch_threshold
         !compile_options.disable_pad_optimization_passes,            # enable_pad_optimization_passes
+        !compile_options.disable_dot_formation_passes,               # enable_dot_formation_passes
+        Int64(compile_options.max_reused_const_prop_size),           # max_reused_const_prop_size
         excl_ptr,                                                    # excluded_passes
         Csize_t(length(excl_cstrs)),                                 # num_excluded_passes
     )

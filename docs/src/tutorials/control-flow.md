@@ -251,3 +251,5 @@ This implementation runs the algorithm until convergence (the transport plan has
 !!! warning "Current limitations"
 
     The for loop tracing does not support any arbitrary iterable. It supports integer and floating point ranges.
+
+[`@trace`](@ref) will also promote scalar numbers to their traced counterpart upon entering the loop. By specifying the `track_numbers = false` parameter to the macro, this behaviour can be disabled. Instead of a boolean value, one can also provide a Julia type, any scalar which is a subtype of this type will be promoted to a traced number.

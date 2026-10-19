@@ -1290,6 +1290,14 @@ bounds), \'nusw\' (no unsigned signed wrap), and \'nuw\' (no unsigned wrap).
 Note that \'inbounds\' implies \'nusw\' which is ensured by the enum
 definition. The flags can be set individually or in combination.
 
+An optional `inrange` attribute corresponds to the LLVM IR `inrange(Start,
+End)` qualifier on constant GEP expressions. Loading from or storing to any
+pointer derived from the GEP has undefined behavior if the access would fall
+outside the half-open range `[Start, End)` from the GEP result. The bounds
+use the pointer index type: their bitwidth must match the index bitwidth of
+the base pointer in the data layout. LLVM IR permits `inrange` only on
+constant GEP expressions.
+
 Examples:
 
 ```mlir
@@ -1302,6 +1310,10 @@ Examples:
 // GEP with constant offsets into a structure
 %0 = llvm.getelementptr %1[0, 1]
    : (!llvm.ptr) -> !llvm.ptr, !llvm.struct<(i32, f32)>
+
+// Constant GEP with an inrange qualifier
+%0 = llvm.getelementptr inbounds inrange <i64, -16, 8> %1[0, 0, 2]
+   : (!llvm.ptr) -> !llvm.ptr, !llvm.struct<(array<3 x ptr>)>
 ```
 """
 function getelementptr(
@@ -1310,6 +1322,7 @@ function getelementptr(
     res::IR.Type,
     rawConstantIndices,
     elem_type,
+    inrange=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[res,]
@@ -1320,6 +1333,7 @@ function getelementptr(
         NamedAttribute("rawConstantIndices", rawConstantIndices),
         NamedAttribute("elem_type", elem_type),
     ]
+    !isnothing(inrange) && push!(attributes, NamedAttribute("inrange", inrange))
 
     return create_operation(
         "llvm.getelementptr",
@@ -2086,6 +2100,7 @@ function func(;
     uwtable_kind=nothing,
     use_sample_profile=nothing,
     disable_tail_calls=nothing,
+    sample_profile_suffix_elision_policy=nothing,
     body::Region,
     location=Location(),
 )
@@ -2209,6 +2224,12 @@ function func(;
         push!(attributes, NamedAttribute("use_sample_profile", use_sample_profile))
     !isnothing(disable_tail_calls) &&
         push!(attributes, NamedAttribute("disable_tail_calls", disable_tail_calls))
+    !isnothing(sample_profile_suffix_elision_policy) && push!(
+        attributes,
+        NamedAttribute(
+            "sample_profile_suffix_elision_policy", sample_profile_suffix_elision_policy
+        ),
+    )
 
     return create_operation(
         "llvm.func",

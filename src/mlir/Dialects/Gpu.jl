@@ -36,7 +36,7 @@ accumulation as code region. The reduction operation must be one of:
 *  Integer types: `add`, `mul`, `minui`, `minsi`, `maxui`, `maxsi`, `and`,
    `or`, `xor`
 *  Floating point types: `add`, `mul`, `minnumf`, `maxnumf`, `minimumf`,
-   `maximumf`
+   `maximumf`, `minimumnumf`, `maximumnumf`
 
 If `uniform` flag is set either none or all work items of a workgroup
 need to execute this op in convergence.
@@ -3361,7 +3361,7 @@ The reduction operation must be one of:
 *  Integer types: `add`, `mul`, `minui`, `minsi`, `maxui`, `maxsi`, `and`,
    `or`, `xor`
 *  Floating point types: `add`, `mul`, `minnumf`, `maxnumf`, `minimumf`,
-   `maximumf`
+   `maximumf`, `minimumnumf`, `maximumnumf`
 """
 function subgroup_reduce(
     value::Value;

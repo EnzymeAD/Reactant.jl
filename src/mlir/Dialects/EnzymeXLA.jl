@@ -2445,6 +2445,13 @@ function wrap(
     )
 end
 
+"""
+`xla_wrapper`
+
+Calls a raised function whose input/output pairs represent device buffers.
+The corresponding function result replaces each buffer\'s contents. Trailing
+specialized scalar inputs are compile-time values rather than device buffers.
+"""
 function xla_wrapper(
     inputs::Vector{Value};
     fn,
