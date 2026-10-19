@@ -1,5 +1,5 @@
 using Reactant
-using ReactantCore
+using ReactantCore: ReactantCore
 using Reactant: MLIR, Sharding, TracedRArray
 using Reactant.TracedUtils: get_mlir_data, get_paths, set_paths!
 using MPI
