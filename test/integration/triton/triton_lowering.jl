@@ -14,7 +14,7 @@ module {
   enzymexla_tt_ext.module @triton_module {
     builtin.module @triton_module_inner attributes {enzymexla.num_stages = 3 : i32, enzymexla.num_warps = 4 : i32} {
       tt.func public @add_kernel(%arg0: !tt.ptr<f32> {tt.divisibility = 16 : i32}, %arg1: !tt.ptr<f32> {tt.divisibility = 16 : i32}, %arg2: !tt.ptr<f32> {tt.divisibility = 16 : i32}) attributes {noinline = false} {
-        %cst = arith.constant dense<1024> : tensor<1024xi32>
+        %cst = arith.constant dense<98432> : tensor<1024xi32>
         %c1024_i32 = arith.constant 1024 : i32
         %0 = tt.get_program_id x : i32
         %1 = arith.muli %0, %c1024_i32 : i32
