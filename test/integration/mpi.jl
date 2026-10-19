@@ -14,6 +14,9 @@ RUN_CPU_MPI_TESTS && Reactant.set_default_backend("cpu")
 const RUN_GPU_MPI_TESTS = MPI_BACKEND == "cuda" # rocm not currently supported
 # gpu backend gets set in ReactantMPIExt.initialize! below
 
+const ReactantMPIExt =
+    RUN_GPU_MPI_TESTS ? Base.get_extension(Reactant, :ReactantMPIExt) : nothing
+
 # Julia types which map surjectively to MPI datatypes in MPI.jl
 datatypes = [
     Int8,
