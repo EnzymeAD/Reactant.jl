@@ -376,6 +376,32 @@ Base.@nospecializeinfer function compile_mlir!(
     opt_passes2 = optimization_passes(
         compile_options; sroa=false, recognize_comms, lower_comms, backend, is_sharded
     )
+    opt_passes_prelower, opt_passes2_prelower = if DEBUG_PROBPROG_DISABLE_PRELOWER_LICM[]
+        (
+            optimization_passes(
+                compile_options;
+                sroa=true,
+                recognize_comms,
+                lower_comms,
+                backend,
+                is_sharded,
+                hlo_opts=compile_options.optimization_passes !== :after_enzyme &&
+                    compile_options.optimization_passes !== :only_enzyme,
+                licm=false,
+            ),
+            optimization_passes(
+                compile_options;
+                sroa=false,
+                recognize_comms,
+                lower_comms,
+                backend,
+                is_sharded,
+                licm=false,
+            ),
+        )
+    else
+        (opt_passes, opt_passes2)
+    end
 
     raise_passes = if raise isa String
         # Raising passes were specified
@@ -598,11 +624,11 @@ Base.@nospecializeinfer function compile_mlir!(
                 if compile_options.raise_first
                     [
                         "mark-func-memory-effects",
-                        opt_passes,
+                        opt_passes_prelower,
                         kern,
                         raise_passes,
                         "enzyme-batch",
-                        opt_passes2,
+                        opt_passes2_prelower,
                         # Dedupe ops hoisted by opt_passes2 (its cse runs before LICM).
                         "cse",
                         impulse_pass(; backend=backend),
@@ -629,9 +655,9 @@ Base.@nospecializeinfer function compile_mlir!(
                 else
                     [
                         "mark-func-memory-effects",
-                        opt_passes,
+                        opt_passes_prelower,
                         "enzyme-batch",
-                        opt_passes2,
+                        opt_passes2_prelower,
                         # Dedupe ops hoisted by opt_passes2 (its cse runs before LICM).
                         "cse",
                         impulse_pass(; backend=backend),

@@ -16,6 +16,7 @@ const DEBUG_PROBPROG_DISABLE_SICM = Ref(false)
 const DEBUG_PROBPROG_EIGENLIFT_GUARD = Ref("auto")
 const DEBUG_PASS_TIMING = Ref(false)
 const DEBUG_PROBPROG_DISABLE_REGION = Ref(false)
+const DEBUG_PROBPROG_DISABLE_PRELOWER_LICM = Ref(false)
 const DEBUG_PROBPROG_DUMP_PASSES = Ref(false)
 const DEBUG_MLIR_DIAGNOSTIC_LEVEL = Ref{MLIR.API.MlirDiagnosticSeverity}(
     MLIR.API.MlirDiagnosticError
@@ -49,6 +50,7 @@ function optimization_passes(
     raise_shlo_to_blas_lapack::Bool=true,
     self_to_convolution::Bool=false,
     hlo_opts::Bool=true,
+    licm::Bool=!compile_options.disable_licm_optimization_passes,
 )
     # Build the excluded-passes pointer array. Julia Strings are null-terminated,
     # so unsafe_convert(Cstring, s) gives a stable C pointer while the String is live.
@@ -82,7 +84,7 @@ function optimization_passes(
         !compile_options.disable_reduce_slice_fusion_passes,         # enable_reduce_slice_fusion_passes
         !compile_options.disable_concat_to_batch_passes,             # enable_concat_to_batch_passes
         !compile_options.disable_loop_raising_passes,                # enable_loop_raising_passes
-        !compile_options.disable_licm_optimization_passes,           # enable_licm_optimization_passes
+        licm,                                                        # enable_licm_optimization_passes
         Int64(compile_options.loop_unswitch_threshold),              # loop_unswitch_threshold
         !compile_options.disable_pad_optimization_passes,            # enable_pad_optimization_passes
         !compile_options.disable_dot_formation_passes,               # enable_dot_formation_passes
