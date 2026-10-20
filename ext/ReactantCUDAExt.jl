@@ -362,11 +362,11 @@ Base.@nospecializeinfer function Reactant.promote_traced_type(
 end
 
 function Base.show(io::IO, a::AT) where {AT<:CuTracedArray}
-    print(io, join(size(a), '×'), " cu traced array at ", repr(UInt(pointer(a))))
+    return print(io, join(size(a), '×'), " cu traced array at ", repr(UInt(pointer(a))))
 end
 
 function Base.show(io::IO, a::AT) where {AT<:CuTracedRNumber}
-    print(io, join(size(a), '×'), " cu traced rnumber at ", repr(UInt(pointer(a))))
+    return print(io, join(size(a), '×'), " cu traced rnumber at ", repr(UInt(pointer(a))))
 end
 
 ## array interface

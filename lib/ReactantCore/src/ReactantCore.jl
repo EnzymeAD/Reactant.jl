@@ -535,10 +535,13 @@ function trace_while(mod, expr; track_numbers, mincut, checkpointing, first_arg=
     ref_syms = Symbol[Symbol(string(sym), "_ref") for sym in external_syms]
     arg_syms = Expr(:tuple, ref_syms...)
 
-    # Bound with `let` rather than `local`, which Julia rejects for a name that is a
-    # static parameter of the enclosing method (e.g. `T` in `f(x::T) where {T}`).
+    local_names = Expr(:block, external_syms...)
     to_locals = Expr(
-        :block, [:($s = $ref[]) for (s, ref) in zip(external_syms, ref_syms)]...
+        :block, [:(
+            if !isnothing($ref[])
+                $s = $ref[]
+            end
+        ) for (s, ref) in zip(external_syms, ref_syms)]...
     )
     from_locals = [(
         quote
@@ -574,6 +577,10 @@ function trace_while(mod, expr; track_numbers, mincut, checkpointing, first_arg=
         ]...,
     )
 
+    function enclosed_body(body)
+        return Expr(:let, Expr(:block, (:($s = nothing) for s in external_syms)...), body)
+    end
+
     # After the body runs and from_locals has written back into the refs, capture
     # post-body objectids and verify the aliasing pattern is unchanged.
     post_ids_expr = Expr(
@@ -585,22 +592,33 @@ function trace_while(mod, expr; track_numbers, mincut, checkpointing, first_arg=
     reactant_code_block = quote
         let $args_sym = $(args_init)
             $pre_alias_ids_sym = $(pre_ids_expr)
-            $cond_fn_sym = $(arg_syms) -> $(Expr(:let, to_locals, cond))
+            $cond_fn_sym =
+                $(arg_syms) -> $(enclosed_body(Expr(
+                    :let,
+                    local_names,
+                    quote
+                        $to_locals
+                        $cond
+                    end,
+                )))
             $body_fn_sym =
-                $(arg_syms) -> begin
-                    $(Expr(
-                        :let,
-                        to_locals,
-                        quote
-                            $body
-                            $(from_locals...)
-                        end,
-                    ))
-                    $(ReactantCore)._check_aliasing_unchanged(
-                        $pre_alias_ids_sym, $(post_ids_expr), $(varnames_expr)
-                    )
-                    nothing
-                end
+                $(arg_syms) -> $(enclosed_body(
+                    quote
+                        $(Expr(
+                            :let,
+                            local_names,
+                            quote
+                                $to_locals
+                                $body
+                                $(from_locals...)
+                            end,
+                        ))
+                        $(ReactantCore)._check_aliasing_unchanged(
+                            $pre_alias_ids_sym, $(post_ids_expr), $(varnames_expr)
+                        )
+                        nothing
+                    end,
+                ))
 
             $(verify_arg_names_sym) = if sizeof($(body_fn_sym)) != 0
                 (Symbol($body_fn_sym), $(QuoteNode.(args_names.args)...))
