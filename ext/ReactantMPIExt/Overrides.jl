@@ -3,7 +3,6 @@ using Reactant:
     TracedRArray,
     TracedRNumber,
     call_with_native,
-    call_with_reactant,
     use_overlayed_version,
     MPI_OVERLAY_NATIVE_CALLS
 using MPI

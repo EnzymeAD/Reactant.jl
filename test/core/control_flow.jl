@@ -1744,3 +1744,16 @@ end
     @test Array(state.x) ≈ fill(4.0f0, 3)
     @test length(state.empty) == 0
 end
+
+function f_undef_var_error(x)
+    @trace for _ in 1:3
+        s = sum(z)   # z not defined yet
+        z = x .+ s
+    end
+    return x
+end
+
+@testset "UndefVarError in loop" begin
+    x = Reactant.to_rarray([1, 2, 3])
+    @test_throws UndefVarError @compile f_undef_var_error(x)
+end
