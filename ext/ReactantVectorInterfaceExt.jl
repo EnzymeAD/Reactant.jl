@@ -1,6 +1,6 @@
 module ReactantVectorInterfaceExt
 
-using Reactant: Reactant, TracedRArray, TracedRNumber, promote_to
+using Reactant: Reactant, TracedRArray, TracedRNumber, TracedUtils, promote_to
 using VectorInterface: VectorInterface, Zero, One
 
 Reactant.TracedRNumber{T}(::Zero) where {T} = promote_to(TracedRNumber{T}, Zero())
