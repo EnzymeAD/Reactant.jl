@@ -2093,6 +2093,32 @@ function subindex(source::Value, index::Value; result::IR.Type, location=Locatio
     )
 end
 
+function lapack_syevd(
+    input::Value;
+    eigenvectors::IR.Type,
+    eigenvalues::IR.Type,
+    info::IR.Type,
+    uplo,
+    location=Location(),
+)
+    op_ty_results = IR.Type[eigenvectors, eigenvalues, info]
+    operands = Value[input,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[NamedAttribute("uplo", uplo),]
+
+    return create_operation(
+        "enzymexla.lapack.syevd",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 """
 `blas_symm`
 
