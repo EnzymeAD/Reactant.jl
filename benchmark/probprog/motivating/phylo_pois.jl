@@ -1,49 +1,74 @@
 # Phylogenetic Poisson regression (motivating example)
 #
-# Real data: brms phylogenetics vignette count example (200 species on a known tree),
-# from Modern Phylogenetic Comparative Methods ch. 11 (de Villemereuil & Nakagawa 2014).
-# Provenance + files: motivating/phylo_data/README.md. Data prep (tree -> A):
-# pplbench/pplbench/models/phylo_pois.py.
+# Data: brms phylogenetics vignette count example, simulated by the book authors (200 species
+# on a simulated tree), from Modern Phylogenetic Comparative Methods ch. 11 (de Villemereuil &
+# Nakagawa 2014).
+# Provenance + files: motivating/phylo_data/README.md. Data prep (tree -> A, brms row order,
+# raw cofactor): evidence/phylo_model_fix_2026-10-07/scripts/brms_standata.R.
 #
-# Model (brms: phen_pois ~ cofactor + (1|gr(phylo, cov = A)) + (1|obs), poisson), written
-# in the natural non-centered form. A is the tree covariance (ape::vcv.phylo): a DATA
-# input, hence sample-invariant by construction. The only thing inferred about the
-# covariance is its scale sigma_sq, sampled as a VARIANCE (Statistical Rethinking m14.10:
-# `sigma_sq ~ exponential(1)`, `SIGMA <- R * sigma_sq`), so SICM's
-#     cholesky(sigma_sq * A) -> sqrt(sigma_sq) * cholesky(A)
-# introduces a genuinely new sqrt and hoists the O(n^3) Cholesky of A.
+# Model: the brms vignette model as written,
+#   brm(phen_pois ~ cofactor + (1|gr(phylo, cov = A)) + (1|obs), family = poisson("log"),
+#       data2 = list(A = A))
+# with the brms 2.23.0 default priors, ported from the Stan code brms generates for it
+# (evidence/phylo_model_fix_2026-10-07/stan/brms_phylo_pois.stan; brms names in brackets):
+#   b         flat                         population-level slope           [b]
+#   Intercept student_t(3, 0.3, 2.6)       intercept of the centered model  [Intercept]
+#   sd_phylo  student_t(3, 0, 2.6), > 0    phylogenetic sd                  [sd_1]
+#   z_phylo   N(0, 1)^n                                                     [z_1]
+#   sd_obs    student_t(3, 0, 2.6), > 0    observation-level sd             [sd_2]
+#   z_obs     N(0, 1)^n                                                     [z_2]
+#   r_phylo = sd_phylo * (chol(A) * z_phylo)     [r_1_1 = sd_1[1] * (Lcov_1 * z_1[1])]
+#   r_obs   = sd_obs * z_obs                     [r_2_1 = sd_2[1] * z_2[1]]
+#   k ~ Poisson(exp(Intercept + (x - mean(x)) * b + r_phylo + r_obs))   [poisson_log_glm]
+# The prior literals are the data-dependent brms defaults (priors.R def_scale_prior: location
+# round(median(log y'), 1) = 0.3 and scale max(2.5, round(mad(log y'), 1)) = 2.6, where y' is
+# y with zeros replaced by 0.1). x is the RAW cofactor; brms centers it in transformed data and
+# reports b_Intercept = Intercept - mean(x) * b. brms computes Lcov = t(chol(A)) once in R
+# before Stan runs; here A is the model input and its Cholesky is written where the model
+# puts it, so hoisting it out of the sampler is the compiler's job. A is ape::vcv.phylo (a
+# DATA input): the rows of A, x and k must be in the same species order.
+# Sampler setting (setup below): a diagonal inverse mass matrix, Stan's and brms's default
+# metric (diag_e).
+
+const PHYLO_INTERCEPT_LOC = 0.3
+const PHYLO_PRIOR_SCALE = 2.6
+
+# Flat prior on the slope b (brms default for population-level effects): log density 0.
+_phylo_flat_sampler(rng) = randn(rng, 1)
+_phylo_flat_logpdf(b) = sum(0.0 .* b)
 
 function model_phylo_pois(rng, A, x, k)
     n = Base.length(x)
 
-    _, sigma_sq = ProbProg.sample(
-        rng, ProbProg.Exponential(1.0, (1,)); symbol=:sigma_sq
+    _, b = ProbProg.sample(
+        rng, _phylo_flat_sampler; symbol=:b, logpdf=_phylo_flat_logpdf
     )
-    _, eta = ProbProg.sample(
-        rng, ProbProg.Normal(0.0, 1.0, (n,)); symbol=:eta
+    _, Intercept = ProbProg.sample(
+        rng, ProbProg.StudentT(3.0, PHYLO_INTERCEPT_LOC, PHYLO_PRIOR_SCALE, (1,));
+        symbol=:Intercept,
     )
-    _, b0 = ProbProg.sample(
-        rng, ProbProg.Normal(0.0, 1.0, (1,)); symbol=:b0
+    _, sd_phylo = ProbProg.sample(
+        rng, ProbProg.HalfStudentT(3.0, PHYLO_PRIOR_SCALE, (1,)); symbol=:sd_phylo
     )
-    _, b1 = ProbProg.sample(
-        rng, ProbProg.Normal(0.0, 1.0, (1,)); symbol=:b1
+    _, z_phylo = ProbProg.sample(
+        rng, ProbProg.Normal(0.0, 1.0, (n,)); symbol=:z_phylo
     )
-    _, sigma_obs = ProbProg.sample(
-        rng, ProbProg.HalfNormal(1.0, (1,)); symbol=:sigma_obs
+    _, sd_obs = ProbProg.sample(
+        rng, ProbProg.HalfStudentT(3.0, PHYLO_PRIOR_SCALE, (1,)); symbol=:sd_obs
     )
-    _, eps = ProbProg.sample(
-        rng, ProbProg.Normal(0.0, 1.0, (n,)); symbol=:eps
+    _, z_obs = ProbProg.sample(
+        rng, ProbProg.Normal(0.0, 1.0, (n,)); symbol=:z_obs
     )
 
-    # Phylogenetic random effect: f = chol(sigma_sq * A) * eta
-    s_2d = reshape(sigma_sq, 1, 1)
-    cov = s_2d .* A
-    C = cholesky(cov)
-    f = reshape(C.factors' * reshape(eta, n, 1), n)
+    # Phylogenetic effect: r_phylo = sd_phylo * (chol(A) * z_phylo)
+    C = cholesky(A)
+    r_phylo = reshape(sd_phylo, 1) .* reshape(C.factors' * reshape(z_phylo, n, 1), n)
+    r_obs = reshape(sd_obs, 1) .* z_obs
 
-    log_rate = reshape(b0, 1) .+ reshape(b1, 1) .* x .+ f .+ reshape(sigma_obs, 1) .* eps
+    xc = x .- sum(x) ./ n
+    mu = reshape(Intercept, 1) .+ xc .* reshape(b, 1) .+ r_phylo .+ r_obs
     _, obs = ProbProg.sample(
-        rng, ProbProg.Poisson(exp.(log_rate), (n,)); symbol=:k
+        rng, ProbProg.Poisson(exp.(mu), (n,)); symbol=:k
     )
     return obs
 end
@@ -51,6 +76,8 @@ end
 function setup(data)
     attrs = data["attrs"]
     n = Int(attrs["n"])
+    haskey(attrs, "int_loc") && @assert Float64(attrs["int_loc"]) == PHYLO_INTERCEPT_LOC
+    haskey(attrs, "sd_scale") && @assert Float64(attrs["sd_scale"]) == PHYLO_PRIOR_SCALE
 
     A_raw = data["A"]
     A = [Float64(A_raw[i][j]) for i in 1:n, j in 1:n]
@@ -63,12 +90,12 @@ function setup(data)
     model_args = (A_rarray, x_rarray, k_rarray)
 
     selection = ProbProg.select(
-        ProbProg.Address(:sigma_sq),
-        ProbProg.Address(:eta),
-        ProbProg.Address(:b0),
-        ProbProg.Address(:b1),
-        ProbProg.Address(:sigma_obs),
-        ProbProg.Address(:eps),
+        ProbProg.Address(:b),
+        ProbProg.Address(:Intercept),
+        ProbProg.Address(:sd_phylo),
+        ProbProg.Address(:z_phylo),
+        ProbProg.Address(:sd_obs),
+        ProbProg.Address(:z_obs),
     )
 
     return (
@@ -77,6 +104,7 @@ function setup(data)
         selection = selection,
         position_size = 2 * n + 4,
         model_name = "Phylogenetic Poisson Regression",
+        inverse_mass_matrix = ones(Float64, 2 * n + 4),
     )
 end
 
@@ -85,41 +113,41 @@ function build_constraint(data, init_params)
     k = Float64.(data["Y"])
 
     if init_params !== nothing
-        init_sigma_sq = Float64.(init_params["sigma_sq"])
-        init_eta = Float64.(init_params["eta"])
-        init_b0 = Float64.(init_params["b0"])
-        init_b1 = Float64.(init_params["b1"])
-        init_sigma_obs = Float64.(init_params["sigma_obs"])
-        init_eps = Float64.(init_params["eps"])
+        init_b = Float64.(init_params["b"])
+        init_Intercept = Float64.(init_params["Intercept"])
+        init_sd_phylo = Float64.(init_params["sd_phylo"])
+        init_z_phylo = Float64.(init_params["z_phylo"])
+        init_sd_obs = Float64.(init_params["sd_obs"])
+        init_z_obs = Float64.(init_params["z_obs"])
     else
-        init_sigma_sq = [1.0]
-        init_eta = zeros(n)
-        init_b0 = [0.0]
-        init_b1 = [0.0]
-        init_sigma_obs = [1.0]
-        init_eps = zeros(n)
+        init_b = [0.0]
+        init_Intercept = [0.0]
+        init_sd_phylo = [1.0]
+        init_z_phylo = zeros(n)
+        init_sd_obs = [1.0]
+        init_z_obs = zeros(n)
     end
 
     return ProbProg.Constraint(
-        :sigma_sq => init_sigma_sq,
-        :eta => init_eta,
-        :b0 => init_b0,
-        :b1 => init_b1,
-        :sigma_obs => init_sigma_obs,
-        :eps => init_eps,
+        :b => init_b,
+        :Intercept => init_Intercept,
+        :sd_phylo => init_sd_phylo,
+        :z_phylo => init_z_phylo,
+        :sd_obs => init_sd_obs,
+        :z_obs => init_z_obs,
         :k => k,
     )
 end
 
 function extract_samples(trace)
-    eta_samples = trace.choices[:eta]
-    eps_samples = trace.choices[:eps]
+    zp = trace.choices[:z_phylo]
+    zo = trace.choices[:z_obs]
     return Dict{String,Any}(
-        "sigma_sq" => collect(vec(trace.choices[:sigma_sq])),
-        "eta" => [collect(eta_samples[i, :]) for i in 1:size(eta_samples, 1)],
-        "b0" => collect(vec(trace.choices[:b0])),
-        "b1" => collect(vec(trace.choices[:b1])),
-        "sigma_obs" => collect(vec(trace.choices[:sigma_obs])),
-        "eps" => [collect(eps_samples[i, :]) for i in 1:size(eps_samples, 1)],
+        "b" => collect(vec(trace.choices[:b])),
+        "Intercept" => collect(vec(trace.choices[:Intercept])),
+        "sd_phylo" => collect(vec(trace.choices[:sd_phylo])),
+        "z_phylo" => [collect(zp[i, :]) for i in 1:size(zp, 1)],
+        "sd_obs" => collect(vec(trace.choices[:sd_obs])),
+        "z_obs" => [collect(zo[i, :]) for i in 1:size(zo, 1)],
     )
 end

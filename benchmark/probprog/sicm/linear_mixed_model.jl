@@ -1,11 +1,25 @@
 # Linear Mixed Model (SICM: CholeskyEigenLift)
 #
 # Model: y ~ MVN(X * beta, sigma_u^2 * K_re + sigma_e^2 * I)
-#   beta ~ Normal(0, 1)^k
+#   beta ~ Normal(0, 10)^k
 #   sigma_u ~ HalfNormal(1)    (random effects std)
 #   sigma_e ~ HalfNormal(1)    (residual std)
 #   K_re = Z * Z'              (precomputed, sample-invariant)
 #   X is fixed design matrix, Z is random effects design matrix
+#
+# Priors (2026-10-07). posteriordb `radon_mn-radon_variable_intercept_centered`
+# (and its noncentered twin), stan-dev/posteriordb commit 28f8d3d (unchanged at
+# 91027f9), models/stan/radon_variable_intercept_centered.stan:
+#   sigma_y ~ normal(0, 1); sigma_alpha ~ normal(0, 1);   (both <lower=0>)
+#   mu_alpha ~ normal(0, 10); beta ~ normal(0, 10);
+#   alpha ~ normal(mu_alpha, sigma_alpha);
+#   log_radon[n] ~ normal(alpha[county_idx[n]] + floor_measure[n] * beta, sigma_y)
+# With X = [1, floor] and Z the county indicators, integrating alpha out gives
+# this file's marginal with beta = [mu_alpha, beta], sigma_u = sigma_alpha,
+# sigma_e = sigma_y, so every prior above is posteriordb's. The marginal is the
+# one of Lai, Domke and Sheldon (NeurIPS 2024, arXiv:2410.24079), section 2,
+# equation (2), written here in its dense N x N form (their section 2.1 "naive"
+# O(N^3) form, not their linear-time section 3 algorithm).
 #
 # SICM EigenLift pattern:
 #   cholesky(s * K_re + t * I) -> eigendecomposition of K_re (hoisted, O(N^3))
@@ -19,7 +33,7 @@ function model_lmm(rng, X, K_re, y)
     k = size(X, 2)
 
     _, beta = ProbProg.sample(
-        rng, ProbProg.Normal(0.0, 1.0, (k,)); symbol=:beta
+        rng, ProbProg.Normal(0.0, 10.0, (k,)); symbol=:beta
     )
 
     _, sigma_u = ProbProg.sample(
