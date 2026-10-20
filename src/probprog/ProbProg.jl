@@ -32,7 +32,8 @@ export Distribution,
     HalfStudentT,
     Dirichlet,
     DiscreteUniform,
-    Gumbel
+    Gumbel,
+    Uniform
 
 # Utility functions.
 export get_choices,

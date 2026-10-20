@@ -76,6 +76,31 @@ support(::Type{<:Normal}) = :real
 dist_spec(::Type{<:Normal}) = _dist_spec("STD_NORMAL", [AffineTransform()])
 
 #==============================================================================#
+# Uniform Distribution
+#==============================================================================#
+
+struct Uniform{Tl,Th,S<:Tuple} <: AbstractDistribution
+    low::Tl
+    high::Th
+    shape::S
+
+    function Uniform{Tl,Th,S}(low::Tl, high::Th, shape::S) where {Tl,Th,S<:Tuple}
+        isempty(shape) && throw(ArgumentError("shape cannot be empty"))
+        return new{Tl,Th,S}(low, high, shape)
+    end
+end
+
+function Uniform(low::Tl, high::Th, shape::S) where {Tl,Th,S<:Tuple}
+    return Uniform{Tl,Th,S}(low, high, shape)
+end
+Uniform(low, high) = Uniform(low, high, (1,))
+
+params(d::Uniform) = (d.low, d.high - d.low, d.shape)
+# Bounds are operands, so HMC/NUTS/VI cannot reparameterize a Uniform site.
+support(::Type{<:Uniform}) = :interval
+dist_spec(::Type{<:Uniform}) = _dist_spec("STD_UNIFORM", [AffineTransform()])
+
+#==============================================================================#
 # Exponential Distribution (rate)
 #==============================================================================#
 
