@@ -1342,6 +1342,22 @@ Base.@nospecializeinfer function make_tracer_unknown(
                     xi2 = Core.Typeof(xi2)((newpath,), xi2.mlir_data)
                     seen[xi2] = xi2
                     changed = true
+                elseif xi2 isa AbstractDict &&
+                    FT <: AbstractDict &&
+                    is_traced_number(dict_value(FT)) &&
+                    all(v -> v isa unwrapped_eltype(dict_value(FT)), values(xi2))
+                    # Reconcile dict value mismatch (e.g. Dict{K,Float64} -> Dict{K,TracedRNumber{Float64}})
+                    # arising from parent type constraints overriding local inference.
+                    local VT = dict_value(FT)
+                    local d = FT()
+                    for (k, v) in xi2
+                        tv = VT(v)
+                        tv = Core.Typeof(tv)((append_path(newpath, k),), tv.mlir_data)
+                        seen[tv] = tv
+                        d[k] = tv
+                    end
+                    xi2 = d
+                    changed = true
                 elseif !ismutabletype(FT) &&
                     !ismutabletype(Core.Typeof(xi2)) &&
                     fieldcount(FT) == fieldcount(Core.Typeof(xi2))
