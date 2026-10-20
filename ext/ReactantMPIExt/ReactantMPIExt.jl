@@ -42,10 +42,10 @@ function Distributed.get_local_process_id(::Distributed.MPIEnvDetector)
 end
 
 function __init__()
+    #! explicit-imports: off
     mpi_handle = MPI.API.libmpi_handle
 
     # register MPI routines
-    #! explicit-imports: off
     for name in [
         :MPI_Init,
         :MPI_Finalize,
