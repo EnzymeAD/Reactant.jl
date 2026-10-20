@@ -13,8 +13,8 @@
 # cell, per the single-build rule.
 set -uo pipefail
 
-BENCH_DIR="/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog"
-SO="/mnt/sbrantq/probprog/oopsla/Reactant.jl/deps/ReactantExtra/bazel-bin/libReactantExtra.so"
+BENCH_DIR="/mnt4/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog"
+SO="/mnt4/sbrantq/probprog/oopsla/Reactant.jl/deps/ReactantExtra/bazel-bin/libReactantExtra.so"
 TAG="${1:-batch1}"
 LOG_DIR="$BENCH_DIR/ablation/sicm_roster/logs_$TAG"
 META="$LOG_DIR/batch_meta.txt"

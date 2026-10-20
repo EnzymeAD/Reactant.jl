@@ -4,13 +4,13 @@
 # samples, do the chains move.
 set -uo pipefail
 
-BENCH_DIR="/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog"
+BENCH_DIR="/mnt4/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog"
 LOG_DIR="$BENCH_DIR/ablation/sicm_roster/logs_smoke"
 mkdir -p "$LOG_DIR"
 
 cd "$BENCH_DIR" || exit 1
 
-echo "binary md5: $(md5sum /mnt/sbrantq/probprog/oopsla/Reactant.jl/deps/ReactantExtra/bazel-bin/libReactantExtra.so)"
+echo "binary md5: $(md5sum /mnt4/sbrantq/probprog/oopsla/Reactant.jl/deps/ReactantExtra/bazel-bin/libReactantExtra.so)"
 echo "loadavg before all: $(cat /proc/loadavg)"
 
 for cfg in ${SMOKE_CELLS:-probe/sicm_smoke_car_scotland probe/sicm_smoke_car_nyc \
@@ -24,5 +24,5 @@ for cfg in ${SMOKE_CELLS:-probe/sicm_smoke_car_scotland probe/sicm_smoke_car_nyc
     echo "exit=$? loadavg after: $(cat /proc/loadavg)"
 done
 
-echo "binary md5 after: $(md5sum /mnt/sbrantq/probprog/oopsla/Reactant.jl/deps/ReactantExtra/bazel-bin/libReactantExtra.so)"
+echo "binary md5 after: $(md5sum /mnt4/sbrantq/probprog/oopsla/Reactant.jl/deps/ReactantExtra/bazel-bin/libReactantExtra.so)"
 echo "loadavg after all: $(cat /proc/loadavg)"

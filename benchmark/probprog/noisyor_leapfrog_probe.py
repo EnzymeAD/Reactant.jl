@@ -1,6 +1,6 @@
 import sys, time, json
 import numpy as np
-sys.path.insert(0, "/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/pplbench")
+sys.path.insert(0, "/mnt4/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/pplbench")
 from pplbench.models.noisy_or_topic import NoisyOrTopic as Model
 
 ARGS = dict(n=2, num_topics=50, num_words=100, avg_fanout=3.0, avg_leak_weight=0.1, avg_topic_weight=1.0)

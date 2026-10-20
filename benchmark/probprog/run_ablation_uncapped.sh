@@ -11,10 +11,10 @@
 #   3. SICM-on-VI: three repetitions of the n=200 driver (median over runs)
 #   4. IR evidence for the section-2 row (in-loop LAPACK call counts)
 set -uo pipefail
-BENCH="/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog"
-ROOT="/mnt/sbrantq/probprog/oopsla/Reactant.jl"
+BENCH="/mnt4/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog"
+ROOT="/mnt4/sbrantq/probprog/oopsla/Reactant.jl"
 CAMPAIGN="${CAMPAIGN:-refreeze_2026-09-08}"
-EV="${CAMPAIGN_EV:-/mnt/sbrantq/probprog/oopsla/evidence/refreeze_2026-09-08}"
+EV="${CAMPAIGN_EV:-/mnt4/sbrantq/probprog/oopsla/evidence/refreeze_2026-09-08}"
 LOGS="$BENCH/logs/$CAMPAIGN"
 cd "$BENCH" || exit 1
 mkdir -p "$LOGS/uncapped" "$EV"
@@ -109,7 +109,7 @@ svi)
 ir)
   note "STAGE ir: section-2 phylogenetic Poisson regression IR dumps"
   CAMPAIGN="$CAMPAIGN" IR_HLO_DIR="${IR_HLO_DIR:-}" IR_MODELS="phylo_pois" bash - <<'IRSH' > "$LOGS/uncapped/ir_phylo.log" 2>&1
-BENCH="/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog"
+BENCH="/mnt4/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog"
 HLO="${IR_HLO_DIR:-$BENCH/ablation/sicm_roster/hlo}"
 LOG="$BENCH/logs/${CAMPAIGN:-refreeze_2026-09-08}/uncapped"
 mkdir -p "$HLO" "$LOG"

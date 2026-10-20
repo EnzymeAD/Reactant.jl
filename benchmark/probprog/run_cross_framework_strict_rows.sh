@@ -46,5 +46,5 @@ env LOAD_GATE=20 START_EXT_CPU=1000 LOAD_MAX=24 EXT_CPU_LIMIT=1000 ABORT_SAMPLES
     MAX_ROW_RETRIES=2 ROWS="robust svi_logistic" LOGDIR="$OUT" \
     ./run_cross_framework_singlethread.sh > "$OUT/nohup.log" 2>&1
 echo "[$(date '+%F %T')] strict re-measurement rc=$?"
-python3 /mnt/sbrantq/probprog/oopsla/tools/refreeze_cell_ledger.py > "$OUT/ledger_after.txt" 2>&1
+python3 /mnt4/sbrantq/probprog/oopsla/tools/refreeze_cell_ledger.py > "$OUT/ledger_after.txt" 2>&1
 echo "[$(date '+%F %T')] strict rows pass finished"

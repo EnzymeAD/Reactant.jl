@@ -333,7 +333,7 @@ def verify():
     # cannot select those rows by a size rule, so the check is column-by-column
     # against the posteriordb source at its own rows (done at build time and
     # recorded in the provenance). Re-run it here.
-    z = zipfile.ZipFile("/mnt/sbrantq/probprog/posteriordb/posterior_database/"
+    z = zipfile.ZipFile("/mnt4/sbrantq/probprog/posteriordb/posterior_database/"
                         "data/data/diamonds.json.zip")
     raw = json.loads(z.read("diamonds.json"))
     Xp = np.asarray(raw["X"], float); Yp = np.asarray(raw["Y"], float)

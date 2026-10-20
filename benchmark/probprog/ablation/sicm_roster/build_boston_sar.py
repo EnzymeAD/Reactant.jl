@@ -49,7 +49,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 BENCH = os.path.abspath(os.path.join(HERE, "..", ".."))
 OUT = os.path.join(BENCH, "pplbench", "pplbench", "models", "real_data",
                    "boston_sar.json")
-RDA = "/mnt/sbrantq/probprog/spData/data/boston.rda"
+RDA = "/mnt4/sbrantq/probprog/spData/data/boston.rda"
 
 
 def main():

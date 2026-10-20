@@ -69,7 +69,7 @@ run impulse_scaledcov_sicm_triple 90m \
 # what the rewrite is worth; the paper's claim is that SICM applies inside
 # user-composed kernels, and this is the size that tests it. The figure's row
 # stays at n=8; this cell is reported separately.
-EV_N200="/mnt/sbrantq/probprog/oopsla/evidence/refreeze_2026-09-08/fig13_generality/scaledcov_n200"
+EV_N200="/mnt4/sbrantq/probprog/oopsla/evidence/refreeze_2026-09-08/fig13_generality/scaledcov_n200"
 mkdir -p "$EV_N200"
 run impulse_scaledcov_sicm_triple_n200 120m \
   "$JULIA_ENV E2_N=200 E2_ITERS=500 E2_OUT=$EV_N200 julia -t 1 --project=$SCRIPT_DIR $ROOT/test/probprog/mh_sicm_benchmark.jl"

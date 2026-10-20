@@ -5,7 +5,7 @@
 # single-core cells on CCD 6 (core 48); the only other pinned work, the w1000
 # row, runs on cores 64-88, so they do not share a die.
 set -uo pipefail
-B="/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog"
+B="/mnt4/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog"
 L="$B/logs/refreeze_2026-09-08"
 cd "$B" || exit 1
 echo "[$(date '+%F %T')] starting the post-pinned phase (decoupled from the w1000 row)"

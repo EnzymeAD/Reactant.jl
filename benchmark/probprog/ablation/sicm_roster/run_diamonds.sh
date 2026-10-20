@@ -21,8 +21,8 @@ set -uo pipefail
 
 STAGE="${1:-}"
 TAG="${2:-diamonds1}"
-BENCH_DIR="/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog"
-SO="/mnt/sbrantq/probprog/oopsla/Reactant.jl/deps/ReactantExtra/bazel-bin/libReactantExtra.so"
+BENCH_DIR="/mnt4/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog"
+SO="/mnt4/sbrantq/probprog/oopsla/Reactant.jl/deps/ReactantExtra/bazel-bin/libReactantExtra.so"
 LOG_DIR="$BENCH_DIR/ablation/sicm_roster/logs_diamonds/$TAG"
 HLO_DIR="$BENCH_DIR/ablation/sicm_roster/hlo"
 META="$LOG_DIR/meta.txt"

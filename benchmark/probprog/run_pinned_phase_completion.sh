@@ -14,7 +14,7 @@
 # pinned_phase.log open on a truncating redirect, so a concurrent append to that
 # file could be overwritten by the chain's next write.
 set -uo pipefail
-B="/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog"
+B="/mnt4/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog"
 L="$B/logs/refreeze_2026-09-08"
 cd "$B" || exit 1
 

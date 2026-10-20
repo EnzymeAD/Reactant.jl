@@ -19,7 +19,7 @@
 #   julia --project=benchmark/probprog/gen_env benchmark/probprog/gen_mh_harness.jl
 using Gen, Random, LinearAlgebra, Printf
 
-const OUT = get(ENV, "GEN_MH_OUT", "/mnt/sbrantq/probprog/oopsla/evidence/programmable_mh")
+const OUT = get(ENV, "GEN_MH_OUT", "/mnt4/sbrantq/probprog/oopsla/evidence/programmable_mh")
 mkpath(OUT)
 
 # HalfNormal matching the Impulse HALF_NORMAL native (DistBuilder.cpp):

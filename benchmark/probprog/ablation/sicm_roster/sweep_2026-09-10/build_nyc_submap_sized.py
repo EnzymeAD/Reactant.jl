@@ -44,7 +44,7 @@ import numpy as np
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROSTER = os.path.normpath(os.path.join(HERE, ".."))
 BENCH = os.path.normpath(os.path.join(ROSTER, "..", ".."))
-SRC = ("/mnt/sbrantq/probprog/posteriordb/posterior_database/data/data/"
+SRC = ("/mnt4/sbrantq/probprog/posteriordb/posterior_database/data/data/"
        "traffic_accident_nyc.json.zip")
 REAL = os.path.join(BENCH, "pplbench", "pplbench", "models", "real_data")
 DATA = os.path.join(ROSTER, "data")
@@ -160,7 +160,7 @@ def main():
             "edges). Source: posteriordb data set `traffic_accident_nyc` "
             "(posterior `traffic_accident_nyc-bym2_offset_only`), file "
             "posterior_database/data/data/traffic_accident_nyc.json.zip from the "
-            "local posteriordb checkout at /mnt/sbrantq/probprog/posteriordb, "
+            "local posteriordb checkout at /mnt4/sbrantq/probprog/posteriordb, "
             "which carries N=%d tracts, N_edges=%d undirected adjacency edges "
             "(1-based node1/node2 lists), observed accident counts y and "
             "exposure E. Sub-map rule: %s. y and E are the observed values, "

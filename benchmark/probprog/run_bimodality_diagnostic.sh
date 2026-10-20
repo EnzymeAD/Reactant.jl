@@ -48,6 +48,6 @@ env $G ./refreeze_cell.sh bimod_noeigen "$LOG" 30m "$CORE" -- \
   "$CAPS XLA_FLAGS=--xla_cpu_multi_thread_eigen=false IMPULSE_MH_ARM=flat julia -t 1 --project=. impulse_mh_linreg_harness.jl"
 
 echo "[$(date '+%F %T')] bimodality diagnostic done"
-python3 /mnt/sbrantq/probprog/oopsla/tools/repetition_clusters.py "$LOG" \
-  --json /mnt/sbrantq/probprog/oopsla/evidence/refreeze_2026-09-08/fig13_generality/bimodality/clusters_diagnostic.json \
-  | tee /mnt/sbrantq/probprog/oopsla/evidence/refreeze_2026-09-08/fig13_generality/bimodality/clusters_diagnostic.txt
+python3 /mnt4/sbrantq/probprog/oopsla/tools/repetition_clusters.py "$LOG" \
+  --json /mnt4/sbrantq/probprog/oopsla/evidence/refreeze_2026-09-08/fig13_generality/bimodality/clusters_diagnostic.json \
+  | tee /mnt4/sbrantq/probprog/oopsla/evidence/refreeze_2026-09-08/fig13_generality/bimodality/clusters_diagnostic.txt

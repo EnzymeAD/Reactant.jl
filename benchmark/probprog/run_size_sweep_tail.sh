@@ -8,7 +8,7 @@
 # measurable rather than guessed: the measured scaling of both configurations
 # is far below the flop count, so n=1000, n=1921 and D=1000 are affordable.
 set -uo pipefail
-BENCH="/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog"
+BENCH="/mnt4/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog"
 LOGS="$BENCH/logs/size_sweep_2026-09-10"
 cd "$BENCH" || exit 1
 DRV="$LOGS/supervisor.log"

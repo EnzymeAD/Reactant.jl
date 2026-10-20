@@ -87,7 +87,7 @@ for n in (8, 32, 64, 128, 256):
     results[n] = {"per_move_us": round(per_move_us, 4), "accepts": int(out[2])}
     print(f"n={n:<4} per-move {per_move_us:10.3f} us | accepts {int(out[2])}/1000 | slope={float(out[0]):.4f} tau={float(out[1]):.6f}")
 
-GENJAX_MH_OUT = os.environ.get("GENJAX_MH_OUT", "/mnt/sbrantq/probprog/oopsla/evidence/programmable_mh")
+GENJAX_MH_OUT = os.environ.get("GENJAX_MH_OUT", "/mnt4/sbrantq/probprog/oopsla/evidence/programmable_mh")
 with open(os.path.join(GENJAX_MH_OUT, "genjax_baseline_sweep.json"), "w") as f:
     json.dump({"genjax": "0.10.3", "jax": jax.__version__, "x64": True, "reps": 8,
                "num_iters": NUM_ITERS, "mh_steps": NUM_STEPS, "sweep": results}, f, indent=1)

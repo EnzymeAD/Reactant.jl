@@ -4,7 +4,7 @@ import json, os, sys, statistics
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import aggregate as agg
 
-DIR = "/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/ablation/pre_lowering"
+DIR = "/mnt4/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/ablation/pre_lowering"
 BATCHES = [("batch1", "logs_batch1", "2026-08-24T20:59:02-05:00"),
            ("batch2", "logs_batch2", "2026-08-24T21:17:39-05:00"),
            ("batch3", "logs_batch3", None)]

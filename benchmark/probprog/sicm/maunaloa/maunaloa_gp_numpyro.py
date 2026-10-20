@@ -9,7 +9,7 @@ maunaloa_gp_prep.py wrote). Purpose: pointwise density parity (1e-12 relative) a
 NUTS trajectory lockstep with adaptation off and a fixed step size.
 
 Usage:
-  export PYTHONPATH="/mnt/sbrantq/probprog/jax:/mnt/sbrantq/probprog/numpyro:$PYTHONPATH"
+  export PYTHONPATH="/mnt4/sbrantq/probprog/jax:/mnt4/sbrantq/probprog/numpyro:$PYTHONPATH"
   CUDA_VISIBLE_DEVICES="" /home/sbrantq/anaconda3/envs/probprog/bin/python \
       maunaloa_gp_numpyro.py <N> [point|parity|bench]
 """

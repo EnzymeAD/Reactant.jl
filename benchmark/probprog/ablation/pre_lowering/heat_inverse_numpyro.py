@@ -14,7 +14,7 @@ Matched NUTS settings: num_samples=20, num_warmup=0, max_tree_depth=5,
 step_size=0.1, no adaptation, dense identity inverse mass matrix.
 
 Usage:
-  export PYTHONPATH="/mnt/sbrantq/probprog/jax:/mnt/sbrantq/probprog/numpyro:$PYTHONPATH"
+  export PYTHONPATH="/mnt4/sbrantq/probprog/jax:/mnt4/sbrantq/probprog/numpyro:$PYTHONPATH"
   CUDA_VISIBLE_DEVICES="" /home/sbrantq/anaconda3/envs/probprog/bin/python \
       heat_inverse_numpyro.py <scale> [bench|parity|point]
 """

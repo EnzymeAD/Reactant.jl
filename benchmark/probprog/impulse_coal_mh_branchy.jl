@@ -8,7 +8,7 @@ function Base.wait(future::Future)::Nothing
     return nothing
 end
 Reactant.set_default_backend("cpu")
-include("/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/standard/coal_mining.jl")
+include("/mnt4/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/standard/coal_mining.jl")
 const T = 56
 branch_model(rng) = coal_mining_branch(rng, T)
 y = Float64[6, 3, 1, 7, 3, 3, 5, 5, 3, 4, 5, 2, 3, 1, 3, 2, 3, 4, 6, 2, 1, 2, 7, 1, 4, 0, 5, 2, 2, 2, 2, 7, 3, 7, 2, 3, 4, 5, 4, 1, 1, 2, 0, 0, 0, 1, 0, 2, 2, 1, 0, 1, 0, 1, 0, 0]

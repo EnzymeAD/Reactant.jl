@@ -14,7 +14,7 @@
 # load1 in the uncapped regime. This script only sequences the two campaign
 # drivers, which own the gates.
 set -uo pipefail
-BENCH="/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog"
+BENCH="/mnt4/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog"
 LOGS="$BENCH/logs/size_sweep_2026-09-10"
 cd "$BENCH" || exit 1
 mkdir -p "$LOGS"
@@ -35,7 +35,7 @@ STAGES="${STAGES:-roster_a roster_b roster_c prelower_a prelower_b}"
 note "size sweep start; stages: $STAGES"
 cp -n "$BENCH/ablation/pre_lowering/logs/batch_meta.txt" \
       "$LOGS/prelowering_batch_meta_before_sweep.txt" 2>/dev/null
-note "md5: $(md5sum /mnt/sbrantq/probprog/oopsla/Reactant.jl/deps/ReactantExtra/bazel-bin/libReactantExtra.so | cut -d' ' -f1)"
+note "md5: $(md5sum /mnt4/sbrantq/probprog/oopsla/Reactant.jl/deps/ReactantExtra/bazel-bin/libReactantExtra.so | cut -d' ' -f1)"
 
 roster () {  # $1 = stage log name, $2 = newline-separated cell list
   FROZEN_CELLS="$2" bash "$BENCH/ablation/sicm_roster/run_frozen_batch.sh" "$TAG" \

@@ -17,7 +17,7 @@ import zipfile
 
 import numpy as np
 
-SRC = ("/mnt/sbrantq/probprog/posteriordb/posterior_database/data/data/"
+SRC = ("/mnt4/sbrantq/probprog/posteriordb/posterior_database/data/data/"
        "diamonds.json.zip")
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..",
                    "pplbench", "pplbench", "models", "real_data",
@@ -35,7 +35,7 @@ PROVENANCE = (
     "Y and X are the recorded regression variables, not simulated. "
     "`prior_only` is carried through from the source file (0 = fit the "
     "likelihood). Retrieved from the local posteriordb checkout at "
-    "/mnt/sbrantq/probprog/posteriordb."
+    "/mnt4/sbrantq/probprog/posteriordb."
 )
 
 

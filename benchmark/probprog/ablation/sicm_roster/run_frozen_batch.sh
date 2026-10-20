@@ -25,8 +25,8 @@
 # missed.
 set -uo pipefail
 
-BENCH="/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog"
-SO="/mnt/sbrantq/probprog/oopsla/Reactant.jl/deps/ReactantExtra/bazel-bin/libReactantExtra.so"
+BENCH="/mnt4/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog"
+SO="/mnt4/sbrantq/probprog/oopsla/Reactant.jl/deps/ReactantExtra/bazel-bin/libReactantExtra.so"
 HERE="$BENCH/ablation/sicm_roster"
 TAG="${1:-frozen1}"
 LOGS="$HERE/logs_frozen/$TAG"

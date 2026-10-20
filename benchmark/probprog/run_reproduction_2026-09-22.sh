@@ -15,11 +15,11 @@
 #
 # Usage: run_reproduction_2026-09-22.sh [uncapped] [pinned]
 set -uo pipefail
-BENCH="/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog"
-EV="/mnt/sbrantq/probprog/oopsla/evidence/rebase_2026-09-22"
+BENCH="/mnt4/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog"
+EV="/mnt4/sbrantq/probprog/oopsla/evidence/rebase_2026-09-22"
 CAMPAIGN="rebase_2026-09-22"
 LOGS="$BENCH/logs/$CAMPAIGN"
-SO="/mnt/sbrantq/probprog/oopsla/Reactant.jl/deps/ReactantExtra/bazel-bin/libReactantExtra.so"
+SO="/mnt4/sbrantq/probprog/oopsla/Reactant.jl/deps/ReactantExtra/bazel-bin/libReactantExtra.so"
 EXPECT_MD5="51db760bd3f057d17a7413cd5400886d"
 cd "$BENCH" || exit 1
 mkdir -p "$LOGS" "$EV"

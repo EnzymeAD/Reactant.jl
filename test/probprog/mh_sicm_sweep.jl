@@ -2,7 +2,7 @@
 using Reactant, Random, LinearAlgebra, Printf, Statistics
 using Reactant: ProbProg, ReactantRNG, ConcreteRNumber
 
-const OUT = get(ENV, "SWEEP_OUT", "/mnt/sbrantq/probprog/oopsla/evidence/programmable_mh")
+const OUT = get(ENV, "SWEEP_OUT", "/mnt4/sbrantq/probprog/oopsla/evidence/programmable_mh")
 mkpath(OUT)
 
 _force(x) = x isa AbstractArray ? Array(x) : Float64(x)

@@ -12,7 +12,7 @@ float literals. The eager (op-by-op) value is also computed and every point
 where it differs from the jitted one is listed on stderr.
 
 Run (from Reactant.jl):
-  PYTHONPATH=/mnt/sbrantq/probprog/jax:/mnt/sbrantq/probprog/numpyro \
+  PYTHONPATH=/mnt4/sbrantq/probprog/jax:/mnt4/sbrantq/probprog/numpyro \
   JAX_PLATFORMS=cpu python test/probprog/studentt_numpyro_reference.py \
       > test/probprog/studentt_numpyro_reference_values.jl
 """

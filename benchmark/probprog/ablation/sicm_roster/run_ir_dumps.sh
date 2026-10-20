@@ -10,14 +10,14 @@
 # and deletes the rest of the dump directory (tens of MB per cell).
 set -uo pipefail
 
-BENCH_DIR="/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog"
+BENCH_DIR="/mnt4/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog"
 LOG_DIR="$BENCH_DIR/ablation/sicm_roster/logs_ir"
 HLO_DIR="$BENCH_DIR/ablation/sicm_roster/hlo"
 mkdir -p "$LOG_DIR" "$HLO_DIR"
 
 cd "$BENCH_DIR" || exit 1
 
-echo "md5 at start: $(md5sum /mnt/sbrantq/probprog/oopsla/Reactant.jl/deps/ReactantExtra/bazel-bin/libReactantExtra.so | cut -d' ' -f1)"
+echo "md5 at start: $(md5sum /mnt4/sbrantq/probprog/oopsla/Reactant.jl/deps/ReactantExtra/bazel-bin/libReactantExtra.so | cut -d' ' -f1)"
 
 for m in ${IR_MODELS:-car_spatial_scotland car_spatial_nyc lmm_radon hierarchical_mvn}; do
   for arm in sicm nosicm; do
@@ -42,5 +42,5 @@ for m in ${IR_MODELS:-car_spatial_scotland car_spatial_nyc lmm_radon hierarchica
     rm -rf "$outdir/mlir_dumps"
   done
 done
-echo "md5 at end: $(md5sum /mnt/sbrantq/probprog/oopsla/Reactant.jl/deps/ReactantExtra/bazel-bin/libReactantExtra.so | cut -d' ' -f1)"
+echo "md5 at end: $(md5sum /mnt4/sbrantq/probprog/oopsla/Reactant.jl/deps/ReactantExtra/bazel-bin/libReactantExtra.so | cut -d' ' -f1)"
 echo done

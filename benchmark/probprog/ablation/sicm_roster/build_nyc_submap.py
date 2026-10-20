@@ -25,7 +25,7 @@ import zipfile
 
 import numpy as np
 
-SRC = "/mnt/sbrantq/probprog/posteriordb/posterior_database/data/data/traffic_accident_nyc.json.zip"
+SRC = "/mnt4/sbrantq/probprog/posteriordb/posterior_database/data/data/traffic_accident_nyc.json.zip"
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..",
                    "pplbench", "pplbench", "models", "real_data",
                    "nyc_traffic_submap.json")

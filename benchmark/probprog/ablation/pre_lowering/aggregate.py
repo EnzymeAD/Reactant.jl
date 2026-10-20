@@ -3,7 +3,7 @@
 verification report (cross-arm accept identity, sample agreement, syevd)."""
 import json, os, re, sys, statistics
 
-DIR = "/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/ablation/pre_lowering"
+DIR = "/mnt4/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog/ablation/pre_lowering"
 
 ROWS = [
     ("Heat Equation",         "heat",      "D=100, T=100", "heat_s1_B",     "heat_s1_A",     1),

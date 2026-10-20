@@ -36,7 +36,7 @@ MODELS = os.path.join(BENCH, "pplbench", "pplbench", "models")
 sys.path.insert(0, os.path.join(BENCH, "pplbench"))
 from pplbench.models.phylo_pois import _parse_newick  # noqa: E402
 
-RDA = "/mnt/sbrantq/probprog/caper/data/shorebird.rda"
+RDA = "/mnt4/sbrantq/probprog/caper/data/shorebird.rda"
 OUT = os.path.join(MODELS, "real_data", "shorebird_pgls.json")
 
 

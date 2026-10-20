@@ -4,7 +4,7 @@
 # themselves. Cores: fig11 rows on CCD 0-3, the noisy-or w1000 row on CCD 8-11,
 # the two SlicStan cells on CCD 4 and 5, the generality pass on CCD 6.
 set -uo pipefail
-B="/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog"
+B="/mnt4/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog"
 L="$B/logs/refreeze_2026-09-08"
 cd "$B" || exit 1
 until grep -q "uncapped phase done" "$L/uncapped/driver.log" 2>/dev/null; do sleep 60; done

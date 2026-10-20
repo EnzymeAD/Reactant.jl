@@ -10,8 +10,8 @@
 # whole pass costs a few minutes of machine.
 set -uo pipefail
 
-BENCH_DIR="/mnt/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog"
-SO="/mnt/sbrantq/probprog/oopsla/Reactant.jl/deps/ReactantExtra/bazel-bin/libReactantExtra.so"
+BENCH_DIR="/mnt4/sbrantq/probprog/oopsla/Reactant.jl/benchmark/probprog"
+SO="/mnt4/sbrantq/probprog/oopsla/Reactant.jl/deps/ReactantExtra/bazel-bin/libReactantExtra.so"
 LOG_DIR="$BENCH_DIR/ablation/sicm_roster/logs_row67quiet"
 HLO_DIR="$BENCH_DIR/ablation/sicm_roster/hlo"
 mkdir -p "$LOG_DIR" "$HLO_DIR"
