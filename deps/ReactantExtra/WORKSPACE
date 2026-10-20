@@ -54,7 +54,7 @@ sed -i.bak0 "s,//:patches,@enzyme_ad//:patches,g" third_party/*/workspace.bzl
 # patch_cmds do not track the patch file; update the sha256 on every patch edit.
 XLA_CPU_RUNTIME_LEVERS_PATCH = __workspace_dir__ + "/xla_cpu_runtime_levers.patch"
 
-XLA_CPU_RUNTIME_LEVERS_SHA256 = "4ff52c2d66f3f00ad2e7f16bf5f43446465f28a81276e5dfe2202226cf50aae3"
+XLA_CPU_RUNTIME_LEVERS_SHA256 = "12f4aafc92e6bb7ec8c1d8ad3c9941c972f2dccb11206f808c32326ea2afe5a7"
 
 NEW_XLA_PATCHES = [
     """

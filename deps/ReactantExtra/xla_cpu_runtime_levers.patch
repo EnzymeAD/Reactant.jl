@@ -1,5 +1,5 @@
 diff --git a/xla/backends/cpu/runtime/buffer_allocations.h b/xla/backends/cpu/runtime/buffer_allocations.h
-index a0d11f6..1164e89 100644
+index 2fea17c..d7643c8 100644
 --- a/xla/backends/cpu/runtime/buffer_allocations.h
 +++ b/xla/backends/cpu/runtime/buffer_allocations.h
 @@ -16,6 +16,7 @@ limitations under the License.
@@ -33,10 +33,10 @@ index a0d11f6..1164e89 100644
  
  inline BufferAllocations::BufferAllocations(Buffers buffers)
 diff --git a/xla/backends/cpu/runtime/kernel_thunk.cc b/xla/backends/cpu/runtime/kernel_thunk.cc
-index abb161e..39281fc 100644
+index cbaf11e..0c73f54 100644
 --- a/xla/backends/cpu/runtime/kernel_thunk.cc
 +++ b/xla/backends/cpu/runtime/kernel_thunk.cc
-@@ -170,28 +170,47 @@ KernelThunk<num_arguments, num_results>::ExecuteInternal(
+@@ -170,30 +170,49 @@ KernelThunk<num_arguments, num_results>::ExecuteInternal(
        kernel_name_, arguments_buffers_.size(), results_buffers_.size(),
        num_workgroups_);
  
@@ -47,7 +47,8 @@ index abb161e..39281fc 100644
  
 -  for (const ShapedSlice& buffer : arguments_buffers_) {
 -    if constexpr (ShouldCheckBufferSlices()) {
--      ABSL_ASSIGN_OR_RETURN(auto mem, allocations->GetDeviceAddress(buffer.slice));
+-      ABSL_ASSIGN_OR_RETURN(auto mem,
+-                            allocations->GetDeviceAddress(buffer.slice));
 -      kernel_args_ptr++->data = mem.opaque();
 -    } else {
 -      auto mem = allocations->GetDeviceAddressUnchecked(buffer.slice);
@@ -68,7 +69,8 @@ index abb161e..39281fc 100644
 +
 +    for (const ShapedSlice& buffer : arguments_buffers_) {
 +      if constexpr (ShouldCheckBufferSlices()) {
-+        ABSL_ASSIGN_OR_RETURN(auto mem, allocations->GetDeviceAddress(buffer.slice));
++        ABSL_ASSIGN_OR_RETURN(auto mem,
++                              allocations->GetDeviceAddress(buffer.slice));
 +        kernel_args_ptr++->data = mem.opaque();
 +      } else {
 +        auto mem = allocations->GetDeviceAddressUnchecked(buffer.slice);
@@ -79,14 +81,16 @@ index abb161e..39281fc 100644
  
 -  for (const ShapedSlice& buffer : results_buffers_) {
 -    if constexpr (ShouldCheckBufferSlices()) {
--      ABSL_ASSIGN_OR_RETURN(auto mem, allocations->GetDeviceAddress(buffer.slice));
+-      ABSL_ASSIGN_OR_RETURN(auto mem,
+-                            allocations->GetDeviceAddress(buffer.slice));
 -      kernel_args_ptr++->data = mem.opaque();
 -    } else {
 -      auto mem = allocations->GetDeviceAddressUnchecked(buffer.slice);
 -      kernel_args_ptr++->data = mem.opaque();
 +    for (const ShapedSlice& buffer : results_buffers_) {
 +      if constexpr (ShouldCheckBufferSlices()) {
-+        ABSL_ASSIGN_OR_RETURN(auto mem, allocations->GetDeviceAddress(buffer.slice));
++        ABSL_ASSIGN_OR_RETURN(auto mem,
++                              allocations->GetDeviceAddress(buffer.slice));
 +        kernel_args_ptr++->data = mem.opaque();
 +      } else {
 +        auto mem = allocations->GetDeviceAddressUnchecked(buffer.slice);
@@ -121,10 +125,10 @@ index e8949a8..46c0281 100644
  
  }  // namespace internal
 diff --git a/xla/backends/cpu/runtime/thunk_executor.cc b/xla/backends/cpu/runtime/thunk_executor.cc
-index c45f8e3..87a81e1 100644
+index 53a387b..d316b5b 100644
 --- a/xla/backends/cpu/runtime/thunk_executor.cc
 +++ b/xla/backends/cpu/runtime/thunk_executor.cc
-@@ -160,6 +160,15 @@ ThunkExecutor::ThunkExecutor(ThunkSequence thunk_sequence,
+@@ -161,6 +161,15 @@ ThunkExecutor::ThunkExecutor(ThunkSequence thunk_sequence,
    // Xprof traces easier to read.
    is_sequential_ |= UseBlockingThunkExecutor();
  
@@ -214,11 +218,11 @@ index e1908ba..48079d7 100644
  // on buffer uses to build a DAG defining execution order. At run time executes
  // thunks concurrently in a given thread pool.
 diff --git a/xla/pjrt/cpu/cpu_client.cc b/xla/pjrt/cpu/cpu_client.cc
-index 2ef62a4..b5bb2e1 100644
+index 467669f..12df71e 100644
 --- a/xla/pjrt/cpu/cpu_client.cc
 +++ b/xla/pjrt/cpu/cpu_client.cc
-@@ -1842,6 +1842,23 @@ PjRtRawLoadedExecutable::RawExecuteResult CpuPjRtRawLoadedExecutable::Execute(
-         static_cast<uint64_t>(static_cast<uint32_t>(run_options.rng_seed())),
+@@ -1652,6 +1652,23 @@ PjRtRawLoadedExecutable::RawExecuteResult CpuPjRtRawLoadedExecutable::Execute(
+         run_options.custom_options(),
      };
  
 +    // Impulse lever B (default and env override: cpu::GetImpulseRuntimeLevers):
@@ -241,7 +245,7 @@ index 2ef62a4..b5bb2e1 100644
      auto thunks_execute_event =
          cpu_executable->thunks().Execute(execute_params);
  
-@@ -1852,6 +1869,10 @@ PjRtRawLoadedExecutable::RawExecuteResult CpuPjRtRawLoadedExecutable::Execute(
+@@ -1662,6 +1679,10 @@ PjRtRawLoadedExecutable::RawExecuteResult CpuPjRtRawLoadedExecutable::Execute(
             {"device_ordinal", run_options.device_ordinal()}});
      });
      tsl::BlockUntilReady(thunks_execute_event);
