@@ -1,0 +1,8 @@
+/regressions/
+/results/
+/ad-batching-codegen-ablation-report.md
+/compressed-jacobian-diff-batch-gpu-report.md
+/compressed-jacobian-diff-batch-profile-report.md
+/inspect_mlir.jl
+/profile_k8.jl
+/validate_l1.jl
