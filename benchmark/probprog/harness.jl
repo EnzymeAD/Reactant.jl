@@ -188,12 +188,15 @@ function svi_guide_draws(loc, scale, selected_entries, K::Int, seed::Integer)
         cols = (entry.offset + 1):(entry.offset + entry.num_elements)
         if entry.support === :positive
             @views constrained[:, cols] .= exp.(z[:, cols])
+        elseif entry.support === :unit_interval
+            # sigmoid bijector (Impulse XformKind::SIGMOID, DistBuilder.cpp)
+            @views constrained[:, cols] .= 1 ./ (1 .+ exp.(-z[:, cols]))
         elseif entry.support === :real
             # identity bijector
         else
             error(
                 "SVI guide draw: unsupported support :$(entry.support) for site " *
-                ":$(entry.symbol) (only :real and :positive are handled)",
+                ":$(entry.symbol) (only :real, :positive and :unit_interval are handled)",
             )
         end
     end
