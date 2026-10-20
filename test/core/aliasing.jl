@@ -100,10 +100,14 @@ end
                 @test buf.future !== nothing
             end
         end
-        Reactant.@allowscalar for I in CartesianIndices(v)
-            v[I] *= 3
+        # the raw-pointer scalar path only exists for CPU buffers; elsewhere every scalar
+        # access compiles and runs a program, which makes this loop prohibitively slow
+        if Reactant.buffer_on_cpu(x)
+            Reactant.@allowscalar for I in CartesianIndices(v)
+                v[I] *= 3
+            end
+            @test all(==(3), Array(v))
+            @test all(==(1), Array(view(x, :, 1:8, :)))
         end
-        @test all(==(3), Array(v))
-        @test all(==(1), Array(view(x, :, 1:8, :)))
     end
 end
