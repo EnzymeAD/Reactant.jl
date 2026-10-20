@@ -153,12 +153,39 @@ function svi_draw_and_extract(model, q, vi_linked, rng, K)
     return out
 end
 
+# `optimizer = "TuringDefault"`: Turing's documented default VI call, as in the Turing 0.42
+# variational-inference tutorial (TuringLang/docs 87bcf73ac9, tutorials/variational-inference
+# lines 153 and 168):
+#     q_init = q_meanfield_gaussian(m)
+#     q_avg, info, state = vi(m, q_init, n_iters)
+# i.e. KLMinRepGradProxDescent(adtype; n_samples=10) with DoWG, PolynomialAveraging and the
+# entropy proximal operator (Turing src/variational/Variational.jl:335-337), returning the
+# averaged iterate. The protocol's step_size, num_particles and init_scale do not apply (the
+# defaults set them); the rng is passed to both calls so a seed reproduces the fit. The
+# initialisation (10 log-density evaluations in q_initialize_scale) is inside the timed span.
+function run_turing_vi_default(model, seed, num_steps, K, adtype_name)
+    rng = Xoshiro(seed)
+    adtype = resolve_adtype(adtype_name)
+    vi_linked = DynamicPPL.link(DynamicPPL.VarInfo(model), model)
+    local q, info
+    fit_time = @elapsed begin
+        q0 = TV.q_meanfield_gaussian(rng, model)
+        q, info, _ = TV.vi(rng, model, q0, num_steps; adtype=adtype, show_progress=false)
+    end
+    elbo_traj = Float64[Float64(nt.elbo) for nt in info]
+    out = svi_draw_and_extract(model, q, vi_linked, rng, K)
+    return out, elbo_traj, fit_time
+end
+
 function run_turing_advi(
     model, seed, num_steps, lr, n_particles, init_scale, K, guide, optimizer,
     adtype_name,
 )
     @assert guide == "AutoNormal" "Turing ADVI arm only supports the AutoNormal (mean-field Gaussian) guide; got $guide"
-    @assert optimizer == "Adam" "Turing ADVI arm only supports the Adam optimizer; got $optimizer"
+    if optimizer == "TuringDefault"
+        return run_turing_vi_default(model, seed, num_steps, K, adtype_name)
+    end
+    @assert optimizer == "Adam" "Turing ADVI arm only supports the Adam optimizer or TuringDefault; got $optimizer"
 
     rng = Xoshiro(seed)
     # AD backend from the config's `adtype` (--adtype), as on the NUTS path:
