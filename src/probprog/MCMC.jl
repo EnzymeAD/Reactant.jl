@@ -364,6 +364,8 @@ function mcmc(
     thinning::Int=1,
     adapt_step_size::Bool=true,
     adapt_mass_matrix::Bool=true,
+    num_steps::Int=0,
+    _layout::Union{Nothing,Base.RefValue}=nothing,
 ) where {Nargs}
     _validate_chain_method(chain_method)
     # In one traced call, :parallel emits the same unrolled IR as :sequential.
@@ -386,6 +388,7 @@ function mcmc(
     ) = ppf
 
     fn_attr = MLIR.IR.FlatSymbolRefAttribute(f_name)
+    _layout === nothing || (_layout[] = tt)
 
     all_addresses_attr = build_selection_attr(tt)
 
@@ -443,13 +446,24 @@ function mcmc(
     nuts_config_attr = nothing
 
     if algorithm == :HMC
+        # num_steps > 0 overrides trajectory_length with a fixed leapfrog step count.
         hmc_config_attr = MLIR.IR.Attribute(
-            MLIR.API.enzymeHMCConfigAttrGet(
-                MLIR.IR.current_context(),
-                trajectory_length,
-                adapt_step_size,
-                adapt_mass_matrix,
-            ),
+            if num_steps > 0
+                MLIR.API.enzymeHMCConfigAttrGetWithNumSteps(
+                    MLIR.IR.current_context(),
+                    trajectory_length,
+                    adapt_step_size,
+                    adapt_mass_matrix,
+                    Int64(num_steps),
+                )
+            else
+                MLIR.API.enzymeHMCConfigAttrGet(
+                    MLIR.IR.current_context(),
+                    trajectory_length,
+                    adapt_step_size,
+                    adapt_mass_matrix,
+                )
+            end,
         )
     elseif algorithm == :NUTS
         nuts_config_attr = MLIR.IR.Attribute(

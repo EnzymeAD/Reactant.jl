@@ -16527,6 +16527,18 @@ function enzymeHMCConfigAttrGet(ctx, trajectoryLength, adaptStepSize, adaptMassM
     )::MlirAttribute
 end
 
+function enzymeHMCConfigAttrGetWithNumSteps(
+    ctx, trajectoryLength, adaptStepSize, adaptMassMatrix, numSteps
+)
+    @ccall Reactant_jll.libReactantExtra.enzymeHMCConfigAttrGetWithNumSteps(
+        ctx::MlirContext,
+        trajectoryLength::Cdouble,
+        adaptStepSize::Bool,
+        adaptMassMatrix::Bool,
+        numSteps::Int64,
+    )::MlirAttribute
+end
+
 function enzymeNUTSConfigAttrGet(
     ctx, maxTreeDepth, hasMaxDeltaEnergy, maxDeltaEnergy, adaptStepSize, adaptMassMatrix
 )
@@ -16542,6 +16554,12 @@ end
 
 function enzymeMHConfigAttrGet(ctx)
     @ccall Reactant_jll.libReactantExtra.enzymeMHConfigAttrGet(
+        ctx::MlirContext
+    )::MlirAttribute
+end
+
+function enzymeGibbsConfigAttrGet(ctx)
+    @ccall Reactant_jll.libReactantExtra.enzymeGibbsConfigAttrGet(
         ctx::MlirContext
     )::MlirAttribute
 end

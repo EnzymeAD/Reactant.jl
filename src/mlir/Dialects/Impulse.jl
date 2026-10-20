@@ -325,6 +325,7 @@ function infer(
     nuts_config=nothing,
     vi_config=nothing,
     mh_config=nothing,
+    gibbs_config=nothing,
     constrained_addresses=nothing,
     logpdf_fn=nothing,
     state_schema=nothing,
@@ -372,6 +373,8 @@ function infer(
     !isnothing(nuts_config) && push!(attributes, NamedAttribute("nuts_config", nuts_config))
     !isnothing(vi_config) && push!(attributes, NamedAttribute("vi_config", vi_config))
     !isnothing(mh_config) && push!(attributes, NamedAttribute("mh_config", mh_config))
+    !isnothing(gibbs_config) &&
+        push!(attributes, NamedAttribute("gibbs_config", gibbs_config))
     !isnothing(constrained_addresses) &&
         push!(attributes, NamedAttribute("constrained_addresses", constrained_addresses))
     !isnothing(logpdf_fn) && push!(attributes, NamedAttribute("logpdf_fn", logpdf_fn))
@@ -441,6 +444,7 @@ function infer_region(
     nuts_config=nothing,
     vi_config=nothing,
     mh_config=nothing,
+    gibbs_config=nothing,
     constrained_addresses=nothing,
     logpdf_fn=nothing,
     state_schema=nothing,
@@ -492,6 +496,8 @@ function infer_region(
     !isnothing(nuts_config) && push!(attributes, NamedAttribute("nuts_config", nuts_config))
     !isnothing(vi_config) && push!(attributes, NamedAttribute("vi_config", vi_config))
     !isnothing(mh_config) && push!(attributes, NamedAttribute("mh_config", mh_config))
+    !isnothing(gibbs_config) &&
+        push!(attributes, NamedAttribute("gibbs_config", gibbs_config))
     !isnothing(constrained_addresses) &&
         push!(attributes, NamedAttribute("constrained_addresses", constrained_addresses))
     !isnothing(logpdf_fn) && push!(attributes, NamedAttribute("logpdf_fn", logpdf_fn))

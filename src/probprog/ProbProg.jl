@@ -10,6 +10,7 @@ include("Modeling.jl")
 include("Display.jl")
 include("Stats.jl")
 include("MH.jl")
+include("Gibbs.jl")
 include("MCMC.jl")
 include("VI.jl")
 
@@ -49,6 +50,8 @@ export sample,
     simulate,
     generate,
     mh,
+    gibbs,
+    hmc,
     mcmc,
     mcmc_logpdf,
     svi,
