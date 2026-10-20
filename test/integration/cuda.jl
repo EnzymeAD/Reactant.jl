@@ -4,6 +4,7 @@ using BFloat16s: BFloat16
 const ReactantCUDAExt = Base.get_extension(Reactant, :ReactantCUDAExt)
 
 const RunningOnTPU = contains(string(Reactant.devices()[1]), "TPU")
+const RunningOnCUDA = contains(string(Reactant.devices()[1]), "CUDA")
 
 # LLVM's X86 backend marks bf16 vector types legal on hosts advertising avx512_bf16 but has
 # no selection patterns for them, so vectorized bf16 code aborts during instruction
@@ -361,4 +362,29 @@ end
     r_run!(arr, clock2, params)
 
     @test all(==(10), Array(arr))
+end
+
+const stream_bug_seen = Float32[]
+stream_bug_record(x) = (push!(stream_bug_seen, x); nothing)
+
+function stream_bug_f(A)
+    s = sum(A * A) # long-running producer on XLA's stream
+    Reactant.Ops.julia_callback(stream_bug_record, (), s; has_side_effect=true)
+    return s
+end
+
+# The julia callback must observe the value produced on XLA's stream, rather than racing
+# with the (still running) producer kernel.
+@testset "julia_callback stream ordering" begin
+    if RunningOnCUDA
+        n = 4096
+        A = Reactant.to_rarray(ones(Float32, n, n))
+        fc = @compile sync = true stream_bug_f(A)
+        expected = Float32(n)^3
+        for _ in 1:20
+            s = Float32(fc(A))
+            @test s == expected
+            @test stream_bug_seen[end] == s
+        end
+    end
 end

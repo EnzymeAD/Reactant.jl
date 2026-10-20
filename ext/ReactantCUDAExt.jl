@@ -1937,6 +1937,28 @@ end
     return @allowscalar Reactant.Ops.__construct_cuda_julia_buffer(T, (1,), ptr)[1]
 end
 
+# Fork the task-local CUDA.jl stream off XLA's stream for the duration of a
+# `julia_callback`, and join it back afterwards, so that neither the host nor the
+# rest of XLA's stream has to wait on a full synchronization.
+function Reactant.Ops.__with_cuda_stream_fork(f::F, xla_stream_ptr::Ptr{Cvoid}) where {F}
+    xla_stream = CUDACore.CUstream(xla_stream_ptr)
+    julia_stream = CUDACore.stream()
+    start_event = CUDACore.CuEvent(CUDACore.EVENT_DISABLE_TIMING)
+    end_event = CUDACore.CuEvent(CUDACore.EVENT_DISABLE_TIMING)
+
+    CUDACore.cuEventRecord(start_event, xla_stream)
+    CUDACore.cuStreamWaitEvent(julia_stream, start_event, 0)
+    try
+        return f()
+    finally
+        CUDACore.cuEventRecord(end_event, julia_stream)
+        CUDACore.cuStreamWaitEvent(xla_stream, end_event, 0)
+        # Destroying a pending event is fine: the driver releases it once it completes.
+        finalize(start_event)
+        finalize(end_event)
+    end
+end
+
 # In Julia v1.11.3 precompiling this module caches bad code:
 # <https://github.com/EnzymeAD/Reactant.jl/issues/614>.
 @static if !Sys.isapple()
