@@ -558,7 +558,13 @@ def main():
 
     position_size = None
     if init_params_raw and not matched:
-        position_size = sum(np.array(v).size for v in init_params_raw.values())
+        # Count only keys that name a latent site: a model may carry the same init
+        # under several names for the other systems (primates_brownian: b and bM, bG),
+        # and init_to_value ignores the rest.
+        sites = constrained_to_unconstrained(
+            impl.model, data, make_init_params(init_params_raw)).keys()
+        position_size = sum(np.array(v).size for k, v in init_params_raw.items()
+                            if k in sites)
 
     kernel = infer.NUTS(
         impl.model,

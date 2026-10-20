@@ -1,0 +1,55 @@
+{
+  "model": {
+    "class": "primates_brownian.PrimatesBrownian",
+    "args": {
+      "n": 151
+    },
+    "seed": 12345
+  },
+  "iterations": 4000,
+  "num_warmup": 1000,
+  "trials": 4,
+  "ppls": [
+    {
+      "name": "impulse",
+      "inference": {
+        "class": "inference.MCMC",
+        "infer_args": {
+          "step_size": 0.1,
+          "max_tree_depth": 10,
+          "adapt_step_size": true,
+          "adapt_mass_matrix": true
+        }
+      },
+      "legend": {
+        "name": "Impulse",
+        "color": "red"
+      },
+      "trials": 4
+    },
+    {
+      "name": "turing",
+      "inference": {
+        "class": "inference.MCMC",
+        "infer_args": {
+          "step_size": 0.1,
+          "max_tree_depth": 10,
+          "adapt_step_size": true,
+          "adapt_mass_matrix": true,
+          "adtype": "reversediff"
+        }
+      },
+      "legend": {
+        "name": "Turing.jl (ReverseDiff)",
+        "color": "violet"
+      },
+      "trials": 4
+    }
+  ],
+  "save_samples": true,
+  "output_root_dir": "/mnt4/sbrantq/probprog/oopsla/evidence/section2_stan_timing_2026-10-12/sessions/T1/out",
+  "figures": {
+    "generate_pll": true,
+    "suffix": "png"
+  }
+}
