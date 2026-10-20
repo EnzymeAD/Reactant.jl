@@ -1061,12 +1061,7 @@ function apply_type_with_promotion(wrapper, params, relevant_typevars=typevar_di
                     if value != resolved
                         # This happens when `value` lost the promotion battle.
                         # At this point, we need to update the problematic parameter in `param`.
-                        d = typevar_dict(rewrapped)
-                        v = Any[param.parameters...]
-                        v[d[typevar]] = resolved
-                        params[i], _changed_params = apply_type_with_promotion(
-                            param.name.wrapper, v
-                        )
+                        params[i] = repromote_parameter_with_bound(param, rewrapped, typevar, resolved)
                     end
                     changed = true
                 end
@@ -1076,6 +1071,33 @@ function apply_type_with_promotion(wrapper, params, relevant_typevars=typevar_di
     end
     changed_params = original_params .!= params
     return Core.apply_type(wrapper, params...), changed_params
+end
+
+"""
+Rebuild `param` so that it satisfies `bound` (a `UnionAll` over the wrapper typevars) once `typevar` is fixed
+to `resolved`. `bound` may be a parametric type (e.g. `A<:AbstractArray{T}`), the typevar itself (e.g. `S<:T`)
+or a `Union` of those (e.g. `S<:Union{T,AbstractVector{T}}`).
+"""
+function repromote_parameter_with_bound(param, bound, typevar, resolved, body=Base.unwrap_unionall(bound))
+    # NOTE `body` is matched unwrapped because rewrapping a bare typevar collapses it to its upper bound
+    if body === typevar
+        return resolved
+    end
+
+    if body isa Union
+        # pick the branch matched by `param`, preferring structural matches over the bare typevar
+        branches = sort!(Base.uniontypes(body); by=b -> b === typevar)
+        for branch in branches
+            param <: Base.rewrap_unionall(branch, bound) || continue
+            return repromote_parameter_with_bound(param, bound, typevar, resolved, branch)
+        end
+        error("$param does not match any branch of $bound")
+    end
+
+    d = typevar_dict(body)
+    v = Any[param.parameters...]
+    v[d[typevar]] = resolved
+    return first(apply_type_with_promotion(param.name.wrapper, v))
 end
 
 function typevar_dict(t)
@@ -1342,6 +1364,10 @@ Base.@nospecializeinfer function make_tracer_unknown(
                     xi2 = Core.Typeof(xi2)((newpath,), xi2.mlir_data)
                     seen[xi2] = xi2
                     changed = true
+                    # elseif xi isa FT
+                    #     # type constraints forced this field to stay untraced (e.g. `S<:Union{T,AbstractVector{T}}`
+                    #     # with `T` pinned by an array eltype), so keep the original value
+                    #     xi2 = xi
                 elseif !ismutabletype(FT) &&
                     !ismutabletype(Core.Typeof(xi2)) &&
                     fieldcount(FT) == fieldcount(Core.Typeof(xi2))
@@ -2476,9 +2502,9 @@ function make_tracer(
     )
     if (
         typeof(newref) == typeof(prev.ref) &&
-        typeof(newstep) == typeof(prev.step) &&
-        typeof(newlen) == typeof(prev.len) &&
-        typeof(newoffset) == typeof(prev.offset)
+            typeof(newstep) == typeof(prev.step) &&
+            typeof(newlen) == typeof(prev.len) &&
+            typeof(newoffset) == typeof(prev.offset)
     )
         return prev
     else
