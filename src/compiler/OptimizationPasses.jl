@@ -12,6 +12,8 @@ const SROA_ATTRIBUTOR = Ref{Union{Bool,Symbol}}(true)
 const DEBUG_PROBPROG_DUMP_VALUE = Ref(false)
 const DEBUG_PROBPROG_DISABLE_OPT = Ref(true)
 const DEBUG_PROBPROG_DISABLE_SICM = Ref(false)
+# sicm eigenlift-guard option: "auto", "force-lift" or "force-fallback".
+const DEBUG_PROBPROG_EIGENLIFT_GUARD = Ref("auto")
 const DEBUG_PASS_TIMING = Ref(false)
 const DEBUG_PROBPROG_DISABLE_REGION = Ref(false)
 const DEBUG_PROBPROG_DUMP_PASSES = Ref(false)
@@ -200,7 +202,14 @@ function impulse_pass(;
     # Lower emitted distribution math to StableHLO so the SICM patterns match it.
     math_twins = "lower-impulse-to-stablehlo{math-twins-only=true backend=$backend}"
     raise = "arith-raise{stablehlo=true}"
-    sicm = disable_sicm ? "sicm{max-iterations=0}" : "sicm"
+    guard = DEBUG_PROBPROG_EIGENLIFT_GUARD[]
+    sicm = if disable_sicm
+        "sicm{max-iterations=0}"
+    elseif guard == "auto"
+        "sicm"
+    else
+        "sicm{eigenlift-guard=$guard}"
+    end
     return join(
         [
             "inline-infer-regions",
