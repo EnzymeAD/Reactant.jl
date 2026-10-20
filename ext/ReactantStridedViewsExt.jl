@@ -5,16 +5,6 @@ using ReactantCore
 using Reactant: @opcall, @reactant_overlay, use_overlayed_version, call_with_native
 using StridedViews: StridedViews as SV, StridedView
 
-@reactant_overlay function SV.sreshape(x::StridedView, newsize)
-    if use_overlayed_version(x)
-        y = ReactantCore.materialize_traced_array(x)
-        z = @opcall reshape(y, collect(newsize))
-        return StridedView(z, size(z), strides(z), 0, x.op)
-    else
-        call_with_native(SV.sreshape, x, newsize)
-    end
-end
-
 @reactant_overlay function Base.getindex(
     x::StridedView{T,N}, I::Vararg{SV.SliceIndex,N}
 ) where {T,N}
@@ -67,6 +57,27 @@ function ReactantCore.materialize_traced_array(x::StridedView)
     limit_indices = collect(size(x)) + offset .- 1
     y = @opcall slice(xp, start_indices, limit_indices)
     return y
+end
+
+# write through the view: store every element at the position of the parent it addresses
+function Reactant.TracedUtils.set_mlir_data!(
+    x::StridedView{<:Reactant.TracedRNumber,N,<:Reactant.TracedRArray}, data
+) where {N}
+    x.op === identity ||
+        x.op === conj ||
+        throw(ArgumentError("cannot write through a StridedView with op $(x.op)"))
+    v = Reactant.TracedRArray{Reactant.unwrapped_eltype(x),N}((), data, size(x))
+    x.op === conj && (v = @opcall conj(v))
+    # 1-based linear index into the parent of each element of the view
+    idx = broadcast(
+        +,
+        SV.offset(x) + 1,
+        ntuple(N) do d
+            reshape((0:(size(x, d) - 1)) .* stride(x, d), ntuple(k -> k == d ? size(x, d) : 1, N))
+        end...,
+    )
+    parent(x)[vec(collect(idx))] = vec(v)
+    return x
 end
 
 end
