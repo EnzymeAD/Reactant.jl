@@ -70,12 +70,13 @@ end
 
 # Ensure the device and client are the same as the input
 for numType in (:ConcretePJRTNumber, :ConcreteIFRTNumber)
-    @eval function Base.float(x::$(numType){T}) where {T}
-        return $(numType)(
-            float(T)(to_number(x)); client=XLA.client(x), device=XLA.device(x), x.sharding
-        )
+    @eval function number_like(x::$(numType), val::Number)
+        return $(numType)(val; client=XLA.client(x), device=XLA.device(x), x.sharding)
     end
 end
+Base.float(x::AbstractConcreteNumber{T}) where {T} = number_like(x, float(T)(to_number(x)))
+Base.zero(x::AbstractConcreteNumber{T}) where {T} = number_like(x, zero(T))
+Base.one(x::AbstractConcreteNumber{T}) where {T} = number_like(x, one(T))
 
 # written like this to avoid ambiguity errors
 for T in Base.uniontypes(ReactantPrimitive)

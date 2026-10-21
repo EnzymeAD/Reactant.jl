@@ -163,20 +163,52 @@ end
     @test !Bool(@jit(isinf(ConcreteRNumber(true))))
 end
 
+const cpu_pjrt_client = Reactant.Accelerators.CPU.make_pjrt_client()
+const cpu_ifrt_client = Reactant.Accelerators.CPU.make_ifrt_client()
+
+function concrete_numbers(x)
+    return (
+        ConcretePJRTNumber(x; client=cpu_pjrt_client),
+        ConcreteIFRTNumber(x; client=cpu_ifrt_client),
+    )
+end
+function concrete_0d_arrays(x)
+    return (
+        ConcretePJRTArray(fill(x); client=cpu_pjrt_client),
+        ConcreteIFRTArray(fill(x); client=cpu_ifrt_client),
+    )
+end
+
+function same_runtime_and_client(y, x)
+    return typeof(y).name.wrapper === typeof(x).name.wrapper &&
+           Reactant.XLA.client(y) == Reactant.XLA.client(x)
+end
+
 @testset "isinf/isnan/isfinite on PJRT and IFRT scalars" begin
-    pjrt_client = Reactant.Accelerators.CPU.make_pjrt_client()
-    ifrt_client = Reactant.Accelerators.CPU.make_ifrt_client()
     for x in (Inf, -Inf, NaN, 2.0, 2, true),
-        xr in (
-            ConcretePJRTNumber(x; client=pjrt_client),
-            ConcreteIFRTNumber(x; client=ifrt_client),
-            ConcretePJRTArray(fill(x); client=pjrt_client),
-            ConcreteIFRTArray(fill(x); client=ifrt_client),
-        )
+        xr in (concrete_numbers(x)..., concrete_0d_arrays(x)...)
 
         @test isinf(xr) === isinf(x)
         @test isnan(xr) === isnan(x)
         @test isfinite(xr) === isfinite(x)
+    end
+end
+
+@testset "zero/one on PJRT and IFRT scalars" begin
+    for x in (2.5, 0.0, -3, 1, true)
+        for xr in concrete_numbers(x)
+            for f in (zero, one, oneunit, float)
+                y = f(xr)
+                @test same_runtime_and_client(y, xr)
+                @test Reactant.to_number(y) === f(x)
+            end
+            @test iszero(xr) === iszero(x)
+            @test isone(xr) === isone(x)
+        end
+        for xr in concrete_0d_arrays(x)
+            @test same_runtime_and_client(zero(xr), xr)
+            @test Array(zero(xr)) == zero(fill(x))
+        end
     end
 end
 
