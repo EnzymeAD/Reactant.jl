@@ -216,6 +216,39 @@ count_init(x) = count(x; init=10)
     @test Array(r_ra) == count!(zeros(Int, 1, 3), bm)
 end
 
+count_missing(x) = count(ismissing, x)
+count_missing_init(x) = count(ismissing, x; init=10)
+count_missing_dims1(x) = count(ismissing, x; dims=1)
+any_missing(x) = any(ismissing, x)
+any_missing_dims2(x) = any(ismissing, x; dims=2)
+all_numbers(x) = all(v -> v isa Number, x)
+sum_isreal(x) = sum(isreal, x)
+sum_isreal_dims2(x) = sum(isreal, x; dims=2)
+safe_sum(x) = any(ismissing, x) ? zero(eltype(x)) : sum(x)
+
+@testset "reduce over a map to plain values (#3410)" begin
+    x = [1.0 2.0 3.0; 4.0 5.0 6.0]
+    x_ra = Reactant.to_rarray(x)
+
+    # known at trace time, so a plain value of Base's type, not a traced one
+    @testset "$f" for f in (
+        count_missing,
+        count_missing_init,
+        count_missing_dims1,
+        any_missing,
+        any_missing_dims2,
+        all_numbers,
+        sum_isreal,
+        sum_isreal_dims2,
+    )
+        res = @jit f(x_ra)
+        @test res == f(x)
+        @test typeof(res) === typeof(f(x))
+    end
+
+    @test @jit(safe_sum(x_ra)) ≈ safe_sum(x)
+end
+
 function fntest1(x)
     y = similar(x, 1, 1, 8)
     sum!(y, x)
