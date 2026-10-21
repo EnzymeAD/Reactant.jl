@@ -210,6 +210,10 @@ count_init(x) = count(x; init=10)
 
     @test Array(@jit(count_dims1(bm_ra))) == count_dims1(bm)
     @test eltype(Array(@jit(count_dims1(bm_ra)))) === eltype(count_dims1(bm))
+
+    r_ra = Reactant.to_rarray(zeros(Int, 1, 3))
+    @jit(count!(r_ra, bm_ra))
+    @test Array(r_ra) == count!(zeros(Int, 1, 3), bm)
 end
 
 function fntest1(x)

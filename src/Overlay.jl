@@ -304,12 +304,9 @@ end
     end
 end
 
-@reactant_overlay function Base._count(f, x::AbstractArray, dims, init)
-    if use_overlayed_version(x) || use_overlayed_version(f)
-        return call_with_native(TracedRArrayOverrides.overloaded_count, f, x, dims, init)
-    else
-        return call_with_native(Base._count, CallWithReactant(f), x, dims, init)
-    end
+# `count` wraps its predicate in `Base._bool`, which asserts a plain `Bool`
+@reactant_overlay function Base._bool(f)
+    return x -> f(x)::Union{Bool,TracedRNumber{Bool}}
 end
 
 @reactant_overlay function Base._getindex(

@@ -247,17 +247,6 @@ function overloaded_mapreduce(
     return res_reshaped::TracedRArray{res_T,N}
 end
 
-# Base's `count` wraps `f` in `Base._bool`, which asserts a plain `Bool`.
-function overloaded_count(@nospecialize(f), @nospecialize(A), dims, init)
-    res = overloaded_mapreduce(f, Base.add_sum, A; dims, init)
-    # `overloaded_mapreduce` counts in `Int64`, Base in the type of `add_sum(init, false)`
-    T = unwrapped_eltype(Base.promote_op(Base.add_sum, typeof(init), Bool))
-    unwrapped_eltype(res) === T && return res
-    return Reactant.promote_to(
-        res isa TracedRNumber ? TracedRNumber{T} : TracedRArray{T}, res
-    )
-end
-
 function Base.mapreducedim!(
     @nospecialize(f),
     @nospecialize(op),
