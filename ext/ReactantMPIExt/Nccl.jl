@@ -6,6 +6,7 @@ end
 
 const NCCL_COMM = Ref{NcclComm_t}(C_NULL)
 const NCCL_COMM_HANDLE = Ref{UInt}(0)
+const NCCL_COMM_SYMBOL = "Reactant_NCCL_COMM_WORLD"
 
 function nccl_symbol(name::Symbol)
     Reactant_jll.is_available() ||
@@ -97,19 +98,18 @@ function Reactant.initialize_nccl_comm!(comm::MPI.Comm)
 
     NCCL_COMM[] = nccl_comm
     NCCL_COMM_HANDLE[] = UInt(nccl_comm)
+    MLIR.API.EnzymeJaXMapSymbol(NCCL_COMM_SYMBOL, nccl_comm)
 
     return nothing
 end
 
-function destroy_default_comm()
+function destroy_comm()
     if NCCL_COMM[] != C_NULL
         nccl_comm_destroy(NCCL_COMM[])
         NCCL_COMM[] = C_NULL
         NCCL_COMM_HANDLE[] = 0
+        # map communicator to null
+        MLIR.API.EnzymeJaXMapSymbol(NCCL_COMM_SYMBOL, NCCL_COMM[])
     end
     return nothing
-end
-
-function Reactant.default_nccl_comm_handle()
-    return NCCL_COMM_HANDLE[]
 end
