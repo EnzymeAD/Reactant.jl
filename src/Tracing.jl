@@ -1061,7 +1061,9 @@ function apply_type_with_promotion(wrapper, params, relevant_typevars=typevar_di
                     if value != resolved
                         # This happens when `value` lost the promotion battle.
                         # At this point, we need to update the problematic parameter in `param`.
-                        params[i] = repromote_parameter_with_bound(param, rewrapped, typevar, resolved)
+                        params[i] = repromote_parameter_with_bound(
+                            param, rewrapped, typevar, resolved
+                        )
                     end
                     changed = true
                 end
@@ -1078,7 +1080,9 @@ Rebuild `param` so that it satisfies `bound` (a `UnionAll` over the wrapper type
 to `resolved`. `bound` may be a parametric type (e.g. `A<:AbstractArray{T}`), the typevar itself (e.g. `S<:T`)
 or a `Union` of those (e.g. `S<:Union{T,AbstractVector{T}}`).
 """
-function repromote_parameter_with_bound(param, bound, typevar, resolved, body=Base.unwrap_unionall(bound))
+function repromote_parameter_with_bound(
+    param, bound, typevar, resolved, body=Base.unwrap_unionall(bound)
+)
     # NOTE `body` is matched unwrapped because rewrapping a bare typevar collapses it to its upper bound
     if body === typevar
         return resolved
@@ -2502,9 +2506,9 @@ function make_tracer(
     )
     if (
         typeof(newref) == typeof(prev.ref) &&
-            typeof(newstep) == typeof(prev.step) &&
-            typeof(newlen) == typeof(prev.len) &&
-            typeof(newoffset) == typeof(prev.offset)
+        typeof(newstep) == typeof(prev.step) &&
+        typeof(newlen) == typeof(prev.len) &&
+        typeof(newoffset) == typeof(prev.offset)
     )
         return prev
     else

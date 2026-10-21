@@ -25,7 +25,9 @@ struct RMSProp{Teta,Trho,Teps,C<:Bool}
     centred::C
 end
 
-struct MockScalarOrAbstractArrayUnion{T<:Number,V<:AbstractVecOrMat{T},S<:Union{T,AbstractVector{T}}}
+struct MockScalarOrAbstractArrayUnion{
+    T<:Number,V<:AbstractVecOrMat{T},S<:Union{T,AbstractVector{T}}
+}
     x::V
     b::S
 end
@@ -392,17 +394,21 @@ end
 
     CN = Reactant.ConcretePJRTNumber{Float32,1}
     CA = Reactant.ConcretePJRTArray{Float32,1,1}
-    @test Reactant.apply_type_with_promotion(MockScalarOrAbstractArrayUnion, [CN, CA, CN]) ==
-        (MockScalarOrAbstractArrayUnion{Float32,CA,Float32}, [true, false, true])
+    @test Reactant.apply_type_with_promotion(
+        MockScalarOrAbstractArrayUnion, [CN, CA, CN]
+    ) == (MockScalarOrAbstractArrayUnion{Float32,CA,Float32}, [true, false, true])
 
-    @test Reactant.apply_type_with_promotion(MockScalarOrAbstractArrayUnion, [CN, CA, CA]) ==
-        (MockScalarOrAbstractArrayUnion{Float32,CA,CA}, [true, false, false])
+    @test Reactant.apply_type_with_promotion(
+        MockScalarOrAbstractArrayUnion, [CN, CA, CA]
+    ) == (MockScalarOrAbstractArrayUnion{Float32,CA,CA}, [true, false, false])
 
     @test Reactant.apply_type_with_promotion(
         MockScalarOrAbstractArrayUnion,
         [TracedRNumber{Float32}, TracedRArray{Float32,1}, TracedRNumber{Float32}],
     ) == (
-        MockScalarOrAbstractArrayUnion{TracedRNumber{Float32},TracedRArray{Float32,1},TracedRNumber{Float32}},
+        MockScalarOrAbstractArrayUnion{
+            TracedRNumber{Float32},TracedRArray{Float32,1},TracedRNumber{Float32}
+        },
         [false, false, false],
     )
 end
@@ -469,17 +475,28 @@ end
 
     scratch = MockScalarOrAbstractArrayUnion(x, 2.0f0)
     scratch_ra = Reactant.to_rarray(scratch; track_numbers=Number)
-    @test scratch_ra isa MockScalarOrAbstractArrayUnion{Float32,<:ConcreteRArray{Float32,1},Float32}
+    @test scratch_ra isa
+        MockScalarOrAbstractArrayUnion{Float32,<:ConcreteRArray{Float32,1},Float32}
     @test Array(scratch_ra.x) == x
     @test scratch_ra.b === 2.0f0
 
     scratch = MockScalarOrAbstractArrayUnion(x, Float32[4, 5, 6])
     scratch_ra = Reactant.to_rarray(scratch; track_numbers=Number)
-    @test scratch_ra isa MockScalarOrAbstractArrayUnion{Float32,<:ConcreteRArray{Float32,1},<:ConcreteRArray{Float32,1}}
+    @test scratch_ra isa MockScalarOrAbstractArrayUnion{
+        Float32,<:ConcreteRArray{Float32,1},<:ConcreteRArray{Float32,1}
+    }
     @test Array(scratch_ra.b) == Float32[4, 5, 6]
 
     f(s) = s.x .* s.b
-    @test Array(@jit(f(Reactant.to_rarray(MockScalarOrAbstractArrayUnion(x, 2.0f0); track_numbers=Number)))) ≈ 2 .* x
+    @test Array(
+        @jit(
+            f(
+                Reactant.to_rarray(
+                    MockScalarOrAbstractArrayUnion(x, 2.0f0); track_numbers=Number
+                ),
+            )
+        )
+    ) ≈ 2 .* x
     @test Array(@jit(f(scratch_ra))) ≈ x .* Float32[4, 5, 6]
 end
 
