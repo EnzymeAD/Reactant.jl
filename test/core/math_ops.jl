@@ -163,6 +163,26 @@ end
     @test !Bool(@jit(isinf(ConcreteRNumber(true))))
 end
 
+@testset "round/trunc/floor/ceil" begin
+    for x in (4.2313f0, -2.5, 7)
+        xr = ConcreteRNumber(x)
+        for f in (round, trunc, floor, ceil)
+            @test f(xr) === f(x)
+            @test f(Int32, xr) === f(Int32, x)
+            @test f(Integer, xr) === f(Integer, x)
+            @test f(xr; digits=2) === f(x; digits=2)
+            @test f(xr; sigdigits=2) === f(x; sigdigits=2)
+            @test f(xr; digits=1, base=2) === f(x; digits=1, base=2)
+        end
+        for r in (RoundNearest, RoundNearestTiesAway, RoundUp, RoundDown, RoundToZero)
+            @test round(xr, r) === round(x, r)
+            @test round(xr, r; sigdigits=3) === round(x, r; sigdigits=3)
+            # Julia 1.10 has no `round(::Type, ::Integer, ::RoundingMode)`
+            x isa Integer || @test round(Int, xr, r) === round(Int, x, r)
+        end
+    end
+end
+
 @testset "isapprox" begin
     # `ConcreteRNumber` forwards `isapprox` straight to `Base` on the unwrapped
     # values (see the `AbstractConcreteNumber` methods in ConcreteRArray.jl), so

@@ -894,7 +894,22 @@ for T in (Number, Integer)
 end
 
 Base.isinf(x::ConcreteRNumber{T}) where {T} = Base.isinf(convert(T, x))
-Base.round(x::ConcreteRNumber{T}) where {T} = Base.round(convert(T, x))
+# Julia 1.10 has no generic rounding fallbacks for non-`Real` numbers, so define each form.
+# `T<:Number` avoids ambiguities with Base's `T>:Missing` methods.
+for jlop in (:(Base.round), :(Base.trunc), :(Base.floor), :(Base.ceil))
+    @eval begin
+        $(jlop)(x::AbstractConcreteNumber; kwargs...) = $(jlop)(to_number(x); kwargs...)
+        function $(jlop)(::Type{T}, x::AbstractConcreteNumber) where {T<:Number}
+            return $(jlop)(T, to_number(x))
+        end
+    end
+end
+function Base.round(x::AbstractConcreteNumber, r::RoundingMode; kwargs...)
+    return round(to_number(x), r; kwargs...)
+end
+function Base.round(::Type{T}, x::AbstractConcreteNumber, r::RoundingMode) where {T<:Number}
+    return round(T, to_number(x), r)
+end
 
 Base._parentsmatch(A::ConcreteIFRTArray, B::ConcreteIFRTArray) = A === B
 Base._parentsmatch(A::ConcretePJRTArray, B::ConcretePJRTArray) = A === B
