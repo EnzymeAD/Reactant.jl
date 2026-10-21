@@ -424,6 +424,7 @@ function _stack_indices(idxs::AbstractArray{<:CartesianIndex})
 end
 
 function _nnlib_gather_impl(src::AnyTracedRArray, idxs::AbstractArray, n_dims::Int)
+    src = materialize_traced_array(src)
     return @opcall gather(
         src,
         Reactant.promote_to(TracedRArray, idxs);
@@ -514,9 +515,9 @@ function _nnlib_scatter_impl(
     return @opcall(
         scatter(
             op,
-            [dst],
+            [materialize_traced_array(dst)],
             Reactant.promote_to(TracedRArray, idx),
-            [src];
+            [materialize_traced_array(src)];
             update_window_dims=collect(Int64, 1:n_dims),
             inserted_window_dims=collect(Int64, (n_dims + 1):ndims(dst)),
             input_batching_dims=Int64[],
