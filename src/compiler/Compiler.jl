@@ -414,25 +414,9 @@ Base.@nospecializeinfer function compile_mlir!(
     )
     lower_enzymexla_math_pass = "lower-enzymexla-math"
 
-# <<<<<<< HEAD
-#     lower_enzymexla_mpi_pass = if backend == "cpu"
-#         "lower-enzymexla-mpi{backend=cpu}"
-#     elseif backend == "cuda"
-#         default_comm_handle = Reactant.default_nccl_comm_handle()
-#         "lower-enzymexla-mpi{backend=cuda ncclCommPtr=$default_comm_handle}"
-#     else
-#         # mpi only supported on cpu and cuda, don't run pass otherwise  
-#         nothing
-#     end
-#     lower_enzymexla_passes = filter(
-#         !isnothing,
-#         [lower_enzymexla_linalg_pass, lower_enzymexla_math_pass, lower_enzymexla_mpi_pass],
-# =======
-
     lower_comm_pass = if compile_options.comm_options.lowering_target === :jit
         if backend == "cuda"
-            default_comm_handle = Reactant.default_nccl_comm_handle()
-            "legalize-mpi-to-nccl, lower-comm-to-jit{mpi_request_width=$(MPI_REQUEST_WIDTH[]) ncclCommPtr=$default_comm_handle}"
+            "legalize-mpi-to-nccl, lower-comm-to-jit{mpi_request_width=$(MPI_REQUEST_WIDTH[])}"
         else
             "lower-comm-to-jit{mpi_request_width=$(MPI_REQUEST_WIDTH[])}"
         end
