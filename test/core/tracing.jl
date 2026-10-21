@@ -394,6 +394,26 @@ end
     )
 end
 
+@testset "to_rarray with PJRT and IFRT runtimes" begin
+    struct VectorWithEltype{T,A<:AbstractVector{T}}
+        a::A
+    end
+    x = VectorWithEltype([1.0, 2.0])
+    pjrt_client = Reactant.Accelerators.CPU.make_pjrt_client()
+    ifrt_client = Reactant.Accelerators.CPU.make_ifrt_client()
+    pjrt = (Val(:PJRT), pjrt_client, ConcretePJRTArray, ConcretePJRTNumber)
+    ifrt = (Val(:IFRT), ifrt_client, ConcreteIFRTArray, ConcreteIFRTNumber)
+    # The traced type cache must not leak types from one runtime into the other
+    for (runtime, client, AT, NT) in (pjrt, ifrt, pjrt)
+        x_ra = Reactant.to_rarray(x; track_numbers=Number, runtime, client)
+        @test x_ra isa VectorWithEltype{Float64,<:AT}
+        @test Array(x_ra.a) == x.a
+
+        r = Reactant.to_rarray(0:0.25:1; track_numbers=Number, runtime, client)
+        @test r.step.hi isa NT
+    end
+end
+
 @testset "specialized dispatches" begin
     @test @inferred Union{Float64,ConcreteRArray{Float64}} Reactant.to_rarray(
         1.0; track_numbers=Number
