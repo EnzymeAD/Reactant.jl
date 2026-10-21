@@ -100,7 +100,8 @@ end
                 @test buf.future !== nothing
             end
         end
-        if Reactant.buffer_on_cpu(x)
+        # `buffer_on_cpu` is only defined for PJRT buffers
+        if x isa Reactant.ConcretePJRTArray && Reactant.buffer_on_cpu(x)
             Reactant.@allowscalar for I in CartesianIndices(v)
                 v[I] *= 3
             end
