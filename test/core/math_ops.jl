@@ -163,6 +163,23 @@ end
     @test !Bool(@jit(isinf(ConcreteRNumber(true))))
 end
 
+@testset "isinf/isnan/isfinite on PJRT and IFRT scalars" begin
+    pjrt_client = Reactant.Accelerators.CPU.make_pjrt_client()
+    ifrt_client = Reactant.Accelerators.CPU.make_ifrt_client()
+    for x in (Inf, -Inf, NaN, 2.0, 2, true),
+        xr in (
+            ConcretePJRTNumber(x; client=pjrt_client),
+            ConcreteIFRTNumber(x; client=ifrt_client),
+            ConcretePJRTArray(fill(x); client=pjrt_client),
+            ConcreteIFRTArray(fill(x); client=ifrt_client),
+        )
+
+        @test isinf(xr) === isinf(x)
+        @test isnan(xr) === isnan(x)
+        @test isfinite(xr) === isfinite(x)
+    end
+end
+
 @testset "round/trunc/floor/ceil" begin
     for x in (4.2313f0, -2.5, 7)
         xr = ConcreteRNumber(x)

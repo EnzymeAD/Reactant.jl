@@ -254,7 +254,7 @@ for T in (Integer, Rational)
 end
 Base.:^(::Irrational{:ℯ}, x::AbstractConcreteNumber) = exp(x)
 
-for jlop in (:(Base.isnan), :(Base.isfinite)),
+for jlop in (:(Base.isnan), :(Base.isfinite), :(Base.isinf)),
     T in (AbstractConcreteNumber, AbstractConcreteArray{<:Any,0})
 
     @eval $(jlop)(x::$(T)) = $(jlop)(to_number(x))
@@ -893,7 +893,6 @@ for T in (Number, Integer)
     end
 end
 
-Base.isinf(x::ConcreteRNumber{T}) where {T} = Base.isinf(convert(T, x))
 # Julia 1.10 has no generic rounding fallbacks for non-`Real` numbers, so define each form.
 # `T<:Number` avoids ambiguities with Base's `T>:Missing` methods.
 for jlop in (:(Base.round), :(Base.trunc), :(Base.floor), :(Base.ceil))
