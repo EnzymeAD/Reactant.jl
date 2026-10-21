@@ -373,6 +373,7 @@ function initialize_ptrs()
             "cuModuleLoadData",
             "cuModuleGetFunction",
             "cuStreamSynchronize",
+            "cuMemcpyAsync",
             "ncclAllReduce",
         )
             MLIR.API.EnzymeJaXMapSymbol(
