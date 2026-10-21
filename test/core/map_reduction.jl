@@ -321,6 +321,45 @@ accum_fn(x, y) = abs2(x) + abs2(y)
             z
         end ≈ accumulate(accum_fn, b; dims=3, init=0.0f0) broken = RunningOnTPU
     end
+
+    # the output eltype can differ from the input's: `Base.add_sum` and `Base.mul_prod`
+    # widen small integers and `Bool`, and `init` takes part in the promotion
+    @testset "eltype widening (#3525)" begin
+        @testset for T in (Int32, Int8, UInt8, Int16, Bool)
+            x = T === Bool ? [true, false, true, true] : T[100, 120, 3, 2]
+            m = hcat(x, reverse(x))
+            x_ra = Reactant.to_rarray(x)
+            m_ra = Reactant.to_rarray(m)
+
+            @testset for f in (cumsum, cumprod)
+                res = @jit(f(x_ra))
+                @test eltype(res) === eltype(f(x))
+                @test Array(res) == f(x)
+
+                for dims in (1, 2)
+                    res = @jit(f(m_ra; dims=dims))
+                    @test eltype(res) === eltype(f(m; dims=dims))
+                    @test Array(res) == f(m; dims=dims)
+                end
+            end
+
+            z = Reactant.to_rarray(zeros(Int64, size(m)))
+            @jit(cumsum!(z, m_ra; dims=2))
+            @test Array(z) == cumsum!(zeros(Int64, size(m)), m; dims=2)
+
+            expected = accumulate(+, x; init=1)
+            @test begin
+                res = @jit(accumulate(+, x_ra; init=1))
+                eltype(res) === eltype(expected) && Array(res) == expected
+            end broken = RunningOnTPU
+        end
+
+        expected = accumulate(+, a; init=1)
+        @test begin
+            res = @jit(accumulate(+, a_ra; init=1))
+            eltype(res) === eltype(expected) && Array(res) ≈ expected
+        end broken = RunningOnTPU
+    end
 end
 
 sameunitrange(x, y) = first(x) == first(y) && last(x) == last(y)
