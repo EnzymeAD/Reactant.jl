@@ -398,19 +398,21 @@ function NNlib.pad_constant(
 end
 
 # Gather
-function NNlib.gather!(dst::AnyTracedRArray, src::AnyTracedRArray, idxs::AbstractArray)
+function NNlib.gather!(
+    dst::AnyTracedRArray{T}, src::AnyTracedRArray, idxs::AbstractArray
+) where {T}
     n_dims = NNlib.scatter_dims(src, dst, idxs)
     res = _nnlib_gather_impl(src, _stack_indices(idxs), n_dims)
-    set_mlir_data!(dst, get_mlir_data(res))
+    set_mlir_data!(dst, get_mlir_data(Reactant.promote_to(TracedRArray{T}, res)))
     return dst
 end
 
 function NNlib.gather!(
-    dst::AnyTracedRArray, src::AnyTracedRArray, idxs::AbstractArray{<:Number}
-)
+    dst::AnyTracedRArray{T}, src::AnyTracedRArray, idxs::AbstractArray{<:Number}
+) where {T}
     n_dims = NNlib.scatter_dims(src, dst, idxs)
     res = _nnlib_gather_impl(src, reshape(idxs, 1, size(idxs)...), n_dims)
-    set_mlir_data!(dst, get_mlir_data(res))
+    set_mlir_data!(dst, get_mlir_data(Reactant.promote_to(TracedRArray{T}, res)))
     return dst
 end
 
@@ -469,7 +471,7 @@ function NNlib.scatter(
         )
     end
     xinit = isnothing(init) ? NNlib.scatter_empty(op, T) : init
-    dst = @opcall fill(xinit, dstsz)
+    dst = Reactant.promote_to(TracedRArray{T}, @opcall(fill(xinit, dstsz)))
 
     NNlib.scatter!(op, dst, src, idx)
     return dst
@@ -495,29 +497,25 @@ end
 
 for AT in (AbstractArray, AbstractArray{<:Number})
     @eval function NNlib.scatter!(
-        ::typeof(mean), dst::AnyTracedRArray, src::AnyTracedRArray, idx::$AT
-    )
+        ::typeof(mean), dst::AnyTracedRArray{T}, src::AnyTracedRArray, idx::$AT
+    ) where {T}
         Ns = NNlib.scatter!(+, zero(dst), one.(src), idx)
         dst_ = NNlib.scatter!(+, zero(dst), src, idx)
         res = dst .+ NNlib.safe_div.(dst_, Ns)
-        set_mlir_data!(dst, get_mlir_data(res))
+        set_mlir_data!(dst, get_mlir_data(Reactant.promote_to(TracedRArray{T}, res)))
         return dst
     end
 end
 
 function _nnlib_scatter_impl(
-    op::OP,
-    dst::AnyTracedRArray{T},
-    src::AnyTracedRArray{T},
-    idx::AbstractArray,
-    n_dims::Int,
+    op::OP, dst::AnyTracedRArray{T}, src::AnyTracedRArray, idx::AbstractArray, n_dims::Int
 ) where {OP,T}
     return @opcall(
         scatter(
             op,
             [materialize_traced_array(dst)],
             Reactant.promote_to(TracedRArray, idx),
-            [materialize_traced_array(src)];
+            [Reactant.promote_to(TracedRArray{T}, materialize_traced_array(src))];
             update_window_dims=collect(Int64, 1:n_dims),
             inserted_window_dims=collect(Int64, (n_dims + 1):ndims(dst)),
             input_batching_dims=Int64[],
