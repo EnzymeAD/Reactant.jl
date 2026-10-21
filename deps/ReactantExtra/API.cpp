@@ -996,6 +996,8 @@ REACTANT_ABI int32_t ReactantCudaDriverGetVersion() {
 extern "C" {
 void __cudaRegisterLinkedBinary_28b8d6c6_20_separate_callback_cu_a85cd5ea_29231() {
 }
+void __cudaRegisterLinkedBinary_28b8d6c6_20_separate_callback_cu_4817d27c_3513083() {
+}
 }
 #endif
 
@@ -1499,6 +1501,14 @@ REACTANT_ABI void FutureAwait(FutureType *Future) {
   if (!status.ok()) {
     ReactantThrowError(status.ToString().c_str());
   }
+}
+
+// Future that becomes ready once `buffer`'s contents have been written (its
+// definition events have fired), or holds the producer's error. Lets a buffer
+// obtained from an asynchronous operation that does not itself hand out a
+// future (notably `CopyBufferToDevice`) be tracked like an execution result.
+REACTANT_ABI FutureType *PjRtBufferGetReadyFuture(PjRtBuffer *buffer) {
+  return new FutureType(buffer->GetReadyFuture());
 }
 
 xla::CompileOptions GenerateCompileOptions(
@@ -3474,7 +3484,13 @@ ifrt_loaded_executable_get_hlo_modules(HeldIfrtLoadedExecutable *exec,
 
 REACTANT_ABI int32_t
 ifrt_loaded_executable_num_devices(HeldIfrtLoadedExecutable *exec) {
-  return static_cast<int32_t>(exec->obj()->num_devices());
+  if (auto *pjrt_exec =
+          ifrt::dyn_cast<ifrt::PjRtLoadedExecutable>(exec->ptr())) {
+    auto *pjrt = pjrt_exec->pjrt_loaded_executable();
+    return static_cast<int32_t>(pjrt->num_replicas() * pjrt->num_partitions());
+  }
+  std::optional<ifrt::DeviceListRef> devices = exec->obj()->devices();
+  return devices ? static_cast<int32_t>((*devices)->size()) : 0;
 }
 
 #pragma endregion
@@ -3812,6 +3828,39 @@ REACTANT_ABI void reactantXLADeInit(LinkableRuntime **__restrict__ lrt) {
   *lrt = nullptr;
 }
 
+REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
+                                  const char *modstr, int64_t argcnt,
+                                  void **args, int64_t constcnt,
+                                  const int64_t *consts);
+
+// The module copying `size` bytes from its second argument to its first,
+// as the exec path takes it: byte buffers of unknown extent, each returned
+// (the first written). Its string outlives the executables cached under
+// its address.
+static const char *copyModule(size_t size) {
+  static std::mutex lock;
+  static std::map<size_t, std::unique_ptr<std::string>> modules;
+  std::lock_guard<std::mutex> guard(lock);
+  auto &text = modules[size];
+  if (!text) {
+    std::string n = std::to_string(size);
+    text = std::make_unique<std::string>(
+        "func.func @main(%dst: tensor<?xi8>, %src: tensor<?xi8>) -> "
+        "(tensor<?xi8>, tensor<?xi8>) {\n"
+        "  %c0 = stablehlo.constant dense<0> : tensor<i64>\n"
+        "  %s = stablehlo.dynamic_slice %src, %c0, sizes = [" +
+        n + "] : (tensor<?xi8>, tensor<i64>) -> tensor<" + n +
+        "xi8>\n"
+        "  %d = stablehlo.dynamic_update_slice %dst, %s, %c0 : (tensor<?xi8>, "
+        "tensor<" +
+        n +
+        "xi8>, tensor<i64>) -> tensor<?xi8>\n"
+        "  return %d, %src : tensor<?xi8>, tensor<?xi8>\n"
+        "}\n");
+  }
+  return text->c_str();
+}
+
 REACTANT_ABI void reactantXLAMemcpy(LinkableRuntime **__restrict__ lrtP,
                                     void *__restrict__ dst,
                                     void *__restrict__ src, size_t size,
@@ -3835,12 +3884,15 @@ REACTANT_ABI void reactantXLAMemcpy(LinkableRuntime **__restrict__ lrtP,
   }
   case 3: // cudaMemcpyDeviceToDevice
   {
-    // PJRT exposes no raw buffer-to-buffer copy; stage through the host.
-    auto &&[srcB, srcO, srcStart] = bufferAndOffset(lrt, src);
-    auto &&[dstB, dstO, dstStart] = bufferAndOffset(lrt, dst);
-    std::vector<char> tmp(size);
-    CopyFromBuffer(lrt->client, srcB, tmp.data(), srcO, size, srcStart);
-    CopyToBuffer(lrt->client, dstB, tmp.data(), dstO, size, dstStart);
+    // PJRT exposes no raw buffer-to-buffer copy, and a copy on the raw
+    // device pointers would not see the uses PJRT still has in flight; so
+    // the copy is an executable, which the exec path orders with the rest
+    // (and addresses through views and shared buffers as for any kernel):
+    // one per size, cached under a stable module string.
+    if (!size)
+      break;
+    void *copyArgs[2] = {dst, src};
+    reactantXLAExec(lrtP, copyModule(size), 2, copyArgs, 0, nullptr);
     break;
   }
   default: // cudaMemcpyDeviceToDevice
@@ -4047,21 +4099,38 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
     pm.addPass(mlir::stablehlo::createStablehloRefineShapesPass());
     pm.addNestedPass<mlir::func::FuncOp>(
         stablehlo::createStablehloCanonicalizeDynamismPass());
-    // REACTANT_EXEC_OPT=transform runs the optimizer the Julia compiler
-    // runs on a traced program (the transform-dialect pattern list with its
-    // defaults) instead of the plain enzyme-hlo-opt pass.
+    // The exec-time optimizer runs the pattern list the Julia compiler runs
+    // on a traced program (the transform-dialect list with its defaults);
+    // REACTANT_EXEC_OPT=hlo-opt runs the plain enzyme-hlo-opt pass instead.
+    // REACTANT_EXEC_UNROLL sets the trip count up to which while loops are
+    // unrolled (default 8). Unrolled, a raised kernel's short loops are
+    // straight-line code XLA compiles more slowly but runs much faster: at
+    // 8 MFEM's ex1 (order 3, partial assembly) solves in 0.056 s on
+    // star.mesh against 0.098 s at 1, and in 0.415 s against 0.468 s on
+    // fichera.mesh, with the first solve, compile included, unchanged; the
+    // mfem GPU suite, which compiles a kernel per test, takes 3204 s against
+    // 2713 s. Thresholds below 8 leave the 5- to 8-trip loops rolled and
+    // are slower still (star 0.114 s at 4); 16 runs as fast as 8.
     static const char *execOpt = getenv("REACTANT_EXEC_OPT");
-    if (execOpt && std::string(execOpt) == "transform") {
+    static const int unrollThreshold =
+        getenv("REACTANT_EXEC_UNROLL") ? atoi(getenv("REACTANT_EXEC_UNROLL"))
+                                       : 8;
+    if (execOpt && std::string(execOpt) == "hlo-opt") {
+      // The parallel loops of a raised kernel (its dynamic-extent dimensions,
+      // peeled into host-driven whiles) are batched into scatters by the auto
+      // batching patterns, once the constant-trip loops nested in them are
+      // unrolled; enzyme-hlo-opt registers neither by default.
+      mlir::enzyme::EnzymeHLOUnrollPassOptions unroll;
+      unroll.maxNumIterations = unrollThreshold;
+      unroll.maxOperationThreshold = 128;
+      pm.addPass(mlir::enzyme::createEnzymeHLOUnrollPass(unroll));
+      mlir::enzyme::EnzymeHLOOptPassOptions opts;
+      opts.enable_auto_batching_passes = true;
+      pm.addPass(mlir::enzyme::createEnzymeHLOOptPass(opts));
+    } else {
       EnzymeXLATransformPassesOptions opts{};
       opts.max_constant_threshold = 1024;
-      // REACTANT_EXEC_UNROLL sets the trip count up to which while loops
-      // are unrolled. Unrolling the raised kernels' short loops (threshold
-      // 16) makes them straight-line code XLA compiles slowly: the mfem GPU
-      // suite takes 4384 s against 2899 s at threshold 1 (enzyme-hlo-opt:
-      // 2753 s), so unrolling is opt-in.
-      opts.while_unroll_threshold = getenv("REACTANT_EXEC_UNROLL")
-                                        ? atoi(getenv("REACTANT_EXEC_UNROLL"))
-                                        : 1;
+      opts.while_unroll_threshold = unrollThreshold;
       opts.reshape_propagate = ENZYMEXLA_PROPAGATE_UP;
       opts.transpose_propagate = ENZYMEXLA_PROPAGATE_UP;
       opts.dus_slice_simplify = true;
@@ -4076,6 +4145,33 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
       opts.enable_licm_optimization_passes = true;
       opts.loop_unswitch_threshold = 10;
       opts.enable_pad_optimization_passes = true;
+      // REACTANT_EXEC_DOT_FORMATION=0 leaves contractions as reduce(mul)
+      // instead of forming dot_general.
+      const char *dotFormation = getenv("REACTANT_EXEC_DOT_FORMATION");
+      opts.enable_dot_formation_passes =
+          !dotFormation || std::string(dotFormation) != "0";
+      // Fold small results (index and mask computations) even when a
+      // non-splat constant operand stays alive.
+      opts.max_reused_const_prop_size = 1024;
+      // REACTANT_EXEC_EXCLUDED_PASSES is a comma-separated list of pattern
+      // base names (e.g. "scatter_op_canon,reduce_mul_to_dot_general") left
+      // out of the list.
+      std::vector<std::string> excludedNames;
+      if (const char *excluded = getenv("REACTANT_EXEC_EXCLUDED_PASSES")) {
+        std::string list(excluded);
+        for (size_t begin = 0, end; begin < list.size(); begin = end + 1) {
+          end = list.find(',', begin);
+          if (end == std::string::npos)
+            end = list.size();
+          if (end > begin)
+            excludedNames.push_back(list.substr(begin, end - begin));
+        }
+      }
+      std::vector<const char *> excludedPtrs;
+      for (const std::string &name : excludedNames)
+        excludedPtrs.push_back(name.c_str());
+      opts.excluded_passes = excludedPtrs.data();
+      opts.num_excluded_passes = excludedPtrs.size();
       char *mainPasses = nullptr, *lowerPasses = nullptr;
       enzymexlaGetTransformPassesList(&opts, &mainPasses, &lowerPasses);
       std::string patterns(mainPasses);
@@ -4099,8 +4195,6 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
         llvm::errs() << " failed to parse the exec optimization pipeline\n";
         exit(1);
       }
-    } else {
-      pm.addPass(mlir::enzyme::createEnzymeHLOOptPass());
     }
 
     if (getenv("REACTANT_EXEC_DUMP")) {

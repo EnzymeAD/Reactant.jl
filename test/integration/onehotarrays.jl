@@ -5,7 +5,12 @@ using Reactant, Test, OneHotArrays, Random
     r_m = Reactant.to_rarray(m)
     a = Reactant.TestUtils.construct_test_array(Float32, 100, 4)
     r_a = Reactant.to_rarray(a)
-    r_res = @jit r_a * r_m
+    # At the default precision a TPU does this Float32 matmul in bfloat16, and
+    # the result is off by ~1e-3 relative; the test is about the one-hot
+    # lowering, not the accelerator's default precision.
+    r_res = Reactant.with_config(; dot_general_precision=PrecisionConfig.HIGHEST) do
+        @jit r_a * r_m
+    end
     res = a * m
     @test convert(Array, r_res) ≈ res
 end
@@ -60,4 +65,17 @@ end
     dense_ra = Reactant.to_rarray(Array(res))
     oc_res = onecold(res)
     @test @jit(onecold(dense_ra)) == oc_res
+end
+
+flat_mul(W, x) = W * reshape(x, size(x, 1), :)
+
+@testset "matmul with a reshaped $(length(dims) + 1)-d array" for dims in ((15,), (3, 5))
+    m = onehotbatch(rand(1:10, dims...), 1:10)
+    r_m = Reactant.to_rarray(m)
+    W = Reactant.TestUtils.construct_test_array(Float32, 4, 10)
+    r_W = Reactant.to_rarray(W)
+    r_res = Reactant.with_config(; dot_general_precision=PrecisionConfig.HIGHEST) do
+        @jit flat_mul(r_W, r_m)
+    end
+    @test r_res ≈ flat_mul(W, m)
 end

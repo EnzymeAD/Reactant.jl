@@ -99,6 +99,25 @@ end
             @test all(Array(A) .≈ (oA .* oA .* 100))
             @test all(Array(B) .≈ (oA .* 100))
         end
+
+        @testset "Square BF16 Kernel raise=false vs raise=true" begin
+            oA = collect(BFloat16, 1:1:64)
+            oB = 100 .* oA
+
+            A_noraise = Reactant.to_rarray(oA)
+            B_noraise = Reactant.to_rarray(oB)
+            @jit raise = false square!(A_noraise, B_noraise)
+
+            A_raise = Reactant.to_rarray(oA)
+            B_raise = Reactant.to_rarray(oB)
+            @jit raise = true square!(A_raise, B_raise)
+
+            @test eltype(Array(A_noraise)) == BFloat16
+            @test Array(A_noraise) == Array(A_raise)
+            @test Array(B_noraise) == Array(B_raise)
+            @test all(Array(A_noraise) .≈ (oA .* oB))
+            @test Array(B_noraise) == oB
+        end
     end
 end
 

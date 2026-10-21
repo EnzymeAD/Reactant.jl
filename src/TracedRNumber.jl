@@ -25,9 +25,7 @@ Base.collect(x::TracedRNumber{T}) where {T} = TracedRArray{T,0}((), x.mlir_data,
 
 Base.copy(x::TracedRNumber{T}) where {T} = TracedRNumber{T}((), x.mlir_data)
 
-function Base.eps(::Type{TracedRNumber{T}}) where {T}
-    return Reactant.promote_to(TracedRNumber{T}, eps(T))
-end
+Base.eps(::Type{TracedRNumber{T}}) where {T} = eps(T)
 Base.eps(x::TracedRNumber{T}) where {T} = eps(typeof(x))
 
 function Base.typemin(::Type{<:TracedRNumber{T}}) where {T}

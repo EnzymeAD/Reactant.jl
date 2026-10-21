@@ -7,7 +7,8 @@ module {
   func.func @main(%arg0: tensor<1024xf32>, %arg1: tensor<1024xf32>) -> tensor<1024xf32> {
     %c = stablehlo.constant dense<16> : tensor<i64>
     %c_0 = stablehlo.constant dense<1> : tensor<i64>
-    %0 = enzymexla_tt_ext.call @triton_module::@triton_module_inner::@add_kernel clusters in(%c_0, %c_0, %c_0) blocks in(%c, %c_0, %c_0) (%arg0, %arg1) : (tensor<1024xf32>, tensor<1024xf32>) -> tensor<1024xf32>
+    %out = stablehlo.constant dense<0.0> : tensor<1024xf32>
+    %0 = enzymexla_tt_ext.call @triton_module::@triton_module_inner::@add_kernel clusters in(%c_0, %c_0, %c_0) blocks in(%c, %c_0, %c_0) (%arg0, %arg1, %out) <{output_operand_aliases = [#stablehlo.output_operand_alias<output_tuple_indices = [], operand_index = 2, operand_tuple_indices = []>]}> : (tensor<1024xf32>, tensor<1024xf32>, tensor<1024xf32>) -> tensor<1024xf32>
     return %0 : tensor<1024xf32>
   }
   enzymexla_tt_ext.module @triton_module {

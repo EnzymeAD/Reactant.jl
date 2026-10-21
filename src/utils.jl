@@ -1153,7 +1153,7 @@ function call_llvm_generator(
 
                 jl_cstr_to_string, FT = Enzyme.Compiler.get_function!(
                     llvm_module,
-                    "jl_cstr_to_string",
+                    "ijl_cstr_to_string",
                     LLVM.FunctionType(jlvaluet, [LLVM.PointerType(LLVM.IntType(8))]),
                 )
                 fname = LLVM.call!(builder, FT, jl_cstr_to_string, [fname])

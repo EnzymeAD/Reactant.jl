@@ -206,7 +206,12 @@ end
         y_ra = Reactant.to_rarray(y; track_numbers=Number)
         got = @jit isapprox(x_ra, y_ra; kwargs...)
         @test got isa ConcreteRNumber{Bool}
-        @test Bool(got) == expected
+        # A TPU has no Float64 arithmetic: abs2(1e-20) = 1e-40 is below Float32's
+        # smallest normal and flushes to zero there, so both sides of the
+        # comparison become 0 and the two numbers test as approximately equal.
+        @test Bool(got) == expected skip = (
+            RunningOnTPU && (x, y) == (0.0, 1e-20) && haskey(kwargs, :norm)
+        )
     end
 
     @testset "traced vs real: x=$x, y=$y" for (x, y) in float_pairs

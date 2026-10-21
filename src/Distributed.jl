@@ -57,6 +57,8 @@ function initialize(;
         single_gpu_per_process,
     )
 
+    Reactant.XLA.claim_gpu_device_mapping!(:distributed)
+
     @debug "Detected Reactant distributed params" coordinator_address num_processes process_id local_gpu_device_ids
 
     Reactant.XLA.update_global_state!(;

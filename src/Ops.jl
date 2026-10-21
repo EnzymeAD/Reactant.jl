@@ -2457,9 +2457,19 @@ end
         MLIR.IR.setattr!(while_op, "enzyme.enable_checkpointing", MLIR.IR.Attribute(true))
     end
 
-    return map(enumerate(linear_args)) do (i, arg)
+    results = map(enumerate(linear_args)) do (i, arg)
         return Reactant.TracedUtils.set_mlir_data!(arg, MLIR.IR.result(while_op, i))
     end
+
+    # Values promoted to traced ones (e.g. Julia numbers with `track_numbers`) are new
+    # objects that only `traced_args` refers to, write them back into the caller's `Ref`s
+    for (prev, traced) in zip(args, traced_args)
+        if prev isa Base.RefValue && prev !== traced && traced[] isa eltype(prev)
+            prev[] = traced[]
+        end
+    end
+
+    return results
 end
 
 @noinline function if_condition(

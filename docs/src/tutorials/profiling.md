@@ -157,6 +157,28 @@ contain the trace files. The traces can then be visualized in different ways.
 !!! note
     For more insights about the current state of Reactant, it is possible to fetch device information about allocations using the [`Reactant.XLA.allocatorstats`](@ref) function.
 
+## Profiling compilation time
+
+To see where compilation time goes, use [`Reactant.Profiler.@timed_compile`](@ref). It
+accepts the same options as [`Reactant.@compile`](@ref), but returns the compiled function
+together with a [`Reactant.Profiler.CompileTimings`](@ref) breaking down the time spent
+tracing, running MLIR passes and compiling with XLA.
+
+```julia
+compiled_linear, timings = Reactant.Profiler.@timed_compile linear(x, W, b)
+```
+
+For more control, call [`Reactant.Profiler.profile_compile_timings`](@ref) directly. It
+takes the same arguments and keyword arguments as
+[`Reactant.Profiler.with_profiler`](@ref) and returns `(result, timings)`. If no trace
+output directory is given, a temporary one is created and removed afterwards.
+
+```julia
+compiled_linear, timings = Reactant.Profiler.profile_compile_timings() do
+    Reactant.@compile linear(x, W, b)
+end
+```
+
 ## Perfetto UI
 
 ![The perfetto interface](images/perfetto.png)
@@ -215,14 +237,14 @@ tensorboard --logdir ./
 ## Adding Custom Annotations
 
 By default, the traces contain only information captured from within XLA.
-The [`ReactantCore.annotate`](@ref) function can be used to annotate traces. It is a no-op
+The [`ReactantCore.@annotate`](@ref) macro can be used to annotate traces. It is a no-op
 when only ReactantCore is loaded, allowing libraries to add annotations without depending on
 Reactant. Loading Reactant activates the annotations in host-side profiles.
 
 ```julia
-using ReactantCore
+using Reactant
 
-ReactantCore.annotate("my_annotation") do
+Reactant.Profiler.@annotate "my_annotation" begin
     # Do things...
 end
 ```

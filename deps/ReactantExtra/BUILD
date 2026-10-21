@@ -1186,6 +1186,7 @@ cc_library(
             "-Wl,-exported_symbol,_FreeFuture",
             "-Wl,-exported_symbol,_FutureIsReady",
             "-Wl,-exported_symbol,_FutureAwait",
+            "-Wl,-exported_symbol,_PjRtBufferGetReadyFuture",
             "-Wl,-exported_symbol,_XLAExecute",
             "-Wl,-exported_symbol,_RegisterDialects",
             "-Wl,-exported_symbol,_InitializeRegistry",
@@ -1264,11 +1265,14 @@ cc_library(
             "-Wl,-exported_symbol,_freeHloComputation",
             "-Wl,-exported_symbol,_hloComputationToString",
             "-Wl,-exported_symbol,_hloComputationGetInstructionsPostOrder",
+            "-Wl,-exported_symbol,_hloComputationInstructionCount",
             "-Wl,-exported_symbol,_freeHloInstruction",
             "-Wl,-exported_symbol,_hloInstructionToString",
             "-Wl,-exported_symbol,_hloInstructionGetOpcode",
             "-Wl,-exported_symbol,_hloInstructionIsFusion",
             "-Wl,-exported_symbol,_hloInstructionGetFusionKind",
+            "-Wl,-exported_symbol,_hloInstructionHasToApply",
+            "-Wl,-exported_symbol,_hloInstructionGetToApply",
             "-Wl,-exported_symbol,_hloOpcodeToString",
             "-Wl,-exported_symbol,_hloFusionKindToString",
             "-Wl,-exported_symbol,_hloInstructionFusedInstructionsComputation",
@@ -1289,6 +1293,10 @@ cc_library(
             "-Wl,-exported_symbol,_ReactantCompileMhloToLLVM",
             "-Wl,-exported_symbol,_ReactantFreeLocalExecutable",
             "-Wl,-exported_symbol,_ReactantCreateLLVMMod",
+            "-Wl,-exported_symbol,_reactantXLA*",
+            "-Wl,-exported_symbol,_dump_op",
+            "-Wl,-exported_symbol,_dump_mval",
+            "-Wl,-exported_symbol,_dump_string",
         ],
     }),
     linkstatic = True,
@@ -1775,7 +1783,7 @@ gentbl_cc_library(
     tblgen = "//:mlir-jl-tblgen",
     td_file = "@cuda_tile//:include/cuda_tile/Dialect/CudaTile/IR/Ops.td",
     deps = [
-        "@cuda_tile//:CudaTileDialectTdFiles",
+        "@cuda_tile//:CudaTileTdFiles",
     ],
 )
 
@@ -2028,7 +2036,6 @@ genrule(
         "@xla//xla/pjrt/c:pjrt_c_api_tpu_topology_extension.h",
         "@xla//xla/pjrt/c:pjrt_c_api_ffi_extension.h",
         "@xla//xla/pjrt/c:pjrt_c_api_phase_compile_extension.h",
-        "@xla//xla/pjrt/c:pjrt_c_api_triton_extension.h",
         "@xla//xla/pjrt/c:pjrt_c_api_gpu_extension.h",
         "@xla//xla/pjrt/c:pjrt_c_api_stream_extension.h",
         "@xla//xla/pjrt/c:pjrt_c_api_profiler_extension.h",
@@ -2049,7 +2056,6 @@ genrule(
         \"$(location @xla//xla/pjrt/c:pjrt_c_api_tpu_topology_extension.h)\" \
         \"$(location @xla//xla/pjrt/c:pjrt_c_api_ffi_extension.h)\" \
         \"$(location @xla//xla/pjrt/c:pjrt_c_api_phase_compile_extension.h)\" \
-        \"$(location @xla//xla/pjrt/c:pjrt_c_api_triton_extension.h)\" \
         \"$(location @xla//xla/pjrt/c:pjrt_c_api_gpu_extension.h)\" \
         \"$(location @xla//xla/pjrt/c:pjrt_c_api_stream_extension.h)\" \
         \"$(location @xla//xla/pjrt/c:pjrt_c_api_profiler_extension.h)\" \
