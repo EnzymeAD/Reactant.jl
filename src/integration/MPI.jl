@@ -8,6 +8,4 @@ const MPI_OVERLAY_NATIVE_CALLS = Ref(false)
 # set by `ReactantMPIExt` to match the loaded MPI library
 const MPI_REQUEST_WIDTH = Ref(64)
 
-default_nccl_comm_handle(::Vararg{Nothing}) = UInt(0)
-
 function initialize_nccl_comm! end

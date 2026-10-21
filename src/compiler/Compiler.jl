@@ -424,11 +424,9 @@ Base.@nospecializeinfer function compile_mlir!(
         backend
     end
     lower_enzymexla_math_pass = "lower-enzymexla-math{backend=$math_backend}"
-    # TODO legalization of comm.mpi ops to comm.nccl if compile_options.comm_options.legalize_mpi_to_nccl is true and backend is CUDA
     lower_comm_pass = if compile_options.comm_options.lowering_target === :jit
         if backend == "cuda"
-            default_comm_handle = Reactant.default_nccl_comm_handle()
-            "legalize-mpi-to-nccl, lower-comm-to-jit{mpi_request_width=$(MPI_REQUEST_WIDTH[]) ncclCommPtr=$default_comm_handle}"
+            "legalize-mpi-to-nccl, lower-comm-to-jit{mpi_request_width=$(MPI_REQUEST_WIDTH[])}"
         else
             "lower-comm-to-jit{mpi_request_width=$(MPI_REQUEST_WIDTH[])}"
         end
