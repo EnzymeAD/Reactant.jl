@@ -67,7 +67,12 @@ end
     @test @jit(onecold(dense_ra)) == oc_res
 end
 
-flat_mul(W, x) = W * reshape(x, size(x, 1), :)
+flat(x) = reshape(x, size(x, 1), :)
+flat_mul(W, x) = W * flat(x)
+flat_sum(x) = sum(flat(x))
+flat_sum_dims(x) = sum(flat(x); dims=1)
+flat_vec_add(x, y) = vec(flat(x)) .+ vec(y)
+flat_bcast_mul(x, y) = flat(x) .* y
 
 @testset "matmul with a reshaped $(length(dims) + 1)-d array" for dims in ((15,), (3, 5))
     m = onehotbatch(rand(1:10, dims...), 1:10)
@@ -78,4 +83,17 @@ flat_mul(W, x) = W * reshape(x, size(x, 1), :)
         @jit flat_mul(r_W, r_m)
     end
     @test r_res ≈ flat_mul(W, m)
+end
+
+@testset "reshaped $(length(dims) + 1)-d array" for dims in ((15,), (3, 5))
+    m = onehotbatch(rand(1:10, dims...), 1:10)
+    r_m = Reactant.to_rarray(m)
+    y = Reactant.TestUtils.construct_test_array(Float32, 10, 15)
+    r_y = Reactant.to_rarray(y)
+
+    @test @jit(sum(r_m)) == sum(m)
+    @test @jit(flat_sum(r_m)) == flat_sum(m)
+    @test @jit(flat_sum_dims(r_m)) == flat_sum_dims(m)
+    @test @jit(flat_vec_add(r_m, r_y)) ≈ flat_vec_add(m, y)
+    @test @jit(flat_bcast_mul(r_m, r_y)) ≈ flat_bcast_mul(m, y)
 end

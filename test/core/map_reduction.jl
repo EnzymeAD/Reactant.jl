@@ -186,6 +186,32 @@ sum_eq1_init(x) = sum(y -> y == 1, x; init=10)
     @test Reactant.unwrapped_eltype(@jit(maximum(b_ra))) === typeof(maximum(b))
 end
 
+count_gt1(x) = count(>(1), x)
+count_dims1(x) = count(x; dims=1)
+count_gt1_dims2(x) = count(>(1), x; dims=2)
+count_init(x) = count(x; init=10)
+
+@testset "count" begin
+    b = [true, false, true, true]
+    b_ra = Reactant.to_rarray(b)
+
+    @test @jit(count(b_ra)) == count(b)
+    @test Reactant.unwrapped_eltype(@jit(count(b_ra))) === typeof(count(b))
+    @test @jit(count_init(b_ra)) == count_init(b)
+
+    m = [1 2 3; 3 1 2]
+    m_ra = Reactant.to_rarray(m)
+
+    @test @jit(count_gt1(m_ra)) == count_gt1(m)
+    @test Array(@jit(count_gt1_dims2(m_ra))) == count_gt1_dims2(m)
+
+    bm = [true false true; true true false]
+    bm_ra = Reactant.to_rarray(bm)
+
+    @test Array(@jit(count_dims1(bm_ra))) == count_dims1(bm)
+    @test eltype(Array(@jit(count_dims1(bm_ra)))) === eltype(count_dims1(bm))
+end
+
 function fntest1(x)
     y = similar(x, 1, 1, 8)
     sum!(y, x)
