@@ -203,7 +203,39 @@ function Base.convert(
     return to_number(x)
 end
 
-for jlop in (:(Base.abs),), T in (AbstractConcreteNumber,)
+for jlop in (
+        :(Base.abs),
+        :(Base.abs2),
+        :(Base.:-),
+        :(Base.inv),
+        :(Base.sign),
+        :(Base.conj),
+        :(Base.imag),
+        :(Base.eps),
+        :(Base.sqrt),
+        :(Base.cbrt),
+        :(Base.exp),
+        :(Base.exp2),
+        :(Base.expm1),
+        :(Base.log),
+        :(Base.log2),
+        :(Base.log10),
+        :(Base.log1p),
+        :(Base.sin),
+        :(Base.cos),
+        :(Base.tan),
+        :(Base.sinh),
+        :(Base.cosh),
+        :(Base.tanh),
+        :(Base.asin),
+        :(Base.acos),
+        :(Base.atan),
+        :(Base.asinh),
+        :(Base.acosh),
+        :(Base.atanh),
+    ),
+    T in (AbstractConcreteNumber,)
+
     @eval $(jlop)(x::$(T)) = $(jlop)(to_number(x))
 end
 
@@ -255,7 +287,15 @@ for T in (Integer, Rational)
 end
 Base.:^(::Irrational{:ℯ}, x::AbstractConcreteNumber) = exp(x)
 
-for jlop in (:(Base.isnan), :(Base.isfinite), :(Base.isinf)),
+for jlop in (
+        :(Base.isnan),
+        :(Base.isfinite),
+        :(Base.isinf),
+        :(Base.isinteger),
+        :(Base.signbit),
+        :(Base.iszero),
+        :(Base.isone),
+    ),
     T in (AbstractConcreteNumber, AbstractConcreteArray{<:Any,0})
 
     @eval $(jlop)(x::$(T)) = $(jlop)(to_number(x))

@@ -227,6 +227,61 @@ end
     end
 end
 
+function result_or_error(f, x)
+    try
+        return f(x)
+    catch e
+        return typeof(e)
+    end
+end
+
+@testset "host math on PJRT and IFRT scalars" begin
+    # Outside `@jit`, functions of concrete numbers return host values
+    for x in (0.5, -2.5f0, 3, true, ComplexF32(1, 2)), xr in concrete_numbers(x)
+        for f in (
+            abs,
+            abs2,
+            -,
+            inv,
+            sign,
+            conj,
+            imag,
+            eps,
+            sqrt,
+            cbrt,
+            exp,
+            exp2,
+            expm1,
+            log,
+            log2,
+            log10,
+            log1p,
+            sin,
+            cos,
+            tan,
+            sinh,
+            cosh,
+            tanh,
+            asin,
+            acos,
+            atan,
+            asinh,
+            acosh,
+            atanh,
+            y -> ℯ^y,
+        )
+            @test result_or_error(f, xr) === result_or_error(f, x)
+        end
+    end
+    for x in (0.0, -0.0, 1.0, -2.5f0, 3, true),
+        xr in (concrete_numbers(x)..., concrete_0d_arrays(x)...)
+
+        for f in (isinteger, signbit, iszero, isone)
+            @test f(xr) === f(x)
+        end
+    end
+end
+
 @testset "round/trunc/floor/ceil" begin
     for x in (4.2313f0, -2.5, 7)
         xr = ConcreteRNumber(x)
