@@ -988,8 +988,8 @@ const traced_type_cache = Dict{Tuple{TraceMode,Type,Any},Dict{Type,Type}}()
 #     $(Expr(:meta, :generated, traced_type_generator))
 # end
 
-resolve_conflict(t1::Type{<:ConcreteRNumber{T}}, t2::Type{T}) where {T} = T
-resolve_conflict(t1::Type{T}, t2::Type{<:ConcreteRNumber{T}}) where {T} = T
+resolve_conflict(t1::Type{<:AbstractConcreteNumber{T}}, t2::Type{T}) where {T} = T
+resolve_conflict(t1::Type{T}, t2::Type{<:AbstractConcreteNumber{T}}) where {T} = T
 resolve_conflict(t1, t2) = promote_type(t1, t2)
 
 """

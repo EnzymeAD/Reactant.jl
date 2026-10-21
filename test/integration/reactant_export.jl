@@ -143,4 +143,44 @@ using Reactant, Test, FileCheck
         @test size(loaded_data) == size(x_data)
         @test isapprox(loaded_data, x_data; rtol=1e-5)
     end
+
+    @testset "PJRT and IFRT inputs" begin
+        f_scale(x, y) = x .* y
+
+        using Serialization
+        pjrt_client = Reactant.Accelerators.CPU.make_pjrt_client()
+        ifrt_client = Reactant.Accelerators.CPU.make_ifrt_client()
+        y_data = Float32[1, 2, 3]
+        for (x, y) in (
+            (
+                ConcretePJRTNumber(2.0f0; client=pjrt_client),
+                ConcretePJRTArray(y_data; client=pjrt_client),
+            ),
+            (
+                ConcreteIFRTNumber(2.0f0; client=ifrt_client),
+                ConcreteIFRTArray(y_data; client=ifrt_client),
+            ),
+        )
+            julia_file_path = Reactant.Serialization.export_to_reactant_script(
+                f_scale, x, y; output_dir=mktempdir(; cleanup=true)
+            )
+            output_dir = dirname(julia_file_path)
+            jls_path = only(
+                filter(f -> endswith(f, ".jls"), readdir(output_dir; join=true))
+            )
+
+            inputs = collect(values(open(deserialize, jls_path)))
+            @test any(v -> v === 2.0f0, inputs)
+            @test y_data in inputs
+
+            python_file_path = Reactant.Serialization.export_to_enzymejax(
+                f_scale,
+                x,
+                y;
+                output_dir=mktempdir(; cleanup=true),
+                export_data_as_npz=false,
+            )
+            @test isfile(python_file_path)
+        end
+    end
 end

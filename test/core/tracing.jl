@@ -354,6 +354,14 @@ end
         ],
     ) == (Foo{Float64,Bar{Float64},ConcreteRArray{Float64,1}}, [true, true, false])
 
+    for (N, A) in (
+        (ConcretePJRTNumber{Float64,1}, ConcretePJRTArray{Float64,1,1}),
+        (ConcreteIFRTNumber{Float64}, ConcreteIFRTArray{Float64,1,Nothing}),
+    )
+        @test Reactant.apply_type_with_promotion(Foo, [N, Bar{N}, A]) ==
+            (Foo{Float64,Bar{Float64},A}, [true, true, false])
+    end
+
     # Regression: concrete subtype has more params than the abstract bound.
     # Container{NF, G<:AbstractGridLike{NF}, F<:AbstractFoo{NF}} where F's concrete
     # type Bar{NF,A} has 2 params but AbstractFoo{NF} (the bound) has only 1.

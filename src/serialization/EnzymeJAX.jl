@@ -186,13 +186,15 @@ function export_to_enzymejax(
     end
 end
 
-_to_array(x::Reactant.ConcreteRArray) = Array(x)
-_to_array(x::Reactant.ConcreteRNumber{T}) where {T} = T(x)
+_to_array(x::Reactant.AbstractConcreteArray) = Array(x)
+_to_array(x::Reactant.AbstractConcreteNumber{T}) where {T} = T(x)
 
-_has_sharding_info(x::Reactant.ConcreteRArray) = Reactant.Sharding.is_sharded(x.sharding)
+function _has_sharding_info(x::Reactant.AbstractConcreteArray)
+    return Reactant.Sharding.is_sharded(x.sharding)
+end
 _has_sharding_info(x) = false
 
-function _extract_sharding_info(x::Reactant.ConcreteRArray)
+function _extract_sharding_info(x::Reactant.AbstractConcreteArray)
     sharding = x.sharding
     if sharding isa Reactant.Sharding.ShardInfo
         inner_sharding = sharding.sharding
