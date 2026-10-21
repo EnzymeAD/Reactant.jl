@@ -56,7 +56,7 @@ if RUN_CPU_MPI_TESTS
 elseif RUN_GPU_MPI_TESTS
     Reactant.initialize_nccl_comm!(MPI.COMM_WORLD)
 
-    atexit(ReactantMPIExt.destroy_default_comm)
+    atexit(ReactantMPIExt.destroy_comm)
 end
 
 # run tests
