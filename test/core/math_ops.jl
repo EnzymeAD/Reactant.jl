@@ -212,6 +212,21 @@ end
     end
 end
 
+@testset "TwicePrecision to PJRT and IFRT numbers" begin
+    for (hi, lo) in ((2.5, 0.5), (0.1, -5.551115123125783e-18))
+        expected = Float64(Base.TwicePrecision(hi, lo))
+        @test Reactant.to_number(ConcreteRNumber{Float64}(Base.TwicePrecision(hi, lo))) ===
+            expected
+        for (hr, lr) in zip(concrete_numbers(hi), concrete_numbers(lo))
+            for T in (typeof(hr), typeof(hr).name.wrapper)
+                y = T(Base.TwicePrecision(hr, lr))
+                @test same_runtime_and_client(y, hr)
+                @test Reactant.to_number(y) === expected
+            end
+        end
+    end
+end
+
 @testset "round/trunc/floor/ceil" begin
     for x in (4.2313f0, -2.5, 7)
         xr = ConcreteRNumber(x)
