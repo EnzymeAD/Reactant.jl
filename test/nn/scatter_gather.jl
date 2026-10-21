@@ -506,3 +506,42 @@ end
         hlo
     end
 end
+
+@testset "gather/scatter wrapped traced arrays" begin
+    @testset "gather $name" for (name, wrap, idx) in (
+        ("reshaped src", x -> reshape(x, 2, :), [1, 6, 3]),
+        ("view src", x -> view(x, :, :, 2), [1, 3, 2]),
+        ("permuted src", x -> PermutedDimsArray(x, (2, 1, 3)), [2, 1]),
+        ("reshaped src, tuple index", x -> reshape(x, 2, 2, 3), [(1, 3), (2, 1)]),
+        (
+            "reshaped src, cartesian index",
+            x -> reshape(x, 2, 2, 3),
+            CartesianIndex.([(1, 3), (2, 1)]),
+        ),
+    )
+        x = Reactant.TestUtils.construct_test_array(Float32, 2, 3, 2)
+        gather_wrapped(x, idx) = NNlib.gather(wrap(x), idx)
+        @test @jit(gather_wrapped(Reactant.to_rarray(x), Reactant.to_rarray(idx))) ≈
+            gather_wrapped(x, idx)
+    end
+
+    @testset "scatter $op" for op in (+, max, mean)
+        dst = Reactant.TestUtils.construct_test_array(Float32, 10)
+        src = Reactant.TestUtils.construct_test_array(Float32, 6)
+        idx = [4, 2, 4]
+
+        function scatter_wrapped!(dst, src, idx)
+            NNlib.scatter!(op, reshape(dst, 2, :), reshape(src, 2, :), idx)
+            return dst
+        end
+        @test @jit(
+            scatter_wrapped!(
+                Reactant.to_rarray(dst), Reactant.to_rarray(src), Reactant.to_rarray(idx)
+            )
+        ) ≈ scatter_wrapped!(copy(dst), src, idx)
+
+        scatter_wrapped(src, idx) = NNlib.scatter(op, reshape(src, 2, :), idx)
+        @test @jit(scatter_wrapped(Reactant.to_rarray(src), idx)) ≈
+            scatter_wrapped(src, idx)
+    end
+end
