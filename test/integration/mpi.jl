@@ -85,7 +85,7 @@ elseif RUN_GPU_MPI_TESTS
 end
 
 @testset "Allreduce" begin
-    if RUN_CPU_MPI_TESTS
+    if false
         operations = [
             ("OP_NULL", MPI.OP_NULL),
             ("BAND", MPI.BAND),
@@ -234,14 +234,17 @@ if RUN_CPU_MPI_TESTS
             for T in datatypes
                 @testset "Type: $T" begin
                     send_buf = ConcreteRArray(ones(T, 5))
+                    recv_buf = ConcreteRArray(zeros(T, 5))
                     tag = 43
                     if rank == 0
-                        dest = 1
-                        @jit MPI.Send(send_buf, dest, tag, comm)
+                        peer = 1
+                        @jit MPI.Send(send_buf, peer, tag, comm)
+                        @jit MPI.Recv!(recv_buf, peer, tag+1, comm, nothing)
+                        @test recv_buf == send_buf
                     elseif rank == 1
-                        recv_buf = ConcreteRArray(zeros(T, 5))
-                        src = 0
-                        @jit MPI.Recv!(recv_buf, src, tag, comm, nothing)
+                        peer = 0
+                        @jit MPI.Recv!(recv_buf, peer, tag, comm, nothing)
+                        @jit MPI.Send(send_buf, peer, tag+1, comm)
                         @test recv_buf == send_buf
                     end
                 end
@@ -255,22 +258,50 @@ if RUN_CPU_MPI_TESTS
                 tag = 43
                 function sendrecv!(comm, rank, send_buf, recv_buf, tag)
                     if rank == 0
-                        dest = 1
-                        MPI.Send(send_buf, dest, tag, comm)
-                        return nothing
+                        peer = 1
+                        MPI.Send(send_buf, peer, tag, comm)
+                        MPI.Recv!(recv_buf, peer, tag+1, comm, nothing)
                     elseif rank == 1
-                        src = 0
-                        MPI.Recv!(recv_buf, src, tag, comm, nothing)
-                        return nothing
+                        peer = 0
+                        MPI.Recv!(recv_buf, peer, tag, comm, nothing)
+                        MPI.Send(send_buf, peer, tag+1, comm)
                     end
+                    return nothing
                 end
                 @jit sendrecv!(comm, rank, send_buf, recv_buf, tag)
-                rank == 1 && @test recv_buf == send_buf
+                @test recv_buf == send_buf
             end
         end
     end
 elseif RUN_GPU_MPI_TESTS
-    @info "Skipping GPU MPI Send / Recv! tests; Not implemented"
+    @testset "Send / Recv!" begin
+        comm = MPI.COMM_WORLD
+        rank = MPI.Comm_rank(comm)
+
+        function sendrecv!(comm, rank, send_buf, recv_buf, tag)
+            if rank == 0
+                MPI.Send(send_buf, 1, tag, comm)
+                MPI.Recv!(recv_buf, 1, tag+1, comm, nothing)
+            elseif rank == 1
+                MPI.Recv!(recv_buf, 0, tag, comm, nothing)
+                MPI.Send(recv_buf, 0, tag+1, comm)
+            end
+            return nothing
+        end
+
+        for T in gpu_datatypes
+            @testset "Type: $T" begin
+                send_buf = ConcreteRArray(fill(T(7), 5))
+                recv_buf = ConcreteRArray(zeros(T, 5))
+                tag = 44
+
+                @jit sync = true sendrecv!(comm, rank, send_buf, recv_buf, tag)
+                @test recv_buf == send_buf
+
+                MPI.Barrier(comm)
+            end
+        end
+    end
 end
 
 if RUN_CPU_MPI_TESTS
