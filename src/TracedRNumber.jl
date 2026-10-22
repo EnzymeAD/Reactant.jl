@@ -270,6 +270,22 @@ for (jlop, hloop) in (
     end
 end
 
+# Base promotes `Bool` operands of `+` and `-` to `Int` (`true - false === 1`) instead of
+# computing in `Bool`, which is not a valid element type for these ops.
+for jlop in (:(Base.:+), :(Base.:-))
+    @eval function $(jlop)(x::TracedRNumber{Bool}, y::TracedRNumber{Bool})
+        return $(jlop)(
+            Reactant.promote_to(TracedRNumber{Int}, x),
+            Reactant.promote_to(TracedRNumber{Int}, y),
+        )
+    end
+end
+
+# `Float64(true)`, `Int(true)`, ...
+function (::Type{T})(x::TracedRNumber{Bool}) where {T<:Union{Integer,AbstractFloat}}
+    return Reactant.promote_to(TracedRNumber{T}, x)
+end
+
 function Base.rem(x::TracedRNumber, y::TracedRNumber, ::typeof(Base.RoundFromZero))
     return ifelse(
         signbit(x) == signbit(y), rem(x, y, Base.RoundUp), rem(x, y, Base.RoundDown)

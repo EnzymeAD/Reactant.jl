@@ -527,3 +527,15 @@ end
     ys = Reactant.to_rarray([4.0, 12.0, 15.0])
     @test @jit(hypot.(xs, ys)) ≈ [5.0, 13.0, 17.0]
 end
+
+@testset "Traced Bool arithmetic follows Base" begin
+    a = Reactant.to_rarray([1.0, -7.0, 8.0, 0.5])
+    f(x, y) = ((x < -5.0) - (y > 5.0)) * 10
+    g(x, y) = (x < 0.0) + (y > 5.0)
+    h(x) = Float64(x < 0.0)
+    k(x) = Int(x < 0.0)
+    @test Array(@jit(broadcast(f, a, a))) == f.(Array(a), Array(a))
+    @test Array(@jit(broadcast(g, a, a))) == g.(Array(a), Array(a))
+    @test Array(@jit(broadcast(h, a))) == h.(Array(a))
+    @test Array(@jit(broadcast(k, a))) == k.(Array(a))
+end
