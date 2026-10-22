@@ -267,3 +267,33 @@ end
         @test Array(out) == T[1, 2]
     end
 end
+
+# A raised kernel reads a Bool argument as the byte it is stored as, and
+# stores Bool results as bytes (#3557).
+@kernel function switched_kernel!(u, flag)
+    i = @index(Global, Linear)
+    @inbounds u[i] = ifelse(flag, one(eltype(u)), zero(eltype(u)))
+end
+
+@kernel function positive_kernel!(mask, @Const(x))
+    i = @index(Global)
+    @inbounds mask[i] = x[i] > 0
+end
+
+@testset "KernelAbstractions booleans (raised)" begin
+    @testset "Bool argument $flag, traced: $traced" for flag in (true, false),
+        traced in (false, true)
+
+        u = Reactant.to_rarray(fill(-1.0f0, 8))
+        arg = traced ? Reactant.ConcreteRNumber(flag) : flag
+        @jit raise = true launch_elementwise!(switched_kernel!, u, arg)
+        @test Array(u) == fill(Float32(flag), 8)
+    end
+
+    @testset "Bool array result" begin
+        x = Reactant.to_rarray([0.5, -1.0, 2.0, 0.0])
+        mask = Reactant.to_rarray(fill(true, 4))
+        @jit raise = true launch_elementwise!(positive_kernel!, mask, x)
+        @test Array(mask) == [true, false, true, false]
+    end
+end
