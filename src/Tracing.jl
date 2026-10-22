@@ -1368,10 +1368,6 @@ Base.@nospecializeinfer function make_tracer_unknown(
                     xi2 = Core.Typeof(xi2)((newpath,), xi2.mlir_data)
                     seen[xi2] = xi2
                     changed = true
-                    # elseif xi isa FT
-                    #     # type constraints forced this field to stay untraced (e.g. `S<:Union{T,AbstractVector{T}}`
-                    #     # with `T` pinned by an array eltype), so keep the original value
-                    #     xi2 = xi
                 elseif !ismutabletype(FT) &&
                     !ismutabletype(Core.Typeof(xi2)) &&
                     fieldcount(FT) == fieldcount(Core.Typeof(xi2))
