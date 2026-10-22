@@ -309,28 +309,35 @@ if RUN_CPU_MPI_TESTS
         comm = MPI.COMM_WORLD
         rank = MPI.Comm_rank(comm)
 
+        # NOTE:: currently don't allow a request to cross the compile boundary
+        # Debugging tip: if this fails, can use pair Send with Irecv! + Wait, or Recv!
+        # with Isend + Wait to isolate the problematic op
+        function IsendIrecvWait!(send_buf, recv_buf, rank, tag, comm)
+            if rank == 0
+                peer = 1
+                req = MPI.Isend(send_buf, peer, tag, comm)
+                MPI.Wait(req)
+                req = MPI.Irecv!(recv_buf, peer, tag+1, comm)
+                MPI.Wait(req)
+            elseif rank == 1
+                peer = 0
+                req = MPI.Irecv!(recv_buf, peer, tag, comm)
+                MPI.Wait(req)
+                req = MPI.Isend(send_buf, peer, tag+1, comm)
+                MPI.Wait(req)
+            end
+            return nothing
+        end
+
         for T in datatypes
-            # NOTE: currently don't allow a request to cross the compile boundary
-            # debugging tip: if this fails, can use pair Send with Irecv! + Wait, or Recv! with
-            # Isend + Wait to isolate the issue
             send_buf = ConcreteRArray(ones(T, 5))
             recv_buf = ConcreteRArray(zeros(T, 5))
             tag = 42
-            function isendirecvwait(send_buf, recv_buf, rank, tag, comm)
-                if rank == 0
-                    dest = 1
-                    req = MPI.Isend(send_buf, dest, tag, comm)
-                    MPI.Wait(req)
-                    return nothing
-                elseif rank == 1
-                    src = 0
-                    req = MPI.Irecv!(recv_buf, src, tag, comm)
-                    MPI.Wait(req)
-                    return nothing
-                end
-            end
-            @jit isendirecvwait(send_buf, recv_buf, rank, tag, comm)
-            rank == 1 && @test recv_buf == send_buf
+
+            @jit IsendIrecvWait!(send_buf, recv_buf, rank, tag, comm)
+            @test recv_buf == send_buf
+
+            MPI.Barrier(comm)
         end
     end
 elseif RUN_GPU_MPI_TESTS
@@ -352,10 +359,10 @@ if RUN_CPU_MPI_TESTS
                     dest = 1
                     src = 1
 
-                    req = MPI.Irecv!(recv_buf, src, tag - 1, comm)
+                    req = MPI.Isend(send_buf, dest, tag + 1, comm)
                     push!(reqs, req)
 
-                    req = MPI.Isend(send_buf, dest, tag + 1, comm)
+                    req = MPI.Irecv!(recv_buf, src, tag - 1, comm)
                     push!(reqs, req)
                 elseif rank == 1
                     dest = 0
