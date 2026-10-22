@@ -173,6 +173,27 @@ end
     @test Array(Reactant.@jit raise = true traced_double(x)) ≈ 2 .* Array(x)
 end
 
+@kernel function scale!(y, x, α)
+    I = @index(Global, Cartesian)
+    @inbounds y[I] = α * x[I]
+end
+
+function f(x, y, n)
+    @trace for _ in 1:n
+        scale!(get_backend(y))(y, x, 2.0; ndrange=size(y))   # y = 2x, x untouched
+    end
+    return sum(y)          # any reduction of the array the kernel wrote
+end
+
+@testset "XLA Relayouting" begin
+    x = Reactant.to_rarray(randn(16, 3))
+    y = Reactant.to_rarray(zeros(16, 3))
+    n = Reactant.to_rarray(5; track_numbers=true)
+    @jit f(x, y, n)
+
+    @test Array(y) ≈ 2 .* Array(x)
+end
+
 # A raised kernel reads and writes a complex number as its two fields.
 @kernel function real_to_complex_kernel!(y, @Const(x))
     i = @index(Global)
