@@ -418,12 +418,13 @@ if RUN_CPU_MPI_TESTS
 
             @jit waitall(send_buf, recv_buf)
 
-            # debug
+            # # debug
             # if rank==0
+            #     println(T)
             #     println("\ncode_hlo optimize=false:\n",
             #             @code_hlo optimize=false waitall(send_buf, recv_buf))
-            #     println("\ncode_hlo optimize=\"lower-enzymexla-mpi{backend=cpu}\":\n",
-            #             @code_hlo optimize="lower-enzymexla-mpi{backend=cpu}" waitall(send_buf, recv_buf))
+            #     println("\ncode_hlo optimize=\"lower-comm-to-jit{mpi_request_width=$(Reactant.MPI_REQUEST_WIDTH[])}\":\n",
+            #             @code_hlo optimize="lower-comm-to-jit{mpi_request_width=$(Reactant.MPI_REQUEST_WIDTH[])}" waitall(send_buf, recv_buf))
             #     println("\ncode_hlo:\n",
             #             @code_hlo waitall(send_buf, recv_buf))
             # end
