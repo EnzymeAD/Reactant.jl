@@ -375,6 +375,8 @@ function initialize_ptrs()
             "cuStreamSynchronize",
             "cuMemcpyAsync",
             "ncclAllReduce",
+            "ncclSend",
+            "ncclRecv",
         )
             MLIR.API.EnzymeJaXMapSymbol(
                 name, Libdl.dlsym(Reactant_jll.libReactantExtra_handle, name)
