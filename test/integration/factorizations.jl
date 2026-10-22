@@ -189,7 +189,7 @@ function compute_ls_solution_error(A, sol, b, bsize)
     return maximum(abs, mul .- b)
 end
 
-@testset "svd factorization ($T)" for T in (Float32, ComplexF32) 
+@testset "svd factorization ($T)" for T in (Float32, ComplexF32)
     A = Reactant.TestUtils.construct_test_array(T, 4, 8)
 
     algs = get_svd_algorithms(string(Reactant.devices()[1]), size(A))
@@ -267,7 +267,7 @@ end
         end broken = RunningOnTPU
     end
 
-    @testset "Batched: $(alg) - $T" for alg in algs, T in (Float32, ComplexF32) 
+    @testset "Batched: $(alg) - $T" for alg in algs, T in (Float32, ComplexF32)
         A = Reactant.TestUtils.construct_test_array(T, 4, 4, 3, 2)
         _svdvals = reshape(mapslices(svdvals, A; dims=(1, 2)), 4, 3, 2)
         A_ra = Reactant.to_rarray(A)
