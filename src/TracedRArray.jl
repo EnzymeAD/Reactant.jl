@@ -306,10 +306,15 @@ function Base.zeros(::Type{T}, dims::NTuple{N,Int}) where {T<:TracedRArray,N}
     ))::TracedRArray{unwrapped_eltype(T),N}
 end
 
+# the axes of a broadcast as sizes (static arrays give `SOneTo` axes)
+_broadcast_dim(d::Integer) = Int(d)
+_broadcast_dim(r::AbstractUnitRange) = length(r)
+
 function Base.similar(
     ::Broadcasted{AbstractReactantArrayStyle{N}}, ::Type{T}, dims
 ) where {T<:Reactant.ReactantPrimitive,N}
     @assert N isa Int
+    dims = map(_broadcast_dim, dims)
     return (@opcall fill(zero(unwrapped_eltype(T)), dims))::TracedRArray{T,N}
 end
 
@@ -317,6 +322,7 @@ function Base.similar(
     ::Broadcasted{AbstractReactantArrayStyle{N}}, ::Type{<:TracedRNumber{T}}, dims
 ) where {T<:Reactant.ReactantPrimitive,N}
     @assert N isa Int
+    dims = map(_broadcast_dim, dims)
     return (@opcall fill(zero(T), dims))::TracedRArray{T,N}
 end
 

@@ -26,9 +26,14 @@ function Reactant.materialize_traced_array(x::SAReact)
 end
 
 # A static array broadcast with a traced number is unrolled, as with any other
-# scalar.
+# scalar; with a traced array it is a traced array, as with any other array.
 function Base.BroadcastStyle(s::StaticArrayStyle, ::AbstractReactantArrayStyle{0})
     return s
+end
+function Base.BroadcastStyle(
+    ::StaticArrayStyle{M}, ::AbstractReactantArrayStyle{N}
+) where {M,N}
+    return AbstractReactantArrayStyle{max(M, N)}()
 end
 
 # We don't want to overload map on StaticArrays since it is likely better to just unroll things
