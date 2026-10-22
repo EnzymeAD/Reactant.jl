@@ -100,10 +100,13 @@ end
                 @test buf.future !== nothing
             end
         end
-        Reactant.@allowscalar for I in CartesianIndices(v)
-            v[I] *= 3
+        # `buffer_on_cpu` is only defined for PJRT buffers
+        if x isa Reactant.ConcretePJRTArray && Reactant.buffer_on_cpu(x)
+            Reactant.@allowscalar for I in CartesianIndices(v)
+                v[I] *= 3
+            end
+            @test all(==(3), Array(v))
+            @test all(==(1), Array(view(x, :, 1:8, :)))
         end
-        @test all(==(3), Array(v))
-        @test all(==(1), Array(view(x, :, 1:8, :)))
     end
 end

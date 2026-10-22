@@ -21,7 +21,7 @@ concurrency:
 
 jobs:
   determine-suites:
-    runs-on: linux-x86-n2-32
+    runs-on: linux-x86-n4-32
     container:
       image: "ghcr.io/enzymead/reactant-docker-images@sha256:7004a6ebbdd77bd047900b2bffc542e8576864056dc27a9c94d30666d6f7ea01"
     outputs:
@@ -116,7 +116,7 @@ jobs:
       matrix:
         suite: ${{ fromJson(needs.determine-suites.outputs.suites) }}
         os:
-          - linux-x86-n2-32
+          - linux-x86-n4-32
           - linux-x86-ct6e-180-4tpu
           - linux-x86-a2-48-a100-4gpu
     env:
