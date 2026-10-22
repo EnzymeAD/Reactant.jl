@@ -10,41 +10,7 @@ export @annotate,
     MissingTracedValue,
     promote_to_traced,
     Periodic,
-    Binomial,
-    FixedPoint,
-    fixed_point_implicit
-
-"""
-    FixedPoint(; reduction=1e-12, max_iters=1000)
-
-Settings for a traced loop declared to iterate to a fixed point (`@trace fixed_point=...`).
-The loop is then differentiated at its converged state: reverse mode keeps one snapshot of
-the state and iterates the adjoint of a single step there until the squared norm of its
-increment has fallen below `reduction` times its value after the first pass, or `max_iters`
-passes have run (0 for no limit). `fixed_point=true` uses these defaults.
-
-The loop body must be one step of a contraction at the fixed point (stationary iterations,
-Newton); the initial guess receives no adjoint.
-"""
-struct FixedPoint
-    reduction::Float64
-    max_iters::Int
-end
-FixedPoint(; reduction=1e-12, max_iters=1000) = FixedPoint(Float64(reduction), Int(max_iters))
-
-"""
-    fixed_point_implicit(; reduction=1e-12, max_iters=1000)
-
-Called in the body of a `while` loop inside a kernel, declares that loop a fixed-point
-iteration, which is then differentiated at its converged state. The settings are those of
-[`FixedPoint`](@ref), and the defaults are usually what you want. It only has an effect when
-Reactant raises the kernel, and does nothing otherwise.
-"""
-@inline function fixed_point_implicit(; kwargs...)
-    settings = FixedPoint(; kwargs...)
-    return _fixed_point_implicit(settings.reduction, settings.max_iters)
-end
-_fixed_point_implicit(::Float64, ::Int) = nothing # overlaid for kernels being raised
+    Binomial
 
 """
     Periodic(n::Int)
@@ -310,21 +276,19 @@ The behavior of loops can be configured with the following configuration options
  - `track_numbers::Union{Bool,DataType} = true` - whether Julia numbers should be automatically promoted to traced numbers upon entering the loop.
  - `checkpointing::Union{Bool,Periodic,Binomial} = false` - whether or not to enable checkpointing when performing reverse mode differentiation. Can be `false` (default), `true` (automatic checkpointing), or `Periodic(n)` to specify `n` checkpoints. When `true` is used, defaults to `isqrt(num_iters)` checkpoints for `for` loops with static (non-traced) bounds. `Periodic(n)` must be used for `while` loops or `for` loops with dynamic (traced) bounds when checkpointing is enabled.
  - `mincut::Bool = false` - whether or not to enable the mincut algorithm when performing reverse mode differentiation (default: `false`).
- - `fixed_point::Union{Bool,FixedPoint} = false` - declares that the loop iterates to a fixed point of its body, so that reverse mode differentiates it at the converged state (one snapshot, no tape, no trip count) instead of through every iteration. See [`FixedPoint`](@ref) for the settings.
 """
 macro trace(args...)
     track_numbers = true
     checkpointing = false
     mincut = false
-    fixed_point = false
 
     expr = first(args)
     while length(args) > 1
         if Meta.isexpr(args[1], :(=))
             tn_expr = args[1]
             key, val = tn_expr.args
-            key ∈ (:track_numbers, :checkpointing, :mincut, :fixed_point) || error(
-                "@trace supports setting track_numbers, checkpointing, mincut or fixed_point, but got $(tn_expr)",
+            key ∈ (:track_numbers, :checkpointing, :mincut) || error(
+                "@trace supports setting track_numbers, checkpointing or mincut, but got $(tn_expr)",
             )
 
             if key === :track_numbers
@@ -333,8 +297,6 @@ macro trace(args...)
                 checkpointing = val
             elseif key === :mincut
                 mincut = val
-            elseif key === :fixed_point
-                fixed_point = val
             end
             args = args[2:end]
         else
@@ -391,15 +353,11 @@ macro trace(args...)
     Meta.isexpr(expr, :if) && return esc(mark_traced(trace_if(expr; track_numbers)))
 
     Meta.isexpr(expr, :for) && return esc(
-        mark_traced(
-            trace_for(__module__, expr; track_numbers, checkpointing, mincut, fixed_point)
-        )
+        mark_traced(trace_for(__module__, expr; track_numbers, checkpointing, mincut))
     )
 
     Meta.isexpr(expr, :while) && return esc(
-        mark_traced(
-            trace_while(__module__, expr; track_numbers, checkpointing, mincut, fixed_point)
-        )
+        mark_traced(trace_while(__module__, expr; track_numbers, checkpointing, mincut))
     )
 
     return error(
@@ -518,9 +476,7 @@ cond_val(s) = :(@isdefined($s) ? $s : $MissingTracedValue())
     return isdefined(mod, s) && val === getglobal(mod, s)
 end
 
-function trace_while(
-    mod, expr; track_numbers, mincut, checkpointing, fixed_point=false, first_arg=nothing
-)
+function trace_while(mod, expr; track_numbers, mincut, checkpointing, first_arg=nothing)
     Meta.isexpr(expr, :while, 2) || error("expected while expr")
     cond, body = expr.args
 
@@ -678,7 +634,6 @@ function trace_while(
                 verify_arg_names=($(verify_arg_names_sym)),
                 mincut=($(mincut)),
                 checkpointing=($(checkpointing)),
-                fixed_point=($(fixed_point)),
             )
             $(rebind_outputs...)
             nothing
@@ -695,7 +650,7 @@ function trace_while(
     end
 end
 
-function trace_for(mod, expr; track_numbers, checkpointing, mincut, fixed_point=false)
+function trace_for(mod, expr; track_numbers, checkpointing, mincut)
     Meta.isexpr(expr, :for, 2) || error("expected for expr")
     assign, body = expr.args
 
@@ -801,7 +756,6 @@ function trace_for(mod, expr; track_numbers, checkpointing, mincut, fixed_point=
             first_arg=counter,
             checkpointing=checkpointing_sym,
             mincut,
-            fixed_point,
         ))
     end
 end
