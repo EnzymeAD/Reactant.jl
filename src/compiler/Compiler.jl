@@ -138,8 +138,6 @@ end
 
 const PartitionKA = Ref{Bool}(true)
 
-const CONSTRAIN_LAYOUTS = Ref{Bool}(true)
-
 const cuindexBitWidth = Ref{Int}(32)
 const cubinFormat = Ref{String}("bin")
 const cuOptLevel = Ref{Int}(2)
