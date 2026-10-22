@@ -279,6 +279,9 @@ Base.@nospecializeinfer function compile_mlir!(
     @assert MLIR.IR.current_context() == MLIR.IR.context(mod)
     client = client !== nothing ? client : XLA.default_backend()
 
+    @assert compile_options.optimization_passes !== :kernelad ||
+        lowercase(XLA.platform_name(client)) == "cuda" "kernelad only supports the cuda backend right now"
+
     # Explicitly don't use with_block to avoid creating a closure, which creates
     # both compile-time and relocatability issues
 
