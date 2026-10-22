@@ -532,10 +532,11 @@ end
     a = Reactant.to_rarray([1.0, -7.0, 8.0, 0.5])
     f(x, y) = ((x < -5.0) - (y > 5.0)) * 10
     g(x, y) = (x < 0.0) + (y > 5.0)
-    h(x) = Float64(x < 0.0)
-    k(x) = Int(x < 0.0)
+    h(x) = -(x < 0.0)
+    k(x) = +(x < 0.0)
     @test Array(@jit(broadcast(f, a, a))) == f.(Array(a), Array(a))
     @test Array(@jit(broadcast(g, a, a))) == g.(Array(a), Array(a))
     @test Array(@jit(broadcast(h, a))) == h.(Array(a))
     @test Array(@jit(broadcast(k, a))) == k.(Array(a))
+    @test eltype(@jit(broadcast(k, a))) == Int
 end
