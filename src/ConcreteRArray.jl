@@ -119,12 +119,8 @@ unchanged.
 See also [`to_rarray`](@ref), which traverses arbitrary structures with Reactant's own
 tracing machinery and does not require `Adapt.adapt_structure` methods.
 """
-struct ConcreteRArrayAdaptor
-    materialize_ranges::Bool
-end
-
-function ConcreteRArrayAdaptor(; materialize_ranges::Bool=false)
-    return ConcreteRArrayAdaptor(materialize_ranges)
+@kwdef struct ConcreteRArrayAdaptor
+    materialize_ranges::Bool = false
 end
 
 Adapt.adapt_storage(::ConcreteRArrayAdaptor, x::AbstractConcreteArray) = x
