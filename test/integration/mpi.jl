@@ -284,7 +284,7 @@ elseif RUN_GPU_MPI_TESTS
                 MPI.Recv!(recv_buf, 1, tag+1, comm, nothing)
             elseif rank == 1
                 MPI.Recv!(recv_buf, 0, tag, comm, nothing)
-                MPI.Send(recv_buf, 0, tag+1, comm)
+                MPI.Send(send_buf, 0, tag+1, comm)
             end
             return nothing
         end
