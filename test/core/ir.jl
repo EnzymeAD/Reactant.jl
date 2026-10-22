@@ -31,3 +31,27 @@ using Reactant: MLIR
         MLIR.IR.dispose(mod)
     end
 end
+
+@testset "location of a disposed context" begin
+    ctx = Reactant.ReactantContext()
+    loc = MLIR.IR.@with_context ctx MLIR.IR.Location("a.jl", 3, 4)
+    @test occursin("a.jl", sprint(show, loc))
+    MLIR.IR.dispose(ctx)
+    @test occursin("disposed", sprint(show, loc))
+
+    # an error that carries a location, shown after the compilation it came
+    # from has disposed of its context
+    function bad_fill(x)
+        loc = MLIR.IR.Location()
+        return Reactant.Ops.fill(1.0, (Base.OneTo(2), "not a size"); location=loc) .+ x
+    end
+    err = try
+        @jit bad_fill(Reactant.to_rarray([1.0, 2.0]))
+        nothing
+    catch e
+        e
+    end
+    @test err isa MethodError
+    @test occursin("location", sprint(showerror, err))
+    @test occursin("disposed", sprint(show, err.args))
+end

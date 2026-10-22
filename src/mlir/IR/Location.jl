@@ -1,5 +1,21 @@
 @checked struct Location
     ref::API.MlirLocation
+    # the context the location lives in, and its generation, to tell whether
+    # it is still alive (see `live_generation`)
+    context::API.MlirContext
+    generation::UInt
+end
+
+function Location(ref::API.MlirLocation)
+    ctx = API.mlirLocationGetContext(ref)
+    return Location(ref, ctx, live_generation(ctx))
+end
+
+# Whether the location's context has not been disposed of (a context not made
+# by `Context` is taken as alive).
+function isalive(location::Location)
+    return location.generation == 0 ||
+           live_generation(location.context) == location.generation
 end
 
 function Location(; context::Context=current_context())
@@ -25,6 +41,7 @@ Base.:(==)(a::Location, b::Location) = API.mlirLocationEqual(a, b)
 context(location::Location) = Context(API.mlirLocationGetContext(location))
 
 function Base.show(io::IO, location::Location)
+    isalive(location) || return print(io, "Location(#= of a disposed context =#)")
     c_print_callback = @cfunction(print_callback, Cvoid, (API.MlirStringRef, Any))
     ref = Ref(io)
     print(io, "Location(#= ")
