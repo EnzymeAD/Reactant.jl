@@ -472,32 +472,27 @@ end
 
 @testset "to_rarray with Union-bound type parameter" begin
     x = Float32[1, 2, 3]
-
-    scratch = MockScalarOrAbstractArrayUnion(x, 2.0f0)
-    scratch_ra = Reactant.to_rarray(scratch; track_numbers=Number)
-    @test scratch_ra isa
-        MockScalarOrAbstractArrayUnion{Float32,<:ConcreteRArray{Float32,1},Float32}
-    @test Array(scratch_ra.x) == x
-    @test scratch_ra.b === 2.0f0
-
-    scratch = MockScalarOrAbstractArrayUnion(x, Float32[4, 5, 6])
-    scratch_ra = Reactant.to_rarray(scratch; track_numbers=Number)
-    @test scratch_ra isa MockScalarOrAbstractArrayUnion{
-        Float32,<:ConcreteRArray{Float32,1},<:ConcreteRArray{Float32,1}
-    }
-    @test Array(scratch_ra.b) == Float32[4, 5, 6]
-
     f(s) = s.x .* s.b
-    @test Array(
-        @jit(
-            f(
-                Reactant.to_rarray(
-                    MockScalarOrAbstractArrayUnion(x, 2.0f0); track_numbers=Number
-                ),
-            )
-        )
-    ) ≈ 2 .* x
-    @test Array(@jit(f(scratch_ra))) ≈ x .* Float32[4, 5, 6]
+
+    @testset let b = 2.0f0
+        mock = MockScalarOrAbstractArrayUnion(x, b)
+        mock_re = Reactant.to_rarray(mock)
+        @test mock_re isa
+            MockScalarOrAbstractArrayUnion{Float32,<:ConcreteRArray{Float32,1},Float32}
+        @test Array(mock_re.x) == x
+        @test mock_re.b === b
+        @test @jit(f(mock_re)) ≈ 2 .* x
+    end
+
+    @testset let b2 = Float32[4, 5, 6]
+        mock = MockScalarOrAbstractArrayUnion(x, b2)
+        mock_re = Reactant.to_rarray(mock)
+        @test mock_re isa MockScalarOrAbstractArrayUnion{
+            Float32,<:ConcreteRArray{Float32,1},<:ConcreteRArray{Float32,1}
+        }
+        @test Array(mock_re.b) == b2
+        @test Array(@jit(f(mock_re))) ≈ x .* b2
+    end
 end
 
 # When `a` and `b` alias on loop entry and `b` is reassigned inside the loop,
