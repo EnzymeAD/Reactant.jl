@@ -372,6 +372,8 @@ function initialize_ptrs()
             "cuLaunchKernel",
             "cuModuleLoadData",
             "cuModuleGetFunction",
+            "cuLibraryLoadData",
+            "cuLibraryGetKernel",
             "cuStreamSynchronize",
             "ncclAllReduce",
         )
