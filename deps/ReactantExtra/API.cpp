@@ -64,6 +64,7 @@ void reactantReleaseAddressRange(void *base, size_t nbytes);
 #include "src/enzyme_ad/jax/RegistryUtils.h"
 #include "src/enzyme_ad/jax/clang_compile.h"
 #include "src/enzyme_ad/jax/compile_with_xla.h"
+#include "llvm/ADT/SetVector.h"
 #include "llvm/Support/TargetSelect.h"
 
 #if defined(REACTANT_ROCM) && !defined(_WIN32)
@@ -4112,6 +4113,43 @@ static void stripMarksOnConstants(mlir::ModuleOp module) {
   });
 }
 
+// REACTANT_EXEC_CONCAT_BARRIER (local experiment): the computation behind each
+// operand of a wide concatenate (through slices, broadcasts, reshapes,
+// transposes and converts) is materialized, so XLA does not recompute it
+// inside the concatenate's consumer fusion.
+static void barrierConcatOperandRoots(mlir::ModuleOp module) {
+  llvm::SetVector<mlir::Value> roots;
+  module->walk([&](mlir::stablehlo::ConcatenateOp concat) {
+    if (concat->getNumOperands() < 3)
+      return;
+    for (mlir::Value v : concat->getOperands()) {
+      while (mlir::Operation *def = v.getDefiningOp()) {
+        if (!mlir::isa<mlir::stablehlo::SliceOp,
+                       mlir::stablehlo::BroadcastInDimOp,
+                       mlir::stablehlo::ReshapeOp, mlir::stablehlo::TransposeOp,
+                       mlir::stablehlo::ConvertOp,
+                       mlir::stablehlo::BitcastConvertOp>(def))
+          break;
+        v = def->getOperand(0);
+      }
+      mlir::Operation *def = v.getDefiningOp();
+      if (!def ||
+          mlir::isa<mlir::stablehlo::ConcatenateOp, mlir::stablehlo::ConstantOp,
+                    mlir::stablehlo::IotaOp,
+                    mlir::stablehlo::OptimizationBarrierOp>(def))
+        continue;
+      roots.insert(v);
+    }
+  });
+  for (mlir::Value v : roots) {
+    mlir::OpBuilder b(v.getContext());
+    b.setInsertionPointAfterValue(v);
+    auto bar = mlir::stablehlo::OptimizationBarrierOp::create(
+        b, v.getLoc(), mlir::ValueRange{v});
+    v.replaceAllUsesExcept(bar.getResult()[0], bar);
+  }
+}
+
 // The exec path's optimization of a kernel's module, before XLA: the
 // transform list (or REACTANT_EXEC_OPT=hlo-opt, the plain pass).
 static void addExecOptimizationPasses(mlir::PassManager &pm, bool again = false,
@@ -4156,6 +4194,13 @@ static void addExecOptimizationPasses(mlir::PassManager &pm, bool again = false,
     opts.enable_licm_optimization_passes = true;
     opts.loop_unswitch_threshold = 10;
     opts.enable_pad_optimization_passes = true;
+    // As Reactant main (#3467, #3470): REACTANT_EXEC_DOT_FORMATION=0 leaves
+    // contractions as reduce(mul) instead of forming dot_general; small
+    // results fold even when a non-splat constant operand stays alive.
+    const char *dotFormation = getenv("REACTANT_EXEC_DOT_FORMATION");
+    opts.enable_dot_formation_passes =
+        !dotFormation || std::string(dotFormation) != "0";
+    opts.max_reused_const_prop_size = 1024;
     char *mainPasses = nullptr, *lowerPasses = nullptr;
     enzymexlaGetTransformPassesList(&opts, &mainPasses, &lowerPasses);
     std::string patterns(mainPasses);
@@ -4165,6 +4210,17 @@ static void addExecOptimizationPasses(mlir::PassManager &pm, bool again = false,
          {"convert_mul_convert;", "associative_binary_op_reordering<1>;"})
       for (size_t at; (at = patterns.find(drop)) != std::string::npos;)
         patterns.erase(at, strlen(drop));
+    if (const char *env = getenv("REACTANT_EXEC_MAIN_DROP")) {
+      std::string list(env);
+      for (size_t b = 0, e; b < list.size(); b = e + 1) {
+        e = list.find(',', b);
+        if (e == std::string::npos)
+          e = list.size();
+        std::string drop = list.substr(b, e - b) + ";";
+        for (size_t at; (at = patterns.find(drop)) != std::string::npos;)
+          patterns.erase(at, drop.size());
+      }
+    }
     // Asked for chunks (see reactantXLAExec): a tagged parallel loop is
     // batched a chunk at a time, and fission, which lifts ops out of a loop
     // over all its iterations at once, is left out.
@@ -4192,32 +4248,113 @@ static void addExecOptimizationPasses(mlir::PassManager &pm, bool again = false,
     // the lanes are still a loop: once the list batches them the indices
     // carry the lane, and the scratch is a pass over memory per access.
     std::string folding;
-    for (const char *name :
-         {"compare_op_canon<16>", "compare_bool_const<16>",
-          "broadcast_in_dim_op_canon<16>", "convert_op_canon<16>",
-          "reduce_const_prop<16>", "reshape_op_canon<16>",
-          "concatenate_op_canon<16>(1024)", "select_op_canon<16>(1024)",
-          "and_simplify<16>", "or_simplify<16>", "slice_simplify<16>",
-          "convert_simplify<16>", "iota_simplify<16>(1024)",
-          "broadcast_in_dim_simplify<16>(1024)", "transpose_simplify<16>",
-          "pad_simplify<16>(1024)", "gather_scatter_constant_forward",
-          "gather_of_masked_scatter", "scatter_of_scatter_simplify"})
+    for (const char *name : {"compare_op_canon<16>",
+                             "compare_bool_const<16>",
+                             "broadcast_in_dim_op_canon<16>",
+                             "convert_op_canon<16>",
+                             "reduce_const_prop<16>",
+                             "reshape_op_canon<16>",
+                             "concatenate_op_canon<16>(1024)",
+                             "select_op_canon<16>(1024)",
+                             "and_simplify<16>",
+                             "or_simplify<16>",
+                             "slice_simplify<16>",
+                             "convert_simplify<16>",
+                             "iota_simplify<16>(1024)",
+                             "broadcast_in_dim_simplify<16>(1024)",
+                             "transpose_simplify<16>",
+                             "pad_simplify<16>(1024)",
+                             "gather_of_masked_scatter",
+                             "scatter_of_scatter_simplify",
+                             "scatter_masked_index_slice",
+                             "scatter_out_of_bounds_noop",
+                             "slice_elementwise<1>",
+                             "slice_broadcast",
+                             "slice_gather",
+                             "slice_select_to_select_slice",
+                             "slice_slice<16>",
+                             "noop_slice<16>",
+                             "slice_concat<1>",
+                             "concat_slice<1>",
+                             "slice_transpose",
+                             "slice_reshape_transpose<1>",
+                             "slice_iota",
+                             "slice_internal",
+                             "while_slice_elementwise_carry",
+                             "while_deadresult"})
       folding += std::string(folding.empty() ? "" : ";") + name;
+    if (const char *drop = getenv("REACTANT_EXEC_FOLD_DROP"))
+      for (size_t at; (at = folding.find(drop)) != std::string::npos;)
+        folding.erase(at, strlen(drop));
     std::string foldRound = "enzyme-hlo-generate-td{patterns=" + folding +
                             "},transform-interpreter,"
                             "enzyme-hlo-remove-transform,canonicalize,"
                             "func.func(stablehlo-aggressive-folder),"
                             "canonicalize,cse,";
+    if (getenv("REACTANT_EXEC_NOFOLD"))
+      foldRound = "";
+    // A kernel whose thread block has a run-time extent is raised with its
+    // lanes padded to a bound and every store from the padding masked. With
+    // the extent a constant, the masks are constants: the masked stores are
+    // cut to their live lanes (scatter_masked_index_slice) and the cut moves
+    // up their operands, through the loops that accumulate them
+    // (while_slice_elementwise_carry), so the lanes compute only the live
+    // box; a lane's scratch, read only at the live lanes, is built only
+    // there (gather_operand_box). Moving slices up, transposes are left where
+    // they are (slice_transpose; the list moves them up past slices). The short
+    // loops are unrolled first so a lane's scratch, indexed by their counters,
+    // is indexed by constants and forwarded.
+    std::string unroll = "enzyme-hlo-unroll{max-num-iterations=" +
+                         std::to_string(unrollThreshold) +
+                         " max-operation-threshold=128},canonicalize,cse,";
+    if (!getenv("REACTANT_EXEC_PREUNROLL"))
+      unroll = "";
+    // After the list, the layout round: an elementwise op reading a
+    // transposed view of memory (an argument the list hoisted a transpose
+    // onto, through slices) computes in the view's layout, with the transpose
+    // on its result, where the transpose-propagating patterns take it into
+    // the broadcasts of the next contraction (transposed_view_elementwise,
+    // Enzyme-JAX #3624, with the pushes that keep it there). A round of its
+    // own because in the list it fires before the batching patterns have
+    // merged the components of a vector problem, and on the unmerged
+    // components it leaves transposes the merged form would not have (ceed
+    // BP4: 3x slower). REACTANT_EXEC_NOLAYOUT=1 leaves it out.
+    std::string layoutRound =
+        "enzyme-hlo-generate-td{patterns=transpose_transpose<16>;"
+        "transpose_simplify<16>;broadcast_in_dim_op_canon<16>;"
+        "cse_transpose<16>;cse_broadcast_in_dim<16>;"
+        "transpose_broadcast_in_dim_to_broadcast_in_dim<16>;transpose_slice;"
+        "transpose_like_broadcast_slice;transpose_concat;"
+        "transpose_like_broadcast_concat;transpose_iota;transpose_reduce;"
+        "transpose_dus;transpose_pad<1>;transpose_dynamic_slice;"
+        "transpose_reverse;transpose_reshape;"
+        "transpose_like_broadcast_elementwise(1);"
+        "transposed_view_elementwise;reduce_minor_dims},transform-interpreter,"
+        "enzyme-hlo-remove-transform,canonicalize,cse,";
+    if (getenv("REACTANT_EXEC_NOLAYOUT"))
+      layoutRound = "";
+    // Values a nested expansion would recompute are materialized with an
+    // optimization_barrier (REACTANT_EXEC_NOBARRIER=1 disables).
+    // concat_operand_barrier (Enzyme-JAX #3538) is part of the round;
+    // REACTANT_EXEC_NOCONCATROUND=1 leaves it out.
+    std::string barrierRound =
+        std::string("enzyme-hlo-generate-td{patterns=reread_barrier") +
+        (getenv("REACTANT_EXEC_NOCONCATROUND") ? "" : ";concat_operand_barrier") +
+        "},transform-interpreter,enzyme-hlo-remove-transform,";
+    if (getenv("REACTANT_EXEC_NOBARRIER"))
+      barrierRound = "";
     // Again (see runExecOptimizationAgain): one round of folding, then the
     // list.
     std::string pipeline =
         (again ? foldRound
                : "canonicalize,cse,func.func(stablehlo-aggressive-folder),"
                  "canonicalize," +
-                     foldRound + foldRound + foldRound) +
+                     unroll + foldRound + foldRound + foldRound) +
         "enzyme-hlo-generate-td{patterns=" + patterns +
         "},transform-interpreter,enzyme-hlo-remove-transform,canonicalize,"
-        "cse,enzyme-hlo-generate-td{patterns=lower_rotate;lower_wrap;"
+        "cse," +
+        layoutRound + barrierRound +
+        "enzyme-hlo-generate-td{patterns=lower_rotate;lower_wrap;"
         "lower_extend;lower_updatewithoutcorners;lower_multislice},"
         "transform-interpreter,enzyme-hlo-remove-transform,canonicalize,cse";
     if (failed(mlir::parsePassPipeline(pipeline, pm))) {
@@ -4590,6 +4727,17 @@ REACTANT_ABI void reactantXLADeInit(LinkableRuntime **__restrict__ lrt) {
   }
   delete *lrt;
   *lrt = nullptr;
+}
+
+// cudaDeviceSynchronize of the raised host code: every execution issued so
+// far has completed when this returns.
+REACTANT_ABI void reactantXLASync(LinkableRuntime **__restrict__ lrtP) {
+  auto lrt = *lrtP;
+  if (!lrt)
+    return;
+  runPending(lrt);
+  if (lrt->stream)
+    check(lrt->stream->BlockHostUntilDone(), "device synchronize");
 }
 
 REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
@@ -5161,6 +5309,8 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
       }
       exit(1);
     }
+    if (getenv("REACTANT_EXEC_CONCAT_BARRIER"))
+      barrierConcatOperandRoots(*module);
     if (getenv("REACTANT_EXEC_DUMP")) {
       llvm::errs() << "EXEC_DUMP after\n";
       module->print(llvm::errs());
