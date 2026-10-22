@@ -157,7 +157,12 @@ promote_traced_type(a::Type, b::Type) = Base.promote_type(a, b)
 aos_to_soa(x::AbstractArray) = x
 
 aos_to_soa(x::TracedRArray) = x
-aos_to_soa(x::AnyTracedRArray) = x
+
+function aos_to_soa(x::AnyTracedRArray)
+    isa_traced_soa(ancestor(x)) && return x
+    # an array of traced numbers (a static array, say)
+    return @opcall reshape(vcat(x...), size(x)...)
+end
 
 function aos_to_soa(x::Array{TracedRNumber{T}}) where {T}
     isa_traced_soa(ancestor(x)) && return x

@@ -10,3 +10,13 @@ using StaticArrays, Reactant, Test
     @test @jit(g(p)) ≈ g(2.0)
     @test @jit(h(p)) ≈ h(2.0)
 end
+
+@testset "broadcast with a traced array" begin
+    f(x) = SVector(1.0, 2.0) .+ x
+    g(x, p) = SVector(p, 2p) .+ x
+
+    x = Reactant.to_rarray([3.0, 4.0])
+    p = ConcreteRNumber(2.0)
+    @test @jit(f(x)) ≈ f([3.0, 4.0])
+    @test @jit(g(x, p)) ≈ g([3.0, 4.0], 2.0)
+end
