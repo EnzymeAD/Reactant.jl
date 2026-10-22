@@ -344,7 +344,44 @@ if RUN_CPU_MPI_TESTS
         end
     end
 elseif RUN_GPU_MPI_TESTS
-    @info "Skipping GPU MPI Isend / Irecv! / Wait tests; Not implemented"
+    @testset "Isend / Irecv! / Wait" begin
+        comm = MPI.COMM_WORLD
+        rank = MPI.Comm_rank(comm)
+
+        # NOTE:: currently don't allow a request to cross the compile boundary
+        function IsendIrecvWait!(send_buf, recv_buf, rank, tag, comm)
+            if rank == 0
+                peer = 1
+                req = MPI.Isend(send_buf, peer, tag, comm)
+                MPI.Wait(req)
+                req = MPI.Irecv!(recv_buf, peer, tag+1, comm)
+                MPI.Wait(req)
+            elseif rank == 1
+                peer = 0
+                req = MPI.Irecv!(recv_buf, peer, tag, comm)
+                MPI.Wait(req)
+                req = MPI.Isend(send_buf, peer, tag+1, comm)
+                MPI.Wait(req)
+            end
+            return nothing
+        end
+
+        for T in gpu_datatypes
+            @testset "Type: $T" begin
+                send_buf = ConcreteRArray(ones(T, 5))
+                recv_buf = ConcreteRArray(zeros(T, 5))
+                tag = 42
+
+                @jit sync = true IsendIrecvWait!(send_buf, recv_buf, rank, tag, comm)
+
+                # TODO currently hangs (presumably due to a xla-reording-the-ops issue)
+                # if both ranks send and recv. Need jit fusion to fix.
+                rank == 1 && @test recv_buf == send_buf
+
+                MPI.Barrier(comm)
+            end
+        end
+    end
 end
 
 if RUN_CPU_MPI_TESTS
