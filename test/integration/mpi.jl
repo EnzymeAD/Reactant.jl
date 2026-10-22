@@ -84,7 +84,7 @@ elseif RUN_GPU_MPI_TESTS
 end
 
 @testset "Allreduce" begin
-    if false
+    if RUN_CPU_MPI_TESTS
         operations = [
             ("OP_NULL", MPI.OP_NULL),
             ("BAND", MPI.BAND),
