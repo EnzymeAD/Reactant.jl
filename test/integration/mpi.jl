@@ -356,22 +356,16 @@ if RUN_CPU_MPI_TESTS
                 reqs = []
 
                 if rank == 0
-                    dest = 1
-                    src = 1
-
-                    req = MPI.Isend(send_buf, dest, tag + 1, comm)
+                    peer = 1
+                    req = MPI.Isend(send_buf, peer, tag + 1, comm)
                     push!(reqs, req)
-
-                    req = MPI.Irecv!(recv_buf, src, tag - 1, comm)
+                    req = MPI.Irecv!(recv_buf, peer, tag - 1, comm)
                     push!(reqs, req)
                 elseif rank == 1
-                    dest = 0
-                    src = 0
-
-                    req = MPI.Isend(send_buf, dest, tag - 1, comm)
+                    peer = 0
+                    req = MPI.Isend(send_buf, peer, tag - 1, comm)
                     push!(reqs, req)
-
-                    req = MPI.Irecv!(recv_buf, src, tag + 1, comm)
+                    req = MPI.Irecv!(recv_buf, peer, tag + 1, comm)
                     push!(reqs, req)
                 end
 
