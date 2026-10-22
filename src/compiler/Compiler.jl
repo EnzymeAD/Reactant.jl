@@ -235,6 +235,30 @@ function raising!(f, is_raising::Bool)
     end
 end
 
+# Whether kernels are traced for the `:kernelad` pipeline. Their bodies then go through the
+# same affine conversion as when raising, so they must be compiled the same way.
+function activate_kernelad!(is_kernelad::Bool)
+    stack = get!(task_local_storage(), :reactant_is_kernelad) do
+        Bool[]
+    end::Vector{Bool}
+    push!(stack, is_kernelad)
+    return nothing
+end
+
+function deactivate_kernelad!(is_kernelad::Bool)
+    key = :reactant_is_kernelad
+    is_kernelad === last(task_local_storage(key)::Vector{Bool}) ||
+        error("Deactivating wrong Reactant kernelad context")
+    return pop!(task_local_storage(key)::Vector{Bool})
+end
+
+function kernelad()
+    key = :reactant_is_kernelad
+    haskey(task_local_storage(), key) || return false
+    stack = task_local_storage(key)::Vector{Bool}
+    return !Base.isempty(stack) && last(stack)
+end
+
 # The pass pipeline is independent of the model's Julia function and argument types.
 Base.@nospecializeinfer function compile_mlir!(
     mod,
@@ -274,6 +298,8 @@ Base.@nospecializeinfer function compile_mlir!(
     end
     is_raising = raise isa String || raise
     activate_raising!(is_raising)
+    is_kernelad = compile_options.optimization_passes === :kernelad
+    activate_kernelad!(is_kernelad)
 
     fnname = string(f)
     mlir_fn_res = try
@@ -290,6 +316,7 @@ Base.@nospecializeinfer function compile_mlir!(
             )
         end
     finally
+        deactivate_kernelad!(is_kernelad)
         deactivate_raising!(is_raising)
         deactivate_sdycache!(sdycache)
         deactivate_sdygroupidcache!(sdygroupidcache)
@@ -449,7 +476,6 @@ Base.@nospecializeinfer function compile_mlir!(
         end
 
     # `:kernelad` is `:all` with extra passes to differentiate through kernel calls
-    is_kernelad = compile_options.optimization_passes === :kernelad
     is_all = compile_options.optimization_passes === :all || is_kernelad
 
     legal_to_run_shardy_passes = is_all
