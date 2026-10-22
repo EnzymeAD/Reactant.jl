@@ -63,10 +63,6 @@ end
 
 Returns `true` if `x` is backed by a MLIR value; i.e. `x` is a leaf of the tracing tree that
 gets linearized into an argument/result of the traced function.
-
-Types other than [`Reactant.TracedType`](@ref) can opt in by overloading this method together
-with `TracedUtils.get_mlir_data`, `TracedUtils.set_mlir_data!`, `TracedUtils.get_paths`,
-`TracedUtils.set_paths!` and `Ops.mlir_type`.
 """
 is_traced_leaf(@nospecialize(x)) = false
 

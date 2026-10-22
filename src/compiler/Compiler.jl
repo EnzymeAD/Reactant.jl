@@ -15,9 +15,9 @@ import ..Reactant:
     RArray,
     OrderedIdDict,
     make_tracer,
+    is_traced_leaf,
     TracedToConcrete,
     append_path,
-    TracedType,
     MPI_REQUEST_WIDTH
 import Reactant: OptimizeCommunicationOptions, ShardyPropagationOptions, CompileOptions
 using Reactant_jll: Reactant_jll
@@ -774,7 +774,7 @@ Base.@nospecializeinfer function compile_mlir!(
         padded_inputs = IdDict()
         has_padded_inputs = false
         for (k, v) in seen_args
-            v isa Reactant.TracedType || continue
+            Reactant.is_traced_leaf(v) || continue
             if Reactant.has_padding(k)
                 has_padded_inputs = true
                 padded_inputs[v] = Reactant.get_padding(k)
@@ -808,9 +808,11 @@ Base.@nospecializeinfer function compile_mlir!(
                         MLIR.IR.Type(Reactant.unwrapped_eltype(res)),
                     )
                 else
-                    out_tys_padded[i] = Reactant.TracedUtils.transpose_ty(
-                        Reactant.Ops.mlir_type(res)
-                    )
+                    out_ty = Reactant.Ops.mlir_type(res)
+                    if MLIR.IR.isrankedtensor(out_ty)
+                        out_ty = Reactant.TracedUtils.transpose_ty(out_ty)
+                    end
+                    out_tys_padded[i] = out_ty
                 end
             end
 
@@ -1047,10 +1049,17 @@ Base.@nospecializeinfer function compile_mlir!(
     fnbody = MLIR.IR.first_block(MLIR.IR.region(func_op, 1))::MLIR.IR.Block
     ret = MLIR.IR.terminator(fnbody)::MLIR.IR.Operation
 
-    preserved_args = Tuple{TracedType,Int}[]
+    # The passes may have rewritten the argument types (e.g. non-tensor types lowered to
+    # tensors), so read them back instead of using the ones from tracing.
+    # TODO check if we can refactor this out, and keep relying on the same MLIR function
+    in_tys = MLIR.IR.Type[
+        MLIR.IR.type(MLIR.IR.argument(fnbody, i)) for i in 1:MLIR.IR.nargs(fnbody)
+    ]
+
+    preserved_args = Tuple{Any,Int}[]
     results = [MLIR.IR.operand(ret, i) for i in 1:MLIR.IR.noperands(ret)]
     nresults = MLIR.IR.Value[]
-    linear_results2 = TracedType[]
+    linear_results2 = Any[]
     results_mask = falses(length(results))
 
     for (i, op) in enumerate(results)
@@ -1230,7 +1239,8 @@ function __resolve_device_and_client(client, seen_args, linear_args, is_sharded)
     if length(linear_args) > 0
         devices_list = []
         for (k, v) in seen_args
-            !(v isa TracedRArray || v isa TracedRNumber) && continue
+            Reactant.is_traced_leaf(v) || continue
+            # TODO require sth like `concrete_backing` to get `.data` from custom traced type
             buffer = k.data isa Tuple ? only(k.data) : k.data
             push!(devices_list, XLA.device(buffer))
         end
@@ -1588,7 +1598,7 @@ function default_callcache()
             mlir_result_types::Vector{MLIR.IR.Type},
             traced_result::Any,
             mutated_args::Vector{Int},
-            linear_results::Vector{Reactant.TracedType},
+            linear_results::Vector{Any},
             fnwrapped::Bool,
             argprefix::Symbol,
             resprefix::Symbol,
