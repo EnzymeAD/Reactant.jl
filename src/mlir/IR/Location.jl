@@ -36,6 +36,10 @@ end
 
 Base.cconvert(::Core.Type{API.MlirLocation}, location::Location) = location
 Base.unsafe_convert(::Core.Type{API.MlirLocation}, location::Location) = location.ref
+# C takes an array of the bare references (`Location` carries more than its reference)
+function Base.cconvert(::Core.Type{Ptr{API.MlirLocation}}, locations::Vector{Location})
+    return API.MlirLocation[location.ref for location in locations]
+end
 
 Base.:(==)(a::Location, b::Location) = API.mlirLocationEqual(a, b)
 context(location::Location) = Context(API.mlirLocationGetContext(location))

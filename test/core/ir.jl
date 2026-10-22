@@ -32,6 +32,24 @@ using Reactant: MLIR
     end
 end
 
+@testset "locations passed to C as an array" begin
+    ctx = Reactant.ReactantContext()
+    MLIR.IR.@with_context ctx begin
+        locs = [MLIR.IR.Location("a.jl", 1, 1), MLIR.IR.Location("b.jl", 2, 2)]
+        # a block's argument locations
+        block = MLIR.IR.Block(
+            [MLIR.IR.TensorType(Int[2], MLIR.IR.Type(Float32)) for _ in 1:2], locs
+        )
+        @test MLIR.IR.nargs(block) == 2
+        # a fused location of several
+        fused = MLIR.IR.fuse(locs, MLIR.IR.Attribute("meta"))
+        @test occursin("a.jl", sprint(show, fused))
+        @test occursin("b.jl", sprint(show, fused))
+        MLIR.IR.dispose(block)
+    end
+    MLIR.IR.dispose(ctx)
+end
+
 @testset "location of a disposed context" begin
     ctx = Reactant.ReactantContext()
     loc = MLIR.IR.@with_context ctx MLIR.IR.Location("a.jl", 3, 4)
