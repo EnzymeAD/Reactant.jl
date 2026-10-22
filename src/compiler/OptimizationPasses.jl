@@ -24,6 +24,20 @@ const AGGRESSIVE_PROPAGATION = Ref(false)
 const DUS_SLICE_SIMPLIFY = Ref(true)
 const CONCATS_TO_DUS = Ref(false)
 const WHILE_UNROLL_THRESHOLD = Ref(4)
+const INTERPRETER_MAX_NUM_REWRITES = Ref(-1)
+const INTERPRETER_MAX_ITERATIONS = Ref(-1)
+
+# -1 means unlimited / inherit from the driver, so the option is omitted
+function generate_td_pass(patterns::AbstractString)
+    opts = "patterns=" * patterns
+    if INTERPRETER_MAX_NUM_REWRITES[] != -1
+        opts *= " max-num-rewrites=$(INTERPRETER_MAX_NUM_REWRITES[])"
+    end
+    if INTERPRETER_MAX_ITERATIONS[] != -1
+        opts *= " max-iterations=$(INTERPRETER_MAX_ITERATIONS[])"
+    end
+    return "enzyme-hlo-generate-td{" * opts * "}"
+end
 
 function _propagate_direction(sym::Symbol)
     sym === :up && return MLIR.API.ENZYMEXLA_PROPAGATE_UP
@@ -106,7 +120,7 @@ function optimization_passes(
 
     transform_passes = join(
         [
-            "enzyme-hlo-generate-td{patterns=" * main_passes_str * "}",
+            generate_td_pass(main_passes_str),
             "transform-interpreter",
             "enzyme-hlo-remove-transform",
         ],
@@ -120,12 +134,15 @@ function optimization_passes(
     if lower_comms
         func_passes =
             func_passes *
-            ",enzyme-hlo-generate-td{patterns=" *
-            lower_passes_str *
-            "},transform-interpreter,enzyme-hlo-remove-transform"
+            "," *
+            generate_td_pass(lower_passes_str) *
+            ",transform-interpreter,enzyme-hlo-remove-transform"
     end
     if CONCATS_TO_DUS[] && hlo_opts
-        func_passes *= ",enzyme-hlo-generate-td{patterns=concat_to_onedim_dus},transform-interpreter,enzyme-hlo-remove-transform"
+        func_passes *=
+            "," *
+            generate_td_pass("concat_to_onedim_dus") *
+            ",transform-interpreter,enzyme-hlo-remove-transform"
     end
     passes = String[]
     if compile_options.inline
@@ -360,7 +377,9 @@ end
 function get_optimize_comms_passes(options::Bool)
     if !options
         return [
-            "enzyme-hlo-generate-td{patterns=lower_rotate;lower_wrap;lower_extend;lower_updatewithoutcorners}",
+            generate_td_pass(
+                "lower_rotate;lower_wrap;lower_extend;lower_updatewithoutcorners"
+            ),
             "transform-interpreter",
             "enzyme-hlo-remove-transform",
         ]
@@ -371,14 +390,20 @@ end
 function get_optimize_comms_passes(options::OptimizeCommunicationOptions)
     options_str = String(options)
     res = [
-        "enzyme-hlo-generate-td{patterns=concat_to_onedim_dus;concat_to_onedim_dusslice;concatreshape_to_onedim_dus}",
+        generate_td_pass(
+            "concat_to_onedim_dus;concat_to_onedim_dusslice;concatreshape_to_onedim_dus"
+        ),
         "transform-interpreter",
         "enzyme-hlo-remove-transform",
-        "enzyme-hlo-generate-td{patterns=reshape_to_broadcast;recognize_multirotate;use_multirotate_neutral_result;recognize_multislice}",
+        generate_td_pass(
+            "reshape_to_broadcast;recognize_multirotate;use_multirotate_neutral_result;recognize_multislice",
+        ),
         "transform-interpreter",
         "enzyme-hlo-remove-transform",
         options_str,
-        "enzyme-hlo-generate-td{patterns=lower_rotate;lower_wrap;lower_extend;lower_updatewithoutcorners;lower_multislice}",
+        generate_td_pass(
+            "lower_rotate;lower_wrap;lower_extend;lower_updatewithoutcorners;lower_multislice",
+        ),
         "transform-interpreter",
         "enzyme-hlo-remove-transform",
         options_str,
