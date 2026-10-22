@@ -2370,6 +2370,7 @@ end
     verify_arg_names=nothing,
     checkpointing=false,
     mincut=false,
+    fixed_point=false,
     location=mlir_stacktrace("while_loop", @__FILE__, @__LINE__),
 ) where {CFn,BFn}
     # TODO(#2250): detect and prevent mutation within the condition
@@ -2455,6 +2456,24 @@ end
         )
     elseif checkpointing === true
         MLIR.IR.setattr!(while_op, "enzyme.enable_checkpointing", MLIR.IR.Attribute(true))
+    end
+
+    # A loop declared to iterate to a fixed point is differentiated at its converged
+    # state (Enzyme-JAX turns the marked loop into an `enzymexla.fixed_point`).
+    if fixed_point !== false
+        MLIR.IR.setattr!(while_op, "enzyme.fixed_point", MLIR.IR.UnitAttribute())
+        if fixed_point isa ReactantCore.FixedPoint
+            MLIR.IR.setattr!(
+                while_op,
+                "enzyme.fixed_point_reduction",
+                MLIR.IR.Attribute(Float64(fixed_point.reduction)),
+            )
+            MLIR.IR.setattr!(
+                while_op,
+                "enzyme.fixed_point_max_iters",
+                MLIR.IR.Attribute(Int64(fixed_point.max_iters)),
+            )
+        end
     end
 
     results = map(enumerate(linear_args)) do (i, arg)

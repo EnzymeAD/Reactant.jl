@@ -236,6 +236,12 @@ Fine-grained control over the compilation options for the Reactant compiler.
   - `strip_llvm_debuginfo`: Removes LLVM debug info from the generated IR.
   - `speculate_partial_ifs`: Speculatively execute partial `if` conditions in the
     `canonicalize-loops` pass. (Default `false`).
+  - `recognize_fixed_point_loops`: Run `recognize-fixed-point-loops`, which marks
+    convergence loops (a loop whose exit tests a change of its state against a tolerance
+    and whose body is a plausible contraction) as fixed points, so they are differentiated
+    at their converged state instead of through every iteration. Applies to traced loops
+    and to loops inside raised kernels. Loops marked explicitly with
+    `@trace fixed_point=...` do not need this. (Default `false`).
 """
 struct CompileOptions
     optimization_passes::Union{Symbol,String}
@@ -285,6 +291,7 @@ struct CompileOptions
     disable_structured_tensors_passes::Bool
     strip_llvm_debuginfo::Bool
     speculate_partial_ifs::Bool
+    recognize_fixed_point_loops::Bool
     strip::Union{Symbol,Vector{String}}
     multifloat::Union{Nothing,MultiFloatOptions}
 end
@@ -326,6 +333,7 @@ function CompileOptions(;
     disable_structured_tensors_passes::Bool=false,
     strip_llvm_debuginfo::Bool=false,
     speculate_partial_ifs::Bool=false,
+    recognize_fixed_point_loops::Bool=false,
     strip::Union{Symbol,Vector{String}}=:all,
     raise_triton_custom_call::Bool=true,
     lower_triton::Bool=true,
@@ -398,6 +406,7 @@ function CompileOptions(;
         disable_structured_tensors_passes,
         strip_llvm_debuginfo,
         speculate_partial_ifs,
+        recognize_fixed_point_loops,
         strip,
         multifloat,
     )
@@ -459,6 +468,7 @@ function __compile_options_with_reversed_propagation(compile_options::CompileOpt
         compile_options.disable_structured_tensors_passes,
         compile_options.strip_llvm_debuginfo,
         compile_options.speculate_partial_ifs,
+        compile_options.recognize_fixed_point_loops,
         compile_options.strip,
         compile_options.multifloat,
     )
@@ -507,6 +517,7 @@ function __compile_options_with_updated_sync(compile_options::CompileOptions, sy
         compile_options.disable_structured_tensors_passes,
         compile_options.strip_llvm_debuginfo,
         compile_options.speculate_partial_ifs,
+        compile_options.recognize_fixed_point_loops,
         compile_options.strip,
         compile_options.multifloat,
     )
