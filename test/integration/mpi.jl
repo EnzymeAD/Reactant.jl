@@ -433,7 +433,44 @@ if RUN_CPU_MPI_TESTS
         end
     end
 elseif RUN_GPU_MPI_TESTS
-    @info "Skipping GPU MPI Isend / Irecv! / Waitall tests; Not implemented"
+    @testset "Isend / Irecv! / Waitall" begin
+        comm = MPI.COMM_WORLD
+        rank = MPI.Comm_rank(comm)
+        tag = 42
+
+        # NOTE: currently don't allow a request to cross the compile boundary
+        function IsendIrecvWaitall!(send_buf, recv_buf)
+            reqs = []
+
+            if rank == 0
+                peer = 1
+                req = MPI.Isend(send_buf, peer, tag + 1, comm)
+                push!(reqs, req)
+                req = MPI.Irecv!(recv_buf, peer, tag - 1, comm)
+                push!(reqs, req)
+            elseif rank == 1
+                peer = 0
+                req = MPI.Isend(send_buf, peer, tag - 1, comm)
+                push!(reqs, req)
+                req = MPI.Irecv!(recv_buf, peer, tag + 1, comm)
+                push!(reqs, req)
+            end
+
+            reqs = vcat(reqs...)
+            return MPI.Waitall(reqs)
+        end
+
+        for T in datatypes
+            send_buf = ConcreteRArray(ones(T, 5))
+            recv_buf = ConcreteRArray(zeros(T, 5))
+
+            @jit sync = true IsendIrecvWaitall!(send_buf, recv_buf)
+
+            @test recv_buf == send_buf
+
+            MPI.Barrier(comm)
+        end
+    end
 end
 
 if RUN_CPU_MPI_TESTS
