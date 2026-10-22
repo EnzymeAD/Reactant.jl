@@ -4,6 +4,7 @@ using ReactantCore:
     ReactantCore,
     @annotate,
     @trace,
+    is_traced_leaf,
     annotate,
     within_compile,
     MissingTracedValue,
