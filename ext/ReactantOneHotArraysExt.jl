@@ -37,7 +37,7 @@ function ReactantCore.materialize_traced_array(r::OneHotArray)
 
     z = @opcall(fill(false, (N, B)))
     z[linear_indices] = fill(true, length(linear_indices))
-    return reshape(z, size(r))
+    return @opcall reshape(z, size(r)...)
 end
 
 Reactant._parent(r::OneHotArray) = r.indices

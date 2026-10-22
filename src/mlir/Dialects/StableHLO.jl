@@ -941,6 +941,10 @@ Within each process group in the process grid, send the value of the
 `operand` tensor from the source process to the target processes and produce a
 `result` tensor.
 
+When `has_dynamic_root` is false (default), the root is the 0-th rank in
+each replica group. When `has_dynamic_root` is true, the last operand is a
+rank-1 i32 tensor specifying per-operand root indices within each group.
+
 See:
 https://github.com/openxla/stablehlo/blob/main/docs/spec.md#collective_broadcast
 
@@ -955,20 +959,23 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#collective_broadcast
 ```
 """
 function collective_broadcast(
-    operand::Value;
-    result_0=nothing::Union{Nothing,IR.Type},
+    operands::Vector{Value};
+    result_0=nothing::Union{Nothing,Vector{IR.Type}},
     replica_groups,
     channel_handle=nothing,
+    has_dynamic_root=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
-    operands = Value[operand,]
+    operands = Value[operands...,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[NamedAttribute("replica_groups", replica_groups),]
-    !isnothing(result_0) && push!(op_ty_results, result_0)
+    !isnothing(result_0) && push!(op_ty_results, result_0...)
     !isnothing(channel_handle) &&
         push!(attributes, NamedAttribute("channel_handle", channel_handle))
+    !isnothing(has_dynamic_root) &&
+        push!(attributes, NamedAttribute("has_dynamic_root", has_dynamic_root))
 
     return create_operation(
         "stablehlo.collective_broadcast",

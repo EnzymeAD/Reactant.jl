@@ -66,3 +66,16 @@ end
     oc_res = onecold(res)
     @test @jit(onecold(dense_ra)) == oc_res
 end
+
+flat_mul(W, x) = W * reshape(x, size(x, 1), :)
+
+@testset "matmul with a reshaped $(length(dims) + 1)-d array" for dims in ((15,), (3, 5))
+    m = onehotbatch(rand(1:10, dims...), 1:10)
+    r_m = Reactant.to_rarray(m)
+    W = Reactant.TestUtils.construct_test_array(Float32, 4, 10)
+    r_W = Reactant.to_rarray(W)
+    r_res = Reactant.with_config(; dot_general_precision=PrecisionConfig.HIGHEST) do
+        @jit flat_mul(r_W, r_m)
+    end
+    @test r_res ≈ flat_mul(W, m)
+end
