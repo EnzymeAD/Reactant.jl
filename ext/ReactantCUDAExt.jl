@@ -1349,12 +1349,14 @@ Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
         push!(mlir_args, arg)
         # The transposed value is row-major, i.e. Julia's column-major memory order.
         # Pin it so XLA can't choose another layout for the kernel's buffers.
-        push!(
-            operand_layouts,
-            MLIR.IR.DenseIndexElementsAttribute(
-                collect(Int64, (ndims(MLIR.IR.type(arg)) - 1):-1:0)
-            ),
-        )
+        if Reactant.Compiler.CONSTRAIN_LAYOUTS[]
+            push!(
+                operand_layouts,
+                MLIR.IR.DenseIndexElementsAttribute(
+                    collect(Int64, (ndims(MLIR.IR.type(arg)) - 1):-1:0)
+                ),
+            )
+        end
 
         ctx = MLIR.IR.current_context()
         out_tup = Ref{Int64}(argidx - 1)
@@ -1468,7 +1470,11 @@ Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
         inputs=mlir_args,
         result_0=restys,
         fn=MLIR.IR.FlatSymbolRefAttribute(sym_name),
-        operand_layouts=MLIR.IR.Attribute(operand_layouts),
+        operand_layouts=if Reactant.Compiler.CONSTRAIN_LAYOUTS[]
+            MLIR.IR.Attribute(operand_layouts)
+        else
+            nothing
+        end,
         output_operand_aliases=MLIR.IR.Attribute(output_operand_aliases),
         xla_side_effect_free=MLIR.IR.UnitAttribute(),
         location=Reactant.Ops.mlir_stacktrace(

@@ -4551,6 +4551,8 @@ function julia_callback(
     # Build backend_config as a dictionary with the callback pointer
     backend_config = Dict("callback_ptr" => MLIR.IR.Attribute(callback_ptr_int))
 
+    constrain_layouts = Reactant.Compiler.CONSTRAIN_LAYOUTS[]
+
     # Emit the custom call op
     op = stablehlo.custom_call(
         input_values;
@@ -4560,8 +4562,8 @@ function julia_callback(
         backend_config,
         api_version=Int32(4),
         output_operand_aliases=output_operand_aliases,
-        result_layouts=_col_major_layout(output_specs),
-        operand_layouts=_col_major_layout(input_specs),
+        result_layouts=constrain_layouts ? _col_major_layout(output_specs) : nothing,
+        operand_layouts=constrain_layouts ? _col_major_layout(input_specs) : nothing,
         location,
     )
 
