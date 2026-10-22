@@ -513,6 +513,20 @@ REACTANT_ABI void InitializeLogs() {
   char **argv2 = &argv[0];
   tsl::port::InitMain(binary, &argc, &argv2);
 
+  // Until `absl::InitializeLog` runs, absl writes every log message to stderr
+  // whatever the configured threshold (and says so, once), so the level
+  // can't be changed after the library is loaded. Once it has run, a message
+  // reaches stderr only if it passes both `absl::MinLogLevel` and
+  // `absl::StderrThreshold`; TSL's static initializer set the latter to INFO
+  // and the former from `TF_CPP_MIN_LOG_LEVEL`. Without that variable, show
+  // warnings and up, as JAX does.
+  static std::once_flag logs;
+  std::call_once(logs, [] {
+    absl::InitializeLog();
+    if (!getenv("TF_CPP_MIN_LOG_LEVEL"))
+      absl::SetMinLogLevel(absl::LogSeverityAtLeast::kWarning);
+  });
+
 #if defined(REACTANT_ROCM) && !defined(_WIN32)
   TameLLVMSignalHandlers();
 #endif
@@ -529,9 +543,11 @@ REACTANT_ABI void InitializeLogs() {
   LLVMInitializeAArch64AsmParser();
 }
 
+// The least severe XLA log messages to print, as `absl::LogSeverityAtLeast`
+// (0 INFO, 1 WARNING, 2 ERROR, 3 FATAL).
 REACTANT_ABI void SetLogLevel(int level) {
-  SetStderrThreshold((absl::LogSeverity)level);
-  // absl::SetGlobalVLogLevel(level);
+  absl::SetMinLogLevel((absl::LogSeverityAtLeast)level);
+  absl::SetStderrThreshold((absl::LogSeverityAtLeast)level);
 }
 
 REACTANT_ABI void SetModuleLogLevel(const char *module_pattern, int level) {
