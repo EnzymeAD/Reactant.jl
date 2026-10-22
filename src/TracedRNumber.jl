@@ -277,11 +277,14 @@ for jlop in (:(Base.:+), :(Base.:-))
             Reactant.promote_to(TracedRNumber{Int}, y),
         )
     end
+    @eval $(jlop)(x::TracedRNumber{Bool}) =
+        $(jlop)(Reactant.promote_to(TracedRNumber{Int}, x))
 end
 
-# `Float64(true)`, `Int(true)`, ...
-function (::Type{T})(x::TracedRNumber{Bool}) where {T<:Union{Integer,AbstractFloat}}
-    return Reactant.promote_to(TracedRNumber{T}, x)
+for (wrapop, jlop) in ((Symbol("+%"), :+), (Symbol("-%"), :-))
+    isdefined(Base, wrapop) || continue
+    @eval Base.$(wrapop)(x::TracedRNumber{Bool}, y::TracedRNumber{Bool}) = $(jlop)(x, y)
+    @eval Base.$(wrapop)(x::TracedRNumber{Bool}) = $(jlop)(x)
 end
 
 function Base.rem(x::TracedRNumber, y::TracedRNumber, ::typeof(Base.RoundFromZero))
