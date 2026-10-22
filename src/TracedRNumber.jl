@@ -270,8 +270,6 @@ for (jlop, hloop) in (
     end
 end
 
-# Base promotes `Bool` operands of `+` and `-` to `Int` (`true - false === 1`) instead of
-# computing in `Bool`, which is not a valid element type for these ops.
 for jlop in (:(Base.:+), :(Base.:-))
     @eval function $(jlop)(x::TracedRNumber{Bool}, y::TracedRNumber{Bool})
         return $(jlop)(
