@@ -17053,6 +17053,20 @@ function ReactantCudaSetDevice(device_id)
     @ccall Reactant_jll.libReactantExtra.ReactantCudaSetDevice(device_id::Int32)::Int32
 end
 
+function ReactantNcclGetUniqueId(id)
+    @ccall Reactant_jll.libReactantExtra.ReactantNcclGetUniqueId(id::Ptr{Cvoid})::Int32
+end
+
+function ReactantNcclCommInitRank(comm, nranks, id, rank)
+    @ccall Reactant_jll.libReactantExtra.ReactantNcclCommInitRank(
+        comm::Ptr{Ptr{Cvoid}}, nranks::Int32, id::Ptr{Cvoid}, rank::Int32
+    )::Int32
+end
+
+function ReactantNcclCommDestroy(comm)
+    @ccall Reactant_jll.libReactantExtra.ReactantNcclCommDestroy(comm::Ptr{Cvoid})::Int32
+end
+
 function ReactantCudaDeviceGetComputeCapalilityMajor()
     @ccall Reactant_jll.libReactantExtra.ReactantCudaDeviceGetComputeCapalilityMajor()::Int32
 end
