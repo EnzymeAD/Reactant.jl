@@ -236,6 +236,30 @@ function raising!(f, is_raising::Bool)
     end
 end
 
+# Whether kernels are traced for the `:kernelad` pipeline. Their bodies then go through the
+# same affine conversion as when raising, so they must be compiled the same way.
+function activate_kernelad!(is_kernelad::Bool)
+    stack = get!(task_local_storage(), :reactant_is_kernelad) do
+        Bool[]
+    end::Vector{Bool}
+    push!(stack, is_kernelad)
+    return nothing
+end
+
+function deactivate_kernelad!(is_kernelad::Bool)
+    key = :reactant_is_kernelad
+    is_kernelad === last(task_local_storage(key)::Vector{Bool}) ||
+        error("Deactivating wrong Reactant kernelad context")
+    return pop!(task_local_storage(key)::Vector{Bool})
+end
+
+function kernelad()
+    key = :reactant_is_kernelad
+    haskey(task_local_storage(), key) || return false
+    stack = task_local_storage(key)::Vector{Bool}
+    return !Base.isempty(stack) && last(stack)
+end
+
 # The pass pipeline is independent of the model's Julia function and argument types.
 Base.@nospecializeinfer function compile_mlir!(
     mod,
@@ -256,6 +280,9 @@ Base.@nospecializeinfer function compile_mlir!(
     @assert MLIR.IR.current_context() == MLIR.IR.context(mod)
     client = client !== nothing ? client : XLA.default_backend()
 
+    @assert compile_options.optimization_passes !== :kernelad ||
+        lowercase(XLA.platform_name(client)) == "cuda" "kernelad only supports the cuda backend right now"
+
     # Explicitly don't use with_block to avoid creating a closure, which creates
     # both compile-time and relocatability issues
 
@@ -275,6 +302,8 @@ Base.@nospecializeinfer function compile_mlir!(
     end
     is_raising = raise isa String || raise
     activate_raising!(is_raising)
+    is_kernelad = compile_options.optimization_passes === :kernelad
+    activate_kernelad!(is_kernelad)
 
     fnname = string(f)
     mlir_fn_res = try
@@ -291,6 +320,7 @@ Base.@nospecializeinfer function compile_mlir!(
             )
         end
     finally
+        deactivate_kernelad!(is_kernelad)
         deactivate_raising!(is_raising)
         deactivate_sdycache!(sdycache)
         deactivate_sdygroupidcache!(sdygroupidcache)
@@ -431,6 +461,14 @@ Base.@nospecializeinfer function compile_mlir!(
         [lower_enzymexla_linalg_pass, lower_enzymexla_math_pass, lower_comm_pass], ","
     )
 
+    # Expose kernel_call bodies to Enzyme as gpu_wrapper regions containing
+    # affine.parallel loops. This mirrors the default raising sequence, stopping short of
+    # raise-affine-to-stablehlo so that the IR stays in affine/memref form, and inlines the
+    # generated helpers so that no jit_call reaches Enzyme.
+    kernelad_pre_enzyme_passes = "kernel-call-to-gpu-wrapper,llvm-to-memref-access,canonicalize,convert-llvm-to-cf,canonicalize,enzyme-lift-cf-to-scf,canonicalize,func.func(canonicalize-loops{speculate_partial_if=$(compile_options.speculate_partial_ifs)}),canonicalize-scf-for,canonicalize,libdevice-funcs-raise{remove_freeze=true},canonicalize,affine-cfg,canonicalize,func.func(canonicalize-loops{speculate_partial_if=$(compile_options.speculate_partial_ifs)}),canonicalize,llvm-to-affine-access,canonicalize,delinearize-indexing,canonicalize,simplify-affine-exprs,affine-cfg,canonicalize,func.func(affine-loop-invariant-code-motion),canonicalize,sort-memory,func.func(kernelcast),canonicalize,inline{default-pipeline=canonicalize inlining-threshold=4294967295 max-iterations=4},canonicalize,cse"
+    # Lower the (differentiated) gpu_wrapper regions back into kernel calls
+    kernelad_post_enzyme_passes = "canonicalize,prepare-affine-gpu-wrapper,lower-affine,convert-parallel-to-gpu1{emit_single_alternative=true},symbol-dce,gpu-kernel-outlining,canonicalize,symbol-dce,convert-parallel-to-gpu2,lower-aligned-affine-accesses,lower-affine,parallel-serialization,symbol-dce,gpu-wrapper-to-kernel-call,canonicalize,symbol-dce,arith-raise"
+
     legalize_chlo_to_stablehlo =
         if legalize_stablehlo_to_mhlo || compile_options.legalize_chlo_to_stablehlo
             get_stablehlo_to_hlo_passes(; stablehlo_to_mhlo=legalize_stablehlo_to_mhlo)
@@ -438,7 +476,10 @@ Base.@nospecializeinfer function compile_mlir!(
             ()
         end
 
-    legal_to_run_shardy_passes = compile_options.optimization_passes === :all
+    # `:kernelad` is `:all` with extra passes to differentiate through kernel calls
+    is_all = compile_options.optimization_passes === :all || is_kernelad
+
+    legal_to_run_shardy_passes = is_all
 
     # Raise any triton kernel that might exist as a custom call
     # We will lower them back later on, but having the full triton IR enables
@@ -447,8 +488,7 @@ Base.@nospecializeinfer function compile_mlir!(
         run_pass_pipeline!(mod, "raise-triton-custom-call", "raise_triton_custom_call")
     end
 
-    if compile_options.optimization_passes === :all ||
-        compile_options.optimization_passes === :after_enzyme
+    if is_all || compile_options.optimization_passes === :after_enzyme
         raise_pass_list = String[kern, raise_passes]
         run_pass_pipeline!(
             mod,
@@ -462,11 +502,15 @@ Base.@nospecializeinfer function compile_mlir!(
                     else
                         String[opt_passes2]
                     end,
+                    is_kernelad ? String[kernelad_pre_enzyme_passes] : String[],
                     String[
                         enzyme_pass,
                         opt_passes2,
                         "canonicalize",
                         "remove-unnecessary-enzyme-ops",
+                    ],
+                    is_kernelad ? String[kernelad_post_enzyme_passes] : String[],
+                    String[
                         "enzyme-simplify-math",
                         legalize_chlo_to_stablehlo...,
                         opt_passes2,
@@ -476,7 +520,13 @@ Base.@nospecializeinfer function compile_mlir!(
                 ),
                 ",",
             ),
-            compile_options.optimization_passes === :after_enzyme ? "after_enzyme" : "all",
+            if compile_options.optimization_passes === :after_enzyme
+                "after_enzyme"
+            elseif is_kernelad
+                "kernelad"
+            else
+                "all"
+            end,
         )
     elseif compile_options.optimization_passes === :before_kernel
         run_pass_pipeline!(
@@ -733,8 +783,7 @@ Base.@nospecializeinfer function compile_mlir!(
         run_pass_pipeline!(mod, compile_options.optimization_passes, "custom_pass")
     end
 
-    if compile_options.optimization_passes isa Symbol &&
-        compile_options.optimization_passes === :all &&
+    if is_all &&
         (
             compile_options.transpose_propagate === :up ||
             compile_options.reshape_propagate === :up
@@ -898,7 +947,7 @@ Base.@nospecializeinfer function compile_mlir!(
             end
 
             # we just need the ops to potentially remove slices / paddings
-            if compile_options.optimization_passes === :all
+            if is_all
                 run_pass_pipeline!(
                     mod,
                     join(
