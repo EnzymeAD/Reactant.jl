@@ -44,7 +44,7 @@ steps:
           CUDA_VISIBLE_DEVICES: 0
           REACTANT_BACKEND_GROUP: "GPU"
         if: build.message !~ /\[skip tests\]/
-        timeout_in_minutes: 120
+        timeout_in_minutes: 60
 
   # - label: ":julia: :linux: AMDGPU Julia v{{matrix.version}} -- {{matrix.group}} -- {{matrix.runtime}}"
   #   matrix:
