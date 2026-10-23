@@ -377,6 +377,16 @@ Base.@nospecializeinfer function compile_mlir!(
         compile_options; sroa=false, recognize_comms, lower_comms, backend, is_sharded
     )
 
+    # Loops marked `enzyme.fixed_point` (by `@trace fixed_point=...`, or by the
+    # recognizer when enabled) become `enzymexla.fixed_point` before any optimization
+    # touches them; the op is lowered back after Enzyme (see `enzyme_pass`) and, in
+    # case Enzyme never runs, with the other enzymexla ops.
+    opt_passes = string(
+        compile_options.recognize_fixed_point_loops ? "recognize-fixed-point-loops," : "",
+        "raise-fixed-point-loops,",
+        opt_passes,
+    )
+
     raise_passes = if raise isa String
         # Raising passes were specified
         raise
@@ -384,7 +394,10 @@ Base.@nospecializeinfer function compile_mlir!(
 
         # Raise enabled but use default passes
         # TODO(#2240) remove redundant libdevice raise after fixing phase ordering
-        result = "canonicalize,llvm-to-memref-access,canonicalize,convert-llvm-to-cf,canonicalize,enzyme-lift-cf-to-scf,canonicalize,func.func(canonicalize-loops{speculate_partial_if=$(compile_options.speculate_partial_ifs)}),canonicalize-scf-for,canonicalize,libdevice-funcs-raise,canonicalize,affine-cfg,canonicalize,func.func(canonicalize-loops{speculate_partial_if=$(compile_options.speculate_partial_ifs)}),canonicalize,llvm-to-affine-access,canonicalize,delinearize-indexing,canonicalize,simplify-affine-exprs,affine-cfg,canonicalize,func.func(affine-loop-invariant-code-motion),canonicalize,sort-memory,func.func(kernelcast),raise-affine-to-stablehlo{strip_llvm_debuginfo=$(compile_options.strip_llvm_debuginfo) prefer_while_raising=false dump_failed_lockstep=$(DUMP_FAILED_LOCKSTEP[])},canonicalize,arith-raise{stablehlo=true}"
+        # Always run: it applies the `fixed_point_implicit` calls in kernels; the
+        # heuristic only on request.
+        recognize = "recognize-fixed-point-loops{heuristic=$(compile_options.recognize_fixed_point_loops)},"
+        result = "canonicalize,llvm-to-memref-access,canonicalize,convert-llvm-to-cf,canonicalize,enzyme-lift-cf-to-scf,canonicalize,$(recognize)func.func(canonicalize-loops{speculate_partial_if=$(compile_options.speculate_partial_ifs)}),canonicalize-scf-for,canonicalize,libdevice-funcs-raise,canonicalize,affine-cfg,canonicalize,func.func(canonicalize-loops{speculate_partial_if=$(compile_options.speculate_partial_ifs)}),canonicalize,llvm-to-affine-access,canonicalize,delinearize-indexing,canonicalize,simplify-affine-exprs,affine-cfg,canonicalize,func.func(affine-loop-invariant-code-motion),canonicalize,sort-memory,func.func(kernelcast),raise-affine-to-stablehlo{strip_llvm_debuginfo=$(compile_options.strip_llvm_debuginfo) prefer_while_raising=false dump_failed_lockstep=$(DUMP_FAILED_LOCKSTEP[])},canonicalize,arith-raise{stablehlo=true},raise-fixed-point-loops"
 
         if compile_options.optimization_passes !== :after_enzyme &&
             compile_options.optimization_passes !== :only_enzyme
@@ -428,7 +441,13 @@ Base.@nospecializeinfer function compile_mlir!(
         error("Unknown comm lowering target: $(compile_options.comm_options.lowering_target)")
     end
     lower_enzymexla_passes = join(
-        [lower_enzymexla_linalg_pass, lower_enzymexla_math_pass, lower_comm_pass], ","
+        [
+            "lower-fixed-point-loops",
+            lower_enzymexla_linalg_pass,
+            lower_enzymexla_math_pass,
+            lower_comm_pass,
+        ],
+        ",",
     )
 
     legalize_chlo_to_stablehlo =
