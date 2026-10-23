@@ -167,6 +167,14 @@ function overloaded_mapreduce(
         return foldl(op, res; init)
     end
 
+    # `f` mapped every element to a plain value (e.g. `any(isnothing, [x, x])`), so the
+    # reduction is known at trace time; keep it plain as Base would.
+    if res isa Array &&
+        !Reactant.looped_any(Reactant.use_overlayed_version, res) &&
+        !Reactant.use_overlayed_version(init)
+        return re(Base.mapreduce(identity, op, res; dims=updated_dims, init))
+    end
+
     return re(overloaded_mapreduce(identity, op, res; dims=updated_dims, init))
 end
 
@@ -205,6 +213,18 @@ function overloaded_mapreduce(
         end,
     )
 
+    mapped = TracedUtils.elem_apply(f, A)
+    # `f` may return a plain value for a traced scalar (e.g. `ismissing`); it is then the
+    # same for every element and the reduction is known at trace time, so reduce it
+    # natively over a lazy index array to keep Base's result and type. Only check when
+    # inference doesn't already say `f` is traced, to keep this method inferable.
+    mapped_T = Core.Compiler.return_type(f, Tuple{TracedRNumber{T}})
+    if !(mapped_T <: TracedRNumber) && !Reactant.use_overlayed_version(mapped)
+        return Base.mapreduce(
+            Returns(mapped::mapped_T), op, CartesianIndices(size(A)); dims, init
+        )
+    end
+
     op_in_T = unwrapped_eltype(Core.Compiler.return_type(f, Tuple{T}))
     # `op` may accumulate in a wider type than it consumes: `+(::Bool, ::Bool)::Int64`, so
     # `sum` over booleans is an `Int64` in Base. `__default_init` reports that wider type
@@ -218,7 +238,7 @@ function overloaded_mapreduce(
     # predicate in `sum(x -> x == 1, a)` returns `Bool` whatever `A` was converted to.
     # Reducing in the narrow type is silently wrong: `stablehlo.add` over `i1` is a logical
     # `or`, and small integers wrap.
-    reduce_input = materialize_traced_array(TracedUtils.elem_apply(f, A))
+    reduce_input = materialize_traced_array(mapped)
     if unwrapped_eltype(reduce_input) != op_in_T
         reduce_input = op_in_T.(reduce_input)
     end
