@@ -106,7 +106,8 @@ Adapt.adapt(Reactant.ConcreteRArrayAdaptor(), x)
 `Adapt.adapt` recurses through every type that defines `Adapt.adapt_structure`, so any
 structure that can be moved to a GPU array type this way can be moved to `ConcreteRArray`s
 too, without Reactant knowing about its type. Only arrays whose element type is a
-`ReactantPrimitive` are converted; other arrays, numbers and `nothing` pass through
+structure that can be moved to a GPU array type this way can be moved to `ConcreteRArray`s
+too, without Reactant knowing about its type. Only arrays whose element type could be stored in `Reactant.ConcreteRArray`; other arrays, numbers and `nothing` pass through
 unchanged.
 
 ## Keyword Arguments
