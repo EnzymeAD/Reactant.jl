@@ -370,6 +370,20 @@ if build_backend isa CUDABackend
             Base.Filesystem.symlink(source, full_path)
         end
     end
+
+    # XLA loads the CUDA runtime with dlopen, searching the pip-style layout next to the
+    # library.
+    cudart_dir = joinpath(dirname(realpath(lib_path)), "..", "nvidia", "cuda_runtime", "lib")
+    cudart_source = joinpath(source_dir, "bazel-ReactantExtra", "external", "cuda_cudart", "lib")
+    for name in readdir(cudart_source)
+        startswith(name, "libcudart.so") || continue
+        full_path = joinpath(cudart_dir, name)
+        if !Base.Filesystem.ispath(full_path)
+            Base.Filesystem.mkpath(cudart_dir)
+            @info "Symlinking $(full_path) -> $(joinpath(cudart_source, name))"
+            Base.Filesystem.symlink(realpath(joinpath(cudart_source, name)), full_path)
+        end
+    end
 end
 
 # Tell ReactantExtra_jll to load our library instead of the default artifact one

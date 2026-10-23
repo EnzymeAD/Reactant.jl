@@ -1101,6 +1101,13 @@ platform(
     ],
 )
 
+# The static CUDA libraries (cuBLAS, cuFFT, ...) need culibos, which only the static
+# CUDA runtime brought in before XLA's runtime was routed through its dlopen stub.
+cc_import(
+    name = "cuda_culibos",
+    static_library = "@cuda_cudart//:lib/libculibos.a",
+)
+
 cc_library(
     name = "ReactantExtraLib",
     srcs = glob(
@@ -1457,6 +1464,7 @@ cc_library(
         "@xla//xla/stream_executor:cuda_platform",
         "@xla//xla/stream_executor:kernel",
         "@xla//xla/stream_executor/cuda:all_runtime",
+        ":cuda_culibos",
     ]) + if_rocm([
         "@xla//xla/service:gpu_plugin",
         "@xla//xla/pjrt/c:pjrt_c_api_gpu",

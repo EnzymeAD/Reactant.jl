@@ -51,7 +51,16 @@ sed -i.bak0 "s,//:patches,@enzyme_ad//:patches,g" third_party/*/workspace.bzl
     urls = ["https://github.com/EnzymeAD/Enzyme-JAX/archive/{commit}.tar.gz".format(commit = ENZYMEXLA_COMMIT)],
 )
 
-NEW_XLA_PATCHES = []
+NEW_XLA_PATCHES = [
+    """
+    # Route the CUDA runtime through XLA's dlopen stub instead of the static
+    # libcudart, whose entry points are hidden. The stub exports them, so kernels
+    # jitted by lower-jit register and launch through the same runtime as XLA.
+    sed -i.bak1 "s/THIS_SHOULD_NEVER_BE_COMPILED/namespace/g" xla/tsl/cuda/cudart_stub.cc
+    sed -i.bak1 's|actual = if_cuda_libs("@cuda_cudart//:cudart", ":cudart_stub")|actual = ":cudart_stub"|' xla/tsl/cuda/BUILD.bazel
+    sed -i.bak1 's|"@local_config_cuda//cuda:cuda_runtime"|"//xla/tsl/cuda:cudart"|' xla/stream_executor/cuda/BUILD xla/backends/profiler/gpu/BUILD
+    """,
+]
 
 LLVM_TARGETS = [
     "AMDGPU",
