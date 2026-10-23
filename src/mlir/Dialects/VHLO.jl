@@ -680,6 +680,36 @@ function collective_broadcast_v1(
     )
 end
 
+function collective_broadcast_v2(
+    operands::Vector{Value};
+    results::Vector{IR.Type},
+    replica_groups,
+    channel_id,
+    has_dynamic_root,
+    location=Location(),
+)
+    op_ty_results = IR.Type[results...,]
+    operands = Value[operands...,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[
+        NamedAttribute("replica_groups", replica_groups),
+        NamedAttribute("channel_id", channel_id),
+        NamedAttribute("has_dynamic_root", has_dynamic_root),
+    ]
+
+    return create_operation(
+        "vhlo.collective_broadcast_v2",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function collective_permute_v1(
     operand::Value; result::IR.Type, source_target_pairs, channel_id, location=Location()
 )
@@ -694,6 +724,39 @@ function collective_permute_v1(
 
     return create_operation(
         "vhlo.collective_permute_v1",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+function collective_reduce_v1(
+    operands::Vector{Value};
+    results::Vector{IR.Type},
+    replica_groups,
+    channel_id,
+    use_global_device_ids,
+    has_dynamic_root,
+    computation::Region,
+    location=Location(),
+)
+    op_ty_results = IR.Type[results...,]
+    operands = Value[operands...,]
+    owned_regions = Region[computation,]
+    successors = Block[]
+    attributes = NamedAttribute[
+        NamedAttribute("replica_groups", replica_groups),
+        NamedAttribute("channel_id", channel_id),
+        NamedAttribute("use_global_device_ids", use_global_device_ids),
+        NamedAttribute("has_dynamic_root", has_dynamic_root),
+    ]
+
+    return create_operation(
+        "vhlo.collective_reduce_v1",
         location;
         operands,
         owned_regions,
@@ -1043,6 +1106,48 @@ function custom_call_v1(
 
     return create_operation(
         "vhlo.custom_call_v1",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+function custom_call_v2(
+    inputs::Vector{Value};
+    results::Vector{IR.Type},
+    call_target_name,
+    has_side_effect,
+    backend_config,
+    api_version,
+    called_computations,
+    operand_layouts,
+    result_layouts,
+    output_operand_aliases,
+    result_tilings,
+    location=Location(),
+)
+    op_ty_results = IR.Type[results...,]
+    operands = Value[inputs...,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[
+        NamedAttribute("call_target_name", call_target_name),
+        NamedAttribute("has_side_effect", has_side_effect),
+        NamedAttribute("backend_config", backend_config),
+        NamedAttribute("api_version", api_version),
+        NamedAttribute("called_computations", called_computations),
+        NamedAttribute("operand_layouts", operand_layouts),
+        NamedAttribute("result_layouts", result_layouts),
+        NamedAttribute("output_operand_aliases", output_operand_aliases),
+        NamedAttribute("result_tilings", result_tilings),
+    ]
+
+    return create_operation(
+        "vhlo.custom_call_v2",
         location;
         operands,
         owned_regions,

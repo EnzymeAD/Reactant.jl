@@ -4,6 +4,10 @@ module Sharding
 using ..Reactant: Reactant, XLA, MLIR, ShardyPropagationOptions
 using ReactantCore: ReactantCore
 
+# `mlir::sdy::ReductionOp::SUM`. The reduction op is only meaningful for shardings with
+# unreduced axes, which we never generate, so we always use the default `SUM`.
+const SDY_REDUCTION_OP_SUM = UInt32(0)
+
 """
     Mesh(devices::AbstractArray{XLA.AbstractDevice}, axis_names)
 
@@ -564,6 +568,7 @@ function get_tensor_sharding_attribute(
             MLIR.API.MlirAttribute[],
             0,
             MLIR.API.MlirAttribute[],
+            SDY_REDUCTION_OP_SUM,
         ),
     )
     return tensor_sharding_attr, :sdy
@@ -1154,16 +1159,19 @@ function sdy_sharding_to_reactant_sharding(attr, global_device_ids, mod)
         )
     end
 
-    mesh_op = MLIR.IR.@dispose sym_table = MLIR.IR.SymbolTable(mod) begin
-        MLIR.IR.lookup(
-            sym_table,
-            MLIR.IR.leafref(
-                MLIR.IR.Attribute(MLIR.API.sdyTensorShardingAttrGetMeshOrRef(mlir_attr))
-            ),
-        )
+    # As the name says, this is either the mesh itself or a reference to one
+    # defined elsewhere in the module; only the latter needs looking up.
+    mesh_or_ref = MLIR.IR.Attribute(MLIR.API.sdyTensorShardingAttrGetMeshOrRef(mlir_attr))
+    mesh_attr = if MLIR.API.sdyAttributeIsAMeshAttr(mesh_or_ref)
+        mesh_or_ref
+    else
+        mesh_op = MLIR.IR.@dispose sym_table = MLIR.IR.SymbolTable(mod) begin
+            MLIR.IR.lookup(sym_table, MLIR.IR.leafref(mesh_or_ref))
+        end
+        MLIR.IR.getattr(mesh_op, "mesh")
     end
     return sdy_tensor_sharding_to_named_sharding(
-        sdy_mesh_to_reactant_mesh(MLIR.IR.getattr(mesh_op, "mesh"), global_device_ids),
+        sdy_mesh_to_reactant_mesh(mesh_attr, global_device_ids),
         MLIR.IR.Attribute(mlir_attr),
     )
 end

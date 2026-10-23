@@ -87,6 +87,7 @@ end
             Reactant;
             treat_as_own=(
                 Reactant.ReactantCore.MissingTracedValue,
+                Reactant.ReactantCore.annotate,
                 Reactant.ReactantCore.promote_to_traced,
                 Reactant.ReactantCore.traced_call,
                 Reactant.ReactantCore.traced_while,

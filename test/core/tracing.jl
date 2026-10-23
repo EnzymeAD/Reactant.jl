@@ -25,6 +25,13 @@ struct RMSProp{Teta,Trho,Teps,C<:Bool}
     centred::C
 end
 
+struct MockScalarOrAbstractArrayUnion{
+    T<:Number,V<:AbstractVecOrMat{T},S<:Union{T,AbstractVector{T}}
+}
+    x::V
+    b::S
+end
+
 @testset "Traced Type" begin
     @test !(Vector{Union{}} <: Reactant.AnyTracedRArray)
 end
@@ -353,6 +360,57 @@ end
             ConcreteRArray{Float64,1},
         ],
     ) == (Foo{Float64,Bar{Float64},ConcreteRArray{Float64,1}}, [true, true, false])
+
+    # Regression: concrete subtype has more params than the abstract bound.
+    # Container{NF, G<:AbstractGridLike{NF}, F<:AbstractFoo{NF}} where F's concrete
+    # type Bar{NF,A} has 2 params but AbstractFoo{NF} (the bound) has only 1.
+    # apply_type_with_promotion must use param.name.wrapper (Bar), not rewrapped
+    # (AbstractFoo), when recursing to fix up Bar's NF — otherwise it crashes with
+    # a BoundsError accessing index 2 on a 1-element SimpleVector.
+    abstract type AbstractMockFoo{NF} end
+    abstract type AbstractMockGrid{NF} end
+
+    struct MockBar{NF,A} <: AbstractMockFoo{NF}
+        a::A
+    end
+    struct MockGrid{NF,A<:AbstractVector{NF}} <: AbstractMockGrid{NF}
+        z::A
+    end
+    struct MockContainer{NF,G<:AbstractMockGrid{NF},F<:AbstractMockFoo{NF}}
+        grid::G
+        foo::F
+    end
+
+    NF_traced = TracedRNumber{Float64}
+    @test Reactant.apply_type_with_promotion(
+        MockContainer,
+        [Float64, MockGrid{NF_traced,TracedRArray{Float64,1}}, MockBar{Float64,Float64}],
+    ) == (
+        MockContainer{
+            NF_traced,MockGrid{NF_traced,TracedRArray{Float64,1}},MockBar{NF_traced,Float64}
+        },
+        [true, false, true],
+    )
+
+    CN = Reactant.ConcretePJRTNumber{Float32,1}
+    CA = Reactant.ConcretePJRTArray{Float32,1,1}
+    @test Reactant.apply_type_with_promotion(
+        MockScalarOrAbstractArrayUnion, [CN, CA, CN]
+    ) == (MockScalarOrAbstractArrayUnion{Float32,CA,Float32}, [true, false, true])
+
+    @test Reactant.apply_type_with_promotion(
+        MockScalarOrAbstractArrayUnion, [CN, CA, CA]
+    ) == (MockScalarOrAbstractArrayUnion{Float32,CA,CA}, [true, false, false])
+
+    @test Reactant.apply_type_with_promotion(
+        MockScalarOrAbstractArrayUnion,
+        [TracedRNumber{Float32}, TracedRArray{Float32,1}, TracedRNumber{Float32}],
+    ) == (
+        MockScalarOrAbstractArrayUnion{
+            TracedRNumber{Float32},TracedRArray{Float32,1},TracedRNumber{Float32}
+        },
+        [false, false, false],
+    )
 end
 
 @testset "specialized dispatches" begin
@@ -410,6 +468,31 @@ end
     @test opt_traced.rho isa ConcreteRNumber{Float64}
     @test opt_traced.epsilon isa ConcreteRNumber{Float64}
     @test opt_traced.centred isa Bool
+end
+
+@testset "to_rarray with Union-bound type parameter" begin
+    x = Float32[1, 2, 3]
+    f(s) = s.x .* s.b
+
+    @testset let b = 2.0f0
+        mock = MockScalarOrAbstractArrayUnion(x, b)
+        mock_re = Reactant.to_rarray(mock)
+        @test mock_re isa
+            MockScalarOrAbstractArrayUnion{Float32,<:ConcreteRArray{Float32,1},Float32}
+        @test Array(mock_re.x) == x
+        @test mock_re.b === b
+        @test @jit(f(mock_re)) ≈ 2 .* x
+    end
+
+    @testset let b2 = Float32[4, 5, 6]
+        mock = MockScalarOrAbstractArrayUnion(x, b2)
+        mock_re = Reactant.to_rarray(mock)
+        @test mock_re isa MockScalarOrAbstractArrayUnion{
+            Float32,<:ConcreteRArray{Float32,1},<:ConcreteRArray{Float32,1}
+        }
+        @test Array(mock_re.b) == b2
+        @test Array(@jit(f(mock_re))) ≈ x .* b2
+    end
 end
 
 # When `a` and `b` alias on loop entry and `b` is reassigned inside the loop,

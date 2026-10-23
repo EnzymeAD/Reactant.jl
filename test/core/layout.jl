@@ -9,6 +9,8 @@ using Test
 
     @test ConcreteRArray{Float32}(undef, (100, 10)) isa ConcreteRArray{Float32,2}
 
+    @test ConcreteRArray{Float32,2}(undef, (100, 10)) isa ConcreteRArray{Float32,2}
+
     @test ConcreteRArray{Float32}(
         undef, (100, 10); client=client, idx=idx, device=device
     ) isa ConcreteRArray{Float32,2}

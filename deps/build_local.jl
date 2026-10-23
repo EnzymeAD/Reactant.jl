@@ -273,7 +273,12 @@ push!(build_cmd_list, "--jobs=$(parsed_args["jobs"])")
 push!(build_cmd_list, "--experimental_ui_max_stdouterr_bytes=-1")
 push!(build_cmd_list, "--spawn_strategy=local")
 
-push!(build_cmd_list, "--linkopt=-fuse-ld=lld")
+# Many deps require C++17 aligned allocation which is not available on
+# old macOS libc++
+if Sys.isapple()
+    push!(build_cmd_list, "--copt=-mmacosx-version-min=11.0")
+    push!(build_cmd_list, "--host_copt=-mmacosx-version-min=11.0")
+end
 
 for opt in parsed_args["copt"]
     push!(build_cmd_list, "--copt=$(opt)")
@@ -300,16 +305,30 @@ if cc_is_gcc
         end
     end
 else
-    # Assume the compiler is clang if not GCC. `using_clang` is an option
-    # introduced by Enzyme-JAX.
-    push!(build_cmd_list, "--define=using_clang=true")
     push!(build_cmd_list, "--copt=-Wno-unused-command-line-argument")
 end
+
+if Sys.isapple()
+    # Native macOS build: use the local Apple toolchain. The jll builds cross-compile
+    # from Linux with `--config=macos` instead, so keep these flags out of that config.
+    push!(build_cmd_list, "--config=macos_local")
+
+    # With only the Command Line Tools installed (no Xcode.app), Bazel can't detect any
+    # Xcode version and falls back to its default macOS SDK (10.11), which `xcrun` can't
+    # find. Pass the SDK version actually available on this machine.
+    macos_sdk_version = strip(read(`xcrun --sdk macosx --show-sdk-version`, String))
+    push!(build_cmd_list, "--macos_sdk_version=$(macos_sdk_version)")
+end
+
+if !isnothing(Sys.which("lld"))
+    push!(build_cmd_list, "--linkopt=-fuse-ld=lld")
+end
+
 push!(build_cmd_list, "--copt=-Wno-private-header")
 push!(build_cmd_list, "--color=$(parsed_args["color"])")
 push!(build_cmd_list, ":libReactantExtra.so")
 
-@info "About to run Bazel" build_cmd_list
+@info "About to run Bazel\n" * join(build_cmd_list, " \\\n  ")
 run(Cmd(Cmd(build_cmd_list); dir=source_dir))
 
 # Discover built libraries

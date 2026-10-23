@@ -28,7 +28,6 @@ using GPUCompiler: GPUCompiler
 using GPUArraysCore: @allowscalar
 using KernelAbstractions: KernelAbstractions
 using LLVM: LLVM
-using Printf: Printf
 
 using PrecompileTools: @setup_workload, @compile_workload
 
@@ -100,8 +99,32 @@ for jlop in (
     :(Base.:-),
     :(Base.:*),
     :(Base.:/),
+    :(Base.:\),
     :(Base.:^),
     :(Base.rem),
+    :(Base.mod1),
+    :(Base.ldexp),
+    :(Base.lcm),
+    :(Base.div),
+    :(Base.fld),
+    :(Base.cld),
+    :(Base.divrem),
+    :(Base.fldmod),
+    :(Base.hypot),
+    :(Base.atan),
+    :(Base.atand),
+    :(Base.copysign),
+    :(Base.flipsign),
+    :(Base.complex),
+    :(Base.gcd),
+    :(Base.:&),
+    :(Base.:|),
+    :(Base.xor),
+    :(Base.nand),
+    :(Base.nor),
+    :(Base.:(<<)),
+    :(Base.:(>>)),
+    :(Base.:(>>>)),
     :(Base.isless),
     :(Base.:(==)),
     :(Base.:(!=)),
@@ -130,7 +153,71 @@ Base.@constprop :aggressive @inline Base.:^(
 @inline Base.unsafe_trunc(::Type{T}, a::CuTracedRNumber) where {T} =
     Base.unsafe_trunc(T, a[])
 
-for jlop in (:(Base.:+), :(Base.:-), :(Base.isnan), :(Base.isfinite), :(Base.isinf))
+for jlop in (
+    :(Base.:+),
+    :(Base.:-),
+    :(Base.abs),
+    :(Base.sign),
+    :(Base.signbit),
+    :(Base.conj),
+    :(Base.real),
+    :(Base.imag),
+    :(Base.sin),
+    :(Base.cos),
+    :(Base.tan),
+    :(Base.sinh),
+    :(Base.cosh),
+    :(Base.tanh),
+    :(Base.asin),
+    :(Base.acos),
+    :(Base.atan),
+    :(Base.asinh),
+    :(Base.acosh),
+    :(Base.atanh),
+    :(Base.sinpi),
+    :(Base.cospi),
+    :(Base.tanpi),
+    :(Base.sincospi),
+    :(Base.sinc),
+    :(Base.cis),
+    :(Base.cispi),
+    :(Base.complex),
+    :(Base.exp),
+    :(Base.exp2),
+    :(Base.exp10),
+    :(Base.expm1),
+    :(Base.log),
+    :(Base.log2),
+    :(Base.log10),
+    :(Base.log1p),
+    :(Base.sqrt),
+    :(Base.cbrt),
+    :(Base.frexp),
+    :(Base.modf),
+    :(Base.isqrt),
+    :(Base.:~),
+    :(Base.leading_zeros),
+    :(Base.trailing_zeros),
+    :(Base.count_ones),
+    :(Base.bswap),
+    :(Base.typemin),
+    :(Base.typemax),
+    :(Base.isnan),
+    :(Base.isfinite),
+    :(Base.isinf),
+    :(Base.isreal),
+    :(Base.isinteger),
+    :(Base.iseven),
+    :(Base.isodd),
+    :(Base.floor),
+    :(Base.ceil),
+    :(Base.round),
+    :(Base.trunc),
+    :(Base.float),
+    :(Base.nextfloat),
+    :(Base.prevfloat),
+    :(Base.:!),
+)
     @eval begin
         @inline $jlop(a::CuTracedRNumber) = $jlop(a[])
     end
@@ -193,6 +280,9 @@ end
 end
 
 Base.convert(::Type{<:CuTracedRNumber{T}}, x::CuTracedRNumber{T}) where {T} = x
+Base.convert(::Type{<:CuTracedRNumber{BFloat16,1}}, x::CuTracedRNumber{BFloat16,1}) = x
+Base.convert(::Type{<:CuTracedRNumber{Float32,1}}, x::CuTracedRNumber{Float32,1}) = x
+Base.convert(::Type{<:CuTracedRNumber{Float64,1}}, x::CuTracedRNumber{Float64,1}) = x
 
 Base.one(a::CuTracedRNumber) = one(a[])
 Base.one(::Type{<:CuTracedRNumber{T,A}}) where {T,A} = one(T)
@@ -270,11 +360,11 @@ Base.@nospecializeinfer function Reactant.promote_traced_type(
 end
 
 function Base.show(io::IO, a::AT) where {AT<:CuTracedArray}
-    Printf.@printf(io, "%s cu traced array at %p", join(size(a), '×'), Int(pointer(a)))
+    return print(io, join(size(a), '×'), " cu traced array at ", repr(UInt(pointer(a))))
 end
 
 function Base.show(io::IO, a::AT) where {AT<:CuTracedRNumber}
-    Printf.@printf(io, "%s cu traced rnumber at %p", join(size(a), '×'), Int(pointer(a)))
+    return print(io, join(size(a), '×'), " cu traced rnumber at ", repr(UInt(pointer(a))))
 end
 
 ## array interface
@@ -756,6 +846,11 @@ function compile(job)
             if isdefined(GPUCompiler, :current_job)
                 GPUCompiler.current_job = prev_job
             end
+            # The target machine isn't owned by the LLVM context: dispose it explicitly,
+            # otherwise it's leaked at every kernel compilation. There is none when
+            # LLVM was built without the NVPTX backend (macOS), where llvm_machine
+            # returns nothing and the passes above run without one.
+            tm === nothing || LLVM.dispose(tm)
         end
 
         for fname in ("gpu_report_exception", "gpu_signal_exception")
@@ -791,12 +886,16 @@ function compile(job)
         end
         # LLVM.strip_debuginfo!(mod)
         dl = string(LLVM.datalayout(mod))
-        modstr = string(mod)
         # This is a bit weird since we're taking a module from julia's llvm into reactant's llvm version
-        # it is probably safer to reparse a string using the right llvm module api, so we will do that.
-        mmod = MLIR.IR.Module(
-            MLIR.API.ConvertLLVMStrToMLIR(modstr, MLIR.IR.current_context())
+        # so we serialize and reparse with the right llvm module api. Bitcode is used rather than
+        # textual IR: the bitcode reader auto-upgrades constructs whose spelling changed between the
+        # two LLVM versions (e.g. `llvm.loop.distribute.enable` metadata), whereas the .ll parser does
+        # not, and mismatches there abort the process in the verifier.
+        modbc = convert(Vector{UInt8}, mod)
+        mmodref = GC.@preserve modbc MLIR.API.ConvertLLVMBCToMLIR(
+            pointer(modbc), length(modbc), MLIR.IR.current_context()
         )
+        mmod = MLIR.IR.Module(mmodref)
         @assert mmod != C_NULL
 
         cur_module = MLIR.IR.current_module()
@@ -833,12 +932,16 @@ function abi_sizeof(@nospecialize(x::CUDA.CuDeviceArray))
     return sizeof(Ptr)
 end
 
+# Int8 rather than UInt8: these bytes become an llvm.mlir.constant of type
+# !llvm.array<N x i8>, and llvm.mlir.constant requires the attribute's integer
+# element type to match the result's. A UInt8 array yields tensor<Nxui8>, which
+# the verifier rejects against i8.
 function to_bytes(x)
     sz = abi_sizeof(x)
     ref = Ref(x)
     GC.@preserve ref begin
-        ptr = Base.reinterpret(Ptr{UInt8}, Base.unsafe_convert(Ptr{Cvoid}, ref))
-        vec = Vector{UInt8}(undef, sz)
+        ptr = Base.reinterpret(Ptr{Int8}, Base.unsafe_convert(Ptr{Cvoid}, ref))
+        vec = Vector{Int8}(undef, sz)
         for i in 1:sz
             @inbounds vec[i] = Base.unsafe_load(ptr, i)
         end
@@ -1042,6 +1145,7 @@ Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
 
     mlir_args = MLIR.IR.Value[]
     restys = MLIR.IR.Type[]
+    operand_layouts = MLIR.IR.Attribute[]
     aliases = MLIR.IR.Attribute[]
 
     fname = func.entry
@@ -1057,7 +1161,7 @@ Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
     for (i, prev) in enumerate(Any[func.f, args...])
         Reactant.make_tracer(seen, prev, (kernelargsym, i), Reactant.NoStopTracedTrack)
     end
-    bfloat16_compile_type = Reactant.Compiler.BFLOAT16_COMPILE_TYPE[]
+    bfloat16_compile_type = _bfloat16_compile_type()
     has_cast_float_type =
         bfloat16_compile_type !== BFloat16 && any(values(seen)) do arg
             (arg isa TracedRArray || arg isa TracedRNumber) &&
@@ -1225,6 +1329,9 @@ Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
     end
     LLVM.deactivate(ctx)
 
+    # See `_to_kernel_buffer`.
+    raised_buffers = raising()
+
     argidx = 1
     for arg in values(seen)
         if !(arg isa TracedRArray || arg isa TracedRNumber)
@@ -1235,8 +1342,21 @@ Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
 
         arg = arg.mlir_data
         arg = Reactant.TracedUtils.transpose_val(arg)
+        if raised_buffers
+            arg = _to_kernel_buffer(arg)
+        end
         push!(restys, MLIR.IR.type(arg))
         push!(mlir_args, arg)
+        # The transposed value is row-major, i.e. Julia's column-major memory order.
+        # Pin it so XLA can't choose another layout for the kernel's buffers.
+        if Reactant.Compiler.CONSTRAIN_LAYOUTS[]
+            push!(
+                operand_layouts,
+                MLIR.IR.DenseIndexElementsAttribute(
+                    collect(Int64, (ndims(MLIR.IR.type(arg)) - 1):-1:0)
+                ),
+            )
+        end
 
         ctx = MLIR.IR.current_context()
         out_tup = Ref{Int64}(argidx - 1)
@@ -1350,6 +1470,11 @@ Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
         inputs=mlir_args,
         result_0=restys,
         fn=MLIR.IR.FlatSymbolRefAttribute(sym_name),
+        operand_layouts=if Reactant.Compiler.CONSTRAIN_LAYOUTS[]
+            MLIR.IR.Attribute(operand_layouts)
+        else
+            nothing
+        end,
         output_operand_aliases=MLIR.IR.Attribute(output_operand_aliases),
         xla_side_effect_free=MLIR.IR.UnitAttribute(),
         location=Reactant.Ops.mlir_stacktrace(
@@ -1365,10 +1490,106 @@ Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
         if !(arg isa TracedRArray || arg isa TracedRNumber)
             continue
         end
-        arg.mlir_data = Reactant.TracedUtils.transpose_val(MLIR.IR.result(call, argidx))
+        res = MLIR.IR.result(call, argidx)
+        T = Reactant.unwrapped_eltype(typeof(arg))
+        if raised_buffers
+            res = _from_kernel_buffer(res, T)
+        end
+        arg.mlir_data = Reactant.TracedUtils.transpose_val(res)
         argidx += 1
     end
 end
+
+# A raised kernel's buffers are typed by the operands the kernel is called with,
+# but the kernel itself moves values of its LLVM types: a complex number as its
+# `[2 x T]` aggregate, an unsigned integer as a signless one. A store through a
+# view of another element type than its buffer's is not written back when
+# raising, so hand the kernel each buffer as what it moves:
+#   - a complex buffer as the interleaved reals it is in memory (a trailing
+#     dimension of 2 in row-major order), whose fields the kernel accesses one
+#     by one;
+#   - an unsigned integer buffer as its signless bits.
+function _to_kernel_buffer(val::MLIR.IR.Value)
+    ty = MLIR.IR.type(val)
+    ety = eltype(ty)
+    shape = collect(Int64, size(ty))
+    if MLIR.IR.iscomplex(ety)
+        rty = eltype(ety)
+        parts = MLIR.IR.Value[]
+        for part in (MLIR.Dialects.stablehlo.real, MLIR.Dialects.stablehlo.imag)
+            v = MLIR.IR.result(part(val; result=MLIR.IR.TensorType(shape, rty)), 1)
+            v = MLIR.IR.result(
+                MLIR.Dialects.stablehlo.reshape(
+                    v; result_0=MLIR.IR.TensorType([shape..., 1], rty)
+                ),
+                1,
+            )
+            push!(parts, v)
+        end
+        return MLIR.IR.result(
+            MLIR.Dialects.stablehlo.concatenate(parts; dimension=length(shape)), 1
+        )
+    elseif MLIR.IR.isinteger(ety) && MLIR.IR.isunsigned(ety)
+        sty = MLIR.IR.Type(
+            MLIR.API.mlirIntegerTypeGet(MLIR.IR.current_context(), MLIR.IR.bitwidth(ety))
+        )
+        return MLIR.IR.result(
+            MLIR.Dialects.stablehlo.bitcast_convert(
+                val; result_0=MLIR.IR.TensorType(shape, sty)
+            ),
+            1,
+        )
+    end
+    return val
+end
+
+# The inverse of `_to_kernel_buffer`, back to a buffer of `T`.
+function _from_kernel_buffer(val::MLIR.IR.Value, ::Type{T}) where {T}
+    ty = MLIR.IR.type(val)
+    ety = eltype(ty)
+    full = collect(Int64, size(ty))
+    if T <: Complex
+        shape = full[1:(end - 1)]
+        parts = MLIR.IR.Value[]
+        for k in 0:1
+            start = zeros(Int64, length(full))
+            start[end] = k
+            limit = copy(full)
+            limit[end] = k + 1
+            v = MLIR.IR.result(
+                MLIR.Dialects.stablehlo.slice(
+                    val;
+                    result_0=MLIR.IR.TensorType([shape..., 1], ety),
+                    start_indices=MLIR.IR.DenseArrayAttribute(start),
+                    limit_indices=MLIR.IR.DenseArrayAttribute(limit),
+                    strides=MLIR.IR.DenseArrayAttribute(ones(Int64, length(full))),
+                ),
+                1,
+            )
+            v = MLIR.IR.result(
+                MLIR.Dialects.stablehlo.reshape(v; result_0=MLIR.IR.TensorType(shape, ety)),
+                1,
+            )
+            push!(parts, v)
+        end
+        return MLIR.IR.result(
+            MLIR.Dialects.stablehlo.complex(
+                parts[1], parts[2]; result=MLIR.IR.TensorType(shape, MLIR.IR.Type(T))
+            ),
+            1,
+        )
+    elseif T <: Unsigned
+        return MLIR.IR.result(
+            MLIR.Dialects.stablehlo.bitcast_convert(
+                val; result_0=MLIR.IR.TensorType(full, MLIR.IR.Type(T))
+            ),
+            1,
+        )
+    end
+    return val
+end
+
+_bfloat16_compile_type() = raising() ? Reactant.Compiler.BFLOAT16_COMPILE_TYPE[] : BFloat16
 
 function _bfloat16_to_ft_type(@nospecialize(T), @nospecialize(FT))
     T === BFloat16 && return FT
@@ -1545,9 +1766,7 @@ Reactant.@reactant_overlay function CUDA.cufunction(
     res = Base.@lock CUDACore.cufunction_lock begin
         # compile the function
         cache = llvm_compiler_cache(MLIR.IR.current_module())
-        effective_tt = _substitute_bfloat16_tt(
-            tt, Reactant.Compiler.BFLOAT16_COMPILE_TYPE[]
-        )
+        effective_tt = _substitute_bfloat16_tt(tt, _bfloat16_compile_type())
         source = GPUCompiler.methodinstance(F, effective_tt)
         # cuda = CUDA.active_state()
         device = nothing # cuda.device
@@ -1713,7 +1932,21 @@ end
         end
 
         @compile_workload begin
-            @static if Reactant.precompilation_supported() && VERSION != v"1.11.3"
+            # On Windows, Julia v1.11 cannot link the pkgimage this workload
+            # produces. Compiling a GPU kernel during precompilation leaves an
+            # unmarked reference to the `jl_boxed_uint8_cache` runtime global in
+            # the image, and since COFF has no import thunk for data, lld
+            # rejects it:
+            #     lld: error: undefined symbol: jl_boxed_uint8_cache
+            # ReactantCUDAExt then fails to precompile and never loads at all.
+            # Skipping the workload here only costs precompilation: any package
+            # compiling a GPU kernel in its own workload hits this too, so the
+            # actual fix has to come from Julia. The upper bound assumes that
+            # fix ships in the next v1.11 patch release, so that precompilation
+            # resumes on its own; raise it if it slips.
+            @static if Reactant.precompilation_supported() &&
+                VERSION != v"1.11.3" &&
+                !(Sys.iswindows() && v"1.11" <= VERSION <= v"1.11.9")
                 function square_kernel!(x)
                     i = CUDA.threadIdx().x
                     x[i] *= x[i]

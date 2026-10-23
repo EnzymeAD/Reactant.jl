@@ -113,8 +113,46 @@ end
     res = @jit gw(x)
     # TODO we should probably override https://github.com/EnzymeAD/Enzyme.jl/blob/5e6a82dd08e74666822b9d7b2b46c36b075668ca/src/Enzyme.jl#L2132
     # to make sure this gets merged as a tracedrarray
-    @test res isa Tuple{<:Enzyme.TupleArray{<:ConcreteRNumber{Float64},(2, 2),4,2}}
+    @test res isa Tuple{<:Enzyme.TupleArray{<:ConcreteRNumber{Float64}}}
+    @test size(res[1]) == (2, 2)
     @test res[1] ≈ ones(2, 2)
+end
+
+f_sincos(x) = map(sin, x) + map(cos, reverse(x))
+function f_sincos_jac(x)
+    return [
+        cos(x[i]) * (i == j ? 1 : 0) -
+        sin(x[end - i + 1]) * (i == (length(x) - j + 1) ? 1 : 0) for i in 1:length(x),
+        j in 1:length(x)
+    ]
+end
+
+@testset "Forward Jacobian" begin
+    jac(x) = only(Enzyme.jacobian(Enzyme.Forward, f_sincos, x))
+    x_r = Reactant.to_rarray(rand(10))
+
+    j_gt = Reactant.@allowscalar f_sincos_jac(x_r)
+    j_reactant = Reactant.@jit jac(x_r)
+
+    @test j_reactant ≈ j_gt
+end
+
+# output shape and rank both differ from the input's, so that a transposed or
+# mis-stacked jacobian cannot accidentally still line up
+f_rect(x) = map(sin, x) * [1.0, 2.0, 3.0]
+function f_rect_jac(x)
+    return [(i == a) * cos(x[a, b]) * [1.0, 2.0, 3.0][b] for i in 1:2, a in 1:2, b in 1:3]
+end
+
+@testset "Forward Jacobian (outshape != inshape)" begin
+    jac(x) = only(Enzyme.jacobian(Enzyme.Forward, f_rect, x))
+    x_r = Reactant.to_rarray(rand(2, 3))
+
+    j_gt = Reactant.@allowscalar f_rect_jac(x_r)
+    j_reactant = Reactant.@jit jac(x_r)
+
+    @test size(j_reactant) == (2, 2, 3)
+    @test j_reactant ≈ j_gt
 end
 
 mutable struct StateReturn
@@ -673,4 +711,74 @@ fwd_nocap(x) = complex.(x .* 2.0, x .* 3.0)
     dy = @jit jvp_constarg(fwd_nocap, x0, v, yc)
     @test dy isa ConcreteRArray{ComplexF64,1}
     @test dy ≈ complex.(v .* 2.0, v .* 3.0)
+end
+
+# https://github.com/EnzymeAD/Reactant.jl/issues/3217
+batch_extract_rhs(u) = vcat(u .* u, sin.(u) .* sum(u))
+
+function batch_extract_fwd(u, seeds)
+    return Enzyme.autodiff(
+        Forward, Const(batch_extract_rhs), BatchDuplicated, BatchDuplicated(u, seeds)
+    )
+end
+
+function batch_extract_fwd_serial(u, seed)
+    return only(
+        Enzyme.autodiff(Forward, Const(batch_extract_rhs), Duplicated, Duplicated(u, seed))
+    )
+end
+
+@testset "Batched forward mode lowers enzyme.extract (#3217)" begin
+    N, NS = 12, 4
+    u = Reactant.to_rarray(collect(1.0:N))
+    seeds = ntuple(s -> Reactant.to_rarray(Float64[i == s ? 1 : 0 for i in 1:N]), NS)
+
+    batched = @jit batch_extract_fwd(u, seeds)
+
+    for s in 1:NS
+        serial = @jit batch_extract_fwd_serial(u, seeds[s])
+        @test Array(batched[1][s]) ≈ Array(serial)
+    end
+end
+
+function batch_fwd(umat, seedmat)
+    NS = size(umat, 1)
+    @assert size(seedmat, 1) == NS
+    return only(
+        Reactant.Ops.batch([umat, seedmat], [NS]) do uu, vv
+            only(
+                Enzyme.autodiff(
+                    Forward, Const(batch_extract_rhs), Duplicated, Duplicated(uu, vv)
+                ),
+            )
+        end,
+    )
+end
+
+@testset "Forward mode inside Ops.batch" begin
+    N = 10
+    u = reshape(collect(1.0:(N^2)), N, N)
+    seeds = Float64[i == j ? 1 : 0 for i in 1:N, j in 1:N]
+    u_ra = Reactant.to_rarray(u)
+    seeds_ra = Reactant.to_rarray(seeds)
+
+    res = @jit batch_fwd(u_ra, seeds_ra)
+
+    expected = stack(
+        only(
+            Enzyme.autodiff(
+                Forward,
+                Const(batch_extract_rhs),
+                Duplicated,
+                Duplicated(u[i, :], seeds[i, :]),
+            ),
+        ) for i in 1:N;
+        dims=1,
+    )
+
+    @test size(res) == (N, 2N)
+    @test Array(res) ≈ expected
+
+    @test Array(u_ra) ≈ u
+    @test Array(seeds_ra) ≈ seeds
 end

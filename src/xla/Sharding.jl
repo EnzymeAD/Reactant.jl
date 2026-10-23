@@ -297,6 +297,21 @@ function Base.:(==)(hsharding1::HloSharding, hsharding2::HloSharding)
     end
 end
 
+"""
+    isequal_ignoring_metadata(hsharding1::HloSharding, hsharding2::HloSharding)
+
+Same as `hsharding1 == hsharding2`, but only compares how the data is laid out across the
+devices. In particular the metadata is ignored, which XLA takes into account through the
+reduction op (`sdy::reduction_op`).
+"""
+function isequal_ignoring_metadata(hsharding1::HloSharding, hsharding2::HloSharding)
+    GC.@preserve hsharding1 hsharding2 begin
+        return MLIR.API.hlo_sharding_check_eq_ignoring_metadata(
+            hsharding1.ptr, hsharding2.ptr
+        )
+    end
+end
+
 function free_hlo_sharding(hlo_sharding::HloSharding)
     GC.@preserve hlo_sharding begin
         MLIR.API.free_hlo_sharding(hlo_sharding.ptr)

@@ -4,6 +4,10 @@
 #include "xla/ffi/api/ffi.h"
 #include "xla/ffi/ffi_api.h"
 
+#if defined(REACTANT_CUDA)
+#include "third_party/gpus/cuda/include/cuda_runtime_api.h"
+#endif
+
 #include "mlir/CAPI/IR.h"
 
 #include <cstdint>
@@ -25,18 +29,20 @@ namespace ffi = xla::ffi;
 // backend_config dict carries a single i64 attribute "callback_ptr" that
 // encodes the address of a C-callable Julia function:
 //
-//   bool callback(void** inputs, void** outputs, int32_t backend);
+//   bool callback(void** inputs, void** outputs, int32_t backend,
+//                 void* stream);
 //
 // Backend Values:
-//   1: Host
-//   2: CUDA
+//   1: Host (stream is null)
+//   2: CUDA (stream is XLA's cudaStream_t; the Julia side is responsible for
+//      ordering its work with respect to it)
 // ============================================================================
 using JuliaCallbackFn = bool (*)(void ** /*inputs*/, void ** /*outputs*/,
-                                 int32_t /*backend*/);
+                                 int32_t /*backend*/, void * /*stream*/);
 
 template <int32_t Backend>
-xla::ffi::Error juliaCallback(ffi::RemainingArgs args, ffi::RemainingRets rets,
-                              int64_t callback_ptr) {
+xla::ffi::Error juliaCallback(void *stream, ffi::RemainingArgs args,
+                              ffi::RemainingRets rets, int64_t callback_ptr) {
   auto fn = reinterpret_cast<JuliaCallbackFn>(callback_ptr);
   if (!fn) {
     return ffi::Error(ffi::ErrorCode::kInternal,
@@ -70,7 +76,7 @@ xla::ffi::Error juliaCallback(ffi::RemainingArgs args, ffi::RemainingRets rets,
     output_ptrs[i] = (*buf)->untyped_data();
   }
 
-  bool ok = fn(input_ptrs.data(), output_ptrs.data(), Backend);
+  bool ok = fn(input_ptrs.data(), output_ptrs.data(), Backend, stream);
   if (!ok) {
     return ffi::Error(ffi::ErrorCode::kInternal,
                       "reactant_julia_callback: callback returned false");
@@ -79,16 +85,32 @@ xla::ffi::Error juliaCallback(ffi::RemainingArgs args, ffi::RemainingRets rets,
   return ffi::Error::Success();
 }
 
+xla::ffi::Error juliaHostCallback(ffi::RemainingArgs args,
+                                  ffi::RemainingRets rets,
+                                  int64_t callback_ptr) {
+  return juliaCallback<1>(nullptr, args, rets, callback_ptr);
+}
+
 XLA_FFI_DEFINE_HANDLER(
-    juliaCallbackHandlerHost, juliaCallback<1>,
+    juliaCallbackHandlerHost, juliaHostCallback,
     xla::ffi::Ffi::Bind().RemainingArgs().RemainingRets().Attr<int64_t>(
         "callback_ptr"));
 
 #if defined(REACTANT_CUDA)
-XLA_FFI_DEFINE_HANDLER(
-    juliaCallbackHandlerCUDA, juliaCallback<2>,
-    xla::ffi::Ffi::Bind().RemainingArgs().RemainingRets().Attr<int64_t>(
-        "callback_ptr"));
+
+xla::ffi::Error juliaCUDACallback(cudaStream_t stream, ffi::RemainingArgs args,
+                                  ffi::RemainingRets rets,
+                                  int64_t callback_ptr) {
+  return juliaCallback<2>(stream, args, rets, callback_ptr);
+}
+
+XLA_FFI_DEFINE_HANDLER(juliaCallbackHandlerCUDA, juliaCUDACallback,
+                       xla::ffi::Ffi::Bind()
+                           .Ctx<xla::ffi::PlatformStream<cudaStream_t>>()
+                           .RemainingArgs()
+                           .RemainingRets()
+                           .Attr<int64_t>("callback_ptr"));
+
 #endif
 
 void registerReactantXLAInternalFFI() {

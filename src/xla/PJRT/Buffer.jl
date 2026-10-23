@@ -174,6 +174,15 @@ function Base.copy(buffer::Buffer)
     end
 end
 
+# Future that becomes ready once the contents of `buffer` have been written. Buffers
+# produced by `Base.copy`/`copy_buffer_to_device` are allocated eagerly and filled
+# asynchronously, so they must be paired with this future when wrapped in an `AsyncBuffer`.
+function ready_future(buffer::Buffer)
+    GC.@preserve buffer begin
+        return Future(MLIR.API.PjRtBufferGetReadyFuture(buffer.buffer))
+    end
+end
+
 function XLA.copy_buffer_to_device(buffer::Buffer, dev::Device)
     XLA.device(buffer) == dev && return buffer
     GC.@preserve buffer dev begin

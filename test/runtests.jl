@@ -7,17 +7,42 @@ parsed_args = parse_args(ARGS)
 const ENZYMEJAX_INSTALLED = Ref(false)
 const NUMPYRO_INSTALLED = Ref(false)
 
+function is_python_module_installed(mod)
+    python = CondaPkg.which("python")
+    python === nothing && return false
+    return success(pipeline(`$(python) -c "import $(mod)"`; stdout=devnull, stderr=devnull))
+end
+
+# `CondaPkg.add_pip` can silently do nothing (it skips resolving based on file timestamps),
+# so check that the module is actually importable instead of trusting that no error was
+# thrown. Otherwise the corresponding test is run against a missing python package.
+function add_pip_and_check(pkg, mod; version="")
+    msg = "Could not install the python package `$(pkg)`, skipping the tests using it"
+    try
+        CondaPkg.add_pip(pkg; version)
+        is_python_module_installed(mod) && return true
+        @warn "`import $(mod)` failed after adding `$(pkg)`, forcing a re-resolve"
+        CondaPkg.resolve(; force=true)
+        is_python_module_installed(mod) && return true
+        @warn msg
+        return false
+    catch e
+        @warn msg exception = e
+        return false
+    end
+end
+
 # Install specific packages. Pkg.test doesn't pick up CondaPkg.toml in test folder
 if (
     isempty(parsed_args.positionals) ||
     "integration" ∈ parsed_args.positionals ||
     "integration/enzymejax" ∈ parsed_args.positionals
 )
-    CondaPkg.add_pip("jax"; version="==0.5")
-    try
-        CondaPkg.add_pip("enzyme_ad"; version=">=0.0.9")
-        ENZYMEJAX_INSTALLED[] = true
-    catch
+    CondaPkg.add_pip("jax"; version=">=0.9")
+    if !Sys.iswindows() && !(Sys.isapple() && Sys.ARCH === :x86_64)
+        ENZYMEJAX_INSTALLED[] = add_pip_and_check(
+            "enzyme_ad", "enzyme_ad"; version=">=0.0.15"
+        )
     end
 end
 
@@ -26,11 +51,7 @@ if (
     "integration" ∈ parsed_args.positionals ||
     "integration/numpyro" ∈ parsed_args.positionals
 )
-    try
-        CondaPkg.add_pip("numpyro")
-        NUMPYRO_INSTALLED[] = true
-    catch
-    end
+    NUMPYRO_INSTALLED[] = add_pip_and_check("numpyro", "numpyro"; version=">=0.21")
 end
 
 testsuite = find_tests(@__DIR__)
@@ -43,6 +64,9 @@ delete!(testsuite, "plugins/metal") # Currently completely non functional
 
 if Sys.isapple()
     delete!(testsuite, "core/custom_number_types")
+end
+
+if Sys.iswindows() || (Sys.isapple() && Sys.ARCH === :x86_64)
     delete!(testsuite, "integration/enzymejax")
 end
 
@@ -101,17 +125,25 @@ test_worker = custom_test_worker ? tpu_custom_worker_launcher : Returns(nothing)
     end
 
     if (
-        # MPI is only supported on CPU
-        (BACKEND == "cpu" || BACKEND == "auto") && (
+        BACKEND in ("auto", "cpu", "cuda", "gpu") && (
             isempty(parsed_args.positionals) ||
             "integration" ∈ parsed_args.positionals ||
             "integration/mpi" ∈ parsed_args.positionals
         )
     )
         @testset "MPI" begin
-            using MPI
-            nranks = 2
-            run(`$(mpiexec()) -n $nranks $(Base.julia_cmd()) integration/mpi.jl`)
+            # Determine backend before test to avoid illegal xla client creation before nccl initialization
+            # MPI is only supported on CPU and CUDA
+            BACKEND != "auto" && Reactant.set_default_backend(BACKEND)
+            mpi_backend = lowercase(
+                Reactant.XLA.platform_name(Reactant.XLA.default_backend())
+            )
+            if mpi_backend in ("cpu", "cuda")
+                using MPI
+                nranks = 2
+                cmd = `$(mpiexec()) -n $nranks $(Base.julia_cmd()) --project=$(Base.active_project()) $(joinpath(@__DIR__, "integration", "mpi.jl"))`
+                run(addenv(cmd, "REACTANT_MPI_BACKEND" => mpi_backend))
+            end
         end
     end
 

@@ -55,3 +55,58 @@ end
     @test buffer_equals(x.x, x.y)
     @test !buffer_equals(x.y, z)
 end
+
+mutable struct State{A}
+    u::A
+    u⁰::A
+end
+
+function step!(state)
+    state.u⁰ .= state.u
+    state.u = state.u .+ 1.0
+    return nothing
+end
+
+@testset "Mutable struct aliasing" begin
+    sz = 3
+
+    state_v = State(fill(0.5, sz), fill(0.0, sz))
+    step!(state_v)
+
+    state_r = State(ConcreteRArray(fill(0.5, sz)), ConcreteRArray(fill(0.0, sz)))
+
+    r_step! = Reactant.@compile step!(state_r)
+    r_step!(state_r)
+
+    @test state_v.u == Array(state_r.u)
+    @test state_v.u⁰ == Array(state_r.u⁰)
+end
+
+# https://github.com/EnzymeAD/Reactant.jl/issues/3469
+# `copyto!(dest, src)` between concrete arrays writes back `dest.data = copy(src.data)`. That
+# device copy is asynchronous; if the resulting buffer is not paired with its ready future,
+# `wait(dest)` is a no-op and the raw-pointer scalar indexing path races with the in-flight
+# copy (lost writes, reads of uninitialized memory).
+@testset "copyto! result is synchronized before scalar access" begin
+    x = Reactant.to_rarray(zeros(Float32, 560, 33, 2))
+    v = view(x, :, 9:16, :)
+    src = Reactant.to_rarray(ones(Float32, 560, 33, 2))
+
+    for _ in 1:10
+        copyto!(x, src)
+        if x isa Reactant.ConcretePJRTArray
+            # the copy must be tracked by a future, so that `wait`/`synchronize` cover it
+            for buf in x.data
+                @test buf.future !== nothing
+            end
+        end
+        # `buffer_on_cpu` is only defined for PJRT buffers
+        if x isa Reactant.ConcretePJRTArray && Reactant.buffer_on_cpu(x)
+            Reactant.@allowscalar for I in CartesianIndices(v)
+                v[I] *= 3
+            end
+            @test all(==(3), Array(v))
+            @test all(==(1), Array(view(x, :, 1:8, :)))
+        end
+    end
+end

@@ -195,12 +195,25 @@ function update_global_state!(args...; kwargs...)
     return nothing
 end
 
+"""
+    has_initialized_client(backend)
+
+Return whether a client for `backend` already exists without triggering lazy
+backend initialization.
+"""
+function has_initialized_client(backend::String)
+    clients = getfield(global_backend_state, :clients)
+    return any(haskey(clients, name) for name in normalize_backend_name(backend))
+end
+
 function __init__()
     if Reactant_jll.is_available()
         @debug "Using libReactantExtra from $(Reactant_jll.libReactantExtra_path)"
 
         # This must be the very first thing initialized (otherwise we can't throw errors)
-        errptr = cglobal((:ReactantThrowError, MLIR.API.mlir_c), Ptr{Ptr{Cvoid}})
+        errptr = cglobal(
+            (:ReactantThrowError, Reactant_jll.libReactantExtra), Ptr{Ptr{Cvoid}}
+        )
         unsafe_store!(errptr, @cfunction(reactant_err, Cvoid, (Cstring,)))
 
         initLogs = Libdl.dlsym(Reactant_jll.libReactantExtra_handle, "InitializeLogs")

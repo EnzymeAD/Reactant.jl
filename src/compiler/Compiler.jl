@@ -17,7 +17,8 @@ import ..Reactant:
     make_tracer,
     TracedToConcrete,
     append_path,
-    TracedType
+    TracedType,
+    MPI_REQUEST_WIDTH
 import Reactant: OptimizeCommunicationOptions, ShardyPropagationOptions, CompileOptions
 using Reactant_jll: Reactant_jll
 
@@ -235,10 +236,11 @@ function raising!(f, is_raising::Bool)
     end
 end
 
-function compile_mlir!(
+# The pass pipeline is independent of the model's Julia function and argument types.
+Base.@nospecializeinfer function compile_mlir!(
     mod,
-    f,
-    args,
+    @nospecialize(f),
+    @nospecialize(args),
     compile_options::CompileOptions,
     debugcache=default_debugcache(),
     callcache=default_callcache(),
@@ -276,16 +278,18 @@ function compile_mlir!(
 
     fnname = string(f)
     mlir_fn_res = try
-        Reactant.TracedUtils.make_mlir_fn(
-            f,
-            args,
-            fn_kwargs,
-            fnname,
-            true;
-            runtime,
-            compile_options.optimize_then_pad,
-            kwargs...,
-        )
+        Reactant.Profiler.@annotate "trace $fnname" begin
+            Reactant.TracedUtils.make_mlir_fn(
+                f,
+                args,
+                fn_kwargs,
+                fnname,
+                true;
+                runtime,
+                compile_options.optimize_then_pad,
+                kwargs...,
+            )
+        end
     finally
         deactivate_raising!(is_raising)
         deactivate_sdycache!(sdycache)
@@ -360,7 +364,14 @@ function compile_mlir!(
     end
 
     opt_passes = optimization_passes(
-        compile_options; sroa=true, recognize_comms, lower_comms, backend, is_sharded
+        compile_options;
+        sroa=true,
+        recognize_comms,
+        lower_comms,
+        backend,
+        is_sharded,
+        hlo_opts=compile_options.optimization_passes !== :after_enzyme &&
+                 compile_options.optimization_passes !== :only_enzyme,
     )
     opt_passes2 = optimization_passes(
         compile_options; sroa=false, recognize_comms, lower_comms, backend, is_sharded
@@ -373,22 +384,26 @@ function compile_mlir!(
 
         # Raise enabled but use default passes
         # TODO(#2240) remove redundant libdevice raise after fixing phase ordering
-        result =
-            "canonicalize,llvm-to-memref-access,canonicalize,convert-llvm-to-cf,canonicalize,enzyme-lift-cf-to-scf,canonicalize,func.func(canonicalize-loops),canonicalize-scf-for,canonicalize,libdevice-funcs-raise,canonicalize,affine-cfg,canonicalize,func.func(canonicalize-loops),canonicalize,llvm-to-affine-access,canonicalize,delinearize-indexing,canonicalize,simplify-affine-exprs,affine-cfg,canonicalize,func.func(affine-loop-invariant-code-motion),canonicalize,sort-memory,func.func(kernelcast),raise-affine-to-stablehlo{strip_llvm_debuginfo=$(compile_options.strip_llvm_debuginfo) prefer_while_raising=false dump_failed_lockstep=$(DUMP_FAILED_LOCKSTEP[])},canonicalize,arith-raise{stablehlo=true}," *
-            opt_passes2
+        result = "canonicalize,llvm-to-memref-access,canonicalize,convert-llvm-to-cf,canonicalize,enzyme-lift-cf-to-scf,canonicalize,func.func(canonicalize-loops{speculate_partial_if=$(compile_options.speculate_partial_ifs)}),canonicalize-scf-for,canonicalize,libdevice-funcs-raise,canonicalize,affine-cfg,canonicalize,func.func(canonicalize-loops{speculate_partial_if=$(compile_options.speculate_partial_ifs)}),canonicalize,llvm-to-affine-access,canonicalize,delinearize-indexing,canonicalize,simplify-affine-exprs,affine-cfg,canonicalize,func.func(affine-loop-invariant-code-motion),canonicalize,sort-memory,func.func(kernelcast),raise-affine-to-stablehlo{strip_llvm_debuginfo=$(compile_options.strip_llvm_debuginfo) prefer_while_raising=false dump_failed_lockstep=$(DUMP_FAILED_LOCKSTEP[])},canonicalize,arith-raise{stablehlo=true}"
 
-        if DUS_TO_CONCAT[]
-            opt_passes3 = optimization_passes(
-                compile_options;
-                sroa=false,
-                dus_to_concat=true,
-                recognize_comms,
-                lower_comms,
-                backend,
-                is_sharded,
-            )
-            result = result * "," * opt_passes3
+        if compile_options.optimization_passes !== :after_enzyme &&
+            compile_options.optimization_passes !== :only_enzyme
+            result = result * "," * opt_passes2
+
+            if DUS_TO_CONCAT[]
+                opt_passes3 = optimization_passes(
+                    compile_options;
+                    sroa=false,
+                    dus_to_concat=true,
+                    recognize_comms,
+                    lower_comms,
+                    backend,
+                    is_sharded,
+                )
+                result = result * "," * opt_passes3
+            end
         end
+
         result
     else
         "canonicalize"
@@ -404,10 +419,16 @@ function compile_mlir!(
         ",",
     )
     lower_enzymexla_math_pass = "lower-enzymexla-math"
-    lower_enzymexla_mpi_pass = "lower-enzymexla-mpi{backend=$backend}"
+    # TODO legalization of comm.mpi ops to comm.nccl if compile_options.comm_options.legalize_mpi_to_nccl is true and backend is CUDA
+    lower_comm_pass = if compile_options.comm_options.lowering_target === :jit
+        "lower-comm-to-jit{mpi_request_width=$(MPI_REQUEST_WIDTH[])}"
+    elseif compile_options.comm_options.lowering_target === :ffi
+        "lower-comm-to-stablehlo"
+    else
+        error("Unknown comm lowering target: $(compile_options.comm_options.lowering_target)")
+    end
     lower_enzymexla_passes = join(
-        [lower_enzymexla_linalg_pass, lower_enzymexla_math_pass, lower_enzymexla_mpi_pass],
-        ",",
+        [lower_enzymexla_linalg_pass, lower_enzymexla_math_pass, lower_comm_pass], ","
     )
 
     legalize_chlo_to_stablehlo =
@@ -426,18 +447,22 @@ function compile_mlir!(
         run_pass_pipeline!(mod, "raise-triton-custom-call", "raise_triton_custom_call")
     end
 
-    if compile_options.optimization_passes === :all
+    if compile_options.optimization_passes === :all ||
+        compile_options.optimization_passes === :after_enzyme
+        raise_pass_list = String[kern, raise_passes]
         run_pass_pipeline!(
             mod,
             join(
-                if compile_options.raise_first
-                    [
-                        "mark-func-memory-effects",
-                        opt_passes,
-                        kern,
-                        raise_passes,
-                        "enzyme-batch",
-                        opt_passes2,
+                vcat(
+                    String["mark-func-memory-effects", opt_passes],
+                    compile_options.raise_first ? raise_pass_list : String[],
+                    String["enzyme-batch"],
+                    if compile_options.optimization_passes === :after_enzyme
+                        String[]
+                    else
+                        String[opt_passes2]
+                    end,
+                    String[
                         enzyme_pass,
                         opt_passes2,
                         "canonicalize",
@@ -445,31 +470,13 @@ function compile_mlir!(
                         "enzyme-simplify-math",
                         legalize_chlo_to_stablehlo...,
                         opt_passes2,
-                        lower_enzymexla_passes,
-                        jit,
-                    ]
-                else
-                    [
-                        "mark-func-memory-effects",
-                        opt_passes,
-                        "enzyme-batch",
-                        opt_passes2,
-                        enzyme_pass,
-                        opt_passes2,
-                        "canonicalize",
-                        "remove-unnecessary-enzyme-ops",
-                        "enzyme-simplify-math",
-                        legalize_chlo_to_stablehlo...,
-                        opt_passes2,
-                        kern,
-                        raise_passes,
-                        lower_enzymexla_passes,
-                        jit,
-                    ]
-                end,
+                    ],
+                    compile_options.raise_first ? String[] : raise_pass_list,
+                    String[lower_enzymexla_passes, jit],
+                ),
                 ",",
             ),
-            "all",
+            compile_options.optimization_passes === :after_enzyme ? "after_enzyme" : "all",
         )
     elseif compile_options.optimization_passes === :before_kernel
         run_pass_pipeline!(
@@ -682,45 +689,6 @@ function compile_mlir!(
                 ',',
             ),
             "only_enzyme",
-        )
-    elseif compile_options.optimization_passes === :after_enzyme
-        run_pass_pipeline!(
-            mod,
-            join(
-                if compile_options.raise_first
-                    [
-                        "mark-func-memory-effects",
-                        kern,
-                        raise_passes,
-                        "enzyme-batch",
-                        enzyme_pass,
-                        "canonicalize",
-                        "remove-unnecessary-enzyme-ops",
-                        "enzyme-simplify-math",
-                        legalize_chlo_to_stablehlo...,
-                        opt_passes2,
-                        lower_enzymexla_passes,
-                        jit,
-                    ]
-                else
-                    [
-                        "mark-func-memory-effects",
-                        "enzyme-batch",
-                        enzyme_pass,
-                        "canonicalize",
-                        "remove-unnecessary-enzyme-ops",
-                        "enzyme-simplify-math",
-                        legalize_chlo_to_stablehlo...,
-                        opt_passes2,
-                        kern,
-                        raise_passes,
-                        lower_enzymexla_passes,
-                        jit,
-                    ]
-                end,
-                ',',
-            ),
-            "after_enzyme",
         )
     elseif compile_options.optimization_passes === :before_enzyme
         run_pass_pipeline!(
@@ -1303,7 +1271,7 @@ function compile_xla(f, args; kwargs...)
     end
 end
 
-function compile_xla(
+Reactant.@annotate "compile $(string(f))" function compile_xla(
     ctx,
     f,
     args;
@@ -1389,21 +1357,25 @@ function compile_xla(
                 ),
             )
 
-            exec = XLA.compile(
-                client,
-                mod;
-                compile_options=xla_compile_options,
-                num_outputs=length(mlir_fn_res.linear_results),
-                num_parameters=length(mlir_fn_res.linear_args),
-                mlir_fn_res.is_sharded,
-                mlir_fn_res.num_replicas,
-                mlir_fn_res.num_partitions,
-            )
+            exec = Reactant.Profiler.@annotate "XLA compile $(string(f))" begin
+                XLA.compile(
+                    client,
+                    mod;
+                    compile_options=xla_compile_options,
+                    num_outputs=length(mlir_fn_res.linear_results),
+                    num_parameters=length(mlir_fn_res.linear_args),
+                    mlir_fn_res.is_sharded,
+                    mlir_fn_res.num_replicas,
+                    mlir_fn_res.num_partitions,
+                )
+            end
             hlo_modules = XLA.get_hlo_modules(exec)
             hlo_modules = length(hlo_modules) == 1 ? only(hlo_modules) : hlo_modules
         end
 
-        finalize(mod)
+        # `MLIR.IR.Module` has no finalizer and XLA doesn't take ownership of it: destroy it
+        # explicitly, otherwise the whole module is leaked at every compilation.
+        MLIR.IR.dispose(mod)
 
         return exec, hlo_modules, mlir_fn_res, device, client, module_string
     finally

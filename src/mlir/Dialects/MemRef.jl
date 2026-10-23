@@ -252,16 +252,26 @@ The `load` op reads an element from a memref at the specified indices.
 The number of indices must match the rank of the memref. The indices must
 be in-bounds: `0 <= idx < dim_size`.
 
-Lowerings of `memref.load` may emit attributes, e.g. `inbouds` + `nuw`
-when converting to LLVM\'s `llvm.getelementptr`, that would cause undefined
-behavior if indices are out of bounds or if computing the offset in the
-memref would cause signed overflow of the `index` type.
+Lowerings of `memref.load` may emit no-wrap flags on
+`llvm.getelementptr` when converting to LLVM. The `inbounds` flag is
+always emitted (valid since indices are guaranteed in-bounds) and causes
+undefined behavior if that precondition is violated. The `nuw` flag is
+emitted only when all strides of the memref are statically non-negative;
+with negative strides, `nuw` would propagate to intermediate `mul`
+operations and cause unsigned overflow (poison) even for in-bounds
+indices.
 
 The single result of `memref.load` is a value with the same type as the
 element type of the memref.
 
 A set `nontemporal` attribute indicates that this load is not expected to
 be reused in the cache. For details, refer to the
+[LLVM load instruction](https://llvm.org/docs/LangRef.html#load-instruction).
+
+A set `invariant` attribute indicates that the referenced memory location
+contains the same value at all points in the program where it is
+dereferenceable, so the load may be treated as invariant. For details, refer
+to the
 [LLVM load instruction](https://llvm.org/docs/LangRef.html#load-instruction).
 
 An optional `alignment` attribute allows to specify the byte alignment of the
@@ -281,6 +291,7 @@ function load(
     result=nothing::Union{Nothing,IR.Type},
     nontemporal=nothing,
     alignment=nothing,
+    invariant=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -291,6 +302,7 @@ function load(
     !isnothing(result) && push!(op_ty_results, result)
     !isnothing(nontemporal) && push!(attributes, NamedAttribute("nontemporal", nontemporal))
     !isnothing(alignment) && push!(attributes, NamedAttribute("alignment", alignment))
+    !isnothing(invariant) && push!(attributes, NamedAttribute("invariant", invariant))
 
     return create_operation(
         "memref.load",
@@ -341,7 +353,7 @@ region of memory that will be indexed is aligned at the specified byte
 boundary.
 
 ```mlir
-%0 = memref.alloc()[%s] {alignment = 8} :
+%0 = memref.alloc()[%s] alignment = 8 :
   memref<8x64xf32, affine_map<(d0, d1)[s0] -> ((d0 + s0), d1)>, 1>
 ```
 """
@@ -1101,7 +1113,7 @@ given global variable will always return the same memref descriptor).
 memref.global \"private\" @x : memref<2xf32> = dense<[0.0, 2.0]>
 
 // Private variable with an initial value and an alignment (power of 2).
-memref.global \"private\" @x : memref<2xf32> = dense<[0.0, 2.0]> {alignment = 64}
+memref.global \"private\" @x : memref<2xf32> = dense<[0.0, 2.0]> alignment = 64
 
 // Declaration of an external variable.
 memref.global \"private\" @y : memref<4xi32>
@@ -1322,7 +1334,7 @@ nor realloc supports alignment, though there is aligned_alloc but not
 aligned_realloc.
 
 ```mlir
-%3 = memref.realloc %src {alignment = 8} : memref<64xf32> to memref<124xf32>
+%3 = memref.realloc %src alignment = 8 : memref<64xf32> to memref<124xf32>
 ```
 
 Referencing the memref through the old SSA value after realloc is undefined
@@ -1370,6 +1382,12 @@ Example 1:
 
 Consecutive `reinterpret_cast` operations on memref\'s with static
 dimensions.
+
+This operation is intended for cases where the user can guarantee the
+validity of the constructed descriptor. Neither static nor runtime
+verification check that the resulting descriptor is in-bounds. Accessing
+memory outside the underlying allocation through the resulting memref is
+undefined behavior.
 
 We distinguish between *underlying memory* — the sequence of elements as
 they appear in the contiguous memory of the memref — and the
@@ -1571,10 +1589,14 @@ The `store` op stores an element into a memref at the specified indices.
 The number of indices must match the rank of the memref. The indices must
 be in-bounds: `0 <= idx < dim_size`.
 
-Lowerings of `memref.store` may emit attributes, e.g. `inbouds` + `nuw`
-when converting to LLVM\'s `llvm.getelementptr`, that would cause undefined
-behavior if indices are out of bounds or if computing the offset in the
-memref would cause signed overflow of the `index` type.
+Lowerings of `memref.store` may emit no-wrap flags on
+`llvm.getelementptr` when converting to LLVM. The `inbounds` flag is
+always emitted (valid since indices are guaranteed in-bounds) and causes
+undefined behavior if that precondition is violated. The `nuw` flag is
+emitted only when all strides of the memref are statically non-negative;
+with negative strides, `nuw` would propagate to intermediate `mul`
+operations and cause unsigned overflow (poison) even for in-bounds
+indices.
 
 A set `nontemporal` attribute indicates that this store is not expected to
 be reused in the cache. For details, refer to the
@@ -1751,8 +1773,10 @@ result_offset = src_offset + dot_product(offset_operands, src_strides)
 The offset, size and stride operands must be in-bounds with respect to the
 source memref. When possible, the static operation verifier will detect
 out-of-bounds subviews. Subviews that cannot be confirmed to be in-bounds
-or out-of-bounds based on compile-time information are valid. However,
-performing an out-of-bounds subview at runtime is undefined behavior.
+or out-of-bounds based on compile-time information are valid. The
+`-generate-runtime-verification` pass can insert runtime bound checks.
+Otherwise, performing an out-of-bounds subview at runtime is undefined
+behavior.
 
 Example 1:
 

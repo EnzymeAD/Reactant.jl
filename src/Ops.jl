@@ -310,6 +310,22 @@ function fill(v, ::Tuple{}; location=mlir_stacktrace("fill", @__FILE__, @__LINE_
 end
 
 function fill(
+    v::TracedRNumber{T},
+    dims::NTuple{N,Integer};
+    location=mlir_stacktrace("fill", @__FILE__, @__LINE__),
+) where {N,T}
+    return fill(v, collect(Int64, dims); location)::TracedRArray{T,N}
+end
+
+function fill(
+    v::TracedRNumber{T},
+    dims::Tuple{};
+    location=mlir_stacktrace("fill", @__FILE__, @__LINE__),
+) where {T}
+    return fill(v, collect(Int64, dims); location)::TracedRArray{T,0}
+end
+
+function fill(
     number::TracedRNumber{T},
     shape::Vector{Int};
     location=mlir_stacktrace("fill", @__FILE__, @__LINE__),
@@ -1499,6 +1515,7 @@ end
     x::TracedRArray{T,N},
     k::Integer;
     dimension::Integer=N,
+    is_stable::Bool=false,
     location=mlir_stacktrace("top_k", @__FILE__, @__LINE__),
 ) where {T,N}
     @assert 1 <= dimension <= N
@@ -1521,7 +1538,13 @@ end
     rsize = [size(x)[1:(end - 1)]..., k]
     values = mlir_type(TracedRArray{T,N}, rsize)
     indices = mlir_type(TracedRArray{Int32,N}, rsize)
-    op = chlo.top_k(x.mlir_data; values, indices, k, location)
+    # is_stable=false lets XLA:GPU dispatch eligible shapes to
+    # raft::matrix::select_k instead of full sort + slice (issue #886); the
+    # debug option that used to force this is gone upstream and the raft path
+    # is only taken for top_k ops declared unstable.
+    op = chlo.top_k(
+        x.mlir_data; values, indices, k, is_stable=MLIR.IR.Attribute(is_stable), location
+    )
     indices = add(
         TracedRArray{Int32,N}((), MLIR.IR.result(op, 2), rsize),
         fill(Int32(1), Tuple(rsize)),
@@ -2060,7 +2083,7 @@ module @reactant_hlo_call attributes {mhlo.num_partitions = 1 : i64, mhlo.num_re
                 # Set function private
                 MLIR.IR.setattr!(
                     op,
-                    MLIR.API.mlirSymbolTableGetVisibilityAttributeName(),
+                    MLIR.API.mlirSymbolTableGetDefaultVisibilityAttributeName(),
                     MLIR.IR.Attribute("private"),
                 )
 
@@ -2420,31 +2443,33 @@ end
     end
 
     if checkpointing isa ReactantCore.Periodic
+        MLIR.IR.setattr!(while_op, "enzyme.enable_checkpointing", MLIR.IR.Attribute(true))
         MLIR.IR.setattr!(
-            while_op, "enzymexla.enable_checkpointing", MLIR.IR.Attribute(true)
-        )
-        MLIR.IR.setattr!(
-            while_op, "enzymexla.checkpoint_period", MLIR.IR.Attribute(checkpointing.n)
+            while_op, "enzyme.checkpoint_period", MLIR.IR.Attribute(checkpointing.n)
         )
     elseif checkpointing isa ReactantCore.Binomial
+        MLIR.IR.setattr!(while_op, "enzyme.enable_checkpointing", MLIR.IR.Attribute(true))
+        MLIR.IR.setattr!(while_op, "enzyme.binomial_checkpointing", MLIR.IR.UnitAttribute())
         MLIR.IR.setattr!(
-            while_op, "enzymexla.enable_checkpointing", MLIR.IR.Attribute(true)
-        )
-        MLIR.IR.setattr!(
-            while_op, "enzymexla.binomial_checkpointing", MLIR.IR.UnitAttribute()
-        )
-        MLIR.IR.setattr!(
-            while_op, "enzymexla.checkpoint_period", MLIR.IR.Attribute(checkpointing.budget)
+            while_op, "enzyme.checkpoint_period", MLIR.IR.Attribute(checkpointing.budget)
         )
     elseif checkpointing === true
-        MLIR.IR.setattr!(
-            while_op, "enzymexla.enable_checkpointing", MLIR.IR.Attribute(true)
-        )
+        MLIR.IR.setattr!(while_op, "enzyme.enable_checkpointing", MLIR.IR.Attribute(true))
     end
 
-    return map(enumerate(linear_args)) do (i, arg)
+    results = map(enumerate(linear_args)) do (i, arg)
         return Reactant.TracedUtils.set_mlir_data!(arg, MLIR.IR.result(while_op, i))
     end
+
+    # Values promoted to traced ones (e.g. Julia numbers with `track_numbers`) are new
+    # objects that only `traced_args` refers to, write them back into the caller's `Ref`s
+    for (prev, traced) in zip(args, traced_args)
+        if prev isa Base.RefValue && prev !== traced && traced[] isa eltype(prev)
+            prev[] = traced[]
+        end
+    end
+
+    return results
 end
 
 @noinline function if_condition(
@@ -2875,11 +2900,36 @@ end
                 Reactant.TracedUtils.set!(
                     args, path[2:end], MLIR.IR.result(if_compiled, residx)
                 )
+            else
+                check_untraced_branch_state(
+                    target, tb_traced_args, fb_traced_args, path[2:end]
+                )
             end
         end
     end
 
     return corrected_traced_results
+end
+
+# An untraced location in a mutable argument (e.g. a struct field holding a plain number)
+# has nothing the `if` result can be written back into, so a branch that assigned it a new
+# value would be a silent no-op. Note this only inspects collected result paths: a leaf the
+# tracing machinery never tracks cannot be detected here.
+function check_untraced_branch_state(target, tb_traced_args, fb_traced_args, path)
+    for branch_args in (tb_traced_args, fb_traced_args)
+        leaf = branch_args
+        for p in path
+            leaf = Reactant.Compiler.traced_getfield(leaf, p)
+        end
+        leaf === target && continue
+        error(
+            "if_condition: a branch assigned a value of type $(typeof(leaf)) to an untraced \
+             location holding $(repr(target)) (path $(path)); the assignment cannot be \
+             carried out of the branch. Make the initial value traced before the `if`, e.g. \
+             with `Reactant.ReactantCore.promote_to_traced`.",
+        )
+    end
+    return nothing
 end
 
 """
