@@ -57,6 +57,8 @@ Base.elsize(::Type{RNumber{T}}) where {T} = sizeof(T)
 Base.elsize(::Type{<:AbstractConcreteNumber{T}}) where {T} = sizeof(T)
 Base.elsize(::Type{<:AbstractConcreteArray{T}}) where {T} = sizeof(T)
 
+is_traced_leaf(@nospecialize(_::TracedRNumber)) = true
+
 function repath(x::TracedRNumber{T}, paths) where {T}
     return TracedRNumber{T}(paths, x.mlir_data)
 end
@@ -87,6 +89,8 @@ mutable struct TracedRArray{T,N} <: RArray{TracedRNumber{T},N}
         return similar(TracedRArray{T,N}, shape)
     end
 end
+
+is_traced_leaf(@nospecialize(_::TracedRArray)) = true
 
 function repath(x::TracedRArray{T,N}, paths) where {T,N}
     return TracedRArray{T,N}(paths, x.mlir_data, x.shape)

@@ -2385,12 +2385,7 @@ end
         )
     end
 
-    linear_args = Reactant.TracedType[]
-    for (_, v) in seen_args
-        v isa Reactant.TracedType || continue
-        push!(linear_args, v)
-    end
-
+    linear_args = Any[v for (_, v) in seen_args if is_traced_leaf(v)]
     input_types = [mlir_type(arg) for arg in linear_args]
 
     cond_fn_compiled =
@@ -2516,12 +2511,8 @@ end
         )
     end
 
-    tb_linear_args = Reactant.TracedType[
-        v for v in values(tb_seen_args) if v isa Reactant.TracedType
-    ]
-    fb_linear_args = Reactant.TracedType[
-        v for v in values(fb_seen_args) if v isa Reactant.TracedType
-    ]
+    tb_linear_args = Any[v for v in values(tb_seen_args) if is_traced_leaf(v)]
+    fb_linear_args = Any[v for v in values(fb_seen_args) if is_traced_leaf(v)]
 
     input_types = [mlir_type(arg) for arg in tb_linear_args]
     sym_visibility = MLIR.IR.Attribute("private")
@@ -2588,9 +2579,7 @@ end
         )
     end
 
-    tb_linear_results = Reactant.TracedType[
-        v for v in values(seen_true_results) if v isa Reactant.TracedType
-    ]
+    tb_linear_results = Any[v for v in values(seen_true_results) if is_traced_leaf(v)]
 
     # compile the false branch without any returns similar to the true branch
     false_fn_mod = MLIR.IR.current_module()
@@ -2653,11 +2642,9 @@ end
         )
     end
 
-    fb_linear_results = Reactant.TracedType[
-        v for v in values(seen_false_results) if v isa Reactant.TracedType
-    ]
+    fb_linear_results = Any[v for v in values(seen_false_results) if is_traced_leaf(v)]
 
-    tb_results_dict = Dict{Tuple,Reactant.TracedType}()
+    tb_results_dict = Dict{Tuple,Any}()
     for tr in tb_linear_results
         for path in Reactant.TracedUtils.get_paths(tr)
             if length(path) > 0 &&
@@ -2667,7 +2654,7 @@ end
         end
     end
 
-    fb_results_dict = Dict{Tuple,Reactant.TracedType}()
+    fb_results_dict = Dict{Tuple,Any}()
     for fr in fb_linear_results
         for path in Reactant.TracedUtils.get_paths(fr)
             if length(path) > 0 &&
@@ -2714,7 +2701,7 @@ end
     # finalize the true branch by adding the missing values
     MLIR.IR.activate(true_fn_body)
     activate_constant_context!(true_fn_body)
-    tb_corrected_linear_results = Reactant.TracedType[]
+    tb_corrected_linear_results = Any[]
     try
         for (i, _) in enumerate(tb_paths)
             if haskey(tb_results_dict, tb_paths[i])
@@ -2731,7 +2718,7 @@ end
     # finalize the false branch by adding the missing values
     MLIR.IR.activate(false_fn_body)
     activate_constant_context!(false_fn_body)
-    fb_corrected_linear_results = Reactant.TracedType[]
+    fb_corrected_linear_results = Any[]
     try
         for (i, _) in enumerate(fb_paths)
             if haskey(fb_results_dict, fb_paths[i])
@@ -2895,8 +2882,8 @@ end
             for p in path[2:end]
                 target = Reactant.Compiler.traced_getfield(target, p)
             end
-            if target isa
-                Union{Reactant.ConcreteRArray,Reactant.ConcreteRNumber,Reactant.TracedType}
+            if is_traced_leaf(target) ||
+                target isa Union{Reactant.ConcreteRArray,Reactant.ConcreteRNumber}
                 Reactant.TracedUtils.set!(
                     args, path[2:end], MLIR.IR.result(if_compiled, residx)
                 )
@@ -3010,8 +2997,7 @@ result = Ops.case(
     end
 
     branch_linear_args = [
-        Reactant.TracedType[v for v in values(seen) if v isa Reactant.TracedType] for
-        seen in branch_seen_args
+        Any[v for v in values(seen) if is_traced_leaf(v)] for seen in branch_seen_args
     ]
 
     # Input types from first branch (all should be the same)
@@ -3091,12 +3077,11 @@ result = Ops.case(
     end
 
     branch_linear_results = [
-        Reactant.TracedType[v for v in values(seen) if v isa Reactant.TracedType] for
-        seen in seen_branch_results
+        Any[v for v in values(seen) if is_traced_leaf(v)] for seen in seen_branch_results
     ]
 
     # Build dictionaries mapping paths to traced values for each branch
-    branch_results_dicts = [Dict{Tuple,Reactant.TracedType}() for _ in 1:n_branches]
+    branch_results_dicts = [Dict{Tuple,Any}() for _ in 1:n_branches]
     for b in 1:n_branches
         for tr in branch_linear_results[b]
             for path in Reactant.TracedUtils.get_paths(tr)
@@ -3133,7 +3118,7 @@ result = Ops.case(
     ]
 
     # Correct each branch's results to include all paths
-    branch_corrected_linear_results = [Reactant.TracedType[] for _ in 1:n_branches]
+    branch_corrected_linear_results = [Any[] for _ in 1:n_branches]
 
     for b in 1:n_branches
         MLIR.IR.activate(branch_bodies[b])
@@ -3325,9 +3310,9 @@ end
     linear_args = []
     mlir_caller_args = Reactant.MLIR.IR.Value[]
     for (_, v) in seen_cache
-        v isa Reactant.TracedType || continue
+        is_traced_leaf(v) || continue
         push!(linear_args, v)
-        push!(mlir_caller_args, v.mlir_data)
+        push!(mlir_caller_args, Reactant.TracedUtils.get_mlir_data(v))
         # make tracer inserted `()` into the path, here we remove it:
         v.paths = v.paths[1:(end - 1)]
     end
@@ -3813,7 +3798,7 @@ end
             seenargs, f, (argprefix, 1), Reactant.TracedSetPath; toscalar=false
         )
         for (k, v) in seenargs
-            v isa Reactant.TracedType || continue
+            is_traced_leaf(v) || continue
             bcasted_arg = broadcast_in_dim(
                 v,
                 collect(Int64, (length(batch_shape) + 1):(ndims(v) + length(batch_shape))),
@@ -3897,7 +3882,7 @@ function triangular_solve(
     @assert N >= 2
     @assert size(a, N - 1) == size(a, N) == size(b, N - left_side)
     @assert size(a)[1:(N - 2)] == size(b)[1:(N - 2)] "a and b must have the same leading \
-                                                      dimensions"
+                                                          dimensions"
 
     @assert transpose_a in ('N', 'T', 'C') "transpose_a must be one of 'N', 'T', or 'C'"
     transpose_attr = MLIR.API.stablehloTransposeAttrGet(

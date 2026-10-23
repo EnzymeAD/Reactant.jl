@@ -16,8 +16,8 @@ using ..Reactant:
     broadcast_to_size # keep this to avoid breaking external code
 using ..Ops: @opcall
 using GPUArraysCore: @allowscalar
-using ReactantCore: ReactantCore
-using ReactantCore: MissingTracedValue, is_traced, materialize_traced_array
+using ReactantCore:
+    ReactantCore, MissingTracedValue, is_traced_leaf, is_traced, materialize_traced_array
 
 ReactantCore.materialize_traced_array(x::AbstractArray) = x
 
@@ -496,11 +496,11 @@ Base.@nospecializeinfer function prepare_mlir_fn_args(
     end
 
     seen_args = OrderedIdDict()
-    linear_args = Reactant.TracedType[]
-    skipped_args = Reactant.TracedType[]
+    linear_args = Any[]
+    skipped_args = Any[]
     inv_map = IdDict()
     for (k, v) in seen_args0
-        v isa Reactant.TracedType || continue
+        Reactant.is_traced_leaf(v) || continue
         arg = get_mlir_data(v)
         if (arg isa MLIR.IR.Value) &&
             MLIR.IR.is_op_res(arg) &&
@@ -515,20 +515,22 @@ Base.@nospecializeinfer function prepare_mlir_fn_args(
 
     in_tys = Vector{MLIR.IR.Type}(undef, length(linear_args))
     for (i, arg) in enumerate(linear_args)
-        elT = MLIR.IR.Type(Reactant.unwrapped_eltype(arg))
-        if toscalar
-            in_tys[i] = MLIR.IR.TensorType(Int[], elT)
-        else
-            sz = collect(Int, size(arg))
+        typ = Ops.mlir_type(arg)
+
+        if MLIR.IR.isrankedtensor(typ)
             if !optimize_then_pad
+                sz = collect(Int, size(typ))
                 carg = inv_map[arg]
                 Reactant.has_padding(carg) && (sz .+= Reactant.get_padding(carg))
+                typ = MLIR.IR.TensorType(sz, eltype(typ), MLIR.IR.encoding(typ))
             end
 
-            typ = MLIR.IR.TensorType(sz, elT)
-            do_transpose && (typ = transpose_ty(typ))
-            in_tys[i] = typ
+            if do_transpose
+                typ = tranpose_ty(typ)
+            end
         end
+
+        in_tys[i] = arg
     end
 
     sym_visibility = nothing
@@ -613,7 +615,11 @@ end
 function process_linear_args!(linear_args, fnbody, do_transpose, optimize_then_pad, inv_map)
     for (i, arg) in enumerate(linear_args)
         raw_arg = MLIR.IR.argument(fnbody, i)
-        row_maj_arg = do_transpose ? transpose_val(raw_arg) : raw_arg
+        row_maj_arg = if do_transpose && MLIR.IR.isrankedtensor(MLIR.IR.type(raw_arg))
+            transpose_val(raw_arg)
+        else
+            raw_arg
+        end
         if !optimize_then_pad
             carg = inv_map[arg]
             if Reactant.has_padding(carg)
@@ -702,10 +708,10 @@ Base.@nospecializeinfer function finalize_mlir_fn(
         MLIR.IR.deactivate(fnbody)
     end
 
-    linear_results = Reactant.TracedType[]
-    skipped_results = Reactant.TracedType[]
+    linear_results = Any[]
+    skipped_results = Any[]
     for (k, v) in seen_results
-        v isa Reactant.TracedType || continue
+        Reactant.is_traced_leaf(v) || continue
         if Reactant.looped_any(Base.Fix1(===, k), skipped_args)
             push!(skipped_results, v)
 
@@ -727,11 +733,9 @@ Base.@nospecializeinfer function finalize_mlir_fn(
                         original_arg = Reactant.Compiler.traced_getfield(original_arg, p)
                     end
                     if !(
-                        original_arg isa Union{
-                            Reactant.ConcreteRNumber,
-                            Reactant.ConcreteRArray,
-                            Reactant.TracedType,
-                        }
+                        Reactant.is_traced_leaf(original_arg) ||
+                        original_arg isa
+                        Union{Reactant.ConcreteRNumber,Reactant.ConcreteRArray}
                     )
                         continue
                     end
@@ -878,7 +882,7 @@ Base.@nospecializeinfer function finalize_mlir_fn(
                 col_maj = get_mlir_data(res)
                 out_ty = Ops.mlir_type(res)
 
-                if do_transpose
+                if do_transpose && MLIR.IR.isrankedtensor(out_ty)
                     col_maj = transpose_val(col_maj)
                     out_ty = transpose_ty(out_ty)
                 end
@@ -1249,7 +1253,7 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
 
     input_shapes = Tuple{Vararg{Int}}[]
     for k in keys(seen_args)
-        if !(k isa Reactant.TracedType)
+        if !is_traced_leaf(k)
             continue
         end
         idx, path = get_argidx(k, argprefix)
