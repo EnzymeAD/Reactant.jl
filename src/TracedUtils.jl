@@ -373,8 +373,12 @@ Base.@nospecializeinfer function make_mlir_fn(
         Reactant.Compiler.activate_raising!(true)
     end
 
+    # Transposition and unpadding adapt the arguments before tracing. Those operations
+    # are not mutations of the Julia inputs. Compare against the adapted values.
+    initial_arg_values = MLIR.IR.Value[]
     result = try
         process_linear_args!(linear_args, fnbody, do_transpose, optimize_then_pad, inv_map)
+        append!(initial_arg_values, get_mlir_data.(linear_args))
 
         if isempty(kwargs)
             Reactant.call_with_reactant(f, traced_args...)
@@ -393,7 +397,7 @@ Base.@nospecializeinfer function make_mlir_fn(
     mutated_args = Int[]
     if !construct_function_without_args
         for (i, arg) in enumerate(linear_args)
-            if get_mlir_data(arg) != MLIR.IR.argument(fnbody, i)
+            if get_mlir_data(arg) != initial_arg_values[i]
                 # mutation occured!
                 push!(mutated_args, i)
             end
@@ -414,6 +418,7 @@ Base.@nospecializeinfer function make_mlir_fn(
         do_transpose,
         optimize_then_pad,
         inv_map,
+        mutated_args,
         args_in_result,
         resprefix,
         argprefix,
@@ -645,6 +650,7 @@ Base.@nospecializeinfer function finalize_mlir_fn(
     do_transpose,
     optimize_then_pad,
     inv_map,
+    mutated_args,
     args_in_result,
     resprefix,
     argprefix,
@@ -662,17 +668,6 @@ Base.@nospecializeinfer function finalize_mlir_fn(
     concretein,
     toscalar,
 )
-    # check which arguments have been mutated
-    mutated_args = Int[]
-    if !construct_function_without_args
-        for (i, arg) in enumerate(linear_args)
-            if get_mlir_data(arg) != MLIR.IR.argument(fnbody, i)
-                # mutation occured!
-                push!(mutated_args, i)
-            end
-        end
-    end
-
     outmode = if concretein
         @assert !toscalar
         Reactant.NoStopTracedTrack
@@ -750,7 +745,7 @@ Base.@nospecializeinfer function finalize_mlir_fn(
         end
         if args_in_result != :all
             if has_idx(v, argprefix)
-                if !(args_in_result == :result && has_idx(v, resprefix))
+                if !(args_in_result in (:result, :mutated) && has_idx(v, resprefix))
                     continue
                 end
             end
@@ -759,7 +754,12 @@ Base.@nospecializeinfer function finalize_mlir_fn(
     end
 
     if args_in_result == :mutated
-        append!(linear_results, linear_args[mutated_args])
+        for i in mutated_args
+            arg = linear_args[i]
+            # A mutated argument returned by the function is already present.
+            Reactant.looped_any(Base.Fix1(===, arg), linear_results) ||
+                push!(linear_results, arg)
+        end
     end
     if !isnothing(verify_arg_names) && typeof.(linear_args) != typeof.(linear_results)
         argis = []

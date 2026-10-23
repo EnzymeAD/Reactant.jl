@@ -368,6 +368,7 @@ end
 function get_common_compile_options()
     return Dict{Symbol,Any}(
         :optimize => true,
+        :ad_optimization_passes => false,
         :no_nan => false,
         :client => nothing,
         :raise => false,
