@@ -295,6 +295,14 @@ function Broadcast.BroadcastStyle(::Type{<:TracedRNumber})
     return AbstractReactantArrayStyle{0}()
 end
 
+# Adapt conversion nodes before nesting so eltype inference and scalar probes
+# use the traced conversion without materializing or splitting the broadcast.
+function Broadcast.broadcasted(
+    style::AbstractReactantArrayStyle, ::Type{T}, x
+) where {T<:Reactant.ReactantPrimitive}
+    return Broadcasted(style, TracedUtils.TypeCast{T}(), (x,))
+end
+
 function Base.zeros(::Type{T}, dims::Tuple{}) where {T<:TracedRArray}
     return (@opcall fill(
         zero(unwrapped_eltype(T)), dims
