@@ -374,6 +374,12 @@ function initialize_ptrs()
             "cuModuleGetFunction",
             "cuStreamSynchronize",
             "ncclAllReduce",
+            # Kernel registration and launch emitted by convert-polygeist-to-llvm.
+            "__cudaRegisterFatBinary",
+            "__cudaRegisterFatBinaryEnd",
+            "__cudaRegisterFunction",
+            "__cudaUnregisterFatBinary",
+            "cudaLaunchKernel",
         )
             MLIR.API.EnzymeJaXMapSymbol(
                 name, Libdl.dlsym(Reactant_jll.libReactantExtra_handle, name)
