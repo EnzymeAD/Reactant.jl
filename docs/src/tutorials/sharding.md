@@ -23,7 +23,9 @@ for multiple devices (including [multiple nodes](@ref distributed)).
 ```@example sharding_tutorial
 using Reactant
 
-@assert length(Reactant.devices()) > 1 # hide
+if length(Reactant.devices()) < 4 # hide
+    error("The Reactant docs require at least 4 devices to run. Set the environment variable `XLA_FLAGS=\"--xla_force_host_platform_device_count=4\"` before loading Reactant.") # hide
+end # hide
 Reactant.devices()
 ```
 
