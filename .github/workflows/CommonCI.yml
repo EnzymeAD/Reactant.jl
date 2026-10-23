@@ -93,7 +93,11 @@ jobs:
         with:
           cache-name: julia-cache;workflow=${{ inputs.julia_version }}-${{ inputs.os }}-${{ inputs.runtime }}-assertions=${{ inputs.assertions }}-${{ github.event_name }}-${{ inputs.test_args }}-${{ inputs.downgrade_testing }}-${{ inputs.localjll || inputs.enzymejax_commit != '' }}-${{ inputs.enzymejax_commit }}
           gcp-bucket: ${{ contains(inputs.os, 'linux') && 'enzyme-ci-transient' || '' }}
-          key-prefix: reactantjl/
+          # Bumped to evict a depot whose registry disagreed with the pkg server
+          # (the TPU core/ifrt key, 2026-09-27); registries are small and are
+          # updated at the start of every job anyway, so they are not cached.
+          key-prefix: reactantjl-v2/
+          cache-registries: false
 
       - uses: julia-actions/julia-downgrade-compat@v2
         if: ${{ inputs.downgrade_testing }}
