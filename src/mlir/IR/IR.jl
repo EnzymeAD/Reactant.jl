@@ -4,40 +4,25 @@ using ..Reactant
 using ..API
 
 using BFloat16s: BFloat16s, BFloat16
-using LLVM: LLVM, @checked, mark_alloc, mark_use, mark_dispose
-import LLVM: activate, deactivate, dispose, @dispose, refcheck
+using LLVM: LLVM, @dispose, mark_alloc, mark_use, mark_dispose, mark_untracked
+import LLVM: activate, deactivate, dispose
 
-mark_donate(x) = (mark_dispose(x); x)
-
-# fix for `@checked` on MLIR.API types
-for AT in [
-    :MlirDialect,
-    :MlirDialectHandle,
-    :MlirDialectRegistry,
-    :MlirContext,
-    :MlirLocation,
-    :MlirType,
-    :MlirTypeID,
-    :MlirTypeIDAllocator,
-    :MlirModule,
-    :MlirOperation,
-    :MlirOpOperand,
-    :MlirBlock,
-    :MlirRegion,
-    :MlirValue,
-    # :MlirLogicalResult,
-    :MlirAffineExpr,
-    :MlirAffineMap,
-    # :MlirAttribute,
-    # :MlirNamedAttribute,
-    :MlirIntegerSet,
-    :MlirIdentifier,
-    :MlirSymbolTable,
-    :MlirExecutionEngine,
-    :MlirPassManager,
-    :MlirOpPassManager,
-]
-    @eval refcheck(T::Core.Type, ref::API.$AT) = refcheck(T, ref.ptr)
+# add an inner constructor to a wrapper type definition, which checks that the handle in
+# its `ref` field isn't null
+macro checked(typedef)
+    Meta.isexpr(typedef, :struct) || error("expected a struct definition")
+    name = typedef.args[2]
+    name = Meta.isexpr(name, :<:) ? name.args[1] : name
+    fields = filter(arg -> !(arg isa LineNumberNode), typedef.args[3].args)
+    names = [Meta.isexpr(f, :(::)) ? f.args[1] : f for f in fields]
+    push!(
+        typedef.args[3].args,
+        :(function $name($(fields...))
+            ref.ptr == C_NULL && throw(UndefRefError())
+            return new($(names...))
+        end),
+    )
+    return esc(typedef)
 end
 
 # WARN do not export `Type` nor `Module` as they are already defined in Core
