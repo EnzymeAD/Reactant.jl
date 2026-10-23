@@ -53,7 +53,6 @@ function optimization_passes(
     dus_to_concat::Bool=false,
     recognize_comms::Bool=true,
     lower_comms::Bool=true,
-    backend::String="gpu",
     is_sharded::Bool=false,
     raise_shlo_to_blas_lapack::Bool=true,
     self_to_convolution::Bool=false,
