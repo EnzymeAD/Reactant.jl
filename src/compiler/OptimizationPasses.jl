@@ -119,6 +119,24 @@ function optimization_passes(
         lower_passes_str, "associative_binary_op_reordering<1>;" => ""
     )
 
+    # TODO: drop both once Reactant_jll ships EnzymeAD/Enzyme-JAX#3639 and #3640.
+    #
+    # `convert_concat` splits a convert of a stacked concatenate into one convert
+    # per operand; `concat_insert_dim_elementwise` batches them back into a
+    # single convert of the stack and the reshape reordering patterns sink the
+    # split converts below their reshapes, so the greedy rewriter loops forever
+    # on `concat(reshape(convert(x_i)))`. Batched, unrolled loops produce that
+    # shape (e.g. the i64 pivots of a batched `lu` converted to `BlasInt`), which
+    # hangs `core/autodiff`, `core/math_ops`, and the linear-algebra tests.
+    #
+    # `reshape_iota` turns a reshape that drops a unit-extent iota dimension
+    # (all zeros) into an iota counting along dimension 0, which gives the
+    # batched `lu` solve wrong pivot indices for every batch but the first.
+    main_passes_str = replace(main_passes_str, "convert_concat<1>;" => "")
+    lower_passes_str = replace(lower_passes_str, "convert_concat<1>;" => "")
+    main_passes_str = replace(main_passes_str, "reshape_iota<1>;" => "")
+    lower_passes_str = replace(lower_passes_str, "reshape_iota<1>;" => "")
+
     transform_passes = join(
         [
             generate_td_pass(main_passes_str),
