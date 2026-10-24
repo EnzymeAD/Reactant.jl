@@ -301,6 +301,14 @@ function set_act!(inp, path, reverse, tostore; emptypath=false, width=1)
     return nothing
 end
 
+# As in eager Enzyme, non-differentiable leaves get no shadow: it may alias the primal
+# (`make_zero` shares integer arrays), so writing one back would clobber the primal.
+function leaf_annotation(arg::Annotation, leaf)
+    arg isa Union{Const,Active} && return arg
+    Enzyme.Compiler.guaranteed_const(unwrapped_eltype(leaf)) || return arg
+    return Const(arg.val)
+end
+
 function act_attr(val)
     return MLIR.IR.Attribute(
         MLIR.API.enzymeActivityAttrGet(MLIR.IR.current_context(), Int32(val))
@@ -364,7 +372,7 @@ function overload_autodiff(
 
     for a in linear_args
         idx, path = TracedUtils.get_argidx(a, argprefix)
-        arg = idx == 1 && fnwrap ? f : args[idx - fnwrap]
+        arg = leaf_annotation(idx == 1 && fnwrap ? f : args[idx - fnwrap], a)
         push!(activity, act_from_type(arg, reverse))
         push_acts!(ad_inputs, arg, path[3:end], reverse)
 
@@ -421,7 +429,7 @@ function overload_autodiff(
 
             if CMode <: ReverseMode && TracedUtils.has_idx(a, argprefix)
                 idx, path = TracedUtils.get_argidx(a, argprefix)
-                arg = idx == 1 && fnwrap ? f : args[idx - fnwrap]
+                arg = leaf_annotation(idx == 1 && fnwrap ? f : args[idx - fnwrap], a)
                 if act_from_type(arg, false) == EnzymeActivity.DUPLICATED
                     seed = reverse_seeds[path]
                     if cst === nothing
@@ -449,7 +457,7 @@ function overload_autodiff(
         else
             if TracedUtils.has_idx(a, argprefix)
                 idx, path = TracedUtils.get_argidx(a, argprefix)
-                arg = idx == 1 && fnwrap ? f : args[idx - fnwrap]
+                arg = leaf_annotation(idx == 1 && fnwrap ? f : args[idx - fnwrap], a)
 
                 act = act_from_type(arg, reverse, true)
                 push!(ret_activity, act)
@@ -542,7 +550,7 @@ function overload_autodiff(
             end
         elseif TracedUtils.has_idx(a, argprefix)
             idx, path = TracedUtils.get_argidx(a, argprefix)
-            arg = idx == 1 && fnwrap ? f : args[idx - fnwrap]
+            arg = leaf_annotation(idx == 1 && fnwrap ? f : args[idx - fnwrap], a)
             TracedUtils.set!(
                 arg.val, path[3:end], TracedUtils.transpose_val(MLIR.IR.result(res, residx))
             )
@@ -570,7 +578,7 @@ function overload_autodiff(
     for a in linear_args
         idx, path = TracedUtils.get_argidx(a, argprefix)
 
-        arg = idx == 1 && fnwrap ? f : args[idx - fnwrap]
+        arg = leaf_annotation(idx == 1 && fnwrap ? f : args[idx - fnwrap], a)
         act_from_type(arg, reverse) != EnzymeActivity.OUT && continue
 
         if idx == 1 && fnwrap && arg isa Active
