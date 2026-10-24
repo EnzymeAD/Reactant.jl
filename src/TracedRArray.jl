@@ -1067,14 +1067,18 @@ end
 function scan_impl!(
     op,
     output::AnyTracedRArray{T,N},
-    input::AnyTracedRArray{T,N};
+    input::AnyTracedRArray{S,N};
     dims::Integer,
     init=Base._InitialValue(),
-) where {T,N}
+) where {T,S,N}
     @assert dims > 0 "dims must be a positive integer"
     @assert axes(output) == axes(input) "output and input must have the same shape"
 
     dims > ndims(input) && return copyto!(output, input)
+
+    # Base accumulates in the output's eltype, which can be wider than the input's:
+    # `cumsum` of `Int32` is `Int64` through `Base.add_sum`
+    S != T && (input = T.(input))
 
     if init isa Base._InitialValue
         op_in_T = Core.Compiler.return_type(op, Tuple{T,T})
@@ -1100,7 +1104,7 @@ function scan_impl!(
     end
 
     init = something(init) # unwrap Some
-    init = Reactant.promote_to(TracedRNumber{unwrapped_eltype(init)}, init)
+    init = Reactant.promote_to(TracedRNumber{unwrapped_eltype(input)}, init)
 
     window_dimensions = ones(Int64, N)
     window_dimensions[dims] = size(input, dims)
