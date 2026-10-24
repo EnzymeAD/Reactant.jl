@@ -895,7 +895,7 @@ Base.@nospecializeinfer function traced_type_inner(
     return T
 end
 
-const traced_type_cache = Dict{Tuple{TraceMode,Type,Any},Dict{Type,Type}}()
+const traced_type_cache = Dict{Tuple{TraceMode,Type,Any,Any},Dict{Type,Type}}()
 
 # function traced_type_generator(world::UInt, source, self, @nospecialize(T::Type), @nospecialize(mode::Type{<:Val}), @nospecialize(track_numbers::Type))
 #     @nospecialize
@@ -988,8 +988,8 @@ const traced_type_cache = Dict{Tuple{TraceMode,Type,Any},Dict{Type,Type}}()
 #     $(Expr(:meta, :generated, traced_type_generator))
 # end
 
-resolve_conflict(t1::Type{<:ConcreteRNumber{T}}, t2::Type{T}) where {T} = T
-resolve_conflict(t1::Type{T}, t2::Type{<:ConcreteRNumber{T}}) where {T} = T
+resolve_conflict(t1::Type{<:AbstractConcreteNumber{T}}, t2::Type{T}) where {T} = T
+resolve_conflict(t1::Type{T}, t2::Type{<:AbstractConcreteNumber{T}}) where {T} = T
 resolve_conflict(t1, t2) = promote_type(t1, t2)
 
 """
@@ -1121,7 +1121,7 @@ Base.@assume_effects :total @inline function traced_type(
 
     ndevices = Sharding.ndevices(sharding)
     cache = nothing
-    cache_key = (mode, track_numbers, ndevices)
+    cache_key = (mode, track_numbers, ndevices, runtime)
     if haskey(traced_type_cache, cache_key)
         cache = traced_type_cache[cache_key]
     else
