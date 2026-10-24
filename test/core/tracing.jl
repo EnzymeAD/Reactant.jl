@@ -392,8 +392,8 @@ end
         [true, false, true],
     )
 
-    CN = ConcreteRNumber{Float32}
-    CA = ConcreteRArray{Float32,1}
+    CN = typeof(ConcreteRNumber(1.0f0))
+    CA = typeof(ConcreteRArray(Float32[1, 2, 3]))
     @test Reactant.apply_type_with_promotion(
         MockScalarOrAbstractArrayUnion, [CN, CA, CN]
     ) == (MockScalarOrAbstractArrayUnion{Float32,CA,Float32}, [true, false, true])

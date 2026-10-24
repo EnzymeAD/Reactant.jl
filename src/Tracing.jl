@@ -1018,7 +1018,7 @@ The first type parameter has been promoted to satisfy to be in agreement with th
 function apply_type_with_promotion(wrapper, params, relevant_typevars=typevar_dict(wrapper))
     unwrapped = Base.unwrap_unionall(wrapper) # remove all the typevars
     original_params = copy(params)
-    params = [params...]
+    params = Any[params...]
 
     changed = true
     iter = 0
