@@ -15,6 +15,10 @@ using Reactant, Test, OneHotArrays, Random
     @test convert(Array, r_res) ≈ res
 end
 
+add_one(x) = x .+ 1.0f0
+to_float32(x) = Float32.(x)
+times_two(x) = 2 .* x
+
 @testset "broadcasting" begin
     m = onehotbatch([10, 20, 30, 10, 10], 10:10:40)
     r_m = Reactant.to_rarray(m)
@@ -34,6 +38,12 @@ end
         res_ra = @jit r_m .* x_ra
         res = m .* x
         @test res_ra ≈ res
+    end
+
+    @testset "$f without a dense operand" for f in (add_one, to_float32, times_two)
+        res_ra = @jit f(r_m)
+        @test res_ra == f(m)
+        @test eltype(res_ra) === eltype(f(m))
     end
 end
 
@@ -67,7 +77,15 @@ end
     @test @jit(onecold(dense_ra)) == oc_res
 end
 
-flat_mul(W, x) = W * reshape(x, size(x, 1), :)
+flat(x) = reshape(x, size(x, 1), :)
+flat_mul(W, x) = W * flat(x)
+flat_sum(x) = sum(flat(x))
+flat_sum_dims(x) = sum(flat(x); dims=1)
+flat_vec_add(x, y) = vec(flat(x)) .+ vec(y)
+flat_bcast_mul(x, y) = flat(x) .* y
+flat_add_one(x) = add_one(flat(x))
+flat_to_float32(x) = to_float32(flat(x))
+flat_times_two(x) = times_two(flat(x))
 
 @testset "matmul with a reshaped $(length(dims) + 1)-d array" for dims in ((15,), (3, 5))
     m = onehotbatch(rand(1:10, dims...), 1:10)
@@ -78,4 +96,23 @@ flat_mul(W, x) = W * reshape(x, size(x, 1), :)
         @jit flat_mul(r_W, r_m)
     end
     @test r_res ≈ flat_mul(W, m)
+end
+
+@testset "reshaped $(length(dims) + 1)-d array" for dims in ((15,), (3, 5))
+    m = onehotbatch(rand(1:10, dims...), 1:10)
+    r_m = Reactant.to_rarray(m)
+    y = Reactant.TestUtils.construct_test_array(Float32, 10, 15)
+    r_y = Reactant.to_rarray(y)
+
+    @test @jit(sum(r_m)) == sum(m)
+    @test @jit(flat_sum(r_m)) == flat_sum(m)
+    @test @jit(flat_sum_dims(r_m)) == flat_sum_dims(m)
+    @test @jit(flat_vec_add(r_m, r_y)) ≈ flat_vec_add(m, y)
+    @test @jit(flat_bcast_mul(r_m, r_y)) ≈ flat_bcast_mul(m, y)
+
+    @testset "$f" for f in (flat_add_one, flat_to_float32, flat_times_two)
+        res_ra = @jit f(r_m)
+        @test res_ra == f(m)
+        @test eltype(res_ra) === eltype(f(m))
+    end
 end

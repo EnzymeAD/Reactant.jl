@@ -186,6 +186,69 @@ sum_eq1_init(x) = sum(y -> y == 1, x; init=10)
     @test Reactant.unwrapped_eltype(@jit(maximum(b_ra))) === typeof(maximum(b))
 end
 
+count_gt1(x) = count(>(1), x)
+count_dims1(x) = count(x; dims=1)
+count_gt1_dims2(x) = count(>(1), x; dims=2)
+count_init(x) = count(x; init=10)
+
+@testset "count" begin
+    b = [true, false, true, true]
+    b_ra = Reactant.to_rarray(b)
+
+    @test @jit(count(b_ra)) == count(b)
+    @test Reactant.unwrapped_eltype(@jit(count(b_ra))) === typeof(count(b))
+    @test @jit(count_init(b_ra)) == count_init(b)
+
+    m = [1 2 3; 3 1 2]
+    m_ra = Reactant.to_rarray(m)
+
+    @test @jit(count_gt1(m_ra)) == count_gt1(m)
+    @test Array(@jit(count_gt1_dims2(m_ra))) == count_gt1_dims2(m)
+
+    bm = [true false true; true true false]
+    bm_ra = Reactant.to_rarray(bm)
+
+    @test Array(@jit(count_dims1(bm_ra))) == count_dims1(bm)
+    @test eltype(Array(@jit(count_dims1(bm_ra)))) === eltype(count_dims1(bm))
+
+    r_ra = Reactant.to_rarray(zeros(Int, 1, 3))
+    @jit(count!(r_ra, bm_ra))
+    @test Array(r_ra) == count!(zeros(Int, 1, 3), bm)
+end
+
+count_missing(x) = count(ismissing, x)
+count_missing_init(x) = count(ismissing, x; init=10)
+count_missing_dims1(x) = count(ismissing, x; dims=1)
+any_missing(x) = any(ismissing, x)
+any_missing_dims2(x) = any(ismissing, x; dims=2)
+all_numbers(x) = all(v -> v isa Number, x)
+sum_isreal(x) = sum(isreal, x)
+sum_isreal_dims2(x) = sum(isreal, x; dims=2)
+safe_sum(x) = any(ismissing, x) ? zero(eltype(x)) : sum(x)
+
+@testset "reduce over a map to plain values (#3410)" begin
+    x = [1.0 2.0 3.0; 4.0 5.0 6.0]
+    x_ra = Reactant.to_rarray(x)
+
+    # known at trace time, so a plain value of Base's type, not a traced one
+    @testset "$f" for f in (
+        count_missing,
+        count_missing_init,
+        count_missing_dims1,
+        any_missing,
+        any_missing_dims2,
+        all_numbers,
+        sum_isreal,
+        sum_isreal_dims2,
+    )
+        res = @jit f(x_ra)
+        @test res == f(x)
+        @test typeof(res) === typeof(f(x))
+    end
+
+    @test @jit(safe_sum(x_ra)) ≈ safe_sum(x)
+end
+
 function fntest1(x)
     y = similar(x, 1, 1, 8)
     sum!(y, x)

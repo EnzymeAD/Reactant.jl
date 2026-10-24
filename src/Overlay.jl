@@ -304,6 +304,11 @@ end
     end
 end
 
+# `count` wraps its predicate in `Base._bool`, which asserts a plain `Bool`
+@reactant_overlay function Base._bool(f)
+    return x -> f(x)::Union{Bool,TracedRNumber{Bool}}
+end
+
 @reactant_overlay function Base._getindex(
     ::IndexLinear, x::Array{T,N}, idxs::Vararg{Any,N}
 ) where {T,N}
