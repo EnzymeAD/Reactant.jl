@@ -392,8 +392,8 @@ end
         [true, false, true],
     )
 
-    CN = Reactant.ConcretePJRTNumber{Float32,1}
-    CA = Reactant.ConcretePJRTArray{Float32,1,1}
+    CN = ConcreteRNumber{Float32}
+    CA = ConcreteRArray{Float32,1}
     @test Reactant.apply_type_with_promotion(
         MockScalarOrAbstractArrayUnion, [CN, CA, CN]
     ) == (MockScalarOrAbstractArrayUnion{Float32,CA,Float32}, [true, false, true])
