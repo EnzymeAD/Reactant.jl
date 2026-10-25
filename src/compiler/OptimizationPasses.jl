@@ -396,8 +396,12 @@ function get_optimize_comms_passes(options::OptimizeCommunicationOptions)
         ),
         "transform-interpreter",
         "enzyme-hlo-remove-transform",
+        # `slice_rotate` hoists a rotation above the slices of its operand, so that the
+        # rotations of one field by several amounts, which the main pipeline's slice
+        # propagation leaves on separate slices of it, are grouped by the recognizer that
+        # follows into one exchange per field and direction.
         generate_td_pass(
-            "reshape_to_broadcast;recognize_multirotate;use_multirotate_neutral_result;recognize_multislice",
+            "slice_rotate;reshape_to_broadcast;recognize_multirotate;use_multirotate_neutral_result;recognize_multislice",
         ),
         "transform-interpreter",
         "enzyme-hlo-remove-transform",
