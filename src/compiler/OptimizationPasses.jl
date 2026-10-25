@@ -399,9 +399,12 @@ function get_optimize_comms_passes(options::OptimizeCommunicationOptions)
         # `slice_rotate` hoists a rotation above the slices of its operand, so that the
         # rotations of one field by several amounts, which the main pipeline's slice
         # propagation leaves on separate slices of it, are grouped by the recognizer that
-        # follows into one exchange per field and direction.
+        # follows into one exchange per field and direction. `slice_wrap` does the same
+        # for a periodic wrap applied separately to several slices of one field that
+        # leave the wrapped dimension whole (the per-level slabs of a column), so the
+        # wrap is exchanged once for the field.
         generate_td_pass(
-            "slice_rotate;reshape_to_broadcast;recognize_multirotate;use_multirotate_neutral_result;recognize_multislice",
+            "slice_wrap;slice_rotate;reshape_to_broadcast;recognize_multirotate;use_multirotate_neutral_result;recognize_multislice",
         ),
         "transform-interpreter",
         "enzyme-hlo-remove-transform",
