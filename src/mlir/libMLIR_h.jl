@@ -16059,6 +16059,26 @@ function enzymexlaCommMpiOpAttrGet(ctx, op)
     )::MlirAttribute
 end
 
+function enzymexlaCommNcclCommTypeGet(ctx)
+    @ccall Reactant_jll.libReactantExtra.enzymexlaCommNcclCommTypeGet(
+        ctx::MlirContext
+    )::MlirType
+end
+
+@cenum EnzymeXlaCommNcclRedOp::UInt32 begin
+    ENZYMEXLA_COMM_NCCL_RED_OP_SUM = 0x0000000000000000
+    ENZYMEXLA_COMM_NCCL_RED_OP_PROD = 0x0000000000000001
+    ENZYMEXLA_COMM_NCCL_RED_OP_MIN = 0x0000000000000002
+    ENZYMEXLA_COMM_NCCL_RED_OP_MAX = 0x0000000000000003
+    ENZYMEXLA_COMM_NCCL_RED_OP_AVG = 0x0000000000000004
+end
+
+function enzymexlaCommNcclRedOpAttrGet(ctx, op)
+    @ccall Reactant_jll.libReactantExtra.enzymexlaCommNcclRedOpAttrGet(
+        ctx::MlirContext, op::EnzymeXlaCommNcclRedOp
+    )::MlirAttribute
+end
+
 @cenum EnzymeXlaGuaranteedAnalysisResult::UInt32 begin
     ENZYMEXLA_GUARANTEED_ANALYSIS_RESULT_GUARANTEED = 0x0000000000000000
     ENZYMEXLA_GUARANTEED_ANALYSIS_RESULT_NOTGUARANTEED = 0x0000000000000001
