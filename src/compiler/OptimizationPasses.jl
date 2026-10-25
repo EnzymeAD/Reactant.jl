@@ -396,23 +396,45 @@ function get_optimize_comms_passes(options::OptimizeCommunicationOptions)
         ),
         "transform-interpreter",
         "enzyme-hlo-remove-transform",
-        # `slice_rotate` hoists a rotation above the slices of its operand, so that the
-        # rotations of one field by several amounts, which the main pipeline's slice
-        # propagation leaves on separate slices of it, are grouped by the recognizer that
-        # follows into one exchange per field and direction.
-        generate_td_pass(
-            "slice_rotate;reshape_to_broadcast;recognize_multirotate;use_multirotate_neutral_result;recognize_multislice",
-        ),
-        "transform-interpreter",
-        "enzyme-hlo-remove-transform",
-        options_str,
-        generate_td_pass(
-            "lower_rotate;lower_wrap;lower_extend;lower_updatewithoutcorners;lower_multislice",
-        ),
-        "transform-interpreter",
-        "enzyme-hlo-remove-transform",
-        options_str,
     ]
+    if options.dus_sink_slices_comm > 0
+        # Runs on the plain slices, before they are grouped into multislices: the slices
+        # feeding the update of a DUS on a sharded dimension are moved down to the DUS.
+        early = (:dus_sink_slices_comm, :dus_sink_slices_max_extra_percent)
+        push!(
+            res,
+            "optimize-communication{" *
+            join(
+                [
+                    "$(f)=$(f in early ? getfield(options, f) : 0)" for
+                    f in fieldnames(OptimizeCommunicationOptions)
+                ],
+                " ",
+            ) *
+            " dus_of_concat_slices=0 reorder_associative=0}",
+        )
+    end
+    append!(
+        res,
+        [
+            # `slice_rotate` hoists a rotation above the slices of its operand, so that the
+            # rotations of one field by several amounts, which the main pipeline's slice
+            # propagation leaves on separate slices of it, are grouped by the recognizer
+            # that follows into one exchange per field and direction.
+            generate_td_pass(
+                "slice_rotate;reshape_to_broadcast;recognize_multirotate;use_multirotate_neutral_result;recognize_multislice",
+            ),
+            "transform-interpreter",
+            "enzyme-hlo-remove-transform",
+            options_str,
+            generate_td_pass(
+                "lower_rotate;lower_wrap;lower_extend;lower_updatewithoutcorners;lower_multislice",
+            ),
+            "transform-interpreter",
+            "enzyme-hlo-remove-transform",
+            options_str,
+        ],
+    )
     return res
 end
 

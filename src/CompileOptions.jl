@@ -26,6 +26,13 @@ communication.
     extend_comm::Int = 0
     dus_to_pad_manual_comp_comm::Int = 0 # 2
     dus_to_pad_comm::Int = 0
+    # The slices feeding the update of a DUS on a sharded dimension are moved down to the
+    # DUS: the update is recomputed at the full extent (the discarded part bounded by
+    # `dus_sink_slices_max_extra_percent` of the window), leaving a DUS of a slice at its
+    # own window, which XLA partitions without communication, instead of a halo exchange
+    # per slice the update was narrowed to.
+    dus_sink_slices_comm::Int = 1
+    dus_sink_slices_max_extra_percent::Int = 100
     concat_two_operands_comm::Int = 0
     concat_to_pad_comm::Int = 0
     concat_to_dus::Int = 1
