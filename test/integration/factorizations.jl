@@ -126,7 +126,6 @@ end
         Are = Reactant.to_rarray(A)
         C = cholesky(A)
         Cre = @jit cholesky(Are)
-        
         @test Cre.U ≈ C.U
         @test Cre.L ≈ C.L
         @test Cre.UL ≈ C.UL
