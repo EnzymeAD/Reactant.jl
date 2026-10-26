@@ -326,9 +326,9 @@ Base.@nospecializeinfer function compile_mlir!(
     if backend == "cpu" || backend == "tpu" || backend == "neuron" || backend == "trainium"
         kern = "lower-kernel{backend=cpu},canonicalize"
         if backend == "tpu" || backend == "neuron" || backend == "trainium"
-            jit = "lower-affine,$(OpenMP[] ? "convert-scf-to-openmp" : "convert-scf-to-cf"),convert-polygeist-to-llvm{backend=cpu preserve-xla-funcs=true},lower-jit{openmp=$(OpenMP[])},symbol-dce,strip-debuginfo"
+            jit = "lower-affine,$(OpenMP[] ? "convert-scf-to-openmp" : "convert-scf-to-cf"),convert-polygeist-to-llvm{backend=cpu preserve-xla-funcs=true},lower-jit,symbol-dce,strip-debuginfo"
         else
-            jit = "lower-affine,$(OpenMP[] ? "convert-scf-to-openmp" : "convert-scf-to-cf"),convert-polygeist-to-llvm{backend=cpu preserve-xla-funcs=true},lower-jit{openmp=$(OpenMP[])},symbol-dce"
+            jit = "lower-affine,$(OpenMP[] ? "convert-scf-to-openmp" : "convert-scf-to-cf"),convert-polygeist-to-llvm{backend=cpu preserve-xla-funcs=true},lower-jit,symbol-dce"
         end
     else
         kern = if is_raising

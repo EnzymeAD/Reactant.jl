@@ -366,8 +366,12 @@ if build_backend isa CUDABackend
 
     # XLA loads the CUDA runtime with dlopen, searching the pip-style layout next to the
     # library.
-    cudart_dir = joinpath(dirname(realpath(lib_path)), "..", "nvidia", "cuda_runtime", "lib")
-    cudart_source = joinpath(source_dir, "bazel-ReactantExtra", "external", "cuda_cudart", "lib")
+    cudart_dir = joinpath(
+        dirname(realpath(lib_path)), "..", "nvidia", "cuda_runtime", "lib"
+    )
+    cudart_source = joinpath(
+        source_dir, "bazel-ReactantExtra", "external", "cuda_cudart", "lib"
+    )
     for name in readdir(cudart_source)
         startswith(name, "libcudart.so") || continue
         full_path = joinpath(cudart_dir, name)
