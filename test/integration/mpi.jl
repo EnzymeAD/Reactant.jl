@@ -55,7 +55,7 @@ elseif RUN_GPU_MPI_TESTS
     Reactant.initialize_nccl_comm!(MPI.COMM_WORLD)
 
     # finalize at exit instead of using a big `try...finaly...end` block
-    atexit(ReactantMPIExt.destroy_default_comm)
+    atexit(Base.get_extension(Reactant, :ReactantMPIExt).destroy_default_comm)
 end
 
 # run tests
