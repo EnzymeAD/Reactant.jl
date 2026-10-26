@@ -735,10 +735,7 @@ Base.@nospecializeinfer function compile_mlir!(
         # with them, we propagate them down to minimize the number of Ops in the IR.
         # Since this might enable certain raising, we do push down -> push up -> push down
         common_kwargs = (;
-            recognize_comms,
-            lower_comms,
-            is_sharded,
-            raise_shlo_to_blas_lapack=false,
+            recognize_comms, lower_comms, is_sharded, raise_shlo_to_blas_lapack=false
         )
         opt_passes_down = optimization_passes(
             Reactant.__compile_options_with_reversed_propagation(compile_options);
@@ -1281,13 +1278,7 @@ Reactant.@annotate "compile $(string(f))" function compile_xla(
         compile_options, kwargs = __get_compile_options_and_kwargs(; kwargs...)
 
         mlir_fn_res = compile_mlir!(
-            mod,
-            f,
-            args,
-            compile_options;
-            runtime=XLA.runtime(client),
-            client,
-            kwargs...,
+            mod, f, args, compile_options; runtime=XLA.runtime(client), client, kwargs...
         )
 
         # Resolve client and device
