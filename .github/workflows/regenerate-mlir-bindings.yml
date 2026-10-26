@@ -65,7 +65,7 @@ jobs:
       - name: Make generated files writable
         run: |
           chmod -R u+rw ./src/mlir/Dialects/ ./src/proto/
-          chmod u+rw ./src/mlir/libMLIR_h.jl ./src/xla/PJRT/CAPI.jl
+          chmod u+rw ./src/mlir/libMLIR_h.jl
           git config core.fileMode false
       - name: Format code
         shell: julia --color=yes {0}
@@ -75,7 +75,7 @@ jobs:
               "./src/mlir/Dialects/",
               "./src/mlir/libMLIR_h.jl",
               "./src/proto/",
-              "./src/xla/PJRT/CAPI.jl",
+              "./src/xla/CAPI/PJRT.jl",
           ]
           format.(targets)
           # Format twice to work around <https://github.com/domluna/JuliaFormatter.jl/issues/897>.
