@@ -27,6 +27,7 @@ function LLVMclopts(opts...)
     return MLIR.API.ReactantLLVMParseCommandLineOptions(length(args), args, C_NULL)
 end
 
+include("CAPI/CAPI.jl")
 include("Distributed.jl")
 include("Client.jl")
 include("Device.jl")
