@@ -84,11 +84,39 @@ function rewrite_pjrt_define_struct_traits(node)
     )
 end
 
+function rewrite_pjrt_args_struct_constructor(node)
+    node.type isa Generators.StructDefinition || return nothing
+    ex = only(node.exprs)
+    Base.remove_linenums!(ex)
+    @assert Meta.isexpr(ex, :struct)
+
+    ismut, name, body = ex.args
+    endswith(string(name), "_Args") || return nothing
+
+    @assert Meta.isexpr(body, :block)
+    push!(body.args,
+        Expr(:function,
+            Expr(:call, name, Expr(:..., :args)),
+            Expr(:block,
+                Expr(:return,
+                    Expr(:call, :new, Expr(:call, :csizeof, name), Expr(:..., :args)))))
+    )
+    return node
+end
+
 function rewrite!(dag::ExprDAG)
     for (i, node) in enumerate(dag.nodes)
+        # fix `@cenum` disaster of `PJRT_DEFINE_STRUCT_TRAITS` macro
         new_node = rewrite_pjrt_define_struct_traits(node)
-        isnothing(new_node) && continue
-        dag.nodes[i] = new_node
+        if !isnothing(new_node)
+            dag.nodes[i] = new_node
+        end
+
+        # automatically set `struct_size` field (first) of `*_Args` structs
+        new_node = rewrite_pjrt_args_struct_constructor(node)
+        if !isnothing(new_node)
+            dag.nodes[i] = new_node
+        end
     end
     return dag
 end
