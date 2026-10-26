@@ -103,7 +103,7 @@ function (@main)(argv)
     options["general"]["output_file_path"] = output
 
     args = Generators.get_default_args()
-    const CORE_HEADER = joinpath("xla", "pjrt", "c", "pjrt_c_api.h")
+    CORE_HEADER = joinpath("xla", "pjrt", "c", "pjrt_c_api.h")
     include_path = let idx = findfirst(h -> endswith(h, CORE_HEADER), headers)
         isnothing(idx) && error("`$(CORE_HEADER)` must be one of the input headers")
         chopsuffix(headers[idx], CORE_HEADER)
