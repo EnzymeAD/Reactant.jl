@@ -127,7 +127,9 @@ end
         C = cholesky(A)
         Cre = @jit cholesky(Are)
         @test Cre.U ≈ C.U
-        @test Cre.L ≈ C.L
+        # Cre.L wraps an `Adjoint`, and `@allowscalar` is needed to circumvent
+        # https://github.com/EnzymeAD/Reactant.jl/issues/3583
+        @test @allowscalar(Cre.L ≈ C.L)
         @test Cre.UL ≈ C.UL
     end
 
