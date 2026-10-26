@@ -94,12 +94,19 @@ function rewrite_pjrt_args_struct_constructor(node)
     endswith(string(name), "_Args") || return nothing
 
     @assert Meta.isexpr(body, :block)
-    push!(body.args,
-        Expr(:function,
+    push!(
+        body.args,
+        Expr(
+            :function,
             Expr(:call, name, Expr(:..., :args)),
-            Expr(:block,
-                Expr(:return,
-                    Expr(:call, :new, Expr(:call, :csizeof, name), Expr(:..., :args)))))
+            Expr(
+                :block,
+                Expr(
+                    :return,
+                    Expr(:call, :new, Expr(:call, :csizeof, name), Expr(:..., :args)),
+                ),
+            ),
+        ),
     )
     return node
 end
