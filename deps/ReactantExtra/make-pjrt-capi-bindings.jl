@@ -13,41 +13,50 @@ else
 end
 
 # get header files
-bazel_targets = join([
-    "@xla//xla/pjrt/c:pjrt_c_api.h",
-    "@xla//xla/pjrt/c:pjrt_c_api_callback_extension.h",
-    "@xla//xla/pjrt/c:pjrt_c_api_collectives_extension.h",
-    "@xla//xla/pjrt/c:pjrt_c_api_custom_partitioner_extension.h",
-    "@xla//xla/pjrt/c:pjrt_c_api_abi_version_extension.h",
-    "@xla//xla/pjrt/c:pjrt_c_api_device_event.h",
-    "@xla//xla/pjrt/c:pjrt_c_api_ffi_extension.h",
-    "@xla//xla/pjrt/c:pjrt_c_api_gpu_extension.h",
-    "@xla//xla/pjrt/c:pjrt_c_api_layouts_extension.h",
-    "@xla//xla/pjrt/c:pjrt_c_api_megascale_extension.h",
-    "@xla//xla/pjrt/c:pjrt_c_api_memory_descriptions_extension.h",
-    "@xla//xla/pjrt/c:pjrt_c_api_multi_slice_extension.h",
-    "@xla//xla/pjrt/c:pjrt_c_api_phase_compile_extension.h",
-    "@xla//xla/pjrt/c:pjrt_c_api_profiler_extension.h",
-    "@xla//xla/pjrt/c:pjrt_c_api_raw_buffer_extension.h",
-    "@xla//xla/pjrt/c:pjrt_c_api_shardings_extension.h",
-    "@xla//xla/pjrt/c:pjrt_c_api_stream_extension.h",
-    "@xla//xla/pjrt/c:pjrt_c_api_tpu_executable_extension.h",
-    "@xla//xla/pjrt/c:pjrt_c_api_tpu_topology_extension.h",
-    "@xla//xla/pjrt/c:pjrt_c_api_xla_transform_extension.h",
-], ' ')
+bazel_targets = join(
+    [
+        "@xla//xla/pjrt/c:pjrt_c_api.h",
+        "@xla//xla/pjrt/c:pjrt_c_api_callback_extension.h",
+        "@xla//xla/pjrt/c:pjrt_c_api_collectives_extension.h",
+        "@xla//xla/pjrt/c:pjrt_c_api_custom_partitioner_extension.h",
+        "@xla//xla/pjrt/c:pjrt_c_api_abi_version_extension.h",
+        "@xla//xla/pjrt/c:pjrt_c_api_device_event.h",
+        "@xla//xla/pjrt/c:pjrt_c_api_ffi_extension.h",
+        "@xla//xla/pjrt/c:pjrt_c_api_gpu_extension.h",
+        "@xla//xla/pjrt/c:pjrt_c_api_layouts_extension.h",
+        "@xla//xla/pjrt/c:pjrt_c_api_megascale_extension.h",
+        "@xla//xla/pjrt/c:pjrt_c_api_memory_descriptions_extension.h",
+        "@xla//xla/pjrt/c:pjrt_c_api_multi_slice_extension.h",
+        "@xla//xla/pjrt/c:pjrt_c_api_phase_compile_extension.h",
+        "@xla//xla/pjrt/c:pjrt_c_api_profiler_extension.h",
+        "@xla//xla/pjrt/c:pjrt_c_api_raw_buffer_extension.h",
+        "@xla//xla/pjrt/c:pjrt_c_api_shardings_extension.h",
+        "@xla//xla/pjrt/c:pjrt_c_api_stream_extension.h",
+        "@xla//xla/pjrt/c:pjrt_c_api_tpu_executable_extension.h",
+        "@xla//xla/pjrt/c:pjrt_c_api_tpu_topology_extension.h",
+        "@xla//xla/pjrt/c:pjrt_c_api_xla_transform_extension.h",
+    ],
+    ' ',
+)
 
-headers = let cmd = Cmd(`$(bazel_cmd) query --output=location --noshow_progress --ui_event_filters=-info "set($(bazel_targets))"`; dir=@__DIR__)
-    map(eachline(IOBuffer(String(read(cmd))))) do line
-        String(split(line, ':'; limit=2)[1])
+headers =
+    let cmd = Cmd(
+            `$(bazel_cmd) query --output=location --noshow_progress --ui_event_filters=-info "set($(bazel_targets))"`;
+            dir=@__DIR__
+        )
+        map(eachline(IOBuffer(String(read(cmd))))) do line
+            String(split(line, ':'; limit=2)[1])
+        end
     end
-end
 
 # anonymous `enum { X_STRUCT_SIZE = ... }` from `PJRT_DEFINE_STRUCT_TRAITS(X,_)`
 # are emitted as `@cenum __JL_Ctag_N::UInt32 begin X_STRUCT_SIZE = v end`
 # rewrite them into `csizeof(::Type{T}) = Csize_t(v)`
 struct PjrtStructTraitsExprNodeType <: Generators.AbstractExprNodeType end
 
-function Generators.pretty_print(io, node::ExprNode{PjrtStructTraitsExprNodeType}, options::Dict)
+function Generators.pretty_print(
+    io, node::ExprNode{PjrtStructTraitsExprNodeType}, options::Dict
+)
     foreach(ex -> println(io, ex), node.exprs)
     println(io)
     return nothing
@@ -65,7 +74,14 @@ function rewrite_pjrt_define_struct_traits(node)
     typname != name || return nothing
 
     ex = Expr(:(=), :(csizeof(::Type{$typname})), :(Csize_t($value)))
-    return ExprNode(node.id, PjrtStructTraitsExprNodeType(), node.cursor, Expr[ex], node.premature_exprs, node.adj)
+    return ExprNode(
+        node.id,
+        PjrtStructTraitsExprNodeType(),
+        node.cursor,
+        Expr[ex],
+        node.premature_exprs,
+        node.adj,
+    )
 end
 
 function rewrite!(dag::ExprDAG)
