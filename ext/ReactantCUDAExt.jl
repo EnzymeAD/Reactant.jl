@@ -146,6 +146,21 @@ end
 @inline Base.ifelse(cond::CuTracedRNumber, a::CuTracedRNumber, b::CuTracedRNumber) =
     ifelse(cond[], a[], b[])
 
+# `Base.clamp` returns one of its arguments when all three share a type, which for
+# `CuTracedRNumber`s is a pointer chosen by a branch, and raising reads zeros through it.
+# Clamp the loaded values instead.
+@inline loaded_value(x::CuTracedRNumber) = x[]
+@inline loaded_value(x) = x
+
+for X in (:CuTracedRNumber, :Number),
+    L in (:CuTracedRNumber, :Number),
+    H in (:CuTracedRNumber, :Number)
+
+    X === L === H === :Number && continue
+    @eval @inline Base.clamp(x::$X, lo::$L, hi::$H) =
+        clamp(loaded_value(x), loaded_value(lo), loaded_value(hi))
+end
+
 Base.@constprop :aggressive @inline Base.:^(
     a::CuTracedRNumber{T,A}, b::Integer
 ) where {T,A} = ^(a[], b)

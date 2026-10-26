@@ -27,6 +27,14 @@ function dus2(x, y)
     return nothing
 end
 
+function interior_stencil(x)
+    M = size(x, 1) - 2
+    inside = (2 .<= (1:M) .<= (M - 1))
+    g = x[2:(M + 1), :] .^ 2
+    f = 2 .* g .+ x[3:(M + 2), :]
+    return ifelse.(inside, f, g)
+end
+
 function multirot(x)
     xs = [
         Reactant.Ops.rotate(x, size(x, 1) - 2, ; dimension=1),
@@ -160,6 +168,37 @@ if length(addressable_devices) ≥ 8
 
             hlo
         end
+    end
+
+    # A stencil on the interior of a sharded dimension. The constant mask lets the main
+    # pipeline turn the select into a DUS of the stencil computed on the window only, and
+    # the window [1, M-1) is not on the shard boundary: the DUS and the slice of `g` it
+    # leaves behind would each exchange halos. The communication optimizer moves the
+    # slices down to the DUS (dus_sink_slices_comm): the stencil is computed at the full
+    # extent (258 rows, no 256-row intermediate is left) and the DUS gets the slice at its
+    # window, which XLA partitions without communication.
+    @testset "Interior stencil" begin
+        N = min((length(Reactant.devices()) ÷ 2) * 2, 8)
+
+        mesh = Sharding.Mesh(reshape(Reactant.devices()[1:N], 2, :), (:x, :y))
+        sharding = Sharding.NamedSharding(mesh, (:x, :y))
+
+        x = reshape(collect(Float64, 1:(258 * 12)), 258, 12)
+        rx = Reactant.to_rarray(x; sharding)
+
+        # The update of the DUS (the stencil on the 254 interior rows) is recomputed at
+        # the 256-row extent of the DUS operand and the DUS is given a slice of it at its
+        # own window; nothing is left computed at the narrowed 254-row extent.
+        hlo = @code_hlo shardy_passes = :to_mhlo_shardings interior_stencil(rx)
+        @test @filecheck begin
+            @check_not "stablehlo.multiply{{.*}}tensor<{{(254x12|12x254)}}xf64>"
+            @check "stablehlo.multiply{{.*}}tensor<{{(256x12|12x256)}}xf64>"
+            @check "stablehlo.dynamic_update_slice"
+            hlo
+        end
+
+        res = @jit shardy_passes = :to_mhlo_shardings interior_stencil(rx)
+        @test convert(Array, res) == interior_stencil(x)
     end
 end
 

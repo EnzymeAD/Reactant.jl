@@ -289,3 +289,34 @@ end
     @jit raise = true launch_typed!(y, Float32, Reactant.to_rarray(x))
     @test Array(y) == y_cpu
 end
+
+# A raised kernel clamps traced numbers. Inside a kernel `convert` to the kernel's traced
+# number type returns a pointer to the value, which `clamp` has to load rather than return.
+@kernel function clamp_kernel!(out, @Const(x), s, ::Val{form}) where {form}
+    i = @index(Global)
+    T = typeof(s)
+    xᵢ = @inbounds x[i]
+    @inbounds out[i] = if form === :all_traced
+        clamp(convert(T, xᵢ), convert(T, 2), convert(T, 5))
+    elseif form === :traced_value
+        clamp(convert(T, xᵢ), 2, 5)
+    else
+        clamp(xᵢ, convert(T, 2), convert(T, 5))
+    end
+end
+
+function launch_clamp!(out, x, s, form)
+    backend = KernelAbstractions.get_backend(out)
+    clamp_kernel!(backend)(out, x, s, form; ndrange=length(out))
+    return nothing
+end
+
+@testset "KernelAbstractions clamp of traced numbers (raised)" begin
+    x = Float32[0.5, 1.5, 2.5, 3.5, 4.5, 5.5, 6.5, 7.5]
+    s = Reactant.to_rarray(1.0f0; track_numbers=true)
+    @testset "$form" for form in (:all_traced, :traced_value, :traced_bounds)
+        out = Reactant.to_rarray(zeros(Float32, 8))
+        @jit raise = true launch_clamp!(out, Reactant.to_rarray(x), s, Val(form))
+        @test Array(out) == clamp.(x, 2, 5)
+    end
+end
