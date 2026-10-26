@@ -63,6 +63,9 @@ struct PJRT_Error_Destroy_Args
     struct_size::Csize_t
     extension_start::Ptr{PJRT_Extension_Base}
     error::Ptr{PJRT_Error}
+    function PJRT_Error_Destroy_Args(args...)
+        return new(csizeof(PJRT_Error_Destroy_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Error_Destroy_Args}) = Csize_t(24)
@@ -76,6 +79,9 @@ struct PJRT_Error_Message_Args
     error::Ptr{PJRT_Error}
     message::Cstring
     message_size::Csize_t
+    function PJRT_Error_Message_Args(args...)
+        return new(csizeof(PJRT_Error_Message_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Error_Message_Args}) = Csize_t(40)
@@ -115,6 +121,9 @@ struct PJRT_Error_GetCode_Args
     extension_start::Ptr{PJRT_Extension_Base}
     error::Ptr{PJRT_Error}
     code::PJRT_Error_Code
+    function PJRT_Error_GetCode_Args(args...)
+        return new(csizeof(PJRT_Error_GetCode_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Error_GetCode_Args}) = Csize_t(28)
@@ -128,6 +137,9 @@ struct PJRT_Error_ForEachPayload_Args
     error::Ptr{PJRT_Error}
     visitor::PJRT_Error_PayloadVisitor
     user_arg::Ptr{Cvoid}
+    function PJRT_Error_ForEachPayload_Args(args...)
+        return new(csizeof(PJRT_Error_ForEachPayload_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Error_ForEachPayload_Args}) = Csize_t(40)
@@ -202,6 +214,9 @@ csizeof(::Type{PJRT_NamedValue}) = Csize_t(56)
 struct PJRT_Plugin_Initialize_Args
     struct_size::Csize_t
     extension_start::Ptr{PJRT_Extension_Base}
+    function PJRT_Plugin_Initialize_Args(args...)
+        return new(csizeof(PJRT_Plugin_Initialize_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Plugin_Initialize_Args}) = Csize_t(16)
@@ -214,6 +229,9 @@ struct PJRT_Plugin_Attributes_Args
     extension_start::Ptr{PJRT_Extension_Base}
     attributes::Ptr{PJRT_NamedValue}
     num_attributes::Csize_t
+    function PJRT_Plugin_Attributes_Args(args...)
+        return new(csizeof(PJRT_Plugin_Attributes_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Plugin_Attributes_Args}) = Csize_t(32)
@@ -227,6 +245,9 @@ struct PJRT_Event_Destroy_Args
     struct_size::Csize_t
     extension_start::Ptr{PJRT_Extension_Base}
     event::Ptr{PJRT_Event}
+    function PJRT_Event_Destroy_Args(args...)
+        return new(csizeof(PJRT_Event_Destroy_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Event_Destroy_Args}) = Csize_t(24)
@@ -239,6 +260,9 @@ struct PJRT_Event_IsReady_Args
     extension_start::Ptr{PJRT_Extension_Base}
     event::Ptr{PJRT_Event}
     is_ready::Bool
+    function PJRT_Event_IsReady_Args(args...)
+        return new(csizeof(PJRT_Event_IsReady_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Event_IsReady_Args}) = Csize_t(25)
@@ -250,6 +274,9 @@ struct PJRT_Event_Error_Args
     struct_size::Csize_t
     extension_start::Ptr{PJRT_Extension_Base}
     event::Ptr{PJRT_Event}
+    function PJRT_Event_Error_Args(args...)
+        return new(csizeof(PJRT_Event_Error_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Event_Error_Args}) = Csize_t(24)
@@ -261,6 +288,9 @@ struct PJRT_Event_Await_Args
     struct_size::Csize_t
     extension_start::Ptr{PJRT_Extension_Base}
     event::Ptr{PJRT_Event}
+    function PJRT_Event_Await_Args(args...)
+        return new(csizeof(PJRT_Event_Await_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Event_Await_Args}) = Csize_t(24)
@@ -277,6 +307,9 @@ struct PJRT_Event_OnReady_Args
     event::Ptr{PJRT_Event}
     callback::PJRT_Event_OnReadyCallback
     user_arg::Ptr{Cvoid}
+    function PJRT_Event_OnReady_Args(args...)
+        return new(csizeof(PJRT_Event_OnReady_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Event_OnReady_Args}) = Csize_t(40)
@@ -288,6 +321,9 @@ struct PJRT_Event_Create_Args
     struct_size::Csize_t
     extension_start::Ptr{PJRT_Extension_Base}
     event::Ptr{PJRT_Event}
+    function PJRT_Event_Create_Args(args...)
+        return new(csizeof(PJRT_Event_Create_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Event_Create_Args}) = Csize_t(24)
@@ -302,6 +338,9 @@ struct PJRT_Event_Set_Args
     error_code::PJRT_Error_Code
     error_message::Cstring
     error_message_size::Csize_t
+    function PJRT_Event_Set_Args(args...)
+        return new(csizeof(PJRT_Event_Set_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Event_Set_Args}) = Csize_t(48)
@@ -404,6 +443,9 @@ struct PJRT_KeyValueGetCallback_Args
     value::Cstring
     value_size::Csize_t
     value_deleter_callback::PJRT_KeyValueGetCallback_ValueDeleter
+    function PJRT_KeyValueGetCallback_Args(args...)
+        return new(csizeof(PJRT_KeyValueGetCallback_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_KeyValueGetCallback_Args}) = Csize_t(80)
@@ -424,6 +466,9 @@ struct PJRT_KeyValueTryGetCallback_Args
     value::Cstring
     value_size::Csize_t
     value_deleter_callback::PJRT_KeyValueTryGetCallback_ValueDeleter
+    function PJRT_KeyValueTryGetCallback_Args(args...)
+        return new(csizeof(PJRT_KeyValueTryGetCallback_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_KeyValueTryGetCallback_Args}) = Csize_t(72)
@@ -440,6 +485,9 @@ struct PJRT_KeyValuePutCallback_Args
     value_size::Csize_t
     callback_error::Ptr{PJRT_CallbackError}
     user_arg::Ptr{Cvoid}
+    function PJRT_KeyValuePutCallback_Args(args...)
+        return new(csizeof(PJRT_KeyValuePutCallback_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_KeyValuePutCallback_Args}) = Csize_t(64)
@@ -459,6 +507,9 @@ struct PJRT_Client_Create_Args
     client::Ptr{PJRT_Client}
     kv_try_get_callback::PJRT_KeyValueTryGetCallback
     kv_try_get_user_arg::Ptr{Cvoid}
+    function PJRT_Client_Create_Args(args...)
+        return new(csizeof(PJRT_Client_Create_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Client_Create_Args}) = Csize_t(88)
@@ -470,6 +521,9 @@ struct PJRT_Client_Destroy_Args
     struct_size::Csize_t
     extension_start::Ptr{PJRT_Extension_Base}
     client::Ptr{PJRT_Client}
+    function PJRT_Client_Destroy_Args(args...)
+        return new(csizeof(PJRT_Client_Destroy_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Client_Destroy_Args}) = Csize_t(24)
@@ -483,6 +537,9 @@ struct PJRT_Client_PlatformName_Args
     client::Ptr{PJRT_Client}
     platform_name::Cstring
     platform_name_size::Csize_t
+    function PJRT_Client_PlatformName_Args(args...)
+        return new(csizeof(PJRT_Client_PlatformName_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Client_PlatformName_Args}) = Csize_t(40)
@@ -495,6 +552,9 @@ struct PJRT_Client_ProcessIndex_Args
     extension_start::Ptr{PJRT_Extension_Base}
     client::Ptr{PJRT_Client}
     process_index::Cint
+    function PJRT_Client_ProcessIndex_Args(args...)
+        return new(csizeof(PJRT_Client_ProcessIndex_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Client_ProcessIndex_Args}) = Csize_t(28)
@@ -508,6 +568,9 @@ struct PJRT_Client_PlatformVersion_Args
     client::Ptr{PJRT_Client}
     platform_version::Cstring
     platform_version_size::Csize_t
+    function PJRT_Client_PlatformVersion_Args(args...)
+        return new(csizeof(PJRT_Client_PlatformVersion_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Client_PlatformVersion_Args}) = Csize_t(40)
@@ -520,6 +583,9 @@ struct PJRT_Client_TopologyDescription_Args
     extension_start::Ptr{PJRT_Extension_Base}
     client::Ptr{PJRT_Client}
     topology::Ptr{PJRT_TopologyDescription}
+    function PJRT_Client_TopologyDescription_Args(args...)
+        return new(csizeof(PJRT_Client_TopologyDescription_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Client_TopologyDescription_Args}) = Csize_t(32)
@@ -533,6 +599,9 @@ struct PJRT_Client_Devices_Args
     client::Ptr{PJRT_Client}
     devices::Ptr{Ptr{PJRT_Device}}
     num_devices::Csize_t
+    function PJRT_Client_Devices_Args(args...)
+        return new(csizeof(PJRT_Client_Devices_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Client_Devices_Args}) = Csize_t(40)
@@ -546,6 +615,9 @@ struct PJRT_Client_AddressableDevices_Args
     client::Ptr{PJRT_Client}
     addressable_devices::Ptr{Ptr{PJRT_Device}}
     num_addressable_devices::Csize_t
+    function PJRT_Client_AddressableDevices_Args(args...)
+        return new(csizeof(PJRT_Client_AddressableDevices_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Client_AddressableDevices_Args}) = Csize_t(40)
@@ -559,6 +631,9 @@ struct PJRT_Client_LookupDevice_Args
     client::Ptr{PJRT_Client}
     id::Cint
     device::Ptr{PJRT_Device}
+    function PJRT_Client_LookupDevice_Args(args...)
+        return new(csizeof(PJRT_Client_LookupDevice_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Client_LookupDevice_Args}) = Csize_t(40)
@@ -572,6 +647,9 @@ struct PJRT_Client_LookupAddressableDevice_Args
     client::Ptr{PJRT_Client}
     local_hardware_id::Cint
     addressable_device::Ptr{PJRT_Device}
+    function PJRT_Client_LookupAddressableDevice_Args(args...)
+        return new(csizeof(PJRT_Client_LookupAddressableDevice_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Client_LookupAddressableDevice_Args}) = Csize_t(40)
@@ -605,6 +683,9 @@ struct PJRT_Client_UpdateGlobalProcessInfo_Args
     client::Ptr{PJRT_Client}
     process_infos::Ptr{PJRT_ProcessInfo}
     num_process_infos::Csize_t
+    function PJRT_Client_UpdateGlobalProcessInfo_Args(args...)
+        return new(csizeof(PJRT_Client_UpdateGlobalProcessInfo_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Client_UpdateGlobalProcessInfo_Args}) = Csize_t(40)
@@ -618,6 +699,9 @@ struct PJRT_Client_AddressableMemories_Args
     client::Ptr{PJRT_Client}
     addressable_memories::Ptr{Ptr{PJRT_Memory}}
     num_addressable_memories::Csize_t
+    function PJRT_Client_AddressableMemories_Args(args...)
+        return new(csizeof(PJRT_Client_AddressableMemories_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Client_AddressableMemories_Args}) = Csize_t(40)
@@ -644,6 +728,9 @@ struct PJRT_Client_Compile_Args
     compile_options::Cstring
     compile_options_size::Csize_t
     executable::Ptr{PJRT_LoadedExecutable}
+    function PJRT_Client_Compile_Args(args...)
+        return new(csizeof(PJRT_Client_Compile_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Client_Compile_Args}) = Csize_t(56)
@@ -659,6 +746,9 @@ struct PJRT_Client_Load_Args
     compile_options::Cstring
     compile_options_size::Csize_t
     loaded_executable::Ptr{PJRT_LoadedExecutable}
+    function PJRT_Client_Load_Args(args...)
+        return new(csizeof(PJRT_Client_Load_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Client_Load_Args}) = Csize_t(56)
@@ -674,6 +764,9 @@ struct PJRT_Client_DefaultDeviceAssignment_Args
     num_partitions::Cint
     default_assignment_size::Csize_t
     default_assignment::Ptr{Cint}
+    function PJRT_Client_DefaultDeviceAssignment_Args(args...)
+        return new(csizeof(PJRT_Client_DefaultDeviceAssignment_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Client_DefaultDeviceAssignment_Args}) = Csize_t(48)
@@ -687,6 +780,9 @@ struct PJRT_Client_DmaMap_Args
     client::Ptr{PJRT_Client}
     data::Ptr{Cvoid}
     size::Csize_t
+    function PJRT_Client_DmaMap_Args(args...)
+        return new(csizeof(PJRT_Client_DmaMap_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Client_DmaMap_Args}) = Csize_t(40)
@@ -699,6 +795,9 @@ struct PJRT_Client_DmaUnmap_Args
     extension_start::Ptr{PJRT_Extension_Base}
     client::Ptr{PJRT_Client}
     data::Ptr{Cvoid}
+    function PJRT_Client_DmaUnmap_Args(args...)
+        return new(csizeof(PJRT_Client_DmaUnmap_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Client_DmaUnmap_Args}) = Csize_t(32)
@@ -710,6 +809,9 @@ struct PJRT_AsyncHostToDeviceTransferManager_Destroy_Args
     struct_size::Csize_t
     extension_start::Ptr{PJRT_Extension_Base}
     transfer_manager::Ptr{PJRT_AsyncHostToDeviceTransferManager}
+    function PJRT_AsyncHostToDeviceTransferManager_Destroy_Args(args...)
+        return new(csizeof(PJRT_AsyncHostToDeviceTransferManager_Destroy_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_AsyncHostToDeviceTransferManager_Destroy_Args}) = Csize_t(24)
@@ -727,6 +829,11 @@ struct PJRT_AsyncHostToDeviceTransferManager_TransferData_Args
     transfer_size::Int64
     is_last_transfer::Bool
     done_with_h2d_transfer::Ptr{PJRT_Event}
+    function PJRT_AsyncHostToDeviceTransferManager_TransferData_Args(args...)
+        return new(
+            csizeof(PJRT_AsyncHostToDeviceTransferManager_TransferData_Args), args...
+        )
+    end
 end
 
 csizeof(::Type{PJRT_AsyncHostToDeviceTransferManager_TransferData_Args}) = Csize_t(72)
@@ -740,6 +847,11 @@ struct PJRT_AsyncHostToDeviceTransferManager_RetrieveBuffer_Args
     transfer_manager::Ptr{PJRT_AsyncHostToDeviceTransferManager}
     buffer_index::Cint
     buffer_out::Ptr{PJRT_Buffer}
+    function PJRT_AsyncHostToDeviceTransferManager_RetrieveBuffer_Args(args...)
+        return new(
+            csizeof(PJRT_AsyncHostToDeviceTransferManager_RetrieveBuffer_Args), args...
+        )
+    end
 end
 
 csizeof(::Type{PJRT_AsyncHostToDeviceTransferManager_RetrieveBuffer_Args}) = Csize_t(40)
@@ -752,6 +864,9 @@ struct PJRT_AsyncHostToDeviceTransferManager_Device_Args
     extension_start::Ptr{PJRT_Extension_Base}
     transfer_manager::Ptr{PJRT_AsyncHostToDeviceTransferManager}
     device_out::Ptr{PJRT_Device}
+    function PJRT_AsyncHostToDeviceTransferManager_Device_Args(args...)
+        return new(csizeof(PJRT_AsyncHostToDeviceTransferManager_Device_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_AsyncHostToDeviceTransferManager_Device_Args}) = Csize_t(32)
@@ -764,6 +879,9 @@ struct PJRT_AsyncHostToDeviceTransferManager_BufferCount_Args
     extension_start::Ptr{PJRT_Extension_Base}
     transfer_manager::Ptr{PJRT_AsyncHostToDeviceTransferManager}
     buffer_count::Csize_t
+    function PJRT_AsyncHostToDeviceTransferManager_BufferCount_Args(args...)
+        return new(csizeof(PJRT_AsyncHostToDeviceTransferManager_BufferCount_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_AsyncHostToDeviceTransferManager_BufferCount_Args}) = Csize_t(32)
@@ -777,6 +895,9 @@ struct PJRT_AsyncHostToDeviceTransferManager_BufferSize_Args
     transfer_manager::Ptr{PJRT_AsyncHostToDeviceTransferManager}
     buffer_index::Cint
     buffer_size::Csize_t
+    function PJRT_AsyncHostToDeviceTransferManager_BufferSize_Args(args...)
+        return new(csizeof(PJRT_AsyncHostToDeviceTransferManager_BufferSize_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_AsyncHostToDeviceTransferManager_BufferSize_Args}) = Csize_t(40)
@@ -792,6 +913,11 @@ struct PJRT_AsyncHostToDeviceTransferManager_SetBufferError_Args
     error_code::PJRT_Error_Code
     error_message::Cstring
     error_message_size::Csize_t
+    function PJRT_AsyncHostToDeviceTransferManager_SetBufferError_Args(args...)
+        return new(
+            csizeof(PJRT_AsyncHostToDeviceTransferManager_SetBufferError_Args), args...
+        )
+    end
 end
 
 csizeof(::Type{PJRT_AsyncHostToDeviceTransferManager_SetBufferError_Args}) = Csize_t(48)
@@ -805,6 +931,9 @@ struct PJRT_AsyncHostToDeviceTransferManager_AddMetadata_Args
     transfer_manager::Ptr{PJRT_AsyncHostToDeviceTransferManager}
     transfer_metadata::Ptr{PJRT_NamedValue}
     num_metadata::Csize_t
+    function PJRT_AsyncHostToDeviceTransferManager_AddMetadata_Args(args...)
+        return new(csizeof(PJRT_AsyncHostToDeviceTransferManager_AddMetadata_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_AsyncHostToDeviceTransferManager_AddMetadata_Args}) = Csize_t(40)
@@ -897,6 +1026,11 @@ struct PJRT_AsyncHostToDeviceTransferManager_TransferLiteral_Args
     shape_element_type::PJRT_Buffer_Type
     shape_layout::Ptr{PJRT_Buffer_MemoryLayout}
     done_with_h2d_transfer::Ptr{PJRT_Event}
+    function PJRT_AsyncHostToDeviceTransferManager_TransferLiteral_Args(args...)
+        return new(
+            csizeof(PJRT_AsyncHostToDeviceTransferManager_TransferLiteral_Args), args...
+        )
+    end
 end
 
 csizeof(::Type{PJRT_AsyncHostToDeviceTransferManager_TransferLiteral_Args}) = Csize_t(80)
@@ -915,6 +1049,9 @@ struct PJRT_Client_CreateUninitializedBuffer_Args
     device::Ptr{PJRT_Device}
     memory::Ptr{PJRT_Memory}
     buffer::Ptr{PJRT_Buffer}
+    function PJRT_Client_CreateUninitializedBuffer_Args(args...)
+        return new(csizeof(PJRT_Client_CreateUninitializedBuffer_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Client_CreateUninitializedBuffer_Args}) = Csize_t(80)
@@ -937,6 +1074,9 @@ struct PJRT_Client_CreateErrorBuffer_Args
     buffer::Ptr{PJRT_Buffer}
     payload::Ptr{PJRT_NamedValue}
     num_payload::Csize_t
+    function PJRT_Client_CreateErrorBuffer_Args(args...)
+        return new(csizeof(PJRT_Client_CreateErrorBuffer_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Client_CreateErrorBuffer_Args}) = Csize_t(112)
@@ -955,6 +1095,9 @@ struct PJRT_Client_CreateAliasBuffer_Args
     shape_layout::Ptr{PJRT_Buffer_MemoryLayout}
     alias_buffer::Ptr{PJRT_Buffer}
     fulfill_alias_buffer_cb::Ptr{PJRT_FulfillAliasBufferCallback}
+    function PJRT_Client_CreateAliasBuffer_Args(args...)
+        return new(csizeof(PJRT_Client_CreateAliasBuffer_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Client_CreateAliasBuffer_Args}) = Csize_t(80)
@@ -971,6 +1114,9 @@ struct PJRT_Client_FulfillAliasBuffer_Args
     error_message::Cstring
     error_message_size::Csize_t
     fulfill_alias_buffer_cb::Ptr{PJRT_FulfillAliasBufferCallback}
+    function PJRT_Client_FulfillAliasBuffer_Args(args...)
+        return new(csizeof(PJRT_Client_FulfillAliasBuffer_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Client_FulfillAliasBuffer_Args}) = Csize_t(64)
@@ -994,6 +1140,9 @@ struct PJRT_Client_BufferFromHostBuffer_Args
     device_layout::Ptr{PJRT_Buffer_MemoryLayout}
     done_with_host_buffer::Ptr{PJRT_Event}
     buffer::Ptr{PJRT_Buffer}
+    function PJRT_Client_BufferFromHostBuffer_Args(args...)
+        return new(csizeof(PJRT_Client_BufferFromHostBuffer_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Client_BufferFromHostBuffer_Args}) = Csize_t(120)
@@ -1016,6 +1165,9 @@ struct PJRT_Client_CreateViewOfDeviceBuffer_Args
     stream::Cptrdiff_t
     buffer::Ptr{PJRT_Buffer}
     memory::Ptr{PJRT_Memory}
+    function PJRT_Client_CreateViewOfDeviceBuffer_Args(args...)
+        return new(csizeof(PJRT_Client_CreateViewOfDeviceBuffer_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Client_CreateViewOfDeviceBuffer_Args}) = Csize_t(112)
@@ -1035,6 +1187,9 @@ struct PJRT_Client_CreateBuffersForAsyncHostToDevice_Args
     num_device_layouts::Csize_t
     memory::Ptr{PJRT_Memory}
     transfer_manager::Ptr{PJRT_AsyncHostToDeviceTransferManager}
+    function PJRT_Client_CreateBuffersForAsyncHostToDevice_Args(args...)
+        return new(csizeof(PJRT_Client_CreateBuffersForAsyncHostToDevice_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Client_CreateBuffersForAsyncHostToDevice_Args}) = Csize_t(72)
@@ -1047,6 +1202,9 @@ struct PJRT_DeviceDescription_Id_Args
     extension_start::Ptr{PJRT_Extension_Base}
     device_description::Ptr{PJRT_DeviceDescription}
     id::Cint
+    function PJRT_DeviceDescription_Id_Args(args...)
+        return new(csizeof(PJRT_DeviceDescription_Id_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_DeviceDescription_Id_Args}) = Csize_t(28)
@@ -1059,6 +1217,9 @@ struct PJRT_DeviceDescription_ProcessIndex_Args
     extension_start::Ptr{PJRT_Extension_Base}
     device_description::Ptr{PJRT_DeviceDescription}
     process_index::Cint
+    function PJRT_DeviceDescription_ProcessIndex_Args(args...)
+        return new(csizeof(PJRT_DeviceDescription_ProcessIndex_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_DeviceDescription_ProcessIndex_Args}) = Csize_t(28)
@@ -1072,6 +1233,9 @@ struct PJRT_DeviceDescription_Attributes_Args
     device_description::Ptr{PJRT_DeviceDescription}
     num_attributes::Csize_t
     attributes::Ptr{PJRT_NamedValue}
+    function PJRT_DeviceDescription_Attributes_Args(args...)
+        return new(csizeof(PJRT_DeviceDescription_Attributes_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_DeviceDescription_Attributes_Args}) = Csize_t(40)
@@ -1085,6 +1249,9 @@ struct PJRT_DeviceDescription_Kind_Args
     device_description::Ptr{PJRT_DeviceDescription}
     device_kind::Cstring
     device_kind_size::Csize_t
+    function PJRT_DeviceDescription_Kind_Args(args...)
+        return new(csizeof(PJRT_DeviceDescription_Kind_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_DeviceDescription_Kind_Args}) = Csize_t(40)
@@ -1098,6 +1265,9 @@ struct PJRT_DeviceDescription_DebugString_Args
     device_description::Ptr{PJRT_DeviceDescription}
     debug_string::Cstring
     debug_string_size::Csize_t
+    function PJRT_DeviceDescription_DebugString_Args(args...)
+        return new(csizeof(PJRT_DeviceDescription_DebugString_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_DeviceDescription_DebugString_Args}) = Csize_t(40)
@@ -1111,6 +1281,9 @@ struct PJRT_DeviceDescription_ToString_Args
     device_description::Ptr{PJRT_DeviceDescription}
     to_string::Cstring
     to_string_size::Csize_t
+    function PJRT_DeviceDescription_ToString_Args(args...)
+        return new(csizeof(PJRT_DeviceDescription_ToString_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_DeviceDescription_ToString_Args}) = Csize_t(40)
@@ -1123,6 +1296,9 @@ struct PJRT_Device_GetDescription_Args
     extension_start::Ptr{PJRT_Extension_Base}
     device::Ptr{PJRT_Device}
     device_description::Ptr{PJRT_DeviceDescription}
+    function PJRT_Device_GetDescription_Args(args...)
+        return new(csizeof(PJRT_Device_GetDescription_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Device_GetDescription_Args}) = Csize_t(32)
@@ -1135,6 +1311,9 @@ struct PJRT_Device_IsAddressable_Args
     extension_start::Ptr{PJRT_Extension_Base}
     device::Ptr{PJRT_Device}
     is_addressable::Bool
+    function PJRT_Device_IsAddressable_Args(args...)
+        return new(csizeof(PJRT_Device_IsAddressable_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Device_IsAddressable_Args}) = Csize_t(25)
@@ -1147,6 +1326,9 @@ struct PJRT_Device_LocalHardwareId_Args
     extension_start::Ptr{PJRT_Extension_Base}
     device::Ptr{PJRT_Device}
     local_hardware_id::Cint
+    function PJRT_Device_LocalHardwareId_Args(args...)
+        return new(csizeof(PJRT_Device_LocalHardwareId_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Device_LocalHardwareId_Args}) = Csize_t(28)
@@ -1160,6 +1342,9 @@ struct PJRT_Device_AddressableMemories_Args
     device::Ptr{PJRT_Device}
     memories::Ptr{Ptr{PJRT_Memory}}
     num_memories::Csize_t
+    function PJRT_Device_AddressableMemories_Args(args...)
+        return new(csizeof(PJRT_Device_AddressableMemories_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Device_AddressableMemories_Args}) = Csize_t(40)
@@ -1172,6 +1357,9 @@ struct PJRT_Device_DefaultMemory_Args
     extension_start::Ptr{PJRT_Extension_Base}
     device::Ptr{PJRT_Device}
     memory::Ptr{PJRT_Memory}
+    function PJRT_Device_DefaultMemory_Args(args...)
+        return new(csizeof(PJRT_Device_DefaultMemory_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Device_DefaultMemory_Args}) = Csize_t(32)
@@ -1206,6 +1394,9 @@ struct PJRT_Device_MemoryStats_Args
     peak_pool_bytes_is_set::Bool
     peak_allocated_bytes::Int64
     peak_allocated_bytes_is_set::Bool
+    function PJRT_Device_MemoryStats_Args(args...)
+        return new(csizeof(PJRT_Device_MemoryStats_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Device_MemoryStats_Args}) = Csize_t(201)
@@ -1217,6 +1408,9 @@ struct PJRT_Device_ClearMemoryStats_Args
     struct_size::Csize_t
     extension_start::Ptr{PJRT_Extension_Base}
     device::Ptr{PJRT_Device}
+    function PJRT_Device_ClearMemoryStats_Args(args...)
+        return new(csizeof(PJRT_Device_ClearMemoryStats_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Device_ClearMemoryStats_Args}) = Csize_t(24)
@@ -1235,6 +1429,9 @@ struct PJRT_Device_PoisonExecution_Args
     poisoned::Bool
     payload::Ptr{PJRT_NamedValue}
     num_payload::Csize_t
+    function PJRT_Device_PoisonExecution_Args(args...)
+        return new(csizeof(PJRT_Device_PoisonExecution_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Device_PoisonExecution_Args}) = Csize_t(72)
@@ -1252,6 +1449,9 @@ struct PJRT_Device_GetAttributes_Args
     num_attributes::Csize_t
     device_attributes::Ptr{PJRT_Device_Attributes}
     attributes_deleter::Ptr{Cvoid}
+    function PJRT_Device_GetAttributes_Args(args...)
+        return new(csizeof(PJRT_Device_GetAttributes_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Device_GetAttributes_Args}) = Csize_t(56)
@@ -1268,6 +1468,9 @@ struct PJRT_Device_CreateAsyncTrackingEvent_Args
     description::Cstring
     description_size::Csize_t
     event::Ptr{PJRT_AsyncTrackingEvent}
+    function PJRT_Device_CreateAsyncTrackingEvent_Args(args...)
+        return new(csizeof(PJRT_Device_CreateAsyncTrackingEvent_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Device_CreateAsyncTrackingEvent_Args}) = Csize_t(48)
@@ -1279,6 +1482,9 @@ struct PJRT_AsyncTrackingEvent_Destroy_Args
     struct_size::Csize_t
     extension_start::Ptr{PJRT_Extension_Base}
     event::Ptr{PJRT_AsyncTrackingEvent}
+    function PJRT_AsyncTrackingEvent_Destroy_Args(args...)
+        return new(csizeof(PJRT_AsyncTrackingEvent_Destroy_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_AsyncTrackingEvent_Destroy_Args}) = Csize_t(24)
@@ -1291,6 +1497,9 @@ struct PJRT_Memory_Id_Args
     extension_start::Ptr{PJRT_Extension_Base}
     memory::Ptr{PJRT_Memory}
     id::Cint
+    function PJRT_Memory_Id_Args(args...)
+        return new(csizeof(PJRT_Memory_Id_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Memory_Id_Args}) = Csize_t(28)
@@ -1304,6 +1513,9 @@ struct PJRT_Memory_Kind_Args
     memory::Ptr{PJRT_Memory}
     kind::Cstring
     kind_size::Csize_t
+    function PJRT_Memory_Kind_Args(args...)
+        return new(csizeof(PJRT_Memory_Kind_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Memory_Kind_Args}) = Csize_t(40)
@@ -1316,6 +1528,9 @@ struct PJRT_Memory_Kind_Id_Args
     extension_start::Ptr{PJRT_Extension_Base}
     memory::Ptr{PJRT_Memory}
     kind_id::Cint
+    function PJRT_Memory_Kind_Id_Args(args...)
+        return new(csizeof(PJRT_Memory_Kind_Id_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Memory_Kind_Id_Args}) = Csize_t(28)
@@ -1329,6 +1544,9 @@ struct PJRT_Memory_DebugString_Args
     memory::Ptr{PJRT_Memory}
     debug_string::Cstring
     debug_string_size::Csize_t
+    function PJRT_Memory_DebugString_Args(args...)
+        return new(csizeof(PJRT_Memory_DebugString_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Memory_DebugString_Args}) = Csize_t(40)
@@ -1342,6 +1560,9 @@ struct PJRT_Memory_ToString_Args
     memory::Ptr{PJRT_Memory}
     to_string::Cstring
     to_string_size::Csize_t
+    function PJRT_Memory_ToString_Args(args...)
+        return new(csizeof(PJRT_Memory_ToString_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Memory_ToString_Args}) = Csize_t(40)
@@ -1355,6 +1576,9 @@ struct PJRT_Memory_AddressableByDevices_Args
     memory::Ptr{PJRT_Memory}
     devices::Ptr{Ptr{PJRT_Device}}
     num_devices::Csize_t
+    function PJRT_Memory_AddressableByDevices_Args(args...)
+        return new(csizeof(PJRT_Memory_AddressableByDevices_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Memory_AddressableByDevices_Args}) = Csize_t(40)
@@ -1368,6 +1592,9 @@ struct PJRT_ExecuteContext_Create_Args
     struct_size::Csize_t
     extension_start::Ptr{PJRT_Extension_Base}
     context::Ptr{PJRT_ExecuteContext}
+    function PJRT_ExecuteContext_Create_Args(args...)
+        return new(csizeof(PJRT_ExecuteContext_Create_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_ExecuteContext_Create_Args}) = Csize_t(24)
@@ -1379,6 +1606,9 @@ struct PJRT_ExecuteContext_Destroy_Args
     struct_size::Csize_t
     extension_start::Ptr{PJRT_Extension_Base}
     context::Ptr{PJRT_ExecuteContext}
+    function PJRT_ExecuteContext_Destroy_Args(args...)
+        return new(csizeof(PJRT_ExecuteContext_Destroy_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_ExecuteContext_Destroy_Args}) = Csize_t(24)
@@ -1390,6 +1620,9 @@ struct PJRT_Executable_Destroy_Args
     struct_size::Csize_t
     extension_start::Ptr{PJRT_Extension_Base}
     executable::Ptr{PJRT_Executable}
+    function PJRT_Executable_Destroy_Args(args...)
+        return new(csizeof(PJRT_Executable_Destroy_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Executable_Destroy_Args}) = Csize_t(24)
@@ -1401,6 +1634,9 @@ struct PJRT_LoadedExecutable_Destroy_Args
     struct_size::Csize_t
     extension_start::Ptr{PJRT_Extension_Base}
     executable::Ptr{PJRT_LoadedExecutable}
+    function PJRT_LoadedExecutable_Destroy_Args(args...)
+        return new(csizeof(PJRT_LoadedExecutable_Destroy_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_LoadedExecutable_Destroy_Args}) = Csize_t(24)
@@ -1413,6 +1649,9 @@ struct PJRT_LoadedExecutable_GetExecutable_Args
     extension_start::Ptr{PJRT_Extension_Base}
     loaded_executable::Ptr{PJRT_LoadedExecutable}
     executable::Ptr{PJRT_Executable}
+    function PJRT_LoadedExecutable_GetExecutable_Args(args...)
+        return new(csizeof(PJRT_LoadedExecutable_GetExecutable_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_LoadedExecutable_GetExecutable_Args}) = Csize_t(32)
@@ -1430,6 +1669,9 @@ struct PJRT_LoadedExecutable_GetDeviceAssignment_Args
     serialized_bytes_size::Csize_t
     serialized_device_assignment::Ptr{PJRT_DeviceAssignmentSerialized}
     serialized_device_assignment_deleter::Ptr{Cvoid}
+    function PJRT_LoadedExecutable_GetDeviceAssignment_Args(args...)
+        return new(csizeof(PJRT_LoadedExecutable_GetDeviceAssignment_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_LoadedExecutable_GetDeviceAssignment_Args}) = Csize_t(56)
@@ -1443,6 +1685,9 @@ struct PJRT_Executable_Name_Args
     executable::Ptr{PJRT_Executable}
     executable_name::Cstring
     executable_name_size::Csize_t
+    function PJRT_Executable_Name_Args(args...)
+        return new(csizeof(PJRT_Executable_Name_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Executable_Name_Args}) = Csize_t(40)
@@ -1455,6 +1700,9 @@ struct PJRT_Executable_NumReplicas_Args
     extension_start::Ptr{PJRT_Extension_Base}
     executable::Ptr{PJRT_Executable}
     num_replicas::Csize_t
+    function PJRT_Executable_NumReplicas_Args(args...)
+        return new(csizeof(PJRT_Executable_NumReplicas_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Executable_NumReplicas_Args}) = Csize_t(32)
@@ -1467,6 +1715,9 @@ struct PJRT_Executable_NumPartitions_Args
     extension_start::Ptr{PJRT_Extension_Base}
     executable::Ptr{PJRT_Executable}
     num_partitions::Csize_t
+    function PJRT_Executable_NumPartitions_Args(args...)
+        return new(csizeof(PJRT_Executable_NumPartitions_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Executable_NumPartitions_Args}) = Csize_t(32)
@@ -1485,6 +1736,9 @@ struct PJRT_LoadedExecutable_AddressableDevices_Args
     executable::Ptr{PJRT_LoadedExecutable}
     addressable_devices::Ptr{Ptr{PJRT_Device}}
     num_addressable_devices::Csize_t
+    function PJRT_LoadedExecutable_AddressableDevices_Args(args...)
+        return new(csizeof(PJRT_LoadedExecutable_AddressableDevices_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_LoadedExecutable_AddressableDevices_Args}) = Csize_t(40)
@@ -1498,6 +1752,9 @@ struct PJRT_LoadedExecutable_AddressableDeviceLogicalIds_Args
     executable::Ptr{PJRT_LoadedExecutable}
     addressable_device_logical_ids::Ptr{PJRT_LogicalDeviceIds}
     num_addressable_device_logical_ids::Csize_t
+    function PJRT_LoadedExecutable_AddressableDeviceLogicalIds_Args(args...)
+        return new(csizeof(PJRT_LoadedExecutable_AddressableDeviceLogicalIds_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_LoadedExecutable_AddressableDeviceLogicalIds_Args}) = Csize_t(40)
@@ -1510,6 +1767,9 @@ struct PJRT_Executable_OptimizedProgram_Args
     extension_start::Ptr{PJRT_Extension_Base}
     executable::Ptr{PJRT_Executable}
     program::Ptr{PJRT_Program}
+    function PJRT_Executable_OptimizedProgram_Args(args...)
+        return new(csizeof(PJRT_Executable_OptimizedProgram_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Executable_OptimizedProgram_Args}) = Csize_t(32)
@@ -1521,6 +1781,9 @@ struct PJRT_LoadedExecutable_Delete_Args
     struct_size::Csize_t
     extension_start::Ptr{PJRT_Extension_Base}
     executable::Ptr{PJRT_LoadedExecutable}
+    function PJRT_LoadedExecutable_Delete_Args(args...)
+        return new(csizeof(PJRT_LoadedExecutable_Delete_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_LoadedExecutable_Delete_Args}) = Csize_t(24)
@@ -1533,6 +1796,9 @@ struct PJRT_LoadedExecutable_IsDeleted_Args
     extension_start::Ptr{PJRT_Extension_Base}
     executable::Ptr{PJRT_LoadedExecutable}
     is_deleted::Bool
+    function PJRT_LoadedExecutable_IsDeleted_Args(args...)
+        return new(csizeof(PJRT_LoadedExecutable_IsDeleted_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_LoadedExecutable_IsDeleted_Args}) = Csize_t(25)
@@ -1621,6 +1887,9 @@ struct PJRT_LoadedExecutable_Execute_Args
     output_lists::Ptr{Ptr{Ptr{PJRT_Buffer}}}
     device_complete_events::Ptr{Ptr{PJRT_Event}}
     execute_device::Ptr{PJRT_Device}
+    function PJRT_LoadedExecutable_Execute_Args(args...)
+        return new(csizeof(PJRT_LoadedExecutable_Execute_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_LoadedExecutable_Execute_Args}) = Csize_t(80)
@@ -1633,6 +1902,9 @@ struct PJRT_Executable_NumOutputs_Args
     extension_start::Ptr{PJRT_Extension_Base}
     executable::Ptr{PJRT_Executable}
     num_outputs::Csize_t
+    function PJRT_Executable_NumOutputs_Args(args...)
+        return new(csizeof(PJRT_Executable_NumOutputs_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Executable_NumOutputs_Args}) = Csize_t(32)
@@ -1645,6 +1917,9 @@ struct PJRT_Executable_SizeOfGeneratedCodeInBytes_Args
     extension_start::Ptr{PJRT_Extension_Base}
     executable::Ptr{PJRT_Executable}
     size_in_bytes::Int64
+    function PJRT_Executable_SizeOfGeneratedCodeInBytes_Args(args...)
+        return new(csizeof(PJRT_Executable_SizeOfGeneratedCodeInBytes_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Executable_SizeOfGeneratedCodeInBytes_Args}) = Csize_t(32)
@@ -1658,6 +1933,9 @@ struct PJRT_Executable_Fingerprint_Args
     executable::Ptr{PJRT_Executable}
     executable_fingerprint::Cstring
     executable_fingerprint_size::Csize_t
+    function PJRT_Executable_Fingerprint_Args(args...)
+        return new(csizeof(PJRT_Executable_Fingerprint_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Executable_Fingerprint_Args}) = Csize_t(40)
@@ -1671,6 +1949,9 @@ struct PJRT_Executable_GetCostAnalysis_Args
     executable::Ptr{PJRT_Executable}
     num_properties::Csize_t
     properties::Ptr{PJRT_NamedValue}
+    function PJRT_Executable_GetCostAnalysis_Args(args...)
+        return new(csizeof(PJRT_Executable_GetCostAnalysis_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Executable_GetCostAnalysis_Args}) = Csize_t(40)
@@ -1697,6 +1978,9 @@ struct PJRT_Executable_GetCompiledMemoryStats_Args
     total_allocation_bytes::Int64
     indefinite_allocations::Int64
     peak_unpadded_heap_bytes::Int64
+    function PJRT_Executable_GetCompiledMemoryStats_Args(args...)
+        return new(csizeof(PJRT_Executable_GetCompiledMemoryStats_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Executable_GetCompiledMemoryStats_Args}) = Csize_t(144)
@@ -1710,6 +1994,9 @@ struct PJRT_Executable_OutputElementTypes_Args
     executable::Ptr{PJRT_Executable}
     output_types::Ptr{PJRT_Buffer_Type}
     num_output_types::Csize_t
+    function PJRT_Executable_OutputElementTypes_Args(args...)
+        return new(csizeof(PJRT_Executable_OutputElementTypes_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Executable_OutputElementTypes_Args}) = Csize_t(40)
@@ -1724,6 +2011,9 @@ struct PJRT_Executable_OutputDimensions_Args
     num_outputs::Csize_t
     dims::Ptr{Int64}
     dim_sizes::Ptr{Csize_t}
+    function PJRT_Executable_OutputDimensions_Args(args...)
+        return new(csizeof(PJRT_Executable_OutputDimensions_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Executable_OutputDimensions_Args}) = Csize_t(48)
@@ -1738,6 +2028,9 @@ struct PJRT_Executable_ParameterMemoryKinds_Args
     num_parameters::Csize_t
     memory_kinds::Ptr{Cstring}
     memory_kind_sizes::Ptr{Csize_t}
+    function PJRT_Executable_ParameterMemoryKinds_Args(args...)
+        return new(csizeof(PJRT_Executable_ParameterMemoryKinds_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Executable_ParameterMemoryKinds_Args}) = Csize_t(48)
@@ -1752,6 +2045,9 @@ struct PJRT_Executable_OutputMemoryKinds_Args
     num_outputs::Csize_t
     memory_kinds::Ptr{Cstring}
     memory_kind_sizes::Ptr{Csize_t}
+    function PJRT_Executable_OutputMemoryKinds_Args(args...)
+        return new(csizeof(PJRT_Executable_OutputMemoryKinds_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Executable_OutputMemoryKinds_Args}) = Csize_t(48)
@@ -1771,6 +2067,9 @@ struct PJRT_Executable_Serialize_Args
     serialized_bytes_size::Csize_t
     serialized_executable::Ptr{PJRT_SerializedExecutable}
     serialized_executable_deleter::Ptr{Cvoid}
+    function PJRT_Executable_Serialize_Args(args...)
+        return new(csizeof(PJRT_Executable_Serialize_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Executable_Serialize_Args}) = Csize_t(56)
@@ -1786,6 +2085,9 @@ struct PJRT_Executable_GetCompileOptions_Args
     serialized_bytes_size::Csize_t
     serialized_compile_options::Ptr{PJRT_SerializedCompileOptions}
     serialized_compile_options_deleter::Ptr{Cvoid}
+    function PJRT_Executable_GetCompileOptions_Args(args...)
+        return new(csizeof(PJRT_Executable_GetCompileOptions_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Executable_GetCompileOptions_Args}) = Csize_t(56)
@@ -1812,6 +2114,9 @@ struct PJRT_Executable_DeserializeAndLoad_Args
     overridden_serialized_compile_options::Cstring
     overridden_serialized_compile_options_size::Csize_t
     load_options::Ptr{PJRT_LoadOptions}
+    function PJRT_Executable_DeserializeAndLoad_Args(args...)
+        return new(csizeof(PJRT_Executable_DeserializeAndLoad_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Executable_DeserializeAndLoad_Args}) = Csize_t(72)
@@ -1825,6 +2130,9 @@ struct PJRT_LoadedExecutable_Fingerprint_Args
     executable::Ptr{PJRT_LoadedExecutable}
     executable_fingerprint::Cstring
     executable_fingerprint_size::Csize_t
+    function PJRT_LoadedExecutable_Fingerprint_Args(args...)
+        return new(csizeof(PJRT_LoadedExecutable_Fingerprint_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_LoadedExecutable_Fingerprint_Args}) = Csize_t(40)
@@ -1836,6 +2144,9 @@ struct PJRT_Buffer_Destroy_Args
     struct_size::Csize_t
     extension_start::Ptr{PJRT_Extension_Base}
     buffer::Ptr{PJRT_Buffer}
+    function PJRT_Buffer_Destroy_Args(args...)
+        return new(csizeof(PJRT_Buffer_Destroy_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Buffer_Destroy_Args}) = Csize_t(24)
@@ -1848,6 +2159,9 @@ struct PJRT_Buffer_ElementType_Args
     extension_start::Ptr{PJRT_Extension_Base}
     buffer::Ptr{PJRT_Buffer}
     type::PJRT_Buffer_Type
+    function PJRT_Buffer_ElementType_Args(args...)
+        return new(csizeof(PJRT_Buffer_ElementType_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Buffer_ElementType_Args}) = Csize_t(28)
@@ -1861,6 +2175,9 @@ struct PJRT_Buffer_Dimensions_Args
     buffer::Ptr{PJRT_Buffer}
     dims::Ptr{Int64}
     num_dims::Csize_t
+    function PJRT_Buffer_Dimensions_Args(args...)
+        return new(csizeof(PJRT_Buffer_Dimensions_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Buffer_Dimensions_Args}) = Csize_t(40)
@@ -1874,6 +2191,9 @@ struct PJRT_Buffer_UnpaddedDimensions_Args
     buffer::Ptr{PJRT_Buffer}
     unpadded_dims::Ptr{Int64}
     num_dims::Csize_t
+    function PJRT_Buffer_UnpaddedDimensions_Args(args...)
+        return new(csizeof(PJRT_Buffer_UnpaddedDimensions_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Buffer_UnpaddedDimensions_Args}) = Csize_t(40)
@@ -1887,6 +2207,9 @@ struct PJRT_Buffer_DynamicDimensionIndices_Args
     buffer::Ptr{PJRT_Buffer}
     dynamic_dim_indices::Ptr{Csize_t}
     num_dynamic_dims::Csize_t
+    function PJRT_Buffer_DynamicDimensionIndices_Args(args...)
+        return new(csizeof(PJRT_Buffer_DynamicDimensionIndices_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Buffer_DynamicDimensionIndices_Args}) = Csize_t(40)
@@ -1940,6 +2263,9 @@ struct PJRT_Buffer_ToHostBuffer_Args
     dst::Ptr{Cvoid}
     dst_size::Csize_t
     event::Ptr{PJRT_Event}
+    function PJRT_Buffer_ToHostBuffer_Args(args...)
+        return new(csizeof(PJRT_Buffer_ToHostBuffer_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Buffer_ToHostBuffer_Args}) = Csize_t(56)
@@ -1952,6 +2278,9 @@ struct PJRT_Buffer_OnDeviceSizeInBytes_Args
     extension_start::Ptr{PJRT_Extension_Base}
     buffer::Ptr{PJRT_Buffer}
     on_device_size_in_bytes::Csize_t
+    function PJRT_Buffer_OnDeviceSizeInBytes_Args(args...)
+        return new(csizeof(PJRT_Buffer_OnDeviceSizeInBytes_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Buffer_OnDeviceSizeInBytes_Args}) = Csize_t(32)
@@ -1963,6 +2292,9 @@ struct PJRT_Buffer_Delete_Args
     struct_size::Csize_t
     extension_start::Ptr{PJRT_Extension_Base}
     buffer::Ptr{PJRT_Buffer}
+    function PJRT_Buffer_Delete_Args(args...)
+        return new(csizeof(PJRT_Buffer_Delete_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Buffer_Delete_Args}) = Csize_t(24)
@@ -1975,6 +2307,9 @@ struct PJRT_Buffer_IsDeleted_Args
     extension_start::Ptr{PJRT_Extension_Base}
     buffer::Ptr{PJRT_Buffer}
     is_deleted::Bool
+    function PJRT_Buffer_IsDeleted_Args(args...)
+        return new(csizeof(PJRT_Buffer_IsDeleted_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Buffer_IsDeleted_Args}) = Csize_t(25)
@@ -1990,6 +2325,9 @@ struct PJRT_Buffer_CopyRawToHost_Args
     offset::Int64
     transfer_size::Int64
     event::Ptr{PJRT_Event}
+    function PJRT_Buffer_CopyRawToHost_Args(args...)
+        return new(csizeof(PJRT_Buffer_CopyRawToHost_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Buffer_CopyRawToHost_Args}) = Csize_t(56)
@@ -2004,6 +2342,9 @@ struct PJRT_Buffer_CopyRawToHostFuture_Callback_Args
     error_message::Cstring
     error_message_size::Csize_t
     dst::Ptr{Cvoid}
+    function PJRT_Buffer_CopyRawToHostFuture_Callback_Args(args...)
+        return new(csizeof(PJRT_Buffer_CopyRawToHostFuture_Callback_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Buffer_CopyRawToHostFuture_Callback_Args}) = Csize_t(48)
@@ -2017,6 +2358,9 @@ struct PJRT_Buffer_CopyRawToHostFuture_Args
     event::Ptr{PJRT_Event}
     callback_data::Ptr{Cvoid}
     future_ready_callback::Ptr{Cvoid}
+    function PJRT_Buffer_CopyRawToHostFuture_Args(args...)
+        return new(csizeof(PJRT_Buffer_CopyRawToHostFuture_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Buffer_CopyRawToHostFuture_Args}) = Csize_t(64)
@@ -2030,6 +2374,9 @@ struct PJRT_Buffer_CopyToDevice_Args
     buffer::Ptr{PJRT_Buffer}
     dst_device::Ptr{PJRT_Device}
     dst_buffer::Ptr{PJRT_Buffer}
+    function PJRT_Buffer_CopyToDevice_Args(args...)
+        return new(csizeof(PJRT_Buffer_CopyToDevice_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Buffer_CopyToDevice_Args}) = Csize_t(40)
@@ -2043,6 +2390,9 @@ struct PJRT_Buffer_CopyToMemory_Args
     buffer::Ptr{PJRT_Buffer}
     dst_memory::Ptr{PJRT_Memory}
     dst_buffer::Ptr{PJRT_Buffer}
+    function PJRT_Buffer_CopyToMemory_Args(args...)
+        return new(csizeof(PJRT_Buffer_CopyToMemory_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Buffer_CopyToMemory_Args}) = Csize_t(40)
@@ -2059,6 +2409,9 @@ struct PJRT_Buffer_Bitcast_Args
     num_dims::Csize_t
     device_layout::Ptr{PJRT_Buffer_MemoryLayout}
     out_buffer::Ptr{PJRT_Buffer}
+    function PJRT_Buffer_Bitcast_Args(args...)
+        return new(csizeof(PJRT_Buffer_Bitcast_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Buffer_Bitcast_Args}) = Csize_t(64)
@@ -2071,6 +2424,9 @@ struct PJRT_Buffer_IsOnCpu_Args
     extension_start::Ptr{PJRT_Extension_Base}
     buffer::Ptr{PJRT_Buffer}
     is_on_cpu::Bool
+    function PJRT_Buffer_IsOnCpu_Args(args...)
+        return new(csizeof(PJRT_Buffer_IsOnCpu_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Buffer_IsOnCpu_Args}) = Csize_t(25)
@@ -2083,6 +2439,9 @@ struct PJRT_Buffer_Device_Args
     extension_start::Ptr{PJRT_Extension_Base}
     buffer::Ptr{PJRT_Buffer}
     device::Ptr{PJRT_Device}
+    function PJRT_Buffer_Device_Args(args...)
+        return new(csizeof(PJRT_Buffer_Device_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Buffer_Device_Args}) = Csize_t(32)
@@ -2095,6 +2454,9 @@ struct PJRT_Buffer_Memory_Args
     extension_start::Ptr{PJRT_Extension_Base}
     buffer::Ptr{PJRT_Buffer}
     memory::Ptr{PJRT_Memory}
+    function PJRT_Buffer_Memory_Args(args...)
+        return new(csizeof(PJRT_Buffer_Memory_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Buffer_Memory_Args}) = Csize_t(32)
@@ -2107,6 +2469,9 @@ struct PJRT_Buffer_ReadyEvent_Args
     extension_start::Ptr{PJRT_Extension_Base}
     buffer::Ptr{PJRT_Buffer}
     event::Ptr{PJRT_Event}
+    function PJRT_Buffer_ReadyEvent_Args(args...)
+        return new(csizeof(PJRT_Buffer_ReadyEvent_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Buffer_ReadyEvent_Args}) = Csize_t(32)
@@ -2119,6 +2484,9 @@ struct PJRT_Buffer_UnsafePointer_Args
     extension_start::Ptr{PJRT_Extension_Base}
     buffer::Ptr{PJRT_Buffer}
     buffer_pointer::Csize_t
+    function PJRT_Buffer_UnsafePointer_Args(args...)
+        return new(csizeof(PJRT_Buffer_UnsafePointer_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Buffer_UnsafePointer_Args}) = Csize_t(32)
@@ -2130,6 +2498,9 @@ struct PJRT_Buffer_IncreaseExternalReferenceCount_Args
     struct_size::Csize_t
     extension_start::Ptr{PJRT_Extension_Base}
     buffer::Ptr{PJRT_Buffer}
+    function PJRT_Buffer_IncreaseExternalReferenceCount_Args(args...)
+        return new(csizeof(PJRT_Buffer_IncreaseExternalReferenceCount_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Buffer_IncreaseExternalReferenceCount_Args}) = Csize_t(24)
@@ -2141,6 +2512,9 @@ struct PJRT_Buffer_DecreaseExternalReferenceCount_Args
     struct_size::Csize_t
     extension_start::Ptr{PJRT_Extension_Base}
     buffer::Ptr{PJRT_Buffer}
+    function PJRT_Buffer_DecreaseExternalReferenceCount_Args(args...)
+        return new(csizeof(PJRT_Buffer_DecreaseExternalReferenceCount_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Buffer_DecreaseExternalReferenceCount_Args}) = Csize_t(24)
@@ -2153,6 +2527,9 @@ struct PJRT_Buffer_OpaqueDeviceMemoryDataPointer_Args
     extension_start::Ptr{PJRT_Extension_Base}
     buffer::Ptr{PJRT_Buffer}
     device_memory_ptr::Ptr{Cvoid}
+    function PJRT_Buffer_OpaqueDeviceMemoryDataPointer_Args(args...)
+        return new(csizeof(PJRT_Buffer_OpaqueDeviceMemoryDataPointer_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Buffer_OpaqueDeviceMemoryDataPointer_Args}) = Csize_t(32)
@@ -2166,6 +2543,9 @@ struct PJRT_Buffer_DonateWithControlDependency_Callback_Args
     error_code::PJRT_Error_Code
     error_message::Cstring
     error_message_size::Csize_t
+    function PJRT_Buffer_DonateWithControlDependency_Callback_Args(args...)
+        return new(csizeof(PJRT_Buffer_DonateWithControlDependency_Callback_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Buffer_DonateWithControlDependency_Callback_Args}) = Csize_t(40)
@@ -2177,6 +2557,9 @@ struct PJRT_Buffer_DonateWithControlDependency_Args
     callback_data::Ptr{Cvoid}
     dependency_ready_callback::Ptr{Cvoid}
     out_buffer::Ptr{PJRT_Buffer}
+    function PJRT_Buffer_DonateWithControlDependency_Args(args...)
+        return new(csizeof(PJRT_Buffer_DonateWithControlDependency_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Buffer_DonateWithControlDependency_Args}) = Csize_t(48)
@@ -2188,6 +2571,9 @@ struct PJRT_CopyToDeviceStream_Destroy_Args
     struct_size::Csize_t
     extension_start::Ptr{PJRT_Extension_Base}
     stream::Ptr{PJRT_CopyToDeviceStream}
+    function PJRT_CopyToDeviceStream_Destroy_Args(args...)
+        return new(csizeof(PJRT_CopyToDeviceStream_Destroy_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_CopyToDeviceStream_Destroy_Args}) = Csize_t(24)
@@ -2201,6 +2587,9 @@ struct PJRT_CopyToDeviceStream_AddChunk_Args
     stream::Ptr{PJRT_CopyToDeviceStream}
     chunk::Ptr{PJRT_Chunk}
     transfer_complete::Ptr{PJRT_Event}
+    function PJRT_CopyToDeviceStream_AddChunk_Args(args...)
+        return new(csizeof(PJRT_CopyToDeviceStream_AddChunk_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_CopyToDeviceStream_AddChunk_Args}) = Csize_t(40)
@@ -2213,6 +2602,9 @@ struct PJRT_CopyToDeviceStream_TotalBytes_Args
     extension_start::Ptr{PJRT_Extension_Base}
     stream::Ptr{PJRT_CopyToDeviceStream}
     total_bytes::Int64
+    function PJRT_CopyToDeviceStream_TotalBytes_Args(args...)
+        return new(csizeof(PJRT_CopyToDeviceStream_TotalBytes_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_CopyToDeviceStream_TotalBytes_Args}) = Csize_t(32)
@@ -2225,6 +2617,9 @@ struct PJRT_CopyToDeviceStream_GranuleSize_Args
     extension_start::Ptr{PJRT_Extension_Base}
     stream::Ptr{PJRT_CopyToDeviceStream}
     granule_size_in_bytes::Int64
+    function PJRT_CopyToDeviceStream_GranuleSize_Args(args...)
+        return new(csizeof(PJRT_CopyToDeviceStream_GranuleSize_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_CopyToDeviceStream_GranuleSize_Args}) = Csize_t(32)
@@ -2237,6 +2632,9 @@ struct PJRT_CopyToDeviceStream_CurrentBytes_Args
     extension_start::Ptr{PJRT_Extension_Base}
     stream::Ptr{PJRT_CopyToDeviceStream}
     current_bytes::Int64
+    function PJRT_CopyToDeviceStream_CurrentBytes_Args(args...)
+        return new(csizeof(PJRT_CopyToDeviceStream_CurrentBytes_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_CopyToDeviceStream_CurrentBytes_Args}) = Csize_t(32)
@@ -2252,6 +2650,9 @@ struct PJRT_TopologyDescription_Create_Args
     create_options::Ptr{PJRT_NamedValue}
     num_options::Csize_t
     topology::Ptr{PJRT_TopologyDescription}
+    function PJRT_TopologyDescription_Create_Args(args...)
+        return new(csizeof(PJRT_TopologyDescription_Create_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_TopologyDescription_Create_Args}) = Csize_t(56)
@@ -2263,6 +2664,9 @@ struct PJRT_TopologyDescription_Destroy_Args
     struct_size::Csize_t
     extension_start::Ptr{PJRT_Extension_Base}
     topology::Ptr{PJRT_TopologyDescription}
+    function PJRT_TopologyDescription_Destroy_Args(args...)
+        return new(csizeof(PJRT_TopologyDescription_Destroy_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_TopologyDescription_Destroy_Args}) = Csize_t(24)
@@ -2276,6 +2680,9 @@ struct PJRT_TopologyDescription_PlatformVersion_Args
     topology::Ptr{PJRT_TopologyDescription}
     platform_version::Cstring
     platform_version_size::Csize_t
+    function PJRT_TopologyDescription_PlatformVersion_Args(args...)
+        return new(csizeof(PJRT_TopologyDescription_PlatformVersion_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_TopologyDescription_PlatformVersion_Args}) = Csize_t(40)
@@ -2289,6 +2696,9 @@ struct PJRT_TopologyDescription_PlatformName_Args
     topology::Ptr{PJRT_TopologyDescription}
     platform_name::Cstring
     platform_name_size::Csize_t
+    function PJRT_TopologyDescription_PlatformName_Args(args...)
+        return new(csizeof(PJRT_TopologyDescription_PlatformName_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_TopologyDescription_PlatformName_Args}) = Csize_t(40)
@@ -2302,6 +2712,9 @@ struct PJRT_TopologyDescription_GetDeviceDescriptions_Args
     topology::Ptr{PJRT_TopologyDescription}
     descriptions::Ptr{Ptr{PJRT_DeviceDescription}}
     num_descriptions::Csize_t
+    function PJRT_TopologyDescription_GetDeviceDescriptions_Args(args...)
+        return new(csizeof(PJRT_TopologyDescription_GetDeviceDescriptions_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_TopologyDescription_GetDeviceDescriptions_Args}) = Csize_t(40)
@@ -2319,6 +2732,9 @@ struct PJRT_TopologyDescription_Serialize_Args
     serialized_bytes_size::Csize_t
     serialized_topology::Ptr{PJRT_SerializedTopology}
     serialized_topology_deleter::Ptr{Cvoid}
+    function PJRT_TopologyDescription_Serialize_Args(args...)
+        return new(csizeof(PJRT_TopologyDescription_Serialize_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_TopologyDescription_Serialize_Args}) = Csize_t(56)
@@ -2332,6 +2748,9 @@ struct PJRT_TopologyDescription_Deserialize_Args
     serialized_topology::Cstring
     serialized_topology_size::Csize_t
     topology::Ptr{PJRT_TopologyDescription}
+    function PJRT_TopologyDescription_Deserialize_Args(args...)
+        return new(csizeof(PJRT_TopologyDescription_Deserialize_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_TopologyDescription_Deserialize_Args}) = Csize_t(40)
@@ -2345,6 +2764,9 @@ struct PJRT_TopologyDescription_Attributes_Args
     topology::Ptr{PJRT_TopologyDescription}
     attributes::Ptr{PJRT_NamedValue}
     num_attributes::Csize_t
+    function PJRT_TopologyDescription_Attributes_Args(args...)
+        return new(csizeof(PJRT_TopologyDescription_Attributes_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_TopologyDescription_Attributes_Args}) = Csize_t(40)
@@ -2357,6 +2779,9 @@ struct PJRT_TopologyDescription_Fingerprint_Args
     extension_start::Ptr{PJRT_Extension_Base}
     topology::Ptr{PJRT_TopologyDescription}
     fingerprint::UInt64
+    function PJRT_TopologyDescription_Fingerprint_Args(args...)
+        return new(csizeof(PJRT_TopologyDescription_Fingerprint_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_TopologyDescription_Fingerprint_Args}) = Csize_t(32)
@@ -2376,6 +2801,11 @@ struct PJRT_TopologyDescription_MakeCanonicalShapeForMemorySpace_Args
     serialized_shape::Cstring
     serialized_shape_size::Csize_t
     serialized_shape_deleter::Ptr{Cvoid}
+    function PJRT_TopologyDescription_MakeCanonicalShapeForMemorySpace_Args(args...)
+        return new(
+            csizeof(PJRT_TopologyDescription_MakeCanonicalShapeForMemorySpace_Args), args...
+        )
+    end
 end
 
 function csizeof(::Type{PJRT_TopologyDescription_MakeCanonicalShapeForMemorySpace_Args})
@@ -2391,6 +2821,9 @@ struct PJRT_TopologyDescription_GetMemorySpaceKindIds_Args
     topology::Ptr{PJRT_TopologyDescription}
     memory_space_kind_ids::Ptr{Cint}
     num_memory_space_kind_ids::Csize_t
+    function PJRT_TopologyDescription_GetMemorySpaceKindIds_Args(args...)
+        return new(csizeof(PJRT_TopologyDescription_GetMemorySpaceKindIds_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_TopologyDescription_GetMemorySpaceKindIds_Args}) = Csize_t(40)
@@ -2407,6 +2840,9 @@ struct PJRT_Compile_Args
     compile_options_size::Csize_t
     client::Ptr{PJRT_Client}
     executable::Ptr{PJRT_Executable}
+    function PJRT_Compile_Args(args...)
+        return new(csizeof(PJRT_Compile_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Compile_Args}) = Csize_t(64)
@@ -2608,6 +3044,9 @@ struct PJRT_Client_RuntimeAbiVersion_Args
     struct_size::Csize_t
     client::Ptr{PJRT_Client}
     abi_version::Ptr{PJRT_RuntimeAbiVersion}
+    function PJRT_Client_RuntimeAbiVersion_Args(args...)
+        return new(csizeof(PJRT_Client_RuntimeAbiVersion_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Client_RuntimeAbiVersion_Args}) = Csize_t(24)
@@ -2619,6 +3058,9 @@ struct PJRT_Executable_GetAbiVersion_Args
     struct_size::Csize_t
     executable::Ptr{PJRT_Executable}
     abi_version::Ptr{PJRT_ExecutableAbiVersion}
+    function PJRT_Executable_GetAbiVersion_Args(args...)
+        return new(csizeof(PJRT_Executable_GetAbiVersion_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Executable_GetAbiVersion_Args}) = Csize_t(24)
@@ -2629,6 +3071,9 @@ const PJRT_Executable_GetAbiVersion = Cvoid
 struct PJRT_RuntimeAbiVersion_Destroy_Args
     struct_size::Csize_t
     abi_version::Ptr{PJRT_RuntimeAbiVersion}
+    function PJRT_RuntimeAbiVersion_Destroy_Args(args...)
+        return new(csizeof(PJRT_RuntimeAbiVersion_Destroy_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_RuntimeAbiVersion_Destroy_Args}) = Csize_t(16)
@@ -2640,6 +3085,9 @@ struct PJRT_RuntimeAbiVersion_IsCompatibleWithRuntime_Args
     struct_size::Csize_t
     abi_version::Ptr{PJRT_RuntimeAbiVersion}
     other_abi_version::Ptr{PJRT_RuntimeAbiVersion}
+    function PJRT_RuntimeAbiVersion_IsCompatibleWithRuntime_Args(args...)
+        return new(csizeof(PJRT_RuntimeAbiVersion_IsCompatibleWithRuntime_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_RuntimeAbiVersion_IsCompatibleWithRuntime_Args}) = Csize_t(24)
@@ -2651,6 +3099,9 @@ struct PJRT_RuntimeAbiVersion_IsCompatibleWithExecutable_Args
     struct_size::Csize_t
     abi_version::Ptr{PJRT_RuntimeAbiVersion}
     executable_abi_version::Ptr{PJRT_ExecutableAbiVersion}
+    function PJRT_RuntimeAbiVersion_IsCompatibleWithExecutable_Args(args...)
+        return new(csizeof(PJRT_RuntimeAbiVersion_IsCompatibleWithExecutable_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_RuntimeAbiVersion_IsCompatibleWithExecutable_Args}) = Csize_t(24)
@@ -2665,6 +3116,9 @@ struct PJRT_RuntimeAbiVersion_ToProto_Args
     serialized_proto_size::Csize_t
     serialized_proto_holder::Ptr{PJRT_SerializedProto}
     serialized_proto_deleter::Ptr{Cvoid}
+    function PJRT_RuntimeAbiVersion_ToProto_Args(args...)
+        return new(csizeof(PJRT_RuntimeAbiVersion_ToProto_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_RuntimeAbiVersion_ToProto_Args}) = Csize_t(48)
@@ -2676,6 +3130,9 @@ struct PJRT_RuntimeAbiVersion_PlatformId_Args
     struct_size::Csize_t
     abi_version::Ptr{PJRT_RuntimeAbiVersion}
     platform_id::UInt64
+    function PJRT_RuntimeAbiVersion_PlatformId_Args(args...)
+        return new(csizeof(PJRT_RuntimeAbiVersion_PlatformId_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_RuntimeAbiVersion_PlatformId_Args}) = Csize_t(24)
@@ -2686,6 +3143,9 @@ const PJRT_RuntimeAbiVersion_PlatformId = Cvoid
 struct PJRT_ExecutableAbiVersion_Destroy_Args
     struct_size::Csize_t
     abi_version::Ptr{PJRT_ExecutableAbiVersion}
+    function PJRT_ExecutableAbiVersion_Destroy_Args(args...)
+        return new(csizeof(PJRT_ExecutableAbiVersion_Destroy_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_ExecutableAbiVersion_Destroy_Args}) = Csize_t(16)
@@ -2700,6 +3160,9 @@ struct PJRT_ExecutableAbiVersion_ToProto_Args
     serialized_proto_size::Csize_t
     serialized_proto_holder::Ptr{PJRT_SerializedProto}
     serialized_proto_deleter::Ptr{Cvoid}
+    function PJRT_ExecutableAbiVersion_ToProto_Args(args...)
+        return new(csizeof(PJRT_ExecutableAbiVersion_ToProto_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_ExecutableAbiVersion_ToProto_Args}) = Csize_t(48)
@@ -2711,6 +3174,9 @@ struct PJRT_ExecutableAbiVersion_PlatformId_Args
     struct_size::Csize_t
     abi_version::Ptr{PJRT_ExecutableAbiVersion}
     platform_id::UInt64
+    function PJRT_ExecutableAbiVersion_PlatformId_Args(args...)
+        return new(csizeof(PJRT_ExecutableAbiVersion_PlatformId_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_ExecutableAbiVersion_PlatformId_Args}) = Csize_t(24)
@@ -2723,6 +3189,9 @@ struct PJRT_RuntimeAbiVersion_FromProto_Args
     serialized_proto::Cstring
     serialized_proto_size::Csize_t
     abi_version::Ptr{PJRT_RuntimeAbiVersion}
+    function PJRT_RuntimeAbiVersion_FromProto_Args(args...)
+        return new(csizeof(PJRT_RuntimeAbiVersion_FromProto_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_RuntimeAbiVersion_FromProto_Args}) = Csize_t(32)
@@ -2735,6 +3204,9 @@ struct PJRT_ExecutableAbiVersion_FromProto_Args
     serialized_proto::Cstring
     serialized_proto_size::Csize_t
     abi_version::Ptr{PJRT_ExecutableAbiVersion}
+    function PJRT_ExecutableAbiVersion_FromProto_Args(args...)
+        return new(csizeof(PJRT_ExecutableAbiVersion_FromProto_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_ExecutableAbiVersion_FromProto_Args}) = Csize_t(32)
@@ -2804,6 +3276,9 @@ struct PJRT_Callback_RegisterCallback_Args
     type::PJRT_Callback_Type
     callback::Ptr{PJRT_Callback_Function}
     user_arg::Ptr{Cvoid}
+    function PJRT_Callback_RegisterCallback_Args(args...)
+        return new(csizeof(PJRT_Callback_RegisterCallback_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Callback_RegisterCallback_Args}) = Csize_t(40)
@@ -2816,6 +3291,9 @@ struct PJRT_Callback_InvokeCallback_Args
     client::Ptr{PJRT_Client}
     type::PJRT_Callback_Type
     args::Ptr{Cvoid}
+    function PJRT_Callback_InvokeCallback_Args(args...)
+        return new(csizeof(PJRT_Callback_InvokeCallback_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Callback_InvokeCallback_Args}) = Csize_t(32)
@@ -2842,6 +3320,9 @@ mutable struct PJRT_Collectives_ToString_Holder end
 struct PJRT_Collectives_Destroy_Args
     struct_size::Csize_t
     collectives::Ptr{PJRT_Collectives}
+    function PJRT_Collectives_Destroy_Args(args...)
+        return new(csizeof(PJRT_Collectives_Destroy_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Collectives_Destroy_Args}) = Csize_t(16)
@@ -2863,6 +3344,9 @@ struct PJRT_Collectives_CreateCommunicators_Args
     num_communicators::Csize_t
     communicators_holder::Ptr{PJRT_Collectives_Communicators}
     communicators_holder_deleter::Ptr{Cvoid}
+    function PJRT_Collectives_CreateCommunicators_Args(args...)
+        return new(csizeof(PJRT_Collectives_CreateCommunicators_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Collectives_CreateCommunicators_Args}) = Csize_t(104)
@@ -2873,6 +3357,9 @@ const PJRT_Collectives_CreateCommunicators = Cvoid
 struct PJRT_Collectives_Communicator_Destroy_Args
     struct_size::Csize_t
     communicator::Ptr{PJRT_Collectives_Communicator}
+    function PJRT_Collectives_Communicator_Destroy_Args(args...)
+        return new(csizeof(PJRT_Collectives_Communicator_Destroy_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Collectives_Communicator_Destroy_Args}) = Csize_t(16)
@@ -2914,6 +3401,9 @@ struct PJRT_Collectives_Communicator_AllReduce_Args
     reduction_kind::PJRT_Collectives_ReductionKind
     cpu_executor::Ptr{PJRT_Collectives_CpuExecutor}
     event::Ptr{PJRT_Event}
+    function PJRT_Collectives_Communicator_AllReduce_Args(args...)
+        return new(csizeof(PJRT_Collectives_Communicator_AllReduce_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Collectives_Communicator_AllReduce_Args}) = Csize_t(88)
@@ -2933,6 +3423,9 @@ struct PJRT_Collectives_Communicator_ReduceScatter_Args
     reduction_kind::PJRT_Collectives_ReductionKind
     cpu_executor::Ptr{PJRT_Collectives_CpuExecutor}
     event::Ptr{PJRT_Event}
+    function PJRT_Collectives_Communicator_ReduceScatter_Args(args...)
+        return new(csizeof(PJRT_Collectives_Communicator_ReduceScatter_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Collectives_Communicator_ReduceScatter_Args}) = Csize_t(88)
@@ -2951,6 +3444,9 @@ struct PJRT_Collectives_Communicator_AllGather_Args
     count::Csize_t
     cpu_executor::Ptr{PJRT_Collectives_CpuExecutor}
     event::Ptr{PJRT_Event}
+    function PJRT_Collectives_Communicator_AllGather_Args(args...)
+        return new(csizeof(PJRT_Collectives_Communicator_AllGather_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Collectives_Communicator_AllGather_Args}) = Csize_t(80)
@@ -2973,6 +3469,9 @@ struct PJRT_Collectives_Communicator_CollectivePermute_Args
     num_target_ranks::Csize_t
     cpu_executor::Ptr{PJRT_Collectives_CpuExecutor}
     event::Ptr{PJRT_Event}
+    function PJRT_Collectives_Communicator_CollectivePermute_Args(args...)
+        return new(csizeof(PJRT_Collectives_Communicator_CollectivePermute_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Collectives_Communicator_CollectivePermute_Args}) = Csize_t(112)
@@ -2993,6 +3492,9 @@ struct PJRT_Collectives_Communicator_AllToAll_Args
     count::Csize_t
     cpu_executor::Ptr{PJRT_Collectives_CpuExecutor}
     event::Ptr{PJRT_Event}
+    function PJRT_Collectives_Communicator_AllToAll_Args(args...)
+        return new(csizeof(PJRT_Collectives_Communicator_AllToAll_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Collectives_Communicator_AllToAll_Args}) = Csize_t(96)
@@ -3007,6 +3509,9 @@ struct PJRT_Collectives_Communicator_ToString_Args
     str_size::Csize_t
     str_holder::Ptr{PJRT_Collectives_ToString_Holder}
     str_holder_deleter::Ptr{Cvoid}
+    function PJRT_Collectives_Communicator_ToString_Args(args...)
+        return new(csizeof(PJRT_Collectives_Communicator_ToString_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Collectives_Communicator_ToString_Args}) = Csize_t(48)
@@ -3058,6 +3563,9 @@ struct JAX_CustomCallPartitioner_Partition_Args
     mlir_module::JAX_CustomCallPartitioner_string
     args_sharding::Ptr{JAX_CustomCallPartitioner_string}
     result_sharding::JAX_CustomCallPartitioner_string
+    function JAX_CustomCallPartitioner_Partition_Args(args...)
+        return new(csizeof(JAX_CustomCallPartitioner_Partition_Args), args...)
+    end
 end
 
 struct JAX_CustomCallPartitioner_InferShardingFromOperands_Args
@@ -3068,6 +3576,11 @@ struct JAX_CustomCallPartitioner_InferShardingFromOperands_Args
     backend_config::JAX_CustomCallPartitioner_string
     has_result_sharding::Bool
     result_sharding::JAX_CustomCallPartitioner_string
+    function JAX_CustomCallPartitioner_InferShardingFromOperands_Args(args...)
+        return new(
+            csizeof(JAX_CustomCallPartitioner_InferShardingFromOperands_Args), args...
+        )
+    end
 end
 
 struct JAX_CustomCallPartitioner_PropagateUserSharding_Args
@@ -3075,6 +3588,9 @@ struct JAX_CustomCallPartitioner_PropagateUserSharding_Args
     backend_config::JAX_CustomCallPartitioner_string
     result_shape::JAX_CustomCallPartitioner_string
     result_sharding::JAX_CustomCallPartitioner_string
+    function JAX_CustomCallPartitioner_PropagateUserSharding_Args(args...)
+        return new(csizeof(JAX_CustomCallPartitioner_PropagateUserSharding_Args), args...)
+    end
 end
 
 struct JAX_CustomCallPartitioner_Callbacks
@@ -3092,6 +3608,9 @@ struct PJRT_Register_Custom_Partitioner_Args
     name::Cstring
     name_size::Csize_t
     callbacks::Ptr{JAX_CustomCallPartitioner_Callbacks}
+    function PJRT_Register_Custom_Partitioner_Args(args...)
+        return new(csizeof(PJRT_Register_Custom_Partitioner_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Register_Custom_Partitioner_Args}) = Csize_t(32)
@@ -3103,6 +3622,9 @@ struct PJRT_Register_Batch_Partitionable_Args
     struct_size::Csize_t
     name::Cstring
     name_size::Csize_t
+    function PJRT_Register_Batch_Partitionable_Args(args...)
+        return new(csizeof(PJRT_Register_Batch_Partitionable_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Register_Batch_Partitionable_Args}) = Csize_t(24)
@@ -3186,6 +3708,9 @@ struct PJRT_FFI_Type_Register_Args
     type_name_size::Csize_t
     type_id::Int64
     type_info::Ptr{PJRT_FFI_Type_Info}
+    function PJRT_FFI_Type_Register_Args(args...)
+        return new(csizeof(PJRT_FFI_Type_Register_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_FFI_Type_Register_Args}) = Csize_t(48)
@@ -3203,6 +3728,9 @@ struct PJRT_FFI_UserData_Add_Args
     extension_start::Ptr{PJRT_Extension_Base}
     context::Ptr{PJRT_ExecuteContext}
     user_data::PJRT_FFI_UserData
+    function PJRT_FFI_UserData_Add_Args(args...)
+        return new(csizeof(PJRT_FFI_UserData_Add_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_FFI_UserData_Add_Args}) = Csize_t(40)
@@ -3222,6 +3750,9 @@ struct PJRT_FFI_Register_Handler_Args
     platform_name::Cstring
     platform_name_size::Csize_t
     traits::PJRT_FFI_Handler_TraitsBits
+    function PJRT_FFI_Register_Handler_Args(args...)
+        return new(csizeof(PJRT_FFI_Register_Handler_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_FFI_Register_Handler_Args}) = Csize_t(52)
@@ -3250,6 +3781,9 @@ struct PJRT_Gpu_Register_Custom_Call_Args
     handler_initialize::Ptr{Cvoid}
     handler_execute::Ptr{Cvoid}
     traits::UInt32
+    function PJRT_Gpu_Register_Custom_Call_Args(args...)
+        return new(csizeof(PJRT_Gpu_Register_Custom_Call_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Gpu_Register_Custom_Call_Args}) = Csize_t(68)
@@ -3273,6 +3807,9 @@ struct PJRT_Layouts_MemoryLayout_Destroy_Args
     struct_size::Csize_t
     extension_start::Ptr{PJRT_Extension_Base}
     layout::Ptr{PJRT_Layouts_MemoryLayout}
+    function PJRT_Layouts_MemoryLayout_Destroy_Args(args...)
+        return new(csizeof(PJRT_Layouts_MemoryLayout_Destroy_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Layouts_MemoryLayout_Destroy_Args}) = Csize_t(24)
@@ -3288,6 +3825,9 @@ struct PJRT_Layouts_MemoryLayout_Serialize_Args
     serialized_bytes_size::Csize_t
     serialized_layout::Ptr{PJRT_Layouts_SerializedLayout}
     serialized_layout_deleter::Ptr{Cvoid}
+    function PJRT_Layouts_MemoryLayout_Serialize_Args(args...)
+        return new(csizeof(PJRT_Layouts_MemoryLayout_Serialize_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Layouts_MemoryLayout_Serialize_Args}) = Csize_t(56)
@@ -3300,6 +3840,9 @@ struct PJRT_Layouts_PJRT_Buffer_MemoryLayout_Args
     extension_start::Ptr{PJRT_Extension_Base}
     buffer::Ptr{PJRT_Buffer}
     layout::Ptr{PJRT_Layouts_MemoryLayout}
+    function PJRT_Layouts_PJRT_Buffer_MemoryLayout_Args(args...)
+        return new(csizeof(PJRT_Layouts_PJRT_Buffer_MemoryLayout_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Layouts_PJRT_Buffer_MemoryLayout_Args}) = Csize_t(32)
@@ -3315,6 +3858,9 @@ struct PJRT_Layouts_PJRT_Client_GetDefaultLayout_Args
     dims::Ptr{Int64}
     num_dims::Csize_t
     layout::Ptr{PJRT_Layouts_MemoryLayout}
+    function PJRT_Layouts_PJRT_Client_GetDefaultLayout_Args(args...)
+        return new(csizeof(PJRT_Layouts_PJRT_Client_GetDefaultLayout_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Layouts_PJRT_Client_GetDefaultLayout_Args}) = Csize_t(56)
@@ -3330,6 +3876,9 @@ struct PJRT_Layouts_PJRT_Topology_GetDefaultLayout_Args
     dims::Ptr{Int64}
     num_dims::Csize_t
     layout::Ptr{PJRT_Layouts_MemoryLayout}
+    function PJRT_Layouts_PJRT_Topology_GetDefaultLayout_Args(args...)
+        return new(csizeof(PJRT_Layouts_PJRT_Topology_GetDefaultLayout_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Layouts_PJRT_Topology_GetDefaultLayout_Args}) = Csize_t(56)
@@ -3343,6 +3892,9 @@ struct PJRT_Layouts_PJRT_Executable_GetOutputLayouts_Args
     executable::Ptr{PJRT_Executable}
     num_outputs::Csize_t
     layouts::Ptr{Ptr{PJRT_Layouts_MemoryLayout}}
+    function PJRT_Layouts_PJRT_Executable_GetOutputLayouts_Args(args...)
+        return new(csizeof(PJRT_Layouts_PJRT_Executable_GetOutputLayouts_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Layouts_PJRT_Executable_GetOutputLayouts_Args}) = Csize_t(40)
@@ -3356,6 +3908,9 @@ struct PJRT_Layouts_PJRT_Executable_GetParameterLayouts_Args
     executable::Ptr{PJRT_Executable}
     num_parameters::Csize_t
     layouts::Ptr{Ptr{PJRT_Layouts_MemoryLayout}}
+    function PJRT_Layouts_PJRT_Executable_GetParameterLayouts_Args(args...)
+        return new(csizeof(PJRT_Layouts_PJRT_Executable_GetParameterLayouts_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Layouts_PJRT_Executable_GetParameterLayouts_Args}) = Csize_t(40)
@@ -3394,6 +3949,9 @@ struct PJRT_Megascale_CreateClientContextFromPjRtClient_Args
     struct_size::Csize_t
     client::Ptr{PJRT_Client}
     client_context::Ptr{PJRT_Megascale_ClientContext}
+    function PJRT_Megascale_CreateClientContextFromPjRtClient_Args(args...)
+        return new(csizeof(PJRT_Megascale_CreateClientContextFromPjRtClient_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Megascale_CreateClientContextFromPjRtClient_Args}) = Csize_t(24)
@@ -3404,6 +3962,9 @@ const PJRT_Megascale_CreateClientContextFromPjRtClient = Cvoid
 struct PJRT_Megascale_CreateDefaultClientContext_Args
     struct_size::Csize_t
     client_context::Ptr{PJRT_Megascale_ClientContext}
+    function PJRT_Megascale_CreateDefaultClientContext_Args(args...)
+        return new(csizeof(PJRT_Megascale_CreateDefaultClientContext_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Megascale_CreateDefaultClientContext_Args}) = Csize_t(16)
@@ -3414,6 +3975,9 @@ const PJRT_Megascale_CreateDefaultClientContext = Cvoid
 struct PJRT_Megascale_DeleteClientContext_Args
     struct_size::Csize_t
     client_context::Ptr{PJRT_Megascale_ClientContext}
+    function PJRT_Megascale_DeleteClientContext_Args(args...)
+        return new(csizeof(PJRT_Megascale_DeleteClientContext_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Megascale_DeleteClientContext_Args}) = Csize_t(16)
@@ -3426,6 +3990,9 @@ struct PJRT_Megascale_CreateAoTConfig_Args
     topology::Ptr{PJRT_TopologyDescription}
     num_slices::Int32
     multi_slice_config::Ptr{PJRT_MultiSlice_Config}
+    function PJRT_Megascale_CreateAoTConfig_Args(args...)
+        return new(csizeof(PJRT_Megascale_CreateAoTConfig_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Megascale_CreateAoTConfig_Args}) = Csize_t(32)
@@ -3445,6 +4012,9 @@ struct PJRT_Megascale_CreateMultiSliceConfig_Args
     dcn_topology_size::Int32
     client_context::Ptr{PJRT_Megascale_ClientContext}
     multi_slice_config::Ptr{PJRT_MultiSlice_Config}
+    function PJRT_Megascale_CreateMultiSliceConfig_Args(args...)
+        return new(csizeof(PJRT_Megascale_CreateMultiSliceConfig_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Megascale_CreateMultiSliceConfig_Args}) = Csize_t(80)
@@ -3457,6 +4027,9 @@ struct PJRT_Megascale_ClientContext_Initialize_Args
     client_context::Ptr{PJRT_Megascale_ClientContext}
     has_incarnation_id::Bool
     incarnation_id::UInt64
+    function PJRT_Megascale_ClientContext_Initialize_Args(args...)
+        return new(csizeof(PJRT_Megascale_ClientContext_Initialize_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Megascale_ClientContext_Initialize_Args}) = Csize_t(32)
@@ -3469,6 +4042,9 @@ struct PJRT_Megascale_ClientContext_UnblockPendingWork_Args
     client_context::Ptr{PJRT_Megascale_ClientContext}
     launch_id::Int32
     expire_after_ms::Int64
+    function PJRT_Megascale_ClientContext_UnblockPendingWork_Args(args...)
+        return new(csizeof(PJRT_Megascale_ClientContext_UnblockPendingWork_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Megascale_ClientContext_UnblockPendingWork_Args}) = Csize_t(32)
@@ -3480,6 +4056,9 @@ struct PJRT_Megascale_ClientContext_MegascalePort_Args
     struct_size::Csize_t
     client_context::Ptr{PJRT_Megascale_ClientContext}
     port::Int32
+    function PJRT_Megascale_ClientContext_MegascalePort_Args(args...)
+        return new(csizeof(PJRT_Megascale_ClientContext_MegascalePort_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Megascale_ClientContext_MegascalePort_Args}) = Csize_t(20)
@@ -3505,6 +4084,9 @@ struct PJRT_Megascale_CreateMegascaleCollectives_Args
     dcn_topology::Cstring
     dcn_topology_size::Csize_t
     collectives::Ptr{PJRT_Collectives}
+    function PJRT_Megascale_CreateMegascaleCollectives_Args(args...)
+        return new(csizeof(PJRT_Megascale_CreateMegascaleCollectives_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Megascale_CreateMegascaleCollectives_Args}) = Csize_t(48)
@@ -3517,6 +4099,9 @@ struct PJRT_Megascale_DeviceId_To_MegascaleId_Args
     slice_id::Int32
     per_slice_device_id::Int32
     megascale_id::Int64
+    function PJRT_Megascale_DeviceId_To_MegascaleId_Args(args...)
+        return new(csizeof(PJRT_Megascale_DeviceId_To_MegascaleId_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Megascale_DeviceId_To_MegascaleId_Args}) = Csize_t(24)
@@ -3529,6 +4114,9 @@ struct PJRT_Megascale_MegascaleId_To_DeviceId_Args
     megascale_id::Int64
     slice_id::Int32
     per_slice_device_id::Int32
+    function PJRT_Megascale_MegascaleId_To_DeviceId_Args(args...)
+        return new(csizeof(PJRT_Megascale_MegascaleId_To_DeviceId_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Megascale_MegascaleId_To_DeviceId_Args}) = Csize_t(24)
@@ -3545,6 +4133,9 @@ struct PJRT_Megascale_RegisterErrorHandler_Args
     handler_name_size::Csize_t
     handler::PJRT_Megascale_ErrorHandler
     user_data::Ptr{Cvoid}
+    function PJRT_Megascale_RegisterErrorHandler_Args(args...)
+        return new(csizeof(PJRT_Megascale_RegisterErrorHandler_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Megascale_RegisterErrorHandler_Args}) = Csize_t(40)
@@ -3556,6 +4147,9 @@ struct PJRT_Megascale_UnregisterErrorHandler_Args
     struct_size::Csize_t
     handler_name::Cstring
     handler_name_size::Csize_t
+    function PJRT_Megascale_UnregisterErrorHandler_Args(args...)
+        return new(csizeof(PJRT_Megascale_UnregisterErrorHandler_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Megascale_UnregisterErrorHandler_Args}) = Csize_t(24)
@@ -3572,6 +4166,9 @@ struct PJRT_Megascale_ErrorAggregator_Create_Args
     app_type::Cstring
     app_type_size::Csize_t
     aggregator::Ptr{PJRT_Megascale_ErrorAggregator}
+    function PJRT_Megascale_ErrorAggregator_Create_Args(args...)
+        return new(csizeof(PJRT_Megascale_ErrorAggregator_Create_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Megascale_ErrorAggregator_Create_Args}) = Csize_t(32)
@@ -3582,6 +4179,9 @@ const PJRT_Megascale_ErrorAggregator_Create = Cvoid
 struct PJRT_Megascale_ErrorAggregator_Delete_Args
     struct_size::Csize_t
     aggregator::Ptr{PJRT_Megascale_ErrorAggregator}
+    function PJRT_Megascale_ErrorAggregator_Delete_Args(args...)
+        return new(csizeof(PJRT_Megascale_ErrorAggregator_Delete_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Megascale_ErrorAggregator_Delete_Args}) = Csize_t(16)
@@ -3592,6 +4192,9 @@ const PJRT_Megascale_ErrorAggregator_Delete = Cvoid
 struct PJRT_Megascale_ErrorDigest_Delete_Args
     struct_size::Csize_t
     digest::Ptr{PJRT_Megascale_ErrorDigest}
+    function PJRT_Megascale_ErrorDigest_Delete_Args(args...)
+        return new(csizeof(PJRT_Megascale_ErrorDigest_Delete_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Megascale_ErrorDigest_Delete_Args}) = Csize_t(16)
@@ -3606,6 +4209,9 @@ struct PJRT_Megascale_ErrorAggregator_AddError_Args
     worker_id_size::Csize_t
     serialized_error::Cstring
     serialized_error_size::Csize_t
+    function PJRT_Megascale_ErrorAggregator_AddError_Args(args...)
+        return new(csizeof(PJRT_Megascale_ErrorAggregator_AddError_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Megascale_ErrorAggregator_AddError_Args}) = Csize_t(48)
@@ -3617,6 +4223,9 @@ struct PJRT_Megascale_ErrorAggregator_ProcessAndShutdown_Args
     struct_size::Csize_t
     aggregator::Ptr{PJRT_Megascale_ErrorAggregator}
     digest::Ptr{PJRT_Megascale_ErrorDigest}
+    function PJRT_Megascale_ErrorAggregator_ProcessAndShutdown_Args(args...)
+        return new(csizeof(PJRT_Megascale_ErrorAggregator_ProcessAndShutdown_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Megascale_ErrorAggregator_ProcessAndShutdown_Args}) = Csize_t(24)
@@ -3628,6 +4237,9 @@ struct PJRT_Megascale_ErrorAggregator_LogErrorDigest_Args
     struct_size::Csize_t
     aggregator::Ptr{PJRT_Megascale_ErrorAggregator}
     digest::Ptr{PJRT_Megascale_ErrorDigest}
+    function PJRT_Megascale_ErrorAggregator_LogErrorDigest_Args(args...)
+        return new(csizeof(PJRT_Megascale_ErrorAggregator_LogErrorDigest_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Megascale_ErrorAggregator_LogErrorDigest_Args}) = Csize_t(24)
@@ -3639,6 +4251,9 @@ struct PJRT_Megascale_ErrorAggregator_Size_Args
     struct_size::Csize_t
     aggregator::Ptr{PJRT_Megascale_ErrorAggregator}
     size::Csize_t
+    function PJRT_Megascale_ErrorAggregator_Size_Args(args...)
+        return new(csizeof(PJRT_Megascale_ErrorAggregator_Size_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Megascale_ErrorAggregator_Size_Args}) = Csize_t(24)
@@ -3650,6 +4265,9 @@ struct PJRT_Megascale_ErrorAggregator_Active_Args
     struct_size::Csize_t
     aggregator::Ptr{PJRT_Megascale_ErrorAggregator}
     active::Bool
+    function PJRT_Megascale_ErrorAggregator_Active_Args(args...)
+        return new(csizeof(PJRT_Megascale_ErrorAggregator_Active_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Megascale_ErrorAggregator_Active_Args}) = Csize_t(17)
@@ -3674,6 +4292,9 @@ struct PJRT_Megascale_GetInterfaceAddressesHelper_Args
     num_addresses::Csize_t
     addresses::Ptr{PJRT_Megascale_SerializedAddresses}
     addresses_deleter::Ptr{Cvoid}
+    function PJRT_Megascale_GetInterfaceAddressesHelper_Args(args...)
+        return new(csizeof(PJRT_Megascale_GetInterfaceAddressesHelper_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Megascale_GetInterfaceAddressesHelper_Args}) = Csize_t(104)
@@ -3698,6 +4319,9 @@ struct PJRT_Megascale_GetOrCreateRuntimeError_Args
     is_new_error::Bool
     error::Ptr{PJRT_Megascale_SerializedError}
     error_deleter::Ptr{Cvoid}
+    function PJRT_Megascale_GetOrCreateRuntimeError_Args(args...)
+        return new(csizeof(PJRT_Megascale_GetOrCreateRuntimeError_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Megascale_GetOrCreateRuntimeError_Args}) = Csize_t(104)
@@ -3754,6 +4378,9 @@ struct PJRT_DeviceDescription_MemoryDescriptions_Args
     memory_descriptions::Ptr{Ptr{PJRT_MemoryDescription}}
     num_memory_descriptions::Csize_t
     default_memory_index::Csize_t
+    function PJRT_DeviceDescription_MemoryDescriptions_Args(args...)
+        return new(csizeof(PJRT_DeviceDescription_MemoryDescriptions_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_DeviceDescription_MemoryDescriptions_Args}) = Csize_t(48)
@@ -3768,6 +4395,9 @@ struct PJRT_MemoryDescription_Kind_Args
     kind::Cstring
     kind_size::Csize_t
     kind_id::Cint
+    function PJRT_MemoryDescription_Kind_Args(args...)
+        return new(csizeof(PJRT_MemoryDescription_Kind_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_MemoryDescription_Kind_Args}) = Csize_t(44)
@@ -3792,6 +4422,9 @@ mutable struct PJRT_MultiSlice_SerializedConfig end
 struct PJRT_MultiSlice_Config_Destroy_Args
     struct_size::Csize_t
     config::Ptr{PJRT_MultiSlice_Config}
+    function PJRT_MultiSlice_Config_Destroy_Args(args...)
+        return new(csizeof(PJRT_MultiSlice_Config_Destroy_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_MultiSlice_Config_Destroy_Args}) = Csize_t(16)
@@ -3803,6 +4436,9 @@ struct PJRT_MultiSlice_Config_NumSlices_Args
     struct_size::Csize_t
     config::Ptr{PJRT_MultiSlice_Config}
     num_slices::Int32
+    function PJRT_MultiSlice_Config_NumSlices_Args(args...)
+        return new(csizeof(PJRT_MultiSlice_Config_NumSlices_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_MultiSlice_Config_NumSlices_Args}) = Csize_t(20)
@@ -3814,6 +4450,9 @@ struct PJRT_MultiSlice_Config_SliceId_Args
     struct_size::Csize_t
     config::Ptr{PJRT_MultiSlice_Config}
     slice_id::Int32
+    function PJRT_MultiSlice_Config_SliceId_Args(args...)
+        return new(csizeof(PJRT_MultiSlice_Config_SliceId_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_MultiSlice_Config_SliceId_Args}) = Csize_t(20)
@@ -3829,6 +4468,9 @@ struct PJRT_MultiSlice_Config_NumDevicesPerSlice_Args
     num_devices::Ptr{Int32}
     devices_per_slice_map::Ptr{PJRT_MultiSlice_NumDevicesPerSlice}
     devices_per_slice_map_deleter::Ptr{Cvoid}
+    function PJRT_MultiSlice_Config_NumDevicesPerSlice_Args(args...)
+        return new(csizeof(PJRT_MultiSlice_Config_NumDevicesPerSlice_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_MultiSlice_Config_NumDevicesPerSlice_Args}) = Csize_t(56)
@@ -3843,6 +4485,9 @@ struct PJRT_MultiSlice_Config_Serialize_Args
     size::Csize_t
     serialized_config::Ptr{PJRT_MultiSlice_SerializedConfig}
     serialized_config_deleter::Ptr{Cvoid}
+    function PJRT_MultiSlice_Config_Serialize_Args(args...)
+        return new(csizeof(PJRT_MultiSlice_Config_Serialize_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_MultiSlice_Config_Serialize_Args}) = Csize_t(48)
@@ -3865,6 +4510,9 @@ struct PJRT_PhaseCompile_Get_Compiler_Args
     struct_size::Csize_t
     extension_start::Ptr{PJRT_Extension_Base}
     phase_compiler::Ptr{PJRT_PhaseCompiler}
+    function PJRT_PhaseCompile_Get_Compiler_Args(args...)
+        return new(csizeof(PJRT_PhaseCompile_Get_Compiler_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_PhaseCompile_Get_Compiler_Args}) = Csize_t(24)
@@ -3876,6 +4524,9 @@ struct PJRT_PhaseCompile_Destroy_Compiler_Args
     struct_size::Csize_t
     extension_start::Ptr{PJRT_Extension_Base}
     phase_compiler::Ptr{PJRT_PhaseCompiler}
+    function PJRT_PhaseCompile_Destroy_Compiler_Args(args...)
+        return new(csizeof(PJRT_PhaseCompile_Destroy_Compiler_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_PhaseCompile_Destroy_Compiler_Args}) = Csize_t(24)
@@ -3899,6 +4550,9 @@ struct PJRT_PhaseCompile_Run_Phase_Args
     output_programs::Ptr{Cstring}
     output_programs_sizes::Ptr{Csize_t}
     num_output_programs::Csize_t
+    function PJRT_PhaseCompile_Run_Phase_Args(args...)
+        return new(csizeof(PJRT_PhaseCompile_Run_Phase_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_PhaseCompile_Run_Phase_Args}) = Csize_t(120)
@@ -3913,6 +4567,9 @@ struct PJRT_PhaseCompile_Get_PhaseNames_Args
     phase_names::Ptr{Cstring}
     phase_names_sizes::Ptr{Csize_t}
     num_phase_names::Csize_t
+    function PJRT_PhaseCompile_Get_PhaseNames_Args(args...)
+        return new(csizeof(PJRT_PhaseCompile_Get_PhaseNames_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_PhaseCompile_Get_PhaseNames_Args}) = Csize_t(48)
@@ -3926,6 +4583,9 @@ struct PJRT_PhaseCompile_C_Buffers_Destroy_Args
     char_buffers::Ptr{Cstring}
     char_buffer_sizes::Ptr{Csize_t}
     num_char_buffers::Csize_t
+    function PJRT_PhaseCompile_C_Buffers_Destroy_Args(args...)
+        return new(csizeof(PJRT_PhaseCompile_C_Buffers_Destroy_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_PhaseCompile_C_Buffers_Destroy_Args}) = Csize_t(40)
@@ -3954,6 +4614,9 @@ struct PLUGIN_Profiler_Error_Destroy_Args
     struct_size::Csize_t
     priv::Ptr{Cvoid}
     error::Ptr{PLUGIN_Profiler_Error}
+    function PLUGIN_Profiler_Error_Destroy_Args(args...)
+        return new(csizeof(PLUGIN_Profiler_Error_Destroy_Args), args...)
+    end
 end
 
 csizeof(::Type{PLUGIN_Profiler_Error_Destroy_Args}) = Csize_t(24)
@@ -3967,6 +4630,9 @@ struct PLUGIN_Profiler_Error_Message_Args
     error::Ptr{PLUGIN_Profiler_Error}
     message::Cstring
     message_size::Csize_t
+    function PLUGIN_Profiler_Error_Message_Args(args...)
+        return new(csizeof(PLUGIN_Profiler_Error_Message_Args), args...)
+    end
 end
 
 csizeof(::Type{PLUGIN_Profiler_Error_Message_Args}) = Csize_t(40)
@@ -3979,6 +4645,9 @@ struct PLUGIN_Profiler_Error_GetCode_Args
     priv::Ptr{Cvoid}
     error::Ptr{PLUGIN_Profiler_Error}
     code::Cint
+    function PLUGIN_Profiler_Error_GetCode_Args(args...)
+        return new(csizeof(PLUGIN_Profiler_Error_GetCode_Args), args...)
+    end
 end
 
 csizeof(::Type{PLUGIN_Profiler_Error_GetCode_Args}) = Csize_t(28)
@@ -3991,6 +4660,9 @@ struct PLUGIN_Profiler_Create_Args
     options::Cstring
     options_size::Csize_t
     profiler::Ptr{PLUGIN_Profiler}
+    function PLUGIN_Profiler_Create_Args(args...)
+        return new(csizeof(PLUGIN_Profiler_Create_Args), args...)
+    end
 end
 
 csizeof(::Type{PLUGIN_Profiler_Create_Args}) = Csize_t(32)
@@ -4001,6 +4673,9 @@ const PLUGIN_Profiler_Create = Cvoid
 struct PLUGIN_Profiler_Destroy_Args
     struct_size::Csize_t
     profiler::Ptr{PLUGIN_Profiler}
+    function PLUGIN_Profiler_Destroy_Args(args...)
+        return new(csizeof(PLUGIN_Profiler_Destroy_Args), args...)
+    end
 end
 
 csizeof(::Type{PLUGIN_Profiler_Destroy_Args}) = Csize_t(16)
@@ -4011,6 +4686,9 @@ const PLUGIN_Profiler_Destroy = Cvoid
 struct PLUGIN_Profiler_Start_Args
     struct_size::Csize_t
     profiler::Ptr{PLUGIN_Profiler}
+    function PLUGIN_Profiler_Start_Args(args...)
+        return new(csizeof(PLUGIN_Profiler_Start_Args), args...)
+    end
 end
 
 csizeof(::Type{PLUGIN_Profiler_Start_Args}) = Csize_t(16)
@@ -4021,6 +4699,9 @@ const PLUGIN_Profiler_Start = Cvoid
 struct PLUGIN_Profiler_Stop_Args
     struct_size::Csize_t
     profiler::Ptr{PLUGIN_Profiler}
+    function PLUGIN_Profiler_Stop_Args(args...)
+        return new(csizeof(PLUGIN_Profiler_Stop_Args), args...)
+    end
 end
 
 csizeof(::Type{PLUGIN_Profiler_Stop_Args}) = Csize_t(16)
@@ -4033,6 +4714,9 @@ struct PLUGIN_Profiler_CollectData_Args
     profiler::Ptr{PLUGIN_Profiler}
     buffer::Ptr{UInt8}
     buffer_size_in_bytes::Csize_t
+    function PLUGIN_Profiler_CollectData_Args(args...)
+        return new(csizeof(PLUGIN_Profiler_CollectData_Args), args...)
+    end
 end
 
 csizeof(::Type{PLUGIN_Profiler_CollectData_Args}) = Csize_t(32)
@@ -4044,6 +4728,9 @@ struct PLUGIN_Profiler_Consume_Args
     struct_size::Csize_t
     profiler::Ptr{PLUGIN_Profiler}
     result::Ptr{PLUGIN_Profiler_ConsumeResult}
+    function PLUGIN_Profiler_Consume_Args(args...)
+        return new(csizeof(PLUGIN_Profiler_Consume_Args), args...)
+    end
 end
 
 csizeof(::Type{PLUGIN_Profiler_Consume_Args}) = Csize_t(24)
@@ -4054,6 +4741,9 @@ const PLUGIN_Profiler_Consume = Cvoid
 struct PLUGIN_Profiler_ConsumeResult_Destroy_Args
     struct_size::Csize_t
     consume_result::Ptr{PLUGIN_Profiler_ConsumeResult}
+    function PLUGIN_Profiler_ConsumeResult_Destroy_Args(args...)
+        return new(csizeof(PLUGIN_Profiler_ConsumeResult_Destroy_Args), args...)
+    end
 end
 
 csizeof(::Type{PLUGIN_Profiler_ConsumeResult_Destroy_Args}) = Csize_t(16)
@@ -4067,6 +4757,9 @@ struct PLUGIN_Profiler_Serialize_Args
     consume_result::Ptr{PLUGIN_Profiler_ConsumeResult}
     serialized_bytes::Ptr{UInt8}
     serialized_size::Csize_t
+    function PLUGIN_Profiler_Serialize_Args(args...)
+        return new(csizeof(PLUGIN_Profiler_Serialize_Args), args...)
+    end
 end
 
 csizeof(::Type{PLUGIN_Profiler_Serialize_Args}) = Csize_t(40)
@@ -4132,6 +4825,9 @@ struct PJRT_RawBuffer_CreateRawAliasOfBuffer_Args
     extension_start::Ptr{PJRT_Extension_Base}
     buffer::Ptr{PJRT_Buffer}
     raw_buffer::Ptr{PJRT_RawBuffer}
+    function PJRT_RawBuffer_CreateRawAliasOfBuffer_Args(args...)
+        return new(csizeof(PJRT_RawBuffer_CreateRawAliasOfBuffer_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_RawBuffer_CreateRawAliasOfBuffer_Args}) = Csize_t(32)
@@ -4143,6 +4839,9 @@ struct PJRT_RawBuffer_Destroy_Args
     struct_size::Csize_t
     extension_start::Ptr{PJRT_Extension_Base}
     buffer::Ptr{PJRT_RawBuffer}
+    function PJRT_RawBuffer_Destroy_Args(args...)
+        return new(csizeof(PJRT_RawBuffer_Destroy_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_RawBuffer_Destroy_Args}) = Csize_t(24)
@@ -4155,6 +4854,9 @@ struct PJRT_RawBuffer_GetHostPointer_Args
     extension_start::Ptr{PJRT_Extension_Base}
     buffer::Ptr{PJRT_RawBuffer}
     host_pointer::Ptr{Cvoid}
+    function PJRT_RawBuffer_GetHostPointer_Args(args...)
+        return new(csizeof(PJRT_RawBuffer_GetHostPointer_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_RawBuffer_GetHostPointer_Args}) = Csize_t(32)
@@ -4167,6 +4869,9 @@ struct PJRT_RawBuffer_GetOnDeviceSizeInBytes_Args
     extension_start::Ptr{PJRT_Extension_Base}
     buffer::Ptr{PJRT_RawBuffer}
     on_device_size_in_bytes::Csize_t
+    function PJRT_RawBuffer_GetOnDeviceSizeInBytes_Args(args...)
+        return new(csizeof(PJRT_RawBuffer_GetOnDeviceSizeInBytes_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_RawBuffer_GetOnDeviceSizeInBytes_Args}) = Csize_t(32)
@@ -4179,6 +4884,9 @@ struct PJRT_RawBuffer_GetMemorySpace_Args
     extension_start::Ptr{PJRT_Extension_Base}
     buffer::Ptr{PJRT_RawBuffer}
     memory_space::Ptr{PJRT_Memory}
+    function PJRT_RawBuffer_GetMemorySpace_Args(args...)
+        return new(csizeof(PJRT_RawBuffer_GetMemorySpace_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_RawBuffer_GetMemorySpace_Args}) = Csize_t(32)
@@ -4194,6 +4902,9 @@ struct PJRT_RawBuffer_CopyRawDeviceToHost_Args
     offset::Int64
     transfer_size::Int64
     event::Ptr{PJRT_Event}
+    function PJRT_RawBuffer_CopyRawDeviceToHost_Args(args...)
+        return new(csizeof(PJRT_RawBuffer_CopyRawDeviceToHost_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_RawBuffer_CopyRawDeviceToHost_Args}) = Csize_t(56)
@@ -4209,6 +4920,9 @@ struct PJRT_RawBuffer_CopyRawHostToDevice_Args
     offset::Int64
     transfer_size::Int64
     event::Ptr{PJRT_Event}
+    function PJRT_RawBuffer_CopyRawHostToDevice_Args(args...)
+        return new(csizeof(PJRT_RawBuffer_CopyRawHostToDevice_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_RawBuffer_CopyRawHostToDevice_Args}) = Csize_t(56)
@@ -4236,6 +4950,9 @@ struct PJRT_Shardings_PJRT_Executable_ParameterShardings_Args
     num_parameters::Csize_t
     shardings::Ptr{Cstring}
     sharding_sizes::Ptr{Csize_t}
+    function PJRT_Shardings_PJRT_Executable_ParameterShardings_Args(args...)
+        return new(csizeof(PJRT_Shardings_PJRT_Executable_ParameterShardings_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Shardings_PJRT_Executable_ParameterShardings_Args}) = Csize_t(48)
@@ -4250,6 +4967,9 @@ struct PJRT_Shardings_PJRT_Executable_OutputShardings_Args
     num_outputs::Csize_t
     shardings::Ptr{Cstring}
     sharding_sizes::Ptr{Csize_t}
+    function PJRT_Shardings_PJRT_Executable_OutputShardings_Args(args...)
+        return new(csizeof(PJRT_Shardings_PJRT_Executable_OutputShardings_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Shardings_PJRT_Executable_OutputShardings_Args}) = Csize_t(48)
@@ -4273,6 +4993,9 @@ struct PJRT_Get_Stream_For_External_Ready_Events_Args
     struct_size::Csize_t
     device::Ptr{PJRT_Device}
     stream::Cptrdiff_t
+    function PJRT_Get_Stream_For_External_Ready_Events_Args(args...)
+        return new(csizeof(PJRT_Get_Stream_For_External_Ready_Events_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Get_Stream_For_External_Ready_Events_Args}) = Csize_t(24)
@@ -4284,6 +5007,9 @@ struct PJRT_Wait_Until_Buffer_Ready_On_Stream_Args
     struct_size::Csize_t
     stream::Cptrdiff_t
     buffer::Ptr{PJRT_Buffer}
+    function PJRT_Wait_Until_Buffer_Ready_On_Stream_Args(args...)
+        return new(csizeof(PJRT_Wait_Until_Buffer_Ready_On_Stream_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Wait_Until_Buffer_Ready_On_Stream_Args}) = Csize_t(24)
@@ -4315,6 +5041,9 @@ struct PJRT_TpuExecutable_GetTargetArguments_Args
     target_arguments_size::Csize_t
     target_arguments_ptr::Ptr{PJRT_TpuExecutable_TargetArguments}
     target_arguments_deleter::Ptr{Cvoid}
+    function PJRT_TpuExecutable_GetTargetArguments_Args(args...)
+        return new(csizeof(PJRT_TpuExecutable_GetTargetArguments_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_TpuExecutable_GetTargetArguments_Args}) = Csize_t(56)
@@ -4332,6 +5061,9 @@ struct PJRT_TpuExecutable_GetHloModuleWithConfig_Args
     hlo_module_with_config_size::Csize_t
     hlo_module_with_config_ptr::Ptr{PJRT_TpuExecutable_HloModuleWithConfig}
     hlo_module_with_config_deleter::Ptr{Cvoid}
+    function PJRT_TpuExecutable_GetHloModuleWithConfig_Args(args...)
+        return new(csizeof(PJRT_TpuExecutable_GetHloModuleWithConfig_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_TpuExecutable_GetHloModuleWithConfig_Args}) = Csize_t(56)
@@ -4350,6 +5082,9 @@ struct PJRT_TpuExecutable_RunHloCostAnalysis_Args
     num_analysis_results::Csize_t
     analysis_results_ptr::Ptr{PJRT_TpuExecutable_CostAnalysisResult}
     analysis_results_deleter::Ptr{Cvoid}
+    function PJRT_TpuExecutable_RunHloCostAnalysis_Args(args...)
+        return new(csizeof(PJRT_TpuExecutable_RunHloCostAnalysis_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_TpuExecutable_RunHloCostAnalysis_Args}) = Csize_t(80)
@@ -4365,6 +5100,9 @@ struct PJRT_TpuExecutable_GetCompiledMemoryStats_Args
     compiled_memory_stats_size::Csize_t
     compiled_memory_stats_ptr::Ptr{PJRT_TpuExecutable_CompiledMemoryStats}
     compiled_memory_stats_deleter::Ptr{Cvoid}
+    function PJRT_TpuExecutable_GetCompiledMemoryStats_Args(args...)
+        return new(csizeof(PJRT_TpuExecutable_GetCompiledMemoryStats_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_TpuExecutable_GetCompiledMemoryStats_Args}) = Csize_t(56)
@@ -4380,6 +5118,9 @@ struct PJRT_TpuExecutable_SetTpuCompilationEnv_Args
     result_compilation_environments_size::Csize_t
     result_compilation_environments_ptr::Ptr{PJRT_TpuExecutable_CompilationEnvironments}
     result_compilation_environments_deleter::Ptr{Cvoid}
+    function PJRT_TpuExecutable_SetTpuCompilationEnv_Args(args...)
+        return new(csizeof(PJRT_TpuExecutable_SetTpuCompilationEnv_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_TpuExecutable_SetTpuCompilationEnv_Args}) = Csize_t(56)
@@ -4399,6 +5140,11 @@ struct PJRT_TpuExecutable_GetTpuCompilationEnvFieldAsString_Args
     field_value_size::Csize_t
     field_value_ptr::Ptr{PJRT_TpuExecutable_FieldValue}
     field_value_deleter::Ptr{Cvoid}
+    function PJRT_TpuExecutable_GetTpuCompilationEnvFieldAsString_Args(args...)
+        return new(
+            csizeof(PJRT_TpuExecutable_GetTpuCompilationEnvFieldAsString_Args), args...
+        )
+    end
 end
 
 csizeof(::Type{PJRT_TpuExecutable_GetTpuCompilationEnvFieldAsString_Args}) = Csize_t(72)
@@ -4411,6 +5157,9 @@ struct PJRT_TpuExecutable_IsTpuPredeterminedError_Args
     serialized_status::Cstring
     serialized_status_size::Csize_t
     is_predetermined::Bool
+    function PJRT_TpuExecutable_IsTpuPredeterminedError_Args(args...)
+        return new(csizeof(PJRT_TpuExecutable_IsTpuPredeterminedError_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_TpuExecutable_IsTpuPredeterminedError_Args}) = Csize_t(25)
@@ -4423,6 +5172,11 @@ struct PJRT_TpuExecutable_IsTpuCancellationPlaceholderError_Args
     serialized_status::Cstring
     serialized_status_size::Csize_t
     is_cancellation_placeholder::Bool
+    function PJRT_TpuExecutable_IsTpuCancellationPlaceholderError_Args(args...)
+        return new(
+            csizeof(PJRT_TpuExecutable_IsTpuCancellationPlaceholderError_Args), args...
+        )
+    end
 end
 
 csizeof(::Type{PJRT_TpuExecutable_IsTpuCancellationPlaceholderError_Args}) = Csize_t(25)
@@ -4457,6 +5211,9 @@ struct PJRT_TpuTopology_Subslice_Args
     host_bounds::Ptr{Int32}
     host_bounds_num_dims::Csize_t
     subslice_topology::Ptr{PJRT_TopologyDescription}
+    function PJRT_TpuTopology_Subslice_Args(args...)
+        return new(csizeof(PJRT_TpuTopology_Subslice_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_TpuTopology_Subslice_Args}) = Csize_t(56)
@@ -4468,6 +5225,9 @@ struct PJRT_TpuTopology_IsSubsliceTopology_Args
     struct_size::Csize_t
     topology::Ptr{PJRT_TopologyDescription}
     is_subslice_topology::Bool
+    function PJRT_TpuTopology_IsSubsliceTopology_Args(args...)
+        return new(csizeof(PJRT_TpuTopology_IsSubsliceTopology_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_TpuTopology_IsSubsliceTopology_Args}) = Csize_t(17)
@@ -4483,6 +5243,9 @@ struct PJRT_TpuTopology_SubsliceDeviceIdFromFullDeviceId_Args
     subslice_origin_dim_num::Csize_t
     full_device_id::Int32
     subslice_device_id::Int32
+    function PJRT_TpuTopology_SubsliceDeviceIdFromFullDeviceId_Args(args...)
+        return new(csizeof(PJRT_TpuTopology_SubsliceDeviceIdFromFullDeviceId_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_TpuTopology_SubsliceDeviceIdFromFullDeviceId_Args}) = Csize_t(48)
@@ -4496,6 +5259,9 @@ struct PJRT_TpuTopology_ReplaceHostBounds_Args
     host_bounds::Ptr{Int32}
     host_bounds_dim_num::Csize_t
     new_topology::Ptr{PJRT_TopologyDescription}
+    function PJRT_TpuTopology_ReplaceHostBounds_Args(args...)
+        return new(csizeof(PJRT_TpuTopology_ReplaceHostBounds_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_TpuTopology_ReplaceHostBounds_Args}) = Csize_t(40)
@@ -4507,6 +5273,9 @@ struct PJRT_TpuTopology_IsEnhancedBarrierEnabled_Args
     struct_size::Csize_t
     topology::Ptr{PJRT_TopologyDescription}
     is_enhanced_barrier_enabled::Bool
+    function PJRT_TpuTopology_IsEnhancedBarrierEnabled_Args(args...)
+        return new(csizeof(PJRT_TpuTopology_IsEnhancedBarrierEnabled_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_TpuTopology_IsEnhancedBarrierEnabled_Args}) = Csize_t(17)
@@ -4518,6 +5287,9 @@ struct PJRT_TpuTopology_HasLimitedIciConnectivity_Args
     struct_size::Csize_t
     topology::Ptr{PJRT_TopologyDescription}
     has_limited_ici_connectivity::Bool
+    function PJRT_TpuTopology_HasLimitedIciConnectivity_Args(args...)
+        return new(csizeof(PJRT_TpuTopology_HasLimitedIciConnectivity_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_TpuTopology_HasLimitedIciConnectivity_Args}) = Csize_t(17)
@@ -4531,6 +5303,9 @@ struct PJRT_TpuTopology_IsReachableOverLimitedIci_Args
     source_chip_id::Int32
     dest_chip_id::Int32
     is_reachable_over_limited_ici::Bool
+    function PJRT_TpuTopology_IsReachableOverLimitedIci_Args(args...)
+        return new(csizeof(PJRT_TpuTopology_IsReachableOverLimitedIci_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_TpuTopology_IsReachableOverLimitedIci_Args}) = Csize_t(25)
@@ -4542,6 +5317,9 @@ struct PJRT_TpuTopology_ProcessCount_Args
     struct_size::Csize_t
     topology::Ptr{PJRT_TopologyDescription}
     process_count::Int32
+    function PJRT_TpuTopology_ProcessCount_Args(args...)
+        return new(csizeof(PJRT_TpuTopology_ProcessCount_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_TpuTopology_ProcessCount_Args}) = Csize_t(20)
@@ -4553,6 +5331,9 @@ struct PJRT_TpuTopology_ChipsPerProcess_Args
     struct_size::Csize_t
     topology::Ptr{PJRT_TopologyDescription}
     chips_per_process::Int32
+    function PJRT_TpuTopology_ChipsPerProcess_Args(args...)
+        return new(csizeof(PJRT_TpuTopology_ChipsPerProcess_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_TpuTopology_ChipsPerProcess_Args}) = Csize_t(20)
@@ -4564,6 +5345,9 @@ struct PJRT_TpuTopology_CoreCountPerChip_Args
     struct_size::Csize_t
     topology::Ptr{PJRT_TopologyDescription}
     core_count_of_default_type_per_chip::Int32
+    function PJRT_TpuTopology_CoreCountPerChip_Args(args...)
+        return new(csizeof(PJRT_TpuTopology_CoreCountPerChip_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_TpuTopology_CoreCountPerChip_Args}) = Csize_t(20)
@@ -4575,6 +5359,9 @@ struct PJRT_TpuTopology_ChipCount_Args
     struct_size::Csize_t
     topology::Ptr{PJRT_TopologyDescription}
     chip_count::Int32
+    function PJRT_TpuTopology_ChipCount_Args(args...)
+        return new(csizeof(PJRT_TpuTopology_ChipCount_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_TpuTopology_ChipCount_Args}) = Csize_t(20)
@@ -4586,6 +5373,9 @@ struct PJRT_TpuTopology_CoreCount_Args
     struct_size::Csize_t
     topology::Ptr{PJRT_TopologyDescription}
     core_count_of_default_type::Int32
+    function PJRT_TpuTopology_CoreCount_Args(args...)
+        return new(csizeof(PJRT_TpuTopology_CoreCount_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_TpuTopology_CoreCount_Args}) = Csize_t(20)
@@ -4597,6 +5387,9 @@ struct PJRT_TpuTopology_LogiDeviceCount_Args
     struct_size::Csize_t
     topology::Ptr{PJRT_TopologyDescription}
     logical_device_count_of_default_type::Int32
+    function PJRT_TpuTopology_LogiDeviceCount_Args(args...)
+        return new(csizeof(PJRT_TpuTopology_LogiDeviceCount_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_TpuTopology_LogiDeviceCount_Args}) = Csize_t(20)
@@ -4608,6 +5401,9 @@ struct PJRT_TpuTopology_LogiDeviceCountPerProcess_Args
     struct_size::Csize_t
     topology::Ptr{PJRT_TopologyDescription}
     logical_device_count_of_default_type_per_process::Int32
+    function PJRT_TpuTopology_LogiDeviceCountPerProcess_Args(args...)
+        return new(csizeof(PJRT_TpuTopology_LogiDeviceCountPerProcess_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_TpuTopology_LogiDeviceCountPerProcess_Args}) = Csize_t(20)
@@ -4619,6 +5415,9 @@ struct PJRT_TpuTopology_LogiDeviceCountPerChip_Args
     struct_size::Csize_t
     topology::Ptr{PJRT_TopologyDescription}
     logical_device_count_of_default_type_per_chip::Int32
+    function PJRT_TpuTopology_LogiDeviceCountPerChip_Args(args...)
+        return new(csizeof(PJRT_TpuTopology_LogiDeviceCountPerChip_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_TpuTopology_LogiDeviceCountPerChip_Args}) = Csize_t(20)
@@ -4630,6 +5429,9 @@ struct PJRT_TpuTopology_CoreCountPerProcess_Args
     struct_size::Csize_t
     topology::Ptr{PJRT_TopologyDescription}
     core_count_of_default_type_per_process::Int32
+    function PJRT_TpuTopology_CoreCountPerProcess_Args(args...)
+        return new(csizeof(PJRT_TpuTopology_CoreCountPerProcess_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_TpuTopology_CoreCountPerProcess_Args}) = Csize_t(20)
@@ -4643,6 +5445,9 @@ struct PJRT_TpuTopology_ProcessIds_Args
     max_process_ids::Int32
     process_ids::Ptr{Int32}
     num_process_ids::Csize_t
+    function PJRT_TpuTopology_ProcessIds_Args(args...)
+        return new(csizeof(PJRT_TpuTopology_ProcessIds_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_TpuTopology_ProcessIds_Args}) = Csize_t(40)
@@ -4657,6 +5462,9 @@ struct PJRT_TpuTopology_LogiDeviceIdsOnProcess_Args
     max_logical_device_ids::Int32
     logical_device_of_default_type_ids::Ptr{Int32}
     num_logical_device_ids::Csize_t
+    function PJRT_TpuTopology_LogiDeviceIdsOnProcess_Args(args...)
+        return new(csizeof(PJRT_TpuTopology_LogiDeviceIdsOnProcess_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_TpuTopology_LogiDeviceIdsOnProcess_Args}) = Csize_t(40)
@@ -4670,6 +5478,9 @@ struct PJRT_TpuTopology_ProcIdAndIdxOnProcForChip_Args
     chip_id::Int32
     process_id::Int32
     index_on_process::Int32
+    function PJRT_TpuTopology_ProcIdAndIdxOnProcForChip_Args(args...)
+        return new(csizeof(PJRT_TpuTopology_ProcIdAndIdxOnProcForChip_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_TpuTopology_ProcIdAndIdxOnProcForChip_Args}) = Csize_t(28)
@@ -4683,6 +5494,9 @@ struct PJRT_TpuTopology_ProcIdAndIdxOnProcForLogiDevice_Args
     device_id::Int32
     process_id::Int32
     index_on_process::Int32
+    function PJRT_TpuTopology_ProcIdAndIdxOnProcForLogiDevice_Args(args...)
+        return new(csizeof(PJRT_TpuTopology_ProcIdAndIdxOnProcForLogiDevice_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_TpuTopology_ProcIdAndIdxOnProcForLogiDevice_Args}) = Csize_t(28)
@@ -4697,6 +5511,9 @@ struct PJRT_TpuTopology_ProcessCoordFromId_Args
     coords_max_dims::Csize_t
     coords::Ptr{Int32}
     coords_num_dims::Csize_t
+    function PJRT_TpuTopology_ProcessCoordFromId_Args(args...)
+        return new(csizeof(PJRT_TpuTopology_ProcessCoordFromId_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_TpuTopology_ProcessCoordFromId_Args}) = Csize_t(48)
@@ -4710,6 +5527,9 @@ struct PJRT_TpuTopology_ChipIdFromCoord_Args
     coords::Ptr{Int32}
     coords_num_dims::Csize_t
     chip_id::Int32
+    function PJRT_TpuTopology_ChipIdFromCoord_Args(args...)
+        return new(csizeof(PJRT_TpuTopology_ChipIdFromCoord_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_TpuTopology_ChipIdFromCoord_Args}) = Csize_t(36)
@@ -4724,6 +5544,9 @@ struct PJRT_TpuTopology_LogiDeviceIdFromChipCoordAndIdx_Args
     chip_coords_num_dims::Csize_t
     logical_device_index_on_chip::Int32
     logical_device_of_default_type_id::Int32
+    function PJRT_TpuTopology_LogiDeviceIdFromChipCoordAndIdx_Args(args...)
+        return new(csizeof(PJRT_TpuTopology_LogiDeviceIdFromChipCoordAndIdx_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_TpuTopology_LogiDeviceIdFromChipCoordAndIdx_Args}) = Csize_t(40)
@@ -4739,6 +5562,9 @@ struct PJRT_TpuTopology_ChipCoordAndIdxForLogiDevice_Args
     chip_coords::Ptr{Int32}
     chip_coords_num_dims::Csize_t
     device_index_on_chip::Int32
+    function PJRT_TpuTopology_ChipCoordAndIdxForLogiDevice_Args(args...)
+        return new(csizeof(PJRT_TpuTopology_ChipCoordAndIdxForLogiDevice_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_TpuTopology_ChipCoordAndIdxForLogiDevice_Args}) = Csize_t(52)
@@ -4752,6 +5578,9 @@ struct PJRT_TpuTopology_ChipsPerProcessBounds_Args
     chip_per_process_bounds_max_dims::Csize_t
     chip_per_process_bounds::Ptr{Int32}
     chip_per_process_bounds_num_dims::Csize_t
+    function PJRT_TpuTopology_ChipsPerProcessBounds_Args(args...)
+        return new(csizeof(PJRT_TpuTopology_ChipsPerProcessBounds_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_TpuTopology_ChipsPerProcessBounds_Args}) = Csize_t(40)
@@ -4765,6 +5594,9 @@ struct PJRT_TpuTopology_ChipBounds_Args
     chip_bounds_max_dims::Csize_t
     chip_bounds::Ptr{Int32}
     chip_bounds_num_dims::Csize_t
+    function PJRT_TpuTopology_ChipBounds_Args(args...)
+        return new(csizeof(PJRT_TpuTopology_ChipBounds_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_TpuTopology_ChipBounds_Args}) = Csize_t(40)
@@ -4778,6 +5610,9 @@ struct PJRT_TpuTopology_ProcessBounds_Args
     process_bounds_max_dims::Csize_t
     process_bounds::Ptr{Int32}
     process_bounds_num_dims::Csize_t
+    function PJRT_TpuTopology_ProcessBounds_Args(args...)
+        return new(csizeof(PJRT_TpuTopology_ProcessBounds_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_TpuTopology_ProcessBounds_Args}) = Csize_t(40)
@@ -4790,6 +5625,9 @@ struct PJRT_TpuTopology_GetRoutingStrategy_Args
     topology::Ptr{PJRT_TopologyDescription}
     routing_strategy::Cstring
     routing_strategy_len::Csize_t
+    function PJRT_TpuTopology_GetRoutingStrategy_Args(args...)
+        return new(csizeof(PJRT_TpuTopology_GetRoutingStrategy_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_TpuTopology_GetRoutingStrategy_Args}) = Csize_t(32)
@@ -4813,6 +5651,9 @@ struct PJRT_TpuTopology_GetSliceConfig_Args
     slice_name::Cstring
     slice_name_len::Csize_t
     slice_config::Ptr{PJRT_TpuTopology_SliceConfig}
+    function PJRT_TpuTopology_GetSliceConfig_Args(args...)
+        return new(csizeof(PJRT_TpuTopology_GetSliceConfig_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_TpuTopology_GetSliceConfig_Args}) = Csize_t(48)
@@ -4827,6 +5668,9 @@ struct PJRT_TpuTopology_GetSliceConfigs_Args
     slice_configs::Ptr{PJRT_TpuTopology_SliceConfig}
     max_slice_configs::Csize_t
     num_slice_configs::Csize_t
+    function PJRT_TpuTopology_GetSliceConfigs_Args(args...)
+        return new(csizeof(PJRT_TpuTopology_GetSliceConfigs_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_TpuTopology_GetSliceConfigs_Args}) = Csize_t(48)
@@ -4840,6 +5684,9 @@ struct PJRT_TpuTopology_GetDefaultPlatformConfig_Args
     platform_type_name_len::Csize_t
     num_chips_per_tray::Int64
     num_trays::Int64
+    function PJRT_TpuTopology_GetDefaultPlatformConfig_Args(args...)
+        return new(csizeof(PJRT_TpuTopology_GetDefaultPlatformConfig_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_TpuTopology_GetDefaultPlatformConfig_Args}) = Csize_t(40)
@@ -4910,6 +5757,9 @@ struct PJRT_XlaTransform_Args
     hlo_module::PJRT_XlaTransform_string
     transformed_hlo_module::PJRT_XlaTransform_string
     changed::Bool
+    function PJRT_XlaTransform_Args(args...)
+        return new(csizeof(PJRT_XlaTransform_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_XlaTransform_Args}) = Csize_t(89)
@@ -4931,6 +5781,9 @@ struct PJRT_Register_Xla_Transform_Args
     name_size::Csize_t
     stage::PJRT_XlaTransform_PipelineStage
     callbacks::Ptr{PJRT_XlaTransform_Callbacks}
+    function PJRT_Register_Xla_Transform_Args(args...)
+        return new(csizeof(PJRT_Register_Xla_Transform_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Register_Xla_Transform_Args}) = Csize_t(40)
@@ -4945,6 +5798,9 @@ struct PJRT_Clear_Xla_Transform_Args
     name_size::Csize_t
     callbacks::Ptr{PJRT_XlaTransform_Callbacks}
     cleared::Bool
+    function PJRT_Clear_Xla_Transform_Args(args...)
+        return new(csizeof(PJRT_Clear_Xla_Transform_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Clear_Xla_Transform_Args}) = Csize_t(41)
@@ -4961,6 +5817,9 @@ struct PJRT_Xla_Transform_Get_Hlo_Pass_Pipeline_Trace_Args
     struct_size::Csize_t
     hlo_module::PJRT_XlaTransform_string
     trace::PJRT_HloPassPipelineTrace
+    function PJRT_Xla_Transform_Get_Hlo_Pass_Pipeline_Trace_Args(args...)
+        return new(csizeof(PJRT_Xla_Transform_Get_Hlo_Pass_Pipeline_Trace_Args), args...)
+    end
 end
 
 csizeof(::Type{PJRT_Xla_Transform_Get_Hlo_Pass_Pipeline_Trace_Args}) = Csize_t(40)
@@ -4971,6 +5830,11 @@ const PJRT_Xla_Transform_Get_Hlo_Pass_Pipeline_Trace_Fn = Ptr{Cvoid}
 struct PJRT_Xla_Transform_Destroy_Hlo_Pass_Pipeline_Trace_Args
     struct_size::Csize_t
     trace::Ptr{PJRT_HloPassPipelineTrace}
+    function PJRT_Xla_Transform_Destroy_Hlo_Pass_Pipeline_Trace_Args(args...)
+        return new(
+            csizeof(PJRT_Xla_Transform_Destroy_Hlo_Pass_Pipeline_Trace_Args), args...
+        )
+    end
 end
 
 csizeof(::Type{PJRT_Xla_Transform_Destroy_Hlo_Pass_Pipeline_Trace_Args}) = Csize_t(16)
