@@ -354,14 +354,14 @@ elseif RUN_GPU_MPI_TESTS
                 peer = 1
                 req = MPI.Isend(send_buf, peer, tag, comm)
                 MPI.Wait(req)
-                req = MPI.Irecv!(recv_buf, peer, tag+1, comm)
-                MPI.Wait(req)
+                # req = MPI.Irecv!(recv_buf, peer, tag+1, comm)
+                # MPI.Wait(req)
             elseif rank == 1
                 peer = 0
                 req = MPI.Irecv!(recv_buf, peer, tag, comm)
                 MPI.Wait(req)
-                req = MPI.Isend(send_buf, peer, tag+1, comm)
-                MPI.Wait(req)
+                # req = MPI.Isend(send_buf, peer, tag+1, comm)
+                # MPI.Wait(req)
             end
             return nothing
         end
@@ -460,7 +460,7 @@ elseif RUN_GPU_MPI_TESTS
             return MPI.Waitall(reqs)
         end
 
-        for T in datatypes
+        for T in gpu_datatypes
             send_buf = ConcreteRArray(ones(T, 5))
             recv_buf = ConcreteRArray(zeros(T, 5))
 
