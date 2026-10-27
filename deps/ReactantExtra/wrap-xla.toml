@@ -1,8 +1,8 @@
 [general]
 # The PJRT C API headers declare no functions (only types, enums and function-pointer typedefs),
 # so `library_name` is never referenced in the output.
-library_name = "NONE"
-output_file_path = "Plugin.jl"
+library_name = "libxla"
+output_file_path = "CAPI.jl"
 prologue_file_path = ""
 epilogue_file_path = ""
 use_julia_native_enum_type = false
@@ -19,6 +19,9 @@ output_ignorelist = [
     "PJRT_STRUCT_SIZE",
     "PJRT_CHECK_STRUCT_SIZE",
     "PJRT_DEFINE_STRUCT_TRAITS",
+    "_XLA_FFI_API_STRUCT_FIELD",
+    "XLA_FFI_STRUCT_SIZE",
+    "XLA_FFI_DEFINE_STRUCT_TRAITS",
 ]
 
 [codegen]
