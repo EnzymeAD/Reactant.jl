@@ -1,7 +1,6 @@
 module Compiler
 
 using Reactant_jll
-using Libdl: dlsym
 using LinearAlgebra: BlasInt
 import p7zip_jll: p7zip
 
