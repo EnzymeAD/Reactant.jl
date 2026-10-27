@@ -226,6 +226,18 @@ Fine-grained control over the compilation options for the Reactant compiler.
     optimization passes. (Default: `false`).
   - `loop_unswitch_threshold`: Threshold passed to the `loop_unswitch` pattern inside the
     LICM pass group. A negative value disables the pattern entirely. (Default: `10`).
+  - `split_kernel_fixup`: After the optimization passes, repair the form of a raised
+    stencil kernel whose boundary rows the select-to-slices rewrites split off into
+    concatenates and pads of separately computed pieces, which XLA cannot fuse into one
+    kernel. Where the kernel's work per element stays under
+    `split_kernel_fixup_max_ops` elementwise ops per output, the pieces are rebuilt over
+    every row and selected by row (one fused kernel, as before the split); beyond it the
+    elementwise ops are sunk into the pieces so that each is one computation feeding the
+    concatenate alone, which XLA fuses without recomputing every boundary variant per
+    element. (Default: `true`).
+  - `split_kernel_fixup_max_ops`: The per-output elementwise op count of the kernel
+    (before the rebuild) up to which `split_kernel_fixup` rebuilds the pieces into a
+    select. (Default: `1024`).
   - `excluded_passes`: A list of pass base-names (e.g. `["loop_unswitch"]`) that should be
     omitted from the generated pass pipeline. (Default: `String[]`).
   - `disable_reduce_slice_fusion_passes`: Disables fusion of slice elementwise and reduce
@@ -284,6 +296,8 @@ struct CompileOptions
     disable_licm_optimization_passes::Bool
     loop_unswitch_threshold::Int
     excluded_passes::Vector{String}
+    split_kernel_fixup::Bool
+    split_kernel_fixup_max_ops::Int
     disable_reduce_slice_fusion_passes::Bool
     disable_slice_to_batch_passes::Bool
     disable_concat_to_batch_passes::Bool
@@ -325,6 +339,8 @@ function CompileOptions(;
     disable_licm_optimization_passes::Bool=false,
     loop_unswitch_threshold::Int=10,
     excluded_passes::Vector{String}=String[],
+    split_kernel_fixup::Bool=true,
+    split_kernel_fixup_max_ops::Int=1024,
     disable_reduce_slice_fusion_passes::Bool=false,
     disable_slice_to_batch_passes::Bool=true, # expensive + introduces all-to-all in GB25
     disable_concat_to_batch_passes::Bool=false,
@@ -397,6 +413,8 @@ function CompileOptions(;
         disable_licm_optimization_passes,
         loop_unswitch_threshold,
         excluded_passes,
+        split_kernel_fixup,
+        split_kernel_fixup_max_ops,
         disable_reduce_slice_fusion_passes,
         disable_slice_to_batch_passes,
         disable_concat_to_batch_passes,
@@ -458,6 +476,8 @@ function __compile_options_with_reversed_propagation(compile_options::CompileOpt
         compile_options.disable_licm_optimization_passes,
         compile_options.loop_unswitch_threshold,
         compile_options.excluded_passes,
+        compile_options.split_kernel_fixup,
+        compile_options.split_kernel_fixup_max_ops,
         compile_options.disable_reduce_slice_fusion_passes,
         compile_options.disable_slice_to_batch_passes,
         compile_options.disable_concat_to_batch_passes,
@@ -506,6 +526,8 @@ function __compile_options_with_updated_sync(compile_options::CompileOptions, sy
         compile_options.disable_licm_optimization_passes,
         compile_options.loop_unswitch_threshold,
         compile_options.excluded_passes,
+        compile_options.split_kernel_fixup,
+        compile_options.split_kernel_fixup_max_ops,
         compile_options.disable_reduce_slice_fusion_passes,
         compile_options.disable_slice_to_batch_passes,
         compile_options.disable_concat_to_batch_passes,
