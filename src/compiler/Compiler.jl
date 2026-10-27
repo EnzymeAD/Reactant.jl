@@ -416,9 +416,9 @@ Base.@nospecializeinfer function compile_mlir!(
 
     lower_comm_pass = if compile_options.comm_options.lowering_target === :jit
         if backend == "cuda"
-            "legalize-mpi-to-nccl, lower-comm-to-jit{mpi_request_width=$(MPI_REQUEST_WIDTH[])}"
+            "legalize-mpi-to-nccl, lower-comm-to-jit{mpi_request_width=$(MPI_REQUEST_WIDTH[])}, fuse-jit{dag=false adjacent=true}"
         else
-            "lower-comm-to-jit{mpi_request_width=$(MPI_REQUEST_WIDTH[])}"
+            "lower-comm-to-jit{mpi_request_width=$(MPI_REQUEST_WIDTH[])}, fuse-jit{dag=false adjacent=true}"
         end
     elseif compile_options.comm_options.lowering_target === :ffi
         "lower-comm-to-stablehlo"
