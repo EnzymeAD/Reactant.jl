@@ -1438,6 +1438,7 @@ cc_library(
         "@xla//xla/tsl/platform:env",
         "@xla//xla/tsl/platform:errors",
         "@xla//xla/service:hlo_proto_cc_impl",
+        "@xla//xla/service/llvm_ir:llvm_command_line_options",
         "@xla//xla/pjrt/proto:compile_options_proto_cc_impl",
         "@com_google_absl//absl/status:statusor",
     ] + if_cuda([
