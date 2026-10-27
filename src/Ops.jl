@@ -267,6 +267,17 @@ end
     return constant(collect(x); location)
 end
 
+# `collect` of a dense array with an element type that is not a number returns the same
+# type, so the fallback above would call itself forever.
+@noinline function constant(x::DenseArray{T,N}; kwargs...) where {T,N}
+    throw(
+        ArgumentError(
+            "cannot make a constant of an array with element type $T: " *
+            "only arrays of numbers are supported",
+        ),
+    )
+end
+
 @noinline function constant(x::Reactant.AbstractConcreteArray; kwargs...)
     return constant(Base.convert(Array, x); kwargs...)
 end
