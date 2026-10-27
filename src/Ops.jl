@@ -4015,6 +4015,59 @@ end
     return U, S, Vt, info
 end
 
+"""
+    tridiagonal_solve(
+        dl::TracedRArray{T,N},
+        d::TracedRArray{T,N},
+        du::TracedRArray{T,N},
+        b::TracedRArray{T,M},
+        ::Type{iT}=Int32;
+        location=mlir_stacktrace("tridiagonal_solve", @__FILE__, @__LINE__)
+    ) where {T,N,M,iT}
+
+Solve the tridiagonal linear system `A * X = b` and return the solution `X` and `info`.
+
+`dl`, `d` and `du` are the sub-, main and super-diagonals of `A` with shape `[..., m]`,
+where `dl[..., 1]` and `du[..., m]` are ignored. `b` has shape `[..., m, nrhs]`. `info` has
+the batch shape `[...]` and is non-zero for the systems that could not be solved.
+"""
+@noinline function tridiagonal_solve(
+    dl::TracedRArray{T,N},
+    d::TracedRArray{T,N},
+    du::TracedRArray{T,N},
+    b::TracedRArray{T,M},
+    (::Type{iT})=Int32;
+    location=mlir_stacktrace("tridiagonal_solve", @__FILE__, @__LINE__),
+) where {T,N,M,iT}
+    @assert M == N + 1 && N >= 1
+    @assert size(dl) == size(d) == size(du) == size(b)[1:(end - 1)] "diagonals must have \
+                                                                      shape [..., m] and \
+                                                                      b must have shape \
+                                                                      [..., m, nrhs]"
+
+    info_size = size(b)[1:(end - 2)]
+
+    op = enzymexla.linalg_tridiagonal_solve(
+        dl.mlir_data,
+        d.mlir_data,
+        du.mlir_data,
+        b.mlir_data;
+        X=mlir_type(TracedRArray{T,M}, size(b)),
+        info=mlir_type(TracedRArray{iT,M - 2}, info_size),
+        location,
+    )
+
+    X = TracedRArray{T,M}((), MLIR.IR.result(op, 1), size(b))
+
+    if M == 2
+        info = TracedRNumber{iT}((), MLIR.IR.result(op, 2))
+    else
+        info = TracedRArray{iT,M - 2}((), MLIR.IR.result(op, 2), info_size)
+    end
+
+    return X, info
+end
+
 @noinline function reduce_window(
     f::F,
     inputs::Vector{<:TracedRArray{T,N}},
