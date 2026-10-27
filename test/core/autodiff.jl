@@ -782,3 +782,61 @@ end
     @test Array(u_ra) ≈ u
     @test Array(seeds_ra) ≈ seeds
 end
+
+# https://github.com/EnzymeAD/Reactant.jl/issues/3502
+mutable struct RNGModel
+    w::Any
+    rng::Any
+end
+
+rng_model_loss(m) = sum(m.w .* rand(m.rng, Float32, 4))
+
+function rng_model_grad!(m, copy_inactive)
+    dm = Enzyme.make_zero(m, Val(copy_inactive))
+    Enzyme.autodiff(Reverse, Const(rng_model_loss), Active, Duplicated(m, dm))
+    return dm
+end
+
+function rng_model_jvp!(m, copy_inactive)
+    dm = Enzyme.make_zero(m, Val(copy_inactive))
+    dm.w = dm.w .+ 1
+    res = Enzyme.autodiff(Forward, Const(rng_model_loss), Duplicated, Duplicated(m, dm))
+    return dm, only(res)
+end
+
+function new_rng_model()
+    return RNGModel(
+        Reactant.to_rarray(ones(Float32, 4)),
+        Reactant.ReactantRNG(Reactant.to_rarray(UInt64[1, 2])),
+    )
+end
+
+@testset "Shadows of integer arrays are left untouched (#3502)" begin
+    m = new_rng_model()
+    r = Array(@jit rand(m.rng, Float32, 4))
+    seed = Array(m.rng.seed)
+    @test seed != UInt64[1, 2]
+
+    @testset "copy_inactive=$copy_inactive" for copy_inactive in (false, true)
+        dseed = copy_inactive ? UInt64[1, 2] : seed
+
+        m = new_rng_model()
+        dm = @jit rng_model_grad!(m, copy_inactive)
+        @test Array(m.rng.seed) == seed
+        @test Array(dm.rng.seed) == dseed
+        @test Array(dm.w) ≈ r
+
+        m = new_rng_model()
+        dm, dres = @jit rng_model_jvp!(m, copy_inactive)
+        @test Array(m.rng.seed) == seed
+        @test Array(dm.rng.seed) == dseed
+        @test Float32(dres) ≈ sum(r)
+    end
+
+    m = new_rng_model()
+    dm = Enzyme.make_zero(m)
+    @test dm.rng.seed === m.rng.seed
+    @jit Enzyme.autodiff(Reverse, Const(rng_model_loss), Active, Duplicated(m, dm))
+    @test Array(m.rng.seed) == seed
+    @test Array(dm.w) ≈ r
+end
