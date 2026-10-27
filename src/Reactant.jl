@@ -379,8 +379,6 @@ function initialize_ptrs()
                 name, Libdl.dlsym(Reactant_jll.libReactantExtra_handle, name)
             )
         end
-        # CUDA runtime calls emitted by convert-polygeist-to-llvm.
-        @ccall Reactant_jll.libReactantExtra.ReactantMapCudaRuntimeSymbols()::Cvoid
     end
     # LLVM lowers float -> bfloat truncation to a compiler-rt libcall on targets without
     # native bf16 conversions.

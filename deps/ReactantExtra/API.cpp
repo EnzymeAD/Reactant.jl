@@ -1007,52 +1007,6 @@ REACTANT_ABI int32_t ReactantCudaSetDevice(int32_t device_id) {
   return static_cast<int32_t>(cudaSetDevice(device_id));
 }
 
-// Registration entry points of the CUDA runtime, normally declared by the
-// nvcc-generated host stubs (crt/host_runtime.h).
-extern "C" {
-void **__cudaRegisterFatBinary(void *fatCubin);
-void __cudaRegisterFatBinaryEnd(void **fatCubinHandle);
-void __cudaUnregisterFatBinary(void **fatCubinHandle);
-void __cudaRegisterFunction(void **fatCubinHandle, const char *hostFun,
-                            char *deviceFun, const char *deviceName,
-                            int thread_limit, uint3 *tid, uint3 *bid,
-                            dim3 *bDim, dim3 *gDim, int *wSize);
-void __cudaRegisterVar(void **fatCubinHandle, char *hostVar,
-                       char *deviceAddress, const char *deviceName, int ext,
-                       size_t size, int constant, int global);
-void EnzymeJaXMapSymbol(const char *name, void *symbol);
-}
-
-// Kernels jitted by lower-jit call into the CUDA runtime. The static libcudart
-// linked in here hides its symbols, so hand their addresses to the JIT
-// directly; jitted kernels then share the runtime instance XLA uses.
-REACTANT_ABI void ReactantMapCudaRuntimeSymbols() {
-#define MAP_CUDART(name, type)                                                 \
-  EnzymeJaXMapSymbol(#name, reinterpret_cast<void *>(static_cast<type>(&name)))
-  MAP_CUDART(__cudaRegisterFatBinary, void **(*)(void *));
-  MAP_CUDART(__cudaRegisterFatBinaryEnd, void (*)(void **));
-  MAP_CUDART(__cudaUnregisterFatBinary, void (*)(void **));
-  MAP_CUDART(__cudaRegisterFunction,
-             void (*)(void **, const char *, char *, const char *, int, uint3 *,
-                      uint3 *, dim3 *, dim3 *, int *));
-  MAP_CUDART(__cudaRegisterVar, void (*)(void **, char *, char *, const char *,
-                                         int, size_t, int, int));
-  MAP_CUDART(cudaLaunchKernel, cudaError_t(*)(const void *, dim3, dim3,
-                                              void **, size_t, cudaStream_t));
-  MAP_CUDART(cudaMalloc, cudaError_t(*)(void **, size_t));
-  MAP_CUDART(cudaFree, cudaError_t(*)(void *));
-  MAP_CUDART(cudaMemcpy,
-             cudaError_t(*)(void *, const void *, size_t, cudaMemcpyKind));
-  MAP_CUDART(cudaMemcpy2D, cudaError_t(*)(void *, size_t, const void *, size_t,
-                                          size_t, size_t, cudaMemcpyKind));
-  MAP_CUDART(cudaMemset, cudaError_t(*)(void *, int, size_t));
-  MAP_CUDART(cudaOccupancyMaxActiveBlocksPerMultiprocessorWithFlags,
-             cudaError_t(*)(int *, const void *, int, size_t, unsigned int));
-  MAP_CUDART(cudaDeviceSynchronize, cudaError_t(*)());
-  MAP_CUDART(cudaGetLastError, cudaError_t(*)());
-#undef MAP_CUDART
-}
-
 REACTANT_ABI int32_t ReactantCudaDeviceGetComputeCapalilityMajor() {
   CUdevice cuDevice;
   ReactantHandleCuResult(cuDeviceGet(&cuDevice, 0));
@@ -1223,8 +1177,6 @@ REACTANT_ABI int32_t ReactantCudaDriverGetVersion() { return 0; }
 REACTANT_ABI int32_t ReactantHermeticCudaGetVersion() { return 0; }
 
 REACTANT_ABI int32_t ReactantCudaSetDevice(int32_t) { return -1; }
-
-REACTANT_ABI void ReactantMapCudaRuntimeSymbols() {}
 
 REACTANT_ABI int32_t ReactantCudaDeviceGetComputeCapalilityMajor() { return 0; }
 
