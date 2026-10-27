@@ -4,6 +4,7 @@ using ..Reactant:
     Reactant, MLIR, OptimizeCommunicationOptions, ShardyPropagationOptions, CompileOptions
 
 const BFLOAT16_COMPILE_TYPE = Ref{DataType}(Float32)
+const CONSTRAIN_LAYOUTS = Ref{Bool}(true)
 const DEBUG_KERNEL = Ref{Bool}(false)
 const DUMP_LLVMIR = Ref{Bool}(false)
 const DUMP_FAILED_LOCKSTEP = Ref{Bool}(false)
@@ -24,6 +25,20 @@ const AGGRESSIVE_PROPAGATION = Ref(false)
 const DUS_SLICE_SIMPLIFY = Ref(true)
 const CONCATS_TO_DUS = Ref(false)
 const WHILE_UNROLL_THRESHOLD = Ref(4)
+const INTERPRETER_MAX_NUM_REWRITES = Ref(-1)
+const INTERPRETER_MAX_ITERATIONS = Ref(-1)
+
+# -1 means unlimited / inherit from the driver, so the option is omitted
+function generate_td_pass(patterns::AbstractString)
+    opts = "patterns=" * patterns
+    if INTERPRETER_MAX_NUM_REWRITES[] != -1
+        opts *= " max-num-rewrites=$(INTERPRETER_MAX_NUM_REWRITES[])"
+    end
+    if INTERPRETER_MAX_ITERATIONS[] != -1
+        opts *= " max-iterations=$(INTERPRETER_MAX_ITERATIONS[])"
+    end
+    return "enzyme-hlo-generate-td{" * opts * "}"
+end
 
 function _propagate_direction(sym::Symbol)
     sym === :up && return MLIR.API.ENZYMEXLA_PROPAGATE_UP
@@ -38,7 +53,6 @@ function optimization_passes(
     dus_to_concat::Bool=false,
     recognize_comms::Bool=true,
     lower_comms::Bool=true,
-    backend::String="gpu",
     is_sharded::Bool=false,
     raise_shlo_to_blas_lapack::Bool=true,
     self_to_convolution::Bool=false,
@@ -106,7 +120,7 @@ function optimization_passes(
 
     transform_passes = join(
         [
-            "enzyme-hlo-generate-td{patterns=" * main_passes_str * "}",
+            generate_td_pass(main_passes_str),
             "transform-interpreter",
             "enzyme-hlo-remove-transform",
         ],
@@ -120,12 +134,15 @@ function optimization_passes(
     if lower_comms
         func_passes =
             func_passes *
-            ",enzyme-hlo-generate-td{patterns=" *
-            lower_passes_str *
-            "},transform-interpreter,enzyme-hlo-remove-transform"
+            "," *
+            generate_td_pass(lower_passes_str) *
+            ",transform-interpreter,enzyme-hlo-remove-transform"
     end
     if CONCATS_TO_DUS[] && hlo_opts
-        func_passes *= ",enzyme-hlo-generate-td{patterns=concat_to_onedim_dus},transform-interpreter,enzyme-hlo-remove-transform"
+        func_passes *=
+            "," *
+            generate_td_pass("concat_to_onedim_dus") *
+            ",transform-interpreter,enzyme-hlo-remove-transform"
     end
     passes = String[]
     if compile_options.inline
@@ -360,7 +377,9 @@ end
 function get_optimize_comms_passes(options::Bool)
     if !options
         return [
-            "enzyme-hlo-generate-td{patterns=lower_rotate;lower_wrap;lower_extend;lower_updatewithoutcorners}",
+            generate_td_pass(
+                "lower_rotate;lower_wrap;lower_extend;lower_updatewithoutcorners"
+            ),
             "transform-interpreter",
             "enzyme-hlo-remove-transform",
         ]
@@ -371,18 +390,50 @@ end
 function get_optimize_comms_passes(options::OptimizeCommunicationOptions)
     options_str = String(options)
     res = [
-        "enzyme-hlo-generate-td{patterns=concat_to_onedim_dus;concat_to_onedim_dusslice;concatreshape_to_onedim_dus}",
+        generate_td_pass(
+            "concat_to_onedim_dus;concat_to_onedim_dusslice;concatreshape_to_onedim_dus"
+        ),
         "transform-interpreter",
         "enzyme-hlo-remove-transform",
-        "enzyme-hlo-generate-td{patterns=reshape_to_broadcast;recognize_multirotate;use_multirotate_neutral_result;recognize_multislice}",
-        "transform-interpreter",
-        "enzyme-hlo-remove-transform",
-        options_str,
-        "enzyme-hlo-generate-td{patterns=lower_rotate;lower_wrap;lower_extend;lower_updatewithoutcorners;lower_multislice}",
-        "transform-interpreter",
-        "enzyme-hlo-remove-transform",
-        options_str,
     ]
+    if options.dus_sink_slices_comm > 0
+        # Runs on the plain slices, before they are grouped into multislices: the slices
+        # feeding the update of a DUS on a sharded dimension are moved down to the DUS.
+        early = (:dus_sink_slices_comm, :dus_sink_slices_max_extra_percent)
+        push!(
+            res,
+            "optimize-communication{" *
+            join(
+                [
+                    "$(f)=$(f in early ? getfield(options, f) : 0)" for
+                    f in fieldnames(OptimizeCommunicationOptions)
+                ],
+                " ",
+            ) *
+            " dus_of_concat_slices=0 reorder_associative=0}",
+        )
+    end
+    append!(
+        res,
+        [
+            # `slice_rotate` hoists a rotation above the slices of its operand, so that the
+            # rotations of one field by several amounts, which the main pipeline's slice
+            # propagation leaves on separate slices of it, are grouped by the recognizer
+            # that follows into one exchange per field and direction.
+            generate_td_pass(
+                "slice_rotate;reshape_to_broadcast;recognize_multirotate;use_multirotate_neutral_result;recognize_multislice",
+            ),
+            "transform-interpreter",
+            "enzyme-hlo-remove-transform",
+            options_str,
+            generate_td_pass(
+                "lower_rotate;lower_wrap;lower_extend;lower_updatewithoutcorners;lower_multislice",
+            ),
+            "transform-interpreter",
+            "enzyme-hlo-remove-transform",
+            options_str,
+        ],
+    )
     return res
 end
 

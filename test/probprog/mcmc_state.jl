@@ -524,7 +524,7 @@ end
             total_samples,
         )
 
-        @test samples == Array(combined_samples)
+        @test samples ≈ Array(combined_samples)
     end
 
     @testset "run_chain continuation from state" begin

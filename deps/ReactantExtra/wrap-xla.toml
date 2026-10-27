@@ -1,0 +1,37 @@
+[general]
+# The PJRT C API headers declare no functions (only types, enums and function-pointer typedefs),
+# so `library_name` is never referenced in the output.
+library_name = "libxla"
+output_file_path = "CAPI.jl"
+prologue_file_path = ""
+epilogue_file_path = ""
+use_julia_native_enum_type = false
+use_deterministic_symbol = true
+smart_de_anonymize = true
+extract_c_comment_style = "doxygen"
+fold_single_line_comment = false
+struct_field_comment_style = "outofline"
+show_c_function_prototype = false
+output_ignorelist = [
+    # Header-internal helper macros; they produce invalid Julia if emitted.
+    "PJRT_NO_DISCARD",
+    "_PJRT_API_STRUCT_FIELD",
+    "PJRT_STRUCT_SIZE",
+    "PJRT_CHECK_STRUCT_SIZE",
+    "PJRT_DEFINE_STRUCT_TRAITS",
+    "_XLA_FFI_API_STRUCT_FIELD",
+    "XLA_FFI_STRUCT_SIZE",
+    "XLA_FFI_DEFINE_STRUCT_TRAITS",
+]
+
+[codegen]
+use_julia_bool = true
+always_NUL_terminated_string = true
+is_function_strictly_typed = false
+opaque_func_arg_as_PtrCvoid = false
+opaque_as_mutable_struct = true
+use_ccall_macro = true
+
+[codegen.macro]
+macro_mode = "basic"
+add_comment_for_skipped_macro = false

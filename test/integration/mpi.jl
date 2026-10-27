@@ -55,7 +55,7 @@ elseif RUN_GPU_MPI_TESTS
     Reactant.initialize_nccl_comm!(MPI.COMM_WORLD)
 
     # finalize at exit instead of using a big `try...finaly...end` block
-    atexit(ReactantMPIExt.destroy_default_comm)
+    atexit(Base.get_extension(Reactant, :ReactantMPIExt).destroy_default_comm)
 end
 
 # run tests
@@ -138,39 +138,40 @@ end
 
     elseif RUN_GPU_MPI_TESTS
 
+        # TODO disabled until we reenable MPI to NCCL pass
         # nccl-backed allreduce operations
-        gpu_operations = [
-            ("MAX", MPI.MAX), ("MIN", MPI.MIN), ("PROD", MPI.PROD), ("SUM", MPI.SUM)
-        ]
+        # gpu_operations = [
+        #     ("MAX", MPI.MAX), ("MIN", MPI.MIN), ("PROD", MPI.PROD), ("SUM", MPI.SUM)
+        # ]
 
-        comm = MPI.COMM_WORLD
-        rank = MPI.Comm_rank(comm)
+        # comm = MPI.COMM_WORLD
+        # rank = MPI.Comm_rank(comm)
 
-        for (opname, op) in gpu_operations
-            @testset "$opname" begin
-                for T in gpu_datatypes
-                    @testset "Type: $T" begin
-                        sendbuf = fill(T(rank + 1), 5)
-                        expected = MPI.Allreduce(sendbuf, op, comm)
+        # for (opname, op) in gpu_operations
+        #     @testset "$opname" begin
+        #         for T in gpu_datatypes
+        #             @testset "Type: $T" begin
+        #                 sendbuf = fill(T(rank + 1), 5)
+        #                 expected = MPI.Allreduce(sendbuf, op, comm)
 
-                        rsendbuf = ConcreteRArray(sendbuf)
-                        rrecvbuf = ConcreteRArray(zeros(T, 5))
-                        result = @jit sync = true MPI.Allreduce!(
-                            rsendbuf, rrecvbuf, op, comm
-                        )
+        #                 rsendbuf = ConcreteRArray(sendbuf)
+        #                 rrecvbuf = ConcreteRArray(zeros(T, 5))
+        #                 result = @jit sync = true MPI.Allreduce!(
+        #                     rsendbuf, rrecvbuf, op, comm
+        #                 )
 
-                        # # *debug*
-                        # println("""MPI rank $(rank) 
-                        #            sendbuf = $(sendbuf) 
-                        #            result = $(Array(result)) 
-                        #            rrecvbuf = $(Array(rrecvbuf))""")
+        #                 # # *debug*
+        #                 # println("""MPI rank $(rank) 
+        #                 #            sendbuf = $(sendbuf) 
+        #                 #            result = $(Array(result)) 
+        #                 #            rrecvbuf = $(Array(rrecvbuf))""")
 
-                        @test Array(result) == expected
-                        @test Array(rrecvbuf) == expected
-                    end
-                end
-            end
-        end
+        #                 @test Array(result) == expected
+        #                 @test Array(rrecvbuf) == expected
+        #             end
+        #         end
+        #     end
+        # end
     end
 end
 

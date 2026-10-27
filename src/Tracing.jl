@@ -988,8 +988,8 @@ const traced_type_cache = Dict{Tuple{TraceMode,Type,Any},Dict{Type,Type}}()
 #     $(Expr(:meta, :generated, traced_type_generator))
 # end
 
-resolve_conflict(t1::Type{<:ConcreteRNumber{T}}, t2::Type{T}) where {T} = T
-resolve_conflict(t1::Type{T}, t2::Type{<:ConcreteRNumber{T}}) where {T} = T
+resolve_conflict(t1::Type{<:AbstractConcreteNumber{T}}, t2::Type{T}) where {T} = T
+resolve_conflict(t1::Type{T}, t2::Type{<:AbstractConcreteNumber{T}}) where {T} = T
 resolve_conflict(t1, t2) = promote_type(t1, t2)
 
 """
@@ -1018,7 +1018,7 @@ The first type parameter has been promoted to satisfy to be in agreement with th
 function apply_type_with_promotion(wrapper, params, relevant_typevars=typevar_dict(wrapper))
     unwrapped = Base.unwrap_unionall(wrapper) # remove all the typevars
     original_params = copy(params)
-    params = [params...]
+    params = Any[params...]
 
     changed = true
     iter = 0
@@ -1061,11 +1061,8 @@ function apply_type_with_promotion(wrapper, params, relevant_typevars=typevar_di
                     if value != resolved
                         # This happens when `value` lost the promotion battle.
                         # At this point, we need to update the problematic parameter in `param`.
-                        d = typevar_dict(rewrapped)
-                        v = Any[param.parameters...]
-                        v[d[typevar]] = resolved
-                        params[i], _changed_params = apply_type_with_promotion(
-                            param.name.wrapper, v
+                        params[i] = repromote_parameter_with_bound(
+                            param, rewrapped, typevar, resolved
                         )
                     end
                     changed = true
@@ -1076,6 +1073,35 @@ function apply_type_with_promotion(wrapper, params, relevant_typevars=typevar_di
     end
     changed_params = original_params .!= params
     return Core.apply_type(wrapper, params...), changed_params
+end
+
+"""
+Rebuild `param` so that it satisfies `bound` (a `UnionAll` over the wrapper typevars) once `typevar` is fixed
+to `resolved`. `bound` may be a parametric type (e.g. `A<:AbstractArray{T}`), the typevar itself (e.g. `S<:T`)
+or a `Union` of those (e.g. `S<:Union{T,AbstractVector{T}}`).
+"""
+function repromote_parameter_with_bound(
+    param, bound, typevar, resolved, body=Base.unwrap_unionall(bound)
+)
+    # NOTE `body` is matched unwrapped because rewrapping a bare typevar collapses it to its upper bound
+    if body === typevar
+        return resolved
+    end
+
+    if body isa Union
+        # pick the branch matched by `param`, preferring structural matches over the bare typevar
+        branches = sort!(Base.uniontypes(body); by=b -> b === typevar)
+        for branch in branches
+            param <: Base.rewrap_unionall(branch, bound) || continue
+            return repromote_parameter_with_bound(param, bound, typevar, resolved, branch)
+        end
+        error("$param does not match any branch of $bound")
+    end
+
+    d = typevar_dict(body)
+    v = Any[param.parameters...]
+    v[d[typevar]] = resolved
+    return first(apply_type_with_promotion(param.name.wrapper, v))
 end
 
 function typevar_dict(t)
