@@ -192,6 +192,7 @@ void reactantReleaseAddressRange(void *base, size_t nbytes);
 #include "xla/debug_options_flags.h"
 #include "xla/hlo/ir/hlo_module.h"
 #include "xla/service/hlo_cost_analysis.h"
+#include "xla/service/llvm_ir/llvm_command_line_options.h"
 #include "xla/xla.pb.h"
 
 #if defined(REACTANT_CUDA) || defined(REACTANT_ROCM)
@@ -945,11 +946,20 @@ std::vector<int64_t> col_major(int64_t dim) {
   return minor_to_major;
 }
 
+// XLA parses LLVM's command line itself, from its own option list, when a
+// client with other options than the last one compiles, and resets every
+// option first (llvm_ir::LLVMCommandLineOptionsLock): an option parsed here
+// alone is gone after the first compile. XLA re-applies its global option
+// list on each such parse, so the options also go there, once each.
 REACTANT_ABI void ReactantLLVMParseCommandLineOptions(int argc,
                                                       const char *const *argv,
                                                       const char *Overview) {
   llvm::cl::ParseCommandLineOptions(argc, argv, StringRef(Overview),
                                     &llvm::nulls());
+  auto &global = xla::llvm_ir::LLVMCommandLineOptionsLock::GetGlobalOptions();
+  for (int i = 1; i < argc; i++)
+    if (std::find(global.begin(), global.end(), argv[i]) == global.end())
+      global.push_back(argv[i]);
 }
 
 std::vector<int64_t> row_major(int64_t dim) {
@@ -3776,6 +3786,14 @@ struct LinkableRuntime {
       assert(client);
       // Weird stream issue in freeing cuda client.
       shouldFreeClient = false;
+      // nvcc contracts a*b+c into an fma; XLA's NVPTX backend only when
+      // asked (the Julia client asks the same way, in GPU.jl). The option
+      // exists only where the NVPTX target is linked in: on any other GPU
+      // XLA's own parse would reject it and exit.
+      if (client->platform_name() == "cuda") {
+        const char *fma[] = {"", "--nvptx-fma-level=1"};
+        ReactantLLVMParseCommandLineOptions(2, fma, nullptr);
+      }
     } else {
       client = MakeCPUClient(1, 0);
       assert(client);
