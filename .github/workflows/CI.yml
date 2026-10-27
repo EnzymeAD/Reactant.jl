@@ -50,7 +50,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        version: ["1.14"]
+        version: ["1.14-nightly"]
         os: ["ubuntu-24.04"]
         test_group: [core, nn, integration, probprog]
         runtime: [pjrt, ifrt]
