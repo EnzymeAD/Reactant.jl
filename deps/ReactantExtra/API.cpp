@@ -3269,14 +3269,13 @@ hloShardingFromTensorShardingAttr(MlirAttribute cattr,
                                   MlirAttribute cmeshAttr) {
   auto attr = mlir::cast<mlir::sdy::TensorShardingAttr>(unwrap(cattr));
   auto meshAttr = mlir::cast<mlir::sdy::MeshAttr>(unwrap(cmeshAttr));
-  mlir::ArrayRef<mlir::StringAttr> manual_axes = {};
   std::function<mlir::sdy::MeshAttr(mlir::sdy::TensorShardingAttr)>
       get_mesh_attr = [meshAttr](mlir::sdy::TensorShardingAttr local_attr) {
         return meshAttr;
       };
 
   return new xla::HloSharding(
-      xla::sdy::convertToHloSharding(attr, get_mesh_attr, manual_axes));
+      xla::sdy::convertToHloSharding(attr, get_mesh_attr));
 }
 
 // TODO(#2252): This is incorrect for multiple meshes. We need to use the

@@ -57,13 +57,6 @@ function compile_mlir(
     kwargs...,
 )
     client = client !== nothing ? client : XLA.default_backend()
-    backend = XLA.platform_name(client)
-
-    if backend == "CUDA"
-        backend = "GPU"
-    elseif backend == "CPU"
-        backend = "cpu"
-    end
 
     MLIR.IR.activate(ctx)
     try
@@ -78,7 +71,6 @@ function compile_mlir(
                 f,
                 args,
                 compile_options;
-                backend,
                 runtime=XLA.runtime(client),
                 client,
                 kwargs_inner...,
@@ -247,14 +239,16 @@ Base.@nospecializeinfer function compile_mlir!(
     sdycache=default_sdycache(),
     sdygroupidcache=default_sdygroupidcache();
     fn_kwargs=(),
-    backend="gpu",
     runtime::Union{Val{:PJRT},Val{:IFRT}},
     legalize_stablehlo_to_mhlo::Bool=false,
     client=nothing,
+    backend=nothing,
     kwargs...,
 )
     @assert MLIR.IR.current_context() == MLIR.IR.context(mod)
-    client = client !== nothing ? client : XLA.default_backend()
+    client = @something(client, XLA.default_backend())
+    backend = @something(backend, XLA.platform_name(client))::String
+    @assert backend ∉ ("gpu", "GPU")
 
     # Explicitly don't use with_block to avoid creating a closure, which creates
     # both compile-time and relocatability issues
@@ -358,13 +352,12 @@ Base.@nospecializeinfer function compile_mlir!(
         sroa=true,
         recognize_comms,
         lower_comms,
-        backend,
         is_sharded,
         hlo_opts=compile_options.optimization_passes !== :after_enzyme &&
                  compile_options.optimization_passes !== :only_enzyme,
     )
     opt_passes2 = optimization_passes(
-        compile_options; sroa=false, recognize_comms, lower_comms, backend, is_sharded
+        compile_options; sroa=false, recognize_comms, lower_comms, is_sharded
     )
 
     raise_passes = if raise isa String
@@ -387,7 +380,6 @@ Base.@nospecializeinfer function compile_mlir!(
                     dus_to_concat=true,
                     recognize_comms,
                     lower_comms,
-                    backend,
                     is_sharded,
                 )
                 result = result * "," * opt_passes3
@@ -733,11 +725,7 @@ Base.@nospecializeinfer function compile_mlir!(
         # with them, we propagate them down to minimize the number of Ops in the IR.
         # Since this might enable certain raising, we do push down -> push up -> push down
         common_kwargs = (;
-            recognize_comms,
-            lower_comms,
-            backend,
-            is_sharded,
-            raise_shlo_to_blas_lapack=false,
+            recognize_comms, lower_comms, is_sharded, raise_shlo_to_blas_lapack=false
         )
         opt_passes_down = optimization_passes(
             Reactant.__compile_options_with_reversed_propagation(compile_options);
@@ -1271,13 +1259,6 @@ Reactant.@annotate "compile $(string(f))" function compile_xla(
     kwargs...,
 )
     client = client !== nothing ? client : XLA.default_backend()
-    backend = XLA.platform_name(client)
-
-    if backend == "CUDA"
-        backend = "GPU"
-    elseif backend == "CPU"
-        backend = "cpu"
-    end
 
     MLIR.IR.activate(ctx)
     try
@@ -1287,14 +1268,7 @@ Reactant.@annotate "compile $(string(f))" function compile_xla(
         compile_options, kwargs = __get_compile_options_and_kwargs(; kwargs...)
 
         mlir_fn_res = compile_mlir!(
-            mod,
-            f,
-            args,
-            compile_options;
-            backend,
-            runtime=XLA.runtime(client),
-            client,
-            kwargs...,
+            mod, f, args, compile_options; runtime=XLA.runtime(client), client, kwargs...
         )
 
         # Resolve client and device

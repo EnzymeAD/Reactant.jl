@@ -31,9 +31,19 @@ module {
   func.func @foo()
 }
 ```
+
+A module may have an inherent `dlti` attribute implementing
+`DLTIQueryInterface`, for example
+`module <{dlti = #dlti.map<\"chip\" = \"sm_90\">}> {}`.
+When the DLTI dialect is loaded, the module implements
+`DLTIQueryOpInterface` and provides values for scoped DLTI queries.
 """
 function module_(;
-    sym_name=nothing, sym_visibility=nothing, bodyRegion::Region, location=Location()
+    sym_name=nothing,
+    sym_visibility=nothing,
+    dlti=nothing,
+    bodyRegion::Region,
+    location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[]
@@ -43,6 +53,7 @@ function module_(;
     !isnothing(sym_name) && push!(attributes, NamedAttribute("sym_name", sym_name))
     !isnothing(sym_visibility) &&
         push!(attributes, NamedAttribute("sym_visibility", sym_visibility))
+    !isnothing(dlti) && push!(attributes, NamedAttribute("dlti", dlti))
 
     return create_operation(
         "builtin.module",

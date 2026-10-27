@@ -132,9 +132,10 @@ for (aT, iT) in (
     (LinRange{<:TracedRNumber}, TracedRNumber{Int}),
 )
     @eval function Base.getindex(r::$aT, index::$iT)
+        # `Base.lerpi`, which takes an `Integer` index
+        t = (index - oneunit(index)) / r.lendiv
         return convert(
-            TracedRNumber{Reactant.unwrapped_eltype(r)},
-            Base.lerpi(index - oneunit(index), r.lendiv, r.start, r.stop),
+            TracedRNumber{Reactant.unwrapped_eltype(r)}, (1 - t) * r.start + t * r.stop
         )
     end
 end
