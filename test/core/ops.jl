@@ -201,8 +201,8 @@ end
 
     # An element type that is not a number errors instead of recursing
     x = Union{Missing,Float32}[1, missing, 1]
-    @test_throws ArgumentError Ops.constant(x)
-    @test_throws ArgumentError Ops.constant(view(x, 1:2))
+    @test_throws ArgumentError @jit Ops.constant(x)
+    @test_throws ArgumentError @jit Ops.constant(view(x, 1:2))
 end
 
 @testset "cosine" begin
