@@ -14096,6 +14096,292 @@ function mlirRegisterAllPasses()
 end
 
 """
+    MlirRemark
+
+An opaque reference to a remark. A remark is only valid for the duration of the callback it is passed to; it must not be stored.
+"""
+struct MlirRemark
+    ptr::Ptr{Cvoid}
+end
+
+"""
+    MlirRemarkKind
+
+The outcome a remark describes (see mlir::remark::RemarkKind).
+"""
+@cenum MlirRemarkKind::UInt32 begin
+    MlirRemarkKindUnknown = 0x0000000000000000
+    MlirRemarkKindPassed = 0x0000000000000001
+    MlirRemarkKindMissed = 0x0000000000000002
+    MlirRemarkKindFailure = 0x0000000000000003
+    MlirRemarkKindAnalysis = 0x0000000000000004
+end
+
+"""
+    MlirRemarkPolicy
+
+The emitting policy of the remark engine.
+"""
+@cenum MlirRemarkPolicy::UInt32 begin
+    MlirRemarkPolicyAll = 0x0000000000000000
+    MlirRemarkPolicyFinal = 0x0000000000000001
+end
+
+"""
+    MlirRemarkFileFormat
+
+The serialization format of a remark output file.
+"""
+@cenum MlirRemarkFileFormat::UInt32 begin
+    MlirRemarkFileFormatYAML = 0x0000000000000000
+    MlirRemarkFileFormatBitstream = 0x0000000000000001
+end
+
+"""
+    MlirRemarkCategories
+
+Regular expressions (llvm::Regex syntax, anchored by the engine) selecting the remark categories to report: `all` applies to every kind, the others to one kind each. A string of length 0 means the filter is not set, so the corresponding kind is not reported unless `all` matches.
+"""
+struct MlirRemarkCategories
+    all::MlirStringRef
+    passed::MlirStringRef
+    missed::MlirStringRef
+    analysis::MlirStringRef
+    failed::MlirStringRef
+end
+
+# typedef void ( * MlirRemarkCallback ) ( MlirRemark remark , void * userData )
+"""
+Callback receiving every remark the engine reports.
+"""
+const MlirRemarkCallback = Ptr{Cvoid}
+
+"""
+    mlirContextEnableOptimizationRemarks(context, categories, policy, printAsEmitRemarks)
+
+Enables the remark engine on the context without a streamer; when `printAsEmitRemarks` is set, every reported remark is emitted as an MLIR remark diagnostic at its location. Fails when the context already has a remark engine (finalize it first).
+"""
+function mlirContextEnableOptimizationRemarks(
+    context, categories, policy, printAsEmitRemarks
+)
+    @ccall Reactant_jll.libReactantExtra.mlirContextEnableOptimizationRemarks(
+        context::MlirContext,
+        categories::MlirRemarkCategories,
+        policy::MlirRemarkPolicy,
+        printAsEmitRemarks::Bool,
+    )::MlirLogicalResult
+end
+
+"""
+    mlirContextEnableOptimizationRemarksToFile(context, categories, policy, format, path, printAsEmitRemarks)
+
+Enables the remark engine on the context, streaming the reported remarks to the file at `path` in `format`. The file is written when the engine is finalized. Fails when the file cannot be created or the context already has a remark engine.
+"""
+function mlirContextEnableOptimizationRemarksToFile(
+    context, categories, policy, format, path, printAsEmitRemarks
+)
+    @ccall Reactant_jll.libReactantExtra.mlirContextEnableOptimizationRemarksToFile(
+        context::MlirContext,
+        categories::MlirRemarkCategories,
+        policy::MlirRemarkPolicy,
+        format::MlirRemarkFileFormat,
+        path::MlirStringRef,
+        printAsEmitRemarks::Bool,
+    )::MlirLogicalResult
+end
+
+"""
+    mlirContextEnableOptimizationRemarksWithCallback(context, categories, policy, callback, userData, deleteUserData, printAsEmitRemarks)
+
+Enables the remark engine on the context, delivering every reported remark to `callback`. `userData` is passed to the callback unchanged and released through `deleteUserData` (may be null) when the engine is finalized or the context is destroyed. Fails when the context already has a remark engine.
+"""
+function mlirContextEnableOptimizationRemarksWithCallback(
+    context, categories, policy, callback, userData, deleteUserData, printAsEmitRemarks
+)
+    @ccall Reactant_jll.libReactantExtra.mlirContextEnableOptimizationRemarksWithCallback(
+        context::MlirContext,
+        categories::MlirRemarkCategories,
+        policy::MlirRemarkPolicy,
+        callback::MlirRemarkCallback,
+        userData::Ptr{Cvoid},
+        deleteUserData::Ptr{Cvoid},
+        printAsEmitRemarks::Bool,
+    )::MlirLogicalResult
+end
+
+"""
+    mlirContextFinalizeOptimizationRemarks(context)
+
+Finalizes and removes the remark engine of the context: postponed remarks are reported, the output file is written and the callback's user data is released. Does nothing when no engine is enabled.
+"""
+function mlirContextFinalizeOptimizationRemarks(context)
+    @ccall Reactant_jll.libReactantExtra.mlirContextFinalizeOptimizationRemarks(
+        context::MlirContext
+    )::Cvoid
+end
+
+"""
+    mlirContextHasRemarkEngine(context)
+
+Returns whether the context has a remark engine enabled.
+"""
+function mlirContextHasRemarkEngine(context)
+    @ccall Reactant_jll.libReactantExtra.mlirContextHasRemarkEngine(
+        context::MlirContext
+    )::Bool
+end
+
+"""
+    mlirRemarkGetKind(remark)
+
+Returns the kind of the remark.
+"""
+function mlirRemarkGetKind(remark)
+    @ccall Reactant_jll.libReactantExtra.mlirRemarkGetKind(
+        remark::MlirRemark
+    )::MlirRemarkKind
+end
+
+"""
+    mlirRemarkGetRemarkName(remark)
+
+Returns the name identifying the remark.
+"""
+function mlirRemarkGetRemarkName(remark)
+    @ccall Reactant_jll.libReactantExtra.mlirRemarkGetRemarkName(
+        remark::MlirRemark
+    )::MlirStringRef
+end
+
+"""
+    mlirRemarkGetCategoryName(remark)
+
+Returns the category of the remark (the subject of the filters).
+"""
+function mlirRemarkGetCategoryName(remark)
+    @ccall Reactant_jll.libReactantExtra.mlirRemarkGetCategoryName(
+        remark::MlirRemark
+    )::MlirStringRef
+end
+
+"""
+    mlirRemarkGetFullCategoryName(remark)
+
+Returns the combined `category:subcategory` name of the remark.
+"""
+function mlirRemarkGetFullCategoryName(remark)
+    @ccall Reactant_jll.libReactantExtra.mlirRemarkGetFullCategoryName(
+        remark::MlirRemark
+    )::MlirStringRef
+end
+
+"""
+    mlirRemarkGetFunctionName(remark)
+
+Returns the name of the function the remark refers to.
+"""
+function mlirRemarkGetFunctionName(remark)
+    @ccall Reactant_jll.libReactantExtra.mlirRemarkGetFunctionName(
+        remark::MlirRemark
+    )::MlirStringRef
+end
+
+"""
+    mlirRemarkGetLocation(remark)
+
+Returns the location of the remark.
+"""
+function mlirRemarkGetLocation(remark)
+    @ccall Reactant_jll.libReactantExtra.mlirRemarkGetLocation(
+        remark::MlirRemark
+    )::MlirLocation
+end
+
+"""
+    mlirRemarkGetId(remark)
+
+Returns the unique id of the remark within its engine (0 when unset).
+"""
+function mlirRemarkGetId(remark)
+    @ccall Reactant_jll.libReactantExtra.mlirRemarkGetId(remark::MlirRemark)::UInt64
+end
+
+"""
+    mlirRemarkGetNumArgs(remark)
+
+Returns the number of key/value arguments attached to the remark.
+"""
+function mlirRemarkGetNumArgs(remark)
+    @ccall Reactant_jll.libReactantExtra.mlirRemarkGetNumArgs(
+        remark::MlirRemark
+    )::Cptrdiff_t
+end
+
+"""
+    mlirRemarkGetArgKey(remark, pos)
+
+Returns the key of the `pos`-th argument of the remark.
+"""
+function mlirRemarkGetArgKey(remark, pos)
+    @ccall Reactant_jll.libReactantExtra.mlirRemarkGetArgKey(
+        remark::MlirRemark, pos::Cptrdiff_t
+    )::MlirStringRef
+end
+
+"""
+    mlirRemarkGetArgValue(remark, pos)
+
+Returns the value of the `pos`-th argument of the remark.
+"""
+function mlirRemarkGetArgValue(remark, pos)
+    @ccall Reactant_jll.libReactantExtra.mlirRemarkGetArgValue(
+        remark::MlirRemark, pos::Cptrdiff_t
+    )::MlirStringRef
+end
+
+"""
+    mlirRemarkPrint(remark, callback, userData)
+
+Prints the remark in its textual form, `[Kind] name | Category:... | Function=... | key=value, ...` (without its location).
+"""
+function mlirRemarkPrint(remark, callback, userData)
+    @ccall Reactant_jll.libReactantExtra.mlirRemarkPrint(
+        remark::MlirRemark, callback::MlirStringCallback, userData::Ptr{Cvoid}
+    )::Cvoid
+end
+
+"""
+    mlirEmitOptimizationRemark(location, kind, remarkName, categoryName, subCategoryName, functionName, message, numArgs, argKeys, argValues)
+
+Emits a remark of `kind` at `location` through the remark engine of the location's context. `message` (when non-empty) and the `numArgs` key/value pairs become the arguments of the remark. Returns false, emitting nothing, when the context has no remark engine, the category is filtered out, or `kind` is MlirRemarkKindUnknown.
+"""
+function mlirEmitOptimizationRemark(
+    location,
+    kind,
+    remarkName,
+    categoryName,
+    subCategoryName,
+    functionName,
+    message,
+    numArgs,
+    argKeys,
+    argValues,
+)
+    @ccall Reactant_jll.libReactantExtra.mlirEmitOptimizationRemark(
+        location::MlirLocation,
+        kind::MlirRemarkKind,
+        remarkName::MlirStringRef,
+        categoryName::MlirStringRef,
+        subCategoryName::MlirStringRef,
+        functionName::MlirStringRef,
+        message::MlirStringRef,
+        numArgs::Cptrdiff_t,
+        argKeys::Ptr{MlirStringRef},
+        argValues::Ptr{MlirStringRef},
+    )::Bool
+end
+
+"""
     mlirTranslateModuleToSMTLIB(arg1, arg2, userData, inlineSingleUseValues, indentLetBody, emitReset)
 
 Emits SMTLIB for the specified module using the provided callback and user data

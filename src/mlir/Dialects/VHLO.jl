@@ -1649,6 +1649,25 @@ function einsum_v1(
     )
 end
 
+function exp2_v1(operand::Value; result::IR.Type, result_accuracy, location=Location())
+    op_ty_results = IR.Type[result,]
+    operands = Value[operand,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[NamedAttribute("result_accuracy", result_accuracy),]
+
+    return create_operation(
+        "vhlo.exp2_v1",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function exponential_v1(operand::Value; result::IR.Type, location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[operand,]
@@ -2055,6 +2074,25 @@ function log_plus_one_v2(
 
     return create_operation(
         "vhlo.log_plus_one_v2",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+function log2_v1(operand::Value; result::IR.Type, result_accuracy, location=Location())
+    op_ty_results = IR.Type[result,]
+    operands = Value[operand,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[NamedAttribute("result_accuracy", result_accuracy),]
+
+    return create_operation(
+        "vhlo.log2_v1",
         location;
         operands,
         owned_regions,

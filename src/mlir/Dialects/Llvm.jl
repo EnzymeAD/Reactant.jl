@@ -324,6 +324,7 @@ function atomicrmw(
     syncscope=nothing,
     alignment=nothing,
     volatile_=nothing,
+    ignore_denormal_mode=nothing,
     access_groups=nothing,
     alias_scopes=nothing,
     noalias_scopes=nothing,
@@ -341,6 +342,8 @@ function atomicrmw(
     !isnothing(syncscope) && push!(attributes, NamedAttribute("syncscope", syncscope))
     !isnothing(alignment) && push!(attributes, NamedAttribute("alignment", alignment))
     !isnothing(volatile_) && push!(attributes, NamedAttribute("volatile_", volatile_))
+    !isnothing(ignore_denormal_mode) &&
+        push!(attributes, NamedAttribute("ignore_denormal_mode", ignore_denormal_mode))
     !isnothing(access_groups) &&
         push!(attributes, NamedAttribute("access_groups", access_groups))
     !isnothing(alias_scopes) &&
@@ -2345,6 +2348,12 @@ Examples:
 // A nontemporal load of a float variable.
 %0 = llvm.load %ptr <nontemporal> : !llvm.ptr -> f32
 
+// A load of a value that is neither undef nor poison.
+%0 = llvm.load %ptr noundef : !llvm.ptr -> i32
+
+// A load of an integer known to lie in [0, 10).
+%0 = llvm.load %ptr range<i32, 0, 10> : !llvm.ptr -> i32
+
 // An atomic load of an integer variable.
 %0 = llvm.load %ptr atomic monotonic <alignment = 8>
     : !llvm.ptr -> i64
@@ -2364,6 +2373,8 @@ function load(
     ordering=nothing,
     syncscope=nothing,
     dereferenceable=nothing,
+    noundef=nothing,
+    range=nothing,
     access_groups=nothing,
     alias_scopes=nothing,
     noalias_scopes=nothing,
@@ -2385,6 +2396,8 @@ function load(
     !isnothing(syncscope) && push!(attributes, NamedAttribute("syncscope", syncscope))
     !isnothing(dereferenceable) &&
         push!(attributes, NamedAttribute("dereferenceable", dereferenceable))
+    !isnothing(noundef) && push!(attributes, NamedAttribute("noundef", noundef))
+    !isnothing(range) && push!(attributes, NamedAttribute("range", range))
     !isnothing(access_groups) &&
         push!(attributes, NamedAttribute("access_groups", access_groups))
     !isnothing(alias_scopes) &&

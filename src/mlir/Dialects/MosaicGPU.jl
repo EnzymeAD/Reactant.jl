@@ -183,6 +183,83 @@ function assume_multiple(
 end
 
 """
+`async_load_im2col`
+
+Schedules an async im2col copy of the contents of the `source` MemRef in
+GMEM to the `destination` MemRef in SMEM. Each row of `destination` receives
+the channels of one pixel of one window in `source`. The `destination`
+MemRef in SMEM must be contiguous.
+
+Upon completion of the copy, the `complete-tx(complete-count)` operation
+will be executed on the provided `barrier`.
+
+- `source` is a batch of channels-last images of shape `(N, W, C)`,
+  `(N, H, W, C)` or `(N, D, H, W, C)` (rank 3, 4 or 5) with an element
+  bitwidth of at least 8.
+- `destination` has shape `(*rows, cols)` of rank at least 2. Its leading
+  dimensions are flattened into `prod(rows)` windows (in `[1, 1024]`) of
+  `cols` channels each (in `[1, 256]`), where `cols` has a bytewidth
+  divisible by 16.
+- `window_lower_bounds` and `window_upper_bounds` give, for each spatial
+  dimension `i` of size `S`, the `(lo, hi)` bounds such that windows start
+  at positions `lo`, `lo + s`, `lo + 2 * s`, ... below `S + hi`, where `s`
+  is `window_strides[i]`, with the image implicitly zero-padded outside
+  `[0, S)`. Each bound must fit in a signed `16 / (rank - 2)`-bit integer.
+- `indices` has length equal to the rank of `source` and specifies
+  `(n, *start, c)`: the batch index and start position of the window loaded
+  into the first row, and the first channel to load. Each subsequent row
+  takes the next window in row-major order over `(n, *start)`, so a copy can
+  span several images. Rows past the last image are zero-filled.
+- `filter_offsets` has length `rank - 2` and selects the pixel to load
+  within each window as an offset in `[0, 2**(16 / (rank - 2)) - 1]` from
+  the window\'s start position.
+- `window_strides` has length `rank - 2` and gives the step in `[1, 8]`
+  between consecutive window start positions along each spatial dimension.
+
+The `predicate` allows scheduling the transfer conditionally.
+"""
+function async_load_im2col(
+    source::Value,
+    destination::Value,
+    barrier::Value,
+    indices::Vector{Value},
+    filter_offsets::Vector{Value},
+    predicate=nothing::Union{Nothing,Value};
+    window_lower_bounds,
+    window_upper_bounds,
+    window_strides,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[source, destination, barrier, indices..., filter_offsets...]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[
+        NamedAttribute("window_lower_bounds", window_lower_bounds),
+        NamedAttribute("window_upper_bounds", window_upper_bounds),
+        NamedAttribute("window_strides", window_strides),
+    ]
+    !isnothing(predicate) && push!(operands, predicate)
+    push!(
+        attributes,
+        operandsegmentsizes([
+            1, 1, 1, length(indices), length(filter_offsets), Int(!isnothing(predicate))
+        ]),
+    )
+
+    return create_operation(
+        "mosaic_gpu.async_load_im2col",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
 `async_load`
 
 Schedules an async copy of the contents of the `source` MemRef in GMEM to
@@ -235,8 +312,7 @@ The `oob_fill_mode` attribute controls the behavior of out-of-bounds
 accesses. `zeros` and `undefined` are only supported with TMA (Hopper and
 newer); the `cp.async` implementation only supports `promise_in_bounds`.
 
-The `predicate` allows scheduling the transfer conditionally. The async copy
-is always scheduled by at most a single lane in the warpgroup.
+The `predicate` allows scheduling the transfer conditionally.
 
 The `gmem_peer_id` parameter specifies a particular device id to load from
 in a multi-GPU setting.
@@ -393,8 +469,7 @@ The data is written in row-major order to the GMEM `destination`. The
 `source` data in SMEM needs to be contiguous, but the `destination` GMEM
 does not.
 
-The `predicate` allows scheduling the transfer conditionally. The async copy
-is always scheduled by at most a single lane in the warpgroup.
+The `predicate` allows scheduling the transfer conditionally.
 
 The `reduction_op` attribute can be provided to perform a reduction when
 storing to GMEM. For example, using `add` will add the SMEM values to
