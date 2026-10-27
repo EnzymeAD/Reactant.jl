@@ -110,9 +110,9 @@ end
 # automatically set `struct_size` field (first) of `*_Args` structs
 function rewrite_args_struct_constructor(node)
     node.type isa Generators.StructDefinition || return nothing
-    ex = only(node.exprs)
-    Base.remove_linenums!(ex)
+    ex = first(node.exprs)
     @assert Meta.isexpr(ex, :struct)
+    Base.remove_linenums!(ex)
 
     ismut, name, body = ex.args
     endswith(string(name), "_Args") || return nothing
@@ -163,6 +163,12 @@ function rewrite!(dag::ExprDAG)
     return dag
 end
 
+# matches any struct name ending in `suffix` for `field_access_method_list`
+struct SuffixMatch
+    suffix::String
+end
+Base.in(name::AbstractString, m::SuffixMatch) = endswith(name, m.suffix)
+
 function (@main)(argv)
     for (output, core_header, target_set) in targets
         output = joinpath(OUTPUT_DIR, output)
@@ -174,6 +180,7 @@ function (@main)(argv)
 
         options = load_options(joinpath(@__DIR__, "wrap-xla.toml"))
         options["general"]["output_file_path"] = output
+        options["codegen"]["field_access_method_list"] = SuffixMatch("_Args")
 
         args = Generators.get_default_args()
         include_path = let idx = findfirst(h -> endswith(h, core_header), headers)

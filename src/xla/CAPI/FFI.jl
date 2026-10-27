@@ -161,6 +161,17 @@ struct XLA_FFI_Error_Create_Args
         return new(csizeof(XLA_FFI_Error_Create_Args), extension_start, message, errc)
     end
 end
+function Base.getproperty(x::Ptr{XLA_FFI_Error_Create_Args}, f::Symbol)
+    f === :struct_size && return Ptr{Csize_t}(x + 0)
+    f === :extension_start && return Ptr{Ptr{XLA_FFI_InternalExtension}}(x + 8)
+    f === :message && return Ptr{Cstring}(x + 16)
+    f === :errc && return Ptr{XLA_FFI_Error_Code}(x + 24)
+    return getfield(x, f)
+end
+
+function Base.setproperty!(x::Ptr{XLA_FFI_Error_Create_Args}, f::Symbol, v)
+    return unsafe_store!(getproperty(x, f), v)
+end
 
 csizeof(::Type{XLA_FFI_Error_Create_Args}) = Csize_t(28)
 
@@ -176,6 +187,18 @@ struct XLA_FFI_Error_GetDetails_Args
         )
     end
 end
+function Base.getproperty(x::Ptr{XLA_FFI_Error_GetDetails_Args}, f::Symbol)
+    f === :struct_size && return Ptr{Csize_t}(x + 0)
+    f === :extension_start && return Ptr{Ptr{XLA_FFI_InternalExtension}}(x + 8)
+    f === :error && return Ptr{Ptr{XLA_FFI_Error}}(x + 16)
+    f === :message && return Ptr{Cstring}(x + 24)
+    f === :errc && return Ptr{XLA_FFI_Error_Code}(x + 32)
+    return getfield(x, f)
+end
+
+function Base.setproperty!(x::Ptr{XLA_FFI_Error_GetDetails_Args}, f::Symbol, v)
+    return unsafe_store!(getproperty(x, f), v)
+end
 
 csizeof(::Type{XLA_FFI_Error_GetDetails_Args}) = Csize_t(36)
 
@@ -186,6 +209,16 @@ struct XLA_FFI_Error_Destroy_Args
     function XLA_FFI_Error_Destroy_Args(extension_start, error)
         return new(csizeof(XLA_FFI_Error_Destroy_Args), extension_start, error)
     end
+end
+function Base.getproperty(x::Ptr{XLA_FFI_Error_Destroy_Args}, f::Symbol)
+    f === :struct_size && return Ptr{Csize_t}(x + 0)
+    f === :extension_start && return Ptr{Ptr{XLA_FFI_InternalExtension}}(x + 8)
+    f === :error && return Ptr{Ptr{XLA_FFI_Error}}(x + 16)
+    return getfield(x, f)
+end
+
+function Base.setproperty!(x::Ptr{XLA_FFI_Error_Destroy_Args}, f::Symbol, v)
+    return unsafe_store!(getproperty(x, f), v)
 end
 
 csizeof(::Type{XLA_FFI_Error_Destroy_Args}) = Csize_t(24)
@@ -289,6 +322,16 @@ struct XLA_FFI_Future_Create_Args
         return new(csizeof(XLA_FFI_Future_Create_Args), extension_start, future)
     end
 end
+function Base.getproperty(x::Ptr{XLA_FFI_Future_Create_Args}, f::Symbol)
+    f === :struct_size && return Ptr{Csize_t}(x + 0)
+    f === :extension_start && return Ptr{Ptr{XLA_FFI_InternalExtension}}(x + 8)
+    f === :future && return Ptr{Ptr{XLA_FFI_Future}}(x + 16)
+    return getfield(x, f)
+end
+
+function Base.setproperty!(x::Ptr{XLA_FFI_Future_Create_Args}, f::Symbol, v)
+    return unsafe_store!(getproperty(x, f), v)
+end
 
 csizeof(::Type{XLA_FFI_Future_Create_Args}) = Csize_t(16)
 
@@ -299,6 +342,16 @@ struct XLA_FFI_Future_SetAvailable_Args
     function XLA_FFI_Future_SetAvailable_Args(extension_start, future)
         return new(csizeof(XLA_FFI_Future_SetAvailable_Args), extension_start, future)
     end
+end
+function Base.getproperty(x::Ptr{XLA_FFI_Future_SetAvailable_Args}, f::Symbol)
+    f === :struct_size && return Ptr{Csize_t}(x + 0)
+    f === :extension_start && return Ptr{Ptr{XLA_FFI_InternalExtension}}(x + 8)
+    f === :future && return Ptr{Ptr{XLA_FFI_Future}}(x + 16)
+    return getfield(x, f)
+end
+
+function Base.setproperty!(x::Ptr{XLA_FFI_Future_SetAvailable_Args}, f::Symbol, v)
+    return unsafe_store!(getproperty(x, f), v)
 end
 
 csizeof(::Type{XLA_FFI_Future_SetAvailable_Args}) = Csize_t(24)
@@ -311,6 +364,17 @@ struct XLA_FFI_Future_SetError_Args
     function XLA_FFI_Future_SetError_Args(extension_start, future, error)
         return new(csizeof(XLA_FFI_Future_SetError_Args), extension_start, future, error)
     end
+end
+function Base.getproperty(x::Ptr{XLA_FFI_Future_SetError_Args}, f::Symbol)
+    f === :struct_size && return Ptr{Csize_t}(x + 0)
+    f === :extension_start && return Ptr{Ptr{XLA_FFI_InternalExtension}}(x + 8)
+    f === :future && return Ptr{Ptr{XLA_FFI_Future}}(x + 16)
+    f === :error && return Ptr{Ptr{XLA_FFI_Error}}(x + 24)
+    return getfield(x, f)
+end
+
+function Base.setproperty!(x::Ptr{XLA_FFI_Future_SetError_Args}, f::Symbol, v)
+    return unsafe_store!(getproperty(x, f), v)
 end
 
 csizeof(::Type{XLA_FFI_Future_SetError_Args}) = Csize_t(32)
@@ -332,6 +396,18 @@ struct XLA_FFI_Args
     function XLA_FFI_Args(extension_start, size, types, args)
         return new(csizeof(XLA_FFI_Args), extension_start, size, types, args)
     end
+end
+function Base.getproperty(x::Ptr{XLA_FFI_Args}, f::Symbol)
+    f === :struct_size && return Ptr{Csize_t}(x + 0)
+    f === :extension_start && return Ptr{Ptr{XLA_FFI_InternalExtension}}(x + 8)
+    f === :size && return Ptr{Int64}(x + 16)
+    f === :types && return Ptr{Ptr{XLA_FFI_ArgType}}(x + 24)
+    f === :args && return Ptr{Ptr{Ptr{Cvoid}}}(x + 32)
+    return getfield(x, f)
+end
+
+function Base.setproperty!(x::Ptr{XLA_FFI_Args}, f::Symbol, v)
+    return unsafe_store!(getproperty(x, f), v)
 end
 
 csizeof(::Type{XLA_FFI_Args}) = Csize_t(40)
@@ -406,6 +482,19 @@ struct XLA_FFI_Handler_Register_Args
         )
     end
 end
+function Base.getproperty(x::Ptr{XLA_FFI_Handler_Register_Args}, f::Symbol)
+    f === :struct_size && return Ptr{Csize_t}(x + 0)
+    f === :extension_start && return Ptr{Ptr{XLA_FFI_InternalExtension}}(x + 8)
+    f === :name && return Ptr{XLA_FFI_ByteSpan}(x + 16)
+    f === :platform && return Ptr{XLA_FFI_ByteSpan}(x + 32)
+    f === :bundle && return Ptr{XLA_FFI_Handler_Bundle}(x + 48)
+    f === :traits && return Ptr{XLA_FFI_Handler_Traits}(x + 88)
+    return getfield(x, f)
+end
+
+function Base.setproperty!(x::Ptr{XLA_FFI_Handler_Register_Args}, f::Symbol, v)
+    return unsafe_store!(getproperty(x, f), v)
+end
 
 csizeof(::Type{XLA_FFI_Handler_Register_Args}) = Csize_t(92)
 
@@ -420,6 +509,18 @@ struct XLA_FFI_Type_Register_Args
             csizeof(XLA_FFI_Type_Register_Args), extension_start, name, type_id, type_info
         )
     end
+end
+function Base.getproperty(x::Ptr{XLA_FFI_Type_Register_Args}, f::Symbol)
+    f === :struct_size && return Ptr{Csize_t}(x + 0)
+    f === :extension_start && return Ptr{Ptr{XLA_FFI_InternalExtension}}(x + 8)
+    f === :name && return Ptr{XLA_FFI_ByteSpan}(x + 16)
+    f === :type_id && return Ptr{Ptr{XLA_FFI_TypeId}}(x + 32)
+    f === :type_info && return Ptr{Ptr{XLA_FFI_TypeInfo}}(x + 40)
+    return getfield(x, f)
+end
+
+function Base.setproperty!(x::Ptr{XLA_FFI_Type_Register_Args}, f::Symbol, v)
+    return unsafe_store!(getproperty(x, f), v)
 end
 
 csizeof(::Type{XLA_FFI_Type_Register_Args}) = Csize_t(40)
@@ -442,6 +543,18 @@ struct XLA_FFI_InvokeContext_FindExtension_Args
         )
     end
 end
+function Base.getproperty(x::Ptr{XLA_FFI_InvokeContext_FindExtension_Args}, f::Symbol)
+    f === :struct_size && return Ptr{Csize_t}(x + 0)
+    f === :extension_start && return Ptr{Ptr{XLA_FFI_InternalExtension}}(x + 8)
+    f === :ctx && return Ptr{Ptr{XLA_FFI_InvokeContext}}(x + 16)
+    f === :extension_type && return Ptr{Int64}(x + 24)
+    f === :extension && return Ptr{Ptr{XLA_FFI_Extension}}(x + 32)
+    return getfield(x, f)
+end
+
+function Base.setproperty!(x::Ptr{XLA_FFI_InvokeContext_FindExtension_Args}, f::Symbol, v)
+    return unsafe_store!(getproperty(x, f), v)
+end
 
 csizeof(::Type{XLA_FFI_InvokeContext_FindExtension_Args}) = Csize_t(40)
 
@@ -457,6 +570,18 @@ struct XLA_FFI_InvokeContext_Get_Args
         )
     end
 end
+function Base.getproperty(x::Ptr{XLA_FFI_InvokeContext_Get_Args}, f::Symbol)
+    f === :struct_size && return Ptr{Csize_t}(x + 0)
+    f === :extension_start && return Ptr{Ptr{XLA_FFI_InternalExtension}}(x + 8)
+    f === :ctx && return Ptr{Ptr{XLA_FFI_InvokeContext}}(x + 16)
+    f === :type_id && return Ptr{Ptr{XLA_FFI_TypeId}}(x + 24)
+    f === :data && return Ptr{Ptr{Cvoid}}(x + 32)
+    return getfield(x, f)
+end
+
+function Base.setproperty!(x::Ptr{XLA_FFI_InvokeContext_Get_Args}, f::Symbol, v)
+    return unsafe_store!(getproperty(x, f), v)
+end
 
 csizeof(::Type{XLA_FFI_InvokeContext_Get_Args}) = Csize_t(40)
 
@@ -468,6 +593,17 @@ struct XLA_FFI_CustomOptions_Get_Args
     function XLA_FFI_CustomOptions_Get_Args(extension_start, ctx, attrs)
         return new(csizeof(XLA_FFI_CustomOptions_Get_Args), extension_start, ctx, attrs)
     end
+end
+function Base.getproperty(x::Ptr{XLA_FFI_CustomOptions_Get_Args}, f::Symbol)
+    f === :struct_size && return Ptr{Csize_t}(x + 0)
+    f === :extension_start && return Ptr{Ptr{XLA_FFI_InternalExtension}}(x + 8)
+    f === :ctx && return Ptr{Ptr{XLA_FFI_InvokeContext}}(x + 16)
+    f === :attrs && return Ptr{Ptr{XLA_FFI_Attrs}}(x + 24)
+    return getfield(x, f)
+end
+
+function Base.setproperty!(x::Ptr{XLA_FFI_CustomOptions_Get_Args}, f::Symbol, v)
+    return unsafe_store!(getproperty(x, f), v)
 end
 
 csizeof(::Type{XLA_FFI_CustomOptions_Get_Args}) = Csize_t(32)
@@ -485,6 +621,19 @@ struct XLA_FFI_State_Set_Args
         )
     end
 end
+function Base.getproperty(x::Ptr{XLA_FFI_State_Set_Args}, f::Symbol)
+    f === :struct_size && return Ptr{Csize_t}(x + 0)
+    f === :extension_start && return Ptr{Ptr{XLA_FFI_InternalExtension}}(x + 8)
+    f === :ctx && return Ptr{Ptr{XLA_FFI_InvokeContext}}(x + 16)
+    f === :stage && return Ptr{XLA_FFI_ExecutionStage}(x + 24)
+    f === :type_id && return Ptr{Ptr{XLA_FFI_TypeId}}(x + 32)
+    f === :state && return Ptr{Ptr{Cvoid}}(x + 40)
+    return getfield(x, f)
+end
+
+function Base.setproperty!(x::Ptr{XLA_FFI_State_Set_Args}, f::Symbol, v)
+    return unsafe_store!(getproperty(x, f), v)
+end
 
 csizeof(::Type{XLA_FFI_State_Set_Args}) = Csize_t(48)
 
@@ -501,6 +650,19 @@ struct XLA_FFI_State_Get_Args
         )
     end
 end
+function Base.getproperty(x::Ptr{XLA_FFI_State_Get_Args}, f::Symbol)
+    f === :struct_size && return Ptr{Csize_t}(x + 0)
+    f === :extension_start && return Ptr{Ptr{XLA_FFI_InternalExtension}}(x + 8)
+    f === :ctx && return Ptr{Ptr{XLA_FFI_InvokeContext}}(x + 16)
+    f === :stage && return Ptr{XLA_FFI_ExecutionStage}(x + 24)
+    f === :type_id && return Ptr{Ptr{XLA_FFI_TypeId}}(x + 32)
+    f === :state && return Ptr{Ptr{Cvoid}}(x + 40)
+    return getfield(x, f)
+end
+
+function Base.setproperty!(x::Ptr{XLA_FFI_State_Get_Args}, f::Symbol, v)
+    return unsafe_store!(getproperty(x, f), v)
+end
 
 csizeof(::Type{XLA_FFI_State_Get_Args}) = Csize_t(48)
 
@@ -512,6 +674,17 @@ struct XLA_FFI_Stream_Get_Args
     function XLA_FFI_Stream_Get_Args(extension_start, ctx, stream)
         return new(csizeof(XLA_FFI_Stream_Get_Args), extension_start, ctx, stream)
     end
+end
+function Base.getproperty(x::Ptr{XLA_FFI_Stream_Get_Args}, f::Symbol)
+    f === :struct_size && return Ptr{Csize_t}(x + 0)
+    f === :extension_start && return Ptr{Ptr{XLA_FFI_InternalExtension}}(x + 8)
+    f === :ctx && return Ptr{Ptr{XLA_FFI_InvokeContext}}(x + 16)
+    f === :stream && return Ptr{Ptr{Cvoid}}(x + 24)
+    return getfield(x, f)
+end
+
+function Base.setproperty!(x::Ptr{XLA_FFI_Stream_Get_Args}, f::Symbol, v)
+    return unsafe_store!(getproperty(x, f), v)
 end
 
 csizeof(::Type{XLA_FFI_Stream_Get_Args}) = Csize_t(32)
@@ -534,6 +707,19 @@ struct XLA_FFI_DeviceMemory_Allocate_Args
         )
     end
 end
+function Base.getproperty(x::Ptr{XLA_FFI_DeviceMemory_Allocate_Args}, f::Symbol)
+    f === :struct_size && return Ptr{Csize_t}(x + 0)
+    f === :extension_start && return Ptr{Ptr{XLA_FFI_InternalExtension}}(x + 8)
+    f === :ctx && return Ptr{Ptr{XLA_FFI_InvokeContext}}(x + 16)
+    f === :size && return Ptr{Csize_t}(x + 24)
+    f === :alignment && return Ptr{Csize_t}(x + 32)
+    f === :data && return Ptr{Ptr{Cvoid}}(x + 40)
+    return getfield(x, f)
+end
+
+function Base.setproperty!(x::Ptr{XLA_FFI_DeviceMemory_Allocate_Args}, f::Symbol, v)
+    return unsafe_store!(getproperty(x, f), v)
+end
 
 csizeof(::Type{XLA_FFI_DeviceMemory_Allocate_Args}) = Csize_t(48)
 
@@ -548,6 +734,18 @@ struct XLA_FFI_DeviceMemory_Free_Args
             csizeof(XLA_FFI_DeviceMemory_Free_Args), extension_start, ctx, size, data
         )
     end
+end
+function Base.getproperty(x::Ptr{XLA_FFI_DeviceMemory_Free_Args}, f::Symbol)
+    f === :struct_size && return Ptr{Csize_t}(x + 0)
+    f === :extension_start && return Ptr{Ptr{XLA_FFI_InternalExtension}}(x + 8)
+    f === :ctx && return Ptr{Ptr{XLA_FFI_InvokeContext}}(x + 16)
+    f === :size && return Ptr{Csize_t}(x + 24)
+    f === :data && return Ptr{Ptr{Cvoid}}(x + 32)
+    return getfield(x, f)
+end
+
+function Base.setproperty!(x::Ptr{XLA_FFI_DeviceMemory_Free_Args}, f::Symbol, v)
+    return unsafe_store!(getproperty(x, f), v)
 end
 
 csizeof(::Type{XLA_FFI_DeviceMemory_Free_Args}) = Csize_t(40)
@@ -567,6 +765,18 @@ struct XLA_FFI_ThreadPool_Schedule_Args
         )
     end
 end
+function Base.getproperty(x::Ptr{XLA_FFI_ThreadPool_Schedule_Args}, f::Symbol)
+    f === :struct_size && return Ptr{Csize_t}(x + 0)
+    f === :extension_start && return Ptr{Ptr{XLA_FFI_InternalExtension}}(x + 8)
+    f === :ctx && return Ptr{Ptr{XLA_FFI_InvokeContext}}(x + 16)
+    f === :task && return Ptr{Ptr{XLA_FFI_Task}}(x + 24)
+    f === :data && return Ptr{Ptr{Cvoid}}(x + 32)
+    return getfield(x, f)
+end
+
+function Base.setproperty!(x::Ptr{XLA_FFI_ThreadPool_Schedule_Args}, f::Symbol, v)
+    return unsafe_store!(getproperty(x, f), v)
+end
 
 csizeof(::Type{XLA_FFI_ThreadPool_Schedule_Args}) = Csize_t(40)
 
@@ -581,6 +791,17 @@ struct XLA_FFI_ThreadPool_NumThreads_Args
         )
     end
 end
+function Base.getproperty(x::Ptr{XLA_FFI_ThreadPool_NumThreads_Args}, f::Symbol)
+    f === :struct_size && return Ptr{Csize_t}(x + 0)
+    f === :extension_start && return Ptr{Ptr{XLA_FFI_InternalExtension}}(x + 8)
+    f === :ctx && return Ptr{Ptr{XLA_FFI_InvokeContext}}(x + 16)
+    f === :num_threads && return Ptr{Ptr{Int64}}(x + 24)
+    return getfield(x, f)
+end
+
+function Base.setproperty!(x::Ptr{XLA_FFI_ThreadPool_NumThreads_Args}, f::Symbol, v)
+    return unsafe_store!(getproperty(x, f), v)
+end
 
 csizeof(::Type{XLA_FFI_ThreadPool_NumThreads_Args}) = Csize_t(32)
 
@@ -592,6 +813,17 @@ struct XLA_FFI_RunId_Get_Args
     function XLA_FFI_RunId_Get_Args(extension_start, ctx, run_id)
         return new(csizeof(XLA_FFI_RunId_Get_Args), extension_start, ctx, run_id)
     end
+end
+function Base.getproperty(x::Ptr{XLA_FFI_RunId_Get_Args}, f::Symbol)
+    f === :struct_size && return Ptr{Csize_t}(x + 0)
+    f === :extension_start && return Ptr{Ptr{XLA_FFI_InternalExtension}}(x + 8)
+    f === :ctx && return Ptr{Ptr{XLA_FFI_InvokeContext}}(x + 16)
+    f === :run_id && return Ptr{Int64}(x + 24)
+    return getfield(x, f)
+end
+
+function Base.setproperty!(x::Ptr{XLA_FFI_RunId_Get_Args}, f::Symbol, v)
+    return unsafe_store!(getproperty(x, f), v)
 end
 
 csizeof(::Type{XLA_FFI_RunId_Get_Args}) = Csize_t(32)
@@ -606,6 +838,17 @@ struct XLA_FFI_DeviceOrdinal_Get_Args
             csizeof(XLA_FFI_DeviceOrdinal_Get_Args), extension_start, ctx, device_ordinal
         )
     end
+end
+function Base.getproperty(x::Ptr{XLA_FFI_DeviceOrdinal_Get_Args}, f::Symbol)
+    f === :struct_size && return Ptr{Csize_t}(x + 0)
+    f === :extension_start && return Ptr{Ptr{XLA_FFI_InternalExtension}}(x + 8)
+    f === :ctx && return Ptr{Ptr{XLA_FFI_InvokeContext}}(x + 16)
+    f === :device_ordinal && return Ptr{Int32}(x + 24)
+    return getfield(x, f)
+end
+
+function Base.setproperty!(x::Ptr{XLA_FFI_DeviceOrdinal_Get_Args}, f::Symbol, v)
+    return unsafe_store!(getproperty(x, f), v)
 end
 
 csizeof(::Type{XLA_FFI_DeviceOrdinal_Get_Args}) = Csize_t(28)
@@ -630,7 +873,7 @@ csizeof(::Type{XLA_FFI_Api}) = Csize_t(208)
 
 # no prototype is found for this function at c_api.h:874:20, please use with caution
 function XLA_FFI_GetApi()
-    @ccall NONE.XLA_FFI_GetApi()::Ptr{XLA_FFI_Api}
+    @ccall libxla.XLA_FFI_GetApi()::Ptr{XLA_FFI_Api}
 end
 
 @cenum XLA_FFI_CollectiveGroupMode::UInt32 begin
@@ -690,6 +933,19 @@ struct XLA_FFI_Communicator_Request_Args
         )
     end
 end
+function Base.getproperty(x::Ptr{XLA_FFI_Communicator_Request_Args}, f::Symbol)
+    f === :struct_size && return Ptr{Csize_t}(x + 0)
+    f === :extension_start && return Ptr{Ptr{XLA_FFI_InternalExtension}}(x + 8)
+    f === :group_mode && return Ptr{XLA_FFI_CollectiveGroupMode}(x + 16)
+    f === :groups && return Ptr{Ptr{XLA_FFI_ReplicaGroup}}(x + 24)
+    f === :num_groups && return Ptr{Csize_t}(x + 32)
+    f === :communication_id && return Ptr{Int64}(x + 40)
+    return getfield(x, f)
+end
+
+function Base.setproperty!(x::Ptr{XLA_FFI_Communicator_Request_Args}, f::Symbol, v)
+    return unsafe_store!(getproperty(x, f), v)
+end
 
 csizeof(::Type{XLA_FFI_Communicator_Request_Args}) = Csize_t(48)
 
@@ -714,6 +970,20 @@ struct XLA_FFI_Communicator_Get_Args
             communicator,
         )
     end
+end
+function Base.getproperty(x::Ptr{XLA_FFI_Communicator_Get_Args}, f::Symbol)
+    f === :struct_size && return Ptr{Csize_t}(x + 0)
+    f === :extension_start && return Ptr{Ptr{XLA_FFI_InternalExtension}}(x + 8)
+    f === :group_mode && return Ptr{XLA_FFI_CollectiveGroupMode}(x + 16)
+    f === :groups && return Ptr{Ptr{XLA_FFI_ReplicaGroup}}(x + 24)
+    f === :num_groups && return Ptr{Csize_t}(x + 32)
+    f === :communication_id && return Ptr{Int64}(x + 40)
+    f === :communicator && return Ptr{Ptr{XLA_FFI_Communicator}}(x + 48)
+    return getfield(x, f)
+end
+
+function Base.setproperty!(x::Ptr{XLA_FFI_Communicator_Get_Args}, f::Symbol, v)
+    return unsafe_store!(getproperty(x, f), v)
 end
 
 csizeof(::Type{XLA_FFI_Communicator_Get_Args}) = Csize_t(56)
@@ -756,6 +1026,21 @@ struct XLA_FFI_Window_Request_Args
         )
     end
 end
+function Base.getproperty(x::Ptr{XLA_FFI_Window_Request_Args}, f::Symbol)
+    f === :struct_size && return Ptr{Csize_t}(x + 0)
+    f === :extension_start && return Ptr{Ptr{XLA_FFI_InternalExtension}}(x + 8)
+    f === :group_mode && return Ptr{XLA_FFI_CollectiveGroupMode}(x + 16)
+    f === :groups && return Ptr{Ptr{XLA_FFI_ReplicaGroup}}(x + 24)
+    f === :num_groups && return Ptr{Csize_t}(x + 32)
+    f === :communication_id && return Ptr{Int64}(x + 40)
+    f === :regions && return Ptr{Ptr{XLA_FFI_CollectiveMemoryRegion}}(x + 48)
+    f === :num_regions && return Ptr{Csize_t}(x + 56)
+    return getfield(x, f)
+end
+
+function Base.setproperty!(x::Ptr{XLA_FFI_Window_Request_Args}, f::Symbol, v)
+    return unsafe_store!(getproperty(x, f), v)
+end
 
 csizeof(::Type{XLA_FFI_Window_Request_Args}) = Csize_t(64)
 
@@ -791,6 +1076,22 @@ struct XLA_FFI_Window_Get_Args
             window_offset,
         )
     end
+end
+function Base.getproperty(x::Ptr{XLA_FFI_Window_Get_Args}, f::Symbol)
+    f === :struct_size && return Ptr{Csize_t}(x + 0)
+    f === :extension_start && return Ptr{Ptr{XLA_FFI_InternalExtension}}(x + 8)
+    f === :group_mode && return Ptr{XLA_FFI_CollectiveGroupMode}(x + 16)
+    f === :groups && return Ptr{Ptr{XLA_FFI_ReplicaGroup}}(x + 24)
+    f === :num_groups && return Ptr{Csize_t}(x + 32)
+    f === :communication_id && return Ptr{Int64}(x + 40)
+    f === :buffer && return Ptr{Ptr{Cvoid}}(x + 48)
+    f === :window && return Ptr{Ptr{XLA_FFI_Window}}(x + 56)
+    f === :window_offset && return Ptr{Csize_t}(x + 64)
+    return getfield(x, f)
+end
+
+function Base.setproperty!(x::Ptr{XLA_FFI_Window_Get_Args}, f::Symbol, v)
+    return unsafe_store!(getproperty(x, f), v)
 end
 
 csizeof(::Type{XLA_FFI_Window_Get_Args}) = Csize_t(72)
@@ -868,8 +1169,6 @@ csizeof(::Type{XLA_FFI_Record_Extension}) = Csize_t(40)
 const XLA_FFI_API_MAJOR = 0
 
 const XLA_FFI_API_MINOR = 5
-
-const _XLA_FFI_API_STRUCT_FIELD = fn_type(fn_type) * fn_type
 
 const XLA_FFI_Extension_Collectives = 129
 
