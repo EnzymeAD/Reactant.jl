@@ -374,17 +374,13 @@ function initialize_ptrs()
             "cuModuleGetFunction",
             "cuStreamSynchronize",
             "ncclAllReduce",
-            # Kernel registration and launch emitted by convert-polygeist-to-llvm.
-            "__cudaRegisterFatBinary",
-            "__cudaRegisterFatBinaryEnd",
-            "__cudaRegisterFunction",
-            "__cudaUnregisterFatBinary",
-            "cudaLaunchKernel",
         )
             MLIR.API.EnzymeJaXMapSymbol(
                 name, Libdl.dlsym(Reactant_jll.libReactantExtra_handle, name)
             )
         end
+        # CUDA runtime calls emitted by convert-polygeist-to-llvm.
+        @ccall Reactant_jll.libReactantExtra.ReactantMapCudaRuntimeSymbols()::Cvoid
     end
     # LLVM lowers float -> bfloat truncation to a compiler-rt libcall on targets without
     # native bf16 conversions.
