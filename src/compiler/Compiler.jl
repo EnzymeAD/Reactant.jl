@@ -1,6 +1,7 @@
 module Compiler
 
 using Reactant_jll
+using Libdl: dlsym
 using LinearAlgebra: BlasInt
 import p7zip_jll: p7zip
 
@@ -129,8 +130,8 @@ end
 
 const PartitionKA = Ref{Bool}(true)
 
-# Kernels are registered with the CUDA runtime, which expects a fat binary.
-const cubinFormat = Ref{String}("fatbin")
+const cuindexBitWidth = Ref{Int}(32)
+const cubinFormat = Ref{String}("bin")
 const cuOptLevel = Ref{Int}(2)
 
 # Whatever the relevant highest version from our LLVM is within NVPTX.td
@@ -319,9 +320,9 @@ Base.@nospecializeinfer function compile_mlir!(
     if backend == "cpu" || backend == "tpu" || backend == "neuron" || backend == "trainium"
         kern = "lower-kernel{backend=cpu},canonicalize"
         if backend == "tpu" || backend == "neuron" || backend == "trainium"
-            jit = "lower-affine,$(OpenMP[] ? "convert-scf-to-openmp" : "convert-scf-to-cf"),convert-polygeist-to-llvm{backend=cpu preserve-xla-funcs=true},lower-jit,symbol-dce,strip-debuginfo"
+            jit = "lower-jit{openmp=$(OpenMP[]) backend=cpu},symbol-dce,strip-debuginfo"
         else
-            jit = "lower-affine,$(OpenMP[] ? "convert-scf-to-openmp" : "convert-scf-to-cf"),convert-polygeist-to-llvm{backend=cpu preserve-xla-funcs=true},lower-jit,symbol-dce"
+            jit = "lower-jit{openmp=$(OpenMP[]) backend=cpu},symbol-dce"
         end
     else
         kern = if is_raising
@@ -333,7 +334,17 @@ Base.@nospecializeinfer function compile_mlir!(
         device_properties = XLA.device_properties(XLA.default_device(client))
         cubinChip = "sm_$(device_properties.major)$(device_properties.minor)"
 
-        jit = "convert-polygeist-to-llvm{backend=cuda preserve-xla-funcs=true},strip-gpu-info,nvvm-attach-target{chip=$(cubinChip) features=$(cubinFeatures()) O=$(cuOptLevel[])},enzymexla-gpu-module-to-binary{format=$(cubinFormat[]) toolkit=$toolkit},lower-jit,symbol-dce"
+        if DEBUG_KERNEL[]
+            curesulthandler = dlsym(
+                Reactant_jll.libReactantExtra_handle, "ReactantHandleCuResult"
+            )
+            @assert curesulthandler !== nothing
+            curesulthandler = Base.reinterpret(UInt, curesulthandler)
+            extra_lowerjit_options = "debug=true cuResultHandlerPtr=$curesulthandler "
+        else
+            extra_lowerjit_options = ""
+        end
+        jit = "lower-jit{$(extra_lowerjit_options)cuOptLevel=$(cuOptLevel[]) cubinFormat=$(cubinFormat[]) indexBitWidth=$(cuindexBitWidth[])  cubinChip=$(cubinChip) cubinFeatures=$(cubinFeatures()) run_init=true toolkitPath=$toolkit},symbol-dce"
     end
 
     recognize_comms = true

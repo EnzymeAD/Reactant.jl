@@ -5,6 +5,7 @@ using ..Reactant:
 
 const BFLOAT16_COMPILE_TYPE = Ref{DataType}(Float32)
 const CONSTRAIN_LAYOUTS = Ref{Bool}(true)
+const DEBUG_KERNEL = Ref{Bool}(false)
 const DUMP_LLVMIR = Ref{Bool}(false)
 const DUMP_FAILED_LOCKSTEP = Ref{Bool}(false)
 const OpenMP = Ref{Bool}(true)
