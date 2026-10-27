@@ -1359,6 +1359,53 @@ end
     end
 end
 
+# dl[1] and du[end] are ignored by the op
+tridiagonal_matrix(dl, d, du) = Tridiagonal(dl[2:end], d, du[1:(end - 1)])
+
+@testset "tridiagonal solve" begin
+    m, nrhs = 6, 3
+
+    @testset "unbatched" begin
+        dl = Float32.(rand(m))
+        d = Float32.(rand(m) .+ 4) # diagonally dominant
+        du = Float32.(rand(m))
+        b = Float32.(rand(m, nrhs))
+
+        X, info = @jit Ops.tridiagonal_solve(
+            Reactant.to_rarray(dl),
+            Reactant.to_rarray(d),
+            Reactant.to_rarray(du),
+            Reactant.to_rarray(b),
+        )
+        @test size(X) == (m, nrhs)
+        @test Array(X) ≈ tridiagonal_matrix(dl, d, du) \ b atol = 1e-5 rtol = 1e-3
+        @test Int(info) == 0
+    end
+
+    @testset "batched" begin
+        dl = Float32.(rand(4, 2, m))
+        d = Float32.(rand(4, 2, m) .+ 4)
+        du = Float32.(rand(4, 2, m))
+        b = Float32.(rand(4, 2, m, nrhs))
+
+        X, info = @jit Ops.tridiagonal_solve(
+            Reactant.to_rarray(dl),
+            Reactant.to_rarray(d),
+            Reactant.to_rarray(du),
+            Reactant.to_rarray(b),
+        )
+        @test size(X) == size(b)
+        @test size(info) == (4, 2)
+        @test all(iszero, Array(info))
+
+        X = Array(X)
+        for i in 1:4, j in 1:2
+            A = tridiagonal_matrix(dl[i, j, :], d[i, j, :], du[i, j, :])
+            @test X[i, j, :, :] ≈ A \ b[i, j, :, :] atol = 1e-5 rtol = 1e-3
+        end
+    end
+end
+
 @testset "batch norm" begin
     @testset "training" begin
         @testset for affine in [false, true]
