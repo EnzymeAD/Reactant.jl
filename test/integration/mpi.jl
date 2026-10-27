@@ -281,10 +281,10 @@ elseif RUN_GPU_MPI_TESTS
         function sendrecv!(comm, rank, send_buf, recv_buf, tag)
             if rank == 0
                 MPI.Send(send_buf, 1, tag, comm)
-                # MPI.Recv!(recv_buf, 1, tag+1, comm, nothing)
+                MPI.Recv!(recv_buf, 1, tag+1, comm, nothing)
             elseif rank == 1
                 MPI.Recv!(recv_buf, 0, tag, comm, nothing)
-                # MPI.Send(send_buf, 0, tag+1, comm)
+                MPI.Send(send_buf, 0, tag+1, comm)
             end
             return nothing
         end
@@ -299,7 +299,7 @@ elseif RUN_GPU_MPI_TESTS
 
                 # TODO currently hangs (presumably due to a xla-reording-the-ops issue)
                 # if both ranks send and recv. Need jit fusion to fix.
-                rank == 1 && @test recv_buf == send_buf
+                @test recv_buf == send_buf
 
                 MPI.Barrier(comm)
             end
@@ -354,14 +354,14 @@ elseif RUN_GPU_MPI_TESTS
                 peer = 1
                 req = MPI.Isend(send_buf, peer, tag, comm)
                 MPI.Wait(req)
-                # req = MPI.Irecv!(recv_buf, peer, tag+1, comm)
-                # MPI.Wait(req)
+                req = MPI.Irecv!(recv_buf, peer, tag+1, comm)
+                MPI.Wait(req)
             elseif rank == 1
                 peer = 0
                 req = MPI.Irecv!(recv_buf, peer, tag, comm)
                 MPI.Wait(req)
-                # req = MPI.Isend(send_buf, peer, tag+1, comm)
-                # MPI.Wait(req)
+                req = MPI.Isend(send_buf, peer, tag+1, comm)
+                MPI.Wait(req)
             end
             return nothing
         end
@@ -376,7 +376,7 @@ elseif RUN_GPU_MPI_TESTS
 
                 # TODO currently hangs (presumably due to a xla-reording-the-ops issue)
                 # if both ranks send and recv. Need jit fusion to fix.
-                rank == 1 && @test recv_buf == send_buf
+                @test recv_buf == send_buf
 
                 MPI.Barrier(comm)
             end
