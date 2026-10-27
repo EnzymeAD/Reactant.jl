@@ -488,7 +488,7 @@ const SE_TpuTopology_Host = SE_TpuTopology_Core
 mutable struct SE_OutsideCompilationParams end
 
 function TfTpu_Initialize(init_library, num_args, args)
-    @ccall NONE.TfTpu_Initialize(
+    @ccall libxla.TfTpu_Initialize(
         init_library::Bool, num_args::Cint, args::Ptr{Cstring}
     )::Cvoid
 end

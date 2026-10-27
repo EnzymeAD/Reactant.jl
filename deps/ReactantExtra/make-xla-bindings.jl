@@ -84,6 +84,7 @@ function Generators.pretty_print(
     return nothing
 end
 
+# fix `@cenum` disaster of `PJRT_DEFINE_STRUCT_TRAITS` macro
 function rewrite_define_struct_traits(node)
     node.type isa Generators.EnumAnonymous || return nothing
     length(node.exprs) == 2 || return nothing
@@ -106,6 +107,7 @@ function rewrite_define_struct_traits(node)
     )
 end
 
+# automatically set `struct_size` field (first) of `*_Args` structs
 function rewrite_args_struct_constructor(node)
     node.type isa Generators.StructDefinition || return nothing
     ex = only(node.exprs)
