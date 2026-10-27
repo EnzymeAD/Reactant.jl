@@ -57,7 +57,7 @@ jobs:
         working-directory: ./deps/ReactantExtra
         env:
           JULIA_DEPOT_PATH: "${{ runner.temp }}/julia_depot:"
-      - name: Generate XLA PjRT C API Bindings
+      - name: Generate XLA C API Bindings
         run: julia --project=. --color=yes --threads=auto make-xla-bindings.jl --force
         working-directory: ./deps/ReactantExtra
         env:
@@ -75,7 +75,7 @@ jobs:
               "./src/mlir/Dialects/",
               "./src/mlir/libMLIR_h.jl",
               "./src/proto/",
-              "./src/xla/CAPI/PJRT.jl",
+              "./src/xla/CAPI/",
           ]
           format.(targets)
           # Format twice to work around <https://github.com/domluna/JuliaFormatter.jl/issues/897>.
