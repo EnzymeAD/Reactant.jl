@@ -53,11 +53,14 @@ Error(code, msg::Symbol) = Error(code, unsafe_convert(Ptr{UInt8}, msg))
 
 Error(code) = Error(code, Symbol())
 
-function ok()
-    ptr = unsafe_convert(Ptr{Error}, Libc.malloc(sizeof(Error)))
-    unsafe_store!(ptr, Error(CAPI.PJRT_Error_Code_OK))
-    return ptr
-end
+# function ok()
+#     ptr = unsafe_convert(Ptr{Error}, Libc.malloc(sizeof(Error)))
+#     unsafe_store!(ptr, Error(CAPI.PJRT_Error_Code_OK))
+#     return ptr
+# end
+
+# XLA considers `nullptr` to be OK as it avoids implementing stuff or 
+ok() = C_NULL
 
 function unimplemented()
     ptr = unsafe_convert(Ptr{Error}, Libc.malloc(sizeof(Error)))
@@ -80,19 +83,34 @@ function resource_exhausted()
     return ptr
 end
 
-function error_destroy(args::Ptr{CAPI.PJRT_Error_Destroy_Args})
-    args.error == C_NULL && return nothing
-    return Libc.free(args.error)
+function error_destroy(args::Ptr{CAPI.PJRT_Error_Destroy_Args})::Cvoid
+    args.error != C_NULL && Libc.free(args.error)
+    return nothing
 end
 
-function error_message(args::Ptr{CAPI.PJRT_Error_Message_Args})
+function error_message(args::Ptr{CAPI.PJRT_Error_Message_Args})::Ptr{}
     args.error == C_NULL && return nothing
     unsafe_store!(args.message, args.error.message)
-    return unsafe_store!(args.message_size, strlen(args.error.message))
+    unsafe_store!(args.message_size, strlen(args.error.message))
+    return ok()
 end
 
-function error_getcode(args::Ptr{CAPI.PJRT_Error_GetCode_Args})
-    return unsafe_store!(args.code, unsafe_load(args.error))
+# this is required by CAPI.PJRT_Api
+function error_getcode(args::Ptr{CAPI.PJRT_Error_GetCode_Args})::Ptr{CAPI.PJRT_Error}
+    error = unsafe_load(args.error)
+    unsafe_store!(args.code, error.code)
+    return ok()
+end
+
+# this is required by CAPI.PJRT_Error_FunctionTable
+function error_getcode_obj(args::Ptr{CAPI.PJRT_Error_GetCode_Args})::CAPI.PJRT_Error_Code
+    error = unsafe_load(args.error)
+    return error.code
+end
+
+function error_for_each_payload(args::Ptr{CAPI.PJRT_Error_ForEachPayload_Args})::Cvoid
+    # do nothing
+    return nothing
 end
 
 ## Plugin
