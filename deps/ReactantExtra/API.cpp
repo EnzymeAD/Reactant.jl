@@ -204,7 +204,7 @@ void reactantReleaseAddressRange(void *base, size_t nbytes);
 #endif
 
 // Broken upstream x/ref https://github.com/jax-ml/jax/issues/33344
-// #include "jaxlib/mosaic/dialect/tpu/tpu_dialect.h"
+// #include "xla/mosaic/dialect/tpu/tpu_dialect.h"
 
 #include "llvm/Support/ExtensibleRTTI.h"
 #include <llvm/Support/FileSystem.h>

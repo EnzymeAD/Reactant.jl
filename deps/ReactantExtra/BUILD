@@ -1421,7 +1421,7 @@ cc_library(
         "@llvm-project//mlir:CAPILLVMObjects",
 
         # Broken upstream x/ref https://github.com/jax-ml/jax/issues/33344
-        # "@jax//jaxlib/mosaic:tpu_dialect_capi_objects",
+        # "@xla//xla/mosaic:tpu_dialect_capi_objects",
         "@enzyme_ad//src/enzyme_ad/jax:triton_dialect_capi_objects",
         "@xla//xla/pjrt/plugin/xla_cpu:xla_cpu_pjrt_client",
         "@xla//xla/pjrt/c:pjrt_c_api_cpu_internal",
@@ -1800,9 +1800,9 @@ gentbl_cc_library(
         ),
     ],
     tblgen = "//:mlir-jl-tblgen",
-    td_file = "@jax//jaxlib/mosaic:dialect/tpu/tpu.td",
+    td_file = "@xla//xla/mosaic:dialect/tpu/tpu.td",
     deps = [
-        "@jax//jaxlib/mosaic:tpu_td_files",
+        "@xla//xla/mosaic:tpu_td_files",
     ],
 )
 
@@ -2008,8 +2008,8 @@ genrule(
         "@stablehlo//:stablehlo/integrations/c/StablehloTypes.h",
         "@shardy//shardy/integrations/c:attributes.h",
         "@enzyme_ad//src/enzyme_ad/jax:Integrations/c/triton_dialect_capi.h",
-        "@jax//jaxlib/mosaic:dialect/tpu/integrations/c/tpu_dialect.h",
-        # "@jax//jaxlib/mosaic:dialect/tpu/integrations/c/tpu_passes.capi.h.inc",
+        "@xla//xla/mosaic:dialect/tpu/integrations/c/tpu_dialect.h",
+        # "@xla//xla/mosaic:dialect/tpu/integrations/c/tpu_passes.capi.h.inc",
         "@jax//jaxlib/mosaic/dialect/gpu:integrations/c/attributes.h",
         "@jax//jaxlib/mosaic/dialect/gpu:integrations/c/gpu_dialect.h",
         "@enzyme_ad//src/enzyme_ad/jax:Integrations/c/EnzymeXLA.h",
@@ -2023,7 +2023,7 @@ genrule(
         "//:make.jl",
     ],
     outs = ["libMLIR_h.jl"],
-    cmd = "$$JULIA \"--color=yes\" \"--project=$(location //:Project.toml)\" \"$(location //:make.jl)\" \"--extract-api\" \"$(location @llvm-project//mlir:include/mlir-c/Bindings/Python/Interop.h)\" \"$(location @llvm-project//llvm:include/llvm-c/Support.h)\" \"$(locations @llvm-project//mlir:ConversionPassIncGen_filegroup)\" \"$(location @stablehlo//:stablehlo/integrations/c/StablehloAttributes.h)\" \"$(location @shardy//shardy/integrations/c:attributes.h)\" \"$(location @enzyme_ad//src/enzyme_ad/jax:Integrations/c/triton_dialect_capi.h)\" \"$(location @jax//jaxlib/mosaic:dialect/tpu/integrations/c/tpu_dialect.h)\" \"$(location @jax//jaxlib/mosaic/dialect/gpu:integrations/c/gpu_dialect.h)\" \"$(location @enzyme_ad//src/enzyme_ad/jax:Integrations/c/EnzymeXLA.h)\" \"$(location @enzyme//:Enzyme/MLIR/Integrations/c/EnzymeMLIR.h)\" \"$@\"",
+    cmd = "$$JULIA \"--color=yes\" \"--project=$(location //:Project.toml)\" \"$(location //:make.jl)\" \"--extract-api\" \"$(location @llvm-project//mlir:include/mlir-c/Bindings/Python/Interop.h)\" \"$(location @llvm-project//llvm:include/llvm-c/Support.h)\" \"$(locations @llvm-project//mlir:ConversionPassIncGen_filegroup)\" \"$(location @stablehlo//:stablehlo/integrations/c/StablehloAttributes.h)\" \"$(location @shardy//shardy/integrations/c:attributes.h)\" \"$(location @enzyme_ad//src/enzyme_ad/jax:Integrations/c/triton_dialect_capi.h)\" \"$(location @xla//xla/mosaic:dialect/tpu/integrations/c/tpu_dialect.h)\" \"$(location @jax//jaxlib/mosaic/dialect/gpu:integrations/c/gpu_dialect.h)\" \"$(location @enzyme_ad//src/enzyme_ad/jax:Integrations/c/EnzymeXLA.h)\" \"$(location @enzyme//:Enzyme/MLIR/Integrations/c/EnzymeMLIR.h)\" \"$@\"",
     tags = [
         "jlrule",
     ],
