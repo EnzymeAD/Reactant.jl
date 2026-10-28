@@ -443,12 +443,16 @@ Base.@nospecializeinfer function compile_mlir!(
     )
 
     # Expose kernel_call bodies to Enzyme as gpu_wrapper regions containing
-    # affine.parallel loops. This mirrors the default raising sequence, stopping short of
-    # raise-affine-to-stablehlo so that the IR stays in affine/memref form, and inlines the
-    # generated helpers so that no jit_call reaches Enzyme.
-    kernelad_pre_enzyme_passes = "kernel-call-to-gpu-wrapper,llvm-to-memref-access,canonicalize,convert-llvm-to-cf,canonicalize,enzyme-lift-cf-to-scf,canonicalize,func.func(canonicalize-loops{speculate_partial_if=$(compile_options.speculate_partial_ifs)}),canonicalize-scf-for,canonicalize,libdevice-funcs-raise{remove_freeze=true},canonicalize,affine-cfg,canonicalize,func.func(canonicalize-loops{speculate_partial_if=$(compile_options.speculate_partial_ifs)}),canonicalize,llvm-to-affine-access,canonicalize,delinearize-indexing,canonicalize,simplify-affine-exprs,affine-cfg,canonicalize,func.func(affine-loop-invariant-code-motion),canonicalize,sort-memory,func.func(kernelcast),canonicalize,inline{default-pipeline=canonicalize inlining-threshold=4294967295 max-iterations=4},canonicalize,cse"
-    # Lower the (differentiated) gpu_wrapper regions back into kernel calls
-    kernelad_post_enzyme_passes = "canonicalize,prepare-affine-gpu-wrapper,lower-affine,convert-parallel-to-gpu1{emit_single_alternative=true},symbol-dce,gpu-kernel-outlining,canonicalize,symbol-dce,convert-parallel-to-gpu2,lower-aligned-affine-accesses,lower-affine,parallel-serialization,symbol-dce,gpu-wrapper-to-kernel-call,canonicalize,symbol-dce,arith-raise"
+    # affine.parallel loops. Each kernel_call becomes a jit_call of a gpu_wrapper running
+    # the kernel body, fuse-jit merges dependent jit_calls, and each one is then inlined
+    # into a jit_region so that no jit_call reaches Enzyme. This mirrors the default
+    # raising sequence, stopping short of raise-affine-to-stablehlo so that the IR stays in
+    # affine/memref form.
+    kernelad_pre_enzyme_passes = "kernel-call-to-gpu-wrapper,fuse-jit,jit-call-to-jit-region,llvm-to-memref-access,canonicalize,convert-llvm-to-cf,canonicalize,enzyme-lift-cf-to-scf,canonicalize,func.func(canonicalize-loops{speculate_partial_if=$(compile_options.speculate_partial_ifs)}),canonicalize-scf-for,canonicalize,libdevice-funcs-raise{remove_freeze=true},canonicalize,affine-cfg,canonicalize,func.func(canonicalize-loops{speculate_partial_if=$(compile_options.speculate_partial_ifs)}),canonicalize,llvm-to-affine-access,canonicalize,delinearize-indexing,canonicalize,simplify-affine-exprs,affine-cfg,canonicalize,func.func(affine-loop-invariant-code-motion),canonicalize,sort-memory,func.func(kernelcast),canonicalize,inline{default-pipeline=canonicalize inlining-threshold=4294967295 max-iterations=4},canonicalize,cse"
+    # Outline each (differentiated) jit_region into a jit_call whose gpu_wrappers run on
+    # XLA's stream, and lower the gpu_wrappers to kernel launches, which the jit lowering
+    # then compiles
+    kernelad_post_enzyme_passes = "canonicalize,jit-region-to-jit-call,lower-affine,convert-parallel-to-gpu1{emit_single_alternative=true},symbol-dce,gpu-kernel-outlining,canonicalize,symbol-dce,convert-parallel-to-gpu2,lower-aligned-affine-accesses,lower-affine,parallel-serialization,symbol-dce,canonicalize,symbol-dce,arith-raise"
 
     legalize_chlo_to_stablehlo =
         if legalize_stablehlo_to_mhlo || compile_options.legalize_chlo_to_stablehlo
