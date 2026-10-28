@@ -1186,6 +1186,7 @@ cc_library(
             "-Wl,-exported_symbol,_FreeFuture",
             "-Wl,-exported_symbol,_FutureIsReady",
             "-Wl,-exported_symbol,_FutureAwait",
+            "-Wl,-exported_symbol,_PjRtBufferGetReadyFuture",
             "-Wl,-exported_symbol,_XLAExecute",
             "-Wl,-exported_symbol,_RegisterDialects",
             "-Wl,-exported_symbol,_InitializeRegistry",
@@ -1264,11 +1265,14 @@ cc_library(
             "-Wl,-exported_symbol,_freeHloComputation",
             "-Wl,-exported_symbol,_hloComputationToString",
             "-Wl,-exported_symbol,_hloComputationGetInstructionsPostOrder",
+            "-Wl,-exported_symbol,_hloComputationInstructionCount",
             "-Wl,-exported_symbol,_freeHloInstruction",
             "-Wl,-exported_symbol,_hloInstructionToString",
             "-Wl,-exported_symbol,_hloInstructionGetOpcode",
             "-Wl,-exported_symbol,_hloInstructionIsFusion",
             "-Wl,-exported_symbol,_hloInstructionGetFusionKind",
+            "-Wl,-exported_symbol,_hloInstructionHasToApply",
+            "-Wl,-exported_symbol,_hloInstructionGetToApply",
             "-Wl,-exported_symbol,_hloOpcodeToString",
             "-Wl,-exported_symbol,_hloFusionKindToString",
             "-Wl,-exported_symbol,_hloInstructionFusedInstructionsComputation",
@@ -1289,6 +1293,10 @@ cc_library(
             "-Wl,-exported_symbol,_ReactantCompileMhloToLLVM",
             "-Wl,-exported_symbol,_ReactantFreeLocalExecutable",
             "-Wl,-exported_symbol,_ReactantCreateLLVMMod",
+            "-Wl,-exported_symbol,_reactantXLA*",
+            "-Wl,-exported_symbol,_dump_op",
+            "-Wl,-exported_symbol,_dump_mval",
+            "-Wl,-exported_symbol,_dump_string",
         ],
     }),
     linkstatic = True,
@@ -1430,6 +1438,7 @@ cc_library(
         "@xla//xla/tsl/platform:env",
         "@xla//xla/tsl/platform:errors",
         "@xla//xla/service:hlo_proto_cc_impl",
+        "@xla//xla/service/llvm_ir:llvm_command_line_options",
         "@xla//xla/pjrt/proto:compile_options_proto_cc_impl",
         "@com_google_absl//absl/status:statusor",
     ] + if_cuda([
@@ -2015,47 +2024,6 @@ genrule(
     ],
     outs = ["libMLIR_h.jl"],
     cmd = "$$JULIA \"--color=yes\" \"--project=$(location //:Project.toml)\" \"$(location //:make.jl)\" \"--extract-api\" \"$(location @llvm-project//mlir:include/mlir-c/Bindings/Python/Interop.h)\" \"$(location @llvm-project//llvm:include/llvm-c/Support.h)\" \"$(locations @llvm-project//mlir:ConversionPassIncGen_filegroup)\" \"$(location @stablehlo//:stablehlo/integrations/c/StablehloAttributes.h)\" \"$(location @shardy//shardy/integrations/c:attributes.h)\" \"$(location @enzyme_ad//src/enzyme_ad/jax:Integrations/c/triton_dialect_capi.h)\" \"$(location @jax//jaxlib/mosaic:dialect/tpu/integrations/c/tpu_dialect.h)\" \"$(location @jax//jaxlib/mosaic/dialect/gpu:integrations/c/gpu_dialect.h)\" \"$(location @enzyme_ad//src/enzyme_ad/jax:Integrations/c/EnzymeXLA.h)\" \"$(location @enzyme//:Enzyme/MLIR/Integrations/c/EnzymeMLIR.h)\" \"$@\"",
-    tags = [
-        "jlrule",
-    ],
-)
-
-genrule(
-    name = "julia_pjrt_capi_bindings",
-    srcs = [
-        "@xla//xla/pjrt/c:pjrt_c_api.h",
-        "@xla//xla/pjrt/c:pjrt_c_api_callback_extension.h",
-        "@xla//xla/pjrt/c:pjrt_c_api_tpu_topology_extension.h",
-        "@xla//xla/pjrt/c:pjrt_c_api_ffi_extension.h",
-        "@xla//xla/pjrt/c:pjrt_c_api_phase_compile_extension.h",
-        "@xla//xla/pjrt/c:pjrt_c_api_gpu_extension.h",
-        "@xla//xla/pjrt/c:pjrt_c_api_stream_extension.h",
-        "@xla//xla/pjrt/c:pjrt_c_api_profiler_extension.h",
-        "@xla//xla/pjrt/c:pjrt_c_api_raw_buffer_extension.h",
-        "@xla//xla/pjrt/c:pjrt_c_api_custom_partitioner_extension.h",
-        "@xla//xla/pjrt/c:pjrt_c_api_layouts_extension.h",
-        "@xla//xla/pjrt/c:pjrt_c_api_memory_descriptions_extension.h",
-        "//:Project.toml",
-        "//:Manifest.toml",
-        "//:wrap.toml",
-        "//:missing_defs.jl",
-        "//:make.jl",
-    ],
-    outs = ["CAPI.jl"],
-    cmd = "$$JULIA \"--color=yes\" \"--project=$(location //:Project.toml)\" \"$(location //:make.jl)\" \
-        \"$(location @xla//xla/pjrt/c:pjrt_c_api.h)\" \
-        \"$(location @xla//xla/pjrt/c:pjrt_c_api_callback_extension.h)\" \
-        \"$(location @xla//xla/pjrt/c:pjrt_c_api_tpu_topology_extension.h)\" \
-        \"$(location @xla//xla/pjrt/c:pjrt_c_api_ffi_extension.h)\" \
-        \"$(location @xla//xla/pjrt/c:pjrt_c_api_phase_compile_extension.h)\" \
-        \"$(location @xla//xla/pjrt/c:pjrt_c_api_gpu_extension.h)\" \
-        \"$(location @xla//xla/pjrt/c:pjrt_c_api_stream_extension.h)\" \
-        \"$(location @xla//xla/pjrt/c:pjrt_c_api_profiler_extension.h)\" \
-        \"$(location @xla//xla/pjrt/c:pjrt_c_api_raw_buffer_extension.h)\" \
-        \"$(location @xla//xla/pjrt/c:pjrt_c_api_custom_partitioner_extension.h)\" \
-        \"$(location @xla//xla/pjrt/c:pjrt_c_api_layouts_extension.h)\" \
-        \"$(location @xla//xla/pjrt/c:pjrt_c_api_memory_descriptions_extension.h)\" \
-        \"$@\"",
     tags = [
         "jlrule",
     ],

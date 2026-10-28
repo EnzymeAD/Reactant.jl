@@ -1710,3 +1710,50 @@ end
         @test @jit(traced_bcast_in_if(x_ra)) ≈ traced_bcast_in_if(x)
     end
 end
+
+# Issue #3476: a zero-length array captured by a traced loop (and thus carried
+# through the `stablehlo.while`) must not end up as a `tensor.empty` in the
+# optimized module, which XLA cannot export.
+function zero_length_loop_capture!(state, n)
+    @trace track_numbers = false for _ in 1:n
+        state.x .+= length(state.empty)
+    end
+    return nothing
+end
+
+function zero_length_loop_capture_use!(state, n)
+    @trace track_numbers = false for _ in 1:n
+        state.x .+= sum(state.empty) .+ 1
+    end
+    return nothing
+end
+
+@testset "zero-length array captured by traced loop (#3476)" begin
+    state = (
+        empty=Reactant.to_rarray(zeros(Float32, 0)), x=Reactant.to_rarray(ones(Float32, 3))
+    )
+    hlo = repr(@code_hlo optimize = true zero_length_loop_capture!(state, 3))
+    @test !occursin("tensor.empty", hlo)
+    @jit zero_length_loop_capture!(state, 3)
+    @test Array(state.x) ≈ ones(Float32, 3)
+    @test length(state.empty) == 0
+
+    hlo = repr(@code_hlo optimize = true zero_length_loop_capture_use!(state, 3))
+    @test !occursin("tensor.empty", hlo)
+    @jit zero_length_loop_capture_use!(state, 3)
+    @test Array(state.x) ≈ fill(4.0f0, 3)
+    @test length(state.empty) == 0
+end
+
+function f_undef_var_error(x)
+    @trace for _ in 1:3
+        s = sum(z)   # z not defined yet
+        z = x .+ s
+    end
+    return x
+end
+
+@testset "UndefVarError in loop" begin
+    x = Reactant.to_rarray([1, 2, 3])
+    @test_throws UndefVarError @compile f_undef_var_error(x)
+end

@@ -1,7 +1,6 @@
 module Compiler
 
 using Reactant_jll
-using Libdl: dlsym
 using LinearAlgebra: BlasInt
 import p7zip_jll: p7zip
 
@@ -17,7 +16,8 @@ import ..Reactant:
     make_tracer,
     TracedToConcrete,
     append_path,
-    TracedType
+    TracedType,
+    MPI_REQUEST_WIDTH
 import Reactant: OptimizeCommunicationOptions, ShardyPropagationOptions, CompileOptions
 using Reactant_jll: Reactant_jll
 
@@ -56,13 +56,6 @@ function compile_mlir(
     kwargs...,
 )
     client = client !== nothing ? client : XLA.default_backend()
-    backend = XLA.platform_name(client)
-
-    if backend == "CUDA"
-        backend = "GPU"
-    elseif backend == "CPU"
-        backend = "cpu"
-    end
 
     MLIR.IR.activate(ctx)
     try
@@ -77,7 +70,6 @@ function compile_mlir(
                 f,
                 args,
                 compile_options;
-                backend,
                 runtime=XLA.runtime(client),
                 client,
                 kwargs_inner...,
@@ -137,8 +129,8 @@ end
 
 const PartitionKA = Ref{Bool}(true)
 
-const cuindexBitWidth = Ref{Int}(32)
-const cubinFormat = Ref{String}("bin")
+# Kernels are registered with the CUDA runtime, which expects a fat binary.
+const cubinFormat = Ref{String}("fatbin")
 const cuOptLevel = Ref{Int}(2)
 
 # Whatever the relevant highest version from our LLVM is within NVPTX.td
@@ -270,14 +262,16 @@ Base.@nospecializeinfer function compile_mlir!(
     sdycache=default_sdycache(),
     sdygroupidcache=default_sdygroupidcache();
     fn_kwargs=(),
-    backend="gpu",
     runtime::Union{Val{:PJRT},Val{:IFRT}},
     legalize_stablehlo_to_mhlo::Bool=false,
     client=nothing,
+    backend=nothing,
     kwargs...,
 )
     @assert MLIR.IR.current_context() == MLIR.IR.context(mod)
-    client = client !== nothing ? client : XLA.default_backend()
+    client = @something(client, XLA.default_backend())
+    backend = @something(backend, XLA.platform_name(client))::String
+    @assert backend ∉ ("gpu", "GPU")
 
     @assert compile_options.optimization_passes !== :kernelad ||
         lowercase(XLA.platform_name(client)) == "cuda" "kernelad only supports the cuda backend right now"
@@ -355,9 +349,9 @@ Base.@nospecializeinfer function compile_mlir!(
     if backend == "cpu" || backend == "tpu" || backend == "neuron" || backend == "trainium"
         kern = "lower-kernel{backend=cpu},canonicalize"
         if backend == "tpu" || backend == "neuron" || backend == "trainium"
-            jit = "lower-jit{openmp=$(OpenMP[]) backend=cpu},symbol-dce,strip-debuginfo"
+            jit = "lower-affine,$(OpenMP[] ? "convert-scf-to-openmp" : "convert-scf-to-cf"),convert-polygeist-to-llvm{backend=cpu preserve-xla-funcs=true},lower-jit,symbol-dce,strip-debuginfo"
         else
-            jit = "lower-jit{openmp=$(OpenMP[]) backend=cpu},symbol-dce"
+            jit = "lower-affine,$(OpenMP[] ? "convert-scf-to-openmp" : "convert-scf-to-cf"),convert-polygeist-to-llvm{backend=cpu preserve-xla-funcs=true},lower-jit,symbol-dce"
         end
     else
         kern = if is_raising
@@ -369,17 +363,7 @@ Base.@nospecializeinfer function compile_mlir!(
         device_properties = XLA.device_properties(XLA.default_device(client))
         cubinChip = "sm_$(device_properties.major)$(device_properties.minor)"
 
-        if DEBUG_KERNEL[]
-            curesulthandler = dlsym(
-                Reactant_jll.libReactantExtra_handle, "ReactantHandleCuResult"
-            )
-            @assert curesulthandler !== nothing
-            curesulthandler = Base.reinterpret(UInt, curesulthandler)
-            extra_lowerjit_options = "debug=true cuResultHandlerPtr=$curesulthandler "
-        else
-            extra_lowerjit_options = ""
-        end
-        jit = "lower-jit{$(extra_lowerjit_options)cuOptLevel=$(cuOptLevel[]) cubinFormat=$(cubinFormat[]) indexBitWidth=$(cuindexBitWidth[])  cubinChip=$(cubinChip) cubinFeatures=$(cubinFeatures()) run_init=true toolkitPath=$toolkit},symbol-dce"
+        jit = "convert-polygeist-to-llvm{backend=cuda preserve-xla-funcs=true},strip-gpu-info,nvvm-attach-target{chip=$(cubinChip) features=$(cubinFeatures()) O=$(cuOptLevel[])},enzymexla-gpu-module-to-binary{format=$(cubinFormat[]) toolkit=$toolkit},lower-jit,symbol-dce"
     end
 
     recognize_comms = true
@@ -397,13 +381,12 @@ Base.@nospecializeinfer function compile_mlir!(
         sroa=true,
         recognize_comms,
         lower_comms,
-        backend,
         is_sharded,
         hlo_opts=compile_options.optimization_passes !== :after_enzyme &&
                  compile_options.optimization_passes !== :only_enzyme,
     )
     opt_passes2 = optimization_passes(
-        compile_options; sroa=false, recognize_comms, lower_comms, backend, is_sharded
+        compile_options; sroa=false, recognize_comms, lower_comms, is_sharded
     )
 
     raise_passes = if raise isa String
@@ -426,7 +409,6 @@ Base.@nospecializeinfer function compile_mlir!(
                     dus_to_concat=true,
                     recognize_comms,
                     lower_comms,
-                    backend,
                     is_sharded,
                 )
                 result = result * "," * opt_passes3
@@ -448,20 +430,17 @@ Base.@nospecializeinfer function compile_mlir!(
         ",",
     )
     lower_enzymexla_math_pass = "lower-enzymexla-math"
-    lower_enzymexla_mpi_pass = if backend == "cpu"
-        "lower-enzymexla-mpi{backend=cpu}"
-    elseif backend == "cuda"
-        default_comm_handle = Reactant.default_nccl_comm_handle()
-        "lower-enzymexla-mpi{backend=cuda ncclCommPtr=$default_comm_handle}"
+    # TODO legalization of comm.mpi ops to comm.nccl if compile_options.comm_options.legalize_mpi_to_nccl is true and backend is CUDA
+    lower_comm_pass = if compile_options.comm_options.lowering_target === :jit
+        "lower-comm-to-jit{mpi_request_width=$(MPI_REQUEST_WIDTH[])}"
+    elseif compile_options.comm_options.lowering_target === :ffi
+        "lower-comm-to-stablehlo"
     else
-        # mpi only supported on cpu and cuda, don't run pass otherwise  
-        nothing
+        error("Unknown comm lowering target: $(compile_options.comm_options.lowering_target)")
     end
-    lower_enzymexla_passes = filter(
-        !isnothing,
-        [lower_enzymexla_linalg_pass, lower_enzymexla_math_pass, lower_enzymexla_mpi_pass],
+    lower_enzymexla_passes = join(
+        [lower_enzymexla_linalg_pass, lower_enzymexla_math_pass, lower_comm_pass], ","
     )
-    lower_enzymexla_passes = join(lower_enzymexla_passes, ",")
 
     # Expose kernel_call bodies to Enzyme as gpu_wrapper regions containing
     # affine.parallel loops. This mirrors the default raising sequence, stopping short of
@@ -794,11 +773,7 @@ Base.@nospecializeinfer function compile_mlir!(
         # with them, we propagate them down to minimize the number of Ops in the IR.
         # Since this might enable certain raising, we do push down -> push up -> push down
         common_kwargs = (;
-            recognize_comms,
-            lower_comms,
-            backend,
-            is_sharded,
-            raise_shlo_to_blas_lapack=false,
+            recognize_comms, lower_comms, is_sharded, raise_shlo_to_blas_lapack=false
         )
         opt_passes_down = optimization_passes(
             Reactant.__compile_options_with_reversed_propagation(compile_options);
@@ -1332,13 +1307,6 @@ Reactant.@annotate "compile $(string(f))" function compile_xla(
     kwargs...,
 )
     client = client !== nothing ? client : XLA.default_backend()
-    backend = XLA.platform_name(client)
-
-    if backend == "CUDA"
-        backend = "GPU"
-    elseif backend == "CPU"
-        backend = "cpu"
-    end
 
     MLIR.IR.activate(ctx)
     try
@@ -1348,14 +1316,7 @@ Reactant.@annotate "compile $(string(f))" function compile_xla(
         compile_options, kwargs = __get_compile_options_and_kwargs(; kwargs...)
 
         mlir_fn_res = compile_mlir!(
-            mod,
-            f,
-            args,
-            compile_options;
-            backend,
-            runtime=XLA.runtime(client),
-            client,
-            kwargs...,
+            mod, f, args, compile_options; runtime=XLA.runtime(client), client, kwargs...
         )
 
         # Resolve client and device

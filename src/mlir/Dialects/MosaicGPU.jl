@@ -13,15 +13,83 @@ import ...IR:
 import ..Dialects: operandsegmentsizes, resultsegmentsizes
 import ...API
 
-function arrive_dyn_expect_tx_supported(; location=Location())
-    op_ty_results = IR.Type[]
+"""
+`alloc_smem`
+
+Allocates a statically shaped SMEM memref that is valid for the duration of
+the enclosing `alloca_scope` operation.
+
+An optional `alignment` attribute specifies the minimum byte alignment for
+the allocation and must be a positive power of 2.
+"""
+function alloc_smem(; result::IR.Type, alignment=nothing, location=Location())
+    op_ty_results = IR.Type[result,]
     operands = Value[]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(alignment) && push!(attributes, NamedAttribute("alignment", alignment))
+
+    return create_operation(
+        "mosaic_gpu.alloc_smem",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`alloca_scope`
+
+Defines a single-block allocation scope for scoped allocation operations
+(such as `mosaic_gpu.alloc_smem`). Any scoped allocations inside this region
+are valid only for the duration of the region and may not escape.
+
+`alloca_scope` can capture outer values directly and optionally return
+non-memref results via `mosaic_gpu.alloca_scope.return`.
+"""
+function alloca_scope(; result_0::Vector{IR.Type}, region::Region, location=Location())
+    op_ty_results = IR.Type[result_0...,]
+    operands = Value[]
+    owned_regions = Region[region,]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "mosaic_gpu.alloca_scope",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`alloca_scope_return`
+
+The `alloca_scope.return` op is a terminator that indicates the end of
+execution within an `AllocaScopeOp`\'s region. It can optionally return some
+values, which become the results of the parent `AllocaScopeOp`.
+
+The declared results of the parent `AllocaScopeOp` must match the operand
+types of this op.
+"""
+function alloca_scope_return(operands::Vector{Value}; location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[operands...,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
 
     return create_operation(
-        "mosaic_gpu.arrive_dyn_expect_tx_supported",
+        "mosaic_gpu.alloca_scope.return",
         location;
         operands,
         owned_regions,
@@ -58,12 +126,18 @@ function arrive_expect_tx(barrier::Value, expect_tx::Value; location=Location())
     )
 end
 
-function arrive(barrier::Value; orders_tensor_core, location=Location())
+function arrive(
+    barrier::Value,
+    predicate=nothing::Union{Nothing,Value};
+    orders_tensor_core,
+    location=Location(),
+)
     op_ty_results = IR.Type[]
     operands = Value[barrier,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[NamedAttribute("orders_tensor_core", orders_tensor_core),]
+    !isnothing(predicate) && push!(operands, predicate)
 
     return create_operation(
         "mosaic_gpu.arrive",
@@ -105,6 +179,83 @@ function assume_multiple(
         attributes,
         results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
         result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
+`async_load_im2col`
+
+Schedules an async im2col copy of the contents of the `source` MemRef in
+GMEM to the `destination` MemRef in SMEM. Each row of `destination` receives
+the channels of one pixel of one window in `source`. The `destination`
+MemRef in SMEM must be contiguous.
+
+Upon completion of the copy, the `complete-tx(complete-count)` operation
+will be executed on the provided `barrier`.
+
+- `source` is a batch of channels-last images of shape `(N, W, C)`,
+  `(N, H, W, C)` or `(N, D, H, W, C)` (rank 3, 4 or 5) with an element
+  bitwidth of at least 8.
+- `destination` has shape `(*rows, cols)` of rank at least 2. Its leading
+  dimensions are flattened into `prod(rows)` windows (in `[1, 1024]`) of
+  `cols` channels each (in `[1, 256]`), where `cols` has a bytewidth
+  divisible by 16.
+- `window_lower_bounds` and `window_upper_bounds` give, for each spatial
+  dimension `i` of size `S`, the `(lo, hi)` bounds such that windows start
+  at positions `lo`, `lo + s`, `lo + 2 * s`, ... below `S + hi`, where `s`
+  is `window_strides[i]`, with the image implicitly zero-padded outside
+  `[0, S)`. Each bound must fit in a signed `16 / (rank - 2)`-bit integer.
+- `indices` has length equal to the rank of `source` and specifies
+  `(n, *start, c)`: the batch index and start position of the window loaded
+  into the first row, and the first channel to load. Each subsequent row
+  takes the next window in row-major order over `(n, *start)`, so a copy can
+  span several images. Rows past the last image are zero-filled.
+- `filter_offsets` has length `rank - 2` and selects the pixel to load
+  within each window as an offset in `[0, 2**(16 / (rank - 2)) - 1]` from
+  the window\'s start position.
+- `window_strides` has length `rank - 2` and gives the step in `[1, 8]`
+  between consecutive window start positions along each spatial dimension.
+
+The `predicate` allows scheduling the transfer conditionally.
+"""
+function async_load_im2col(
+    source::Value,
+    destination::Value,
+    barrier::Value,
+    indices::Vector{Value},
+    filter_offsets::Vector{Value},
+    predicate=nothing::Union{Nothing,Value};
+    window_lower_bounds,
+    window_upper_bounds,
+    window_strides,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[source, destination, barrier, indices..., filter_offsets...]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[
+        NamedAttribute("window_lower_bounds", window_lower_bounds),
+        NamedAttribute("window_upper_bounds", window_upper_bounds),
+        NamedAttribute("window_strides", window_strides),
+    ]
+    !isnothing(predicate) && push!(operands, predicate)
+    push!(
+        attributes,
+        operandsegmentsizes([
+            1, 1, 1, length(indices), length(filter_offsets), Int(!isnothing(predicate))
+        ]),
+    )
+
+    return create_operation(
+        "mosaic_gpu.async_load_im2col",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
     )
 end
 
@@ -161,8 +312,7 @@ The `oob_fill_mode` attribute controls the behavior of out-of-bounds
 accesses. `zeros` and `undefined` are only supported with TMA (Hopper and
 newer); the `cp.async` implementation only supports `promise_in_bounds`.
 
-The `predicate` allows scheduling the transfer conditionally. The async copy
-is always scheduled by at most a single lane in the warpgroup.
+The `predicate` allows scheduling the transfer conditionally.
 
 The `gmem_peer_id` parameter specifies a particular device id to load from
 in a multi-GPU setting.
@@ -319,8 +469,7 @@ The data is written in row-major order to the GMEM `destination`. The
 `source` data in SMEM needs to be contiguous, but the `destination` GMEM
 does not.
 
-The `predicate` allows scheduling the transfer conditionally. The async copy
-is always scheduled by at most a single lane in the warpgroup.
+The `predicate` allows scheduling the transfer conditionally.
 
 The `reduction_op` attribute can be provided to perform a reduction when
 storing to GMEM. For example, using `add` will add the SMEM values to
@@ -746,10 +895,18 @@ end
 
 """
 `layout_cast`
+
 Casts a vector value to a new strided or tiled layout.
+
+If `strict` is true, only allows relayouts that are free at runtime and
+forces layout equality otherwise.
 """
 function layout_cast(
-    x::Value; result_0=nothing::Union{Nothing,IR.Type}, new_layout, location=Location()
+    x::Value;
+    result_0=nothing::Union{Nothing,IR.Type},
+    new_layout,
+    strict=nothing,
+    location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[x,]
@@ -757,6 +914,7 @@ function layout_cast(
     successors = Block[]
     attributes = NamedAttribute[NamedAttribute("new_layout", new_layout),]
     !isnothing(result_0) && push!(op_ty_results, result_0)
+    !isnothing(strict) && push!(attributes, NamedAttribute("strict", strict))
 
     return create_operation(
         "mosaic_gpu.layout_cast",
@@ -957,11 +1115,11 @@ end
 `return_`
 
 The `return` op is a terminator that indicates the end of execution
-within a `CustomPrimitiveOp`\'s region. It can optionally return some values,
-which become the results of the parent `CustomPrimitiveOp`.
+within a `CustomPrimitiveOp` or `RunScopedOp` region. It can optionally
+return some values, which become the results of the parent op.
 
-The declared results of the parent `CustomPrimitiveOp` must match the
-operand types of this op.
+The declared results of the parent op must match the operand types of this
+op.
 """
 function return_(operands::Vector{Value}; location=Location())
     op_ty_results = IR.Type[]
@@ -972,6 +1130,39 @@ function return_(operands::Vector{Value}; location=Location())
 
     return create_operation(
         "mosaic_gpu.return",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`run_scoped`
+
+Evaluates a single-block region where block arguments represent scoped
+allocations whose lifetimes are confined to the region.
+
+Each block argument must be a statically shaped memref in SMEM, with a
+corresponding `#mosaic_gpu.smem_alloc` entry in `buffer_attrs`.
+
+The region may capture outer values and return non-memref results via
+`mosaic_gpu.return`.
+"""
+function run_scoped(;
+    results::Vector{IR.Type}, buffer_attrs, region::Region, location=Location()
+)
+    op_ty_results = IR.Type[results...,]
+    operands = Value[]
+    owned_regions = Region[region,]
+    successors = Block[]
+    attributes = NamedAttribute[NamedAttribute("buffer_attrs", buffer_attrs),]
+
+    return create_operation(
+        "mosaic_gpu.run_scoped",
         location;
         operands,
         owned_regions,
@@ -1051,12 +1242,18 @@ tcgen05 operations.
 if `collective` is `true`, allow signaling on the `barrier` object of
 multiple CTAs within the cluster.
 """
-function tcgen05_commit_arrive(barrier::Value; collective=nothing, location=Location())
+function tcgen05_commit_arrive(
+    barrier::Value,
+    predicate=nothing::Union{Nothing,Value};
+    collective=nothing,
+    location=Location(),
+)
     op_ty_results = IR.Type[]
     operands = Value[barrier,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(predicate) && push!(operands, predicate)
     !isnothing(collective) && push!(attributes, NamedAttribute("collective", collective))
 
     return create_operation(
@@ -1348,8 +1545,7 @@ Similar to `vector.load` (vector dialect) but supports loading from
 non-contiguous memory.
 
 If `optimized` is true, raises an error if we cannot generate an optimised
-transfer. If unset, fall back to a non-optimized transfer if unable to
-generate an optimized transfer.
+transfer. `optimized` defaults to true when unset.
 """
 function vector_load(
     source::Value;
@@ -1384,8 +1580,7 @@ Similar to `vector.store` (vector dialect) but supports storing to
 non-contiguous memory.
 
 If `optimized` is true, raises an error if we cannot generate an optimised
-transfer. If unset, fall back to a non-optimized transfer if unable to
-generate an optimized transfer.
+transfer. `optimized` defaults to true when unset.
 
 If `atomic_type` is set, performs an atomic store-(add|min|...) of the value.
 
@@ -1481,34 +1676,6 @@ function wgmma(
         attributes,
         results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
         result_inference=(length(op_ty_results) == 0 ? true : false),
-    )
-end
-
-"""
-`wait`
-
-All threads in the warpgroup will block, waiting on the provided barrier
-until:
-  - all pending threads have arrived on the barrier
-  - all expected byte transfers have been completed
-  - the barrier\'s parity matches the provided parity
-"""
-function wait(barrier::Value, parity::Value; location=Location())
-    op_ty_results = IR.Type[]
-    operands = Value[barrier, parity]
-    owned_regions = Region[]
-    successors = Block[]
-    attributes = NamedAttribute[]
-
-    return create_operation(
-        "mosaic_gpu.wait",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
-        results=op_ty_results,
-        result_inference=false,
     )
 end
 

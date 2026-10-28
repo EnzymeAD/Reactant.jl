@@ -941,6 +941,10 @@ Within each process group in the process grid, send the value of the
 `operand` tensor from the source process to the target processes and produce a
 `result` tensor.
 
+When `has_dynamic_root` is false (default), the root is the 0-th rank in
+each replica group. When `has_dynamic_root` is true, the last operand is a
+rank-1 i32 tensor specifying per-operand root indices within each group.
+
 See:
 https://github.com/openxla/stablehlo/blob/main/docs/spec.md#collective_broadcast
 
@@ -955,20 +959,23 @@ https://github.com/openxla/stablehlo/blob/main/docs/spec.md#collective_broadcast
 ```
 """
 function collective_broadcast(
-    operand::Value;
-    result_0=nothing::Union{Nothing,IR.Type},
+    operands::Vector{Value};
+    result_0=nothing::Union{Nothing,Vector{IR.Type}},
     replica_groups,
     channel_handle=nothing,
+    has_dynamic_root=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
-    operands = Value[operand,]
+    operands = Value[operands...,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[NamedAttribute("replica_groups", replica_groups),]
-    !isnothing(result_0) && push!(op_ty_results, result_0)
+    !isnothing(result_0) && push!(op_ty_results, result_0...)
     !isnothing(channel_handle) &&
         push!(attributes, NamedAttribute("channel_handle", channel_handle))
+    !isnothing(has_dynamic_root) &&
+        push!(attributes, NamedAttribute("has_dynamic_root", has_dynamic_root))
 
     return create_operation(
         "stablehlo.collective_broadcast",
@@ -2149,6 +2156,47 @@ function einsum(
 end
 
 """
+`exp2`
+
+Performs element-wise base-2 exponential operation on `operand` tensor and
+produces a `result` tensor.
+
+See:
+https://github.com/openxla/stablehlo/blob/main/docs/spec.md#exp2
+
+# Example
+```mlir
+%result = stablehlo.exp2 %operand : tensor<2x2xf64>
+```
+"""
+function exp2(
+    operand::Value;
+    result=nothing::Union{Nothing,IR.Type},
+    result_accuracy=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[operand,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(result) && push!(op_ty_results, result)
+    !isnothing(result_accuracy) &&
+        push!(attributes, NamedAttribute("result_accuracy", result_accuracy))
+
+    return create_operation(
+        "stablehlo.exp2",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
 `exponential`
 
 Performs element-wise exponential operation on `operand` tensor and produces
@@ -2649,6 +2697,47 @@ function log_plus_one(
 
     return create_operation(
         "stablehlo.log_plus_one",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
+`log2`
+
+Performs element-wise base-2 logarithm operation on `operand` tensor and
+produces a `result` tensor.
+
+See:
+https://github.com/openxla/stablehlo/blob/main/docs/spec.md#log2
+
+# Example
+```mlir
+%result = stablehlo.log2 %operand : tensor<2x2xf64>
+```
+"""
+function log2(
+    operand::Value;
+    result=nothing::Union{Nothing,IR.Type},
+    result_accuracy=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[operand,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(result) && push!(op_ty_results, result)
+    !isnothing(result_accuracy) &&
+        push!(attributes, NamedAttribute("result_accuracy", result_accuracy))
+
+    return create_operation(
+        "stablehlo.log2",
         location;
         operands,
         owned_regions,

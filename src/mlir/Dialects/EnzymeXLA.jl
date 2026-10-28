@@ -914,6 +914,38 @@ function lapack_getri(input::Value, ipiv::Value; output::IR.Type, location=Locat
     )
 end
 
+"""
+`lapack_gtsv`
+
+This operation is modeled after LAPACK\'s *GTSV routines. Unlike LAPACK,
+all three diagonals have the same length m as the system: dl[0] and
+du[m-1] are ignored.
+
+`dl`, `d` and `du` have shape [..., m] and `B` has shape [..., m, nrhs].
+`info` has shape [...] and is non-zero for the systems that could not be
+solved.
+"""
+function lapack_gtsv(
+    dl::Value, d::Value, du::Value, B::Value; X::IR.Type, info::IR.Type, location=Location()
+)
+    op_ty_results = IR.Type[X, info]
+    operands = Value[dl, d, du, B]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "enzymexla.lapack.gtsv",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function special_hankelh1x(
     nu::Value, z::Value; res=nothing::Union{Nothing,IR.Type}, location=Location()
 )
@@ -986,7 +1018,6 @@ function jit_call(
     fn,
     backend_config=nothing,
     operand_layouts=nothing,
-    result_layouts=nothing,
     arg_attrs=nothing,
     res_attrs=nothing,
     output_operand_aliases=nothing,
@@ -1002,8 +1033,6 @@ function jit_call(
         push!(attributes, NamedAttribute("backend_config", backend_config))
     !isnothing(operand_layouts) &&
         push!(attributes, NamedAttribute("operand_layouts", operand_layouts))
-    !isnothing(result_layouts) &&
-        push!(attributes, NamedAttribute("result_layouts", result_layouts))
     !isnothing(arg_attrs) && push!(attributes, NamedAttribute("arg_attrs", arg_attrs))
     !isnothing(res_attrs) && push!(attributes, NamedAttribute("res_attrs", res_attrs))
     !isnothing(output_operand_aliases) &&
@@ -1066,7 +1095,6 @@ function kernel_call(
     fn,
     backend_config=nothing,
     operand_layouts=nothing,
-    result_layouts=nothing,
     arg_attrs=nothing,
     res_attrs=nothing,
     output_operand_aliases=nothing,
@@ -1101,8 +1129,6 @@ function kernel_call(
         push!(attributes, NamedAttribute("backend_config", backend_config))
     !isnothing(operand_layouts) &&
         push!(attributes, NamedAttribute("operand_layouts", operand_layouts))
-    !isnothing(result_layouts) &&
-        push!(attributes, NamedAttribute("result_layouts", result_layouts))
     !isnothing(arg_attrs) && push!(attributes, NamedAttribute("arg_attrs", arg_attrs))
     !isnothing(res_attrs) && push!(attributes, NamedAttribute("res_attrs", res_attrs))
     !isnothing(output_operand_aliases) &&
@@ -2255,13 +2281,16 @@ Computes the solution of a tridiagonal linear system.
   d: A batch of vectors with shape [..., m]. The middle diagonal of A:
     d[i]  := A[i, i] for i in [0,m).
   du: A batch of vectors with shape [..., m]. The upper diagonal of A:
-    du[i] := A[i, i+1] for i in [0,m). Note that dl[m-1] = 0.
-  b: Right hand side matrix.
+    du[i] := A[i, i+1] for i in [0,m). Note that du[m-1] = 0.
+  b: Right hand side matrix with shape [..., m, nrhs].
+
+  Returns the solution X with the same shape as b, and info with shape [...],
+  which is non-zero for the systems that could not be solved.
 """
 function linalg_tridiagonal_solve(
-    dl::Value, d::Value, du::Value, B::Value; X::IR.Type, location=Location()
+    dl::Value, d::Value, du::Value, B::Value; X::IR.Type, info::IR.Type, location=Location()
 )
-    op_ty_results = IR.Type[X,]
+    op_ty_results = IR.Type[X, info]
     operands = Value[dl, d, du, B]
     owned_regions = Region[]
     successors = Block[]
@@ -2451,6 +2480,13 @@ function wrap(
     )
 end
 
+"""
+`xla_wrapper`
+
+Calls a raised function whose input/output pairs represent device buffers.
+The corresponding function result replaces each buffer\'s contents. Trailing
+specialized scalar inputs are compile-time values rather than device buffers.
+"""
 function xla_wrapper(
     inputs::Vector{Value};
     fn,

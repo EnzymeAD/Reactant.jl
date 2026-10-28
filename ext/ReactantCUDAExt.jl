@@ -28,7 +28,6 @@ using GPUCompiler: GPUCompiler
 using GPUArraysCore: @allowscalar
 using KernelAbstractions: KernelAbstractions
 using LLVM: LLVM
-using Printf: Printf
 
 using PrecompileTools: @setup_workload, @compile_workload
 
@@ -146,6 +145,21 @@ end
 @inline Base.ifelse(cond::CuTracedRNumber, a, b::CuTracedRNumber) = ifelse(cond[], a, b[])
 @inline Base.ifelse(cond::CuTracedRNumber, a::CuTracedRNumber, b::CuTracedRNumber) =
     ifelse(cond[], a[], b[])
+
+# `Base.clamp` returns one of its arguments when all three share a type, which for
+# `CuTracedRNumber`s is a pointer chosen by a branch, and raising reads zeros through it.
+# Clamp the loaded values instead.
+@inline loaded_value(x::CuTracedRNumber) = x[]
+@inline loaded_value(x) = x
+
+for X in (:CuTracedRNumber, :Number),
+    L in (:CuTracedRNumber, :Number),
+    H in (:CuTracedRNumber, :Number)
+
+    X === L === H === :Number && continue
+    @eval @inline Base.clamp(x::$X, lo::$L, hi::$H) =
+        clamp(loaded_value(x), loaded_value(lo), loaded_value(hi))
+end
 
 Base.@constprop :aggressive @inline Base.:^(
     a::CuTracedRNumber{T,A}, b::Integer
@@ -361,11 +375,11 @@ Base.@nospecializeinfer function Reactant.promote_traced_type(
 end
 
 function Base.show(io::IO, a::AT) where {AT<:CuTracedArray}
-    Printf.@printf(io, "%s cu traced array at %p", join(size(a), '×'), Int(pointer(a)))
+    return print(io, join(size(a), '×'), " cu traced array at ", repr(UInt(pointer(a))))
 end
 
 function Base.show(io::IO, a::AT) where {AT<:CuTracedRNumber}
-    Printf.@printf(io, "%s cu traced rnumber at %p", join(size(a), '×'), Int(pointer(a)))
+    return print(io, join(size(a), '×'), " cu traced rnumber at ", repr(UInt(pointer(a))))
 end
 
 ## array interface
@@ -1051,6 +1065,9 @@ function _find_unadapted_traced(
     @nospecialize(T::Type), seen::Set{Any}=Set{Any}(), path::String=""
 )
     T isa UnionAll && return nothing
+    # A type passed as an argument (`Type{Float32}`) is a constant: GPUCompiler drops it
+    # from the kernel
+    Core.Compiler.isconstType(T) && return nothing
     T in seen && return nothing
     push!(seen, T)
     T <: TracedRNumber && return isempty(path) ? "<arg>" : path
@@ -1141,11 +1158,12 @@ Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
     end
 
     for arg in Any[func.f, args...]
-        _check_no_traced_in_kernel_arg(typeof(arg))
+        _check_no_traced_in_kernel_arg(Core.Typeof(arg))
     end
 
     mlir_args = MLIR.IR.Value[]
     restys = MLIR.IR.Type[]
+    operand_layouts = MLIR.IR.Attribute[]
     aliases = MLIR.IR.Attribute[]
 
     fname = func.entry
@@ -1237,7 +1255,9 @@ Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
     ctx = LLVM.Context()
     LLVM.activate(ctx)
     for a in allargs
-        if sizeof(a) == 0
+        # Ghost and constant-type arguments are absent from the compiled kernel's signature,
+        # as in GPUCompiler
+        if Core.Compiler.isconstType(Core.Typeof(a)) || sizeof(a) == 0
             push!(allocs, nothing)
             continue
         end
@@ -1348,6 +1368,16 @@ Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
         end
         push!(restys, MLIR.IR.type(arg))
         push!(mlir_args, arg)
+        # The transposed value is row-major, i.e. Julia's column-major memory order.
+        # Pin it so XLA can't choose another layout for the kernel's buffers.
+        if Reactant.Compiler.CONSTRAIN_LAYOUTS[]
+            push!(
+                operand_layouts,
+                MLIR.IR.DenseIndexElementsAttribute(
+                    collect(Int64, (ndims(MLIR.IR.type(arg)) - 1):-1:0)
+                ),
+            )
+        end
 
         ctx = MLIR.IR.current_context()
         out_tup = Ref{Int64}(argidx - 1)
@@ -1461,6 +1491,11 @@ Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
         inputs=mlir_args,
         result_0=restys,
         fn=MLIR.IR.FlatSymbolRefAttribute(sym_name),
+        operand_layouts=if Reactant.Compiler.CONSTRAIN_LAYOUTS[]
+            MLIR.IR.Attribute(operand_layouts)
+        else
+            nothing
+        end,
         output_operand_aliases=MLIR.IR.Attribute(output_operand_aliases),
         xla_side_effect_free=MLIR.IR.UnitAttribute(),
         location=Reactant.Ops.mlir_stacktrace(

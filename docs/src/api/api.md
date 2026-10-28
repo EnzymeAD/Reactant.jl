@@ -29,6 +29,7 @@ Periodic
 
 ```@docs
 Reactant.to_rarray
+Reactant.ConcreteRArrayAdaptor
 ```
 
 ## Reactant data types
@@ -63,6 +64,12 @@ Reactant.DefaultXLACompileOptions
 ```@docs
 OptimizeCommunicationOptions
 ShardyPropagationOptions
+```
+
+### Communications Specific Options (MPI, NCCL, ...)
+
+```@docs
+Reactant.CommOptions
 ```
 
 ## Tracing customization

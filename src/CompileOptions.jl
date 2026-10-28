@@ -26,6 +26,13 @@ communication.
     extend_comm::Int = 0
     dus_to_pad_manual_comp_comm::Int = 0 # 2
     dus_to_pad_comm::Int = 0
+    # The slices feeding the update of a DUS on a sharded dimension are moved down to the
+    # DUS: the update is recomputed at the full extent (the discarded part bounded by
+    # `dus_sink_slices_max_extra_percent` of the window), leaving a DUS of a slice at its
+    # own window, which XLA partitions without communication, instead of a halo exchange
+    # per slice the update was narrowed to.
+    dus_sink_slices_comm::Int = 1
+    dus_sink_slices_max_extra_percent::Int = 100
     concat_two_operands_comm::Int = 0
     concat_to_pad_comm::Int = 0
     concat_to_dus::Int = 1
@@ -47,6 +54,23 @@ function Base.String(options::OptimizeCommunicationOptions)
         join(["$(f)=$(getfield(options, f))" for f in fieldnames(typeof(options))], " ") *
         "}"
     )
+end
+
+"""
+    CommOptions
+
+Fine-grained control over the optimization and lowering passes related to the `comm` dialect.
+
+## Options
+
+  - `lowering_target::Symbol`: the target backend for the communication operations. Valid values are `:jit` (default) and `:ffi`.
+    `:jit` lowers ops to `enzymexla.jit_call` ops, while `:ffi` lowers ops to `stablehlo.custom_call` ops.
+  - `legalize_mpi_to_nccl::Bool`: whether to legalize `comm.mpi` ops to `comm.nccl` ops when backend is CUDA.
+    Defaults to `true`.
+"""
+@kwdef struct CommOptions
+    lowering_target::Symbol = :jit
+    legalize_mpi_to_nccl::Bool = true
 end
 
 """
@@ -238,6 +262,8 @@ struct CompileOptions
     legalize_chlo_to_stablehlo::Bool
     # backend specific options
     cudnn_hlo_optimize::Bool
+    # comm dialect (MPI, NCCL, etc.) options
+    comm_options::CommOptions
     # sharding options
     shardy_passes::Union{Symbol,ShardyPropagationOptions}
     optimize_then_pad::Bool
@@ -285,6 +311,7 @@ function CompileOptions(;
     raise_first::Bool=false,
     legalize_chlo_to_stablehlo::Bool=false,
     cudnn_hlo_optimize::Bool=false,
+    comm_options::CommOptions=CommOptions(),
     shardy_passes::Union{Symbol,ShardyPropagationOptions}=:post_sdy_propagation,
     optimize_then_pad::Bool=true,
     optimize_communications::Union{Bool,OptimizeCommunicationOptions}=true,
@@ -355,6 +382,7 @@ function CompileOptions(;
         raise_first,
         legalize_chlo_to_stablehlo,
         cudnn_hlo_optimize,
+        comm_options,
         shardy_passes,
         optimize_then_pad,
         optimize_communications,
@@ -415,6 +443,7 @@ function __compile_options_with_reversed_propagation(compile_options::CompileOpt
         compile_options.raise_first,
         compile_options.legalize_chlo_to_stablehlo,
         compile_options.cudnn_hlo_optimize,
+        compile_options.comm_options,
         compile_options.shardy_passes,
         compile_options.optimize_then_pad,
         compile_options.optimize_communications,
@@ -462,6 +491,7 @@ function __compile_options_with_updated_sync(compile_options::CompileOptions, sy
         compile_options.raise_first,
         compile_options.legalize_chlo_to_stablehlo,
         compile_options.cudnn_hlo_optimize,
+        compile_options.comm_options,
         compile_options.shardy_passes,
         compile_options.optimize_then_pad,
         compile_options.optimize_communications,
