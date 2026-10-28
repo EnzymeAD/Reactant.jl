@@ -585,8 +585,9 @@ for T in [Error, Device, DeviceDescription, Memory, Buffer, Client]
     exprs =
         map(Iterators.zip(fieldnames(T), fieldtypes(DeviceDescription))) do (fname, ftype)
             :(
-                f === $(QuoteNode(fname)) &&
-                return Ptr{$ftype}(x + $(fieldoffset($T, fname)))
+                if f === $(QuoteNode(fname))
+                    return Ptr{$ftype}(x + $(fieldoffset(T, fname)))
+                end
             )
         end
     @eval begin
@@ -596,7 +597,7 @@ for T in [Error, Device, DeviceDescription, Memory, Buffer, Client]
         end
 
         function Base.propertynames(x::Ptr{$T}; private=false)
-            return ($(propertynames($T)...), Base.propertynames(Ptr{Cvoid}; private)...)
+            return ($(propertynames(T)...), Base.propertynames(Ptr{Cvoid}; private)...)
         end
     end
 end
