@@ -2162,7 +2162,7 @@ Base.@nospecializeinfer function make_tracer(
         seen[prev] = prev
         return prev
     end
-    res.contents = prev2
+    res.contents = tr
     return res
 end
 
