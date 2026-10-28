@@ -1757,3 +1757,49 @@ end
     x = Reactant.to_rarray([1, 2, 3])
     @test_throws UndefVarError @compile f_undef_var_error(x)
 end
+
+function while_no_track_numbers_scalar_counter(A, n)
+    i = 0
+    @trace track_numbers = false while i < n
+        i += 1
+        A = A .+ 1.5
+    end
+    return A
+end
+
+function while_no_track_numbers_compound_cond(A, n)
+    i = 0
+    s = 0.0
+    @trace track_numbers = false while (i < n) & (s < 10.0)
+        i += 1
+        A = A .+ 1.0
+        s = sum(A)
+    end
+    return A
+end
+
+function while_no_track_numbers_untraced_only(x, n)
+    i = 0
+    acc = 0
+    @trace track_numbers = false while i < n
+        i += 1
+        acc += i
+    end
+    return x .+ acc
+end
+
+@testset "while: track_numbers=false with scalar condition variables (#3617)" begin
+    A_jl = ones(3, 2)
+
+    A_ra = Reactant.to_rarray(copy(A_jl))
+    @test Array(@jit while_no_track_numbers_scalar_counter(A_ra, 2)) ≈
+        while_no_track_numbers_scalar_counter(copy(A_jl), 2)
+
+    A_ra = Reactant.to_rarray(copy(A_jl))
+    @test Array(@jit while_no_track_numbers_compound_cond(A_ra, 5)) ≈
+        while_no_track_numbers_compound_cond(copy(A_jl), 5)
+
+    A_ra = Reactant.to_rarray(copy(A_jl))
+    @test Array(@jit while_no_track_numbers_untraced_only(A_ra, 4)) ≈
+        while_no_track_numbers_untraced_only(copy(A_jl), 4)
+end
