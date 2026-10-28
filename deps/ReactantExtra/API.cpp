@@ -112,6 +112,7 @@ void reactantReleaseAddressRange(void *base, size_t nbytes);
 #include "xla/pjrt/pjrt_c_api_client.h"
 #include "xla/pjrt/pjrt_executable.h"
 #include "xla/pjrt/plugin/xla_cpu/xla_cpu_pjrt_client.h"
+#include "xla/shape_util.h"
 
 #include "xla/hlo/ir/hlo_computation.h"
 #include "xla/hlo/ir/hlo_instruction.h"
@@ -1238,6 +1239,15 @@ REACTANT_ABI PjRtBuffer *ArrayFromHostBuffer(PjRtClient *client, void *data,
   return bres;
 }
 
+REACTANT_ABI void BufferToHost(PjRtBuffer *buffer, void *data);
+
+// Logical (row-major host) size of `buffer` in bytes. Not the on-device size,
+// which on TPU includes tiling padding.
+static size_t BufferHostSizeInBytes(PjRtBuffer *buffer) {
+  Shape shape(MyValueOrThrow(buffer->HostShape()));
+  return xla::ShapeUtil::ByteSizeOfElements(shape);
+}
+
 REACTANT_ABI void CopyToBuffer(PjRtClient *client, PjRtBuffer *buffer,
                                void *data, size_t offset, size_t size,
                                PjRtBuffer **bufferP) {
@@ -1252,11 +1262,34 @@ REACTANT_ABI void CopyToBuffer(PjRtClient *client, PjRtBuffer *buffer,
 
   auto pid = client->platform_id();
   if (pid == xla::TpuId()) {
+    // The TPU on-device layout is tiled, so raw byte offsets into the device
+    // buffer don't correspond to logical element offsets and the raw-copy APIs
+    // can't be used. We also can't write into an existing buffer through the
+    // PJRT C API, so a *new* buffer holding the updated contents is created
+    // and handed back through `bufferP`, and the old buffer is freed.
+    if (bufferP == nullptr) {
+      ReactantThrowError(
+          "CopyToBuffer: on TPU the device buffer is replaced, so a non-null "
+          "`bufferP` out-parameter is required");
+    }
     auto dims = buffer->on_device_shape().dimensions();
-    // TODO(#2252): note this assume that we want to copy the entire buffer
-    // size.
-    auto buf2 = ArrayFromHostBuffer(client, data, buffer->element_type(),
-                                    dims.size(), dims.data(), buffer->device());
+    size_t total = BufferHostSizeInBytes(buffer);
+    if (offset + size > total) {
+      ReactantThrowError("CopyToBuffer: offset + size exceeds buffer size");
+    }
+    PjRtBuffer *buf2;
+    if (offset == 0 && size == total) {
+      buf2 = ArrayFromHostBuffer(client, data, buffer->element_type(),
+                                 dims.size(), dims.data(), buffer->device());
+    } else {
+      // Partial copy: fetch the current contents (row-major), patch the
+      // requested range on the host and upload the whole thing again.
+      std::vector<char> host(total);
+      BufferToHost(buffer, host.data());
+      memcpy(host.data() + offset, data, size);
+      buf2 = ArrayFromHostBuffer(client, host.data(), buffer->element_type(),
+                                 dims.size(), dims.data(), buffer->device());
+    }
     *bufferP = buf2;
     PjRtBufferFree((PjRtBuffer *)buffer);
     return;
@@ -1323,9 +1356,19 @@ REACTANT_ABI void CopyFromBuffer(PjRtClient *client, PjRtBuffer *buffer,
 
   auto pid = client->platform_id();
   if (pid == xla::TpuId()) {
-    // TODO(#2252): note this assume that we want to copy the entire buffer
-    // size.
-    BufferToHost(buffer, data);
+    // See CopyToBuffer: TPU layouts are tiled, so go through a row-major host
+    // literal rather than a raw copy.
+    size_t total = BufferHostSizeInBytes(buffer);
+    if (offset + size > total) {
+      ReactantThrowError("CopyFromBuffer: offset + size exceeds buffer size");
+    }
+    if (offset == 0 && size == total) {
+      BufferToHost(buffer, data);
+      return;
+    }
+    std::vector<char> host(total);
+    BufferToHost(buffer, host.data());
+    memcpy(data, host.data() + offset, size);
     return;
   }
 
