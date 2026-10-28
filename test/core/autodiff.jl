@@ -782,3 +782,104 @@ end
     @test Array(u_ra) ≈ u
     @test Array(seeds_ra) ≈ seeds
 end
+
+# https://github.com/EnzymeAD/Reactant.jl/issues/3589
+struct IntShadowColumn{F,I}
+    x::F
+    idx::I
+    table::F
+    y::F
+end
+
+function int_shadow_loss(c)
+    c.idx .= unsafe_trunc.(Int32, clamp.(c.x, 1, 3.999))
+    c.y .= c.table[c.idx] .* c.x .^ 2
+    return sum(c.y)
+end
+
+function int_shadow_gradient!(c, dc)
+    Enzyme.autodiff(Reverse, int_shadow_loss, Active, Duplicated(c, dc))
+    return nothing
+end
+
+function int_shadow_fwd!(c, dc)
+    Enzyme.autodiff(Forward, int_shadow_loss, Duplicated(c, dc))
+    return nothing
+end
+
+struct IntShadowPair{A,B}
+    a::A
+    b::B
+end
+
+function int_shadow_mixed_return(x)
+    return IntShadowPair(x .^ 2, unsafe_trunc.(Int32, x))
+end
+
+function int_shadow_fwd_mixed_return(x, dx)
+    return Enzyme.autodiff(Forward, int_shadow_mixed_return, Duplicated, Duplicated(x, dx))
+end
+
+@testset "Integer tensors are never differentiable" begin
+    N = 8
+    x = collect(range(1.2, 3.7; length=N))
+    table = [10.0, 20.0, 30.0, 40.0]
+    exact_idx = unsafe_trunc.(Int32, clamp.(x, 1, 3.999))
+    exact = [2 * table[i] * xi for (i, xi) in zip(exact_idx, x)]
+
+    column(i) = IntShadowColumn(
+        Reactant.to_rarray(x),
+        Reactant.to_rarray(fill(Int32(i), N)),
+        Reactant.to_rarray(table),
+        Reactant.to_rarray(zeros(N)),
+    )
+
+    @testset "reverse mode" begin
+        hlo = repr(
+            @code_hlo optimize = false int_shadow_gradient!(
+                column(4), Enzyme.make_zero(column(4))
+            )
+        )
+        # the Int32 index buffer (2nd field) is never a differentiable argument / result
+        @test occursin(
+            "activity = [#enzyme.activity<enzyme_active>, #enzyme.activity<enzyme_const>, " *
+            "#enzyme.activity<enzyme_active>, #enzyme.activity<enzyme_active>]",
+            hlo,
+        )
+        @test occursin(
+            "ret_activity = [#enzyme.activity<enzyme_activenoneed>, " *
+            "#enzyme.activity<enzyme_active>, #enzyme.activity<enzyme_const>, " *
+            "#enzyme.activity<enzyme_active>, #enzyme.activity<enzyme_active>]",
+            hlo,
+        )
+
+        compiled = @compile int_shadow_gradient!(column(4), Enzyme.make_zero(column(4)))
+        # The gradient must not depend on the contents of the integer "shadow"
+        for shadow_idx in (0, 1, 4)
+            c = column(4)
+            dc = Enzyme.make_zero(column(shadow_idx))
+            compiled(c, dc)
+            @test Array(dc.x) ≈ exact
+            @test Array(c.idx) == exact_idx
+            @test all(Array(dc.idx) .== Int32(shadow_idx))
+        end
+    end
+
+    @testset "forward mode" begin
+        c = column(4)
+        dc = Enzyme.make_zero(column(7))
+        dc.x .= 1.0
+        @jit int_shadow_fwd!(c, dc)
+        @test Array(dc.y) ≈ exact
+        @test Array(c.idx) == exact_idx
+        @test all(Array(dc.idx) .== Int32(7))
+    end
+
+    @testset "forward mode mixed return" begin
+        xr = Reactant.to_rarray([1.5, 2.5])
+        dxr = Reactant.to_rarray([1.0, 1.0])
+        res = @jit int_shadow_fwd_mixed_return(xr, dxr)
+        @test Array(only(res).a) ≈ [3.0, 5.0]
+        @test Array(only(res).b) == Int32[1, 2]
+    end
+end
