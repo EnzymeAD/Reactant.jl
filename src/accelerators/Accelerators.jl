@@ -10,5 +10,6 @@ include("TPU.jl")
 include("Metal.jl")
 include("TT.jl")
 include("Trainium.jl")
+include("Julia.jl")
 
 end
