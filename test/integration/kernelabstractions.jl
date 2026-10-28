@@ -268,6 +268,28 @@ end
     end
 end
 
+# A type passed as a kernel argument is a constant, which the kernel is compiled for and
+# which is not passed at run time; the argument after it must still reach the kernel.
+@kernel function fill_typed_kernel!(y, FT, x)
+    i = @index(Global)
+    @inbounds y[i] = convert(FT, 2) * x[i]
+end
+
+function launch_typed!(y, FT, x)
+    fill_typed_kernel!(KernelAbstractions.get_backend(y))(y, FT, x; ndrange=length(y))
+    return nothing
+end
+
+@testset "KernelAbstractions type argument (raised)" begin
+    x = Float32[1, 2, 3]
+    y_cpu = zeros(Float32, 3)
+    launch_typed!(y_cpu, Float32, x)
+
+    y = Reactant.to_rarray(zeros(Float32, 3))
+    @jit raise = true launch_typed!(y, Float32, Reactant.to_rarray(x))
+    @test Array(y) == y_cpu
+end
+
 # A raised kernel clamps traced numbers. Inside a kernel `convert` to the kernel's traced
 # number type returns a pointer to the value, which `clamp` has to load rather than return.
 @kernel function clamp_kernel!(out, @Const(x), s, ::Val{form}) where {form}
