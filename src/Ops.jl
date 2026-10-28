@@ -41,7 +41,7 @@ const SVD_ALGORITHM_MAP = Dict(
 )
 
 function _function_macro_error()
-    throw(ArgumentError("`caller_function` is not available in this context"))
+    return throw(ArgumentError("`caller_function` is not available in this context"))
 end
 
 macro caller_function()
@@ -4672,6 +4672,126 @@ end
         Core.kwcall, (; dims,), Base.sum, exp_diff
     )
     return diff .- log(reduced_exp_diff; location)
+end
+
+@noinline function attention(
+    query::TracedRArray{T,4},
+    key::TracedRArray{T,4},
+    value::TracedRArray{T,4},
+    bias::Union{TracedRArray{T,4},Nothing}=nothing;
+    mask::Union{TracedRArray{Bool,4},Nothing}=nothing,
+    q_lengths::Union{TracedRArray{<:Integer,1},Nothing}=nothing,
+    kv_lengths::Union{TracedRArray{<:Integer,1},Nothing}=nothing,
+    scale::Real=Base.inv(Base.sqrt(Float64(Base.size(query, 1)))),
+    is_causal::Bool=false,
+    return_lse::Bool=false,
+    location=mlir_stacktrace("attention", @__FILE__, @__LINE__),
+) where {T}
+    D_qk, N_q, T_len, B = size(query)
+    D_v = size(value, 1)
+
+    q_t = transpose(query, [4, 3, 2, 1]; location)
+    k_t = transpose(key, [4, 3, 2, 1]; location)
+    v_t = transpose(value, [4, 3, 2, 1]; location)
+    bias_t = bias === nothing ? nothing : transpose(bias, [4, 3, 2, 1]; location).mlir_data
+    mask_t = mask === nothing ? nothing : transpose(mask, [4, 3, 2, 1]; location).mlir_data
+    q_len_v = q_lengths === nothing ? nothing : q_lengths.mlir_data
+    kv_len_v = kv_lengths === nothing ? nothing : kv_lengths.mlir_data
+
+    LseT = T <: Union{Float16,Reactant.BFloat16} ? Float32 : T
+    out_btnh_shape = (B, T_len, N_q, D_v)
+    lse_bnt_shape = (B, N_q, T_len)
+
+    op = enzymexla.ml_attention(
+        q_t.mlir_data,
+        k_t.mlir_data,
+        v_t.mlir_data,
+        bias_t;
+        mask=mask_t,
+        q_lengths=q_len_v,
+        kv_lengths=kv_len_v,
+        output=mlir_type(TracedRArray{T,4}, out_btnh_shape),
+        lse=mlir_type(TracedRArray{LseT,3}, lse_bnt_shape),
+        scale=MLIR.IR.Attribute(Float64(scale)),
+        is_causal=MLIR.IR.Attribute(is_causal),
+        location,
+    )
+
+    out_btnh = TracedRArray{T,4}((), MLIR.IR.result(op, 1), out_btnh_shape)
+    out = transpose(out_btnh, [4, 3, 2, 1]; location)
+    if return_lse
+        lse_bnt = TracedRArray{LseT,3}((), MLIR.IR.result(op, 2), lse_bnt_shape)
+        lse = transpose(lse_bnt, [3, 2, 1]; location)
+        return out, lse
+    end
+    return out
+end
+
+@noinline function attention_grad(
+    query::TracedRArray{T,4},
+    key::TracedRArray{T,4},
+    value::TracedRArray{T,4},
+    output::TracedRArray{T,4},
+    lse::TracedRArray{LseT,3},
+    d_output::TracedRArray{T,4},
+    bias::Union{TracedRArray{T,4},Nothing}=nothing;
+    mask::Union{TracedRArray{Bool,4},Nothing}=nothing,
+    q_lengths::Union{TracedRArray{<:Integer,1},Nothing}=nothing,
+    kv_lengths::Union{TracedRArray{<:Integer,1},Nothing}=nothing,
+    scale::Real=Base.inv(Base.sqrt(Float64(Base.size(query, 1)))),
+    is_causal::Bool=false,
+    location=mlir_stacktrace("attention_grad", @__FILE__, @__LINE__),
+) where {T,LseT}
+    q_t = transpose(query, [4, 3, 2, 1]; location)
+    k_t = transpose(key, [4, 3, 2, 1]; location)
+    v_t = transpose(value, [4, 3, 2, 1]; location)
+    out_t = transpose(output, [4, 3, 2, 1]; location)
+    lse_t = transpose(lse, [3, 2, 1]; location)
+    dout_t = transpose(d_output, [4, 3, 2, 1]; location)
+    bias_t = bias === nothing ? nothing : transpose(bias, [4, 3, 2, 1]; location)
+    mask_t = mask === nothing ? nothing : transpose(mask, [4, 3, 2, 1]; location).mlir_data
+    q_len_v = q_lengths === nothing ? nothing : q_lengths.mlir_data
+    kv_len_v = kv_lengths === nothing ? nothing : kv_lengths.mlir_data
+
+    op = enzymexla.ml_attention_grad(
+        q_t.mlir_data,
+        k_t.mlir_data,
+        v_t.mlir_data,
+        out_t.mlir_data,
+        lse_t.mlir_data,
+        dout_t.mlir_data,
+        bias_t === nothing ? nothing : bias_t.mlir_data;
+        mask=mask_t,
+        q_lengths=q_len_v,
+        kv_lengths=kv_len_v,
+        d_query=mlir_type(q_t),
+        d_key=mlir_type(k_t),
+        d_value=mlir_type(v_t),
+        d_bias=bias_t === nothing ? nothing : mlir_type(bias_t),
+        scale=MLIR.IR.Attribute(Float64(scale)),
+        is_causal=MLIR.IR.Attribute(is_causal),
+        location,
+    )
+
+    dq = transpose(
+        TracedRArray{T,4}((), MLIR.IR.result(op, 1), size(q_t)), [4, 3, 2, 1]; location
+    )
+    dk = transpose(
+        TracedRArray{T,4}((), MLIR.IR.result(op, 2), size(k_t)), [4, 3, 2, 1]; location
+    )
+    dv = transpose(
+        TracedRArray{T,4}((), MLIR.IR.result(op, 3), size(v_t)), [4, 3, 2, 1]; location
+    )
+    dbias = if bias_t === nothing
+        nothing
+    else
+        transpose(
+            TracedRArray{T,4}((), MLIR.IR.result(op, 4), size(bias_t)),
+            [4, 3, 2, 1];
+            location,
+        )
+    end
+    return dq, dk, dv, dbias
 end
 
 end # module Ops

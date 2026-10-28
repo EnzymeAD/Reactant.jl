@@ -538,3 +538,184 @@ end
 function NNlib.maximum_dims(dims::AnyTracedRArray{CartesianIndex{N}}) where {N}
     return ntuple(i -> maximum(x -> x[i], dims), N)
 end
+
+function _to_traced_array(::Type{ElT}, x::AbstractArray) where {ElT}
+    if Reactant.ancestor(x) isa AnyTracedRArray
+        return Reactant.promote_to(TracedRArray{ElT,ndims(x)}, materialize_traced_array(x))
+    else
+        return Reactant.promote_to(TracedRArray{ElT,ndims(x)}, Array{ElT}(x))
+    end
+end
+
+# Scaled Dot-Product Attention
+function _prepare_attention_bias_or_mask(
+    ::Type{ElT}, x, target_sz::NTuple{4,Int}
+) where {ElT}
+    x === nothing && return nothing
+    ndims(x) <= 4 && all(i -> size(x, i) in (1, target_sz[i]), (1, 2, 3, 4)) || throw(
+        DimensionMismatch(
+            "A bias or mask of size $(size(x)) cannot be broadcast to the attention score dimensions $target_sz.",
+        ),
+    )
+    x_traced = _to_traced_array(ElT, x)
+    return materialize_traced_array(
+        reshape(x_traced, size(x, 1), size(x, 2), size(x, 3), size(x, 4))
+    )
+end
+
+function _prepare_attention_lengths(lengths, B::Int, max_len::Int)
+    lengths === nothing && return nothing
+    max_len_i32 = Int32(max_len)
+    zero_i32 = Int32(0)
+    if lengths isa Number
+        if lengths isa TracedRNumber
+            c = clamp(
+                Reactant.promote_to(TracedRNumber{Int32}, lengths), zero_i32, max_len_i32
+            )
+            return @opcall fill(c, (B,))
+        else
+            c = clamp(Int32(lengths), zero_i32, max_len_i32)
+            return @opcall fill(c, (B,))
+        end
+    else
+        length(lengths) == B || throw(
+            ArgumentError(
+                "Expected a sequence length for each of the $B sequences, got $(length(lengths)).",
+            ),
+        )
+        l_traced = materialize_traced_array(reshape(_to_traced_array(Int32, lengths), B))
+        return materialize_traced_array(clamp.(l_traced, zero_i32, max_len_i32))
+    end
+end
+
+if isdefined(NNlib, :attention_lengths)
+    function NNlib.attention_lengths(
+        x::AnyTracedRArray{<:Any,4}, lengths::Union{Number,AbstractArray}, n::Int=size(x, 4)
+    )
+        l_vec = _prepare_attention_lengths(lengths, n, size(x, 3))
+        return reshape(l_vec, (1, 1, 1, n))
+    end
+end
+
+if isdefined(NNlib, :_is_fused_attention)
+    function NNlib._is_fused_attention(
+        ::AnyTracedRArray{<:Any,4},
+        ::AnyTracedRArray{<:Any,4},
+        ::AnyTracedRArray{<:Any,4},
+        bias;
+        fdrop=identity,
+        mask=nothing,
+        scale=nothing,
+        is_causal=false,
+        window=nothing,
+        q_offset=0,
+        q_lengths=nothing,
+        kv_lengths=nothing,
+        segments=nothing,
+        kws...,
+    )
+        return fdrop === identity &&
+               window === nothing &&
+               is_causal isa Bool &&
+               (q_offset isa Integer && iszero(q_offset)) &&
+               segments === nothing &&
+               isempty(kws)
+    end
+end
+
+if isdefined(NNlib, :_scaled_dot_product_attention)
+    function NNlib._scaled_dot_product_attention(
+        q::AnyTracedRArray{Tq,4},
+        k::AnyTracedRArray{Tk,4},
+        v::AnyTracedRArray{Tv,4},
+        bias=nothing;
+        fdrop=identity,
+        mask=nothing,
+        scale=nothing,
+        is_causal::Union{Bool,Symbol}=false,
+        window=nothing,
+        q_offset=0,
+        q_lengths=nothing,
+        kv_lengths=nothing,
+        segments=nothing,
+        kws...,
+    ) where {Tq,Tk,Tv}
+        if !(
+            fdrop === identity &&
+            window === nothing &&
+            is_causal isa Bool &&
+            (q_offset isa Integer && iszero(q_offset)) &&
+            segments === nothing &&
+            isempty(kws)
+        )
+            if isdefined(NNlib, :generic_attention)
+                return NNlib.generic_attention(
+                    q,
+                    k,
+                    v,
+                    bias;
+                    fdrop,
+                    mask,
+                    scale,
+                    is_causal,
+                    window,
+                    q_offset,
+                    q_lengths,
+                    kv_lengths,
+                    segments,
+                    kws...,
+                    unsegmented=NNlib.unsegmented_attention,
+                )
+            elseif hasmethod(
+                NNlib._attention,
+                Tuple{typeof(q),typeof(k),typeof(v),typeof(bias)},
+                (:fdrop, :mask, :scale, :is_causal, :q_lengths, :kv_lengths),
+            )
+                x, _ = NNlib._attention(
+                    q, k, v, bias; fdrop, mask, scale, is_causal, q_lengths, kv_lengths
+                )
+                return x
+            else
+                x, _ = NNlib._attention(q, k, v, bias; fdrop, mask, scale, is_causal)
+                return x
+            end
+        end
+
+        T = promote_type(
+            Reactant.unwrapped_eltype(Tq),
+            Reactant.unwrapped_eltype(Tk),
+            Reactant.unwrapped_eltype(Tv),
+        )
+        q_traced = Reactant.promote_to(TracedRArray{T,4}, materialize_traced_array(q))
+        k_traced = Reactant.promote_to(TracedRArray{T,4}, materialize_traced_array(k))
+        v_traced = Reactant.promote_to(TracedRArray{T,4}, materialize_traced_array(v))
+
+        if scale isa TracedRNumber
+            s_traced = Reactant.promote_to(TracedRNumber{T}, scale)
+            q_traced = materialize_traced_array(q_traced .* s_traced)
+            scale_val = 1.0
+        elseif scale === nothing
+            scale_val = Float64(inv(sqrt(T(size(q, 1)))))
+        else
+            scale_val = Float64(T(scale))
+        end
+
+        score_sz = (size(k, 3), size(q, 3), size(q, 2), size(q, 4))
+        bias_traced = _prepare_attention_bias_or_mask(T, bias, score_sz)
+        mask_traced = _prepare_attention_bias_or_mask(Bool, mask, score_sz)
+        q_len_traced = _prepare_attention_lengths(q_lengths, size(q, 4), size(q, 3))
+        kv_len_traced = _prepare_attention_lengths(kv_lengths, size(k, 4), size(k, 3))
+
+        return @opcall attention(
+            q_traced,
+            k_traced,
+            v_traced,
+            bias_traced;
+            mask=mask_traced,
+            q_lengths=q_len_traced,
+            kv_lengths=kv_len_traced,
+            scale=scale_val,
+            is_causal,
+        )
+    end
+end

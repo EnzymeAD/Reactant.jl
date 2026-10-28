@@ -194,7 +194,7 @@ end
 
 function activate_raising!(is_raising::Bool)
     stack = get!(task_local_storage(), :reactant_is_raising) do
-        Bool[]
+        return Bool[]
     end::Vector{Bool}
     push!(stack, is_raising)
     return nothing
@@ -315,6 +315,8 @@ Base.@nospecializeinfer function compile_mlir!(
     end
 
     toolkit = XLA.CUDA_DATA_DIR[]
+    cuda_sm_major = 0
+    cuda_sm_minor = 0
 
     if backend == "cpu" || backend == "tpu" || backend == "neuron" || backend == "trainium"
         kern = "lower-kernel{backend=cpu},canonicalize"
@@ -343,7 +345,9 @@ Base.@nospecializeinfer function compile_mlir!(
         end
 
         device_properties = XLA.device_properties(XLA.default_device(client))
-        cubinChip = "sm_$(device_properties.major)$(device_properties.minor)"
+        cuda_sm_major = device_properties.major
+        cuda_sm_minor = device_properties.minor
+        cubinChip = "sm_$(cuda_sm_major)$(cuda_sm_minor)"
         cuda_get_kernel = div(MLIR.API.ReactantHermeticCudaGetVersion(), 1000) == 12
 
         jit = "convert-polygeist-to-llvm{backend=cuda preserve-xla-funcs=true cuda-get-kernel=$(cuda_get_kernel)},strip-gpu-info,nvvm-attach-target{chip=$(cubinChip) features=$(cubinFeatures()) O=$(cuOptLevel[])},enzymexla-gpu-module-to-binary{format=$(cubinFormat[]) toolkit=$toolkit},lower-jit,symbol-dce"
@@ -412,7 +416,14 @@ Base.@nospecializeinfer function compile_mlir!(
         ],
         ",",
     )
-    lower_enzymexla_math_pass = "lower-enzymexla-math"
+    # cuDNN fused SDPA (__cudnn$fmha*) requires SM80 (Ampere) or newer; fall back
+    # to StableHLO decomposition on older CUDA architectures (e.g. V100/T4).
+    math_backend = if backend == "cuda" && cuda_sm_major < 8
+        "cuda_sm$(cuda_sm_major)$(cuda_sm_minor)"
+    else
+        backend
+    end
+    lower_enzymexla_math_pass = "lower-enzymexla-math{backend=$math_backend}"
     # TODO legalization of comm.mpi ops to comm.nccl if compile_options.comm_options.legalize_mpi_to_nccl is true and backend is CUDA
     lower_comm_pass = if compile_options.comm_options.lowering_target === :jit
         "lower-comm-to-jit{mpi_request_width=$(MPI_REQUEST_WIDTH[])}"
