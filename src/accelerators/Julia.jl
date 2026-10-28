@@ -45,11 +45,13 @@ struct Error
     code::CAPI.PJRT_Error_Code
     message::Cstring
 
-    Error(code::CAPI.PJRT_Error_Code, msg::Cstring) = Error(vtable_error[], code, msg)
+    function Error(code::CAPI.PJRT_Error_Code, msg::Cstring)
+        return Error(unsafe_convert(Ptr{CAPI.PJRT_Error_FunctionTable}, vtable_error), code, msg)
+    end
 end
 
 Error(code, msg::AbstractString) = Error(code, Symbol(msg))
-Error(code, msg::Symbol) = Error(code, unsafe_convert(Ptr{UInt8}, msg))
+Error(code, msg::Symbol) = Error(code, Cstring(unsafe_convert(Ptr{UInt8}, msg)))
 
 Error(code) = Error(code, Symbol())
 
