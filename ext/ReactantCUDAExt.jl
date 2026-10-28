@@ -702,26 +702,23 @@ Reactant.@reactant_overlay function CUDA.cudaconvert(arg)
 end
 # CUDA.jl 6.4.1's `@cuda` converts the arguments, compiles and launches the kernel behind
 # the `compile_and_launch` function barrier: intercept that as a whole, with Reactant's
-# argument conversion and kernel object. Earlier versions of `@cuda` call the overlaid
-# `cudaconvert` and `cufunction` directly.
-@static if isdefined(CUDACore, :compile_and_launch)
-    Reactant.@reactant_overlay function CUDACore.compile_and_launch(
-        backend::CUDACore.LLVMBackend,
-        f::F,
-        args::Tuple,
-        ::Val{launch},
-        launch_kwargs::NamedTuple,
-        compiler_kwargs::NamedTuple,
-    ) where {F,launch}
-        kernel_f = recudaconvert(f)
-        kernel_args = map(recudaconvert, args)
-        kernel_tt = Tuple{map(Core.Typeof, kernel_args)...}
-        kernel = CUDA.cufunction(kernel_f, kernel_tt; compiler_kwargs...)
-        if launch
-            kernel(kernel_args...; launch_kwargs..., convert=Val(false))
-        end
-        return kernel
+# argument conversion and kernel object.
+Reactant.@reactant_overlay function CUDACore.compile_and_launch(
+    backend::CUDACore.LLVMBackend,
+    f::F,
+    args::Tuple,
+    ::Val{launch},
+    launch_kwargs::NamedTuple,
+    compiler_kwargs::NamedTuple,
+) where {F,launch}
+    kernel_f = recudaconvert(f)
+    kernel_args = map(recudaconvert, args)
+    kernel_tt = Tuple{map(Core.Typeof, kernel_args)...}
+    kernel = CUDA.cufunction(kernel_f, kernel_tt; compiler_kwargs...)
+    if launch
+        kernel(kernel_args...; launch_kwargs..., convert=Val(false))
     end
+    return kernel
 end
 
 function Adapt.adapt_storage(::ReactantKernelAdaptor, xs::TracedRArray{T,N}) where {T,N}
@@ -764,39 +761,6 @@ end
     )
 end
 
-function GPULowerCPUFeaturesPass(job)
-    return LLVM.NewPMModulePass(
-        "GPULowerCPUFeatures",
-        if isdefined(GPUCompiler, :CPUFeatures)
-            GPUCompiler.CPUFeatures(job)
-        else
-            GPUCompiler.cpu_features!
-        end,
-    )
-end
-function GPULowerPTLSPass(job)
-    return LLVM.NewPMModulePass(
-        "GPULowerPTLS",
-        if isdefined(GPUCompiler, :LowerPTLS)
-            GPUCompiler.LowerPTLS(job)
-        else
-            GPUCompiler.lower_ptls!
-        end,
-    )
-end
-function GPULowerGCFramePass(job, meta)
-    return LLVM.NewPMFunctionPass(
-        "GPULowerGCFrame",
-        if !isdefined(GPUCompiler, :LowerGCFrame)
-            GPUCompiler.lower_gc_frame!
-        elseif hasfield(GPUCompiler.LowerGCFrame, :relocs)
-            # GPUCompiler 2.10 also needs the kernel's relocations
-            GPUCompiler.LowerGCFrame(job, meta.relocations)
-        else
-            GPUCompiler.LowerGCFrame(job)
-        end,
-    )
-end
 function noop_pass(x)
     return false
 end
@@ -838,7 +802,9 @@ function compile(job)
         )
 
         if !Reactant.precompiling()
-            link_runtime!(mod, job)
+            runtime, runtime_relocs = GPUCompiler.load_runtime(job)
+            LLVM.link!(mod, runtime)
+            GPUCompiler.apply_relocations!(mod, runtime_relocs)
         end
         entryname = LLVM.name(meta.entry)
 
@@ -855,9 +821,9 @@ function compile(job)
 
         try
             LLVM.@dispose pb = LLVM.NewPMPassBuilder() begin
-                LLVM.register!(pb, GPULowerCPUFeaturesPass(job))
-                LLVM.register!(pb, GPULowerPTLSPass(job))
-                LLVM.register!(pb, GPULowerGCFramePass(job, meta))
+                LLVM.register!(pb, GPUCompiler.GPULowerCPUFeaturesPass(job))
+                LLVM.register!(pb, GPUCompiler.GPULowerPTLSPass(job))
+                LLVM.register!(pb, GPUCompiler.GPULowerGCFramePass(job, meta.relocations))
                 LLVM.register!(pb, AddKernelStatePass())
                 LLVM.register!(pb, LowerKernelStatePass())
                 LLVM.register!(pb, CleanupKernelStatePass())
@@ -903,7 +869,7 @@ function compile(job)
             end
         end
 
-        errors = check_ir(job, mod, meta)
+        errors = GPUCompiler.check_ir!(job, GPUCompiler.IRError[], mod, meta.relocations)
         unique!(errors)
         filter!(errors) do err
             (kind, bt, meta) = err
@@ -1777,35 +1743,9 @@ const ReactantCUDAJob = GPUCompiler.CompilerJob{
 }
 GPUCompiler.can_vectorize(job::ReactantCUDAJob) = !job.config.params.raising
 
-# GPUCompiler 2 describes the references to Julia values in the IR with relocation records,
-# which the runtime library and the IR validation take too. GPUCompiler 1 resolved them into
-# the IR right away.
-@static if Reactant.GPUCOMPILER_2
-    # The kernel's IR is linked into the MLIR module rather than loaded by CUDA.jl, so
-    # resolve the references into the IR, instead of the patchable globals CUDA.jl uses.
-    GPUCompiler.relocation_lowering(@nospecialize(job::ReactantCUDAJob)) = :bake
-
-    function link_runtime!(mod, job)
-        runtime, runtime_relocs = GPUCompiler.load_runtime(job)
-        LLVM.link!(mod, runtime)
-        GPUCompiler.apply_relocations!(mod, runtime_relocs)
-        return nothing
-    end
-
-    function check_ir(job, mod, meta)
-        return GPUCompiler.check_ir!(job, GPUCompiler.IRError[], mod, meta.relocations)
-    end
-else
-    function link_runtime!(mod, job)
-        LLVM.link!(mod, GPUCompiler.load_runtime(job))
-        return nothing
-    end
-
-    function check_ir(job, mod, meta)
-        return GPUCompiler.check_ir!(job, GPUCompiler.IRError[], mod)
-    end
-end
-
+# The kernel's IR is linked into the MLIR module rather than loaded by CUDA.jl, so resolve
+# the references to Julia values into the IR, instead of the patchable globals CUDA.jl uses.
+GPUCompiler.relocation_lowering(@nospecialize(job::ReactantCUDAJob)) = :bake
 function GPUCompiler.optimization_options(job::ReactantCUDAJob)
     raising = job.config.params.raising
     return (; instcombine=!raising, fastmath=!raising, aggressiveinstcombine=!raising)

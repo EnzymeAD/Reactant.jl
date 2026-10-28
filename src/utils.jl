@@ -35,13 +35,9 @@ function GPUCompiler.get_interpreter(@nospecialize(job::NativeCompilerJob))
     end
 end
 
-# GPUCompiler 2 changed some of the interfaces that Reactant extends and calls. Reactant
-# supports both GPUCompiler 1 and 2, and selects the code for either with this constant.
-const GPUCOMPILER_2 = pkgversion(GPUCompiler) >= v"2"
-
-# GPUCompiler 2 looks up (and filters) the code instances it compiles by the job's cache
+# GPUCompiler looks up (and filters) the code instances it compiles by the job's cache
 # owner, so that has to be the owner the interpreter above caches them under.
-@static if GPUCOMPILER_2 && GPUCompiler.HAS_INTEGRATED_CACHE
+@static if GPUCompiler.HAS_INTEGRATED_CACHE
     function GPUCompiler.cache_owner(@nospecialize(job::NativeCompilerJob))
         return job.config.params.use_native_interp ? nothing : ReactantCacheToken()
     end
@@ -52,7 +48,7 @@ end
 # interpreter, some of the stored sources give wrong results (as if Reactant's overlays
 # weren't applied, e.g., in the LU tests of core/ops), so re-infer them like GPUCompiler 1
 # did, and store the result for GPUCompiler to compile.
-@static if GPUCOMPILER_2 && VERSION >= v"1.12.0-DEV.1434"
+@static if VERSION >= v"1.12.0-DEV.1434"
     function GPUCompiler.drive_inference!(interp::ReactantInterp, mi::Core.MethodInstance)
         ci = Core.Compiler.typeinf_ext(interp, mi, Core.Compiler.SOURCE_MODE_NOT_REQUIRED)
         ci === nothing && return nothing
@@ -94,9 +90,8 @@ end
 # own operations, are left to dynamic dispatch, which runs them natively. GPUCompiler 2
 # collects the code to compile with CompilerCaching, which turns such calls into direct ones
 # to code it infers with the job's interpreter, i.e., Reactant's, which then rewrites them to
-# be traced. Keep them as they are, like GPUCompiler 1 does.
-@static if GPUCOMPILER_2 &&
-    isdefined(GPUCompiler.CompilerCaching, :resolve_invoke_targets)
+# be traced. Keep them as they are.
+@static if isdefined(GPUCompiler.CompilerCaching, :resolve_invoke_targets)
     function GPUCompiler.CompilerCaching.resolve_invoke_targets(
         ::ReactantInterp, src::Core.CodeInfo
     )
@@ -872,24 +867,17 @@ end
 # Generate the LLVM IR for a native job. Also returns the address of the Julia value that each
 # global annotated with `julia.constgv` refers to, which the entry wrapper that
 # `call_llvm_generator` generates loads from an array that is passed in at run time.
-@static if GPUCOMPILER_2
-    function emit_native_llvm(@nospecialize(job))
-        # GPUCompiler 2 describes the references to Julia values with relocation records.
-        # Keep them symbolic, so that no addresses get baked into the IR.
-        llvm_module, meta = GPUCompiler.emit_llvm(job; resolve_relocations=false)
-        gmap = Dict{String,Ptr{Cvoid}}()
-        for (rec, word) in GPUCompiler.resolved_relocations(meta.relocations)
-            if rec.kind === GPUCompiler.SlotSite
-                gmap[rec.name] = reinterpret(Ptr{Cvoid}, word)
-            end
+function emit_native_llvm(@nospecialize(job))
+    # GPUCompiler describes the references to Julia values with relocation records. Keep
+    # them symbolic, so that no addresses get baked into the IR.
+    llvm_module, meta = GPUCompiler.emit_llvm(job; resolve_relocations=false)
+    gmap = Dict{String,Ptr{Cvoid}}()
+    for (rec, word) in GPUCompiler.resolved_relocations(meta.relocations)
+        if rec.kind === GPUCompiler.SlotSite
+            gmap[rec.name] = reinterpret(Ptr{Cvoid}, word)
         end
-        return llvm_module, meta, gmap
     end
-else
-    function emit_native_llvm(@nospecialize(job))
-        llvm_module, meta = GPUCompiler.emit_llvm(job)
-        return llvm_module, meta, copy(meta.gv_to_value)
-    end
+    return llvm_module, meta, gmap
 end
 
 function call_llvm_generator(
