@@ -379,30 +379,6 @@ function initialize_ptrs()
                 name, Libdl.dlsym(Reactant_jll.libReactantExtra_handle, name)
             )
         end
-        # Kernels jitted by lower-jit register their fat binaries and launch through the
-        # CUDA runtime. libReactantExtra (and with it libcudart) is not loaded globally,
-        # so the JIT can't find these symbols by itself. Looking them up through the
-        # libReactantExtra handle gives the libcudart instance XLA uses. They are hidden
-        # when cudart is linked statically, in which case Enzyme-JAX maps them.
-        for name in (
-            "__cudaRegisterFatBinary",
-            "__cudaRegisterFatBinaryEnd",
-            "__cudaUnregisterFatBinary",
-            "__cudaRegisterFunction",
-            "__cudaRegisterVar",
-            "cudaLaunchKernel",
-            "cudaMalloc",
-            "cudaFree",
-            "cudaMemcpy",
-            "cudaMemcpy2D",
-            "cudaMemset",
-            "cudaOccupancyMaxActiveBlocksPerMultiprocessorWithFlags",
-            "cudaDeviceSynchronize",
-            "cudaGetLastError",
-        )
-            ptr = Libdl.dlsym(Reactant_jll.libReactantExtra_handle, name; throw_error=false)
-            ptr === nothing || MLIR.API.EnzymeJaXMapSymbol(name, ptr)
-        end
     end
     # LLVM lowers float -> bfloat truncation to a compiler-rt libcall on targets without
     # native bf16 conversions.
