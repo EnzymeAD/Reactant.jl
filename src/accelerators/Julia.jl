@@ -221,7 +221,7 @@ end
 function device_description_id(
     args::Ptr{CAPI.PJRT_DeviceDescription_Id_Args}
 )::Ptr{CAPI.PJRT_Error}
-    id = unsafe_load(args.device_description.id)
+    id = unsafe_load(unsafe_convert(Ptr{Device}, args.device_description).id)
     unsafe_store!(args.id, id)
     return ok()
 end
@@ -229,8 +229,8 @@ end
 function device_description_process_index(
     args::Ptr{CAPI.PJRT_DeviceDescription_ProcessIndex_Args}
 )::Ptr{CAPI.PJRT_Error}
-    id = unsafe_load(args.device_description.id)
-    unsafe_store!(args.id, id)
+    pid = unsafe_load(unsafe_convert(Ptr{Device}, args.device_description).pid)
+    unsafe_store!(args.process_index, pid)
     return ok()
 end
 
@@ -254,16 +254,16 @@ end
 function device_description_debug_string(
     args::Ptr{CAPI.PJRT_DeviceDescription_DebugString_Args}
 )::Ptr{CAPI.PJRT_Error}
-    unsafe_store!(args.debug_string, args.device_description.debug_string)
-    unsafe_store!(args.debug_string_size, strlen(args.device_description.debug_string))
+    unsafe_store!(args.debug_string, unsafe_convert(Ptr{Device}, args.device_description).debug_string)
+    unsafe_store!(args.debug_string_size, strlen(unsafe_convert(Ptr{Device}, args.device_description).debug_string))
     return ok()
 end
 
 function device_description_to_string(
     args::Ptr{CAPI.PJRT_DeviceDescription_ToString_Args}
 )::Ptr{CAPI.PJRT_Error}
-    unsafe_store!(args.to_string, args.device_description.to_string)
-    unsafe_store!(args.to_string_size, strlen(args.device_description.to_string))
+    unsafe_store!(args.to_string, unsafe_convert(Ptr{Device}, args.device_description).to_string)
+    unsafe_store!(args.to_string_size, strlen(unsafe_convert(Ptr{Device}, args.device_description).to_string))
     return ok()
 end
 
