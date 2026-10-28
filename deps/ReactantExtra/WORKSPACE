@@ -311,9 +311,22 @@ load(
 )
 load("@xla//third_party/cccl:workspace.bzl", "CCCL_3_2_0_DIST_DICT", "CCCL_GITHUB_VERSIONS_TO_BUILD_TEMPLATES")
 
+# Link the shared cudart even when the other CUDA libraries are linked statically:
+# kernels jitted by lower-jit register their fat binaries with the CUDA runtime,
+# and with the static cudart only the first jitted kernel of a process launches.
+CUDA_CUDART_SHARED_BUILD_TEMPLATES = {
+    "cuda_cudart": REDIST_VERSIONS_TO_BUILD_TEMPLATES["cuda_cudart"] | {
+        "version_to_template": {
+            "13": "@//:cuda_cudart.BUILD.tpl",
+            "12": "@//:cuda_cudart.BUILD.tpl",
+            "11": "@//:cuda_cudart.BUILD.tpl",
+        },
+    },
+}
+
 cuda_redist_init_repositories(
     cuda_redistributions = CUDA_REDISTRIBUTIONS | CCCL_3_2_0_DIST_DICT,
-    redist_versions_to_build_templates = REDIST_VERSIONS_TO_BUILD_TEMPLATES | CCCL_GITHUB_VERSIONS_TO_BUILD_TEMPLATES,
+    redist_versions_to_build_templates = REDIST_VERSIONS_TO_BUILD_TEMPLATES | CCCL_GITHUB_VERSIONS_TO_BUILD_TEMPLATES | CUDA_CUDART_SHARED_BUILD_TEMPLATES,
 )
 
 cudnn_redist_init_repository(
