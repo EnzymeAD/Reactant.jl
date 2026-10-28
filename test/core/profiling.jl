@@ -54,7 +54,14 @@ end
 
 @testset "Compile timings" begin
     if !Sys.iswindows()
-        fn, timings = Reactant.Profiler.@timed_compile linear(x, W, b)
+        # At the default precision a TPU does this Float32 matmul in bfloat16, and
+        # the result is off by ~1e-3 relative; the test is about the compile
+        # timings, not the accelerator's default precision.
+        fn, timings = Reactant.with_config(;
+            dot_general_precision=Reactant.PrecisionConfig.HIGHEST
+        ) do
+            Reactant.Profiler.@timed_compile linear(x, W, b)
+        end
         @test Array(fn(x, W, b)) ≈ linear(Array(x), Array(W), Array(b))
 
         @test timings isa Reactant.Profiler.CompileTimings
