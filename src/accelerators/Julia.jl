@@ -135,6 +135,18 @@ struct Memory
     vtable::Ptr{CAPI.PJRT_Memory_FunctionTable}
     id::Cint
     kind::Symbol
+    devices::Ptr{Ptr{CAPI.PJRT_Device}}
+    num_devices::Csize_t
+
+    function Memory(id, kind, devices, num_devices)
+        return new(unsafe_convert(Ptr{CAPI.PJRT_Memory_FunctionTable}, vtable_memory), id, kind, devices, num_devices)
+    end
+end
+
+function _memory_destroy(memory::Memory)
+    # only the array is owned by the memory, the devices are owned by the client
+    Libc.free(memory.devices)
+    return nothing
 end
 
 function memory_id(args::Ptr{CAPI.PJRT_Memory_Id_Args})::Ptr{CAPI.PJRT_Error}
@@ -199,6 +211,13 @@ function DeviceDescription()
     return DeviceDescription(id, pid, debug_string, to_string)
 end
 
+# takes the value and not a pointer because `DeviceDescription` is embedded in `Device`, so only the strings are freed
+function _device_description_destroy(description::DeviceDescription)
+    Libc.free(description.debug_string)
+    Libc.free(description.to_string)
+    return nothing
+end
+
 function device_description_id(
     args::Ptr{CAPI.PJRT_DeviceDescription_Id_Args}
 )::Ptr{CAPI.PJRT_Error}
@@ -250,14 +269,19 @@ end
 
 ## Device
 struct Device
-    # embedded so that `PJRT_Device_GetDescription` can return a pointer with the lifetime of the device
     description::DeviceDescription
-    # opaque hardware id (e.g. CUDA device number), -1 if undefined
     local_hardware_id::Cint
-    default_memory::Ptr{Memory}
-    # malloc'd array of `num_memories` pointers, owned by the device
+    # the first memory is the default memory
     memories::Ptr{Ptr{Memory}}
     num_memories::Csize_t
+end
+
+function _device_destroy(device::Device)
+    _device_description_destroy(device.description)
+
+    # only the array is owned by the device, the memories are owned by the client
+    Libc.free(device.memories)
+    return nothing
 end
 
 function device_get_description(
@@ -298,7 +322,8 @@ end
 function device_default_memory(
     args::Ptr{CAPI.PJRT_Device_DefaultMemory_Args}
 )::Ptr{CAPI.PJRT_Error}
-    unsafe_store!(args.memory, unsafe_load(args.device.default_memory))
+    device = unsafe_load(Ptr{Device}(unsafe_load(args.device)))
+    unsafe_store!(args.memory, Ptr{CAPI.PJRT_Memory}(unsafe_load(device.memories)))
     return ok()
 end
 
@@ -430,25 +455,75 @@ end
 
 ## Client
 struct Client
-    devices::Ptr{Device}
+    devices::Ptr{Ptr{Device}}
     num_devices::Cint
-    memories::Ptr{Memory}
+
+    memories::Ptr{Ptr{Memory}}
     num_memories::Cint
 end
 
 function client_create(args::Ptr{CAPI.PJRT_Client_Create_Args})::Ptr{CAPI.PJRT_Error}
-    client = Libc.malloc(sizeof(Client))
+    # single device with a single memory
+    num_devices = 1
+    num_memories = 1
 
-    # not required for this case but still useful to ilustrate if `Client` gets fields
-    unsafe_store!(client, Client())
+    client = Ptr{Client}(Libc.malloc(sizeof(Client)))
+    devices = Ptr{Ptr{Device}}(Libc.malloc(sizeof(Ptr{Device}) * num_devices))
+    memories = Ptr{Ptr{Memory}}(Libc.malloc(sizeof(Ptr{Memory}) * num_memories))
+    device = Ptr{Device}(Libc.malloc(sizeof(Device)))
+    memory = Ptr{Memory}(Libc.malloc(sizeof(Memory)))
+    device_memories = Ptr{Ptr{Memory}}(Libc.malloc(sizeof(Ptr{Memory})))
+    memory_devices = Ptr{Ptr{CAPI.PJRT_Device}}(Libc.malloc(sizeof(Ptr{CAPI.PJRT_Device})))
+    if client == C_NULL ||
+        devices == C_NULL ||
+        memories == C_NULL ||
+        device == C_NULL ||
+        memory == C_NULL ||
+        device_memories == C_NULL ||
+        memory_devices == C_NULL
+        Libc.free(client)
+        Libc.free(devices)
+        Libc.free(memories)
+        Libc.free(device)
+        Libc.free(memory)
+        Libc.free(device_memories)
+        Libc.free(memory_devices)
+        return resource_exhausted()
+    end
 
-    unsafe_store!(args.client, unsafe_convert(Ptr{CAPI.PJRT_Client}, client))
+    unsafe_store!(memory_devices, Ptr{CAPI.PJRT_Device}(device))
+    unsafe_store!(memory, Memory(0, :device, memory_devices, 1))
+
+    unsafe_store!(device_memories, memory)
+    unsafe_store!(device, Device(DeviceDescription(), -1, device_memories, 1))
+
+    unsafe_store!(devices, device)
+    unsafe_store!(memories, memory)
+    unsafe_store!(client, Client(devices, num_devices, memories, num_memories))
+
+    unsafe_store!(args.client, Ptr{CAPI.PJRT_Client}(client))
     return ok()
 end
 
 function client_destroy(args::Ptr{CAPI.PJRT_Client_Destroy_Args})::Ptr{CAPI.PJRT_Error}
-    if args.client != C_NULL
-        Libc.free(args.client)
+    ptr = Ptr{Client}(unsafe_load(args.client))
+    if ptr != C_NULL
+        client = unsafe_load(ptr)
+        for i in 1:(client.num_devices)
+            device = unsafe_load(client.devices, i)
+            _device_destroy(unsafe_load(device))
+            Libc.free(device)
+        end
+        Libc.free(client.devices)
+
+        for i in 1:(client.num_memories)
+            memory = unsafe_load(client.memories, i)
+            _memory_destroy(unsafe_load(memory))
+            Libc.free(memory)
+        end
+        Libc.free(client.memories)
+
+        Libc.free(ptr)
         unsafe_store!(args.client, C_NULL)
     end
     return ok()
@@ -480,15 +555,20 @@ function client_platform_version(
 end
 
 function client_devices(args::Ptr{CAPI.PJRT_Client_Devices_Args})::Ptr{CAPI.PJRT_Error}
-    # TODO
-    return unimplemented()
+    client = unsafe_load(Ptr{Client}(unsafe_load(args.client)))
+    unsafe_store!(args.devices, Ptr{Ptr{CAPI.PJRT_Device}}(client.devices))
+    unsafe_store!(args.num_devices, client.num_devices)
+    return ok()
 end
 
 function client_addressable_devices(
-    args::Ptr{CAPI.PJRT_Client_Addressable_Devices_Args}
+    args::Ptr{CAPI.PJRT_Client_AddressableDevices_Args}
 )::Ptr{CAPI.PJRT_Error}
-    # TODO
-    return unimplemented()
+    # single-process backend: all devices are addressable
+    client = unsafe_load(Ptr{Client}(unsafe_load(args.client)))
+    unsafe_store!(args.addressable_devices, Ptr{Ptr{CAPI.PJRT_Device}}(client.devices))
+    unsafe_store!(args.num_addressable_devices, client.num_devices)
+    return ok()
 end
 
 function client_compile(args::Ptr{CAPI.PJRT_Client_Compile_Args})::Ptr{CAPI.PJRT_Error}
