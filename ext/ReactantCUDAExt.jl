@@ -9,7 +9,7 @@ using Reactant:
     TracedRNumber,
     ReactantPrecompilationException,
     call_with_native
-using Reactant.Compiler: raising, LLVMFunc, llvm_compiler_cache
+using Reactant.Compiler: raising, kernelad, LLVMFunc, llvm_compiler_cache
 using Reactant.Ops: @opcall
 
 using Enzyme
@@ -1349,8 +1349,9 @@ Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
     end
     LLVM.deactivate(ctx)
 
-    # See `_to_kernel_buffer`.
-    raised_buffers = raising()
+    # See `_to_kernel_buffer`. Kernels differentiated by `:kernelad` go through the same
+    # affine conversion, so they need the same buffer types.
+    raised_buffers = raising() || kernelad()
 
     argidx = 1
     for arg in values(seen)
@@ -1809,7 +1810,9 @@ Reactant.@reactant_overlay function CUDA.cufunction(
 
         config = GPUCompiler.CompilerConfig(
             GPUCompiler.PTXCompilerTarget(; cap=llvm_cap, ptx=llvm_ptx, debuginfo),
-            ReactantCUDACompilerParams(params, raising());
+            # Kernels differentiated by `:kernelad` are converted to affine like raised
+            # ones, so compile them the same way (e.g. without vectorization)
+            ReactantCUDACompilerParams(params, raising() || kernelad());
             kernel,
             name,
             always_inline,
