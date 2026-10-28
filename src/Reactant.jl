@@ -400,9 +400,7 @@ function initialize_ptrs()
             "cudaDeviceSynchronize",
             "cudaGetLastError",
         )
-            ptr = Libdl.dlsym(
-                Reactant_jll.libReactantExtra_handle, name; throw_error=false
-            )
+            ptr = Libdl.dlsym(Reactant_jll.libReactantExtra_handle, name; throw_error=false)
             ptr === nothing || MLIR.API.EnzymeJaXMapSymbol(name, ptr)
         end
     end
