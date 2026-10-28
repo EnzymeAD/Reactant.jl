@@ -728,6 +728,10 @@ function Base.copyto!(
     dest_sync = dest_async.buffer
     wait(dest_async)
 
+    # On platforms where the device buffer can't be written in place (TPU through the
+    # PJRT C API), `CopyToBuffer` frees the old buffer and returns a replacement
+    # holding the updated contents through this out-parameter.
+    new_buffer = Ref{Ptr{Cvoid}}(C_NULL)
     GC.@preserve dest_sync client src begin
         MLIR.API.CopyToBuffer(
             client.client,
@@ -735,8 +739,13 @@ function Base.copyto!(
             pointer(src, soffs),
             (doffs - 1) * sizeof(T),
             n * sizeof(T),
-            C_NULL,
+            new_buffer,
         )
+    end
+    if new_buffer[] != C_NULL
+        # The old buffer has already been freed by `CopyToBuffer`; adopt the new one so
+        # the finalizer releases it (and doesn't double free the old one).
+        dest_sync.buffer = new_buffer[]
     end
 
     return dest
