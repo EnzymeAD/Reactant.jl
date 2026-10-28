@@ -61,7 +61,10 @@ end
 
 function unimplemented()
     ptr = unsafe_convert(Ptr{Error}, Libc.malloc(sizeof(Error)))
-    unsafe_store!(ptr, Error(CAPI.PJRT_Error_Code_UNIMPLEMENTED, "this feature is not implemented yet!"))
+    unsafe_store!(
+        ptr,
+        Error(CAPI.PJRT_Error_Code_UNIMPLEMENTED, "this feature is not implemented yet!"),
+    )
     return ptr
 end
 
@@ -79,28 +82,32 @@ end
 
 function error_destroy(args::Ptr{CAPI.PJRT_Error_Destroy_Args})
     args.error == C_NULL && return nothing
-    Libc.free(args.error)
+    return Libc.free(args.error)
 end
 
 function error_message(args::Ptr{CAPI.PJRT_Error_Message_Args})
     args.error == C_NULL && return nothing
     unsafe_store!(args.message, args.error.message)
-    unsafe_store!(args.message_size, strlen(args.error.message))
+    return unsafe_store!(args.message_size, strlen(args.error.message))
 end
 
 function error_getcode(args::Ptr{CAPI.PJRT_Error_GetCode_Args})
-    unsafe_store!(args.code, unsafe_load(args.error))
+    return unsafe_store!(args.code, unsafe_load(args.error))
 end
 
 ## Plugin
-function plugin_initialize(args::Ptr{CAPI.PJRT_Plugin_Initialize_Args})::Ptr{CAPI.PJRT_Error}
+function plugin_initialize(
+    args::Ptr{CAPI.PJRT_Plugin_Initialize_Args}
+)::Ptr{CAPI.PJRT_Error}
     # do nothing
-    ok()
+    return ok()
 end
 
-function plugin_attributes(args::Ptr{CAPI.PJRT_Plugin_Attributes_Args})::Ptr{CAPI.PJRT_Error}
+function plugin_attributes(
+    args::Ptr{CAPI.PJRT_Plugin_Attributes_Args}
+)::Ptr{CAPI.PJRT_Error}
     # TODO return key-value pairs of `xla_version`, `stablehlo_current_version` and `stablehlo_minimum_version`
-    ok()
+    return ok()
 end
 
 ## Memory
@@ -112,7 +119,7 @@ end
 
 function memory_id(args::Ptr{CAPI.PJRT_Memory_Id_Args})::Ptr{CAPI.PJRT_Error}
     unsafe_store!(args.id, args.memory.id)
-    ok()
+    return ok()
 end
 
 function memory_kind(args::Ptr{CAPI.PJRT_Memory_Kind_Args})::Ptr{CAPI.PJRT_Error}
@@ -120,17 +127,19 @@ function memory_kind(args::Ptr{CAPI.PJRT_Memory_Kind_Args})::Ptr{CAPI.PJRT_Error
     cstr = Cstring(unsafe_convert(Ptr{UInt8}, sym))
     unsafe_store!(args.kind, cstr)
     unsafe_store!(args.kind_size, strlen(cstr))
-    ok()
+    return ok()
 end
 
-function memory_debug_string(args::Ptr{CAPI.PJRT_Memory_DebugString_Args})::Ptr{CAPI.PJRT_Error}
+function memory_debug_string(
+    args::Ptr{CAPI.PJRT_Memory_DebugString_Args}
+)::Ptr{CAPI.PJRT_Error}
     memory = unsafe_load(Ptr{Memory}(unsafe_load(args.memory)))
     # TODO move interpolated string to `Memory` field instead of interning
     str = "Memory(id=$(memory.id), kind=$(memory.kind), platform=julia)"
     cstr = Cstring(Base.unsafe_convert(Ptr{UInt8}, Symbol(str)))
     unsafe_store!(args.debug_string, cstr)
     unsafe_store!(args.debug_string_size, strlen(cstr))
-    ok()
+    return ok()
 end
 
 function memory_to_string(args::Ptr{CAPI.PJRT_Memory_ToString_Args})::Ptr{CAPI.PJRT_Error}
@@ -138,18 +147,20 @@ function memory_to_string(args::Ptr{CAPI.PJRT_Memory_ToString_Args})::Ptr{CAPI.P
     cstr = Cstring(Base.unsafe_convert(Ptr{UInt8}, Symbol("Memory managed by Julia")))
     unsafe_store!(args.to_string, cstr)
     unsafe_store!(args.to_string_size, strlen(cstr))
-    ok()
+    return ok()
 end
 
-function memory_addressable_by_devices(args::Ptr{CAPI.PJRT_Memory_AddressableByDevices_Args})::Ptr{CAPI.PJRT_Error}
+function memory_addressable_by_devices(
+    args::Ptr{CAPI.PJRT_Memory_AddressableByDevices_Args}
+)::Ptr{CAPI.PJRT_Error}
     # TODO
-    ok()
+    return ok()
 end
 
 function memory_kind_id(args::Ptr{CAPI.PJRT_Memory_Kind_Args})::Ptr{CAPI.PJRT_Error}
     # arbitrary value
     unsafe_store!(args.kind_id, Cint(1))
-    ok()
+    return ok()
 end
 
 ## DeviceDescription
@@ -168,43 +179,54 @@ function DeviceDescription()
     return DeviceDescription(id, pid, debug_string, to_string)
 end
 
-function device_description_id(args::Ptr{CAPI.PJRT_DeviceDescription_Id_Args})::Ptr{CAPI.PJRT_Error}
+function device_description_id(
+    args::Ptr{CAPI.PJRT_DeviceDescription_Id_Args}
+)::Ptr{CAPI.PJRT_Error}
     id = unsafe_load(args.device_description.id)
     unsafe_store!(args.id, id)
     return ok()
 end
 
-function device_description_process_index(args::Ptr{CAPI.PJRT_DeviceDescription_ProcessIndex_Args})::Ptr{CAPI.PJRT_Error}
+function device_description_process_index(
+    args::Ptr{CAPI.PJRT_DeviceDescription_ProcessIndex_Args}
+)::Ptr{CAPI.PJRT_Error}
     id = unsafe_load(args.device_description.id)
     unsafe_store!(args.id, id)
     return ok()
 end
 
-function device_description_attributes(args::Ptr{CAPI.PJRT_DeviceDescription_Attributes_Args})::Ptr{CAPI.PJRT_Error}
+function device_description_attributes(
+    args::Ptr{CAPI.PJRT_DeviceDescription_Attributes_Args}
+)::Ptr{CAPI.PJRT_Error}
     unsafe_store!(args.num_attributes, Cint(0))
     unsafe_store!(args.attributes, C_NULL)
     return ok()
 end
 
-function device_description_kind(args::Ptr{CAPI.PJRT_DeviceDescription_Kind_Args})::Ptr{CAPI.PJRT_Error}
+function device_description_kind(
+    args::Ptr{CAPI.PJRT_DeviceDescription_Kind_Args}
+)::Ptr{CAPI.PJRT_Error}
     cstr = Cstring(unsafe_convert(Ptr{UInt8}, Symbol("julia")))
     unsafe_store!(args.device_kind, cstr)
     unsafe_store!(args.device_kind_size, strlen(cstr))
     return ok()
 end
 
-function device_description_debug_string(args::Ptr{CAPI.PJRT_DeviceDescription_DebugString_Args})::Ptr{CAPI.PJRT_Error}
+function device_description_debug_string(
+    args::Ptr{CAPI.PJRT_DeviceDescription_DebugString_Args}
+)::Ptr{CAPI.PJRT_Error}
     unsafe_store!(args.debug_string, args.device_description.debug_string)
     unsafe_store!(args.debug_string_size, strlen(args.device_description.debug_string))
     return ok()
 end
 
-function device_description_to_string(args::Ptr{CAPI.PJRT_DeviceDescription_ToString_Args})::Ptr{CAPI.PJRT_Error}
+function device_description_to_string(
+    args::Ptr{CAPI.PJRT_DeviceDescription_ToString_Args}
+)::Ptr{CAPI.PJRT_Error}
     unsafe_store!(args.to_string, args.device_description.to_string)
     unsafe_store!(args.to_string_size, strlen(args.device_description.to_string))
     return ok()
 end
-
 
 ## Device
 struct Device
@@ -218,37 +240,51 @@ struct Device
     num_memories::Csize_t
 end
 
-function device_get_description(args::Ptr{CAPI.PJRT_Device_GetDescription_Args})::Ptr{CAPI.PJRT_Error}
+function device_get_description(
+    args::Ptr{CAPI.PJRT_Device_GetDescription_Args}
+)::Ptr{CAPI.PJRT_Error}
     device = Ptr{Device}(unsafe_load(args.device))
-    unsafe_store!(args.device_description, Ptr{CAPI.PJRT_DeviceDescription}(device.description))
+    unsafe_store!(
+        args.device_description, Ptr{CAPI.PJRT_DeviceDescription}(device.description)
+    )
     return ok()
 end
 
-function device_is_addressable(args::Ptr{CAPI.PJRT_Device_IsAddressable_Args})::Ptr{CAPI.PJRT_Error}
+function device_is_addressable(
+    args::Ptr{CAPI.PJRT_Device_IsAddressable_Args}
+)::Ptr{CAPI.PJRT_Error}
     # single-process backend: the client can issue commands to all of its devices
     unsafe_store!(args.is_addressable, true)
     return ok()
 end
 
-function device_local_hardware_id(args::Ptr{CAPI.PJRT_Device_LocalHardwareId_Args})::Ptr{CAPI.PJRT_Error}
+function device_local_hardware_id(
+    args::Ptr{CAPI.PJRT_Device_LocalHardwareId_Args}
+)::Ptr{CAPI.PJRT_Error}
     device = Ptr{Device}(unsafe_load(args.device))
     unsafe_store!(args.local_hardware_id, unsafe_load(device.local_hardware_id))
     return ok()
 end
 
-function device_addressable_memories(args::Ptr{CAPI.PJRT_Device_AddressableMemories_Args})::Ptr{CAPI.PJRT_Error}
+function device_addressable_memories(
+    args::Ptr{CAPI.PJRT_Device_AddressableMemories_Args}
+)::Ptr{CAPI.PJRT_Error}
     device = Ptr{Device}(unsafe_load(args.device))
     unsafe_store!(args.memories, Ptr{Ptr{CAPI.PJRT_Memory}}(unsafe_load(device.memories)))
     unsafe_store!(args.num_memories, unsafe_load(device.num_memories))
     return ok()
 end
 
-function device_default_memory(args::Ptr{CAPI.PJRT_Device_DefaultMemory_Args})::Ptr{CAPI.PJRT_Error}
+function device_default_memory(
+    args::Ptr{CAPI.PJRT_Device_DefaultMemory_Args}
+)::Ptr{CAPI.PJRT_Error}
     unsafe_store!(args.memory, unsafe_load(args.device.default_memory))
     return ok()
 end
 
-function device_memory_stats(args::Ptr{CAPI.PJRT_Device_MemoryStats_Args})::Ptr{CAPI.PJRT_Error}
+function device_memory_stats(
+    args::Ptr{CAPI.PJRT_Device_MemoryStats_Args}
+)::Ptr{CAPI.PJRT_Error}
     # allocations are not tracked yet; `pjrt_c_api.h` allows returning `UNIMPLEMENTED` here
     return unimplemented()
 end
@@ -278,13 +314,17 @@ function buffer_destroy(args::Ptr{CAPI.PJRT_Buffer_Destroy_Args})::Ptr{CAPI.PJRT
     return ok()
 end
 
-function buffer_element_type(args::Ptr{CAPI.PJRT_Buffer_ElementType_Args})::Ptr{CAPI.PJRT_Error}
+function buffer_element_type(
+    args::Ptr{CAPI.PJRT_Buffer_ElementType_Args}
+)::Ptr{CAPI.PJRT_Error}
     buffer = unsafe_load(Ptr{Buffer}(unsafe_load(args.buffer)))
     unsafe_store!(args.type, buffer.type)
     return ok()
 end
 
-function buffer_dimensions(args::Ptr{CAPI.PJRT_Buffer_Dimensions_Args})::Ptr{CAPI.PJRT_Error}
+function buffer_dimensions(
+    args::Ptr{CAPI.PJRT_Buffer_Dimensions_Args}
+)::Ptr{CAPI.PJRT_Error}
     buffer = unsafe_load(Ptr{Buffer}(unsafe_load(args.buffer)))
     unsafe_store!(args.dims, buffer.dims)
     unsafe_store!(args.num_dims, buffer.num_dims)
@@ -293,12 +333,20 @@ end
 
 # deprecated, but required for backward compatibility
 # use layouts extension instead
-function buffer_get_memory_layout(args::Ptr{CAPI.PJRT_Buffer_GetMemoryLayout_Args})::Ptr{CAPI.PJRT_Error}
+function buffer_get_memory_layout(
+    args::Ptr{CAPI.PJRT_Buffer_GetMemoryLayout_Args}
+)::Ptr{CAPI.PJRT_Error}
     buffer = unsafe_load(Ptr{Buffer}(unsafe_load(args.buffer)))
 
     # dense layout without tiling; `minor_to_major` has the lifetime of `buffer` as required by PJRT
     tiled = CAPI.PJRT_Buffer_MemoryLayout_Tiled(
-        csizeof(CAPI.PJRT_Buffer_MemoryLayout_Tiled), C_NULL, buffer.minor_to_major, buffer.num_dims, C_NULL, C_NULL, 0
+        csizeof(CAPI.PJRT_Buffer_MemoryLayout_Tiled),
+        C_NULL,
+        buffer.minor_to_major,
+        buffer.num_dims,
+        C_NULL,
+        C_NULL,
+        0,
     )
     unsafe_store!(args.layout.struct_size, csizeof(CAPI.PJRT_Buffer_MemoryLayout))
     unsafe_store!(args.layout.extension_start, C_NULL)
@@ -307,13 +355,17 @@ function buffer_get_memory_layout(args::Ptr{CAPI.PJRT_Buffer_GetMemoryLayout_Arg
     return ok()
 end
 
-function buffer_on_device_size_in_bytes(args::Ptr{CAPI.PJRT_Buffer_OnDeviceSizeInBytes_Args})::Ptr{CAPI.PJRT_Error}
+function buffer_on_device_size_in_bytes(
+    args::Ptr{CAPI.PJRT_Buffer_OnDeviceSizeInBytes_Args}
+)::Ptr{CAPI.PJRT_Error}
     buffer = unsafe_load(Ptr{Buffer}(unsafe_load(args.buffer)))
     unsafe_store!(args.on_device_size_in_bytes, buffer.size_in_bytes)
     return ok()
 end
 
-function buffer_copy_to_device(args::Ptr{CAPI.PJRT_Buffer_CopyToDevice_Args})::Ptr{CAPI.PJRT_Error}
+function buffer_copy_to_device(
+    args::Ptr{CAPI.PJRT_Buffer_CopyToDevice_Args}
+)::Ptr{CAPI.PJRT_Error}
     src = unsafe_load(Ptr{Buffer}(unsafe_load(args.buffer)))
     dst_device = Ptr{Device}(unsafe_load(args.dst_device))
 
@@ -332,7 +384,18 @@ function buffer_copy_to_device(args::Ptr{CAPI.PJRT_Buffer_CopyToDevice_Args})::P
         return resource_exhausted()
     end
 
-    unsafe_store!(dst, Buffer(data, src.size_in_bytes, src.type, dims, minor_to_major, src.num_dims, dst_device))
+    unsafe_store!(
+        dst,
+        Buffer(
+            data,
+            src.size_in_bytes,
+            src.type,
+            dims,
+            minor_to_major,
+            src.num_dims,
+            dst_device,
+        ),
+    )
 
     # caller is responsible for freeing `dst_buffer` with `PJRT_Buffer_Destroy`
     unsafe_store!(args.dst_buffer, Ptr{CAPI.PJRT_Buffer}(dst))
@@ -371,19 +434,25 @@ function client_destroy(args::Ptr{CAPI.PJRT_Client_Destroy_Args})::Ptr{CAPI.PJRT
     return ok()
 end
 
-function client_platform_name(args::Ptr{CAPI.PJRT_Client_PlatformName_Args})::Ptr{CAPI.PJRT_Error}
+function client_platform_name(
+    args::Ptr{CAPI.PJRT_Client_PlatformName_Args}
+)::Ptr{CAPI.PJRT_Error}
     cstr = Cstring(unsafe_convert(Ptr{UInt8}, :julia))
     unsafe_store!(args.platform_name, cstr)
     unsafe_store!(args.platform_name_size, strlen(cstr))
     return ok()
 end
 
-function client_process_index(args::Ptr{CAPI.PJRT_Client_ProcessIndex_Args})::Ptr{CAPI.PJRT_Error}
+function client_process_index(
+    args::Ptr{CAPI.PJRT_Client_ProcessIndex_Args}
+)::Ptr{CAPI.PJRT_Error}
     unsafe_store!(args.process_index, Cint(0))
-    ok()
+    return ok()
 end
 
-function client_platform_version(args::Ptr{CAPI.PJRT_Client_PlatformVersion_Args})::Ptr{CAPI.PJRT_Error}
+function client_platform_version(
+    args::Ptr{CAPI.PJRT_Client_PlatformVersion_Args}
+)::Ptr{CAPI.PJRT_Error}
     cstr = Cstring(unsafe_convert(Ptr{UInt8}, Symbol(VERSION)))
     unsafe_store!(args.platform_version, cstr)
     unsafe_store!(args.platform_version_size, strlen(cstr))
@@ -395,7 +464,9 @@ function client_devices(args::Ptr{CAPI.PJRT_Client_Devices_Args})::Ptr{CAPI.PJRT
     return unimplemented()
 end
 
-function client_addressable_devices(args::Ptr{CAPI.PJRT_Client_Addressable_Devices_Args})::Ptr{CAPI.PJRT_Error}
+function client_addressable_devices(
+    args::Ptr{CAPI.PJRT_Client_Addressable_Devices_Args}
+)::Ptr{CAPI.PJRT_Error}
     # TODO
     return unimplemented()
 end
@@ -404,14 +475,20 @@ function client_compile(args::Ptr{CAPI.PJRT_Client_Compile_Args})::Ptr{CAPI.PJRT
     # TODO
 end
 
-function client_buffer_from_host_buffer(args::Ptr{CAPI.PJRT_Client_BufferFromHostBuffer_Args})::Ptr{CAPI.PJRT_Error}
+function client_buffer_from_host_buffer(
+    args::Ptr{CAPI.PJRT_Client_BufferFromHostBuffer_Args}
+)::Ptr{CAPI.PJRT_Error}
     # TODO
 end
 
 for T in [Error, Device, DeviceDescription, Memory, Buffer, Client]
-    exprs = map(Iterators.zip(fieldnames(T), fieldtypes(DeviceDescription))) do (fname, ftype)
-        :(f === $(QuoteNode(fname)) && return Ptr{$ftype}(x + $(fieldoffset($T, fname))))
-    end
+    exprs =
+        map(Iterators.zip(fieldnames(T), fieldtypes(DeviceDescription))) do (fname, ftype)
+            :(
+                f === $(QuoteNode(fname)) &&
+                return Ptr{$ftype}(x + $(fieldoffset($T, fname)))
+            )
+        end
     @eval begin
         function Base.getproperty(x::Ptr{$T}, f::Symbol)
             $(exprs...)
@@ -419,7 +496,7 @@ for T in [Error, Device, DeviceDescription, Memory, Buffer, Client]
         end
 
         function Base.propertynames(x::Ptr{$T}; private=false)
-            ($(propertynames($T)...), Base.propertynames(Ptr{Cvoid}; private)...)
+            return ($(propertynames($T)...), Base.propertynames(Ptr{Cvoid}; private)...)
         end
     end
 end
