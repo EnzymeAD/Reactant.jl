@@ -51,12 +51,7 @@ sed -i.bak0 "s,//:patches,@enzyme_ad//:patches,g" third_party/*/workspace.bzl
     urls = ["https://github.com/EnzymeAD/Enzyme-JAX/archive/{commit}.tar.gz".format(commit = ENZYMEXLA_COMMIT)],
 )
 
-NEW_XLA_PATCHES = [
-    # Link the shared cudart: kernels jitted by lower-jit register their fat binaries
-    # with the CUDA runtime, and with the static cudart only the first jitted kernel
-    # of a process launches.
-    "sed -i.bak0 's,\"@cuda_cudart//:cudart\",\"@cuda_cudart//:cudart_shared_library\",' xla/tsl/cuda/BUILD.bazel",
-]
+NEW_XLA_PATCHES = []
 
 LLVM_TARGETS = [
     "AMDGPU",
