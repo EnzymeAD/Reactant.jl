@@ -172,6 +172,18 @@ const __skip_rewrite_func_set = Set([
     # Avoid the 1.10 stackoverflow
     typeof(Base.typed_hvcat),
     typeof(Base.hvcat),
+    # Reflection on a UnionAll unwraps it and calls itself on the body, a type
+    # with free typevars. Julia's method cache does not tell `Type{Options{A}}`
+    # (`A` free) apart from `Type{Options}`, so the generated entry for the
+    # UnionAll is reused for the body and the call recurses forever; and an
+    # entry generated for the body itself is never compilable (#3518).
+    typeof(Base.fieldnames),
+    typeof(Base.fieldname),
+    typeof(Base.fieldindex),
+    typeof(Base.nameof),
+    typeof(Base.parentmodule),
+    typeof(Base.typename),
+    typeof(Base.has_bottom_parameter),
     typeof(Core.Compiler.concrete_eval_eligible),
     typeof(Core.Compiler.typeinf_type),
     typeof(Core.Compiler.typeinf_ext),
