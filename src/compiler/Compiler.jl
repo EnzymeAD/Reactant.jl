@@ -332,8 +332,9 @@ Base.@nospecializeinfer function compile_mlir!(
 
         device_properties = XLA.device_properties(XLA.default_device(client))
         cubinChip = "sm_$(device_properties.major)$(device_properties.minor)"
+        cuda_get_kernel = div(MLIR.API.ReactantHermeticCudaGetVersion(), 1000) == 12
 
-        jit = "convert-polygeist-to-llvm{backend=cuda preserve-xla-funcs=true},strip-gpu-info,nvvm-attach-target{chip=$(cubinChip) features=$(cubinFeatures()) O=$(cuOptLevel[])},enzymexla-gpu-module-to-binary{format=$(cubinFormat[]) toolkit=$toolkit},lower-jit,symbol-dce"
+        jit = "convert-polygeist-to-llvm{backend=cuda preserve-xla-funcs=true cuda-get-kernel=$(cuda_get_kernel)},strip-gpu-info,nvvm-attach-target{chip=$(cubinChip) features=$(cubinFeatures()) O=$(cuOptLevel[])},enzymexla-gpu-module-to-binary{format=$(cubinFormat[]) toolkit=$toolkit},lower-jit,symbol-dce"
     end
 
     recognize_comms = true
