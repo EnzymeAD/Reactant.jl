@@ -534,6 +534,14 @@ function __init__()
         #= for_each_payload =# c_unimplemented,
     )
 
+    vtable_memory[] = CAPI.PJRT_Memory_FunctionTable(
+        #= struct_size =# csizeof(CAPI.PJRT_Memory_FunctionTable),
+        #= extension_start =# C_NULL,
+        #= instance_struct_size =# sizeof(Memory),
+        #= get_user_data =# c_unimplemented,
+        #= set_user_data =# c_unimplemented,
+    )
+
     vtable_api[] = CAPI.PJRT_Api(
         #= struct_size =# csizeof(CAPI.PJRT_Api),
         #= extension_start =# C_NULL,
