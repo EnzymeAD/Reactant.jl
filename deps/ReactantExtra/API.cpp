@@ -4244,12 +4244,18 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
       // The main list may introduce enzymexla ops (rotate, wrap, extend)
       // that XLA does not take; the Julia compiler lowers them before export
       // with this second list.
+      // A round converges within 10 greedy iterations on MFEM's kernels;
+      // without a cap, two patterns undoing each other (Enzyme-JAX #3680 on
+      // ceed BP1/2) spin the compile forever, so the cap makes that a
+      // failure instead.
       std::string pipeline =
           "canonicalize,cse,canonicalize,enzyme-hlo-generate-td{patterns=" +
           patterns +
-          "},transform-interpreter,enzyme-hlo-remove-transform,canonicalize,"
+          " max-iterations=100},transform-interpreter,enzyme-hlo-remove-"
+          "transform,canonicalize,"
           "cse,enzyme-hlo-generate-td{patterns=lower_rotate;lower_wrap;"
-          "lower_extend;lower_updatewithoutcorners;lower_multislice},"
+          "lower_extend;lower_updatewithoutcorners;lower_multislice "
+          "max-iterations=100},"
           "transform-interpreter,enzyme-hlo-remove-transform,canonicalize,cse";
       if (failed(mlir::parsePassPipeline(pipeline, pm))) {
         llvm::errs() << " failed to parse the exec optimization pipeline\n";
@@ -4266,7 +4272,23 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
       module->print(llvm::errs());
       llvm::errs() << "EXEC_DUMP end\n";
     }
+    // A round that does not converge within its iteration cap is a pattern
+    // cycle; the interpreter only says "greedy pattern application failed",
+    // so name the cause (the diagnostic is left to print as usual).
+    bool roundCapHit = false;
+    mlir::ScopedDiagnosticHandler roundCapHandler(
+        module->getContext(), [&roundCapHit](mlir::Diagnostic &diag) {
+          if (diag.str().find("greedy pattern application failed") !=
+              std::string::npos)
+            roundCapHit = true;
+          return mlir::failure();
+        });
     if (!mlir::succeeded(pm.run(*module))) {
+      if (roundCapHit)
+        llvm::errs() << " a pattern round of the exec pipeline hit its cap of "
+                        "100 greedy iterations: two patterns undo each other "
+                        "on this module (REACTANT_EXEC_DUMP=1 prints it "
+                        "before the pipeline)\n";
       llvm::errs() << " failed to run passes\n";
       llvm::errs() << " modstr:\n" << modstr << "\n";
       pm.dump();
