@@ -17407,6 +17407,18 @@ function ReactantCudaDeviceGetProperties(jlprops, device_id)
     )::Cvoid
 end
 
+function ReactantRocmDeviceGetProperties(jlprops, device_id)
+    @ccall Reactant_jll.libReactantExtra.ReactantRocmDeviceGetProperties(
+        jlprops::Ptr{DeviceProperties}, device_id::Int32
+    )::Cvoid
+end
+
+function ReactantRocmDeviceGetGcnArchName(buffer, size, device_id)
+    @ccall Reactant_jll.libReactantExtra.ReactantRocmDeviceGetGcnArchName(
+        buffer::Ptr{Cchar}, size::Int32, device_id::Int32
+    )::Cvoid
+end
+
 function ReactantCudaGetRegsSpillsMaxThreadsFromBinary(
     binary, fnname, regs, spills, maxThreads
 )
