@@ -771,7 +771,9 @@ function traced_mi(mi)
         kwargs = Any[(keys[i], fieldtype(kwt, i)) for i in eachindex(keys)]
     end
 
-    Base.sprint() do io
+    # `:compact => false` skips `Base.make_typealias`, which searches every loaded module
+    # for an alias of each argument type and dominates tracing time for large types.
+    Base.sprint(; context=:compact => false) do io
         Base.show_signature_function(io, ft)
         Base.show_tuple_as_call(
             io,
