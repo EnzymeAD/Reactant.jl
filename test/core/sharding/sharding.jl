@@ -567,6 +567,99 @@ end
     end
 end
 
+gather_sum(G, idx) = sum(Reactant.Ops.gather_getindex(G, idx))
+gather_sum_ref(G, idx) = sum(G[CartesianIndex.(idx[:, 1], idx[:, 2])])
+
+# https://github.com/EnzymeAD/Reactant.jl/issues/3396
+# When the gather operand is sharded along a dimension that the indices select from and
+# the indices are replicated, XLA's SPMD partitioner
+# (`PartitionGatherTrivialSlicedOperandDimensions`) gathers + masks locally and then
+# all-reduces the *full* gather output, even if the only consumer is a reduction. Sharding
+# the indices along the batch dimension instead makes the partitioner gather locally, so
+# the reduction happens locally and only a scalar is all-reduced.
+@testset "Gather from sharded operand: #3396" begin
+    if length(addressable_devices) ≥ 4
+        mesh = Sharding.Mesh(reshape(collect(Int64, 0:3), 4), (:t,))
+
+        G = Reactant.TestUtils.construct_test_array(Float64, 16, 8)
+        idx = hcat(mod1.(7 .* (1:1000), 16), mod1.(3 .* (1:1000), 8))
+        ref = gather_sum_ref(G, idx)
+
+        G_ra = Reactant.to_rarray(G; sharding=Sharding.DimsSharding(mesh, (2,), (:t,)))
+        idx_rep = Reactant.to_rarray(idx; sharding=Sharding.Replicated(mesh))
+        idx_batch = Reactant.to_rarray(
+            idx; sharding=Sharding.DimsSharding(mesh, (1,), (:t,))
+        )
+
+        full_all_reduce = r"f64\[1,1000\]\{[0-9,]*\} all-reduce\("
+        scalar_all_reduce = r"f64\[\] all-reduce\("
+
+        # Replicated indices: the gather output is all-reduced before the reduce.
+        hlo = repr(@code_xla gather_sum(G_ra, idx_rep))
+        @test Float64(@jit(gather_sum(G_ra, idx_rep))) ≈ ref
+        if !RunningOnTPU
+            @test occursin(scalar_all_reduce, hlo) broken = true
+            @test !occursin(full_all_reduce, hlo) broken = true
+        end
+
+        # Batch-sharded indices: local gather + local reduce + scalar all-reduce.
+        hlo = repr(@code_xla gather_sum(G_ra, idx_batch))
+        @test Float64(@jit(gather_sum(G_ra, idx_batch))) ≈ ref
+        if !RunningOnTPU
+            @test occursin(scalar_all_reduce, hlo)
+            @test !occursin(full_all_reduce, hlo)
+        end
+    else
+        @warn "Not enough addressable devices to run sharding tests"
+    end
+end
+
+# A sharding constraint on the gather output (or on the indices) is an alternative way to
+# steer the partitioner. It must be respected regardless of how the shardings reach XLA:
+# as the constraint op itself (`:none`), as exported MHLO shardings (`:to_mhlo_shardings`)
+# or after Reactant's own propagation (`:post_sdy_propagation`). In the last case the
+# constraint used to be lost: propagation turned it into an identity `sdy.reshard` which
+# was dropped, and XLA's Shardy round-trip import discards all per-op shardings before
+# re-running propagation.
+@testset "Sharding constraint on gather output" begin
+    if length(addressable_devices) ≥ 4
+        mesh = Sharding.Mesh(reshape(collect(Int64, 0:3), 4), (:t,))
+
+        G = Reactant.TestUtils.construct_test_array(Float64, 16, 8)
+        idx = hcat(mod1.(7 .* (1:1000), 16), mod1.(3 .* (1:1000), 8))
+        ref = gather_sum_ref(G, idx)
+
+        G_ra = Reactant.to_rarray(G; sharding=Sharding.DimsSharding(mesh, (2,), (:t,)))
+        idx_rep = Reactant.to_rarray(idx; sharding=Sharding.Replicated(mesh))
+
+        constraint = Sharding.DimsSharding(mesh, (1,), (:t,))
+        function gather_sum_constrained(G, idx)
+            y = Reactant.Ops.gather_getindex(G, idx)
+            return sum(Reactant.Ops.sharding_constraint(y, constraint))
+        end
+
+        full_all_reduce = r"f64\[1,1000\]\{[0-9,]*\} all-reduce\("
+        scalar_all_reduce = r"f64\[\] all-reduce\("
+
+        for shardy_passes in (:none, :to_mhlo_shardings, :post_sdy_propagation)
+            hlo = repr(
+                @code_xla shardy_passes = shardy_passes gather_sum_constrained(
+                    G_ra, idx_rep
+                )
+            )
+            @test Float64(
+                @jit(shardy_passes = shardy_passes, gather_sum_constrained(G_ra, idx_rep))
+            ) ≈ ref
+            if !RunningOnTPU
+                @test occursin(scalar_all_reduce, hlo)
+                @test !occursin(full_all_reduce, hlo)
+            end
+        end
+    else
+        @warn "Not enough addressable devices to run sharding tests"
+    end
+end
+
 #=
 # FIXME: This is commented out since it causes a segfault currently
 @testset "InterpolateArray" begin
