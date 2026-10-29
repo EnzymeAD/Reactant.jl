@@ -1206,6 +1206,8 @@ cc_library(
             "-Wl,-exported_symbol,_ProfilerActivityEnd",
             "-Wl,-exported_symbol,_ReactantFuncSetArgAttr",
             "-Wl,-exported_symbol,_ReactantHermeticCudaGetVersion",
+            "-Wl,-exported_symbol,_ReactantRocmDeviceGetProperties",
+            "-Wl,-exported_symbol,_ReactantRocmDeviceGetGcnArchName",
             "-Wl,-exported_symbol,_ReactantCudaDriverGetVersion",
             "-Wl,-exported_symbol,_ReactantCudaSetDevice",
             "-Wl,-exported_symbol,_ReactantLLVMParseCommandLineOptions",
@@ -1465,6 +1467,7 @@ cc_library(
         "@xla//xla/pjrt/plugin/xla_gpu:xla_gpu_pjrt_client",
         "@xla//xla/stream_executor:rocm_platform",
         "@xla//xla/service/gpu:amdgpu_compiler",
+        "@local_config_rocm//rocm:rocm_headers",
         "@xla//xla/backends/profiler/gpu:device_tracer",
     ]) + select({
         # gloo tcp transport only builds on linux

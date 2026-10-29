@@ -1209,6 +1209,73 @@ CudaGetStreamExecutorDeviceDescription(int32_t device_id) {
 
 #endif
 
+#ifdef REACTANT_ROCM
+
+#include "rocm/include/hip/hip_runtime.h"
+
+static bool ReactantRocmGetDeviceProp(hipDeviceProp_t &props,
+                                      int32_t device_id) {
+  hipError_t err = hipGetDeviceProperties(&props, device_id);
+  if (err != hipSuccess) {
+    llvm::errs() << "hipGetDeviceProperties(" << device_id
+                 << ") failed: " << hipGetErrorString(err) << "\n";
+    return false;
+  }
+  return true;
+}
+
+REACTANT_ABI void ReactantRocmDeviceGetProperties(DeviceProperties *jlprops,
+                                                  int32_t device_id) {
+  *jlprops = DeviceProperties{};
+  hipDeviceProp_t props;
+  if (!ReactantRocmGetDeviceProp(props, device_id))
+    return;
+
+  jlprops->totalGlobalMem = props.totalGlobalMem;
+  jlprops->sharedMemPerBlock = props.sharedMemPerBlock;
+  jlprops->regsPerBlock = props.regsPerBlock;
+  jlprops->warpSize = props.warpSize;
+  jlprops->maxThreadsPerBlock = props.maxThreadsPerBlock;
+  jlprops->maxThreadsDim[0] = props.maxThreadsDim[0];
+  jlprops->maxThreadsDim[1] = props.maxThreadsDim[1];
+  jlprops->maxThreadsDim[2] = props.maxThreadsDim[2];
+  jlprops->maxGridSize[0] = props.maxGridSize[0];
+  jlprops->maxGridSize[1] = props.maxGridSize[1];
+  jlprops->maxGridSize[2] = props.maxGridSize[2];
+  jlprops->totalConstMem = props.totalConstMem;
+  jlprops->major = props.major;
+  jlprops->minor = props.minor;
+  jlprops->multiProcessorCount = props.multiProcessorCount;
+  jlprops->canMapHostMemory = props.canMapHostMemory;
+  jlprops->l2CacheSize = props.l2CacheSize;
+  jlprops->maxThreadsPerMultiProcessor = props.maxThreadsPerMultiProcessor;
+}
+
+// The target ID the device runs, e.g. "gfx942:sramecc+:xnack-", in the
+// spelling rocdl-attach-target takes for its `arch` option.
+REACTANT_ABI void ReactantRocmDeviceGetGcnArchName(char *buffer, int32_t size,
+                                                   int32_t device_id) {
+  if (size <= 0)
+    return;
+  buffer[0] = 0;
+  hipDeviceProp_t props;
+  if (!ReactantRocmGetDeviceProp(props, device_id))
+    return;
+  strncpy(buffer, props.gcnArchName, size - 1);
+  buffer[size - 1] = 0;
+}
+#else
+REACTANT_ABI void ReactantRocmDeviceGetProperties(DeviceProperties *jlprops,
+                                                  int32_t device_id) {
+  *jlprops = DeviceProperties{};
+}
+REACTANT_ABI void ReactantRocmDeviceGetGcnArchName(char *buffer, int32_t size,
+                                                   int32_t device_id) {
+  if (size > 0)
+    buffer[0] = 0;
+}
+#endif
+
 REACTANT_ABI const char *
 deviceDescriptionToString(stream_executor::DeviceDescription *device) {
   return cstr_from_string(device->ToString());

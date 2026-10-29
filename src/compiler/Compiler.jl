@@ -323,6 +323,18 @@ Base.@nospecializeinfer function compile_mlir!(
         else
             jit = "lower-affine,$(OpenMP[] ? "convert-scf-to-openmp" : "convert-scf-to-cf"),convert-polygeist-to-llvm{backend=cpu preserve-xla-funcs=true},lower-jit,symbol-dce"
         end
+    elseif backend == "rocm"
+        kern = if is_raising
+            "lower-kernel{backend=cpu},symbol-dce,canonicalize"
+        else
+            "lower-kernel,canonicalize"
+        end
+
+        arch = XLA.rocm_gcn_arch_name(XLA.default_device(client))
+        isempty(arch) && error("Could not determine the gfx target of the ROCm device")
+        toolkit_option = isempty(XLA.ROCM_PATH[]) ? "" : " toolkit=$(XLA.ROCM_PATH[])"
+
+        jit = "convert-polygeist-to-llvm{backend=rocm preserve-xla-funcs=true},strip-gpu-info,rocdl-attach-target{arch=$(arch) O=$(cuOptLevel[])},enzymexla-gpu-module-to-binary{format=fatbin$(toolkit_option)},lower-jit,symbol-dce"
     else
         kern = if is_raising
             "lower-kernel{backend=cpu},symbol-dce,canonicalize"

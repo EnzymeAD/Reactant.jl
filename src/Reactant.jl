@@ -380,6 +380,29 @@ function initialize_ptrs()
             )
         end
     end
+    if Reactant_jll.host_platform.tags["gpu"] == "rocm"
+        # convert-polygeist-to-llvm{backend=rocm} registers and launches kernels
+        # through the HIP runtime, which libReactantExtra links dynamically.
+        for name in (
+            "__hipRegisterFatBinary",
+            "__hipUnregisterFatBinary",
+            "__hipRegisterFunction",
+            "__hipRegisterVar",
+            "hipLaunchKernel",
+            "hipMalloc",
+            "hipFree",
+            "hipMemcpy",
+            "hipMemcpy2D",
+            "hipMemset",
+            "hipOccupancyMaxActiveBlocksPerMultiprocessorWithFlags",
+            "hipDeviceSynchronize",
+            "hipGetLastError",
+        )
+            MLIR.API.EnzymeJaXMapSymbol(
+                name, Libdl.dlsym(Reactant_jll.libReactantExtra_handle, name)
+            )
+        end
+    end
     # LLVM lowers float -> bfloat truncation to a compiler-rt libcall on targets without
     # native bf16 conversions.
     @static if Sys.iswindows() && VERSION >= v"1.11"
