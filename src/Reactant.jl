@@ -335,8 +335,8 @@ function register_enzymexla_dialects(ctx::MLIR.IR.Context)
 end
 
 ReactantContext(; kwargs...) = ReactantContext(registry[]; kwargs...)
-function ReactantContext(args...; kwargs...)
-    ctx = MLIR.IR.Context(args...; kwargs...)
+function ReactantContext(args...; threading::Bool=false, kwargs...)
+    ctx = MLIR.IR.Context(args...; threading, kwargs...)
     register_enzymexla_dialects(ctx)
     return ctx
 end

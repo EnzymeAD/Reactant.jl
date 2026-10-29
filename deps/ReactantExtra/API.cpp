@@ -93,6 +93,8 @@ void reactantReleaseAddressRange(void *base, size_t nbytes);
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
 #include "llvm/MC/TargetRegistry.h"
 #include "llvm/Support/Process.h"
+#include "llvm/Support/ThreadPool.h"
+#include "llvm/Support/Threading.h"
 #include "llvm/TargetParser/Host.h"
 
 #include "llvm-c/TargetMachine.h"
@@ -375,6 +377,14 @@ REACTANT_ABI void ReactantHandleCuResult(uint32_t curesult) {
 REACTANT_ABI void
 mlirPassManagerEnableXLATraceTiming(MlirPassManager passManager) {
   unwrap(passManager)->enableTiming(std::make_unique<XlaTraceTimingManager>());
+}
+
+// Like mlirLlvmThreadPoolCreate, but caps the pool at `maxThreads` concurrent
+// workers. `maxThreads == 0` uses the hardware concurrency.
+REACTANT_ABI MlirLlvmThreadPool
+mlirLlvmThreadPoolCreateWithMaxThreads(unsigned maxThreads) {
+  return wrap(static_cast<llvm::ThreadPoolInterface *>(
+      new llvm::DefaultThreadPool(llvm::hardware_concurrency(maxThreads))));
 }
 
 REACTANT_ABI bool mlirOperationInject(MlirContext ctx, MlirBlock block,
