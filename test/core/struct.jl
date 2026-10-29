@@ -142,4 +142,22 @@ end
         result = @jit f_container(cr)
         @test @allowscalar(result) ≈ sum(z) + 1.0f0
     end
+
+    # Regression: a Dict field whose value type is a type param that gets promoted to
+    # TracedRNumber by a sibling param constraint (A<:AbstractVector{T}).
+    @testset "Dict field with value type promoted by parent type param" begin
+        struct ScaledVec{T,A<:AbstractVector{T}}
+            data::A
+            scalars::Dict{Int,T}
+        end
+
+        f_scaled(s) = sum(s.data) * s.scalars[1] + s.scalars[2]
+
+        x = Float64[1, 2, 3, 4]
+        xr = Reactant.to_rarray(x)
+        sr = ScaledVec{Float64,typeof(xr)}(xr, Dict(1 => 2.0, 2 => 0.5))
+
+        result = @jit f_scaled(sr)
+        @test @allowscalar(result) ≈ sum(x) * 2.0 + 0.5
+    end
 end
