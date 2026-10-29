@@ -142,7 +142,7 @@ The ROCm build of Reactant is selected when the `amdgpu` kernel driver is loaded
 ```toml
 [Reactant_jll]
 gpu = "rocm"
-gpu_version = "10.0"
+gpu_version = "10.2"
 ```
 
 ## Reactant with TPU
