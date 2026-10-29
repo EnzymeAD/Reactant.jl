@@ -7,7 +7,7 @@ A `Block` is a sequence of [`Operation`](@ref)s with a list of arguments.
     ref::API.MlirBlock
 end
 
-Block() = Block(mark_alloc(API.mlirBlockCreate(0, C_NULL, C_NULL)))
+Block() = mark_alloc(Block(API.mlirBlockCreate(0, C_NULL, C_NULL)))
 
 """
     Block(args, locs)
@@ -16,7 +16,7 @@ Creates a new empty block with the given argument types and transfers ownership 
 """
 function Block(args::Vector{Type}, locs::Vector{Location})
     @assert length(args) == length(locs) "there should be one args for each locs (got $(length(args)) & $(length(locs)))"
-    return Block(mark_alloc(API.mlirBlockCreate(length(args), args, locs)))
+    return mark_alloc(Block(API.mlirBlockCreate(length(args), args, locs)))
 end
 
 """
@@ -167,7 +167,8 @@ end
 Takes an operation owned by the caller and appends it to the block.
 """
 function Base.push!(block::Block, op::Operation)
-    API.mlirBlockAppendOwnedOperation(block, mark_donate(op))
+    API.mlirBlockAppendOwnedOperation(block, op)
+    mark_untracked(op)
     return op
 end
 
@@ -178,7 +179,8 @@ Takes an operation owned by the caller and inserts it as `index` to the block.
 This is an expensive operation that scans the block linearly, prefer insertBefore/After instead.
 """
 function Base.insert!(block::Block, index, op::Operation)
-    API.mlirBlockInsertOwnedOperation(block, index - 1, mark_donate(op))
+    API.mlirBlockInsertOwnedOperation(block, index - 1, op)
+    mark_untracked(op)
     return op
 end
 
@@ -193,7 +195,8 @@ end
 Takes an operation owned by the caller and inserts it after the (non-owned) reference operation in the given block. If the reference is null, prepends the operation. Otherwise, the reference must belong to the block.
 """
 function insert_after!(block::Block, reference::Operation, op::Operation)
-    API.mlirBlockInsertOwnedOperationAfter(block, reference, mark_donate(op))
+    API.mlirBlockInsertOwnedOperationAfter(block, reference, op)
+    mark_untracked(op)
     return op
 end
 
@@ -203,7 +206,8 @@ end
 Takes an operation owned by the caller and inserts it before the (non-owned) reference operation in the given block. If the reference is null, appends the operation. Otherwise, the reference must belong to the block.
 """
 function insert_before!(block::Block, reference::Operation, op::Operation)
-    API.mlirBlockInsertOwnedOperationBefore(block, reference, mark_donate(op))
+    API.mlirBlockInsertOwnedOperationBefore(block, reference, op)
+    mark_untracked(op)
     return op
 end
 
