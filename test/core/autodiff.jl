@@ -883,3 +883,39 @@ end
         @test Array(only(res).b) == Int32[1, 2]
     end
 end
+
+function active_plus_primal(x)
+    ((dx,),) = Enzyme.autodiff(Reverse, abs2, Active, Active(x))
+    return dx + x
+end
+
+@testset "Reverse-mode Active traced scalar arguments: Issue #3599" begin
+    res_real = @jit Enzyme.autodiff(Reverse, abs2, Active(Reactant.ConcreteRNumber(3.0)))
+    @test res_real isa Tuple{Tuple{<:ConcreteRNumber{Float64}}}
+    @test only(only(res_real)) ≈ 6.0
+
+    res_primal = @jit Enzyme.autodiff(
+        ReverseWithPrimal, abs2, Active(Reactant.ConcreteRNumber(3.0))
+    )
+    @test only(res_primal[1]) ≈ 6.0
+    @test res_primal[2] ≈ 9.0
+
+    z = 1.0 + 1.0im
+    res_complex = @jit Enzyme.autodiff(
+        Reverse, imag ∘ exp, Active(Reactant.ConcreteRNumber(z))
+    )
+    expected_complex = only(only(Enzyme.autodiff(Reverse, imag ∘ exp, Active(z))))
+    @test only(only(res_complex)) ≈ expected_complex
+
+    # Ensure set_act! does not overwrite the caller's primal input x with the gradient dx
+    res_keep_primal = @jit active_plus_primal(Reactant.ConcreteRNumber(3.0))
+    @test res_keep_primal ≈ 9.0
+
+    f_tup(t) = t[1]^2 + 3 * t[2]
+    res_tup = @jit Enzyme.autodiff(
+        Reverse, f_tup, Active((Reactant.ConcreteRNumber(4.0), Reactant.ConcreteRNumber(5.0)))
+    )
+    @test only(only(res_tup))[1] ≈ 8.0
+    @test only(only(res_tup))[2] ≈ 3.0
+end
+
