@@ -138,6 +138,13 @@ julia> using Reactant
 julia> Reactant.set_default_backend("rocm")
 ```
 
+The ROCm build of Reactant is selected when the `amdgpu` kernel driver is loaded, or, under WSL2, when a ROCm installation (`$ROCM_PATH`, `/opt/rocm`, or `libamdhip64` on the library path) is found next to `/dev/dxg`. To force it regardless of what is detected, set the `gpu` and `gpu_version` preferences of `Reactant_jll` in `LocalPreferences.toml`; `Reactant_jll` has to be a direct dependency of the environment for the preferences to take effect:
+```toml
+[Reactant_jll]
+gpu = "rocm"
+gpu_version = "10.0"
+```
+
 ## Reactant with TPU
 
 Reactant should detect automatically when you are running on a machine with a TPU, and load dynamically the necessary modules.
