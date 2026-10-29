@@ -538,3 +538,25 @@ end
         @test iszero(t.compile_time)
     end
 end
+
+struct KindOptions{A}
+    a::A
+end
+
+# `fieldnames(::UnionAll)` unwraps its argument and calls itself on the body, a
+# `DataType` with a free typevar, which Julia's method cache does not tell apart
+# from the UnionAll (#3518).
+reflect_fieldnames(x) = x .+ length(fieldnames(KindOptions))
+reflect_fieldname(x) = x .+ length(string(fieldname(KindOptions, 1)))
+reflect_nameof(x) = x .+ length(string(nameof(KindOptions)))
+reflect_parentmodule(x) = x .+ length(string(parentmodule(KindOptions)))
+reflect_hasfield(x) = x .+ hasfield(KindOptions, :a)
+
+@testset "reflection on a UnionAll (#3518)" begin
+    x = Reactant.to_rarray([1.0])
+    @test @jit(reflect_fieldnames(x)) ≈ [2.0]
+    @test @jit(reflect_fieldname(x)) ≈ [2.0]
+    @test @jit(reflect_nameof(x)) ≈ [1.0 + length("KindOptions")]
+    @test @jit(reflect_parentmodule(x)) ≈ [1.0 + length(string(@__MODULE__))]
+    @test @jit(reflect_hasfield(x)) ≈ [2.0]
+end

@@ -142,7 +142,7 @@ source_dir = joinpath(@__DIR__, "ReactantExtra")
 # --repo_env TF_NEED_CUDA=1
 # --repo_env TF_NVCC_CLANG=1
 # --repo_env TF_NCCL_USE_STUB=1
-# --repo_env HERMETIC_CUDA_COMPUTE_CAPABILITIES="sm_50,sm_60,sm_70,sm_80,compute_90"
+# --repo_env HERMETIC_CUDA_COMPUTE_CAPABILITIES="sm_60,sm_70,sm_80,compute_90"
 # --@xla//xla/python:jax_cuda_pip_rpaths=true
 # --repo_env=HERMETIC_CUDA_VERSION="12.3.2"
 # --repo_env=HERMETIC_CUDNN_VERSION="9.1.1"

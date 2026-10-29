@@ -1087,6 +1087,9 @@ function _find_unadapted_traced(
     @nospecialize(T::Type), seen::Set{Any}=Set{Any}(), path::String=""
 )
     T isa UnionAll && return nothing
+    # A type passed as an argument (`Type{Float32}`) is a constant: GPUCompiler drops it
+    # from the kernel
+    Core.Compiler.isconstType(T) && return nothing
     T in seen && return nothing
     push!(seen, T)
     T <: TracedRNumber && return isempty(path) ? "<arg>" : path
@@ -1401,7 +1404,7 @@ Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
     end
 
     for arg in Any[func.f, args...]
-        _check_no_traced_in_kernel_arg(typeof(arg))
+        _check_no_traced_in_kernel_arg(Core.Typeof(arg))
     end
 
     mlir_args = MLIR.IR.Value[]
@@ -1446,9 +1449,15 @@ Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
     )
 
     allargs = Any[func.f, args...]
-    # bytes of the kernel arguments, stored as constants in the wrapper
+    # bytes of the kernel arguments, stored as constants in the wrapper. Ghost and
+    # constant-type arguments are absent from the compiled kernel's signature, as in
+    # GPUCompiler
     argbytes = Union{Vector{Int8},Nothing}[
-        sizeof(a) == 0 ? nothing : to_bytes(a) for a in allargs
+        if Core.Compiler.isconstType(Core.Typeof(a)) || sizeof(a) == 0
+            nothing
+        else
+            to_bytes(a)
+        end for a in allargs
     ]
 
     # See `_to_kernel_buffer`.

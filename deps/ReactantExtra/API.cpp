@@ -112,6 +112,7 @@ void reactantReleaseAddressRange(void *base, size_t nbytes);
 #include "xla/pjrt/pjrt_c_api_client.h"
 #include "xla/pjrt/pjrt_executable.h"
 #include "xla/pjrt/plugin/xla_cpu/xla_cpu_pjrt_client.h"
+#include "xla/shape_util.h"
 
 #include "xla/hlo/ir/hlo_computation.h"
 #include "xla/hlo/ir/hlo_instruction.h"
@@ -192,6 +193,7 @@ void reactantReleaseAddressRange(void *base, size_t nbytes);
 #include "xla/debug_options_flags.h"
 #include "xla/hlo/ir/hlo_module.h"
 #include "xla/service/hlo_cost_analysis.h"
+#include "xla/service/llvm_ir/llvm_command_line_options.h"
 #include "xla/xla.pb.h"
 
 #if defined(REACTANT_CUDA) || defined(REACTANT_ROCM)
@@ -202,7 +204,7 @@ void reactantReleaseAddressRange(void *base, size_t nbytes);
 #endif
 
 // Broken upstream x/ref https://github.com/jax-ml/jax/issues/33344
-// #include "jaxlib/mosaic/dialect/tpu/tpu_dialect.h"
+// #include "xla/mosaic/dialect/tpu/tpu_dialect.h"
 
 #include "llvm/Support/ExtensibleRTTI.h"
 #include <llvm/Support/FileSystem.h>
@@ -945,11 +947,20 @@ std::vector<int64_t> col_major(int64_t dim) {
   return minor_to_major;
 }
 
+// XLA parses LLVM's command line itself, from its own option list, when a
+// client with other options than the last one compiles, and resets every
+// option first (llvm_ir::LLVMCommandLineOptionsLock): an option parsed here
+// alone is gone after the first compile. XLA re-applies its global option
+// list on each such parse, so the options also go there, once each.
 REACTANT_ABI void ReactantLLVMParseCommandLineOptions(int argc,
                                                       const char *const *argv,
                                                       const char *Overview) {
   llvm::cl::ParseCommandLineOptions(argc, argv, StringRef(Overview),
                                     &llvm::nulls());
+  auto &global = xla::llvm_ir::LLVMCommandLineOptionsLock::GetGlobalOptions();
+  for (int i = 1; i < argc; i++)
+    if (std::find(global.begin(), global.end(), argv[i]) == global.end())
+      global.push_back(argv[i]);
 }
 
 std::vector<int64_t> row_major(int64_t dim) {
@@ -1198,6 +1209,73 @@ CudaGetStreamExecutorDeviceDescription(int32_t device_id) {
 
 #endif
 
+#ifdef REACTANT_ROCM
+
+#include "rocm/include/hip/hip_runtime.h"
+
+static bool ReactantRocmGetDeviceProp(hipDeviceProp_t &props,
+                                      int32_t device_id) {
+  hipError_t err = hipGetDeviceProperties(&props, device_id);
+  if (err != hipSuccess) {
+    llvm::errs() << "hipGetDeviceProperties(" << device_id
+                 << ") failed: " << hipGetErrorString(err) << "\n";
+    return false;
+  }
+  return true;
+}
+
+REACTANT_ABI void ReactantRocmDeviceGetProperties(DeviceProperties *jlprops,
+                                                  int32_t device_id) {
+  *jlprops = DeviceProperties{};
+  hipDeviceProp_t props;
+  if (!ReactantRocmGetDeviceProp(props, device_id))
+    return;
+
+  jlprops->totalGlobalMem = props.totalGlobalMem;
+  jlprops->sharedMemPerBlock = props.sharedMemPerBlock;
+  jlprops->regsPerBlock = props.regsPerBlock;
+  jlprops->warpSize = props.warpSize;
+  jlprops->maxThreadsPerBlock = props.maxThreadsPerBlock;
+  jlprops->maxThreadsDim[0] = props.maxThreadsDim[0];
+  jlprops->maxThreadsDim[1] = props.maxThreadsDim[1];
+  jlprops->maxThreadsDim[2] = props.maxThreadsDim[2];
+  jlprops->maxGridSize[0] = props.maxGridSize[0];
+  jlprops->maxGridSize[1] = props.maxGridSize[1];
+  jlprops->maxGridSize[2] = props.maxGridSize[2];
+  jlprops->totalConstMem = props.totalConstMem;
+  jlprops->major = props.major;
+  jlprops->minor = props.minor;
+  jlprops->multiProcessorCount = props.multiProcessorCount;
+  jlprops->canMapHostMemory = props.canMapHostMemory;
+  jlprops->l2CacheSize = props.l2CacheSize;
+  jlprops->maxThreadsPerMultiProcessor = props.maxThreadsPerMultiProcessor;
+}
+
+// The target ID the device runs, e.g. "gfx942:sramecc+:xnack-", in the
+// spelling rocdl-attach-target takes for its `arch` option.
+REACTANT_ABI void ReactantRocmDeviceGetGcnArchName(char *buffer, int32_t size,
+                                                   int32_t device_id) {
+  if (size <= 0)
+    return;
+  buffer[0] = 0;
+  hipDeviceProp_t props;
+  if (!ReactantRocmGetDeviceProp(props, device_id))
+    return;
+  strncpy(buffer, props.gcnArchName, size - 1);
+  buffer[size - 1] = 0;
+}
+#else
+REACTANT_ABI void ReactantRocmDeviceGetProperties(DeviceProperties *jlprops,
+                                                  int32_t device_id) {
+  *jlprops = DeviceProperties{};
+}
+REACTANT_ABI void ReactantRocmDeviceGetGcnArchName(char *buffer, int32_t size,
+                                                   int32_t device_id) {
+  if (size > 0)
+    buffer[0] = 0;
+}
+#endif
+
 REACTANT_ABI const char *
 deviceDescriptionToString(stream_executor::DeviceDescription *device) {
   return cstr_from_string(device->ToString());
@@ -1228,6 +1306,15 @@ REACTANT_ABI PjRtBuffer *ArrayFromHostBuffer(PjRtClient *client, void *data,
   return bres;
 }
 
+REACTANT_ABI void BufferToHost(PjRtBuffer *buffer, void *data);
+
+// Logical (row-major host) size of `buffer` in bytes. Not the on-device size,
+// which on TPU includes tiling padding.
+static size_t BufferHostSizeInBytes(PjRtBuffer *buffer) {
+  Shape shape(MyValueOrThrow(buffer->HostShape()));
+  return xla::ShapeUtil::ByteSizeOfElements(shape);
+}
+
 REACTANT_ABI void CopyToBuffer(PjRtClient *client, PjRtBuffer *buffer,
                                void *data, size_t offset, size_t size,
                                PjRtBuffer **bufferP) {
@@ -1242,11 +1329,34 @@ REACTANT_ABI void CopyToBuffer(PjRtClient *client, PjRtBuffer *buffer,
 
   auto pid = client->platform_id();
   if (pid == xla::TpuId()) {
+    // The TPU on-device layout is tiled, so raw byte offsets into the device
+    // buffer don't correspond to logical element offsets and the raw-copy APIs
+    // can't be used. We also can't write into an existing buffer through the
+    // PJRT C API, so a *new* buffer holding the updated contents is created
+    // and handed back through `bufferP`, and the old buffer is freed.
+    if (bufferP == nullptr) {
+      ReactantThrowError(
+          "CopyToBuffer: on TPU the device buffer is replaced, so a non-null "
+          "`bufferP` out-parameter is required");
+    }
     auto dims = buffer->on_device_shape().dimensions();
-    // TODO(#2252): note this assume that we want to copy the entire buffer
-    // size.
-    auto buf2 = ArrayFromHostBuffer(client, data, buffer->element_type(),
-                                    dims.size(), dims.data(), buffer->device());
+    size_t total = BufferHostSizeInBytes(buffer);
+    if (offset + size > total) {
+      ReactantThrowError("CopyToBuffer: offset + size exceeds buffer size");
+    }
+    PjRtBuffer *buf2;
+    if (offset == 0 && size == total) {
+      buf2 = ArrayFromHostBuffer(client, data, buffer->element_type(),
+                                 dims.size(), dims.data(), buffer->device());
+    } else {
+      // Partial copy: fetch the current contents (row-major), patch the
+      // requested range on the host and upload the whole thing again.
+      std::vector<char> host(total);
+      BufferToHost(buffer, host.data());
+      memcpy(host.data() + offset, data, size);
+      buf2 = ArrayFromHostBuffer(client, host.data(), buffer->element_type(),
+                                 dims.size(), dims.data(), buffer->device());
+    }
     *bufferP = buf2;
     PjRtBufferFree((PjRtBuffer *)buffer);
     return;
@@ -1313,9 +1423,19 @@ REACTANT_ABI void CopyFromBuffer(PjRtClient *client, PjRtBuffer *buffer,
 
   auto pid = client->platform_id();
   if (pid == xla::TpuId()) {
-    // TODO(#2252): note this assume that we want to copy the entire buffer
-    // size.
-    BufferToHost(buffer, data);
+    // See CopyToBuffer: TPU layouts are tiled, so go through a row-major host
+    // literal rather than a raw copy.
+    size_t total = BufferHostSizeInBytes(buffer);
+    if (offset + size > total) {
+      ReactantThrowError("CopyFromBuffer: offset + size exceeds buffer size");
+    }
+    if (offset == 0 && size == total) {
+      BufferToHost(buffer, data);
+      return;
+    }
+    std::vector<char> host(total);
+    BufferToHost(buffer, host.data());
+    memcpy(data, host.data() + offset, size);
     return;
   }
 
@@ -3775,6 +3895,14 @@ struct LinkableRuntime {
       assert(client);
       // Weird stream issue in freeing cuda client.
       shouldFreeClient = false;
+      // nvcc contracts a*b+c into an fma; XLA's NVPTX backend only when
+      // asked (the Julia client asks the same way, in GPU.jl). The option
+      // exists only where the NVPTX target is linked in: on any other GPU
+      // XLA's own parse would reject it and exit.
+      if (client->platform_name() == "cuda") {
+        const char *fma[] = {"", "--nvptx-fma-level=1"};
+        ReactantLLVMParseCommandLineOptions(2, fma, nullptr);
+      }
     } else {
       client = MakeCPUClient(1, 0);
       assert(client);
@@ -4183,12 +4311,18 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
       // The main list may introduce enzymexla ops (rotate, wrap, extend)
       // that XLA does not take; the Julia compiler lowers them before export
       // with this second list.
+      // A round converges within 10 greedy iterations on MFEM's kernels;
+      // without a cap, two patterns undoing each other (Enzyme-JAX #3680 on
+      // ceed BP1/2) spin the compile forever, so the cap makes that a
+      // failure instead.
       std::string pipeline =
           "canonicalize,cse,canonicalize,enzyme-hlo-generate-td{patterns=" +
           patterns +
-          "},transform-interpreter,enzyme-hlo-remove-transform,canonicalize,"
+          " max-iterations=100},transform-interpreter,enzyme-hlo-remove-"
+          "transform,canonicalize,"
           "cse,enzyme-hlo-generate-td{patterns=lower_rotate;lower_wrap;"
-          "lower_extend;lower_updatewithoutcorners;lower_multislice},"
+          "lower_extend;lower_updatewithoutcorners;lower_multislice "
+          "max-iterations=100},"
           "transform-interpreter,enzyme-hlo-remove-transform,canonicalize,cse";
       if (failed(mlir::parsePassPipeline(pipeline, pm))) {
         llvm::errs() << " failed to parse the exec optimization pipeline\n";
@@ -4205,7 +4339,23 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
       module->print(llvm::errs());
       llvm::errs() << "EXEC_DUMP end\n";
     }
+    // A round that does not converge within its iteration cap is a pattern
+    // cycle; the interpreter only says "greedy pattern application failed",
+    // so name the cause (the diagnostic is left to print as usual).
+    bool roundCapHit = false;
+    mlir::ScopedDiagnosticHandler roundCapHandler(
+        module->getContext(), [&roundCapHit](mlir::Diagnostic &diag) {
+          if (diag.str().find("greedy pattern application failed") !=
+              std::string::npos)
+            roundCapHit = true;
+          return mlir::failure();
+        });
     if (!mlir::succeeded(pm.run(*module))) {
+      if (roundCapHit)
+        llvm::errs() << " a pattern round of the exec pipeline hit its cap of "
+                        "100 greedy iterations: two patterns undo each other "
+                        "on this module (REACTANT_EXEC_DUMP=1 prints it "
+                        "before the pipeline)\n";
       llvm::errs() << " failed to run passes\n";
       llvm::errs() << " modstr:\n" << modstr << "\n";
       pm.dump();

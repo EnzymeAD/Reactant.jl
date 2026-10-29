@@ -16492,6 +16492,36 @@ function mlirTritonInferReduceOpEncoding(operandEncoding, axis)
     )::MlirAttribute
 end
 
+function mlirGetDialectHandle__tpu__()
+    @ccall Reactant_jll.libReactantExtra.mlirGetDialectHandle__tpu__()::MlirDialectHandle
+end
+
+function mlirTPUAnalyzePotentialCommunication(op, has_communication, has_custom_barrier)
+    @ccall Reactant_jll.libReactantExtra.mlirTPUAnalyzePotentialCommunication(
+        op::MlirOperation, has_communication::Ptr{Bool}, has_custom_barrier::Ptr{Bool}
+    )::Cvoid
+end
+
+function mlirTpuRegisterMosaicSerdePass()
+    @ccall Reactant_jll.libReactantExtra.mlirTpuRegisterMosaicSerdePass()::Cvoid
+end
+
+function mlirTpuFloat8EXMYTypeGetUnderlyingType(exmy_type)
+    @ccall Reactant_jll.libReactantExtra.mlirTpuFloat8EXMYTypeGetUnderlyingType(
+        exmy_type::MlirType
+    )::MlirType
+end
+
+function mlirTpuIsAFloat8EXMYType(type)
+    @ccall Reactant_jll.libReactantExtra.mlirTpuIsAFloat8EXMYType(type::MlirType)::Bool
+end
+
+function mlirTpuFloat8EXMYTypeGet(ctx, exmy_type)
+    @ccall Reactant_jll.libReactantExtra.mlirTpuFloat8EXMYTypeGet(
+        ctx::MlirContext, exmy_type::MlirType
+    )::MlirType
+end
+
 function mlirMosaicGpuIsATileTransformAttr(attr)
     @ccall Reactant_jll.libReactantExtra.mlirMosaicGpuIsATileTransformAttr(
         attr::MlirAttribute
@@ -17418,6 +17448,12 @@ function ArrayFromHostBuffer(client, data, ptype, dim, cshape, device)
     )::Ptr{PjRtBuffer}
 end
 
+function BufferToHost(buffer, data)
+    @ccall Reactant_jll.libReactantExtra.BufferToHost(
+        buffer::Ptr{PjRtBuffer}, data::Ptr{Cvoid}
+    )::Cvoid
+end
+
 function CopyToBuffer(client, buffer, data, offset, size, bufferP)
     @ccall Reactant_jll.libReactantExtra.CopyToBuffer(
         client::Ptr{PjRtClient},
@@ -17426,12 +17462,6 @@ function CopyToBuffer(client, buffer, data, offset, size, bufferP)
         offset::Csize_t,
         size::Csize_t,
         bufferP::Ptr{Ptr{PjRtBuffer}},
-    )::Cvoid
-end
-
-function BufferToHost(buffer, data)
-    @ccall Reactant_jll.libReactantExtra.BufferToHost(
-        buffer::Ptr{PjRtBuffer}, data::Ptr{Cvoid}
     )::Cvoid
 end
 
