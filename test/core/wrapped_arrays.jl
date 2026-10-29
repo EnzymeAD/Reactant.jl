@@ -310,3 +310,30 @@ end
 
     @test Array(@jit(permutedims!_reshaped(A_ra, B_ra))) ≈ permutedims!_reshaped(A, B)
 end
+
+@testset "Broadcasting into views of concrete arrays" begin
+    x = Reactant.TestUtils.construct_test_array(Float32, 4, 8, 2)
+    x_ra = Reactant.to_rarray(x)
+    v = view(x_ra, :, 2:4, :)
+    @test Base.Broadcast.BroadcastStyle(typeof(v)) isa
+        Base.Broadcast.ArrayStyle{ConcretePJRTArray}
+
+    v .*= 2
+    v .= v .+ view(x_ra, :, 5:7, :)
+    expected = copy(x)
+    expected[:, 2:4, :] .= 2 .* expected[:, 2:4, :] .+ expected[:, 5:7, :]
+    @test Array(x_ra) ≈ expected
+
+    # view created before its parent is overwritten, the eager scalar-indexing
+    # fallback lost writes here
+    for _ in 1:5
+        a = rand(Float32, 560, 33, 2)
+        y_ra = Reactant.to_rarray(zeros(Float32, size(a)))
+        w = view(y_ra, :, 9:16, :)
+        copyto!(y_ra, Reactant.to_rarray(a))
+        w .*= 3
+        b = copy(a)
+        b[:, 9:16, :] .*= 3
+        @test Array(y_ra) ≈ b
+    end
+end

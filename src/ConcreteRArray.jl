@@ -560,6 +560,20 @@ function Broadcast.BroadcastStyle(::Type{<:ConcreteIFRTArray})
     return Broadcast.ArrayStyle{ConcreteIFRTArray}()
 end
 
+# views of concrete arrays broadcast like their parent (otherwise they fall back to
+# Base's DefaultArrayStyle and scalar indexing), see `copyto!(::SubArray, ::Broadcasted)`
+function Broadcast.BroadcastStyle(::Type{<:SubArray{<:Any,<:Any,<:ConcretePJRTArray}})
+    return Broadcast.ArrayStyle{ConcretePJRTArray}()
+end
+function Broadcast.BroadcastStyle(::Type{<:SubArray{<:Any,<:Any,<:ConcreteIFRTArray}})
+    return Broadcast.ArrayStyle{ConcreteIFRTArray}()
+end
+
+function broadcast_into!(dest, f, args...)
+    dest .= f.(args...)
+    return nothing
+end
+
 function Base.similar(
     bc::Broadcast.Broadcasted{Broadcast.ArrayStyle{ConcretePJRTArray}}, ::Type{T}
 ) where {T}
@@ -785,6 +799,18 @@ for aType in (:ConcretePJRTArray, :ConcreteIFRTArray)
             dest::SubArray{<:Any,<:Any,<:$(aType)}, src::SubArray{<:Any,<:Any,<:Array}
         )
             return Base.copyto!(dest, convert(Array, copy(src)))
+        end
+
+        # Broadcasting into a view of a concrete array: compile the whole broadcast instead of
+        # Base's fallback that loops over the view with eager scalar getindex/setindex!
+        function Base.copyto!(
+            dest::SubArray{<:Any,<:Any,<:$(aType)},
+            src::Broadcast.Broadcasted{Broadcast.ArrayStyle{$(aType)}},
+        )
+            src = Broadcast.flatten(src)
+            fn = compile(broadcast_into!, (dest, src.f, src.args...))
+            fn(dest, src.f, src.args...)
+            return dest
         end
 
         function Base.copyto!(
