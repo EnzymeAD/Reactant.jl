@@ -1,3 +1,4 @@
+load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")
 load("@llvm-project//mlir:tblgen.bzl", "gentbl_cc_library")
 load("@local_config_cuda//cuda:build_defs.bzl", "if_cuda")
 load("@local_config_rocm//rocm:build_defs.bzl", "if_rocm")
@@ -10,6 +11,40 @@ package(
     default_applicable_licenses = [],
     default_visibility = ["//:__subpackages__"],
 )
+
+bool_flag(
+    name = "enable_profiler",
+    build_setting_default = True,
+    visibility = ["//visibility:public"],
+)
+
+config_setting(
+    name = "with_profiler",
+    flag_values = {":enable_profiler": "True"},
+)
+
+bool_flag(
+    name = "enable_ifrt_proxy",
+    build_setting_default = True,
+    visibility = ["//visibility:public"],
+)
+
+config_setting(
+    name = "with_ifrt_proxy",
+    flag_values = {":enable_ifrt_proxy": "True"},
+)
+
+bool_flag(
+    name = "enable_cpu_collectives",
+    build_setting_default = True,
+    visibility = ["//visibility:public"],
+)
+
+config_setting(
+    name = "with_cpu_collectives",
+    flag_values = {":enable_cpu_collectives": "True"},
+)
+
 # =============================================================================
 # Proto file collection for Julia bindings generation
 # =============================================================================
@@ -1102,6 +1137,26 @@ platform(
 )
 
 cc_library(
+    name = "cpu_collectives_deps",
+    deps = select({
+        # gloo tcp transport only builds on linux
+        "@platforms//os:macos": [
+            "@gloo//:transport_uv",
+            "@xla//xla/backends/cpu/collectives:gloo_collectives",
+            "@xla//xla/backends/cpu/collectives:gloo_kv_store",
+            "@xla//xla/backends/cpu/collectives:mpi_collectives",
+        ],
+        "@platforms//os:linux": [
+            "@gloo//:transport_tcp",
+            "@xla//xla/backends/cpu/collectives:gloo_collectives",
+            "@xla//xla/backends/cpu/collectives:gloo_kv_store",
+            "@xla//xla/backends/cpu/collectives:mpi_collectives",
+        ],
+        "//conditions:default": [],
+    }),
+)
+
+cc_library(
     name = "ReactantExtraLib",
     srcs = glob(
         [
@@ -1110,7 +1165,6 @@ cc_library(
     ) + [
         "@enzyme_ad//src/enzyme_ad/jax:gpu.cc",
         "@enzyme_ad//src/enzyme_ad/jax:cpu.cc",
-        "@enzyme_ad//src/enzyme_ad/jax:xla_ffi/register.cc",
         # "@xla//xla/service/gpu:backend_configs.pb.cc",
         # "@xla//xla:autotuning.pb.cc",
         # "@xla//xla:autotune_results.pb.cc",
@@ -1118,16 +1172,31 @@ cc_library(
     ],
     hdrs = glob([
         "*.h",
-    ]) + [
-        "@enzyme_ad//src/enzyme_ad/jax:RegistryUtils.h",
-    ],
+    ]),
     copts = [
         "-Werror=unused-variable",
         "-Werror=unused-but-set-variable",
         "-Werror=return-type",
         "-Werror=unused-result",
         "-Wno-error=stringop-truncation",
-    ] + if_cuda(["-DREACTANT_CUDA=1"]) + if_rocm(["-DREACTANT_ROCM=1"]),
+        "-Wno-vla-cxx-extension",
+        "-Wno-private-header",
+    ] + if_cuda(["-DREACTANT_CUDA=1"]) + if_rocm(["-DREACTANT_ROCM=1"]) + select({
+        ":with_profiler": [
+            "-DREACTANT_ENABLE_PROFILER=1",
+        ],
+        "//conditions:default": [],
+    }) + select({
+        ":with_ifrt_proxy": [
+            "-DREACTANT_ENABLE_IFRT_PROXY=1",
+        ],
+        "//conditions:default": [],
+    }) + select({
+        ":with_cpu_collectives": [
+            "-DREACTANT_ENABLE_CPU_COLLECTIVES=1",
+        ],
+        "//conditions:default": [],
+    }),
     linkopts = select({
         "//conditions:default": [],
         "@bazel_tools//src/conditions:darwin": [
@@ -1315,6 +1384,7 @@ cc_library(
         "@llvm-project//mlir:ControlFlowDialect",
         "@llvm-project//mlir:ConversionPasses",
         "@llvm-project//mlir:DLTIDialect",
+        "@llvm-project//mlir:IR",
         "@llvm-project//mlir:FuncDialect",
         "@llvm-project//mlir:FromLLVMIRTranslation",
         "@llvm-project//mlir:GPUDialect",
@@ -1332,6 +1402,7 @@ cc_library(
         "@llvm-project//mlir:LLVMIRToLLVMTranslation",
         "@llvm-project//mlir:LLVMIRToNVVMTranslation",
         "@llvm-project//mlir:LLVMIRTransforms",
+        "@llvm-project//mlir:Support",
         "@llvm-project//llvm:BitReader",
         "@llvm-project//llvm:IRReader",
         "@llvm-project//llvm:Support",
@@ -1347,67 +1418,46 @@ cc_library(
         "@enzyme_ad//src/enzyme_ad/jax:clang_compile",
         # "@enzyme_ad//src/enzyme_ad/jax:gpu",
         "@xla//xla/ffi/api:ffi",
+        "@xla//xla/ffi/api:c_api",
+        "@xla//xla/ffi/api:c_api_internal",
+        "@xla//xla/ffi:execution_state",
         "@xla//xla/ffi:ffi_api",
+        "@xla//xla/ffi:type_registry",
         "@stablehlo//:chlo_ops",
+        "@xla//xla/pjrt:maybe_owning_mlir_module",
         "@xla//xla/pjrt:pjrt_api",
         "@xla//xla/pjrt:pjrt_c_api_client",
-        "@xla//xla/pjrt/cpu:cpu_client",
+        "@xla//xla/pjrt:raw_buffer",
+        "@xla//xla/pjrt/plugin/xla_cpu:cpu_client_options",
         "@xla//xla/pjrt/distributed",
         "@xla//xla/pjrt/distributed:client",
         "@xla//xla/pjrt/distributed:service",
         "@xla//xla/service/spmd/shardy/stablehlo_round_trip:export_shardings",
         "@xla//xla/service/spmd/shardy/stablehlo_round_trip:stablehlo_import",
-
-        # "@xla//xla:xla_proto_cc",
-        # "@xla//xla:xla_proto_cc_impl",
+        "@xla//xla:debug_options_flags",
+        "@xla//xla:shape_util",
+        "@xla//xla:xla_proto_cc",
+        "@xla//xla:xla_proto_cc_impl",
         "@xla//xla/stream_executor:device_description_proto_cc_impl",
+        "@xla//xla/stream_executor:stream",
         "@xla//xla/service:metrics_proto_cc",
         "@xla//xla/service:metrics_proto_cc_impl",
         "@xla//xla/service:custom_call_target_registry",
         "@xla//xla/service/cpu:cpu_compiler",
         "@xla//xla/service/cpu:cpu_transfer_manager",
         "@xla//xla/tsl/protobuf:protos_all_cc_impl",
-        "@xla//xla/tsl/framework:allocator_registry_impl",
+        "@xla//xla/tsl/framework:allocator",
         "@xla//xla/pjrt:status_casters",
         "@xla//xla/python/ifrt",
         "@xla//xla/python/pjrt_ifrt",
         "@xla//xla/hlo/parser:hlo_parser",
         "@xla//xla/hlo/translate:stablehlo",
-        "@xla//xla/python/ifrt_proxy/server:grpc_server",
-        "@xla//xla/python/ifrt_proxy/client:grpc_client",
-        "@xla//xla/python/ifrt_proxy/client:registry",
-        # "@xla//xla/pjrt/plugin/xla_cpu:cpu_client_options",
-        # "@xla//xla/pjrt/plugin/xla_cpu:xla_cpu_pjrt_client",
         "@xla//xla/python/ifrt/hlo:hlo_program",
         "@xla//xla/python/ifrt/ir:ifrt_ir_program",
         "@xla//xla/ffi:call_frame",
         # "@com_google_protobuf//:protobuf",
-        "@tsl//tsl/profiler/lib:profiler_session_impl",
-        "@tsl//tsl/profiler/lib:profiler_factory_impl",
-        "@tsl//tsl/profiler/lib:profiler_controller",
         "@tsl//tsl/profiler/lib:traceme",
-        "@xla//xla/tsl/profiler/rpc:profiler_server_impl",
-        "@xla//xla/tsl/profiler/rpc/client:capture_profile",
-        "@xla//xla/tsl/profiler/rpc/client:profiler_client",
-        "@xla//xla/tsl/profiler/backends/cpu:annotation_stack_impl",
-        "@xla//xla/tsl/profiler/backends/cpu:traceme_recorder_impl",
-        "@xla//xla/tsl/profiler/utils:time_utils_impl",
-        "@tsl//tsl/profiler/protobuf:profiler_service_monitor_result_proto_cc_impl",
-        "@tsl//tsl/profiler/protobuf:profiler_service_proto_cc_impl",
-        "@tsl//tsl/profiler/protobuf:profiler_analysis_proto_cc_impl",
-        "@tsl//tsl/profiler/protobuf:profiler_options_proto_cc_impl",
-        "@tsl//tsl/profiler/protobuf:profile_proto_cc_impl",
-        "@tsl//tsl/profiler/protobuf:xplane_proto_cc_impl",
-        "@tsl//tsl/profiler/protobuf:trace_events_proto_cc_impl",
-        "@xla//xla/backends/profiler/cpu:host_tracer",
-        "@xla//xla/backends/profiler/cpu:host_tracer_impl",
-        "@xla//xla/backends/profiler/cpu:metadata_collector",
-        "@xla//xla/backends/profiler/cpu:metadata_utils",
-        "@xla//xla/backends/profiler/tpu:tpu_tracer",
         "@xla//xla/python:profiler_utils",
-        "@org_xprof//xprof/pywrap:profiler_plugin_impl",
-        "@org_xprof//plugin/xprof/worker:stub_factory",
-        "@org_xprof//xprof/convert:tool_options",
         "@tsl//tsl/platform:env_impl",
         "@xla//xla/stream_executor:stream_executor_impl",
         "@xla//xla/mlir/utils:type_util",
@@ -1417,8 +1467,11 @@ cc_library(
         "@shardy//shardy/dialect/sdy/transforms:passes",
         "@shardy//shardy/dialect/sdy/transforms/propagation:passes",
         "@com_google_absl//absl/hash",
+        "@com_google_absl//absl/strings:cord",
+        "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/log:initialize",
         "@com_google_absl//absl/log:globals",
+        "@com_google_absl//absl/base",
         "@llvm-project//mlir:CAPIIRObjects",
         "@llvm-project//mlir:CAPILLVMObjects",
 
@@ -1433,6 +1486,7 @@ cc_library(
         "@stablehlo//:stablehlo_passes_optimization",
         "@stablehlo//stablehlo/tests:check_ops",
         "@tsl//tsl/platform:env",
+        "@tsl//tsl/platform:platform_port",
         "@xla//xla/tsl/protobuf:dnn_proto_cc_impl",
         "@xla//xla/tsl/protobuf:histogram_proto_cc",
         "@xla//xla/tsl/protobuf:histogram_proto_cc_impl",
@@ -1443,11 +1497,52 @@ cc_library(
         "@xla//xla/service/llvm_ir:llvm_command_line_options",
         "@xla//xla/pjrt/proto:compile_options_proto_cc_impl",
         "@com_google_absl//absl/status:statusor",
-    ] + if_cuda([
+    ] + select({
+        ":with_profiler": [
+            "@org_xprof//plugin/xprof/worker:stub_factory",
+            "@org_xprof//xprof/convert:tool_options",
+            "@org_xprof//xprof/pywrap:profiler_plugin_impl",
+            "@tsl//tsl/profiler/lib:profiler_controller",
+            "@tsl//tsl/profiler/lib:profiler_factory_impl",
+            "@tsl//tsl/profiler/lib:profiler_session",
+            "@tsl//tsl/profiler/lib:profiler_session_impl",
+            "@tsl//tsl/profiler/protobuf:profile_proto_cc_impl",
+            "@tsl//tsl/profiler/protobuf:profiler_analysis_proto_cc_impl",
+            "@tsl//tsl/profiler/protobuf:profiler_options_proto_cc_impl",
+            "@tsl//tsl/profiler/protobuf:profiler_service_monitor_result_proto_cc_impl",
+            "@tsl//tsl/profiler/protobuf:profiler_service_proto_cc_impl",
+            "@tsl//tsl/profiler/protobuf:trace_events_proto_cc_impl",
+            "@tsl//tsl/profiler/protobuf:xplane_proto_cc_impl",
+            "@xla//xla/backends/profiler/cpu:host_tracer",
+            "@xla//xla/backends/profiler/cpu:host_tracer_impl",
+            "@xla//xla/backends/profiler/cpu:metadata_collector",
+            "@xla//xla/backends/profiler/cpu:metadata_utils",
+            "@xla//xla/backends/profiler/tpu:tpu_tracer",
+            "@xla//xla/tsl/profiler/backends/cpu:annotation_stack_impl",
+            "@xla//xla/tsl/profiler/backends/cpu:traceme_recorder_impl",
+            "@xla//xla/tsl/profiler/rpc:profiler_server_impl",
+            "@xla//xla/tsl/profiler/rpc/client:capture_profile",
+            "@xla//xla/tsl/profiler/rpc/client:profiler_client",
+            "@xla//xla/tsl/profiler/utils:time_utils_impl",
+        ],
+        "//conditions:default": [],
+    }) + select({
+        ":with_ifrt_proxy": [
+            "@xla//xla/python/ifrt_proxy/client:grpc_client",
+            "@xla//xla/python/ifrt_proxy/client:registry",
+            "@xla//xla/python/ifrt_proxy/server:grpc_server",
+        ],
+        "//conditions:default": [],
+    }) + select({
+        ":with_cpu_collectives": [
+            ":cpu_collectives_deps",
+        ],
+        "//conditions:default": [],
+    }) + if_cuda([
         "@xla//xla/stream_executor/cuda:cuda_compute_capability_proto_cc_impl",
         "@xla//xla/service:gpu_plugin",
         "@xla//xla/pjrt/c:pjrt_c_api_gpu",
-        "@xla//xla/pjrt/gpu:se_gpu_pjrt_client",
+        "@xla//xla/pjrt/plugin/xla_gpu:xla_gpu_client_options",
         "@xla//xla/pjrt/plugin/xla_gpu:xla_gpu_pjrt_client",
         "@jax//jaxlib/cuda:cuda_gpu_kernels",
         "@xla//xla/backends/profiler:profiler_backends",
@@ -1463,32 +1558,13 @@ cc_library(
     ]) + if_rocm([
         "@xla//xla/service:gpu_plugin",
         "@xla//xla/pjrt/c:pjrt_c_api_gpu",
-        "@xla//xla/pjrt/gpu:se_gpu_pjrt_client",
+        "@xla//xla/pjrt/plugin/xla_gpu:xla_gpu_client_options",
         "@xla//xla/pjrt/plugin/xla_gpu:xla_gpu_pjrt_client",
         "@xla//xla/stream_executor:rocm_platform",
         "@xla//xla/service/gpu:amdgpu_compiler",
         "@local_config_rocm//rocm:rocm_headers",
         "@xla//xla/backends/profiler/gpu:device_tracer",
-    ]) + select({
-        # gloo tcp transport only builds on linux
-        "@xla//xla/tsl:macos": [
-            "@gloo//:transport_uv",
-            "@xla//xla/backends/cpu/collectives:gloo_collectives",
-            "@xla//xla/backends/cpu/collectives:gloo_kv_store",
-            "@xla//xla/backends/cpu/collectives:mpi_collectives",
-            "@xla//xla/tsl/platform/default:platform_port",
-        ],
-        "@xla//xla/tsl:windows": [
-            "@xla//xla/tsl/platform/windows:platform_port",
-        ],
-        "//conditions:default": [
-            "@gloo//:transport_tcp",
-            "@xla//xla/backends/cpu/collectives:gloo_collectives",
-            "@xla//xla/backends/cpu/collectives:gloo_kv_store",
-            "@xla//xla/backends/cpu/collectives:mpi_collectives",
-            "@xla//xla/tsl/platform/default:platform_port",
-        ],
-    }),
+    ]),
     alwayslink = True,
 )
 
