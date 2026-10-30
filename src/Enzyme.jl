@@ -493,7 +493,11 @@ function overload_autodiff(
                 idx, path = TracedUtils.get_argidx(a, argprefix)
                 arg = idx == 1 && fnwrap ? f : args[idx - fnwrap]
 
-                act = leaf_act(arg, a, reverse, true)
+                act = if arg isa Active
+                    act_from_type(Const, reverse, true)
+                else
+                    leaf_act(arg, a, reverse, true)
+                end
                 push!(ret_activity, act)
 
                 if act == EnzymeActivity.OUT || act == EnzymeActivity.OUT_NO_NEED
@@ -603,7 +607,11 @@ function overload_autodiff(
                 arg.val, path[3:end], TracedUtils.transpose_val(MLIR.IR.result(res, residx))
             )
             residx += 1
-            act = leaf_act(arg, a, reverse, true)
+            act = if arg isa Active
+                act_from_type(Const, reverse, true)
+            else
+                leaf_act(arg, a, reverse, true)
+            end
             if CMode <: ForwardMode &&
                 act != EnzymeActivity.CONST &&
                 act != EnzymeActivity.CONST_NO_NEED
@@ -622,7 +630,7 @@ function overload_autodiff(
         end
     end
 
-    restup = Any[(a isa Active) ? copy(a) : nothing for a in args]
+    restup = Any[(a isa Active) ? deepcopy(a.val) : nothing for a in args]
     for a in linear_args
         idx, path = TracedUtils.get_argidx(a, argprefix)
 
@@ -633,8 +641,9 @@ function overload_autodiff(
             @assert false
         end
 
+        target = arg isa Active ? Active(restup[idx - fnwrap]) : arg
         set_act!(
-            arg,
+            target,
             path[3:end],
             reverse,
             TracedUtils.transpose_val(MLIR.IR.result(res, residx));
