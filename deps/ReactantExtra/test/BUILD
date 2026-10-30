@@ -70,3 +70,15 @@ cc_test(
     linkstatic = True,
     deps = ["@com_google_googletest//:gtest_main"],
 )
+
+cc_test(
+    name = "dlopen_abi_test",
+    srcs = ["dlopen_abi_test.cpp"],
+    data = ["//:libReactantExtra.so"],
+    linkopts = ["-ldl"],
+    linkstatic = True,
+    deps = [
+        "@com_google_absl//absl/debugging:leak_check",
+        "@com_google_googletest//:gtest_main",
+    ],
+)
