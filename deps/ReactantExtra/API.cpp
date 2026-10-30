@@ -83,11 +83,13 @@ void reactantReleaseAddressRange(void *base, size_t nbytes);
 #include "xla/mlir_hlo/mhlo/IR/hlo_ops.h"
 
 #include "tsl/platform/init_main.h"
-#include "tsl/profiler/lib/profiler_session.h"
 #include "tsl/profiler/lib/traceme.h"
 #include "xla/python/profiler_utils.h"
+#ifdef REACTANT_ENABLE_PROFILER
+#include "tsl/profiler/lib/profiler_session.h"
 #include "xla/tsl/profiler/rpc/client/capture_profile.h"
 #include "xla/tsl/profiler/rpc/profiler_server.h"
+#endif
 
 #include "xla/python/ifrt/hlo/hlo_program.h"
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
@@ -100,18 +102,20 @@ void reactantReleaseAddressRange(void *base, size_t nbytes);
 #include "xla/pjrt/maybe_owning_mlir_module.h"
 
 // PJRT
-#include "xla/pjrt/cpu/cpu_client.h"
 #include "xla/pjrt/distributed/client.h"
 #include "xla/pjrt/distributed/distributed.h"
 #include "xla/pjrt/distributed/service.h"
+#include "xla/pjrt/plugin/xla_cpu/cpu_client_options.h"
 #if defined(REACTANT_CUDA) || defined(REACTANT_ROCM)
-#include "xla/pjrt/gpu/se_gpu_pjrt_client.h"
+#include "xla/pjrt/plugin/xla_gpu/xla_gpu_client_options.h"
+#include "xla/pjrt/plugin/xla_gpu/xla_gpu_pjrt_client.h"
 #endif
 #include "xla/pjrt/c/pjrt_c_api_cpu_internal.h"
 #include "xla/pjrt/pjrt_api.h"
 #include "xla/pjrt/pjrt_c_api_client.h"
 #include "xla/pjrt/pjrt_executable.h"
 #include "xla/pjrt/plugin/xla_cpu/xla_cpu_pjrt_client.h"
+#include "xla/pjrt/raw_buffer.h"
 #include "xla/shape_util.h"
 
 #include "xla/hlo/ir/hlo_computation.h"
@@ -123,6 +127,7 @@ void reactantReleaseAddressRange(void *base, size_t nbytes);
 #include "xla/hlo/translate/stablehlo.h"
 
 // CPU collectives
+#ifdef REACTANT_ENABLE_CPU_COLLECTIVES
 #if defined(__linux__)
 #include "gloo/transport/tcp/attr.h"
 #include "gloo/transport/tcp/device.h"
@@ -135,6 +140,7 @@ void reactantReleaseAddressRange(void *base, size_t nbytes);
 #include "xla/backends/cpu/collectives/gloo_kv_store.h"
 #include "xla/backends/cpu/collectives/mpi_collectives.h"
 #endif // defined(__linux__)
+#endif // REACTANT_ENABLE_CPU_COLLECTIVES
 
 // shardy
 #include "shardy/dialect/sdy/ir/dialect.h"
@@ -186,8 +192,10 @@ void reactantReleaseAddressRange(void *base, size_t nbytes);
 #include "xla/python/pjrt_ifrt/xla_sharding.h"
 
 // IFRT - Proxy (RPC)
+#ifdef REACTANT_ENABLE_IFRT_PROXY
 #include "xla/python/ifrt_proxy/client/registry.h"
 #include "xla/python/ifrt_proxy/server/grpc_server.h"
+#endif
 
 // Cost Analysis
 #include "xla/debug_options_flags.h"
@@ -210,16 +218,20 @@ void reactantReleaseAddressRange(void *base, size_t nbytes);
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/raw_ostream.h>
 
+#ifdef REACTANT_ENABLE_PROFILER
 #include "plugin/xprof/worker/stub_factory.h"
 #include "xprof/convert/tool_options.h"
 #include "xprof/pywrap/profiler_plugin_impl.h"
+#endif
 
 #include "absl/status/statusor.h"
 #include "xla/pjrt/proto/compile_options.pb.h"
 
 using namespace mlir;
 using namespace xla;
+#ifdef REACTANT_ENABLE_PROFILER
 using ::tensorflow::profiler::ToolOptions;
+#endif
 
 namespace {
 
@@ -404,6 +416,7 @@ REACTANT_ABI MlirType mlirGetFunctionTypeFromOperation(MlirOperation op) {
     return wrap(funcOp.getFunctionType());
   }
   ReactantThrowError("Not a function op");
+  return MlirType{nullptr};
 }
 
 REACTANT_ABI bool mlirIsFunctionOpInterface(MlirOperation op) {
@@ -554,6 +567,7 @@ enzymeActivityAttrGet(MlirContext ctx, int32_t val) {
 // advanced_config_keys/values are parallel arrays of key-value pairs that
 // get inserted into ProfileOptions::advanced_configuration.
 // Pass n_advanced=0 with nullptr for keys/values to use defaults.
+#ifdef REACTANT_ENABLE_PROFILER
 REACTANT_ABI tsl::ProfilerSession *
 CreateProfilerSession(uint32_t device_tracer_level, uint32_t host_tracer_level,
                       const char **advanced_config_keys,
@@ -583,6 +597,24 @@ REACTANT_ABI void ProfilerSessionCollectData(tsl::ProfilerSession *session,
 REACTANT_ABI void ProfilerSessionDelete(tsl::ProfilerSession *session) {
   delete session;
 }
+#else
+REACTANT_ABI void *CreateProfilerSession(uint32_t device_tracer_level,
+                                         uint32_t host_tracer_level,
+                                         const char **advanced_config_keys,
+                                         const char **advanced_config_values,
+                                         int n_advanced) {
+  if (ReactantThrowError)
+    ReactantThrowError("Profiler session support is not enabled in this build");
+  return nullptr;
+}
+
+REACTANT_ABI void ProfilerSessionCollectData(void *session, const char *path) {
+  if (ReactantThrowError)
+    ReactantThrowError("Profiler session support is not enabled in this build");
+}
+
+REACTANT_ABI void ProfilerSessionDelete(void *session) {}
+#endif
 
 REACTANT_ABI int64_t ProfilerActivityStart(const char *name, int level) {
   return tsl::profiler::TraceMe::ActivityStart(name, level);
@@ -592,6 +624,7 @@ REACTANT_ABI void ProfilerActivityEnd(int64_t id) {
   tsl::profiler::TraceMe::ActivityEnd(id);
 }
 
+#ifdef REACTANT_ENABLE_PROFILER
 REACTANT_ABI tsl::profiler::ProfilerServer *ProfilerServerStart(int32_t port) {
   auto server = new tsl::profiler::ProfilerServer();
   server->StartProfilerServer(port);
@@ -601,6 +634,15 @@ REACTANT_ABI tsl::profiler::ProfilerServer *ProfilerServerStart(int32_t port) {
 REACTANT_ABI void ProfilerServerStop(tsl::profiler::ProfilerServer *server) {
   delete server;
 }
+#else
+REACTANT_ABI void *ProfilerServerStart(int32_t port) {
+  if (ReactantThrowError)
+    ReactantThrowError("Profiler server support is not enabled in this build");
+  return nullptr;
+}
+
+REACTANT_ABI void ProfilerServerStop(void *server) {}
+#endif
 
 PjRtClient *MakeCPUClientInternal(
     uint8_t asynchronous, int node_id,
@@ -613,7 +655,7 @@ PjRtClient *MakeCPUClientInternal(
   if (collectives.has_value())
     options.collectives = collectives.value();
 
-  return MyValueOrThrow(GetPjRtCpuClient(options)).release();
+  return MyValueOrThrow(GetXlaPjrtCpuClient(options)).release();
 }
 
 REACTANT_ABI PjRtClient *MakeCPUClient(uint8_t asynchronous, int node_id) {
@@ -660,7 +702,7 @@ MakeGPUClient(int node_id, int num_nodes, int64_t *allowed_devices,
   options.platform_name =
       platform_name ? std::string(platform_name) : std::optional<std::string>();
   // options.collectives = num_nodes;
-  auto clientErr = GetStreamExecutorGpuClient(options);
+  auto clientErr = GetXlaPjrtGpuClient(options);
 
   if (!clientErr.ok()) {
     auto str = clientErr.status().message();
@@ -2417,6 +2459,7 @@ HloPrintOptions getHloPrintOptions(int32_t print_options) {
     return HloPrintOptions::ModuleFingerprint();
   default:
     ReactantThrowError("Invalid print_options");
+    return HloPrintOptions::Default();
   }
 }
 
@@ -2492,6 +2535,7 @@ REACTANT_ABI void FreeHloModule(HeldHloModule *hlo_module) {
 //       .release();
 // }
 
+#ifdef REACTANT_ENABLE_IFRT_PROXY
 REACTANT_ABI void ifrt_proxy_grpc_server_dtor(ifrt::proxy::GrpcServer *server) {
   delete server;
 }
@@ -2522,6 +2566,28 @@ ifrt_proxy_create_client(const char *c_proxy_server_address,
              ifrt::proxy::CreateClient(proxy_server_address, options))
       .release();
 }
+#else
+REACTANT_ABI void ifrt_proxy_grpc_server_dtor(void *server) {}
+
+REACTANT_ABI const char *ifrt_proxy_grpc_server_address(void *server) {
+  if (ReactantThrowError)
+    ReactantThrowError("IFRT proxy support is not enabled in this build");
+  return nullptr;
+}
+
+REACTANT_ABI void ifrt_proxy_grpc_server_wait(void *server) {
+  if (ReactantThrowError)
+    ReactantThrowError("IFRT proxy support is not enabled in this build");
+}
+
+REACTANT_ABI ifrt::Client *
+ifrt_proxy_create_client(const char *c_proxy_server_address,
+                         int connection_timeout_in_minutes) {
+  if (ReactantThrowError)
+    ReactantThrowError("IFRT proxy support is not enabled in this build");
+  return nullptr;
+}
+#endif
 
 static ifrt::Client *ifrt_pjrt_make_client(
     PjRtClient *pjrt_client, int node_id, int num_nodes,
@@ -2564,7 +2630,9 @@ REACTANT_ABI ifrt::Client *ifrt_pjrt_make_client_with_default_kv_store(
                                kv_store);
 }
 
+#ifdef REACTANT_ENABLE_CPU_COLLECTIVES
 const char *const kMpiTrampolineLibEnv = "MPITRAMPOLINE_LIB";
+#endif
 
 REACTANT_ABI ifrt::Client *
 ifrt_make_pjrt_cpu_client(uint8_t asynchronous, int node_id, int num_nodes,
@@ -2574,6 +2642,7 @@ ifrt_make_pjrt_cpu_client(uint8_t asynchronous, int node_id, int num_nodes,
   std::optional<std::shared_ptr<KeyValueStoreInterface>> kv_store;
 
   if (distributed_runtime_client != nullptr) {
+#ifdef REACTANT_ENABLE_CPU_COLLECTIVES
     auto mpi_trampoline_path = llvm::sys::Process::GetEnv(kMpiTrampolineLibEnv);
     if (mpi_trampoline_path) {
 #if defined(__linux__) || defined(__APPLE__)
@@ -2613,6 +2682,16 @@ ifrt_make_pjrt_cpu_client(uint8_t asynchronous, int node_id, int num_nodes,
           "Gloo TCP Collectives only implemented for linux and macos");
 #endif
     }
+#else
+    if (error) {
+      *error = "CPU collectives support is not enabled in this build";
+    }
+    if (ReactantThrowError) {
+      ReactantThrowError(
+          "CPU collectives support is not enabled in this build");
+    }
+    return nullptr;
+#endif
   }
 
   PjRtClient *pjrt_client =
@@ -3166,9 +3245,12 @@ REACTANT_ABI int64_t ifrt_array_ndims(HeldIfrtArray *array) {
   return array->obj()->shape().dims().size();
 }
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wreturn-type-c-linkage"
 REACTANT_ABI ifrt::DType ifrt_array_eltype(HeldIfrtArray *array) {
   return array->obj()->dtype();
 }
+#pragma clang diagnostic pop
 
 REACTANT_ABI ifrt::Client *ifrt_array_to_client(HeldIfrtArray *array) {
   return array->obj()->client();
@@ -3815,6 +3897,7 @@ REACTANT_ABI HeldIfrtArray *ifrt_copy_array(HeldIfrtArray *array) {
     return reactant::capture(res);
   }
   ReactantThrowError("Only ifrt-pjrt arrays are supported for now");
+  return nullptr;
 }
 
 struct LinkableRuntime {
@@ -4175,7 +4258,7 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
           b, funcOp.getLoc(),
           mlir::SplatElementsAttr::get(TT, b.getIntegerAttr(IT, consts[i])));
       arg.replaceAllUsesWith(cst);
-      funcOp.eraseArgument(argcnt + i);
+      (void)funcOp.eraseArgument(argcnt + i);
     }
 
     for (int64_t i = 0; i < argcnt; i++) {
@@ -4482,7 +4565,7 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
       for (int64_t i = 0; i < argcnt; i++)
         if (dupOf[i] != -1)
           folded.set(i);
-      funcOp.eraseArguments(folded);
+      (void)funcOp.eraseArguments(folded);
       funcOp.setType(mlir::FunctionType::get(
           module->getContext(), funcOp.getBody().front().getArgumentTypes(),
           keptTypes));
@@ -4545,7 +4628,7 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
 REACTANT_ABI HeldHloModule *convertMlirModuleToHloModule(MlirModule mod) {
   mlir::ModuleOp cmod_op = cast<ModuleOp>(*unwrap(mod));
   std::shared_ptr<xla::HloModule> hlo_module =
-      std::move(MyValueOrThrow(xla::ConvertStablehloToHlo(cmod_op)));
+      MyValueOrThrow(xla::ConvertStablehloToHlo(cmod_op));
   return reactant::capture(hlo_module);
 }
 
@@ -4634,6 +4717,7 @@ hloInstructionGetFusionKind(HloInstruction *hlo_instruction) {
     return static_cast<uint8_t>(hlo_instruction_fusion->fusion_kind());
   }
   ReactantThrowError("hloInstructionGetFusionKind: not a fusion instruction");
+  return 0;
 }
 
 REACTANT_ABI const char *hloFusionKindToString(uint8_t kind) {
@@ -4649,6 +4733,7 @@ hloInstructionFusedInstructionsComputation(HloInstruction *hlo_instruction) {
   }
   ReactantThrowError("hloInstructionFusedInstructionsComputation: not a fusion "
                      "instruction");
+  return nullptr;
 }
 
 struct JLEstimateRunTimeData {
@@ -4750,6 +4835,7 @@ REACTANT_ABI void EstimateRunTimeForInstruction(void *gpu_performance_model,
 
 #endif
 
+#ifdef REACTANT_ENABLE_PROFILER
 REACTANT_ABI void
 InitializeXProfStubs(const char *cstr_worker_service_address) {
   std::string worker_service_address = std::string(cstr_worker_service_address);
@@ -4851,6 +4937,40 @@ REACTANT_ABI int XSpaceToToolsData(
 
   return 0;
 }
+#else
+REACTANT_ABI void
+InitializeXProfStubs(const char *cstr_worker_service_address) {
+  if (ReactantThrowError)
+    ReactantThrowError("XProf support is not enabled in this build");
+}
+
+REACTANT_ABI void StartGrpcServer(int port) {
+  if (ReactantThrowError)
+    ReactantThrowError("XProf support is not enabled in this build");
+}
+
+REACTANT_ABI int XSpaceToToolsData(
+    const char **xspace_paths, int64_t num_paths, const char *tool_name,
+    const char **bool_keys, const bool *bool_values, int64_t bool_count,
+    const char **int_keys, const int *int_values, int64_t int_count,
+    const char **str_keys, const char **str_values, int64_t str_count,
+    char **result_data, int64_t *result_size, bool *is_binary, char **error) {
+  if (result_data)
+    *result_data = nullptr;
+  if (result_size)
+    *result_size = 0;
+  if (is_binary)
+    *is_binary = false;
+  if (error) {
+    const char *msg = "XProf support is not enabled in this build";
+    size_t len = strlen(msg);
+    char *err = (char *)malloc(len + 1);
+    memcpy(err, msg, len + 1);
+    *error = err;
+  }
+  return 1;
+}
+#endif
 
 REACTANT_ABI void *ReactantGetDebugOptions(size_t *size) {
   xla::DebugOptions options = xla::GetDebugOptionsFromFlags();
