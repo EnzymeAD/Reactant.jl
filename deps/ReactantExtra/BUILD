@@ -45,17 +45,6 @@ config_setting(
     flag_values = {":enable_cpu_collectives": "True"},
 )
 
-config_setting(
-    name = "with_cpu_collectives_linux",
-    constraint_values = ["@platforms//os:linux"],
-    flag_values = {":enable_cpu_collectives": "True"},
-)
-
-config_setting(
-    name = "with_cpu_collectives_macos",
-    constraint_values = ["@platforms//os:macos"],
-    flag_values = {":enable_cpu_collectives": "True"},
-)
 # =============================================================================
 # Proto file collection for Julia bindings generation
 # =============================================================================
@@ -1148,6 +1137,26 @@ platform(
 )
 
 cc_library(
+    name = "cpu_collectives_deps",
+    deps = select({
+        # gloo tcp transport only builds on linux
+        "@platforms//os:macos": [
+            "@gloo//:transport_uv",
+            "@xla//xla/backends/cpu/collectives:gloo_collectives",
+            "@xla//xla/backends/cpu/collectives:gloo_kv_store",
+            "@xla//xla/backends/cpu/collectives:mpi_collectives",
+        ],
+        "@platforms//os:linux": [
+            "@gloo//:transport_tcp",
+            "@xla//xla/backends/cpu/collectives:gloo_collectives",
+            "@xla//xla/backends/cpu/collectives:gloo_kv_store",
+            "@xla//xla/backends/cpu/collectives:mpi_collectives",
+        ],
+        "//conditions:default": [],
+    }),
+)
+
+cc_library(
     name = "ReactantExtraLib",
     srcs = glob(
         [
@@ -1525,18 +1534,8 @@ cc_library(
         ],
         "//conditions:default": [],
     }) + select({
-        # gloo tcp transport only builds on linux
-        ":with_cpu_collectives_macos": [
-            "@gloo//:transport_uv",
-            "@xla//xla/backends/cpu/collectives:gloo_collectives",
-            "@xla//xla/backends/cpu/collectives:gloo_kv_store",
-            "@xla//xla/backends/cpu/collectives:mpi_collectives",
-        ],
-        ":with_cpu_collectives_linux": [
-            "@gloo//:transport_tcp",
-            "@xla//xla/backends/cpu/collectives:gloo_collectives",
-            "@xla//xla/backends/cpu/collectives:gloo_kv_store",
-            "@xla//xla/backends/cpu/collectives:mpi_collectives",
+        ":with_cpu_collectives": [
+            ":cpu_collectives_deps",
         ],
         "//conditions:default": [],
     }) + if_cuda([
