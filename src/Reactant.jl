@@ -380,6 +380,9 @@ function initialize_ptrs()
             "ncclRecv",
             "ncclGroupStart",
             "ncclGroupEnd",
+            "ncclBroadcast",
+            "ncclCommUserRank",
+            "ncclCommCount",
         )
             MLIR.API.EnzymeJaXMapSymbol(
                 name, Libdl.dlsym(Reactant_jll.libReactantExtra_handle, name)
