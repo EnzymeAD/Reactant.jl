@@ -57,3 +57,16 @@ cc_test(
     linkstatic = True,
     deps = ["@com_google_googletest//:gtest_main"],
 )
+
+cc_test(
+    name = "mlir_hlo_utils_test",
+    srcs = [
+        "mlir_hlo_utils_test.cpp",
+        "reactant_extra_test.h",
+        "//:libReactantExtra.so",
+    ],
+    data = ["//:libReactantExtra.so"],
+    env = {"LD_LIBRARY_PATH": "."},
+    linkstatic = True,
+    deps = ["@com_google_googletest//:gtest_main"],
+)
