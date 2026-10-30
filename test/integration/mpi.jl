@@ -59,28 +59,20 @@ elseif RUN_GPU_MPI_TESTS
 end
 
 # run tests
-if RUN_CPU_MPI_TESTS
-    @testset "Comm_rank" begin
-        enable_native_mpi_overlay()
-        comm = MPI.COMM_WORLD
-        expected = MPI.Comm_rank(comm)
-        @test expected == @jit MPI.Comm_rank(comm)
-        disable_native_mpi_overlay()
-    end
-elseif RUN_GPU_MPI_TESTS
-    @info "Skipping GPU MPI Comm_rank tests; Not implemented"
+@testset "Comm_rank" begin
+    enable_native_mpi_overlay()
+    comm = MPI.COMM_WORLD
+    expected = MPI.Comm_rank(comm)
+    @test expected == @jit MPI.Comm_rank(comm)
+    disable_native_mpi_overlay()
 end
 
-if RUN_CPU_MPI_TESTS
-    @testset "Comm_size" begin
-        enable_native_mpi_overlay()
-        comm = MPI.COMM_WORLD
-        expected = MPI.Comm_size(comm)
-        @test expected == @jit MPI.Comm_size(comm)
-        disable_native_mpi_overlay()
-    end
-elseif RUN_GPU_MPI_TESTS
-    @info "Skipping GPU MPI Comm_size tests; Not implemented"
+@testset "Comm_size" begin
+    enable_native_mpi_overlay()
+    comm = MPI.COMM_WORLD
+    expected = MPI.Comm_size(comm)
+    @test expected == @jit MPI.Comm_size(comm)
+    disable_native_mpi_overlay()
 end
 
 @testset "Allreduce" begin
@@ -471,8 +463,8 @@ elseif RUN_GPU_MPI_TESTS
     end
 end
 
-if RUN_CPU_MPI_TESTS
-    @testset "Bcast!" begin
+@testset "Bcast!" begin
+    if RUN_CPU_MPI_TESTS
         comm = MPI.COMM_WORLD
         rank = MPI.Comm_rank(comm)
         root = 0
@@ -496,7 +488,30 @@ if RUN_CPU_MPI_TESTS
                 @test expected == @jit MPI.Bcast!(ConcreteRArray(x), root, comm)
             end
         end
+    elseif RUN_GPU_MPI_TESTS
+        @info "Skipping GPU MPI Bcast! tests; Not implemented"
+        comm = MPI.COMM_WORLD
+        rank = MPI.Comm_rank(comm)
+        root = 0
+
+        for T in gpu_datatypes
+            @testset "Type: $T" begin
+                # just the root have the real values, others have zeros
+                if rank == root
+                    x = ones(T, 5)
+                else
+                    x = zeros(T, 5)
+                end
+                # try block catches any invalid combinations we missed above, depending on
+                # mpi implem
+                expected = try
+                    ConcreteRArray(MPI.Bcast!(x, root, comm))
+                catch
+                    continue
+                end
+
+                @test expected == @jit MPI.Bcast!(ConcreteRArray(x), root, comm)
+            end
+        end
     end
-elseif RUN_GPU_MPI_TESTS
-    @info "Skipping GPU MPI Bcast! tests; Not implemented"
 end
