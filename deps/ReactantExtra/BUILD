@@ -44,6 +44,18 @@ config_setting(
     name = "with_cpu_collectives",
     flag_values = {":enable_cpu_collectives": "True"},
 )
+
+config_setting(
+    name = "with_cpu_collectives_linux",
+    constraint_values = ["@platforms//os:linux"],
+    flag_values = {":enable_cpu_collectives": "True"},
+)
+
+config_setting(
+    name = "with_cpu_collectives_macos",
+    constraint_values = ["@platforms//os:macos"],
+    flag_values = {":enable_cpu_collectives": "True"},
+)
 # =============================================================================
 # Proto file collection for Julia bindings generation
 # =============================================================================
@@ -1478,17 +1490,9 @@ cc_library(
         "@com_google_absl//absl/status:statusor",
     ] + select({
         ":with_profiler": [
-            "@xla//xla/backends/profiler/cpu:host_tracer",
-            "@xla//xla/backends/profiler/cpu:host_tracer_impl",
-            "@xla//xla/backends/profiler/cpu:metadata_collector",
-            "@xla//xla/backends/profiler/cpu:metadata_utils",
-            "@xla//xla/backends/profiler/tpu:tpu_tracer",
-            "@xla//xla/tsl/profiler/backends/cpu:annotation_stack_impl",
-            "@xla//xla/tsl/profiler/backends/cpu:traceme_recorder_impl",
-            "@xla//xla/tsl/profiler/rpc:profiler_server_impl",
-            "@xla//xla/tsl/profiler/rpc/client:capture_profile",
-            "@xla//xla/tsl/profiler/rpc/client:profiler_client",
-            "@xla//xla/tsl/profiler/utils:time_utils_impl",
+            "@org_xprof//plugin/xprof/worker:stub_factory",
+            "@org_xprof//xprof/convert:tool_options",
+            "@org_xprof//xprof/pywrap:profiler_plugin_impl",
             "@tsl//tsl/profiler/lib:profiler_controller",
             "@tsl//tsl/profiler/lib:profiler_factory_impl",
             "@tsl//tsl/profiler/lib:profiler_session",
@@ -1500,9 +1504,17 @@ cc_library(
             "@tsl//tsl/profiler/protobuf:profiler_service_proto_cc_impl",
             "@tsl//tsl/profiler/protobuf:trace_events_proto_cc_impl",
             "@tsl//tsl/profiler/protobuf:xplane_proto_cc_impl",
-            "@org_xprof//xprof/convert:tool_options",
-            "@org_xprof//plugin/xprof/worker:stub_factory",
-            "@org_xprof//xprof/pywrap:profiler_plugin_impl",
+            "@xla//xla/backends/profiler/cpu:host_tracer",
+            "@xla//xla/backends/profiler/cpu:host_tracer_impl",
+            "@xla//xla/backends/profiler/cpu:metadata_collector",
+            "@xla//xla/backends/profiler/cpu:metadata_utils",
+            "@xla//xla/backends/profiler/tpu:tpu_tracer",
+            "@xla//xla/tsl/profiler/backends/cpu:annotation_stack_impl",
+            "@xla//xla/tsl/profiler/backends/cpu:traceme_recorder_impl",
+            "@xla//xla/tsl/profiler/rpc:profiler_server_impl",
+            "@xla//xla/tsl/profiler/rpc/client:capture_profile",
+            "@xla//xla/tsl/profiler/rpc/client:profiler_client",
+            "@xla//xla/tsl/profiler/utils:time_utils_impl",
         ],
         "//conditions:default": [],
     }) + select({
@@ -1513,7 +1525,14 @@ cc_library(
         ],
         "//conditions:default": [],
     }) + select({
-        ":with_cpu_collectives": [
+        # gloo tcp transport only builds on linux
+        ":with_cpu_collectives_macos": [
+            "@gloo//:transport_uv",
+            "@xla//xla/backends/cpu/collectives:gloo_collectives",
+            "@xla//xla/backends/cpu/collectives:gloo_kv_store",
+            "@xla//xla/backends/cpu/collectives:mpi_collectives",
+        ],
+        ":with_cpu_collectives_linux": [
             "@gloo//:transport_tcp",
             "@xla//xla/backends/cpu/collectives:gloo_collectives",
             "@xla//xla/backends/cpu/collectives:gloo_kv_store",
