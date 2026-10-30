@@ -17064,6 +17064,12 @@ function mlirPassManagerEnableXLATraceTiming(passManager)
     )::Cvoid
 end
 
+function mlirLlvmThreadPoolCreateWithMaxThreads(maxThreads)
+    @ccall Reactant_jll.libReactantExtra.mlirLlvmThreadPoolCreateWithMaxThreads(
+        maxThreads::Cuint
+    )::MlirLlvmThreadPool
+end
+
 function mlirOperationInject(ctx, block, code, location, verify_after_parse)
     @ccall Reactant_jll.libReactantExtra.mlirOperationInject(
         ctx::MlirContext,
