@@ -1577,8 +1577,6 @@ function default_debugcache()
     return Vector{@NamedTuple{f_name::String, file::String, line::Int64}}(undef, 0)
 end
 
-# Since we cache these objects we cannot cache data containing MLIR operations (e.g. the entry must be a string
-# and not the operation itself).
 struct LLVMFunc{F,tt}
     f::Union{F,Nothing}
     entry::String
@@ -1592,12 +1590,13 @@ function Base.getproperty(f::LLVMFunc{F,tt}, sym::Symbol) where {F,tt}
     end
 end
 
-# cache of compilation caches, per module
-const _llvm_compiler_caches = Dict{MLIR.IR.Module,Dict{Any,LLVMFunc}}()
+# cache of compilation caches, per module: maps compiled kernels (and their call wrappers)
+# to the name of the corresponding function in the module
+const _llvm_compiler_caches = Dict{MLIR.IR.Module,Dict{Any,String}}()
 function llvm_compiler_cache(_mod::MLIR.IR.Module)
     cache = get(_llvm_compiler_caches, _mod, nothing)
     if cache === nothing
-        cache = Dict{Any,LLVMFunc}()
+        cache = Dict{Any,String}()
         _llvm_compiler_caches[_mod] = cache
     end
     return cache
