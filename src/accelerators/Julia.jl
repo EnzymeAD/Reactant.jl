@@ -34,6 +34,44 @@ function memdup(src::Ptr{T}, n::Integer) where {T}
     return dst
 end
 
+function pjrt_elsize(T::CAPI.PJRT_Buffer_Type)
+    if T in (
+        CAPI.PJRT_Buffer_Type_PRED,
+        CAPI.PJRT_Buffer_Type_S8,
+        CAPI.PJRT_Buffer_Type_U8,
+        CAPI.PJRT_Buffer_Type_F8E5M2,
+        CAPI.PJRT_Buffer_Type_F8E4M3FN,
+        CAPI.PJRT_Buffer_Type_F8E4M3B11FNUZ,
+        CAPI.PJRT_Buffer_Type_F8E5M2FNUZ,
+        CAPI.PJRT_Buffer_Type_F8E4M3FNUZ,
+        CAPI.PJRT_Buffer_Type_F8E4M3,
+        CAPI.PJRT_Buffer_Type_F8E3M4,
+        CAPI.PJRT_Buffer_Type_F8E8M0FNU,
+    )
+        1
+    elseif T in (
+        CAPI.PJRT_Buffer_Type_S16,
+        CAPI.PJRT_Buffer_Type_U16,
+        CAPI.PJRT_Buffer_Type_F16,
+        CAPI.PJRT_Buffer_Type_BF16,
+    )
+        2
+    elseif T in (CAPI.PJRT_Buffer_Type_S32, CAPI.PJRT_Buffer_Type_U32, CAPI.PJRT_Buffer_Type_F32)
+        4
+    elseif T in (
+        CAPI.PJRT_Buffer_Type_S64,
+        CAPI.PJRT_Buffer_Type_U64,
+        CAPI.PJRT_Buffer_Type_F64,
+        CAPI.PJRT_Buffer_Type_C64,
+    )
+        8
+    elseif type == CAPI.PJRT_Buffer_Type_C128
+        16
+    else
+        return nothing
+    end
+end
+
 ## vtables
 const vtable_api = Ref{CAPI.PJRT_Api}()
 const vtable_error = Ref{CAPI.PJRT_Error_FunctionTable}()
@@ -75,15 +113,15 @@ function unimplemented()
     return ptr
 end
 
-function invalid_argument()
+function invalid_argument(reason="invalid argument")
     ptr = unsafe_convert(Ptr{Error}, Libc.malloc(sizeof(Error)))
-    unsafe_store!(ptr, Error(CAPI.PJRT_Error_Code_INVALID_ARGUMENT, "invalid argument"))
+    unsafe_store!(ptr, Error(CAPI.PJRT_Error_Code_INVALID_ARGUMENT, reason))
     return ptr
 end
 
-function resource_exhausted()
+function resource_exhausted(reason="out of memory")
     ptr = unsafe_convert(Ptr{Error}, Libc.malloc(sizeof(Error)))
-    unsafe_store!(ptr, Error(CAPI.PJRT_Error_Code_RESOURCE_EXHAUSTED, "out of memory"))
+    unsafe_store!(ptr, Error(CAPI.PJRT_Error_Code_RESOURCE_EXHAUSTED, reason))
     return ptr
 end
 
@@ -398,10 +436,27 @@ function buffer_destroy(args::Ptr{CAPI.PJRT_Buffer_Destroy_Args})::Ptr{CAPI.PJRT
     return ok()
 end
 
+# `data == C_NULL` marks a deleted buffer; live buffers always have a non-null `data` (see `memdup`)
+function buffer_delete(args::Ptr{CAPI.PJRT_Buffer_Delete_Args})::Ptr{CAPI.PJRT_Error}
+    ptr = Ptr{Buffer}(unsafe_load(args.buffer))
+    Libc.free(unsafe_load(ptr.data))
+    unsafe_store!(ptr.data, C_NULL)
+    return ok()
+end
+
+function buffer_is_deleted(
+    args::Ptr{CAPI.PJRT_Buffer_IsDeleted_Args}
+)::Ptr{CAPI.PJRT_Error}
+    buffer = unsafe_load(Ptr{Buffer}(unsafe_load(args.buffer)))
+    unsafe_store!(args.is_deleted, buffer.data == C_NULL)
+    return ok()
+end
+
 function buffer_element_type(
     args::Ptr{CAPI.PJRT_Buffer_ElementType_Args}
 )::Ptr{CAPI.PJRT_Error}
     buffer = unsafe_load(Ptr{Buffer}(unsafe_load(args.buffer)))
+    buffer.data == C_NULL && return invalid_argument("Buffer has been deleted or donated")
     unsafe_store!(args.type, buffer.type)
     return ok()
 end
@@ -410,32 +465,9 @@ function buffer_dimensions(
     args::Ptr{CAPI.PJRT_Buffer_Dimensions_Args}
 )::Ptr{CAPI.PJRT_Error}
     buffer = unsafe_load(Ptr{Buffer}(unsafe_load(args.buffer)))
+    buffer.data == C_NULL && return invalid_argument("Buffer has been deleted or donated")
     unsafe_store!(args.dims, buffer.dims)
     unsafe_store!(args.num_dims, buffer.num_dims)
-    return ok()
-end
-
-# deprecated, but required for backward compatibility
-# use layouts extension instead
-function buffer_get_memory_layout(
-    args::Ptr{CAPI.PJRT_Buffer_GetMemoryLayout_Args}
-)::Ptr{CAPI.PJRT_Error}
-    buffer = unsafe_load(Ptr{Buffer}(unsafe_load(args.buffer)))
-
-    # dense layout without tiling; `minor_to_major` has the lifetime of `buffer` as required by PJRT
-    tiled = CAPI.PJRT_Buffer_MemoryLayout_Tiled(
-        csizeof(CAPI.PJRT_Buffer_MemoryLayout_Tiled),
-        C_NULL,
-        buffer.minor_to_major,
-        buffer.num_dims,
-        C_NULL,
-        C_NULL,
-        0,
-    )
-    unsafe_store!(args.layout.struct_size, csizeof(CAPI.PJRT_Buffer_MemoryLayout))
-    unsafe_store!(args.layout.extension_start, C_NULL)
-    unsafe_store!(args.layout.tiled, tiled)
-    unsafe_store!(args.layout.type, CAPI.PJRT_Buffer_MemoryLayout_Type_Tiled)
     return ok()
 end
 
@@ -443,7 +475,24 @@ function buffer_on_device_size_in_bytes(
     args::Ptr{CAPI.PJRT_Buffer_OnDeviceSizeInBytes_Args}
 )::Ptr{CAPI.PJRT_Error}
     buffer = unsafe_load(Ptr{Buffer}(unsafe_load(args.buffer)))
+    buffer.data == C_NULL && return invalid_argument("Buffer has been deleted or donated")
     unsafe_store!(args.on_device_size_in_bytes, buffer.size_in_bytes)
+    return ok()
+end
+
+function buffer_device(args::Ptr{CAPI.PJRT_Buffer_Device_Args})::Ptr{CAPI.PJRT_Error}
+    buffer = unsafe_load(Ptr{Buffer}(unsafe_load(args.buffer)))
+    buffer.data == C_NULL && return invalid_argument("Buffer has been deleted or donated")
+    unsafe_store!(args.device, Ptr{CAPI.PJRT_Device}(buffer.device))
+    return ok()
+end
+
+function buffer_memory(args::Ptr{CAPI.PJRT_Buffer_Memory_Args})::Ptr{CAPI.PJRT_Error}
+    buffer = unsafe_load(Ptr{Buffer}(unsafe_load(args.buffer)))
+    buffer.data == C_NULL && return invalid_argument("Buffer has been deleted or donated")
+    # buffers are always allocated on the default memory of their device
+    memory = unsafe_load(unsafe_load(buffer.device.memories))
+    unsafe_store!(args.memory, Ptr{CAPI.PJRT_Memory}(memory))
     return ok()
 end
 
@@ -451,6 +500,7 @@ function buffer_copy_to_device(
     args::Ptr{CAPI.PJRT_Buffer_CopyToDevice_Args}
 )::Ptr{CAPI.PJRT_Error}
     src = unsafe_load(Ptr{Buffer}(unsafe_load(args.buffer)))
+    src.data == C_NULL && return invalid_argument("Buffer has been deleted or donated")
     dst_device = Ptr{Device}(unsafe_load(args.dst_device))
 
     # `pjrt_c_api.h` requires an error if the buffer is already on `dst_device`
@@ -486,8 +536,56 @@ function buffer_copy_to_device(
     return ok()
 end
 
+function buffer_to_host_buffer(
+    args::Ptr{CAPI.PJRT_Buffer_ToHostBuffer_Args}
+)::Ptr{CAPI.PJRT_Error}
+    src = unsafe_load(Ptr{Buffer}(unsafe_load(args.src)))
+    src.data == C_NULL && return invalid_argument("Buffer has been deleted or donated")
+
+    # relayout is not supported, so `host_layout` must match the dense layout of `src`
+    host_layout = unsafe_load(args.host_layout)
+    if host_layout != C_NULL
+        type = unsafe_load(host_layout.type)
+        type != CAPI.PJRT_Buffer_MemoryLayout_Type_Tiled && return unimplemented()
+
+        tiled = unsafe_load(host_layout.tiled)
+        tiled.num_tiles != 0 && return unimplemented()
+        tiled.minor_to_major_size != src.num_dims && return invalid_argument()
+        for i in 1:(src.num_dims)
+            m2m = unsafe_load(tiled.minor_to_major, i)
+            m2m != unsafe_load(src.minor_to_major, i) && return unimplemented()
+        end
+    end
+
+    # `dst == C_NULL` queries the required size
+    dst = unsafe_load(args.dst)
+    if dst == C_NULL
+        unsafe_store!(args.dst_size, src.size_in_bytes)
+        return ok()
+    end
+    unsafe_load(args.dst_size) < src.size_in_bytes && return invalid_argument()
+
+    # the copy is synchronous
+    unsafe_copyto!(Ptr{UInt8}(dst), Ptr{UInt8}(src.data), src.size_in_bytes)
+
+    # TODO return an already-ready `PJRT_Event` once events are implemented
+    unsafe_store!(args.event, C_NULL)
+    return ok()
+end
+
 function buffer_is_on_cpu(args::Ptr{CAPI.PJRT_Buffer_IsOnCpu_Args})::Ptr{CAPI.PJRT_Error}
+    buffer = unsafe_load(Ptr{Buffer}(unsafe_load(args.buffer)))
+    buffer.data == C_NULL && return invalid_argument("Buffer has been deleted or donated")
     unsafe_store!(args.is_on_cpu, true)
+    return ok()
+end
+
+function buffer_unsafe_pointer(
+    args::Ptr{CAPI.PJRT_Buffer_UnsafePointer_Args}
+)::Ptr{CAPI.PJRT_Error}
+    buffer = unsafe_load(Ptr{Buffer}(unsafe_load(args.buffer)))
+    buffer.data == C_NULL && return invalid_argument("Buffer has been deleted or donated")
+    unsafe_store!(args.buffer_pointer, UInt(buffer.data))
     return ok()
 end
 
@@ -611,8 +709,86 @@ end
 function client_buffer_from_host_buffer(
     args::Ptr{CAPI.PJRT_Client_BufferFromHostBuffer_Args}
 )::Ptr{CAPI.PJRT_Error}
-    # TODO
-    return unimplemented()
+    # `memory` takes precedence over `device`
+    memory = Ptr{Memory}(unsafe_load(args.memory))
+
+    device = if memory != C_NULL
+        Ptr{Device}(unsafe_load(unsafe_load(memory.devices)))
+    else
+        Ptr{Device}(unsafe_load(args.device))
+    end
+    device == C_NULL && return invalid_argument("No device nor memory has been assigned")
+
+    # TODO we should be calling `PJRT_Device_DefaultMemory` if memory == C_NULL && device != C_NULL
+
+    # sub-byte types are packed, which is not supported yet
+    type = unsafe_load(args.type)
+    elsize = pjrt_elsize(type)
+    if isnothing(elsize)
+        return invalid_argument("Invalid Buffer eltype")
+    end
+
+    num_dims = Int(unsafe_load(args.num_dims))
+    host_dims = unsafe_load(args.dims)
+    size_in_bytes = elsize
+    for i in 1:num_dims
+        size_in_bytes *= unsafe_load(host_dims, i)
+    end
+
+    # only dense major-to-minor host data is supported; strides of size-1 dims are irrelevant
+    num_byte_strides = Int(unsafe_load(args.num_byte_strides))
+    if num_byte_strides != 0
+        num_byte_strides != num_dims && return invalid_argument()
+        byte_strides = unsafe_load(args.byte_strides)
+        stride = elsize
+        for i in num_dims:-1:1
+            dim = unsafe_load(host_dims, i)
+            dim != 1 && unsafe_load(byte_strides, i) != stride && return unimplemented()
+            stride *= dim
+        end
+    end
+
+    # relayout is not supported, so `device_layout` must be dense major-to-minor
+    device_layout = unsafe_load(args.device_layout)
+    if device_layout != C_NULL
+        layout_type = unsafe_load(device_layout.type)
+        layout_type != CAPI.PJRT_Buffer_MemoryLayout_Type_Tiled && return unimplemented()
+
+        tiled = unsafe_load(device_layout.tiled)
+        tiled.num_tiles != 0 && return unimplemented()
+        tiled.minor_to_major_size != num_dims && return invalid_argument()
+        for i in 1:num_dims
+            unsafe_load(tiled.minor_to_major, i) != num_dims - i && return unimplemented()
+        end
+    end
+
+    # the copy is synchronous, so all `host_buffer_semantics` are honored
+    data = memdup(Ptr{UInt8}(unsafe_load(args.data)), size_in_bytes)
+    dims = memdup(host_dims, num_dims)
+    minor_to_major = Ptr{Int64}(Libc.malloc(max(num_dims, 1) * sizeof(Int64)))
+    buffer = Ptr{Buffer}(Libc.malloc(sizeof(Buffer)))
+    if data == C_NULL || dims == C_NULL || minor_to_major == C_NULL || buffer == C_NULL
+        Libc.free(data)
+        Libc.free(dims)
+        Libc.free(minor_to_major)
+        Libc.free(buffer)
+        return resource_exhausted()
+    end
+
+    for i in 1:num_dims
+        unsafe_store!(minor_to_major, num_dims - i, i)
+    end
+
+    unsafe_store!(
+        buffer, Buffer(data, size_in_bytes, type, dims, minor_to_major, num_dims, device)
+    )
+
+    # TODO return an already-ready `PJRT_Event` once events are implemented
+    unsafe_store!(args.done_with_host_buffer, C_NULL)
+
+    # caller is responsible for freeing `buffer` with `PJRT_Buffer_Destroy`
+    unsafe_store!(args.buffer, Ptr{CAPI.PJRT_Buffer}(buffer))
+    return ok()
 end
 
 for T in [Error, Device, DeviceDescription, Memory, Buffer, Client]
@@ -730,17 +906,17 @@ function __init__()
         #= PJRT_Buffer_Dimensions =# @cfunction(buffer_dimensions, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_Dimensions_Args},)),
         #= PJRT_Buffer_UnpaddedDimensions =# c_unimplemented,
         #= PJRT_Buffer_DynamicDimensionIndices =# c_unimplemented,
-        #= PJRT_Buffer_GetMemoryLayout =# @cfunction(buffer_get_memory_layout, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_GetMemoryLayout_Args},)),
+        #= PJRT_Buffer_GetMemoryLayout =# c_unimplemented,
         #= PJRT_Buffer_OnDeviceSizeInBytes =# @cfunction(buffer_on_device_size_in_bytes, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_OnDeviceSizeInBytes_Args},)),
-        #= PJRT_Buffer_Device =# c_unimplemented,
-        #= PJRT_Buffer_Memory =# c_unimplemented,
-        #= PJRT_Buffer_Delete =# c_unimplemented,
-        #= PJRT_Buffer_IsDeleted =# c_unimplemented,
+        #= PJRT_Buffer_Device =# @cfunction(buffer_device, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_Device_Args},)),
+        #= PJRT_Buffer_Memory =# @cfunction(buffer_memory, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_Memory_Args},)),
+        #= PJRT_Buffer_Delete =# @cfunction(buffer_delete, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_Delete_Args},)),
+        #= PJRT_Buffer_IsDeleted =# @cfunction(buffer_is_deleted, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_IsDeleted_Args},)),
         #= PJRT_Buffer_CopyToDevice =# @cfunction(buffer_copy_to_device, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_CopyToDevice_Args},)),
-        #= PJRT_Buffer_ToHostBuffer =# c_unimplemented,
+        #= PJRT_Buffer_ToHostBuffer =# @cfunction(buffer_to_host_buffer, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_ToHostBuffer_Args},)),
         #= PJRT_Buffer_IsOnCpu =# @cfunction(buffer_is_on_cpu, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_IsOnCpu_Args},)),
         #= PJRT_Buffer_ReadyEvent =# c_unimplemented,
-        #= PJRT_Buffer_UnsafePointer =# c_unimplemented,
+        #= PJRT_Buffer_UnsafePointer =# @cfunction(buffer_unsafe_pointer, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_UnsafePointer_Args},)),
         #= PJRT_Buffer_IncreaseExternalReferenceCount =# c_unimplemented,
         #= PJRT_Buffer_DecreaseExternalReferenceCount =# c_unimplemented,
         #= PJRT_Buffer_OpaqueDeviceMemoryDataPointer =# c_unimplemented,
