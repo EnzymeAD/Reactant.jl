@@ -98,12 +98,16 @@ void mlirContextDestroy(MlirContext context);
 MlirModule mlirModuleCreateParse(MlirContext context, MlirStringRef module);
 void mlirModuleDestroy(MlirModule module);
 
-// Process initialization and dialect/pass registration (API.cpp).
+// Process initialization, dialect/pass registration, and FFI (API.cpp,
+// xla_ffi.cpp).
 void InitializeLogs(void);
 void RegisterDialects(MlirContext context);
 void InitializePasses(MlirDialectRegistry registry);
 void InitializeRegistry(MlirDialectRegistry registry);
 char *GetDefaultTargetTriple(void);
+void registerReactantXLAFFI(void);
+void RegisterCustomCallTarget(const char *name, void *address,
+                              const char *platform);
 
 // LinkableRuntime C ABI (API.cpp).
 void reactantXLAThrow(const char *message);

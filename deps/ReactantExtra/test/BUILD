@@ -44,3 +44,16 @@ cc_test(
     linkstatic = True,
     deps = ["@com_google_googletest//:gtest_main"],
 )
+
+cc_test(
+    name = "xla_ffi_test",
+    srcs = [
+        "reactant_extra_test.h",
+        "xla_ffi_test.cpp",
+        "//:libReactantExtra.so",
+    ],
+    data = ["//:libReactantExtra.so"],
+    env = {"LD_LIBRARY_PATH": "."},
+    linkstatic = True,
+    deps = ["@com_google_googletest//:gtest_main"],
+)
