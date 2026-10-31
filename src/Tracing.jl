@@ -895,7 +895,7 @@ Base.@nospecializeinfer function traced_type_inner(
     return T
 end
 
-const traced_type_cache = Dict{Tuple{TraceMode,Type,Any},Dict{Type,Type}}()
+const traced_type_cache = Dict{Tuple{TraceMode,Type,Any,Any},Dict{Type,Type}}()
 
 # function traced_type_generator(world::UInt, source, self, @nospecialize(T::Type), @nospecialize(mode::Type{<:Val}), @nospecialize(track_numbers::Type))
 #     @nospecialize
@@ -1121,7 +1121,7 @@ Base.@assume_effects :total @inline function traced_type(
 
     ndevices = Sharding.ndevices(sharding)
     cache = nothing
-    cache_key = (mode, track_numbers, ndevices)
+    cache_key = (mode, track_numbers, ndevices, runtime)
     if haskey(traced_type_cache, cache_key)
         cache = traced_type_cache[cache_key]
     else

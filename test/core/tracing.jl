@@ -361,6 +361,14 @@ end
         ],
     ) == (Foo{Float64,Bar{Float64},ConcreteRArray{Float64,1}}, [true, true, false])
 
+    for (N, A) in (
+        (ConcretePJRTNumber{Float64,1}, ConcretePJRTArray{Float64,1,1}),
+        (ConcreteIFRTNumber{Float64}, ConcreteIFRTArray{Float64,1,Nothing}),
+    )
+        @test Reactant.apply_type_with_promotion(Foo, [N, Bar{N}, A]) ==
+            (Foo{Float64,Bar{Float64},A}, [true, true, false])
+    end
+
     # Regression: concrete subtype has more params than the abstract bound.
     # Container{NF, G<:AbstractGridLike{NF}, F<:AbstractFoo{NF}} where F's concrete
     # type Bar{NF,A} has 2 params but AbstractFoo{NF} (the bound) has only 1.
@@ -411,6 +419,26 @@ end
         },
         [false, false, false],
     )
+end
+
+@testset "to_rarray with PJRT and IFRT runtimes" begin
+    struct VectorWithEltype{T,A<:AbstractVector{T}}
+        a::A
+    end
+    x = VectorWithEltype([1.0, 2.0])
+    pjrt_client = Reactant.Accelerators.CPU.make_pjrt_client()
+    ifrt_client = Reactant.Accelerators.CPU.make_ifrt_client()
+    pjrt = (Val(:PJRT), pjrt_client, ConcretePJRTArray, ConcretePJRTNumber)
+    ifrt = (Val(:IFRT), ifrt_client, ConcreteIFRTArray, ConcreteIFRTNumber)
+    # The traced type cache must not leak types from one runtime into the other
+    for (runtime, client, AT, NT) in (pjrt, ifrt, pjrt)
+        x_ra = Reactant.to_rarray(x; track_numbers=Number, runtime, client)
+        @test x_ra isa VectorWithEltype{Float64,<:AT}
+        @test Array(x_ra.a) == x.a
+
+        r = Reactant.to_rarray(0:0.25:1; track_numbers=Number, runtime, client)
+        @test r.step.hi isa NT
+    end
 end
 
 @testset "specialized dispatches" begin

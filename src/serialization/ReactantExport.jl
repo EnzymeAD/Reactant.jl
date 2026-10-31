@@ -145,8 +145,8 @@ function export_to_reactant_script(
     end
 end
 
-_to_array(x::Reactant.ConcreteRArray) = Array(x)
-_to_array(x::Reactant.ConcreteRNumber{T}) where {T} = T(x)
+_to_array(x::Reactant.AbstractConcreteArray) = Array(x)
+_to_array(x::Reactant.AbstractConcreteNumber{T}) where {T} = T(x)
 
 function save_inputs_jls(
     output_path::String, inputs::Dict{String,<:Union{AbstractArray,Number}}

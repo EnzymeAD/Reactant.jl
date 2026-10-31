@@ -163,6 +163,145 @@ end
     @test !Bool(@jit(isinf(ConcreteRNumber(true))))
 end
 
+const cpu_pjrt_client = Reactant.Accelerators.CPU.make_pjrt_client()
+const cpu_ifrt_client = Reactant.Accelerators.CPU.make_ifrt_client()
+
+function concrete_numbers(x)
+    return (
+        ConcretePJRTNumber(x; client=cpu_pjrt_client),
+        ConcreteIFRTNumber(x; client=cpu_ifrt_client),
+    )
+end
+function concrete_0d_arrays(x)
+    return (
+        ConcretePJRTArray(fill(x); client=cpu_pjrt_client),
+        ConcreteIFRTArray(fill(x); client=cpu_ifrt_client),
+    )
+end
+
+function same_runtime_and_client(y, x)
+    return typeof(y).name.wrapper === typeof(x).name.wrapper &&
+           Reactant.XLA.client(y) == Reactant.XLA.client(x)
+end
+
+@testset "isinf/isnan/isfinite on PJRT and IFRT scalars" begin
+    for x in (Inf, -Inf, NaN, 2.0, 2, true),
+        xr in (concrete_numbers(x)..., concrete_0d_arrays(x)...)
+
+        @test isinf(xr) === isinf(x)
+        @test isnan(xr) === isnan(x)
+        @test isfinite(xr) === isfinite(x)
+    end
+end
+
+@testset "zero/one on PJRT and IFRT scalars" begin
+    for x in (2.5, 0.0, -3, 1, true)
+        for xr in concrete_numbers(x)
+            for f in (zero, one, oneunit, float)
+                y = f(xr)
+                @test same_runtime_and_client(y, xr)
+                @test Reactant.to_number(y) === f(x)
+            end
+            @test iszero(xr) === iszero(x)
+            @test isone(xr) === isone(x)
+        end
+        for xr in concrete_0d_arrays(x)
+            @test same_runtime_and_client(zero(xr), xr)
+            @test Array(zero(xr)) == zero(fill(x))
+        end
+    end
+end
+
+@testset "TwicePrecision to PJRT and IFRT numbers" begin
+    for (hi, lo) in ((2.5, 0.5), (0.1, -5.551115123125783e-18))
+        expected = Float64(Base.TwicePrecision(hi, lo))
+        @test Reactant.to_number(ConcreteRNumber{Float64}(Base.TwicePrecision(hi, lo))) ===
+            expected
+        for (hr, lr) in zip(concrete_numbers(hi), concrete_numbers(lo))
+            for T in (typeof(hr), typeof(hr).name.wrapper)
+                y = T(Base.TwicePrecision(hr, lr))
+                @test same_runtime_and_client(y, hr)
+                @test Reactant.to_number(y) === expected
+            end
+        end
+    end
+end
+
+function result_or_error(f, x)
+    try
+        return f(x)
+    catch e
+        return typeof(e)
+    end
+end
+
+@testset "host math on PJRT and IFRT scalars" begin
+    # Outside `@jit`, functions of concrete numbers return host values
+    for x in (0.5, -2.5f0, 3, true, ComplexF32(1, 2)), xr in concrete_numbers(x)
+        for f in (
+            abs,
+            abs2,
+            -,
+            inv,
+            sign,
+            conj,
+            imag,
+            eps,
+            sqrt,
+            cbrt,
+            exp,
+            exp2,
+            expm1,
+            log,
+            log2,
+            log10,
+            log1p,
+            sin,
+            cos,
+            tan,
+            sinh,
+            cosh,
+            tanh,
+            asin,
+            acos,
+            atan,
+            asinh,
+            acosh,
+            atanh,
+            y -> ℯ^y,
+        )
+            @test result_or_error(f, xr) === result_or_error(f, x)
+        end
+    end
+    for x in (0.0, -0.0, 1.0, -2.5f0, 3, true),
+        xr in (concrete_numbers(x)..., concrete_0d_arrays(x)...)
+
+        for f in (isinteger, signbit, iszero, isone)
+            @test f(xr) === f(x)
+        end
+    end
+end
+
+@testset "round/trunc/floor/ceil" begin
+    for x in (4.2313f0, -2.5, 7)
+        xr = ConcreteRNumber(x)
+        for f in (round, trunc, floor, ceil)
+            @test f(xr) === f(x)
+            @test f(Int32, xr) === f(Int32, x)
+            @test f(Integer, xr) === f(Integer, x)
+            @test f(xr; digits=2) === f(x; digits=2)
+            @test f(xr; sigdigits=2) === f(x; sigdigits=2)
+            @test f(xr; digits=1, base=2) === f(x; digits=1, base=2)
+        end
+        for r in (RoundNearest, RoundNearestTiesAway, RoundUp, RoundDown, RoundToZero)
+            @test round(xr, r) === round(x, r)
+            @test round(xr, r; sigdigits=3) === round(x, r; sigdigits=3)
+            # Julia 1.10 has no `round(::Type, ::Integer, ::RoundingMode)`
+            x isa Integer || @test round(Int, xr, r) === round(Int, x, r)
+        end
+    end
+end
+
 @testset "isapprox" begin
     # `ConcreteRNumber` forwards `isapprox` straight to `Base` on the unwrapped
     # values (see the `AbstractConcreteNumber` methods in ConcreteRArray.jl), so
