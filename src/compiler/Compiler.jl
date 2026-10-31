@@ -751,6 +751,16 @@ Base.@nospecializeinfer function compile_mlir!(
         )
     end
 
+    if compile_options.optimization_passes isa Symbol &&
+        compile_options.optimization_passes === :all &&
+        compile_options.split_kernel_fixup
+        run_pass_pipeline!(
+            mod,
+            get_split_kernel_fixup_passes(compile_options.split_kernel_fixup_max_ops),
+            "split_kernel_fixup",
+        )
+    end
+
     if backend == "cuda" && compile_options.cudnn_hlo_optimize
         run_pass_pipeline!(mod, "enzymexla-cudnn-hlo-opt", "cudnn-hlo-opt")
     end
