@@ -50,6 +50,12 @@ end
     ccall("extern __nv_sqrtf", llvmcall, Cfloat, (Cfloat,), x)
 @reactant_cuda_overlay Base.FastMath.sqrt_fast(x::Union{Float32,Float64}) = sqrt(x)
 
+# Marks the enclosing loop as a fixed point; recognize-fixed-point-loops turns the call
+# into the loop's `enzyme.fixed_point` attribute and removes it.
+@reactant_cuda_overlay Reactant.ReactantCore._fixed_point_implicit(
+    reduction::Float64, max_iters::Int
+) = ccall("extern __enzyme_fixed_point", llvmcall, Cvoid, (Float64, Int64), reduction, max_iters)
+
 struct CuTracedArray{T,N,A,Size} <: DenseArray{T,N}
     ptr::Core.LLVMPtr{T,A}
 
@@ -1842,6 +1848,16 @@ GPUCompiler.can_vectorize(job::ReactantCUDAJob) = !job.config.params.raising
 function GPUCompiler.optimization_options(job::ReactantCUDAJob)
     raising = job.config.params.raising
     return (; instcombine=!raising, fastmath=!raising, aggressiveinstcombine=!raising)
+end
+
+# `__enzyme_fixed_point` (see `fixed_point_implicit`) is resolved by the raising passes.
+function GPUCompiler.isintrinsic(@nospecialize(job::ReactantCUDAJob), fn::String)
+    return fn == "__enzyme_fixed_point" || invoke(
+        GPUCompiler.isintrinsic,
+        Tuple{GPUCompiler.CompilerJob{GPUCompiler.PTXCompilerTarget,<:CUDACore.AbstractCUDACompilerParams},String},
+        job,
+        fn,
+    )
 end
 
 function GPUCompiler.method_table(@nospecialize(job::ReactantCUDAJob))

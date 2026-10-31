@@ -193,7 +193,11 @@ end
 
 # TODO(#2251) we want to be able to run the more advanced passes via transform dialect as an enzyme intermediate
 # However, this errs as we cannot attach the transform with to the funcop itself [as we run a functionpass].
-const enzyme_pass::String = "enzyme{postpasses=\"arith-raise{stablehlo=true},enzyme-batch-to-stablehlo,canonicalize,cse,canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math,canonicalize,cse,canonicalize,arith-raise{stablehlo=true}\"}"
+# A loop marked `enzyme.fixed_point` becomes an `enzymexla.fixed_point` before Enzyme
+# differentiates it at its converged state, and is lowered back to a plain loop after.
+# (The marker is also raised at the start of the pipeline, see Compiler.jl, so that the
+# loop is protected from the optimization passes in between.)
+const enzyme_pass::String = "raise-fixed-point-loops,enzyme{postpasses=\"arith-raise{stablehlo=true},enzyme-batch-to-stablehlo,canonicalize,cse,canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math,canonicalize,cse,canonicalize,arith-raise{stablehlo=true}\"},lower-fixed-point-loops"
 
 function impulse_pass(;
     debug_dump::Bool=DEBUG_PROBPROG_DUMP_VALUE[],
