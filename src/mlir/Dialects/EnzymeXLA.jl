@@ -72,6 +72,135 @@ function alternatives(; regions::Vector{Region}, location=Location())
     )
 end
 
+"""
+`ml_attention_grad`
+
+Computes gradients of scaled dot-product attention in BTNH layout given the
+forward inputs, forward output, log-sum-exp (lse), and output cotangent (d_output).
+"""
+function ml_attention_grad(
+    query::Value,
+    key::Value,
+    value::Value,
+    output::Value,
+    lse::Value,
+    d_output::Value,
+    bias=nothing::Union{Nothing,Value};
+    mask=nothing::Union{Nothing,Value},
+    q_lengths=nothing::Union{Nothing,Value},
+    kv_lengths=nothing::Union{Nothing,Value},
+    d_query::IR.Type,
+    d_key::IR.Type,
+    d_value::IR.Type,
+    d_bias=nothing::Union{Nothing,IR.Type},
+    scale,
+    is_causal=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[d_query, d_key, d_value]
+    operands = Value[query, key, value, output, lse, d_output]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[NamedAttribute("scale", scale),]
+    !isnothing(bias) && push!(operands, bias)
+    !isnothing(mask) && push!(operands, mask)
+    !isnothing(q_lengths) && push!(operands, q_lengths)
+    !isnothing(kv_lengths) && push!(operands, kv_lengths)
+    push!(
+        attributes,
+        operandsegmentsizes([
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            Int(!isnothing(bias)),
+            Int(!isnothing(mask)),
+            Int(!isnothing(q_lengths)),
+            Int(!isnothing(kv_lengths)),
+        ]),
+    )
+    !isnothing(d_bias) && push!(op_ty_results, d_bias)
+    !isnothing(is_causal) && push!(attributes, NamedAttribute("is_causal", is_causal))
+
+    return create_operation(
+        "enzymexla.ml.attention_grad",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`ml_attention`
+
+Computes scaled dot-product attention in BTNH layout:
+- query: (B, T, N_q, D_qk)
+- key: (B, S, N_kv, D_qk)
+- value: (B, S, N_kv, D_v)
+- bias (optional): broadcastable to (B, N_q, T, S)
+- mask (optional): boolean tensor (i1) broadcastable to (B, N_q, T, S), where true means attend and false means mask out (-inf)
+- q_lengths (optional): (B,) integer tensor of valid query sequence lengths
+- kv_lengths (optional): (B,) integer tensor of valid key/value sequence lengths
+
+Returns:
+- output: (B, T, N_q, D_v)
+- lse: (B, N_q, T) log-sum-exp of attention scores per query
+"""
+function ml_attention(
+    query::Value,
+    key::Value,
+    value::Value,
+    bias=nothing::Union{Nothing,Value};
+    mask=nothing::Union{Nothing,Value},
+    q_lengths=nothing::Union{Nothing,Value},
+    kv_lengths=nothing::Union{Nothing,Value},
+    output::IR.Type,
+    lse::IR.Type,
+    scale,
+    is_causal=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[output, lse]
+    operands = Value[query, key, value]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[NamedAttribute("scale", scale),]
+    !isnothing(bias) && push!(operands, bias)
+    !isnothing(mask) && push!(operands, mask)
+    !isnothing(q_lengths) && push!(operands, q_lengths)
+    !isnothing(kv_lengths) && push!(operands, kv_lengths)
+    push!(
+        attributes,
+        operandsegmentsizes([
+            1,
+            1,
+            1,
+            Int(!isnothing(bias)),
+            Int(!isnothing(mask)),
+            Int(!isnothing(q_lengths)),
+            Int(!isnothing(kv_lengths)),
+        ]),
+    )
+    !isnothing(is_causal) && push!(attributes, NamedAttribute("is_causal", is_causal))
+
+    return create_operation(
+        "enzymexla.ml.attention",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function barrier(indices::Vector{Value}; location=Location())
     op_ty_results = IR.Type[]
     operands = Value[indices...,]

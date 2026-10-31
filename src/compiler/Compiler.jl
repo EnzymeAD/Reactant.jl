@@ -194,7 +194,7 @@ end
 
 function activate_raising!(is_raising::Bool)
     stack = get!(task_local_storage(), :reactant_is_raising) do
-        Bool[]
+        return Bool[]
     end::Vector{Bool}
     push!(stack, is_raising)
     return nothing
@@ -412,7 +412,7 @@ Base.@nospecializeinfer function compile_mlir!(
         ],
         ",",
     )
-    lower_enzymexla_math_pass = "lower-enzymexla-math"
+    lower_enzymexla_math_pass = "lower-enzymexla-math{backend=$backend}"
     # TODO legalization of comm.mpi ops to comm.nccl if compile_options.comm_options.legalize_mpi_to_nccl is true and backend is CUDA
     lower_comm_pass = if compile_options.comm_options.lowering_target === :jit
         "lower-comm-to-jit{mpi_request_width=$(MPI_REQUEST_WIDTH[])}"
