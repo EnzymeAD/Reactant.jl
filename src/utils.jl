@@ -191,6 +191,7 @@ const __skip_rewrite_func_set = Set([
     # should be moved to TracedUtils.jl:
     typeof(ReactantCore.traced_call),
     typeof(ReactantCore.is_traced),
+    typeof(ReactantCore.is_traced_leaf),
     # Perf optimization
     typeof(Base.typemax),
     typeof(Base.typemin),
