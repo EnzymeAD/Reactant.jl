@@ -421,11 +421,19 @@ end
 #    method and silently return a 1-element array;
 #  * structured wrappers (`Diagonal`, `UpperTriangular`, ...) keep Base's dispatch, which
 #    picks destinations that preserve their structure.
+# A reshape, view or permutation of a traced array is a genuine (dense) traced matrix too
+# (#3195).
+const UnstructuredTracedRMatrix{T} = Union{
+    TracedRArray{T,2},
+    Base.ReshapedArray{TracedRNumber{T},2,<:AnyTracedRArray{T}},
+    SubArray{TracedRNumber{T},2,<:AnyTracedRArray{T}},
+    PermutedDimsArray{TracedRNumber{T},2,<:Any,<:Any,<:AnyTracedRArray{T}},
+}
 @reactant_overlay function Base.:(*)(
     a::Union{
-        TracedRArray{T,2},
-        LinearAlgebra.Adjoint{TracedRNumber{T},<:TracedRArray{T,2}},
-        LinearAlgebra.Transpose{TracedRNumber{T},<:TracedRArray{T,2}},
+        UnstructuredTracedRMatrix{T},
+        LinearAlgebra.Adjoint{TracedRNumber{T},<:UnstructuredTracedRMatrix{T}},
+        LinearAlgebra.Transpose{TracedRNumber{T},<:UnstructuredTracedRMatrix{T}},
     },
     b::AbstractVecOrMat,
 ) where {T}
