@@ -119,6 +119,20 @@ function random_matrix_with_cond(
 end
 
 @testset "Cholesky Factorization" begin
+    @testset "properties" begin
+        A = let B = randn(4, 4)
+            B * B' + 4I
+        end
+        Are = Reactant.to_rarray(A)
+        C = cholesky(A)
+        Cre = @jit cholesky(Are)
+        @test Cre.U ≈ C.U
+        # Cre.L wraps an `Adjoint`, and `@allowscalar` is needed to circumvent
+        # https://github.com/EnzymeAD/Reactant.jl/issues/3583
+        @test @allowscalar(Cre.L ≈ C.L)
+        @test Cre.UL ≈ C.UL
+    end
+
     @testset "Un-batched" begin
         @testset for T in (Float32, Float64, ComplexF32, ComplexF64)
             (T == ComplexF64 || T == Float64) && RunningOnTPU && continue
