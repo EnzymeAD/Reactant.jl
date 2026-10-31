@@ -2029,6 +2029,57 @@ end
     return @allowscalar Reactant.Ops.__construct_cuda_julia_buffer(T, (1,), ptr)[1]
 end
 
+# CUDA.jl v6.5 supports wrapping streams it doesn't own (like XLA's) with
+# `unsafe_wrap(CuStream, handle)`, which can then be ordered with the task's stream
+# using `record`/`wait`, letting CUDA.jl track the ordering. Older versions only
+# support adopting a stream with `own=true`, so we fall back to raw driver calls.
+const CUDA_SUPPORTS_BORROWED_STREAMS = pkgversion(CUDACore) >= v"6.5"
+
+# Events used to order streams, cached per context (like CUDA.jl does per stream in
+# `stream_wait`). A single event can be reused for every ordering, as
+# `cuStreamWaitEvent` only waits on the recording made before it was called, as long as
+# no other recording sneaks in between the record and the wait: `STREAM_EVENTS_LOCK`
+# is held across both.
+const STREAM_EVENTS = Dict{CUDACore.CuContext,CUDACore.CuEvent}()
+const STREAM_EVENTS_LOCK = ReentrantLock()
+
+# Make the work submitted to `waiter` from now on wait for the work submitted to
+# `source` so far, without blocking the host.
+function cuda_stream_wait(waiter, source)
+    @lock STREAM_EVENTS_LOCK begin
+        event = get!(STREAM_EVENTS, CUDACore.context()) do
+            CUDACore.CuEvent(CUDACore.EVENT_DISABLE_TIMING)
+        end
+        @static if CUDA_SUPPORTS_BORROWED_STREAMS
+            CUDACore.record(event, source)
+            CUDACore.wait(event, waiter)
+        else
+            CUDACore.cuEventRecord(event, source)
+            CUDACore.cuStreamWaitEvent(waiter, event, 0)
+        end
+    end
+    return nothing
+end
+
+# Fork the task-local CUDA.jl stream off XLA's stream for the duration of a
+# `julia_callback`, and join it back afterwards, so that neither the host nor the
+# rest of XLA's stream has to wait on a full synchronization.
+function Reactant.Ops.__with_cuda_stream_fork(f::F, xla_stream_ptr::Ptr{Cvoid}) where {F}
+    xla_stream = @static if CUDA_SUPPORTS_BORROWED_STREAMS
+        unsafe_wrap(CUDACore.CuStream, CUDACore.CUstream(xla_stream_ptr))
+    else
+        CUDACore.CUstream(xla_stream_ptr)
+    end
+    julia_stream = CUDACore.stream()
+
+    cuda_stream_wait(julia_stream, xla_stream)
+    try
+        return f()
+    finally
+        cuda_stream_wait(xla_stream, julia_stream)
+    end
+end
+
 # In Julia v1.11.3 precompiling this module caches bad code:
 # <https://github.com/EnzymeAD/Reactant.jl/issues/614>.
 @static if !Sys.isapple()
