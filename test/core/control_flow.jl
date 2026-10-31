@@ -1538,6 +1538,50 @@ end
     @test Array(for_compiled(rd, rB)) ≈ for_loop_calling_closure(d, B)
 end
 
+function while_loop_inline_closure(A, w, n)
+    i = 0
+    @trace while i < n
+        i += 1
+        A = (a -> a .+ w)(A)
+    end
+    return A
+end
+
+function for_loop_inline_closure(A, w, n)
+    @trace track_numbers = false for _ in 1:n
+        A = (a -> a .+ w)(A)
+    end
+    return A
+end
+
+function if_inline_closure_mutate!(cond, w)
+    @trace if cond
+        (() -> (w .+= 1; nothing))()
+    end
+    return w
+end
+
+@testset "inline closures capturing outer traced values in @trace (#3617)" begin
+    A_jl = ones(3, 2)
+    w_jl = fill(0.5, 3)
+
+    A_ra = Reactant.to_rarray(copy(A_jl))
+    w_ra = Reactant.to_rarray(copy(w_jl))
+    @test Array(@jit while_loop_inline_closure(A_ra, w_ra, 2)) ≈
+        while_loop_inline_closure(copy(A_jl), w_jl, 2)
+
+    A_ra = Reactant.to_rarray(copy(A_jl))
+    w_ra = Reactant.to_rarray(copy(w_jl))
+    @test Array(@jit for_loop_inline_closure(A_ra, w_ra, 2)) ≈
+        for_loop_inline_closure(copy(A_jl), w_jl, 2)
+
+    for cond in (true, false)
+        w_ra = Reactant.to_rarray(copy(w_jl))
+        @test Array(@jit if_inline_closure_mutate!(ConcreteRNumber(cond), w_ra)) ≈
+            if_inline_closure_mutate!(cond, copy(w_jl))
+    end
+end
+
 # A static parameter can't be rebound with `local`, so naming one in a traced loop body,
 # whether called or passed as a value, must still lower.
 function for_loop_using_static_param(x::AbstractVector{T}) where {T}
