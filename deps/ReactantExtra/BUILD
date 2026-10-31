@@ -81,7 +81,9 @@ genrule(
         "@xla//xla/pjrt/proto:execute_options.proto",
         "@xla//xla/pjrt/proto:compile_options.proto",
         "@xla//xla/stream_executor:device_description.proto",
+        "@xla//xla/stream_executor/cuda:cublas_lt_matmul_algorithm.proto",
         "@xla//xla/stream_executor/cuda:cuda_compute_capability.proto",
+        "@xla//xla/stream_executor/gpu:blas_lt_matmul_algorithm.proto",
         "@xla//xla/stream_executor/sycl:oneapi_compute_capability.proto",
         "@xla//xla/backends/autotuner:backends.proto",
         "@xla//xla/tsl/protobuf:dnn.proto",
@@ -129,6 +131,7 @@ genrule(
         mkdir -p $$STAGING/xla/service/cpu
         mkdir -p $$STAGING/xla/backends/cpu/runtime
         mkdir -p $$STAGING/xla/stream_executor/cuda
+        mkdir -p $$STAGING/xla/stream_executor/gpu
         mkdir -p $$STAGING/xla/stream_executor/sycl
         mkdir -p $$STAGING/xla/backends/autotuner
         mkdir -p $$STAGING/xla/tsl/protobuf
@@ -155,6 +158,8 @@ genrule(
                 cp $$src $$STAGING/xla/pjrt/proto/
             elif echo "$$src" | grep -q "xla/stream_executor/cuda/"; then
                 cp $$src $$STAGING/xla/stream_executor/cuda/
+            elif echo "$$src" | grep -q "xla/stream_executor/gpu/"; then
+                cp $$src $$STAGING/xla/stream_executor/gpu/
             elif echo "$$src" | grep -q "xla/stream_executor/sycl/"; then
                 cp $$src $$STAGING/xla/stream_executor/sycl/
             elif echo "$$src" | grep -q "xla/backends/autotuner/"; then
@@ -181,9 +186,16 @@ genrule(
         [ -f $$STAGING/xla/autotune_results.proto ] && sed -i 's/package xla;/package xla_autotuning;/g' $$STAGING/xla/autotune_results.proto
         [ -f $$STAGING/xla/autotuning.proto ] && sed -i 's/package xla;/package xla_autotuning;/g' $$STAGING/xla/autotuning.proto
         [ -f $$STAGING/xla/tsl/protobuf/dnn.proto ] && sed -i 's/package stream_executor.dnn;/package xla_tsl_dnn;/g' $$STAGING/xla/tsl/protobuf/dnn.proto
+        [ -f $$STAGING/xla/stream_executor/gpu/blas_lt_matmul_algorithm.proto ] && sed -i 's/package stream_executor.gpu;/package stream_executor_gpu;/g' $$STAGING/xla/stream_executor/gpu/blas_lt_matmul_algorithm.proto
+        [ -f $$STAGING/xla/stream_executor/cuda/cublas_lt_matmul_algorithm.proto ] && sed -i 's/package stream_executor.cuda;/package stream_executor_cuda;/g' $$STAGING/xla/stream_executor/cuda/cublas_lt_matmul_algorithm.proto
 
-        # Update usages of stream_executor.dnn to xla_tsl_dnn
-        find $$STAGING -name "*.proto" -type f -exec sed -i 's/stream_executor\\.dnn/xla_tsl_dnn/g' {} +
+        # Update usages of stream_executor.{dnn,gpu,cuda} to avoid cyclic top-level
+        # package dependencies between stream_executor and xla_autotuning
+        find $$STAGING -name "*.proto" -type f -exec sed -i \
+            -e 's/stream_executor\\.dnn/xla_tsl_dnn/g' \
+            -e 's/stream_executor\\.gpu/stream_executor_gpu/g' \
+            -e 's/stream_executor\\.cuda/stream_executor_cuda/g' \
+            {} +
 
         # Update usages of xla.AutotuneResults to autotune_results.AutotuneResults
         find $$STAGING -name "*.proto" -type f -exec sed -i \
