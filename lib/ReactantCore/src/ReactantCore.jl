@@ -518,7 +518,7 @@ function trace_while(mod, expr; track_numbers, mincut, checkpointing, first_arg=
 
     function loop_init_val(s)
         s ∈ body_symbols.assignments || return :(@isdefined($s) ? $s : nothing)
-        return :(
+        init_expr = :(
             if $(Expr(:islocal, s)) && @isdefined($s)
                 $s
             elseif @isdefined($s) && !(
@@ -529,6 +529,19 @@ function trace_while(mod, expr; track_numbers, mincut, checkpointing, first_arg=
                 nothing
             end
         )
+        if s ∈ cond_symbols.references
+            val_sym = gensym(:init_val)
+            return :(
+                let $val_sym = $init_expr
+                    if !$(is_traced)($val_sym) && $val_sym isa Number
+                        $(ReactantCore.promote_to_traced)($val_sym)
+                    else
+                        $val_sym
+                    end
+                end
+            )
+        end
+        return init_expr
     end
     args_init = Expr(:tuple, (:(Ref{Any}($(loop_init_val(s)))) for s in external_syms)...)
 
