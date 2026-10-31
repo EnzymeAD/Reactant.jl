@@ -5,33 +5,53 @@ module Julia
 # - rely on Julia's GC, which requires to...
 #   - globally mark objects
 #   - refer to them via `pointer_from_objref`, `unsafe_pointer_to_objref`
-#   - use `mutable` objects only (immutable objects do not have a )
+#   - use `mutable` objects only (immutable objects do not have a stable memory address)
 # - manually allocate/free memory, which requires to...
 #   - use `Libc`
-#   - `isbits` objects (i.e. not mutable nor immutable with mutable fields)
+#   - only work with `isbits` objects (i.e. not mutable nor immutable with mutable fields)
 #
-# for this first PoC, I have decided to manually allocate objects because...
-# - it avoids any kind of global state which can be buggy and difficult to debug
-# - it's more akin to be trim-able for AOT compilation
+# after trying both designs, i ultimately opted for the "globally GC rooted" design because
+# - has a simpler design
+# - it's easier to extend
+# - safer against memory bugs
+# - almost no overhead compared to manual allocations
 #
-# note that we can change to the other strategy (global GC marks) at any time as it eases further Julia integration.
-# while both strategies can be used at the same time (manual alloc for some objects, global GC marks for others),
-# this is severely discouraged as it leads to a complex design with no apparent gaints.
+# notes:
+# - all objects passed through the XLA/PJRT boundary need to be GC rooted (i.e. use `(un)root!`), which requires objects to be `mutable` to have a stable pointer address
+# - some objects require as a first field a pointer to their vtable
+# - if for some PJRT object, the API requires it to return a string, store the string inside the object so that it's correctly freed (owner is the object)
+# - if for some PJRT object, the API requires it to return a list, store the list as a `Vector{X}` where `X` is an abstract type
+#   - the Julia array ABI layout states that an array with abstract eltype is represented as a pointer of pointers (no inline storage. check: https://docs.julialang.org/en/v1/manual/embedding/#Working-with-Arrays)
+#   - the stored pointers are of type `jl_value_t*` which points to the object data (the type tag is stored before that pointer address. check https://docs.julialang.org/en/v1/devdocs/object/#Object-layout-(jl_value_t))
+#   - once the object is created, DO NOT resize the array
+# - DO NOT use moving GC (e.g. MMTk) as it would break `pointer_from_objref`
 
 using Base: unsafe_convert
-using Reactant.XLA: CAPI
-using Reactant.XLA.CAPI: csizeof
+using Reactant.XLA.CAPI: CAPI, csizeof
 
 # helpers
-@inline strdup(str::Union{Cstring,String}) = ccall(:strdup, Cstring, (Cstring,), str)
-@inline strlen(str::Cstring) = ccall(:strlen, Csize_t, (Cstring,), str)
-
 # malloc'd copy of `n` elements; allocates at least 1 element so that `C_NULL` always means out-of-memory
 function memdup(src::Ptr{T}, n::Integer) where {T}
     dst = Ptr{T}(Libc.malloc(max(n, 1) * sizeof(T)))
     dst == C_NULL && return dst
     unsafe_copyto!(dst, src, n)
     return dst
+end
+
+# GC roots of objects whose pointers are handed to C; objects stay alive until they are unmarked
+const gc_roots = IdSet{Any}()
+const gc_roots_lock = ReentrantLock()
+
+function root!(obj::T) where {T}
+    ismutabletype(T) || error("Only mutable types can be GC rooted")
+    @lock gc_roots_lock push!(gc_roots, obj)
+    return Ptr{T}(pointer_from_objref(obj))
+end
+
+unroot!(ptr::Ptr) = unroot!(unsafe_pointer_to_objref(ptr))
+function unroot!(obj)
+    @lock gc_roots_lock delete!(gc_roots, obj)
+    return nothing
 end
 
 function pjrt_elsize(T::CAPI.PJRT_Buffer_Type)
@@ -78,22 +98,19 @@ const vtable_error = Ref{CAPI.PJRT_Error_FunctionTable}()
 const vtable_memory = Ref{CAPI.PJRT_Memory_FunctionTable}()
 
 ## Error
-struct Error
-    vtable::Ptr{CAPI.PJRT_Error_FunctionTable}
-    code::CAPI.PJRT_Error_Code
-    message::Cstring
+mutable struct Error
+    const vtable::Ptr{CAPI.PJRT_Error_FunctionTable}
+    const code::CAPI.PJRT_Error_Code
+    const message::String
 
-    function Error(code::CAPI.PJRT_Error_Code, msg::Cstring)
+    function Error(code::CAPI.PJRT_Error_Code, message)
         return new(
-            unsafe_convert(Ptr{CAPI.PJRT_Error_FunctionTable}, vtable_error), code, msg
+            unsafe_convert(Ptr{CAPI.PJRT_Error_FunctionTable}, vtable_error),
+            code,
+            message,
         )
     end
 end
-
-Error(code, msg::AbstractString) = Error(code, Symbol(msg))
-Error(code, msg::Symbol) = Error(code, Cstring(unsafe_convert(Ptr{UInt8}, msg)))
-
-Error(code) = Error(code, Symbol())
 
 # function ok()
 #     ptr = unsafe_convert(Ptr{Error}, Libc.malloc(sizeof(Error)))
@@ -104,25 +121,19 @@ Error(code) = Error(code, Symbol())
 # XLA considers `nullptr` to be OK as it avoids allocations
 ok() = C_NULL
 
-function unimplemented()
-    ptr = unsafe_convert(Ptr{Error}, Libc.malloc(sizeof(Error)))
-    unsafe_store!(
-        ptr,
-        Error(CAPI.PJRT_Error_Code_UNIMPLEMENTED, "this feature is not implemented yet!"),
+# the caller is responsible for freeing the error with `PJRT_Error_Destroy`, which unmarks it
+function unimplemented()::Ptr{CAPI.PJRT_Error}
+    return root!(
+        Error(CAPI.PJRT_Error_Code_UNIMPLEMENTED, "this feature is not implemented yet!")
     )
-    return ptr
 end
 
-function invalid_argument(reason="invalid argument")
-    ptr = unsafe_convert(Ptr{Error}, Libc.malloc(sizeof(Error)))
-    unsafe_store!(ptr, Error(CAPI.PJRT_Error_Code_INVALID_ARGUMENT, reason))
-    return ptr
+function invalid_argument(reason="invalid argument")::Ptr{CAPI.PJRT_Error}
+    return root!(Error(CAPI.PJRT_Error_Code_INVALID_ARGUMENT, reason))
 end
 
-function resource_exhausted(reason="out of memory")
-    ptr = unsafe_convert(Ptr{Error}, Libc.malloc(sizeof(Error)))
-    unsafe_store!(ptr, Error(CAPI.PJRT_Error_Code_RESOURCE_EXHAUSTED, reason))
-    return ptr
+function resource_exhausted(reason="out of memory")::Ptr{CAPI.PJRT_Error}
+    return root!(Error(CAPI.PJRT_Error_Code_RESOURCE_EXHAUSTED, reason))
 end
 
 # these are required by CAPI.PJRT_Api
@@ -157,7 +168,7 @@ end
 
 # this are required by CAPI.PJRT_Error_FunctionTable
 function error_destroy_obj(error::Ptr{Error})::Cvoid
-    error != C_NULL && Libc.free(error)
+    error != C_NULL && unroot!(error)
     return nothing
 end
 
@@ -165,15 +176,17 @@ function error_message_obj(
     error::Ptr{Error}, message::Ptr{Cstring}, message_size::Ptr{Csize_t}
 )::Cvoid
     error == C_NULL && return nothing
-    msg = unsafe_load(error.message)
-    unsafe_store!(message, msg)
-    unsafe_store!(message_size, strlen(msg))
+    err = unsafe_pointer_to_objref(error)::Error
+    msg = err.message
+    unsafe_store!(message, Cstring(pointer(msg)))
+    unsafe_store!(message_size, sizeof(msg))
     return nothing
 end
 
 function error_getcode_obj(error::Ptr{Error})::CAPI.PJRT_Error_Code
     error == C_NULL && return CAPI.PJRT_Error_Code_OK
-    return unsafe_load(error.code)
+    err = unsafe_pointer_to_objref(error)::Error
+    return err.code
 end
 
 function error_for_each_payload_obj(
@@ -200,173 +213,179 @@ function plugin_attributes(
     return ok()
 end
 
-## Memory
-struct Memory
-    vtable::Ptr{CAPI.PJRT_Memory_FunctionTable}
-    id::Cint
-    kind::Cstring
-    devices::Ptr{Ptr{CAPI.PJRT_Device}}
-    num_devices::Csize_t
+## interfaces
+"""
+    Memory
 
-    function Memory(id, kind, devices, num_devices)
-        return new(
-            unsafe_convert(Ptr{CAPI.PJRT_Memory_FunctionTable}, vtable_memory),
-            id,
-            strdup(kind),
-            devices,
-            num_devices,
-        )
+### Inteface
+
+- `id`
+- `kind`
+- `debug_string`
+- `to_string`
+- `addressable_devices`
+"""
+abstract type Memory end
+
+function checkinterface(T::Type{<:Memory})
+    if !ismutabletype(T)
+        error("$T <: Memory must be a mutable type to be GC rootable")
     end
-end
 
-function _memory_destroy(memory::Memory)
-    Libc.free(memory.kind)
+    if fieldtype(T, 1) != Ptr{CAPI.PJRT_Memory_FunctionTable}
+        error("First field of $T must be a $(CAPI.PJRT_Memory_FunctionTable)")
+    end
 
-    # only the array is owned by the memory, the devices are owned by the client
-    Libc.free(memory.devices)
     return nothing
 end
 
 function memory_id(args::Ptr{CAPI.PJRT_Memory_Id_Args})::Ptr{CAPI.PJRT_Error}
-    mem = Ptr{Memory}(unsafe_load(args.memory))
-    unsafe_store!(args.id, unsafe_load(mem.id))
+    memory = unsafe_pointer_to_objref(Ptr{Memory}(unsafe_load(args.memory)))::Memory
+    unsafe_store!(args.id, id(memory))
     return ok()
 end
 
 function memory_kind(args::Ptr{CAPI.PJRT_Memory_Kind_Args})::Ptr{CAPI.PJRT_Error}
-    mem = Ptr{Memory}(unsafe_load(args.memory))
-    cstr = unsafe_load(mem.kind)
-    unsafe_store!(args.kind, cstr)
-    unsafe_store!(args.kind_size, strlen(cstr))
+    memory = unsafe_pointer_to_objref(Ptr{Memory}(unsafe_load(args.memory)))::Memory
+    str = kind(memory)
+    unsafe_store!(args.kind, Cstring(pointer(str)))
+    unsafe_store!(args.kind_size, length(str))
     return ok()
 end
 
 function memory_debug_string(
     args::Ptr{CAPI.PJRT_Memory_DebugString_Args}
 )::Ptr{CAPI.PJRT_Error}
-    memory = unsafe_load(Ptr{Memory}(unsafe_load(args.memory)))
-    # TODO move interpolated string to `Memory` field instead of interning
-    str = "Memory(id=$(memory.id), kind=$(unsafe_string(memory.kind)), platform=julia)"
-    cstr = Cstring(Base.unsafe_convert(Ptr{UInt8}, Symbol(str)))
-    unsafe_store!(args.debug_string, cstr)
-    unsafe_store!(args.debug_string_size, strlen(cstr))
+    memory = unsafe_pointer_to_objref(Ptr{Memory}(unsafe_load(args.memory)))::Memory
+    str = debug_string(memory)::String
+    unsafe_store!(args.debug_string, Cstring(pointer(str)))
+    unsafe_store!(args.debug_string_size, length(str))
     return ok()
 end
 
 function memory_to_string(args::Ptr{CAPI.PJRT_Memory_ToString_Args})::Ptr{CAPI.PJRT_Error}
-    # if interpolation is used, we need to move the string to a `Memory` field
-    cstr = Cstring(Base.unsafe_convert(Ptr{UInt8}, Symbol("Memory managed by Julia")))
-    unsafe_store!(args.to_string, cstr)
-    unsafe_store!(args.to_string_size, strlen(cstr))
+    memory = unsafe_pointer_to_objref(Ptr{Memory}(unsafe_load(args.memory)))::Memory
+    str = to_string(memory)::String
+    unsafe_store!(args.to_string, Cstring(pointer(str)))
+    unsafe_store!(args.to_string_size, length(str))
     return ok()
 end
 
 function memory_addressable_by_devices(
     args::Ptr{CAPI.PJRT_Memory_AddressableByDevices_Args}
 )::Ptr{CAPI.PJRT_Error}
-    memory = unsafe_load(Ptr{Memory}(unsafe_load(args.memory)))
-    unsafe_store!(args.devices, memory.devices)
-    unsafe_store!(args.num_devices, memory.num_devices)
+    memory = unsafe_pointer_to_objref(Ptr{Memory}(unsafe_load(args.memory)))::Memory
+    devs = addressable_devices(memory)
+    unsafe_store!(args.devices, Ptr{Ptr{CAPI.PJRT_Device}}(pointer(devs)))
+    unsafe_store!(args.num_devices, length(devs))
     return ok()
 end
 
-## DeviceDescription
-struct DeviceDescription
-    id::Cint
-    pid::Cint
-    debug_string::Cstring
-    to_string::Cstring
-end
+"""
+    DeviceDescription
 
-function DeviceDescription()
-    id = 0
-    pid = 0
-    debug_string = strdup("julia: id=$id")
-    to_string = strdup("JuliaDevice(id=$id)")
-    return DeviceDescription(id, pid, debug_string, to_string)
-end
+### Interface
 
-# takes the value and not a pointer because `DeviceDescription` is embedded in `Device`, so only the strings are freed
-function _device_description_destroy(description::DeviceDescription)
-    Libc.free(description.debug_string)
-    Libc.free(description.to_string)
-    return nothing
-end
+- `id`
+- `pid`
+- `kind`
+- `debug_string`
+- `to_string`
+- `attributes`
+"""
+abstract type DeviceDescription end
 
 function device_description_id(
     args::Ptr{CAPI.PJRT_DeviceDescription_Id_Args}
 )::Ptr{CAPI.PJRT_Error}
-    description = unsafe_load(Ptr{DeviceDescription}(unsafe_load(args.device_description)))
-    unsafe_store!(args.id, description.id)
+    ptr = Ptr{DeviceDescription}(unsafe_load(args.device_description))
+    desc = unsafe_pointer_to_objref(ptr)::DeviceDescription
+    unsafe_store!(args.id, id(desc))
     return ok()
 end
 
 function device_description_process_index(
     args::Ptr{CAPI.PJRT_DeviceDescription_ProcessIndex_Args}
 )::Ptr{CAPI.PJRT_Error}
-    description = unsafe_load(Ptr{DeviceDescription}(unsafe_load(args.device_description)))
-    unsafe_store!(args.process_index, description.pid)
+    ptr = Ptr{DeviceDescription}(unsafe_load(args.device_description))
+    desc = unsafe_pointer_to_objref(ptr)::DeviceDescription
+    unsafe_store!(args.process_index, pid(desc))
     return ok()
 end
 
+# TODO find the interface of `attributes`
 function device_description_attributes(
     args::Ptr{CAPI.PJRT_DeviceDescription_Attributes_Args}
 )::Ptr{CAPI.PJRT_Error}
-    unsafe_store!(args.num_attributes, Cint(0))
-    unsafe_store!(args.attributes, C_NULL)
-    return ok()
+    # ptr = Ptr{DeviceDescription}(unsafe_load(args.device_description))
+    # desc = unsafe_pointer_to_objref(ptr)::DeviceDescription
+    # attrs = attributes(desc)
+    # unsafe_store!(args.num_attributes, length(attrs))
+    # unsafe_store!(args.attributes, C_NULL)
+    # return ok()
+    return unimplemented()
 end
 
 function device_description_kind(
     args::Ptr{CAPI.PJRT_DeviceDescription_Kind_Args}
 )::Ptr{CAPI.PJRT_Error}
-    cstr = Cstring(unsafe_convert(Ptr{UInt8}, Symbol("julia")))
-    unsafe_store!(args.device_kind, cstr)
-    unsafe_store!(args.device_kind_size, strlen(cstr))
+    ptr = Ptr{DeviceDescription}(unsafe_load(args.device_description))
+    desc = unsafe_pointer_to_objref(ptr)::DeviceDescription
+    str = kind(desc)::String
+    unsafe_store!(args.device_kind, Cstring(pointer(str)))
+    unsafe_store!(args.device_kind_size, length(str))
     return ok()
 end
 
 function device_description_debug_string(
     args::Ptr{CAPI.PJRT_DeviceDescription_DebugString_Args}
 )::Ptr{CAPI.PJRT_Error}
-    description = unsafe_load(Ptr{DeviceDescription}(unsafe_load(args.device_description)))
-    unsafe_store!(args.debug_string, description.debug_string)
-    unsafe_store!(args.debug_string_size, strlen(description.debug_string))
+    ptr = Ptr{DeviceDescription}(unsafe_load(args.device_description))
+    desc = unsafe_pointer_to_objref(ptr)::DeviceDescription
+    str = debug_string(desc)::String
+    unsafe_store!(args.debug_string, Cstring(pointer(desc)))
+    unsafe_store!(args.debug_string_size, length(desc))
     return ok()
 end
 
 function device_description_to_string(
     args::Ptr{CAPI.PJRT_DeviceDescription_ToString_Args}
 )::Ptr{CAPI.PJRT_Error}
-    description = unsafe_load(Ptr{DeviceDescription}(unsafe_load(args.device_description)))
-    unsafe_store!(args.to_string, description.to_string)
-    unsafe_store!(args.to_string_size, strlen(description.to_string))
+    ptr = Ptr{DeviceDescription}(unsafe_load(args.device_description))
+    desc = unsafe_pointer_to_objref(ptr)::DeviceDescription
+    str = to_string(desc)
+    unsafe_store!(args.to_string, Cstring(pointer(str)))
+    unsafe_store!(args.to_string_size, length(str))
     return ok()
 end
 
-## Device
-struct Device
-    description::DeviceDescription
-    local_hardware_id::Cint
-    # the first memory is the default memory
-    memories::Ptr{Ptr{Memory}}
-    num_memories::Csize_t
-end
+"""
+    Device
 
-function _device_destroy(device::Device)
-    _device_description_destroy(device.description)
+### Interface
 
-    # only the array is owned by the device, the memories are owned by the client
-    Libc.free(device.memories)
-    return nothing
+- `description`
+- `is_addressable`
+- `local_hardware_id`
+- `addressable_memories`
+- `default_memory`
+- `memory_stats`
+"""
+abstract type Device end
+function checkinterface(T::Type{<:Device})
+    if !ismutabletype(T)
+        error("$T <: Device must be a mutable type to be GC rootable")
+    end
 end
 
 function device_get_description(
     args::Ptr{CAPI.PJRT_Device_GetDescription_Args}
 )::Ptr{CAPI.PJRT_Error}
-    device = Ptr{Device}(unsafe_load(args.device))
+    device = unsafe_pointer_to_objref(Ptr{Device}(unsafe_load(args.device)))::Device
+    desc = description(device)::DeviceDescription
     unsafe_store!(
-        args.device_description, Ptr{CAPI.PJRT_DeviceDescription}(device.description)
+        args.device_description,
+        Ptr{CAPI.PJRT_DeviceDescription}(pointer_from_objref(device.description)),
     )
     return ok()
 end
@@ -374,33 +393,35 @@ end
 function device_is_addressable(
     args::Ptr{CAPI.PJRT_Device_IsAddressable_Args}
 )::Ptr{CAPI.PJRT_Error}
-    # single-process backend: the client can issue commands to all of its devices
-    unsafe_store!(args.is_addressable, true)
+    device = unsafe_pointer_to_objref(Ptr{Device}(unsafe_load(args.device)))::Device
+    unsafe_store!(args.is_addressable, is_addressable(device)::Bool)
     return ok()
 end
 
 function device_local_hardware_id(
     args::Ptr{CAPI.PJRT_Device_LocalHardwareId_Args}
 )::Ptr{CAPI.PJRT_Error}
-    device = unsafe_load(Ptr{Device}(unsafe_load(args.device)))
-    unsafe_store!(args.local_hardware_id, device.local_hardware_id)
+    device = unsafe_pointer_to_objref(Ptr{Device}(unsafe_load(args.device)))::Device
+    unsafe_store!(args.local_hardware_id, local_hardware_id(device))
     return ok()
 end
 
 function device_addressable_memories(
     args::Ptr{CAPI.PJRT_Device_AddressableMemories_Args}
 )::Ptr{CAPI.PJRT_Error}
-    device = unsafe_load(Ptr{Device}(unsafe_load(args.device)))
-    unsafe_store!(args.memories, Ptr{Ptr{CAPI.PJRT_Memory}}(device.memories))
-    unsafe_store!(args.num_memories, device.num_memories)
+    device = unsafe_pointer_to_objref(Ptr{Device}(unsafe_load(args.device)))::Device
+    mems = addressable_memories(device)::Vector{Memory}
+    unsafe_store!(args.memories, Ptr{Ptr{CAPI.PJRT_Memory}}(pointer(mems)))
+    unsafe_store!(args.num_memories, length(mems))
     return ok()
 end
 
 function device_default_memory(
     args::Ptr{CAPI.PJRT_Device_DefaultMemory_Args}
 )::Ptr{CAPI.PJRT_Error}
-    device = unsafe_load(Ptr{Device}(unsafe_load(args.device)))
-    unsafe_store!(args.memory, Ptr{CAPI.PJRT_Memory}(unsafe_load(device.memories)))
+    device = unsafe_pointer_to_objref(Ptr{Device}(unsafe_load(args.device)))::Device
+    mem = default_memory(device)::Memory
+    unsafe_store!(args.memory, Ptr{CAPI.PJRT_Memory}(pointer_from_objref(mem)))
     return ok()
 end
 
@@ -411,19 +432,27 @@ function device_memory_stats(
     return unimplemented()
 end
 
-## Buffer
-struct Buffer
-    # malloc'd array of `size_in_bytes` bytes, owned by the buffer
-    data::Ptr{Cvoid}
-    size_in_bytes::Csize_t
-    type::CAPI.PJRT_Buffer_Type
-    # malloc'd arrays of `num_dims` elements, owned by the buffer
-    dims::Ptr{Int64}
-    minor_to_major::Ptr{Int64}
-    num_dims::Csize_t
-    device::Ptr{Device}
-end
+"""
+    Buffer
 
+### Interface
+
+- `destroy`
+- `delete!`
+- `isdeleted`
+- `element_type` -> eltype
+- `dimensions` -> size
+- `on_device_size_in_bytes` -> sizeof?
+- `device`
+- `memory`
+- `copy_to_device!` -> copyto!?
+- `to_host_buffer` -> copyto!?
+- `is_on_cpu`
+- `unsafe_pointer`
+- ...
+"""
+
+# TODO abstract interface
 function buffer_destroy(args::Ptr{CAPI.PJRT_Buffer_Destroy_Args})::Ptr{CAPI.PJRT_Error}
     ptr = Ptr{Buffer}(unsafe_load(args.buffer))
     ptr == C_NULL && return ok()
@@ -436,7 +465,6 @@ function buffer_destroy(args::Ptr{CAPI.PJRT_Buffer_Destroy_Args})::Ptr{CAPI.PJRT
     return ok()
 end
 
-# `data == C_NULL` marks a deleted buffer; live buffers always have a non-null `data` (see `memdup`)
 function buffer_delete(args::Ptr{CAPI.PJRT_Buffer_Delete_Args})::Ptr{CAPI.PJRT_Error}
     ptr = Ptr{Buffer}(unsafe_load(args.buffer))
     Libc.free(unsafe_load(ptr.data))
@@ -491,8 +519,9 @@ function buffer_memory(args::Ptr{CAPI.PJRT_Buffer_Memory_Args})::Ptr{CAPI.PJRT_E
     buffer = unsafe_load(Ptr{Buffer}(unsafe_load(args.buffer)))
     buffer.data == C_NULL && return invalid_argument("Buffer has been deleted or donated")
     # buffers are always allocated on the default memory of their device
-    memory = unsafe_load(unsafe_load(buffer.device.memories))
-    unsafe_store!(args.memory, Ptr{CAPI.PJRT_Memory}(memory))
+    device = unsafe_pointer_to_objref(buffer.device)::Device
+    memory = first(device.memories)
+    unsafe_store!(args.memory, Ptr{CAPI.PJRT_Memory}(pointer_from_objref(memory)))
     return ok()
 end
 
@@ -589,151 +618,230 @@ function buffer_unsafe_pointer(
     return ok()
 end
 
-## Client
-struct Client
-    devices::Ptr{Ptr{Device}}
-    num_devices::Cint
+"""
+    Client
 
-    memories::Ptr{Ptr{Memory}}
-    num_memories::Cint
+## Interface
+
+- `create`
+- `destroy!`
+- `platform_name`
+- `platform_version`
+- `process_index` -> pid?
+- `devices`
+- `addressable_devices`
+- `addressable_memories`
+- `compile!`
+- `buffer_from_host_buffer`
+"""
+abstract type Client end
+
+function client_create(args::Ptr{CAPI.PJRT_Client_Create})
+    # TODO
 end
 
-function client_create(args::Ptr{CAPI.PJRT_Client_Create_Args})::Ptr{CAPI.PJRT_Error}
-    # single device with a single memory
-    num_devices = 1
-    num_memories = 1
-
-    client = Ptr{Client}(Libc.malloc(sizeof(Client)))
-    devices = Ptr{Ptr{Device}}(Libc.malloc(sizeof(Ptr{Device}) * num_devices))
-    memories = Ptr{Ptr{Memory}}(Libc.malloc(sizeof(Ptr{Memory}) * num_memories))
-
-    device = Ptr{Device}(Libc.malloc(sizeof(Device)))
-    unsafe_store!(devices, device)
-
-    memory = Ptr{Memory}(Libc.malloc(sizeof(Memory)))
-    unsafe_store!(memories, memory)
-
-    device_memories = Ptr{Ptr{Memory}}(Libc.malloc(sizeof(Ptr{Memory})))
-    unsafe_store!(device, Device(DeviceDescription(), -1, device_memories, 1))
-    unsafe_store!(device_memories, memory)
-
-    memory_devices = Ptr{Ptr{Device}}(Libc.malloc(sizeof(Ptr{Device})))
-    unsafe_store!(memory, Memory(0, "device", memory_devices, 1))
-    unsafe_store!(memory_devices, device)
-
-    unsafe_store!(client, Client(devices, num_devices, memories, num_memories))
-
-    unsafe_store!(args.client, Ptr{CAPI.PJRT_Client}(client))
+function client_destroy(args::Ptr{CAPI.PJRT_Client_Destroy})
+    client = unsafe_pointer_to_objref(unsafe_load(args.client))::Client
+    unroot!(client)
     return ok()
 end
 
-function client_destroy(args::Ptr{CAPI.PJRT_Client_Destroy_Args})::Ptr{CAPI.PJRT_Error}
-    ptr = Ptr{Client}(unsafe_load(args.client))
-    ptr == C_NULL && return ok()
-
-    client = unsafe_load(ptr)
-    for i in 1:(client.num_devices)
-        device = unsafe_load(client.devices, i)
-        _device_destroy(unsafe_load(device))
-        Libc.free(device)
-    end
-    Libc.free(client.devices)
-
-    for i in 1:(client.num_memories)
-        memory = unsafe_load(client.memories, i)
-        _memory_destroy(unsafe_load(memory))
-        Libc.free(memory)
-    end
-    Libc.free(client.memories)
-
-    Libc.free(ptr)
+function client_platform_name(args::Ptr{CAPI.PJRT_Client_PlatformName})
+    client = unsafe_pointer_to_objref(unsafe_load(Ptr{Client}(args.client)))::Client
+    str = platform_name(client)::String
+    unsafe_store!(args.platform_name, Cstring(pointer(str)))
+    unsafe_store!(args.platform_name_size, length(str))
     return ok()
 end
 
-function client_platform_name(
-    args::Ptr{CAPI.PJRT_Client_PlatformName_Args}
-)::Ptr{CAPI.PJRT_Error}
-    cstr = Cstring(unsafe_convert(Ptr{UInt8}, :julia))
-    unsafe_store!(args.platform_name, cstr)
-    unsafe_store!(args.platform_name_size, strlen(cstr))
+function client_platform_version(args::Ptr{CAPI.PJRT_Client_PlatformVersion})
+    client = unsafe_pointer_to_objref(unsafe_load(Ptr{Client}(args.client)))::Client
+    str = platform_version(client)::String
+    unsafe_store!(args.platform_version, Cstring(pointer(str)))
+    unsafe_store!(args.platform_version_size, length(str))
     return ok()
 end
 
-function client_process_index(
-    args::Ptr{CAPI.PJRT_Client_ProcessIndex_Args}
-)::Ptr{CAPI.PJRT_Error}
+function client_process_index(args::Ptr{CAPI.PJRT_Client_ProcessIndex})
+    client = unsafe_pointer_to_objref(unsafe_load(Ptr{Client}(args.client)))::Client
+    pid = process_index(client)
     unsafe_store!(args.process_index, Cint(0))
     return ok()
 end
 
-function client_platform_version(
-    args::Ptr{CAPI.PJRT_Client_PlatformVersion_Args}
-)::Ptr{CAPI.PJRT_Error}
-    cstr = Cstring(unsafe_convert(Ptr{UInt8}, Symbol(VERSION)))
-    unsafe_store!(args.platform_version, cstr)
-    unsafe_store!(args.platform_version_size, strlen(cstr))
+function client_devices(args::Ptr{CAPI.PJRT_Client_Devices})
+    client = unsafe_pointer_to_objref(unsafe_load(Ptr{Client}(args.client)))::Client
+    devs = devices(client)::Vector{Device}
+    unsafe_store!(args.devices, Ptr{Ptr{CAPI.PJRT_Device}}(pointer(devs)))
+    unsafe_store!(args.num_devices, length(devs))
     return ok()
 end
 
-function client_devices(args::Ptr{CAPI.PJRT_Client_Devices_Args})::Ptr{CAPI.PJRT_Error}
-    client = unsafe_load(Ptr{Client}(unsafe_load(args.client)))
-    unsafe_store!(args.devices, Ptr{Ptr{CAPI.PJRT_Device}}(client.devices))
-    unsafe_store!(args.num_devices, client.num_devices)
+function client_addressable_devices(args::Ptr{CAPI.PJRT_Client_AddressableDevices})
+    client = unsafe_pointer_to_objref(unsafe_load(Ptr{Client}(args.client)))::Client
+    devs = addressable_devices(client)::Vector{Device}
+    unsafe_store!(args.addressable_devices, Ptr{Ptr{CAPI.PJRT_Device}}(pointer(devs)))
+    unsafe_store!(args.num_devices, length(devs))
     return ok()
 end
 
-function client_addressable_devices(
-    args::Ptr{CAPI.PJRT_Client_AddressableDevices_Args}
-)::Ptr{CAPI.PJRT_Error}
-    # single-process backend: all devices are addressable
-    client = unsafe_load(Ptr{Client}(unsafe_load(args.client)))
-    unsafe_store!(args.addressable_devices, Ptr{Ptr{CAPI.PJRT_Device}}(client.devices))
-    unsafe_store!(args.num_addressable_devices, client.num_devices)
+function client_addressable_memories(args::Ptr{CAPI.PJRT_Client_AddressableMemories})
+    client = unsafe_pointer_to_objref(unsafe_load(Ptr{Client}(args.client)))::Client
+    mems = addressable_memories(client)::Vector{Memory}
+    unsafe_store!(args.addressable_memories, Ptr{Ptr{CAPI.PJRT_Device}}(pointer(mems)))
+    unsafe_store!(args.num_memories, length(mems))
     return ok()
 end
 
-function client_addressable_memories(
-    args::Ptr{CAPI.PJRT_Client_AddressableMemories_Args}
-)::Ptr{CAPI.PJRT_Error}
-    client = unsafe_load(Ptr{Client}(unsafe_load(args.client)))
-    unsafe_store!(args.addressable_memories, Ptr{Ptr{CAPI.PJRT_Memory}}(client.memories))
-    unsafe_store!(args.num_addressable_memories, client.num_memories)
-    return ok()
-end
-
-function client_compile(args::Ptr{CAPI.PJRT_Client_Compile_Args})::Ptr{CAPI.PJRT_Error}
-    # TODO
+function client_compile(args::Ptr{CAPI.PJRT_Client_Compile})
+    client = unsafe_pointer_to_objref(unsafe_load(Ptr{Client}(args.client)))::Client
     return unimplemented()
 end
 
-function client_buffer_from_host_buffer(
-    args::Ptr{CAPI.PJRT_Client_BufferFromHostBuffer_Args}
-)::Ptr{CAPI.PJRT_Error}
-    # `memory` takes precedence over `device`
-    memory = Ptr{Memory}(unsafe_load(args.memory))
+function client_buffer_from_host_buffer(args::Ptr{CAPI.PJRT_Client_BufferFromHostBuffer})::Ptr{CAPI.PJRT_Error}
+    client = unsafe_pointer_to_objref(unsafe_load(Ptr{Client}(args.client)))::Client
 
-    device = if memory != C_NULL
-        Ptr{Device}(unsafe_load(unsafe_load(memory.devices)))
+    _eltype = unsafe_load(args.type)
+
+    _ndims = unsafe_load(args.num_dims)
+    _dims_ptr = unsafe_load(args.dims)
+    _size = unsafe_wrap(Vector{Cint}, _dims_ptr, _ndims)
+
+    _nbytestrides = unsafe_load(args.num_byte_strides)
+    _device_layout = unsafe_load(args.device_layout)
+    _host_buffer_semantics = unsafe_load(args.host_buffer_semantics)
+
+    mem_ptr = Ptr{Memory}(unsafe_load(args.memory))
+    dev_ptr = Ptr{Device}(unsafe_load(args.device))
+
+    # TODO error?
+    buffer = if mem_ptr != C_NULL
+        mem = unsafe_pointer_to_objref(mem_ptr)::Memory
+        buffer_from_host_buffer(client, mem, _eltype, _size, _nbytestrides, _device_layout, _host_buffer_semantics)::Buffer
+    elseif dev_ptr != C_NULL
+        dev = unsafe_pointer_to_objref(dev_ptr)::Device
+        buffer_from_host_buffer(client, dev, _eltype, _size, _nbytestrides, _device_layout, _host_buffer_semantics)::Buffer
     else
-        Ptr{Device}(unsafe_load(args.device))
-    end
-    device == C_NULL && return invalid_argument("No device nor memory has been assigned")
-
-    # TODO we should be calling `PJRT_Device_DefaultMemory` if memory == C_NULL && device != C_NULL
-
-    # sub-byte types are packed, which is not supported yet
-    type = unsafe_load(args.type)
-    elsize = pjrt_elsize(type)
-    if isnothing(elsize)
-        return invalid_argument("Invalid Buffer eltype")
+        return invalid_argument("No devive nor memory has been assigned")
     end
 
-    num_dims = Int(unsafe_load(args.num_dims))
-    host_dims = unsafe_load(args.dims)
-    size_in_bytes = elsize
-    for i in 1:num_dims
-        size_in_bytes *= unsafe_load(host_dims, i)
+    # TODO return an already-ready `PJRT_Event` once events are implemented
+    unsafe_store!(args.done_with_host_buffer, C_NULL)
+
+    root!(buffer)
+    unsafe_store!(args.buffer, Ptr{CAPI.PJRT_Buffer}(buffer))
+
+    return ok()
+end
+
+## HostMemory
+mutable struct HostMemory <: Memory
+    const vtable::Ptr{CAPI.PJRT_Memory_FunctionTable}
+    const id::Cint
+    const kind::String
+    const debug_string::String
+    const to_string::String
+    const devices::Vector{Device}
+
+    function HostMemory(id, kind, devices)
+        return new(
+            unsafe_convert(Ptr{CAPI.PJRT_Memory_FunctionTable}, vtable_memory),
+            id,
+            kind,
+            "Memory(id=$id, kind=$kind, platform=julia)",
+            "Memory managed by Julia",
+            devices,
+        )
     end
+end
+
+id(mem::HostMemory) = mem.id
+kind(mem::HostMemory) = mem.kind
+debug_string(mem::HostMemory) = mem.debug_string
+to_string(mem::HostMemory) = mem.to_string
+addressable_devices(mem::HostMemory) = mem.devices
+
+## DeviceDescription
+mutable struct HostDeviceDescription
+    const id::Cint
+    const pid::Cint
+    const debug_string::String
+    const to_string::String
+end
+
+function HostDeviceDescription()
+    id = 0
+    pid = 0
+    return HostDeviceDescription(id, pid, "julia: id=$id", "JuliaDevice(id=$id)")
+end
+
+id(desc::HostDeviceDescription) = desc.id
+pid(desc::HostDeviceDescription) = desc.pid
+# kind(desc::HostDeviceDescription) = desc.kind
+debug_string(desc::HostDeviceDescription) = desc.debug_string
+to_string(desc::HostDeviceDescription) = desc.to_string
+# attributes(desc::HostDeviceDescription) = desc.
+
+## Device
+mutable struct HostDevice <: Device
+    const description::DeviceDescription # TODO or HostDeviceDescription
+    const local_hardware_id::Cint
+    const memories::Vector{Memory}
+end
+
+description(dev::HostDevice) = dev.description
+is_addressable(dev::HostDevice) = true
+local_hardware_id(dev::HostDevice) = dev.local_hardware_id
+addressable_memories(dev::HostDevice) = dev.memories
+default_memory(dev::HostDevice) = dev.memories[1]
+# memory_stats(dev::HostDevice) = 
+
+## HostBuffer
+struct HostBuffer
+    data::Ptr{Cvoid}
+    size_in_bytes::Csize_t
+    type::CAPI.PJRT_Buffer_Type
+    dims::Vector{Int64}
+    minor_to_major::Vector{Int64}
+    device::Device
+end
+
+## HostClient
+mutable struct HostClient
+    devices::Vector{Device}
+    memories::Vector{Memory}
+end
+
+function HostClient(args::Ptr{CAPI.PJRT_Client_Create_Args})::Ptr{CAPI.PJRT_Error}
+    devs = Vector{Device}(undef, 1)
+    mems = Vector{Device}(undef, 1)
+
+    dev = HostDevice(DeviceDescription(), -1, mems)
+    mem = HostMemory(0, "device", devs)
+
+    devs[1] = dev
+    mems[1] = mem
+
+    client = HostClient(devs, mems)
+    unsafe_store!(args.client, Ptr{CAPI.PJRT_Client}(client))
+
+    root!(client)
+
+    return ok()
+end
+
+platform_name(::HostClient) = "Julia client"
+platform_version(::HostClient) = string(VERSION)
+process_index(::HostClient) = 0
+devices(client::HostClient) = client.devices
+addressable_devices(client::HostClient) = devices(client)
+addressable_memories(client::HostClient) = client.memories
+
+function buffer_from_host_buffer(client::HostClient, mem::HostMemory, _eltype, _size, _nbytestrides, _layout, _host_buffer_semantics)
+    _elsize = pjrt_elsize(_eltype)
+    _ndims = length(_size)
+
+    size_in_bytes = prod(_size; init=_elsize)
 
     # only dense major-to-minor host data is supported; strides of size-1 dims are irrelevant
     num_byte_strides = Int(unsafe_load(args.num_byte_strides))
@@ -749,66 +857,32 @@ function client_buffer_from_host_buffer(
     end
 
     # relayout is not supported, so `device_layout` must be dense major-to-minor
-    device_layout = unsafe_load(args.device_layout)
-    if device_layout != C_NULL
-        layout_type = unsafe_load(device_layout.type)
-        layout_type != CAPI.PJRT_Buffer_MemoryLayout_Type_Tiled && return unimplemented()
+    # if device_layout != C_NULL
+    #     layout_type = unsafe_load(device_layout.type)
+    #     layout_type != CAPI.PJRT_Buffer_MemoryLayout_Type_Tiled && return unimplemented()
 
-        tiled = unsafe_load(device_layout.tiled)
-        tiled.num_tiles != 0 && return unimplemented()
-        tiled.minor_to_major_size != num_dims && return invalid_argument()
-        for i in 1:num_dims
-            unsafe_load(tiled.minor_to_major, i) != num_dims - i && return unimplemented()
-        end
-    end
+    #     tiled = unsafe_load(device_layout.tiled)
+    #     tiled.num_tiles != 0 && return unimplemented()
+    #     tiled.minor_to_major_size != num_dims && return invalid_argument()
+    #     for i in 1:num_dims
+    #         unsafe_load(tiled.minor_to_major, i) != num_dims - i && return unimplemented()
+    #     end
+    # end
 
     # the copy is synchronous, so all `host_buffer_semantics` are honored
-    data = memdup(Ptr{UInt8}(unsafe_load(args.data)), size_in_bytes)
-    dims = memdup(host_dims, num_dims)
-    minor_to_major = Ptr{Int64}(Libc.malloc(max(num_dims, 1) * sizeof(Int64)))
-    buffer = Ptr{Buffer}(Libc.malloc(sizeof(Buffer)))
-    if data == C_NULL || dims == C_NULL || minor_to_major == C_NULL || buffer == C_NULL
-        Libc.free(data)
-        Libc.free(dims)
-        Libc.free(minor_to_major)
-        Libc.free(buffer)
-        return resource_exhausted()
-    end
+    data = Libc.malloc(size_in_bytes)
+    data == C_NULL && return resource_exhausted()
 
-    for i in 1:num_dims
-        unsafe_store!(minor_to_major, num_dims - i, i)
-    end
+    minor_to_major = collect(_ndims:-1:1)
 
-    unsafe_store!(
-        buffer, Buffer(data, size_in_bytes, type, dims, minor_to_major, num_dims, device)
-    )
-
-    # TODO return an already-ready `PJRT_Event` once events are implemented
-    unsafe_store!(args.done_with_host_buffer, C_NULL)
-
-    # caller is responsible for freeing `buffer` with `PJRT_Buffer_Destroy`
-    unsafe_store!(args.buffer, Ptr{CAPI.PJRT_Buffer}(buffer))
-    return ok()
+    # TODO device
+    buffer = Buffer(data, size_in_bytes, _eltype, _size, minor_to_major, device)
+    root!(buffer)
+    return buffer
 end
 
-for T in [Error, Device, DeviceDescription, Memory, Buffer, Client]
-    exprs = map(Iterators.zip(fieldnames(T), fieldtypes(T))) do (fname, ftype)
-        quote
-            if f === $(QuoteNode(fname))
-                return Ptr{$ftype}(x + $(fieldoffset(T, fname)))
-            end
-        end
-    end
-    @eval begin
-        function Base.getproperty(x::Ptr{$T}, f::Symbol)
-            $(exprs...)
-            return getfield(x, f)
-        end
-
-        function Base.propertynames(x::Ptr{$T}; private=false)
-            return $(fieldnames(T))
-        end
-    end
+function buffer_from_host_buffer(client::HostClient, mem::HostDevice, _eltype, _size, _nbytestrides, _device_layout, _host_buffer_semantics)
+    # TODO error
 end
 
 function __init__()
