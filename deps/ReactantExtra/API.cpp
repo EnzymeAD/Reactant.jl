@@ -4408,14 +4408,18 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
       // without a cap, two patterns undoing each other (Enzyme-JAX #3680 on
       // ceed BP1/2) spin the compile forever, so the cap makes that a
       // failure instead.
+      // The lowering round after the list also computes a reduce of values a
+      // broadcast only permutes in their layout (reduce_permuted_broadcast,
+      // Enzyme-JAX #3788): after the list, whose transpose pushes move the
+      // permutation the other way.
       std::string pipeline =
           "canonicalize,cse,canonicalize,enzyme-hlo-generate-td{patterns=" +
           patterns +
           " max-iterations=100},transform-interpreter,enzyme-hlo-remove-"
           "transform,canonicalize,"
           "cse,enzyme-hlo-generate-td{patterns=lower_rotate;lower_wrap;"
-          "lower_extend;lower_updatewithoutcorners;lower_multislice "
-          "max-iterations=100},"
+          "lower_extend;lower_updatewithoutcorners;lower_multislice;"
+          "reduce_permuted_broadcast max-iterations=100},"
           "transform-interpreter,enzyme-hlo-remove-transform,canonicalize,cse";
       if (failed(mlir::parsePassPipeline(pipeline, pm))) {
         llvm::errs() << " failed to parse the exec optimization pipeline\n";
