@@ -6313,6 +6313,146 @@ function read_ptx_sreg_smid(;
 end
 
 """
+`sparse_compress`
+
+Compresses elements from a dense vector `data` into a structured sparse
+vector `compressed_data` using the 2:4 sparsity pattern: 2 out of every
+4 elements of `data` are selected. The indices of the selected elements
+are returned in `metadata`.
+
+The element size (8 or 16 bits) is given by the element type of `data`
+and `compressed_data`. `data` must occupy `2 * repFactor` 32-bit
+registers, where the repeat factor `repFactor` is a power of two from 1
+to 64.
+
+Arguments:
+- `spDesc`: Sparsity descriptor specifying the selection operation and the
+  element data type.
+- `data`: Dense vector containing the elements to be compressed.
+- `idxSize`: Size in bits of each metadata index (2 or 4).
+
+Results:
+- `metadata`: Indices of the selected elements, stored in
+  `ceil(repFactor * idxSize / elemSize)` 32-bit registers. A single
+  register may be either `i32` or `vector<1xi32>`.
+- `compressed_data`: Selected elements; half as many as in `data`.
+
+Examples:
+```mlir
+// 8-bit elements, 2-bit indices, repeat factor of 1.
+%metadata, %compressed_data = nvvm.sparse.compress %spdesc, %data
+    idx_size = 2
+    : i32, vector<8xi8> -> i32, vector<4xi8>
+
+// 16-bit elements, 4-bit indices, repeat factor of 8.
+%metadata, %compressed_data = nvvm.sparse.compress %spdesc, %data
+    idx_size = 4
+    : i32, vector<32xi16> -> vector<2xi32>, vector<16xi16>
+```
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-spcompress)
+"""
+function sparse_compress(
+    spDesc::Value,
+    data::Value;
+    metadata::IR.Type,
+    compressed_data::IR.Type,
+    idxSize,
+    location=Location(),
+)
+    op_ty_results = IR.Type[metadata, compressed_data]
+    operands = Value[spDesc, data]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[NamedAttribute("idxSize", idxSize),]
+
+    return create_operation(
+        "nvvm.sparse.compress",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`sparse_decompress`
+
+Decompresses elements from a structured sparse vector `compressed_data`
+into a dense vector `data`, using the indices stored in `metadata`. Dense
+positions not selected by `metadata` are set to zero.
+
+`data` consists of `repFactor` groups of `numTgt` elements, and
+`compressed_data` holds `numSrc` elements for each group, i.e. the
+sparsity factor is `numSrc:numTgt`. Both `numSrc` and the repeat factor
+`repFactor` are derived from the vector lengths. The element size
+`elemSize` (8 or 16 bits) is given by the element type of `data` and
+`compressed_data`.
+
+The following conditions must hold:
+- `numSrc:numTgt` is one of 1:2, 1:4, 1:8, 1:16, 2:4, 2:8, 2:16, 4:8, or
+  4:16.
+- `repFactor` is a power of two from 1 to 64.
+- `numTgt * elemSize * repFactor` is between 32 and 4096.
+- `numSrc * elemSize` is at most 32.
+- `idxSize` is 2 only if `numTgt` is at most 4.
+- `metadata` occupies `ceil(numSrc * idxSize * repFactor / 32)` 32-bit
+  registers. A single register may be either `i32` or `vector<1xi32>`.
+
+Arguments:
+- `metadata`: Indices of the selected elements.
+- `compressed_data`: Compressed vector containing the selected elements.
+- `idxSize`: Size in bits of each metadata index (2 or 4).
+- `numTgt`: Size of each group in `data` (2, 4, 8, or 16).
+
+Results:
+- `data`: Dense vector containing the decompressed elements.
+
+Examples:
+```mlir
+// 2:4 sparsity, 8-bit elements, 2-bit indices, repeat factor of 1.
+%res = nvvm.sparse.decompress %metadata, %compdata idx_size = 2 num_tgt = 4
+    : i32, vector<2xi8> -> vector<4xi8>
+
+// 2:4 sparsity, 16-bit elements, 4-bit indices, repeat factor of 64.
+%res = nvvm.sparse.decompress %metadata, %compdata idx_size = 4 num_tgt = 4
+    : vector<16xi32>, vector<128xi16> -> vector<256xi16>
+```
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-spdecompress)
+"""
+function sparse_decompress(
+    metadata::Value,
+    compressed_data::Value;
+    data::IR.Type,
+    idxSize,
+    numTgt,
+    location=Location(),
+)
+    op_ty_results = IR.Type[data,]
+    operands = Value[metadata, compressed_data]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[
+        NamedAttribute("idxSize", idxSize), NamedAttribute("numTgt", numTgt)
+    ]
+
+    return create_operation(
+        "nvvm.sparse.decompress",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
 `sqrt_approx`
 
 Computes a fast approximation of the square root of the input value
