@@ -62,7 +62,7 @@ function PB._encoded_size(x::BufferIsolationConfig)
     return encoded_size
 end
 
-@enumx var"AssignmentAlgorithmForComputationsWithoutOrderingProto.Value" DEFAULT=0 FAST_MERGE=1
+@enumx var"AssignmentAlgorithmForComputationsWithoutOrderingProto.Value" SPATIAL=0 FAST_MERGE=1
 
 struct AssignmentAlgorithmForComputationsWithoutOrderingProto end
 
