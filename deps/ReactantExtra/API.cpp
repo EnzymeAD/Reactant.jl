@@ -4408,14 +4408,20 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
       // without a cap, two patterns undoing each other (Enzyme-JAX #3680 on
       // ceed BP1/2) spin the compile forever, so the cap makes that a
       // failure instead.
+      // The lowering round after the list also writes a reduction over a row
+      // of 2 or 4 elements as the combination of its slices
+      // (short_row_reduce_unroll, Enzyme-JAX #3790): XLA puts at most 8 such
+      // row reductions in one fusion, and as slices they fuse with their
+      // siblings. After the list, whose reduce-of-slices patterns would
+      // rebuild the reduce.
       std::string pipeline =
           "canonicalize,cse,canonicalize,enzyme-hlo-generate-td{patterns=" +
           patterns +
           " max-iterations=100},transform-interpreter,enzyme-hlo-remove-"
           "transform,canonicalize,"
           "cse,enzyme-hlo-generate-td{patterns=lower_rotate;lower_wrap;"
-          "lower_extend;lower_updatewithoutcorners;lower_multislice "
-          "max-iterations=100},"
+          "lower_extend;lower_updatewithoutcorners;lower_multislice;"
+          "short_row_reduce_unroll max-iterations=100},"
           "transform-interpreter,enzyme-hlo-remove-transform,canonicalize,cse";
       if (failed(mlir::parsePassPipeline(pipeline, pm))) {
         llvm::errs() << " failed to parse the exec optimization pipeline\n";
