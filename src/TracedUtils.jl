@@ -175,7 +175,7 @@ function set_mlir_data!(x::AnyTracedRArray{T}, data) where {T}
     return x
 end
 
-get_ancestor_and_indices(a::TracedRArray, indices) = (a, indices)
+get_ancestor_and_indices(a::TracedRArray, indices...) = (a, indices)
 get_ancestor_and_indices(a::TracedRArray, indices, args...) = (a, (indices, args...))
 
 get_ancestor_and_indices(a::Array{<:TracedRNumber}, indices...) = (a, indices)
@@ -196,7 +196,9 @@ function get_ancestor_and_indices_inner(
     return get_ancestor_and_indices(parent(x), Base.reindex(parentindices(x), indices)...)
 end
 function get_ancestor_and_indices_inner(x::AnyTracedRArray{T,1}, indices) where {T}
-    return get_ancestor_and_indices(parent(x), Base.reindex(parentindices(x), indices))
+    return get_ancestor_and_indices(
+        parent(x), Base.reindex(parentindices(x), (indices,))...
+    )
 end
 function get_ancestor_and_indices_inner(x::AnyTracedRArray{T,N}, linear_index) where {T,N}
     return get_ancestor_and_indices_inner(x, [linear_index])
