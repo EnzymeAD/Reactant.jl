@@ -563,3 +563,178 @@ end
         @test @jit(getindex(x, idx_ra)) ≈ getindex(x, idx)
     end
 end
+
+struct Wrap3302{T}
+    x::T
+end
+
+struct PairWrap3302{A,B}
+    a::A
+    b::B
+end
+
+struct NestedWrap3302{W,T}
+    inner::W
+    scale::T
+end
+
+struct Layer3302{W,B,F}
+    w::W
+    b::B
+    act::F
+end
+
+mutable struct MutableWrap3302{T}
+    x::T
+end
+
+struct TaggedWrap3302{Tag,T}
+    x::T
+    label::Symbol
+end
+
+struct StaticIntField3302{T}
+    n::Int
+    x::T
+end
+
+struct FixedWrap3302
+    x::Float64
+end
+
+# https://github.com/EnzymeAD/Reactant.jl/issues/3302
+@testset "Indexing Array of structs with traced indices (#3302)" begin
+    function sum_wrapped(xs)
+        ws = [@allowscalar Wrap3302(xs[i]) for i in 1:length(xs)]
+        s = 0.0
+        @trace for i in 1:length(xs)
+            s += ws[i].x
+        end
+        return s
+    end
+
+    xs_jl = [1.0, 2.0, 3.0]
+    xs = Reactant.to_rarray(xs_jl)
+    @test @jit(sum_wrapped(xs)) ≈ 6.0
+
+    function weighted_sum_wrapped(xs)
+        ws = [@allowscalar PairWrap3302(xs[i], Float64(i)) for i in 1:length(xs)]
+        s = 0.0
+        @trace for i in 1:length(xs)
+            w = ws[i]
+            s += w.a * w.b
+        end
+        return s
+    end
+    @test @jit(weighted_sum_wrapped(xs)) ≈ 14.0
+
+    function grad_weighted_sum_wrapped(xs)
+        dxs = zero(xs)
+        Reactant.Enzyme.autodiff(
+            Reactant.Enzyme.Reverse,
+            weighted_sum_wrapped,
+            Reactant.Enzyme.Active,
+            Reactant.Enzyme.Duplicated(xs, dxs),
+        )
+        return dxs
+    end
+    @test Array(@jit(grad_weighted_sum_wrapped(xs))) ≈ [1.0, 2.0, 3.0]
+
+    function plain_struct_idx(i)
+        ws = [Wrap3302(10.0), Wrap3302(20.0), Wrap3302(30.0)]
+        return ws[i]
+    end
+    @test (@jit plain_struct_idx(ConcreteRNumber(2))).x ≈ 20.0
+
+    function nested_and_tuples(xs)
+        ns = [@allowscalar NestedWrap3302(Wrap3302(xs[i]), 2.0 * i) for i in 1:length(xs)]
+        ts = [@allowscalar (xs[i], Float64(i + 10)) for i in 1:length(xs)]
+        nts = [@allowscalar (; u=xs[i], v=Float64(i)) for i in 1:length(xs)]
+        ms = [@allowscalar MutableWrap3302(xs[i] + 1.0) for i in 1:length(xs)]
+        tws = [
+            @allowscalar TaggedWrap3302{:mytag,typeof(xs[i])}(xs[i], :ok) for
+            i in 1:length(xs)
+        ]
+        s = 0.0
+        @trace for i in 1:length(xs)
+            s += ns[i].inner.x * ns[i].scale
+            t = ts[i]
+            s += t[1] + t[2]
+            nt = nts[i]
+            s += nt.u - nt.v
+            s += ms[i].x
+            tw = tws[i]
+            s += (tw.label === :ok ? tw.x : 0.0)
+        end
+        return s
+    end
+    @test @jit(nested_and_tuples(xs)) ≈ nested_and_tuples(xs_jl)
+
+    function static_int_field_idx(xs, idx)
+        sis = [@allowscalar StaticIntField3302(7, xs[i]) for i in 1:length(xs)]
+        si = sis[idx]
+        return si.n * si.x
+    end
+    @test @jit(static_int_field_idx(xs, ConcreteRNumber(2))) ≈ 14.0
+
+    function run_layers(x, W1, b1, W2, b2)
+        layers = [Layer3302(W1, b1, tanh), Layer3302(W2, b2, tanh)]
+        @trace for i in 1:length(layers)
+            l = layers[i]
+            x = l.act.(l.w * x .+ l.b)
+        end
+        return x
+    end
+    x0 = Float32[0.1, -0.2, 0.3, 0.4]
+    W1 = reshape(Float32.(1:16) ./ 20, 4, 4)
+    b1 = Float32[0.1, 0.2, 0.3, 0.4]
+    W2 = reshape(Float32.(16:-1:1) ./ 20, 4, 4)
+    b2 = Float32[-0.1, 0.0, 0.1, 0.2]
+    x0_r, W1_r, b1_r, W2_r, b2_r = map(Reactant.to_rarray, (x0, W1, b1, W2, b2))
+    @test Array(@jit(run_layers(x0_r, W1_r, b1_r, W2_r, b2_r))) ≈
+        run_layers(x0, W1, b1, W2, b2)
+
+    function mat_struct_ops(M, i, j, idxs)
+        ws = [@allowscalar Wrap3302(M[r, c]) for r in 1:size(M, 1), c in 1:size(M, 2)]
+        c_val = ws[i, j].x
+        l_val = ws[j].x
+        col = ws[:, j]
+        col_sum = sum(w -> w.x, col)
+        gathered = ws[idxs]
+        g_sum = sum(w -> w.x, gathered)
+        return c_val + l_val + col_sum + g_sum
+    end
+    M_jl = Float64[1 2 3; 4 5 6]
+    M_r = Reactant.to_rarray(M_jl)
+    idxs_jl = [2, 5]
+    idxs_r = Reactant.to_rarray(idxs_jl)
+    @test @jit(mat_struct_ops(M_r, ConcreteRNumber(2), ConcreteRNumber(3), idxs_r)) ≈
+        mat_struct_ops(M_jl, 2, 3, idxs_jl)
+
+    function int32_loop(xs)
+        ws = [@allowscalar Wrap3302(xs[i]) for i in 1:length(xs)]
+        s = 0.0
+        @trace for i in Int32(1):Int32(length(xs))
+            s += ws[i].x
+        end
+        return s
+    end
+    @test @jit(int32_loop(xs)) ≈ 6.0
+
+    bad_missing(i) = (Union{Missing,Float32}[1.0f0, missing, 2.0f0])[i]
+    @test_throws ArgumentError @jit bad_missing(ConcreteRNumber(1))
+
+    bad_fixed(i) = ([FixedWrap3302(1.0), FixedWrap3302(2.0)])[i]
+    @test_throws ArgumentError @jit bad_fixed(ConcreteRNumber(1))
+
+    bad_bool_idx(b) = ([Wrap3302(1.0), Wrap3302(2.0)])[b]
+    @test_throws ArgumentError @jit bad_bool_idx(ConcreteRNumber(true))
+
+    bad_empty(i) = (Wrap3302{Float64}[])[i]
+    @test_throws BoundsError @jit bad_empty(ConcreteRNumber(1))
+
+    bad_nonuniform_arrays(x, y, i) = ([Wrap3302(x), Wrap3302(y)])[i]
+    @test_throws ArgumentError @jit bad_nonuniform_arrays(
+        Reactant.to_rarray(ones(2)), Reactant.to_rarray(ones(3)), ConcreteRNumber(1)
+    )
+end
