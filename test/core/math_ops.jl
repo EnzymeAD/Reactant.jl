@@ -180,7 +180,7 @@ end
         for f in (zero, one, oneunit, float)
             y = f(xr)
             @test y isa ConcreteRNumber
-            @test Reactant.XLA.device(y) == device
+            @test Reactant.XLA.device(y) == Reactant.XLA.device(xr)
             @test Reactant.to_number(y) === f(x)
         end
         @test iszero(xr) === iszero(x)
