@@ -38,11 +38,3 @@ struct SVectorCallable{V} end
     hlo = String(@code_hlo debug = true sv_holder_fn(x, h))
     @test occursin("SVectorHolder{Float32[1.0, 2.0, 3.0]}", hlo)
 end
-
-struct ThrowingShowVal end
-Base.show(::IO, ::ThrowingShowVal) = error("broken show")
-
-@testset "Fallback when type parameter show throws" begin
-    x = Reactant.to_rarray(ones(Float32, 4))
-    @test @jit(sv_holder_fn(x, SVectorHolder{ThrowingShowVal()}())) ≈ ones(Float32, 4) .+ 1
-end

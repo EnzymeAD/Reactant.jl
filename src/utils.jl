@@ -759,16 +759,10 @@ end
 # generator was defined, not the caller's world, and `Base.invoke_in_world` does not
 # raise the world age inside a generator. Printing a method signature may need `show`
 # methods of packages loaded after Reactant (e.g. when an `SVector` value is a type
-# parameter, `show(::SVector)` calls StaticArrays' `size`). Use `Core._call_in_world_total`
-# to run the printing in `world` so those methods are visible, and never fail compilation
-# just because pretty-printing the signature threw (it is only used for debug info).
+# parameter, `show(::SVector)` calls StaticArrays' `size`), so run `traced_mi` in `world`
+# via `Core._call_in_world_total`.
 function traced_mi(mi, world::UInt)
-    try
-        return Core._call_in_world_total(world, traced_mi, mi)
-    catch
-        m = mi.def
-        return m isa Method ? string(m.module, ".", m.name, "(...)") : string(m)
-    end
+    return Core._call_in_world_total(world, traced_mi, mi)
 end
 
 function traced_mi(mi)
