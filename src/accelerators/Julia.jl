@@ -27,6 +27,7 @@ module Julia
 # - DO NOT use moving GC (e.g. MMTk) as it would break `pointer_from_objref`
 
 using Base: unsafe_convert
+using ..Reactant: Reactant
 using Reactant.XLA.CAPI: CAPI, csizeof
 
 macro pjrt_catch_return(fdef)
@@ -40,7 +41,9 @@ macro pjrt_catch_return(fdef)
             if $err isa $Error
                 return $pointer_from_objref($root!($err))
             else
-                return $pointer_from_objref($root!($Error($(CAPI.PJRT_Error_Code_INTERNAL), $sprint($showerror, $err))))
+                # we could return an "internal" error, but throwing makes it easier for Julia REPL sessions
+                # return $pointer_from_objref($root!($Error($(CAPI.PJRT_Error_Code_INTERNAL), $sprint($showerror, $err))))
+                $rethrow()
             end
         end
         return $ok()
@@ -882,14 +885,14 @@ end
     client = unsafe_pointer_to_objref(unsafe_load(args.client))::Client
     devs = addressable_devices(client)::Vector{Device}
     unsafe_store!(args.addressable_devices, Ptr{Ptr{CAPI.PJRT_Device}}(pointer(devs)))
-    unsafe_store!(args.num_devices, length(devs))
+    unsafe_store!(args.num_addressable_devices, length(devs))
 end
 
 @pjrt_catch_return function client_addressable_memories(args::Ptr{CAPI.PJRT_Client_AddressableMemories_Args})::Ptr{CAPI.PJRT_Error}
     client = unsafe_pointer_to_objref(unsafe_load(args.client))::Client
     mems = addressable_memories(client)::Vector{Memory}
     unsafe_store!(args.addressable_memories, Ptr{Ptr{CAPI.PJRT_Memory}}(pointer(mems)))
-    unsafe_store!(args.num_memories, length(mems))
+    unsafe_store!(args.num_addressable_memories, length(mems))
 end
 
 @pjrt_catch_return function client_compile(args::Ptr{CAPI.PJRT_Client_Compile_Args})::Ptr{CAPI.PJRT_Error}
