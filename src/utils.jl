@@ -755,16 +755,6 @@ function Base.showerror(io::IO, ece::ReactantPrecompilationException)
     )
 end
 
-# Generated functions (and hence `call_llvm_generator`) run in the world in which the
-# generator was defined, not the caller's world, and `Base.invoke_in_world` does not
-# raise the world age inside a generator. Printing a method signature may need `show`
-# methods of packages loaded after Reactant (e.g. when an `SVector` value is a type
-# parameter, `show(::SVector)` calls StaticArrays' `size`), so run `traced_mi` in `world`
-# via `Core._call_in_world_total`.
-function traced_mi(mi, world::UInt)
-    return Core._call_in_world_total(world, traced_mi, mi)
-end
-
 function traced_mi(mi)
     spec = mi.specTypes.parameters
     ft = spec[1]
@@ -1166,7 +1156,7 @@ function call_llvm_generator(
                     push!(profile_llvm_fns, gval)
                 end
 
-                stringv = traced_mi(mi, world)
+                stringv = Core._call_in_world_total(world, traced_mi, mi)
 
                 fname = LLVM.globalstring_ptr!(builder, stringv, "mi_name")
 
