@@ -132,6 +132,67 @@ end
     @test @jit(custombcast(x_ra)) ≈ custombcast(x)
 end
 
+struct ScaleFunctor{T}
+    a::T
+end
+(s::ScaleFunctor)(x) = s.a * x
+
+struct AffineFunctor{A,B}
+    a::A
+    b::B
+end
+(f::AffineFunctor)(x) = f.a * x + f.b
+
+struct IndexShiftFunctor{V}
+    v::V
+end
+(s::IndexShiftFunctor)(x) = x + s.v[2]
+
+# `c::Float64` is deliberately not a type parameter
+struct OuterFunctor{S}
+    inner::S
+    c::Float64
+end
+(o::OuterFunctor)(x) = o.inner(x) * o.c
+
+@testset "Broadcasting callable struct holding traced values: #3392" begin
+    x = Reactant.TestUtils.construct_test_array(Float64, 4)
+    x_ra = Reactant.to_rarray(x)
+    a_ra = ConcreteRNumber(2.0)
+    v = [10.0, 20.0]
+    v_ra = Reactant.to_rarray(v)
+
+    bcast_struct(a, x) = ScaleFunctor(a).(x)
+    bcast_closure(a, x) = (xi -> a * xi).(x)
+    bcast_mixed(a, x) = AffineFunctor(a, 1.5).(x)
+    bcast_two_traced(a, x) = AffineFunctor(a, a).(x)
+    bcast_indexed(v, x) = IndexShiftFunctor(v).(x)
+    bcast_nested(a, x) = OuterFunctor(ScaleFunctor(a), 3.0).(x)
+    bcast_inplace(a, x) = (y = similar(x); y .= ScaleFunctor(a).(x); return y)
+
+    @test Array(@jit(bcast_struct(a_ra, x_ra))) ≈ bcast_struct(2.0, x)
+    @test Array(@jit(bcast_closure(a_ra, x_ra))) ≈ bcast_closure(2.0, x)
+    @test Array(@jit(bcast_mixed(a_ra, x_ra))) ≈ bcast_mixed(2.0, x)
+    @test Array(@jit(bcast_two_traced(a_ra, x_ra))) ≈ bcast_two_traced(2.0, x)
+    @test Array(@jit(bcast_indexed(v_ra, x_ra))) ≈ bcast_indexed(v, x)
+    @test Array(@jit(bcast_nested(a_ra, x_ra))) ≈ bcast_nested(2.0, x)
+    @test Array(@jit(bcast_inplace(a_ra, x_ra))) ≈ bcast_inplace(2.0, x)
+
+    # scalar-only broadcast
+    @test Float64(@jit(bcast_struct(a_ra, a_ra))) ≈ 4.0
+
+    # a 2-D input
+    xm = Reactant.TestUtils.construct_test_array(Float64, 3, 2)
+    xm_ra = Reactant.to_rarray(xm)
+    @test Array(@jit(bcast_struct(a_ra, xm_ra))) ≈ bcast_struct(2.0, xm)
+
+    # the struct path must lower like the closure path: a plain broadcast, no loop
+    hlo = repr(@code_hlo bcast_struct(a_ra, x_ra))
+    @test !occursin("stablehlo.while", hlo)
+    @test occursin("stablehlo.broadcast_in_dim", hlo)
+    @test occursin("stablehlo.multiply", hlo)
+end
+
 function bcast_scalar_with_jlarray(jlarr, x)
     return jlarr .+ x
 end
