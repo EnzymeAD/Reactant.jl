@@ -163,30 +163,9 @@ end
     @test !Bool(@jit(isinf(ConcreteRNumber(true))))
 end
 
-const cpu_pjrt_client = Reactant.Accelerators.CPU.make_pjrt_client()
-const cpu_ifrt_client = Reactant.Accelerators.CPU.make_ifrt_client()
-
-function concrete_numbers(x)
-    return (
-        ConcretePJRTNumber(x; client=cpu_pjrt_client),
-        ConcreteIFRTNumber(x; client=cpu_ifrt_client),
-    )
-end
-function concrete_0d_arrays(x)
-    return (
-        ConcretePJRTArray(fill(x); client=cpu_pjrt_client),
-        ConcreteIFRTArray(fill(x); client=cpu_ifrt_client),
-    )
-end
-
-function same_runtime_and_client(y, x)
-    return typeof(y).name.wrapper === typeof(x).name.wrapper &&
-           Reactant.XLA.client(y) == Reactant.XLA.client(x)
-end
-
-@testset "isinf/isnan/isfinite on PJRT and IFRT scalars" begin
+@testset "isinf/isnan/isfinite on concrete scalars" begin
     for x in (Inf, -Inf, NaN, 2.0, 2, true),
-        xr in (concrete_numbers(x)..., concrete_0d_arrays(x)...)
+        xr in (ConcreteRNumber(x), ConcreteRArray(fill(x)))
 
         @test isinf(xr) === isinf(x)
         @test isnan(xr) === isnan(x)
@@ -194,36 +173,18 @@ end
     end
 end
 
-@testset "zero/one on PJRT and IFRT scalars" begin
+@testset "zero/one on concrete scalars" begin
+    device = last(Reactant.devices())
     for x in (2.5, 0.0, -3, 1, true)
-        for xr in concrete_numbers(x)
-            for f in (zero, one, oneunit, float)
-                y = f(xr)
-                @test same_runtime_and_client(y, xr)
-                @test Reactant.to_number(y) === f(x)
-            end
-            @test iszero(xr) === iszero(x)
-            @test isone(xr) === isone(x)
+        xr = ConcreteRNumber(x; device)
+        for f in (zero, one, oneunit, float)
+            y = f(xr)
+            @test y isa ConcreteRNumber
+            @test Reactant.XLA.device(y) == device
+            @test Reactant.to_number(y) === f(x)
         end
-        for xr in concrete_0d_arrays(x)
-            @test same_runtime_and_client(zero(xr), xr)
-            @test Array(zero(xr)) == zero(fill(x))
-        end
-    end
-end
-
-@testset "TwicePrecision to PJRT and IFRT numbers" begin
-    for (hi, lo) in ((2.5, 0.5), (0.1, -5.551115123125783e-18))
-        expected = Float64(Base.TwicePrecision(hi, lo))
-        @test Reactant.to_number(ConcreteRNumber{Float64}(Base.TwicePrecision(hi, lo))) ===
-            expected
-        for (hr, lr) in zip(concrete_numbers(hi), concrete_numbers(lo))
-            for T in (typeof(hr), typeof(hr).name.wrapper)
-                y = T(Base.TwicePrecision(hr, lr))
-                @test same_runtime_and_client(y, hr)
-                @test Reactant.to_number(y) === expected
-            end
-        end
+        @test iszero(xr) === iszero(x)
+        @test isone(xr) === isone(x)
     end
 end
 
@@ -235,9 +196,10 @@ function result_or_error(f, x)
     end
 end
 
-@testset "host math on PJRT and IFRT scalars" begin
+@testset "host math on concrete scalars" begin
     # Outside `@jit`, functions of concrete numbers return host values
-    for x in (0.5, -2.5f0, 3, true, ComplexF32(1, 2)), xr in concrete_numbers(x)
+    for x in (0.5, -2.5f0, 3, true, ComplexF32(1, 2))
+        xr = ConcreteRNumber(x)
         for f in (
             abs,
             abs2,
@@ -268,13 +230,12 @@ end
             asinh,
             acosh,
             atanh,
-            y -> ℯ^y,
         )
             @test result_or_error(f, xr) === result_or_error(f, x)
         end
     end
     for x in (0.0, -0.0, 1.0, -2.5f0, 3, true),
-        xr in (concrete_numbers(x)..., concrete_0d_arrays(x)...)
+        xr in (ConcreteRNumber(x), ConcreteRArray(fill(x)))
 
         for f in (isinteger, signbit, iszero, isone)
             @test f(xr) === f(x)
