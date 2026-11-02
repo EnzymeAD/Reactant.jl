@@ -1087,7 +1087,7 @@ mutable struct HostClient <: Client
     memories::Vector{Memory}
 end
 
-function HostClient(args::Ptr{CAPI.PJRT_Client_Create_Args})::Ptr{CAPI.PJRT_Error}
+function HostClient()
     devs = Vector{Device}(undef, 1)
     mems = Vector{Memory}(undef, 1)
 
@@ -1097,8 +1097,12 @@ function HostClient(args::Ptr{CAPI.PJRT_Client_Create_Args})::Ptr{CAPI.PJRT_Erro
     devs[1] = dev
     mems[1] = mem
 
-    client = HostClient(devs, mems)
-    root!(client)
+    return HostClient(devs, mems)
+end
+
+# used by `PJRT_Client_Create`
+function HostClient(args::Ptr{CAPI.PJRT_Client_Create_Args})::Ptr{CAPI.PJRT_Error}
+    client = root!(HostClient())
     unsafe_store!(args.client, Ptr{CAPI.PJRT_Client}(pointer_from_objref(client)))
     return ok()
 end
@@ -1347,10 +1351,31 @@ function __init__()
         #= PJRT_TopologyDescription_GetMemorySpaceKindIds =# c_unimplemented,
     )
     #! format: on
+
+    Reactant.Accelerators.Registration.register_backend(
+        "julia";
+        priority=100,
+        pjrt_initialize_function=make_pjrt_client,
+    )
 end
 
-function make_pjrt_client()
-    # TODO
+function make_pjrt_client(;
+    node_id::Integer=0,
+    num_nodes::Integer=1,
+    distributed_runtime_client=nothing,
+    allowed_devices::Union{Nothing,Vector{Int}}=nothing
+)
+    @assert node_id == 0
+    @assert num_nodes == 1 "`make_pjrt_client` does not support num_nodes > 1"
+    @assert isnothing(distributed_runtime_client) "`make_pjrt_client` does not \
+                                                    support distributed_runtime_client"
+    @assert isnothing(allowed_devices)
+
+    errstr = Ref{Cstring}()
+    api = unsafe_convert(Ptr{CAPI.PJRT_Api}, vtable_api)
+    ptr = Reactant.MLIR.API.MakeClientFromApi(api, "julia", "JULIA", errstr)
+    ptr == C_NULL && error(unsafe_string(errstr[]))
+    return Reactant.XLA.PJRT.Client(ptr)
 end
 
 end
