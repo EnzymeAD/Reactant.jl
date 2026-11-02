@@ -32,3 +32,12 @@ broadcast_over_range(a, kx, ky) = a .* (kx .^ 2 .+ ky' .^ 2)
     @test @jit(broadcast_over_range(a_ra, kx_2_ra, ky_2_ra)) ≈
         broadcast_over_range(a, kx_2, ky_2)
 end
+
+@testset "TwicePrecision to ConcreteRNumber" begin
+    tp = Base.TwicePrecision(2.5, 0.5)
+    @test Reactant.to_number(ConcreteRNumber{Float64}(tp)) === Float64(tp)
+
+    r = 0:0.1:1
+    r_ra = Reactant.to_rarray(r; track_numbers=Number)
+    @test Reactant.to_number(step(r_ra)) === step(r)
+end

@@ -1014,7 +1014,7 @@ function (::Type{T})(x::TwicePrecision) where {T<:Reactant.TracedRNumber}
 end
 
 function (::Type{T})(x::TwicePrecision) where {T<:Reactant.ConcreteRNumber}
-    return Reactant.ConcreteRNumber(T(x.hi) - T(x.lo))::T
+    return Reactant.ConcreteRNumber(T(x.hi) + T(x.lo))::T
 end
 
 function Base.round(::Type{T}, x::TracedRNumber{<:AbstractFloat}) where {T<:Integer}
