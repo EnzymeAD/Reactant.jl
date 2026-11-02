@@ -1167,8 +1167,22 @@ Base.@nospecializeinfer function compile_mlir!(
         end
     end
 
+    # Result placeholders must match the concrete type produced by the executable (notably
+    # `D = length(global_device_ids)` for sharded `ConcretePJRTArray{T,N,D}` /
+    # `ConcretePJRTNumber{T,D}`), because any container or struct wrapping the results is
+    # parameterized on those placeholder types.
+    result_sharding = if mlir_fn_res.is_sharded && runtime isa Val{:PJRT}
+        Sharding.UnknownSharding{length(mlir_fn_res.global_device_ids)}()
+    else
+        Sharding.NoSharding()
+    end
     concrete_result = make_tracer(
-        OrderedIdDict(), traced_result, ("result",), TracedToConcrete; runtime
+        OrderedIdDict(),
+        traced_result,
+        ("result",),
+        TracedToConcrete;
+        runtime,
+        sharding=result_sharding,
     )
 
     return Reactant.TracedUtils.CompiledMlirFnResult(
