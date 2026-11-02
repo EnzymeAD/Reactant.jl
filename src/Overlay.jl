@@ -306,7 +306,7 @@ end
 
 # `count` wraps its predicate in `Base._bool`, which asserts a plain `Bool`
 @reactant_overlay function Base._bool(f)
-    return x -> f(x)::Union{Bool,TracedRNumber{Bool}}
+    return CallWithReactant(f)
 end
 
 @reactant_overlay function Base._getindex(
