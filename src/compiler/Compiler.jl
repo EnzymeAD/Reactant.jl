@@ -923,6 +923,10 @@ Base.@nospecializeinfer function compile_mlir!(
         run_pass_pipeline!(mod, String(compile_options.multifloat), "multifloat")
     end
 
+    if legal_to_run_shardy_passes
+        canonicalize_degenerate_broadcasts!(mod)
+    end
+
     # shardy passes
     use_shardy_partitioner = false
     result_shardings = missing
