@@ -1061,12 +1061,12 @@ function buffer_from_host_buffer(
     # only dense major-to-minor host data is supported; strides of size-1 dims are irrelevant
     # num_byte_strides = Int(unsafe_load(args.num_byte_strides))
     # if num_byte_strides != 0
-    #     num_byte_strides != num_dims && return invalid_argument()
+    #     num_byte_strides != num_dims && throw(invalid_argument())
     #     byte_strides = unsafe_load(args.byte_strides)
     #     stride = elsize
     #     for i in num_dims:-1:1
     #         dim = unsafe_load(host_dims, i)
-    #         dim != 1 && unsafe_load(byte_strides, i) != stride && return unimplemented()
+    #         dim != 1 && unsafe_load(byte_strides, i) != stride && throw(unimplemented())
     #         stride *= dim
     #     end
     # end
@@ -1074,13 +1074,13 @@ function buffer_from_host_buffer(
     # relayout is not supported, so `device_layout` must be dense major-to-minor
     # if device_layout != C_NULL
     #     layout_type = unsafe_load(device_layout.type)
-    #     layout_type != CAPI.PJRT_Buffer_MemoryLayout_Type_Tiled && return unimplemented()
+    #     layout_type != CAPI.PJRT_Buffer_MemoryLayout_Type_Tiled && throw(unimplemented())
 
     #     tiled = unsafe_load(device_layout.tiled)
-    #     tiled.num_tiles != 0 && return unimplemented()
-    #     tiled.minor_to_major_size != num_dims && return invalid_argument()
+    #     tiled.num_tiles != 0 && throw(unimplemented())
+    #     tiled.minor_to_major_size != num_dims && throw(invalid_argument())
     #     for i in 1:num_dims
-    #         unsafe_load(tiled.minor_to_major, i) != num_dims - i && return unimplemented()
+    #         unsafe_load(tiled.minor_to_major, i) != num_dims - i && throw(unimplemented())
     #     end
     # end
 
