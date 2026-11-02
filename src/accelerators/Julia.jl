@@ -213,6 +213,124 @@ function error_for_each_payload_obj(
     return nothing
 end
 
+## Event
+mutable struct Event
+    const cond::Threads.Condition
+    ready::Bool
+    error::Union{Nothing,Error}
+    const callbacks::Vector{Tuple{CAPI.PJRT_Event_OnReadyCallback,Ptr{Cvoid}}}
+
+    function Event()
+        return new(
+            Threads.Condition(), false, nothing, Tuple{CAPI.PJRT_Event_OnReadyCallback,Ptr{Cvoid}}[]
+        )
+    end
+end
+
+Base.isready(event::Event) = @lock event.cond event.ready
+
+function Base.wait(event::Event)
+    @lock event.cond while !event.ready
+        wait(event.cond)
+    end
+    return nothing
+end
+
+function Base.notify(event::Event, err::Union{Nothing,Error}=nothing)
+    callbacks = @lock event.cond begin
+        event.ready && throw(invalid_argument("event has already been set"))
+        event.ready = true
+        event.error = err
+        notify(event.cond)
+        callbacks = copy(event.callbacks)
+        empty!(event.callbacks)
+        callbacks
+    end
+
+    # callbacks run outside the lock so that they can call back into the event
+    for (callback, user_arg) in callbacks
+        ccall(callback, Cvoid, (Ptr{CAPI.PJRT_Error}, Ptr{Cvoid}), event_error_ptr(event), user_arg)
+    end
+    return nothing
+end
+
+# every `PJRT_Error` handed out by an event is freed independently by its receiver, so each one must be a new object
+function event_error_ptr(event::Event)::Ptr{CAPI.PJRT_Error}
+    err = event.error
+    isnothing(err) && return ok()
+    return pointer_from_objref(root!(Error(err.code, err.message)))
+end
+
+function event_destroy(args::Ptr{CAPI.PJRT_Event_Destroy_Args})::Ptr{CAPI.PJRT_Error}
+    ptr = unsafe_load(args.event)
+    ptr != C_NULL && unroot!(ptr)
+    return ok()
+end
+
+function event_is_ready(args::Ptr{CAPI.PJRT_Event_IsReady_Args})::Ptr{CAPI.PJRT_Error}
+    event = unsafe_pointer_to_objref(unsafe_load(args.event))::Event
+    unsafe_store!(args.is_ready, isready(event))
+    return ok()
+end
+
+function event_error(args::Ptr{CAPI.PJRT_Event_Error_Args})::Ptr{CAPI.PJRT_Error}
+    event = unsafe_pointer_to_objref(unsafe_load(args.event))::Event
+    return event_error_ptr(event)
+end
+
+function event_await(args::Ptr{CAPI.PJRT_Event_Await_Args})::Ptr{CAPI.PJRT_Error}
+    event = unsafe_pointer_to_objref(unsafe_load(args.event))::Event
+    wait(event)
+    return event_error_ptr(event)
+end
+
+function event_on_ready(args::Ptr{CAPI.PJRT_Event_OnReady_Args})::Ptr{CAPI.PJRT_Error}
+    event = unsafe_pointer_to_objref(unsafe_load(args.event))::Event
+    callback = unsafe_load(args.callback)
+    user_arg = unsafe_load(args.user_arg)
+
+    ready = @lock event.cond begin
+        event.ready || push!(event.callbacks, (callback, user_arg))
+        event.ready
+    end
+
+    # if the event is already set, the callback is run immediately
+    if ready
+        ccall(callback, Cvoid, (Ptr{CAPI.PJRT_Error}, Ptr{Cvoid}), event_error_ptr(event), user_arg)
+    end
+    return ok()
+end
+
+function event_create(args::Ptr{CAPI.PJRT_Event_Create_Args})::Ptr{CAPI.PJRT_Error}
+    event = root!(Event())
+    unsafe_store!(args.event, pointer_from_objref(event))
+    return ok()
+end
+
+function event_set(args::Ptr{CAPI.PJRT_Event_Set_Args})::Ptr{CAPI.PJRT_Error}
+    event = unsafe_pointer_to_objref(unsafe_load(args.event))::Event
+    code = unsafe_load(args.error_code)
+
+    err = nothing
+    if code != CAPI.PJRT_Error_Code_OK
+        msg_ptr = Ptr{UInt8}(unsafe_load(args.error_message))
+        msg_size = unsafe_load(args.error_message_size)
+        msg = msg_ptr == C_NULL ? "" : unsafe_string(msg_ptr, msg_size)
+        err = Error(code, msg)
+    end
+
+    try
+        notify(event, err)
+    catch e
+        if e isa Error
+            return pointer_from_objref(root!(e))
+        else
+            rethrow()
+        end
+    end
+    return ok()
+end
+
 ## Plugin
 function plugin_initialize(
     args::Ptr{CAPI.PJRT_Plugin_Initialize_Args}
@@ -718,9 +836,9 @@ function buffer_to_host_buffer(args::Ptr{CAPI.PJRT_Buffer_ToHostBuffer_Args}
         end
     end
 
-    # TODO return an already-ready `PJRT_Event` once events are implemented
-    # currently the copy is synchronous
-    unsafe_store!(args.event, C_NULL)
+    event = root!(Event())
+    notify(event)
+    unsafe_store!(args.event, Ptr{CAPI.PJRT_Event}(pointer_from_objref(event)))
 
     return ok()
 end
@@ -879,8 +997,9 @@ function client_buffer_from_host_buffer(
             )
         end::Buffer
 
-        # TODO return an already-ready `PJRT_Event` once events are implemented
-        unsafe_store!(args.done_with_host_buffer, C_NULL)
+        event = root!(Event())
+        notify(event)
+        unsafe_store!(args.done_with_host_buffer, Ptr{CAPI.PJRT_Event}(pointer_from_objref(event)))
 
         root!(buffer)
         unsafe_store!(args.buffer, Ptr{CAPI.PJRT_Buffer}(pointer_from_objref(buffer)))
@@ -1141,11 +1260,11 @@ function __init__()
         #= PJRT_Error_GetCode =# @cfunction(error_getcode, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Error_GetCode_Args},)),
         #= PJRT_Plugin_Initialize =# @cfunction(plugin_initialize, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Plugin_Initialize_Args},)),
         #= PJRT_Plugin_Attributes =# @cfunction(plugin_attributes, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Plugin_Attributes_Args},)),
-        #= PJRT_Event_Destroy =# c_unimplemented,
-        #= PJRT_Event_IsReady =# c_unimplemented,
-        #= PJRT_Event_Error =# c_unimplemented,
-        #= PJRT_Event_Await =# c_unimplemented,
-        #= PJRT_Event_OnReady =# c_unimplemented,
+        #= PJRT_Event_Destroy =# @cfunction(event_destroy, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Event_Destroy_Args},)),
+        #= PJRT_Event_IsReady =# @cfunction(event_is_ready, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Event_IsReady_Args},)),
+        #= PJRT_Event_Error =# @cfunction(event_error, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Event_Error_Args},)),
+        #= PJRT_Event_Await =# @cfunction(event_await, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Event_Await_Args},)),
+        #= PJRT_Event_OnReady =# @cfunction(event_on_ready, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Event_OnReady_Args},)),
         #= PJRT_Client_Create =# @cfunction(client_create, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Client_Create_Args},)),
         #= PJRT_Client_Destroy =# @cfunction(client_destroy, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Client_Destroy_Args},)),
         #= PJRT_Client_PlatformName =# @cfunction(client_platform_name, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Client_PlatformName_Args},)),
@@ -1262,8 +1381,8 @@ function __init__()
         #= PJRT_AsyncTrackingEvent_Destroy =# c_unimplemented,
         #= PJRT_Executable_GetCompileOptions =# c_unimplemented,
         #= PJRT_Buffer_DonateWithControlDependency =# c_unimplemented,
-        #= PJRT_Event_Create =# c_unimplemented,
-        #= PJRT_Event_Set =# c_unimplemented,
+        #= PJRT_Event_Create =# @cfunction(event_create, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Event_Create_Args},)),
+        #= PJRT_Event_Set =# @cfunction(event_set, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Event_Set_Args},)),
         #= PJRT_Device_GetAttributes =# c_unimplemented,
         #= PJRT_Client_Load =# c_unimplemented,
         #= PJRT_LoadedExecutable_AddressableDeviceLogicalIds =# c_unimplemented,
