@@ -2355,6 +2355,46 @@ function floor(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=
 end
 
 """
+`fma`
+
+Performs element-wise single-rounded IEEE-754 fused multiply-add of `a`,
+`b`, and `c` tensors and produces a `result` tensor.
+
+See:
+https://github.com/openxla/stablehlo/blob/main/docs/spec.md#fma
+
+# Example
+```mlir
+%result = stablehlo.fma %a, %b, %c : tensor<3xf32>
+```
+"""
+function fma(
+    a::Value,
+    b::Value,
+    c::Value;
+    result=nothing::Union{Nothing,IR.Type},
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[a, b, c]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(result) && push!(op_ty_results, result)
+
+    return create_operation(
+        "stablehlo.fma",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
 `gather`
 
 Gathers slices from `operand` tensor from offsets specified in

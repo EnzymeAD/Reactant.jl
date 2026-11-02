@@ -22,6 +22,11 @@ const CUDA_DATA_DIR = Ref(
     isdefined(Reactant_jll, :ptxas_path) ? dirname(dirname(Reactant_jll.ptxas_path)) : ""
 )
 
+# The ROCm root `enzymexla-gpu-module-to-binary` assembles and links kernels with
+# (`llvm/bin/ld.lld` and `amdgcn/bitcode` under it). Empty leaves it to the pass,
+# which reads `ROCM_PATH`, `ROCM_ROOT` and `ROCM_HOME` itself.
+const ROCM_PATH = Ref(get(ENV, "ROCM_PATH", ""))
+
 function LLVMclopts(opts...)
     args = ["", opts...]
     return MLIR.API.ReactantLLVMParseCommandLineOptions(length(args), args, C_NULL)

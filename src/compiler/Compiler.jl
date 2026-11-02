@@ -353,6 +353,18 @@ Base.@nospecializeinfer function compile_mlir!(
         else
             jit = "lower-affine,$(OpenMP[] ? "convert-scf-to-openmp" : "convert-scf-to-cf"),convert-polygeist-to-llvm{backend=cpu preserve-xla-funcs=true},lower-jit,symbol-dce"
         end
+    elseif backend == "rocm"
+        kern = if is_raising
+            "lower-kernel{backend=cpu},symbol-dce,canonicalize"
+        else
+            "lower-kernel,canonicalize"
+        end
+
+        arch = XLA.rocm_gcn_arch_name(XLA.default_device(client))
+        isempty(arch) && error("Could not determine the gfx target of the ROCm device")
+        toolkit_option = isempty(XLA.ROCM_PATH[]) ? "" : " toolkit=$(XLA.ROCM_PATH[])"
+
+        jit = "convert-polygeist-to-llvm{backend=rocm preserve-xla-funcs=true},strip-gpu-info,rocdl-attach-target{arch=$(arch) O=$(cuOptLevel[])},enzymexla-gpu-module-to-binary{format=fatbin$(toolkit_option)},lower-jit,symbol-dce"
     else
         kern = if is_raising
             "lower-kernel{backend=cpu},symbol-dce,canonicalize"
@@ -362,8 +374,9 @@ Base.@nospecializeinfer function compile_mlir!(
 
         device_properties = XLA.device_properties(XLA.default_device(client))
         cubinChip = "sm_$(device_properties.major)$(device_properties.minor)"
+        cuda_get_kernel = div(MLIR.API.ReactantHermeticCudaGetVersion(), 1000) == 12
 
-        jit = "convert-polygeist-to-llvm{backend=cuda preserve-xla-funcs=true},strip-gpu-info,nvvm-attach-target{chip=$(cubinChip) features=$(cubinFeatures()) O=$(cuOptLevel[])},enzymexla-gpu-module-to-binary{format=$(cubinFormat[]) toolkit=$toolkit},lower-jit,symbol-dce"
+        jit = "convert-polygeist-to-llvm{backend=cuda preserve-xla-funcs=true cuda-get-kernel=$(cuda_get_kernel)},strip-gpu-info,nvvm-attach-target{chip=$(cubinChip) features=$(cubinFeatures()) O=$(cuOptLevel[])},enzymexla-gpu-module-to-binary{format=$(cubinFormat[]) toolkit=$toolkit},lower-jit,symbol-dce"
     end
 
     recognize_comms = true
@@ -1619,8 +1632,6 @@ function default_debugcache()
     return Vector{@NamedTuple{f_name::String, file::String, line::Int64}}(undef, 0)
 end
 
-# Since we cache these objects we cannot cache data containing MLIR operations (e.g. the entry must be a string
-# and not the operation itself).
 struct LLVMFunc{F,tt}
     f::Union{F,Nothing}
     entry::String
@@ -1634,12 +1645,13 @@ function Base.getproperty(f::LLVMFunc{F,tt}, sym::Symbol) where {F,tt}
     end
 end
 
-# cache of compilation caches, per module
-const _llvm_compiler_caches = Dict{MLIR.IR.Module,Dict{Any,LLVMFunc}}()
+# cache of compilation caches, per module: maps compiled kernels (and their call wrappers)
+# to the name of the corresponding function in the module
+const _llvm_compiler_caches = Dict{MLIR.IR.Module,Dict{Any,String}}()
 function llvm_compiler_cache(_mod::MLIR.IR.Module)
     cache = get(_llvm_compiler_caches, _mod, nothing)
     if cache === nothing
-        cache = Dict{Any,LLVMFunc}()
+        cache = Dict{Any,String}()
         _llvm_compiler_caches[_mod] = cache
     end
     return cache

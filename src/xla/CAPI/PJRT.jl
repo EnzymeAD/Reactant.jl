@@ -9559,13 +9559,14 @@ struct PJRT_RawBuffer_FunctionTable
     is_mutable::Ptr{Cvoid}
     slice::Ptr{Cvoid}
     schedule_copy_to::Ptr{Cvoid}
+    get_external_dma_info::Ptr{Cvoid}
 end
 
 struct PJRT_RawBuffer
     vtable::Ptr{PJRT_RawBuffer_FunctionTable}
 end
 
-csizeof(::Type{PJRT_RawBuffer_FunctionTable}) = Csize_t(128)
+csizeof(::Type{PJRT_RawBuffer_FunctionTable}) = Csize_t(136)
 
 csizeof(::Type{PJRT_RawBuffer}) = Csize_t(8)
 
@@ -11592,13 +11593,17 @@ struct PJRT_XlaTransform_Args
     hlo_module::PJRT_XlaTransform_string
     transformed_hlo_module::PJRT_XlaTransform_string
     changed::Bool
-    function PJRT_XlaTransform_Args(header, hlo_module, transformed_hlo_module, changed)
+    hlo_module_config::PJRT_XlaTransform_string
+    function PJRT_XlaTransform_Args(
+        header, hlo_module, transformed_hlo_module, changed, hlo_module_config
+    )
         return new(
             csizeof(PJRT_XlaTransform_Args),
             header,
             hlo_module,
             transformed_hlo_module,
             changed,
+            hlo_module_config,
         )
     end
 end
@@ -11608,6 +11613,7 @@ function Base.getproperty(x::Ptr{PJRT_XlaTransform_Args}, f::Symbol)
     f === :hlo_module && return Ptr{PJRT_XlaTransform_string}(x + 56)
     f === :transformed_hlo_module && return Ptr{PJRT_XlaTransform_string}(x + 72)
     f === :changed && return Ptr{Bool}(x + 88)
+    f === :hlo_module_config && return Ptr{PJRT_XlaTransform_string}(x + 96)
     return getfield(x, f)
 end
 
@@ -11615,7 +11621,7 @@ function Base.setproperty!(x::Ptr{PJRT_XlaTransform_Args}, f::Symbol, v)
     return unsafe_store!(getproperty(x, f), v)
 end
 
-csizeof(::Type{PJRT_XlaTransform_Args}) = Csize_t(89)
+csizeof(::Type{PJRT_XlaTransform_Args}) = Csize_t(112)
 
 struct PJRT_XlaTransform_Callbacks
     version::Int64
