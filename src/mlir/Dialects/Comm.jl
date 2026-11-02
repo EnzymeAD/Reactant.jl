@@ -303,6 +303,25 @@ function nccl_all_reduce(
     )
 end
 
+function nccl_barrier(comm::Value; location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[comm,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "comm.nccl.barrier",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function nccl_broadcast(
     sendbuff::Value, root::Value, comm::Value; recvbuff::IR.Type, location=Location()
 )
@@ -449,6 +468,63 @@ function nccl_comm_user_rank(comm::Value; user_rank::IR.Type, location=Location(
 
     return create_operation(
         "comm.nccl.comm_user_rank",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+function nccl_get_comm(; comm::IR.Type, location=Location())
+    op_ty_results = IR.Type[comm,]
+    operands = Value[]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "comm.nccl.get_comm",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+function nccl_group_end(; location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "comm.nccl.group_end",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+function nccl_group_start(; location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "comm.nccl.group_start",
         location;
         operands,
         owned_regions,

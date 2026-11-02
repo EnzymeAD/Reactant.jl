@@ -141,6 +141,19 @@ test_worker = custom_test_worker ? tpu_custom_worker_launcher : Returns(nothing)
             if mpi_backend in ("cpu", "cuda")
                 using MPI
                 nranks = 2
+                if mpi_backend == "cuda"
+                    # NCCL pins exactly one GPU per MPI rank (see
+                    # `Reactant.initialize_nccl_comm!`), so we can't launch more ranks
+                    # than there are GPUs on this host.
+                    ngpus = length(
+                        Reactant.XLA.addressable_devices(Reactant.XLA.default_backend())
+                    )
+                    if ngpus < nranks
+                        @warn "Only $ngpus GPU(s) available; running the GPU MPI tests \
+                               with $ngpus rank(s) instead of $nranks"
+                        nranks = ngpus
+                    end
+                end
                 cmd = `$(mpiexec()) -n $nranks $(Base.julia_cmd()) --project=$(Base.active_project()) $(joinpath(@__DIR__, "integration", "mpi.jl"))`
                 run(addenv(cmd, "REACTANT_MPI_BACKEND" => mpi_backend))
             end

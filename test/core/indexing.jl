@@ -553,3 +553,13 @@ end
         @test @jit(getindex(x_ra, idx_ra)) ≈ getindex(x, idx)
     end
 end
+
+# a host range with a traced index (a `LinRange` has no traced counterpart)
+@testset "Indexing a host $(x) with a traced index" for x in (
+    1:3:10, range(-0.1, 0.3; length=5), LinRange(0.0, 1.0, 11)
+)
+    @testset "idx: $(idx)" for idx in (1, 2, 3)
+        idx_ra = Reactant.to_rarray(idx; track_numbers=true)
+        @test @jit(getindex(x, idx_ra)) ≈ getindex(x, idx)
+    end
+end

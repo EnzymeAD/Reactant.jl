@@ -1048,14 +1048,18 @@ The result `dst` is returned as an i8 type where the converted values are
 packed such that the value converted from the first element of `a` is 
 stored in the lower 4 bits of `dst` and the value converted from the second 
 element of `a` is stored in the upper 4 bits of `dst`.
+The `rnd` attribute specifies the rounding mode (`rn` or `rz`).
 The `relu` attribute, when set, lowers to the \'.relu\' variant of
-the cvt instruction.
+the cvt instruction. The `pzo` attribute, when set, lowers to the
+\'.pzo\' variant of the cvt instruction.
 """
 function convert_bf16x2_to_f4x2(
     src::Value;
     dst=nothing::Union{Nothing,IR.Type},
     relu=nothing,
     dstTy,
+    rnd=nothing,
+    pzo=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -1065,6 +1069,8 @@ function convert_bf16x2_to_f4x2(
     attributes = NamedAttribute[NamedAttribute("dstTy", dstTy),]
     !isnothing(dst) && push!(op_ty_results, dst)
     !isnothing(relu) && push!(attributes, NamedAttribute("relu", relu))
+    !isnothing(rnd) && push!(attributes, NamedAttribute("rnd", rnd))
+    !isnothing(pzo) && push!(attributes, NamedAttribute("pzo", pzo))
 
     return create_operation(
         "nvvm.convert.bf16x2.to.f4x2",
@@ -1090,11 +1096,19 @@ converted from the second element of `a` is stored in the upper 8 bits of
 `dst` with 2 MSB bits padded with zeros.
 If `dst` is returned as a vector type, each converted value is stored as an 
 i8 element in the vector with 2 MSB bits padded with zeros.
+The `rnd` attribute specifies the rounding mode (`rn` or `rz`).
 The `relu` attribute, when set, lowers to the \'.relu\' variant of
-the cvt instruction.
+the cvt instruction. The `pzo` attribute, when set, lowers to the
+\'.pzo\' variant of the cvt instruction.
 """
 function convert_bf16x2_to_f6x2(
-    src::Value; dst::IR.Type, relu=nothing, dstTy, location=Location()
+    src::Value;
+    dst::IR.Type,
+    relu=nothing,
+    dstTy,
+    rnd=nothing,
+    pzo=nothing,
+    location=Location(),
 )
     op_ty_results = IR.Type[dst,]
     operands = Value[src,]
@@ -1102,6 +1116,8 @@ function convert_bf16x2_to_f6x2(
     successors = Block[]
     attributes = NamedAttribute[NamedAttribute("dstTy", dstTy),]
     !isnothing(relu) && push!(attributes, NamedAttribute("relu", relu))
+    !isnothing(rnd) && push!(attributes, NamedAttribute("rnd", rnd))
+    !isnothing(pzo) && push!(attributes, NamedAttribute("pzo", pzo))
 
     return create_operation(
         "nvvm.convert.bf16x2.to.f6x2",
@@ -1128,7 +1144,11 @@ lower 8 bits of `dst` and the value converted from the second element of
 If `dst` is returned as a vector type, each converted value is stored as an 
 i8 element in the vector.
 The `rnd` and `sat` attributes specify the rounding and saturation modes 
-respectively.
+respectively. Conversions to `f8E4M3FN` and `f8E5M2` support `rn` and `rz`
+rounding. The `relu` attribute, when set, lowers to the \'.relu\' variant of
+the cvt instruction. The `pzo` attribute, when set, lowers to the \'.pzo\'
+variant of the cvt instruction. `pzo` is not supported for conversions to
+`f8E8M0FNU`.
 
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
 """
@@ -1139,6 +1159,7 @@ function convert_bf16x2_to_f8x2(
     sat=nothing,
     relu=nothing,
     dstTy,
+    pzo=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[dst,]
@@ -1149,6 +1170,7 @@ function convert_bf16x2_to_f8x2(
     !isnothing(rnd) && push!(attributes, NamedAttribute("rnd", rnd))
     !isnothing(sat) && push!(attributes, NamedAttribute("sat", sat))
     !isnothing(relu) && push!(attributes, NamedAttribute("relu", relu))
+    !isnothing(pzo) && push!(attributes, NamedAttribute("pzo", pzo))
 
     return create_operation(
         "nvvm.convert.bf16x2.to.f8x2",
@@ -1520,14 +1542,18 @@ The result `dst` is returned as an i8 type where the converted values are
 packed such that the value converted from the first element of `a` is 
 stored in the lower 4 bits of `dst` and the value converted from the second 
 element of `a` is stored in the upper 4 bits of `dst`.
+The `rnd` attribute specifies the rounding mode (`rn` or `rz`).
 The `relu` attribute, when set, lowers to the \'.relu\' variant of
-the cvt instruction.
+the cvt instruction. The `pzo` attribute, when set, lowers to the
+\'.pzo\' variant of the cvt instruction.
 """
 function convert_f16x2_to_f4x2(
     src::Value;
     dst=nothing::Union{Nothing,IR.Type},
     relu=nothing,
     dstTy,
+    rnd=nothing,
+    pzo=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -1537,6 +1563,8 @@ function convert_f16x2_to_f4x2(
     attributes = NamedAttribute[NamedAttribute("dstTy", dstTy),]
     !isnothing(dst) && push!(op_ty_results, dst)
     !isnothing(relu) && push!(attributes, NamedAttribute("relu", relu))
+    !isnothing(rnd) && push!(attributes, NamedAttribute("rnd", rnd))
+    !isnothing(pzo) && push!(attributes, NamedAttribute("pzo", pzo))
 
     return create_operation(
         "nvvm.convert.f16x2.to.f4x2",
@@ -1562,11 +1590,19 @@ converted from the second element of `a` is stored in the upper 8 bits of
 `dst` with 2 MSB bits padded with zeros.
 If `dst` is returned as a vector type, each converted value is stored as an 
 i8 element in the vector with 2 MSB bits padded with zeros.
+The `rnd` attribute specifies the rounding mode (`rn` or `rz`).
 The `relu` attribute, when set, lowers to the \'.relu\' variant of
-the cvt instruction.
+the cvt instruction. The `pzo` attribute, when set, lowers to the
+\'.pzo\' variant of the cvt instruction.
 """
 function convert_f16x2_to_f6x2(
-    src::Value; dst::IR.Type, relu=nothing, dstTy, location=Location()
+    src::Value;
+    dst::IR.Type,
+    relu=nothing,
+    dstTy,
+    rnd=nothing,
+    pzo=nothing,
+    location=Location(),
 )
     op_ty_results = IR.Type[dst,]
     operands = Value[src,]
@@ -1574,6 +1610,8 @@ function convert_f16x2_to_f6x2(
     successors = Block[]
     attributes = NamedAttribute[NamedAttribute("dstTy", dstTy),]
     !isnothing(relu) && push!(attributes, NamedAttribute("relu", relu))
+    !isnothing(rnd) && push!(attributes, NamedAttribute("rnd", rnd))
+    !isnothing(pzo) && push!(attributes, NamedAttribute("pzo", pzo))
 
     return create_operation(
         "nvvm.convert.f16x2.to.f6x2",
@@ -1600,13 +1638,21 @@ is stored in the upper 8 bits of `dst` and the value converted from the
 second element of `a` is stored in the lower 8 bits of `dst`.
 If `dst` is returned as a vector type, each converted value is stored as an 
 i8 element in the vector.
+The `rnd` attribute specifies the rounding mode (`rn` or `rz`).
 The `relu` attribute, when set, lowers to the \'.relu\' variant of
-the cvt instruction.
+the cvt instruction. The `pzo` attribute, when set, lowers to the
+\'.pzo\' variant of the cvt instruction.
 
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
 """
 function convert_f16x2_to_f8x2(
-    a::Value; dst::IR.Type, relu=nothing, dstTy, location=Location()
+    a::Value;
+    dst::IR.Type,
+    relu=nothing,
+    dstTy,
+    rnd=nothing,
+    pzo=nothing,
+    location=Location(),
 )
     op_ty_results = IR.Type[dst,]
     operands = Value[a,]
@@ -1614,6 +1660,8 @@ function convert_f16x2_to_f8x2(
     successors = Block[]
     attributes = NamedAttribute[NamedAttribute("dstTy", dstTy),]
     !isnothing(relu) && push!(attributes, NamedAttribute("relu", relu))
+    !isnothing(rnd) && push!(attributes, NamedAttribute("rnd", rnd))
+    !isnothing(pzo) && push!(attributes, NamedAttribute("pzo", pzo))
 
     return create_operation(
         "nvvm.convert.f16x2.to.f8x2",
@@ -1683,8 +1731,10 @@ The result `dst` is returned as an i8 type where the converted values are
 packed such that the value converted from `a` is stored in the upper 4 bits 
 of `dst` and the value converted from `b` is stored in the lower 4 bits of 
 `dst`.
+The `rnd` attribute specifies the rounding mode (`rn` or `rz`).
 The `relu` attribute, when set, lowers to the \'.relu\' variant of
-the cvt instruction.
+the cvt instruction. The `pzo` attribute, when set, lowers to the
+\'.pzo\' variant of the cvt instruction.
 
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
 """
@@ -1694,6 +1744,8 @@ function convert_f32x2_to_f4x2(
     dst=nothing::Union{Nothing,IR.Type},
     relu=nothing,
     dstTy,
+    rnd=nothing,
+    pzo=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -1703,6 +1755,8 @@ function convert_f32x2_to_f4x2(
     attributes = NamedAttribute[NamedAttribute("dstTy", dstTy),]
     !isnothing(dst) && push!(op_ty_results, dst)
     !isnothing(relu) && push!(attributes, NamedAttribute("relu", relu))
+    !isnothing(rnd) && push!(attributes, NamedAttribute("rnd", rnd))
+    !isnothing(pzo) && push!(attributes, NamedAttribute("pzo", pzo))
 
     return create_operation(
         "nvvm.convert.f32x2.to.f4x2",
@@ -1728,13 +1782,22 @@ with 2 MSB bits padded with zeros and the value converted from `b` is
 stored in the lower 8 bits of `dst` with 2 MSB bits padded with zeros.
 If `dst` is returned as a vector type, each converted value is stored as an 
 i8 element in the vector.
+The `rnd` attribute specifies the rounding mode (`rn` or `rz`).
 The `relu` attribute, when set, lowers to the \'.relu\' variant of
-the cvt instruction.
+the cvt instruction. The `pzo` attribute, when set, lowers to the
+\'.pzo\' variant of the cvt instruction.
 
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
 """
 function convert_f32x2_to_f6x2(
-    a::Value, b::Value; dst::IR.Type, relu=nothing, dstTy, location=Location()
+    a::Value,
+    b::Value;
+    dst::IR.Type,
+    relu=nothing,
+    dstTy,
+    rnd=nothing,
+    pzo=nothing,
+    location=Location(),
 )
     op_ty_results = IR.Type[dst,]
     operands = Value[a, b]
@@ -1742,6 +1805,8 @@ function convert_f32x2_to_f6x2(
     successors = Block[]
     attributes = NamedAttribute[NamedAttribute("dstTy", dstTy),]
     !isnothing(relu) && push!(attributes, NamedAttribute("relu", relu))
+    !isnothing(rnd) && push!(attributes, NamedAttribute("rnd", rnd))
+    !isnothing(pzo) && push!(attributes, NamedAttribute("pzo", pzo))
 
     return create_operation(
         "nvvm.convert.f32x2.to.f6x2",
@@ -1767,8 +1832,11 @@ and the value converted from `b` is stored in the lower 8 bits of `dst`.
 If `dst` is returned as a vector type, each converted value is stored as an 
 i8 element in the vector.
 The `rnd` and `sat` attributes specify the rounding and saturation modes respectively.
+Conversions to `f8E4M3FN` and `f8E5M2` support `rn` and `rz` rounding.
 The `relu` attribute, when set, lowers to the \'.relu\' variant of
-the cvt instruction.
+the cvt instruction. The `pzo` attribute, when set, lowers to the
+\'.pzo\' variant of the cvt instruction. `pzo` is not supported for
+conversions to `f8E8M0FNU`.
 
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
 """
@@ -1780,6 +1848,7 @@ function convert_f32x2_to_f8x2(
     sat=nothing,
     relu=nothing,
     dstTy,
+    pzo=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[dst,]
@@ -1790,6 +1859,7 @@ function convert_f32x2_to_f8x2(
     !isnothing(rnd) && push!(attributes, NamedAttribute("rnd", rnd))
     !isnothing(sat) && push!(attributes, NamedAttribute("sat", sat))
     !isnothing(relu) && push!(attributes, NamedAttribute("relu", relu))
+    !isnothing(pzo) && push!(attributes, NamedAttribute("pzo", pzo))
 
     return create_operation(
         "nvvm.convert.f32x2.to.f8x2",
@@ -6239,6 +6309,146 @@ function read_ptx_sreg_smid(;
         attributes,
         results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
         result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
+`sparse_compress`
+
+Compresses elements from a dense vector `data` into a structured sparse
+vector `compressed_data` using the 2:4 sparsity pattern: 2 out of every
+4 elements of `data` are selected. The indices of the selected elements
+are returned in `metadata`.
+
+The element size (8 or 16 bits) is given by the element type of `data`
+and `compressed_data`. `data` must occupy `2 * repFactor` 32-bit
+registers, where the repeat factor `repFactor` is a power of two from 1
+to 64.
+
+Arguments:
+- `spDesc`: Sparsity descriptor specifying the selection operation and the
+  element data type.
+- `data`: Dense vector containing the elements to be compressed.
+- `idxSize`: Size in bits of each metadata index (2 or 4).
+
+Results:
+- `metadata`: Indices of the selected elements, stored in
+  `ceil(repFactor * idxSize / elemSize)` 32-bit registers. A single
+  register may be either `i32` or `vector<1xi32>`.
+- `compressed_data`: Selected elements; half as many as in `data`.
+
+Examples:
+```mlir
+// 8-bit elements, 2-bit indices, repeat factor of 1.
+%metadata, %compressed_data = nvvm.sparse.compress %spdesc, %data
+    idx_size = 2
+    : i32, vector<8xi8> -> i32, vector<4xi8>
+
+// 16-bit elements, 4-bit indices, repeat factor of 8.
+%metadata, %compressed_data = nvvm.sparse.compress %spdesc, %data
+    idx_size = 4
+    : i32, vector<32xi16> -> vector<2xi32>, vector<16xi16>
+```
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-spcompress)
+"""
+function sparse_compress(
+    spDesc::Value,
+    data::Value;
+    metadata::IR.Type,
+    compressed_data::IR.Type,
+    idxSize,
+    location=Location(),
+)
+    op_ty_results = IR.Type[metadata, compressed_data]
+    operands = Value[spDesc, data]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[NamedAttribute("idxSize", idxSize),]
+
+    return create_operation(
+        "nvvm.sparse.compress",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`sparse_decompress`
+
+Decompresses elements from a structured sparse vector `compressed_data`
+into a dense vector `data`, using the indices stored in `metadata`. Dense
+positions not selected by `metadata` are set to zero.
+
+`data` consists of `repFactor` groups of `numTgt` elements, and
+`compressed_data` holds `numSrc` elements for each group, i.e. the
+sparsity factor is `numSrc:numTgt`. Both `numSrc` and the repeat factor
+`repFactor` are derived from the vector lengths. The element size
+`elemSize` (8 or 16 bits) is given by the element type of `data` and
+`compressed_data`.
+
+The following conditions must hold:
+- `numSrc:numTgt` is one of 1:2, 1:4, 1:8, 1:16, 2:4, 2:8, 2:16, 4:8, or
+  4:16.
+- `repFactor` is a power of two from 1 to 64.
+- `numTgt * elemSize * repFactor` is between 32 and 4096.
+- `numSrc * elemSize` is at most 32.
+- `idxSize` is 2 only if `numTgt` is at most 4.
+- `metadata` occupies `ceil(numSrc * idxSize * repFactor / 32)` 32-bit
+  registers. A single register may be either `i32` or `vector<1xi32>`.
+
+Arguments:
+- `metadata`: Indices of the selected elements.
+- `compressed_data`: Compressed vector containing the selected elements.
+- `idxSize`: Size in bits of each metadata index (2 or 4).
+- `numTgt`: Size of each group in `data` (2, 4, 8, or 16).
+
+Results:
+- `data`: Dense vector containing the decompressed elements.
+
+Examples:
+```mlir
+// 2:4 sparsity, 8-bit elements, 2-bit indices, repeat factor of 1.
+%res = nvvm.sparse.decompress %metadata, %compdata idx_size = 2 num_tgt = 4
+    : i32, vector<2xi8> -> vector<4xi8>
+
+// 2:4 sparsity, 16-bit elements, 4-bit indices, repeat factor of 64.
+%res = nvvm.sparse.decompress %metadata, %compdata idx_size = 4 num_tgt = 4
+    : vector<16xi32>, vector<128xi16> -> vector<256xi16>
+```
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/#data-movement-and-conversion-instructions-spdecompress)
+"""
+function sparse_decompress(
+    metadata::Value,
+    compressed_data::Value;
+    data::IR.Type,
+    idxSize,
+    numTgt,
+    location=Location(),
+)
+    op_ty_results = IR.Type[data,]
+    operands = Value[metadata, compressed_data]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[
+        NamedAttribute("idxSize", idxSize), NamedAttribute("numTgt", numTgt)
+    ]
+
+    return create_operation(
+        "nvvm.sparse.decompress",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
     )
 end
 

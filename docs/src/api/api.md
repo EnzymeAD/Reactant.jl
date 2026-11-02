@@ -29,6 +29,7 @@ Periodic
 
 ```@docs
 Reactant.to_rarray
+Reactant.ConcreteRArrayAdaptor
 ```
 
 ## Reactant data types

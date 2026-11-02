@@ -189,12 +189,12 @@ function compute_ls_solution_error(A, sol, b, bsize)
     return maximum(abs, mul .- b)
 end
 
-@testset "svd factorization" begin
-    A = Reactant.TestUtils.construct_test_array(Float32, 4, 8)
+@testset "svd factorization ($T)" for T in (Float32, ComplexF32)
+    A = Reactant.TestUtils.construct_test_array(T, 4, 8)
 
     algs = get_svd_algorithms(string(Reactant.devices()[1]), size(A))
 
-    tmp = rand(Float32, 8, 5)
+    tmp = rand(T, 8, 5)
     B = A * tmp
     b = B[:, 1]
 
@@ -221,11 +221,11 @@ end
         end broken = RunningOnTPU
     end
 
-    A = Reactant.TestUtils.construct_test_array(Float32, 4, 8, 3, 2)
+    A = Reactant.TestUtils.construct_test_array(T, 4, 8, 3, 2)
     A_ra = Reactant.to_rarray(A)
 
-    tmp = rand(Float32, 8, 5, 3, 2)
-    B = similar(A, Float32, 4, 5, 3, 2)
+    tmp = rand(T, 8, 5, 3, 2)
+    B = similar(A, T, 4, 5, 3, 2)
     for i in 1:3, j in 1:2
         B[:, :, i, j] = A[:, :, i, j] * tmp[:, :, i, j]
     end
@@ -255,8 +255,8 @@ end
 @testset "svdvals" begin
     algs = get_svd_algorithms(string(Reactant.devices()[1]))
 
-    @testset "Un-batched: $(alg)" for alg in algs
-        A = Reactant.TestUtils.construct_test_array(Float32, 4, 4)
+    @testset "Un-batched: $(alg) - $T" for alg in algs, T in (Float32, ComplexF32)
+        A = Reactant.TestUtils.construct_test_array(T, 4, 4)
         _svdvals = svdvals(A)
         A_ra = Reactant.to_rarray(A)
 
@@ -267,8 +267,8 @@ end
         end broken = RunningOnTPU
     end
 
-    @testset "Batched: $(alg)" for alg in algs
-        A = Reactant.TestUtils.construct_test_array(Float32, 4, 4, 3, 2)
+    @testset "Batched: $(alg) - $T" for alg in algs, T in (Float32, ComplexF32)
+        A = Reactant.TestUtils.construct_test_array(T, 4, 4, 3, 2)
         _svdvals = reshape(mapslices(svdvals, A; dims=(1, 2)), 4, 3, 2)
         A_ra = Reactant.to_rarray(A)
 

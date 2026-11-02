@@ -4,7 +4,8 @@ using Reactant
 import Reactant.TracedRArrayOverrides: overloaded_map, overloaded_mapreduce
 import Reactant.TracedLinearAlgebra: overloaded_mul
 
-using StaticArrays: SArray, StaticArray
+using StaticArrays: SArray, StaticArray, StaticArrayStyle
+using Reactant.TracedRArrayOverrides: AbstractReactantArrayStyle
 
 const SAReact{Sz,T} = StaticArray{Sz,T} where {Sz<:Tuple,T<:Reactant.TracedRNumber}
 
@@ -22,6 +23,12 @@ end
 
 function Reactant.materialize_traced_array(x::SAReact)
     return x
+end
+
+# A static array broadcast with a traced number is unrolled, as with any other
+# scalar.
+function Base.BroadcastStyle(s::StaticArrayStyle, ::AbstractReactantArrayStyle{0})
+    return s
 end
 
 # We don't want to overload map on StaticArrays since it is likely better to just unroll things

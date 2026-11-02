@@ -1,7 +1,6 @@
 module Compiler
 
 using Reactant_jll
-using Libdl: dlsym
 using LinearAlgebra: BlasInt
 import p7zip_jll: p7zip
 
@@ -57,13 +56,6 @@ function compile_mlir(
     kwargs...,
 )
     client = client !== nothing ? client : XLA.default_backend()
-    backend = XLA.platform_name(client)
-
-    if backend == "CUDA"
-        backend = "GPU"
-    elseif backend == "CPU"
-        backend = "cpu"
-    end
 
     MLIR.IR.activate(ctx)
     try
@@ -78,7 +70,6 @@ function compile_mlir(
                 f,
                 args,
                 compile_options;
-                backend,
                 runtime=XLA.runtime(client),
                 client,
                 kwargs_inner...,
@@ -138,8 +129,8 @@ end
 
 const PartitionKA = Ref{Bool}(true)
 
-const cuindexBitWidth = Ref{Int}(32)
-const cubinFormat = Ref{String}("bin")
+# Kernels are registered with the CUDA runtime, which expects a fat binary.
+const cubinFormat = Ref{String}("fatbin")
 const cuOptLevel = Ref{Int}(2)
 
 # Whatever the relevant highest version from our LLVM is within NVPTX.td
@@ -247,14 +238,16 @@ Base.@nospecializeinfer function compile_mlir!(
     sdycache=default_sdycache(),
     sdygroupidcache=default_sdygroupidcache();
     fn_kwargs=(),
-    backend="gpu",
     runtime::Union{Val{:PJRT},Val{:IFRT}},
     legalize_stablehlo_to_mhlo::Bool=false,
     client=nothing,
+    backend=nothing,
     kwargs...,
 )
     @assert MLIR.IR.current_context() == MLIR.IR.context(mod)
-    client = client !== nothing ? client : XLA.default_backend()
+    client = @something(client, XLA.default_backend())
+    backend = @something(backend, XLA.platform_name(client))::String
+    @assert backend ∉ ("gpu", "GPU")
 
     # Explicitly don't use with_block to avoid creating a closure, which creates
     # both compile-time and relocatability issues
@@ -326,10 +319,22 @@ Base.@nospecializeinfer function compile_mlir!(
     if backend == "cpu" || backend == "tpu" || backend == "neuron" || backend == "trainium"
         kern = "lower-kernel{backend=cpu},canonicalize"
         if backend == "tpu" || backend == "neuron" || backend == "trainium"
-            jit = "lower-jit{openmp=$(OpenMP[]) backend=cpu},symbol-dce,strip-debuginfo"
+            jit = "lower-affine,$(OpenMP[] ? "convert-scf-to-openmp" : "convert-scf-to-cf"),convert-polygeist-to-llvm{backend=cpu preserve-xla-funcs=true},lower-jit,symbol-dce,strip-debuginfo"
         else
-            jit = "lower-jit{openmp=$(OpenMP[]) backend=cpu},symbol-dce"
+            jit = "lower-affine,$(OpenMP[] ? "convert-scf-to-openmp" : "convert-scf-to-cf"),convert-polygeist-to-llvm{backend=cpu preserve-xla-funcs=true},lower-jit,symbol-dce"
         end
+    elseif backend == "rocm"
+        kern = if is_raising
+            "lower-kernel{backend=cpu},symbol-dce,canonicalize"
+        else
+            "lower-kernel,canonicalize"
+        end
+
+        arch = XLA.rocm_gcn_arch_name(XLA.default_device(client))
+        isempty(arch) && error("Could not determine the gfx target of the ROCm device")
+        toolkit_option = isempty(XLA.ROCM_PATH[]) ? "" : " toolkit=$(XLA.ROCM_PATH[])"
+
+        jit = "convert-polygeist-to-llvm{backend=rocm preserve-xla-funcs=true},strip-gpu-info,rocdl-attach-target{arch=$(arch) O=$(cuOptLevel[])},enzymexla-gpu-module-to-binary{format=fatbin$(toolkit_option)},lower-jit,symbol-dce"
     else
         kern = if is_raising
             "lower-kernel{backend=cpu},symbol-dce,canonicalize"
@@ -339,18 +344,9 @@ Base.@nospecializeinfer function compile_mlir!(
 
         device_properties = XLA.device_properties(XLA.default_device(client))
         cubinChip = "sm_$(device_properties.major)$(device_properties.minor)"
+        cuda_get_kernel = div(MLIR.API.ReactantHermeticCudaGetVersion(), 1000) == 12
 
-        if DEBUG_KERNEL[]
-            curesulthandler = dlsym(
-                Reactant_jll.libReactantExtra_handle, "ReactantHandleCuResult"
-            )
-            @assert curesulthandler !== nothing
-            curesulthandler = Base.reinterpret(UInt, curesulthandler)
-            extra_lowerjit_options = "debug=true cuResultHandlerPtr=$curesulthandler "
-        else
-            extra_lowerjit_options = ""
-        end
-        jit = "lower-jit{$(extra_lowerjit_options)cuOptLevel=$(cuOptLevel[]) cubinFormat=$(cubinFormat[]) indexBitWidth=$(cuindexBitWidth[])  cubinChip=$(cubinChip) cubinFeatures=$(cubinFeatures()) run_init=true toolkitPath=$toolkit},symbol-dce"
+        jit = "convert-polygeist-to-llvm{backend=cuda preserve-xla-funcs=true cuda-get-kernel=$(cuda_get_kernel)},strip-gpu-info,nvvm-attach-target{chip=$(cubinChip) features=$(cubinFeatures()) O=$(cuOptLevel[])},enzymexla-gpu-module-to-binary{format=$(cubinFormat[]) toolkit=$toolkit},lower-jit,symbol-dce"
     end
 
     recognize_comms = true
@@ -368,13 +364,12 @@ Base.@nospecializeinfer function compile_mlir!(
         sroa=true,
         recognize_comms,
         lower_comms,
-        backend,
         is_sharded,
         hlo_opts=compile_options.optimization_passes !== :after_enzyme &&
                  compile_options.optimization_passes !== :only_enzyme,
     )
     opt_passes2 = optimization_passes(
-        compile_options; sroa=false, recognize_comms, lower_comms, backend, is_sharded
+        compile_options; sroa=false, recognize_comms, lower_comms, is_sharded
     )
 
     raise_passes = if raise isa String
@@ -397,7 +392,6 @@ Base.@nospecializeinfer function compile_mlir!(
                     dus_to_concat=true,
                     recognize_comms,
                     lower_comms,
-                    backend,
                     is_sharded,
                 )
                 result = result * "," * opt_passes3
@@ -743,11 +737,7 @@ Base.@nospecializeinfer function compile_mlir!(
         # with them, we propagate them down to minimize the number of Ops in the IR.
         # Since this might enable certain raising, we do push down -> push up -> push down
         common_kwargs = (;
-            recognize_comms,
-            lower_comms,
-            backend,
-            is_sharded,
-            raise_shlo_to_blas_lapack=false,
+            recognize_comms, lower_comms, is_sharded, raise_shlo_to_blas_lapack=false
         )
         opt_passes_down = optimization_passes(
             Reactant.__compile_options_with_reversed_propagation(compile_options);
@@ -1281,13 +1271,6 @@ Reactant.@annotate "compile $(string(f))" function compile_xla(
     kwargs...,
 )
     client = client !== nothing ? client : XLA.default_backend()
-    backend = XLA.platform_name(client)
-
-    if backend == "CUDA"
-        backend = "GPU"
-    elseif backend == "CPU"
-        backend = "cpu"
-    end
 
     MLIR.IR.activate(ctx)
     try
@@ -1297,14 +1280,7 @@ Reactant.@annotate "compile $(string(f))" function compile_xla(
         compile_options, kwargs = __get_compile_options_and_kwargs(; kwargs...)
 
         mlir_fn_res = compile_mlir!(
-            mod,
-            f,
-            args,
-            compile_options;
-            backend,
-            runtime=XLA.runtime(client),
-            client,
-            kwargs...,
+            mod, f, args, compile_options; runtime=XLA.runtime(client), client, kwargs...
         )
 
         # Resolve client and device
@@ -1601,8 +1577,6 @@ function default_debugcache()
     return Vector{@NamedTuple{f_name::String, file::String, line::Int64}}(undef, 0)
 end
 
-# Since we cache these objects we cannot cache data containing MLIR operations (e.g. the entry must be a string
-# and not the operation itself).
 struct LLVMFunc{F,tt}
     f::Union{F,Nothing}
     entry::String
@@ -1616,12 +1590,13 @@ function Base.getproperty(f::LLVMFunc{F,tt}, sym::Symbol) where {F,tt}
     end
 end
 
-# cache of compilation caches, per module
-const _llvm_compiler_caches = Dict{MLIR.IR.Module,Dict{Any,LLVMFunc}}()
+# cache of compilation caches, per module: maps compiled kernels (and their call wrappers)
+# to the name of the corresponding function in the module
+const _llvm_compiler_caches = Dict{MLIR.IR.Module,Dict{Any,String}}()
 function llvm_compiler_cache(_mod::MLIR.IR.Module)
     cache = get(_llvm_compiler_caches, _mod, nothing)
     if cache === nothing
-        cache = Dict{Any,LLVMFunc}()
+        cache = Dict{Any,String}()
         _llvm_compiler_caches[_mod] = cache
     end
     return cache

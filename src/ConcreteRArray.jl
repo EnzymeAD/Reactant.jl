@@ -48,8 +48,10 @@ end
 function Base.deepcopy_internal(
     x::Union{AbstractConcreteArray,AbstractConcreteNumber}, stackdict::IdDict
 )
-    haskey(stackdict, x) && return stackdict[x]
-    return deepcopy(x)
+    haskey(stackdict, x) && return stackdict[x]::typeof(x)
+    y = copy(x)
+    stackdict[x] = y
+    return y
 end
 
 Base.size(::AbstractConcreteNumber) = ()
@@ -107,6 +109,50 @@ function Base.convert(::Type{T}, x::AbstractConcreteNumber) where {T<:ReactantFl
 end
 
 Adapt.adapt_storage(::Type{T}, x::AbstractArray) where {T<:AbstractConcreteArray} = T(x)
+
+"""
+    ConcreteRArrayAdaptor(; materialize_ranges=false)
+
+An [Adapt.jl](https://github.com/JuliaGPU/Adapt.jl) adaptor that converts the arrays inside
+a structure into `ConcreteRArray`s:
+
+```julia
+Adapt.adapt(Reactant.ConcreteRArrayAdaptor(), x)
+```
+
+`Adapt.adapt` recurses through every type that defines `Adapt.adapt_structure`, so any
+structure that can be moved to a GPU array type this way can be moved to `ConcreteRArray`s
+too, without Reactant knowing about its type. Only arrays whose element type could be stored
+in a `Reactant.ConcreteRArray` are converted; other arrays, numbers and `nothing` pass
+through unchanged.
+
+## Keyword Arguments
+
+- `materialize_ranges::Bool = false`: Adapt rebuilds ranges (`UnitRange`, `StepRange`,
+  `StepRangeLen`, `LinRange`, `Base.OneTo`) from their endpoints, so by default they stay
+  CPU ranges, as with `Adapt.adapt(ConcreteRArray, x)`. With `materialize_ranges=true`
+  they are collected into `ConcreteRArray`s instead.
+
+See also [`to_rarray`](@ref), which traverses arbitrary structures with Reactant's own
+tracing machinery and does not require `Adapt.adapt_structure` methods.
+"""
+@kwdef struct ConcreteRArrayAdaptor
+    materialize_ranges::Bool = false
+end
+
+Adapt.adapt_storage(::ConcreteRArrayAdaptor, x::AbstractConcreteArray) = x
+function Adapt.adapt_storage(::ConcreteRArrayAdaptor, x::AbstractArray{<:ReactantPrimitive})
+    return to_rarray(x)
+end
+
+for R in (UnitRange, Base.OneTo, StepRange, StepRangeLen, LinRange)
+    @eval function Adapt.adapt_structure(to::ConcreteRArrayAdaptor, r::$R)
+        if to.materialize_ranges && eltype(r) <: ReactantPrimitive
+            return to_rarray(collect(r))
+        end
+        return @invoke Adapt.adapt_structure(to::Any, r::$R)
+    end
+end
 
 Base.size(x::AbstractConcreteArray) = x.shape
 
@@ -739,6 +785,10 @@ function Base.copyto!(
     dest_sync = dest_async.buffer
     wait(dest_async)
 
+    # On platforms where the device buffer can't be written in place (TPU through the
+    # PJRT C API), `CopyToBuffer` frees the old buffer and returns a replacement
+    # holding the updated contents through this out-parameter.
+    new_buffer = Ref{Ptr{Cvoid}}(C_NULL)
     GC.@preserve dest_sync client src begin
         MLIR.API.CopyToBuffer(
             client.client,
@@ -746,8 +796,13 @@ function Base.copyto!(
             pointer(src, soffs),
             (doffs - 1) * sizeof(T),
             n * sizeof(T),
-            C_NULL,
+            new_buffer,
         )
+    end
+    if new_buffer[] != C_NULL
+        # The old buffer has already been freed by `CopyToBuffer`; adopt the new one so
+        # the finalizer releases it (and doesn't double free the old one).
+        dest_sync.buffer = new_buffer[]
     end
 
     return dest

@@ -142,7 +142,7 @@ source_dir = joinpath(@__DIR__, "ReactantExtra")
 # --repo_env TF_NEED_CUDA=1
 # --repo_env TF_NVCC_CLANG=1
 # --repo_env TF_NCCL_USE_STUB=1
-# --repo_env HERMETIC_CUDA_COMPUTE_CAPABILITIES="sm_50,sm_60,sm_70,sm_80,compute_90"
+# --repo_env HERMETIC_CUDA_COMPUTE_CAPABILITIES="sm_60,sm_70,sm_80,compute_90"
 # --@xla//xla/python:jax_cuda_pip_rpaths=true
 # --repo_env=HERMETIC_CUDA_VERSION="12.3.2"
 # --repo_env=HERMETIC_CUDNN_VERSION="9.1.1"
@@ -273,6 +273,13 @@ push!(build_cmd_list, "--jobs=$(parsed_args["jobs"])")
 push!(build_cmd_list, "--experimental_ui_max_stdouterr_bytes=-1")
 push!(build_cmd_list, "--spawn_strategy=local")
 
+# Many deps require C++17 aligned allocation which is not available on
+# old macOS libc++
+if Sys.isapple()
+    push!(build_cmd_list, "--copt=-mmacosx-version-min=11.0")
+    push!(build_cmd_list, "--host_copt=-mmacosx-version-min=11.0")
+end
+
 for opt in parsed_args["copt"]
     push!(build_cmd_list, "--copt=$(opt)")
 end
@@ -321,7 +328,7 @@ push!(build_cmd_list, "--copt=-Wno-private-header")
 push!(build_cmd_list, "--color=$(parsed_args["color"])")
 push!(build_cmd_list, ":libReactantExtra.so")
 
-@info "About to run Bazel" build_cmd_list
+@info "About to run Bazel\n" * join(build_cmd_list, " \\\n  ")
 run(Cmd(Cmd(build_cmd_list); dir=source_dir))
 
 # Discover built libraries
