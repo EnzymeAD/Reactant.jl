@@ -755,6 +755,22 @@ function Base.showerror(io::IO, ece::ReactantPrecompilationException)
     )
 end
 
+# Generated functions (and hence `call_llvm_generator`) run in the world in which the
+# generator was defined, not the caller's world, and `Base.invoke_in_world` does not
+# raise the world age inside a generator. Printing a method signature may need `show`
+# methods of packages loaded after Reactant (e.g. when an `SVector` value is a type
+# parameter, `show(::SVector)` calls StaticArrays' `size`). Use `Core._call_in_world_total`
+# to run the printing in `world` so those methods are visible, and never fail compilation
+# just because pretty-printing the signature threw (it is only used for debug info).
+function traced_mi(mi, world::UInt)
+    try
+        return Core._call_in_world_total(world, traced_mi, mi)
+    catch
+        m = mi.def
+        return m isa Method ? string(m.module, ".", m.name, "(...)") : string(m)
+    end
+end
+
 function traced_mi(mi)
     spec = mi.specTypes.parameters
     ft = spec[1]
@@ -1156,13 +1172,13 @@ function call_llvm_generator(
                     push!(profile_llvm_fns, gval)
                 end
 
-                stringv = traced_mi(mi)
+                stringv = traced_mi(mi, world)
 
                 fname = LLVM.globalstring_ptr!(builder, stringv, "mi_name")
 
                 m = mi.def
 
-                tv, decls, file, line = Base.arg_decl_parts(m)
+                file, line = Core._call_in_world_total(world, Base.updated_methodloc, m)
                 file = LLVM.globalstring_ptr!(builder, file, "mi_file")
 
                 jl_cstr_to_string, FT = Enzyme.Compiler.get_function!(

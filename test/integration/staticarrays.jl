@@ -10,3 +10,39 @@ using StaticArrays, Reactant, Test
     @test @jit(g(p)) ≈ g(2.0)
     @test @jit(h(p)) ≈ h(2.0)
 end
+
+struct SVectorHolder{V} end
+sv_holder_fn(x, ::SVectorHolder) = x .+ 1
+sv_holder_specific_fn(x, ::SVectorHolder{SVector(1.0f0, 2.0f0, 3.0f0)}) = x .+ 2
+sv_kw_fn(x; h) = sv_holder_fn(x, h)
+
+struct SVectorCallable{V} end
+(::SVectorCallable)(x) = x .* 2
+
+# https://github.com/EnzymeAD/Reactant.jl/issues/3553
+@testset "StaticArray value as a type parameter" begin
+    x = Reactant.to_rarray(ones(Float32, 4))
+
+    h = SVectorHolder{SVector(1.0f0, 2.0f0, 3.0f0)}()
+    @test @jit(sv_holder_fn(x, h)) ≈ ones(Float32, 4) .+ 1
+    @test @jit(sv_holder_specific_fn(x, h)) ≈ ones(Float32, 4) .+ 2
+    @test @jit(sv_kw_fn(x; h)) ≈ ones(Float32, 4) .+ 1
+
+    hm = SVectorHolder{SMatrix{2,2}(1.0f0, 2.0f0, 3.0f0, 4.0f0)}()
+    @test @jit(sv_holder_fn(x, hm)) ≈ ones(Float32, 4) .+ 1
+
+    w = SVectorCallable{SVector(1.0f0, 2.0f0)}()
+    @test @jit(broadcast(w, x)) ≈ ones(Float32, 4) .* 2
+    @test @jit(w(x)) ≈ ones(Float32, 4) .* 2
+
+    hlo = String(@code_hlo debug = true sv_holder_fn(x, h))
+    @test occursin("SVectorHolder{Float32[1.0, 2.0, 3.0]}", hlo)
+end
+
+struct ThrowingShowVal end
+Base.show(::IO, ::ThrowingShowVal) = error("broken show")
+
+@testset "Fallback when type parameter show throws" begin
+    x = Reactant.to_rarray(ones(Float32, 4))
+    @test @jit(sv_holder_fn(x, SVectorHolder{ThrowingShowVal()}())) ≈ ones(Float32, 4) .+ 1
+end
