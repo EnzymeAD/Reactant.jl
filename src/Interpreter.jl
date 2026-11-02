@@ -11,10 +11,48 @@ import Core.Compiler:
     ArgInfo,
     StmtInfo,
     AbsIntState,
+    CallInfo,
     CallMeta,
     Effects,
     NoCallInfo,
     MethodResultPure
+
+# Wraps the inner call's `CallInfo` on a `call_with_reactant(...)` statement so
+# world-age invalidation edges to the inner method are preserved without letting
+# the optimizer inline or devirtualize the inner method directly onto the
+# `call_with_reactant` call site (whose arguments have `call_with_reactant` and
+# optional `EnsureReturnType` / `InvokeSignature` markers prepended).
+struct CallWithReactantInfo <: CallInfo
+    info::CallInfo
+end
+
+@static if VERSION >= v"1.12.0-DEV.1531"
+    #! explicit-imports: off
+    function CC.add_edges_impl(edges::Vector{Any}, info::CallWithReactantInfo)
+        CC.add_edges!(edges, info.info)
+        return nothing
+    end
+    #! explicit-imports: on
+end
+
+function _wrap_call_with_reactant_info(@nospecialize(info::CallInfo))
+    info === NoCallInfo() && return NoCallInfo()
+    info isa MethodResultPure && return MethodResultPure(CallWithReactantInfo(info.info))
+    return CallWithReactantInfo(info)
+end
+
+function _wrap_call_with_reactant_meta(
+    ret::CallMeta, @nospecialize(_interp = nothing), @nospecialize(_sv = nothing)
+)
+    info = _wrap_call_with_reactant_info(ret.info)
+    @static if VERSION < v"1.11.0-"
+        return CallMeta(ret.rt, ret.effects, info)
+    elseif VERSION < v"1.12.0-"
+        return CallMeta(ret.rt, ret.exct, ret.effects, info)
+    else
+        return CallMeta(ret.rt, ret.exct, ret.effects, info, ret.refinements)
+    end
+end
 
 Base.Experimental.@MethodTable(REACTANT_METHOD_TABLE)
 
@@ -69,20 +107,56 @@ end
     # Improve inference by considering call_with_reactant as having the same results as
     # the original call
     if f === call_with_reactant
-        arginfo2 =
-            if length(argtypes) >= 2 &&
-                Core.Compiler.widenconst(argtypes[2]) <: EnsureReturnType
-                ArgInfo(fargs isa Nothing ? nothing : fargs[3:end], argtypes[3:end])
-            else
-                ArgInfo(fargs isa Nothing ? nothing : fargs[2:end], argtypes[2:end])
-            end
-
-        si2 = if VERSION < v"1.12"
-            StmtInfo(true)
-        else
-            StmtInfo(true, false)
+        idx = 2
+        if length(argtypes) >= idx &&
+            Core.Compiler.widenconst(argtypes[idx]) <: EnsureReturnType
+            idx += 1
         end
-        return Core.Compiler.abstract_call(interp, arginfo2::ArgInfo, si2, sv, max_methods)
+        invoke_sig = nothing
+        if length(argtypes) >= idx &&
+            Core.Compiler.widenconst(argtypes[idx]) <: InvokeSignature
+            isig_t = Core.Compiler.widenconst(argtypes[idx])
+            if isig_t isa DataType
+                invoke_sig = isig_t.parameters[1]
+            end
+            idx += 1
+        end
+        if length(argtypes) >= idx
+            arginfo2 =
+                if invoke_sig !== nothing && invoke_sig isa Type && invoke_sig <: Tuple
+                    ArgInfo(
+                        if fargs isa Nothing
+                            nothing
+                        else
+                            Any[nothing, fargs[idx], nothing, fargs[(idx + 1):end]...]
+                        end,
+                        Any[
+                            Core.Const(Core.invoke),
+                            argtypes[idx],
+                            Core.Const(Base.tuple_type_tail(invoke_sig)),
+                            argtypes[(idx + 1):end]...,
+                        ],
+                    )
+                else
+                    ArgInfo(fargs isa Nothing ? nothing : fargs[idx:end], argtypes[idx:end])
+                end
+
+            si2 = if VERSION < v"1.12"
+                StmtInfo(true)
+            else
+                StmtInfo(true, false)
+            end
+            ret = Core.Compiler.abstract_call(
+                interp, arginfo2::ArgInfo, si2, sv, max_methods
+            )
+            @static if isdefined(Core.Compiler, :Future)
+                return Core.Compiler.Future{Core.Compiler.CallMeta}(
+                    _wrap_call_with_reactant_meta, ret, interp, sv
+                )
+            else
+                return _wrap_call_with_reactant_meta(ret)
+            end
+        end
     end
 
     if !should_rewrite_call(Core.Typeof(f))
