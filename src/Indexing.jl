@@ -417,7 +417,9 @@ function Base.setindex!(a::TracedRArray{T,N}, v, indices::Vararg{Any,N}) where {
     end
 
     if v isa Number
-        v = Reactant.broadcast_to_size(v, length.(indices))
+        v = Reactant.broadcast_to_size(
+            Reactant.promote_to(TracedRNumber{T}, v), length.(indices)
+        )
         v = Reactant.promote_to(TracedRArray{T,N}, v)
     else
         v = Reactant.promote_to(TracedRArray{T,ndims(v)}, v)

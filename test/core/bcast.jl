@@ -287,4 +287,33 @@ end
 
     g(x) = all(broadcast(xj -> true, x))
     @test Bool(@jit g(x))
+
+    a = Float32[1, 2, 3]
+    a_ra = Reactant.to_rarray(a)
+
+    const_bcast_im!(d, y) = (d .= (_ -> im).(y); return nothing)
+    dest = Reactant.to_rarray(zeros(ComplexF32, 3))
+    @jit const_bcast_im!(dest, a_ra)
+    @test Array(dest) == fill(ComplexF32(im), 3)
+
+    const_bcast_view!(d, y) = (view(d, 1:2) .= (_ -> 1im).(view(y, 1:2)); return nothing)
+    dest = Reactant.to_rarray(zeros(ComplexF32, 3))
+    @jit const_bcast_view!(dest, a_ra)
+    @test Array(dest) == ComplexF32[1im, 1im, 0]
+
+    const_bcast_jlarr(y) = begin
+        arr = Reactant.@allowscalar [complex(y[1]), complex(y[2])]
+        arr .= (_ -> im).(arr)
+        return stack(arr)
+    end
+    @test Array(@jit const_bcast_jlarr(a_ra)) == fill(ComplexF32(im), 2)
+
+    setindex_const_complex!(d) = begin
+        Reactant.@allowscalar d[1, 2] = im
+        Reactant.@allowscalar d[2, 1] = 1im
+        return nothing
+    end
+    d2 = Reactant.to_rarray(zeros(ComplexF32, 2, 2))
+    @jit setindex_const_complex!(d2)
+    @test Array(d2) == ComplexF32[0 im; 1im 0]
 end
