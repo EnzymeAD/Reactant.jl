@@ -288,3 +288,63 @@ end
     g(x) = all(broadcast(xj -> true, x))
     @test Bool(@jit g(x))
 end
+
+@testset "Nested lazy broadcast: #3339" begin
+    x_jl = rand(3)
+    a_jl = rand(3)
+    v_jl = rand(3)
+    b = 0.9
+
+    x = Reactant.to_rarray(x_jl)
+    a = Reactant.to_rarray(a_jl)
+    v = Reactant.to_rarray(v_jl)
+
+    # Eager materialization with nested scalar-only subexpression
+    res1 = x .+ (a .+ (v .+ (1 .+ b)))
+    @test Array(res1) ≈ x_jl .+ (a_jl .+ (v_jl .+ (1 .+ b)))
+
+    res2 = x .+ (a .+ (1 .- b)) .+ 1.0
+    @test Array(res2) ≈ x_jl .+ (a_jl .+ (1 .- b)) .+ 1.0
+
+    # Compiled @jit nested broadcast
+    fn_nested(x, a, v, b) = x .+ (a .+ (v .+ (1 .+ b)))
+    @test Array(@jit fn_nested(x, a, v, b)) ≈ x_jl .+ (a_jl .+ (v_jl .+ (1 .+ b)))
+
+    # Compiled branch of ConcreteRArray broadcast copy via `flatten_broadcasted`
+    bc_flat = Reactant.flatten_broadcasted(
+        Broadcast.broadcasted(
+            +,
+            Broadcast.broadcasted(
+                +, x, Broadcast.broadcasted(+, a, Broadcast.broadcasted(-, 1, b))
+            ),
+            1.0,
+        ),
+    )
+    res_flat = Reactant.compile(Broadcast.BroadcastFunction(bc_flat.f), (bc_flat.args...,))(
+        bc_flat.args...
+    )
+    @test Array(res_flat) ≈ x_jl .+ (a_jl .+ (1 .- b)) .+ 1.0
+
+    # Optimisers.jl Adam-style in-place nested lazy broadcast (`x .-= x̄`)
+    m_jl = rand(3)
+    vv_jl = rand(3)
+    xx_jl = rand(3)
+    m = Reactant.to_rarray(copy(m_jl))
+    vv = Reactant.to_rarray(copy(vv_jl))
+    xx = Reactant.to_rarray(copy(xx_jl))
+    β1, β2, ϵ, η = 0.9, 0.999, 1e-8, 0.01
+    xbar = Broadcast.broadcasted(
+        *,
+        Broadcast.broadcasted(
+            /,
+            Broadcast.broadcasted(/, m, 1 - β1),
+            Broadcast.broadcasted(
+                +, Broadcast.broadcasted(sqrt, Broadcast.broadcasted(/, vv, 1 - β2)), ϵ
+            ),
+        ),
+        η,
+    )
+    xx .-= xbar
+    expected_xx = xx_jl .- (m_jl ./ (1 - β1)) ./ (sqrt.(vv_jl ./ (1 - β2)) .+ ϵ) .* η
+    @test Array(xx) ≈ expected_xx
+end
