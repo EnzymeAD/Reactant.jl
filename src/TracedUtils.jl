@@ -1147,8 +1147,8 @@ function __elem_apply_loop_body(idx_ref, fn_ref::F, res_ref, args_ref, L_ref) wh
     res = res_ref[]
     idx = @allowscalar(idx_ref[]) + 1
 
-    scalar_args = [@allowscalar(arg[idx]) for arg in args]
-    @allowscalar res[idx] = fn(scalar_args...)
+    scalar_args = @allowscalar map(Base.Fix2(getindex, idx), args)
+    @allowscalar res[idx] = Reactant.call_with_reactant(fn, scalar_args...)
 
     @allowscalar idx_ref[] = idx
     res_ref[] = res
@@ -1160,19 +1160,21 @@ scalar_arg(arg) = arg isa Base.RefValue || !(arg isa AbstractArray)
 flattenarg(arg) = ReactantCore.materialize_traced_array(vec(arg))
 flattenarg(arg::Ref) = RefFillVector(arg)
 
-function elem_apply_via_while_loop(f, args::Vararg{Any,Nargs}; kwargs...) where {Nargs}
-    non_ref_args = [arg for arg in args if !scalar_arg(arg)]
+function elem_apply_via_while_loop(
+    f, args::Vararg{Any,Nargs}; track_numbers=Union{}, kwargs...
+) where {Nargs}
+    non_ref_args = filter(!scalar_arg, args)
     if !isempty(non_ref_args)
-        @assert allequal(size.(non_ref_args)) "All args must have the same size"
+        @assert allequal(map(size, non_ref_args)) "All args must have the same size"
     end
     out_size = isempty(non_ref_args) ? () : size(first(non_ref_args))
     L = isempty(non_ref_args) ? 1 : length(first(non_ref_args))
     # flattening the tensors makes the auto-batching pass work nicer
-    flat_args = [flattenarg(arg) for arg in args]
+    flat_args = map(flattenarg, args)
 
     # This wont be a mutating function so we can safely execute it once
-    scalar_seed_args = [@allowscalar(arg[1]) for arg in flat_args]
-    res_tmp = @allowscalar(f(scalar_seed_args...))
+    scalar_seed_args = @allowscalar map(Base.Fix2(getindex, 1), flat_args)
+    res_tmp = @allowscalar(Reactant.call_with_reactant(f, scalar_seed_args...))
 
     # TODO: perhaps instead of this logic, we should have
     # `similar(::TracedRArray, TracedRNumber{T}) where T = similar(::TracedRArray, T)`
@@ -1199,6 +1201,7 @@ function elem_apply_via_while_loop(f, args::Vararg{Any,Nargs}; kwargs...) where 
         __elem_apply_loop_condition,
         __elem_apply_loop_body,
         (ind_var, f_ref, result_ref, args_ref, limit_ref);
+        track_numbers,
         kwargs...,
     )
 
