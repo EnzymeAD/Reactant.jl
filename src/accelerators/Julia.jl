@@ -469,16 +469,118 @@ end
 """
 abstract type Buffer end
 
-:(Base.delete!(::Buffer)) # -> delete
+function isdeleted end
+function element_type end
+function dimensions end
+function device end
+function memory end
+function on_device_size_in_bytes end
+function copy_to_device end
+function to_host_buffer end
+function is_on_cpu end
+function unsafe_pointer end
+
+"""
+    delete!(buffer::Buffer)
+
+Free the data of `buffer` while keeping its metadata alive. Must be idempotent.
+After this call, `isdeleted(buffer)` must return `true`.
+
+Backs `PJRT_Buffer_Delete`.
+"""
+Base.delete!(::Buffer)
+
+"""
+    isdeleted(buffer::Buffer) -> Bool
+
+Return whether the data of `buffer` has been freed with `delete!`.
+
+Backs `PJRT_Buffer_IsDeleted`.
+"""
 isdeleted(::Buffer)
-:(Base.eltype(::Buffer)) # -> element_type
+
+"""
+    element_type(buffer::Buffer) -> CAPI.PJRT_Buffer_Type
+
+Return the PJRT element type of `buffer`.
+
+Backs `PJRT_Buffer_ElementType`.
+"""
+element_type(::Buffer)
+
+"""
+    dimensions(buffer::Buffer) -> Vector{Int64}
+
+Return the dimensions of `buffer`. The returned vector is handed to C by pointer, so it must be owned by `buffer` and
+never be resized.
+
+Backs `PJRT_Buffer_Dimensions`.
+"""
 dimensions(::Buffer)
+
+"""
+    device(buffer::Buffer) -> Device
+
+Return the device where `buffer` resides. The device must be kept alive by its client.
+
+Backs `PJRT_Buffer_Device`.
+"""
 device(::Buffer)
+
+"""
+    memory(buffer::Buffer) -> Memory
+
+Return the memory space where `buffer` resides. The memory must be kept alive by its client.
+
+Backs `PJRT_Buffer_Memory`.
+"""
 memory(::Buffer)
+
+"""
+    on_device_size_in_bytes(buffer::Buffer) -> Integer
+
+Return the number of bytes that `buffer` occupies on its device.
+
+Backs `PJRT_Buffer_OnDeviceSizeInBytes`.
+"""
 on_device_size_in_bytes(::Buffer)
+
+"""
+    copy_to_device(dst::Device, buffer::Buffer) -> Buffer
+
+Return a new buffer with a copy of the data of `buffer` placed on `dst`. Must fail if `buffer` already resides on
+`dst`. The returned buffer is GC rooted by the caller.
+
+Backs `PJRT_Buffer_CopyToDevice`.
+"""
 copy_to_device(::Device, ::Buffer)
+
+"""
+    to_host_buffer(dst::Ptr, buffer::Buffer)
+
+Copy the data of `buffer` to the host memory pointed by `dst`, which must hold at least
+`on_device_size_in_bytes(buffer)` bytes. The copy is _currently_ synchronous.
+
+Backs `PJRT_Buffer_ToHostBuffer`.
+"""
 to_host_buffer(::Ptr, ::Buffer)
+
+"""
+    is_on_cpu(buffer::Buffer) -> Bool
+
+Return whether the data of `buffer` resides in host memory.
+
+Backs `PJRT_Buffer_IsOnCpu`.
+"""
 is_on_cpu(::Buffer)
+
+"""
+    unsafe_pointer(buffer::Buffer) -> Ptr
+
+Return the raw pointer to the data of `buffer`. The pointer is only valid until `buffer` is deleted or destroyed.
+
+Backs `PJRT_Buffer_UnsafePointer`.
+"""
 unsafe_pointer(::Buffer)
 
 function buffer_destroy(args::Ptr{CAPI.PJRT_Buffer_Destroy_Args})::Ptr{CAPI.PJRT_Error}
