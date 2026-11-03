@@ -244,6 +244,12 @@ end
     end
 end
 
+# `count` reduces with its predicate wrapped in `Base._bool`, a closure asserting a plain
+# `Bool`. Unwrap it rather than overlay `_bool`, which would also reroute host-side counts.
+const BoolPredicate = typeof(Base._bool(identity)).name.wrapper
+unwrap_bool(f) = f
+unwrap_bool(f::BoolPredicate) = f.f
+
 @reactant_overlay function Base.mapreduce(
     f,
     op,
@@ -252,7 +258,7 @@ end
 )
     if use_overlayed_version(A) || use_overlayed_version(f)
         return call_with_native(
-            TracedRArrayOverrides.overloaded_mapreduce, f, op, A; kwargs...
+            TracedRArrayOverrides.overloaded_mapreduce, unwrap_bool(f), op, A; kwargs...
         )
     else
         return call_with_native(
@@ -302,11 +308,6 @@ end
     else
         return call_with_native(Base._any, CallWithReactant(f), x, dims)
     end
-end
-
-# `count` wraps its predicate in `Base._bool`, which asserts a plain `Bool`
-@reactant_overlay function Base._bool(f)
-    return CallWithReactant(f)
 end
 
 @reactant_overlay function Base._getindex(::IndexLinear, x::Array{T,N}, idxs...) where {T,N}

@@ -190,6 +190,8 @@ count_gt1(x) = count(>(1), x)
 count_dims1(x) = count(x; dims=1)
 count_gt1_dims2(x) = count(>(1), x; dims=2)
 count_init(x) = count(x; init=10)
+count_host_tuple(x) = x .* count(!iszero, (true, false, true))
+count_host_array(x) = x .* count(!iszero, [true, false, true])
 
 @testset "count" begin
     b = [true, false, true, true]
@@ -214,6 +216,11 @@ count_init(x) = count(x; init=10)
     r_ra = Reactant.to_rarray(zeros(Int, 1, 3))
     @jit(count!(r_ra, bm_ra))
     @test Array(r_ra) == count!(zeros(Int, 1, 3), bm)
+
+    # host-side counts in a trace, like the one in `vcat`
+    x_ra = Reactant.to_rarray(ones(2))
+    @test @jit(count_host_tuple(x_ra)) ≈ count_host_tuple(ones(2))
+    @test @jit(count_host_array(x_ra)) ≈ count_host_array(ones(2))
 end
 
 count_missing(x) = count(ismissing, x)
