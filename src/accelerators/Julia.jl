@@ -302,6 +302,21 @@ function error_for_each_payload_obj(
 end
 
 ## Event
+"""
+    Event()
+
+A `PJRT_Event`: a one-shot, thread-safe completion signal, which may carry an [`Error`](@ref) if the operation failed.
+
+It starts unset and is set exactly once with [`notify`](@ref Base.notify(::Event)). Use
+[`wait`](@ref Base.wait(::Event)) to block until it is set and [`isready`](@ref Base.isready(::Event)) to check without
+blocking. Callbacks registered with `PJRT_Event_OnReady` run when it is set, or immediately if it already is.
+
+Every `PJRT_Error` it hands to C (from `PJRT_Event_Error`, `PJRT_Event_Await` or an on-ready callback) is a new copy of
+`event.error`, since each receiver destroys its own.
+
+!!! warning
+It is GC rooted when handed to C and unrooted by `PJRT_Event_Destroy`.
+"""
 mutable struct Event
     const cond::Threads.Condition
     ready::Bool
@@ -315,8 +330,28 @@ mutable struct Event
     end
 end
 
+"""
+    isready(event::Event) -> Bool
+
+Return whether `event` has been set, without blocking.
+
+Backs `PJRT_Event_IsReady`.
+
+See also [`wait`](@ref Base.wait(::Event)), [`notify`](@ref Base.notify(::Event)).
+"""
 Base.isready(event::Event) = @lock event.cond event.ready
 
+"""
+    wait(event::Event)
+
+Block the current task until `event` is set. Returns immediately if it already is.
+
+It doesn't throw if `event` was set with an error: check `event.error` afterwards.
+
+Backs `PJRT_Event_Await`.
+
+See also [`isready`](@ref Base.isready(::Event)), [`notify`](@ref Base.notify(::Event)).
+"""
 function Base.wait(event::Event)
     @lock event.cond while !event.ready
         wait(event.cond)
@@ -324,6 +359,20 @@ function Base.wait(event::Event)
     return nothing
 end
 
+"""
+    notify(event::Event, err::Union{Nothing,Error}=nothing)
+
+Set `event`, as failed with `err` or as successful if `err` is `nothing`. This wakes every task blocked in
+[`wait`](@ref Base.wait(::Event)) and then runs the on-ready callbacks, each with its own copy of `err`.
+
+Callbacks run outside the lock, in the calling task, so they may call back into `event`.
+
+Throws [`invalid_argument`](@ref) if `event` is already set.
+
+Backs `PJRT_Event_Set`.
+
+See also [`isready`](@ref Base.isready(::Event)).
+"""
 function Base.notify(event::Event, err::Union{Nothing,Error}=nothing)
     callbacks = @lock event.cond begin
         event.ready && throw(invalid_argument("event has already been set"))
