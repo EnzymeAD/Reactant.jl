@@ -284,11 +284,13 @@ function write_tensor_bundle(variables_dir::String, tensors::Vector{BundleTensor
                 byte_size = Int64(length(raw_bytes))
             else
                 arr = something(t.array)
-                raw_bytes = if ENDIAN_BOM == 0x04030201
-                    reinterpret(UInt8, vec(arr))
-                else
-                    reinterpret(UInt8, htol.(vec(arr)))
-                end
+                raw_bytes = Vector{UInt8}(
+                    if ENDIAN_BOM == 0x04030201
+                        reinterpret(UInt8, vec(arr))
+                    else
+                        reinterpret(UInt8, htol.(vec(arr)))
+                    end,
+                )
                 write(data_io, raw_bytes)
                 byte_size = Int64(length(raw_bytes))
                 masked_crc = mask_crc(crc32c(raw_bytes))

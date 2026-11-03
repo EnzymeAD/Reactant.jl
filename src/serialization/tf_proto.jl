@@ -390,12 +390,8 @@ struct OpArgDef
     handle_data::Vector{ResourceDtypeAndShape}
 end
 
-function OpArgDef(
-    name::String,
-    type::TFDataType,
-    handle_data::Vector{ResourceDtypeAndShape}=ResourceDtypeAndShape[],
-)
-    return OpArgDef(name, type, handle_data)
+function OpArgDef(name::String, type::TFDataType)
+    return OpArgDef(name, type, ResourceDtypeAndShape[])
 end
 
 function encode(e::AbstractProtoEncoder, x::OpArgDef)
@@ -894,10 +890,6 @@ end
 struct ObjectReference
     node_id::Int32
     local_name::String
-end
-
-function ObjectReference(node_id::Integer, local_name::String)
-    return ObjectReference(Int32(node_id), local_name)
 end
 
 function encode(e::AbstractProtoEncoder, x::ObjectReference)

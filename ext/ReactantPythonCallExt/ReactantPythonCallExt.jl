@@ -7,27 +7,17 @@ using Reactant.Serialization: NUMPY_SIMPLE_TYPES
 
 const jaxptr = Ref{Py}()
 const jnpptr = Ref{Py}()
-const JAX_LOADED = Ref{Bool}(false)
+
+const JAX_TRACING_SUPPORTED = Ref{Bool}(false)
 
 function __init__()
-    JAX_LOADED[] = false
-    return nothing
-end
-
-function ensure_jax_loaded!()
-    JAX_LOADED[] && return nothing
     try
-        jax = pyimport("jax")
-        jnp = pyimport("jax.numpy")
-        jaxptr[] = jax
-        jnpptr[] = jnp
-        JAX_LOADED[] = true
-    catch
-        error(
-            "Failed to import `jax`, which is required to trace Python functions " *
-            "invoked with `PythonCall.pycall`. Install it in your Python environment, " *
-            "e.g. with `using CondaPkg; CondaPkg.add_pip(\"jax\")`.",
-        )
+        jaxptr[] = pyimport("jax")
+        jnpptr[] = pyimport("jax.numpy")
+        JAX_TRACING_SUPPORTED[] = true
+    catch err
+        @warn "Failed to import jax. Tracing jax functions invoked with pycall won't \
+               be supported." exception = (err, catch_backtrace())
     end
     return nothing
 end

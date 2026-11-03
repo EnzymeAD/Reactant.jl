@@ -7,15 +7,15 @@ using Test
 fn(x, y) = sin.(x) .+ cos.(y.x[1:2, :])
 
 function multi_fn(x32, x64, flag, w1, b1, cparam, bfparam)
-    mat = (w1 * x32) .+ Float32.(b1) .+ Float32.(bfparam)
-    gated = ifelse(flag, mat, -mat)
-    scalar = sum(Float64.(gated)) + sum(x64)
-    cout = ComplexF32.(gated) .+ cparam
+    mat = (w1 * x32) .+ b1 .+ bfparam
+    gated = ifelse.(flag, mat, -mat)
+    scalar = sum(gated) + sum(x64)
+    cout = gated .+ cparam
     return gated, scalar, cout
 end
 
 @testset "Pure-Julia SavedModel Export (No Python)" begin
-    @test !isfile(joinpath(pkgdir(Reactant), "CondaPkg.toml"))
+    @test !occursin("tensorflow", read(joinpath(pkgdir(Reactant), "CondaPkg.toml"), String))
     @test Reactant.Serialization.serialization_supported(Val(:SavedModel))
     @test !any(m -> nameof(m) === :PythonCall, Base.loaded_modules_array())
 
@@ -162,34 +162,8 @@ with open(os.path.join(tmpdir, "num_outs.txt"), "w") as f:
         return [npzread(joinpath(tmpdir, "out_$(i - 1).npy")) for i in 1:num_outs]
     end
 
-    @testset "Lazy Python Imports" begin
-        sys = pyimport("sys")
-        @test pyis(sys.modules.get("jax"), pybuiltins.None)
-        @test pyis(sys.modules.get("tensorflow"), pybuiltins.None)
-
-        x = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float32, 2, 4))
-        y = (; x=Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float32, 4, 4)))
-        compiled_fn = @compile serializable = true fn(x, y)
-        Reactant.Serialization.export_as_tf_saved_model(
-            compiled_fn,
-            joinpath(mktempdir(), "lazy_sm"),
-            v"1.8.5",
-            [1, "y.x"],
-            Dict("y.x" => y.x),
-        )
-        @test pyis(sys.modules.get("jax"), pybuiltins.None)
-        @test pyis(sys.modules.get("tensorflow"), pybuiltins.None)
-
-        ext = Base.get_extension(Reactant, :ReactantPythonCallExt)
-        sys.modules["jax"] = pybuiltins.None
-        try
-            @test_throws ErrorException ext.ensure_jax_loaded!()
-        finally
-            sys.modules.pop("jax", pybuiltins.None)
-        end
-    end
-
     @testset "PythonCall" begin
+        @test pyis(pyimport("sys").modules.get("tensorflow"), pybuiltins.None)
         jax = pyimport("jax")
         jnp = pyimport("jax.numpy")
 
@@ -342,7 +316,7 @@ with open(os.path.join(tmpdir, "num_outs.txt"), "w") as f:
                 check_v1_loader=true,
             )
             @test permutedims(outs_true[1], (2, 1)) ≈ Array(gt_gated) atol = 1e-4
-            @test only(outs_true[2]) ≈ Array(gt_scalar)[] atol = 1e-4
+            @test only(outs_true[2]) ≈ Reactant.to_number(gt_scalar) atol = 1e-4
             @test permutedims(outs_true[3], (2, 1)) ≈ Array(gt_cout) atol = 1e-4
 
             outs_false = eval_tf_saved_model_in_subprocess(
@@ -352,7 +326,7 @@ with open(os.path.join(tmpdir, "num_outs.txt"), "w") as f:
                 check_v1_loader=true,
             )
             @test permutedims(outs_false[1], (2, 1)) ≈ Array(gt_gated_neg) atol = 1e-4
-            @test only(outs_false[2]) ≈ Array(gt_scalar_neg)[] atol = 1e-4
+            @test only(outs_false[2]) ≈ Reactant.to_number(gt_scalar_neg) atol = 1e-4
             @test permutedims(outs_false[3], (2, 1)) ≈ Array(gt_cout_neg) atol = 1e-4
         end
     end

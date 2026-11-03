@@ -84,16 +84,14 @@ if RUN_PYTHON_TEST || RUN_ENZYMEJAX_TEST || RUN_NUMPYRO_TEST
             delete!(testsuite, "integration/numpyro")
         end
     else
-        # TensorFlow wheels (used by integration/python to validate exported SavedModels)
-        # currently support up to Python 3.13; enzyme_ad and jax support up to 3.14.
-        py_version = RUN_PYTHON_TEST ? ">=3.10,<3.14" : ">=3.10,<3.15"
-        CondaPkg.add("python"; version=py_version, resolve=false)
-        CondaPkg.add_pip("jax"; version=">=0.9", resolve=false)
         if RUN_PYTHON_TEST
+            # TensorFlow wheels (used by integration/python to validate exported SavedModels)
+            # currently support up to Python 3.13.
+            CondaPkg.add("python"; version="<3.14,>=3.9,<4", resolve=false)
             CondaPkg.add_pip("tensorflow"; version=">=2.17", resolve=false)
-            CondaPkg.add_pip("numpy"; version=">=1", resolve=false)
-        elseif RUN_ENZYMEJAX_TEST
-            CondaPkg.add_pip("numpy"; version=">=1", resolve=false)
+        end
+        if RUN_ENZYMEJAX_TEST || RUN_NUMPYRO_TEST
+            CondaPkg.add_pip("jax"; version=">=0.9", resolve=false)
         end
         CondaPkg.resolve()
 

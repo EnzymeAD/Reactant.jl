@@ -669,6 +669,14 @@ function build_traced_restore(
     )
 end
 
+function sanitize_tf_scope_name(name::AbstractString)::String
+    cleaned = replace(name, r"[^A-Za-z0-9_.\\/>-]" => "_")
+    if isempty(cleaned) || !occursin(r"^[A-Za-z0-9.]", cleaned)
+        return "var_" * cleaned
+    end
+    return cleaned
+end
+
 function to_tf_saved_model(fn_spec::ReactantFunctionSpec, path::String)
     if !serialization_supported(Val(:SavedModel))
         error("Serialization to SavedModel is not supported.")
@@ -719,7 +727,7 @@ function to_tf_saved_model(fn_spec::ReactantFunctionSpec, path::String)
                 ),
             )
             if !haskey(param_idx_map, loc.name)
-                push!(param_names, loc.name)
+                push!(param_names, sanitize_tf_scope_name(loc.name))
                 push!(param_sigs, sig)
                 push!(param_arrays, arr)
                 param_idx_map[loc.name] = length(param_names)
