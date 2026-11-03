@@ -170,6 +170,20 @@ const vtable_error = Ref{CAPI.PJRT_Error_FunctionTable}()
 const vtable_memory = Ref{CAPI.PJRT_Memory_FunctionTable}()
 
 ## Error
+"""
+    Error(code::CAPI.PJRT_Error_Code, message)
+
+A `PJRT_Error` carrying an error `code` and a human-readable `message`.
+
+Throw it from a `@pjrt_catch_return` callback to return it to C.
+
+!!! info
+Success is a null `PJRT_Error*` (`ok()`), not an `Error` with code `OK`.
+
+!!! warning
+It is GC rooted when handed to C and unrooted by `PJRT_Error_Destroy`.
+Since every receiver destroys its own error, the same `Error` must never be handed out twice.
+"""
 mutable struct Error
     const vtable::Ptr{CAPI.PJRT_Error_FunctionTable}
     const code::CAPI.PJRT_Error_Code
@@ -184,24 +198,45 @@ mutable struct Error
     end
 end
 
-# function ok()
-#     ptr = unsafe_convert(Ptr{Error}, Libc.malloc(sizeof(Error)))
-#     unsafe_store!(ptr, Error(CAPI.PJRT_Error_Code_OK))
-#     return ptr
-# end
-
 # XLA considers `nullptr` to be OK as it avoids allocations
 ok() = C_NULL
 
-# the caller is responsible for freeing the error with `PJRT_Error_Destroy`, which unmarks it
+"""
+    unimplemented(reason="this feature is not implemented yet!") -> Error
+
+Return an `UNIMPLEMENTED` [`Error`](@ref) with message `reason`, for features that are not supported yet.
+
+!!! info
+The error is not GC rooted.
+`throw` it inside the scope of a `@pjrt_catch_return` function, which roots it and returns it to C.
+"""
 function unimplemented(reason="this feature is not implemented yet!")
     return Error(CAPI.PJRT_Error_Code_UNIMPLEMENTED, reason)
 end
 
+"""
+    invalid_argument(reason="invalid argument") -> Error
+
+Return an `INVALID_ARGUMENT` [`Error`](@ref) with message `reason`, for arguments that are malformed or that refer to
+an object in the wrong state (e.g. a deleted buffer).
+
+!!! info
+The error is not GC rooted.
+`throw` it inside the scope of a `@pjrt_catch_return` function, which roots it and returns it to C.
+"""
 function invalid_argument(reason="invalid argument")
     return Error(CAPI.PJRT_Error_Code_INVALID_ARGUMENT, reason)
 end
 
+"""
+    resource_exhausted(reason="out of memory") -> Error
+
+Return a `RESOURCE_EXHAUSTED` [`Error`](@ref) with message `reason`, for failed allocations.
+
+!!! info
+The error is not GC rooted.
+`throw` it inside the scope of a `@pjrt_catch_return` function, which roots it and returns it to C.
+"""
 function resource_exhausted(reason="out of memory")
     return Error(CAPI.PJRT_Error_Code_RESOURCE_EXHAUSTED, reason)
 end
