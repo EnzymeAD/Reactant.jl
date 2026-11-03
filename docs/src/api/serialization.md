@@ -10,11 +10,11 @@ Reactant.Serialization
 
 ## Exporting to TensorFlow SavedModel
 
-!!! note "Load PythonCall"
+!!! note "Install TensorFlow and Load PythonCall"
 
-    Serialization to TensorFlow SavedModel requires PythonCall to be loaded. Loading
-    PythonCall will automatically install tensorflow. If tensorflow installation fails,
-    we won't be able to export to SavedModel.
+    Serialization to TensorFlow SavedModel requires `PythonCall` to be loaded and the
+    `tensorflow` and `numpy` Python packages to be installed in your Python environment
+    (for example, via `using CondaPkg; CondaPkg.add("python"; version="<3.14"); CondaPkg.add_pip("tensorflow")`).
 
 A SavedModel contains a complete TensorFlow program, including trained parameters (i.e,
 tf.Variables) and computation. It does not require the original model building code to run,

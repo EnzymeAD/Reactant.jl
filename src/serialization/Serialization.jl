@@ -66,6 +66,12 @@ for deployemnt.
   - `state_dict`: A dictionary mapping parameter names to their values. This is used to
     serialize the parameters of the function.
 
+## Requirements
+
+  - **PythonCall.jl**: Must be loaded with `using PythonCall`, with `tensorflow` and
+    `numpy` installed in its Python environment (e.g. via
+    `using CondaPkg; CondaPkg.add_pip("tensorflow"); CondaPkg.add_pip("numpy")`).
+
 ## Example
 
 ```julia

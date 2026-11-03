@@ -5,11 +5,66 @@ using Test
 
 fn(x, y) = sin.(x) .+ cos.(y.x[1:2, :])
 
+@testset "No CondaPkg.toml in Reactant" begin
+    @test !isfile(joinpath(pkgdir(Reactant), "CondaPkg.toml"))
+end
+
+@testset "SavedModel Error Before PythonCall Loaded" begin
+    @test !Reactant.Serialization.serialization_supported(Val(:SavedModel))
+    x = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float32, 2, 10))
+    y = (; x=Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float32, 4, 10)))
+    compiled_fn = @compile serializable = true fn(x, y)
+    @test_throws "PythonCall" Reactant.Serialization.export_as_tf_saved_model(
+        compiled_fn, mktempdir(), v"1.8.5", [], Dict()
+    )
+end
+
 # Jax on Github CI dislikes X86 macos
 @static if !Sys.isapple() || Sys.ARCH != :x86_64
     using PythonCall
     using CondaPkg
     using NPZ
+
+    # Verify that loading ReactantPythonCallExt does not eagerly import jax or tensorflow.
+    @testset "Lazy Python Imports & Missing Package Errors" begin
+        sys = pyimport("sys")
+        @test !pyconvert(Bool, pycontains(sys.modules, "jax"))
+        @test !pyconvert(Bool, pycontains(sys.modules, "tensorflow"))
+
+        # Calling Python on non-traced values inside @jit must not import jax or tensorflow.
+        py_add_scalar = pyfunc((a, b) -> a + b)
+        untraced_fn(x) = x .+ pyconvert(Float32, py_add_scalar(1.0f0, 2.0f0))
+        r_untraced = @jit untraced_fn(Reactant.to_rarray(Float32[1, 2]))
+        @test Array(r_untraced) ≈ Float32[4, 5]
+        @test !pyconvert(Bool, pycontains(sys.modules, "jax"))
+        @test !pyconvert(Bool, pycontains(sys.modules, "tensorflow"))
+
+        # Simulate missing jax / tensorflow via PEP 302 (None in sys.modules) to check
+        # error messages and verify subsequent recovery once available.
+        pysetitem(sys.modules, "jax", pybuiltins.None)
+        pysetitem(sys.modules, "tensorflow", pybuiltins.None)
+        try
+            py_double = pyfunc(x -> x + x)
+            @test_throws "CondaPkg.add_pip(\"jax\")" (@jit py_double(
+                Reactant.to_rarray(Float32[1, 2, 3])
+            ))
+
+            @test !Reactant.Serialization.serialization_supported(Val(:SavedModel))
+            x = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float32, 2, 10))
+            y = (;
+                x=Reactant.to_rarray(
+                    Reactant.TestUtils.construct_test_array(Float32, 4, 10)
+                )
+            )
+            compiled_fn = @compile serializable = true fn(x, y)
+            @test_throws "CondaPkg.add_pip(\"tensorflow\")" Reactant.Serialization.export_as_tf_saved_model(
+                compiled_fn, mktempdir(), v"1.8.5", [], Dict()
+            )
+        finally
+            pydelitem(sys.modules, "jax")
+            pydelitem(sys.modules, "tensorflow")
+        end
+    end
 
     # On macOS, dyld performs process-wide weak symbol coalescing between Julia's libLLVM
     # and TensorFlow's embedded LLVM (libtensorflow_framework / libtensorflow_cc). When TensorFlow
@@ -48,6 +103,16 @@ np.save(r"$out_path", res)
     end
 
     @testset "PythonCall" begin
+        sys = pyimport("sys")
+        @test !pyconvert(Bool, pycontains(sys.modules, "jax"))
+
+        # First traced pycall lazily imports jax without importing tensorflow.
+        py_double = pyfunc(x -> x + x)
+        doubled = @jit py_double(Reactant.to_rarray(Float32[1, 2, 3]))
+        @test Array(doubled) ≈ Float32[2, 4, 6]
+        @test pyconvert(Bool, pycontains(sys.modules, "jax"))
+        @test !pyconvert(Bool, pycontains(sys.modules, "tensorflow"))
+
         jax = pyimport("jax")
         jnp = pyimport("jax.numpy")
 
@@ -82,8 +147,8 @@ np.save(r"$out_path", res)
     end
 
     @testset "SavedModel Export" begin
-        tf = pyimport("tensorflow")
-        np = pyimport("numpy")
+        sys = pyimport("sys")
+        @test !pyconvert(Bool, pycontains(sys.modules, "tensorflow"))
 
         x = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float32, 2, 10))
         y = (;
@@ -99,6 +164,8 @@ np.save(r"$out_path", res)
             Reactant.Serialization.export_as_tf_saved_model(
                 compiled_fn, model_path, v"1.8.5", [], Dict()
             )
+            @test pyconvert(Bool, pycontains(sys.modules, "tensorflow"))
+            @test Reactant.Serialization.serialization_supported(Val(:SavedModel))
 
             if Sys.isapple()
                 res_raw = eval_tf_saved_model_in_subprocess(
@@ -107,6 +174,8 @@ np.save(r"$out_path", res)
                 )
                 res = permutedims(res_raw, (2, 1))
             else
+                tf = pyimport("tensorflow")
+                np = pyimport("numpy")
                 restored_model = tf.saved_model.load(model_path)
                 res = permutedims(
                     PyArray(
@@ -135,6 +204,8 @@ np.save(r"$out_path", res)
                 )
                 res = permutedims(res_raw, (2, 1))
             else
+                tf = pyimport("tensorflow")
+                np = pyimport("numpy")
                 restored_model = tf.saved_model.load(model_path)
                 res = permutedims(
                     PyArray(
