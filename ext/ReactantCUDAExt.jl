@@ -1221,7 +1221,7 @@ function emit_kernel_wrapper(
     llvmptr = MLIR.IR.Type(MLIR.API.mlirLLVMPointerTypeGet(ctx, 0))
     i8 = MLIR.IR.Type(UInt8)
     # `inline_roots_type` converts Julia types to LLVM types, which needs a context
-    LLVM.Context() do _
+    LLVM.@dispose llvm_ctx = LLVM.Context() begin
         for (a, val) in zip(allargs, argbytes)
             if val === nothing
                 push!(allocs, nothing)
