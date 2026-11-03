@@ -29,6 +29,7 @@ module Julia
 using Base: unsafe_convert
 using ..Reactant: Reactant
 using Reactant.XLA.CAPI: CAPI, csizeof
+import Serialization: serialize
 
 macro pjrt_catch_return(fdef)
     Meta.isexpr(fdef, :function) ||
@@ -53,35 +54,46 @@ macro pjrt_catch_return(fdef)
 end
 
 # interface functions
+function addressable_devices end
+function addressable_memories end
+function attributes end
+function buffer_from_host_buffer end
+function compile_options end
+function compile! end
+function copy_to_device end
+function debug_string end
+function default_memory end
+function description end
+function device end
+function device_assignment end
+function devices end
+function dimensions end
+function element_type end
+function executable end
+function execute end
+function fingerprint end
 function id end
+function is_addressable end
+function is_on_cpu end
+function isdeleted end
 function kind end
 function kind_id end
-function debug_string end
-function to_string end
-function addressable_devices end
-function pid end
-function attributes end
-function description end
-function is_addressable end
 function local_hardware_id end
-function addressable_memories end
-function default_memory end
-function isdeleted end
-function element_type end
-function dimensions end
-function device end
 function memory end
+function name end
+function num_outputs end
+function num_partitions end
+function num_replicas end
 function on_device_size_in_bytes end
-function copy_to_device end
-function to_host_buffer end
-function is_on_cpu end
-function unsafe_pointer end
+function optimized_program end
+function output_element_types end
 function platform_name end
 function platform_version end
 function process_index end
-function devices end
-function buffer_from_host_buffer end
-function compile! end
+function size_of_generated_code_in_bytes end
+function to_host_buffer end
+function to_string end
+function unsafe_pointer end
 
 # GC roots of objects whose pointers are handed to C; objects stay alive until they are unmarked
 const gc_roots = IdSet{Any}()
@@ -687,20 +699,20 @@ id(::DeviceDescription)
 end
 
 """
-    pid(desc::DeviceDescription) -> Integer
+    process_index(desc::DeviceDescription) -> Integer
 
 Return the index of the process that owns the device described by `desc`. Always `0` in single-process settings.
 
 Backs `PJRT_DeviceDescription_ProcessIndex`.
 """
-pid(::DeviceDescription)
+process_index(::DeviceDescription)
 
 @pjrt_catch_return function device_description_process_index(
     args::Ptr{CAPI.PJRT_DeviceDescription_ProcessIndex_Args}
 )::Ptr{CAPI.PJRT_Error}
     ptr = Ptr{DeviceDescription}(unsafe_load(args.device_description))
     desc = unsafe_pointer_to_objref(ptr)::DeviceDescription
-    unsafe_store!(args.process_index, pid(desc))
+    unsafe_store!(args.process_index, process_index(desc))
     return ok()
 end
 
@@ -1216,6 +1228,512 @@ unsafe_pointer(::Buffer)
 end
 
 """
+    Executable
+
+A compiled program, independent of the devices it runs on. Returned by `executable(::LoadedExecutable)`.
+
+### Interface
+
+- `name`
+- `num_replicas`
+- `num_partitions`
+- `num_outputs`
+- `size_of_generated_code_in_bytes`
+- `fingerprint`
+- `output_element_types`
+- `optimized_program`
+- `serialize`
+- `compile_options`
+"""
+abstract type Executable end
+
+@pjrt_catch_return function executable_destroy(
+    args::Ptr{CAPI.PJRT_Executable_Destroy_Args}
+)::Ptr{CAPI.PJRT_Error}
+    ptr = unsafe_load(args.executable)
+    ptr != C_NULL && unroot!(ptr)
+    return ok()
+end
+
+# frees the rooted bytes handed out by `PJRT_LoadedExecutable_GetDeviceAssignment`, `PJRT_Executable_Serialize` and
+# `PJRT_Executable_GetCompileOptions`
+function serialized_bytes_deleter(ptr::Ptr{Cvoid})::Cvoid
+    ptr != C_NULL && unroot!(ptr)
+    return nothing
+end
+
+"""
+    name(exe::Executable) -> String
+
+Return a string that identifies `exe` (e.g. the name of the compiled module).
+
+!!! warning
+The string is handed to C by pointer, so it must be owned by `exe`.
+
+!!! warning
+`PjRtCApiExecutable` treats any error as fatal.
+
+Backs `PJRT_Executable_Name`.
+"""
+name(::Executable)
+
+@pjrt_catch_return function executable_name(
+    args::Ptr{CAPI.PJRT_Executable_Name_Args}
+)::Ptr{CAPI.PJRT_Error}
+    exe = unsafe_pointer_to_objref(unsafe_load(args.executable))::Executable
+    str = name(exe)::String
+    unsafe_store!(args.executable_name, Cstring(pointer(str)))
+    unsafe_store!(args.executable_name_size, sizeof(str))
+    return ok()
+end
+
+"""
+    num_replicas(exe::Executable) -> Integer
+
+Return the number of replicas of `exe`, i.e. `executable_build_options.num_replicas` of the `CompileOptionsProto` it
+was compiled with.
+
+!!! warning
+`PjRtCApiExecutable` treats any error as fatal.
+
+Backs `PJRT_Executable_NumReplicas`.
+"""
+num_replicas(::Executable)
+
+@pjrt_catch_return function executable_num_replicas(
+    args::Ptr{CAPI.PJRT_Executable_NumReplicas_Args}
+)::Ptr{CAPI.PJRT_Error}
+    exe = unsafe_pointer_to_objref(unsafe_load(args.executable))::Executable
+    unsafe_store!(args.num_replicas, num_replicas(exe))
+    return ok()
+end
+
+"""
+    num_partitions(exe::Executable) -> Integer
+
+Return the number of partitions of `exe`, i.e. `executable_build_options.num_partitions` of the `CompileOptionsProto`
+it was compiled with.
+
+!!! warning
+`PjRtCApiExecutable` treats any error as fatal.
+
+Backs `PJRT_Executable_NumPartitions`.
+"""
+num_partitions(::Executable)
+
+@pjrt_catch_return function executable_num_partitions(
+    args::Ptr{CAPI.PJRT_Executable_NumPartitions_Args}
+)::Ptr{CAPI.PJRT_Error}
+    exe = unsafe_pointer_to_objref(unsafe_load(args.executable))::Executable
+    unsafe_store!(args.num_partitions, num_partitions(exe))
+    return ok()
+end
+
+"""
+    num_outputs(exe::Executable) -> Integer
+
+Return the number of outputs that `exe` produces per device.
+
+`PjRtCApiLoadedExecutable` uses it to allocate the output lists filled by `execute`, so it must match the length of
+each output vector that `execute` returns.
+
+Backs `PJRT_Executable_NumOutputs`.
+"""
+num_outputs(::Executable)
+
+@pjrt_catch_return function executable_num_outputs(
+    args::Ptr{CAPI.PJRT_Executable_NumOutputs_Args}
+)::Ptr{CAPI.PJRT_Error}
+    exe = unsafe_pointer_to_objref(unsafe_load(args.executable))::Executable
+    unsafe_store!(args.num_outputs, num_outputs(exe))
+    return ok()
+end
+
+"""
+    size_of_generated_code_in_bytes(exe::Executable) -> Integer
+
+Return the size in bytes of the code generated for `exe`, or `0` if unknown.
+
+!!! warning
+`PjRtCApiExecutable` treats any error as fatal.
+
+Backs `PJRT_Executable_SizeOfGeneratedCodeInBytes`.
+"""
+size_of_generated_code_in_bytes(::Executable)
+
+@pjrt_catch_return function executable_size_of_generated_code_in_bytes(
+    args::Ptr{CAPI.PJRT_Executable_SizeOfGeneratedCodeInBytes_Args}
+)::Ptr{CAPI.PJRT_Error}
+    exe = unsafe_pointer_to_objref(unsafe_load(args.executable))::Executable
+    unsafe_store!(args.size_in_bytes, size_of_generated_code_in_bytes(exe))
+    return ok()
+end
+
+"""
+    fingerprint(exe::Executable) -> String
+
+Return a fingerprint of `exe`. Executables compiled from identical inputs (program, compile options, compiler
+version, ...) must have the same fingerprint. Throw `unimplemented` if not supported.
+
+!!! warning
+The string is handed to C by pointer, so it must be owned by `exe`.
+
+Backs `PJRT_Executable_Fingerprint`.
+"""
+fingerprint(::Executable)
+
+@pjrt_catch_return function executable_fingerprint(
+    args::Ptr{CAPI.PJRT_Executable_Fingerprint_Args}
+)::Ptr{CAPI.PJRT_Error}
+    exe = unsafe_pointer_to_objref(unsafe_load(args.executable))::Executable
+    str = fingerprint(exe)::String
+    unsafe_store!(args.executable_fingerprint, Cstring(pointer(str)))
+    unsafe_store!(args.executable_fingerprint_size, sizeof(str))
+    return ok()
+end
+
+"""
+    output_element_types(exe::Executable) -> Vector{CAPI.PJRT_Buffer_Type}
+
+Return the element type of each output of `exe`.
+
+!!! warning
+The vector is handed to C by pointer, so it must be owned by `exe` and never be resized.
+
+Backs `PJRT_Executable_OutputElementTypes`.
+"""
+output_element_types(::Executable)
+
+@pjrt_catch_return function executable_output_element_types(
+    args::Ptr{CAPI.PJRT_Executable_OutputElementTypes_Args}
+)::Ptr{CAPI.PJRT_Error}
+    exe = unsafe_pointer_to_objref(unsafe_load(args.executable))::Executable
+    types = output_element_types(exe)::Vector{CAPI.PJRT_Buffer_Type}
+    unsafe_store!(args.output_types, pointer(types))
+    unsafe_store!(args.num_output_types, length(types))
+    return ok()
+end
+
+"""
+    optimized_program(exe::Executable) -> String
+
+Return the optimized program of `exe` as MLIR text (StableHLO dialect).
+
+`PJRT_Executable_OptimizedProgram` is called twice per query (first for the size, then for the data), so this must
+return the same string every time.
+
+Backs `PJRT_Executable_OptimizedProgram`, which `PjRtCApiExecutable` uses for `GetHloModules` and for the default
+output and parameter shardings.
+"""
+optimized_program(::Executable)
+
+@pjrt_catch_return function executable_optimized_program(
+    args::Ptr{CAPI.PJRT_Executable_OptimizedProgram_Args}
+)::Ptr{CAPI.PJRT_Error}
+    exe = unsafe_pointer_to_objref(unsafe_load(args.executable))::Executable
+    code = optimized_program(exe)::String
+    program = unsafe_load(args.program)
+
+    # string literals are never freed, so the implementation keeps owning `format`
+    format = "mlir"
+    unsafe_store!(program.format, Cstring(pointer(format)))
+    unsafe_store!(program.format_size, sizeof(format))
+
+    # first call: only report the size of the buffer that the caller must allocate
+    code_ptr = Ptr{UInt8}(unsafe_load(program.code))
+    if code_ptr == C_NULL
+        unsafe_store!(program.code_size, sizeof(code))
+        return ok()
+    end
+
+    # second call: `code_size` holds the size of the caller's buffer
+    capacity = unsafe_load(program.code_size)
+    if capacity < sizeof(code)
+        throw(
+            invalid_argument(
+                "program buffer of $capacity bytes is smaller than the $(sizeof(code)) bytes required",
+            ),
+        )
+    end
+    GC.@preserve code unsafe_copyto!(code_ptr, pointer(code), sizeof(code))
+    unsafe_store!(program.code_size, sizeof(code))
+    return ok()
+end
+
+"""
+    serialize(exe::Executable) -> Vector{UInt8}
+
+Return a platform-specific serialization of `exe`. It doesn't need to be stable across versions.
+
+The returned vector is GC rooted until C calls its deleter, so it must be a new vector that `exe` doesn't hand out
+anywhere else.
+
+Backs `PJRT_Executable_Serialize`.
+"""
+serialize(::Executable)
+
+@pjrt_catch_return function executable_serialize(
+    args::Ptr{CAPI.PJRT_Executable_Serialize_Args}
+)::Ptr{CAPI.PJRT_Error}
+    exe = unsafe_pointer_to_objref(unsafe_load(args.executable))::Executable
+    bytes = root!(serialize(exe)::Vector{UInt8})
+    unsafe_store!(args.serialized_bytes, Cstring(pointer(bytes)))
+    unsafe_store!(args.serialized_bytes_size, length(bytes))
+    unsafe_store!(args.serialized_executable, pointer_from_objref(bytes))
+    unsafe_store!(
+        args.serialized_executable_deleter,
+        @cfunction(serialized_bytes_deleter, Cvoid, (Ptr{Cvoid},))
+    )
+    return ok()
+end
+
+"""
+    compile_options(exe::Executable) -> Reactant.Proto.xla.CompileOptionsProto
+
+Return the compile options that `exe` was compiled with, i.e. the ones given to `compile!`.
+
+Backs `PJRT_Executable_GetCompileOptions`.
+"""
+compile_options(::Executable)
+
+@pjrt_catch_return function executable_get_compile_options(
+    args::Ptr{CAPI.PJRT_Executable_GetCompileOptions_Args}
+)::Ptr{CAPI.PJRT_Error}
+    exe = unsafe_pointer_to_objref(unsafe_load(args.executable))::Executable
+    proto = compile_options(exe)::Reactant.Proto.xla.CompileOptionsProto
+    bytes = root!(Reactant.ProtoUtils.proto_to_bytes(proto))
+    unsafe_store!(args.serialized_bytes, Cstring(pointer(bytes)))
+    unsafe_store!(args.serialized_bytes_size, length(bytes))
+    unsafe_store!(args.serialized_compile_options, pointer_from_objref(bytes))
+    unsafe_store!(
+        args.serialized_compile_options_deleter,
+        @cfunction(serialized_bytes_deleter, Cvoid, (Ptr{Cvoid},))
+    )
+    return ok()
+end
+
+"""
+    LoadedExecutable
+
+A compiled program loaded on the devices of a `Client`, as returned by `compile!`.
+
+### Interface
+
+- `destroy`
+- `executable`
+- `delete!`
+- `isdeleted`
+- `addressable_devices`
+- `device_assignment`
+- `execute`
+"""
+abstract type LoadedExecutable end
+
+@pjrt_catch_return function loaded_executable_destroy(
+    args::Ptr{CAPI.PJRT_LoadedExecutable_Destroy_Args}
+)::Ptr{CAPI.PJRT_Error}
+    ptr = unsafe_load(args.executable)
+    ptr == C_NULL && return ok()
+    exec = unsafe_pointer_to_objref(ptr)::LoadedExecutable
+    delete!(exec)
+    unroot!(exec)
+    return ok()
+end
+
+"""
+    executable(exec::LoadedExecutable) -> Executable
+
+Return the `Executable` of `exec`, i.e. its compiled program without the devices it is loaded on.
+
+The returned executable is GC rooted until C calls `PJRT_Executable_Destroy` on it. If the same object is returned
+on every call, `exec` must keep a reference to it, since the first `PJRT_Executable_Destroy` unroots it.
+
+!!! warning
+`PjRtCApiLoadedExecutable` calls this when wrapping `exec` and treats any error as fatal.
+
+Backs `PJRT_LoadedExecutable_GetExecutable`.
+"""
+executable(::LoadedExecutable)
+
+@pjrt_catch_return function loaded_executable_get_executable(
+    args::Ptr{CAPI.PJRT_LoadedExecutable_GetExecutable_Args}
+)::Ptr{CAPI.PJRT_Error}
+    exec = unsafe_pointer_to_objref(unsafe_load(args.loaded_executable))::LoadedExecutable
+    exe = root!(executable(exec)::Executable)
+    unsafe_store!(args.executable, Ptr{CAPI.PJRT_Executable}(pointer_from_objref(exe)))
+    return ok()
+end
+
+"""
+    delete!(exec::LoadedExecutable)
+
+Free the runtime resources of `exec` (e.g. its compiled code) while keeping the object alive. Must be idempotent.
+After this call, `isdeleted(exec)` must return `true`.
+
+Also called by `PJRT_LoadedExecutable_Destroy` before `exec` is unrooted.
+
+Backs `PJRT_LoadedExecutable_Delete`.
+"""
+Base.delete!(::LoadedExecutable)
+
+@pjrt_catch_return function loaded_executable_delete(
+    args::Ptr{CAPI.PJRT_LoadedExecutable_Delete_Args}
+)::Ptr{CAPI.PJRT_Error}
+    exec = unsafe_pointer_to_objref(unsafe_load(args.executable))::LoadedExecutable
+    delete!(exec)
+    return ok()
+end
+
+"""
+    isdeleted(exec::LoadedExecutable) -> Bool
+
+Return whether the runtime resources of `exec` have been freed with `delete!`.
+
+Backs `PJRT_LoadedExecutable_IsDeleted`.
+"""
+isdeleted(::LoadedExecutable)
+
+@pjrt_catch_return function loaded_executable_is_deleted(
+    args::Ptr{CAPI.PJRT_LoadedExecutable_IsDeleted_Args}
+)::Ptr{CAPI.PJRT_Error}
+    exec = unsafe_pointer_to_objref(unsafe_load(args.executable))::LoadedExecutable
+    pred = isdeleted(exec)::Bool
+    unsafe_store!(args.is_deleted, pred)
+    return ok()
+end
+
+"""
+    addressable_devices(exec::LoadedExecutable) -> Vector{Device}
+
+Return the devices that `exec` runs on, in the order used by the argument and output lists of `execute`.
+
+!!! warning
+The vector is handed to C by pointer, so it must be owned by `exec` and never be resized.
+`PjRtCApiLoadedExecutable` calls this when wrapping `exec` and treats any error as fatal.
+
+Backs `PJRT_LoadedExecutable_AddressableDevices`.
+"""
+addressable_devices(::LoadedExecutable)
+
+@pjrt_catch_return function loaded_executable_addressable_devices(
+    args::Ptr{CAPI.PJRT_LoadedExecutable_AddressableDevices_Args}
+)::Ptr{CAPI.PJRT_Error}
+    exec = unsafe_pointer_to_objref(unsafe_load(args.executable))::LoadedExecutable
+    devs = addressable_devices(exec)::Vector{Device}
+    unsafe_store!(args.addressable_devices, Ptr{Ptr{CAPI.PJRT_Device}}(pointer(devs)))
+    unsafe_store!(args.num_addressable_devices, length(devs))
+    return ok()
+end
+
+"""
+    device_assignment(exec::LoadedExecutable) -> Union{Nothing,Reactant.Proto.xla.DeviceAssignmentProto}
+
+Return the device assignment that `exec` was compiled for, which maps every (replica, partition) pair to a device
+id, or `nothing` if `exec` is portable (i.e. it runs on whichever device is given to `execute`).
+
+It usually is `executable_build_options.device_assignment` of the `CompileOptionsProto` given to `compile!`.
+
+!!! warning
+`PjRtCApiLoadedExecutable` calls this when wrapping `exec` and treats any error as fatal.
+
+Backs `PJRT_LoadedExecutable_GetDeviceAssignment`.
+"""
+device_assignment(::LoadedExecutable)
+
+@pjrt_catch_return function loaded_executable_get_device_assignment(
+    args::Ptr{CAPI.PJRT_LoadedExecutable_GetDeviceAssignment_Args}
+)::Ptr{CAPI.PJRT_Error}
+    exec = unsafe_pointer_to_objref(unsafe_load(args.executable))::LoadedExecutable
+    proto = device_assignment(exec)::Union{Nothing,Reactant.Proto.xla.DeviceAssignmentProto}
+
+    # XLA calls the deleter even if there is no device assignment
+    deleter = @cfunction(serialized_bytes_deleter, Cvoid, (Ptr{Cvoid},))
+    unsafe_store!(args.serialized_device_assignment_deleter, deleter)
+
+    if isnothing(proto)
+        unsafe_store!(args.serialized_bytes, Cstring(C_NULL))
+        unsafe_store!(args.serialized_bytes_size, 0)
+        unsafe_store!(args.serialized_device_assignment, C_NULL)
+        return ok()
+    end
+
+    bytes = root!(Reactant.ProtoUtils.proto_to_bytes(proto))
+    unsafe_store!(args.serialized_bytes, Cstring(pointer(bytes)))
+    unsafe_store!(args.serialized_bytes_size, length(bytes))
+    unsafe_store!(args.serialized_device_assignment, pointer_from_objref(bytes))
+    return ok()
+end
+
+"""
+    execute(exec::LoadedExecutable, arguments::Vector{Vector{Buffer}}, dev::Union{Nothing,Device}) -> Vector{Vector{Buffer}}
+
+Run `exec` and return its outputs.
+
+`arguments[i]` holds the input buffers for the `i`-th device of `addressable_devices(exec)`. The result must follow the
+same layout: one vector per device, each with as many new buffers as `exec` has outputs.
+
+If `dev` is not `nothing`, run only on `dev` (one of `addressable_devices(exec)`). Then `arguments` and the result
+have a single entry, for `dev`.
+
+Execution is synchronous: the device-complete events are signaled as soon as this returns. The caller GC-roots the
+returned buffers and destroys each of them, so they must all be distinct.
+
+!!! todo
+`PJRT_ExecuteOptions` (e.g. non-donatable inputs, send/recv callbacks) are ignored.
+
+Backs `PJRT_LoadedExecutable_Execute`.
+"""
+execute(::LoadedExecutable, args...)
+
+@pjrt_catch_return function loaded_executable_execute(
+    args::Ptr{CAPI.PJRT_LoadedExecutable_Execute_Args}
+)::Ptr{CAPI.PJRT_Error}
+    exec = unsafe_pointer_to_objref(unsafe_load(args.executable))::LoadedExecutable
+    isdeleted(exec) && throw(invalid_argument("executable is deleted"))
+
+    num_devices = unsafe_load(args.num_devices)
+    num_args = unsafe_load(args.num_args)
+    argument_lists = unsafe_load(args.argument_lists)
+    arguments = map(1:num_devices) do i
+        argument_list = unsafe_load(argument_lists, i)
+        Buffer[
+            unsafe_pointer_to_objref(unsafe_load(argument_list, j))::Buffer for
+            j in 1:num_args
+        ]
+    end
+
+    dev_ptr = unsafe_load(args.execute_device)
+    dev = dev_ptr == C_NULL ? nothing : unsafe_pointer_to_objref(dev_ptr)::Device
+
+    outputs = execute(exec, arguments, dev)::Vector{Vector{Buffer}}
+    if length(outputs) != num_devices
+        msg = "`execute` returned outputs for $(length(outputs)) devices, but $num_devices were expected"
+        throw(Error(CAPI.PJRT_Error_Code_INTERNAL, msg))
+    end
+
+    output_lists = unsafe_load(args.output_lists)
+    for (i, output_list) in enumerate(outputs)
+        c_output_list = unsafe_load(output_lists, i)
+        for (j, output) in enumerate(output_list)
+            root!(output)
+            unsafe_store!(
+                c_output_list, Ptr{CAPI.PJRT_Buffer}(pointer_from_objref(output)), j
+            )
+        end
+    end
+
+    events = unsafe_load(args.device_complete_events)
+    if events != C_NULL
+        for i in 1:num_devices
+            event = root!(Event())
+            notify(event)
+            unsafe_store!(events, Ptr{CAPI.PJRT_Event}(pointer_from_objref(event)), i)
+        end
+    end
+    return ok()
+end
+
+"""
     Client
 
 ## Interface
@@ -1224,7 +1742,7 @@ end
 - `destroy!`
 - `platform_name`
 - `platform_version`
-- `process_index` -> pid?
+- `process_index`
 - `devices`
 - `addressable_devices`
 - `addressable_memories`
@@ -1524,9 +2042,11 @@ compile!(::Client, args...)
     options = Reactant.ProtoUtils.proto_from_bytes(
         Reactant.Proto.xla.CompileOptionsProto, opts_bytes
     )
-    loaded_exec = compile!(client, mlir_mod, options)
+    loaded_exec = compile!(client, mlir_mod, options)::LoadedExecutable
     root!(loaded_exec)
-    unsafe_store!(args.executable, Ptr{CAPI.PJRT_LoadedExecutable}(pointer_from_objref(loaded_exec)))
+    unsafe_store!(
+        args.executable, Ptr{CAPI.PJRT_LoadedExecutable}(pointer_from_objref(loaded_exec))
+    )
     throw(unimplemented())
 end
 
@@ -1573,7 +2093,7 @@ function HostDeviceDescription()
 end
 
 id(desc::HostDeviceDescription) = desc.id
-pid(desc::HostDeviceDescription) = desc.pid
+process_index(desc::HostDeviceDescription) = desc.pid
 kind(desc::HostDeviceDescription) = "julia-cpu"
 debug_string(desc::HostDeviceDescription) = desc.debug_string
 to_string(desc::HostDeviceDescription) = desc.to_string
@@ -1824,22 +2344,22 @@ function __init__()
         #= PJRT_Memory_DebugString =# @cfunction(memory_debug_string, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Memory_DebugString_Args},)),
         #= PJRT_Memory_ToString =# @cfunction(memory_to_string, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Memory_ToString_Args},)),
         #= PJRT_Memory_AddressableByDevices =# @cfunction(memory_addressable_by_devices, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Memory_AddressableByDevices_Args},)),
-        #= PJRT_Executable_Destroy =# c_unimplemented,
-        #= PJRT_Executable_Name =# c_unimplemented,
-        #= PJRT_Executable_NumReplicas =# c_unimplemented,
-        #= PJRT_Executable_NumPartitions =# c_unimplemented,
-        #= PJRT_Executable_NumOutputs =# c_unimplemented,
-        #= PJRT_Executable_SizeOfGeneratedCodeInBytes =# c_unimplemented,
+        #= PJRT_Executable_Destroy =# @cfunction(executable_destroy, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Executable_Destroy_Args},)),
+        #= PJRT_Executable_Name =# @cfunction(executable_name, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Executable_Name_Args},)),
+        #= PJRT_Executable_NumReplicas =# @cfunction(executable_num_replicas, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Executable_NumReplicas_Args},)),
+        #= PJRT_Executable_NumPartitions =# @cfunction(executable_num_partitions, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Executable_NumPartitions_Args},)),
+        #= PJRT_Executable_NumOutputs =# @cfunction(executable_num_outputs, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Executable_NumOutputs_Args},)),
+        #= PJRT_Executable_SizeOfGeneratedCodeInBytes =# @cfunction(executable_size_of_generated_code_in_bytes, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Executable_SizeOfGeneratedCodeInBytes_Args},)),
         #= PJRT_Executable_GetCostAnalysis =# c_unimplemented,
         #= PJRT_Executable_OutputMemoryKinds =# c_unimplemented,
-        #= PJRT_Executable_OptimizedProgram =# c_unimplemented,
-        #= PJRT_Executable_Serialize =# c_unimplemented,
-        #= PJRT_LoadedExecutable_Destroy =# c_unimplemented,
-        #= PJRT_LoadedExecutable_GetExecutable =# c_unimplemented,
-        #= PJRT_LoadedExecutable_AddressableDevices =# c_unimplemented,
-        #= PJRT_LoadedExecutable_Delete =# c_unimplemented,
-        #= PJRT_LoadedExecutable_IsDeleted =# c_unimplemented,
-        #= PJRT_LoadedExecutable_Execute =# c_unimplemented,
+        #= PJRT_Executable_OptimizedProgram =# @cfunction(executable_optimized_program, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Executable_OptimizedProgram_Args},)),
+        #= PJRT_Executable_Serialize =# @cfunction(executable_serialize, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Executable_Serialize_Args},)),
+        #= PJRT_LoadedExecutable_Destroy =# @cfunction(loaded_executable_destroy, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_LoadedExecutable_Destroy_Args},)),
+        #= PJRT_LoadedExecutable_GetExecutable =# @cfunction(loaded_executable_get_executable, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_LoadedExecutable_GetExecutable_Args},)),
+        #= PJRT_LoadedExecutable_AddressableDevices =# @cfunction(loaded_executable_addressable_devices, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_LoadedExecutable_AddressableDevices_Args},)),
+        #= PJRT_LoadedExecutable_Delete =# @cfunction(loaded_executable_delete, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_LoadedExecutable_Delete_Args},)),
+        #= PJRT_LoadedExecutable_IsDeleted =# @cfunction(loaded_executable_is_deleted, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_LoadedExecutable_IsDeleted_Args},)),
+        #= PJRT_LoadedExecutable_Execute =# @cfunction(loaded_executable_execute, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_LoadedExecutable_Execute_Args},)),
         #= PJRT_Executable_DeserializeAndLoad =# c_unimplemented,
         #= PJRT_LoadedExecutable_Fingerprint =# c_unimplemented,
         #= PJRT_Buffer_Destroy =# @cfunction(buffer_destroy, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_Destroy_Args},)),
@@ -1874,11 +2394,11 @@ function __init__()
         #= PJRT_TopologyDescription_Serialize =# c_unimplemented,
         #= PJRT_TopologyDescription_Attributes =# c_unimplemented,
         #= PJRT_Compile =# c_unimplemented,
-        #= PJRT_Executable_OutputElementTypes =# c_unimplemented,
+        #= PJRT_Executable_OutputElementTypes =# @cfunction(executable_output_element_types, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Executable_OutputElementTypes_Args},)),
         #= PJRT_Executable_OutputDimensions =# c_unimplemented,
         #= PJRT_Buffer_CopyToMemory =# c_unimplemented,
         #= PJRT_Client_CreateViewOfDeviceBuffer =# c_unimplemented,
-        #= PJRT_Executable_Fingerprint =# c_unimplemented,
+        #= PJRT_Executable_Fingerprint =# @cfunction(executable_fingerprint, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Executable_Fingerprint_Args},)),
         #= PJRT_Client_TopologyDescription =# c_unimplemented,
         #= PJRT_Executable_GetCompiledMemoryStats =# c_unimplemented,
         #= PJRT_Memory_Kind_Id =# @cfunction(memory_kind_id, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Memory_Kind_Id_Args},)),
@@ -1901,14 +2421,14 @@ function __init__()
         #= PJRT_TopologyDescription_Deserialize =# c_unimplemented,
         #= PJRT_Client_CreateAliasBuffer =# c_unimplemented,
         #= PJRT_Client_FulfillAliasBuffer =# c_unimplemented,
-        #= PJRT_LoadedExecutable_GetDeviceAssignment =# c_unimplemented,
+        #= PJRT_LoadedExecutable_GetDeviceAssignment =# @cfunction(loaded_executable_get_device_assignment, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_LoadedExecutable_GetDeviceAssignment_Args},)),
         #= PJRT_Client_CreateErrorBuffer =# c_unimplemented,
         #= PJRT_AsyncHostToDeviceTransferManager_TransferLiteral =# c_unimplemented,
         #= PJRT_Buffer_CopyRawToHostFuture =# c_unimplemented,
         #= PJRT_Device_PoisonExecution =# c_unimplemented,
         #= PJRT_Device_CreateAsyncTrackingEvent =# c_unimplemented,
         #= PJRT_AsyncTrackingEvent_Destroy =# c_unimplemented,
-        #= PJRT_Executable_GetCompileOptions =# c_unimplemented,
+        #= PJRT_Executable_GetCompileOptions =# @cfunction(executable_get_compile_options, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Executable_GetCompileOptions_Args},)),
         #= PJRT_Buffer_DonateWithControlDependency =# c_unimplemented,
         #= PJRT_Event_Create =# @cfunction(event_create, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Event_Create_Args},)),
         #= PJRT_Event_Set =# @cfunction(event_set, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Event_Set_Args},)),
