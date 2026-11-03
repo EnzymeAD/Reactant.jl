@@ -1038,6 +1038,11 @@ end
             ),
         }
     end
+else
+    # Base's `cumsum` takes its eltype from `promote_op(add_sum, T, T)`, which does not
+    # widen small integers and `Bool` for `TracedRNumber`s
+    Base.cumsum(A::AnyTracedRArray; dims::Integer) = accumulate(Base.add_sum, A; dims)
+    Base.cumsum(x::AnyTracedRVector) = cumsum(x; dims=1)
 end
 
 function Base._accumulate!(
