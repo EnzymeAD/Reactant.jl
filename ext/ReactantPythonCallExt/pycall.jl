@@ -1,14 +1,14 @@
 Reactant.jax_dtype_struct_type(::Type{T}) where {T} = Py
 
 function Reactant.convert_to_jax_dtype_struct(x::Union{TracedRArray,TracedRNumber})
-    JAX_TRACING_SUPPORTED[] || throw("jax could not be loaded.")
+    ensure_jax_loaded!()
     return jaxptr[].ShapeDtypeStruct(
         size(x), jnpptr[].dtype(string(NUMPY_SIMPLE_TYPES[Reactant.unwrapped_eltype(x)]))
     )
 end
 
 function pycall_with_jax_tracing(f::Py, args...)
-    JAX_TRACING_SUPPORTED[] || throw("jax could not be loaded.")
+    ensure_jax_loaded!()
 
     seen_args = Reactant.OrderedIdDict()
     jax_inputs = Vector{Any}(undef, length(args))

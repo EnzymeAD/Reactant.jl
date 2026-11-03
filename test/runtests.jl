@@ -4,11 +4,17 @@ const BACKEND = lowercase(get(ENV, "REACTANT_BACKEND_GROUP", "auto"))
 
 parsed_args = parse_args(ARGS)
 
-const ENZYMEJAX_INSTALLED = Ref(false)
-const NUMPYRO_INSTALLED = Ref(false)
+function active_python_exe()
+    exe = get(ENV, "JULIA_PYTHONCALL_EXE", "")
+    !isempty(exe) && return exe
+    if CondaPkg.backend() !== :Null
+        return CondaPkg.which("python")
+    end
+    return Sys.which("python")
+end
 
 function is_python_module_installed(mod)
-    python = CondaPkg.which("python")
+    python = active_python_exe()
     python === nothing && return false
     return success(pipeline(`$(python) -c "import $(mod)"`; stdout=devnull, stderr=devnull))
 end
@@ -30,28 +36,6 @@ function add_pip_and_check(pkg, mod; version="")
         @warn msg exception = e
         return false
     end
-end
-
-# Install specific packages. Pkg.test doesn't pick up CondaPkg.toml in test folder
-if (
-    isempty(parsed_args.positionals) ||
-    "integration" ∈ parsed_args.positionals ||
-    "integration/enzymejax" ∈ parsed_args.positionals
-)
-    CondaPkg.add_pip("jax"; version=">=0.9")
-    if !Sys.iswindows() && !(Sys.isapple() && Sys.ARCH === :x86_64)
-        ENZYMEJAX_INSTALLED[] = add_pip_and_check(
-            "enzyme_ad", "enzyme_ad"; version=">=0.0.15"
-        )
-    end
-end
-
-if (
-    isempty(parsed_args.positionals) ||
-    "integration" ∈ parsed_args.positionals ||
-    "integration/numpyro" ∈ parsed_args.positionals
-)
-    NUMPYRO_INSTALLED[] = add_pip_and_check("numpyro", "numpyro"; version=">=0.21")
 end
 
 testsuite = find_tests(@__DIR__)
@@ -84,12 +68,52 @@ delete!(testsuite, "core/sharding/optimize_comm")
 # ProbProg tests require a compatible combination of NumPyro and JAX.
 filter!(((k, _),) -> !startswith(k, "probprog"), testsuite)
 
-if !ENZYMEJAX_INSTALLED[]
-    delete!(testsuite, "integration/enzymejax")
-end
+const RUN_PYTHON_TEST =
+    haskey(testsuite, "integration/python") && !(Sys.isapple() && Sys.ARCH === :x86_64)
+const RUN_ENZYMEJAX_TEST = haskey(testsuite, "integration/enzymejax")
+const RUN_NUMPYRO_TEST = haskey(testsuite, "integration/numpyro")
 
-if !NUMPYRO_INSTALLED[]
-    delete!(testsuite, "integration/numpyro")
+# Install specific Python packages needed by the selected integration tests.
+# Pkg.test doesn't pick up CondaPkg.toml in test folder.
+if RUN_PYTHON_TEST || RUN_ENZYMEJAX_TEST || RUN_NUMPYRO_TEST
+    if CondaPkg.backend() === :Null
+        if RUN_ENZYMEJAX_TEST && !is_python_module_installed("enzyme_ad")
+            delete!(testsuite, "integration/enzymejax")
+        end
+        if RUN_NUMPYRO_TEST && !is_python_module_installed("numpyro")
+            delete!(testsuite, "integration/numpyro")
+        end
+    else
+        # TensorFlow wheels (used by integration/python to validate exported SavedModels)
+        # currently support up to Python 3.13; enzyme_ad and jax support up to 3.14.
+        py_version = RUN_PYTHON_TEST ? ">=3.10,<3.14" : ">=3.10,<3.15"
+        CondaPkg.add("python"; version=py_version, resolve=false)
+        CondaPkg.add_pip("jax"; version=">=0.9", resolve=false)
+        if RUN_PYTHON_TEST
+            CondaPkg.add_pip("tensorflow"; version=">=2.17", resolve=false)
+            CondaPkg.add_pip("numpy"; version=">=1", resolve=false)
+        elseif RUN_ENZYMEJAX_TEST
+            CondaPkg.add_pip("numpy"; version=">=1", resolve=false)
+        end
+        CondaPkg.resolve()
+
+        if RUN_ENZYMEJAX_TEST &&
+            !add_pip_and_check("enzyme_ad", "enzyme_ad"; version=">=0.0.15")
+            delete!(testsuite, "integration/enzymejax")
+        end
+
+        if RUN_NUMPYRO_TEST && !add_pip_and_check("numpyro", "numpyro"; version=">=0.21")
+            delete!(testsuite, "integration/numpyro")
+        end
+
+        CondaPkg.activate!(ENV)
+        if !haskey(ENV, "JULIA_PYTHONCALL_EXE")
+            python = CondaPkg.which("python")
+            if python !== nothing
+                ENV["JULIA_PYTHONCALL_EXE"] = python
+            end
+        end
+    end
 end
 
 include("test_helpers.jl")
