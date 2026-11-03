@@ -333,7 +333,7 @@ function should_rewrite_call(@nospecialize(ft))
     if ft === typeof(Base.string)
         return false
     end
-    if ft === typeof(call_with_reactant)
+    if ft === typeof(call_with_reactant) || ft === typeof(applyiterate_with_reactant)
         return false
     end
     if ft === typeof(Core.Intrinsics.llvmcall)
