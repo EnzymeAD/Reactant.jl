@@ -327,3 +327,181 @@ end
         end
     end
 end
+
+# Vector-based variants of `execute` / `execute_sharded` called by generated `Thunk`s.
+# Unlike the tuple-based `@generated` variants above, these are not inlined into the thunk
+# and do not construct `N`-element tuples in the caller, keeping thunk LLVM compilation
+# independent of the buffer count (see #3511). For small buffer counts (`<= 16`), pointer
+# staging uses fixed-size stack `Ref`s to avoid temporary heap allocations on the fast path.
+const SMALL_EXEC_BUFFER_LIMIT = 16
+
+function XLA.execute_sharded(
+    exec::LoadedExecutable,
+    device::Device,
+    inputs::Vector{Buffer},
+    donated_args::Vector{Bool},
+    n_outs::Int,
+)
+    n_args = length(inputs)
+    @assert length(donated_args) == n_args
+    futures = Ref{UInt8}(0)
+    results = Vector{Tuple{AsyncBuffer}}(undef, n_outs)
+
+    if n_args <= SMALL_EXEC_BUFFER_LIMIT && n_outs <= SMALL_EXEC_BUFFER_LIMIT
+        input_ptrs_ref = Ref{NTuple{SMALL_EXEC_BUFFER_LIMIT,Ptr{Cvoid}}}()
+        outputs_ref = Ref{NTuple{SMALL_EXEC_BUFFER_LIMIT,Ptr{Cvoid}}}()
+        future_res_ref = Ref{NTuple{SMALL_EXEC_BUFFER_LIMIT,Ptr{Cvoid}}}()
+        GC.@preserve exec device inputs donated_args input_ptrs_ref outputs_ref future_res_ref futures begin
+            in_ptr = Base.unsafe_convert(Ptr{Ptr{Cvoid}}, input_ptrs_ref)
+            @inbounds for i in 1:n_args
+                unsafe_store!(in_ptr, inputs[i].buffer, i)
+            end
+            out_ptr = if n_outs == 0
+                Ptr{Ptr{Cvoid}}(C_NULL)
+            else
+                Base.unsafe_convert(Ptr{Ptr{Cvoid}}, outputs_ref)
+            end
+            fut_ptr = if n_outs == 0
+                Ptr{Ptr{Cvoid}}(C_NULL)
+            else
+                Base.unsafe_convert(Ptr{Ptr{Cvoid}}, future_res_ref)
+            end
+            MLIR.API.XLAExecuteSharded(
+                exec.exec,
+                n_args,
+                in_ptr,
+                device.device,
+                Ptr{UInt8}(pointer(donated_args)),
+                n_outs,
+                out_ptr,
+                Base.unsafe_convert(Ptr{UInt8}, futures),
+                fut_ptr,
+            )
+            future = futures[] != 0
+            @inbounds for i in 1:n_outs
+                out_i = unsafe_load(out_ptr, i)
+                fut_i = future ? Future(unsafe_load(fut_ptr, i)) : nothing
+                results[i] = (AsyncBuffer(Buffer(out_i), fut_i),)
+            end
+        end
+        return results
+    end
+
+    input_ptrs = Vector{Ptr{Cvoid}}(undef, n_args)
+    @inbounds for i in 1:n_args
+        input_ptrs[i] = inputs[i].buffer
+    end
+    outputs = Vector{Ptr{Cvoid}}(undef, n_outs)
+    future_res = Vector{Ptr{Cvoid}}(undef, n_outs)
+
+    GC.@preserve exec device inputs input_ptrs donated_args outputs future_res futures begin
+        MLIR.API.XLAExecuteSharded(
+            exec.exec,
+            n_args,
+            pointer(input_ptrs),
+            device.device,
+            Ptr{UInt8}(pointer(donated_args)),
+            n_outs,
+            n_outs == 0 ? Ptr{Ptr{Cvoid}}(C_NULL) : pointer(outputs),
+            Base.unsafe_convert(Ptr{UInt8}, futures),
+            n_outs == 0 ? Ptr{Ptr{Cvoid}}(C_NULL) : pointer(future_res),
+        )
+    end
+
+    future = futures[] != 0
+    @inbounds for i in 1:n_outs
+        results[i] = (
+            AsyncBuffer(Buffer(outputs[i]), future ? Future(future_res[i]) : nothing),
+        )
+    end
+    return results
+end
+
+function XLA.execute(
+    exec::LoadedExecutable,
+    inputs::Vector{Buffer},
+    donated_args::Vector{Bool},
+    n_outs::Int,
+    ::Val{K},
+) where {K}
+    n_args = length(inputs)
+    @assert length(donated_args) * K == n_args
+    n_total_outs = n_outs * K
+    futures = Ref{UInt8}(0)
+    results = Vector{NTuple{K,AsyncBuffer}}(undef, n_outs)
+
+    if n_args <= SMALL_EXEC_BUFFER_LIMIT && n_total_outs <= SMALL_EXEC_BUFFER_LIMIT
+        input_ptrs_ref = Ref{NTuple{SMALL_EXEC_BUFFER_LIMIT,Ptr{Cvoid}}}()
+        outputs_ref = Ref{NTuple{SMALL_EXEC_BUFFER_LIMIT,Ptr{Cvoid}}}()
+        future_res_ref = Ref{NTuple{SMALL_EXEC_BUFFER_LIMIT,Ptr{Cvoid}}}()
+        GC.@preserve exec inputs donated_args input_ptrs_ref outputs_ref future_res_ref futures begin
+            in_ptr = Base.unsafe_convert(Ptr{Ptr{Cvoid}}, input_ptrs_ref)
+            @inbounds for i in 1:n_args
+                unsafe_store!(in_ptr, inputs[i].buffer, i)
+            end
+            out_ptr = if n_total_outs == 0
+                Ptr{Ptr{Cvoid}}(C_NULL)
+            else
+                Base.unsafe_convert(Ptr{Ptr{Cvoid}}, outputs_ref)
+            end
+            fut_ptr = if n_total_outs == 0
+                Ptr{Ptr{Cvoid}}(C_NULL)
+            else
+                Base.unsafe_convert(Ptr{Ptr{Cvoid}}, future_res_ref)
+            end
+            MLIR.API.XLAExecute(
+                exec.exec,
+                n_args,
+                in_ptr,
+                Ptr{UInt8}(pointer(donated_args)),
+                n_outs,
+                out_ptr,
+                Base.unsafe_convert(Ptr{UInt8}, futures),
+                fut_ptr,
+            )
+            future = futures[] != 0
+            @inbounds for j in 1:n_outs
+                results[j] = ntuple(Val(K)) do i
+                    Base.@_inline_meta
+                    idx = (i - 1) * n_outs + j
+                    out_idx = unsafe_load(out_ptr, idx)
+                    fut_idx = future ? Future(unsafe_load(fut_ptr, idx)) : nothing
+                    return AsyncBuffer(Buffer(out_idx), fut_idx)
+                end
+            end
+        end
+        return results
+    end
+
+    input_ptrs = Vector{Ptr{Cvoid}}(undef, n_args)
+    @inbounds for i in 1:n_args
+        input_ptrs[i] = inputs[i].buffer
+    end
+    outputs = Vector{Ptr{Cvoid}}(undef, n_total_outs)
+    future_res = Vector{Ptr{Cvoid}}(undef, n_total_outs)
+
+    GC.@preserve exec inputs input_ptrs donated_args outputs future_res futures begin
+        MLIR.API.XLAExecute(
+            exec.exec,
+            n_args,
+            pointer(input_ptrs),
+            Ptr{UInt8}(pointer(donated_args)),
+            n_outs,
+            n_outs == 0 ? Ptr{Ptr{Cvoid}}(C_NULL) : pointer(outputs),
+            Base.unsafe_convert(Ptr{UInt8}, futures),
+            n_outs == 0 ? Ptr{Ptr{Cvoid}}(C_NULL) : pointer(future_res),
+        )
+    end
+
+    future = futures[] != 0
+    @inbounds for j in 1:n_outs
+        results[j] = ntuple(Val(K)) do i
+            Base.@_inline_meta
+            idx = (i - 1) * n_outs + j
+            return AsyncBuffer(
+                Buffer(outputs[idx]), future ? Future(future_res[idx]) : nothing
+            )
+        end
+    end
+    return results
+end

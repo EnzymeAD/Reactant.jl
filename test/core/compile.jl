@@ -668,3 +668,102 @@ end
         x
     ))
 end
+
+struct ThunkOutlineLayer{A,B}
+    w::A
+    b::B
+end
+
+function thunk_outline_inc_nt(nt::NamedTuple{K}) where {K}
+    return NamedTuple{K}(map(thunk_outline_inc_nt, values(nt)))
+end
+thunk_outline_inc_nt(x::Reactant.TracedRArray{T}) where {T} = x .+ T(2)
+
+@testset "Large buffer count thunk outlining (#3511)" begin
+    # 1. In-place Vector mutation & deterministic thunk body caching
+    N = 200
+    xs_host = [Float32[i, i + 1] for i in 1:N]
+    xs = [Reactant.to_rarray(copy(v)) for v in xs_host]
+    function step_many!(arrs)
+        for a in arrs
+            a .+= 1.0f0
+        end
+        return nothing
+    end
+    f1 = @compile step_many!(xs)
+    f2 = @compile step_many!(xs)
+    @test typeof(f1) == typeof(f2)
+    @test f1(xs) === nothing
+    @test f1(xs) === nothing
+    @test all(Array(xs[i]) ≈ xs_host[i] .+ 2.0f0 for i in 1:N)
+
+    # 2. Returning a new Vector of N arrays
+    map_many(arrs) = map(a -> a .* 2.0f0 .+ 1.0f0, arrs)
+    f_map = @compile map_many(xs)
+    ys = f_map(xs)
+    @test ys isa Vector{<:Reactant.ConcreteRArray{Float32,1}}
+    @test length(ys) == N
+    @test all(Array(ys[i]) ≈ 2.0f0 .* (xs_host[i] .+ 2.0f0) .+ 1.0f0 for i in 1:N)
+
+    # 3. Periodic Vector of multi-field structs mixing preserved & computed buffers
+    L = 64
+    layers_host = [(rand(Float32, 2, 2), rand(Float32, 2)) for _ in 1:L]
+    layers = [
+        ThunkOutlineLayer(Reactant.to_rarray(copy(w)), Reactant.to_rarray(copy(b))) for
+        (w, b) in layers_host
+    ]
+    update_layers(ls) = map(l -> ThunkOutlineLayer(l.w, l.b .+ 1.0f0), ls)
+    f_layers = @compile update_layers(layers)
+    out_layers = f_layers(layers)
+    @test length(out_layers) == L
+    @test all(
+        Array(out_layers[i].w) ≈ layers_host[i][1] &&
+        Array(out_layers[i].b) ≈ layers_host[i][2] .+ 1.0f0 for i in 1:L
+    )
+
+    # 4. Cross-slot in-place aliasing (`reverse!`)
+    rev_host = [Float32[k, 2k] for k in 1:32]
+    rev_xs = [Reactant.to_rarray(copy(v)) for v in rev_host]
+    f_rev = @compile reverse!(rev_xs)
+    f_rev(rev_xs)
+    @test all(Array(rev_xs[k]) ≈ rev_host[33 - k] for k in 1:32)
+
+    # 5. Lux-style homogeneous NamedTuple of repeated layers
+    hom_nt_host = (;
+        (
+            Symbol(:layer_, k) => (w=Float32[k k+1; k+2 k+3], b=Float32[k, -k]) for
+            k in 1:32
+        )...,
+    )
+    hom_nt_r = Reactant.to_rarray(hom_nt_host)
+    step_hom_nt(nt::NamedTuple{K}) where {K} =
+        NamedTuple{K}(map(l -> (w=l.w .* 2.0f0, b=l.b .+ 1.0f0), values(nt)))
+    f_hom_nt = @compile step_hom_nt(hom_nt_r)
+    res_hom_nt = f_hom_nt(hom_nt_r)
+    @test typeof(res_hom_nt) === typeof(hom_nt_r)
+    @test Array(res_hom_nt.layer_1.w) ≈ hom_nt_host.layer_1.w .* 2.0f0
+    @test Array(res_hom_nt.layer_32.b) ≈ hom_nt_host.layer_32.b .+ 1.0f0
+
+    # 6. Larger heterogeneous nested NamedTuple (exercises `unpack_selected_fields`,
+    #    `pack_vec_to_tuple_or_nt`, and binary-tree `ThunkChunk{depth, tag}` outlining)
+    het_blocks = Pair{Symbol,Any}[]
+    for b in 1:12
+        fields = Pair{Symbol,Any}[
+            Symbol(:a_, b) => Float32[b, b + 1],
+            Symbol(:b_, b) => Float64[b 2b; 3b 4b],
+            Symbol(:c_, b) => Float32[b, b + 1, b + 2],
+            Symbol(:d_, b) => Float64[10b],
+            Symbol(:e_, b) => Float32[b 2b],
+        ]
+        push!(het_blocks, Symbol(:block_, b) => (; fields...))
+    end
+    nt_host = (; het_blocks...)
+    nt_r = Reactant.to_rarray(nt_host)
+    f_nt = @compile thunk_outline_inc_nt(nt_r)
+    res_nt = f_nt(nt_r)
+    @test typeof(res_nt) === typeof(nt_r)
+    @test Array(res_nt.block_1.a_1) ≈ nt_host.block_1.a_1 .+ 2.0f0
+    @test Array(res_nt.block_1.b_1) ≈ nt_host.block_1.b_1 .+ 2.0
+    @test Array(res_nt.block_12.c_12) ≈ nt_host.block_12.c_12 .+ 2.0f0
+    @test Array(res_nt.block_12.e_12) ≈ nt_host.block_12.e_12 .+ 2.0f0
+end

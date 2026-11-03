@@ -462,7 +462,9 @@ function create_result(
         if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
             if haskey(to_unreshard_results, path)
                 if !haskey(unresharded_arrays_cache, restore)
-                    unresharded_array_sym = gensym(:unresharded_array)
+                    unresharded_array_sym = Symbol(
+                        :unresharded_array_, length(unresharded_arrays_cache) + 1
+                    )
                     push!(
                         unresharded_code,
                         :(
@@ -525,6 +527,122 @@ function generate_unresharded_ifrt_array(
     return res_arr
 end
 
+function add_chunk_param!(params::Vector{Pair{Symbol,Any}}, @nospecialize(val))
+    sym = Symbol(:_p_, length(params) + 1)
+    push!(params, sym => val)
+    return sym
+end
+
+# Hoist per-buffer runtime values (buffer slot indices, array shapes, sharding slices/specs,
+# and runtime container indices marked with `Base.identity`) out of an element's generated
+# AST into `params`, so elements of the same structural shape share one `ThunkChunk`.
+function hoist_chunk_params!(@nospecialize(ex), params::Vector{Pair{Symbol,Any}})
+    ex isa Expr || return ex
+    if ex.head === :quote || ex.head === :meta
+        return ex
+    elseif ex.head === :ref &&
+        length(ex.args) == 2 &&
+        (
+            ex.args[1] === :linearized_results ||
+            ex.args[1] === :output_hlo_shardings ||
+            ex.args[1] === :aliased_arg_buffers ||
+            ex.args[1] === :preserved_result_buffers
+        ) &&
+        ex.args[2] isa Int
+        p = add_chunk_param!(params, ex.args[2])
+        return Expr(:ref, ex.args[1], p)
+    elseif ex.head === :call
+        callee = ex.args[1]
+        if callee === Base.identity && length(ex.args) == 2
+            arg = ex.args[2]
+            val = arg isa QuoteNode ? arg.value : arg
+            return add_chunk_param!(params, val)
+        elseif callee isa Expr &&
+            callee.head === :curly &&
+            (
+                callee.args[1] === :ConcretePJRTArray ||
+                callee.args[1] === :ConcreteIFRTArray
+            ) &&
+            length(ex.args) >= 3 &&
+            ex.args[3] isa Tuple
+            new_args = Any[callee, hoist_chunk_params!(ex.args[2], params)]
+            push!(new_args, add_chunk_param!(params, ex.args[3]))
+            for k in 4:length(ex.args)
+                push!(new_args, hoist_chunk_params!(ex.args[k], params))
+            end
+            return Expr(:call, new_args...)
+        elseif callee == :(Sharding.ShardInfo) && length(ex.args) == 3
+            return Expr(
+                :call,
+                callee,
+                hoist_chunk_params!(ex.args[2], params),
+                add_chunk_param!(params, ex.args[3]),
+            )
+        elseif callee === Sharding.NamedSharding && length(ex.args) == 6
+            return Expr(
+                :call,
+                callee,
+                ex.args[2],
+                add_chunk_param!(params, ex.args[3]),
+                add_chunk_param!(params, ex.args[4]),
+                add_chunk_param!(params, ex.args[5]),
+                add_chunk_param!(params, ex.args[6]),
+            )
+        end
+    elseif ex.head === :macrocall
+        new_args = Any[ex.args[1], ex.args[2]]
+        for k in 3:length(ex.args)
+            push!(new_args, hoist_chunk_params!(ex.args[k], params))
+        end
+        return Expr(:macrocall, new_args...)
+    end
+    return Expr(ex.head, Any[hoist_chunk_params!(a, params) for a in ex.args]...)
+end
+
+function hoist_scalar_element!(@nospecialize(subexpr), params::Vector{Pair{Symbol,Any}})
+    if subexpr isa Union{Integer,AbstractFloat,AbstractString,Nothing,Char}
+        return add_chunk_param!(params, subexpr)
+    elseif subexpr isa QuoteNode && subexpr.value isa Symbol
+        return add_chunk_param!(params, subexpr.value)
+    end
+    return subexpr
+end
+
+function emit_indexed_element_chunk!(
+    resultgen_code,
+    container_sym::Symbol,
+    @nospecialize(idx_val),
+    elem_code::Vector{Expr},
+    @nospecialize(subexpr),
+    reorderable::Bool,
+)
+    if any(is_thunk_chunk, elem_code)
+        for stmt in elem_code
+            push!(resultgen_code, is_thunk_chunk(stmt) ? stmt : thunk_chunk(stmt))
+        end
+        params = Pair{Symbol,Any}[:_elem_idx => idx_val]
+        val_expr = hoist_scalar_element!(subexpr, params)
+        push!(
+            resultgen_code,
+            thunk_chunk(
+                :(@inbounds $container_sym[_elem_idx] = $val_expr); params, reorderable
+            ),
+        )
+    else
+        params = Pair{Symbol,Any}[:_elem_idx => idx_val]
+        flat_stmts = flatten_statements(elem_code)
+        hoisted_stmts = Any[hoist_chunk_params!(s, params) for s in flat_stmts]
+        val_expr = if isempty(hoisted_stmts)
+            hoist_scalar_element!(subexpr, params)
+        else
+            hoist_chunk_params!(subexpr, params)
+        end
+        push!(hoisted_stmts, :(@inbounds $container_sym[_elem_idx] = $val_expr))
+        push!(resultgen_code, thunk_chunk(hoisted_stmts...; params, reorderable))
+    end
+    return nothing
+end
+
 function create_result(
     tocopy::Array{T,N},
     @nospecialize(path::Tuple),
@@ -538,43 +656,84 @@ function create_result(
     var_idx,
     resultgen_code,
 ) where {T,N}
-    args = (
-        result_stores,
-        path_to_shard_info,
-        to_unreshard_results,
-        unresharded_code::Vector{Expr},
-        unresharded_arrays_cache,
-        used_shardinfo,
-        result_cache,
-        var_idx,
-        resultgen_code,
-    )
-
     if !haskey(result_cache, tocopy)
         sym = Symbol("result", var_idx[])
         var_idx[] += 1
 
         push!(
-            resultgen_code,
-            quote
-                $sym = $(Array{T,N})(undef, $(size(tocopy)...,))
-            end,
+            resultgen_code, thunk_chunk(:($sym = $(Array{T,N})(undef, $(size(tocopy)...,))))
         )
 
         result_cache[tocopy] = sym
 
         for (i, v) in enumerate(tocopy)
-            subexpr = create_result(v, append_path(path, i), args...)
-            push!(
-                resultgen_code,
-                quote
-                    @inbounds $sym[$i] = $subexpr
-                end,
+            elem_code = Expr[]
+            sub_args = (
+                result_stores,
+                path_to_shard_info,
+                to_unreshard_results,
+                unresharded_code::Vector{Expr},
+                unresharded_arrays_cache,
+                used_shardinfo,
+                result_cache,
+                var_idx,
+                elem_code,
             )
+            subexpr = create_result(v, append_path(path, i), sub_args...)
+            emit_indexed_element_chunk!(resultgen_code, sym, i, elem_code, subexpr, true)
         end
     end
 
     return result_cache[tocopy]
+end
+
+function _is_small_typeassert(@nospecialize(T::Type))
+    isconcretetype(T) || return false
+    ismutabletype(T) && return true
+    return sizeof(T) <= 256
+end
+
+function _has_no_huge_inline_fields(@nospecialize(obj))
+    T = Core.Typeof(obj)
+    isconcretetype(T) || return false
+    (!ismutabletype(T) && sizeof(T) > 256) && return false
+    for i in 1:fieldcount(T)
+        FT = fieldtype(T, i)
+        if isconcretetype(FT) && !ismutabletype(FT) && sizeof(FT) > 256
+            return false
+        end
+    end
+    return true
+end
+
+@noinline function unpack_tuple_to_any_vec(@nospecialize(t::Tuple))
+    n = nfields(t)
+    out = Vector{Any}(undef, n)
+    for i in 1:n
+        @inbounds out[i] = getfield(t, i)
+    end
+    return out
+end
+
+@noinline function pack_vec_to_tuple_or_nt(@nospecialize(T::Type), elems::Vector{Any})
+    if T <: Tuple
+        return Core._apply_iterate(Base.iterate, tuple, elems)
+    end
+    return GC.@preserve elems ccall(
+        :jl_new_structv, Any, (Any, Ptr{Any}, UInt32), T, elems, UInt32(length(elems))
+    )
+end
+
+@noinline function pack_homogeneous_vec(@nospecialize(T::Type), @nospecialize(v::Vector))
+    T <: Tuple && return Tuple(v)
+    n = length(v)
+    elems = Vector{Any}(undef, n)
+    for i in 1:n
+        @inbounds elems[i] = v[i]
+    end
+    return GC.@preserve elems ccall(
+        :jl_new_structv, Any, (Any, Ptr{Any}, UInt32), T, elems, UInt32(n)
+    )
 end
 
 function create_result(
@@ -590,22 +749,60 @@ function create_result(
     var_idx,
     resultgen_code,
 )
-    args = (
-        result_stores,
-        path_to_shard_info,
-        to_unreshard_results,
-        unresharded_code::Vector{Expr},
-        unresharded_arrays_cache,
-        used_shardinfo,
-        result_cache,
-        var_idx,
-        resultgen_code,
-    )
-    elems = Union{Symbol,Expr}[]
-    for (k, v) in pairs(tocopy)
-        push!(elems, create_result(v, append_path(path, k), args...))
+    len = length(tocopy)
+    len == 0 && return :()
+
+    if len <= 4 && _has_no_huge_inline_fields(tocopy)
+        args = (
+            result_stores,
+            path_to_shard_info,
+            to_unreshard_results,
+            unresharded_code::Vector{Expr},
+            unresharded_arrays_cache,
+            used_shardinfo,
+            result_cache,
+            var_idx,
+            resultgen_code,
+        )
+        elems = Any[create_result(tocopy[i], append_path(path, i), args...) for i in 1:len]
+        return :(($(elems...),))
     end
-    return :(($(elems...),))
+
+    TT = typeof(tocopy)
+    ET = fieldtype(TT, 1)
+    is_homog =
+        allequal(fieldtypes(TT)) &&
+        isconcretetype(ET) &&
+        (ismutabletype(ET) || sizeof(ET) <= 256)
+    buf_sym = Symbol("result", var_idx[])
+    var_idx[] += 1
+    sym = Symbol("result", var_idx[])
+    var_idx[] += 1
+    buf_type = is_homog ? Vector{ET} : Vector{Any}
+    push!(resultgen_code, thunk_chunk(:($buf_sym = $buf_type(undef, $len))))
+    for (i, v) in enumerate(tocopy)
+        elem_code = Expr[]
+        sub_args = (
+            result_stores,
+            path_to_shard_info,
+            to_unreshard_results,
+            unresharded_code::Vector{Expr},
+            unresharded_arrays_cache,
+            used_shardinfo,
+            result_cache,
+            var_idx,
+            elem_code,
+        )
+        subexpr = create_result(v, append_path(path, i), sub_args...)
+        emit_indexed_element_chunk!(resultgen_code, buf_sym, i, elem_code, subexpr, true)
+    end
+    pack_fn = is_homog ? :pack_homogeneous_vec : :pack_vec_to_tuple_or_nt
+    pack_expr = :($pack_fn($TT, $buf_sym))
+    if isempty(path) && _is_small_typeassert(TT)
+        pack_expr = :($pack_expr::$TT)
+    end
+    push!(resultgen_code, thunk_chunk(:($sym = $pack_expr)))
+    return sym
 end
 
 function create_result(
@@ -621,22 +818,65 @@ function create_result(
     var_idx,
     resultgen_code,
 ) where {K,T}
-    args = (
-        result_stores,
-        path_to_shard_info,
-        to_unreshard_results,
-        unresharded_code::Vector{Expr},
-        unresharded_arrays_cache,
-        used_shardinfo,
-        result_cache,
-        var_idx,
-        resultgen_code,
-    )
-    elems = Union{Symbol,Expr}[]
-    for (i, (_, v)) in enumerate(pairs(tocopy))
-        push!(elems, create_result(v, append_path(path, i), args...))
+    len = length(tocopy)
+    if len == 0
+        return :(NamedTuple{$K}(()))
     end
-    return :(NamedTuple{$K}(($(elems...),)))
+
+    if len <= 4 && _has_no_huge_inline_fields(tocopy)
+        args = (
+            result_stores,
+            path_to_shard_info,
+            to_unreshard_results,
+            unresharded_code::Vector{Expr},
+            unresharded_arrays_cache,
+            used_shardinfo,
+            result_cache,
+            var_idx,
+            resultgen_code,
+        )
+        elems = Any[
+            create_result(v, append_path(path, i), args...) for
+            (i, (_, v)) in enumerate(pairs(tocopy))
+        ]
+        return :(NamedTuple{$K}(($(elems...),)))
+    end
+
+    NTT = NamedTuple{K,T}
+    ET = fieldtype(T, 1)
+    is_homog =
+        allequal(fieldtypes(T)) &&
+        isconcretetype(ET) &&
+        (ismutabletype(ET) || sizeof(ET) <= 256)
+    buf_sym = Symbol("result", var_idx[])
+    var_idx[] += 1
+    sym = Symbol("result", var_idx[])
+    var_idx[] += 1
+    buf_type = is_homog ? Vector{ET} : Vector{Any}
+    push!(resultgen_code, thunk_chunk(:($buf_sym = $buf_type(undef, $len))))
+    for (i, (_, v)) in enumerate(pairs(tocopy))
+        elem_code = Expr[]
+        sub_args = (
+            result_stores,
+            path_to_shard_info,
+            to_unreshard_results,
+            unresharded_code::Vector{Expr},
+            unresharded_arrays_cache,
+            used_shardinfo,
+            result_cache,
+            var_idx,
+            elem_code,
+        )
+        subexpr = create_result(v, append_path(path, i), sub_args...)
+        emit_indexed_element_chunk!(resultgen_code, buf_sym, i, elem_code, subexpr, true)
+    end
+    pack_fn = is_homog ? :pack_homogeneous_vec : :pack_vec_to_tuple_or_nt
+    pack_expr = :($pack_fn($NTT, $buf_sym))
+    if isempty(path) && _is_small_typeassert(NTT)
+        pack_expr = :($pack_expr::$NTT)
+    end
+    push!(resultgen_code, thunk_chunk(:($sym = $pack_expr)))
+    return sym
 end
 
 function create_result(
@@ -652,48 +892,36 @@ function create_result(
     var_idx,
     resultgen_code,
 ) where {K,V,D<:AbstractDict{K,V}}
-    args = (
-        result_stores,
-        path_to_shard_info,
-        to_unreshard_results,
-        unresharded_code::Vector{Expr},
-        unresharded_arrays_cache,
-        used_shardinfo,
-        result_cache,
-        var_idx,
-        resultgen_code,
-    )
-
     if !haskey(result_cache, tocopy)
         sym = Symbol("result", var_idx[])
         var_idx[] += 1
 
-        push!(
-            resultgen_code,
-            quote
-                $sym = $D()
-            end,
-        )
+        push!(resultgen_code, thunk_chunk(:($sym = $D())))
 
         result_cache[tocopy] = sym
+        reorderable = tocopy isa Dict
 
         for (k, v) in pairs(tocopy)
-            subexpr = create_result(v, append_path(path, k), args...)
-            # symbol keys must be quoted in generated code; otherwise
-            # they are interpreted as variable references
-            k_expr = k isa Symbol ? QuoteNode(k) : k
-            push!(
-                resultgen_code,
-                quote
-                    @inbounds $sym[$k_expr] = $subexpr
-                end,
+            elem_code = Expr[]
+            sub_args = (
+                result_stores,
+                path_to_shard_info,
+                to_unreshard_results,
+                unresharded_code::Vector{Expr},
+                unresharded_arrays_cache,
+                used_shardinfo,
+                result_cache,
+                var_idx,
+                elem_code,
+            )
+            subexpr = create_result(v, append_path(path, k), sub_args...)
+            emit_indexed_element_chunk!(
+                resultgen_code, sym, k, elem_code, subexpr, reorderable
             )
         end
     end
 
-    return quote
-        $(result_cache[tocopy])
-    end
+    return result_cache[tocopy]
 end
 
 function create_result(
@@ -751,19 +979,437 @@ function assert_mismatched_sharding(
 end
 
 """
+    is_runtime_index(obj, field)
+
+Whether `traced_getfield(obj, field)` indexes into a container whose element type does not
+depend on `field` (an `Array`, `Dict`, or non-tiny homogeneous `Tuple`/`NamedTuple`), in
+which case `field` can be passed as a runtime parameter, as opposed to accessing a
+struct/heterogeneous-tuple field where `field` must remain a compile-time constant for type
+inference. Mirrors the dispatch of [`traced_getfield`](@ref).
+"""
+function is_runtime_index(@nospecialize(obj), @nospecialize(field))
+    obj isa Dict && return true
+    obj isa Base.Enum && return false
+    field isa Integer || return false
+    if obj isa Union{Tuple,NamedTuple}
+        length(obj) >= 4 && allequal(fieldtypes(typeof(obj))) || return false
+        ET = fieldtype(typeof(obj), 1)
+        return isconcretetype(ET) && (ismutabletype(ET) || sizeof(ET) <= 256)
+    end
+    obj isa Union{AbstractConcreteArray,AbstractConcreteNumber} && return false
+    if obj isa AbstractArray
+        T = eltype(obj)
+        if T <: Union{ConcretePJRTNumber,ConcreteIFRTNumber,TracedRNumber}
+            return obj isa Array
+        end
+        return !(isbitstype(T) || ancestor(obj) isa RArray || obj isa AbstractRange)
+    end
+    return false
+end
+
+@noinline function unpack_homogeneous_vec(@nospecialize(obj), ::Type{ET}) where {ET}
+    n = nfields(obj)
+    out = Vector{ET}(undef, n)
+    for i in 1:n
+        @inbounds out[i] = getfield(obj, i)::ET
+    end
+    return out
+end
+
+@noinline function unpack_arg_homogeneous_vec(
+    @nospecialize(args), idx::Int, ::Type{ET}
+) where {ET}
+    return unpack_homogeneous_vec(getfield(args, idx), ET)
+end
+
+@noinline function unpack_selected_fields(@nospecialize(obj), fields::Tuple)
+    n = length(fields)
+    out = Vector{Any}(undef, n)
+    for i in 1:n
+        @inbounds out[i] = traced_getfield(obj, fields[i])
+    end
+    return out
+end
+
+@noinline function unpack_arg_selected_fields(@nospecialize(args), idx::Int, fields::Tuple)
+    return unpack_selected_fields(traced_getfield(args, idx), fields)
+end
+
+# Safely traverse a path step on `roots` at compile time; returns `nothing` if an untyped
+# mutable slot held a placeholder (e.g. `nothing`) prior to being overwritten during tracing.
+function _safe_traced_getfield(@nospecialize(obj), @nospecialize(field))
+    if obj isa Dict
+        return haskey(obj, field) ? obj[field] : nothing
+    elseif obj isa Base.Enum
+        field === 1 && return obj
+        return if field isa Symbol && hasfield(typeof(obj), field)
+            getfield(obj, field)
+        else
+            nothing
+        end
+    elseif obj isa Array{<:Union{ConcretePJRTNumber,ConcreteIFRTNumber,TracedRNumber}}
+        return checkbounds(Bool, obj, field) ? obj[field] : nothing
+    elseif obj isa AbstractArray
+        T_el = eltype(typeof(obj))
+        if obj isa
+           AbstractArray{<:Union{ConcretePJRTNumber,ConcreteIFRTNumber,TracedRNumber}} ||
+            isbitstype(T_el) ||
+            ancestor(obj) isa RArray ||
+            obj isa AbstractRange
+            return if field isa Symbol && hasfield(typeof(obj), field)
+                getfield(obj, field)
+            else
+                nothing
+            end
+        end
+        return checkbounds(Bool, obj, field) ? obj[field] : nothing
+    elseif obj isa Union{AbstractConcreteArray,AbstractConcreteNumber}
+        return if field isa Symbol && hasproperty(obj, field)
+            getproperty(obj, field)
+        else
+            nothing
+        end
+    elseif field isa Symbol
+        return hasfield(typeof(obj), field) ? getfield(obj, field) : nothing
+    elseif field isa Int
+        return (1 <= field <= nfields(obj)) ? getfield(obj, field) : nothing
+    end
+    return nothing
+end
+
+# Statically check whether `steps` starting from `T = typeof(roots)` is guaranteed by
+# container field/element types to resolve to an `AbstractConcreteArray` or
+# `AbstractConcreteNumber` (so `:resargs` write-back never sees a `TracedRArray`,
+# `TracedRNumber`, or `TracedEnum`, and does not need `cache_dict`).
+function _is_statically_concrete_target(@nospecialize(T::Type), steps::Tuple)
+    for p in steps
+        if T isa Union || T === Any || T === Union{} || isabstracttype(T)
+            return false
+        elseif T <: Tuple || T <: NamedTuple
+            if p isa Int && 1 <= p <= fieldcount(T)
+                T = fieldtype(T, p)
+            elseif p isa Symbol && hasfield(T, p)
+                T = fieldtype(T, p)
+            else
+                return false
+            end
+        elseif T <: Array{<:Union{ConcretePJRTNumber,ConcreteIFRTNumber,TracedRNumber}}
+            T = eltype(T)
+        elseif T <: AbstractArray
+            T_el = eltype(T)
+            if T <: AbstractArray{
+                    <:Union{ConcretePJRTNumber,ConcreteIFRTNumber,TracedRNumber}
+                } ||
+                isbitstype(T_el) ||
+                T <: RArray ||
+                T <: AbstractRange
+                if p isa Symbol && hasfield(T, p)
+                    T = fieldtype(T, p)
+                else
+                    return false
+                end
+            else
+                T = T_el
+            end
+        elseif T <: Dict
+            T = valtype(T)
+        elseif T <: Union{AbstractConcreteArray,AbstractConcreteNumber}
+            if p isa Symbol && hasfield(T, p)
+                T = fieldtype(T, p)
+            else
+                return false
+            end
+        elseif isstructtype(T)
+            if p isa Symbol && hasfield(T, p)
+                T = fieldtype(T, p)
+            elseif p isa Int && 1 <= p <= fieldcount(T)
+                T = fieldtype(T, p)
+            else
+                return false
+            end
+        else
+            return false
+        end
+    end
+    return (T <: AbstractConcreteArray || T <: AbstractConcreteNumber) && !(T === Union{})
+end
+
+struct ArgPathEntry
+    prefix_steps::Tuple
+    suffix_steps::Tuple
+    payload::Any
+end
+
+function _walk_arg_path_group!(
+    out_stmts::Vector{Expr},
+    @nospecialize(obj),
+    obj_expr,
+    entries::Vector{ArgPathEntry},
+    depth::Int,
+    split_counter::Base.RefValue{Int},
+    emit_leaf!::F;
+    arg_root_idx::Int=0,
+    from_any_vec::Bool=false,
+    parent_param::Union{Nothing,Pair{Symbol,<:Any}}=nothing,
+) where {F}
+    deeper = ArgPathEntry[]
+    for e in entries
+        if length(e.prefix_steps) < depth
+            params = Pair{Symbol,Any}[]
+            parent_param !== nothing && push!(params, parent_param)
+            leaf_expr =
+                if from_any_vec && obj !== nothing && _is_small_typeassert(Core.Typeof(obj))
+                    :($obj_expr::$(Core.Typeof(obj)))
+                else
+                    obj_expr
+                end
+            _, suffix_codes = codegen_getfield_path(
+                obj, leaf_expr, e.suffix_steps, params, :sidx_
+            )
+            emit_leaf!(out_stmts, leaf_expr, suffix_codes, params, e.payload)
+        else
+            push!(deeper, e)
+        end
+    end
+    isempty(deeper) && return nothing
+
+    if is_runtime_index(obj, deeper[1].prefix_steps[depth])
+        base_expr = if obj isa Union{Tuple,NamedTuple}
+            ET = fieldtype(typeof(obj), 1)
+            split_counter[] += 1
+            hvec_sym = Symbol(:_arg_hvec_, split_counter[])
+            unpack_call = if arg_root_idx > 0
+                :(unpack_arg_homogeneous_vec(args, $arg_root_idx, $ET))
+            else
+                :(unpack_homogeneous_vec($obj_expr, $ET))
+            end
+            push!(out_stmts, :($hvec_sym = $unpack_call))
+            hvec_sym
+        elseif from_any_vec && obj !== nothing && _is_small_typeassert(Core.Typeof(obj))
+            :($obj_expr::$(Core.Typeof(obj)))
+        else
+            obj_expr
+        end
+        for e in deeper
+            params = Pair{Symbol,Any}[]
+            parent_param !== nothing && push!(params, parent_param)
+            rem_prefix = e.prefix_steps[depth:end]
+            target_expr, _ = codegen_getfield_path(
+                obj, base_expr, rem_prefix, params, :idx_
+            )
+            target_obj = obj
+            for p in rem_prefix
+                target_obj = _safe_traced_getfield(target_obj, p)
+            end
+            _, suffix_codes = codegen_getfield_path(
+                target_obj, target_expr, e.suffix_steps, params, :sidx_
+            )
+            emit_leaf!(out_stmts, target_expr, suffix_codes, params, e.payload)
+        end
+        return nothing
+    end
+
+    distinct_fields = Any[]
+    groups = Dict{Any,Vector{ArgPathEntry}}()
+    for e in deeper
+        f = e.prefix_steps[depth]
+        grp = get!(groups, f) do
+            push!(distinct_fields, f)
+            return ArgPathEntry[]
+        end
+        push!(grp, e)
+    end
+
+    M = length(distinct_fields)
+    if (M <= 4 && _has_no_huge_inline_fields(obj)) || obj === nothing
+        base_expr =
+            if from_any_vec && obj !== nothing && _is_small_typeassert(Core.Typeof(obj))
+                :($obj_expr::$(Core.Typeof(obj)))
+            else
+                obj_expr
+            end
+        for f in distinct_fields
+            child_obj = _safe_traced_getfield(obj, f)
+            child_expr = :(traced_getfield($base_expr, $(Meta.quot(f))))
+            next_root_idx = (depth == 1 && f isa Int) ? f : 0
+            _walk_arg_path_group!(
+                out_stmts,
+                child_obj,
+                child_expr,
+                groups[f],
+                depth + 1,
+                split_counter,
+                emit_leaf!;
+                arg_root_idx=next_root_idx,
+                from_any_vec=false,
+                parent_param=parent_param,
+            )
+        end
+        return nothing
+    end
+
+    fields_tup = Tuple(distinct_fields)
+    split_counter[] += 1
+    vec_sym = Symbol(:_arg_vec_, split_counter[])
+    unpack_call = if arg_root_idx > 0
+        :(unpack_arg_selected_fields(args, $arg_root_idx, $(QuoteNode(fields_tup))))
+    else
+        :(unpack_selected_fields($obj_expr, $(QuoteNode(fields_tup))))
+    end
+    push!(out_stmts, :($vec_sym = $unpack_call))
+
+    for (j, f) in enumerate(distinct_fields)
+        grp = groups[f]
+        child_obj = _safe_traced_getfield(obj, f)
+        all_direct_leaves = all(e -> length(e.prefix_steps) == depth, grp)
+        if all_direct_leaves && parent_param === nothing
+            _walk_arg_path_group!(
+                out_stmts,
+                child_obj,
+                :(getindex($vec_sym, _vidx)),
+                grp,
+                depth + 1,
+                split_counter,
+                emit_leaf!;
+                arg_root_idx=0,
+                from_any_vec=true,
+                parent_param=Pair{Symbol,Any}(:_vidx, j),
+            )
+        else
+            _walk_arg_path_group!(
+                out_stmts,
+                child_obj,
+                :(getindex($vec_sym, $j)),
+                grp,
+                depth + 1,
+                split_counter,
+                emit_leaf!;
+                arg_root_idx=0,
+                from_any_vec=true,
+                parent_param=parent_param,
+            )
+        end
+    end
+    return nothing
+end
+
+# Traverse `entries` rooted at `args` / `roots`, unpacking any wide (> 4 field) containers
+# into heap `Vector`s via `@nospecialize` helpers so outlined `ThunkChunk`s and loop bodies
+# never unbox or pass `O(N)`-pointer inline aggregates, while leaving small (`<= 4` field)
+# and runtime-indexed `Array`/`Dict` containers completely untouched.
+function emit_arg_path_group!(
+    emit_leaf!::F,
+    out_stmts::Vector{Expr},
+    roots,
+    entries::Vector{ArgPathEntry},
+    split_counter::Base.RefValue{Int},
+) where {F}
+    isempty(entries) && return out_stmts
+    if !_has_no_huge_inline_fields(roots)
+        distinct_roots = Int[]
+        root_groups = Dict{Int,Vector{ArgPathEntry}}()
+        for e in entries
+            r = e.prefix_steps[1]::Int
+            grp = get!(root_groups, r) do
+                push!(distinct_roots, r)
+                return ArgPathEntry[]
+            end
+            push!(grp, e)
+        end
+        for r in distinct_roots
+            grp = root_groups[r]
+            child_obj = _safe_traced_getfield(roots, r)
+            all_direct_leaves = all(e -> length(e.prefix_steps) == 1, grp)
+            if all_direct_leaves
+                _walk_arg_path_group!(
+                    out_stmts,
+                    child_obj,
+                    :(getindex(_args_vec, _vidx)),
+                    grp,
+                    2,
+                    split_counter,
+                    emit_leaf!;
+                    arg_root_idx=0,
+                    from_any_vec=true,
+                    parent_param=Pair{Symbol,Any}(:_vidx, r),
+                )
+            else
+                _walk_arg_path_group!(
+                    out_stmts,
+                    child_obj,
+                    :(getindex(_args_vec, $r)),
+                    grp,
+                    2,
+                    split_counter,
+                    emit_leaf!;
+                    arg_root_idx=0,
+                    from_any_vec=true,
+                )
+            end
+        end
+        return out_stmts
+    end
+    _walk_arg_path_group!(out_stmts, roots, :args, entries, 1, split_counter, emit_leaf!)
+    return out_stmts
+end
+
+"""
+    codegen_getfield_path(root, root_code, path, params, var_prefix)
+
+Generate the `traced_getfield` chain accessing `path` inside `root` (whose AST is
+`root_code`). Any runtime container indices along `path` (see [`is_runtime_index`](@ref))
+are pushed to `params` so paths of the same structural shape emit identical ASTs.
+"""
+function codegen_getfield_path(
+    @nospecialize(root),
+    root_code,
+    path,
+    params::Vector{Pair{Symbol,Any}},
+    var_prefix::Symbol,
+)
+    code = root_code
+    field_codes = Any[]
+    obj = root
+    nidx = 0
+    npath = length(path)
+    for (k, p) in enumerate(path)
+        if is_runtime_index(obj, p)
+            nidx += 1
+            var = Symbol(var_prefix, nidx)
+            push!(params, var => p)
+            field_code = var
+        else
+            field_code = Meta.quot(p)
+        end
+        push!(field_codes, field_code)
+        code = :(traced_getfield($code, $field_code))
+        if k < npath
+            obj = _safe_traced_getfield(obj, p)
+        end
+    end
+    return code, field_codes
+end
+
+"""
     codegen_flatten!
 
 Generate Julia code to extract the XLA buffers from input arguments.
 The name is due to its similarity to the `flatten` function in `jax.tree_util.register_pytree_node`.
 
+Buffers are written into a `Vector` named `linearized_args` rather than `N` distinct local
+variables, and each argument's extraction is emitted as a parameterized [`thunk_chunk`](@ref)
+so arguments of the same structural shape share a single compiled function (see #3511).
+
 # Arguments
 
 - `linear_args`: A list of arguments to be flattened.
+- `roots`: The concrete root arguments indexed by `args`.
 
 # Returns
 
-- `flatten_names`: A list of `Symbol`s representing the names of the flattened arguments.
+- `nbuffers`: Total number of buffers stored in `linearized_args`.
 - `flatten_code`: A list of `Expr`s to extract the XLA buffers from the input arguments.
+- `resharded_inputs`: Map from resharded input paths to `(device_sym, param_sharding_expr)`.
 
 # Note
 
@@ -772,15 +1418,18 @@ The _linearized arguments_ do not directly refer to the arguments that have been
 function codegen_flatten!(
     linear_args,
     seen_args,
+    roots,
     is_sharded::Bool,
     linear_parameter_shardings,
     client,
     ndevices::Int,
+    donated_args_mask::Vector{Bool},
 )
-    flatten_names = Symbol[]
+    nbuffers = 0
     flatten_code = Expr[]
     runtime = XLA.runtime(client)
     resharded_inputs = Dict{Tuple,Any}()
+    has_donated_args = any(donated_args_mask)
 
     inv_seen_args = if is_sharded
         result = Reactant.OrderedIdDict()
@@ -792,7 +1441,9 @@ function codegen_flatten!(
         nothing
     end
 
-    xla_parameter_sharding_sym = missing
+    needs_param_shardings = false
+    nargs = length(linear_args)
+    entries = Vector{ArgPathEntry}(undef, nargs)
 
     for (i, arg) in enumerate(linear_args)
         paths = (
@@ -808,17 +1459,18 @@ function codegen_flatten!(
                 "Invalid path duplication $(Reactant.TracedUtils.get_paths(arg)) into $(paths)",
             )
         end
+        entries[i] = ArgPathEntry(path[2:end], (), (i, arg, path))
+    end
 
-        carg_sym = Symbol(:carg_, i)
-        usbuf = Symbol(:usbuf_, i)
-
-        flatcode = :(getindex(args, $(path[2])))
-        for p in path[3:end]
-            flatcode = :(traced_getfield($flatcode, $(Meta.quot(p))))
-        end
+    emit_arg_path_group!(
+        flatten_code, roots, entries, Ref(0)
+    ) do out_stmts, flatcode, _suffix_codes, path_params, (i, arg, path)
+        params = Pair{Symbol,Any}[:arg_idx => i]
+        has_donated_args && push!(params, :arg_path => path)
+        append!(params, path_params)
+        chunk = Expr[:(carg = $flatcode)]
 
         if runtime isa Val{:PJRT}
-            push!(flatten_code, :($carg_sym = $flatcode))
             if is_sharded
                 carg = inv_seen_args[arg]
 
@@ -836,14 +1488,17 @@ function codegen_flatten!(
                         size(carg),
                     )
 
-                    push!(flatten_code, :($usbuf = $carg_sym.data))
-                    for j in 1:length(carg.sharding.mesh)
-                        logical_id = carg.sharding.mesh.logical_device_ids[j]
-                        sbuf = Symbol(:sbuf_, i, "_", logical_id)
-                        push!(flatten_names, sbuf)
+                    push!(chunk, :(usbuf = carg.data))
+                    @assert length(carg.sharding.mesh) == ndevices
+                    for j in 1:ndevices
+                        nbuffers += 1
+                        offset = (j - 1) * nargs
+                        slot_expr = offset == 0 ? :arg_idx : :($offset + arg_idx)
                         push!(
-                            flatten_code,
-                            :($sbuf = XLA.synced_buffer(getindex($usbuf, $(j)))),
+                            chunk,
+                            :(@inbounds linearized_args[$slot_expr] = XLA.synced_buffer(
+                                getindex(usbuf, $(j))
+                            )),
                         )
                     end
                 else
@@ -854,23 +1509,11 @@ function codegen_flatten!(
                                $(path[3:end])")
                     end
 
-                    push!(flatten_code, :($usbuf = $carg_sym))
-                    device_sym = gensym(:device)
-                    push!(flatten_code, :($device_sym = Reactant.XLA.device($usbuf)))
-
-                    if xla_parameter_sharding_sym === missing
-                        xla_parameter_sharding_sym = :xla_parameter_sharding
-                        pushfirst!(
-                            flatten_code,
-                            :(
-                                $(xla_parameter_sharding_sym) = Reactant.XLA.get_parameter_shardings(
-                                    thunk.exec
-                                )
-                            ),
-                        )
-                    end
-
-                    resharded_inputs[path[3:end]] = (device_sym, xla_parameter_sharding_sym)
+                    push!(chunk, :(usbuf = carg))
+                    device_sym = Symbol(:input_device_, i)
+                    push!(chunk, :($device_sym = Reactant.XLA.device(usbuf)))
+                    needs_param_shardings = true
+                    resharded_inputs[path[3:end]] = (device_sym, :xla_parameter_sharding)
 
                     device_to_array_slices, _ = XLA.sharding_to_concrete_array_indices(
                         condensed_op_sharding, size(carg), 0:(ndevices - 1)
@@ -880,15 +1523,15 @@ function codegen_flatten!(
                     buf_slice = Dict{eltype(device_to_array_slices),Symbol}()
                     counter = 0
                     for j in 1:ndevices
-                        sliced_buf = Symbol(:sliced_buf_, i, :_, counter)
+                        sliced_buf = Symbol(:sliced_buf_, counter)
                         slice = device_to_array_slices[j]
                         haskey(buf_slice, slice) && continue
                         counter += 1
                         push!(
-                            flatten_code,
+                            chunk,
                             :(
                                 $sliced_buf = only(
-                                    Reactant._fast_slice($usbuf, $(slice...)).data
+                                    Reactant._fast_slice(usbuf, $(slice...)).data
                                 )
                             ),
                         )
@@ -896,45 +1539,36 @@ function codegen_flatten!(
                     end
 
                     for j in 1:ndevices
-                        buf = Symbol(:buf_, i, :_, j)
                         slice = device_to_array_slices[j]
-                        sbuf = Symbol(:s, buf)
-                        push!(flatten_names, sbuf)
+                        nbuffers += 1
+                        offset = (j - 1) * nargs
+                        slot_expr = offset == 0 ? :arg_idx : :($offset + arg_idx)
                         push!(
-                            flatten_code,
-                            :(
-                                $sbuf = XLA.copy_buffer_to_device(
-                                    XLA.synced_buffer($(buf_slice[slice])),
-                                    XLA.get_device(
-                                        thunk.client, global_mesh.device_ids[$(j)]
-                                    ),
-                                )
-                            ),
+                            chunk,
+                            :(@inbounds linearized_args[$slot_expr] = XLA.copy_buffer_to_device(
+                                XLA.synced_buffer($(buf_slice[slice])),
+                                XLA.get_device(thunk.client, global_mesh.device_ids[$(j)]),
+                            )),
                         )
                     end
                 end
             else
-                push!(flatten_code, :($usbuf = $carg_sym.data))
-                sbuf = Symbol(:sbuf_, i)
-                push!(flatten_names, sbuf)
+                push!(chunk, :(usbuf = carg.data))
+                nbuffers += 1
                 if arg isa TracedRArray || arg isa TracedRNumber
-                    push!(flatten_code, :($sbuf = only(XLA.synced_buffer($usbuf))))
+                    push!(
+                        chunk,
+                        :(@inbounds linearized_args[arg_idx] = only(
+                            XLA.synced_buffer(usbuf)
+                        )),
+                    )
                 else
                     error("Unsupported type $(typeof(arg))")
                 end
             end
-            # Important to mark donated after we have extracted the data
-            push!(
-                flatten_code,
-                :(donate_argument!(
-                    donated_args_mask, $carg_sym, $i, donated_buffers, $(path)
-                )),
-            )
         elseif runtime isa Val{:IFRT}
-            push!(flatten_code, :($carg_sym = $flatcode))
-            push!(flatten_code, :($usbuf = $carg_sym.data))
-            sbuf = Symbol(:sbuf_, i)
-            push!(flatten_names, sbuf)
+            push!(chunk, :(usbuf = carg.data))
+            nbuffers += 1
             if is_sharded
                 carg = inv_seen_args[arg]
 
@@ -950,7 +1584,10 @@ function codegen_flatten!(
                         size(carg),
                     )
 
-                    push!(flatten_code, :($sbuf = XLA.synced_buffer($usbuf)))
+                    push!(
+                        chunk,
+                        :(@inbounds linearized_args[arg_idx] = XLA.synced_buffer(usbuf)),
+                    )
                 else
                     if DEBUG_DISABLE_RESHARDING[]
                         error("Resharding is disabled. Problematic input:\ntypeof: \
@@ -959,61 +1596,55 @@ function codegen_flatten!(
                                $(path[3:end])")
                     end
 
-                    device_sym = gensym(:device)
-                    push!(flatten_code, :($device_sym = Reactant.XLA.device($usbuf)))
-
-                    if xla_parameter_sharding_sym === missing
-                        xla_parameter_sharding_sym = :xla_parameter_sharding
-                        pushfirst!(
-                            flatten_code,
-                            :(
-                                $(xla_parameter_sharding_sym) = Reactant.XLA.get_parameter_shardings(
-                                    thunk.exec
-                                )
-                            ),
-                        )
-                    end
-
-                    resharded_inputs[path] = (
-                        device_sym, :($(xla_parameter_sharding_sym)[$(i)])
-                    )
+                    device_sym = Symbol(:input_device_, i)
+                    push!(chunk, :($device_sym = Reactant.XLA.device(usbuf)))
+                    needs_param_shardings = true
+                    resharded_inputs[path] = (device_sym, :(xla_parameter_sharding[$(i)]))
 
                     push!(
-                        flatten_code,
-                        :(
-                            $(sbuf) = ifrt_resharded_buffer(
-                                $(Reactant.unwrapped_eltype(carg)),
-                                $(usbuf),
-                                $(size(carg)),
-                                thunk.client,
-                                $(carg_sym).sharding,
-                                thunk.global_device_ids,
-                                $(xla_parameter_sharding_sym)[$(i)],
-                            )
-                        ),
+                        chunk,
+                        :(@inbounds linearized_args[arg_idx] = ifrt_resharded_buffer(
+                            $(Reactant.unwrapped_eltype(carg)),
+                            usbuf,
+                            $(size(carg)),
+                            thunk.client,
+                            carg.sharding,
+                            thunk.global_device_ids,
+                            xla_parameter_sharding[arg_idx],
+                        )),
                     )
                 end
             else
-                push!(flatten_code, :($sbuf = XLA.synced_buffer($usbuf)))
+                push!(
+                    chunk, :(@inbounds linearized_args[arg_idx] = XLA.synced_buffer(usbuf))
+                )
             end
-            # Important to mark donated after we have extracted the data
-            push!(
-                flatten_code,
-                :(donate_argument!(
-                    donated_args_mask, $carg_sym, $i, donated_buffers, $(path)
-                )),
-            )
         else
             error("Unsupported runtime $runtime")
         end
+
+        if has_donated_args
+            # Important to mark donated after we have extracted the data
+            push!(
+                chunk,
+                :(donate_argument!(
+                    donated_args_mask, carg, arg_idx, donated_buffers, arg_path
+                )),
+            )
+        end
+        push!(out_stmts, thunk_chunk(chunk...; params, reorderable=true))
     end
 
-    # We reorder how the buffers are passed to the XLA call
-    if is_sharded && runtime isa Val{:PJRT}
-        flatten_names = vcat(eachrow(reshape(flatten_names, ndevices, :))...)
+    if needs_param_shardings
+        pushfirst!(
+            flatten_code,
+            :(xla_parameter_sharding = Reactant.XLA.get_parameter_shardings(thunk.exec)),
+        )
     end
+    buffer_type = runtime isa Val{:PJRT} ? XLA.PJRT.Buffer : XLA.IFRT.Array
+    pushfirst!(flatten_code, :(linearized_args = Vector{$buffer_type}(undef, $nbuffers)))
 
-    return flatten_names, flatten_code, resharded_inputs
+    return nbuffers, flatten_code, resharded_inputs
 end
 
 function donate_argument!(
@@ -1024,12 +1655,16 @@ function donate_argument!(
     path,
 )
     if donated_args_mask[i]
-        buffers = map(Base.Fix2(getfield, :buffer), carg.data)
-        if buffers in donated_buffers
-            error("Donated buffer $(carg.data) is already marked as donated. Can't donate \
-                   the same buffer multiple times. The argument is present at $(path)")
+        if donated_buffers !== nothing
+            buffers = map(Base.Fix2(getfield, :buffer), carg.data)
+            if buffers in donated_buffers
+                error(
+                    "Donated buffer $(carg.data) is already marked as donated. Can't donate \
+                     the same buffer multiple times. The argument is present at $(path)",
+                )
+            end
+            push!(donated_buffers, buffers)
         end
-        push!(donated_buffers, buffers)
         Reactant.mark_donated!(carg)
     end
 end
@@ -1042,11 +1677,15 @@ function donate_argument!(
     path,
 )
     if donated_args_mask[i]
-        if carg.data.buffer in donated_buffers
-            error("Donated buffer $(carg.data) is already marked as donated. Can't donate \
-                   the same buffer multiple times. The argument is present at $(path)")
+        if donated_buffers !== nothing
+            if carg.data.buffer in donated_buffers
+                error(
+                    "Donated buffer $(carg.data) is already marked as donated. Can't donate \
+                     the same buffer multiple times. The argument is present at $(path)",
+                )
+            end
+            push!(donated_buffers, carg.data.buffer)
         end
-        push!(donated_buffers, carg.data.buffer)
         Reactant.mark_donated!(carg)
     end
 end
@@ -1074,6 +1713,7 @@ The name is due to its similarity to the `unflatten` function in `jax.tree_util.
 """
 function codegen_unflatten!(
     linear_args,
+    roots,
     preserved_args,
     concretized_res_names,
     linear_results,
@@ -1086,10 +1726,10 @@ function codegen_unflatten!(
 )
     cache_dict = Symbol("cache_dict")
     needs_cache_dict = false
-    unresharded_arrays_cache = Dict{Symbol,Symbol}()
+    unresharded_arrays_cache = Dict{Any,Symbol}()
     unresharded_code = Expr[]
     unflatten_code = Expr[]
-    used_shardinfo = Set{Symbol}()
+    used_shardinfo = Set{Any}()
 
     runtime = XLA.runtime(client)
     if runtime isa Val{:PJRT}
@@ -1116,8 +1756,12 @@ function codegen_unflatten!(
     resprefix::Symbol = :result
     resargprefix::Symbol = :resargs
 
-    for (concrete_res_name, result, shard_info) in
-        zip(concretized_res_names, linear_results, linear_result_shard_info)
+    split_counter = Ref(0)
+    resarg_entries = ArgPathEntry[]
+    track_alias_paths = DEBUG_ALIASED_BUFFER_ASSIGNMENT_ERROR[]
+
+    for (i, (concrete_res_name, result, shard_info)) in
+        enumerate(zip(concretized_res_names, linear_results, linear_result_shard_info))
         paths = (
             (
                 p for p in Reactant.TracedUtils.get_paths(result) if
@@ -1126,7 +1770,6 @@ function codegen_unflatten!(
         )
         for path in paths
             if path[1] == resprefix
-                unflatcode = :result
                 path = path[2:end]
 
                 if Reactant.TracedUtils.has_idx(result, argprefix)
@@ -1143,7 +1786,6 @@ function codegen_unflatten!(
                 continue
             else
                 @assert path[1] == resargprefix
-                unflatcode = :(args[$(path[2])])
 
                 need_to_unreshard = get(resharded_inputs, (:args, path[2:end]...), nothing)
                 if need_to_unreshard !== nothing
@@ -1151,15 +1793,14 @@ function codegen_unflatten!(
                                                     instead."
                 end
 
-                path = path[3:end]
-                for p in path[1:max(0, end - 2)]
-                    unflatcode = :(traced_getfield($unflatcode, $(Meta.quot(p))))
-                end
+                root_idx = path[2]
+                subpath = path[3:end]
 
-                concrete_res_name_final = concrete_res_name
-                if need_to_unreshard !== nothing
+                concrete_res_expr = if need_to_unreshard !== nothing
                     if !haskey(unresharded_arrays_cache, concrete_res_name)
-                        unreshard_sym = gensym(:unresharded_buffer)
+                        unreshard_sym = Symbol(
+                            :unresharded_buffer_, length(unresharded_arrays_cache) + 1
+                        )
                         push!(
                             unresharded_code,
                             :(
@@ -1173,47 +1814,48 @@ function codegen_unflatten!(
                         )
                         unresharded_arrays_cache[concrete_res_name] = unreshard_sym
                     end
-                    concrete_res_name_final = unresharded_arrays_cache[concrete_res_name]
+                    unresharded_arrays_cache[concrete_res_name]
+                else
+                    i
                 end
 
-                if length(path) > 1
+                if isempty(subpath) ||
+                    _is_statically_concrete_target(typeof(roots), (root_idx, subpath...))
+                    push!(
+                        resarg_entries,
+                        ArgPathEntry(
+                            (root_idx, subpath...),
+                            (),
+                            (:direct, concrete_res_expr, subpath),
+                        ),
+                    )
+                elseif length(subpath) > 1
                     needs_cache_dict = true
-                    unflatcode = quote
-                        traced_setfield_buffer_at_parent!(
-                            $(runtime),
-                            $(cache_dict),
-                            $(concrete_res_name_final),
-                            $(unflatcode),
-                            $(Meta.quot(path[end - 1])),
-                            $(Meta.quot(path[end])),
-                            $(path),
-                        )
-                    end
-                elseif length(path) > 0
-                    needs_cache_dict = true
-                    # TODO(#2233): we might need to handle sharding here
-                    unflatcode = quote
-                        traced_setfield_buffer!(
-                            $(runtime),
-                            $(cache_dict),
-                            $(concrete_res_name_final),
-                            $(unflatcode),
-                            $(Meta.quot(path[end])),
-                            $(path),
-                        )
-                    end
+                    push!(
+                        resarg_entries,
+                        ArgPathEntry(
+                            (root_idx, subpath[1:(end - 2)]...),
+                            (subpath[end - 1], subpath[end]),
+                            (:at_parent, concrete_res_expr, subpath),
+                        ),
+                    )
                 else
-                    unflatcode = :(traced_setfield!(
-                        $(unflatcode), :data, $(concrete_res_name_final), $(path)
-                    ))
+                    needs_cache_dict = true
+                    push!(
+                        resarg_entries,
+                        ArgPathEntry(
+                            (root_idx, subpath[1:(end - 1)]...),
+                            (subpath[end],),
+                            (:at_field, concrete_res_expr, subpath),
+                        ),
+                    )
                 end
-                push!(unflatten_code, unflatcode)
             end
         end
     end
 
     if needs_cache_dict
-        pushfirst!(
+        push!(
             unflatten_code,
             :(
                 $cache_dict = IdDict{
@@ -1224,9 +1866,56 @@ function codegen_unflatten!(
         )
     end
 
+    emit_arg_path_group!(
+        unflatten_code, roots, resarg_entries, split_counter
+    ) do out_stmts,
+    target_expr, suffix_codes, path_params,
+    (mode, concrete_res_expr, subpath)
+        params = Pair{Symbol,Any}[]
+        res_expr = if concrete_res_expr isa Int
+            push!(params, :res_idx => concrete_res_expr)
+            :(@inbounds linearized_results[res_idx])
+        else
+            concrete_res_expr
+        end
+        res_path_expr = if track_alias_paths
+            push!(params, :res_path => subpath)
+            :res_path
+        else
+            :()
+        end
+        append!(params, path_params)
+        stmt = if mode === :at_parent
+            :(traced_setfield_buffer_at_parent!(
+                $(runtime),
+                $(cache_dict),
+                $(res_expr),
+                $(target_expr),
+                $(suffix_codes[1]),
+                $(suffix_codes[2]),
+                $(res_path_expr),
+            ))
+        elseif mode === :at_field
+            # TODO(#2233): we might need to handle sharding here
+            :(traced_setfield_buffer!(
+                $(runtime),
+                $(cache_dict),
+                $(res_expr),
+                $(target_expr),
+                $(suffix_codes[1]),
+                $(res_path_expr),
+            ))
+        else
+            :(traced_setfield!($(target_expr), :data, $(res_expr), $(res_path_expr)))
+        end
+        push!(out_stmts, thunk_chunk(stmt; params, reorderable=true))
+    end
+
     result_cache = IdDict{Any,Symbol}()
     var_idx = Ref(0)
     resultgen_code = Expr[]
+    preserved_result_code = Expr[]
+    pres_result_items = Tuple{Tuple,Tuple}[]
 
     for (result, arg_idx) in preserved_args
         paths = (
@@ -1255,22 +1944,59 @@ function codegen_unflatten!(
                 error("TODO(#2234): Not yet Implemented. Open an issue on Reactant.jl.")
             end
 
+            push!(pres_result_items, (path, argpath))
+        end
+    end
+
+    if length(pres_result_items) <= 4 &&
+        _has_no_huge_inline_fields(roots) &&
+        all(
+            ((_, argpath),) -> _is_small_typeassert(Core.Typeof(roots[argpath[2]])),
+            pres_result_items,
+        )
+        for (path, argpath) in pres_result_items
+            in(path, keys(result_stores)) && continue
             argres = :(args[$(argpath[2])])
             for p in argpath[3:end]
                 argres = :(traced_getfield($argres, $(Meta.quot(p))))
             end
-
-            sym = Symbol("result", var_idx[])
-            var_idx[] += 1
-
+            result_stores[path] = :($argres.data)
+        end
+    else
+        pres_entries = ArgPathEntry[]
+        for (path, argpath) in pres_result_items
+            in(path, keys(result_stores)) && continue
+            slot = length(pres_entries) + 1
+            push!(pres_entries, ArgPathEntry(argpath[2:end], (), slot))
+            result_stores[path] = :(preserved_result_buffers[$slot])
+        end
+        n_pres = length(pres_entries)
+        if n_pres > 0
+            pres_buf_type = if runtime isa Val{:IFRT}
+                XLA.IFRT.AsyncArray
+            elseif path_to_shard_info === nothing
+                Tuple{XLA.PJRT.AsyncBuffer}
+            else
+                Any
+            end
             push!(
-                resultgen_code,
-                quote
-                    $sym = $argres.data
-                end,
+                preserved_result_code,
+                :(preserved_result_buffers = Vector{$pres_buf_type}(undef, $n_pres)),
             )
-
-            result_stores[path] = sym
+            emit_arg_path_group!(
+                preserved_result_code, roots, pres_entries, split_counter
+            ) do out_stmts, target_expr, _suffix_codes, path_params, slot
+                params = Pair{Symbol,Any}[:_pres_slot => slot, path_params...]
+                push!(
+                    out_stmts,
+                    thunk_chunk(
+                        :(@inbounds preserved_result_buffers[_pres_slot] =
+                            ($target_expr).data);
+                        params,
+                        reorderable=true,
+                    ),
+                )
+            end
         end
     end
 
@@ -1306,27 +2032,43 @@ function codegen_unflatten!(
     pre_execution_read_code = Expr[]
     post_execution_read_code = Expr[]
     alias_write_code = Expr[]
-    codegen_unflatten_aliased_args!(
+    n_aliased = codegen_unflatten_aliased_args!(
         pre_execution_read_code,
         post_execution_read_code,
         alias_write_code,
         preserved_args,
         linear_args,
+        roots,
         resharded_inputs,
         orig_buffer_available,
         runtime,
+        split_counter,
     )
 
     # generate return object which stores the concrete results in some arbitrary way
     body_code = Expr[
         pre_execution_read_code...,
-        unresharded_code...,
-        resultgen_code...,
-        :(result = $result_code),
+        preserved_result_code...,
+        map(thunk_chunk, unresharded_code)...,
+        map(thunk_chunk, resultgen_code)...,
+        thunk_chunk(:(result = $result_code)),
         unflatten_code...,
         post_execution_read_code...,
         alias_write_code...,
     ]
+
+    if n_aliased > 0
+        alias_buf_type = if runtime isa Val{:IFRT}
+            XLA.IFRT.AsyncArray
+        elseif path_to_shard_info === nothing
+            Tuple{XLA.PJRT.AsyncBuffer}
+        else
+            Any
+        end
+        pushfirst!(
+            body_code, :(aliased_arg_buffers = Vector{$alias_buf_type}(undef, $n_aliased))
+        )
+    end
 
     if DEBUG_ALIASED_BUFFER_ASSIGNMENT_ERROR[]
         push!(body_code, :(empty!(DEBUG_BUFFER_POINTERS_STORE_DICT)))
@@ -1341,11 +2083,19 @@ function codegen_unflatten_aliased_args!(
     write_code,
     preserved_args,
     linear_args,
+    roots,
     resharded_inputs,
     orig_buffer_available,
     runtime,
+    split_counter::Base.RefValue{Int},
 )
-    for (pi, (result, arg_idx)) in enumerate(preserved_args)
+    n_aliased = 0
+    pre_read_entries = ArgPathEntry[]
+    post_read_entries = ArgPathEntry[]
+    write_entries = ArgPathEntry[]
+    track_alias_paths = DEBUG_ALIASED_BUFFER_ASSIGNMENT_ERROR[]
+
+    for (result, arg_idx) in preserved_args
         paths = (
             (
                 p for p in Reactant.TracedUtils.get_paths(result) if
@@ -1358,7 +2108,7 @@ function codegen_unflatten_aliased_args!(
         argpath = only((
             p for p in Reactant.TracedUtils.get_paths(arg) if length(p) > 0 && p[1] == :args
         ))
-        argpath_value = nothing
+        alias_slot = 0
 
         if any(parg -> parg[2] == arg_idx, preserved_args)
             orig_buffer_available[arg_idx + 1] = false
@@ -1368,7 +2118,7 @@ function codegen_unflatten_aliased_args!(
         # source buffer must be captured before the execution results overwrite the
         # arguments. Otherwise it is a pure mutation and the post-execution value is used.
         aliases_input = any(p -> p[1] == :args, paths)
-        read_code = aliases_input ? pre_execution_read_code : post_execution_read_code
+        read_entries = aliases_input ? pre_read_entries : post_read_entries
 
         seen_dsts = Set{Any}()
         for path in paths
@@ -1382,20 +2132,13 @@ function codegen_unflatten_aliased_args!(
             path[2:end] in seen_dsts && continue
             push!(seen_dsts, path[2:end])
 
-            res = :(args[$(path[2])])
-
-            path = path[3:end]
-            for p in path
-                res = :(traced_getfield($res, $(Meta.quot(p))))
-            end
-
             need_to_unreshard = get(resharded_inputs, (:args, argpath[2:end]...), nothing)
             if need_to_unreshard !== nothing
                 # TODO(@avik-pal): I need an MWE to debug this codepath
                 error("TODO(#2234): Not yet Implemented. Open an issue on Reactant.jl.")
             end
 
-            if isnothing(argpath_value)
+            if alias_slot == 0
                 # this traced array take an identity value derived from another argument but
                 # is its own traced array. As such, it needs to allocate a new buffer instead of using the arg directly.
                 needs_copy =
@@ -1404,30 +2147,72 @@ function codegen_unflatten_aliased_args!(
                     !orig_buffer_available[arg_idx + 1]
                 orig_buffer_available[arg_idx + 1] = false
 
-                argres = :(args[$(argpath[2])])
-                for p in argpath[3:end]
-                    argres = :(traced_getfield($argres, $(Meta.quot(p))))
-                end
-                argpath_value = Symbol(:argpath_value_, pi)
-                argres_data = :($(argres).data)
-                if needs_copy
-                    if runtime isa Val{:PJRT}
-                        argres_data = :(map(copy, $argres_data))
-                    elseif runtime isa Val{:IFRT}
-                        argres_data = :(copy($argres_data))
-                    else
-                        error("unknown runtime $runtime")
-                    end
-                end
-                # Capture the source buffer into a temporary so the actual write can be
-                # applied later without re-reading the (possibly overwritten) argument.
-                push!(read_code, :($argpath_value = $argres_data))
+                n_aliased += 1
+                alias_slot = n_aliased
+                push!(
+                    read_entries, ArgPathEntry(argpath[2:end], (), (alias_slot, needs_copy))
+                )
             end
 
-            push!(write_code, :(traced_setfield!($res, :data, $argpath_value, $(path))))
+            push!(write_entries, ArgPathEntry(path[2:end], (), (alias_slot, path[3:end])))
         end
     end
-    return pre_execution_read_code, post_execution_read_code, write_code
+
+    for (entries_vec, out_code) in (
+        (pre_read_entries, pre_execution_read_code),
+        (post_read_entries, post_execution_read_code),
+    )
+        emit_arg_path_group!(
+            out_code, roots, entries_vec, split_counter
+        ) do out_stmts, argres, _suffix_codes, path_params, (alias_slot, needs_copy)
+            read_params = Pair{Symbol,Any}[:_alias_slot => alias_slot, path_params...]
+            argres_data = :($(argres).data)
+            if needs_copy
+                if runtime isa Val{:PJRT}
+                    argres_data = :(map(copy, $argres_data))
+                elseif runtime isa Val{:IFRT}
+                    argres_data = :(copy($argres_data))
+                else
+                    error("unknown runtime $runtime")
+                end
+            end
+            # Capture the source buffer into `aliased_arg_buffers` so the actual write
+            # can be applied later without keeping `O(N)` distinct locals live.
+            push!(
+                out_stmts,
+                thunk_chunk(
+                    :(@inbounds aliased_arg_buffers[_alias_slot] = $argres_data);
+                    params=read_params,
+                    reorderable=true,
+                ),
+            )
+        end
+    end
+
+    emit_arg_path_group!(
+        write_code, roots, write_entries, split_counter
+    ) do out_stmts, res, _suffix_codes, path_params, (alias_slot, dst_subpath)
+        write_params = Pair{Symbol,Any}[:_alias_slot => alias_slot]
+        dst_path_expr = if track_alias_paths
+            push!(write_params, :_dst_path => dst_subpath)
+            :_dst_path
+        else
+            :()
+        end
+        append!(write_params, path_params)
+        push!(
+            out_stmts,
+            thunk_chunk(
+                :(traced_setfield!(
+                    $res, :data, @inbounds(aliased_arg_buffers[_alias_slot]), $dst_path_expr
+                ));
+                params=write_params,
+                reorderable=true,
+            ),
+        )
+    end
+
+    return n_aliased
 end
 
 """
@@ -1437,51 +2222,32 @@ Generate Julia code to call the XLA executable.
 
 # Arguments
 
-- `flatten_names`: A list of `Symbol`s representing the names of the flattened linear arguments.
 - `nresults`: The number of results to expect.
+- `is_sharded`: Whether the function is sharded.
+- `ndevices`: The number of devices.
 - `is_pure`: Whether the function being compiled is pure (i.e., has no side effects)
 """
-function codegen_xla_call(
-    flatten_names, nresults, is_sharded::Bool, ndevices::Int, is_pure::Bool
-)
-    flatten_buffer_refs = map(n -> :($n.buffer), flatten_names)
-
-    base_symbol_name = is_sharded ? Symbol(:result_buffer_m, ndevices, :_) : :result_buffer_
-    concretized_res_names = Symbol[Symbol(base_symbol_name, i) for i in 1:nresults]
-    concretized_res_code = map(enumerate(concretized_res_names)) do (i, varname)
-        :($varname = linearized_results[$i])
-    end
+function codegen_xla_call(nresults, is_sharded::Bool, ndevices::Int, is_pure::Bool)
+    concretized_res_names = Any[:(linearized_results[$i]) for i in 1:nresults]
 
     xla_call_code = if nresults == 0 && is_pure
         :()
+    elseif is_sharded
+        :(
+            linearized_results = XLA.execute(
+                thunk.exec,
+                linearized_args,
+                donated_args_mask,
+                $nresults,
+                Val($ndevices),
+            )
+        )
     else
-        if is_sharded
-            quote
-                GC.@preserve $(flatten_names...) begin
-                    linearized_results = XLA.execute(
-                        thunk.exec,
-                        ($(flatten_buffer_refs...),),
-                        UInt8.(Tuple(donated_args_mask)),
-                        Val($nresults),
-                        Val($ndevices),
-                    )
-                end
-                $(concretized_res_code...)
-            end
-        else
-            quote
-                GC.@preserve $(flatten_names...) begin
-                    linearized_results = XLA.execute_sharded(
-                        thunk.exec,
-                        thunk.device,
-                        ($(flatten_buffer_refs...),),
-                        UInt8.(Tuple(donated_args_mask)),
-                        Val($nresults),
-                    )
-                end
-                $(concretized_res_code...)
-            end
-        end
+        :(
+            linearized_results = XLA.execute_sharded(
+                thunk.exec, thunk.device, linearized_args, donated_args_mask, $nresults
+            )
+        )
     end
 
     return concretized_res_names, xla_call_code
@@ -1492,14 +2258,13 @@ end
 function codegen_shard_info(
     is_sharded, nresults::Int, linear_results, output_reactant_shardings, exec, ndevices
 )
-    !is_sharded && return Expr[], Expr[], [nothing for _ in 1:nresults]
+    !is_sharded && return Expr[], Any[nothing for _ in 1:nresults]
 
     shard_info_code = Expr[]
-    optional_shard_info_code = Expr[]
     output_hlo_shardings_var = missing
     output_hlo_shardings = XLA.get_output_shardings(exec)
 
-    linear_result_shard_info = Vector{Symbol}(undef, length(linear_results))
+    linear_result_shard_info = Vector{Any}(undef, length(linear_results))
     mesh_codegen_cache = Dict{Tuple,Symbol}()
 
     for i in 1:nresults
@@ -1520,7 +2285,6 @@ function codegen_shard_info(
             use_hlo_sharding = true
         end
 
-        var_name = Symbol(:shard_info_, i)
         if use_hlo_sharding
             if output_hlo_shardings_var === missing
                 output_hlo_shardings_var = :output_hlo_shardings
@@ -1534,28 +2298,23 @@ function codegen_shard_info(
                 )
             end
 
-            push!(
-                optional_shard_info_code,
-                :(
-                    $(var_name) = Sharding.ShardInfo(
-                        Sharding.HloSharding(
-                            convert(XLA.HloSharding, $(output_hlo_shardings_var)[$(i)]),
-                            global_mesh,
-                            $(ntuple(Returns(true), length(res_size))),
-                            $(ntuple(Returns(-1), length(res_size))),
-                            nothing,
-                        ),
-                        $(array_slices),
-                    )
+            linear_result_shard_info[i] = :(Sharding.ShardInfo(
+                Sharding.HloSharding(
+                    convert(XLA.HloSharding, $(output_hlo_shardings_var)[$(i)]),
+                    global_mesh,
+                    $(ntuple(Returns(true), length(res_size))),
+                    $(ntuple(Returns(-1), length(res_size))),
+                    nothing,
                 ),
-            )
+                $(array_slices),
+            ))
         else
             mesh = output_reactant_shardings[i].mesh
             mesh_key = (mesh.logical_device_ids, mesh.axis_names, mesh.axis_sizes)
             if haskey(mesh_codegen_cache, mesh_key)
                 mesh_name = mesh_codegen_cache[mesh_key]
             else
-                mesh_name = gensym(:mesh)
+                mesh_name = Symbol(:mesh_, length(mesh_codegen_cache) + 1)
                 push!(
                     shard_info_code,
                     :(
@@ -1573,12 +2332,9 @@ function codegen_shard_info(
             new_sharding = Sharding.codegen_with_new_mesh(
                 output_reactant_shardings[i], mesh_name
             )
-            push!(
-                optional_shard_info_code,
-                :($(var_name) = Sharding.ShardInfo($(new_sharding), $(array_slices))),
-            )
+            linear_result_shard_info[i] =
+                :(Sharding.ShardInfo($(new_sharding), $(array_slices)))
         end
-        linear_result_shard_info[i] = var_name
     end
-    return shard_info_code, optional_shard_info_code, linear_result_shard_info
+    return shard_info_code, linear_result_shard_info
 end

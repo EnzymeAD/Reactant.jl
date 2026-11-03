@@ -139,3 +139,95 @@ end
 ) where {N,n_outs}
     return XLA.execute(exec, inputs, donated_args, Val(n_outs))
 end
+
+# Vector-based variants matching `PJRT/LoadedExecutable.jl` for generated `Thunk`s.
+const SMALL_EXEC_BUFFER_LIMIT = 16
+
+function XLA.execute(
+    exec::LoadedExecutable, inputs::Vector{Array}, donated_args::Vector{Bool}, n_outs::Int
+)
+    n_args = length(inputs)
+    @assert length(donated_args) == n_args
+    future_res = Ref{Ptr{Cvoid}}()
+    futures = Ref{UInt8}(0)
+    results = Vector{AsyncArray}(undef, n_outs)
+
+    if n_args <= SMALL_EXEC_BUFFER_LIMIT && n_outs <= SMALL_EXEC_BUFFER_LIMIT
+        input_ptrs_ref = Ref{NTuple{SMALL_EXEC_BUFFER_LIMIT,Ptr{Cvoid}}}()
+        outputs_ref = Ref{NTuple{SMALL_EXEC_BUFFER_LIMIT,Ptr{Cvoid}}}()
+        GC.@preserve exec inputs donated_args input_ptrs_ref outputs_ref future_res futures begin
+            in_ptr = Base.unsafe_convert(Ptr{Ptr{Cvoid}}, input_ptrs_ref)
+            @inbounds for i in 1:n_args
+                unsafe_store!(in_ptr, inputs[i].buffer, i)
+            end
+            out_ptr = if n_outs == 0
+                Ptr{Ptr{Cvoid}}(C_NULL)
+            else
+                Base.unsafe_convert(Ptr{Ptr{Cvoid}}, outputs_ref)
+            end
+            MLIR.API.ifrt_loaded_executable_execute(
+                exec.exec,
+                n_args,
+                in_ptr,
+                Ptr{UInt8}(pointer(donated_args)),
+                n_outs,
+                out_ptr,
+                futures,
+                future_res,
+            )
+            future = futures[] != 0
+            @inbounds for i in 1:n_outs
+                out_i = unsafe_load(out_ptr, i)
+                results[i] = AsyncArray(
+                    Array(out_i), future ? Future(future_res[]) : nothing
+                )
+            end
+        end
+        return results
+    end
+
+    input_ptrs = Vector{Ptr{Cvoid}}(undef, n_args)
+    @inbounds for i in 1:n_args
+        input_ptrs[i] = inputs[i].buffer
+    end
+    outputs = Vector{Ptr{Cvoid}}(undef, n_outs)
+
+    GC.@preserve exec inputs input_ptrs donated_args outputs future_res futures begin
+        MLIR.API.ifrt_loaded_executable_execute(
+            exec.exec,
+            n_args,
+            pointer(input_ptrs),
+            Ptr{UInt8}(pointer(donated_args)),
+            n_outs,
+            n_outs == 0 ? Ptr{Ptr{Cvoid}}(C_NULL) : pointer(outputs),
+            futures,
+            future_res,
+        )
+    end
+
+    future = futures[] != 0
+    @inbounds for i in 1:n_outs
+        results[i] = AsyncArray(Array(outputs[i]), future ? Future(future_res[]) : nothing)
+    end
+    return results
+end
+
+function XLA.execute(
+    exec::LoadedExecutable,
+    inputs::Vector{Array},
+    donated_args::Vector{Bool},
+    n_outs::Int,
+    ::Val{K},
+) where {K}
+    return XLA.execute(exec, inputs, donated_args, n_outs)
+end
+
+function XLA.execute_sharded(
+    exec::LoadedExecutable,
+    ::Device,
+    inputs::Vector{Array},
+    donated_args::Vector{Bool},
+    n_outs::Int,
+)
+    return XLA.execute(exec, inputs, donated_args, n_outs)
+end
