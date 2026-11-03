@@ -1156,13 +1156,13 @@ function call_llvm_generator(
                     push!(profile_llvm_fns, gval)
                 end
 
-                stringv = traced_mi(mi)
+                stringv = Core._call_in_world_total(world, traced_mi, mi)
 
                 fname = LLVM.globalstring_ptr!(builder, stringv, "mi_name")
 
                 m = mi.def
 
-                tv, decls, file, line = Base.arg_decl_parts(m)
+                file, line = Core._call_in_world_total(world, Base.updated_methodloc, m)
                 file = LLVM.globalstring_ptr!(builder, file, "mi_file")
 
                 jl_cstr_to_string, FT = Enzyme.Compiler.get_function!(
