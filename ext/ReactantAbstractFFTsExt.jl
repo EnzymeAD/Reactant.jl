@@ -296,4 +296,45 @@ function AbstractFFTs.plan_brfft(
     return normbfft(real(T), sz, dims) * y
 end
 
+
+# Applying a Reactant plan to a concrete (non-traced) array: compile and run the traced
+# operation, matching how other eager operations on concrete arrays are handled (e.g.
+# `fill!`). Without these methods, AbstractFFTs' fallback
+# `*(p::Plan{T}, x::AbstractArray) = p * copy1(T, x)` recurses forever.
+# See https://github.com/EnzymeAD/Reactant.jl/issues/3259
+const ConcretePlanTypes = (
+    ReactantFFTPlan,
+    ReactantIFFTPlan,
+    ReactantRFFTPlan,
+    ReactantIRFFTPlan,
+    ReactantFFTInPlacePlan,
+    ReactantIFFTInPlacePlan,
+)
+
+apply_plan(p, x) = p * x
+apply_plan!(y, p, x) = LinearAlgebra.mul!(y, p, x)
+
+for P in ConcretePlanTypes
+    @eval function Base.:*(p::$P, x::Reactant.UnionAnyConcreteRArray)
+        return Reactant.compile(apply_plan, (p, x))(p, x)
+    end
+
+    @eval function LinearAlgebra.mul!(
+        y::Reactant.UnionAnyConcreteRArray, p::$P, x::Reactant.UnionAnyConcreteRArray
+    )
+        Reactant.compile(apply_plan!, (y, p, x))(y, p, x)
+        return y
+    end
+
+    @eval function Base.:*(p::$P, x::AbstractArray)
+        throw(
+            ArgumentError(
+                "Reactant FFT plan $(typeof(p)) can only be applied to traced or concrete " *
+                "Reactant arrays, got $(typeof(x)). Convert the input with " *
+                "`Reactant.to_rarray` first.",
+            ),
+        )
+    end
+end
+
 end
