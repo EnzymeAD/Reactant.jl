@@ -1385,8 +1385,8 @@ function compile(ctx, f, args; kwargs...)
     (; linear_args, seen_args, linear_results, preserved_args, concrete_result) =
         mlir_fn_res
 
-    result_stores = Dict{Tuple,Symbol}()
-    path_to_shard_info = mlir_fn_res.is_sharded ? Dict{Tuple,Symbol}() : nothing
+    result_stores = Dict{Tuple,Any}()
+    path_to_shard_info = mlir_fn_res.is_sharded ? Dict{Tuple,Any}() : nothing
 
     global_mesh_expr = if mlir_fn_res.unique_meshes === nothing
         :()
@@ -1408,26 +1408,25 @@ function compile(ctx, f, args; kwargs...)
     end
 
     ndevices = mlir_fn_res.is_sharded ? length(mlir_fn_res.global_device_ids) : 1
+    roots = mlir_fn_res.fnwrapped ? (f, args...) : args
 
     # generate Julia `Thunk` code
-    flatten_arg_names, flatten_code, resharded_inputs = codegen_flatten!(
+    _, flatten_code, resharded_inputs = codegen_flatten!(
         linear_args,
         seen_args,
+        roots,
         mlir_fn_res.is_sharded,
         XLA.get_parameter_shardings(exec), # TODO(#2233): use the same workflow as output shardings to parse the tensor sharding attributes directly if possible
         client,
         ndevices,
+        mlir_fn_res.donated_args_mask,
     )
 
     concretized_res_names, xla_call_code = codegen_xla_call(
-        flatten_arg_names,
-        length(linear_results),
-        mlir_fn_res.is_sharded,
-        ndevices,
-        mlir_fn_res.is_pure,
+        length(linear_results), mlir_fn_res.is_sharded, ndevices, mlir_fn_res.is_pure
     )
 
-    shard_info_code, optional_shard_info_code, linear_result_shard_info = codegen_shard_info(
+    shard_info_code, linear_result_shard_info = codegen_shard_info(
         mlir_fn_res.is_sharded,
         length(linear_results),
         linear_results,
@@ -1438,6 +1437,7 @@ function compile(ctx, f, args; kwargs...)
 
     unflatten_code, used_shardinfo = codegen_unflatten!(
         linear_args,
+        roots,
         preserved_args,
         concretized_res_names,
         linear_results,
@@ -1449,52 +1449,53 @@ function compile(ctx, f, args; kwargs...)
         resharded_inputs,
     )
 
-    for (i, name) in enumerate(linear_result_shard_info)
-        if name in used_shardinfo
-            push!(shard_info_code, optional_shard_info_code[i])
-        end
-    end
+    isempty(used_shardinfo) && empty!(shard_info_code)
 
-    sync_call = if compile_options.sync
-        calls = []
-        for name in concretized_res_names
-            push!(calls, :(XLA.synced_buffer($(name))))
-        end
-        Expr(:block, calls...)
+    sync_call = if compile_options.sync && !isempty(concretized_res_names)
+        :(foreach(XLA.synced_buffer, linearized_results))
     else
         :()
     end
 
-    donated_buffers_set = if XLA.runtime(client) isa Val{:PJRT}
-        :(Base.IdSet{NTuple{<:Any,XLA.PJRT.Buffer}}())
+    n_donated = count(mlir_fn_res.donated_args_mask)
+    donated_buffers_stmt = if n_donated == 0
+        :()
+    elseif n_donated == 1
+        :(donated_buffers = nothing)
+    elseif XLA.runtime(client) isa Val{:PJRT}
+        :(donated_buffers = Base.IdSet{NTuple{<:Any,XLA.PJRT.Buffer}}())
     else
-        :(Base.IdSet{XLA.IFRT.Array}())
+        :(donated_buffers = Base.IdSet{XLA.IFRT.Array}())
     end
 
-    body = quote
-        global_mesh = $(global_mesh_expr)
-        donated_buffers = $(donated_buffers_set)
-        donated_args_mask = thunk.donated_args_mask
-        $(flatten_code...)
-        $(xla_call_code)
-        $(sync_call)
-        $(shard_info_code...)
-        $(unflatten_code...)
-        return result
+    body_stmts = Any[
+        global_mesh_expr == :() ? :() : :(global_mesh = $(global_mesh_expr)),
+        donated_buffers_stmt,
+        :(donated_args_mask = thunk.donated_args_mask),
+        flatten_code...,
+        xla_call_code,
+        sync_call,
+        map(thunk_chunk, shard_info_code)...,
+        unflatten_code...,
+    ]
+    filter!(stmt -> stmt != :(), body_stmts)
+    use_args_vec = !_has_no_huge_inline_fields(roots)
+    predefined_syms = use_args_vec ? (:thunk, :_args_vec) : (:thunk, :args)
+    body_stmts = outline_thunk_body(body_stmts, predefined_syms, (:result,))
+    if use_args_vec
+        pushfirst!(body_stmts, :(_args_vec = unpack_tuple_to_any_vec(args)))
     end
+
+    body = Expr(:block, body_stmts..., :(return result))
 
     if DEBUG_PRINT_CODEGEN[] && Reactant.Distributed.local_rank() == 0
         display(body)
+        chunk_types = collect_chunk_types!(DataType[], Set{DataType}(), body)
+        for CT in chunk_types
+            println("Body of ", CT, ":")
+            display(__thunk_chunk_fwd_body_cache[get_tag(CT)])
+        end
         display(mlir_fn_res.donated_args_mask)
-    end
-
-    fname = if body in keys(__thunk_rev_body_cache)
-        __thunk_rev_body_cache[body]
-    else
-        fname2 = gensym(Symbol(Symbol(f), :_reactant))
-        __thunk_rev_body_cache[body] = fname2
-        __thunk_fwd_body_cache[fname2] = body
-        fname2
     end
 
     return register_thunk(
