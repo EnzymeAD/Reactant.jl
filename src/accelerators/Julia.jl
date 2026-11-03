@@ -2229,7 +2229,8 @@ end
 compile_options(exe::HostExecutable) = exe.options
 
 ## HostLoadedExecutable
-mutable struct HostLoadedExecutable <: LoadedExecutable
+# `Tag` is unique per compiled program, so that `compile!` can define an `execute` method for each one
+mutable struct HostLoadedExecutable{Tag} <: LoadedExecutable
     const executable::HostExecutable
     const devices::Vector{Device}
     const logical_ids::Vector{CAPI.PJRT_LogicalDeviceIds}
@@ -2248,10 +2249,6 @@ isdeleted(exec::HostLoadedExecutable) = exec.deleted
 addressable_devices(exec::HostLoadedExecutable) = exec.devices
 addressable_device_logical_ids(exec::HostLoadedExecutable) = exec.logical_ids
 device_assignment(exec::HostLoadedExecutable) = exec.device_assignment
-
-function execute(::HostLoadedExecutable, arguments, dev)
-    throw(unimplemented("execution of `HostLoadedExecutable` is not supported yet"))
-end
 
 ## HostClient
 mutable struct HostClient <: Client
@@ -2301,7 +2298,7 @@ function buffer_from_host_buffer(
     _ndims = length(_size)
 
     size_in_bytes = prod(_size; init=_elsize)
-    minor_to_major = collect((_ndims - 1):-1:0)
+    minor_to_major = collect((_ndims-1):-1:0)
 
     # TODO support byte strides, layout and host buffer semantics
 
@@ -2372,9 +2369,110 @@ function compile!(client::HostClient, code, options)
         client.devices[idx]
     end
 
+    # translate `@main` op by op into the body of an `execute` method specific to this executable.
+    # buffers are row-major, so they are seen from Julia as column-major arrays with reversed dimensions.
+    block = IR.first_block(IR.region(main, 1))
+    nargs = IR.nargs(block)
+    vars = Dict{Ptr{Cvoid},Symbol}()
+    body = quote
+        length(arguments) == 1 ||
+            throw(invalid_argument(string("expected arguments for 1 device, got ", length(arguments))))
+        isnothing(dev) || dev === exec.devices[1] || throw(invalid_argument("cannot execute on another device"))
+        buffers = only(arguments)
+        length(buffers) == $nargs ||
+            throw(invalid_argument(string("expected ", $nargs, " arguments, got ", length(buffers))))
+    end
+
+    # inputs are wrapped without copying
+    for i in 1:nargs
+        arg = IR.argument(block, i)
+        T = IR.julia_type(eltype(IR.type(arg)))
+        dims = reverse(size(IR.type(arg)))
+        var = vars[arg.ref.ptr] = Symbol("%arg", i - 1)
+        push!(body.args, quote
+            isdeleted(buffers[$i]) && throw(invalid_argument(string("argument ", $i, " is deleted")))
+            $var = unsafe_wrap(Array, Ptr{$T}((buffers[$i]::HostBuffer).data), $dims)
+        end)
+    end
+
+    elementwise = Dict(
+        "stablehlo.add" => :+,
+        "stablehlo.subtract" => :-,
+        "stablehlo.multiply" => :*,
+        "stablehlo.maximum" => :max,
+        "stablehlo.minimum" => :min,
+        "stablehlo.negate" => :-,
+    )
+    outputs = Symbol[]
+    for op in block
+        opname = IR.name(op)
+        operands = [vars[IR.operand(op, i).ref.ptr] for i in 1:IR.noperands(op)]
+
+        if opname == "func.return"
+            append!(outputs, operands)
+            continue
+        end
+
+        IR.nresults(op) == 1 || throw(unimplemented("`$opname` with $(IR.nresults(op)) results is not supported"))
+        res = IR.result(op, 1)
+        T = IR.julia_type(eltype(IR.type(res)))
+        rhs = if haskey(elementwise, opname)
+            :(broadcast($(elementwise[opname]), $(operands...)))
+        elseif opname == "stablehlo.divide"
+            # integer division truncates towards zero, like `div`
+            :(broadcast($(T <: Integer ? :div : :/), $(operands...)))
+        elseif opname == "stablehlo.constant"
+            # the constant is built once here and embedded in the generated code
+            value = IR.getattr(op, "value")
+            dims = reverse(size(IR.type(res)))
+            if IR.issplat(value)
+                splat = IR.Attribute(Reactant.MLIR.API.mlirDenseElementsAttrGetSplatValue(value))
+                x = T === Bool ? Bool(splat) : T <: Integer ? T(Int64(splat)) : T(Float64(splat))
+                fill(x, dims)
+            elseif T === Bool
+                # dense boolean attributes are bit-packed
+                throw(unimplemented("non-splat boolean constants are not supported"))
+            else
+                data = Ptr{T}(Reactant.MLIR.API.mlirDenseElementsAttrGetRawData(value))
+                copy(unsafe_wrap(Array, data, dims))
+            end
+        else
+            throw(unimplemented("`$opname` is not supported by `HostClient`"))
+        end
+
+        var = vars[res.ref.ptr] = Symbol("%", length(vars) - nargs)
+        push!(body.args, :($var = $rhs))
+    end
+
+    # outputs are copied into new buffers, since they may alias inputs or embedded constants
+    push!(body.args, quote
+        out_dev = exec.devices[1]
+        out_mem = default_memory(out_dev)
+        results = Buffer[]
+        for res in ($(outputs...),)
+            # broadcasting over 0-dimensional arrays returns a scalar
+            out = res isa Array ? res : fill(res)
+            nbytes = sizeof(out)
+            data = Libc.malloc(max(nbytes, 1))
+            data == C_NULL && throw(resource_exhausted())
+            GC.@preserve out unsafe_copyto!(Ptr{UInt8}(data), Ptr{UInt8}(pointer(out)), nbytes)
+            dims = collect(Int64, reverse(size(out)))
+            minor_to_major = collect(Int64, (ndims(out)-1):-1:0)
+            push!(results, HostBuffer(data, nbytes, pjrt_eltype(eltype(out)), dims, minor_to_major, out_dev, out_mem))
+        end
+        return [results]
+    end)
+
+    tag = gensym(:main)
+    @eval function execute(
+        exec::HostLoadedExecutable{$(QuoteNode(tag))}, arguments::Vector{Vector{Buffer}}, dev
+    )
+        $body
+    end
+
     # single-device executables run as replica 0 of partition 0
     logical_ids = [CAPI.PJRT_LogicalDeviceIds(0, 0)]
-    return HostLoadedExecutable(exe, Device[dev], logical_ids, assignment, false)
+    return HostLoadedExecutable{tag}(exe, Device[dev], logical_ids, assignment, false)
 end
 
 unimplemented_c_hook() = Ptr{CAPI.PJRT_Error}(pointer_from_objref(root!(unimplemented())))
