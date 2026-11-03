@@ -1471,22 +1471,21 @@ end
 end
 
 """
-    compile!(client::Client, code::Vector{UInt8}, format::String, options::Vector{UInt8})
+    compile!(client::Client, code::Reactant.MLIR.IR.Module, options::Vector{UInt8})
 
 Compile `code` for the devices of `client` and return a loaded executable.
 
-`format` tells how `code` is encoded:
+## Arguments
 
-  - `"mlir"`: MLIR module bytecode or text. Reactant always sends this format: a StableHLO portable artifact (VHLO
+- `code`: MLIR module. Reactant always sends this format: a StableHLO portable artifact (VHLO
     bytecode) serialized to the version in the plugin's `stablehlo_current_version` attribute, or to XLA's default
     version if the plugin doesn't set it.
-  - `"hlo"`: serialized `HloModuleProto`.
-  - `"hlo_with_config"`: serialized `HloModuleProtoWithConfig`.
+- `options` is a serialized `CompileOptionsProto` (replica/partition counts, device assignment, ...).
 
-`options` is a serialized `CompileOptionsProto` (replica/partition counts, device assignment, ...).
+!!! warning
+`code` and `options` are owned by C and only valid during the call, so they must be copied before being stored.
 
-`code`, `format` and `options` are owned by C and only valid during the call, so they must be copied before being
-stored. The caller GC-roots the returned executable.
+The caller GC-roots the returned executable.
 
 !!! todo
 Not supported yet: no executable type exists and `PJRT_Client_Compile` always returns `UNIMPLEMENTED`.
@@ -1495,9 +1494,39 @@ Backs `PJRT_Client_Compile`.
 """
 compile!(::Client, args...)
 
-@pjrt_catch_return function client_compile(args::Ptr{CAPI.PJRT_Client_Compile_Args})::Ptr{CAPI.PJRT_Error}
+@pjrt_catch_return function client_compile(
+    args::Ptr{CAPI.PJRT_Client_Compile_Args}
+)::Ptr{CAPI.PJRT_Error}
+    @info "compile! called"
     client = unsafe_pointer_to_objref(unsafe_load(args.client))::Client
-    # TODO
+    program = Ptr{CAPI.PJRT_Program}(unsafe_load(args.program))
+    format = unsafe_string(
+        Ptr{Cchar}(unsafe_load(program.format)), unsafe_load(program.format_size)
+    )
+    format == "mlir" || throw(unimplemented("code in $format format is not supported"))
+    # code = unsafe_string(
+    #     Ptr{Cchar}(unsafe_load(program.code)), unsafe_load(program.code_size)
+    # )
+    code_str_ref = Reactant.MLIR.API.MlirStringRef(
+        unsafe_load(program.code), unsafe_load(program.code_size)
+    )
+    ctx = Reactant.ReactantContext()
+    mlir_mod = Reactant.MLIR.IR.Module(
+        Reactant.MLIR.API.stablehloDeserializePortableArtifactNoError(code_str_ref, ctx)
+    )
+    # options = unsafe_string(
+    #     Ptr{Cchar}(unsafe_load(args.compile_options)),
+    #     unsafe_load(args.compile_options_size),
+    # )
+    opts_ptr = Ptr{UInt8}(unsafe_load(args.compile_options))
+    opts_size = unsafe_load(args.compile_options_size)
+    opts_bytes = unsafe_wrap(Vector{UInt8}, opts_ptr, opts_size)
+    options = Reactant.ProtoUtils.proto_from_bytes(
+        Reactant.Proto.xla.CompileOptionsProto, opts_bytes
+    )
+    loaded_exec = compile!(client, mlir_mod, options)
+    root!(loaded_exec)
+    unsafe_store!(args.executable, Ptr{CAPI.PJRT_LoadedExecutable}(pointer_from_objref(loaded_exec)))
     throw(unimplemented())
 end
 
@@ -1712,12 +1741,13 @@ function buffer_from_host_buffer(
     return HostBuffer(new_data, size_in_bytes, _eltype, _size, minor_to_major, dev, mem)
 end
 
-function compile!(client::HostClient, code::String, options::String)
+function compile!(client::HostClient, code, options)
     @warn "compile!"
     print("code = ")
     println(code)
     print("options = ")
-    return println(options)
+    println(options)
+    return nothing
 end
 
 unimplemented_c_hook() = Ptr{CAPI.PJRT_Error}(pointer_from_objref(root!(unimplemented())))
