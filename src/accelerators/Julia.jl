@@ -406,30 +406,40 @@ end
     return pointer_from_objref(root!(Error(err.code, err.message)))
 end
 
-@pjrt_catch_return function event_destroy(args::Ptr{CAPI.PJRT_Event_Destroy_Args})::Ptr{CAPI.PJRT_Error}
+@pjrt_catch_return function event_destroy(
+    args::Ptr{CAPI.PJRT_Event_Destroy_Args}
+)::Ptr{CAPI.PJRT_Error}
     ptr = unsafe_load(args.event)
     ptr != C_NULL && unroot!(ptr)
     return ok()
 end
 
-@pjrt_catch_return function event_is_ready(args::Ptr{CAPI.PJRT_Event_IsReady_Args})::Ptr{CAPI.PJRT_Error}
+@pjrt_catch_return function event_is_ready(
+    args::Ptr{CAPI.PJRT_Event_IsReady_Args}
+)::Ptr{CAPI.PJRT_Error}
     event = unsafe_pointer_to_objref(unsafe_load(args.event))::Event
     unsafe_store!(args.is_ready, isready(event))
     return ok()
 end
 
-@pjrt_catch_return function event_error(args::Ptr{CAPI.PJRT_Event_Error_Args})::Ptr{CAPI.PJRT_Error}
+@pjrt_catch_return function event_error(
+    args::Ptr{CAPI.PJRT_Event_Error_Args}
+)::Ptr{CAPI.PJRT_Error}
     event = unsafe_pointer_to_objref(unsafe_load(args.event))::Event
     return event_error_ptr(event)
 end
 
-@pjrt_catch_return function event_await(args::Ptr{CAPI.PJRT_Event_Await_Args})::Ptr{CAPI.PJRT_Error}
+@pjrt_catch_return function event_await(
+    args::Ptr{CAPI.PJRT_Event_Await_Args}
+)::Ptr{CAPI.PJRT_Error}
     event = unsafe_pointer_to_objref(unsafe_load(args.event))::Event
     wait(event)
     return event_error_ptr(event)
 end
 
-@pjrt_catch_return function event_on_ready(args::Ptr{CAPI.PJRT_Event_OnReady_Args})::Ptr{CAPI.PJRT_Error}
+@pjrt_catch_return function event_on_ready(
+    args::Ptr{CAPI.PJRT_Event_OnReady_Args}
+)::Ptr{CAPI.PJRT_Error}
     event = unsafe_pointer_to_objref(unsafe_load(args.event))::Event
     callback = unsafe_load(args.callback)
     user_arg = unsafe_load(args.user_arg)
@@ -452,7 +462,9 @@ end
     return ok()
 end
 
-@pjrt_catch_return function event_create(args::Ptr{CAPI.PJRT_Event_Create_Args})::Ptr{CAPI.PJRT_Error}
+@pjrt_catch_return function event_create(
+    args::Ptr{CAPI.PJRT_Event_Create_Args}
+)::Ptr{CAPI.PJRT_Error}
     event = root!(Event())
     unsafe_store!(args.event, pointer_from_objref(event))
     return ok()
@@ -1661,7 +1673,7 @@ function buffer_from_host_buffer(
     _ndims = length(_size)
 
     size_in_bytes = prod(_size; init=_elsize)
-    minor_to_major = collect((_ndims-1):-1:0)
+    minor_to_major = collect((_ndims - 1):-1:0)
 
     # TODO support byte strides, layout and host buffer semantics
 
