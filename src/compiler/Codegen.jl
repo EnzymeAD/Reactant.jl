@@ -171,6 +171,7 @@ function traced_setfield_buffer_at_parent!(
 end
 
 function traced_setfield_buffer!(::Val, _cache_dict, val, concrete_res, _obj, _field, path)
+    # TODO we might require `concrete_backing(val)` for custom traced types
     return traced_setfield!(val, :data, concrete_res, path)
 end
 
@@ -816,6 +817,8 @@ function codegen_flatten!(
         for p in path[3:end]
             flatcode = :(traced_getfield($flatcode, $(Meta.quot(p))))
         end
+        # TODO we might need `codegen_concrete_backing(flatcode, arg)` for custom traced type
+        flatcode = codegen_concrete_backing(flatcode, arg)
 
         if runtime isa Val{:PJRT}
             push!(flatten_code, :($carg_sym = $flatcode))
@@ -917,7 +920,7 @@ function codegen_flatten!(
                 push!(flatten_code, :($usbuf = $carg_sym.data))
                 sbuf = Symbol(:sbuf_, i)
                 push!(flatten_names, sbuf)
-                if arg isa TracedRArray || arg isa TracedRNumber
+                if Reactant.is_traced_leaf(arg)
                     push!(flatten_code, :($sbuf = only(XLA.synced_buffer($usbuf))))
                 else
                     error("Unsupported type $(typeof(arg))")
@@ -1203,6 +1206,7 @@ function codegen_unflatten!(
                         )
                     end
                 else
+                    # TODO we might need `codegen_concrete_backing(unflatcode, result)` here for custom traced types
                     unflatcode = :(traced_setfield!(
                         $(unflatcode), :data, $(concrete_res_name_final), $(path)
                     ))
@@ -1259,6 +1263,8 @@ function codegen_unflatten!(
             for p in argpath[3:end]
                 argres = :(traced_getfield($argres, $(Meta.quot(p))))
             end
+            # TODO we might need `codegen_concrete_backing(argres, arg)` here for custom traced types
+            argres = codegen_concrete_backing(argres, arg)
 
             sym = Symbol("result", var_idx[])
             var_idx[] += 1
@@ -1409,7 +1415,8 @@ function codegen_unflatten_aliased_args!(
                     argres = :(traced_getfield($argres, $(Meta.quot(p))))
                 end
                 argpath_value = Symbol(:argpath_value_, pi)
-                argres_data = :($(argres).data)
+                # TODO we might require `codegen_concrete_backing(argres, arg)` for custom traced types
+                argres_data = :($(codegen_concrete_backing(argres, arg)).data)
                 if needs_copy
                     if runtime isa Val{:PJRT}
                         argres_data = :(map(copy, $argres_data))
@@ -1424,6 +1431,8 @@ function codegen_unflatten_aliased_args!(
                 push!(read_code, :($argpath_value = $argres_data))
             end
 
+            # TODO we might require `codegen_concrete_backing(res, result)` for custom traced types
+            res = codegen_concrete_backing(res, result)
             push!(write_code, :(traced_setfield!($res, :data, $argpath_value, $(path))))
         end
     end

@@ -4,6 +4,7 @@ using ReactantCore:
     ReactantCore,
     @annotate,
     @trace,
+    is_traced_leaf,
     annotate,
     within_compile,
     MissingTracedValue,
@@ -278,8 +279,6 @@ include("stdlibs/BLAS.jl")
 include("Enzyme.jl")
 
 export StackedBatchDuplicated, StackedBatchDuplicatedNoNeed
-
-const TracedType = Union{TracedRArray,TracedRNumber,MissingTracedValue}
 
 include("ControlFlow.jl")
 include("Enums.jl")

@@ -1,13 +1,6 @@
 using ScopedValues: ScopedValues, ScopedValue
 using ..Reactant:
-    MLIR,
-    TracedUtils,
-    Compiler,
-    OrderedIdDict,
-    TracedToTypes,
-    TracedType,
-    TracedTrack,
-    TracedSetPath
+    MLIR, TracedUtils, Compiler, OrderedIdDict, TracedToTypes, TracedTrack, TracedSetPath
 
 import ..Reactant: make_tracer
 
@@ -80,7 +73,7 @@ function process_probprog_function(f, args, op_name, with_rng=true)
     linear_args = []
     mlir_caller_args = MLIR.IR.Value[]
     for (_, v) in seen_cache
-        v isa TracedType || continue
+        is_traced_leaf(v) || continue
         push!(linear_args, v)
         push!(mlir_caller_args, v.mlir_data)
         v.paths = v.paths[1:(end - 1)]
@@ -153,9 +146,9 @@ function trace_logpdf_function(logdensity_fn, sample_pos, args)
     for (i, arg) in enumerate(args)
         make_tracer(seen, arg, (:_logpdf_trace, i), TracedTrack; toscalar=false)
     end
-    traced_vals = TracedType[]
+    traced_vals = Any[]
     for (_, v) in seen
-        v isa TracedType || continue
+        is_traced_leaf(v) || continue
         push!(traced_vals, v)
         v.paths = v.paths[1:(end - 1)]
     end

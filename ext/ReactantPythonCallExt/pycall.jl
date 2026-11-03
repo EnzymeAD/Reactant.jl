@@ -22,9 +22,9 @@ function pycall_with_jax_tracing(f::Py, args...)
         prev_len = length(seen_args)
     end
 
-    linear_args = Reactant.TracedType[]
+    linear_args = Any[]
     for (k, v) in seen_args
-        k isa Reactant.TracedType || continue
+        Reactant.is_traced_leaf(k) || continue
         push!(linear_args, k)
     end
 
