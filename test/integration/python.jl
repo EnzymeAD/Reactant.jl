@@ -14,10 +14,9 @@ function multi_fn(x32, x64, flag, w1, b1, cparam, bfparam)
     return gated, scalar, cout
 end
 
-@testset "Pure-Julia SavedModel Export (No Python)" begin
+@testset "Pure-Julia SavedModel Export" begin
     @test !occursin("tensorflow", read(joinpath(pkgdir(Reactant), "CondaPkg.toml"), String))
     @test Reactant.Serialization.serialization_supported(Val(:SavedModel))
-    @test !any(m -> nameof(m) === :PythonCall, Base.loaded_modules_array())
 
     x = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float32, 2, 10))
     y = (; x=Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float32, 4, 10)))
@@ -46,7 +45,6 @@ end
     @test filesize(
         joinpath(dir_with_params, "variables", "variables.data-00000-of-00001")
     ) > 0
-    @test !any(m -> nameof(m) === :PythonCall, Base.loaded_modules_array())
 
     # Validation error checks
     @test_throws ArgumentError Reactant.Serialization.export_as_tf_saved_model(

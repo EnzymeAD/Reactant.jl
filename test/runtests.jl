@@ -86,14 +86,31 @@ if RUN_PYTHON_TEST || RUN_ENZYMEJAX_TEST || RUN_NUMPYRO_TEST
     else
         if RUN_PYTHON_TEST
             # TensorFlow wheels (used by integration/python to validate exported SavedModels)
-            # currently support up to Python 3.13.
+            # currently support up to Python 3.13. The environment may already have been
+            # resolved with a newer Python while precompiling (PythonCall extensions of our
+            # dependencies trigger a resolve). Downgrading the interpreter in place leaves
+            # stale `cp314` wheels behind on some platforms (notably Windows), so start from
+            # a clean environment whenever the installed Python is too new.
+            python = CondaPkg.which("python")
+            if python !== nothing
+                installed_py = try
+                    pycmd = "import sys; print('%d.%d' % sys.version_info[:2])"
+                    VersionNumber(readchomp(`$(python) -c $(pycmd)`))
+                catch
+                    nothing
+                end
+                if installed_py === nothing || installed_py >= v"3.14"
+                    env_dir = joinpath(dirname(CondaPkg.cur_deps_file()), ".CondaPkg")
+                    isdir(env_dir) && rm(env_dir; recursive=true, force=true)
+                end
+            end
             CondaPkg.add("python"; version="<3.14,>=3.9,<4", resolve=false)
             CondaPkg.add_pip("tensorflow"; version=">=2.17", resolve=false)
         end
         if RUN_ENZYMEJAX_TEST || RUN_NUMPYRO_TEST
             CondaPkg.add_pip("jax"; version=">=0.9", resolve=false)
         end
-        CondaPkg.resolve()
+        CondaPkg.resolve(; force=true)
 
         if RUN_ENZYMEJAX_TEST &&
             !add_pip_and_check("enzyme_ad", "enzyme_ad"; version=">=0.0.15")
