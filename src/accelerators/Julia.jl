@@ -66,6 +66,7 @@ function default_memory end
 function description end
 function device end
 function device_assignment end
+function addressable_device_logical_ids end
 function devices end
 function dimensions end
 function element_type end
@@ -1524,6 +1525,7 @@ A compiled program loaded on the devices of a `Client`, as returned by `compile!
 - `delete!`
 - `isdeleted`
 - `addressable_devices`
+- `addressable_device_logical_ids`
 - `device_assignment`
 - `execute`
 """
@@ -1622,6 +1624,29 @@ addressable_devices(::LoadedExecutable)
     devs = addressable_devices(exec)::Vector{Device}
     unsafe_store!(args.addressable_devices, Ptr{Ptr{CAPI.PJRT_Device}}(pointer(devs)))
     unsafe_store!(args.num_addressable_devices, length(devs))
+    return ok()
+end
+
+"""
+    addressable_device_logical_ids(exec::LoadedExecutable) -> Vector{CAPI.PJRT_LogicalDeviceIds}
+
+Return the logical (replica, partition) ids, 0-based, of each device in `addressable_devices(exec)`, in the same order.
+
+!!! warning
+The vector is handed to C by pointer, so it must be owned by `exec` and never be resized.
+Some versions of `PjRtCApiLoadedExecutable` call this when wrapping `exec` and treat any error as fatal.
+
+Backs `PJRT_LoadedExecutable_AddressableDeviceLogicalIds`.
+"""
+addressable_device_logical_ids(::LoadedExecutable)
+
+@pjrt_catch_return function loaded_executable_addressable_device_logical_ids(
+    args::Ptr{CAPI.PJRT_LoadedExecutable_AddressableDeviceLogicalIds_Args}
+)::Ptr{CAPI.PJRT_Error}
+    exec = unsafe_pointer_to_objref(unsafe_load(args.executable))::LoadedExecutable
+    ids = addressable_device_logical_ids(exec)::Vector{CAPI.PJRT_LogicalDeviceIds}
+    unsafe_store!(args.addressable_device_logical_ids, pointer(ids))
+    unsafe_store!(args.num_addressable_device_logical_ids, length(ids))
     return ok()
 end
 
@@ -2520,7 +2545,7 @@ function __init__()
         #= PJRT_Event_Set =# @cfunction(event_set, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Event_Set_Args},)),
         #= PJRT_Device_GetAttributes =# C_NULL,
         #= PJRT_Client_Load =# c_unimplemented,
-        #= PJRT_LoadedExecutable_AddressableDeviceLogicalIds =# c_unimplemented,
+        #= PJRT_LoadedExecutable_AddressableDeviceLogicalIds =# @cfunction(loaded_executable_addressable_device_logical_ids, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_LoadedExecutable_AddressableDeviceLogicalIds_Args},)),
         #= PJRT_Buffer_Bitcast =# c_unimplemented,
         #= PJRT_Error_ForEachPayload =# @cfunction(error_for_each_payload, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Error_ForEachPayload_Args},)),
         #= PJRT_TopologyDescription_Fingerprint =# c_unimplemented,
