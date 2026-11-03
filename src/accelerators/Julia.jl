@@ -400,36 +400,36 @@ function Base.notify(event::Event, err::Union{Nothing,Error}=nothing)
 end
 
 # every `PJRT_Error` handed out by an event is freed independently by its receiver, so each one must be a new object
-function event_error_ptr(event::Event)::Ptr{CAPI.PJRT_Error}
+@pjrt_catch_return function event_error_ptr(event::Event)::Ptr{CAPI.PJRT_Error}
     err = event.error
     isnothing(err) && return ok()
     return pointer_from_objref(root!(Error(err.code, err.message)))
 end
 
-function event_destroy(args::Ptr{CAPI.PJRT_Event_Destroy_Args})::Ptr{CAPI.PJRT_Error}
+@pjrt_catch_return function event_destroy(args::Ptr{CAPI.PJRT_Event_Destroy_Args})::Ptr{CAPI.PJRT_Error}
     ptr = unsafe_load(args.event)
     ptr != C_NULL && unroot!(ptr)
     return ok()
 end
 
-function event_is_ready(args::Ptr{CAPI.PJRT_Event_IsReady_Args})::Ptr{CAPI.PJRT_Error}
+@pjrt_catch_return function event_is_ready(args::Ptr{CAPI.PJRT_Event_IsReady_Args})::Ptr{CAPI.PJRT_Error}
     event = unsafe_pointer_to_objref(unsafe_load(args.event))::Event
     unsafe_store!(args.is_ready, isready(event))
     return ok()
 end
 
-function event_error(args::Ptr{CAPI.PJRT_Event_Error_Args})::Ptr{CAPI.PJRT_Error}
+@pjrt_catch_return function event_error(args::Ptr{CAPI.PJRT_Event_Error_Args})::Ptr{CAPI.PJRT_Error}
     event = unsafe_pointer_to_objref(unsafe_load(args.event))::Event
     return event_error_ptr(event)
 end
 
-function event_await(args::Ptr{CAPI.PJRT_Event_Await_Args})::Ptr{CAPI.PJRT_Error}
+@pjrt_catch_return function event_await(args::Ptr{CAPI.PJRT_Event_Await_Args})::Ptr{CAPI.PJRT_Error}
     event = unsafe_pointer_to_objref(unsafe_load(args.event))::Event
     wait(event)
     return event_error_ptr(event)
 end
 
-function event_on_ready(args::Ptr{CAPI.PJRT_Event_OnReady_Args})::Ptr{CAPI.PJRT_Error}
+@pjrt_catch_return function event_on_ready(args::Ptr{CAPI.PJRT_Event_OnReady_Args})::Ptr{CAPI.PJRT_Error}
     event = unsafe_pointer_to_objref(unsafe_load(args.event))::Event
     callback = unsafe_load(args.callback)
     user_arg = unsafe_load(args.user_arg)
@@ -452,7 +452,7 @@ function event_on_ready(args::Ptr{CAPI.PJRT_Event_OnReady_Args})::Ptr{CAPI.PJRT_
     return ok()
 end
 
-function event_create(args::Ptr{CAPI.PJRT_Event_Create_Args})::Ptr{CAPI.PJRT_Error}
+@pjrt_catch_return function event_create(args::Ptr{CAPI.PJRT_Event_Create_Args})::Ptr{CAPI.PJRT_Error}
     event = root!(Event())
     unsafe_store!(args.event, pointer_from_objref(event))
     return ok()
@@ -487,7 +487,8 @@ end
 )::Ptr{CAPI.PJRT_Error}
     # TODO return key-value pairs of `xla_version`, `stablehlo_current_version` and `stablehlo_minimum_version`
     unsafe_store!(args.attributes, C_NULL)
-    return unsafe_store!(args.num_attributes, 0)
+    unsafe_store!(args.num_attributes, 0)
+    return ok()
 end
 
 ## interfaces
@@ -530,7 +531,8 @@ id(::Memory)
     args::Ptr{CAPI.PJRT_Memory_Id_Args}
 )::Ptr{CAPI.PJRT_Error}
     memory = unsafe_pointer_to_objref(Ptr{Memory}(unsafe_load(args.memory)))::Memory
-    return unsafe_store!(args.id, id(memory))
+    unsafe_store!(args.id, id(memory))
+    return ok()
 end
 
 """
@@ -551,7 +553,8 @@ kind(::Memory)
     memory = unsafe_pointer_to_objref(Ptr{Memory}(unsafe_load(args.memory)))::Memory
     str = kind(memory)
     unsafe_store!(args.kind, Cstring(pointer(str)))
-    return unsafe_store!(args.kind_size, sizeof(str))
+    unsafe_store!(args.kind_size, sizeof(str))
+    return ok()
 end
 
 """
@@ -569,7 +572,8 @@ kind_id(::Memory)
 )::Ptr{CAPI.PJRT_Error}
     memory = unsafe_pointer_to_objref(Ptr{Memory}(unsafe_load(args.memory)))::Memory
     kid = kind_id(memory)::Integer
-    return unsafe_store!(args.kind_id, kid)
+    unsafe_store!(args.kind_id, kid)
+    return ok()
 end
 
 """
@@ -590,7 +594,8 @@ debug_string(::Memory)
     memory = unsafe_pointer_to_objref(Ptr{Memory}(unsafe_load(args.memory)))::Memory
     str = debug_string(memory)::String
     unsafe_store!(args.debug_string, Cstring(pointer(str)))
-    return unsafe_store!(args.debug_string_size, sizeof(str))
+    unsafe_store!(args.debug_string_size, sizeof(str))
+    return ok()
 end
 
 """
@@ -611,7 +616,8 @@ to_string(::Memory)
     memory = unsafe_pointer_to_objref(Ptr{Memory}(unsafe_load(args.memory)))::Memory
     str = to_string(memory)::String
     unsafe_store!(args.to_string, Cstring(pointer(str)))
-    return unsafe_store!(args.to_string_size, sizeof(str))
+    unsafe_store!(args.to_string_size, sizeof(str))
+    return ok()
 end
 
 """
@@ -632,7 +638,8 @@ addressable_devices(::Memory)
     memory = unsafe_pointer_to_objref(Ptr{Memory}(unsafe_load(args.memory)))::Memory
     devs = addressable_devices(memory)
     unsafe_store!(args.devices, Ptr{Ptr{CAPI.PJRT_Device}}(pointer(devs)))
-    return unsafe_store!(args.num_devices, length(devs))
+    unsafe_store!(args.num_devices, length(devs))
+    return ok()
 end
 
 """
@@ -663,7 +670,8 @@ id(::DeviceDescription)
 )::Ptr{CAPI.PJRT_Error}
     ptr = Ptr{DeviceDescription}(unsafe_load(args.device_description))
     desc = unsafe_pointer_to_objref(ptr)::DeviceDescription
-    return unsafe_store!(args.id, id(desc))
+    unsafe_store!(args.id, id(desc))
+    return ok()
 end
 
 """
@@ -680,7 +688,8 @@ pid(::DeviceDescription)
 )::Ptr{CAPI.PJRT_Error}
     ptr = Ptr{DeviceDescription}(unsafe_load(args.device_description))
     desc = unsafe_pointer_to_objref(ptr)::DeviceDescription
-    return unsafe_store!(args.process_index, pid(desc))
+    unsafe_store!(args.process_index, pid(desc))
+    return ok()
 end
 
 """
@@ -702,7 +711,8 @@ kind(::DeviceDescription)
     desc = unsafe_pointer_to_objref(ptr)::DeviceDescription
     str = kind(desc)::String
     unsafe_store!(args.device_kind, Cstring(pointer(str)))
-    return unsafe_store!(args.device_kind_size, sizeof(str))
+    unsafe_store!(args.device_kind_size, sizeof(str))
+    return ok()
 end
 
 """
@@ -729,7 +739,8 @@ attributes(::DeviceDescription)
     # TODO attributes not yet supported
     # attrs = attributes(desc)
     unsafe_store!(args.num_attributes, 0)
-    return unsafe_store!(args.attributes, C_NULL)
+    unsafe_store!(args.attributes, C_NULL)
+    return ok()
 end
 
 """
@@ -751,7 +762,8 @@ debug_string(::DeviceDescription)
     desc = unsafe_pointer_to_objref(ptr)::DeviceDescription
     str = debug_string(desc)::String
     unsafe_store!(args.debug_string, Cstring(pointer(str)))
-    return unsafe_store!(args.debug_string_size, sizeof(str))
+    unsafe_store!(args.debug_string_size, sizeof(str))
+    return ok()
 end
 
 """
@@ -773,7 +785,8 @@ to_string(::DeviceDescription)
     desc = unsafe_pointer_to_objref(ptr)::DeviceDescription
     str = to_string(desc)
     unsafe_store!(args.to_string, Cstring(pointer(str)))
-    return unsafe_store!(args.to_string_size, sizeof(str))
+    unsafe_store!(args.to_string_size, sizeof(str))
+    return ok()
 end
 
 """
@@ -809,9 +822,10 @@ description(::Device)
 )::Ptr{CAPI.PJRT_Error}
     device = unsafe_pointer_to_objref(Ptr{Device}(unsafe_load(args.device)))::Device
     desc = description(device)::DeviceDescription
-    return unsafe_store!(
+    unsafe_store!(
         args.device_description, Ptr{CAPI.PJRT_DeviceDescription}(pointer_from_objref(desc))
     )
+    return ok()
 end
 
 """
@@ -827,7 +841,8 @@ is_addressable(::Device)
     args::Ptr{CAPI.PJRT_Device_IsAddressable_Args}
 )::Ptr{CAPI.PJRT_Error}
     device = unsafe_pointer_to_objref(Ptr{Device}(unsafe_load(args.device)))::Device
-    return unsafe_store!(args.is_addressable, is_addressable(device)::Bool)
+    unsafe_store!(args.is_addressable, is_addressable(device)::Bool)
+    return ok()
 end
 
 """
@@ -845,7 +860,8 @@ local_hardware_id(::Device)
     args::Ptr{CAPI.PJRT_Device_LocalHardwareId_Args}
 )::Ptr{CAPI.PJRT_Error}
     device = unsafe_pointer_to_objref(Ptr{Device}(unsafe_load(args.device)))::Device
-    return unsafe_store!(args.local_hardware_id, local_hardware_id(device))
+    unsafe_store!(args.local_hardware_id, local_hardware_id(device))
+    return ok()
 end
 
 """
@@ -866,7 +882,8 @@ addressable_memories(::Device)
     device = unsafe_pointer_to_objref(Ptr{Device}(unsafe_load(args.device)))::Device
     mems = addressable_memories(device)::Vector{Memory}
     unsafe_store!(args.memories, Ptr{Ptr{CAPI.PJRT_Memory}}(pointer(mems)))
-    return unsafe_store!(args.num_memories, length(mems))
+    unsafe_store!(args.num_memories, length(mems))
+    return ok()
 end
 
 """
@@ -883,7 +900,8 @@ default_memory(::Device)
 )::Ptr{CAPI.PJRT_Error}
     device = unsafe_pointer_to_objref(Ptr{Device}(unsafe_load(args.device)))::Device
     mem = default_memory(device)::Memory
-    return unsafe_store!(args.memory, Ptr{CAPI.PJRT_Memory}(pointer_from_objref(mem)))
+    unsafe_store!(args.memory, Ptr{CAPI.PJRT_Memory}(pointer_from_objref(mem)))
+    return ok()
 end
 
 # TODO document and add interface function
@@ -919,7 +937,8 @@ abstract type Buffer end
 )::Ptr{CAPI.PJRT_Error}
     buffer = unsafe_pointer_to_objref(unsafe_load(args.buffer))::Buffer
     delete!(buffer)
-    return unroot!(buffer)
+    unroot!(buffer)
+    return ok()
 end
 
 """
@@ -936,7 +955,8 @@ Base.delete!(::Buffer)
     args::Ptr{CAPI.PJRT_Buffer_Delete_Args}
 )::Ptr{CAPI.PJRT_Error}
     buffer = unsafe_pointer_to_objref(unsafe_load(args.buffer))::Buffer
-    return delete!(buffer)
+    delete!(buffer)
+    return ok()
 end
 
 """
@@ -953,7 +973,8 @@ isdeleted(::Buffer)
 )::Ptr{CAPI.PJRT_Error}
     buffer = unsafe_pointer_to_objref(unsafe_load(args.buffer))::Buffer
     pred = isdeleted(buffer)::Bool
-    return unsafe_store!(args.is_deleted, pred)
+    unsafe_store!(args.is_deleted, pred)
+    return ok()
 end
 
 """
@@ -972,7 +993,8 @@ element_type(::Buffer)
     # _eltype = eltype(buffer)::Type
     # _pjrt_eltype = pjrt_eltype(_eltype)::CAPI.PJRT_Buffer_Type
     _pjrt_eltype = element_type(buffer)::CAPI.PJRT_Buffer_Type
-    return unsafe_store!(args.type, _pjrt_eltype)
+    unsafe_store!(args.type, _pjrt_eltype)
+    return ok()
 end
 
 """
@@ -993,7 +1015,8 @@ dimensions(::Buffer)
     buffer = unsafe_pointer_to_objref(unsafe_load(args.buffer))::Buffer
     dims = dimensions(buffer)::Vector{Int}
     unsafe_store!(args.dims, pointer(dims))
-    return unsafe_store!(args.num_dims, length(dims))
+    unsafe_store!(args.num_dims, length(dims))
+    return ok()
 end
 
 """
@@ -1011,7 +1034,8 @@ device(::Buffer)
     buffer = unsafe_pointer_to_objref(unsafe_load(args.buffer))::Buffer
     dev = device(buffer)::Device
     ptr = Ptr{CAPI.PJRT_Device}(pointer_from_objref(dev))
-    return unsafe_store!(args.device, ptr)
+    unsafe_store!(args.device, ptr)
+    return ok()
 end
 
 """
@@ -1029,7 +1053,8 @@ memory(::Buffer)
     buffer = unsafe_pointer_to_objref(unsafe_load(args.buffer))::Buffer
     mem = memory(buffer)::Memory
     ptr = Ptr{CAPI.PJRT_Memory}(pointer_from_objref(mem))
-    return unsafe_store!(args.memory, ptr)
+    unsafe_store!(args.memory, ptr)
+    return ok()
 end
 
 """
@@ -1046,7 +1071,8 @@ on_device_size_in_bytes(::Buffer)
 )::Ptr{CAPI.PJRT_Error}
     buffer = unsafe_pointer_to_objref(unsafe_load(args.buffer))::Buffer
     _size = on_device_size_in_bytes(buffer)
-    return unsafe_store!(args.on_device_size_in_bytes, Csize_t(_size))
+    unsafe_store!(args.on_device_size_in_bytes, Csize_t(_size))
+    return ok()
 end
 
 """
@@ -1071,7 +1097,8 @@ copy_to_device(::Device, ::Buffer)
     dst_buffer = copy_to_device(dst_dev, buffer)::Buffer
     root!(dst_buffer)
     ptr = Ptr{CAPI.PJRT_Buffer}(pointer_from_objref(dst_buffer))
-    return unsafe_store!(args.dst_buffer, ptr)
+    unsafe_store!(args.dst_buffer, ptr)
+    return ok()
 end
 
 """
@@ -1136,7 +1163,8 @@ to_host_buffer(::Ptr, ::Buffer)
 
     event = root!(Event())
     notify(event)
-    return unsafe_store!(args.event, Ptr{CAPI.PJRT_Event}(pointer_from_objref(event)))
+    unsafe_store!(args.event, Ptr{CAPI.PJRT_Event}(pointer_from_objref(event)))
+    return ok()
 end
 
 """
@@ -1153,7 +1181,8 @@ is_on_cpu(::Buffer)
 )::Ptr{CAPI.PJRT_Error}
     buffer = unsafe_pointer_to_objref(unsafe_load(args.buffer))::Buffer
     pred = is_on_cpu(buffer)::Bool
-    return unsafe_store!(args.is_on_cpu, pred)
+    unsafe_store!(args.is_on_cpu, pred)
+    return ok()
 end
 
 """
@@ -1170,7 +1199,8 @@ unsafe_pointer(::Buffer)
 )::Ptr{CAPI.PJRT_Error}
     buffer = unsafe_pointer_to_objref(unsafe_load(args.buffer))::Buffer
     ptr = unsafe_pointer(buffer)::Ptr
-    return unsafe_store!(args.buffer_pointer, UInt(ptr))
+    unsafe_store!(args.buffer_pointer, UInt(ptr))
+    return ok()
 end
 
 """
@@ -1195,7 +1225,8 @@ abstract type Client end
     args::Ptr{CAPI.PJRT_Client_Destroy_Args}
 )::Ptr{CAPI.PJRT_Error}
     client = unsafe_pointer_to_objref(unsafe_load(args.client))::Client
-    return unroot!(client)
+    unroot!(client)
+    return ok()
 end
 
 """
@@ -1216,7 +1247,8 @@ platform_name(::Client)
     client = unsafe_pointer_to_objref(unsafe_load(args.client))::Client
     str = platform_name(client)::String
     unsafe_store!(args.platform_name, Cstring(pointer(str)))
-    return unsafe_store!(args.platform_name_size, sizeof(str))
+    unsafe_store!(args.platform_name_size, sizeof(str))
+    return ok()
 end
 
 """
@@ -1237,7 +1269,8 @@ platform_version(::Client)
     client = unsafe_pointer_to_objref(unsafe_load(args.client))::Client
     str = platform_version(client)::String
     unsafe_store!(args.platform_version, Cstring(pointer(str)))
-    return unsafe_store!(args.platform_version_size, sizeof(str))
+    unsafe_store!(args.platform_version_size, sizeof(str))
+    return ok()
 end
 
 """
@@ -1254,7 +1287,8 @@ process_index(::Client)
 )::Ptr{CAPI.PJRT_Error}
     client = unsafe_pointer_to_objref(unsafe_load(args.client))::Client
     pid = process_index(client)
-    return unsafe_store!(args.process_index, pid)
+    unsafe_store!(args.process_index, pid)
+    return ok()
 end
 
 """
@@ -1275,7 +1309,8 @@ devices(::Client)
     client = unsafe_pointer_to_objref(unsafe_load(args.client))::Client
     devs = devices(client)::Vector{Device}
     unsafe_store!(args.devices, Ptr{Ptr{CAPI.PJRT_Device}}(pointer(devs)))
-    return unsafe_store!(args.num_devices, length(devs))
+    unsafe_store!(args.num_devices, length(devs))
+    return ok()
 end
 
 """
@@ -1296,7 +1331,8 @@ addressable_devices(::Client)
     client = unsafe_pointer_to_objref(unsafe_load(args.client))::Client
     devs = addressable_devices(client)::Vector{Device}
     unsafe_store!(args.addressable_devices, Ptr{Ptr{CAPI.PJRT_Device}}(pointer(devs)))
-    return unsafe_store!(args.num_addressable_devices, length(devs))
+    unsafe_store!(args.num_addressable_devices, length(devs))
+    return ok()
 end
 
 """
@@ -1317,7 +1353,8 @@ addressable_memories(::Client)
     client = unsafe_pointer_to_objref(unsafe_load(args.client))::Client
     mems = addressable_memories(client)::Vector{Memory}
     unsafe_store!(args.addressable_memories, Ptr{Ptr{CAPI.PJRT_Memory}}(pointer(mems)))
-    return unsafe_store!(args.num_addressable_memories, length(mems))
+    unsafe_store!(args.num_addressable_memories, length(mems))
+    return ok()
 end
 
 """
@@ -1417,7 +1454,8 @@ end
     )
 
     root!(buffer)
-    return unsafe_store!(args.buffer, Ptr{CAPI.PJRT_Buffer}(pointer_from_objref(buffer)))
+    unsafe_store!(args.buffer, Ptr{CAPI.PJRT_Buffer}(pointer_from_objref(buffer)))
+    return ok()
 end
 
 """
@@ -1623,7 +1661,7 @@ function buffer_from_host_buffer(
     _ndims = length(_size)
 
     size_in_bytes = prod(_size; init=_elsize)
-    minor_to_major = collect((_ndims - 1):-1:0)
+    minor_to_major = collect((_ndims-1):-1:0)
 
     # TODO support byte strides, layout and host buffer semantics
 
