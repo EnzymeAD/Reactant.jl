@@ -1,6 +1,6 @@
 module TFSavedModel
 
-using ..Serialization: serialization_supported, NUMPY_SIMPLE_TYPES
+using ..Serialization: NUMPY_SIMPLE_TYPES
 using ..Reactant: Reactant, Compiler, MLIR
 
 # https://github.com/openxla/stablehlo/blob/955fa7e6e3b0a6411edc8ff6fcce1e644440acbd/stablehlo/integrations/python/stablehlo/savedmodel/stablehlo_to_tf_saved_model.py
@@ -39,10 +39,7 @@ function export_as_saved_model(
         "To export a thunk, ensure that it has been compiled with `serializable=true`."
     )
 
-    if !serialization_supported(Val(:SavedModel))
-        error("Serialization to SavedModel is not supported. This might happen if \
-               PythonCall hasn't been installed and loaded.")
-    end
+    ensure_saved_model_supported()
 
     MLIR.IR.@dispose ctx = Reactant.ReactantContext() begin
         MLIR.IR.activate(ctx)
@@ -103,14 +100,26 @@ function export_as_saved_model(
 end
 
 function to_tf_saved_model(fn_spec::ReactantFunctionSpec, path::String)
-    if !serialization_supported(Val(:SavedModel))
-        error("Serialization to SavedModel is not supported. This might happen if \
-               PythonCall hasn't been installed and loaded.")
-    end
+    ensure_saved_model_supported()
     return __to_tf_saved_model(fn_spec, path)
 end
 
+pythoncall_ext_loaded(::Val) = false
+
+function ensure_saved_model_supported()
+    if !pythoncall_ext_loaded(Val(:PythonCall))
+        error(
+            "Serialization to SavedModel is not supported because `PythonCall` hasn't " *
+            "been installed and loaded. Load it with `using PythonCall` and ensure the " *
+            "`tensorflow` Python package is installed (e.g. with " *
+            "`using CondaPkg; CondaPkg.add_pip(\"tensorflow\")`).",
+        )
+    end
+    return __ensure_tf_loaded!()
+end
+
 # Defined in the PythonCallExt module
+function __ensure_tf_loaded! end
 function __to_tf_saved_model end
 
 end

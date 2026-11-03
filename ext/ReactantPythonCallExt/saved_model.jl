@@ -1,7 +1,19 @@
 # TODO(#2263): at some point, we should use the TF C++ API to export the SavedModel
 
+Reactant.Serialization.TFSavedModel.pythoncall_ext_loaded(::Val{:PythonCall}) = true
+
+function Reactant.Serialization.TFSavedModel.__ensure_tf_loaded!()
+    return ensure_tf_loaded!()
+end
+
 function Reactant.Serialization.serialization_supported(::Val{:SavedModel})
-    return SAVED_MODEL_EXPORT_SUPPORTED[]
+    SAVED_MODEL_LOADED[] && return true
+    try
+        ensure_tf_loaded!()
+        return true
+    catch
+        return false
+    end
 end
 
 function _extract_call_parameters(args::Tuple, input_locations, state_dict)
@@ -63,6 +75,7 @@ end
 function Reactant.Serialization.TFSavedModel.__to_tf_saved_model(
     fn_spec::Reactant.Serialization.TFSavedModel.ReactantFunctionSpec, path::String
 )
+    ensure_tf_loaded!()
     tfm = tfptr[].Module()
 
     state_dict = Dict(
