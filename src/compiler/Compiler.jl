@@ -336,7 +336,7 @@ Base.@nospecializeinfer function compile_mlir!(
         isempty(arch) && error("Could not determine the gfx target of the ROCm device")
         toolkit_option = isempty(XLA.ROCM_PATH[]) ? "" : " toolkit=$(XLA.ROCM_PATH[])"
 
-        jit = "convert-polygeist-to-llvm{backend=rocm preserve-xla-funcs=true},strip-gpu-info,rocdl-attach-target{arch=$(arch) O=$(cuOptLevel[])},enzymexla-gpu-module-to-binary{format=fatbin$(toolkit_option)},lower-jit,symbol-dce"
+        jit = "convert-polygeist-to-llvm{backend=rocm preserve-xla-funcs=true},strip-gpu-info,rocdl-attach-target{arch=$(arch) O=$(cuOptLevel[])},enzymexla-gpu-module-to-binary{format=fatbin$(toolkit_option) parallel=true},lower-jit,symbol-dce"
     else
         kern = if is_raising
             "lower-kernel{backend=cpu},symbol-dce,canonicalize"
@@ -1267,7 +1267,7 @@ function __resolve_device_and_client(client, seen_args, linear_args, is_sharded)
 end
 
 function compile_xla(f, args; kwargs...)
-    MLIR.IR.@dispose ctx = Reactant.ReactantContext() begin
+    MLIR.IR.@dispose ctx = initialize_reactant_context() begin
         compile_xla(ctx, f, args; kwargs...)
     end
 end
@@ -1370,8 +1370,21 @@ Reactant.@annotate "compile $(string(f))" function compile_xla(
     end
 end
 
+function initialize_reactant_context()
+    ctx = Reactant.ReactantContext()
+
+    max_threads = PARALLEL_COMPILATION_MAX_THREADS[]
+    if max_threads > 1
+        tp = @something(PARALLEL_COMPILATION_POOL[], MLIR.IR.ThreadPool(; max_threads))
+        MLIR.IR.set_thread_pool!(tp; context=ctx)
+        PARALLEL_COMPILATION_POOL[] = tp
+    end
+
+    return ctx
+end
+
 function compile(f, args; kwargs...)
-    MLIR.IR.@dispose ctx = Reactant.ReactantContext() begin
+    MLIR.IR.@dispose ctx = initialize_reactant_context() begin
         compile(ctx, f, args; kwargs...)
     end
 end
