@@ -51,6 +51,37 @@ macro pjrt_catch_return(fdef)
     return esc(fdef)
 end
 
+# interface functions
+function id end
+function kind end
+function kind_id end
+function debug_string end
+function to_string end
+function addressable_devices end
+function pid end
+function attributes end
+function description end
+function is_addressable end
+function local_hardware_id end
+function addressable_memories end
+function default_memory end
+function isdeleted end
+function element_type end
+function dimensions end
+function device end
+function memory end
+function on_device_size_in_bytes end
+function copy_to_device end
+function to_host_buffer end
+function is_on_cpu end
+function unsafe_pointer end
+function platform_name end
+function platform_version end
+function process_index end
+function devices end
+function buffer_from_host_buffer end
+function compile! end
+
 # GC roots of objects whose pointers are handed to C; objects stay alive until they are unmarked
 const gc_roots = IdSet{Any}()
 const gc_roots_lock = ReentrantLock()
@@ -386,10 +417,31 @@ function checkinterface(T::Type{<:Memory})
     return nothing
 end
 
+"""
+    id(mem::Memory) -> Integer
+
+Return the id of `mem`, unique among the memories of its client.
+
+Backs `PJRT_Memory_Id`.
+"""
+id(::Memory)
+
 @pjrt_catch_return function memory_id(args::Ptr{CAPI.PJRT_Memory_Id_Args})::Ptr{CAPI.PJRT_Error}
     memory = unsafe_pointer_to_objref(Ptr{Memory}(unsafe_load(args.memory)))::Memory
     unsafe_store!(args.id, id(memory))
 end
+
+"""
+    kind(mem::Memory) -> String
+
+Return the kind of `mem` (e.g. `"device"`, `"pinned_host"`).
+
+!!! warning
+The string is handed to C by pointer, so it must be owned by `mem`.
+
+Backs `PJRT_Memory_Kind`.
+"""
+kind(::Memory)
 
 @pjrt_catch_return function memory_kind(args::Ptr{CAPI.PJRT_Memory_Kind_Args})::Ptr{CAPI.PJRT_Error}
     memory = unsafe_pointer_to_objref(Ptr{Memory}(unsafe_load(args.memory)))::Memory
@@ -398,11 +450,33 @@ end
     unsafe_store!(args.kind_size, sizeof(str))
 end
 
+"""
+    kind_id(mem::Memory) -> Integer
+
+Return a platform-dependent id that uniquely identifies the kind of `mem`.
+Memories with the same `kind` must return the same `kind_id`.
+
+Backs `PJRT_Memory_Kind_Id`.
+"""
+kind_id(::Memory)
+
 @pjrt_catch_return function memory_kind_id(args::Ptr{CAPI.PJRT_Memory_Kind_Id_Args})::Ptr{CAPI.PJRT_Error}
     memory = unsafe_pointer_to_objref(Ptr{Memory}(unsafe_load(args.memory)))::Memory
     kid = kind_id(memory)::Integer
     unsafe_store!(args.kind_id, kid)
 end
+
+"""
+    debug_string(mem::Memory) -> String
+
+Return a verbose description of `mem` for debugging.
+    
+!!! warning
+The string is handed to C by pointer, so it must be owned by `mem`.
+
+Backs `PJRT_Memory_DebugString`.
+"""
+debug_string(::Memory)
 
 @pjrt_catch_return function memory_debug_string(
     args::Ptr{CAPI.PJRT_Memory_DebugString_Args}
@@ -413,12 +487,36 @@ end
     unsafe_store!(args.debug_string_size, sizeof(str))
 end
 
+"""
+    to_string(mem::Memory) -> String
+
+Return a short, user-facing description of `mem`.
+
+!!! warning
+The string is handed to C by pointer, so it must be owned by `mem`.
+
+Backs `PJRT_Memory_ToString`.
+"""
+to_string(::Memory)
+
 @pjrt_catch_return function memory_to_string(args::Ptr{CAPI.PJRT_Memory_ToString_Args})::Ptr{CAPI.PJRT_Error}
     memory = unsafe_pointer_to_objref(Ptr{Memory}(unsafe_load(args.memory)))::Memory
     str = to_string(memory)::String
     unsafe_store!(args.to_string, Cstring(pointer(str)))
     unsafe_store!(args.to_string_size, sizeof(str))
 end
+
+"""
+    addressable_devices(mem::Memory) -> Vector{Device}
+
+Return the devices that can address `mem`.
+
+!!! warning
+The vector is handed to C by pointer, so it must be owned by `mem` and never be resized.
+
+Backs `PJRT_Memory_AddressableByDevices`.
+"""
+addressable_devices(::Memory)
 
 @pjrt_catch_return function memory_addressable_by_devices(
     args::Ptr{CAPI.PJRT_Memory_AddressableByDevices_Args}
@@ -443,6 +541,15 @@ end
 """
 abstract type DeviceDescription end
 
+"""
+    id(desc::DeviceDescription) -> Integer
+
+Return the id of the device described by `desc`, unique among the devices of its platform across all processes.
+
+Backs `PJRT_DeviceDescription_Id`.
+"""
+id(::DeviceDescription)
+
 @pjrt_catch_return function device_description_id(
     args::Ptr{CAPI.PJRT_DeviceDescription_Id_Args}
 )::Ptr{CAPI.PJRT_Error}
@@ -451,6 +558,15 @@ abstract type DeviceDescription end
     unsafe_store!(args.id, id(desc))
 end
 
+"""
+    pid(desc::DeviceDescription) -> Integer
+
+Return the index of the process that owns the device described by `desc`. Always `0` in single-process settings.
+
+Backs `PJRT_DeviceDescription_ProcessIndex`.
+"""
+pid(::DeviceDescription)
+
 @pjrt_catch_return function device_description_process_index(
     args::Ptr{CAPI.PJRT_DeviceDescription_ProcessIndex_Args}
 )::Ptr{CAPI.PJRT_Error}
@@ -458,6 +574,44 @@ end
     desc = unsafe_pointer_to_objref(ptr)::DeviceDescription
     unsafe_store!(args.process_index, pid(desc))
 end
+
+"""
+    kind(desc::DeviceDescription) -> String
+
+Return a vendor-dependent string that uniquely identifies the kind of device (e.g. `"Tesla V100-SXM2-16GB"`).
+
+!!! warning
+The string is handed to C by pointer, so it must be owned by `desc`.
+
+Backs `PJRT_DeviceDescription_Kind`.
+"""
+kind(::DeviceDescription)
+
+@pjrt_catch_return function device_description_kind(
+    args::Ptr{CAPI.PJRT_DeviceDescription_Kind_Args}
+)::Ptr{CAPI.PJRT_Error}
+    ptr = Ptr{DeviceDescription}(unsafe_load(args.device_description))
+    desc = unsafe_pointer_to_objref(ptr)::DeviceDescription
+    str = kind(desc)::String
+    unsafe_store!(args.device_kind, Cstring(pointer(str)))
+    unsafe_store!(args.device_kind_size, sizeof(str))
+end
+
+"""
+    attributes(desc::DeviceDescription)
+
+Return the device-specific attributes of the device described by `desc` as name-value pairs.
+PJRT supports values of type `String`, `Int64`, `Vector{Int64}`, `Float32` and `Bool`.
+
+!!! warning
+`PjRtCApiClient` copies the attributes once, when it wraps the device description, and treats any error as fatal.
+
+!!! todo
+Not supported yet: this method is never called and `PJRT_DeviceDescription_Attributes` always returns an empty list.
+
+Backs `PJRT_DeviceDescription_Attributes`.
+"""
+attributes(::DeviceDescription)
 
 # TODO find the interface of `attributes`
 @pjrt_catch_return function device_description_attributes(
@@ -470,15 +624,17 @@ end
     unsafe_store!(args.attributes, C_NULL)
 end
 
-@pjrt_catch_return function device_description_kind(
-    args::Ptr{CAPI.PJRT_DeviceDescription_Kind_Args}
-)::Ptr{CAPI.PJRT_Error}
-    ptr = Ptr{DeviceDescription}(unsafe_load(args.device_description))
-    desc = unsafe_pointer_to_objref(ptr)::DeviceDescription
-    str = kind(desc)::String
-    unsafe_store!(args.device_kind, Cstring(pointer(str)))
-    unsafe_store!(args.device_kind_size, sizeof(str))
-end
+"""
+    debug_string(desc::DeviceDescription) -> String
+
+Return a verbose description of the device for debugging.
+    
+!!! warning
+The string is handed to C by pointer, so it must be owned by `desc`.
+
+Backs `PJRT_DeviceDescription_DebugString`.
+"""
+debug_string(::DeviceDescription)
 
 @pjrt_catch_return function device_description_debug_string(
     args::Ptr{CAPI.PJRT_DeviceDescription_DebugString_Args}
@@ -489,6 +645,18 @@ end
     unsafe_store!(args.debug_string, Cstring(pointer(str)))
     unsafe_store!(args.debug_string_size, sizeof(str))
 end
+
+"""
+    to_string(desc::DeviceDescription) -> String
+
+Return a short, user-facing description of the device.
+
+!!! warning
+The string is handed to C by pointer, so it must be owned by `desc`.
+
+Backs `PJRT_DeviceDescription_ToString`.
+"""
+to_string(::DeviceDescription)
 
 @pjrt_catch_return function device_description_to_string(
     args::Ptr{CAPI.PJRT_DeviceDescription_ToString_Args}
@@ -519,6 +687,15 @@ function checkinterface(T::Type{<:Device})
     end
 end
 
+"""
+    description(dev::Device) -> DeviceDescription
+
+Return the description of `dev`. The description must be kept alive by `dev`.
+
+Backs `PJRT_Device_GetDescription`.
+"""
+description(::Device)
+
 @pjrt_catch_return function device_get_description(
     args::Ptr{CAPI.PJRT_Device_GetDescription_Args}
 )::Ptr{CAPI.PJRT_Error}
@@ -530,6 +707,15 @@ end
     )
 end
 
+"""
+    is_addressable(dev::Device) -> Bool
+
+Return whether `dev` can be addressed by the client of this process.
+
+Backs `PJRT_Device_IsAddressable`.
+"""
+is_addressable(::Device)
+
 @pjrt_catch_return function device_is_addressable(
     args::Ptr{CAPI.PJRT_Device_IsAddressable_Args}
 )::Ptr{CAPI.PJRT_Error}
@@ -537,12 +723,35 @@ end
     unsafe_store!(args.is_addressable, is_addressable(device)::Bool)
 end
 
+"""
+    local_hardware_id(dev::Device) -> Integer
+
+Return an opaque hardware id of `dev` (e.g. the CUDA device number).
+Use the vendor's handle for the physical device.
+Not guaranteed to be dense (i.e. `∈(0:n-1)`), and `-1` if undefined.
+
+Backs `PJRT_Device_LocalHardwareId`.
+"""
+local_hardware_id(::Device)
+
 @pjrt_catch_return function device_local_hardware_id(
     args::Ptr{CAPI.PJRT_Device_LocalHardwareId_Args}
 )::Ptr{CAPI.PJRT_Error}
     device = unsafe_pointer_to_objref(Ptr{Device}(unsafe_load(args.device)))::Device
     unsafe_store!(args.local_hardware_id, local_hardware_id(device))
 end
+
+"""
+    addressable_memories(dev::Device) -> Vector{Memory}
+
+Return the memories that `dev` can address.
+
+!!! warning
+The vector is handed to C by pointer, so it must be owned by `dev` and never be resized.
+
+Backs `PJRT_Device_AddressableMemories`.
+"""
+addressable_memories(::Device)
 
 @pjrt_catch_return function device_addressable_memories(
     args::Ptr{CAPI.PJRT_Device_AddressableMemories_Args}
@@ -553,6 +762,15 @@ end
     unsafe_store!(args.num_memories, length(mems))
 end
 
+"""
+    default_memory(dev::Device) -> Memory
+
+Return the memory where buffers are placed on `dev` when no memory is given. Must be one of `addressable_memories(dev)`.
+
+Backs `PJRT_Device_DefaultMemory`.
+"""
+default_memory(::Device)
+
 @pjrt_catch_return function device_default_memory(
     args::Ptr{CAPI.PJRT_Device_DefaultMemory_Args}
 )::Ptr{CAPI.PJRT_Error}
@@ -561,6 +779,7 @@ end
     unsafe_store!(args.memory, Ptr{CAPI.PJRT_Memory}(pointer_from_objref(mem)))
 end
 
+# TODO document and add interface function
 @pjrt_catch_return function device_memory_stats(
     args::Ptr{CAPI.PJRT_Device_MemoryStats_Args}
 )::Ptr{CAPI.PJRT_Error}
@@ -588,16 +807,11 @@ end
 """
 abstract type Buffer end
 
-function isdeleted end
-function element_type end
-function dimensions end
-function device end
-function memory end
-function on_device_size_in_bytes end
-function copy_to_device end
-function to_host_buffer end
-function is_on_cpu end
-function unsafe_pointer end
+@pjrt_catch_return function buffer_destroy(args::Ptr{CAPI.PJRT_Buffer_Destroy_Args})::Ptr{CAPI.PJRT_Error}
+    buffer = unsafe_pointer_to_objref(unsafe_load(args.buffer))::Buffer
+    delete!(buffer)
+    unroot!(buffer)
+end
 
 """
     delete!(buffer::Buffer)
@@ -609,6 +823,11 @@ Backs `PJRT_Buffer_Delete`.
 """
 Base.delete!(::Buffer)
 
+@pjrt_catch_return function buffer_delete(args::Ptr{CAPI.PJRT_Buffer_Delete_Args})::Ptr{CAPI.PJRT_Error}
+    buffer = unsafe_pointer_to_objref(unsafe_load(args.buffer))::Buffer
+    delete!(buffer)
+end
+
 """
     isdeleted(buffer::Buffer) -> Bool
 
@@ -618,6 +837,12 @@ Backs `PJRT_Buffer_IsDeleted`.
 """
 isdeleted(::Buffer)
 
+@pjrt_catch_return function buffer_is_deleted(args::Ptr{CAPI.PJRT_Buffer_IsDeleted_Args})::Ptr{CAPI.PJRT_Error}
+    buffer = unsafe_pointer_to_objref(unsafe_load(args.buffer))::Buffer
+    pred = isdeleted(buffer)::Bool
+    unsafe_store!(args.is_deleted, pred)
+end
+
 """
     element_type(buffer::Buffer) -> CAPI.PJRT_Buffer_Type
 
@@ -626,98 +851,6 @@ Return the PJRT element type of `buffer`.
 Backs `PJRT_Buffer_ElementType`.
 """
 element_type(::Buffer)
-
-"""
-    dimensions(buffer::Buffer) -> Vector{Int64}
-
-Return the dimensions of `buffer`. The returned vector is handed to C by pointer, so it must be owned by `buffer` and
-never be resized.
-
-Backs `PJRT_Buffer_Dimensions`.
-"""
-dimensions(::Buffer)
-
-"""
-    device(buffer::Buffer) -> Device
-
-Return the device where `buffer` resides. The device must be kept alive by its client.
-
-Backs `PJRT_Buffer_Device`.
-"""
-device(::Buffer)
-
-"""
-    memory(buffer::Buffer) -> Memory
-
-Return the memory space where `buffer` resides. The memory must be kept alive by its client.
-
-Backs `PJRT_Buffer_Memory`.
-"""
-memory(::Buffer)
-
-"""
-    on_device_size_in_bytes(buffer::Buffer) -> Integer
-
-Return the number of bytes that `buffer` occupies on its device.
-
-Backs `PJRT_Buffer_OnDeviceSizeInBytes`.
-"""
-on_device_size_in_bytes(::Buffer)
-
-"""
-    copy_to_device(dst::Device, buffer::Buffer) -> Buffer
-
-Return a new buffer with a copy of the data of `buffer` placed on `dst`. Must fail if `buffer` already resides on
-`dst`. The returned buffer is GC rooted by the caller.
-
-Backs `PJRT_Buffer_CopyToDevice`.
-"""
-copy_to_device(::Device, ::Buffer)
-
-"""
-    to_host_buffer(dst::Ptr, buffer::Buffer)
-
-Copy the data of `buffer` to the host memory pointed by `dst`, which must hold at least
-`on_device_size_in_bytes(buffer)` bytes. The copy is _currently_ synchronous.
-
-Backs `PJRT_Buffer_ToHostBuffer`.
-"""
-to_host_buffer(::Ptr, ::Buffer)
-
-"""
-    is_on_cpu(buffer::Buffer) -> Bool
-
-Return whether the data of `buffer` resides in host memory.
-
-Backs `PJRT_Buffer_IsOnCpu`.
-"""
-is_on_cpu(::Buffer)
-
-"""
-    unsafe_pointer(buffer::Buffer) -> Ptr
-
-Return the raw pointer to the data of `buffer`. The pointer is only valid until `buffer` is deleted or destroyed.
-
-Backs `PJRT_Buffer_UnsafePointer`.
-"""
-unsafe_pointer(::Buffer)
-
-@pjrt_catch_return function buffer_destroy(args::Ptr{CAPI.PJRT_Buffer_Destroy_Args})::Ptr{CAPI.PJRT_Error}
-    buffer = unsafe_pointer_to_objref(unsafe_load(args.buffer))::Buffer
-    delete!(buffer)
-    unroot!(buffer)
-end
-
-@pjrt_catch_return function buffer_delete(args::Ptr{CAPI.PJRT_Buffer_Delete_Args})::Ptr{CAPI.PJRT_Error}
-    buffer = unsafe_pointer_to_objref(unsafe_load(args.buffer))::Buffer
-    delete!(buffer)
-end
-
-@pjrt_catch_return function buffer_is_deleted(args::Ptr{CAPI.PJRT_Buffer_IsDeleted_Args})::Ptr{CAPI.PJRT_Error}
-    buffer = unsafe_pointer_to_objref(unsafe_load(args.buffer))::Buffer
-    pred = isdeleted(buffer)::Bool
-    unsafe_store!(args.is_deleted, pred)
-end
 
 @pjrt_catch_return function buffer_element_type(
     args::Ptr{CAPI.PJRT_Buffer_ElementType_Args}
@@ -729,6 +862,18 @@ end
     unsafe_store!(args.type, _pjrt_eltype)
 end
 
+"""
+    dimensions(buffer::Buffer) -> Vector{Int64}
+
+Return the dimensions of `buffer`.
+
+!!! warning
+The returned vector is handed to C by pointer, so it must be owned by `buffer` and never be resized.
+
+Backs `PJRT_Buffer_Dimensions`.
+"""
+dimensions(::Buffer)
+
 @pjrt_catch_return function buffer_dimensions(
     args::Ptr{CAPI.PJRT_Buffer_Dimensions_Args}
 )::Ptr{CAPI.PJRT_Error}
@@ -738,13 +883,14 @@ end
     unsafe_store!(args.num_dims, length(dims))
 end
 
-@pjrt_catch_return function buffer_on_device_size_in_bytes(
-    args::Ptr{CAPI.PJRT_Buffer_OnDeviceSizeInBytes_Args}
-)::Ptr{CAPI.PJRT_Error}
-    buffer = unsafe_pointer_to_objref(unsafe_load(args.buffer))::Buffer
-    _size = on_device_size_in_bytes(buffer)
-    unsafe_store!(args.on_device_size_in_bytes, Csize_t(_size))
-end
+"""
+    device(buffer::Buffer) -> Device
+
+Return the device where `buffer` resides. The device must be kept alive by its client.
+
+Backs `PJRT_Buffer_Device`.
+"""
+device(::Buffer)
 
 @pjrt_catch_return function buffer_device(args::Ptr{CAPI.PJRT_Buffer_Device_Args})::Ptr{CAPI.PJRT_Error}
     buffer = unsafe_pointer_to_objref(unsafe_load(args.buffer))::Buffer
@@ -753,12 +899,49 @@ end
     unsafe_store!(args.device, ptr)
 end
 
+"""
+    memory(buffer::Buffer) -> Memory
+
+Return the memory space where `buffer` resides. The memory must be kept alive by its client.
+
+Backs `PJRT_Buffer_Memory`.
+"""
+memory(::Buffer)
+
 @pjrt_catch_return function buffer_memory(args::Ptr{CAPI.PJRT_Buffer_Memory_Args})::Ptr{CAPI.PJRT_Error}
     buffer = unsafe_pointer_to_objref(unsafe_load(args.buffer))::Buffer
     mem = memory(buffer)::Memory
     ptr = Ptr{CAPI.PJRT_Memory}(pointer_from_objref(mem))
     unsafe_store!(args.memory, ptr)
 end
+
+"""
+    on_device_size_in_bytes(buffer::Buffer) -> Integer
+
+Return the number of bytes that `buffer` occupies on its device.
+
+Backs `PJRT_Buffer_OnDeviceSizeInBytes`.
+"""
+on_device_size_in_bytes(::Buffer)
+
+@pjrt_catch_return function buffer_on_device_size_in_bytes(
+    args::Ptr{CAPI.PJRT_Buffer_OnDeviceSizeInBytes_Args}
+)::Ptr{CAPI.PJRT_Error}
+    buffer = unsafe_pointer_to_objref(unsafe_load(args.buffer))::Buffer
+    _size = on_device_size_in_bytes(buffer)
+    unsafe_store!(args.on_device_size_in_bytes, Csize_t(_size))
+end
+
+"""
+    copy_to_device(dst::Device, buffer::Buffer) -> Buffer
+
+Return a new buffer with a copy of the data of `buffer` placed on `dst`.
+Must fail if `buffer` already resides on `dst`.
+The returned buffer is GC rooted by the caller.
+
+Backs `PJRT_Buffer_CopyToDevice`.
+"""
+copy_to_device(::Device, ::Buffer)
 
 @pjrt_catch_return function buffer_copy_to_device(args::Ptr{CAPI.PJRT_Buffer_CopyToDevice_Args}
 )::Ptr{CAPI.PJRT_Error}
@@ -772,6 +955,19 @@ end
     ptr = Ptr{CAPI.PJRT_Buffer}(pointer_from_objref(dst_buffer))
     unsafe_store!(args.dst_buffer, ptr)
 end
+
+"""
+    to_host_buffer(dst::Ptr, buffer::Buffer)
+
+Copy the data of `buffer` to the host memory pointed by `dst`, which must hold at least
+`on_device_size_in_bytes(buffer)` bytes.
+
+!!! todo
+The copy is _currently_ synchronous.
+
+Backs `PJRT_Buffer_ToHostBuffer`.
+"""
+to_host_buffer(::Ptr, ::Buffer)
 
 @pjrt_catch_return function buffer_to_host_buffer(args::Ptr{CAPI.PJRT_Buffer_ToHostBuffer_Args}
 )::Ptr{CAPI.PJRT_Error}
@@ -817,11 +1013,29 @@ end
     unsafe_store!(args.event, Ptr{CAPI.PJRT_Event}(pointer_from_objref(event)))
 end
 
+"""
+    is_on_cpu(buffer::Buffer) -> Bool
+
+Return whether the data of `buffer` resides in host memory.
+
+Backs `PJRT_Buffer_IsOnCpu`.
+"""
+is_on_cpu(::Buffer)
+
 @pjrt_catch_return function buffer_is_on_cpu(args::Ptr{CAPI.PJRT_Buffer_IsOnCpu_Args})::Ptr{CAPI.PJRT_Error}
     buffer = unsafe_pointer_to_objref(unsafe_load(args.buffer))::Buffer
     pred = is_on_cpu(buffer)::Bool
     unsafe_store!(args.is_on_cpu, pred)
 end
+
+"""
+    unsafe_pointer(buffer::Buffer) -> Ptr
+
+Return the raw pointer to the data of `buffer`. The pointer is only valid until `buffer` is deleted or destroyed.
+
+Backs `PJRT_Buffer_UnsafePointer`.
+"""
+unsafe_pointer(::Buffer)
 
 @pjrt_catch_return function buffer_unsafe_pointer(
     args::Ptr{CAPI.PJRT_Buffer_UnsafePointer_Args}
@@ -844,8 +1058,8 @@ end
 - `devices`
 - `addressable_devices`
 - `addressable_memories`
-- `compile!`
 - `buffer_from_host_buffer`
+- `compile!`
 """
 abstract type Client end
 
@@ -854,12 +1068,36 @@ abstract type Client end
     unroot!(client)
 end
 
+"""
+    platform_name(client::Client) -> String
+
+Return a string that identifies the platform of `client` (e.g. `"cpu"`, `"gpu"`, `"tpu"`).
+
+!!! warning
+The string is handed to C by pointer, so it must be owned by `client`.
+
+Backs `PJRT_Client_PlatformName`.
+"""
+platform_name(::Client)
+
 @pjrt_catch_return function client_platform_name(args::Ptr{CAPI.PJRT_Client_PlatformName_Args})::Ptr{CAPI.PJRT_Error}
     client = unsafe_pointer_to_objref(unsafe_load(args.client))::Client
     str = platform_name(client)::String
     unsafe_store!(args.platform_name, Cstring(pointer(str)))
     unsafe_store!(args.platform_name_size, sizeof(str))
 end
+
+"""
+    platform_version(client::Client) -> String
+
+Return a string containing the platform version of `client`.
+
+!!! warning
+The string is handed to C by pointer, so it must be owned by `client`.
+
+Backs `PJRT_Client_PlatformVersion`.
+"""
+platform_version(::Client)
 
 @pjrt_catch_return function client_platform_version(args::Ptr{CAPI.PJRT_Client_PlatformVersion_Args})::Ptr{CAPI.PJRT_Error}
     client = unsafe_pointer_to_objref(unsafe_load(args.client))::Client
@@ -868,11 +1106,32 @@ end
     unsafe_store!(args.platform_version_size, sizeof(str))
 end
 
+"""
+    process_index(client::Client) -> Integer
+
+Return the index of the process of `client`. Always `0` in single-process settings.
+
+Backs `PJRT_Client_ProcessIndex`.
+"""
+process_index(::Client)
+
 @pjrt_catch_return function client_process_index(args::Ptr{CAPI.PJRT_Client_ProcessIndex_Args})::Ptr{CAPI.PJRT_Error}
     client = unsafe_pointer_to_objref(unsafe_load(args.client))::Client
     pid = process_index(client)
     unsafe_store!(args.process_index, pid)
 end
+
+"""
+    devices(client::Client) -> Vector{Device}
+
+Return all the devices visible to `client`, including those that it cannot address.
+
+!!! warning
+The vector is handed to C by pointer, so it must be owned by `client` and never be resized.
+
+Backs `PJRT_Client_Devices`.
+"""
+devices(::Client)
 
 @pjrt_catch_return function client_devices(args::Ptr{CAPI.PJRT_Client_Devices_Args})::Ptr{CAPI.PJRT_Error}
     client = unsafe_pointer_to_objref(unsafe_load(args.client))::Client
@@ -881,12 +1140,36 @@ end
     unsafe_store!(args.num_devices, length(devs))
 end
 
+"""
+    addressable_devices(client::Client) -> Vector{Device}
+
+Return the subset of `devices(client)` that `client` can address.
+
+!!! warning
+The vector is handed to C by pointer, so it must be owned by `client` and never be resized.
+
+Backs `PJRT_Client_AddressableDevices`.
+"""
+addressable_devices(::Client)
+
 @pjrt_catch_return function client_addressable_devices(args::Ptr{CAPI.PJRT_Client_AddressableDevices_Args})::Ptr{CAPI.PJRT_Error}
     client = unsafe_pointer_to_objref(unsafe_load(args.client))::Client
     devs = addressable_devices(client)::Vector{Device}
     unsafe_store!(args.addressable_devices, Ptr{Ptr{CAPI.PJRT_Device}}(pointer(devs)))
     unsafe_store!(args.num_addressable_devices, length(devs))
 end
+
+"""
+    addressable_memories(client::Client) -> Vector{Memory}
+
+Return the memories that `client` can address.
+
+!!! warning
+The vector is handed to C by pointer, so it must be owned by `client` and never be resized.
+
+Backs `PJRT_Client_AddressableMemories`.
+"""
+addressable_memories(::Client)
 
 @pjrt_catch_return function client_addressable_memories(args::Ptr{CAPI.PJRT_Client_AddressableMemories_Args})::Ptr{CAPI.PJRT_Error}
     client = unsafe_pointer_to_objref(unsafe_load(args.client))::Client
@@ -895,10 +1178,38 @@ end
     unsafe_store!(args.num_addressable_memories, length(mems))
 end
 
-@pjrt_catch_return function client_compile(args::Ptr{CAPI.PJRT_Client_Compile_Args})::Ptr{CAPI.PJRT_Error}
-    client = unsafe_pointer_to_objref(unsafe_load(args.client))::Client
-    # TODO
-    throw(unimplemented())
+"""
+    buffer_from_host_buffer(
+        client::Client, dev::Device, mem::Memory, data::Ptr, type, dims, byte_strides, device_layout, host_buffer_semantics
+    ) -> Buffer
+
+Return a new buffer placed on memory `mem` of device `dev`, with a copy of the host `data`. The new buffer has element
+type `type::CAPI.PJRT_Buffer_Type` and dimensions `dims::Vector{Int64}`.
+
+## Arguments
+- `mem` is always one of `addressable_memories(dev)`. PJRT may pass only one of the two, so the caller fills in the other:
+
+  - only `dev` given: `mem` is `default_memory(dev)`.
+  - only `mem` given: `dev` is one of `addressable_devices(mem)`.
+
+- `byte_strides::Vector{Int64}` is empty for dense data in major-to-minor order.
+- `device_layout::Ptr{CAPI.PJRT_Buffer_MemoryLayout}` is `C_NULL` for the default layout.
+- `host_buffer_semantics::CAPI.PJRT_HostBufferSemantics` says how long `data` stays valid.
+- `done_with_host_buffer` is signaled as soon as this returns, so `data` must not be accessed afterwards.
+
+The caller GC-roots the returned buffer.
+
+Backs `PJRT_Client_BufferFromHostBuffer`.
+"""
+buffer_from_host_buffer(::Client, ::Device, ::Memory, args...)
+
+function buffer_from_host_buffer(client::Client, mem::Memory, args...)
+    # we select the first addressable device from the memory because there is no default
+    return buffer_from_host_buffer(client, first(addressable_devices(mem)), mem, args...)
+end
+
+function buffer_from_host_buffer(client::Client, dev::Device, args...)
+    return buffer_from_host_buffer(client, dev, default_memory(dev), args...)
 end
 
 @pjrt_catch_return function client_buffer_from_host_buffer(
@@ -963,6 +1274,37 @@ end
 
     root!(buffer)
     unsafe_store!(args.buffer, Ptr{CAPI.PJRT_Buffer}(pointer_from_objref(buffer)))
+end
+
+"""
+    compile!(client::Client, code::Vector{UInt8}, format::String, options::Vector{UInt8})
+
+Compile `code` for the devices of `client` and return a loaded executable.
+
+`format` tells how `code` is encoded:
+
+  - `"mlir"`: MLIR module bytecode or text. Reactant always sends this format: a StableHLO portable artifact (VHLO
+    bytecode) serialized to the version in the plugin's `stablehlo_current_version` attribute, or to XLA's default
+    version if the plugin doesn't set it.
+  - `"hlo"`: serialized `HloModuleProto`.
+  - `"hlo_with_config"`: serialized `HloModuleProtoWithConfig`.
+
+`options` is a serialized `CompileOptionsProto` (replica/partition counts, device assignment, ...).
+
+`code`, `format` and `options` are owned by C and only valid during the call, so they must be copied before being
+stored. The caller GC-roots the returned executable.
+
+!!! todo
+Not supported yet: no executable type exists and `PJRT_Client_Compile` always returns `UNIMPLEMENTED`.
+
+Backs `PJRT_Client_Compile`.
+"""
+compile!(::Client, args...)
+
+@pjrt_catch_return function client_compile(args::Ptr{CAPI.PJRT_Client_Compile_Args})::Ptr{CAPI.PJRT_Error}
+    client = unsafe_pointer_to_objref(unsafe_load(args.client))::Client
+    # TODO
+    throw(unimplemented())
 end
 
 ## HostMemory
@@ -1166,15 +1508,6 @@ function buffer_from_host_buffer(
     Libc.memcpy(new_data, data, size_in_bytes)
 
     return HostBuffer(new_data, size_in_bytes, _eltype, _size, minor_to_major, dev, mem)
-end
-
-function buffer_from_host_buffer(client::HostClient, mem::HostMemory, args...)
-    # we select the first addressable device from the memory because there is no default
-    return buffer_from_host_buffer(client, first(addressable_devices(mem)), mem, args...)
-end
-
-function buffer_from_host_buffer(client::HostClient, dev::HostDevice, args...)
-    return buffer_from_host_buffer(client, dev, default_memory(dev), args...)
 end
 
 unimplemented_c_hook() = Ptr{CAPI.PJRT_Error}(pointer_from_objref(root!(unimplemented())))
