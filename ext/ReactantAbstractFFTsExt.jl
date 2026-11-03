@@ -1,9 +1,18 @@
 module ReactantAbstractFFTsExt
 
 using AbstractFFTs: AbstractFFTs, fftdims
-using LinearAlgebra
-using Reactant: Reactant, MLIR, Ops, AnyTracedRArray, TracedRNumber, TracedUtils
+using LinearAlgebra: LinearAlgebra
+using Reactant:
+    Reactant,
+    AbstractConcreteArray,
+    AnyTracedRArray,
+    TracedRArray,
+    TracedRNumber,
+    ancestor,
+    promote_to,
+    unwrapped_eltype
 using Reactant.Ops: @opcall
+using ReactantCore: ReactantCore, materialize_traced_array
 
 # FFTW.jl defines methods on StridedArrays, and we have to be more specific than FFTW to
 # catch its methods.
@@ -17,8 +26,8 @@ function Reactant.make_tracer(
     @nospecialize(prev::AbstractFFTs.Plan{T}),
     @nospecialize(path),
     mode;
-    @nospecialize(track_numbers::Type = Union{}),
-    @nospecialize(sharding = Reactant.Sharding.NoSharding()),
+    @nospecialize(track_numbers::Type=Union{}),
+    @nospecialize(sharding=Reactant.Sharding.NoSharding()),
     @nospecialize(runtime),
     kwargs...,
 ) where {T}
@@ -39,6 +48,8 @@ function Reactant.traced_type_inner(
 end
 
 abstract type AbstractReactantFFTPlan{T} <: AbstractFFTs.Plan{T} end
+abstract type AbstractReactantOutOfPlaceFFTPlan{T} <: AbstractReactantFFTPlan{T} end
+abstract type AbstractReactantInPlaceFFTPlan{T} <: AbstractReactantFFTPlan{T} end
 AbstractFFTs.fftdims(p::AbstractReactantFFTPlan) = p.dims
 
 function reactant_fftplan(RT, p::AbstractFFTs.Plan)
@@ -115,13 +126,13 @@ for op in (:rfft, :fft, :ifft)
     @eval function AbstractFFTs.$(op)(x::AnyTracedRArray, dims)
         @assert maximum(dims) <= ndims(x) "Invalid dimensions for fft: $(dims)"
 
-        (dims isa Union{Integer,Reactant.TracedRNumber{<:Integer}} && (dims = (dims,)))
+        (dims isa Union{Integer,TracedRNumber{<:Integer}} && (dims = (dims,)))
 
         fft_lengths = Int64[size(x, dim) for dim in reverse(dims)]
         if __is_valid_stablehlo_fft_dims(dims, ndims(x))
             return @opcall fft(
-                TracedUtils.materialize_traced_array(x);
-                type=$(uppercase(string(op))),
+                materialize_traced_array(x);
+                type=($(uppercase(string(op)))),
                 length=fft_lengths,
             )
         end
@@ -129,8 +140,8 @@ for op in (:rfft, :fft, :ifft)
         return permutedims(
             @opcall(
                 fft(
-                    TracedUtils.materialize_traced_array(permutedims(x, perm));
-                    type=$(uppercase(string(op))),
+                    materialize_traced_array(permutedims(x, perm));
+                    type=($(uppercase(string(op)))),
                     length=fft_lengths,
                 )
             ),
@@ -150,7 +161,7 @@ for op in (:rfft, :fft, :ifft)
     # Out-of-place plan
     plan_name = Symbol("Reactant", uppercase(string(op)), "Plan")
     plan_f = Symbol("plan_", op)
-    @eval struct $(plan_name){T,D} <: AbstractReactantFFTPlan{T}
+    @eval struct $(plan_name){T,D} <: AbstractReactantOutOfPlaceFFTPlan{T}
         dims::D
     end
     @eval $(plan_name){T}(dims) where {T} = $(plan_name){T,typeof(dims)}(dims)
@@ -166,8 +177,8 @@ for op in (:rfft, :fft, :ifft)
     end
 
     @eval function LinearAlgebra.mul!(
-        y::AnyTracedRArray, p::$(plan_name), x::AnyTracedRArray
-    )
+        y::AnyTracedRArray, p::$(plan_name){T}, x::AnyTracedRArray{T}
+    ) where {T}
         return copyto!(y, AbstractFFTs.$(op)(x, fftdims(p)))
     end
 
@@ -175,7 +186,7 @@ for op in (:rfft, :fft, :ifft)
     if op !== :rfft
         plan_name! = Symbol("Reactant", uppercase(string(op)), "InPlacePlan")
         plan_f! = Symbol("plan_", op, "!")
-        @eval struct $(plan_name!){T,D} <: AbstractReactantFFTPlan{T}
+        @eval struct $(plan_name!){T,D} <: AbstractReactantInPlaceFFTPlan{T}
             dims::D
         end
         @eval $(plan_name!){T}(dims) where {T} = $(plan_name!){T,typeof(dims)}(dims)
@@ -199,8 +210,8 @@ for op in (:rfft, :fft, :ifft)
         end
 
         @eval function LinearAlgebra.mul!(
-            y::AnyTracedRArray, p::$(plan_name!), x::AnyTracedRArray
-        )
+            y::AnyTracedRArray, p::$(plan_name!){T}, x::AnyTracedRArray{T}
+        ) where {T}
             return copyto!(y, AbstractFFTs.$(op)(x, fftdims(p)))
         end
     end
@@ -212,14 +223,14 @@ for op in (:irfft,)
     @eval function AbstractFFTs.$(op)(x::AnyTracedRArray, d::Integer, dims)
         @assert maximum(dims) <= ndims(x) "Invalid dimensions for irfft: $(dims)"
 
-        (dims isa Union{Integer,Reactant.TracedRNumber{<:Integer}} && (dims = (dims,)))
+        (dims isa Union{Integer,TracedRNumber{<:Integer}} && (dims = (dims,)))
 
         fft_lengths = vcat(Int64[size(x, dim) for dim in reverse(dims[2:end])], d)
 
         if __is_valid_stablehlo_fft_dims(dims, ndims(x))
             return @opcall fft(
-                TracedUtils.materialize_traced_array(x);
-                type=$(uppercase(string(op))),
+                materialize_traced_array(x);
+                type=($(uppercase(string(op)))),
                 length=fft_lengths,
             )
         end
@@ -228,8 +239,8 @@ for op in (:irfft,)
         return permutedims(
             @opcall(
                 fft(
-                    TracedUtils.materialize_traced_array(permutedims(x, perm));
-                    type=$(uppercase(string(op))),
+                    materialize_traced_array(permutedims(x, perm));
+                    type=($(uppercase(string(op)))),
                     length=fft_lengths,
                 )
             ),
@@ -240,7 +251,7 @@ for op in (:irfft,)
     #Inverse plan I need to store the real array length along the first dim in dims
     plan_name = Symbol("Reactant", uppercase(string(op)), "Plan")
     plan_f = Symbol("plan_", op)
-    @eval struct $(plan_name){T,D} <: AbstractReactantFFTPlan{T}
+    @eval struct $(plan_name){T,D} <: AbstractReactantOutOfPlaceFFTPlan{T}
         dims::D
         length::Int
     end
@@ -261,6 +272,121 @@ for op in (:irfft,)
     ) where {T<:Complex}
         return copyto!(y, AbstractFFTs.$(op)(x, p.length, fftdims(p)))
     end
+end
+
+# AbstractFFTs defines `*(p::Plan{T}, x::AbstractArray) = p * copy1(T, x)`, assuming
+# implementations define `*(::Plan{T}, ::Array{T})`. Since `AbstractReactantFFTPlan`s
+# instead dispatch on `AnyTracedRArray{T}`, handle mismatched element types, untraced
+# arrays during compilation, and eager concrete/host arrays explicitly rather than
+# falling into an infinite `copy1` recursion (#3259).
+function _check_fft_input_eltype(p::AbstractFFTs.Plan{T}, x::AbstractArray) where {T}
+    if T <: Real &&
+        (x isa AnyTracedRArray || ancestor(x) isa AbstractConcreteArray) &&
+        unwrapped_eltype(x) <: Complex
+        throw(
+            ArgumentError(
+                "Cannot apply real-input FFT plan of type $(typeof(p)) to complex array of type $(typeof(x))",
+            ),
+        )
+    end
+    return nothing
+end
+
+function _promote_fft_input(::Type{T}, p::AbstractFFTs.Plan{T}, x::AbstractArray) where {T}
+    if x isa AnyTracedRArray || ancestor(x) isa AbstractConcreteArray
+        _check_fft_input_eltype(p, x)
+        return promote_to(TracedRArray{T,ndims(x)}, x)
+    end
+    return promote_to(TracedRArray{T,ndims(x)}, AbstractFFTs.copy1(T, x))
+end
+
+function _throw_untraced_fft_dest_error(p::AbstractFFTs.Plan, y::AbstractArray)
+    if ReactantCore.within_compile()
+        throw(
+            ArgumentError(
+                "Cannot store result of Reactant FFT plan of type $(typeof(p)) into untraced array of type $(typeof(y)); pass the destination array as a traced argument (converted with `Reactant.to_rarray`).",
+            ),
+        )
+    end
+    return throw(
+        ArgumentError(
+            "Cannot apply Reactant FFT plan of type $(typeof(p)) to host array of type $(typeof(y)); convert the array with `Reactant.to_rarray` first.",
+        ),
+    )
+end
+
+function Base.:*(p::AbstractReactantFFTPlan{T}, x::AbstractArray) where {T}
+    if x isa AnyTracedRArray
+        x isa AnyTracedRArray{T} && throw(MethodError(*, (p, x)))
+        return p * _promote_fft_input(T, p, x)
+    end
+    if ReactantCore.within_compile()
+        if p isa AbstractReactantOutOfPlaceFFTPlan
+            return p * _promote_fft_input(T, p, x)
+        end
+        throw(
+            ArgumentError(
+                "Cannot apply in-place Reactant FFT plan of type $(typeof(p)) to untraced array of type $(typeof(x)); pass the array as a traced argument (converted with `Reactant.to_rarray`) or use an out-of-place FFT plan.",
+            ),
+        )
+    end
+    if ancestor(x) isa AbstractConcreteArray
+        _check_fft_input_eltype(p, x)
+        fn = Reactant.compile(*, (p, x))
+        return fn(p, x)
+    end
+    return throw(
+        ArgumentError(
+            "Cannot apply Reactant FFT plan of type $(typeof(p)) to host array of type $(typeof(x)); convert the array with `Reactant.to_rarray` first.",
+        ),
+    )
+end
+
+function Base.:*(
+    p::AbstractFFTs.ScaledPlan{T,<:AbstractReactantFFTPlan}, x::AbstractArray
+) where {T}
+    if !ReactantCore.within_compile() &&
+        !(x isa AnyTracedRArray) &&
+        ancestor(x) isa AbstractConcreteArray
+        _check_fft_input_eltype(p, x)
+        fn = Reactant.compile(*, (p, x))
+        return fn(p, x)
+    end
+    return LinearAlgebra.rmul!(p.p * x, p.scale)
+end
+
+function LinearAlgebra.mul!(
+    y::AnyTracedRArray, p::AbstractReactantFFTPlan{T}, x::AbstractArray
+) where {T}
+    x isa AnyTracedRArray{T} && throw(MethodError(LinearAlgebra.mul!, (y, p, x)))
+    return LinearAlgebra.mul!(y, p, _promote_fft_input(T, p, x))
+end
+
+function LinearAlgebra.mul!(
+    y::AbstractArray, p::AbstractReactantFFTPlan{T}, x::AbstractArray
+) where {T}
+    if !ReactantCore.within_compile() && ancestor(y) isa AbstractConcreteArray
+        _check_fft_input_eltype(p, x)
+        fn = Reactant.compile(LinearAlgebra.mul!, (y, p, x))
+        return fn(y, p, x)
+    end
+    return _throw_untraced_fft_dest_error(p, y)
+end
+
+function LinearAlgebra.mul!(
+    y::AbstractArray,
+    p::AbstractFFTs.ScaledPlan{T,<:AbstractReactantFFTPlan},
+    x::AbstractArray,
+) where {T}
+    if y isa AnyTracedRArray
+        return LinearAlgebra.lmul!(p.scale, LinearAlgebra.mul!(y, p.p, x))
+    end
+    if !ReactantCore.within_compile() && ancestor(y) isa AbstractConcreteArray
+        _check_fft_input_eltype(p, x)
+        fn = Reactant.compile(LinearAlgebra.mul!, (y, p, x))
+        return fn(y, p, x)
+    end
+    return _throw_untraced_fft_dest_error(p, y)
 end
 
 # Because XLA defines ifft and irfft directly we need to support bfft by adding a normalization

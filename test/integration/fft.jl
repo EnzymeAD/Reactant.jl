@@ -344,3 +344,206 @@ end
     cmp = @compile myfft(mp, xr)
     @test cmp(mp, xr) ≈ myfft(mp, x)
 end
+
+module FFT3259Global
+using Reactant: Reactant
+const GLOBAL_RA = Ref{Any}()
+end
+
+@testset "Untraced, concrete, and mismatched arrays (#3259)" begin
+    AFTEx = Base.get_extension(Reactant, :ReactantAbstractFFTsExt)
+
+    @testset "Host Array outside @compile throws ArgumentError" begin
+        x_c = randn(ComplexF64, 4, 4, 4)
+        x_r = randn(Float64, 4, 4, 4)
+        x_rc = rfft(x_r, (1, 2))
+        y_c = similar(x_c)
+        y_rc = similar(x_rc)
+        y_r = similar(x_r)
+
+        p_ip = AFTEx.ReactantFFTInPlacePlan{ComplexF64}((1, 2))
+        p_iip = AFTEx.ReactantIFFTInPlacePlan{ComplexF64}((1, 2))
+        p_oop = AFTEx.ReactantFFTPlan{ComplexF64}((1, 2))
+        p_ioop = AFTEx.ReactantIFFTPlan{ComplexF64}((1, 2))
+        p_rfft = AFTEx.ReactantRFFTPlan{Float64}((1, 2))
+        p_irfft = AFTEx.ReactantIRFFTPlan{ComplexF64}((1, 2), 4)
+
+        for p in (p_ip, p_iip, p_oop, p_ioop, 2.0 * p_ip, 2.0 * p_oop)
+            @test_throws ArgumentError (p * x_c)
+            @test_throws ArgumentError LinearAlgebra.mul!(y_c, p, x_c)
+        end
+        @test_throws ArgumentError (p_rfft * x_r)
+        @test_throws ArgumentError LinearAlgebra.mul!(y_rc, p_rfft, x_r)
+        @test_throws ArgumentError (p_irfft * x_rc)
+        @test_throws ArgumentError LinearAlgebra.mul!(y_r, p_irfft, x_rc)
+        @test_throws ArgumentError ((2.0 * p_irfft) * x_rc)
+        @test_throws ArgumentError LinearAlgebra.mul!(y_r, 2.0 * p_irfft, x_rc)
+    end
+
+    @testset "Eager ConcreteRArray and reshaped ConcreteRArray" begin
+        x0 = Reactant.TestUtils.construct_test_array(ComplexF64, 4, 4, 4)
+        p_ip = AFTEx.ReactantFFTInPlacePlan{ComplexF64}((1, 2))
+        p_iip = AFTEx.ReactantIFFTInPlacePlan{ComplexF64}((1, 2))
+        p_oop = AFTEx.ReactantFFTPlan{ComplexF64}((1, 2))
+        p_rfft = AFTEx.ReactantRFFTPlan{Float32}((1, 2))
+        p_irfft = AFTEx.ReactantIRFFTPlan{ComplexF32}((1, 2), 4)
+
+        # In-place forward, inverse, and scaled plans mutate ConcreteRArray in-place
+        x_ra = Reactant.to_rarray(copy(x0))
+        res = p_ip * x_ra
+        @test Array(x_ra) ≈ fft(x0, (1, 2))
+        @test Array(res) ≈ fft(x0, (1, 2))
+
+        p_iip * x_ra
+        @test Array(x_ra) ≈ x0
+
+        (2.0 * p_ip) * x_ra
+        @test Array(x_ra) ≈ 2.0 .* fft(x0, (1, 2))
+
+        # Reshaped 1D ConcreteRArray buffer mutated in-place (Oceananigans buffer pattern)
+        buf = Reactant.to_rarray(copy(vec(x0)))
+        p_ip * reshape(buf, 4, 4, 4)
+        @test Array(buf) ≈ vec(fft(x0, (1, 2)))
+        (0.5 * p_iip) * reshape(buf, 4, 4, 4)
+        @test Array(buf) ≈ vec(0.5 .* x0)
+
+        # Out-of-place plans do not mutate input ConcreteRArray
+        x_ra = Reactant.to_rarray(copy(x0))
+        y_ra = p_oop * x_ra
+        @test Array(y_ra) ≈ fft(x0, (1, 2))
+        @test Array(x_ra) ≈ x0
+        @test Array((3.0 * p_oop) * x_ra) ≈ 3.0 .* fft(x0, (1, 2))
+        @test Array(x_ra) ≈ x0
+
+        xr0 = Reactant.TestUtils.construct_test_array(Float32, 4, 4, 4)
+        xr_ra = Reactant.to_rarray(copy(xr0))
+        yr_ra = p_rfft * xr_ra
+        @test Array(yr_ra) ≈ rfft(xr0, (1, 2))
+        @test Array(p_irfft * yr_ra) ≈ xr0
+
+        # Eager mul! on ConcreteRArray (including ScaledPlan)
+        dest_ra = similar(x_ra)
+        LinearAlgebra.mul!(dest_ra, p_oop, x_ra)
+        @test Array(dest_ra) ≈ fft(x0, (1, 2))
+        LinearAlgebra.mul!(dest_ra, 2.5 * p_oop, x_ra)
+        @test Array(dest_ra) ≈ 2.5 .* fft(x0, (1, 2))
+
+        # Real-input plan on complex ConcreteRArray throws ArgumentError
+        xc32_ra = Reactant.to_rarray(
+            Reactant.TestUtils.construct_test_array(ComplexF32, 4, 4, 4)
+        )
+        @test_throws ArgumentError (p_rfft * xc32_ra)
+        @test_throws ArgumentError ((2.0f0 * p_rfft) * xc32_ra)
+        @test_throws ArgumentError LinearAlgebra.mul!(similar(yr_ra), p_rfft, xc32_ra)
+    end
+
+    @testset "Untraced arrays inside @compile" begin
+        x_const = Reactant.TestUtils.construct_test_array(ComplexF32, 8, 4)
+        xr_const = Reactant.TestUtils.construct_test_array(Float32, 8, 4)
+        xrc_const = rfft(xr_const)
+        FFT3259Global.GLOBAL_RA[] = Reactant.to_rarray(copy(x_const))
+
+        # Out-of-place plans promote untraced constant Array and untraced global ConcreteRArray
+        for (plan_fn, ref_fn) in (
+            (FFTW.plan_fft, FFTW.fft),
+            (FFTW.plan_ifft, FFTW.ifft),
+            (FFTW.plan_bfft, FFTW.bfft),
+        )
+            p = plan_fn(copy(x_const))
+            f_const(p) = p * x_const
+            f_global_ra(p) =
+                p * (FFT3259Global.GLOBAL_RA[]::typeof(FFT3259Global.GLOBAL_RA[]))
+            @test Array((@compile f_const(p))(p)) ≈ ref_fn(x_const)
+            @test Array((@compile f_global_ra(p))(p)) ≈ ref_fn(x_const)
+        end
+
+        pr = FFTW.plan_rfft(copy(xr_const))
+        run_rfft_const(p) = p * xr_const
+        @test Array((@compile run_rfft_const(pr))(pr)) ≈ rfft(xr_const)
+
+        for (plan_fn, ref_fn) in
+            ((FFTW.plan_irfft, FFTW.irfft), (FFTW.plan_brfft, FFTW.brfft))
+            pir = plan_fn(copy(xrc_const), size(xr_const, 1))
+            run_irfft_const(p) = p * xrc_const
+            @test Array((@compile run_irfft_const(pir))(pir)) ≈
+                ref_fn(xrc_const, size(xr_const, 1))
+        end
+
+        # Traced planner applied to constant host Array inside @compile
+        x_seed = Reactant.to_rarray(copy(x_const))
+        f_traced_plan_const(seed) = plan_fft(seed) * x_const
+        @test Array((@compile f_traced_plan_const(x_seed))(x_seed)) ≈ fft(x_const)
+
+        # mul! with traced destination and untraced constant input succeeds
+        y_out = Reactant.to_rarray(similar(x_const))
+        p_oop = FFTW.plan_fft(copy(x_const))
+        p_bfft = FFTW.plan_bfft(copy(x_const))
+        f_mul_const!(y, p) = LinearAlgebra.mul!(y, p, x_const)
+        (@compile f_mul_const!(y_out, p_oop))(y_out, p_oop)
+        @test Array(y_out) ≈ fft(x_const)
+        (@compile f_mul_const!(y_out, p_bfft))(y_out, p_bfft)
+        @test Array(y_out) ≈ bfft(x_const)
+
+        # Closure-captured ConcreteRArray is traced and mutated in-place, while untraced
+        # host Arrays and untraced global ConcreteRArrays throw ArgumentError
+        for (plan_fn!, ref_fn) in (
+            (FFTW.plan_fft!, FFTW.fft),
+            (FFTW.plan_ifft!, FFTW.ifft),
+            (FFTW.plan_bfft!, FFTW.bfft),
+        )
+            p! = plan_fn!(copy(x_const))
+            closed_ra = Reactant.to_rarray(copy(x_const))
+            f_ip_closed(p) = p * closed_ra
+            (@compile f_ip_closed(p!))(p!)
+            @test Array(closed_ra) ≈ ref_fn(x_const)
+
+            f_ip_const(p) = p * copy(x_const)
+            f_ip_global_ra(p) =
+                p * (FFT3259Global.GLOBAL_RA[]::typeof(FFT3259Global.GLOBAL_RA[]))
+            @test_throws ArgumentError @compile f_ip_const(p!)
+            @test_throws ArgumentError @compile f_ip_global_ra(p!)
+        end
+        f_ip_traced_plan(seed) = plan_fft!(seed) * copy(x_const)
+        @test_throws ArgumentError @compile f_ip_traced_plan(x_seed)
+
+        # mul! into untraced destination array inside @compile throws ArgumentError
+        f_mul_bad_dest(p, x) = LinearAlgebra.mul!(similar(x_const), p, x)
+        @test_throws ArgumentError @compile f_mul_bad_dest(p_oop, x_seed)
+        @test_throws ArgumentError @compile f_mul_bad_dest(p_bfft, x_seed)
+    end
+
+    @testset "Element-type promotion and validation on TracedRArray" begin
+        x_f64 = Reactant.TestUtils.construct_test_array(Float64, 8)
+        x_cf32 = Reactant.TestUtils.construct_test_array(ComplexF32, 8)
+        x_f64_ra = Reactant.to_rarray(x_f64)
+        x_cf32_ra = Reactant.to_rarray(x_cf32)
+
+        p_cf64 = FFTW.plan_fft(zeros(ComplexF64, 8))
+        res_f64 = @jit(p_cf64 * x_f64_ra)
+        @test eltype(res_f64) == ComplexF64
+        @test Array(res_f64) ≈ p_cf64 * x_f64
+
+        res_cf32 = @jit(p_cf64 * x_cf32_ra)
+        @test eltype(res_cf32) == ComplexF64
+        @test Array(res_cf32) ≈ p_cf64 * x_cf32
+
+        # In-place ComplexF64 plan applied to Float64 TracedRArray allocates/promotes without mutating x_f64_ra
+        p_cf64! = FFTW.plan_fft!(zeros(ComplexF64, 8))
+        x_f64_copy = copy(x_f64_ra)
+        res_ip_f64 = @jit(p_cf64! * x_f64_ra)
+        @test eltype(res_ip_f64) == ComplexF64
+        @test Array(res_ip_f64) ≈ p_cf64! * x_f64
+        @test Array(x_f64_ra) == Array(x_f64_copy)
+
+        # mul! with mismatched input element type promotes to plan precision
+        y_cf64_ra = Reactant.to_rarray(zeros(ComplexF64, 8))
+        @jit LinearAlgebra.mul!(y_cf64_ra, p_cf64, x_cf32_ra)
+        @test Array(y_cf64_ra) ≈ p_cf64 * x_cf32
+
+        # Real-input rfft plan on Complex TracedRArray throws ArgumentError (does not drop imag)
+        p_rfft32 = FFTW.plan_rfft(zeros(Float32, 8))
+        y_rfft32_ra = Reactant.to_rarray(zeros(ComplexF32, 5))
+        @test_throws ArgumentError @jit(p_rfft32 * x_cf32_ra)
+        @test_throws ArgumentError @jit LinearAlgebra.mul!(y_rfft32_ra, p_rfft32, x_cf32_ra)
+    end
+end
