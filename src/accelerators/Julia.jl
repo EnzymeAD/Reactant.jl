@@ -2047,7 +2047,7 @@ compile!(::Client, args...)
     unsafe_store!(
         args.executable, Ptr{CAPI.PJRT_LoadedExecutable}(pointer_from_objref(loaded_exec))
     )
-    throw(unimplemented())
+    return ok()
 end
 
 ## HostMemory
@@ -2174,6 +2174,61 @@ end
 is_on_cpu(::HostBuffer) = true
 unsafe_pointer(buffer::HostBuffer) = buffer.data
 
+## HostExecutable
+mutable struct HostExecutable <: Executable
+    const name::String
+    const program::String
+    const output_types::Vector{CAPI.PJRT_Buffer_Type}
+    const options::Reactant.Proto.xla.CompileOptionsProto
+end
+
+name(exe::HostExecutable) = exe.name
+
+function num_replicas(exe::HostExecutable)
+    build_options = exe.options.executable_build_options
+    return isnothing(build_options) ? 1 : max(build_options.num_replicas, 1)
+end
+
+function num_partitions(exe::HostExecutable)
+    build_options = exe.options.executable_build_options
+    return isnothing(build_options) ? 1 : max(build_options.num_partitions, 1)
+end
+
+num_outputs(exe::HostExecutable) = length(exe.output_types)
+size_of_generated_code_in_bytes(::HostExecutable) = 0
+fingerprint(::HostExecutable) = throw(unimplemented("`HostExecutable` has no fingerprint"))
+output_element_types(exe::HostExecutable) = exe.output_types
+optimized_program(exe::HostExecutable) = exe.program
+function serialize(::HostExecutable)
+    throw(unimplemented("serialization of `HostExecutable` is not supported yet"))
+end
+compile_options(exe::HostExecutable) = exe.options
+
+## HostLoadedExecutable
+mutable struct HostLoadedExecutable <: LoadedExecutable
+    const executable::HostExecutable
+    const devices::Vector{Device}
+    const logical_ids::Vector{CAPI.PJRT_LogicalDeviceIds}
+    const device_assignment::Union{Nothing,Reactant.Proto.xla.DeviceAssignmentProto}
+    deleted::Bool
+end
+
+executable(exec::HostLoadedExecutable) = exec.executable
+
+function Base.delete!(exec::HostLoadedExecutable)
+    exec.deleted = true
+    return nothing
+end
+
+isdeleted(exec::HostLoadedExecutable) = exec.deleted
+addressable_devices(exec::HostLoadedExecutable) = exec.devices
+addressable_device_logical_ids(exec::HostLoadedExecutable) = exec.logical_ids
+device_assignment(exec::HostLoadedExecutable) = exec.device_assignment
+
+function execute(::HostLoadedExecutable, arguments, dev)
+    throw(unimplemented("execution of `HostLoadedExecutable` is not supported yet"))
+end
+
 ## HostClient
 mutable struct HostClient <: Client
     devices::Vector{Device}
@@ -2262,12 +2317,43 @@ function buffer_from_host_buffer(
 end
 
 function compile!(client::HostClient, code, options)
-    @warn "compile!"
-    print("code = ")
-    println(code)
-    print("options = ")
-    println(options)
-    return nothing
+    IR = Reactant.MLIR.IR
+
+    # `code` lives in a context owned by the caller, so only copies of its contents are kept
+    main = IR.lookup(IR.SymbolTable(code), "main")
+    isnothing(main) && throw(invalid_argument("program has no `main` function"))
+    ftype = IR.FunctionType(main)
+    output_types = map(1:IR.nresults(ftype)) do i
+        pjrt_eltype(IR.julia_type(eltype(IR.result(ftype, i))))
+    end
+
+    @show ftype
+    @show output_types
+
+    name_attr = IR.getattr(IR.Operation(code), "sym_name")
+    _name = isnothing(name_attr) ? "main" : String(name_attr)
+
+    exe = HostExecutable(_name, string(code), output_types, options)
+    if num_replicas(exe) * num_partitions(exe) != 1
+        throw(unimplemented("`HostClient` only supports single-device executables"))
+    end
+
+    # run on the device given by the device assignment, or on the first one if there is none
+    build_options = options.executable_build_options
+    assignment = isnothing(build_options) ? nothing : build_options.device_assignment
+    dev = if isnothing(assignment)
+        first(client.devices)
+    else
+        dev_id = only(only(assignment.computation_devices).replica_device_ids)
+        idx = findfirst(d -> id(description(d)) == dev_id, client.devices)
+        isnothing(idx) &&
+            throw(invalid_argument("device $dev_id is not addressable by `HostClient`"))
+        client.devices[idx]
+    end
+
+    # single-device executables run as replica 0 of partition 0
+    logical_ids = [CAPI.PJRT_LogicalDeviceIds(0, 0)]
+    return HostLoadedExecutable(exe, Device[dev], logical_ids, assignment, false)
 end
 
 unimplemented_c_hook() = Ptr{CAPI.PJRT_Error}(pointer_from_objref(root!(unimplemented())))
