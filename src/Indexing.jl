@@ -68,11 +68,20 @@ function Base.getindex(a::TracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
 end
 
 ### Wrapped Array Types
+function _getindex_ancestor(ancestor::Array{<:TracedRNumber}, idxs...)
+    if Reactant.use_overlayed_version(idxs)
+        return getindex(materialize_traced_array(ancestor), idxs...)
+    else
+        return Base._getindex(IndexLinear(), ancestor, Base.to_indices(ancestor, idxs)...)
+    end
+end
+_getindex_ancestor(ancestor, idxs...) = getindex(ancestor, idxs...)
+
 function Base.getindex(
     a::AnyTracedRArray{T,N}, index::Vararg{Union{Int,TracedRNumber{Int}},N}
 ) where {T,N}
     ancestor, idxs = TracedUtils.get_ancestor_and_indices(a, index...)
-    return getindex(ancestor, idxs...)
+    return _getindex_ancestor(ancestor, idxs...)
 end
 
 # This method is needed exclusively to resolve an ambiguity
@@ -159,17 +168,17 @@ end
 
 function Base.getindex(a::AnyTracedRArray{T,N}, linear_indices) where {T,N}
     ancestor, idxs = TracedUtils.get_ancestor_and_indices(a, linear_indices)
-    return getindex(ancestor, idxs...)
+    return _getindex_ancestor(ancestor, idxs...)
 end
 
 function Base.getindex(a::AnyTracedRArray{T,1}, indices) where {T}
     ancestor, idxs = TracedUtils.get_ancestor_and_indices(a, indices)
-    return getindex(ancestor, idxs...)
+    return _getindex_ancestor(ancestor, idxs...)
 end
 
 function Base.getindex(a::AnyTracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
     ancestor, idxs = TracedUtils.get_ancestor_and_indices(a, indices...)
-    return getindex(ancestor, idxs...)
+    return _getindex_ancestor(ancestor, idxs...)
 end
 
 ### Specialize certain dispatches for better codegen
@@ -627,10 +636,8 @@ function getindex_general(a::TracedRArray{T,N}, indices::Vararg{Any,N}) where {T
     return x
 end
 
-function overloaded_unsafe_getindex(
-    ::IndexLinear, a::Array{T,N}, idxs::Vararg{Any,N}
-) where {T,N}
-    return Base.unsafe_getindex(@opcall(constant(a)), idxs...)
+function overloaded_unsafe_getindex(::IndexLinear, a::Array{T,N}, idxs...) where {T,N}
+    return Base.unsafe_getindex(Reactant.promote_to(TracedRArray, a), idxs...)
 end
 
 function maybe_assert_scalar_setindexing(
