@@ -2040,7 +2040,6 @@ compile!(::Client, args...)
 @pjrt_catch_return function client_compile(
     args::Ptr{CAPI.PJRT_Client_Compile_Args}
 )::Ptr{CAPI.PJRT_Error}
-    @info "compile! called"
     client = unsafe_pointer_to_objref(unsafe_load(args.client))::Client
     program = Ptr{CAPI.PJRT_Program}(unsafe_load(args.program))
     format = unsafe_string(
@@ -2351,9 +2350,6 @@ function compile!(client::HostClient, code, options)
     output_types = map(1:IR.nresults(ftype)) do i
         pjrt_eltype(IR.julia_type(eltype(IR.result(ftype, i))))
     end
-
-    @show ftype
-    @show output_types
 
     name_attr = IR.getattr(IR.Operation(code), "sym_name")
     _name = isnothing(name_attr) ? "main" : String(name_attr)
