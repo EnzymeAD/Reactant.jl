@@ -317,7 +317,11 @@ Base.@nospecializeinfer function compile_mlir!(
 
     toolkit = XLA.CUDA_DATA_DIR[]
 
-    if backend == "cpu" || backend == "tpu" || backend == "neuron" || backend == "trainium"
+    if backend == "cpu" ||
+        backend == "tpu" ||
+        backend == "neuron" ||
+        backend == "trainium" ||
+        backend == "julia-cpu"
         kern = "lower-kernel{backend=cpu},canonicalize"
         if backend == "tpu" || backend == "neuron" || backend == "trainium"
             jit = "lower-jit{openmp=$(OpenMP[]) backend=cpu},symbol-dce,strip-debuginfo"
@@ -402,14 +406,16 @@ Base.@nospecializeinfer function compile_mlir!(
     end
 
     blas_int_width = sizeof(BlasInt) * 8
-    lower_enzymexla_linalg_pass = join(
-        [
-            "lower-enzymexla-linalg{backend=$backend blas_int_width=$blas_int_width}",
-            "lower-enzymexla-blas{backend=$backend blas_int_width=$blas_int_width}",
-            "lower-enzymexla-lapack{backend=$backend blas_int_width=$blas_int_width}",
-        ],
-        ",",
-    )
+    lower_enzymexla_linalg_pass = let backend = backend == "julia" ? "cpu" : backend
+        join(
+            [
+                "lower-enzymexla-linalg{backend=$backend blas_int_width=$blas_int_width}",
+                "lower-enzymexla-blas{backend=$backend blas_int_width=$blas_int_width}",
+                "lower-enzymexla-lapack{backend=$backend blas_int_width=$blas_int_width}",
+            ],
+            ",",
+        )
+    end
     lower_enzymexla_math_pass = "lower-enzymexla-math"
     # TODO legalization of comm.mpi ops to comm.nccl if compile_options.comm_options.legalize_mpi_to_nccl is true and backend is CUDA
     lower_comm_pass = if compile_options.comm_options.lowering_target === :jit

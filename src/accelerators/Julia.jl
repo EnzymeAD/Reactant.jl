@@ -1639,7 +1639,7 @@ function HostClient(args::Ptr{CAPI.PJRT_Client_Create_Args})::Ptr{CAPI.PJRT_Erro
     return ok()
 end
 
-platform_name(::HostClient) = "cpu"
+platform_name(::HostClient) = "julia-cpu"
 platform_version(::HostClient) = string(VERSION)
 process_index(::HostClient) = 0
 devices(client::HostClient) = client.devices
