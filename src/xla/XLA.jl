@@ -222,10 +222,10 @@ function __init__()
         )
         unsafe_store!(errptr, @cfunction(reactant_err, Cvoid, (Cstring,)))
 
+        # Also sets the log level, from `TF_CPP_MIN_LOG_LEVEL` or to WARNING;
+        # see `XLA.SetLogLevel` to change it later.
         initLogs = Libdl.dlsym(Reactant_jll.libReactantExtra_handle, "InitializeLogs")
         ccall(initLogs, Cvoid, ())
-        # Add most log level
-        # SetLogLevel(0)
 
         if haskey(ENV, "XLA_REACTANT_GPU_MEM_FRACTION")
             XLA_REACTANT_GPU_MEM_FRACTION[] = parse(
