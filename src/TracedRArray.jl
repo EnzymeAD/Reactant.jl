@@ -435,6 +435,9 @@ function _copyto!(dest::AnyTracedRArray, bc::Broadcasted)
     res0 = TracedUtils.elem_apply(bc.f, args...)
     if !(res0 isa Reactant.TracedType)
         # `bc.f` returned a constant that does not depend on its arguments:
+        if res0 isa Number
+            res0 = Reactant.promote_to(TracedRNumber{unwrapped_eltype(dest)}, res0)
+        end
         res0 = Reactant.broadcast_to_size(res0, size(dest))
     end
     res = Reactant.promote_to(TracedRArray{unwrapped_eltype(dest),ndims(dest)}, res0)
@@ -451,6 +454,12 @@ function _copyto!(dest::Array{<:TracedRNumber}, bc::Broadcasted)
     args = (Reactant.broadcast_to_size(Base.materialize(a), size(bc)) for a in bc.args)
 
     res = TracedUtils.elem_apply(bc.f, args...)
+    if !(res isa Reactant.TracedType)
+        if res isa Number
+            res = Reactant.promote_to(TracedRNumber{unwrapped_eltype(dest)}, res)
+        end
+        res = Reactant.broadcast_to_size(res, size(dest))
+    end
     for I in 1:length(dest)
         dest[I] = @allowscalar res[I]
     end

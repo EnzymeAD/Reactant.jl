@@ -175,7 +175,7 @@ function set_mlir_data!(x::AnyTracedRArray{T}, data) where {T}
     return x
 end
 
-get_ancestor_and_indices(a::TracedRArray, indices) = (a, indices)
+get_ancestor_and_indices(a::TracedRArray, indices...) = (a, indices)
 get_ancestor_and_indices(a::TracedRArray, indices, args...) = (a, (indices, args...))
 
 get_ancestor_and_indices(a::Array{<:TracedRNumber}, indices...) = (a, indices)
@@ -196,7 +196,9 @@ function get_ancestor_and_indices_inner(
     return get_ancestor_and_indices(parent(x), Base.reindex(parentindices(x), indices)...)
 end
 function get_ancestor_and_indices_inner(x::AnyTracedRArray{T,1}, indices) where {T}
-    return get_ancestor_and_indices(parent(x), Base.reindex(parentindices(x), indices))
+    return get_ancestor_and_indices(
+        parent(x), Base.reindex(parentindices(x), (indices,))...
+    )
 end
 function get_ancestor_and_indices_inner(x::AnyTracedRArray{T,N}, linear_index) where {T,N}
     return get_ancestor_and_indices_inner(x, [linear_index])
@@ -1052,10 +1054,12 @@ end
 
 function __lookup_unique_name_in_module(mod, name)
     new_name = name
-    tab = MLIR.IR.SymbolTable(MLIR.IR.Operation(mod))
-    for i in 0:10000
-        new_name = i == 0 ? name : name * "_" * string(i)
-        MLIR.IR.mlirIsNull(MLIR.API.mlirSymbolTableLookup(tab, new_name)) && return new_name
+    MLIR.IR.@dispose tab = MLIR.IR.SymbolTable(MLIR.IR.Operation(mod)) begin
+        for i in 0:10000
+            new_name = i == 0 ? name : name * "_" * string(i)
+            MLIR.IR.mlirIsNull(MLIR.API.mlirSymbolTableLookup(tab, new_name)) &&
+                return new_name
+        end
     end
     modstr = string(mod)
     return error("Mod\n$modstr\nCould not find unique name for $name")

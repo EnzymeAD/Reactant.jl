@@ -2156,6 +2156,47 @@ function einsum(
 end
 
 """
+`exp2`
+
+Performs element-wise base-2 exponential operation on `operand` tensor and
+produces a `result` tensor.
+
+See:
+https://github.com/openxla/stablehlo/blob/main/docs/spec.md#exp2
+
+# Example
+```mlir
+%result = stablehlo.exp2 %operand : tensor<2x2xf64>
+```
+"""
+function exp2(
+    operand::Value;
+    result=nothing::Union{Nothing,IR.Type},
+    result_accuracy=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[operand,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(result) && push!(op_ty_results, result)
+    !isnothing(result_accuracy) &&
+        push!(attributes, NamedAttribute("result_accuracy", result_accuracy))
+
+    return create_operation(
+        "stablehlo.exp2",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
 `exponential`
 
 Performs element-wise exponential operation on `operand` tensor and produces
@@ -2303,6 +2344,46 @@ function floor(operand::Value; result=nothing::Union{Nothing,IR.Type}, location=
 
     return create_operation(
         "stablehlo.floor",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
+`fma`
+
+Performs element-wise single-rounded IEEE-754 fused multiply-add of `a`,
+`b`, and `c` tensors and produces a `result` tensor.
+
+See:
+https://github.com/openxla/stablehlo/blob/main/docs/spec.md#fma
+
+# Example
+```mlir
+%result = stablehlo.fma %a, %b, %c : tensor<3xf32>
+```
+"""
+function fma(
+    a::Value,
+    b::Value,
+    c::Value;
+    result=nothing::Union{Nothing,IR.Type},
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[a, b, c]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(result) && push!(op_ty_results, result)
+
+    return create_operation(
+        "stablehlo.fma",
         location;
         operands,
         owned_regions,
@@ -2656,6 +2737,47 @@ function log_plus_one(
 
     return create_operation(
         "stablehlo.log_plus_one",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
+`log2`
+
+Performs element-wise base-2 logarithm operation on `operand` tensor and
+produces a `result` tensor.
+
+See:
+https://github.com/openxla/stablehlo/blob/main/docs/spec.md#log2
+
+# Example
+```mlir
+%result = stablehlo.log2 %operand : tensor<2x2xf64>
+```
+"""
+function log2(
+    operand::Value;
+    result=nothing::Union{Nothing,IR.Type},
+    result_accuracy=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[operand,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(result) && push!(op_ty_results, result)
+    !isnothing(result_accuracy) &&
+        push!(attributes, NamedAttribute("result_accuracy", result_accuracy))
+
+    return create_operation(
+        "stablehlo.log2",
         location;
         operands,
         owned_regions,

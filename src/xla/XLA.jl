@@ -22,11 +22,17 @@ const CUDA_DATA_DIR = Ref(
     isdefined(Reactant_jll, :ptxas_path) ? dirname(dirname(Reactant_jll.ptxas_path)) : ""
 )
 
+# The ROCm root `enzymexla-gpu-module-to-binary` assembles and links kernels with
+# (`llvm/bin/ld.lld` and `amdgcn/bitcode` under it). Empty leaves it to the pass,
+# which reads `ROCM_PATH`, `ROCM_ROOT` and `ROCM_HOME` itself.
+const ROCM_PATH = Ref(get(ENV, "ROCM_PATH", ""))
+
 function LLVMclopts(opts...)
     args = ["", opts...]
     return MLIR.API.ReactantLLVMParseCommandLineOptions(length(args), args, C_NULL)
 end
 
+include("CAPI/CAPI.jl")
 include("Distributed.jl")
 include("Client.jl")
 include("Device.jl")
@@ -216,10 +222,10 @@ function __init__()
         )
         unsafe_store!(errptr, @cfunction(reactant_err, Cvoid, (Cstring,)))
 
+        # Also sets the log level, from `TF_CPP_MIN_LOG_LEVEL` or to WARNING;
+        # see `XLA.SetLogLevel` to change it later.
         initLogs = Libdl.dlsym(Reactant_jll.libReactantExtra_handle, "InitializeLogs")
         ccall(initLogs, Cvoid, ())
-        # Add most log level
-        # SetLogLevel(0)
 
         if haskey(ENV, "XLA_REACTANT_GPU_MEM_FRACTION")
             XLA_REACTANT_GPU_MEM_FRACTION[] = parse(

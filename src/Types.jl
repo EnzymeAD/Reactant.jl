@@ -668,7 +668,7 @@ Base.@deprecate_binding TracedRNG ReactantRNG
 
     ConcretePJRTArray{T}(undef, shape::Integer...; kwargs...)
 
-    ConcretePJRTArray(data::Array; kwargs...)
+    ConcreteRArray(data::AbstractArray; kwargs...)
 
     ConcreteRArray{T}(data::AbstractArray; kwargs...)
 
@@ -744,6 +744,10 @@ for aType in (:ConcretePJRTArray, :ConcreteIFRTArray)
             ::UndefInitializer, shape::Vararg{Integer,N}; kwargs...
         ) where {T,N}
             return $(aType){T,N}(undef, Dims(shape); kwargs...)
+        end
+
+        function $(aType)(data::AbstractArray; kwargs...)
+            return $(aType){eltype(data),ndims(data)}(data; kwargs...)
         end
 
         function $(aType){T}(data::AbstractArray; kwargs...) where {T}

@@ -41,6 +41,7 @@ makedocs(;
     ),
     # clean=false, # Uncomment for local testing
     doctest=true,
+    checkdocs=:public,
     warnonly=[:cross_references],
 )
 

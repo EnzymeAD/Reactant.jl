@@ -1278,6 +1278,11 @@ Modules can contain an optional `OffloadingTranslationAttr` attribute. This
 attribute will be used during the `gpu-module-to-binary` pass to specify the
 `OffloadingTranslationAttr` used when creating the `gpu.binary` operation.
 
+A GPU module may also have an inherent `dlti` attribute implementing
+`DLTIQueryInterface`. It provides values for scoped DLTI queries on the
+module and its nested operations. In custom assembly, write it as
+`dlti = #dlti.map<...>` before the optional attribute dictionary.
+
 ```
 gpu.module @symbol_name {
   gpu.func {}
@@ -1297,6 +1302,7 @@ function module_(;
     sym_visibility=nothing,
     targets=nothing,
     offloadingHandler=nothing,
+    dlti=nothing,
     bodyRegion::Region,
     location=Location(),
 )
@@ -1310,6 +1316,7 @@ function module_(;
     !isnothing(targets) && push!(attributes, NamedAttribute("targets", targets))
     !isnothing(offloadingHandler) &&
         push!(attributes, NamedAttribute("offloadingHandler", offloadingHandler))
+    !isnothing(dlti) && push!(attributes, NamedAttribute("dlti", dlti))
 
     return create_operation(
         "gpu.module",

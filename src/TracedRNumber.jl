@@ -603,10 +603,18 @@ for (jlop, hloop, hlocomp) in (
 end
 
 function Base.ifelse(@nospecialize(pred::TracedRNumber{Bool}), x::Number, y::Number)
+    T1 = unwrapped_eltype(x)
+    T2 = unwrapped_eltype(y)
+    if T1 != T2
+        @warn "`ifelse` with different element-types in Reactant works by promoting the \
+                element-type to the common type. This is semantically different from the \
+                behavior of `ifelse` in Base. Use with caution" maxlog = 1
+    end
+    T = promote_type(T1, T2)
     return ifelse(
         pred,
-        Reactant.promote_to(TracedRNumber{unwrapped_eltype(x)}, x),
-        Reactant.promote_to(TracedRNumber{unwrapped_eltype(y)}, y),
+        Reactant.promote_to(TracedRNumber{T}, x),
+        Reactant.promote_to(TracedRNumber{T}, y),
     )
 end
 
@@ -1014,7 +1022,7 @@ function (::Type{T})(x::TwicePrecision) where {T<:Reactant.TracedRNumber}
 end
 
 function (::Type{T})(x::TwicePrecision) where {T<:Reactant.ConcreteRNumber}
-    return Reactant.ConcreteRNumber(T(x.hi) - T(x.lo))::T
+    return Reactant.ConcreteRNumber(T(x.hi) + T(x.lo))::T
 end
 
 function Base.round(::Type{T}, x::TracedRNumber{<:AbstractFloat}) where {T<:Integer}

@@ -116,3 +116,24 @@ end
         @test eltype(res_ra) === eltype(f(m))
     end
 end
+
+@testset "show/print_array without scalar indexing" begin
+    ext = Base.get_extension(Reactant, :ReactantOneHotArraysExt)
+    oh_cpu = onehotbatch([1, 3, 2, 1], 1:3)
+    oh_r = Reactant.to_rarray(oh_cpu)
+
+    @test which(Base.print_array, Tuple{IOBuffer,typeof(oh_r)}).module === ext
+    @test which(Base.show, Tuple{IOBuffer,typeof(oh_r)}).module === ext
+
+    task_local_storage(:ScalarIndexing, Reactant.GPUArraysCore.ScalarDisallowed) do
+        @test occursin("⋅", sprint(show, MIME"text/plain"(), oh_r))
+        @test sprint(show, oh_r) == sprint(show, oh_cpu)
+        @test sprint(show, MIME"text/plain"(), oh_r') isa String
+        @test sprint(show, MIME"text/plain"(), transpose(oh_r)) isa String
+        @test sprint(show, MIME"text/plain"(), reshape(oh_r, 3, 2, 2)) isa String
+
+        oh_view = OneHotArray(@view(oh_r.indices[1:2]), 3)
+        @test Array(oh_view) == Array(oh_cpu)[:, 1:2]
+        @test sprint(show, MIME"text/plain"(), oh_view) isa String
+    end
+end

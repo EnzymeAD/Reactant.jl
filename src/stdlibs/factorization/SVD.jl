@@ -132,9 +132,16 @@ function _svd_solve_core(
 ) where {Tr}
     mask = S .> eps(real(Tr)) * @allowscalar(S[1])
     m, n = size(U, 1), size(Vt, 2)
-    rhs = S .\ (U' * LinearAlgebra._cut_B(B, 1:m))
-    rhs = ifelse.(mask, rhs, zero(eltype(rhs)))
-    return (Vt[1:length(S), :])' * rhs
+    # The solve divides by the singular values, so any error in `U' * B` is
+    # amplified by the condition number. With the default precision XLA's GPU
+    # backend runs these products in TF32 (about 3 significant digits), which
+    # is not enough for a solve: LU and Cholesky solves run in full-precision
+    # solver kernels, so this one does too.
+    return Reactant.with_config(; dot_general_precision=Reactant.PrecisionConfig.HIGHEST) do
+        rhs = S .\ (U' * LinearAlgebra._cut_B(B, 1:m))
+        rhs = ifelse.(mask, rhs, zero(eltype(rhs)))
+        (Vt[1:length(S), :])' * rhs
+    end
 end
 
 function LinearAlgebra.ldiv!(

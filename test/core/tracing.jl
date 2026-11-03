@@ -25,6 +25,13 @@ struct RMSProp{Teta,Trho,Teps,C<:Bool}
     centred::C
 end
 
+struct MockScalarOrAbstractArrayUnion{
+    T<:Number,V<:AbstractVecOrMat{T},S<:Union{T,AbstractVector{T}}
+}
+    x::V
+    b::S
+end
+
 @testset "Traced Type" begin
     @test !(Vector{Union{}} <: Reactant.AnyTracedRArray)
 end
@@ -384,6 +391,26 @@ end
         },
         [true, false, true],
     )
+
+    CN = typeof(ConcreteRNumber(1.0f0))
+    CA = typeof(ConcreteRArray(Float32[1, 2, 3]))
+    @test Reactant.apply_type_with_promotion(
+        MockScalarOrAbstractArrayUnion, [CN, CA, CN]
+    ) == (MockScalarOrAbstractArrayUnion{Float32,CA,Float32}, [true, false, true])
+
+    @test Reactant.apply_type_with_promotion(
+        MockScalarOrAbstractArrayUnion, [CN, CA, CA]
+    ) == (MockScalarOrAbstractArrayUnion{Float32,CA,CA}, [true, false, false])
+
+    @test Reactant.apply_type_with_promotion(
+        MockScalarOrAbstractArrayUnion,
+        [TracedRNumber{Float32}, TracedRArray{Float32,1}, TracedRNumber{Float32}],
+    ) == (
+        MockScalarOrAbstractArrayUnion{
+            TracedRNumber{Float32},TracedRArray{Float32,1},TracedRNumber{Float32}
+        },
+        [false, false, false],
+    )
 end
 
 @testset "specialized dispatches" begin
@@ -443,6 +470,31 @@ end
     @test opt_traced.centred isa Bool
 end
 
+@testset "to_rarray with Union-bound type parameter" begin
+    x = Float32[1, 2, 3]
+    f(s) = s.x .* s.b
+
+    @testset let b = 2.0f0
+        mock = MockScalarOrAbstractArrayUnion(x, b)
+        mock_re = Reactant.to_rarray(mock)
+        @test mock_re isa
+            MockScalarOrAbstractArrayUnion{Float32,<:ConcreteRArray{Float32,1},Float32}
+        @test Array(mock_re.x) == x
+        @test mock_re.b === b
+        @test @jit(f(mock_re)) ≈ 2 .* x
+    end
+
+    @testset let b2 = Float32[4, 5, 6]
+        mock = MockScalarOrAbstractArrayUnion(x, b2)
+        mock_re = Reactant.to_rarray(mock)
+        @test mock_re isa MockScalarOrAbstractArrayUnion{
+            Float32,<:ConcreteRArray{Float32,1},<:ConcreteRArray{Float32,1}
+        }
+        @test Array(mock_re.b) == b2
+        @test Array(@jit(f(mock_re))) ≈ x .* b2
+    end
+end
+
 # When `a` and `b` alias on loop entry and `b` is reassigned inside the loop,
 # the aliasing pattern changes (a and b no longer refer to the same object after
 # the body runs). `@trace` detects this dynamically and throws an error, since
@@ -485,4 +537,26 @@ end
     @static if VERSION >= v"1.11.0"
         @test iszero(t.compile_time)
     end
+end
+
+struct KindOptions{A}
+    a::A
+end
+
+# `fieldnames(::UnionAll)` unwraps its argument and calls itself on the body, a
+# `DataType` with a free typevar, which Julia's method cache does not tell apart
+# from the UnionAll (#3518).
+reflect_fieldnames(x) = x .+ length(fieldnames(KindOptions))
+reflect_fieldname(x) = x .+ length(string(fieldname(KindOptions, 1)))
+reflect_nameof(x) = x .+ length(string(nameof(KindOptions)))
+reflect_parentmodule(x) = x .+ length(string(parentmodule(KindOptions)))
+reflect_hasfield(x) = x .+ hasfield(KindOptions, :a)
+
+@testset "reflection on a UnionAll (#3518)" begin
+    x = Reactant.to_rarray([1.0])
+    @test @jit(reflect_fieldnames(x)) ≈ [2.0]
+    @test @jit(reflect_fieldname(x)) ≈ [2.0]
+    @test @jit(reflect_nameof(x)) ≈ [1.0 + length("KindOptions")]
+    @test @jit(reflect_parentmodule(x)) ≈ [1.0 + length(string(@__MODULE__))]
+    @test @jit(reflect_hasfield(x)) ≈ [2.0]
 end

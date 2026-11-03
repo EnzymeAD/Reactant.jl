@@ -83,16 +83,20 @@ void reactantReleaseAddressRange(void *base, size_t nbytes);
 #include "xla/mlir_hlo/mhlo/IR/hlo_ops.h"
 
 #include "tsl/platform/init_main.h"
-#include "tsl/profiler/lib/profiler_session.h"
 #include "tsl/profiler/lib/traceme.h"
 #include "xla/python/profiler_utils.h"
+#ifdef REACTANT_ENABLE_PROFILER
+#include "tsl/profiler/lib/profiler_session.h"
 #include "xla/tsl/profiler/rpc/client/capture_profile.h"
 #include "xla/tsl/profiler/rpc/profiler_server.h"
+#endif
 
 #include "xla/python/ifrt/hlo/hlo_program.h"
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
 #include "llvm/MC/TargetRegistry.h"
 #include "llvm/Support/Process.h"
+#include "llvm/Support/ThreadPool.h"
+#include "llvm/Support/Threading.h"
 #include "llvm/TargetParser/Host.h"
 
 #include "llvm-c/TargetMachine.h"
@@ -100,18 +104,21 @@ void reactantReleaseAddressRange(void *base, size_t nbytes);
 #include "xla/pjrt/maybe_owning_mlir_module.h"
 
 // PJRT
-#include "xla/pjrt/cpu/cpu_client.h"
 #include "xla/pjrt/distributed/client.h"
 #include "xla/pjrt/distributed/distributed.h"
 #include "xla/pjrt/distributed/service.h"
+#include "xla/pjrt/plugin/xla_cpu/cpu_client_options.h"
 #if defined(REACTANT_CUDA) || defined(REACTANT_ROCM)
-#include "xla/pjrt/gpu/se_gpu_pjrt_client.h"
+#include "xla/pjrt/plugin/xla_gpu/xla_gpu_client_options.h"
+#include "xla/pjrt/plugin/xla_gpu/xla_gpu_pjrt_client.h"
 #endif
 #include "xla/pjrt/c/pjrt_c_api_cpu_internal.h"
 #include "xla/pjrt/pjrt_api.h"
 #include "xla/pjrt/pjrt_c_api_client.h"
 #include "xla/pjrt/pjrt_executable.h"
 #include "xla/pjrt/plugin/xla_cpu/xla_cpu_pjrt_client.h"
+#include "xla/pjrt/raw_buffer.h"
+#include "xla/shape_util.h"
 
 #include "xla/hlo/ir/hlo_computation.h"
 #include "xla/hlo/ir/hlo_instruction.h"
@@ -122,6 +129,7 @@ void reactantReleaseAddressRange(void *base, size_t nbytes);
 #include "xla/hlo/translate/stablehlo.h"
 
 // CPU collectives
+#ifdef REACTANT_ENABLE_CPU_COLLECTIVES
 #if defined(__linux__)
 #include "gloo/transport/tcp/attr.h"
 #include "gloo/transport/tcp/device.h"
@@ -134,6 +142,7 @@ void reactantReleaseAddressRange(void *base, size_t nbytes);
 #include "xla/backends/cpu/collectives/gloo_kv_store.h"
 #include "xla/backends/cpu/collectives/mpi_collectives.h"
 #endif // defined(__linux__)
+#endif // REACTANT_ENABLE_CPU_COLLECTIVES
 
 // shardy
 #include "shardy/dialect/sdy/ir/dialect.h"
@@ -185,13 +194,16 @@ void reactantReleaseAddressRange(void *base, size_t nbytes);
 #include "xla/python/pjrt_ifrt/xla_sharding.h"
 
 // IFRT - Proxy (RPC)
+#ifdef REACTANT_ENABLE_IFRT_PROXY
 #include "xla/python/ifrt_proxy/client/registry.h"
 #include "xla/python/ifrt_proxy/server/grpc_server.h"
+#endif
 
 // Cost Analysis
 #include "xla/debug_options_flags.h"
 #include "xla/hlo/ir/hlo_module.h"
 #include "xla/service/hlo_cost_analysis.h"
+#include "xla/service/llvm_ir/llvm_command_line_options.h"
 #include "xla/xla.pb.h"
 
 #if defined(REACTANT_CUDA) || defined(REACTANT_ROCM)
@@ -202,22 +214,26 @@ void reactantReleaseAddressRange(void *base, size_t nbytes);
 #endif
 
 // Broken upstream x/ref https://github.com/jax-ml/jax/issues/33344
-// #include "jaxlib/mosaic/dialect/tpu/tpu_dialect.h"
+// #include "xla/mosaic/dialect/tpu/tpu_dialect.h"
 
 #include "llvm/Support/ExtensibleRTTI.h"
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/raw_ostream.h>
 
+#ifdef REACTANT_ENABLE_PROFILER
 #include "plugin/xprof/worker/stub_factory.h"
 #include "xprof/convert/tool_options.h"
 #include "xprof/pywrap/profiler_plugin_impl.h"
+#endif
 
 #include "absl/status/statusor.h"
 #include "xla/pjrt/proto/compile_options.pb.h"
 
 using namespace mlir;
 using namespace xla;
+#ifdef REACTANT_ENABLE_PROFILER
 using ::tensorflow::profiler::ToolOptions;
+#endif
 
 namespace {
 
@@ -375,6 +391,14 @@ mlirPassManagerEnableXLATraceTiming(MlirPassManager passManager) {
   unwrap(passManager)->enableTiming(std::make_unique<XlaTraceTimingManager>());
 }
 
+// Like mlirLlvmThreadPoolCreate, but caps the pool at `maxThreads` concurrent
+// workers. `maxThreads == 0` uses the hardware concurrency.
+REACTANT_ABI MlirLlvmThreadPool
+mlirLlvmThreadPoolCreateWithMaxThreads(unsigned maxThreads) {
+  return wrap(static_cast<llvm::ThreadPoolInterface *>(
+      new llvm::DefaultThreadPool(llvm::hardware_concurrency(maxThreads))));
+}
+
 REACTANT_ABI bool mlirOperationInject(MlirContext ctx, MlirBlock block,
                                       MlirStringRef code, MlirLocation location,
                                       bool verify_after_parse) {
@@ -402,6 +426,7 @@ REACTANT_ABI MlirType mlirGetFunctionTypeFromOperation(MlirOperation op) {
     return wrap(funcOp.getFunctionType());
   }
   ReactantThrowError("Not a function op");
+  return MlirType{nullptr};
 }
 
 REACTANT_ABI bool mlirIsFunctionOpInterface(MlirOperation op) {
@@ -513,6 +538,20 @@ REACTANT_ABI void InitializeLogs() {
   char **argv2 = &argv[0];
   tsl::port::InitMain(binary, &argc, &argv2);
 
+  // Until `absl::InitializeLog` runs, absl writes every log message to stderr
+  // whatever the configured threshold (and says so, once), so the level
+  // can't be changed after the library is loaded. Once it has run, a message
+  // reaches stderr only if it passes both `absl::MinLogLevel` and
+  // `absl::StderrThreshold`; TSL's static initializer set the latter to INFO
+  // and the former from `TF_CPP_MIN_LOG_LEVEL`. Without that variable, show
+  // warnings and up, as JAX does.
+  static std::once_flag logs;
+  std::call_once(logs, [] {
+    absl::InitializeLog();
+    if (!getenv("TF_CPP_MIN_LOG_LEVEL"))
+      absl::SetMinLogLevel(absl::LogSeverityAtLeast::kWarning);
+  });
+
 #if defined(REACTANT_ROCM) && !defined(_WIN32)
   TameLLVMSignalHandlers();
 #endif
@@ -529,9 +568,11 @@ REACTANT_ABI void InitializeLogs() {
   LLVMInitializeAArch64AsmParser();
 }
 
+// The least severe XLA log messages to print, as `absl::LogSeverityAtLeast`
+// (0 INFO, 1 WARNING, 2 ERROR, 3 FATAL).
 REACTANT_ABI void SetLogLevel(int level) {
-  SetStderrThreshold((absl::LogSeverity)level);
-  // absl::SetGlobalVLogLevel(level);
+  absl::SetMinLogLevel((absl::LogSeverityAtLeast)level);
+  absl::SetStderrThreshold((absl::LogSeverityAtLeast)level);
 }
 
 REACTANT_ABI void SetModuleLogLevel(const char *module_pattern, int level) {
@@ -552,6 +593,7 @@ enzymeActivityAttrGet(MlirContext ctx, int32_t val) {
 // advanced_config_keys/values are parallel arrays of key-value pairs that
 // get inserted into ProfileOptions::advanced_configuration.
 // Pass n_advanced=0 with nullptr for keys/values to use defaults.
+#ifdef REACTANT_ENABLE_PROFILER
 REACTANT_ABI tsl::ProfilerSession *
 CreateProfilerSession(uint32_t device_tracer_level, uint32_t host_tracer_level,
                       const char **advanced_config_keys,
@@ -581,6 +623,24 @@ REACTANT_ABI void ProfilerSessionCollectData(tsl::ProfilerSession *session,
 REACTANT_ABI void ProfilerSessionDelete(tsl::ProfilerSession *session) {
   delete session;
 }
+#else
+REACTANT_ABI void *CreateProfilerSession(uint32_t device_tracer_level,
+                                         uint32_t host_tracer_level,
+                                         const char **advanced_config_keys,
+                                         const char **advanced_config_values,
+                                         int n_advanced) {
+  if (ReactantThrowError)
+    ReactantThrowError("Profiler session support is not enabled in this build");
+  return nullptr;
+}
+
+REACTANT_ABI void ProfilerSessionCollectData(void *session, const char *path) {
+  if (ReactantThrowError)
+    ReactantThrowError("Profiler session support is not enabled in this build");
+}
+
+REACTANT_ABI void ProfilerSessionDelete(void *session) {}
+#endif
 
 REACTANT_ABI int64_t ProfilerActivityStart(const char *name, int level) {
   return tsl::profiler::TraceMe::ActivityStart(name, level);
@@ -590,6 +650,7 @@ REACTANT_ABI void ProfilerActivityEnd(int64_t id) {
   tsl::profiler::TraceMe::ActivityEnd(id);
 }
 
+#ifdef REACTANT_ENABLE_PROFILER
 REACTANT_ABI tsl::profiler::ProfilerServer *ProfilerServerStart(int32_t port) {
   auto server = new tsl::profiler::ProfilerServer();
   server->StartProfilerServer(port);
@@ -599,6 +660,15 @@ REACTANT_ABI tsl::profiler::ProfilerServer *ProfilerServerStart(int32_t port) {
 REACTANT_ABI void ProfilerServerStop(tsl::profiler::ProfilerServer *server) {
   delete server;
 }
+#else
+REACTANT_ABI void *ProfilerServerStart(int32_t port) {
+  if (ReactantThrowError)
+    ReactantThrowError("Profiler server support is not enabled in this build");
+  return nullptr;
+}
+
+REACTANT_ABI void ProfilerServerStop(void *server) {}
+#endif
 
 PjRtClient *MakeCPUClientInternal(
     uint8_t asynchronous, int node_id,
@@ -611,7 +681,7 @@ PjRtClient *MakeCPUClientInternal(
   if (collectives.has_value())
     options.collectives = collectives.value();
 
-  return MyValueOrThrow(GetPjRtCpuClient(options)).release();
+  return MyValueOrThrow(GetXlaPjrtCpuClient(options)).release();
 }
 
 REACTANT_ABI PjRtClient *MakeCPUClient(uint8_t asynchronous, int node_id) {
@@ -658,7 +728,7 @@ MakeGPUClient(int node_id, int num_nodes, int64_t *allowed_devices,
   options.platform_name =
       platform_name ? std::string(platform_name) : std::optional<std::string>();
   // options.collectives = num_nodes;
-  auto clientErr = GetStreamExecutorGpuClient(options);
+  auto clientErr = GetXlaPjrtGpuClient(options);
 
   if (!clientErr.ok()) {
     auto str = clientErr.status().message();
@@ -945,11 +1015,20 @@ std::vector<int64_t> col_major(int64_t dim) {
   return minor_to_major;
 }
 
+// XLA parses LLVM's command line itself, from its own option list, when a
+// client with other options than the last one compiles, and resets every
+// option first (llvm_ir::LLVMCommandLineOptionsLock): an option parsed here
+// alone is gone after the first compile. XLA re-applies its global option
+// list on each such parse, so the options also go there, once each.
 REACTANT_ABI void ReactantLLVMParseCommandLineOptions(int argc,
                                                       const char *const *argv,
                                                       const char *Overview) {
   llvm::cl::ParseCommandLineOptions(argc, argv, StringRef(Overview),
                                     &llvm::nulls());
+  auto &global = xla::llvm_ir::LLVMCommandLineOptionsLock::GetGlobalOptions();
+  for (int i = 1; i < argc; i++)
+    if (std::find(global.begin(), global.end(), argv[i]) == global.end())
+      global.push_back(argv[i]);
 }
 
 std::vector<int64_t> row_major(int64_t dim) {
@@ -1198,6 +1277,73 @@ CudaGetStreamExecutorDeviceDescription(int32_t device_id) {
 
 #endif
 
+#ifdef REACTANT_ROCM
+
+#include "rocm/include/hip/hip_runtime.h"
+
+static bool ReactantRocmGetDeviceProp(hipDeviceProp_t &props,
+                                      int32_t device_id) {
+  hipError_t err = hipGetDeviceProperties(&props, device_id);
+  if (err != hipSuccess) {
+    llvm::errs() << "hipGetDeviceProperties(" << device_id
+                 << ") failed: " << hipGetErrorString(err) << "\n";
+    return false;
+  }
+  return true;
+}
+
+REACTANT_ABI void ReactantRocmDeviceGetProperties(DeviceProperties *jlprops,
+                                                  int32_t device_id) {
+  *jlprops = DeviceProperties{};
+  hipDeviceProp_t props;
+  if (!ReactantRocmGetDeviceProp(props, device_id))
+    return;
+
+  jlprops->totalGlobalMem = props.totalGlobalMem;
+  jlprops->sharedMemPerBlock = props.sharedMemPerBlock;
+  jlprops->regsPerBlock = props.regsPerBlock;
+  jlprops->warpSize = props.warpSize;
+  jlprops->maxThreadsPerBlock = props.maxThreadsPerBlock;
+  jlprops->maxThreadsDim[0] = props.maxThreadsDim[0];
+  jlprops->maxThreadsDim[1] = props.maxThreadsDim[1];
+  jlprops->maxThreadsDim[2] = props.maxThreadsDim[2];
+  jlprops->maxGridSize[0] = props.maxGridSize[0];
+  jlprops->maxGridSize[1] = props.maxGridSize[1];
+  jlprops->maxGridSize[2] = props.maxGridSize[2];
+  jlprops->totalConstMem = props.totalConstMem;
+  jlprops->major = props.major;
+  jlprops->minor = props.minor;
+  jlprops->multiProcessorCount = props.multiProcessorCount;
+  jlprops->canMapHostMemory = props.canMapHostMemory;
+  jlprops->l2CacheSize = props.l2CacheSize;
+  jlprops->maxThreadsPerMultiProcessor = props.maxThreadsPerMultiProcessor;
+}
+
+// The target ID the device runs, e.g. "gfx942:sramecc+:xnack-", in the
+// spelling rocdl-attach-target takes for its `arch` option.
+REACTANT_ABI void ReactantRocmDeviceGetGcnArchName(char *buffer, int32_t size,
+                                                   int32_t device_id) {
+  if (size <= 0)
+    return;
+  buffer[0] = 0;
+  hipDeviceProp_t props;
+  if (!ReactantRocmGetDeviceProp(props, device_id))
+    return;
+  strncpy(buffer, props.gcnArchName, size - 1);
+  buffer[size - 1] = 0;
+}
+#else
+REACTANT_ABI void ReactantRocmDeviceGetProperties(DeviceProperties *jlprops,
+                                                  int32_t device_id) {
+  *jlprops = DeviceProperties{};
+}
+REACTANT_ABI void ReactantRocmDeviceGetGcnArchName(char *buffer, int32_t size,
+                                                   int32_t device_id) {
+  if (size > 0)
+    buffer[0] = 0;
+}
+#endif
+
 REACTANT_ABI const char *
 deviceDescriptionToString(stream_executor::DeviceDescription *device) {
   return cstr_from_string(device->ToString());
@@ -1228,6 +1374,15 @@ REACTANT_ABI PjRtBuffer *ArrayFromHostBuffer(PjRtClient *client, void *data,
   return bres;
 }
 
+REACTANT_ABI void BufferToHost(PjRtBuffer *buffer, void *data);
+
+// Logical (row-major host) size of `buffer` in bytes. Not the on-device size,
+// which on TPU includes tiling padding.
+static size_t BufferHostSizeInBytes(PjRtBuffer *buffer) {
+  Shape shape(MyValueOrThrow(buffer->HostShape()));
+  return xla::ShapeUtil::ByteSizeOfElements(shape);
+}
+
 REACTANT_ABI void CopyToBuffer(PjRtClient *client, PjRtBuffer *buffer,
                                void *data, size_t offset, size_t size,
                                PjRtBuffer **bufferP) {
@@ -1242,11 +1397,34 @@ REACTANT_ABI void CopyToBuffer(PjRtClient *client, PjRtBuffer *buffer,
 
   auto pid = client->platform_id();
   if (pid == xla::TpuId()) {
+    // The TPU on-device layout is tiled, so raw byte offsets into the device
+    // buffer don't correspond to logical element offsets and the raw-copy APIs
+    // can't be used. We also can't write into an existing buffer through the
+    // PJRT C API, so a *new* buffer holding the updated contents is created
+    // and handed back through `bufferP`, and the old buffer is freed.
+    if (bufferP == nullptr) {
+      ReactantThrowError(
+          "CopyToBuffer: on TPU the device buffer is replaced, so a non-null "
+          "`bufferP` out-parameter is required");
+    }
     auto dims = buffer->on_device_shape().dimensions();
-    // TODO(#2252): note this assume that we want to copy the entire buffer
-    // size.
-    auto buf2 = ArrayFromHostBuffer(client, data, buffer->element_type(),
-                                    dims.size(), dims.data(), buffer->device());
+    size_t total = BufferHostSizeInBytes(buffer);
+    if (offset + size > total) {
+      ReactantThrowError("CopyToBuffer: offset + size exceeds buffer size");
+    }
+    PjRtBuffer *buf2;
+    if (offset == 0 && size == total) {
+      buf2 = ArrayFromHostBuffer(client, data, buffer->element_type(),
+                                 dims.size(), dims.data(), buffer->device());
+    } else {
+      // Partial copy: fetch the current contents (row-major), patch the
+      // requested range on the host and upload the whole thing again.
+      std::vector<char> host(total);
+      BufferToHost(buffer, host.data());
+      memcpy(host.data() + offset, data, size);
+      buf2 = ArrayFromHostBuffer(client, host.data(), buffer->element_type(),
+                                 dims.size(), dims.data(), buffer->device());
+    }
     *bufferP = buf2;
     PjRtBufferFree((PjRtBuffer *)buffer);
     return;
@@ -1313,9 +1491,19 @@ REACTANT_ABI void CopyFromBuffer(PjRtClient *client, PjRtBuffer *buffer,
 
   auto pid = client->platform_id();
   if (pid == xla::TpuId()) {
-    // TODO(#2252): note this assume that we want to copy the entire buffer
-    // size.
-    BufferToHost(buffer, data);
+    // See CopyToBuffer: TPU layouts are tiled, so go through a row-major host
+    // literal rather than a raw copy.
+    size_t total = BufferHostSizeInBytes(buffer);
+    if (offset + size > total) {
+      ReactantThrowError("CopyFromBuffer: offset + size exceeds buffer size");
+    }
+    if (offset == 0 && size == total) {
+      BufferToHost(buffer, data);
+      return;
+    }
+    std::vector<char> host(total);
+    BufferToHost(buffer, host.data());
+    memcpy(data, host.data() + offset, size);
     return;
   }
 
@@ -2297,6 +2485,7 @@ HloPrintOptions getHloPrintOptions(int32_t print_options) {
     return HloPrintOptions::ModuleFingerprint();
   default:
     ReactantThrowError("Invalid print_options");
+    return HloPrintOptions::Default();
   }
 }
 
@@ -2372,6 +2561,7 @@ REACTANT_ABI void FreeHloModule(HeldHloModule *hlo_module) {
 //       .release();
 // }
 
+#ifdef REACTANT_ENABLE_IFRT_PROXY
 REACTANT_ABI void ifrt_proxy_grpc_server_dtor(ifrt::proxy::GrpcServer *server) {
   delete server;
 }
@@ -2402,6 +2592,28 @@ ifrt_proxy_create_client(const char *c_proxy_server_address,
              ifrt::proxy::CreateClient(proxy_server_address, options))
       .release();
 }
+#else
+REACTANT_ABI void ifrt_proxy_grpc_server_dtor(void *server) {}
+
+REACTANT_ABI const char *ifrt_proxy_grpc_server_address(void *server) {
+  if (ReactantThrowError)
+    ReactantThrowError("IFRT proxy support is not enabled in this build");
+  return nullptr;
+}
+
+REACTANT_ABI void ifrt_proxy_grpc_server_wait(void *server) {
+  if (ReactantThrowError)
+    ReactantThrowError("IFRT proxy support is not enabled in this build");
+}
+
+REACTANT_ABI ifrt::Client *
+ifrt_proxy_create_client(const char *c_proxy_server_address,
+                         int connection_timeout_in_minutes) {
+  if (ReactantThrowError)
+    ReactantThrowError("IFRT proxy support is not enabled in this build");
+  return nullptr;
+}
+#endif
 
 static ifrt::Client *ifrt_pjrt_make_client(
     PjRtClient *pjrt_client, int node_id, int num_nodes,
@@ -2444,7 +2656,9 @@ REACTANT_ABI ifrt::Client *ifrt_pjrt_make_client_with_default_kv_store(
                                kv_store);
 }
 
+#ifdef REACTANT_ENABLE_CPU_COLLECTIVES
 const char *const kMpiTrampolineLibEnv = "MPITRAMPOLINE_LIB";
+#endif
 
 REACTANT_ABI ifrt::Client *
 ifrt_make_pjrt_cpu_client(uint8_t asynchronous, int node_id, int num_nodes,
@@ -2454,6 +2668,7 @@ ifrt_make_pjrt_cpu_client(uint8_t asynchronous, int node_id, int num_nodes,
   std::optional<std::shared_ptr<KeyValueStoreInterface>> kv_store;
 
   if (distributed_runtime_client != nullptr) {
+#ifdef REACTANT_ENABLE_CPU_COLLECTIVES
     auto mpi_trampoline_path = llvm::sys::Process::GetEnv(kMpiTrampolineLibEnv);
     if (mpi_trampoline_path) {
 #if defined(__linux__) || defined(__APPLE__)
@@ -2493,6 +2708,16 @@ ifrt_make_pjrt_cpu_client(uint8_t asynchronous, int node_id, int num_nodes,
           "Gloo TCP Collectives only implemented for linux and macos");
 #endif
     }
+#else
+    if (error) {
+      *error = "CPU collectives support is not enabled in this build";
+    }
+    if (ReactantThrowError) {
+      ReactantThrowError(
+          "CPU collectives support is not enabled in this build");
+    }
+    return nullptr;
+#endif
   }
 
   PjRtClient *pjrt_client =
@@ -3046,9 +3271,12 @@ REACTANT_ABI int64_t ifrt_array_ndims(HeldIfrtArray *array) {
   return array->obj()->shape().dims().size();
 }
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wreturn-type-c-linkage"
 REACTANT_ABI ifrt::DType ifrt_array_eltype(HeldIfrtArray *array) {
   return array->obj()->dtype();
 }
+#pragma clang diagnostic pop
 
 REACTANT_ABI ifrt::Client *ifrt_array_to_client(HeldIfrtArray *array) {
   return array->obj()->client();
@@ -3269,14 +3497,13 @@ hloShardingFromTensorShardingAttr(MlirAttribute cattr,
                                   MlirAttribute cmeshAttr) {
   auto attr = mlir::cast<mlir::sdy::TensorShardingAttr>(unwrap(cattr));
   auto meshAttr = mlir::cast<mlir::sdy::MeshAttr>(unwrap(cmeshAttr));
-  mlir::ArrayRef<mlir::StringAttr> manual_axes = {};
   std::function<mlir::sdy::MeshAttr(mlir::sdy::TensorShardingAttr)>
       get_mesh_attr = [meshAttr](mlir::sdy::TensorShardingAttr local_attr) {
         return meshAttr;
       };
 
   return new xla::HloSharding(
-      xla::sdy::convertToHloSharding(attr, get_mesh_attr, manual_axes));
+      xla::sdy::convertToHloSharding(attr, get_mesh_attr));
 }
 
 // TODO(#2252): This is incorrect for multiple meshes. We need to use the
@@ -3696,6 +3923,7 @@ REACTANT_ABI HeldIfrtArray *ifrt_copy_array(HeldIfrtArray *array) {
     return reactant::capture(res);
   }
   ReactantThrowError("Only ifrt-pjrt arrays are supported for now");
+  return nullptr;
 }
 
 struct LinkableRuntime {
@@ -3776,6 +4004,14 @@ struct LinkableRuntime {
       assert(client);
       // Weird stream issue in freeing cuda client.
       shouldFreeClient = false;
+      // nvcc contracts a*b+c into an fma; XLA's NVPTX backend only when
+      // asked (the Julia client asks the same way, in GPU.jl). The option
+      // exists only where the NVPTX target is linked in: on any other GPU
+      // XLA's own parse would reject it and exit.
+      if (client->platform_name() == "cuda") {
+        const char *fma[] = {"", "--nvptx-fma-level=1"};
+        ReactantLLVMParseCommandLineOptions(2, fma, nullptr);
+      }
     } else {
       client = MakeCPUClient(1, 0);
       assert(client);
@@ -4048,7 +4284,7 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
           b, funcOp.getLoc(),
           mlir::SplatElementsAttr::get(TT, b.getIntegerAttr(IT, consts[i])));
       arg.replaceAllUsesWith(cst);
-      funcOp.eraseArgument(argcnt + i);
+      (void)funcOp.eraseArgument(argcnt + i);
     }
 
     for (int64_t i = 0; i < argcnt; i++) {
@@ -4184,12 +4420,18 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
       // The main list may introduce enzymexla ops (rotate, wrap, extend)
       // that XLA does not take; the Julia compiler lowers them before export
       // with this second list.
+      // A round converges within 10 greedy iterations on MFEM's kernels;
+      // without a cap, two patterns undoing each other (Enzyme-JAX #3680 on
+      // ceed BP1/2) spin the compile forever, so the cap makes that a
+      // failure instead.
       std::string pipeline =
           "canonicalize,cse,canonicalize,enzyme-hlo-generate-td{patterns=" +
           patterns +
-          "},transform-interpreter,enzyme-hlo-remove-transform,canonicalize,"
+          " max-iterations=100},transform-interpreter,enzyme-hlo-remove-"
+          "transform,canonicalize,"
           "cse,enzyme-hlo-generate-td{patterns=lower_rotate;lower_wrap;"
-          "lower_extend;lower_updatewithoutcorners;lower_multislice},"
+          "lower_extend;lower_updatewithoutcorners;lower_multislice "
+          "max-iterations=100},"
           "transform-interpreter,enzyme-hlo-remove-transform,canonicalize,cse";
       if (failed(mlir::parsePassPipeline(pipeline, pm))) {
         llvm::errs() << " failed to parse the exec optimization pipeline\n";
@@ -4206,7 +4448,23 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
       module->print(llvm::errs());
       llvm::errs() << "EXEC_DUMP end\n";
     }
+    // A round that does not converge within its iteration cap is a pattern
+    // cycle; the interpreter only says "greedy pattern application failed",
+    // so name the cause (the diagnostic is left to print as usual).
+    bool roundCapHit = false;
+    mlir::ScopedDiagnosticHandler roundCapHandler(
+        module->getContext(), [&roundCapHit](mlir::Diagnostic &diag) {
+          if (diag.str().find("greedy pattern application failed") !=
+              std::string::npos)
+            roundCapHit = true;
+          return mlir::failure();
+        });
     if (!mlir::succeeded(pm.run(*module))) {
+      if (roundCapHit)
+        llvm::errs() << " a pattern round of the exec pipeline hit its cap of "
+                        "100 greedy iterations: two patterns undo each other "
+                        "on this module (REACTANT_EXEC_DUMP=1 prints it "
+                        "before the pipeline)\n";
       llvm::errs() << " failed to run passes\n";
       llvm::errs() << " modstr:\n" << modstr << "\n";
       pm.dump();
@@ -4333,7 +4591,7 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
       for (int64_t i = 0; i < argcnt; i++)
         if (dupOf[i] != -1)
           folded.set(i);
-      funcOp.eraseArguments(folded);
+      (void)funcOp.eraseArguments(folded);
       funcOp.setType(mlir::FunctionType::get(
           module->getContext(), funcOp.getBody().front().getArgumentTypes(),
           keptTypes));
@@ -4396,7 +4654,7 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
 REACTANT_ABI HeldHloModule *convertMlirModuleToHloModule(MlirModule mod) {
   mlir::ModuleOp cmod_op = cast<ModuleOp>(*unwrap(mod));
   std::shared_ptr<xla::HloModule> hlo_module =
-      std::move(MyValueOrThrow(xla::ConvertStablehloToHlo(cmod_op)));
+      MyValueOrThrow(xla::ConvertStablehloToHlo(cmod_op));
   return reactant::capture(hlo_module);
 }
 
@@ -4485,6 +4743,7 @@ hloInstructionGetFusionKind(HloInstruction *hlo_instruction) {
     return static_cast<uint8_t>(hlo_instruction_fusion->fusion_kind());
   }
   ReactantThrowError("hloInstructionGetFusionKind: not a fusion instruction");
+  return 0;
 }
 
 REACTANT_ABI const char *hloFusionKindToString(uint8_t kind) {
@@ -4500,6 +4759,7 @@ hloInstructionFusedInstructionsComputation(HloInstruction *hlo_instruction) {
   }
   ReactantThrowError("hloInstructionFusedInstructionsComputation: not a fusion "
                      "instruction");
+  return nullptr;
 }
 
 struct JLEstimateRunTimeData {
@@ -4601,6 +4861,7 @@ REACTANT_ABI void EstimateRunTimeForInstruction(void *gpu_performance_model,
 
 #endif
 
+#ifdef REACTANT_ENABLE_PROFILER
 REACTANT_ABI void
 InitializeXProfStubs(const char *cstr_worker_service_address) {
   std::string worker_service_address = std::string(cstr_worker_service_address);
@@ -4702,6 +4963,40 @@ REACTANT_ABI int XSpaceToToolsData(
 
   return 0;
 }
+#else
+REACTANT_ABI void
+InitializeXProfStubs(const char *cstr_worker_service_address) {
+  if (ReactantThrowError)
+    ReactantThrowError("XProf support is not enabled in this build");
+}
+
+REACTANT_ABI void StartGrpcServer(int port) {
+  if (ReactantThrowError)
+    ReactantThrowError("XProf support is not enabled in this build");
+}
+
+REACTANT_ABI int XSpaceToToolsData(
+    const char **xspace_paths, int64_t num_paths, const char *tool_name,
+    const char **bool_keys, const bool *bool_values, int64_t bool_count,
+    const char **int_keys, const int *int_values, int64_t int_count,
+    const char **str_keys, const char **str_values, int64_t str_count,
+    char **result_data, int64_t *result_size, bool *is_binary, char **error) {
+  if (result_data)
+    *result_data = nullptr;
+  if (result_size)
+    *result_size = 0;
+  if (is_binary)
+    *is_binary = false;
+  if (error) {
+    const char *msg = "XProf support is not enabled in this build";
+    size_t len = strlen(msg);
+    char *err = (char *)malloc(len + 1);
+    memcpy(err, msg, len + 1);
+    *error = err;
+  }
+  return 1;
+}
+#endif
 
 REACTANT_ABI void *ReactantGetDebugOptions(size_t *size) {
   xla::DebugOptions options = xla::GetDebugOptionsFromFlags();
