@@ -225,31 +225,29 @@ end
     #     end
     # end
 
-    @testset "Reactant Send / Recv! - compiled together" begin
-        function sendrecv!(comm, rank, send_buf, recv_buf, tag)
-            if rank == 0
-                peer = 1
-                MPI.Send(send_buf, peer, tag, comm)
-                MPI.Recv!(recv_buf, peer, tag + 1, comm, nothing)
-            elseif rank == 1
-                peer = 0
-                MPI.Recv!(recv_buf, peer, tag, comm, nothing)
-                MPI.Send(send_buf, peer, tag + 1, comm)
-            end
-            return nothing
+    function sendrecv!(comm, rank, send_buf, recv_buf, tag)
+        if rank == 0
+            peer = 1
+            MPI.Send(send_buf, peer, tag, comm)
+            MPI.Recv!(recv_buf, peer, tag + 1, comm, nothing)
+        elseif rank == 1
+            peer = 0
+            MPI.Recv!(recv_buf, peer, tag, comm, nothing)
+            MPI.Send(send_buf, peer, tag + 1, comm)
         end
+        return nothing
+    end
 
-        for T in DATATYPES
-            @testset "Type: $T" begin
-                send_buf = ConcreteRArray(ones(T, 5))
-                recv_buf = ConcreteRArray(zeros(T, 5))
-                tag = 43
+    for T in DATATYPES
+        @testset "Type: $T" begin
+            send_buf = ConcreteRArray(ones(T, 5))
+            recv_buf = ConcreteRArray(zeros(T, 5))
+            tag = 43
 
-                @jit sync = true sendrecv!(comm, rank, send_buf, recv_buf, tag)
-                @test recv_buf == send_buf
+            @jit sync = true sendrecv!(comm, rank, send_buf, recv_buf, tag)
+            @test recv_buf == send_buf
 
-                MPI.Barrier(comm)
-            end
+            MPI.Barrier(comm)
         end
     end
 end
