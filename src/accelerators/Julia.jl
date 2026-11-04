@@ -2250,6 +2250,201 @@ addressable_devices(exec::HostLoadedExecutable) = exec.devices
 addressable_device_logical_ids(exec::HostLoadedExecutable) = exec.logical_ids
 device_assignment(exec::HostLoadedExecutable) = exec.device_assignment
 
+"""
+    handle(::Val{opname}, operands::Tuple, attributes::NamedTuple, results::Tuple)
+
+Run the MLIR op `opname` (e.g. `Symbol("stablehlo.add")`) and return its results.
+
+- `operands`: Julia arrays, i.e. row-major MLIR tensors seen as column-major arrays with reversed dimensions.
+- `attributes`: the op attributes, decoded by `decode_attribute`.
+- `results`: the type of each result, as `(; eltype, size)` with `size` in Julia order (i.e. reversed).
+
+Like MLIR values, the return value depends on the number of results: it is ignored if there are none, it is the
+result itself if there is one (`%N`), and it must be a tuple with one entry per result if there are several (`%N:2`,
+bound to `%N#0` and `%N#1`).
+"""
+function handle end
+
+# element-wise ops use `map` instead of broadcasting: StableHLO operands always have the same shape, and broadcasting
+# would return a scalar over 0-dimensional arrays and a `BitArray` for booleans instead of an `Array`
+handle(::Val{Symbol("stablehlo.add")}, (a, b), _, _) = map(+, a, b)
+handle(::Val{Symbol("stablehlo.subtract")}, (a, b), _, _) = map(-, a, b)
+handle(::Val{Symbol("stablehlo.multiply")}, (a, b), _, _) = map(*, a, b)
+handle(::Val{Symbol("stablehlo.maximum")}, (a, b), _, _) = map(max, a, b)
+handle(::Val{Symbol("stablehlo.minimum")}, (a, b), _, _) = map(min, a, b)
+handle(::Val{Symbol("stablehlo.negate")}, (a,), _, _) = map(-, a)
+
+# integer division truncates towards zero, like `div`
+handle(::Val{Symbol("stablehlo.divide")}, (a, b), _, (result,)) = map(result.eltype <: Integer ? div : /, a, b)
+
+handle(::Val{Symbol("stablehlo.constant")}, _, attributes, _) = attributes.value
+
+handle(::Val{Symbol("stablehlo.abs")}, (a,), _, _) = map(abs, a)
+
+# bitwise for integers, logical for booleans
+handle(::Val{Symbol("stablehlo.and")}, (a, b), _, _) = map(&, a, b)
+handle(::Val{Symbol("stablehlo.or")}, (a, b), _, _) = map(|, a, b)
+handle(::Val{Symbol("stablehlo.not")}, (a,), _, _) = map(~, a)
+
+# Julia throws `DomainError` where StableHLO returns NaN (e.g. `sin(Inf)`, `log(-1.0)`, `sqrt(-1.0)`), so real
+# inputs outside of the domain are mapped to NaN explicitly
+function handle(::Val{Symbol("stablehlo.sine")}, (a,), _, _)
+    return map(x -> x isa Real && isinf(x) ? oftype(x, NaN) : sin(x), a)
+end
+
+function handle(::Val{Symbol("stablehlo.cosine")}, (a,), _, _)
+    return map(x -> x isa Real && isinf(x) ? oftype(x, NaN) : cos(x), a)
+end
+
+function handle(::Val{Symbol("stablehlo.log")}, (a,), _, _)
+    return map(x -> x isa Real && x < 0 ? oftype(x, NaN) : log(x), a)
+end
+
+function handle(::Val{Symbol("stablehlo.sqrt")}, (a,), _, _)
+    return map(x -> x isa Real && x < 0 ? oftype(x, NaN) : sqrt(x), a)
+end
+
+function handle(::Val{Symbol("stablehlo.rsqrt")}, (a,), _, _)
+    return map(x -> x isa Real && x < 0 ? oftype(x, NaN) : inv(sqrt(x)), a)
+end
+
+# like XLA, integer powers with negative exponents are 0 except for bases 1 and -1 (which Julia's `^` handles), and
+# negative real bases with finite non-integer exponents are NaN
+function handle(::Val{Symbol("stablehlo.power")}, (a, b), _, _)
+    return map(a, b) do x, y
+        if x isa Integer
+            y < 0 && abs(x) != 1 ? zero(x) : x^y
+        elseif x isa Real && x < 0 && isfinite(y) && !isinteger(y)
+            oftype(x, NaN)
+        else
+            x^y
+        end
+    end
+end
+
+# the sign of the result follows the dividend, like `rem`. like XLA, an integer remainder by zero is the dividend
+function handle(::Val{Symbol("stablehlo.remainder")}, (a, b), _, _)
+    return map((x, y) -> x isa Integer && iszero(y) ? x : rem(x, y), a, b)
+end
+
+# like XLA, integers wrap around, floats are truncated towards zero and saturate when converted to integers (NaN
+# becomes 0), and complex numbers lose their imaginary part when converted to real numbers
+function handle(::Val{Symbol("stablehlo.convert")}, (a,), _, (result,))
+    T = result.eltype
+    return map(a) do x
+        if T === Bool
+            !iszero(x)
+        elseif x isa Complex && !(T <: Complex)
+            convert(T, real(x))
+        elseif T <: Integer && x isa Integer
+            x % T
+        elseif T <: Integer
+            isnan(x) ? zero(T) : x <= typemin(T) ? typemin(T) : x >= typemax(T) ? typemax(T) : trunc(T, x)
+        else
+            convert(T, x)
+        end
+    end
+end
+
+# shape handlers. arrays have reversed dimensions, so MLIR dimension `d` (0-based) of a rank-`N` tensor is Julia
+# dimension `N - d`, and attributes indexed by MLIR dimension (e.g. `permutation`) are read in reverse
+
+# reshapes follow the row-major order of MLIR tensors, which is the column-major order of the reversed arrays
+function handle(::Val{Symbol("stablehlo.reshape")}, (a,), _, (result,))
+    return reshape(a, result.size)
+end
+
+function handle(::Val{Symbol("stablehlo.transpose")}, (a,), attributes, _)
+    perm = attributes.permutation
+    N = length(perm)
+    return permutedims(a, ntuple(j -> N - perm[N-j+1], N))
+end
+
+# `start_indices` are 0-based and `limit_indices` are exclusive
+function handle(::Val{Symbol("stablehlo.slice")}, (a,), attributes, _)
+    (; start_indices, limit_indices, strides) = attributes
+    N = length(start_indices)
+    ranges = ntuple(N) do j
+        d = N - j + 1
+        (start_indices[d]+1):strides[d]:limit_indices[d]
+    end
+    # indexing a 0-dimensional array with no indices would return a scalar
+    return copy(view(a, ranges...))
+end
+
+# like in StableHLO, start indices are clamped so that the slice is always within bounds
+function handle(::Val{Symbol("stablehlo.dynamic_slice")}, operands, attributes, _)
+    a = first(operands)
+    starts = Base.tail(operands)
+    sizes = attributes.slice_sizes
+    N = length(sizes)
+    ranges = ntuple(N) do j
+        d = N - j + 1
+        start = clamp(Int(starts[d][]), 0, size(a, j) - sizes[d])
+        (start+1):(start+sizes[d])
+    end
+    return copy(view(a, ranges...))
+end
+
+function handle(::Val{Symbol("stablehlo.dynamic_update_slice")}, operands, _, _)
+    a, update = operands[1], operands[2]
+    starts = operands[3:end]
+    N = ndims(a)
+    ranges = ntuple(N) do j
+        start = clamp(Int(starts[N-j+1][]), 0, size(a, j) - size(update, j))
+        (start+1):(start+size(update, j))
+    end
+
+    # the operand may be an input or a constant, so the update goes into a copy
+    result = copy(a)
+    view(result, ranges...) .= update
+    return result
+end
+
+# convert an MLIR attribute into a Julia value that doesn't depend on its MLIR context.
+# dense elements become arrays with reversed dimensions (like operands), dense arrays keep MLIR order (e.g. dimension
+# indices are 0-based MLIR dimensions), and attributes of any other kind become their textual form.
+function decode_attribute(attr)
+    IR = Reactant.MLIR.IR
+    API = Reactant.MLIR.API
+
+    if IR.isdenseelements(attr)
+        T = IR.julia_type(eltype(IR.type(attr)))
+        dims = reverse(size(IR.type(attr)))
+        if IR.issplat(attr)
+            splat = IR.Attribute(API.mlirDenseElementsAttrGetSplatValue(attr))
+            x = if T === Bool
+                Bool(splat)
+            elseif T <: Integer
+                T(Int64(splat))
+            else
+                T(Float64(splat))
+            end
+            return fill(x, dims)
+        end
+
+        # dense boolean attributes are bit-packed
+        T === Bool && throw(unimplemented("non-splat boolean dense attributes are not supported"))
+        return copy(unsafe_wrap(Array, Ptr{T}(API.mlirDenseElementsAttrGetRawData(attr)), dims))
+    elseif IR.isdensearray(attr, Int64)
+        return Int64[API.mlirDenseI64ArrayGetElement(attr, i) for i in 0:(length(attr)-1)]
+    elseif IR.isbool(attr)
+        return Bool(attr)
+    elseif IR.isinteger(attr)
+        return Int64(attr)
+    elseif IR.isfloat(attr)
+        return Float64(attr)
+    elseif IR.isstring(attr)
+        return String(attr)
+    elseif IR.isarray(attr)
+        return Any[
+            decode_attribute(IR.Attribute(API.mlirArrayAttrGetElement(attr, i))) for
+            i in 0:(API.mlirArrayAttrGetNumElements(attr)-1)
+        ]
+    end
+    return string(attr)
+end
+
 ## HostClient
 mutable struct HostClient <: Client
     devices::Vector{Device}
@@ -2391,7 +2586,8 @@ function compile!(client::HostClient, code, options)
         )
     end
 
-    # inputs are wrapped without copying
+    # wrap operand buffers into Array without copying
+    # TODO support wrapping other MLIR types apart of `tensor`
     for i in 1:nargs
         arg = IR.argument(block, i)
         T = IR.julia_type(eltype(IR.type(arg)))
@@ -2407,15 +2603,10 @@ function compile!(client::HostClient, code, options)
         )
     end
 
-    elementwise = Dict(
-        "stablehlo.add" => :+,
-        "stablehlo.subtract" => :-,
-        "stablehlo.multiply" => :*,
-        "stablehlo.maximum" => :max,
-        "stablehlo.minimum" => :min,
-        "stablehlo.negate" => :-,
-    )
+    # each op becomes a call to its handler, `%N = handle(Val(opname), operands, attributes, results)`
+    # like in MLIR, an op with several results binds `%N#0`, `%N#1`, ... instead
     outputs = Symbol[]
+    nvals = 0
     for op in block
         opname = IR.name(op)
         operands = [vars[IR.operand(op, i).ref.ptr] for i in 1:IR.noperands(op)]
@@ -2425,65 +2616,59 @@ function compile!(client::HostClient, code, options)
             continue
         end
 
-        IR.nresults(op) == 1 || throw(
-            unimplemented("`$opname` with $(IR.nresults(op)) results is not supported")
-        )
-        res = IR.result(op, 1)
-        T = IR.julia_type(eltype(IR.type(res)))
-        rhs = if haskey(elementwise, opname)
-            :(broadcast($(elementwise[opname]), $(operands...)))
-        elseif opname == "stablehlo.divide"
-            # integer division truncates towards zero, like `div`
-            :(broadcast($(T <: Integer ? :div : :/), $(operands...)))
-        elseif opname == "stablehlo.constant"
-            # the constant is built once here and embedded in the generated code
-            value = IR.getattr(op, "value")
-            dims = reverse(size(IR.type(res)))
-            if IR.issplat(value)
-                splat = IR.Attribute(
-                    Reactant.MLIR.API.mlirDenseElementsAttrGetSplatValue(value)
-                )
-                x = if T === Bool
-                    Bool(splat)
-                elseif T <: Integer
-                    T(Int64(splat))
-                else
-                    T(Float64(splat))
-                end
-                fill(x, dims)
-            elseif T === Bool
-                # dense boolean attributes are bit-packed
-                throw(unimplemented("non-splat boolean constants are not supported"))
-            else
-                data = Ptr{T}(Reactant.MLIR.API.mlirDenseElementsAttrGetRawData(value))
-                copy(unsafe_wrap(Array, data, dims))
-            end
-        else
+        opval = Val(Symbol(opname))
+        hasmethod(handle, Tuple{typeof(opval),Tuple,NamedTuple,Tuple}) ||
             throw(unimplemented("`$opname` is not supported by `HostClient`"))
+
+        # attributes are decoded here, since the MLIR context doesn't outlive `compile!`
+        attributes = (;
+            (
+                Symbol(String(Reactant.MLIR.API.mlirIdentifierStr(na.ref.name))) =>
+                    decode_attribute(IR.Attribute(na.ref.attribute)) for
+                na in (IR.getattr(op, i) for i in 1:IR.nattrs(op))
+            )...
+        )
+        nres = IR.nresults(op)
+        results = ntuple(nres) do i
+            type = IR.type(IR.result(op, i))
+            IR.istensor(type) ||
+                throw(unimplemented("`$opname` returns a non-tensor value, which is not supported"))
+            (; eltype=IR.julia_type(eltype(type)), size=reverse(size(type)))
         end
 
-        var = vars[res.ref.ptr] = Symbol("%", length(vars) - nargs)
-        push!(body.args, :($var = $rhs))
+        call = :(handle($opval, ($(operands...),), $attributes, $results))
+        if nres == 0
+            push!(body.args, call)
+        elseif nres == 1
+            var = vars[IR.result(op, 1).ref.ptr] = Symbol("%", nvals)
+            push!(body.args, :($var = $call))
+            nvals += 1
+        else
+            resvars = map(1:nres) do i
+                vars[IR.result(op, i).ref.ptr] = Symbol("%", nvals, "#", i - 1)
+            end
+            push!(body.args, :(($(resvars...),) = $call::NTuple{$nres,Any}))
+            nvals += 1
+        end
     end
 
     # outputs are copied into new buffers, since they may alias inputs or embedded constants
+    # TODO support buffer donation?
     push!(
         body.args,
         quote
             out_dev = exec.devices[1]
             out_mem = default_memory(out_dev)
             results = Buffer[]
-            for res in ($(outputs...),)
-                # broadcasting over 0-dimensional arrays returns a scalar
-                out = res isa Array ? res : fill(res)
-                nbytes = sizeof(out)
+            for out in ($(outputs...),)
+                nbytes = sizeof(out::Array)
                 data = Libc.malloc(max(nbytes, 1))
                 data == C_NULL && throw(resource_exhausted())
                 GC.@preserve out unsafe_copyto!(
                     Ptr{UInt8}(data), Ptr{UInt8}(pointer(out)), nbytes
                 )
                 dims = collect(Int64, reverse(size(out)))
-                minor_to_major = collect(Int64, (ndims(out) - 1):-1:0)
+                minor_to_major = collect(Int64, (ndims(out)-1):-1:0)
                 push!(
                     results,
                     HostBuffer(
