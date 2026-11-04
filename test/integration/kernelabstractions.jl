@@ -130,6 +130,45 @@ end
     end
 end
 
+@kernel function muladd_kernel!(out, @Const(a), @Const(b), @Const(c))
+    i = @index(Global)
+    @inbounds out[i] = muladd(a[i], b[i], c[i])
+end
+
+function run_muladd!(out, a, b, c)
+    backend = KernelAbstractions.get_backend(out)
+    kernel! = muladd_kernel!(backend)
+    kernel!(out, a, b, c; ndrange=length(out))
+    return out
+end
+
+# `muladd` does not always share a path with `fma`, and it broke on the *un-raised* path: `muladd`
+# on a device float goes through `llvm.fmuladd`, which becomes a scalar
+# `enzymexla.math.fmuladd`, while `fma` goes through `llvm.fma`.
+@testset "Compile muladd" begin
+    a = Reactant.to_rarray(Float64[1.0, 2.0, 3.0, 4.0])
+    b = Reactant.to_rarray(Float64[2.0, 3.0, 4.0, 5.0])
+    c = Reactant.to_rarray(Float64[0.5, 0.5, 0.5, 0.5])
+    out = Reactant.to_rarray(zeros(Float64, 4))
+
+    ir = repr(Reactant.@code_hlo raise = true run_muladd!(out, a, b, c))
+    @test @filecheck begin
+        @check "%0 = stablehlo.multiply %arg1, %arg2 : tensor<4xf64>"
+        @check_next "%1 = stablehlo.add %0, %arg3 : tensor<4xf64>"
+        @check_next "return %1 : tensor<4xf64>"
+        ir
+    end
+
+    @jit raise = true run_muladd!(out, a, b, c)
+    @test Array(out) ≈ [2.5, 6.5, 12.5, 20.5]
+
+    if Reactant.XLA.platform_name(Reactant.XLA.default_backend()) ∈ ("cpu", "cuda")
+        unraised_out = Reactant.to_rarray(zeros(Float64, 4))
+        @jit raise = false run_muladd!(unraised_out, a, b, c)
+        @test Array(unraised_out) ≈ [2.5, 6.5, 12.5, 20.5]
+    end
+end
+
 # Scratch allocated *inside* a traced call must come back traced: a concrete array cannot take
 # part in the traced program. `KA.allocate` used to return a `ConcreteRArray` unconditionally, so
 # `KA.zeros` then hit `fill!` on it, which compiles a `fill!` kernel, which traces `fill!`, which
