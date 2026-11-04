@@ -2282,7 +2282,9 @@ handle(::Val{Symbol("stablehlo.or")}, (a, b), _, _) = map(|, a, b)
 handle(::Val{Symbol("stablehlo.not")}, (a,), _, _) = map(~, a)
 
 # integer division truncates towards zero, like `div`
-handle(::Val{Symbol("stablehlo.divide")}, (a, b), _, (result,)) = map(result.eltype <: Integer ? div : /, a, b)
+function handle(::Val{Symbol("stablehlo.divide")}, (a, b), _, (result,))
+    return map(result.eltype <: Integer ? div : /, a, b)
+end
 
 handle(::Val{Symbol("stablehlo.constant")}, _, attributes, _) = attributes.value
 
@@ -2345,7 +2347,15 @@ function handle(::Val{Symbol("stablehlo.convert")}, (a,), _, (result,))
         elseif T <: Integer && x isa Integer
             x % T
         elseif T <: Integer
-            isnan(x) ? zero(T) : x <= typemin(T) ? typemin(T) : x >= typemax(T) ? typemax(T) : trunc(T, x)
+            if isnan(x)
+                zero(T)
+            elseif x <= typemin(T)
+                typemin(T)
+            elseif x >= typemax(T)
+                typemax(T)
+            else
+                trunc(T, x)
+            end
         else
             convert(T, x)
         end
@@ -2374,7 +2384,12 @@ function handle(::Val{Symbol("stablehlo.compare")}, (a, b), attributes, _)
     end
 
     if get(attributes, :compare_type, :NOTYPE) === :TOTALORDER
-        key = x -> x isa Base.IEEEFloat ? (bits = reinterpret(Signed, x); bits < 0 ? bits ⊻ typemax(bits) : bits) : x
+        key =
+            x -> if x isa Base.IEEEFloat
+                (bits = reinterpret(Signed, x); bits < 0 ? bits ⊻ typemax(bits) : bits)
+            else
+                x
+            end
         return map((x, y) -> f(key(x), key(y)), a, b)
     end
     return map(f, a, b)
@@ -2430,7 +2445,7 @@ end
 function handle(::Val{Symbol("stablehlo.transpose")}, (a,), attributes, _)
     perm = attributes.permutation
     N = length(perm)
-    return permutedims(a, ntuple(j -> N - perm[N-j+1], N))
+    return permutedims(a, ntuple(j -> N - perm[N - j + 1], N))
 end
 
 # `start_indices` are 0-based and `limit_indices` are exclusive
@@ -2439,7 +2454,7 @@ function handle(::Val{Symbol("stablehlo.slice")}, (a,), attributes, _)
     N = length(start_indices)
     ranges = ntuple(N) do j
         d = N - j + 1
-        (start_indices[d]+1):strides[d]:limit_indices[d]
+        (start_indices[d] + 1):strides[d]:limit_indices[d]
     end
     # indexing a 0-dimensional array with no indices would return a scalar
     return copy(view(a, ranges...))
@@ -2454,7 +2469,7 @@ function handle(::Val{Symbol("stablehlo.dynamic_slice")}, operands, attributes, 
     ranges = ntuple(N) do j
         d = N - j + 1
         start = clamp(Int(starts[d][]), 0, size(a, j) - sizes[d])
-        (start+1):(start+sizes[d])
+        (start + 1):(start + sizes[d])
     end
     return copy(view(a, ranges...))
 end
@@ -2464,8 +2479,8 @@ function handle(::Val{Symbol("stablehlo.dynamic_update_slice")}, operands, _, _)
     starts = operands[3:end]
     N = ndims(a)
     ranges = ntuple(N) do j
-        start = clamp(Int(starts[N-j+1][]), 0, size(a, j) - size(update, j))
-        (start+1):(start+size(update, j))
+        start = clamp(Int(starts[N - j + 1][]), 0, size(a, j) - size(update, j))
+        (start + 1):(start + size(update, j))
     end
 
     # the operand may be an input or a constant, so the update goes into a copy
@@ -2502,7 +2517,10 @@ function handle(::Val{Symbol("stablehlo.concatenate")}, operands, attributes, (r
     offset = 0
     for x in operands
         n = size(x, j)
-        view(out, ntuple(k -> k == j ? ((offset + 1):(offset + n)) : (1:size(out, k)), Val(N))...) .= x
+        view(
+            out,
+            ntuple(k -> k == j ? ((offset + 1):(offset + n)) : (1:size(out, k)), Val(N))...,
+        ) .= x
         offset += n
     end
     return out
@@ -2671,10 +2689,13 @@ function decode_attribute(attr)
         end
 
         # dense boolean attributes are bit-packed
-        T === Bool && throw(unimplemented("non-splat boolean dense attributes are not supported"))
-        return copy(unsafe_wrap(Array, Ptr{T}(API.mlirDenseElementsAttrGetRawData(attr)), dims))
+        T === Bool &&
+            throw(unimplemented("non-splat boolean dense attributes are not supported"))
+        return copy(
+            unsafe_wrap(Array, Ptr{T}(API.mlirDenseElementsAttrGetRawData(attr)), dims)
+        )
     elseif IR.isdensearray(attr, Int64)
-        return Int64[API.mlirDenseI64ArrayGetElement(attr, i) for i in 0:(length(attr)-1)]
+        return Int64[API.mlirDenseI64ArrayGetElement(attr, i) for i in 0:(length(attr) - 1)]
     elseif IR.isbool(attr)
         return Bool(attr)
     elseif IR.isinteger(attr)
@@ -2754,7 +2775,7 @@ function decode_attribute(attr)
     elseif IR.isarray(attr)
         return Any[
             decode_attribute(IR.Attribute(API.mlirArrayAttrGetElement(attr, i))) for
-            i in 0:(API.mlirArrayAttrGetNumElements(attr)-1)
+            i in 0:(API.mlirArrayAttrGetNumElements(attr) - 1)
         ]
     end
 
@@ -3025,7 +3046,7 @@ function compile!(client::HostClient, code, options)
                     Ptr{UInt8}(data), Ptr{UInt8}(pointer(out)), nbytes
                 )
                 dims = collect(Int64, reverse(size(out)))
-                minor_to_major = collect(Int64, (ndims(out)-1):-1:0)
+                minor_to_major = collect(Int64, (ndims(out) - 1):-1:0)
                 push!(
                     results,
                     HostBuffer(
