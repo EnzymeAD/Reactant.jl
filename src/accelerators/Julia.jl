@@ -2274,18 +2274,22 @@ handle(::Val{Symbol("stablehlo.multiply")}, (a, b), _, _) = map(*, a, b)
 handle(::Val{Symbol("stablehlo.maximum")}, (a, b), _, _) = map(max, a, b)
 handle(::Val{Symbol("stablehlo.minimum")}, (a, b), _, _) = map(min, a, b)
 handle(::Val{Symbol("stablehlo.negate")}, (a,), _, _) = map(-, a)
+handle(::Val{Symbol("stablehlo.abs")}, (a,), _, _) = map(abs, a)
+handle(::Val{Symbol("stablehlo.floor")}, (a,), _, _) = map(floor, a)
+handle(::Val{Symbol("stablehlo.and")}, (a, b), _, _) = map(&, a, b)
+handle(::Val{Symbol("stablehlo.or")}, (a, b), _, _) = map(|, a, b)
+handle(::Val{Symbol("stablehlo.not")}, (a,), _, _) = map(~, a)
 
 # integer division truncates towards zero, like `div`
 handle(::Val{Symbol("stablehlo.divide")}, (a, b), _, (result,)) = map(result.eltype <: Integer ? div : /, a, b)
 
 handle(::Val{Symbol("stablehlo.constant")}, _, attributes, _) = attributes.value
 
-handle(::Val{Symbol("stablehlo.abs")}, (a,), _, _) = map(abs, a)
-
-# bitwise for integers, logical for booleans
-handle(::Val{Symbol("stablehlo.and")}, (a, b), _, _) = map(&, a, b)
-handle(::Val{Symbol("stablehlo.or")}, (a, b), _, _) = map(|, a, b)
-handle(::Val{Symbol("stablehlo.not")}, (a,), _, _) = map(~, a)
+# each element is its 0-based index along `iota_dimension`, an MLIR dimension, which is Julia dimension `N - d`
+function handle(::Val{Symbol("stablehlo.iota")}, _, attributes, (result,))
+    j = length(result.size) - attributes.iota_dimension
+    return [result.eltype(I[j] - 1) for I in CartesianIndices(result.size)]
+end
 
 # Julia throws `DomainError` where StableHLO returns NaN (e.g. `sin(Inf)`, `log(-1.0)`, `sqrt(-1.0)`), so real
 # inputs outside of the domain are mapped to NaN explicitly
