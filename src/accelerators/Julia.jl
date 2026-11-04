@@ -29,6 +29,7 @@ module Julia
 using Base: unsafe_convert
 using ..Reactant: Reactant
 using Reactant.XLA.CAPI: CAPI, csizeof
+using Reactant.MLIR: IR, API
 using LinearAlgebra: mul!
 import Serialization: serialize
 
@@ -2685,9 +2686,94 @@ function buffer_from_host_buffer(
     return HostBuffer(new_data, size_in_bytes, _eltype, _size, minor_to_major, dev, mem)
 end
 
-function compile!(client::HostClient, code, options)
-    IR = Reactant.MLIR.IR
+# each op becomes a call to its handler, `%N = handle(Val(opname), operands, attributes, results)`
+# like in MLIR, an op with several results binds `%N#0`, `%N#1`, ... instead.
+# ops with regions also get `regions`, a tuple with an anonymous function per region, which takes the block
+# arguments and returns a tuple with the operands of the region terminator.
+# `codegen!` translates the ops of `block` into `exprs` and returns the operands of its terminator. `vars` maps MLIR
+# values to the names of their Julia variables, and `nvals` counts the ops with results to name them
+function codegen!(exprs, block, vars, nvals)
+    for op in block
+        opname = IR.name(op)
+        operands = [vars[IR.operand(op, i).ref.ptr] for i in 1:IR.noperands(op)]
+        opname in ("func.return", "stablehlo.return") && return operands
+        codegen_op!(exprs, op, opname, operands, vars, nvals)
+    end
+    throw(invalid_argument("block has no terminator"))
+end
 
+function codegen_op!(exprs, op, opname, operands, vars, nvals)
+    opval = Val(Symbol(opname))
+    nregions = IR.nregions(op)
+    signature = if nregions == 0
+        Tuple{typeof(opval),Tuple,NamedTuple,Tuple}
+    else
+        Tuple{typeof(opval),Tuple,NamedTuple,Tuple,Tuple}
+    end
+    hasmethod(handle, signature) ||
+        throw(unimplemented("`$opname` is not supported by `HostClient`"))
+
+    # attributes are decoded here, since the MLIR context doesn't outlive `compile!`
+    attributes = (;
+        (
+            Symbol(String(Reactant.MLIR.API.mlirIdentifierStr(na.ref.name))) =>
+                decode_attribute(IR.Attribute(na.ref.attribute)) for
+            na in (IR.getattr(op, i) for i in 1:IR.nattrs(op))
+        )...
+    )
+    nres = IR.nresults(op)
+    results = ntuple(nres) do i
+        type = IR.type(IR.result(op, i))
+        IR.istensor(type) || throw(
+            unimplemented("`$opname` returns a non-tensor value, which is not supported"),
+        )
+        T = IR.julia_type(eltype(type))
+        dims = reverse(size(type))
+
+        # `eltype` is typed as `Type{T}` instead of `DataType`, so that handlers that build their result from it
+        # (e.g. `Array{result.eltype}`) are type-stable
+        NamedTuple{(:eltype, :size),Tuple{Type{T},typeof(dims)}}((T, dims))
+    end
+
+    call = :(handle($opval, ($(operands...),), $attributes, $results))
+    if nregions > 0
+        id = nvals[]
+        nvals[] += 1
+        regions = map(1:nregions) do r
+            rblock = IR.first_block(IR.region(op, r))
+            args = map(1:IR.nargs(rblock)) do i
+                vars[IR.argument(rblock, i).ref.ptr] = Symbol(
+                    "%", id, "^", r - 1, "#arg", i - 1
+                )
+            end
+            rexprs = Expr(:block)
+            rets = codegen!(rexprs, rblock, vars, nvals)
+            Expr(
+                :->,
+                Expr(:tuple, args...),
+                Expr(:block, rexprs.args..., :(return ($(rets...),))),
+            )
+        end
+        push!(call.args, Expr(:tuple, regions...))
+    end
+
+    if nres == 0
+        push!(exprs.args, call)
+    elseif nres == 1
+        var = vars[IR.result(op, 1).ref.ptr] = Symbol("%", nvals[])
+        push!(exprs.args, :($var = $call))
+        nvals[] += 1
+    else
+        resvars = map(1:nres) do i
+            vars[IR.result(op, i).ref.ptr] = Symbol("%", nvals[], "#", i - 1)
+        end
+        push!(exprs.args, :(($(resvars...),) = $call::NTuple{$nres,Any}))
+        nvals[] += 1
+    end
+    return nothing
+end
+
+function compile!(client::HostClient, code, options)
     # `code` lives in a context owned by the caller, so only copies of its contents are kept
     main = IR.lookup(IR.SymbolTable(code), "main")
     isnothing(main) && throw(invalid_argument("program has no `main` function"))
@@ -2756,59 +2842,8 @@ function compile!(client::HostClient, code, options)
         )
     end
 
-    # each op becomes a call to its handler, `%N = handle(Val(opname), operands, attributes, results)`
-    # like in MLIR, an op with several results binds `%N#0`, `%N#1`, ... instead
-    outputs = Symbol[]
-    nvals = 0
-    for op in block
-        opname = IR.name(op)
-        operands = [vars[IR.operand(op, i).ref.ptr] for i in 1:IR.noperands(op)]
-
-        if opname == "func.return"
-            append!(outputs, operands)
-            continue
-        end
-
-        opval = Val(Symbol(opname))
-        hasmethod(handle, Tuple{typeof(opval),Tuple,NamedTuple,Tuple}) ||
-            throw(unimplemented("`$opname` is not supported by `HostClient`"))
-
-        # attributes are decoded here, since the MLIR context doesn't outlive `compile!`
-        attributes = (;
-            (
-                Symbol(String(Reactant.MLIR.API.mlirIdentifierStr(na.ref.name))) =>
-                    decode_attribute(IR.Attribute(na.ref.attribute)) for
-                na in (IR.getattr(op, i) for i in 1:IR.nattrs(op))
-            )...
-        )
-        nres = IR.nresults(op)
-        results = ntuple(nres) do i
-            type = IR.type(IR.result(op, i))
-            IR.istensor(type) ||
-                throw(unimplemented("`$opname` returns a non-tensor value, which is not supported"))
-            T = IR.julia_type(eltype(type))
-            dims = reverse(size(type))
-
-            # `eltype` is typed as `Type{T}` instead of `DataType`, so that handlers that build their result from it
-            # (e.g. `Array{result.eltype}`) are type-stable
-            NamedTuple{(:eltype, :size),Tuple{Type{T},typeof(dims)}}((T, dims))
-        end
-
-        call = :(handle($opval, ($(operands...),), $attributes, $results))
-        if nres == 0
-            push!(body.args, call)
-        elseif nres == 1
-            var = vars[IR.result(op, 1).ref.ptr] = Symbol("%", nvals)
-            push!(body.args, :($var = $call))
-            nvals += 1
-        else
-            resvars = map(1:nres) do i
-                vars[IR.result(op, i).ref.ptr] = Symbol("%", nvals, "#", i - 1)
-            end
-            push!(body.args, :(($(resvars...),) = $call::NTuple{$nres,Any}))
-            nvals += 1
-        end
-    end
+    # each op becomes a call to its handler
+    outputs = codegen!(body, block, vars, Ref(0))
 
     # outputs are copied into new buffers, since they may alias inputs or embedded constants
     # TODO support buffer donation?
