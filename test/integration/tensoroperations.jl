@@ -86,3 +86,37 @@ end
     @test fall(α, a, b, c, d) ≈ @jit fall(α_re, a_re, b_re, c_re, d_re)
     @test d ≈ d_re
 end
+
+# Writing through a StridedView of a traced array has to reach its parent, as when TensorKit
+# hands TensorOperations a view of a tensor's flat storage as the output
+function fwrite_view!(x, y, makeview)
+    Reactant.TracedUtils.set_mlir_data!(makeview(x), Reactant.TracedUtils.get_mlir_data(y))
+    return x
+end
+
+@testset "writes through StridedViews" begin
+    x = construct_test_array(Float64, 24)
+    for (name, makeview, sz) in (
+        ("sreshape", x -> TensorOperations.sreshape(TensorOperations.StridedView(x), (2, 3, 4)), (2, 3, 4)),
+        # offset and non-unit strides, like a TensorKit subblock
+        ("strided", x -> TensorOperations.StridedView(x, (2, 3), (1, 4), 1), (2, 3)),
+    )
+        @testset "$name" begin
+            y = construct_test_array(Float64, sz...) .+ 100
+            expected = copy(x)
+            v = makeview(expected)
+            for I in CartesianIndices(v)
+                v[I] = y[I]
+            end
+            x_re = Reactant.to_rarray(x)
+            @test @jit(fwrite_view!(x_re, Reactant.to_rarray(y), makeview)) ≈ expected
+        end
+    end
+
+    @testset "conj" begin
+        z = complex.(construct_test_array(Float64, 6), construct_test_array(Float64, 6) .+ 1)
+        w = complex.(construct_test_array(Float64, 6) .+ 2, construct_test_array(Float64, 6))
+        makeview(z) = conj(TensorOperations.StridedView(z))
+        @test @jit(fwrite_view!(Reactant.to_rarray(z), Reactant.to_rarray(w), makeview)) ≈ conj(w)
+    end
+end
