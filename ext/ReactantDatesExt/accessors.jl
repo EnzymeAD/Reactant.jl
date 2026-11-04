@@ -64,6 +64,18 @@ function Dates.yearmonthday(days::Reactant.TracedRNumber)
     return (y + overflow, m - 12overflow, d)
 end
 
+function Dates.year(days::Reactant.TracedRNumber)
+    z = days + 306
+    h = 100z - 25
+    a = fld(h, 3652425)
+    b = a - fld(a, 4)
+    y = fld(100b + h, 36525)
+    c = b + z - 365y - fld(y, 4)
+    m = div(5c + 456, 153)
+    overflow = fld(m - 1, 12)
+    return y + overflow
+end
+
 function Dates.yearmonth(days::Reactant.TracedRNumber)
     z = days + 306
     h = 100z - 25
