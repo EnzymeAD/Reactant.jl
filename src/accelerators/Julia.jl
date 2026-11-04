@@ -2259,7 +2259,13 @@ function copy_to_memory(mem::HostMemory, buffer::HostBuffer)
     new_data == C_NULL && throw(resource_exhausted())
     Libc.memcpy(new_data, buffer.data, buffer.size_in_bytes)
     return HostBuffer(
-        new_data, buffer.size_in_bytes, buffer.type, buffer.dims, buffer.minor_to_major, dev, mem
+        new_data,
+        buffer.size_in_bytes,
+        buffer.type,
+        buffer.dims,
+        buffer.minor_to_major,
+        dev,
+        mem,
     )
 end
 
