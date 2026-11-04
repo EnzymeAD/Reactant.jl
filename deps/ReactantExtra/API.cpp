@@ -4176,6 +4176,24 @@ REACTANT_ABI void reactantXLAFree(LinkableRuntime **__restrict__ lrtP,
   PjRtBufferFree(buffer);
 }
 
+// The options a raised kernel's executable is compiled with: XLA's flags,
+// with a CUDA graph for as few as three kernels. Each launch of the kernel
+// runs the executable once, and an executable of 3 or 4 kernels, below
+// XLA's default minimum of 5 for a graph, would launch them one at a time
+// (nlvc AssembleGradDiagonal2d/4: 37 -> 35 us, /2: 33 -> 29 us). Two
+// kernels stay launches: a graph starts later, which a loop synchronizing
+// on every step waits for (ceed BP1PARTIAL/2's CG: +1.6% with two). Set in
+// XLA_FLAGS, xla_gpu_graph_min_graph_size is kept.
+static xla::CompileOptions execCompileOptions() {
+  xla::CompileOptions options;
+  auto *debugOptions = options.executable_build_options.mutable_debug_options();
+  *debugOptions = xla::GetDebugOptionsFromFlags();
+  const char *flags = getenv("XLA_FLAGS");
+  if (!flags || !strstr(flags, "xla_gpu_graph_min_graph_size"))
+    debugOptions->set_xla_gpu_graph_min_graph_size(3);
+  return options;
+}
+
 REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
                                   const char *modstr, int64_t argcnt,
                                   void **args, int64_t constcnt,
@@ -4593,8 +4611,8 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
         funcOp.setArgAttr(pos, "tf.aliasing_output",
                           builder.getI64IntegerAttr(res));
     }
-    auto exec =
-        ClientCompileWithProto(lrt->client, wrap(module.get()), nullptr, 0);
+    auto exec = ClientCompileInternal(lrt->client, wrap(module.get()),
+                                      execCompileOptions());
 
     // Per parameter of the executable, in order.
     uint8_t *keep = (uint8_t *)malloc(argcnt);
