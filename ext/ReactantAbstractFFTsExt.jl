@@ -296,12 +296,9 @@ function AbstractFFTs.plan_brfft(
     return normbfft(real(T), sz, dims) * y
 end
 
-
 # Applying a Reactant plan to a concrete (non-traced) array: compile and run the traced
 # operation, matching how other eager operations on concrete arrays are handled (e.g.
-# `fill!`). Without these methods, AbstractFFTs' fallback
-# `*(p::Plan{T}, x::AbstractArray) = p * copy1(T, x)` recurses forever.
-# See https://github.com/EnzymeAD/Reactant.jl/issues/3259
+# `fill!`).
 const ConcretePlanTypes = (
     ReactantFFTPlan,
     ReactantIFFTPlan,
@@ -314,7 +311,9 @@ const ConcretePlanTypes = (
 apply_plan(p, x) = p * x
 apply_plan!(y, p, x) = LinearAlgebra.mul!(y, p, x)
 
-for P in ConcretePlanTypes
+# `ScaledPlan`s (ifft, bfft, irfft, ...) wrap a Reactant plan; compile the whole scaled
+# operation, otherwise AbstractFFTs scales the concrete result eagerly (scalar indexing).
+for P0 in ConcretePlanTypes, P in (P0, AbstractFFTs.ScaledPlan{<:Any,<:P0})
     @eval function Base.:*(p::$P, x::Reactant.UnionAnyConcreteRArray)
         return Reactant.compile(apply_plan, (p, x))(p, x)
     end
