@@ -420,10 +420,10 @@ def _lower_torchax(ep, prefix):
 _LOWERINGS["torchax"] = _lower_torchax
 """
 
-is_torch_module(f::Py) = TORCH_EXPORT_SUPPORTED[] && pyisinstance(f, torchptr[].nn.Module)
+is_torch_module(f::Py) = _torch_ready(false) && pyisinstance(f, torchptr[].nn.Module)
 
 function is_torchscript_module(f::Py)
-    return TORCH_EXPORT_SUPPORTED[] && pyisinstance(f, torchptr[].jit.ScriptModule)
+    return _torch_ready(false) && pyisinstance(f, torchptr[].jit.ScriptModule)
 end
 
 const NUMPY_DTYPE_TO_JULIA = Dict(string(v) => k for (k, v) in NUMPY_SIMPLE_TYPES)
@@ -548,7 +548,7 @@ end
 # Prepare `model` for export and read its parameters and buffers. `convert` maps each
 # host array to the leaf stored in `ps`/`st`.
 function _import(model::Py, convert; backend::Symbol=:torchax)
-    TORCH_EXPORT_SUPPORTED[] || throw("torch/torchax could not be loaded.")
+    _torch_ready() || throw("torch/torchax could not be loaded.")
     _check_backend(backend, "import_torch")
     export_model, prefix = if is_torchscript_module(model)
         pyeval("_fix_jit_parameters", @__MODULE__)(model)
@@ -839,7 +839,7 @@ end
 # `@jit model(x)` shortcut: export in evaluation mode with the parameters and buffers
 # embedded as constants, and return only `y`.
 function pycall_with_torch_export(model::Py, args...)
-    TORCH_EXPORT_SUPPORTED[] || throw("torch/torchax could not be loaded.")
+    _torch_ready() || throw("torch/torchax could not be loaded.")
     tm, ps, st = _import(model, identity)
     y, _ = _torch_call(tm, args, ps, st; mode=:eval)
     return y

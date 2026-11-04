@@ -20,7 +20,7 @@ using Logging
     torch_to_julia(t) = pyconvert(Array, pyimport("numpy").asarray(t.detach().cpu()))
 
     torch_available =
-        ReactantPythonCallExt !== nothing && ReactantPythonCallExt.TORCH_EXPORT_SUPPORTED[]
+        ReactantPythonCallExt !== nothing && ReactantPythonCallExt._torch_ready()
 
     if !torch_available
         @warn "torch/torchax not available; skipping PyTorch import tests."

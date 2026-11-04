@@ -4,6 +4,7 @@ using PythonCall:
     PythonCall,
     Py,
     pyconvert,
+    pycontains,
     pyeval,
     pyexec,
     pygetattr,
@@ -29,6 +30,7 @@ const npptr = Ref{Py}()
 const torch_export_with_state = Ref{Py}()
 
 const TORCH_EXPORT_SUPPORTED = Ref{Bool}(false)
+const TORCH_INIT_ATTEMPTED = Ref{Bool}(false)
 
 function __init__()
     try
@@ -39,7 +41,19 @@ function __init__()
         @warn "Failed to import jax. Tracing jax functions invoked with pycall won't \
                be supported." exception = (err, catch_backtrace())
     end
+    return nothing
+end
 
+# torch is set up on first use rather than in `__init__`, so code that never touches
+# PyTorch does not pay for importing it, and torch's OpenMP runtime is not loaded next
+# to jax's (on Windows the two can abort the process). With `require=false` this only
+# sets up torch when the user has already imported it: an object can only be a torch
+# module if torch is in `sys.modules`.
+function _torch_ready(require::Bool=true)
+    TORCH_EXPORT_SUPPORTED[] && return true
+    TORCH_INIT_ATTEMPTED[] && return false
+    require || pycontains(pyimport("sys").modules, "torch") || return false
+    TORCH_INIT_ATTEMPTED[] = true
     try
         torchptr[] = pyimport("torch")
         npptr[] = pyimport("numpy")
@@ -50,10 +64,10 @@ function __init__()
         torch_export_with_state[] = pyeval("_torch_export_with_state", @__MODULE__)
         TORCH_EXPORT_SUPPORTED[] = true
     catch err
-        @warn "Failed to import torch/torchax. Importing PyTorch modules invoked with \
-               pycall won't be supported." exception = (err, catch_backtrace())
+        @warn "Failed to import torch/torchax. Importing PyTorch modules won't be \
+               supported." exception = (err, catch_backtrace())
     end
-    return nothing
+    return TORCH_EXPORT_SUPPORTED[]
 end
 
 include("overlays.jl")
