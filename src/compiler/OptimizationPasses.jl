@@ -373,6 +373,64 @@ function __get_compile_options_and_kwargs(;
     )
 end
 
+"""
+    get_split_kernel_fixup_passes(max_ops)
+
+The pipeline run after the optimization passes to repair the form of a raised stencil
+kernel whose boundary rows were split off into concatenates and pads of separately
+computed pieces (see `CompileOptions`'s `split_kernel_fixup`).
+"""
+function get_split_kernel_fixup_passes(max_ops::Int)
+    fold = join(
+        [
+            "slice_concat<1>",
+            "slice_pad<1>",
+            "slice_slice<16>",
+            "slice_elementwise<1>",
+            "slice_broadcast",
+            "slice_simplify<16>",
+            "concat_fuse<1>",
+            "concatenate_op_canon<16>(1024)",
+            "pad_simplify<16>(1024)",
+            "broadcast_in_dim_op_canon<16>",
+            "cse_slice<16>",
+            "cse_concatenate<16>",
+            "slice_iota",
+            "slice_select_to_select_slice",
+        ],
+        ";",
+    )
+    widen = join(
+        [
+            "concat_pieces_to_select<1>($max_ops)",
+            "pad_computed_to_select<1>($max_ops)",
+            "slice_slice<16>",
+            "slice_simplify<16>",
+            "cse_slice<16>",
+            "slice_elementwise<1>",
+            "iota_simplify<16>(0)",
+            "cse_select<16>",
+            "cse_compare<16>",
+            "cse_iota",
+        ],
+        ";",
+    )
+    apply = "transform-interpreter,enzyme-hlo-remove-transform"
+    return join(
+        [
+            generate_td_pass(widen),
+            apply,
+            "cse",
+            "canonicalize",
+            generate_td_pass("sink_elementwise_into_concat;" * fold),
+            apply,
+            "cse",
+            "canonicalize",
+        ],
+        ",",
+    )
+end
+
 function get_optimize_comms_passes(options::Bool)
     if !options
         return [
