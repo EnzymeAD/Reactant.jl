@@ -159,7 +159,15 @@ end
         end
     end
 
-    if !should_rewrite_call(Core.Typeof(f))
+    # `Core.invoke` is a builtin, but it calls the method it names, which has to be
+    # inferred with Reactant's interpreter like any other call: inferring it natively
+    # skips Reactant's overlays, and lets the optimizer inline that native code here.
+    ft = if f === Core.invoke && length(argtypes) >= 2
+        Core.Compiler.widenconst(argtypes[2])
+    else
+        Core.Typeof(f)
+    end
+    if !should_rewrite_call(ft)
         ninterp = Core.Compiler.NativeInterpreter(interp.world)
         # Note: mildly sus, but gabe said this was fine?
         @static if VERSION >= v"1.12"
