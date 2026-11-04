@@ -2665,6 +2665,48 @@ function handle(
     return n == 1 ? only(outs) : outs
 end
 
+# both branches take no arguments and return the results of the op
+function handle(
+    ::Val{Symbol("stablehlo.if")}, (pred,), _, results, (true_branch, false_branch)
+)
+    rets = pred[] ? true_branch() : false_branch()
+    length(results) == 0 && return nothing
+    return length(results) == 1 ? only(rets) : rets
+end
+
+# `cond` and `body` take the loop-carried values; `cond` returns a 0-dimensional boolean and `body` the next values
+function handle(::Val{Symbol("stablehlo.while")}, operands, _, results, (cond, body))
+    vals = operands
+    while only(cond(vals...))[]
+        vals = body(vals...)
+    end
+    length(results) == 0 && return nothing
+    return length(results) == 1 ? only(vals) : vals
+end
+
+# operands are the `inputs` and their `init_values`, and `body` combines the accumulated values with an element of each
+# input (all as 0-dimensional arrays). `dimensions` are the reduced MLIR dimensions, and the result keeps the other
+# dimensions in order, which on the reversed arrays are the remaining Julia dimensions in increasing order
+function handle(::Val{Symbol("stablehlo.reduce")}, operands, attributes, results, (body,))
+    n = length(results)
+    inputs = ntuple(i -> operands[i], Val(n))
+    inits = ntuple(i -> operands[n + i], Val(n))
+    outs = ntuple(
+        i -> fill(convert(results[i].eltype, inits[i][]), results[i].size), Val(n)
+    )
+
+    N = ndims(first(inputs))
+    reduced = [N - d for d in attributes.dimensions]
+    kept = [j for j in 1:N if j ∉ reduced]
+    M = Val(length(first(results).size))
+    for I in CartesianIndices(first(inputs))
+        J = CartesianIndex(ntuple(k -> I[kept[k]], M))
+        new = body(map(o -> fill(o[J]), outs)..., map(x -> fill(x[I]), inputs)...)
+        foreach((o, v) -> o[J] = v[], outs, new)
+    end
+    return n == 1 ? only(outs) : outs
+end
+
 # convert an MLIR attribute into a Julia value that doesn't depend on its MLIR context.
 # dense elements become arrays with reversed dimensions (like operands), dense arrays keep MLIR order (e.g. dimension
 # indices are 0-based MLIR dimensions), enums become a `Symbol` with their value (e.g.
