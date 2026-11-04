@@ -683,6 +683,42 @@ class _MutatesParam(nn.Module):
                 @test relerr(y, torch_to_julia(model(x_torch))) < 1.0f-4
             end
 
+            @testset "import_torch: full_like with an explicit layout" begin
+                # `zeros_like(mask, dtype=..., layout=..., device=...)` (which TorchScript
+                # artifacts record explicitly, for example in nn.TransformerEncoder's
+                # padding mask) lowers to aten.full_like with a `layout` keyword, which
+                # torchax's own handler does not accept.
+                pyexec(
+                    """
+import torch, torch.nn as nn
+class _FullLike(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.lin = nn.Linear(4, 4)
+    def forward(self, x, mask):
+        z = torch.zeros_like(mask, dtype=torch.float32, layout=torch.strided,
+                             device=torch.device("cpu"))
+        return self.lin(x) + z + torch.full_like(x, 2.0)
+""",
+                    @__MODULE__,
+                )
+                torch.manual_seed(0)
+                model = pyeval("_FullLike", @__MODULE__)()
+                model.eval()
+                xdata = randn(Float32, 3, 4)
+                mdata = rand(Bool, 3, 4)
+                x_torch = torch.from_numpy(np.asarray(xdata))
+                m_torch = torch.from_numpy(np.asarray(mdata))
+                for mod in (model, torch.jit.trace(model, (x_torch, m_torch)))
+                    y_native = mod(x_torch, m_torch)
+                    tm, ps, st = Reactant.import_torch(mod)
+                    y, _ = @jit tm(
+                        Reactant.to_rarray(xdata), Reactant.to_rarray(mdata), ps, st
+                    )
+                    @test relerr(y, torch_to_julia(y_native)) < 1.0f-4
+                end
+            end
+
             @testset "import_torch: multiple inputs and outputs" begin
                 torch.manual_seed(0)
                 model = pyeval("_TwoInput", @__MODULE__)()
@@ -784,6 +820,33 @@ class _MutatesInput(nn.Module):
 
                 @test exp.backend === :torchax
                 @test_throws ArgumentError Reactant.import_torch(model; backend=:nope)
+            end
+
+            @testset "adaptive_max_pool2d" begin
+                pyexec(
+                    """
+import torch, torch.nn as nn
+class _AdaptiveMax(nn.Module):
+    def __init__(self, size):
+        super().__init__()
+        self.pool = nn.AdaptiveMaxPool2d(size, return_indices=True)
+    def forward(self, x):
+        return self.pool(x)
+""",
+                    @__MODULE__,
+                )
+                xdata = randn(Float32, 2, 3, 7, 9)
+                x_torch = torch.from_numpy(np.asarray(xdata))
+                for size in ((1, 1), (3, 3), (2, 5), (7, 9))
+                    model = pyeval("_AdaptiveMax", @__MODULE__)(pytuple(size))
+                    y_native, i_native = model(x_torch)
+                    for mod in (model, torch.jit.trace(model, x_torch))
+                        tm, ps, st = Reactant.import_torch(mod)
+                        (y, idx), _ = @jit tm(Reactant.to_rarray(xdata), ps, st)
+                        @test Array(y) == torch_to_julia(y_native)
+                        @test Array(idx) == torch_to_julia(i_native)
+                    end
+                end
             end
 
             @testset "TorchScript modules with a fixed mode" begin

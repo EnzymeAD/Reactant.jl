@@ -224,6 +224,61 @@ from torchax import decompositions as _decomps
 from torchax.ops import mappings as _mappings
 from torchax.ops import ops_registry as _ops_registry, jaten as _jaten
 
+# A graph that passes `layout=` to `aten.full_like` (for example from
+# `torch.zeros_like(x, dtype=..., layout=...)`, which TorchScript artifacts record
+# explicitly) fails in torchax's handler, which does not accept that keyword. Register
+# a handler for the exact overload that ignores the layout (always strided here).
+def _register_aten_full_like_handler():
+    if not hasattr(_jaten, "_aten_fill"):
+        raise AttributeError(
+            "torchax.ops.jaten._aten_fill is missing; "
+            "the installed torchax version is incompatible with ReactantPythonCallExt"
+        )
+    def _full_like_handler(x, value, dtype=None, layout=None, device=None,
+                           pin_memory=None, memory_format=None):
+        return _jaten._aten_fill(x, value, dtype=dtype)
+    _ops_registry.register_torch_dispatch_op(_torch.ops.aten.full_like.default,
+                                             _full_like_handler)
+
+_register_aten_full_like_handler()
+
+# torchax has no handler for `aten.adaptive_max_pool2d` (nn.AdaptiveMaxPool2d). Output
+# bin i along an axis of length n covers [floor(i*n/o), ceil((i+1)*n/o)), so bins can
+# differ in size. Gather every bin's window at the largest bin size K, clamping indices
+# past a bin's end to its last element (a repeated element changes neither the max nor
+# the first position of the max), then reduce once. This avoids concatenating
+# reductions over windows of different sizes, which Reactant's optimizer can mishandle.
+# The indices the op schema also returns are the flat position of each maximum in its
+# input plane (h * W + w), as int64, so `return_indices=True` stays correct; ties resolve
+# to the first maximum in row-major window order, as in PyTorch.
+def _register_aten_adaptive_max_pool2d_handler():
+    import numpy as _np
+    def _windows(n, o):
+        edges = [((i * n) // o, -((-(i + 1) * n) // o)) for i in range(o)]
+        k = max(e - s for s, e in edges)
+        return _np.array([[min(s + j, e - 1) for j in range(k)] for s, e in edges]), k
+    def _adaptive_max_pool2d(x, output_size):
+        H, W = int(x.shape[-2]), int(x.shape[-1])
+        oh, ow = int(output_size[0]), int(output_size[1])
+        ih, kh = _windows(H, oh)                    # (oh, kh) row indices
+        iw, kw = _windows(W, ow)                    # (ow, kw) column indices
+        g = x[..., ih, :]                           # (..., oh, kh, W)
+        g = g[..., iw]                              # (..., oh, kh, ow, kw)
+        g = _jnp.moveaxis(g, -3, -2)                # (..., oh, ow, kh, kw)
+        g = g.reshape(g.shape[:-2] + (kh * kw,))
+        vals = _jnp.max(g, axis=-1)
+        k = _jnp.argmax(g, axis=-1)                 # (..., oh, ow)
+        rows = _jnp.broadcast_to(_jnp.asarray(ih)[:, None, :], k.shape + (kh,))
+        cols = _jnp.broadcast_to(_jnp.asarray(iw)[None, :, :], k.shape + (kw,))
+        h = _jnp.take_along_axis(rows, (k // kw)[..., None], axis=-1)[..., 0]
+        w = _jnp.take_along_axis(cols, (k % kw)[..., None], axis=-1)[..., 0]
+        return vals, (h * W + w).astype(_jnp.int64)
+    _ops_registry.register_torch_dispatch_op(
+        _torch.ops.aten.adaptive_max_pool2d.default, _adaptive_max_pool2d
+    )
+
+_register_aten_adaptive_max_pool2d_handler()
+
 # JIT graphs emit the deprecated `aten._convolution.default` overload, which torchax
 # does not register. Register a handler that drops the cuDNN flags and delegates to
 # torchax's `aten.convolution`.
