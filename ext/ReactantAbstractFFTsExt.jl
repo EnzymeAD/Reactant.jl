@@ -325,6 +325,9 @@ for P0 in ConcretePlanTypes, P in (P0, AbstractFFTs.ScaledPlan{<:Any,<:P0})
         return y
     end
 
+    # Host arrays: error instead of recursing. Only needed on the bare plan, since
+    # `ScaledPlan` forwards to it (and a `ScaledPlan` method would shadow the traced path).
+    P === P0 || continue
     @eval function Base.:*(p::$P, x::AbstractArray)
         throw(
             ArgumentError(
