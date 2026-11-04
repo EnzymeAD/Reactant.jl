@@ -294,6 +294,38 @@ include("Overlay.jl")
 # Serialization
 include("serialization/Serialization.jl")
 
+"""
+    import_torch(model; backend=:torchax) -> (tm, ps, st)
+
+Import a PyTorch `torch.nn.Module` given as a
+PythonCall `Py`. Returns a callable `tm`, the module's parameters `ps` and its buffers
+`st`. `ps` and `st` are flat `NamedTuple`s of Reactant arrays keyed by the module's fully
+qualified names, the same names `state_dict()` uses: `ps.var"0.weight"`,
+`st.var"bn.running_mean"` or `st[Symbol("bn.running_mean")]`. Parameters
+(`named_parameters()`) are in `ps` and buffers (`named_buffers()`) in `st`. A 0-dim
+tensor becomes a `ConcreteRNumber`.
+
+Call `tm` inside [`@jit`](@ref) or [`@compile`](@ref) as `tm(x..., ps, st)`. The call
+always returns `(y, st_new)`. `ps` and `st` are arguments of the compiled function, not
+embedded constants. Buffers the module updates in place, such as BatchNorm running
+statistics in training mode (`model.train()`), are replaced in `st_new`; every other leaf
+is the corresponding leaf of `st`. Updates in evaluation mode are applied as well, with a
+warning, since they are usually unintended. The mode is read from `model.training` when
+the call is traced.
+
+Calling the module directly, `@jit model(x)`, is a shortcut that runs it in evaluation
+mode with its state embedded as constants and returns only `y`.
+
+Being plain `NamedTuple`s, `ps` and `st` work with `keys`, `pairs`, `merge` and
+`Base.setindex`, for example `merge(ps, (; var"0.weight"=w))` to swap in new weights.
+
+`backend` names the lowering that turns the captured program into StableHLO.
+`:torchax` (torchax and jax) is currently the only one.
+
+Requires PythonCall with `torch` and `torchax` installed.
+"""
+function import_torch end
+
 # ProbProg
 include("probprog/ProbProg.jl")
 
