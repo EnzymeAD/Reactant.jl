@@ -2346,6 +2346,40 @@ function handle(::Val{Symbol("stablehlo.convert")}, (a,), _, (result,))
     end
 end
 
+# `compare_type` defaults to the natural order of the element type (IEEE for floats, so comparisons with NaN are false
+# except for `NE`). with `TOTALORDER`, floats are compared by their bits as -NaN < -Inf < ... < -0.0 < +0.0 < ... <
+# +Inf < +NaN, which is done by flipping all but the sign bit of negative floats
+function handle(::Val{Symbol("stablehlo.compare")}, (a, b), attributes, _)
+    direction = attributes.comparison_direction
+    f = if direction === :EQ
+        ==
+    elseif direction === :NE
+        !=
+    elseif direction === :GE
+        >=
+    elseif direction === :GT
+        >
+    elseif direction === :LE
+        <=
+    elseif direction === :LT
+        <
+    else
+        throw(invalid_argument("unknown comparison direction $direction"))
+    end
+
+    if get(attributes, :compare_type, :NOTYPE) === :TOTALORDER
+        key = x -> x isa Base.IEEEFloat ? (bits = reinterpret(Signed, x); bits < 0 ? bits ⊻ typemax(bits) : bits) : x
+        return map((x, y) -> f(key(x), key(y)), a, b)
+    end
+    return map(f, a, b)
+end
+
+# a 0-dimensional predicate selects whole operands, otherwise elements are selected one by one
+function handle(::Val{Symbol("stablehlo.select")}, (pred, on_true, on_false), _, _)
+    ndims(pred) == 0 && return pred[] ? on_true : on_false
+    return map(ifelse, pred, on_true, on_false)
+end
+
 # shape handlers. arrays have reversed dimensions, so MLIR dimension `d` (0-based) of a rank-`N` tensor is Julia
 # dimension `N - d`, and attributes indexed by MLIR dimension (e.g. `permutation`) are read in reverse
 
@@ -2403,7 +2437,8 @@ end
 
 # convert an MLIR attribute into a Julia value that doesn't depend on its MLIR context.
 # dense elements become arrays with reversed dimensions (like operands), dense arrays keep MLIR order (e.g. dimension
-# indices are 0-based MLIR dimensions), and attributes of any other kind become their textual form.
+# indices are 0-based MLIR dimensions), enums become a `Symbol` with their value (e.g.
+# `#stablehlo<comparison_direction LT>` becomes `:LT`), and attributes of any other kind become their textual form.
 function decode_attribute(attr)
     IR = Reactant.MLIR.IR
     API = Reactant.MLIR.API
@@ -2442,7 +2477,10 @@ function decode_attribute(attr)
             i in 0:(API.mlirArrayAttrGetNumElements(attr)-1)
         ]
     end
-    return string(attr)
+
+    str = string(attr)
+    m = match(r"^#\w+<\w+ (\w+)>$", str)
+    return isnothing(m) ? str : Symbol(m[1])
 end
 
 ## HostClient
