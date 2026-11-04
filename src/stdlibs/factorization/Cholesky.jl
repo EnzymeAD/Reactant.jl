@@ -14,6 +14,23 @@ Base.size(c::BatchedCholesky) = size(c.factors)
 Base.size(c::BatchedCholesky, i::Integer) = size(c.factors, i)
 Base.ndims(c::BatchedCholesky) = ndims(c.factors)
 
+function Base.getproperty(C::BatchedCholesky, d::Symbol)
+    Cfactors = getfield(C, :factors)
+    Cuplo = getfield(C, :uplo)
+    if d in (:U, :L, :UL) && ndims(Cfactors) > 2
+        error("`getproperty` is not yet supported for batched Cholesky factorizations")
+    end
+    return if d === :U
+        UpperTriangular(Cuplo == 'U' ? Cfactors : Cfactors')
+    elseif d === :L
+        LowerTriangular(Cuplo == 'L' ? Cfactors : Cfactors')
+    elseif d === :UL
+        Cuplo == 'U' ? UpperTriangular(Cfactors) : LowerTriangular(Cfactors)
+    else
+        getfield(C, d)
+    end
+end
+
 function overloaded_cholesky(A::AbstractArray, ::NoPivot; check::Bool=false)
     return overloaded_cholesky(Reactant.promote_to(TracedRArray, A), NoPivot(); check)
 end
