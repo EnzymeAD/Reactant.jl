@@ -1,6 +1,6 @@
 module ReactantKernelAbstractionsExt
 
-using Reactant: Reactant
+using Reactant: Reactant, ReactantBackend
 
 using Adapt: Adapt
 using KernelAbstractions: KernelAbstractions
@@ -9,61 +9,8 @@ const KA = KernelAbstractions
 
 ## back-end
 
-# ToDo: Include XLA client, device and sharding in ReactantBackend struct, to
-# support more complex applications? If so, need to adapt implementation of
-# `KA.get_backend` and `KA.allocate` accordingly.
-struct ReactantBackend <: KA.GPU end
-
-function Base.getproperty(x::ReactantBackend, sym::Symbol)
-    if sym === :always_inline
-        return true
-    elseif sym === :prefer_blocks
-        return false
-    else
-        return Base.getfield(x, sym)
-    end
-end
-
-function KA.allocate(::ReactantBackend, ::Type{T}, dims::Tuple) where {T}
-    ET = Reactant.unwrapped_eltype(T)
-
-    # Inside a trace there is no uninitialized device memory to hand back, and a concrete array
-    # cannot take part in the traced program: filling or otherwise mutating one re-enters the
-    # compiler. Return a traced array instead, mirroring what `similar` already does when it is
-    # asked for a traced element type.
-    Reactant.within_compile() && return Reactant.Ops.fill(zero(ET), dims)
-
-    return Reactant.ConcreteRArray{ET}(undef, dims)
-end
-
-function KA.zeros(b::ReactantBackend, ::Type{T}, dims::Tuple) where {T}
-    A = KA.allocate(b, T, dims)
-    isempty(A) || fill!(A, zero(T))
-    return A
-end
-function KA.ones(b::ReactantBackend, ::Type{T}, dims::Tuple) where {T}
-    A = KA.allocate(b, T, dims)
-    isempty(A) || fill!(A, one(T))
-    return A
-end
-
-KA.get_backend(::Reactant.AnyTracedRArray) = ReactantBackend()
-KA.get_backend(::Reactant.UnionAnyConcreteRArray) = ReactantBackend()
-function KA.synchronize(::ReactantBackend) end
-
-Adapt.adapt_storage(::ReactantBackend, a::Array) = a
-Adapt.adapt_storage(::ReactantBackend, a::Reactant.AnyTracedRArray) = a
-Adapt.adapt_storage(::ReactantBackend, a::Reactant.AnyConcretePJRTArray) = a
-Adapt.adapt_storage(::ReactantBackend, a::Reactant.AnyConcreteIFRTArray) = a
 Adapt.adapt_storage(::KA.CPU, a::Reactant.AnyConcretePJRTArray) = convert(Array, a)
 Adapt.adapt_storage(::KA.CPU, a::Reactant.AnyConcreteIFRTArray) = convert(Array, a)
-
-## memory operations
-
-function KA.copyto!(::ReactantBackend, A, B)
-    Base.copyto!(A, B)
-    return A
-end
 
 ## kernel launch
 
@@ -95,48 +42,12 @@ function KA.launch_config(kernel::KA.Kernel{ReactantBackend}, ndrange, workgroup
     return ndrange, workgroupsize, iterspace, dynamic
 end
 
-KA.argconvert(k::KA.Kernel{ReactantBackend}, arg) = arg
 
 function KA.priority!(::ReactantBackend, prio::Symbol)
     if !(prio in (:high, :normal, :low))
         error("priority must be one of :high, :normal, :low")
     end
     return nothing
-end
-
-function tokw(ndrange, workgroupsize, obj, args...)
-    @inline obj(args...; ndrange, workgroupsize)
-end
-
-function (obj::KA.Kernel{ReactantBackend})(args...; ndrange=nothing, workgroupsize=nothing)
-    if Reactant.precompiling()
-        Reactant.@code_hlo optimize = false tokw(ndrange, workgroupsize, obj, args...)
-    else
-        Reactant.@jit tokw(ndrange, workgroupsize, obj, args...)
-    end
-    return nothing
-end
-
-@static if VERSION < v"1.12-"
-    Reactant.@reactant_overlay Base.@nospecializeinfer @noinline function (
-        obj::KA.Kernel{ReactantBackend}
-    )(
-        @nospecialize args...; ndrange=nothing, workgroupsize=nothing
-    )
-        return Reactant.call_with_reactant(
-            Reactant.ka_with_reactant, ndrange, workgroupsize, obj, args...
-        )
-    end
-else
-    Reactant.@reactant_overlay function (obj::KA.Kernel{ReactantBackend})(
-        args...; ndrange=nothing, workgroupsize=nothing
-    )
-        Base.@_noinline_meta
-        Base.@_nospecializeinfer_meta
-        return Reactant.call_with_reactant(
-            Reactant.ka_with_reactant, ndrange, workgroupsize, obj, args...
-        )
-    end
 end
 
 end
