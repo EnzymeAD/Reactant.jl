@@ -221,7 +221,7 @@ end
         end
     end
 
-    if T <: Complex{<:Integer}
+    if T <: Complex && !(T <: Reactant.ReactantComplexFloat)
         error(
             "Generating a constant of type $T is not supported, eltype of complex must be Float32 or Float64",
         )
@@ -286,7 +286,7 @@ end
     x::T; location=mlir_stacktrace("constant", @__FILE__, @__LINE__)
 ) where {T<:Number}
     x isa TracedRNumber && return x
-    if T <: Complex{<:Integer}
+    if T <: Complex && !(T <: Reactant.ReactantComplexFloat)
         error(
             "Generating a constant of type $T is not supported, eltype of complex must be Float32 or Float64",
         )
@@ -408,13 +408,13 @@ end
 @noinline function fill(
     element::T, shape::Vector{Int}; location=mlir_stacktrace("fill", @__FILE__, @__LINE__)
 ) where {T<:Number}
-    tt = MLIR.IR.TensorType(shape, MLIR.IR.Type(T))
-    splatattr = MLIR.API.mlirDenseElementsAttrSplatGet(tt, _fill_element_attr(element))
-    if T <: Complex{<:Integer}
+    if T <: Complex && !(T <: Reactant.ReactantComplexFloat)
         error(
             "Generating a constant of type $T is not supported, eltype of complex must be Float32 or Float64",
         )
     end
+    tt = MLIR.IR.TensorType(shape, MLIR.IR.Type(T))
+    splatattr = MLIR.API.mlirDenseElementsAttrSplatGet(tt, _fill_element_attr(element))
     cst_op = stablehlo.constant(; output=tt, value=splatattr, location=location)
     cst = MLIR.IR.result(cst_op)
     ta = TracedRArray{T,length(shape)}((), cst, shape)
@@ -824,6 +824,11 @@ end
     imag::TracedRArray{T,N};
     location=mlir_stacktrace("complex", @__FILE__, @__LINE__),
 ) where {T,N}
+    if !(Complex{T} <: Reactant.ReactantComplexFloat)
+        error(
+            "Complex values of type $(Complex{T}) are not supported, eltype of complex must be Float32 or Float64",
+        )
+    end
     res = MLIR.IR.result(
         stablehlo.complex(
             real.mlir_data,
@@ -840,6 +845,11 @@ end
     imag::TracedRNumber{T};
     location=mlir_stacktrace("complex", @__FILE__, @__LINE__),
 ) where {T}
+    if !(Complex{T} <: Reactant.ReactantComplexFloat)
+        error(
+            "Complex values of type $(Complex{T}) are not supported, eltype of complex must be Float32 or Float64",
+        )
+    end
     res = MLIR.IR.result(
         stablehlo.complex(
             real.mlir_data,

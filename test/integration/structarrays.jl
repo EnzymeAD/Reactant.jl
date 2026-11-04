@@ -100,4 +100,17 @@ end
     @test out ≈ elcom.(s)
     @test out isa ConcreteRArray
     @test @jit(sum(sr)) ≈ sum(s)
+
+    sv = StructVector(; a=Float32[1, 2, 3], b=Float32[4, 5, 6])
+    sv_ra = Reactant.to_rarray(sv)
+    bcast_sv_im(v) = ((e, z) -> e.a - z * e.b).(v, im)
+    bcast_sv_1im(v) = ((e, z) -> (; w=e.a + z * e.b)).(v, 1im)
+
+    out_im = @jit bcast_sv_im(sv_ra)
+    @test out_im isa ConcreteRArray{ComplexF32,1}
+    @test Array(out_im) ≈ bcast_sv_im(sv)
+
+    out_1im = @jit bcast_sv_1im(sv_ra)
+    @test out_1im isa StructVector
+    @test Array(out_1im.w) ≈ bcast_sv_1im(sv).w
 end

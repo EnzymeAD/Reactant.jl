@@ -421,7 +421,7 @@ function _copyto!(dest::AnyTracedRArray, bc::Broadcasted)
     isempty(dest) && return dest
     bc = Broadcast.preprocess(dest, bc)
 
-    args = (Reactant.broadcast_to_size(Base.materialize(a), size(bc)) for a in bc.args)
+    args = (Reactant.broadcast_arg_to_size(Base.materialize(a), size(bc)) for a in bc.args)
 
     res0 = TracedUtils.elem_apply(bc.f, args...)
     if !(res0 isa Reactant.TracedType)
@@ -442,7 +442,7 @@ function _copyto!(dest::Array{<:TracedRNumber}, bc::Broadcasted)
 
     bc = Broadcast.preprocess(dest, bc)
 
-    args = (Reactant.broadcast_to_size(Base.materialize(a), size(bc)) for a in bc.args)
+    args = (Reactant.broadcast_arg_to_size(Base.materialize(a), size(bc)) for a in bc.args)
 
     res = TracedUtils.elem_apply(bc.f, args...)
     if !(res isa Reactant.TracedType)
