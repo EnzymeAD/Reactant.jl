@@ -4418,14 +4418,19 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
       // without a cap, two patterns undoing each other (Enzyme-JAX #3680 on
       // ceed BP1/2) spin the compile forever, so the cap makes that a
       // failure instead.
+      // The lowering round after the list also pads a reduction over a row of
+      // 17 to 31 elements to the warp size (short_row_reduce_pad,
+      // Enzyme-JAX #3792): XLA sums a shorter row a thread at a time, and a
+      // row of 32 with its reduction emitter, a warp per row. After the list,
+      // whose reduce-of-pad patterns would take the padding out.
       std::string pipeline =
           "canonicalize,cse,canonicalize,enzyme-hlo-generate-td{patterns=" +
           patterns +
           " max-iterations=100},transform-interpreter,enzyme-hlo-remove-"
           "transform,canonicalize,"
           "cse,enzyme-hlo-generate-td{patterns=lower_rotate;lower_wrap;"
-          "lower_extend;lower_updatewithoutcorners;lower_multislice "
-          "max-iterations=100},"
+          "lower_extend;lower_updatewithoutcorners;lower_multislice;"
+          "short_row_reduce_pad max-iterations=100},"
           "transform-interpreter,enzyme-hlo-remove-transform,canonicalize,cse";
       if (failed(mlir::parsePassPipeline(pipeline, pm))) {
         llvm::errs() << " failed to parse the exec optimization pipeline\n";
