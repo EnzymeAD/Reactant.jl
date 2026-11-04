@@ -2298,7 +2298,7 @@ function buffer_from_host_buffer(
     _ndims = length(_size)
 
     size_in_bytes = prod(_size; init=_elsize)
-    minor_to_major = collect((_ndims-1):-1:0)
+    minor_to_major = collect((_ndims - 1):-1:0)
 
     # TODO support byte strides, layout and host buffer semantics
 
@@ -2375,12 +2375,20 @@ function compile!(client::HostClient, code, options)
     nargs = IR.nargs(block)
     vars = Dict{Ptr{Cvoid},Symbol}()
     body = quote
-        length(arguments) == 1 ||
-            throw(invalid_argument(string("expected arguments for 1 device, got ", length(arguments))))
-        isnothing(dev) || dev === exec.devices[1] || throw(invalid_argument("cannot execute on another device"))
+        length(arguments) == 1 || throw(
+            invalid_argument(
+                string("expected arguments for 1 device, got ", length(arguments))
+            ),
+        )
+        isnothing(dev) ||
+            dev === exec.devices[1] ||
+            throw(invalid_argument("cannot execute on another device"))
         buffers = only(arguments)
-        length(buffers) == $nargs ||
-            throw(invalid_argument(string("expected ", $nargs, " arguments, got ", length(buffers))))
+        length(buffers) == $nargs || throw(
+            invalid_argument(
+                string("expected ", $nargs, " arguments, got ", length(buffers))
+            ),
+        )
     end
 
     # inputs are wrapped without copying
@@ -2389,10 +2397,14 @@ function compile!(client::HostClient, code, options)
         T = IR.julia_type(eltype(IR.type(arg)))
         dims = reverse(size(IR.type(arg)))
         var = vars[arg.ref.ptr] = Symbol("%arg", i - 1)
-        push!(body.args, quote
-            isdeleted(buffers[$i]) && throw(invalid_argument(string("argument ", $i, " is deleted")))
-            $var = unsafe_wrap(Array, Ptr{$T}((buffers[$i]::HostBuffer).data), $dims)
-        end)
+        push!(
+            body.args,
+            quote
+                isdeleted(buffers[$i]) &&
+                    throw(invalid_argument(string("argument ", $i, " is deleted")))
+                $var = unsafe_wrap(Array, Ptr{$T}((buffers[$i]::HostBuffer).data), $dims)
+            end,
+        )
     end
 
     elementwise = Dict(
@@ -2413,7 +2425,9 @@ function compile!(client::HostClient, code, options)
             continue
         end
 
-        IR.nresults(op) == 1 || throw(unimplemented("`$opname` with $(IR.nresults(op)) results is not supported"))
+        IR.nresults(op) == 1 || throw(
+            unimplemented("`$opname` with $(IR.nresults(op)) results is not supported")
+        )
         res = IR.result(op, 1)
         T = IR.julia_type(eltype(IR.type(res)))
         rhs = if haskey(elementwise, opname)
@@ -2426,8 +2440,16 @@ function compile!(client::HostClient, code, options)
             value = IR.getattr(op, "value")
             dims = reverse(size(IR.type(res)))
             if IR.issplat(value)
-                splat = IR.Attribute(Reactant.MLIR.API.mlirDenseElementsAttrGetSplatValue(value))
-                x = T === Bool ? Bool(splat) : T <: Integer ? T(Int64(splat)) : T(Float64(splat))
+                splat = IR.Attribute(
+                    Reactant.MLIR.API.mlirDenseElementsAttrGetSplatValue(value)
+                )
+                x = if T === Bool
+                    Bool(splat)
+                elseif T <: Integer
+                    T(Int64(splat))
+                else
+                    T(Float64(splat))
+                end
                 fill(x, dims)
             elseif T === Bool
                 # dense boolean attributes are bit-packed
@@ -2445,29 +2467,47 @@ function compile!(client::HostClient, code, options)
     end
 
     # outputs are copied into new buffers, since they may alias inputs or embedded constants
-    push!(body.args, quote
-        out_dev = exec.devices[1]
-        out_mem = default_memory(out_dev)
-        results = Buffer[]
-        for res in ($(outputs...),)
-            # broadcasting over 0-dimensional arrays returns a scalar
-            out = res isa Array ? res : fill(res)
-            nbytes = sizeof(out)
-            data = Libc.malloc(max(nbytes, 1))
-            data == C_NULL && throw(resource_exhausted())
-            GC.@preserve out unsafe_copyto!(Ptr{UInt8}(data), Ptr{UInt8}(pointer(out)), nbytes)
-            dims = collect(Int64, reverse(size(out)))
-            minor_to_major = collect(Int64, (ndims(out)-1):-1:0)
-            push!(results, HostBuffer(data, nbytes, pjrt_eltype(eltype(out)), dims, minor_to_major, out_dev, out_mem))
-        end
-        return [results]
-    end)
+    push!(
+        body.args,
+        quote
+            out_dev = exec.devices[1]
+            out_mem = default_memory(out_dev)
+            results = Buffer[]
+            for res in ($(outputs...),)
+                # broadcasting over 0-dimensional arrays returns a scalar
+                out = res isa Array ? res : fill(res)
+                nbytes = sizeof(out)
+                data = Libc.malloc(max(nbytes, 1))
+                data == C_NULL && throw(resource_exhausted())
+                GC.@preserve out unsafe_copyto!(
+                    Ptr{UInt8}(data), Ptr{UInt8}(pointer(out)), nbytes
+                )
+                dims = collect(Int64, reverse(size(out)))
+                minor_to_major = collect(Int64, (ndims(out) - 1):-1:0)
+                push!(
+                    results,
+                    HostBuffer(
+                        data,
+                        nbytes,
+                        pjrt_eltype(eltype(out)),
+                        dims,
+                        minor_to_major,
+                        out_dev,
+                        out_mem,
+                    ),
+                )
+            end
+            return [results]
+        end,
+    )
 
     tag = gensym(:main)
     @eval function execute(
-        exec::HostLoadedExecutable{$(QuoteNode(tag))}, arguments::Vector{Vector{Buffer}}, dev
+        exec::HostLoadedExecutable{$(QuoteNode(tag))},
+        arguments::Vector{Vector{Buffer}},
+        dev,
     )
-        $body
+        return $body
     end
 
     # single-device executables run as replica 0 of partition 0
