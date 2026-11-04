@@ -63,6 +63,7 @@ function buffer_from_host_buffer end
 function compile_options end
 function compile! end
 function copy_to_device end
+function copy_to_memory end
 function debug_string end
 function default_memory end
 function description end
@@ -952,6 +953,7 @@ end
 - `device`
 - `memory`
 - `copy_to_device` -> copyto!?
+- `copy_to_memory`
 - `to_host_buffer` -> copyto!?
 - `is_on_cpu`
 - `unsafe_pointer`
@@ -1122,6 +1124,33 @@ copy_to_device(::Device, ::Buffer)
     isdeleted(buffer) && throw(invalid_argument("buffer is deleted"))
 
     dst_buffer = copy_to_device(dst_dev, buffer)::Buffer
+    root!(dst_buffer)
+    ptr = Ptr{CAPI.PJRT_Buffer}(pointer_from_objref(dst_buffer))
+    unsafe_store!(args.dst_buffer, ptr)
+    return ok()
+end
+
+"""
+    copy_to_memory(dst::Memory, buffer::Buffer) -> Buffer
+
+Return a new buffer with a copy of the data of `buffer` placed on memory space `dst`.
+Unlike the PJRT C API header says, `dst` may be the memory of `buffer`: XLA's CPU client allows it and Reactant's
+`CopyBufferToDevice` relies on it.
+The returned buffer is GC rooted by the caller.
+
+Backs `PJRT_Buffer_CopyToMemory`.
+"""
+copy_to_memory(::Memory, ::Buffer)
+
+@pjrt_catch_return function buffer_copy_to_memory(
+    args::Ptr{CAPI.PJRT_Buffer_CopyToMemory_Args}
+)::Ptr{CAPI.PJRT_Error}
+    buffer = unsafe_pointer_to_objref(unsafe_load(args.buffer))::Buffer
+    dst_mem = unsafe_pointer_to_objref(unsafe_load(args.dst_memory))::Memory
+
+    isdeleted(buffer) && throw(invalid_argument("buffer is deleted"))
+
+    dst_buffer = copy_to_memory(dst_mem, buffer)::Buffer
     root!(dst_buffer)
     ptr = Ptr{CAPI.PJRT_Buffer}(pointer_from_objref(dst_buffer))
     unsafe_store!(args.dst_buffer, ptr)
@@ -2192,6 +2221,18 @@ function copy_to_device(dev::HostDevice, buffer::HostBuffer)
     return new_buffer
 end
 
+function copy_to_memory(mem::HostMemory, buffer::HostBuffer)
+    devs = addressable_devices(mem)
+    isempty(devs) && throw(invalid_argument("HostMemory has no addressable devices"))
+    dev = device(buffer) in devs ? device(buffer) : first(devs)
+    new_data = Libc.malloc(buffer.size_in_bytes)
+    new_data == C_NULL && throw(resource_exhausted())
+    Libc.memcpy(new_data, buffer.data, buffer.size_in_bytes)
+    return HostBuffer(
+        new_data, buffer.size_in_bytes, buffer.type, buffer.dims, buffer.minor_to_major, dev, mem
+    )
+end
+
 function to_host_buffer(dst::Ptr{Cvoid}, buffer::HostBuffer)
     Libc.memcpy(dst, buffer.data, buffer.size_in_bytes)
     return nothing
@@ -3246,7 +3287,7 @@ function __init__()
         #= PJRT_Compile =# c_unimplemented,
         #= PJRT_Executable_OutputElementTypes =# @cfunction(executable_output_element_types, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Executable_OutputElementTypes_Args},)),
         #= PJRT_Executable_OutputDimensions =# c_unimplemented,
-        #= PJRT_Buffer_CopyToMemory =# c_unimplemented,
+        #= PJRT_Buffer_CopyToMemory =# @cfunction(buffer_copy_to_memory, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_CopyToMemory_Args},)),
         #= PJRT_Client_CreateViewOfDeviceBuffer =# c_unimplemented,
         #= PJRT_Executable_Fingerprint =# @cfunction(executable_fingerprint, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Executable_Fingerprint_Args},)),
         #= PJRT_Client_TopologyDescription =# c_unimplemented,
