@@ -2473,6 +2473,63 @@ function handle(::Val{Symbol("stablehlo.dynamic_update_slice")}, operands, _, _)
     return result
 end
 
+# MLIR dimension `i` of the operand is MLIR dimension `broadcast_dimensions[i]` of the result. the operand is permuted
+# so that its dimensions follow the order of the result ones, reshaped with size 1 for the missing dimensions and
+# broadcast into the result
+function handle(::Val{Symbol("stablehlo.broadcast_in_dim")}, (a,), attributes, (result,))
+    bdims = attributes.broadcast_dimensions
+    N = length(result.size)
+    M = ndims(a)
+
+    # result Julia dimension of each operand Julia dimension
+    rdims = [N - bdims[M - j + 1] for j in 1:M]
+    perm = sortperm(rdims)
+    shape = ntuple(Val(N)) do k
+        j = findfirst(==(k), rdims)
+        isnothing(j) ? 1 : size(a, j)
+    end
+
+    out = Array{result.eltype}(undef, result.size)
+    out .= reshape(permutedims(a, perm), shape)
+    return out
+end
+
+function handle(::Val{Symbol("stablehlo.concatenate")}, operands, attributes, (result,))
+    N = length(result.size)
+    j = N - attributes.dimension
+    out = Array{result.eltype}(undef, result.size)
+    offset = 0
+    for x in operands
+        n = size(x, j)
+        view(out, ntuple(k -> k == j ? ((offset + 1):(offset + n)) : (1:size(out, k)), Val(N))...) .= x
+        offset += n
+    end
+    return out
+end
+
+# element `k` (1-based) of the operand along a dimension goes to `low + (k - 1) * (interior + 1) + 1` of the result.
+# negative `low` or `high` crop the operand, so only the elements that land within the result are copied
+function handle(::Val{Symbol("stablehlo.pad")}, (a, padding_value), attributes, (result,))
+    (; edge_padding_low, interior_padding) = attributes
+    N = length(result.size)
+    out = fill(convert(result.eltype, padding_value[]), result.size)
+
+    src = ntuple(Val(N)) do j
+        d = N - j + 1
+        lo, step = edge_padding_low[d], interior_padding[d] + 1
+        kmin = max(1, cld(-lo, step) + 1)
+        kmax = min(size(a, j), fld(size(out, j) - 1 - lo, step) + 1)
+        kmin:kmax
+    end
+    dst = ntuple(Val(N)) do j
+        d = N - j + 1
+        lo, step = edge_padding_low[d], interior_padding[d] + 1
+        (lo + (first(src[j]) - 1) * step + 1):step:(lo + (last(src[j]) - 1) * step + 1)
+    end
+    view(out, dst...) .= view(a, src...)
+    return out
+end
+
 # convert an MLIR attribute into a Julia value that doesn't depend on its MLIR context.
 # dense elements become arrays with reversed dimensions (like operands), dense arrays keep MLIR order (e.g. dimension
 # indices are 0-based MLIR dimensions), enums become a `Symbol` with their value (e.g.
