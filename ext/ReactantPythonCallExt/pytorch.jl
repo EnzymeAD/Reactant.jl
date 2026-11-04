@@ -716,3 +716,125 @@ function Base.show(io::IO, tm::TorchModule)
     n = length(tm.cache)
     return print(io, "TorchModule($name) with $n export", n == 1 ? "" : "s")
 end
+
+# The tables use PrettyTables (a dependency of Reactant) with a compact style: column
+# labels, one rule under them, no other lines. When `io` is limited (the REPL sets
+# `:limit => true`), a long table keeps its first and last rows around a `⋮` row and an
+# "N rows omitted" note, sized to a third of the display height, so a model with
+# hundreds of tensors stays readable. Each line is indented under its heading.
+const _TABLE_FORMAT = PrettyTables.TextTableFormat(;
+    borders=PrettyTables.text_table_borders__compact,
+    horizontal_line_at_beginning=false,
+    horizontal_line_after_column_labels=true,
+    horizontal_line_after_data_rows=false,
+    vertical_line_at_beginning=false,
+    vertical_lines_at_data_columns=:none,
+    vertical_line_after_data_columns=false,
+)
+
+function _print_table(io, labels::Vector{String}, rows::Vector{Vector{String}})
+    isempty(rows) && return print(io, "\n     (none)")
+    data = permutedims(reduce(hcat, rows))
+    limit = get(io, :limit, false)::Bool
+    height, width = displaysize(io)
+    maxrows = max(8, height ÷ 3)
+    table = sprint(; context=(:limit => limit)) do buf
+        PrettyTables.pretty_table(
+            buf,
+            data;
+            column_labels=labels,
+            alignment=:l,
+            table_format=_TABLE_FORMAT,
+            vertical_crop_mode=:middle,
+            fit_table_in_display_vertically=limit,
+            fit_table_in_display_horizontally=false,
+            display_size=(maxrows + 3, width),
+        )
+    end
+    for line in split(rstrip(table, '\n'), '\n')
+        print(io, "\n    ", rstrip(line))
+    end
+    return nothing
+end
+
+function _count_summary(entries)
+    nelem = sum(e -> prod(e.shape; init=1), entries; init=0)
+    nt = length(entries)
+    return "$nt tensor$(nt == 1 ? "" : "s"), $(_group_digits(nelem)) element\
+            $(nelem == 1 ? "" : "s")"
+end
+_group_digits(n::Integer) = replace(string(n), r"(?<=\d)(?=(\d{3})+$)" => ",")
+
+# The argument and result tables of one export.
+function _print_export_tables(io, exp::TorchExport)
+    print(io, "\n    arguments (hlo_call operands):")
+    _print_table(
+        io,
+        ["kind", "source", "eltype", "shape"],
+        [
+            [
+                repr(s.kind),
+                if s.kind === :user_input
+                    "x[$(s.target)]"
+                else
+                    _julia_path(s.target, s.kind === :parameter ? "ps" : "st")
+                end,
+                string(s.eltype),
+                string(s.shape),
+            ] for s in exp.arguments
+        ],
+    )
+    print(io, "\n    results (hlo_call results):")
+    ny = count(s -> s.kind === :user_output, exp.results)
+    iy = 0
+    _print_table(
+        io,
+        ["#", "kind", "destination"],
+        map(enumerate(exp.results)) do (i, s)
+            dest = if s.kind === :user_output
+                iy += 1
+                ny == 1 ? "y" : "y[$iy]"
+            else
+                _julia_path(s.target, "st")
+            end
+            [string(i), repr(s.kind), dest]
+        end,
+    )
+    return nothing
+end
+
+function Base.show(io::IO, ::MIME"text/plain", tm::TorchModule)
+    show(io, tm)
+    params = filter(e -> e.kind === :parameter, tm.layout)
+    print(io, "\n  parameters (ps), ", _count_summary(params), ":")
+    _print_table(
+        io,
+        ["FQN", "eltype", "shape", "owner"],
+        [[e.fqn, string(e.eltype), string(e.shape), e.owner] for e in params],
+    )
+    buffers = filter(e -> e.kind === :buffer, tm.layout)
+    print(io, "\n  buffers (st), ", _count_summary(buffers), ":")
+    _print_table(
+        io,
+        ["FQN", "eltype", "shape", "owner", "persistent"],
+        [
+            [e.fqn, string(e.eltype), string(e.shape), e.owner, string(e.persistent)] for
+            e in buffers
+        ],
+    )
+    for (key, exp) in sort!(collect(tm.cache); by=kv -> string(kv[1]))
+        backend, mode, sig = key
+        print(
+            io,
+            "\n  export ",
+            repr(mode),
+            " via ",
+            backend,
+            " for inputs ",
+            join(("$T$(shape)" for (T, shape) in sig), ", "),
+            ":",
+        )
+        _print_export_tables(io, exp)
+    end
+    return nothing
+end

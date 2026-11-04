@@ -2,6 +2,7 @@ module ReactantPythonCallExt
 
 using PythonCall:
     PythonCall, Py, pyconvert, pyeval, pyexec, pyimport, pyisinstance, pylist, pytuple
+using PrettyTables: PrettyTables
 using Reactant: Reactant, TracedRArray, TracedRNumber, @reactant_overlay
 using Reactant.Ops: @opcall
 using Reactant.Serialization: NUMPY_SIMPLE_TYPES

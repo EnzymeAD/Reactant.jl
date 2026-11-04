@@ -318,8 +318,8 @@ mode with its state embedded as constants and returns only `y`.
 
 Being plain `NamedTuple`s, `ps` and `st` work with `keys`, `pairs`, `merge` and
 `Base.setindex`, for example `merge(ps, (; var"0.weight"=w))` to swap in new weights.
-[`torch_layout`](@ref) describes every tensor: its kind, element type, size and owning
-submodule.
+`display(tm)` lists every tensor with its element type, size and owning submodule;
+[`torch_layout`](@ref) returns the same information as data.
 
 `backend` names the lowering that turns the captured program into StableHLO.
 `:torchax` (torchax and jax) is currently the only one.

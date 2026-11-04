@@ -306,6 +306,13 @@ class _TwoOutput(nn.Module):
                     end
                     @test st[Symbol("1.running_mean")] === st.var"1.running_mean"
                     @test !haskey(ps, Symbol("1.running_mean"))  # a buffer, so in st
+
+                    s = sprint(show, MIME"text/plain"(), tm)
+                    @test occursin("parameters (ps), 6 tensors, 244 elements:", s)
+                    @test occursin("buffers (st), 3 tensors, 33 elements:", s)
+                    @test occursin(
+                        r"^\s+1\.running_mean\s+Float32\s+\(16,\)\s+BatchNorm1d"m, s
+                    )
                 end
 
                 @testset "eval" begin
@@ -396,6 +403,16 @@ class _TwoOutput(nn.Module):
                     @test pyconvert(Bool, model.training)
                     model.eval()
                     @test pyconvert(Bool, model[1].training) == false
+                end
+
+                @testset "display" begin
+                    s = sprint(show, MIME"text/plain"(), tm)
+                    @test occursin("TorchModule(Sequential) with 2 exports", s)
+                    @test occursin(r"export :train via torchax for inputs Float32\(", s)
+                    @test occursin(":buffer_mutation", s)
+                    # Each result names the st leaf it replaces.
+                    @test occursin(r":buffer_mutation\s+st\.var\"1\.running_mean\""m, s)
+                    @test occursin(r":user_output\s+y$"m, s)
                 end
             end
 
@@ -534,6 +551,33 @@ class _Stateful(nn.Module):
                         @test Int(s.steps) == 3
                     end
                 end
+            end
+
+            @testset "import_torch: display of a large model" begin
+                # 100 Linear layers: 200 parameters. A limited display (as in the REPL)
+                # abbreviates the table; an unlimited one lists every tensor.
+                model = nn.Sequential([nn.Linear(2, 2) for _ in 1:100]...)
+                tm, ps, st = Reactant.import_torch(model)
+                @test length(Reactant.torch_layout(tm)) == 200
+
+                limited = sprint(
+                    show,
+                    MIME"text/plain"(),
+                    tm;
+                    context=(:limit => true, :displaysize => (30, 120)),
+                )
+                @test occursin("parameters (ps), 200 tensors, 600 elements:", limited)
+                @test occursin("buffers (st), 0 tensors, 0 elements:", limited)
+                row(fqn) = Regex("^\\s+" * replace(fqn, "." => "\\.") * "\\s", "m")
+                @test occursin(r"\d+ rows omitted", limited)
+                @test occursin(row("0.weight"), limited)     # first rows kept
+                @test occursin(row("99.bias"), limited)      # last rows kept
+                @test !occursin(row("50.weight"), limited)   # middle elided
+                @test count('\n', limited) < 30
+
+                full = sprint(show, MIME"text/plain"(), tm)
+                @test !occursin("omitted", full)
+                @test all(i -> occursin(row("$(i).weight"), full), 0:99)
             end
 
             @testset "import_torch: parameter mutation is rejected" begin
