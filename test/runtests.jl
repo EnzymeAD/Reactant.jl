@@ -38,6 +38,36 @@ function add_pip_and_check(pkg, mod; version="")
     end
 end
 
+# integration/pytorch needs a CPU build of torch: the default PyPI torch wheel on Linux
+# is a CUDA build whose libtorch_cuda.so clashes with Reactant's runtime and fails to
+# import after Reactant loads, which makes the extension disable torch support and the
+# tests skip themselves. CondaPkg cannot pin a per-package index, so torch and torchax are
+# resolved normally and the resolved torch version is then reinstalled from the PyTorch
+# CPU index. The version is read from package metadata rather than by importing torch,
+# since the CUDA build may fail to import, and --no-deps keeps the dependencies that are
+# already installed.
+function install_cpu_torch()
+    try
+        CondaPkg.withenv() do
+            run(`python -m ensurepip --upgrade`)
+            torch_version = readchomp(
+                `python -c "import importlib.metadata as m; print(m.version('torch').split('+')[0])"`,
+            )
+            run(
+                `python -m pip install --index-url https://download.pytorch.org/whl/cpu --no-deps --force-reinstall "torch==$(torch_version)"`,
+            )
+        end
+        is_python_module_installed("torchax") && return true
+        @warn "`import torchax` failed after installing the CPU build of torch, skipping \
+               the PyTorch tests"
+        return false
+    catch e
+        @warn "Could not install the CPU build of torch, skipping the PyTorch tests" exception =
+            e
+        return false
+    end
+end
+
 testsuite = find_tests(@__DIR__)
 
 filter_tests!(testsuite, parsed_args)
@@ -72,16 +102,20 @@ const RUN_PYTHON_TEST =
     haskey(testsuite, "integration/python") && !(Sys.isapple() && Sys.ARCH === :x86_64)
 const RUN_ENZYMEJAX_TEST = haskey(testsuite, "integration/enzymejax")
 const RUN_NUMPYRO_TEST = haskey(testsuite, "integration/numpyro")
+const RUN_PYTORCH_TEST = haskey(testsuite, "integration/pytorch")
 
 # Install specific Python packages needed by the selected integration tests.
 # Pkg.test doesn't pick up CondaPkg.toml in test folder.
-if RUN_PYTHON_TEST || RUN_ENZYMEJAX_TEST || RUN_NUMPYRO_TEST
+if RUN_PYTHON_TEST || RUN_ENZYMEJAX_TEST || RUN_NUMPYRO_TEST || RUN_PYTORCH_TEST
     if CondaPkg.backend() === :Null
         if RUN_ENZYMEJAX_TEST && !is_python_module_installed("enzyme_ad")
             delete!(testsuite, "integration/enzymejax")
         end
         if RUN_NUMPYRO_TEST && !is_python_module_installed("numpyro")
             delete!(testsuite, "integration/numpyro")
+        end
+        if RUN_PYTORCH_TEST && !is_python_module_installed("torchax")
+            delete!(testsuite, "integration/pytorch")
         end
     else
         if RUN_PYTHON_TEST
@@ -110,6 +144,12 @@ if RUN_PYTHON_TEST || RUN_ENZYMEJAX_TEST || RUN_NUMPYRO_TEST
         if RUN_ENZYMEJAX_TEST || RUN_NUMPYRO_TEST
             CondaPkg.add_pip("jax"; version=">=0.9", resolve=false)
         end
+        if RUN_PYTORCH_TEST
+            # torchax is pinned to the versions ReactantPythonCallExt is tested with
+            # (see ext/ReactantPythonCallExt/pytorch.jl).
+            CondaPkg.add_pip("torch"; version=">=2.4", resolve=false)
+            CondaPkg.add_pip("torchax"; version=">=0.0.10,<0.0.13", resolve=false)
+        end
         CondaPkg.resolve(; force=true)
 
         if RUN_ENZYMEJAX_TEST &&
@@ -119,6 +159,10 @@ if RUN_PYTHON_TEST || RUN_ENZYMEJAX_TEST || RUN_NUMPYRO_TEST
 
         if RUN_NUMPYRO_TEST && !add_pip_and_check("numpyro", "numpyro"; version=">=0.21")
             delete!(testsuite, "integration/numpyro")
+        end
+
+        if RUN_PYTORCH_TEST && !install_cpu_torch()
+            delete!(testsuite, "integration/pytorch")
         end
 
         CondaPkg.activate!(ENV)
