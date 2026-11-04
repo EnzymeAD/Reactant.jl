@@ -2531,13 +2531,129 @@ function handle(::Val{Symbol("stablehlo.pad")}, (a, padding_value), attributes, 
     return out
 end
 
+function __gather_scatter_julia_index(idx, ::Val{N}) where {N}
+    return CartesianIndex(ntuple(j -> idx[N - j + 1] + 1, Val(N)))
+end
+
+# for each result index, the operand index is the clamped start index (read from `start_indices` along
+# `index_vector_dim` and placed by `start_index_map`), plus the batching index and the offset within the slice
+function handle(
+    ::Val{Symbol("stablehlo.gather")}, (operand, start_indices), attributes, (result,)
+)
+    dn = attributes.dimension_numbers
+    slice_sizes = attributes.slice_sizes
+    ivd = dn.index_vector_dim
+    out = Array{result.eltype}(undef, result.size)
+
+    batch_dims = [d for d in 0:(ndims(out) - 1) if d ∉ dn.offset_dims]
+    offset_operand_dims = [
+        d for d in 0:(ndims(operand) - 1) if
+        d ∉ dn.collapsed_slice_dims && d ∉ dn.operand_batching_dims
+    ]
+
+    operand_index = zeros(Int, ndims(operand))
+    sindex = zeros(Int, ndims(start_indices))
+    for I in CartesianIndices(out)
+        # `gather` follow the StableHLO spec, which is written in 0-based MLIR indices
+        # these convert them from and to the Julia indices of the reversed arrays
+        ridx = reverse(Tuple(I)) .- 1
+        fill!(operand_index, 0)
+
+        # the batch index, with a gap at `index_vector_dim` for the component of the start index
+        for (k, d) in enumerate(batch_dims)
+            sindex[k <= ivd ? k : k + 1] = ridx[d + 1]
+        end
+        for (k, d_operand) in enumerate(dn.start_index_map)
+            ivd < ndims(start_indices) && (sindex[ivd + 1] = k - 1)
+            start = Int(
+                start_indices[__gather_scatter_julia_index(
+                    sindex, Val(ndims(start_indices))
+                )],
+            )
+            mlir_size = size(operand, ndims(operand) - d_operand)
+            operand_index[d_operand + 1] = clamp(
+                start, 0, mlir_size - slice_sizes[d_operand + 1]
+            )
+        end
+        for (i, d_operand) in enumerate(dn.operand_batching_dims)
+            d_start = dn.start_indices_batching_dims[i]
+            operand_index[d_operand + 1] += ridx[batch_dims[d_start - (d_start < ivd ? 0 : 1) + 1] + 1]
+        end
+        for (k, d) in enumerate(dn.offset_dims)
+            operand_index[offset_operand_dims[k] + 1] += ridx[d + 1]
+        end
+
+        out[I] = operand[__gather_scatter_julia_index(operand_index, Val(ndims(operand)))]
+    end
+    return out
+end
+
+# operands are the `inputs`, `scatter_indices` and `updates`, and `update_computation` combines an element of each
+# input with the corresponding element of each update (all as 0-dimensional arrays). like in the spec, updates whose
+# index falls outside of the inputs are dropped, and they are applied sequentially in index order
+function handle(
+    ::Val{Symbol("stablehlo.scatter")}, operands, attributes, results, (update_computation,)
+)
+    n = length(results)
+    outs = ntuple(i -> copy(operands[i]), Val(n))
+    scatter_indices = operands[n + 1]
+    updates = ntuple(i -> operands[n + 1 + i], Val(n))
+
+    dn = attributes.scatter_dimension_numbers
+    ivd = dn.index_vector_dim
+    R = ndims(first(outs))
+    update_scatter_dims = [
+        d for d in 0:(ndims(first(updates)) - 1) if d ∉ dn.update_window_dims
+    ]
+    window_input_dims = [
+        d for d in 0:(R - 1) if d ∉ dn.inserted_window_dims && d ∉ dn.input_batching_dims
+    ]
+
+    result_index = zeros(Int, R)
+    sindex = zeros(Int, ndims(scatter_indices))
+    for I in CartesianIndices(first(updates))
+        # `scatter` follow the StableHLO spec, which is written in 0-based MLIR indices
+        # these convert them from and to the Julia indices of the reversed arrays
+        uidx = reverse(Tuple(I)) .- 1
+        fill!(result_index, 0)
+
+        for (k, d) in enumerate(update_scatter_dims)
+            sindex[k <= ivd ? k : k + 1] = uidx[d + 1]
+        end
+        for (k, d_input) in enumerate(dn.scatter_dims_to_operand_dims)
+            ivd < ndims(scatter_indices) && (sindex[ivd + 1] = k - 1)
+            result_index[d_input + 1] = Int(
+                scatter_indices[__gather_scatter_julia_index(
+                    sindex, Val(ndims(scatter_indices))
+                )],
+            )
+        end
+        for (i, d_input) in enumerate(dn.input_batching_dims)
+            d_start = dn.scatter_indices_batching_dims[i]
+            result_index[d_input + 1] += uidx[update_scatter_dims[d_start - (d_start < ivd ? 0 : 1) + 1] + 1]
+        end
+        for (k, d) in enumerate(dn.update_window_dims)
+            result_index[window_input_dims[k] + 1] += uidx[d + 1]
+        end
+
+        mlir_size = size(first(outs), ndims(first(outs)) - d)
+        all(d -> 0 <= result_index[d + 1] < mlir_size, 0:(R - 1)) || continue
+        J = __gather_scatter_julia_index(result_index, Val(R))
+        new = update_computation(
+            map(o -> fill(o[J]), outs)..., map(u -> fill(u[I]), updates)...
+        )
+        foreach((o, v) -> o[J] = v[], outs, new)
+    end
+    return n == 1 ? only(outs) : outs
+end
+
 # convert an MLIR attribute into a Julia value that doesn't depend on its MLIR context.
 # dense elements become arrays with reversed dimensions (like operands), dense arrays keep MLIR order (e.g. dimension
 # indices are 0-based MLIR dimensions), enums become a `Symbol` with their value (e.g.
 # `#stablehlo<comparison_direction LT>` becomes `:LT`), and attributes of any other kind become their textual form.
 function decode_attribute(attr)
-    IR = Reactant.MLIR.IR
-    API = Reactant.MLIR.API
+    # reads a list of dimensions through the size and element getters of the C API
+    getdims(getsize, getelem) = Int64[getelem(attr, i) for i in 0:(getsize(attr) - 1)]
 
     if IR.isdenseelements(attr)
         T = IR.julia_type(eltype(IR.type(attr)))
@@ -2568,7 +2684,6 @@ function decode_attribute(attr)
     elseif IR.isstring(attr)
         return String(attr)
     elseif API.stablehloAttributeIsADotDimensionNumbers(attr)
-        getdims(getsize, getelem) = Int64[getelem(attr, i) for i in 0:(getsize(attr) - 1)]
         return (;
             lhs_batching_dimensions=getdims(
                 API.stablehloDotDimensionNumbersGetLhsBatchingDimensionsSize,
@@ -2586,6 +2701,55 @@ function decode_attribute(attr)
                 API.stablehloDotDimensionNumbersGetRhsContractingDimensionsSize,
                 API.stablehloDotDimensionNumbersGetRhsContractingDimensionsElem,
             ),
+        )
+    elseif API.stablehloAttributeIsAGatherDimensionNumbers(attr)
+        return (;
+            offset_dims=getdims(
+                API.stablehloGatherDimensionNumbersGetOffsetDimsSize,
+                API.stablehloGatherDimensionNumbersGetOffsetDimsElem,
+            ),
+            collapsed_slice_dims=getdims(
+                API.stablehloGatherDimensionNumbersGetCollapsedSliceDimsSize,
+                API.stablehloGatherDimensionNumbersGetCollapsedSliceDimsElem,
+            ),
+            operand_batching_dims=getdims(
+                API.stablehloGatherDimensionNumbersGetOperandBatchingDimsSize,
+                API.stablehloGatherDimensionNumbersGetOperandBatchingDimsElem,
+            ),
+            start_indices_batching_dims=getdims(
+                API.stablehloGatherDimensionNumbersGetStartIndicesBatchingDimsSize,
+                API.stablehloGatherDimensionNumbersGetStartIndicesBatchingDimsElem,
+            ),
+            start_index_map=getdims(
+                API.stablehloGatherDimensionNumbersGetStartIndexMapSize,
+                API.stablehloGatherDimensionNumbersGetStartIndexMapElem,
+            ),
+            index_vector_dim=API.stablehloGatherDimensionNumbersGetIndexVectorDim(attr),
+        )
+    elseif API.stablehloAttributeIsAScatterDimensionNumbers(attr)
+        return (;
+            update_window_dims=getdims(
+                API.stablehloScatterDimensionNumbersGetUpdateWindowDimsSize,
+                API.stablehloScatterDimensionNumbersGetUpdateWindowDimsElem,
+            ),
+            inserted_window_dims=getdims(
+                API.stablehloScatterDimensionNumbersGetInsertedWindowDimsSize,
+                API.stablehloScatterDimensionNumbersGetInsertedWindowDimsElem,
+            ),
+            input_batching_dims=getdims(
+                API.stablehloScatterDimensionNumbersGetInputBatchingDimsSize,
+                API.stablehloScatterDimensionNumbersGetInputBatchingDimsElem,
+            ),
+            scatter_indices_batching_dims=getdims(
+                API.stablehloScatterDimensionNumbersGetScatterIndicesBatchingDimsSize,
+                API.stablehloScatterDimensionNumbersGetScatterIndicesBatchingDimsElem,
+            ),
+            scatter_dims_to_operand_dims=getdims(
+                API.stablehloScatterDimensionNumbersGetScatteredDimsToOperandDimsSize,
+                API.stablehloScatterDimensionNumbersGetScatteredDimsToOperandDimsElem,
+            ),
+            # the C API exports the scatter getter of `index_vector_dim` under this name
+            index_vector_dim=API.stablehloDimensionNumbersGetIndexVectorDim(attr),
         )
     elseif IR.isarray(attr)
         return Any[
