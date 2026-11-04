@@ -2086,28 +2086,16 @@ end
 # support adopting a stream with `own=true`, so we fall back to raw driver calls.
 const CUDA_SUPPORTS_BORROWED_STREAMS = pkgversion(CUDACore) >= v"6.5"
 
-# Events used to order streams, cached per context (like CUDA.jl does per stream in
-# `stream_wait`). A single event can be reused for every ordering, as
-# `cuStreamWaitEvent` only waits on the recording made before it was called, as long as
-# no other recording sneaks in between the record and the wait: `STREAM_EVENTS_LOCK`
-# is held across both.
-const STREAM_EVENTS = Dict{CUDACore.CuContext,CUDACore.CuEvent}()
-const STREAM_EVENTS_LOCK = ReentrantLock()
-
 # Make the work submitted to `waiter` from now on wait for the work submitted to
-# `source` so far, without blocking the host.
-function cuda_stream_wait(waiter, source)
-    @lock STREAM_EVENTS_LOCK begin
-        event = get!(STREAM_EVENTS, CUDACore.context()) do
-            CUDACore.CuEvent(CUDACore.EVENT_DISABLE_TIMING)
-        end
-        @static if CUDA_SUPPORTS_BORROWED_STREAMS
-            CUDACore.record(event, source)
-            CUDACore.wait(event, waiter)
-        else
-            CUDACore.cuEventRecord(event, source)
-            CUDACore.cuStreamWaitEvent(waiter, event, 0)
-        end
+# `source` so far, without blocking the host. `cuStreamWaitEvent` only waits on the
+# recording made before it was called, so `event` can be re-recorded afterwards.
+function cuda_stream_wait(waiter, source, event)
+    @static if CUDA_SUPPORTS_BORROWED_STREAMS
+        CUDACore.record(event, source)
+        CUDACore.wait(event, waiter)
+    else
+        CUDACore.cuEventRecord(event, source)
+        CUDACore.cuStreamWaitEvent(waiter, event, 0)
     end
     return nothing
 end
@@ -2122,12 +2110,15 @@ function Reactant.Ops.__with_cuda_stream_fork(f::F, xla_stream_ptr::Ptr{Cvoid}) 
         CUDACore.CUstream(xla_stream_ptr)
     end
     julia_stream = CUDACore.stream()
+    event = CUDACore.CuEvent(CUDACore.EVENT_DISABLE_TIMING)
 
-    cuda_stream_wait(julia_stream, xla_stream)
+    cuda_stream_wait(julia_stream, xla_stream, event)
     try
         return f()
     finally
-        cuda_stream_wait(xla_stream, julia_stream)
+        cuda_stream_wait(xla_stream, julia_stream, event)
+        # Destroying a pending event is fine: the driver releases it once it completes.
+        finalize(event)
     end
 end
 
