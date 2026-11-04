@@ -146,8 +146,9 @@ if RUN_PYTHON_TEST || RUN_ENZYMEJAX_TEST || RUN_NUMPYRO_TEST || RUN_PYTORCH_TEST
         end
         if RUN_PYTORCH_TEST
             # torchax is pinned to the versions ReactantPythonCallExt is tested with
-            # (see ext/ReactantPythonCallExt/pytorch.jl).
-            CondaPkg.add_pip("torch"; version=">=2.4", resolve=false)
+            # (see ext/ReactantPythonCallExt/pytorch.jl). torch is capped because the
+            # released torchax versions fail to import with torch 2.13 and newer.
+            CondaPkg.add_pip("torch"; version=">=2.4,<2.13", resolve=false)
             CondaPkg.add_pip("torchax"; version=">=0.0.10,<0.0.13", resolve=false)
         end
         CondaPkg.resolve(; force=true)
