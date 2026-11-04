@@ -133,6 +133,32 @@ arguments, you can swap in new values (for example weights updated by an optimiz
 and call `tm` again; each leaf must keep its element type and size, and a mismatch
 raises an error naming the parameter or buffer.
 
+Inputs are positional. A `forward` that takes keyword arguments, or nested tuples or
+dictionaries of tensors, needs a small wrapper module that accepts each tensor as a
+positional argument:
+
+```julia
+pyexec("""
+import torch.nn as nn
+
+class Positional(nn.Module):
+    def __init__(self, model):
+        super().__init__()
+        self.model = model
+
+    def forward(self, input_ids, attention_mask):
+        return self.model(input_ids=input_ids, attention_mask=attention_mask)
+""", Main)
+
+tm, ps, st = Reactant.import_torch(pyeval("Positional", Main)(model))
+y, st = @jit tm(input_ids, attention_mask, ps, st)
+```
+
+The wrapper holds the original module as a submodule, so every key in `ps` and `st`
+gains a `model.` prefix (`model.encoder.layer.0.attention.self.query.weight` rather
+than `encoder.layer.0...`). Strip or add the prefix when matching keys against a
+`state_dict()` saved from the unwrapped module.
+
 `tm` exports the module once per mode and input signature (element types and sizes)
 and caches the result, so calling it again with inputs of the same shape does not
 re-export. `display(tm)` lists each cached export with its arguments and results.
@@ -267,8 +293,8 @@ configuration.
 
 - The model must be exportable with `torch.export`. Data-dependent control flow or
   shapes that `torch.export` cannot capture are not supported.
-- Inputs and outputs must be tensors. Nested or non-tensor arguments are not
-  supported.
+- Inputs and outputs must be tensors. Inputs are positional; keyword, nested or
+  non-tensor arguments need a wrapper module (see "Calling the module" above).
 - Element types are limited to those Reactant maps to StableHLO (the floating point,
   integer, and boolean types in `Reactant.Serialization.NUMPY_SIMPLE_TYPES`).
 - `torchax` depends on JAX, so a JAX installation compatible with your `torchax`
