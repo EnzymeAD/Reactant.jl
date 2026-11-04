@@ -29,6 +29,7 @@ module Julia
 using Base: unsafe_convert
 using ..Reactant: Reactant
 using Reactant.XLA.CAPI: CAPI, csizeof
+using LinearAlgebra: mul!
 import Serialization: serialize
 
 macro pjrt_catch_return(fdef)
@@ -2380,6 +2381,39 @@ function handle(::Val{Symbol("stablehlo.select")}, (pred, on_true, on_false), _,
     return map(ifelse, pred, on_true, on_false)
 end
 
+# the result has the batching dimensions, then the free (i.e. neither batching nor contracting) dimensions of `lhs`
+# and then those of `rhs`, all in MLIR order. on the reversed arrays this is `rhs * lhs` for each batch: `rhs` is
+# permuted and reshaped into a (rhs free × contracting × batch) array, `lhs` into a (contracting × lhs free × batch)
+# array, and the product of each batch slice is written into a (rhs free × lhs free × batch) array.
+# `dot_dimension_numbers` is decoded by `decode_attribute` with 0-based MLIR dimensions.
+function handle(::Val{Symbol("stablehlo.dot_general")}, (lhs, rhs), attributes, (result,))
+    dims = attributes.dot_dimension_numbers
+    jdim(x, d) = ndims(x) - d
+
+    # batching dimensions are reversed so that they flatten in the order of the result
+    lb = [jdim(lhs, d) for d in reverse(dims.lhs_batching_dimensions)]
+    rb = [jdim(rhs, d) for d in reverse(dims.rhs_batching_dimensions)]
+    lc = [jdim(lhs, d) for d in dims.lhs_contracting_dimensions]
+    rc = [jdim(rhs, d) for d in dims.rhs_contracting_dimensions]
+
+    # free dimensions keep their MLIR order, which reversed is the increasing order of Julia dimensions
+    lf = [j for j in 1:ndims(lhs) if j ∉ lb && j ∉ lc]
+    rf = [j for j in 1:ndims(rhs) if j ∉ rb && j ∉ rc]
+
+    nbatch = prod(j -> size(lhs, j), lb; init=1)
+    k = prod(j -> size(lhs, j), lc; init=1)
+    m = prod(j -> size(lhs, j), lf; init=1)
+    n = prod(j -> size(rhs, j), rf; init=1)
+
+    l = reshape(permutedims(lhs, [lc; lf; lb]), k, m, nbatch)
+    r = reshape(permutedims(rhs, [rf; rc; rb]), n, k, nbatch)
+    out = Array{result.eltype}(undef, n, m, nbatch)
+    for (o, x, y) in zip(eachslice(out; dims=3), eachslice(r; dims=3), eachslice(l; dims=3))
+        mul!(o, x, y)
+    end
+    return reshape(out, result.size)
+end
+
 # shape handlers. arrays have reversed dimensions, so MLIR dimension `d` (0-based) of a rank-`N` tensor is Julia
 # dimension `N - d`, and attributes indexed by MLIR dimension (e.g. `permutation`) are read in reverse
 
@@ -2471,6 +2505,26 @@ function decode_attribute(attr)
         return Float64(attr)
     elseif IR.isstring(attr)
         return String(attr)
+    elseif API.stablehloAttributeIsADotDimensionNumbers(attr)
+        getdims(getsize, getelem) = Int64[getelem(attr, i) for i in 0:(getsize(attr) - 1)]
+        return (;
+            lhs_batching_dimensions=getdims(
+                API.stablehloDotDimensionNumbersGetLhsBatchingDimensionsSize,
+                API.stablehloDotDimensionNumbersGetLhsBatchingDimensionsElem,
+            ),
+            rhs_batching_dimensions=getdims(
+                API.stablehloDotDimensionNumbersGetRhsBatchingDimensionsSize,
+                API.stablehloDotDimensionNumbersGetRhsBatchingDimensionsElem,
+            ),
+            lhs_contracting_dimensions=getdims(
+                API.stablehloDotDimensionNumbersGetLhsContractingDimensionsSize,
+                API.stablehloDotDimensionNumbersGetLhsContractingDimensionsElem,
+            ),
+            rhs_contracting_dimensions=getdims(
+                API.stablehloDotDimensionNumbersGetRhsContractingDimensionsSize,
+                API.stablehloDotDimensionNumbersGetRhsContractingDimensionsElem,
+            ),
+        )
     elseif IR.isarray(attr)
         return Any[
             decode_attribute(IR.Attribute(API.mlirArrayAttrGetElement(attr, i))) for
@@ -2671,7 +2725,12 @@ function compile!(client::HostClient, code, options)
             type = IR.type(IR.result(op, i))
             IR.istensor(type) ||
                 throw(unimplemented("`$opname` returns a non-tensor value, which is not supported"))
-            (; eltype=IR.julia_type(eltype(type)), size=reverse(size(type)))
+            T = IR.julia_type(eltype(type))
+            dims = reverse(size(type))
+
+            # `eltype` is typed as `Type{T}` instead of `DataType`, so that handlers that build their result from it
+            # (e.g. `Array{result.eltype}`) are type-stable
+            NamedTuple{(:eltype, :size),Tuple{Type{T},typeof(dims)}}((T, dims))
         end
 
         call = :(handle($opval, ($(operands...),), $attributes, $results))
