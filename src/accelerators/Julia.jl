@@ -94,6 +94,7 @@ function output_element_types end
 function platform_name end
 function platform_version end
 function process_index end
+function ready_event end
 function size_of_generated_code_in_bytes end
 function to_host_buffer end
 function to_string end
@@ -956,8 +957,8 @@ end
 - `copy_to_memory`
 - `to_host_buffer` -> copyto!?
 - `is_on_cpu`
+- `ready_event`
 - `unsafe_pointer`
-- ...
 """
 abstract type Buffer end
 
@@ -1238,6 +1239,35 @@ is_on_cpu(::Buffer)
     buffer = unsafe_pointer_to_objref(unsafe_load(args.buffer))::Buffer
     pred = is_on_cpu(buffer)::Bool
     unsafe_store!(args.is_on_cpu, pred)
+    return ok()
+end
+
+"""
+    ready_event(buffer::Buffer) -> Event
+
+Return a new [`Event`](@ref) that is set once the data of `buffer` is ready, or with an [`Error`](@ref) if
+producing it failed. A new event is needed on each call because the caller owns it and destroys it.
+The returned event is GC rooted by the caller.
+
+If `buffer` is deleted, the C wrapper returns an event set with an error without calling `ready_event`.
+
+Backs `PJRT_Buffer_ReadyEvent`.
+"""
+ready_event(::Buffer)
+
+@pjrt_catch_return function buffer_ready_event(
+    args::Ptr{CAPI.PJRT_Buffer_ReadyEvent_Args}
+)::Ptr{CAPI.PJRT_Error}
+    buffer = unsafe_pointer_to_objref(unsafe_load(args.buffer))::Buffer
+
+    if isdeleted(buffer)
+        event = Event()
+        notify(event, invalid_argument("buffer is deleted"))
+    else
+        event = ready_event(buffer)::Event
+    end
+    root!(event)
+    unsafe_store!(args.event, Ptr{CAPI.PJRT_Event}(pointer_from_objref(event)))
     return ok()
 end
 
@@ -2239,6 +2269,14 @@ function to_host_buffer(dst::Ptr{Cvoid}, buffer::HostBuffer)
 end
 
 is_on_cpu(::HostBuffer) = true
+
+# `HostBuffer` data is written synchronously before the buffer is handed out, so it is always ready
+function ready_event(::HostBuffer)
+    event = Event()
+    notify(event)
+    return event
+end
+
 unsafe_pointer(buffer::HostBuffer) = buffer.data
 
 ## HostExecutable
@@ -3267,7 +3305,7 @@ function __init__()
         #= PJRT_Buffer_CopyToDevice =# @cfunction(buffer_copy_to_device, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_CopyToDevice_Args},)),
         #= PJRT_Buffer_ToHostBuffer =# @cfunction(buffer_to_host_buffer, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_ToHostBuffer_Args},)),
         #= PJRT_Buffer_IsOnCpu =# @cfunction(buffer_is_on_cpu, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_IsOnCpu_Args},)),
-        #= PJRT_Buffer_ReadyEvent =# c_unimplemented,
+        #= PJRT_Buffer_ReadyEvent =# @cfunction(buffer_ready_event, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_ReadyEvent_Args},)),
         #= PJRT_Buffer_UnsafePointer =# @cfunction(buffer_unsafe_pointer, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_UnsafePointer_Args},)),
         #= PJRT_Buffer_IncreaseExternalReferenceCount =# c_unimplemented,
         #= PJRT_Buffer_DecreaseExternalReferenceCount =# c_unimplemented,
