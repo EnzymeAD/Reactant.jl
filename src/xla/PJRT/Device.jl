@@ -46,3 +46,10 @@ function XLA.allocatorstats_internal(device::Device)
     end
     return ref[]
 end
+
+function XLA.clear_memory_stats_internal!(device::Device)
+    GC.@preserve device begin
+        MLIR.API.PjRtDeviceClearMemoryStats(device.device)
+    end
+    return nothing
+end
