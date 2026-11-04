@@ -451,3 +451,212 @@ function get_stablehlo_to_hlo_passes(; stablehlo_to_mhlo::Bool=true)
     )
     return passes
 end
+
+# Squeeze singleton input dimensions that expand in `broadcast_in_dim` (`1 -> N` where `N != 1`)
+# into an explicit rank-reducing reshape (or squeezed constant) followed by a non-degenerate
+# `broadcast_in_dim`. During StableHLO/MHLO -> XLA HLO lowering, `XlaBuilder::BroadcastInDim`
+# decomposes degenerate `broadcast_in_dim` ops while keeping the output's `mhlo.sharding` active
+# on an intermediate degenerate-shaped HLO `broadcast`. That tiles size-1 dimensions across mesh
+# axes and causes GSPMD/SpmdPartitioner to emit unnecessary zero-masking and collectives
+# (`all-reduce` / `collective-permute`).
+function canonicalize_degenerate_broadcasts!(mod::MLIR.IR.Module)
+    const_cache = Dict{Tuple{Ptr{Cvoid},Ptr{Cvoid}},MLIR.IR.Value}()
+    reshape_cache = Dict{Tuple{Ptr{Cvoid},Ptr{Cvoid},Ptr{Cvoid}},MLIR.IR.Value}()
+    dead_candidates = MLIR.IR.Operation[]
+    seen_dead_ptrs = Set{Ptr{Cvoid}}()
+
+    function record_dead_candidate!(cand::MLIR.IR.Operation)
+        ptr = cand.ref.ptr
+        if ptr ∉ seen_dead_ptrs
+            push!(seen_dead_ptrs, ptr)
+            push!(dead_candidates, cand)
+        end
+        return nothing
+    end
+
+    function walk_op!(parent_op::MLIR.IR.Operation)
+        for reg in parent_op
+            for blk in reg
+                for op in collect(blk)
+                    walk_op!(op)
+                    op_name = MLIR.IR.name(op)
+                    if op_name == "stablehlo.broadcast_in_dim"
+                        is_mhlo = false
+                    elseif op_name == "mhlo.broadcast_in_dim"
+                        is_mhlo = true
+                    else
+                        continue
+                    end
+
+                    (MLIR.IR.noperands(op) == 1 && MLIR.IR.nresults(op) == 1) || continue
+                    MLIR.IR.getattr(op, "sdy.sharding_rule") === nothing || continue
+
+                    operand = MLIR.IR.operand(op, 1)
+                    in_ty = MLIR.IR.type(operand)
+                    out_ty = MLIR.IR.type(MLIR.IR.result(op, 1))
+                    if !(
+                        MLIR.IR.isrankedtensor(in_ty) &&
+                        MLIR.IR.isrankedtensor(out_ty) &&
+                        MLIR.IR.hasstaticshape(in_ty) &&
+                        MLIR.IR.hasstaticshape(out_ty) &&
+                        MLIR.IR.encoding(in_ty) === nothing
+                    )
+                        continue
+                    end
+
+                    bcast_attr = MLIR.IR.getattr(op, "broadcast_dimensions")
+                    bcast_attr === nothing && continue
+                    in_rank = ndims(in_ty)
+                    if MLIR.IR.isdensearray(bcast_attr, Int64)
+                        MLIR.API.mlirDenseArrayGetNumElements(bcast_attr) == in_rank ||
+                            continue
+                        bcast_dims = Int64[
+                            MLIR.API.mlirDenseI64ArrayGetElement(bcast_attr, j - 1) for
+                            j in 1:in_rank
+                        ]
+                        use_dense_array = true
+                    elseif MLIR.IR.isdenseelements(bcast_attr)
+                        MLIR.API.mlirElementsAttrGetNumElements(bcast_attr) == in_rank ||
+                            continue
+                        bcast_dims = Int64[
+                            MLIR.API.mlirDenseElementsAttrGetInt64Value(bcast_attr, j - 1)
+                            for j in 1:in_rank
+                        ]
+                        use_dense_array = false
+                    else
+                        continue
+                    end
+
+                    has_degenerate = false
+                    for i in 1:in_rank
+                        out_dim = Int(bcast_dims[i]) + 1
+                        if size(in_ty, i) == 1 && size(out_ty, out_dim) != 1
+                            has_degenerate = true
+                            break
+                        end
+                    end
+                    has_degenerate || continue
+
+                    squeezed_shape = Int[]
+                    new_bcast_dims = Int64[]
+                    for i in 1:in_rank
+                        in_sz = size(in_ty, i)
+                        out_dim = Int(bcast_dims[i]) + 1
+                        if !(in_sz == 1 && size(out_ty, out_dim) != 1)
+                            push!(squeezed_shape, in_sz)
+                            push!(new_bcast_dims, bcast_dims[i])
+                        end
+                    end
+
+                    squeezed_ty = MLIR.IR.TensorType(squeezed_shape, eltype(in_ty))
+                    const_name = is_mhlo ? "mhlo.constant" : "stablehlo.constant"
+                    reshape_name = is_mhlo ? "mhlo.reshape" : "stablehlo.reshape"
+
+                    src_operand = operand
+                    while MLIR.IR.is_op_res(src_operand)
+                        def_op = MLIR.IR.op_owner(src_operand)
+                        if MLIR.IR.name(def_op) == reshape_name &&
+                            MLIR.IR.getattr(def_op, "sdy.sharding") === nothing &&
+                            MLIR.IR.getattr(def_op, "mhlo.sharding") === nothing
+                            inner = MLIR.IR.operand(def_op, 1)
+                            inner_ty = MLIR.IR.type(inner)
+                            if MLIR.IR.isrankedtensor(inner_ty) &&
+                                MLIR.IR.hasstaticshape(inner_ty) &&
+                                MLIR.IR.encoding(inner_ty) === nothing
+                                record_dead_candidate!(def_op)
+                                src_operand = inner
+                                continue
+                            end
+                        end
+                        break
+                    end
+
+                    new_operand = nothing
+                    if MLIR.IR.type(src_operand) == squeezed_ty
+                        new_operand = src_operand
+                    elseif MLIR.IR.is_op_res(src_operand)
+                        def_op = MLIR.IR.op_owner(src_operand)
+                        if MLIR.IR.name(def_op) == const_name &&
+                            MLIR.IR.getattr(def_op, "sdy.sharding") === nothing &&
+                            MLIR.IR.getattr(def_op, "mhlo.sharding") === nothing
+                            val_attr = MLIR.IR.getattr(def_op, "value")
+                            if val_attr !== nothing &&
+                                MLIR.IR.isdenseelements(val_attr) &&
+                                MLIR.IR.encoding(MLIR.IR.type(val_attr)) === nothing
+                                key = (def_op.ref.ptr, squeezed_ty.ref.ptr)
+                                new_operand = get(const_cache, key, nothing)
+                                if new_operand === nothing
+                                    new_attr = reshape(val_attr, squeezed_shape)
+                                    new_cst = MLIR.IR.create_operation_common(
+                                        const_name,
+                                        MLIR.IR.location(def_op);
+                                        operands=MLIR.IR.Value[],
+                                        owned_regions=MLIR.IR.Region[],
+                                        successors=MLIR.IR.Block[],
+                                        attributes=MLIR.IR.NamedAttribute[MLIR.IR.NamedAttribute(
+                                            "value", new_attr
+                                        )],
+                                        results=MLIR.IR.Type[squeezed_ty],
+                                        result_inference=false,
+                                    )
+                                    MLIR.IR.insert_after!(
+                                        MLIR.IR.block(def_op), def_op, new_cst
+                                    )
+                                    new_operand = MLIR.IR.result(new_cst, 1)
+                                    const_cache[key] = new_operand
+                                end
+                                record_dead_candidate!(def_op)
+                            end
+                        end
+                    end
+
+                    if new_operand === nothing
+                        rkey = (blk.ref.ptr, src_operand.ref.ptr, squeezed_ty.ref.ptr)
+                        new_operand = get(reshape_cache, rkey, nothing)
+                        if new_operand === nothing
+                            r_op = MLIR.IR.create_operation_common(
+                                reshape_name,
+                                MLIR.IR.location(op);
+                                operands=MLIR.IR.Value[src_operand],
+                                owned_regions=MLIR.IR.Region[],
+                                successors=MLIR.IR.Block[],
+                                attributes=MLIR.IR.NamedAttribute[],
+                                results=MLIR.IR.Type[squeezed_ty],
+                                result_inference=false,
+                            )
+                            MLIR.IR.insert_before!(blk, op, r_op)
+                            new_operand = MLIR.IR.result(r_op, 1)
+                            reshape_cache[rkey] = new_operand
+                        end
+                    end
+
+                    MLIR.IR.setoperand!(op, 1, new_operand)
+                    new_bcast_attr = if use_dense_array
+                        MLIR.IR.DenseArrayAttribute(new_bcast_dims)
+                    else
+                        MLIR.IR.DenseElementsAttribute(new_bcast_dims)
+                    end
+                    MLIR.IR.setattr!(op, "broadcast_dimensions", new_bcast_attr)
+                end
+            end
+        end
+        return nothing
+    end
+
+    walk_op!(MLIR.IR.Operation(mod))
+
+    changed = true
+    while changed
+        changed = false
+        filter!(dead_candidates) do cand
+            if MLIR.IR.nresults(cand) == 1 &&
+                MLIR.IR.first_use(MLIR.IR.result(cand, 1)) === nothing
+                MLIR.IR.dispose(cand)
+                changed = true
+                return false
+            end
+            return true
+        end
+    end
+    return mod
+end
