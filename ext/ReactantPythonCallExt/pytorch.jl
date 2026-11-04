@@ -337,7 +337,7 @@ end
 
 """
 One parameter or buffer of an imported module, as recorded by
-[`Reactant.import_torch`](@ref).
+[`Reactant.import_torch`](@ref). See [`Reactant.torch_layout`](@ref).
 
 - `fqn`: the fully qualified name PyTorch uses (`"1.running_mean"`), the key of the
   leaf in `ps` (parameters) or `st` (buffers)
@@ -355,6 +355,12 @@ struct TorchStateEntry
     eltype::DataType
     shape::Dims
 end
+
+# The Julia expression that reaches an entry's leaf, e.g. `st.var"1.running_mean"`.
+function _julia_path(fqn::AbstractString, root::AbstractString)
+    return Base.isidentifier(fqn) ? "$root.$fqn" : "$root.var\"$fqn\""
+end
+_julia_path(e::TorchStateEntry) = _julia_path(e.fqn, e.kind === :parameter ? "ps" : "st")
 
 # (backend, mode, [(eltype, size) per user input]); mode is :eval or :train
 const TorchExportKey = Tuple{Symbol,Symbol,Vector{Tuple{DataType,Dims}}}
@@ -484,6 +490,16 @@ end
 # `st` with the leaves named in `updates` replaced, keeping its key order.
 function _replace_leaves(st::NamedTuple, updates::Dict{String})
     return merge(st, _flat(collect(updates)))
+end
+
+## Public FQN access
+
+Reactant.torch_layout(tm::TorchModule) = tm.layout
+
+function Reactant.torch_layout(tm::TorchModule, fqn::AbstractString)
+    i = findfirst(e -> e.fqn == fqn, tm.layout)
+    i === nothing && throw(KeyError("the module has no parameter or buffer \"$fqn\""))
+    return tm.layout[i]
 end
 
 ## Export
@@ -676,6 +692,24 @@ function pycall_with_torch_export(model::Py, args...)
 end
 
 ## Display
+
+function Base.show(io::IO, e::TorchStateEntry)
+    return print(
+        io,
+        "TorchStateEntry(",
+        repr(e.fqn),
+        " => ",
+        _julia_path(e),
+        ", ",
+        e.eltype,
+        " ",
+        e.shape,
+        ", ",
+        e.owner,
+        e.persistent ? "" : ", non-persistent",
+        ")",
+    )
+end
 
 function Base.show(io::IO, tm::TorchModule)
     name = pyconvert(String, tm.model.__class__.__name__)

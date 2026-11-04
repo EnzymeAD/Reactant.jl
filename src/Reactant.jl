@@ -318,6 +318,8 @@ mode with its state embedded as constants and returns only `y`.
 
 Being plain `NamedTuple`s, `ps` and `st` work with `keys`, `pairs`, `merge` and
 `Base.setindex`, for example `merge(ps, (; var"0.weight"=w))` to swap in new weights.
+[`torch_layout`](@ref) describes every tensor: its kind, element type, size and owning
+submodule.
 
 `backend` names the lowering that turns the captured program into StableHLO.
 `:torchax` (torchax and jax) is currently the only one.
@@ -325,6 +327,24 @@ Being plain `NamedTuple`s, `ps` and `st` work with `keys`, `pairs`, `merge` and
 Requires PythonCall with `torch` and `torchax` installed.
 """
 function import_torch end
+
+"""
+    torch_layout(tm) -> Vector{TorchStateEntry}
+    torch_layout(tm, fqn) -> TorchStateEntry
+
+Describe where every parameter and buffer of a module imported with
+[`import_torch`](@ref) lives. Each entry records the tensor's FQN, whether it is a
+`:parameter` (a leaf of `ps`) or a `:buffer` (a leaf of `st`), whether it is
+persistent (part of the module's `state_dict()`), the class of the submodule that owns
+it, and its element type and size. Entries are in the order of `keys(ps)` followed by
+`keys(st)`.
+
+```julia
+julia> torch_layout(tm, "1.running_mean")
+TorchStateEntry("1.running_mean" => st.var"1.running_mean", Float32 (16,), BatchNorm1d)
+```
+"""
+function torch_layout end
 
 # ProbProg
 include("probprog/ProbProg.jl")

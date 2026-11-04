@@ -273,6 +273,41 @@ class _TwoOutput(nn.Module):
                 x_torch = torch.from_numpy(np.asarray(xdata))
                 x = Reactant.to_rarray(xdata)
 
+                @testset "layout and FQN access" begin
+                    sd = model.state_dict()
+                    layout = Reactant.torch_layout(tm)
+                    # One entry per tensor, parameters then buffers, in torch's order.
+                    @test [e.fqn for e in layout] == vcat(
+                        [pyconvert(String, kv[0]) for kv in model.named_parameters()],
+                        [pyconvert(String, kv[0]) for kv in model.named_buffers()],
+                    )
+                    @test [e.fqn for e in layout] == string.([keys(ps)..., keys(st)...])
+                    @test Set(e.fqn for e in layout) ==
+                        Set(pyconvert(String, k) for k in sd.keys())
+
+                    e = Reactant.torch_layout(tm, "1.running_mean")
+                    @test e.kind === :buffer
+                    @test e.persistent
+                    @test e.owner == "BatchNorm1d"
+                    @test e.eltype === Float32 && e.shape == (16,)
+                    @test Reactant.torch_layout(tm, "0.weight").owner == "Linear"
+                    @test Reactant.torch_layout(tm, "1.num_batches_tracked").eltype ===
+                        Int64
+                    @test_throws KeyError Reactant.torch_layout(tm, "9.weight")
+
+                    # Every leaf matches its state_dict tensor and its layout entry.
+                    for e in layout
+                        tree = e.kind === :parameter ? ps : st
+                        leaf = tree[Symbol(e.fqn)]
+                        @test Reactant.unwrapped_eltype(leaf) === e.eltype
+                        @test size(leaf) == e.shape
+                        host = leaf isa Number ? fill(convert(e.eltype, leaf)) : Array(leaf)
+                        @test host == torch_to_julia(sd[e.fqn])
+                    end
+                    @test st[Symbol("1.running_mean")] === st.var"1.running_mean"
+                    @test !haskey(ps, Symbol("1.running_mean"))  # a buffer, so in st
+                end
+
                 @testset "eval" begin
                     y_native = model(x_torch)
                     y, st_new = @jit tm(x, ps, st)
@@ -440,6 +475,10 @@ class _Stateful(nn.Module):
                         @test isempty(buffer_warnings())  # the export is cached
                         @test st.steps isa ConcreteRNumber{Int64}
                         @test st.var"inner.total" isa ConcreteRNumber{Float32}
+                        @test Reactant.torch_layout(tm, "inner.total").owner == "_Inner"
+                        @test !Reactant.torch_layout(tm, "scratch").persistent
+                        @test Reactant.torch_layout(tm, "ema").persistent
+                        @test Reactant.torch_layout(tm, "steps").eltype === Int64
                         st0 = deepcopy(map(Array, (; st.ema, st.scale, st.unused)))
 
                         # Three steps, feeding the returned state into the next call.
