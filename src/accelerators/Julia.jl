@@ -2654,8 +2654,8 @@ function handle(
             result_index[window_input_dims[k] + 1] += uidx[d + 1]
         end
 
-        mlir_size = size(first(outs), ndims(first(outs)) - d)
-        all(d -> 0 <= result_index[d + 1] < mlir_size, 0:(R - 1)) || continue
+        mlir_size = (d) -> size(first(outs), ndims(first(outs)) - d)
+        all(d -> 0 <= result_index[d + 1] < mlir_size(d), 0:(R - 1)) || continue
         J = __gather_scatter_julia_index(result_index, Val(R))
         new = update_computation(
             map(o -> fill(o[J]), outs)..., map(u -> fill(u[I]), updates)...
