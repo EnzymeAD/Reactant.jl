@@ -65,7 +65,8 @@ def _state_layout(model):
             m = model.get_submodule(path) if path else model
         except Exception:
             return "?"
-        return type(m).__name__
+        # A ScriptModule reports its Python class through `original_name`.
+        return getattr(m, "original_name", None) or type(m).__name__
     rows = [("parameter", n, True, owner(n), t) for n, t in model.named_parameters()]
     rows += [("buffer", n, n in in_state_dict, owner(n), t) for n, t in model.named_buffers()]
     return rows
@@ -73,16 +74,75 @@ def _state_layout(model):
 def _strip(fqn, prefix):
     return fqn[len(prefix):] if prefix and fqn.startswith(prefix) else fqn
 
+def _set_training(model, train, prefix):
+    # Put every submodule in the requested mode. Two kinds of TorchScript module cannot
+    # change mode: a frozen module (`torch.jit.freeze`) has no `training` attribute at
+    # all, its mode having been folded into the graph (freezing requires eval mode),
+    # and a scripted module that lists `training` in `__constants__` raises on any
+    # assignment. Both are left alone when they already match the request; otherwise
+    # the export is refused with the module's name rather than a TorchScript error.
+    for name, m in model.named_modules():
+        # The wrapper's own module and its `jit_mod` child are both the user's root.
+        rel = name[len(prefix):] if prefix and (name + ".").startswith(prefix) else name
+        name = repr(rel) if rel else "the root module"
+        if not hasattr(m, "training"):
+            if train:
+                raise ValueError(
+                    f"{name} is a frozen TorchScript module, whose evaluation mode is "
+                    "fixed in its graph; it cannot be exported in training mode"
+                )
+            continue
+        if bool(m.training) == train:
+            continue
+        try:
+            m.training = train
+        except RuntimeError as e:
+            if "constant" not in str(e):
+                raise
+            raise ValueError(
+                f"{name} has `training` fixed to {bool(m.training)} as a TorchScript "
+                f"constant; it cannot be exported in "
+                f"{'training' if train else 'evaluation'} mode"
+            ) from None
+
+# TorchScript modules (`torch.jit.script` / `torch.jit.trace`) need two adjustments
+# before `torch.export` accepts them. JIT modules store parameters as plain tensors,
+# while the exporter's verifier requires real `torch.nn.Parameter`, so each leaf
+# parameter is re-wrapped. And `torch.export` expects an `nn.Module`, so the
+# ScriptModule is wrapped in a minimal forwarding module; its state FQNs gain a
+# `jit_mod.` prefix, which is stripped again so `ps` and `st` use the ScriptModule's own
+# names.
+def _fix_jit_parameters(mod):
+    for name in list(mod._parameters.keys()):
+        p = mod._parameters[name]
+        if p is not None and not isinstance(p, _torch.nn.Parameter):
+            mod._parameters[name] = _torch.nn.Parameter(p.detach().clone(), requires_grad=False)
+    for child in mod._modules.values():
+        if child is not None:
+            _fix_jit_parameters(child)
+
+class _JitWrapper(_torch.nn.Module):
+    def __init__(self, jit_mod):
+        super().__init__()
+        self.jit_mod = jit_mod
+    def forward(self, *args):
+        # Call the compiled method directly. Going through the module's `__call__`
+        # fails under torch.export for a module scripted in this process (rather than
+        # loaded from a file): the export's module-call hook resolves `forward` to the
+        # original Python method and calls it with the wrong arguments.
+        return self.jit_mod._c.forward(*args)
+
 def _capture(model, example_inputs, train, strict, prefix):
     # Export in the requested mode without leaving the caller's module changed.
-    saved_modes = [(m, m.training) for m in model.modules()]
+    saved_modes = [(m, bool(m.training)) for m in model.modules() if hasattr(m, "training")]
     try:
-        model.train(train)
+        _set_training(model, train, prefix)
         exported = _torch.export.export(model, example_inputs, strict=strict)
         return exported.run_decompositions()
     finally:
         for m, mode in saved_modes:
-            m.training = mode
+            if bool(m.training) != mode:
+                m.training = mode
 
 def _signature(ep, prefix):
     # Label the program's placeholders and outputs. `bind` has one (kind, key) per
@@ -152,7 +212,8 @@ def _torch_export_with_state(model, example_inputs, train, strict, prefix, backe
 
 # The "torchax" lowering: torchax interprets the program's ATen ops as jax functions,
 # and `jax.export` produces the StableHLO. Everything specific to torchax and jax lives
-# here: the extra decompositions, x64 handling and weak-scalar demotion.
+# here: the extra decompositions, the operator handlers torchax lacks, x64 handling and
+# weak-scalar demotion.
 const TORCHAX_LOWERING_PY = """
 import jax as _jax
 import jax.numpy as _jnp
@@ -162,6 +223,31 @@ import torchax.export as _txe
 from torchax import decompositions as _decomps
 from torchax.ops import mappings as _mappings
 from torchax.ops import ops_registry as _ops_registry, jaten as _jaten
+
+# JIT graphs emit the deprecated `aten._convolution.default` overload, which torchax
+# does not register. Register a handler that drops the cuDNN flags and delegates to
+# torchax's `aten.convolution`.
+def _register_aten_convolution_default_handler():
+    aten = _torch.ops.aten
+    # Fail loudly if the overloads or helpers we rely on have moved, rather than
+    # registering against a stale symbol or calling a missing function later.
+    if not hasattr(aten, "_convolution") or not hasattr(aten._convolution, "default"):
+        raise AttributeError(
+            "torch.ops.aten._convolution.default is missing; "
+            "the installed torch version is incompatible with ReactantPythonCallExt"
+        )
+    if not hasattr(_jaten, "_aten_convolution"):
+        raise AttributeError(
+            "torchax.ops.jaten._aten_convolution is missing; "
+            "the installed torchax version is incompatible with ReactantPythonCallExt"
+        )
+    def _conv_handler(input, weight, bias, stride, padding, dilation, transposed,
+                      output_padding, groups, benchmark, deterministic, cudnn_enabled, allow_tf32):
+        return _jaten._aten_convolution(input, weight, bias, stride, padding, dilation,
+                                         transposed, output_padding, groups)
+    _ops_registry.register_torch_dispatch_op(aten._convolution.default, _conv_handler)
+
+_register_aten_convolution_default_handler()
 
 def _demote_weak_scalar_constant(w):
     # Reproduce PyTorch's weak-scalar promotion: a float64 *scalar* constant binds to
@@ -281,6 +367,10 @@ _LOWERINGS["torchax"] = _lower_torchax
 
 is_torch_module(f::Py) = TORCH_EXPORT_SUPPORTED[] && pyisinstance(f, torchptr[].nn.Module)
 
+function is_torchscript_module(f::Py)
+    return TORCH_EXPORT_SUPPORTED[] && pyisinstance(f, torchptr[].jit.ScriptModule)
+end
+
 const NUMPY_DTYPE_TO_JULIA = Dict(string(v) => k for (k, v) in NUMPY_SIMPLE_TYPES)
 
 function _julia_eltype(dtype::AbstractString)
@@ -343,7 +433,8 @@ One parameter or buffer of an imported module, as recorded by
   leaf in `ps` (parameters) or `st` (buffers)
 - `kind`: `:parameter` (in `ps`) or `:buffer` (in `st`)
 - `persistent`: whether the tensor is part of the module's `state_dict()`; `false`
-  for buffers registered with `persistent=False`
+  for buffers registered with `persistent=False`. TorchScript does not record this, so
+  every buffer of a TorchScript module is reported as persistent.
 - `owner`: class name of the submodule that owns the tensor (`"BatchNorm1d"`)
 - `eltype`, `shape`: element type and size of the leaf, in PyTorch order
 """
@@ -404,7 +495,10 @@ end
 function _import(model::Py, convert; backend::Symbol=:torchax)
     TORCH_EXPORT_SUPPORTED[] || throw("torch/torchax could not be loaded.")
     _check_backend(backend, "import_torch")
-    export_model, prefix = if is_torch_module(model)
+    export_model, prefix = if is_torchscript_module(model)
+        pyeval("_fix_jit_parameters", @__MODULE__)(model)
+        pyeval("_JitWrapper", @__MODULE__)(model), "jit_mod."
+    elseif is_torch_module(model)
         model, ""
     else
         throw(ArgumentError("import_torch: expected a torch.nn.Module, got $(model)"))
@@ -545,10 +639,10 @@ function _torch_export(tm::TorchModule, backend::Symbol, mode::Symbol, inputs)
 
     _before_lowering(Val(backend))
 
-    # Export with strict=false (the non-Dynamo tracer). strict=true routes through
-    # Dynamo, whose accelerator/stream handling conflicts with the torchax "jax"
-    # device and fails on current torch+torchax. strict=false is also the direction
-    # torch.export is moving.
+    # Export with strict=false (the non-Dynamo tracer). Besides being required for
+    # TorchScript, strict=true routes through Dynamo, whose accelerator/stream
+    # handling conflicts with the torchax "jax" device and fails on current
+    # torch+torchax. strict=false is also the direction torch.export is moving.
     result = torch_export_with_state[](
         tm.export_model,
         pytuple(Tuple(example)),
@@ -669,7 +763,12 @@ function _torch_call(tm::TorchModule, inputs::Tuple, ps, st; mode::Symbol)
     return y, (isempty(updates) ? st : _replace_leaves(st, updates))
 end
 
-_torch_mode(tm::TorchModule) = pyconvert(Bool, tm.model.training) ? :train : :eval
+# A frozen TorchScript module has no `training` attribute; its graph is fixed in
+# evaluation mode.
+function _torch_mode(tm::TorchModule)
+    training = pygetattr(tm.model, "training", false)
+    return pyconvert(Bool, training) ? :train : :eval
+end
 
 function (tm::TorchModule)(args...)
     length(args) >= 2 || throw(ArgumentError("a TorchModule is called as tm(x..., ps, st)"))

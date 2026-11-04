@@ -177,6 +177,24 @@ class _WeakScalar(nn.Module):
                 @test relerr(y, torch_to_julia(y_native)) < 1.0f-4
             end
 
+            @testset "TorchScript Conv2d (trace)" begin
+                torch.manual_seed(0)
+                conv = nn.Conv2d(3, 4, 3)
+                conv.eval()
+                example = torch.randn(1, 3, 8, 8)
+                scripted = torch.jit.trace(conv, example)
+
+                xdata = randn(Float32, 1, 3, 8, 8)  # NCHW, torch order
+                x_torch = torch.from_numpy(np.asarray(xdata))
+                y_native = scripted(x_torch)
+
+                x_ra = Reactant.to_rarray(xdata)
+                y = @jit scripted(x_ra)
+
+                @test size(y) == (1, 4, 6, 6)
+                @test relerr(y, torch_to_julia(y_native)) < 1.0f-4
+            end
+
             @testset "Multiple inputs (operand ordering)" begin
                 # forward(self, a, b) takes two tensors. Exercises the
                 # (inputs..., weights...) reordering and the n_inputs accounting for
@@ -621,6 +639,50 @@ class _MutatesParam(nn.Module):
                 @test relerr(y, torch_to_julia(y_native)) < 1.0f-4
             end
 
+            @testset "import_torch: TorchScript" begin
+                torch.manual_seed(0)
+                conv = nn.Conv2d(3, 4, 3)
+                conv.eval()
+                scripted = torch.jit.trace(conv, torch.randn(1, 3, 8, 8))
+                xdata = randn(Float32, 1, 3, 8, 8)
+                y_native = scripted(torch.from_numpy(np.asarray(xdata)))
+                tm, ps, st = Reactant.import_torch(scripted)
+                @test keys(ps) == (:weight, :bias)
+                y, st_new = @jit tm(Reactant.to_rarray(xdata), ps, st)
+                @test st_new == NamedTuple()
+                @test relerr(y, torch_to_julia(y_native)) < 1.0f-4
+            end
+
+            @testset "import_torch: TorchScript keeps parameters and buffers apart" begin
+                # A traced module saved to and loaded from a file, as deployed models are.
+                torch.manual_seed(0)
+                model = nn.Sequential(nn.Linear(8, 16), nn.BatchNorm1d(16), nn.ReLU())
+                model.eval()
+                xdata = randn(Float32, 4, 8)
+                x_torch = torch.from_numpy(np.asarray(xdata))
+                buf = pyimport("io").BytesIO()
+                torch.jit.save(torch.jit.trace(model, x_torch), buf)
+                buf.seek(0)
+                loaded = torch.jit.load(buf)
+
+                tm, ps, st = Reactant.import_torch(loaded)
+                kinds(m) = Dict(
+                    vcat(
+                        [
+                            pyconvert(String, n) => :parameter for
+                            (n, _) in m.named_parameters()
+                        ],
+                        [pyconvert(String, n) => :buffer for (n, _) in m.named_buffers()],
+                    ),
+                )
+                @test Dict(e.fqn => e.kind for e in Reactant.torch_layout(tm)) ==
+                    kinds(model)
+                @test collect(string.(keys(ps))) ==
+                    ["0.weight", "0.bias", "1.weight", "1.bias"]
+                y, _ = @jit tm(Reactant.to_rarray(xdata), ps, st)
+                @test relerr(y, torch_to_julia(model(x_torch))) < 1.0f-4
+            end
+
             @testset "import_torch: multiple inputs and outputs" begin
                 torch.manual_seed(0)
                 model = pyeval("_TwoInput", @__MODULE__)()
@@ -722,6 +784,68 @@ class _MutatesInput(nn.Module):
 
                 @test exp.backend === :torchax
                 @test_throws ArgumentError Reactant.import_torch(model; backend=:nope)
+            end
+
+            @testset "TorchScript modules with a fixed mode" begin
+                torch.manual_seed(0)
+                xdata = randn(Float32, 4, 8)
+                x_torch = torch.from_numpy(np.asarray(xdata))
+
+                # A scripted module that lists `training` in __constants__ raises on any
+                # assignment to it, including `.eval()`. Scripting needs the source on disk.
+                dir = mktempdir()
+                write(
+                    joinpath(dir, "_reactant_const_training.py"),
+                    """
+import torch.nn as nn
+class ConstTraining(nn.Module):
+    __constants__ = ["training"]
+    def __init__(self):
+        super().__init__()
+        self.lin = nn.Linear(8, 4)
+        self.training = False
+    def forward(self, x):
+        return self.lin(x)
+""",
+                )
+                sys = pyimport("sys")
+                sys.path.insert(0, dir)
+                try
+                    mod = pyimport("_reactant_const_training")
+                    scripted = torch.jit.script(mod.ConstTraining())
+                    @test_throws PyException scripted.train()
+                    tm, ps, st = Reactant.import_torch(scripted)
+                    y, _ = @jit tm(Reactant.to_rarray(xdata), ps, st)
+                    @test relerr(y, torch_to_julia(scripted(x_torch))) < 1.0f-4
+                    err = try
+                        ReactantPythonCallExt._cached_export(tm, :torchax, :train, (xdata,))
+                        nothing
+                    catch e
+                        e
+                    end
+                    @test err !== nothing
+                    @test occursin("TorchScript constant", sprint(showerror, err))
+                finally
+                    sys.path.remove(dir)
+                end
+
+                # A frozen module has no `training` attribute; its graph is evaluation
+                # mode, and its parameters are folded into the graph as constants.
+                model = nn.Sequential(nn.Linear(8, 16), nn.BatchNorm1d(16), nn.ReLU())
+                model.eval()
+                frozen = torch.jit.freeze(torch.jit.trace(model, x_torch))
+                @test !pyhasattr(frozen, "training")
+                tm, ps, st = Reactant.import_torch(frozen)
+                y, _ = @jit tm(Reactant.to_rarray(xdata), ps, st)
+                @test relerr(y, torch_to_julia(frozen(x_torch))) < 1.0f-4
+                err = try
+                    ReactantPythonCallExt._cached_export(tm, :torchax, :train, (xdata,))
+                    nothing
+                catch e
+                    e
+                end
+                @test err !== nothing
+                @test occursin("frozen TorchScript module", sprint(showerror, err))
             end
         end
     end

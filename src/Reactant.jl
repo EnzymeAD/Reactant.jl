@@ -297,7 +297,7 @@ include("serialization/Serialization.jl")
 """
     import_torch(model; backend=:torchax) -> (tm, ps, st)
 
-Import a PyTorch `torch.nn.Module` given as a
+Import a PyTorch `torch.nn.Module` (or a TorchScript `ScriptModule`) given as a
 PythonCall `Py`. Returns a callable `tm`, the module's parameters `ps` and its buffers
 `st`. `ps` and `st` are flat `NamedTuple`s of Reactant arrays keyed by the module's fully
 qualified names, the same names `state_dict()` uses: `ps.var"0.weight"`,
