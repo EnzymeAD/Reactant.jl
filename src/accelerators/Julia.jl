@@ -3299,6 +3299,80 @@ function handle(::Val{Symbol("stablehlo.dynamic_conv")}, (lhs, rhs, padding), at
     )
 end
 
+# Threefry-2x32 with 20 rounds (Salmon et al., "Parallel random numbers: as easy as 1, 2, 3", SC 2011)
+function __threefry2x32(k0::UInt32, k1::UInt32, c0::UInt32, c1::UInt32)
+    rotations = (13, 15, 26, 6, 17, 29, 16, 24)
+    ks = (k0, k1, 0x1bd11bda ⊻ k0 ⊻ k1)
+    x0, x1 = c0 + k0, c1 + k1
+    for r in 0:19
+        x0 += x1
+        x1 = bitrotate(x1, rotations[r % 8 + 1]) ⊻ x0
+        if r % 4 == 3
+            i = (r + 1) ÷ 4
+            x0 += ks[i % 3 + 1]
+            x1 += ks[(i + 1) % 3 + 1] + UInt32(i)
+        end
+    end
+    return (x0, x1)
+end
+
+# Philox-4x32 with 10 rounds, from the same paper
+function __philox4x32(k0::UInt32, k1::UInt32, c::NTuple{4,UInt32})
+    for r in 1:10
+        p0 = UInt64(0xd2511f53) * c[1]
+        p1 = UInt64(0xcd9e8d57) * c[3]
+        c = (
+            (p1 >> 32) % UInt32 ⊻ c[2] ⊻ k0,
+            p1 % UInt32,
+            (p0 >> 32) % UInt32 ⊻ c[4] ⊻ k1,
+            p0 % UInt32,
+        )
+        k0 += 0x9e3779b9
+        k1 += 0xbb67ae85
+    end
+    return c
+end
+
+function handle(::Val{Symbol("stablehlo.rng_bit_generator")}, (state,), attributes, (_, result))
+    algorithm = get(attributes, :rng_algorithm, :DEFAULT)
+    algorithm in (:PHILOX, :DEFAULT, :THREE_FRY) || throw(invalid_argument("unknown RNG algorithm $algorithm"))
+    n = length(state)
+    (algorithm === :THREE_FRY ? n == 2 : n in (2, 3)) ||
+        throw(invalid_argument("$algorithm RNG state must not have $n elements"))
+
+    key = state[1]
+    k0, k1 = key % UInt32, (key >> 32) % UInt32
+    lo, hi = state[2], n == 3 ? state[3] : zero(UInt64)
+
+    out = Array{result.eltype}(undef, result.size)
+    nbytes = sizeof(out)
+    blocksize = algorithm === :THREE_FRY ? 2 : 4
+    nblocks = cld(cld(nbytes, 4), blocksize)
+    words = Vector{UInt32}(undef, nblocks * blocksize)
+    for b in 0:(nblocks - 1)
+        # 128-bit counter `(hi, lo) + b`
+        clo = lo + UInt64(b)
+        chi = hi + UInt64(clo < lo)
+        block = if algorithm === :THREE_FRY
+            __threefry2x32(k0, k1, clo % UInt32, (clo >> 32) % UInt32)
+        else
+            __philox4x32(k0, k1, (clo % UInt32, (clo >> 32) % UInt32, chi % UInt32, (chi >> 32) % UInt32))
+        end
+        for (i, w) in enumerate(block)
+            words[b * blocksize + i] = w
+        end
+    end
+    bytes = view(reinterpret(UInt8, words), 1:nbytes)
+    copyto!(vec(out), reinterpret(result.eltype, bytes))
+
+    new_state = copy(state)
+    new_state[2] = lo + UInt64(nblocks)
+    if n == 3 && !(algorithm !== :THREE_FRY)
+        new_state[3] = hi + UInt64(new_state[2] < lo)
+    end
+    return (new_state, out)
+end
+
 # convert an MLIR attribute into a Julia value that doesn't depend on its MLIR context.
 # dense elements become arrays with reversed dimensions (like operands), dense arrays keep MLIR order (e.g. dimension
 # indices are 0-based MLIR dimensions), enums become a `Symbol` with their value (e.g.
