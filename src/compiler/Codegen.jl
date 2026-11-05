@@ -76,19 +76,14 @@ function traced_getfield(@nospecialize(obj::AbstractArray{T}), field) where {T}
     return Base.getindex(obj, field)
 end
 
-function traced_setfield!(
-    @nospecialize(obj::AbstractConcreteNumber), field, val, path
-)
+function traced_setfield!(@nospecialize(obj::AbstractConcreteNumber), field, val, path)
     check_aliased_buffer_assignment(obj, field, val, path)
     return Base.setproperty!(obj, field, val)
 end
 
-traced_setfield!(@nospecialize(obj), field, val, _path) =
-    Base.setfield!(obj, field, val)
+traced_setfield!(@nospecialize(obj), field, val, _path) = Base.setfield!(obj, field, val)
 
-function traced_setfield!(
-    @nospecialize(obj::AbstractArray{T}), field, val, path
-) where {T}
+function traced_setfield!(@nospecialize(obj::AbstractArray{T}), field, val, path) where {T}
     ancestor_obj = ancestor(obj)
     (isbitstype(T) || ancestor_obj isa RArray) &&
         return setfield_carray!(obj, field, val, path)
@@ -1068,13 +1063,9 @@ end
 
 const UNRESOLVED_PATH = gensym(:unresolved_path)
 
-"""
-    resolve_path(concrete_args, path)
-
-Follow `path` (indices into `args` and then fields, as in the generated `traced_getfield`
-chains) through the compile-time `concrete_args`, returning the object found there, or
-`UNRESOLVED_PATH` if it cannot be followed.
-"""
+# Follow `path` (indices into `args` and then fields, as in the generated `traced_getfield`
+# chains) through the compile-time `concrete_args`, returning the object found there, or
+# `UNRESOLVED_PATH` if it cannot be followed.
 function resolve_path(concrete_args, path)
     concrete_args === nothing && return UNRESOLVED_PATH
     try
@@ -1088,17 +1079,13 @@ function resolve_path(concrete_args, path)
     end
 end
 
-"""
-    is_redundant_write!(written, concrete_args, path, key)
-
-Whether the write-back to the object at `path` (resolved through the compile-time
-`concrete_args`) with `key` has already been emitted. The same object is often reachable
-through many argument paths (e.g. a mutable array shared by many immutable wrappers);
-writing the same value to it through every path is redundant and, since the thunk body is
-a single straight-line function, makes its native code generation superlinearly slower.
-The thunk already assumes the aliasing seen at compile time, as aliased inputs are
-flattened only once.
-"""
+# Whether the write-back to the object at `path` (resolved through the compile-time
+# `concrete_args`) with `key` has already been emitted. The same object is often reachable
+# through many argument paths (e.g. a mutable array shared by many immutable wrappers);
+# writing the same value to it through every path is redundant and, since the thunk body is
+# a single straight-line function, makes its native code generation superlinearly slower.
+# The thunk already assumes the aliasing seen at compile time, as aliased inputs are
+# flattened only once.
 function is_redundant_write!(written, concrete_args, path, key)
     obj = resolve_path(concrete_args, path)
     obj === UNRESOLVED_PATH && return false
