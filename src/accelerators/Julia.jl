@@ -2365,6 +2365,26 @@ handle(::Val{Symbol("stablehlo.floor")}, (a,), _, _) = map(floor, a)
 handle(::Val{Symbol("stablehlo.and")}, (a, b), _, _) = map(&, a, b)
 handle(::Val{Symbol("stablehlo.or")}, (a, b), _, _) = map(|, a, b)
 handle(::Val{Symbol("stablehlo.not")}, (a,), _, _) = map(~, a)
+handle(::Val{Symbol("stablehlo.xor")}, (a, b), _, _) = map(xor, a, b)
+handle(::Val{Symbol("stablehlo.ceil")}, (a,), _, _) = map(ceil, a)
+function handle(::Val{Symbol("stablehlo.round_nearest_even")}, (a,), _, _)
+    return map(x -> round(x, RoundNearest), a)
+end
+function handle(::Val{Symbol("stablehlo.round_nearest_afz")}, (a,), _, _)
+    return map(x -> round(x, RoundNearestTiesAway), a)
+end
+handle(::Val{Symbol("stablehlo.sign")}, (a,), _, _) = map(sign, a)
+handle(::Val{Symbol("stablehlo.tanh")}, (a,), _, _) = map(tanh, a)
+handle(::Val{Symbol("stablehlo.exponential")}, (a,), _, _) = map(exp, a)
+handle(::Val{Symbol("stablehlo.exponential_minus_one")}, (a,), _, _) = map(expm1, a)
+handle(::Val{Symbol("stablehlo.logistic")}, (a,), _, _) = map(x -> inv(one(x) + exp(-x)), a)
+handle(::Val{Symbol("stablehlo.is_finite")}, (a,), _, _) = map(isfinite, a)
+handle(::Val{Symbol("stablehlo.real")}, (a,), _, _) = map(real, a)
+handle(::Val{Symbol("stablehlo.imag")}, (a,), _, _) = map(imag, a)
+handle(::Val{Symbol("stablehlo.complex")}, (a, b), _, _) = map(complex, a, b)
+function handle(::Val{Symbol("stablehlo.count_leading_zeros")}, (a,), _, _)
+    return map(x -> oftype(x, leading_zeros(x)), a)
+end
 
 # integer division truncates towards zero, like `div`
 function handle(::Val{Symbol("stablehlo.divide")}, (a, b), _, (result,))
@@ -2401,6 +2421,19 @@ function handle(::Val{Symbol("stablehlo.rsqrt")}, (a,), _, _)
     return map(x -> x isa Real && x < 0 ? oftype(x, NaN) : inv(sqrt(x)), a)
 end
 
+function handle(::Val{Symbol("stablehlo.tan")}, (a,), _, _)
+    return map(x -> x isa Real && isinf(x) ? oftype(x, NaN) : tan(x), a)
+end
+
+function handle(::Val{Symbol("stablehlo.log_plus_one")}, (a,), _, _)
+    return map(x -> x isa Real && x < -1 ? oftype(x, NaN) : log1p(x), a)
+end
+
+# Julia has no complex `cbrt`, so complex numbers use the principal cube root like XLA
+function handle(::Val{Symbol("stablehlo.cbrt")}, (a,), _, _)
+    return map(x -> x isa Complex ? x^(one(real(x)) / 3) : cbrt(x), a)
+end
+
 # like XLA, integer powers with negative exponents are 0 except for bases 1 and -1 (which Julia's `^` handles), and
 # negative real bases with finite non-integer exponents are NaN
 function handle(::Val{Symbol("stablehlo.power")}, (a, b), _, _)
@@ -2418,6 +2451,26 @@ end
 # the sign of the result follows the dividend, like `rem`. like XLA, an integer remainder by zero is the dividend
 function handle(::Val{Symbol("stablehlo.remainder")}, (a, b), _, _)
     return map((x, y) -> x isa Integer && iszero(y) ? x : rem(x, y), a, b)
+end
+
+# like XLA, shift amounts are read as unsigned, so negative amounts are treated as too large: logical shifts by at least
+# the bit width give 0, which Julia does for unsigned amounts, and arithmetic shifts fill with the sign bit (the most
+# significant bit, also for unsigned integers, hence the reinterpretation as signed)
+function handle(::Val{Symbol("stablehlo.shift_left")}, (a, b), _, _)
+    return map((x, y) -> x << unsigned(y), a, b)
+end
+
+function handle(::Val{Symbol("stablehlo.shift_right_logical")}, (a, b), _, _)
+    return map((x, y) -> x >>> unsigned(y), a, b)
+end
+
+function handle(::Val{Symbol("stablehlo.shift_right_arithmetic")}, (a, b), _, _)
+    return map((x, y) -> (signed(x) >> unsigned(y)) % typeof(x), a, b)
+end
+
+# `min` and `max` are either 0-dimensional or have the shape of `operand`, so they are broadcast into a new array
+function handle(::Val{Symbol("stablehlo.clamp")}, (lo, x, hi), _, _)
+    return broadcast!((l, v, h) -> min(max(v, l), h), similar(x), lo, x, hi)
 end
 
 # like XLA, integers wrap around, floats are truncated towards zero and saturate when converted to integers (NaN
@@ -2788,6 +2841,46 @@ function handle(::Val{Symbol("stablehlo.reduce")}, operands, attributes, results
         J = CartesianIndex(ntuple(k -> I[kept[k]], M))
         new = body(map(o -> fill(o[J]), outs)..., map(x -> fill(x[I]), inputs)...)
         foreach((o, v) -> o[J] = v[], outs, new)
+    end
+    return n == 1 ? only(outs) : outs
+end
+
+# `dimensions` are MLIR dimensions, which are Julia dimensions `N - d`
+function handle(::Val{Symbol("stablehlo.reverse")}, (a,), attributes, _)
+    return reverse(a; dims=Tuple(ndims(a) - d for d in attributes.dimensions))
+end
+
+# the size of MLIR dimension `dimension` as a 0-dimensional i32 tensor
+function handle(::Val{Symbol("stablehlo.get_dimension_size")}, (a,), attributes, _)
+    return fill(Int32(size(a, ndims(a) - attributes.dimension)))
+end
+
+function handle(::Val{Symbol("stablehlo.optimization_barrier")}, operands, _, results)
+    length(results) == 0 && return nothing
+    return length(results) == 1 ? only(operands) : operands
+end
+
+# all operands are sorted together along `dimension` (an MLIR dimension, possibly negative) by the permutation that
+# sorts their 1-dimensional slices with `comparator`, which takes `(lhs_1, rhs_1, lhs_2, rhs_2, ...)` as 0-dimensional
+# arrays and returns whether lhs < rhs. the sort is always stable, which is valid for `is_stable = false` too
+function handle(
+    ::Val{Symbol("stablehlo.sort")}, operands, attributes, results, (comparator,)
+)
+    n = length(results)
+    outs = map(copy, operands)
+    N = ndims(first(outs))
+    d = attributes.dimension
+    j = N - (d < 0 ? d + N : d)
+    kept = Tuple(k for k in 1:N if k != j)
+    for vs in zip(map(o -> eachslice(o; dims=kept), outs)...)
+        lt =
+            (p, q) -> only(
+                comparator(
+                    ntuple(k -> fill(vs[(k + 1) >> 1][isodd(k) ? p : q]), Val(2n))...
+                ),
+            )[]
+        perm = sortperm(eachindex(first(vs)); lt)
+        foreach(v -> v .= v[perm], vs)
     end
     return n == 1 ? only(outs) : outs
 end
