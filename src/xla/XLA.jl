@@ -23,9 +23,10 @@ const CUDA_DATA_DIR = Ref(
 )
 
 # The ROCm root `enzymexla-gpu-module-to-binary` assembles and links kernels with
-# (`llvm/bin/ld.lld` and `amdgcn/bitcode` under it). Empty leaves it to the pass,
-# which reads `ROCM_PATH`, `ROCM_ROOT` and `ROCM_HOME` itself.
-const ROCM_PATH = Ref(get(ENV, "ROCM_PATH", ""))
+# (`ld.lld` and `amdgcn/bitcode` under it). Refreshed in `__init__` so the
+# precompile-time `ENV["ROCM_PATH"]` does not get baked into the pkgimage; empty
+# leaves it to the pass, which reads `ROCM_PATH`, `ROCM_ROOT` and `ROCM_HOME`.
+const ROCM_PATH = Ref("")
 
 function LLVMclopts(opts...)
     args = ["", opts...]
@@ -296,6 +297,7 @@ function has_initialized_client(backend::String)
 end
 
 function __init__()
+    ROCM_PATH[] = Reactant.precompiling() ? "" : get(ENV, "ROCM_PATH", "")
     if Reactant_jll.is_available()
         @debug "Using libReactantExtra from $(Reactant_jll.libReactantExtra_path)"
 
