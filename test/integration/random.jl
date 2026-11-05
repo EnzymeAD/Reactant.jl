@@ -289,6 +289,18 @@ end
     end
 end
 
+_rand_bcast_elem(rng, α) = rand(rng, typeof(α))
+
+@testset "Batched/Broadcasted Rand" begin
+    rng = Reactant.ReactantRNG()
+    as = Reactant.to_rarray(ones(10))
+    res1 = @jit _rand_bcast_elem.(Ref(rng), as)
+    res2 = @jit _rand_bcast_elem.(Ref(rng), as)
+    @test res1 isa Reactant.AbstractConcreteArray{Float64,1}
+    @test length(res1) == 10
+    @test !(Array(res1) ≈ Array(res2))
+end
+
 function _rand_foo3(rng, α)
     T = typeof(α)
     boost = one(T)
