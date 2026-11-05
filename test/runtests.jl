@@ -68,6 +68,32 @@ delete!(testsuite, "core/sharding/optimize_comm")
 # ProbProg tests require a compatible combination of NumPyro and JAX.
 filter!(((k, _),) -> !startswith(k, "probprog"), testsuite)
 
+# The julia PJRT backend (`src/accelerators/Julia.jl`) runs on a single CPU device and only supports the StableHLO ops
+# with a `handle` method, so tests that need anything else are skipped
+if BACKEND == "julia"
+    for name in (
+        # `stablehlo.reduce_window` (`cumsum`, `accumulate`, pooling)
+        "core/map_reduction",
+        "nn/convolution",
+        # `enzymexla.lapack`/`enzymexla.linalg` ops (`lu`, `inv`, `\`, `det`, `svd`, ...)
+        "integration/factorizations",
+        "integration/linear_algebra",
+        "integration/linearsolve",
+        # custom calls (Julia callbacks, kernels, Python)
+        "core/julia_callback",
+        "integration/cuda",
+        "integration/kernelabstractions",
+        "integration/nfft_callback",
+        "integration/enzymejax",
+        # profiler and allocator statistics are not implemented
+        "core/profiling",
+        "core/compile",
+    )
+        delete!(testsuite, name)
+    end
+    filter!(((k, _),) -> !startswith(k, "integration/triton"), testsuite)
+end
+
 const RUN_PYTHON_TEST =
     haskey(testsuite, "integration/python") && !(Sys.isapple() && Sys.ARCH === :x86_64)
 const RUN_ENZYMEJAX_TEST = haskey(testsuite, "integration/enzymejax")
@@ -209,9 +235,11 @@ test_worker = custom_test_worker ? tpu_custom_worker_launcher : Returns(nothing)
 
     # Important to run these last, since they will capture the TPU and any
     # processes triggered in multi-process tests will not be able to use TPUs
-    # These tests require multiple devices
-    run_specific_test("core/sharding/sharding", parsed_args)
-    run_specific_test("core/sharding/optimize_comm", parsed_args)
+    # These tests require multiple devices, which the "julia" backend doesn't have
+    if BACKEND != "julia"
+        run_specific_test("core/sharding/sharding", parsed_args)
+        run_specific_test("core/sharding/optimize_comm", parsed_args)
+    end
 
     # qa tests run a separate process
     if BACKEND == "cpu" || BACKEND == "auto"
