@@ -2342,9 +2342,11 @@ device_assignment(exec::HostLoadedExecutable) = exec.device_assignment
 
 Run the MLIR op `opname` (e.g. `Symbol("stablehlo.add")`) and return its results.
 
-- `operands`: Julia arrays, i.e. row-major MLIR tensors seen as column-major arrays with reversed dimensions.
+- `operands`: Julia arrays, i.e. row-major MLIR tensors seen as column-major arrays with reversed dimensions, or
+  [`Token`](@ref)s.
 - `attributes`: the op attributes, decoded by `decode_attribute`.
-- `results`: the type of each result, as `(; eltype, size)` with `size` in Julia order (i.e. reversed).
+- `results`: the type of each result, as `(; eltype, size)` with `size` in Julia order (i.e. reversed), or `Token`
+  for tokens.
 
 Like MLIR values, the return value depends on the number of results: it is ignored if there are none, it is the
 result itself if there is one (`%N`), and it must be a tuple with one entry per result if there are several (`%N:2`,
@@ -2936,6 +2938,11 @@ function handle(
     return n == 1 ? only(outs) : outs
 end
 
+struct Token end
+
+# joins tokens into a new one; ops already run in program order, so there is nothing to wait for
+handle(::Val{Symbol("stablehlo.after_all")}, _, _, _) = Token()
+
 # convert an MLIR attribute into a Julia value that doesn't depend on its MLIR context.
 # dense elements become arrays with reversed dimensions (like operands), dense arrays keep MLIR order (e.g. dimension
 # indices are 0-based MLIR dimensions), enums become a `Symbol` with their value (e.g.
@@ -3180,8 +3187,9 @@ function codegen_op!(exprs, op, opname, operands, vars, nvals)
     nres = IR.nresults(op)
     results = ntuple(nres) do i
         type = IR.type(IR.result(op, i))
+        API.stablehloTypeIsAToken(type) && return Token
         IR.istensor(type) || throw(
-            unimplemented("`$opname` returns a non-tensor value, which is not supported"),
+            unimplemented("`$opname` returns a value that is neither a tensor nor a token, which is not supported"),
         )
         T = IR.julia_type(eltype(type))
         dims = reverse(size(type))
