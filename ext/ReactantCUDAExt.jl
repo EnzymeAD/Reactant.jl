@@ -23,8 +23,6 @@ if CUVERSION == 6
 else
     const CUDACore = CUDA
 end
-# `reshape` and `reinterpret` of a `CuTracedArray` go through CUDA's device-array hook
-import .CUDACore: _derived_array
 
 using GPUCompiler: GPUCompiler
 using GPUArraysCore: @allowscalar
@@ -581,13 +579,13 @@ function Base.reinterpret(::Type{T}, a::CuTracedArray{S,N,A}) where {T,S,N,A}
     err === nothing || throw(err)
 
     if sizeof(T) == sizeof(S) # fast case
-        return _derived_array(a, T, size(a))
+        return derived_array(a, T, size(a))
     end
 
     isize = size(a)
     size1 = div(isize[1] * sizeof(S), sizeof(T))
     osize = tuple(size1, Base.tail(isize)...)
-    return _derived_array(a, T, osize)
+    return derived_array(a, T, osize)
 end
 
 ## reshape
@@ -603,12 +601,12 @@ function Base.reshape(a::CuTracedArray{T,M,A}, dims::NTuple{N,Int}) where {T,N,M
     if N == M && dims == size(a)
         return a
     end
-    return _derived_array(a, T, dims)
+    return derived_array(a, T, dims)
 end
 
-# A `CuTracedArray` is a pointer and its size in its type, so a derived array is the same pointer
-# under the new element type and size
-@inline function _derived_array(
+# A `CuTracedArray` is a pointer and its size in its type, so a reshaped or reinterpreted array is the
+# same pointer under the new element type and size
+@inline function derived_array(
     a::CuTracedArray{<:Any,<:Any,A}, ::Type{T}, osize::Dims{N}
 ) where {T,N,A}
     return CuTracedArray{T,N,A,osize}(reinterpret(Core.LLVMPtr{T,A}, a.ptr))
