@@ -2815,6 +2815,14 @@ function handle(
     return length(results) == 1 ? only(rets) : rets
 end
 
+# like `stablehlo.if` with 0-based `index` selecting the branch; out-of-range indices run the last branch
+function handle(::Val{Symbol("stablehlo.case")}, (index,), _, results, branches)
+    i = index[]
+    rets = (0 <= i < length(branches) ? branches[i + 1] : last(branches))()
+    length(results) == 0 && return nothing
+    return length(results) == 1 ? only(rets) : rets
+end
+
 # `cond` and `body` take the loop-carried values; `cond` returns a 0-dimensional boolean and `body` the next values
 function handle(::Val{Symbol("stablehlo.while")}, operands, _, results, (cond, body))
     vals = operands
