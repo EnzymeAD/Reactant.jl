@@ -347,11 +347,12 @@ end
 
 # https://github.com/EnzymeAD/Reactant.jl/issues/3259
 @testset "Reactant plans applied to concrete arrays" begin
-    x = Reactant.TestUtils.construct_test_array(ComplexF64, 4, 6)
-    xr = Reactant.TestUtils.construct_test_array(Float64, 4, 6)
+    # Use single precision: TPUs do not support double-precision FFTs.
+    x = Reactant.TestUtils.construct_test_array(ComplexF32, 4, 6)
+    xr = Reactant.TestUtils.construct_test_array(Float32, 4, 6)
 
     @testset "Out-of-place $(plan)" for plan in
-                                       (FFTW.plan_fft, FFTW.plan_ifft, FFTW.plan_bfft)
+                                        (FFTW.plan_fft, FFTW.plan_ifft, FFTW.plan_bfft)
         p_r = Reactant.to_rarray(plan(x))
         x_r = Reactant.to_rarray(x)
         @test p_r * x_r ≈ plan(x) * x
@@ -360,6 +361,19 @@ end
         mul!(y_r, p_r, x_r)
         @test y_r ≈ plan(x) * x
         @test_throws ArgumentError p_r * x
+    end
+
+    # `inv(plan_fft(x))` is an `AbstractFFTs.ScaledPlan` wrapping an inverse plan
+    @testset "Inverse of a plan (ScaledPlan)" begin
+        p = FFTW.plan_fft(x)
+        p_inv = inv(p)
+        @test p_inv isa AbstractFFTs.ScaledPlan
+        p_inv_r = Reactant.to_rarray(p_inv)
+        y_r = Reactant.to_rarray(p * x)
+        @test p_inv_r * y_r ≈ x
+        z_r = Reactant.to_rarray(zero(x))
+        mul!(z_r, p_inv_r, y_r)
+        @test z_r ≈ x
     end
 
     @testset "In-place $(plan!)" for plan! in
