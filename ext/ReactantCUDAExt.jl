@@ -2080,11 +2080,9 @@ end
     return @allowscalar Reactant.Ops.__construct_cuda_julia_buffer(T, (1,), ptr)[1]
 end
 
-# CUDA.jl v6.5 supports wrapping streams it doesn't own (like XLA's) with
-# `unsafe_wrap(CuStream, handle)`, which can then be ordered with the task's stream
-# using `record`/`wait`, letting CUDA.jl track the ordering. Older versions only
-# support adopting a stream with `own=true`, so we fall back to raw driver calls.
-const CUDA_SUPPORTS_BORROWED_STREAMS = pkgversion(CUDACore) >= v"6.5"
+const CUDA_SUPPORTS_BORROWED_STREAMS = hasmethod(
+    Base.unsafe_wrap, Tuple{Type{CUDACore.CuStream},CUDACore.CUstream}
+)
 
 # Make the work submitted to `waiter` from now on wait for the work submitted to
 # `source` so far, without blocking the host. `cuStreamWaitEvent` only waits on the
