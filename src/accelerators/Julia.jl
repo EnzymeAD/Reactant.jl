@@ -2973,6 +2973,60 @@ function handle(::Val{Symbol("stablehlo.triangular_solve")}, (a, b), attributes,
     return convert(Array{result.eltype}, sx)
 end
 
+function handle(
+    ::Val{Symbol("stablehlo.batch_norm_inference")},
+    (x, scale, offset, mean, variance),
+    attributes,
+    _,
+)
+    N = ndims(x)
+    shape = ntuple(k -> k == N - attributes.feature_index ? length(scale) : 1, Val(N))
+    s, o, m, v = map(a -> reshape(a, shape), (scale, offset, mean, variance))
+    eps = convert(eltype(x), attributes.epsilon)
+    stddev = map(w -> w < 0 ? oftype(w, NaN) : sqrt(w), v .+ eps)
+    return @. s * (x - m) / stddev + o
+end
+
+function handle(
+    ::Val{Symbol("stablehlo.batch_norm_training")}, (x, scale, offset), attributes, _
+)
+    N = ndims(x)
+    j = N - attributes.feature_index
+    other = Tuple(k for k in 1:N if k != j)
+    n = convert(eltype(x), prod(k -> size(x, k), other; init=1))
+    shape = ntuple(k -> k == j ? length(scale) : 1, Val(N))
+    s, o = reshape(scale, shape), reshape(offset, shape)
+    eps = convert(eltype(x), attributes.epsilon)
+
+    m = sum(x; dims=other) ./ n
+    v = sum(abs2, x .- m; dims=other) ./ n
+    out = @. s * (x - m) / sqrt(v + eps) + o
+    return out, vec(m), vec(v)
+end
+
+function handle(
+    ::Val{Symbol("stablehlo.batch_norm_grad")},
+    (x, scale, mean, variance, dy),
+    attributes,
+    _,
+)
+    N = ndims(x)
+    j = N - attributes.feature_index
+    other = Tuple(k for k in 1:N if k != j)
+    n = convert(eltype(x), prod(k -> size(x, k), other; init=1))
+    shape = ntuple(k -> k == j ? length(scale) : 1, Val(N))
+    s, m, v = map(a -> reshape(a, shape), (scale, mean, variance))
+    eps = convert(eltype(x), attributes.epsilon)
+
+    centered = x .- m
+    stddev = map(w -> w < 0 ? oftype(w, NaN) : sqrt(w), v .+ eps)
+    grad_offset = sum(dy; dims=other)
+    grad_scale = sum(dy .* centered ./ stddev; dims=other)
+    i3 = sum(dy .* centered; dims=other)
+    grad_x = @. s / stddev / n * (n * dy - grad_offset - i3 * centered / (v + eps))
+    return grad_x, vec(grad_scale), vec(grad_offset)
+end
+
 # `dimensions` are MLIR dimensions, which are Julia dimensions `N - d`
 function handle(::Val{Symbol("stablehlo.reverse")}, (a,), attributes, _)
     return reverse(a; dims=Tuple(ndims(a) - d for d in attributes.dimensions))
