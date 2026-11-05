@@ -2630,6 +2630,18 @@ function handle(::Val{Symbol("stablehlo.dynamic_update_slice")}, operands, _, _)
     return result
 end
 
+function handle(
+    ::Val{Symbol("stablehlo.dynamic_iota")}, (output_shape,), attributes, (result,)
+)
+    dims = ntuple(j -> Int(output_shape[end - j + 1]), Val(length(result.size)))
+    j = length(dims) - attributes.iota_dimension
+    return [result.eltype(I[j] - 1) for I in CartesianIndices(dims)]
+end
+
+function handle(::Val{Symbol("stablehlo.dynamic_reshape")}, (a, output_shape), _, (result,))
+    return reshape(a, ntuple(j -> Int(output_shape[end - j + 1]), Val(length(result.size))))
+end
+
 # MLIR dimension `i` of the operand is MLIR dimension `broadcast_dimensions[i]` of the result. the operand is permuted
 # so that its dimensions follow the order of the result ones, reshaped with size 1 for the missing dimensions and
 # broadcast into the result
@@ -2649,6 +2661,20 @@ function handle(::Val{Symbol("stablehlo.broadcast_in_dim")}, (a,), attributes, (
     out = Array{result.eltype}(undef, result.size)
     out .= reshape(permutedims(a, perm), shape)
     return out
+end
+
+# handle dynamic info and call `stablehlo.broadcast_in_dim` handler
+function handle(
+    ::Val{Symbol("stablehlo.dynamic_broadcast_in_dim")},
+    (a, output_dimensions),
+    attributes,
+    (result,),
+)
+    dims = ntuple(j -> Int(output_dimensions[end - j + 1]), Val(length(result.size)))
+    static = NamedTuple{(:eltype, :size),Tuple{Type{result.eltype},typeof(dims)}}((
+        result.eltype, dims
+    ))
+    return handle(Val(Symbol("stablehlo.broadcast_in_dim")), (a,), attributes, (static,))
 end
 
 function handle(::Val{Symbol("stablehlo.concatenate")}, operands, attributes, (result,))
@@ -2690,12 +2716,31 @@ function handle(::Val{Symbol("stablehlo.pad")}, (a, padding_value), attributes, 
     return out
 end
 
+# handle dynamic info and call `stablehlo.pad` handler
+function handle(
+    ::Val{Symbol("stablehlo.dynamic_pad")},
+    (a, padding_value, low, high, interior),
+    _,
+    (result,),
+)
+    lo, hi, in = collect(Int, low), collect(Int, high), collect(Int, interior)
+    N = ndims(a)
+    dims = ntuple(Val(N)) do j
+        d = N - j + 1
+        n = size(a, j)
+        lo[d] + n + max(n - 1, 0) * in[d] + hi[d]
+    end
+    static = NamedTuple{(:eltype, :size),Tuple{Type{result.eltype},typeof(dims)}}((
+        result.eltype, dims
+    ))
+    attributes = (; edge_padding_low=lo, edge_padding_high=hi, interior_padding=in)
+    return handle(Val(Symbol("stablehlo.pad")), (a, padding_value), attributes, (static,))
+end
+
 function __gather_scatter_julia_index(idx, ::Val{N}) where {N}
     return CartesianIndex(ntuple(j -> idx[N - j + 1] + 1, Val(N)))
 end
 
-# for each result index, the operand index is the clamped start index (read from `start_indices` along
-# `index_vector_dim` and placed by `start_index_map`), plus the batching index and the offset within the slice
 function handle(
     ::Val{Symbol("stablehlo.gather")}, (operand, start_indices), attributes, (result,)
 )
@@ -2745,6 +2790,38 @@ function handle(
         out[I] = operand[__gather_scatter_julia_index(operand_index, Val(ndims(operand)))]
     end
     return out
+end
+
+# handle dynamic info and call `stablehlo.gather` handler
+function handle(
+    ::Val{Symbol("stablehlo.dynamic_gather")},
+    (operand, start_indices, slice_sizes),
+    attributes,
+    (result,),
+)
+    dn = attributes.dimension_numbers
+    sizes = collect(Int, slice_sizes)
+    S = ndims(start_indices)
+    batch = [size(start_indices, S - d) for d in 0:(S - 1) if d != dn.index_vector_dim]
+    offset = [
+        sizes[d + 1] for d in 0:(ndims(operand) - 1) if
+        d ∉ dn.collapsed_slice_dims && d ∉ dn.operand_batching_dims
+    ]
+    R = length(result.size)
+    mlir_dims = ntuple(Val(R)) do d
+        k = findfirst(==(d - 1), dn.offset_dims)
+        isnothing(k) ? batch[d - count(<(d - 1), dn.offset_dims)] : offset[k]
+    end
+    dims = reverse(mlir_dims)
+    static = NamedTuple{(:eltype, :size),Tuple{Type{result.eltype},typeof(dims)}}((
+        result.eltype, dims
+    ))
+    return handle(
+        Val(Symbol("stablehlo.gather")),
+        (operand, start_indices),
+        merge(attributes, (; slice_sizes=sizes)),
+        (static,),
+    )
 end
 
 # operands are the `inputs`, `scatter_indices` and `updates`, and `update_computation` combines an element of each
