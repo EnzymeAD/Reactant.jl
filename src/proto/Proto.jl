@@ -13,6 +13,8 @@ using ProtoBuf
 # Generated proto bindings
 include("google/google.jl")
 include("stream_executor/stream_executor.jl")
+include("stream_executor_cuda/stream_executor_cuda.jl")
+include("stream_executor_gpu/stream_executor_gpu.jl")
 include("tensorflow/tensorflow.jl")
 include("tsl/tsl.jl")
 include("xla/xla.jl")

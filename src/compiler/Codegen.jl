@@ -843,7 +843,7 @@ function codegen_flatten!(
                         push!(flatten_names, sbuf)
                         push!(
                             flatten_code,
-                            :($sbuf = XLA.synced_buffer(getindex($usbuf, $(j)))),
+                            :($sbuf = XLA.unsynced_buffer(getindex($usbuf, $(j)))),
                         )
                     end
                 else
@@ -918,7 +918,7 @@ function codegen_flatten!(
                 sbuf = Symbol(:sbuf_, i)
                 push!(flatten_names, sbuf)
                 if arg isa TracedRArray || arg isa TracedRNumber
-                    push!(flatten_code, :($sbuf = only(XLA.synced_buffer($usbuf))))
+                    push!(flatten_code, :($sbuf = only(XLA.unsynced_buffer($usbuf))))
                 else
                     error("Unsupported type $(typeof(arg))")
                 end
@@ -950,7 +950,7 @@ function codegen_flatten!(
                         size(carg),
                     )
 
-                    push!(flatten_code, :($sbuf = XLA.synced_buffer($usbuf)))
+                    push!(flatten_code, :($sbuf = XLA.unsynced_buffer($usbuf)))
                 else
                     if DEBUG_DISABLE_RESHARDING[]
                         error("Resharding is disabled. Problematic input:\ntypeof: \
@@ -994,7 +994,7 @@ function codegen_flatten!(
                     )
                 end
             else
-                push!(flatten_code, :($sbuf = XLA.synced_buffer($usbuf)))
+                push!(flatten_code, :($sbuf = XLA.unsynced_buffer($usbuf)))
             end
             # Important to mark donated after we have extracted the data
             push!(
