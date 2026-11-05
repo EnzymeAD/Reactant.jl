@@ -91,7 +91,12 @@ end
 end
 
 @testset "ifelse" begin
-    @test 1.0 == @test_warn r"`ifelse` with different element-types" @jit(
+    # The warning is `maxlog = 1`, so whether the process has already emitted it
+    # depends on which test files the worker ran before this one. @test_logs
+    # installs a fresh TestLogger with its own maxlog count, so it sees the
+    # warning either way; @test_warn only reads what reaches stderr.
+    @test 1.0 ==
+        @test_logs (:warn, r"`ifelse` with different element-types") match_mode = :any @jit(
         ifelse(ConcreteRNumber(true), ConcreteRNumber(1.0), ConcreteRNumber(0.0f0))
     )
     @test @jit(
@@ -275,4 +280,36 @@ end
     res = @jit tobc(nt, x)
 
     @test res ≈ tobc((10.0, 10.0), x)
+end
+
+@testset "Mixed-type ifelse promotion" begin
+    t = ConcreteRNumber(true)
+    f = ConcreteRNumber(false)
+    x = ConcreteRNumber(2.0f0)
+
+    r1 = @jit ifelse(t, x, im)
+    r2 = @jit ifelse(f, x, im)
+    @test r1 isa Reactant.AbstractConcreteNumber{ComplexF32}
+    @test r2 isa Reactant.AbstractConcreteNumber{ComplexF32}
+    @test ComplexF32(r1) == ComplexF32(2, 0)
+    @test ComplexF32(r2) == ComplexF32(0, 1)
+
+    r3 = @jit ifelse(t, 1im, x)
+    r4 = @jit ifelse(f, 1im, x)
+    @test r3 isa Reactant.AbstractConcreteNumber{ComplexF32}
+    @test r4 isa Reactant.AbstractConcreteNumber{ComplexF32}
+    @test ComplexF32(r3) == ComplexF32(0, 1)
+    @test ComplexF32(r4) == ComplexF32(2, 0)
+
+    r5 = @jit ifelse(f, x, ComplexF16(3, -4))
+    @test r5 isa Reactant.AbstractConcreteNumber{ComplexF32}
+    @test ComplexF32(r5) == ComplexF32(3, -4)
+
+    cond = [true, false, true]
+    vals = Float32[1, 2, 3]
+    cond_ra = Reactant.to_rarray(cond)
+    vals_ra = Reactant.to_rarray(vals)
+    res = @jit ifelse.(cond_ra, vals_ra, Ref(im))
+    @test res isa Reactant.AbstractConcreteArray{ComplexF32,1}
+    @test Array(res) == ifelse.(cond, vals, Ref(im))
 end

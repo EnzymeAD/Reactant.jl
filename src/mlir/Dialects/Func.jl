@@ -156,7 +156,10 @@ they are internally represented as “block arguments” to the first block in
 the region.
 
 Only dialect attribute names may be specified in the attribute dictionaries
-for function arguments, results, or the function itself.
+for function arguments, results, or the function itself. The function may
+also have an inherent `dlti` attribute implementing `DLTIQueryInterface`.
+Its values are available to scoped DLTI queries on the function and nested
+operations, unless a closer scope answers the same key.
 
 # Example
 
@@ -188,6 +191,7 @@ function func_(;
     arg_attrs=nothing,
     res_attrs=nothing,
     no_inline=nothing,
+    dlti=nothing,
     body::Region,
     location=Location(),
 )
@@ -203,6 +207,7 @@ function func_(;
     !isnothing(arg_attrs) && push!(attributes, NamedAttribute("arg_attrs", arg_attrs))
     !isnothing(res_attrs) && push!(attributes, NamedAttribute("res_attrs", res_attrs))
     !isnothing(no_inline) && push!(attributes, NamedAttribute("no_inline", no_inline))
+    !isnothing(dlti) && push!(attributes, NamedAttribute("dlti", dlti))
 
     return create_operation(
         "func.func",

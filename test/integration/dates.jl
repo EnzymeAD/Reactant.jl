@@ -3,12 +3,15 @@ using Reactant
 
 using Dates
 using Dates: value, UTInstant
+using Adapt: Adapt
 
 const RDExt = Base.get_extension(Reactant, :ReactantDatesExt)
 
-# Preparations for timestepper MWE unit test in the end
-# Can't do that in the @testset scope, as scope issues occur
-# Inspired by the usage in SpeedyWeather.jl
+const ADAPT_MARKER = Int32(-12345)
+
+struct MarkerAdaptor end
+Adapt.adapt_storage(::MarkerAdaptor, ::Reactant.TracedRNumber) = ADAPT_MARKER
+Adapt.adapt_storage(::MarkerAdaptor, ::Number) = ADAPT_MARKER
 
 # Minimal clock-like mutable struct
 mutable struct Clock{I,T,TS}
@@ -36,6 +39,11 @@ function timestepping!(state::State)
 
     return nothing
 end
+
+# Helpers for the period-scaling testset (`@jit` needs a plain call expression)
+scale_period(a, b) = a * b
+divide_period(a, b) = a / b
+advance(dt, n) = dt + Dates.Millisecond(1000) * n
 
 @testset "ReactantDatesExt" begin
 
@@ -748,6 +756,56 @@ end
         end
     end
 
+    @testset "Period scaling by Reactant numbers" begin
+        # Base only defines `*(::Period, ::Real)` / `/(::Period, ::Real)`, and Reactant
+        # numbers are `Number`s but not `Real`s, so scaling a period used to hit a
+        # MethodError inside `@jit`.
+        for (DatesT, TracedT) in (
+            (Dates.Year, RDExt.ReactantYear),
+            (Dates.Quarter, RDExt.ReactantQuarter),
+            (Dates.Month, RDExt.ReactantMonth),
+            (Dates.Week, RDExt.ReactantWeek),
+            (Dates.Day, RDExt.ReactantDay),
+            (Dates.Hour, RDExt.ReactantHour),
+            (Dates.Minute, RDExt.ReactantMinute),
+            (Dates.Second, RDExt.ReactantSecond),
+            (Dates.Millisecond, RDExt.ReactantMillisecond),
+            (Dates.Microsecond, RDExt.ReactantMicrosecond),
+            (Dates.Nanosecond, RDExt.ReactantNanosecond),
+        )
+            n = Reactant.ConcreteRNumber(3)
+
+            # Dates period scaled by a traced number becomes the traced period type
+            r = @jit(scale_period(DatesT(4), n))
+            @test r isa TracedT
+            @test value(r) == 12
+            @test convert(DatesT, r) == DatesT(4) * 3
+
+            # commutativity
+            @test value(@jit(scale_period(n, DatesT(4)))) == 12
+
+            # the traced period type scales too
+            @test value(@jit(scale_period(TracedT(4), n))) == 12
+            @test value(@jit(scale_period(n, TracedT(4)))) == 12
+
+            # division
+            @test value(@jit(divide_period(DatesT(6), n))) == 2
+            @test value(@jit(divide_period(TracedT(6), n))) == 2
+        end
+
+        # a non-integral scaling factor is kept as-is instead of erroring like `Dates`
+        x = Reactant.ConcreteRNumber(1.5f0)
+        r = @jit(scale_period(Dates.Millisecond(1000), x))
+        @test r isa RDExt.ReactantMillisecond
+        @test value(r) == 1500.0f0
+
+        # scaled periods keep working in DateTime arithmetic
+        n = Reactant.ConcreteRNumber(4)
+        dt = Reactant.to_rarray(DateTime(2002, 1, 1); track_numbers=true)
+        @test DateTime(@jit(advance(dt, n))) ==
+            DateTime(2002, 1, 1) + Dates.Millisecond(1000) * 4
+    end
+
     @testset "Minimal timestepper with Dates" begin
         clock = Clock(5, DateTime(2002, 1, 1), Dates.Day(1))
         state = State(clock)
@@ -760,5 +818,22 @@ end
         @jit(timestepping!(state_jit))
 
         @test DateTime(state_jit.clock.time) == state.clock.time
+    end
+
+    @testset "Adapt recurses into Reactant date types" begin
+        # Kernel arguments are walked by Adapt; a type with no `adapt_structure` is opaque and its
+        # traced payload survives to the device unadapted. `MarkerAdaptor` (top of file) reports
+        # whether the payload was reached, without needing a GPU.
+        dt = RDExt.ReactantDateTime(UTInstant(RDExt.ReactantMillisecond(12_345)))
+        @test value(Adapt.adapt(MarkerAdaptor(), dt)) === ADAPT_MARKER
+
+        d = RDExt.ReactantDate(UTInstant(RDExt.ReactantDay(7)))
+        @test value(Adapt.adapt(MarkerAdaptor(), d)) === ADAPT_MARKER
+
+        t = RDExt.ReactantTime(RDExt.ReactantNanosecond(99))
+        @test value(Adapt.adapt(MarkerAdaptor(), t)) === ADAPT_MARKER
+
+        p = RDExt.ReactantSecond(42)
+        @test value(Adapt.adapt(MarkerAdaptor(), p)) === ADAPT_MARKER
     end
 end

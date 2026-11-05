@@ -20,9 +20,11 @@ struct var"AutotuneResult.TritonGemmKey"
     is_tma_allowed::Bool
     is_warp_specialization_allowed::Bool
     waves_per_eu::Int64
+    group_size::Int64
+    mfma_size::Int64
 end
-PB.default_values(::Type{var"AutotuneResult.TritonGemmKey"}) = (;block_m = zero(Int64), block_n = zero(Int64), block_k = zero(Int64), split_k = zero(Int64), num_stages = zero(Int64), num_warps = zero(Int64), num_ctas = zero(Int64), is_tma_allowed = false, is_warp_specialization_allowed = false, waves_per_eu = zero(Int64))
-PB.field_numbers(::Type{var"AutotuneResult.TritonGemmKey"}) = (;block_m = 1, block_n = 2, block_k = 3, split_k = 4, num_stages = 5, num_warps = 6, num_ctas = 7, is_tma_allowed = 8, is_warp_specialization_allowed = 9, waves_per_eu = 10)
+PB.default_values(::Type{var"AutotuneResult.TritonGemmKey"}) = (;block_m = zero(Int64), block_n = zero(Int64), block_k = zero(Int64), split_k = zero(Int64), num_stages = zero(Int64), num_warps = zero(Int64), num_ctas = zero(Int64), is_tma_allowed = false, is_warp_specialization_allowed = false, waves_per_eu = zero(Int64), group_size = zero(Int64), mfma_size = zero(Int64))
+PB.field_numbers(::Type{var"AutotuneResult.TritonGemmKey"}) = (;block_m = 1, block_n = 2, block_k = 3, split_k = 4, num_stages = 5, num_warps = 6, num_ctas = 7, is_tma_allowed = 8, is_warp_specialization_allowed = 9, waves_per_eu = 10, group_size = 11, mfma_size = 12)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"AutotuneResult.TritonGemmKey"}, _endpos::Int=0, _group::Bool=false)
     block_m = zero(Int64)
@@ -35,6 +37,8 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"AutotuneResult.Trito
     is_tma_allowed = false
     is_warp_specialization_allowed = false
     waves_per_eu = zero(Int64)
+    group_size = zero(Int64)
+    mfma_size = zero(Int64)
     while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
@@ -57,11 +61,15 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"AutotuneResult.Trito
             is_warp_specialization_allowed = PB.decode(d, Bool)
         elseif field_number == 10
             waves_per_eu = PB.decode(d, Int64)
+        elseif field_number == 11
+            group_size = PB.decode(d, Int64)
+        elseif field_number == 12
+            mfma_size = PB.decode(d, Int64)
         else
             Base.skip(d, wire_type)
         end
     end
-    return var"AutotuneResult.TritonGemmKey"(block_m, block_n, block_k, split_k, num_stages, num_warps, num_ctas, is_tma_allowed, is_warp_specialization_allowed, waves_per_eu)
+    return var"AutotuneResult.TritonGemmKey"(block_m, block_n, block_k, split_k, num_stages, num_warps, num_ctas, is_tma_allowed, is_warp_specialization_allowed, waves_per_eu, group_size, mfma_size)
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::var"AutotuneResult.TritonGemmKey")
@@ -76,6 +84,8 @@ function PB.encode(e::PB.AbstractProtoEncoder, x::var"AutotuneResult.TritonGemmK
     x.is_tma_allowed != false && PB.encode(e, 8, x.is_tma_allowed)
     x.is_warp_specialization_allowed != false && PB.encode(e, 9, x.is_warp_specialization_allowed)
     x.waves_per_eu != zero(Int64) && PB.encode(e, 10, x.waves_per_eu)
+    x.group_size != zero(Int64) && PB.encode(e, 11, x.group_size)
+    x.mfma_size != zero(Int64) && PB.encode(e, 12, x.mfma_size)
     return position(e.io) - initpos
 end
 function PB._encoded_size(x::var"AutotuneResult.TritonGemmKey")
@@ -90,6 +100,8 @@ function PB._encoded_size(x::var"AutotuneResult.TritonGemmKey")
     x.is_tma_allowed != false && (encoded_size += PB._encoded_size(x.is_tma_allowed, 8))
     x.is_warp_specialization_allowed != false && (encoded_size += PB._encoded_size(x.is_warp_specialization_allowed, 9))
     x.waves_per_eu != zero(Int64) && (encoded_size += PB._encoded_size(x.waves_per_eu, 10))
+    x.group_size != zero(Int64) && (encoded_size += PB._encoded_size(x.group_size, 11))
+    x.mfma_size != zero(Int64) && (encoded_size += PB._encoded_size(x.mfma_size, 12))
     return encoded_size
 end
 
@@ -213,36 +225,48 @@ end
 struct var"AutotuneResult.GemmKey"
     algorithm::Int64
     autotune_workspace_size::Int64
+    unfuse_fp8_output::Bool
+    algorithm_proto::Union{Nothing,stream_executor_gpu.BlasLtMatmulAlgorithmProto}
 end
-PB.default_values(::Type{var"AutotuneResult.GemmKey"}) = (;algorithm = zero(Int64), autotune_workspace_size = zero(Int64))
-PB.field_numbers(::Type{var"AutotuneResult.GemmKey"}) = (;algorithm = 1, autotune_workspace_size = 2)
+PB.default_values(::Type{var"AutotuneResult.GemmKey"}) = (;algorithm = zero(Int64), autotune_workspace_size = zero(Int64), unfuse_fp8_output = false, algorithm_proto = nothing)
+PB.field_numbers(::Type{var"AutotuneResult.GemmKey"}) = (;algorithm = 1, autotune_workspace_size = 2, unfuse_fp8_output = 3, algorithm_proto = 4)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"AutotuneResult.GemmKey"}, _endpos::Int=0, _group::Bool=false)
     algorithm = zero(Int64)
     autotune_workspace_size = zero(Int64)
+    unfuse_fp8_output = false
+    algorithm_proto = Ref{Union{Nothing,stream_executor_gpu.BlasLtMatmulAlgorithmProto}}(nothing)
     while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
             algorithm = PB.decode(d, Int64)
         elseif field_number == 2
             autotune_workspace_size = PB.decode(d, Int64)
+        elseif field_number == 3
+            unfuse_fp8_output = PB.decode(d, Bool)
+        elseif field_number == 4
+            PB.decode!(d, algorithm_proto)
         else
             Base.skip(d, wire_type)
         end
     end
-    return var"AutotuneResult.GemmKey"(algorithm, autotune_workspace_size)
+    return var"AutotuneResult.GemmKey"(algorithm, autotune_workspace_size, unfuse_fp8_output, algorithm_proto[])
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::var"AutotuneResult.GemmKey")
     initpos = position(e.io)
     x.algorithm != zero(Int64) && PB.encode(e, 1, x.algorithm)
     x.autotune_workspace_size != zero(Int64) && PB.encode(e, 2, x.autotune_workspace_size)
+    x.unfuse_fp8_output != false && PB.encode(e, 3, x.unfuse_fp8_output)
+    !isnothing(x.algorithm_proto) && PB.encode(e, 4, x.algorithm_proto)
     return position(e.io) - initpos
 end
 function PB._encoded_size(x::var"AutotuneResult.GemmKey")
     encoded_size = 0
     x.algorithm != zero(Int64) && (encoded_size += PB._encoded_size(x.algorithm, 1))
     x.autotune_workspace_size != zero(Int64) && (encoded_size += PB._encoded_size(x.autotune_workspace_size, 2))
+    x.unfuse_fp8_output != false && (encoded_size += PB._encoded_size(x.unfuse_fp8_output, 3))
+    !isnothing(x.algorithm_proto) && (encoded_size += PB._encoded_size(x.algorithm_proto, 4))
     return encoded_size
 end
 

@@ -1,7 +1,6 @@
 module Compiler
 
 using Reactant_jll
-using Libdl: dlsym
 using LinearAlgebra: BlasInt
 import p7zip_jll: p7zip
 
@@ -17,7 +16,8 @@ import ..Reactant:
     make_tracer,
     TracedToConcrete,
     append_path,
-    TracedType
+    TracedType,
+    MPI_REQUEST_WIDTH
 import Reactant: OptimizeCommunicationOptions, ShardyPropagationOptions, CompileOptions
 using Reactant_jll: Reactant_jll
 
@@ -56,13 +56,6 @@ function compile_mlir(
     kwargs...,
 )
     client = client !== nothing ? client : XLA.default_backend()
-    backend = XLA.platform_name(client)
-
-    if backend == "CUDA"
-        backend = "GPU"
-    elseif backend == "CPU"
-        backend = "cpu"
-    end
 
     MLIR.IR.activate(ctx)
     try
@@ -77,7 +70,6 @@ function compile_mlir(
                 f,
                 args,
                 compile_options;
-                backend,
                 runtime=XLA.runtime(client),
                 client,
                 kwargs_inner...,
@@ -137,8 +129,8 @@ end
 
 const PartitionKA = Ref{Bool}(true)
 
-const cuindexBitWidth = Ref{Int}(32)
-const cubinFormat = Ref{String}("bin")
+# Kernels are registered with the CUDA runtime, which expects a fat binary.
+const cubinFormat = Ref{String}("fatbin")
 const cuOptLevel = Ref{Int}(2)
 
 # Whatever the relevant highest version from our LLVM is within NVPTX.td
@@ -202,7 +194,7 @@ end
 
 function activate_raising!(is_raising::Bool)
     stack = get!(task_local_storage(), :reactant_is_raising) do
-        Bool[]
+        return Bool[]
     end::Vector{Bool}
     push!(stack, is_raising)
     return nothing
@@ -235,24 +227,27 @@ function raising!(f, is_raising::Bool)
     end
 end
 
-function compile_mlir!(
+# The pass pipeline is independent of the model's Julia function and argument types.
+Base.@nospecializeinfer function compile_mlir!(
     mod,
-    f,
-    args,
+    @nospecialize(f),
+    @nospecialize(args),
     compile_options::CompileOptions,
     debugcache=default_debugcache(),
     callcache=default_callcache(),
     sdycache=default_sdycache(),
     sdygroupidcache=default_sdygroupidcache();
     fn_kwargs=(),
-    backend="gpu",
     runtime::Union{Val{:PJRT},Val{:IFRT}},
     legalize_stablehlo_to_mhlo::Bool=false,
     client=nothing,
+    backend=nothing,
     kwargs...,
 )
     @assert MLIR.IR.current_context() == MLIR.IR.context(mod)
-    client = client !== nothing ? client : XLA.default_backend()
+    client = @something(client, XLA.default_backend())
+    backend = @something(backend, XLA.platform_name(client))::String
+    @assert backend ∉ ("gpu", "GPU")
 
     # Explicitly don't use with_block to avoid creating a closure, which creates
     # both compile-time and relocatability issues
@@ -276,16 +271,18 @@ function compile_mlir!(
 
     fnname = string(f)
     mlir_fn_res = try
-        Reactant.TracedUtils.make_mlir_fn(
-            f,
-            args,
-            fn_kwargs,
-            fnname,
-            true;
-            runtime,
-            compile_options.optimize_then_pad,
-            kwargs...,
-        )
+        Reactant.Profiler.@annotate "trace $fnname" begin
+            Reactant.TracedUtils.make_mlir_fn(
+                f,
+                args,
+                fn_kwargs,
+                fnname,
+                true;
+                runtime,
+                compile_options.optimize_then_pad,
+                kwargs...,
+            )
+        end
     finally
         deactivate_raising!(is_raising)
         deactivate_sdycache!(sdycache)
@@ -318,14 +315,28 @@ function compile_mlir!(
     end
 
     toolkit = XLA.CUDA_DATA_DIR[]
+    cuda_sm_major = 0
+    cuda_sm_minor = 0
 
     if backend == "cpu" || backend == "tpu" || backend == "neuron" || backend == "trainium"
         kern = "lower-kernel{backend=cpu},canonicalize"
         if backend == "tpu" || backend == "neuron" || backend == "trainium"
-            jit = "lower-jit{openmp=$(OpenMP[]) backend=cpu},symbol-dce,strip-debuginfo"
+            jit = "lower-affine,$(OpenMP[] ? "convert-scf-to-openmp" : "convert-scf-to-cf"),convert-polygeist-to-llvm{backend=cpu preserve-xla-funcs=true},lower-jit,symbol-dce,strip-debuginfo"
         else
-            jit = "lower-jit{openmp=$(OpenMP[]) backend=cpu},symbol-dce"
+            jit = "lower-affine,$(OpenMP[] ? "convert-scf-to-openmp" : "convert-scf-to-cf"),convert-polygeist-to-llvm{backend=cpu preserve-xla-funcs=true},lower-jit,symbol-dce"
         end
+    elseif backend == "rocm"
+        kern = if is_raising
+            "lower-kernel{backend=cpu},symbol-dce,canonicalize"
+        else
+            "lower-kernel,canonicalize"
+        end
+
+        arch = XLA.rocm_gcn_arch_name(XLA.default_device(client))
+        isempty(arch) && error("Could not determine the gfx target of the ROCm device")
+        toolkit_option = isempty(XLA.ROCM_PATH[]) ? "" : " toolkit=$(XLA.ROCM_PATH[])"
+
+        jit = "convert-polygeist-to-llvm{backend=rocm preserve-xla-funcs=true},strip-gpu-info,rocdl-attach-target{arch=$(arch) O=$(cuOptLevel[])},enzymexla-gpu-module-to-binary{format=fatbin$(toolkit_option)},lower-jit,symbol-dce"
     else
         kern = if is_raising
             "lower-kernel{backend=cpu},symbol-dce,canonicalize"
@@ -334,19 +345,12 @@ function compile_mlir!(
         end
 
         device_properties = XLA.device_properties(XLA.default_device(client))
-        cubinChip = "sm_$(device_properties.major)$(device_properties.minor)"
+        cuda_sm_major = device_properties.major
+        cuda_sm_minor = device_properties.minor
+        cubinChip = "sm_$(cuda_sm_major)$(cuda_sm_minor)"
+        cuda_get_kernel = div(MLIR.API.ReactantHermeticCudaGetVersion(), 1000) == 12
 
-        if DEBUG_KERNEL[]
-            curesulthandler = dlsym(
-                Reactant_jll.libReactantExtra_handle, "ReactantHandleCuResult"
-            )
-            @assert curesulthandler !== nothing
-            curesulthandler = Base.reinterpret(UInt, curesulthandler)
-            extra_lowerjit_options = "debug=true cuResultHandlerPtr=$curesulthandler "
-        else
-            extra_lowerjit_options = ""
-        end
-        jit = "lower-jit{$(extra_lowerjit_options)cuOptLevel=$(cuOptLevel[]) cubinFormat=$(cubinFormat[]) indexBitWidth=$(cuindexBitWidth[])  cubinChip=$(cubinChip) cubinFeatures=$(cubinFeatures()) run_init=true toolkitPath=$toolkit},symbol-dce"
+        jit = "convert-polygeist-to-llvm{backend=cuda preserve-xla-funcs=true cuda-get-kernel=$(cuda_get_kernel)},strip-gpu-info,nvvm-attach-target{chip=$(cubinChip) features=$(cubinFeatures()) O=$(cuOptLevel[])},enzymexla-gpu-module-to-binary{format=$(cubinFormat[]) toolkit=$toolkit},lower-jit,symbol-dce"
     end
 
     recognize_comms = true
@@ -364,13 +368,12 @@ function compile_mlir!(
         sroa=true,
         recognize_comms,
         lower_comms,
-        backend,
         is_sharded,
         hlo_opts=compile_options.optimization_passes !== :after_enzyme &&
                  compile_options.optimization_passes !== :only_enzyme,
     )
     opt_passes2 = optimization_passes(
-        compile_options; sroa=false, recognize_comms, lower_comms, backend, is_sharded
+        compile_options; sroa=false, recognize_comms, lower_comms, is_sharded
     )
 
     raise_passes = if raise isa String
@@ -380,7 +383,7 @@ function compile_mlir!(
 
         # Raise enabled but use default passes
         # TODO(#2240) remove redundant libdevice raise after fixing phase ordering
-        result = "canonicalize,llvm-to-memref-access,canonicalize,convert-llvm-to-cf,canonicalize,enzyme-lift-cf-to-scf,canonicalize,func.func(canonicalize-loops),canonicalize-scf-for,canonicalize,libdevice-funcs-raise,canonicalize,affine-cfg,canonicalize,func.func(canonicalize-loops),canonicalize,llvm-to-affine-access,canonicalize,delinearize-indexing,canonicalize,simplify-affine-exprs,affine-cfg,canonicalize,func.func(affine-loop-invariant-code-motion),canonicalize,sort-memory,func.func(kernelcast),raise-affine-to-stablehlo{strip_llvm_debuginfo=$(compile_options.strip_llvm_debuginfo) prefer_while_raising=false dump_failed_lockstep=$(DUMP_FAILED_LOCKSTEP[])},canonicalize,arith-raise{stablehlo=true}"
+        result = "canonicalize,llvm-to-memref-access,canonicalize,convert-llvm-to-cf,canonicalize,enzyme-lift-cf-to-scf,canonicalize,func.func(canonicalize-loops{speculate_partial_if=$(compile_options.speculate_partial_ifs)}),canonicalize-scf-for,canonicalize,libdevice-funcs-raise,canonicalize,affine-cfg,canonicalize,func.func(canonicalize-loops{speculate_partial_if=$(compile_options.speculate_partial_ifs)}),canonicalize,llvm-to-affine-access,canonicalize,delinearize-indexing,canonicalize,simplify-affine-exprs,affine-cfg,canonicalize,func.func(affine-loop-invariant-code-motion),canonicalize,sort-memory,func.func(kernelcast),raise-affine-to-stablehlo{strip_llvm_debuginfo=$(compile_options.strip_llvm_debuginfo) prefer_while_raising=false dump_failed_lockstep=$(DUMP_FAILED_LOCKSTEP[])},canonicalize,arith-raise{stablehlo=true}"
 
         if compile_options.optimization_passes !== :after_enzyme &&
             compile_options.optimization_passes !== :only_enzyme
@@ -393,7 +396,6 @@ function compile_mlir!(
                     dus_to_concat=true,
                     recognize_comms,
                     lower_comms,
-                    backend,
                     is_sharded,
                 )
                 result = result * "," * opt_passes3
@@ -414,11 +416,24 @@ function compile_mlir!(
         ],
         ",",
     )
-    lower_enzymexla_math_pass = "lower-enzymexla-math"
-    lower_enzymexla_mpi_pass = "lower-enzymexla-mpi{backend=$backend}"
+    # cuDNN fused SDPA (__cudnn$fmha*) requires SM80 (Ampere) or newer; fall back
+    # to StableHLO decomposition on older CUDA architectures (e.g. V100/T4).
+    math_backend = if backend == "cuda" && cuda_sm_major < 8
+        "cuda_sm$(cuda_sm_major)$(cuda_sm_minor)"
+    else
+        backend
+    end
+    lower_enzymexla_math_pass = "lower-enzymexla-math{backend=$math_backend}"
+    # TODO legalization of comm.mpi ops to comm.nccl if compile_options.comm_options.legalize_mpi_to_nccl is true and backend is CUDA
+    lower_comm_pass = if compile_options.comm_options.lowering_target === :jit
+        "lower-comm-to-jit{mpi_request_width=$(MPI_REQUEST_WIDTH[])}"
+    elseif compile_options.comm_options.lowering_target === :ffi
+        "lower-comm-to-stablehlo"
+    else
+        error("Unknown comm lowering target: $(compile_options.comm_options.lowering_target)")
+    end
     lower_enzymexla_passes = join(
-        [lower_enzymexla_linalg_pass, lower_enzymexla_math_pass, lower_enzymexla_mpi_pass],
-        ",",
+        [lower_enzymexla_linalg_pass, lower_enzymexla_math_pass, lower_comm_pass], ","
     )
 
     legalize_chlo_to_stablehlo =
@@ -733,11 +748,7 @@ function compile_mlir!(
         # with them, we propagate them down to minimize the number of Ops in the IR.
         # Since this might enable certain raising, we do push down -> push up -> push down
         common_kwargs = (;
-            recognize_comms,
-            lower_comms,
-            backend,
-            is_sharded,
-            raise_shlo_to_blas_lapack=false,
+            recognize_comms, lower_comms, is_sharded, raise_shlo_to_blas_lapack=false
         )
         opt_passes_down = optimization_passes(
             Reactant.__compile_options_with_reversed_propagation(compile_options);
@@ -1261,7 +1272,7 @@ function compile_xla(f, args; kwargs...)
     end
 end
 
-function compile_xla(
+Reactant.@annotate "compile $(string(f))" function compile_xla(
     ctx,
     f,
     args;
@@ -1271,13 +1282,6 @@ function compile_xla(
     kwargs...,
 )
     client = client !== nothing ? client : XLA.default_backend()
-    backend = XLA.platform_name(client)
-
-    if backend == "CUDA"
-        backend = "GPU"
-    elseif backend == "CPU"
-        backend = "cpu"
-    end
 
     MLIR.IR.activate(ctx)
     try
@@ -1287,14 +1291,7 @@ function compile_xla(
         compile_options, kwargs = __get_compile_options_and_kwargs(; kwargs...)
 
         mlir_fn_res = compile_mlir!(
-            mod,
-            f,
-            args,
-            compile_options;
-            backend,
-            runtime=XLA.runtime(client),
-            client,
-            kwargs...,
+            mod, f, args, compile_options; runtime=XLA.runtime(client), client, kwargs...
         )
 
         # Resolve client and device
@@ -1347,21 +1344,25 @@ function compile_xla(
                 ),
             )
 
-            exec = XLA.compile(
-                client,
-                mod;
-                compile_options=xla_compile_options,
-                num_outputs=length(mlir_fn_res.linear_results),
-                num_parameters=length(mlir_fn_res.linear_args),
-                mlir_fn_res.is_sharded,
-                mlir_fn_res.num_replicas,
-                mlir_fn_res.num_partitions,
-            )
+            exec = Reactant.Profiler.@annotate "XLA compile $(string(f))" begin
+                XLA.compile(
+                    client,
+                    mod;
+                    compile_options=xla_compile_options,
+                    num_outputs=length(mlir_fn_res.linear_results),
+                    num_parameters=length(mlir_fn_res.linear_args),
+                    mlir_fn_res.is_sharded,
+                    mlir_fn_res.num_replicas,
+                    mlir_fn_res.num_partitions,
+                )
+            end
             hlo_modules = XLA.get_hlo_modules(exec)
             hlo_modules = length(hlo_modules) == 1 ? only(hlo_modules) : hlo_modules
         end
 
-        finalize(mod)
+        # `MLIR.IR.Module` has no finalizer and XLA doesn't take ownership of it: destroy it
+        # explicitly, otherwise the whole module is leaked at every compilation.
+        MLIR.IR.dispose(mod)
 
         return exec, hlo_modules, mlir_fn_res, device, client, module_string
     finally
@@ -1445,7 +1446,8 @@ function compile(ctx, f, args; kwargs...)
         path_to_shard_info,
         linear_result_shard_info,
         client,
-        resharded_inputs,
+        resharded_inputs;
+        concrete_args=args,
     )
 
     for (i, name) in enumerate(linear_result_shard_info)
@@ -1587,8 +1589,6 @@ function default_debugcache()
     return Vector{@NamedTuple{f_name::String, file::String, line::Int64}}(undef, 0)
 end
 
-# Since we cache these objects we cannot cache data containing MLIR operations (e.g. the entry must be a string
-# and not the operation itself).
 struct LLVMFunc{F,tt}
     f::Union{F,Nothing}
     entry::String
@@ -1602,12 +1602,13 @@ function Base.getproperty(f::LLVMFunc{F,tt}, sym::Symbol) where {F,tt}
     end
 end
 
-# cache of compilation caches, per module
-const _llvm_compiler_caches = Dict{MLIR.IR.Module,Dict{Any,LLVMFunc}}()
+# cache of compilation caches, per module: maps compiled kernels (and their call wrappers)
+# to the name of the corresponding function in the module
+const _llvm_compiler_caches = Dict{MLIR.IR.Module,Dict{Any,String}}()
 function llvm_compiler_cache(_mod::MLIR.IR.Module)
     cache = get(_llvm_compiler_caches, _mod, nothing)
     if cache === nothing
-        cache = Dict{Any,LLVMFunc}()
+        cache = Dict{Any,String}()
         _llvm_compiler_caches[_mod] = cache
     end
     return cache

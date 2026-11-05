@@ -1,8 +1,11 @@
 module ReactantOneHotArraysExt
 
+using Adapt: Adapt
 using GPUArraysCore: @allowscalar
-using OneHotArrays: OneHotArrays, OneHotArray
-using Reactant: Reactant, AnyTracedRArray, TracedRArray, TracedRNumber
+using LinearAlgebra: LinearAlgebra
+using OneHotArrays: OneHotArrays, OneHotArray, OneHotLike
+using Reactant:
+    Reactant, AnyTracedRArray, TracedRArray, TracedRNumber, UnionAnyConcreteRArray
 using ReactantCore: ReactantCore
 using Reactant.Ops: @opcall
 
@@ -37,15 +40,28 @@ function ReactantCore.materialize_traced_array(r::OneHotArray)
 
     z = @opcall(fill(false, (N, B)))
     z[linear_indices] = fill(true, length(linear_indices))
-    return reshape(z, size(r))
+    return @opcall reshape(z, size(r)...)
 end
 
 Reactant._parent(r::OneHotArray) = r.indices
 
-function Base.Array(
-    r::OneHotArray{T,N,Np1,<:Reactant.AbstractConcreteArray}
-) where {T,N,Np1}
+const ConcreteOneHotLike = OneHotLike{<:Any,<:Any,<:Any,<:UnionAnyConcreteRArray}
+
+function Base.Array(r::OneHotArray{T,N,Np1,<:UnionAnyConcreteRArray}) where {T,N,Np1}
     return Array(reshape(Array(r.indices), 1, size(r.indices)...) .== 1:(r.nlabels))
+end
+
+# Copy concrete Reactant indices to host before printing, matching OneHotArrays's
+# `<:AbstractGPUArray` overloads so REPL display does not scalar-index the device buffer.
+for fun in (:show, :print_array)
+    @eval begin
+        function Base.$fun(io::IO, X::ConcreteOneHotLike)
+            return Base.$fun(io, Adapt.adapt(Array, X))
+        end
+        function Base.$fun(io::IO, X::LinearAlgebra.AdjOrTrans{Bool,<:ConcreteOneHotLike})
+            return Base.$fun(io, Adapt.adapt(Array, X))
+        end
+    end
 end
 
 function OneHotArrays.onehotbatch(data::AnyTracedRArray{<:Any,N}, labels) where {N}

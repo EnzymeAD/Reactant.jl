@@ -30,7 +30,11 @@ function run_benchmark!(
     track_numbers::Bool=false,
     skip_manual_vectorized_bench::Bool=false,
 ) where {F,GT}
-    compile_modes = [("Default", Reactant.CompileOptions())]
+    # Raised `@trace` nests usually write into their inputs, so `donated_args=:auto`
+    # aliases those inputs to outputs, while the vectorized ground truth usually
+    # returns a fresh array and aliases nothing. Disable donation so both arms
+    # are compiled under the same buffer rules.
+    compile_modes = [("Default", Reactant.CompileOptions(; donated_args=:none))]
     # NOTE: extremely slow to benchmark
     # if backend == "CPU"
     #     push!(compile_modes, ("NoOpt", Reactant.DefaultXLACompileOptions()))

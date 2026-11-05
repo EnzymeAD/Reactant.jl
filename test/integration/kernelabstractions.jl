@@ -28,7 +28,7 @@ if !Reactant.Accelerators.TPU.has_tpu()
         A = Reactant.to_rarray(ones(100, 100))
         out = Reactant.to_rarray(ones(100, 100))
         platform_name = Reactant.XLA.platform_name(Reactant.XLA.default_backend())
-        raise = platform_name ∉ ("cpu", "cuda")
+        raise = platform_name ∉ ("cpu", "cuda", "rocm")
         @jit raise = raise matmul!(out, A)
         out_c = Array(out)
         A_c = Array(A)
@@ -70,7 +70,7 @@ end
     x = Reactant.to_rarray(collect(1:1:64) ./ 64)
 
     platform_name = Reactant.XLA.platform_name(Reactant.XLA.default_backend())
-    raise = platform_name ∉ ("cpu", "cuda")
+    raise = platform_name ∉ ("cpu", "cuda", "rocm")
 
     b = get_backend(x)
     @test b isa Base.get_extension(Reactant, :ReactantKernelAbstractionsExt).ReactantBackend
@@ -171,4 +171,152 @@ end
 
     @test Array(Reactant.@jit raise = true concrete_double(x)) ≈ 2 .* Array(x)
     @test Array(Reactant.@jit raise = true traced_double(x)) ≈ 2 .* Array(x)
+end
+
+@kernel function scale!(y, x, α)
+    I = @index(Global, Cartesian)
+    @inbounds y[I] = α * x[I]
+end
+
+function f(x, y, n)
+    @trace for _ in 1:n
+        scale!(get_backend(y))(y, x, 2.0; ndrange=size(y))   # y = 2x, x untouched
+    end
+    return sum(y)          # any reduction of the array the kernel wrote
+end
+
+@testset "XLA Relayouting" begin
+    x = Reactant.to_rarray(randn(16, 3))
+    y = Reactant.to_rarray(zeros(16, 3))
+    n = Reactant.to_rarray(5; track_numbers=true)
+    @jit f(x, y, n)
+
+    @test Array(y) ≈ 2 .* Array(x)
+end
+
+# A raised kernel reads and writes a complex number as its two fields.
+@kernel function real_to_complex_kernel!(y, @Const(x))
+    i = @index(Global)
+    @inbounds y[i] = x[i]
+end
+
+@kernel function complex_square_kernel!(y, @Const(x))
+    i = @index(Global)
+    @inbounds xr, xi = reim(x[i])
+    @inbounds y[i] = complex(xr^2 - xi^2, 2 * xr * xi)
+end
+
+@kernel function complex_to_real_kernel!(y, @Const(x))
+    i = @index(Global)
+    @inbounds y[i] = real(x[i]) + 2 * imag(x[i])
+end
+
+function launch_elementwise!(kernel, y, x)
+    kernel(KernelAbstractions.get_backend(y))(y, x; ndrange=length(y))
+    return nothing
+end
+
+@testset "KernelAbstractions complex numbers (raised)" begin
+    @testset "$T" for T in (Float32, Float64)
+        xr = T[1, 2, 3, 4, 5, 6]
+        xc = Complex{T}[1 + 2im, 3 - 4im, -5 + 6im, 7 + 8im, 0 - 1im, 2 + 0im]
+
+        @testset "real to complex" begin
+            x = Reactant.to_rarray(xr)
+            y = Reactant.to_rarray(zeros(Complex{T}, 6))
+            @jit raise = true launch_elementwise!(real_to_complex_kernel!, y, x)
+            @test Array(y) ≈ Complex{T}.(xr)
+        end
+
+        @testset "complex to complex" begin
+            x = Reactant.to_rarray(xc)
+            y = Reactant.to_rarray(zeros(Complex{T}, 6))
+            @jit raise = true launch_elementwise!(complex_square_kernel!, y, x)
+            @test Array(y) ≈ xc .^ 2
+
+            x2 = Reactant.to_rarray(reshape(xc, 2, 3))
+            y2 = Reactant.to_rarray(zeros(Complex{T}, 2, 3))
+            @jit raise = true launch_elementwise!(complex_square_kernel!, y2, x2)
+            @test Array(y2) ≈ reshape(xc, 2, 3) .^ 2
+        end
+
+        @testset "complex to real" begin
+            x = Reactant.to_rarray(xc)
+            y = Reactant.to_rarray(zeros(T, 6))
+            @jit raise = true launch_elementwise!(complex_to_real_kernel!, y, x)
+            @test Array(y) ≈ real.(xc) .+ 2 .* imag.(xc)
+        end
+    end
+end
+
+# A raised kernel stores an unsigned integer as its signless bits.
+@kernel function unsigned_branch_kernel!(out, @Const(vals))
+    i = @index(Global)
+    branch = one(eltype(out))
+    if @inbounds(vals[i]) >= 0.5
+        branch = eltype(out)(2)
+    end
+    @inbounds out[i] = branch
+end
+
+@testset "KernelAbstractions unsigned integers (raised)" begin
+    @testset "$T" for T in (UInt8, UInt32)
+        out = Reactant.to_rarray(fill(T(99), 2))
+        vals = Reactant.to_rarray([0.2, 0.7])
+        @jit raise = true launch_elementwise!(unsigned_branch_kernel!, out, vals)
+        @test Array(out) == T[1, 2]
+    end
+end
+
+# A type passed as a kernel argument is a constant, which the kernel is compiled for and
+# which is not passed at run time; the argument after it must still reach the kernel.
+@kernel function fill_typed_kernel!(y, FT, x)
+    i = @index(Global)
+    @inbounds y[i] = convert(FT, 2) * x[i]
+end
+
+function launch_typed!(y, FT, x)
+    fill_typed_kernel!(KernelAbstractions.get_backend(y))(y, FT, x; ndrange=length(y))
+    return nothing
+end
+
+@testset "KernelAbstractions type argument (raised)" begin
+    x = Float32[1, 2, 3]
+    y_cpu = zeros(Float32, 3)
+    launch_typed!(y_cpu, Float32, x)
+
+    y = Reactant.to_rarray(zeros(Float32, 3))
+    @jit raise = true launch_typed!(y, Float32, Reactant.to_rarray(x))
+    @test Array(y) == y_cpu
+end
+
+# A raised kernel clamps traced numbers. Inside a kernel `convert` to the kernel's traced
+# number type returns a pointer to the value, which `clamp` has to load rather than return.
+@kernel function clamp_kernel!(out, @Const(x), s, ::Val{form}) where {form}
+    i = @index(Global)
+    T = typeof(s)
+    xᵢ = @inbounds x[i]
+    @inbounds out[i] = if form === :all_traced
+        clamp(convert(T, xᵢ), convert(T, 2), convert(T, 5))
+    elseif form === :traced_value
+        clamp(convert(T, xᵢ), 2, 5)
+    else
+        clamp(xᵢ, convert(T, 2), convert(T, 5))
+    end
+end
+
+function launch_clamp!(out, x, s, form)
+    backend = KernelAbstractions.get_backend(out)
+    clamp_kernel!(backend)(out, x, s, form; ndrange=length(out))
+    return nothing
+end
+
+@testset "KernelAbstractions clamp of traced numbers (raised)" begin
+    x = Float32[0.5, 1.5, 2.5, 3.5, 4.5, 5.5, 6.5, 7.5]
+    s = Reactant.to_rarray(1.0f0; track_numbers=true)
+    @testset "$form" for form in (:all_traced, :traced_value, :traced_bounds)
+        out = Reactant.to_rarray(zeros(Float32, 8))
+        @jit raise = true launch_clamp!(out, Reactant.to_rarray(x), s, Val(form))
+        @test Array(out) == clamp.(x, 2, 5)
+    end
 end

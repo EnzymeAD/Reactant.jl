@@ -197,13 +197,183 @@ function generate_bindings(staging_dir::String, output_dir::String)
         add_kwarg_constructors=false,
     )
 
+    # Fix up the order of the `include`s inside each generated module
+    reorder_module_includes(staging_dir, output_dir)
+
     # Remove headers from generated files to minimize diffs
     remove_proto_headers(output_dir)
 
     # Create a main module that includes all generated files
     write_main_module(output_dir, proto_rel_paths)
 
+    # Verify the generated bindings have no top-level include cycles and load cleanly
+    verify_generated_bindings(output_dir)
+
     return proto_rel_paths
+end
+
+"""
+    proto_metadata(staging_dir::String) -> (packages, imports)
+
+Parse the `package` and `import` statements out of every staged proto file.
+Returns two dicts keyed by the proto path relative to `staging_dir`: the package
+split into its namespace components, and the list of imported proto paths.
+"""
+function proto_metadata(staging_dir::String)
+    packages = Dict{String,Vector{String}}()
+    imports = Dict{String,Vector{String}}()
+
+    for (rel, abs_path) in find_proto_files(staging_dir)
+        rel = replace(rel, '\\' => '/')
+        namespace = String[]
+        imported = String[]
+        for line in eachline(abs_path)
+            m = match(r"^\s*package\s+([A-Za-z0-9_.]+)\s*;", line)
+            if m !== nothing
+                namespace = String.(split(m[1], '.'))
+            end
+            m = match(r"^\s*import\s+(?:public\s+|weak\s+)?\"([^\"]+)\"\s*;", line)
+            if m !== nothing
+                push!(imported, m[1])
+            end
+        end
+        packages[rel] = namespace
+        imports[rel] = imported
+    end
+
+    return packages, imports
+end
+
+"""
+    transitive_imports(imports::Dict{String,Vector{String}}) -> Dict{String,Set{String}}
+
+Expand the direct import lists into their transitive closures.
+"""
+function transitive_imports(imports::Dict{String,Vector{String}})
+    closure = Dict{String,Set{String}}()
+
+    function visit(file, stack)
+        haskey(closure, file) && return closure[file]
+        file in stack && return Set{String}()  # import cycles are illegal, be safe anyway
+        push!(stack, file)
+        deps = Set{String}()
+        for dep in get(imports, file, String[])
+            push!(deps, dep)
+            union!(deps, visit(dep, stack))
+        end
+        delete!(stack, file)
+        closure[file] = deps
+        return deps
+    end
+
+    for file in keys(imports)
+        visit(file, Set{String}())
+    end
+
+    return closure
+end
+
+"""
+    stable_topological_sort(entries, deps) -> Vector
+
+Sort `entries` so that every entry comes after the entries it depends on, while
+otherwise preserving the original order. Entries that cannot be placed (which
+would require an import cycle) keep their original position.
+"""
+function stable_topological_sort(entries::Vector{T}, deps::Dict{T,Set{T}}) where {T}
+    remaining = copy(entries)
+    ordered = T[]
+    placed = Set{T}()
+
+    while !isempty(remaining)
+        i = findfirst(remaining) do entry
+            all(d -> d in placed || d == entry, get(deps, entry, Set{T}()))
+        end
+        if i === nothing
+            @warn "Cyclic dependency between generated modules, keeping original order" remaining
+            append!(ordered, remaining)
+            break
+        end
+        entry = popat!(remaining, i)
+        push!(ordered, entry)
+        push!(placed, entry)
+    end
+
+    return ordered
+end
+
+"""
+    reorder_module_includes(staging_dir::String, output_dir::String)
+
+ProtoBuf.jl topologically sorts the `include`s of a module using only the proto
+files that live directly in that module, so a dependency that travels through a
+submodule is invisible to it. For example `xla/service/gpu_topology.proto`
+(package `xla`) imports `xla/service/cpu/executable.proto` (package `xla.cpu`),
+which in turn imports `xla/service/hlo.proto` (package `xla`) - ProtoBuf.jl then
+emits `include("cpu/cpu.jl")` before `include("hlo_pb.jl")` and loading the
+generated code fails with an `UndefVarError`.
+
+Re-sort each generated module's `include`s using the full proto import graph.
+"""
+function reorder_module_includes(staging_dir::String, output_dir::String)
+    println("\n  Reordering module includes...")
+
+    packages, imports = proto_metadata(staging_dir)
+    closure = transitive_imports(imports)
+
+    for (root, dirs, files) in walkdir(output_dir)
+        module_name = basename(root)
+        module_file = joinpath(root, "$module_name.jl")
+        ("$module_name.jl" in files) || continue
+
+        namespace = String.(splitpath(relpath(root, output_dir)))
+        namespace == ["."] && continue
+
+        lines = readlines(module_file)
+
+        # Only the includes of this module's own files/submodules are movable;
+        # the leading `include("../pkg/pkg.jl")` lines pull in other packages.
+        idxs = findall(l -> occursin(r"^include\(\"(?!\.\.)", l), lines)
+        length(idxs) > 1 || continue
+
+        # Map each `include` to the set of proto files it brings into scope.
+        provided = Dict{String,Set{String}}()
+        for i in idxs
+            path = match(r"^include\(\"([^\"]+)\"\)", lines[i])[1]
+            covered = Set{String}()
+            for (rel, ns) in packages
+                if endswith(path, "_pb.jl")
+                    ns == namespace &&
+                        string(replace(basename(rel), ".proto" => ""), "_pb.jl") == path &&
+                        push!(covered, rel)
+                else
+                    sub = [namespace; first(splitpath(path))]
+                    length(ns) >= length(sub) &&
+                        ns[1:length(sub)] == sub &&
+                        push!(covered, rel)
+                end
+            end
+            provided[lines[i]] = covered
+        end
+
+        # `a => b` means the include `a` must come after the include `b`.
+        deps = Dict{String,Set{String}}()
+        for a in lines[idxs]
+            needed = union(
+                Set{String}(), (get(closure, f, Set{String}()) for f in provided[a])...
+            )
+            deps[a] = Set(
+                b for b in lines[idxs] if b != a && !isdisjoint(needed, provided[b])
+            )
+        end
+
+        sorted = stable_topological_sort(lines[idxs], deps)
+        sorted == lines[idxs] && continue
+
+        lines[idxs] = sorted
+        write(module_file, join(lines, '\n') * '\n')
+        println("    reordered $(relpath(module_file, output_dir))")
+    end
 end
 
 """
@@ -293,6 +463,63 @@ function write_main_module(output_dir::String, generated::Vector{String})
     write(main_file, content)
     println("\n✓ Created main module: $main_file")
     return println("  Includes $(length(jl_files)) generated files")
+end
+
+"""
+    verify_generated_bindings(output_dir::String)
+
+Check that top-level generated package modules do not have cyclic `include("../pkg/pkg.jl")`
+dependencies (which would cause an infinite `include` loop when loading `Proto.jl`), and
+verify that `Proto.jl` loads cleanly in a fresh module.
+"""
+function verify_generated_bindings(output_dir::String)
+    println("\n  Verifying generated bindings...")
+
+    # Check top-level package modules for mutual `include("../pkg/pkg.jl")` cycles.
+    top_deps = Dict{String,Vector{String}}()
+    for dir in readdir(output_dir)
+        mod_file = joinpath(output_dir, dir, "$dir.jl")
+        isfile(mod_file) || continue
+        deps = String[]
+        for line in eachline(mod_file)
+            m = match(r"^include\(\"\.\./([^/\"]+)/\1\.jl\"\)", line)
+            m !== nothing && push!(deps, m[1])
+        end
+        top_deps[dir] = deps
+    end
+
+    visited = Dict{String,Int}() # 0 = visiting, 1 = done
+    path = String[]
+    function visit(pkg::String)
+        state = get(visited, pkg, -1)
+        if state == 0
+            cycle_start = findfirst(==(pkg), path)
+            cycle = join([path[cycle_start:end]; pkg], " -> ")
+            error(
+                "Cyclic top-level package `include` detected in generated proto bindings: $cycle",
+            )
+        elseif state == 1
+            return nothing
+        end
+        visited[pkg] = 0
+        push!(path, pkg)
+        for dep in get(top_deps, pkg, String[])
+            visit(dep)
+        end
+        pop!(path)
+        visited[pkg] = 1
+        return nothing
+    end
+    for pkg in sort!(collect(keys(top_deps)))
+        visit(pkg)
+    end
+
+    main_file = joinpath(output_dir, "Proto.jl")
+    if isfile(main_file)
+        Base.include(Module(), main_file)
+        println("    ✓ Verified Proto.jl loads cleanly")
+    end
+    return nothing
 end
 
 """

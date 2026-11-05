@@ -383,8 +383,8 @@ between different flavors of ops on that operate on tensors.
 Note that there may be multiple ways to infer a resulting rank-reduced type.
   e.g. 1x6x1 could potentially rank-reduce to either 1x6 or 6x1 2-D shapes.
 
-To disambiguate, the inference helpers `inferCanonicalRankReducedResultType`
-only drop the first unit dimensions, in order:
+To disambiguate, canonical rank-reduction inference drops only the first
+unit dimensions, in order:
   e.g. 1x6x1 rank-reduced to 2-D will infer the 6x1 2-D shape, but not 1x6.
 
 Verification however has access to result type and does not need to infer.
@@ -807,6 +807,9 @@ The PadOp operation supports the following arguments:
 The result tensor dimensions are `low[i]` + `dim[i]` + `high[i]` for each
 dimension `i`. The number of elements of `low` and `high` must match the
 rank of the input tensor. They can be either a constant or a dynamic value.
+The padding amounts must be non-negative. A negative constant is rejected
+by the verifier. A negative dynamic value is undefined behavior: the
+verifier does not look through the defining op of an SSA value.
 
 The region of the `tensor.pad` operation returns the value to use
 for the padding. The arguments of the region represent the index

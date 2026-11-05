@@ -135,3 +135,58 @@ end
     @test convert(Array, res[2][].data) ≈ [3.14, 1.59]
     @test res[1][].data == res[2][].data
 end
+
+@testset "Parametric construction from host arrays" begin
+    x = reshape(collect(1.0:6.0), 2, 3)
+
+    @test ConcreteRArray{Float32}(x) isa ConcreteRArray{Float32,2}
+    @test ConcreteRArray{Float32,2}(x) isa ConcreteRArray{Float32,2}
+    @test Array(ConcreteRArray{Float32,2}(x)) == Float32.(x)
+
+    # eltype is preserved when it already matches
+    @test ConcreteRArray{Float64,2}(x) isa ConcreteRArray{Float64,2}
+    @test Array(ConcreteRArray{Float64}(x)) == x
+
+    # non-`Array` hosts, i.e. the `ArrayType{T,N}(data)` form generic code uses
+    @test Array(ConcreteRArray{Float64,2}(reshape(1:6, 2, 3))) == x
+    @test Array(ConcreteRArray{Float64,1}(view(collect(1.0:4.0), 2:3))) == [2.0, 3.0]
+
+    # dimensionality mismatches are rejected
+    @test_throws MethodError ConcreteRArray{Float32,1}(x)
+
+    # both runtimes get the methods, only the active one can be constructed here
+    for AT in (ConcretePJRTArray, ConcreteIFRTArray)
+        @test hasmethod(AT, Tuple{AbstractArray})
+        @test hasmethod(AT{Float32}, Tuple{AbstractArray})
+        @test hasmethod(AT{Float32,2}, Tuple{AbstractArray})
+    end
+end
+
+struct MockDeviceArray{T,N} <: AbstractArray{T,N}
+    host::Array{T,N}
+end
+Base.size(a::MockDeviceArray) = size(a.host)
+function Base.getindex(a::MockDeviceArray, I::Int...)
+    Reactant.GPUArraysCore.assertscalar("MockDeviceArray getindex")
+    return a.host[I...]
+end
+function Base.convert(::Type{Array{T,N}}, a::MockDeviceArray{S,N}) where {T,S,N}
+    return convert(Array{T,N}, a.host)
+end
+
+@testset "Non-parametric ConcreteRArray(::AbstractArray)" begin
+    task_local_storage(:ScalarIndexing, Reactant.GPUArraysCore.ScalarDisallowed) do
+        @test ConcreteRArray(reshape(1:6, 2, 3)) isa ConcreteRArray{Int,2}
+        @test Array(ConcreteRArray(reshape(1:6, 2, 3))) == reshape(collect(1:6), 2, 3)
+
+        rb = Adapt.adapt(ConcreteRArray, trues(2, 3))
+        @test rb isa ConcreteRArray{Bool,2}
+        @test Array(rb) == trues(2, 3)
+
+        dev_arr = MockDeviceArray(Float32[1 2; 3 4])
+        rd = ConcreteRArray(dev_arr)
+        @test rd isa ConcreteRArray{Float32,2}
+        @test Array(rd) == Float32[1 2; 3 4]
+        @test Array(Adapt.adapt(ConcreteRArray, dev_arr)) == Float32[1 2; 3 4]
+    end
+end

@@ -21,7 +21,7 @@ concurrency:
 
 jobs:
   determine-suites:
-    runs-on: linux-x86-n2-32
+    runs-on: linux-x86-n4-32
     container:
       image: "ghcr.io/enzymead/reactant-docker-images@sha256:7004a6ebbdd77bd047900b2bffc542e8576864056dc27a9c94d30666d6f7ea01"
     outputs:
@@ -116,7 +116,7 @@ jobs:
       matrix:
         suite: ${{ fromJson(needs.determine-suites.outputs.suites) }}
         os:
-          - linux-x86-n2-32
+          - linux-x86-n4-32
           - linux-x86-ct6e-180-4tpu
           - linux-x86-a2-48-a100-4gpu
     env:
@@ -127,10 +127,14 @@ jobs:
       - uses: julia-actions/setup-julia@v3
         with:
           version: "1.11"
-      - uses: julia-actions/cache@v3.2.0
+      - uses: julia-actions/cache@v3.5.0
         with:
           gcp-bucket: ${{ contains(matrix.os, 'linux') && 'enzyme-ci-transient' || '' }}
-          key-prefix: reactantjl_benchmark/
+          # v2: the v1 oceananigans TPU depot holds a CUDA_Compiler_jll artifact missing
+          # libnvvm.so, which Pkg never re-downloads.
+          key-prefix: reactantjl_benchmark_v2/
+          # Don't let a failed job overwrite the cache with whatever state it left behind.
+          save-always: false
       - name: "Instantiate benchmarks environment"
         run: |
           julia --color=yes --project=benchmark/${{ matrix.suite }} -e 'using Pkg; Pkg.instantiate()'
@@ -155,7 +159,7 @@ jobs:
       - uses: julia-actions/setup-julia@v3
         with:
           version: "1"
-      - uses: julia-actions/cache@v3.2.0
+      - uses: julia-actions/cache@v3.5.0
       - uses: actions/download-artifact@v8
         with:
           pattern: benchmark-results-*

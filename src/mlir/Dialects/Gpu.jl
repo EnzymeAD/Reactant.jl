@@ -36,7 +36,7 @@ accumulation as code region. The reduction operation must be one of:
 *  Integer types: `add`, `mul`, `minui`, `minsi`, `maxui`, `maxsi`, `and`,
    `or`, `xor`
 *  Floating point types: `add`, `mul`, `minnumf`, `maxnumf`, `minimumf`,
-   `maximumf`
+   `maximumf`, `minimumnumf`, `maximumnumf`
 
 If `uniform` flag is set either none or all work items of a workgroup
 need to execute this op in convergence.
@@ -288,7 +288,13 @@ Examples:
   gpu.binary @myobject <#gpu.select_object<#rocdl.target>> [#gpu.object<...>, #gpu.object<#rocdl.target, ...>]
 ```
 """
-function binary(; sym_name, offloadingHandler=nothing, objects, location=Location())
+function binary(;
+    sym_name,
+    sym_visibility=nothing,
+    offloadingHandler=nothing,
+    objects,
+    location=Location(),
+)
     op_ty_results = IR.Type[]
     operands = Value[]
     owned_regions = Region[]
@@ -296,6 +302,8 @@ function binary(; sym_name, offloadingHandler=nothing, objects, location=Locatio
     attributes = NamedAttribute[
         NamedAttribute("sym_name", sym_name), NamedAttribute("objects", objects)
     ]
+    !isnothing(sym_visibility) &&
+        push!(attributes, NamedAttribute("sym_visibility", sym_visibility))
     !isnothing(offloadingHandler) &&
         push!(attributes, NamedAttribute("offloadingHandler", offloadingHandler))
 
@@ -1193,6 +1201,8 @@ Note the non-default memory spaces used in memref types in memory
 attribution.
 """
 function func(;
+    sym_name,
+    sym_visibility=nothing,
     function_type,
     arg_attrs=nothing,
     res_attrs=nothing,
@@ -1210,7 +1220,11 @@ function func(;
     operands = Value[]
     owned_regions = Region[body,]
     successors = Block[]
-    attributes = NamedAttribute[NamedAttribute("function_type", function_type),]
+    attributes = NamedAttribute[
+        NamedAttribute("sym_name", sym_name), NamedAttribute("function_type", function_type)
+    ]
+    !isnothing(sym_visibility) &&
+        push!(attributes, NamedAttribute("sym_visibility", sym_visibility))
     !isnothing(arg_attrs) && push!(attributes, NamedAttribute("arg_attrs", arg_attrs))
     !isnothing(res_attrs) && push!(attributes, NamedAttribute("res_attrs", res_attrs))
     !isnothing(workgroup_attrib_attrs) &&
@@ -1264,6 +1278,11 @@ Modules can contain an optional `OffloadingTranslationAttr` attribute. This
 attribute will be used during the `gpu-module-to-binary` pass to specify the
 `OffloadingTranslationAttr` used when creating the `gpu.binary` operation.
 
+A GPU module may also have an inherent `dlti` attribute implementing
+`DLTIQueryInterface`. It provides values for scoped DLTI queries on the
+module and its nested operations. In custom assembly, write it as
+`dlti = #dlti.map<...>` before the optional attribute dictionary.
+
 ```
 gpu.module @symbol_name {
   gpu.func {}
@@ -1280,8 +1299,10 @@ gpu.module @symbol_name2 <#gpu.select_object<1>> [
 """
 function module_(;
     sym_name,
+    sym_visibility=nothing,
     targets=nothing,
     offloadingHandler=nothing,
+    dlti=nothing,
     bodyRegion::Region,
     location=Location(),
 )
@@ -1290,9 +1311,12 @@ function module_(;
     owned_regions = Region[bodyRegion,]
     successors = Block[]
     attributes = NamedAttribute[NamedAttribute("sym_name", sym_name),]
+    !isnothing(sym_visibility) &&
+        push!(attributes, NamedAttribute("sym_visibility", sym_visibility))
     !isnothing(targets) && push!(attributes, NamedAttribute("targets", targets))
     !isnothing(offloadingHandler) &&
         push!(attributes, NamedAttribute("offloadingHandler", offloadingHandler))
+    !isnothing(dlti) && push!(attributes, NamedAttribute("dlti", dlti))
 
     return create_operation(
         "gpu.module",
@@ -1545,13 +1569,21 @@ to have the `gpu.container_module` attribute. The `gpu.launch_func`
 operation has a symbol attribute named `kernel` to identify the fully
 specified kernel function to launch (both the gpu.module and func).
 
-The `gpu.launch_func` supports async dependencies: the kernel does not start
+By default, the host implicitly blocks until kernel execution has completed.
+
+Otherwise, the operation supports two async models.
+
+The first one is dependency-based and is enabled when the `async` keyword is
+present in text form, and corresponds to when the operation produces the
+optional token result of type `!gpu.async.token`. Other async GPU ops can
+take this token as dependency. In this case, the `gpu.launch_func` does not
+block, and supports specifying async dependencies: the kernel does not start
 executing until the ops producing those async dependencies have completed.
 
-By the default, the host implicitly blocks until kernel execution has
-completed. If the `async` keyword is present, the host does not block but
-instead a `!gpu.async.token` is returned. Other async GPU ops can take this
-token as dependency.
+The second async model is stream-based. When `asyncObject` is present, the
+launch operation is queued to execute on the queue represented by it.
+
+The two async models are mutually exclusive.
 
 The operation requires at least the grid and block sizes along the x,y,z
 dimensions as arguments. When a lower-dimensional kernel is required,
@@ -1708,14 +1740,10 @@ end
 `launch`
 
 Launch a kernel on the specified grid of thread blocks. The body of the
-kernel is defined by the single region that this operation contains. The
-operation takes an optional list of async dependencies followed by six
-operands and an optional operand.
+kernel is defined by the single region that this operation contains.
 
-The `async` keyword indicates the kernel should be launched asynchronously;
-the operation returns a new !gpu.async.token when the keyword is specified.
-The kernel launched does not start executing until the ops producing its
-async dependencies (optional operands) have completed.
+The async execution model is equivalent to the `gpu.launch_func` op, refer
+to its description.
 
 The first three operands (following any async dependencies) are grid sizes
 along the x,y,z dimensions and the following three are block sizes along the
@@ -1834,6 +1862,7 @@ function launch(
     clusterSizeY=nothing::Union{Nothing,Value},
     clusterSizeZ=nothing::Union{Nothing,Value},
     dynamicSharedMemorySize=nothing::Union{Nothing,Value},
+    asyncObject=nothing::Union{Nothing,Value},
     asyncToken=nothing::Union{Nothing,IR.Type},
     cooperative=nothing,
     module_=nothing,
@@ -1859,6 +1888,7 @@ function launch(
     !isnothing(clusterSizeY) && push!(operands, clusterSizeY)
     !isnothing(clusterSizeZ) && push!(operands, clusterSizeZ)
     !isnothing(dynamicSharedMemorySize) && push!(operands, dynamicSharedMemorySize)
+    !isnothing(asyncObject) && push!(operands, asyncObject)
     push!(
         attributes,
         operandsegmentsizes([
@@ -1873,6 +1903,7 @@ function launch(
             Int(!isnothing(clusterSizeY)),
             Int(!isnothing(clusterSizeZ)),
             Int(!isnothing(dynamicSharedMemorySize)),
+            Int(!isnothing(asyncObject)),
         ]),
     )
     !isnothing(asyncToken) && push!(op_ty_results, asyncToken)
@@ -3337,7 +3368,7 @@ The reduction operation must be one of:
 *  Integer types: `add`, `mul`, `minui`, `minsi`, `maxui`, `maxsi`, `and`,
    `or`, `xor`
 *  Floating point types: `add`, `mul`, `minnumf`, `maxnumf`, `minimumf`,
-   `maximumf`
+   `maximumf`, `minimumnumf`, `maximumnumf`
 """
 function subgroup_reduce(
     value::Value;

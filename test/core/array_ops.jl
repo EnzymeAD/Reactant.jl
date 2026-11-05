@@ -264,6 +264,15 @@ end
         @test y !== x_ra
     end
 
+    @testset "view of TracedRArray" begin
+        for idxs in ((1:2, 2:3), (2, 1:3))
+            view_ra = view(x_ra, idxs...)
+            y = @jit(collect(view_ra))
+            @test y ≈ x[idxs...]
+            @test y isa ConcreteRArray{Float64}
+        end
+    end
+
     x = 5
     x_ra = ConcreteRNumber(x)
 
@@ -307,6 +316,23 @@ end
     @test @jit(circshift(x_ra, (1, 2, 3))) ≈ circshift(x, (1, 2, 3))
     @test @jit(circshift(x_ra, (-3, 2))) ≈ circshift(x, (-3, 2))
     @test @jit(circshift(x_ra, (5, 2))) ≈ circshift(x, (5, 2))
+end
+
+reverse_view(x) = reverse(view(x, 2:4))
+
+@testset "reverse does not mutate its argument" begin
+    x = collect(Float32, 1:4)
+
+    @testset "$(name)" for (name, reverse_fn) in [
+        ("whole vector", reverse),
+        ("start and stop", v -> reverse(v, 2, 3)),
+        ("start only", v -> reverse(v, 2)),
+        ("view", reverse_view),
+    ]
+        x_ra = Reactant.to_rarray(x)
+        @test @jit(reverse_fn(x_ra)) == reverse_fn(x)
+        @test Array(x_ra) == x
+    end
 end
 
 function meshgrid(args::AbstractVector...)
@@ -469,6 +495,57 @@ end
             @test x.data.buffer.buffer == orig_ptr
         end
     end
+end
+
+mutable struct DeepcopyAliasingHolder{A}
+    a::A
+    b::A
+end
+
+@testset "deepcopy preserves aliasing" begin
+    x = Reactant.to_rarray(Float32[1, 2, 3])
+
+    # Shared references within a container stay shared after `deepcopy`
+    t = (a=x, b=x)
+    c = deepcopy(t)
+    @test c.a === c.b
+    @test c.a !== x
+    @test Array(c.a) == Float32[1, 2, 3]
+
+    h = DeepcopyAliasingHolder(x, x)
+    hc = deepcopy(h)
+    @test hc.a === hc.b
+    @test hc.a !== x
+    @test Array(hc.a) == Float32[1, 2, 3]
+
+    # Aliasing is preserved across nested containers
+    n = (; fields=(; u=x), lookup=(x, x))
+    nc = deepcopy(n)
+    @test nc.fields.u === nc.lookup[1] === nc.lookup[2]
+
+    # Distinct arrays stay distinct
+    y = Reactant.to_rarray(Float32[4, 5, 6])
+    d = deepcopy((x, y, x))
+    @test d[1] === d[3]
+    @test d[1] !== d[2]
+    @test Array(d[2]) == Float32[4, 5, 6]
+
+    # The copy is independent of the original
+    fill!(c.a, 7)
+    @test Array(c.b) == fill(7.0f0, 3)
+    @test Array(x) == Float32[1, 2, 3]
+
+    # A lone array still deepcopies
+    z = deepcopy(x)
+    @test z !== x
+    @test Array(z) == Float32[1, 2, 3]
+
+    # Numbers too
+    s = Reactant.to_rarray(4.0; track_numbers=Number)
+    sc = deepcopy((s, s))
+    @test sc[1] === sc[2]
+    @test sc[1] !== s
+    @test Reactant.to_number(sc[1]) == 4.0
 end
 
 @testset "map!" begin

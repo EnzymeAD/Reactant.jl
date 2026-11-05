@@ -553,3 +553,93 @@ end
         @test @jit(getindex(x_ra, idx_ra)) ≈ getindex(x, idx)
     end
 end
+
+# a host range with a traced index (a `LinRange` has no traced counterpart)
+@testset "Indexing a host $(x) with a traced index" for x in (
+    1:3:10, range(-0.1, 0.3; length=5), LinRange(0.0, 1.0, 11)
+)
+    @testset "idx: $(idx)" for idx in (1, 2, 3)
+        idx_ra = Reactant.to_rarray(idx; track_numbers=true)
+        @test @jit(getindex(x, idx_ra)) ≈ getindex(x, idx)
+    end
+end
+
+function copy_from_plain_vec!(x)
+    ys = [1.0, 2.0, 3.0]
+    @trace for i in 1:length(x)
+        x[i] = ys[i]
+    end
+    return x
+end
+
+function copy_from_plain_mat_cartesian!(x)
+    ys = [1.0 2.0; 3.0 4.0]
+    @allowscalar @trace for i in 1:size(x, 1)
+        @trace for j in 1:size(x, 2)
+            x[i, j] = ys[i, j]
+        end
+    end
+    return x
+end
+
+function copy_from_plain_mat_linear!(x)
+    ys = [1.0 2.0; 3.0 4.0]
+    @allowscalar @trace for i in 1:length(x)
+        x[i] = ys[i]
+    end
+    return x
+end
+
+function sum_plain_mat_rows(x)
+    ys = [1.0 2.0 3.0; 4.0 5.0 6.0]
+    s = zero(x)
+    @trace for i in 1:2
+        s = s .+ ys[i, :]
+    end
+    return s .+ x
+end
+
+function copy_from_plain_vec_view!(x)
+    ys = [100.0, 1.0, 2.0, 3.0]
+    @allowscalar @trace for i in 1:length(x)
+        v = @view ys[2:4]
+        x[i] = v[i]
+    end
+    return x
+end
+
+index_1d_view(a, i) = @allowscalar (@view a[2:3])[i]
+index_traced_elem_vec_untraced(x) = @allowscalar([x[1], x[2], x[3]][[1, 3]]) .+ 0.0
+index_traced_elem_vec_traced(x, ia) = @allowscalar [x[1], x[2], x[3]][ia]
+index_traced_elem_0d(x) = @allowscalar fill(x[2])[]
+index_plain_mat_linear(idx) = @allowscalar reshape(collect(1.0:10.0), 2, 5)[idx]
+
+@testset "Indexing plain Array with traced indices (#3301)" begin
+    xs = Reactant.to_rarray([0.0, 0.0, 0.0])
+    @test_throws ErrorException @jit(copy_from_plain_vec!(xs))
+
+    xs = Reactant.to_rarray([0.0, 0.0, 0.0])
+    @test @allowscalar(@jit(copy_from_plain_vec!(xs))) ≈ [1.0, 2.0, 3.0]
+
+    xm = Reactant.to_rarray(zeros(2, 2))
+    @test @jit(copy_from_plain_mat_cartesian!(xm)) ≈ [1.0 2.0; 3.0 4.0]
+
+    xl = Reactant.to_rarray(zeros(4))
+    @test @jit(copy_from_plain_mat_linear!(xl)) ≈ vec([1.0 2.0; 3.0 4.0])
+
+    xs_sl = Reactant.to_rarray([10.0, 20.0, 30.0])
+    @test @jit(sum_plain_mat_rows(xs_sl)) ≈ [15.0, 27.0, 39.0]
+
+    xv = Reactant.to_rarray(zeros(3))
+    @test @jit(copy_from_plain_vec_view!(xv)) ≈ [1.0, 2.0, 3.0]
+
+    x_ra = Reactant.to_rarray([10.0, 20.0, 30.0])
+    @test @jit(index_1d_view(x_ra, ConcreteRNumber(2))) ≈ 30.0
+    @test @jit(index_traced_elem_vec_untraced(x_ra)) ≈ [10.0, 30.0]
+    @test @jit(index_traced_elem_vec_traced(x_ra, Reactant.to_rarray([3, 1]))) ≈
+        [30.0, 10.0]
+    @test @jit(index_traced_elem_0d(x_ra)) ≈ 20.0
+
+    @test @jit(index_plain_mat_linear(Reactant.to_rarray([2, 4, 7]))) ≈ [2.0, 4.0, 7.0]
+    @test @jit(index_plain_mat_linear(ConcreteRNumber(5))) ≈ 5.0
+end

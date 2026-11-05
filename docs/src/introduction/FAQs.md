@@ -180,8 +180,13 @@ BenchmarkTools.Trial: 233 samples with 8 evaluations per sample.
 
 ## XLA verbosity flags
 
-XLA has special logging flags that can be used to get more information about the compilation
-process. These flags are:
+By default Reactant prints XLA's warnings and errors, but not its INFO messages. Set the
+`TF_CPP_MIN_LOG_LEVEL` environment variable to `0` before loading Reactant, or call
+`Reactant.XLA.SetLogLevel(0)` at any time, to see them as well (`1` returns to the
+default).
+
+XLA also has special logging flags that can be used to get more information about the
+compilation process. These flags are:
 
 1. `TF_CPP_MAX_VLOG_LEVEL`: This set the max verbosity level for XLA, i.e. all logging
    for `VLOG(level)` where `level <= TF_CPP_MAX_VLOG_LEVEL` will be printed.

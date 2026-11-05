@@ -2,7 +2,9 @@ module Reactant
 
 using ReactantCore:
     ReactantCore,
+    @annotate,
     @trace,
+    annotate,
     within_compile,
     MissingTracedValue,
     materialize_traced_array,
@@ -159,6 +161,7 @@ aos_to_soa(x::AnyTracedRArray) = x
 
 function aos_to_soa(x::Array{TracedRNumber{T}}) where {T}
     isa_traced_soa(ancestor(x)) && return x
+    isempty(x) && return similar(TracedRArray{T}, size(x))
     for i in eachindex(x)
         if !isassigned(x, i)
             x[i] = promote_to(TracedRNumber{T}, 0)
@@ -214,10 +217,17 @@ include("Indexing.jl")
 
 include("ConcreteRArray.jl")
 
-use_overlayed_version(x) = false
-function use_overlayed_version(x::F) where {F<:Function}
-    return use_overlayed_version(getfield.(Ref(x), fieldnames(F)))
+function use_overlayed_version(x::T) where {T}
+    isstructtype(T) || return false
+    return looped_any(use_overlayed_version ∘ Base.Fix1(getfield, x), 1:nfields(x))
 end
+use_overlayed_version(::Symbol) = false
+use_overlayed_version(::Module) = false
+use_overlayed_version(::Core.SimpleVector) = false
+use_overlayed_version(::DataType) = false
+use_overlayed_version(::Exception) = false
+use_overlayed_version(::Nothing) = false
+use_overlayed_version(::Missing) = false
 use_overlayed_version(x::Base.Generator) = use_overlayed_version((x.f, x.iter))
 use_overlayed_version(x::Base.Iterators.Zip) = use_overlayed_version(x.is)
 use_overlayed_version(x::Base.Iterators.Enumerate) = use_overlayed_version(x.itr)
@@ -227,13 +237,15 @@ use_overlayed_version(iter::NamedTuple) = looped_any(use_overlayed_version, valu
 use_overlayed_version(::Number) = false
 use_overlayed_version(::MissingTracedValue) = true
 use_overlayed_version(rng::ReactantRNG) = use_overlayed_version(rng.seed)
-use_overlayed_version(::AbstractArray{<:TracedRNumber}) = true
 use_overlayed_version(::TracedRArray) = true
 use_overlayed_version(::TracedRNumber) = true
 use_overlayed_version(::TracedStepRangeLen) = true
 use_overlayed_version(::TracedUnitRange) = true
 use_overlayed_version(::TracedRational) = true
 function use_overlayed_version(x::AbstractArray)
+    T = eltype(x)
+    # `Union{}` is a subtype of everything, but an array of it holds no traced values.
+    T !== Union{} && T <: TracedRNumber && return true
     a = ancestor(x)
     a === x && return false
     return use_overlayed_version(a)
@@ -270,7 +282,10 @@ export StackedBatchDuplicated, StackedBatchDuplicatedNoNeed
 const TracedType = Union{TracedRArray,TracedRNumber,MissingTracedValue}
 
 include("ControlFlow.jl")
+include("Enums.jl")
 include("Tracing.jl")
+
+include("integration/MPI.jl")
 
 include("compiler/Compiler.jl")
 
@@ -305,10 +320,12 @@ export ConcreteRArray,
     @code_xla,
     @jit,
     @trace,
-    within_compile
+    within_compile,
+    @annotate,
+    annotate
 
 @static if VERSION ≥ v"1.11"
-    @eval $(Expr(:public, :Periodic, :Binomial))
+    @eval $(Expr(:public, :Periodic, :Binomial, :TracedEnum, :ConcreteEnum))
 end
 
 const registry = Ref{Union{Nothing,MLIR.IR.DialectRegistry}}()
@@ -319,8 +336,8 @@ function register_enzymexla_dialects(ctx::MLIR.IR.Context)
 end
 
 ReactantContext(; kwargs...) = ReactantContext(registry[]; kwargs...)
-function ReactantContext(args...; kwargs...)
-    ctx = MLIR.IR.Context(args...; kwargs...)
+function ReactantContext(args...; threading::Bool=false, kwargs...)
+    ctx = MLIR.IR.Context(args...; threading, kwargs...)
     register_enzymexla_dialects(ctx)
     return ctx
 end
@@ -357,11 +374,18 @@ function initialize_ptrs()
             "cuModuleLoadData",
             "cuModuleGetFunction",
             "cuStreamSynchronize",
+            "ncclAllReduce",
         )
             MLIR.API.EnzymeJaXMapSymbol(
                 name, Libdl.dlsym(Reactant_jll.libReactantExtra_handle, name)
             )
         end
+    end
+    # LLVM lowers float -> bfloat truncation to a compiler-rt libcall on targets without
+    # native bf16 conversions.
+    @static if Sys.iswindows() && VERSION >= v"1.11"
+        MLIR.API.EnzymeJaXMapSymbol("__truncsfbf2", cglobal(:julia__truncsfbf2))
+        MLIR.API.EnzymeJaXMapSymbol("__truncdfbf2", cglobal(:julia__truncdfbf2))
     end
 end
 

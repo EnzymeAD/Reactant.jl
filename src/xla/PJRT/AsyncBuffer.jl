@@ -9,7 +9,11 @@ AsyncBuffer(args...; kwargs...) = AsyncBuffer(Buffer(args...; kwargs...), nothin
 
 function Base.copy(b::AsyncBuffer)
     Base.wait(b)
-    return AsyncBuffer(Base.copy(b.buffer), nothing)
+    # The device-to-device copy is asynchronous: the new buffer is allocated eagerly but
+    # its contents arrive later. Track that with the buffer's ready future so that
+    # `wait`/`synchronize` on the copy (and hence raw-pointer access to it) are correct.
+    buffer = Base.copy(b.buffer)
+    return AsyncBuffer(buffer, ready_future(buffer))
 end
 
 function Base.similar(a::AsyncBuffer, args...)

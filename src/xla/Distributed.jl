@@ -121,10 +121,32 @@ end
     process_id::Int = 0
     num_processes::Int = 1
     local_gpu_device_ids::Union{Nothing,Vector{Int}} = nothing
+    gpu_device_mapping_owner::Symbol = :none
     service::Union{Nothing,DistributedRuntimeService} = nothing
     client::Union{Nothing,DistributedRuntimeClient} = nothing
     coordinator_address::Union{Nothing,String} = nothing
     coordinator_bind_address::Union{Nothing,String} = nothing
+end
+
+"""
+    claim_gpu_device_mapping!(owner)
+
+Reserve GPU device mapping configuration for `owner`. Distributed XLA and MPI/NCCL
+use incompatible process-to-device setup, so only one of them may configure it.
+"""
+function claim_gpu_device_mapping!(owner::Symbol)
+    owner in (:distributed, :mpi) || error("Unknown GPU device mapping owner: $owner")
+
+    current_owner = global_state.gpu_device_mapping_owner
+    if current_owner == :none
+        global_state.gpu_device_mapping_owner = owner
+    elseif current_owner != owner
+        error(
+            "GPU device mapping is already owned by $current_owner; " *
+            "cannot initialize $owner GPU device mapping in the same process",
+        )
+    end
+    return nothing
 end
 
 function shutdown(state::State)

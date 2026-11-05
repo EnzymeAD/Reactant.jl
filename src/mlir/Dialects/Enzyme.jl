@@ -43,6 +43,7 @@ function affine_atomic_rmw(
     indices::Vector{Value};
     result::IR.Type,
     kind,
+    ordering,
     map,
     alignment=nothing,
     fastmath=nothing,
@@ -52,7 +53,11 @@ function affine_atomic_rmw(
     operands = Value[value, memref, indices...]
     owned_regions = Region[]
     successors = Block[]
-    attributes = NamedAttribute[NamedAttribute("kind", kind), NamedAttribute("map", map)]
+    attributes = NamedAttribute[
+        NamedAttribute("kind", kind),
+        NamedAttribute("ordering", ordering),
+        NamedAttribute("map", map),
+    ]
     !isnothing(alignment) && push!(attributes, NamedAttribute("alignment", alignment))
     !isnothing(fastmath) && push!(attributes, NamedAttribute("fastmath", fastmath))
 

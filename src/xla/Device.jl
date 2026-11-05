@@ -52,11 +52,31 @@ function device_properties(device::AbstractDevice)
         GC.@preserve jldevprops begin
             MLIR.API.ReactantCudaDeviceGetProperties(jldevprops, local_hardware_id)
         end
+    elseif pname == "rocm"
+        GC.@preserve jldevprops begin
+            MLIR.API.ReactantRocmDeviceGetProperties(jldevprops, local_hardware_id)
+        end
     else
         @warn "`get_properties` not implemented for platform: $(pname)" maxlog = 1
     end
     DEVICE_PROPERTIES_CACHE[(local_hardware_id, pname)] = jldevprops[]
     return jldevprops[]
+end
+
+"""
+    rocm_gcn_arch_name(device::AbstractDevice)
+
+The target ID of a ROCm device, e.g. `"gfx942:sramecc+:xnack-"`, as
+`rocdl-attach-target` takes it.
+"""
+function rocm_gcn_arch_name(device::AbstractDevice)
+    buffer = zeros(UInt8, 256)
+    GC.@preserve buffer begin
+        MLIR.API.ReactantRocmDeviceGetGcnArchName(
+            pointer(buffer), length(buffer), get_local_hardware_id(device)
+        )
+        return unsafe_string(pointer(buffer))
+    end
 end
 
 function Base.show(io::IO, ::MIME"text/plain", props::MLIR.API.DeviceProperties)

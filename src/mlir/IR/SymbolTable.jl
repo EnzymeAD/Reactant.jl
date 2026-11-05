@@ -16,7 +16,7 @@ Base.cconvert(::Core.Type{API.MlirSymbolTable}, st::SymbolTable) = st
 Base.unsafe_convert(::Core.Type{API.MlirSymbolTable}, st::SymbolTable) = mark_use(st).ref
 
 # TODO(#2246) mlirSymbolTableGetSymbolAttributeName
-# TODO(#2246) mlirSymbolTableGetVisibilityAttributeName
+# TODO(#2246) mlirSymbolTableGetDefaultVisibilityAttributeName
 
 """
     lookup(symboltable, name)

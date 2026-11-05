@@ -25,9 +25,7 @@ Base.collect(x::TracedRNumber{T}) where {T} = TracedRArray{T,0}((), x.mlir_data,
 
 Base.copy(x::TracedRNumber{T}) where {T} = TracedRNumber{T}((), x.mlir_data)
 
-function Base.eps(::Type{TracedRNumber{T}}) where {T}
-    return Reactant.promote_to(TracedRNumber{T}, eps(T))
-end
+Base.eps(::Type{TracedRNumber{T}}) where {T} = eps(T)
 Base.eps(x::TracedRNumber{T}) where {T} = eps(typeof(x))
 
 function Base.typemin(::Type{<:TracedRNumber{T}}) where {T}
@@ -270,6 +268,23 @@ for (jlop, hloop) in (
     @eval function $(jlop)(lhs::TracedRNumber{T}, rhs::TracedRNumber{T}) where {T}
         return @opcall $(hloop)(lhs, rhs)
     end
+end
+
+for jlop in (:(Base.:+), :(Base.:-))
+    @eval function $(jlop)(x::TracedRNumber{Bool}, y::TracedRNumber{Bool})
+        return $(jlop)(
+            Reactant.promote_to(TracedRNumber{Int}, x),
+            Reactant.promote_to(TracedRNumber{Int}, y),
+        )
+    end
+    @eval $(jlop)(x::TracedRNumber{Bool}) =
+        $(jlop)(Reactant.promote_to(TracedRNumber{Int}, x))
+end
+
+for (wrapop, jlop) in ((Symbol("+%"), :+), (Symbol("-%"), :-))
+    isdefined(Base, wrapop) || continue
+    @eval Base.$(wrapop)(x::TracedRNumber{Bool}, y::TracedRNumber{Bool}) = $(jlop)(x, y)
+    @eval Base.$(wrapop)(x::TracedRNumber{Bool}) = $(jlop)(x)
 end
 
 function Base.rem(x::TracedRNumber, y::TracedRNumber, ::typeof(Base.RoundFromZero))
@@ -605,10 +620,18 @@ for (jlop, hloop, hlocomp) in (
 end
 
 function Base.ifelse(@nospecialize(pred::TracedRNumber{Bool}), x::Number, y::Number)
+    T1 = unwrapped_eltype(x)
+    T2 = unwrapped_eltype(y)
+    if T1 != T2
+        @warn "`ifelse` with different element-types in Reactant works by promoting the \
+                element-type to the common type. This is semantically different from the \
+                behavior of `ifelse` in Base. Use with caution" maxlog = 1
+    end
+    T = promote_type(T1, T2)
     return ifelse(
         pred,
-        Reactant.promote_to(TracedRNumber{unwrapped_eltype(x)}, x),
-        Reactant.promote_to(TracedRNumber{unwrapped_eltype(y)}, y),
+        Reactant.promote_to(TracedRNumber{T}, x),
+        Reactant.promote_to(TracedRNumber{T}, y),
     )
 end
 
@@ -1016,7 +1039,7 @@ function (::Type{T})(x::TwicePrecision) where {T<:Reactant.TracedRNumber}
 end
 
 function (::Type{T})(x::TwicePrecision) where {T<:Reactant.ConcreteRNumber}
-    return Reactant.ConcreteRNumber(T(x.hi) - T(x.lo))::T
+    return Reactant.ConcreteRNumber(T(x.hi) + T(x.lo))::T
 end
 
 function Base.round(::Type{T}, x::TracedRNumber{<:AbstractFloat}) where {T<:Integer}

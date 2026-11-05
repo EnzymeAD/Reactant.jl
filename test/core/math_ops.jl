@@ -163,6 +163,106 @@ end
     @test !Bool(@jit(isinf(ConcreteRNumber(true))))
 end
 
+@testset "isinf/isnan/isfinite on concrete scalars" begin
+    for x in (Inf, -Inf, NaN, 2.0, 2, true),
+        xr in (ConcreteRNumber(x), ConcreteRArray(fill(x)))
+
+        @test isinf(xr) === isinf(x)
+        @test isnan(xr) === isnan(x)
+        @test isfinite(xr) === isfinite(x)
+    end
+end
+
+@testset "zero/one on concrete scalars" begin
+    device = last(Reactant.devices())
+    for x in (2.5, 0.0, -3, 1, true)
+        xr = ConcreteRNumber(x; device)
+        for f in (zero, one, oneunit, float)
+            y = f(xr)
+            @test y isa ConcreteRNumber
+            @test Reactant.XLA.device(y) == Reactant.XLA.device(xr)
+            @test Reactant.to_number(y) === f(x)
+        end
+        @test iszero(xr) === iszero(x)
+        @test isone(xr) === isone(x)
+    end
+end
+
+function result_or_error(f, x)
+    try
+        return f(x)
+    catch e
+        return typeof(e)
+    end
+end
+
+@testset "host math on concrete scalars" begin
+    # Outside `@jit`, functions of concrete numbers return host values
+    for x in (0.5, -2.5f0, 3, true, ComplexF32(1, 2))
+        xr = ConcreteRNumber(x)
+        for f in (
+            abs,
+            abs2,
+            -,
+            inv,
+            sign,
+            conj,
+            imag,
+            eps,
+            sqrt,
+            cbrt,
+            exp,
+            exp2,
+            expm1,
+            log,
+            log2,
+            log10,
+            log1p,
+            sin,
+            cos,
+            tan,
+            sinh,
+            cosh,
+            tanh,
+            asin,
+            acos,
+            atan,
+            asinh,
+            acosh,
+            atanh,
+        )
+            @test result_or_error(f, xr) === result_or_error(f, x)
+        end
+    end
+    for x in (0.0, -0.0, 1.0, -2.5f0, 3, true),
+        xr in (ConcreteRNumber(x), ConcreteRArray(fill(x)))
+
+        for f in (isinteger, signbit, iszero, isone)
+            @test f(xr) === f(x)
+        end
+    end
+end
+
+@testset "round/trunc/floor/ceil" begin
+    for x in (4.2313f0, -2.5, 7)
+        xr = ConcreteRNumber(x)
+        for f in (round, trunc, floor, ceil)
+            @test f(xr) === f(x)
+            @test f(Int32, xr) === f(Int32, x)
+            @test f(Integer, xr) === f(Integer, x)
+            @test f(xr; digits=2) === f(x; digits=2)
+            @test f(xr; sigdigits=2) === f(x; sigdigits=2)
+            @test f(xr; digits=1, base=2) === f(x; digits=1, base=2)
+        end
+        for r in (RoundNearest, RoundNearestTiesAway, RoundUp, RoundDown, RoundToZero)
+            @test round(xr, r) === round(x, r)
+            @test round(xr, r; sigdigits=3) === round(x, r; sigdigits=3)
+            # Julia 1.10 has no `round(::Type, ::Integer, ::RoundingMode)`
+            x isa Integer || @test round(Int, xr, r) === round(Int, x, r)
+        end
+    end
+end
+
 @testset "isapprox" begin
     # `ConcreteRNumber` forwards `isapprox` straight to `Base` on the unwrapped
     # values (see the `AbstractConcreteNumber` methods in ConcreteRArray.jl), so
@@ -206,7 +306,12 @@ end
         y_ra = Reactant.to_rarray(y; track_numbers=Number)
         got = @jit isapprox(x_ra, y_ra; kwargs...)
         @test got isa ConcreteRNumber{Bool}
-        @test Bool(got) == expected
+        # A TPU has no Float64 arithmetic: abs2(1e-20) = 1e-40 is below Float32's
+        # smallest normal and flushes to zero there, so both sides of the
+        # comparison become 0 and the two numbers test as approximately equal.
+        @test Bool(got) == expected skip = (
+            RunningOnTPU && (x, y) == (0.0, 1e-20) && haskey(kwargs, :norm)
+        )
     end
 
     @testset "traced vs real: x=$x, y=$y" for (x, y) in float_pairs
@@ -521,4 +626,17 @@ end
     xs = Reactant.to_rarray([3.0, 5.0, 8.0])
     ys = Reactant.to_rarray([4.0, 12.0, 15.0])
     @test @jit(hypot.(xs, ys)) ≈ [5.0, 13.0, 17.0]
+end
+
+@testset "Traced Bool arithmetic follows Base" begin
+    a = Reactant.to_rarray([1.0, -7.0, 8.0, 0.5])
+    f(x, y) = ((x < -5.0) - (y > 5.0)) * 10
+    g(x, y) = (x < 0.0) + (y > 5.0)
+    h(x) = -(x < 0.0)
+    k(x) = +(x < 0.0)
+    @test Array(@jit(broadcast(f, a, a))) == f.(Array(a), Array(a))
+    @test Array(@jit(broadcast(g, a, a))) == g.(Array(a), Array(a))
+    @test Array(@jit(broadcast(h, a))) == h.(Array(a))
+    @test Array(@jit(broadcast(k, a))) == k.(Array(a))
+    @test eltype(@jit(broadcast(k, a))) == Int
 end

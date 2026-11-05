@@ -198,6 +198,11 @@ end
         xscalar = x[1]
         @test xscalar ≈ @jit Ops.constant(xscalar)
     end
+
+    # An element type that is not a number errors instead of recursing
+    x = Union{Missing,Float32}[1, missing, 1]
+    @test_throws ArgumentError @jit Ops.constant(x)
+    @test_throws ArgumentError @jit Ops.constant(view(x, 1:2))
 end
 
 @testset "cosine" begin
@@ -719,7 +724,7 @@ end
     g1(x, s) = Ops.set_dimension_size(x, s, 1)
     result = @jit(g1(x, dim_size))
     @test size(result) == (4,)
-    @test Array(result) ≈ Float32[1.0, 2.0, 3.0, 4.0] broken = RunningOnTPU
+    @test Array(result) ≈ Float32[1.0, 2.0, 3.0, 4.0]
 
     # Test with 2D array, setting dimension 1
     x2d = Reactant.to_rarray(Float32[1.0 2.0; 3.0 4.0; 5.0 6.0])
@@ -727,14 +732,14 @@ end
     g2(x, s) = Ops.set_dimension_size(x, s, 1)
     result = @jit(g2(x2d, dim_size))
     @test size(result) == (3, 2)
-    @test Array(result) ≈ Float32[1.0 2.0; 3.0 4.0; 5.0 6.0] broken = RunningOnTPU
+    @test Array(result) ≈ Float32[1.0 2.0; 3.0 4.0; 5.0 6.0]
 
     # Test with 2D array, setting dimension 2
     dim_size = ConcreteRNumber(Int32(2))
     g3(x, s) = Ops.set_dimension_size(x, s, 2)
     result = @jit(g3(x2d, dim_size))
     @test size(result) == (3, 2)
-    @test Array(result) ≈ Float32[1.0 2.0; 3.0 4.0; 5.0 6.0] broken = RunningOnTPU
+    @test Array(result) ≈ Float32[1.0 2.0; 3.0 4.0; 5.0 6.0]
 
     # Test with different element types (Int32 array)
     x_int = Reactant.to_rarray(Int32[1, 2, 3])
@@ -742,7 +747,7 @@ end
     g4(x, s) = Ops.set_dimension_size(x, s, 1)
     result = @jit(g4(x_int, dim_size))
     @test size(result) == (3,)
-    @test Array(result) == Int32[1, 2, 3] broken = RunningOnTPU
+    @test Array(result) == Int32[1, 2, 3]
 end
 
 @testset "shift_left" begin
@@ -952,10 +957,11 @@ end
 end
 
 @testset "digamma" begin
-    # small divergence between chlo.digamma and SpecialFunctions.digamma:
-    # on <=0, chlo.digamma returns NaN, SpecialFunctions.digamma returns Inf
+    # small divergence between chlo.digamma and SpecialFunctions.digamma: at the
+    # negative integer poles chlo.digamma returns NaN where SpecialFunctions.digamma
+    # returns -Inf. At 0 the two agree on -Inf.
     x = Reactant.to_rarray([-1.0, 0.0, 1.0])
-    @test [NaN, NaN, SpecialFunctions.digamma(1.0)] ≈ @jit(Ops.digamma(x)) nans = true skip =
+    @test [NaN, -Inf, SpecialFunctions.digamma(1.0)] ≈ @jit(Ops.digamma(x)) nans = true skip =
         RunningOnAppleX86
 end
 
@@ -1303,6 +1309,9 @@ end
         y_ra = @jit fn(x_ra)
         @test y_ra isa ConcreteRArray{Float32,2}
         @test Array(y_ra) == ones(Float32, 2, 3)
+        @test first(
+            Base.return_types(() -> fill(zero(Reactant.TracedRNumber{Float32}), 2, 3))
+        ) == Reactant.TracedRArray{Float32,2}
     end
 end
 
@@ -1347,6 +1356,53 @@ end
 
         @test @jit(recon_from_lu(lu_ra)) ≈ @jit(apply_permutation(x_ra, perm)) atol = 1e-5 rtol =
             1e-2
+    end
+end
+
+# dl[1] and du[end] are ignored by the op
+tridiagonal_matrix(dl, d, du) = Tridiagonal(dl[2:end], d, du[1:(end - 1)])
+
+@testset "tridiagonal solve" begin
+    m, nrhs = 6, 3
+
+    @testset "unbatched" begin
+        dl = Float32.(rand(m))
+        d = Float32.(rand(m) .+ 4) # diagonally dominant
+        du = Float32.(rand(m))
+        b = Float32.(rand(m, nrhs))
+
+        X, info = @jit Ops.tridiagonal_solve(
+            Reactant.to_rarray(dl),
+            Reactant.to_rarray(d),
+            Reactant.to_rarray(du),
+            Reactant.to_rarray(b),
+        )
+        @test size(X) == (m, nrhs)
+        @test Array(X) ≈ tridiagonal_matrix(dl, d, du) \ b atol = 1e-5 rtol = 1e-3
+        @test Int(info) == 0
+    end
+
+    @testset "batched" begin
+        dl = Float32.(rand(4, 2, m))
+        d = Float32.(rand(4, 2, m) .+ 4)
+        du = Float32.(rand(4, 2, m))
+        b = Float32.(rand(4, 2, m, nrhs))
+
+        X, info = @jit Ops.tridiagonal_solve(
+            Reactant.to_rarray(dl),
+            Reactant.to_rarray(d),
+            Reactant.to_rarray(du),
+            Reactant.to_rarray(b),
+        )
+        @test size(X) == size(b)
+        @test size(info) == (4, 2)
+        @test all(iszero, Array(info))
+
+        X = Array(X)
+        for i in 1:4, j in 1:2
+            A = tridiagonal_matrix(dl[i, j, :], d[i, j, :], du[i, j, :])
+            @test X[i, j, :, :] ≈ A \ b[i, j, :, :] atol = 1e-5 rtol = 1e-3
+        end
     end
 end
 

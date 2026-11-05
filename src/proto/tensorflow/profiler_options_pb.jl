@@ -106,9 +106,10 @@ struct ProfileOptions
     raise_error_on_start_failure::Bool
     session_id::String
     override_hostname::String
+    enable_multipass::Bool
 end
-PB.default_values(::Type{ProfileOptions}) = (;version = zero(UInt32), device_type = var"ProfileOptions.DeviceType".UNSPECIFIED, include_dataset_ops = false, host_tracer_level = zero(UInt32), device_tracer_level = zero(UInt32), python_tracer_level = zero(UInt32), enable_hlo_proto = false, start_timestamp_ns = zero(UInt64), duration_ms = zero(UInt64), repository_path = "", trace_options = nothing, advanced_configuration = Dict{String,var"ProfileOptions.AdvancedConfigValue"}(), raise_error_on_start_failure = false, session_id = "", override_hostname = "")
-PB.field_numbers(::Type{ProfileOptions}) = (;version = 5, device_type = 6, include_dataset_ops = 1, host_tracer_level = 2, device_tracer_level = 3, python_tracer_level = 4, enable_hlo_proto = 7, start_timestamp_ns = 8, duration_ms = 9, repository_path = 10, trace_options = 11, advanced_configuration = 12, raise_error_on_start_failure = 13, session_id = 14, override_hostname = 15)
+PB.default_values(::Type{ProfileOptions}) = (;version = zero(UInt32), device_type = var"ProfileOptions.DeviceType".UNSPECIFIED, include_dataset_ops = false, host_tracer_level = zero(UInt32), device_tracer_level = zero(UInt32), python_tracer_level = zero(UInt32), enable_hlo_proto = false, start_timestamp_ns = zero(UInt64), duration_ms = zero(UInt64), repository_path = "", trace_options = nothing, advanced_configuration = Dict{String,var"ProfileOptions.AdvancedConfigValue"}(), raise_error_on_start_failure = false, session_id = "", override_hostname = "", enable_multipass = false)
+PB.field_numbers(::Type{ProfileOptions}) = (;version = 5, device_type = 6, include_dataset_ops = 1, host_tracer_level = 2, device_tracer_level = 3, python_tracer_level = 4, enable_hlo_proto = 7, start_timestamp_ns = 8, duration_ms = 9, repository_path = 10, trace_options = 11, advanced_configuration = 12, raise_error_on_start_failure = 13, session_id = 14, override_hostname = 15, enable_multipass = 16)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ProfileOptions}, _endpos::Int=0, _group::Bool=false)
     version = zero(UInt32)
@@ -126,6 +127,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ProfileOptions}, _endpos
     raise_error_on_start_failure = false
     session_id = ""
     override_hostname = ""
+    enable_multipass = false
     while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 5
@@ -158,11 +160,13 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ProfileOptions}, _endpos
             session_id = PB.decode(d, String)
         elseif field_number == 15
             override_hostname = PB.decode(d, String)
+        elseif field_number == 16
+            enable_multipass = PB.decode(d, Bool)
         else
             Base.skip(d, wire_type)
         end
     end
-    return ProfileOptions(version, device_type, include_dataset_ops, host_tracer_level, device_tracer_level, python_tracer_level, enable_hlo_proto, start_timestamp_ns, duration_ms, repository_path, trace_options[], advanced_configuration, raise_error_on_start_failure, session_id, override_hostname)
+    return ProfileOptions(version, device_type, include_dataset_ops, host_tracer_level, device_tracer_level, python_tracer_level, enable_hlo_proto, start_timestamp_ns, duration_ms, repository_path, trace_options[], advanced_configuration, raise_error_on_start_failure, session_id, override_hostname, enable_multipass)
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::ProfileOptions)
@@ -182,6 +186,7 @@ function PB.encode(e::PB.AbstractProtoEncoder, x::ProfileOptions)
     x.raise_error_on_start_failure != false && PB.encode(e, 13, x.raise_error_on_start_failure)
     !isempty(x.session_id) && PB.encode(e, 14, x.session_id)
     !isempty(x.override_hostname) && PB.encode(e, 15, x.override_hostname)
+    x.enable_multipass != false && PB.encode(e, 16, x.enable_multipass)
     return position(e.io) - initpos
 end
 function PB._encoded_size(x::ProfileOptions)
@@ -201,6 +206,7 @@ function PB._encoded_size(x::ProfileOptions)
     x.raise_error_on_start_failure != false && (encoded_size += PB._encoded_size(x.raise_error_on_start_failure, 13))
     !isempty(x.session_id) && (encoded_size += PB._encoded_size(x.session_id, 14))
     !isempty(x.override_hostname) && (encoded_size += PB._encoded_size(x.override_hostname, 15))
+    x.enable_multipass != false && (encoded_size += PB._encoded_size(x.enable_multipass, 16))
     return encoded_size
 end
 

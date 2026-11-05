@@ -132,6 +132,35 @@ end
     @test @jit(custombcast(x_ra)) ≈ custombcast(x)
 end
 
+@testset "elem_apply_via_while_loop with Ref scalars and overlayed calls" begin
+    x = Float32[1, 2, 3]
+    x_ra = Reactant.to_rarray(x)
+
+    loop_ref_im(a) = begin
+        s = sum(a)
+        return ((u, z) -> s * u + z * u).(a, Ref(im))
+    end
+    res_im = @jit loop_ref_im(x_ra)
+    @test res_im isa Reactant.AbstractConcreteArray{ComplexF32,1}
+    @test Array(res_im) ≈ loop_ref_im(x)
+
+    loop_ref_1im(a) = begin
+        s = sum(a)
+        return ((u, z) -> s * u + z * u).(a, Ref(1im))
+    end
+    res_1im = @jit loop_ref_1im(x_ra)
+    @test res_1im isa Reactant.AbstractConcreteArray{ComplexF32,1}
+    @test Array(res_1im) ≈ loop_ref_1im(x)
+
+    table = Float32[10, 20]
+    loop_overlay_index(a) = begin
+        s = sum(a)
+        return (u -> s + Reactant.@allowscalar(table[ifelse(u > 1.5f0, 2, 1)])).(a)
+    end
+    res_idx = @jit loop_overlay_index(x_ra)
+    @test Array(res_idx) ≈ loop_overlay_index(x)
+end
+
 function bcast_scalar_with_jlarray(jlarr, x)
     return jlarr .+ x
 end
@@ -287,4 +316,33 @@ end
 
     g(x) = all(broadcast(xj -> true, x))
     @test Bool(@jit g(x))
+
+    a = Float32[1, 2, 3]
+    a_ra = Reactant.to_rarray(a)
+
+    const_bcast_im!(d, y) = (d .= (_ -> im).(y); return nothing)
+    dest = Reactant.to_rarray(zeros(ComplexF32, 3))
+    @jit const_bcast_im!(dest, a_ra)
+    @test Array(dest) == fill(ComplexF32(im), 3)
+
+    const_bcast_view!(d, y) = (view(d, 1:2) .= (_ -> 1im).(view(y, 1:2)); return nothing)
+    dest = Reactant.to_rarray(zeros(ComplexF32, 3))
+    @jit const_bcast_view!(dest, a_ra)
+    @test Array(dest) == ComplexF32[1im, 1im, 0]
+
+    const_bcast_jlarr(y) = begin
+        arr = Reactant.@allowscalar [complex(y[1]), complex(y[2])]
+        arr .= (_ -> im).(arr)
+        return stack(arr)
+    end
+    @test Array(@jit const_bcast_jlarr(a_ra)) == fill(ComplexF32(im), 2)
+
+    setindex_const_complex!(d) = begin
+        Reactant.@allowscalar d[1, 2] = im
+        Reactant.@allowscalar d[2, 1] = 1im
+        return nothing
+    end
+    d2 = Reactant.to_rarray(zeros(ComplexF32, 2, 2))
+    @jit setindex_const_complex!(d2)
+    @test Array(d2) == ComplexF32[0 im; 1im 0]
 end

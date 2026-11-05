@@ -4,9 +4,6 @@ using ..Reactant: Reactant, AbstractConcreteNumber, TracedRNumber
 import ..Reactant: TracedRational
 using ReactantCore: ReactantCore
 
-ReactantCore.is_traced(::TracedRational, seen) = true
-ReactantCore.is_traced(::TracedRational) = true
-
 function checked_den(::Type{T}, num, den) where {T<:Integer}
     num = Reactant.promote_to(TracedRNumber{T}, num)
     den = Reactant.promote_to(TracedRNumber{T}, den)

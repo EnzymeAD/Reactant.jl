@@ -33,7 +33,6 @@ using GPUCompiler: GPUCompiler
 using GPUArraysCore: @allowscalar
 using KernelAbstractions: KernelAbstractions
 using LLVM: LLVM
-using Printf: Printf
 
 using PrecompileTools: @setup_workload, @compile_workload
 
@@ -154,6 +153,21 @@ end
 @inline Base.ifelse(cond::CuTracedRNumber, a, b::CuTracedRNumber) = ifelse(cond[], a, b[])
 @inline Base.ifelse(cond::CuTracedRNumber, a::CuTracedRNumber, b::CuTracedRNumber) =
     ifelse(cond[], a[], b[])
+
+# `Base.clamp` returns one of its arguments when all three share a type, which for
+# `CuTracedRNumber`s is a pointer chosen by a branch, and raising reads zeros through it.
+# Clamp the loaded values instead.
+@inline loaded_value(x::CuTracedRNumber) = x[]
+@inline loaded_value(x) = x
+
+for X in (:CuTracedRNumber, :Number),
+    L in (:CuTracedRNumber, :Number),
+    H in (:CuTracedRNumber, :Number)
+
+    X === L === H === :Number && continue
+    @eval @inline Base.clamp(x::$X, lo::$L, hi::$H) =
+        clamp(loaded_value(x), loaded_value(lo), loaded_value(hi))
+end
 
 Base.@constprop :aggressive @inline Base.:^(
     a::CuTracedRNumber{T,A}, b::Integer
@@ -369,11 +383,11 @@ Base.@nospecializeinfer function Reactant.promote_traced_type(
 end
 
 function Base.show(io::IO, a::AT) where {AT<:CuTracedArray}
-    Printf.@printf(io, "%s cu traced array at %p", join(size(a), '×'), Int(pointer(a)))
+    return print(io, join(size(a), '×'), " cu traced array at ", repr(UInt(pointer(a))))
 end
 
 function Base.show(io::IO, a::AT) where {AT<:CuTracedRNumber}
-    Printf.@printf(io, "%s cu traced rnumber at %p", join(size(a), '×'), Int(pointer(a)))
+    return print(io, join(size(a), '×'), " cu traced rnumber at ", repr(UInt(pointer(a))))
 end
 
 ## array interface
@@ -698,6 +712,29 @@ end
 Reactant.@reactant_overlay function CUDA.cudaconvert(arg)
     return recudaconvert(arg)
 end
+# CUDA.jl 6.4.1's `@cuda` converts the arguments, compiles and launches the kernel behind
+# the `compile_and_launch` function barrier: intercept that as a whole, with Reactant's
+# argument conversion and kernel object. Earlier versions of `@cuda` call the overlaid
+# `cudaconvert` and `cufunction` directly.
+@static if isdefined(CUDACore, :compile_and_launch)
+    Reactant.@reactant_overlay function CUDACore.compile_and_launch(
+        backend::CUDACore.LLVMBackend,
+        f::F,
+        args::Tuple,
+        ::Val{launch},
+        launch_kwargs::NamedTuple,
+        compiler_kwargs::NamedTuple,
+    ) where {F,launch}
+        kernel_f = recudaconvert(f)
+        kernel_args = map(recudaconvert, args)
+        kernel_tt = Tuple{map(Core.Typeof, kernel_args)...}
+        kernel = CUDA.cufunction(kernel_f, kernel_tt; compiler_kwargs...)
+        if launch
+            kernel(kernel_args...; launch_kwargs..., convert=Val(false))
+        end
+        return kernel
+    end
+end
 
 function Adapt.adapt_storage(::ReactantKernelAdaptor, xs::TracedRArray{T,N}) where {T,N}
     res = CuTracedArray{T,N,CUDA.AS.Global,size(xs)}(xs)
@@ -759,13 +796,16 @@ function GPULowerPTLSPass(job)
         end,
     )
 end
-function GPULowerGCFramePass(job)
+function GPULowerGCFramePass(job, meta)
     return LLVM.NewPMFunctionPass(
         "GPULowerGCFrame",
-        if isdefined(GPUCompiler, :LowerGCFrame)
-            GPUCompiler.LowerGCFrame(job)
-        else
+        if !isdefined(GPUCompiler, :LowerGCFrame)
             GPUCompiler.lower_gc_frame!
+        elseif hasfield(GPUCompiler.LowerGCFrame, :relocs)
+            # GPUCompiler 2.10 also needs the kernel's relocations
+            GPUCompiler.LowerGCFrame(job, meta.relocations)
+        else
+            GPUCompiler.LowerGCFrame(job)
         end,
     )
 end
@@ -796,11 +836,29 @@ AddKernelStatePass() = LLVM.NewPMModulePass("AddKernelStatePass", kern_pass)
 LowerKernelStatePass() = LLVM.NewPMFunctionPass("LowerKernelStatePass", noop_pass)
 CleanupKernelStatePass() = LLVM.NewPMModulePass("CleanupKernelStatePass", noop_pass)
 
-# compile to executable machine code
+# LLVM bitcode of a kernel, ready to be linked into an MLIR module.  This is a mutable
+# struct so that it's hashed by identity when used as key of the per-module caches.
+mutable struct KernelBitcode
+    const bitcode::Vector{UInt8}
+    const entryname::String
+    const datalayout::String
+end
+
+# Kernels compiled with GPUCompiler, shared across all MLIR modules.  Compiling a kernel with
+# GPUCompiler is expensive and, in current versions of Julia, leaks the whole LLVM module
+# and context of the compilation (the native code descriptor returned by
+# `jl_emit_native`/`jl_create_native` can't be freed), so we want to do it at most once per
+# kernel, instead of once per MLIR module (e.g. at every eager kernel launch).
+# NOTE: this is global mutable state, it must only be accessed while holding
+# `CUDACore.cufunction_lock` (see the `CUDA.cufunction` overlay below): the lock inside
+# `GPUCompiler.cached_compilation` alone isn't sufficient, as not all cache writes take it.
+const KERNEL_BITCODE_CACHE = Dict{Any,KernelBitcode}()
+
+# compile to LLVM bitcode
 function compile(job)
     # lower to PTX
     # TODO(#2240): on 1.9, this actually creates a context. cache those.
-    entry = GPUCompiler.JuliaContext() do ctx
+    return GPUCompiler.JuliaContext() do ctx
         mod, meta = GPUCompiler.compile(
             # :llvm, job; optimize=false, cleanup=false, validate=false, libraries=true
             :llvm,
@@ -810,7 +868,7 @@ function compile(job)
         )
 
         if !Reactant.precompiling()
-            LLVM.link!(mod, GPUCompiler.load_runtime(job))
+            link_runtime!(mod, job)
         end
         entryname = LLVM.name(meta.entry)
 
@@ -829,7 +887,7 @@ function compile(job)
             LLVM.@dispose pb = LLVM.NewPMPassBuilder() begin
                 LLVM.register!(pb, GPULowerCPUFeaturesPass(job))
                 LLVM.register!(pb, GPULowerPTLSPass(job))
-                LLVM.register!(pb, GPULowerGCFramePass(job))
+                LLVM.register!(pb, GPULowerGCFramePass(job, meta))
                 LLVM.register!(pb, AddKernelStatePass())
                 LLVM.register!(pb, LowerKernelStatePass())
                 LLVM.register!(pb, CleanupKernelStatePass())
@@ -843,12 +901,7 @@ function compile(job)
                 println("cuda.jl pre vendor IR\n", string(mod))
             end
 
-            LLVM.@dispose pb = LLVM.NewPMPassBuilder() begin
-                LLVM.add!(pb, LLVM.NewPMModulePassManager()) do mpm
-                    LLVM.add!(mpm, LLVM.AlwaysInlinerPass())
-                end
-                LLVM.run!(pb, mod, tm)
-            end
+            LLVM.run!(LLVM.AlwaysInlinerPass(), mod, tm)
 
             GPUCompiler.optimize_module!(job, mod)
             if Reactant.Compiler.DUMP_LLVMIR[]
@@ -859,6 +912,11 @@ function compile(job)
             if isdefined(GPUCompiler, :current_job)
                 GPUCompiler.current_job = prev_job
             end
+            # The target machine isn't owned by the LLVM context: dispose it explicitly,
+            # otherwise it's leaked at every kernel compilation. There is none when
+            # LLVM was built without the NVPTX backend (macOS), where llvm_machine
+            # returns nothing and the passes above run without one.
+            tm === nothing || LLVM.dispose(tm)
         end
 
         for fname in ("gpu_report_exception", "gpu_signal_exception")
@@ -875,7 +933,7 @@ function compile(job)
             end
         end
 
-        errors = GPUCompiler.check_ir!(job, GPUCompiler.IRError[], mod)
+        errors = check_ir(job, mod, meta)
         unique!(errors)
         filter!(errors) do err
             (kind, bt, meta) = err
@@ -899,29 +957,33 @@ function compile(job)
         # textual IR: the bitcode reader auto-upgrades constructs whose spelling changed between the
         # two LLVM versions (e.g. `llvm.loop.distribute.enable` metadata), whereas the .ll parser does
         # not, and mismatches there abort the process in the verifier.
-        modbc = convert(Vector{UInt8}, mod)
-        mmodref = GC.@preserve modbc MLIR.API.ConvertLLVMBCToMLIR(
-            pointer(modbc), length(modbc), MLIR.IR.current_context()
-        )
-        mmod = MLIR.IR.Module(mmodref)
-        @assert mmod != C_NULL
+        KernelBitcode(convert(Vector{UInt8}, mod), entryname, dl)
+    end
+end
 
-        cur_module = MLIR.IR.current_module()
-        linkRes = MLIR.API.LinkInModule(cur_module, mmod, entryname)
+# link the compiled kernel into the current MLIR module, return the name of the entry point
+function link_into_current_module(compiled::KernelBitcode)
+    modbc = compiled.bitcode
+    mmodref = GC.@preserve modbc MLIR.API.ConvertLLVMBCToMLIR(
+        pointer(modbc), length(modbc), MLIR.IR.current_context()
+    )
+    mmod = MLIR.IR.Module(mmodref)
+    @assert mmod != C_NULL
 
-        dl_attr_name = "llvm.data_layout"
-        prevdlattr = MLIR.IR.getattr(MLIR.IR.Operation(cur_module), dl_attr_name)
-        if !isnothing(prevdlattr)
-            prevdl = String(prevdlattr)
-            @assert prevdl == dl "data layout mismatch, tried compiling cuda kernels for different target machines?"
-        else
-            MLIR.IR.setattr!(MLIR.IR.Operation(cur_module), dl_attr_name, MLIR.IR.Attribute(dl))
-        end
+    cur_module = MLIR.IR.current_module()
+    linkRes = MLIR.API.LinkInModule(cur_module, mmod, compiled.entryname)
 
-        String(Reactant.TracedUtils.get_attribute_by_name(linkRes, "sym_name"))
+    dl = compiled.datalayout
+    dl_attr_name = "llvm.data_layout"
+    prevdlattr = MLIR.IR.getattr(MLIR.IR.Operation(cur_module), dl_attr_name)
+    if !isnothing(prevdlattr)
+        prevdl = String(prevdlattr)
+        @assert prevdl == dl "data layout mismatch, tried compiling cuda kernels for different target machines?"
+    else
+        MLIR.IR.setattr!(MLIR.IR.Operation(cur_module), dl_attr_name, MLIR.IR.Attribute(dl))
     end
 
-    return LLVMFunc{job.source.specTypes.parameters[1],job.source.specTypes}(nothing, entry)
+    return String(Reactant.TracedUtils.get_attribute_by_name(linkRes, "sym_name"))
 end
 
 # link into an executable kernel
@@ -940,12 +1002,16 @@ function abi_sizeof(@nospecialize(x::CUDA.CuDeviceArray))
     return sizeof(Ptr)
 end
 
+# Int8 rather than UInt8: these bytes become an llvm.mlir.constant of type
+# !llvm.array<N x i8>, and llvm.mlir.constant requires the attribute's integer
+# element type to match the result's. A UInt8 array yields tensor<Nxui8>, which
+# the verifier rejects against i8.
 function to_bytes(x)
     sz = abi_sizeof(x)
     ref = Ref(x)
     GC.@preserve ref begin
-        ptr = Base.reinterpret(Ptr{UInt8}, Base.unsafe_convert(Ptr{Cvoid}, ref))
-        vec = Vector{UInt8}(undef, sz)
+        ptr = Base.reinterpret(Ptr{Int8}, Base.unsafe_convert(Ptr{Cvoid}, ref))
+        vec = Vector{Int8}(undef, sz)
         for i in 1:sz
             @inbounds vec[i] = Base.unsafe_load(ptr, i)
         end
@@ -1054,6 +1120,9 @@ function _find_unadapted_traced(
     @nospecialize(T::Type), seen::Set{Any}=Set{Any}(), path::String=""
 )
     T isa UnionAll && return nothing
+    # A type passed as an argument (`Type{Float32}`) is a constant: GPUCompiler drops it
+    # from the kernel
+    Core.Compiler.isconstType(T) && return nothing
     T in seen && return nothing
     push!(seen, T)
     T <: TracedRNumber && return isempty(path) ? "<arg>" : path
@@ -1126,59 +1195,20 @@ contain no references to other values, can be used in GPU kernels.
     )
 end
 
-Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
-    args...;
-    convert=Val(true),
-    blocks::CuDim=1,
-    threads::CuDim=1,
-    cooperative::Bool=false,
-    shmem::Integer=0,
-    call_kwargs...,
-) where {F,tt}
-    blockdim = CUDA.CuDim3(blocks)
-    threaddim = CUDA.CuDim3(threads)
-    mod = MLIR.IR.current_module()
-
-    if convert == Val(true)
-        args = recudaconvert.(args)
-    end
-
-    for arg in Any[func.f, args...]
-        _check_no_traced_in_kernel_arg(typeof(arg))
-    end
-
-    mlir_args = MLIR.IR.Value[]
-    restys = MLIR.IR.Type[]
-    aliases = MLIR.IR.Attribute[]
-
-    fname = func.entry
-
-    wrapper_tys = MLIR.IR.Type[]
+# Emit the `ptx_kernelcc` function which takes the buffers as arguments, builds the kernel
+# arguments and calls the kernel `fname`.  Returns the name of the wrapper.
+function emit_kernel_wrapper(
+    mod,
+    gpufunc,
+    fname,
+    allargs,
+    argbytes,
+    ptr_stores,
+    wrapper_tys,
+    has_cast_float_type,
+    bfloat16_compile_type,
+)
     ctx = MLIR.IR.current_context()
-    cullvm_ty = MLIR.IR.Type(MLIR.API.mlirLLVMPointerTypeGet(ctx, 1))
-
-    # linearize kernel arguments
-    seen = Reactant.OrderedIdDict()
-    kernelargsym = gensym("kernelarg")
-
-    for (i, prev) in enumerate(Any[func.f, args...])
-        Reactant.make_tracer(seen, prev, (kernelargsym, i), Reactant.NoStopTracedTrack)
-    end
-    bfloat16_compile_type = Reactant.Compiler.BFLOAT16_COMPILE_TYPE[]
-    has_cast_float_type =
-        bfloat16_compile_type !== BFloat16 && any(values(seen)) do arg
-            (arg isa TracedRArray || arg isa TracedRNumber) &&
-                Reactant.unwrapped_eltype(typeof(arg)) === BFloat16
-        end
-
-    wrapper_tys = MLIR.IR.Type[]
-    for arg in values(seen)
-        if !(arg isa TracedRArray || arg isa TracedRNumber)
-            continue
-        end
-        push!(wrapper_tys, cullvm_ty)
-    end
-
     sym_name = String(gensym("call_$fname"))
     CConv = MLIR.IR.Attribute(
         MLIR.API.mlirLLVMCConvAttrGet(ctx, MLIR.API.MlirLLVMCConvPTX_Kernel)
@@ -1218,182 +1248,126 @@ Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
     end
 
     wrapargs = MLIR.IR.Value[]
-    argidx = 1
 
-    symtab = MLIR.IR.SymbolTable(MLIR.IR.Operation(mod))
-    gpufunc = MLIR.IR.lookup(symtab, fname)
-    MLIR.IR.setattr!(
-        gpufunc,
-        "CConv",
-        MLIR.IR.Attribute(MLIR.API.mlirLLVMCConvAttrGet(ctx, MLIR.API.MlirLLVMCConvC)),
-    )
     gpu_function_type = MLIR.IR.Type(
         Reactant.TracedUtils.get_attribute_by_name(gpufunc, "function_type")
     )
 
     trueidx = 1
-    allocs = Union{Tuple{MLIR.IR.Value,MLIR.IR.Type,Type},Nothing}[]
+    allocs = Union{Tuple{MLIR.IR.Value,MLIR.IR.Type,Int},Nothing}[]
 
     llvmptr = MLIR.IR.Type(MLIR.API.mlirLLVMPointerTypeGet(ctx, 0))
     i8 = MLIR.IR.Type(UInt8)
-    allargs = Any[func.f, args...]
-    ctx = LLVM.Context()
-    LLVM.activate(ctx)
-    for a in allargs
-        if sizeof(a) == 0
-            push!(allocs, nothing)
-            continue
-        end
-
-        # TODO(#2240): check for only integer and explicitly non cutraced types
-        MLIR.IR.@with_block wrapbody begin
-            argty = MLIR.IR.Type(
-                MLIR.API.mlirLLVMFunctionTypeGetInput(gpu_function_type, trueidx - 1)
-            )
-            trueidx += 1
-            jltyp = Core.Typeof(a)
-            if Enzyme.Compiler.inline_roots_type(jltyp) != 0
-                trueidx += 1
+    # `inline_roots_type` converts Julia types to LLVM types, which needs a context
+    LLVM.@dispose llvm_ctx = LLVM.Context() begin
+        for (a, val) in zip(allargs, argbytes)
+            if val === nothing
+                push!(allocs, nothing)
+                continue
             end
-            c1 = MLIR.IR.result(
-                MLIR.Dialects.llvm.mlir_constant(;
-                    res=MLIR.IR.Type(Int64), value=MLIR.IR.Attribute(1)
-                ),
-                1,
-            )
-            alloc = MLIR.IR.result(
-                MLIR.Dialects.llvm.alloca(
-                    c1; elem_type=MLIR.IR.Attribute(argty), res=llvmptr
-                ),
-                1,
-            )
-            push!(allocs, (alloc, argty, jltyp))
 
-            if has_cast_float_type
-                # The argument `a` has BFloat16 fields but the GPU function was
-                # compiled with a substitute type (e.g. Float32). We need to:
-                # 1. Create an alloca with the bf16 layout
-                # 2. Store the raw bf16 bytes into it
-                # 3. Load, walk the struct fields, extend bf16→f32, store into alloc
-                compile_float_ty = MLIR.IR.Type(bfloat16_compile_type)
-                bf16_float_ty = MLIR.IR.Type(BFloat16)
-                bf16_ty = _replace_float_in_llvm_type(
-                    argty, compile_float_ty, bf16_float_ty
+            # TODO(#2240): check for only integer and explicitly non cutraced types
+            MLIR.IR.@with_block wrapbody begin
+                argty = MLIR.IR.Type(
+                    MLIR.API.mlirLLVMFunctionTypeGetInput(gpu_function_type, trueidx - 1)
                 )
-
-                bf16_c1 = MLIR.IR.result(
+                trueidx += 1
+                jltyp = Core.Typeof(a)
+                nroots = Enzyme.Compiler.inline_roots_type(jltyp)
+                if nroots != 0
+                    trueidx += 1
+                end
+                c1 = MLIR.IR.result(
                     MLIR.Dialects.llvm.mlir_constant(;
                         res=MLIR.IR.Type(Int64), value=MLIR.IR.Attribute(1)
                     ),
                     1,
                 )
-                bf16_alloc = MLIR.IR.result(
+                alloc = MLIR.IR.result(
                     MLIR.Dialects.llvm.alloca(
-                        bf16_c1; elem_type=MLIR.IR.Attribute(bf16_ty), res=llvmptr
+                        c1; elem_type=MLIR.IR.Attribute(argty), res=llvmptr
                     ),
                     1,
                 )
+                push!(allocs, (alloc, argty, nroots))
 
-                sz = abi_sizeof(a)
-                val = to_bytes(a)
-                array_ty = MLIR.IR.Type(
-                    MLIR.API.mlirLLVMArrayTypeGet(MLIR.IR.Type(Int8), sz)
-                )
-                cdata = MLIR.IR.result(
-                    MLIR.Dialects.llvm.mlir_constant(;
-                        res=array_ty, value=MLIR.IR.DenseElementsAttribute(val)
-                    ),
-                    1,
-                )
-                MLIR.Dialects.llvm.store(cdata, bf16_alloc)
+                if has_cast_float_type
+                    # The argument `a` has BFloat16 fields but the GPU function was
+                    # compiled with a substitute type (e.g. Float32). We need to:
+                    # 1. Create an alloca with the bf16 layout
+                    # 2. Store the raw bf16 bytes into it
+                    # 3. Load, walk the struct fields, extend bf16→f32, store into alloc
+                    compile_float_ty = MLIR.IR.Type(bfloat16_compile_type)
+                    bf16_float_ty = MLIR.IR.Type(BFloat16)
+                    bf16_ty = _replace_float_in_llvm_type(
+                        argty, compile_float_ty, bf16_float_ty
+                    )
 
-                bf16_val = MLIR.IR.result(
-                    MLIR.Dialects.llvm.load(bf16_alloc; res=bf16_ty), 1
-                )
-                converted_val = _convert_bf16_value(
-                    bf16_val, bf16_ty, argty, bf16_float_ty, compile_float_ty
-                )
-                MLIR.Dialects.llvm.store(converted_val, alloc)
-            else
-                sz = abi_sizeof(a)
-                val = to_bytes(a)
-                array_ty = MLIR.IR.Type(
-                    MLIR.API.mlirLLVMArrayTypeGet(MLIR.IR.Type(Int8), sz)
-                )
-                cdata = MLIR.IR.result(
-                    MLIR.Dialects.llvm.mlir_constant(;
-                        res=array_ty, value=MLIR.IR.DenseElementsAttribute(val)
-                    ),
-                    1,
-                )
-                MLIR.Dialects.llvm.store(cdata, alloc)
+                    bf16_c1 = MLIR.IR.result(
+                        MLIR.Dialects.llvm.mlir_constant(;
+                            res=MLIR.IR.Type(Int64), value=MLIR.IR.Attribute(1)
+                        ),
+                        1,
+                    )
+                    bf16_alloc = MLIR.IR.result(
+                        MLIR.Dialects.llvm.alloca(
+                            bf16_c1; elem_type=MLIR.IR.Attribute(bf16_ty), res=llvmptr
+                        ),
+                        1,
+                    )
+
+                    sz = abi_sizeof(a)
+                    array_ty = MLIR.IR.Type(
+                        MLIR.API.mlirLLVMArrayTypeGet(MLIR.IR.Type(Int8), sz)
+                    )
+                    cdata = MLIR.IR.result(
+                        MLIR.Dialects.llvm.mlir_constant(;
+                            res=array_ty, value=MLIR.IR.DenseElementsAttribute(val)
+                        ),
+                        1,
+                    )
+                    MLIR.Dialects.llvm.store(cdata, bf16_alloc)
+
+                    bf16_val = MLIR.IR.result(
+                        MLIR.Dialects.llvm.load(bf16_alloc; res=bf16_ty), 1
+                    )
+                    converted_val = _convert_bf16_value(
+                        bf16_val, bf16_ty, argty, bf16_float_ty, compile_float_ty
+                    )
+                    MLIR.Dialects.llvm.store(converted_val, alloc)
+                else
+                    sz = abi_sizeof(a)
+                    array_ty = MLIR.IR.Type(
+                        MLIR.API.mlirLLVMArrayTypeGet(MLIR.IR.Type(Int8), sz)
+                    )
+                    cdata = MLIR.IR.result(
+                        MLIR.Dialects.llvm.mlir_constant(;
+                            res=array_ty, value=MLIR.IR.DenseElementsAttribute(val)
+                        ),
+                        1,
+                    )
+                    MLIR.Dialects.llvm.store(cdata, alloc)
+                end
             end
         end
     end
-    LLVM.deactivate(ctx)
 
-    argidx = 1
-    for arg in values(seen)
-        if !(arg isa TracedRArray || arg isa TracedRNumber)
-            continue
+    for (argidx, kernelargidx, offset) in ptr_stores
+        # Get the allocation corresponding to which arg we're doing
+        alloc = allocs[kernelargidx][1]
+        MLIR.IR.@with_block wrapbody begin
+            ptr = MLIR.IR.result(
+                MLIR.Dialects.llvm.getelementptr(
+                    alloc,
+                    MLIR.IR.Value[];
+                    res=llvmptr,
+                    elem_type=i8,
+                    rawConstantIndices=MLIR.IR.Attribute([Int32(offset)]),
+                ),
+                1,
+            )
+            MLIR.Dialects.llvm.store(MLIR.IR.argument(wrapbody, argidx), ptr)
         end
-
-        paths = Reactant.TracedUtils.get_paths(arg)
-
-        arg = arg.mlir_data
-        arg = Reactant.TracedUtils.transpose_val(arg)
-        push!(restys, MLIR.IR.type(arg))
-        push!(mlir_args, arg)
-
-        ctx = MLIR.IR.current_context()
-        out_tup = Ref{Int64}(argidx - 1)
-        push!(
-            aliases,
-            MLIR.IR.Attribute(
-                GC.@preserve ctx out_tup MLIR.API.stablehloOutputOperandAliasGet(
-                    ctx,
-                    length(wrapper_tys) == 1 ? 0 : 1,
-                    pointer_from_objref(out_tup),
-                    argidx - 1,
-                    0,
-                    C_NULL,
-                )
-            ),
-        )
-
-        for p in paths
-            if p[1] !== kernelargsym
-                continue
-            end
-            # Get the allocation corresponding to which arg we're doing
-            alloc = allocs[p[2]][1]
-
-            # we need to now compute the offset in bytes of the path
-            julia_arg = allargs[p[2]]
-
-            offset = if has_cast_float_type
-                get_field_offset(
-                    _bfloat16_to_ft_type(typeof(julia_arg), bfloat16_compile_type),
-                    p[3:end],
-                )
-            else
-                get_field_offset(typeof(julia_arg), p[3:end])
-            end
-            MLIR.IR.@with_block wrapbody begin
-                ptr = MLIR.IR.result(
-                    MLIR.Dialects.llvm.getelementptr(
-                        alloc,
-                        MLIR.IR.Value[];
-                        res=llvmptr,
-                        elem_type=i8,
-                        rawConstantIndices=MLIR.IR.Attribute([Int32(offset)]),
-                    ),
-                    1,
-                )
-                MLIR.Dialects.llvm.store(MLIR.IR.argument(wrapbody, argidx), ptr)
-            end
-        end
-        argidx += 1
     end
 
     MLIR.IR.@with_block wrapbody begin
@@ -1401,17 +1375,16 @@ Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
             if arg === nothing
                 continue
             end
-            alloc, argty, jltyp = arg
+            alloc, argty, roots_count = arg
             argres = MLIR.IR.result(MLIR.Dialects.llvm.load(alloc; res=argty), 1)
             push!(wrapargs, argres)
-            if Enzyme.Compiler.inline_roots_type(jltyp) != 0
+            if roots_count != 0
                 c1 = MLIR.IR.result(
                     MLIR.Dialects.llvm.mlir_constant(;
                         res=MLIR.IR.Type(Int64), value=MLIR.IR.Attribute(1)
                     ),
                     1,
                 )
-                roots_count = Enzyme.Compiler.inline_roots_type(jltyp)
                 jlvaluet = MLIR.IR.Type(MLIR.API.mlirLLVMPointerTypeGet(ctx, 10))
                 njlvaluet = MLIR.IR.Type(
                     MLIR.API.mlirLLVMArrayTypeGet(jlvaluet, roots_count)
@@ -1443,6 +1416,183 @@ Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
         MLIR.Dialects.llvm.return_(nothing)
     end
 
+    return sym_name
+end
+
+Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
+    args...;
+    convert=Val(true),
+    blocks::CuDim=1,
+    threads::CuDim=1,
+    cooperative::Bool=false,
+    shmem::Integer=0,
+    call_kwargs...,
+) where {F,tt}
+    blockdim = CUDA.CuDim3(blocks)
+    threaddim = CUDA.CuDim3(threads)
+    mod = MLIR.IR.current_module()
+
+    if convert == Val(true)
+        args = recudaconvert.(args)
+    end
+
+    for arg in Any[func.f, args...]
+        _check_no_traced_in_kernel_arg(Core.Typeof(arg))
+    end
+
+    mlir_args = MLIR.IR.Value[]
+    restys = MLIR.IR.Type[]
+    operand_layouts = MLIR.IR.Attribute[]
+    aliases = MLIR.IR.Attribute[]
+
+    fname = func.entry
+
+    wrapper_tys = MLIR.IR.Type[]
+    ctx = MLIR.IR.current_context()
+    cullvm_ty = MLIR.IR.Type(MLIR.API.mlirLLVMPointerTypeGet(ctx, 1))
+
+    # linearize kernel arguments
+    seen = Reactant.OrderedIdDict()
+    kernelargsym = gensym("kernelarg")
+
+    for (i, prev) in enumerate(Any[func.f, args...])
+        Reactant.make_tracer(seen, prev, (kernelargsym, i), Reactant.NoStopTracedTrack)
+    end
+    bfloat16_compile_type = _bfloat16_compile_type()
+    has_cast_float_type =
+        bfloat16_compile_type !== BFloat16 && any(values(seen)) do arg
+            (arg isa TracedRArray || arg isa TracedRNumber) &&
+                Reactant.unwrapped_eltype(typeof(arg)) === BFloat16
+        end
+
+    wrapper_tys = MLIR.IR.Type[]
+    for arg in values(seen)
+        if !(arg isa TracedRArray || arg isa TracedRNumber)
+            continue
+        end
+        push!(wrapper_tys, cullvm_ty)
+    end
+
+    symtab = MLIR.IR.SymbolTable(MLIR.IR.Operation(mod))
+    gpufunc = MLIR.IR.lookup(symtab, fname)
+    MLIR.IR.setattr!(
+        gpufunc,
+        "CConv",
+        MLIR.IR.Attribute(MLIR.API.mlirLLVMCConvAttrGet(ctx, MLIR.API.MlirLLVMCConvC)),
+    )
+
+    allargs = Any[func.f, args...]
+    # bytes of the kernel arguments, stored as constants in the wrapper. Ghost and
+    # constant-type arguments are absent from the compiled kernel's signature, as in
+    # GPUCompiler
+    argbytes = Union{Vector{Int8},Nothing}[
+        if Core.Compiler.isconstType(Core.Typeof(a)) || sizeof(a) == 0
+            nothing
+        else
+            to_bytes(a)
+        end for a in allargs
+    ]
+
+    # See `_to_kernel_buffer`.
+    raised_buffers = raising()
+
+    # (wrapper argument index, kernel argument index, byte offset): the buffer passed as
+    # wrapper argument is stored at that offset of the kernel argument
+    ptr_stores = NTuple{3,Int}[]
+    argidx = 1
+    for arg in values(seen)
+        if !(arg isa TracedRArray || arg isa TracedRNumber)
+            continue
+        end
+
+        paths = Reactant.TracedUtils.get_paths(arg)
+
+        arg = arg.mlir_data
+        arg = Reactant.TracedUtils.transpose_val(arg)
+        if raised_buffers
+            arg = _to_kernel_buffer(arg)
+        end
+        push!(restys, MLIR.IR.type(arg))
+        push!(mlir_args, arg)
+        # The transposed value is row-major, i.e. Julia's column-major memory order.
+        # Pin it so XLA can't choose another layout for the kernel's buffers.
+        if Reactant.Compiler.CONSTRAIN_LAYOUTS[]
+            push!(
+                operand_layouts,
+                MLIR.IR.DenseIndexElementsAttribute(
+                    collect(Int64, (ndims(MLIR.IR.type(arg)) - 1):-1:0)
+                ),
+            )
+        end
+
+        out_tup = Ref{Int64}(argidx - 1)
+        push!(
+            aliases,
+            MLIR.IR.Attribute(
+                GC.@preserve ctx out_tup MLIR.API.stablehloOutputOperandAliasGet(
+                    ctx,
+                    length(wrapper_tys) == 1 ? 0 : 1,
+                    pointer_from_objref(out_tup),
+                    argidx - 1,
+                    0,
+                    C_NULL,
+                )
+            ),
+        )
+
+        for p in paths
+            if p[1] !== kernelargsym
+                continue
+            end
+            # we need to now compute the offset in bytes of the path
+            julia_arg = allargs[p[2]]
+            src_offset = get_field_offset(typeof(julia_arg), p[3:end])
+
+            offset = if has_cast_float_type
+                get_field_offset(
+                    _bfloat16_to_ft_type(typeof(julia_arg), bfloat16_compile_type),
+                    p[3:end],
+                )
+            else
+                src_offset
+            end
+            push!(ptr_stores, (argidx, p[2], offset))
+
+            # The bytes at this location hold the address of the traced Julia object,
+            # which is overwritten by the store of the buffer pointer: zero them so that
+            # the wrapper doesn't depend on it and can be shared between launches.
+            bytes = argbytes[p[2]]::Vector{Int8}
+            bytes[(src_offset + 1):min(src_offset + sizeof(Ptr{Cvoid}), length(bytes))] .= 0
+        end
+        argidx += 1
+    end
+
+    # The wrapper only depends on the kernel, the kernel arguments (with the pointers to
+    # the buffers zeroed out) and where the buffers are stored in them, so launches of the
+    # same kernel with the same non-buffer arguments can share it.
+    wrapper_key = (
+        :kernel_wrapper,
+        fname,
+        map(Core.Typeof, allargs),
+        argbytes,
+        ptr_stores,
+        has_cast_float_type,
+        bfloat16_compile_type,
+    )
+    sym_name = get!(llvm_compiler_cache(mod), wrapper_key) do
+        emit_kernel_wrapper(
+            mod,
+            gpufunc,
+            fname,
+            allargs,
+            argbytes,
+            ptr_stores,
+            wrapper_tys,
+            has_cast_float_type,
+            bfloat16_compile_type,
+        )
+    end
+
     output_operand_aliases = MLIR.IR.Attribute(aliases)
 
     blk_operands = MLIR.IR.Value[]
@@ -1457,6 +1607,11 @@ Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
         inputs=mlir_args,
         result_0=restys,
         fn=MLIR.IR.FlatSymbolRefAttribute(sym_name),
+        operand_layouts=if Reactant.Compiler.CONSTRAIN_LAYOUTS[]
+            MLIR.IR.Attribute(operand_layouts)
+        else
+            nothing
+        end,
         output_operand_aliases=MLIR.IR.Attribute(output_operand_aliases),
         xla_side_effect_free=MLIR.IR.UnitAttribute(),
         location=Reactant.Ops.mlir_stacktrace(
@@ -1472,10 +1627,106 @@ Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
         if !(arg isa TracedRArray || arg isa TracedRNumber)
             continue
         end
-        arg.mlir_data = Reactant.TracedUtils.transpose_val(MLIR.IR.result(call, argidx))
+        res = MLIR.IR.result(call, argidx)
+        T = Reactant.unwrapped_eltype(typeof(arg))
+        if raised_buffers
+            res = _from_kernel_buffer(res, T)
+        end
+        arg.mlir_data = Reactant.TracedUtils.transpose_val(res)
         argidx += 1
     end
 end
+
+# A raised kernel's buffers are typed by the operands the kernel is called with,
+# but the kernel itself moves values of its LLVM types: a complex number as its
+# `[2 x T]` aggregate, an unsigned integer as a signless one. A store through a
+# view of another element type than its buffer's is not written back when
+# raising, so hand the kernel each buffer as what it moves:
+#   - a complex buffer as the interleaved reals it is in memory (a trailing
+#     dimension of 2 in row-major order), whose fields the kernel accesses one
+#     by one;
+#   - an unsigned integer buffer as its signless bits.
+function _to_kernel_buffer(val::MLIR.IR.Value)
+    ty = MLIR.IR.type(val)
+    ety = eltype(ty)
+    shape = collect(Int64, size(ty))
+    if MLIR.IR.iscomplex(ety)
+        rty = eltype(ety)
+        parts = MLIR.IR.Value[]
+        for part in (MLIR.Dialects.stablehlo.real, MLIR.Dialects.stablehlo.imag)
+            v = MLIR.IR.result(part(val; result=MLIR.IR.TensorType(shape, rty)), 1)
+            v = MLIR.IR.result(
+                MLIR.Dialects.stablehlo.reshape(
+                    v; result_0=MLIR.IR.TensorType([shape..., 1], rty)
+                ),
+                1,
+            )
+            push!(parts, v)
+        end
+        return MLIR.IR.result(
+            MLIR.Dialects.stablehlo.concatenate(parts; dimension=length(shape)), 1
+        )
+    elseif MLIR.IR.isinteger(ety) && MLIR.IR.isunsigned(ety)
+        sty = MLIR.IR.Type(
+            MLIR.API.mlirIntegerTypeGet(MLIR.IR.current_context(), MLIR.IR.bitwidth(ety))
+        )
+        return MLIR.IR.result(
+            MLIR.Dialects.stablehlo.bitcast_convert(
+                val; result_0=MLIR.IR.TensorType(shape, sty)
+            ),
+            1,
+        )
+    end
+    return val
+end
+
+# The inverse of `_to_kernel_buffer`, back to a buffer of `T`.
+function _from_kernel_buffer(val::MLIR.IR.Value, ::Type{T}) where {T}
+    ty = MLIR.IR.type(val)
+    ety = eltype(ty)
+    full = collect(Int64, size(ty))
+    if T <: Complex
+        shape = full[1:(end - 1)]
+        parts = MLIR.IR.Value[]
+        for k in 0:1
+            start = zeros(Int64, length(full))
+            start[end] = k
+            limit = copy(full)
+            limit[end] = k + 1
+            v = MLIR.IR.result(
+                MLIR.Dialects.stablehlo.slice(
+                    val;
+                    result_0=MLIR.IR.TensorType([shape..., 1], ety),
+                    start_indices=MLIR.IR.DenseArrayAttribute(start),
+                    limit_indices=MLIR.IR.DenseArrayAttribute(limit),
+                    strides=MLIR.IR.DenseArrayAttribute(ones(Int64, length(full))),
+                ),
+                1,
+            )
+            v = MLIR.IR.result(
+                MLIR.Dialects.stablehlo.reshape(v; result_0=MLIR.IR.TensorType(shape, ety)),
+                1,
+            )
+            push!(parts, v)
+        end
+        return MLIR.IR.result(
+            MLIR.Dialects.stablehlo.complex(
+                parts[1], parts[2]; result=MLIR.IR.TensorType(shape, MLIR.IR.Type(T))
+            ),
+            1,
+        )
+    elseif T <: Unsigned
+        return MLIR.IR.result(
+            MLIR.Dialects.stablehlo.bitcast_convert(
+                val; result_0=MLIR.IR.TensorType(full, MLIR.IR.Type(T))
+            ),
+            1,
+        )
+    end
+    return val
+end
+
+_bfloat16_compile_type() = raising() ? Reactant.Compiler.BFLOAT16_COMPILE_TYPE[] : BFloat16
 
 function _bfloat16_to_ft_type(@nospecialize(T), @nospecialize(FT))
     T === BFloat16 && return FT
@@ -1621,6 +1872,36 @@ const ReactantCUDAJob = GPUCompiler.CompilerJob{
     GPUCompiler.PTXCompilerTarget,ReactantCUDACompilerParams
 }
 GPUCompiler.can_vectorize(job::ReactantCUDAJob) = !job.config.params.raising
+
+# GPUCompiler 2 describes the references to Julia values in the IR with relocation records,
+# which the runtime library and the IR validation take too. GPUCompiler 1 resolved them into
+# the IR right away.
+@static if Reactant.GPUCOMPILER_2
+    # The kernel's IR is linked into the MLIR module rather than loaded by CUDA.jl, so
+    # resolve the references into the IR, instead of the patchable globals CUDA.jl uses.
+    GPUCompiler.relocation_lowering(@nospecialize(job::ReactantCUDAJob)) = :bake
+
+    function link_runtime!(mod, job)
+        runtime, runtime_relocs = GPUCompiler.load_runtime(job)
+        LLVM.link!(mod, runtime)
+        GPUCompiler.apply_relocations!(mod, runtime_relocs)
+        return nothing
+    end
+
+    function check_ir(job, mod, meta)
+        return GPUCompiler.check_ir!(job, GPUCompiler.IRError[], mod, meta.relocations)
+    end
+else
+    function link_runtime!(mod, job)
+        LLVM.link!(mod, GPUCompiler.load_runtime(job))
+        return nothing
+    end
+
+    function check_ir(job, mod, meta)
+        return GPUCompiler.check_ir!(job, GPUCompiler.IRError[], mod)
+    end
+end
+
 function GPUCompiler.optimization_options(job::ReactantCUDAJob)
     raising = job.config.params.raising
     return (; instcombine=!raising, fastmath=!raising, aggressiveinstcombine=!raising)
@@ -1652,9 +1933,7 @@ Reactant.@reactant_overlay function CUDA.cufunction(
     res = Base.@lock CUDACore.cufunction_lock begin
         # compile the function
         cache = llvm_compiler_cache(MLIR.IR.current_module())
-        effective_tt = _substitute_bfloat16_tt(
-            tt, Reactant.Compiler.BFLOAT16_COMPILE_TYPE[]
-        )
+        effective_tt = _substitute_bfloat16_tt(tt, _bfloat16_compile_type())
         source = GPUCompiler.methodinstance(F, effective_tt)
         # cuda = CUDA.active_state()
         device = nothing # cuda.device
@@ -1686,9 +1965,17 @@ Reactant.@reactant_overlay function CUDA.cufunction(
             validate=false,
             libraries=false,
         )
-        GPUCompiler.cached_compilation(cache, source, config, compile, link)
+        # While precompiling, the runtime library isn't linked in, don't let those kernels
+        # end up in the global cache.
+        bitcode_cache =
+            Reactant.precompiling() ? Dict{Any,KernelBitcode}() : KERNEL_BITCODE_CACHE
+        compiled = GPUCompiler.cached_compilation(
+            bitcode_cache, source, config, compile, link
+        )
+        entry = get!(() -> link_into_current_module(compiled), cache, compiled)
+        LLVMFunc{source.specTypes.parameters[1],source.specTypes}(f, entry)
     end
-    return Core.Typeof(res)(f, res.entry)
+    return res
 end
 
 Base.@nospecializeinfer function Reactant.traced_type_inner(
@@ -1803,6 +2090,46 @@ end
     ::Type{T}, ::Tuple{}, ptr
 ) where {T}
     return @allowscalar Reactant.Ops.__construct_cuda_julia_buffer(T, (1,), ptr)[1]
+end
+
+const CUDA_SUPPORTS_BORROWED_STREAMS = hasmethod(
+    Base.unsafe_wrap, Tuple{Type{CUDACore.CuStream},CUDACore.CUstream}
+)
+
+# Make the work submitted to `waiter` from now on wait for the work submitted to
+# `source` so far, without blocking the host. `cuStreamWaitEvent` only waits on the
+# recording made before it was called, so `event` can be re-recorded afterwards.
+function cuda_stream_wait(waiter, source, event)
+    @static if CUDA_SUPPORTS_BORROWED_STREAMS
+        CUDACore.record(event, source)
+        CUDACore.wait(event, waiter)
+    else
+        CUDACore.cuEventRecord(event, source)
+        CUDACore.cuStreamWaitEvent(waiter, event, 0)
+    end
+    return nothing
+end
+
+# Fork the task-local CUDA.jl stream off XLA's stream for the duration of a
+# `julia_callback`, and join it back afterwards, so that neither the host nor the
+# rest of XLA's stream has to wait on a full synchronization.
+function Reactant.Ops.__with_cuda_stream_fork(f::F, xla_stream_ptr::Ptr{Cvoid}) where {F}
+    xla_stream = @static if CUDA_SUPPORTS_BORROWED_STREAMS
+        unsafe_wrap(CUDACore.CuStream, CUDACore.CUstream(xla_stream_ptr))
+    else
+        CUDACore.CUstream(xla_stream_ptr)
+    end
+    julia_stream = CUDACore.stream()
+    event = CUDACore.CuEvent(CUDACore.EVENT_DISABLE_TIMING)
+
+    cuda_stream_wait(julia_stream, xla_stream, event)
+    try
+        return f()
+    finally
+        cuda_stream_wait(xla_stream, julia_stream, event)
+        # Destroying a pending event is fine: the driver releases it once it completes.
+        finalize(event)
+    end
 end
 
 # In Julia v1.11.3 precompiling this module caches bad code:

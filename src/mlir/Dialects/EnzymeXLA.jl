@@ -72,6 +72,135 @@ function alternatives(; regions::Vector{Region}, location=Location())
     )
 end
 
+"""
+`ml_attention_grad`
+
+Computes gradients of scaled dot-product attention in BTNH layout given the
+forward inputs, forward output, log-sum-exp (lse), and output cotangent (d_output).
+"""
+function ml_attention_grad(
+    query::Value,
+    key::Value,
+    value::Value,
+    output::Value,
+    lse::Value,
+    d_output::Value,
+    bias=nothing::Union{Nothing,Value};
+    mask=nothing::Union{Nothing,Value},
+    q_lengths=nothing::Union{Nothing,Value},
+    kv_lengths=nothing::Union{Nothing,Value},
+    d_query::IR.Type,
+    d_key::IR.Type,
+    d_value::IR.Type,
+    d_bias=nothing::Union{Nothing,IR.Type},
+    scale,
+    is_causal=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[d_query, d_key, d_value]
+    operands = Value[query, key, value, output, lse, d_output]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[NamedAttribute("scale", scale),]
+    !isnothing(bias) && push!(operands, bias)
+    !isnothing(mask) && push!(operands, mask)
+    !isnothing(q_lengths) && push!(operands, q_lengths)
+    !isnothing(kv_lengths) && push!(operands, kv_lengths)
+    push!(
+        attributes,
+        operandsegmentsizes([
+            1,
+            1,
+            1,
+            1,
+            1,
+            1,
+            Int(!isnothing(bias)),
+            Int(!isnothing(mask)),
+            Int(!isnothing(q_lengths)),
+            Int(!isnothing(kv_lengths)),
+        ]),
+    )
+    !isnothing(d_bias) && push!(op_ty_results, d_bias)
+    !isnothing(is_causal) && push!(attributes, NamedAttribute("is_causal", is_causal))
+
+    return create_operation(
+        "enzymexla.ml.attention_grad",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`ml_attention`
+
+Computes scaled dot-product attention in BTNH layout:
+- query: (B, T, N_q, D_qk)
+- key: (B, S, N_kv, D_qk)
+- value: (B, S, N_kv, D_v)
+- bias (optional): broadcastable to (B, N_q, T, S)
+- mask (optional): boolean tensor (i1) broadcastable to (B, N_q, T, S), where true means attend and false means mask out (-inf)
+- q_lengths (optional): (B,) integer tensor of valid query sequence lengths
+- kv_lengths (optional): (B,) integer tensor of valid key/value sequence lengths
+
+Returns:
+- output: (B, T, N_q, D_v)
+- lse: (B, N_q, T) log-sum-exp of attention scores per query
+"""
+function ml_attention(
+    query::Value,
+    key::Value,
+    value::Value,
+    bias=nothing::Union{Nothing,Value};
+    mask=nothing::Union{Nothing,Value},
+    q_lengths=nothing::Union{Nothing,Value},
+    kv_lengths=nothing::Union{Nothing,Value},
+    output::IR.Type,
+    lse::IR.Type,
+    scale,
+    is_causal=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[output, lse]
+    operands = Value[query, key, value]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[NamedAttribute("scale", scale),]
+    !isnothing(bias) && push!(operands, bias)
+    !isnothing(mask) && push!(operands, mask)
+    !isnothing(q_lengths) && push!(operands, q_lengths)
+    !isnothing(kv_lengths) && push!(operands, kv_lengths)
+    push!(
+        attributes,
+        operandsegmentsizes([
+            1,
+            1,
+            1,
+            Int(!isnothing(bias)),
+            Int(!isnothing(mask)),
+            Int(!isnothing(q_lengths)),
+            Int(!isnothing(kv_lengths)),
+        ]),
+    )
+    !isnothing(is_causal) && push!(attributes, NamedAttribute("is_causal", is_causal))
+
+    return create_operation(
+        "enzymexla.ml.attention",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function barrier(indices::Vector{Value}; location=Location())
     op_ty_results = IR.Type[]
     operands = Value[indices...,]
@@ -379,6 +508,42 @@ function extend(
 
     return create_operation(
         "enzymexla.extend",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
+`math_fmuladd`
+
+Carries the semantics of the `llvm.fmuladd` intrinsic through the round
+trip: compute `a * b + c`, fused into a single rounding only when the
+target can do so profitably, otherwise as an ordinary multiply and add.
+This is a *permission* to fuse, unlike `math.fma`, whose single rounding
+is required and whose honest lowering on a target without FMA units is a
+libm call. Raised from `llvm.intr.fmuladd`; lowered back to the same.
+"""
+function math_fmuladd(
+    a::Value,
+    b::Value,
+    c::Value;
+    result=nothing::Union{Nothing,IR.Type},
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[a, b, c]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(result) && push!(op_ty_results, result)
+
+    return create_operation(
+        "enzymexla.math.fmuladd",
         location;
         operands,
         owned_regions,
@@ -784,6 +949,36 @@ function lapack_gesvj(
     )
 end
 
+"""
+`get_global_temp`
+
+Returns the storage owned by a `temp_alloc` declaration. Repeated accesses
+to the same symbol alias the same allocation; this operation is not an
+allocation. The returned reference is borrowed and must not be freed or
+used beyond the lifetime of the owning module\'s XLA runtime.
+
+The allocation handle is stable even when the XLA runtime replaces the
+underlying PJRT buffer after execution. Its contents are not constant.
+"""
+function get_global_temp(; result::IR.Type, name, location=Location())
+    op_ty_results = IR.Type[result,]
+    operands = Value[]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[NamedAttribute("name", name),]
+
+    return create_operation(
+        "enzymexla.get_global_temp",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
 function get_stream(; result::IR.Type, location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[]
@@ -838,6 +1033,38 @@ function lapack_getri(input::Value, ipiv::Value; output::IR.Type, location=Locat
 
     return create_operation(
         "enzymexla.lapack.getri",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`lapack_gtsv`
+
+This operation is modeled after LAPACK\'s *GTSV routines. Unlike LAPACK,
+all three diagonals have the same length m as the system: dl[0] and
+du[m-1] are ignored.
+
+`dl`, `d` and `du` have shape [..., m] and `B` has shape [..., m, nrhs].
+`info` has shape [...] and is non-zero for the systems that could not be
+solved.
+"""
+function lapack_gtsv(
+    dl::Value, d::Value, du::Value, B::Value; X::IR.Type, info::IR.Type, location=Location()
+)
+    op_ty_results = IR.Type[X, info]
+    operands = Value[dl, d, du, B]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "enzymexla.lapack.gtsv",
         location;
         operands,
         owned_regions,
@@ -920,7 +1147,6 @@ function jit_call(
     fn,
     backend_config=nothing,
     operand_layouts=nothing,
-    result_layouts=nothing,
     arg_attrs=nothing,
     res_attrs=nothing,
     output_operand_aliases=nothing,
@@ -936,8 +1162,6 @@ function jit_call(
         push!(attributes, NamedAttribute("backend_config", backend_config))
     !isnothing(operand_layouts) &&
         push!(attributes, NamedAttribute("operand_layouts", operand_layouts))
-    !isnothing(result_layouts) &&
-        push!(attributes, NamedAttribute("result_layouts", result_layouts))
     !isnothing(arg_attrs) && push!(attributes, NamedAttribute("arg_attrs", arg_attrs))
     !isnothing(res_attrs) && push!(attributes, NamedAttribute("res_attrs", res_attrs))
     !isnothing(output_operand_aliases) &&
@@ -947,6 +1171,103 @@ function jit_call(
 
     return create_operation(
         "enzymexla.jit_call",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`jit_region`
+
+Runs its single block on mutable buffers holding the values of its tensor
+inputs. The block has one memref argument per input, with the input\'s
+shape and element type; on entry it holds the input\'s contents. The block
+may read and write these buffers freely: the input tensors are values and
+are never modified.
+
+Each result holds the contents of one of the buffers when the block exits,
+and has the type of the corresponding input. As for `jit_call`, every
+result maps to an input through an entry of `output_operand_aliases`: the
+result `output_tuple_indices[0]` (or the only result, with empty
+`output_tuple_indices`) is read from the buffer of the input
+`operand_index`. The buffer of an input is read by at most one result.
+
+`operand_attrs` and `result_attrs`, if present, hold one dictionary of
+attributes per input and per result respectively.
+
+# Example
+
+```mlir
+%r:2 = \"enzymexla.jit_region\"(%a, %b) <{
+  operand_attrs = [{}, {enzymexla.reverse_operand_index = 0 : i64} ],
+  output_operand_aliases = [
+    #stablehlo.output_operand_alias<output_tuple_indices = [0],
+                                    operand_index = 0,
+                                    operand_tuple_indices = []>,
+    #stablehlo.output_operand_alias<output_tuple_indices = [1],
+                                    operand_index = 1,
+                                    operand_tuple_indices = []>
+  ]
+}> ({
+^bb0(%ma: memref<4xf32, 1>, %mb: memref<4xf32, 1>):
+  ...
+  \"enzymexla.jit_region_yield\"() : () -> ()
+}) : (tensor<4xf32>, tensor<4xf32>) -> (tensor<4xf32>, tensor<4xf32>)
+```
+"""
+function jit_region(
+    inputs::Vector{Value};
+    result_0::Vector{IR.Type},
+    operand_layouts=nothing,
+    operand_attrs=nothing,
+    result_attrs=nothing,
+    output_operand_aliases=nothing,
+    xla_side_effect_free=nothing,
+    body::Region,
+    location=Location(),
+)
+    op_ty_results = IR.Type[result_0...,]
+    operands = Value[inputs...,]
+    owned_regions = Region[body,]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(operand_layouts) &&
+        push!(attributes, NamedAttribute("operand_layouts", operand_layouts))
+    !isnothing(operand_attrs) &&
+        push!(attributes, NamedAttribute("operand_attrs", operand_attrs))
+    !isnothing(result_attrs) &&
+        push!(attributes, NamedAttribute("result_attrs", result_attrs))
+    !isnothing(output_operand_aliases) &&
+        push!(attributes, NamedAttribute("output_operand_aliases", output_operand_aliases))
+    !isnothing(xla_side_effect_free) &&
+        push!(attributes, NamedAttribute("xla_side_effect_free", xla_side_effect_free))
+
+    return create_operation(
+        "enzymexla.jit_region",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+function jit_region_yield(; location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+
+    return create_operation(
+        "enzymexla.jit_region_yield",
         location;
         operands,
         owned_regions,
@@ -1000,7 +1321,6 @@ function kernel_call(
     fn,
     backend_config=nothing,
     operand_layouts=nothing,
-    result_layouts=nothing,
     arg_attrs=nothing,
     res_attrs=nothing,
     output_operand_aliases=nothing,
@@ -1035,8 +1355,6 @@ function kernel_call(
         push!(attributes, NamedAttribute("backend_config", backend_config))
     !isnothing(operand_layouts) &&
         push!(attributes, NamedAttribute("operand_layouts", operand_layouts))
-    !isnothing(result_layouts) &&
-        push!(attributes, NamedAttribute("result_layouts", result_layouts))
     !isnothing(arg_attrs) && push!(attributes, NamedAttribute("arg_attrs", arg_attrs))
     !isnothing(res_attrs) && push!(attributes, NamedAttribute("res_attrs", res_attrs))
     !isnothing(output_operand_aliases) &&
@@ -2139,6 +2457,48 @@ function math_tgamma(
 end
 
 """
+`temp_alloc`
+
+Declares uninitialized, statically shaped device storage allocated when
+the module is initialized and freed when it is finalized. The declaration
+must be private. Uses retrieve the allocation with `get_global_temp`;
+accessing it does not allocate new storage.
+
+The allocation belongs to the module\'s XLA runtime. Its contents are
+mutable and shared by all uses, so callers must synchronize overlapping
+accesses. The first write and subsequent updates remain explicit copies.
+This operation does not move copies or computations across calls or loops.
+Lowering currently requires an XLA backend and C-style memrefs.
+
+# Example
+```mlir
+enzymexla.temp_alloc \"private\" @bound : memref<i32, 1>
+```
+"""
+function temp_alloc(; sym_name, sym_visibility=nothing, type, location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[
+        NamedAttribute("sym_name", sym_name), NamedAttribute("type", type)
+    ]
+    !isnothing(sym_visibility) &&
+        push!(attributes, NamedAttribute("sym_visibility", sym_visibility))
+
+    return create_operation(
+        "enzymexla.temp_alloc",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
 `linalg_tridiagonal_solve`
 Computes the solution of a tridiagonal linear system.
   Parameters:
@@ -2147,13 +2507,16 @@ Computes the solution of a tridiagonal linear system.
   d: A batch of vectors with shape [..., m]. The middle diagonal of A:
     d[i]  := A[i, i] for i in [0,m).
   du: A batch of vectors with shape [..., m]. The upper diagonal of A:
-    du[i] := A[i, i+1] for i in [0,m). Note that dl[m-1] = 0.
-  b: Right hand side matrix.
+    du[i] := A[i, i+1] for i in [0,m). Note that du[m-1] = 0.
+  b: Right hand side matrix with shape [..., m, nrhs].
+
+  Returns the solution X with the same shape as b, and info with shape [...],
+  which is non-zero for the systems that could not be solved.
 """
 function linalg_tridiagonal_solve(
-    dl::Value, d::Value, du::Value, B::Value; X::IR.Type, location=Location()
+    dl::Value, d::Value, du::Value, B::Value; X::IR.Type, info::IR.Type, location=Location()
 )
-    op_ty_results = IR.Type[X,]
+    op_ty_results = IR.Type[X, info]
     operands = Value[dl, d, du, B]
     owned_regions = Region[]
     successors = Block[]
@@ -2343,8 +2706,20 @@ function wrap(
     )
 end
 
+"""
+`xla_wrapper`
+
+Calls a raised function whose input/output pairs represent device buffers.
+The corresponding function result replaces each buffer\'s contents. Trailing
+specialized scalar inputs are compile-time values rather than device buffers.
+"""
 function xla_wrapper(
-    inputs::Vector{Value}; fn, arg_attrs=nothing, res_attrs=nothing, location=Location()
+    inputs::Vector{Value};
+    fn,
+    arg_attrs=nothing,
+    res_attrs=nothing,
+    num_specialized=nothing,
+    location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[inputs...,]
@@ -2353,6 +2728,8 @@ function xla_wrapper(
     attributes = NamedAttribute[NamedAttribute("fn", fn),]
     !isnothing(arg_attrs) && push!(attributes, NamedAttribute("arg_attrs", arg_attrs))
     !isnothing(res_attrs) && push!(attributes, NamedAttribute("res_attrs", res_attrs))
+    !isnothing(num_specialized) &&
+        push!(attributes, NamedAttribute("num_specialized", num_specialized))
 
     return create_operation(
         "enzymexla.xla_wrapper",
