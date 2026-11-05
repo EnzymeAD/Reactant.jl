@@ -3766,6 +3766,17 @@ struct LinkableRuntime {
     std::map<std::vector<int64_t>, std::pair<xla::LocalExecutable *, bool>>
         specialized; // by bound values: executable, tuple result
     bool specializing = true;
+    // REACTANT_EXEC_TUNE: other forms of the final module (see
+    // compileVariants), when they differ from it. Which runs faster depends
+    // on the module, so the first calls run them in turn, each timed, and
+    // the fastest is kept (each call still runs once). Empty when there is
+    // nothing to choose.
+    std::vector<xla::LocalExecutable *> variants;
+    std::vector<std::string> variantNames;
+    int64_t tuneCalls = 0;
+    std::vector<std::vector<double>> tuneSeconds;
+    // (CUDA: the start and stop events of each timed call, read at the end)
+    std::vector<std::vector<std::pair<void *, void *>>> tuneEvents;
   };
   DenseMap<const char *,
            std::map<std::vector<std::vector<int64_t>>, CachedExec>>
@@ -4347,6 +4358,92 @@ specializeRaw(LinkableRuntime *__restrict__ lrt,
   return {lexec, tupleResult};
 }
 
+// REACTANT_EXEC_TUNE (a comma-separated list of the transforms below): the
+// forms of the final module the transforms make, every combination of them,
+// compiled when it differs from the module and from the forms before it,
+// takes the same parameters and returns the same results, and fits in the
+// budget. The transforms:
+//   emajor     the element dimension leads every tensor (Enzyme-JAX
+//              enzyme-hlo-element-major): XLA's layout assignment follows
+//              the logical order, which decides how its fusions iterate;
+//   nobarrier  the optimization_barriers the barrier rounds placed are
+//              taken out: whether a materialized value beats recomputing it
+//              in its readers depends on how XLA fuses the rest;
+//   chunk      the elements run in chunks, unrolled and ordered by
+//              optimization barriers (Enzyme-JAX enzyme-hlo-element-chunk,
+//              last), so each chunk's stage tensors pass through the L2
+//              cache.
+// A transform whose pass the Enzyme-JAX build lacks makes no form.
+static std::vector<std::pair<std::string, xla::LocalExecutable *>>
+compileVariants(LinkableRuntime *__restrict__ lrt, mlir::ModuleOp module,
+                const std::vector<xla::Shape> &paramShapes, bool tupleResult) {
+  static const std::vector<std::string> transforms = [] {
+    std::vector<std::string> list;
+    std::string spec;
+    if (const char *tune = getenv("REACTANT_EXEC_TUNE"))
+      spec = tune;
+    for (size_t begin = 0, end; begin < spec.size(); begin = end + 1) {
+      end = spec.find(',', begin);
+      if (end == std::string::npos)
+        end = spec.size();
+      std::string name = spec.substr(begin, end - begin);
+      if ((name == "emajor" || name == "nobarrier" || name == "chunk") &&
+          std::find(list.begin(), list.end(), name) == list.end())
+        list.push_back(name);
+    }
+    return list;
+  }();
+  std::vector<std::pair<std::string, xla::LocalExecutable *>> variants;
+  if (transforms.empty())
+    return variants;
+  std::vector<std::string> seen;
+  {
+    llvm::raw_string_ostream os(seen.emplace_back());
+    module->print(os);
+  }
+  for (size_t mask = 1; mask < (1u << transforms.size()); mask++) {
+    mlir::OwningOpRef<mlir::ModuleOp> form = module.clone();
+    std::string name;
+    bool ok = true;
+    for (size_t t = 0; t < transforms.size() && ok; t++) {
+      if (!(mask & (1u << t)))
+        continue;
+      name += (name.empty() ? "" : "+") + transforms[t];
+      if (transforms[t] == "nobarrier")
+        eraseOptimizationBarriers(*form);
+      mlir::PassManager pm(module->getContext());
+      ok = succeeded(mlir::parsePassPipeline(
+               transforms[t] == "emajor"
+                   ? "enzyme-hlo-element-major,canonicalize,cse"
+               : transforms[t] == "chunk"
+                   ? "enzyme-hlo-element-chunk{barriers=true},canonicalize,cse"
+                   : "canonicalize,cse",
+               pm)) &&
+           succeeded(pm.run(*form));
+    }
+    if (!ok)
+      continue;
+    std::string text;
+    llvm::raw_string_ostream os(text);
+    form->print(os);
+    if (std::find(seen.begin(), seen.end(), text) != seen.end())
+      continue;
+    seen.push_back(std::move(text));
+    auto [lexec, shapes, tuple] = compileRaw(lrt, *form);
+    if (tuple != tupleResult || shapes.size() != paramShapes.size() ||
+        !std::equal(shapes.begin(), shapes.end(), paramShapes.begin(),
+                    [](const xla::Shape &a, const xla::Shape &b) {
+                      return xla::ShapeUtil::Equal(a, b);
+                    }) ||
+        tempBytes(lexec) > tempBudget(lrt)) {
+      delete lexec;
+      continue;
+    }
+    variants.emplace_back(name, lexec);
+  }
+  return variants;
+}
+
 // Runs the executable on the stream over the arguments' raw memory: a
 // written argument is donated, and comes back as the result it aliases
 // (XLA keeps it in place; should it not, the allocation takes the result's
@@ -4387,6 +4484,29 @@ static void runRaw(LinkableRuntime *__restrict__ lrt,
       readBounds = true;
     }
   }
+  // REACTANT_EXEC_TUNE: after kTuneWarm calls, each form runs kTuneCalls
+  // calls in a row, timed on the stream (CUDA events, so the calls run back
+  // to back as they otherwise would), and the fastest is kept. The first call
+  // of each form is not counted: it starts behind the queue the form before
+  // left, which hides the launch gaps of a host-bound module.
+  static const int64_t kTuneWarm = 4, kTuneCalls = 6;
+  int64_t tuning = -1;
+  std::chrono::steady_clock::time_point tuneStart;
+  void *tuneStartEvent = nullptr;
+  if (!exec.variants.empty() && !readBounds && exec.tuneCalls >= kTuneWarm) {
+    tuning = (exec.tuneCalls - kTuneWarm) / kTuneCalls;
+    lexec = exec.variants[tuning];
+#ifdef REACTANT_CUDA
+    CUevent start;
+    cuEventCreate(&start, CU_EVENT_DEFAULT);
+    cuEventRecord(start,
+                  (CUstream)lrt->stream->platform_specific_handle().stream);
+    tuneStartEvent = start;
+#else
+    check(lrt->stream->BlockHostUntilDone(), "tuning wait");
+    tuneStart = std::chrono::steady_clock::now();
+#endif
+  }
   std::vector<xla::ExecutionInput> inputs;
   inputs.reserve(exec.paramShapes.size());
   for (size_t pos = 0; pos < params.size(); pos++) {
@@ -4421,6 +4541,71 @@ static void runRaw(LinkableRuntime *__restrict__ lrt,
       info->mem = mem;
     }
     r++;
+  }
+  if (!exec.variants.empty() && tuning < 0)
+    exec.tuneCalls++;
+  if (tuning >= 0) {
+#ifdef REACTANT_CUDA
+    CUevent stop;
+    cuEventCreate(&stop, CU_EVENT_DEFAULT);
+    cuEventRecord(stop,
+                  (CUstream)lrt->stream->platform_specific_handle().stream);
+    exec.tuneEvents[tuning].emplace_back(tuneStartEvent, stop);
+#else
+    check(lrt->stream->BlockHostUntilDone(), "tuning wait");
+    exec.tuneSeconds[tuning].push_back(
+        std::chrono::duration<double>(std::chrono::steady_clock::now() -
+                                      tuneStart)
+            .count());
+#endif
+    int64_t forms = exec.variants.size();
+    if (++exec.tuneCalls == kTuneWarm + forms * kTuneCalls) {
+#ifdef REACTANT_CUDA
+      cuEventSynchronize((CUevent)exec.tuneEvents[tuning].back().second);
+      for (int64_t v = 0; v < forms; v++)
+        for (auto [a, b] : exec.tuneEvents[v]) {
+          float ms = 0;
+          cuEventElapsedTime(&ms, (CUevent)a, (CUevent)b);
+          exec.tuneSeconds[v].push_back(ms * 1e-3);
+          cuEventDestroy((CUevent)a);
+          cuEventDestroy((CUevent)b);
+        }
+#endif
+      auto median = [](std::vector<double> v) {
+        std::sort(v.begin(), v.end());
+        return v[v.size() / 2];
+      };
+      int64_t best = 0;
+      std::vector<double> medians(forms);
+      for (int64_t v = 0; v < forms; v++) {
+        // (a call that could not be timed, reading bounds, leaves a form
+        // fewer samples)
+        auto &samples = exec.tuneSeconds[v];
+        medians[v] = samples.empty() ? INFINITY
+                     : samples.size() == 1
+                         ? samples[0]
+                         : median(std::vector<double>(samples.begin() + 1,
+                                                      samples.end()));
+        if (medians[v] < medians[best])
+          best = v;
+      }
+      static const bool log = getenv("REACTANT_EXEC_TUNE_LOG");
+      if (log) {
+        llvm::errs() << "TUNE";
+        for (int64_t v = 0; v < forms; v++)
+          llvm::errs() << " " << exec.variantNames[v] << " " << medians[v] * 1e6
+                       << " us";
+        llvm::errs() << ": keep " << exec.variantNames[best] << "\n";
+      }
+      for (int64_t v = 0; v < forms; v++)
+        if (v != best)
+          delete exec.variants[v];
+      exec.lexec = exec.variants[best];
+      exec.variants.clear();
+      exec.variantNames.clear();
+      exec.tuneEvents.clear();
+      exec.tuneSeconds.clear();
+    }
   }
   int64_t firstBound = readBounds ? numResults - exec.numBounds : numResults;
   for (; r < firstBound; r++)
@@ -5281,6 +5466,11 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
       exec =
           ClientCompileWithProto(lrt->client, wrap(module.get()), nullptr, 0);
     }
+    // The other forms to time against this one (REACTANT_EXEC_TUNE); a
+    // module whose bounds are read back runs its specializations instead.
+    std::vector<std::pair<std::string, xla::LocalExecutable *>> variants;
+    if (lrt->raw && boundDeps.empty())
+      variants = compileVariants(lrt, *module, paramShapes, tupleResult);
 
     // Per parameter of the executable, in order.
     uint8_t *keep = (uint8_t *)malloc(argcnt);
@@ -5299,6 +5489,17 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
                                 std::move(text), (int64_t)boundDeps.size(),
                                 std::move(boundDeps)})
                .first;
+    if (!variants.empty()) {
+      auto &e = iter->second;
+      e.variants.push_back(e.lexec);
+      e.variantNames.push_back("plain");
+      for (auto &[name, lexec] : variants) {
+        e.variants.push_back(lexec);
+        e.variantNames.push_back(name);
+      }
+      e.tuneSeconds.resize(e.variants.size());
+      e.tuneEvents.resize(e.variants.size());
+    }
   }
 
   if (lrt->raw) {
