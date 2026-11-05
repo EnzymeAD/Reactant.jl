@@ -3929,7 +3929,10 @@ function __init__()
     #! format: on
 
     return Reactant.Accelerators.Registration.register_backend(
-        "julia"; priority=100, pjrt_initialize_function=make_pjrt_client
+        "julia";
+        priority=100,
+        pjrt_initialize_function=make_pjrt_client,
+        ifrt_initialize_function=make_ifrt_client,
     )
 end
 
@@ -3950,6 +3953,18 @@ function make_pjrt_client(;
     ptr = API.MakeClientFromApi(api, "julia", "JULIA", errstr)
     ptr == C_NULL && error(unsafe_string(errstr[]))
     return Reactant.XLA.PJRT.Client(ptr)
+end
+
+function make_ifrt_client(; kwargs...)
+    pjrt_client = make_pjrt_client(; kwargs...)
+    errstr = Ref{Cstring}()
+    ptr = GC.@preserve pjrt_client errstr begin
+        API.ifrt_pjrt_make_client_with_default_kv_store(
+            pjrt_client.client, 0, 1, C_NULL, errstr, "julia"
+        )
+    end
+    ptr == C_NULL && error(unsafe_string(errstr[]))
+    return Reactant.XLA.IFRT.Client(ptr)
 end
 
 end
