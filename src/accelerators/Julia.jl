@@ -64,6 +64,7 @@ function compile_options end
 function compile! end
 function copy_to_device end
 function copy_to_memory end
+function create_uninitialized_buffer end
 function debug_string end
 function default_memory end
 function description end
@@ -2075,6 +2076,57 @@ end
 end
 
 """
+    create_uninitialized_buffer(client::Client, dev::Device, mem::Memory, type, dims, layout) -> Buffer
+
+Return a new buffer placed on memory `mem` of device `dev`, with element type `type::CAPI.PJRT_Buffer_Type` and
+dimensions `dims::Vector{Int64}`, whose contents are left uninitialized.
+
+## Arguments
+- `mem` is always one of `addressable_memories(dev)`, filled in like in [`buffer_from_host_buffer`](@ref).
+- `layout::Ptr{CAPI.PJRT_Buffer_MemoryLayout}` is `C_NULL` for the default layout.
+
+The caller GC-roots the returned buffer.
+
+Backs `PJRT_Client_CreateUninitializedBuffer`.
+"""
+create_uninitialized_buffer(::Client, ::Device, ::Memory, args...)
+
+function create_uninitialized_buffer(client::Client, mem::Memory, args...)
+    return create_uninitialized_buffer(client, first(addressable_devices(mem)), mem, args...)
+end
+
+function create_uninitialized_buffer(client::Client, dev::Device, args...)
+    return create_uninitialized_buffer(client, dev, default_memory(dev), args...)
+end
+
+@pjrt_catch_return function client_create_uninitialized_buffer(
+    args::Ptr{CAPI.PJRT_Client_CreateUninitializedBuffer_Args}
+)::Ptr{CAPI.PJRT_Error}
+    client = unsafe_pointer_to_objref(unsafe_load(args.client))::Client
+    _eltype = unsafe_load(args.shape_element_type)
+    _size = copy(unsafe_wrap(Vector{Int64}, unsafe_load(args.shape_dims), unsafe_load(args.shape_num_dims)))
+    layout = unsafe_load(args.shape_layout)
+
+    mem_ptr = Ptr{Memory}(unsafe_load(args.memory))
+    dev_ptr = Ptr{Device}(unsafe_load(args.device))
+    if mem_ptr == C_NULL && dev_ptr == C_NULL
+        throw(invalid_argument("No device nor memory has been assigned"))
+    end
+
+    buffer = if mem_ptr != C_NULL
+        mem = unsafe_pointer_to_objref(mem_ptr)::Memory
+        create_uninitialized_buffer(client, mem, _eltype, _size, layout)
+    else
+        dev = unsafe_pointer_to_objref(dev_ptr)::Device
+        create_uninitialized_buffer(client, dev, _eltype, _size, layout)
+    end::Buffer
+
+    root!(buffer)
+    unsafe_store!(args.buffer, Ptr{CAPI.PJRT_Buffer}(pointer_from_objref(buffer)))
+    return ok()
+end
+
+"""
     compile!(client::Client, code::MLIR.IR.Module, options::Vector{UInt8})
 
 Compile `code` for the devices of `client` and return a loaded executable.
@@ -3479,6 +3531,18 @@ function buffer_from_host_buffer(
     return HostBuffer(new_data, size_in_bytes, _eltype, _size, minor_to_major, dev, mem)
 end
 
+# like `buffer_from_host_buffer`, buffers are dense in major-to-minor order and `layout` is not checked
+function create_uninitialized_buffer(
+    ::HostClient, dev::HostDevice, mem::HostMemory, _eltype, _size, _layout
+)
+    size_in_bytes = prod(_size; init=pjrt_elsize(_eltype))
+    minor_to_major = collect((length(_size) - 1):-1:0)
+    # `malloc(0)` may return `C_NULL`, which would mark the buffer as deleted
+    data = Libc.malloc(max(size_in_bytes, 1))
+    data == C_NULL && throw(resource_exhausted())
+    return HostBuffer(data, size_in_bytes, _eltype, _size, minor_to_major, dev, mem)
+end
+
 # each op becomes a call to its handler, `%N = handle(Val(opname), operands, attributes, results)`
 # like in MLIR, an op with several results binds `%N#0`, `%N#1`, ... instead.
 # ops with regions also get `regions`, a tuple with an anonymous function per region, which takes the block
@@ -3835,7 +3899,7 @@ function __init__()
         #= PJRT_AsyncHostToDeviceTransferManager_AddMetadata =# c_unimplemented,
         #= PJRT_Client_DmaMap =# c_unimplemented,
         #= PJRT_Client_DmaUnmap =# c_unimplemented,
-        #= PJRT_Client_CreateUninitializedBuffer =# c_unimplemented,
+        #= PJRT_Client_CreateUninitializedBuffer =# @cfunction(client_create_uninitialized_buffer, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Client_CreateUninitializedBuffer_Args},)),
         #= PJRT_Client_UpdateGlobalProcessInfo =# c_unimplemented,
         #= PJRT_TopologyDescription_Deserialize =# c_unimplemented,
         #= PJRT_Client_CreateAliasBuffer =# c_unimplemented,
