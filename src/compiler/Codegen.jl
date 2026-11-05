@@ -1121,6 +1121,7 @@ function codegen_unflatten!(
     client,
     resharded_inputs;
     concrete_args=nothing,
+    plan=nothing,
 )
     cache_dict = Symbol("cache_dict")
     needs_cache_dict = false
@@ -1155,8 +1156,8 @@ function codegen_unflatten!(
     resprefix::Symbol = :result
     resargprefix::Symbol = :resargs
 
-    for (concrete_res_name, result, shard_info) in
-        zip(concretized_res_names, linear_results, linear_result_shard_info)
+    for (result_index, (concrete_res_name, result, shard_info)) in
+        enumerate(zip(concretized_res_names, linear_results, linear_result_shard_info))
         paths = (
             (
                 p for p in Reactant.TracedUtils.get_paths(result) if
@@ -1198,6 +1199,10 @@ function codegen_unflatten!(
                     (argidx, path[1:max(0, end - 2)]...),
                     (path[max(1, end - 1):end]..., concrete_res_name),
                 )
+                    continue
+                end
+                if plan !== nothing
+                    push!(plan.result_writes, ResultWrite(result_index, (argidx, path...)))
                     continue
                 end
                 for p in path[1:max(0, end - 2)]
@@ -1365,7 +1370,22 @@ function codegen_unflatten!(
         runtime;
         concrete_args,
         written,
+        plan,
     )
+
+    if plan !== nothing
+        # the reads and writes are carried out by the runtime thunk functions
+        body_code = Expr[
+            :(alias_values = runtime_thunk_pre_reads(args, thunk_plan)),
+            unresharded_code...,
+            resultgen_code...,
+            :(result = $result_code),
+            :(runtime_thunk_write_back!(
+                args, thunk_plan, linearized_results, alias_values
+            )),
+        ]
+        return (body_code, used_shardinfo)
+    end
 
     # generate return object which stores the concrete results in some arbitrary way
     body_code = Expr[
@@ -1396,6 +1416,7 @@ function codegen_unflatten_aliased_args!(
     runtime;
     concrete_args=nothing,
     written=new_written_set(),
+    plan=nothing,
 )
     for (pi, (result, arg_idx)) in enumerate(preserved_args)
         paths = (
@@ -1448,6 +1469,23 @@ function codegen_unflatten_aliased_args!(
             if need_to_unreshard !== nothing
                 # TODO(@avik-pal): I need an MWE to debug this codepath
                 error("TODO(#2234): Not yet Implemented. Open an issue on Reactant.jl.")
+            end
+
+            if plan !== nothing
+                if isnothing(argpath_value)
+                    needs_copy =
+                        initial_path[1] === :args &&
+                        argpath[1] === :args &&
+                        !orig_buffer_available[arg_idx + 1]
+                    orig_buffer_available[arg_idx + 1] = false
+                    push!(
+                        plan.alias_reads,
+                        AliasRead(argpath[2:end], aliases_input, needs_copy),
+                    )
+                    argpath_value = length(plan.alias_reads)
+                end
+                push!(plan.alias_writes, AliasWrite(argpath_value, initial_path[2:end]))
+                continue
             end
 
             if isnothing(argpath_value)
