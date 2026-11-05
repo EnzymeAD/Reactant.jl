@@ -1066,6 +1066,51 @@ function ifrt_resharded_buffer(
     return XLA.IFRT.Array(client, data, ifrt_sharding)
 end
 
+const UNRESOLVED_PATH = gensym(:unresolved_path)
+
+"""
+    resolve_path(concrete_args, path)
+
+Follow `path` (indices into `args` and then fields, as in the generated `traced_getfield`
+chains) through the compile-time `concrete_args`, returning the object found there, or
+`UNRESOLVED_PATH` if it cannot be followed.
+"""
+function resolve_path(concrete_args, path)
+    concrete_args === nothing && return UNRESOLVED_PATH
+    try
+        obj = concrete_args[path[1]]
+        for p in path[2:end]
+            obj = traced_getfield(obj, p)
+        end
+        return obj
+    catch
+        return UNRESOLVED_PATH
+    end
+end
+
+"""
+    is_redundant_write!(written, concrete_args, path, key)
+
+Whether the write-back to the object at `path` (resolved through the compile-time
+`concrete_args`) with `key` has already been emitted. The same object is often reachable
+through many argument paths (e.g. a mutable array shared by many immutable wrappers);
+writing the same value to it through every path is redundant and, since the thunk body is
+a single straight-line function, makes its native code generation superlinearly slower.
+The thunk already assumes the aliasing seen at compile time, as aliased inputs are
+flattened only once.
+"""
+function is_redundant_write!(written, concrete_args, path, key)
+    obj = resolve_path(concrete_args, path)
+    obj === UNRESOLVED_PATH && return false
+    # compare by identity: `isequal` on arrays would compare (and fetch) their contents
+    entry = (obj, key)
+    entry in written && return true
+    push!(written, entry)
+    return false
+end
+
+new_written_set() = Base.IdSet{Any}()
+
 """
     codegen_unflatten!
 
@@ -1082,7 +1127,8 @@ function codegen_unflatten!(
     path_to_shard_info,
     linear_result_shard_info,
     client,
-    resharded_inputs,
+    resharded_inputs;
+    concrete_args=nothing,
 )
     cache_dict = Symbol("cache_dict")
     needs_cache_dict = false
@@ -1104,6 +1150,7 @@ function codegen_unflatten!(
     ctypes = Union{arrtype,numtype}
 
     to_unreshard_results = Dict{Tuple,Any}()
+    written = new_written_set()
 
     # Ofcourse not thread-safe but this isn't meant for end-users anyways
     if DEBUG_ALIASED_BUFFER_ASSIGNMENT_ERROR[]
@@ -1151,7 +1198,16 @@ function codegen_unflatten!(
                                                     instead."
                 end
 
+                argidx = path[2]
                 path = path[3:end]
+                if length(path) > 0 && is_redundant_write!(
+                    written,
+                    concrete_args,
+                    (argidx, path[1:max(0, end - 2)]...),
+                    (path[max(1, end - 1):end]..., concrete_res_name),
+                )
+                    continue
+                end
                 for p in path[1:max(0, end - 2)]
                     unflatcode = :(traced_getfield($unflatcode, $(Meta.quot(p))))
                 end
@@ -1314,7 +1370,9 @@ function codegen_unflatten!(
         linear_args,
         resharded_inputs,
         orig_buffer_available,
-        runtime,
+        runtime;
+        concrete_args,
+        written,
     )
 
     # generate return object which stores the concrete results in some arbitrary way
@@ -1343,7 +1401,9 @@ function codegen_unflatten_aliased_args!(
     linear_args,
     resharded_inputs,
     orig_buffer_available,
-    runtime,
+    runtime;
+    concrete_args=nothing,
+    written=new_written_set(),
 )
     for (pi, (result, arg_idx)) in enumerate(preserved_args)
         paths = (
@@ -1381,6 +1441,9 @@ function codegen_unflatten_aliased_args!(
             # `:resargs` path can resolve to the same argument slot. Write it only once.
             path[2:end] in seen_dsts && continue
             push!(seen_dsts, path[2:end])
+            # Another path to the same object already received this value.
+            is_redundant_write!(written, concrete_args, path[2:end], (:data, pi)) &&
+                continue
 
             res = :(args[$(path[2])])
 
