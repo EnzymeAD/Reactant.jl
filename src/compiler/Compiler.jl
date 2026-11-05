@@ -1,5 +1,7 @@
 module Compiler
 
+Base.Experimental.@optlevel 0
+
 using Reactant_jll
 using LinearAlgebra: BlasInt
 import p7zip_jll: p7zip
