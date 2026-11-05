@@ -2080,6 +2080,46 @@ end
     return @allowscalar Reactant.Ops.__construct_cuda_julia_buffer(T, (1,), ptr)[1]
 end
 
+const CUDA_SUPPORTS_BORROWED_STREAMS = hasmethod(
+    Base.unsafe_wrap, Tuple{Type{CUDACore.CuStream},CUDACore.CUstream}
+)
+
+# Make the work submitted to `waiter` from now on wait for the work submitted to
+# `source` so far, without blocking the host. `cuStreamWaitEvent` only waits on the
+# recording made before it was called, so `event` can be re-recorded afterwards.
+function cuda_stream_wait(waiter, source, event)
+    @static if CUDA_SUPPORTS_BORROWED_STREAMS
+        CUDACore.record(event, source)
+        CUDACore.wait(event, waiter)
+    else
+        CUDACore.cuEventRecord(event, source)
+        CUDACore.cuStreamWaitEvent(waiter, event, 0)
+    end
+    return nothing
+end
+
+# Fork the task-local CUDA.jl stream off XLA's stream for the duration of a
+# `julia_callback`, and join it back afterwards, so that neither the host nor the
+# rest of XLA's stream has to wait on a full synchronization.
+function Reactant.Ops.__with_cuda_stream_fork(f::F, xla_stream_ptr::Ptr{Cvoid}) where {F}
+    xla_stream = @static if CUDA_SUPPORTS_BORROWED_STREAMS
+        unsafe_wrap(CUDACore.CuStream, CUDACore.CUstream(xla_stream_ptr))
+    else
+        CUDACore.CUstream(xla_stream_ptr)
+    end
+    julia_stream = CUDACore.stream()
+    event = CUDACore.CuEvent(CUDACore.EVENT_DISABLE_TIMING)
+
+    cuda_stream_wait(julia_stream, xla_stream, event)
+    try
+        return f()
+    finally
+        cuda_stream_wait(xla_stream, julia_stream, event)
+        # Destroying a pending event is fine: the driver releases it once it completes.
+        finalize(event)
+    end
+end
+
 # In Julia v1.11.3 precompiling this module caches bad code:
 # <https://github.com/EnzymeAD/Reactant.jl/issues/614>.
 @static if !Sys.isapple()
