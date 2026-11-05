@@ -4460,9 +4460,19 @@ function __construct_cuda_julia_buffer end
     return __construct_cuda_julia_buffer(T, shape, ptr)
 end
 
+function __construct_rocm_julia_buffer end
+
+@inline function _construct_rocm_julia_buffer(::Type{T}, shape, ptr) where {T}
+    if !Reactant.is_extension_loaded(Val(:AMDGPU))
+        error("AMDGPU.jl extension must be loaded to perform julia callbacks on ROCm.")
+    end
+    return __construct_rocm_julia_buffer(T, shape, ptr)
+end
+
 # Backend Values:
 #   1: Host
 #   2: CUDA.jl
+#   3: AMDGPU.jl (ROCm)
 @inline function _wrap_buffers(
     data_ptrs::Ptr{Ptr{Cvoid}},
     specs::NTuple{N,Tuple{DataType,Tuple}},
@@ -4476,6 +4486,8 @@ end
             return _construct_host_julia_buffer(T, shape, ptr)
         elseif backend == 2
             return _construct_cuda_julia_buffer(T, shape, ptr)
+        elseif backend == 3
+            return _construct_rocm_julia_buffer(T, shape, ptr)
         else
             error("Unsupported backend: $backend")
         end
