@@ -2373,6 +2373,52 @@ end
     )
 end
 
+function _set_at_path!(curr, path_tail::Tuple, val)
+    p = first(path_tail)
+    rest = Base.tail(path_tail)
+    if isempty(rest)
+        if curr isa Array || curr isa Dict
+            curr[p] = val
+            return curr
+        elseif ismutable(curr)
+            setfield!(curr, p, val)
+            return curr
+        elseif curr isa Tuple
+            return Base.setindex(curr, val, p)
+        elseif curr isa NamedTuple
+            idx = p isa Symbol ? Base.fieldindex(typeof(curr), p) : p
+            return NamedTuple{keys(curr)}(Base.setindex(Tuple(curr), val, idx))
+        else
+            T = Core.Typeof(curr)
+            nf = fieldcount(T)
+            flds = Vector{Any}(undef, nf)
+            idx = p isa Symbol ? Base.fieldindex(T, p) : p
+            for j in 1:nf
+                if j == idx
+                    flds[j] = val
+                elseif isdefined(curr, j)
+                    flds[j] = getfield(curr, j)
+                else
+                    nf = j - 1
+                    break
+                end
+            end
+            return ccall(:jl_new_structv, Any, (Any, Ptr{Any}, UInt32), T, flds, nf)
+        end
+    else
+        child = if curr isa Array || curr isa Dict
+            curr[p]
+        else
+            getfield(curr, p)
+        end
+        new_child = _set_at_path!(child, rest, val)
+        if new_child !== child
+            return _set_at_path!(curr, (p,), new_child)
+        end
+        return curr
+    end
+end
+
 @noinline function while_loop(
     cond_fn::CFn,
     body_fn::BFn,
@@ -2419,21 +2465,22 @@ end
             resargprefix=gensym("loop_condresarg"),
         ).f
 
-    body_fn_compiled =
-        Reactant.TracedUtils.make_mlir_fn(
-            body_fn,
-            traced_args,
-            (),
-            string(gensym("body_fn")),
-            false;
-            return_dialect=:stablehlo,
-            args_in_result=:all,
-            do_transpose=false,
-            verify_arg_names,
-            argprefix=gensym("loop_bodyarg"),
-            resprefix=gensym("loop_bodyres"),
-            resargprefix=gensym("loop_bodyresarg"),
-        ).f
+    body_resargprefix = gensym("loop_bodyresarg")
+    body_res = Reactant.TracedUtils.make_mlir_fn(
+        body_fn,
+        traced_args,
+        (),
+        string(gensym("body_fn")),
+        false;
+        return_dialect=:stablehlo,
+        args_in_result=:all,
+        do_transpose=false,
+        verify_arg_names,
+        argprefix=gensym("loop_bodyarg"),
+        resprefix=gensym("loop_bodyres"),
+        resargprefix=body_resargprefix,
+    )
+    body_fn_compiled = body_res.f
 
     cond_reg = Reactant.TracedUtils.__take_region(cond_fn_compiled)
     body_reg = Reactant.TracedUtils.__take_region(body_fn_compiled)
@@ -2468,15 +2515,32 @@ end
         MLIR.IR.setattr!(while_op, "enzyme.enable_checkpointing", MLIR.IR.Attribute(true))
     end
 
-    results = map(enumerate(linear_args)) do (i, arg)
-        return Reactant.TracedUtils.set_mlir_data!(arg, MLIR.IR.result(while_op, i))
+    root_targets = body_res.fnwrapped ? (body_fn, args...) : args
+    results = Vector{Reactant.TracedType}(undef, length(linear_args))
+    for (i, arg) in enumerate(linear_args)
+        res_val = MLIR.IR.result(while_op, i)
+        b_arg = body_res.linear_args[i]
+        b_res = body_res.linear_results[i]
+        if b_res === b_arg
+            results[i] = Reactant.TracedUtils.set_mlir_data!(arg, res_val)
+        else
+            new_arg = Reactant.TracedUtils.set_mlir_data!(copy(arg), res_val)
+            results[i] = new_arg
+            for path in Reactant.TracedUtils.get_paths(b_res)
+                if !isempty(path) && path[1] == body_resargprefix && length(path) >= 3
+                    _set_at_path!(root_targets[path[2]], path[3:end], new_arg)
+                end
+            end
+        end
     end
 
-    # Values promoted to traced ones (e.g. Julia numbers with `track_numbers`) are new
-    # objects that only `traced_args` refers to, write them back into the caller's `Ref`s
+    # Values promoted to traced ones (e.g. Julia numbers with `track_numbers`) that were
+    # not reassigned in the body still need to be written back into the caller's `Ref`s
     for (prev, traced) in zip(args, traced_args)
         if prev isa Base.RefValue && prev !== traced && traced[] isa eltype(prev)
-            prev[] = traced[]
+            if !(prev[] isa Reactant.TracedType)
+                prev[] = traced[]
+            end
         end
     end
 

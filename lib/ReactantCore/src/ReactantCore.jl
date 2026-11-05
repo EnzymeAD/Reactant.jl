@@ -492,6 +492,16 @@ function compute_symbols_state(ex)
     return flatten_symbols_state!(ExpressionExplorer.compute_symbols_state(ex))
 end
 
+_copy_traced_numbers(x) = x
+_copy_traced_numbers(x::Number) = copy(x)
+function _copy_traced_numbers(x::Complex)
+    return Complex(_copy_traced_numbers(real(x)), _copy_traced_numbers(imag(x)))
+end
+_copy_traced_numbers(x::Tuple) = map(_copy_traced_numbers, x)
+function _copy_traced_numbers(x::NamedTuple{K}) where {K}
+    return NamedTuple{K}(map(_copy_traced_numbers, Tuple(x)))
+end
+
 function trace_while(mod, expr; track_numbers, mincut, checkpointing, first_arg=nothing)
     Meta.isexpr(expr, :while, 2) || error("expected while expr")
     cond, body = expr.args
@@ -534,7 +544,7 @@ function trace_while(mod, expr; track_numbers, mincut, checkpointing, first_arg=
 
     function loop_init_val(s)
         s ∈ body_symbols.assignments || return :(@isdefined($s) ? $s : nothing)
-        return :(
+        val_expr = :(
             if $(Expr(:islocal, s)) && @isdefined($s)
                 $s
             elseif @isdefined($s) && !(
@@ -545,6 +555,7 @@ function trace_while(mod, expr; track_numbers, mincut, checkpointing, first_arg=
                 nothing
             end
         )
+        return :($(_copy_traced_numbers)($val_expr))
     end
     args_init = Expr(:tuple, (:(Ref{Any}($(loop_init_val(s)))) for s in external_syms)...)
 
