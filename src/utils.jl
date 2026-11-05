@@ -1050,9 +1050,7 @@ function call_llvm_generator(
                 # Run in the caller's world: code generation may format values of type
                 # parameters (e.g. GPUCompiler 2 mangles the signature to name relocations),
                 # whose `show` methods can come from packages loaded after Reactant.
-                llvm_module, p, gmap = Core._call_in_world_total(
-                    world, emit_native_llvm, job
-                )
+                llvm_module, p, gmap = Core._call_in_world_total(world, emit_native_llvm, job)
                 for g in LLVM.globals(llvm_module)
                     haskey(LLVM.metadata(g), "julia.constgv") || continue
                     init = LLVM.initializer(g)
