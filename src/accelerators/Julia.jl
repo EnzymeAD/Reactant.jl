@@ -2075,7 +2075,7 @@ end
 end
 
 """
-    compile!(client::Client, code::Reactant.MLIR.IR.Module, options::Vector{UInt8})
+    compile!(client::Client, code::MLIR.IR.Module, options::Vector{UInt8})
 
 Compile `code` for the devices of `client` and return a loaded executable.
 
@@ -2110,13 +2110,11 @@ compile!(::Client, args...)
     # code = unsafe_string(
     #     Ptr{Cchar}(unsafe_load(program.code)), unsafe_load(program.code_size)
     # )
-    code_str_ref = Reactant.MLIR.API.MlirStringRef(
+    code_str_ref = API.MlirStringRef(
         unsafe_load(program.code), unsafe_load(program.code_size)
     )
     ctx = Reactant.ReactantContext()
-    mlir_mod = Reactant.MLIR.IR.Module(
-        Reactant.MLIR.API.stablehloDeserializePortableArtifactNoError(code_str_ref, ctx)
-    )
+    mlir_mod = IR.Module(API.stablehloDeserializePortableArtifactNoError(code_str_ref, ctx))
     # options = unsafe_string(
     #     Ptr{Cchar}(unsafe_load(args.compile_options)),
     #     unsafe_load(args.compile_options_size),
@@ -3179,7 +3177,7 @@ function codegen_op!(exprs, op, opname, operands, vars, nvals)
     # attributes are decoded here, since the MLIR context doesn't outlive `compile!`
     attributes = (;
         (
-            Symbol(String(Reactant.MLIR.API.mlirIdentifierStr(na.ref.name))) =>
+            Symbol(String(API.mlirIdentifierStr(na.ref.name))) =>
                 decode_attribute(IR.Attribute(na.ref.attribute)) for
             na in (IR.getattr(op, i) for i in 1:IR.nattrs(op))
         )...
@@ -3189,7 +3187,9 @@ function codegen_op!(exprs, op, opname, operands, vars, nvals)
         type = IR.type(IR.result(op, i))
         API.stablehloTypeIsAToken(type) && return Token
         IR.istensor(type) || throw(
-            unimplemented("`$opname` returns a value that is neither a tensor nor a token, which is not supported"),
+            unimplemented(
+                "`$opname` returns a value that is neither a tensor nor a token, which is not supported",
+            ),
         )
         T = IR.julia_type(eltype(type))
         dims = reverse(size(type))
@@ -3551,7 +3551,7 @@ function make_pjrt_client(;
 
     errstr = Ref{Cstring}()
     api = unsafe_convert(Ptr{CAPI.PJRT_Api}, vtable_api)
-    ptr = Reactant.MLIR.API.MakeClientFromApi(api, "julia", "JULIA", errstr)
+    ptr = API.MakeClientFromApi(api, "julia", "JULIA", errstr)
     ptr == C_NULL && error(unsafe_string(errstr[]))
     return Reactant.XLA.PJRT.Client(ptr)
 end
