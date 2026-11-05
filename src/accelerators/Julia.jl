@@ -3072,6 +3072,181 @@ struct Token end
 # joins tokens into a new one; ops already run in program order, so there is nothing to wait for
 handle(::Val{Symbol("stablehlo.after_all")}, _, _, _) = Token()
 
+# TODO this can be veeery slow. fix it by using "mixed-radix cooley-tukey" for small factors, and bluestein/rader for
+# large prime factors
+# TODO also, plan FFTs ahead
+# 1-dimensional discrete Fourier transform of `x` written into `out`, which must not alias `x`, unnormalized and with
+# the sign of the exponent given by `inverse`. even lengths transform the even and odd elements of `x` into the two
+# halves of `out` and combine them in place (radix-2 Cooley-Tukey), and odd lengths are computed directly in O(n^2)
+function __fft_1d!(out::AbstractVector{T}, x::AbstractVector, inverse::Bool) where {T<:Complex}
+    n = length(x)
+    if n <= 1
+        n == 1 && (out[1] = x[1])
+        return out
+    end
+    s = inverse ? 2 : -2
+    if iseven(n)
+        h = n ÷ 2
+        __fft_1d!(view(out, 1:h), view(x, 1:2:n), inverse)
+        __fft_1d!(view(out, (h + 1):n), view(x, 2:2:n), inverse)
+        for k in 1:h
+            e = out[k]
+            t = T(cispi(s * (k - 1) / n)) * out[k + h]
+            out[k] = e + t
+            out[k + h] = e - t
+        end
+        return out
+    end
+    # the exponent is reduced modulo `n` to keep the twiddle factors accurate
+    for k in 1:n
+        out[k] = sum(x[j] * T(cispi(s * mod((j - 1) * (k - 1), n) / n)) for j in 1:n)
+    end
+    return out
+end
+
+# transforms the `length(fft_length)` minor-most MLIR dimensions, i.e. the first Julia dimensions, with
+# `fft_length[end]` being the size of Julia dimension 1. inverse transforms are normalized by the product of
+# `fft_length`. `RFFT` keeps the `n ÷ 2 + 1` non-redundant elements of Julia dimension 1, and `IRFFT` rebuilds the
+# others from the Hermitian symmetry before its last (real) transform.
+# the first transform reads the operand and writes the result, and the next ones work on the result in place through
+# a scratch vector, since `__fft_1d!` can't transform in place
+function handle(::Val{Symbol("stablehlo.fft")}, (a,), attributes, (result,))
+    fft_type = attributes.fft_type
+    L = length(attributes.fft_length)
+    n = attributes.fft_length[end]
+    inverse = fft_type === :IFFT || fft_type === :IRFFT
+    C = complex(real(result.eltype))
+    N = ndims(a)
+    # vectors along Julia dimension `j`
+    slices(x, j) = eachslice(x; dims=ntuple(k -> k < j ? k : k + 1, Val(N - 1)))
+
+    out = Array{result.eltype}(undef, result.size)
+    tmp = Vector{C}(undef, maximum(attributes.fft_length))
+    full = Vector{C}(undef, n)
+
+    if fft_type === :IRFFT
+        # the complex transforms run first, so they need a complex copy of the operand unless there are none
+        x = L > 1 ? Array{C}(a) : a
+    elseif fft_type === :RFFT
+        h = n ÷ 2 + 1
+        for (w, v) in zip(slices(out, 1), slices(a, 1))
+            copyto!(w, view(__fft_1d!(full, v, false), 1:h))
+        end
+        x = out
+    else
+        for (w, v) in zip(slices(out, 1), slices(a, 1))
+            __fft_1d!(w, v, inverse)
+        end
+        x = out
+    end
+
+    for j in 2:L
+        for w in slices(x, j)
+            __fft_1d!(w, copyto!(view(tmp, 1:length(w)), w), inverse)
+        end
+    end
+
+    if fft_type === :IRFFT
+        for (w, v) in zip(slices(out, 1), slices(x, 1))
+            for k in 1:n
+                tmp[k] = k <= length(v) ? v[k] : conj(v[n - k + 2])
+            end
+            w .= real.(__fft_1d!(full, view(tmp, 1:n), true))
+        end
+    end
+    if inverse
+        out ./= prod(attributes.fft_length)
+    end
+    return out
+end
+
+function handle(::Val{Symbol("stablehlo.convolution")}, (lhs, rhs), attributes, (result,))
+    dn = attributes.dimension_numbers
+    nspatial = length(dn.input_spatial_dimensions)
+    strides = get(attributes, :window_strides, ones(Int, nspatial))
+    padding = get(attributes, :padding, zeros(Int, 2, nspatial)) # (low, high) × spatial dimension
+    lhs_dilation = get(attributes, :lhs_dilation, ones(Int, nspatial))
+    rhs_dilation = get(attributes, :rhs_dilation, ones(Int, nspatial))
+    reversal = get(attributes, :window_reversal, falses(nspatial))
+    G = get(attributes, :feature_group_count, 1)
+    B = get(attributes, :batch_group_count, 1)
+
+    out = zeros(result.eltype, result.size)
+    NL, NR, NO = ndims(lhs), ndims(rhs), ndims(out)
+    lsp = [NL - d for d in dn.input_spatial_dimensions]
+    rsp = [NR - d for d in dn.kernel_spatial_dimensions]
+    osp = [NO - d for d in dn.output_spatial_dimensions]
+    lb, lf = NL - dn.input_batch_dimension, NL - dn.input_feature_dimension
+    ri, ro = NR - dn.kernel_input_feature_dimension, NR - dn.kernel_output_feature_dimension
+    ob, of = NO - dn.output_batch_dimension, NO - dn.output_feature_dimension
+
+    cin = size(rhs, ri)
+    cout = size(out, of)
+    nbatch = size(lhs, lb) ÷ B
+    window = CartesianIndices(ntuple(s -> size(rhs, rsp[s]), nspatial))
+    lidx = zeros(Int, NL)
+    ridx = zeros(Int, NR)
+    for I in CartesianIndices(out)
+        o = I[of] - 1
+        lidx[lb] = (o ÷ (cout ÷ B)) * nbatch + I[ob]
+        ridx[ro] = I[of]
+        acc = zero(result.eltype)
+        for K in window
+            valid = true
+            for s in 1:nspatial
+                k = K[s] - 1
+                # position in the padded and dilated lhs, which must fall on an element of the lhs
+                q = (I[osp[s]] - 1) * strides[s] + k * rhs_dilation[s] - padding[1, s]
+                if q < 0 || q % lhs_dilation[s] != 0 || q ÷ lhs_dilation[s] >= size(lhs, lsp[s])
+                    valid = false
+                    break
+                end
+                lidx[lsp[s]] = q ÷ lhs_dilation[s] + 1
+                ridx[rsp[s]] = reversal[s] ? size(rhs, rsp[s]) - k : k + 1
+            end
+            valid || continue
+            for c in 1:cin
+                lidx[lf] = (o ÷ (cout ÷ G)) * cin + c
+                ridx[ri] = c
+                acc += lhs[CartesianIndex(ntuple(k -> lidx[k], NL))] *
+                    rhs[CartesianIndex(ntuple(k -> ridx[k], NR))]
+            end
+        end
+        out[I] = acc
+    end
+    return out
+end
+
+function handle(::Val{Symbol("stablehlo.dynamic_conv")}, (lhs, rhs, padding), attributes, (result,))
+    dn = attributes.dimension_numbers
+    nspatial = length(dn.input_spatial_dimensions)
+    pad = Matrix{Int}(padding)
+    strides = get(attributes, :window_strides, ones(Int, nspatial))
+    lhs_dilation = get(attributes, :lhs_dilation, ones(Int, nspatial))
+    rhs_dilation = get(attributes, :rhs_dilation, ones(Int, nspatial))
+    B = get(attributes, :batch_group_count, 1)
+
+    NL, NR = ndims(lhs), ndims(rhs)
+    mlir_dims = zeros(Int, length(result.size))
+    mlir_dims[dn.output_batch_dimension + 1] = size(lhs, NL - dn.input_batch_dimension) ÷ B
+    mlir_dims[dn.output_feature_dimension + 1] = size(rhs, NR - dn.kernel_output_feature_dimension)
+    for s in 1:nspatial
+        n = size(lhs, NL - dn.input_spatial_dimensions[s])
+        k = size(rhs, NR - dn.kernel_spatial_dimensions[s])
+        dilated = n == 0 ? 0 : (n - 1) * lhs_dilation[s] + 1
+        window = k == 0 ? 0 : (k - 1) * rhs_dilation[s] + 1
+        padded = dilated + pad[1, s] + pad[2, s]
+        mlir_dims[dn.output_spatial_dimensions[s] + 1] =
+            padded < window ? 0 : (padded - window) ÷ strides[s] + 1
+    end
+
+    dims = ntuple(j -> mlir_dims[end - j + 1], Val(length(result.size)))
+    static = NamedTuple{(:eltype, :size),Tuple{Type{result.eltype},typeof(dims)}}((result.eltype, dims))
+    return handle(
+        Val(Symbol("stablehlo.convolution")), (lhs, rhs), merge(attributes, (; padding=pad)), (static,)
+    )
+end
+
 # convert an MLIR attribute into a Julia value that doesn't depend on its MLIR context.
 # dense elements become arrays with reversed dimensions (like operands), dense arrays keep MLIR order (e.g. dimension
 # indices are 0-based MLIR dimensions), enums become a `Symbol` with their value (e.g.
@@ -3103,6 +3278,11 @@ function decode_attribute(attr)
         )
     elseif IR.isdensearray(attr, Int64)
         return Int64[API.mlirDenseI64ArrayGetElement(attr, i) for i in 0:(length(attr) - 1)]
+    elseif API.mlirAttributeIsADenseBoolArray(attr)
+        return Bool[
+            API.mlirDenseBoolArrayGetElement(attr, i) for
+            i in 0:(API.mlirDenseArrayGetNumElements(attr) - 1)
+        ]
     elseif IR.isbool(attr)
         return Bool(attr)
     elseif IR.isinteger(attr)
@@ -3178,6 +3358,27 @@ function decode_attribute(attr)
             ),
             # the C API exports the scatter getter of `index_vector_dim` under this name
             index_vector_dim=API.stablehloDimensionNumbersGetIndexVectorDim(attr),
+        )
+    elseif API.stablehloAttributeIsAConvDimensionNumbers(attr)
+        return (;
+            input_batch_dimension=API.stablehloConvDimensionNumbersGetInputBatchDimension(attr),
+            input_feature_dimension=API.stablehloConvDimensionNumbersGetInputFeatureDimension(attr),
+            input_spatial_dimensions=getdims(
+                API.stablehloConvDimensionNumbersGetInputSpatialDimensionsSize,
+                API.stablehloConvDimensionNumbersGetInputSpatialDimensionsElem,
+            ),
+            kernel_input_feature_dimension=API.stablehloConvDimensionNumbersGetKernelInputFeatureDimension(attr),
+            kernel_output_feature_dimension=API.stablehloConvDimensionNumbersGetKernelOutputFeatureDimension(attr),
+            kernel_spatial_dimensions=getdims(
+                API.stablehloConvDimensionNumbersGetKernelSpatialDimensionsSize,
+                API.stablehloConvDimensionNumbersGetKernelSpatialDimensionsElem,
+            ),
+            output_batch_dimension=API.stablehloConvDimensionNumbersGetOutputBatchDimension(attr),
+            output_feature_dimension=API.stablehloConvDimensionNumbersGetOutputFeatureDimension(attr),
+            output_spatial_dimensions=getdims(
+                API.stablehloConvDimensionNumbersGetOutputSpatialDimensionsSize,
+                API.stablehloConvDimensionNumbersGetOutputSpatialDimensionsElem,
+            ),
         )
     elseif IR.isarray(attr)
         return Any[
