@@ -1,6 +1,5 @@
 using Reactant
 using Test
-using Logging
 
 # Jax (and therefore torchax) on GitHub CI dislikes x86 macOS, matching python.jl.
 @static if !Sys.isapple() || Sys.ARCH != :x86_64
@@ -491,11 +490,7 @@ class _Stateful(nn.Module):
                         x0 = Reactant.to_rarray(randn(Float32, 5, 4))
                         buffer_warnings() = filter(
                             l -> occursin("updates buffers", string(l.message)),
-                            first(
-                                Test.collect_test_logs(
-                                    () -> @jit(tm(x0, ps, st)); min_level=Logging.Warn
-                                ),
-                            ),
+                            first(Test.collect_test_logs(() -> @jit(tm(x0, ps, st)))),
                         )
                         first_call = buffer_warnings()
                         if mode === :eval
