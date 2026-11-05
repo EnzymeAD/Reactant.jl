@@ -643,3 +643,28 @@ index_plain_mat_linear(idx) = @allowscalar reshape(collect(1.0:10.0), 2, 5)[idx]
     @test @jit(index_plain_mat_linear(Reactant.to_rarray([2, 4, 7]))) ≈ [2.0, 4.0, 7.0]
     @test @jit(index_plain_mat_linear(ConcreteRNumber(5))) ≈ 5.0
 end
+
+bool_getindex(x, m) = x[m]
+function bool_setindex!(x, m, v)
+    x[m] = v
+    return x
+end
+
+@testset "Boolean linear getindex and setindex! (#3087)" begin
+    A = collect(1.0:10.0)
+    Ar = Reactant.to_rarray(copy(A))
+    mask = iseven.(1:10)
+    maskr = Reactant.to_rarray(mask)
+
+    @test Array(@jit(bool_getindex(Ar, mask))) == A[mask]
+    @test Array(@jit(bool_getindex(Ar, collect(mask)))) == A[collect(mask)]
+    @test_throws ErrorException @jit bool_getindex(Ar, maskr)
+
+    A2 = copy(A)
+    bool_setindex!(A2, mask, zeros(5))
+    Ar2 = Reactant.to_rarray(copy(A))
+    @test Array(@jit(bool_setindex!(Ar2, mask, Reactant.to_rarray(zeros(5))))) == A2
+    @test_throws ErrorException @jit bool_setindex!(
+        Reactant.to_rarray(copy(A)), maskr, Reactant.to_rarray(zeros(5))
+    )
+end
