@@ -31,24 +31,24 @@ function check_aliased_buffer_assignment(
     end
 end
 
-function traced_getfield(@nospecialize(obj::Dict), field)
+@inline function traced_getfield(@nospecialize(obj::Dict), field)
     return Base.getindex(obj, field)
 end
 
-function traced_getfield(@nospecialize(obj), field)
+@inline function traced_getfield(@nospecialize(obj), field)
     return Base.getfield(obj, field)
 end
 
 # A path can address the payload inside a `TracedEnum` while the object actually present at
 # the enum's position (e.g. an untraced branch counterpart) is still the plain enum; there
 # is nothing to descend into, and callers skip untraced targets.
-function traced_getfield(@nospecialize(obj::Base.Enum), field)
+@inline function traced_getfield(@nospecialize(obj::Base.Enum), field)
     # Only the synthetic payload field can stand in for a plain enum.
     field === 1 && return obj
     return Base.getfield(obj, field)
 end
 
-function traced_getfield(
+@inline function traced_getfield(
     @nospecialize(
         obj::AbstractArray{<:Union{ConcretePJRTNumber,ConcreteIFRTNumber,TracedRNumber}}
     ),
@@ -57,40 +57,45 @@ function traced_getfield(
     return Base.getfield(obj, field)
 end
 
-function traced_getfield(
+@inline function traced_getfield(
     @nospecialize(obj::Array{<:Union{ConcretePJRTNumber,ConcreteIFRTNumber,TracedRNumber}}),
     field,
 )
     return Base.getindex(obj, field)
 end
 
-function traced_getfield(
+@inline function traced_getfield(
     @nospecialize(obj::Union{AbstractConcreteArray,AbstractConcreteNumber}), field
 )
     return Base.getproperty(obj, field)
 end
 
-function traced_getfield(@nospecialize(obj::AbstractArray{T}), field) where {T}
+@inline function traced_getfield(@nospecialize(obj::AbstractArray{T}), field) where {T}
     (isbitstype(T) || ancestor(obj) isa RArray || obj isa AbstractRange) &&
         return Base.getfield(obj, field)
     return Base.getindex(obj, field)
 end
 
-function traced_setfield!(@nospecialize(obj::AbstractConcreteNumber), field, val, path)
+@inline function traced_setfield!(
+    @nospecialize(obj::AbstractConcreteNumber), field, val, path
+)
     check_aliased_buffer_assignment(obj, field, val, path)
     return Base.setproperty!(obj, field, val)
 end
 
-traced_setfield!(@nospecialize(obj), field, val, _path) = Base.setfield!(obj, field, val)
+@inline traced_setfield!(@nospecialize(obj), field, val, _path) =
+    Base.setfield!(obj, field, val)
 
-function traced_setfield!(@nospecialize(obj::AbstractArray{T}), field, val, path) where {T}
+@inline function traced_setfield!(
+    @nospecialize(obj::AbstractArray{T}), field, val, path
+) where {T}
     ancestor_obj = ancestor(obj)
     (isbitstype(T) || ancestor_obj isa RArray) &&
         return setfield_carray!(obj, field, val, path)
     return Base.setindex!(obj, val, field)
 end
 
-function traced_setfield!(
+@inline function traced_setfield!(
     @nospecialize(obj::AbstractArray{<:Union{ConcretePJRTNumber,ConcreteIFRTNumber}}),
     field,
     val,
@@ -99,7 +104,7 @@ function traced_setfield!(
     return setfield_carray!(obj, field, val, path)
 end
 
-function traced_setfield!(@nospecialize(obj::Dict), field, val, _path)
+@inline function traced_setfield!(@nospecialize(obj::Dict), field, val, _path)
     return Base.setindex!(obj, field, val)
 end
 
