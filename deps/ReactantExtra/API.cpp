@@ -4274,6 +4274,19 @@ static int64_t tempBudget(LinkableRuntime *lrt);
 // is taken.
 static constexpr int64_t kMaxChunkRequest = 1024;
 
+// Takes out the module's optimization_barriers (each result stands for its
+// operand).
+static void eraseOptimizationBarriers(mlir::ModuleOp module) {
+  SmallVector<mlir::stablehlo::OptimizationBarrierOp> barriers;
+  module->walk([&](mlir::stablehlo::OptimizationBarrierOp op) {
+    barriers.push_back(op);
+  });
+  for (auto op : barriers) {
+    op->replaceAllUsesWith(op->getOperands());
+    op->erase();
+  }
+}
+
 static std::pair<xla::LocalExecutable *, bool>
 specializeRaw(LinkableRuntime *__restrict__ lrt,
               LinkableRuntime::CachedExec &exec, ArrayRef<int64_t> values,
@@ -4304,7 +4317,13 @@ specializeRaw(LinkableRuntime *__restrict__ lrt,
       funcOp.getContext(), funcOp.getBody().front().getArgumentTypes(),
       mlir::ValueRange(results).getTypes()));
   // Optimized again with the bounds known: the loops they bound unroll
-  // (REACTANT_EXEC_UNROLL), and what that exposes simplifies.
+  // (REACTANT_EXEC_UNROLL), and what that exposes simplifies. The barriers
+  // the barrier round (#3474) placed in the module before are taken out
+  // first: they would keep apart what the unrolled loops now let the list
+  // batch (the per-component reductions of a vector restriction, each its
+  // own fusion with a concatenate after them), and the round places them
+  // again where the module still needs them.
+  eraseOptimizationBarriers(*module);
   mlir::PassManager pm(&context);
   addExecOptimizationPasses(pm, chunks);
   if (!mlir::succeeded(pm.run(*module)))
