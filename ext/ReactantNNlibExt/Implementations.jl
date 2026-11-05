@@ -25,6 +25,27 @@ else
     NNlib.gelu(x::TracedRNumber) = @opcall math_gelu(x, "TANH")
 end
 
+function NNlib.elu(x::TracedRNumber, α=1)
+    fx = float(x)
+    x_neg = min(fx, zero(fx))
+    return ifelse(fx ≥ zero(fx), fx, NNlib.oftf(x, α) * expm1(x_neg))
+end
+
+function NNlib.selu(x::TracedRNumber)
+    fx = float(x)
+    λ = NNlib.oftf(x, NNlib.selu_λ)
+    α = NNlib.oftf(x, NNlib.selu_α)
+    x_neg = min(fx, zero(fx))
+    return λ * ifelse(fx > zero(fx), fx, α * expm1(x_neg))
+end
+
+function NNlib.celu(x::TracedRNumber, α=1)
+    fx = float(x)
+    α_f = NNlib.oftf(x, α)
+    x_neg = min(fx, zero(fx))
+    return ifelse(fx ≥ zero(fx), fx, α_f * expm1(x_neg / α_f))
+end
+
 function NNlib.softmax!(out::AnyTracedRArray{T,N}, x::AbstractArray; dims=1) where {T,N}
     x = T.(materialize_traced_array(x))
     res = @opcall softmax(x; dims=vec(collect(Int64, dims)))

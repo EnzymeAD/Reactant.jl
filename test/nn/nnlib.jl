@@ -976,3 +976,19 @@ end
         end
     end
 end
+
+sum_bcast_fn(f, x) = sum(f.(x))
+grad_sum_bcast_fn(f, x) = Enzyme.gradient(Reverse, sum_bcast_fn, Const(f), x)[2]
+
+@testset "elu/selu/celu large positive gradient (#2973)" begin
+    x = Float32[-2.0, -1.0, 0.0, 1.0, 89.0, 100.0]
+    x_ra = Reactant.to_rarray(x)
+    for fn in (NNlib.elu, NNlib.selu, NNlib.celu)
+        y_ra = @jit fn.(x_ra)
+        g_ra = @jit grad_sum_bcast_fn(fn, x_ra)
+        g = grad_sum_bcast_fn(fn, x)
+        @test Array(y_ra) ≈ fn.(x)
+        @test !any(isnan, Array(g_ra))
+        @test Array(g_ra) ≈ g
+    end
+end
