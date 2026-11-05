@@ -30,7 +30,7 @@ using Base: unsafe_convert
 using ..Reactant: Reactant
 using Reactant.XLA.CAPI: CAPI, csizeof
 using Reactant.MLIR: IR, API
-using LinearAlgebra: mul!
+using LinearAlgebra: BLAS, BlasFloat, Hermitian, cholesky, issuccess, mul!
 import Serialization: serialize
 
 macro pjrt_catch_return(fdef)
@@ -2385,6 +2385,9 @@ handle(::Val{Symbol("stablehlo.complex")}, (a, b), _, _) = map(complex, a, b)
 function handle(::Val{Symbol("stablehlo.count_leading_zeros")}, (a,), _, _)
     return map(x -> oftype(x, leading_zeros(x)), a)
 end
+function handle(::Val{Symbol("stablehlo.popcnt")}, (a,), _, _)
+    return map(x -> oftype(x, count_ones(x)), a)
+end
 
 # integer division truncates towards zero, like `div`
 function handle(::Val{Symbol("stablehlo.divide")}, (a, b), _, (result,))
@@ -2843,6 +2846,46 @@ function handle(::Val{Symbol("stablehlo.reduce")}, operands, attributes, results
         foreach((o, v) -> o[J] = v[], outs, new)
     end
     return n == 1 ? only(outs) : outs
+end
+
+function handle(::Val{Symbol("stablehlo.bitcast_convert")}, (a,), _, (result,))
+    return copyto!(
+        Array{result.eltype}(undef, result.size), reinterpret(result.eltype, vec(a))
+    )
+end
+
+function handle(::Val{Symbol("stablehlo.cholesky")}, (a,), attributes, _)
+    lower = get(attributes, :lower, false)
+    out = similar(a)
+    for I in CartesianIndices(axes(a)[3:end])
+        m = permutedims(view(a, :, :, I))
+        c = cholesky(Hermitian(m, lower ? :L : :U); check=false)
+        f = issuccess(c) ? Matrix(lower ? c.L : c.U) : fill(eltype(a)(NaN), size(m))
+        out[:, :, I] = permutedims(f)
+    end
+    return out
+end
+
+# types without BLAS support (e.g. `Float16`) are solved in a promoted type
+function handle(::Val{Symbol("stablehlo.triangular_solve")}, (a, b), attributes, (result,))
+    T = result.eltype <: BlasFloat ? result.eltype : promote_type(result.eltype, Float32)
+    sa = convert(Array{T}, a)
+    sx = copyto!(similar(sa, size(b)), b)
+    side = attributes.left_side ? 'R' : 'L'
+    uplo = attributes.lower ? 'U' : 'L'
+    trans = attributes.transpose_a
+    trans = if trans === :NO_TRANSPOSE
+        'N'
+    elseif trans === :TRANSPOSE
+        'T'
+    else
+        'C'
+    end
+    diag = attributes.unit_diagonal ? 'U' : 'N'
+    for I in CartesianIndices(axes(sa)[3:end])
+        BLAS.trsm!(side, uplo, trans, diag, one(T), view(sa, :, :, I), view(sx, :, :, I))
+    end
+    return convert(Array{result.eltype}, sx)
 end
 
 # `dimensions` are MLIR dimensions, which are Julia dimensions `N - d`
