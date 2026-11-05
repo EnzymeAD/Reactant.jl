@@ -22,6 +22,12 @@ const CUDA_DATA_DIR = Ref(
     isdefined(Reactant_jll, :ptxas_path) ? dirname(dirname(Reactant_jll.ptxas_path)) : ""
 )
 
+# The ROCm root `enzymexla-gpu-module-to-binary` assembles and links kernels with
+# (`ld.lld` and `amdgcn/bitcode` under it). Refreshed in `__init__` so the
+# precompile-time `ENV["ROCM_PATH"]` does not get baked into the pkgimage; empty
+# leaves it to the pass, which reads `ROCM_PATH`, `ROCM_ROOT` and `ROCM_HOME`.
+const ROCM_PATH = Ref("")
+
 function LLVMclopts(opts...)
     args = ["", opts...]
     return MLIR.API.ReactantLLVMParseCommandLineOptions(length(args), args, C_NULL)
@@ -124,14 +130,57 @@ function cleanup_backend_state()
     return nothing
 end
 
+const GPU_BACKEND_NAMES = ("cuda", "metal", "rocm")
+
 function normalize_backend_name(backend::String)
-    backend == "gpu" && return Set(["cuda", "metal", "rocm"])
+    backend == "gpu" && return Set(GPU_BACKEND_NAMES)
     return Set([backend])
 end
 
+function registered_backend_names()
+    return Reactant.Accelerators.Registration.registered_platform_names()
+end
+
+"""
+    validate_backend_name(backend::String)
+
+Throw an `ArgumentError` naming the requested backend and listing the backends that are
+valid in this session if `backend` is neither `"gpu"` nor a registered backend. Backend
+names are case-sensitive (e.g. `"cpu"`, not `"CPU"`).
+"""
+function validate_backend_name(backend::String)
+    backend == "gpu" && return nothing
+    Reactant.Accelerators.Registration.is_registered_backend(backend) && return nothing
+
+    registered = registered_backend_names()
+    valid = join(["\"$(b)\"" for b in [registered..., "gpu"]], ", ")
+    msg = "Requested backend \"$(backend)\" is not valid. Valid backends in this session \
+           are: $(valid) (\"gpu\" selects the first available of \
+           $(join(["\"$(b)\"" for b in GPU_BACKEND_NAMES], ", "))). Backend names are \
+           case-sensitive."
+
+    # Case-only mismatch (e.g. "CPU" instead of "cpu") is by far the most common mistake.
+    suggestion_idx = findfirst(
+        b -> lowercase(b) == lowercase(backend), [registered..., "gpu"]
+    )
+    if suggestion_idx !== nothing
+        suggestion = [registered..., "gpu"][suggestion_idx]
+        msg *= " Did you mean \"$(suggestion)\"?"
+    elseif lowercase(backend) in GPU_BACKEND_NAMES
+        msg *= " The \"$(lowercase(backend))\" backend is not registered, which usually \
+                means that `Reactant_jll` selected an artifact without \
+                \"$(lowercase(backend))\" support. See \
+                https://enzymead.github.io/Reactant.jl/stable/introduction/configuration \
+                for how to force a specific artifact and debug the installation."
+    end
+    throw(ArgumentError(msg))
+end
+
 function client(backend::String)
+    validate_backend_name(backend)
+
     if backend == "gpu"
-        for b in ["cuda", "metal", "rocm"]
+        for b in GPU_BACKEND_NAMES
             if haskey(global_backend_state.clients, b)
                 return global_backend_state.clients[b]
             end
@@ -147,7 +196,20 @@ function client(backend::String)
             return client("gpu") # Try again
         end
 
-        error("No GPU client found")
+        registered_gpu_backends = filter(in(registered_backend_names()), GPU_BACKEND_NAMES)
+        if isempty(registered_gpu_backends)
+            error(
+                "No GPU client found. No GPU backend ($(join(GPU_BACKEND_NAMES, ", "))) \
+                 is registered in this session, which usually means that `Reactant_jll` \
+                 selected an artifact without GPU support. See \
+                 https://enzymead.github.io/Reactant.jl/stable/introduction/configuration \
+                 for how to force a specific artifact and debug the installation."
+            )
+        else
+            error("No GPU client found. Initialization of the registered GPU backend(s) \
+                   ($(join(registered_gpu_backends, ", "))) failed, see the error(s) \
+                   logged above.")
+        end
     end
 
     if (
@@ -160,9 +222,36 @@ function client(backend::String)
         end
         union!(global_backend_state.attempted_backends, backends)
     end
+
+    haskey(global_backend_state.clients, backend) ||
+        error("Initialization of the \"$(backend)\" backend failed, see the error(s) \
+               logged above.")
     return global_backend_state.clients[backend]
 end
-default_backend() = global_backend_state.default_client
+
+function default_backend()
+    default_client = global_backend_state.default_client
+    Reactant.Accelerators.Registration.is_null_client(default_client) ||
+        return default_client
+
+    # A previous (filtered) initialization, e.g. `set_default_backend("gpu")` on a machine
+    # without a GPU, didn't yield any functional client. Try the backends that we haven't
+    # attempted yet before giving up.
+    remaining = Set(
+        filter(∉(global_backend_state.attempted_backends), registered_backend_names())
+    )
+    if !isempty(remaining)
+        with(BACKENDS_TO_INITIALIZE => remaining) do
+            initialize_default_clients!(global_backend_state)
+        end
+        default_client = global_backend_state.default_client
+    end
+
+    Reactant.Accelerators.Registration.is_null_client(default_client) &&
+        error("No functional XLA client could be initialized (registered backends: \
+               $(join(registered_backend_names(), ", "))). See the error(s) logged above.")
+    return default_client
+end
 default_device() = default_device(default_backend())
 process_index() = process_index(default_backend())
 
@@ -208,6 +297,7 @@ function has_initialized_client(backend::String)
 end
 
 function __init__()
+    ROCM_PATH[] = Reactant.precompiling() ? "" : get(ENV, "ROCM_PATH", "")
     if Reactant_jll.is_available()
         @debug "Using libReactantExtra from $(Reactant_jll.libReactantExtra_path)"
 
@@ -217,10 +307,10 @@ function __init__()
         )
         unsafe_store!(errptr, @cfunction(reactant_err, Cvoid, (Cstring,)))
 
+        # Also sets the log level, from `TF_CPP_MIN_LOG_LEVEL` or to WARNING;
+        # see `XLA.SetLogLevel` to change it later.
         initLogs = Libdl.dlsym(Reactant_jll.libReactantExtra_handle, "InitializeLogs")
         ccall(initLogs, Cvoid, ())
-        # Add most log level
-        # SetLogLevel(0)
 
         if haskey(ENV, "XLA_REACTANT_GPU_MEM_FRACTION")
             XLA_REACTANT_GPU_MEM_FRACTION[] = parse(

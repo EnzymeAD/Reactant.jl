@@ -123,6 +123,9 @@ s = ArgParseSettings()
     "--push-cache"
         help = "Build and store to bazel cache."
         action = :store_true
+    "--test"
+        help = "Build and run the ReactantExtra C++ unit tests."
+        action = :store_true
 end
 #! format: on
 parsed_args = parse_args(ARGS, s)
@@ -142,7 +145,7 @@ source_dir = joinpath(@__DIR__, "ReactantExtra")
 # --repo_env TF_NEED_CUDA=1
 # --repo_env TF_NVCC_CLANG=1
 # --repo_env TF_NCCL_USE_STUB=1
-# --repo_env HERMETIC_CUDA_COMPUTE_CAPABILITIES="sm_50,sm_60,sm_70,sm_80,compute_90"
+# --repo_env HERMETIC_CUDA_COMPUTE_CAPABILITIES="sm_60,sm_70,sm_80,compute_90"
 # --@xla//xla/python:jax_cuda_pip_rpaths=true
 # --repo_env=HERMETIC_CUDA_VERSION="12.3.2"
 # --repo_env=HERMETIC_CUDNN_VERSION="9.1.1"
@@ -330,6 +333,15 @@ push!(build_cmd_list, ":libReactantExtra.so")
 
 @info "About to run Bazel\n" * join(build_cmd_list, " \\\n  ")
 run(Cmd(Cmd(build_cmd_list); dir=source_dir))
+
+if parsed_args["test"]
+    test_cmd_list = copy(build_cmd_list)
+    test_cmd_list[2] = "test"
+    test_cmd_list[end] = "//test:all"
+    push!(test_cmd_list, "--test_output=errors")
+    @info "About to run Bazel tests\n" * join(test_cmd_list, " \\\n  ")
+    run(Cmd(Cmd(test_cmd_list); dir=source_dir))
+end
 
 # Discover built libraries
 built_libs = filter(readdir(joinpath(source_dir, "bazel-bin"))) do file

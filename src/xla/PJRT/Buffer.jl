@@ -143,6 +143,7 @@ function XLA.client(buffer::Buffer)
 end
 
 XLA.synced_buffer(buffer::Buffer) = buffer
+XLA.unsynced_buffer(buffer::Buffer) = buffer
 
 function XLA.buffer_on_cpu(buffer::Buffer)
     GC.@preserve buffer begin

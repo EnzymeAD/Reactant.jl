@@ -244,6 +244,24 @@ end
     return act_from_type(DuplicatedNoNeed, reverse, needs_primal)
 end
 
+# Only floating point (and complex floating point) tensors can carry derivatives. Integer,
+# boolean, etc. tensors are always inactive and must never be marked as differentiable in
+# the `enzyme.autodiff` / `enzyme.fwddiff` ops, regardless of the user-provided annotation.
+# Otherwise the (shared or user-provided) integer shadow is treated as a derivative and
+# leaks into the floating point gradients (see EnzymeAD/Reactant.jl#3589).
+@inline function is_differentiable_leaf(a::Union{TracedRArray,TracedRNumber})
+    T = unwrapped_eltype(a)
+    return T <: AbstractFloat || T <: Complex{<:AbstractFloat}
+end
+@inline is_differentiable_leaf(::MissingTracedValue) = false
+
+# Activity of a single traced leaf `a` (an element of `linear_args` / `linear_results`)
+# belonging to the annotated argument `arg`.
+@inline function leaf_act(arg, a, reverse, needs_primal=true)
+    is_differentiable_leaf(a) || return act_from_type(Const, reverse, needs_primal)
+    return act_from_type(arg, reverse, needs_primal)
+end
+
 function push_acts!(ad_inputs, x::Union{Const,Active}, path, reverse)
     TracedUtils.push_val!(ad_inputs, x.val, path)
     return nothing
@@ -272,6 +290,16 @@ function push_acts!(
     if !reverse
         TracedUtils.push_val!(ad_inputs, x.dval, path)
     end
+end
+
+# Push the primal (and, if differentiable, the shadow) of the leaf `a` of `x`.
+function push_acts!(ad_inputs, x::Annotation, a, path, reverse)
+    if is_differentiable_leaf(a)
+        push_acts!(ad_inputs, x, path, reverse)
+    else
+        TracedUtils.push_val!(ad_inputs, x.val, path)
+    end
+    return nothing
 end
 
 function set_act!(inp, path, reverse, tostore; emptypath=false, width=1)
@@ -365,10 +393,10 @@ function overload_autodiff(
     for a in linear_args
         idx, path = TracedUtils.get_argidx(a, argprefix)
         arg = idx == 1 && fnwrap ? f : args[idx - fnwrap]
-        push!(activity, act_from_type(arg, reverse))
-        push_acts!(ad_inputs, arg, path[3:end], reverse)
+        push!(activity, leaf_act(arg, a, reverse))
+        push_acts!(ad_inputs, arg, a, path[3:end], reverse)
 
-        if CMode <: ReverseMode && act_from_type(arg, false) == EnzymeActivity.DUPLICATED
+        if CMode <: ReverseMode && leaf_act(arg, a, false) == EnzymeActivity.DUPLICATED
             x = if width == 1
                 arg.dval
             elseif arg.dval isa AbstractArray
@@ -389,14 +417,24 @@ function overload_autodiff(
 
     for a in linear_results
         if TracedUtils.has_idx(a, resprefix)
-            if EnzymeCore.needs_primal(CMode)
+            diff_leaf = is_differentiable_leaf(a)
+            # Shadows of forward mode results only exist for differentiable leaves. For a
+            # non-differentiable leaf (e.g. an integer tensor) of a non-`Const` forward mode
+            # result, the "shadow" is the primal itself (matching the `Enzyme.make_zero`
+            # semantics for inactive data), so we always need the primal for it.
+            fwd_shadow = CMode <: ForwardMode && !(A <: Const) && diff_leaf
+            leaf_needs_primal =
+                EnzymeCore.needs_primal(CMode) ||
+                (CMode <: ForwardMode && !(A <: Const) && !diff_leaf)
+
+            if leaf_needs_primal
                 push!(
                     outtys,
                     TracedUtils.transpose_ty(MLIR.IR.type(TracedUtils.get_mlir_data(a))),
                 )
             end
 
-            if CMode <: ForwardMode && !(A <: Const)
+            if fwd_shadow
                 push!(
                     outtys,
                     TracedUtils.batch_ty(
@@ -408,7 +446,11 @@ function overload_autodiff(
                 )
             end
 
-            act = act_from_type(A, reverse, EnzymeCore.needs_primal(CMode))
+            act = if diff_leaf
+                act_from_type(A, reverse, EnzymeCore.needs_primal(CMode))
+            else
+                act_from_type(Const, reverse, leaf_needs_primal)
+            end
             cst = nothing
             if act == EnzymeActivity.OUT || act == EnzymeActivity.OUT_NO_NEED
                 if width == 1
@@ -422,7 +464,7 @@ function overload_autodiff(
             if CMode <: ReverseMode && TracedUtils.has_idx(a, argprefix)
                 idx, path = TracedUtils.get_argidx(a, argprefix)
                 arg = idx == 1 && fnwrap ? f : args[idx - fnwrap]
-                if act_from_type(arg, false) == EnzymeActivity.DUPLICATED
+                if leaf_act(arg, a, false) == EnzymeActivity.DUPLICATED
                     seed = reverse_seeds[path]
                     if cst === nothing
                         if act == EnzymeActivity.CONST
@@ -451,7 +493,7 @@ function overload_autodiff(
                 idx, path = TracedUtils.get_argidx(a, argprefix)
                 arg = idx == 1 && fnwrap ? f : args[idx - fnwrap]
 
-                act = act_from_type(arg, reverse, true)
+                act = leaf_act(arg, a, reverse, true)
                 push!(ret_activity, act)
 
                 if act == EnzymeActivity.OUT || act == EnzymeActivity.OUT_NO_NEED
@@ -517,14 +559,28 @@ function overload_autodiff(
 
     for a in linear_results
         if TracedUtils.has_idx(a, resprefix)
-            if EnzymeCore.needs_primal(CMode)
-                path = TracedUtils.get_idx(a, resprefix)
+            diff_leaf = is_differentiable_leaf(a)
+            fwd_shadow = CMode <: ForwardMode && !(A <: Const) && diff_leaf
+            fwd_inactive_shadow = CMode <: ForwardMode && !(A <: Const) && !diff_leaf
+            path = TracedUtils.get_idx(a, resprefix)
+            if EnzymeCore.needs_primal(CMode) || fwd_inactive_shadow
                 tval = TracedUtils.transpose_val(MLIR.IR.result(res, residx))
-                TracedUtils.set!(result, path[2:end], tval)
                 residx += 1
+                if EnzymeCore.needs_primal(CMode)
+                    TracedUtils.set!(result, path[2:end], tval)
+                end
+                if fwd_inactive_shadow
+                    # Non-differentiable leaves have no shadow, use the primal (see above).
+                    if width == 1
+                        TracedUtils.set!(dresult, path[2:end], tval)
+                    else
+                        for i in 1:width
+                            TracedUtils.set!(dresult[i], path[2:end], tval)
+                        end
+                    end
+                end
             end
-            if CMode <: ForwardMode && !(A <: Const)
-                path = TracedUtils.get_idx(a, resprefix)
+            if fwd_shadow
                 tval = TracedUtils.transpose_val(MLIR.IR.result(res, residx))
                 if width == 1
                     TracedUtils.set!(dresult, path[2:end], tval)
@@ -547,7 +603,7 @@ function overload_autodiff(
                 arg.val, path[3:end], TracedUtils.transpose_val(MLIR.IR.result(res, residx))
             )
             residx += 1
-            act = act_from_type(arg, reverse, true)
+            act = leaf_act(arg, a, reverse, true)
             if CMode <: ForwardMode &&
                 act != EnzymeActivity.CONST &&
                 act != EnzymeActivity.CONST_NO_NEED
@@ -571,7 +627,7 @@ function overload_autodiff(
         idx, path = TracedUtils.get_argidx(a, argprefix)
 
         arg = idx == 1 && fnwrap ? f : args[idx - fnwrap]
-        act_from_type(arg, reverse) != EnzymeActivity.OUT && continue
+        leaf_act(arg, a, reverse) != EnzymeActivity.OUT && continue
 
         if idx == 1 && fnwrap && arg isa Active
             @assert false

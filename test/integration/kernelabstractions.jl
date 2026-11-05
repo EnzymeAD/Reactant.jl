@@ -28,7 +28,7 @@ if !Reactant.Accelerators.TPU.has_tpu()
         A = Reactant.to_rarray(ones(100, 100))
         out = Reactant.to_rarray(ones(100, 100))
         platform_name = Reactant.XLA.platform_name(Reactant.XLA.default_backend())
-        raise = platform_name ∉ ("cpu", "cuda")
+        raise = platform_name ∉ ("cpu", "cuda", "rocm")
         @jit raise = raise matmul!(out, A)
         out_c = Array(out)
         A_c = Array(A)
@@ -70,7 +70,7 @@ end
     x = Reactant.to_rarray(collect(1:1:64) ./ 64)
 
     platform_name = Reactant.XLA.platform_name(Reactant.XLA.default_backend())
-    raise = platform_name ∉ ("cpu", "cuda")
+    raise = platform_name ∉ ("cpu", "cuda", "rocm")
 
     b = get_backend(x)
     @test b isa Base.get_extension(Reactant, :ReactantKernelAbstractionsExt).ReactantBackend
@@ -266,6 +266,28 @@ end
         @jit raise = true launch_elementwise!(unsigned_branch_kernel!, out, vals)
         @test Array(out) == T[1, 2]
     end
+end
+
+# A type passed as a kernel argument is a constant, which the kernel is compiled for and
+# which is not passed at run time; the argument after it must still reach the kernel.
+@kernel function fill_typed_kernel!(y, FT, x)
+    i = @index(Global)
+    @inbounds y[i] = convert(FT, 2) * x[i]
+end
+
+function launch_typed!(y, FT, x)
+    fill_typed_kernel!(KernelAbstractions.get_backend(y))(y, FT, x; ndrange=length(y))
+    return nothing
+end
+
+@testset "KernelAbstractions type argument (raised)" begin
+    x = Float32[1, 2, 3]
+    y_cpu = zeros(Float32, 3)
+    launch_typed!(y_cpu, Float32, x)
+
+    y = Reactant.to_rarray(zeros(Float32, 3))
+    @jit raise = true launch_typed!(y, Float32, Reactant.to_rarray(x))
+    @test Array(y) == y_cpu
 end
 
 # A raised kernel clamps traced numbers. Inside a kernel `convert` to the kernel's traced
