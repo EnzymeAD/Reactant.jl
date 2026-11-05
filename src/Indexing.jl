@@ -521,6 +521,12 @@ function get_slice_stride(x)
 end
 
 function getindex_linear(a::TracedRArray{T,N}, indices::AbstractArray) where {T,N}
+    if eltype(indices) <: Union{Bool,TracedRNumber{Bool}}
+        if indices isa Reactant.TracedType || eltype(indices) <: TracedRNumber
+            error("Boolean indexing with TracedRArrays isn't fully supported yet.")
+        end
+        indices = only(Base.to_indices(a, (indices,)))
+    end
     if !(indices isa Reactant.TracedType || eltype(indices) <: TracedRNumber)
         if length(indices) == 1 && first(indices) isa CartesianIndex
             # fast-path else we will end up with a gather
@@ -695,6 +701,12 @@ function _setindex_scalar_cartesian!(
 end
 
 function _setindex_linear!(a::TracedRArray{T,N}, v, indices::AbstractArray) where {T,N}
+    if eltype(indices) <: Union{Bool,TracedRNumber{Bool}}
+        if indices isa Reactant.TracedType || eltype(indices) <: TracedRNumber
+            error("Boolean indexing with TracedRArrays isn't fully supported yet.")
+        end
+        indices = only(Base.to_indices(a, (indices,)))
+    end
     if !(indices isa Reactant.TracedType) && TracedUtils.__contiguous_indices(vec(indices))
         res = @opcall(
             reshape(
