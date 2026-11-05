@@ -111,7 +111,11 @@ ml_toolchain_workspace()
 
 load("@enzyme_ad//third_party/jax:workspace.bzl", jax_workspace = "repo")
 
-jax_workspace([])
+jax_workspace([
+    """
+    sed -i.bak0 "s,//:__subpackages__,//visibility:public,g" jaxlib/rocm/BUILD
+    """,
+])
 
 load("@enzyme_ad//third_party/xla:workspace.bzl", xla_workspace = "repo")
 
