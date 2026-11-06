@@ -1822,3 +1822,28 @@ end
     D_ra = Reactant.to_rarray(D)
     @test Array(@jit(triply_nested_trace_for(D_ra))) ≈ triply_nested_trace_for(D)
 end
+
+function loop_with_pi_var(x)
+    s = zero(eltype(x))
+    @trace for i in 1:length(x)
+        pi = @allowscalar x[i]
+        s += pi
+    end
+    return s
+end
+
+function loop_reading_outer_irrational(x)
+    c = π
+    s = zero(eltype(x))
+    @trace for i in 1:length(x)
+        s += c * @allowscalar x[i]
+    end
+    return s
+end
+
+@testset "Variables shadowing const globals and irrationals in @trace (#3282)" begin
+    x = Float32[1, 2, 3]
+    xr = Reactant.to_rarray(x)
+    @test @jit(loop_with_pi_var(xr)) ≈ 6.0f0
+    @test @jit(loop_reading_outer_irrational(xr)) ≈ Float32(π) * 6.0f0
+end
