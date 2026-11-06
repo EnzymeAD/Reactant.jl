@@ -629,9 +629,57 @@ function Base.similar(
     return similar(ConcreteIFRTArray, T, axes(bc))
 end
 
+@static if VERSION < v"1.11"
+    # On Julia < 1.11, `Broadcast.flatten` builds the flattened function out of
+    # recursively nested vararg closures. For deeply nested broadcasts (e.g.
+    # `x .+ (a .+ (v .+ (1 .+ b)))`) inference gives up on that closure and the
+    # flattened broadcast infers as `Any`, even though the un-flattened one infers
+    # fine. That breaks both `combine_eltypes` (eager CPU path) and tracing of the
+    # flattened function (compiled path). Julia 1.11 rewrote `flatten`
+    # (JuliaLang/julia#43322) to be inference friendly; this is a backport of that
+    # implementation. See #3339.
+    function flatten_broadcasted(bc::Broadcast.Broadcasted)
+        Broadcast.isflat(bc) && return bc
+        args = Broadcast.cat_nested(bc)
+        makeargs = _bc_make_makeargs(bc.args)
+        f = Base.maybeconstructor(bc.f)
+        newf = (args...) -> (@inline; f(_bc_prepare_args(makeargs, args)...))
+        return Broadcast.Broadcasted(bc.style, newf, args, bc.axes)
+    end
+
+    _bc_make_makeargs(args::Tuple) = _bc_make_makeargs(args, 1)[1]
+
+    @inline function _bc_make_makeargs(args::Tuple, n::Int)
+        head, n = _bc_make_makeargs1(args[1], n)
+        rest, n = _bc_make_makeargs(Base.tail(args), n)
+        return (head, rest...), n
+    end
+    _bc_make_makeargs(::Tuple{}, n::Int) = (), n
+
+    struct _BroadcastPick{N} <: Function end
+    (::_BroadcastPick{N})(@nospecialize(args::Tuple)) where {N} = args[N]
+
+    @inline _bc_make_makeargs1(_, n::Int) = _BroadcastPick{n}(), n + 1
+    @inline function _bc_make_makeargs1(bc::Broadcast.Broadcasted, n::Int)
+        makeargs, n = _bc_make_makeargs(bc.args, n)
+        f = Base.maybeconstructor(bc.f)
+        makeargs1 = (args::Tuple) -> (@inline; f(_bc_prepare_args(makeargs, args)...))
+        return makeargs1, n
+    end
+
+    @inline function _bc_prepare_args(makeargs::Tuple, @nospecialize(x::Tuple))
+        return (makeargs[1](x), _bc_prepare_args(Base.tail(makeargs), x)...)
+    end
+    @inline _bc_prepare_args(makeargs::Tuple{Any}, @nospecialize(x::Tuple)) =
+        (makeargs[1](x),)
+    _bc_prepare_args(::Tuple{}, ::Tuple) = ()
+else
+    const flatten_broadcasted = Broadcast.flatten
+end
+
 # TODO(#2255) replace this copy for `setindex!` maybe? how to copy data to already existing buffer? (i.e. `copyto!`)
 function Base.copy(bc::Base.Broadcast.Broadcasted{Broadcast.ArrayStyle{ConcretePJRTArray}})
-    bc = Broadcast.flatten(bc)
+    bc = flatten_broadcasted(bc)
     for x in bc.args
         x isa ConcretePJRTArray && wait(x)
     end
@@ -662,7 +710,7 @@ function Base.copy(bc::Base.Broadcast.Broadcasted{Broadcast.ArrayStyle{ConcreteP
 end
 
 function Base.copy(bc::Base.Broadcast.Broadcasted{Broadcast.ArrayStyle{ConcreteIFRTArray}})
-    bc = Broadcast.flatten(bc)
+    bc = flatten_broadcasted(bc)
     fn = compile(Broadcast.BroadcastFunction(bc.f), (bc.args...,))
     return fn(bc.args...)
 end
