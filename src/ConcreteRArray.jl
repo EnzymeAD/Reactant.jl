@@ -293,10 +293,8 @@ for jlop in (
         :(Base.asinh),
         :(Base.acosh),
         :(Base.atanh),
-    ),
-    T in (AbstractConcreteNumber,)
-
-    @eval $(jlop)(x::$(T)) = $(jlop)(to_number(x))
+    )
+    @eval $(jlop)(x::AbstractConcreteNumber) = $(jlop)(to_number(x))
 end
 
 for jlop in (
