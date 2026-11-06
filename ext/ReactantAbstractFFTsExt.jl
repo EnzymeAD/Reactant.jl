@@ -2,7 +2,7 @@ module ReactantAbstractFFTsExt
 
 using AbstractFFTs: AbstractFFTs, fftdims
 using LinearAlgebra
-using Reactant: Reactant, MLIR, Ops, AnyTracedRArray, TracedRNumber, TracedUtils
+using Reactant: Reactant, MLIR, Ops, AnyTracedRArray, TracedRNumber, TracedUtils, @jit
 using Reactant.Ops: @opcall
 
 # FFTW.jl defines methods on StridedArrays, and we have to be more specific than FFTW to
@@ -296,47 +296,31 @@ function AbstractFFTs.plan_brfft(
     return normbfft(real(T), sz, dims) * y
 end
 
-# Applying a Reactant plan to a concrete (non-traced) array: compile and run the traced
-# operation, matching how other eager operations on concrete arrays are handled (e.g.
-# `fill!`).
-const ConcretePlanTypes = (
-    ReactantFFTPlan,
-    ReactantIFFTPlan,
-    ReactantRFFTPlan,
-    ReactantIRFFTPlan,
-    ReactantFFTInPlacePlan,
-    ReactantIFFTInPlacePlan,
-)
-
-apply_plan(p, x) = p * x
-apply_plan!(y, p, x) = LinearAlgebra.mul!(y, p, x)
-
 # `ScaledPlan`s (ifft, bfft, irfft, ...) wrap a Reactant plan; compile the whole scaled
 # operation, otherwise AbstractFFTs scales the concrete result eagerly (scalar indexing).
-for P0 in ConcretePlanTypes, P in (P0, AbstractFFTs.ScaledPlan{<:Any,<:P0})
+for P in (AbstractReactantFFTPlan, AbstractFFTs.ScaledPlan{<:Any,<:AbstractReactantFFTPlan})
     @eval function Base.:*(p::$P, x::Reactant.UnionAnyConcreteRArray)
-        return Reactant.compile(apply_plan, (p, x))(p, x)
+        return @jit p * x
     end
 
     @eval function LinearAlgebra.mul!(
         y::Reactant.UnionAnyConcreteRArray, p::$P, x::Reactant.UnionAnyConcreteRArray
     )
-        Reactant.compile(apply_plan!, (y, p, x))(y, p, x)
+        @jit LinearAlgebra.mul!(y, p, x)
         return y
     end
+end
 
-    # Host arrays: error instead of recursing. Only needed on the bare plan, since
-    # `ScaledPlan` forwards to it (and a `ScaledPlan` method would shadow the traced path).
-    P === P0 || continue
-    @eval function Base.:*(p::$P, x::AbstractArray)
-        throw(
-            ArgumentError(
-                "Reactant FFT plan $(typeof(p)) can only be applied to traced or concrete " *
-                "Reactant arrays, got $(typeof(x)). Convert the input with " *
-                "`Reactant.to_rarray` first.",
-            ),
-        )
-    end
+# Host arrays: error instead of recursing. Only needed on the bare plan, since
+# `ScaledPlan` forwards to it (and a `ScaledPlan` method would shadow the traced path).
+function Base.:*(p::AbstractReactantFFTPlan, x::AbstractArray)
+    throw(
+        ArgumentError(
+            "Reactant FFT plan $(typeof(p)) can only be applied to traced or concrete " *
+            "Reactant arrays, got $(typeof(x)). Convert the input with " *
+            "`Reactant.to_rarray` first.",
+        ),
+    )
 end
 
 end
