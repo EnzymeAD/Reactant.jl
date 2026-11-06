@@ -532,40 +532,42 @@ static void TameLLVMSignalHandlers() {
 #endif
 
 REACTANT_ABI void InitializeLogs() {
-  const char *binary = "julia";
-  int argc = 1;
-  char *argv[] = {(char *)binary};
-  char **argv2 = &argv[0];
-  tsl::port::InitMain(binary, &argc, &argv2);
+  static std::once_flag once;
+  std::call_once(once, []() {
+    if (tsl::port::GetArgvs().empty()) {
+      const char *binary = "julia";
+      int argc = 1;
+      char *argv[] = {(char *)binary};
+      char **argv2 = &argv[0];
+      tsl::port::InitMain(binary, &argc, &argv2);
 
-  // Until `absl::InitializeLog` runs, absl writes every log message to stderr
-  // whatever the configured threshold (and says so, once), so the level
-  // can't be changed after the library is loaded. Once it has run, a message
-  // reaches stderr only if it passes both `absl::MinLogLevel` and
-  // `absl::StderrThreshold`; TSL's static initializer set the latter to INFO
-  // and the former from `TF_CPP_MIN_LOG_LEVEL`. Without that variable, show
-  // warnings and up, as JAX does.
-  static std::once_flag logs;
-  std::call_once(logs, [] {
-    absl::InitializeLog();
+      // Until `absl::InitializeLog` runs, absl writes every log message to
+      // stderr whatever the configured threshold (and says so, once), so the
+      // level can't be changed after the library is loaded. Once it has run, a
+      // message reaches stderr only if it passes both `absl::MinLogLevel` and
+      // `absl::StderrThreshold`; TSL's static initializer set the latter to
+      // INFO and the former from `TF_CPP_MIN_LOG_LEVEL`.
+      absl::InitializeLog();
+    }
+    // Without `TF_CPP_MIN_LOG_LEVEL`, show warnings and up, as JAX does.
     if (!getenv("TF_CPP_MIN_LOG_LEVEL"))
       absl::SetMinLogLevel(absl::LogSeverityAtLeast::kWarning);
-  });
 
 #if defined(REACTANT_ROCM) && !defined(_WIN32)
-  TameLLVMSignalHandlers();
+    TameLLVMSignalHandlers();
 #endif
-  LLVMInitializeX86Target();
-  LLVMInitializeX86TargetInfo();
-  LLVMInitializeX86TargetMC();
-  LLVMInitializeX86AsmPrinter();
-  LLVMInitializeX86AsmParser();
+    LLVMInitializeX86Target();
+    LLVMInitializeX86TargetInfo();
+    LLVMInitializeX86TargetMC();
+    LLVMInitializeX86AsmPrinter();
+    LLVMInitializeX86AsmParser();
 
-  LLVMInitializeAArch64Target();
-  LLVMInitializeAArch64TargetInfo();
-  LLVMInitializeAArch64TargetMC();
-  LLVMInitializeAArch64AsmPrinter();
-  LLVMInitializeAArch64AsmParser();
+    LLVMInitializeAArch64Target();
+    LLVMInitializeAArch64TargetInfo();
+    LLVMInitializeAArch64TargetMC();
+    LLVMInitializeAArch64AsmPrinter();
+    LLVMInitializeAArch64AsmParser();
+  });
 }
 
 // The least severe XLA log messages to print, as `absl::LogSeverityAtLeast`
@@ -2012,7 +2014,9 @@ REACTANT_ABI void XLAExecuteSharded(xla::PjRtLoadedExecutable *exec,
 
   // Handle futures if they are returned.
   auto future_val = returned_future.has_value();
-  *futures = future_val;
+  if (futures) {
+    *futures = future_val;
+  }
   if (future_val) {
     for (size_t i = 0; i < num_results; i++) {
       future_results[i] = new FutureType(*returned_future);
@@ -2148,7 +2152,9 @@ REACTANT_ABI void RegisterDialects(MlirContext cctx) {
 #include "xla/service/spmd/shardy/sdy_round_trip/pipelines.h"
 
 REACTANT_ABI void InitializePasses(MlirDialectRegistry creg) {
-  mlir::enzyme::initializePasses();
+  (void)creg;
+  static std::once_flag once;
+  std::call_once(once, mlir::enzyme::initializePasses);
 }
 
 REACTANT_ABI void InitializeRegistry(MlirDialectRegistry creg) {
@@ -4017,6 +4023,18 @@ struct LinkableRuntime {
   }
 
   ~LinkableRuntime() {
+    for (auto &moduleEntry : executables) {
+      for (auto &executableEntry : moduleEntry.second) {
+        delete executableEntry.second.exec;
+        free(executableEntry.second.written);
+        free(executableEntry.second.keep);
+      }
+    }
+    for (auto &allocationEntry : allocations) {
+      reactantReleaseAddressRange(allocationEntry.first,
+                                  allocationEntry.second.size);
+      PjRtBufferFree(allocationEntry.second.buffer);
+    }
     if (client && shouldFreeClient) {
       delete client;
     }
@@ -4625,21 +4643,23 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
   for (size_t p = 0; p < callArgs.size(); p++)
     num_results += written[p];
   std::vector<PjRtBuffer *> results(num_results);
-  std::vector<uint8_t> futures(num_results, 0);
+  uint8_t has_future = 0;
   std::vector<FutureType *> future_results(num_results, nullptr);
   PjRtDevice *device = ClientGetDevice(lrt->client, lrt->device);
   XLAExecuteSharded(exec, callArgs.size(), callArgs.data(), device, written,
-                    num_results, results.data(), futures.data(),
+                    num_results, results.data(), &has_future,
                     future_results.data());
   for (int64_t i = 0, p = 0, k = 0; i < argcnt; i++) {
     if (!keep[i])
       continue;
     if (written[p++]) {
+      PjRtBuffer *oldBuffer = *basePtrs[i];
       *basePtrs[i] = results[k];
-      if (futures[k]) {
+      if (has_future) {
         FutureAwait(future_results[k]);
         FreeFuture(future_results[k]);
       }
+      PjRtBufferFree(oldBuffer);
       k++;
     }
   }
