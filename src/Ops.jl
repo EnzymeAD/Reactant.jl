@@ -3711,14 +3711,21 @@ function standardize_start_indices(
     operand::TracedRArray{T,N}, update, start_indices::Vector
 ) where {T,N}
     @assert length(start_indices) == N
-    return MLIR.IR.Value[
+    standardized = [
         standardize_start_index(
             size(operand, i),
             update === nothing ? nothing : size(update, i),
             start_indices[i],
             i,
-        ).mlir_data for i in 1:N
+        ) for i in 1:N
     ]
+    if N > 1
+        IT = promote_type(map(unwrapped_eltype, standardized)...)
+        return MLIR.IR.Value[
+            Reactant.promote_to(TracedRNumber{IT}, s).mlir_data for s in standardized
+        ]
+    end
+    return MLIR.IR.Value[s.mlir_data for s in standardized]
 end
 
 @noinline function dynamic_update_slice(

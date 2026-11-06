@@ -22,17 +22,33 @@ end
 
 ## Array Indexing
 ### Scalar Indexing
-function Base.getindex(
-    a::TracedRArray{T,N}, index::Vararg{Union{Int,TracedRNumber{Int}},N}
-) where {T,N}
-    assertscalar("getindex(::TracedRArray, ::Vararg{Int, N})")
+const NonBoolScalarIndex = Union{Signed,Unsigned,TracedRNumber{<:Union{Signed,Unsigned}}}
+
+function _getindex_scalar_cartesian(a::TracedRArray{T,N}, index) where {T,N}
+    assertscalar("getindex(::TracedRArray, ::Vararg{Integer, N})")
     res = @opcall(reshape(@opcall(dynamic_slice(a, [index...], ones(Int32, N))), Int[]))
     return TracedRNumber{unwrapped_eltype(T)}((), res.mlir_data)
 end
 
 function Base.getindex(
+    a::TracedRArray{T,N}, index::Vararg{Union{Int,TracedRNumber{Int}},N}
+) where {T,N}
+    return _getindex_scalar_cartesian(a, index)
+end
+
+function Base.getindex(
+    a::TracedRArray{T,N}, index::Vararg{NonBoolScalarIndex,N}
+) where {T,N}
+    return _getindex_scalar_cartesian(a, index)
+end
+
+function Base.getindex(
     a::TracedRArray{T,N}, index::Union{Int,TracedRNumber{Int}}
 ) where {T,N}
+    return getindex(a, scalar_index_to_cartesian(index, size(a))...)
+end
+
+function Base.getindex(a::TracedRArray{T,N}, index::NonBoolScalarIndex) where {T,N}
     return getindex(a, scalar_index_to_cartesian(index, size(a))...)
 end
 
@@ -332,14 +348,10 @@ for idxtype in (AbstractArray, AbstractUnitRange{<:Integer}, StepRange{<:Integer
 end
 
 # setindex!
-function Base.setindex!(
-    a::TracedRArray{T,N}, v, index::Union{Int,TracedRNumber{Int}}
-) where {T,N}
+function Base.setindex!(a::TracedRArray{T,N}, v, index::NonBoolScalarIndex) where {T,N}
     return _setindex_scalar!(a, v, index)
 end
-function Base.setindex!(
-    a::TracedRArray{T,1}, v, index::Union{Int,TracedRNumber{Int}}
-) where {T}
+function Base.setindex!(a::TracedRArray{T,1}, v, index::NonBoolScalarIndex) where {T}
     return _setindex_scalar!(a, v, index)
 end
 
@@ -486,14 +498,17 @@ function scalar_index_to_cartesian(
 end
 
 function scalar_index_to_cartesian(idx::T, sz::NTuple{N,Int}) where {T<:Number,N}
-    idx = idx - 1
-    idxs = (idx % T(sz[1]),)
-    idx = idx ÷ T(sz[1])
+    N == 1 && return (idx,)
+    IT = promote_type(unwrapped_eltype(T), prod(sz) ≤ typemax(Int32) ? Int32 : Int64)
+    idx_p = idx isa TracedRNumber ? Reactant.promote_to(TracedRNumber{IT}, idx) : IT(idx)
+    idx_p = idx_p - one(IT)
+    idxs = (idx_p % IT(sz[1]),)
+    idx_p = idx_p ÷ IT(sz[1])
     for i in 2:N
-        idxs = (idxs..., idx % T(sz[i]))
-        idx = idx ÷ T(sz[i])
+        idxs = (idxs..., idx_p % IT(sz[i]))
+        idx_p = idx_p ÷ IT(sz[i])
     end
-    return idxs .+ 1
+    return idxs .+ one(IT)
 end
 
 function getindex_cartesian(a::TracedRArray{T,N}, index::CartesianIndex{N}) where {T,N}
@@ -507,6 +522,8 @@ function getindex_cartesian(a::TracedRArray{T,N}, index::CartesianIndex{N}) wher
         ).mlir_data,
     )
 end
+
+is_dropped_scalar_index(idx) = idx isa Integer || idx isa TracedRNumber{<:Integer}
 
 get_slice_stride(::Base.LogicalIndex) = -1
 get_slice_stride(x::CartesianIndex) = -1
@@ -631,9 +648,7 @@ function getindex_general(a::TracedRArray{T,N}, indices::Vararg{Any,N}) where {T
         x = @opcall slice(a, [first.(indices)...], [last.(indices)...]; strides)
     end
 
-    ddims = findall(indices) do idx
-        return idx isa Integer || idx isa TracedRNumber{Int}
-    end
+    ddims = findall(is_dropped_scalar_index, indices)
     isempty(ddims) || return materialize_traced_array(dropdims(x; dims=Tuple(ddims)))
     return x
 end
@@ -643,18 +658,16 @@ function overloaded_unsafe_getindex(::IndexLinear, a::Array{T,N}, idxs...) where
 end
 
 function maybe_assert_scalar_setindexing(
-    ::TracedRArray{T,N}, ::Vararg{Union{Int,TracedRNumber{Int}},N}
+    ::TracedRArray{T,N}, ::Vararg{NonBoolScalarIndex,N}
 ) where {T,N}
-    assertscalar("setindex!(::TracedRArray, v, ::Vararg{Int, N})")
+    assertscalar("setindex!(::TracedRArray, v, ::Vararg{Integer, N})")
     return nothing
 end
 
 maybe_assert_scalar_setindexing(_args...) = nothing
 
-function _setindex_scalar!(
-    a::TracedRArray{T,N}, v, index::Union{Int,TracedRNumber{Int}}
-) where {T,N}
-    assertscalar("setindex!(::TracedRArray, v, ::Union{Int, TracedRNumber{Int}})")
+function _setindex_scalar!(a::TracedRArray{T,N}, v, index::NonBoolScalarIndex) where {T,N}
+    assertscalar("setindex!(::TracedRArray, v, ::NonBoolScalarIndex)")
 
     res = @opcall(
         reshape(
