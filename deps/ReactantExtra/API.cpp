@@ -2356,8 +2356,10 @@ ifrt_client_make_single_shard_array_from_host_buffer(
     ifrt::MemoryKind *mem_kind) {
   auto sharding = reactant::capture(std::shared_ptr<const ifrt::Sharding>(
       ifrt::SingleDeviceSharding::Create(device, *mem_kind).release()));
-  return ifrt_client_make_array_from_host_buffer(
+  HeldIfrtArray *array = ifrt_client_make_array_from_host_buffer(
       client, data, dtype_kind, ndims, c_shape, sharding, c_semantics);
+  delete sharding;
+  return array;
 }
 
 // all arrays are assumed to have same DType
@@ -2881,13 +2883,17 @@ REACTANT_ABI const char *
 ifrt_MemoryKindToString(ifrt::MemoryKind *memory_kind) {
   auto memkind = memory_kind->memory_kind();
   if (!memkind.has_value())
-    return "";
+    return cstr_from_string(std::string_view(""));
   return cstr_from_string(memkind.value());
 }
 
 REACTANT_ABI bool ifrt_MemoryKindsAreEqual(ifrt::MemoryKind *a,
                                            ifrt::MemoryKind *b) {
   return *a == *b;
+}
+
+REACTANT_ABI void free_ifrt_memory_kind(ifrt::MemoryKind *memory_kind) {
+  delete memory_kind;
 }
 
 #pragma endregion
