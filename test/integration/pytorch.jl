@@ -3,8 +3,6 @@ using Test
 
 using PythonCall
 
-const ReactantPythonCallExt = Base.get_extension(Reactant, :ReactantPythonCallExt)
-
 # Relative error metric: max|diff| / max|ref|, robust to scale.
 function relerr(actual, reference)
     ref = Array(reference)
@@ -733,10 +731,12 @@ class _MutatesInput(nn.Module):
         model.eval()
         xdata = randn(Float32, 4, 8)
         tm, ps, st = Reactant.import_torch(model)
+        x = Reactant.to_rarray(xdata)
 
-        export_for(mode) =
-            ReactantPythonCallExt._cached_export(tm, :torchax, mode, (xdata,))
-        exp = export_for(:eval)
+        # The first traced call exports the module and caches the export in tm.
+        y, _ = @jit tm(x, ps, st)
+        @test length(tm.cache) == 1
+        exp = only(values(tm.cache))
         kinds = [a.kind for a in exp.arguments]
         @test kinds == [
             :user_input, :parameter, :parameter, :parameter, :parameter, :buffer, :buffer
@@ -758,18 +758,20 @@ class _MutatesInput(nn.Module):
         @test sig !== nothing
         @test length(collect(eachmatch(r"%arg\d+:", sig[1]))) == length(exp.arguments)
 
-        # The export is cached in tm and reused by a traced call.
+        # A call with the same mode and input signature reuses the export.
+        y, _ = @jit tm(x, ps, st)
         @test length(tm.cache) == 1
-        y, _ = @jit tm(Reactant.to_rarray(xdata), ps, st)
-        @test length(tm.cache) == 1
-        @test export_for(:eval) === exp
+        @test only(values(tm.cache)) === exp
 
-        # Training mode returns the buffer updates; the module keeps its mode.
-        exp_train = export_for(:train)
+        # Training mode is a separate export that returns the buffer updates; the
+        # module keeps its mode.
+        model.train()
+        y, _ = @jit tm(x, ps, st)
+        @test length(tm.cache) == 2
+        exp_train = only(e for e in values(tm.cache) if e !== exp)
         @test Set(r.target for r in exp_train.results if r.kind === :buffer_mutation) ==
             Set(["1.running_mean", "1.running_var", "1.num_batches_tracked"])
-        @test !pyconvert(Bool, model.training)
-        @test length(tm.cache) == 2
+        @test pyconvert(Bool, model.training)
 
         @test exp.backend === :torchax
         @test_throws ArgumentError Reactant.import_torch(model; backend=:nope)
@@ -807,6 +809,20 @@ class _AdaptiveMax(nn.Module):
         xdata = randn(Float32, 4, 8)
         x_torch = torch.from_numpy(np.asarray(xdata))
 
+        # Calling a module in training mode that holds `inner` as a submodule exports
+        # `inner` in training mode too; return the error message that raises.
+        function train_mode_error(inner)
+            outer = nn.Sequential(inner)
+            outer.training = true  # set only the wrapper's flag; inner cannot change
+            tm, ps, st = Reactant.import_torch(outer)
+            return try
+                @jit tm(Reactant.to_rarray(xdata), ps, st)
+                ""
+            catch e
+                sprint(showerror, e)
+            end
+        end
+
         # A scripted module that lists `training` in __constants__ raises on any
         # assignment to it, including `.eval()`. Scripting needs the source on disk.
         dir = mktempdir()
@@ -833,14 +849,7 @@ class ConstTraining(nn.Module):
             tm, ps, st = Reactant.import_torch(scripted)
             y, _ = @jit tm(Reactant.to_rarray(xdata), ps, st)
             @test relerr(y, torch_to_julia(scripted(x_torch))) < 1.0f-4
-            err = try
-                ReactantPythonCallExt._cached_export(tm, :torchax, :train, (xdata,))
-                nothing
-            catch e
-                e
-            end
-            @test err !== nothing
-            @test occursin("TorchScript constant", sprint(showerror, err))
+            @test occursin("TorchScript constant", train_mode_error(scripted))
         finally
             sys.path.remove(dir)
         end
@@ -854,13 +863,6 @@ class ConstTraining(nn.Module):
         tm, ps, st = Reactant.import_torch(frozen)
         y, _ = @jit tm(Reactant.to_rarray(xdata), ps, st)
         @test relerr(y, torch_to_julia(frozen(x_torch))) < 1.0f-4
-        err = try
-            ReactantPythonCallExt._cached_export(tm, :torchax, :train, (xdata,))
-            nothing
-        catch e
-            e
-        end
-        @test err !== nothing
-        @test occursin("frozen TorchScript module", sprint(showerror, err))
+        @test occursin("frozen TorchScript module", train_mode_error(frozen))
     end
 end
