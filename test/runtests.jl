@@ -84,6 +84,11 @@ if Sys.iswindows() || (Sys.isapple() && Sys.ARCH === :x86_64)
     delete!(testsuite, "integration/enzymejax")
 end
 
+# jax, and therefore torchax, is not tested on x86 macOS (see RUN_PYTHON_TEST below).
+if Sys.isapple() && Sys.ARCH === :x86_64
+    delete!(testsuite, "integration/pytorch")
+end
+
 # Zygote is not supported on 1.12 https://github.com/FluxML/Zygote.jl/issues/1580
 if VERSION ≥ v"1.12-"
     delete!(testsuite, "integration/zygote")
