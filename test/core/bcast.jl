@@ -132,6 +132,35 @@ end
     @test @jit(custombcast(x_ra)) ≈ custombcast(x)
 end
 
+@testset "elem_apply_via_while_loop with Ref scalars and overlayed calls" begin
+    x = Float32[1, 2, 3]
+    x_ra = Reactant.to_rarray(x)
+
+    loop_ref_im(a) = begin
+        s = sum(a)
+        return ((u, z) -> s * u + z * u).(a, Ref(im))
+    end
+    res_im = @jit loop_ref_im(x_ra)
+    @test res_im isa Reactant.AbstractConcreteArray{ComplexF32,1}
+    @test Array(res_im) ≈ loop_ref_im(x)
+
+    loop_ref_1im(a) = begin
+        s = sum(a)
+        return ((u, z) -> s * u + z * u).(a, Ref(1im))
+    end
+    res_1im = @jit loop_ref_1im(x_ra)
+    @test res_1im isa Reactant.AbstractConcreteArray{ComplexF32,1}
+    @test Array(res_1im) ≈ loop_ref_1im(x)
+
+    table = Float32[10, 20]
+    loop_overlay_index(a) = begin
+        s = sum(a)
+        return (u -> s + Reactant.@allowscalar(table[ifelse(u > 1.5f0, 2, 1)])).(a)
+    end
+    res_idx = @jit loop_overlay_index(x_ra)
+    @test Array(res_idx) ≈ loop_overlay_index(x)
+end
+
 function bcast_scalar_with_jlarray(jlarr, x)
     return jlarr .+ x
 end

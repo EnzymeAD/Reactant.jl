@@ -58,6 +58,9 @@ struct CuTracedArray{T,N,A,Size} <: DenseArray{T,N}
         ptr = Base.reinterpret(Core.LLVMPtr{T,CUDA.AS.Global}, Base.pointer_from_objref(xs))
         return new(ptr)
     end
+    function CuTracedArray{T,N,A,Size}(ptr::Core.LLVMPtr{T,A}) where {T,N,A,Size}
+        return new(ptr)
+    end
 end
 
 Reactant.use_overlayed_version(::CuTracedArray) = true
@@ -576,15 +579,13 @@ function Base.reinterpret(::Type{T}, a::CuTracedArray{S,N,A}) where {T,S,N,A}
     err === nothing || throw(err)
 
     if sizeof(T) == sizeof(S) # fast case
-        return CuTracedArray{T,N,A}(
-            reinterpret(Core.LLVMPtr{T,A}, a.ptr), size(a), a.maxsize
-        )
+        return derived_array(a, T, size(a))
     end
 
     isize = size(a)
     size1 = div(isize[1] * sizeof(S), sizeof(T))
     osize = tuple(size1, Base.tail(isize)...)
-    return CuTracedArray{T,N,A}(reinterpret(Core.LLVMPtr{T,A}, a.ptr), osize, a.maxsize)
+    return derived_array(a, T, osize)
 end
 
 ## reshape
@@ -600,7 +601,15 @@ function Base.reshape(a::CuTracedArray{T,M,A}, dims::NTuple{N,Int}) where {T,N,M
     if N == M && dims == size(a)
         return a
     end
-    return _derived_array(a, T, dims)
+    return derived_array(a, T, dims)
+end
+
+# A `CuTracedArray` is a pointer and its size in its type, so a reshaped or reinterpreted array is the
+# same pointer under the new element type and size
+@inline function derived_array(
+    a::CuTracedArray{<:Any,<:Any,A}, ::Type{T}, osize::Dims{N}
+) where {T,N,A}
+    return CuTracedArray{T,N,A,osize}(reinterpret(Core.LLVMPtr{T,A}, a.ptr))
 end
 
 struct ReactantKernelAdaptor end
@@ -700,6 +709,29 @@ end
 Reactant.@reactant_overlay function CUDA.cudaconvert(arg)
     return recudaconvert(arg)
 end
+# CUDA.jl 6.4.1's `@cuda` converts the arguments, compiles and launches the kernel behind
+# the `compile_and_launch` function barrier: intercept that as a whole, with Reactant's
+# argument conversion and kernel object. Earlier versions of `@cuda` call the overlaid
+# `cudaconvert` and `cufunction` directly.
+@static if isdefined(CUDACore, :compile_and_launch)
+    Reactant.@reactant_overlay function CUDACore.compile_and_launch(
+        backend::CUDACore.LLVMBackend,
+        f::F,
+        args::Tuple,
+        ::Val{launch},
+        launch_kwargs::NamedTuple,
+        compiler_kwargs::NamedTuple,
+    ) where {F,launch}
+        kernel_f = recudaconvert(f)
+        kernel_args = map(recudaconvert, args)
+        kernel_tt = Tuple{map(Core.Typeof, kernel_args)...}
+        kernel = CUDA.cufunction(kernel_f, kernel_tt; compiler_kwargs...)
+        if launch
+            kernel(kernel_args...; launch_kwargs..., convert=Val(false))
+        end
+        return kernel
+    end
+end
 
 function Adapt.adapt_storage(::ReactantKernelAdaptor, xs::TracedRArray{T,N}) where {T,N}
     res = CuTracedArray{T,N,CUDA.AS.Global,size(xs)}(xs)
@@ -761,13 +793,16 @@ function GPULowerPTLSPass(job)
         end,
     )
 end
-function GPULowerGCFramePass(job)
+function GPULowerGCFramePass(job, meta)
     return LLVM.NewPMFunctionPass(
         "GPULowerGCFrame",
-        if isdefined(GPUCompiler, :LowerGCFrame)
-            GPUCompiler.LowerGCFrame(job)
-        else
+        if !isdefined(GPUCompiler, :LowerGCFrame)
             GPUCompiler.lower_gc_frame!
+        elseif hasfield(GPUCompiler.LowerGCFrame, :relocs)
+            # GPUCompiler 2.10 also needs the kernel's relocations
+            GPUCompiler.LowerGCFrame(job, meta.relocations)
+        else
+            GPUCompiler.LowerGCFrame(job)
         end,
     )
 end
@@ -830,7 +865,7 @@ function compile(job)
         )
 
         if !Reactant.precompiling()
-            LLVM.link!(mod, GPUCompiler.load_runtime(job))
+            link_runtime!(mod, job)
         end
         entryname = LLVM.name(meta.entry)
 
@@ -849,7 +884,7 @@ function compile(job)
             LLVM.@dispose pb = LLVM.NewPMPassBuilder() begin
                 LLVM.register!(pb, GPULowerCPUFeaturesPass(job))
                 LLVM.register!(pb, GPULowerPTLSPass(job))
-                LLVM.register!(pb, GPULowerGCFramePass(job))
+                LLVM.register!(pb, GPULowerGCFramePass(job, meta))
                 LLVM.register!(pb, AddKernelStatePass())
                 LLVM.register!(pb, LowerKernelStatePass())
                 LLVM.register!(pb, CleanupKernelStatePass())
@@ -895,7 +930,7 @@ function compile(job)
             end
         end
 
-        errors = GPUCompiler.check_ir!(job, GPUCompiler.IRError[], mod)
+        errors = check_ir(job, mod, meta)
         unique!(errors)
         filter!(errors) do err
             (kind, bt, meta) = err
@@ -1834,6 +1869,36 @@ const ReactantCUDAJob = GPUCompiler.CompilerJob{
     GPUCompiler.PTXCompilerTarget,ReactantCUDACompilerParams
 }
 GPUCompiler.can_vectorize(job::ReactantCUDAJob) = !job.config.params.raising
+
+# GPUCompiler 2 describes the references to Julia values in the IR with relocation records,
+# which the runtime library and the IR validation take too. GPUCompiler 1 resolved them into
+# the IR right away.
+@static if Reactant.GPUCOMPILER_2
+    # The kernel's IR is linked into the MLIR module rather than loaded by CUDA.jl, so
+    # resolve the references into the IR, instead of the patchable globals CUDA.jl uses.
+    GPUCompiler.relocation_lowering(@nospecialize(job::ReactantCUDAJob)) = :bake
+
+    function link_runtime!(mod, job)
+        runtime, runtime_relocs = GPUCompiler.load_runtime(job)
+        LLVM.link!(mod, runtime)
+        GPUCompiler.apply_relocations!(mod, runtime_relocs)
+        return nothing
+    end
+
+    function check_ir(job, mod, meta)
+        return GPUCompiler.check_ir!(job, GPUCompiler.IRError[], mod, meta.relocations)
+    end
+else
+    function link_runtime!(mod, job)
+        LLVM.link!(mod, GPUCompiler.load_runtime(job))
+        return nothing
+    end
+
+    function check_ir(job, mod, meta)
+        return GPUCompiler.check_ir!(job, GPUCompiler.IRError[], mod)
+    end
+end
+
 function GPUCompiler.optimization_options(job::ReactantCUDAJob)
     raising = job.config.params.raising
     return (; instcombine=!raising, fastmath=!raising, aggressiveinstcombine=!raising)
@@ -2022,6 +2087,46 @@ end
     ::Type{T}, ::Tuple{}, ptr
 ) where {T}
     return @allowscalar Reactant.Ops.__construct_cuda_julia_buffer(T, (1,), ptr)[1]
+end
+
+const CUDA_SUPPORTS_BORROWED_STREAMS = hasmethod(
+    Base.unsafe_wrap, Tuple{Type{CUDACore.CuStream},CUDACore.CUstream}
+)
+
+# Make the work submitted to `waiter` from now on wait for the work submitted to
+# `source` so far, without blocking the host. `cuStreamWaitEvent` only waits on the
+# recording made before it was called, so `event` can be re-recorded afterwards.
+function cuda_stream_wait(waiter, source, event)
+    @static if CUDA_SUPPORTS_BORROWED_STREAMS
+        CUDACore.record(event, source)
+        CUDACore.wait(event, waiter)
+    else
+        CUDACore.cuEventRecord(event, source)
+        CUDACore.cuStreamWaitEvent(waiter, event, 0)
+    end
+    return nothing
+end
+
+# Fork the task-local CUDA.jl stream off XLA's stream for the duration of a
+# `julia_callback`, and join it back afterwards, so that neither the host nor the
+# rest of XLA's stream has to wait on a full synchronization.
+function Reactant.Ops.__with_cuda_stream_fork(f::F, xla_stream_ptr::Ptr{Cvoid}) where {F}
+    xla_stream = @static if CUDA_SUPPORTS_BORROWED_STREAMS
+        unsafe_wrap(CUDACore.CuStream, CUDACore.CUstream(xla_stream_ptr))
+    else
+        CUDACore.CUstream(xla_stream_ptr)
+    end
+    julia_stream = CUDACore.stream()
+    event = CUDACore.CuEvent(CUDACore.EVENT_DISABLE_TIMING)
+
+    cuda_stream_wait(julia_stream, xla_stream, event)
+    try
+        return f()
+    finally
+        cuda_stream_wait(xla_stream, julia_stream, event)
+        # Destroying a pending event is fine: the driver releases it once it completes.
+        finalize(event)
+    end
 end
 
 # In Julia v1.11.3 precompiling this module caches bad code:

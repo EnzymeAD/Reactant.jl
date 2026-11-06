@@ -4452,6 +4452,7 @@ end
 
 # Defined in CUDAExt.jl
 function __construct_cuda_julia_buffer end
+function __with_cuda_stream_fork end
 
 @inline function _construct_cuda_julia_buffer(::Type{T}, shape, ptr) where {T}
     if !Reactant.is_extension_loaded(Val(:CUDA))
@@ -4460,9 +4461,19 @@ function __construct_cuda_julia_buffer end
     return __construct_cuda_julia_buffer(T, shape, ptr)
 end
 
+function __construct_rocm_julia_buffer end
+
+@inline function _construct_rocm_julia_buffer(::Type{T}, shape, ptr) where {T}
+    if !Reactant.is_extension_loaded(Val(:AMDGPU))
+        error("AMDGPU.jl extension must be loaded to perform julia callbacks on ROCm.")
+    end
+    return __construct_rocm_julia_buffer(T, shape, ptr)
+end
+
 # Backend Values:
 #   1: Host
 #   2: CUDA.jl
+#   3: AMDGPU.jl (ROCm)
 @inline function _wrap_buffers(
     data_ptrs::Ptr{Ptr{Cvoid}},
     specs::NTuple{N,Tuple{DataType,Tuple}},
@@ -4476,6 +4487,8 @@ end
             return _construct_host_julia_buffer(T, shape, ptr)
         elseif backend == 2
             return _construct_cuda_julia_buffer(T, shape, ptr)
+        elseif backend == 3
+            return _construct_rocm_julia_buffer(T, shape, ptr)
         else
             error("Unsupported backend: $backend")
         end
@@ -4487,12 +4500,28 @@ function _make_c_callback(f::F, output_specs::Tuple, input_specs::Tuple) where {
     in_val = Val(length(input_specs))
 
     function trampoline(
-        inputs_ptr::Ptr{Ptr{Cvoid}}, outputs_ptr::Ptr{Ptr{Cvoid}}, backend::Int32
+        inputs_ptr::Ptr{Ptr{Cvoid}},
+        outputs_ptr::Ptr{Ptr{Cvoid}},
+        backend::Int32,
+        stream::Ptr{Cvoid},
     )
-        output_arrays = _wrap_buffers(outputs_ptr, output_specs, out_val, backend)
-        input_arrays = _wrap_buffers(inputs_ptr, input_specs, in_val, backend)
         try
-            f(output_arrays..., input_arrays...)
+            # Wrapping must happen inside the stream fork: scalar inputs are read
+            # eagerly from the device and need to be ordered after XLA's stream.
+            if backend == 2
+                function call_julia_callback()
+                    output_arrays = _wrap_buffers(
+                        outputs_ptr, output_specs, out_val, backend
+                    )
+                    input_arrays = _wrap_buffers(inputs_ptr, input_specs, in_val, backend)
+                    return f(output_arrays..., input_arrays...)
+                end
+                __with_cuda_stream_fork(call_julia_callback, stream)
+            else
+                output_arrays = _wrap_buffers(outputs_ptr, output_specs, out_val, backend)
+                input_arrays = _wrap_buffers(inputs_ptr, input_specs, in_val, backend)
+                f(output_arrays..., input_arrays...)
+            end
             return true
         catch e
             @error "CustomCall callback failed" exception = (e, catch_backtrace())
@@ -4500,11 +4529,14 @@ function _make_c_callback(f::F, output_specs::Tuple, input_specs::Tuple) where {
         end
     end
 
-    cfunc = @cfunction($trampoline, Bool, (
-        Ptr{Ptr{Cvoid}},  # inputs
-        Ptr{Ptr{Cvoid}},  # outputs
-        Int32,            # backend
-    ))
+    cfunc = @cfunction(
+        $trampoline, Bool, (
+            Ptr{Ptr{Cvoid}},  # inputs
+            Ptr{Ptr{Cvoid}},  # outputs
+            Int32,            # backend
+            Ptr{Cvoid},       # stream (XLA's cudaStream_t for CUDA, null for Host)
+        )
+    )
 
     # Extract raw pointer from Base.CFunction
     ptr = Base.unsafe_convert(Ptr{Cvoid}, cfunc)
@@ -4544,6 +4576,12 @@ execution time.
 !!! warning "Single Device"
 
     This function doesn't support sharding across multiple devices.
+
+!!! warning "CUDA Stream ordering"
+
+    On CUDA, the callback must be careful to do operation on the current's task stream.
+    Or make sure that operations performed on another stream are completed before returning
+    to the XLA runtime.
 
 # Arguments
 

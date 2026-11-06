@@ -146,6 +146,38 @@ end
 
         # TODO(#2253): test for gradients
     end
+
+    x = Reactant.TestUtils.construct_test_array(Float32, 7, 6, 3, 2)
+    x_reactant = Reactant.to_rarray(x)
+
+    @test @jit(NNlib.meanpool(x_reactant, (2, 2))) ≈ NNlib.meanpool(x, (2, 2))
+
+    if pkgversion(NNlib) ≥ v"0.9.36"
+        @testset "count_include_pad=$count_include_pad" for count_include_pad in
+                                                            (true, false),
+            padding in ((0, 0), (1, 1), (0, 1, 2, 0))
+
+            @test @jit(NNlib.meanpool(x_reactant, (3, 3); pad=padding, count_include_pad)) ≈
+                NNlib.meanpool(x, (3, 3); pad=padding, count_include_pad)
+        end
+    end
+
+    if pkgversion(NNlib) ≥ v"0.9.53"
+        @testset "ceil_mode $f" for f in (NNlib.meanpool, NNlib.maxpool),
+            window in ((2, 2), (3, 3)),
+            stride in ((2, 2), (3, 2)),
+            padding in ((0, 0), (1, 1))
+
+            pool_dims = PoolDims(x, window; stride, padding, ceil_mode=true)
+            @test @jit(f(x_reactant, pool_dims)) ≈ f(x, pool_dims)
+        end
+
+        @testset "ceil_mode count_include_pad=false" for padding in ((0, 0), (1, 1))
+            pool_dims = PoolDims(x, (2, 2); padding, ceil_mode=true)
+            @test @jit(NNlib.meanpool(x_reactant, pool_dims; count_include_pad=false)) ≈
+                NNlib.meanpool(x, pool_dims; count_include_pad=false)
+        end
+    end
 end
 
 function ∇conv_data_filter(x, weight, conv_dims)

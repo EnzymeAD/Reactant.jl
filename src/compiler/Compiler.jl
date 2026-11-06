@@ -1446,7 +1446,8 @@ function compile(ctx, f, args; kwargs...)
         path_to_shard_info,
         linear_result_shard_info,
         client,
-        resharded_inputs,
+        resharded_inputs;
+        concrete_args=args,
     )
 
     for (i, name) in enumerate(linear_result_shard_info)

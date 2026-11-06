@@ -28,7 +28,7 @@ if !Reactant.Accelerators.TPU.has_tpu()
         A = Reactant.to_rarray(ones(100, 100))
         out = Reactant.to_rarray(ones(100, 100))
         platform_name = Reactant.XLA.platform_name(Reactant.XLA.default_backend())
-        raise = platform_name ∉ ("cpu", "cuda")
+        raise = platform_name ∉ ("cpu", "cuda", "rocm")
         @jit raise = raise matmul!(out, A)
         out_c = Array(out)
         A_c = Array(A)
@@ -70,7 +70,7 @@ end
     x = Reactant.to_rarray(collect(1:1:64) ./ 64)
 
     platform_name = Reactant.XLA.platform_name(Reactant.XLA.default_backend())
-    raise = platform_name ∉ ("cpu", "cuda")
+    raise = platform_name ∉ ("cpu", "cuda", "rocm")
 
     b = get_backend(x)
     @test b isa Base.get_extension(Reactant, :ReactantKernelAbstractionsExt).ReactantBackend
