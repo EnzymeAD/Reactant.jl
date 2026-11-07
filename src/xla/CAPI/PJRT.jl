@@ -1208,6 +1208,19 @@ struct PJRT_Program
     format::Cstring
     format_size::Csize_t
 end
+function Base.getproperty(x::Ptr{PJRT_Program}, f::Symbol)
+    f === :struct_size && return Ptr{Csize_t}(x + 0)
+    f === :extension_start && return Ptr{Ptr{PJRT_Extension_Base}}(x + 8)
+    f === :code && return Ptr{Cstring}(x + 16)
+    f === :code_size && return Ptr{Csize_t}(x + 24)
+    f === :format && return Ptr{Cstring}(x + 32)
+    f === :format_size && return Ptr{Csize_t}(x + 40)
+    return getfield(x, f)
+end
+
+function Base.setproperty!(x::Ptr{PJRT_Program}, f::Symbol, v)
+    return unsafe_store!(getproperty(x, f), v)
+end
 
 csizeof(::Type{PJRT_Program}) = Csize_t(48)
 
