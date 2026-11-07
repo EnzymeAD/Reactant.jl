@@ -70,6 +70,20 @@ end
     @test y2 ≈ Float32.(a)
 end
 
+return_zero(x) = 0
+return_false(x) = false
+return_one(x) = 1
+return_one_f64(x) = 1.0
+
+@testset "thunks returning equal constants of different types" begin
+    x_ra = Reactant.to_rarray(ones(2))
+
+    @testset "$f" for f in (return_zero, return_false, return_one, return_one_f64)
+        res = @jit f(x_ra)
+        @test res === f(x_ra)
+    end
+end
+
 @testset "no variable name collisions in compile macros (#237)" begin
     f(x) = x
     g(x) = f(x)
