@@ -27,6 +27,9 @@ struct MlirModule {
 struct MlirOperation {
   void *ptr;
 };
+struct MlirRegion {
+  void *ptr;
+};
 struct MlirBlock {
   void *ptr;
 };
@@ -45,6 +48,9 @@ struct MlirPassManager {
 struct MlirOpPassManager {
   void *ptr;
 };
+struct MlirLogicalResult {
+  int8_t value;
+};
 
 // Non-owning string reference passed across the MLIR C-API boundary.
 struct MlirStringRef {
@@ -52,6 +58,26 @@ struct MlirStringRef {
   const char *data;
   // Number of bytes in the string slice.
   size_t length;
+};
+
+// Callback signature used by mlirOperationPrint and mlirAttributePrint.
+typedef void (*MlirStringCallback)(MlirStringRef, void *);
+
+// HLO cost analysis properties populated by
+// pjrt_hlo_module_cost_analysis_properties and
+// ifrt_hlo_module_cost_analysis_properties.
+struct JLHloCostAnalysisProperties {
+  float flops;
+  float transcendentals;
+  float bytes_accessed;
+  float optimal_seconds;
+  float utilization;
+  float operand0_utilization;
+  float operand1_utilization;
+  float operand0_bytes_accessed;
+  float operand1_bytes_accessed;
+  float output_root_bytes_accessed;
+  float reserved0;
 };
 
 // Device memory allocator statistics populated by PjRtDeviceGetAllocatorStats.
@@ -95,8 +121,34 @@ extern void (*ReactantThrowError)(const char *);
 // MLIR C-API functions re-exported by ReactantExtraLib.
 MlirContext mlirContextCreate(void);
 void mlirContextDestroy(MlirContext context);
+MlirDialectRegistry mlirDialectRegistryCreate(void);
+void mlirDialectRegistryDestroy(MlirDialectRegistry registry);
+void mlirContextAppendDialectRegistry(MlirContext context,
+                                      MlirDialectRegistry registry);
+MlirLocation mlirLocationUnknownGet(MlirContext context);
+MlirModule mlirModuleCreateEmpty(MlirLocation location);
 MlirModule mlirModuleCreateParse(MlirContext context, MlirStringRef module);
 void mlirModuleDestroy(MlirModule module);
+MlirOperation mlirModuleGetOperation(MlirModule module);
+MlirBlock mlirModuleGetBody(MlirModule module);
+MlirOperation mlirBlockGetFirstOperation(MlirBlock block);
+MlirOperation mlirOperationGetNextInBlock(MlirOperation operation);
+MlirRegion mlirOperationGetFirstRegion(MlirOperation operation);
+MlirBlock mlirRegionGetFirstBlock(MlirRegion region);
+void mlirOperationDestroy(MlirOperation operation);
+bool mlirOperationVerify(MlirOperation operation);
+void mlirOperationPrint(MlirOperation operation, MlirStringCallback callback,
+                        void *user_data);
+MlirAttribute mlirAttributeParseGet(MlirContext context,
+                                    MlirStringRef attribute);
+void mlirAttributePrint(MlirAttribute attribute, MlirStringCallback callback,
+                        void *user_data);
+MlirPassManager mlirPassManagerCreate(MlirContext context);
+void mlirPassManagerDestroy(MlirPassManager pass_manager);
+MlirOpPassManager
+mlirPassManagerGetAsOpPassManager(MlirPassManager pass_manager);
+MlirLogicalResult mlirPassManagerRunOnOp(MlirPassManager pass_manager,
+                                         MlirOperation operation);
 
 // Process initialization, dialect/pass registration, and FFI (API.cpp,
 // xla_ffi.cpp).
@@ -108,6 +160,123 @@ char *GetDefaultTargetTriple(void);
 void registerReactantXLAFFI(void);
 void RegisterCustomCallTarget(const char *name, void *address,
                               const char *platform);
+
+// MLIR, Shardy, and LLVM-to-MLIR utilities (API.cpp).
+void mlirPassManagerEnableXLATraceTiming(MlirPassManager pass_manager);
+bool mlirOperationInject(MlirContext context, MlirBlock block,
+                         MlirStringRef code, MlirLocation location,
+                         bool verify_after_parse);
+MlirOperation mlirOperationParse(MlirContext context, MlirBlock block,
+                                 MlirStringRef code, MlirLocation location,
+                                 bool verify_after_parse);
+MlirType mlirGetFunctionTypeFromOperation(MlirOperation operation);
+bool mlirIsFunctionOpInterface(MlirOperation operation);
+void ReactantFuncSetResultAttr(MlirOperation operation, intptr_t position,
+                               MlirStringRef name, MlirAttribute attribute);
+void ReactantFuncSetArgAttr(MlirOperation operation, intptr_t position,
+                            MlirStringRef name, MlirAttribute attribute);
+void *mlirGetParentOfTypeFunctionOp(void *operation);
+MlirAttribute enzymeActivityAttrGet(MlirContext context, int32_t value);
+MlirOperation LinkInModule(MlirModule previous_module, MlirModule new_module,
+                           const char *entry_function_name);
+MlirModule ConvertLLVMStrToMLIR(const char *llvm_ir_text, MlirContext context);
+void addSdyPropagationPipeline(
+    MlirOpPassManager pass_manager, uint8_t keep_sharding_rules,
+    uint8_t conservative_propagation, uint8_t debug_sharding_origins,
+    uint8_t debug_propagation_edge_sharding, uint8_t skip_convert_to_reshard,
+    uint8_t skip_inline, uint8_t enable_insert_explicit_collectives);
+int32_t ReactantLexMLIR(MlirContext context, const char *input,
+                        int32_t input_length, int32_t *token_kinds,
+                        int32_t *token_offsets, int32_t *token_lengths,
+                        int32_t max_tokens);
+
+// HLO module, computation, instruction, sharding, and cost analysis C ABI.
+void *convertMlirModuleToHloModule(MlirModule module);
+void *parseAndReturnUnverifiedHloModule(const char *hlo_text);
+void *hloModuleGetEntryComputation(void *hlo_module);
+const char *hloComputationToString(void *hlo_computation,
+                                   int32_t print_options);
+int64_t hloComputationInstructionCount(void *hlo_computation);
+void hloComputationGetInstructionsPostOrder(void *hlo_computation,
+                                            int64_t num_instructions,
+                                            void **hlo_instructions);
+const char *hloInstructionToString(void *hlo_instruction,
+                                   int32_t print_options);
+uint8_t hloInstructionHasToApply(void *hlo_instruction);
+void *hloInstructionGetToApply(void *hlo_instruction);
+uint8_t hloInstructionGetOpcode(void *hlo_instruction);
+const char *hloOpcodeToString(uint8_t opcode);
+uint8_t hloInstructionIsFusion(void *hlo_instruction);
+uint8_t hloInstructionGetFusionKind(void *hlo_instruction);
+const char *hloFusionKindToString(uint8_t kind);
+void *hloInstructionFusedInstructionsComputation(void *hlo_instruction);
+
+void *hloShardingFromTensorShardingAttr(MlirAttribute sharding_attribute,
+                                        MlirAttribute mesh_attribute);
+MlirAttribute
+hloShardingToTensorShardingAttr(MlirContext context, const void *hlo_sharding,
+                                MlirAttribute mesh_name,
+                                MlirAttribute mesh_attribute, int64_t rank,
+                                const bool *is_closed, const int64_t *priority);
+void free_hlo_sharding(void *hlo_sharding);
+void *hlo_sharding_from_op_sharding(void *op_sharding);
+void *hlo_sharding_to_op_sharding(void *hlo_sharding);
+const char *hlo_sharding_to_string(const void *hlo_sharding);
+bool hlo_sharding_is_tuple(void *hlo_sharding);
+bool hlo_sharding_is_replicated(void *hlo_sharding);
+bool hlo_sharding_is_manual(void *hlo_sharding);
+bool hlo_sharding_is_unknown(void *hlo_sharding);
+bool hlo_sharding_is_tiled(void *hlo_sharding);
+bool hlo_sharding_is_maximal(void *hlo_sharding);
+bool hlo_sharding_replicate_on_last_tile_dim(void *hlo_sharding);
+int32_t hlo_sharding_tile_assignment_dimensions_size(void *hlo_sharding);
+int32_t hlo_sharding_tile_assignment_devices_size(void *hlo_sharding);
+void hlo_sharding_tile_assignment_dimensions(void *hlo_sharding,
+                                             int64_t *dimensions,
+                                             int32_t num_dimensions);
+void hlo_sharding_tile_assignment_devices(void *hlo_sharding, int64_t *devices,
+                                          int32_t num_devices);
+bool hlo_sharding_check_eq(void *hlo_sharding, void *other);
+bool hlo_sharding_check_eq_ignoring_metadata(void *hlo_sharding, void *other);
+
+void free_op_sharding(void *op_sharding);
+int32_t op_sharding_to_op_sharding_type(void *op_sharding);
+bool op_sharding_is_shard_group(void *op_sharding);
+bool op_sharding_replicate_on_last_tile_dim(void *op_sharding);
+bool op_sharding_has_last_tile_dims(void *op_sharding);
+bool op_sharding_has_iota_reshape_dims(void *op_sharding);
+int32_t op_sharding_iota_reshape_dims_size(void *op_sharding);
+void op_sharding_iota_reshape_dims(void *op_sharding,
+                                   int32_t *iota_reshape_dims);
+bool op_sharding_has_iota_transpose_perm(void *op_sharding);
+int32_t op_sharding_iota_transpose_perm_size(void *op_sharding);
+void op_sharding_iota_transpose_perm(void *op_sharding,
+                                     int32_t *iota_transpose_perm);
+bool op_sharding_has_tile_assignment_dimensions(void *op_sharding);
+int32_t op_sharding_tile_assignment_dimensions_size(void *op_sharding);
+void op_sharding_tile_assignment_dimensions(
+    void *op_sharding, int32_t *tile_assignment_dimensions);
+bool op_sharding_has_tile_assignment_devices(void *op_sharding);
+int32_t op_sharding_tile_assignment_devices_size(void *op_sharding);
+void op_sharding_tile_assignment_devices(void *op_sharding,
+                                         int32_t *tile_assignment_devices);
+
+void *ifrt_sharding_from_xla_hlo_sharding(void *client, void **device_list,
+                                          int32_t num_devices,
+                                          void *memory_kind,
+                                          void *xla_hlo_sharding);
+void *ifrt_sharding_to_xla_hlo_sharding(void *sharding);
+void ifrt_sharding_to_index_domains(void *sharding, int64_t *array_size_list,
+                                    int32_t array_rank,
+                                    int64_t *index_domain_origins,
+                                    int64_t *index_domain_shapes);
+
+void pjrt_hlo_module_cost_analysis_properties(
+    void *client, void *hlo_module, JLHloCostAnalysisProperties *properties);
+void ifrt_hlo_module_cost_analysis_properties(
+    void *client, void *hlo_module, JLHloCostAnalysisProperties *properties);
+void *ReactantGetDebugOptions(size_t *size_in_bytes);
+void *ReactantGetCompileOptions(size_t *size_in_bytes);
 
 // LinkableRuntime C ABI (API.cpp).
 void reactantXLAThrow(const char *message);
@@ -323,6 +492,27 @@ enum XlaMemcpyDirection : int32_t {
 // Wraps a null-terminated C string into an MlirStringRef.
 inline MlirStringRef makeStringRef(const char *text) {
   return MlirStringRef{text, std::strlen(text)};
+}
+
+// Callback that appends an MlirStringRef chunk to a std::string passed via
+// `user_data`.
+inline void appendMlirStringRef(MlirStringRef string_ref, void *user_data) {
+  std::string *output = static_cast<std::string *>(user_data);
+  output->append(string_ref.data, string_ref.length);
+}
+
+// Prints an MlirOperation into an owned std::string.
+inline std::string printOperationToString(MlirOperation operation) {
+  std::string output;
+  mlirOperationPrint(operation, &appendMlirStringRef, &output);
+  return output;
+}
+
+// Prints an MlirAttribute into an owned std::string.
+inline std::string printAttributeToString(MlirAttribute attribute) {
+  std::string output;
+  mlirAttributePrint(attribute, &appendMlirStringRef, &output);
+  return output;
 }
 
 // RAII guard that installs a non-aborting ReactantThrowError handler and
