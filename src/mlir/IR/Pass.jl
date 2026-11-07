@@ -23,7 +23,7 @@ end
 Create a new top-level PassManager.
 """
 function PassManager(; context::Context=current_context())
-    return PassManager(mark_alloc(API.mlirPassManagerCreate(context)))
+    return mark_alloc(PassManager(API.mlirPassManagerCreate(context)))
 end
 
 """
@@ -32,10 +32,14 @@ end
 Create a new top-level PassManager anchored on `anchorOp`.
 """
 function PassManager(anchor_op::Operation; context::Context=current_context())
-    return PassManager(mark_alloc(API.mlirPassManagerCreateOnOperation(context, anchor_op)))
+    return mark_alloc(PassManager(API.mlirPassManagerCreateOnOperation(context, anchor_op)))
 end
 
-dispose(pass::PassManager) = mark_dispose(API.mlirPassManagerDestroy, pass)
+function dispose(pass::PassManager)
+    mark_dispose(API.mlirPassManagerDestroy, pass)
+    # the allocator of the type IDs of external passes
+    return dispose(pass.allocator)
+end
 
 Base.cconvert(::Core.Type{API.MlirPassManager}, pass::PassManager) = pass
 function Base.unsafe_convert(::Core.Type{API.MlirPassManager}, pass::PassManager)
