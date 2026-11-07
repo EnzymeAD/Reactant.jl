@@ -1603,24 +1603,22 @@ Base.@nospecializeinfer function make_tracer(
     if mode == TracedToConcrete
         if runtime isa Val{:PJRT}
             haskey(seen, prev) && return seen[prev]::ConcretePJRTArray{T,N}
-            if !Sharding.is_sharded(sharding)
-                res = ConcretePJRTArray{T,N,1}(
-                    (XLA.PJRT.AsyncEmptyBuffer,), size(prev), Sharding.NoShardInfo()
-                )
-            else
-                error("TODO(#2230): implement sharding")
-            end
+            # The placeholder only needs the concrete type the compiled function will
+            # produce (`D` is the number of devices of the executable); actual buffers are
+            # populated by the generated thunk.
+            D = Sharding.ndevices(sharding)
+            res = ConcretePJRTArray{T,N,D}(
+                ntuple(Returns(XLA.PJRT.AsyncEmptyBuffer), D),
+                size(prev),
+                Sharding.NoShardInfo(),
+            )
             seen[prev] = res
             return res
         elseif runtime isa Val{:IFRT}
             haskey(seen, prev) && return seen[prev]::ConcreteIFRTArray{T,N}
-            if !Sharding.is_sharded(sharding)
-                res = ConcreteIFRTArray{T,N}(
-                    XLA.IFRT.AsyncEmptyArray, size(prev), Sharding.NoShardInfo()
-                )
-            else
-                error("TODO(#2230): implement sharding")
-            end
+            res = ConcreteIFRTArray{T,N}(
+                XLA.IFRT.AsyncEmptyArray, size(prev), Sharding.NoShardInfo()
+            )
             seen[prev] = res
             return res
         end
@@ -1692,24 +1690,15 @@ Base.@nospecializeinfer function make_tracer(
     if mode == TracedToConcrete
         if runtime isa Val{:PJRT}
             haskey(seen, prev) && return seen[prev]::ConcretePJRTNumber{T}
-            if !Sharding.is_sharded(sharding)
-                res = ConcretePJRTNumber{T,1}(
-                    (XLA.PJRT.AsyncEmptyBuffer,), Sharding.NoShardInfo()
-                )
-            else
-                error("TODO(#2230): implement sharding")
-            end
+            D = Sharding.ndevices(sharding)
+            res = ConcretePJRTNumber{T,D}(
+                ntuple(Returns(XLA.PJRT.AsyncEmptyBuffer), D), Sharding.NoShardInfo()
+            )
             seen[prev] = res
             return res
         elseif runtime isa Val{:IFRT}
             haskey(seen, prev) && return seen[prev]::ConcreteIFRTNumber{T}
-            if !Sharding.is_sharded(sharding)
-                res = ConcreteIFRTNumber{T}(
-                    XLA.IFRT.AsyncEmptyArray, Sharding.NoShardInfo()
-                )
-            else
-                error("TODO(#2230): implement sharding")
-            end
+            res = ConcreteIFRTNumber{T}(XLA.IFRT.AsyncEmptyArray, Sharding.NoShardInfo())
             seen[prev] = res
             return res
         end
@@ -1850,13 +1839,13 @@ Base.@nospecializeinfer function make_tracer(
     Sharding.is_sharded(sharding) && error("Cannot specify sharding for Complex")
     if mode == TracedToTypes
         push!(path, Core.Typeof(prev))
-        make_tracer(seen, prev.re, path, mode; kwargs...)
-        make_tracer(seen, prev.im, path, mode; kwargs...)
+        make_tracer(seen, prev.re, path, mode; sharding, kwargs...)
+        make_tracer(seen, prev.im, path, mode; sharding, kwargs...)
         return nothing
     end
     return Complex(
-        make_tracer(seen, prev.re, append_path(path, :re), mode; kwargs...),
-        make_tracer(seen, prev.im, append_path(path, :im), mode; kwargs...),
+        make_tracer(seen, prev.re, append_path(path, :re), mode; sharding, kwargs...),
+        make_tracer(seen, prev.im, append_path(path, :im), mode; sharding, kwargs...),
     )
 end
 
@@ -2433,12 +2422,16 @@ function make_tracer(
     Sharding.is_sharded(sharding) && error("Cannot specify sharding for UnitRange")
     if mode == TracedToTypes
         push!(path, Core.Typeof(prev))
-        make_tracer(seen, prev.start, path, mode; kwargs...)
-        make_tracer(seen, prev.stop, path, mode; kwargs...)
+        make_tracer(seen, prev.start, path, mode; sharding, kwargs...)
+        make_tracer(seen, prev.stop, path, mode; sharding, kwargs...)
         return nothing
     end
-    newstart = make_tracer(seen, prev.start, append_path(path, :start), mode; kwargs...)
-    newstop = make_tracer(seen, prev.stop, append_path(path, :stop), mode; kwargs...)
+    newstart = make_tracer(
+        seen, prev.start, append_path(path, :start), mode; sharding, kwargs...
+    )
+    newstop = make_tracer(
+        seen, prev.stop, append_path(path, :stop), mode; sharding, kwargs...
+    )
     if typeof(newstart) == typeof(prev.start) && typeof(newstop) == typeof(prev.stop)
         return prev
     else
@@ -2540,12 +2533,12 @@ function make_tracer(
     Sharding.is_sharded(sharding) && error("Cannot specify sharding for Rational")
     if mode == TracedToTypes
         push!(path, Core.Typeof(prev))
-        make_tracer(seen, prev.num, path, mode; kwargs...)
-        make_tracer(seen, prev.den, path, mode; kwargs...)
+        make_tracer(seen, prev.num, path, mode; sharding, kwargs...)
+        make_tracer(seen, prev.den, path, mode; sharding, kwargs...)
         return nothing
     end
-    newnum = make_tracer(seen, prev.num, append_path(path, :num), mode; kwargs...)
-    newden = make_tracer(seen, prev.den, append_path(path, :den), mode; kwargs...)
+    newnum = make_tracer(seen, prev.num, append_path(path, :num), mode; sharding, kwargs...)
+    newden = make_tracer(seen, prev.den, append_path(path, :den), mode; sharding, kwargs...)
     if typeof(newnum) == typeof(prev.num) && typeof(newden) == typeof(prev.den)
         return prev
     else

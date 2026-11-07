@@ -192,6 +192,19 @@ struct NoSharding <: AbstractSharding end
 
 @inline shard_type(::Type{NoSharding}, _) = ShardInfo{NoSharding,Nothing}
 
+"""
+    UnknownSharding{D}()
+
+Internal sharding annotation for values living on `D` devices whose concrete sharding is not
+known yet. Used when building `TracedToConcrete` result placeholders: their sharding is only
+determined after XLA compilation, while their device-count type parameter (e.g.
+`ConcretePJRTArray{T,N,D}`) must match the values produced by the compiled executable so
+containers and structs holding the results are typed accurately.
+"""
+struct UnknownSharding{D} <: AbstractSharding end
+
+@inline ndevices(::UnknownSharding{D}) where {D} = D
+
 function (::NoSharding)(client::XLA.PJRT.Client, device, x::Union{AbstractArray,Number})
     device === nothing && (device = XLA.default_device(client))
     buffer = XLA.PJRT.AsyncBuffer(client, x, device)
@@ -1113,6 +1126,7 @@ ShardInfo{NoSharding,Nothing}() = ShardInfo(NoSharding(), nothing)
 Checks whether the given sharding refers to no sharding.
 """
 is_sharded(::NoSharding) = false
+is_sharded(::UnknownSharding) = false
 is_sharded(::AbstractSharding) = true
 is_sharded(s::ShardInfo) = is_sharded(s.sharding)
 
