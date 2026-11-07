@@ -643,3 +643,76 @@ index_plain_mat_linear(idx) = @allowscalar reshape(collect(1.0:10.0), 2, 5)[idx]
     @test @jit(index_plain_mat_linear(Reactant.to_rarray([2, 4, 7]))) ≈ [2.0, 4.0, 7.0]
     @test @jit(index_plain_mat_linear(ConcreteRNumber(5))) ≈ 5.0
 end
+
+function loop_int32_scalar_index(x, vals, n)
+    s_idx = Int32(1)
+    accum = zero(eltype(x))
+    @trace while s_idx <= n
+        v = @allowscalar vals[s_idx]
+        accum = accum + v
+        s_idx += Int32(1)
+    end
+    return accum .+ x
+end
+
+lin2d_get_int32(m, idx) = @allowscalar m[idx]
+lin2d_set_int32!(m, v, idx) = (@allowscalar(m[idx] = v); m)
+
+function bin_acc_scalar_loop_int32!(a, l, s, t)
+    @trace for i in axes(a, 1)
+        @allowscalar @inbounds l_i = l[i]
+        @allowscalar @inbounds t[l_i] += Int32(1)
+        @trace for j in axes(a, 2)
+            @allowscalar @inbounds s[l_i, j] += a[i, j]
+        end
+    end
+    return s, t
+end
+
+function bin_acc_views_dot_loop_int32!(a, l, s, t)
+    @trace for i in axes(a, 1)
+        @allowscalar @inbounds l_i = l[i]
+        @allowscalar @inbounds @views t[l_i] .+= Int32(1)
+    end
+    return s, t
+end
+
+@testset "Non-Int64 scalar integer indexing (#2359, #2452)" begin
+    x = ones(Float32, 5)
+    vals = Float32[0.1, 0.2, 0.3, 0.4]
+    xr = Reactant.to_rarray(x)
+    valsr = Reactant.to_rarray(vals)
+    @test Array(@jit(loop_int32_scalar_index(xr, valsr, ConcreteRNumber(Int32(4))))) ≈
+        fill(2.0f0, 5)
+
+    m2d = reshape(collect(Float32, 1:6), 2, 3)
+    m2d_r = Reactant.to_rarray(copy(m2d))
+    @test @jit(lin2d_get_int32(m2d_r, ConcreteRNumber(Int32(5)))) == 5.0f0
+    @test Array(@jit(lin2d_set_int32!(m2d_r, 99.0f0, ConcreteRNumber(Int32(5)))))[5] ==
+        99.0f0
+
+    a = reshape(collect(Float32, 1:12), 4, 3)
+    l = Int32[1, 2, 1, 1]
+    s0 = zeros(Float32, 2, 3)
+    t0 = zeros(Int32, 2)
+    s_ref, t_ref = bin_acc_scalar_loop_int32!(a, l, copy(s0), copy(t0))
+
+    sr, tr = @jit bin_acc_scalar_loop_int32!(
+        Reactant.to_rarray(a),
+        Reactant.to_rarray(l),
+        Reactant.to_rarray(copy(s0)),
+        Reactant.to_rarray(copy(t0)),
+    )
+    @test Array(sr) ≈ s_ref
+    @test Array(tr) == t_ref
+
+    # Scalar broadcast assignment (`@views t[l_i] .+= 1`) throws MethodError in Base Julia;
+    # ensure Int32 scalar indexing returns a TracedRNumber (and errors) rather than a
+    # disconnected 1-element TracedRArray that silently drops the loop (#2452).
+    @test_throws MethodError @jit bin_acc_views_dot_loop_int32!(
+        Reactant.to_rarray(a),
+        Reactant.to_rarray(l),
+        Reactant.to_rarray(copy(s0)),
+        Reactant.to_rarray(copy(t0)),
+    )
+end
