@@ -148,6 +148,39 @@ end
         result = run_exported_enzymejax_function(python_file_path, "run_complex_fn")
         @test isapprox(Array(result), expected_result; atol=1e-5, rtol=1e-5)
     end
+
+    @testset "In-place mutating function disables buffer donation (#2325)" begin
+        f_mutating!(x, y) = (x .*= y; x)
+        f_mutating_nothing!(x, y) = (x .*= y; nothing)
+
+        x_data = Reactant.TestUtils.construct_test_array(Float32, 3, 4)
+        y_data = Reactant.TestUtils.construct_test_array(Float32, 3, 4)
+        x = Reactant.to_rarray(copy(x_data))
+        y = Reactant.to_rarray(copy(y_data))
+
+        out_dir = mktempdir(; cleanup=true)
+        python_file_path = Reactant.Serialization.export_to_enzymejax(
+            f_mutating!, x, y; output_dir=out_dir, function_name="f_mutating"
+        )
+        mlir_path = only(filter(endswith(".mlir"), readdir(out_dir; join=true)))
+        @test !contains(read(mlir_path, String), "tf.aliasing_output")
+
+        result = run_exported_enzymejax_function(python_file_path, "run_f_mutating")
+        @test isapprox(Array(result), x_data .* y_data; atol=1e-5, rtol=1e-5)
+
+        out_dir2 = mktempdir(; cleanup=true)
+        Reactant.Serialization.export_to_enzymejax(
+            f_mutating_nothing!,
+            x,
+            y;
+            output_dir=out_dir2,
+            function_name="f_mutating_nothing",
+            export_data_as_npz=false,
+            compile_options=Reactant.CompileOptions(; donated_args=:auto),
+        )
+        mlir_path2 = only(filter(endswith(".mlir"), readdir(out_dir2; join=true)))
+        @test !contains(read(mlir_path2, String), "tf.aliasing_output")
+    end
 end
 
 @testset "EnzymeJAX Export - With Sharding" begin
