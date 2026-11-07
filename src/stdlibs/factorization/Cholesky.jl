@@ -95,3 +95,20 @@ end
 function _cholesky_solve_core_upper(factors::AbstractMatrix, B::AbstractMatrix)
     return UpperTriangular(factors) \ (adjoint(UpperTriangular(factors)) \ B)
 end
+
+function LinearAlgebra.det(c::BatchedCholesky{<:Any,<:AbstractMatrix})
+    LinearAlgebra.checksquare(c)
+    d = real.(diag(c.factors))
+    return prod(abs2, d)
+end
+
+function LinearAlgebra.logdet(c::BatchedCholesky{<:Any,<:AbstractMatrix})
+    LinearAlgebra.checksquare(c)
+    d = real.(diag(c.factors))
+    return 2 * sum(log, d)
+end
+
+function LinearAlgebra.logabsdet(c::BatchedCholesky{T,<:AbstractMatrix}) where {T}
+    UT = unwrapped_eltype(T)
+    return LinearAlgebra.logdet(c), promote_to(TracedRNumber{UT}, one(UT))
+end
