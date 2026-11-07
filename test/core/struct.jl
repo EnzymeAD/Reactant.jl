@@ -143,3 +143,30 @@ end
         @test @allowscalar(result) ≈ sum(z) + 1.0f0
     end
 end
+
+struct Carrier3151{K,X}
+    kwargs::K
+    x::X
+end
+carrier_empty_pairs(x) = Carrier3151(pairs(NamedTuple()), x .* 2)
+carrier_nonempty_pairs(x) = Carrier3151(pairs((; a=x .+ 1, b=3)), x .* 2)
+carrier_homog_pairs(x) = Carrier3151(pairs((; a=x .+ 1, b=x .* 3)), x)
+
+@testset "Base.Pairs in create_result (#3151)" begin
+    x = Float32[1, 2, 3, 4]
+    xr = Reactant.to_rarray(x)
+
+    res1 = @jit carrier_empty_pairs(xr)
+    @test isempty(res1.kwargs)
+    @test res1.kwargs isa Base.Pairs
+    @test Array(res1.x) ≈ x .* 2
+
+    res2 = @jit carrier_nonempty_pairs(xr)
+    @test Array(res2.kwargs[:a]) ≈ x .+ 1
+    @test res2.kwargs[:b] == 3
+    @test Array(res2.x) ≈ x .* 2
+
+    res3 = @jit carrier_homog_pairs(xr)
+    @test Array(res3.kwargs[:a]) ≈ x .+ 1
+    @test Array(res3.kwargs[:b]) ≈ x .* 3
+end
