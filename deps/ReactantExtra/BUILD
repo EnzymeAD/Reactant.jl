@@ -103,6 +103,7 @@ genrule(
         "@org_xprof//plugin/xprof/protobuf:steps_db.proto",
         "@org_xprof//plugin/xprof/protobuf:trace_events.proto",
         # Xprof protos - dependencies
+        "@org_xprof//plugin/xprof/protobuf:flat_op_metrics.proto",
         "@org_xprof//plugin/xprof/protobuf:topology.proto",
         "@org_xprof//plugin/xprof/protobuf:source_info.proto",
         "@org_xprof//plugin/xprof/protobuf:task.proto",
