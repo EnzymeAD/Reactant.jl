@@ -263,6 +263,13 @@ function cloud_tpu_init!()
         ENV["LIBTPU_INIT_ARGS"] =
             get(ENV, "LIBTPU_INIT_ARGS", "") * " --xla_tpu_use_enhanced_launch_barrier=true"
     end
+    if !occursin(
+        "--xla_tpu_enable_collective_permute_combiner", get(ENV, "LIBTPU_INIT_ARGS", "")
+    )
+        ENV["LIBTPU_INIT_ARGS"] =
+            get(ENV, "LIBTPU_INIT_ARGS", "") *
+            " --xla_tpu_enable_collective_permute_combiner=true"
+    end
 
     # Set tensorstore variables
     ENV["TENSORSTORE_CURL_LOW_SPEED_TIME_SECONDS"] = get(
