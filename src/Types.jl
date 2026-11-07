@@ -790,23 +790,11 @@ function ConcreteIFRTArray{T,N}(
     return ConcreteIFRTArray{T,N}(sharded_data, shape, shardinfo, padding)
 end
 
-# Fully parameterized constructors, so that generic code allocating through a stored array
-# type (e.g. `S(undef, 0)` with `S = typeof(x)`, or `Adapt.adapt(typeof(x), y)`) works. The
-# last type parameter (number of shards / padding type) is determined by the sharding, so we
-# construct via the partially parameterized form and check that it matches.
 for aType in (:ConcretePJRTArray, :ConcreteIFRTArray)
     @eval begin
-        function $(aType){T,N,P}(
-            ::UndefInitializer, shape::Vararg{Integer,N}; kwargs...
-        ) where {T,N,P}
-            return $(aType){T,N,P}(undef, Dims(shape); kwargs...)
-        end
-
-        function $(aType){T,N,P}(
-            ::UndefInitializer, shape::NTuple{N,Integer}; kwargs...
-        ) where {T,N,P}
+        function $(aType){T,N,P}(::UndefInitializer, shape...; kwargs...) where {T,N,P}
             return _check_concrete_type(
-                $(aType){T,N,P}, $(aType){T,N}(undef, Dims(shape); kwargs...)
+                $(aType){T,N,P}, $(aType){T,N}(undef, shape...; kwargs...)
             )
         end
 
