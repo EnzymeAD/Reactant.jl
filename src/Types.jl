@@ -790,6 +790,31 @@ function ConcreteIFRTArray{T,N}(
     return ConcreteIFRTArray{T,N}(sharded_data, shape, shardinfo, padding)
 end
 
+for aType in (:ConcretePJRTArray, :ConcreteIFRTArray)
+    @eval begin
+        function $(aType){T,N,P}(::UndefInitializer, shape...; kwargs...) where {T,N,P}
+            return _check_concrete_type(
+                $(aType){T,N,P}, $(aType){T,N}(undef, shape...; kwargs...)
+            )
+        end
+
+        function $(aType){T,N,P}(data::AbstractArray; kwargs...) where {T,N,P}
+            return _check_concrete_type($(aType){T,N,P}, $(aType){T,N}(data; kwargs...))
+        end
+    end
+end
+
+function _check_concrete_type(::Type{A}, x) where {A}
+    x isa A || throw(
+        ArgumentError(
+            "Cannot construct a `$(A)`: the given sharding produces a `$(typeof(x))`. \
+             Use `$(Base.typename(A).wrapper){$(eltype(x)),$(ndims(x))}` or pass a \
+             matching `sharding` keyword.",
+        ),
+    )
+    return x
+end
+
 function _select_client_and_device(
     client::Union{Nothing,XLA.AbstractClient},
     idx::Union{Int,Nothing},
