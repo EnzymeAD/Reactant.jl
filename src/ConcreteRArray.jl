@@ -201,14 +201,31 @@ function write_to_host_buffer!(data::Array, X::ConcreteIFRTArray{T,N}) where {T,
     return nothing
 end
 
+const NestedWrappedConcreteRArray = Union{
+    LinearAlgebra.UpperTriangular{
+        <:Any,<:Union{WrappedConcretePJRTArray,WrappedConcreteIFRTArray}
+    },
+    LinearAlgebra.LowerTriangular{
+        <:Any,<:Union{WrappedConcretePJRTArray,WrappedConcreteIFRTArray}
+    },
+    LinearAlgebra.UnitUpperTriangular{
+        <:Any,<:Union{WrappedConcretePJRTArray,WrappedConcreteIFRTArray}
+    },
+    LinearAlgebra.UnitLowerTriangular{
+        <:Any,<:Union{WrappedConcretePJRTArray,WrappedConcreteIFRTArray}
+    },
+}
+
 function Base.convert(
-    ::Type{<:Array}, X::Union{WrappedConcretePJRTArray,WrappedConcreteIFRTArray}
+    ::Type{<:Array},
+    X::Union{WrappedConcretePJRTArray,WrappedConcreteIFRTArray,NestedWrappedConcreteRArray},
 )
-    fn = compile(TracedUtils.materialize_traced_array, (X,))
+    fn = compile(materialize_traced_array, (X,))
     return convert(Array, fn(X))
 end
 
 Base.Array(x::Union{AnyConcretePJRTArray,AnyConcreteIFRTArray}) = convert(Array, x)
+Base.Array(x::NestedWrappedConcreteRArray) = convert(Array, x)
 
 """
     synchronize(x::Union{ConcretePJRTArray,ConcretePJRTNumber})
@@ -1024,27 +1041,133 @@ function Base._parentsmatch(A::UnionAnyConcreteRArray, B::UnionAnyConcreteRArray
     return Base._parentsmatch(ancestor(A), ancestor(B))
 end
 
-for srcStyle in (IndexStyle, IndexCartesian),
-    (dstType, srcType) in [
-        (UnionAnyConcreteRArray, UnionAnyConcreteRArray),
-        (UnionAnyConcreteRArray, AbstractArray),
-        (AbstractArray, UnionAnyConcreteRArray),
-        (
-            AbstractMatrix,
-            Union{
-                LinearAlgebra.AdjOrTransAbsMat{T,M} where {T,S,M<:ConcreteIFRTArray{T,2,S}},
-                LinearAlgebra.AdjOrTransAbsMat{T,M} where {T,S,M<:ConcretePJRTArray{T,2,S}},
-            },
-        ),
-    ]
+function _copyto_unaliased_dev_dev!(dst, src)
+    fn = compile(Base.copyto!, (dst, src))
+    fn(dst, src)
+    return dst
+end
 
-    @eval function Base.copyto_unaliased!(
-        ::IndexStyle, dst::$(dstType), ::$(srcStyle), src::$(srcType)
-    )
-        fn = compile(Base.copyto!, (dst, src))
-        fn(dst, src)
-        return dst
+function _copyto_device_from_host!(dst::UnionAnyConcreteRArray, src::AbstractArray)
+    host_arr = src isa Array ? src : Array(src)
+    ancestor_dst = ancestor(dst)
+    if dst isa ConcretePJRTArray &&
+        !Sharding.is_sharded(dst) &&
+        eltype(dst) === eltype(host_arr)
+        return copyto!(dst, host_arr)
+    elseif ancestor_dst isa ConcretePJRTArray
+        dev_arr = ConcretePJRTArray(
+            host_arr;
+            sharding=ancestor_dst.sharding,
+            client=XLA.client(ancestor_dst),
+            device=XLA.device(ancestor_dst),
+        )
+        return _copyto_unaliased_dev_dev!(dst, dev_arr)
+    else
+        dev_arr = ConcreteIFRTArray(
+            host_arr;
+            sharding=ancestor_dst.sharding,
+            client=XLA.client(ancestor_dst),
+            device=XLA.device(ancestor_dst),
+        )
+        return _copyto_unaliased_dev_dev!(dst, dev_arr)
     end
+end
+
+function _copyto_host_from_device!(dst::AbstractArray, src::UnionAnyConcreteRArray)
+    if src isa Union{ConcretePJRTArray,ConcreteIFRTArray}
+        if dst isa Array &&
+            eltype(dst) === eltype(src) &&
+            length(dst) >= length(src) &&
+            (src isa ConcretePJRTArray || length(dst) == length(src))
+            return copyto!(dst, src)
+        end
+        return copyto!(dst, convert(Array, src))
+    end
+    fn = compile(materialize_traced_array, (src,))
+    mat_src = fn(src)
+    if dst isa Array &&
+        eltype(dst) === eltype(mat_src) &&
+        length(dst) >= length(mat_src) &&
+        (mat_src isa ConcretePJRTArray || length(dst) == length(mat_src))
+        return copyto!(dst, mat_src)
+    end
+    return copyto!(dst, convert(Array, mat_src))
+end
+
+function _copyto_unaliased_dev_any!(dst, src)
+    if ancestor(src) isa AbstractConcreteArray
+        return _copyto_unaliased_dev_dev!(dst, src)
+    end
+    return _copyto_device_from_host!(dst, src)
+end
+
+function _copyto_unaliased_any_dev!(dst, src)
+    if ancestor(dst) isa AbstractConcreteArray
+        return _copyto_unaliased_dev_dev!(dst, src)
+    end
+    return _copyto_host_from_device!(dst, src)
+end
+
+function _intersect_concrete_union(@nospecialize(U), @nospecialize(Target))
+    body = Base.unwrap_unionall(U)
+    parts = Any[]
+    for b in Base.uniontypes(body)
+        bw = Base.rewrap_unionall(b, U)
+        ti = typeintersect(bw, Target)
+        ti === Union{} && continue
+        @assert ti <: bw && ti <: Target
+        push!(parts, ti)
+    end
+    return Union{parts...}
+end
+
+const UnionAnyConcreteRMatrix = _intersect_concrete_union(
+    UnionAnyConcreteRArray, AbstractMatrix
+)
+const ConcreteAdjOrTransMat = _intersect_concrete_union(
+    UnionAnyConcreteRArray, LinearAlgebra.AdjOrTransAbsMat
+)
+
+for srcStyle in (IndexStyle, IndexCartesian)
+    @eval begin
+        function Base.copyto_unaliased!(
+            ::IndexStyle,
+            dst::UnionAnyConcreteRArray,
+            ::$(srcStyle),
+            src::UnionAnyConcreteRArray,
+        )
+            return _copyto_unaliased_dev_dev!(dst, src)
+        end
+        function Base.copyto_unaliased!(
+            ::IndexStyle, dst::UnionAnyConcreteRArray, ::$(srcStyle), src::AbstractArray
+        )
+            return _copyto_unaliased_dev_any!(dst, src)
+        end
+        function Base.copyto_unaliased!(
+            ::IndexStyle, dst::AbstractArray, ::$(srcStyle), src::UnionAnyConcreteRArray
+        )
+            return _copyto_unaliased_any_dev!(dst, src)
+        end
+        function Base.copyto_unaliased!(
+            ::IndexStyle, dst::AbstractMatrix, ::$(srcStyle), src::ConcreteAdjOrTransMat
+        )
+            return _copyto_unaliased_any_dev!(dst, src)
+        end
+    end
+end
+
+function Base.copyto_unaliased!(
+    ::IndexStyle,
+    dst::UnionAnyConcreteRMatrix,
+    ::IndexCartesian,
+    src::LinearAlgebra.AdjOrTransAbsMat,
+)
+    return _copyto_unaliased_dev_any!(dst, src)
+end
+function Base.copyto_unaliased!(
+    ::IndexStyle, dst::UnionAnyConcreteRMatrix, ::IndexCartesian, src::ConcreteAdjOrTransMat
+)
+    return _copyto_unaliased_dev_dev!(dst, src)
 end
 
 Base.to_index(x::AbstractConcreteNumber) = to_number(x)
