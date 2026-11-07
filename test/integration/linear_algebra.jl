@@ -621,3 +621,55 @@ end
     @test Array(@jit(((m, v) -> LowerTriangular(m) \ v)(M_ra, b_ra))) ≈
         LowerTriangular(M) \ b
 end
+
+solve_sym_u(A, b) = Symmetric(A, :U) \ b
+solve_sym_l(A, b) = Symmetric(A, :L) \ b
+solve_herm_u(A, b) = Hermitian(A, :U) \ b
+solve_herm_l(A, b) = Hermitian(A, :L) \ b
+
+@testset "Symmetric & Hermitian backslash (#3369)" begin
+    A_real = Float32[4 1; -2 3]
+    b_vec = Float32[1, 2]
+    B_mat = Float32[1 3; 2 -1]
+    Ar = Reactant.to_rarray(A_real)
+    br = Reactant.to_rarray(b_vec)
+    Br = Reactant.to_rarray(B_mat)
+
+    @test Array(@jit(solve_sym_u(Ar, br))) ≈ solve_sym_u(A_real, b_vec)
+    @test Array(@jit(solve_sym_l(Ar, br))) ≈ solve_sym_l(A_real, b_vec)
+    @test Array(@jit(solve_sym_u(Ar, Br))) ≈ solve_sym_u(A_real, B_mat)
+    @test Array(@jit(solve_herm_u(Ar, br))) ≈ solve_herm_u(A_real, b_vec)
+
+    # Indefinite symmetric (works via LU)
+    A_indef = Float32[1 3; 3 -2]
+    Ai_r = Reactant.to_rarray(A_indef)
+    @test Array(@jit(solve_sym_u(Ai_r, br))) ≈ solve_sym_u(A_indef, b_vec)
+
+    # Complex Hermitian with non-zero diagonal imaginary part
+    A_cplx = ComplexF32[4+5im 1+2im; -3+1im 3-7im]
+    b_cplx = ComplexF32[1 - 1im, 2 + 0.5f0im]
+    Ac_r = Reactant.to_rarray(A_cplx)
+    bc_r = Reactant.to_rarray(b_cplx)
+    @test Array(@jit(solve_herm_u(Ac_r, bc_r))) ≈ solve_herm_u(A_cplx, b_cplx)
+    @test Array(@jit(solve_herm_l(Ac_r, bc_r))) ≈ solve_herm_l(A_cplx, b_cplx)
+end
+
+linear_row_adj(z, sd, g) = (z * sd)'[g]
+linear_row_trans(z, sd, g) = transpose(z * sd)[g]
+mat_adj_lin(M, g) = M'[g]
+diag_vec_lin(v, g) = Diagonal(v)[g]
+
+@testset "Wrapped LinearAlgebra indexing (#3381)" begin
+    z = Float32[0.2 -0.4; 0.7 0.5]
+    sd = Float32[0.6, -0.3]
+    g = [1, 2, 1, 2, 2, 1]
+    rz = Reactant.to_rarray(z)
+    rsd = Reactant.to_rarray(sd)
+    @test Array(@jit(linear_row_adj(rz, rsd, g))) ≈ linear_row_adj(z, sd, g)
+    @test Array(@jit(linear_row_trans(rz, rsd, g))) ≈ linear_row_trans(z, sd, g)
+
+    Mc = ComplexF32[1+2im 3-1im; 4+0.5f0im 2-3im]
+    rMc = Reactant.to_rarray(Mc)
+    @test Array(@jit(mat_adj_lin(rMc, [1, 2, 3, 4]))) ≈ mat_adj_lin(Mc, [1, 2, 3, 4])
+    @test Array(@jit(diag_vec_lin(rsd, [1, 2, 3, 4]))) ≈ diag_vec_lin(sd, [1, 2, 3, 4])
+end

@@ -77,11 +77,15 @@ function _getindex_ancestor(ancestor::Array{<:TracedRNumber}, idxs...)
 end
 _getindex_ancestor(ancestor, idxs...) = getindex(ancestor, idxs...)
 
+function _getindex_any_traced(a::AnyTracedRArray, indices...)
+    ancestor, idxs = TracedUtils.get_ancestor_and_indices(a, indices...)
+    return _getindex_ancestor(ancestor, idxs...)
+end
+
 function Base.getindex(
     a::AnyTracedRArray{T,N}, index::Vararg{Union{Int,TracedRNumber{Int}},N}
 ) where {T,N}
-    ancestor, idxs = TracedUtils.get_ancestor_and_indices(a, index...)
-    return _getindex_ancestor(ancestor, idxs...)
+    return _getindex_any_traced(a, index...)
 end
 
 # This method is needed exclusively to resolve an ambiguity
@@ -167,18 +171,15 @@ function Base.getindex(
 end
 
 function Base.getindex(a::AnyTracedRArray{T,N}, linear_indices) where {T,N}
-    ancestor, idxs = TracedUtils.get_ancestor_and_indices(a, linear_indices)
-    return _getindex_ancestor(ancestor, idxs...)
+    return _getindex_any_traced(a, linear_indices)
 end
 
 function Base.getindex(a::AnyTracedRArray{T,1}, indices) where {T}
-    ancestor, idxs = TracedUtils.get_ancestor_and_indices(a, indices)
-    return _getindex_ancestor(ancestor, idxs...)
+    return _getindex_any_traced(a, indices)
 end
 
 function Base.getindex(a::AnyTracedRArray{T,N}, indices::Vararg{Any,N}) where {T,N}
-    ancestor, idxs = TracedUtils.get_ancestor_and_indices(a, indices...)
-    return _getindex_ancestor(ancestor, idxs...)
+    return _getindex_any_traced(a, indices...)
 end
 
 ### Specialize certain dispatches for better codegen
