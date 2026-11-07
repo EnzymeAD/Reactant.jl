@@ -342,7 +342,9 @@ function _copy(bc)
     ElType = Broadcast.combine_eltypes(fn, bc.args)
     # Special case a union{} return so we can see the better error message
     if ElType === Union{} || ElType == Any || ElType == TracedRNumber
-        ElType = Core.Typeof(fn(map(first_scalar, bc.args)...))
+        ElType = Core.Typeof(
+            TracedUtils.call_without_mutating_state(fn, map(first_scalar, bc.args)...)
+        )
     end
     if ElType == Any || ElType == Union{}
         throw(AssertionError("Failed to deduce eltype of broadcast of $fn, found $ElType"))
