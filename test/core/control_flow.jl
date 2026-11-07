@@ -1801,3 +1801,24 @@ end
     x = Reactant.to_rarray([1, 2, 3])
     @test_throws UndefVarError @compile f_undef_var_error(x)
 end
+
+function triply_nested_trace_for(D::AbstractMatrix{T}) where {T}
+    n, m = size(D)
+    corr = zeros(T, m, m)
+    @trace for i in 1:m
+        @allowscalar corr[i, i] = one(T)
+        @trace for j in 1:m
+            @allowscalar corr[i, j] = zero(T)
+            @trace for k in 1:n
+                @allowscalar corr[i, j] += D[k, i] * D[k, j]
+            end
+        end
+    end
+    return corr
+end
+
+@testset "triply-nested @trace for loops (#3095)" begin
+    D = Float32[1 2 3; 4 5 6; 7 8 9; 10 11 12]
+    D_ra = Reactant.to_rarray(D)
+    @test Array(@jit(triply_nested_trace_for(D_ra))) ≈ triply_nested_trace_for(D)
+end
