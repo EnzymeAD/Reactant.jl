@@ -1801,3 +1801,45 @@ end
     x = Reactant.to_rarray([1, 2, 3])
     @test_throws UndefVarError @compile f_undef_var_error(x)
 end
+
+function while_reassigned_scalar(x)
+    y = x
+    @trace while y < 5
+        y += 1
+    end
+    return (; x, y)
+end
+
+function while_reassigned_scalar_both_used(x)
+    y = x
+    @trace while y < x + 5
+        y += 1
+    end
+    return (; x, y)
+end
+
+function while_reassigned_array(x)
+    y = x
+    @trace while sum(y) < 10
+        y = y .+ 1
+    end
+    return (; x, y)
+end
+
+@testset "reassigned variable initialized from outer variable (#3070)" begin
+    xr = ConcreteRNumber(0)
+    res = @jit while_reassigned_scalar(xr)
+    @test res.x == 0
+    @test res.y == 5
+    @test xr == 0
+
+    xr2 = ConcreteRNumber(2)
+    res2 = @jit while_reassigned_scalar_both_used(xr2)
+    @test res2.x == 2
+    @test res2.y == 7
+
+    ar = Reactant.to_rarray([1, 2, 3])
+    res_arr = @jit while_reassigned_array(ar)
+    @test Array(res_arr.x) == [1, 2, 3]
+    @test Array(res_arr.y) == [3, 4, 5]
+end
