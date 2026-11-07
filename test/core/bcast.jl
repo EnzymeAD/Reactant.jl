@@ -346,3 +346,99 @@ end
     @jit setindex_const_complex!(d2)
     @test Array(d2) == ComplexF32[0 im; 1im 0]
 end
+
+f1970_ref_bcast(a, b) = sum(a) + b
+g1970_ref_bcast(a, b) = f1970_ref_bcast.(Ref(a), b)
+loss1970_ref_bcast(a, b) = sum(g1970_ref_bcast(a, b))
+grad1970_ref_bcast(a, b) = Enzyme.gradient(Enzyme.Reverse, loss1970_ref_bcast, a, b)
+
+function interp_like_2381(x_target, xp_sorted::AbstractVector, fp_values::AbstractVector)
+    i = searchsortedlast(xp_sorted, x_target)
+    N = length(xp_sorted)
+    i_lo = ifelse(i <= 0, 1, ifelse(i >= N, N - 1, i))
+    i_hi = i_lo + 1
+    x1 = Reactant.@allowscalar xp_sorted[i_lo]
+    y1 = Reactant.@allowscalar fp_values[i_lo]
+    x2 = Reactant.@allowscalar xp_sorted[i_hi]
+    y2 = Reactant.@allowscalar fp_values[i_hi]
+    d = x2 - x1
+    y_interp = ifelse(d == 0, y1, y1 + (y2 - y1) * (x_target - x1) / d)
+    return ifelse(
+        i <= 0,
+        Reactant.@allowscalar(fp_values[1]),
+        ifelse(i >= N, Reactant.@allowscalar(fp_values[N]), y_interp),
+    )
+end
+
+function gen_magnification_2381(P, k, u, fp)
+    col = Reactant.@allowscalar P[:, k]
+    return interp_like_2381.(u, Ref(col), Ref(fp))
+end
+
+function gen_mag_fused_2381(P, u, fp)
+    return interp_like_2381.(u, Ref(@views(P[:, 2])), Ref(fp)) .* 2.0 .+ 1.0
+end
+
+bcast_searchsortedlast_2381(z, r) = searchsortedlast.(Ref(z), r)
+
+pick_sq_ref_elem(M, x) = Reactant.@allowscalar(M[1, 4]) + x
+bcast_pick_sq_ref(M, X) = pick_sq_ref_elem.(Ref(M), X)
+
+pick_rect_ref_elem(M, x) = Reactant.@allowscalar(M[1, 5]) + sum(M[2, :]) + x
+bcast_pick_rect_ref(M, X) = pick_rect_ref_elem.(Ref(M), X)
+
+pick_3d_ref_elem(T, x) = Reactant.@allowscalar(T[1, 2, 4]) + x
+bcast_pick_3d_ref(T, X) = pick_3d_ref_elem.(Ref(T), X)
+
+len_plus_ref_0d(a, c) = length(a) + sum(a) + c
+bcast_len_plus_ref_0d(a, c) = len_plus_ref_0d.(Ref(a), c)
+
+@testset "Broadcasting with Ref of traced arrays: #1970 & #2381" begin
+    a_h = [1.0, 2.0, 3.0]
+    b1_h = [10.0, 20.0]
+    b2_h = [10.0 20.0 30.0; 40.0 50.0 60.0]
+    a_r = Reactant.to_rarray(a_h)
+    b1_r = Reactant.to_rarray(b1_h)
+    b2_r = Reactant.to_rarray(b2_h)
+
+    @test Array(@jit g1970_ref_bcast(a_r, b1_r)) ≈ g1970_ref_bcast(a_h, b1_h)
+    @test Array(@jit g1970_ref_bcast(a_r, b2_r)) ≈ g1970_ref_bcast(a_h, b2_h)
+
+    da_r, db_r = @jit grad1970_ref_bcast(a_r, b2_r)
+    @test Array(da_r) ≈ fill(Float64(length(b2_h)), length(a_h))
+    @test Array(db_r) ≈ ones(size(b2_h))
+
+    P_h = reshape(collect(1.0:24.0), 6, 4)
+    k_h = Int64(2)
+    u_h = [0.5, 6.5, 8.2, 10.0, 11.7, 13.0]
+    fp_h = collect(10.0:15.0)
+    P_r = Reactant.to_rarray(P_h)
+    k_r = ConcreteRNumber(k_h)
+    u_r = Reactant.to_rarray(u_h)
+    @test Array(@jit gen_magnification_2381(P_r, k_r, u_r, fp_h)) ≈
+        gen_magnification_2381(P_h, k_h, u_h, fp_h)
+
+    @test Array(@jit gen_mag_fused_2381(P_r, u_r, fp_h)) ≈
+        gen_mag_fused_2381(P_h, u_h, fp_h)
+
+    z_h = collect(0.0:0.25:5.0)
+    red_h = [0.0, 0.37, 1.25, 2.9, 5.0]
+    @test Array(
+        @jit bcast_searchsortedlast_2381(Reactant.to_rarray(z_h), Reactant.to_rarray(red_h))
+    ) == bcast_searchsortedlast_2381(z_h, red_h)
+
+    M_sq_h = reshape(collect(1.0:16.0), 4, 4)
+    M_rect_h = reshape(collect(1.0:15.0), 3, 5)
+    T3_h = reshape(collect(1.0:24.0), 2, 3, 4)
+    X2_h = [1.0 2.0 3.0; 4.0 5.0 6.0]
+    X2_r = Reactant.to_rarray(X2_h)
+    @test Array(@jit bcast_pick_sq_ref(Reactant.to_rarray(M_sq_h), X2_r)) ≈
+        bcast_pick_sq_ref(M_sq_h, X2_h)
+    @test Array(@jit bcast_pick_rect_ref(Reactant.to_rarray(M_rect_h), X2_r)) ≈
+        bcast_pick_rect_ref(M_rect_h, X2_h)
+    @test Array(@jit bcast_pick_3d_ref(Reactant.to_rarray(T3_h), X2_r)) ≈
+        bcast_pick_3d_ref(T3_h, X2_h)
+
+    @test Number(@jit bcast_len_plus_ref_0d(a_r, ConcreteRNumber(5.0))) ≈
+        bcast_len_plus_ref_0d(a_h, 5.0)
+end
