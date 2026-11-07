@@ -461,6 +461,7 @@ for (dialect, op) in [
     (:chlo, :sinh),
     (:enzymexla, :math_softplus),
     (:enzymexla, :math_relu),
+    (:enzymexla, :math_selu),
 ]
     @eval begin
         @noinline function $op(
@@ -490,7 +491,7 @@ for (dialect, op) in [
 end
 
 # These are only defined for floating point types. So integers are typecast
-for op in (:math_softplus,)
+for op in (:math_softplus, :math_selu)
     @eval begin
         @noinline function $op(
             x::TracedRArray{T,N};
@@ -504,6 +505,53 @@ for op in (:math_softplus,)
             location=mlir_stacktrace($(string(op)), @__FILE__, @__LINE__),
         ) where {T<:Integer}
             return $(op)(float(x); location=location)
+        end
+    end
+end
+
+# elu / celu take the (host-constant) `alpha` as an op attribute. Keeping the
+# activation as a single op lets Enzyme-JAX differentiate it without evaluating
+# the exponential branch for positive inputs (see EnzymeAD/Reactant.jl#2973).
+for op in (:math_elu, :math_celu)
+    @eval begin
+        @noinline function $op(
+            x::TracedRArray{T,N},
+            alpha::Real;
+            location=mlir_stacktrace($(string(op)), @__FILE__, @__LINE__),
+        ) where {T<:AbstractFloat,N}
+            res = MLIR.IR.result(
+                enzymexla.$op(
+                    x.mlir_data;
+                    result=mlir_type(TracedRArray{T,N}, size(x)),
+                    alpha=MLIR.IR.Attribute(Float64(alpha)),
+                    location,
+                ),
+            )
+            return TracedRArray{T,N}((), res, size(x))
+        end
+
+        @noinline function $op(
+            x::TracedRNumber{T},
+            alpha::Real;
+            location=mlir_stacktrace($(string(op)), @__FILE__, @__LINE__),
+        ) where {T<:AbstractFloat}
+            res = MLIR.IR.result(
+                enzymexla.$op(
+                    x.mlir_data;
+                    result=mlir_type(TracedRArray{T,0}, ()),
+                    alpha=MLIR.IR.Attribute(Float64(alpha)),
+                    location,
+                ),
+            )
+            return TracedRNumber{T}((), res)
+        end
+
+        @noinline function $op(
+            x::Union{TracedRArray{<:Integer},TracedRNumber{<:Integer}},
+            alpha::Real;
+            location=mlir_stacktrace($(string(op)), @__FILE__, @__LINE__),
+        )
+            return $(op)(float(x), alpha; location)
         end
     end
 end
