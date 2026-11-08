@@ -809,7 +809,7 @@ function _check_concrete_type(::Type{A}, x) where {A}
         ArgumentError(
             "Cannot construct a `$(A)`: the given sharding produces a `$(typeof(x))`. \
              Use `$(Base.typename(A).wrapper){$(eltype(x)),$(ndims(x))}` or pass a \
-             matching `sharding` keyword.",
+             matching `sharding` keyword."
         ),
     )
     return x
