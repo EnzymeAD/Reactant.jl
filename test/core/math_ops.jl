@@ -234,11 +234,13 @@ end
             @test result_or_error(f, xr) === result_or_error(f, x)
         end
     end
-    for x in (0.0, -0.0, 1.0, -2.5f0, 3, true),
+    for x in (0.0, -0.0, -0.0f0, 1.0, -2.5f0, 3, true),
         xr in (ConcreteRNumber(x), ConcreteRArray(fill(x)))
 
         for f in (isinteger, signbit, iszero, isone)
-            @test f(xr) === f(x)
+            # On TPU, Float64(-0.0) is stored as a pair of Float32 values and
+            # reconstructs on host transfer as Float64(-0.0f0) + Float64(+0.0f0) === +0.0.
+            @test f(xr) === f(x) skip = (RunningOnTPU && x === -0.0 && f === signbit)
         end
     end
 end
