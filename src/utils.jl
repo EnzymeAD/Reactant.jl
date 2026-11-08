@@ -1022,9 +1022,16 @@ function call_llvm_generator(
         return code_info
     end
 
+    # Give the job an explicit entrypoint name so GPUCompiler 2 does not fall back to
+    # `mangle_sig(job.source.specTypes)` for its relocation namespace: each `call_with_reactant`
+    # module internalizes its globals and is invoked standalone via `llvmcall`, and `mangle_sig`
+    # crashes on Julia <= 1.11 when `specTypes` contains an abstract `<: Function` type (e.g.
+    # `Union{Function,Type}` in nested `@trace` loops, where `Function.name.mt` is undefined).
+    entry_name = string("reactant_", mi.def isa Method ? mi.def.name : :toplevel)
     config = GPUCompiler.CompilerConfig(
         GPUCompiler.NativeCompilerTarget(; jlruntime=true, llvm_always_inline=false),
         CompilerParams(use_native_interpreter);
+        name=entry_name,
         kernel=false,
         libraries=true,
         toplevel=true,
