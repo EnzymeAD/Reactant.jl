@@ -4485,7 +4485,8 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
                         "before the pipeline)\n";
       llvm::errs() << " failed to run passes\n";
       llvm::errs() << " modstr:\n" << modstr << "\n";
-      pm.dump();
+      pm.printAsTextualPipeline(llvm::errs());
+      llvm::errs() << "\n";
       for (auto ty : types) {
         llvm::errs() << " arg: " << ty << "\n";
       }
