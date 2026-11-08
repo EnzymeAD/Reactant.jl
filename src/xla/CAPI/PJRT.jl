@@ -7487,6 +7487,7 @@ struct PJRT_Gpu_Register_Custom_Call_Args
     handler_initialize::Ptr{Cvoid}
     handler_execute::Ptr{Cvoid}
     traits::UInt32
+    handler_record::Ptr{Cvoid}
     function PJRT_Gpu_Register_Custom_Call_Args(
         function_name,
         function_name_size,
@@ -7496,6 +7497,7 @@ struct PJRT_Gpu_Register_Custom_Call_Args
         handler_initialize,
         handler_execute,
         traits,
+        handler_record,
     )
         return new(
             csizeof(PJRT_Gpu_Register_Custom_Call_Args),
@@ -7507,6 +7509,7 @@ struct PJRT_Gpu_Register_Custom_Call_Args
             handler_initialize,
             handler_execute,
             traits,
+            handler_record,
         )
     end
 end
@@ -7520,6 +7523,7 @@ function Base.getproperty(x::Ptr{PJRT_Gpu_Register_Custom_Call_Args}, f::Symbol)
     f === :handler_initialize && return Ptr{Ptr{Cvoid}}(x + 48)
     f === :handler_execute && return Ptr{Ptr{Cvoid}}(x + 56)
     f === :traits && return Ptr{UInt32}(x + 64)
+    f === :handler_record && return Ptr{Ptr{Cvoid}}(x + 72)
     return getfield(x, f)
 end
 
@@ -7527,7 +7531,7 @@ function Base.setproperty!(x::Ptr{PJRT_Gpu_Register_Custom_Call_Args}, f::Symbol
     return unsafe_store!(getproperty(x, f), v)
 end
 
-csizeof(::Type{PJRT_Gpu_Register_Custom_Call_Args}) = Csize_t(68)
+csizeof(::Type{PJRT_Gpu_Register_Custom_Call_Args}) = Csize_t(80)
 
 # typedef PJRT_Error * PJRT_Gpu_Register_Custom_Call ( PJRT_Gpu_Register_Custom_Call_Args * args )
 const PJRT_Gpu_Register_Custom_Call = Cvoid
@@ -7536,9 +7540,10 @@ struct PJRT_Gpu_Custom_Call
     base::PJRT_Extension_Base
     custom_call::Ptr{PJRT_Gpu_Register_Custom_Call}
     custom_call_handles_traits::Bool
+    custom_call_handles_record::Bool
 end
 
-csizeof(::Type{PJRT_Gpu_Custom_Call}) = Csize_t(33)
+csizeof(::Type{PJRT_Gpu_Custom_Call}) = Csize_t(34)
 
 mutable struct PJRT_Layouts_MemoryLayout end
 
@@ -11530,6 +11535,65 @@ csizeof(::Type{PJRT_TpuTopology_GetDefaultPlatformConfig_Args}) = Csize_t(40)
 # typedef PJRT_Error * PJRT_TpuTopology_GetDefaultPlatformConfig ( PJRT_TpuTopology_GetDefaultPlatformConfig_Args * args )
 const PJRT_TpuTopology_GetDefaultPlatformConfig = Cvoid
 
+struct PJRT_TpuTopology_ComputeSubsliceForDevices_Args
+    struct_size::Csize_t
+    topology::Ptr{PJRT_TopologyDescription}
+    device_ids::Ptr{Int32}
+    num_device_ids::Csize_t
+    max_dims::Csize_t
+    origin::Ptr{Int32}
+    chips_per_host_bounds::Ptr{Int32}
+    host_bounds::Ptr{Int32}
+    num_dims::Csize_t
+    function PJRT_TpuTopology_ComputeSubsliceForDevices_Args(
+        topology,
+        device_ids,
+        num_device_ids,
+        max_dims,
+        origin,
+        chips_per_host_bounds,
+        host_bounds,
+        num_dims,
+    )
+        return new(
+            csizeof(PJRT_TpuTopology_ComputeSubsliceForDevices_Args),
+            topology,
+            device_ids,
+            num_device_ids,
+            max_dims,
+            origin,
+            chips_per_host_bounds,
+            host_bounds,
+            num_dims,
+        )
+    end
+end
+function Base.getproperty(
+    x::Ptr{PJRT_TpuTopology_ComputeSubsliceForDevices_Args}, f::Symbol
+)
+    f === :struct_size && return Ptr{Csize_t}(x + 0)
+    f === :topology && return Ptr{Ptr{PJRT_TopologyDescription}}(x + 8)
+    f === :device_ids && return Ptr{Ptr{Int32}}(x + 16)
+    f === :num_device_ids && return Ptr{Csize_t}(x + 24)
+    f === :max_dims && return Ptr{Csize_t}(x + 32)
+    f === :origin && return Ptr{Ptr{Int32}}(x + 40)
+    f === :chips_per_host_bounds && return Ptr{Ptr{Int32}}(x + 48)
+    f === :host_bounds && return Ptr{Ptr{Int32}}(x + 56)
+    f === :num_dims && return Ptr{Csize_t}(x + 64)
+    return getfield(x, f)
+end
+
+function Base.setproperty!(
+    x::Ptr{PJRT_TpuTopology_ComputeSubsliceForDevices_Args}, f::Symbol, v
+)
+    return unsafe_store!(getproperty(x, f), v)
+end
+
+csizeof(::Type{PJRT_TpuTopology_ComputeSubsliceForDevices_Args}) = Csize_t(72)
+
+# typedef PJRT_Error * PJRT_TpuTopology_ComputeSubsliceForDevices ( PJRT_TpuTopology_ComputeSubsliceForDevices_Args * args )
+const PJRT_TpuTopology_ComputeSubsliceForDevices = Cvoid
+
 struct PJRT_TpuTopology_Extension
     base::PJRT_Extension_Base
     subslice::Ptr{PJRT_TpuTopology_Subslice}
@@ -11569,9 +11633,10 @@ struct PJRT_TpuTopology_Extension
     get_slice_config::Ptr{PJRT_TpuTopology_GetSliceConfig}
     get_slice_configs::Ptr{PJRT_TpuTopology_GetSliceConfigs}
     get_default_platform_config::Ptr{PJRT_TpuTopology_GetDefaultPlatformConfig}
+    compute_subslice_for_devices::Ptr{PJRT_TpuTopology_ComputeSubsliceForDevices}
 end
 
-csizeof(::Type{PJRT_TpuTopology_Extension}) = Csize_t(272)
+csizeof(::Type{PJRT_TpuTopology_Extension}) = Csize_t(280)
 
 struct PJRT_XlaTransform_string
     data::Cstring
@@ -11786,7 +11851,7 @@ const PJRT_API_CUSTOM_PARTITIONER_EXTENSION_VERSION = 1
 
 const PJRT_API_FFI_EXTENSION_VERSION = 3
 
-const PJRT_API_GPU_EXTENSION_VERSION = 3
+const PJRT_API_GPU_EXTENSION_VERSION = 4
 
 const PJRT_API_LAYOUTS_EXTENSION_VERSION = 4
 
