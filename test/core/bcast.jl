@@ -346,3 +346,72 @@ end
     @jit setindex_const_complex!(d2)
     @test Array(d2) == ComplexF32[0 im; 1im 0]
 end
+
+struct Scale3392{T}
+    a::T
+end
+(s::Scale3392)(x) = s.a * x
+
+struct AffineVec3392{W,B}
+    w::W
+    b::B
+end
+(s::AffineVec3392)(x) = sum(s.w .* x) + s.b
+
+broadcast_scale_3392(a, x) = Scale3392(a).(x)
+broadcast_affine_vec_3392(w, b, x) = AffineVec3392(w, b).(x)
+
+@testset "callable struct holding traced values in broadcast (#3392)" begin
+    x_host = [1.0, 2.0, 3.0, 4.0]
+    x = Reactant.to_rarray(x_host)
+    a = ConcreteRNumber(2.5)
+
+    @test Array(@jit(broadcast_scale_3392(2.5, x))) ≈ 2.5 .* x_host
+    @test Array(@jit(broadcast_scale_3392(a, x))) ≈ 2.5 .* x_host
+
+    ir = sprint(show, (@code_hlo broadcast_scale_3392(a, x)))
+    @test !occursin("stablehlo.while", ir)
+
+    w_host = [10.0, 20.0]
+    w = Reactant.to_rarray(w_host)
+    b = ConcreteRNumber(1.0)
+    @test Array(@jit(broadcast_affine_vec_3392(w, b, x))) ≈ (sum(w_host) .* x_host) .+ 1.0
+end
+
+function rng_bcast_kernel_2958(rng, α)
+    T = typeof(α)
+    cond = α < one(T)
+    boost = ifelse(cond, rand(rng, T)^inv(α), one(T))
+    α = ifelse(cond, α + one(T), α)
+    return boost * rand(rng, T)
+end
+
+rng_bcast_2958(rng, as) = rng_bcast_kernel_2958.(Ref(rng), as)
+
+function rng_seq_ref_2958(rng, as)
+    out = similar(as)
+    @trace for i in 1:length(as)
+        Reactant.@allowscalar out[i] = rng_bcast_kernel_2958(rng, as[i])
+    end
+    return out
+end
+
+dot_ref_kernel_2958(x, y) = x * sum(y)
+dot_ref_bcast_2958(xs, y) = dot_ref_kernel_2958.(xs, Ref(y))
+
+@testset "Ref wrapping ReactantRNG and non-scalar traced values in broadcast (#2958)" begin
+    rng1 = Reactant.ReactantRNG(Reactant.to_rarray(UInt64[12345, 67890]))
+    rng2 = Reactant.ReactantRNG(Reactant.to_rarray(UInt64[12345, 67890]))
+    as1 = Reactant.to_rarray(fill(0.5, 10))
+    as2 = Reactant.to_rarray(fill(0.5, 10))
+
+    res_bcast = @jit rng_bcast_2958(rng1, as1)
+    res_seq = @jit rng_seq_ref_2958(rng2, as2)
+    @test Array(res_bcast) ≈ Array(res_seq)
+    @test length(unique(Array(res_bcast))) == 10
+    @test Array(rng1.seed) == Array(rng2.seed)
+
+    xs_ra = Reactant.to_rarray([1.0, 2.0, 3.0])
+    v_ra = Reactant.to_rarray([10.0, 20.0])
+    @test Array(@jit(dot_ref_bcast_2958(xs_ra, v_ra))) ≈ [30.0, 60.0, 90.0]
+end
