@@ -2,6 +2,7 @@ module Julia
 
 using Base: unsafe_convert
 using ..Reactant: Reactant
+using Reactant.MLIR: IR, API
 using Reactant.XLA: CAPI
 
 using Reactant.XLA.PJRT.Plugin:
