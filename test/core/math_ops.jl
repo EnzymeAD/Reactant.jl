@@ -163,6 +163,16 @@ end
     @test !Bool(@jit(isinf(ConcreteRNumber(true))))
 end
 
+@testset "ceil(T, x) traced" begin
+    for x in (4.2313f0, -2.5f0, 7)
+        for T in (Int32, Int64, Float32, Float64)
+            r = @jit ceil(T, ConcreteRNumber(x))
+            @test r isa ConcreteRNumber{T}
+            @test Float64(r) == Float64(ceil(x))
+        end
+    end
+end
+
 @testset "isapprox" begin
     # `ConcreteRNumber` forwards `isapprox` straight to `Base` on the unwrapped
     # values (see the `AbstractConcreteNumber` methods in ConcreteRArray.jl), so
