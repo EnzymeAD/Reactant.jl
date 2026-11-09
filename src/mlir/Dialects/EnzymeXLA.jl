@@ -446,6 +446,28 @@ function cacheload(
     )
 end
 
+function math_celu(
+    input::Value; result=nothing::Union{Nothing,IR.Type}, alpha, location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[input,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[NamedAttribute("alpha", alpha),]
+    !isnothing(result) && push!(op_ty_results, result)
+
+    return create_operation(
+        "enzymexla.math.celu",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
 function comm_region(; result_0::Vector{IR.Type}, body::Region, location=Location())
     op_ty_results = IR.Type[result_0...,]
     operands = Value[]
@@ -477,6 +499,28 @@ function math_cosc(
 
     return create_operation(
         "enzymexla.math.cosc",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+function math_elu(
+    input::Value; result=nothing::Union{Nothing,IR.Type}, alpha, location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[input,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[NamedAttribute("alpha", alpha),]
+    !isnothing(result) && push!(op_ty_results, result)
+
+    return create_operation(
+        "enzymexla.math.elu",
         location;
         operands,
         owned_regions,
@@ -2222,6 +2266,28 @@ function linalg_svd(
         attributes,
         results=op_ty_results,
         result_inference=false,
+    )
+end
+
+function math_selu(
+    input::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[input,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(result) && push!(op_ty_results, result)
+
+    return create_operation(
+        "enzymexla.math.selu",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
