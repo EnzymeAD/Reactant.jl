@@ -273,42 +273,42 @@ function resource_exhausted(reason="out of memory")
 end
 
 # these are required by CAPI.PJRT_Api
-function error_destroy(args::Ptr{CAPI.PJRT_Error_Destroy_Args})::Cvoid
+function pjrt_error_destroy(args::Ptr{CAPI.PJRT_Error_Destroy_Args})::Cvoid
     error = Ptr{Error}(unsafe_load(args.error))
-    error_destroy_obj(error)
+    pjrt_error_destroy_obj(error)
     return nothing
 end
 
-function error_message(args::Ptr{CAPI.PJRT_Error_Message_Args})::Cvoid
+function pjrt_error_message(args::Ptr{CAPI.PJRT_Error_Message_Args})::Cvoid
     error = Ptr{Error}(unsafe_load(args.error))
-    error_message_obj(error, args.message, args.message_size)
+    pjrt_error_message_obj(error, args.message, args.message_size)
     return nothing
 end
 
-function error_getcode(args::Ptr{CAPI.PJRT_Error_GetCode_Args})::Ptr{CAPI.PJRT_Error}
+function pjrt_error_getcode(args::Ptr{CAPI.PJRT_Error_GetCode_Args})::Ptr{CAPI.PJRT_Error}
     error = Ptr{Error}(unsafe_load(args.error))
-    code = error_getcode_obj(error)
+    code = pjrt_error_getcode_obj(error)
     unsafe_store!(args.code, code)
     return ok()
 end
 
-function error_for_each_payload(
+function pjrt_error_for_each_payload(
     args::Ptr{CAPI.PJRT_Error_ForEachPayload_Args}
 )::Ptr{CAPI.PJRT_Error}
     error = Ptr{Error}(unsafe_load(args.error))
     visitor = unsafe_load(args.visitor)
     user_arg = unsafe_load(args.user_arg)
-    error_for_each_payload_obj(error, visitor, user_arg)
+    pjrt_error_for_each_payload_obj(error, visitor, user_arg)
     return ok()
 end
 
 # this are required by CAPI.PJRT_Error_FunctionTable
-function error_destroy_obj(error::Ptr{Error})::Cvoid
+function pjrt_error_destroy_obj(error::Ptr{Error})::Cvoid
     error != C_NULL && unroot!(error)
     return nothing
 end
 
-function error_message_obj(
+function pjrt_error_message_obj(
     error::Ptr{Error}, message::Ptr{Cstring}, message_size::Ptr{Csize_t}
 )::Cvoid
     error == C_NULL && return nothing
@@ -319,13 +319,13 @@ function error_message_obj(
     return nothing
 end
 
-function error_getcode_obj(error::Ptr{Error})::CAPI.PJRT_Error_Code
+function pjrt_error_getcode_obj(error::Ptr{Error})::CAPI.PJRT_Error_Code
     error == C_NULL && return CAPI.PJRT_Error_Code_OK
     err = unsafe_pointer_to_objref(error)::Error
     return err.code
 end
 
-function error_for_each_payload_obj(
+function pjrt_error_for_each_payload_obj(
     error::Ptr{Error}, visitor::CAPI.PJRT_Error_PayloadVisitor, user_arg::Ptr{Cvoid}
 )::Cvoid
     # do nothing
@@ -438,7 +438,7 @@ end
     return pointer_from_objref(root!(Error(err.code, err.message)))
 end
 
-@pjrt_catch_return function event_destroy(
+@pjrt_catch_return function pjrt_event_destroy(
     args::Ptr{CAPI.PJRT_Event_Destroy_Args}
 )::Ptr{CAPI.PJRT_Error}
     ptr = unsafe_load(args.event)
@@ -446,7 +446,7 @@ end
     return ok()
 end
 
-@pjrt_catch_return function event_is_ready(
+@pjrt_catch_return function pjrt_event_is_ready(
     args::Ptr{CAPI.PJRT_Event_IsReady_Args}
 )::Ptr{CAPI.PJRT_Error}
     event = unsafe_pointer_to_objref(unsafe_load(args.event))::Event
@@ -454,14 +454,14 @@ end
     return ok()
 end
 
-@pjrt_catch_return function event_error(
+@pjrt_catch_return function pjrt_event_error(
     args::Ptr{CAPI.PJRT_Event_Error_Args}
 )::Ptr{CAPI.PJRT_Error}
     event = unsafe_pointer_to_objref(unsafe_load(args.event))::Event
     return event_error_ptr(event)
 end
 
-@pjrt_catch_return function event_await(
+@pjrt_catch_return function pjrt_event_await(
     args::Ptr{CAPI.PJRT_Event_Await_Args}
 )::Ptr{CAPI.PJRT_Error}
     event = unsafe_pointer_to_objref(unsafe_load(args.event))::Event
@@ -469,7 +469,7 @@ end
     return event_error_ptr(event)
 end
 
-@pjrt_catch_return function event_on_ready(
+@pjrt_catch_return function pjrt_event_on_ready(
     args::Ptr{CAPI.PJRT_Event_OnReady_Args}
 )::Ptr{CAPI.PJRT_Error}
     event = unsafe_pointer_to_objref(unsafe_load(args.event))::Event
@@ -494,7 +494,7 @@ end
     return ok()
 end
 
-@pjrt_catch_return function event_create(
+@pjrt_catch_return function pjrt_event_create(
     args::Ptr{CAPI.PJRT_Event_Create_Args}
 )::Ptr{CAPI.PJRT_Error}
     event = root!(Event())
@@ -502,7 +502,7 @@ end
     return ok()
 end
 
-@pjrt_catch_return function event_set(
+@pjrt_catch_return function pjrt_event_set(
     args::Ptr{CAPI.PJRT_Event_Set_Args}
 )::Ptr{CAPI.PJRT_Error}
     event = unsafe_pointer_to_objref(unsafe_load(args.event))::Event
@@ -520,13 +520,13 @@ end
 end
 
 ## Plugin
-@pjrt_catch_return function plugin_initialize(
+@pjrt_catch_return function pjrt_plugin_initialize(
     args::Ptr{CAPI.PJRT_Plugin_Initialize_Args}
 )::Ptr{CAPI.PJRT_Error}
     # do nothing
 end
 
-@pjrt_catch_return function plugin_attributes(
+@pjrt_catch_return function pjrt_plugin_attributes(
     args::Ptr{CAPI.PJRT_Plugin_Attributes_Args}
 )::Ptr{CAPI.PJRT_Error}
     # TODO return key-value pairs of `xla_version`, `stablehlo_current_version` and `stablehlo_minimum_version`
@@ -571,7 +571,7 @@ Backs `PJRT_Memory_Id`.
 """
 id(::Memory)
 
-@pjrt_catch_return function memory_id(
+@pjrt_catch_return function pjrt_memory_id(
     args::Ptr{CAPI.PJRT_Memory_Id_Args}
 )::Ptr{CAPI.PJRT_Error}
     memory = unsafe_pointer_to_objref(Ptr{Memory}(unsafe_load(args.memory)))::Memory
@@ -591,7 +591,7 @@ Backs `PJRT_Memory_Kind`.
 """
 kind(::Memory)
 
-@pjrt_catch_return function memory_kind(
+@pjrt_catch_return function pjrt_memory_kind(
     args::Ptr{CAPI.PJRT_Memory_Kind_Args}
 )::Ptr{CAPI.PJRT_Error}
     memory = unsafe_pointer_to_objref(Ptr{Memory}(unsafe_load(args.memory)))::Memory
@@ -611,7 +611,7 @@ Backs `PJRT_Memory_Kind_Id`.
 """
 kind_id(::Memory)
 
-@pjrt_catch_return function memory_kind_id(
+@pjrt_catch_return function pjrt_memory_kind_id(
     args::Ptr{CAPI.PJRT_Memory_Kind_Id_Args}
 )::Ptr{CAPI.PJRT_Error}
     memory = unsafe_pointer_to_objref(Ptr{Memory}(unsafe_load(args.memory)))::Memory
@@ -632,7 +632,7 @@ Backs `PJRT_Memory_DebugString`.
 """
 debug_string(::Memory)
 
-@pjrt_catch_return function memory_debug_string(
+@pjrt_catch_return function pjrt_memory_debug_string(
     args::Ptr{CAPI.PJRT_Memory_DebugString_Args}
 )::Ptr{CAPI.PJRT_Error}
     memory = unsafe_pointer_to_objref(Ptr{Memory}(unsafe_load(args.memory)))::Memory
@@ -654,7 +654,7 @@ Backs `PJRT_Memory_ToString`.
 """
 to_string(::Memory)
 
-@pjrt_catch_return function memory_to_string(
+@pjrt_catch_return function pjrt_memory_to_string(
     args::Ptr{CAPI.PJRT_Memory_ToString_Args}
 )::Ptr{CAPI.PJRT_Error}
     memory = unsafe_pointer_to_objref(Ptr{Memory}(unsafe_load(args.memory)))::Memory
@@ -676,7 +676,7 @@ Backs `PJRT_Memory_AddressableByDevices`.
 """
 addressable_devices(::Memory)
 
-@pjrt_catch_return function memory_addressable_by_devices(
+@pjrt_catch_return function pjrt_memory_addressable_by_devices(
     args::Ptr{CAPI.PJRT_Memory_AddressableByDevices_Args}
 )::Ptr{CAPI.PJRT_Error}
     memory = unsafe_pointer_to_objref(Ptr{Memory}(unsafe_load(args.memory)))::Memory
@@ -709,7 +709,7 @@ Backs `PJRT_DeviceDescription_Id`.
 """
 id(::DeviceDescription)
 
-@pjrt_catch_return function device_description_id(
+@pjrt_catch_return function pjrt_device_description_id(
     args::Ptr{CAPI.PJRT_DeviceDescription_Id_Args}
 )::Ptr{CAPI.PJRT_Error}
     ptr = Ptr{DeviceDescription}(unsafe_load(args.device_description))
@@ -727,7 +727,7 @@ Backs `PJRT_DeviceDescription_ProcessIndex`.
 """
 process_index(::DeviceDescription)
 
-@pjrt_catch_return function device_description_process_index(
+@pjrt_catch_return function pjrt_device_description_process_index(
     args::Ptr{CAPI.PJRT_DeviceDescription_ProcessIndex_Args}
 )::Ptr{CAPI.PJRT_Error}
     ptr = Ptr{DeviceDescription}(unsafe_load(args.device_description))
@@ -748,7 +748,7 @@ Backs `PJRT_DeviceDescription_Kind`.
 """
 kind(::DeviceDescription)
 
-@pjrt_catch_return function device_description_kind(
+@pjrt_catch_return function pjrt_device_description_kind(
     args::Ptr{CAPI.PJRT_DeviceDescription_Kind_Args}
 )::Ptr{CAPI.PJRT_Error}
     ptr = Ptr{DeviceDescription}(unsafe_load(args.device_description))
@@ -776,7 +776,7 @@ Backs `PJRT_DeviceDescription_Attributes`.
 attributes(::DeviceDescription)
 
 # TODO find the interface of `attributes`
-@pjrt_catch_return function device_description_attributes(
+@pjrt_catch_return function pjrt_device_description_attributes(
     args::Ptr{CAPI.PJRT_DeviceDescription_Attributes_Args}
 )::Ptr{CAPI.PJRT_Error}
     desc = unsafe_pointer_to_objref(unsafe_load(args.device_description))::DeviceDescription
@@ -799,7 +799,7 @@ Backs `PJRT_DeviceDescription_DebugString`.
 """
 debug_string(::DeviceDescription)
 
-@pjrt_catch_return function device_description_debug_string(
+@pjrt_catch_return function pjrt_device_description_debug_string(
     args::Ptr{CAPI.PJRT_DeviceDescription_DebugString_Args}
 )::Ptr{CAPI.PJRT_Error}
     ptr = Ptr{DeviceDescription}(unsafe_load(args.device_description))
@@ -822,7 +822,7 @@ Backs `PJRT_DeviceDescription_ToString`.
 """
 to_string(::DeviceDescription)
 
-@pjrt_catch_return function device_description_to_string(
+@pjrt_catch_return function pjrt_device_description_to_string(
     args::Ptr{CAPI.PJRT_DeviceDescription_ToString_Args}
 )::Ptr{CAPI.PJRT_Error}
     ptr = Ptr{DeviceDescription}(unsafe_load(args.device_description))
@@ -861,7 +861,7 @@ Backs `PJRT_Device_GetDescription`.
 """
 description(::Device)
 
-@pjrt_catch_return function device_get_description(
+@pjrt_catch_return function pjrt_device_get_description(
     args::Ptr{CAPI.PJRT_Device_GetDescription_Args}
 )::Ptr{CAPI.PJRT_Error}
     device = unsafe_pointer_to_objref(Ptr{Device}(unsafe_load(args.device)))::Device
@@ -881,7 +881,7 @@ Backs `PJRT_Device_IsAddressable`.
 """
 is_addressable(::Device)
 
-@pjrt_catch_return function device_is_addressable(
+@pjrt_catch_return function pjrt_device_is_addressable(
     args::Ptr{CAPI.PJRT_Device_IsAddressable_Args}
 )::Ptr{CAPI.PJRT_Error}
     device = unsafe_pointer_to_objref(Ptr{Device}(unsafe_load(args.device)))::Device
@@ -900,7 +900,7 @@ Backs `PJRT_Device_LocalHardwareId`.
 """
 local_hardware_id(::Device)
 
-@pjrt_catch_return function device_local_hardware_id(
+@pjrt_catch_return function pjrt_device_local_hardware_id(
     args::Ptr{CAPI.PJRT_Device_LocalHardwareId_Args}
 )::Ptr{CAPI.PJRT_Error}
     device = unsafe_pointer_to_objref(Ptr{Device}(unsafe_load(args.device)))::Device
@@ -920,7 +920,7 @@ Backs `PJRT_Device_AddressableMemories`.
 """
 addressable_memories(::Device)
 
-@pjrt_catch_return function device_addressable_memories(
+@pjrt_catch_return function pjrt_device_addressable_memories(
     args::Ptr{CAPI.PJRT_Device_AddressableMemories_Args}
 )::Ptr{CAPI.PJRT_Error}
     device = unsafe_pointer_to_objref(Ptr{Device}(unsafe_load(args.device)))::Device
@@ -939,7 +939,7 @@ Backs `PJRT_Device_DefaultMemory`.
 """
 default_memory(::Device)
 
-@pjrt_catch_return function device_default_memory(
+@pjrt_catch_return function pjrt_device_default_memory(
     args::Ptr{CAPI.PJRT_Device_DefaultMemory_Args}
 )::Ptr{CAPI.PJRT_Error}
     device = unsafe_pointer_to_objref(Ptr{Device}(unsafe_load(args.device)))::Device
@@ -949,7 +949,7 @@ default_memory(::Device)
 end
 
 # TODO document and add interface function
-@pjrt_catch_return function device_memory_stats(
+@pjrt_catch_return function pjrt_device_memory_stats(
     args::Ptr{CAPI.PJRT_Device_MemoryStats_Args}
 )::Ptr{CAPI.PJRT_Error}
     throw(unimplemented())
@@ -977,7 +977,7 @@ end
 """
 abstract type Buffer end
 
-@pjrt_catch_return function buffer_destroy(
+@pjrt_catch_return function pjrt_buffer_destroy(
     args::Ptr{CAPI.PJRT_Buffer_Destroy_Args}
 )::Ptr{CAPI.PJRT_Error}
     buffer = unsafe_pointer_to_objref(unsafe_load(args.buffer))::Buffer
@@ -996,7 +996,7 @@ Backs `PJRT_Buffer_Delete`.
 """
 Base.delete!(::Buffer)
 
-@pjrt_catch_return function buffer_delete(
+@pjrt_catch_return function pjrt_buffer_delete(
     args::Ptr{CAPI.PJRT_Buffer_Delete_Args}
 )::Ptr{CAPI.PJRT_Error}
     buffer = unsafe_pointer_to_objref(unsafe_load(args.buffer))::Buffer
@@ -1013,7 +1013,7 @@ Backs `PJRT_Buffer_IsDeleted`.
 """
 isdeleted(::Buffer)
 
-@pjrt_catch_return function buffer_is_deleted(
+@pjrt_catch_return function pjrt_buffer_is_deleted(
     args::Ptr{CAPI.PJRT_Buffer_IsDeleted_Args}
 )::Ptr{CAPI.PJRT_Error}
     buffer = unsafe_pointer_to_objref(unsafe_load(args.buffer))::Buffer
@@ -1031,7 +1031,7 @@ Backs `PJRT_Buffer_ElementType`.
 """
 element_type(::Buffer)
 
-@pjrt_catch_return function buffer_element_type(
+@pjrt_catch_return function pjrt_buffer_element_type(
     args::Ptr{CAPI.PJRT_Buffer_ElementType_Args}
 )::Ptr{CAPI.PJRT_Error}
     buffer = unsafe_pointer_to_objref(unsafe_load(args.buffer))::Buffer
@@ -1054,7 +1054,7 @@ Backs `PJRT_Buffer_Dimensions`.
 """
 dimensions(::Buffer)
 
-@pjrt_catch_return function buffer_dimensions(
+@pjrt_catch_return function pjrt_buffer_dimensions(
     args::Ptr{CAPI.PJRT_Buffer_Dimensions_Args}
 )::Ptr{CAPI.PJRT_Error}
     buffer = unsafe_pointer_to_objref(unsafe_load(args.buffer))::Buffer
@@ -1073,7 +1073,7 @@ Backs `PJRT_Buffer_Device`.
 """
 device(::Buffer)
 
-@pjrt_catch_return function buffer_device(
+@pjrt_catch_return function pjrt_buffer_device(
     args::Ptr{CAPI.PJRT_Buffer_Device_Args}
 )::Ptr{CAPI.PJRT_Error}
     buffer = unsafe_pointer_to_objref(unsafe_load(args.buffer))::Buffer
@@ -1092,7 +1092,7 @@ Backs `PJRT_Buffer_Memory`.
 """
 memory(::Buffer)
 
-@pjrt_catch_return function buffer_memory(
+@pjrt_catch_return function pjrt_buffer_memory(
     args::Ptr{CAPI.PJRT_Buffer_Memory_Args}
 )::Ptr{CAPI.PJRT_Error}
     buffer = unsafe_pointer_to_objref(unsafe_load(args.buffer))::Buffer
@@ -1111,7 +1111,7 @@ Backs `PJRT_Buffer_OnDeviceSizeInBytes`.
 """
 on_device_size_in_bytes(::Buffer)
 
-@pjrt_catch_return function buffer_on_device_size_in_bytes(
+@pjrt_catch_return function pjrt_buffer_on_device_size_in_bytes(
     args::Ptr{CAPI.PJRT_Buffer_OnDeviceSizeInBytes_Args}
 )::Ptr{CAPI.PJRT_Error}
     buffer = unsafe_pointer_to_objref(unsafe_load(args.buffer))::Buffer
@@ -1131,7 +1131,7 @@ Backs `PJRT_Buffer_CopyToDevice`.
 """
 copy_to_device(::Device, ::Buffer)
 
-@pjrt_catch_return function buffer_copy_to_device(
+@pjrt_catch_return function pjrt_buffer_copy_to_device(
     args::Ptr{CAPI.PJRT_Buffer_CopyToDevice_Args}
 )::Ptr{CAPI.PJRT_Error}
     buffer = unsafe_pointer_to_objref(unsafe_load(args.buffer))::Buffer
@@ -1158,7 +1158,7 @@ Backs `PJRT_Buffer_CopyToMemory`.
 """
 copy_to_memory(::Memory, ::Buffer)
 
-@pjrt_catch_return function buffer_copy_to_memory(
+@pjrt_catch_return function pjrt_buffer_copy_to_memory(
     args::Ptr{CAPI.PJRT_Buffer_CopyToMemory_Args}
 )::Ptr{CAPI.PJRT_Error}
     buffer = unsafe_pointer_to_objref(unsafe_load(args.buffer))::Buffer
@@ -1186,7 +1186,7 @@ Backs `PJRT_Buffer_ToHostBuffer`.
 """
 to_host_buffer(::Ptr, ::Buffer)
 
-@pjrt_catch_return function buffer_to_host_buffer(
+@pjrt_catch_return function pjrt_buffer_to_host_buffer(
     args::Ptr{CAPI.PJRT_Buffer_ToHostBuffer_Args}
 )::Ptr{CAPI.PJRT_Error}
     buffer = unsafe_pointer_to_objref(unsafe_load(args.src))::Buffer
@@ -1248,7 +1248,7 @@ Backs `PJRT_Buffer_IsOnCpu`.
 """
 is_on_cpu(::Buffer)
 
-@pjrt_catch_return function buffer_is_on_cpu(
+@pjrt_catch_return function pjrt_buffer_is_on_cpu(
     args::Ptr{CAPI.PJRT_Buffer_IsOnCpu_Args}
 )::Ptr{CAPI.PJRT_Error}
     buffer = unsafe_pointer_to_objref(unsafe_load(args.buffer))::Buffer
@@ -1270,7 +1270,7 @@ Backs `PJRT_Buffer_ReadyEvent`.
 """
 ready_event(::Buffer)
 
-@pjrt_catch_return function buffer_ready_event(
+@pjrt_catch_return function pjrt_buffer_ready_event(
     args::Ptr{CAPI.PJRT_Buffer_ReadyEvent_Args}
 )::Ptr{CAPI.PJRT_Error}
     buffer = unsafe_pointer_to_objref(unsafe_load(args.buffer))::Buffer
@@ -1295,7 +1295,7 @@ Backs `PJRT_Buffer_UnsafePointer`.
 """
 unsafe_pointer(::Buffer)
 
-@pjrt_catch_return function buffer_unsafe_pointer(
+@pjrt_catch_return function pjrt_buffer_unsafe_pointer(
     args::Ptr{CAPI.PJRT_Buffer_UnsafePointer_Args}
 )::Ptr{CAPI.PJRT_Error}
     buffer = unsafe_pointer_to_objref(unsafe_load(args.buffer))::Buffer
@@ -1324,7 +1324,7 @@ A compiled program, independent of the devices it runs on. Returned by `executab
 """
 abstract type Executable end
 
-@pjrt_catch_return function executable_destroy(
+@pjrt_catch_return function pjrt_executable_destroy(
     args::Ptr{CAPI.PJRT_Executable_Destroy_Args}
 )::Ptr{CAPI.PJRT_Error}
     ptr = unsafe_load(args.executable)
@@ -1334,7 +1334,7 @@ end
 
 # frees the rooted bytes handed out by `PJRT_LoadedExecutable_GetDeviceAssignment`, `PJRT_Executable_Serialize` and
 # `PJRT_Executable_GetCompileOptions`
-function serialized_bytes_deleter(ptr::Ptr{Cvoid})::Cvoid
+function pjrt_serialized_bytes_deleter(ptr::Ptr{Cvoid})::Cvoid
     ptr != C_NULL && unroot!(ptr)
     return nothing
 end
@@ -1354,7 +1354,7 @@ Backs `PJRT_Executable_Name`.
 """
 name(::Executable)
 
-@pjrt_catch_return function executable_name(
+@pjrt_catch_return function pjrt_executable_name(
     args::Ptr{CAPI.PJRT_Executable_Name_Args}
 )::Ptr{CAPI.PJRT_Error}
     exe = unsafe_pointer_to_objref(unsafe_load(args.executable))::Executable
@@ -1377,7 +1377,7 @@ Backs `PJRT_Executable_NumReplicas`.
 """
 num_replicas(::Executable)
 
-@pjrt_catch_return function executable_num_replicas(
+@pjrt_catch_return function pjrt_executable_num_replicas(
     args::Ptr{CAPI.PJRT_Executable_NumReplicas_Args}
 )::Ptr{CAPI.PJRT_Error}
     exe = unsafe_pointer_to_objref(unsafe_load(args.executable))::Executable
@@ -1398,7 +1398,7 @@ Backs `PJRT_Executable_NumPartitions`.
 """
 num_partitions(::Executable)
 
-@pjrt_catch_return function executable_num_partitions(
+@pjrt_catch_return function pjrt_executable_num_partitions(
     args::Ptr{CAPI.PJRT_Executable_NumPartitions_Args}
 )::Ptr{CAPI.PJRT_Error}
     exe = unsafe_pointer_to_objref(unsafe_load(args.executable))::Executable
@@ -1418,7 +1418,7 @@ Backs `PJRT_Executable_NumOutputs`.
 """
 num_outputs(::Executable)
 
-@pjrt_catch_return function executable_num_outputs(
+@pjrt_catch_return function pjrt_executable_num_outputs(
     args::Ptr{CAPI.PJRT_Executable_NumOutputs_Args}
 )::Ptr{CAPI.PJRT_Error}
     exe = unsafe_pointer_to_objref(unsafe_load(args.executable))::Executable
@@ -1438,7 +1438,7 @@ Backs `PJRT_Executable_SizeOfGeneratedCodeInBytes`.
 """
 size_of_generated_code_in_bytes(::Executable)
 
-@pjrt_catch_return function executable_size_of_generated_code_in_bytes(
+@pjrt_catch_return function pjrt_executable_size_of_generated_code_in_bytes(
     args::Ptr{CAPI.PJRT_Executable_SizeOfGeneratedCodeInBytes_Args}
 )::Ptr{CAPI.PJRT_Error}
     exe = unsafe_pointer_to_objref(unsafe_load(args.executable))::Executable
@@ -1459,7 +1459,7 @@ Backs `PJRT_Executable_Fingerprint`.
 """
 fingerprint(::Executable)
 
-@pjrt_catch_return function executable_fingerprint(
+@pjrt_catch_return function pjrt_executable_fingerprint(
     args::Ptr{CAPI.PJRT_Executable_Fingerprint_Args}
 )::Ptr{CAPI.PJRT_Error}
     exe = unsafe_pointer_to_objref(unsafe_load(args.executable))::Executable
@@ -1481,7 +1481,7 @@ Backs `PJRT_Executable_OutputElementTypes`.
 """
 output_element_types(::Executable)
 
-@pjrt_catch_return function executable_output_element_types(
+@pjrt_catch_return function pjrt_executable_output_element_types(
     args::Ptr{CAPI.PJRT_Executable_OutputElementTypes_Args}
 )::Ptr{CAPI.PJRT_Error}
     exe = unsafe_pointer_to_objref(unsafe_load(args.executable))::Executable
@@ -1504,7 +1504,7 @@ output and parameter shardings.
 """
 optimized_program(::Executable)
 
-@pjrt_catch_return function executable_optimized_program(
+@pjrt_catch_return function pjrt_executable_optimized_program(
     args::Ptr{CAPI.PJRT_Executable_OptimizedProgram_Args}
 )::Ptr{CAPI.PJRT_Error}
     exe = unsafe_pointer_to_objref(unsafe_load(args.executable))::Executable
@@ -1549,7 +1549,7 @@ Backs `PJRT_Executable_Serialize`.
 """
 serialize(::Executable)
 
-@pjrt_catch_return function executable_serialize(
+@pjrt_catch_return function pjrt_executable_serialize(
     args::Ptr{CAPI.PJRT_Executable_Serialize_Args}
 )::Ptr{CAPI.PJRT_Error}
     exe = unsafe_pointer_to_objref(unsafe_load(args.executable))::Executable
@@ -1559,7 +1559,7 @@ serialize(::Executable)
     unsafe_store!(args.serialized_executable, pointer_from_objref(bytes))
     unsafe_store!(
         args.serialized_executable_deleter,
-        @cfunction(serialized_bytes_deleter, Cvoid, (Ptr{Cvoid},))
+        @cfunction(pjrt_serialized_bytes_deleter, Cvoid, (Ptr{Cvoid},))
     )
     return ok()
 end
@@ -1573,7 +1573,7 @@ Backs `PJRT_Executable_GetCompileOptions`.
 """
 compile_options(::Executable)
 
-@pjrt_catch_return function executable_get_compile_options(
+@pjrt_catch_return function pjrt_executable_get_compile_options(
     args::Ptr{CAPI.PJRT_Executable_GetCompileOptions_Args}
 )::Ptr{CAPI.PJRT_Error}
     exe = unsafe_pointer_to_objref(unsafe_load(args.executable))::Executable
@@ -1584,7 +1584,7 @@ compile_options(::Executable)
     unsafe_store!(args.serialized_compile_options, pointer_from_objref(bytes))
     unsafe_store!(
         args.serialized_compile_options_deleter,
-        @cfunction(serialized_bytes_deleter, Cvoid, (Ptr{Cvoid},))
+        @cfunction(pjrt_serialized_bytes_deleter, Cvoid, (Ptr{Cvoid},))
     )
     return ok()
 end
@@ -1607,7 +1607,7 @@ A compiled program loaded on the devices of a `Client`, as returned by `compile!
 """
 abstract type LoadedExecutable end
 
-@pjrt_catch_return function loaded_executable_destroy(
+@pjrt_catch_return function pjrt_loaded_executable_destroy(
     args::Ptr{CAPI.PJRT_LoadedExecutable_Destroy_Args}
 )::Ptr{CAPI.PJRT_Error}
     ptr = unsafe_load(args.executable)
@@ -1633,7 +1633,7 @@ Backs `PJRT_LoadedExecutable_GetExecutable`.
 """
 executable(::LoadedExecutable)
 
-@pjrt_catch_return function loaded_executable_get_executable(
+@pjrt_catch_return function pjrt_loaded_executable_get_executable(
     args::Ptr{CAPI.PJRT_LoadedExecutable_GetExecutable_Args}
 )::Ptr{CAPI.PJRT_Error}
     exec = unsafe_pointer_to_objref(unsafe_load(args.loaded_executable))::LoadedExecutable
@@ -1654,7 +1654,7 @@ Backs `PJRT_LoadedExecutable_Delete`.
 """
 Base.delete!(::LoadedExecutable)
 
-@pjrt_catch_return function loaded_executable_delete(
+@pjrt_catch_return function pjrt_loaded_executable_delete(
     args::Ptr{CAPI.PJRT_LoadedExecutable_Delete_Args}
 )::Ptr{CAPI.PJRT_Error}
     exec = unsafe_pointer_to_objref(unsafe_load(args.executable))::LoadedExecutable
@@ -1671,7 +1671,7 @@ Backs `PJRT_LoadedExecutable_IsDeleted`.
 """
 isdeleted(::LoadedExecutable)
 
-@pjrt_catch_return function loaded_executable_is_deleted(
+@pjrt_catch_return function pjrt_loaded_executable_is_deleted(
     args::Ptr{CAPI.PJRT_LoadedExecutable_IsDeleted_Args}
 )::Ptr{CAPI.PJRT_Error}
     exec = unsafe_pointer_to_objref(unsafe_load(args.executable))::LoadedExecutable
@@ -1693,7 +1693,7 @@ Backs `PJRT_LoadedExecutable_AddressableDevices`.
 """
 addressable_devices(::LoadedExecutable)
 
-@pjrt_catch_return function loaded_executable_addressable_devices(
+@pjrt_catch_return function pjrt_loaded_executable_addressable_devices(
     args::Ptr{CAPI.PJRT_LoadedExecutable_AddressableDevices_Args}
 )::Ptr{CAPI.PJRT_Error}
     exec = unsafe_pointer_to_objref(unsafe_load(args.executable))::LoadedExecutable
@@ -1716,7 +1716,7 @@ Backs `PJRT_LoadedExecutable_AddressableDeviceLogicalIds`.
 """
 addressable_device_logical_ids(::LoadedExecutable)
 
-@pjrt_catch_return function loaded_executable_addressable_device_logical_ids(
+@pjrt_catch_return function pjrt_loaded_executable_addressable_device_logical_ids(
     args::Ptr{CAPI.PJRT_LoadedExecutable_AddressableDeviceLogicalIds_Args}
 )::Ptr{CAPI.PJRT_Error}
     exec = unsafe_pointer_to_objref(unsafe_load(args.executable))::LoadedExecutable
@@ -1741,14 +1741,14 @@ Backs `PJRT_LoadedExecutable_GetDeviceAssignment`.
 """
 device_assignment(::LoadedExecutable)
 
-@pjrt_catch_return function loaded_executable_get_device_assignment(
+@pjrt_catch_return function pjrt_loaded_executable_get_device_assignment(
     args::Ptr{CAPI.PJRT_LoadedExecutable_GetDeviceAssignment_Args}
 )::Ptr{CAPI.PJRT_Error}
     exec = unsafe_pointer_to_objref(unsafe_load(args.executable))::LoadedExecutable
     proto = device_assignment(exec)::Union{Nothing,Reactant.Proto.xla.DeviceAssignmentProto}
 
     # XLA calls the deleter even if there is no device assignment
-    deleter = @cfunction(serialized_bytes_deleter, Cvoid, (Ptr{Cvoid},))
+    deleter = @cfunction(pjrt_serialized_bytes_deleter, Cvoid, (Ptr{Cvoid},))
     unsafe_store!(args.serialized_device_assignment_deleter, deleter)
 
     if isnothing(proto)
@@ -1786,7 +1786,7 @@ Backs `PJRT_LoadedExecutable_Execute`.
 """
 execute(::LoadedExecutable, args...)
 
-@pjrt_catch_return function loaded_executable_execute(
+@pjrt_catch_return function pjrt_loaded_executable_execute(
     args::Ptr{CAPI.PJRT_LoadedExecutable_Execute_Args}
 )::Ptr{CAPI.PJRT_Error}
     exec = unsafe_pointer_to_objref(unsafe_load(args.executable))::LoadedExecutable
@@ -1852,7 +1852,7 @@ end
 """
 abstract type Client end
 
-@pjrt_catch_return function client_destroy(
+@pjrt_catch_return function pjrt_client_destroy(
     args::Ptr{CAPI.PJRT_Client_Destroy_Args}
 )::Ptr{CAPI.PJRT_Error}
     client = unsafe_pointer_to_objref(unsafe_load(args.client))::Client
@@ -1872,7 +1872,7 @@ Backs `PJRT_Client_PlatformName`.
 """
 platform_name(::Client)
 
-@pjrt_catch_return function client_platform_name(
+@pjrt_catch_return function pjrt_client_platform_name(
     args::Ptr{CAPI.PJRT_Client_PlatformName_Args}
 )::Ptr{CAPI.PJRT_Error}
     client = unsafe_pointer_to_objref(unsafe_load(args.client))::Client
@@ -1894,7 +1894,7 @@ Backs `PJRT_Client_PlatformVersion`.
 """
 platform_version(::Client)
 
-@pjrt_catch_return function client_platform_version(
+@pjrt_catch_return function pjrt_client_platform_version(
     args::Ptr{CAPI.PJRT_Client_PlatformVersion_Args}
 )::Ptr{CAPI.PJRT_Error}
     client = unsafe_pointer_to_objref(unsafe_load(args.client))::Client
@@ -1913,7 +1913,7 @@ Backs `PJRT_Client_ProcessIndex`.
 """
 process_index(::Client)
 
-@pjrt_catch_return function client_process_index(
+@pjrt_catch_return function pjrt_client_process_index(
     args::Ptr{CAPI.PJRT_Client_ProcessIndex_Args}
 )::Ptr{CAPI.PJRT_Error}
     client = unsafe_pointer_to_objref(unsafe_load(args.client))::Client
@@ -1934,7 +1934,7 @@ Backs `PJRT_Client_Devices`.
 """
 devices(::Client)
 
-@pjrt_catch_return function client_devices(
+@pjrt_catch_return function pjrt_client_devices(
     args::Ptr{CAPI.PJRT_Client_Devices_Args}
 )::Ptr{CAPI.PJRT_Error}
     client = unsafe_pointer_to_objref(unsafe_load(args.client))::Client
@@ -1956,7 +1956,7 @@ Backs `PJRT_Client_AddressableDevices`.
 """
 addressable_devices(::Client)
 
-@pjrt_catch_return function client_addressable_devices(
+@pjrt_catch_return function pjrt_client_addressable_devices(
     args::Ptr{CAPI.PJRT_Client_AddressableDevices_Args}
 )::Ptr{CAPI.PJRT_Error}
     client = unsafe_pointer_to_objref(unsafe_load(args.client))::Client
@@ -1978,7 +1978,7 @@ Backs `PJRT_Client_AddressableMemories`.
 """
 addressable_memories(::Client)
 
-@pjrt_catch_return function client_addressable_memories(
+@pjrt_catch_return function pjrt_client_addressable_memories(
     args::Ptr{CAPI.PJRT_Client_AddressableMemories_Args}
 )::Ptr{CAPI.PJRT_Error}
     client = unsafe_pointer_to_objref(unsafe_load(args.client))::Client
@@ -2022,7 +2022,7 @@ function buffer_from_host_buffer(client::Client, dev::Device, args...)
     return buffer_from_host_buffer(client, dev, default_memory(dev), args...)
 end
 
-@pjrt_catch_return function client_buffer_from_host_buffer(
+@pjrt_catch_return function pjrt_client_buffer_from_host_buffer(
     args::Ptr{CAPI.PJRT_Client_BufferFromHostBuffer_Args}
 )::Ptr{CAPI.PJRT_Error}
     client = unsafe_pointer_to_objref(unsafe_load(args.client))::Client
@@ -2115,7 +2115,7 @@ function create_uninitialized_buffer(client::Client, dev::Device, args...)
     return create_uninitialized_buffer(client, dev, default_memory(dev), args...)
 end
 
-@pjrt_catch_return function client_create_uninitialized_buffer(
+@pjrt_catch_return function pjrt_client_create_uninitialized_buffer(
     args::Ptr{CAPI.PJRT_Client_CreateUninitializedBuffer_Args}
 )::Ptr{CAPI.PJRT_Error}
     client = unsafe_pointer_to_objref(unsafe_load(args.client))::Client
@@ -2170,7 +2170,7 @@ Backs `PJRT_Client_Compile`.
 """
 compile!(::Client, args...)
 
-@pjrt_catch_return function client_compile(
+@pjrt_catch_return function pjrt_client_compile(
     args::Ptr{CAPI.PJRT_Client_Compile_Args}
 )::Ptr{CAPI.PJRT_Error}
     client = unsafe_pointer_to_objref(unsafe_load(args.client))::Client
@@ -2242,10 +2242,10 @@ function __init__()
         #= struct_size =# csizeof(CAPI.PJRT_Error_FunctionTable),
         #= instance_size =# csizeof(CAPI.PJRT_Error),
         #= extension_start =# C_NULL,
-        #= destroy =# @cfunction(error_destroy_obj, Cvoid, (Ptr{Error},)),
-        #= message =# @cfunction(error_message_obj, Cvoid, (Ptr{Error}, Ptr{Cstring}, Ptr{Csize_t})),
-        #= get_code =# @cfunction(error_getcode_obj, CAPI.PJRT_Error_Code, (Ptr{Error},)),
-        #= for_each_payload =# @cfunction(error_for_each_payload_obj, Cvoid, (Ptr{Error}, CAPI.PJRT_Error_PayloadVisitor, Ptr{Cvoid})),
+        #= destroy =# @cfunction(pjrt_error_destroy_obj, Cvoid, (Ptr{Error},)),
+        #= message =# @cfunction(pjrt_error_message_obj, Cvoid, (Ptr{Error}, Ptr{Cstring}, Ptr{Csize_t})),
+        #= get_code =# @cfunction(pjrt_error_getcode_obj, CAPI.PJRT_Error_Code, (Ptr{Error},)),
+        #= for_each_payload =# @cfunction(pjrt_error_for_each_payload_obj, Cvoid, (Ptr{Error}, CAPI.PJRT_Error_PayloadVisitor, Ptr{Cvoid})),
     )
 
     vtable_memory[] = CAPI.PJRT_Memory_FunctionTable(
@@ -2287,80 +2287,80 @@ function make_api(::Type{C}) where {C<:Client}
             #= major_version =# CAPI.PJRT_API_MAJOR,
             #= minor_version =# CAPI.PJRT_API_MINOR,
         ),
-        #= PJRT_Error_Destroy =# @cfunction(error_destroy, Cvoid, (Ptr{CAPI.PJRT_Error_Destroy_Args},)),
-        #= PJRT_Error_Message =# @cfunction(error_message, Cvoid, (Ptr{CAPI.PJRT_Error_Message_Args},)),
-        #= PJRT_Error_GetCode =# @cfunction(error_getcode, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Error_GetCode_Args},)),
-        #= PJRT_Plugin_Initialize =# @cfunction(plugin_initialize, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Plugin_Initialize_Args},)),
-        #= PJRT_Plugin_Attributes =# @cfunction(plugin_attributes, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Plugin_Attributes_Args},)),
-        #= PJRT_Event_Destroy =# @cfunction(event_destroy, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Event_Destroy_Args},)),
-        #= PJRT_Event_IsReady =# @cfunction(event_is_ready, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Event_IsReady_Args},)),
-        #= PJRT_Event_Error =# @cfunction(event_error, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Event_Error_Args},)),
-        #= PJRT_Event_Await =# @cfunction(event_await, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Event_Await_Args},)),
-        #= PJRT_Event_OnReady =# @cfunction(event_on_ready, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Event_OnReady_Args},)),
+        #= PJRT_Error_Destroy =# @cfunction(pjrt_error_destroy, Cvoid, (Ptr{CAPI.PJRT_Error_Destroy_Args},)),
+        #= PJRT_Error_Message =# @cfunction(pjrt_error_message, Cvoid, (Ptr{CAPI.PJRT_Error_Message_Args},)),
+        #= PJRT_Error_GetCode =# @cfunction(pjrt_error_getcode, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Error_GetCode_Args},)),
+        #= PJRT_Plugin_Initialize =# @cfunction(pjrt_plugin_initialize, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Plugin_Initialize_Args},)),
+        #= PJRT_Plugin_Attributes =# @cfunction(pjrt_plugin_attributes, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Plugin_Attributes_Args},)),
+        #= PJRT_Event_Destroy =# @cfunction(pjrt_event_destroy, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Event_Destroy_Args},)),
+        #= PJRT_Event_IsReady =# @cfunction(pjrt_event_is_ready, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Event_IsReady_Args},)),
+        #= PJRT_Event_Error =# @cfunction(pjrt_event_error, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Event_Error_Args},)),
+        #= PJRT_Event_Await =# @cfunction(pjrt_event_await, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Event_Await_Args},)),
+        #= PJRT_Event_OnReady =# @cfunction(pjrt_event_on_ready, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Event_OnReady_Args},)),
         #= PJRT_Client_Create =# unsafe_convert(Ptr{Cvoid}, c_client_create),
-        #= PJRT_Client_Destroy =# @cfunction(client_destroy, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Client_Destroy_Args},)),
-        #= PJRT_Client_PlatformName =# @cfunction(client_platform_name, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Client_PlatformName_Args},)),
-        #= PJRT_Client_ProcessIndex =# @cfunction(client_process_index, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Client_ProcessIndex_Args},)),
-        #= PJRT_Client_PlatformVersion =# @cfunction(client_platform_version, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Client_PlatformVersion_Args},)),
-        #= PJRT_Client_Devices =# @cfunction(client_devices, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Client_Devices_Args},)),
-        #= PJRT_Client_AddressableDevices =# @cfunction(client_addressable_devices, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Client_AddressableDevices_Args},)),
+        #= PJRT_Client_Destroy =# @cfunction(pjrt_client_destroy, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Client_Destroy_Args},)),
+        #= PJRT_Client_PlatformName =# @cfunction(pjrt_client_platform_name, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Client_PlatformName_Args},)),
+        #= PJRT_Client_ProcessIndex =# @cfunction(pjrt_client_process_index, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Client_ProcessIndex_Args},)),
+        #= PJRT_Client_PlatformVersion =# @cfunction(pjrt_client_platform_version, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Client_PlatformVersion_Args},)),
+        #= PJRT_Client_Devices =# @cfunction(pjrt_client_devices, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Client_Devices_Args},)),
+        #= PJRT_Client_AddressableDevices =# @cfunction(pjrt_client_addressable_devices, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Client_AddressableDevices_Args},)),
         #= PJRT_Client_LookupDevice =# c_unimplemented,
         #= PJRT_Client_LookupAddressableDevice =# c_unimplemented,
-        #= PJRT_Client_AddressableMemories =# @cfunction(client_addressable_memories, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Client_AddressableMemories_Args},)),
-        #= PJRT_Client_Compile =# @cfunction(client_compile, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Client_Compile_Args},)),
+        #= PJRT_Client_AddressableMemories =# @cfunction(pjrt_client_addressable_memories, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Client_AddressableMemories_Args},)),
+        #= PJRT_Client_Compile =# @cfunction(pjrt_client_compile, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Client_Compile_Args},)),
         #= PJRT_Client_DefaultDeviceAssignment =# c_unimplemented,
-        #= PJRT_Client_BufferFromHostBuffer =# @cfunction(client_buffer_from_host_buffer, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Client_BufferFromHostBuffer_Args},)),
-        #= PJRT_DeviceDescription_Id =# @cfunction(device_description_id, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_DeviceDescription_Id_Args},)),
-        #= PJRT_DeviceDescription_ProcessIndex =# @cfunction(device_description_process_index, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_DeviceDescription_ProcessIndex_Args},)),
-        #= PJRT_DeviceDescription_Attributes =# @cfunction(device_description_attributes, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_DeviceDescription_Attributes_Args},)),
-        #= PJRT_DeviceDescription_Kind =# @cfunction(device_description_kind, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_DeviceDescription_Kind_Args},)),
-        #= PJRT_DeviceDescription_DebugString =# @cfunction(device_description_debug_string, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_DeviceDescription_DebugString_Args},)),
-        #= PJRT_DeviceDescription_ToString =# @cfunction(device_description_to_string, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_DeviceDescription_ToString_Args},)),
-        #= PJRT_Device_GetDescription =# @cfunction(device_get_description, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Device_GetDescription_Args},)),
-        #= PJRT_Device_IsAddressable =# @cfunction(device_is_addressable, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Device_IsAddressable_Args},)),
-        #= PJRT_Device_LocalHardwareId =# @cfunction(device_local_hardware_id, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Device_LocalHardwareId_Args},)),
-        #= PJRT_Device_AddressableMemories =# @cfunction(device_addressable_memories, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Device_AddressableMemories_Args},)),
-        #= PJRT_Device_DefaultMemory =# @cfunction(device_default_memory, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Device_DefaultMemory_Args},)),
-        #= PJRT_Device_MemoryStats =# @cfunction(device_memory_stats, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Device_MemoryStats_Args},)),
-        #= PJRT_Memory_Id =# @cfunction(memory_id, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Memory_Id_Args},)),
-        #= PJRT_Memory_Kind =# @cfunction(memory_kind, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Memory_Kind_Args},)),
-        #= PJRT_Memory_DebugString =# @cfunction(memory_debug_string, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Memory_DebugString_Args},)),
-        #= PJRT_Memory_ToString =# @cfunction(memory_to_string, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Memory_ToString_Args},)),
-        #= PJRT_Memory_AddressableByDevices =# @cfunction(memory_addressable_by_devices, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Memory_AddressableByDevices_Args},)),
-        #= PJRT_Executable_Destroy =# @cfunction(executable_destroy, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Executable_Destroy_Args},)),
-        #= PJRT_Executable_Name =# @cfunction(executable_name, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Executable_Name_Args},)),
-        #= PJRT_Executable_NumReplicas =# @cfunction(executable_num_replicas, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Executable_NumReplicas_Args},)),
-        #= PJRT_Executable_NumPartitions =# @cfunction(executable_num_partitions, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Executable_NumPartitions_Args},)),
-        #= PJRT_Executable_NumOutputs =# @cfunction(executable_num_outputs, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Executable_NumOutputs_Args},)),
-        #= PJRT_Executable_SizeOfGeneratedCodeInBytes =# @cfunction(executable_size_of_generated_code_in_bytes, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Executable_SizeOfGeneratedCodeInBytes_Args},)),
+        #= PJRT_Client_BufferFromHostBuffer =# @cfunction(pjrt_client_buffer_from_host_buffer, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Client_BufferFromHostBuffer_Args},)),
+        #= PJRT_DeviceDescription_Id =# @cfunction(pjrt_device_description_id, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_DeviceDescription_Id_Args},)),
+        #= PJRT_DeviceDescription_ProcessIndex =# @cfunction(pjrt_device_description_process_index, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_DeviceDescription_ProcessIndex_Args},)),
+        #= PJRT_DeviceDescription_Attributes =# @cfunction(pjrt_device_description_attributes, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_DeviceDescription_Attributes_Args},)),
+        #= PJRT_DeviceDescription_Kind =# @cfunction(pjrt_device_description_kind, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_DeviceDescription_Kind_Args},)),
+        #= PJRT_DeviceDescription_DebugString =# @cfunction(pjrt_device_description_debug_string, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_DeviceDescription_DebugString_Args},)),
+        #= PJRT_DeviceDescription_ToString =# @cfunction(pjrt_device_description_to_string, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_DeviceDescription_ToString_Args},)),
+        #= PJRT_Device_GetDescription =# @cfunction(pjrt_device_get_description, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Device_GetDescription_Args},)),
+        #= PJRT_Device_IsAddressable =# @cfunction(pjrt_device_is_addressable, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Device_IsAddressable_Args},)),
+        #= PJRT_Device_LocalHardwareId =# @cfunction(pjrt_device_local_hardware_id, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Device_LocalHardwareId_Args},)),
+        #= PJRT_Device_AddressableMemories =# @cfunction(pjrt_device_addressable_memories, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Device_AddressableMemories_Args},)),
+        #= PJRT_Device_DefaultMemory =# @cfunction(pjrt_device_default_memory, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Device_DefaultMemory_Args},)),
+        #= PJRT_Device_MemoryStats =# @cfunction(pjrt_device_memory_stats, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Device_MemoryStats_Args},)),
+        #= PJRT_Memory_Id =# @cfunction(pjrt_memory_id, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Memory_Id_Args},)),
+        #= PJRT_Memory_Kind =# @cfunction(pjrt_memory_kind, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Memory_Kind_Args},)),
+        #= PJRT_Memory_DebugString =# @cfunction(pjrt_memory_debug_string, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Memory_DebugString_Args},)),
+        #= PJRT_Memory_ToString =# @cfunction(pjrt_memory_to_string, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Memory_ToString_Args},)),
+        #= PJRT_Memory_AddressableByDevices =# @cfunction(pjrt_memory_addressable_by_devices, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Memory_AddressableByDevices_Args},)),
+        #= PJRT_Executable_Destroy =# @cfunction(pjrt_executable_destroy, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Executable_Destroy_Args},)),
+        #= PJRT_Executable_Name =# @cfunction(pjrt_executable_name, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Executable_Name_Args},)),
+        #= PJRT_Executable_NumReplicas =# @cfunction(pjrt_executable_num_replicas, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Executable_NumReplicas_Args},)),
+        #= PJRT_Executable_NumPartitions =# @cfunction(pjrt_executable_num_partitions, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Executable_NumPartitions_Args},)),
+        #= PJRT_Executable_NumOutputs =# @cfunction(pjrt_executable_num_outputs, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Executable_NumOutputs_Args},)),
+        #= PJRT_Executable_SizeOfGeneratedCodeInBytes =# @cfunction(pjrt_executable_size_of_generated_code_in_bytes, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Executable_SizeOfGeneratedCodeInBytes_Args},)),
         #= PJRT_Executable_GetCostAnalysis =# c_unimplemented,
         #= PJRT_Executable_OutputMemoryKinds =# c_unimplemented,
-        #= PJRT_Executable_OptimizedProgram =# @cfunction(executable_optimized_program, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Executable_OptimizedProgram_Args},)),
-        #= PJRT_Executable_Serialize =# @cfunction(executable_serialize, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Executable_Serialize_Args},)),
-        #= PJRT_LoadedExecutable_Destroy =# @cfunction(loaded_executable_destroy, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_LoadedExecutable_Destroy_Args},)),
-        #= PJRT_LoadedExecutable_GetExecutable =# @cfunction(loaded_executable_get_executable, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_LoadedExecutable_GetExecutable_Args},)),
-        #= PJRT_LoadedExecutable_AddressableDevices =# @cfunction(loaded_executable_addressable_devices, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_LoadedExecutable_AddressableDevices_Args},)),
-        #= PJRT_LoadedExecutable_Delete =# @cfunction(loaded_executable_delete, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_LoadedExecutable_Delete_Args},)),
-        #= PJRT_LoadedExecutable_IsDeleted =# @cfunction(loaded_executable_is_deleted, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_LoadedExecutable_IsDeleted_Args},)),
-        #= PJRT_LoadedExecutable_Execute =# @cfunction(loaded_executable_execute, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_LoadedExecutable_Execute_Args},)),
+        #= PJRT_Executable_OptimizedProgram =# @cfunction(pjrt_executable_optimized_program, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Executable_OptimizedProgram_Args},)),
+        #= PJRT_Executable_Serialize =# @cfunction(pjrt_executable_serialize, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Executable_Serialize_Args},)),
+        #= PJRT_LoadedExecutable_Destroy =# @cfunction(pjrt_loaded_executable_destroy, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_LoadedExecutable_Destroy_Args},)),
+        #= PJRT_LoadedExecutable_GetExecutable =# @cfunction(pjrt_loaded_executable_get_executable, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_LoadedExecutable_GetExecutable_Args},)),
+        #= PJRT_LoadedExecutable_AddressableDevices =# @cfunction(pjrt_loaded_executable_addressable_devices, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_LoadedExecutable_AddressableDevices_Args},)),
+        #= PJRT_LoadedExecutable_Delete =# @cfunction(pjrt_loaded_executable_delete, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_LoadedExecutable_Delete_Args},)),
+        #= PJRT_LoadedExecutable_IsDeleted =# @cfunction(pjrt_loaded_executable_is_deleted, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_LoadedExecutable_IsDeleted_Args},)),
+        #= PJRT_LoadedExecutable_Execute =# @cfunction(pjrt_loaded_executable_execute, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_LoadedExecutable_Execute_Args},)),
         #= PJRT_Executable_DeserializeAndLoad =# c_unimplemented,
         #= PJRT_LoadedExecutable_Fingerprint =# c_unimplemented,
-        #= PJRT_Buffer_Destroy =# @cfunction(buffer_destroy, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_Destroy_Args},)),
-        #= PJRT_Buffer_ElementType =# @cfunction(buffer_element_type, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_ElementType_Args},)),
-        #= PJRT_Buffer_Dimensions =# @cfunction(buffer_dimensions, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_Dimensions_Args},)),
+        #= PJRT_Buffer_Destroy =# @cfunction(pjrt_buffer_destroy, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_Destroy_Args},)),
+        #= PJRT_Buffer_ElementType =# @cfunction(pjrt_buffer_element_type, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_ElementType_Args},)),
+        #= PJRT_Buffer_Dimensions =# @cfunction(pjrt_buffer_dimensions, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_Dimensions_Args},)),
         #= PJRT_Buffer_UnpaddedDimensions =# c_unimplemented,
         #= PJRT_Buffer_DynamicDimensionIndices =# c_unimplemented,
         #= PJRT_Buffer_GetMemoryLayout =# c_unimplemented,
-        #= PJRT_Buffer_OnDeviceSizeInBytes =# @cfunction(buffer_on_device_size_in_bytes, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_OnDeviceSizeInBytes_Args},)),
-        #= PJRT_Buffer_Device =# @cfunction(buffer_device, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_Device_Args},)),
-        #= PJRT_Buffer_Memory =# @cfunction(buffer_memory, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_Memory_Args},)),
-        #= PJRT_Buffer_Delete =# @cfunction(buffer_delete, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_Delete_Args},)),
-        #= PJRT_Buffer_IsDeleted =# @cfunction(buffer_is_deleted, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_IsDeleted_Args},)),
-        #= PJRT_Buffer_CopyToDevice =# @cfunction(buffer_copy_to_device, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_CopyToDevice_Args},)),
-        #= PJRT_Buffer_ToHostBuffer =# @cfunction(buffer_to_host_buffer, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_ToHostBuffer_Args},)),
-        #= PJRT_Buffer_IsOnCpu =# @cfunction(buffer_is_on_cpu, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_IsOnCpu_Args},)),
-        #= PJRT_Buffer_ReadyEvent =# @cfunction(buffer_ready_event, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_ReadyEvent_Args},)),
-        #= PJRT_Buffer_UnsafePointer =# @cfunction(buffer_unsafe_pointer, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_UnsafePointer_Args},)),
+        #= PJRT_Buffer_OnDeviceSizeInBytes =# @cfunction(pjrt_buffer_on_device_size_in_bytes, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_OnDeviceSizeInBytes_Args},)),
+        #= PJRT_Buffer_Device =# @cfunction(pjrt_buffer_device, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_Device_Args},)),
+        #= PJRT_Buffer_Memory =# @cfunction(pjrt_buffer_memory, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_Memory_Args},)),
+        #= PJRT_Buffer_Delete =# @cfunction(pjrt_buffer_delete, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_Delete_Args},)),
+        #= PJRT_Buffer_IsDeleted =# @cfunction(pjrt_buffer_is_deleted, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_IsDeleted_Args},)),
+        #= PJRT_Buffer_CopyToDevice =# @cfunction(pjrt_buffer_copy_to_device, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_CopyToDevice_Args},)),
+        #= PJRT_Buffer_ToHostBuffer =# @cfunction(pjrt_buffer_to_host_buffer, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_ToHostBuffer_Args},)),
+        #= PJRT_Buffer_IsOnCpu =# @cfunction(pjrt_buffer_is_on_cpu, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_IsOnCpu_Args},)),
+        #= PJRT_Buffer_ReadyEvent =# @cfunction(pjrt_buffer_ready_event, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_ReadyEvent_Args},)),
+        #= PJRT_Buffer_UnsafePointer =# @cfunction(pjrt_buffer_unsafe_pointer, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_UnsafePointer_Args},)),
         #= PJRT_Buffer_IncreaseExternalReferenceCount =# c_unimplemented,
         #= PJRT_Buffer_DecreaseExternalReferenceCount =# c_unimplemented,
         #= PJRT_Buffer_OpaqueDeviceMemoryDataPointer =# c_unimplemented,
@@ -2377,14 +2377,14 @@ function make_api(::Type{C}) where {C<:Client}
         #= PJRT_TopologyDescription_Serialize =# c_unimplemented,
         #= PJRT_TopologyDescription_Attributes =# c_unimplemented,
         #= PJRT_Compile =# c_unimplemented,
-        #= PJRT_Executable_OutputElementTypes =# @cfunction(executable_output_element_types, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Executable_OutputElementTypes_Args},)),
+        #= PJRT_Executable_OutputElementTypes =# @cfunction(pjrt_executable_output_element_types, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Executable_OutputElementTypes_Args},)),
         #= PJRT_Executable_OutputDimensions =# c_unimplemented,
-        #= PJRT_Buffer_CopyToMemory =# @cfunction(buffer_copy_to_memory, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_CopyToMemory_Args},)),
+        #= PJRT_Buffer_CopyToMemory =# @cfunction(pjrt_buffer_copy_to_memory, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_CopyToMemory_Args},)),
         #= PJRT_Client_CreateViewOfDeviceBuffer =# c_unimplemented,
-        #= PJRT_Executable_Fingerprint =# @cfunction(executable_fingerprint, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Executable_Fingerprint_Args},)),
+        #= PJRT_Executable_Fingerprint =# @cfunction(pjrt_executable_fingerprint, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Executable_Fingerprint_Args},)),
         #= PJRT_Client_TopologyDescription =# c_unimplemented,
         #= PJRT_Executable_GetCompiledMemoryStats =# c_unimplemented,
-        #= PJRT_Memory_Kind_Id =# @cfunction(memory_kind_id, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Memory_Kind_Id_Args},)),
+        #= PJRT_Memory_Kind_Id =# @cfunction(pjrt_memory_kind_id, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Memory_Kind_Id_Args},)),
         #= PJRT_ExecuteContext_Create =# c_unimplemented,
         #= PJRT_ExecuteContext_Destroy =# c_unimplemented,
         #= PJRT_Buffer_CopyRawToHost =# c_unimplemented,
@@ -2399,27 +2399,27 @@ function make_api(::Type{C}) where {C<:Client}
         #= PJRT_AsyncHostToDeviceTransferManager_AddMetadata =# c_unimplemented,
         #= PJRT_Client_DmaMap =# c_unimplemented,
         #= PJRT_Client_DmaUnmap =# c_unimplemented,
-        #= PJRT_Client_CreateUninitializedBuffer =# @cfunction(client_create_uninitialized_buffer, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Client_CreateUninitializedBuffer_Args},)),
+        #= PJRT_Client_CreateUninitializedBuffer =# @cfunction(pjrt_client_create_uninitialized_buffer, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Client_CreateUninitializedBuffer_Args},)),
         #= PJRT_Client_UpdateGlobalProcessInfo =# c_unimplemented,
         #= PJRT_TopologyDescription_Deserialize =# c_unimplemented,
         #= PJRT_Client_CreateAliasBuffer =# c_unimplemented,
         #= PJRT_Client_FulfillAliasBuffer =# c_unimplemented,
-        #= PJRT_LoadedExecutable_GetDeviceAssignment =# @cfunction(loaded_executable_get_device_assignment, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_LoadedExecutable_GetDeviceAssignment_Args},)),
+        #= PJRT_LoadedExecutable_GetDeviceAssignment =# @cfunction(pjrt_loaded_executable_get_device_assignment, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_LoadedExecutable_GetDeviceAssignment_Args},)),
         #= PJRT_Client_CreateErrorBuffer =# c_unimplemented,
         #= PJRT_AsyncHostToDeviceTransferManager_TransferLiteral =# c_unimplemented,
         #= PJRT_Buffer_CopyRawToHostFuture =# c_unimplemented,
         #= PJRT_Device_PoisonExecution =# c_unimplemented,
         #= PJRT_Device_CreateAsyncTrackingEvent =# c_unimplemented,
         #= PJRT_AsyncTrackingEvent_Destroy =# c_unimplemented,
-        #= PJRT_Executable_GetCompileOptions =# @cfunction(executable_get_compile_options, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Executable_GetCompileOptions_Args},)),
+        #= PJRT_Executable_GetCompileOptions =# @cfunction(pjrt_executable_get_compile_options, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Executable_GetCompileOptions_Args},)),
         #= PJRT_Buffer_DonateWithControlDependency =# c_unimplemented,
-        #= PJRT_Event_Create =# @cfunction(event_create, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Event_Create_Args},)),
-        #= PJRT_Event_Set =# @cfunction(event_set, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Event_Set_Args},)),
+        #= PJRT_Event_Create =# @cfunction(pjrt_event_create, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Event_Create_Args},)),
+        #= PJRT_Event_Set =# @cfunction(pjrt_event_set, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Event_Set_Args},)),
         #= PJRT_Device_GetAttributes =# C_NULL,
         #= PJRT_Client_Load =# c_unimplemented,
-        #= PJRT_LoadedExecutable_AddressableDeviceLogicalIds =# @cfunction(loaded_executable_addressable_device_logical_ids, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_LoadedExecutable_AddressableDeviceLogicalIds_Args},)),
+        #= PJRT_LoadedExecutable_AddressableDeviceLogicalIds =# @cfunction(pjrt_loaded_executable_addressable_device_logical_ids, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_LoadedExecutable_AddressableDeviceLogicalIds_Args},)),
         #= PJRT_Buffer_Bitcast =# c_unimplemented,
-        #= PJRT_Error_ForEachPayload =# @cfunction(error_for_each_payload, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Error_ForEachPayload_Args},)),
+        #= PJRT_Error_ForEachPayload =# @cfunction(pjrt_error_for_each_payload, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Error_ForEachPayload_Args},)),
         #= PJRT_TopologyDescription_Fingerprint =# c_unimplemented,
         #= PJRT_Executable_ParameterMemoryKinds =# c_unimplemented,
         #= PJRT_Device_ClearMemoryStats =# c_unimplemented,
