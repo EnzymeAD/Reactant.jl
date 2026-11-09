@@ -1015,7 +1015,9 @@ handle(::Val{Symbol("stablehlo.after_all")}, _, _, _) = Token()
 # 1-dimensional discrete Fourier transform of `x` written into `out`, which must not alias `x`, unnormalized and with
 # the sign of the exponent given by `inverse`. even lengths transform the even and odd elements of `x` into the two
 # halves of `out` and combine them in place (radix-2 Cooley-Tukey), and odd lengths are computed directly in O(n^2)
-function __fft_1d!(out::AbstractVector{T}, x::AbstractVector, inverse::Bool) where {T<:Complex}
+function __fft_1d!(
+    out::AbstractVector{T}, x::AbstractVector, inverse::Bool
+) where {T<:Complex}
     n = length(x)
     if n <= 1
         n == 1 && (out[1] = x[1])
@@ -1134,7 +1136,9 @@ function handle(::Val{Symbol("stablehlo.convolution")}, (lhs, rhs), attributes, 
                 k = K[s] - 1
                 # position in the padded and dilated lhs, which must fall on an element of the lhs
                 q = (I[osp[s]] - 1) * strides[s] + k * rhs_dilation[s] - padding[1, s]
-                if q < 0 || q % lhs_dilation[s] != 0 || q ÷ lhs_dilation[s] >= size(lhs, lsp[s])
+                if q < 0 ||
+                    q % lhs_dilation[s] != 0 ||
+                    q ÷ lhs_dilation[s] >= size(lhs, lsp[s])
                     valid = false
                     break
                 end
@@ -1145,7 +1149,8 @@ function handle(::Val{Symbol("stablehlo.convolution")}, (lhs, rhs), attributes, 
             for c in 1:cin
                 lidx[lf] = (o ÷ (cout ÷ G)) * cin + c
                 ridx[ri] = c
-                acc += lhs[CartesianIndex(ntuple(k -> lidx[k], NL))] *
+                acc +=
+                    lhs[CartesianIndex(ntuple(k -> lidx[k], NL))] *
                     rhs[CartesianIndex(ntuple(k -> ridx[k], NR))]
             end
         end
@@ -1154,7 +1159,9 @@ function handle(::Val{Symbol("stablehlo.convolution")}, (lhs, rhs), attributes, 
     return out
 end
 
-function handle(::Val{Symbol("stablehlo.dynamic_conv")}, (lhs, rhs, padding), attributes, (result,))
+function handle(
+    ::Val{Symbol("stablehlo.dynamic_conv")}, (lhs, rhs, padding), attributes, (result,)
+)
     dn = attributes.dimension_numbers
     nspatial = length(dn.input_spatial_dimensions)
     pad = Matrix{Int}(padding)
@@ -1166,7 +1173,9 @@ function handle(::Val{Symbol("stablehlo.dynamic_conv")}, (lhs, rhs, padding), at
     NL, NR = ndims(lhs), ndims(rhs)
     mlir_dims = zeros(Int, length(result.size))
     mlir_dims[dn.output_batch_dimension + 1] = size(lhs, NL - dn.input_batch_dimension) ÷ B
-    mlir_dims[dn.output_feature_dimension + 1] = size(rhs, NR - dn.kernel_output_feature_dimension)
+    mlir_dims[dn.output_feature_dimension + 1] = size(
+        rhs, NR - dn.kernel_output_feature_dimension
+    )
     for s in 1:nspatial
         n = size(lhs, NL - dn.input_spatial_dimensions[s])
         k = size(rhs, NR - dn.kernel_spatial_dimensions[s])
@@ -1178,9 +1187,14 @@ function handle(::Val{Symbol("stablehlo.dynamic_conv")}, (lhs, rhs, padding), at
     end
 
     dims = ntuple(j -> mlir_dims[end - j + 1], Val(length(result.size)))
-    static = NamedTuple{(:eltype, :size),Tuple{Type{result.eltype},typeof(dims)}}((result.eltype, dims))
+    static = NamedTuple{(:eltype, :size),Tuple{Type{result.eltype},typeof(dims)}}((
+        result.eltype, dims
+    ))
     return handle(
-        Val(Symbol("stablehlo.convolution")), (lhs, rhs), merge(attributes, (; padding=pad)), (static,)
+        Val(Symbol("stablehlo.convolution")),
+        (lhs, rhs),
+        merge(attributes, (; padding=pad)),
+        (static,),
     )
 end
 
@@ -1218,9 +1232,12 @@ function __philox4x32(k0::UInt32, k1::UInt32, c::NTuple{4,UInt32})
     return c
 end
 
-function handle(::Val{Symbol("stablehlo.rng_bit_generator")}, (state,), attributes, (_, result))
+function handle(
+    ::Val{Symbol("stablehlo.rng_bit_generator")}, (state,), attributes, (_, result)
+)
     algorithm = get(attributes, :rng_algorithm, :DEFAULT)
-    algorithm in (:PHILOX, :DEFAULT, :THREE_FRY) || throw(invalid_argument("unknown RNG algorithm $algorithm"))
+    algorithm in (:PHILOX, :DEFAULT, :THREE_FRY) ||
+        throw(invalid_argument("unknown RNG algorithm $algorithm"))
     n = length(state)
     (algorithm === :THREE_FRY ? n == 2 : n in (2, 3)) ||
         throw(invalid_argument("$algorithm RNG state must not have $n elements"))
@@ -1241,7 +1258,11 @@ function handle(::Val{Symbol("stablehlo.rng_bit_generator")}, (state,), attribut
         block = if algorithm === :THREE_FRY
             __threefry2x32(k0, k1, clo % UInt32, (clo >> 32) % UInt32)
         else
-            __philox4x32(k0, k1, (clo % UInt32, (clo >> 32) % UInt32, chi % UInt32, (chi >> 32) % UInt32))
+            __philox4x32(
+                k0,
+                k1,
+                (clo % UInt32, (clo >> 32) % UInt32, chi % UInt32, (chi >> 32) % UInt32),
+            )
         end
         for (i, w) in enumerate(block)
             words[b * blocksize + i] = w
@@ -1372,20 +1393,32 @@ function decode_attribute(attr)
         )
     elseif API.stablehloAttributeIsAConvDimensionNumbers(attr)
         return (;
-            input_batch_dimension=API.stablehloConvDimensionNumbersGetInputBatchDimension(attr),
-            input_feature_dimension=API.stablehloConvDimensionNumbersGetInputFeatureDimension(attr),
+            input_batch_dimension=API.stablehloConvDimensionNumbersGetInputBatchDimension(
+                attr
+            ),
+            input_feature_dimension=API.stablehloConvDimensionNumbersGetInputFeatureDimension(
+                attr
+            ),
             input_spatial_dimensions=getdims(
                 API.stablehloConvDimensionNumbersGetInputSpatialDimensionsSize,
                 API.stablehloConvDimensionNumbersGetInputSpatialDimensionsElem,
             ),
-            kernel_input_feature_dimension=API.stablehloConvDimensionNumbersGetKernelInputFeatureDimension(attr),
-            kernel_output_feature_dimension=API.stablehloConvDimensionNumbersGetKernelOutputFeatureDimension(attr),
+            kernel_input_feature_dimension=API.stablehloConvDimensionNumbersGetKernelInputFeatureDimension(
+                attr
+            ),
+            kernel_output_feature_dimension=API.stablehloConvDimensionNumbersGetKernelOutputFeatureDimension(
+                attr
+            ),
             kernel_spatial_dimensions=getdims(
                 API.stablehloConvDimensionNumbersGetKernelSpatialDimensionsSize,
                 API.stablehloConvDimensionNumbersGetKernelSpatialDimensionsElem,
             ),
-            output_batch_dimension=API.stablehloConvDimensionNumbersGetOutputBatchDimension(attr),
-            output_feature_dimension=API.stablehloConvDimensionNumbersGetOutputFeatureDimension(attr),
+            output_batch_dimension=API.stablehloConvDimensionNumbersGetOutputBatchDimension(
+                attr
+            ),
+            output_feature_dimension=API.stablehloConvDimensionNumbersGetOutputFeatureDimension(
+                attr
+            ),
             output_spatial_dimensions=getdims(
                 API.stablehloConvDimensionNumbersGetOutputSpatialDimensionsSize,
                 API.stablehloConvDimensionNumbersGetOutputSpatialDimensionsElem,
