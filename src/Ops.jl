@@ -2483,6 +2483,64 @@ end
     return results
 end
 
+function _if_has_mutable_ancestor(curr, path_tail::Tuple)
+    isempty(path_tail) && return false
+    if curr isa Array || curr isa Dict || ismutable(curr)
+        return true
+    end
+    p = first(path_tail)
+    rest = Base.tail(path_tail)
+    isempty(rest) && return false
+    child = Reactant.Compiler.traced_getfield(curr, p)
+    return _if_has_mutable_ancestor(child, rest)
+end
+
+function _if_set_at_path!(curr, path_tail::Tuple, val)
+    p = first(path_tail)
+    rest = Base.tail(path_tail)
+    if isempty(rest)
+        if curr isa Array || curr isa Dict
+            curr[p] = val
+            return curr
+        elseif ismutable(curr)
+            setfield!(curr, p, val)
+            return curr
+        elseif curr isa Tuple
+            return Base.setindex(curr, val, p)
+        elseif curr isa NamedTuple
+            idx = p isa Symbol ? Base.fieldindex(typeof(curr), p) : p
+            return NamedTuple{keys(curr)}(Base.setindex(Tuple(curr), val, idx))
+        else
+            T = Core.Typeof(curr)
+            nf = fieldcount(T)
+            flds = Vector{Any}(undef, nf)
+            idx = p isa Symbol ? Base.fieldindex(T, p) : p
+            for j in 1:nf
+                if j == idx
+                    flds[j] = val
+                elseif isdefined(curr, j)
+                    flds[j] = getfield(curr, j)
+                else
+                    nf = j - 1
+                    break
+                end
+            end
+            return ccall(:jl_new_structv, Any, (Any, Ptr{Any}, UInt32), T, flds, nf)
+        end
+    else
+        child = if curr isa Array || curr isa Dict
+            curr[p]
+        else
+            Reactant.Compiler.traced_getfield(curr, p)
+        end
+        new_child = _if_set_at_path!(child, rest, val)
+        if new_child !== child
+            return _if_set_at_path!(curr, (p,), new_child)
+        end
+        return curr
+    end
+end
+
 @noinline function if_condition(
     cond::TracedRNumber{Bool},
     true_fn::TFn,
@@ -2764,9 +2822,11 @@ end
 
     result_types = MLIR.IR.Type[]
     both_missing = Set{Int}()
+    untraced_result_indices = Set{Int}()
     for (i, (tr, fr)) in
         enumerate(zip(tb_corrected_linear_results, fb_corrected_linear_results))
         res = if tr isa MissingTracedValue && fr isa MissingTracedValue
+            push!(untraced_result_indices, i)
             z = zero(TracedRNumber{Int})
             tb_corrected_linear_results[i] = z
             fb_corrected_linear_results[i] = z
@@ -2894,23 +2954,42 @@ end
     @assert length(all_paths) == length(result_types)
 
     residx = 0
-    for (_, path) in enumerate(all_paths)
+    for (path_idx, path) in enumerate(all_paths)
         if path[1] == :result
             residx += 1
-            Reactant.TracedUtils.set!(
-                corrected_traced_results, path[2:end], MLIR.IR.result(if_compiled, residx)
-            )
+            if path_idx ∉ untraced_result_indices
+                Reactant.TracedUtils.set!(
+                    corrected_traced_results,
+                    path[2:end],
+                    MLIR.IR.result(if_compiled, residx),
+                )
+            end
         elseif path[1] == :resarg
             residx += 1
+            path_idx ∈ untraced_result_indices && continue
             target = args
             for p in path[2:end]
                 target = Reactant.Compiler.traced_getfield(target, p)
             end
             if target isa
                 Union{Reactant.ConcreteRArray,Reactant.ConcreteRNumber,Reactant.TracedType}
-                Reactant.TracedUtils.set!(
-                    args, path[2:end], MLIR.IR.result(if_compiled, residx)
-                )
+                res_val = MLIR.IR.result(if_compiled, residx)
+                tb_same =
+                    haskey(tb_results_dict, tb_paths[path_idx]) &&
+                    (true_fn_names[1], path[2:end]...) in
+                    Reactant.TracedUtils.get_paths(tb_results_dict[tb_paths[path_idx]])
+                fb_same =
+                    haskey(fb_results_dict, fb_paths[path_idx]) &&
+                    (false_fn_names[1], path[2:end]...) in
+                    Reactant.TracedUtils.get_paths(fb_results_dict[fb_paths[path_idx]])
+                if !(tb_same && fb_same) &&
+                    target isa Union{TracedRNumber,TracedRArray} &&
+                    _if_has_mutable_ancestor(args, path[2:end])
+                    new_leaf = Reactant.TracedUtils.set_mlir_data!(copy(target), res_val)
+                    _if_set_at_path!(args, path[2:end], new_leaf)
+                else
+                    Reactant.TracedUtils.set!(args, path[2:end], res_val)
+                end
             else
                 check_untraced_branch_state(
                     target, tb_traced_args, fb_traced_args, path[2:end]

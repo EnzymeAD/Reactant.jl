@@ -1847,3 +1847,80 @@ end
     @test @jit(loop_with_pi_var(xr)) ≈ 6.0f0
     @test @jit(loop_reading_outer_irrational(xr)) ≈ Float32(π) * 6.0f0
 end
+
+mutable struct MutablePair3725
+    a
+    b
+end
+mutable struct MutableSingle3725
+    a
+end
+
+function mutate_field_b_3725!(s, c)
+    @trace if c
+        s.b = s.b + 1
+    end
+    return s
+end
+
+function mutate_field_a_3725!(s, c)
+    @trace if c
+        s.a = s.a + 1
+    end
+    return s
+end
+
+function mutate_wrapped_outer_3725(x, c)
+    s = MutableSingle3725(x)
+    @trace if c
+        s.a = s.a + 1
+    end
+    return (x, s.a)
+end
+
+function branch_local_untraced_if_3424(x)
+    @trace if sum(x) > 0
+        op = sin
+        x = x .+ op(0.0) .+ 2.0
+    else
+        x = x .- 1.0
+    end
+    return x
+end
+
+function branch_local_untraced_else_3424(x)
+    @trace if sum(x) > 0
+        x = x .- 1.0
+    else
+        op = sin
+        x = x .+ op(0.0) .+ 2.0
+    end
+    return x
+end
+
+@testset "if_condition aliased mutable field writeback (#3725) and untraced branch locals (#3424)" begin
+    x1 = ConcreteRNumber(1.0)
+    s1 = @jit mutate_field_b_3725!(MutablePair3725(x1, x1), ConcreteRNumber(true))
+    @test Float64(s1.a) == 1.0
+    @test Float64(s1.b) == 2.0
+
+    x2 = ConcreteRNumber(1.0)
+    s2 = @jit mutate_field_b_3725!(MutablePair3725(x2, x2), ConcreteRNumber(false))
+    @test Float64(s2.a) == 1.0
+    @test Float64(s2.b) == 1.0
+
+    x3 = ConcreteRNumber(1.0)
+    s3 = @jit mutate_field_a_3725!(MutablePair3725(x3, x3), ConcreteRNumber(true))
+    @test Float64(s3.a) == 2.0
+    @test Float64(s3.b) == 1.0
+
+    x4 = ConcreteRNumber(1.0)
+    ox, osa = @jit mutate_wrapped_outer_3725(x4, ConcreteRNumber(true))
+    @test Float64(ox) == 1.0
+    @test Float64(osa) == 2.0
+
+    xr_pos = Reactant.to_rarray(ones(2))
+    @test Array(@jit(branch_local_untraced_if_3424(xr_pos))) ≈ [3.0, 3.0]
+    xr_neg = Reactant.to_rarray(fill(-1.0, 2))
+    @test Array(@jit(branch_local_untraced_else_3424(xr_neg))) ≈ [1.0, 1.0]
+end
