@@ -171,6 +171,13 @@ end
             @test Float64(r) == Float64(ceil(x))
         end
     end
+    # `Int` (Int64) target with a Float32 input, scalar and broadcasted
+    r = @jit ceil(Int, ConcreteRNumber(1.5f0))
+    @test r isa ConcreteRNumber{Int}
+    @test r == 2
+    xs = Float32[1.5, -2.5, 3.0]
+    xs_ra = Reactant.to_rarray(xs)
+    @test Array(@jit(ceil.(Int, xs_ra))) == ceil.(Int, xs)
 end
 
 @testset "isapprox" begin
