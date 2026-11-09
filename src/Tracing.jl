@@ -1119,9 +1119,13 @@ Base.@assume_effects :total @inline function traced_type(
         return T
     end
 
-    ndevices = Sharding.ndevices(sharding)
+    ndevices = if runtime isa Val{:IFRT} && !Sharding.can_have_padding(sharding)
+        1
+    else
+        Sharding.ndevices(sharding)
+    end
     cache = nothing
-    cache_key = (mode, track_numbers, ndevices)
+    cache_key = (mode, track_numbers, (ndevices, runtime))
     if haskey(traced_type_cache, cache_key)
         cache = traced_type_cache[cache_key]
     else
