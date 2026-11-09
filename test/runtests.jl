@@ -72,9 +72,6 @@ filter!(((k, _),) -> !startswith(k, "probprog"), testsuite)
 # with a `handle` method, so tests that need anything else are skipped
 if BACKEND == "julia"
     for name in (
-        # `stablehlo.reduce_window` (`cumsum`, `accumulate`, pooling)
-        "core/map_reduction",
-        "nn/convolution",
         # `enzymexla.lapack`/`enzymexla.linalg` ops (`lu`, `inv`, `\`, `det`, `svd`, ...)
         "integration/factorizations",
         "integration/linear_algebra",
