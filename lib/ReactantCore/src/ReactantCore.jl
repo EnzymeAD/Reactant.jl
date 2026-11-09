@@ -666,46 +666,82 @@ function trace_while(mod, expr; track_numbers, mincut, checkpointing, first_arg=
     end
 end
 
+_for_is_enumerate(::Base.Iterators.Enumerate) = true
+_for_is_enumerate(_) = false
+_for_unwrap(r::Base.Iterators.Enumerate) = r.itr
+_for_unwrap(r) = r
+_for_first(r) = first(_for_unwrap(r))
+_for_step(r) = step(_for_unwrap(r))
+_for_last(r) = last(_for_unwrap(r))
+_for_item(::Val{true}, counter, val) = (counter + one(counter), val)
+_for_item(::Val{false}, _, val) = val
+
+function _collect_lhs_syms!(syms::Vector{Symbol}, ex)
+    if ex isa Symbol
+        push!(syms, ex)
+    elseif Meta.isexpr(ex, :tuple)
+        for a in ex.args
+            _collect_lhs_syms!(syms, a)
+        end
+    else
+        error("malformed for loop assignment target: $ex")
+    end
+    return syms
+end
+
 function trace_for(mod, expr; track_numbers, checkpointing, mincut)
     Meta.isexpr(expr, :for, 2) || error("expected for expr")
     assign, body = expr.args
 
     error_if_any_control_flow(body)
-    if !Meta.isexpr(assign, :(=)) || !(assign.args[1] isa Symbol)
+    if !Meta.isexpr(assign, :(=)) ||
+        !(assign.args[1] isa Symbol || Meta.isexpr(assign.args[1], :tuple))
         error(
-            "malformed for loop assignment, expected a single induction variable, got $assign",
+            "malformed for loop assignment, expected an induction variable or tuple, got $assign",
         )
     end
 
-    induction, range = assign.args
+    lhs, range = assign.args
+    lhs_syms = _collect_lhs_syms!(Symbol[], lhs)
+    induction = lhs isa Symbol ? lhs : gensym(:induction)
 
     counter = gensym(:i)
     num_iters = gensym(:num_iters)
     checkpointing_sym = gensym(:checkpointing)
     range_sym = gensym(:range)
+    is_enumerate_sym = gensym(:is_enumerate)
 
     start_sym = gensym(:start)
     step_sym = gensym(:step)
     limit_sym = gensym(:limit)
 
+    syn_enumerate =
+        Meta.isexpr(range, :call) &&
+        length(range.args) == 2 &&
+        (range.args[begin] === :enumerate || range.args[begin] === Base.Iterators.enumerate)
+    inner_range = syn_enumerate ? range.args[2] : range
+
     # Unwrap the start:step:limit syntax since we cannot create such a range with tracedrnumbers
     # because its length would be unknown.
-    bounds_defs = if Meta.isexpr(range, :call) && range.args[begin] == :(:)
-        local start = range.args[2]
-        local step = length(range.args) == 3 ? :(one($start_sym)) : range.args[3]
-        local limit = range.args[end]
+    bounds_defs = if Meta.isexpr(inner_range, :call) && inner_range.args[begin] == :(:)
+        local start = inner_range.args[2]
+        local step =
+            length(inner_range.args) == 3 ? :(one($start_sym)) : inner_range.args[3]
+        local limit = inner_range.args[end]
         quote
+            $is_enumerate_sym = Val($syn_enumerate)
             $start_sym = $start
             $step_sym = $step
             $limit_sym = $limit
         end
     else
         quote
-            local $range_sym = $range
+            local $range_sym = $inner_range
 
-            $start_sym = first($range_sym)
-            $step_sym = step($range_sym)
-            $limit_sym = last($range_sym)
+            $is_enumerate_sym = Val($syn_enumerate || $_for_is_enumerate($range_sym))
+            $start_sym = $_for_first($range_sym)
+            $step_sym = $_for_step($range_sym)
+            $limit_sym = $_for_last($range_sym)
         end
     end
 
@@ -737,15 +773,39 @@ function trace_for(mod, expr; track_numbers, checkpointing, mincut)
         :($checkpointing_sym = $checkpointing)
     end
 
+    body_symbols = compute_symbols_state(body)
+    body_ext_syms = Symbol[]
+    union!(body_ext_syms, body_symbols.references)
+    union!(body_ext_syms, body_symbols.assignments)
+    for fn in body_symbols.funccalls
+        if length(fn.parts) == 1 && !isdefined(mod, only(fn.parts))
+            union!(body_ext_syms, fn.parts)
+        end
+    end
+    filter!(∉(SPECIAL_SYMBOLS), body_ext_syms)
+    filter!(∉(lhs_syms), body_ext_syms)
+
+    unpack_lhs = if lhs isa Symbol
+        :()
+    else
+        quote
+            $(Expr(:local, lhs_syms...))
+            $lhs = $induction
+        end
+    end
+
     return quote
-        local $start_sym, $limit_sym, $step_sym
+        local $start_sym, $limit_sym, $step_sym, $is_enumerate_sym
         $bounds_defs
 
         # Compute checkpointing value before promotion to traced values
         local $checkpointing_sym
         $checkpointing_computation
 
-        if $(within_compile)()
+        if $(within_compile)() && $(any)(
+            $(is_traced),
+            $(Expr(:tuple, start_sym, limit_sym, step_sym, cond_val.(body_ext_syms)...)),
+        )
             $start_sym = $(ReactantCore.promote_to_traced)($start_sym)
             $limit_sym = $(ReactantCore.promote_to_traced)($limit_sym)
             $step_sym = $(ReactantCore.promote_to_traced)($step_sym)
@@ -763,7 +823,10 @@ function trace_for(mod, expr; track_numbers, checkpointing, mincut)
                     $counter < $num_iters
                 end,
                 quote
-                    local $induction = $start_sym + $counter * $step_sym
+                    local $induction = $_for_item(
+                        $is_enumerate_sym, $counter, $start_sym + $counter * $step_sym
+                    )
+                    $unpack_lhs
                     $counter = $counter + one($counter)
                     $body
                 end,

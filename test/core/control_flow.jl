@@ -1847,3 +1847,52 @@ end
     @test @jit(loop_with_pi_var(xr)) ≈ 6.0f0
     @test @jit(loop_reading_outer_irrational(xr)) ≈ Float32(π) * 6.0f0
 end
+
+mutable struct Clock2561{I}
+    n_timesteps::I
+    time_int::I
+end
+
+function timestepping_trace_2561!(clock::Clock2561)
+    @trace track_numbers = true for i in 1:(clock.n_timesteps)
+        clock.time_int += 1
+    end
+    return nothing
+end
+
+function enum_single_var_2491(n)
+    ans = 0
+    @trace for I in enumerate(1:n)
+        ans += I[1] * I[2]
+    end
+    return ans
+end
+
+function enum_destructured_2491(x)
+    @trace for (idx, val) in enumerate(10:2:16)
+        @allowscalar x[idx] = idx * val
+    end
+    return x
+end
+
+@testset "enumerate and untraced mutable struct in @trace for (#2491, #2561)" begin
+    c_host = Clock2561(5, 0)
+    @jit timestepping_trace_2561!(c_host)
+    @test c_host.n_timesteps == 5
+    @test c_host.time_int == 5
+
+    c_traced = Reactant.to_rarray(Clock2561(5, 0); track_numbers=Number)
+    @jit timestepping_trace_2561!(c_traced)
+    @test c_traced.n_timesteps == 5
+    @test c_traced.time_int == 5
+
+    n_plain = Reactant.to_rarray(10)
+    @test @jit(enum_single_var_2491(n_plain)) == sum((1:10) .^ 2)
+
+    n_traced = Reactant.ConcreteRNumber(10)
+    @test @jit(enum_single_var_2491(n_traced)) == sum((1:10) .^ 2)
+
+    x_ra = Reactant.to_rarray(zeros(Int, 4))
+    res_e = @jit enum_destructured_2491(x_ra)
+    @test Array(res_e) == [1 * 10, 2 * 12, 3 * 14, 4 * 16]
+end
