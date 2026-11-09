@@ -1356,9 +1356,7 @@ function decode_attribute(attr)
             return fill(x, dims)
         end
 
-        # dense boolean attributes are bit-packed
-        T === Bool &&
-            throw(unimplemented("non-splat boolean dense attributes are not supported"))
+        # i1 elements are stored as one byte per element (0x00/0x01), so `Bool` can be read like any other type
         return copy(
             unsafe_wrap(Array, Ptr{T}(API.mlirDenseElementsAttrGetRawData(attr)), dims)
         )
