@@ -1366,7 +1366,8 @@ function decode_attribute(attr)
                 re, im = splat[0], splat[1]
                 R <: Integer ? T(Int64(re), Int64(im)) : T(Float64(re), Float64(im))
             elseif T <: Integer
-                T(Int64(splat))
+                splat = T <: Unsigned ? UInt64(splat) : Int64(splat)
+                T(splat)
             else
                 T(Float64(splat))
             end
@@ -1387,7 +1388,7 @@ function decode_attribute(attr)
     elseif IR.isbool(attr)
         return Bool(attr)
     elseif IR.isinteger(attr)
-        return Int64(attr)
+        return IR.isunsigned(IR.type(attr)) ? UInt64(attr) : Int64(attr)
     elseif IR.isfloat(attr)
         return Float64(attr)
     elseif IR.isstring(attr)
