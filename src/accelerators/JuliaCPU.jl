@@ -294,6 +294,7 @@ function handle end
 # element-wise ops use `map` instead of broadcasting: StableHLO operands always have the same shape, and broadcasting
 # would return a scalar over 0-dimensional arrays and a `BitArray` for booleans instead of an `Array`
 handle(::Val{Symbol("stablehlo.add")}, (a, b), _, _) = map(+, a, b)
+handle(::Val{Symbol("stablehlo.add")}, (a::AbstractArray{Bool}, b::AbstractArray{Bool}), _, _) = map(|, a, b)
 handle(::Val{Symbol("stablehlo.subtract")}, (a, b), _, _) = map(-, a, b)
 handle(::Val{Symbol("stablehlo.multiply")}, (a, b), _, _) = map(*, a, b)
 handle(::Val{Symbol("stablehlo.maximum")}, (a, b), _, _) = map(max, a, b)
