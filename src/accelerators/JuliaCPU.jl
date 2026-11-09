@@ -872,6 +872,46 @@ function handle(::Val{Symbol("stablehlo.reduce")}, operands, attributes, results
     return n == 1 ? only(outs) : outs
 end
 
+function handle(
+    ::Val{Symbol("stablehlo.reduce_window")}, operands, attributes, results, (body,)
+)
+    n = length(results)
+    inputs = ntuple(i -> operands[i], Val(n))
+    inits = ntuple(i -> convert(results[i].eltype, operands[n + i][]), Val(n))
+    outs = ntuple(i -> Array{results[i].eltype}(undef, results[i].size), Val(n))
+
+    N = ndims(first(inputs))
+    window_dimensions = attributes.window_dimensions
+    strides = get(attributes, :window_strides, ones(Int, N))
+    base_dilations = get(attributes, :base_dilations, ones(Int, N))
+    window_dilations = get(attributes, :window_dilations, ones(Int, N))
+    padding = get(attributes, :padding, zeros(Int, 2, N))
+
+    window = CartesianIndices(ntuple(j -> Int(window_dimensions[N - j + 1]), N))
+    idx = zeros(Int, N)
+    for J in CartesianIndices(first(outs))
+        accs = map(fill, inits)
+        for K in window
+            inbounds = true
+            for j in 1:N
+                d = N - j + 1
+                # position in the dilated input, which must fall on an element of the input
+                q = (J[j] - 1) * strides[d] + (K[j] - 1) * window_dilations[d] - padding[1, d]
+                if q < 0 || q % base_dilations[d] != 0 || q ÷ base_dilations[d] >= size(first(inputs), j)
+                    inbounds = false
+                    break
+                end
+                idx[j] = q ÷ base_dilations[d] + 1
+            end
+            inbounds || continue
+            I = CartesianIndex(ntuple(k -> idx[k], N))
+            accs = body(accs..., map(x -> fill(x[I]), inputs)...)
+        end
+        foreach((o, a) -> o[J] = a[], outs, accs)
+    end
+    return n == 1 ? only(outs) : outs
+end
+
 function handle(::Val{Symbol("stablehlo.bitcast_convert")}, (a,), _, (result,))
     return copyto!(
         Array{result.eltype}(undef, result.size), reinterpret(result.eltype, vec(a))
