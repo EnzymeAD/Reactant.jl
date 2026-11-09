@@ -846,6 +846,23 @@ function handle(::Val{Symbol("stablehlo.case")}, (index,), _, results, branches)
     return length(results) == 1 ? only(rets) : rets
 end
 
+# `func` is the function named by the `callee` attribute, which takes the operands and returns the results of the op
+function handle(::Val{Symbol("func.call")}, operands, _, results, (func,))
+    rets = func(operands...)
+    length(results) == 0 && return nothing
+    return length(results) == 1 ? only(rets) : rets
+end
+
+# `decomposition` is the function named by the `decomposition` (`stablehlo.composite`) attribute, which takes the
+# operands and returns the results of the op
+function handle(
+    ::Val{Symbol("stablehlo.composite")}, operands, _, results, (decomposition,)
+)
+    rets = decomposition(operands...)
+    length(results) == 0 && return nothing
+    return length(results) == 1 ? only(rets) : rets
+end
+
 # `cond` and `body` take the loop-carried values; `cond` returns a 0-dimensional boolean and `body` the next values
 function handle(::Val{Symbol("stablehlo.while")}, operands, _, results, (cond, body))
     vals = operands
@@ -1598,7 +1615,30 @@ end
 
 function codegen_op!(exprs, op, opname, operands, vars, nvals)
     opval = Val(Symbol(opname))
-    nregions = IR.nregions(op)
+
+    # `func.call` and `stablehlo.composite` have no regions, but the function they call (named by their `callee` and
+    # `decomposition` attributes) is passed to their handler as if it were one
+    symattr = if opname == "func.call"
+        "callee"
+    elseif opname == "stablehlo.composite"
+        "decomposition"
+    else
+        nothing
+    end
+    blocks = if !isnothing(symattr)
+        mod = IR.parent_op(op)
+        while IR.name(mod) != "builtin.module"
+            mod = IR.parent_op(mod)
+        end
+        callee = IR.flatsymbol(IR.getattr(op, symattr))
+        func = IR.lookup(IR.SymbolTable(mod), callee)
+        isnothing(func) && throw(invalid_argument("function `@$callee` not found"))
+        [IR.first_block(IR.region(func, 1))]
+    else
+        [IR.first_block(IR.region(op, r)) for r in 1:IR.nregions(op)]
+    end
+    nregions = length(blocks)
+
     signature = if nregions == 0
         Tuple{typeof(opval),Tuple,NamedTuple,Tuple}
     else
@@ -1636,8 +1676,7 @@ function codegen_op!(exprs, op, opname, operands, vars, nvals)
     if nregions > 0
         id = nvals[]
         nvals[] += 1
-        regions = map(1:nregions) do r
-            rblock = IR.first_block(IR.region(op, r))
+        regions = map(enumerate(blocks)) do (r, rblock)
             args = map(1:IR.nargs(rblock)) do i
                 vars[IR.argument(rblock, i).ref.ptr] = Symbol(
                     "%", id, "^", r - 1, "#arg", i - 1
