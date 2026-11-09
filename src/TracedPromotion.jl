@@ -97,6 +97,11 @@ end
 
 ## Promote to a Traced Type and broadcast to a given size
 function broadcast_to_size(arg::AbstractArray, rsize)
+    if !(eltype(arg) <: Union{ReactantPrimitive,RNumber,TracedRNumber})
+        if !isempty(arg) && allequal(arg)
+            return Ref(@allowscalar first(arg))
+        end
+    end
     return broadcast_to_size(promote_to(TracedRArray, arg), rsize)
 end
 
@@ -119,3 +124,4 @@ function broadcast_to_size(arg::Broadcast.Extruded, rsize)
 end
 
 broadcast_to_size(arg::Base.RefValue, rsize) = arg
+broadcast_to_size(arg, rsize) = Ref(arg)

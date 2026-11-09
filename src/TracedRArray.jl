@@ -314,16 +314,22 @@ function Base.similar(
 end
 
 function Base.similar(
-    ::Broadcasted{AbstractReactantArrayStyle{N}}, ::Type{<:TracedRNumber{T}}, dims
+    ::Broadcasted{AbstractReactantArrayStyle{N}}, ::Type{TracedRNumber{T}}, dims
 ) where {T<:Reactant.ReactantPrimitive,N}
     @assert N isa Int
     return (@opcall fill(zero(T), dims))::TracedRArray{T,N}
 end
 
+function Base.similar(
+    ::Broadcasted{AbstractReactantArrayStyle{N}}, ::Type{T}, dims
+) where {T,N}
+    @assert N isa Int
+    return Array{T,N}(undef, length.(dims))
+end
+
 function Base.copy(bc::Broadcasted{<:AbstractReactantArrayStyle{0}})
-    ElType = Broadcast.combine_eltypes(bc.f, bc.args)
-    dest = copyto!(similar(bc, ElType), bc)
-    return dest[CartesianIndex()]  # 0D broadcast needs to unwrap results
+    dest = _copy(bc)
+    return @allowscalar dest[CartesianIndex()]  # 0D broadcast needs to unwrap results
 end
 
 Base.eltype(::Broadcast.Extruded{T}) where {T} = eltype(T)
@@ -416,12 +422,24 @@ function Base.copyto!(dest::AnyTracedRArray, src::Array)
     return copyto!(dest, Reactant.promote_to(TracedRArray, src))
 end
 
+_broadcast_args_to_size(::Tuple{}, _) = ()
+function _broadcast_args_to_size(args::Tuple, sz)
+    return (
+        Reactant.broadcast_to_size(Base.materialize(first(args)), sz),
+        _broadcast_args_to_size(Base.tail(args), sz)...,
+    )
+end
+
+function Base.copyto!(dest::Array, bc::Broadcasted{<:AbstractReactantArrayStyle})
+    return _copyto!(dest, bc)
+end
+
 function _copyto!(dest::AnyTracedRArray, bc::Broadcasted)
     axes(dest) == axes(bc) || Broadcast.throwdm(axes(dest), axes(bc))
     isempty(dest) && return dest
     bc = Broadcast.preprocess(dest, bc)
 
-    args = (Reactant.broadcast_to_size(Base.materialize(a), size(bc)) for a in bc.args)
+    args = _broadcast_args_to_size(bc.args, size(bc))
 
     res0 = TracedUtils.elem_apply(bc.f, args...)
     if !(res0 isa Reactant.TracedType)
@@ -429,6 +447,8 @@ function _copyto!(dest::AnyTracedRArray, bc::Broadcasted)
         if res0 isa Number
             res0 = Reactant.promote_to(TracedRNumber{unwrapped_eltype(dest)}, res0)
         end
+        res0 = Reactant.broadcast_to_size(res0, size(dest))
+    elseif res0 isa TracedRNumber
         res0 = Reactant.broadcast_to_size(res0, size(dest))
     end
     res = Reactant.promote_to(TracedRArray{unwrapped_eltype(dest),ndims(dest)}, res0)
@@ -442,7 +462,7 @@ function _copyto!(dest::Array{<:TracedRNumber}, bc::Broadcasted)
 
     bc = Broadcast.preprocess(dest, bc)
 
-    args = (Reactant.broadcast_to_size(Base.materialize(a), size(bc)) for a in bc.args)
+    args = _broadcast_args_to_size(bc.args, size(bc))
 
     res = TracedUtils.elem_apply(bc.f, args...)
     if !(res isa Reactant.TracedType)
@@ -450,6 +470,23 @@ function _copyto!(dest::Array{<:TracedRNumber}, bc::Broadcasted)
             res = Reactant.promote_to(TracedRNumber{unwrapped_eltype(dest)}, res)
         end
         res = Reactant.broadcast_to_size(res, size(dest))
+    elseif res isa TracedRNumber
+        res = Reactant.broadcast_to_size(res, size(dest))
+    end
+    for I in 1:length(dest)
+        dest[I] = @allowscalar res[I]
+    end
+    return dest
+end
+
+function _copyto!(dest::Array, bc::Broadcasted)
+    axes(dest) == axes(bc) || Broadcast.throwdm(axes(dest), axes(bc))
+    isempty(dest) && return dest
+    bc = Broadcast.preprocess(dest, bc)
+    args = _broadcast_args_to_size(bc.args, size(bc))
+    res = TracedUtils.elem_apply(bc.f, args...)
+    if !(res isa AbstractArray)
+        return fill!(dest, res)
     end
     for I in 1:length(dest)
         dest[I] = @allowscalar res[I]

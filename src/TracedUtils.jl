@@ -1212,14 +1212,18 @@ function elem_apply_via_while_loop(
     return ReactantCore.materialize_traced_array(reshape(result, out_size))
 end
 
+function _scalarize_zero_dim_arg(arg)
+    if arg isa Number || arg isa TracedRArray{<:Any,0}
+        return promote_to(TracedRNumber, arg)
+    elseif arg isa Base.RefValue
+        return arg[]
+    end
+    return arg
+end
+
 function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
     if all(iszero ∘ ndims, args)
-        scalar_args = map(args) do arg
-            if arg isa Number || arg isa TracedRArray{<:Any,0}
-                return promote_to(TracedRNumber, arg)
-            end
-            return arg
-        end
+        scalar_args = map(_scalarize_zero_dim_arg, args)
         return Reactant.call_with_reactant(f, scalar_args...)
     end
 

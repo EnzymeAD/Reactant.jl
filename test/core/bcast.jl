@@ -346,3 +346,19 @@ end
     @jit setindex_const_complex!(d2)
     @test Array(d2) == ComplexF32[0 im; 1im 0]
 end
+
+f1_eltype_bcast_3283(x) = sum(one.(eltype.(x)))
+f_mixed_eltype_bcast_3283(x) = convert.(eltype.(x), x .+ 1)
+
+@testset "Broadcasted similar ambiguity (#3258) and non-primitive broadcast (#3283)" begin
+    bc0 = Broadcast.Broadcasted{
+        Reactant.TracedRArrayOverrides.AbstractReactantArrayStyle{0}
+    }(
+        identity, ()
+    )
+    @test @jit(f1_eltype_bcast_3283(Reactant.to_rarray([1.0, 2.0, 3.0]))) == 3.0
+    @test Array(@jit(f_mixed_eltype_bcast_3283(Reactant.to_rarray([1.0, 2.0, 3.0])))) ≈
+        [2.0, 3.0, 4.0]
+    @test @jit(f1_eltype_bcast_3283(Reactant.to_rarray(fill(2.5)))) == 1.0
+    @test similar(bc0, DataType, ()) isa Array{DataType,0}
+end
