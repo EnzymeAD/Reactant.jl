@@ -1,5 +1,6 @@
 module Julia
 
+using Base: unsafe_convert
 using ..Reactant: Reactant
 using Reactant.XLA: CAPI
 
