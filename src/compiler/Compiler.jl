@@ -1385,7 +1385,7 @@ function compile(ctx, f, args; kwargs...)
     (; linear_args, seen_args, linear_results, preserved_args, concrete_result) =
         mlir_fn_res
 
-    result_stores = Dict{Tuple,Symbol}()
+    result_stores = Dict{Tuple,Any}()
     path_to_shard_info = mlir_fn_res.is_sharded ? Dict{Tuple,Symbol}() : nothing
 
     global_mesh_expr = if mlir_fn_res.unique_meshes === nothing
