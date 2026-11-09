@@ -85,6 +85,8 @@ if BACKEND == "julia"
         # profiler and allocator statistics are not implemented
         "core/profiling",
         "core/compile",
+        # requires extensions which are not implemented yet
+        "core/layout",
     )
         delete!(testsuite, name)
     end
