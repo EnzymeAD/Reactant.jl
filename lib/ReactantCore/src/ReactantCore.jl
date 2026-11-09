@@ -57,6 +57,12 @@ struct Binomial
     budget::Int
 end
 
+mutable struct ReadOnlyRef{T}
+    x::T
+end
+Base.getindex(r::ReadOnlyRef) = r.x
+Base.setindex!(r::ReadOnlyRef, val) = (r.x = val; r)
+
 # Traits
 function is_traced((@nospecialize x::T), seen=Base.IdSet()) where {T}
     if !isprimitivetype(x)
@@ -546,7 +552,15 @@ function trace_while(mod, expr; track_numbers, mincut, checkpointing, first_arg=
             end
         )
     end
-    args_init = Expr(:tuple, (:(Ref{Any}($(loop_init_val(s)))) for s in external_syms)...)
+    args_init = Expr(
+        :tuple, (
+            if s ∈ body_symbols.assignments
+                :(Ref{Any}($(loop_init_val(s))))
+            else
+                :($(ReadOnlyRef){Any}($(loop_init_val(s))))
+            end for s in external_syms
+        )...
+    )
 
     ref_syms = Symbol[Symbol(string(sym), "_ref") for sym in external_syms]
     arg_syms = Expr(:tuple, ref_syms...)
