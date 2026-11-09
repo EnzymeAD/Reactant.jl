@@ -1502,7 +1502,7 @@ function HostClient()
     return HostClient(devs, mems)
 end
 
-platform_name(::HostClient) = "julia-cpu"
+platform_name(::HostClient) = "Host"
 platform_version(::HostClient) = string(VERSION)
 process_index(::HostClient) = 0
 devices(client::HostClient) = client.devices
