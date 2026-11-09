@@ -316,6 +316,7 @@ handle(::Val{Symbol("stablehlo.sign")}, (a,), _, _) = map(sign, a)
 handle(::Val{Symbol("stablehlo.tanh")}, (a,), _, _) = map(tanh, a)
 handle(::Val{Symbol("stablehlo.exponential")}, (a,), _, _) = map(exp, a)
 handle(::Val{Symbol("stablehlo.exponential_minus_one")}, (a,), _, _) = map(expm1, a)
+handle(::Val{Symbol("stablehlo.exp2")}, (a,), _, _) = map(exp2, a)
 handle(::Val{Symbol("stablehlo.logistic")}, (a,), _, _) = map(x -> inv(one(x) + exp(-x)), a)
 handle(::Val{Symbol("stablehlo.is_finite")}, (a,), _, _) = map(isfinite, a)
 handle(::Val{Symbol("stablehlo.real")}, (a,), _, _) = map(real, a)
@@ -388,6 +389,12 @@ function handle(::Val{Symbol("stablehlo.power")}, (a, b), _, _)
             x^y
         end
     end
+end
+
+# Julia has no complex two-argument `atan`, so complex numbers use the StableHLO spec definition
+# `-i * log((x + i * y) / sqrt(x^2 + y^2))`
+function handle(::Val{Symbol("stablehlo.atan2")}, (a, b), _, _)
+    return map((y, x) -> y isa Complex ? -im * log((x + im * y) / sqrt(x^2 + y^2)) : atan(y, x), a, b)
 end
 
 # the sign of the result follows the dividend, like `rem`. like XLA, an integer remainder by zero is the dividend
