@@ -1336,6 +1336,11 @@ function decode_attribute(attr)
             splat = IR.Attribute(API.mlirDenseElementsAttrGetSplatValue(attr))
             x = if T === Bool
                 Bool(splat)
+            elseif T <: Complex
+                # complex splats are an array attribute `[re, im]` (indexing is 0-based)
+                R = real(T)
+                re, im = splat[0], splat[1]
+                R <: Integer ? T(Int64(re), Int64(im)) : T(Float64(re), Float64(im))
             elseif T <: Integer
                 T(Int64(splat))
             else
