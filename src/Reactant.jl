@@ -217,38 +217,75 @@ include("Indexing.jl")
 
 include("ConcreteRArray.jl")
 
-function use_overlayed_version(x::T) where {T}
+function use_overlayed_version(x::T, seen::Base.IdSet{Any}=Base.IdSet{Any}()) where {T}
     isstructtype(T) || return false
-    return looped_any(use_overlayed_version ∘ Base.Fix1(getfield, x), 1:nfields(x))
+    (x in seen) && return false
+    ismutabletype(T) && push!(seen, x)
+    for i in 1:nfields(x)
+        if isdefined(x, i) && use_overlayed_version(getfield(x, i), seen)
+            return true
+        end
+    end
+    return false
 end
-use_overlayed_version(::Symbol) = false
-use_overlayed_version(::Module) = false
-use_overlayed_version(::Core.SimpleVector) = false
-use_overlayed_version(::DataType) = false
-use_overlayed_version(::Exception) = false
-use_overlayed_version(::Nothing) = false
-use_overlayed_version(::Missing) = false
-use_overlayed_version(x::Base.Generator) = use_overlayed_version((x.f, x.iter))
-use_overlayed_version(x::Base.Iterators.Zip) = use_overlayed_version(x.is)
-use_overlayed_version(x::Base.Iterators.Enumerate) = use_overlayed_version(x.itr)
-use_overlayed_version(x::Vector) = looped_any(use_overlayed_version, x)
-use_overlayed_version(iter::Tuple) = looped_any(use_overlayed_version, iter)
-use_overlayed_version(iter::NamedTuple) = looped_any(use_overlayed_version, values(iter))
-use_overlayed_version(::Number) = false
-use_overlayed_version(::MissingTracedValue) = true
-use_overlayed_version(rng::ReactantRNG) = use_overlayed_version(rng.seed)
-use_overlayed_version(::TracedRArray) = true
-use_overlayed_version(::TracedRNumber) = true
-use_overlayed_version(::TracedStepRangeLen) = true
-use_overlayed_version(::TracedUnitRange) = true
-use_overlayed_version(::TracedRational) = true
-function use_overlayed_version(x::AbstractArray)
+use_overlayed_version(::Symbol, ::Base.IdSet{Any}=Base.IdSet{Any}()) = false
+use_overlayed_version(::Module, ::Base.IdSet{Any}=Base.IdSet{Any}()) = false
+use_overlayed_version(::Core.SimpleVector, ::Base.IdSet{Any}=Base.IdSet{Any}()) = false
+use_overlayed_version(::DataType, ::Base.IdSet{Any}=Base.IdSet{Any}()) = false
+use_overlayed_version(::Exception, ::Base.IdSet{Any}=Base.IdSet{Any}()) = false
+use_overlayed_version(::Nothing, ::Base.IdSet{Any}=Base.IdSet{Any}()) = false
+use_overlayed_version(::Missing, ::Base.IdSet{Any}=Base.IdSet{Any}()) = false
+function use_overlayed_version(x::Base.Generator, seen::Base.IdSet{Any}=Base.IdSet{Any}())
+    return use_overlayed_version((x.f, x.iter), seen)
+end
+function use_overlayed_version(
+    x::Base.Iterators.Zip, seen::Base.IdSet{Any}=Base.IdSet{Any}()
+)
+    return use_overlayed_version(x.is, seen)
+end
+function use_overlayed_version(
+    x::Base.Iterators.Enumerate, seen::Base.IdSet{Any}=Base.IdSet{Any}()
+)
+    return use_overlayed_version(x.itr, seen)
+end
+function use_overlayed_version(x::Array, seen::Base.IdSet{Any}=Base.IdSet{Any}())
+    (x in seen) && return false
+    push!(seen, x)
+    for i in eachindex(x)
+        if isassigned(x, i) && use_overlayed_version(x[i], seen)
+            return true
+        end
+    end
+    return false
+end
+function use_overlayed_version(iter::Tuple, seen::Base.IdSet{Any}=Base.IdSet{Any}())
+    for v in iter
+        use_overlayed_version(v, seen) && return true
+    end
+    return false
+end
+function use_overlayed_version(iter::NamedTuple, seen::Base.IdSet{Any}=Base.IdSet{Any}())
+    return use_overlayed_version(values(iter), seen)
+end
+use_overlayed_version(::Number, ::Base.IdSet{Any}=Base.IdSet{Any}()) = false
+use_overlayed_version(::MissingTracedValue, ::Base.IdSet{Any}=Base.IdSet{Any}()) = true
+function use_overlayed_version(rng::ReactantRNG, seen::Base.IdSet{Any}=Base.IdSet{Any}())
+    return use_overlayed_version(rng.seed, seen)
+end
+use_overlayed_version(::TracedRArray, ::Base.IdSet{Any}=Base.IdSet{Any}()) = true
+use_overlayed_version(::TracedRNumber, ::Base.IdSet{Any}=Base.IdSet{Any}()) = true
+use_overlayed_version(::TracedStepRangeLen, ::Base.IdSet{Any}=Base.IdSet{Any}()) = true
+use_overlayed_version(::TracedUnitRange, ::Base.IdSet{Any}=Base.IdSet{Any}()) = true
+use_overlayed_version(::TracedRational, ::Base.IdSet{Any}=Base.IdSet{Any}()) = true
+function use_overlayed_version(x::AbstractArray, seen::Base.IdSet{Any}=Base.IdSet{Any}())
     T = eltype(x)
     # `Union{}` is a subtype of everything, but an array of it holds no traced values.
     T !== Union{} && T <: TracedRNumber && return true
+    (x in seen) && return false
+    push!(seen, x)
     a = ancestor(x)
     a === x && return false
-    return use_overlayed_version(a)
+    return use_overlayed_version(a, seen)
 end
 
 ## We avoid calling into `any` to avoid triggering the `any` overlay
