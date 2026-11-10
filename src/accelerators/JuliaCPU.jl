@@ -336,6 +336,7 @@ function handle(::Val{Symbol("stablehlo.divide")}, (a, b), _, (result,))
 end
 
 handle(::Val{Symbol("stablehlo.constant")}, _, attributes, _) = attributes.value
+handle(::Val{Symbol("arith.constant")}, _, attributes, _) = attributes.value
 
 # each element is its 0-based index along `iota_dimension`, an MLIR dimension, which is Julia dimension `N - d`
 function handle(::Val{Symbol("stablehlo.iota")}, _, attributes, (result,))
