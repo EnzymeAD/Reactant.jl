@@ -213,6 +213,11 @@ end
 function get_ancestor_and_indices_inner(
     x::AnyTracedRArray{T,1}, linear_indices::AbstractArray
 ) where {T}
+    if any(is_traced, parentindices(x)) || is_traced(linear_indices)
+        return get_ancestor_and_indices(
+            parent(x), Base.reindex(parentindices(x), (linear_indices,))...
+        )
+    end
     a, idxs = _get_ancestor_and_indices_linear(x, linear_indices)
     return a, (idxs isa Tuple ? idxs : (idxs,))
 end
