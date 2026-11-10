@@ -1192,6 +1192,30 @@ function elem_apply_via_while_loop(
     # Before we selected the output container based on the first argument
     # That doesn't work for cases when StructArrays are involved
     # Since this is essentially a broadcast I'm reusing this machinery
+    if Broadcast.combine_styles(args...) isa
+       Reactant.TracedRArrayOverrides.AbstractReactantArrayStyle &&
+        !(T_res <: Reactant.ReactantPrimitive)
+        L == 0 && return reshape(T_res[], out_size)
+        out = Vector{Any}(undef, L)
+        out[1] = res_tmp
+        all_same = true
+        for idx in 2:L
+            step_args = @allowscalar map(Base.Fix2(getindex, idx), flat_args)
+            val_idx = @allowscalar(Reactant.call_with_reactant(f, step_args...))
+            out[idx] = val_idx
+            all_same &= typeof(val_idx) === T_res
+        end
+        typed_out = if all_same
+            out_t = Vector{T_res}(undef, L)
+            for idx in 1:L
+                out_t[idx] = out[idx]
+            end
+            out_t
+        else
+            out
+        end
+        return out_size === () ? only(typed_out) : reshape(typed_out, out_size)
+    end
     bc = Base.Broadcast.Broadcasted(f, Tuple(args))
     result = similar(bc, T_res)
 

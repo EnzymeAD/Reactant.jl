@@ -532,3 +532,53 @@ mapped_sub(xs...) = stack(map(-, xs...))
         end
     end
 end
+
+struct SumDims2966{X}
+    x::X
+end
+(s::SumDims2966)(_) = sum(s.x; dims=2)
+
+struct ScaleSumDims2966{X}
+    x::X
+end
+(s::ScaleSumDims2966)(k) = k .* sum(s.x; dims=2)
+
+map_over_sum_dims_2966(x) = only(map(SumDims2966(x), 1:1))
+map_multi_sum_dims_2966(x) = map(ScaleSumDims2966(x), 1:3)
+
+function sum_into_2966!(R, x)
+    sum!(R, x)
+    return R
+end
+
+function mapreducedim_add_2966!(R, x)
+    Base.mapreducedim!(abs2, +, R, x)
+    return R
+end
+
+@testset "mapreducedim! and map over sum(x; dims=...) (#2966)" begin
+    x_host = reshape(collect(Float64, 1:15), 5, 3)
+    x = Reactant.to_rarray(x_host)
+
+    @test Array(@jit(map_over_sum_dims_2966(x))) ≈ sum(x_host; dims=2)
+
+    multi_res = @jit map_multi_sum_dims_2966(x)
+    @test length(multi_res) == 3
+    for k in 1:3
+        @test Array(multi_res[k]) ≈ k .* sum(x_host; dims=2)
+    end
+
+    R_host = zeros(Float64, 5, 1)
+    R = Reactant.to_rarray(copy(R_host))
+    @test Array(@jit(sum_into_2966!(R, x))) ≈ sum!(copy(R_host), x_host)
+
+    R2_host = ones(Float64, 5, 1)
+    R2 = Reactant.to_rarray(copy(R2_host))
+    @test Array(@jit(mapreducedim_add_2966!(R2, x))) ≈
+        Base.mapreducedim!(abs2, +, copy(R2_host), x_host)
+
+    R_same_host = ones(Float64, 5, 3)
+    R_same = Reactant.to_rarray(copy(R_same_host))
+    @test Array(@jit(mapreducedim_add_2966!(R_same, x))) ≈
+        Base.mapreducedim!(abs2, +, copy(R_same_host), x_host)
+end
