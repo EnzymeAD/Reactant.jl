@@ -294,7 +294,14 @@ function handle end
 # element-wise ops use `map` instead of broadcasting: StableHLO operands always have the same shape, and broadcasting
 # would return a scalar over 0-dimensional arrays and a `BitArray` for booleans instead of an `Array`
 handle(::Val{Symbol("stablehlo.add")}, (a, b), _, _) = map(+, a, b)
-handle(::Val{Symbol("stablehlo.add")}, (a, b)::Tuple{AbstractArray{Bool},AbstractArray{Bool}}, _, _) = map(|, a, b)
+function handle(
+    ::Val{Symbol("stablehlo.add")},
+    (a, b)::Tuple{<:AbstractArray{Bool},<:AbstractArray{Bool}},
+    _,
+    _,
+)
+    return map(|, a, b)
+end
 handle(::Val{Symbol("stablehlo.subtract")}, (a, b), _, _) = map(-, a, b)
 handle(::Val{Symbol("stablehlo.multiply")}, (a, b), _, _) = map(*, a, b)
 handle(::Val{Symbol("stablehlo.maximum")}, (a, b), _, _) = map(max, a, b)
@@ -396,7 +403,11 @@ end
 # Julia has no complex two-argument `atan`, so complex numbers use the StableHLO spec definition
 # `-i * log((x + i * y) / sqrt(x^2 + y^2))`
 function handle(::Val{Symbol("stablehlo.atan2")}, (a, b), _, _)
-    return map((y, x) -> y isa Complex ? -im * log((x + im * y) / sqrt(x^2 + y^2)) : atan(y, x), a, b)
+    return map(
+        (y, x) -> y isa Complex ? -im * log((x + im * y) / sqrt(x^2 + y^2)) : atan(y, x),
+        a,
+        b,
+    )
 end
 
 # the sign of the result follows the dividend, like `rem`. like XLA, an integer remainder by zero is the dividend
@@ -922,8 +933,12 @@ function handle(
             for j in 1:N
                 d = N - j + 1
                 # position in the dilated input, which must fall on an element of the input
-                q = (J[j] - 1) * strides[d] + (K[j] - 1) * window_dilations[d] - padding[1, d]
-                if q < 0 || q % base_dilations[d] != 0 || q ÷ base_dilations[d] >= size(first(inputs), j)
+                q =
+                    (J[j] - 1) * strides[d] + (K[j] - 1) * window_dilations[d] -
+                    padding[1, d]
+                if q < 0 ||
+                    q % base_dilations[d] != 0 ||
+                    q ÷ base_dilations[d] >= size(first(inputs), j)
                     inbounds = false
                     break
                 end
