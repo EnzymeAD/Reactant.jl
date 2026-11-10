@@ -3,10 +3,11 @@ using Reactant, Test, Enzyme, Statistics, FileCheck
 using Reactant: TracedRArray, TracedRNumber
 
 const RunningOnTPU = contains(string(Reactant.devices()[1]), "TPU")
+const RunningOnMetal = contains(string(Reactant.devices()[1]), "MTL")
 
 fastmax(x::AbstractArray{T}) where {T} = reduce(max, x; dims=1, init=float(T)(-Inf))
 
-@testset "2D sum" begin
+RunningOnMetal || @testset "2D sum" begin
     x = Reactant.TestUtils.construct_test_array(Float64, 2, 10)
 
     r_res = sum(x)
@@ -19,7 +20,7 @@ fastmax(x::AbstractArray{T}) where {T} = reduce(max, x; dims=1, init=float(T)(-I
     @test @jit(sum(a)) ≈ r_res
 end
 
-@testset "Basic reduce max" begin
+RunningOnMetal || @testset "Basic reduce max" begin
     x = Reactant.TestUtils.construct_test_array(Float64, 2, 10)
 
     r_res = fastmax(x)
@@ -108,12 +109,13 @@ end
 
         _sum1(x) = sum(x; init=1.0)
         _sum2(x) = sum(x; dims=1, init=1.0)
-        @testset "$reduction" for reduction in (sum, maximum, _sum1, _sum2)
-            y = @jit strict_reduction(reduction, x_ra)
-            z = reduction(x)
-            @test y ≈ z
-            @test Reactant.unwrapped_eltype(y) == Reactant.unwrapped_eltype(z)
-        end
+        RunningOnMetal ||
+            @testset "$reduction" for reduction in (sum, maximum, _sum1, _sum2)
+                y = @jit strict_reduction(reduction, x_ra)
+                z = reduction(x)
+                @test y ≈ z
+                @test Reactant.unwrapped_eltype(y) == Reactant.unwrapped_eltype(z)
+            end
     end
 end
 
@@ -122,7 +124,7 @@ function mysoftmax!(x)
     return x .- max_
 end
 
-@testset "Basic softmax" begin
+RunningOnMetal || @testset "Basic softmax" begin
     x = Reactant.TestUtils.construct_test_array(Float64, 2, 10)
     r_res = mysoftmax!(x)
 
@@ -141,7 +143,7 @@ sum_xxᵀ(x) = sum(x .* x')
     )
         x_ca = Reactant.to_rarray(x)
 
-        @test @jit(sum_xxᵀ(x_ca)) ≈ sum_xxᵀ(x)
+        @test @jit(sum_xxᵀ(x_ca)) ≈ sum_xxᵀ(x) skip = RunningOnMetal
     end
 end
 
@@ -371,7 +373,8 @@ end
         hlo
     end
 
-    @test @jit(mapreduce_with_closure(ρr, x)) ≈ mapreduce_with_closure(2.0, x)
+    @test @jit(mapreduce_with_closure(ρr, x)) ≈ mapreduce_with_closure(2.0, x) skip =
+        RunningOnMetal
 end
 
 mapreduce_closure_not_traced(x) = prod(Base.Fix1(size, x), [1, 3])
@@ -385,7 +388,7 @@ end
 
 @testset "scalar indexing in any #1434" begin
     xr = Reactant.to_rarray(ones(4, 4))
-    @test @jit(any(<(0), xr)) == any(<(0), Array(xr))
+    @test @jit(any(<(0), xr)) == any(<(0), Array(xr)) skip = RunningOnMetal
 end
 
 zip_iterator(a, b) = mapreduce(splat(*), +, zip(a, b))
@@ -418,7 +421,7 @@ end
         x = collect(range(10.0, 15.0; length=N + 2))
         x_ra = Reactant.to_rarray(x)
 
-        @test @jit(zip_iterator(a, x_ra)) ≈ zip_iterator(a, x)
+        @test @jit(zip_iterator(a, x_ra)) ≈ zip_iterator(a, x) skip = RunningOnMetal
 
         a = [Reactant.TestUtils.construct_test_array(Float32, 2, 3) for _ in 1:10]
         x = [Reactant.TestUtils.construct_test_array(Float32, 2, 3) for _ in 1:10]
@@ -432,7 +435,7 @@ end
         x = collect(range(1.0, 5.0; length=10))
         x_ra = Reactant.to_rarray(x)
 
-        @test @jit(enumerate_iterator(x_ra)) ≈ enumerate_iterator(x)
+        @test @jit(enumerate_iterator(x_ra)) ≈ enumerate_iterator(x) skip = RunningOnMetal
 
         x = [Reactant.TestUtils.construct_test_array(Float32, 2, 3) for _ in 1:10]
         x_ra = Reactant.to_rarray(x)

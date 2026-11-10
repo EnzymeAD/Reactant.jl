@@ -105,3 +105,14 @@ function MakeClientUsingPluginAPI(
     client == C_NULL && throw(AssertionError(unsafe_string(errstr[])))
     return Client(client)
 end
+
+function MakeClientFromApi(
+    api::Ptr{Cvoid}, device_type::String, client_name::String=uppercase(device_type)
+)
+    errstr = Ref{Cstring}()
+    GC.@preserve errstr device_type client_name begin
+        client = MLIR.API.MakeClientFromApi(api, device_type, client_name, errstr)
+    end
+    client == C_NULL && throw(AssertionError(unsafe_string(errstr[])))
+    return Client(client)
+end

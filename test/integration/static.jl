@@ -2,6 +2,8 @@ using Test
 using Reactant
 using Static
 
+const RunningOnMetal = contains(string(Reactant.devices()[1]), "MTL")
+
 @testset "type promotion" begin
     for (sv, T) in ((static(true), Bool), (static(2), Int), (static(1.5), Float64))
         @test Reactant.unwrapped_eltype(typeof(sv)) == T
@@ -16,11 +18,11 @@ end
     x = Reactant.to_rarray(rand(4))
 
     f1(x) = sum(x) + static(1.5)
-    @test Float64(@jit f1(x)) ≈ f1(Array(x))
+    @test Float64(@jit f1(x)) ≈ f1(Array(x)) skip = RunningOnMetal
 
     f2(x) = static(2) * sum(x)
-    @test Float64(@jit f2(x)) ≈ f2(Array(x))
+    @test Float64(@jit f2(x)) ≈ f2(Array(x)) skip = RunningOnMetal
 
     f3(x) = x .+ static(1.0)
-    @test Array(@jit f3(x)) ≈ f3(Array(x))
+    @test Array(@jit f3(x)) ≈ f3(Array(x)) skip = RunningOnMetal
 end

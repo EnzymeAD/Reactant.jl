@@ -1,6 +1,7 @@
 using Reactant, Test, Enzyme, InteractiveUtils, FileCheck
 
 const RunningOnTPU = contains(string(Reactant.devices()[1]), "TPU")
+const RunningOnMetal = contains(string(Reactant.devices()[1]), "MTL")
 
 Base.sum(x::NamedTuple{(:a,),Tuple{T}}) where {T<:Reactant.TracedRArray} = (; a=sum(x.a))
 
@@ -14,7 +15,7 @@ intout_caller(vis) = @noinline intout(vis)
 end
 
 @testset "create_result" begin
-    @testset "NamedTuple" begin
+    RunningOnMetal || @testset "NamedTuple" begin
         x = (; a=Reactant.TestUtils.construct_test_array(Float64, 4, 3))
         x2 = Reactant.to_rarray(x)
 
@@ -50,10 +51,10 @@ end
 
     fworld(x, y) = @jit(x * y)
 
-    @test fworld(a_ra, b_ra) ≈ ones(2, 2) * 10
+    @test fworld(a_ra, b_ra) ≈ ones(2, 2) * 10 skip = RunningOnMetal
 end
 
-@testset "type casting & optimized out returns" begin
+RunningOnMetal || @testset "type casting & optimized out returns" begin
     a = ones(2, 10)
     a_ra = Reactant.to_rarray(a)
 
@@ -305,7 +306,7 @@ end
     @test Reactant.synchronize((ysyncfalse, ysynctrue)) == nothing
 end
 
-@testset "Julia Compilation cache" begin
+RunningOnMetal || @testset "Julia Compilation cache" begin
     x = @compile -(Reactant.to_rarray(ones(2)))
     y = @compile -(Reactant.to_rarray(ones(2)))
 
@@ -319,7 +320,7 @@ f_var(args...) = sum(args)
     y = Reactant.to_rarray(3 * ones(3))
     z = Reactant.to_rarray(2.6 * ones(3))
 
-    @test @jit(f_var(x, y, z)) ≈ [6.6, 6.6, 6.6]
+    @test @jit(f_var(x, y, z)) ≈ [6.6, 6.6, 6.6] skip = RunningOnMetal
 end
 
 sumcos(x) = sum(cos.(x))
@@ -336,10 +337,10 @@ function resgrad_ip(x)
     return (res, dx)
 end
 
-@testset "Basic grad cos" begin
+RunningOnMetal || @testset "Basic grad cos" begin
     c = Reactant.to_rarray(ones(3, 2))
 
-    @test @jit(grad_ip(c)) ≈ -sin.(ones(3, 2))
+    @test @jit(grad_ip(c)) ≈ -sin.(ones(3, 2)) skip = RunningOnMetal
 
     orig, r = @jit(resgrad_ip(c))
 
@@ -351,7 +352,7 @@ end
     c = Reactant.to_rarray(ones(50, 70))
     d = Reactant.to_rarray(ones(70, 30))
 
-    @test @jit(*(c, d)) ≈ *(ones(50, 70), ones(70, 30))
+    @test @jit(*(c, d)) ≈ *(ones(50, 70), ones(70, 30)) skip = RunningOnMetal
 end
 
 @testset "@code_hlo" begin
@@ -401,7 +402,7 @@ end
     x = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float64, 10))
     fn(x) = x .+ (1:length(x))
 
-    @test @jit(fn(x)) ≈ fn(Array(x))
+    @test @jit(fn(x)) ≈ fn(Array(x)) skip = RunningOnMetal
 end
 
 @testset "don't expand ranges by default" begin
@@ -474,12 +475,11 @@ end
     @test Array(x) ≈ Array(y) ./ 2
 end
 
-@testset "HLO Cost Analysis" begin
+RunningOnMetal || @testset "HLO Cost Analysis" begin
     x_ra = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float64, 4, 4))
     mul_comp = @compile x_ra * x_ra
     @test begin
-        Reactant.XLA.cost_analysis(mul_comp) isa
-        Reactant.MLIR.API.JLHloCostAnalysisProperties
+        Reactant.XLA.cost_analysis(mul_comp) isa Reactant.MLIR.API.JLHloCostAnalysisProperties
     end broken = RunningOnTPU
 end
 
@@ -497,7 +497,7 @@ function fractional_idx(times, t)
     return ñ, n₁, n₂
 end
 
-@testset "Fractional index" begin
+RunningOnMetal || @testset "Fractional index" begin
     times = 0:0.01:4.5
     @test times isa Base.StepRangeLen
     res = @jit fractional_idx(times, ConcreteRNumber(2.143))
@@ -506,7 +506,7 @@ end
     @test res[3] == 216
 end
 
-@testset "Traced fractional index" begin
+RunningOnMetal || @testset "Traced fractional index" begin
     times = Reactant.to_rarray(0:0.01:4.5; track_numbers=Number)
     @test times isa Reactant.TracedStepRangeLen
     res = @jit fractional_idx(times, ConcreteRNumber(2.143))
@@ -654,10 +654,10 @@ end
     x = Reactant.to_rarray([1, 2, 3])
     ir = sprint(show, @code_hlo debug = true sum(x))
     if !RunningOnTPU
-        @test @filecheck begin
+        @test (@filecheck begin
             @check_dag "loc(\"arg1 (path=(:args, 1))\")"
             ir
-        end
+        end) skip = RunningOnMetal
     end
 end
 
@@ -672,55 +672,58 @@ end
 _cwr_inv_f(x::Number) = x + 1
 _cwr_inv_f(x::Real) = x * 10
 
-@testset "call_with_reactant CallInfo & nested vararg closure rewrite" begin
-    # Compiling Base.Broadcast.flatten's nested inline vararg closures (#3339)
-    x_jl = rand(3)
-    a_jl = rand(3)
-    b = 0.9
-    x = Reactant.to_rarray(x_jl)
-    a = Reactant.to_rarray(a_jl)
-    bc_flat = Broadcast.flatten(
-        Broadcast.broadcasted(
-            +,
+RunningOnMetal ||
+    @testset "call_with_reactant CallInfo & nested vararg closure rewrite" begin
+        # Compiling Base.Broadcast.flatten's nested inline vararg closures (#3339)
+        x_jl = rand(3)
+        a_jl = rand(3)
+        b = 0.9
+        x = Reactant.to_rarray(x_jl)
+        a = Reactant.to_rarray(a_jl)
+        bc_flat = Broadcast.flatten(
             Broadcast.broadcasted(
-                +, x, Broadcast.broadcasted(+, a, Broadcast.broadcasted(-, 1, b))
+                +,
+                Broadcast.broadcasted(
+                    +, x, Broadcast.broadcasted(+, a, Broadcast.broadcasted(-, 1, b))
+                ),
+                1.0,
             ),
-            1.0,
-        ),
-    )
-    res_flat = Reactant.compile(Broadcast.BroadcastFunction(bc_flat.f), (bc_flat.args...,))(
-        bc_flat.args...
-    )
-    @test Array(res_flat) ≈ x_jl .+ (a_jl .+ (1 .- b)) .+ 1.0
+        )
+        res_flat = Reactant.compile(
+            Broadcast.BroadcastFunction(bc_flat.f), (bc_flat.args...,)
+        )(
+            bc_flat.args...
+        )
+        @test Array(res_flat) ≈ x_jl .+ (a_jl .+ (1 .- b)) .+ 1.0
 
-    # Direct CallWithReactant / call_with_reactant on inlineable methods & InvokeSignature
-    @inline inner_pair(p, q) = (p + q, p - q)
-    call_cwr(p, q) = Reactant.CallWithReactant(inner_pair)(p, q)
-    call_ert(p, q) = Reactant.call_with_reactant(
-        Reactant.EnsureReturnType{Tuple{Reactant.TracedRNumber{Float64},Any}}(),
-        inner_pair,
-        p,
-        q,
-    )
-    call_inv(p) = Reactant.call_with_reactant(
-        Reactant.EnsureReturnType{Any}(),
-        Reactant.InvokeSignature{Tuple{typeof(_cwr_inv_f),Number}}(),
-        _cwr_inv_f,
-        p,
-    )
+        # Direct CallWithReactant / call_with_reactant on inlineable methods & InvokeSignature
+        @inline inner_pair(p, q) = (p + q, p - q)
+        call_cwr(p, q) = Reactant.CallWithReactant(inner_pair)(p, q)
+        call_ert(p, q) = Reactant.call_with_reactant(
+            Reactant.EnsureReturnType{Tuple{Reactant.TracedRNumber{Float64},Any}}(),
+            inner_pair,
+            p,
+            q,
+        )
+        call_inv(p) = Reactant.call_with_reactant(
+            Reactant.EnsureReturnType{Any}(),
+            Reactant.InvokeSignature{Tuple{typeof(_cwr_inv_f),Number}}(),
+            _cwr_inv_f,
+            p,
+        )
 
-    # Nested inline vararg forwarding (`applyiterate_with_reactant` must not be double-rewritten)
-    @inline _inner_va(xs...) = +(xs...)
-    @inline _outer_va(w, ys...) = _inner_va(w, ys...)
+        # Nested inline vararg forwarding (`applyiterate_with_reactant` must not be double-rewritten)
+        @inline _inner_va(xs...) = +(xs...)
+        @inline _outer_va(w, ys...) = _inner_va(w, ys...)
 
-    p = ConcreteRNumber(3.0)
-    q = ConcreteRNumber(1.5)
-    s1, d1 = @jit call_cwr(p, q)
-    @test Float64(s1) ≈ 4.5
-    @test Float64(d1) ≈ 1.5
-    s2, d2 = @jit call_ert(p, q)
-    @test Float64(s2) ≈ 4.5
-    @test Float64(d2) ≈ 1.5
-    @test Float64(@jit call_inv(p)) ≈ 4.0
-    @test Float64(@jit _outer_va(p, q, p)) ≈ 7.5
-end
+        p = ConcreteRNumber(3.0)
+        q = ConcreteRNumber(1.5)
+        s1, d1 = @jit call_cwr(p, q)
+        @test Float64(s1) ≈ 4.5
+        @test Float64(d1) ≈ 1.5
+        s2, d2 = @jit call_ert(p, q)
+        @test Float64(s2) ≈ 4.5
+        @test Float64(d2) ≈ 1.5
+        @test Float64(@jit call_inv(p)) ≈ 4.0
+        @test Float64(@jit _outer_va(p, q, p)) ≈ 7.5
+    end

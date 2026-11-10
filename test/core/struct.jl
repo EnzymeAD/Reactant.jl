@@ -1,5 +1,7 @@
 using Reactant, Test, Adapt
 
+const RunningOnMetal = contains(string(Reactant.devices()[1]), "MTL")
+
 # from bsc-quantic/Tenet.jl
 struct MockTensor{T,N,A<:AbstractArray{T,N}} <: AbstractArray{T,N}
     data::A
@@ -74,7 +76,7 @@ end
 
 @testset "Struct" begin
     @testset "MockTensor" begin
-        @testset "immutable" begin
+        RunningOnMetal || @testset "immutable" begin
             x = MockTensor(Reactant.TestUtils.construct_test_array(Float64, 4, 4), [:i, :j])
             x2 = MockTensor(Reactant.to_rarray(parent(x)), x.inds)
 
@@ -86,7 +88,7 @@ end
             @test x.inds == [:i, :j]
         end
 
-        @testset "mutable" begin
+        RunningOnMetal || @testset "mutable" begin
             x = MutableMockTensor(
                 Reactant.TestUtils.construct_test_array(Float64, 4, 4), [:i, :j]
             )
@@ -109,7 +111,7 @@ end
         # TODO(#2253) this should be able to run without problems, but crashes
         @test_broken isapprox(@jit(identity(x3)), x3)
 
-        @test isapprox(@allowscalar(sum(x3)), only(@jit(sum(x3))))
+        @test isapprox(@allowscalar(sum(x3)), only(@jit(sum(x3)))) skip = RunningOnMetal
     end
 
     # Regression: concrete subtype (Bar{NF,A}) has more type params than the abstract

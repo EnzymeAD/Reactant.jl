@@ -4,6 +4,8 @@ using BFloat16s: BFloat16
 
 using Test
 
+const RunningOnMetal = contains(string(Reactant.devices()[1]), "MTL")
+
 fn(x, y) = sin.(x) .+ cos.(y.x[1:2, :])
 
 function multi_fn(x32, x64, flag, w1, b1, cparam, bfparam)
@@ -261,7 +263,7 @@ with open(os.path.join(tmpdir, "num_outs.txt"), "w") as f:
             end
         end
 
-        @testset "Multiple parameters, outputs, scalars, and dtypes" begin
+        RunningOnMetal || @testset "Multiple parameters, outputs, scalars, and dtypes" begin
             x32_jl = Float32[1 2 3 4 5; 6 7 8 9 10; 11 12 13 14 15]
             x64_jl = Float64[0.5, -1.5, 2.0, 3.25, -0.75]
             w1_jl = Float32[0.25 -0.5 1.0; 1.5 0.5 -0.25]

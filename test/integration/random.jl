@@ -1,6 +1,8 @@
 using Reactant, Test, Random, Random123, StableRNGs, Statistics, FileCheck
 using StatsBase, Statistics, HypothesisTests, Distributions
 
+const RunningOnMetal = contains(string(Reactant.devices()[1]), "MTL")
+
 # First Testing overlay works correctly
 @testset "Random.jl Overlay" begin
     hlo = @code_hlo rand(Float32, 2, 3)
@@ -104,7 +106,7 @@ end
 # Next we test that the random number generators actually generate data from the correct
 # distributions
 @testset "Uniform Random" begin
-    @testset "Deterministic Seed" begin
+    RunningOnMetal || @testset "Deterministic Seed" begin
         seed1 = Reactant.to_rarray(UInt64[1, 3])
         seed2 = Reactant.to_rarray(UInt64[1, 5])
 
@@ -119,26 +121,26 @@ end
         @test !(all(Array(fn_compiled(seed1)) .≈ Array(fn_compiled(seed2))))
     end
 
-    @testset "Correct Distribution" begin
+    RunningOnMetal || @testset "Correct Distribution" begin
         X = Array(@jit(rand(StableRNG(0), 10000)))
         ks_test = ExactOneSampleKSTest(X, Uniform(0.0, 1.0))
         @test pvalue(ks_test) > 0.05
     end
 
-    @testset "AutoCorrelation" begin
+    RunningOnMetal || @testset "AutoCorrelation" begin
         X = Array(@jit(rand(StableRNG(0), 10000)))
         autocorr = cor(X[1:(end - 1)], X[2:end])
         @test abs(autocorr) < 0.05
     end
 
-    @testset "Correct Range" begin
+    RunningOnMetal || @testset "Correct Range" begin
         X = Array(@jit(rand(StableRNG(0), 10000)))
         X_min, X_max = extrema(X)
         @test X_min ≥ 0.0
         @test X_max ≤ 1.0
     end
 
-    @testset "Mean & Variance" begin
+    RunningOnMetal || @testset "Mean & Variance" begin
         X = Array(@jit(rand(StableRNG(0), 10000)))
         μ = mean(X)
         σ² = var(X)
@@ -148,7 +150,7 @@ end
 end
 
 @testset "Normal Distribution" begin
-    @testset "Deterministic Seed" begin
+    RunningOnMetal || @testset "Deterministic Seed" begin
         seed1 = Reactant.to_rarray(UInt64[1, 3])
         seed2 = Reactant.to_rarray(UInt64[1, 5])
 
@@ -163,7 +165,7 @@ end
         @test !(all(Array(fn_compiled(seed1)) .≈ Array(fn_compiled(seed2))))
     end
 
-    @testset "Seeding with Integer" begin
+    RunningOnMetal || @testset "Seeding with Integer" begin
         fn() = begin
             rng = Random.default_rng()
             Random.seed!(rng, 42)
@@ -179,19 +181,19 @@ end
         @test Array(a) != Array(c)
     end
 
-    @testset "Correct Distribution" begin
+    RunningOnMetal || @testset "Correct Distribution" begin
         X = Array(@jit(randn(StableRNG(0), 10000)))
         sw_test = ShapiroWilkTest(X)
         @test pvalue(sw_test) > 0.05
     end
 
-    @testset "AutoCorrelation" begin
+    RunningOnMetal || @testset "AutoCorrelation" begin
         X = Array(@jit(randn(StableRNG(0), 10000)))
         autocorr = cor(X[1:(end - 1)], X[2:end])
         @test abs(autocorr) < 0.05
     end
 
-    @testset "Mean & Variance" begin
+    RunningOnMetal || @testset "Mean & Variance" begin
         X = Array(@jit(randn(StableRNG(0), 10000)))
         μ = mean(X)
         σ² = var(X)
@@ -201,7 +203,7 @@ end
 end
 
 @testset "Exponential Distribution" begin
-    @testset "Deterministic Seed" begin
+    RunningOnMetal || @testset "Deterministic Seed" begin
         seed1 = Reactant.to_rarray(UInt64[1, 3])
         seed2 = Reactant.to_rarray(UInt64[1, 5])
 
@@ -216,25 +218,25 @@ end
         @test !(all(Array(fn_compiled(seed1)) .≈ Array(fn_compiled(seed2))))
     end
 
-    @testset "Correct Distribution" begin
+    RunningOnMetal || @testset "Correct Distribution" begin
         X = Array(@jit(randexp(StableRNG(0), 10000)))
         ks_test = ExactOneSampleKSTest(X, Exponential(1.0))
         @test pvalue(ks_test) > 0.05
     end
 
-    @testset "AutoCorrelation" begin
+    RunningOnMetal || @testset "AutoCorrelation" begin
         X = Array(@jit(randexp(StableRNG(0), 10000)))
         autocorr = cor(X[1:(end - 1)], X[2:end])
         @test abs(autocorr) < 0.05
     end
 
-    @testset "Correct Range" begin
+    RunningOnMetal || @testset "Correct Range" begin
         X = Array(@jit(randexp(StableRNG(0), 10000)))
         X_min, X_max = extrema(X)
         @test X_min ≥ 0.0
     end
 
-    @testset "Mean" begin
+    RunningOnMetal || @testset "Mean" begin
         X = Array(@jit(randexp(StableRNG(0), 10000)))
         μ = mean(X)
         @test μ ≈ 1.0 atol = 0.05 rtol = 0.05
@@ -251,9 +253,9 @@ end
 
 @testset "TracedTypes in Sampling" begin
     @test @jit(rand_sample(Reactant.ReactantRNG(), rand(3, 4))) isa
-        ConcreteRArray{Float64,2}
+        ConcreteRArray{Float64,2} skip = RunningOnMetal
     @test @jit(rand_sample(Reactant.ReactantRNG(), Reactant.to_rarray(rand(3, 4)))) isa
-        ConcreteRArray{Float64,2}
+        ConcreteRArray{Float64,2} skip = RunningOnMetal
     @test @jit(rand_on_device()) isa ConcreteRArray{Float32,3}
 end
 
@@ -304,13 +306,14 @@ function _rand_foo3(rng, α)
     return boost * dv
 end
 
-@testset "Random state mutation across conditional branches and while loop" begin
-    for val in (0.5, 1.0, 1.5, 2.0)
-        rng = Reactant.ReactantRNG()
-        a = ConcreteRNumber(val)
-        rg = @compile _rand_foo3(rng, a)
-        res1 = rg(rng, a)
-        res2 = rg(rng, a)
-        @test res1 != res2
+RunningOnMetal ||
+    @testset "Random state mutation across conditional branches and while loop" begin
+        for val in (0.5, 1.0, 1.5, 2.0)
+            rng = Reactant.ReactantRNG()
+            a = ConcreteRNumber(val)
+            rg = @compile _rand_foo3(rng, a)
+            res1 = rg(rng, a)
+            res2 = rg(rng, a)
+            @test res1 != res2
+        end
     end
-end

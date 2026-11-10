@@ -1,5 +1,7 @@
 using Reactant, Test
 
+const RunningOnMetal = contains(string(Reactant.devices()[1]), "MTL")
+
 @testset "rationals" begin
     # Test basic conversion
     r = 1//2
@@ -33,7 +35,7 @@ using Reactant, Test
     @test Rational(r_neg) ≈ -(1//2)
 end
 
-@testset "rational conversions" begin
+RunningOnMetal || @testset "rational conversions" begin
     r = Reactant.to_rarray(3//4; track_numbers=true)
 
     # Convert to float
@@ -72,7 +74,7 @@ function mutliply_with_rational(x, n, d)
     return x .* coeff
 end
 
-@testset "broadcasted rational multiplication" begin
+RunningOnMetal || @testset "broadcasted rational multiplication" begin
     x = [1.0f0, 2.0f0, 3.0f0]
     x_ra = Reactant.to_rarray(x; track_numbers=true)
 

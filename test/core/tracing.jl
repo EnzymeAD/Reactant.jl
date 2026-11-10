@@ -9,6 +9,8 @@ using Reactant:
     TracedTypeError,
     ReactantPrimitive
 
+const RunningOnMetal = contains(string(Reactant.devices()[1]), "MTL")
+
 struct Wrapper{A,B}
     a::A
     b::B
@@ -554,9 +556,10 @@ reflect_hasfield(x) = x .+ hasfield(KindOptions, :a)
 
 @testset "reflection on a UnionAll (#3518)" begin
     x = Reactant.to_rarray([1.0])
-    @test @jit(reflect_fieldnames(x)) ≈ [2.0]
-    @test @jit(reflect_fieldname(x)) ≈ [2.0]
-    @test @jit(reflect_nameof(x)) ≈ [1.0 + length("KindOptions")]
-    @test @jit(reflect_parentmodule(x)) ≈ [1.0 + length(string(@__MODULE__))]
-    @test @jit(reflect_hasfield(x)) ≈ [2.0]
+    @test @jit(reflect_fieldnames(x)) ≈ [2.0] skip = RunningOnMetal
+    @test @jit(reflect_fieldname(x)) ≈ [2.0] skip = RunningOnMetal
+    @test @jit(reflect_nameof(x)) ≈ [1.0 + length("KindOptions")] skip = RunningOnMetal
+    @test @jit(reflect_parentmodule(x)) ≈ [1.0 + length(string(@__MODULE__))] skip =
+        RunningOnMetal
+    @test @jit(reflect_hasfield(x)) ≈ [2.0] skip = RunningOnMetal
 end

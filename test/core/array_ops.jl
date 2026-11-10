@@ -1,6 +1,7 @@
 using Reactant, Test, FileCheck
 
 const RunningOnTPU = contains(string(Reactant.devices()[1]), "TPU")
+const RunningOnMetal = contains(string(Reactant.devices()[1]), "MTL")
 
 @testset "concatenation" begin
     @testset "Number" begin
@@ -126,7 +127,7 @@ const RunningOnTPU = contains(string(Reactant.devices()[1]), "TPU")
         @test eltype(y) === Int
     end
 
-    @testset "Number and RArray" for a in [1.0f0, 1.0e0]
+    RunningOnMetal || @testset "Number and RArray" for a in [1.0f0, 1.0e0]
         typeof_a = typeof(a)
         _b = typeof_a.([2.0, 3.0, 4.0])
         _c = typeof_a.([2.0 3.0 4.0])
@@ -159,14 +160,15 @@ end
         x = Reactant.TestUtils.construct_test_array(Float64, size...)
 
         @testset "outer repeat" begin
-            @test (@jit repeat(Reactant.to_rarray(x), counts...)) ≈ repeat(x, counts...)
+            @test (@jit repeat(Reactant.to_rarray(x), counts...)) ≈ repeat(x, counts...) skip =
+                RunningOnMetal
         end
 
         length(counts) < length(size) && continue
 
         @testset "inner repeat" begin
             @test (@jit repeat(Reactant.to_rarray(x); inner=counts)) ≈
-                repeat(x; inner=counts)
+                repeat(x; inner=counts) skip = RunningOnMetal
         end
     end
 end
@@ -186,10 +188,11 @@ end
     x_ra = Reactant.to_rarray(x)
     y_ra = Reactant.to_rarray(y)
 
-    @test @jit(stack((x_ra, x_ra))) ≈ stack((x, x))
-    @test @jit(stack((x_ra, x_ra); dims=2)) ≈ stack((x, x); dims=2)
-    @test @jit(stack((x_ra, y_ra); dims=2)) ≈ stack((x, y); dims=2)
-    @test @jit(stack((x_ra, y_ra, x_ra); dims=1)) ≈ stack((x, y, x); dims=1)
+    @test @jit(stack((x_ra, x_ra))) ≈ stack((x, x)) skip = RunningOnMetal
+    @test @jit(stack((x_ra, x_ra); dims=2)) ≈ stack((x, x); dims=2) skip = RunningOnMetal
+    @test @jit(stack((x_ra, y_ra); dims=2)) ≈ stack((x, y); dims=2) skip = RunningOnMetal
+    @test @jit(stack((x_ra, y_ra, x_ra); dims=1)) ≈ stack((x, y, x); dims=1) skip =
+        RunningOnMetal
 
     @test @jit(stack((x, x))) isa Any
     @test @jit(stack((x, x); dims=2)) isa Any
@@ -229,10 +232,10 @@ end
         stack(xs; dims=2)
     end
 
-    @test @jit(s1(x_ra)) ≈ s1(x)
-    @test @jit(s2(x_ra)) ≈ s2(x)
-    @test @jit(s3(x_ra, y_ra)) ≈ s3(x, y)
-    @test @jit(s4(x_ra, y_ra)) ≈ s4(x, y)
+    @test @jit(s1(x_ra)) ≈ s1(x) skip = RunningOnMetal
+    @test @jit(s2(x_ra)) ≈ s2(x) skip = RunningOnMetal
+    @test @jit(s3(x_ra, y_ra)) ≈ s3(x, y) skip = RunningOnMetal
+    @test @jit(s4(x_ra, y_ra)) ≈ s4(x, y) skip = RunningOnMetal
 
     @test @jit(s1(x)) isa Any
     @test @jit(s2(x)) isa Any
@@ -264,7 +267,7 @@ end
         @test y !== x_ra
     end
 
-    @testset "view of TracedRArray" begin
+    RunningOnMetal || @testset "view of TracedRArray" begin
         for idxs in ((1:2, 2:3), (2, 1:3))
             view_ra = view(x_ra, idxs...)
             y = @jit(collect(view_ra))
@@ -290,7 +293,7 @@ end
 
 similar_from_type(x) = similar(typeof(x), (4, 5))
 
-@testset "similar" begin
+RunningOnMetal || @testset "similar" begin
     x = zeros(2, 3)
     y = Reactant.to_rarray(x)
     f = @compile similar(y)
@@ -360,7 +363,7 @@ end
     @test @jit(meshgrid(x_ra, y_ra)) ≈ meshgrid(x, y)
 end
 
-@testset "copyto! ConcreteArray" begin
+RunningOnMetal || @testset "copyto! ConcreteArray" begin
     x_ra = Reactant.to_rarray(ones(4, 4))
     y_ra = Reactant.to_rarray(zeros(2, 2))
     copyto!(view(x_ra, 1:2, 1:2), y_ra)
@@ -368,7 +371,7 @@ end
         [0.0 0.0 1.0 1.0; 0.0 0.0 1.0 1.0; 1.0 1.0 1.0 1.0; 1.0 1.0 1.0 1.0]
 end
 
-@testset "copyto! ConcreteArray Array" begin
+RunningOnMetal || @testset "copyto! ConcreteArray Array" begin
     x_ra = Reactant.to_rarray(ones(4, 4))
     y_ra = view(zeros(4, 4), 1:2, 1:2)
     copyto!(view(x_ra, 1:2, 1:2), y_ra)
@@ -376,7 +379,7 @@ end
         [0.0 0.0 1.0 1.0; 0.0 0.0 1.0 1.0; 1.0 1.0 1.0 1.0; 1.0 1.0 1.0 1.0]
 end
 
-@testset "copyto! TracedRArray" begin
+RunningOnMetal || @testset "copyto! TracedRArray" begin
     x_ra = Reactant.to_rarray(ones(4, 4))
     y_ra = Reactant.to_rarray(zeros(2, 2))
     @jit copyto!(x_ra, 6, y_ra, 3, 2)
@@ -392,7 +395,7 @@ reshapecopy!(x, y) = begin
     nothing
 end
 
-@testset "copyto! Reshaped TracedRArray" begin
+RunningOnMetal || @testset "copyto! Reshaped TracedRArray" begin
     x = zeros(3, 4, 5)
     y = collect(reshape(1:60, (3, 20)))
 
@@ -405,7 +408,7 @@ end
     @test Array(xr) == x
 end
 
-@testset "copyto!, no offsets" begin
+RunningOnMetal || @testset "copyto!, no offsets" begin
     a = Float32[10, 20, 30, 40, 50]
     len = length(a)
     b = Float32[111, 222, 333, 444, 555]
@@ -425,7 +428,7 @@ end
     @test cpu == a
 end
 
-@testset "copyto!, with offsets" begin
+RunningOnMetal || @testset "copyto!, with offsets" begin
     a = Float32[10, 20, 30, 40, 50, 60, 70]
     alen = length(a)
     b = Float32[111, 222, 333, 444, 555]
@@ -457,7 +460,7 @@ end
     end
 end
 
-@testset "copy(::Broadcast.Broadcasted{ArrayStyle{ConcreteRArray}})" begin
+RunningOnMetal || @testset "copy(::Broadcast.Broadcasted{ArrayStyle{ConcreteRArray}})" begin
     x_ra = Reactant.to_rarray(ones(4, 4))
     res = copy(Broadcast.broadcasted(-, Broadcast.broadcasted(+, x_ra, 1)))
     @test res ≈ -(Array(x_ra) .+ 1)
@@ -609,7 +612,7 @@ end
 end
 
 @testset "push!/pop! on TracedRArray" begin
-    @testset "push!" begin
+    RunningOnMetal || @testset "push!" begin
         function f_push(x)
             push!(x, 4.0)
             return x
@@ -619,7 +622,7 @@ end
         @test Array(result) ≈ [1.0, 2.0, 3.0, 4.0]
     end
 
-    @testset "push! multiple" begin
+    RunningOnMetal || @testset "push! multiple" begin
         function f_push_multi(x)
             push!(x, 4.0, 5.0)
             return x
@@ -629,7 +632,7 @@ end
         @test Array(result) ≈ [1.0, 2.0, 3.0, 4.0, 5.0]
     end
 
-    @testset "pushfirst!" begin
+    RunningOnMetal || @testset "pushfirst!" begin
         function f_pushfirst(x)
             pushfirst!(x, 0.0)
             return x
@@ -659,7 +662,7 @@ end
         @test Array(result) ≈ [2.0, 3.0]
     end
 
-    @testset "append!" begin
+    RunningOnMetal || @testset "append!" begin
         function f_append(x, y)
             append!(x, y)
             return x

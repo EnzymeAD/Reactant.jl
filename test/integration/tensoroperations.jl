@@ -3,6 +3,8 @@ using Reactant
 using Reactant.TestUtils: construct_test_array
 using TensorOperations
 
+const RunningOnMetal = contains(string(Reactant.devices()[1]), "MTL")
+
 fadd(α, X) = @tensor Y[a, b, c] := α * X[c, a, b]
 
 @testset "tensoradd!" begin
@@ -11,8 +13,8 @@ fadd(α, X) = @tensor Y[a, b, c] := α * X[c, a, b]
 
     α_re = ConcreteRNumber(α)
     x_re = Reactant.to_rarray(x)
-    @test fadd(α, x) ≈ @jit fadd(α, x_re)
-    @test fadd(α, x) ≈ @jit fadd(α_re, x_re)
+    @test fadd(α, x) ≈ (@jit fadd(α, x_re)) skip = RunningOnMetal
+    @test fadd(α, x) ≈ (@jit fadd(α_re, x_re)) skip = RunningOnMetal
 end
 
 ftrace(X) = @tensor Y[l, k, m] := X[l, i, i, k, j, j, m]
@@ -20,7 +22,7 @@ ftrace(X) = @tensor Y[l, k, m] := X[l, i, i, k, j, j, m]
 @testset "tensortrace!" begin
     a = ones(3, 2, 2, 3, 2, 2, 3)
     a_re = Reactant.to_rarray(a)
-    @test ftrace(a) ≈ @jit ftrace(a_re)
+    @test ftrace(a) ≈ (@jit ftrace(a_re)) skip = RunningOnMetal
 end
 
 fcontract1(A, B) = @tensor C[] := A[a, b, c] * B[c, a, b]
@@ -36,7 +38,7 @@ end
         b = construct_test_array(Float64, 5, 5, 5)
         a_re = Reactant.to_rarray(a)
         b_re = Reactant.to_rarray(b)
-        @test fcontract1(a, b) ≈ @jit fcontract1(a_re, b_re)
+        @test fcontract1(a, b) ≈ (@jit fcontract1(a_re, b_re)) skip = RunningOnMetal
     end
 
     @testset let
@@ -44,7 +46,7 @@ end
         b = construct_test_array(Float64, 5, 5, 3, 5)
         a_re = Reactant.to_rarray(a)
         b_re = Reactant.to_rarray(b)
-        @test fcontract2(a, b) ≈ @jit fcontract2(a_re, b_re)
+        @test fcontract2(a, b) ≈ (@jit fcontract2(a_re, b_re)) skip = RunningOnMetal
     end
 
     @testset let
@@ -83,6 +85,7 @@ end
     c_re = Reactant.to_rarray(c)
     d_re = Reactant.to_rarray(d)
 
-    @test fall(α, a, b, c, d) ≈ @jit fall(α_re, a_re, b_re, c_re, d_re)
-    @test d ≈ d_re
+    @test fall(α, a, b, c, d) ≈ (@jit fall(α_re, a_re, b_re, c_re, d_re)) skip =
+        RunningOnMetal
+    @test d ≈ d_re skip = RunningOnMetal
 end

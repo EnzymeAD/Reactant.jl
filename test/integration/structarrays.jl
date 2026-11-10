@@ -1,5 +1,7 @@
 using StructArrays, StaticArrays, Reactant, LinearAlgebra, Test
 
+const RunningOnMetal = contains(string(Reactant.devices()[1]), "MTL")
+
 @testset "StructArray to_rarray and make_tracer" begin
     x = StructArray(;
         a=rand(10, 2), b=fill("some strings", (10, 2)), c=rand(Float32, 10, 2)
@@ -48,7 +50,7 @@ function broadcast_elwise(x)
     return elwise.(x)
 end
 
-@testset "structarray broadcasting" begin
+RunningOnMetal || @testset "structarray broadcasting" begin
     x = StructVector(; a=rand(10), b=rand(Float32, 10))
 
     x_ra = Reactant.to_rarray(x)
@@ -70,7 +72,7 @@ end
     end
 end
 
-@testset "structarray with static array broadcasting" begin
+RunningOnMetal || @testset "structarray with static array broadcasting" begin
     trel(x) = tr.(x)
     s1 = StructArray{SMatrix{2,2,Float64,4}}((
         fill(1.0, 4), fill(2.0, 4), fill(3.0, 4), fill(4.0, 4)
@@ -91,7 +93,7 @@ end
     @test @jit(sum(sr)) ≈ sum(s2)
 end
 
-@testset "structarray with complex numbers" begin
+RunningOnMetal || @testset "structarray with complex numbers" begin
     s = randn(64)
 
     elcom(x) = complex(x, x)

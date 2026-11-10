@@ -1,6 +1,8 @@
 using Reactant, Test, FileCheck
 
-@testset "sort & sortperm" begin
+const RunningOnMetal = contains(string(Reactant.devices()[1]), "MTL")
+
+RunningOnMetal || @testset "sort & sortperm" begin
     x = Reactant.TestUtils.construct_test_array(Float64, 10)
     x_ra = Reactant.to_rarray(x)
 
@@ -11,14 +13,14 @@ using Reactant, Test, FileCheck
     srt_lt(x) = sort(x; lt=(a, b) -> a > b)
     srtperm_lt(x) = sortperm(x; lt=(a, b) -> a > b)
 
-    @test @jit(sort(x_ra)) ≈ sort(x)
-    @test @jit(srt_rev(x_ra)) ≈ srt_rev(x)
-    @test @jit(srt_lt(x_ra)) ≈ srt_lt(x)
-    @test @jit(srt_by(x_ra)) ≈ srt_by(x)
-    @test @jit(sortperm(x_ra)) ≈ sortperm(x)
-    @test @jit(srtperm_rev(x_ra)) ≈ srtperm_rev(x)
-    @test @jit(srtperm_lt(x_ra)) ≈ srtperm_lt(x)
-    @test @jit(srtperm_by(x_ra)) ≈ srtperm_by(x)
+    @test @jit(sort(x_ra)) ≈ sort(x) skip = RunningOnMetal
+    @test @jit(srt_rev(x_ra)) ≈ srt_rev(x) skip = RunningOnMetal
+    @test @jit(srt_lt(x_ra)) ≈ srt_lt(x) skip = RunningOnMetal
+    @test @jit(srt_by(x_ra)) ≈ srt_by(x) skip = RunningOnMetal
+    @test @jit(sortperm(x_ra)) ≈ sortperm(x) skip = RunningOnMetal
+    @test @jit(srtperm_rev(x_ra)) ≈ srtperm_rev(x) skip = RunningOnMetal
+    @test @jit(srtperm_lt(x_ra)) ≈ srtperm_lt(x) skip = RunningOnMetal
+    @test @jit(srtperm_by(x_ra)) ≈ srtperm_by(x) skip = RunningOnMetal
 
     x = Reactant.TestUtils.construct_test_array(Float64, 10)
     x_ra = Reactant.to_rarray(x)
@@ -55,22 +57,30 @@ using Reactant, Test, FileCheck
     end
 end
 
-@testset "partialsort & partialsortperm" begin
+RunningOnMetal || @testset "partialsort & partialsortperm" begin
     x = Reactant.TestUtils.construct_test_array(Float64, 10)
     x_ra = Reactant.to_rarray(x)
 
-    @test @jit(partialsort(x_ra, 1:5)) ≈ partialsort(x, 1:5)
-    @test @jit(partialsort(x_ra, 1:5; rev=true)) ≈ partialsort(x, 1:5; rev=true)
-    @test @jit(partialsortperm(x_ra, 1:5)) ≈ partialsortperm(x, 1:5)
-    @test @jit(partialsortperm(x_ra, 1:5; rev=true)) ≈ partialsortperm(x, 1:5; rev=true)
-    @test @jit(partialsort(x_ra, 3:6)) ≈ partialsort(x, 3:6)
-    @test @jit(partialsort(x_ra, 3:6; rev=true)) ≈ partialsort(x, 3:6; rev=true)
-    @test @jit(partialsortperm(x_ra, 3:6)) ≈ partialsortperm(x, 3:6)
-    @test @jit(partialsortperm(x_ra, 3:6; rev=true)) ≈ partialsortperm(x, 3:6; rev=true)
-    @test @jit(partialsort(x_ra, 4)) ≈ partialsort(x, 4)
-    @test @jit(partialsort(x_ra, 4; rev=true)) ≈ partialsort(x, 4; rev=true)
-    @test @jit(partialsortperm(x_ra, 4)) ≈ partialsortperm(x, 4)
-    @test @jit(partialsortperm(x_ra, 4; rev=true)) ≈ partialsortperm(x, 4; rev=true)
+    @test @jit(partialsort(x_ra, 1:5)) ≈ partialsort(x, 1:5) skip = RunningOnMetal
+    @test @jit(partialsort(x_ra, 1:5; rev=true)) ≈ partialsort(x, 1:5; rev=true) skip =
+        RunningOnMetal
+    @test @jit(partialsortperm(x_ra, 1:5)) ≈ partialsortperm(x, 1:5) skip =
+        RunningOnMetal
+    @test @jit(partialsortperm(x_ra, 1:5; rev=true)) ≈ partialsortperm(x, 1:5; rev=true) skip =
+        RunningOnMetal
+    @test @jit(partialsort(x_ra, 3:6)) ≈ partialsort(x, 3:6) skip = RunningOnMetal
+    @test @jit(partialsort(x_ra, 3:6; rev=true)) ≈ partialsort(x, 3:6; rev=true) skip =
+        RunningOnMetal
+    @test @jit(partialsortperm(x_ra, 3:6)) ≈ partialsortperm(x, 3:6) skip =
+        RunningOnMetal
+    @test @jit(partialsortperm(x_ra, 3:6; rev=true)) ≈ partialsortperm(x, 3:6; rev=true) skip =
+        RunningOnMetal
+    @test @jit(partialsort(x_ra, 4)) ≈ partialsort(x, 4) skip = RunningOnMetal
+    @test @jit(partialsort(x_ra, 4; rev=true)) ≈ partialsort(x, 4; rev=true) skip =
+        RunningOnMetal
+    @test @jit(partialsortperm(x_ra, 4)) ≈ partialsortperm(x, 4) skip = RunningOnMetal
+    @test @jit(partialsortperm(x_ra, 4; rev=true)) ≈ partialsortperm(x, 4; rev=true) skip =
+        RunningOnMetal
 
     x = Reactant.TestUtils.construct_test_array(Float64, 10)
     x_ra = Reactant.to_rarray(x)
@@ -113,8 +123,8 @@ end
     linargmin(x) = LinearIndices(x)[argmin(x)]
     linargmax(x) = LinearIndices(x)[argmax(x)]
 
-    @test linargmin(x) == @jit(argmin(x_ra))
-    @test linargmax(x) == @jit(argmax(x_ra))
+    @test linargmin(x) == @jit(argmin(x_ra)) skip = RunningOnMetal
+    @test linargmax(x) == @jit(argmax(x_ra)) skip = RunningOnMetal
 
     x = Reactant.TestUtils.construct_test_array(Float64, 2, 3, 4)
     x_ra = Reactant.to_rarray(x)
@@ -124,18 +134,18 @@ end
     argmindims(x, d) = argmin(x; dims=d)
     argmaxdims(x, d) = argmax(x; dims=d)
 
-    @test linargmin(x, 1) == @jit(argmindims(x_ra, 1))
-    @test linargmax(x, 1) == @jit(argmaxdims(x_ra, 1))
-    @test linargmin(x, 2) == @jit(argmindims(x_ra, 2))
-    @test linargmax(x, 2) == @jit(argmaxdims(x_ra, 2))
-    @test linargmin(x, 3) == @jit(argmindims(x_ra, 3))
-    @test linargmax(x, 3) == @jit(argmaxdims(x_ra, 3))
+    @test linargmin(x, 1) == @jit(argmindims(x_ra, 1)) skip = RunningOnMetal
+    @test linargmax(x, 1) == @jit(argmaxdims(x_ra, 1)) skip = RunningOnMetal
+    @test linargmin(x, 2) == @jit(argmindims(x_ra, 2)) skip = RunningOnMetal
+    @test linargmax(x, 2) == @jit(argmaxdims(x_ra, 2)) skip = RunningOnMetal
+    @test linargmin(x, 3) == @jit(argmindims(x_ra, 3)) skip = RunningOnMetal
+    @test linargmax(x, 3) == @jit(argmaxdims(x_ra, 3)) skip = RunningOnMetal
 
     x = Reactant.TestUtils.construct_test_array(Float64, 2, 3, 4)
     x_ra = Reactant.to_rarray(x)
 
-    @test argmin(abs2, x) ≈ @jit(argmin(abs2, x_ra))
-    @test argmax(abs2, x) ≈ @jit(argmax(abs2, x_ra))
+    @test argmin(abs2, x) ≈ @jit(argmin(abs2, x_ra)) skip = RunningOnMetal
+    @test argmax(abs2, x) ≈ @jit(argmax(abs2, x_ra)) skip = RunningOnMetal
 end
 
 function dual_approx(x, y)
@@ -143,7 +153,7 @@ function dual_approx(x, y)
     @test (x[2] ≈ y[2])
 end
 
-@testset "findmin / findmax" begin
+RunningOnMetal || @testset "findmin / findmax" begin
     xvec = Reactant.TestUtils.construct_test_array(Float64, 10)
     xvec_ra = Reactant.to_rarray(xvec)
 

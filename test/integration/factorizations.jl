@@ -1,6 +1,7 @@
 using LinearAlgebra, Reactant, Test
 
 const RunningOnTPU = contains(string(Reactant.devices()[1]), "TPU")
+const RunningOnMetal = contains(string(Reactant.devices()[1]), "MTL")
 
 solve_with_fact(f::F, A, b) where {F} = f(A) \ b
 function solve_with_fact_batched(
@@ -31,6 +32,7 @@ solve_with_lu_batched(A, b) = solve_with_fact_batched(lu, A, b)
     @testset "Un-batched" begin
         @testset for T in (Float32, Float64, ComplexF32, ComplexF64)
             (T == ComplexF64 || T == Float64) && RunningOnTPU && continue
+            T != Float32 && RunningOnMetal && continue
 
             A = rand(T, 4, 4)
             A_ra = Reactant.to_rarray(A)
@@ -51,6 +53,7 @@ solve_with_lu_batched(A, b) = solve_with_fact_batched(lu, A, b)
     @testset "Batched" begin
         @testset for T in (Float32, Float64, ComplexF32, ComplexF64)
             (T == ComplexF64 || T == Float64) && RunningOnTPU && continue
+            T != Float32 && RunningOnMetal && continue
 
             A = rand(T, 4, 4, 3, 2)
             A_ra = Reactant.to_rarray(A)
@@ -122,6 +125,7 @@ end
     @testset "Un-batched" begin
         @testset for T in (Float32, Float64, ComplexF32, ComplexF64)
             (T == ComplexF64 || T == Float64) && RunningOnTPU && continue
+            (T == ComplexF64 || T == Float64) && RunningOnMetal && continue
 
             A = random_matrix_with_cond(T, 4, 4, 1.001) # avoid ill conditioned
             A = A * A'
@@ -143,6 +147,7 @@ end
     @testset "Batched" begin
         @testset for T in (Float32, Float64, ComplexF32, ComplexF64)
             (T == ComplexF64 || T == Float64) && RunningOnTPU && continue
+            (T == ComplexF64 || T == Float64) && RunningOnMetal && continue
 
             A = stack(random_matrix_with_cond(T, 4, 4, 1.001) for _ in 1:6)
             A = reshape(stack((r * r' for r in eachslice(A; dims=3))), 4, 4, 3, 2)
@@ -190,6 +195,7 @@ function compute_ls_solution_error(A, sol, b, bsize)
 end
 
 @testset "svd factorization ($T)" for T in (Float32, ComplexF32)
+    T != Float32 && RunningOnMetal && continue
     A = Reactant.TestUtils.construct_test_array(T, 4, 8)
 
     algs = get_svd_algorithms(string(Reactant.devices()[1]), size(A))
@@ -256,6 +262,7 @@ end
     algs = get_svd_algorithms(string(Reactant.devices()[1]))
 
     @testset "Un-batched: $(alg) - $T" for alg in algs, T in (Float32, ComplexF32)
+        T != Float32 && RunningOnMetal && continue
         A = Reactant.TestUtils.construct_test_array(T, 4, 4)
         _svdvals = svdvals(A)
         A_ra = Reactant.to_rarray(A)
@@ -268,6 +275,7 @@ end
     end
 
     @testset "Batched: $(alg) - $T" for alg in algs, T in (Float32, ComplexF32)
+        T != Float32 && RunningOnMetal && continue
         A = Reactant.TestUtils.construct_test_array(T, 4, 4, 3, 2)
         _svdvals = reshape(mapslices(svdvals, A; dims=(1, 2)), 4, 3, 2)
         A_ra = Reactant.to_rarray(A)

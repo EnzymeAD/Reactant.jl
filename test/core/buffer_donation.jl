@@ -1,5 +1,7 @@
 using Reactant, Test, FileCheck
 
+const RunningOnMetal = contains(string(Reactant.devices()[1]), "MTL")
+
 function donate_fill_x_with_2(x, y)
     x .= 2
     return nothing
@@ -17,7 +19,7 @@ function multiple_donated_args(x, y, z)
     return x, z, y
 end
 
-@testset "buffer_donation" begin
+RunningOnMetal || @testset "buffer_donation" begin
     a = Reactant.to_rarray(ones(2, 2))
     b = Reactant.to_rarray(3 * ones(2, 2))
     @jit(donate_fill_x_with_2(a, b))
@@ -84,7 +86,7 @@ function update_inplace_bad!(x, y, z)
     return old
 end
 
-@testset "buffer_donation" begin
+RunningOnMetal || @testset "buffer_donation" begin
     x = Reactant.to_rarray(ones(3))
     y = Reactant.to_rarray(ones(3))
     z = Reactant.to_rarray(ones(3))

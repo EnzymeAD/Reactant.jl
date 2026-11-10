@@ -1,5 +1,7 @@
 using NNlib, Reactant, Enzyme, Statistics, Test, FileCheck
 
+const RunningOnMetal = contains(string(Reactant.devices()[1]), "MTL")
+
 # Adapted from https://github.com/FluxML/NNlib.jl/blob/02138682a4fc5ca019759218be50e59907d4527c/test/testsuite/gather.jl#L5
 @testset "NNlib gather" begin
     @testset "gather scalar index" begin
@@ -554,6 +556,8 @@ end
         (Td, Ts) in ((Float32, Float64), (Float64, Float32), (Float32, Int), (Int, Int32))
         for op in (+, -, *, /, max, min, mean) if !(Td <: Integer && op === /)
     ]
+        # no double precision, and no 64-bit atomics for the combiner
+        RunningOnMetal && (Float64 in (Td, Ts) || Td == Int) && continue
         dst = Td.(Reactant.TestUtils.construct_test_array(Int, 2, 5))
         src = Ts.(2 .* Reactant.TestUtils.construct_test_array(Int, 2, 3))
 
@@ -568,6 +572,7 @@ end
     @testset "scatter $op src::$Ts init::$(typeof(init))" for op in (+, max),
         (Ts, init) in ((Float32, 0), (Float64, 1.0f0), (Int, 0.0))
 
+        RunningOnMetal && Ts != Float32 && continue
         src = Ts.(Reactant.TestUtils.construct_test_array(Int, 2, 3))
         expected = NNlib.scatter(op, src, idx; init)
         res = @jit NNlib.scatter(op, Reactant.to_rarray(src), idx; init)
@@ -578,6 +583,7 @@ end
     @testset "gather! dst::$Td src::$Ts" for (Td, Ts) in (
         (Float32, Float64), (Float32, Int), (Int, Int32)
     )
+        RunningOnMetal && Ts == Float64 && continue
         src = Ts.(Reactant.TestUtils.construct_test_array(Int, 2, 5))
         dst = zeros(Td, 2, 3)
 

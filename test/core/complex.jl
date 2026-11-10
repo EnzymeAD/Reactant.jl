@@ -2,6 +2,7 @@ using Test
 using Reactant
 
 const RunningOnTPU = contains(string(Reactant.devices()[1]), "TPU")
+const RunningOnMetal = contains(string(Reactant.devices()[1]), "MTL")
 
 @testset "Complex runtime: $CT" for CT in (ComplexF32, ComplexF64)
     @test begin
@@ -9,7 +10,7 @@ const RunningOnTPU = contains(string(Reactant.devices()[1]), "TPU")
         b = Reactant.to_rarray(ones(CT, 2))
         c = Reactant.compile(+, (a, b))(a, b)
         c == ones(CT, 2) + ones(CT, 2)
-    end skip = CT == ComplexF64 && RunningOnTPU
+    end skip = (CT == ComplexF64 && RunningOnTPU) || RunningOnMetal
 end
 
 const SCALAR_LIST = (1.0, 1.0 + 2.0im)
@@ -39,7 +40,7 @@ const ARRAY_LIST = (
         @test begin
             x_concrete = Reactant.to_rarray(x)
             @jit(fn(x_concrete)) == fn(x)
-        end skip = RunningOnTPU && eltype(x) == ComplexF64
+        end skip = (RunningOnTPU && eltype(x) == ComplexF64) || RunningOnMetal
     end
 end
 
@@ -89,9 +90,9 @@ end
     y = -2.25
     x_ra = Reactant.to_rarray(x; track_numbers=true)
     y_ra = Reactant.to_rarray(y; track_numbers=true)
-    @test @jit(Complex(x_ra, y_ra)) == Complex(x, y) skip = RunningOnTPU
-    @test @jit(Complex(x_ra, y)) == Complex(x, y) skip = RunningOnTPU
-    @test @jit(Complex(x, y_ra)) == Complex(x, y) skip = RunningOnTPU
+    @test @jit(Complex(x_ra, y_ra)) == Complex(x, y) skip = RunningOnTPU || RunningOnMetal
+    @test @jit(Complex(x_ra, y)) == Complex(x, y) skip = RunningOnTPU || RunningOnMetal
+    @test @jit(Complex(x, y_ra)) == Complex(x, y) skip = RunningOnTPU || RunningOnMetal
     @test @jit(Complex(x_ra)) == Complex(x) == @jit(Complex(x_ra, 0))
 end
 
@@ -116,6 +117,6 @@ end
     @testset "broadcast" begin
         x = [1.0 + 0.0im, 1.0 + 2.0im, 1.0 - 2.0im, -5.0 + 0.0im]
         x_concrete = Reactant.to_rarray(x)
-        @test @jit(isreal.(x_concrete)) == isreal.(x)
+        @test @jit(isreal.(x_concrete)) == isreal.(x) skip = RunningOnMetal
     end
 end

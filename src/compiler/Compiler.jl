@@ -26,6 +26,7 @@ include("CompilationError.jl")
 include("OptimizationPasses.jl")
 include("Codegen.jl")
 include("Thunk.jl")
+include("Metal.jl")
 
 const DEBUG_PRINT_CODEGEN = Ref(false)
 
@@ -263,7 +264,7 @@ Base.@nospecializeinfer function compile_mlir!(
     # checking whether the user set an explicit list of passes, or chose
     # `raise=true` to use the default passes.
     raise = compile_options.raise
-    if (backend == "tpu" || backend == "neuron" || backend == "trainium") && raise isa Bool
+    if backend in ("tpu", "neuron", "trainium", "mtl") && raise isa Bool
         raise = true
     end
     is_raising = raise isa String || raise
@@ -318,9 +319,9 @@ Base.@nospecializeinfer function compile_mlir!(
     cuda_sm_major = 0
     cuda_sm_minor = 0
 
-    if backend == "cpu" || backend == "tpu" || backend == "neuron" || backend == "trainium"
+    if backend in ("cpu", "tpu", "neuron", "trainium", "mtl")
         kern = "lower-kernel{backend=cpu},canonicalize"
-        if backend == "tpu" || backend == "neuron" || backend == "trainium"
+        if backend in ("tpu", "neuron", "trainium")
             jit = "lower-affine,$(OpenMP[] ? "convert-scf-to-openmp" : "convert-scf-to-cf"),convert-polygeist-to-llvm{backend=cpu preserve-xla-funcs=true},lower-jit,symbol-dce,strip-debuginfo"
         else
             jit = "lower-affine,$(OpenMP[] ? "convert-scf-to-openmp" : "convert-scf-to-cf"),convert-polygeist-to-llvm{backend=cpu preserve-xla-funcs=true},lower-jit,symbol-dce"
@@ -408,14 +409,19 @@ Base.@nospecializeinfer function compile_mlir!(
     end
 
     blas_int_width = sizeof(BlasInt) * 8
-    lower_enzymexla_linalg_pass = join(
-        [
-            "lower-enzymexla-linalg{backend=$backend blas_int_width=$blas_int_width}",
-            "lower-enzymexla-blas{backend=$backend blas_int_width=$blas_int_width}",
-            "lower-enzymexla-lapack{backend=$backend blas_int_width=$blas_int_width}",
-        ],
-        ",",
-    )
+    lower_enzymexla_linalg_pass = if backend == "mtl"
+        # linalg ops are lowered by `Metal.legalize!` after the pipeline
+        "lower-enzymexla-blas{backend=$backend blas_int_width=$blas_int_width}"
+    else
+        join(
+            [
+                "lower-enzymexla-linalg{backend=$backend blas_int_width=$blas_int_width}",
+                "lower-enzymexla-blas{backend=$backend blas_int_width=$blas_int_width}",
+                "lower-enzymexla-lapack{backend=$backend blas_int_width=$blas_int_width}",
+            ],
+            ",",
+        )
+    end
     # cuDNN fused SDPA (__cudnn$fmha*) requires SM80 (Ampere) or newer; fall back
     # to StableHLO decomposition on older CUDA architectures (e.g. V100/T4).
     math_backend = if backend == "cuda" && cuda_sm_major < 8
@@ -737,6 +743,8 @@ Base.@nospecializeinfer function compile_mlir!(
     elseif compile_options.optimization_passes isa String
         run_pass_pipeline!(mod, compile_options.optimization_passes, "custom_pass")
     end
+
+    backend == "mtl" && Metal.legalize!(mod)
 
     if compile_options.optimization_passes isa Symbol &&
         compile_options.optimization_passes === :all &&
@@ -1137,8 +1145,8 @@ Base.@nospecializeinfer function compile_mlir!(
         end
     end
 
-    # drop certain operations from the module if using TPU or Trainium backend
-    if backend == "tpu" || backend == "neuron" || backend == "trainium"
+    # drop certain operations from the module if using TPU, Trainium or Metal backend
+    if backend in ("tpu", "neuron", "trainium", "mtl")
         for op in collect(MLIR.IR.body(mod))
             if MLIR.IR.dialect(op) == :llvm
                 MLIR.IR.dispose(op)

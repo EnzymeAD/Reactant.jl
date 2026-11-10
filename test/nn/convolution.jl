@@ -1,5 +1,7 @@
 using LuxLib, Reactant, Enzyme, NNlib, Test, Statistics
 
+const RunningOnMetal = contains(string(Reactant.devices()[1]), "MTL")
+
 @testset "Fused Conv" begin
     @testset for groups in (1, 2), has_bias in (true, false), act in (identity, relu, tanh)
         weight = Reactant.TestUtils.construct_test_array(Float32, 4, 4, 8 ÷ groups, 4)
@@ -119,12 +121,14 @@ end
     x = [10i + j + channel / 10 for i in 1:2, j in 1:3, channel in 1:4, batch in 1:1]
     x_ra = Reactant.to_rarray(x)
 
-    @test @jit(NNlib.pixel_shuffle(x_ra, 2)) ≈ NNlib.pixel_shuffle(x, 2)
+    @test @jit(NNlib.pixel_shuffle(x_ra, 2)) ≈ NNlib.pixel_shuffle(x, 2) skip =
+        RunningOnMetal
 
     y = [i + channel / 10 for i in 1:3, channel in 1:6, batch in 1:1]
     y_ra = Reactant.to_rarray(y)
 
-    @test @jit(NNlib.pixel_shuffle(y_ra, 2)) ≈ NNlib.pixel_shuffle(y, 2)
+    @test @jit(NNlib.pixel_shuffle(y_ra, 2)) ≈ NNlib.pixel_shuffle(y, 2) skip =
+        RunningOnMetal
 end
 
 @testset "Pooling" begin

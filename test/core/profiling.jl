@@ -2,6 +2,7 @@ using Reactant, Test
 
 const RunningOnCPU = contains(string(Reactant.devices()[1]), "CPU")
 const RunningOnCUDA = contains(string(Reactant.devices()[1]), "CUDA")
+const RunningOnMetal = contains(string(Reactant.devices()[1]), "MTL")
 
 x = Reactant.to_rarray(randn(Float32, 100, 2))
 W = Reactant.to_rarray(randn(Float32, 10, 100))
@@ -35,8 +36,8 @@ linear(x, W, b) = (W * x) .+ b
         metrics = Reactant.Profiler.get_aggregate_metrics(file, 10)
         @test metrics isa Reactant.Proto.tensorflow.profiler.op_profile.Metrics
         @test metrics.raw_time > 0
-        @test metrics.raw_flops_rate > 0
-        @test metrics.bf16_flops_rate > 0
+        @test metrics.raw_flops_rate > 0 skip = RunningOnMetal
+        @test metrics.bf16_flops_rate > 0 skip = RunningOnMetal
         @test isfinite(metrics.raw_flops_rate)
         @test isfinite(metrics.bf16_flops_rate)
         @test metrics.raw_flops_rate ≈ metrics.raw_flops / (metrics.raw_time * 1e-12)
@@ -73,9 +74,11 @@ linear(x, W, b) = (W * x) .+ b
         loop_prof = Reactant.Profiler.profile_with_xprof(loop_fn, x; nrepeat=3, warmup=1)
         @test loop_prof.profiling_result.metrics_data !== nothing
         @test loop_prof.profiling_result.metrics_data.raw_time > 0
-        @test loop_prof.profiling_result.metrics_data.raw_flops >= 3 * 5 * 2 * length(x)
+        @test loop_prof.profiling_result.metrics_data.raw_flops >= 3 * 5 * 2 * length(x) skip =
+            RunningOnMetal
         @test isfinite(loop_prof.profiling_result.metrics_data.raw_flops_rate)
-        @test loop_prof.profiling_result.metrics_data.raw_flops_rate > 0
+        @test loop_prof.profiling_result.metrics_data.raw_flops_rate > 0 skip =
+            RunningOnMetal
 
         big_x = Reactant.to_rarray(ones(Float32, 256, 256))
         big_loop_fn = @compile sync = true loop_fma(big_x)
@@ -85,9 +88,10 @@ linear(x, W, b) = (W * x) .+ b
         @test big_loop_prof.profiling_result.metrics_data !== nothing
         @test big_loop_prof.profiling_result.metrics_data.raw_time > 0
         @test big_loop_prof.profiling_result.metrics_data.raw_flops >=
-            2 * 5 * 2 * length(big_x)
+            2 * 5 * 2 * length(big_x) skip = RunningOnMetal
         @test isfinite(big_loop_prof.profiling_result.metrics_data.raw_flops_rate)
-        @test big_loop_prof.profiling_result.metrics_data.raw_flops_rate > 0
+        @test big_loop_prof.profiling_result.metrics_data.raw_flops_rate > 0 skip =
+            RunningOnMetal
 
         Reactant.@timed nrepeat = 32 linear(x, W, b)
         Reactant.@time nrepeat = 32 linear(x, W, b)

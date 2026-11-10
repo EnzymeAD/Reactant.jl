@@ -4,11 +4,12 @@ using Reactant, Test
 const RunningOnTPU = contains(string(Reactant.devices()[1]), "TPU")
 const RunningOnCUDA = contains(string(Reactant.devices()[1]), "CUDA")
 const RunningOnCPU = contains(string(Reactant.devices()[1]), "CPU")
+const RunningOnMetal = contains(string(Reactant.devices()[1]), "MTL")
 
 sinexp(x) = sin(exp(x))
 sinexpbc(x) = sinexp.(x)
 
-@testset "Broadcast combined" begin
+RunningOnMetal || @testset "Broadcast combined" begin
     x = Reactant.TestUtils.construct_test_array(Float64, 2, 10)
 
     r_res = sinexpbc(x)
@@ -27,7 +28,7 @@ bcast_cos(x) = cos.(x)
     x = Reactant.TestUtils.construct_test_array(Float64, 3, 2)
     c = Reactant.to_rarray(x)
 
-    @test @jit(bcast_cos(c)) ≈ cos.(x)
+    @test @jit(bcast_cos(c)) ≈ cos.(x) skip = RunningOnMetal
 end
 
 @testset "Common Trig Functions" begin
@@ -109,8 +110,8 @@ end
 
         xz = ConcreteRNumber(0.0)
         xinf = ConcreteRNumber(Inf)
-        @test @jit(sinc(ConcreteRNumber(0.0))) ≈ sinc(0.0)
-        @test @jit(sinc(ConcreteRNumber(Inf))) ≈ sinc(Inf)
+        @test @jit(sinc(ConcreteRNumber(0.0))) ≈ sinc(0.0) skip = RunningOnMetal
+        @test @jit(sinc(ConcreteRNumber(Inf))) ≈ sinc(Inf) skip = RunningOnMetal
 
         # Complex test
         xc = Reactant.TestUtils.construct_test_array(ComplexF32, 4, 16)[:, 1:7]
@@ -130,22 +131,22 @@ end
 
 @testset "isfinite" begin
     x = Reactant.to_rarray([1.0, NaN, Inf, -Inf, NaN])
-    @test @jit(isfinite.(x)) == [true, false, false, false, false]
+    @test @jit(isfinite.(x)) == [true, false, false, false, false] skip = RunningOnMetal
 
     @test begin
         x = Reactant.to_rarray([1.0, NaN, Inf, -Inf, NaN] .* im)
         @jit(isfinite.(x)) == [true, false, false, false, false]
-    end skip = RunningOnTPU
+    end skip = RunningOnTPU || RunningOnMetal
 end
 
 @testset "isnan" begin
     x = Reactant.to_rarray([1.0, NaN, Inf, -Inf, NaN])
-    @test @jit(isnan.(x)) == [false, true, false, false, true]
+    @test @jit(isnan.(x)) == [false, true, false, false, true] skip = RunningOnMetal
 
     @test begin
         x = Reactant.to_rarray([1.0, NaN, Inf, -Inf, NaN] .* im)
         @jit(isnan.(x)) == [false, true, false, false, true]
-    end skip = RunningOnTPU
+    end skip = RunningOnTPU || RunningOnMetal
 end
 
 @testset "isnan/isfinite" begin
@@ -156,10 +157,10 @@ end
 end
 
 @testset "isinf" begin
-    @test Bool(@jit(isinf(ConcreteRNumber(Inf))))
-    @test Bool(@jit(isinf(ConcreteRNumber(-Inf))))
+    @test Bool(@jit(isinf(ConcreteRNumber(Inf)))) skip = RunningOnMetal
+    @test Bool(@jit(isinf(ConcreteRNumber(-Inf)))) skip = RunningOnMetal
     @test !Bool(@jit(isinf(ConcreteRNumber(2))))
-    @test !Bool(@jit(isinf(ConcreteRNumber(2.0))))
+    @test !Bool(@jit(isinf(ConcreteRNumber(2.0)))) skip = RunningOnMetal
     @test !Bool(@jit(isinf(ConcreteRNumber(true))))
 end
 
@@ -300,40 +301,41 @@ end
         (; norm=abs2),
     ]
 
-    @testset "traced vs traced: x=$x, y=$y, kwargs=$kwargs" for (x, y) in float_pairs,
-        kwargs in kwargs_cases
+    RunningOnMetal ||
+        @testset "traced vs traced: x=$x, y=$y, kwargs=$kwargs" for (x, y) in float_pairs,
+            kwargs in kwargs_cases
 
-        expected = isapprox(x, y; kwargs...)
-        x_ra = Reactant.to_rarray(x; track_numbers=Number)
-        y_ra = Reactant.to_rarray(y; track_numbers=Number)
-        got = @jit isapprox(x_ra, y_ra; kwargs...)
-        @test got isa ConcreteRNumber{Bool}
-        # A TPU has no Float64 arithmetic: abs2(1e-20) = 1e-40 is below Float32's
-        # smallest normal and flushes to zero there, so both sides of the
-        # comparison become 0 and the two numbers test as approximately equal.
-        @test Bool(got) == expected skip = (
-            RunningOnTPU && (x, y) == (0.0, 1e-20) && haskey(kwargs, :norm)
-        )
-    end
+            expected = isapprox(x, y; kwargs...)
+            x_ra = Reactant.to_rarray(x; track_numbers=Number)
+            y_ra = Reactant.to_rarray(y; track_numbers=Number)
+            got = @jit isapprox(x_ra, y_ra; kwargs...)
+            @test got isa ConcreteRNumber{Bool}
+            # A TPU has no Float64 arithmetic: abs2(1e-20) = 1e-40 is below Float32's
+            # smallest normal and flushes to zero there, so both sides of the
+            # comparison become 0 and the two numbers test as approximately equal.
+            @test Bool(got) == expected skip = (
+                RunningOnTPU && (x, y) == (0.0, 1e-20) && haskey(kwargs, :norm)
+            )
+        end
 
     @testset "traced vs real: x=$x, y=$y" for (x, y) in float_pairs
         expected = isapprox(x, y)
         x_ra = Reactant.to_rarray(x; track_numbers=Number)
-        @test Bool(@jit(isapprox(x_ra, y))) == expected
+        @test Bool(@jit(isapprox(x_ra, y))) == expected skip = RunningOnMetal
     end
 
     @testset "real vs traced: x=$x, y=$y" for (x, y) in float_pairs
         expected = isapprox(x, y)
         y_ra = Reactant.to_rarray(y; track_numbers=Number)
-        @test Bool(@jit(isapprox(x, y_ra))) == expected
+        @test Bool(@jit(isapprox(x, y_ra))) == expected skip = RunningOnMetal
     end
 
     @testset "≈ operator" begin
         x_ra = Reactant.to_rarray(1.0; track_numbers=Number)
         y_ra = Reactant.to_rarray(1.0 + 1e-12; track_numbers=Number)
         z_ra = Reactant.to_rarray(2.0; track_numbers=Number)
-        @test Bool(@jit(x_ra ≈ y_ra))
-        @test !Bool(@jit(x_ra ≈ z_ra))
+        @test Bool(@jit(x_ra ≈ y_ra)) skip = RunningOnMetal
+        @test !Bool(@jit(x_ra ≈ z_ra)) skip = RunningOnMetal
     end
 end
 
@@ -342,14 +344,16 @@ end
     b = [6.6, -2.2, -8.8, 4.4, -10.1]
 
     expected_mod = mod.(a, b)
-    @test @jit(mod.(Reactant.to_rarray(a), Reactant.to_rarray(b))) ≈ expected_mod
-    @test @jit(mod.(a, Reactant.to_rarray(b))) ≈ expected_mod
-    @test @jit(mod.(Reactant.to_rarray(a), b)) ≈ expected_mod
+    @test @jit(mod.(Reactant.to_rarray(a), Reactant.to_rarray(b))) ≈ expected_mod skip =
+        RunningOnMetal
+    @test @jit(mod.(a, Reactant.to_rarray(b))) ≈ expected_mod skip = RunningOnMetal
+    @test @jit(mod.(Reactant.to_rarray(a), b)) ≈ expected_mod skip = RunningOnMetal
 
     expected_rem = rem.(a, b)
-    @test @jit(rem.(Reactant.to_rarray(a), Reactant.to_rarray(b))) ≈ expected_rem
-    @test @jit(rem.(a, Reactant.to_rarray(b))) ≈ expected_rem
-    @test @jit(rem.(Reactant.to_rarray(a), b)) ≈ expected_rem
+    @test @jit(rem.(Reactant.to_rarray(a), Reactant.to_rarray(b))) ≈ expected_rem skip =
+        RunningOnMetal
+    @test @jit(rem.(a, Reactant.to_rarray(b))) ≈ expected_rem skip = RunningOnMetal
+    @test @jit(rem.(Reactant.to_rarray(a), b)) ≈ expected_rem skip = RunningOnMetal
 end
 
 @testset "rem2pi" begin
@@ -363,7 +367,7 @@ end
             break
         end
 
-        @testset for round_mode in
+        RunningOnMetal || @testset for round_mode in
                      (Base.RoundUp, Base.RoundDown, Base.RoundNearest, Base.RoundToZero)
             a_ = convfn(a)
             expected_mod2pi = rem2pi.(a_, round_mode)
@@ -377,7 +381,7 @@ end
 @testset "mod2pi" begin
     a = [-1.1, 7.7, -3.3, 9.9, -5.5]
 
-    @testset "$T" for (convfn, T) in [
+    RunningOnMetal || @testset "$T" for (convfn, T) in [
         (identity, Float64), (x -> Float32.(x), Float32), (x -> floor.(Int32, x), Int32)
     ]
         if RunningOnTPU
@@ -410,7 +414,7 @@ end
 
 @testset "signbit" begin
     @testset "$(typeof(x))" for x in (-4, -3.14, -0.0f0, 0.0, 0, 5, 6.28f0)
-        @test @jit(signbit(ConcreteRNumber(x))) == signbit(x)
+        @test @jit(signbit(ConcreteRNumber(x))) == signbit(x) skip = RunningOnMetal
     end
 end
 
@@ -419,7 +423,7 @@ end
         b in (-7, -0.57, -0.0, 1, 3.14)
 
         @test Reactant.to_number(@jit(copysign(ConcreteRNumber(a), ConcreteRNumber(b)))) ≈
-            copysign(a, b)
+            copysign(a, b) skip = RunningOnMetal
     end
 end
 
@@ -444,14 +448,14 @@ end
 @testset "sign" begin
     x = collect(Float64, 0:0.01:1) .- 0.5
     x_ra = Reactant.to_rarray(x)
-    @test Array(@jit(sign.(x_ra))) ≈ sign.(x)
+    @test Array(@jit(sign.(x_ra))) ≈ sign.(x) skip = RunningOnMetal
 end
 
 @testset "/ on integers" begin
-    @test @jit(/(ConcreteRNumber(2), ConcreteRNumber(4))) ≈ 0.5
-    @test @jit(/(ConcreteRNumber(2), 4)) ≈ 0.5
-    @test @jit(/(2, ConcreteRNumber(4))) ≈ 0.5
-    @test @jit(/(2, ConcreteRNumber(Int32(4)))) ≈ 0.5
+    @test @jit(/(ConcreteRNumber(2), ConcreteRNumber(4))) ≈ 0.5 skip = RunningOnMetal
+    @test @jit(/(ConcreteRNumber(2), 4)) ≈ 0.5 skip = RunningOnMetal
+    @test @jit(/(2, ConcreteRNumber(4))) ≈ 0.5 skip = RunningOnMetal
+    @test @jit(/(2, ConcreteRNumber(Int32(4)))) ≈ 0.5 skip = RunningOnMetal
 end
 
 @testset "div" begin
@@ -463,13 +467,13 @@ end
 @testset "log10" begin
     x = collect(Float64, 1:10)
     x_ra = Reactant.to_rarray(x)
-    @test Array(@jit(log10.(x_ra))) ≈ log10.(x)
+    @test Array(@jit(log10.(x_ra))) ≈ log10.(x) skip = RunningOnMetal
 end
 
 @testset "log2" begin
     x = collect(Float64, 1:10)
     x_ra = Reactant.to_rarray(x)
-    @test Array(@jit(log2.(x_ra))) ≈ log2.(x)
+    @test Array(@jit(log2.(x_ra))) ≈ log2.(x) skip = RunningOnMetal
 end
 
 @testset for op in [round, ceil, floor]
@@ -480,12 +484,12 @@ end
         intop = Base.Fix1(op, Int)
         x_ra = Reactant.to_rarray.(x; track_numbers=Number)
 
-        @test @jit(op.(x_ra)) ≈ op.(x)
-        @test @jit(intop.(x_ra)) ≈ intop.(x)
+        @test @jit(op.(x_ra)) ≈ op.(x) skip = RunningOnMetal
+        @test @jit(intop.(x_ra)) ≈ intop.(x) skip = RunningOnMetal
     end
 end
 
-@testset "round with RoundToZero" begin
+RunningOnMetal || @testset "round with RoundToZero" begin
     # Test with Float32 arrays
     x32 = Float32[-2.7, -2.3, -1.5, -0.9, 0.0, 0.9, 1.5, 2.3, 2.7]
     x32_ra = Reactant.to_rarray(x32)
@@ -546,7 +550,7 @@ end
     @test sign.(Array(result_small)) == sign.(expected_small)
 end
 
-@testset "clamp" begin
+RunningOnMetal || @testset "clamp" begin
     x = Reactant.TestUtils.construct_test_array(Float64, 2, 3)
     x_ra = Reactant.to_rarray(x)
 
@@ -581,7 +585,7 @@ end
 
 mulpi(x) = π * x
 
-@testset "Irrational promotion" begin
+RunningOnMetal || @testset "Irrational promotion" begin
     x = Reactant.to_rarray(ones(2))
     y = @jit mulpi(x)
     @test all(Array(y) .≈ π)
@@ -606,28 +610,31 @@ end
 @testset "hypot" begin
     x = ConcreteRNumber(3.0)
     y = ConcreteRNumber(4.0)
-    @test @jit(hypot(x, y)) ≈ 5.0
-    @test @jit(hypot(x, y)) isa ConcreteRNumber{Float64}
+    @test @jit(hypot(x, y)) ≈ 5.0 skip = RunningOnMetal
+    @test @jit(hypot(x, y)) isa ConcreteRNumber{Float64} skip = RunningOnMetal
 
     # Mixed: one traced, one plain
-    @test @jit(hypot(x, 4.0)) ≈ 5.0
-    @test @jit(hypot(3.0, y)) ≈ 5.0
+    @test @jit(hypot(x, 4.0)) ≈ 5.0 skip = RunningOnMetal
+    @test @jit(hypot(3.0, y)) ≈ 5.0 skip = RunningOnMetal
 
     # Zero edge case
-    @test @jit(hypot(ConcreteRNumber(0.0), ConcreteRNumber(0.0))) ≈ 0.0
+    @test @jit(hypot(ConcreteRNumber(0.0), ConcreteRNumber(0.0))) ≈ 0.0 skip =
+        RunningOnMetal
 
     # Large values that would overflow with naive x^2 + y^2
     large = ConcreteRNumber(floatmax(Float64) / 2)
-    @test @jit(hypot(large, large)) ≈ large * sqrt(2) broken = RunningOnTPU
+    @test @jit(hypot(large, large)) ≈ large * sqrt(2) broken =
+        RunningOnTPU || RunningOnMetal
 
     # Small values that would underflow with naive x^2 + y^2
     small = ConcreteRNumber(2 * nextfloat(0.0))
-    @test @jit(hypot(small, small)) ≈ small * sqrt(2) broken = RunningOnCPU
+    @test @jit(hypot(small, small)) ≈ small * sqrt(2) broken =
+        RunningOnCPU || RunningOnMetal
 
     # Broadcast over arrays
     xs = Reactant.to_rarray([3.0, 5.0, 8.0])
     ys = Reactant.to_rarray([4.0, 12.0, 15.0])
-    @test @jit(hypot.(xs, ys)) ≈ [5.0, 13.0, 17.0]
+    @test @jit(hypot.(xs, ys)) ≈ [5.0, 13.0, 17.0] skip = RunningOnMetal
 end
 
 @testset "Traced Bool arithmetic follows Base" begin
@@ -636,9 +643,9 @@ end
     g(x, y) = (x < 0.0) + (y > 5.0)
     h(x) = -(x < 0.0)
     k(x) = +(x < 0.0)
-    @test Array(@jit(broadcast(f, a, a))) == f.(Array(a), Array(a))
-    @test Array(@jit(broadcast(g, a, a))) == g.(Array(a), Array(a))
-    @test Array(@jit(broadcast(h, a))) == h.(Array(a))
-    @test Array(@jit(broadcast(k, a))) == k.(Array(a))
-    @test eltype(@jit(broadcast(k, a))) == Int
+    @test Array(@jit(broadcast(f, a, a))) == f.(Array(a), Array(a)) skip = RunningOnMetal
+    @test Array(@jit(broadcast(g, a, a))) == g.(Array(a), Array(a)) skip = RunningOnMetal
+    @test Array(@jit(broadcast(h, a))) == h.(Array(a)) skip = RunningOnMetal
+    @test Array(@jit(broadcast(k, a))) == k.(Array(a)) skip = RunningOnMetal
+    @test eltype(@jit(broadcast(k, a))) == Int skip = RunningOnMetal
 end

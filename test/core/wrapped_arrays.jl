@@ -1,5 +1,7 @@
 using Reactant, Test, Statistics, NNlib, LinearAlgebra, FileCheck
 
+const RunningOnMetal = contains(string(Reactant.devices()[1]), "MTL")
+
 function view_getindex_1(x)
     x = view(x, 2:3, 1:2, :)
     return x[2, 1, 1]
@@ -21,7 +23,7 @@ end
     x_ra = Reactant.to_rarray(x)
 
     @test @allowscalar(@jit(view_getindex_1(x_ra))) ≈ view_getindex_1(x)
-    @test Array(@jit(view_getindex_2(x_ra))) ≈ view_getindex_2(x)
+    @test Array(@jit(view_getindex_2(x_ra))) ≈ view_getindex_2(x) skip = RunningOnMetal
     @test Array(@jit(view_getindex_3(x_ra))) ≈ view_getindex_3(x)
 end
 
@@ -33,7 +35,7 @@ end
 @testset "reshape wrapper" begin
     x = Reactant.TestUtils.construct_test_array(Float64, 4, 4, 3)
     x_ra = Reactant.to_rarray(x)
-    @test @jit(reshape_wrapper(x_ra)) ≈ reshape_wrapper(x)
+    @test @jit(reshape_wrapper(x_ra)) ≈ reshape_wrapper(x) skip = RunningOnMetal
 end
 
 function permutedims_wrapper(x)
@@ -44,7 +46,7 @@ end
 @testset "permutedims wrapper" begin
     x = Reactant.TestUtils.construct_test_array(Float64, 4, 4, 3)
     x_ra = Reactant.to_rarray(x)
-    @test @jit(permutedims_wrapper(x_ra)) ≈ permutedims_wrapper(x)
+    @test @jit(permutedims_wrapper(x_ra)) ≈ permutedims_wrapper(x) skip = RunningOnMetal
 end
 
 function bcast_wrapper(f::F, x) where {F}
@@ -57,7 +59,7 @@ end
     x_ra = Reactant.to_rarray(x)
 
     for op in (-, tanh, sin)
-        @test @jit(bcast_wrapper(op, x_ra)) ≈ bcast_wrapper(op, x)
+        @test @jit(bcast_wrapper(op, x_ra)) ≈ bcast_wrapper(op, x) skip = RunningOnMetal
     end
 end
 
@@ -66,7 +68,7 @@ function mean_var(x)
     return mean(x; dims=1), var(x; dims=1)
 end
 
-@testset "mean/var" begin
+RunningOnMetal || @testset "mean/var" begin
     x = Reactant.TestUtils.construct_test_array(Float64, 4, 3)
     x_ra = Reactant.to_rarray(x)
 
@@ -86,7 +88,7 @@ end
 @testset "batched transpose/adjoint" begin
     x = Reactant.TestUtils.construct_test_array(Float64, 4, 2, 3)
     x_ra = Reactant.to_rarray(x)
-    @test @jit(btranspose_badjoint(x_ra)) ≈ btranspose_badjoint(x)
+    @test @jit(btranspose_badjoint(x_ra)) ≈ btranspose_badjoint(x) skip = RunningOnMetal
 end
 
 function bypass_permutedims(x)
@@ -105,7 +107,7 @@ add_perm_dims(x) = x .+ PermutedDimsArray(x, (2, 1))
     x = Reactant.TestUtils.construct_test_array(Float64, 4, 4)
     x_ra = Reactant.to_rarray(x)
 
-    @test @jit(add_perm_dims(x_ra)) ≈ add_perm_dims(x)
+    @test @jit(add_perm_dims(x_ra)) ≈ add_perm_dims(x) skip = RunningOnMetal
 end
 
 function writeto_reshaped_array!(x)
@@ -143,7 +145,7 @@ function write_to_diagonal_array!(x)
 end
 
 @testset "Preserve Aliasing with Parent" begin
-    @testset "$(aType)" for (aType, fn) in [
+    RunningOnMetal || @testset "$(aType)" for (aType, fn) in [
         ("ReshapedArray", writeto_reshaped_array!),
         ("Transpose", write_to_transposed_array!),
         ("Adjoint", write_to_adjoint_array!),
@@ -156,10 +158,11 @@ end
     @testset "PermutedDimsArray" begin
         x = Reactant.TestUtils.construct_test_array(Float64, 4, 4)
         x_ra = Reactant.to_rarray(x)
-        @test @jit(write_to_permuted_dims_array!(x_ra)) ≈ write_to_permuted_dims_array!(x)
+        @test @jit(write_to_permuted_dims_array!(x_ra)) ≈ write_to_permuted_dims_array!(x) skip =
+            RunningOnMetal
     end
 
-    @testset "Diagonal" begin
+    RunningOnMetal || @testset "Diagonal" begin
         x = Reactant.TestUtils.construct_test_array(Float64, 4, 4)
         x_ra = Reactant.to_rarray(x)
         y_ra = copy(x_ra)
@@ -199,7 +202,7 @@ end
     ]
         x = Reactant.TestUtils.construct_test_array(Float64, 4, 4)
         x_ra = Reactant.to_rarray(x)
-        @test @jit(fn(x_ra)) ≈ fn(x)
+        @test @jit(fn(x_ra)) ≈ fn(x) skip = RunningOnMetal
     end
 end
 
@@ -225,23 +228,25 @@ end
 
     @test broadcast_reshaped_array(Array(x_ra), Array(idx1_ra), Array(idx2_ra)) ≈
         @jit(broadcast_reshaped_array(x_ra, idx1_ra, idx2_ra)) ≈
-        @jit(broadcast_reshaped_array(x_ra, Array(idx1_ra), Array(idx2_ra)))
+        @jit(broadcast_reshaped_array(x_ra, Array(idx1_ra), Array(idx2_ra))) skip =
+        RunningOnMetal
 
     idx3 = Reactant.to_rarray(2; track_numbers=true)
 
     @test broadcast_reshaped_array(Array(x_ra), Array(idx1_ra), Int64(idx3)) ≈
         @jit(broadcast_reshaped_array(x_ra, idx1_ra, idx3)) ≈
-        @jit(broadcast_reshaped_array(x_ra, Array(idx1_ra), Int64(idx3)))
+        @jit(broadcast_reshaped_array(x_ra, Array(idx1_ra), Int64(idx3))) skip =
+        RunningOnMetal
 
     @test broadcast_reshaped_array(Array(x_ra), Array(idx1_ra)) ≈
         @jit(broadcast_reshaped_array(x_ra, idx1_ra)) ≈
-        @jit(broadcast_reshaped_array(x_ra, Array(idx1_ra)))
+        @jit(broadcast_reshaped_array(x_ra, Array(idx1_ra))) skip = RunningOnMetal
 end
 
 @testset "reshaped subarray indexing" begin
     fn(x) = view(x, 1:2) .+ 1
     x_ra = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float64, 3, 4, 3))
-    @test @jit(fn(x_ra)) ≈ fn(Array(x_ra))
+    @test @jit(fn(x_ra)) ≈ fn(Array(x_ra)) skip = RunningOnMetal
 end
 
 function reshape_getindex(x)

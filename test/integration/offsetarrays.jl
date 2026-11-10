@@ -1,5 +1,7 @@
 using Reactant, Test, OffsetArrays
 
+const RunningOnMetal = contains(string(Reactant.devices()[1]), "MTL")
+
 function scalar_index(x)
     @allowscalar getindex(x, -1, 0)
 end
@@ -17,7 +19,7 @@ end
     @test tval ≈ oval
 end
 
-@testset "OffsetArray View" begin
+RunningOnMetal || @testset "OffsetArray View" begin
     U = zeros(Float64, 128, 128, 1)
     vU = OffsetArray(U, -7:120, -7:120, 1:1)
     rU = Reactant.to_rarray(vU)

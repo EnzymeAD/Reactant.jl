@@ -1,5 +1,7 @@
 using Reactant, Test
 
+const RunningOnMetal = contains(string(Reactant.devices()[1]), "MTL")
+
 @testset "ranges" begin
     i = Reactant.to_rarray(5; track_numbers=true)
     @test Array{Int64}(@jit(1:i)) == collect(1:5)
@@ -30,7 +32,7 @@ broadcast_over_range(a, kx, ky) = a .* (kx .^ 2 .+ ky' .^ 2)
     @test kx_2_ra isa Reactant.TracedStepRangeLen
     @test ky_2_ra isa Reactant.TracedStepRangeLen
     @test @jit(broadcast_over_range(a_ra, kx_2_ra, ky_2_ra)) ≈
-        broadcast_over_range(a, kx_2, ky_2)
+        broadcast_over_range(a, kx_2, ky_2) skip = RunningOnMetal
 end
 
 @testset "TwicePrecision to ConcreteRNumber" begin

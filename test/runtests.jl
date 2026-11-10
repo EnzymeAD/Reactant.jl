@@ -44,7 +44,7 @@ filter_tests!(testsuite, parsed_args)
 
 delete!(testsuite, "test_helpers")
 
-delete!(testsuite, "plugins/metal") # Currently completely non functional
+(Sys.isapple() && Sys.ARCH === :aarch64) || delete!(testsuite, "plugins/metal")
 
 if Sys.isapple()
     delete!(testsuite, "core/custom_number_types")

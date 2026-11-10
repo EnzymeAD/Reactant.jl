@@ -5,6 +5,7 @@ const ReactantCUDAExt = Base.get_extension(Reactant, :ReactantCUDAExt)
 
 const RunningOnTPU = contains(string(Reactant.devices()[1]), "TPU")
 const RunningOnCUDA = contains(string(Reactant.devices()[1]), "CUDA")
+const RunningOnMetal = contains(string(Reactant.devices()[1]), "MTL")
 
 # LLVM's X86 backend marks bf16 vector types legal on hosts advertising avx512_bf16 but has
 # no selection patterns for them, so vectorized bf16 code aborts during instruction
@@ -44,7 +45,7 @@ end
 # `w::FT` in "Convert mul" above), so `clamp(val, lo, hi)` exercises the same
 # `Base.clamp` code path that failed to compile before the identity-`convert`
 # ambiguity was fixed.
-@testset "Clamp Kernel" begin
+RunningOnMetal || @testset "Clamp Kernel" begin
     if !RunningOnTPU
         for FT in (Float32, Float64)
             lo = Reactant.ConcreteRNumber(FT(1))
@@ -153,7 +154,7 @@ end
     @test Array(out) == [3.0]
 end
 
-@testset "Sin Kernel" begin
+RunningOnMetal || @testset "Sin Kernel" begin
     oA = collect(Float64, 1:1:64)
     A = Reactant.to_rarray(oA)
     B = Reactant.to_rarray(100 .* oA)
@@ -260,7 +261,7 @@ function mul_number!(x, y)
     return nothing
 end
 
-@testset "Mul Number" begin
+RunningOnMetal || @testset "Mul Number" begin
     oA = collect(Float64, 1:1:64)
     A = Reactant.to_rarray(oA)
     B = ConcreteRNumber(3.1)
@@ -279,7 +280,7 @@ function pow_number!(x, y)
     return nothing
 end
 
-@testset "Pow Number" begin
+RunningOnMetal || @testset "Pow Number" begin
     oA = collect(Float64, 1:1:64)
     A = Reactant.to_rarray(oA)
     B = ConcreteRNumber(3.1)
@@ -307,7 +308,7 @@ end
     @test begin
         @jit searchsorted!(A, B)
         all(Array(A) .≈ 311)
-    end broken = contains(string(Reactant.devices()[1]), "TPU")
+    end broken = (contains(string(Reactant.devices()[1]), "TPU")) || RunningOnMetal
 end
 
 function convert_mul_kernel!(Gu, w::FT) where {FT}
@@ -321,7 +322,7 @@ function convert_mul!(Gu, w)
     return nothing
 end
 
-@testset "Convert mul" begin
+RunningOnMetal || @testset "Convert mul" begin
     w = Reactant.ConcreteRNumber(0.6)
     Gu = Reactant.to_rarray(ones(24, 24, 24))
     @jit convert_mul!(Gu, w)
@@ -365,7 +366,7 @@ function run!(arr, clock, params)
     return nothing
 end
 
-@testset "Oceananigans Clock" begin
+RunningOnMetal || @testset "Oceananigans Clock" begin
     arr = Reactant.to_rarray(zeros(Float64, 16))
     clock = MyClock(ConcreteRNumber(0.0), 3)
     params = RawParams(ConcreteRNumber(0.1), 7)

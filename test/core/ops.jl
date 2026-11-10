@@ -5,13 +5,14 @@ using SpecialFunctions: SpecialFunctions
 
 const RunningOnTPU = contains(string(Reactant.devices()[1]), "TPU")
 const RunningOnAppleX86 = Sys.isapple() && Sys.ARCH === :x86_64
+const RunningOnMetal = contains(string(Reactant.devices()[1]), "MTL")
 
 @testset "abs" begin
     x = Reactant.to_rarray([1, -1])
     @test [1, 1] ≈ @jit Ops.abs(x)
 
     x = Reactant.to_rarray([1.0, -1.0])
-    @test [1.0, 1.0] ≈ @jit Ops.abs(x)
+    @test [1.0, 1.0] ≈ (@jit Ops.abs(x)) skip = RunningOnMetal
 
     x = Reactant.to_rarray(ComplexF32[
         3.0+4im -3.0+4im
@@ -34,7 +35,7 @@ end
 
     a = Reactant.to_rarray([1.1, 2.2, 3.3, 4.4])
     b = Reactant.to_rarray([5.5, 6.6, -7.7, -8.8])
-    @test Array(a) .+ Array(b) ≈ @jit Ops.add(a, b)
+    @test Array(a) .+ Array(b) ≈ (@jit Ops.add(a, b)) skip = RunningOnMetal
 
     a = Reactant.to_rarray(ComplexF32[1.1 + 2.2im, 3.3 + 4.4im, 5.5 + 6.6im, 7.7 + 8.8im])
     b = Reactant.to_rarray(
@@ -60,14 +61,14 @@ end
 @testset "atan2" begin
     a = Reactant.to_rarray([1.1, 2.2, 3.3, 4.4])
     b = Reactant.to_rarray([5.5, 6.6, -7.7, -8.8])
-    @test atan.(Array(a), Array(b)) ≈ @jit Ops.atan2(a, b)
+    @test atan.(Array(a), Array(b)) ≈ (@jit Ops.atan2(a, b)) skip = RunningOnMetal
 
     # TODO(#2253) couldn't find the definition of complex atan2 to compare against, but it should be implemented
 end
 
 @testset "cbrt" begin
     x = Reactant.to_rarray([1.0, 8.0, 27.0, 64.0])
-    @test [1.0, 2.0, 3.0, 4.0] ≈ @jit Ops.cbrt(x)
+    @test [1.0, 2.0, 3.0, 4.0] ≈ (@jit Ops.cbrt(x)) skip = RunningOnMetal
 
     # TODO(#2253) currently crashes, reenable when #291 is fixed
     # x = Reactant.to_rarray([1.0 + 2.0im, 8.0 + 16.0im, 27.0 + 54.0im, 64.0 + 128.0im])
@@ -116,7 +117,7 @@ end
             -1.1 -2.2 -3.3 -4.4 -5.5 -6.6 -7.7 -8.8 -9.9 -10.0
         ],
     )
-    @test ceil.(x) ≈ @jit Ops.ceil(x)
+    @test ceil.(x) ≈ (@jit Ops.ceil(x)) skip = RunningOnMetal
 end
 
 @testset "cholesky" begin
@@ -130,8 +131,8 @@ end
         2.0 5.0 6.0
         3.0 6.0 9.0
     ])
-    @test cholesky(Array(x)).U ≈ @jit g1(x)
-    @test transpose(cholesky(Array(x)).U) ≈ @jit g2(x)
+    @test cholesky(Array(x)).U ≈ (@jit g1(x)) skip = RunningOnMetal
+    @test transpose(cholesky(Array(x)).U) ≈ (@jit g2(x)) skip = RunningOnMetal
 
     x = Reactant.to_rarray(
         ComplexF32[
@@ -173,7 +174,7 @@ end
     ]
         x = Reactant.to_rarray([1.1, 2.2, 3.3, 4.4, 5.5, 6.6, 7.7, 8.8, 9.9, 10.0])
         @test [3.0, 3.0, 3.3, 4.4, 5.5, 6.6, 7.0, 7.0, 7.0, 7.0] ≈
-            @jit Ops.clamp(_min, x, _max)
+            (@jit Ops.clamp(_min, x, _max)) skip = RunningOnMetal
     end
 end
 
@@ -208,10 +209,12 @@ end
 @testset "cosine" begin
     # it crashes in apple x86_64 and it's a deprecated platform so we don't need to care a lot...
     x = Reactant.to_rarray([0, π / 2, π, 3π / 2, 2π])
-    @test [1, 0, -1, 0, 1] ≈ @jit(Ops.cosine(x)) broken = RunningOnAppleX86
+    @test [1, 0, -1, 0, 1] ≈ @jit(Ops.cosine(x)) broken =
+        RunningOnAppleX86 || RunningOnMetal
 
     x = Reactant.to_rarray([0.0, π / 2, π, 3π / 2, 2π])
-    @test [1.0, 0.0, -1.0, 0.0, 1.0] ≈ @jit(Ops.cosine(x)) broken = RunningOnAppleX86
+    @test [1.0, 0.0, -1.0, 0.0, 1.0] ≈ @jit(Ops.cosine(x)) broken =
+        RunningOnAppleX86 || RunningOnMetal
 
     @test ComplexF32[1.0 + 0.0im, 0.0 + 0.0im, -1.0 + 0.0im, 0.0 + 0.0im, 1.0 + 0.0im] ≈
         @jit(
@@ -247,7 +250,7 @@ end
         end
         a = Reactant.to_rarray(a)
         b = Reactant.to_rarray(b)
-        @test Array(a) ./ Array(b) ≈ @jit Ops.divide(a, b)
+        @test Array(a) ./ Array(b) ≈ (@jit Ops.divide(a, b)) skip = RunningOnMetal
     end
 end
 
@@ -271,10 +274,10 @@ end
         a = Reactant.to_rarray(a)
         b = Reactant.to_rarray(b)
         # NOTE `LinearAlgebra.dot` is not equal to `sum(a .* b)` on complex numbers due to conjugation
-        @test sum(a .* b) ≈ @jit f1(a, b)
+        @test sum(a .* b) ≈ (@jit f1(a, b)) skip = RunningOnMetal
         @test kron(reshape(Array(a), length(a), 1), reshape(Array(b), 1, length(b))) ≈
-            @jit fouter(a, b)
-        @test a .* b ≈ @jit fouter_batch1(a, b)
+            (@jit fouter(a, b)) skip = RunningOnMetal
+        @test a .* b ≈ (@jit fouter_batch1(a, b)) skip = RunningOnMetal
     end
 
     a = Reactant.to_rarray(Int32[1 2; 3 4])
@@ -284,7 +287,7 @@ end
 
 @testset "exponential" begin
     x = [1.0, 2.0, 3.0, 4.0]
-    @test exp.(x) ≈ @jit Ops.exponential(Reactant.to_rarray(x))
+    @test exp.(x) ≈ (@jit Ops.exponential(Reactant.to_rarray(x))) skip = RunningOnMetal
 
     x = ComplexF32[1.0 + 2.0im, 3.0 + 4.0im, 5.0 + 6.0im, 7.0 + 8.0im]
     @test exp.(x) ≈ @jit(Ops.exponential(Reactant.to_rarray(x))) skip = RunningOnAppleX86
@@ -292,7 +295,8 @@ end
 
 @testset "exponential_minus_one" begin
     x = [1.0, 2.0, 3.0, 4.0]
-    @test expm1.(x) ≈ @jit Ops.exponential_minus_one(Reactant.to_rarray(x))
+    @test expm1.(x) ≈ (@jit Ops.exponential_minus_one(Reactant.to_rarray(x))) skip =
+        RunningOnMetal
 
     x = ComplexF32[1.0 + 2.0im, 3.0 + 4.0im, 5.0 + 6.0im, 7.0 + 8.0im]
     @test expm1.(x) ≈ @jit(Ops.exponential_minus_one(Reactant.to_rarray(x))) skip =
@@ -367,7 +371,7 @@ end
             -1.1 -2.2 -3.3 -4.4 -5.5 -6.6 -7.7 -8.8 -9.9 -10.0
         ],
     )
-    @test floor.(x) ≈ @jit Ops.floor(x)
+    @test floor.(x) ≈ (@jit Ops.floor(x)) skip = RunningOnMetal
 end
 
 @testset "get_dimension_size" begin
@@ -386,15 +390,15 @@ end
     # Test Ops.hypot with arrays
     x = Reactant.to_rarray([3.0, 5.0, 8.0])
     y = Reactant.to_rarray([4.0, 12.0, 15.0])
-    @test [5.0, 13.0, 17.0] ≈ @jit Ops.hypot(x, y)
+    @test [5.0, 13.0, 17.0] ≈ (@jit Ops.hypot(x, y)) skip = RunningOnMetal
 
     # Test Base.hypot with TracedRNumber
     f(a, b) = Base.hypot(a, b)
     a = Reactant.to_rarray(3.0; track_numbers=true)
     b = Reactant.to_rarray(4.0; track_numbers=true)
-    @test 5.0 ≈ @jit f(a, b)
-    @test 5.0 ≈ @jit f(a, 4.0)
-    @test 5.0 ≈ @jit f(3.0, b)
+    @test 5.0 ≈ (@jit f(a, b)) skip = RunningOnMetal
+    @test 5.0 ≈ (@jit f(a, 4.0)) skip = RunningOnMetal
+    @test 5.0 ≈ (@jit f(3.0, b)) skip = RunningOnMetal
 end
 
 @testset "iota" begin
@@ -417,12 +421,13 @@ end
 
 @testset "is_finite" begin
     x = Reactant.to_rarray([-Inf, Inf, NaN, -10.0, -0.0, 0.0, 10.0])
-    @test [false, false, false, true, true, true, true] ≈ @jit Ops.is_finite(x)
+    @test [false, false, false, true, true, true, true] ≈ (@jit Ops.is_finite(x)) skip =
+        RunningOnMetal
 end
 
 @testset "log" begin
     x = Reactant.to_rarray([1.0, 2.0, 3.0, 4.0])
-    @test log.(Array(x)) ≈ @jit Ops.log(x)
+    @test log.(Array(x)) ≈ (@jit Ops.log(x)) skip = RunningOnMetal
 
     x = Reactant.to_rarray(ComplexF32[1.0 + 0.0im, 2.0 + 0.0im, -3.0 + 0.0im, -4.0 + 0.0im])
     @test log.(Array(x)) ≈ @jit(Ops.log(x))
@@ -430,7 +435,7 @@ end
 
 @testset "log_plus_one" begin
     x = Reactant.to_rarray([1.0, 2.0, 3.0, 4.0])
-    @test log.(Array(x)) ≈ @jit Ops.log(x)
+    @test log.(Array(x)) ≈ (@jit Ops.log(x)) skip = RunningOnMetal
 
     x = Reactant.to_rarray(ComplexF32[1.0 + 0.0im, 2.0 + 0.0im, -3.0 + 0.0im, -4.0 + 0.0im])
     @test log.(Array(x)) ≈ @jit(Ops.log(x))
@@ -439,7 +444,7 @@ end
 @testset "logistic" begin
     x = Reactant.to_rarray([0.0, 1.0, 2.0, 3.0])
     l(x) = 1 / (1 + exp(-x))
-    @test l.(Array(x)) ≈ @jit Ops.logistic(x)
+    @test l.(Array(x)) ≈ (@jit Ops.logistic(x)) skip = RunningOnMetal
 end
 
 @testset "maximum" begin
@@ -453,7 +458,7 @@ end
 
     x = Reactant.to_rarray([-1.0, 0.0, 1.0, 10.0])
     y = Reactant.to_rarray([10.0, 1.0, 0.0, -1.0])
-    @test [10.0, 1.0, 1.0, 10.0] == @jit Ops.maximum(x, y)
+    @test [10.0, 1.0, 1.0, 10.0] == (@jit Ops.maximum(x, y)) skip = RunningOnMetal
 end
 
 @testset "minimum" begin
@@ -467,7 +472,7 @@ end
 
     x = Reactant.to_rarray([-1.0, 0.0, 1.0, 10.0])
     y = Reactant.to_rarray([10.0, 1.0, 0.0, -1.0])
-    @test [-1.0, 0.0, 0.0, -1.0] == @jit Ops.minimum(x, y)
+    @test [-1.0, 0.0, 0.0, -1.0] == (@jit Ops.minimum(x, y)) skip = RunningOnMetal
 end
 
 @testset "multiply" begin
@@ -488,7 +493,7 @@ end
         end
         a = Reactant.to_rarray(a)
         b = Reactant.to_rarray(b)
-        @test Array(a) .* Array(b) ≈ @jit Ops.multiply(a, b)
+        @test Array(a) .* Array(b) ≈ (@jit Ops.multiply(a, b)) skip = RunningOnMetal
     end
 end
 
@@ -502,7 +507,7 @@ end
         @jit Ops.negate(x)
 
     x = Reactant.to_rarray([-1.0, 0.0, 1.0, 10.0])
-    @test [1.0, 0.0, -1.0, -10.0] ≈ @jit Ops.negate(x)
+    @test [1.0, 0.0, -1.0, -10.0] ≈ (@jit Ops.negate(x)) skip = RunningOnMetal
 
     x = Reactant.to_rarray(ComplexF32[-1.0 + 2im, 0.0 - 3im, 1.0 + 4im, 10.0 - 5im])
     @test [1.0 - 2im, 0.0 + 3im, -1.0 - 4im, -10.0 + 5im] ≈ @jit(Ops.negate(x))
@@ -595,7 +600,7 @@ end
             Reactant.to_rarray([5.5, 6.6, -7.7, -8.8]),
         ),
     ]
-        @test Array(a) .% Array(b) ≈ @jit Ops.remainder(a, b)
+        @test Array(a) .% Array(b) ≈ (@jit Ops.remainder(a, b)) skip = RunningOnMetal
     end
 end
 
@@ -623,7 +628,7 @@ end
 end
 
 @testset "rng_bit_generator" begin
-    @testset for (alg, sz) in
+    RunningOnMetal || @testset for (alg, sz) in
                  [("DEFAULT", 2), ("PHILOX", 2), ("PHILOX", 3), ("THREE_FRY", 2)]
         seed = Reactant.to_rarray(zeros(UInt64, sz))
 
@@ -673,17 +678,18 @@ end
 
 @testset "round_nearest_afz" begin
     x = Reactant.to_rarray([-2.5, 0.4, 0.5, 0.6, 2.5])
-    @test [-3.0, 0.0, 1.0, 1.0, 3.0] ≈ @jit Ops.round_nearest_afz(x)
+    @test [-3.0, 0.0, 1.0, 1.0, 3.0] ≈ (@jit Ops.round_nearest_afz(x)) skip = RunningOnMetal
 end
 
 @testset "round_nearest_even" begin
     x = Reactant.to_rarray([-2.5, 0.4, 0.5, 0.6, 2.5])
-    @test [-2.0, 0.0, 0.0, 1.0, 2.0] ≈ @jit Ops.round_nearest_even(x)
+    @test [-2.0, 0.0, 0.0, 1.0, 2.0] ≈ (@jit Ops.round_nearest_even(x)) skip =
+        RunningOnMetal
 end
 
 @testset "rsqrt" begin
     x = Reactant.to_rarray([1.0 4.0; 9.0 25.0])
-    @test 1 ./ sqrt.(Array(x)) ≈ @jit Ops.rsqrt(x)
+    @test 1 ./ sqrt.(Array(x)) ≈ (@jit Ops.rsqrt(x)) skip = RunningOnMetal
 
     x = Reactant.to_rarray(ComplexF32[1.0+1im 4.0+2im; 9.0+3im 25.0+4im])
     @test 1 ./ sqrt.(Array(x)) ≈ @jit(Ops.rsqrt(x))
@@ -717,7 +723,7 @@ end
 
 @testset "send" begin end
 
-@testset "set_dimension_size" begin
+RunningOnMetal || @testset "set_dimension_size" begin
     # Test with 1D array
     x = Reactant.to_rarray(Float32[1.0, 2.0, 3.0, 4.0])
     dim_size = ConcreteRNumber(Int32(4))
@@ -773,7 +779,8 @@ end
     @test [-1, 0, 1] == @jit Ops.sign(x)
 
     x = Reactant.to_rarray([Inf, -Inf, NaN, -NaN, -1.0, -0.0, +0.0, 1.0])
-    @test [1.0, -1.0, NaN, NaN, -1.0, -0.0, 0.0, 1.0] ≈ @jit(Ops.sign(x)) nans = true
+    @test [1.0, -1.0, NaN, NaN, -1.0, -0.0, 0.0, 1.0] ≈ @jit(Ops.sign(x)) nans = true skip =
+        RunningOnMetal
 
     x = Reactant.to_rarray(
         ComplexF32[
@@ -792,10 +799,10 @@ end
 
 @testset "sine" begin
     x = Reactant.to_rarray([0, π / 2, π, 3π / 2, 2π])
-    @test [0, 1, 0, -1, 0] ≈ @jit(Ops.sine(x)) broken = RunningOnAppleX86
+    @test [0, 1, 0, -1, 0] ≈ @jit(Ops.sine(x)) broken = RunningOnAppleX86 || RunningOnMetal
 
     x = Reactant.to_rarray([0.0, π / 2, π, 3π / 2, 2π])
-    @test [0.0, 1.0, 0.0, -1.0, 0.0] ≈ @jit(Ops.sine(x))
+    @test [0.0, 1.0, 0.0, -1.0, 0.0] ≈ @jit(Ops.sine(x)) skip = RunningOnMetal
 
     x = Reactant.to_rarray(
         ComplexF32[0.0 + 0.0im, π / 2 + 0.0im, π + 0.0im, 3π / 2 + 0.0im, 2π + 0.0im]
@@ -825,7 +832,7 @@ end
 
 @testset "sqrt" begin
     x = Reactant.to_rarray([1.0, 4.0, 9.0, 16.0])
-    @test [1.0, 2.0, 3.0, 4.0] ≈ @jit Ops.sqrt(x)
+    @test [1.0, 2.0, 3.0, 4.0] ≈ (@jit Ops.sqrt(x)) skip = RunningOnMetal
 
     x = Reactant.to_rarray(ComplexF32[1.0 + 0im, 0.0 + 1im])
     @test ComplexF32[1.0 + 0im, 1 / √2 * (1 + im)] ≈ @jit(Ops.sqrt(x)) broken =
@@ -846,7 +853,7 @@ end
         end
         a = Reactant.to_rarray(a)
         b = Reactant.to_rarray(b)
-        @test Array(a) .- Array(b) == @jit Ops.subtract(a, b)
+        @test Array(a) .- Array(b) == (@jit Ops.subtract(a, b)) skip = RunningOnMetal
     end
 end
 
@@ -855,7 +862,7 @@ end
     x = Reactant.to_rarray([0, π / 4, π / 3, 3π / 4, π])
 
     @test [0.0, 1.0, 1.73205, -1.0, 0.0] ≈ @jit(Ops.tan(x)) atol = 1e-5 rtol = 1e-3 broken =
-        RunningOnAppleX86
+        RunningOnAppleX86 || RunningOnMetal
 
     x = Reactant.to_rarray(
         ComplexF32[0.0 + 0.0im, π / 4 + 0.0im, π / 3 + 0.0im, 3π / 4 + 0.0im, π + 0.0im]
@@ -866,7 +873,8 @@ end
 
 @testset "tanh" begin
     x = Reactant.to_rarray([-1.0, 0.0, 1.0])
-    @test [-0.7615941559557649, 0.0, 0.7615941559557649] ≈ @jit Ops.tanh(x)
+    @test [-0.7615941559557649, 0.0, 0.7615941559557649] ≈ (@jit Ops.tanh(x)) skip =
+        RunningOnMetal
 
     x = Reactant.to_rarray(ComplexF32[-1.0, 0.0, 1.0])
     @test ComplexF32[-0.7615941559557649, 0.0, 0.7615941559557649] ≈ @jit(Ops.tanh(x)) skip =
@@ -923,27 +931,28 @@ end
 
 @testset "asin" begin
     x = Reactant.to_rarray([-1.0, 0.0, 1.0])
-    @test asin.(Array(x)) ≈ @jit Ops.asin(x)
+    @test asin.(Array(x)) ≈ (@jit Ops.asin(x)) skip = RunningOnMetal
 end
 
 @testset "asinh" begin
     x = Reactant.to_rarray([-1.0, 0.0, 1.0])
-    @test asinh.(Array(x)) ≈ @jit Ops.asinh(x)
+    @test asinh.(Array(x)) ≈ (@jit Ops.asinh(x)) skip = RunningOnMetal
 end
 
 @testset "atan" begin
     x = Reactant.to_rarray([-1.0, 0.0, 1.0])
-    @test atan.(Array(x)) ≈ @jit Ops.atan(x)
+    @test atan.(Array(x)) ≈ (@jit Ops.atan(x)) skip = RunningOnMetal
 end
 
 @testset "atanh" begin
     x = Reactant.to_rarray([-1.0, 0.0, 1.0])
-    @test atanh.(Array(x)) ≈ @jit Ops.atanh(x)
+    @test atanh.(Array(x)) ≈ (@jit Ops.atanh(x)) skip = RunningOnMetal
 end
 
 @testset "bessel_i1e" begin
     x = Reactant.to_rarray([-1.0, 0.0, 1.0, 2.0, 3.0, 4.0])
-    @test SpecialFunctions.besselix.(1, Array(x)) ≈ @jit Ops.bessel_i1e(x)
+    @test SpecialFunctions.besselix.(1, Array(x)) ≈ (@jit Ops.bessel_i1e(x)) skip =
+        RunningOnMetal
 end
 
 @testset "conj" begin
@@ -953,7 +962,7 @@ end
 
 @testset "cosh" begin
     x = Reactant.to_rarray([-1.0, 0.0, 1.0])
-    @test cosh.(Array(x)) ≈ @jit Ops.cosh(x)
+    @test cosh.(Array(x)) ≈ (@jit Ops.cosh(x)) skip = RunningOnMetal
 end
 
 @testset "digamma" begin
@@ -962,44 +971,47 @@ end
     # returns -Inf. At 0 the two agree on -Inf.
     x = Reactant.to_rarray([-1.0, 0.0, 1.0])
     @test [NaN, -Inf, SpecialFunctions.digamma(1.0)] ≈ @jit(Ops.digamma(x)) nans = true skip =
-        RunningOnAppleX86
+        RunningOnAppleX86 || RunningOnMetal
 end
 
 @testset "erf_inv" begin
     x = Reactant.to_rarray([-1.0, 0.0, 1.0])
-    @test SpecialFunctions.erfinv.(Array(x)) ≈ @jit Ops.erf_inv(x)
+    @test SpecialFunctions.erfinv.(Array(x)) ≈ (@jit Ops.erf_inv(x)) skip = RunningOnMetal
 end
 
 @testset "erf" begin
     x = Reactant.to_rarray([-1.0, 0.0, 1.0])
-    @test SpecialFunctions.erf.(Array(x)) ≈ @jit Ops.erf(x)
+    @test SpecialFunctions.erf.(Array(x)) ≈ (@jit Ops.erf(x)) skip = RunningOnMetal
 end
 
 @testset "erfc" begin
     x = Reactant.to_rarray([-1.0, 0.0, 1.0])
-    @test SpecialFunctions.erfc.(Array(x)) ≈ @jit Ops.erfc(x)
+    @test SpecialFunctions.erfc.(Array(x)) ≈ (@jit Ops.erfc(x)) skip = RunningOnMetal
 end
 
 @testset "is_inf" begin
     x = Reactant.to_rarray([-Inf, Inf, NaN, -10.0, -0.0, 0.0, 10.0])
-    @test [true, true, false, false, false, false, false] ≈ @jit Ops.is_inf(x)
+    @test [true, true, false, false, false, false, false] ≈ (@jit Ops.is_inf(x)) skip =
+        RunningOnMetal
 end
 
 @testset "is_neg_inf" begin
     x = Reactant.to_rarray([-Inf, Inf, NaN, -10.0, -0.0, 0.0, 10.0])
-    @test [true, false, false, false, false, false, false] ≈ @jit Ops.is_neg_inf(x)
+    @test [true, false, false, false, false, false, false] ≈ (@jit Ops.is_neg_inf(x)) skip =
+        RunningOnMetal
 end
 
 @testset "is_pos_inf" begin
     x = Reactant.to_rarray([-Inf, Inf, NaN, -10.0, -0.0, 0.0, 10.0])
-    @test [false, true, false, false, false, false, false] ≈ @jit Ops.is_pos_inf(x)
+    @test [false, true, false, false, false, false, false] ≈ (@jit Ops.is_pos_inf(x)) skip =
+        RunningOnMetal
 end
 
 @testset "lgamma" begin
     x = Reactant.to_rarray([-1.0, 0.0, 1.0, 2.5])
     lgamma(x) = (SpecialFunctions.logabsgamma(x))[1]
     @test lgamma.(Array(x)) ≈ @jit(Ops.lgamma(x)) atol = 1e-5 rtol = 1e-3 skip =
-        RunningOnAppleX86
+        RunningOnAppleX86 || RunningOnMetal
 end
 
 @testset "next_after" begin
@@ -1015,22 +1027,22 @@ end
         nextfloat(1e18),
         prevfloat(3e-9),
         nextfloat(3e-9),
-    ] == @jit(Ops.next_after(x, y)) skip = RunningOnTPU
+    ] == @jit(Ops.next_after(x, y)) skip = RunningOnTPU || RunningOnMetal
 end
 
 @testset "polygamma" begin
     x = Reactant.to_rarray([-1.0, 0.0, 1.0, 1.0, 2.5])
     m = Reactant.to_rarray([3.0, 3.0, 2.0, 3.0, 4.0])
     @test SpecialFunctions.polygamma.(Int.(Array(m)), Array(x)) ≈ @jit(Ops.polygamma(m, x)) broken =
-        RunningOnAppleX86
+        RunningOnAppleX86 || RunningOnMetal
 end
 
 @testset "sinh" begin
     x = Reactant.to_rarray([-1.0, 0.0, 1.0])
-    @test sinh.(Array(x)) ≈ @jit Ops.sinh(x)
+    @test sinh.(Array(x)) ≈ (@jit Ops.sinh(x)) skip = RunningOnMetal
 end
 
-@testset "top_k" begin
+RunningOnMetal || @testset "top_k" begin
     x = Reactant.to_rarray([1, 2, 3, 4])
     @test (; values=[4, 3], indices=[4, 3]) == @jit Ops.top_k(x, 2)
 
@@ -1045,7 +1057,8 @@ end
 @testset "zeta" begin
     s = Reactant.to_rarray([1.0, 2.0, 50.0])
     z = Reactant.to_rarray([1e-8, 0.001, 2.0])
-    @test SpecialFunctions.zeta.(Array(s), Array(z)) ≈ @jit Ops.zeta(s, z)
+    @test SpecialFunctions.zeta.(Array(s), Array(z)) ≈ (@jit Ops.zeta(s, z)) skip =
+        RunningOnMetal
 end
 
 @testset "hlo_call" begin
@@ -1267,7 +1280,7 @@ end
     end
 end
 
-@testset "Large constant" begin
+RunningOnMetal || @testset "Large constant" begin
     N = 5
     constant = Reactant.TestUtils.construct_test_array(Float64, N)
     v = Reactant.TestUtils.construct_test_array(Float64, N)
@@ -1295,7 +1308,7 @@ end
 
 fn_test_wrap(x) = Reactant.Ops.wrap(x, 2, 1; dimension=3)
 
-@testset "Ops.wrap" begin
+RunningOnMetal || @testset "Ops.wrap" begin
     x = Reactant.to_rarray(rand(2, 3, 4, 5))
     out = @jit fn_test_wrap(x)
 

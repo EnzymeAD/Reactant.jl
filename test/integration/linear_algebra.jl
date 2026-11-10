@@ -1,6 +1,7 @@
 using LinearAlgebra, Reactant, Test, FileCheck
 
 const RunningOnTPU = contains(string(Reactant.devices()[1]), "TPU")
+const RunningOnMetal = contains(string(Reactant.devices()[1]), "MTL")
 
 function muladd2(A, x, b)
     C = similar(A, promote_type(eltype(A), eltype(b)), size(A, 1), size(x, 2))
@@ -437,18 +438,18 @@ end
             A_ra = Reactant.to_rarray(A_wrapped)
 
             @testset "no_tranpose" begin
-                @test @jit(fn1(A_ra, b_ra)) ≈ fn1(A_wrapped, b)
-                @test @jit(fn4(A_ra, B_ra)) ≈ fn4(A_wrapped, B)
+                @test @jit(fn1(A_ra, b_ra)) ≈ fn1(A_wrapped, b) skip = RunningOnMetal
+                @test @jit(fn4(A_ra, B_ra)) ≈ fn4(A_wrapped, B) skip = RunningOnMetal
             end
 
             @testset "adjoint" begin
-                @test @jit(fn2(A_ra, b_ra)) ≈ fn2(A_wrapped, b)
-                @test @jit(fn5(A_ra, B_ra)) ≈ fn5(A_wrapped, B)
+                @test @jit(fn2(A_ra, b_ra)) ≈ fn2(A_wrapped, b) skip = RunningOnMetal
+                @test @jit(fn5(A_ra, B_ra)) ≈ fn5(A_wrapped, B) skip = RunningOnMetal
             end
 
             @testset "transpose" begin
-                @test @jit(fn3(A_ra, b_ra)) ≈ fn3(A_wrapped, b)
-                @test @jit(fn6(A_ra, B_ra)) ≈ fn6(A_wrapped, B)
+                @test @jit(fn3(A_ra, b_ra)) ≈ fn3(A_wrapped, b) skip = RunningOnMetal
+                @test @jit(fn6(A_ra, B_ra)) ≈ fn6(A_wrapped, B) skip = RunningOnMetal
             end
         end
     end
@@ -617,7 +618,8 @@ end
     # `b_ra` is captured (concrete); the solve allocates its output via
     # `similar(b_ra, <traced eltype>, ...)`, which must yield a traced array
     # rather than hit `primitive_type` on the wrapped element type.
-    @test Array(@jit((m -> UpperTriangular(m) \ b_ra)(M_ra))) ≈ UpperTriangular(M) \ b
+    @test Array(@jit((m -> UpperTriangular(m) \ b_ra)(M_ra))) ≈ UpperTriangular(M) \ b skip =
+        RunningOnMetal
     @test Array(@jit(((m, v) -> LowerTriangular(m) \ v)(M_ra, b_ra))) ≈
-        LowerTriangular(M) \ b
+        LowerTriangular(M) \ b skip = RunningOnMetal
 end

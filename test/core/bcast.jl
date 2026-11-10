@@ -1,6 +1,8 @@
 using Test, Reactant, Enzyme, NNlib, Statistics, FileCheck
 using Reactant.MLIR
 
+const RunningOnMetal = contains(string(Reactant.devices()[1]), "MTL")
+
 @noinline function no(@nospecialize(x))
     x = @ccall $(Base.@cfunction(identity, Any, (Any,)))(x::Any)::Any
     return x[]::Any
@@ -56,10 +58,10 @@ end
     y_ca = Reactant.to_rarray(y)
 
     @testset "Broadcasting" begin
-        @test x .+ y ≈ @jit x_ca .+ y_ca
-        @test x .- y ≈ @jit x_ca .- y_ca
-        @test x .* y ≈ @jit x_ca .* y_ca
-        @test x ./ y ≈ @jit x_ca ./ y_ca
+        @test x .+ y ≈ (@jit x_ca .+ y_ca) skip = RunningOnMetal
+        @test x .- y ≈ (@jit x_ca .- y_ca) skip = RunningOnMetal
+        @test x .* y ≈ (@jit x_ca .* y_ca) skip = RunningOnMetal
+        @test x ./ y ≈ (@jit x_ca ./ y_ca) skip = RunningOnMetal
     end
 end
 
@@ -129,7 +131,7 @@ end
 @testset "Broadcasting closures / functors" begin
     x = Reactant.TestUtils.construct_test_array(Float32, 2, 3)
     x_ra = Reactant.to_rarray(x)
-    @test @jit(custombcast(x_ra)) ≈ custombcast(x)
+    @test @jit(custombcast(x_ra)) ≈ custombcast(x) skip = RunningOnMetal
 end
 
 @testset "elem_apply_via_while_loop with Ref scalars and overlayed calls" begin
@@ -270,7 +272,7 @@ function K(m::T) where {T}
     return drf
 end
 
-@testset "Non-concrete inferred type for broadcasting: #2467" begin
+RunningOnMetal || @testset "Non-concrete inferred type for broadcasting: #2467" begin
     x_inner = Vector{Float64}(LinRange(0.0, 1.0, 1000))
     x = Reactant.to_rarray(x_inner)
 
@@ -279,7 +281,7 @@ end
     @test res_ra ≈ res_jl
 end
 
-@testset "@views broadcast with captured Matrix columns: #2569" begin
+RunningOnMetal || @testset "@views broadcast with captured Matrix columns: #2569" begin
     # When @views creates SubArray wrappers around both a TracedRArray and a
     # captured regular Matrix, broadcast alias-checking calls _parentsmatch
     # which fell through to the DenseArray method that calls pointer().

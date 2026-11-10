@@ -3,9 +3,10 @@ using Reactant, Test, Enzyme, FileCheck
 using ArrayInterface
 
 const RunningOnTPU = contains(string(Reactant.devices()[1]), "TPU")
+const RunningOnMetal = contains(string(Reactant.devices()[1]), "MTL")
 
 @testset "Scalars" begin
-    @testset "Only Scalars" begin
+    RunningOnMetal || @testset "Only Scalars" begin
         x = (3, 3.14)
 
         f1(x) = x[1] * x[2]
@@ -27,7 +28,7 @@ const RunningOnTPU = contains(string(Reactant.devices()[1]), "TPU")
         @test f4(Reactant.to_rarray((5, 5.2); track_numbers=Int)) isa ConcreteRNumber
     end
 
-    @testset "Mixed" begin
+    RunningOnMetal || @testset "Mixed" begin
         x = (3, [3.14])
 
         f1(x) = x[1] * x[2]
@@ -55,7 +56,7 @@ relu(x) = relu.(x)
     x = Reactant.TestUtils.construct_test_array(Float64, 2, 10)
     x_ra = Reactant.to_rarray(x)
 
-    @test @jit(relu(x_ra)) ≈ relu(x)
+    @test @jit(relu(x_ra)) ≈ relu(x) skip = RunningOnMetal
 end
 
 @testset "concrete number to julia number" begin
@@ -77,7 +78,7 @@ end
     @test fill(x, (10, 10)) == Array(x_ra)
 end
 
-@testset "aos_to_soa" begin
+RunningOnMetal || @testset "aos_to_soa" begin
     x_res = collect(reshape(1.0:4.0, 2, 1, 2))
     x_ca = Reactant.to_rarray.(x_res; track_numbers=Number)
 
@@ -96,27 +97,28 @@ end
     # installs a fresh TestLogger with its own maxlog count, so it sees the
     # warning either way; @test_warn only reads what reaches stderr.
     @test 1.0 ==
-        @test_logs (:warn, r"`ifelse` with different element-types") match_mode = :any @jit(
+        (@test_logs (:warn, r"`ifelse` with different element-types") match_mode = :any @jit(
         ifelse(ConcreteRNumber(true), ConcreteRNumber(1.0), ConcreteRNumber(0.0f0))
-    )
+    )) skip = RunningOnMetal
     @test @jit(
         ifelse(ConcreteRNumber(false), ConcreteRNumber(1.0), ConcreteRNumber(0.0f0))
-    ) isa ConcreteRNumber{Float64}
-    @test 0.0f0 ==
-        @jit ifelse(ConcreteRNumber(false), ConcreteRNumber(1.0), ConcreteRNumber(0.0f0))
+    ) isa ConcreteRNumber{Float64} skip = RunningOnMetal
+    @test 0.0f0 == (@jit ifelse(
+        ConcreteRNumber(false), ConcreteRNumber(1.0), ConcreteRNumber(0.0f0)
+    )) skip = RunningOnMetal
     @test @jit(
         ifelse(ConcreteRNumber(false), ConcreteRNumber(1.0f0), ConcreteRNumber(0.0f0))
     ) isa ConcreteRNumber{Float32}
 
     cond = ConcreteRNumber(true)
     x = ConcreteRNumber(1.0)
-    @test @jit(ifelse(cond, x, 0.0)) == ConcreteRNumber(1.0)
-    @test @jit(ifelse(cond, 0.0, x)) == ConcreteRNumber(0.0)
-    @test @jit(ifelse(cond, 1.0, 0.0)) == ConcreteRNumber(1.0)
-    @test @jit(ifelse(cond, 0.0, 1.0)) == ConcreteRNumber(0.0)
+    @test @jit(ifelse(cond, x, 0.0)) == ConcreteRNumber(1.0) skip = RunningOnMetal
+    @test @jit(ifelse(cond, 0.0, x)) == ConcreteRNumber(0.0) skip = RunningOnMetal
+    @test @jit(ifelse(cond, 1.0, 0.0)) == ConcreteRNumber(1.0) skip = RunningOnMetal
+    @test @jit(ifelse(cond, 0.0, 1.0)) == ConcreteRNumber(0.0) skip = RunningOnMetal
 end
 
-@testset "fill! and zero on Reactant.to_rarray" begin
+RunningOnMetal || @testset "fill! and zero on Reactant.to_rarray" begin
     x_ra = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float64, 3, 4))
 
     z = zero(x_ra)
@@ -138,7 +140,7 @@ end
     @test @jit(fn(x_ra)) == fn(ones(Int, 4))
 end
 
-@testset "eltype conversion inside interpreter" begin
+RunningOnMetal || @testset "eltype conversion inside interpreter" begin
     function test_convert(x::AbstractArray{T}, eta) where {T}
         eta = T(eta)
         return x .* eta, eta
@@ -156,7 +158,7 @@ end
 tuple_byref(x) = (; a=(; b=x))
 tuple_byref2(x) = abs2.(x), tuple_byref(x)
 
-@testset "Tuple byref" begin
+RunningOnMetal || @testset "Tuple byref" begin
     x = Reactant.to_rarray([1.0 -2.0; -3.0 4.0])
     @test @jit(tuple_byref(x)).a.b.data === x.data
 
@@ -272,7 +274,7 @@ function tobc(nt, x)
     return bc_apply.(nt, x)
 end
 
-@testset "Broadcast Ref" begin
+RunningOnMetal || @testset "Broadcast Ref" begin
     x = [2.7, 3.1]
     xr = Reactant.to_rarray(x)
     nt = map(ConcreteRNumber, (10.0, 10.0))

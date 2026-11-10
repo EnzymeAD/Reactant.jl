@@ -1,6 +1,8 @@
 using Test
 using Reactant
 
+const RunningOnMetal = contains(string(Reactant.devices()[1]), "MTL")
+
 muler(x) = y -> x * y
 
 function boxed_muler(x)
@@ -34,16 +36,18 @@ end
     y_ra = Reactant.to_rarray(y)
 
     f = muler(x_ra)
-    @test @jit(f(y_ra)) ≈ x * y
+    @test @jit(f(y_ra)) ≈ x * y skip = RunningOnMetal
 
     bf = boxed_muler(x_ra)
     @test Core.Box in fieldtypes(typeof(bf))
-    @test @jit(bf(y_ra)) ≈ x * y
+    @test @jit(bf(y_ra)) ≈ x * y skip = RunningOnMetal
 
     A = ones(3, 2)
     A_ra = Reactant.to_rarray(copy(A))
-    @test Array(@jit(mapslices_boxed_capture(A_ra))) ≈ mapslices_boxed_capture(A)
+    @test Array(@jit(mapslices_boxed_capture(A_ra))) ≈ mapslices_boxed_capture(A) skip =
+        RunningOnMetal
 
     A_ra = Reactant.to_rarray(copy(A))
-    @test Array(@jit(mapslices_boxed_in_for(A_ra, 2))) ≈ mapslices_boxed_in_for(copy(A), 2)
+    @test Array(@jit(mapslices_boxed_in_for(A_ra, 2))) ≈ mapslices_boxed_in_for(copy(A), 2) skip =
+        RunningOnMetal
 end

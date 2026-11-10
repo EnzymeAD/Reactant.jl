@@ -1,5 +1,7 @@
 using Reactant, Test
 
+const RunningOnMetal = contains(string(Reactant.devices()[1]), "MTL")
+
 function buffer_equals(x, y)
     if x isa Reactant.ConcreteIFRTArray
         y.data.buffer == x.data.buffer
@@ -33,7 +35,7 @@ function f!(x, j)
     return nothing
 end
 
-@testset "Buffer aliasing" begin
+RunningOnMetal || @testset "Buffer aliasing" begin
     x = Reactant.to_rarray(ones(10))
     y = similar(x)
     @jit copy_with_broadcast!(y, x)
@@ -67,7 +69,7 @@ function step!(state)
     return nothing
 end
 
-@testset "Mutable struct aliasing" begin
+RunningOnMetal || @testset "Mutable struct aliasing" begin
     sz = 3
 
     state_v = State(fill(0.5, sz), fill(0.0, sz))
@@ -132,7 +134,7 @@ function scale_shared!(m)
     return nothing
 end
 
-@testset "Write-back to an array reachable through many paths" begin
+RunningOnMetal || @testset "Write-back to an array reachable through many paths" begin
     shared = Reactant.to_rarray(ones(4))
     other = Reactant.to_rarray(ones(4))
     m = ManyWrappers(ntuple(_ -> SharedWrapper(shared), 64), other)

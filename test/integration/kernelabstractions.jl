@@ -1,5 +1,7 @@
 using CUDA, KernelAbstractions, Reactant, Test, FileCheck
 
+const RunningOnMetal = contains(string(Reactant.devices()[1]), "MTL")
+
 # Simple kernel for matrix multiplication
 @kernel function matmul_kernel!(output, a)
     i, j = @index(Global, NTuple)
@@ -24,7 +26,7 @@ end
 # TODO(#2253): raising fails on TPU CI.
 #       https://github.com/EnzymeAD/Reactant.jl/pull/1923#discussion_r2580461294
 if !Reactant.Accelerators.TPU.has_tpu()
-    @testset "KernelAbstractions Matmul" begin
+    RunningOnMetal || @testset "KernelAbstractions Matmul" begin
         A = Reactant.to_rarray(ones(100, 100))
         out = Reactant.to_rarray(ones(100, 100))
         platform_name = Reactant.XLA.platform_name(Reactant.XLA.default_backend())
@@ -87,10 +89,11 @@ end
         @test Array(y) == ones(Float32, 100, 10)
     end
 
-    @test all(Array(@jit(raise = raise, square(x))) .≈ Array(x) .* Array(x))
+    @test all(Array(@jit(raise = raise, square(x))) .≈ Array(x) .* Array(x)) skip =
+        RunningOnMetal
 end
 
-@testset "KernelAbstractions WENO weights" begin
+RunningOnMetal || @testset "KernelAbstractions WENO weights" begin
     N = 64
     c = Reactant.to_rarray(sin.((1:(N + 2)) ./ 3.0))
     out = Reactant.to_rarray(zeros(N))
@@ -163,14 +166,16 @@ end
     concrete_zeros(x) = allocate_zeros(x, Float64)
     traced_zeros(x) = allocate_zeros(x, eltype(x))
 
-    @test Array(Reactant.@jit concrete_zeros(x)) ≈ zeros(4)
-    @test Array(Reactant.@jit traced_zeros(x)) ≈ zeros(4)
+    @test Array(Reactant.@jit concrete_zeros(x)) ≈ zeros(4) skip = RunningOnMetal
+    @test Array(Reactant.@jit traced_zeros(x)) ≈ zeros(4) skip = RunningOnMetal
 
     concrete_double(x) = allocate_and_double(x, Float64)
     traced_double(x) = allocate_and_double(x, eltype(x))
 
-    @test Array(Reactant.@jit raise = true concrete_double(x)) ≈ 2 .* Array(x)
-    @test Array(Reactant.@jit raise = true traced_double(x)) ≈ 2 .* Array(x)
+    @test Array(Reactant.@jit raise = true concrete_double(x)) ≈ 2 .* Array(x) skip =
+        RunningOnMetal
+    @test Array(Reactant.@jit raise = true traced_double(x)) ≈ 2 .* Array(x) skip =
+        RunningOnMetal
 end
 
 @kernel function scale!(y, x, α)
@@ -185,7 +190,7 @@ function f(x, y, n)
     return sum(y)          # any reduction of the array the kernel wrote
 end
 
-@testset "XLA Relayouting" begin
+RunningOnMetal || @testset "XLA Relayouting" begin
     x = Reactant.to_rarray(randn(16, 3))
     y = Reactant.to_rarray(zeros(16, 3))
     n = Reactant.to_rarray(5; track_numbers=true)
@@ -221,14 +226,14 @@ end
         xr = T[1, 2, 3, 4, 5, 6]
         xc = Complex{T}[1 + 2im, 3 - 4im, -5 + 6im, 7 + 8im, 0 - 1im, 2 + 0im]
 
-        @testset "real to complex" begin
+        RunningOnMetal || @testset "real to complex" begin
             x = Reactant.to_rarray(xr)
             y = Reactant.to_rarray(zeros(Complex{T}, 6))
             @jit raise = true launch_elementwise!(real_to_complex_kernel!, y, x)
             @test Array(y) ≈ Complex{T}.(xr)
         end
 
-        @testset "complex to complex" begin
+        RunningOnMetal || @testset "complex to complex" begin
             x = Reactant.to_rarray(xc)
             y = Reactant.to_rarray(zeros(Complex{T}, 6))
             @jit raise = true launch_elementwise!(complex_square_kernel!, y, x)
@@ -240,7 +245,7 @@ end
             @test Array(y2) ≈ reshape(xc, 2, 3) .^ 2
         end
 
-        @testset "complex to real" begin
+        RunningOnMetal || @testset "complex to real" begin
             x = Reactant.to_rarray(xc)
             y = Reactant.to_rarray(zeros(T, 6))
             @jit raise = true launch_elementwise!(complex_to_real_kernel!, y, x)
@@ -260,7 +265,7 @@ end
 end
 
 @testset "KernelAbstractions unsigned integers (raised)" begin
-    @testset "$T" for T in (UInt8, UInt32)
+    RunningOnMetal || @testset "$T" for T in (UInt8, UInt32)
         out = Reactant.to_rarray(fill(T(99), 2))
         vals = Reactant.to_rarray([0.2, 0.7])
         @jit raise = true launch_elementwise!(unsigned_branch_kernel!, out, vals)

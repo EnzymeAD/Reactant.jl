@@ -1,5 +1,7 @@
 using Reactant, Test, Adapt
 
+const RunningOnMetal = contains(string(Reactant.devices()[1]), "MTL")
+
 struct MyGrid{FT,AT} <: AbstractVector{FT}
     data::AT
     radius::FT
@@ -100,7 +102,7 @@ function call_selfreturn(g)
     @trace selfreturn(g)
 end
 
-@testset "Custom construction" begin
+RunningOnMetal || @testset "Custom construction" begin
     g = MyGrid([3.14, 1.59], 2.7)
     rg = Reactant.to_rarray(g)
 

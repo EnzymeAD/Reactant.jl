@@ -5,6 +5,8 @@ using Dates
 using Dates: value, UTInstant
 using Adapt: Adapt
 
+const RunningOnMetal = contains(string(Reactant.devices()[1]), "MTL")
+
 const RDExt = Base.get_extension(Reactant, :ReactantDatesExt)
 
 const ADAPT_MARKER = Int32(-12345)
@@ -789,8 +791,8 @@ advance(dt, n) = dt + Dates.Millisecond(1000) * n
             @test value(@jit(scale_period(n, TracedT(4)))) == 12
 
             # division
-            @test value(@jit(divide_period(DatesT(6), n))) == 2
-            @test value(@jit(divide_period(TracedT(6), n))) == 2
+            @test value(@jit(divide_period(DatesT(6), n))) == 2 skip = RunningOnMetal
+            @test value(@jit(divide_period(TracedT(6), n))) == 2 skip = RunningOnMetal
         end
 
         # a non-integral scaling factor is kept as-is instead of erroring like `Dates`

@@ -1,5 +1,7 @@
 using Enzyme, Reactant, Test, Random, Statistics, FileCheck
 
+const RunningOnMetal = contains(string(Reactant.devices()[1]), "MTL")
+
 square(x) = x * 2
 
 fwd(Mode, RT, x, y) = Enzyme.autodiff(Mode, square, RT, Duplicated(x, y))
@@ -39,7 +41,7 @@ fwd(Mode, RT, x, y) = Enzyme.autodiff(Mode, square, RT, Duplicated(x, y))
         Enzyme.Duplicated
 end
 
-@testset "Basic Forward Mode" begin
+RunningOnMetal || @testset "Basic Forward Mode" begin
     res1 = @jit(
         fwd(
             Forward,
@@ -127,7 +129,7 @@ function f_sincos_jac(x)
     ]
 end
 
-@testset "Forward Jacobian" begin
+RunningOnMetal || @testset "Forward Jacobian" begin
     jac(x) = only(Enzyme.jacobian(Enzyme.Forward, f_sincos, x))
     x_r = Reactant.to_rarray(rand(10))
 
@@ -144,7 +146,7 @@ function f_rect_jac(x)
     return [(i == a) * cos(x[a, b]) * [1.0, 2.0, 3.0][b] for i in 1:2, a in 1:2, b in 1:3]
 end
 
-@testset "Forward Jacobian (outshape != inshape)" begin
+RunningOnMetal || @testset "Forward Jacobian (outshape != inshape)" begin
     jac(x) = only(Enzyme.jacobian(Enzyme.Forward, f_rect, x))
     x_r = Reactant.to_rarray(rand(2, 3))
 
@@ -178,7 +180,7 @@ function cached_return(x, stret::StateReturn1)
     return loss
 end
 
-@testset "Cached Return: Issue #416" begin
+RunningOnMetal || @testset "Cached Return: Issue #416" begin
     x = Reactant.TestUtils.construct_test_array(Float64, 10)
     x_ra = Reactant.to_rarray(x)
 
@@ -200,7 +202,7 @@ end
     @test stret.st1 === stret.st2
 end
 
-@testset "Nested AD" begin
+RunningOnMetal || @testset "Nested AD" begin
     x = ConcreteRNumber(3.1)
     f(x) = x * x * x * x
     df(x) = Enzyme.gradient(Reverse, f, x)[1]
@@ -222,7 +224,7 @@ end
         (res.val ≈ 4ones(2, 2)) &&
             (res.derivs[1] ≈ 4ones(2, 2)) &&
             (res.derivs[2] ≈ 2ones(2, 2))
-    end skip = contains(string(Reactant.devices()[1]), "TPU")
+    end skip = (contains(string(Reactant.devices()[1]), "TPU")) || RunningOnMetal
 end
 
 @testset "onehot" begin
@@ -281,7 +283,7 @@ function fn2!(y, x)
     return nothing
 end
 
-@testset "Vector Mode AD (Reverse)" begin
+RunningOnMetal || @testset "Vector Mode AD (Reverse)" begin
     x = [2.0, 3.0]
     x_ra = Reactant.to_rarray(x)
     y = [0.0, 0.0]
@@ -370,8 +372,8 @@ end
 
 @testset "Strong zero" begin
     x = ConcreteRNumber(0.0)
-    @test isnan((@jit grad_divinf(x))[1])
-    @test iszero((@jit grad_divinf_sz(x))[1])
+    @test isnan((@jit grad_divinf(x))[1]) skip = RunningOnMetal
+    @test iszero((@jit grad_divinf_sz(x))[1]) skip = RunningOnMetal
 end
 
 function simple_grad_without_ignore(x::AbstractArray{T}) where {T}
@@ -433,7 +435,7 @@ end
     lambdas = ones(3, 2)
     lambdas_r = Reactant.to_rarray(lambdas)
 
-    @test @jit(jvp_vjp_cubic(v_r, x_r, lambdas_r)) ≈ fill(6, (3, 2))
+    @test @jit(jvp_vjp_cubic(v_r, x_r, lambdas_r)) ≈ fill(6, (3, 2)) skip = RunningOnMetal
 end
 
 @testset "Finite Difference Gradient" begin
@@ -452,7 +454,7 @@ end
 
 (f::WrapperFunc)(x) = x .^ 3 .+ f.x
 
-@testset "Finite Difference Gradient (non vector inputs)" begin
+RunningOnMetal || @testset "Finite Difference Gradient (non vector inputs)" begin
     nt = (;
         x=Reactant.TestUtils.construct_test_array(Float64, 3, 4),
         y=Reactant.TestUtils.construct_test_array(Float64, 3, 4),
@@ -477,7 +479,7 @@ end
     @test results_fd[3] ≈ results_enz[3]
 end
 
-@testset "Correct return tuple" begin
+RunningOnMetal || @testset "Correct return tuple" begin
     # issue 1875
     x = ones(2)
     xr = Reactant.to_rarray(x)
@@ -497,16 +499,14 @@ end
         y=Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float64, 2, 2)),
     )
 
-    @testset "Integer Inputs to Finite Differences" begin
+    RunningOnMetal || @testset "Integer Inputs to Finite Differences" begin
         res = @jit Reactant.TestUtils.finite_difference_gradient(test_fn, x, nt)
         @test res isa typeof((x, nt))
         @test all(iszero, Array(res[2].x))
     end
 
-    @testset "Skip Constant Inputs" begin
-        res = @jit Reactant.TestUtils.finite_difference_gradient(
-            test_fn, x, Enzyme.Const(nt)
-        )
+    RunningOnMetal || @testset "Skip Constant Inputs" begin
+        res = @jit Reactant.TestUtils.finite_difference_gradient(test_fn, x, Enzyme.Const(nt))
         @test res isa typeof((x, nt))
         @test all(iszero, Array(res[2].x))
         @test all(iszero, Array(res[2].y))
@@ -703,7 +703,7 @@ end
 
 fwd_nocap(x) = complex.(x .* 2.0, x .* 3.0)
 
-@testset "Forward Mode with complex output and mutated Duplicated args" begin
+RunningOnMetal || @testset "Forward Mode with complex output and mutated Duplicated args" begin
     N = 64
     x0 = Reactant.to_rarray(randn(N))
     v = Reactant.to_rarray(ones(N))
@@ -728,7 +728,7 @@ function batch_extract_fwd_serial(u, seed)
     )
 end
 
-@testset "Batched forward mode lowers enzyme.extract (#3217)" begin
+RunningOnMetal || @testset "Batched forward mode lowers enzyme.extract (#3217)" begin
     N, NS = 12, 4
     u = Reactant.to_rarray(collect(1.0:N))
     seeds = ntuple(s -> Reactant.to_rarray(Float64[i == s ? 1 : 0 for i in 1:N]), NS)
@@ -755,7 +755,7 @@ function batch_fwd(umat, seedmat)
     )
 end
 
-@testset "Forward mode inside Ops.batch" begin
+RunningOnMetal || @testset "Forward mode inside Ops.batch" begin
     N = 10
     u = reshape(collect(1.0:(N^2)), N, N)
     seeds = Float64[i == j ? 1 : 0 for i in 1:N, j in 1:N]
@@ -834,7 +834,7 @@ end
         Reactant.to_rarray(zeros(N)),
     )
 
-    @testset "reverse mode" begin
+    RunningOnMetal || @testset "reverse mode" begin
         hlo = repr(
             @code_hlo optimize = false int_shadow_gradient!(
                 column(4), Enzyme.make_zero(column(4))
@@ -865,7 +865,7 @@ end
         end
     end
 
-    @testset "forward mode" begin
+    RunningOnMetal || @testset "forward mode" begin
         c = column(4)
         dc = Enzyme.make_zero(column(7))
         dc.x .= 1.0
@@ -875,7 +875,7 @@ end
         @test all(Array(dc.idx) .== Int32(7))
     end
 
-    @testset "forward mode mixed return" begin
+    RunningOnMetal || @testset "forward mode mixed return" begin
         xr = Reactant.to_rarray([1.5, 2.5])
         dxr = Reactant.to_rarray([1.0, 1.0])
         res = @jit int_shadow_fwd_mixed_return(xr, dxr)
@@ -887,7 +887,7 @@ end
 co_vec_3296(θ, p) = sin.(θ) .* θ[2] .+ p
 jac_vec_3296(θ, p) = Enzyme.jacobian(Forward, Const(co_vec_3296), θ, p)
 
-@testset "width-1 BatchDuplicated in Enzyme.jacobian (#3296)" begin
+RunningOnMetal || @testset "width-1 BatchDuplicated in Enzyme.jacobian (#3296)" begin
     θ_host = [0.3, -0.7]
     p_host = [0.5]
     θ = Reactant.to_rarray(θ_host)

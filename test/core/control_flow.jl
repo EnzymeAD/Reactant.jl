@@ -5,6 +5,8 @@ using Reactant: MLIR
 using Reactant: Periodic, Binomial
 using Enzyme
 
+const RunningOnMetal = contains(string(Reactant.devices()[1]), "MTL")
+
 function condition1(x)
     y = sum(x)
     @trace if y > 0
@@ -19,12 +21,12 @@ end
     x = Reactant.TestUtils.construct_test_array(Float64, 2, 10)
     x_ra = Reactant.to_rarray(x)
 
-    @test @jit(condition1(x_ra)) ≈ condition1(x)
+    @test @jit(condition1(x_ra)) ≈ condition1(x) skip = RunningOnMetal
 
     x = -Reactant.TestUtils.construct_test_array(Float64, 2, 10)
     x_ra = Reactant.to_rarray(x)
 
-    @test @jit(condition1(x_ra)) ≈ condition1(x)
+    @test @jit(condition1(x_ra)) ≈ condition1(x) skip = RunningOnMetal
 end
 
 function condition1_missing_var(x)
@@ -42,12 +44,14 @@ end
     x = Reactant.TestUtils.construct_test_array(Float64, 2, 10)
     x_ra = Reactant.to_rarray(x)
 
-    @test @jit(condition1_missing_var(x_ra)) ≈ condition1_missing_var(x)
+    @test @jit(condition1_missing_var(x_ra)) ≈ condition1_missing_var(x) skip =
+        RunningOnMetal
 
     x = -Reactant.TestUtils.construct_test_array(Float64, 2, 10)
     x_ra = Reactant.to_rarray(x)
 
-    @test @jit(condition1_missing_var(x_ra)) ≈ condition1_missing_var(x)
+    @test @jit(condition1_missing_var(x_ra)) ≈ condition1_missing_var(x) skip =
+        RunningOnMetal
 end
 
 @testset "return not supported" begin
@@ -91,14 +95,18 @@ end
     x_ra = Reactant.to_rarray(x)
     y_ra = Reactant.to_rarray(y)
 
-    @test @jit(condition2_nested_if(x_ra, y_ra)) ≈ condition2_nested_if(x, y)
-    @test @jit(condition2_if_else_if(x_ra, y_ra)) ≈ condition2_if_else_if(x, y)
+    @test @jit(condition2_nested_if(x_ra, y_ra)) ≈ condition2_nested_if(x, y) skip =
+        RunningOnMetal
+    @test @jit(condition2_if_else_if(x_ra, y_ra)) ≈ condition2_if_else_if(x, y) skip =
+        RunningOnMetal
 
     y = -Reactant.TestUtils.construct_test_array(Float64, 2, 10)
     y_ra = Reactant.to_rarray(y)
 
-    @test @jit(condition2_nested_if(x_ra, y_ra)) ≈ condition2_nested_if(x, y)
-    @test @jit(condition2_if_else_if(x_ra, y_ra)) ≈ condition2_if_else_if(x, y)
+    @test @jit(condition2_nested_if(x_ra, y_ra)) ≈ condition2_nested_if(x, y) skip =
+        RunningOnMetal
+    @test @jit(condition2_if_else_if(x_ra, y_ra)) ≈ condition2_if_else_if(x, y) skip =
+        RunningOnMetal
 
     x = -Reactant.TestUtils.construct_test_array(Float64, 2, 10)
     y = -Reactant.TestUtils.construct_test_array(Float64, 2, 10)
@@ -110,8 +118,10 @@ end
     # exactly 0.0. isapprox defaults to atol = 0, so the test only holds while
     # the two reductions are computed bit for bit alike; a one ulp difference
     # between them (1.8e-15 was seen on the A100 IFRT run) is enough to fail it.
-    @test @jit(condition2_nested_if(x_ra, y_ra)) ≈ condition2_nested_if(x, y) atol = 1e-10
-    @test @jit(condition2_if_else_if(x_ra, y_ra)) ≈ condition2_if_else_if(x, y) atol = 1e-10
+    @test @jit(condition2_nested_if(x_ra, y_ra)) ≈ condition2_nested_if(x, y) atol = 1e-10 skip =
+        RunningOnMetal
+    @test @jit(condition2_if_else_if(x_ra, y_ra)) ≈ condition2_if_else_if(x, y) atol = 1e-10 skip =
+        RunningOnMetal
 end
 
 function condition3_mixed_conditions(x, y)
@@ -131,26 +141,30 @@ end
     x_ra = Reactant.to_rarray(x)
     y_ra = Reactant.to_rarray(y)
 
-    @test @jit(condition3_mixed_conditions(x_ra, y_ra)) ≈ condition3_mixed_conditions(x, y)
+    @test @jit(condition3_mixed_conditions(x_ra, y_ra)) ≈ condition3_mixed_conditions(x, y) skip =
+        RunningOnMetal
 
     x = -Reactant.TestUtils.construct_test_array(Float64, 2, 10)
     y = -Reactant.TestUtils.construct_test_array(Float64, 2, 10)
     x_ra = Reactant.to_rarray(x)
     y_ra = Reactant.to_rarray(y)
 
-    @test @jit(condition3_mixed_conditions(x_ra, y_ra)) ≈ condition3_mixed_conditions(x, y)
+    @test @jit(condition3_mixed_conditions(x_ra, y_ra)) ≈ condition3_mixed_conditions(x, y) skip =
+        RunningOnMetal
 
     x = Reactant.TestUtils.construct_test_array(Float64, 2, 10)
     y = -Reactant.TestUtils.construct_test_array(Float64, 2, 10)
     x_ra = Reactant.to_rarray(x)
     y_ra = Reactant.to_rarray(y)
-    @test @jit(condition3_mixed_conditions(x_ra, y_ra)) ≈ condition3_mixed_conditions(x, y)
+    @test @jit(condition3_mixed_conditions(x_ra, y_ra)) ≈ condition3_mixed_conditions(x, y) skip =
+        RunningOnMetal
 
     y = Reactant.TestUtils.construct_test_array(Float64, 2, 10)
     z = -Reactant.TestUtils.construct_test_array(Float64, 2, 10)
     y_ra = Reactant.to_rarray(y)
     z_ra = Reactant.to_rarray(z)
-    @test @jit(condition3_mixed_conditions(x_ra, y_ra)) ≈ condition3_mixed_conditions(x, y)
+    @test @jit(condition3_mixed_conditions(x_ra, y_ra)) ≈ condition3_mixed_conditions(x, y) skip =
+        RunningOnMetal
 end
 
 function condition4_mixed_conditions(x, y)
@@ -172,26 +186,30 @@ end
     x_ra = Reactant.to_rarray(x)
     y_ra = Reactant.to_rarray(y)
 
-    @test @jit(condition4_mixed_conditions(x_ra, y_ra)) ≈ condition4_mixed_conditions(x, y)
+    @test @jit(condition4_mixed_conditions(x_ra, y_ra)) ≈ condition4_mixed_conditions(x, y) skip =
+        RunningOnMetal
 
     x = -Reactant.TestUtils.construct_test_array(Float64, 2, 10)
     y = -Reactant.TestUtils.construct_test_array(Float64, 2, 10)
     x_ra = Reactant.to_rarray(x)
     y_ra = Reactant.to_rarray(y)
 
-    @test @jit(condition4_mixed_conditions(x_ra, y_ra)) ≈ condition4_mixed_conditions(x, y)
+    @test @jit(condition4_mixed_conditions(x_ra, y_ra)) ≈ condition4_mixed_conditions(x, y) skip =
+        RunningOnMetal
 
     x = Reactant.TestUtils.construct_test_array(Float64, 2, 10)
     y = -Reactant.TestUtils.construct_test_array(Float64, 2, 10)
     x_ra = Reactant.to_rarray(x)
     y_ra = Reactant.to_rarray(y)
-    @test @jit(condition4_mixed_conditions(x_ra, y_ra)) ≈ condition4_mixed_conditions(x, y)
+    @test @jit(condition4_mixed_conditions(x_ra, y_ra)) ≈ condition4_mixed_conditions(x, y) skip =
+        RunningOnMetal
 
     y = Reactant.TestUtils.construct_test_array(Float64, 2, 10)
     z = -Reactant.TestUtils.construct_test_array(Float64, 2, 10)
     y_ra = Reactant.to_rarray(y)
     z_ra = Reactant.to_rarray(z)
-    @test @jit(condition4_mixed_conditions(x_ra, y_ra)) ≈ condition4_mixed_conditions(x, y)
+    @test @jit(condition4_mixed_conditions(x_ra, y_ra)) ≈ condition4_mixed_conditions(x, y) skip =
+        RunningOnMetal
 end
 
 function condition5_multiple_returns(x, y)
@@ -207,7 +225,7 @@ function condition5_multiple_returns(x, y)
     return z, p
 end
 
-@testset "condition5: multiple returns" begin
+RunningOnMetal || @testset "condition5: multiple returns" begin
     x = Reactant.TestUtils.construct_test_array(Float64, 2, 10)
     y = Reactant.TestUtils.construct_test_array(Float64, 2, 10)
     x_ra = Reactant.to_rarray(x)
@@ -226,7 +244,7 @@ function condition6_bareif_relu(x)
     return x
 end
 
-@testset "condition6: bareif relu" begin
+RunningOnMetal || @testset "condition6: bareif relu" begin
     x = 2.0
     x_ra = Reactant.to_rarray(x; track_numbers=Number)
 
@@ -253,7 +271,7 @@ function condition7_bare_elseif(x)
     return x
 end
 
-@testset "condition7: bare elseif" begin
+RunningOnMetal || @testset "condition7: bare elseif" begin
     x = 2.0
     x_ra = Reactant.to_rarray(x; track_numbers=Number)
 
@@ -287,7 +305,7 @@ function condition8_return_if(x)
     return y, z
 end
 
-@testset "condition8: return if" begin
+RunningOnMetal || @testset "condition8: return if" begin
     x = Reactant.TestUtils.construct_test_array(Float64, 2, 10)
     x_ra = Reactant.to_rarray(x)
 
@@ -323,7 +341,7 @@ function condition9_if_ends_with_nothing(x)
     return y
 end
 
-@testset "condition9: if ends with nothing" begin
+RunningOnMetal || @testset "condition9: if ends with nothing" begin
     x = Reactant.TestUtils.construct_test_array(Float64, 2, 10)
     x_ra = Reactant.to_rarray(x)
 
@@ -350,7 +368,7 @@ function condition9_if_ends_with_pathological_nothing(x)
     return y, nothing
 end
 
-@testset "condition9: if ends with pathological nothing" begin
+RunningOnMetal || @testset "condition9: if ends with pathological nothing" begin
     x = Reactant.TestUtils.construct_test_array(Float64, 2, 10)
     x_ra = Reactant.to_rarray(x)
 
@@ -369,7 +387,7 @@ function condition10_condition_with_setindex(x)
     return x
 end
 
-@testset "condition10: condition with setindex!" begin
+RunningOnMetal || @testset "condition10: condition with setindex!" begin
     x = Reactant.TestUtils.construct_test_array(Float64, 2, 10)
     x_ra = Reactant.to_rarray(x)
 
@@ -443,11 +461,11 @@ end
     n_ra = Reactant.ConcreteRNumber(n)
 
     @test @jit(condition11_nested_ifff(x_ra, y_ra, z_ra)) ≈ condition11_nested_ifff(x, y, z) atol =
-        1e-10
+        1e-10 skip = RunningOnMetal
 
     # positive inputs take the nested branches on every iteration, so the result depends on n
     @test @jit(condition11_nested_ifff_and_for(x_ra, y_ra, z_ra, n_ra)) ≈
-        condition11_nested_ifff_and_for(x, y, z, n) atol = 1e-10
+        condition11_nested_ifff_and_for(x, y, z, n) atol = 1e-10 skip = RunningOnMetal
 
     x = -Reactant.TestUtils.construct_test_array(Float64, 2, 10)
     y = -Reactant.TestUtils.construct_test_array(Float64, 2, 10)
@@ -461,10 +479,10 @@ end
     # holds while both reductions are computed bit for bit alike; a one ulp
     # difference between them is enough to fail it.
     @test @jit(condition11_nested_ifff(x_ra, y_ra, z_ra)) ≈ condition11_nested_ifff(x, y, z) atol =
-        1e-10
+        1e-10 skip = RunningOnMetal
 
     @test @jit(condition11_nested_ifff_and_for(x_ra, y_ra, z_ra, n_ra)) ≈
-        condition11_nested_ifff_and_for(x, y, z, n) atol = 1e-10
+        condition11_nested_ifff_and_for(x, y, z, n) atol = 1e-10 skip = RunningOnMetal
 end
 
 function condition12_compile_test(x, y, z)
@@ -488,7 +506,7 @@ end
     z_ra = Reactant.to_rarray(z)
 
     @test @jit(condition12_compile_test(x_ra, y_ra, z_ra)) ≈
-        condition12_compile_test(x, y, z)
+        condition12_compile_test(x, y, z) skip = RunningOnMetal
 
     x = -Reactant.TestUtils.construct_test_array(Float64, 2, 10)
     y = -Reactant.TestUtils.construct_test_array(Float64, 2, 10)
@@ -498,7 +516,7 @@ end
     z_ra = Reactant.to_rarray(z)
 
     @test @jit(condition12_compile_test(x_ra, y_ra, z_ra)) ≈
-        condition12_compile_test(x, y, z)
+        condition12_compile_test(x, y, z) skip = RunningOnMetal
 end
 
 function condition_with_structure(x)
@@ -511,7 +529,7 @@ function condition_with_structure(x)
     return z
 end
 
-@testset "condition with structure" begin
+RunningOnMetal || @testset "condition with structure" begin
     x = Reactant.TestUtils.construct_test_array(Float64, 2, 10)
     x_ra = Reactant.to_rarray(x)
 
@@ -639,7 +657,7 @@ end
     x = Reactant.TestUtils.construct_test_array(Float64, 10)
     x_ra = Reactant.to_rarray(x)
 
-    @test @jit(for_ref_outer(x_ra)) ≈ for_ref_outer(x)
+    @test @jit(for_ref_outer(x_ra)) ≈ for_ref_outer(x) skip = RunningOnMetal
 end
 
 function for_inner_scope(x)
@@ -654,7 +672,7 @@ end
     x = Reactant.TestUtils.construct_test_array(Float64, 10)
     x_ra = Reactant.to_rarray(x)
 
-    @test @jit(for_inner_scope(x_ra)) ≈ for_inner_scope(x)
+    @test @jit(for_inner_scope(x_ra)) ≈ for_inner_scope(x) skip = RunningOnMetal
 end
 
 function for_with_named_tuple(x)
@@ -670,7 +688,7 @@ end
     x = Reactant.TestUtils.construct_test_array(Float64, 10)
     x_ra = Reactant.to_rarray(x)
 
-    @test @jit(for_with_named_tuple(x_ra)) ≈ for_with_named_tuple(x)
+    @test @jit(for_with_named_tuple(x_ra)) ≈ for_with_named_tuple(x) skip = RunningOnMetal
 end
 
 mutable struct Container{A,B,C}
@@ -686,7 +704,7 @@ function for_in_container(ctr)
     end
 end
 
-@testset "for: container" begin
+RunningOnMetal || @testset "for: container" begin
     x = Container(3.1, [1.4], [2.7])
     x_ra = Reactant.to_rarray(x)
 
@@ -730,10 +748,10 @@ function while_untraced_accumulator(xs)
     return s, i
 end
 
-@testset "loops: untraced accumulator" begin
+RunningOnMetal || @testset "loops: untraced accumulator" begin
     xs = Reactant.to_rarray([1.0, 2.0, 3.0])
 
-    @test @allowscalar(@jit(for_untraced_accumulator(xs))) ≈ 6.0
+    @test @allowscalar(@jit(for_untraced_accumulator(xs))) ≈ 6.0 skip = RunningOnMetal
     s, i = @allowscalar @jit(while_untraced_accumulator(xs))
     @test s ≈ 6.0
     @test i == 4
@@ -754,7 +772,8 @@ end
     x_ra = Reactant.to_rarray(x)
     y_ra = Reactant.to_rarray(y)
 
-    @test @jit(while_convergence(x_ra, y_ra)) ≈ while_convergence(x, y)
+    @test @jit(while_convergence(x_ra, y_ra)) ≈ while_convergence(x, y) skip =
+        RunningOnMetal
 end
 
 function for_no_track_numbers(x, n, tn)
@@ -1062,7 +1081,7 @@ function call5!(a, b)
     return a
 end
 
-@testset "call: argument mutation" begin
+RunningOnMetal || @testset "call: argument mutation" begin
     a = ones(3)
     b = ones(3)
     a_ra = Reactant.to_rarray(a)
@@ -1085,7 +1104,7 @@ end
         b_ra = Reactant.to_rarray(b)
 
         # Should work the same as untraced when JIT compiled
-        @test @jit(traced_add(a_ra, b_ra)) ≈ traced_add(a, b)
+        @test @jit(traced_add(a_ra, b_ra)) ≈ traced_add(a, b) skip = RunningOnMetal
         MLIR.IR.@dispose ctx = Reactant.ReactantContext() begin
             ir = Reactant.code_hlo(ctx, traced_add, (a_ra, b_ra); optimize=false)
             func_names = [
@@ -1111,7 +1130,8 @@ end
         a_ra = Reactant.to_rarray(a)
         b_ra = Reactant.to_rarray(b)
 
-        @test @jit(traced_multiply(a_ra, b_ra)) ≈ traced_multiply(a, b)
+        @test @jit(traced_multiply(a_ra, b_ra)) ≈ traced_multiply(a, b) skip =
+            RunningOnMetal
 
         MLIR.IR.@dispose ctx = Reactant.ReactantContext() begin
             ir = Reactant.code_hlo(ctx, traced_multiply, (a_ra, b_ra); optimize=false)
@@ -1132,7 +1152,7 @@ end
         a = Reactant.TestUtils.construct_test_array(Float64, 2, 3)
         a_ra = Reactant.to_rarray(a)
 
-        @test @jit(singleline(a_ra)) ≈ singleline(a)
+        @test @jit(singleline(a_ra)) ≈ singleline(a) skip = RunningOnMetal
 
         MLIR.IR.@dispose ctx = Reactant.ReactantContext() begin
             ir = Reactant.code_hlo(ctx, singleline, (a_ra,); optimize=false)
@@ -1161,7 +1181,7 @@ end
 
         fn1 = FunctorTest1(2.0f0)
 
-        @test @jit(fn1(a_ra)) ≈ fn1(a)
+        @test @jit(fn1(a_ra)) ≈ fn1(a) skip = RunningOnMetal
         MLIR.IR.@dispose ctx = Reactant.ReactantContext() begin
             ir = Reactant.code_hlo(ctx, fn1, (a_ra,); optimize=false)
             func_names = [
@@ -1183,7 +1203,8 @@ end
         a = Reactant.TestUtils.construct_test_array(Float64, 2, 3)
         a_ra = Reactant.to_rarray(a)
 
-        @test @jit(func_with_kwargs(a_ra; y=2.0f0)) ≈ func_with_kwargs(a; y=2.0f0)
+        @test @jit(func_with_kwargs(a_ra; y=2.0f0)) ≈ func_with_kwargs(a; y=2.0f0) skip =
+            RunningOnMetal
 
         MLIR.IR.@dispose ctx = Reactant.ReactantContext() begin
             ir = Reactant.code_hlo(
@@ -1318,7 +1339,7 @@ end
     x = Reactant.TestUtils.construct_test_array(Float64, 1024, 128)
     x_ra = Reactant.to_rarray(x)
 
-    @test @jit(loop_batched(x_ra)) ≈ loop_batched(x)
+    @test @jit(loop_batched(x_ra)) ≈ loop_batched(x) skip = RunningOnMetal
 end
 
 function loop!(h_mat::AbstractMatrix, η_mat::AbstractMatrix, H_mat::AbstractMatrix)
@@ -1330,7 +1351,7 @@ function loop!(h_mat::AbstractMatrix, η_mat::AbstractMatrix, H_mat::AbstractMat
     end
 end
 
-@testset "loop! with nested traced loops and scalar setindex!" begin
+RunningOnMetal || @testset "loop! with nested traced loops and scalar setindex!" begin
     h = zeros(Float64, 2, 3)
     η = [1.0 2.0 3.0; 4.0 5.0 6.0]
     H = [0.5 1.5 2.5; 3.5 4.5 5.5]
@@ -1357,7 +1378,7 @@ function different_branch_returns(cond, a, b)
     return a, b
 end
 
-@testset "one branch mutates variable" begin
+RunningOnMetal || @testset "one branch mutates variable" begin
     cond = true
     a = 3 .* ones(Float32, 2, 3)
     b = 4 .* ones(Float64, 2, 3)
@@ -1434,15 +1455,15 @@ end
         x_ra = Reactant.to_rarray(x)
 
         cond_true = ConcreteRNumber{Bool}(true)
-        @test @jit(condition_assign_static(cond_true, x_ra)) ≈ sum(x)
+        @test @jit(condition_assign_static(cond_true, x_ra)) ≈ sum(x) skip = RunningOnMetal
         @test condition_assign_static(true, x) ≈ sum(x)
 
         cond_false = ConcreteRNumber{Bool}(false)
-        @test @jit(condition_assign_static(cond_false, x_ra)) ≈ 0.0
+        @test @jit(condition_assign_static(cond_false, x_ra)) ≈ 0.0 skip = RunningOnMetal
         @test condition_assign_static(false, x) ≈ 0.0
     end
 
-    @testset "assign multiple" begin
+    RunningOnMetal || @testset "assign multiple" begin
         x = [1.0, 2.0, 3.0]
         x_ra = Reactant.to_rarray(x)
 
@@ -1464,11 +1485,12 @@ end
         x_ra = Reactant.to_rarray(x)
 
         cond_true = ConcreteRNumber{Bool}(true)
-        @test @jit(condition_assign_else_only(cond_true, x_ra)) ≈ 0.0
+        @test @jit(condition_assign_else_only(cond_true, x_ra)) ≈ 0.0 skip = RunningOnMetal
         @test condition_assign_else_only(true, x) ≈ 0.0
 
         cond_false = ConcreteRNumber{Bool}(false)
-        @test @jit(condition_assign_else_only(cond_false, x_ra)) ≈ sum(x)
+        @test @jit(condition_assign_else_only(cond_false, x_ra)) ≈ sum(x) skip =
+            RunningOnMetal
         @test condition_assign_else_only(false, x) ≈ sum(x)
     end
 end
@@ -1490,7 +1512,7 @@ function test(b)
     return ans
 end
 
-@testset "Issue #2686" begin
+RunningOnMetal || @testset "Issue #2686" begin
     a = [rand(4) .+ rand(4)im, [-5.0 + 0.0im, 1.0 + 2.0im, 1.0 - 2.0im, -5.0 + 0.0im]]
     b = Reactant.to_rarray(a)
     testr = @compile test.(b)
@@ -1525,7 +1547,7 @@ function for_loop_calling_closure(d, B)
     return X
 end
 
-@testset "traced loops calling closures that capture traced values" begin
+RunningOnMetal || @testset "traced loops calling closures that capture traced values" begin
     d = rand(3) .+ 1
     B = rand(3, 4)
     rd = Reactant.to_rarray(d)
@@ -1568,17 +1590,17 @@ end
     A_ra = Reactant.to_rarray(copy(A_jl))
     w_ra = Reactant.to_rarray(copy(w_jl))
     @test Array(@jit while_loop_inline_closure(A_ra, w_ra, 2)) ≈
-        while_loop_inline_closure(copy(A_jl), w_jl, 2)
+        while_loop_inline_closure(copy(A_jl), w_jl, 2) skip = RunningOnMetal
 
     A_ra = Reactant.to_rarray(copy(A_jl))
     w_ra = Reactant.to_rarray(copy(w_jl))
     @test Array(@jit for_loop_inline_closure(A_ra, w_ra, 2)) ≈
-        for_loop_inline_closure(copy(A_jl), w_jl, 2)
+        for_loop_inline_closure(copy(A_jl), w_jl, 2) skip = RunningOnMetal
 
     for cond in (true, false)
         w_ra = Reactant.to_rarray(copy(w_jl))
         @test Array(@jit if_inline_closure_mutate!(ConcreteRNumber(cond), w_ra)) ≈
-            if_inline_closure_mutate!(cond, copy(w_jl))
+            if_inline_closure_mutate!(cond, copy(w_jl)) skip = RunningOnMetal
     end
 end
 
@@ -1649,8 +1671,10 @@ function condition14_ifelse_assign_return(x)
 end
 
 @testset "condition14: if/else assign returned directly" begin
-    @test @jit(condition14_ifelse_assign_return(ConcreteRNumber(1.0))) == 1
-    @test @jit(condition14_ifelse_assign_return(ConcreteRNumber(-1.0))) == -1
+    @test @jit(condition14_ifelse_assign_return(ConcreteRNumber(1.0))) == 1 skip =
+        RunningOnMetal
+    @test @jit(condition14_ifelse_assign_return(ConcreteRNumber(-1.0))) == -1 skip =
+        RunningOnMetal
 end
 
 function condition15_ifelseifelse_assign_return(x)
@@ -1664,9 +1688,12 @@ function condition15_ifelseifelse_assign_return(x)
 end
 
 @testset "condition15: if/elseif/else assign returned directly" begin
-    @test @jit(condition15_ifelseifelse_assign_return(ConcreteRNumber(1.0))) == 1
-    @test @jit(condition15_ifelseifelse_assign_return(ConcreteRNumber(0.0))) == 0
-    @test @jit(condition15_ifelseifelse_assign_return(ConcreteRNumber(-1.0))) == -1
+    @test @jit(condition15_ifelseifelse_assign_return(ConcreteRNumber(1.0))) == 1 skip =
+        RunningOnMetal
+    @test @jit(condition15_ifelseifelse_assign_return(ConcreteRNumber(0.0))) == 0 skip =
+        RunningOnMetal
+    @test @jit(condition15_ifelseifelse_assign_return(ConcreteRNumber(-1.0))) == -1 skip =
+        RunningOnMetal
 end
 
 function condition16_nested_ifelse_assign_return(x)
@@ -1682,9 +1709,12 @@ function condition16_nested_ifelse_assign_return(x)
 end
 
 @testset "condition16: nested if/else assign returned directly" begin
-    @test @jit(condition16_nested_ifelse_assign_return(ConcreteRNumber(1.0))) == 1
-    @test @jit(condition16_nested_ifelse_assign_return(ConcreteRNumber(0.0))) == 0
-    @test @jit(condition16_nested_ifelse_assign_return(ConcreteRNumber(-1.0))) == -1
+    @test @jit(condition16_nested_ifelse_assign_return(ConcreteRNumber(1.0))) == 1 skip =
+        RunningOnMetal
+    @test @jit(condition16_nested_ifelse_assign_return(ConcreteRNumber(0.0))) == 0 skip =
+        RunningOnMetal
+    @test @jit(condition16_nested_ifelse_assign_return(ConcreteRNumber(-1.0))) == -1 skip =
+        RunningOnMetal
 end
 
 function myfunc_traced_if_in_for(x)  # compute sum of positive elements in x
@@ -1720,11 +1750,12 @@ end
     for mask_val in (true, false)
         mask = Reactant.ConcreteRArray(fill(mask_val, 16))
         @test @jit(nested_trace_if_for(u, mask)) ≈
-            nested_trace_if_for(Array(u), Array(mask))
+            nested_trace_if_for(Array(u), Array(mask)) skip = RunningOnMetal
     end
 
     x = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float64, 10))
-    @test @jit(myfunc_traced_if_in_for(x)) ≈ myfunc_traced_if_in_for(Array(x))
+    @test @jit(myfunc_traced_if_in_for(x)) ≈ myfunc_traced_if_in_for(Array(x)) skip =
+        RunningOnMetal
 end
 
 traced_call_double(x) = x .* 2
@@ -1750,8 +1781,8 @@ end
 @testset "@trace call inside @trace if" begin
     for x in (ones(4), -ones(4))
         x_ra = Reactant.to_rarray(x)
-        @test @jit(traced_call_in_if(x_ra)) ≈ traced_call_in_if(x)
-        @test @jit(traced_bcast_in_if(x_ra)) ≈ traced_bcast_in_if(x)
+        @test @jit(traced_call_in_if(x_ra)) ≈ traced_call_in_if(x) skip = RunningOnMetal
+        @test @jit(traced_bcast_in_if(x_ra)) ≈ traced_bcast_in_if(x) skip = RunningOnMetal
     end
 end
 

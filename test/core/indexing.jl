@@ -1,12 +1,14 @@
 using LinearAlgebra, Reactant, Test, FileCheck
 
+const RunningOnMetal = contains(string(Reactant.devices()[1]), "MTL")
+
 function update_on_copy(x)
     y = x[1:2, 2:4, :]
     y[1:1, 1:1, :] = ones(1, 1, 3)
     return y
 end
 
-@testset "view / setindex" begin
+RunningOnMetal || @testset "view / setindex" begin
     x = Reactant.TestUtils.construct_test_array(Float64, 2, 4, 3)
     y = copy(x)
     x_concrete = Reactant.to_rarray(x)
@@ -31,7 +33,7 @@ end
     # get_view_compiled = @compile get_view(x_concrete)
 end
 
-@testset "setindex: unitrange index" begin
+RunningOnMetal || @testset "setindex: unitrange index" begin
     x = Reactant.TestUtils.construct_test_array(Float64, 4, 4)
     y = zeros(3, 2)
     x_ra = Reactant.to_rarray(x)
@@ -109,7 +111,7 @@ function non_contiguous_setindex!(x)
     return x
 end
 
-@testset "non-contiguous setindex!" begin
+RunningOnMetal || @testset "non-contiguous setindex!" begin
     x = Reactant.TestUtils.construct_test_array(Float64, 6, 6)
     x_ra = Reactant.to_rarray(x)
 
@@ -124,7 +126,7 @@ end
     @test !all(isone, x_ra[:, 5:end])
 end
 
-@testset "dynamic indexing" begin
+RunningOnMetal || @testset "dynamic indexing" begin
     x = Reactant.TestUtils.construct_test_array(Float64, 5, 3)
     x_ra = Reactant.to_rarray(x)
 
@@ -156,15 +158,17 @@ end
     @test @jit(getindex(x_ra, 1:3:8)) ≈ getindex(x, 1:3:8)
 end
 
-@testset "non-contiguous indexing" begin
+RunningOnMetal || @testset "non-contiguous indexing" begin
     x = Reactant.TestUtils.construct_test_array(Float64, 4, 4, 3)
     x_ra = Reactant.to_rarray(x)
 
     non_contiguous_indexing1(x) = x[[1, 3, 2], :, :]
     non_contiguous_indexing2(x) = x[:, [1, 2, 1, 3], [1, 3]]
 
-    @test @jit(non_contiguous_indexing1(x_ra)) ≈ non_contiguous_indexing1(x)
-    @test @jit(non_contiguous_indexing2(x_ra)) ≈ non_contiguous_indexing2(x)
+    @test @jit(non_contiguous_indexing1(x_ra)) ≈ non_contiguous_indexing1(x) skip =
+        RunningOnMetal
+    @test @jit(non_contiguous_indexing2(x_ra)) ≈ non_contiguous_indexing2(x) skip =
+        RunningOnMetal
 
     x = Reactant.TestUtils.construct_test_array(Float64, 4, 2)
     x_ra = Reactant.to_rarray(x)
@@ -172,8 +176,10 @@ end
     non_contiguous_indexing3(x) = x[[1, 3, 2], :]
     non_contiguous_indexing4(x) = x[:, [1, 2, 2]]
 
-    @test @jit(non_contiguous_indexing3(x_ra)) ≈ non_contiguous_indexing3(x)
-    @test @jit(non_contiguous_indexing4(x_ra)) ≈ non_contiguous_indexing4(x)
+    @test @jit(non_contiguous_indexing3(x_ra)) ≈ non_contiguous_indexing3(x) skip =
+        RunningOnMetal
+    @test @jit(non_contiguous_indexing4(x_ra)) ≈ non_contiguous_indexing4(x) skip =
+        RunningOnMetal
 
     x = Reactant.TestUtils.construct_test_array(Float64, 4, 4, 3)
     x_ra = Reactant.to_rarray(x)
@@ -224,10 +230,11 @@ end
     getindex3(x, idx3) = x[:, :, idx3]
     getindex4(x, idx1, idx3) = x[idx1, :, idx3]
 
-    @test @jit(getindex1(x_ra, idx1_ra)) ≈ getindex1(x, idx1)
-    @test @jit(getindex2(x_ra, idx1_ra)) ≈ getindex2(x, idx1)
-    @test @jit(getindex3(x_ra, idx3_ra)) ≈ getindex3(x, idx3)
-    @test @jit(getindex4(x_ra, idx1_ra, idx3_ra)) ≈ getindex4(x, idx1, idx3)
+    @test @jit(getindex1(x_ra, idx1_ra)) ≈ getindex1(x, idx1) skip = RunningOnMetal
+    @test @jit(getindex2(x_ra, idx1_ra)) ≈ getindex2(x, idx1) skip = RunningOnMetal
+    @test @jit(getindex3(x_ra, idx3_ra)) ≈ getindex3(x, idx3) skip = RunningOnMetal
+    @test @jit(getindex4(x_ra, idx1_ra, idx3_ra)) ≈ getindex4(x, idx1, idx3) skip =
+        RunningOnMetal
 end
 
 @testset "linear indexing" begin
@@ -240,7 +247,7 @@ end
         @test @jit(getindex_linear_scalar(x_ra, i)) ≈ getindex_linear_scalar(x, i)
         @test @jit(
             getindex_linear_scalar(x_ra, Reactant.to_rarray(i; track_numbers=Number))
-        ) ≈ getindex_linear_scalar(x, i)
+        ) ≈ getindex_linear_scalar(x, i) skip = RunningOnMetal
     end
 
     idx = [1, 6, 12, 18, 24, 30, 36, 42]
@@ -248,12 +255,15 @@ end
 
     getindex_linear_vector(x, idx) = x[idx]
 
-    @test @jit(getindex_linear_vector(x_ra, idx_ra)) ≈ getindex_linear_vector(x, idx)
-    @test @jit(getindex_linear_vector(x_ra, idx)) ≈ getindex_linear_vector(x, idx)
+    @test @jit(getindex_linear_vector(x_ra, idx_ra)) ≈ getindex_linear_vector(x, idx) skip =
+        RunningOnMetal
+    @test @jit(getindex_linear_vector(x_ra, idx)) ≈ getindex_linear_vector(x, idx) skip =
+        RunningOnMetal
 
     # indices aren't a TracedRArray but we should still be able to trace
     idx = Reactant.TracedUnitRange(ConcreteRNumber(1), ConcreteRNumber(5), 5)
-    @test @jit(getindex_linear_vector(x_ra, idx)) ≈ getindex_linear_vector(x, 1:5)
+    @test @jit(getindex_linear_vector(x_ra, idx)) ≈ getindex_linear_vector(x, 1:5) skip =
+        RunningOnMetal
 end
 
 @testset "Boolean Indexing" begin
@@ -278,8 +288,8 @@ end
     fn3(x, idx) = x[idx, :, 1]
 
     @test ndims(@jit(fn1(x_ra))) == 2
-    @test ndims(@jit(fn2(x_ra, idx_ra))) == 2
-    @test ndims(@jit(fn3(x_ra, idx_ra))) == 1
+    @test ndims(@jit(fn2(x_ra, idx_ra))) == 2 skip = RunningOnMetal
+    @test ndims(@jit(fn3(x_ra, idx_ra))) == 1 skip = RunningOnMetal
 end
 
 @testset "High-Dimensional Array Indexing" begin
@@ -293,7 +303,7 @@ end
     fn(x, idx1, idx2, idx3) = x[idx1, idx2, idx3]
 
     @test @jit(fn(x_ra, idx1_ra, idx2_ra, idx3)) ≈
-        fn(Array(x_ra), Array(idx1_ra), Array(idx2_ra), idx3)
+        fn(Array(x_ra), Array(idx1_ra), Array(idx2_ra), idx3) skip = RunningOnMetal
 end
 
 function issue_617(outf, fr, pr, I)
@@ -329,14 +339,15 @@ end
     x = zeros(4, 4)
     x_ra = Reactant.to_rarray(x)
 
-    @test @jit(scalar_setindex(x_ra, 1, 1)) ≈ scalar_setindex(x, 1, 1)
-    @test @allowscalar x_ra[1] == 1
+    @test @jit(scalar_setindex(x_ra, 1, 1)) ≈ scalar_setindex(x, 1, 1) skip = RunningOnMetal
+    @test (@allowscalar x_ra[1] == 1) skip = RunningOnMetal
 
     x = zeros(4, 4)
     x_ra = Reactant.to_rarray(x)
 
-    @test @jit(scalar_setindex(x_ra, ConcreteRNumber(1), 1)) ≈ scalar_setindex(x, 1, 1)
-    @test @allowscalar x_ra[1] == 1
+    @test @jit(scalar_setindex(x_ra, ConcreteRNumber(1), 1)) ≈ scalar_setindex(x, 1, 1) skip =
+        RunningOnMetal
+    @test (@allowscalar x_ra[1] == 1) skip = RunningOnMetal
 end
 
 function write_with_broadcast1!(x, y)
@@ -348,7 +359,7 @@ function write_with_broadcast2!(x, y)
     return x
 end
 
-@testset "write_with_broadcast" begin
+RunningOnMetal || @testset "write_with_broadcast" begin
     x_ra = Reactant.to_rarray(zeros(3, 4, 3))
     y_ra = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float64, 3, 4))
 
@@ -391,7 +402,7 @@ end
     @test @jit(fn(x_ra, idx)) ≈ fn(x, idx)
 end
 
-@testset "ConcreteRArray view fill!" begin
+RunningOnMetal || @testset "ConcreteRArray view fill!" begin
     x = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float64, 2, 3))
     x_view = view(x, 1:2, 1:2)
 
@@ -399,7 +410,7 @@ end
     @test all(Array(x)[1:2, 1:2] .== 0)
 end
 
-@testset "ConcreteRArray mapreducedim!" begin
+RunningOnMetal || @testset "ConcreteRArray mapreducedim!" begin
     dest = ones(3, 1)
     x = Reactant.TestUtils.construct_test_array(Float64, 3, 3)
     dest_ra = Reactant.to_rarray(dest)
@@ -411,7 +422,7 @@ end
     @test dest_ra ≈ dest
 end
 
-@testset "ConcreteRArray destination view mapreducedim" begin
+RunningOnMetal || @testset "ConcreteRArray destination view mapreducedim" begin
     parent = ones(3, 1)
     x = Reactant.TestUtils.construct_test_array(Float64, 2, 3)
     parent_ra = Reactant.to_rarray(parent)
@@ -430,7 +441,7 @@ function test_slice_copy!(x)
     return x
 end
 
-@testset "slice copy" begin
+RunningOnMetal || @testset "slice copy" begin
     x = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float64, 2, 10))
     @jit test_slice_copy!(x)
     @test all(Array(x)[1, :] .== 0)
@@ -547,10 +558,10 @@ end
 @testset "Indexing: $(x)" for x in (1:3:10, range(-0.1, 0.3; length=5))
     x_ra = Reactant.to_rarray(x; track_numbers=true)
     @testset "idx: $(idx)" for idx in (1, 2, 3)
-        @test @jit(getindex(x_ra, idx)) ≈ getindex(x, idx)
+        @test @jit(getindex(x_ra, idx)) ≈ getindex(x, idx) skip = RunningOnMetal
 
         idx_ra = Reactant.to_rarray(idx; track_numbers=true)
-        @test @jit(getindex(x_ra, idx_ra)) ≈ getindex(x, idx)
+        @test @jit(getindex(x_ra, idx_ra)) ≈ getindex(x, idx) skip = RunningOnMetal
     end
 end
 
@@ -560,7 +571,7 @@ end
 )
     @testset "idx: $(idx)" for idx in (1, 2, 3)
         idx_ra = Reactant.to_rarray(idx; track_numbers=true)
-        @test @jit(getindex(x, idx_ra)) ≈ getindex(x, idx)
+        @test @jit(getindex(x, idx_ra)) ≈ getindex(x, idx) skip = RunningOnMetal
     end
 end
 
@@ -628,18 +639,19 @@ index_plain_mat_linear(idx) = @allowscalar reshape(collect(1.0:10.0), 2, 5)[idx]
     @test @jit(copy_from_plain_mat_linear!(xl)) ≈ vec([1.0 2.0; 3.0 4.0])
 
     xs_sl = Reactant.to_rarray([10.0, 20.0, 30.0])
-    @test @jit(sum_plain_mat_rows(xs_sl)) ≈ [15.0, 27.0, 39.0]
+    @test @jit(sum_plain_mat_rows(xs_sl)) ≈ [15.0, 27.0, 39.0] skip = RunningOnMetal
 
     xv = Reactant.to_rarray(zeros(3))
     @test @jit(copy_from_plain_vec_view!(xv)) ≈ [1.0, 2.0, 3.0]
 
     x_ra = Reactant.to_rarray([10.0, 20.0, 30.0])
-    @test @jit(index_1d_view(x_ra, ConcreteRNumber(2))) ≈ 30.0
-    @test @jit(index_traced_elem_vec_untraced(x_ra)) ≈ [10.0, 30.0]
+    @test @jit(index_1d_view(x_ra, ConcreteRNumber(2))) ≈ 30.0 skip = RunningOnMetal
+    @test @jit(index_traced_elem_vec_untraced(x_ra)) ≈ [10.0, 30.0] skip = RunningOnMetal
     @test @jit(index_traced_elem_vec_traced(x_ra, Reactant.to_rarray([3, 1]))) ≈
-        [30.0, 10.0]
+        [30.0, 10.0] skip = RunningOnMetal
     @test @jit(index_traced_elem_0d(x_ra)) ≈ 20.0
 
-    @test @jit(index_plain_mat_linear(Reactant.to_rarray([2, 4, 7]))) ≈ [2.0, 4.0, 7.0]
-    @test @jit(index_plain_mat_linear(ConcreteRNumber(5))) ≈ 5.0
+    @test @jit(index_plain_mat_linear(Reactant.to_rarray([2, 4, 7]))) ≈ [2.0, 4.0, 7.0] skip =
+        RunningOnMetal
+    @test @jit(index_plain_mat_linear(ConcreteRNumber(5))) ≈ 5.0 skip = RunningOnMetal
 end

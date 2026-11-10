@@ -1,6 +1,7 @@
 using Reactant, Test, LinearAlgebra, FileCheck
 
 const RunningOnTPU = contains(string(Reactant.devices()[1]), "TPU")
+const RunningOnMetal = contains(string(Reactant.devices()[1]), "MTL")
 
 raise_to_syrk(x, y) = 3 .* (x * transpose(x)) .+ 5 .* y
 raise_to_syrk2(x, y) = 3 .* (transpose(x) * x) .+ 5 .* y
@@ -14,8 +15,9 @@ raise_to_syrk2(x, y) = 3 .* (transpose(x) * x) .+ 5 .* y
         y2 = Reactant.TestUtils.construct_test_array(elty, 5, 5)
         x_ra = Reactant.to_rarray(x)
 
-        @testset "fn: $(fn) | y: $(size(y))" for (fn, y) in
-                                                 ((raise_to_syrk, y1), (raise_to_syrk2, y2))
+        RunningOnMetal || @testset "fn: $(fn) | y: $(size(y))" for (fn, y) in (
+            (raise_to_syrk, y1), (raise_to_syrk2, y2)
+        )
             y_ra = Reactant.to_rarray(y)
 
             hlo = @code_hlo compile_options = CompileOptions(;
@@ -55,8 +57,9 @@ end
         y2 = Reactant.TestUtils.construct_test_array(elty, 7, 4)
         x_ra = Reactant.to_rarray(x)
 
-        @testset "fn: $(fn) | y: $(size(y))" for (fn, y) in
-                                                 ((raise_to_symm, y1), (raise_to_symm2, y2))
+        RunningOnMetal || @testset "fn: $(fn) | y: $(size(y))" for (fn, y) in (
+            (raise_to_symm, y1), (raise_to_symm2, y2)
+        )
             y_ra = Reactant.to_rarray(y)
 
             hlo = @code_hlo compile_options = CompileOptions(;

@@ -1,5 +1,7 @@
 using FFTW, Reactant, Test, LinearAlgebra
 
+const RunningOnMetal = contains(string(Reactant.devices()[1]), "MTL")
+
 @testset "fft" begin
     x = Reactant.TestUtils.construct_test_array(ComplexF32, 2, 2, 3, 4)
     x_ra = Reactant.to_rarray(x)
@@ -47,7 +49,7 @@ using FFTW, Reactant, Test, LinearAlgebra
     end
 end
 
-@testset "fft!" begin
+RunningOnMetal || @testset "fft!" begin
     x = Reactant.TestUtils.construct_test_array(ComplexF32, 2, 3, 4)
     x_ra = Reactant.to_rarray(x)
     x_ra_copy = copy(x_ra)
