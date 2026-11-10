@@ -97,6 +97,7 @@ void reactantReleaseAddressRange(void *base, size_t nbytes);
 #include "llvm/Support/Process.h"
 #include "llvm/Support/ThreadPool.h"
 #include "llvm/Support/Threading.h"
+#include "llvm/Support/thread.h"
 #include "llvm/TargetParser/Host.h"
 
 #include "llvm-c/TargetMachine.h"
@@ -4252,6 +4253,36 @@ REACTANT_ABI void reactantXLAExec(LinkableRuntime **__restrict__ lrtP,
     sizeKey.emplace_back(consts, consts + constcnt);
 
   auto iter = cache.find(sizeKey);
+
+  // A miss compiles on a thread of its own, which glibc gives a malloc arena
+  // of its own: the compiler's garbage would otherwise fragment the arena the
+  // calls run on, and every later call (allocating its inputs and results)
+  // pays for it (tmop GetLocalStateEnergyPA/1/1, after eight forms of a
+  // module were compiled before it: 78 us per call, against 70 us).
+  static thread_local bool compiling = false;
+  if (iter == cache.end() && !compiling) {
+#ifdef REACTANT_CUDA
+    CUcontext cuContext = nullptr;
+    cuCtxGetCurrent(&cuContext);
+#endif
+    std::exception_ptr error;
+    llvm::thread compiler(std::optional<unsigned>(64u << 20), [&] {
+#ifdef REACTANT_CUDA
+      if (cuContext)
+        cuCtxSetCurrent(cuContext);
+#endif
+      compiling = true;
+      try {
+        reactantXLAExec(lrtP, modstr, argcnt, args, constcnt, consts);
+      } catch (...) {
+        error = std::current_exception();
+      }
+    });
+    compiler.join();
+    if (error)
+      std::rethrow_exception(error);
+    return;
+  }
 
   if (iter == cache.end()) {
     MLIRContext context(lrt->registry);
