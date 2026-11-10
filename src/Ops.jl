@@ -1772,6 +1772,19 @@ end
 end
 
 @noinline function rng_bit_generator(
+    ::Type{Complex{T}},
+    seed::TracedRArray{UInt64,1},
+    shape;
+    algorithm::String="DEFAULT",
+    location=mlir_stacktrace("rng_bit_generator", @__FILE__, @__LINE__),
+) where {T<:AbstractFloat}
+    real_result = rng_bit_generator(T, seed, shape; algorithm, location)
+    imag_result = rng_bit_generator(T, real_result.output_state, shape; algorithm, location)
+    output = complex.(real_result.output, imag_result.output)
+    return (; output_state=imag_result.output_state, output)
+end
+
+@noinline function rng_bit_generator(
     ::Type{<:TracedRNumber{T}}, seed::TracedRArray{UInt64,1}, shape; kwargs...
 ) where {T}
     return rng_bit_generator(T, seed, shape; kwargs...)
