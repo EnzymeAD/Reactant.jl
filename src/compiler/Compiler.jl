@@ -1167,8 +1167,35 @@ Base.@nospecializeinfer function compile_mlir!(
         end
     end
 
+    ndevices_res = mlir_fn_res.is_sharded ? length(mlir_fn_res.global_device_ids) : 1
+    preserved_ndevices =
+        if mlir_fn_res.is_sharded && runtime isa Val{:PJRT} && !isempty(preserved_args)
+            inv_seen = IdDict{Any,Any}()
+            for (k, v) in seen_args
+                inv_seen[v] = k
+            end
+            pd = IdDict{Any,Int}()
+            for (pres_res, arg_idx) in preserved_args
+                orig_traced = linear_args[arg_idx + 1]
+                if haskey(inv_seen, orig_traced)
+                    carg = inv_seen[orig_traced]
+                    if carg isa Union{ConcretePJRTArray,ConcretePJRTNumber}
+                        pd[pres_res] = length(carg.data)
+                    end
+                end
+            end
+            pd
+        else
+            nothing
+        end
     concrete_result = make_tracer(
-        OrderedIdDict(), traced_result, ("result",), TracedToConcrete; runtime
+        OrderedIdDict(),
+        traced_result,
+        ("result",),
+        TracedToConcrete;
+        runtime,
+        ndevices=Val(ndevices_res),
+        preserved_ndevices,
     )
 
     return Reactant.TracedUtils.CompiledMlirFnResult(
