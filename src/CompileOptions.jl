@@ -519,6 +519,56 @@ function __compile_options_with_updated_sync(compile_options::CompileOptions, sy
     )
 end
 
+function __compile_options_with_updated_donated_args(
+    compile_options::CompileOptions, donated_args::Symbol
+)
+    if compile_options.donated_args == donated_args
+        return compile_options
+    end
+    return CompileOptions(
+        compile_options.optimization_passes,
+        compile_options.no_nan,
+        compile_options.all_finite,
+        compile_options.inline,
+        compile_options.transpose_propagate,
+        compile_options.reshape_propagate,
+        compile_options.max_constant_threshold,
+        compile_options.raise,
+        compile_options.raise_first,
+        compile_options.legalize_chlo_to_stablehlo,
+        compile_options.cudnn_hlo_optimize,
+        compile_options.comm_options,
+        compile_options.shardy_passes,
+        compile_options.optimize_then_pad,
+        compile_options.optimize_communications,
+        compile_options.raise_triton_custom_call,
+        compile_options.lower_triton,
+        compile_options.assert_nonallocating,
+        donated_args,
+        compile_options.sync,
+        compile_options.xla_executable_build_options,
+        compile_options.xla_compile_options,
+        compile_options.xla_debug_options,
+        compile_options.disable_scatter_gather_optimization_passes,
+        compile_options.disable_pad_optimization_passes,
+        compile_options.disable_dot_formation_passes,
+        compile_options.max_reused_const_prop_size,
+        compile_options.disable_licm_optimization_passes,
+        compile_options.loop_unswitch_threshold,
+        compile_options.excluded_passes,
+        compile_options.disable_reduce_slice_fusion_passes,
+        compile_options.disable_slice_to_batch_passes,
+        compile_options.disable_concat_to_batch_passes,
+        compile_options.disable_loop_raising_passes,
+        compile_options.disable_structured_tensors_detection_passes,
+        compile_options.disable_structured_tensors_passes,
+        compile_options.strip_llvm_debuginfo,
+        compile_options.speculate_partial_ifs,
+        compile_options.strip,
+        compile_options.multifloat,
+    )
+end
+
 """
     DefaultXLACompileOptions(;
         donated_args=:auto, sync=false, optimize_then_pad=true, assert_nonallocating=false
