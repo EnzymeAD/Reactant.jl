@@ -14,6 +14,55 @@ Base.size(c::BatchedCholesky) = size(c.factors)
 Base.size(c::BatchedCholesky, i::Integer) = size(c.factors, i)
 Base.ndims(c::BatchedCholesky) = ndims(c.factors)
 
+function Base.getproperty(C::BatchedCholesky, d::Symbol)
+    Cfactors = getfield(C, :factors)
+    Cuplo = getfield(C, :uplo)
+    if d === :U
+        if ndims(Cfactors) == 2
+            return UpperTriangular(
+                Cuplo === 'U' ? Cfactors : materialize_traced_array(adjoint(Cfactors))
+            )
+        end
+        if Cuplo === 'U'
+            return mapslices(LinearAlgebra.triu, Cfactors; dims=(1, 2))
+        end
+        perm = vcat(2, 1, collect(Int64, 3:ndims(Cfactors)))
+        return conj.(
+            @opcall(transpose(mapslices(LinearAlgebra.tril, Cfactors; dims=(1, 2)), perm))
+        )
+    elseif d === :L
+        if ndims(Cfactors) == 2
+            return LowerTriangular(
+                Cuplo === 'L' ? Cfactors : materialize_traced_array(adjoint(Cfactors))
+            )
+        end
+        if Cuplo === 'L'
+            return mapslices(LinearAlgebra.tril, Cfactors; dims=(1, 2))
+        end
+        perm = vcat(2, 1, collect(Int64, 3:ndims(Cfactors)))
+        return conj.(
+            @opcall(transpose(mapslices(LinearAlgebra.triu, Cfactors; dims=(1, 2)), perm))
+        )
+    elseif d === :UL
+        if ndims(Cfactors) == 2
+            return Cuplo === 'U' ? UpperTriangular(Cfactors) : LowerTriangular(Cfactors)
+        end
+        return mapslices(
+            Cuplo === 'U' ? LinearAlgebra.triu : LinearAlgebra.tril, Cfactors; dims=(1, 2)
+        )
+    else
+        return getfield(C, d)
+    end
+end
+
+function Base.propertynames(C::BatchedCholesky, private::Bool=false)
+    return (:U, :L, :UL, (private ? fieldnames(typeof(C)) : ())...)
+end
+
+Base.iterate(C::BatchedCholesky) = (C.L, Val(:U))
+Base.iterate(C::BatchedCholesky, ::Val{:U}) = (C.U, Val(:done))
+Base.iterate(C::BatchedCholesky, ::Val{:done}) = nothing
+
 function overloaded_cholesky(A::AbstractArray, ::NoPivot; check::Bool=false)
     return overloaded_cholesky(Reactant.promote_to(TracedRArray, A), NoPivot(); check)
 end
