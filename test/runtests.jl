@@ -78,6 +78,7 @@ if BACKEND == "julia"
         "integration/linearsolve",
         # custom calls (Julia callbacks, kernels, Python)
         "core/julia_callback",
+        "core/sorting",
         "integration/cuda",
         "integration/kernelabstractions",
         "integration/nfft_callback",
@@ -85,8 +86,12 @@ if BACKEND == "julia"
         # profiler and allocator statistics are not implemented
         "core/profiling",
         "core/compile",
-        # requires extensions which are not implemented yet
+        # requires extensions which are not implemented yet (use CopyFromBuffer)
         "core/layout",
+        "core/ops",
+        "core/enums",
+        "core/array_ops",
+        "nn/nnlib",
     )
         delete!(testsuite, name)
     end
