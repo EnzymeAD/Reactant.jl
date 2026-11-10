@@ -560,3 +560,82 @@ reflect_hasfield(x) = x .+ hasfield(KindOptions, :a)
     @test @jit(reflect_parentmodule(x)) ≈ [1.0 + length(string(@__MODULE__))]
     @test @jit(reflect_hasfield(x)) ≈ [2.0]
 end
+
+@static if isdefined(Core, :GenericMemory)
+    struct MemoryHolder2301
+        bar::Memory{UInt8}
+    end
+
+    struct ParametricMemoryHolder2301{T}
+        mem::Memory{T}
+        ref::MemoryRef{T}
+    end
+
+    memory_do_nothing_2301(::MemoryHolder2301) = nothing
+    memory_passthrough_2301(h::MemoryHolder2301) = h
+    memory_sum_arrays_2301(h::ParametricMemoryHolder2301) = h.mem[1] .+ h.ref[]
+
+    @testset "GenericMemory and GenericMemoryRef tracing (#2301)" begin
+        @test traced_type(
+            Memory{UInt8},
+            Val(ConcreteToTraced),
+            Union{},
+            Sharding.NoSharding(),
+            Reactant.XLA.runtime(),
+        ) == Memory{UInt8}
+        @test traced_type(
+            Memory{UInt8},
+            Val(ConcreteToTraced),
+            Number,
+            Sharding.NoSharding(),
+            Reactant.XLA.runtime(),
+        ) == Memory{UInt8}
+        @test traced_type(
+            Memory{UInt8},
+            Val(Reactant.NoStopTracedTrack),
+            Number,
+            Sharding.NoSharding(),
+            Reactant.XLA.runtime(),
+        ) == Memory{TracedRNumber{UInt8}}
+        @test traced_type(
+            Memory{ConcreteRArray{Float32,1}},
+            Val(ConcreteToTraced),
+            Union{},
+            Sharding.NoSharding(),
+            Reactant.XLA.runtime(),
+        ) == Memory{TracedRArray{Float32,1}}
+        @test traced_type(
+            Memory,
+            Val(ConcreteToTraced),
+            Union{},
+            Sharding.NoSharding(),
+            Reactant.XLA.runtime(),
+        ) == Memory
+
+        mem_u8 = Memory{UInt8}(undef, 3)
+        mem_u8[1] = 0x0a
+        mem_u8[2] = 0x14
+        mem_u8[3] = 0x1e
+        foo = MemoryHolder2301(mem_u8)
+        @test Reactant.to_rarray(foo).bar === mem_u8
+        f_noop = @compile memory_do_nothing_2301(foo)
+        @test f_noop(foo) === nothing
+        foo_out = @jit memory_passthrough_2301(foo)
+        @test foo_out isa MemoryHolder2301
+        @test collect(foo_out.bar) == UInt8[0x0a, 0x14, 0x1e]
+
+        iob = IOBuffer()
+        @test (@jit identity(iob)) isa IOBuffer
+
+        a1 = Reactant.to_rarray(Float32[1.0, 2.0])
+        a2 = Reactant.to_rarray(Float32[10.0, 20.0])
+        mem_arr = Memory{typeof(a1)}(undef, 2)
+        mem_arr[1] = a1
+        mem_arr[2] = a2
+        ph = ParametricMemoryHolder2301(mem_arr, Core.memoryref(mem_arr, 2))
+        @test Array(@jit memory_sum_arrays_2301(ph)) ≈ Float32[11.0, 22.0]
+        ph_out = @jit identity(ph)
+        @test Array(ph_out.mem[1]) ≈ Float32[1.0, 2.0]
+        @test Array(ph_out.ref[]) ≈ Float32[10.0, 20.0]
+    end
+end
