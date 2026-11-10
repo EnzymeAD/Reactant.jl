@@ -640,6 +640,45 @@ function create_result(
 end
 
 function create_result(
+    tocopy::Base.Pairs{K,V,I,A},
+    @nospecialize(path::Tuple),
+    result_stores,
+    path_to_shard_info,
+    to_unreshard_results,
+    unresharded_code::Vector{Expr},
+    unresharded_arrays_cache,
+    used_shardinfo,
+    result_cache,
+    var_idx,
+    resultgen_code,
+) where {K,V,I,A}
+    args = (
+        result_stores,
+        path_to_shard_info,
+        to_unreshard_results,
+        unresharded_code::Vector{Expr},
+        unresharded_arrays_cache,
+        used_shardinfo,
+        result_cache,
+        var_idx,
+        resultgen_code,
+    )
+
+    if !haskey(result_cache, tocopy)
+        sym = Symbol("result", var_idx[])
+        var_idx[] += 1
+
+        data_expr = create_result(getfield(tocopy, :data), append_path(path, 1), args...)
+        itr_expr = create_result(getfield(tocopy, :itr), append_path(path, 2), args...)
+        result = Expr(:call, Base.Pairs{K,V,I,A}, data_expr, itr_expr)
+        push!(resultgen_code, Expr(:block, Expr(:(=), sym, result)))
+        result_cache[tocopy] = sym
+    end
+
+    return result_cache[tocopy]
+end
+
+function create_result(
     tocopy::D,
     @nospecialize(path::Tuple),
     result_stores,
