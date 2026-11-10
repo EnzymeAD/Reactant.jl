@@ -118,6 +118,12 @@ function random_matrix_with_cond(
     return T.(U * S * V')
 end
 
+chol_det(S) = det(cholesky(S))
+chol_logdet(S) = logdet(cholesky(S))
+chol_logabsdet(S) = logabsdet(cholesky(S))
+chol_sym_logdet(S) = logdet(cholesky(Symmetric(S)))
+chol_herm_logdet(S) = logdet(cholesky(Hermitian(S)))
+
 @testset "Cholesky Factorization" begin
     @testset "Un-batched" begin
         @testset for T in (Float32, Float64, ComplexF32, ComplexF64)
@@ -158,6 +164,27 @@ end
                 1e-4 rtol = 1e-2
             @test @jit(solve_with_cholesky(A_ra, B_ra)) ≈ solve_with_cholesky_batched(A, B) atol =
                 1e-4 rtol = 1e-2
+        end
+    end
+
+    @testset "det, logdet, logabsdet (#3370)" begin
+        @testset for T in (Float32, Float64, ComplexF32, ComplexF64)
+            (T == ComplexF64 || T == Float64) && RunningOnTPU && continue
+
+            S = T <: Complex ? T[4+0im 1+1im; 1-1im 3+0im] : T[4 1; 1 3]
+            S_ra = Reactant.to_rarray(S)
+
+            @test @jit(chol_det(S_ra)) ≈ chol_det(S) atol = 1e-4 rtol = 1e-4
+            @test @jit(chol_logdet(S_ra)) ≈ chol_logdet(S) atol = 1e-4 rtol = 1e-4
+            lad_ra = @jit(chol_logabsdet(S_ra))
+            lad = chol_logabsdet(S)
+            @test lad_ra[1] ≈ lad[1] atol = 1e-4 rtol = 1e-4
+            @test lad_ra[2] ≈ lad[2] atol = 1e-4 rtol = 1e-4
+            if T <: Real
+                @test @jit(chol_sym_logdet(S_ra)) ≈ chol_sym_logdet(S) atol = 1e-4 rtol =
+                    1e-4
+            end
+            @test @jit(chol_herm_logdet(S_ra)) ≈ chol_herm_logdet(S) atol = 1e-4 rtol = 1e-4
         end
     end
 end
