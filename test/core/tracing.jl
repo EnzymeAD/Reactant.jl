@@ -560,3 +560,44 @@ reflect_hasfield(x) = x .+ hasfield(KindOptions, :a)
     @test @jit(reflect_parentmodule(x)) ≈ [1.0 + length(string(@__MODULE__))]
     @test @jit(reflect_hasfield(x)) ≈ [2.0]
 end
+
+function _test_unbounded_unique_names_1616()
+    ctx = Reactant.ReactantContext()
+    Reactant.MLIR.IR.activate(ctx)
+    try
+        mod = Reactant.MLIR.IR.Module(Reactant.MLIR.IR.Location(; context=ctx))
+        try
+            body = Reactant.MLIR.IR.body(mod)
+            Reactant.MLIR.IR.activate(body)
+            try
+                fty = Reactant.MLIR.IR.FunctionType(
+                    Reactant.MLIR.IR.Type[], Reactant.MLIR.IR.Type[]; context=ctx
+                )
+                last_name = ""
+                for _ in 1:10005
+                    last_name = Reactant.TracedUtils.__lookup_unique_name_in_module(
+                        mod, "TypeCast_broadcast_scalar"
+                    )
+                    Reactant.MLIR.Dialects.func.func_(;
+                        sym_name=last_name,
+                        function_type=fty,
+                        body=Reactant.MLIR.IR.Region(),
+                        location=Reactant.MLIR.IR.Location(; context=ctx),
+                    )
+                end
+                return last_name
+            finally
+                Reactant.MLIR.IR.deactivate(body)
+            end
+        finally
+            Reactant.MLIR.IR.dispose(mod)
+        end
+    finally
+        Reactant.MLIR.IR.deactivate(ctx)
+        Reactant.MLIR.IR.dispose(ctx)
+    end
+end
+
+@testset "Unbounded unique symbol names in MLIR module (#1616)" begin
+    @test _test_unbounded_unique_names_1616() == "TypeCast_broadcast_scalar_10004"
+end
