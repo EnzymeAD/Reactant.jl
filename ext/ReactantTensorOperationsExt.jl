@@ -16,8 +16,7 @@ using TensorOperations:
     TupleTools,
     Index2Tuple,
     IndexTuple,
-    stridedtensoradd!,
-    _unsafe_blas_contract!
+    stridedtensoradd!
 
 # allocation
 function TO.tensoradd_type(TC, A::ConcreteRArray, pA::Index2Tuple, conjA::Bool)
@@ -28,36 +27,73 @@ function TO.tensoradd_type(TC, A::TracedRArray, pA::Index2Tuple, conjA::Bool)
     return TracedRArray{unwrapped_eltype(TC),TO.numind(pA)}
 end
 
-@reactant_overlay function TO._unsafe_blas_contract!(
-    C::StridedView,
-    A::StridedView,
-    pA,
-    B::StridedView,
-    pB,
-    pAB::IndexTuple,
-    α::Number,
-    β::Number,
-)
-    if use_overlayed_version(C) || use_overlayed_version(A) || use_overlayed_version(B)
-        sizeA = size(A)
-        sizeB = size(B)
-        csizeA = TupleTools.getindices(sizeA, pA[2])
-        csizeB = TupleTools.getindices(sizeB, pB[1])
-        osizeA = TupleTools.getindices(sizeA, pA[1])
-        osizeB = TupleTools.getindices(sizeB, pB[2])
+@static if isdefined(TO, :_unsafe_blas_contract!)
+    @reactant_overlay function TO._unsafe_blas_contract!(
+        C::StridedView,
+        A::StridedView,
+        pA,
+        B::StridedView,
+        pB,
+        pAB::IndexTuple,
+        α::Number,
+        β::Number,
+    )
+        if use_overlayed_version(C) || use_overlayed_version(A) || use_overlayed_version(B)
+            sizeA = size(A)
+            sizeB = size(B)
+            csizeA = TupleTools.getindices(sizeA, pA[2])
+            csizeB = TupleTools.getindices(sizeB, pB[1])
+            osizeA = TupleTools.getindices(sizeA, pA[1])
+            osizeB = TupleTools.getindices(sizeB, pB[2])
 
-        LinearAlgebra.mul!(
-            TO.sreshape(permutedims(C, pAB), (prod(osizeA), prod(osizeB))),
-            TO.sreshape(permutedims(A, TO.linearize(pA)), (prod(osizeA), prod(csizeA))),
-            TO.sreshape(permutedims(B, TO.linearize(pB)), (prod(csizeB), prod(osizeB))),
-            α,
-            β,
-        )
-        return C
-    else
-        return Reactant.call_with_native(
-            TO._unsafe_blas_contract!, C, A, pA, B, pB, pAB, α, β
-        )
+            LinearAlgebra.mul!(
+                TO.sreshape(permutedims(C, pAB), (prod(osizeA), prod(osizeB))),
+                TO.sreshape(permutedims(A, TO.linearize(pA)), (prod(osizeA), prod(csizeA))),
+                TO.sreshape(permutedims(B, TO.linearize(pB)), (prod(csizeB), prod(osizeB))),
+                α,
+                β,
+            )
+            return C
+        else
+            return Reactant.call_with_native(
+                TO._unsafe_blas_contract!, C, A, pA, B, pB, pAB, α, β
+            )
+        end
+    end
+else
+    @reactant_overlay function TO.blas_contract!(
+        C::StridedView,
+        A::StridedView,
+        pA,
+        B::StridedView,
+        pB,
+        pAB,
+        α::Number,
+        β::Number,
+        backend,
+        allocator,
+    )
+        if use_overlayed_version(C) || use_overlayed_version(A) || use_overlayed_version(B)
+            sizeA = size(A)
+            sizeB = size(B)
+            csizeA = TupleTools.getindices(sizeA, pA[2])
+            csizeB = TupleTools.getindices(sizeB, pB[1])
+            osizeA = TupleTools.getindices(sizeA, pA[1])
+            osizeB = TupleTools.getindices(sizeB, pB[2])
+
+            LinearAlgebra.mul!(
+                TO.sreshape(permutedims(C, TO.linearize(pAB)), (prod(osizeA), prod(osizeB))),
+                TO.sreshape(permutedims(A, TO.linearize(pA)), (prod(osizeA), prod(csizeA))),
+                TO.sreshape(permutedims(B, TO.linearize(pB)), (prod(csizeB), prod(osizeB))),
+                α,
+                β,
+            )
+            return C
+        else
+            return Reactant.call_with_native(
+                TO.blas_contract!, C, A, pA, B, pB, pAB, α, β, backend, allocator
+            )
+        end
     end
 end
 
