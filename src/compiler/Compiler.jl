@@ -1,5 +1,13 @@
 module Compiler
 
+# A compiled thunk's call method is generated with one statement per leaf of its
+# arguments and results, which for a large model and optimizer state is about ten
+# thousand statements in a single function. LLVM's backend optimizations take
+# minutes on such a function, so the first call of a thunk could take longer than
+# its compilation. Code in this module either runs once per compilation or moves
+# buffers in and out of a thunk, so it gains little from optimization.
+Base.Experimental.@optlevel 0
+
 using Reactant_jll
 using LinearAlgebra: BlasInt
 import p7zip_jll: p7zip
