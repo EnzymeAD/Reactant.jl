@@ -320,6 +320,14 @@ function Base.similar(
     return (@opcall fill(zero(T), dims))::TracedRArray{T,N}
 end
 
+function Base.similar(
+    ::Broadcasted{Broadcast.DefaultArrayStyle{N}}, ::Type{TracedRNumber{T}}, dims
+) where {T<:Reactant.ReactantPrimitive,N}
+    @assert N isa Int
+    N == 0 && return Array{TracedRNumber{T},0}(undef)
+    return (@opcall fill(zero(T), dims))::TracedRArray{T,N}
+end
+
 function Base.copy(bc::Broadcasted{<:AbstractReactantArrayStyle{0}})
     ElType = Broadcast.combine_eltypes(bc.f, bc.args)
     dest = copyto!(similar(bc, ElType), bc)
