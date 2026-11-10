@@ -532,3 +532,29 @@ mapped_sub(xs...) = stack(map(-, xs...))
         end
     end
 end
+
+_unwrap_extrema_tuple(t) = (Reactant.to_number(t[1]), Reactant.to_number(t[2]))
+ext_plain(x) = extrema(x)
+ext_fn(x) = extrema(abs, x)
+ext_dims1(x) = extrema(x; dims=1)
+ext_fn_dims2(x) = extrema(abs2, x; dims=2)
+ext_view(x) = extrema(view(x, 1:2, :))
+
+@testset "extrema with function, dims, and wrapped arrays (#2387)" begin
+    x = Float32[-30.0 10.0; 50.0 -80.0; 5.0 -2.0]
+    xr = Reactant.to_rarray(x)
+
+    @test @jit(ext_plain(xr)) == ext_plain(x)
+    @test @jit(ext_fn(xr)) == ext_fn(x)
+    @test @jit(ext_view(xr)) == ext_view(x)
+
+    r_d1 = @jit ext_dims1(xr)
+    h_d1 = ext_dims1(x)
+    @test size(r_d1) == size(h_d1)
+    @test map(_unwrap_extrema_tuple, r_d1) == h_d1
+
+    r_d2 = @jit ext_fn_dims2(xr)
+    h_d2 = ext_fn_dims2(x)
+    @test size(r_d2) == size(h_d2)
+    @test map(_unwrap_extrema_tuple, r_d2) == h_d2
+end
