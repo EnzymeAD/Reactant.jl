@@ -362,3 +362,94 @@ f_mixed_eltype_bcast_3283(x) = convert.(eltype.(x), x .+ 1)
     @test @jit(f1_eltype_bcast_3283(Reactant.to_rarray(fill(2.5)))) == 1.0
     @test similar(bc0, DataType, ()) isa Array{DataType,0}
 end
+
+tuple_pair_2676(x) = (x, 2 * x)
+bcast_tuple_pair_2676(x) = tuple_pair_2676.(x)
+
+function _reactant_drd_ifbody_2676(X::T) where {T}
+    ERRTOL = T(0.1)
+    active = X > ERRTOL
+    Reactant.@trace while active
+        X /= 4
+        active = X > ERRTOL
+    end
+    return X
+end
+
+function drd_2676(X::T) where {T}
+    zeroT = zero(T)
+    ans = zeroT
+    err = Base.ifelse(X < zeroT, 1, 0)
+    @trace if err == 0
+        ans = _reactant_drd_ifbody_2676(X)
+    end
+    return (ans, err)
+end
+
+bcast_drd_2676(x) = drd_2676.(x)
+
+function _isreal2_2689(num)
+    ren, imn = reim(num)
+    ren2 = ren^2
+    imn2 = imn^2
+    return Base.:&(1, (imn2 / (imn2 + ren2)) < eps(real(num)))
+end
+
+function _test_real_branch_2689(a, b)
+    numreals = sum(_isreal2_2689, b)
+    ans = zero(real(eltype(b)))
+    @trace if numreals == 4
+        ans = sum(Base.real, b)
+        nothing
+    else
+        ans = sum(Base.real, b) * a
+        nothing
+    end
+    return ans
+end
+
+bcast_nested_rarray_2689(a, b) = _test_real_branch_2689.(a, b)
+
+cast_to_type_1064(x, ::Type{T}) where {T} = convert(Reactant.TracedRNumber{T}, x)
+keep_first_1064(x, _) = x
+bcast_types_keep_1064(xs, types) = keep_first_1064.(xs, types)
+bcast_types_cast_1064(xs, types) = cast_to_type_1064.(xs, types)
+
+@testset "Tuple-returning, type-array, and nested-array broadcasts (#2676, #2689, #1566, #1064)" begin
+    x_cpu = [0.5, -0.2, 0.8, 0.05]
+    xr = Reactant.to_rarray(x_cpu)
+
+    pairs_res = @jit bcast_tuple_pair_2676(xr)
+    @test length(pairs_res) == 4
+    for i in 1:4
+        @test Reactant.to_number(pairs_res[i][1]) ≈ x_cpu[i]
+        @test Reactant.to_number(pairs_res[i][2]) ≈ 2 * x_cpu[i]
+    end
+
+    drd_res = @jit bcast_drd_2676(xr)
+    drd_ref = drd_2676.(x_cpu)
+    @test length(drd_res) == 4
+    for i in 1:4
+        @test Reactant.to_number(drd_res[i][1]) ≈ drd_ref[i][1]
+        @test Reactant.to_number(drd_res[i][2]) == drd_ref[i][2]
+    end
+
+    a_cpu = [2.0, 3.0]
+    b_cpu = [
+        ComplexF64[1.0 + 0.0im, 2.0 + 0.0im, 3.0 + 0.0im, 4.0 + 0.0im],
+        ComplexF64[-5.0 + 0.0im, 1.0 + 2.0im, 1.0 - 2.0im, -5.0 + 0.0im],
+    ]
+    a_r = Reactant.to_rarray(a_cpu)
+    b_r = Reactant.to_rarray(b_cpu)
+    res_2689 = @jit bcast_nested_rarray_2689(a_r, b_r)
+    @test Array(res_2689) ≈ _test_real_branch_2689.(a_cpu, b_cpu)
+
+    x_ra_1064 = ConcreteRNumber{Int64}[
+        ConcreteRNumber(1), ConcreteRNumber(2), ConcreteRNumber(3)
+    ]
+    types_1064 = DataType[Float32, Float64, Int32]
+    res_keep_1064 = @jit bcast_types_keep_1064(x_ra_1064, types_1064)
+    @test Array(res_keep_1064) == [1, 2, 3]
+    res_cast_1064 = @jit bcast_types_cast_1064(x_ra_1064, types_1064)
+    @test Array(res_cast_1064) ≈ Float64[1, 2, 3]
+end

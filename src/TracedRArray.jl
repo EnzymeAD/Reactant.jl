@@ -321,6 +321,13 @@ function Base.similar(
 end
 
 function Base.similar(
+    ::Broadcasted{AbstractReactantArrayStyle{N}}, ::Type{Union{T,TracedRNumber{T}}}, dims
+) where {T<:Reactant.ReactantPrimitive,N}
+    @assert N isa Int
+    return (@opcall fill(zero(T), dims))::TracedRArray{T,N}
+end
+
+function Base.similar(
     ::Broadcasted{AbstractReactantArrayStyle{N}}, ::Type{T}, dims
 ) where {T,N}
     @assert N isa Int
@@ -337,6 +344,63 @@ Base.eltype(::Broadcast.Extruded{T}) where {T} = eltype(T)
 first_scalar(x) = @allowscalar first(x)
 first_scalar(x::Broadcast.Extruded) = first_scalar(x.x)
 
+function _unbatch_soa_element(x::TracedRArray, I, out_size)
+    return size(x) == out_size ? (@allowscalar x[I]) : x
+end
+function _unbatch_soa_element(x::Tuple, I, out_size)
+    isempty(x) && return ()
+    return (
+        _unbatch_soa_element(first(x), I, out_size),
+        _unbatch_soa_element(Base.tail(x), I, out_size)...,
+    )
+end
+function _unbatch_soa_element(x::NamedTuple{K}, I, out_size) where {K}
+    return NamedTuple{K}(_unbatch_soa_element(Tuple(x), I, out_size))
+end
+function _unbatch_soa_element(x, I, out_size)
+    T = Core.Typeof(x)
+    if !isstructtype(T) || ismutabletype(T) || x isa Type || fieldcount(T) == 0
+        return x
+    end
+    nf = fieldcount(T)
+    flds = Vector{Any}(undef, nf)
+    changed = false
+    for k in 1:nf
+        isdefined(x, k) || return x
+        fk = getfield(x, k)
+        fk2 = _unbatch_soa_element(fk, I, out_size)
+        changed |= (fk !== fk2)
+        flds[k] = fk2
+    end
+    changed || return x
+    return T.name.wrapper(flds...)
+end
+
+function _materialize_broadcast_result(res, out_size::NTuple{N,Int}) where {N}
+    if res isa TracedRArray
+        return res
+    elseif res isa TracedRNumber
+        return N == 0 ? fill(res) : Reactant.broadcast_to_size(res, out_size)
+    elseif res isa Number && typeof(res) <: Reactant.ReactantPrimitive
+        tnum = Reactant.promote_to(TracedRNumber{typeof(res)}, res)
+        return N == 0 ? fill(tnum) : Reactant.broadcast_to_size(tnum, out_size)
+    elseif res isa Array
+        return res
+    elseif N == 0
+        out0 = Array{Core.Typeof(res),0}(undef, ())
+        out0[CartesianIndex()] = res
+        return out0
+    end
+    first_I = CartesianIndex(ntuple(Returns(1), Val(N)))
+    first_elem = _unbatch_soa_element(res, first_I, out_size)
+    ElemT = Core.Typeof(first_elem)
+    out = Array{ElemT,N}(undef, out_size)
+    for I in CartesianIndices(out)
+        out[I] = _unbatch_soa_element(res, I, out_size)
+    end
+    return out
+end
+
 # we need to override the outer copy method to make sure we never fall back to scalar
 # iteration (see, e.g., CUDA.jl#145)
 function _copy(bc)
@@ -346,6 +410,19 @@ function _copy(bc)
         bc.f
     end
     ElType = Broadcast.combine_eltypes(fn, bc.args)
+    if ElType === Union{} ||
+        ElType == Any ||
+        ElType == TracedRNumber ||
+        !isconcretetype(ElType)
+        bc_inst = Broadcast.instantiate(bc)
+        out_size = length.(axes(bc_inst))
+        if prod(out_size) > 0
+            bc_prep = Broadcast.preprocess(nothing, bc_inst)
+            args = _broadcast_args_to_size(bc_prep.args, out_size)
+            res = TracedUtils.elem_apply(bc_prep.f, args...)
+            return _materialize_broadcast_result(res, out_size)
+        end
+    end
     # Special case a union{} return so we can see the better error message
     if ElType === Union{} || ElType == Any || ElType == TracedRNumber
         ElType = Core.Typeof(fn(map(first_scalar, bc.args)...))
@@ -483,10 +560,18 @@ function _copyto!(dest::Array, bc::Broadcasted)
     axes(dest) == axes(bc) || Broadcast.throwdm(axes(dest), axes(bc))
     isempty(dest) && return dest
     bc = Broadcast.preprocess(dest, bc)
-    args = _broadcast_args_to_size(bc.args, size(bc))
+    out_size = size(bc)
+    args = _broadcast_args_to_size(bc.args, out_size)
     res = TracedUtils.elem_apply(bc.f, args...)
+    if ndims(dest) == 0
+        dest[CartesianIndex()] = res
+        return dest
+    end
     if !(res isa AbstractArray)
-        return fill!(dest, res)
+        for I in CartesianIndices(dest)
+            dest[I] = _unbatch_soa_element(res, I, out_size)
+        end
+        return dest
     end
     for I in 1:length(dest)
         dest[I] = @allowscalar res[I]
