@@ -2,7 +2,7 @@ using Reactant, Test, FileCheck
 
 const addressable_devices = Reactant.addressable_devices()
 
-const RunningOnTPU = contains(string(Reactant.devices()[1]), "TPU")
+const RunningOnTPU = Reactant.XLA.platform_name(Reactant.XLA.default_backend()) == "tpu"
 const RunningOnGPU =
     lowercase(Reactant.XLA.platform_name(Reactant.XLA.default_backend())) in
     ("cuda", "rocm")

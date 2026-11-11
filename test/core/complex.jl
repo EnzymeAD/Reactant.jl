@@ -1,7 +1,7 @@
 using Test
 using Reactant
 
-const RunningOnTPU = contains(string(Reactant.devices()[1]), "TPU")
+const RunningOnTPU = Reactant.XLA.platform_name(Reactant.XLA.default_backend()) == "tpu"
 
 @testset "Complex runtime: $CT" for CT in (ComplexF32, ComplexF64)
     @test begin

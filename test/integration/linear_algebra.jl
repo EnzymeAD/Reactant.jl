@@ -1,6 +1,6 @@
 using LinearAlgebra, Reactant, Test, FileCheck
 
-const RunningOnTPU = contains(string(Reactant.devices()[1]), "TPU")
+const RunningOnTPU = Reactant.XLA.platform_name(Reactant.XLA.default_backend()) == "tpu"
 
 function muladd2(A, x, b)
     C = similar(A, promote_type(eltype(A), eltype(b)), size(A, 1), size(x, 2))
@@ -207,7 +207,7 @@ end
     x = Reactant.TestUtils.construct_test_array(Float32, 2, 4)
     x_ra = Reactant.to_rarray(x)
 
-    @testset for k in (-size(x, 1) + 1):(size(x, 1) - 1)
+    @testset for k in (-size(x, 1)+1):(size(x, 1)-1)
         @test @jit(diag(x_ra, k)) ≈ diag(x, k)
     end
 

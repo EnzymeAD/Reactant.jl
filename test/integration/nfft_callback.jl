@@ -1,7 +1,7 @@
 using NonuniformFFTs, Reactant, Test, CUDA, LinearAlgebra, KernelAbstractions
 
-const RunningOnCPU = contains(string(Reactant.devices()[1]), "CPU")
-const RunningOnCUDA = contains(string(Reactant.devices()[1]), "CUDA")
+const RunningOnCPU = Reactant.XLA.platform_name(Reactant.XLA.default_backend()) == "cpu"
+const RunningOnCUDA = Reactant.XLA.platform_name(Reactant.XLA.default_backend()) == "cuda"
 
 # platforms that support cfunction with closures
 # (requires LLVM back-end support for trampoline intrinsics)
