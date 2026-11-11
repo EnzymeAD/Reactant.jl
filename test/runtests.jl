@@ -70,7 +70,7 @@ filter!(((k, _),) -> !startswith(k, "probprog"), testsuite)
 
 # The julia PJRT backend (`src/accelerators/Julia.jl`) runs on a single CPU device and only supports the StableHLO ops
 # with a `handle` method, so tests that need anything else are skipped
-if BACKEND == "julia"
+if BACKEND == "julia-cpu"
     for name in (
         # `enzymexla.lapack`/`enzymexla.linalg` ops (`lu`, `inv`, `\`, `det`, `svd`, ...)
         "integration/factorizations",
@@ -92,6 +92,8 @@ if BACKEND == "julia"
         "core/enums",
         "core/array_ops",
         "nn/nnlib",
+        # "Failed to serialize StableHLO with mixed dialects to plugin version 1.16.3; found unstable op"
+        "integration/structured_tensors",
     )
         delete!(testsuite, name)
     end
@@ -239,8 +241,8 @@ test_worker = custom_test_worker ? tpu_custom_worker_launcher : Returns(nothing)
 
     # Important to run these last, since they will capture the TPU and any
     # processes triggered in multi-process tests will not be able to use TPUs
-    # These tests require multiple devices, which the "julia" backend doesn't have
-    if BACKEND != "julia"
+    # These tests require multiple devices, which the "julia-cpu" backend doesn't have
+    if BACKEND != "julia-cpu"
         run_specific_test("core/sharding/sharding", parsed_args)
         run_specific_test("core/sharding/optimize_comm", parsed_args)
     end

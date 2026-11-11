@@ -36,7 +36,7 @@ on:
         default: false
         type: boolean
       backend_group:
-        description: "Value of `REACTANT_BACKEND_GROUP`, the backend the tests run on (auto | cpu | gpu | tpu | julia)"
+        description: "Value of `REACTANT_BACKEND_GROUP`, the backend the tests run on (auto | cpu | gpu | tpu | julia-cpu)"
         required: false
         default: "auto"
         type: string

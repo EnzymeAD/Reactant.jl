@@ -1542,7 +1542,7 @@ function HostClient()
     return HostClient(devs, mems)
 end
 
-platform_name(::HostClient) = "Host"
+platform_name(::HostClient) = "julia-cpu"
 platform_version(::HostClient) = string(VERSION)
 process_index(::HostClient) = 0
 devices(client::HostClient) = client.devices
@@ -1863,7 +1863,7 @@ function make_pjrt_client(;
 
     errstr = Ref{Cstring}()
     api = unsafe_convert(Ptr{CAPI.PJRT_Api}, plugin_api[])
-    ptr = API.MakeClientFromApi(api, "julia", "JULIA", errstr)
+    ptr = API.MakeClientFromApi(api, "julia-cpu", "JULIA-CPU", errstr)
     ptr == C_NULL && error(unsafe_string(errstr[]))
     return Reactant.XLA.PJRT.Client(ptr)
 end
@@ -1873,7 +1873,7 @@ function make_ifrt_client(; kwargs...)
     errstr = Ref{Cstring}()
     ptr = GC.@preserve pjrt_client errstr begin
         API.ifrt_pjrt_make_client_with_default_kv_store(
-            pjrt_client.client, 0, 1, C_NULL, errstr, "julia"
+            pjrt_client.client, 0, 1, C_NULL, errstr, "julia-cpu"
         )
     end
     ptr == C_NULL && error(unsafe_string(errstr[]))
@@ -1884,7 +1884,7 @@ function __init__()
     plugin_api[] = make_api(HostClient)
 
     Reactant.Accelerators.Registration.register_backend(
-        "julia";
+        "julia-cpu";
         priority=100,
         pjrt_initialize_function=make_pjrt_client,
         ifrt_initialize_function=make_ifrt_client,

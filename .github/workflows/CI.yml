@@ -91,7 +91,7 @@ jobs:
       julia_version: ${{ matrix.version }}
       os: ${{ matrix.os }}
       runtime: pjrt
-      backend_group: julia
+      backend_group: julia-cpu
       test_args: ${{ matrix.test_group == 'core' && 'core plugins' || matrix.test_group }}
 
   # This has been broken for a while, originating from CUDA.jl

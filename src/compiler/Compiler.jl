@@ -412,7 +412,7 @@ Base.@nospecializeinfer function compile_mlir!(
     end
 
     blas_int_width = sizeof(BlasInt) * 8
-    lower_enzymexla_linalg_pass = let backend = backend == "julia" ? "cpu" : backend
+    lower_enzymexla_linalg_pass = let backend = backend == "julia-cpu" ? "cpu" : backend
         join(
             [
                 "lower-enzymexla-linalg{backend=$backend blas_int_width=$blas_int_width}",
@@ -426,7 +426,7 @@ Base.@nospecializeinfer function compile_mlir!(
     # to StableHLO decomposition on older CUDA architectures (e.g. V100/T4).
     math_backend = if backend == "cuda" && cuda_sm_major < 8
         "cuda_sm$(cuda_sm_major)$(cuda_sm_minor)"
-    elseif backend == "julia"
+    elseif backend == "julia-cpu"
         "cpu"
     else
         backend
