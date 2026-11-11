@@ -52,6 +52,7 @@ include("ProtoUtils.jl")
 
 # auxiliary types and functions
 include("OrderedIdDict.jl")
+include("WeakKeyIdDict.jl")
 
 function precompiling()
     return (@ccall jl_generating_output()::Cint) == 1

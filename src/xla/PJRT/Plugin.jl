@@ -40,7 +40,7 @@ module Plugin
 #   - Entrypoint to the API, 
 
 using Base: unsafe_convert
-using ..Reactant: Reactant
+using ..Reactant: Reactant, WeakKeyIdDict
 using Reactant.XLA.CAPI: CAPI, csizeof
 using Reactant.MLIR: IR, API
 import Serialization: serialize
@@ -72,19 +72,27 @@ function addressable_device_logical_ids end
 function addressable_devices end
 function addressable_memories end
 function attributes end
+function bitcast! end
 function buffer_from_host_buffer end
+function clear_memory_stats! end
 function compile_options end
 function compile! end
+function compiled_memory_stats end
+function copy_raw_to_host! end
 function copy_to_device end
 function copy_to_memory end
+function cost_analysis end
 function create_uninitialized_buffer end
 function debug_string end
+function default_device_assignment end
 function default_memory end
 function description end
+function deserialize_and_load end
 function device_assignment end
 function device end
 function devices end
 function dimensions end
+function dynamic_dimension_indices end
 function element_type end
 function executable end
 function execute end
@@ -96,14 +104,20 @@ function isdeleted end
 function kind_id end
 function kind end
 function local_hardware_id end
+function lookup_addressable_device end
+function lookup_device end
 function memory end
+function memory_layout end
 function name end
 function num_outputs end
 function num_partitions end
 function num_replicas end
 function on_device_size_in_bytes end
 function optimized_program end
+function output_dimensions end
 function output_element_types end
+function output_memory_kinds end
+function parameter_memory_kinds end
 function platform_name end
 function platform_version end
 function process_index end
@@ -111,6 +125,7 @@ function ready_event end
 function size_of_generated_code_in_bytes end
 function to_host_buffer end
 function to_string end
+function unpadded_dimensions end
 function unsafe_pointer end
 
 export unimplemented, invalid_argument, resource_exhausted
@@ -844,6 +859,7 @@ end
 - `addressable_memories`
 - `default_memory`
 - `memory_stats`
+- `clear_memory_stats!`
 """
 abstract type Device end
 function checkinterface(T::Type{<:Device})
@@ -956,6 +972,23 @@ end
 end
 
 """
+    clear_memory_stats!(dev::Device)
+
+Reset the memory statistics of `dev` (e.g. the peaks reported by `PJRT_Device_MemoryStats`).
+
+Backs `PJRT_Device_ClearMemoryStats`.
+"""
+clear_memory_stats!(::Device)
+
+@pjrt_catch_return function pjrt_device_clear_memory_stats(
+    args::Ptr{CAPI.PJRT_Device_ClearMemoryStats_Args}
+)::Ptr{CAPI.PJRT_Error}
+    device = unsafe_pointer_to_objref(Ptr{Device}(unsafe_load(args.device)))::Device
+    clear_memory_stats!(device)
+    return ok()
+end
+
+"""
     Buffer
 
 ### Interface
@@ -965,12 +998,17 @@ end
 - `isdeleted`
 - `element_type` -> eltype
 - `dimensions` -> size
+- `unpadded_dimensions`
+- `dynamic_dimension_indices`
+- `memory_layout`
 - `on_device_size_in_bytes` -> sizeof?
 - `device`
 - `memory`
 - `copy_to_device` -> copyto!?
 - `copy_to_memory`
 - `to_host_buffer` -> copyto!?
+- `copy_raw_to_host!`
+- `bitcast!`
 - `is_on_cpu`
 - `ready_event`
 - `unsafe_pointer`
@@ -1061,6 +1099,93 @@ dimensions(::Buffer)
     dims = dimensions(buffer)::Vector{Int}
     unsafe_store!(args.dims, pointer(dims))
     unsafe_store!(args.num_dims, length(dims))
+    return ok()
+end
+
+"""
+    unpadded_dimensions(buffer::Buffer) -> Vector{Int64}
+
+Return the dimensions of `buffer` without padding. They usually are `dimensions(buffer)`, but dynamically-sized
+dimensions implemented by padding to a fixed size may be smaller.
+
+Defaults to `dimensions(buffer)`, i.e. no dimension is padded.
+
+!!! warning
+The returned vector is handed to C by pointer, so it must be owned by `buffer` and never be resized.
+
+Backs `PJRT_Buffer_UnpaddedDimensions`.
+"""
+unpadded_dimensions(buffer::Buffer) = dimensions(buffer)
+
+@pjrt_catch_return function pjrt_buffer_unpadded_dimensions(
+    args::Ptr{CAPI.PJRT_Buffer_UnpaddedDimensions_Args}
+)::Ptr{CAPI.PJRT_Error}
+    buffer = unsafe_pointer_to_objref(unsafe_load(args.buffer))::Buffer
+    dims = unpadded_dimensions(buffer)::Vector{Int64}
+    unsafe_store!(args.unpadded_dims, pointer(dims))
+    unsafe_store!(args.num_dims, length(dims))
+    return ok()
+end
+
+"""
+    dynamic_dimension_indices(buffer::Buffer) -> Vector{Csize_t}
+
+Return the 0-based indices of the dynamically-sized dimensions of `buffer`, or an empty vector if all are static.
+
+!!! warning
+The returned vector is handed to C by pointer, so it must be owned by `buffer` and never be resized.
+
+Backs `PJRT_Buffer_DynamicDimensionIndices`.
+"""
+dynamic_dimension_indices(::Buffer)
+
+@pjrt_catch_return function pjrt_buffer_dynamic_dimension_indices(
+    args::Ptr{CAPI.PJRT_Buffer_DynamicDimensionIndices_Args}
+)::Ptr{CAPI.PJRT_Error}
+    buffer = unsafe_pointer_to_objref(unsafe_load(args.buffer))::Buffer
+    indices = dynamic_dimension_indices(buffer)::Vector{Csize_t}
+    unsafe_store!(args.dynamic_dim_indices, pointer(indices))
+    unsafe_store!(args.num_dynamic_dims, length(indices))
+    return ok()
+end
+
+"""
+    memory_layout(buffer::Buffer) -> Vector{Int64}
+
+Return the 0-based minor-to-major order of the dimensions of `buffer` in memory (e.g. `[n-1, ..., 1, 0]` for XLA's
+default row-major layout).
+
+!!! warning
+The returned vector is handed to C by pointer, so it must be owned by `buffer` and never be resized.
+
+!!! todo
+Only tiled layouts without tiles can be described: tile dimensions and strided layouts are not supported yet.
+
+Backs `PJRT_Buffer_GetMemoryLayout`.
+"""
+memory_layout(::Buffer)
+
+@pjrt_catch_return function pjrt_buffer_get_memory_layout(
+    args::Ptr{CAPI.PJRT_Buffer_GetMemoryLayout_Args}
+)::Ptr{CAPI.PJRT_Error}
+    buffer = unsafe_pointer_to_objref(unsafe_load(args.buffer))::Buffer
+    minor_to_major = memory_layout(buffer)::Vector{Int64}
+    layout = args.layout
+    unsafe_store!(layout.struct_size, csizeof(CAPI.PJRT_Buffer_MemoryLayout))
+    unsafe_store!(layout.extension_start, C_NULL)
+    unsafe_store!(layout.type, CAPI.PJRT_Buffer_MemoryLayout_Type_Tiled)
+    unsafe_store!(
+        layout.tiled,
+        CAPI.PJRT_Buffer_MemoryLayout_Tiled(
+            csizeof(CAPI.PJRT_Buffer_MemoryLayout_Tiled), #= struct_size =#
+            C_NULL, #= extension_start =#
+            pointer(minor_to_major), #= minor_to_major =#
+            length(minor_to_major), #= minor_to_major_size =#
+            C_NULL, #= tile_dims =#
+            C_NULL, #= tile_dim_sizes =#
+            0, #= num_tiles =#
+        ),
+    )
     return ok()
 end
 
@@ -1240,6 +1365,80 @@ to_host_buffer(::Ptr, ::Buffer)
 end
 
 """
+    copy_raw_to_host!(dst::Ptr, buffer::Buffer, offset::Integer, transfer_size::Integer)
+
+Copy `transfer_size` bytes of the raw on-device data of `buffer`, starting at byte `offset`, to the host memory pointed
+by `dst`. The C wrapper checks that the range is within `on_device_size_in_bytes(buffer)`.
+
+!!! todo
+The copy is _currently_ synchronous.
+
+Backs `PJRT_Buffer_CopyRawToHost`.
+"""
+copy_raw_to_host!(::Ptr, ::Buffer, ::Integer, ::Integer)
+
+@pjrt_catch_return function pjrt_buffer_copy_raw_to_host(
+    args::Ptr{CAPI.PJRT_Buffer_CopyRawToHost_Args}
+)::Ptr{CAPI.PJRT_Error}
+    buffer = unsafe_pointer_to_objref(unsafe_load(args.buffer))::Buffer
+    dst = unsafe_load(args.dst)
+    offset = unsafe_load(args.offset)
+    transfer_size = unsafe_load(args.transfer_size)
+
+    isdeleted(buffer) && throw(invalid_argument("buffer is deleted"))
+
+    src_size = on_device_size_in_bytes(buffer)
+    if offset < 0 || transfer_size < 0 || offset + transfer_size > src_size
+        throw(
+            invalid_argument(
+                "copy range [$offset, $(offset + transfer_size)) is out of the $src_size bytes of the buffer",
+            ),
+        )
+    end
+
+    copy_raw_to_host!(dst, buffer, offset, transfer_size)
+
+    event = root!(Event())
+    notify(event)
+    unsafe_store!(args.event, Ptr{CAPI.PJRT_Event}(pointer_from_objref(event)))
+    return ok()
+end
+
+"""
+    bitcast!(buffer::Buffer, type, dims, layout) -> Buffer
+
+Return a new buffer that takes over the on-device data of `buffer`, reinterpreted with element type
+`type::CAPI.PJRT_Buffer_Type`, dimensions `dims::Vector{Int64}` and layout `layout::Ptr{CAPI.PJRT_Buffer_MemoryLayout}`
+(`C_NULL` for the default layout, not the layout of `buffer`).
+
+It must not copy any data, and the new buffer must have the same `on_device_size_in_bytes` as `buffer`. `buffer` is
+donated: afterwards, `isdeleted(buffer)` must return `true`, but its data must not be freed.
+
+The caller GC-roots the returned buffer.
+
+Backs `PJRT_Buffer_Bitcast`.
+"""
+bitcast!(::Buffer, args...)
+
+@pjrt_catch_return function pjrt_buffer_bitcast(
+    args::Ptr{CAPI.PJRT_Buffer_Bitcast_Args}
+)::Ptr{CAPI.PJRT_Error}
+    buffer = unsafe_pointer_to_objref(unsafe_load(args.buffer))::Buffer
+    isdeleted(buffer) && throw(invalid_argument("buffer is deleted"))
+
+    _eltype = unsafe_load(args.element_type)
+    _size = copy(
+        unsafe_wrap(Vector{Int64}, unsafe_load(args.dims), unsafe_load(args.num_dims))
+    )
+    layout = unsafe_load(args.device_layout)
+
+    out_buffer = bitcast!(buffer, _eltype, _size, layout)::Buffer
+    root!(out_buffer)
+    unsafe_store!(args.out_buffer, Ptr{CAPI.PJRT_Buffer}(pointer_from_objref(out_buffer)))
+    return ok()
+end
+
+"""
     is_on_cpu(buffer::Buffer) -> Bool
 
 Return whether the data of `buffer` resides in host memory.
@@ -1317,10 +1516,15 @@ A compiled program, independent of the devices it runs on. Returned by `executab
 - `num_outputs`
 - `size_of_generated_code_in_bytes`
 - `fingerprint`
+- `cost_analysis`
 - `output_element_types`
+- `output_dimensions`
+- `parameter_memory_kinds`
+- `output_memory_kinds`
 - `optimized_program`
 - `serialize`
 - `compile_options`
+- `compiled_memory_stats`
 """
 abstract type Executable end
 
@@ -1470,6 +1674,29 @@ fingerprint(::Executable)
 end
 
 """
+    cost_analysis(exe::Executable) -> Vector{CAPI.PJRT_NamedValue}
+
+Return the cost analysis of `exe` as name-value properties (e.g. `"flops"`, `"bytes accessed"`).
+
+!!! warning
+The vector, and the names and values it points to, are handed to C by pointer, so they must be owned by `exe` and the
+vector must never be resized.
+
+Backs `PJRT_Executable_GetCostAnalysis`.
+"""
+cost_analysis(::Executable)
+
+@pjrt_catch_return function pjrt_executable_get_cost_analysis(
+    args::Ptr{CAPI.PJRT_Executable_GetCostAnalysis_Args}
+)::Ptr{CAPI.PJRT_Error}
+    exe = unsafe_pointer_to_objref(unsafe_load(args.executable))::Executable
+    props = cost_analysis(exe)::Vector{CAPI.PJRT_NamedValue}
+    unsafe_store!(args.num_properties, length(props))
+    unsafe_store!(args.properties, isempty(props) ? C_NULL : pointer(props))
+    return ok()
+end
+
+"""
     output_element_types(exe::Executable) -> Vector{CAPI.PJRT_Buffer_Type}
 
 Return the element type of each output of `exe`.
@@ -1488,6 +1715,100 @@ output_element_types(::Executable)
     types = output_element_types(exe)::Vector{CAPI.PJRT_Buffer_Type}
     unsafe_store!(args.output_types, pointer(types))
     unsafe_store!(args.num_output_types, length(types))
+    return ok()
+end
+
+"""
+    output_dimensions(exe::Executable) -> Vector{Vector{Int64}}
+
+Return the dimensions of each output of `exe`.
+
+It is called at most once per `exe`: the C wrapper keeps a copy for as long as `exe` is alive, since C keeps pointers
+to it.
+
+Backs `PJRT_Executable_OutputDimensions`.
+"""
+output_dimensions(::Executable)
+
+const output_dimensions_cache = WeakKeyIdDict{
+    Executable,Tuple{Vector{Int64},Vector{Csize_t}}
+}()
+
+@pjrt_catch_return function pjrt_executable_output_dimensions(
+    args::Ptr{CAPI.PJRT_Executable_OutputDimensions_Args}
+)::Ptr{CAPI.PJRT_Error}
+    exe = unsafe_pointer_to_objref(unsafe_load(args.executable))::Executable
+    # C expects the dimensions of all outputs back to back, plus the number of dimensions of each output
+    dims, ranks = get!(output_dimensions_cache, exe) do
+        shapes = output_dimensions(exe)::Vector{Vector{Int64}}
+        (
+            Int64[d for shape in shapes for d in shape],
+            Csize_t[length(shape) for shape in shapes],
+        )
+    end
+    unsafe_store!(args.num_outputs, length(ranks))
+    unsafe_store!(args.dims, pointer(dims))
+    unsafe_store!(args.dim_sizes, pointer(ranks))
+    return ok()
+end
+
+"""
+    parameter_memory_kinds(exe::Executable) -> Vector{String}
+
+Return the memory kind of each parameter of `exe` (e.g. `"device"`, `"pinned_host"`).
+
+It is called at most once per `exe`: the C wrapper keeps the strings for as long as `exe` is alive, since C keeps
+pointers to them.
+
+Backs `PJRT_Executable_ParameterMemoryKinds`.
+"""
+parameter_memory_kinds(::Executable)
+
+const parameter_memory_kinds_cache = WeakKeyIdDict{
+    Executable,Tuple{Vector{String},Vector{Cstring},Vector{Csize_t}}
+}()
+
+@pjrt_catch_return function pjrt_executable_parameter_memory_kinds(
+    args::Ptr{CAPI.PJRT_Executable_ParameterMemoryKinds_Args}
+)::Ptr{CAPI.PJRT_Error}
+    exe = unsafe_pointer_to_objref(unsafe_load(args.executable))::Executable
+    _, ptrs, sizes = get!(parameter_memory_kinds_cache, exe) do
+        kinds = parameter_memory_kinds(exe)::Vector{String}
+        (kinds, [Cstring(pointer(s)) for s in kinds], Csize_t[sizeof(s) for s in kinds])
+    end
+    unsafe_store!(args.num_parameters, length(ptrs))
+    unsafe_store!(args.memory_kinds, pointer(ptrs))
+    unsafe_store!(args.memory_kind_sizes, pointer(sizes))
+    return ok()
+end
+
+"""
+    output_memory_kinds(exe::Executable) -> Vector{String}
+
+Return the memory kind of each output of `exe` (e.g. `"device"`, `"pinned_host"`).
+
+It is called at most once per `exe`: the C wrapper keeps the strings for as long as `exe` is alive, since C keeps
+pointers to them.
+
+Backs `PJRT_Executable_OutputMemoryKinds`.
+"""
+output_memory_kinds(::Executable)
+
+const output_memory_kinds_cache = WeakKeyIdDict{
+    Executable,Tuple{Vector{String},Vector{Cstring},Vector{Csize_t}}
+}()
+
+@pjrt_catch_return function pjrt_executable_output_memory_kinds(
+    args::Ptr{CAPI.PJRT_Executable_OutputMemoryKinds_Args}
+)::Ptr{CAPI.PJRT_Error}
+    exe = unsafe_pointer_to_objref(unsafe_load(args.executable))::Executable
+    _, ptrs, sizes = get!(output_memory_kinds_cache, exe) do
+        kinds = output_memory_kinds(exe)::Vector{String}
+        (kinds, [Cstring(pointer(s)) for s in kinds], Csize_t[sizeof(s) for s in kinds])
+    end
+    unsafe_store!(args.num_outputs, length(ptrs))
+    unsafe_store!(args.memory_kinds, pointer(ptrs))
+    unsafe_store!(args.memory_kind_sizes, pointer(sizes))
     return ok()
 end
 
@@ -1586,6 +1907,35 @@ compile_options(::Executable)
         args.serialized_compile_options_deleter,
         @cfunction(pjrt_serialized_bytes_deleter, Cvoid, (Ptr{Cvoid},))
     )
+    return ok()
+end
+
+"""
+    compiled_memory_stats(exe::Executable)
+
+Return the memory usage of `exe`, mirroring `xla::CompiledMemoryStats`, as an object (e.g. a `NamedTuple`) with the
+following integer properties:
+
+- device memory: `generated_code_size_in_bytes`, `argument_size_in_bytes`, `output_size_in_bytes`,
+  `alias_size_in_bytes` (how much of the arguments is reused for the outputs), `temp_size_in_bytes`
+- host memory: `host_generated_code_size_in_bytes`, `host_argument_size_in_bytes`, `host_output_size_in_bytes`,
+  `host_alias_size_in_bytes`, `host_temp_size_in_bytes`
+- device memory totals: `peak_memory_in_bytes`, `total_size_in_bytes`, `total_allocation_bytes`,
+  `indefinite_allocations`, `peak_unpadded_heap_bytes`
+
+Backs `PJRT_Executable_GetCompiledMemoryStats`.
+"""
+compiled_memory_stats(::Executable)
+
+@pjrt_catch_return function pjrt_executable_get_compiled_memory_stats(
+    args::Ptr{CAPI.PJRT_Executable_GetCompiledMemoryStats_Args}
+)::Ptr{CAPI.PJRT_Error}
+    exe = unsafe_pointer_to_objref(unsafe_load(args.executable))::Executable
+    stats = compiled_memory_stats(exe)
+    # skip `struct_size`, `extension_start` and `executable`
+    for field in fieldnames(CAPI.PJRT_Executable_GetCompiledMemoryStats_Args)[4:end]
+        unsafe_store!(getproperty(args, field), getproperty(stats, field))
+    end
     return ok()
 end
 
@@ -1846,9 +2196,13 @@ end
 - `process_index`
 - `devices`
 - `addressable_devices`
+- `lookup_device`
+- `lookup_addressable_device`
 - `addressable_memories`
 - `buffer_from_host_buffer`
 - `compile!`
+- `deserialize_and_load`
+- `default_device_assignment`
 """
 abstract type Client end
 
@@ -1963,6 +2317,61 @@ addressable_devices(::Client)
     devs = addressable_devices(client)::Vector{Device}
     unsafe_store!(args.addressable_devices, Ptr{Ptr{CAPI.PJRT_Device}}(pointer(devs)))
     unsafe_store!(args.num_addressable_devices, length(devs))
+    return ok()
+end
+
+"""
+    lookup_device(client::Client, id::Integer) -> Device
+
+Return the device of `devices(client)` whose description has id `id` (see `id(::DeviceDescription)`), or throw
+[`invalid_argument`](@ref) if there is none.
+
+Defaults to a linear search over `devices(client)`.
+
+Backs `PJRT_Client_LookupDevice`.
+"""
+function lookup_device(client::Client, device_id::Integer)
+    devs = devices(client)::Vector{Device}
+    i = findfirst(dev -> id(description(dev)) == device_id, devs)
+    isnothing(i) && throw(invalid_argument("no device with id $device_id"))
+    return devs[i]
+end
+
+@pjrt_catch_return function pjrt_client_lookup_device(
+    args::Ptr{CAPI.PJRT_Client_LookupDevice_Args}
+)::Ptr{CAPI.PJRT_Error}
+    client = unsafe_pointer_to_objref(unsafe_load(args.client))::Client
+    dev = lookup_device(client, unsafe_load(args.id))::Device
+    unsafe_store!(args.device, Ptr{CAPI.PJRT_Device}(pointer_from_objref(dev)))
+    return ok()
+end
+
+"""
+    lookup_addressable_device(client::Client, local_hardware_id::Integer) -> Device
+
+Return the device of `addressable_devices(client)` whose `local_hardware_id` is `local_hardware_id`, or throw
+[`invalid_argument`](@ref) if there is none.
+
+Defaults to a linear search over `addressable_devices(client)`. Since `-1` means that the local hardware id is
+undefined, looking it up always throws.
+
+Backs `PJRT_Client_LookupAddressableDevice`.
+"""
+function lookup_addressable_device(client::Client, hardware_id::Integer)
+    hardware_id == -1 && throw(invalid_argument("local hardware id -1 is undefined"))
+    devs = addressable_devices(client)::Vector{Device}
+    i = findfirst(dev -> local_hardware_id(dev) == hardware_id, devs)
+    isnothing(i) &&
+        throw(invalid_argument("no addressable device with local hardware id $hardware_id"))
+    return devs[i]
+end
+
+@pjrt_catch_return function pjrt_client_lookup_addressable_device(
+    args::Ptr{CAPI.PJRT_Client_LookupAddressableDevice_Args}
+)::Ptr{CAPI.PJRT_Error}
+    client = unsafe_pointer_to_objref(unsafe_load(args.client))::Client
+    dev = lookup_addressable_device(client, unsafe_load(args.local_hardware_id))::Device
+    unsafe_store!(args.addressable_device, Ptr{CAPI.PJRT_Device}(pointer_from_objref(dev)))
     return ok()
 end
 
@@ -2205,6 +2614,99 @@ compile!(::Client, args...)
     return ok()
 end
 
+"""
+    deserialize_and_load(
+        client::Client, bytes::Vector{UInt8}, options::Union{Nothing,Reactant.Proto.xla.CompileOptionsProto}
+    ) -> LoadedExecutable
+
+Load on the devices of `client` an executable serialized with `serialize(::Executable)`. If `options` is not
+`nothing`, it overrides the compile options stored in `bytes`.
+
+The caller GC-roots the returned executable.
+
+!!! todo
+`PJRT_LoadOptions` are ignored.
+
+Backs `PJRT_Executable_DeserializeAndLoad`.
+"""
+deserialize_and_load(::Client, args...)
+
+@pjrt_catch_return function pjrt_executable_deserialize_and_load(
+    args::Ptr{CAPI.PJRT_Executable_DeserializeAndLoad_Args}
+)::Ptr{CAPI.PJRT_Error}
+    client = unsafe_pointer_to_objref(unsafe_load(args.client))::Client
+
+    # the serialized executable is owned by C, so copy it in case the implementation stores it
+    bytes_ptr = Ptr{UInt8}(unsafe_load(args.serialized_executable))
+    bytes_size = unsafe_load(args.serialized_executable_size)
+    bytes = copy(unsafe_wrap(Vector{UInt8}, bytes_ptr, bytes_size))
+
+    opts_ptr = Ptr{UInt8}(unsafe_load(args.overridden_serialized_compile_options))
+    options = if opts_ptr == C_NULL
+        nothing
+    else
+        opts_size = unsafe_load(args.overridden_serialized_compile_options_size)
+        opts_bytes = unsafe_wrap(Vector{UInt8}, opts_ptr, opts_size)
+        Reactant.ProtoUtils.proto_from_bytes(
+            Reactant.Proto.xla.CompileOptionsProto, opts_bytes
+        )
+    end
+
+    loaded_exec = deserialize_and_load(client, bytes, options)::LoadedExecutable
+    root!(loaded_exec)
+    unsafe_store!(
+        args.loaded_executable,
+        Ptr{CAPI.PJRT_LoadedExecutable}(pointer_from_objref(loaded_exec)),
+    )
+    return ok()
+end
+
+"""
+    default_device_assignment(client::Client, num_replicas::Integer, num_partitions::Integer) -> AbstractMatrix{<:Integer}
+
+Return the default device assignment of `client` as a `num_replicas × num_partitions` matrix, whose entry `[r, p]` is
+the id of the device that runs replica `r - 1` and partition `p - 1`.
+
+Backs `PJRT_Client_DefaultDeviceAssignment`.
+"""
+default_device_assignment(::Client, ::Integer, ::Integer)
+
+@pjrt_catch_return function pjrt_client_default_device_assignment(
+    args::Ptr{CAPI.PJRT_Client_DefaultDeviceAssignment_Args}
+)::Ptr{CAPI.PJRT_Error}
+    client = unsafe_pointer_to_objref(unsafe_load(args.client))::Client
+    num_replicas = unsafe_load(args.num_replicas)
+    num_partitions = unsafe_load(args.num_partitions)
+    if num_replicas <= 0 || num_partitions <= 0
+        throw(
+            invalid_argument(
+                "`num_replicas` and `num_partitions` must be positive, got $num_replicas and $num_partitions",
+            ),
+        )
+    end
+
+    capacity = unsafe_load(args.default_assignment_size)
+    if capacity < num_replicas * num_partitions
+        msg = "`default_assignment_size` $capacity < `num_replicas * num_partitions` = $(num_replicas * num_partitions)"
+        throw(Error(CAPI.PJRT_Error_Code_FAILED_PRECONDITION, msg))
+    end
+
+    assignment = default_device_assignment(
+        client, num_replicas, num_partitions
+    )::AbstractMatrix{<:Integer}
+    if size(assignment) != (num_replicas, num_partitions)
+        msg = "`default_device_assignment` returned a $(size(assignment)) matrix, but ($num_replicas, $num_partitions) was expected"
+        throw(Error(CAPI.PJRT_Error_Code_INTERNAL, msg))
+    end
+
+    # C expects a row-major (replica, partition) array
+    dst = unsafe_load(args.default_assignment)
+    for r in 1:num_replicas, p in 1:num_partitions
+        unsafe_store!(dst, assignment[r, p], (r - 1) * num_partitions + p)
+    end
+    return ok()
+end
+
 unimplemented_c_hook() = Ptr{CAPI.PJRT_Error}(pointer_from_objref(root!(unimplemented())))
 
 # `PJRT_Client_Create_Args` carries no user data, so the `Client` type to create is encoded in the callable's type
@@ -2304,11 +2806,11 @@ function make_api(::Type{C}) where {C<:Client}
         #= PJRT_Client_PlatformVersion =# @cfunction(pjrt_client_platform_version, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Client_PlatformVersion_Args},)),
         #= PJRT_Client_Devices =# @cfunction(pjrt_client_devices, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Client_Devices_Args},)),
         #= PJRT_Client_AddressableDevices =# @cfunction(pjrt_client_addressable_devices, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Client_AddressableDevices_Args},)),
-        #= PJRT_Client_LookupDevice =# c_unimplemented,
-        #= PJRT_Client_LookupAddressableDevice =# c_unimplemented,
+        #= PJRT_Client_LookupDevice =# @cfunction(pjrt_client_lookup_device, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Client_LookupDevice_Args},)),
+        #= PJRT_Client_LookupAddressableDevice =# @cfunction(pjrt_client_lookup_addressable_device, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Client_LookupAddressableDevice_Args},)),
         #= PJRT_Client_AddressableMemories =# @cfunction(pjrt_client_addressable_memories, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Client_AddressableMemories_Args},)),
         #= PJRT_Client_Compile =# @cfunction(pjrt_client_compile, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Client_Compile_Args},)),
-        #= PJRT_Client_DefaultDeviceAssignment =# c_unimplemented,
+        #= PJRT_Client_DefaultDeviceAssignment =# @cfunction(pjrt_client_default_device_assignment, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Client_DefaultDeviceAssignment_Args},)),
         #= PJRT_Client_BufferFromHostBuffer =# @cfunction(pjrt_client_buffer_from_host_buffer, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Client_BufferFromHostBuffer_Args},)),
         #= PJRT_DeviceDescription_Id =# @cfunction(pjrt_device_description_id, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_DeviceDescription_Id_Args},)),
         #= PJRT_DeviceDescription_ProcessIndex =# @cfunction(pjrt_device_description_process_index, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_DeviceDescription_ProcessIndex_Args},)),
@@ -2333,8 +2835,8 @@ function make_api(::Type{C}) where {C<:Client}
         #= PJRT_Executable_NumPartitions =# @cfunction(pjrt_executable_num_partitions, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Executable_NumPartitions_Args},)),
         #= PJRT_Executable_NumOutputs =# @cfunction(pjrt_executable_num_outputs, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Executable_NumOutputs_Args},)),
         #= PJRT_Executable_SizeOfGeneratedCodeInBytes =# @cfunction(pjrt_executable_size_of_generated_code_in_bytes, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Executable_SizeOfGeneratedCodeInBytes_Args},)),
-        #= PJRT_Executable_GetCostAnalysis =# c_unimplemented,
-        #= PJRT_Executable_OutputMemoryKinds =# c_unimplemented,
+        #= PJRT_Executable_GetCostAnalysis =# @cfunction(pjrt_executable_get_cost_analysis, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Executable_GetCostAnalysis_Args},)),
+        #= PJRT_Executable_OutputMemoryKinds =# @cfunction(pjrt_executable_output_memory_kinds, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Executable_OutputMemoryKinds_Args},)),
         #= PJRT_Executable_OptimizedProgram =# @cfunction(pjrt_executable_optimized_program, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Executable_OptimizedProgram_Args},)),
         #= PJRT_Executable_Serialize =# @cfunction(pjrt_executable_serialize, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Executable_Serialize_Args},)),
         #= PJRT_LoadedExecutable_Destroy =# @cfunction(pjrt_loaded_executable_destroy, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_LoadedExecutable_Destroy_Args},)),
@@ -2343,14 +2845,14 @@ function make_api(::Type{C}) where {C<:Client}
         #= PJRT_LoadedExecutable_Delete =# @cfunction(pjrt_loaded_executable_delete, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_LoadedExecutable_Delete_Args},)),
         #= PJRT_LoadedExecutable_IsDeleted =# @cfunction(pjrt_loaded_executable_is_deleted, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_LoadedExecutable_IsDeleted_Args},)),
         #= PJRT_LoadedExecutable_Execute =# @cfunction(pjrt_loaded_executable_execute, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_LoadedExecutable_Execute_Args},)),
-        #= PJRT_Executable_DeserializeAndLoad =# c_unimplemented,
-        #= PJRT_LoadedExecutable_Fingerprint =# c_unimplemented,
+        #= PJRT_Executable_DeserializeAndLoad =# @cfunction(pjrt_executable_deserialize_and_load, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Executable_DeserializeAndLoad_Args},)),
+        #= PJRT_LoadedExecutable_Fingerprint =# c_unimplemented, # deprecated
         #= PJRT_Buffer_Destroy =# @cfunction(pjrt_buffer_destroy, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_Destroy_Args},)),
         #= PJRT_Buffer_ElementType =# @cfunction(pjrt_buffer_element_type, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_ElementType_Args},)),
         #= PJRT_Buffer_Dimensions =# @cfunction(pjrt_buffer_dimensions, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_Dimensions_Args},)),
-        #= PJRT_Buffer_UnpaddedDimensions =# c_unimplemented,
-        #= PJRT_Buffer_DynamicDimensionIndices =# c_unimplemented,
-        #= PJRT_Buffer_GetMemoryLayout =# c_unimplemented,
+        #= PJRT_Buffer_UnpaddedDimensions =# @cfunction(pjrt_buffer_unpadded_dimensions, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_UnpaddedDimensions_Args},)),
+        #= PJRT_Buffer_DynamicDimensionIndices =# @cfunction(pjrt_buffer_dynamic_dimension_indices, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_DynamicDimensionIndices_Args},)),
+        #= PJRT_Buffer_GetMemoryLayout =# @cfunction(pjrt_buffer_get_memory_layout, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_GetMemoryLayout_Args},)),
         #= PJRT_Buffer_OnDeviceSizeInBytes =# @cfunction(pjrt_buffer_on_device_size_in_bytes, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_OnDeviceSizeInBytes_Args},)),
         #= PJRT_Buffer_Device =# @cfunction(pjrt_buffer_device, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_Device_Args},)),
         #= PJRT_Buffer_Memory =# @cfunction(pjrt_buffer_memory, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_Memory_Args},)),
@@ -2378,16 +2880,16 @@ function make_api(::Type{C}) where {C<:Client}
         #= PJRT_TopologyDescription_Attributes =# c_unimplemented,
         #= PJRT_Compile =# c_unimplemented,
         #= PJRT_Executable_OutputElementTypes =# @cfunction(pjrt_executable_output_element_types, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Executable_OutputElementTypes_Args},)),
-        #= PJRT_Executable_OutputDimensions =# c_unimplemented,
+        #= PJRT_Executable_OutputDimensions =# @cfunction(pjrt_executable_output_dimensions, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Executable_OutputDimensions_Args},)),
         #= PJRT_Buffer_CopyToMemory =# @cfunction(pjrt_buffer_copy_to_memory, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_CopyToMemory_Args},)),
         #= PJRT_Client_CreateViewOfDeviceBuffer =# c_unimplemented,
         #= PJRT_Executable_Fingerprint =# @cfunction(pjrt_executable_fingerprint, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Executable_Fingerprint_Args},)),
         #= PJRT_Client_TopologyDescription =# c_unimplemented,
-        #= PJRT_Executable_GetCompiledMemoryStats =# c_unimplemented,
+        #= PJRT_Executable_GetCompiledMemoryStats =# @cfunction(pjrt_executable_get_compiled_memory_stats, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Executable_GetCompiledMemoryStats_Args},)),
         #= PJRT_Memory_Kind_Id =# @cfunction(pjrt_memory_kind_id, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Memory_Kind_Id_Args},)),
         #= PJRT_ExecuteContext_Create =# c_unimplemented,
         #= PJRT_ExecuteContext_Destroy =# c_unimplemented,
-        #= PJRT_Buffer_CopyRawToHost =# c_unimplemented,
+        #= PJRT_Buffer_CopyRawToHost =# @cfunction(pjrt_buffer_copy_raw_to_host, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_CopyRawToHost_Args},)),
         #= PJRT_AsyncHostToDeviceTransferManager_Destroy =# c_unimplemented,
         #= PJRT_AsyncHostToDeviceTransferManager_TransferData =# c_unimplemented,
         #= PJRT_Client_CreateBuffersForAsyncHostToDevice =# c_unimplemented,
@@ -2418,11 +2920,11 @@ function make_api(::Type{C}) where {C<:Client}
         #= PJRT_Device_GetAttributes =# C_NULL,
         #= PJRT_Client_Load =# c_unimplemented,
         #= PJRT_LoadedExecutable_AddressableDeviceLogicalIds =# @cfunction(pjrt_loaded_executable_addressable_device_logical_ids, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_LoadedExecutable_AddressableDeviceLogicalIds_Args},)),
-        #= PJRT_Buffer_Bitcast =# c_unimplemented,
+        #= PJRT_Buffer_Bitcast =# @cfunction(pjrt_buffer_bitcast, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_Bitcast_Args},)),
         #= PJRT_Error_ForEachPayload =# @cfunction(pjrt_error_for_each_payload, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Error_ForEachPayload_Args},)),
         #= PJRT_TopologyDescription_Fingerprint =# c_unimplemented,
-        #= PJRT_Executable_ParameterMemoryKinds =# c_unimplemented,
-        #= PJRT_Device_ClearMemoryStats =# c_unimplemented,
+        #= PJRT_Executable_ParameterMemoryKinds =# @cfunction(pjrt_executable_parameter_memory_kinds, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Executable_ParameterMemoryKinds_Args},)),
+        #= PJRT_Device_ClearMemoryStats =# @cfunction(pjrt_device_clear_memory_stats, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Device_ClearMemoryStats_Args},)),
         #= PJRT_TopologyDescription_MakeCanonicalShapeForMemorySpace =# c_unimplemented,
         #= PJRT_TopologyDescription_GetMemorySpaceKindIds =# c_unimplemented,
     ))
