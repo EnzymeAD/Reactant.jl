@@ -87,6 +87,7 @@ function create_alias_buffer end
 function create_async_tracking_event end
 function create_buffers_for_async_host_to_device end
 function create_error_buffer end
+function create_topology_description end
 function create_uninitialized_buffer end
 function debug_string end
 function decrease_external_reference_count! end
@@ -94,8 +95,10 @@ function default_device_assignment end
 function default_memory end
 function description end
 function deserialize_and_load end
+function deserialize_topology_description end
 function device_assignment end
 function device end
+function device_descriptions end
 function devices end
 function dimensions end
 function dma_map! end
@@ -117,8 +120,10 @@ function load end
 function local_hardware_id end
 function lookup_addressable_device end
 function lookup_device end
+function make_canonical_shape_for_memory_space end
 function memory end
 function memory_layout end
+function memory_space_kind_ids end
 function name end
 function num_outputs end
 function num_partitions end
@@ -138,6 +143,7 @@ function ready_event end
 function size_of_generated_code_in_bytes end
 function to_host_buffer end
 function to_string end
+function topology_description end
 function unpadded_dimensions end
 function unsafe_pointer end
 function update_global_process_info! end
@@ -1835,8 +1841,8 @@ abstract type Executable end
     return ok()
 end
 
-# frees the rooted bytes handed out by `PJRT_LoadedExecutable_GetDeviceAssignment`, `PJRT_Executable_Serialize` and
-# `PJRT_Executable_GetCompileOptions`
+# frees the rooted bytes handed out by `PJRT_LoadedExecutable_GetDeviceAssignment`, `PJRT_Executable_Serialize`,
+# `PJRT_Executable_GetCompileOptions` and `PJRT_TopologyDescription_Serialize`
 function pjrt_serialized_bytes_deleter(ptr::Ptr{Cvoid})::Cvoid
     ptr != C_NULL && unroot!(ptr)
     return nothing
@@ -2509,6 +2515,7 @@ end
 - `dma_map!`
 - `dma_unmap!`
 - `create_buffers_for_async_host_to_device`
+- `topology_description`
 """
 abstract type Client end
 
@@ -3322,13 +3329,391 @@ end
     TopologyDescription
 
 The description of the devices of a platform and how they are connected, used by `compile` to compile programs without
-a `Client`.
+a `Client`. C gets one from a client with `topology_description`, or without a client through
+`create_topology_description` and `deserialize_topology_description`.
 
-!!! todo
-No `PJRT_TopologyDescription_*` function is supported yet, so C can't get hold of one and `PJRT_Compile` can't be
-called.
+### Interface
+
+- `platform_name`
+- `platform_version`
+- `device_descriptions`
+- `serialize`
+- `attributes`
+- `fingerprint`
+- `make_canonical_shape_for_memory_space`
+- `memory_space_kind_ids`
 """
 abstract type TopologyDescription end
+
+# read a list of `PJRT_NamedValue`s owned by C into a `Dict`, copying their contents
+function unsafe_load_named_values(ptr::Ptr{CAPI.PJRT_NamedValue}, n::Integer)
+    values = Dict{String,Any}()
+    for i in 1:n
+        nv = ptr + (i - 1) * sizeof(CAPI.PJRT_NamedValue)
+        name = unsafe_string(Ptr{UInt8}(unsafe_load(nv.name)), unsafe_load(nv.name_size))
+        type = unsafe_load(nv.type)
+        size = unsafe_load(nv.value_size)
+        values[name] = if type == CAPI.PJRT_NamedValue_kString
+            unsafe_string(Ptr{UInt8}(unsafe_load(nv.string_value)), size)
+        elseif type == CAPI.PJRT_NamedValue_kInt64
+            unsafe_load(nv.int64_value)
+        elseif type == CAPI.PJRT_NamedValue_kInt64List
+            copy(unsafe_wrap(Vector{Int64}, unsafe_load(nv.int64_array_value), size))
+        elseif type == CAPI.PJRT_NamedValue_kFloat
+            unsafe_load(nv.float_value)
+        elseif type == CAPI.PJRT_NamedValue_kBool
+            unsafe_load(nv.bool_value)
+        else
+            throw(invalid_argument("named value `$name` has unknown type $type"))
+        end
+    end
+    return values
+end
+
+# build the `PJRT_NamedValue`s of the `name => value` pairs in `pairs`; also return the Julia objects they point to,
+# which must be kept alive for as long as C uses them
+function named_values(pairs)
+    roots = Any[]
+    values = map(collect(pairs)) do (name, value)
+        name = String(name)
+        push!(roots, name)
+        r = Ref{CAPI.PJRT_NamedValue}()
+        GC.@preserve r begin
+            nv = Base.unsafe_convert(Ptr{CAPI.PJRT_NamedValue}, r)
+            unsafe_store!(nv.struct_size, csizeof(CAPI.PJRT_NamedValue))
+            unsafe_store!(nv.extension_start, C_NULL)
+            unsafe_store!(nv.name, Cstring(pointer(name)))
+            unsafe_store!(nv.name_size, sizeof(name))
+            if value isa AbstractString
+                str = String(value)
+                push!(roots, str)
+                unsafe_store!(nv.type, CAPI.PJRT_NamedValue_kString)
+                unsafe_store!(nv.string_value, Cstring(pointer(str)))
+                unsafe_store!(nv.value_size, sizeof(str))
+            elseif value isa Bool # before `Integer`, since `Bool <: Integer`
+                unsafe_store!(nv.type, CAPI.PJRT_NamedValue_kBool)
+                unsafe_store!(nv.bool_value, value)
+                unsafe_store!(nv.value_size, 1)
+            elseif value isa Integer
+                unsafe_store!(nv.type, CAPI.PJRT_NamedValue_kInt64)
+                unsafe_store!(nv.int64_value, Int64(value))
+                unsafe_store!(nv.value_size, 1)
+            elseif value isa AbstractVector{<:Integer}
+                list = Vector{Int64}(value)
+                push!(roots, list)
+                unsafe_store!(nv.type, CAPI.PJRT_NamedValue_kInt64List)
+                unsafe_store!(nv.int64_array_value, pointer(list))
+                unsafe_store!(nv.value_size, length(list))
+            elseif value isa AbstractFloat
+                unsafe_store!(nv.type, CAPI.PJRT_NamedValue_kFloat)
+                unsafe_store!(nv.float_value, Float32(value))
+                unsafe_store!(nv.value_size, 1)
+            else
+                msg = "value of `$name` has type $(typeof(value)), which can't be a `PJRT_NamedValue`"
+                throw(Error(CAPI.PJRT_Error_Code_INTERNAL, msg))
+            end
+        end
+        r[]
+    end
+    return values, roots
+end
+
+"""
+    create_topology_description(C::Type{<:Client}, name::String, options::Dict{String,Any}) -> TopologyDescription
+
+Return a new description of the topology named `name` of the platform of client type `C`, without creating a client.
+`options` holds platform-specific options, whose values are `String`, `Int64`, `Vector{Int64}`, `Float32` or `Bool`.
+
+The caller GC-roots the returned topology until `PJRT_TopologyDescription_Destroy`.
+
+Backs `PJRT_TopologyDescription_Create`.
+"""
+create_topology_description(::Type{<:Client}, ::String, ::Dict{String,Any})
+
+# `PJRT_TopologyDescription_Create_Args` carries no user data, so the `Client` type is encoded in the callable's type
+struct TopologyDescriptionCreate{C<:Client} end
+
+@pjrt_catch_return function (::TopologyDescriptionCreate{C})(
+    args::Ptr{CAPI.PJRT_TopologyDescription_Create_Args}
+)::Ptr{CAPI.PJRT_Error} where {C}
+    name = unsafe_string(
+        Ptr{UInt8}(unsafe_load(args.topology_name)), unsafe_load(args.topology_name_size)
+    )
+    options = unsafe_load_named_values(
+        unsafe_load(args.create_options), unsafe_load(args.num_options)
+    )
+    topology = create_topology_description(C, name, options)::TopologyDescription
+    root!(topology)
+    unsafe_store!(
+        args.topology, Ptr{CAPI.PJRT_TopologyDescription}(pointer_from_objref(topology))
+    )
+    return ok()
+end
+
+"""
+    deserialize_topology_description(C::Type{<:Client}, bytes::Vector{UInt8}) -> TopologyDescription
+
+Return the topology description of the platform of client type `C` serialized in `bytes` by `serialize`.
+
+The caller GC-roots the returned topology until `PJRT_TopologyDescription_Destroy`.
+
+Backs `PJRT_TopologyDescription_Deserialize`.
+"""
+deserialize_topology_description(::Type{<:Client}, ::Vector{UInt8})
+
+# `PJRT_TopologyDescription_Deserialize_Args` carries no user data, so the `Client` type is encoded in the callable's type
+struct TopologyDescriptionDeserialize{C<:Client} end
+
+@pjrt_catch_return function (::TopologyDescriptionDeserialize{C})(
+    args::Ptr{CAPI.PJRT_TopologyDescription_Deserialize_Args}
+)::Ptr{CAPI.PJRT_Error} where {C}
+    # the serialized topology is owned by C, so copy it in case the implementation stores it
+    bytes_ptr = Ptr{UInt8}(unsafe_load(args.serialized_topology))
+    bytes = copy(
+        unsafe_wrap(Vector{UInt8}, bytes_ptr, unsafe_load(args.serialized_topology_size))
+    )
+    topology = deserialize_topology_description(C, bytes)::TopologyDescription
+    root!(topology)
+    unsafe_store!(
+        args.topology, Ptr{CAPI.PJRT_TopologyDescription}(pointer_from_objref(topology))
+    )
+    return ok()
+end
+
+@pjrt_catch_return function pjrt_topology_description_destroy(
+    args::Ptr{CAPI.PJRT_TopologyDescription_Destroy_Args}
+)::Ptr{CAPI.PJRT_Error}
+    ptr = unsafe_load(args.topology)
+    ptr != C_NULL && unroot!(ptr)
+    return ok()
+end
+
+"""
+    platform_name(topology::TopologyDescription) -> String
+
+Return a string that identifies the platform of `topology` (e.g. `"cpu"`, `"gpu"`, `"tpu"`).
+
+!!! warning
+The string is handed to C by pointer, so it must be owned by `topology`.
+
+Backs `PJRT_TopologyDescription_PlatformName`.
+"""
+platform_name(::TopologyDescription)
+
+@pjrt_catch_return function pjrt_topology_description_platform_name(
+    args::Ptr{CAPI.PJRT_TopologyDescription_PlatformName_Args}
+)::Ptr{CAPI.PJRT_Error}
+    topology = unsafe_pointer_to_objref(unsafe_load(args.topology))::TopologyDescription
+    str = platform_name(topology)::String
+    unsafe_store!(args.platform_name, Cstring(pointer(str)))
+    unsafe_store!(args.platform_name_size, sizeof(str))
+    return ok()
+end
+
+"""
+    platform_version(topology::TopologyDescription) -> String
+
+Return a string containing the platform version of `topology`.
+
+!!! warning
+The string is handed to C by pointer, so it must be owned by `topology`.
+
+Backs `PJRT_TopologyDescription_PlatformVersion`.
+"""
+platform_version(::TopologyDescription)
+
+@pjrt_catch_return function pjrt_topology_description_platform_version(
+    args::Ptr{CAPI.PJRT_TopologyDescription_PlatformVersion_Args}
+)::Ptr{CAPI.PJRT_Error}
+    topology = unsafe_pointer_to_objref(unsafe_load(args.topology))::TopologyDescription
+    str = platform_version(topology)::String
+    unsafe_store!(args.platform_version, Cstring(pointer(str)))
+    unsafe_store!(args.platform_version_size, sizeof(str))
+    return ok()
+end
+
+"""
+    device_descriptions(topology::TopologyDescription) -> Vector{DeviceDescription}
+
+Return the descriptions of all the devices in `topology`, in any order but the same one on every call.
+
+!!! warning
+The vector is handed to C by pointer, so it must be owned by `topology` and never be resized.
+
+Backs `PJRT_TopologyDescription_GetDeviceDescriptions`.
+"""
+device_descriptions(::TopologyDescription)
+
+@pjrt_catch_return function pjrt_topology_description_get_device_descriptions(
+    args::Ptr{CAPI.PJRT_TopologyDescription_GetDeviceDescriptions_Args}
+)::Ptr{CAPI.PJRT_Error}
+    topology = unsafe_pointer_to_objref(unsafe_load(args.topology))::TopologyDescription
+    descs = device_descriptions(topology)::Vector{DeviceDescription}
+    unsafe_store!(args.descriptions, Ptr{Ptr{CAPI.PJRT_DeviceDescription}}(pointer(descs)))
+    unsafe_store!(args.num_descriptions, length(descs))
+    return ok()
+end
+
+"""
+    serialize(topology::TopologyDescription) -> Vector{UInt8}
+
+Return a serialization of `topology` that `deserialize_topology_description` can read back, also used in cache keys.
+
+The returned vector is GC rooted until C calls its deleter, so it must be a new vector that `topology` doesn't hand out
+anywhere else.
+
+Backs `PJRT_TopologyDescription_Serialize`.
+"""
+serialize(::TopologyDescription)
+
+@pjrt_catch_return function pjrt_topology_description_serialize(
+    args::Ptr{CAPI.PJRT_TopologyDescription_Serialize_Args}
+)::Ptr{CAPI.PJRT_Error}
+    topology = unsafe_pointer_to_objref(unsafe_load(args.topology))::TopologyDescription
+    bytes = root!(serialize(topology)::Vector{UInt8})
+    unsafe_store!(args.serialized_bytes, Cstring(pointer(bytes)))
+    unsafe_store!(args.serialized_bytes_size, length(bytes))
+    unsafe_store!(
+        args.serialized_topology,
+        Ptr{CAPI.PJRT_SerializedTopology}(pointer_from_objref(bytes)),
+    )
+    unsafe_store!(
+        args.serialized_topology_deleter,
+        @cfunction(pjrt_serialized_bytes_deleter, Cvoid, (Ptr{Cvoid},))
+    )
+    return ok()
+end
+
+# C views of the results of `attributes(::TopologyDescription)`, which C keeps for as long as the topology is alive
+const topology_attributes_cache = WeakKeyIdDict{
+    TopologyDescription,Tuple{Vector{CAPI.PJRT_NamedValue},Vector{Any}}
+}()
+
+"""
+    attributes(topology::TopologyDescription)
+
+Return the platform-specific attributes of `topology` as `name => value` pairs (e.g. a `Dict`). Values must be
+`AbstractString`, `Bool`, `Integer`, `AbstractVector{<:Integer}` or `AbstractFloat`, which C receives as `String`,
+`Bool`, `Int64`, `Vector{Int64}` and `Float32`.
+
+It is called at most once per `topology`: the C wrapper keeps a copy for as long as `topology` is alive, since C keeps
+pointers to it.
+
+Backs `PJRT_TopologyDescription_Attributes`.
+"""
+attributes(::TopologyDescription)
+
+@pjrt_catch_return function pjrt_topology_description_attributes(
+    args::Ptr{CAPI.PJRT_TopologyDescription_Attributes_Args}
+)::Ptr{CAPI.PJRT_Error}
+    topology = unsafe_pointer_to_objref(unsafe_load(args.topology))::TopologyDescription
+    values, _ = get!(topology_attributes_cache, topology) do
+        named_values(attributes(topology))
+    end
+    unsafe_store!(args.attributes, pointer(values))
+    unsafe_store!(args.num_attributes, length(values))
+    return ok()
+end
+
+"""
+    fingerprint(topology::TopologyDescription) -> UInt64
+
+Return a fingerprint of `topology` for use in cache keys. It doesn't need to be stable across versions.
+
+Backs `PJRT_TopologyDescription_Fingerprint`.
+"""
+fingerprint(::TopologyDescription)
+
+@pjrt_catch_return function pjrt_topology_description_fingerprint(
+    args::Ptr{CAPI.PJRT_TopologyDescription_Fingerprint_Args}
+)::Ptr{CAPI.PJRT_Error}
+    topology = unsafe_pointer_to_objref(unsafe_load(args.topology))::TopologyDescription
+    unsafe_store!(args.fingerprint, fingerprint(topology)::UInt64)
+    return ok()
+end
+
+"""
+    make_canonical_shape_for_memory_space(topology::TopologyDescription, kind_id::Integer, type, dims, layout)
+        -> Reactant.Proto.xla.ShapeProto
+
+Return the shape, including its layout, that a buffer with element type `type::CAPI.PJRT_Buffer_Type`, dimensions
+`dims::Vector{Int64}` and layout `layout::Ptr{CAPI.PJRT_Buffer_MemoryLayout}` (`C_NULL` if none is given) takes once
+transferred to a memory space of kind id `kind_id` (see `memory_space_kind_ids`).
+
+Backs `PJRT_TopologyDescription_MakeCanonicalShapeForMemorySpace`.
+"""
+make_canonical_shape_for_memory_space(::TopologyDescription, ::Integer, args...)
+
+@pjrt_catch_return function pjrt_topology_description_make_canonical_shape_for_memory_space(
+    args::Ptr{CAPI.PJRT_TopologyDescription_MakeCanonicalShapeForMemorySpace_Args}
+)::Ptr{CAPI.PJRT_Error}
+    topology = unsafe_pointer_to_objref(unsafe_load(args.topology))::TopologyDescription
+    kind_id = unsafe_load(args.memory_space_kind_id)
+    _eltype = unsafe_load(args.element_type)
+    _size = copy(
+        unsafe_wrap(Vector{Int64}, unsafe_load(args.dims), unsafe_load(args.num_dims))
+    )
+    layout = unsafe_load(args.layout)
+
+    shape = make_canonical_shape_for_memory_space(
+        topology, kind_id, _eltype, _size, layout
+    )::Reactant.Proto.xla.ShapeProto
+    bytes = Reactant.ProtoUtils.proto_to_bytes(shape)
+
+    # the deleter only gets the pointer to the data, so it's malloc'ed and freed by `free` instead of GC rooted
+    ptr = Ptr{UInt8}(Libc.malloc(max(length(bytes), 1)))
+    ptr == C_NULL && throw(resource_exhausted())
+    GC.@preserve bytes unsafe_copyto!(ptr, pointer(bytes), length(bytes))
+    unsafe_store!(args.serialized_shape, Cstring(ptr))
+    unsafe_store!(args.serialized_shape_size, length(bytes))
+    unsafe_store!(args.serialized_shape_deleter, cglobal(:free))
+    return ok()
+end
+
+"""
+    memory_space_kind_ids(topology::TopologyDescription) -> Vector{Cint}
+
+Return the kind ids of the memory spaces in `topology` (see `kind_id(::Memory)`). The first one must be the kind id
+of the default memory space.
+
+!!! warning
+The vector is handed to C by pointer, so it must be owned by `topology` and never be resized.
+
+Backs `PJRT_TopologyDescription_GetMemorySpaceKindIds`.
+"""
+memory_space_kind_ids(::TopologyDescription)
+
+@pjrt_catch_return function pjrt_topology_description_get_memory_space_kind_ids(
+    args::Ptr{CAPI.PJRT_TopologyDescription_GetMemorySpaceKindIds_Args}
+)::Ptr{CAPI.PJRT_Error}
+    topology = unsafe_pointer_to_objref(unsafe_load(args.topology))::TopologyDescription
+    ids = memory_space_kind_ids(topology)::Vector{Cint}
+    unsafe_store!(args.memory_space_kind_ids, pointer(ids))
+    unsafe_store!(args.num_memory_space_kind_ids, length(ids))
+    return ok()
+end
+
+"""
+    topology_description(client::Client) -> TopologyDescription
+
+Return the description of the topology of the devices of `client`.
+
+The topology must be kept alive by `client`: C doesn't destroy it.
+
+Backs `PJRT_Client_TopologyDescription`.
+"""
+topology_description(::Client)
+
+@pjrt_catch_return function pjrt_client_topology_description(
+    args::Ptr{CAPI.PJRT_Client_TopologyDescription_Args}
+)::Ptr{CAPI.PJRT_Error}
+    client = unsafe_pointer_to_objref(unsafe_load(args.client))::Client
+    topology = topology_description(client)::TopologyDescription
+    unsafe_store!(
+        args.topology, Ptr{CAPI.PJRT_TopologyDescription}(pointer_from_objref(topology))
+    )
+    return ok()
+end
 
 """
     compile(topology::TopologyDescription, code::MLIR.IR.Module, options, client::Union{Nothing,Client}) -> Executable
@@ -3384,12 +3769,14 @@ end
 A `PJRT_Api` function table bound to a specific [`Client`](@ref) type. Create it with [`make_api`](@ref).
 
 !!! warning
-It must be kept alive for as long as any client created through it exists, since it owns the `PJRT_Client_Create`
-C callback.
+It must be kept alive for as long as any client or topology created through it exists, since it owns the
+`PJRT_Client_Create`, `PJRT_TopologyDescription_Create` and `PJRT_TopologyDescription_Deserialize` C callbacks.
 """
 struct PluginApi
     api::Base.RefValue{CAPI.PJRT_Api}
     client_create::Base.CFunction
+    topology_create::Base.CFunction
+    topology_deserialize::Base.CFunction
 end
 
 function Base.unsafe_convert(::Type{Ptr{CAPI.PJRT_Api}}, x::PluginApi)
@@ -3422,19 +3809,31 @@ end
 """
     make_api(C::Type{<:Client}) -> PluginApi
 
-Build a `PJRT_Api` function table whose `PJRT_Client_Create` instantiates `C()`.
+Build a `PJRT_Api` function table whose `PJRT_Client_Create` instantiates `C()`, and whose
+`PJRT_TopologyDescription_Create` and `PJRT_TopologyDescription_Deserialize` call `create_topology_description(C, ...)`
+and `deserialize_topology_description(C, ...)`.
 
 `C` must have a zero-argument constructor. Store the result in a global (e.g. a `const Ref`) set from the plugin's
 `__init__`, and pass `unsafe_convert(Ptr{CAPI.PJRT_Api}, api)` to XLA.
 
 !!! warning
-`PJRT_Client_Create` is a closure `@cfunction`, which is only supported on some architectures (e.g. x86_64, aarch64).
+These three are closure `@cfunction`s, which are only supported on some architectures (e.g. x86_64, aarch64).
 """
 function make_api(::Type{C}) where {C<:Client}
     # generic handler for unimplemented PJRT API functions
     c_unimplemented = @cfunction(unimplemented_c_hook, Ptr{CAPI.PJRT_Error}, ())
     c_client_create = @cfunction(
         $(ClientCreate{C}()), Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Client_Create_Args},)
+    )
+    c_topology_create = @cfunction(
+        $(TopologyDescriptionCreate{C}()),
+        Ptr{CAPI.PJRT_Error},
+        (Ptr{CAPI.PJRT_TopologyDescription_Create_Args},)
+    )
+    c_topology_deserialize = @cfunction(
+        $(TopologyDescriptionDeserialize{C}()),
+        Ptr{CAPI.PJRT_Error},
+        (Ptr{CAPI.PJRT_TopologyDescription_Deserialize_Args},)
     )
 
     #! format: off
@@ -3529,20 +3928,20 @@ function make_api(::Type{C}) where {C<:Client}
         #= PJRT_CopyToDeviceStream_TotalBytes =# c_unimplemented,
         #= PJRT_CopyToDeviceStream_GranuleSize =# c_unimplemented,
         #= PJRT_CopyToDeviceStream_CurrentBytes =# c_unimplemented,
-        #= PJRT_TopologyDescription_Create =# c_unimplemented,
-        #= PJRT_TopologyDescription_Destroy =# c_unimplemented,
-        #= PJRT_TopologyDescription_PlatformName =# c_unimplemented,
-        #= PJRT_TopologyDescription_PlatformVersion =# c_unimplemented,
-        #= PJRT_TopologyDescription_GetDeviceDescriptions =# c_unimplemented,
-        #= PJRT_TopologyDescription_Serialize =# c_unimplemented,
-        #= PJRT_TopologyDescription_Attributes =# c_unimplemented,
+        #= PJRT_TopologyDescription_Create =# unsafe_convert(Ptr{Cvoid}, c_topology_create),
+        #= PJRT_TopologyDescription_Destroy =# @cfunction(pjrt_topology_description_destroy, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_TopologyDescription_Destroy_Args},)),
+        #= PJRT_TopologyDescription_PlatformName =# @cfunction(pjrt_topology_description_platform_name, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_TopologyDescription_PlatformName_Args},)),
+        #= PJRT_TopologyDescription_PlatformVersion =# @cfunction(pjrt_topology_description_platform_version, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_TopologyDescription_PlatformVersion_Args},)),
+        #= PJRT_TopologyDescription_GetDeviceDescriptions =# @cfunction(pjrt_topology_description_get_device_descriptions, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_TopologyDescription_GetDeviceDescriptions_Args},)),
+        #= PJRT_TopologyDescription_Serialize =# @cfunction(pjrt_topology_description_serialize, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_TopologyDescription_Serialize_Args},)),
+        #= PJRT_TopologyDescription_Attributes =# @cfunction(pjrt_topology_description_attributes, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_TopologyDescription_Attributes_Args},)),
         #= PJRT_Compile =# @cfunction(pjrt_compile, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Compile_Args},)),
         #= PJRT_Executable_OutputElementTypes =# @cfunction(pjrt_executable_output_element_types, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Executable_OutputElementTypes_Args},)),
         #= PJRT_Executable_OutputDimensions =# @cfunction(pjrt_executable_output_dimensions, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Executable_OutputDimensions_Args},)),
         #= PJRT_Buffer_CopyToMemory =# @cfunction(pjrt_buffer_copy_to_memory, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_CopyToMemory_Args},)),
         #= PJRT_Client_CreateViewOfDeviceBuffer =# c_unimplemented,
         #= PJRT_Executable_Fingerprint =# @cfunction(pjrt_executable_fingerprint, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Executable_Fingerprint_Args},)),
-        #= PJRT_Client_TopologyDescription =# c_unimplemented,
+        #= PJRT_Client_TopologyDescription =# @cfunction(pjrt_client_topology_description, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Client_TopologyDescription_Args},)),
         #= PJRT_Executable_GetCompiledMemoryStats =# @cfunction(pjrt_executable_get_compiled_memory_stats, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Executable_GetCompiledMemoryStats_Args},)),
         #= PJRT_Memory_Kind_Id =# @cfunction(pjrt_memory_kind_id, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Memory_Kind_Id_Args},)),
         #= PJRT_ExecuteContext_Create =# c_unimplemented,
@@ -3561,7 +3960,7 @@ function make_api(::Type{C}) where {C<:Client}
         #= PJRT_Client_DmaUnmap =# @cfunction(pjrt_client_dma_unmap, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Client_DmaUnmap_Args},)),
         #= PJRT_Client_CreateUninitializedBuffer =# @cfunction(pjrt_client_create_uninitialized_buffer, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Client_CreateUninitializedBuffer_Args},)),
         #= PJRT_Client_UpdateGlobalProcessInfo =# @cfunction(pjrt_client_update_global_process_info, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Client_UpdateGlobalProcessInfo_Args},)),
-        #= PJRT_TopologyDescription_Deserialize =# c_unimplemented,
+        #= PJRT_TopologyDescription_Deserialize =# unsafe_convert(Ptr{Cvoid}, c_topology_deserialize),
         #= PJRT_Client_CreateAliasBuffer =# @cfunction(pjrt_client_create_alias_buffer, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Client_CreateAliasBuffer_Args},)),
         #= PJRT_Client_FulfillAliasBuffer =# @cfunction(pjrt_client_fulfill_alias_buffer, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Client_FulfillAliasBuffer_Args},)),
         #= PJRT_LoadedExecutable_GetDeviceAssignment =# @cfunction(pjrt_loaded_executable_get_device_assignment, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_LoadedExecutable_GetDeviceAssignment_Args},)),
@@ -3580,15 +3979,15 @@ function make_api(::Type{C}) where {C<:Client}
         #= PJRT_LoadedExecutable_AddressableDeviceLogicalIds =# @cfunction(pjrt_loaded_executable_addressable_device_logical_ids, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_LoadedExecutable_AddressableDeviceLogicalIds_Args},)),
         #= PJRT_Buffer_Bitcast =# @cfunction(pjrt_buffer_bitcast, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_Bitcast_Args},)),
         #= PJRT_Error_ForEachPayload =# @cfunction(pjrt_error_for_each_payload, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Error_ForEachPayload_Args},)),
-        #= PJRT_TopologyDescription_Fingerprint =# c_unimplemented,
+        #= PJRT_TopologyDescription_Fingerprint =# @cfunction(pjrt_topology_description_fingerprint, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_TopologyDescription_Fingerprint_Args},)),
         #= PJRT_Executable_ParameterMemoryKinds =# @cfunction(pjrt_executable_parameter_memory_kinds, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Executable_ParameterMemoryKinds_Args},)),
         #= PJRT_Device_ClearMemoryStats =# @cfunction(pjrt_device_clear_memory_stats, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Device_ClearMemoryStats_Args},)),
-        #= PJRT_TopologyDescription_MakeCanonicalShapeForMemorySpace =# c_unimplemented,
-        #= PJRT_TopologyDescription_GetMemorySpaceKindIds =# c_unimplemented,
+        #= PJRT_TopologyDescription_MakeCanonicalShapeForMemorySpace =# @cfunction(pjrt_topology_description_make_canonical_shape_for_memory_space, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_TopologyDescription_MakeCanonicalShapeForMemorySpace_Args},)),
+        #= PJRT_TopologyDescription_GetMemorySpaceKindIds =# @cfunction(pjrt_topology_description_get_memory_space_kind_ids, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_TopologyDescription_GetMemorySpaceKindIds_Args},)),
     ))
     #! format: on
 
-    return PluginApi(api, c_client_create)
+    return PluginApi(api, c_client_create, c_topology_create, c_topology_deserialize)
 end
 
 end
