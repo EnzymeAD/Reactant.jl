@@ -242,6 +242,8 @@ Base.@nospecializeinfer function traced_type_inner(
         else
             return ConcretePJRTNumber{T,_unwrap_val(ndevices)}
         end
+    elseif mode == NoStopTracedTrack || mode == TracedTrack || mode == TracedSetPath
+        return T0
     else
         throw("Unsupported mode: $mode")
     end
@@ -264,6 +266,8 @@ Base.@nospecializeinfer function traced_type_inner(
     elseif mode == ArrayToConcrete
         @assert runtime isa Val{:IFRT}
         return T0 isa UnionAll ? ConcreteIFRTNumber : ConcreteIFRTNumber{T}
+    elseif mode == NoStopTracedTrack || mode == TracedTrack || mode == TracedSetPath
+        return T0
     else
         throw("Unsupported mode: $mode")
     end
@@ -294,6 +298,8 @@ Base.@nospecializeinfer function traced_type_inner(
         A_ret = N isa Core.TypeVar ? UnionAll(N, A´´) : A´´
         A_ret2 = T isa Core.TypeVar ? UnionAll(T, A_ret) : A_ret
         return A_ret2
+    elseif mode == NoStopTracedTrack || mode == TracedTrack || mode == TracedSetPath
+        return A
     else
         throw("Unsupported mode: $mode")
     end
@@ -324,6 +330,8 @@ Base.@nospecializeinfer function traced_type_inner(
         A_ret = N isa Core.TypeVar ? UnionAll(N, A´´) : A´´
         A_ret2 = T isa Core.TypeVar ? UnionAll(T, A_ret) : A_ret
         return A_ret2
+    elseif mode == NoStopTracedTrack || mode == TracedTrack || mode == TracedSetPath
+        return A
     else
         throw("Unsupported mode: $mode")
     end
@@ -1482,6 +1490,9 @@ Base.@nospecializeinfer function make_tracer(
         throw("Cannot have ConcretePJRTArray as function call argument.")
     end
     mode == ArrayToConcrete && return ConcretePJRTArray(prev; sharding, device, client)
+    if mode == NoStopTracedTrack || mode == TracedTrack || mode == TracedSetPath
+        return prev
+    end
     mode != ConcreteToTraced && throw("Cannot trace concrete")
     haskey(seen, prev) && return seen[prev]::TracedRArray{T,N}
     res = TracedRArray{T,N}((path,), nothing, size(prev))
@@ -1503,6 +1514,9 @@ Base.@nospecializeinfer function make_tracer(
         throw("Cannot have ConcreteIFRTArray as function call argument.")
     end
     mode == ArrayToConcrete && return ConcreteIFRTArray(prev; sharding, device, client)
+    if mode == NoStopTracedTrack || mode == TracedTrack || mode == TracedSetPath
+        return prev
+    end
     mode != ConcreteToTraced && throw("Cannot trace concrete")
     haskey(seen, prev) && return seen[prev]::TracedRArray{T,N}
     res = TracedRArray{T,N}((path,), nothing, size(prev))
@@ -1524,6 +1538,9 @@ Base.@nospecializeinfer function make_tracer(
         throw("Cannot have ConcretePJRTNumber as function call argument.")
     end
     mode == ArrayToConcrete && return ConcretePJRTNumber(prev; sharding, device, client)
+    if mode == NoStopTracedTrack || mode == TracedTrack || mode == TracedSetPath
+        return prev
+    end
     mode != ConcreteToTraced && throw("Cannot trace existing trace type")
     haskey(seen, prev) && return seen[prev]::TracedRNumber{T}
     res = TracedRNumber{T}((path,), nothing)
@@ -1545,6 +1562,9 @@ Base.@nospecializeinfer function make_tracer(
         throw("Cannot have ConcreteIFRTNumber as function call argument.")
     end
     mode == ArrayToConcrete && return ConcreteIFRTNumber(prev; sharding, device, client)
+    if mode == NoStopTracedTrack || mode == TracedTrack || mode == TracedSetPath
+        return prev
+    end
     mode != ConcreteToTraced && throw("Cannot trace existing trace type")
     haskey(seen, prev) && return seen[prev]::TracedRNumber{T}
     res = TracedRNumber{T}((path,), nothing)
