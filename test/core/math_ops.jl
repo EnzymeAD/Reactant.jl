@@ -1,9 +1,9 @@
 # Tests for mathematical operations
 using Reactant, Test
 
-const RunningOnTPU = contains(string(Reactant.devices()[1]), "TPU")
-const RunningOnCUDA = contains(string(Reactant.devices()[1]), "CUDA")
-const RunningOnCPU = contains(string(Reactant.devices()[1]), "CPU")
+const RunningOnTPU = Reactant.XLA.platform_name(Reactant.XLA.default_backend()) == "tpu"
+const RunningOnCUDA = Reactant.XLA.platform_name(Reactant.XLA.default_backend()) == "cuda"
+const RunningOnCPU = Reactant.XLA.platform_name(Reactant.XLA.default_backend()) == "cpu"
 
 sinexp(x) = sin(exp(x))
 sinexpbc(x) = sinexp.(x)

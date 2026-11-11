@@ -1,9 +1,9 @@
 using LinearAlgebra, Reactant, Test
 using LinearAlgebra: BLAS
 
-const RunningOnTPU = contains(string(Reactant.devices()[1]), "TPU")
-const RunningOnROCm = contains(string(Reactant.devices()[1]), "ROCM")
-const RunningOnJuliaCPU = contains(string(Reactant.devices()[1]), "julia-cpu")
+const RunningOnTPU = Reactant.XLA.platform_name(Reactant.XLA.default_backend()) == "tpu"
+const RunningOnROCm = Reactant.XLA.platform_name(Reactant.XLA.default_backend()) == "rocm"
+const RunningOnJuliaCPU = Reactant.XLA.platform_name(Reactant.XLA.default_backend()) == "julia-cpu"
 
 @testset "Level 1" begin
     @testset "asum" begin

@@ -1,7 +1,7 @@
 using Reactant, Test, Enzyme, FileCheck
 
 const addressable_devices = Reactant.addressable_devices()
-const RunningOnTPU = contains(string(Reactant.devices()[1]), "TPU")
+const RunningOnTPU = Reactant.XLA.platform_name(Reactant.XLA.default_backend()) == "tpu"
 
 function fn_test1(x)
     y = x .+ x
@@ -12,7 +12,7 @@ end
 
 @testset "Number" begin
     if length(addressable_devices) ≥ 2
-        mesh = Sharding.Mesh(collect(Int64, 0:(length(addressable_devices) - 1)), ("x",))
+        mesh = Sharding.Mesh(collect(Int64, 0:(length(addressable_devices)-1)), ("x",))
         ConcreteRNumber(2.0; sharding=Sharding.Replicated(mesh))
     end
 end
@@ -31,7 +31,7 @@ end
         data_sharding2 = Sharding.NamedSharding(mesh, (nothing, "x", nothing))
         data_sharding3 = Sharding.NamedSharding(mesh, (nothing, nothing, nothing)) # fully replicated data
 
-        data = reshape(collect(1:(16 * 4 * 12)) ./ (16 * 4 * 12), 16, 4, 12)
+        data = reshape(collect(1:(16*4*12)) ./ (16 * 4 * 12), 16, 4, 12)
 
         cdata = Reactant.to_rarray(data)
         cdata_sharded = Reactant.to_rarray(data; sharding=data_sharding)
@@ -319,21 +319,21 @@ end
 # https://github.com/openxla/xla/blob/96d6678053d867099a42be9001c49b2ed7111afd/xla/hlo/ir/tile_assignment.h#L53-L68
 @testset "Device List from Iota Tile" begin
     @test Reactant.XLA.generate_device_list_from_iota_tile(
-        [4, 4, 1],        #=tile_assignment_dimensions=#
-        [4, 2, 2],        #=iota_reshape_dims=#
-        [1, 2, 3],        #=iota_transpose_perm=#
+        [4, 4, 1], #=tile_assignment_dimensions=#
+        [4, 2, 2], #=iota_reshape_dims=#
+        [1, 2, 3], #=iota_transpose_perm=#
     ) == collect(0:15)
 
     @test Reactant.XLA.generate_device_list_from_iota_tile(
-        [4, 4, 1],        #=tile_assignment_dimensions=#
-        [4, 2, 2],        #=iota_reshape_dims=#
-        [2, 1, 3],        #=iota_transpose_perm=#
+        [4, 4, 1], #=tile_assignment_dimensions=#
+        [4, 2, 2], #=iota_reshape_dims=#
+        [2, 1, 3], #=iota_transpose_perm=#
     ) == [0, 1, 4, 5, 8, 9, 12, 13, 2, 3, 6, 7, 10, 11, 14, 15]
 
     @test Reactant.XLA.generate_device_list_from_iota_tile(
-        [2, 4],        #=tile_assignment_dimensions=#
-        [4, 2],        #=iota_reshape_dims=#
-        [2, 1],        #=iota_transpose_perm=#
+        [2, 4], #=tile_assignment_dimensions=#
+        [4, 2], #=iota_reshape_dims=#
+        [2, 1], #=iota_transpose_perm=#
     ) == [0, 2, 4, 6, 1, 3, 5, 7]
 end
 
@@ -547,7 +547,7 @@ end
         sharding = Sharding.NamedSharding(mesh, (:x, :y))
 
         function shard_groups(x)
-            y = (x' * x)[1:4, :]
+            y = (x'*x)[1:4, :]
             Reactant.Ops.sharding_group(x, y)
             z = y .+ x
             Reactant.Ops.sharding_group(z, y)

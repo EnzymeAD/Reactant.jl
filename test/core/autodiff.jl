@@ -1,5 +1,7 @@
 using Enzyme, Reactant, Test, Random, Statistics, FileCheck
 
+const RunningOnTPU = Reactant.XLA.platform_name(Reactant.XLA.default_backend()) == "tpu"
+
 square(x) = x * 2
 
 fwd(Mode, RT, x, y) = Enzyme.autodiff(Mode, square, RT, Duplicated(x, y))
@@ -222,7 +224,7 @@ end
         (res.val ≈ 4ones(2, 2)) &&
             (res.derivs[1] ≈ 4ones(2, 2)) &&
             (res.derivs[2] ≈ 2ones(2, 2))
-    end skip = contains(string(Reactant.devices()[1]), "TPU")
+    end skip = RunningOnTPU
 end
 
 @testset "onehot" begin
