@@ -72,8 +72,6 @@ filter!(((k, _),) -> !startswith(k, "probprog"), testsuite)
 # with a `handle` method, so tests that need anything else are skipped
 if BACKEND == "julia-cpu"
     for name in (
-        # `enzymexla.lapack`/`enzymexla.linalg` ops (`lu`, `inv`, `\`, `det`, `svd`, ...)
-        "integration/factorizations",
         "integration/linear_algebra",
         "integration/linearsolve",
         # custom calls (Julia callbacks, kernels, Python)
@@ -83,6 +81,11 @@ if BACKEND == "julia-cpu"
         "integration/kernelabstractions",
         "integration/nfft_callback",
         "integration/enzymejax",
+        # MLIR module contains non-StableHLO ops that are not supported on serialization
+        # "Failed to serialize StableHLO with mixed dialects to plugin version 1.16.3; found unstable op: ..."
+        "integration/structured_tensors",
+        "integration/blas",
+        "integration/factorizations",
         # profiler and allocator statistics are not implemented
         "core/profiling",
         "core/compile",
@@ -92,8 +95,6 @@ if BACKEND == "julia-cpu"
         "core/enums",
         "core/array_ops",
         "nn/nnlib",
-        # "Failed to serialize StableHLO with mixed dialects to plugin version 1.16.3; found unstable op"
-        "integration/structured_tensors",
     )
         delete!(testsuite, name)
     end
