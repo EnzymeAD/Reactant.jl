@@ -75,6 +75,7 @@ function attributes end
 function bitcast! end
 function buffer_from_host_buffer end
 function clear_memory_stats! end
+function compile end
 function compile_options end
 function compile! end
 function compiled_memory_stats end
@@ -82,8 +83,13 @@ function copy_raw_to_host! end
 function copy_to_device end
 function copy_to_memory end
 function cost_analysis end
+function create_alias_buffer end
+function create_async_tracking_event end
+function create_buffers_for_async_host_to_device end
+function create_error_buffer end
 function create_uninitialized_buffer end
 function debug_string end
+function decrease_external_reference_count! end
 function default_device_assignment end
 function default_memory end
 function description end
@@ -92,17 +98,22 @@ function device_assignment end
 function device end
 function devices end
 function dimensions end
+function dma_map! end
+function dma_unmap! end
+function donate_with_control_dependency! end
 function dynamic_dimension_indices end
 function element_type end
 function executable end
 function execute end
 function fingerprint end
 function id end
+function increase_external_reference_count! end
 function is_addressable end
 function is_on_cpu end
 function isdeleted end
 function kind_id end
 function kind end
+function load end
 function local_hardware_id end
 function lookup_addressable_device end
 function lookup_device end
@@ -113,6 +124,7 @@ function num_outputs end
 function num_partitions end
 function num_replicas end
 function on_device_size_in_bytes end
+function opaque_device_memory_data_pointer end
 function optimized_program end
 function output_dimensions end
 function output_element_types end
@@ -120,6 +132,7 @@ function output_memory_kinds end
 function parameter_memory_kinds end
 function platform_name end
 function platform_version end
+function poison_execution! end
 function process_index end
 function ready_event end
 function size_of_generated_code_in_bytes end
@@ -127,6 +140,7 @@ function to_host_buffer end
 function to_string end
 function unpadded_dimensions end
 function unsafe_pointer end
+function update_global_process_info! end
 
 export unimplemented, invalid_argument, resource_exhausted
 
@@ -152,6 +166,9 @@ const vtable_error = Ref{CAPI.PJRT_Error_FunctionTable}()
 const vtable_memory = Ref{CAPI.PJRT_Memory_FunctionTable}()
 
 ## helpers
+const ProcessState = CAPI.PJRT_ProcessState
+const ProcessInfo = CAPI.PJRT_ProcessInfo
+
 function pjrt_elsize(T::CAPI.PJRT_Buffer_Type)
     if T in (
         CAPI.PJRT_Buffer_Type_PRED,
@@ -242,6 +259,12 @@ mutable struct Error
             unsafe_convert(Ptr{CAPI.PJRT_Error_FunctionTable}, vtable_error), code, message
         )
     end
+end
+
+# build an `Error` from the status fields of a C struct; the message is owned by C, so it's copied
+function Error(code::CAPI.PJRT_Error_Code, message::Cstring, message_size::Integer)
+    ptr = Ptr{UInt8}(message)
+    return Error(code, ptr == C_NULL ? "" : unsafe_string(ptr, message_size))
 end
 
 # XLA considers `nullptr` to be OK as it avoids allocations
@@ -860,6 +883,8 @@ end
 - `default_memory`
 - `memory_stats`
 - `clear_memory_stats!`
+- `create_async_tracking_event`
+- `poison_execution!`
 """
 abstract type Device end
 function checkinterface(T::Type{<:Device})
@@ -989,6 +1014,97 @@ clear_memory_stats!(::Device)
 end
 
 """
+    AsyncTrackingEvent
+
+A scoped event that tells a device that there is asynchronous work depending on its activity, from its creation by
+`create_async_tracking_event` until it is closed.
+
+### Interface
+
+- `close`
+"""
+abstract type AsyncTrackingEvent end
+
+"""
+    close(event::AsyncTrackingEvent)
+
+Mark the end of the asynchronous work tracked by `event`. Defaults to doing nothing.
+
+Called by `PJRT_AsyncTrackingEvent_Destroy` before `event` is unrooted.
+"""
+Base.close(::AsyncTrackingEvent) = nothing
+
+@pjrt_catch_return function pjrt_async_tracking_event_destroy(
+    args::Ptr{CAPI.PJRT_AsyncTrackingEvent_Destroy_Args}
+)::Ptr{CAPI.PJRT_Error}
+    ptr = unsafe_load(args.event)
+    ptr == C_NULL && return ok()
+    event = unsafe_pointer_to_objref(ptr)::AsyncTrackingEvent
+    close(event)
+    unroot!(event)
+    return ok()
+end
+
+"""
+    create_async_tracking_event(dev::Device, description::String) -> Union{Nothing,AsyncTrackingEvent}
+
+Return a new [`AsyncTrackingEvent`](@ref) that tracks asynchronous work depending on the activity of `dev`, or
+`nothing` if `dev` doesn't support tracking it.
+
+The caller GC-roots the returned event.
+
+Backs `PJRT_Device_CreateAsyncTrackingEvent`.
+"""
+create_async_tracking_event(::Device, ::String)
+
+@pjrt_catch_return function pjrt_device_create_async_tracking_event(
+    args::Ptr{CAPI.PJRT_Device_CreateAsyncTrackingEvent_Args}
+)::Ptr{CAPI.PJRT_Error}
+    device = unsafe_pointer_to_objref(Ptr{Device}(unsafe_load(args.device)))::Device
+    desc = unsafe_string(
+        Ptr{UInt8}(unsafe_load(args.description)), unsafe_load(args.description_size)
+    )
+    event = create_async_tracking_event(device, desc)::Union{Nothing,AsyncTrackingEvent}
+    if isnothing(event)
+        unsafe_store!(args.event, C_NULL)
+        return ok()
+    end
+    root!(event)
+    unsafe_store!(args.event, Ptr{CAPI.PJRT_AsyncTrackingEvent}(pointer_from_objref(event)))
+    return ok()
+end
+
+"""
+    poison_execution!(dev::Device, launch_id::Int32, error::Error) -> Bool
+
+Make the outputs of the earliest unfinished execution on `dev` with launch id `launch_id` fail with `error`.
+
+Return `true` if they have been poisoned, or `false` if there is no such execution (e.g. it already finished).
+
+!!! todo
+Error payloads are not supported yet: if C passes any, `PJRT_Device_PoisonExecution` returns `UNIMPLEMENTED`.
+
+Backs `PJRT_Device_PoisonExecution`.
+"""
+poison_execution!(::Device, ::Int32, ::Error)
+
+@pjrt_catch_return function pjrt_device_poison_execution(
+    args::Ptr{CAPI.PJRT_Device_PoisonExecution_Args}
+)::Ptr{CAPI.PJRT_Error}
+    device = unsafe_pointer_to_objref(Ptr{Device}(unsafe_load(args.device)))::Device
+    unsafe_load(args.num_payload) == 0 ||
+        throw(unimplemented("error payloads are not supported yet"))
+    error = Error(
+        unsafe_load(args.error_code),
+        unsafe_load(args.error_message),
+        unsafe_load(args.error_message_size),
+    )
+    poisoned = poison_execution!(device, unsafe_load(args.launch_id), error)::Bool
+    unsafe_store!(args.poisoned, poisoned)
+    return ok()
+end
+
+"""
     Buffer
 
 ### Interface
@@ -1009,6 +1125,10 @@ end
 - `to_host_buffer` -> copyto!?
 - `copy_raw_to_host!`
 - `bitcast!`
+- `donate_with_control_dependency!`
+- `opaque_device_memory_data_pointer`
+- `increase_external_reference_count!`
+- `decrease_external_reference_count!`
 - `is_on_cpu`
 - `ready_event`
 - `unsafe_pointer`
@@ -1435,6 +1555,185 @@ bitcast!(::Buffer, args...)
     out_buffer = bitcast!(buffer, _eltype, _size, layout)::Buffer
     root!(out_buffer)
     unsafe_store!(args.out_buffer, Ptr{CAPI.PJRT_Buffer}(pointer_from_objref(out_buffer)))
+    return ok()
+end
+
+# called by C when the destination of a `PJRT_Buffer_CopyRawToHostFuture` is ready (or failed): finishes the copy from
+# the staging copy of the data
+function pjrt_buffer_copy_raw_to_host_future_ready(
+    args::Ptr{CAPI.PJRT_Buffer_CopyRawToHostFuture_Callback_Args}
+)::Cvoid
+    data = unsafe_pointer_to_objref(unsafe_load(args.callback_data))
+    unroot!(data)
+    staging, event = data[]::Tuple{Vector{UInt8},Event}
+
+    code = unsafe_load(args.error_code)
+    if code != CAPI.PJRT_Error_Code_OK
+        error = Error(
+            code, unsafe_load(args.error_message), unsafe_load(args.error_message_size)
+        )
+        notify(event, error)
+        return nothing
+    end
+
+    dst = Ptr{UInt8}(unsafe_load(args.dst))
+    GC.@preserve staging unsafe_copyto!(dst, pointer(staging), length(staging))
+    notify(event)
+    return nothing
+end
+
+@pjrt_catch_return function pjrt_buffer_copy_raw_to_host_future(
+    args::Ptr{CAPI.PJRT_Buffer_CopyRawToHostFuture_Args}
+)::Ptr{CAPI.PJRT_Error}
+    buffer = unsafe_pointer_to_objref(unsafe_load(args.buffer))::Buffer
+    offset = unsafe_load(args.offset)
+    transfer_size = unsafe_load(args.transfer_size)
+
+    isdeleted(buffer) && throw(invalid_argument("buffer is deleted"))
+
+    src_size = on_device_size_in_bytes(buffer)
+    if offset < 0 || transfer_size < 0 || offset + transfer_size > src_size
+        throw(
+            invalid_argument(
+                "copy range [$offset, $(offset + transfer_size)) is out of the $src_size bytes of the buffer",
+            ),
+        )
+    end
+
+    # the copy must happen even if `buffer` is deleted before the destination is ready, so the data is copied now
+    # and moved to the destination by `pjrt_buffer_copy_raw_to_host_future_ready`
+    staging = Vector{UInt8}(undef, transfer_size)
+    GC.@preserve staging copy_raw_to_host!(pointer(staging), buffer, offset, transfer_size)
+
+    event = root!(Event())
+    data = root!(Ref((staging, event)))
+    unsafe_store!(args.event, Ptr{CAPI.PJRT_Event}(pointer_from_objref(event)))
+    unsafe_store!(args.callback_data, pointer_from_objref(data))
+    unsafe_store!(
+        args.future_ready_callback,
+        @cfunction(
+            pjrt_buffer_copy_raw_to_host_future_ready,
+            Cvoid,
+            (Ptr{CAPI.PJRT_Buffer_CopyRawToHostFuture_Callback_Args},)
+        ),
+    )
+    return ok()
+end
+
+"""
+    donate_with_control_dependency!(buffer::Buffer, dependency::Event) -> Buffer
+
+Return a new buffer that takes over the on-device data of `buffer`, and which is ready only once both `buffer` and
+`dependency` are ready. If either of them fails, the new buffer fails too.
+
+`buffer` is donated: afterwards, `isdeleted(buffer)` must return `true`, but its data must not be freed.
+
+`dependency` is set by the C wrapper when C signals it, possibly after this returns, so it must not be waited on here.
+The caller GC-roots the returned buffer.
+
+Backs `PJRT_Buffer_DonateWithControlDependency`.
+"""
+donate_with_control_dependency!(::Buffer, ::Event)
+
+# called by C when the dependency of a `PJRT_Buffer_DonateWithControlDependency` is ready (or failed)
+function pjrt_buffer_donate_dependency_ready(
+    args::Ptr{CAPI.PJRT_Buffer_DonateWithControlDependency_Callback_Args}
+)::Cvoid
+    data = unsafe_pointer_to_objref(unsafe_load(args.callback_data))
+    unroot!(data)
+    dependency = data[]::Event
+    code = unsafe_load(args.error_code)
+    if code == CAPI.PJRT_Error_Code_OK
+        notify(dependency)
+    else
+        error = Error(
+            code, unsafe_load(args.error_message), unsafe_load(args.error_message_size)
+        )
+        notify(dependency, error)
+    end
+    return nothing
+end
+
+@pjrt_catch_return function pjrt_buffer_donate_with_control_dependency(
+    args::Ptr{CAPI.PJRT_Buffer_DonateWithControlDependency_Args}
+)::Ptr{CAPI.PJRT_Error}
+    buffer = unsafe_pointer_to_objref(unsafe_load(args.buffer))::Buffer
+    isdeleted(buffer) && throw(invalid_argument("buffer is deleted"))
+
+    dependency = Event()
+    out_buffer = donate_with_control_dependency!(buffer, dependency)::Buffer
+    root!(out_buffer)
+
+    # rooted in a `Ref` of its own, so that the callback unroots it even if the plugin hands `dependency` out to C
+    data = root!(Ref(dependency))
+    unsafe_store!(args.out_buffer, Ptr{CAPI.PJRT_Buffer}(pointer_from_objref(out_buffer)))
+    unsafe_store!(args.callback_data, pointer_from_objref(data))
+    unsafe_store!(
+        args.dependency_ready_callback,
+        @cfunction(
+            pjrt_buffer_donate_dependency_ready,
+            Cvoid,
+            (Ptr{CAPI.PJRT_Buffer_DonateWithControlDependency_Callback_Args},)
+        ),
+    )
+    return ok()
+end
+
+"""
+    opaque_device_memory_data_pointer(buffer::Buffer) -> Ptr
+
+Return the opaque pointer to the device memory of `buffer`. It may become invalid at any point unless `buffer` has an
+external reference (see `increase_external_reference_count!`).
+
+Defaults to `unsafe_pointer(buffer)`.
+
+Backs `PJRT_Buffer_OpaqueDeviceMemoryDataPointer`.
+"""
+opaque_device_memory_data_pointer(buffer::Buffer) = unsafe_pointer(buffer)
+
+@pjrt_catch_return function pjrt_buffer_opaque_device_memory_data_pointer(
+    args::Ptr{CAPI.PJRT_Buffer_OpaqueDeviceMemoryDataPointer_Args}
+)::Ptr{CAPI.PJRT_Error}
+    buffer = unsafe_pointer_to_objref(unsafe_load(args.buffer))::Buffer
+    isdeleted(buffer) && throw(invalid_argument("buffer is deleted"))
+    ptr = opaque_device_memory_data_pointer(buffer)::Ptr
+    unsafe_store!(args.device_memory_ptr, ptr)
+    return ok()
+end
+
+"""
+    increase_external_reference_count!(buffer::Buffer)
+
+Increment the number of external references to `buffer`, which mean that its data is shared with another framework
+(e.g. through DLPack). While there is any, the data of `buffer` must be neither freed (even by `delete!`) nor moved.
+
+Backs `PJRT_Buffer_IncreaseExternalReferenceCount`.
+"""
+increase_external_reference_count!(::Buffer)
+
+@pjrt_catch_return function pjrt_buffer_increase_external_reference_count(
+    args::Ptr{CAPI.PJRT_Buffer_IncreaseExternalReferenceCount_Args}
+)::Ptr{CAPI.PJRT_Error}
+    buffer = unsafe_pointer_to_objref(unsafe_load(args.buffer))::Buffer
+    increase_external_reference_count!(buffer)
+    return ok()
+end
+
+"""
+    decrease_external_reference_count!(buffer::Buffer)
+
+Decrement the number of external references to `buffer` (see `increase_external_reference_count!`). Must throw
+[`invalid_argument`](@ref) if there is none.
+
+Backs `PJRT_Buffer_DecreaseExternalReferenceCount`.
+"""
+decrease_external_reference_count!(::Buffer)
+
+@pjrt_catch_return function pjrt_buffer_decrease_external_reference_count(
+    args::Ptr{CAPI.PJRT_Buffer_DecreaseExternalReferenceCount_Args}
+)::Ptr{CAPI.PJRT_Error}
+    buffer = unsafe_pointer_to_objref(unsafe_load(args.buffer))::Buffer
+    decrease_external_reference_count!(buffer)
     return ok()
 end
 
@@ -2203,6 +2502,13 @@ end
 - `compile!`
 - `deserialize_and_load`
 - `default_device_assignment`
+- `load`
+- `create_error_buffer`
+- `create_alias_buffer`
+- `update_global_process_info!`
+- `dma_map!`
+- `dma_unmap!`
+- `create_buffers_for_async_host_to_device`
 """
 abstract type Client end
 
@@ -2579,32 +2885,34 @@ Backs `PJRT_Client_Compile`.
 """
 compile!(::Client, args...)
 
-@pjrt_catch_return function pjrt_client_compile(
-    args::Ptr{CAPI.PJRT_Client_Compile_Args}
-)::Ptr{CAPI.PJRT_Error}
-    client = unsafe_pointer_to_objref(unsafe_load(args.client))::Client
-    program = Ptr{CAPI.PJRT_Program}(unsafe_load(args.program))
+# parse a `PJRT_Program`, which must be a StableHLO portable artifact (VHLO bytecode) in `"mlir"` format
+function unsafe_load_program(program::Ptr{CAPI.PJRT_Program})
     format = unsafe_string(
         Ptr{Cchar}(unsafe_load(program.format)), unsafe_load(program.format_size)
     )
     format == "mlir" || throw(unimplemented("code in $format format is not supported"))
-    # code = unsafe_string(
-    #     Ptr{Cchar}(unsafe_load(program.code)), unsafe_load(program.code_size)
-    # )
     code_str_ref = API.MlirStringRef(
         unsafe_load(program.code), unsafe_load(program.code_size)
     )
     ctx = Reactant.ReactantContext()
-    mlir_mod = IR.Module(API.stablehloDeserializePortableArtifactNoError(code_str_ref, ctx))
-    # options = unsafe_string(
-    #     Ptr{Cchar}(unsafe_load(args.compile_options)),
-    #     unsafe_load(args.compile_options_size),
-    # )
-    opts_ptr = Ptr{UInt8}(unsafe_load(args.compile_options))
-    opts_size = unsafe_load(args.compile_options_size)
-    opts_bytes = unsafe_wrap(Vector{UInt8}, opts_ptr, opts_size)
-    options = Reactant.ProtoUtils.proto_from_bytes(
-        Reactant.Proto.xla.CompileOptionsProto, opts_bytes
+    return IR.Module(API.stablehloDeserializePortableArtifactNoError(code_str_ref, ctx))
+end
+
+# parse a serialized `CompileOptionsProto`
+function unsafe_load_compile_options(ptr::Cstring, size::Integer)
+    bytes = unsafe_wrap(Vector{UInt8}, Ptr{UInt8}(ptr), size)
+    return Reactant.ProtoUtils.proto_from_bytes(
+        Reactant.Proto.xla.CompileOptionsProto, bytes
+    )
+end
+
+@pjrt_catch_return function pjrt_client_compile(
+    args::Ptr{CAPI.PJRT_Client_Compile_Args}
+)::Ptr{CAPI.PJRT_Error}
+    client = unsafe_pointer_to_objref(unsafe_load(args.client))::Client
+    mlir_mod = unsafe_load_program(Ptr{CAPI.PJRT_Program}(unsafe_load(args.program)))
+    options = unsafe_load_compile_options(
+        unsafe_load(args.compile_options), unsafe_load(args.compile_options_size)
     )
     loaded_exec = compile!(client, mlir_mod, options)::LoadedExecutable
     root!(loaded_exec)
@@ -2704,6 +3012,356 @@ default_device_assignment(::Client, ::Integer, ::Integer)
     for r in 1:num_replicas, p in 1:num_partitions
         unsafe_store!(dst, assignment[r, p], (r - 1) * num_partitions + p)
     end
+    return ok()
+end
+
+"""
+    load(client::Client, exe::Executable, options::Reactant.Proto.xla.CompileOptionsProto) -> LoadedExecutable
+
+Load `exe` on the devices of `client` with the compile options `options`, e.g. an executable returned by `compile`.
+
+The caller GC-roots the returned executable.
+
+Backs `PJRT_Client_Load`.
+"""
+load(::Client, ::Executable, ::Any)
+
+@pjrt_catch_return function pjrt_client_load(
+    args::Ptr{CAPI.PJRT_Client_Load_Args}
+)::Ptr{CAPI.PJRT_Error}
+    client = unsafe_pointer_to_objref(unsafe_load(args.client))::Client
+    exe = unsafe_pointer_to_objref(unsafe_load(args.executable))::Executable
+    options = unsafe_load_compile_options(
+        unsafe_load(args.compile_options), unsafe_load(args.compile_options_size)
+    )
+    loaded_exec = load(client, exe, options)::LoadedExecutable
+    root!(loaded_exec)
+    unsafe_store!(
+        args.loaded_executable,
+        Ptr{CAPI.PJRT_LoadedExecutable}(pointer_from_objref(loaded_exec)),
+    )
+    return ok()
+end
+
+"""
+    create_error_buffer(client::Client, mem::Memory, error::Error, type, dims, layout) -> Buffer
+
+Return a new buffer placed on memory `mem`, with element type `type::CAPI.PJRT_Buffer_Type` and dimensions
+`dims::Vector{Int64}`, that carries `error` without allocating any data: executing a program with it as argument must
+fail with `error`.
+
+`layout::Ptr{CAPI.PJRT_Buffer_MemoryLayout}` is `C_NULL` for the default layout.
+
+The caller GC-roots the returned buffer.
+
+!!! todo
+Error payloads are not supported yet: if C passes any, `PJRT_Client_CreateErrorBuffer` returns `UNIMPLEMENTED`.
+
+Backs `PJRT_Client_CreateErrorBuffer`.
+"""
+create_error_buffer(::Client, ::Memory, ::Error, args...)
+
+@pjrt_catch_return function pjrt_client_create_error_buffer(
+    args::Ptr{CAPI.PJRT_Client_CreateErrorBuffer_Args}
+)::Ptr{CAPI.PJRT_Error}
+    client = unsafe_pointer_to_objref(unsafe_load(args.client))::Client
+    mem_ptr = Ptr{Memory}(unsafe_load(args.memory))
+    mem_ptr == C_NULL && throw(invalid_argument("No memory has been assigned"))
+    mem = unsafe_pointer_to_objref(mem_ptr)::Memory
+
+    unsafe_load(args.num_payload) == 0 ||
+        throw(unimplemented("error payloads are not supported yet"))
+    error = Error(
+        unsafe_load(args.error_code),
+        unsafe_load(args.error_message),
+        unsafe_load(args.error_message_size),
+    )
+
+    _eltype = unsafe_load(args.shape_element_type)
+    _size = copy(
+        unsafe_wrap(
+            Vector{Int64}, unsafe_load(args.shape_dims), unsafe_load(args.shape_num_dims)
+        ),
+    )
+    # `device_layout` was added at the end of the struct, so older callers don't pass it
+    has_device_layout =
+        unsafe_load(args.struct_size) >=
+        UInt(args.device_layout) - UInt(args) + sizeof(Ptr{Cvoid})
+    layout = has_device_layout ? unsafe_load(args.device_layout) : C_NULL
+
+    buffer = create_error_buffer(client, mem, error, _eltype, _size, layout)::Buffer
+    root!(buffer)
+    unsafe_store!(args.buffer, Ptr{CAPI.PJRT_Buffer}(pointer_from_objref(buffer)))
+    return ok()
+end
+
+# GC-rooted holder of the callable returned by `create_alias_buffer`, since it may not be mutable
+mutable struct FulfillAliasBufferCallback
+    const fulfill::Any
+end
+
+"""
+    create_alias_buffer(client::Client, mem::Memory, type, dims, layout) -> Tuple{Buffer,Any}
+
+Return `(alias, fulfill)`: a new buffer `alias` placed on memory `mem`, with element type `type::CAPI.PJRT_Buffer_Type`
+and dimensions `dims::Vector{Int64}`, which aliases a buffer that is not known yet; and a callable `fulfill`.
+
+`alias` is not ready until `fulfill(result)` is called, where `result` is either the aliased `Buffer` or an `Error` that
+`alias` must fail with. `fulfill` is called at most once, by `PJRT_Client_FulfillAliasBuffer`, and its errors are
+returned to C.
+
+`layout::Ptr{CAPI.PJRT_Buffer_MemoryLayout}` is `C_NULL` for the default layout.
+
+The caller GC-roots `alias`, and keeps `fulfill` alive until it is called.
+
+Backs `PJRT_Client_CreateAliasBuffer`.
+"""
+create_alias_buffer(::Client, ::Memory, args...)
+
+@pjrt_catch_return function pjrt_client_create_alias_buffer(
+    args::Ptr{CAPI.PJRT_Client_CreateAliasBuffer_Args}
+)::Ptr{CAPI.PJRT_Error}
+    client = unsafe_pointer_to_objref(unsafe_load(args.client))::Client
+    mem_ptr = Ptr{Memory}(unsafe_load(args.memory))
+    mem_ptr == C_NULL && throw(invalid_argument("No memory has been assigned"))
+    mem = unsafe_pointer_to_objref(mem_ptr)::Memory
+
+    _eltype = unsafe_load(args.shape_element_type)
+    _size = copy(
+        unsafe_wrap(
+            Vector{Int64}, unsafe_load(args.shape_dims), unsafe_load(args.shape_num_dims)
+        ),
+    )
+    layout = unsafe_load(args.shape_layout)
+
+    alias, fulfill =
+        create_alias_buffer(client, mem, _eltype, _size, layout)::Tuple{Buffer,Any}
+    root!(alias)
+    cb = root!(FulfillAliasBufferCallback(fulfill))
+    unsafe_store!(args.alias_buffer, Ptr{CAPI.PJRT_Buffer}(pointer_from_objref(alias)))
+    unsafe_store!(
+        args.fulfill_alias_buffer_cb,
+        Ptr{CAPI.PJRT_FulfillAliasBufferCallback}(pointer_from_objref(cb)),
+    )
+    return ok()
+end
+
+@pjrt_catch_return function pjrt_client_fulfill_alias_buffer(
+    args::Ptr{CAPI.PJRT_Client_FulfillAliasBuffer_Args}
+)::Ptr{CAPI.PJRT_Error}
+    cb_ptr = unsafe_load(args.fulfill_alias_buffer_cb)
+    cb_ptr == C_NULL && throw(invalid_argument("`fulfill_alias_buffer_cb` is null"))
+    # the callback is consumed even if fulfilling fails, like in XLA
+    cb = unsafe_pointer_to_objref(cb_ptr)::FulfillAliasBufferCallback
+    unroot!(cb)
+
+    code = unsafe_load(args.status_code)
+    result = if code == CAPI.PJRT_Error_Code_OK
+        buffer_ptr = unsafe_load(args.buffer)
+        buffer_ptr == C_NULL &&
+            throw(invalid_argument("buffer to fulfill the alias with is null"))
+        unsafe_pointer_to_objref(buffer_ptr)::Buffer
+    else
+        Error(code, unsafe_load(args.error_message), unsafe_load(args.error_message_size))
+    end
+    cb.fulfill(result)
+    return ok()
+end
+
+"""
+    update_global_process_info!(client::Client, infos::Vector)
+
+Update `client` with the state of every process of a distributed program. Each element of `infos` is a `NamedTuple`
+with fields:
+
+- `task_id::Int`
+- `incarnation_id::UInt64`
+- `state::CAPI.PJRT_ProcessState`
+- `error::Union{Nothing,Error}`: the error of the process, if any
+
+Backs `PJRT_Client_UpdateGlobalProcessInfo`.
+"""
+update_global_process_info!(::Client, ::Vector)
+
+@pjrt_catch_return function pjrt_client_update_global_process_info(
+    args::Ptr{CAPI.PJRT_Client_UpdateGlobalProcessInfo_Args}
+)::Ptr{CAPI.PJRT_Error}
+    client = unsafe_pointer_to_objref(unsafe_load(args.client))::Client
+    c_infos = unsafe_load(args.process_infos)
+    infos = map(1:unsafe_load(args.num_process_infos)) do i
+        info = unsafe_load(c_infos, i)
+        error = if info.error_code == 0
+            nothing
+        else
+            # unlike in other structs, the error code is a plain `int` here
+            code = CAPI.PJRT_Error_Code(info.error_code)
+            Error(code, info.error_message, info.error_message_size)
+        end
+        (;
+            task_id=Int(info.task_id),
+            incarnation_id=info.incarnation_id,
+            state=info.state,
+            error,
+        )
+    end
+    update_global_process_info!(client, infos)
+    return ok()
+end
+
+"""
+    dma_map!(client::Client, data::Ptr{Cvoid}, size::Integer)
+
+Map the `size` bytes of host memory at `data` for fast transfers to and from the devices of `client`.
+
+Backs `PJRT_Client_DmaMap`.
+"""
+dma_map!(::Client, ::Ptr{Cvoid}, ::Integer)
+
+@pjrt_catch_return function pjrt_client_dma_map(
+    args::Ptr{CAPI.PJRT_Client_DmaMap_Args}
+)::Ptr{CAPI.PJRT_Error}
+    client = unsafe_pointer_to_objref(unsafe_load(args.client))::Client
+    dma_map!(client, unsafe_load(args.data), unsafe_load(args.size))
+    return ok()
+end
+
+"""
+    dma_unmap!(client::Client, data::Ptr{Cvoid})
+
+Unmap the host memory at `data`, previously mapped with `dma_map!`.
+
+Backs `PJRT_Client_DmaUnmap`.
+"""
+dma_unmap!(::Client, ::Ptr{Cvoid})
+
+@pjrt_catch_return function pjrt_client_dma_unmap(
+    args::Ptr{CAPI.PJRT_Client_DmaUnmap_Args}
+)::Ptr{CAPI.PJRT_Error}
+    client = unsafe_pointer_to_objref(unsafe_load(args.client))::Client
+    dma_unmap!(client, unsafe_load(args.data))
+    return ok()
+end
+
+"""
+    AsyncHostToDeviceTransferManager
+
+Manages the asynchronous transfer of host data to a set of new buffers, as returned by
+`create_buffers_for_async_host_to_device`.
+
+!!! todo
+Only creating and destroying it are supported yet: the `PJRT_AsyncHostToDeviceTransferManager_*` functions that
+transfer data or retrieve the buffers always return `UNIMPLEMENTED`.
+"""
+abstract type AsyncHostToDeviceTransferManager end
+
+@pjrt_catch_return function pjrt_async_host_to_device_transfer_manager_destroy(
+    args::Ptr{CAPI.PJRT_AsyncHostToDeviceTransferManager_Destroy_Args}
+)::Ptr{CAPI.PJRT_Error}
+    ptr = unsafe_load(args.transfer_manager)
+    ptr != C_NULL && unroot!(ptr)
+    return ok()
+end
+
+"""
+    create_buffers_for_async_host_to_device(client::Client, specs::Vector, layouts::Vector, mem::Memory)
+        -> AsyncHostToDeviceTransferManager
+
+Return a new [`AsyncHostToDeviceTransferManager`](@ref) for a set of new buffers placed on memory `mem`, one per
+element of `specs`, which are `NamedTuple`s with fields `element_type::CAPI.PJRT_Buffer_Type` and `dims::Vector{Int64}`.
+
+`layouts::Vector{Ptr{CAPI.PJRT_Buffer_MemoryLayout}}` is either empty, for the default layouts, or holds the layout of
+each buffer (`C_NULL` for its default layout).
+
+The caller GC-roots the returned manager.
+
+Backs `PJRT_Client_CreateBuffersForAsyncHostToDevice`.
+"""
+create_buffers_for_async_host_to_device(::Client, ::Vector, ::Vector, ::Memory)
+
+@pjrt_catch_return function pjrt_client_create_buffers_for_async_host_to_device(
+    args::Ptr{CAPI.PJRT_Client_CreateBuffersForAsyncHostToDevice_Args}
+)::Ptr{CAPI.PJRT_Error}
+    client = unsafe_pointer_to_objref(unsafe_load(args.client))::Client
+    mem_ptr = Ptr{Memory}(unsafe_load(args.memory))
+    mem_ptr == C_NULL && throw(invalid_argument("No memory has been assigned"))
+    mem = unsafe_pointer_to_objref(mem_ptr)::Memory
+
+    c_specs = unsafe_load(args.shape_specs)
+    specs = map(1:unsafe_load(args.num_shape_specs)) do i
+        spec = unsafe_load(c_specs, i)
+        (;
+            element_type=spec.element_type,
+            dims=copy(unsafe_wrap(Vector{Int64}, spec.dims, spec.num_dims)),
+        )
+    end
+
+    num_layouts = unsafe_load(args.num_device_layouts)
+    if num_layouts != 0 && num_layouts != length(specs)
+        throw(
+            invalid_argument("got $num_layouts device layouts for $(length(specs)) buffers")
+        )
+    end
+    c_layouts = unsafe_load(args.device_layouts)
+    layouts = Ptr{CAPI.PJRT_Buffer_MemoryLayout}[
+        unsafe_load(c_layouts, i) for i in 1:num_layouts
+    ]
+
+    manager = create_buffers_for_async_host_to_device(
+        client, specs, layouts, mem
+    )::AsyncHostToDeviceTransferManager
+    root!(manager)
+
+    unsafe_store!(
+        args.transfer_manager,
+        Ptr{CAPI.PJRT_AsyncHostToDeviceTransferManager}(pointer_from_objref(manager)),
+    )
+    return ok()
+end
+
+"""
+    TopologyDescription
+
+The description of the devices of a platform and how they are connected, used by `compile` to compile programs without
+a `Client`.
+
+!!! todo
+No `PJRT_TopologyDescription_*` function is supported yet, so C can't get hold of one and `PJRT_Compile` can't be
+called.
+"""
+abstract type TopologyDescription end
+
+"""
+    compile(topology::TopologyDescription, code::MLIR.IR.Module, options, client::Union{Nothing,Client}) -> Executable
+
+Compile `code` for the devices described by `topology` and return an executable, which must be loaded with `load`
+before it can run.
+
+`code` and `options::Reactant.Proto.xla.CompileOptionsProto` are like in `compile!`. `client` is an optional client of
+the same platform, for performance-guided optimizations.
+
+The caller GC-roots the returned executable.
+
+Backs `PJRT_Compile`.
+"""
+compile(::TopologyDescription, args...)
+
+@pjrt_catch_return function pjrt_compile(
+    args::Ptr{CAPI.PJRT_Compile_Args}
+)::Ptr{CAPI.PJRT_Error}
+    topology_ptr = unsafe_load(args.topology)
+    topology_ptr == C_NULL && throw(invalid_argument("No topology has been given"))
+    topology = unsafe_pointer_to_objref(topology_ptr)::TopologyDescription
+
+    client_ptr = unsafe_load(args.client)
+    client = client_ptr == C_NULL ? nothing : unsafe_pointer_to_objref(client_ptr)::Client
+
+    mlir_mod = unsafe_load_program(Ptr{CAPI.PJRT_Program}(unsafe_load(args.program)))
+    options = unsafe_load_compile_options(
+        unsafe_load(args.compile_options), unsafe_load(args.compile_options_size)
+    )
+    exe = compile(topology, mlir_mod, options, client)::Executable
+    root!(exe)
+    unsafe_store!(args.executable, Ptr{CAPI.PJRT_Executable}(pointer_from_objref(exe)))
     return ok()
 end
 
@@ -2863,9 +3521,9 @@ function make_api(::Type{C}) where {C<:Client}
         #= PJRT_Buffer_IsOnCpu =# @cfunction(pjrt_buffer_is_on_cpu, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_IsOnCpu_Args},)),
         #= PJRT_Buffer_ReadyEvent =# @cfunction(pjrt_buffer_ready_event, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_ReadyEvent_Args},)),
         #= PJRT_Buffer_UnsafePointer =# @cfunction(pjrt_buffer_unsafe_pointer, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_UnsafePointer_Args},)),
-        #= PJRT_Buffer_IncreaseExternalReferenceCount =# c_unimplemented,
-        #= PJRT_Buffer_DecreaseExternalReferenceCount =# c_unimplemented,
-        #= PJRT_Buffer_OpaqueDeviceMemoryDataPointer =# c_unimplemented,
+        #= PJRT_Buffer_IncreaseExternalReferenceCount =# @cfunction(pjrt_buffer_increase_external_reference_count, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_IncreaseExternalReferenceCount_Args},)),
+        #= PJRT_Buffer_DecreaseExternalReferenceCount =# @cfunction(pjrt_buffer_decrease_external_reference_count, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_DecreaseExternalReferenceCount_Args},)),
+        #= PJRT_Buffer_OpaqueDeviceMemoryDataPointer =# @cfunction(pjrt_buffer_opaque_device_memory_data_pointer, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_OpaqueDeviceMemoryDataPointer_Args},)),
         #= PJRT_CopyToDeviceStream_Destroy =# c_unimplemented,
         #= PJRT_CopyToDeviceStream_AddChunk =# c_unimplemented,
         #= PJRT_CopyToDeviceStream_TotalBytes =# c_unimplemented,
@@ -2878,7 +3536,7 @@ function make_api(::Type{C}) where {C<:Client}
         #= PJRT_TopologyDescription_GetDeviceDescriptions =# c_unimplemented,
         #= PJRT_TopologyDescription_Serialize =# c_unimplemented,
         #= PJRT_TopologyDescription_Attributes =# c_unimplemented,
-        #= PJRT_Compile =# c_unimplemented,
+        #= PJRT_Compile =# @cfunction(pjrt_compile, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Compile_Args},)),
         #= PJRT_Executable_OutputElementTypes =# @cfunction(pjrt_executable_output_element_types, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Executable_OutputElementTypes_Args},)),
         #= PJRT_Executable_OutputDimensions =# @cfunction(pjrt_executable_output_dimensions, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Executable_OutputDimensions_Args},)),
         #= PJRT_Buffer_CopyToMemory =# @cfunction(pjrt_buffer_copy_to_memory, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_CopyToMemory_Args},)),
@@ -2890,35 +3548,35 @@ function make_api(::Type{C}) where {C<:Client}
         #= PJRT_ExecuteContext_Create =# c_unimplemented,
         #= PJRT_ExecuteContext_Destroy =# c_unimplemented,
         #= PJRT_Buffer_CopyRawToHost =# @cfunction(pjrt_buffer_copy_raw_to_host, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_CopyRawToHost_Args},)),
-        #= PJRT_AsyncHostToDeviceTransferManager_Destroy =# c_unimplemented,
+        #= PJRT_AsyncHostToDeviceTransferManager_Destroy =# @cfunction(pjrt_async_host_to_device_transfer_manager_destroy, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_AsyncHostToDeviceTransferManager_Destroy_Args},)),
         #= PJRT_AsyncHostToDeviceTransferManager_TransferData =# c_unimplemented,
-        #= PJRT_Client_CreateBuffersForAsyncHostToDevice =# c_unimplemented,
+        #= PJRT_Client_CreateBuffersForAsyncHostToDevice =# @cfunction(pjrt_client_create_buffers_for_async_host_to_device, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Client_CreateBuffersForAsyncHostToDevice_Args},)),
         #= PJRT_AsyncHostToDeviceTransferManager_RetrieveBuffer =# c_unimplemented,
         #= PJRT_AsyncHostToDeviceTransferManager_Device =# c_unimplemented,
         #= PJRT_AsyncHostToDeviceTransferManager_BufferCount =# c_unimplemented,
         #= PJRT_AsyncHostToDeviceTransferManager_BufferSize =# c_unimplemented,
         #= PJRT_AsyncHostToDeviceTransferManager_SetBufferError =# c_unimplemented,
         #= PJRT_AsyncHostToDeviceTransferManager_AddMetadata =# c_unimplemented,
-        #= PJRT_Client_DmaMap =# c_unimplemented,
-        #= PJRT_Client_DmaUnmap =# c_unimplemented,
+        #= PJRT_Client_DmaMap =# @cfunction(pjrt_client_dma_map, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Client_DmaMap_Args},)),
+        #= PJRT_Client_DmaUnmap =# @cfunction(pjrt_client_dma_unmap, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Client_DmaUnmap_Args},)),
         #= PJRT_Client_CreateUninitializedBuffer =# @cfunction(pjrt_client_create_uninitialized_buffer, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Client_CreateUninitializedBuffer_Args},)),
-        #= PJRT_Client_UpdateGlobalProcessInfo =# c_unimplemented,
+        #= PJRT_Client_UpdateGlobalProcessInfo =# @cfunction(pjrt_client_update_global_process_info, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Client_UpdateGlobalProcessInfo_Args},)),
         #= PJRT_TopologyDescription_Deserialize =# c_unimplemented,
-        #= PJRT_Client_CreateAliasBuffer =# c_unimplemented,
-        #= PJRT_Client_FulfillAliasBuffer =# c_unimplemented,
+        #= PJRT_Client_CreateAliasBuffer =# @cfunction(pjrt_client_create_alias_buffer, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Client_CreateAliasBuffer_Args},)),
+        #= PJRT_Client_FulfillAliasBuffer =# @cfunction(pjrt_client_fulfill_alias_buffer, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Client_FulfillAliasBuffer_Args},)),
         #= PJRT_LoadedExecutable_GetDeviceAssignment =# @cfunction(pjrt_loaded_executable_get_device_assignment, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_LoadedExecutable_GetDeviceAssignment_Args},)),
-        #= PJRT_Client_CreateErrorBuffer =# c_unimplemented,
+        #= PJRT_Client_CreateErrorBuffer =# @cfunction(pjrt_client_create_error_buffer, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Client_CreateErrorBuffer_Args},)),
         #= PJRT_AsyncHostToDeviceTransferManager_TransferLiteral =# c_unimplemented,
-        #= PJRT_Buffer_CopyRawToHostFuture =# c_unimplemented,
-        #= PJRT_Device_PoisonExecution =# c_unimplemented,
-        #= PJRT_Device_CreateAsyncTrackingEvent =# c_unimplemented,
-        #= PJRT_AsyncTrackingEvent_Destroy =# c_unimplemented,
+        #= PJRT_Buffer_CopyRawToHostFuture =# @cfunction(pjrt_buffer_copy_raw_to_host_future, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_CopyRawToHostFuture_Args},)),
+        #= PJRT_Device_PoisonExecution =# @cfunction(pjrt_device_poison_execution, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Device_PoisonExecution_Args},)),
+        #= PJRT_Device_CreateAsyncTrackingEvent =# @cfunction(pjrt_device_create_async_tracking_event, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Device_CreateAsyncTrackingEvent_Args},)),
+        #= PJRT_AsyncTrackingEvent_Destroy =# @cfunction(pjrt_async_tracking_event_destroy, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_AsyncTrackingEvent_Destroy_Args},)),
         #= PJRT_Executable_GetCompileOptions =# @cfunction(pjrt_executable_get_compile_options, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Executable_GetCompileOptions_Args},)),
-        #= PJRT_Buffer_DonateWithControlDependency =# c_unimplemented,
+        #= PJRT_Buffer_DonateWithControlDependency =# @cfunction(pjrt_buffer_donate_with_control_dependency, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_DonateWithControlDependency_Args},)),
         #= PJRT_Event_Create =# @cfunction(pjrt_event_create, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Event_Create_Args},)),
         #= PJRT_Event_Set =# @cfunction(pjrt_event_set, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Event_Set_Args},)),
         #= PJRT_Device_GetAttributes =# C_NULL,
-        #= PJRT_Client_Load =# c_unimplemented,
+        #= PJRT_Client_Load =# @cfunction(pjrt_client_load, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Client_Load_Args},)),
         #= PJRT_LoadedExecutable_AddressableDeviceLogicalIds =# @cfunction(pjrt_loaded_executable_addressable_device_logical_ids, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_LoadedExecutable_AddressableDeviceLogicalIds_Args},)),
         #= PJRT_Buffer_Bitcast =# @cfunction(pjrt_buffer_bitcast, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_Bitcast_Args},)),
         #= PJRT_Error_ForEachPayload =# @cfunction(pjrt_error_for_each_payload, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Error_ForEachPayload_Args},)),
