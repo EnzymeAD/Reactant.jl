@@ -393,6 +393,87 @@ end
     end
 end
 
+using Enzyme: Enzyme
+
+rem2pi_bcast_2259(x, r) = rem2pi.(x, r)
+mod2pi_bcast_2259(x) = mod2pi.(x)
+rem2pi_sum_nearest_2259(x) = sum(rem2pi.(x, Base.RoundNearest))
+rem2pi_grad_rev_2259(x) = Enzyme.gradient(Enzyme.Reverse, rem2pi_sum_nearest_2259, x)
+rem2pi_grad_fwd_2259(x) = Enzyme.gradient(Enzyme.Forward, rem2pi_sum_nearest_2259, x)
+
+@testset "rem2pi numerical stability (#2259)" begin
+    if !RunningOnTPU && (!@isdefined(RunningOnMetal) || !RunningOnMetal)
+        xs_f64 = Float64[
+            0.0,
+            -0.0,
+            7 * Float64(π) / 4,
+            9 * Float64(π) / 4,
+            2 * Float64(π),
+            -2 * Float64(π),
+            397073.0 * (Float64(π) / 2),
+            -397073.0 * (Float64(π) / 2),
+            1.0e4,
+            -1.0e5,
+            1.0e6,
+            1.0e8,
+            -1.0e15,
+            1.0e30,
+            -1.0e100,
+            1.0e300,
+            6381956970095103.0 * 2.0^797,
+            -6381956970095103.0 * 2.0^797,
+            floatmax(Float64),
+            -floatmax(Float64),
+            Inf,
+            -Inf,
+            NaN,
+        ]
+        xs_ra = Reactant.to_rarray(xs_f64)
+        for r in (Base.RoundNearest, Base.RoundToZero, Base.RoundDown, Base.RoundUp)
+            expected = rem2pi.(xs_f64, r)
+            got = Array(@jit(rem2pi_bcast_2259(xs_ra, r)))
+            for i in eachindex(expected)
+                if isnan(expected[i])
+                    @test isnan(got[i])
+                elseif iszero(expected[i])
+                    @test signbit(got[i]) == signbit(expected[i])
+                    @test iszero(got[i])
+                else
+                    @test isapprox(got[i], expected[i]; rtol=1e-15, atol=1e-15)
+                end
+            end
+        end
+
+        expected_mod = mod2pi.(xs_f64)
+        got_mod = Array(@jit(mod2pi_bcast_2259(xs_ra)))
+        for i in eachindex(expected_mod)
+            if isnan(expected_mod[i])
+                @test isnan(got_mod[i])
+            else
+                @test isapprox(got_mod[i], expected_mod[i]; rtol=1e-15, atol=1e-15)
+            end
+        end
+
+        xs_f32 = Float32[1.0f5, -1.0f7, 1.0f20, -1.0f30, floatmax(Float32)]
+        xs_f32_ra = Reactant.to_rarray(xs_f32)
+        for r in (Base.RoundNearest, Base.RoundToZero, Base.RoundDown, Base.RoundUp)
+            @test Array(@jit(rem2pi_bcast_2259(xs_f32_ra, r))) ≈ rem2pi.(xs_f32, r)
+        end
+
+        xs_i64 = Int64[0, 7, -19, 10_000_000, -123_456_789]
+        xs_i64_ra = Reactant.to_rarray(xs_i64)
+        @test Array(@jit(rem2pi_bcast_2259(xs_i64_ra, Base.RoundNearest))) ≈
+            rem2pi.(xs_i64, Base.RoundNearest)
+
+        pts = Float64[1.25, -12.34, 1.0e5, -1.0e12, 1.0e40]
+        pts_ra = Reactant.to_rarray(pts)
+        grad_rev = Array(only(@jit(rem2pi_grad_rev_2259(pts_ra))))
+        grad_fwd = Array(only(@jit(rem2pi_grad_fwd_2259(pts_ra))))
+        @test grad_rev ≈ ones(Float64, length(pts))
+        @test grad_fwd ≈ ones(Float64, length(pts))
+    end
+end
+
 @testset "xor" begin
     for a in (true, false), b in (true, false)
         @test @jit(xor(ConcreteRNumber(a), ConcreteRNumber(b))) == xor(a, b)
