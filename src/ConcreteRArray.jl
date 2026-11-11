@@ -982,6 +982,44 @@ function Base.map!(f, R::UnionAnyConcreteRArray, A::AbstractArray)
     return R
 end
 
+struct CallMultiMapReduce{Fn,Op,Dims,Init}
+    f::Fn
+    op::Op
+    dims::Dims
+    init::Init
+end
+
+function (mr::CallMultiMapReduce)(A, B, Cs...)
+    return Base.mapreduce(mr.f, mr.op, A, B, Cs...; dims=mr.dims, init=mr.init)
+end
+
+for (AT, BT) in (
+    (UnionAnyConcreteRArray, UnionAnyConcreteRArray),
+    (UnionAnyConcreteRArray, AbstractArray),
+    (AbstractArray, UnionAnyConcreteRArray),
+)
+    @eval function Base.mapreduce(
+        @nospecialize(f),
+        @nospecialize(op),
+        A::$(AT),
+        B::$(BT),
+        Cs::AbstractArray...;
+        dims=:,
+        init=Base._InitialValue(),
+    )
+        if !allequal((axes(A), axes(B), axes.(Cs)...))
+            throw(
+                DimensionMismatch(
+                    "all inputs to mapreduce must have the same indices, got $(axes(A)) and $(axes(B))",
+                ),
+            )
+        end
+        caller = CallMultiMapReduce(f, op, dims, init)
+        fn = compile(caller, (A, B, Cs...))
+        return fn(A, B, Cs...)
+    end
+end
+
 function myfill(val, dims)
     @opcall fill(val, dims)
 end
