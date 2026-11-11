@@ -563,6 +563,80 @@ end
     return notify(event, err)
 end
 
+## Named values
+# read a list of `PJRT_NamedValue`s owned by C into a `Dict`, copying their contents
+function unsafe_load_pjrt_named_values(ptr::Ptr{CAPI.PJRT_NamedValue}, n::Integer)
+    values = Dict{String,Any}()
+    for i in 1:n
+        nv = ptr + (i - 1) * sizeof(CAPI.PJRT_NamedValue)
+        name = unsafe_string(Ptr{UInt8}(unsafe_load(nv.name)), unsafe_load(nv.name_size))
+        type = unsafe_load(nv.type)
+        size = unsafe_load(nv.value_size)
+        values[name] = if type == CAPI.PJRT_NamedValue_kString
+            unsafe_string(Ptr{UInt8}(unsafe_load(nv.string_value)), size)
+        elseif type == CAPI.PJRT_NamedValue_kInt64
+            unsafe_load(nv.int64_value)
+        elseif type == CAPI.PJRT_NamedValue_kInt64List
+            copy(unsafe_wrap(Vector{Int64}, unsafe_load(nv.int64_array_value), size))
+        elseif type == CAPI.PJRT_NamedValue_kFloat
+            unsafe_load(nv.float_value)
+        elseif type == CAPI.PJRT_NamedValue_kBool
+            unsafe_load(nv.bool_value)
+        else
+            throw(invalid_argument("named value `$name` has unknown type $type"))
+        end
+    end
+    return values
+end
+
+# build the `PJRT_NamedValue`s of the `name => value` pairs in `pairs`; also return the Julia objects they point to,
+# which must be kept alive for as long as C uses them
+function pjrt_named_values(pairs)
+    roots = Any[]
+    values = map(collect(pairs)) do (name, value)
+        name = String(name)
+        push!(roots, name)
+        r = Ref{CAPI.PJRT_NamedValue}()
+        GC.@preserve r begin
+            nv = Base.unsafe_convert(Ptr{CAPI.PJRT_NamedValue}, r)
+            unsafe_store!(nv.struct_size, csizeof(CAPI.PJRT_NamedValue))
+            unsafe_store!(nv.extension_start, C_NULL)
+            unsafe_store!(nv.name, Cstring(pointer(name)))
+            unsafe_store!(nv.name_size, sizeof(name))
+            if value isa AbstractString
+                str = String(value)
+                push!(roots, str)
+                unsafe_store!(nv.type, CAPI.PJRT_NamedValue_kString)
+                unsafe_store!(nv.string_value, Cstring(pointer(str)))
+                unsafe_store!(nv.value_size, sizeof(str))
+            elseif value isa Bool # before `Integer`, since `Bool <: Integer`
+                unsafe_store!(nv.type, CAPI.PJRT_NamedValue_kBool)
+                unsafe_store!(nv.bool_value, value)
+                unsafe_store!(nv.value_size, 1)
+            elseif value isa Integer
+                unsafe_store!(nv.type, CAPI.PJRT_NamedValue_kInt64)
+                unsafe_store!(nv.int64_value, Int64(value))
+                unsafe_store!(nv.value_size, 1)
+            elseif value isa AbstractVector{<:Integer}
+                list = Vector{Int64}(value)
+                push!(roots, list)
+                unsafe_store!(nv.type, CAPI.PJRT_NamedValue_kInt64List)
+                unsafe_store!(nv.int64_array_value, pointer(list))
+                unsafe_store!(nv.value_size, length(list))
+            elseif value isa AbstractFloat
+                unsafe_store!(nv.type, CAPI.PJRT_NamedValue_kFloat)
+                unsafe_store!(nv.float_value, Float32(value))
+                unsafe_store!(nv.value_size, 1)
+            else
+                msg = "value of `$name` has type $(typeof(value)), which can't be a `PJRT_NamedValue`"
+                throw(Error(CAPI.PJRT_Error_Code_INTERNAL, msg))
+            end
+        end
+        r[]
+    end
+    return values, roots
+end
+
 ## Plugin
 @pjrt_catch_return function pjrt_plugin_initialize(
     args::Ptr{CAPI.PJRT_Plugin_Initialize_Args}
@@ -803,31 +877,37 @@ kind(::DeviceDescription)
     return ok()
 end
 
+# C views of the results of `attributes(::DeviceDescription)`, which C keeps for as long as the description is alive
+const device_description_attributes_cache = WeakKeyIdDict{
+    DeviceDescription,Tuple{Vector{CAPI.PJRT_NamedValue},Vector{Any}}
+}()
+
 """
     attributes(desc::DeviceDescription)
 
-Return the device-specific attributes of the device described by `desc` as name-value pairs.
-PJRT supports values of type `String`, `Int64`, `Vector{Int64}`, `Float32` and `Bool`.
+Return the device-specific attributes of the device described by `desc` as `name => value` pairs (e.g. a `Dict`).
+Values must be `AbstractString`, `Bool`, `Integer`, `AbstractVector{<:Integer}` or `AbstractFloat`, which C receives as
+`String`, `Bool`, `Int64`, `Vector{Int64}` and `Float32`.
+
+It is called at most once per `desc`: the C wrapper keeps a copy for as long as `desc` is alive, since C keeps pointers
+to it.
 
 !!! warning
 `PjRtCApiClient` copies the attributes once, when it wraps the device description, and treats any error as fatal.
-
-!!! todo
-Not supported yet: this method is never called and `PJRT_DeviceDescription_Attributes` always returns an empty list.
 
 Backs `PJRT_DeviceDescription_Attributes`.
 """
 attributes(::DeviceDescription)
 
-# TODO find the interface of `attributes`
 @pjrt_catch_return function pjrt_device_description_attributes(
     args::Ptr{CAPI.PJRT_DeviceDescription_Attributes_Args}
 )::Ptr{CAPI.PJRT_Error}
     desc = unsafe_pointer_to_objref(unsafe_load(args.device_description))::DeviceDescription
-    # TODO attributes not yet supported
-    # attrs = attributes(desc)
-    unsafe_store!(args.num_attributes, 0)
-    unsafe_store!(args.attributes, C_NULL)
+    values, _ = get!(device_description_attributes_cache, desc) do
+        pjrt_named_values(attributes(desc))
+    end
+    unsafe_store!(args.num_attributes, length(values))
+    unsafe_store!(args.attributes, pointer(values))
     return ok()
 end
 
@@ -1978,14 +2058,20 @@ fingerprint(::Executable)
     return ok()
 end
 
+# C views of the results of `cost_analysis`, which C keeps for as long as the executable is alive
+const cost_analysis_cache = WeakKeyIdDict{
+    Executable,Tuple{Vector{CAPI.PJRT_NamedValue},Vector{Any}}
+}()
+
 """
-    cost_analysis(exe::Executable) -> Vector{CAPI.PJRT_NamedValue}
+    cost_analysis(exe::Executable)
 
-Return the cost analysis of `exe` as name-value properties (e.g. `"flops"`, `"bytes accessed"`).
+Return the cost analysis of `exe` as `name => value` pairs (e.g. `"flops" => 1.0e6`, `"bytes accessed" => 4096`).
+Values must be `AbstractString`, `Bool`, `Integer`, `AbstractVector{<:Integer}` or `AbstractFloat`, which C receives as
+`String`, `Bool`, `Int64`, `Vector{Int64}` and `Float32`.
 
-!!! warning
-The vector, and the names and values it points to, are handed to C by pointer, so they must be owned by `exe` and the
-vector must never be resized.
+It is called at most once per `exe`: the C wrapper keeps a copy for as long as `exe` is alive, since C keeps pointers
+to it.
 
 Backs `PJRT_Executable_GetCostAnalysis`.
 """
@@ -1995,7 +2081,9 @@ cost_analysis(::Executable)
     args::Ptr{CAPI.PJRT_Executable_GetCostAnalysis_Args}
 )::Ptr{CAPI.PJRT_Error}
     exe = unsafe_pointer_to_objref(unsafe_load(args.executable))::Executable
-    props = cost_analysis(exe)::Vector{CAPI.PJRT_NamedValue}
+    props, _ = get!(cost_analysis_cache, exe) do
+        pjrt_named_values(cost_analysis(exe))
+    end
     unsafe_store!(args.num_properties, length(props))
     unsafe_store!(args.properties, isempty(props) ? C_NULL : pointer(props))
     return ok()
@@ -3345,79 +3433,6 @@ a `Client`. C gets one from a client with `topology_description`, or without a c
 """
 abstract type TopologyDescription end
 
-# read a list of `PJRT_NamedValue`s owned by C into a `Dict`, copying their contents
-function unsafe_load_named_values(ptr::Ptr{CAPI.PJRT_NamedValue}, n::Integer)
-    values = Dict{String,Any}()
-    for i in 1:n
-        nv = ptr + (i - 1) * sizeof(CAPI.PJRT_NamedValue)
-        name = unsafe_string(Ptr{UInt8}(unsafe_load(nv.name)), unsafe_load(nv.name_size))
-        type = unsafe_load(nv.type)
-        size = unsafe_load(nv.value_size)
-        values[name] = if type == CAPI.PJRT_NamedValue_kString
-            unsafe_string(Ptr{UInt8}(unsafe_load(nv.string_value)), size)
-        elseif type == CAPI.PJRT_NamedValue_kInt64
-            unsafe_load(nv.int64_value)
-        elseif type == CAPI.PJRT_NamedValue_kInt64List
-            copy(unsafe_wrap(Vector{Int64}, unsafe_load(nv.int64_array_value), size))
-        elseif type == CAPI.PJRT_NamedValue_kFloat
-            unsafe_load(nv.float_value)
-        elseif type == CAPI.PJRT_NamedValue_kBool
-            unsafe_load(nv.bool_value)
-        else
-            throw(invalid_argument("named value `$name` has unknown type $type"))
-        end
-    end
-    return values
-end
-
-# build the `PJRT_NamedValue`s of the `name => value` pairs in `pairs`; also return the Julia objects they point to,
-# which must be kept alive for as long as C uses them
-function named_values(pairs)
-    roots = Any[]
-    values = map(collect(pairs)) do (name, value)
-        name = String(name)
-        push!(roots, name)
-        r = Ref{CAPI.PJRT_NamedValue}()
-        GC.@preserve r begin
-            nv = Base.unsafe_convert(Ptr{CAPI.PJRT_NamedValue}, r)
-            unsafe_store!(nv.struct_size, csizeof(CAPI.PJRT_NamedValue))
-            unsafe_store!(nv.extension_start, C_NULL)
-            unsafe_store!(nv.name, Cstring(pointer(name)))
-            unsafe_store!(nv.name_size, sizeof(name))
-            if value isa AbstractString
-                str = String(value)
-                push!(roots, str)
-                unsafe_store!(nv.type, CAPI.PJRT_NamedValue_kString)
-                unsafe_store!(nv.string_value, Cstring(pointer(str)))
-                unsafe_store!(nv.value_size, sizeof(str))
-            elseif value isa Bool # before `Integer`, since `Bool <: Integer`
-                unsafe_store!(nv.type, CAPI.PJRT_NamedValue_kBool)
-                unsafe_store!(nv.bool_value, value)
-                unsafe_store!(nv.value_size, 1)
-            elseif value isa Integer
-                unsafe_store!(nv.type, CAPI.PJRT_NamedValue_kInt64)
-                unsafe_store!(nv.int64_value, Int64(value))
-                unsafe_store!(nv.value_size, 1)
-            elseif value isa AbstractVector{<:Integer}
-                list = Vector{Int64}(value)
-                push!(roots, list)
-                unsafe_store!(nv.type, CAPI.PJRT_NamedValue_kInt64List)
-                unsafe_store!(nv.int64_array_value, pointer(list))
-                unsafe_store!(nv.value_size, length(list))
-            elseif value isa AbstractFloat
-                unsafe_store!(nv.type, CAPI.PJRT_NamedValue_kFloat)
-                unsafe_store!(nv.float_value, Float32(value))
-                unsafe_store!(nv.value_size, 1)
-            else
-                msg = "value of `$name` has type $(typeof(value)), which can't be a `PJRT_NamedValue`"
-                throw(Error(CAPI.PJRT_Error_Code_INTERNAL, msg))
-            end
-        end
-        r[]
-    end
-    return values, roots
-end
-
 """
     create_topology_description(C::Type{<:Client}, name::String, options::Dict{String,Any}) -> TopologyDescription
 
@@ -3439,7 +3454,7 @@ struct TopologyDescriptionCreate{C<:Client} end
     name = unsafe_string(
         Ptr{UInt8}(unsafe_load(args.topology_name)), unsafe_load(args.topology_name_size)
     )
-    options = unsafe_load_named_values(
+    options = unsafe_load_pjrt_named_values(
         unsafe_load(args.create_options), unsafe_load(args.num_options)
     )
     topology = create_topology_description(C, name, options)::TopologyDescription
@@ -3608,7 +3623,7 @@ attributes(::TopologyDescription)
 )::Ptr{CAPI.PJRT_Error}
     topology = unsafe_pointer_to_objref(unsafe_load(args.topology))::TopologyDescription
     values, _ = get!(topology_attributes_cache, topology) do
-        named_values(attributes(topology))
+        pjrt_named_values(attributes(topology))
     end
     unsafe_store!(args.attributes, pointer(values))
     unsafe_store!(args.num_attributes, length(values))
