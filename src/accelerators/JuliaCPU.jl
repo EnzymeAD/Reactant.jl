@@ -1327,12 +1327,16 @@ function handle(
 
     key = state[1]
     k0, k1 = key % UInt32, (key >> 32) % UInt32
-    lo, hi = state[2], n == 3 ? state[3] : zero(UInt64)
+    # like XLA, the 128-bit Philox counter of a 2-element state is `(state[2], state[1])`
+    lo, hi = state[2], n == 3 ? state[3] : key
 
     out = Array{result.eltype}(undef, result.size)
     nbytes = sizeof(out)
     blocksize = algorithm === :THREE_FRY ? 2 : 4
-    nblocks = cld(cld(nbytes, 4), blocksize)
+    # like XLA, Philox fills types narrower than 32 bits with the low bits of one 32-bit word per element
+    narrow = algorithm !== :THREE_FRY && sizeof(result.eltype) < 4
+    nwords = narrow ? length(out) : cld(nbytes, 4)
+    nblocks = cld(nwords, blocksize)
     words = Vector{UInt32}(undef, nblocks * blocksize)
     for b in 0:(nblocks - 1)
         # 128-bit counter `(hi, lo) + b`
@@ -1351,12 +1355,17 @@ function handle(
             words[b * blocksize + i] = w
         end
     end
-    bytes = view(reinterpret(UInt8, words), 1:nbytes)
-    copyto!(vec(out), reinterpret(result.eltype, bytes))
+    if narrow
+        U = sizeof(result.eltype) == 1 ? UInt8 : UInt16
+        copyto!(vec(out), reinterpret(result.eltype, U[w % U for w in view(words, 1:nwords)]))
+    else
+        bytes = view(reinterpret(UInt8, words), 1:nbytes)
+        copyto!(vec(out), reinterpret(result.eltype, bytes))
+    end
 
     new_state = copy(state)
     new_state[2] = lo + UInt64(nblocks)
-    if n == 3 && !(algorithm !== :THREE_FRY)
+    if n == 3
         new_state[3] = hi + UInt64(new_state[2] < lo)
     end
     return (new_state, out)
