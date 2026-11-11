@@ -68,12 +68,16 @@ macro pjrt_catch_return(fdef)
 end
 
 # interface functions
+function add_chunk! end
+function add_metadata! end
 function addressable_device_logical_ids end
 function addressable_devices end
 function addressable_memories end
 function attributes end
 function bitcast! end
+function buffer_count end
 function buffer_from_host_buffer end
+function buffer_size end
 function clear_memory_stats! end
 function compile end
 function compile_options end
@@ -89,6 +93,7 @@ function create_buffers_for_async_host_to_device end
 function create_error_buffer end
 function create_topology_description end
 function create_uninitialized_buffer end
+function current_bytes end
 function debug_string end
 function decrease_external_reference_count! end
 function default_device_assignment end
@@ -109,6 +114,7 @@ function element_type end
 function executable end
 function execute end
 function fingerprint end
+function granule_size end
 function id end
 function increase_external_reference_count! end
 function is_addressable end
@@ -140,10 +146,15 @@ function platform_version end
 function poison_execution! end
 function process_index end
 function ready_event end
+function retrieve_buffer! end
+function set_buffer_error! end
 function size_of_generated_code_in_bytes end
 function to_host_buffer end
 function to_string end
 function topology_description end
+function total_bytes end
+function transfer_data! end
+function transfer_literal! end
 function unpadded_dimensions end
 function unsafe_pointer end
 function update_global_process_info! end
@@ -3340,12 +3351,26 @@ end
 """
     AsyncHostToDeviceTransferManager
 
-Manages the asynchronous transfer of host data to a set of new buffers, as returned by
-`create_buffers_for_async_host_to_device`.
+Manages the transfer of host data to a set of new buffers, as returned by `create_buffers_for_async_host_to_device`.
+
+Buffers are identified by their 1-based index (C's 0-based index + 1), which the C wrapper checks to be within
+`1:buffer_count(manager)`. Once a buffer has received its last transfer, or an error with `set_buffer_error!`, no more
+transfers into it are made.
 
 !!! todo
-Only creating and destroying it are supported yet: the `PJRT_AsyncHostToDeviceTransferManager_*` functions that
-transfer data or retrieve the buffers always return `UNIMPLEMENTED`.
+Transfers are _currently_ synchronous: the events returned to C are set as soon as the transfer methods return, so
+they must be done reading the host data by then.
+
+### Interface
+
+- `buffer_count`
+- `device`
+- `retrieve_buffer!`
+- `buffer_size`
+- `transfer_data!`
+- `transfer_literal!`
+- `set_buffer_error!`
+- `add_metadata!`
 """
 abstract type AsyncHostToDeviceTransferManager end
 
@@ -3354,6 +3379,369 @@ abstract type AsyncHostToDeviceTransferManager end
 )::Ptr{CAPI.PJRT_Error}
     ptr = unsafe_load(args.transfer_manager)
     ptr != C_NULL && unroot!(ptr)
+    return ok()
+end
+
+# convert C's 0-based `buffer_index` into the 1-based index of a buffer of `manager`, checking that it exists
+function checked_buffer_index(manager::AsyncHostToDeviceTransferManager, c_index::Integer)
+    n = buffer_count(manager)
+    if !(0 <= c_index < n)
+        throw(invalid_argument("buffer index $c_index is out of range for $n buffers"))
+    end
+    return Int(c_index) + 1
+end
+
+"""
+    buffer_count(manager::AsyncHostToDeviceTransferManager) -> Integer
+
+Return the number of buffers that `manager` transfers data into.
+
+Backs `PJRT_AsyncHostToDeviceTransferManager_BufferCount`.
+"""
+buffer_count(::AsyncHostToDeviceTransferManager)
+
+@pjrt_catch_return function pjrt_async_host_to_device_transfer_manager_buffer_count(
+    args::Ptr{CAPI.PJRT_AsyncHostToDeviceTransferManager_BufferCount_Args}
+)::Ptr{CAPI.PJRT_Error}
+    ptr = unsafe_load(args.transfer_manager)
+    manager = unsafe_pointer_to_objref(ptr)::AsyncHostToDeviceTransferManager
+    unsafe_store!(args.buffer_count, buffer_count(manager))
+    return ok()
+end
+
+"""
+    device(manager::AsyncHostToDeviceTransferManager) -> Device
+
+Return the device that `manager` transfers data to. The device must be kept alive by its client.
+
+Backs `PJRT_AsyncHostToDeviceTransferManager_Device`.
+"""
+device(::AsyncHostToDeviceTransferManager)
+
+@pjrt_catch_return function pjrt_async_host_to_device_transfer_manager_device(
+    args::Ptr{CAPI.PJRT_AsyncHostToDeviceTransferManager_Device_Args}
+)::Ptr{CAPI.PJRT_Error}
+    ptr = unsafe_load(args.transfer_manager)
+    manager = unsafe_pointer_to_objref(ptr)::AsyncHostToDeviceTransferManager
+    dev = device(manager)::Device
+    unsafe_store!(args.device_out, Ptr{CAPI.PJRT_Device}(pointer_from_objref(dev)))
+    return ok()
+end
+
+"""
+    retrieve_buffer!(manager::AsyncHostToDeviceTransferManager, index::Int) -> Buffer
+
+Return the `index`-th buffer of `manager`, handing it over to the caller. It may be retrieved before its transfers are
+done, in which case it becomes ready once they are. C retrieves each buffer at most once.
+
+The caller GC-roots the returned buffer.
+
+Backs `PJRT_AsyncHostToDeviceTransferManager_RetrieveBuffer`.
+"""
+retrieve_buffer!(::AsyncHostToDeviceTransferManager, ::Int)
+
+@pjrt_catch_return function pjrt_async_host_to_device_transfer_manager_retrieve_buffer(
+    args::Ptr{CAPI.PJRT_AsyncHostToDeviceTransferManager_RetrieveBuffer_Args}
+)::Ptr{CAPI.PJRT_Error}
+    ptr = unsafe_load(args.transfer_manager)
+    manager = unsafe_pointer_to_objref(ptr)::AsyncHostToDeviceTransferManager
+    index = checked_buffer_index(manager, unsafe_load(args.buffer_index))
+    buffer = retrieve_buffer!(manager, index)::Buffer
+    root!(buffer)
+    unsafe_store!(args.buffer_out, Ptr{CAPI.PJRT_Buffer}(pointer_from_objref(buffer)))
+    return ok()
+end
+
+"""
+    buffer_size(manager::AsyncHostToDeviceTransferManager, index::Int) -> Integer
+
+Return the on-device size in bytes of the `index`-th buffer of `manager`.
+
+Backs `PJRT_AsyncHostToDeviceTransferManager_BufferSize`.
+"""
+buffer_size(::AsyncHostToDeviceTransferManager, ::Int)
+
+@pjrt_catch_return function pjrt_async_host_to_device_transfer_manager_buffer_size(
+    args::Ptr{CAPI.PJRT_AsyncHostToDeviceTransferManager_BufferSize_Args}
+)::Ptr{CAPI.PJRT_Error}
+    ptr = unsafe_load(args.transfer_manager)
+    manager = unsafe_pointer_to_objref(ptr)::AsyncHostToDeviceTransferManager
+    index = checked_buffer_index(manager, unsafe_load(args.buffer_index))
+    unsafe_store!(args.buffer_size, buffer_size(manager, index))
+    return ok()
+end
+
+"""
+    transfer_data!(manager::AsyncHostToDeviceTransferManager, index::Int, data::Ptr{Cvoid}, offset, size, is_last::Bool)
+
+Copy `size` bytes of host memory at `data` into the `index`-th buffer of `manager`, starting at byte `offset` of its
+on-device data. `data` is already laid out in the on-device format (e.g. as returned by `copy_raw_to_host!`). The C
+wrapper checks that the range is within `buffer_size(manager, index)`.
+
+If `is_last`, the buffer becomes ready once the copy is done, and no more transfers into it are made.
+
+Backs `PJRT_AsyncHostToDeviceTransferManager_TransferData`.
+"""
+transfer_data!(::AsyncHostToDeviceTransferManager, ::Int, args...)
+
+@pjrt_catch_return function pjrt_async_host_to_device_transfer_manager_transfer_data(
+    args::Ptr{CAPI.PJRT_AsyncHostToDeviceTransferManager_TransferData_Args}
+)::Ptr{CAPI.PJRT_Error}
+    ptr = unsafe_load(args.transfer_manager)
+    manager = unsafe_pointer_to_objref(ptr)::AsyncHostToDeviceTransferManager
+    index = checked_buffer_index(manager, unsafe_load(args.buffer_index))
+    offset = unsafe_load(args.offset)
+    transfer_size = unsafe_load(args.transfer_size)
+
+    dst_size = buffer_size(manager, index)
+    if offset < 0 || transfer_size < 0 || offset + transfer_size > dst_size
+        throw(
+            invalid_argument(
+                "transfer range [$offset, $(offset + transfer_size)) is out of the $dst_size bytes of the buffer",
+            ),
+        )
+    end
+
+    data = unsafe_load(args.data)
+    transfer_data!(
+        manager, index, data, offset, transfer_size, unsafe_load(args.is_last_transfer)
+    )
+
+    event = root!(Event())
+    notify(event)
+    unsafe_store!(
+        args.done_with_h2d_transfer, Ptr{CAPI.PJRT_Event}(pointer_from_objref(event))
+    )
+    return ok()
+end
+
+"""
+    transfer_literal!(manager::AsyncHostToDeviceTransferManager, index::Int, data::Ptr{Cvoid}, type, dims, layout)
+
+Copy the host array at `data`, with element type `type::CAPI.PJRT_Buffer_Type`, dimensions `dims::Vector{Int64}` and
+host layout `layout::Ptr{CAPI.PJRT_Buffer_MemoryLayout}` (`C_NULL` for the default layout), into the whole `index`-th
+buffer of `manager`, converting it to the on-device format. The buffer becomes ready once the copy is done, and no more
+transfers into it are made.
+
+Backs `PJRT_AsyncHostToDeviceTransferManager_TransferLiteral`.
+"""
+transfer_literal!(::AsyncHostToDeviceTransferManager, ::Int, args...)
+
+@pjrt_catch_return function pjrt_async_host_to_device_transfer_manager_transfer_literal(
+    args::Ptr{CAPI.PJRT_AsyncHostToDeviceTransferManager_TransferLiteral_Args}
+)::Ptr{CAPI.PJRT_Error}
+    ptr = unsafe_load(args.transfer_manager)
+    manager = unsafe_pointer_to_objref(ptr)::AsyncHostToDeviceTransferManager
+    index = checked_buffer_index(manager, unsafe_load(args.buffer_index))
+
+    _eltype = unsafe_load(args.shape_element_type)
+    _size = copy(
+        unsafe_wrap(
+            Vector{Int64}, unsafe_load(args.shape_dims), unsafe_load(args.shape_num_dims)
+        ),
+    )
+    layout = unsafe_load(args.shape_layout)
+    transfer_literal!(manager, index, unsafe_load(args.data), _eltype, _size, layout)
+
+    event = root!(Event())
+    notify(event)
+    unsafe_store!(
+        args.done_with_h2d_transfer, Ptr{CAPI.PJRT_Event}(pointer_from_objref(event))
+    )
+    return ok()
+end
+
+"""
+    set_buffer_error!(manager::AsyncHostToDeviceTransferManager, index::Int, error::Error)
+
+Make the `index`-th buffer of `manager` fail with `error` instead of receiving data. No more transfers into it are
+made.
+
+Backs `PJRT_AsyncHostToDeviceTransferManager_SetBufferError`.
+"""
+set_buffer_error!(::AsyncHostToDeviceTransferManager, ::Int, ::Error)
+
+@pjrt_catch_return function pjrt_async_host_to_device_transfer_manager_set_buffer_error(
+    args::Ptr{CAPI.PJRT_AsyncHostToDeviceTransferManager_SetBufferError_Args}
+)::Ptr{CAPI.PJRT_Error}
+    ptr = unsafe_load(args.transfer_manager)
+    manager = unsafe_pointer_to_objref(ptr)::AsyncHostToDeviceTransferManager
+    index = checked_buffer_index(manager, unsafe_load(args.buffer_index))
+    error = Error(
+        unsafe_load(args.error_code),
+        unsafe_load(args.error_message),
+        unsafe_load(args.error_message_size),
+    )
+    set_buffer_error!(manager, index, error)
+    return ok()
+end
+
+"""
+    add_metadata!(manager::AsyncHostToDeviceTransferManager, metadata::Dict{String,String})
+
+Attach `metadata` to the transfers of `manager`, e.g. a handle to identify them when debugging.
+
+Backs `PJRT_AsyncHostToDeviceTransferManager_AddMetadata`.
+"""
+add_metadata!(::AsyncHostToDeviceTransferManager, ::Dict{String,String})
+
+@pjrt_catch_return function pjrt_async_host_to_device_transfer_manager_add_metadata(
+    args::Ptr{CAPI.PJRT_AsyncHostToDeviceTransferManager_AddMetadata_Args}
+)::Ptr{CAPI.PJRT_Error}
+    ptr = unsafe_load(args.transfer_manager)
+    manager = unsafe_pointer_to_objref(ptr)::AsyncHostToDeviceTransferManager
+    values = unsafe_load_pjrt_named_values(
+        unsafe_load(args.transfer_metadata), unsafe_load(args.num_metadata)
+    )
+    metadata = Dict{String,String}()
+    for (key, value) in values
+        value isa String ||
+            throw(invalid_argument("transfer metadata `$key` is not a string"))
+        metadata[key] = value
+    end
+    add_metadata!(manager, metadata)
+    return ok()
+end
+
+"""
+    CopyToDeviceStream
+
+A stream of chunks of host data to be copied to a device, which expects `total_bytes` bytes in total, in chunks whose
+size is a multiple of `granule_size`. It is complete once `current_bytes == total_bytes`, and never changes afterwards.
+
+The C wrapper checks those conditions before calling `add_chunk!`.
+
+!!! todo
+`execute` ignores the receive callbacks of `PJRT_ExecuteOptions`, which is how C gets a stream, so nothing can hand
+one to C yet.
+
+### Interface
+
+- `add_chunk!`
+- `total_bytes`
+- `granule_size`
+- `current_bytes`
+"""
+abstract type CopyToDeviceStream end
+
+@pjrt_catch_return function pjrt_copy_to_device_stream_destroy(
+    args::Ptr{CAPI.PJRT_CopyToDeviceStream_Destroy_Args}
+)::Ptr{CAPI.PJRT_Error}
+    ptr = unsafe_load(args.stream)
+    ptr != C_NULL && unroot!(ptr)
+    return ok()
+end
+
+"""
+    add_chunk!(stream::CopyToDeviceStream, data::Ptr{Cvoid}, size::Integer)
+
+Copy the `size` bytes of host memory at `data` to the device as the next chunk of `stream`, adding `size` to
+`current_bytes(stream)`.
+
+`data` is freed right after this returns, so the copy must be done by then.
+
+!!! todo
+The copy is _currently_ synchronous: the event returned to C is set as soon as this returns.
+
+Backs `PJRT_CopyToDeviceStream_AddChunk`.
+"""
+add_chunk!(::CopyToDeviceStream, ::Ptr{Cvoid}, ::Integer)
+
+@pjrt_catch_return function pjrt_copy_to_device_stream_add_chunk(
+    args::Ptr{CAPI.PJRT_CopyToDeviceStream_AddChunk_Args}
+)::Ptr{CAPI.PJRT_Error}
+    stream = unsafe_pointer_to_objref(unsafe_load(args.stream))::CopyToDeviceStream
+    chunk_ptr = unsafe_load(args.chunk)
+    chunk_ptr == C_NULL && throw(invalid_argument("chunk is null"))
+    # `PJRT_Chunk` has no field accessors on pointers, so it's loaded by value
+    chunk = unsafe_load(chunk_ptr)
+
+    # the stream takes ownership of the chunk, so the chunk is freed whatever happens; invalid chunks and failed
+    # transfers are reported through the returned event, like in XLA
+    error = try
+        total = total_bytes(stream)
+        current = current_bytes(stream)
+        granule = granule_size(stream)
+        if current == total
+            throw(invalid_argument("stream is already complete"))
+        elseif chunk.size % granule != 0
+            throw(
+                invalid_argument(
+                    "chunk of $(chunk.size) bytes is not a multiple of the $granule-byte granule",
+                ),
+            )
+        elseif current + chunk.size > total
+            throw(
+                invalid_argument(
+                    "chunk of $(chunk.size) bytes exceeds the $(total - current) bytes left in the stream",
+                ),
+            )
+        end
+        add_chunk!(stream, chunk.data, chunk.size)
+        nothing
+    catch err
+        err isa Error || rethrow()
+        err
+    finally
+        if chunk.deleter != C_NULL
+            ccall(chunk.deleter, Cvoid, (Ptr{Cvoid}, Ptr{Cvoid}), chunk.data, chunk.deleter_arg)
+        end
+    end
+
+    event = root!(Event())
+    notify(event, error)
+    unsafe_store!(args.transfer_complete, Ptr{CAPI.PJRT_Event}(pointer_from_objref(event)))
+    return ok()
+end
+
+"""
+    total_bytes(stream::CopyToDeviceStream) -> Integer
+
+Return the total number of bytes that `stream` expects to be transferred.
+
+Backs `PJRT_CopyToDeviceStream_TotalBytes`.
+"""
+total_bytes(::CopyToDeviceStream)
+
+@pjrt_catch_return function pjrt_copy_to_device_stream_total_bytes(
+    args::Ptr{CAPI.PJRT_CopyToDeviceStream_TotalBytes_Args}
+)::Ptr{CAPI.PJRT_Error}
+    stream = unsafe_pointer_to_objref(unsafe_load(args.stream))::CopyToDeviceStream
+    unsafe_store!(args.total_bytes, total_bytes(stream))
+    return ok()
+end
+
+"""
+    granule_size(stream::CopyToDeviceStream) -> Integer
+
+Return the granule size in bytes of `stream`: the size of every chunk must be a multiple of it.
+
+Backs `PJRT_CopyToDeviceStream_GranuleSize`.
+"""
+granule_size(::CopyToDeviceStream)
+
+@pjrt_catch_return function pjrt_copy_to_device_stream_granule_size(
+    args::Ptr{CAPI.PJRT_CopyToDeviceStream_GranuleSize_Args}
+)::Ptr{CAPI.PJRT_Error}
+    stream = unsafe_pointer_to_objref(unsafe_load(args.stream))::CopyToDeviceStream
+    unsafe_store!(args.granule_size_in_bytes, granule_size(stream))
+    return ok()
+end
+
+"""
+    current_bytes(stream::CopyToDeviceStream) -> Integer
+
+Return the number of bytes that `stream` has transferred or buffered to transfer so far.
+
+Backs `PJRT_CopyToDeviceStream_CurrentBytes`.
+"""
+current_bytes(::CopyToDeviceStream)
+
+@pjrt_catch_return function pjrt_copy_to_device_stream_current_bytes(
+    args::Ptr{CAPI.PJRT_CopyToDeviceStream_CurrentBytes_Args}
+)::Ptr{CAPI.PJRT_Error}
+    stream = unsafe_pointer_to_objref(unsafe_load(args.stream))::CopyToDeviceStream
+    unsafe_store!(args.current_bytes, current_bytes(stream))
     return ok()
 end
 
@@ -3938,11 +4326,11 @@ function make_api(::Type{C}) where {C<:Client}
         #= PJRT_Buffer_IncreaseExternalReferenceCount =# @cfunction(pjrt_buffer_increase_external_reference_count, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_IncreaseExternalReferenceCount_Args},)),
         #= PJRT_Buffer_DecreaseExternalReferenceCount =# @cfunction(pjrt_buffer_decrease_external_reference_count, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_DecreaseExternalReferenceCount_Args},)),
         #= PJRT_Buffer_OpaqueDeviceMemoryDataPointer =# @cfunction(pjrt_buffer_opaque_device_memory_data_pointer, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_OpaqueDeviceMemoryDataPointer_Args},)),
-        #= PJRT_CopyToDeviceStream_Destroy =# c_unimplemented,
-        #= PJRT_CopyToDeviceStream_AddChunk =# c_unimplemented,
-        #= PJRT_CopyToDeviceStream_TotalBytes =# c_unimplemented,
-        #= PJRT_CopyToDeviceStream_GranuleSize =# c_unimplemented,
-        #= PJRT_CopyToDeviceStream_CurrentBytes =# c_unimplemented,
+        #= PJRT_CopyToDeviceStream_Destroy =# @cfunction(pjrt_copy_to_device_stream_destroy, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_CopyToDeviceStream_Destroy_Args},)),
+        #= PJRT_CopyToDeviceStream_AddChunk =# @cfunction(pjrt_copy_to_device_stream_add_chunk, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_CopyToDeviceStream_AddChunk_Args},)),
+        #= PJRT_CopyToDeviceStream_TotalBytes =# @cfunction(pjrt_copy_to_device_stream_total_bytes, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_CopyToDeviceStream_TotalBytes_Args},)),
+        #= PJRT_CopyToDeviceStream_GranuleSize =# @cfunction(pjrt_copy_to_device_stream_granule_size, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_CopyToDeviceStream_GranuleSize_Args},)),
+        #= PJRT_CopyToDeviceStream_CurrentBytes =# @cfunction(pjrt_copy_to_device_stream_current_bytes, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_CopyToDeviceStream_CurrentBytes_Args},)),
         #= PJRT_TopologyDescription_Create =# unsafe_convert(Ptr{Cvoid}, c_topology_create),
         #= PJRT_TopologyDescription_Destroy =# @cfunction(pjrt_topology_description_destroy, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_TopologyDescription_Destroy_Args},)),
         #= PJRT_TopologyDescription_PlatformName =# @cfunction(pjrt_topology_description_platform_name, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_TopologyDescription_PlatformName_Args},)),
@@ -3963,14 +4351,14 @@ function make_api(::Type{C}) where {C<:Client}
         #= PJRT_ExecuteContext_Destroy =# c_unimplemented,
         #= PJRT_Buffer_CopyRawToHost =# @cfunction(pjrt_buffer_copy_raw_to_host, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_CopyRawToHost_Args},)),
         #= PJRT_AsyncHostToDeviceTransferManager_Destroy =# @cfunction(pjrt_async_host_to_device_transfer_manager_destroy, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_AsyncHostToDeviceTransferManager_Destroy_Args},)),
-        #= PJRT_AsyncHostToDeviceTransferManager_TransferData =# c_unimplemented,
+        #= PJRT_AsyncHostToDeviceTransferManager_TransferData =# @cfunction(pjrt_async_host_to_device_transfer_manager_transfer_data, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_AsyncHostToDeviceTransferManager_TransferData_Args},)),
         #= PJRT_Client_CreateBuffersForAsyncHostToDevice =# @cfunction(pjrt_client_create_buffers_for_async_host_to_device, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Client_CreateBuffersForAsyncHostToDevice_Args},)),
-        #= PJRT_AsyncHostToDeviceTransferManager_RetrieveBuffer =# c_unimplemented,
-        #= PJRT_AsyncHostToDeviceTransferManager_Device =# c_unimplemented,
-        #= PJRT_AsyncHostToDeviceTransferManager_BufferCount =# c_unimplemented,
-        #= PJRT_AsyncHostToDeviceTransferManager_BufferSize =# c_unimplemented,
-        #= PJRT_AsyncHostToDeviceTransferManager_SetBufferError =# c_unimplemented,
-        #= PJRT_AsyncHostToDeviceTransferManager_AddMetadata =# c_unimplemented,
+        #= PJRT_AsyncHostToDeviceTransferManager_RetrieveBuffer =# @cfunction(pjrt_async_host_to_device_transfer_manager_retrieve_buffer, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_AsyncHostToDeviceTransferManager_RetrieveBuffer_Args},)),
+        #= PJRT_AsyncHostToDeviceTransferManager_Device =# @cfunction(pjrt_async_host_to_device_transfer_manager_device, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_AsyncHostToDeviceTransferManager_Device_Args},)),
+        #= PJRT_AsyncHostToDeviceTransferManager_BufferCount =# @cfunction(pjrt_async_host_to_device_transfer_manager_buffer_count, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_AsyncHostToDeviceTransferManager_BufferCount_Args},)),
+        #= PJRT_AsyncHostToDeviceTransferManager_BufferSize =# @cfunction(pjrt_async_host_to_device_transfer_manager_buffer_size, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_AsyncHostToDeviceTransferManager_BufferSize_Args},)),
+        #= PJRT_AsyncHostToDeviceTransferManager_SetBufferError =# @cfunction(pjrt_async_host_to_device_transfer_manager_set_buffer_error, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_AsyncHostToDeviceTransferManager_SetBufferError_Args},)),
+        #= PJRT_AsyncHostToDeviceTransferManager_AddMetadata =# @cfunction(pjrt_async_host_to_device_transfer_manager_add_metadata, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_AsyncHostToDeviceTransferManager_AddMetadata_Args},)),
         #= PJRT_Client_DmaMap =# @cfunction(pjrt_client_dma_map, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Client_DmaMap_Args},)),
         #= PJRT_Client_DmaUnmap =# @cfunction(pjrt_client_dma_unmap, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Client_DmaUnmap_Args},)),
         #= PJRT_Client_CreateUninitializedBuffer =# @cfunction(pjrt_client_create_uninitialized_buffer, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Client_CreateUninitializedBuffer_Args},)),
@@ -3980,7 +4368,7 @@ function make_api(::Type{C}) where {C<:Client}
         #= PJRT_Client_FulfillAliasBuffer =# @cfunction(pjrt_client_fulfill_alias_buffer, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Client_FulfillAliasBuffer_Args},)),
         #= PJRT_LoadedExecutable_GetDeviceAssignment =# @cfunction(pjrt_loaded_executable_get_device_assignment, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_LoadedExecutable_GetDeviceAssignment_Args},)),
         #= PJRT_Client_CreateErrorBuffer =# @cfunction(pjrt_client_create_error_buffer, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Client_CreateErrorBuffer_Args},)),
-        #= PJRT_AsyncHostToDeviceTransferManager_TransferLiteral =# c_unimplemented,
+        #= PJRT_AsyncHostToDeviceTransferManager_TransferLiteral =# @cfunction(pjrt_async_host_to_device_transfer_manager_transfer_literal, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_AsyncHostToDeviceTransferManager_TransferLiteral_Args},)),
         #= PJRT_Buffer_CopyRawToHostFuture =# @cfunction(pjrt_buffer_copy_raw_to_host_future, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_CopyRawToHostFuture_Args},)),
         #= PJRT_Device_PoisonExecution =# @cfunction(pjrt_device_poison_execution, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Device_PoisonExecution_Args},)),
         #= PJRT_Device_CreateAsyncTrackingEvent =# @cfunction(pjrt_device_create_async_tracking_event, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Device_CreateAsyncTrackingEvent_Args},)),
