@@ -117,6 +117,7 @@ function compile_mlir(
             run_pass_pipeline!(
                 mod, "drop-unsupported-attributes", "drop_enzymexla_attributes"
             )
+            Reactant._strip_enzymexla_func_arg_attrs!(mod)
         end
 
         return mod, mlir_fn_res
