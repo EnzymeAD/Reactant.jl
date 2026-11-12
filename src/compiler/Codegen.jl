@@ -64,6 +64,19 @@ end
     return Base.getindex(obj, field)
 end
 
+@static if isdefined(Core, :GenericMemory)
+    @inline function traced_getfield(
+        @nospecialize(
+            obj::Core.GenericMemory{
+                <:Any,<:Union{ConcretePJRTNumber,ConcreteIFRTNumber,TracedRNumber}
+            }
+        ),
+        field,
+    )
+        return Base.getindex(obj, field)
+    end
+end
+
 @inline function traced_getfield(
     @nospecialize(obj::Union{AbstractConcreteArray,AbstractConcreteNumber}), field
 )
@@ -575,6 +588,108 @@ function create_result(
     end
 
     return result_cache[tocopy]
+end
+
+@static if isdefined(Core, :GenericMemory)
+    function create_result(
+        tocopy::Core.GenericMemory,
+        @nospecialize(path::Tuple),
+        result_stores,
+        path_to_shard_info,
+        to_unreshard_results,
+        unresharded_code::Vector{Expr},
+        unresharded_arrays_cache,
+        used_shardinfo,
+        result_cache,
+        var_idx,
+        resultgen_code,
+    )
+        args = (
+            result_stores,
+            path_to_shard_info,
+            to_unreshard_results,
+            unresharded_code::Vector{Expr},
+            unresharded_arrays_cache,
+            used_shardinfo,
+            result_cache,
+            var_idx,
+            resultgen_code,
+        )
+
+        if !haskey(result_cache, tocopy)
+            sym = Symbol("result", var_idx[])
+            var_idx[] += 1
+            MT = Core.Typeof(tocopy)
+
+            push!(
+                resultgen_code,
+                quote
+                    $sym = $(MT)(undef, $(length(tocopy)))
+                end,
+            )
+
+            result_cache[tocopy] = sym
+
+            for i in eachindex(tocopy)
+                isassigned(tocopy, i) || continue
+                subexpr = create_result(tocopy[i], append_path(path, i), args...)
+                push!(
+                    resultgen_code,
+                    quote
+                        @inbounds $sym[$i] = $subexpr
+                    end,
+                )
+            end
+        end
+
+        return result_cache[tocopy]
+    end
+
+    function create_result(
+        tocopy::Core.GenericMemoryRef,
+        @nospecialize(path::Tuple),
+        result_stores,
+        path_to_shard_info,
+        to_unreshard_results,
+        unresharded_code::Vector{Expr},
+        unresharded_arrays_cache,
+        used_shardinfo,
+        result_cache,
+        var_idx,
+        resultgen_code,
+    )
+        if !haskey(result_cache, tocopy)
+            sym = Symbol("result", var_idx[])
+            var_idx[] += 1
+            mem_expr = create_result(
+                tocopy.mem,
+                append_path(path, :mem),
+                result_stores,
+                path_to_shard_info,
+                to_unreshard_results,
+                unresharded_code::Vector{Expr},
+                unresharded_arrays_cache,
+                used_shardinfo,
+                result_cache,
+                var_idx,
+                resultgen_code,
+            )
+            ref_expr = if isempty(tocopy.mem)
+                :(Core.memoryref($mem_expr))
+            else
+                :(Core.memoryref($mem_expr, $(Core.memoryrefoffset(tocopy))))
+            end
+            push!(
+                resultgen_code,
+                quote
+                    $sym = $ref_expr
+                end,
+            )
+            result_cache[tocopy] = sym
+        end
+
+        return result_cache[tocopy]
+    end
 end
 
 function create_result(

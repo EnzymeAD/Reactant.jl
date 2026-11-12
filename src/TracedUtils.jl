@@ -461,6 +461,14 @@ Base.@nospecializeinfer function make_mlir_fn(
     )
 end
 
+@inline function _is_indexed_container(@nospecialize(x))
+    @static if isdefined(Core, :GenericMemory)
+        return x isa Array || x isa Dict || x isa Core.GenericMemory
+    else
+        return x isa Array || x isa Dict
+    end
+end
+
 # Reuse MLIR setup across argument types; make_tracer handles each argument.
 Base.@nospecializeinfer function prepare_mlir_fn_args(
     @nospecialize(args),
@@ -574,7 +582,7 @@ Base.@nospecializeinfer function prepare_mlir_fn_args(
         end
         aval = args[path[2]]
         for idx in path[3:end]
-            if aval isa Array || aval isa Dict
+            if _is_indexed_container(aval)
                 aval = getindex(aval, idx)
                 stridx = stridx * "[" * string(idx) * "]"
             else
@@ -800,7 +808,7 @@ Base.@nospecializeinfer function finalize_mlir_fn(
                 stridx = string(verify_arg_names[conflict[1]])
                 aval = args[conflict[1]]
                 for (cidx, idx) in enumerate(Base.tail(conflict))
-                    if aval isa Array || aval isa Dict
+                    if _is_indexed_container(aval)
                         aval = Reactant.@allowscalar getindex(aval, idx)
                         stridx = stridx * "[" * string(idx) * "]"
                     else
