@@ -1212,15 +1212,89 @@ function elem_apply_via_while_loop(
     return ReactantCore.materialize_traced_array(reshape(result, out_size))
 end
 
+function _scalarize_zero_dim_arg(arg)
+    if arg isa Number || arg isa TracedRArray{<:Any,0}
+        return promote_to(TracedRNumber, arg)
+    elseif arg isa Base.RefValue
+        return arg[]
+    end
+    return arg
+end
+
+function _is_nonprimitive_host_array(@nospecialize(arg))
+    return arg isa AbstractArray &&
+           !(arg isa AnyTracedRArray) &&
+           !(
+               eltype(arg) <:
+               Union{Reactant.ReactantPrimitive,Reactant.RNumber,TracedRNumber}
+           )
+end
+
+_elem_at_index(arg::Base.RefValue, _) = arg[]
+_elem_at_index(arg::AbstractArray, I) = @allowscalar arg[I]
+_elem_at_index(arg, _) = arg
+
+_args_at_index(::Tuple{}, _) = ()
+function _args_at_index(args::Tuple, I)
+    return (_elem_at_index(first(args), I), _args_at_index(Base.tail(args), I)...)
+end
+
+function _elem_apply_nonprimitive_host(f, args::Tuple)
+    out_size = ()
+    for arg in args
+        if !scalar_arg(arg)
+            out_size = size(arg)
+            break
+        end
+    end
+    raw = Vector{Any}(undef, prod(out_size))
+    lin = 0
+    for I in CartesianIndices(out_size)
+        lin += 1
+        scalar_args = _args_at_index(args, I)
+        raw[lin] = Reactant.call_with_reactant(f, scalar_args...)
+    end
+    isempty(raw) && return reshape(raw, out_size)
+    all_traced_or_prim_num = true
+    T_num = Union{}
+    any_traced_num = false
+    for y in raw
+        if y isa TracedRNumber
+            any_traced_num = true
+            T_num = promote_type(T_num, Reactant.unwrapped_eltype(y))
+        elseif y isa Reactant.ReactantPrimitive
+            T_num = promote_type(T_num, typeof(y))
+        else
+            all_traced_or_prim_num = false
+            break
+        end
+    end
+    if all_traced_or_prim_num && any_traced_num && T_num <: Reactant.ReactantPrimitive
+        nums = Array{TracedRNumber{T_num},length(out_size)}(undef, out_size)
+        for i in eachindex(raw)
+            nums[i] = promote_to(TracedRNumber{T_num}, raw[i])
+        end
+        return Reactant.aos_to_soa(nums)
+    end
+    ElemT = Core.Typeof(raw[1])
+    for i in 2:length(raw)
+        ElemT = promote_type(ElemT, Core.Typeof(raw[i]))
+    end
+    typed = Array{ElemT,length(out_size)}(undef, out_size)
+    for i in eachindex(raw)
+        typed[i] = raw[i]
+    end
+    return typed
+end
+
 function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
     if all(iszero ∘ ndims, args)
-        scalar_args = map(args) do arg
-            if arg isa Number || arg isa TracedRArray{<:Any,0}
-                return promote_to(TracedRNumber, arg)
-            end
-            return arg
-        end
+        scalar_args = map(_scalarize_zero_dim_arg, args)
         return Reactant.call_with_reactant(f, scalar_args...)
+    end
+
+    if any(_is_nonprimitive_host_array, args)
+        return _elem_apply_nonprimitive_host(f, args)
     end
 
     # we can expand the scope of this later to support cases where the output

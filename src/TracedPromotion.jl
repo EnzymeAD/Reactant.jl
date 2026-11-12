@@ -95,8 +95,33 @@ function ReactantCore.promote_to_traced(x)
     return promote_to(TracedRNumber{unwrapped_eltype(typeof(x))}, x)
 end
 
+function _all_identical_untraced(arg::AbstractArray)
+    isempty(arg) && return false
+    first_val = @allowscalar first(arg)
+    ReactantCore.is_traced(first_val) && return false
+    for x in arg
+        x === first_val || return false
+    end
+    return true
+end
+
 ## Promote to a Traced Type and broadcast to a given size
 function broadcast_to_size(arg::AbstractArray, rsize)
+    if !(eltype(arg) <: Union{ReactantPrimitive,RNumber,TracedRNumber})
+        if _all_identical_untraced(arg)
+            return Ref(@allowscalar first(arg))
+        end
+        rsize_tup = Tuple(rsize)
+        if size(arg) == rsize_tup
+            return arg
+        end
+        out = Array{eltype(arg),length(rsize_tup)}(undef, rsize_tup)
+        ext = Broadcast.extrude(arg)
+        for I in CartesianIndices(rsize_tup)
+            @inbounds out[I] = @allowscalar ext[I]
+        end
+        return out
+    end
     return broadcast_to_size(promote_to(TracedRArray, arg), rsize)
 end
 
@@ -119,3 +144,4 @@ function broadcast_to_size(arg::Broadcast.Extruded, rsize)
 end
 
 broadcast_to_size(arg::Base.RefValue, rsize) = arg
+broadcast_to_size(arg, rsize) = Ref(arg)
