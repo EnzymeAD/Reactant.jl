@@ -194,7 +194,15 @@ function Base.Int64(attr::Attribute)
     return API.mlirIntegerAttrGetValueInt(attr)
 end
 
-# TODO(#2244) mlirIntegerAttrGetValueSInt
+"""
+    sint_value(attr)
+
+Returns the value stored in the given integer attribute, assuming the value is of signed type and fits into a signed 64-bit integer.
+"""
+function sint_value(attr::Attribute)
+    @assert isinteger(attr) "attribute $(attr) is not an integer attribute"
+    return API.mlirIntegerAttrGetValueSInt(attr)
+end
 
 """
     UInt64(attr)
@@ -252,8 +260,8 @@ isopaque(attr::Attribute) = API.mlirAttributeIsAOpaque(attr)
 Creates an opaque attribute in the given context associated with the dialect identified by its namespace.
 The attribute contains opaque byte data of the specified length (data need not be null-terminated).
 """
-function OpaqueAttribute(namespace, data, type; context::Context=context)
-    return Attribute(API.mlirOpaqueAttrGet(context, namespace, length(data), data, type))
+function OpaqueAttribute(namespace, data, type; context::Context=current_context())
+    return Attribute(API.mlirOpaqueAttrGet(context, namespace, sizeof(data), data, type))
 end
 
 """
@@ -432,8 +440,42 @@ Checks whether the given attribute is an elements attribute.
 """
 iselements(attr::Attribute) = API.mlirAttributeIsAElements(attr)
 
-# TODO(#2244) mlirElementsAttrGetValue
-# TODO(#2244) mlirElementsAttrIsValidIndex
+function _to_uint64_indices(idxs)
+    out = Vector{UInt64}(undef, length(idxs))
+    k = 1
+    for idx in idxs
+        out[k] = UInt64(idx)
+        k += 1
+    end
+    return out
+end
+
+"""
+    isvalidindex(attr, idxs)
+
+Checks whether the given 0-based rank-dimensional index is valid in the given elements attribute.
+"""
+function isvalidindex(attr::Attribute, idxs)
+    @assert iselements(attr) "attribute $(attr) is not an elements attribute"
+    raw = _to_uint64_indices(idxs)
+    return GC.@preserve raw API.mlirElementsAttrIsValidIndex(
+        attr, length(raw), pointer(raw)
+    )
+end
+
+"""
+    element_value(attr, idxs)
+
+Returns the element at the given 0-based rank-dimensional index in the given elements attribute.
+"""
+function element_value(attr::Attribute, idxs)
+    @assert iselements(attr) "attribute $(attr) is not an elements attribute"
+    @assert isvalidindex(attr, idxs) "index $(idxs) is out of bounds for attribute $(attr)"
+    raw = _to_uint64_indices(idxs)
+    return Attribute(
+        GC.@preserve raw API.mlirElementsAttrGetValue(attr, length(raw), pointer(raw))
+    )
+end
 
 """
     isdenseelements(attr)
@@ -454,7 +496,19 @@ function DenseElementsAttribute(shaped_type::Type, elements::AbstractArray)
     return Attribute(API.mlirDenseElementsAttrGet(shaped_type, length(elements), elements))
 end
 
-# TODO(#2244) mlirDenseElementsAttrRawBufferGet
+"""
+    DenseElementsAttribute(shapedType, rawBufferSize, rawBuffer)
+
+Creates a dense elements attribute with the given Shaped type and elements populated from a packed, row-major opaque buffer of contents.
+"""
+function DenseElementsAttribute(
+    shaped_type::Type, raw_buffer_size::Integer, raw_buffer::Ptr
+)
+    @assert isshaped(shaped_type) "type $(shaped_type) is not a shaped type"
+    return Attribute(
+        API.mlirDenseElementsAttrRawBufferGet(shaped_type, raw_buffer_size, raw_buffer)
+    )
+end
 
 """
     fill(attr, shapedType)
@@ -468,47 +522,47 @@ end
 
 function Base.fill(value::Bool, shaped_type::Type)
     @assert isshaped(shaped_type) "type $(shaped_type) is not a shaped type"
-    return API.mlirDenseElementsAttrBoolSplatGet(shaped_type, value)
+    return Attribute(API.mlirDenseElementsAttrBoolSplatGet(shaped_type, value))
 end
 
 function Base.fill(value::UInt8, shaped_type::Type)
     @assert isshaped(shaped_type) "type $(shaped_type) is not a shaped type"
-    return API.mlirDenseElementsAttrUInt8SplatGet(shaped_type, value)
+    return Attribute(API.mlirDenseElementsAttrUInt8SplatGet(shaped_type, value))
 end
 
 function Base.fill(value::Int8, shaped_type::Type)
     @assert isshaped(shaped_type) "type $(shaped_type) is not a shaped type"
-    return API.mlirDenseElementsAttrInt8SplatGet(shaped_type, value)
+    return Attribute(API.mlirDenseElementsAttrInt8SplatGet(shaped_type, value))
 end
 
 function Base.fill(value::UInt32, shaped_type::Type)
     @assert isshaped(shaped_type) "type $(shaped_type) is not a shaped type"
-    return API.mlirDenseElementsAttrUInt32SplatGet(shaped_type, value)
+    return Attribute(API.mlirDenseElementsAttrUInt32SplatGet(shaped_type, value))
 end
 
 function Base.fill(value::Int32, shaped_type::Type)
     @assert isshaped(shaped_type) "type $(shaped_type) is not a shaped type"
-    return API.mlirDenseElementsAttrInt32SplatGet(shaped_type, value)
+    return Attribute(API.mlirDenseElementsAttrInt32SplatGet(shaped_type, value))
 end
 
 function Base.fill(value::UInt64, shaped_type::Type)
     @assert isshaped(shaped_type) "type $(shaped_type) is not a shaped type"
-    return API.mlirDenseElementsAttrUInt64SplatGet(shaped_type, value)
+    return Attribute(API.mlirDenseElementsAttrUInt64SplatGet(shaped_type, value))
 end
 
 function Base.fill(value::Int64, shaped_type::Type)
     @assert isshaped(shaped_type) "type $(shaped_type) is not a shaped type"
-    return API.mlirDenseElementsAttrInt64SplatGet(shaped_type, value)
+    return Attribute(API.mlirDenseElementsAttrInt64SplatGet(shaped_type, value))
 end
 
 function Base.fill(value::Float32, shaped_type::Type)
     @assert isshaped(shaped_type) "type $(shaped_type) is not a shaped type"
-    return API.mlirDenseElementsAttrFloatSplatGet(shaped_type, value)
+    return Attribute(API.mlirDenseElementsAttrFloatSplatGet(shaped_type, value))
 end
 
 function Base.fill(value::Float64, shaped_type::Type)
     @assert isshaped(shaped_type) "type $(shaped_type) is not a shaped type"
-    return API.mlirDenseElementsAttrDoubleSplatGet(shaped_type, value)
+    return Attribute(API.mlirDenseElementsAttrDoubleSplatGet(shaped_type, value))
 end
 
 function Base.fill(::Core.Type{Attribute}, value, shape::Vector{Int})
@@ -640,20 +694,43 @@ function DenseElementsAttribute(values::AbstractArray)
 end
 
 """
-    DenseElementsAttribute(array::AbstractArray{String})
+    DenseElementsAttribute(shapedType, array::AbstractArray{<:AbstractString})
+    DenseElementsAttribute(array::AbstractArray{<:AbstractString}; context=current_context())
 
 Creates a dense elements attribute with the given shaped type from string elements.
 """
-function DenseElementsAttribute(values::AbstractArray{String})
-    # Builtin dialect doesn't have string type. If we want to support this,
-    # we need to add this in our dialect.
-    throw(MethodError(DenseElementsAttribute, (values,)))
-    # shaped_type = TensorType(collect(Int, size(values)), Type(String))
-    # return Attribute(
-    #     API.mlirDenseElementsAttrStringGet(
-    #         shaped_type, length(values), to_row_major(values)
-    #     ),
-    # )
+function DenseElementsAttribute(shaped_type::Type, values::AbstractArray{<:AbstractString})
+    @assert isshaped(shaped_type) "type $(shaped_type) is not a shaped type"
+    row_vals = to_row_major(values)
+    strs = Vector{String}(undef, length(row_vals))
+    idx = 1
+    for s in row_vals
+        strs[idx] = String(s)
+        idx += 1
+    end
+    refs = Vector{API.MlirStringRef}(undef, length(strs))
+    GC.@preserve strs refs begin
+        for i in eachindex(strs)
+            refs[i] = Base.unsafe_convert(API.MlirStringRef, strs[i])
+        end
+        return Attribute(
+            API.mlirDenseElementsAttrStringGet(shaped_type, length(refs), pointer(refs))
+        )
+    end
+end
+
+function DenseElementsAttribute(
+    values::AbstractArray{String}; context::Context=current_context()
+)
+    shaped_type = TensorType(collect(Int, size(values)), Type(Nothing; context))
+    return DenseElementsAttribute(shaped_type, values)
+end
+
+function DenseElementsAttribute(
+    values::AbstractArray{<:AbstractString}; context::Context=current_context()
+)
+    shaped_type = TensorType(collect(Int, size(values)), Type(Nothing; context))
+    return DenseElementsAttribute(shaped_type, values)
 end
 
 function DenseIndexElementsAttribute(values::AbstractArray{Int64})
@@ -682,10 +759,30 @@ Checks whether the given dense elements attribute contains a single replicated v
 """
 function issplat(attr::Attribute)
     @assert isdenseelements(attr) "attribute $(attr) is not a dense elements attribute"
-    return API.mlirDenseElementsAttrIsSplat(attr) # TODO(#2244) Base.allequal?
+    return API.mlirDenseElementsAttrIsSplat(attr)
 end
 
-# TODO(#2244) mlirDenseElementsAttrGetRawData
+function Base.allequal(attr::Attribute)
+    @assert isdenseelements(attr) "attribute $(attr) is not a dense elements attribute"
+    n = length(attr)
+    n <= 1 && return true
+    issplat(attr) && return true
+    first_val = attr[0]
+    for i in 1:(n - 1)
+        attr[i] == first_val || return false
+    end
+    return true
+end
+
+"""
+    raw_data(attr)
+
+Returns a raw pointer (`Ptr{Cvoid}`) to the underlying data of the given dense elements attribute.
+"""
+function raw_data(attr::Attribute)
+    @assert isdenseelements(attr) "attribute $(attr) is not a dense elements attribute"
+    return API.mlirDenseElementsAttrGetRawData(attr)
+end
 
 """
     issparseelements(attr)
@@ -694,9 +791,41 @@ Checks whether the given attribute is a sparse elements attribute.
 """
 issparseelements(attr::Attribute) = API.mlirAttributeIsASparseElements(attr)
 
-# TODO(#2244) mlirSparseElementsAttribute
-# TODO(#2244) mlirSparseElementsAttrGetIndices
-# TODO(#2244) mlirSparseElementsAttrGetValues
+"""
+    SparseElementsAttribute(shapedType, denseIndices, denseValues)
+
+Creates a sparse elements attribute of the given shape from a dense integer indices attribute and a dense values attribute.
+"""
+function SparseElementsAttribute(
+    shaped_type::Type, dense_indices::Attribute, dense_values::Attribute
+)
+    @assert isshaped(shaped_type) "type $(shaped_type) is not a shaped type"
+    @assert isdenseelements(dense_indices) "indices $(dense_indices) is not a dense elements attribute"
+    @assert isdenseelements(dense_values) "values $(dense_values) is not a dense elements attribute"
+    return Attribute(
+        API.mlirSparseElementsAttribute(shaped_type, dense_indices, dense_values)
+    )
+end
+
+"""
+    sparse_indices(attr)
+
+Returns the dense elements attribute containing 64-bit integer indices of non-null elements in the given sparse elements attribute.
+"""
+function sparse_indices(attr::Attribute)
+    @assert issparseelements(attr) "attribute $(attr) is not a sparse elements attribute"
+    return Attribute(API.mlirSparseElementsAttrGetIndices(attr))
+end
+
+"""
+    sparse_values(attr)
+
+Returns the dense elements attribute containing the non-null elements in the given sparse elements attribute.
+"""
+function sparse_values(attr::Attribute)
+    @assert issparseelements(attr) "attribute $(attr) is not a sparse elements attribute"
+    return Attribute(API.mlirSparseElementsAttrGetValues(attr))
+end
 
 """
       isdensearray(attr, ::Core.Type{T})
@@ -795,13 +924,16 @@ function Base.length(attr::Attribute)
         API.mlirDictionaryAttrGetNumElements(attr)
     elseif iselements(attr)
         API.mlirElementsAttrGetNumElements(attr)
-    else
-        _isdensearray = any(
-            T -> isdensearray(attr, T), [Bool, Int8, Int16, Int32, Int64, Float32, Float64]
-        )
-        if _isdensearray
-            API.mlirDenseArrayGetNumElements(attr)
-        end
+    elseif (
+        isdensearray(attr, Bool) ||
+        isdensearray(attr, Int8) ||
+        isdensearray(attr, Int16) ||
+        isdensearray(attr, Int32) ||
+        isdensearray(attr, Int64) ||
+        isdensearray(attr, Float32) ||
+        isdensearray(attr, Float64)
+    )
+        API.mlirDenseArrayGetNumElements(attr)
     end
 end
 
@@ -815,31 +947,32 @@ function Base.getindex(attr::Attribute, i)
             NamedAttribute(API.mlirDictionaryAttrGetElement(attr, i))
         end
     elseif isdenseelements(attr)
+        if !isdenseintelements(attr) && !isdensefloatelements(attr)
+            return String(API.mlirDenseElementsAttrGetStringValue(attr, i))
+        end
         elem_type = julia_type(eltype(type(attr)))
-        if elem_type isa Bool
+        if elem_type === Bool
             API.mlirDenseElementsAttrGetBoolValue(attr, i)
-        elseif elem_type isa Int8
+        elseif elem_type === Int8
             API.mlirDenseElementsAttrGetInt8Value(attr, i)
-        elseif elem_type isa UInt8
+        elseif elem_type === UInt8
             API.mlirDenseElementsAttrGetUInt8Value(attr, i)
-        elseif elem_type isa Int16
+        elseif elem_type === Int16
             API.mlirDenseElementsAttrGetInt16Value(attr, i)
-        elseif elem_type isa UInt16
+        elseif elem_type === UInt16
             API.mlirDenseElementsAttrGetUInt16Value(attr, i)
-        elseif elem_type isa Int32
+        elseif elem_type === Int32
             API.mlirDenseElementsAttrGetInt32Value(attr, i)
-        elseif elem_type isa UInt32
+        elseif elem_type === UInt32
             API.mlirDenseElementsAttrGetUInt32Value(attr, i)
-        elseif elem_type isa Int64
+        elseif elem_type === Int64
             API.mlirDenseElementsAttrGetInt64Value(attr, i)
-        elseif elem_type isa UInt64
+        elseif elem_type === UInt64
             API.mlirDenseElementsAttrGetUInt64Value(attr, i)
-        elseif elem_type isa Float32
+        elseif elem_type === Float32
             API.mlirDenseElementsAttrGetFloatValue(attr, i)
-        elseif elem_type isa Float64
+        elseif elem_type === Float64
             API.mlirDenseElementsAttrGetDoubleValue(attr, i)
-        elseif elem_type isa String # TODO(#2244) does this case work?
-            String(API.mlirDenseElementsAttrGetStringValue(attr, i))
         else
             throw("unsupported element type $(elem_type)")
         end
@@ -862,8 +995,8 @@ function Base.getindex(attr::Attribute, i)
     end
 end
 
-function Base.iterate(attr::Attribute, state=1)
-    if state > length(attr)
+function Base.iterate(attr::Attribute, state=0)
+    if state >= length(attr)
         nothing
     else
         (attr[state], state + 1)
@@ -873,31 +1006,32 @@ end
 function Base.getindex(attr::Attribute)
     @assert isdenseelements(attr) "attribute $(attr) is not a dense elements attribute"
     @assert issplat(attr) "attribute $(attr) is not splatted (more than one different elements)"
+    if !isdenseintelements(attr) && !isdensefloatelements(attr)
+        return String(API.mlirDenseElementsAttrGetStringSplatValue(attr))
+    end
     elem_type = julia_type(eltype(type(attr)))
-    if elem_type isa Bool
+    if elem_type === Bool
         API.mlirDenseElementsAttrGetBoolSplatValue(attr)
-    elseif elem_type isa Int8
+    elseif elem_type === Int8
         API.mlirDenseElementsAttrGetInt8SplatValue(attr)
-    elseif elem_type isa UInt8
+    elseif elem_type === UInt8
         API.mlirDenseElementsAttrGetUInt8SplatValue(attr)
-    elseif elem_type isa Int16
+    elseif elem_type === Int16
         API.mlirDenseElementsAttrGetInt16SplatValue(attr)
-    elseif elem_type isa UInt16
+    elseif elem_type === UInt16
         API.mlirDenseElementsAttrGetUInt16SplatValue(attr)
-    elseif elem_type isa Int32
+    elseif elem_type === Int32
         API.mlirDenseElementsAttrGetInt32SplatValue(attr)
-    elseif elem_type isa UInt32
+    elseif elem_type === UInt32
         API.mlirDenseElementsAttrGetUInt32SplatValue(attr)
-    elseif elem_type isa Int64
+    elseif elem_type === Int64
         API.mlirDenseElementsAttrGetInt64SplatValue(attr)
-    elseif elem_type isa UInt64
+    elseif elem_type === UInt64
         API.mlirDenseElementsAttrGetUInt64SplatValue(attr)
-    elseif elem_type isa Float32
+    elseif elem_type === Float32
         API.mlirDenseElementsAttrGetFloatSplatValue(attr)
-    elseif elem_type isa Float64
+    elseif elem_type === Float64
         API.mlirDenseElementsAttrGetDoubleSplatValue(attr)
-    elseif elem_type isa String # TODO(#2244) does this case work?
-        String(API.mlirDenseElementsAttrGetStringSplatValue(attr))
     else
         throw("unsupported element type $(elem_type)")
     end

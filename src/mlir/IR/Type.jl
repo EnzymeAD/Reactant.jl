@@ -482,22 +482,35 @@ function TensorType(elem_type::Type; location::Location=Location(), check::Bool=
     )
 end
 
-# TODO(#2245) maybe add these helper methods?
-# Type(a::AbstractArray{T}) where {T} = Type(Type(T), size(a))
-# Type(::Core.Type{<:AbstractArray{T,N}}, dims) where {T,N} =
-#     Type(API.mlirRankedTensorTypeGetChecked(
-#         Location(),
-#         N, collect(dims),
-#         Type(T),
-#         Attribute(),
-#     ))
-# Type(element_type::Type, dims) =
-#     Type(API.mlirRankedTensorTypeGetChecked(
-#         Location(),
-#         length(dims), collect(dims),
-#         element_type,
-#         Attribute(),
-#     ))
+"""
+    Type(a::AbstractArray{T}; context=current_context())
+    Type(::Core.Type{<:AbstractArray{T,N}}, dims; context=current_context(), location=Location(; context), check=true)
+    Type(element_type::Type, dims; location=Location(; context=context(element_type)), check=true)
+
+Creates a ranked tensor type with the given element type and dimensions.
+"""
+function Type(a::AbstractArray{T}; context::Context=current_context()) where {T}
+    return Type(Type(T; context), size(a))
+end
+function Type(
+    ::Core.Type{<:AbstractArray{T,N}},
+    dims;
+    context::Context=current_context(),
+    location::Location=Location(; context),
+    check::Bool=true,
+) where {T,N}
+    shape = collect(Int, dims)
+    @assert length(shape) == N "expected $N dimensions, got $(length(shape))"
+    return TensorType(shape, Type(T; context); location, check)
+end
+function Type(
+    elem_type::Type,
+    dims;
+    location::Location=Location(; context=context(elem_type)),
+    check::Bool=true,
+)
+    return TensorType(collect(Int, dims), elem_type; location, check)
+end
 
 """
     istensor(type)
@@ -659,7 +672,12 @@ function Type(
     return Type(collect(elements); context)
 end
 function Type(T::Core.Type{<:Tuple}; context::Context=current_context())
-    return Type(map(Type, T.parameters); context)
+    params = T.parameters
+    elems = Vector{Type}(undef, length(params))
+    for i in eachindex(params)
+        elems[i] = Type(params[i]; context)
+    end
+    return Type(elems; context)
 end
 
 """
@@ -688,10 +706,26 @@ function FunctionType(inputs, results; context::Context=current_context())
     )
 end
 
-# TODO(#2245) maybe add this helper method?
-# Type(ft::Pair) = Type(API.mlirFunctionTypeGet(context(),
-#     length(ft.first), [Type(t) for t in ft.first],
-#     length(ft.second), [Type(t) for t in ft.second]))
+_to_mlir_type_vec(t::Type; context::Context) = Type[t]
+_to_mlir_type_vec(T::Core.Type; context::Context) = Type[Type(T; context)]
+function _to_mlir_type_vec(ts; context::Context)
+    out = Type[]
+    for t in ts
+        push!(out, t isa Type ? t : Type(t; context))
+    end
+    return out
+end
+
+"""
+    Type(inputs => results; context=current_context())
+
+Creates a function type mapping `inputs` to `results`.
+"""
+function Type(ft::Pair; context::Context=current_context())
+    return FunctionType(
+        _to_mlir_type_vec(ft.first; context), _to_mlir_type_vec(ft.second; context); context
+    )
+end
 
 """
     ninputs(type)

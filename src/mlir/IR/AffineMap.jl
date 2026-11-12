@@ -241,15 +241,39 @@ function Base.replace(
     )
 end
 
-"""
-    simplify(affineMaps, size, result, populateResult)
+function _populate_affine_map_result(
+    res_ptr::Ptr{Cvoid}, idx::Cptrdiff_t, m::API.MlirAffineMap
+)::Cvoid
+    res = unsafe_pointer_to_objref(res_ptr)::Vector{AffineMap}
+    res[idx + 1] = AffineMap(m)
+    return nothing
+end
 
-Returns the simplified affine map resulting from dropping the symbols that do not appear in any of the individual maps in `affineMaps`.
-Asserts that all maps in `affineMaps` are normalized to the same number of dims and symbols.
-Takes a callback `populateResult` to fill the `res` container with value `m` at entry `idx`.
-This allows returning without worrying about ownership considerations.
 """
-# TODO(#2246) simplify(map::AffineMap, ...) = AffineMap(API.mlirAffineMapCompressUnusedSymbols(map, ...))
+    simplify(affineMaps)
+
+Returns the simplified affine maps resulting from dropping the symbols that do not appear in any of the individual maps in `affineMaps`.
+Asserts that all maps in `affineMaps` are normalized to the same number of dims and symbols.
+"""
+function simplify(maps::AbstractVector{AffineMap})
+    isempty(maps) && return AffineMap[]
+    raw_maps = Vector{API.MlirAffineMap}(undef, length(maps))
+    for i in eachindex(maps)
+        raw_maps[i] = maps[i].ref
+    end
+    result = Vector{AffineMap}(undef, length(maps))
+    cb = @cfunction(
+        _populate_affine_map_result, Cvoid, (Ptr{Cvoid}, Cptrdiff_t, API.MlirAffineMap)
+    )
+    GC.@preserve raw_maps result begin
+        API.mlirAffineMapCompressUnusedSymbols(
+            pointer(raw_maps), length(raw_maps), pointer_from_objref(result), cb
+        )
+    end
+    return result
+end
+
+simplify(map::AffineMap) = only(simplify(AffineMap[map]))
 
 walk(f, other) = f(other)
 function walk(f, expr::Expr)
