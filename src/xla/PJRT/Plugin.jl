@@ -90,6 +90,7 @@ function cost_analysis end
 function create_alias_buffer end
 function create_async_tracking_event end
 function create_buffers_for_async_host_to_device end
+function create_client end
 function create_error_buffer end
 function create_topology_description end
 function create_uninitialized_buffer end
@@ -117,6 +118,7 @@ function fingerprint end
 function granule_size end
 function id end
 function increase_external_reference_count! end
+function initialize end
 function is_addressable end
 function is_on_cpu end
 function isdeleted end
@@ -649,18 +651,183 @@ function pjrt_named_values(pairs)
 end
 
 ## Plugin
-@pjrt_catch_return function pjrt_plugin_initialize(
-    args::Ptr{CAPI.PJRT_Plugin_Initialize_Args}
-)::Ptr{CAPI.PJRT_Error}
-    # do nothing
+"""
+    AbstractPlugin
+
+A PJRT plugin: the owner of what exists independently of any [`Client`](@ref), like client creation or the topologies
+created without a client. Pass an instance to [`make_api`](@ref) to build its `PJRT_Api`; the C callbacks whose
+arguments carry no PJRT object dispatch on it.
+
+It can hold plugin-wide settings and state, which [`make_api`](@ref) keeps alive.
+
+### Interface
+
+- `initialize` (optional)
+- `attributes` (optional)
+- `create_client`
+- `create_topology_description`
+- `deserialize_topology_description`
+"""
+abstract type AbstractPlugin end
+
+"""
+    initialize(plugin::AbstractPlugin)
+
+One-time setup of `plugin`, called by C before any other function of the plugin. Defaults to doing nothing.
+
+Backs `PJRT_Plugin_Initialize`.
+"""
+initialize(::AbstractPlugin) = nothing
+
+struct PluginInitialize{P<:AbstractPlugin}
+    plugin::P
 end
 
-@pjrt_catch_return function pjrt_plugin_attributes(
+@pjrt_catch_return function (f::PluginInitialize)(
+    args::Ptr{CAPI.PJRT_Plugin_Initialize_Args}
+)::Ptr{CAPI.PJRT_Error}
+    initialize(f.plugin)
+    return ok()
+end
+
+"""
+    attributes(plugin::AbstractPlugin)
+
+Return the attributes of `plugin` as `name => value` pairs (e.g. a `Dict`). Common names are `"xla_version"`,
+`"stablehlo_current_version"` and `"stablehlo_minimum_version"`. Values must be `AbstractString`, `Bool`, `Integer`,
+`AbstractVector{<:Integer}` or `AbstractFloat`, which C receives as `String`, `Bool`, `Int64`, `Vector{Int64}` and
+`Float32`. Defaults to no attributes.
+
+It is called at most once per [`make_api`](@ref): the C wrapper keeps a copy for the lifetime of the process, since C
+keeps pointers to it.
+
+Backs `PJRT_Plugin_Attributes`.
+"""
+attributes(::AbstractPlugin) = ()
+
+# `PJRT_Plugin_Attributes_Args` carries no user data, so the callable holds the plugin; it also owns the C view of the
+# attributes, which is computed on the first call since the attributes may depend on `initialize`
+mutable struct PluginAttributes{P<:AbstractPlugin}
+    const plugin::P
+    const lock::ReentrantLock
+    values::Union{Nothing,Tuple{Vector{CAPI.PJRT_NamedValue},Vector{Any}}}
+end
+function PluginAttributes(plugin::AbstractPlugin)
+    return PluginAttributes(plugin, ReentrantLock(), nothing)
+end
+
+@pjrt_catch_return function (f::PluginAttributes)(
     args::Ptr{CAPI.PJRT_Plugin_Attributes_Args}
 )::Ptr{CAPI.PJRT_Error}
-    # TODO return key-value pairs of `xla_version`, `stablehlo_current_version` and `stablehlo_minimum_version`
-    unsafe_store!(args.attributes, C_NULL)
-    unsafe_store!(args.num_attributes, 0)
+    values, _ = @lock f.lock begin
+        if isnothing(f.values)
+            f.values = pjrt_named_values(attributes(f.plugin))
+        end
+        f.values
+    end
+    unsafe_store!(args.attributes, pointer(values))
+    unsafe_store!(args.num_attributes, length(values))
+    return ok()
+end
+
+"""
+    create_client(plugin::AbstractPlugin, options::Dict{String,Any}) -> Client
+
+Return a new client of `plugin`. `options` holds platform-specific options, whose values are `String`, `Int64`,
+`Vector{Int64}`, `Float32` or `Bool`.
+
+The caller GC-roots the returned client until `PJRT_Client_Destroy`.
+
+Backs `PJRT_Client_Create`.
+"""
+create_client(::AbstractPlugin, ::Dict{String,Any})
+
+struct ClientCreate{P<:AbstractPlugin}
+    plugin::P
+end
+
+@pjrt_catch_return function (f::ClientCreate)(
+    args::Ptr{CAPI.PJRT_Client_Create_Args}
+)::Ptr{CAPI.PJRT_Error}
+    options = unsafe_load_pjrt_named_values(
+        unsafe_load(args.create_options), unsafe_load(args.num_options)
+    )
+    client = root!(create_client(f.plugin, options)::Client)
+    unsafe_store!(args.client, Ptr{CAPI.PJRT_Client}(pointer_from_objref(client)))
+    return ok()
+end
+
+"""
+    create_topology_description(plugin::AbstractPlugin, name::String, options::Dict{String,Any}) -> TopologyDescription
+
+Return a new description of the topology named `name` of the platform of `plugin`, without creating a client.
+`options` holds platform-specific options, whose values are `String`, `Int64`, `Vector{Int64}`, `Float32` or `Bool`.
+
+The caller GC-roots the returned topology until `PJRT_TopologyDescription_Destroy`.
+
+Backs `PJRT_TopologyDescription_Create`.
+"""
+create_topology_description(::AbstractPlugin, ::String, ::Dict{String,Any})
+
+# `PJRT_TopologyDescription_Create_Args` carries no user data, so the callable holds the plugin
+struct TopologyDescriptionCreate{P<:AbstractPlugin}
+    plugin::P
+end
+
+@pjrt_catch_return function (f::TopologyDescriptionCreate)(
+    args::Ptr{CAPI.PJRT_TopologyDescription_Create_Args}
+)::Ptr{CAPI.PJRT_Error}
+    name = unsafe_string(
+        Ptr{UInt8}(unsafe_load(args.topology_name)), unsafe_load(args.topology_name_size)
+    )
+    options = unsafe_load_pjrt_named_values(
+        unsafe_load(args.create_options), unsafe_load(args.num_options)
+    )
+    topology = create_topology_description(f.plugin, name, options)::TopologyDescription
+    root!(topology)
+    unsafe_store!(
+        args.topology, Ptr{CAPI.PJRT_TopologyDescription}(pointer_from_objref(topology))
+    )
+    return ok()
+end
+
+"""
+    deserialize_topology_description(plugin::AbstractPlugin, bytes::Vector{UInt8}) -> TopologyDescription
+
+Return the topology description of the platform of `plugin` serialized in `bytes` by `serialize`.
+
+The caller GC-roots the returned topology until `PJRT_TopologyDescription_Destroy`.
+
+Backs `PJRT_TopologyDescription_Deserialize`.
+"""
+deserialize_topology_description(::AbstractPlugin, ::Vector{UInt8})
+
+# `PJRT_TopologyDescription_Deserialize_Args` carries no user data, so the callable holds the plugin
+struct TopologyDescriptionDeserialize{P<:AbstractPlugin}
+    plugin::P
+end
+
+@pjrt_catch_return function (f::TopologyDescriptionDeserialize)(
+    args::Ptr{CAPI.PJRT_TopologyDescription_Deserialize_Args}
+)::Ptr{CAPI.PJRT_Error}
+    # the serialized topology is owned by C, so copy it in case the implementation stores it
+    bytes_ptr = Ptr{UInt8}(unsafe_load(args.serialized_topology))
+    bytes = copy(
+        unsafe_wrap(Vector{UInt8}, bytes_ptr, unsafe_load(args.serialized_topology_size))
+    )
+    topology = deserialize_topology_description(f.plugin, bytes)::TopologyDescription
+    root!(topology)
+    unsafe_store!(
+        args.topology, Ptr{CAPI.PJRT_TopologyDescription}(pointer_from_objref(topology))
+    )
+    return ok()
+end
+
+@pjrt_catch_return function pjrt_topology_description_destroy(
+    args::Ptr{CAPI.PJRT_TopologyDescription_Destroy_Args}
+)::Ptr{CAPI.PJRT_Error}
+    ptr = unsafe_load(args.topology)
+    ptr != C_NULL && unroot!(ptr)
     return ok()
 end
 
@@ -2593,7 +2760,6 @@ end
 
 ## Interface
 
-- `create`
 - `destroy!`
 - `platform_name`
 - `platform_version`
@@ -3822,76 +3988,6 @@ a `Client`. C gets one from a client with `topology_description`, or without a c
 abstract type TopologyDescription end
 
 """
-    create_topology_description(C::Type{<:Client}, name::String, options::Dict{String,Any}) -> TopologyDescription
-
-Return a new description of the topology named `name` of the platform of client type `C`, without creating a client.
-`options` holds platform-specific options, whose values are `String`, `Int64`, `Vector{Int64}`, `Float32` or `Bool`.
-
-The caller GC-roots the returned topology until `PJRT_TopologyDescription_Destroy`.
-
-Backs `PJRT_TopologyDescription_Create`.
-"""
-create_topology_description(::Type{<:Client}, ::String, ::Dict{String,Any})
-
-# `PJRT_TopologyDescription_Create_Args` carries no user data, so the `Client` type is encoded in the callable's type
-struct TopologyDescriptionCreate{C<:Client} end
-
-@pjrt_catch_return function (::TopologyDescriptionCreate{C})(
-    args::Ptr{CAPI.PJRT_TopologyDescription_Create_Args}
-)::Ptr{CAPI.PJRT_Error} where {C}
-    name = unsafe_string(
-        Ptr{UInt8}(unsafe_load(args.topology_name)), unsafe_load(args.topology_name_size)
-    )
-    options = unsafe_load_pjrt_named_values(
-        unsafe_load(args.create_options), unsafe_load(args.num_options)
-    )
-    topology = create_topology_description(C, name, options)::TopologyDescription
-    root!(topology)
-    unsafe_store!(
-        args.topology, Ptr{CAPI.PJRT_TopologyDescription}(pointer_from_objref(topology))
-    )
-    return ok()
-end
-
-"""
-    deserialize_topology_description(C::Type{<:Client}, bytes::Vector{UInt8}) -> TopologyDescription
-
-Return the topology description of the platform of client type `C` serialized in `bytes` by `serialize`.
-
-The caller GC-roots the returned topology until `PJRT_TopologyDescription_Destroy`.
-
-Backs `PJRT_TopologyDescription_Deserialize`.
-"""
-deserialize_topology_description(::Type{<:Client}, ::Vector{UInt8})
-
-# `PJRT_TopologyDescription_Deserialize_Args` carries no user data, so the `Client` type is encoded in the callable's type
-struct TopologyDescriptionDeserialize{C<:Client} end
-
-@pjrt_catch_return function (::TopologyDescriptionDeserialize{C})(
-    args::Ptr{CAPI.PJRT_TopologyDescription_Deserialize_Args}
-)::Ptr{CAPI.PJRT_Error} where {C}
-    # the serialized topology is owned by C, so copy it in case the implementation stores it
-    bytes_ptr = Ptr{UInt8}(unsafe_load(args.serialized_topology))
-    bytes = copy(
-        unsafe_wrap(Vector{UInt8}, bytes_ptr, unsafe_load(args.serialized_topology_size))
-    )
-    topology = deserialize_topology_description(C, bytes)::TopologyDescription
-    root!(topology)
-    unsafe_store!(
-        args.topology, Ptr{CAPI.PJRT_TopologyDescription}(pointer_from_objref(topology))
-    )
-    return ok()
-end
-
-@pjrt_catch_return function pjrt_topology_description_destroy(
-    args::Ptr{CAPI.PJRT_TopologyDescription_Destroy_Args}
-)::Ptr{CAPI.PJRT_Error}
-    ptr = unsafe_load(args.topology)
-    ptr != C_NULL && unroot!(ptr)
-    return ok()
-end
-
-"""
     platform_name(topology::TopologyDescription) -> String
 
 Return a string that identifies the platform of `topology` (e.g. `"cpu"`, `"gpu"`, `"tpu"`).
@@ -4177,6 +4273,10 @@ It must be kept alive for as long as any client or topology created through it e
 """
 struct PluginApi
     api::Base.RefValue{CAPI.PJRT_Api}
+
+    # plugin entrypoints
+    plugin_initialize::Base.CFunction
+    plugin_attributes::Base.CFunction
     client_create::Base.CFunction
     topology_create::Base.CFunction
     topology_deserialize::Base.CFunction
@@ -4210,11 +4310,12 @@ function __init__()
 end
 
 """
-    make_api(C::Type{<:Client}) -> PluginApi
+    make_api(plugin::AbstractPlugin) -> PluginApi
 
-Build a `PJRT_Api` function table whose `PJRT_Client_Create` instantiates `C()`, and whose
-`PJRT_TopologyDescription_Create` and `PJRT_TopologyDescription_Deserialize` call `create_topology_description(C, ...)`
-and `deserialize_topology_description(C, ...)`.
+Build the `PJRT_Api` function table of `plugin`, whose `PJRT_Plugin_Initialize`, `PJRT_Plugin_Attributes`,
+`PJRT_Client_Create`, `PJRT_TopologyDescription_Create` and `PJRT_TopologyDescription_Deserialize` call
+`initialize(plugin)`, `attributes(plugin)`, `create_client(plugin, ...)`, `create_topology_description(plugin, ...)`
+and `deserialize_topology_description(plugin, ...)`.
 
 `C` must have a zero-argument constructor. Store the result in a global (e.g. a `const Ref`) set from the plugin's
 `__init__`, and pass `unsafe_convert(Ptr{CAPI.PJRT_Api}, api)` to XLA.
@@ -4222,19 +4323,29 @@ and `deserialize_topology_description(C, ...)`.
 !!! warning
 These three are closure `@cfunction`s, which are only supported on some architectures (e.g. x86_64, aarch64).
 """
-function make_api(::Type{C}) where {C<:Client}
+function make_api(plugin::AbstractPlugin)
     # generic handler for unimplemented PJRT API functions
     c_unimplemented = @cfunction(unimplemented_c_hook, Ptr{CAPI.PJRT_Error}, ())
+    c_plugin_initialize = @cfunction(
+        $(PluginInitialize(plugin)),
+        Ptr{CAPI.PJRT_Error},
+        (Ptr{CAPI.PJRT_Plugin_Initialize_Args},)
+    )
+    c_plugin_attributes = @cfunction(
+        $(PluginAttributes(plugin)),
+        Ptr{CAPI.PJRT_Error},
+        (Ptr{CAPI.PJRT_Plugin_Attributes_Args},)
+    )
     c_client_create = @cfunction(
-        $(ClientCreate{C}()), Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Client_Create_Args},)
+        $(ClientCreate(plugin)), Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Client_Create_Args},)
     )
     c_topology_create = @cfunction(
-        $(TopologyDescriptionCreate{C}()),
+        $(TopologyDescriptionCreate(plugin)),
         Ptr{CAPI.PJRT_Error},
         (Ptr{CAPI.PJRT_TopologyDescription_Create_Args},)
     )
     c_topology_deserialize = @cfunction(
-        $(TopologyDescriptionDeserialize{C}()),
+        $(TopologyDescriptionDeserialize(plugin)),
         Ptr{CAPI.PJRT_Error},
         (Ptr{CAPI.PJRT_TopologyDescription_Deserialize_Args},)
     )
@@ -4252,8 +4363,8 @@ function make_api(::Type{C}) where {C<:Client}
         #= PJRT_Error_Destroy =# @cfunction(pjrt_error_destroy, Cvoid, (Ptr{CAPI.PJRT_Error_Destroy_Args},)),
         #= PJRT_Error_Message =# @cfunction(pjrt_error_message, Cvoid, (Ptr{CAPI.PJRT_Error_Message_Args},)),
         #= PJRT_Error_GetCode =# @cfunction(pjrt_error_getcode, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Error_GetCode_Args},)),
-        #= PJRT_Plugin_Initialize =# @cfunction(pjrt_plugin_initialize, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Plugin_Initialize_Args},)),
-        #= PJRT_Plugin_Attributes =# @cfunction(pjrt_plugin_attributes, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Plugin_Attributes_Args},)),
+        #= PJRT_Plugin_Initialize =# unsafe_convert(Ptr{Cvoid}, c_plugin_initialize),
+        #= PJRT_Plugin_Attributes =# unsafe_convert(Ptr{Cvoid}, c_plugin_attributes),
         #= PJRT_Event_Destroy =# @cfunction(pjrt_event_destroy, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Event_Destroy_Args},)),
         #= PJRT_Event_IsReady =# @cfunction(pjrt_event_is_ready, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Event_IsReady_Args},)),
         #= PJRT_Event_Error =# @cfunction(pjrt_event_error, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Event_Error_Args},)),
@@ -4390,7 +4501,15 @@ function make_api(::Type{C}) where {C<:Client}
     ))
     #! format: on
 
-    return PluginApi(api, c_client_create, c_topology_create, c_topology_deserialize)
+    return PluginApi(
+        api,
+        c_plugin_initialize,
+        c_plugin_attributes,
+        c_client_create,
+        c_topology_create,
+        c_topology_deserialize,
+        exts,
+    )
 end
 
 end
