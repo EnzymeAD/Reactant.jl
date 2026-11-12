@@ -1138,11 +1138,6 @@ end
 - `poison_execution!`
 """
 abstract type Device end
-function checkinterface(T::Type{<:Device})
-    if !ismutabletype(T)
-        error("$T <: Device must be a mutable type to be GC rootable")
-    end
-end
 
 """
     description(dev::Device) -> DeviceDescription
