@@ -122,7 +122,7 @@ let options = deepcopy(options)
             signatures = String[]
 
             for name in ["API.cpp", "xla_ffi.cpp"]
-                file = joinpath(@__DIR__, name)
+                file = joinpath(enzymexla_include_dir, "..", "..", "ReactantExtra", name)
                 @assert isfile(file) "File $(file) not found"
                 content = read(file, String)
 
