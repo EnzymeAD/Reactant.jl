@@ -1847,3 +1847,65 @@ end
     @test @jit(loop_with_pi_var(xr)) ≈ 6.0f0
     @test @jit(loop_reading_outer_irrational(xr)) ≈ Float32(π) * 6.0f0
 end
+
+function while_reassigned_scalar(x)
+    y = x
+    @trace while y < 5
+        y += 1
+    end
+    return (; x, y)
+end
+
+function while_reassigned_scalar_both_used(x)
+    y = x
+    @trace while y < x + 5
+        y += 1
+    end
+    return (; x, y)
+end
+
+function while_reassigned_array(x)
+    y = x
+    @trace while sum(y) < 10
+        y = y .+ 1
+    end
+    return (; x, y)
+end
+
+@testset "reassigned variable initialized from outer variable (#3070)" begin
+    xr = ConcreteRNumber(0)
+    res = @jit while_reassigned_scalar(xr)
+    @test res.x == 0
+    @test res.y == 5
+    @test xr == 0
+
+    xr2 = ConcreteRNumber(2)
+    res2 = @jit while_reassigned_scalar_both_used(xr2)
+    @test res2.x == 2
+    @test res2.y == 7
+
+    ar = Reactant.to_rarray([1, 2, 3])
+    res_arr = @jit while_reassigned_array(ar)
+    @test Array(res_arr.x) == [1, 2, 3]
+    @test Array(res_arr.y) == [3, 4, 5]
+end
+
+function while_gcd_2476(
+    a::Reactant.TracedRNumber{T}, b::Reactant.TracedRNumber{T}
+) where {T<:Integer}
+    @trace while b != 0
+        t = b
+        b = rem(a, b)
+        a = t
+    end
+    return abs(a)
+end
+
+@testset "reassigned scalar input in @trace while does not mutate caller (#2476)" begin
+    x = Reactant.to_rarray(UInt64(8); track_numbers=Integer)
+    y = Reactant.to_rarray(UInt64(32); track_numbers=Integer)
+    z = @jit while_gcd_2476(x, y)
+    @test z == UInt64(8)
+    @test x == UInt64(8)
+    @test y == UInt64(32)
+end
