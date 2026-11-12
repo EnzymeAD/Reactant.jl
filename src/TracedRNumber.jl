@@ -1051,6 +1051,12 @@ end
 function Base.ceil(::Type{T}, x::TracedRNumber{<:AbstractFloat}) where {T<:Integer}
     return trunc(T, ceil(x))
 end
+function Base.ceil(::Type{T}, x::TracedRNumber{<:AbstractFloat}) where {T<:AbstractFloat}
+    return @opcall convert(TracedRNumber{T}, ceil(x))
+end
+function Base.ceil(::Type{T}, x::TracedRNumber{<:Integer}) where {T<:Real}
+    return @opcall convert(TracedRNumber{T}, x)
+end
 
 # Concatenation. Numbers in Julia are handled in a much less generic fashion than arrays
 Base.vcat(x::TracedRNumber...) = Base.typed_vcat(Base.promote_eltypeof(x...), x...)

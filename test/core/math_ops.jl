@@ -163,6 +163,23 @@ end
     @test !Bool(@jit(isinf(ConcreteRNumber(true))))
 end
 
+@testset "ceil(T, x) traced" begin
+    for x in (4.2313f0, -2.5f0, 7)
+        for T in (Int32, Int64, Float32, Float64)
+            r = @jit ceil(T, ConcreteRNumber(x))
+            @test r isa ConcreteRNumber{T}
+            @test Float64(r) == Float64(ceil(x))
+        end
+    end
+    # `Int` (Int64) target with a Float32 input, scalar and broadcasted
+    r = @jit ceil(Int, ConcreteRNumber(1.5f0))
+    @test r isa ConcreteRNumber{Int}
+    @test r == 2
+    xs = Float32[1.5, -2.5, 3.0]
+    xs_ra = Reactant.to_rarray(xs)
+    @test Array(@jit(ceil.(Int, xs_ra))) == ceil.(Int, xs)
+end
+
 @testset "isinf/isnan/isfinite on concrete scalars" begin
     for x in (Inf, -Inf, NaN, 2.0, 2, true),
         xr in (ConcreteRNumber(x), ConcreteRArray(fill(x)))
