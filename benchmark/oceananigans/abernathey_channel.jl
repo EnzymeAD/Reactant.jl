@@ -426,12 +426,12 @@ function run_abernathey_channel_benchmark!(
     )
     results["Runtime (s)"][full_benchmark_name] =
         prof_result.profiling_result.runtime_ns / 1e9
-    results["TFLOP/s"][full_benchmark_name] =
-        if prof_result.profiling_result.metrics_data === nothing
-            -1
-        else
-            prof_result.profiling_result.metrics_data.raw_flops_rate / 1e12
-        end
+    tflops = if prof_result.profiling_result.metrics_data === nothing
+        -1.0
+    else
+        prof_result.profiling_result.metrics_data.raw_flops_rate / 1e12
+    end
+    results["TFLOP/s"][full_benchmark_name] = isfinite(tflops) ? tflops : -1.0
 
     print_stmt = @sprintf(
         "%100s     :     %.5gs    %.5g TFLOP/s",

@@ -883,3 +883,17 @@ end
         @test Array(only(res).b) == Int32[1, 2]
     end
 end
+
+co_vec_3296(θ, p) = sin.(θ) .* θ[2] .+ p
+jac_vec_3296(θ, p) = Enzyme.jacobian(Forward, Const(co_vec_3296), θ, p)
+
+@testset "width-1 BatchDuplicated in Enzyme.jacobian (#3296)" begin
+    θ_host = [0.3, -0.7]
+    p_host = [0.5]
+    θ = Reactant.to_rarray(θ_host)
+    p = Reactant.to_rarray(p_host)
+    j1, j2 = @allowscalar @jit jac_vec_3296(θ, p)
+    j1_ref, j2_ref = Enzyme.jacobian(Forward, Const(co_vec_3296), θ_host, p_host)
+    @test Array(j1) ≈ j1_ref
+    @test Array(j2) ≈ j2_ref
+end

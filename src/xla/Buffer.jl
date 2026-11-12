@@ -2,6 +2,7 @@ abstract type AbstractBuffer end
 
 function free_buffer end
 function synced_buffer end
+function unsynced_buffer end
 function buffer_on_cpu end
 function to_host end
 function unsafe_buffer_pointer end
@@ -24,6 +25,12 @@ end
     return map(synced_buffer, buffers)
 end
 
+@inline function unsynced_buffer(
+    buffers::Union{AbstractArray{<:AbstractBuffer},NTuple{<:Any,<:AbstractBuffer}}
+)
+    return map(unsynced_buffer, buffers)
+end
+
 # Async Buffers
 abstract type AbstractAsyncBuffer <: AbstractBuffer end
 
@@ -37,6 +44,12 @@ function synced_buffer(buffer::AbstractAsyncBuffer)
     wait(buffer)
     return buffer.buffer
 end
+
+# The buffer without waiting for the computation producing it, for passing to another
+# execution: the runtime orders that execution after the producer on the device, so blocking
+# the host here would only keep it from enqueueing the next step while the device is busy.
+# The future stays with `buffer`, so later reads of it still wait.
+unsynced_buffer(buffer::AbstractAsyncBuffer) = buffer.buffer
 
 function Base.wait(buffer::AbstractAsyncBuffer)
     buffer.future === nothing && return nothing

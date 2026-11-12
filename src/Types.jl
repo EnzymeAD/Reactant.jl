@@ -668,7 +668,7 @@ Base.@deprecate_binding TracedRNG ReactantRNG
 
     ConcretePJRTArray{T}(undef, shape::Integer...; kwargs...)
 
-    ConcretePJRTArray(data::Array; kwargs...)
+    ConcreteRArray(data::AbstractArray; kwargs...)
 
     ConcreteRArray{T}(data::AbstractArray; kwargs...)
 
@@ -746,6 +746,10 @@ for aType in (:ConcretePJRTArray, :ConcreteIFRTArray)
             return $(aType){T,N}(undef, Dims(shape); kwargs...)
         end
 
+        function $(aType)(data::AbstractArray; kwargs...)
+            return $(aType){eltype(data),ndims(data)}(data; kwargs...)
+        end
+
         function $(aType){T}(data::AbstractArray; kwargs...) where {T}
             return $(aType){T,ndims(data)}(data; kwargs...)
         end
@@ -784,6 +788,31 @@ function ConcreteIFRTArray{T,N}(
     # ToDo: How to use specified device (non-sharded case)?
     sharded_data, shardinfo, padding = sharding(theclient, nothing, dummy_array)
     return ConcreteIFRTArray{T,N}(sharded_data, shape, shardinfo, padding)
+end
+
+for aType in (:ConcretePJRTArray, :ConcreteIFRTArray)
+    @eval begin
+        function $(aType){T,N,P}(::UndefInitializer, shape...; kwargs...) where {T,N,P}
+            return _check_concrete_type(
+                $(aType){T,N,P}, $(aType){T,N}(undef, shape...; kwargs...)
+            )
+        end
+
+        function $(aType){T,N,P}(data::AbstractArray; kwargs...) where {T,N,P}
+            return _check_concrete_type($(aType){T,N,P}, $(aType){T,N}(data; kwargs...))
+        end
+    end
+end
+
+function _check_concrete_type(::Type{A}, x) where {A}
+    x isa A || throw(
+        ArgumentError(
+            "Cannot construct a `$(A)`: the given sharding produces a `$(typeof(x))`. \
+             Use `$(Base.typename(A).wrapper){$(eltype(x)),$(ndims(x))}` or pass a \
+             matching `sharding` keyword."
+        ),
+    )
+    return x
 end
 
 function _select_client_and_device(

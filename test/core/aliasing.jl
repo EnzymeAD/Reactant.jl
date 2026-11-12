@@ -110,3 +110,45 @@ end
         end
     end
 end
+
+# An array shared by many immutable wrappers, as when every field of a model holds its own
+# copy of an immutable grid that references the same metric arrays.
+struct SharedWrapper{A}
+    data::A
+end
+
+struct ManyWrappers{W,A}
+    wrappers::W
+    other::A
+end
+
+function scale_other!(m)
+    m.other .*= 2
+    return nothing
+end
+
+function scale_shared!(m)
+    first(m.wrappers).data .*= 2
+    return nothing
+end
+
+@testset "Write-back to an array reachable through many paths" begin
+    shared = Reactant.to_rarray(ones(4))
+    other = Reactant.to_rarray(ones(4))
+    m = ManyWrappers(ntuple(_ -> SharedWrapper(shared), 64), other)
+
+    compiled = @compile scale_other!(m)
+    body = string(only(code_lowered(compiled, Tuple{typeof(m)})))
+    # the shared array is written back once, not once per path to it
+    @test count("traced_setfield!", body) < 8
+
+    compiled(m)
+    @test all(==(2), Array(m.other))
+    @test all(==(1), Array(shared))
+    @test all(w -> w.data === shared, m.wrappers)
+
+    @jit scale_shared!(m)
+    @test all(==(2), Array(shared))
+    @test all(w -> w.data === shared, m.wrappers)
+    @test all(w -> all(==(2), Array(w.data)), m.wrappers)
+end

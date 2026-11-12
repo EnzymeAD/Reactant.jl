@@ -1108,8 +1108,6 @@ mutable struct XLA_FFI_Command end
 end
 
 @cenum XLA_FFI_SourceFormat::UInt32 begin
-    XLA_FFI_SourceFormat_PTX = 0
-    XLA_FFI_SourceFormat_CUBIN = 1
     XLA_FFI_SourceFormat_FUNCTION_PTR = 2
 end
 
@@ -1180,4 +1178,4 @@ const XLA_FFI_Extension_Record = 128
 
 const XLA_FFI_Extension_Record_MajorVersion = 0
 
-const XLA_FFI_Extension_Record_MinorVersion = 2
+const XLA_FFI_Extension_Record_MinorVersion = 3

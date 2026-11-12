@@ -3,8 +3,8 @@ using ProtoBuf: OneOf
 using ProtoBuf.EnumX: @enumx
 
 export var"Node.InstructionCategory", var"Node.XLAInstruction.LayoutAnalysis.Dimension"
-export Metrics, var"Node.XLAInstruction.LayoutAnalysis", var"Node.XLAInstruction", Node
-export Profile
+export var"Node.ProgramServingMetadata", Metrics, var"Node.XLAInstruction.LayoutAnalysis"
+export var"Node.XLAInstruction", Node, Profile
 
 
 struct var"Node.InstructionCategory" end
@@ -65,6 +65,48 @@ function PB._encoded_size(x::var"Node.XLAInstruction.LayoutAnalysis.Dimension")
     x.size != zero(Int32) && (encoded_size += PB._encoded_size(x.size, 1))
     x.alignment != zero(Int32) && (encoded_size += PB._encoded_size(x.alignment, 2))
     !isempty(x.semantics) && (encoded_size += PB._encoded_size(x.semantics, 3))
+    return encoded_size
+end
+
+struct var"Node.ProgramServingMetadata"
+    model_id::String
+    batch_size::Int32
+    num_batches::Int32
+end
+PB.default_values(::Type{var"Node.ProgramServingMetadata"}) = (;model_id = "", batch_size = zero(Int32), num_batches = zero(Int32))
+PB.field_numbers(::Type{var"Node.ProgramServingMetadata"}) = (;model_id = 1, batch_size = 2, num_batches = 3)
+
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"Node.ProgramServingMetadata"}, _endpos::Int=0, _group::Bool=false)
+    model_id = ""
+    batch_size = zero(Int32)
+    num_batches = zero(Int32)
+    while !PB.message_done(d, _endpos, _group)
+        field_number, wire_type = PB.decode_tag(d)
+        if field_number == 1
+            model_id = PB.decode(d, String)
+        elseif field_number == 2
+            batch_size = PB.decode(d, Int32)
+        elseif field_number == 3
+            num_batches = PB.decode(d, Int32)
+        else
+            Base.skip(d, wire_type)
+        end
+    end
+    return var"Node.ProgramServingMetadata"(model_id, batch_size, num_batches)
+end
+
+function PB.encode(e::PB.AbstractProtoEncoder, x::var"Node.ProgramServingMetadata")
+    initpos = position(e.io)
+    !isempty(x.model_id) && PB.encode(e, 1, x.model_id)
+    x.batch_size != zero(Int32) && PB.encode(e, 2, x.batch_size)
+    x.num_batches != zero(Int32) && PB.encode(e, 3, x.num_batches)
+    return position(e.io) - initpos
+end
+function PB._encoded_size(x::var"Node.ProgramServingMetadata")
+    encoded_size = 0
+    !isempty(x.model_id) && (encoded_size += PB._encoded_size(x.model_id, 1))
+    x.batch_size != zero(Int32) && (encoded_size += PB._encoded_size(x.batch_size, 2))
+    x.num_batches != zero(Int32) && (encoded_size += PB._encoded_size(x.num_batches, 3))
     return encoded_size
 end
 
@@ -273,12 +315,13 @@ struct Node
     children::Vector{Node}
     contents::Union{Nothing,OneOf{<:Union{var"Node.InstructionCategory",var"Node.XLAInstruction"}}}
     num_children::Int32
+    program_serving_metadata::Union{Nothing,var"Node.ProgramServingMetadata"}
 end
 PB.oneof_field_types(::Type{Node}) = (;
     contents = (;category=var"Node.InstructionCategory", xla=var"Node.XLAInstruction"),
 )
-PB.default_values(::Type{Node}) = (;name = "", metrics = nothing, children = Vector{Node}(), category = nothing, xla = nothing, num_children = zero(Int32))
-PB.field_numbers(::Type{Node}) = (;name = 1, metrics = 2, children = 3, category = 4, xla = 5, num_children = 6)
+PB.default_values(::Type{Node}) = (;name = "", metrics = nothing, children = Vector{Node}(), category = nothing, xla = nothing, num_children = zero(Int32), program_serving_metadata = nothing)
+PB.field_numbers(::Type{Node}) = (;name = 1, metrics = 2, children = 3, category = 4, xla = 5, num_children = 6, program_serving_metadata = 7)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:Node}, _endpos::Int=0, _group::Bool=false)
     name = ""
@@ -286,6 +329,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:Node}, _endpos::Int=0, _
     children = PB.BufferedVector{Node}()
     contents = nothing
     num_children = zero(Int32)
+    program_serving_metadata = Ref{Union{Nothing,var"Node.ProgramServingMetadata"}}(nothing)
     while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
@@ -300,11 +344,13 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:Node}, _endpos::Int=0, _
             contents = OneOf(:xla, PB.decode(d, Ref{var"Node.XLAInstruction"}))
         elseif field_number == 6
             num_children = PB.decode(d, Int32)
+        elseif field_number == 7
+            PB.decode!(d, program_serving_metadata)
         else
             Base.skip(d, wire_type)
         end
     end
-    return Node(name, metrics[], children[], contents, num_children)
+    return Node(name, metrics[], children[], contents, num_children, program_serving_metadata[])
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::Node)
@@ -319,6 +365,7 @@ function PB.encode(e::PB.AbstractProtoEncoder, x::Node)
         PB.encode(e, 5, x.contents[]::var"Node.XLAInstruction")
     end
     x.num_children != zero(Int32) && PB.encode(e, 6, x.num_children)
+    !isnothing(x.program_serving_metadata) && PB.encode(e, 7, x.program_serving_metadata)
     return position(e.io) - initpos
 end
 function PB._encoded_size(x::Node)
@@ -333,6 +380,7 @@ function PB._encoded_size(x::Node)
         encoded_size += PB._encoded_size(x.contents[]::var"Node.XLAInstruction", 5)
     end
     x.num_children != zero(Int32) && (encoded_size += PB._encoded_size(x.num_children, 6))
+    !isnothing(x.program_serving_metadata) && (encoded_size += PB._encoded_size(x.program_serving_metadata, 7))
     return encoded_size
 end
 

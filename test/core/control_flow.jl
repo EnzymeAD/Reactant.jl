@@ -1538,6 +1538,50 @@ end
     @test Array(for_compiled(rd, rB)) ≈ for_loop_calling_closure(d, B)
 end
 
+function while_loop_inline_closure(A, w, n)
+    i = 0
+    @trace while i < n
+        i += 1
+        A = (a -> a .+ w)(A)
+    end
+    return A
+end
+
+function for_loop_inline_closure(A, w, n)
+    @trace track_numbers = false for _ in 1:n
+        A = (a -> a .+ w)(A)
+    end
+    return A
+end
+
+function if_inline_closure_mutate!(cond, w)
+    @trace if cond
+        (() -> (w .+= 1; nothing))()
+    end
+    return w
+end
+
+@testset "inline closures capturing outer traced values in @trace (#3617)" begin
+    A_jl = ones(3, 2)
+    w_jl = fill(0.5, 3)
+
+    A_ra = Reactant.to_rarray(copy(A_jl))
+    w_ra = Reactant.to_rarray(copy(w_jl))
+    @test Array(@jit while_loop_inline_closure(A_ra, w_ra, 2)) ≈
+        while_loop_inline_closure(copy(A_jl), w_jl, 2)
+
+    A_ra = Reactant.to_rarray(copy(A_jl))
+    w_ra = Reactant.to_rarray(copy(w_jl))
+    @test Array(@jit for_loop_inline_closure(A_ra, w_ra, 2)) ≈
+        for_loop_inline_closure(copy(A_jl), w_jl, 2)
+
+    for cond in (true, false)
+        w_ra = Reactant.to_rarray(copy(w_jl))
+        @test Array(@jit if_inline_closure_mutate!(ConcreteRNumber(cond), w_ra)) ≈
+            if_inline_closure_mutate!(cond, copy(w_jl))
+    end
+end
+
 # A static parameter can't be rebound with `local`, so naming one in a traced loop body,
 # whether called or passed as a value, must still lower.
 function for_loop_using_static_param(x::AbstractVector{T}) where {T}
@@ -1756,4 +1800,50 @@ end
 @testset "UndefVarError in loop" begin
     x = Reactant.to_rarray([1, 2, 3])
     @test_throws UndefVarError @compile f_undef_var_error(x)
+end
+
+function triply_nested_trace_for(D::AbstractMatrix{T}) where {T}
+    n, m = size(D)
+    corr = zeros(T, m, m)
+    @trace for i in 1:m
+        @allowscalar corr[i, i] = one(T)
+        @trace for j in 1:m
+            @allowscalar corr[i, j] = zero(T)
+            @trace for k in 1:n
+                @allowscalar corr[i, j] += D[k, i] * D[k, j]
+            end
+        end
+    end
+    return corr
+end
+
+@testset "triply-nested @trace for loops (#3095)" begin
+    D = Float32[1 2 3; 4 5 6; 7 8 9; 10 11 12]
+    D_ra = Reactant.to_rarray(D)
+    @test Array(@jit(triply_nested_trace_for(D_ra))) ≈ triply_nested_trace_for(D)
+end
+
+function loop_with_pi_var(x)
+    s = zero(eltype(x))
+    @trace for i in 1:length(x)
+        pi = @allowscalar x[i]
+        s += pi
+    end
+    return s
+end
+
+function loop_reading_outer_irrational(x)
+    c = π
+    s = zero(eltype(x))
+    @trace for i in 1:length(x)
+        s += c * @allowscalar x[i]
+    end
+    return s
+end
+
+@testset "Variables shadowing const globals and irrationals in @trace (#3282)" begin
+    x = Float32[1, 2, 3]
+    xr = Reactant.to_rarray(x)
+    @test @jit(loop_with_pi_var(xr)) ≈ 6.0f0
+    @test @jit(loop_reading_outer_irrational(xr)) ≈ Float32(π) * 6.0f0
 end
