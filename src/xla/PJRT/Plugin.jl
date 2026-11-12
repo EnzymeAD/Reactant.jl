@@ -99,6 +99,7 @@ function debug_string end
 function decrease_external_reference_count! end
 function default_device_assignment end
 function default_memory end
+function default_memory_description end
 function description end
 function deserialize_and_load end
 function deserialize_topology_description end
@@ -130,6 +131,7 @@ function lookup_addressable_device end
 function lookup_device end
 function make_canonical_shape_for_memory_space end
 function memory end
+function memory_descriptions end
 function memory_layout end
 function memory_space_kind_ids end
 function name end
@@ -4263,6 +4265,9 @@ Return the type that XLA identifies extensions of type `E` by. Each extension ty
 [`make_api`](@ref).
 """
 function extension_type end
+
+include("Extensions/MemoryDescriptions.jl")
+include("Extensions/FFI.jl")
 
 """
     PluginApi
