@@ -1113,12 +1113,9 @@ platform(
     ],
 )
 
-# cc_shared_library(
-cc_binary(
+alias(
     name = "libReactantExtra.so",
-    linkshared = 1,  ## important
-    linkstatic = 1,  ## important
-    deps = ["@enzyme_ad//src/enzyme_ad/jax/ReactantExtra:ReactantExtraLib"],
+    actual = "@enzyme_ad//src/enzyme_ad/jax/ReactantExtra:libReactantExtra.so",
 )
 
 cc_binary(
