@@ -615,6 +615,38 @@ for (dialect, op) in [
     end
 end
 
+@noinline function polygamma(
+    m::Real,
+    x::TracedRNumber{T};
+    location=mlir_stacktrace("polygamma", @__FILE__, @__LINE__),
+) where {T<:Reactant.ReactantFloat}
+    return polygamma(constant(T(m); location), x; location)
+end
+
+@noinline function polygamma(
+    m::Real,
+    x::TracedRArray{T,N};
+    location=mlir_stacktrace("polygamma", @__FILE__, @__LINE__),
+) where {T<:Reactant.ReactantFloat,N}
+    return polygamma(fill(T(m), size(x); location), x; location)
+end
+
+@noinline function polygamma(
+    m::TracedRNumber{<:Reactant.ReactantInt},
+    x::TracedRNumber{T};
+    location=mlir_stacktrace("polygamma", @__FILE__, @__LINE__),
+) where {T<:Reactant.ReactantFloat}
+    return polygamma(convert(TracedRNumber{T}, m; location), x; location)
+end
+
+@noinline function polygamma(
+    m::TracedRArray{<:Reactant.ReactantInt,N},
+    x::TracedRArray{T,N};
+    location=mlir_stacktrace("polygamma", @__FILE__, @__LINE__),
+) where {T<:Reactant.ReactantFloat,N}
+    return polygamma(convert(TracedRArray{T,N}, m; location), x; location)
+end
+
 @noinline function hypot(
     a::TracedRArray{T,N},
     b::TracedRArray{T,N};
