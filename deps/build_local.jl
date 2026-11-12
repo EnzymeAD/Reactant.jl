@@ -343,12 +343,25 @@ if parsed_args["test"]
     run(Cmd(Cmd(test_cmd_list); dir=source_dir))
 end
 
+# `:libReactantExtra.so` is an alias of the target in Enzyme-JAX, the library is built in
+# the directory of that target
+build_dir = joinpath(
+    source_dir,
+    "bazel-bin",
+    "external",
+    "enzyme_ad",
+    "src",
+    "enzyme_ad",
+    "jax",
+    "ReactantExtra",
+)
+
 # Discover built libraries
-built_libs = filter(readdir(joinpath(source_dir, "bazel-bin"))) do file
+built_libs = filter(readdir(build_dir)) do file
     return endswith(file, "Extra.so") && startswith(file, "lib")
 end
 
-lib_path = joinpath(source_dir, "bazel-bin", only(built_libs))
+lib_path = joinpath(build_dir, only(built_libs))
 isfile(lib_path) || error("Could not find library $lib_path in build directory")
 
 if build_backend isa CUDABackend
@@ -357,11 +370,10 @@ if build_backend isa CUDABackend
         joinpath("bin", "fatbinary"),
         joinpath("nvvm", "libdevice", "libdevice.10.bc"),
     )
-        full_path = joinpath(source_dir, "bazel-bin", "cuda", path)
+        full_path = joinpath(build_dir, "cuda", path)
         if !Base.Filesystem.ispath(full_path)
             source = joinpath(
-                source_dir,
-                "bazel-bin",
+                build_dir,
                 "libReactantExtra.so.runfiles",
                 # libdevice's directory was moved in CUDA 13, before was in same
                 # dir as ptxas and fatbinary
