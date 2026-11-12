@@ -131,16 +131,35 @@ end
     return Base.setproperty!(obj, field, (val[idx],))
 end
 
-function traced_setfield_buffer!(runtime::Val, cache_dict, concrete_res, obj, field, path)
+@inline function traced_set_shape!(
+    @nospecialize(obj::AbstractConcreteArray{T,N}), shape::NTuple{N,Int}
+) where {T,N}
+    if obj.shape != shape
+        Base.setproperty!(obj, :shape, shape)
+    end
+    return nothing
+end
+@inline traced_set_shape!(@nospecialize(_obj), _shape) = nothing
+
+function traced_setfield_buffer!(
+    runtime::Val, cache_dict, concrete_res, obj, field, path; res_shape=nothing
+)
     return traced_setfield_buffer!(
-        runtime, cache_dict, traced_getfield(obj, field), concrete_res, obj, field, path
+        runtime,
+        cache_dict,
+        traced_getfield(obj, field),
+        concrete_res,
+        obj,
+        field,
+        path;
+        res_shape,
     )
 end
 
 # A captured traced enum must be replaced in its containing field: its typed payload
 # cannot accept a concrete number. Other values retain the usual payload write-back.
 function traced_setfield_buffer_at_parent!(
-    runtime, cache_dict, concrete_res, parent, field, payload_field, path
+    runtime, cache_dict, concrete_res, parent, field, payload_field, path; res_shape=nothing
 )
     obj = traced_getfield(parent, field)
     if obj isa Reactant.TracedEnum
@@ -166,12 +185,16 @@ function traced_setfield_buffer_at_parent!(
         return traced_setfield!(parent, field, concrete_enum, path)
     end
     return traced_setfield_buffer!(
-        runtime, cache_dict, concrete_res, obj, payload_field, path
+        runtime, cache_dict, concrete_res, obj, payload_field, path; res_shape
     )
 end
 
-function traced_setfield_buffer!(::Val, _cache_dict, val, concrete_res, _obj, _field, path)
-    return traced_setfield!(val, :data, concrete_res, path)
+function traced_setfield_buffer!(
+    ::Val, _cache_dict, val, concrete_res, _obj, _field, path; res_shape=nothing
+)
+    traced_setfield!(val, :data, concrete_res, path)
+    res_shape !== nothing && traced_set_shape!(val, res_shape)
+    return val
 end
 
 function traced_setfield_buffer!(
@@ -181,7 +204,8 @@ function traced_setfield_buffer!(
     concrete_res,
     obj,
     field,
-    path,
+    path;
+    res_shape=nothing,
 )
     if haskey(cache_dict, val)
         cval = cache_dict[val]
@@ -205,7 +229,8 @@ function traced_setfield_buffer!(
     concrete_res,
     obj,
     field,
-    path,
+    path;
+    res_shape=nothing,
 )
     if haskey(cache_dict, val)
         cval = cache_dict[val]
@@ -312,6 +337,81 @@ Base.@nospecializeinfer function create_result(
     return result_cache[tocopy]
 end
 
+struct AliasedArgResult
+    expr::Expr
+    target_type::Union{Nothing,DataType}
+    fallback_sym::Union{Nothing,Symbol}
+end
+
+function _can_use_aliased_arg_result(
+    restore::AliasedArgResult, @nospecialize(tocopy), path_to_shard_info, path
+)
+    (restore.target_type === nothing || restore.target_type === typeof(tocopy)) ||
+        return false
+    return !(path_to_shard_info !== nothing && haskey(path_to_shard_info, path))
+end
+
+function resolve_result_path(@nospecialize(obj), path::Tuple)
+    try
+        cur = obj
+        for p in path
+            cur = getfield(cur, p)
+        end
+        return cur
+    catch
+        return UNRESOLVED_PATH
+    end
+end
+
+function _find_resarg_expr(
+    result, resargprefix::Symbol, argprefix::Symbol, resharded_inputs, concrete_args
+)
+    resarg_paths = Tuple[]
+    for p in Reactant.TracedUtils.get_paths(result)
+        if length(p) > 0 && p[1] == resargprefix
+            push!(resarg_paths, p)
+        end
+    end
+    isempty(resarg_paths) && return nothing
+
+    chosen = nothing
+    for p in Reactant.TracedUtils.get_paths(result)
+        if length(p) > 0 && p[1] == argprefix
+            candidate = (resargprefix, p[2:end]...)
+            if candidate in resarg_paths
+                chosen = candidate
+                break
+            end
+        end
+    end
+    if chosen === nothing
+        chosen = first(resarg_paths)
+    end
+
+    if get(resharded_inputs, (argprefix, chosen[2:end]...), nothing) !== nothing
+        return nothing
+    end
+
+    target_type = nothing
+    if concrete_args !== nothing
+        target_obj = resolve_path(concrete_args, chosen[2:end])
+        if !(
+            target_obj isa Union{
+                ConcretePJRTArray,ConcretePJRTNumber,ConcreteIFRTArray,ConcreteIFRTNumber
+            }
+        )
+            return nothing
+        end
+        target_type = typeof(target_obj)
+    end
+
+    argres = :(args[$(chosen[2])])
+    for p in chosen[3:end]
+        argres = :(traced_getfield($argres, $(Meta.quot(p))))
+    end
+    return (argres, target_type)
+end
+
 function create_result(
     tocopy::ConcretePJRTNumber{T,D},
     @nospecialize(path::Tuple),
@@ -332,15 +432,23 @@ function create_result(
         @assert haskey(result_stores, path) "Expected $(path) in $(keys(result_stores))"
         restore = result_stores[path]
         delete!(result_stores, path)
-        if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
-            if haskey(to_unreshard_results, path)
-                error("TODO(#2234): Not yet Implemented. Use IFRT for this.")
-            end
-            sharding = pop!(path_to_shard_info, path)
-            push!(used_shardinfo, sharding)
-            result = :(ConcretePJRTNumber{$T}(($(restore)...,), $sharding))
+        if restore isa AliasedArgResult &&
+            _can_use_aliased_arg_result(restore, tocopy, path_to_shard_info, path)
+            result = restore.expr
         else
-            result = :(ConcretePJRTNumber{$T}($restore))
+            if restore isa AliasedArgResult
+                restore = restore.fallback_sym::Symbol
+            end
+            if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
+                if haskey(to_unreshard_results, path)
+                    error("TODO(#2234): Not yet Implemented. Use IFRT for this.")
+                end
+                sharding = pop!(path_to_shard_info, path)
+                push!(used_shardinfo, sharding)
+                result = :(ConcretePJRTNumber{$T}(($(restore)...,), $sharding))
+            else
+                result = :(ConcretePJRTNumber{$T}($restore))
+            end
         end
         push!(
             resultgen_code,
@@ -374,15 +482,23 @@ function create_result(
         @assert haskey(result_stores, path)
         restore = result_stores[path]
         delete!(result_stores, path)
-        if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
-            if haskey(to_unreshard_results, path)
-                error("TODO(#2234): Not yet Implemented.")
-            end
-            sharding = pop!(path_to_shard_info, path)
-            push!(used_shardinfo, sharding)
-            result = :(ConcreteIFRTNumber{$T}($(restore), $sharding))
+        if restore isa AliasedArgResult &&
+            _can_use_aliased_arg_result(restore, tocopy, path_to_shard_info, path)
+            result = restore.expr
         else
-            result = :(ConcreteIFRTNumber{$T}($restore))
+            if restore isa AliasedArgResult
+                restore = restore.fallback_sym::Symbol
+            end
+            if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
+                if haskey(to_unreshard_results, path)
+                    error("TODO(#2234): Not yet Implemented.")
+                end
+                sharding = pop!(path_to_shard_info, path)
+                push!(used_shardinfo, sharding)
+                result = :(ConcreteIFRTNumber{$T}($(restore), $sharding))
+            else
+                result = :(ConcreteIFRTNumber{$T}($restore))
+            end
         end
         push!(
             resultgen_code,
@@ -416,16 +532,25 @@ function create_result(
         @assert haskey(result_stores, path)
         restore = result_stores[path]
         delete!(result_stores, path)
-        if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
-            if haskey(to_unreshard_results, path)
-                error("TODO(#2234): Not yet Implemented. Use IFRT for this.")
-            end
-            sharding = pop!(path_to_shard_info, path)
-            push!(used_shardinfo, sharding)
-            result =
-                :(ConcretePJRTArray{$T,$N}(($(restore)...,), $(tocopy.shape), $sharding))
+        if restore isa AliasedArgResult &&
+            _can_use_aliased_arg_result(restore, tocopy, path_to_shard_info, path)
+            result = restore.expr
         else
-            result = :(ConcretePJRTArray{$T,$N}($restore, $(tocopy.shape)))
+            if restore isa AliasedArgResult
+                restore = restore.fallback_sym::Symbol
+            end
+            if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
+                if haskey(to_unreshard_results, path)
+                    error("TODO(#2234): Not yet Implemented. Use IFRT for this.")
+                end
+                sharding = pop!(path_to_shard_info, path)
+                push!(used_shardinfo, sharding)
+                result = :(ConcretePJRTArray{$T,$N}(
+                    ($(restore)...,), $(tocopy.shape), $sharding
+                ))
+            else
+                result = :(ConcretePJRTArray{$T,$N}($restore, $(tocopy.shape)))
+            end
         end
         push!(
             resultgen_code,
@@ -459,32 +584,40 @@ function create_result(
         @assert haskey(result_stores, path)
         restore = result_stores[path]
         delete!(result_stores, path)
-        if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
-            if haskey(to_unreshard_results, path)
-                if !haskey(unresharded_arrays_cache, restore)
-                    unresharded_array_sym = gensym(:unresharded_array)
-                    push!(
-                        unresharded_code,
-                        :(
-                            $unresharded_array_sym = generate_unresharded_ifrt_array(
-                                $(restore),
-                                $(to_unreshard_results[path][1]),
-                                $(to_unreshard_results[path][2]),
-                                global_mesh,
-                            )
-                        ),
-                    )
-                    unresharded_arrays_cache[restore] = unresharded_array_sym
-                end
-                return :(ConcreteIFRTArray{$T,$N}(
-                    $(unresharded_arrays_cache[restore]), $(tocopy.shape)
-                ))
-            end
-            sharding = pop!(path_to_shard_info, path)
-            push!(used_shardinfo, sharding)
-            result = :(ConcreteIFRTArray{$T,$N}($(restore), $(tocopy.shape), $sharding))
+        if restore isa AliasedArgResult &&
+            _can_use_aliased_arg_result(restore, tocopy, path_to_shard_info, path)
+            result = restore.expr
         else
-            result = :(ConcreteIFRTArray{$T,$N}($(restore), $(tocopy.shape)))
+            if restore isa AliasedArgResult
+                restore = restore.fallback_sym::Symbol
+            end
+            if path_to_shard_info !== nothing && haskey(path_to_shard_info, path)
+                if haskey(to_unreshard_results, path)
+                    if !haskey(unresharded_arrays_cache, restore)
+                        unresharded_array_sym = gensym(:unresharded_array)
+                        push!(
+                            unresharded_code,
+                            :(
+                                $unresharded_array_sym = generate_unresharded_ifrt_array(
+                                    $(restore),
+                                    $(to_unreshard_results[path][1]),
+                                    $(to_unreshard_results[path][2]),
+                                    global_mesh,
+                                )
+                            ),
+                        )
+                        unresharded_arrays_cache[restore] = unresharded_array_sym
+                    end
+                    return :(ConcreteIFRTArray{$T,$N}(
+                        $(unresharded_arrays_cache[restore]), $(tocopy.shape)
+                    ))
+                end
+                sharding = pop!(path_to_shard_info, path)
+                push!(used_shardinfo, sharding)
+                result = :(ConcreteIFRTArray{$T,$N}($(restore), $(tocopy.shape), $sharding))
+            else
+                result = :(ConcreteIFRTArray{$T,$N}($(restore), $(tocopy.shape)))
+            end
         end
         push!(
             resultgen_code,
@@ -1128,6 +1261,7 @@ function codegen_unflatten!(
     unresharded_code = Expr[]
     unflatten_code = Expr[]
     used_shardinfo = Set{Symbol}()
+    pre_execution_read_code = Expr[]
 
     runtime = XLA.runtime(client)
     if runtime isa Val{:PJRT}
@@ -1157,6 +1291,10 @@ function codegen_unflatten!(
 
     for (concrete_res_name, result, shard_info) in
         zip(concretized_res_names, linear_results, linear_result_shard_info)
+        resarg_info = _find_resarg_expr(
+            result, resargprefix, argprefix, resharded_inputs, concrete_args
+        )
+        res_shape = result isa TracedRArray ? size(result) : nothing
         paths = (
             (
                 p for p in Reactant.TracedUtils.get_paths(result) if
@@ -1165,7 +1303,6 @@ function codegen_unflatten!(
         )
         for path in paths
             if path[1] == resprefix
-                unflatcode = :result
                 path = path[2:end]
 
                 if Reactant.TracedUtils.has_idx(result, argprefix)
@@ -1175,9 +1312,15 @@ function codegen_unflatten!(
                     end
                 end
 
-                result_stores[path] = concrete_res_name
                 if path_to_shard_info !== nothing
                     path_to_shard_info[path] = shard_info
+                end
+                if resarg_info !== nothing && !haskey(to_unreshard_results, path)
+                    result_stores[path] = AliasedArgResult(
+                        resarg_info[1], resarg_info[2], concrete_res_name
+                    )
+                else
+                    result_stores[path] = concrete_res_name
                 end
                 continue
             else
@@ -1234,7 +1377,8 @@ function codegen_unflatten!(
                             $(unflatcode),
                             $(Meta.quot(path[end - 1])),
                             $(Meta.quot(path[end])),
-                            $(path),
+                            $(path);
+                            res_shape=$(res_shape),
                         )
                     end
                 elseif length(path) > 0
@@ -1247,8 +1391,16 @@ function codegen_unflatten!(
                             $(concrete_res_name_final),
                             $(unflatcode),
                             $(Meta.quot(path[end])),
-                            $(path),
+                            $(path);
+                            res_shape=$(res_shape),
                         )
+                    end
+                elseif res_shape !== nothing
+                    unflatcode = quote
+                        traced_setfield!(
+                            $(unflatcode), :data, $(concrete_res_name_final), $(path)
+                        )
+                        traced_set_shape!($(unflatcode), $(res_shape))
                     end
                 else
                     unflatcode = :(traced_setfield!(
@@ -1277,6 +1429,9 @@ function codegen_unflatten!(
     resultgen_code = Expr[]
 
     for (result, arg_idx) in preserved_args
+        resarg_info = _find_resarg_expr(
+            result, resargprefix, argprefix, resharded_inputs, concrete_args
+        )
         paths = (
             (
                 p for p in Reactant.TracedUtils.get_paths(result) if
@@ -1303,22 +1458,38 @@ function codegen_unflatten!(
                 error("TODO(#2234): Not yet Implemented. Open an issue on Reactant.jl.")
             end
 
-            argres = :(args[$(argpath[2])])
-            for p in argpath[3:end]
-                argres = :(traced_getfield($argres, $(Meta.quot(p))))
+            leaf_obj = resolve_result_path(concrete_result, path)
+            can_alias =
+                resarg_info !== nothing &&
+                !haskey(to_unreshard_results, path) &&
+                !(path_to_shard_info !== nothing && haskey(path_to_shard_info, path)) &&
+                (
+                    resarg_info[2] === nothing ||
+                    (leaf_obj !== UNRESOLVED_PATH && resarg_info[2] === typeof(leaf_obj))
+                )
+
+            if can_alias
+                result_stores[path] = AliasedArgResult(
+                    resarg_info[1], resarg_info[2], nothing
+                )
+            else
+                argres = :(args[$(argpath[2])])
+                for p in argpath[3:end]
+                    argres = :(traced_getfield($argres, $(Meta.quot(p))))
+                end
+
+                sym = Symbol("result", var_idx[])
+                var_idx[] += 1
+
+                push!(
+                    pre_execution_read_code,
+                    quote
+                        $sym = $argres.data
+                    end,
+                )
+
+                result_stores[path] = sym
             end
-
-            sym = Symbol("result", var_idx[])
-            var_idx[] += 1
-
-            push!(
-                resultgen_code,
-                quote
-                    $sym = $argres.data
-                end,
-            )
-
-            result_stores[path] = sym
         end
     end
 
@@ -1349,9 +1520,9 @@ function codegen_unflatten!(
     #   * A pure `:resargs` mutation takes the *post-execution* value, so that read
     #     happens after the write-back.
     # In all cases the writes are applied after the write-back so an aliased argument is
-    # not clobbered by it.
+    # not clobbered by it, and `resultgen_code` runs afterwards so results aliasing post-
+    # execution argument slots (`AliasedArgResult`) return those exact concrete wrappers.
     orig_buffer_available = trues(length(linear_args))
-    pre_execution_read_code = Expr[]
     post_execution_read_code = Expr[]
     alias_write_code = Expr[]
     codegen_unflatten_aliased_args!(
@@ -1371,11 +1542,11 @@ function codegen_unflatten!(
     body_code = Expr[
         pre_execution_read_code...,
         unresharded_code...,
-        resultgen_code...,
-        :(result = $result_code),
         unflatten_code...,
         post_execution_read_code...,
         alias_write_code...,
+        resultgen_code...,
+        :(result = $result_code),
     ]
 
     if DEBUG_ALIASED_BUFFER_ASSIGNMENT_ERROR[]
@@ -1480,6 +1651,9 @@ function codegen_unflatten_aliased_args!(
             end
 
             push!(write_code, :(traced_setfield!($res, :data, $argpath_value, $(path))))
+            if result isa TracedRArray
+                push!(write_code, :(traced_set_shape!($res, $(size(result)))))
+            end
         end
     end
     return pre_execution_read_code, post_execution_read_code, write_code
