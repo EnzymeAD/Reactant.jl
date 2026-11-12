@@ -279,3 +279,35 @@ end
         end broken = RunningOnTPU
     end
 end
+
+chol_L_3385(A) = cholesky(A).L
+chol_U_3385(A) = cholesky(A).U
+chol_UL_3385(A) = cholesky(A).UL
+chol_sym_L_3385(A) = cholesky(Symmetric(A)).L
+chol_herm_U_3385(A) = cholesky(Hermitian(A)).U
+function chol_iterate_3385(A)
+    L, U = cholesky(A)
+    return L * U
+end
+
+@testset "Cholesky L, U, UL properties and iteration (#3385)" begin
+    @testset for T in (Float32, Float64, ComplexF32, ComplexF64)
+        (T == ComplexF64 || T == Float64) && RunningOnTPU && continue
+
+        B = T <: Complex ? T[2+0im 1+1im; 0 3+0im] : T[2 1; 0 3]
+        A = adjoint(B) * B
+        A_ra = Reactant.to_rarray(A)
+        C_cpu = cholesky(A)
+
+        @test Array(@jit chol_L_3385(A_ra)) ≈ Matrix(C_cpu.L) atol = 1e-4 rtol = 1e-4
+        @test Array(@jit chol_U_3385(A_ra)) ≈ Matrix(C_cpu.U) atol = 1e-4 rtol = 1e-4
+        @test Array(@jit chol_UL_3385(A_ra)) ≈ Matrix(C_cpu.UL) atol = 1e-4 rtol = 1e-4
+        @test Array(@jit chol_iterate_3385(A_ra)) ≈ A atol = 1e-4 rtol = 1e-4
+        if T <: Real
+            @test Array(@jit chol_sym_L_3385(A_ra)) ≈ Matrix(cholesky(Symmetric(A)).L) atol =
+                1e-4 rtol = 1e-4
+        end
+        @test Array(@jit chol_herm_U_3385(A_ra)) ≈ Matrix(cholesky(Hermitian(A)).U) atol =
+            1e-4 rtol = 1e-4
+    end
+end
