@@ -337,7 +337,7 @@ run(Cmd(Cmd(build_cmd_list); dir=source_dir))
 if parsed_args["test"]
     test_cmd_list = copy(build_cmd_list)
     test_cmd_list[2] = "test"
-    test_cmd_list[end] = "//test:all"
+    test_cmd_list[end] = "@enzyme_ad//src/enzyme_ad/jax/ReactantExtra/test:all"
     push!(test_cmd_list, "--test_output=errors")
     @info "About to run Bazel tests\n" * join(test_cmd_list, " \\\n  ")
     run(Cmd(Cmd(test_cmd_list); dir=source_dir))
