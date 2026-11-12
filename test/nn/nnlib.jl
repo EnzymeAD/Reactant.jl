@@ -976,3 +976,52 @@ end
         end
     end
 end
+
+sum_bcast_fn(f, x) = sum(f.(x))
+grad_sum_bcast_fn(f, x) = Enzyme.gradient(Reverse, sum_bcast_fn, Const(f), x)[2]
+
+elu_half(x) = NNlib.elu(x, 0.5f0)
+celu_two(x) = NNlib.celu(x, 2.0f0)
+
+delu_one(x) = x > 0 ? one(x) : exp(x)
+function dselu(x)
+    λ = Float32(1.0507009873554805)
+    α = Float32(1.6732632423543772)
+    return x > 0 ? λ : λ * α * exp(x)
+end
+dcelu_one(x) = x > 0 ? one(x) : exp(x)
+delu_half(x) = x > 0 ? one(x) : 0.5f0 * exp(x)
+dcelu_two(x) = x > 0 ? one(x) : exp(x / 2.0f0)
+
+@testset "elu/selu/celu large positive gradient (#2973)" begin
+    x = Float32[-2.0, -1.0, 0.0, 1.0, 89.0, 100.0]
+    x_ra = Reactant.to_rarray(x)
+    x_cpu = Float32[-2.0, -1.0, 1.0]
+    x_cpu_ra = Reactant.to_rarray(x_cpu)
+    @testset for (fn, dfn, opname) in (
+        (NNlib.elu, delu_one, "enzymexla.math.elu"),
+        (NNlib.selu, dselu, "enzymexla.math.selu"),
+        (NNlib.celu, dcelu_one, "enzymexla.math.celu"),
+        (elu_half, delu_half, "enzymexla.math.elu"),
+        (celu_two, dcelu_two, "enzymexla.math.celu"),
+    )
+        hlo = repr(@code_hlo optimize = false fn.(x_ra))
+        @test occursin(opname, hlo)
+
+        y_ra = @jit fn.(x_ra)
+        g_ra = @jit grad_sum_bcast_fn(fn, x_ra)
+        @test Array(y_ra) ≈ fn.(x)
+        @test !any(isnan, Array(g_ra))
+        @test Array(g_ra) ≈ dfn.(x)
+
+        g_cpu_ra = @jit grad_sum_bcast_fn(fn, x_cpu_ra)
+        g_cpu = grad_sum_bcast_fn(fn, x_cpu)
+        @test Array(g_cpu_ra) ≈ g_cpu
+    end
+
+    # Integer inputs are promoted to float, as in NNlib.
+    xi_ra = Reactant.to_rarray(Int32[-2, 0, 3])
+    @test Array(@jit(NNlib.elu.(xi_ra))) ≈ NNlib.elu.(Int32[-2, 0, 3])
+    @test Array(@jit(NNlib.selu.(xi_ra))) ≈ NNlib.selu.(Int32[-2, 0, 3])
+    @test Array(@jit(NNlib.celu.(xi_ra))) ≈ NNlib.celu.(Int32[-2, 0, 3])
+end

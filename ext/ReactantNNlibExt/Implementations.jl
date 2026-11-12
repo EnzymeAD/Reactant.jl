@@ -25,6 +25,13 @@ else
     NNlib.gelu(x::TracedRNumber) = @opcall math_gelu(x, "TANH")
 end
 
+# elu / selu / celu are emitted as dedicated enzymexla.math ops so that the
+# exponential branch is never evaluated (nor differentiated) for positive inputs.
+# A traced `α` falls through to NNlib's generic definition.
+NNlib.elu(x::TracedRNumber, α::Real=1) = @opcall math_elu(x, α)
+NNlib.selu(x::TracedRNumber) = @opcall math_selu(x)
+NNlib.celu(x::TracedRNumber, α::Real=1) = @opcall math_celu(x, α)
+
 function NNlib.softmax!(out::AnyTracedRArray{T,N}, x::AbstractArray; dims=1) where {T,N}
     x = T.(materialize_traced_array(x))
     res = @opcall softmax(x; dims=vec(collect(Int64, dims)))
