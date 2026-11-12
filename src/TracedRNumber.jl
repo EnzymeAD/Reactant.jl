@@ -1141,9 +1141,397 @@ function Base.checkindex(::Type{Bool}, ::AbstractUnitRange, ::TracedRNumber)
     return true
 end
 
-# rem2pi: fallback to rem for now.
-# TODO(#2259): we should replace with the more numerically stable version.
-# https://github.com/JuliaLang/julia/blob/4d04bb6b3b1b879f4dbb918d194c5c939a1e7f3c/base/special/rem2pi.jl#L133
+const _REM2PI_INV_2PI = (
+    0x28be_60db_9391_054a,
+    0x7f09_d5f4_7d4d_3770,
+    0x36d8_a566_4f10_e410,
+    0x7f94_58ea_f7ae_f158,
+    0x6dc9_1b8e_9093_74b8,
+    0x0192_4bba_8274_6487,
+    0x3f87_7ac7_2c4a_69cf,
+    0xba20_8d7d_4bae_d121,
+    0x3a67_1c09_ad17_df90,
+    0x4e64_758e_60d4_ce7d,
+    0x2721_17e2_ef7e_4a0e,
+    0xc7fe_25ff_f781_6603,
+    0xfbcb_c462_d682_9b47,
+    0xdb4d_9fb3_c9f2_c26d,
+    0xd3d1_8fd9_a797_fa8b,
+    0x5d49_eeb1_faf9_7c5e,
+    0xcf41_ce7d_e294_a4ba,
+    0x9afe_d7ec_47e3_5742,
+    0x1580_cc11_bf1e_daea,
+)
+
+const _REM2PI_PI1O2_H = 1.5707963267948966
+const _REM2PI_PI1O2_L = 6.123233995736766e-17
+const _REM2PI_PI2O2_H = 3.141592653589793
+const _REM2PI_PI2O2_L = 1.2246467991473532e-16
+const _REM2PI_PI3O2_H = 4.71238898038469
+const _REM2PI_PI3O2_L = 1.8369701987210297e-16
+const _REM2PI_PI4O2_H = 6.283185307179586
+const _REM2PI_PI4O2_L = 2.4492935982947064e-16
+
+@inline _rem2pi_u64(v::Integer) = Reactant.promote_to(TracedRNumber{UInt64}, UInt64(v))
+@inline _rem2pi_i64(v::Integer) = Reactant.promote_to(TracedRNumber{Int64}, Int64(v))
+@inline _rem2pi_f64(v::Real) = Reactant.promote_to(TracedRNumber{Float64}, Float64(v))
+
+@inline function _rem2pi_shl(x::TracedRNumber{UInt64}, k::TracedRNumber{UInt64})
+    return @opcall shift_left(x, k)
+end
+@inline function _rem2pi_shl(x::TracedRNumber{UInt64}, k::UInt64)
+    return _rem2pi_shl(x, _rem2pi_u64(k))
+end
+@inline function _rem2pi_shr(x::TracedRNumber{UInt64}, k::TracedRNumber{UInt64})
+    return @opcall shift_right_logical(x, k)
+end
+@inline function _rem2pi_shr(x::TracedRNumber{UInt64}, k::UInt64)
+    return _rem2pi_shr(x, _rem2pi_u64(k))
+end
+
+@inline function _rem2pi_widemul_u64(x::TracedRNumber{UInt64}, y::TracedRNumber{UInt64})
+    mask = _rem2pi_u64(0x0000_0000_ffff_ffff)
+    x_lo = x & mask
+    x_hi = _rem2pi_shr(x, UInt64(32))
+    y_lo = y & mask
+    y_hi = _rem2pi_shr(y, UInt64(32))
+    p0 = x_lo * y_lo
+    p1 = x_lo * y_hi + _rem2pi_shr(p0, UInt64(32))
+    p2 = x_hi * y_lo + (p1 & mask)
+    lo = _rem2pi_shl(p2, UInt64(32)) | (p0 & mask)
+    hi = x_hi * y_hi + _rem2pi_shr(p1, UInt64(32)) + _rem2pi_shr(p2, UInt64(32))
+    return hi, lo
+end
+
+@inline function _rem2pi_shr128_to_u64(
+    x_hi::TracedRNumber{UInt64}, x_lo::TracedRNumber{UInt64}, k::TracedRNumber{Int64}
+)
+    z_i64 = _rem2pi_i64(0)
+    c64 = _rem2pi_i64(64)
+    k_ge_64 = k >= c64
+    s_hi = @opcall bitcast_convert(UInt64, ifelse(k_ge_64, k - c64, z_i64))
+    from_ge64 = _rem2pi_shr(x_hi, s_hi)
+    k_zero = k == z_i64
+    s1 = @opcall bitcast_convert(UInt64, ifelse(k_zero | k_ge_64, z_i64, k))
+    s2 = @opcall bitcast_convert(UInt64, ifelse(k_zero | k_ge_64, z_i64, c64 - k))
+    from_lt64 = ifelse(k_zero, x_lo, _rem2pi_shr(x_lo, s1) | _rem2pi_shl(x_hi, s2))
+    return ifelse(k_ge_64, from_ge64, from_lt64)
+end
+
+@inline function _rem2pi_shl128(
+    x_hi::TracedRNumber{UInt64}, x_lo::TracedRNumber{UInt64}, k::TracedRNumber{Int64}
+)
+    z_i64 = _rem2pi_i64(0)
+    c64 = _rem2pi_i64(64)
+    k_ge_64 = k >= c64
+    s_lo = @opcall bitcast_convert(UInt64, ifelse(k_ge_64, k - c64, z_i64))
+    hi_ge = _rem2pi_shl(x_lo, s_lo)
+    k_zero = k == z_i64
+    s1 = @opcall bitcast_convert(UInt64, ifelse(k_zero | k_ge_64, z_i64, k))
+    s2 = @opcall bitcast_convert(UInt64, ifelse(k_zero | k_ge_64, z_i64, c64 - k))
+    hi_lt = ifelse(k_zero, x_hi, _rem2pi_shl(x_hi, s1) | _rem2pi_shr(x_lo, s2))
+    lo_lt = ifelse(k_zero, x_lo, _rem2pi_shl(x_lo, s1))
+    return ifelse(k_ge_64, hi_ge, hi_lt), ifelse(k_ge_64, _rem2pi_u64(UInt64(0)), lo_lt)
+end
+
+@inline function _rem2pi_fromfraction_u64(
+    f_hi::TracedRNumber{UInt64}, f_lo::TracedRNumber{UInt64}
+)
+    u0 = _rem2pi_u64(UInt64(0))
+    u1 = _rem2pi_u64(UInt64(1))
+    is_zero = (f_hi == u0) & (f_lo == u0)
+    f_neg = _rem2pi_shr(f_hi, UInt64(63)) != u0
+    s = ifelse(f_neg, _rem2pi_u64(0x8000_0000_0000_0000), u0)
+    nx_lo = (@opcall not(f_lo)) + u1
+    nx_hi = (@opcall not(f_hi)) + ifelse(nx_lo == u0, u1, u0)
+    x_hi = ifelse(f_neg, nx_hi, f_hi)
+    x_lo = ifelse(f_neg, nx_lo, f_lo)
+
+    clz_hi = @opcall bitcast_convert(Int64, @opcall(count_leading_zeros(x_hi)))
+    clz_lo = @opcall bitcast_convert(Int64, @opcall(count_leading_zeros(x_lo)))
+    lz = ifelse(x_hi != u0, clz_hi, _rem2pi_i64(64) + clz_lo)
+    n1 = ifelse(is_zero, _rem2pi_i64(64), _rem2pi_i64(128) - lz)
+
+    z_i64 = _rem2pi_i64(0)
+    shift1 = n1 - _rem2pi_i64(26)
+    pos_sh1 = ifelse(shift1 >= z_i64, shift1, z_i64)
+    neg_sh1 = ifelse(shift1 < z_i64, -shift1, z_i64)
+    _, shl1_lo = _rem2pi_shl128(x_hi, x_lo, neg_sh1)
+    m1_raw = ifelse(shift1 >= z_i64, _rem2pi_shr128_to_u64(x_hi, x_lo, pos_sh1), shl1_lo)
+    m1 = _rem2pi_shl(m1_raw, UInt64(27))
+    d1 = _rem2pi_shl(@opcall(bitcast_convert(UInt64, n1 + _rem2pi_i64(893))), UInt64(52))
+    z1 = ifelse(is_zero, _rem2pi_f64(0.0), @opcall(bitcast_convert(Float64, s | (d1 + m1))))
+
+    shift_sub = n1 - _rem2pi_i64(53)
+    pos_sub = ifelse(shift_sub >= z_i64, shift_sub, z_i64)
+    neg_sub = ifelse(shift_sub < z_i64, -shift_sub, z_i64)
+    sh_sub_hi, sh_sub_lo = _rem2pi_shl128(u0, m1, pos_sub)
+    neg_sub_u = @opcall bitcast_convert(UInt64, neg_sub)
+    sub_hi = ifelse(shift_sub >= z_i64, sh_sub_hi, u0)
+    sub_lo = ifelse(shift_sub >= z_i64, sh_sub_lo, _rem2pi_shr(m1, neg_sub_u))
+    borrow = ifelse(x_lo < sub_lo, u1, u0)
+    x2_lo = x_lo - sub_lo
+    x2_hi = x_hi - sub_hi - borrow
+    is_z2_zero = is_zero | ((x2_hi == u0) & (x2_lo == u0))
+
+    clz2_hi = @opcall bitcast_convert(Int64, @opcall(count_leading_zeros(x2_hi)))
+    clz2_lo = @opcall bitcast_convert(Int64, @opcall(count_leading_zeros(x2_lo)))
+    lz2 = ifelse(x2_hi != u0, clz2_hi, _rem2pi_i64(64) + clz2_lo)
+    n2 = ifelse(is_z2_zero, _rem2pi_i64(64), _rem2pi_i64(128) - lz2)
+    shift2 = n2 - _rem2pi_i64(53)
+    pos_sh2 = ifelse(shift2 >= z_i64, shift2, z_i64)
+    neg_sh2 = ifelse(shift2 < z_i64, -shift2, z_i64)
+    _, shl2_lo = _rem2pi_shl128(x2_hi, x2_lo, neg_sh2)
+    m2 = ifelse(shift2 >= z_i64, _rem2pi_shr128_to_u64(x2_hi, x2_lo, pos_sh2), shl2_lo)
+    d2 = _rem2pi_shl(@opcall(bitcast_convert(UInt64, n2 + _rem2pi_i64(893))), UInt64(52))
+    z2 = ifelse(
+        is_z2_zero, _rem2pi_f64(0.0), @opcall(bitcast_convert(Float64, s | (d2 + m2)))
+    )
+    return z1, z2
+end
+
+@inline function _rem2pi_lookup_inv2pi(i::TracedRNumber{Int64})
+    acc = _rem2pi_u64(UInt64(0))
+    for k in 1:19
+        acc = ifelse(i == _rem2pi_i64(Int64(k)), _rem2pi_u64(_REM2PI_INV_2PI[k]), acc)
+    end
+    return acc
+end
+
+@inline function _rem2pi_paynehanek(x::TracedRNumber{Float64})
+    x_ng = @opcall ignore_derivatives(x)
+    one_f64 = _rem2pi_f64(1.0)
+    ax_safe = ifelse((abs(x_ng) >= one_f64) & isfinite(x_ng), x_ng, copysign(one_f64, x_ng))
+    u = @opcall bitcast_convert(UInt64, ax_safe)
+    X = (u & _rem2pi_u64(0x000f_ffff_ffff_ffff)) | _rem2pi_u64(UInt64(1) << 52)
+    raw_exp_u = _rem2pi_shr(u & _rem2pi_u64(0x7ff0_0000_0000_0000), UInt64(52))
+    raw_exponent = @opcall bitcast_convert(Int64, raw_exp_u)
+    k = raw_exponent - _rem2pi_i64(1075)
+
+    idx_s = @opcall shift_right_arithmetic(k, _rem2pi_i64(6))
+    shift_i = k - (@opcall shift_left(idx_s, _rem2pi_i64(6)))
+    v1 = _rem2pi_lookup_inv2pi(idx_s + _rem2pi_i64(1))
+    v2 = _rem2pi_lookup_inv2pi(idx_s + _rem2pi_i64(2))
+    v3 = _rem2pi_lookup_inv2pi(idx_s + _rem2pi_i64(3))
+    v4 = _rem2pi_lookup_inv2pi(idx_s + _rem2pi_i64(4))
+
+    u0 = _rem2pi_u64(UInt64(0))
+    u1 = _rem2pi_u64(UInt64(1))
+    z_i64 = _rem2pi_i64(0)
+    sh_zero = shift_i == z_i64
+    s_l = @opcall bitcast_convert(UInt64, ifelse(sh_zero, z_i64, shift_i))
+    s_r = @opcall bitcast_convert(UInt64, ifelse(sh_zero, z_i64, _rem2pi_i64(64) - shift_i))
+    a1_sh = ifelse(idx_s < z_i64, u0, _rem2pi_shl(v1, s_l)) | _rem2pi_shr(v2, s_r)
+    a2_sh = _rem2pi_shl(v2, s_l) | _rem2pi_shr(v3, s_r)
+    a3_sh = _rem2pi_shl(v3, s_l) | _rem2pi_shr(v4, s_r)
+
+    a1 = ifelse(sh_zero, v1, a1_sh)
+    a2 = ifelse(sh_zero, v2, a2_sh)
+    a3 = ifelse(sh_zero, v3, a3_sh)
+
+    w1_hi = X * a1
+    w2_hi, w2_lo = _rem2pi_widemul_u64(X, a2)
+    w3_hi, _ = _rem2pi_widemul_u64(X, a3)
+
+    w_lo = w2_lo + w3_hi
+    carry = ifelse(w_lo < w2_lo, u1, u0)
+    w_hi = w1_hi + w2_hi + carry
+
+    neg_lo = (@opcall not(w_lo)) + u1
+    neg_hi = (@opcall not(w_hi)) + ifelse(neg_lo == u0, u1, u0)
+    x_neg = ax_safe < _rem2pi_f64(0.0)
+    w_hi = ifelse(x_neg, neg_hi, w_hi)
+    w_lo = ifelse(x_neg, neg_lo, w_lo)
+
+    q_top = @opcall bitcast_convert(Int64, _rem2pi_shr(w_hi, UInt64(61)))
+    q = @opcall shift_right_arithmetic(q_top + _rem2pi_i64(1), _rem2pi_i64(1))
+    f_hi = _rem2pi_shl(w_hi, UInt64(2)) | _rem2pi_shr(w_lo, UInt64(62))
+    f_lo = _rem2pi_shl(w_lo, UInt64(2))
+
+    z_hi, z_lo = _rem2pi_fromfraction_u64(f_hi, f_lo)
+
+    pio2 = _rem2pi_f64(1.5707963267948966)
+    pio2_hi = _rem2pi_f64(1.5707963407039642)
+    pio2_lo = _rem2pi_f64(-1.3909067614167116e-8)
+    y_hi_ng = (z_hi + z_lo) * pio2
+    y_lo = (((z_hi * pio2_hi - y_hi_ng) + z_hi * pio2_lo) + z_lo * pio2_hi) + z_lo * pio2_lo
+    # Preserve exact unit derivative d(rem2pi(x))/dx = 1 on finite inputs without
+    # perturbing the primal Float64 bits (y_hi_ng is strictly nonzero for |x| >= 2^20*pi/2).
+    x_fin = ifelse(isfinite(x), x, _rem2pi_f64(0.0))
+    y_hi = y_hi_ng + (x_fin - (@opcall ignore_derivatives(x_fin)))
+    return q, y_hi, y_lo
+end
+
+@inline function _rem2pi_cody_waite(x::TracedRNumber{Float64})
+    thresh = _rem2pi_f64(1.647099891681509e6)
+    x_safe = ifelse((abs(x) < thresh) & isfinite(x), x, _rem2pi_f64(0.0))
+    u_x = @opcall bitcast_convert(UInt64, @opcall(ignore_derivatives(x_safe)))
+    xhp = _rem2pi_shr(u_x, UInt64(32)) & _rem2pi_u64(0x7fff_ffff)
+
+    pio2_1 = _rem2pi_f64(1.57079632673412561417e+00)
+    pio2_1t = _rem2pi_f64(6.07710050650619224932e-11)
+    pio2_2 = _rem2pi_f64(6.07710050630396597660e-11)
+    pio2_2t = _rem2pi_f64(2.02226624879595063154e-21)
+    pio2_3 = _rem2pi_f64(2.02226624871116645580e-21)
+    pio2_3t = _rem2pi_f64(8.47842766036889956997e-32)
+
+    fn = @opcall ignore_derivatives(round(x_safe * _rem2pi_f64(0.6366197723675814)))
+    r1 = x_safe - fn * pio2_1
+    w1 = fn * pio2_1t
+    j = @opcall bitcast_convert(Int64, _rem2pi_shr(xhp, UInt64(20)))
+    y1_1 = r1 - w1
+    y2_1 = (r1 - y1_1) - w1
+
+    u_y1_1 = @opcall bitcast_convert(UInt64, @opcall(ignore_derivatives(y1_1)))
+    high1 = @opcall bitcast_convert(
+        Int64, _rem2pi_shr(u_y1_1, UInt64(52)) & _rem2pi_u64(0x7ff)
+    )
+    need2 = (j - high1) > _rem2pi_i64(16)
+
+    t2 = r1
+    w2a = fn * pio2_2
+    r2 = t2 - w2a
+    w2 = fn * pio2_2t - ((t2 - r2) - w2a)
+    y1_2 = r2 - w2
+    y2_2 = (r2 - y1_2) - w2
+
+    u_y1_2 = @opcall bitcast_convert(UInt64, @opcall(ignore_derivatives(y1_2)))
+    high2 = @opcall bitcast_convert(
+        Int64, _rem2pi_shr(u_y1_2, UInt64(52)) & _rem2pi_u64(0x7ff)
+    )
+    need3 = need2 & ((j - high2) > _rem2pi_i64(49))
+
+    t3 = r2
+    w3a = fn * pio2_3
+    r3 = t3 - w3a
+    w3 = fn * pio2_3t - ((t3 - r3) - w3a)
+    y1_3 = r3 - w3
+    y2_3 = (r3 - y1_3) - w3
+
+    y1 = ifelse(need3, y1_3, ifelse(need2, y1_2, y1_1))
+    y2 = ifelse(need3, y2_3, ifelse(need2, y2_2, y2_1))
+    n = Base.unsafe_trunc(Int64, fn)
+    return n, y1, y2
+end
+
+@inline function _rem2pi_pio2_kernel(x::TracedRNumber{Float64})
+    u_x = @opcall bitcast_convert(UInt64, @opcall(ignore_derivatives(x)))
+    xhp = _rem2pi_shr(u_x, UInt64(32)) & _rem2pi_u64(0x7fff_ffff)
+    use_cw = xhp < _rem2pi_u64(0x4139_21fb)
+    n_cw, yh_cw, yl_cw = _rem2pi_cody_waite(x)
+    n_ph, yh_ph, yl_ph = _rem2pi_paynehanek(x)
+    return (
+        ifelse(use_cw, n_cw, n_ph),
+        ifelse(use_cw, yh_cw, yh_ph),
+        ifelse(use_cw, yl_cw, yl_ph),
+    )
+end
+
+@inline function _rem2pi_add22condh(
+    xh::TracedRNumber{Float64}, xl::TracedRNumber{Float64}, yh_val::Float64, yl_val::Float64
+)
+    yh = _rem2pi_f64(yh_val)
+    yl = _rem2pi_f64(yl_val)
+    r = xh + yh
+    s = ifelse(abs(xh) > abs(yh), xh - r + yh + yl + xl, yh - r + xh + xl + yl)
+    return r + s
+end
+
+function Base.rem2pi(x::TracedRNumber{Float64}, ::Base.RoundingMode{:Nearest})
+    n, yh, yl = _rem2pi_pio2_kernel(x)
+    rem4 = n & _rem2pi_i64(3)
+    res0 = yh + yl
+    res1 = _rem2pi_add22condh(yh, yl, _REM2PI_PI1O2_H, _REM2PI_PI1O2_L)
+    res2 = ifelse(
+        yh <= _rem2pi_f64(0.0),
+        _rem2pi_add22condh(yh, yl, _REM2PI_PI2O2_H, _REM2PI_PI2O2_L),
+        _rem2pi_add22condh(yh, yl, -_REM2PI_PI2O2_H, -_REM2PI_PI2O2_L),
+    )
+    res3 = _rem2pi_add22condh(yh, yl, -_REM2PI_PI1O2_H, -_REM2PI_PI1O2_L)
+    res = ifelse(
+        rem4 == _rem2pi_i64(0),
+        res0,
+        ifelse(rem4 == _rem2pi_i64(1), res1, ifelse(rem4 == _rem2pi_i64(2), res2, res3)),
+    )
+    nan_f64 = _rem2pi_f64(NaN)
+    return ifelse(
+        isnan(x),
+        x,
+        ifelse(isinf(x), nan_f64, ifelse(abs(x) < _rem2pi_f64(Float64(π)), x, res)),
+    )
+end
+
+function Base.rem2pi(x::TracedRNumber{Float64}, ::Base.RoundingMode{:ToZero})
+    ax = abs(x)
+    n, yh, yl = _rem2pi_pio2_kernel(ax)
+    rem4 = n & _rem2pi_i64(3)
+    res0 = ifelse(
+        yh > _rem2pi_f64(0.0),
+        yh + yl,
+        _rem2pi_add22condh(yh, yl, _REM2PI_PI4O2_H, _REM2PI_PI4O2_L),
+    )
+    res1 = _rem2pi_add22condh(yh, yl, _REM2PI_PI1O2_H, _REM2PI_PI1O2_L)
+    res2 = _rem2pi_add22condh(yh, yl, _REM2PI_PI2O2_H, _REM2PI_PI2O2_L)
+    res3 = _rem2pi_add22condh(yh, yl, _REM2PI_PI3O2_H, _REM2PI_PI3O2_L)
+    z = ifelse(
+        rem4 == _rem2pi_i64(0),
+        res0,
+        ifelse(rem4 == _rem2pi_i64(1), res1, ifelse(rem4 == _rem2pi_i64(2), res2, res3)),
+    )
+    res = copysign(z, x)
+    thresh = _rem2pi_f64(2.0 * Float64(π, RoundDown))
+    nan_f64 = _rem2pi_f64(NaN)
+    return ifelse(isnan(x), x, ifelse(isinf(x), nan_f64, ifelse(ax <= thresh, x, res)))
+end
+
+function Base.rem2pi(x::TracedRNumber{Float64}, ::Base.RoundingMode{:Down})
+    n, yh, yl = _rem2pi_pio2_kernel(x)
+    rem4 = n & _rem2pi_i64(3)
+    zero_f64 = _rem2pi_f64(0.0)
+    res0 = ifelse(
+        yh > zero_f64, yh + yl, _rem2pi_add22condh(yh, yl, _REM2PI_PI4O2_H, _REM2PI_PI4O2_L)
+    )
+    res1 = _rem2pi_add22condh(yh, yl, _REM2PI_PI1O2_H, _REM2PI_PI1O2_L)
+    res2 = _rem2pi_add22condh(yh, yl, _REM2PI_PI2O2_H, _REM2PI_PI2O2_L)
+    res3 = _rem2pi_add22condh(yh, yl, _REM2PI_PI3O2_H, _REM2PI_PI3O2_L)
+    res = ifelse(
+        rem4 == _rem2pi_i64(0),
+        res0,
+        ifelse(rem4 == _rem2pi_i64(1), res1, ifelse(rem4 == _rem2pi_i64(2), res2, res3)),
+    )
+    small_neg = _rem2pi_add22condh(x, zero_f64, _REM2PI_PI4O2_H, _REM2PI_PI4O2_L)
+    pi4 = _rem2pi_f64(_REM2PI_PI4O2_H)
+    res_fin = ifelse(
+        (x >= zero_f64) & (x < pi4), x, ifelse((x < zero_f64) & (x > -pi4), small_neg, res)
+    )
+    return ifelse(isnan(x), x, ifelse(isinf(x), _rem2pi_f64(NaN), res_fin))
+end
+
+function Base.rem2pi(x::TracedRNumber{Float64}, ::Base.RoundingMode{:Up})
+    n, yh, yl = _rem2pi_pio2_kernel(x)
+    rem4 = n & _rem2pi_i64(3)
+    zero_f64 = _rem2pi_f64(0.0)
+    res0 = ifelse(
+        yh < zero_f64,
+        yh + yl,
+        _rem2pi_add22condh(yh, yl, -_REM2PI_PI4O2_H, -_REM2PI_PI4O2_L),
+    )
+    res1 = _rem2pi_add22condh(yh, yl, -_REM2PI_PI3O2_H, -_REM2PI_PI3O2_L)
+    res2 = _rem2pi_add22condh(yh, yl, -_REM2PI_PI2O2_H, -_REM2PI_PI2O2_L)
+    res3 = _rem2pi_add22condh(yh, yl, -_REM2PI_PI1O2_H, -_REM2PI_PI1O2_L)
+    res = ifelse(
+        rem4 == _rem2pi_i64(0),
+        res0,
+        ifelse(rem4 == _rem2pi_i64(1), res1, ifelse(rem4 == _rem2pi_i64(2), res2, res3)),
+    )
+    small_pos = _rem2pi_add22condh(x, zero_f64, -_REM2PI_PI4O2_H, -_REM2PI_PI4O2_L)
+    pi4 = _rem2pi_f64(_REM2PI_PI4O2_H)
+    res_fin = ifelse(
+        (x <= zero_f64) & (x > -pi4), x, ifelse((x > zero_f64) & (x < pi4), small_pos, res)
+    )
+    return ifelse(isnan(x), x, ifelse(isinf(x), _rem2pi_f64(NaN), res_fin))
+end
+
 Base.rem2pi(x::TracedRNumber, r::Base.RoundingMode) = rem(x, typeof(x)(2π), r)
 
 function Base.rem2pi(
