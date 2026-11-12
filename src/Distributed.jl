@@ -1,6 +1,7 @@
 module Distributed
 
-using ..Reactant: Reactant, Accelerators
+using ..Reactant: Reactant, Accelerators, Sharding, XLA
+using ReactantCore: ReactantCore
 using Sockets: Sockets, IPv4, getaddrinfo
 
 const initialized = Ref(false)
@@ -443,6 +444,427 @@ function _get_worker_list_in_slice(::GkeTPUCluster)
     end
     @debug "[GETPID $(getpid())] TPU_WORKER_HOSTNAMES is set: $(ENV["TPU_WORKER_HOSTNAMES"])"
     return split(ENV["TPU_WORKER_HOSTNAMES"], ',')
+end
+
+# Collective utility functions (eager / non-traced)
+
+"""
+    avg
+
+Sentinel reduction operator for [`allreduce!`](@ref) and [`reduce!`](@ref) that averages
+values across all participating processes.
+"""
+function avg end
+
+function _check_not_traced(x, fn_name::Symbol)
+    if ReactantCore.within_compile() ||
+        x isa Union{Reactant.TracedRArray,Reactant.TracedRNumber} ||
+        (x isa AbstractArray && eltype(x) <: Reactant.TracedRNumber) ||
+        (x isa Base.RefValue && x[] isa Union{Reactant.TracedRArray,Reactant.TracedRNumber})
+        throw(
+            ArgumentError(
+                "Distributed.$(fn_name) cannot be used inside traced functions or on traced values",
+            ),
+        )
+    end
+    return nothing
+end
+
+function _validate_root(root::Integer, np::Integer)
+    if !(0 ≤ root < np)
+        throw(
+            ArgumentError(
+                "Invalid root process rank $(root) for num_processes = $(np) (expected 0 ≤ root < $(np))",
+            ),
+        )
+    end
+    return Int(root)
+end
+
+_buffer_eltype(x::AbstractArray) = eltype(x)
+_buffer_eltype(::Base.RefValue{T}) where {T} = T
+_buffer_eltype(::Reactant.AbstractConcreteNumber{T}) where {T} = T
+
+_buffer_size(x::AbstractArray) = size(x)
+_buffer_size(::Base.RefValue) = ()
+_buffer_size(::Reactant.AbstractConcreteNumber) = ()
+
+function _check_compatible_buffers(sendbuf, recvbuf, fn_name::Symbol)
+    if _buffer_eltype(sendbuf) != _buffer_eltype(recvbuf)
+        throw(
+            ArgumentError(
+                "Distributed.$(fn_name): sendbuf eltype $(_buffer_eltype(sendbuf)) does not match recvbuf eltype $(_buffer_eltype(recvbuf))",
+            ),
+        )
+    end
+    if _buffer_size(sendbuf) != _buffer_size(recvbuf)
+        throw(
+            ArgumentError(
+                "Distributed.$(fn_name): sendbuf size $(_buffer_size(sendbuf)) does not match recvbuf size $(_buffer_size(recvbuf))",
+            ),
+        )
+    end
+    return nothing
+end
+
+function _to_host_array(x::Array{T,N}) where {T<:Reactant.ReactantPrimitive,N}
+    return x
+end
+function _to_host_array(x::AbstractArray{T,N}) where {T<:Reactant.ReactantPrimitive,N}
+    return convert(Array{T,N}, x)
+end
+function _to_host_array(x::Base.RefValue{T}) where {T<:Reactant.ReactantPrimitive}
+    return fill(x[])
+end
+function _to_host_array(
+    x::Reactant.AbstractConcreteNumber{T}
+) where {T<:Reactant.ReactantPrimitive}
+    return fill(Reactant.to_number(x))
+end
+
+function _copy_local_buffer!(recvbuf::AbstractArray, sendbuf::AbstractArray)
+    recvbuf === sendbuf && return recvbuf
+    if recvbuf isa Reactant.AbstractConcreteArray && sendbuf isa Array
+        copyto!(recvbuf, sendbuf)
+    elseif recvbuf isa Array && sendbuf isa Reactant.AbstractConcreteArray
+        copyto!(recvbuf, sendbuf)
+    elseif recvbuf isa Reactant.AbstractConcreteArray ||
+        sendbuf isa Reactant.AbstractConcreteArray
+        copyto!(recvbuf, _to_host_array(sendbuf))
+    else
+        copyto!(recvbuf, sendbuf)
+    end
+    return recvbuf
+end
+
+function _copy_local_buffer!(recvbuf::Base.RefValue{T}, sendbuf) where {T}
+    recvbuf === sendbuf && return recvbuf
+    recvbuf[] = only(_to_host_array(sendbuf))
+    return recvbuf
+end
+
+function _copy_local_buffer!(
+    recvbuf::Reactant.ConcreteIFRTNumber{T}, sendbuf
+) where {T<:Reactant.ReactantPrimitive}
+    recvbuf === sendbuf && return recvbuf
+    val = only(_to_host_array(sendbuf))
+    tmp = Reactant.ConcreteIFRTNumber{T}(
+        val; client=XLA.client(recvbuf), device=XLA.device(recvbuf), recvbuf.sharding
+    )
+    recvbuf.data = tmp.data
+    return recvbuf
+end
+
+function _copy_local_buffer!(
+    recvbuf::Reactant.ConcretePJRTNumber{T}, sendbuf
+) where {T<:Reactant.ReactantPrimitive}
+    recvbuf === sendbuf && return recvbuf
+    val = only(_to_host_array(sendbuf))
+    tmp = Reactant.ConcretePJRTNumber{T}(
+        val; client=XLA.client(recvbuf), device=XLA.device(recvbuf), recvbuf.sharding
+    )
+    recvbuf.data = tmp.data
+    return recvbuf
+end
+
+function _copy_local_buffer!(recvbuf::AbstractArray, sendbuf)
+    copyto!(recvbuf, _to_host_array(sendbuf))
+    return recvbuf
+end
+
+function _infer_collective_client(client, sendbuf, recvbuf)
+    client !== nothing && return client
+    if sendbuf isa Union{Reactant.AbstractConcreteArray,Reactant.AbstractConcreteNumber}
+        return XLA.client(sendbuf)
+    end
+    if recvbuf isa Union{Reactant.AbstractConcreteArray,Reactant.AbstractConcreteNumber}
+        return XLA.client(recvbuf)
+    end
+    return XLA.default_backend()
+end
+
+function _bcast_select_kernel(x::AbstractArray{T,M}, ::Val{idx}) where {T,M,idx}
+    return copy(selectdim(x, M, idx))
+end
+
+function _reduce_op_kernel(x::AbstractArray{T,M}, op::F) where {T,M,F}
+    return dropdims(reduce(op, x; dims=M); dims=M)
+end
+
+function _divide_by_count(s::AbstractArray{T}, n::Integer) where {T<:Integer}
+    return div.(s, T(n))
+end
+function _divide_by_count(s::AbstractArray{T}, n::Integer) where {T}
+    denom = convert(real(T), n)
+    return s ./ denom
+end
+
+function _reduce_avg_kernel(x::AbstractArray{T,M}) where {T,M}
+    s = dropdims(sum(x; dims=M); dims=M)
+    return _divide_by_count(s, size(x, M))
+end
+
+function _assemble_process_array(
+    theclient::XLA.IFRT.Client, local_arr::Array{T,N}, np::Int
+) where {T<:Reactant.ReactantPrimitive,N}
+    devs = sort(XLA.devices(theclient); by=XLA.device_ordinal)
+    ndevs = length(devs)
+    if ndevs % np != 0
+        error(
+            "Total IFRT device count ($(ndevs)) must be divisible by num_processes ($(np))"
+        )
+    end
+    devs_per_proc = ndevs ÷ np
+    naddr = count(XLA.is_addressable, devs)
+    if naddr != devs_per_proc
+        error(
+            "Expected $(devs_per_proc) addressable IFRT devices per process, got $(naddr)"
+        )
+    end
+    dev_ids = Vector{Int64}(undef, ndevs)
+    for i in 1:ndevs
+        dev_ids[i] = Int64(XLA.device_ordinal(devs[i]))
+    end
+    mesh = if devs_per_proc == 1
+        Sharding.Mesh(dev_ids, (:proc,))
+    else
+        Sharding.Mesh(reshape(dev_ids, devs_per_proc, np), (:local_dev, :proc))
+    end
+    sharding = Sharding.NamedSharding(mesh, (ntuple(Returns(nothing), N)..., :proc))
+    stacked = reshape(local_arr, size(local_arr)..., 1)
+    global_shape = (size(local_arr)..., np)
+    addr_map = Vector{Int64}[collect(Int64, 1:naddr)]
+    assembled = Reactant.ConcreteIFRTArray(
+        Array{T,N + 1}[stacked], global_shape, addr_map; client=theclient, sharding
+    )
+    return assembled, mesh
+end
+
+function _run_mesh_bcast(
+    assembled::Reactant.ConcreteIFRTArray{T,M}, mesh::Sharding.Mesh, root::Int
+) where {T,M}
+    out_sharding = Sharding.NamedSharding(mesh, ntuple(Returns(nothing), M - 1))
+    val_idx = Val(root + 1)
+    fn = Reactant.Compiler.compile(
+        _bcast_select_kernel,
+        (assembled, val_idx);
+        sync=true,
+        output_shardings=Dict(1 => out_sharding),
+    )
+    return fn(assembled, val_idx)
+end
+
+function _run_mesh_reduce(
+    assembled::Reactant.ConcreteIFRTArray{T,M}, mesh::Sharding.Mesh, op::F
+) where {T,M,F}
+    out_sharding = Sharding.NamedSharding(mesh, ntuple(Returns(nothing), M - 1))
+    if op === avg
+        fn_avg = Reactant.Compiler.compile(
+            _reduce_avg_kernel,
+            (assembled,);
+            sync=true,
+            output_shardings=Dict(1 => out_sharding),
+        )
+        return fn_avg(assembled)
+    end
+    fn = Reactant.Compiler.compile(
+        _reduce_op_kernel,
+        (assembled, op);
+        sync=true,
+        output_shardings=Dict(1 => out_sharding),
+    )
+    return fn(assembled, op)
+end
+
+function _write_replicated_result!(
+    recvbuf::Reactant.ConcreteIFRTArray{T,N}, res::Reactant.ConcreteIFRTArray{T,N}
+) where {T,N}
+    shards = XLA.IFRT.disassemble_into_single_device_arrays(res.data, true)
+    first_shard = first(shards)
+    if recvbuf.sharding isa Sharding.NoShardInfo &&
+        XLA.device(recvbuf) == XLA.device(first_shard)
+        recvbuf.data = XLA.IFRT.AsyncArray(first_shard, nothing)
+        return recvbuf
+    end
+    host_out = Array{T,N}(undef, size(res))
+    XLA.to_host(first_shard, host_out, Sharding.NoSharding())
+    copyto!(recvbuf, host_out)
+    return recvbuf
+end
+
+function _write_replicated_result!(
+    recvbuf::AbstractArray, res::Reactant.ConcreteIFRTArray{T,N}
+) where {T,N}
+    shards = XLA.IFRT.disassemble_into_single_device_arrays(res.data, true)
+    first_shard = first(shards)
+    if recvbuf isa Array{T,N}
+        XLA.to_host(first_shard, recvbuf, Sharding.NoSharding())
+    else
+        host_out = Array{T,N}(undef, size(res))
+        XLA.to_host(first_shard, host_out, Sharding.NoSharding())
+        copyto!(recvbuf, host_out)
+    end
+    return recvbuf
+end
+
+function _write_replicated_result!(
+    recvbuf::Base.RefValue{T}, res::Reactant.ConcreteIFRTArray{T,0}
+) where {T}
+    shards = XLA.IFRT.disassemble_into_single_device_arrays(res.data, true)
+    host_out = Array{T,0}(undef)
+    XLA.to_host(first(shards), host_out, Sharding.NoSharding())
+    recvbuf[] = host_out[]
+    return recvbuf
+end
+
+function _write_replicated_result!(
+    recvbuf::Reactant.ConcreteIFRTNumber{T}, res::Reactant.ConcreteIFRTArray{T,0}
+) where {T}
+    shards = XLA.IFRT.disassemble_into_single_device_arrays(res.data, true)
+    first_shard = first(shards)
+    if recvbuf.sharding isa Sharding.NoShardInfo &&
+        XLA.device(recvbuf) == XLA.device(first_shard)
+        recvbuf.data = XLA.IFRT.AsyncArray(first_shard, nothing)
+        return recvbuf
+    end
+    host_out = Array{T,0}(undef)
+    XLA.to_host(first_shard, host_out, Sharding.NoSharding())
+    tmp = Reactant.ConcreteIFRTNumber{T}(
+        host_out[]; client=XLA.client(recvbuf), device=XLA.device(recvbuf), recvbuf.sharding
+    )
+    recvbuf.data = tmp.data
+    return recvbuf
+end
+
+function _write_replicated_result!(
+    recvbuf::Reactant.ConcretePJRTNumber{T}, res::Reactant.ConcreteIFRTArray{T,0}
+) where {T}
+    shards = XLA.IFRT.disassemble_into_single_device_arrays(res.data, true)
+    host_out = Array{T,0}(undef)
+    XLA.to_host(first(shards), host_out, Sharding.NoSharding())
+    tmp = Reactant.ConcretePJRTNumber{T}(
+        host_out[]; client=XLA.client(recvbuf), device=XLA.device(recvbuf), recvbuf.sharding
+    )
+    recvbuf.data = tmp.data
+    return recvbuf
+end
+
+"""
+    bcast!(sendrecvbuf; root::Integer=0, client=nothing)
+    bcast!(sendbuf, recvbuf; root::Integer=0, client=nothing)
+
+Broadcast `sendrecvbuf` (or `sendbuf` into `recvbuf`) from process `root` (0-indexed) to
+all participating processes. Must be called outside traced functions.
+"""
+function bcast!(sendrecvbuf; root::Integer=0, client=nothing)
+    return bcast!(sendrecvbuf, sendrecvbuf; root, client)
+end
+
+function bcast!(sendbuf, recvbuf; root::Integer=0, client=nothing)
+    _check_not_traced(sendbuf, :bcast!)
+    _check_not_traced(recvbuf, :bcast!)
+    _check_compatible_buffers(sendbuf, recvbuf, :bcast!)
+
+    np = num_processes()
+    r = _validate_root(root, np)
+    if np == 1
+        return _copy_local_buffer!(recvbuf, sendbuf)
+    end
+
+    theclient = _infer_collective_client(client, sendbuf, recvbuf)
+    if !(theclient isa XLA.IFRT.Client)
+        error("Multi-process `Distributed.bcast!` requires the IFRT runtime")
+    end
+
+    local_arr = _to_host_array(sendbuf)
+    assembled, mesh = _assemble_process_array(theclient, local_arr, np)
+    res = _run_mesh_bcast(assembled, mesh, r)
+    return _write_replicated_result!(recvbuf, res)
+end
+
+"""
+    allreduce!(sendrecvbuf, op; client=nothing)
+    allreduce!(sendbuf, recvbuf, op; client=nothing)
+
+Reduce `sendrecvbuf` (or `sendbuf` into `recvbuf`) across all participating processes using
+binary operator `op` (or [`Distributed.avg`](@ref)) and store the result on every process.
+Must be called outside traced functions.
+"""
+function allreduce!(sendrecvbuf, op::F; client=nothing) where {F}
+    return allreduce!(sendrecvbuf, sendrecvbuf, op; client)
+end
+
+function allreduce!(sendbuf, recvbuf, op::F; client=nothing) where {F}
+    _check_not_traced(sendbuf, :allreduce!)
+    _check_not_traced(recvbuf, :allreduce!)
+    _check_compatible_buffers(sendbuf, recvbuf, :allreduce!)
+
+    np = num_processes()
+    if np == 1
+        return _copy_local_buffer!(recvbuf, sendbuf)
+    end
+
+    theclient = _infer_collective_client(client, sendbuf, recvbuf)
+    if !(theclient isa XLA.IFRT.Client)
+        error("Multi-process `Distributed.allreduce!` requires the IFRT runtime")
+    end
+
+    local_arr = _to_host_array(sendbuf)
+    assembled, mesh = _assemble_process_array(theclient, local_arr, np)
+    res = _run_mesh_reduce(assembled, mesh, op)
+    return _write_replicated_result!(recvbuf, res)
+end
+
+"""
+    reduce!(sendrecvbuf, op; root::Integer=0, client=nothing)
+    reduce!(sendbuf, recvbuf, op; root::Integer=0, client=nothing)
+
+Reduce `sendrecvbuf` (or `sendbuf` into `recvbuf`) across all participating processes using
+binary operator `op` (or [`Distributed.avg`](@ref)) and store the reduced result on process
+`root` (0-indexed). On non-root processes `recvbuf` is left unmodified (and may be
+`nothing` in the two-buffer form). Must be called outside traced functions.
+"""
+function reduce!(sendrecvbuf, op::F; root::Integer=0, client=nothing) where {F}
+    return reduce!(sendrecvbuf, sendrecvbuf, op; root, client)
+end
+
+function reduce!(sendbuf, recvbuf, op::F; root::Integer=0, client=nothing) where {F}
+    _check_not_traced(sendbuf, :reduce!)
+    recvbuf === nothing || _check_not_traced(recvbuf, :reduce!)
+
+    np = num_processes()
+    r = _validate_root(root, np)
+    is_root = local_rank() == r
+    if is_root
+        if recvbuf === nothing
+            throw(
+                ArgumentError(
+                    "Distributed.reduce!: recvbuf cannot be `nothing` on root rank"
+                ),
+            )
+        end
+        _check_compatible_buffers(sendbuf, recvbuf, :reduce!)
+    elseif recvbuf !== nothing
+        _check_compatible_buffers(sendbuf, recvbuf, :reduce!)
+    end
+
+    if np == 1
+        return _copy_local_buffer!(recvbuf, sendbuf)
+    end
+
+    theclient = _infer_collective_client(client, sendbuf, recvbuf)
+    if !(theclient isa XLA.IFRT.Client)
+        error("Multi-process `Distributed.reduce!` requires the IFRT runtime")
+    end
+
+    local_arr = _to_host_array(sendbuf)
+    assembled, mesh = _assemble_process_array(theclient, local_arr, np)
+    res = _run_mesh_reduce(assembled, mesh, op)
+    if is_root
+        return _write_replicated_result!(recvbuf, res)
+    end
+    Reactant.synchronize(res)
+    return recvbuf
 end
 
 end
