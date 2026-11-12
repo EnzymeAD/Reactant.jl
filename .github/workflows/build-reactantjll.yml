@@ -41,6 +41,8 @@ jobs:
     uses: EnzymeAD/ReactantBuilder/.github/workflows/build-reactant-reusable.yml@main
     needs: enzyme-jax-commit
     with:
-      reactantbuilder_ref: "main"
+      # TEMPORARY, revert to "main" before merging: use the recipe of
+      # EnzymeAD/ReactantBuilder#275 until it is on `main` of ReactantBuilder.
+      reactantbuilder_ref: "users/ftynse/libreactantextra-output-path"
       reactant_commit: ${{ github.event.pull_request.head.sha }}
       enzyme_jax_commit: ${{ needs.enzyme-jax-commit.outputs.enzyme_jax_commit }}
