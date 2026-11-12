@@ -72,6 +72,47 @@ function Base.sum(x::MockLinkedList{T}) where {T}
     end
 end
 
+mutable struct MutableStepSizes3021{T}
+    η::T
+    ω::T
+    τ::T
+end
+
+struct ImmutableStepSizes3021{T}
+    η::T
+    ω::T
+    τ::T
+end
+
+mutable struct MutablePDLPState3021{T,V<:AbstractVector{T},S}
+    sol::V
+    step_sizes::S
+    scalar_gain::T
+end
+
+function MutablePDLPState3021(
+    sol::V, step_sizes::S, scalar_gain::T
+) where {T,V<:AbstractVector{T},S}
+    return MutablePDLPState3021{T,V,S}(sol, step_sizes, scalar_gain)
+end
+
+mutable struct CoupledMutablePDLPState3021{T,V<:AbstractVector{T}}
+    sol::V
+    step_sizes::MutableStepSizes3021{T}
+    imm_steps::ImmutableStepSizes3021{T}
+end
+
+struct CoupledImmutablePDLPState3021{T,V<:AbstractVector{T}}
+    sol::V
+    step_sizes::MutableStepSizes3021{T}
+end
+
+function pdlp_step_ratios_3021(state)
+    (; step_sizes) = state
+    (; η, ω) = step_sizes
+    return η / ω, η * ω, sum(state.sol) + η
+end
+
 @testset "Struct" begin
     @testset "MockTensor" begin
         @testset "immutable" begin
@@ -141,5 +182,35 @@ end
 
         result = @jit f_container(cr)
         @test @allowscalar(result) ≈ sum(z) + 1.0f0
+    end
+
+    @testset "mutable and nested struct typevar promotion reconciliation (#3021)" begin
+        x = Reactant.to_rarray(Float32[1, 2, 3, 4])
+
+        st_zero = CoupledMutablePDLPState3021(
+            x,
+            MutableStepSizes3021(0.0f0, 0.0f0, 0.0f0),
+            ImmutableStepSizes3021(0.0f0, 0.0f0, 0.0f0),
+        )
+        hlo_zero = repr(@code_hlo pdlp_step_ratios_3021(st_zero))
+        @test occursin("func.func @main", hlo_zero)
+
+        st_mut = CoupledMutablePDLPState3021(
+            x,
+            MutableStepSizes3021(6.0f0, 2.0f0, 0.0f0),
+            ImmutableStepSizes3021(1.0f0, 2.0f0, 3.0f0),
+        )
+        τ_r, σ_r, s_r = @jit pdlp_step_ratios_3021(st_mut)
+        @test @allowscalar(Float32(τ_r)) ≈ 3.0f0
+        @test @allowscalar(Float32(σ_r)) ≈ 12.0f0
+        @test @allowscalar(Float32(s_r)) ≈ 16.0f0
+
+        st_imm_outer = CoupledImmutablePDLPState3021(
+            x, MutableStepSizes3021(9.0f0, 3.0f0, 0.0f0)
+        )
+        τ2_r, σ2_r, s2_r = @jit pdlp_step_ratios_3021(st_imm_outer)
+        @test @allowscalar(Float32(τ2_r)) ≈ 3.0f0
+        @test @allowscalar(Float32(σ2_r)) ≈ 27.0f0
+        @test @allowscalar(Float32(s2_r)) ≈ 19.0f0
     end
 end
