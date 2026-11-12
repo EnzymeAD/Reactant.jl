@@ -290,6 +290,7 @@ include("integration/MPI.jl")
 include("compiler/Compiler.jl")
 
 include("Overlay.jl")
+include("Assume.jl")
 
 # Serialization
 include("serialization/Serialization.jl")
