@@ -856,10 +856,10 @@ Base.collect(x::AbstractConcreteArray) = convert(Array, x)
 function Base.mapreduce(
     @nospecialize(f),
     @nospecialize(op),
-    @nospecialize(A::AbstractConcreteArray{T,N});
+    @nospecialize(A::UnionAnyConcreteRArray);
     dims=:,
     init=Base._InitialValue(),
-) where {T,N}
+)
     fn = compile(CallMapReduce(f, op, dims, init), (A,))
     return fn(A)
 end
@@ -872,6 +872,39 @@ struct CallMapReduce{Fn,Op,Dims,Init}
 end
 
 (f::CallMapReduce)(A) = Base.mapreduce(f.f, f.op, A; f.dims, f.init)
+
+# `Base.any`/`Base.all`/`Base.in` on a generic `AbstractArray` fall back to iterating
+# implementations (`Base._any(f, itr, :)`, `for y in itr`) that scalar-index every element.
+# For concrete arrays (and wrapped concrete arrays like `SubArray`/`Adjoint`/`Transpose`)
+# living on a non-CPU device — or whenever scalar indexing is disallowed — this errors, and
+# is in any case extremely slow. Route them through compiled reductions instead (same as
+# GPUArrays does for `AnyGPUArray`). This gets hit, for instance, by `Flux`'s `show` for
+# layers (`all(iszero, p)`, `any(isnan, p)`, `any(isinf, p)`).
+struct CallAnyAll{Fn,F,Dims}
+    fn::Fn
+    f::F
+    dims::Dims
+end
+
+(f::CallAnyAll)(A) = f.fn(f.f, A; f.dims)
+
+for fname in (:any, :all)
+    @eval begin
+        function Base.$(fname)(f::Function, A::UnionAnyConcreteRArray; dims=:)
+            res = compile(CallAnyAll($(fname), f, dims), (A,))(A)
+            dims isa Colon && return convert(Bool, res)
+            return res
+        end
+        function Base.$(fname)(A::UnionAnyConcreteRArray{Bool}; dims=:)
+            return Base.$(fname)(identity, A; dims)
+        end
+    end
+end
+
+function Base.in(x, A::UnionAnyConcreteRArray)
+    (x isa Number || x isa Enum) || return false
+    return any(==(x), A)
+end
 
 buffer_on_cpu(::Any) = true
 buffer_on_cpu(x::ConcretePJRTArray) = all(XLA.buffer_on_cpu, x.data)
