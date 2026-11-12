@@ -29,6 +29,7 @@ import Reactant.XLA.PJRT.Plugin:
     addressable_device_logical_ids,
     addressable_devices,
     addressable_memories,
+    attributes,
     buffer_from_host_buffer,
     compile!,
     compile_options,
@@ -70,6 +71,7 @@ import Reactant.XLA.PJRT.Plugin:
     size_of_generated_code_in_bytes,
     to_host_buffer,
     to_string,
+    topology_description,
     unsafe_pointer
 
 using LinearAlgebra: BLAS, BlasFloat, Hermitian, cholesky, issuccess, mul!
@@ -121,7 +123,7 @@ process_index(desc::HostDeviceDescription) = desc.pid
 kind(desc::HostDeviceDescription) = "julia-cpu"
 debug_string(desc::HostDeviceDescription) = desc.debug_string
 to_string(desc::HostDeviceDescription) = desc.to_string
-# attributes(desc::HostDeviceDescription) = desc.
+attributes(::HostDeviceDescription) = ()
 
 ## Device
 mutable struct HostDevice <: Device
@@ -1555,17 +1557,17 @@ function HostClient()
     return HostClient(devs, mems)
 end
 
-## HostPlugin
-struct HostPlugin <: AbstractPlugin end
-
-create_client(::HostPlugin, ::Dict{String,Any}) = HostClient()
-
 platform_name(::HostClient) = "julia-cpu"
 platform_version(::HostClient) = string(VERSION)
 process_index(::HostClient) = 0
 devices(client::HostClient) = client.devices
 addressable_devices(client::HostClient) = devices(client)
 addressable_memories(client::HostClient) = client.memories
+
+# XLA tolerates an error here (it only fails if the topology is used later), but not a missing method
+function topology_description(::HostClient)
+    throw(unimplemented("`HostClient` has no topology description yet"))
+end
 
 function buffer_from_host_buffer(
     ::HostClient,
@@ -1864,6 +1866,11 @@ function compile!(client::HostClient, code, options)
     logical_ids = [CAPI.PJRT_LogicalDeviceIds(0, 0)]
     return HostLoadedExecutable{tag}(exe, Device[dev], logical_ids, assignment, false)
 end
+
+## HostPlugin
+struct HostPlugin <: AbstractPlugin end
+
+create_client(::HostPlugin, ::Dict{String,Any}) = HostClient()
 
 const plugin_api = Ref{PluginApi}()
 
