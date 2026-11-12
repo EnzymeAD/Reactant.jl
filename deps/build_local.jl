@@ -329,7 +329,7 @@ end
 
 push!(build_cmd_list, "--copt=-Wno-private-header")
 push!(build_cmd_list, "--color=$(parsed_args["color"])")
-push!(build_cmd_list, ":libReactantExtra.so")
+push!(build_cmd_list, "@enzyme_ad//src/enzyme_ad/jax/ReactantExtra:libReactantExtra.so")
 
 @info "About to run Bazel\n" * join(build_cmd_list, " \\\n  ")
 run(Cmd(Cmd(build_cmd_list); dir=source_dir))
@@ -343,8 +343,7 @@ if parsed_args["test"]
     run(Cmd(Cmd(test_cmd_list); dir=source_dir))
 end
 
-# `:libReactantExtra.so` is an alias of the target in Enzyme-JAX, the library is built in
-# the directory of that target
+# The library is a target of Enzyme-JAX, Bazel builds it in the directory of that target
 build_dir = joinpath(
     source_dir,
     "bazel-bin",
