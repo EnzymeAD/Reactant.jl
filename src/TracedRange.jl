@@ -182,14 +182,16 @@ function Base._reshape(parent::TracedUnitRange, dims::Dims)
     return Base.__reshape((parent, IndexStyle(parent)), dims)
 end
 
-function (C::Base.Colon)(start::TracedRNumber{T}, stop::TracedRNumber{T}) where {T}
-    return TracedUnitRange(start, stop)
+function (C::Base.Colon)(start::TracedRNumber{T1}, stop::TracedRNumber{T2}) where {T1,T2}
+    return TracedUnitRange(promote(start, stop)...)
 end
-function (C::Base.Colon)(start::TracedRNumber{T}, stop::T) where {T}
-    return C(start, TracedRNumber{T}(stop))
+function (C::Base.Colon)(start::TracedRNumber{T1}, stop::T2) where {T1,T2<:Real}
+    T = promote_type(T1, T2)
+    return C(convert(TracedRNumber{T}, start), convert(TracedRNumber{T}, stop))
 end
-function (C::Base.Colon)(start::T, stop::TracedRNumber{T}) where {T}
-    return C(TracedRNumber{T}(start), stop)
+function (C::Base.Colon)(start::T1, stop::TracedRNumber{T2}) where {T1<:Real,T2}
+    T = promote_type(T1, T2)
+    return C(convert(TracedRNumber{T}, start), convert(TracedRNumber{T}, stop))
 end
 
 Base.maximum(r::TracedUnitRange) = last(r)

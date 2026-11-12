@@ -1153,6 +1153,10 @@ function Base.rem2pi(
 end
 Base.rem2pi(x::TracedRNumber{<:Integer}, r::Base.RoundingMode) = rem2pi(float(x), r)
 
+function Base.oneto(x::TracedRNumber{<:Integer})
+    return Reactant.TracedUnitRange(one(x), x)
+end
+
 @static if isdefined(Base, :unchecked_oneto)
     function Base.unchecked_oneto(x::TracedRNumber{<:Integer})
         return Reactant.TracedUnitRange(one(x), x)

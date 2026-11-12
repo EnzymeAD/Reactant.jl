@@ -46,3 +46,42 @@ end
     @test Reactant.to_number(step(r_ra)) === Reactant.to_number(ConcreteRNumber(step(r)))
     @test Reactant.to_number(step(r_ra)) === step(r) skip = RunningOnTPU
 end
+
+function _nested_trace_eachindex_2083!(out, _ar, k1, k2)
+    @trace for i in eachindex(k1)
+        @trace for j in eachindex(k2)
+            Reactant.@allowscalar begin
+                out[i, j] = k1[i] + k2[j]
+            end
+        end
+    end
+    return out
+end
+
+function _sum_mixed_int_colon_2083(i32)
+    s = zero(Int64)
+    @trace for k in i32:10
+        s += k
+    end
+    return s
+end
+
+@testset "Base.oneto / eachindex on TracedStepRangeLen and mixed-int Colon (#2083)" begin
+    ar = ConcreteRNumber(1.0)
+    out = Reactant.to_rarray(zeros(8, 8))
+    k1 = range(1.0, 4.0; length=8)
+    k2 = range(2.0, 5.0; length=8)
+    res = @jit _nested_trace_eachindex_2083!(out, ar, k1, k2)
+    ref = zeros(8, 8)
+    for i in eachindex(k1), j in eachindex(k2)
+        ref[i, j] = k1[i] + k2[j]
+    end
+    @test Array(res) ≈ ref
+
+    i32 = ConcreteRNumber(Int32(3))
+    j64 = ConcreteRNumber(Int64(10))
+    @test Array{Int64}(@jit(i32:10)) == collect(3:10)
+    @test Array{Int64}(@jit(1:i32)) == collect(1:3)
+    @test Array{Int64}(@jit(i32:j64)) == collect(3:10)
+    @test Reactant.to_number(@jit _sum_mixed_int_colon_2083(i32)) == sum(3:10)
+end
