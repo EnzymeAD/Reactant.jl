@@ -654,11 +654,13 @@ end
 """
     AbstractPlugin
 
-A PJRT plugin: the owner of what exists independently of any [`Client`](@ref), like client creation or the topologies
-created without a client. Pass an instance to [`make_api`](@ref) to build its `PJRT_Api`; the C callbacks whose
-arguments carry no PJRT object dispatch on it.
+A type representing a PJRT plugin. Used for dispatching on plugin entrypoints, like client creation or the topologies
+created without a client.
 
-It can hold plugin-wide settings and state, which [`make_api`](@ref) keeps alive.
+Pass an instance to [`make_api`](@ref) to build its `PJRT_Api`.
+
+It must be stateless: its type `P` must be `Base.issingletontype(P)` with an empty constructor `P()`. Plugin-wide state
+(e.g. a registry of FFI handlers) belongs in globals of the module of the plugin.
 
 ### Interface
 
@@ -679,14 +681,12 @@ Backs `PJRT_Plugin_Initialize`.
 """
 initialize(::AbstractPlugin) = nothing
 
-struct PluginInitialize{P<:AbstractPlugin}
-    plugin::P
-end
+struct PluginInitialize{P<:AbstractPlugin} end
 
-@pjrt_catch_return function (f::PluginInitialize)(
+@pjrt_catch_return function (::PluginInitialize{P})(
     args::Ptr{CAPI.PJRT_Plugin_Initialize_Args}
-)::Ptr{CAPI.PJRT_Error}
-    initialize(f.plugin)
+)::Ptr{CAPI.PJRT_Error} where {P}
+    initialize(P())
     return ok()
 end
 
@@ -698,32 +698,25 @@ Return the attributes of `plugin` as `name => value` pairs (e.g. a `Dict`). Comm
 `AbstractVector{<:Integer}` or `AbstractFloat`, which C receives as `String`, `Bool`, `Int64`, `Vector{Int64}` and
 `Float32`. Defaults to no attributes.
 
-It is called at most once per [`make_api`](@ref): the C wrapper keeps a copy for the lifetime of the process, since C
+It is called at most once per plugin type: the C wrapper keeps a copy for the lifetime of the process, since C
 keeps pointers to it.
 
 Backs `PJRT_Plugin_Attributes`.
 """
 attributes(::AbstractPlugin) = ()
 
-# `PJRT_Plugin_Attributes_Args` carries no user data, so the callable holds the plugin; it also owns the C view of the
-# attributes, which is computed on the first call since the attributes may depend on `initialize`
-mutable struct PluginAttributes{P<:AbstractPlugin}
-    const plugin::P
-    const lock::ReentrantLock
-    values::Union{Nothing,Tuple{Vector{CAPI.PJRT_NamedValue},Vector{Any}}}
-end
-function PluginAttributes(plugin::AbstractPlugin)
-    return PluginAttributes(plugin, ReentrantLock(), nothing)
-end
+# the C view of the attributes of each plugin type, computed on the first call since the attributes may depend on
+# `initialize`, and never freed since C keeps pointers to it
+const plugin_attributes = IdDict{DataType,Tuple{Vector{CAPI.PJRT_NamedValue},Vector{Any}}}()
+const plugin_attributes_lock = ReentrantLock()
 
-@pjrt_catch_return function (f::PluginAttributes)(
+struct PluginAttributes{P<:AbstractPlugin} end
+
+@pjrt_catch_return function (::PluginAttributes{P})(
     args::Ptr{CAPI.PJRT_Plugin_Attributes_Args}
-)::Ptr{CAPI.PJRT_Error}
-    values, _ = @lock f.lock begin
-        if isnothing(f.values)
-            f.values = pjrt_named_values(attributes(f.plugin))
-        end
-        f.values
+)::Ptr{CAPI.PJRT_Error} where {P}
+    values, _ = @lock plugin_attributes_lock begin
+        get!(() -> pjrt_named_values(attributes(P())), plugin_attributes, P)
     end
     unsafe_store!(args.attributes, pointer(values))
     unsafe_store!(args.num_attributes, length(values))
@@ -742,17 +735,15 @@ Backs `PJRT_Client_Create`.
 """
 create_client(::AbstractPlugin, ::Dict{String,Any})
 
-struct ClientCreate{P<:AbstractPlugin}
-    plugin::P
-end
+struct ClientCreate{P<:AbstractPlugin} end
 
-@pjrt_catch_return function (f::ClientCreate)(
+@pjrt_catch_return function (::ClientCreate{P})(
     args::Ptr{CAPI.PJRT_Client_Create_Args}
-)::Ptr{CAPI.PJRT_Error}
+)::Ptr{CAPI.PJRT_Error} where {P}
     options = unsafe_load_pjrt_named_values(
         unsafe_load(args.create_options), unsafe_load(args.num_options)
     )
-    client = root!(create_client(f.plugin, options)::Client)
+    client = root!(create_client(P(), options)::Client)
     unsafe_store!(args.client, Ptr{CAPI.PJRT_Client}(pointer_from_objref(client)))
     return ok()
 end
@@ -769,21 +760,18 @@ Backs `PJRT_TopologyDescription_Create`.
 """
 create_topology_description(::AbstractPlugin, ::String, ::Dict{String,Any})
 
-# `PJRT_TopologyDescription_Create_Args` carries no user data, so the callable holds the plugin
-struct TopologyDescriptionCreate{P<:AbstractPlugin}
-    plugin::P
-end
+struct TopologyDescriptionCreate{P<:AbstractPlugin} end
 
-@pjrt_catch_return function (f::TopologyDescriptionCreate)(
+@pjrt_catch_return function (::TopologyDescriptionCreate{P})(
     args::Ptr{CAPI.PJRT_TopologyDescription_Create_Args}
-)::Ptr{CAPI.PJRT_Error}
+)::Ptr{CAPI.PJRT_Error} where {P}
     name = unsafe_string(
         Ptr{UInt8}(unsafe_load(args.topology_name)), unsafe_load(args.topology_name_size)
     )
     options = unsafe_load_pjrt_named_values(
         unsafe_load(args.create_options), unsafe_load(args.num_options)
     )
-    topology = create_topology_description(f.plugin, name, options)::TopologyDescription
+    topology = create_topology_description(P(), name, options)::TopologyDescription
     root!(topology)
     unsafe_store!(
         args.topology, Ptr{CAPI.PJRT_TopologyDescription}(pointer_from_objref(topology))
@@ -802,20 +790,17 @@ Backs `PJRT_TopologyDescription_Deserialize`.
 """
 deserialize_topology_description(::AbstractPlugin, ::Vector{UInt8})
 
-# `PJRT_TopologyDescription_Deserialize_Args` carries no user data, so the callable holds the plugin
-struct TopologyDescriptionDeserialize{P<:AbstractPlugin}
-    plugin::P
-end
+struct TopologyDescriptionDeserialize{P<:AbstractPlugin} end
 
-@pjrt_catch_return function (f::TopologyDescriptionDeserialize)(
+@pjrt_catch_return function (::TopologyDescriptionDeserialize{P})(
     args::Ptr{CAPI.PJRT_TopologyDescription_Deserialize_Args}
-)::Ptr{CAPI.PJRT_Error}
+)::Ptr{CAPI.PJRT_Error} where {P}
     # the serialized topology is owned by C, so copy it in case the implementation stores it
     bytes_ptr = Ptr{UInt8}(unsafe_load(args.serialized_topology))
     bytes = copy(
         unsafe_wrap(Vector{UInt8}, bytes_ptr, unsafe_load(args.serialized_topology_size))
     )
-    topology = deserialize_topology_description(f.plugin, bytes)::TopologyDescription
+    topology = deserialize_topology_description(P(), bytes)::TopologyDescription
     root!(topology)
     unsafe_store!(
         args.topology, Ptr{CAPI.PJRT_TopologyDescription}(pointer_from_objref(topology))
@@ -4251,25 +4236,42 @@ end
 
 unimplemented_c_hook() = Ptr{CAPI.PJRT_Error}(pointer_from_objref(root!(unimplemented())))
 
-# `PJRT_Client_Create_Args` carries no user data, so the `Client` type to create is encoded in the callable's type
-struct ClientCreate{C<:Client} end
+## Extensions
+"""
+    Extension
 
-@pjrt_catch_return function (::ClientCreate{C})(
-    args::Ptr{CAPI.PJRT_Client_Create_Args}
-)::Ptr{CAPI.PJRT_Error} where {C}
-    client = root!(C())::C
-    unsafe_store!(args.client, Ptr{CAPI.PJRT_Client}(pointer_from_objref(client)))
-    return ok()
-end
+A PJRT extension that a plugin implements: an optional set of C functions that XLA looks up by type in the extension
+chain of the `PJRT_Api`. Pass its type to [`make_api`](@ref) to advertise it to XLA. Since XLA only uses an extension
+when it is in the chain, a plugin must pass only the extensions whose interface it implements.
+
+Each subtype `E` is a `mutable struct` whose first field is the C struct of the extension (e.g.
+`CAPI.PJRT_MemoryDescriptions_Extension`), so that a pointer to an `E` is a pointer to its C struct. Julia-only fields
+(e.g. the `Base.CFunction`s of the C struct) can follow it.
+
+### Interface
+
+- `extension_type`
+- `E(plugin::AbstractPlugin, next::Ptr{CAPI.PJRT_Extension_Base})`: build the C struct, whose `PJRT_Extension_Base`
+  has the type of `E` and `next` as the next extension of the chain
+"""
+abstract type Extension end
+
+"""
+    extension_type(::Type{E}) where {E<:Extension} -> CAPI.PJRT_Extension_Type
+
+Return the type that XLA identifies extensions of type `E` by. Each extension type can be passed only once to
+[`make_api`](@ref).
+"""
+function extension_type end
 
 """
     PluginApi
 
-A `PJRT_Api` function table bound to a specific [`Client`](@ref) type. Create it with [`make_api`](@ref).
+A `PJRT_Api` function table bound to a specific [`AbstractPlugin`](@ref) and set of [`Extension`](@ref)s. Create it
+with [`make_api`](@ref).
 
 !!! warning
-It must be kept alive for as long as any client or topology created through it exists, since it owns the
-`PJRT_Client_Create`, `PJRT_TopologyDescription_Create` and `PJRT_TopologyDescription_Deserialize` C callbacks.
+It must be kept alive for as long as any client or topology created through it exists.
 """
 struct PluginApi
     api::Base.RefValue{CAPI.PJRT_Api}
@@ -4280,6 +4282,9 @@ struct PluginApi
     client_create::Base.CFunction
     topology_create::Base.CFunction
     topology_deserialize::Base.CFunction
+
+    # keepalive
+    extensions::Vector{Extension}
 end
 
 function Base.unsafe_convert(::Type{Ptr{CAPI.PJRT_Api}}, x::PluginApi)
@@ -4310,42 +4315,63 @@ function __init__()
 end
 
 """
-    make_api(plugin::AbstractPlugin) -> PluginApi
+    make_api(plugin::AbstractPlugin; extensions=()) -> PluginApi
 
-Build the `PJRT_Api` function table of `plugin`, whose `PJRT_Plugin_Initialize`, `PJRT_Plugin_Attributes`,
-`PJRT_Client_Create`, `PJRT_TopologyDescription_Create` and `PJRT_TopologyDescription_Deserialize` call
-`initialize(plugin)`, `attributes(plugin)`, `create_client(plugin, ...)`, `create_topology_description(plugin, ...)`
-and `deserialize_topology_description(plugin, ...)`.
+Build the `PJRT_Api` function table of `plugin`.
 
-`C` must have a zero-argument constructor. Store the result in a global (e.g. a `const Ref`) set from the plugin's
-`__init__`, and pass `unsafe_convert(Ptr{CAPI.PJRT_Api}, api)` to XLA.
+`extensions` is a collection of [`Extension`](@ref) types, which are built as `E(plugin, next)` and advertised to XLA
+through the extension chain of the table, in the given order, e.g.
+```julia
+make_api(MyPlugin(); extensions=[MemoryDescriptionsExtension, FFIExtension])
+```
+Each extension type can be given only once.
 
-!!! warning
-These three are closure `@cfunction`s, which are only supported on some architectures (e.g. x86_64, aarch64).
+Store the result in a global (e.g. a `const Ref`) set from the plugin's `__init__`, and pass
+`unsafe_convert(Ptr{CAPI.PJRT_Api}, api)` to XLA.
 """
-function make_api(plugin::AbstractPlugin)
+function make_api(plugin::P; extensions=()) where {P<:AbstractPlugin}
+    extensions = collect(Type{<:Extension}, extensions)
+    types = map(extension_type, extensions)
+    allunique(types) ||
+        throw(ArgumentError("each extension type can be given only once, got $types"))
+    Base.issingletontype(P) || throw(
+        ArgumentError("plugin must be stateless (a `struct` without fields), got a `$P`"),
+    )
+
+    # build the chain back to front, so that each extension gets the pointer to the next one
+    exts = Vector{Extension}(undef, length(extensions))
+    extension_start = Ptr{CAPI.PJRT_Extension_Base}(C_NULL)
+    for i in reverse(eachindex(extensions))
+        E = extensions[i]
+        ext = E(plugin, extension_start)
+        ext isa E || throw(ArgumentError("constructor of $E returned a `$(typeof(ext))`"))
+        ismutable(ext) || throw(ArgumentError("$E must be a mutable struct"))
+        exts[i] = ext
+        extension_start = Ptr{CAPI.PJRT_Extension_Base}(pointer_from_objref(ext))
+    end
+
     # generic handler for unimplemented PJRT API functions
     c_unimplemented = @cfunction(unimplemented_c_hook, Ptr{CAPI.PJRT_Error}, ())
     c_plugin_initialize = @cfunction(
-        $(PluginInitialize(plugin)),
+        $(PluginInitialize{P}()),
         Ptr{CAPI.PJRT_Error},
         (Ptr{CAPI.PJRT_Plugin_Initialize_Args},)
     )
     c_plugin_attributes = @cfunction(
-        $(PluginAttributes(plugin)),
+        $(PluginAttributes{P}()),
         Ptr{CAPI.PJRT_Error},
         (Ptr{CAPI.PJRT_Plugin_Attributes_Args},)
     )
     c_client_create = @cfunction(
-        $(ClientCreate(plugin)), Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Client_Create_Args},)
+        $(ClientCreate{P}()), Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Client_Create_Args},)
     )
     c_topology_create = @cfunction(
-        $(TopologyDescriptionCreate(plugin)),
+        $(TopologyDescriptionCreate{P}()),
         Ptr{CAPI.PJRT_Error},
         (Ptr{CAPI.PJRT_TopologyDescription_Create_Args},)
     )
     c_topology_deserialize = @cfunction(
-        $(TopologyDescriptionDeserialize(plugin)),
+        $(TopologyDescriptionDeserialize{P}()),
         Ptr{CAPI.PJRT_Error},
         (Ptr{CAPI.PJRT_TopologyDescription_Deserialize_Args},)
     )
@@ -4353,7 +4379,7 @@ function make_api(plugin::AbstractPlugin)
     #! format: off
     api = Ref(CAPI.PJRT_Api(
         #= struct_size =# csizeof(CAPI.PJRT_Api),
-        #= extension_start =# C_NULL,
+        #= extension_start =# extension_start,
         #= pjrt_api_version =# CAPI.PJRT_Api_Version(
             #= struct_size =# csizeof(CAPI.PJRT_Api_Version),
             #= extension_start =# C_NULL,
