@@ -16,6 +16,7 @@ const BatchedAdjointFactorization{T} =
 include("Cholesky.jl")
 include("LU.jl")
 include("SVD.jl")
+include("Tridiagonal.jl")
 
 # Overload \ to support batched factorization
 for FT in

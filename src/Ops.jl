@@ -3982,6 +3982,40 @@ Compute the row maximum pivoted LU factorization of `x` and return the factors `
     return (res, ipiv, perm, info)
 end
 
+@noinline function gtsv(
+    dl::TracedRArray{T,N},
+    d::TracedRArray{T,N},
+    du::TracedRArray{T,N},
+    B::TracedRArray{T,M},
+    (::Type{pT})=Int32;
+    location=mlir_stacktrace("gtsv", @__FILE__, @__LINE__),
+) where {T,N,M,pT}
+    @assert M == N + 1
+    @assert size(dl) == size(d) == size(du)
+    @assert size(B)[1:N] == size(d)
+
+    output_shape = collect(Int64, size(B))
+    info_shape = output_shape[1:(end - 2)]
+
+    op = enzymexla.lapack_gtsv(
+        dl.mlir_data,
+        d.mlir_data,
+        du.mlir_data,
+        B.mlir_data;
+        X=MLIR.IR.TensorType(output_shape, MLIR.IR.Type(unwrapped_eltype(T))),
+        info=MLIR.IR.TensorType(info_shape, MLIR.IR.Type(pT)),
+        location,
+    )
+
+    res = TracedRArray{T,M}((), MLIR.IR.result(op, 1), size(B))
+    if M == 2
+        info = TracedRNumber{pT}((), MLIR.IR.result(op, 2))
+    else
+        info = TracedRArray{pT,M - 2}((), MLIR.IR.result(op, 2), Tuple(info_shape))
+    end
+    return (res, info)
+end
+
 @noinline function svd(
     x::TracedRArray{T,N},
     (::Type{iT})=Int32;
