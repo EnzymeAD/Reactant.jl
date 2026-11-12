@@ -663,3 +663,46 @@ end
     end
 end
 =#
+
+struct ShardedWrap2989{A}
+    data::A
+end
+
+square_wrapped_2989(a) = ShardedWrap2989(a .* a)
+identity_wrapped_3488(a) = ShardedWrap2989(a)
+mixed_wrapped_2989(u, s) = (ShardedWrap2989(u), ShardedWrap2989(s .* 2))
+
+@testset "Sharded wrapped struct and preserved input results (#2989, #3488)" begin
+    devs = collect(Reactant.devices())
+    if length(devs) >= 2
+        mesh = Sharding.Mesh(reshape(devs[1:2], 2), (:x,))
+
+        # #3488: returning a sharded input unchanged
+        x_host = reshape(collect(Float32, 1:32), 4, 8)
+        x = Reactant.to_rarray(x_host; sharding=Sharding.NamedSharding(mesh, (nothing, :x)))
+        y_id = @jit identity(x)
+        @test Sharding.is_sharded(y_id)
+        @test Array(y_id) ≈ x_host
+
+        # #2989: returning a struct wrapping a sharded array
+        v_host = collect(Float64, 1:64)
+        v = Reactant.to_rarray(v_host; sharding=Sharding.DimsSharding(mesh, (1,), (:x,)))
+        r_wrap = @jit square_wrapped_2989(v)
+        @test r_wrap isa ShardedWrap2989
+        @test Sharding.is_sharded(r_wrap.data)
+        @test Array(r_wrap.data) ≈ v_host .^ 2
+
+        # Combined: wrapping an unchanged sharded input
+        r_id_wrap = @jit identity_wrapped_3488(x)
+        @test r_id_wrap isa ShardedWrap2989
+        @test Sharding.is_sharded(r_id_wrap.data)
+        @test Array(r_id_wrap.data) ≈ x_host
+
+        # Mixed unsharded preserved + sharded computed wrapped structs
+        u_host = Float64[10.0, 20.0, 30.0, 40.0]
+        u = Reactant.to_rarray(u_host)
+        w_u, w_s = @jit mixed_wrapped_2989(u, v)
+        @test Array(w_u.data) ≈ u_host
+        @test Array(w_s.data) ≈ v_host .* 2
+    end
+end

@@ -1319,6 +1319,20 @@ function codegen_unflatten!(
             )
 
             result_stores[path] = sym
+            if path_to_shard_info !== nothing
+                orig_carg = resolve_path(concrete_args, argpath[2:end])
+                if orig_carg === UNRESOLVED_PATH || Sharding.is_sharded(orig_carg)
+                    shsym = Symbol("preserved_sharding", var_idx[])
+                    var_idx[] += 1
+                    push!(
+                        resultgen_code,
+                        quote
+                            $shsym = $argres.sharding
+                        end,
+                    )
+                    path_to_shard_info[path] = shsym
+                end
+            end
         end
     end
 
