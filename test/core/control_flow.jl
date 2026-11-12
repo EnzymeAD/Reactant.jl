@@ -1847,3 +1847,36 @@ end
     @test @jit(loop_with_pi_var(xr)) ≈ 6.0f0
     @test @jit(loop_reading_outer_irrational(xr)) ≈ Float32(π) * 6.0f0
 end
+
+function nested_binomial_checkpoint_3158(x, k1, k2)
+    @trace checkpointing = Reactant.Binomial(k1) for i in 1:4
+        @trace checkpointing = Reactant.Binomial(k2) for j in 1:3
+            x = sin.(x)
+        end
+    end
+    return sum(x)
+end
+
+function grad_nested_binomial_3158(x, k1, k2)
+    return Enzyme.gradient(
+        Enzyme.Reverse,
+        nested_binomial_checkpoint_3158,
+        x,
+        Enzyme.Const(k1),
+        Enzyme.Const(k2),
+    )[1]
+end
+
+@testset "nested @trace loops with Binomial checkpointing (#3158)" begin
+    x_host = [0.5, 1.0]
+    @test @jit(nested_binomial_checkpoint_3158(Reactant.to_rarray(x_host), 2, 2)) ≈
+        nested_binomial_checkpoint_3158(x_host, 2, 2)
+    @test Array(@jit(grad_nested_binomial_3158(Reactant.to_rarray(x_host), 2, 2))) ≈
+        Enzyme.gradient(
+        Enzyme.Reverse,
+        nested_binomial_checkpoint_3158,
+        x_host,
+        Enzyme.Const(2),
+        Enzyme.Const(2),
+    )[1]
+end

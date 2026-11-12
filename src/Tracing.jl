@@ -557,7 +557,7 @@ Base.@nospecializeinfer function traced_type_inner(
     return SubArray{T2,N,P2,I2,L}
 end
 
-for P in (Ptr, Core.LLVMPtr, Base.RefValue, Ref)
+for P in (Ptr, Core.LLVMPtr, Base.RefValue, Ref, ReactantCore.ReadOnlyRef)
     @eval Base.@nospecializeinfer function traced_type_inner(
         @nospecialize(PT::Type{$P}),
         seen,
@@ -584,6 +584,26 @@ for P in (Ptr, Base.RefValue, Ref)
             ),
         }
     end
+end
+
+Base.@nospecializeinfer function traced_type_inner(
+    @nospecialize(PT::Type{ReactantCore.ReadOnlyRef{T}}),
+    seen,
+    @nospecialize(mode::TraceMode),
+    @nospecialize(track_numbers::Type),
+    @nospecialize(ndevices),
+    @nospecialize(runtime),
+) where {T}
+    T1 = PT.parameters[1]
+    eff_tn =
+        if T1 isa Type && T1 !== Any && T1 <: Number && !(T1 <: Union{TracedType,RNumber})
+            Union{}
+        else
+            track_numbers
+        end
+    return ReactantCore.ReadOnlyRef{
+        traced_type_inner(T1, seen, mode, eff_tn, ndevices, runtime)
+    }
 end
 
 Base.@nospecializeinfer function traced_type_inner(
@@ -1466,6 +1486,31 @@ function make_tracer(
     end
     @assert !toscalar
     return make_tracer_unknown(seen, prev, path, mode; toscalar, kwargs...)
+end
+
+function make_tracer(
+    seen,
+    @nospecialize(prev::ReactantCore.ReadOnlyRef),
+    @nospecialize(path),
+    mode;
+    @nospecialize(toscalar = false),
+    @nospecialize(track_numbers::Type = Union{}),
+    kwargs...,
+)
+    eff_tn = if prev.x isa Number && !(prev.x isa Union{TracedType,RNumber})
+        Union{}
+    else
+        track_numbers
+    end
+    if toscalar && mode == TracedSetPath
+        return make_tracer(
+            seen, prev[], append_path(path, :x), mode; toscalar=false, track_numbers=eff_tn
+        )
+    end
+    @assert !toscalar
+    return make_tracer_unknown(
+        seen, prev, path, mode; toscalar, track_numbers=eff_tn, kwargs...
+    )
 end
 
 Base.@nospecializeinfer function make_tracer(
