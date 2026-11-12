@@ -39,9 +39,32 @@ function Base.copy(
     return _copy(bc)
 end
 
+function _broadcast_components(comps::Tuple, rsize)
+    n = length(comps)
+    out = Vector{Any}(undef, n)
+    for i in 1:n
+        out[i] = broadcast_to_size(comps[i], rsize)
+    end
+    return Tuple(out)
+end
+
+function _broadcast_components(comps::NamedTuple{names}, rsize) where {names}
+    return NamedTuple{names}(_broadcast_components(Tuple(comps), rsize))
+end
+
 function Reactant.broadcast_to_size(arg::StructArray{T}, rsize) where {T}
-    new = Tuple((broadcast_to_size(c, rsize) for c in components(arg)))
-    return StructArray{T}(new)
+    new_comps = _broadcast_components(components(arg), rsize)
+    if T <: Tuple || T <: NamedTuple
+        return StructArray(new_comps)
+    end
+    T_traced = traced_type(
+        T,
+        Val(Reactant.NoStopTracedTrack),
+        ReactantPrimitive,
+        Reactant.Sharding.NoSharding(),
+        nothing,
+    )
+    return StructArray{T_traced}(new_comps)
 end
 
 function Base.copyto!(
@@ -101,11 +124,11 @@ function Base.similar(
 end
 
 Base.@propagate_inbounds function StructArrays._getindex(
-    x::StructArray{T}, I::Vararg{TracedRNumber{<:Integer}}
+    x::StructArray{T}, I1::TracedRNumber{<:Integer}, I::Vararg{TracedRNumber{<:Integer}}
 ) where {T}
     cols = components(x)
-    @boundscheck checkbounds(x, I...)
-    return createinstance(T, get_ith(cols, I...)...)
+    @boundscheck checkbounds(x, I1, I...)
+    return createinstance(T, get_ith(cols, I1, I...)...)
 end
 
 setstruct(col, val, I) = @inbounds Reactant.@allowscalar col[I] = val
@@ -144,6 +167,26 @@ function StructArrays.get_ith(cols::NTuple{K,<:MRarr}, I...) where {K}
     return ith
 end
 
+function _has_traced_storage(@nospecialize(C::Type))
+    for FT in fieldtypes(C)
+        if FT <: Reactant.AnyTracedRArray
+            return true
+        elseif FT <: StructArray && _has_traced_storage(fieldtype(FT, 1))
+            return true
+        end
+    end
+    return false
+end
+
+function _tuple_eltypes(@nospecialize(C_traced::Type))
+    nf = fieldcount(C_traced)
+    ets = Vector{Any}(undef, nf)
+    for i in 1:nf
+        ets[i] = eltype(fieldtype(C_traced, i))
+    end
+    return Tuple{ets...}
+end
+
 Base.@nospecializeinfer function Reactant.traced_type_inner(
     @nospecialize(prev::Type{StructArray{ET,N,C,I}}),
     seen,
@@ -152,14 +195,73 @@ Base.@nospecializeinfer function Reactant.traced_type_inner(
     @nospecialize(sharding),
     @nospecialize(runtime)
 ) where {ET,N,C,I}
-    ET_traced = traced_type_inner(
-        ET, seen, mode, Union{ReactantPrimitive,track_numbers}, sharding, runtime
-    )
     C_traced = traced_type_inner(C, seen, mode, track_numbers, sharding, runtime)
+    if mode == Reactant.ConcreteToTraced
+        if ET <: Tuple
+            ET_traced = _tuple_eltypes(C_traced)
+        elseif ET <: NamedTuple
+            ET_traced = NamedTuple{ET.parameters[1],_tuple_eltypes(C_traced)}
+        else
+            ET_traced = traced_type_inner(
+                ET, seen, mode, Union{ReactantPrimitive,track_numbers}, sharding, runtime
+            )
+            if _has_traced_storage(C_traced)
+                ET_traced = traced_type_inner(
+                    ET_traced,
+                    Reactant.OrderedIdDict(),
+                    Reactant.NoStopTracedTrack,
+                    ReactantPrimitive,
+                    sharding,
+                    runtime,
+                )
+            end
+        end
+    else
+        ET_traced = traced_type_inner(
+            ET, seen, mode, Union{ReactantPrimitive,track_numbers}, sharding, runtime
+        )
+    end
     return StructArray{ET_traced,N,C_traced,index_type(fieldtypes(C_traced))}
 end
 
-@inline function Reactant.traced_getfield(@nospecialize(obj::StructArray), field)
+Base.@nospecializeinfer function Reactant.make_tracer(
+    seen,
+    @nospecialize(prev::StructArray),
+    @nospecialize(path),
+    mode;
+    toscalar=false,
+    @nospecialize(sharding = Reactant.Sharding.NoSharding()),
+    kwargs...,
+)
+    if mode == Reactant.TracedSetPath && toscalar
+        comps = make_tracer(
+            seen,
+            Base.getfield(prev, 1),
+            append_path(path, 1),
+            mode;
+            toscalar=true,
+            sharding=Base.getproperty(sharding, 1),
+            kwargs...,
+        )
+        ET = eltype(Core.Typeof(prev))
+        if ET <: NamedTuple || ET <: Tuple
+            return comps
+        end
+        ET_scalar = traced_type(
+            ET,
+            Val(Reactant.NoStopTracedTrack),
+            ReactantPrimitive,
+            Reactant.Sharding.NoSharding(),
+            nothing,
+        )
+        return createinstance(ET_scalar, values(comps)...)
+    end
+    return Reactant.make_tracer_unknown(
+        seen, prev, path, mode; toscalar, sharding, kwargs...
+    )
+end
+
+@inline function Reactant.Compiler.traced_getfield(@nospecialize(obj::StructArray), field)
     return Base.getfield(obj, field)
 end
 
