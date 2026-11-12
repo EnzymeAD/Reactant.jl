@@ -632,9 +632,18 @@ function sharding_to_array_slices(
                 MLIR.IR.getattr(func, "res_attrs")[0], "sdy.sharding"
             )
             @assert mlir_attr.ptr != C_NULL
+            old_sharding = sharding
             sharding = sdy_tensor_sharding_to_named_sharding(
                 sharding.mesh, MLIR.IR.Attribute(mlir_attr)
             )
+            if sharding.partition_spec != old_sharding.partition_spec ||
+                sharding.subaxes != old_sharding.subaxes
+                @warn "Array of size $(size_x) is not evenly divisible by the requested \
+                       sharding $(old_sharding.partition_spec) on mesh axes \
+                       $(old_sharding.mesh.axis_names) => $(old_sharding.mesh.axis_sizes); \
+                       falling back to $(sharding.partition_spec) \
+                       (subaxes=$(sharding.subaxes))."
+            end
 
             new_hlo_sharding = convert(HloSharding, sharding).hlo_sharding
             condensed_op_sharding = convert(XLA.CondensedOpSharding, new_hlo_sharding)
