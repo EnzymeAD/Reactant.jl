@@ -532,3 +532,40 @@ mapped_sub(xs...) = stack(map(-, xs...))
         end
     end
 end
+
+mutable struct MapAccumulator{A}
+    s::Any
+    x::A
+end
+
+function (acc::MapAccumulator)(i)
+    acc.s += acc.x[i]
+    return acc.x[i] * 2
+end
+
+function map_callable_accumulator(x)
+    acc = MapAccumulator(zero(eltype(x)), x)
+    y = map(acc, eachindex(x))
+    return y, acc.s
+end
+
+function map_callable_untraced_init(x)
+    acc = MapAccumulator(0.0, x)
+    y = map(acc, eachindex(x))
+    return y, acc.s
+end
+
+@testset "map mutating captured state (#2539)" begin
+    x = collect(Float64, 1:5)
+    x_ra = Reactant.to_rarray(x)
+
+    y_ra, s_ra = @jit map_callable_accumulator(x_ra)
+    y, s = map_callable_accumulator(x)
+    @test Array(y_ra) ≈ y
+    @test Number(s_ra) ≈ s
+
+    y_ra2, s_ra2 = @jit map_callable_untraced_init(x_ra)
+    y2, s2 = map_callable_untraced_init(x)
+    @test Array(y_ra2) ≈ y2
+    @test Number(s_ra2) ≈ s2
+end

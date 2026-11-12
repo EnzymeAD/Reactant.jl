@@ -1164,6 +1164,191 @@ scalar_arg(arg) = arg isa Base.RefValue || !(arg isa AbstractArray)
 flattenarg(arg) = ReactantCore.materialize_traced_array(vec(arg))
 flattenarg(arg::Ref) = RefFillVector(arg)
 
+function has_boxed_captures(@nospecialize(x), seen::Base.IdSet{Any}=Base.IdSet{Any}())
+    x isa Core.Box && return true
+    x isa Union{Module,DataType,Symbol,String,Number,Reactant.TracedType} && return false
+    (x in seen) && return false
+    T = Core.Typeof(x)
+    isstructtype(T) || return false
+    ismutabletype(T) && push!(seen, x)
+    for i in 1:nfields(x)
+        if isdefined(x, i) && has_boxed_captures(getfield(x, i), seen)
+            return true
+        end
+    end
+    return false
+end
+
+function _promote_boxed_captures!(@nospecialize(x), seen::Base.IdSet{Any}=Base.IdSet{Any}())
+    x isa Union{Module,DataType,Symbol,String,Number,Reactant.TracedType} && return nothing
+    (x in seen) && return nothing
+    push!(seen, x)
+    if x isa Core.Box
+        if isdefined(x, :contents)
+            v = x.contents
+            if v isa Reactant.ReactantPrimitive
+                x.contents = promote_to(TracedRNumber{typeof(v)}, v)
+            else
+                _promote_boxed_captures!(v, seen)
+            end
+        end
+        return nothing
+    end
+    T = Core.Typeof(x)
+    isstructtype(T) || return nothing
+    for i in 1:nfields(x)
+        if isdefined(x, i)
+            _promote_boxed_captures!(getfield(x, i), seen)
+        end
+    end
+    return nothing
+end
+
+function _snapshot_pre_seed_state!(
+    @nospecialize(x),
+    seen::Base.IdSet{Any},
+    traced_snaps::Vector{Tuple{Any,Any,Any}},
+    mutable_snaps::Vector{Tuple{Any,Int,Any}},
+    array_snaps::Vector{Tuple{Array,Array}},
+    dict_snaps::Vector{Tuple{Dict,Dict}},
+)
+    x isa Union{Module,DataType,Symbol,String,Number} && return nothing
+    (x in seen) && return nothing
+    push!(seen, x)
+    if x isa Reactant.TracedType
+        push!(traced_snaps, (x, get_mlir_data(x), get_paths(x)))
+        return nothing
+    elseif x isa Array
+        push!(array_snaps, (x, copy(x)))
+        for idx in eachindex(x)
+            if isassigned(x, idx)
+                _snapshot_pre_seed_state!(
+                    x[idx], seen, traced_snaps, mutable_snaps, array_snaps, dict_snaps
+                )
+            end
+        end
+        return nothing
+    elseif x isa Dict
+        push!(dict_snaps, (x, copy(x)))
+        for (k, v) in x
+            _snapshot_pre_seed_state!(
+                k, seen, traced_snaps, mutable_snaps, array_snaps, dict_snaps
+            )
+            _snapshot_pre_seed_state!(
+                v, seen, traced_snaps, mutable_snaps, array_snaps, dict_snaps
+            )
+        end
+        return nothing
+    end
+    T = Core.Typeof(x)
+    isstructtype(T) || return nothing
+    ismut = ismutabletype(T)
+    for i in 1:nfields(x)
+        if isdefined(x, i)
+            v = getfield(x, i)
+            if ismut
+                push!(mutable_snaps, (x, i, v))
+            end
+            _snapshot_pre_seed_state!(
+                v, seen, traced_snaps, mutable_snaps, array_snaps, dict_snaps
+            )
+        end
+    end
+    return nothing
+end
+
+function _restore_pre_seed_val(@nospecialize(v_old), @nospecialize(v_new))
+    v_old === v_new && return v_old
+    if v_new isa Reactant.TracedType && typeof(v_old) !== typeof(v_new)
+        if v_old isa Number || v_old isa Reactant.TracedRNumber
+            return Reactant.promote_to(typeof(v_new), v_old)
+        end
+    end
+    v_old isa Reactant.TracedType && return v_old
+    if v_old isa Tuple && v_new isa Tuple && length(v_old) == length(v_new)
+        return map(_restore_pre_seed_val, v_old, v_new)
+    end
+    if v_old isa NamedTuple && v_new isa NamedTuple && keys(v_old) == keys(v_new)
+        return NamedTuple{keys(v_old)}(
+            map(_restore_pre_seed_val, Tuple(v_old), Tuple(v_new))
+        )
+    end
+    return v_old
+end
+
+function _restore_pre_seed_state!(
+    traced_snaps::Vector{Tuple{Any,Any,Any}},
+    mutable_snaps::Vector{Tuple{Any,Int,Any}},
+    array_snaps::Vector{Tuple{Array,Array}},
+    dict_snaps::Vector{Tuple{Dict,Dict}},
+)
+    for (t, old_data, old_paths) in traced_snaps
+        set_mlir_data!(t, old_data)
+        set_paths!(t, old_paths)
+    end
+    for (m, i, v_old) in mutable_snaps
+        v_new = getfield(m, i)
+        if v_new !== v_old
+            setfield!(m, i, _restore_pre_seed_val(v_old, v_new))
+        end
+    end
+    for (arr, old_arr) in array_snaps
+        if length(arr) == length(old_arr)
+            for idx in eachindex(arr)
+                if isassigned(old_arr, idx) && isassigned(arr, idx)
+                    arr[idx] = _restore_pre_seed_val(old_arr[idx], arr[idx])
+                end
+            end
+        else
+            copy!(arr, old_arr)
+        end
+    end
+    for (d, old_d) in dict_snaps
+        empty!(d)
+        for (k, v_old) in old_d
+            d[k] = v_old
+        end
+    end
+    return nothing
+end
+
+function typeof_without_mutating_state(f, args...)
+    _promote_boxed_captures!(f)
+    seen_snap = Base.IdSet{Any}()
+    traced_snaps = Tuple{Any,Any,Any}[]
+    mutable_snaps = Tuple{Any,Int,Any}[]
+    array_snaps = Tuple{Array,Array}[]
+    dict_snaps = Tuple{Dict,Dict}[]
+    _snapshot_pre_seed_state!(
+        (f, args), seen_snap, traced_snaps, mutable_snaps, array_snaps, dict_snaps
+    )
+    mod_body = MLIR.IR.body(MLIR.IR.current_module())
+    MLIR.IR.activate(mod_body)
+    tmp_func = try
+        MLIR.Dialects.func.func_(;
+            sym_name=string(gensym("seed_probe")),
+            function_type=MLIR.IR.FunctionType(MLIR.IR.Type[], MLIR.IR.Type[]),
+            body=MLIR.IR.Region(),
+            sym_visibility=MLIR.IR.Attribute("private"),
+        )
+    finally
+        MLIR.IR.deactivate(mod_body)
+    end
+    tmp_block = MLIR.IR.Block(MLIR.IR.Type[], MLIR.IR.Location[])
+    push!(MLIR.IR.region(tmp_func, 1), tmp_block)
+    MLIR.IR.activate(tmp_block)
+    Ops.activate_constant_context!(tmp_block)
+    res_type = try
+        Core.Typeof(@allowscalar(Reactant.call_with_reactant(f, args...)))
+    finally
+        Ops.deactivate_constant_context!(tmp_block)
+        MLIR.IR.deactivate(tmp_block)
+        MLIR.IR.rmfromparent!(tmp_func)
+    end
+    _restore_pre_seed_state!(traced_snaps, mutable_snaps, array_snaps, dict_snaps)
+    return res_type
+end
+
 function elem_apply_via_while_loop(
     f, args::Vararg{Any,Nargs}; track_numbers=Union{}, kwargs...
 ) where {Nargs}
@@ -1176,17 +1361,17 @@ function elem_apply_via_while_loop(
     # flattening the tensors makes the auto-batching pass work nicer
     flat_args = map(flattenarg, args)
 
-    # This wont be a mutating function so we can safely execute it once
+    # Execute once without mutating state to infer the output type
     scalar_seed_args = @allowscalar map(Base.Fix2(getindex, 1), flat_args)
-    res_tmp = @allowscalar(Reactant.call_with_reactant(f, scalar_seed_args...))
+    res_tmp_type = typeof_without_mutating_state(f, scalar_seed_args...)
 
     # TODO: perhaps instead of this logic, we should have
     # `similar(::TracedRArray, TracedRNumber{T}) where T = similar(::TracedRArray, T)`
     # and just not unwrap here?
-    T_res = if typeof(res_tmp) <: TracedRNumber
-        Reactant.unwrapped_eltype(res_tmp)
+    T_res = if res_tmp_type <: TracedRNumber
+        Reactant.unwrapped_eltype(res_tmp_type)
     else
-        typeof(res_tmp)
+        res_tmp_type
     end
 
     # Before we selected the output container based on the first argument
@@ -1226,7 +1411,7 @@ function elem_apply(f, args::Vararg{Any,Nargs}) where {Nargs}
     # we can expand the scope of this later to support cases where the output
     # doesn't align with `Ops.batch`. For now we just handle cases that would
     # obviously fail with scalarizing the inputs.
-    if Reactant.use_overlayed_version(f)
+    if Reactant.use_overlayed_version(f) || has_boxed_captures(f)
         return elem_apply_via_while_loop(f, args...)
     end
 
