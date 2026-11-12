@@ -643,3 +643,29 @@ index_plain_mat_linear(idx) = @allowscalar reshape(collect(1.0:10.0), 2, 5)[idx]
     @test @jit(index_plain_mat_linear(Reactant.to_rarray([2, 4, 7]))) ≈ [2.0, 4.0, 7.0]
     @test @jit(index_plain_mat_linear(ConcreteRNumber(5))) ≈ 5.0
 end
+
+reshaped_get_cartesian_734(x) = @allowscalar reshape(x, 2, 3)[CartesianIndex(2, 3)]
+function reshaped_set_cartesian_734!(x, v)
+    r = reshape(x, 2, 3)
+    @allowscalar r[CartesianIndex(1, 2)] = v
+    return x
+end
+reshaped_get_linear_734(x, i) = @allowscalar reshape(x, 2, 3)[i]
+
+@testset "ReshapedArray CartesianIndex and linear indexing (#734)" begin
+    x_cpu = Float32[1, 2, 3, 4, 5, 6]
+    xr = Reactant.to_rarray(copy(x_cpu))
+    @test Reactant.to_number(@jit reshaped_get_cartesian_734(xr)) ==
+        reshape(x_cpu, 2, 3)[CartesianIndex(2, 3)]
+
+    @jit reshaped_set_cartesian_734!(xr, ConcreteRNumber(99.0f0))
+    x_expected = copy(x_cpu)
+    reshape(x_expected, 2, 3)[CartesianIndex(1, 2)] = 99.0f0
+    @test Array(xr) == x_expected
+
+    xr2 = Reactant.to_rarray(copy(x_cpu))
+    @test Reactant.to_number(@jit reshaped_get_linear_734(xr2, 5)) == x_cpu[5]
+    @test Reactant.to_number(@jit reshaped_get_linear_734(xr2, ConcreteRNumber(5))) ==
+        x_cpu[5]
+    @test Array(@jit reshaped_get_linear_734(xr2, 2:5)) == x_cpu[2:5]
+end
