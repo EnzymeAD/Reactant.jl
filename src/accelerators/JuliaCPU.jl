@@ -6,6 +6,7 @@ using Reactant.MLIR: IR, API
 using Reactant.XLA: CAPI
 
 using Reactant.XLA.PJRT.Plugin:
+    AbstractPlugin,
     Buffer,
     Client,
     Device,
@@ -33,6 +34,7 @@ import Reactant.XLA.PJRT.Plugin:
     compile_options,
     copy_to_device,
     copy_to_memory,
+    create_client,
     create_uninitialized_buffer,
     debug_string,
     default_memory,
@@ -1551,6 +1553,11 @@ function HostClient()
     return HostClient(devs, mems)
 end
 
+## HostPlugin
+struct HostPlugin <: AbstractPlugin end
+
+create_client(::HostPlugin, ::Dict{String,Any}) = HostClient()
+
 platform_name(::HostClient) = "julia-cpu"
 platform_version(::HostClient) = string(VERSION)
 process_index(::HostClient) = 0
@@ -1890,7 +1897,7 @@ function make_ifrt_client(; kwargs...)
 end
 
 function __init__()
-    plugin_api[] = make_api(HostClient)
+    plugin_api[] = make_api(HostPlugin())
 
     Reactant.Accelerators.Registration.register_backend(
         "julia-cpu";
