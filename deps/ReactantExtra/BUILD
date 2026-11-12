@@ -1113,11 +1113,6 @@ platform(
     ],
 )
 
-alias(
-    name = "libReactantExtra.so",
-    actual = "@enzyme_ad//src/enzyme_ad/jax/ReactantExtra:libReactantExtra.so",
-)
-
 cc_binary(
     name = "mlir-jl-tblgen",
     srcs = [
