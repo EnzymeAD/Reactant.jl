@@ -82,6 +82,7 @@ Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
 
 [sources]
 ReactantCore = {path = "lib/ReactantCore"}
+Reactant_jll = {url = "https://github.com/Pangoraw/Reactant_jll.jl", rev = "11cfdcccc9beede4ecce01a5e913a465baabb33e"}
 
 [extensions]
 ReactantAbstractFFTsExt = "AbstractFFTs"
