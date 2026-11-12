@@ -1359,7 +1359,9 @@ function handle(
     end
     if narrow
         U = sizeof(result.eltype) == 1 ? UInt8 : UInt16
-        copyto!(vec(out), reinterpret(result.eltype, U[w % U for w in view(words, 1:nwords)]))
+        copyto!(
+            vec(out), reinterpret(result.eltype, U[w % U for w in view(words, 1:nwords)])
+        )
     else
         bytes = view(reinterpret(UInt8, words), 1:nbytes)
         copyto!(vec(out), reinterpret(result.eltype, bytes))
