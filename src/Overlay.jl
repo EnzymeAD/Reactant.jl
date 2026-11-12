@@ -8,6 +8,19 @@
     return f
 end
 
+@reactant_overlay function to_rarray(
+    @nospecialize(x);
+    runtime::Union{Nothing,Val{:IFRT},Val{:PJRT}}=nothing,
+    track_numbers::Union{Bool,Type}=false,
+    sharding=Sharding.NoSharding(),
+    device=nothing,
+    client=nothing,
+)
+    runtime === nothing && (runtime = XLA.runtime())
+    track_numbers isa Bool && (track_numbers = track_numbers ? Number : Union{})
+    return to_traced_internal(x, track_numbers, sharding, runtime, device, client)
+end
+
 @reactant_overlay function Core.Compiler.return_type(@nospecialize(f), t::DataType)
     world = ccall(:jl_get_tls_world_age, UInt, ())
     args = Any[
