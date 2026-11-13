@@ -26,6 +26,7 @@ include("CompilationError.jl")
 include("OptimizationPasses.jl")
 include("Codegen.jl")
 include("Thunk.jl")
+include("RuntimeThunk.jl")
 
 const DEBUG_PRINT_CODEGEN = Ref(false)
 
@@ -1436,6 +1437,18 @@ function compile(ctx, f, args; kwargs...)
         ndevices,
     )
 
+    plan = if can_use_runtime_thunk(mlir_fn_res.is_sharded, client, resharded_inputs)
+        input_paths = Tuple[
+            only((
+                p[2:end] for p in Reactant.TracedUtils.get_paths(arg) if
+                length(p) > 0 && p[1] == :args
+            )) for arg in linear_args
+        ]
+        ThunkPlan(input_paths, length(linear_results))
+    else
+        nothing
+    end
+
     unflatten_code, used_shardinfo = codegen_unflatten!(
         linear_args,
         preserved_args,
@@ -1448,7 +1461,42 @@ function compile(ctx, f, args; kwargs...)
         client,
         resharded_inputs;
         concrete_args=args,
+        plan,
     )
+
+    if plan !== nothing
+        # Only the result buffers that the returned value is built from are bound to names.
+        used_results = referenced_symbols(unflatten_code)
+        flatten_code = Expr[
+            :(thunk_plan = $(intern_plan(plan))),
+            :(
+                (input_pointers, input_buffers, thunk_objects) = runtime_thunk_inputs(
+                    args, thunk_plan, donated_args_mask, donated_buffers
+                )
+            ),
+        ]
+        xla_call_code = if length(linear_results) == 0 && mlir_fn_res.is_pure
+            :(linearized_results = Tuple{XLA.PJRT.AsyncBuffer}[])
+        else
+            quote
+                linearized_results = runtime_thunk_execute(
+                    thunk.exec,
+                    thunk.device,
+                    input_pointers,
+                    input_buffers,
+                    donated_args_mask,
+                    $(length(linear_results)),
+                )
+                $(
+                    (
+                        :($name = linearized_results[$i]) for
+                        (i, name) in enumerate(concretized_res_names) if
+                        name in used_results
+                    )...
+                )
+            end
+        end
+    end
 
     for (i, name) in enumerate(linear_result_shard_info)
         if name in used_shardinfo
@@ -1456,7 +1504,9 @@ function compile(ctx, f, args; kwargs...)
         end
     end
 
-    sync_call = if compile_options.sync
+    sync_call = if plan !== nothing
+        compile_options.sync ? :(runtime_thunk_sync!(linearized_results)) : :()
+    elseif compile_options.sync
         calls = []
         for name in concretized_res_names
             push!(calls, :(XLA.synced_buffer($(name))))
