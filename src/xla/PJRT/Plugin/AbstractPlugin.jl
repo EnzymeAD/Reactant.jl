@@ -11,8 +11,8 @@ It must be stateless: its type `P` must be `Base.issingletontype(P)` with an emp
 
 ### Interface
 
-- `initialize` (optional)
-- `attributes` (optional)
+- `initialize` (defaults to doing nothing)
+- `attributes` (defaults to `()`, i.e. no attributes)
 - `Client(plugin, options)`
 - `TopologyDescription(plugin, name, options)`
 - `TopologyDescription(plugin, bytes)`

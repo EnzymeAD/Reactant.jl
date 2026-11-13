@@ -2,7 +2,7 @@
     CopyToDeviceStream
 
 A stream of chunks of host data to be copied to a device, which expects `total_bytes` bytes in total, in chunks whose
-size is a multiple of `granule_size`. It is complete once `Base.position(stream) == total_bytes`, and never changes
+size is a multiple of `granulesize`. It is complete once `Base.position(stream) == total_bytes`, and never changes
 afterwards.
 
 The C wrapper checks those conditions before calling `Base.unsafe_write`.
@@ -15,7 +15,7 @@ one to C yet.
 
 - `Base.unsafe_write`
 - `total_bytes`
-- `granule_size`
+- `granulesize`
 - `Base.position`
 """
 abstract type CopyToDeviceStream end
@@ -57,7 +57,7 @@ Base.unsafe_write(::CopyToDeviceStream, ::Ptr{Cvoid}, ::Integer)
     error = try
         total = total_bytes(stream)
         current = position(stream)
-        granule = granule_size(stream)
+        granule = granulesize(stream)
         if current == total
             throw(invalid_argument("stream is already complete"))
         elseif chunk.size % granule != 0
@@ -108,19 +108,19 @@ total_bytes(::CopyToDeviceStream)
 end
 
 """
-    granule_size(stream::CopyToDeviceStream) -> Integer
+    granulesize(stream::CopyToDeviceStream) -> Integer
 
 Return the granule size in bytes of `stream`: the size of every chunk must be a multiple of it.
 
 Backs `PJRT_CopyToDeviceStream_GranuleSize`.
 """
-granule_size(::CopyToDeviceStream)
+granulesize(::CopyToDeviceStream)
 
 @pjrt_catch_return function pjrt_copy_to_device_stream_granule_size(
     args::Ptr{CAPI.PJRT_CopyToDeviceStream_GranuleSize_Args}
 )::Ptr{CAPI.PJRT_Error}
     stream = unsafe_pointer_to_objref(unsafe_load(args.stream))::CopyToDeviceStream
-    unsafe_store!(args.granule_size_in_bytes, granule_size(stream))
+    unsafe_store!(args.granule_size_in_bytes, granulesize(stream))
     return ok()
 end
 
@@ -142,7 +142,7 @@ Base.position(::CopyToDeviceStream)
 end
 
 """
-    create_buffers_for_async_host_to_device(client::Client, specs::Vector, layouts::Vector, mem::Memory)
+    AsyncHostToDeviceTransferManager(client::Client, mem::Memory, specs::Vector, layouts::Vector)
         -> AsyncHostToDeviceTransferManager
 
 Return a new [`AsyncHostToDeviceTransferManager`](@ref) for a set of new buffers placed on memory `mem`, one per
@@ -155,7 +155,7 @@ The caller GC-roots the returned manager.
 
 Backs `PJRT_Client_CreateBuffersForAsyncHostToDevice`.
 """
-create_buffers_for_async_host_to_device(::Client, ::Vector, ::Vector, ::Memory)
+AsyncHostToDeviceTransferManager(::Client, ::Memory, ::Vector, ::Vector)
 
 @pjrt_catch_return function pjrt_client_create_buffers_for_async_host_to_device(
     args::Ptr{CAPI.PJRT_Client_CreateBuffersForAsyncHostToDevice_Args}
@@ -187,8 +187,8 @@ create_buffers_for_async_host_to_device(::Client, ::Vector, ::Vector, ::Memory)
         layouts[i] = c_layout == C_NULL ? nothing : MemoryLayout(c_layout)
     end
 
-    manager = create_buffers_for_async_host_to_device(
-        client, specs, layouts, mem
+    manager = AsyncHostToDeviceTransferManager(
+        client, mem, specs, layouts
     )::AsyncHostToDeviceTransferManager
     root!(manager)
 

@@ -5,9 +5,8 @@ A compiled program loaded on the devices of a `Client`, as returned by `compile`
 
 ### Interface
 
-- `destroy`
 - `executable`
-- `delete!`
+- `Base.delete!`
 - `isdeleted`
 - `addressable_devices`
 - `addressable_device_logical_ids`
@@ -21,22 +20,22 @@ abstract type LoadedExecutable end
 )::Ptr{CAPI.PJRT_Error}
     ptr = unsafe_load(args.executable)
     ptr == C_NULL && return ok()
-    exec = unsafe_pointer_to_objref(ptr)::LoadedExecutable
-    delete!(exec)
-    unroot!(exec)
+    loaded_exe = unsafe_pointer_to_objref(ptr)::LoadedExecutable
+    delete!(loaded_exe)
+    unroot!(loaded_exe)
     return ok()
 end
 
 """
-    executable(exec::LoadedExecutable) -> Executable
+    executable(loaded_exe::LoadedExecutable) -> Executable
 
-Return the `Executable` of `exec`, i.e. its compiled program without the devices it is loaded on.
+Return the `Executable` of `loaded_exe`, i.e. its compiled program without the devices it is loaded on.
 
 The returned executable is GC rooted until C calls `PJRT_Executable_Destroy` on it. If the same object is returned
-on every call, `exec` must keep a reference to it, since the first `PJRT_Executable_Destroy` unroots it.
+on every call, `loaded_exe` must keep a reference to it, since the first `PJRT_Executable_Destroy` unroots it.
 
 !!! warning
-`PjRtCApiLoadedExecutable` calls this when wrapping `exec` and treats any error as fatal.
+`PjRtCApiLoadedExecutable` calls this when wrapping `loaded_exe` and treats any error as fatal.
 
 Backs `PJRT_LoadedExecutable_GetExecutable`.
 """
@@ -45,19 +44,20 @@ executable(::LoadedExecutable)
 @pjrt_catch_return function pjrt_loaded_executable_get_executable(
     args::Ptr{CAPI.PJRT_LoadedExecutable_GetExecutable_Args}
 )::Ptr{CAPI.PJRT_Error}
-    exec = unsafe_pointer_to_objref(unsafe_load(args.loaded_executable))::LoadedExecutable
-    exe = root!(executable(exec)::Executable)
+    loaded_exe =
+        unsafe_pointer_to_objref(unsafe_load(args.loaded_executable))::LoadedExecutable
+    exe = root!(executable(loaded_exe)::Executable)
     unsafe_store!(args.executable, Ptr{CAPI.PJRT_Executable}(pointer_from_objref(exe)))
     return ok()
 end
 
 """
-    delete!(exec::LoadedExecutable)
+    Base.delete!(loaded_exe::LoadedExecutable)
 
-Free the runtime resources of `exec` (e.g. its compiled code) while keeping the object alive. Must be idempotent.
-After this call, `isdeleted(exec)` must return `true`.
+Free the runtime resources of `loaded_exe` (e.g. its compiled code) while keeping the object alive. Must be idempotent.
+After this call, `isdeleted(loaded_exe)` must return `true`.
 
-Also called by `PJRT_LoadedExecutable_Destroy` before `exec` is unrooted.
+Also called by `PJRT_LoadedExecutable_Destroy` before `loaded_exe` is unrooted.
 
 Backs `PJRT_LoadedExecutable_Delete`.
 """
@@ -66,15 +66,15 @@ Base.delete!(::LoadedExecutable)
 @pjrt_catch_return function pjrt_loaded_executable_delete(
     args::Ptr{CAPI.PJRT_LoadedExecutable_Delete_Args}
 )::Ptr{CAPI.PJRT_Error}
-    exec = unsafe_pointer_to_objref(unsafe_load(args.executable))::LoadedExecutable
-    delete!(exec)
+    loaded_exe = unsafe_pointer_to_objref(unsafe_load(args.executable))::LoadedExecutable
+    delete!(loaded_exe)
     return ok()
 end
 
 """
-    isdeleted(exec::LoadedExecutable) -> Bool
+    isdeleted(loaded_exe::LoadedExecutable) -> Bool
 
-Return whether the runtime resources of `exec` have been freed with `delete!`.
+Return whether the runtime resources of `loaded_exe` have been freed with `Base.delete!`.
 
 Backs `PJRT_LoadedExecutable_IsDeleted`.
 """
@@ -83,24 +83,24 @@ isdeleted(::LoadedExecutable)
 @pjrt_catch_return function pjrt_loaded_executable_is_deleted(
     args::Ptr{CAPI.PJRT_LoadedExecutable_IsDeleted_Args}
 )::Ptr{CAPI.PJRT_Error}
-    exec = unsafe_pointer_to_objref(unsafe_load(args.executable))::LoadedExecutable
-    pred = isdeleted(exec)::Bool
+    loaded_exe = unsafe_pointer_to_objref(unsafe_load(args.executable))::LoadedExecutable
+    pred = isdeleted(loaded_exe)::Bool
     unsafe_store!(args.is_deleted, pred)
     return ok()
 end
 
 """
-    addressable_devices(exec::LoadedExecutable) -> Vector{Device}
+    addressable_devices(loaded_exe::LoadedExecutable) -> Vector{Device}
 
-Return the devices that `exec` runs on, in the order used by the argument and output lists of `execute`.
+Return the devices that `loaded_exe` runs on, in the order used by the argument and output lists of `execute`.
 
-The returned value doesn't need to be owned by `exec`, but it must be the same on every call: the C wrapper calls it at
-most once per `exec` and keeps a copy for as long as `exec` is alive, since C keeps pointers to it. The objects in it
-must be the same ones on every call too, and the same ones that other functions return, since C identifies them by
-pointer.
+The returned value doesn't need to be owned by `loaded_exe`, but it must be the same on every call: the C wrapper calls
+it at most once per `loaded_exe` and keeps a copy for as long as `loaded_exe` is alive, since C keeps pointers to it.
+The objects in it must be the same ones on every call too, and the same ones that other functions return, since C
+identifies them by pointer.
 
 !!! warning
-`PjRtCApiLoadedExecutable` calls this when wrapping `exec` and treats any error as fatal.
+`PjRtCApiLoadedExecutable` calls this when wrapping `loaded_exe` and treats any error as fatal.
 
 Backs `PJRT_LoadedExecutable_AddressableDevices`.
 """
@@ -114,9 +114,9 @@ const loaded_executable_addressable_devices_cache = WeakKeyIdDict{
 @pjrt_catch_return function pjrt_loaded_executable_addressable_devices(
     args::Ptr{CAPI.PJRT_LoadedExecutable_AddressableDevices_Args}
 )::Ptr{CAPI.PJRT_Error}
-    exec = unsafe_pointer_to_objref(unsafe_load(args.executable))::LoadedExecutable
-    devs = get!(loaded_executable_addressable_devices_cache, exec) do
-        collect(Device, addressable_devices(exec))
+    loaded_exe = unsafe_pointer_to_objref(unsafe_load(args.executable))::LoadedExecutable
+    devs = get!(loaded_executable_addressable_devices_cache, loaded_exe) do
+        collect(Device, addressable_devices(loaded_exe))
     end
     unsafe_store!(args.addressable_devices, Ptr{Ptr{CAPI.PJRT_Device}}(pointer(devs)))
     unsafe_store!(args.num_addressable_devices, length(devs))
@@ -124,15 +124,16 @@ const loaded_executable_addressable_devices_cache = WeakKeyIdDict{
 end
 
 """
-    addressable_device_logical_ids(exec::LoadedExecutable) -> Vector{CAPI.PJRT_LogicalDeviceIds}
+    addressable_device_logical_ids(loaded_exe::LoadedExecutable) -> Vector{CAPI.PJRT_LogicalDeviceIds}
 
-Return the logical (replica, partition) ids, 0-based, of each device in `addressable_devices(exec)`, in the same order.
+Return the logical (replica, partition) ids, 0-based, of each device in `addressable_devices(loaded_exe)`, in the
+same order.
 
-The returned value doesn't need to be owned by `exec`, but it must be the same on every call: the C wrapper calls it at
-most once per `exec` and keeps a copy for as long as `exec` is alive, since C keeps pointers to it.
+The returned value doesn't need to be owned by `loaded_exe`, but it must be the same on every call: the C wrapper calls
+it at most once per `loaded_exe` and keeps a copy for as long as `loaded_exe` is alive, since C keeps pointers to it.
 
 !!! warning
-Some versions of `PjRtCApiLoadedExecutable` call this when wrapping `exec` and treat any error as fatal.
+Some versions of `PjRtCApiLoadedExecutable` call this when wrapping `loaded_exe` and treat any error as fatal.
 
 Backs `PJRT_LoadedExecutable_AddressableDeviceLogicalIds`.
 """
@@ -146,9 +147,9 @@ const addressable_device_logical_ids_cache = WeakKeyIdDict{
 @pjrt_catch_return function pjrt_loaded_executable_addressable_device_logical_ids(
     args::Ptr{CAPI.PJRT_LoadedExecutable_AddressableDeviceLogicalIds_Args}
 )::Ptr{CAPI.PJRT_Error}
-    exec = unsafe_pointer_to_objref(unsafe_load(args.executable))::LoadedExecutable
-    ids = get!(addressable_device_logical_ids_cache, exec) do
-        collect(CAPI.PJRT_LogicalDeviceIds, addressable_device_logical_ids(exec))
+    loaded_exe = unsafe_pointer_to_objref(unsafe_load(args.executable))::LoadedExecutable
+    ids = get!(addressable_device_logical_ids_cache, loaded_exe) do
+        collect(CAPI.PJRT_LogicalDeviceIds, addressable_device_logical_ids(loaded_exe))
     end
     unsafe_store!(args.addressable_device_logical_ids, pointer(ids))
     unsafe_store!(args.num_addressable_device_logical_ids, length(ids))
@@ -156,15 +157,15 @@ const addressable_device_logical_ids_cache = WeakKeyIdDict{
 end
 
 """
-    device_assignment(exec::LoadedExecutable) -> Union{Nothing,Reactant.Proto.xla.DeviceAssignmentProto}
+    device_assignment(loaded_exe::LoadedExecutable) -> Union{Nothing,Reactant.Proto.xla.DeviceAssignmentProto}
 
-Return the device assignment that `exec` was compiled for, which maps every (replica, partition) pair to a device
-id, or `nothing` if `exec` is portable (i.e. it runs on whichever device is given to `execute`).
+Return the device assignment that `loaded_exe` was compiled for, which maps every (replica, partition) pair to a device
+id, or `nothing` if `loaded_exe` is portable (i.e. it runs on whichever device is given to `execute`).
 
 It usually is `executable_build_options.device_assignment` of the `CompileOptionsProto` given to `compile`.
 
 !!! warning
-`PjRtCApiLoadedExecutable` calls this when wrapping `exec` and treats any error as fatal.
+`PjRtCApiLoadedExecutable` calls this when wrapping `loaded_exe` and treats any error as fatal.
 
 Backs `PJRT_LoadedExecutable_GetDeviceAssignment`.
 """
@@ -173,8 +174,10 @@ device_assignment(::LoadedExecutable)
 @pjrt_catch_return function pjrt_loaded_executable_get_device_assignment(
     args::Ptr{CAPI.PJRT_LoadedExecutable_GetDeviceAssignment_Args}
 )::Ptr{CAPI.PJRT_Error}
-    exec = unsafe_pointer_to_objref(unsafe_load(args.executable))::LoadedExecutable
-    proto = device_assignment(exec)::Union{Nothing,Reactant.Proto.xla.DeviceAssignmentProto}
+    loaded_exe = unsafe_pointer_to_objref(unsafe_load(args.executable))::LoadedExecutable
+    proto = device_assignment(
+        loaded_exe
+    )::Union{Nothing,Reactant.Proto.xla.DeviceAssignmentProto}
 
     # XLA calls the deleter even if there is no device assignment
     deleter = @cfunction(pjrt_serialized_bytes_deleter, Cvoid, (Ptr{Cvoid},))
@@ -196,16 +199,16 @@ end
 
 """
     execute(
-        exec::LoadedExecutable, arguments::Vector{Vector{Buffer}}, dev::Union{Nothing,Device},
+        loaded_exe::LoadedExecutable, arguments::Vector{Vector{Buffer}}, dev::Union{Nothing,Device},
         context::Union{Nothing,ExecuteContext},
     ) -> Vector{Vector{Buffer}}
 
-Run `exec` and return its outputs.
+Run `loaded_exe` and return its outputs.
 
-`arguments[i]` holds the input buffers for the `i`-th device of `addressable_devices(exec)`. The result must follow the
-same layout: one vector per device, each with as many new buffers as `exec` has outputs.
+`arguments[i]` holds the input buffers for the `i`-th device of `addressable_devices(loaded_exe)`. The result must
+follow the same layout: one vector per device, each with as many new buffers as `loaded_exe` has outputs.
 
-If `dev` is not `nothing`, run only on `dev` (one of `addressable_devices(exec)`). Then `arguments` and the result
+If `dev` is not `nothing`, run only on `dev` (one of `addressable_devices(loaded_exe)`). Then `arguments` and the result
 have a single entry, for `dev`.
 
 `context` is the [`ExecuteContext`](@ref) of this execution (e.g. with the user data for its FFI handlers), or `nothing`
@@ -224,8 +227,8 @@ execute(::LoadedExecutable, args...)
 @pjrt_catch_return function pjrt_loaded_executable_execute(
     args::Ptr{CAPI.PJRT_LoadedExecutable_Execute_Args}
 )::Ptr{CAPI.PJRT_Error}
-    exec = unsafe_pointer_to_objref(unsafe_load(args.executable))::LoadedExecutable
-    isdeleted(exec) && throw(invalid_argument("executable is deleted"))
+    loaded_exe = unsafe_pointer_to_objref(unsafe_load(args.executable))::LoadedExecutable
+    isdeleted(loaded_exe) && throw(invalid_argument("executable is deleted"))
 
     num_devices = unsafe_load(args.num_devices)
     num_args = unsafe_load(args.num_args)
@@ -260,7 +263,7 @@ execute(::LoadedExecutable, args...)
         unsafe_pointer_to_objref(context_ptr)::ExecuteContext
     end
 
-    outputs = execute(exec, arguments, dev, context)::Vector{Vector{Buffer}}
+    outputs = execute(loaded_exe, arguments, dev, context)::Vector{Vector{Buffer}}
     if length(outputs) != num_devices
         msg = "`execute` returned outputs for $(length(outputs)) devices, but $num_devices were expected"
         throw(Error(CAPI.PJRT_Error_Code_INTERNAL, msg))

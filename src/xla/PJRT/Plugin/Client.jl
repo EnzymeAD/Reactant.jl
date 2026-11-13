@@ -1,15 +1,15 @@
 """
     Client
 
-## Interface
+### Interface
 
 - `platform_name`
 - `platform_version`
 - `process_index`
 - `devices`
 - `addressable_devices`
-- `lookup_device`
-- `lookup_addressable_device`
+- `lookup_device` (defaults to a linear search over `devices`)
+- `lookup_addressable_device` (defaults to a linear search over `addressable_devices`)
 - `addressable_memories`
 - `compile`
 - `default_device_assignment`
@@ -17,11 +17,11 @@
 - `Buffer(client, dev, mem, data::Ptr, ...)`
 - `Buffer(client, dev, mem, undef, ...)`
 - `Buffer(client, mem, error, ...)`
+- `AsyncHostToDeviceTransferManager(client, mem, specs, layouts)`
 - `alias_buffer`
 - `update_global_process_info!`
 - `dma_map!`
 - `dma_unmap!`
-- `create_buffers_for_async_host_to_device`
 - `topology_description`
 
 !!! info
@@ -475,10 +475,10 @@ end
     options = unsafe_load_compile_options(
         unsafe_load(args.compile_options), unsafe_load(args.compile_options_size)
     )
-    loaded_exec = compile(client, mlir_mod, options)::LoadedExecutable
-    root!(loaded_exec)
+    loaded_exe = compile(client, mlir_mod, options)::LoadedExecutable
+    root!(loaded_exe)
     unsafe_store!(
-        args.executable, Ptr{CAPI.PJRT_LoadedExecutable}(pointer_from_objref(loaded_exec))
+        args.executable, Ptr{CAPI.PJRT_LoadedExecutable}(pointer_from_objref(loaded_exe))
     )
     return ok()
 end
@@ -521,11 +521,11 @@ load(::Client, ::Vector{UInt8}, ::Any)
         )
     end
 
-    loaded_exec = load(client, bytes, options)::LoadedExecutable
-    root!(loaded_exec)
+    loaded_exe = load(client, bytes, options)::LoadedExecutable
+    root!(loaded_exe)
     unsafe_store!(
         args.loaded_executable,
-        Ptr{CAPI.PJRT_LoadedExecutable}(pointer_from_objref(loaded_exec)),
+        Ptr{CAPI.PJRT_LoadedExecutable}(pointer_from_objref(loaded_exe)),
     )
     return ok()
 end
@@ -596,11 +596,11 @@ load(::Client, ::Executable, ::Any)
     options = unsafe_load_compile_options(
         unsafe_load(args.compile_options), unsafe_load(args.compile_options_size)
     )
-    loaded_exec = load(client, exe, options)::LoadedExecutable
-    root!(loaded_exec)
+    loaded_exe = load(client, exe, options)::LoadedExecutable
+    root!(loaded_exe)
     unsafe_store!(
         args.loaded_executable,
-        Ptr{CAPI.PJRT_LoadedExecutable}(pointer_from_objref(loaded_exec)),
+        Ptr{CAPI.PJRT_LoadedExecutable}(pointer_from_objref(loaded_exe)),
     )
     return ok()
 end

@@ -3,13 +3,12 @@
 
 ### Interface
 
-- `destroy`
-- `delete!`
+- `Base.delete!`
 - `isdeleted`
 - `Base.eltype`
 - `pjrt_eltype` (defaults to `pjrt_eltype(Base.eltype(buffer))`)
 - `Base.size`
-- `unpadded_size`
+- `unpadded_size` (defaults to `Base.size`)
 - `dynamic_dimension_indices`
 - `memory_layout`
 - `Base.sizeof`
@@ -17,11 +16,11 @@
 - `memory`
 - `copyto(::Device, ::Buffer)`
 - `copyto(::Memory, ::Buffer)`
-- `to_host_buffer`
+- `to_host_buffer!`
 - `Base.unsafe_copyto!`
 - `bitcast!`
 - `donate!`
-- `opaque_pointer`
+- `opaque_pointer` (defaults to `Base.pointer`)
 - `incref!`
 - `decref!`
 - `isoncpu`
@@ -44,7 +43,7 @@ abstract type Buffer end
 end
 
 """
-    delete!(buffer::Buffer)
+    Base.delete!(buffer::Buffer)
 
 Free the data of `buffer` while keeping its metadata alive. Must be idempotent.
 After this call, `isdeleted(buffer)` must return `true`.
@@ -64,7 +63,7 @@ end
 """
     isdeleted(buffer::Buffer) -> Bool
 
-Return whether the data of `buffer` has been freed with `delete!`.
+Return whether the data of `buffer` has been freed with `Base.delete!`.
 
 Backs `PJRT_Buffer_IsDeleted`.
 """
@@ -380,7 +379,7 @@ copyto(::Memory, ::Buffer)
 end
 
 """
-    to_host_buffer(dst::Ptr, buffer::Buffer)
+    to_host_buffer!(dst::Ptr, buffer::Buffer)
 
 Copy the data of `buffer` to the host memory pointed by `dst`, which must hold at least `Base.sizeof(buffer)` bytes.
 
@@ -389,7 +388,7 @@ The copy is _currently_ synchronous.
 
 Backs `PJRT_Buffer_ToHostBuffer`.
 """
-to_host_buffer(::Ptr, ::Buffer)
+to_host_buffer!(::Ptr, ::Buffer)
 
 @pjrt_catch_return function pjrt_buffer_to_host_buffer(
     args::Ptr{CAPI.PJRT_Buffer_ToHostBuffer_Args}
@@ -427,7 +426,7 @@ to_host_buffer(::Ptr, ::Buffer)
         )
     end
 
-    to_host_buffer(dst, buffer)
+    to_host_buffer!(dst, buffer)
 
     event = root!(Event())
     notify(event)
@@ -660,7 +659,8 @@ end
     incref!(buffer::Buffer)
 
 Increment the number of external references to `buffer`, which mean that its data is shared with another framework
-(e.g. through DLPack). While there is any, the data of `buffer` must be neither freed (even by `delete!`) nor moved.
+(e.g. through DLPack). While there is any, the data of `buffer` must be neither freed (even by `Base.delete!`) nor
+moved.
 
 Backs `PJRT_Buffer_IncreaseExternalReferenceCount`.
 """

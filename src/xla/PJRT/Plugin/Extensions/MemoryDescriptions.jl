@@ -11,7 +11,7 @@ has. XLA uses them to place data in non-default memories when compiling ahead of
 
 Additionally, [`DeviceDescription`](@ref) must implement:
 - [`memory_descriptions`](@ref)
-- [`default_memory_description`](@ref) (optional, defaults to `nothing`)
+- [`default_memory_description`](@ref) (defaults to `nothing`)
 """
 abstract type MemoryDescription end
 

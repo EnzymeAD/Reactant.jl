@@ -41,7 +41,6 @@ using Base: unsafe_convert
 using ..Reactant: Reactant, WeakKeyIdDict
 using Reactant.XLA.CAPI: CAPI, csizeof
 using Reactant.MLIR: IR, API
-import Serialization: serialize
 
 macro pjrt_catch_return(fdef)
     Meta.isexpr(fdef, :function) ||
@@ -74,8 +73,8 @@ function alias_buffer end
 function async_tracking_event end
 function attributes end
 function bitcast! end
-function buffer_size end
 function buffercount end
+function buffersize end
 function canonical_shape end
 function clear_memory_stats! end
 function codesize end
@@ -84,7 +83,6 @@ function compile_options end
 function compiled_memory_stats end
 function copyto end
 function cost_analysis end
-function create_buffers_for_async_host_to_device end
 function debug_string end
 function decref! end
 function default_device_assignment end
@@ -102,7 +100,7 @@ function dynamic_dimension_indices end
 function executable end
 function execute end
 function fingerprint end
-function granule_size end
+function granulesize end
 function id end
 function incref! end
 function initialize end
@@ -136,8 +134,9 @@ function poison_execution! end
 function process_index end
 function ready_event end
 function retrieve_buffer! end
+function serialize end
 function set_buffer_error! end
-function to_host_buffer end
+function to_host_buffer! end
 function topology_description end
 function total_bytes end
 function transfer_data! end
@@ -161,6 +160,11 @@ end
 unroot!(ptr::Ptr) = unroot!(unsafe_pointer_to_objref(ptr))
 function unroot!(obj)
     @lock gc_roots_lock delete!(gc_roots, obj)
+    return nothing
+end
+
+function pjrt_serialized_bytes_deleter(ptr::Ptr{Cvoid})::Cvoid
+    ptr != C_NULL && unroot!(ptr)
     return nothing
 end
 

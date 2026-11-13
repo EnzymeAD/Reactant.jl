@@ -1,7 +1,7 @@
 """
     Memory
 
-### Inteface
+### Interface
 
 - `id`
 - `kind`

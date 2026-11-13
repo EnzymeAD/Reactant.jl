@@ -1,7 +1,7 @@
 """
     AsyncHostToDeviceTransferManager
 
-Manages the transfer of host data to a set of new buffers, as returned by `create_buffers_for_async_host_to_device`.
+Manages the transfer of host data to a set of new buffers.
 
 Buffers are identified by their 1-based index (C's 0-based index + 1), which the C wrapper checks to be within
 `1:buffercount(manager)`. Once a buffer has received its last transfer, or an error with `set_buffer_error!`, no more
@@ -16,11 +16,15 @@ they must be done reading the host data by then.
 - `buffercount`
 - `device`
 - `retrieve_buffer!`
-- `buffer_size`
+- `buffersize`
 - `transfer_data!`
 - `transfer_literal!`
 - `set_buffer_error!`
 - `add_metadata!`
+
+!!! info
+The `AsyncHostToDeviceTransferManager(client, mem, specs, layouts)` constructor (see [`Client`](@ref)) returns the
+plugin's own subtype of `AsyncHostToDeviceTransferManager`, chosen by dispatch on its `client` and `mem` arguments.
 """
 abstract type AsyncHostToDeviceTransferManager end
 
@@ -103,13 +107,13 @@ retrieve_buffer!(::AsyncHostToDeviceTransferManager, ::Int)
 end
 
 """
-    buffer_size(manager::AsyncHostToDeviceTransferManager, index::Int) -> Integer
+    buffersize(manager::AsyncHostToDeviceTransferManager, index::Int) -> Integer
 
 Return the on-device size in bytes of the `index`-th buffer of `manager`.
 
 Backs `PJRT_AsyncHostToDeviceTransferManager_BufferSize`.
 """
-buffer_size(::AsyncHostToDeviceTransferManager, ::Int)
+buffersize(::AsyncHostToDeviceTransferManager, ::Int)
 
 @pjrt_catch_return function pjrt_async_host_to_device_transfer_manager_buffer_size(
     args::Ptr{CAPI.PJRT_AsyncHostToDeviceTransferManager_BufferSize_Args}
@@ -117,7 +121,7 @@ buffer_size(::AsyncHostToDeviceTransferManager, ::Int)
     ptr = unsafe_load(args.transfer_manager)
     manager = unsafe_pointer_to_objref(ptr)::AsyncHostToDeviceTransferManager
     index = checked_buffer_index(manager, unsafe_load(args.buffer_index))
-    unsafe_store!(args.buffer_size, buffer_size(manager, index))
+    unsafe_store!(args.buffer_size, buffersize(manager, index))
     return ok()
 end
 
@@ -127,7 +131,7 @@ end
 Copy `size` bytes of host memory at `data` into the `index`-th buffer of `manager`, starting at byte `offset` of its
 on-device data. `data` is already laid out in the on-device format (e.g. as copied by
 `Base.unsafe_copyto!(dst, buffer, offset, nbytes)`). The C wrapper checks that the range is within
-`buffer_size(manager, index)`.
+`buffersize(manager, index)`.
 
 If `is_last`, the buffer becomes ready once the copy is done, and no more transfers into it are made.
 
@@ -144,7 +148,7 @@ transfer_data!(::AsyncHostToDeviceTransferManager, ::Int, args...)
     offset = unsafe_load(args.offset)
     transfer_size = unsafe_load(args.transfer_size)
 
-    dst_size = buffer_size(manager, index)
+    dst_size = buffersize(manager, index)
     if offset < 0 || transfer_size < 0 || offset + transfer_size > dst_size
         throw(
             invalid_argument(
