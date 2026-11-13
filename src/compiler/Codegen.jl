@@ -1376,12 +1376,12 @@ function codegen_unflatten!(
     if plan !== nothing
         # the reads and writes are carried out by the runtime thunk functions
         body_code = Expr[
-            :(alias_values = runtime_thunk_pre_reads(args, thunk_plan)),
+            :(alias_values = runtime_thunk_pre_reads(thunk_plan, thunk_objects)),
             unresharded_code...,
             resultgen_code...,
             :(result = $result_code),
             :(runtime_thunk_write_back!(
-                args, thunk_plan, linearized_results, alias_values
+                thunk_plan, thunk_objects, linearized_results, alias_values
             )),
         ]
         return (body_code, used_shardinfo)

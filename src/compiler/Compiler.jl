@@ -1470,7 +1470,7 @@ function compile(ctx, f, args; kwargs...)
         flatten_code = Expr[
             :(thunk_plan = $(intern_plan(plan))),
             :(
-                (input_pointers, input_buffers) = runtime_thunk_inputs(
+                (input_pointers, input_buffers, thunk_objects) = runtime_thunk_inputs(
                     args, thunk_plan, donated_args_mask, donated_buffers
                 )
             ),
