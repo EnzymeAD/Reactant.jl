@@ -89,10 +89,8 @@ if BACKEND == "julia-cpu"
         # profiler and allocator statistics are not implemented
         "core/profiling",
         "core/compile",
-        # requires extensions which are not implemented yet (use CopyFromBuffer)
-        "core/layout",
+        # requires extensions which are not implemented yet
         "core/ops",
-        "core/enums",
         "core/array_ops",
         "nn/nnlib",
     )
