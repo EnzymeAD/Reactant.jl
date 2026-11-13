@@ -96,7 +96,7 @@ function devices end
 function dma_map! end
 function dma_unmap! end
 function donate! end
-function dynamic_dimension_indices end
+function dynamic_dims end
 function executable end
 function execute end
 function fingerprint end

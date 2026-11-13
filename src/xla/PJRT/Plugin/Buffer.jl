@@ -9,7 +9,7 @@
 - `pjrt_eltype` (defaults to `pjrt_eltype(Base.eltype(buffer))`)
 - `Base.size`
 - `unpadded_size` (defaults to `Base.size`)
-- `dynamic_dimension_indices`
+- `dynamic_dims`
 - `memory_layout`
 - `Base.sizeof`
 - `device`
@@ -166,26 +166,34 @@ const unpadded_size_cache = WeakKeyIdDict{Buffer,Vector{Int64}}()
 end
 
 """
-    dynamic_dimension_indices(buffer::Buffer) -> Vector{Csize_t}
+    dynamic_dims(buffer::Buffer) -> Vector{Int}
 
-Return the 0-based indices of the dynamically-sized dimensions of `buffer`, or an empty vector if all are static.
+Return the 1-based indices of the dynamically-sized dimensions of `buffer`, or an empty vector if all are static. The
+C wrapper converts them to the 0-based indices that C expects.
 
 The returned value doesn't need to be owned by `buffer`, but it must be the same on every call: the C wrapper calls it
 at most once per `buffer` and keeps a copy for as long as `buffer` is alive, since C keeps pointers to it.
 
 Backs `PJRT_Buffer_DynamicDimensionIndices`.
 """
-dynamic_dimension_indices(::Buffer)
+dynamic_dims(::Buffer)
 
 # C borrows the vector, so it is kept for as long as the buffer is alive
-const dynamic_dimension_indices_cache = WeakKeyIdDict{Buffer,Vector{Csize_t}}()
+const dynamic_dims_cache = WeakKeyIdDict{Buffer,Vector{Csize_t}}()
 
 @pjrt_catch_return function pjrt_buffer_dynamic_dimension_indices(
     args::Ptr{CAPI.PJRT_Buffer_DynamicDimensionIndices_Args}
 )::Ptr{CAPI.PJRT_Error}
     buffer = unsafe_pointer_to_objref(unsafe_load(args.buffer))::Buffer
-    indices = get!(dynamic_dimension_indices_cache, buffer) do
-        collect(Csize_t, dynamic_dimension_indices(buffer))
+    indices = get!(dynamic_dims_cache, buffer) do
+        dims = dynamic_dims(buffer)
+        n = length(size(buffer))
+        if !all(d -> 1 <= d <= n, dims)
+            msg = "`dynamic_dims` returned $dims, but the dimensions of the buffer are 1:$n"
+            throw(Error(CAPI.PJRT_Error_Code_INTERNAL, msg))
+        end
+        # C expects 0-based indices
+        Csize_t[d - 1 for d in dims]
     end
     unsafe_store!(args.dynamic_dim_indices, pointer(indices))
     unsafe_store!(args.num_dynamic_dims, length(indices))
