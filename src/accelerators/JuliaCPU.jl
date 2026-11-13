@@ -1845,6 +1845,7 @@ function compile!(client::HostClient, code, options)
         exec::HostLoadedExecutable{$(QuoteNode(tag))},
         arguments::Vector{Vector{Buffer}},
         dev,
+        _context,
     )
         return $body
     end
