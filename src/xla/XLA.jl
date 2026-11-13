@@ -110,21 +110,35 @@ function Base.setproperty!(bs::AbstractBackendState, sym::Symbol, val)
     return setfield!(bs, sym, val)
 end
 
+const global_pjrt_backend_state = PJRTBackendState()
+const global_ifrt_backend_state = IFRTBackendState()
+const PREFERRED_DEFAULT_BACKEND = Ref{Union{Nothing,String}}(nothing)
+
 const global_backend_state = if REACTANT_XLA_RUNTIME == "PJRT"
-    PJRTBackendState()
+    global_pjrt_backend_state
 elseif REACTANT_XLA_RUNTIME == "IFRT"
-    IFRTBackendState()
+    global_ifrt_backend_state
 else
     error("Unsupported REACTANT_XLA_RUNTIME (set via `xla_runtime` preference): \
            $(REACTANT_XLA_RUNTIME)")
 end
 const global_state = State()
 
+backend_state() = global_backend_state
+backend_state(::Val{:PJRT}) = global_pjrt_backend_state
+backend_state(::Val{:IFRT}) = global_ifrt_backend_state
+
+struct _InitDefaultClientsThunk{BS<:AbstractBackendState}
+    bs::BS
+end
+(f::_InitDefaultClientsThunk)() = initialize_default_clients!(f.bs)
+
 const is_live = Threads.Atomic{Bool}(true)
 
 function cleanup_backend_state()
-    @debug "[GETPID $(getpid())] Cleanup Backend State, $global_backend_state, $global_state"
-    finalize_backend_state(global_backend_state)
+    @debug "[GETPID $(getpid())] Cleanup Backend State, $global_pjrt_backend_state, $global_ifrt_backend_state, $global_state"
+    finalize_backend_state(global_pjrt_backend_state)
+    finalize_backend_state(global_ifrt_backend_state)
     shutdown(global_state)
     is_live[] = false
     return nothing
@@ -176,24 +190,29 @@ function validate_backend_name(backend::String)
     throw(ArgumentError(msg))
 end
 
-function client(backend::String)
+function client(backend::String, bs::AbstractBackendState=global_backend_state)
     validate_backend_name(backend)
 
     if backend == "gpu"
         for b in GPU_BACKEND_NAMES
-            if haskey(global_backend_state.clients, b)
-                return global_backend_state.clients[b]
+            if haskey(bs.clients, b)
+                return bs.clients[b]
             end
         end
 
         # If none found, check if we've attempted all of them
         gpu_backends = normalize_backend_name("gpu")
-        if any(b ∉ global_backend_state.attempted_backends for b in gpu_backends)
-            with(BACKENDS_TO_INITIALIZE => gpu_backends) do
-                initialize_default_clients!(global_backend_state)
+        missing_gpu_backend = false
+        for b in gpu_backends
+            if b ∉ bs.attempted_backends
+                missing_gpu_backend = true
+                break
             end
-            union!(global_backend_state.attempted_backends, gpu_backends)
-            return client("gpu") # Try again
+        end
+        if missing_gpu_backend
+            with(_InitDefaultClientsThunk(bs), BACKENDS_TO_INITIALIZE => gpu_backends)
+            union!(bs.attempted_backends, gpu_backends)
+            return client("gpu", bs) # Try again
         end
 
         registered_gpu_backends = filter(in(registered_backend_names()), GPU_BACKEND_NAMES)
@@ -212,39 +231,39 @@ function client(backend::String)
         end
     end
 
-    if (
-        !haskey(global_backend_state.clients, backend) &&
-        backend ∉ global_backend_state.attempted_backends
-    )
+    if (!haskey(bs.clients, backend) && backend ∉ bs.attempted_backends)
         backends = normalize_backend_name(backend)
-        with(BACKENDS_TO_INITIALIZE => backends) do
-            initialize_default_clients!(global_backend_state)
-        end
-        union!(global_backend_state.attempted_backends, backends)
+        with(_InitDefaultClientsThunk(bs), BACKENDS_TO_INITIALIZE => backends)
+        union!(bs.attempted_backends, backends)
     end
 
-    haskey(global_backend_state.clients, backend) ||
+    haskey(bs.clients, backend) ||
         error("Initialization of the \"$(backend)\" backend failed, see the error(s) \
                logged above.")
-    return global_backend_state.clients[backend]
+    return bs.clients[backend]
+end
+function client(backend::String, rt::Union{Val{:PJRT},Val{:IFRT}})
+    return client(backend, backend_state(rt))
 end
 
-function default_backend()
-    default_client = global_backend_state.default_client
+function default_backend(bs::AbstractBackendState=global_backend_state)
+    preferred = PREFERRED_DEFAULT_BACKEND[]
+    if !getfield(bs, :initialized) && preferred !== nothing
+        bs.default_client = client(preferred, bs)
+        return bs.default_client
+    end
+
+    default_client = bs.default_client
     Reactant.Accelerators.Registration.is_null_client(default_client) ||
         return default_client
 
     # A previous (filtered) initialization, e.g. `set_default_backend("gpu")` on a machine
     # without a GPU, didn't yield any functional client. Try the backends that we haven't
     # attempted yet before giving up.
-    remaining = Set(
-        filter(∉(global_backend_state.attempted_backends), registered_backend_names())
-    )
+    remaining = Set(filter(∉(bs.attempted_backends), registered_backend_names()))
     if !isempty(remaining)
-        with(BACKENDS_TO_INITIALIZE => remaining) do
-            initialize_default_clients!(global_backend_state)
-        end
-        default_client = global_backend_state.default_client
+        with(_InitDefaultClientsThunk(bs), BACKENDS_TO_INITIALIZE => remaining)
+        default_client = bs.default_client
     end
 
     Reactant.Accelerators.Registration.is_null_client(default_client) &&
@@ -252,7 +271,9 @@ function default_backend()
                $(join(registered_backend_names(), ", "))). See the error(s) logged above.")
     return default_client
 end
+default_backend(rt::Union{Val{:PJRT},Val{:IFRT}}) = default_backend(backend_state(rt))
 default_device() = default_device(default_backend())
+default_device(rt::Union{Val{:PJRT},Val{:IFRT}}) = default_device(default_backend(rt))
 process_index() = process_index(default_backend())
 
 runtime(::Nothing) = runtime()
@@ -262,14 +283,44 @@ runtime(::IFRTBackendState) = Val(:IFRT)
 runtime(::PJRT.Client) = Val(:PJRT)
 runtime(::IFRT.Client) = Val(:IFRT)
 
-function set_default_backend(backend::AbstractClient)
-    global_backend_state.default_client = backend
+function set_default_backend(backend::PJRT.Client)
+    global_pjrt_backend_state.default_client = backend
+    global_backend_state === global_pjrt_backend_state &&
+        (PREFERRED_DEFAULT_BACKEND[] = nothing)
+    return nothing
+end
+
+function set_default_backend(backend::IFRT.Client)
+    global_ifrt_backend_state.default_client = backend
+    global_backend_state === global_ifrt_backend_state &&
+        (PREFERRED_DEFAULT_BACKEND[] = nothing)
+    return nothing
+end
+
+struct _SetDefaultBackendThunk{BS<:AbstractBackendState}
+    bs::BS
+    backend::String
+end
+function (f::_SetDefaultBackendThunk)()
+    f.bs.default_client = client(f.backend, f.bs)
     return nothing
 end
 
 function set_default_backend(backend::String)
-    with(BACKENDS_TO_INITIALIZE => normalize_backend_name(backend)) do
-        global_backend_state.default_client = client(backend)
+    validate_backend_name(backend)
+    PREFERRED_DEFAULT_BACKEND[] = backend
+    backends = normalize_backend_name(backend)
+    with(
+        _SetDefaultBackendThunk(global_backend_state, backend),
+        BACKENDS_TO_INITIALIZE => backends,
+    )
+    other_bs = if global_backend_state === global_pjrt_backend_state
+        global_ifrt_backend_state
+    else
+        global_pjrt_backend_state
+    end
+    if getfield(other_bs, :initialized)
+        with(_SetDefaultBackendThunk(other_bs, backend), BACKENDS_TO_INITIALIZE => backends)
     end
     return nothing
 end
@@ -278,9 +329,12 @@ function update_global_state!(args...; kwargs...)
     update!(global_state, args...; kwargs...)
     # We conditionally initialize for now, since a lot of options that are set are not
     # necessarily supported by PJRT.
-    if global_backend_state.initialized
+    if getfield(global_pjrt_backend_state, :initialized)
         # We need to update the clients based on the new state
-        initialize_default_clients!(global_backend_state)
+        initialize_default_clients!(global_pjrt_backend_state)
+    end
+    if getfield(global_ifrt_backend_state, :initialized)
+        initialize_default_clients!(global_ifrt_backend_state)
     end
     return nothing
 end

@@ -69,7 +69,7 @@ end
     idx::Union{Int,Nothing}=nothing,
     device::Union{Nothing,Device}=nothing,
 )
-    client = client === nothing ? XLA.default_backend() : client
+    client = client === nothing ? XLA.default_backend(Val(:PJRT)) : client
 
     if device === nothing
         if idx === nothing

@@ -1,6 +1,8 @@
 abstract type AbstractClient end
 
-Base.:(==)(a::AbstractClient, b::AbstractClient) = a.client == b.client
+function Base.:(==)(a::AbstractClient, b::AbstractClient)
+    return typeof(a) === typeof(b) && a.client == b.client
+end
 
 function client end
 function free_client end
