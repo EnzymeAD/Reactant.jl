@@ -135,9 +135,9 @@ function memory_descriptions end
 function memory_layout end
 function memory_space_kind_ids end
 function name end
-function num_outputs end
-function num_partitions end
-function num_replicas end
+function noutputs end
+function npartitions end
+function nreplicas end
 function on_device_size_in_bytes end
 function opaque_device_memory_data_pointer end
 function optimized_program end
@@ -2173,9 +2173,9 @@ A compiled program, independent of the devices it runs on. Returned by `executab
 ### Interface
 
 - `name`
-- `num_replicas`
-- `num_partitions`
-- `num_outputs`
+- `nreplicas` (defaults to the one in `compile_options`)
+- `npartitions` (defaults to the one in `compile_options`)
+- `noutputs` (defaults to the length of `output_element_types`)
 - `size_of_generated_code_in_bytes`
 - `fingerprint`
 - `cost_analysis`
@@ -2229,64 +2229,78 @@ name(::Executable)
 end
 
 """
-    num_replicas(exe::Executable) -> Integer
+    nreplicas(exe::Executable) -> Integer
 
 Return the number of replicas of `exe`, i.e. `executable_build_options.num_replicas` of the `CompileOptionsProto` it
 was compiled with.
+
+Defaults to the one in `compile_options(exe)`, or `1` if it's not set.
 
 !!! warning
 `PjRtCApiExecutable` treats any error as fatal.
 
 Backs `PJRT_Executable_NumReplicas`.
 """
-num_replicas(::Executable)
+function nreplicas(exe::Executable)
+    options = compile_options(exe)::Reactant.Proto.xla.CompileOptionsProto
+    build_options = options.executable_build_options
+    return isnothing(build_options) ? 1 : max(build_options.num_replicas, 1)
+end
 
 @pjrt_catch_return function pjrt_executable_num_replicas(
     args::Ptr{CAPI.PJRT_Executable_NumReplicas_Args}
 )::Ptr{CAPI.PJRT_Error}
     exe = unsafe_pointer_to_objref(unsafe_load(args.executable))::Executable
-    unsafe_store!(args.num_replicas, num_replicas(exe))
+    unsafe_store!(args.num_replicas, nreplicas(exe))
     return ok()
 end
 
 """
-    num_partitions(exe::Executable) -> Integer
+    npartitions(exe::Executable) -> Integer
 
 Return the number of partitions of `exe`, i.e. `executable_build_options.num_partitions` of the `CompileOptionsProto`
 it was compiled with.
+
+Defaults to the one in `compile_options(exe)`, or `1` if it's not set.
 
 !!! warning
 `PjRtCApiExecutable` treats any error as fatal.
 
 Backs `PJRT_Executable_NumPartitions`.
 """
-num_partitions(::Executable)
+function npartitions(exe::Executable)
+    options = compile_options(exe)::Reactant.Proto.xla.CompileOptionsProto
+    build_options = options.executable_build_options
+    return isnothing(build_options) ? 1 : max(build_options.num_partitions, 1)
+end
 
 @pjrt_catch_return function pjrt_executable_num_partitions(
     args::Ptr{CAPI.PJRT_Executable_NumPartitions_Args}
 )::Ptr{CAPI.PJRT_Error}
     exe = unsafe_pointer_to_objref(unsafe_load(args.executable))::Executable
-    unsafe_store!(args.num_partitions, num_partitions(exe))
+    unsafe_store!(args.num_partitions, npartitions(exe))
     return ok()
 end
 
 """
-    num_outputs(exe::Executable) -> Integer
+    noutputs(exe::Executable) -> Integer
 
 Return the number of outputs that `exe` produces per device.
 
 `PjRtCApiLoadedExecutable` uses it to allocate the output lists filled by `execute`, so it must match the length of
 each output vector that `execute` returns.
 
+Defaults to `length(output_element_types(exe))`.
+
 Backs `PJRT_Executable_NumOutputs`.
 """
-num_outputs(::Executable)
+noutputs(exe::Executable) = length(output_element_types(exe))
 
 @pjrt_catch_return function pjrt_executable_num_outputs(
     args::Ptr{CAPI.PJRT_Executable_NumOutputs_Args}
 )::Ptr{CAPI.PJRT_Error}
     exe = unsafe_pointer_to_objref(unsafe_load(args.executable))::Executable
-    unsafe_store!(args.num_outputs, num_outputs(exe))
+    unsafe_store!(args.num_outputs, noutputs(exe))
     return ok()
 end
 
