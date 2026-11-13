@@ -339,6 +339,38 @@ end
     end
 end
 
+@testset "Isend / Irecv! / Waitall - chained exchanges" begin
+    comm = MPI.COMM_WORLD
+    rank = MPI.Comm_rank(comm)
+    peer = 1 - rank
+
+    function exchange!(send_buf, recv_buf, tag)
+        reqs = [MPI.Irecv!(recv_buf, peer, tag, comm), MPI.Isend(send_buf, peer, tag, comm)]
+        MPI.Waitall(reqs)
+        return nothing
+    end
+
+    # Each exchange sends what the previous one received, so every received buffer must be
+    # read only after its Waitall
+    function chained_exchanges!(x, recv1, recv2, recv3)
+        exchange!(x, recv1, 42)
+        exchange!(recv1 .+ 1, recv2, 43)
+        exchange!(recv2 .+ 1, recv3, 44)
+        return nothing
+    end
+
+    x = ConcreteRArray(fill(Float64(rank + 1), 5))
+    recv1, recv2, recv3 = (ConcreteRArray(zeros(5)) for _ in 1:3)
+
+    @jit raise=true raise_first=true sync = true chained_exchanges!(x, recv1, recv2, recv3)
+
+    @test Array(recv1) == fill(peer + 1.0, 5)
+    @test Array(recv2) == fill(rank + 2.0, 5)
+    @test Array(recv3) == fill(peer + 3.0, 5)
+
+    MPI.Barrier(comm)
+end
+
 @testset "Bcast!" begin
     comm = MPI.COMM_WORLD
     rank = MPI.Comm_rank(comm)
