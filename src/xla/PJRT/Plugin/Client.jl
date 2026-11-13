@@ -43,18 +43,23 @@ end
 
 Return a string that identifies the platform of `client` (e.g. `"cpu"`, `"gpu"`, `"tpu"`).
 
-!!! warning
-The string is handed to C by pointer, so it must be owned by `client`.
+The returned value doesn't need to be owned by `client`, but it must be the same on every call: the C wrapper calls it
+at most once per `client` and keeps a copy for as long as `client` is alive, since C keeps pointers to it.
 
 Backs `PJRT_Client_PlatformName`.
 """
 platform_name(::Client)
 
+# C borrows the string, so it is kept for as long as the client is alive
+const client_platform_name_cache = WeakKeyIdDict{Client,String}()
+
 @pjrt_catch_return function pjrt_client_platform_name(
     args::Ptr{CAPI.PJRT_Client_PlatformName_Args}
 )::Ptr{CAPI.PJRT_Error}
     client = unsafe_pointer_to_objref(unsafe_load(args.client))::Client
-    str = platform_name(client)::String
+    str = get!(client_platform_name_cache, client) do
+        String(platform_name(client))
+    end
     unsafe_store!(args.platform_name, Cstring(pointer(str)))
     unsafe_store!(args.platform_name_size, sizeof(str))
     return ok()
@@ -65,18 +70,23 @@ end
 
 Return a string containing the platform version of `client`.
 
-!!! warning
-The string is handed to C by pointer, so it must be owned by `client`.
+The returned value doesn't need to be owned by `client`, but it must be the same on every call: the C wrapper calls it
+at most once per `client` and keeps a copy for as long as `client` is alive, since C keeps pointers to it.
 
 Backs `PJRT_Client_PlatformVersion`.
 """
 platform_version(::Client)
 
+# C borrows the string, so it is kept for as long as the client is alive
+const client_platform_version_cache = WeakKeyIdDict{Client,String}()
+
 @pjrt_catch_return function pjrt_client_platform_version(
     args::Ptr{CAPI.PJRT_Client_PlatformVersion_Args}
 )::Ptr{CAPI.PJRT_Error}
     client = unsafe_pointer_to_objref(unsafe_load(args.client))::Client
-    str = platform_version(client)::String
+    str = get!(client_platform_version_cache, client) do
+        String(platform_version(client))
+    end
     unsafe_store!(args.platform_version, Cstring(pointer(str)))
     unsafe_store!(args.platform_version_size, sizeof(str))
     return ok()
@@ -105,18 +115,25 @@ end
 
 Return all the devices visible to `client`, including those that it cannot address.
 
-!!! warning
-The vector is handed to C by pointer, so it must be owned by `client` and never be resized.
+The returned value doesn't need to be owned by `client`, but it must be the same on every call: the C wrapper calls it
+at most once per `client` and keeps a copy for as long as `client` is alive, since C keeps pointers to it. The objects
+in it must be the same ones on every call too, and the same ones that other functions return, since C identifies them by
+pointer.
 
 Backs `PJRT_Client_Devices`.
 """
 devices(::Client)
 
+# C borrows the vector, so it is kept for as long as the client is alive
+const client_devices_cache = WeakKeyIdDict{Client,Vector{Device}}()
+
 @pjrt_catch_return function pjrt_client_devices(
     args::Ptr{CAPI.PJRT_Client_Devices_Args}
 )::Ptr{CAPI.PJRT_Error}
     client = unsafe_pointer_to_objref(unsafe_load(args.client))::Client
-    devs = devices(client)::Vector{Device}
+    devs = get!(client_devices_cache, client) do
+        collect(Device, devices(client))
+    end
     unsafe_store!(args.devices, Ptr{Ptr{CAPI.PJRT_Device}}(pointer(devs)))
     unsafe_store!(args.num_devices, length(devs))
     return ok()
@@ -127,18 +144,25 @@ end
 
 Return the subset of `devices(client)` that `client` can address.
 
-!!! warning
-The vector is handed to C by pointer, so it must be owned by `client` and never be resized.
+The returned value doesn't need to be owned by `client`, but it must be the same on every call: the C wrapper calls it
+at most once per `client` and keeps a copy for as long as `client` is alive, since C keeps pointers to it. The objects
+in it must be the same ones on every call too, and the same ones that other functions return, since C identifies them by
+pointer.
 
 Backs `PJRT_Client_AddressableDevices`.
 """
 addressable_devices(::Client)
 
+# C borrows the vector, so it is kept for as long as the client is alive
+const client_addressable_devices_cache = WeakKeyIdDict{Client,Vector{Device}}()
+
 @pjrt_catch_return function pjrt_client_addressable_devices(
     args::Ptr{CAPI.PJRT_Client_AddressableDevices_Args}
 )::Ptr{CAPI.PJRT_Error}
     client = unsafe_pointer_to_objref(unsafe_load(args.client))::Client
-    devs = addressable_devices(client)::Vector{Device}
+    devs = get!(client_addressable_devices_cache, client) do
+        collect(Device, addressable_devices(client))
+    end
     unsafe_store!(args.addressable_devices, Ptr{Ptr{CAPI.PJRT_Device}}(pointer(devs)))
     unsafe_store!(args.num_addressable_devices, length(devs))
     return ok()
@@ -204,18 +228,25 @@ end
 
 Return the memories that `client` can address.
 
-!!! warning
-The vector is handed to C by pointer, so it must be owned by `client` and never be resized.
+The returned value doesn't need to be owned by `client`, but it must be the same on every call: the C wrapper calls it
+at most once per `client` and keeps a copy for as long as `client` is alive, since C keeps pointers to it. The objects
+in it must be the same ones on every call too, and the same ones that other functions return, since C identifies them by
+pointer.
 
 Backs `PJRT_Client_AddressableMemories`.
 """
 addressable_memories(::Client)
 
+# C borrows the vector, so it is kept for as long as the client is alive
+const client_addressable_memories_cache = WeakKeyIdDict{Client,Vector{Memory}}()
+
 @pjrt_catch_return function pjrt_client_addressable_memories(
     args::Ptr{CAPI.PJRT_Client_AddressableMemories_Args}
 )::Ptr{CAPI.PJRT_Error}
     client = unsafe_pointer_to_objref(unsafe_load(args.client))::Client
-    mems = addressable_memories(client)::Vector{Memory}
+    mems = get!(client_addressable_memories_cache, client) do
+        collect(Memory, addressable_memories(client))
+    end
     unsafe_store!(args.addressable_memories, Ptr{Ptr{CAPI.PJRT_Memory}}(pointer(mems)))
     unsafe_store!(args.num_addressable_memories, length(mems))
     return ok()

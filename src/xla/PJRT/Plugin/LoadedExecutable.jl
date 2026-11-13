@@ -94,19 +94,30 @@ end
 
 Return the devices that `exec` runs on, in the order used by the argument and output lists of `execute`.
 
+The returned value doesn't need to be owned by `exec`, but it must be the same on every call: the C wrapper calls it at
+most once per `exec` and keeps a copy for as long as `exec` is alive, since C keeps pointers to it. The objects in it
+must be the same ones on every call too, and the same ones that other functions return, since C identifies them by
+pointer.
+
 !!! warning
-The vector is handed to C by pointer, so it must be owned by `exec` and never be resized.
 `PjRtCApiLoadedExecutable` calls this when wrapping `exec` and treats any error as fatal.
 
 Backs `PJRT_LoadedExecutable_AddressableDevices`.
 """
 addressable_devices(::LoadedExecutable)
 
+# C borrows the vector, so it is kept for as long as the executable is alive
+const loaded_executable_addressable_devices_cache = WeakKeyIdDict{
+    LoadedExecutable,Vector{Device}
+}()
+
 @pjrt_catch_return function pjrt_loaded_executable_addressable_devices(
     args::Ptr{CAPI.PJRT_LoadedExecutable_AddressableDevices_Args}
 )::Ptr{CAPI.PJRT_Error}
     exec = unsafe_pointer_to_objref(unsafe_load(args.executable))::LoadedExecutable
-    devs = addressable_devices(exec)::Vector{Device}
+    devs = get!(loaded_executable_addressable_devices_cache, exec) do
+        collect(Device, addressable_devices(exec))
+    end
     unsafe_store!(args.addressable_devices, Ptr{Ptr{CAPI.PJRT_Device}}(pointer(devs)))
     unsafe_store!(args.num_addressable_devices, length(devs))
     return ok()
@@ -117,19 +128,28 @@ end
 
 Return the logical (replica, partition) ids, 0-based, of each device in `addressable_devices(exec)`, in the same order.
 
+The returned value doesn't need to be owned by `exec`, but it must be the same on every call: the C wrapper calls it at
+most once per `exec` and keeps a copy for as long as `exec` is alive, since C keeps pointers to it.
+
 !!! warning
-The vector is handed to C by pointer, so it must be owned by `exec` and never be resized.
 Some versions of `PjRtCApiLoadedExecutable` call this when wrapping `exec` and treat any error as fatal.
 
 Backs `PJRT_LoadedExecutable_AddressableDeviceLogicalIds`.
 """
 addressable_device_logical_ids(::LoadedExecutable)
 
+# C borrows the vector, so it is kept for as long as the executable is alive
+const addressable_device_logical_ids_cache = WeakKeyIdDict{
+    LoadedExecutable,Vector{CAPI.PJRT_LogicalDeviceIds}
+}()
+
 @pjrt_catch_return function pjrt_loaded_executable_addressable_device_logical_ids(
     args::Ptr{CAPI.PJRT_LoadedExecutable_AddressableDeviceLogicalIds_Args}
 )::Ptr{CAPI.PJRT_Error}
     exec = unsafe_pointer_to_objref(unsafe_load(args.executable))::LoadedExecutable
-    ids = addressable_device_logical_ids(exec)::Vector{CAPI.PJRT_LogicalDeviceIds}
+    ids = get!(addressable_device_logical_ids_cache, exec) do
+        collect(CAPI.PJRT_LogicalDeviceIds, addressable_device_logical_ids(exec))
+    end
     unsafe_store!(args.addressable_device_logical_ids, pointer(ids))
     unsafe_store!(args.num_addressable_device_logical_ids, length(ids))
     return ok()

@@ -45,8 +45,8 @@ Return the attributes of `plugin` as `name => value` pairs (e.g. a `Dict`). Comm
 `AbstractVector{<:Integer}` or `AbstractFloat`, which C receives as `String`, `Bool`, `Int64`, `Vector{Int64}` and
 `Float32`. Defaults to no attributes.
 
-It is called at most once per plugin type: the C wrapper keeps a copy for the lifetime of the process, since C
-keeps pointers to it.
+The returned value doesn't need to be owned by the plugin, but it must be the same on every call: the C wrapper calls it
+at most once per plugin type and keeps a copy for the lifetime of the process, since C keeps pointers to it.
 
 Backs `PJRT_Plugin_Attributes`.
 """

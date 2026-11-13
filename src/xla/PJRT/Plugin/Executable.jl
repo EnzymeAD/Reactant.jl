@@ -42,8 +42,8 @@ end
 
 Return a string that identifies `exe` (e.g. the name of the compiled module).
 
-!!! warning
-The string is handed to C by pointer, so it must be owned by `exe`.
+The returned value doesn't need to be owned by `exe`, but it must be the same on every call: the C wrapper calls it at
+most once per `exe` and keeps a copy for as long as `exe` is alive, since C keeps pointers to it.
 
 !!! warning
 `PjRtCApiExecutable` treats any error as fatal.
@@ -52,11 +52,16 @@ Backs `PJRT_Executable_Name`.
 """
 name(::Executable)
 
+# C borrows the string, so it is kept for as long as the executable is alive
+const executable_name_cache = WeakKeyIdDict{Executable,String}()
+
 @pjrt_catch_return function pjrt_executable_name(
     args::Ptr{CAPI.PJRT_Executable_Name_Args}
 )::Ptr{CAPI.PJRT_Error}
     exe = unsafe_pointer_to_objref(unsafe_load(args.executable))::Executable
-    str = name(exe)::String
+    str = get!(executable_name_cache, exe) do
+        String(name(exe))
+    end
     unsafe_store!(args.executable_name, Cstring(pointer(str)))
     unsafe_store!(args.executable_name_size, sizeof(str))
     return ok()
@@ -164,18 +169,23 @@ end
 Return a fingerprint of `exe`. Executables compiled from identical inputs (program, compile options, compiler
 version, ...) must have the same fingerprint. Throw `unimplemented` if not supported.
 
-!!! warning
-The string is handed to C by pointer, so it must be owned by `exe`.
+The returned value doesn't need to be owned by `exe`, but it must be the same on every call: the C wrapper calls it at
+most once per `exe` and keeps a copy for as long as `exe` is alive, since C keeps pointers to it.
 
 Backs `PJRT_Executable_Fingerprint`.
 """
 fingerprint(::Executable)
 
+# C borrows the string, so it is kept for as long as the executable is alive
+const executable_fingerprint_cache = WeakKeyIdDict{Executable,String}()
+
 @pjrt_catch_return function pjrt_executable_fingerprint(
     args::Ptr{CAPI.PJRT_Executable_Fingerprint_Args}
 )::Ptr{CAPI.PJRT_Error}
     exe = unsafe_pointer_to_objref(unsafe_load(args.executable))::Executable
-    str = fingerprint(exe)::String
+    str = get!(executable_fingerprint_cache, exe) do
+        String(fingerprint(exe))
+    end
     unsafe_store!(args.executable_fingerprint, Cstring(pointer(str)))
     unsafe_store!(args.executable_fingerprint_size, sizeof(str))
     return ok()
@@ -193,8 +203,8 @@ Return the cost analysis of `exe` as `name => value` pairs (e.g. `"flops" => 1.0
 Values must be `AbstractString`, `Bool`, `Integer`, `AbstractVector{<:Integer}` or `AbstractFloat`, which C receives as
 `String`, `Bool`, `Int64`, `Vector{Int64}` and `Float32`.
 
-It is called at most once per `exe`: the C wrapper keeps a copy for as long as `exe` is alive, since C keeps pointers
-to it.
+The returned value doesn't need to be owned by `exe`, but it must be the same on every call: the C wrapper calls it at
+most once per `exe` and keeps a copy for as long as `exe` is alive, since C keeps pointers to it.
 
 Backs `PJRT_Executable_GetCostAnalysis`.
 """
@@ -229,8 +239,8 @@ Return the PJRT element type of each output of `exe`.
 Defaults to `map(pjrt_eltype, output_eltypes(exe))`. Override it if an element type has no Julia equivalent, or if
 `exe` already stores the PJRT element types.
 
-It is called at most once per `exe` by `PJRT_Executable_OutputElementTypes`: the C wrapper keeps a copy for as long as
-`exe` is alive, since C keeps pointers to it.
+The returned value doesn't need to be owned by `exe`, but it must be the same on every call: the C wrapper calls it at
+most once per `exe` and keeps a copy for as long as `exe` is alive, since C keeps pointers to it.
 
 Backs `PJRT_Executable_OutputElementTypes`.
 """
@@ -256,8 +266,8 @@ end
 
 Return the dimensions of each output of `exe`, like `Base.size`.
 
-It is called at most once per `exe`: the C wrapper keeps a copy for as long as `exe` is alive, since C keeps pointers
-to it.
+The returned value doesn't need to be owned by `exe`, but it must be the same on every call: the C wrapper calls it at
+most once per `exe` and keeps a copy for as long as `exe` is alive, since C keeps pointers to it.
 
 Backs `PJRT_Executable_OutputDimensions`.
 """
@@ -288,8 +298,8 @@ end
 
 Return the memory kind of each parameter of `exe` (e.g. `"device"`, `"pinned_host"`).
 
-It is called at most once per `exe`: the C wrapper keeps the strings for as long as `exe` is alive, since C keeps
-pointers to them.
+The returned value doesn't need to be owned by `exe`, but it must be the same on every call: the C wrapper calls it at
+most once per `exe` and keeps a copy for as long as `exe` is alive, since C keeps pointers to it.
 
 Backs `PJRT_Executable_ParameterMemoryKinds`.
 """
@@ -318,8 +328,8 @@ end
 
 Return the memory kind of each output of `exe` (e.g. `"device"`, `"pinned_host"`).
 
-It is called at most once per `exe`: the C wrapper keeps the strings for as long as `exe` is alive, since C keeps
-pointers to them.
+The returned value doesn't need to be owned by `exe`, but it must be the same on every call: the C wrapper calls it at
+most once per `exe` and keeps a copy for as long as `exe` is alive, since C keeps pointers to it.
 
 Backs `PJRT_Executable_OutputMemoryKinds`.
 """

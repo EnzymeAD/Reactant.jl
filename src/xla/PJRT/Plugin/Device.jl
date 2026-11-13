@@ -76,18 +76,24 @@ end
 
 Return the memories that `dev` can address.
 
-!!! warning
-The vector is handed to C by pointer, so it must be owned by `dev` and never be resized.
+The returned value doesn't need to be owned by `dev`, but it must be the same on every call: the C wrapper calls it at
+most once per `dev` and keeps a copy for as long as `dev` is alive, since C keeps pointers to it. The objects in it must
+be the same ones on every call too, and the same ones that other functions return, since C identifies them by pointer.
 
 Backs `PJRT_Device_AddressableMemories`.
 """
 addressable_memories(::Device)
 
+# C borrows the vector, so it is kept for as long as the device is alive
+const device_addressable_memories_cache = WeakKeyIdDict{Device,Vector{Memory}}()
+
 @pjrt_catch_return function pjrt_device_addressable_memories(
     args::Ptr{CAPI.PJRT_Device_AddressableMemories_Args}
 )::Ptr{CAPI.PJRT_Error}
     device = unsafe_pointer_to_objref(Ptr{Device}(unsafe_load(args.device)))::Device
-    mems = addressable_memories(device)::Vector{Memory}
+    mems = get!(device_addressable_memories_cache, device) do
+        collect(Memory, addressable_memories(device))
+    end
     unsafe_store!(args.memories, Ptr{Ptr{CAPI.PJRT_Memory}}(pointer(mems)))
     unsafe_store!(args.num_memories, length(mems))
     return ok()

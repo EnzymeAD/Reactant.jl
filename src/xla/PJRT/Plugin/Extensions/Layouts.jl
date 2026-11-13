@@ -106,8 +106,8 @@ end
 
 Return the [`MemoryLayout`](@ref) of each parameter of `exe`.
 
-It is called at most once per `exe`: the C wrapper keeps the layouts for as long as `exe` is alive, since C keeps
-pointers to them.
+The returned value doesn't need to be owned by `exe`, but it must be the same on every call: the C wrapper calls it at
+most once per `exe` and keeps a copy for as long as `exe` is alive, since C keeps pointers to it.
 
 Backs `PJRT_Layouts_PJRT_Executable_GetParameterLayouts`.
 """
@@ -118,8 +118,8 @@ function parameter_memory_layouts end
 
 Return the [`MemoryLayout`](@ref) of each output of `exe`.
 
-It is called at most once per `exe`: the C wrapper keeps the layouts for as long as `exe` is alive, since C keeps
-pointers to them.
+The returned value doesn't need to be owned by `exe`, but it must be the same on every call: the C wrapper calls it at
+most once per `exe` and keeps a copy for as long as `exe` is alive, since C keeps pointers to it.
 
 Backs `PJRT_Layouts_PJRT_Executable_GetOutputLayouts`.
 """
