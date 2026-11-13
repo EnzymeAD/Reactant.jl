@@ -10,6 +10,7 @@ include("Display.jl")
 include("Stats.jl")
 include("MH.jl")
 include("MCMC.jl")
+include("LogDensity.jl")
 
 # Types.
 export Trace, Constraint, Selection, Address, TraceEntry, TracedTrace, MCMCState
@@ -36,8 +37,15 @@ export sample,
     load_state,
     run_chain
 
-# Gen-like helper functions.
-export simulate_, generate_
+# Gen-like helper functions and log-density evaluators.
+export simulate_,
+    generate_,
+    logp,
+    logp_and_grad,
+    compile_logp,
+    compile_logp_and_grad,
+    CompiledLogp,
+    CompiledLogpAndGrad
 
 # Debug utilities.
 export clear_dump_buffer!, show_dumps

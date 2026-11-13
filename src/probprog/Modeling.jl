@@ -261,7 +261,7 @@ function generate(
     constraint_tensor,
     f::Function,
     args::Vararg{Any,Nargs};
-    constrained_addresses::Set{Address},
+    constrained_addresses::Union{AbstractSet{Address},AbstractVector{Address}},
 ) where {Nargs}
     args = (rng, args...)
 
