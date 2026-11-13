@@ -12,6 +12,7 @@
 - `clear_memory_stats!`
 - `async_tracking_event` (defaults to `nothing`, i.e. not supported)
 - `poison_execution!`
+- `attributes` (defaults to `()`, i.e. no attributes)
 """
 abstract type Device end
 
@@ -197,5 +198,39 @@ async_tracking_event(::Device, ::String) = nothing
     end
     root!(event)
     unsafe_store!(args.event, Ptr{CAPI.PJRT_AsyncTrackingEvent}(pointer_from_objref(event)))
+    return ok()
+end
+
+"""
+    attributes(dev::Device)
+
+Return the device-specific attributes of `dev` as `name => value` pairs (e.g. a `Dict`). Values must be
+`AbstractString`, `Bool`, `Integer`, `AbstractVector{<:Integer}` or `AbstractFloat`, which C receives as `String`,
+`Bool`, `Int64`, `Vector{Int64}` and `Float32`. Defaults to `()`, i.e. no attributes.
+
+C gets its own copy of the attributes on every call and frees it through the deleter, so the returned value doesn't need
+to be the same on every call.
+
+Backs `PJRT_Device_GetAttributes`.
+"""
+attributes(::Device) = ()
+
+@pjrt_catch_return function pjrt_device_get_attributes(
+    args::Ptr{CAPI.PJRT_Device_GetAttributes_Args}
+)::Ptr{CAPI.PJRT_Error}
+    device = unsafe_pointer_to_objref(Ptr{Device}(unsafe_load(args.device)))::Device
+    # C owns the named values and the objects they point to until it calls the deleter
+    values, roots = pjrt_named_values(attributes(device))
+    push!(roots, values)
+    root!(roots)
+    unsafe_store!(args.attributes, pointer(values))
+    unsafe_store!(args.num_attributes, length(values))
+    unsafe_store!(
+        args.device_attributes, Ptr{CAPI.PJRT_Device_Attributes}(pointer_from_objref(roots))
+    )
+    unsafe_store!(
+        args.attributes_deleter,
+        @cfunction(pjrt_serialized_bytes_deleter, Cvoid, (Ptr{Cvoid},))
+    )
     return ok()
 end
