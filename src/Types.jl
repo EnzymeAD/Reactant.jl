@@ -255,7 +255,9 @@ function ConcretePJRTArray(
     device::Union{Nothing,XLA.PJRT.Device}=nothing,
     sharding::Sharding.AbstractSharding=Sharding.NoSharding(),
 ) where {T,N}
-    theclient, thedevice = _select_client_and_device(client, idx, device, sharding)
+    theclient, thedevice = _select_client_and_device(
+        client, idx, device, sharding, Val(:PJRT)
+    )
     sharded_data, shardinfo = sharding(theclient, thedevice, data)
     shape = size(data)
     nsharded = length(sharded_data)
@@ -386,10 +388,11 @@ function ConcreteIFRTArray(
     device::Union{Nothing,XLA.IFRT.Device}=nothing,
     sharding::Sharding.AbstractSharding=Sharding.NoSharding(),
 ) where {T,N}
-    theclient, thedevice = _select_client_and_device(client, idx, device, sharding)
+    theclient, thedevice = _select_client_and_device(
+        client, idx, device, sharding, Val(:IFRT)
+    )
     shape = size(data)
-    # ToDo: How to use specified device (non-sharded case)?
-    sharded_data, shardinfo, padding = sharding(theclient, nothing, data)
+    sharded_data, shardinfo, padding = sharding(theclient, thedevice, data)
     return ConcreteIFRTArray{T,N}(sharded_data, shape, shardinfo, padding)
 end
 
@@ -407,7 +410,7 @@ function ConcreteIFRTArray(
     @assert Sharding.is_sharded(sharding)
     @assert length(data) == length(data_to_addressable_shard)
 
-    client = client === nothing ? XLA.default_backend() : client
+    client = client === nothing ? XLA.default_backend(Val(:IFRT)) : client
 
     (; hlo_sharding) = Sharding.HloSharding(sharding, array_size)
     all_devices = XLA.get_device.((client,), sharding.mesh.device_ids)
@@ -455,7 +458,7 @@ function InterpolateArray(
     client=nothing,
 ) where {T,N}
     @assert Sharding.is_sharded(sharding)
-    client = client === nothing ? XLA.default_backend() : client
+    client = client === nothing ? XLA.default_backend(Val(:IFRT)) : client
     @assert client isa XLA.IFRT.Client "InterpolateArray currently only supports IFRT client"
     (; hlo_sharding) = Sharding.HloSharding(sharding, final_grid_size)
     all_devices = XLA.get_device.((client,), sharding.mesh.device_ids)
@@ -768,7 +771,9 @@ function ConcretePJRTArray{T,N}(
     device::Union{Nothing,XLA.AbstractDevice}=nothing,
     sharding::Sharding.AbstractSharding=Sharding.NoSharding(),
 ) where {T,N}
-    theclient, thedevice = _select_client_and_device(client, idx, device, sharding)
+    theclient, thedevice = _select_client_and_device(
+        client, idx, device, sharding, Val(:PJRT)
+    )
     sharded_data, shardinfo = sharding(theclient, thedevice, T, shape)
     nsharded = length(sharded_data)
     return ConcretePJRTArray{T,N,nsharded}(sharded_data, shape, shardinfo)
@@ -782,11 +787,12 @@ function ConcreteIFRTArray{T,N}(
     device::Union{Nothing,XLA.AbstractDevice}=nothing,
     sharding::Sharding.AbstractSharding=Sharding.NoSharding(),
 ) where {T,N}
-    theclient, thedevice = _select_client_and_device(client, idx, device, sharding)
+    theclient, thedevice = _select_client_and_device(
+        client, idx, device, sharding, Val(:IFRT)
+    )
     # ToDo: How to avoid allocating dummy array on host?
     dummy_array = Array{T}(undef, shape)
-    # ToDo: How to use specified device (non-sharded case)?
-    sharded_data, shardinfo, padding = sharding(theclient, nothing, dummy_array)
+    sharded_data, shardinfo, padding = sharding(theclient, thedevice, dummy_array)
     return ConcreteIFRTArray{T,N}(sharded_data, shape, shardinfo, padding)
 end
 
@@ -815,11 +821,128 @@ function _check_concrete_type(::Type{A}, x) where {A}
     return x
 end
 
+@inline function _merge_inferred_client(
+    prev_client::Union{Nothing,XLA.AbstractClient},
+    new_client::Union{Nothing,XLA.AbstractClient},
+    throw_on_conflict::Bool,
+)
+    new_client === nothing && return prev_client, false
+    prev_client === nothing && return new_client, false
+    prev_client == new_client && return prev_client, false
+    if throw_on_conflict
+        throw(
+            ArgumentError(
+                "Expected all arguments to use the same XLA client, got $(prev_client) and $(new_client)",
+            ),
+        )
+    end
+    return nothing, true
+end
+
+function _infer_client_from_args(
+    @nospecialize(x); throw_on_conflict::Bool=true
+)::Union{Nothing,XLA.AbstractClient}
+    c, conflict = _infer_client_from_args_inner(x, nothing, nothing, throw_on_conflict)
+    return conflict ? nothing : c
+end
+
+Base.@nospecializeinfer function _infer_client_from_args_inner(
+    @nospecialize(x),
+    seen::Union{Nothing,Base.IdSet{Any}},
+    prev_client::Union{Nothing,XLA.AbstractClient},
+    throw_on_conflict::Bool,
+)
+    if x isa
+        Union{ConcretePJRTArray,ConcretePJRTNumber,ConcreteIFRTArray,ConcreteIFRTNumber}
+        return _merge_inferred_client(prev_client, XLA.client(x), throw_on_conflict)
+    end
+    if (
+        x isa Number ||
+        x isa Type ||
+        x isa Module ||
+        x isa Symbol ||
+        x isa AbstractString ||
+        x isa Ptr ||
+        x isa XLA.AbstractClient ||
+        x isa XLA.AbstractDevice ||
+        x isa Sharding.AbstractSharding
+    )
+        return prev_client, false
+    end
+    if x isa Tuple || x isa NamedTuple
+        isbitstype(Core.Typeof(x)) && return prev_client, false
+        for i in 1:nfields(x)
+            prev_client, conflict = _infer_client_from_args_inner(
+                getfield(x, i), seen, prev_client, throw_on_conflict
+            )
+            conflict && return nothing, true
+        end
+        return prev_client, false
+    end
+    if x isa AbstractArray
+        ax = ancestor(x)
+        if ax !== x
+            return _infer_client_from_args_inner(ax, seen, prev_client, throw_on_conflict)
+        elseif x isa Array
+            isbitstype(eltype(x)) && return prev_client, false
+            seen === nothing && (seen = Base.IdSet{Any}())
+            x in seen && return prev_client, false
+            push!(seen, x)
+            for i in eachindex(x)
+                isassigned(x, i) || continue
+                prev_client, conflict = _infer_client_from_args_inner(
+                    @inbounds(x[i]), seen, prev_client, throw_on_conflict
+                )
+                conflict && return nothing, true
+            end
+            return prev_client, false
+        end
+    end
+    if x isa AbstractDict
+        seen === nothing && (seen = Base.IdSet{Any}())
+        x in seen && return prev_client, false
+        push!(seen, x)
+        for (k, v) in pairs(x)
+            prev_client, conflict = _infer_client_from_args_inner(
+                k, seen, prev_client, throw_on_conflict
+            )
+            conflict && return nothing, true
+            prev_client, conflict = _infer_client_from_args_inner(
+                v, seen, prev_client, throw_on_conflict
+            )
+            conflict && return nothing, true
+        end
+        return prev_client, false
+    end
+    T = Core.Typeof(x)
+    nf = nfields(x)
+    (nf == 0 || isbitstype(T)) && return prev_client, false
+    if ismutable(x)
+        seen === nothing && (seen = Base.IdSet{Any}())
+        x in seen && return prev_client, false
+        push!(seen, x)
+    end
+    for i in 1:nf
+        isdefined(x, i) || continue
+        prev_client, conflict = _infer_client_from_args_inner(
+            getfield(x, i), seen, prev_client, throw_on_conflict
+        )
+        conflict && return nothing, true
+    end
+    return prev_client, false
+end
+
+function _default_backend_for_runtime(runtime::Union{Nothing,Val{:PJRT},Val{:IFRT}})
+    runtime === nothing && return XLA.default_backend()
+    return XLA.default_backend(runtime)
+end
+
 function _select_client_and_device(
     client::Union{Nothing,XLA.AbstractClient},
     idx::Union{Int,Nothing},
     device::Union{Nothing,XLA.AbstractDevice},
     sharding::Sharding.AbstractSharding,
+    runtime::Union{Nothing,Val{:PJRT},Val{:IFRT}}=nothing,
 )
     if Sharding.is_sharded(sharding)
         # ToDo: Throw ArgumentError instead of just warning?
@@ -827,11 +950,11 @@ function _select_client_and_device(
             @warn "device index should not be specified for sharded XLA arrays, ignoring it."
         device isa Nothing ||
             @warn "device should not be specified for sharded XLA arrays, ignoring it."
-        theclient = client isa Nothing ? XLA.default_backend() : client
+        theclient = client isa Nothing ? _default_backend_for_runtime(runtime) : client
         thedevice = nothing
     else
         if device isa Nothing
-            theclient = client isa Nothing ? XLA.default_backend() : client
+            theclient = client isa Nothing ? _default_backend_for_runtime(runtime) : client
             if idx isa Nothing
                 thedevice = XLA.default_device(theclient)
             else
@@ -852,6 +975,14 @@ function _select_client_and_device(
                 )
             end
         end
+    end
+
+    if runtime !== nothing && XLA.runtime(theclient) !== runtime
+        throw(
+            ArgumentError(
+                "XLA client runtime $(XLA.runtime(theclient)) does not match requested runtime $(runtime)",
+            ),
+        )
     end
 
     return theclient, thedevice

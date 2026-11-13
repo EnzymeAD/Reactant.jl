@@ -55,7 +55,11 @@ function compile_mlir(
     try_zip_on_failure::Bool=true,
     kwargs...,
 )
-    client = client !== nothing ? client : XLA.default_backend()
+    if client === nothing
+        client = @something(
+            Reactant._infer_client_from_args((f, args)), XLA.default_backend()
+        )
+    end
 
     MLIR.IR.activate(ctx)
     try
@@ -245,7 +249,9 @@ Base.@nospecializeinfer function compile_mlir!(
     kwargs...,
 )
     @assert MLIR.IR.current_context() == MLIR.IR.context(mod)
-    client = @something(client, XLA.default_backend())
+    client = @something(
+        client, Reactant._infer_client_from_args((f, args)), XLA.default_backend()
+    )
     backend = @something(backend, XLA.platform_name(client))::String
     @assert backend ∉ ("gpu", "GPU")
 
@@ -1223,7 +1229,14 @@ end
 
 function __resolve_device_and_client(client, seen_args, linear_args, is_sharded)
     if is_sharded
-        client === nothing && (client = XLA.default_backend())
+        if client === nothing
+            for (k, v) in seen_args
+                !(v isa TracedRArray || v isa TracedRNumber) && continue
+                client = XLA.client(k)
+                break
+            end
+            client === nothing && (client = XLA.default_backend())
+        end
         return client, nothing
     end
 
@@ -1281,7 +1294,11 @@ Reactant.@annotate "compile $(string(f))" function compile_xla(
     serializable::Bool=false,
     kwargs...,
 )
-    client = client !== nothing ? client : XLA.default_backend()
+    if client === nothing
+        client = @something(
+            Reactant._infer_client_from_args((f, args)), XLA.default_backend()
+        )
+    end
 
     MLIR.IR.activate(ctx)
     try
