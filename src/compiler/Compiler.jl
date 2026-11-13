@@ -46,6 +46,8 @@ function release_guard_from_gc_for_module(mod::MLIR.IR.Module)
     return nothing
 end
 
+include("CPULinalgLowering.jl")
+
 function compile_mlir(
     ctx,
     f,
@@ -768,6 +770,25 @@ Base.@nospecializeinfer function compile_mlir!(
 
     if compile_options.lower_triton
         run_pass_pipeline!(mod, "lower-triton", "lower_triton")
+    end
+
+    if backend == "cpu" &&
+        !is_sharded &&
+        compile_options.optimization_passes in
+        (:all, :after_enzyme, :probprog, :noopt, :before_enzyme) &&
+        _lower_cpu_cholesky_to_lapack!(mod)
+        run_pass_pipeline!(
+            mod,
+            join(
+                [
+                    "lower-enzymexla-lapack{backend=cpu blas_int_width=$blas_int_width}",
+                    legalize_chlo_to_stablehlo...,
+                    jit,
+                ],
+                ",",
+            ),
+            "lower_cpu_cholesky_lapack",
+        )
     end
 
     # Now we resolve paddings if `optimize_then_pad`
