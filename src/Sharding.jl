@@ -505,8 +505,121 @@ end
 
 function construct_padded_array(x::AbstractArray, padding)
     y = similar(x, size(x) .+ padding)
-    view(y, [1:size(x, i) for i in 1:ndims(x)]...) .= x
+    view(y, Base.OneTo.(size(x))...) .= x
     return y
+end
+
+function _condensed_partition_sizes(condensed::XLA.CondensedOpSharding, ::Val{N}) where {N}
+    if condensed.type == XLA.OpShardingType.Other
+        partitions_rev, _ = XLA.get_number_of_ways_dim_sharded(condensed)
+        @assert length(partitions_rev) == N
+        return reverse(Tuple(partitions_rev))::NTuple{N,Int}
+    end
+    return ntuple(Returns(1), N)
+end
+
+function _compute_ifrt_padding(
+    condensed::XLA.CondensedOpSharding, array_size::Dims{N}
+) where {N}
+    partition_sizes = _condensed_partition_sizes(condensed, Val(N))
+    remainders = array_size .% partition_sizes
+    all(iszero, remainders) && return nothing
+    return ((partition_sizes .- remainders) .% partition_sizes)::NTuple{N,Int}
+end
+
+function _find_shard_buffer_index(
+    data_to_addressable_shard::Vector{Vector{Int64}}, shard_idx::Int
+)
+    @inbounds for buf_idx in eachindex(data_to_addressable_shard)
+        if shard_idx in data_to_addressable_shard[buf_idx]
+            return buf_idx
+        end
+    end
+    return nothing
+end
+
+function assemble_ifrt_array_with_padding(
+    client::XLA.IFRT.Client,
+    data::Vector{Array{T,N}},
+    array_size::Dims{N},
+    data_to_addressable_shard::Vector{Vector{Int64}},
+    hlo_sharding::XLA.HloSharding,
+    all_devices,
+    ifrt_sharding::XLA.IFRT.Sharding,
+) where {T,N}
+    condensed = convert(XLA.CondensedOpSharding, hlo_sharding)
+    padding = _compute_ifrt_padding(condensed, array_size)
+    padded_array_size = padding === nothing ? array_size : (array_size .+ padding)
+
+    logical_ids = 0:(length(all_devices) - 1)
+    padded_slices, _ = XLA.sharding_to_concrete_array_indices(
+        condensed, padded_array_size, logical_ids
+    )
+    unpadded_slices = if padding === nothing
+        padded_slices
+    else
+        first(XLA.sharding_to_concrete_array_indices(condensed, array_size, logical_ids))
+    end
+
+    n_addressable = count(XLA.is_addressable, all_devices)
+    addressable_unpadded_slices = Vector{NTuple{N,UnitRange{Int64}}}(undef, n_addressable)
+    addressable_padded_slices = Vector{NTuple{N,UnitRange{Int64}}}(undef, n_addressable)
+    addr_idx = 0
+    for dev_idx in eachindex(all_devices)
+        if XLA.is_addressable(all_devices[dev_idx])
+            addr_idx += 1
+            addressable_unpadded_slices[addr_idx] = unpadded_slices[dev_idx]
+            addressable_padded_slices[addr_idx] = padded_slices[dev_idx]
+        end
+    end
+
+    for i in 1:n_addressable
+        idx = _find_shard_buffer_index(data_to_addressable_shard, i)
+        @assert idx !== nothing "No input buffer mapped to addressable shard $i"
+        unpadded_sz = length.(addressable_unpadded_slices[i])
+        padded_sz = length.(addressable_padded_slices[i])
+        buf_sz = size(data[idx])
+        @assert buf_sz == unpadded_sz || buf_sz == padded_sz (
+            "Expected data[$idx] to be at $(addressable_unpadded_slices[i]) with size " *
+            "$(unpadded_sz) (or padded size $(padded_sz)), but got size $(buf_sz)"
+        )
+    end
+
+    padded_data = if padding === nothing
+        data
+    else
+        out_buffers = Vector{Array{T,N}}(undef, length(data))
+        for idx in eachindex(data)
+            shard_idxs = data_to_addressable_shard[idx]
+            @assert !isempty(shard_idxs) "data_to_addressable_shard[$idx] must not be empty"
+            target_padded_sz = length.(addressable_padded_slices[shard_idxs[1]])
+            buf = data[idx]
+            if size(buf) == target_padded_sz
+                out_buffers[idx] = buf
+            else
+                out_buffers[idx] = construct_padded_array(buf, target_padded_sz .- size(buf))
+            end
+        end
+        out_buffers
+    end
+
+    zero_indexed_shard_map = Vector{Vector{Int64}}(undef, length(data_to_addressable_shard))
+    @inbounds for i in eachindex(data_to_addressable_shard)
+        src_idxs = data_to_addressable_shard[i]
+        dst_idxs = Vector{Int64}(undef, length(src_idxs))
+        for j in eachindex(src_idxs)
+            dst_idxs[j] = src_idxs[j] - 1
+        end
+        zero_indexed_shard_map[i] = dst_idxs
+    end
+
+    ifrt_array = XLA.IFRT.AsyncArray(
+        XLA.IFRT.Array(
+            client, padded_data, zero_indexed_shard_map, padded_array_size, ifrt_sharding
+        ),
+        nothing,
+    )
+    return padded_slices, ifrt_array, padding
 end
 
 function get_tensor_sharding_attribute(
