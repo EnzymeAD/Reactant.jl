@@ -21,8 +21,8 @@ abstract type MemoryDescription end
 Return a platform-dependent string that identifies the kind of memory described by `md` (e.g. `"device"`,
 `"pinned_host"`).
 
-!!! warning
-The string is handed to C by pointer, so it must be owned by `md`.
+The returned value doesn't need to be owned by `md`, but it must be the same on every call: the C wrapper calls it at
+most once per `md` and keeps a copy for as long as `md` is alive, since C keeps pointers to it.
 
 Backs `PJRT_MemoryDescription_Kind`.
 """
@@ -37,11 +37,16 @@ Backs `PJRT_MemoryDescription_Kind`.
 """
 kind_id(::MemoryDescription)
 
+# C borrows the string, so it is kept for as long as the description is alive
+const memory_description_kind_cache = WeakKeyIdDict{MemoryDescription,String}()
+
 @pjrt_catch_return function pjrt_memory_description_kind(
     args::Ptr{CAPI.PJRT_MemoryDescription_Kind_Args}
 )::Ptr{CAPI.PJRT_Error}
     md = unsafe_pointer_to_objref(unsafe_load(args.memory_description))::MemoryDescription
-    str = kind(md)::String
+    str = get!(memory_description_kind_cache, md) do
+        String(kind(md))
+    end
     unsafe_store!(args.kind, Cstring(pointer(str)))
     unsafe_store!(args.kind_size, sizeof(str))
     unsafe_store!(args.kind_id, kind_id(md))
@@ -53,8 +58,10 @@ end
 
 Return the descriptions of all the kinds of memory that the device described by `desc` supports, in any order.
 
-!!! warning
-The vector is handed to C by pointer, so it must be owned by `desc` and never be resized.
+The returned value doesn't need to be owned by `desc`, but it must be the same on every call: the C wrapper calls it at
+most once per `desc` and keeps a copy for as long as `desc` is alive, since C keeps pointers to it. The objects in it
+must be the same ones on every call too, and the same ones that other functions return, since C identifies them by
+pointer.
 
 Backs `PJRT_DeviceDescription_MemoryDescriptions`.
 """
@@ -70,11 +77,18 @@ Backs `PJRT_DeviceDescription_MemoryDescriptions`.
 """
 default_memory_description(::DeviceDescription) = nothing
 
+# C borrows the vector, so it is kept for as long as the description is alive
+const memory_descriptions_cache = WeakKeyIdDict{
+    DeviceDescription,Vector{MemoryDescription}
+}()
+
 @pjrt_catch_return function pjrt_device_description_memory_descriptions(
     args::Ptr{CAPI.PJRT_DeviceDescription_MemoryDescriptions_Args}
 )::Ptr{CAPI.PJRT_Error}
     desc = unsafe_pointer_to_objref(unsafe_load(args.device_description))::DeviceDescription
-    mds = memory_descriptions(desc)::Vector{MemoryDescription}
+    mds = get!(memory_descriptions_cache, desc) do
+        collect(MemoryDescription, memory_descriptions(desc))
+    end
     default = default_memory_description(desc)::Union{Nothing,MemoryDescription}
 
     # C's `(size_t)-1` means that there is no default memory

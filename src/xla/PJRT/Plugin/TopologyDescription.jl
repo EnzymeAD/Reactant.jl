@@ -28,18 +28,23 @@ abstract type TopologyDescription end
 
 Return a string that identifies the platform of `topology` (e.g. `"cpu"`, `"gpu"`, `"tpu"`).
 
-!!! warning
-The string is handed to C by pointer, so it must be owned by `topology`.
+The returned value doesn't need to be owned by `topology`, but it must be the same on every call: the C wrapper calls it
+at most once per `topology` and keeps a copy for as long as `topology` is alive, since C keeps pointers to it.
 
 Backs `PJRT_TopologyDescription_PlatformName`.
 """
 platform_name(::TopologyDescription)
 
+# C borrows the string, so it is kept for as long as the topology is alive
+const topology_platform_name_cache = WeakKeyIdDict{TopologyDescription,String}()
+
 @pjrt_catch_return function pjrt_topology_description_platform_name(
     args::Ptr{CAPI.PJRT_TopologyDescription_PlatformName_Args}
 )::Ptr{CAPI.PJRT_Error}
     topology = unsafe_pointer_to_objref(unsafe_load(args.topology))::TopologyDescription
-    str = platform_name(topology)::String
+    str = get!(topology_platform_name_cache, topology) do
+        String(platform_name(topology))
+    end
     unsafe_store!(args.platform_name, Cstring(pointer(str)))
     unsafe_store!(args.platform_name_size, sizeof(str))
     return ok()
@@ -50,18 +55,23 @@ end
 
 Return a string containing the platform version of `topology`.
 
-!!! warning
-The string is handed to C by pointer, so it must be owned by `topology`.
+The returned value doesn't need to be owned by `topology`, but it must be the same on every call: the C wrapper calls it
+at most once per `topology` and keeps a copy for as long as `topology` is alive, since C keeps pointers to it.
 
 Backs `PJRT_TopologyDescription_PlatformVersion`.
 """
 platform_version(::TopologyDescription)
 
+# C borrows the string, so it is kept for as long as the topology is alive
+const topology_platform_version_cache = WeakKeyIdDict{TopologyDescription,String}()
+
 @pjrt_catch_return function pjrt_topology_description_platform_version(
     args::Ptr{CAPI.PJRT_TopologyDescription_PlatformVersion_Args}
 )::Ptr{CAPI.PJRT_Error}
     topology = unsafe_pointer_to_objref(unsafe_load(args.topology))::TopologyDescription
-    str = platform_version(topology)::String
+    str = get!(topology_platform_version_cache, topology) do
+        String(platform_version(topology))
+    end
     unsafe_store!(args.platform_version, Cstring(pointer(str)))
     unsafe_store!(args.platform_version_size, sizeof(str))
     return ok()
@@ -72,18 +82,27 @@ end
 
 Return the descriptions of all the devices in `topology`, in any order but the same one on every call.
 
-!!! warning
-The vector is handed to C by pointer, so it must be owned by `topology` and never be resized.
+The returned value doesn't need to be owned by `topology`, but it must be the same on every call: the C wrapper calls it
+at most once per `topology` and keeps a copy for as long as `topology` is alive, since C keeps pointers to it. The
+objects in it must be the same ones on every call too, and the same ones that other functions return, since C identifies
+them by pointer.
 
 Backs `PJRT_TopologyDescription_GetDeviceDescriptions`.
 """
 device_descriptions(::TopologyDescription)
 
+# C borrows the vector, so it is kept for as long as the topology is alive
+const device_descriptions_cache = WeakKeyIdDict{
+    TopologyDescription,Vector{DeviceDescription}
+}()
+
 @pjrt_catch_return function pjrt_topology_description_get_device_descriptions(
     args::Ptr{CAPI.PJRT_TopologyDescription_GetDeviceDescriptions_Args}
 )::Ptr{CAPI.PJRT_Error}
     topology = unsafe_pointer_to_objref(unsafe_load(args.topology))::TopologyDescription
-    descs = device_descriptions(topology)::Vector{DeviceDescription}
+    descs = get!(device_descriptions_cache, topology) do
+        collect(DeviceDescription, device_descriptions(topology))
+    end
     unsafe_store!(args.descriptions, Ptr{Ptr{CAPI.PJRT_DeviceDescription}}(pointer(descs)))
     unsafe_store!(args.num_descriptions, length(descs))
     return ok()
@@ -131,8 +150,8 @@ Return the platform-specific attributes of `topology` as `name => value` pairs (
 `AbstractString`, `Bool`, `Integer`, `AbstractVector{<:Integer}` or `AbstractFloat`, which C receives as `String`,
 `Bool`, `Int64`, `Vector{Int64}` and `Float32`.
 
-It is called at most once per `topology`: the C wrapper keeps a copy for as long as `topology` is alive, since C keeps
-pointers to it.
+The returned value doesn't need to be owned by `topology`, but it must be the same on every call: the C wrapper calls it
+at most once per `topology` and keeps a copy for as long as `topology` is alive, since C keeps pointers to it.
 
 Backs `PJRT_TopologyDescription_Attributes`.
 """
@@ -212,18 +231,23 @@ end
 Return the kind ids of the memory spaces in `topology` (see `kind_id(::Memory)`). The first one must be the kind id
 of the default memory space.
 
-!!! warning
-The vector is handed to C by pointer, so it must be owned by `topology` and never be resized.
+The returned value doesn't need to be owned by `topology`, but it must be the same on every call: the C wrapper calls it
+at most once per `topology` and keeps a copy for as long as `topology` is alive, since C keeps pointers to it.
 
 Backs `PJRT_TopologyDescription_GetMemorySpaceKindIds`.
 """
 memory_space_kind_ids(::TopologyDescription)
 
+# C borrows the vector, so it is kept for as long as the topology is alive
+const memory_space_kind_ids_cache = WeakKeyIdDict{TopologyDescription,Vector{Cint}}()
+
 @pjrt_catch_return function pjrt_topology_description_get_memory_space_kind_ids(
     args::Ptr{CAPI.PJRT_TopologyDescription_GetMemorySpaceKindIds_Args}
 )::Ptr{CAPI.PJRT_Error}
     topology = unsafe_pointer_to_objref(unsafe_load(args.topology))::TopologyDescription
-    ids = memory_space_kind_ids(topology)::Vector{Cint}
+    ids = get!(memory_space_kind_ids_cache, topology) do
+        collect(Cint, memory_space_kind_ids(topology))
+    end
     unsafe_store!(args.memory_space_kind_ids, pointer(ids))
     unsafe_store!(args.num_memory_space_kind_ids, length(ids))
     return ok()

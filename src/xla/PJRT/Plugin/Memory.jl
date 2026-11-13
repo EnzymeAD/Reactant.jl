@@ -46,18 +46,23 @@ end
 
 Return the kind of `mem` (e.g. `"device"`, `"pinned_host"`).
 
-!!! warning
-The string is handed to C by pointer, so it must be owned by `mem`.
+The returned value doesn't need to be owned by `mem`, but it must be the same on every call: the C wrapper calls it at
+most once per `mem` and keeps a copy for as long as `mem` is alive, since C keeps pointers to it.
 
 Backs `PJRT_Memory_Kind`.
 """
 kind(::Memory)
 
+# C borrows the string, so it is kept for as long as the memory is alive
+const memory_kind_cache = WeakKeyIdDict{Memory,String}()
+
 @pjrt_catch_return function pjrt_memory_kind(
     args::Ptr{CAPI.PJRT_Memory_Kind_Args}
 )::Ptr{CAPI.PJRT_Error}
     memory = unsafe_pointer_to_objref(Ptr{Memory}(unsafe_load(args.memory)))::Memory
-    str = kind(memory)
+    str = get!(memory_kind_cache, memory) do
+        String(kind(memory))
+    end
     unsafe_store!(args.kind, Cstring(pointer(str)))
     unsafe_store!(args.kind_size, sizeof(str))
     return ok()
@@ -87,8 +92,8 @@ end
 
 Return a verbose description of `mem` for debugging. Defaults to `Base.show(io, mem)`, i.e. `sprint(show, mem)`.
 
-It is called at most once per `mem`: the C wrapper keeps the string for as long as `mem` is alive, since C keeps
-pointers to it.
+The returned value doesn't need to be owned by `mem`, but it must be the same on every call: the C wrapper calls it at
+most once per `mem` and keeps a copy for as long as `mem` is alive, since C keeps pointers to it.
 
 Backs `PJRT_Memory_DebugString`.
 """
@@ -114,8 +119,8 @@ end
 
 Write a short, user-facing description of `mem`. If not implemented, Base falls back to `Base.show(io, mem)`.
 
-It is called at most once per `mem`: the C wrapper keeps the string for as long as `mem` is alive, since C keeps
-pointers to it.
+The text doesn't need to be owned by `mem`, but it must be the same on every call: the C wrapper calls it at
+most once per `mem` and keeps a copy for as long as `mem` is alive, since C keeps pointers to it.
 
 Backs `PJRT_Memory_ToString`.
 """
@@ -141,18 +146,25 @@ end
 
 Return the devices that can address `mem`.
 
-!!! warning
-The vector is handed to C by pointer, so it must be owned by `mem` and never be resized.
+The returned value doesn't need to be owned by `mem`, but it must be the same on every call: the C wrapper calls it at
+most once per `mem` and keeps a copy for as long as `mem` is alive, since C keeps pointers to it. The objects in it must
+be the same ones on every call too, and the same ones that other functions return, since C identifies them by pointer.
 
 Backs `PJRT_Memory_AddressableByDevices`.
 """
 addressable_devices(::Memory)
 
+# C borrows the vector, so it is kept for as long as the memory is alive
+# (it is a `Vector{Device}`, but `Device` is defined after `Memory`)
+const memory_addressable_devices_cache = WeakKeyIdDict{Memory,Vector}()
+
 @pjrt_catch_return function pjrt_memory_addressable_by_devices(
     args::Ptr{CAPI.PJRT_Memory_AddressableByDevices_Args}
 )::Ptr{CAPI.PJRT_Error}
     memory = unsafe_pointer_to_objref(Ptr{Memory}(unsafe_load(args.memory)))::Memory
-    devs = addressable_devices(memory)
+    devs = get!(memory_addressable_devices_cache, memory) do
+        collect(Device, addressable_devices(memory))
+    end
     unsafe_store!(args.devices, Ptr{Ptr{CAPI.PJRT_Device}}(pointer(devs)))
     unsafe_store!(args.num_devices, length(devs))
     return ok()

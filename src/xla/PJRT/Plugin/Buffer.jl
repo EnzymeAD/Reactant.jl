@@ -114,8 +114,8 @@ end
 
 Return the dimensions of `buffer`.
 
-It is called at most once per `buffer`: the C wrapper keeps a copy for as long as `buffer` is alive, since C keeps
-pointers to it.
+The returned value doesn't need to be owned by `buffer`, but it must be the same on every call: the C wrapper calls it
+at most once per `buffer` and keeps a copy for as long as `buffer` is alive, since C keeps pointers to it.
 
 Backs `PJRT_Buffer_Dimensions`.
 """
@@ -144,8 +144,8 @@ dimensions implemented by padding to a fixed size may be smaller.
 
 Defaults to `Base.size(buffer)`, i.e. no dimension is padded.
 
-It is called at most once per `buffer`: the C wrapper keeps a copy for as long as `buffer` is alive, since C keeps
-pointers to it.
+The returned value doesn't need to be owned by `buffer`, but it must be the same on every call: the C wrapper calls it
+at most once per `buffer` and keeps a copy for as long as `buffer` is alive, since C keeps pointers to it.
 
 Backs `PJRT_Buffer_UnpaddedDimensions`.
 """
@@ -171,18 +171,23 @@ end
 
 Return the 0-based indices of the dynamically-sized dimensions of `buffer`, or an empty vector if all are static.
 
-!!! warning
-The returned vector is handed to C by pointer, so it must be owned by `buffer` and never be resized.
+The returned value doesn't need to be owned by `buffer`, but it must be the same on every call: the C wrapper calls it
+at most once per `buffer` and keeps a copy for as long as `buffer` is alive, since C keeps pointers to it.
 
 Backs `PJRT_Buffer_DynamicDimensionIndices`.
 """
 dynamic_dimension_indices(::Buffer)
 
+# C borrows the vector, so it is kept for as long as the buffer is alive
+const dynamic_dimension_indices_cache = WeakKeyIdDict{Buffer,Vector{Csize_t}}()
+
 @pjrt_catch_return function pjrt_buffer_dynamic_dimension_indices(
     args::Ptr{CAPI.PJRT_Buffer_DynamicDimensionIndices_Args}
 )::Ptr{CAPI.PJRT_Error}
     buffer = unsafe_pointer_to_objref(unsafe_load(args.buffer))::Buffer
-    indices = dynamic_dimension_indices(buffer)::Vector{Csize_t}
+    indices = get!(dynamic_dimension_indices_cache, buffer) do
+        collect(Csize_t, dynamic_dimension_indices(buffer))
+    end
     unsafe_store!(args.dynamic_dim_indices, pointer(indices))
     unsafe_store!(args.num_dynamic_dims, length(indices))
     return ok()
@@ -197,8 +202,8 @@ array with `n` dimensions).
 If the plugin advertises [`LayoutsExtension`](@ref), it must return a [`TiledMemoryLayout`](@ref): XLA aborts if the
 layout of a buffer can't be serialized.
 
-It is called at most once per `buffer`: the C wrapper keeps a copy for as long as `buffer` is alive, since C keeps
-pointers to it.
+The returned value doesn't need to be owned by `buffer`, but it must be the same on every call: the C wrapper calls it
+at most once per `buffer` and keeps a copy for as long as `buffer` is alive, since C keeps pointers to it.
 
 Backs `PJRT_Buffer_GetMemoryLayout` and `PJRT_Layouts_PJRT_Buffer_MemoryLayout`.
 """
