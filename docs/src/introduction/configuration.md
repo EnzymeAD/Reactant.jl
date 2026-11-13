@@ -138,6 +138,16 @@ julia> using Reactant
 julia> Reactant.set_default_backend("rocm")
 ```
 
+Note that `Reactant.devices()` lists devices for the currently active default backend only. To inspect devices on a specific backend regardless of the current default, pass the lowercase backend name explicitly (e.g., `Reactant.devices("rocm")` or `Reactant.devices("cpu")`).
+
+On Linux, `Reactant_jll` automatically detects the `amdgpu` kernel driver and your GPU architecture family via `/sys/class/kfd/kfd/topology/nodes` (`gpu_version = "10.2_gfx942"`, `"10.2_gfx950"`, or `"10.2_rdna"`). When precompiling on a login node without attached GPUs, you can select the ROCm artifact explicitly in `LocalPreferences.toml`:
+
+```toml
+[Reactant_jll]
+gpu = "rocm"
+gpu_version = "10.2_gfx942" # or "10.2_gfx950", "10.2_rdna"
+```
+
 ## Reactant with TPU
 
 Reactant should detect automatically when you are running on a machine with a TPU, and load dynamically the necessary modules.
