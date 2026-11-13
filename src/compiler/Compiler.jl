@@ -141,6 +141,25 @@ const cuOptLevel = Ref{Int}(2)
 #                                      12.6 -> 85
 #                                      12.2 -> 82
 #                                      11.8 -> 78
+function _has_emitted_mlir_code(mod::MLIR.IR.Module, compiled_f::MLIR.IR.Operation)
+    for top_op in MLIR.IR.body(mod)
+        if top_op != compiled_f
+            return true
+        end
+    end
+    for reg in compiled_f
+        for blk in reg
+            for op in blk
+                op_name = MLIR.IR.name(op)
+                if op_name != "func.return" && op_name != "stablehlo.return"
+                    return true
+                end
+            end
+        end
+    end
+    return false
+end
+
 function cubinFeatures()
     fallback = "+ptx80"
     ver = MLIR.API.ReactantCudaDriverGetVersion()
@@ -306,6 +325,11 @@ Base.@nospecializeinfer function compile_mlir!(
         is_sharded,
     ) = mlir_fn_res
     compiled_f = mlir_fn_res.f
+    if isempty(linear_args) &&
+        isempty(linear_results) &&
+        !_has_emitted_mlir_code(mod, compiled_f)
+        @warn lazy"No traced inputs or outputs were detected and no MLIR code was emitted while compiling `$(fnname)`. Did you forget to convert inputs using `Reactant.to_rarray`?"
+    end
 
     # Custom Kernels without Raising will lead to suboptimal codegen for is_sharded, force
     # raising
