@@ -1,0 +1,58 @@
+include:
+  - remote: 'https://gitlab.com/cscs-ci/recipes/-/raw/master/templates/v2/.ci-ext.yml'
+
+# Pkg.test on one MI300A GPU (gfx942) of Beverin (CSCS): the AMDGPU job commented out in .buildkite/pipeline.yml.
+# Julia (an x86 build of the CI user; the uenv has none) runs in the uenv: its ROCm 7.2.3 libraries, on LD_LIBRARY_PATH, are
+# loaded instead of the ROCm bundled with Reactant_jll, whose hipBLASLt fails with "out of memory" at client creation on Beverin.
+# Nodes are exclusive: srun gives the tests the one GPU of SLURM_GPUS_PER_TASK. ParallelTestRunner would start one worker per
+# hardware thread of the node (192): TEST_JOBS caps the workers that share the GPU. Job-local depot.
+.mi300:
+  extends: .baremetal-runner-beverin-mi300
+  variables:
+    UENV: '56ebb909a6164680'                         # prgenv-gnu/7.2.3 (ROCm 7.2.3)
+    JULIA: '/users/lraess/julia_amd/julia_amd-1.12'
+    SLURM_JOB_NUM_NODES: 1
+    SLURM_NTASKS_PER_NODE: 1
+    SLURM_GPUS_PER_TASK: 1
+    SLURM_TIMELIMIT: '02:00:00'
+    JULIA_DEPOT_PATH: '${CI_PROJECT_DIR}/.julia'
+    JULIA_DEBUG: 'Reactant,Reactant_jll'
+    REACTANT_BACKEND_GROUP: 'gpu'                    # Fail instead of running the tests on the CPU if the GPU is not usable.
+    TEST_JOBS: '16'
+    # The (CK) implicit-GEMM convolution solvers of the uenv's MIOpen 3.5.1 segfault when XLA autotunes convolutions
+    # (https://github.com/ROCm/rocm-libraries/issues/9088): disable the implicit-GEMM family.
+    MIOPEN_DEBUG_CONV_IMPLICIT_GEMM: '0'
+  rules:
+    - if: '$CI_COMMIT_MESSAGE =~ /\[skip tests\]/'
+      when: never
+    - when: on_success
+  script:
+    - ulimit -c 0
+    - printf '[Reactant]\nxla_runtime = "%s"\n' "$XLA_RUNTIME" > LocalPreferences.toml
+    - cat LocalPreferences.toml
+    # Reactant links its ROCm kernels with $ROCM_PATH/llvm/bin/ld.lld, which the view has in bin/: ROCM_PATH points to an overlay
+    # of the view (made inside srun, where the uenv is mounted) that adds llvm/bin.
+    - |
+      srun -n 1 --uenv $UENV --view=default bash -c '
+        set -euo pipefail
+        ROCM_OVERLAY="$CI_PROJECT_DIR/.rocm"
+        rm -rf "$ROCM_OVERLAY"
+        mkdir -p "$ROCM_OVERLAY/llvm"
+        ln -s "$ROCM_PATH"/* "$ROCM_OVERLAY/"
+        ln -s "$ROCM_PATH/bin" "$ROCM_OVERLAY/llvm/bin"
+        export ROCM_PATH="$ROCM_OVERLAY"
+        exec "$0" "$@"
+      ' $JULIA --project=. --startup-file=no -e '
+        println("Instantiating project")
+        using Pkg
+        Pkg.develop([PackageSpec(path="lib/ReactantCore")])
+        println("Running tests")
+        Pkg.test(; test_args=[ENV["TEST_GROUP"], "--jobs=$(ENV["TEST_JOBS"])"])'
+
+mi300:
+  extends: .mi300
+  allow_failure: true  # Until the ROCm backend passes the test suite.
+  parallel:
+    matrix:
+      - TEST_GROUP: ['core', 'nn', 'integration']
+        XLA_RUNTIME: ['IFRT']
