@@ -41,6 +41,7 @@ import Reactant.XLA.PJRT.Plugin:
     device,
     device_assignment,
     devices,
+    dynamic_dims,
     executable,
     execute,
     fingerprint,
@@ -157,6 +158,7 @@ isdeleted(buffer::HostBuffer) = buffer.data == C_NULL
 # TODO implement Base.eltype
 pjrt_eltype(buffer::HostBuffer) = buffer.type
 Base.size(buffer::HostBuffer) = Tuple(buffer.dims)
+dynamic_dims(::HostBuffer) = Int[]
 memory_layout(buffer::HostBuffer) = TiledMemoryLayout(buffer.minor_to_major)
 device(buffer::HostBuffer) = buffer.device
 memory(buffer::HostBuffer) = buffer.memory
