@@ -7,8 +7,6 @@ using Reactant.XLA: CAPI
 
 using Reactant.XLA.PJRT.Plugin:
     AbstractPlugin,
-    Buffer,
-    Client,
     Device,
     DeviceDescription,
     Event,
@@ -22,58 +20,50 @@ using Reactant.XLA.PJRT.Plugin:
     npartitions,
     nreplicas,
     pjrt_elsize,
-    pjrt_eltype,
     resource_exhausted,
     unimplemented,
     vtable_memory
 
 # interface functions extended by this plugin
 import Reactant.XLA.PJRT.Plugin:
+    Buffer,
+    Client,
     addressable_device_logical_ids,
     addressable_devices,
     addressable_memories,
     attributes,
-    buffer_from_host_buffer,
-    compile!,
+    codesize,
+    compile,
     compile_options,
-    copy_to_device,
-    copy_to_memory,
-    create_client,
-    create_uninitialized_buffer,
-    debug_string,
+    copyto,
     default_memory,
     description,
     device,
     device_assignment,
     devices,
-    dimensions,
-    element_type,
     executable,
     execute,
     fingerprint,
     id,
-    is_addressable,
-    is_on_cpu,
+    isaddressable,
     isdeleted,
+    isoncpu,
     kind,
     kind_id,
     local_hardware_id,
     memory,
     memory_layout,
     name,
-    on_device_size_in_bytes,
     optimized_program,
-    output_element_types,
+    output_eltypes,
+    pjrt_eltype,
     platform_name,
     platform_version,
     process_index,
     ready_event,
     serialize,
-    size_of_generated_code_in_bytes,
     to_host_buffer,
-    to_string,
-    topology_description,
-    unsafe_pointer
+    topology_description
 
 using LinearAlgebra: BLAS, BlasFloat, Hermitian, cholesky, issuccess, mul!
 
@@ -82,8 +72,6 @@ mutable struct HostMemory <: Memory
     const vtable::Ptr{CAPI.PJRT_Memory_FunctionTable}
     const id::Cint
     const kind::String
-    const debug_string::String
-    const to_string::String
     const devices::Vector{Device}
 
     function HostMemory(id, kind, devices)
@@ -91,8 +79,6 @@ mutable struct HostMemory <: Memory
             unsafe_convert(Ptr{CAPI.PJRT_Memory_FunctionTable}, vtable_memory),
             id,
             kind,
-            "Memory(id=$id, kind=$kind, platform=julia)",
-            "Memory managed by Julia",
             devices,
         )
     end
@@ -101,29 +87,29 @@ end
 id(mem::HostMemory) = mem.id
 kind(mem::HostMemory) = mem.kind
 kind_id(::HostMemory) = 0
-debug_string(mem::HostMemory) = mem.debug_string
-to_string(mem::HostMemory) = mem.to_string
+function Base.show(io::IO, mem::HostMemory)
+    return print(io, "Memory(id=", mem.id, ", kind=", mem.kind, ", platform=julia)")
+end
+Base.print(io::IO, ::HostMemory) = print(io, "Memory managed by Julia")
 addressable_devices(mem::HostMemory) = mem.devices
 
 ## DeviceDescription
 mutable struct HostDeviceDescription <: DeviceDescription
     const id::Cint
     const pid::Cint
-    const debug_string::String
-    const to_string::String
 end
 
 function HostDeviceDescription()
     id = 0
     pid = 0
-    return HostDeviceDescription(id, pid, "julia: id=$id", "JuliaDevice(id=$id)")
+    return HostDeviceDescription(id, pid)
 end
 
 id(desc::HostDeviceDescription) = desc.id
 process_index(desc::HostDeviceDescription) = desc.pid
 kind(desc::HostDeviceDescription) = "julia-cpu"
-debug_string(desc::HostDeviceDescription) = desc.debug_string
-to_string(desc::HostDeviceDescription) = desc.to_string
+Base.show(io::IO, desc::HostDeviceDescription) = print(io, "julia: id=", desc.id)
+Base.print(io::IO, desc::HostDeviceDescription) = print(io, "JuliaDevice(id=", desc.id, ")")
 attributes(::HostDeviceDescription) = ()
 
 ## Device
@@ -134,7 +120,7 @@ mutable struct HostDevice <: Device
 end
 
 description(dev::HostDevice) = dev.description
-is_addressable(dev::HostDevice) = true
+isaddressable(dev::HostDevice) = true
 local_hardware_id(dev::HostDevice) = dev.local_hardware_id
 addressable_memories(dev::HostDevice) = dev.memories
 default_memory(dev::HostDevice) = dev.memories[1]
@@ -168,14 +154,15 @@ function Base.delete!(buffer::HostBuffer)
 end
 
 isdeleted(buffer::HostBuffer) = buffer.data == C_NULL
-element_type(buffer::HostBuffer) = buffer.type
-dimensions(buffer::HostBuffer) = buffer.dims
+# TODO implement Base.eltype
+pjrt_eltype(buffer::HostBuffer) = buffer.type
+Base.size(buffer::HostBuffer) = Tuple(buffer.dims)
 memory_layout(buffer::HostBuffer) = TiledMemoryLayout(buffer.minor_to_major)
 device(buffer::HostBuffer) = buffer.device
 memory(buffer::HostBuffer) = buffer.memory
-on_device_size_in_bytes(buffer::HostBuffer) = buffer.size_in_bytes
+Base.sizeof(buffer::HostBuffer) = Int(buffer.size_in_bytes)
 
-function copy_to_device(dev::HostDevice, buffer::HostBuffer)
+function copyto(dev::HostDevice, buffer::HostBuffer)
     if dev === device(buffer)
         throw(invalid_argument("HostBuffer is already on HostDevice"))
     end
@@ -194,7 +181,7 @@ function copy_to_device(dev::HostDevice, buffer::HostBuffer)
     return new_buffer
 end
 
-function copy_to_memory(mem::HostMemory, buffer::HostBuffer)
+function copyto(mem::HostMemory, buffer::HostBuffer)
     devs = addressable_devices(mem)
     isempty(devs) && throw(invalid_argument("HostMemory has no addressable devices"))
     dev = device(buffer) in devs ? device(buffer) : first(devs)
@@ -217,7 +204,7 @@ function to_host_buffer(dst::Ptr{Cvoid}, buffer::HostBuffer)
     return nothing
 end
 
-is_on_cpu(::HostBuffer) = true
+isoncpu(::HostBuffer) = true
 
 # `HostBuffer` data is written synchronously before the buffer is handed out, so it is always ready
 function ready_event(::HostBuffer)
@@ -226,20 +213,20 @@ function ready_event(::HostBuffer)
     return event
 end
 
-unsafe_pointer(buffer::HostBuffer) = buffer.data
+Base.pointer(buffer::HostBuffer) = buffer.data
 
 ## HostExecutable
 mutable struct HostExecutable <: Executable
     const name::String
     const program::String
-    const output_types::Vector{CAPI.PJRT_Buffer_Type}
+    const output_types::Vector{DataType}
     const options::Reactant.Proto.xla.CompileOptionsProto
 end
 
 name(exe::HostExecutable) = exe.name
-size_of_generated_code_in_bytes(::HostExecutable) = 0
+codesize(::HostExecutable) = 0
 fingerprint(::HostExecutable) = throw(unimplemented("`HostExecutable` has no fingerprint"))
-output_element_types(exe::HostExecutable) = exe.output_types
+output_eltypes(exe::HostExecutable) = exe.output_types
 optimized_program(exe::HostExecutable) = exe.program
 function serialize(::HostExecutable)
     throw(unimplemented("serialization of `HostExecutable` is not supported yet"))
@@ -247,7 +234,7 @@ end
 compile_options(exe::HostExecutable) = exe.options
 
 ## HostLoadedExecutable
-# `Tag` is unique per compiled program, so that `compile!` can define an `execute` method for each one
+# `Tag` is unique per compiled program, so that `compile` can define an `execute` method for each one
 mutable struct HostLoadedExecutable{Tag} <: LoadedExecutable
     const executable::HostExecutable
     const devices::Vector{Device}
@@ -1559,11 +1546,11 @@ function topology_description(::HostClient)
     throw(unimplemented("`HostClient` has no topology description yet"))
 end
 
-function buffer_from_host_buffer(
+function Buffer(
     ::HostClient,
     dev::HostDevice,
     mem::HostMemory,
-    data,
+    data::Ptr,
     _eltype,
     _size,
     host_layout,
@@ -1611,9 +1598,16 @@ function buffer_from_host_buffer(
     return HostBuffer(new_data, size_in_bytes, _eltype, _size, minor_to_major, dev, mem)
 end
 
-# like `buffer_from_host_buffer`, buffers are dense in major-to-minor order and `layout` is not checked
-function create_uninitialized_buffer(
-    ::HostClient, dev::HostDevice, mem::HostMemory, _eltype, _size, _layout
+# like `Buffer(client, dev, mem, data::Ptr, ...)`, buffers are dense in major-to-minor order and `layout` is not
+# checked
+function Buffer(
+    ::HostClient,
+    dev::HostDevice,
+    mem::HostMemory,
+    ::UndefInitializer,
+    _eltype,
+    _size,
+    _layout,
 )
     size_in_bytes = prod(_size; init=pjrt_elsize(_eltype))
     minor_to_major = collect((length(_size) - 1):-1:0)
@@ -1673,7 +1667,7 @@ function codegen_op!(exprs, op, opname, operands, vars, nvals)
     hasmethod(handle, signature) ||
         throw(unimplemented("`$opname` is not supported by `HostClient`"))
 
-    # attributes are decoded here, since the MLIR context doesn't outlive `compile!`
+    # attributes are decoded here, since the MLIR context doesn't outlive `compile`
     attributes = (;
         (
             Symbol(String(API.mlirIdentifierStr(na.ref.name))) =>
@@ -1735,13 +1729,13 @@ function codegen_op!(exprs, op, opname, operands, vars, nvals)
     return nothing
 end
 
-function compile!(client::HostClient, code, options)
+function compile(client::HostClient, code, options)
     # `code` lives in a context owned by the caller, so only copies of its contents are kept
     main = IR.lookup(IR.SymbolTable(code), "main")
     isnothing(main) && throw(invalid_argument("program has no `main` function"))
     ftype = IR.FunctionType(main)
     output_types = map(1:IR.nresults(ftype)) do i
-        pjrt_eltype(IR.julia_type(eltype(IR.result(ftype, i))))
+        IR.julia_type(eltype(IR.result(ftype, i)))
     end
 
     name_attr = IR.getattr(IR.Operation(code), "sym_name")
@@ -1859,7 +1853,7 @@ end
 ## HostPlugin
 struct HostPlugin <: AbstractPlugin end
 
-create_client(::HostPlugin, ::Dict{String,Any}) = HostClient()
+Client(::HostPlugin, ::Dict{String,Any}) = HostClient()
 
 const plugin_api = Ref{PluginApi}()
 

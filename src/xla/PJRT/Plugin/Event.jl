@@ -188,7 +188,7 @@ end
     AsyncTrackingEvent(description::String)
 
 A scoped event that tells a device that there is asynchronous work depending on its activity, from its creation by
-[`create_async_tracking_event`](@ref) until C destroys it.
+[`async_tracking_event`](@ref) until C destroys it.
 
 `description` is the one given by C (e.g. for tracing), and `done` is an [`Event`](@ref) that is set once the work is
 done, i.e. when `PJRT_AsyncTrackingEvent_Destroy` is called. A plugin that supports tracking events can keep them, and

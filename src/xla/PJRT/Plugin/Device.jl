@@ -4,13 +4,13 @@
 ### Interface
 
 - `description`
-- `is_addressable`
+- `isaddressable`
 - `local_hardware_id`
 - `addressable_memories`
 - `default_memory`
 - `memory_stats`
 - `clear_memory_stats!`
-- `create_async_tracking_event` (defaults to `nothing`, i.e. not supported)
+- `async_tracking_event` (defaults to `nothing`, i.e. not supported)
 - `poison_execution!`
 """
 abstract type Device end
@@ -36,19 +36,19 @@ description(::Device)
 end
 
 """
-    is_addressable(dev::Device) -> Bool
+    isaddressable(dev::Device) -> Bool
 
 Return whether `dev` can be addressed by the client of this process.
 
 Backs `PJRT_Device_IsAddressable`.
 """
-is_addressable(::Device)
+isaddressable(::Device)
 
 @pjrt_catch_return function pjrt_device_is_addressable(
     args::Ptr{CAPI.PJRT_Device_IsAddressable_Args}
 )::Ptr{CAPI.PJRT_Error}
     device = unsafe_pointer_to_objref(Ptr{Device}(unsafe_load(args.device)))::Device
-    unsafe_store!(args.is_addressable, is_addressable(device)::Bool)
+    unsafe_store!(args.is_addressable, isaddressable(device)::Bool)
     return ok()
 end
 
@@ -166,7 +166,7 @@ poison_execution!(::Device, ::Int32, ::Error)
 end
 
 """
-    create_async_tracking_event(dev::Device, description::String) -> Union{Nothing,AsyncTrackingEvent}
+    async_tracking_event(dev::Device, description::String) -> Union{Nothing,AsyncTrackingEvent}
 
 Return a new [`AsyncTrackingEvent`](@ref) (i.e. `AsyncTrackingEvent(description)`) that tracks asynchronous work
 depending on the activity of `dev`, or `nothing` if `dev` doesn't support tracking it. Defaults to `nothing`.
@@ -175,7 +175,7 @@ The caller GC-roots the returned event.
 
 Backs `PJRT_Device_CreateAsyncTrackingEvent`.
 """
-create_async_tracking_event(::Device, ::String) = nothing
+async_tracking_event(::Device, ::String) = nothing
 
 @pjrt_catch_return function pjrt_device_create_async_tracking_event(
     args::Ptr{CAPI.PJRT_Device_CreateAsyncTrackingEvent_Args}
@@ -184,7 +184,7 @@ create_async_tracking_event(::Device, ::String) = nothing
     desc = unsafe_string(
         Ptr{UInt8}(unsafe_load(args.description)), unsafe_load(args.description_size)
     )
-    event = create_async_tracking_event(device, desc)::Union{Nothing,AsyncTrackingEvent}
+    event = async_tracking_event(device, desc)::Union{Nothing,AsyncTrackingEvent}
     if isnothing(event)
         unsafe_store!(args.event, C_NULL)
         return ok()

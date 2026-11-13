@@ -1,7 +1,7 @@
 """
     LoadedExecutable
 
-A compiled program loaded on the devices of a `Client`, as returned by `compile!`.
+A compiled program loaded on the devices of a `Client`, as returned by `compile`.
 
 ### Interface
 
@@ -141,7 +141,7 @@ end
 Return the device assignment that `exec` was compiled for, which maps every (replica, partition) pair to a device
 id, or `nothing` if `exec` is portable (i.e. it runs on whichever device is given to `execute`).
 
-It usually is `executable_build_options.device_assignment` of the `CompileOptionsProto` given to `compile!`.
+It usually is `executable_build_options.device_assignment` of the `CompileOptionsProto` given to `compile`.
 
 !!! warning
 `PjRtCApiLoadedExecutable` calls this when wrapping `exec` and treats any error as fatal.

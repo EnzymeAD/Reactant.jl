@@ -3,7 +3,7 @@
 
 The description of the devices of a platform and how they are connected, used by `compile` to compile programs without
 a `Client`. C gets one from a client with `topology_description`, or without a client through
-`create_topology_description` and `deserialize_topology_description`.
+`TopologyDescription(plugin, name, options)` and `TopologyDescription(plugin, bytes)`.
 
 ### Interface
 
@@ -13,8 +13,13 @@ a `Client`. C gets one from a client with `topology_description`, or without a c
 - `serialize`
 - `attributes`
 - `fingerprint`
-- `make_canonical_shape_for_memory_space`
+- `canonical_shape`
 - `memory_space_kind_ids`
+
+!!! info
+The `TopologyDescription(plugin, name, options)` and `TopologyDescription(plugin, bytes)` constructors (see
+[`AbstractPlugin`](@ref)) return the plugin's own subtype of `TopologyDescription`, chosen by dispatch on their
+`plugin` argument.
 """
 abstract type TopologyDescription end
 
@@ -87,7 +92,7 @@ end
 """
     serialize(topology::TopologyDescription) -> Vector{UInt8}
 
-Return a serialization of `topology` that `deserialize_topology_description` can read back, also used in cache keys.
+Return a serialization of `topology` that `TopologyDescription(plugin, bytes)` can read back, also used in cache keys.
 
 The returned vector is GC rooted until C calls its deleter, so it must be a new vector that `topology` doesn't hand out
 anywhere else.
@@ -163,7 +168,7 @@ fingerprint(::TopologyDescription)
 end
 
 """
-    make_canonical_shape_for_memory_space(topology::TopologyDescription, kind_id::Integer, type, dims, layout)
+    canonical_shape(topology::TopologyDescription, kind_id::Integer, type, dims, layout)
         -> Reactant.Proto.xla.ShapeProto
 
 Return the shape, including its layout, that a buffer with element type `type::CAPI.PJRT_Buffer_Type`, dimensions
@@ -172,7 +177,7 @@ transferred to a memory space of kind id `kind_id` (see `memory_space_kind_ids`)
 
 Backs `PJRT_TopologyDescription_MakeCanonicalShapeForMemorySpace`.
 """
-make_canonical_shape_for_memory_space(::TopologyDescription, ::Integer, args...)
+canonical_shape(::TopologyDescription, ::Integer, args...)
 
 @pjrt_catch_return function pjrt_topology_description_make_canonical_shape_for_memory_space(
     args::Ptr{CAPI.PJRT_TopologyDescription_MakeCanonicalShapeForMemorySpace_Args}
@@ -186,7 +191,7 @@ make_canonical_shape_for_memory_space(::TopologyDescription, ::Integer, args...)
     c_layout = unsafe_load(args.layout)
     layout = c_layout == C_NULL ? nothing : MemoryLayout(c_layout)
 
-    shape = make_canonical_shape_for_memory_space(
+    shape = canonical_shape(
         topology, kind_id, _eltype, _size, layout
     )::Reactant.Proto.xla.ShapeProto
     bytes = Reactant.ProtoUtils.proto_to_bytes(shape)
@@ -252,8 +257,8 @@ end
 Compile `code` for the devices described by `topology` and return an executable, which must be loaded with `load`
 before it can run.
 
-`code` and `options::Reactant.Proto.xla.CompileOptionsProto` are like in `compile!`. `client` is an optional client of
-the same platform, for performance-guided optimizations.
+`code` and `options::Reactant.Proto.xla.CompileOptionsProto` are like in `compile(::Client, ...)`. `client` is an
+optional client of the same platform, for performance-guided optimizations.
 
 The caller GC-roots the returned executable.
 

@@ -6,8 +6,8 @@
 - `id`
 - `kind`
 - `kind_id`
-- `debug_string`
-- `to_string`
+- `debug_string` (defaults to `Base.show`)
+- `Base.print`
 - `addressable_devices`
 """
 abstract type Memory end
@@ -85,42 +85,52 @@ end
 """
     debug_string(mem::Memory) -> String
 
-Return a verbose description of `mem` for debugging.
-    
-!!! warning
-The string is handed to C by pointer, so it must be owned by `mem`.
+Return a verbose description of `mem` for debugging. Defaults to `Base.show(io, mem)`, i.e. `sprint(show, mem)`.
+
+It is called at most once per `mem`: the C wrapper keeps the string for as long as `mem` is alive, since C keeps
+pointers to it.
 
 Backs `PJRT_Memory_DebugString`.
 """
-debug_string(::Memory)
+debug_string(mem::Memory) = sprint(show, mem)
+
+# C borrows the strings, so they are kept for as long as the memory is alive
+const memory_debug_string_cache = WeakKeyIdDict{Memory,String}()
 
 @pjrt_catch_return function pjrt_memory_debug_string(
     args::Ptr{CAPI.PJRT_Memory_DebugString_Args}
 )::Ptr{CAPI.PJRT_Error}
     memory = unsafe_pointer_to_objref(Ptr{Memory}(unsafe_load(args.memory)))::Memory
-    str = debug_string(memory)::String
+    str = get!(memory_debug_string_cache, memory) do
+        debug_string(memory)::String
+    end
     unsafe_store!(args.debug_string, Cstring(pointer(str)))
     unsafe_store!(args.debug_string_size, sizeof(str))
     return ok()
 end
 
 """
-    to_string(mem::Memory) -> String
+    Base.print(io::IO, mem::Memory)
 
-Return a short, user-facing description of `mem`.
+Write a short, user-facing description of `mem`. If not implemented, Base falls back to `Base.show(io, mem)`.
 
-!!! warning
-The string is handed to C by pointer, so it must be owned by `mem`.
+It is called at most once per `mem`: the C wrapper keeps the string for as long as `mem` is alive, since C keeps
+pointers to it.
 
 Backs `PJRT_Memory_ToString`.
 """
-to_string(::Memory)
+Base.print(::IO, ::Memory)
+
+# C borrows the strings, so they are kept for as long as the memory is alive
+const memory_to_string_cache = WeakKeyIdDict{Memory,String}()
 
 @pjrt_catch_return function pjrt_memory_to_string(
     args::Ptr{CAPI.PJRT_Memory_ToString_Args}
 )::Ptr{CAPI.PJRT_Error}
     memory = unsafe_pointer_to_objref(Ptr{Memory}(unsafe_load(args.memory)))::Memory
-    str = to_string(memory)::String
+    str = get!(memory_to_string_cache, memory) do
+        sprint(print, memory)
+    end
     unsafe_store!(args.to_string, Cstring(pointer(str)))
     unsafe_store!(args.to_string_size, sizeof(str))
     return ok()
