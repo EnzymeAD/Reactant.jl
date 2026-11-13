@@ -1,6 +1,6 @@
 using Reactant, Test, StableRNGs
 
-const RunningOnCUDA = contains(string(Reactant.devices()[1]), "CUDA")
+const RunningOnCUDA = Reactant.XLA.platform_name(Reactant.XLA.default_backend()) == "cuda"
 
 const vector_add_kernel = """
 module {

@@ -3,7 +3,7 @@ using Reactant: Ops
 using LinearAlgebra
 using SpecialFunctions: SpecialFunctions
 
-const RunningOnTPU = contains(string(Reactant.devices()[1]), "TPU")
+const RunningOnTPU = Reactant.XLA.platform_name(Reactant.XLA.default_backend()) == "tpu"
 const RunningOnAppleX86 = Sys.isapple() && Sys.ARCH === :x86_64
 
 @testset "abs" begin
@@ -36,9 +36,9 @@ end
     b = Reactant.to_rarray([5.5, 6.6, -7.7, -8.8])
     @test Array(a) .+ Array(b) ≈ @jit Ops.add(a, b)
 
-    a = Reactant.to_rarray(ComplexF32[1.1 + 2.2im, 3.3 + 4.4im, 5.5 + 6.6im, 7.7 + 8.8im])
+    a = Reactant.to_rarray(ComplexF32[1.1+2.2im, 3.3+4.4im, 5.5+6.6im, 7.7+8.8im])
     b = Reactant.to_rarray(
-        ComplexF32[9.9 + 10.10im, 11.11 + 12.12im, -13.13 + -14.14im, -15.15 + -16.16im]
+        ComplexF32[9.9+10.10im, 11.11+12.12im, -13.13+-14.14im, -15.15+-16.16im]
     )
     @test Array(a) .+ Array(b) ≈ @jit(Ops.add(a, b))
 end
@@ -184,13 +184,13 @@ end
 
     x = Reactant.to_rarray([1.1f0, 2.2f0, 3.3f0, 4.4f0])
     y = Reactant.to_rarray([5.5f0, 6.6f0, -7.7f0, -8.8f0])
-    @test ComplexF32[1.1 + 5.5im, 2.2 + 6.6im, 3.3 - 7.7im, 4.4 - 8.8im] ≈
+    @test ComplexF32[1.1+5.5im, 2.2+6.6im, 3.3-7.7im, 4.4-8.8im] ≈
         @jit(Ops.complex(x, y))
 end
 
 @testset "constant" begin
     for x in [[1, 2, 3], [1.1, 2.2, 3.3], [1.1 + 2.2im, 3.3 + 4.4im, 5.5 + 6.6im]]
-        if x isa AbstractArray{ComplexF64} && contains(string(Reactant.devices()[1]), "TPU")
+        if x isa AbstractArray{ComplexF64} && Reactant.XLA.platform_name(Reactant.XLA.default_backend()) == "tpu"
             continue
         end
         @test x ≈ @jit Ops.constant(x)
@@ -213,12 +213,12 @@ end
     x = Reactant.to_rarray([0.0, π / 2, π, 3π / 2, 2π])
     @test [1.0, 0.0, -1.0, 0.0, 1.0] ≈ @jit(Ops.cosine(x)) broken = RunningOnAppleX86
 
-    @test ComplexF32[1.0 + 0.0im, 0.0 + 0.0im, -1.0 + 0.0im, 0.0 + 0.0im, 1.0 + 0.0im] ≈
+    @test ComplexF32[1.0+0.0im, 0.0+0.0im, -1.0+0.0im, 0.0+0.0im, 1.0+0.0im] ≈
         @jit(
         Ops.cosine(
             Reactant.to_rarray(
                 ComplexF32[
-                    0.0 + 0.0im, π / 2 + 0.0im, π + 0.0im, 3π / 2 + 0.0im, 2π + 0.0im
+                    0.0+0.0im, π/2+0.0im, π+0.0im, 3π/2+0.0im, 2π+0.0im
                 ],
             ),
         )
@@ -242,7 +242,7 @@ end
             [9.9 + 10.10im, 11.11 + 12.12im, -13.13 + -14.14im, -15.15 + -16.16im],
         ),
     ]
-        if a isa AbstractArray{ComplexF64} && contains(string(Reactant.devices()[1]), "TPU")
+        if a isa AbstractArray{ComplexF64} && Reactant.XLA.platform_name(Reactant.XLA.default_backend()) == "tpu"
             continue
         end
         a = Reactant.to_rarray(a)
@@ -286,7 +286,7 @@ end
     x = [1.0, 2.0, 3.0, 4.0]
     @test exp.(x) ≈ @jit Ops.exponential(Reactant.to_rarray(x))
 
-    x = ComplexF32[1.0 + 2.0im, 3.0 + 4.0im, 5.0 + 6.0im, 7.0 + 8.0im]
+    x = ComplexF32[1.0+2.0im, 3.0+4.0im, 5.0+6.0im, 7.0+8.0im]
     @test exp.(x) ≈ @jit(Ops.exponential(Reactant.to_rarray(x))) skip = RunningOnAppleX86
 end
 
@@ -294,7 +294,7 @@ end
     x = [1.0, 2.0, 3.0, 4.0]
     @test expm1.(x) ≈ @jit Ops.exponential_minus_one(Reactant.to_rarray(x))
 
-    x = ComplexF32[1.0 + 2.0im, 3.0 + 4.0im, 5.0 + 6.0im, 7.0 + 8.0im]
+    x = ComplexF32[1.0+2.0im, 3.0+4.0im, 5.0+6.0im, 7.0+8.0im]
     @test expm1.(x) ≈ @jit(Ops.exponential_minus_one(Reactant.to_rarray(x))) skip =
         RunningOnAppleX86
 end
@@ -338,7 +338,7 @@ end
 
     # Test FFT followed by IFFT recovers original (round-trip)
     original = Reactant.to_rarray(
-        ComplexF32[1.0 + 2.0im, 3.0 - 1.0im, -2.0 + 0.5im, 0.0 - 3.0im]
+        ComplexF32[1.0+2.0im, 3.0-1.0im, -2.0+0.5im, 0.0-3.0im]
     )
     fft_result = @jit(gfft(original))
     @test Array(original) ≈ @jit(gifft(Reactant.to_rarray(fft_result)))
@@ -378,7 +378,7 @@ end
 end
 
 @testset "imag" begin
-    x = Reactant.to_rarray(ComplexF32[1.1 + 2.2im, 3.3 + 4.4im, 5.5 + 6.6im, 7.7 + 8.8im])
+    x = Reactant.to_rarray(ComplexF32[1.1+2.2im, 3.3+4.4im, 5.5+6.6im, 7.7+8.8im])
     @test Float32[2.2, 4.4, 6.6, 8.8] ≈ @jit(Ops.imag(x))
 end
 
@@ -424,7 +424,7 @@ end
     x = Reactant.to_rarray([1.0, 2.0, 3.0, 4.0])
     @test log.(Array(x)) ≈ @jit Ops.log(x)
 
-    x = Reactant.to_rarray(ComplexF32[1.0 + 0.0im, 2.0 + 0.0im, -3.0 + 0.0im, -4.0 + 0.0im])
+    x = Reactant.to_rarray(ComplexF32[1.0+0.0im, 2.0+0.0im, -3.0+0.0im, -4.0+0.0im])
     @test log.(Array(x)) ≈ @jit(Ops.log(x))
 end
 
@@ -432,7 +432,7 @@ end
     x = Reactant.to_rarray([1.0, 2.0, 3.0, 4.0])
     @test log.(Array(x)) ≈ @jit Ops.log(x)
 
-    x = Reactant.to_rarray(ComplexF32[1.0 + 0.0im, 2.0 + 0.0im, -3.0 + 0.0im, -4.0 + 0.0im])
+    x = Reactant.to_rarray(ComplexF32[1.0+0.0im, 2.0+0.0im, -3.0+0.0im, -4.0+0.0im])
     @test log.(Array(x)) ≈ @jit(Ops.log(x))
 end
 
@@ -483,7 +483,7 @@ end
             [9.9 + 10.10im, 11.11 + 12.12im, -13.13 + -14.14im, -15.15 + -16.16im],
         ),
     ]
-        if contains(string(Reactant.devices()[1]), "TPU")
+        if Reactant.XLA.platform_name(Reactant.XLA.default_backend()) == "tpu"
             continue
         end
         a = Reactant.to_rarray(a)
@@ -504,7 +504,7 @@ end
     x = Reactant.to_rarray([-1.0, 0.0, 1.0, 10.0])
     @test [1.0, 0.0, -1.0, -10.0] ≈ @jit Ops.negate(x)
 
-    x = Reactant.to_rarray(ComplexF32[-1.0 + 2im, 0.0 - 3im, 1.0 + 4im, 10.0 - 5im])
+    x = Reactant.to_rarray(ComplexF32[-1.0+2im, 0.0-3im, 1.0+4im, 10.0-5im])
     @test [1.0 - 2im, 0.0 + 3im, -1.0 - 4im, -10.0 + 5im] ≈ @jit(Ops.negate(x))
 end
 
@@ -575,13 +575,13 @@ end
     p = Reactant.to_rarray([0, 1, 2, 3])
     @test Array(x) .^ Array(p) == @jit Ops.power(x, p)
 
-    x = Reactant.to_rarray(ComplexF32[0.0 + 1.0im, 0.0 + 1.0im, 0.0 + 1.0im, 0.0 + 1.0im])
-    p = Reactant.to_rarray(ComplexF32[0.0 + 0.0im, 1.0 + 0.0im, 2.0 + 0.0im, 3.0 + 0.0im])
+    x = Reactant.to_rarray(ComplexF32[0.0+1.0im, 0.0+1.0im, 0.0+1.0im, 0.0+1.0im])
+    p = Reactant.to_rarray(ComplexF32[0.0+0.0im, 1.0+0.0im, 2.0+0.0im, 3.0+0.0im])
     @test Array(x) .^ Array(p) ≈ @jit(Ops.power(x, p))
 end
 
 @testset "real" begin
-    x = Reactant.to_rarray(ComplexF32[1.1 + 2.2im, 3.3 + 4.4im, 5.5 + 6.6im, 7.7 + 8.8im])
+    x = Reactant.to_rarray(ComplexF32[1.1+2.2im, 3.3+4.4im, 5.5+6.6im, 7.7+8.8im])
     @test [1.1, 3.3, 5.5, 7.7] ≈ @jit(Ops.real(x))
 end
 
@@ -624,7 +624,7 @@ end
 
 @testset "rng_bit_generator" begin
     @testset for (alg, sz) in
-                 [("DEFAULT", 2), ("PHILOX", 2), ("PHILOX", 3), ("THREE_FRY", 2)]
+        [("DEFAULT", 2), ("PHILOX", 2), ("PHILOX", 3), ("THREE_FRY", 2)]
         seed = Reactant.to_rarray(zeros(UInt64, sz))
 
         res = @jit Ops.rng_bit_generator(Int32, seed, [2, 4]; algorithm=alg)
@@ -777,16 +777,16 @@ end
 
     x = Reactant.to_rarray(
         ComplexF32[
-            NaN + 1.0im, 1.0 + NaN, 0.0 + 0.0im, -1.0 + 2.0im, 0.0 - 3.0im, 1.0 + 4.0im
+            NaN+1.0im, 1.0+NaN, 0.0+0.0im, -1.0+2.0im, 0.0-3.0im, 1.0+4.0im
         ],
     )
     @test ComplexF32[
-        NaN + NaN * im,
-        NaN + NaN * im,
-        0.0 + 0.0im,
-        -0.4472135954999579 + 0.8944271909999159im,
-        0.0 - 1.0im,
-        0.24253562503633297 + 0.9701425001453319im,
+        NaN+NaN*im,
+        NaN+NaN*im,
+        0.0+0.0im,
+        -0.4472135954999579+0.8944271909999159im,
+        0.0-1.0im,
+        0.24253562503633297+0.9701425001453319im,
     ] ≈ @jit(Ops.sign(x)) nans = true
 end
 
@@ -798,9 +798,9 @@ end
     @test [0.0, 1.0, 0.0, -1.0, 0.0] ≈ @jit(Ops.sine(x))
 
     x = Reactant.to_rarray(
-        ComplexF32[0.0 + 0.0im, π / 2 + 0.0im, π + 0.0im, 3π / 2 + 0.0im, 2π + 0.0im]
+        ComplexF32[0.0+0.0im, π/2+0.0im, π+0.0im, 3π/2+0.0im, 2π+0.0im]
     )
-    @test ComplexF32[0.0 + 0.0im, 1.0 + 0.0im, 0.0 + 0.0im, -1.0 + 0.0im, 0.0 + 0.0im] ≈
+    @test ComplexF32[0.0+0.0im, 1.0+0.0im, 0.0+0.0im, -1.0+0.0im, 0.0+0.0im] ≈
         @jit(Ops.sine(x)) broken = RunningOnAppleX86
 end
 
@@ -827,8 +827,8 @@ end
     x = Reactant.to_rarray([1.0, 4.0, 9.0, 16.0])
     @test [1.0, 2.0, 3.0, 4.0] ≈ @jit Ops.sqrt(x)
 
-    x = Reactant.to_rarray(ComplexF32[1.0 + 0im, 0.0 + 1im])
-    @test ComplexF32[1.0 + 0im, 1 / √2 * (1 + im)] ≈ @jit(Ops.sqrt(x)) broken =
+    x = Reactant.to_rarray(ComplexF32[1.0+0im, 0.0+1im])
+    @test ComplexF32[1.0+0im, 1/√2*(1+im)] ≈ @jit(Ops.sqrt(x)) broken =
         RunningOnAppleX86
 end
 
@@ -841,7 +841,7 @@ end
             [9.9 + 10.10im, 11.11 + 12.12im, -13.13 + -14.14im, -15.15 + -16.16im],
         ),
     ]
-        if contains(string(Reactant.devices()[1]), "TPU")
+        if Reactant.XLA.platform_name(Reactant.XLA.default_backend()) == "tpu"
             continue
         end
         a = Reactant.to_rarray(a)
@@ -858,7 +858,7 @@ end
         RunningOnAppleX86
 
     x = Reactant.to_rarray(
-        ComplexF32[0.0 + 0.0im, π / 4 + 0.0im, π / 3 + 0.0im, 3π / 4 + 0.0im, π + 0.0im]
+        ComplexF32[0.0+0.0im, π/4+0.0im, π/3+0.0im, 3π/4+0.0im, π+0.0im]
     )
     @test ComplexF32[0.0, 1.0, 1.73205, -1.0, 0.0] ≈ @jit(Ops.tan(x)) atol = 1e-5 rtol =
         1e-3 broken = RunningOnAppleX86
@@ -947,7 +947,7 @@ end
 end
 
 @testset "conj" begin
-    x = Reactant.to_rarray(ComplexF32[-1.0 + 2im, 0.0 - 1im, 1.0 + 4im])
+    x = Reactant.to_rarray(ComplexF32[-1.0+2im, 0.0-1im, 1.0+4im])
     @test conj(Array(x)) ≈ @jit(Ops.conj(x))
 end
 
@@ -1360,7 +1360,7 @@ end
 end
 
 # dl[1] and du[end] are ignored by the op
-tridiagonal_matrix(dl, d, du) = Tridiagonal(dl[2:end], d, du[1:(end - 1)])
+tridiagonal_matrix(dl, d, du) = Tridiagonal(dl[2:end], d, du[1:(end-1)])
 
 @testset "tridiagonal solve" begin
     m, nrhs = 6, 3

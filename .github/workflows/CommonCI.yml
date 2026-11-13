@@ -35,6 +35,11 @@ on:
         required: false
         default: false
         type: boolean
+      backend_group:
+        description: "Value of `REACTANT_BACKEND_GROUP`, the backend the tests run on (auto | cpu | gpu | tpu | julia-cpu)"
+        required: false
+        default: "auto"
+        type: string
       test_args:
         description: "Test arguments"
         required: false
@@ -49,6 +54,8 @@ on:
 jobs:
   test:
     runs-on: ${{ inputs.os }}
+    env:
+      REACTANT_BACKEND_GROUP: ${{ inputs.backend_group }}
     container:
       image: ${{ contains(inputs.os, 'linux') && 'ghcr.io/enzymead/reactant-docker-images:main' || '' }}
     steps:
@@ -91,7 +98,7 @@ jobs:
       - uses: julia-actions/cache@v3.5.0
         id: julia-cache
         with:
-          cache-name: julia-cache;workflow=${{ inputs.julia_version }}-${{ inputs.os }}-${{ inputs.runtime }}-assertions=${{ inputs.assertions }}-${{ github.event_name }}-${{ inputs.test_args }}-${{ inputs.downgrade_testing }}-${{ inputs.localjll || inputs.enzymejax_commit != '' }}-${{ inputs.enzymejax_commit }}
+          cache-name: julia-cache;workflow=${{ inputs.julia_version }}-${{ inputs.os }}-${{ inputs.runtime }}-assertions=${{ inputs.assertions }}-${{ github.event_name }}-${{ inputs.test_args }}-${{ inputs.downgrade_testing }}-${{ inputs.localjll || inputs.enzymejax_commit != '' }}-${{ inputs.enzymejax_commit }}${{ inputs.backend_group != 'auto' && format('-backend={0}', inputs.backend_group) || '' }}
           gcp-bucket: ${{ contains(inputs.os, 'linux') && 'enzyme-ci-transient' || '' }}
           key-prefix: reactantjl_v2/
 
@@ -237,7 +244,7 @@ jobs:
         timeout-minutes: 10
         if: always()
         with:
-          name: "mlir-${{ inputs.julia_version }}-${{ inputs.os }}-${{ inputs.runtime }}-assertions=${{ inputs.assertions }}-${{ github.event_name }}-test_args=${{ inputs.test_args }}-${{ inputs.localjll || inputs.enzymejax_commit != '' }}-${{ inputs.enzymejax_commit }}"
+          name: "mlir-${{ inputs.julia_version }}-${{ inputs.os }}-${{ inputs.runtime }}-assertions=${{ inputs.assertions }}-${{ github.event_name }}-test_args=${{ inputs.test_args }}-${{ inputs.localjll || inputs.enzymejax_commit != '' }}-${{ inputs.enzymejax_commit }}${{ inputs.backend_group != 'auto' && format('-backend={0}', inputs.backend_group) || '' }}"
           path: "**/*.mlir"
           retention-days: 90
           overwrite: false

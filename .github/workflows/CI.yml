@@ -77,6 +77,23 @@ jobs:
       runtime: ${{ matrix.runtime }}
       test_args: ${{ matrix.test_group == 'core' && 'core plugins' || matrix.test_group }}
       
+  # tests the PJRT plugin written in Julia (`src/accelerators/Julia.jl`), which only supports a single CPU device
+  test_julia_backend:
+    name: test (julia backend)
+    strategy:
+      fail-fast: false
+      matrix:
+        version: ["1.12"]
+        os: ["ubuntu-24.04", "macOS-latest"]
+        test_group: [core, nn, integration]
+    uses: ./.github/workflows/CommonCI.yml
+    with:
+      julia_version: ${{ matrix.version }}
+      os: ${{ matrix.os }}
+      runtime: pjrt
+      backend_group: julia-cpu
+      test_args: ${{ matrix.test_group == 'core' && 'core plugins' || matrix.test_group }}
+
   # This has been broken for a while, originating from CUDA.jl
   # test-assertions:
   #   strategy:

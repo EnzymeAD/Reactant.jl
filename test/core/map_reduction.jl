@@ -2,7 +2,7 @@
 using Reactant, Test, Enzyme, Statistics, FileCheck
 using Reactant: TracedRArray, TracedRNumber
 
-const RunningOnTPU = contains(string(Reactant.devices()[1]), "TPU")
+const RunningOnTPU = Reactant.XLA.platform_name(Reactant.XLA.default_backend()) == "tpu"
 
 fastmax(x::AbstractArray{T}) where {T} = reduce(max, x; dims=1, init=float(T)(-Inf))
 

@@ -318,7 +318,11 @@ Base.@nospecializeinfer function compile_mlir!(
     cuda_sm_major = 0
     cuda_sm_minor = 0
 
-    if backend == "cpu" || backend == "tpu" || backend == "neuron" || backend == "trainium"
+    if backend == "cpu" ||
+        backend == "tpu" ||
+        backend == "neuron" ||
+        backend == "trainium" ||
+        backend == "julia-cpu"
         kern = "lower-kernel{backend=cpu},canonicalize"
         if backend == "tpu" || backend == "neuron" || backend == "trainium"
             jit = "lower-affine,$(OpenMP[] ? "convert-scf-to-openmp" : "convert-scf-to-cf"),convert-polygeist-to-llvm{backend=cpu preserve-xla-funcs=true},lower-jit,symbol-dce,strip-debuginfo"
@@ -408,18 +412,22 @@ Base.@nospecializeinfer function compile_mlir!(
     end
 
     blas_int_width = sizeof(BlasInt) * 8
-    lower_enzymexla_linalg_pass = join(
-        [
-            "lower-enzymexla-linalg{backend=$backend blas_int_width=$blas_int_width}",
-            "lower-enzymexla-blas{backend=$backend blas_int_width=$blas_int_width}",
-            "lower-enzymexla-lapack{backend=$backend blas_int_width=$blas_int_width}",
-        ],
-        ",",
-    )
+    lower_enzymexla_linalg_pass = let backend = backend == "julia-cpu" ? "cpu" : backend
+        join(
+            [
+                "lower-enzymexla-linalg{backend=$backend blas_int_width=$blas_int_width}",
+                "lower-enzymexla-blas{backend=$backend blas_int_width=$blas_int_width}",
+                "lower-enzymexla-lapack{backend=$backend blas_int_width=$blas_int_width}",
+            ],
+            ",",
+        )
+    end
     # cuDNN fused SDPA (__cudnn$fmha*) requires SM80 (Ampere) or newer; fall back
     # to StableHLO decomposition on older CUDA architectures (e.g. V100/T4).
     math_backend = if backend == "cuda" && cuda_sm_major < 8
         "cuda_sm$(cuda_sm_major)$(cuda_sm_minor)"
+    elseif backend == "julia-cpu"
+        "cpu"
     else
         backend
     end
@@ -461,7 +469,7 @@ Base.@nospecializeinfer function compile_mlir!(
                 vcat(
                     String["mark-func-memory-effects", opt_passes],
                     compile_options.raise_first ? raise_pass_list : String[],
-                    String["enzyme-batch"],
+                    String["enzyme-batch", "arith-raise{stablehlo=true}"],
                     if compile_options.optimization_passes === :after_enzyme
                         String[]
                     else
@@ -494,6 +502,7 @@ Base.@nospecializeinfer function compile_mlir!(
                         "mark-func-memory-effects",
                         opt_passes,
                         "enzyme-batch",
+                        "arith-raise{stablehlo=true}",
                         opt_passes2,
                         enzyme_pass,
                         opt_passes2,
@@ -519,6 +528,7 @@ Base.@nospecializeinfer function compile_mlir!(
                         kern,
                         raise_passes,
                         "enzyme-batch",
+                        "arith-raise{stablehlo=true}",
                         opt_passes2,
                         enzyme_pass,
                         opt_passes2,
@@ -533,6 +543,7 @@ Base.@nospecializeinfer function compile_mlir!(
                         "mark-func-memory-effects",
                         opt_passes,
                         "enzyme-batch",
+                        "arith-raise{stablehlo=true}",
                         opt_passes2,
                         enzyme_pass,
                         opt_passes2,
@@ -560,6 +571,7 @@ Base.@nospecializeinfer function compile_mlir!(
                         "mark-func-memory-effects",
                         opt_passes,
                         "enzyme-batch",
+                        "arith-raise{stablehlo=true}",
                         opt_passes2,
                         enzyme_pass,
                         opt_passes2,
@@ -583,6 +595,7 @@ Base.@nospecializeinfer function compile_mlir!(
                     "mark-func-memory-effects",
                     opt_passes,
                     "enzyme-batch",
+                    "arith-raise{stablehlo=true}",
                     opt_passes2,
                     enzyme_pass,
                     opt_passes2,
@@ -607,6 +620,7 @@ Base.@nospecializeinfer function compile_mlir!(
                         kern,
                         raise_passes,
                         "enzyme-batch",
+                        "arith-raise{stablehlo=true}",
                         opt_passes2,
                         impulse_pass(),
                         "lower-impulse-to-stablehlo{backend=$backend}",
@@ -633,6 +647,7 @@ Base.@nospecializeinfer function compile_mlir!(
                         "mark-func-memory-effects",
                         opt_passes,
                         "enzyme-batch",
+                        "arith-raise{stablehlo=true}",
                         opt_passes2,
                         impulse_pass(),
                         "lower-impulse-to-stablehlo{backend=$backend}",
@@ -668,6 +683,7 @@ Base.@nospecializeinfer function compile_mlir!(
                 [
                     "mark-func-memory-effects",
                     "enzyme-batch",
+                    "arith-raise{stablehlo=true}",
                     enzyme_pass,
                     "canonicalize",
                     "remove-unnecessary-enzyme-ops",
@@ -684,6 +700,7 @@ Base.@nospecializeinfer function compile_mlir!(
                 [
                     "mark-func-memory-effects",
                     "enzyme-batch",
+                    "arith-raise{stablehlo=true}",
                     enzyme_pass,
                     "canonicalize",
                     "remove-unnecessary-enzyme-ops",
@@ -706,6 +723,7 @@ Base.@nospecializeinfer function compile_mlir!(
                         kern,
                         raise_passes,
                         "enzyme-batch",
+                        "arith-raise{stablehlo=true}",
                         opt_passes2,
                         enzyme_pass,
                         "canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math",
@@ -717,6 +735,7 @@ Base.@nospecializeinfer function compile_mlir!(
                         "mark-func-memory-effects",
                         opt_passes,
                         "enzyme-batch",
+                        "arith-raise{stablehlo=true}",
                         opt_passes2,
                         enzyme_pass,
                         "canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math",
@@ -733,7 +752,7 @@ Base.@nospecializeinfer function compile_mlir!(
     elseif compile_options.optimization_passes === :canonicalize
         run_pass_pipeline!(mod, "mark-func-memory-effects,canonicalize", "canonicalize")
     elseif compile_options.optimization_passes === :just_batch
-        run_pass_pipeline!(mod, "enzyme-batch", "enzyme-batch")
+        run_pass_pipeline!(mod, "enzyme-batch,arith-raise{stablehlo=true}", "enzyme-batch")
     elseif compile_options.optimization_passes isa String
         run_pass_pipeline!(mod, compile_options.optimization_passes, "custom_pass")
     end
