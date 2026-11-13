@@ -19,6 +19,8 @@ using Reactant.XLA.PJRT.Plugin:
     TiledMemoryLayout,
     invalid_argument,
     make_api,
+    npartitions,
+    nreplicas,
     pjrt_elsize,
     pjrt_eltype,
     resource_exhausted,
@@ -59,9 +61,6 @@ import Reactant.XLA.PJRT.Plugin:
     memory,
     memory_layout,
     name,
-    num_outputs,
-    num_partitions,
-    num_replicas,
     on_device_size_in_bytes,
     optimized_program,
     output_element_types,
@@ -238,18 +237,6 @@ mutable struct HostExecutable <: Executable
 end
 
 name(exe::HostExecutable) = exe.name
-
-function num_replicas(exe::HostExecutable)
-    build_options = exe.options.executable_build_options
-    return isnothing(build_options) ? 1 : max(build_options.num_replicas, 1)
-end
-
-function num_partitions(exe::HostExecutable)
-    build_options = exe.options.executable_build_options
-    return isnothing(build_options) ? 1 : max(build_options.num_partitions, 1)
-end
-
-num_outputs(exe::HostExecutable) = length(exe.output_types)
 size_of_generated_code_in_bytes(::HostExecutable) = 0
 fingerprint(::HostExecutable) = throw(unimplemented("`HostExecutable` has no fingerprint"))
 output_element_types(exe::HostExecutable) = exe.output_types
@@ -1761,7 +1748,7 @@ function compile!(client::HostClient, code, options)
     _name = isnothing(name_attr) ? "main" : String(name_attr)
 
     exe = HostExecutable(_name, string(code), output_types, options)
-    if num_replicas(exe) * num_partitions(exe) != 1
+    if nreplicas(exe) * npartitions(exe) != 1
         throw(unimplemented("`HostClient` only supports single-device executables"))
     end
 
