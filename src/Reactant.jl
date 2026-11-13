@@ -9,7 +9,8 @@ using ReactantCore:
     MissingTracedValue,
     materialize_traced_array,
     Periodic,
-    Binomial
+    Binomial,
+    Online
 
 using LinearAlgebra: LinearAlgebra, RowMaximum, NoPivot
 using Random: Random, AbstractRNG
@@ -325,7 +326,7 @@ export ConcreteRArray,
     annotate
 
 @static if VERSION ≥ v"1.11"
-    @eval $(Expr(:public, :Periodic, :Binomial, :TracedEnum, :ConcreteEnum))
+    @eval $(Expr(:public, :Periodic, :Binomial, :Online, :TracedEnum, :ConcreteEnum))
 end
 
 const registry = Ref{Union{Nothing,MLIR.IR.DialectRegistry}}()

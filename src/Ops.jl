@@ -2479,6 +2479,12 @@ end
         MLIR.IR.setattr!(
             while_op, "enzyme.checkpoint_period", MLIR.IR.Attribute(checkpointing.budget)
         )
+    elseif checkpointing isa ReactantCore.Online
+        MLIR.IR.setattr!(while_op, "enzyme.enable_checkpointing", MLIR.IR.Attribute(true))
+        MLIR.IR.setattr!(while_op, "enzyme.online_checkpointing", MLIR.IR.UnitAttribute())
+        MLIR.IR.setattr!(
+            while_op, "enzyme.checkpoint_period", MLIR.IR.Attribute(checkpointing.budget)
+        )
     elseif checkpointing === true
         MLIR.IR.setattr!(while_op, "enzyme.enable_checkpointing", MLIR.IR.Attribute(true))
     end
