@@ -16,6 +16,7 @@ using Reactant.XLA.PJRT.Plugin:
     LoadedExecutable,
     Memory,
     PluginApi,
+    TiledMemoryLayout,
     invalid_argument,
     make_api,
     pjrt_elsize,
@@ -56,6 +57,7 @@ import Reactant.XLA.PJRT.Plugin:
     kind_id,
     local_hardware_id,
     memory,
+    memory_layout,
     name,
     num_outputs,
     num_partitions,
@@ -169,6 +171,7 @@ end
 isdeleted(buffer::HostBuffer) = buffer.data == C_NULL
 element_type(buffer::HostBuffer) = buffer.type
 dimensions(buffer::HostBuffer) = buffer.dims
+memory_layout(buffer::HostBuffer) = TiledMemoryLayout(buffer.minor_to_major)
 device(buffer::HostBuffer) = buffer.device
 memory(buffer::HostBuffer) = buffer.memory
 on_device_size_in_bytes(buffer::HostBuffer) = buffer.size_in_bytes
@@ -1576,7 +1579,7 @@ function buffer_from_host_buffer(
     data,
     _eltype,
     _size,
-    byte_strides,
+    host_layout,
     _layout,
     _host_buffer_semantics,
 )
@@ -1586,20 +1589,18 @@ function buffer_from_host_buffer(
     size_in_bytes = prod(_size; init=_elsize)
     minor_to_major = collect((_ndims - 1):-1:0)
 
-    # TODO support byte strides, layout and host buffer semantics
+    # TODO support strided host data, layout and host buffer semantics
 
     # only dense major-to-minor host data is supported; strides of size-1 dims are irrelevant
-    # num_byte_strides = Int(unsafe_load(args.num_byte_strides))
-    # if num_byte_strides != 0
-    #     num_byte_strides != num_dims && throw(invalid_argument())
-    #     byte_strides = unsafe_load(args.byte_strides)
-    #     stride = elsize
-    #     for i in num_dims:-1:1
-    #         dim = unsafe_load(host_dims, i)
-    #         dim != 1 && unsafe_load(byte_strides, i) != stride && throw(unimplemented())
-    #         stride *= dim
-    #     end
-    # end
+    if !isnothing(host_layout)
+        stride = _elsize
+        for i in _ndims:-1:1
+            _size[i] != 1 &&
+                host_layout.byte_strides[i] != stride &&
+                throw(unimplemented("only dense major-to-minor host data is supported"))
+            stride *= _size[i]
+        end
+    end
 
     # relayout is not supported, so `device_layout` must be dense major-to-minor
     # if device_layout != C_NULL

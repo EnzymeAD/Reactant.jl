@@ -1516,42 +1516,167 @@ dynamic_dimension_indices(::Buffer)
 end
 
 """
-    memory_layout(buffer::Buffer) -> Vector{Int64}
+    MemoryLayout
 
-Return the 0-based minor-to-major order of the dimensions of `buffer` in memory (e.g. `[n-1, ..., 1, 0]` for XLA's
-default row-major layout).
+Layout of an array in memory.
+"""
+abstract type MemoryLayout end
 
-!!! warning
-The returned vector is handed to C by pointer, so it must be owned by `buffer` and never be resized.
+"""
+    TiledMemoryLayout(minor_to_major, tiles=Vector{Int64}[])
 
-!!! todo
-Only tiled layouts without tiles can be described: tile dimensions and strided layouts are not supported yet.
+Tiled layout of an array in memory, as described by `PJRT_Buffer_MemoryLayout` (of type `Tiled`).
 
-Backs `PJRT_Buffer_GetMemoryLayout`.
+## Fields
+
+- `minor_to_major::Vector{Int64}`: the 0-based order of the dimensions, from the fastest-varying to the slowest-varying
+  one (e.g. `[1, 0]` for a row-major matrix like C/numpy, `[0, 1]` for column-major matrix like Julia/Fortran).
+- `tiles::Vector{Vector{Int64}}`: the sizes of each level of tiling, in the order they are applied to the minor-most
+  dimensions (e.g. `[[8, 128], [2, 1]]` for XLA's `T(8,128)(2,1)`). Leave empty if the array is not tiled.
+"""
+struct TiledMemoryLayout <: MemoryLayout
+    minor_to_major::Vector{Int64}
+    tiles::Vector{Vector{Int64}}
+
+    function TiledMemoryLayout(minor_to_major, tiles=Vector{Int64}[])
+        # XLA can't handle such layouts, and aborts on some of them
+        isperm(minor_to_major .+ 1) || throw(
+            ArgumentError(
+                "minor_to_major must be a permutation of 0:$(length(minor_to_major) - 1), got $minor_to_major",
+            ),
+        )
+        all(tile -> all(>(0), tile), tiles) ||
+            throw(ArgumentError("tile sizes must be positive, got $tiles"))
+        return new(minor_to_major, tiles)
+    end
+end
+
+function Base.:(==)(a::TiledMemoryLayout, b::TiledMemoryLayout)
+    return a.minor_to_major == b.minor_to_major && a.tiles == b.tiles
+end
+function Base.hash(layout::TiledMemoryLayout, h::UInt)
+    return hash(layout.tiles, hash(layout.minor_to_major, h))
+end
+
+"""
+    StridedMemoryLayout(byte_strides)
+
+Strided layout of an array in memory, as described by `PJRT_Buffer_MemoryLayout` (of type `Strides`):
+`byte_strides::Vector{Int64}` holds the number of bytes to traverse along each dimension (e.g. `[8n, 8]` for a row-major
+`m×n` matrix of `Float64`). Strides can be negative.
+"""
+struct StridedMemoryLayout <: MemoryLayout
+    byte_strides::Vector{Int64}
+end
+
+function Base.:(==)(a::StridedMemoryLayout, b::StridedMemoryLayout)
+    return a.byte_strides == b.byte_strides
+end
+Base.hash(layout::StridedMemoryLayout, h::UInt) = hash(layout.byte_strides, h)
+
+# converts a layout passed by C, which must not be `C_NULL`
+function MemoryLayout(c_layout::Ptr{CAPI.PJRT_Buffer_MemoryLayout})
+    type = unsafe_load(c_layout.type)
+    if type == CAPI.PJRT_Buffer_MemoryLayout_Type_Strides
+        strides = unsafe_load(c_layout.strides)
+        return StridedMemoryLayout(
+            copy(unsafe_wrap(Vector{Int64}, strides.byte_strides, strides.num_byte_strides))
+        )
+    elseif type == CAPI.PJRT_Buffer_MemoryLayout_Type_Tiled
+        tiled = unsafe_load(c_layout.tiled)
+        minor_to_major = copy(
+            unsafe_wrap(Vector{Int64}, tiled.minor_to_major, tiled.minor_to_major_size)
+        )
+        # C passes the sizes of all tiles back to back, plus the number of dimensions of each tile
+        tiles = Vector{Vector{Int64}}(undef, tiled.num_tiles)
+        offset = 0
+        for i in eachindex(tiles)
+            n = Int(unsafe_load(tiled.tile_dim_sizes, i))
+            tiles[i] = Int64[unsafe_load(tiled.tile_dims, offset + j) for j in 1:n]
+            offset += n
+        end
+        # an invalid layout is an error of the caller
+        try
+            return TiledMemoryLayout(minor_to_major, tiles)
+        catch err
+            err isa ArgumentError && throw(invalid_argument(err.msg))
+            rethrow()
+        end
+    else
+        throw(invalid_argument("unknown layout type $type"))
+    end
+end
+
+"""
+    memory_layout(buffer::Buffer) -> MemoryLayout
+
+Return the layout of `buffer` in memory (e.g. `TiledMemoryLayout(n-1:-1:0)` for XLA's default row-major layout of an
+array with `n` dimensions).
+
+If the plugin advertises [`LayoutsExtension`](@ref), it must return a [`TiledMemoryLayout`](@ref): XLA aborts if the
+layout of a buffer can't be serialized.
+
+It is called at most once per `buffer`: the C wrapper keeps a copy for as long as `buffer` is alive, since C keeps
+pointers to it.
+
+Backs `PJRT_Buffer_GetMemoryLayout` and `PJRT_Layouts_PJRT_Buffer_MemoryLayout`.
 """
 memory_layout(::Buffer)
+
+# C borrows the arrays of `PJRT_Buffer_MemoryLayout`, so they are kept for as long as the buffer is alive (like in XLA's
+# reference plugin, which keeps them in the buffer)
+const memory_layout_cache = WeakKeyIdDict{
+    Buffer,Tuple{MemoryLayout,Vector{Int64},Vector{Csize_t}}
+}()
 
 @pjrt_catch_return function pjrt_buffer_get_memory_layout(
     args::Ptr{CAPI.PJRT_Buffer_GetMemoryLayout_Args}
 )::Ptr{CAPI.PJRT_Error}
     buffer = unsafe_pointer_to_objref(unsafe_load(args.buffer))::Buffer
-    minor_to_major = memory_layout(buffer)::Vector{Int64}
-    layout = args.layout
-    unsafe_store!(layout.struct_size, csizeof(CAPI.PJRT_Buffer_MemoryLayout))
-    unsafe_store!(layout.extension_start, C_NULL)
-    unsafe_store!(layout.type, CAPI.PJRT_Buffer_MemoryLayout_Type_Tiled)
-    unsafe_store!(
-        layout.tiled,
-        CAPI.PJRT_Buffer_MemoryLayout_Tiled(
-            csizeof(CAPI.PJRT_Buffer_MemoryLayout_Tiled), #= struct_size =#
-            C_NULL, #= extension_start =#
-            pointer(minor_to_major), #= minor_to_major =#
-            length(minor_to_major), #= minor_to_major_size =#
-            C_NULL, #= tile_dims =#
-            C_NULL, #= tile_dim_sizes =#
-            0, #= num_tiles =#
-        ),
-    )
+    # for tiled layouts, C expects the sizes of all tiles back to back, plus the number of dimensions of each tile
+    layout, tile_dims, tile_dim_sizes = get!(memory_layout_cache, buffer) do
+        buffer_layout = memory_layout(buffer)::MemoryLayout
+        if buffer_layout isa StridedMemoryLayout
+            return (buffer_layout, Int64[], Csize_t[])
+        elseif buffer_layout isa TiledMemoryLayout
+            (
+                buffer_layout,
+                Int64[d for tile in buffer_layout.tiles for d in tile],
+                Csize_t[length(tile) for tile in buffer_layout.tiles],
+            )
+        else
+            throw(unimplemented("unsupported layout type $(typeof(buffer_layout))"))
+        end
+    end
+    c_layout = args.layout
+    unsafe_store!(c_layout.struct_size, csizeof(CAPI.PJRT_Buffer_MemoryLayout))
+    unsafe_store!(c_layout.extension_start, C_NULL)
+    if layout isa StridedMemoryLayout
+        unsafe_store!(c_layout.type, CAPI.PJRT_Buffer_MemoryLayout_Type_Strides)
+        unsafe_store!(
+            c_layout.strides,
+            CAPI.PJRT_Buffer_MemoryLayout_Strides(
+                csizeof(CAPI.PJRT_Buffer_MemoryLayout_Strides), #= struct_size =#
+                C_NULL, #= extension_start =#
+                pointer(layout.byte_strides), #= byte_strides =#
+                length(layout.byte_strides), #= num_byte_strides =#
+            ),
+        )
+    else
+        unsafe_store!(c_layout.type, CAPI.PJRT_Buffer_MemoryLayout_Type_Tiled)
+        unsafe_store!(
+            c_layout.tiled,
+            CAPI.PJRT_Buffer_MemoryLayout_Tiled(
+                csizeof(CAPI.PJRT_Buffer_MemoryLayout_Tiled), #= struct_size =#
+                C_NULL, #= extension_start =#
+                pointer(layout.minor_to_major), #= minor_to_major =#
+                length(layout.minor_to_major), #= minor_to_major_size =#
+                pointer(tile_dims), #= tile_dims =#
+                pointer(tile_dim_sizes), #= tile_dim_sizes =#
+                length(tile_dim_sizes), #= num_tiles =#
+            ),
+        )
+    end
     return ok()
 end
 
@@ -1702,24 +1827,15 @@ to_host_buffer(::Ptr, ::Buffer)
         )
     end
 
-    # TODO better support for layouts: relayout is not supported, so `host_layout` must match the dense layout of `src`
-    host_layout = unsafe_load(args.host_layout)
-    if host_layout != C_NULL
-        type = unsafe_load(host_layout.type)
-        type != CAPI.PJRT_Buffer_MemoryLayout_Type_Tiled &&
-            throw(unimplemented("different layout not yet supported"))
-
-        tiled = unsafe_load(host_layout.tiled)
-        tiled.num_tiles != 0 && throw(unimplemented())
-        _ndims = length(dimensions(buffer))
-        tiled.minor_to_major_size != _ndims &&
-            throw(invalid_argument("different layout not yet supported"))
-        for i in 1:_ndims
-            m2m = unsafe_load(tiled.minor_to_major, i)
-            # TODO replace `.minor_to_major` for a function call
-            m2m != buffer.minor_to_major[i] &&
-                throw(unimplemented("different layout not yet supported"))
-        end
+    # TODO relayout is not supported, so `host_layout` must be the layout of `buffer`. If it's `C_NULL`, the layout of
+    # `buffer` is used.
+    c_host_layout = unsafe_load(args.host_layout)
+    if c_host_layout != C_NULL
+        host_layout = MemoryLayout(c_host_layout)
+        buffer_layout = memory_layout(buffer)::MemoryLayout
+        host_layout == buffer_layout || throw(
+            unimplemented("relayout from $buffer_layout to $host_layout is not supported"),
+        )
     end
 
     to_host_buffer(dst, buffer)
@@ -1774,8 +1890,8 @@ end
     bitcast!(buffer::Buffer, type, dims, layout) -> Buffer
 
 Return a new buffer that takes over the on-device data of `buffer`, reinterpreted with element type
-`type::CAPI.PJRT_Buffer_Type`, dimensions `dims::Vector{Int64}` and layout `layout::Ptr{CAPI.PJRT_Buffer_MemoryLayout}`
-(`C_NULL` for the default layout, not the layout of `buffer`).
+`type::CAPI.PJRT_Buffer_Type`, dimensions `dims::Vector{Int64}` and layout `layout::Union{Nothing,MemoryLayout}`
+(`nothing` for the default layout, not the layout of `buffer`).
 
 It must not copy any data, and the new buffer must have the same `on_device_size_in_bytes` as `buffer`. `buffer` is
 donated: afterwards, `isdeleted(buffer)` must return `true`, but its data must not be freed.
@@ -1796,7 +1912,8 @@ bitcast!(::Buffer, args...)
     _size = copy(
         unsafe_wrap(Vector{Int64}, unsafe_load(args.dims), unsafe_load(args.num_dims))
     )
-    layout = unsafe_load(args.device_layout)
+    c_layout = unsafe_load(args.device_layout)
+    layout = c_layout == C_NULL ? nothing : MemoryLayout(c_layout)
 
     out_buffer = bitcast!(buffer, _eltype, _size, layout)::Buffer
     root!(out_buffer)
@@ -2081,8 +2198,6 @@ abstract type Executable end
     return ok()
 end
 
-# frees the rooted bytes handed out by `PJRT_LoadedExecutable_GetDeviceAssignment`, `PJRT_Executable_Serialize`,
-# `PJRT_Executable_GetCompileOptions` and `PJRT_TopologyDescription_Serialize`
 function pjrt_serialized_bytes_deleter(ptr::Ptr{Cvoid})::Cvoid
     ptr != C_NULL && unroot!(ptr)
     return nothing
@@ -2959,7 +3074,8 @@ end
 
 """
     buffer_from_host_buffer(
-        client::Client, dev::Device, mem::Memory, data::Ptr, type, dims, byte_strides, device_layout, host_buffer_semantics
+        client::Client, dev::Device, mem::Memory, data::Ptr, type, dims, host_layout, device_layout,
+        host_buffer_semantics,
     ) -> Buffer
 
 Return a new buffer placed on memory `mem` of device `dev`, with a copy of the host `data`. The new buffer has element
@@ -2971,8 +3087,9 @@ type `type::CAPI.PJRT_Buffer_Type` and dimensions `dims::Vector{Int64}`.
   - only `dev` given: `mem` is `default_memory(dev)`.
   - only `mem` given: `dev` is one of `addressable_devices(mem)`.
 
-- `byte_strides::Vector{Int64}` is empty for dense data in major-to-minor order.
-- `device_layout::Ptr{CAPI.PJRT_Buffer_MemoryLayout}` is `C_NULL` for the default layout.
+- `host_layout::Union{Nothing,StridedMemoryLayout}` is the layout of `data`: `nothing` for dense data in major-to-minor
+  order, or the byte strides of each dimension (which can be negative, if `data` points inside the array).
+- `device_layout::Union{Nothing,MemoryLayout}` is `nothing` for the default layout.
 - `host_buffer_semantics::CAPI.PJRT_HostBufferSemantics` says how long `data` stays valid.
 - `done_with_host_buffer` is signaled as soon as this returns, so `data` must not be accessed afterwards.
 
@@ -3003,16 +3120,22 @@ end
     _dims_ptr = unsafe_load(args.dims)
     _size = copy(unsafe_wrap(Vector{Int64}, _dims_ptr, _ndims))
 
+    # the byte strides of `data` are a strided layout; if there are none, `data` is dense in major-to-minor order
     byte_strides_ptr = unsafe_load(args.byte_strides)
-    nbyte_strides = unsafe_load(args.num_byte_strides)
-
-    # TODO byte strides not yet supported
-    if byte_strides_ptr != C_NULL
-        throw(unimplemented("Buffer with byte strides not yet supported"))
+    num_byte_strides = unsafe_load(args.num_byte_strides)
+    host_layout = if byte_strides_ptr == C_NULL || num_byte_strides == 0
+        nothing
+    else
+        num_byte_strides == _ndims || throw(
+            invalid_argument("got $num_byte_strides byte strides for $_ndims dimensions"),
+        )
+        StridedMemoryLayout(
+            copy(unsafe_wrap(Vector{Int64}, byte_strides_ptr, num_byte_strides))
+        )
     end
-    byte_strides = unsafe_wrap(Vector{Int64}, byte_strides_ptr, (nbyte_strides,))
 
-    _device_layout = unsafe_load(args.device_layout)
+    c_device_layout = unsafe_load(args.device_layout)
+    _device_layout = c_device_layout == C_NULL ? nothing : MemoryLayout(c_device_layout)
     _host_buffer_semantics = unsafe_load(args.host_buffer_semantics)
 
     mem_ptr = Ptr{Memory}(unsafe_load(args.memory))
@@ -3029,7 +3152,7 @@ end
             data,
             _eltype,
             _size,
-            byte_strides,
+            host_layout,
             _device_layout,
             _host_buffer_semantics,
         )
@@ -3041,7 +3164,7 @@ end
             data,
             _eltype,
             _size,
-            byte_strides,
+            host_layout,
             _device_layout,
             _host_buffer_semantics,
         )
@@ -3066,7 +3189,7 @@ dimensions `dims::Vector{Int64}`, whose contents are left uninitialized.
 
 ## Arguments
 - `mem` is always one of `addressable_memories(dev)`, filled in like in [`buffer_from_host_buffer`](@ref).
-- `layout::Ptr{CAPI.PJRT_Buffer_MemoryLayout}` is `C_NULL` for the default layout.
+- `layout::Union{Nothing,MemoryLayout}` is `nothing` for the default layout.
 
 The caller GC-roots the returned buffer.
 
@@ -3094,7 +3217,8 @@ end
             Vector{Int64}, unsafe_load(args.shape_dims), unsafe_load(args.shape_num_dims)
         ),
     )
-    layout = unsafe_load(args.shape_layout)
+    c_layout = unsafe_load(args.shape_layout)
+    layout = c_layout == C_NULL ? nothing : MemoryLayout(c_layout)
 
     mem_ptr = Ptr{Memory}(unsafe_load(args.memory))
     dev_ptr = Ptr{Device}(unsafe_load(args.device))
@@ -3304,7 +3428,7 @@ Return a new buffer placed on memory `mem`, with element type `type::CAPI.PJRT_B
 `dims::Vector{Int64}`, that carries `error` without allocating any data: executing a program with it as argument must
 fail with `error`.
 
-`layout::Ptr{CAPI.PJRT_Buffer_MemoryLayout}` is `C_NULL` for the default layout.
+`layout::Union{Nothing,MemoryLayout}` is `nothing` for the default layout.
 
 The caller GC-roots the returned buffer.
 
@@ -3341,7 +3465,8 @@ create_error_buffer(::Client, ::Memory, ::Error, args...)
     has_device_layout =
         unsafe_load(args.struct_size) >=
         UInt(args.device_layout) - UInt(args) + sizeof(Ptr{Cvoid})
-    layout = has_device_layout ? unsafe_load(args.device_layout) : C_NULL
+    c_layout = has_device_layout ? unsafe_load(args.device_layout) : C_NULL
+    layout = c_layout == C_NULL ? nothing : MemoryLayout(c_layout)
 
     buffer = create_error_buffer(client, mem, error, _eltype, _size, layout)::Buffer
     root!(buffer)
@@ -3364,7 +3489,7 @@ and dimensions `dims::Vector{Int64}`, which aliases a buffer that is not known y
 `alias` must fail with. `fulfill` is called at most once, by `PJRT_Client_FulfillAliasBuffer`, and its errors are
 returned to C.
 
-`layout::Ptr{CAPI.PJRT_Buffer_MemoryLayout}` is `C_NULL` for the default layout.
+`layout::Union{Nothing,MemoryLayout}` is `nothing` for the default layout.
 
 The caller GC-roots `alias`, and keeps `fulfill` alive until it is called.
 
@@ -3386,7 +3511,8 @@ create_alias_buffer(::Client, ::Memory, args...)
             Vector{Int64}, unsafe_load(args.shape_dims), unsafe_load(args.shape_num_dims)
         ),
     )
-    layout = unsafe_load(args.shape_layout)
+    c_layout = unsafe_load(args.shape_layout)
+    layout = c_layout == C_NULL ? nothing : MemoryLayout(c_layout)
 
     alias, fulfill =
         create_alias_buffer(client, mem, _eltype, _size, layout)::Tuple{Buffer,Any}
@@ -3667,7 +3793,7 @@ end
     transfer_literal!(manager::AsyncHostToDeviceTransferManager, index::Int, data::Ptr{Cvoid}, type, dims, layout)
 
 Copy the host array at `data`, with element type `type::CAPI.PJRT_Buffer_Type`, dimensions `dims::Vector{Int64}` and
-host layout `layout::Ptr{CAPI.PJRT_Buffer_MemoryLayout}` (`C_NULL` for the default layout), into the whole `index`-th
+host layout `layout::Union{Nothing,MemoryLayout}` (`nothing` for the default layout), into the whole `index`-th
 buffer of `manager`, converting it to the on-device format. The buffer becomes ready once the copy is done, and no more
 transfers into it are made.
 
@@ -3688,7 +3814,8 @@ transfer_literal!(::AsyncHostToDeviceTransferManager, ::Int, args...)
             Vector{Int64}, unsafe_load(args.shape_dims), unsafe_load(args.shape_num_dims)
         ),
     )
-    layout = unsafe_load(args.shape_layout)
+    c_layout = unsafe_load(args.shape_layout)
+    layout = c_layout == C_NULL ? nothing : MemoryLayout(c_layout)
     transfer_literal!(manager, index, unsafe_load(args.data), _eltype, _size, layout)
 
     event = root!(Event())
@@ -3900,8 +4027,8 @@ end
 Return a new [`AsyncHostToDeviceTransferManager`](@ref) for a set of new buffers placed on memory `mem`, one per
 element of `specs`, which are `NamedTuple`s with fields `element_type::CAPI.PJRT_Buffer_Type` and `dims::Vector{Int64}`.
 
-`layouts::Vector{Ptr{CAPI.PJRT_Buffer_MemoryLayout}}` is either empty, for the default layouts, or holds the layout of
-each buffer (`C_NULL` for its default layout).
+`layouts::Vector{Union{Nothing,MemoryLayout}}` is either empty, for the default layouts, or holds the layout of each
+buffer (`nothing` for its default layout).
 
 The caller GC-roots the returned manager.
 
@@ -3933,9 +4060,11 @@ create_buffers_for_async_host_to_device(::Client, ::Vector, ::Vector, ::Memory)
         )
     end
     c_layouts = unsafe_load(args.device_layouts)
-    layouts = Ptr{CAPI.PJRT_Buffer_MemoryLayout}[
-        unsafe_load(c_layouts, i) for i in 1:num_layouts
-    ]
+    layouts = Vector{Union{Nothing,MemoryLayout}}(undef, num_layouts)
+    for i in eachindex(layouts)
+        c_layout = unsafe_load(c_layouts, i)
+        layouts[i] = c_layout == C_NULL ? nothing : MemoryLayout(c_layout)
+    end
 
     manager = create_buffers_for_async_host_to_device(
         client, specs, layouts, mem
@@ -4118,7 +4247,7 @@ end
         -> Reactant.Proto.xla.ShapeProto
 
 Return the shape, including its layout, that a buffer with element type `type::CAPI.PJRT_Buffer_Type`, dimensions
-`dims::Vector{Int64}` and layout `layout::Ptr{CAPI.PJRT_Buffer_MemoryLayout}` (`C_NULL` if none is given) takes once
+`dims::Vector{Int64}` and layout `layout::Union{Nothing,MemoryLayout}` (`nothing` if none is given) takes once
 transferred to a memory space of kind id `kind_id` (see `memory_space_kind_ids`).
 
 Backs `PJRT_TopologyDescription_MakeCanonicalShapeForMemorySpace`.
@@ -4134,7 +4263,8 @@ make_canonical_shape_for_memory_space(::TopologyDescription, ::Integer, args...)
     _size = copy(
         unsafe_wrap(Vector{Int64}, unsafe_load(args.dims), unsafe_load(args.num_dims))
     )
-    layout = unsafe_load(args.layout)
+    c_layout = unsafe_load(args.layout)
+    layout = c_layout == C_NULL ? nothing : MemoryLayout(c_layout)
 
     shape = make_canonical_shape_for_memory_space(
         topology, kind_id, _eltype, _size, layout
@@ -4263,6 +4393,7 @@ function extension_type end
 
 include("Extensions/MemoryDescriptions.jl")
 include("Extensions/FFI.jl")
+include("Extensions/Layouts.jl")
 
 """
     PluginApi
