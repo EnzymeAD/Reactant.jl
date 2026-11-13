@@ -203,7 +203,7 @@ end
 """
     memory_layout(buffer::Buffer) -> MemoryLayout
 
-Return the layout of `buffer` in memory (e.g. `TiledMemoryLayout(n-1:-1:0)` for XLA's default row-major layout of an
+Return the layout of `buffer` in memory (e.g. `TiledMemoryLayout(n:-1:1)` for XLA's default row-major layout of an
 array with `n` dimensions).
 
 If the plugin advertises [`LayoutsExtension`](@ref), it must return a [`TiledMemoryLayout`](@ref): XLA aborts if the
@@ -219,7 +219,7 @@ memory_layout(::Buffer)
 # C borrows the arrays of `PJRT_Buffer_MemoryLayout`, so they are kept for as long as the buffer is alive (like in XLA's
 # reference plugin, which keeps them in the buffer)
 const memory_layout_cache = WeakKeyIdDict{
-    Buffer,Tuple{MemoryLayout,Vector{Int64},Vector{Csize_t}}
+    Buffer,Tuple{MemoryLayout,Vector{Int64},Vector{Int64},Vector{Csize_t}}
 }()
 
 @pjrt_catch_return function pjrt_buffer_get_memory_layout(
@@ -227,13 +227,14 @@ const memory_layout_cache = WeakKeyIdDict{
 )::Ptr{CAPI.PJRT_Error}
     buffer = unsafe_pointer_to_objref(unsafe_load(args.buffer))::Buffer
     # for tiled layouts, C expects the sizes of all tiles back to back, plus the number of dimensions of each tile
-    layout, tile_dims, tile_dim_sizes = get!(memory_layout_cache, buffer) do
+    layout, minor_to_major, tile_dims, tile_dim_sizes = get!(memory_layout_cache, buffer) do
         buffer_layout = memory_layout(buffer)::MemoryLayout
         if buffer_layout isa StridedMemoryLayout
-            return (buffer_layout, Int64[], Csize_t[])
+            return (buffer_layout, Int64[], Int64[], Csize_t[])
         elseif buffer_layout isa TiledMemoryLayout
             (
                 buffer_layout,
+                buffer_layout.minor_to_major .- 1, # C uses 0-based dimensions
                 Int64[d for tile in buffer_layout.tiles for d in tile],
                 Csize_t[length(tile) for tile in buffer_layout.tiles],
             )
@@ -262,8 +263,8 @@ const memory_layout_cache = WeakKeyIdDict{
             CAPI.PJRT_Buffer_MemoryLayout_Tiled(
                 csizeof(CAPI.PJRT_Buffer_MemoryLayout_Tiled), #= struct_size =#
                 C_NULL, #= extension_start =#
-                pointer(layout.minor_to_major), #= minor_to_major =#
-                length(layout.minor_to_major), #= minor_to_major_size =#
+                pointer(minor_to_major), #= minor_to_major =#
+                length(minor_to_major), #= minor_to_major_size =#
                 pointer(tile_dims), #= tile_dims =#
                 pointer(tile_dim_sizes), #= tile_dim_sizes =#
                 length(tile_dim_sizes), #= num_tiles =#

@@ -24,7 +24,8 @@ end
     else
         ":T" * join("(" * join(tile, ",") * ")" for tile in layout.tiles)
     end
-    bytes = root!(Vector{UInt8}("{" * join(layout.minor_to_major, ",") * tiles * "}"))
+    # `xla::ParseLayout` expects 0-based dimensions
+    bytes = root!(Vector{UInt8}("{" * join(layout.minor_to_major .- 1, ",") * tiles * "}"))
     unsafe_store!(args.serialized_bytes, Cstring(pointer(bytes)))
     unsafe_store!(args.serialized_bytes_size, length(bytes))
     unsafe_store!(
@@ -43,7 +44,7 @@ end
     default_memory_layout(topology::TopologyDescription, type, dims::Vector{Int64}) -> MemoryLayout
 
 Return the default [`MemoryLayout`](@ref) of `client` (or `topology`) for an array of element type
-`type::CAPI.PJRT_Buffer_Type` and dimensions `dims` (e.g. `TiledMemoryLayout(n-1:-1:0)` for XLA's default row-major
+`type::CAPI.PJRT_Buffer_Type` and dimensions `dims` (e.g. `TiledMemoryLayout(n:-1:1)` for XLA's default row-major
 layout, with `n = length(dims)`).
 
 Backs `PJRT_Layouts_PJRT_Client_GetDefaultLayout` and `PJRT_Layouts_PJRT_Topology_GetDefaultLayout`.
