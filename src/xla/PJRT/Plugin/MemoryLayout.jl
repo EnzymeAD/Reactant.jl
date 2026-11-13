@@ -12,8 +12,9 @@ Tiled layout of an array in memory, as described by `PJRT_Buffer_MemoryLayout` (
 
 ## Fields
 
-- `minor_to_major::Vector{Int64}`: the 0-based order of the dimensions, from the fastest-varying to the slowest-varying
-  one (e.g. `[1, 0]` for a row-major matrix like C/numpy, `[0, 1]` for column-major matrix like Julia/Fortran).
+- `minor_to_major::Vector{Int64}`: the order of the dimensions, from the fastest-varying to the slowest-varying one
+  (e.g. `[2, 1]` for a row-major matrix like C/numpy, `[1, 2]` for a column-major matrix like Julia/Fortran). The C
+  wrappers convert it from and to the 0-based dimensions of C.
 - `tiles::Vector{Vector{Int64}}`: the sizes of each level of tiling, in the order they are applied to the minor-most
   dimensions (e.g. `[[8, 128], [2, 1]]` for XLA's `T(8,128)(2,1)`). Leave empty if the array is not tiled.
 """
@@ -23,9 +24,9 @@ struct TiledMemoryLayout <: MemoryLayout
 
     function TiledMemoryLayout(minor_to_major, tiles=Vector{Int64}[])
         # XLA can't handle such layouts, and aborts on some of them
-        isperm(minor_to_major .+ 1) || throw(
+        isperm(minor_to_major) || throw(
             ArgumentError(
-                "minor_to_major must be a permutation of 0:$(length(minor_to_major) - 1), got $minor_to_major",
+                "minor_to_major must be a permutation of 1:$(length(minor_to_major)), got $minor_to_major",
             ),
         )
         all(tile -> all(>(0), tile), tiles) ||
@@ -67,9 +68,9 @@ function MemoryLayout(c_layout::Ptr{CAPI.PJRT_Buffer_MemoryLayout})
         )
     elseif type == CAPI.PJRT_Buffer_MemoryLayout_Type_Tiled
         tiled = unsafe_load(c_layout.tiled)
-        minor_to_major = copy(
-            unsafe_wrap(Vector{Int64}, tiled.minor_to_major, tiled.minor_to_major_size)
-        )
+        # C uses 0-based dimensions (`.+ 1` also copies them out of the memory of C)
+        minor_to_major =
+            unsafe_wrap(Vector{Int64}, tiled.minor_to_major, tiled.minor_to_major_size) .+ 1
         # C passes the sizes of all tiles back to back, plus the number of dimensions of each tile
         tiles = Vector{Vector{Int64}}(undef, tiled.num_tiles)
         offset = 0

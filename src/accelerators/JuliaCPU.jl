@@ -1561,7 +1561,7 @@ function Buffer(
     _ndims = length(_size)
 
     size_in_bytes = prod(_size; init=_elsize)
-    minor_to_major = collect((_ndims - 1):-1:0)
+    minor_to_major = collect(_ndims:-1:1)
 
     # TODO support strided host data, layout and host buffer semantics
 
@@ -1610,7 +1610,7 @@ function Buffer(
     _layout,
 )
     size_in_bytes = prod(_size; init=pjrt_elsize(_eltype))
-    minor_to_major = collect((length(_size) - 1):-1:0)
+    minor_to_major = collect(length(_size):-1:1)
     # `malloc(0)` may return `C_NULL`, which would mark the buffer as deleted
     data = Libc.malloc(max(size_in_bytes, 1))
     data == C_NULL && throw(resource_exhausted())
@@ -1817,7 +1817,7 @@ function compile(client::HostClient, code, options)
                     Ptr{UInt8}(data), Ptr{UInt8}(pointer(out)), nbytes
                 )
                 dims = collect(Int64, reverse(size(out)))
-                minor_to_major = collect(Int64, (ndims(out) - 1):-1:0)
+                minor_to_major = collect(Int64, ndims(out):-1:1)
                 push!(
                     results,
                     HostBuffer(
