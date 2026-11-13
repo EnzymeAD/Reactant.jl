@@ -175,7 +175,10 @@ device_assignment(::LoadedExecutable)
 end
 
 """
-    execute(exec::LoadedExecutable, arguments::Vector{Vector{Buffer}}, dev::Union{Nothing,Device}) -> Vector{Vector{Buffer}}
+    execute(
+        exec::LoadedExecutable, arguments::Vector{Vector{Buffer}}, dev::Union{Nothing,Device},
+        context::Union{Nothing,ExecuteContext},
+    ) -> Vector{Vector{Buffer}}
 
 Run `exec` and return its outputs.
 
@@ -184,6 +187,9 @@ same layout: one vector per device, each with as many new buffers as `exec` has 
 
 If `dev` is not `nothing`, run only on `dev` (one of `addressable_devices(exec)`). Then `arguments` and the result
 have a single entry, for `dev`.
+
+`context` is the [`ExecuteContext`](@ref) of this execution (e.g. with the user data for its FFI handlers), or `nothing`
+if C passes none.
 
 Execution is synchronous: the device-complete events are signaled as soon as this returns. The caller GC-roots the
 returned buffers and destroys each of them, so they must all be distinct.
@@ -215,7 +221,26 @@ execute(::LoadedExecutable, args...)
     dev_ptr = unsafe_load(args.execute_device)
     dev = dev_ptr == C_NULL ? nothing : unsafe_pointer_to_objref(dev_ptr)::Device
 
-    outputs = execute(exec, arguments, dev)::Vector{Vector{Buffer}}
+    # `context` was added to `PJRT_ExecuteOptions` later, so older callers don't pass it
+    options = unsafe_load(args.options)
+    offset = fieldoffset(
+        CAPI.PJRT_ExecuteOptions, Base.fieldindex(CAPI.PJRT_ExecuteOptions, :context)
+    )
+    has_context =
+        options != C_NULL &&
+        unsafe_load(Ptr{Csize_t}(options)) >= offset + sizeof(Ptr{Cvoid})
+    context_ptr = if has_context
+        unsafe_load(Ptr{Ptr{CAPI.PJRT_ExecuteContext}}(options + offset))
+    else
+        C_NULL
+    end
+    context = if context_ptr == C_NULL
+        nothing
+    else
+        unsafe_pointer_to_objref(context_ptr)::ExecuteContext
+    end
+
+    outputs = execute(exec, arguments, dev, context)::Vector{Vector{Buffer}}
     if length(outputs) != num_devices
         msg = "`execute` returned outputs for $(length(outputs)) devices, but $num_devices were expected"
         throw(Error(CAPI.PJRT_Error_Code_INTERNAL, msg))

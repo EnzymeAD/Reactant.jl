@@ -1,4 +1,3 @@
-## `PJRT_FFI_Extension`
 """
     ffi_register_type!(plugin::AbstractPlugin, name::String, type_id::Int64, info::CAPI.PJRT_FFI_Type_Info) -> Integer
 
@@ -53,20 +52,33 @@ struct FFIRegisterHandler{P<:AbstractPlugin} end
     return ok()
 end
 
-# TODO dispatch on the `ExecuteContext` once `PJRT_ExecuteContext_Create` is implemented
+# stores the user data in the `ExecuteContext`, so it needs nothing from the plugin
 @pjrt_catch_return function pjrt_ffi_user_data_add(
     args::Ptr{CAPI.PJRT_FFI_UserData_Add_Args}
 )::Ptr{CAPI.PJRT_Error}
-    throw(unimplemented("`PJRT_ExecuteContext` is not supported yet"))
+    ptr = unsafe_load(args.context)
+    ptr == C_NULL &&
+        throw(invalid_argument("adding FFI user data requires an execute context"))
+    context = unsafe_pointer_to_objref(ptr)::ExecuteContext
+    user_data = unsafe_load(args.user_data)
+    if haskey(context.ffi_user_data, user_data.type_id)
+        throw(
+            invalid_argument(
+                "the execute context already has user data of type id $(user_data.type_id)"
+            ),
+        )
+    end
+    context.ffi_user_data[user_data.type_id] = user_data.data
+    return ok()
 end
 
 """
     FFIExtension(plugin::AbstractPlugin, next::Ptr{CAPI.PJRT_Extension_Base} = C_NULL)
 
-Advertises `PJRT_FFI_Extension`, through which XLA registers FFI types and custom call handlers in the plugin.
+Advertises `PJRT_FFI_Extension`, through which XLA registers FFI types and custom call handlers in the plugin, and adds
+user data to the [`ExecuteContext`](@ref) of an execution.
 
-`plugin` must implement [`ffi_register_type!`](@ref) and [`ffi_register_handler!`](@ref). Adding user data to an
-execute context is not supported yet.
+`plugin` must implement [`ffi_register_type!`](@ref) and [`ffi_register_handler!`](@ref).
 """
 mutable struct FFIExtension <: Extension
     const ftable::CAPI.PJRT_FFI_Extension

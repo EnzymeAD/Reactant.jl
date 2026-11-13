@@ -336,6 +336,7 @@ include("Device.jl")
 include("MemoryLayout.jl")
 include("Buffer.jl")
 include("Executable.jl")
+include("ExecuteContext.jl")
 include("LoadedExecutable.jl")
 include("Client.jl")
 include("TopologyDescription.jl")
@@ -565,8 +566,8 @@ function make_api(plugin::P; extensions=()) where {P<:AbstractPlugin}
         #= PJRT_Client_TopologyDescription =# @cfunction(pjrt_client_topology_description, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Client_TopologyDescription_Args},)),
         #= PJRT_Executable_GetCompiledMemoryStats =# @cfunction(pjrt_executable_get_compiled_memory_stats, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Executable_GetCompiledMemoryStats_Args},)),
         #= PJRT_Memory_Kind_Id =# @cfunction(pjrt_memory_kind_id, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Memory_Kind_Id_Args},)),
-        #= PJRT_ExecuteContext_Create =# c_unimplemented,
-        #= PJRT_ExecuteContext_Destroy =# c_unimplemented,
+        #= PJRT_ExecuteContext_Create =# @cfunction(pjrt_execute_context_create, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_ExecuteContext_Create_Args},)),
+        #= PJRT_ExecuteContext_Destroy =# @cfunction(pjrt_execute_context_destroy, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_ExecuteContext_Destroy_Args},)),
         #= PJRT_Buffer_CopyRawToHost =# @cfunction(pjrt_buffer_copy_raw_to_host, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_CopyRawToHost_Args},)),
         #= PJRT_AsyncHostToDeviceTransferManager_Destroy =# @cfunction(pjrt_async_host_to_device_transfer_manager_destroy, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_AsyncHostToDeviceTransferManager_Destroy_Args},)),
         #= PJRT_AsyncHostToDeviceTransferManager_TransferData =# @cfunction(pjrt_async_host_to_device_transfer_manager_transfer_data, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_AsyncHostToDeviceTransferManager_TransferData_Args},)),
