@@ -1447,7 +1447,10 @@ function compile(ctx, f, args; kwargs...)
         linear_result_shard_info,
         client,
         resharded_inputs;
-        concrete_args=args,
+        # A wrapped function (a closure) is traced as the first argument, so the paths are
+        # relative to `(f, args...)`; resolved against `args` alone, none would match and no
+        # redundant write-back would be skipped.
+        concrete_args=mlir_fn_res.fnwrapped ? (f, args...) : args,
     )
 
     for (i, name) in enumerate(linear_result_shard_info)
