@@ -2404,20 +2404,35 @@ end
 
     input_types = [mlir_type(arg) for arg in linear_args]
 
-    cond_fn_compiled =
-        Reactant.TracedUtils.make_mlir_fn(
-            cond_fn,
-            traced_args,
-            (),
-            string(gensym("cond_fn")),
-            false;
-            return_dialect=:stablehlo,
-            args_in_result=:result,
-            do_transpose=false,
-            argprefix=gensym("loop_condarg"),
-            resprefix=gensym("loop_condres"),
-            resargprefix=gensym("loop_condresarg"),
-        ).f
+    cond_res = Reactant.TracedUtils.make_mlir_fn(
+        cond_fn,
+        traced_args,
+        (),
+        string(gensym("cond_fn")),
+        false;
+        return_dialect=:stablehlo,
+        args_in_result=:result,
+        do_transpose=false,
+        argprefix=gensym("loop_condarg"),
+        resprefix=gensym("loop_condres"),
+        resargprefix=gensym("loop_condresarg"),
+    )
+    cond_fn_compiled = cond_res.f
+
+    if isempty(cond_res.linear_results) && cond_res.result isa Bool
+        MLIR.IR.rmfromparent!(cond_fn_compiled)
+        cond_val::Bool = cond_res.result
+        while cond_val
+            Reactant.call_with_reactant(body_fn, traced_args...)
+            cond_val = Reactant.call_with_reactant(cond_fn, traced_args...)::Bool
+        end
+        for (prev, traced) in zip(args, traced_args)
+            if prev isa Base.RefValue && prev !== traced && traced[] isa eltype(prev)
+                prev[] = traced[]
+            end
+        end
+        return TracedRNumber{Int}[]
+    end
 
     body_fn_compiled =
         Reactant.TracedUtils.make_mlir_fn(

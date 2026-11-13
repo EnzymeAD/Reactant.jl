@@ -35,6 +35,6 @@ struct SVectorCallable{V} end
     @test @jit(broadcast(w, x)) ≈ ones(Float32, 4) .* 2
     @test @jit(w(x)) ≈ ones(Float32, 4) .* 2
 
-    hlo = String(@code_hlo debug = true sv_holder_fn(x, h))
+    hlo = String(@code_hlo optimize = :before_jit debug = true sv_holder_fn(x, h))
     @test occursin("SVectorHolder{Float32[1.0, 2.0, 3.0]}", hlo)
 end

@@ -1801,3 +1801,97 @@ end
     x = Reactant.to_rarray([1, 2, 3])
     @test_throws UndefVarError @compile f_undef_var_error(x)
 end
+
+function triply_nested_trace_for(D::AbstractMatrix{T}) where {T}
+    n, m = size(D)
+    corr = zeros(T, m, m)
+    @trace for i in 1:m
+        @allowscalar corr[i, i] = one(T)
+        @trace for j in 1:m
+            @allowscalar corr[i, j] = zero(T)
+            @trace for k in 1:n
+                @allowscalar corr[i, j] += D[k, i] * D[k, j]
+            end
+        end
+    end
+    return corr
+end
+
+@testset "triply-nested @trace for loops (#3095)" begin
+    D = Float32[1 2 3; 4 5 6; 7 8 9; 10 11 12]
+    D_ra = Reactant.to_rarray(D)
+    @test Array(@jit(triply_nested_trace_for(D_ra))) ≈ triply_nested_trace_for(D)
+end
+
+function loop_with_pi_var(x)
+    s = zero(eltype(x))
+    @trace for i in 1:length(x)
+        pi = @allowscalar x[i]
+        s += pi
+    end
+    return s
+end
+
+function loop_reading_outer_irrational(x)
+    c = π
+    s = zero(eltype(x))
+    @trace for i in 1:length(x)
+        s += c * @allowscalar x[i]
+    end
+    return s
+end
+
+@testset "Variables shadowing const globals and irrationals in @trace (#3282)" begin
+    x = Float32[1, 2, 3]
+    xr = Reactant.to_rarray(x)
+    @test @jit(loop_with_pi_var(xr)) ≈ 6.0f0
+    @test @jit(loop_reading_outer_irrational(xr)) ≈ Float32(π) * 6.0f0
+end
+
+struct AddBias3617{W}
+    w::W
+end
+(f::AddBias3617)(a) = a .+ f.w
+
+function argument_in_loop_3617(A, w, n)
+    i = 0
+    @trace track_numbers = false while i < n
+        i += 1
+        A = mapslices(AddBias3617(w), A; dims=1)
+    end
+    return A
+end
+
+function local_in_loop_3617(A, n)
+    i = 0
+    @trace track_numbers = false while i < n
+        i += 1
+        c = sum(A)
+        A = mapslices(AddBias3617(c), A; dims=1)
+    end
+    return A
+end
+
+function count_cond_evals_3617(A, n, cond_calls::Base.RefValue{Int})
+    i = 0
+    @trace track_numbers = false while (cond_calls[] += 1; i < n)
+        i += 1
+        A = A .+ 1.0
+    end
+    return A
+end
+
+@testset "while_loop with plain Bool condition and track_numbers=false (#3617)" begin
+    A = Reactant.to_rarray(ones(3, 2))
+    w = Reactant.to_rarray(fill(0.5, 3))
+    @test Array(@jit(argument_in_loop_3617(A, w, 2))) ≈ fill(2.0, 3, 2)
+    @test Array(@jit(local_in_loop_3617(A, 2))) ≈ fill(49.0, 3, 2)
+
+    c0 = Ref(0)
+    @test Array(@jit(count_cond_evals_3617(A, 0, c0))) ≈ ones(3, 2)
+    @test c0[] == 1
+
+    c3 = Ref(0)
+    @test Array(@jit(count_cond_evals_3617(A, 3, c3))) ≈ fill(4.0, 3, 2)
+    @test c3[] == 4
+end

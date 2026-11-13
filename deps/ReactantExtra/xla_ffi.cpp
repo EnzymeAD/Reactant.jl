@@ -160,7 +160,7 @@ void registerReactantXLAInternalFFI() {
   // Upstream JAX provides @jax//jaxlib/cuda:cuda_gpu_kernels for static CUDA
   // FFI registration, but has no equivalent rocm_gpu_kernels target. Register
   // all JAX ROCm FFI handlers on "ROCM" directly.
-  const auto *api = xla::ffi::GetXlaFfiApi();
+  static const auto *api = xla::ffi::GetXlaFfiApi();
   XLA_FFI_REGISTER_HANDLER(api, "hipdnn_rnn_ffi_v2", "ROCM",
                            ::jax::hip::kRNNForward);
   XLA_FFI_REGISTER_HANDLER(api, "hipdnn_rnn_bwd_ffi_v2", "ROCM",
