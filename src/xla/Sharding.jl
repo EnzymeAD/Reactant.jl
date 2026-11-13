@@ -233,29 +233,37 @@ function sharding_to_concrete_array_indices(
         @assert length(partitions) == length(shape)
         shape = reverse(shape)
 
-        # XLA will automatically pad the inputs that don't match the final shape
-        partitionable_shape = map(zip(shape, partitions)) do (dim, n_shards)
-            dim % n_shards == 0 && return dim
-            res = dim + n_shards ÷ 2
-            return res - res % n_shards
+        # XLA pads inputs whose dimensions are not evenly divisible by the shard counts
+        partitionable_shape_vec = Vector{Int}(undef, N)
+        needs_padding = false
+        for d in 1:N
+            dim = shape[d]
+            n_shards = partitions[d]
+            @assert dim > 0 "Invalid dimension: $dim"
+            @assert n_shards > 0 "Invalid number of shards: $n_shards"
+            dim_padded = cld(dim, n_shards) * n_shards
+            partitionable_shape_vec[d] = dim_padded
+            needs_padding |= (dim_padded != dim)
         end
-        partitionable_shape = Tuple(partitionable_shape)
-
-        needs_padding = any(partitionable_shape .!= shape)
+        partitionable_shape = NTuple{N,Int}(partitionable_shape_vec)
 
         # Calculate indices for each dimension
-        axis_indices =
-            map(zip(partitionable_shape, shape, partitions)) do (dim_padded, dim, n_shards)
-                @assert dim > 0 "Invalid dimension: $dim"
-                @assert n_shards > 0 "Invalid number of shards: $n_shards"
-                n_shards == 1 && return [1:dim]
+        axis_indices = Vector{Vector{UnitRange{Int}}}(undef, N)
+        for d in 1:N
+            dim_padded = partitionable_shape[d]
+            dim = shape[d]
+            n_shards = partitions[d]
+            if n_shards == 1
+                axis_indices[d] = UnitRange{Int}[1:dim]
+            else
                 shard_size = dim_padded ÷ n_shards
-
-                return [
-                    (i * shard_size + 1):min((i + 1) * shard_size, dim) for
-                    i in 0:(n_shards - 1)
-                ]
+                ranges = Vector{UnitRange{Int}}(undef, n_shards)
+                for i in 0:(n_shards - 1)
+                    ranges[i + 1] = (i * shard_size + 1):min((i + 1) * shard_size, dim)
+                end
+                axis_indices[d] = ranges
             end
+        end
 
         indices = Dict{Int,NTuple{N,UnitRange{Int}}}()
         device_idx = 1
