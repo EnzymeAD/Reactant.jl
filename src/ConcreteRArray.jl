@@ -496,9 +496,21 @@ function Base.getindex(
     return convert(Array, a)[args...]
 end
 
+@noinline function throw_untraced_concrete_error(f, T::DataType)
+    return throw(
+        ArgumentError(
+            "Cannot call `$(f)` on an untraced `$(T)` inside a Reactant-compiled " *
+            "function (`@compile` / `@jit`). Pass the value as an explicit argument " *
+            "to the compiled function (or capture it inside a callable struct / " *
+            "closure) rather than accessing it as a global variable.",
+        ),
+    )
+end
+
 function Base.getindex(
     a::Union{ConcreteIFRTArray{T,N},ConcretePJRTArray{T,N}}, args::Vararg{Any,N}
 ) where {T<:ReactantPrimitive,N}
+    ReactantCore.within_compile() && throw_untraced_concrete_error(Base.getindex, typeof(a))
     return compile(getindex, (a, args...))(a, args...)
 end
 
@@ -507,6 +519,7 @@ end
 function _fast_slice(a::AbstractConcreteArray{T,N}, args::Vararg{UnitRange,N}) where {T,N}
     # Avoid slicing all-together
     args == ntuple(Base.Fix1(UnitRange, 1) ∘ Base.Fix1(size, a), N) && return a
+    ReactantCore.within_compile() && throw_untraced_concrete_error(_fast_slice, typeof(a))
     # For all other cases do a compile
     fn = compile(getindex, (a, args...))
     return fn(a, args...)
@@ -520,6 +533,8 @@ function mysetindex!(a, v, args::Vararg{Any,N}) where {N}
 end
 
 function Base.setindex!(a::ConcretePJRTArray{T}, v, args::Vararg{Int,N}) where {T,N}
+    ReactantCore.within_compile() &&
+        throw_untraced_concrete_error(Base.setindex!, typeof(a))
     isempty(a) && throw("Cannot setindex! to empty buffer")
 
     wait(a)
@@ -545,6 +560,8 @@ function Base.setindex!(a::ConcretePJRTArray{T}, v, args::Vararg{Int,N}) where {
 end
 
 function Base.setindex!(a::ConcreteIFRTArray, v, args::Vararg{Int,N}) where {N}
+    ReactantCore.within_compile() &&
+        throw_untraced_concrete_error(Base.setindex!, typeof(a))
     isempty(args) && throw("Cannot setindex! to empty buffer")
 
     GPUArraysCore.assertscalar("setindex!(::ConcreteIFRTArray, ::Any, ::Vararg{Int, N})")
