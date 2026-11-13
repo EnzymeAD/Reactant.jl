@@ -41,3 +41,50 @@ end
         Reactant.call_with_native(NNlib.∇conv_data!, dx, dy, w, cdims; kwargs...)
     end
 end
+
+@reactant_overlay function NNlib.grid_sample(
+    input::AbstractArray, grid; padding_mode=:zeros
+)
+    if any(Reactant.use_overlayed_version, (input, grid))
+        overloaded_grid_sample(input, grid; padding_mode)
+    else
+        Reactant.call_with_native(NNlib.grid_sample, input, grid; padding_mode)
+    end
+end
+
+@reactant_overlay function NNlib.grid_sample!(
+    output::AbstractArray, input::AbstractArray, grid, padding_mode=:zeros
+)
+    if any(Reactant.use_overlayed_version, (output, input, grid))
+        overloaded_grid_sample!(output, input, grid, padding_mode)
+    else
+        Reactant.call_with_native(NNlib.grid_sample!, output, input, grid, padding_mode)
+    end
+end
+
+@reactant_overlay function NNlib.∇grid_sample(
+    Δ::AbstractArray, input::AbstractArray, grid; padding_mode=:zeros
+)
+    if any(Reactant.use_overlayed_version, (Δ, input, grid))
+        overloaded_∇grid_sample(Δ, input, grid; padding_mode)
+    else
+        Reactant.call_with_native(NNlib.∇grid_sample, Δ, input, grid; padding_mode)
+    end
+end
+
+@reactant_overlay function NNlib.∇grid_sample!(
+    dx::AbstractArray,
+    dgrid::AbstractArray,
+    Δ::AbstractArray,
+    input::AbstractArray,
+    grid::AbstractArray,
+    padding_mode,
+)
+    if any(Reactant.use_overlayed_version, (dx, dgrid, Δ, input, grid))
+        overloaded_∇grid_sample!(dx, dgrid, Δ, input, grid, padding_mode)
+    else
+        Reactant.call_with_native(
+            NNlib.∇grid_sample!, dx, dgrid, Δ, input, grid, padding_mode
+        )
+    end
+end
