@@ -313,6 +313,8 @@ macro trace(args...)
         end
     )
     expr = macroexpand(__module__, expr)
+    expr = rewrite_traced_asserts(expr)
+    is_traced_expansion(expr) && return esc(expr)
 
     #! format: off
     if @capture(
@@ -1062,6 +1064,108 @@ function error_if_any_control_flow(expr::Expr)
     end
 
     return foreach(error_if_any_control_flow, expr.args)
+end
+
+is_traced_bool(_) = false
+
+@inline traced_assert_cond(cond::Bool) = cond
+@inline function traced_assert_cond(@nospecialize(cond))
+    within_compile() && is_traced_bool(cond) && return true
+    throw(TypeError(:if, "", Bool, cond))
+end
+
+@inline check_assert_bool(cond::Bool) = cond
+@inline function check_assert_bool(@nospecialize(cond))
+    within_compile() && is_traced_bool(cond) && return cond
+    throw(TypeError(:if, "", Bool, cond))
+end
+
+function _is_base_func(@nospecialize(f), sym::Symbol)
+    if f isa GlobalRef
+        return f.mod === Base && f.name === sym
+    end
+    return isdefined(Base, sym) && f === getfield(Base, sym)
+end
+
+function is_expanded_assert(@nospecialize(ex))
+    Meta.isexpr(ex, :if, 3) || return false
+    ex.args[2] === nothing || return false
+    else_ex = ex.args[3]
+    Meta.isexpr(else_ex, :call) || return false
+    isempty(else_ex.args) && return false
+    callee = else_ex.args[1]
+    if _is_base_func(callee, :throw_assertionerror)
+        return length(else_ex.args) == 2
+    end
+    if _is_base_func(callee, :throw) && length(else_ex.args) == 2
+        err_ex = else_ex.args[2]
+        return Meta.isexpr(err_ex, :call) &&
+               !isempty(err_ex.args) &&
+               _is_base_func(err_ex.args[1], :AssertionError)
+    end
+    return false
+end
+
+function rewrite_assert_cond(@nospecialize(ex))
+    ex isa Expr || return ex
+    is_traced_expansion(ex) && return ex
+    if ex.head === :(&&) && length(ex.args) == 2
+        lhs = rewrite_assert_cond(ex.args[1])
+        rhs = rewrite_assert_cond(ex.args[2])
+        lhs_sym = gensym(:assert_lhs)
+        return :(
+            let $lhs_sym = $lhs
+                if $lhs_sym === false
+                    false
+                elseif $lhs_sym === true
+                    $(check_assert_bool)($rhs)
+                else
+                    $(check_assert_bool)($lhs_sym) & $(check_assert_bool)($rhs)
+                end
+            end
+        )
+    elseif ex.head === :(||) && length(ex.args) == 2
+        lhs = rewrite_assert_cond(ex.args[1])
+        rhs = rewrite_assert_cond(ex.args[2])
+        lhs_sym = gensym(:assert_lhs)
+        return :(
+            let $lhs_sym = $lhs
+                if $lhs_sym === true
+                    true
+                elseif $lhs_sym === false
+                    $(check_assert_bool)($rhs)
+                else
+                    $(check_assert_bool)($lhs_sym) | $(check_assert_bool)($rhs)
+                end
+            end
+        )
+    end
+    new_args = Vector{Any}(undef, length(ex.args))
+    for i in eachindex(ex.args)
+        new_args[i] = rewrite_assert_cond(ex.args[i])
+    end
+    return Expr(ex.head, new_args...)
+end
+
+function rewrite_traced_asserts(@nospecialize(ex))
+    ex isa Expr || return ex
+    is_traced_expansion(ex) && return ex
+    if is_expanded_assert(ex)
+        cond_ex = rewrite_assert_cond(ex.args[1])
+        else_ex = rewrite_traced_asserts(ex.args[3])
+        return mark_traced(:(
+            if $(traced_assert_cond)($cond_ex)
+                nothing
+            else
+                $else_ex
+            end
+        ))
+    end
+    new_args = Vector{Any}(undef, length(ex.args))
+    for i in eachindex(ex.args)
+        new_args[i] = rewrite_traced_asserts(ex.args[i])
+    end
+    return Expr(ex.head, new_args...)
 end
 
 """
