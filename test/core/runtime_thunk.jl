@@ -73,7 +73,11 @@ rt_arrays(model) = (map(f -> Array(f.data), values(model.fields)), Array(model.c
                 # the thunk is called with other arguments than the ones it was compiled with
                 other = rt_model(6)
                 totals = (step!(other), step!(other))
-                (map(t -> Reactant.to_number(t), totals), rt_arrays(other), rt_arrays(model))
+                (
+                    map(t -> Reactant.to_number(t), totals),
+                    rt_arrays(other),
+                    rt_arrays(model),
+                )
             end
         end
         @test results[1] == results[2]
