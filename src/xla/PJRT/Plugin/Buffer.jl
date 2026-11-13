@@ -6,26 +6,31 @@
 - `destroy`
 - `delete!`
 - `isdeleted`
-- `element_type` -> eltype
-- `dimensions` -> size
-- `unpadded_dimensions`
+- `Base.eltype`
+- `pjrt_eltype` (defaults to `pjrt_eltype(Base.eltype(buffer))`)
+- `Base.size`
+- `unpadded_size`
 - `dynamic_dimension_indices`
 - `memory_layout`
-- `on_device_size_in_bytes` -> sizeof?
+- `Base.sizeof`
 - `device`
 - `memory`
-- `copy_to_device` -> copyto!?
-- `copy_to_memory`
-- `to_host_buffer` -> copyto!?
-- `copy_raw_to_host!`
+- `copyto(::Device, ::Buffer)`
+- `copyto(::Memory, ::Buffer)`
+- `to_host_buffer`
+- `Base.unsafe_copyto!`
 - `bitcast!`
-- `donate_with_control_dependency!`
-- `opaque_device_memory_data_pointer`
-- `increase_external_reference_count!`
-- `decrease_external_reference_count!`
-- `is_on_cpu`
+- `donate!`
+- `opaque_pointer`
+- `incref!`
+- `decref!`
+- `isoncpu`
 - `ready_event`
-- `unsafe_pointer`
+- `Base.pointer`
+
+!!! info
+The `Buffer(client, ...)` constructors (see [`Client`](@ref)) return the plugin's own subtype of `Buffer`, chosen by
+dispatch on their `client`, `dev` and `mem` arguments.
 """
 abstract type Buffer end
 
@@ -75,67 +80,87 @@ isdeleted(::Buffer)
 end
 
 """
-    element_type(buffer::Buffer) -> CAPI.PJRT_Buffer_Type
+    Base.eltype(buffer::Buffer) -> Type
+
+Return the Julia element type of `buffer`.
+
+Backs `PJRT_Buffer_ElementType` through the default of [`pjrt_eltype`](@ref).
+"""
+Base.eltype(::Buffer)
+
+"""
+    pjrt_eltype(buffer::Buffer) -> CAPI.PJRT_Buffer_Type
 
 Return the PJRT element type of `buffer`.
 
+Defaults to `pjrt_eltype(Base.eltype(buffer))`. Override it if the element type has no Julia equivalent, or if `buffer`
+already stores its PJRT element type.
+
 Backs `PJRT_Buffer_ElementType`.
 """
-element_type(::Buffer)
+pjrt_eltype(buffer::Buffer) = pjrt_eltype(eltype(buffer))
 
 @pjrt_catch_return function pjrt_buffer_element_type(
     args::Ptr{CAPI.PJRT_Buffer_ElementType_Args}
 )::Ptr{CAPI.PJRT_Error}
     buffer = unsafe_pointer_to_objref(unsafe_load(args.buffer))::Buffer
-    # _eltype = eltype(buffer)::Type
-    # _pjrt_eltype = pjrt_eltype(_eltype)::CAPI.PJRT_Buffer_Type
-    _pjrt_eltype = element_type(buffer)::CAPI.PJRT_Buffer_Type
+    _pjrt_eltype = pjrt_eltype(buffer)::CAPI.PJRT_Buffer_Type
     unsafe_store!(args.type, _pjrt_eltype)
     return ok()
 end
 
 """
-    dimensions(buffer::Buffer) -> Vector{Int64}
+    Base.size(buffer::Buffer) -> Dims
 
 Return the dimensions of `buffer`.
 
-!!! warning
-The returned vector is handed to C by pointer, so it must be owned by `buffer` and never be resized.
+It is called at most once per `buffer`: the C wrapper keeps a copy for as long as `buffer` is alive, since C keeps
+pointers to it.
 
 Backs `PJRT_Buffer_Dimensions`.
 """
-dimensions(::Buffer)
+Base.size(::Buffer)
+
+# C borrows the dimensions, so they are kept for as long as the buffer is alive
+const size_cache = WeakKeyIdDict{Buffer,Vector{Int64}}()
 
 @pjrt_catch_return function pjrt_buffer_dimensions(
     args::Ptr{CAPI.PJRT_Buffer_Dimensions_Args}
 )::Ptr{CAPI.PJRT_Error}
     buffer = unsafe_pointer_to_objref(unsafe_load(args.buffer))::Buffer
-    dims = dimensions(buffer)::Vector{Int}
+    dims = get!(size_cache, buffer) do
+        collect(Int64, size(buffer)::Dims)
+    end
     unsafe_store!(args.dims, pointer(dims))
     unsafe_store!(args.num_dims, length(dims))
     return ok()
 end
 
 """
-    unpadded_dimensions(buffer::Buffer) -> Vector{Int64}
+    unpadded_size(buffer::Buffer) -> Dims
 
-Return the dimensions of `buffer` without padding. They usually are `dimensions(buffer)`, but dynamically-sized
+Return the dimensions of `buffer` without padding. They usually are `Base.size(buffer)`, but dynamically-sized
 dimensions implemented by padding to a fixed size may be smaller.
 
-Defaults to `dimensions(buffer)`, i.e. no dimension is padded.
+Defaults to `Base.size(buffer)`, i.e. no dimension is padded.
 
-!!! warning
-The returned vector is handed to C by pointer, so it must be owned by `buffer` and never be resized.
+It is called at most once per `buffer`: the C wrapper keeps a copy for as long as `buffer` is alive, since C keeps
+pointers to it.
 
 Backs `PJRT_Buffer_UnpaddedDimensions`.
 """
-unpadded_dimensions(buffer::Buffer) = dimensions(buffer)
+unpadded_size(buffer::Buffer) = size(buffer)
+
+# C borrows the dimensions, so they are kept for as long as the buffer is alive
+const unpadded_size_cache = WeakKeyIdDict{Buffer,Vector{Int64}}()
 
 @pjrt_catch_return function pjrt_buffer_unpadded_dimensions(
     args::Ptr{CAPI.PJRT_Buffer_UnpaddedDimensions_Args}
 )::Ptr{CAPI.PJRT_Error}
     buffer = unsafe_pointer_to_objref(unsafe_load(args.buffer))::Buffer
-    dims = unpadded_dimensions(buffer)::Vector{Int64}
+    dims = get!(unpadded_size_cache, buffer) do
+        collect(Int64, unpadded_size(buffer)::Dims)
+    end
     unsafe_store!(args.unpadded_dims, pointer(dims))
     unsafe_store!(args.num_dims, length(dims))
     return ok()
@@ -275,25 +300,29 @@ memory(::Buffer)
 end
 
 """
-    on_device_size_in_bytes(buffer::Buffer) -> Integer
+    Base.sizeof(buffer::Buffer) -> Integer
 
 Return the number of bytes that `buffer` occupies on its device.
 
+Must be implemented: Base's fallback silently returns the size of the Julia object, so this one throws instead.
+
 Backs `PJRT_Buffer_OnDeviceSizeInBytes`.
 """
-on_device_size_in_bytes(::Buffer)
+function Base.sizeof(buffer::Buffer)
+    throw(unimplemented("`sizeof` is not implemented for $(typeof(buffer))"))
+end
 
 @pjrt_catch_return function pjrt_buffer_on_device_size_in_bytes(
     args::Ptr{CAPI.PJRT_Buffer_OnDeviceSizeInBytes_Args}
 )::Ptr{CAPI.PJRT_Error}
     buffer = unsafe_pointer_to_objref(unsafe_load(args.buffer))::Buffer
-    _size = on_device_size_in_bytes(buffer)
+    _size = sizeof(buffer)
     unsafe_store!(args.on_device_size_in_bytes, Csize_t(_size))
     return ok()
 end
 
 """
-    copy_to_device(dst::Device, buffer::Buffer) -> Buffer
+    copyto(dst::Device, buffer::Buffer) -> Buffer
 
 Return a new buffer with a copy of the data of `buffer` placed on `dst`.
 Must fail if `buffer` already resides on `dst`.
@@ -301,7 +330,7 @@ The returned buffer is GC rooted by the caller.
 
 Backs `PJRT_Buffer_CopyToDevice`.
 """
-copy_to_device(::Device, ::Buffer)
+copyto(::Device, ::Buffer)
 
 @pjrt_catch_return function pjrt_buffer_copy_to_device(
     args::Ptr{CAPI.PJRT_Buffer_CopyToDevice_Args}
@@ -311,7 +340,7 @@ copy_to_device(::Device, ::Buffer)
 
     isdeleted(buffer) && throw(invalid_argument("buffer is deleted"))
 
-    dst_buffer = copy_to_device(dst_dev, buffer)::Buffer
+    dst_buffer = copyto(dst_dev, buffer)::Buffer
     root!(dst_buffer)
     ptr = Ptr{CAPI.PJRT_Buffer}(pointer_from_objref(dst_buffer))
     unsafe_store!(args.dst_buffer, ptr)
@@ -319,7 +348,7 @@ copy_to_device(::Device, ::Buffer)
 end
 
 """
-    copy_to_memory(dst::Memory, buffer::Buffer) -> Buffer
+    copyto(dst::Memory, buffer::Buffer) -> Buffer
 
 Return a new buffer with a copy of the data of `buffer` placed on memory space `dst`.
 Unlike the PJRT C API header says, `dst` may be the memory of `buffer`: XLA's CPU client allows it and Reactant's
@@ -328,7 +357,7 @@ The returned buffer is GC rooted by the caller.
 
 Backs `PJRT_Buffer_CopyToMemory`.
 """
-copy_to_memory(::Memory, ::Buffer)
+copyto(::Memory, ::Buffer)
 
 @pjrt_catch_return function pjrt_buffer_copy_to_memory(
     args::Ptr{CAPI.PJRT_Buffer_CopyToMemory_Args}
@@ -338,7 +367,7 @@ copy_to_memory(::Memory, ::Buffer)
 
     isdeleted(buffer) && throw(invalid_argument("buffer is deleted"))
 
-    dst_buffer = copy_to_memory(dst_mem, buffer)::Buffer
+    dst_buffer = copyto(dst_mem, buffer)::Buffer
     root!(dst_buffer)
     ptr = Ptr{CAPI.PJRT_Buffer}(pointer_from_objref(dst_buffer))
     unsafe_store!(args.dst_buffer, ptr)
@@ -348,8 +377,7 @@ end
 """
     to_host_buffer(dst::Ptr, buffer::Buffer)
 
-Copy the data of `buffer` to the host memory pointed by `dst`, which must hold at least
-`on_device_size_in_bytes(buffer)` bytes.
+Copy the data of `buffer` to the host memory pointed by `dst`, which must hold at least `Base.sizeof(buffer)` bytes.
 
 !!! todo
 The copy is _currently_ synchronous.
@@ -363,7 +391,7 @@ to_host_buffer(::Ptr, ::Buffer)
 )::Ptr{CAPI.PJRT_Error}
     buffer = unsafe_pointer_to_objref(unsafe_load(args.src))::Buffer
     dst = unsafe_load(args.dst)
-    src_size = on_device_size_in_bytes(buffer)
+    src_size = sizeof(buffer)
 
     isdeleted(buffer) && throw(invalid_argument("buffer is deleted"))
 
@@ -403,17 +431,20 @@ to_host_buffer(::Ptr, ::Buffer)
 end
 
 """
-    copy_raw_to_host!(dst::Ptr, buffer::Buffer, offset::Integer, transfer_size::Integer)
+    Base.unsafe_copyto!(dst::Ptr, buffer::Buffer, offset::Integer, nbytes::Integer) -> Ptr
 
-Copy `transfer_size` bytes of the raw on-device data of `buffer`, starting at byte `offset`, to the host memory pointed
-by `dst`. The C wrapper checks that the range is within `on_device_size_in_bytes(buffer)`.
+Copy `nbytes` bytes of the raw on-device data of `buffer`, starting at byte `offset`, to the host memory pointed by
+`dst`. Like in Base, return `dst`.
+
+`offset` is 0-based, as in PJRT, unlike the 1-based offsets of Base. The C wrapper checks that the range is within
+`Base.sizeof(buffer)`.
 
 !!! todo
 The copy is _currently_ synchronous.
 
 Backs `PJRT_Buffer_CopyRawToHost`.
 """
-copy_raw_to_host!(::Ptr, ::Buffer, ::Integer, ::Integer)
+Base.unsafe_copyto!(::Ptr, ::Buffer, ::Integer, ::Integer)
 
 @pjrt_catch_return function pjrt_buffer_copy_raw_to_host(
     args::Ptr{CAPI.PJRT_Buffer_CopyRawToHost_Args}
@@ -425,7 +456,7 @@ copy_raw_to_host!(::Ptr, ::Buffer, ::Integer, ::Integer)
 
     isdeleted(buffer) && throw(invalid_argument("buffer is deleted"))
 
-    src_size = on_device_size_in_bytes(buffer)
+    src_size = sizeof(buffer)
     if offset < 0 || transfer_size < 0 || offset + transfer_size > src_size
         throw(
             invalid_argument(
@@ -434,7 +465,7 @@ copy_raw_to_host!(::Ptr, ::Buffer, ::Integer, ::Integer)
         )
     end
 
-    copy_raw_to_host!(dst, buffer, offset, transfer_size)
+    unsafe_copyto!(dst, buffer, offset, transfer_size)
 
     event = root!(Event())
     notify(event)
@@ -449,7 +480,7 @@ Return a new buffer that takes over the on-device data of `buffer`, reinterprete
 `type::CAPI.PJRT_Buffer_Type`, dimensions `dims::Vector{Int64}` and layout `layout::Union{Nothing,MemoryLayout}`
 (`nothing` for the default layout, not the layout of `buffer`).
 
-It must not copy any data, and the new buffer must have the same `on_device_size_in_bytes` as `buffer`. `buffer` is
+It must not copy any data, and the new buffer must have the same `Base.sizeof` as `buffer`. `buffer` is
 donated: afterwards, `isdeleted(buffer)` must return `true`, but its data must not be freed.
 
 The caller GC-roots the returned buffer.
@@ -510,7 +541,7 @@ end
 
     isdeleted(buffer) && throw(invalid_argument("buffer is deleted"))
 
-    src_size = on_device_size_in_bytes(buffer)
+    src_size = sizeof(buffer)
     if offset < 0 || transfer_size < 0 || offset + transfer_size > src_size
         throw(
             invalid_argument(
@@ -522,7 +553,7 @@ end
     # the copy must happen even if `buffer` is deleted before the destination is ready, so the data is copied now
     # and moved to the destination by `pjrt_buffer_copy_raw_to_host_future_ready`
     staging = Vector{UInt8}(undef, transfer_size)
-    GC.@preserve staging copy_raw_to_host!(pointer(staging), buffer, offset, transfer_size)
+    GC.@preserve staging unsafe_copyto!(pointer(staging), buffer, offset, transfer_size)
 
     event = root!(Event())
     data = root!(Ref((staging, event)))
@@ -540,7 +571,7 @@ end
 end
 
 """
-    donate_with_control_dependency!(buffer::Buffer, dependency::Event) -> Buffer
+    donate!(buffer::Buffer, dependency::Event) -> Buffer
 
 Return a new buffer that takes over the on-device data of `buffer`, and which is ready only once both `buffer` and
 `dependency` are ready. If either of them fails, the new buffer fails too.
@@ -552,7 +583,7 @@ The caller GC-roots the returned buffer.
 
 Backs `PJRT_Buffer_DonateWithControlDependency`.
 """
-donate_with_control_dependency!(::Buffer, ::Event)
+donate!(::Buffer, ::Event)
 
 # called by C when the dependency of a `PJRT_Buffer_DonateWithControlDependency` is ready (or failed)
 function pjrt_buffer_donate_dependency_ready(
@@ -580,7 +611,7 @@ end
     isdeleted(buffer) && throw(invalid_argument("buffer is deleted"))
 
     dependency = Event()
-    out_buffer = donate_with_control_dependency!(buffer, dependency)::Buffer
+    out_buffer = donate!(buffer, dependency)::Buffer
     root!(out_buffer)
 
     # rooted in a `Ref` of its own, so that the callback unroots it even if the plugin hands `dependency` out to C
@@ -599,77 +630,77 @@ end
 end
 
 """
-    opaque_device_memory_data_pointer(buffer::Buffer) -> Ptr
+    opaque_pointer(buffer::Buffer) -> Ptr
 
 Return the opaque pointer to the device memory of `buffer`. It may become invalid at any point unless `buffer` has an
-external reference (see `increase_external_reference_count!`).
+external reference (see `incref!`).
 
-Defaults to `unsafe_pointer(buffer)`.
+Defaults to `Base.pointer(buffer)`.
 
 Backs `PJRT_Buffer_OpaqueDeviceMemoryDataPointer`.
 """
-opaque_device_memory_data_pointer(buffer::Buffer) = unsafe_pointer(buffer)
+opaque_pointer(buffer::Buffer) = pointer(buffer)
 
 @pjrt_catch_return function pjrt_buffer_opaque_device_memory_data_pointer(
     args::Ptr{CAPI.PJRT_Buffer_OpaqueDeviceMemoryDataPointer_Args}
 )::Ptr{CAPI.PJRT_Error}
     buffer = unsafe_pointer_to_objref(unsafe_load(args.buffer))::Buffer
     isdeleted(buffer) && throw(invalid_argument("buffer is deleted"))
-    ptr = opaque_device_memory_data_pointer(buffer)::Ptr
+    ptr = opaque_pointer(buffer)::Ptr
     unsafe_store!(args.device_memory_ptr, ptr)
     return ok()
 end
 
 """
-    increase_external_reference_count!(buffer::Buffer)
+    incref!(buffer::Buffer)
 
 Increment the number of external references to `buffer`, which mean that its data is shared with another framework
 (e.g. through DLPack). While there is any, the data of `buffer` must be neither freed (even by `delete!`) nor moved.
 
 Backs `PJRT_Buffer_IncreaseExternalReferenceCount`.
 """
-increase_external_reference_count!(::Buffer)
+incref!(::Buffer)
 
 @pjrt_catch_return function pjrt_buffer_increase_external_reference_count(
     args::Ptr{CAPI.PJRT_Buffer_IncreaseExternalReferenceCount_Args}
 )::Ptr{CAPI.PJRT_Error}
     buffer = unsafe_pointer_to_objref(unsafe_load(args.buffer))::Buffer
-    increase_external_reference_count!(buffer)
+    incref!(buffer)
     return ok()
 end
 
 """
-    decrease_external_reference_count!(buffer::Buffer)
+    decref!(buffer::Buffer)
 
-Decrement the number of external references to `buffer` (see `increase_external_reference_count!`). Must throw
+Decrement the number of external references to `buffer` (see `incref!`). Must throw
 [`invalid_argument`](@ref) if there is none.
 
 Backs `PJRT_Buffer_DecreaseExternalReferenceCount`.
 """
-decrease_external_reference_count!(::Buffer)
+decref!(::Buffer)
 
 @pjrt_catch_return function pjrt_buffer_decrease_external_reference_count(
     args::Ptr{CAPI.PJRT_Buffer_DecreaseExternalReferenceCount_Args}
 )::Ptr{CAPI.PJRT_Error}
     buffer = unsafe_pointer_to_objref(unsafe_load(args.buffer))::Buffer
-    decrease_external_reference_count!(buffer)
+    decref!(buffer)
     return ok()
 end
 
 """
-    is_on_cpu(buffer::Buffer) -> Bool
+    isoncpu(buffer::Buffer) -> Bool
 
 Return whether the data of `buffer` resides in host memory.
 
 Backs `PJRT_Buffer_IsOnCpu`.
 """
-is_on_cpu(::Buffer)
+isoncpu(::Buffer)
 
 @pjrt_catch_return function pjrt_buffer_is_on_cpu(
     args::Ptr{CAPI.PJRT_Buffer_IsOnCpu_Args}
 )::Ptr{CAPI.PJRT_Error}
     buffer = unsafe_pointer_to_objref(unsafe_load(args.buffer))::Buffer
-    pred = is_on_cpu(buffer)::Bool
+    pred = isoncpu(buffer)::Bool
     unsafe_store!(args.is_on_cpu, pred)
     return ok()
 end
@@ -704,19 +735,19 @@ ready_event(::Buffer)
 end
 
 """
-    unsafe_pointer(buffer::Buffer) -> Ptr
+    Base.pointer(buffer::Buffer) -> Ptr
 
 Return the raw pointer to the data of `buffer`. The pointer is only valid until `buffer` is deleted or destroyed.
 
 Backs `PJRT_Buffer_UnsafePointer`.
 """
-unsafe_pointer(::Buffer)
+Base.pointer(::Buffer)
 
 @pjrt_catch_return function pjrt_buffer_unsafe_pointer(
     args::Ptr{CAPI.PJRT_Buffer_UnsafePointer_Args}
 )::Ptr{CAPI.PJRT_Error}
     buffer = unsafe_pointer_to_objref(unsafe_load(args.buffer))::Buffer
-    ptr = unsafe_pointer(buffer)::Ptr
+    ptr = pointer(buffer)::Ptr
     unsafe_store!(args.buffer_pointer, UInt(ptr))
     return ok()
 end

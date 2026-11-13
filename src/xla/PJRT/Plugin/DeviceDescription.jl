@@ -6,8 +6,8 @@
 - `id`
 - `pid`
 - `kind`
-- `debug_string`
-- `to_string`
+- `debug_string` (defaults to `Base.show`)
+- `Base.print`
 - `attributes`
 """
 abstract type DeviceDescription end
@@ -108,44 +108,55 @@ end
 """
     debug_string(desc::DeviceDescription) -> String
 
-Return a verbose description of the device for debugging.
-    
-!!! warning
-The string is handed to C by pointer, so it must be owned by `desc`.
+Return a verbose description of the device for debugging. Defaults to `Base.show(io, desc)`, i.e.
+`sprint(show, desc)`.
+
+It is called at most once per `desc`: the C wrapper keeps the string for as long as `desc` is alive, since C keeps
+pointers to it.
 
 Backs `PJRT_DeviceDescription_DebugString`.
 """
-debug_string(::DeviceDescription)
+debug_string(desc::DeviceDescription) = sprint(show, desc)
+
+# C borrows the strings, so they are kept for as long as the description is alive
+const device_description_debug_string_cache = WeakKeyIdDict{DeviceDescription,String}()
 
 @pjrt_catch_return function pjrt_device_description_debug_string(
     args::Ptr{CAPI.PJRT_DeviceDescription_DebugString_Args}
 )::Ptr{CAPI.PJRT_Error}
     ptr = Ptr{DeviceDescription}(unsafe_load(args.device_description))
     desc = unsafe_pointer_to_objref(ptr)::DeviceDescription
-    str = debug_string(desc)::String
+    str = get!(device_description_debug_string_cache, desc) do
+        debug_string(desc)::String
+    end
     unsafe_store!(args.debug_string, Cstring(pointer(str)))
     unsafe_store!(args.debug_string_size, sizeof(str))
     return ok()
 end
 
 """
-    to_string(desc::DeviceDescription) -> String
+    Base.print(io::IO, desc::DeviceDescription)
 
-Return a short, user-facing description of the device.
+Write a short, user-facing description of the device. If not implemented, Base falls back to `Base.show(io, desc)`.
 
-!!! warning
-The string is handed to C by pointer, so it must be owned by `desc`.
+It is called at most once per `desc`: the C wrapper keeps the string for as long as `desc` is alive, since C keeps
+pointers to it.
 
 Backs `PJRT_DeviceDescription_ToString`.
 """
-to_string(::DeviceDescription)
+Base.print(::IO, ::DeviceDescription)
+
+# C borrows the strings, so they are kept for as long as the description is alive
+const device_description_to_string_cache = WeakKeyIdDict{DeviceDescription,String}()
 
 @pjrt_catch_return function pjrt_device_description_to_string(
     args::Ptr{CAPI.PJRT_DeviceDescription_ToString_Args}
 )::Ptr{CAPI.PJRT_Error}
     ptr = Ptr{DeviceDescription}(unsafe_load(args.device_description))
     desc = unsafe_pointer_to_objref(ptr)::DeviceDescription
-    str = to_string(desc)
+    str = get!(device_description_to_string_cache, desc) do
+        sprint(print, desc)
+    end
     unsafe_store!(args.to_string, Cstring(pointer(str)))
     unsafe_store!(args.to_string_size, sizeof(str))
     return ok()

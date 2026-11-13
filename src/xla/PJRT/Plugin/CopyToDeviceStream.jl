@@ -2,9 +2,10 @@
     CopyToDeviceStream
 
 A stream of chunks of host data to be copied to a device, which expects `total_bytes` bytes in total, in chunks whose
-size is a multiple of `granule_size`. It is complete once `current_bytes == total_bytes`, and never changes afterwards.
+size is a multiple of `granule_size`. It is complete once `Base.position(stream) == total_bytes`, and never changes
+afterwards.
 
-The C wrapper checks those conditions before calling `add_chunk!`.
+The C wrapper checks those conditions before calling `Base.unsafe_write`.
 
 !!! todo
 `execute` ignores the receive callbacks of `PJRT_ExecuteOptions`, which is how C gets a stream, so nothing can hand
@@ -12,10 +13,10 @@ one to C yet.
 
 ### Interface
 
-- `add_chunk!`
+- `Base.unsafe_write`
 - `total_bytes`
 - `granule_size`
-- `current_bytes`
+- `Base.position`
 """
 abstract type CopyToDeviceStream end
 
@@ -28,10 +29,10 @@ abstract type CopyToDeviceStream end
 end
 
 """
-    add_chunk!(stream::CopyToDeviceStream, data::Ptr{Cvoid}, size::Integer)
+    Base.unsafe_write(stream::CopyToDeviceStream, data::Ptr{Cvoid}, nbytes::Integer) -> Integer
 
-Copy the `size` bytes of host memory at `data` to the device as the next chunk of `stream`, adding `size` to
-`current_bytes(stream)`.
+Copy the `nbytes` bytes of host memory at `data` to the device as the next chunk of `stream`, adding `nbytes` to
+`Base.position(stream)`. Like in Base, return the number of bytes written.
 
 `data` is freed right after this returns, so the copy must be done by then.
 
@@ -40,7 +41,7 @@ The copy is _currently_ synchronous: the event returned to C is set as soon as t
 
 Backs `PJRT_CopyToDeviceStream_AddChunk`.
 """
-add_chunk!(::CopyToDeviceStream, ::Ptr{Cvoid}, ::Integer)
+Base.unsafe_write(::CopyToDeviceStream, ::Ptr{Cvoid}, ::Integer)
 
 @pjrt_catch_return function pjrt_copy_to_device_stream_add_chunk(
     args::Ptr{CAPI.PJRT_CopyToDeviceStream_AddChunk_Args}
@@ -55,7 +56,7 @@ add_chunk!(::CopyToDeviceStream, ::Ptr{Cvoid}, ::Integer)
     # transfers are reported through the returned event, like in XLA
     error = try
         total = total_bytes(stream)
-        current = current_bytes(stream)
+        current = position(stream)
         granule = granule_size(stream)
         if current == total
             throw(invalid_argument("stream is already complete"))
@@ -72,7 +73,7 @@ add_chunk!(::CopyToDeviceStream, ::Ptr{Cvoid}, ::Integer)
                 ),
             )
         end
-        add_chunk!(stream, chunk.data, chunk.size)
+        unsafe_write(stream, chunk.data, chunk.size)
         nothing
     catch err
         err isa Error || rethrow()
@@ -124,19 +125,19 @@ granule_size(::CopyToDeviceStream)
 end
 
 """
-    current_bytes(stream::CopyToDeviceStream) -> Integer
+    Base.position(stream::CopyToDeviceStream) -> Integer
 
 Return the number of bytes that `stream` has transferred or buffered to transfer so far.
 
 Backs `PJRT_CopyToDeviceStream_CurrentBytes`.
 """
-current_bytes(::CopyToDeviceStream)
+Base.position(::CopyToDeviceStream)
 
 @pjrt_catch_return function pjrt_copy_to_device_stream_current_bytes(
     args::Ptr{CAPI.PJRT_CopyToDeviceStream_CurrentBytes_Args}
 )::Ptr{CAPI.PJRT_Error}
     stream = unsafe_pointer_to_objref(unsafe_load(args.stream))::CopyToDeviceStream
-    unsafe_store!(args.current_bytes, current_bytes(stream))
+    unsafe_store!(args.current_bytes, position(stream))
     return ok()
 end
 

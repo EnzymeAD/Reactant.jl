@@ -8,12 +8,13 @@ A compiled program, independent of the devices it runs on. Returned by `executab
 - `name`
 - `nreplicas` (defaults to the one in `compile_options`)
 - `npartitions` (defaults to the one in `compile_options`)
-- `noutputs` (defaults to the length of `output_element_types`)
-- `size_of_generated_code_in_bytes`
+- `noutputs` (defaults to the length of `output_pjrt_eltypes`)
+- `codesize`
 - `fingerprint`
 - `cost_analysis`
-- `output_element_types`
-- `output_dimensions`
+- `output_eltypes`
+- `output_pjrt_eltypes` (defaults to `map(pjrt_eltype, output_eltypes(exe))`)
+- `output_sizes`
 - `parameter_memory_kinds`
 - `output_memory_kinds`
 - `optimized_program`
@@ -123,11 +124,11 @@ Return the number of outputs that `exe` produces per device.
 `PjRtCApiLoadedExecutable` uses it to allocate the output lists filled by `execute`, so it must match the length of
 each output vector that `execute` returns.
 
-Defaults to `length(output_element_types(exe))`.
+Defaults to `length(output_pjrt_eltypes(exe))`.
 
 Backs `PJRT_Executable_NumOutputs`.
 """
-noutputs(exe::Executable) = length(output_element_types(exe))
+noutputs(exe::Executable) = length(output_pjrt_eltypes(exe))
 
 @pjrt_catch_return function pjrt_executable_num_outputs(
     args::Ptr{CAPI.PJRT_Executable_NumOutputs_Args}
@@ -138,7 +139,7 @@ noutputs(exe::Executable) = length(output_element_types(exe))
 end
 
 """
-    size_of_generated_code_in_bytes(exe::Executable) -> Integer
+    codesize(exe::Executable) -> Integer
 
 Return the size in bytes of the code generated for `exe`, or `0` if unknown.
 
@@ -147,13 +148,13 @@ Return the size in bytes of the code generated for `exe`, or `0` if unknown.
 
 Backs `PJRT_Executable_SizeOfGeneratedCodeInBytes`.
 """
-size_of_generated_code_in_bytes(::Executable)
+codesize(::Executable)
 
 @pjrt_catch_return function pjrt_executable_size_of_generated_code_in_bytes(
     args::Ptr{CAPI.PJRT_Executable_SizeOfGeneratedCodeInBytes_Args}
 )::Ptr{CAPI.PJRT_Error}
     exe = unsafe_pointer_to_objref(unsafe_load(args.executable))::Executable
-    unsafe_store!(args.size_in_bytes, size_of_generated_code_in_bytes(exe))
+    unsafe_store!(args.size_in_bytes, codesize(exe))
     return ok()
 end
 
@@ -212,50 +213,65 @@ cost_analysis(::Executable)
 end
 
 """
-    output_element_types(exe::Executable) -> Vector{CAPI.PJRT_Buffer_Type}
+    output_eltypes(exe::Executable) -> Vector{<:Type}
 
-Return the element type of each output of `exe`.
+Return the Julia element type of each output of `exe`.
 
-!!! warning
-The vector is handed to C by pointer, so it must be owned by `exe` and never be resized.
+Backs `PJRT_Executable_OutputElementTypes` through the default of [`output_pjrt_eltypes`](@ref).
+"""
+output_eltypes(::Executable)
+
+"""
+    output_pjrt_eltypes(exe::Executable) -> Vector{CAPI.PJRT_Buffer_Type}
+
+Return the PJRT element type of each output of `exe`.
+
+Defaults to `map(pjrt_eltype, output_eltypes(exe))`. Override it if an element type has no Julia equivalent, or if
+`exe` already stores the PJRT element types.
+
+It is called at most once per `exe` by `PJRT_Executable_OutputElementTypes`: the C wrapper keeps a copy for as long as
+`exe` is alive, since C keeps pointers to it.
 
 Backs `PJRT_Executable_OutputElementTypes`.
 """
-output_element_types(::Executable)
+output_pjrt_eltypes(exe::Executable) = map(pjrt_eltype, output_eltypes(exe))
+
+# C borrows the element types, so they are kept for as long as the executable is alive
+const output_pjrt_eltypes_cache = WeakKeyIdDict{Executable,Vector{CAPI.PJRT_Buffer_Type}}()
 
 @pjrt_catch_return function pjrt_executable_output_element_types(
     args::Ptr{CAPI.PJRT_Executable_OutputElementTypes_Args}
 )::Ptr{CAPI.PJRT_Error}
     exe = unsafe_pointer_to_objref(unsafe_load(args.executable))::Executable
-    types = output_element_types(exe)::Vector{CAPI.PJRT_Buffer_Type}
+    types = get!(output_pjrt_eltypes_cache, exe) do
+        collect(CAPI.PJRT_Buffer_Type, output_pjrt_eltypes(exe))
+    end
     unsafe_store!(args.output_types, pointer(types))
     unsafe_store!(args.num_output_types, length(types))
     return ok()
 end
 
 """
-    output_dimensions(exe::Executable) -> Vector{Vector{Int64}}
+    output_sizes(exe::Executable) -> Vector{<:Dims}
 
-Return the dimensions of each output of `exe`.
+Return the dimensions of each output of `exe`, like `Base.size`.
 
 It is called at most once per `exe`: the C wrapper keeps a copy for as long as `exe` is alive, since C keeps pointers
 to it.
 
 Backs `PJRT_Executable_OutputDimensions`.
 """
-output_dimensions(::Executable)
+output_sizes(::Executable)
 
-const output_dimensions_cache = WeakKeyIdDict{
-    Executable,Tuple{Vector{Int64},Vector{Csize_t}}
-}()
+const output_sizes_cache = WeakKeyIdDict{Executable,Tuple{Vector{Int64},Vector{Csize_t}}}()
 
 @pjrt_catch_return function pjrt_executable_output_dimensions(
     args::Ptr{CAPI.PJRT_Executable_OutputDimensions_Args}
 )::Ptr{CAPI.PJRT_Error}
     exe = unsafe_pointer_to_objref(unsafe_load(args.executable))::Executable
     # C expects the dimensions of all outputs back to back, plus the number of dimensions of each output
-    dims, ranks = get!(output_dimensions_cache, exe) do
-        shapes = output_dimensions(exe)::Vector{Vector{Int64}}
+    dims, ranks = get!(output_sizes_cache, exe) do
+        shapes = output_sizes(exe)::Vector{<:Dims}
         (
             Int64[d for shape in shapes for d in shape],
             Csize_t[length(shape) for shape in shapes],
@@ -403,7 +419,7 @@ end
 """
     compile_options(exe::Executable) -> Reactant.Proto.xla.CompileOptionsProto
 
-Return the compile options that `exe` was compiled with, i.e. the ones given to `compile!`.
+Return the compile options that `exe` was compiled with, i.e. the ones given to `compile`.
 
 Backs `PJRT_Executable_GetCompileOptions`.
 """
