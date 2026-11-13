@@ -4,7 +4,7 @@
 ### Interface
 
 - `id`
-- `pid`
+- `process_index`
 - `kind`
 - `debug_string` (defaults to `Base.show`)
 - `Base.print`

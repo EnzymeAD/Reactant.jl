@@ -32,11 +32,6 @@ abstract type Executable end
     return ok()
 end
 
-function pjrt_serialized_bytes_deleter(ptr::Ptr{Cvoid})::Cvoid
-    ptr != C_NULL && unroot!(ptr)
-    return nothing
-end
-
 """
     name(exe::Executable) -> String
 

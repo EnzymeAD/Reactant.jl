@@ -172,7 +172,7 @@ Advertises `PJRT_Layouts_Extension`, through which XLA gets the memory layouts o
 layouts of clients and topologies. Without it, XLA assumes the default row-major layout everywhere. Pass it to
 [`make_api`](@ref).
 
-## Interface
+### Interface
 
 - [`default_memory_layout(::Client)`](@ref default_memory_layout)
 - [`default_memory_layout(::TopologyDescription)`](@ref default_memory_layout)

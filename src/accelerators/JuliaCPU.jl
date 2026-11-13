@@ -62,7 +62,7 @@ import Reactant.XLA.PJRT.Plugin:
     process_index,
     ready_event,
     serialize,
-    to_host_buffer,
+    to_host_buffer!,
     topology_description
 
 using LinearAlgebra: BLAS, BlasFloat, Hermitian, cholesky, issuccess, mul!
@@ -199,7 +199,7 @@ function copyto(mem::HostMemory, buffer::HostBuffer)
     )
 end
 
-function to_host_buffer(dst::Ptr{Cvoid}, buffer::HostBuffer)
+function to_host_buffer!(dst::Ptr{Cvoid}, buffer::HostBuffer)
     Libc.memcpy(dst, buffer.data, buffer.size_in_bytes)
     return nothing
 end
@@ -243,17 +243,17 @@ mutable struct HostLoadedExecutable{Tag} <: LoadedExecutable
     deleted::Bool
 end
 
-executable(exec::HostLoadedExecutable) = exec.executable
+executable(loaded_exe::HostLoadedExecutable) = loaded_exe.executable
 
-function Base.delete!(exec::HostLoadedExecutable)
-    exec.deleted = true
+function Base.delete!(loaded_exe::HostLoadedExecutable)
+    loaded_exe.deleted = true
     return nothing
 end
 
-isdeleted(exec::HostLoadedExecutable) = exec.deleted
-addressable_devices(exec::HostLoadedExecutable) = exec.devices
-addressable_device_logical_ids(exec::HostLoadedExecutable) = exec.logical_ids
-device_assignment(exec::HostLoadedExecutable) = exec.device_assignment
+isdeleted(loaded_exe::HostLoadedExecutable) = loaded_exe.deleted
+addressable_devices(loaded_exe::HostLoadedExecutable) = loaded_exe.devices
+addressable_device_logical_ids(loaded_exe::HostLoadedExecutable) = loaded_exe.logical_ids
+device_assignment(loaded_exe::HostLoadedExecutable) = loaded_exe.device_assignment
 
 """
     handle(::Val{opname}, operands::Tuple, attributes::NamedTuple, results::Tuple)
@@ -1771,7 +1771,7 @@ function compile(client::HostClient, code, options)
             ),
         )
         isnothing(dev) ||
-            dev === exec.devices[1] ||
+            dev === loaded_exe.devices[1] ||
             throw(invalid_argument("cannot execute on another device"))
         buffers = only(arguments)
         length(buffers) == $nargs || throw(
@@ -1806,7 +1806,7 @@ function compile(client::HostClient, code, options)
     push!(
         body.args,
         quote
-            out_dev = exec.devices[1]
+            out_dev = loaded_exe.devices[1]
             out_mem = default_memory(out_dev)
             results = Buffer[]
             for out in ($(outputs...),)
@@ -1837,7 +1837,7 @@ function compile(client::HostClient, code, options)
 
     tag = gensym(:main)
     @eval function execute(
-        exec::HostLoadedExecutable{$(QuoteNode(tag))},
+        loaded_exe::HostLoadedExecutable{$(QuoteNode(tag))},
         arguments::Vector{Vector{Buffer}},
         dev,
         _context,
