@@ -169,4 +169,10 @@ end
     @test all(==(2), Array(m.other))
     @test all(==(1), Array(shared))
     @test all(w -> w.data === shared, m.wrappers)
+
+    scale_shared_by!(m) = (first(m.wrappers).data .*= factor; nothing)
+    @jit scale_shared_by!(m)
+    @test all(==(2), Array(shared))
+    @test all(w -> w.data === shared, m.wrappers)
+    @test all(w -> all(==(2), Array(w.data)), m.wrappers)
 end
