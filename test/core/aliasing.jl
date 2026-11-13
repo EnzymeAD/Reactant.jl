@@ -152,3 +152,27 @@ end
     @test all(w -> w.data === shared, m.wrappers)
     @test all(w -> all(==(2), Array(w.data)), m.wrappers)
 end
+
+@testset "Write-back to an array reachable through many paths, from a closure" begin
+    shared = Reactant.to_rarray(ones(4))
+    other = Reactant.to_rarray(ones(4))
+    m = ManyWrappers(ntuple(_ -> SharedWrapper(shared), 64), other)
+
+    # A closure is traced as the first argument: the deduplication must resolve its paths too
+    factor = 2
+    scale_other_by!(m) = (m.other .*= factor; nothing)
+    compiled = @compile scale_other_by!(m)
+    body = string(only(code_lowered(compiled, Tuple{typeof(m)})))
+    @test count("traced_setfield!", body) < 8
+
+    compiled(m)
+    @test all(==(2), Array(m.other))
+    @test all(==(1), Array(shared))
+    @test all(w -> w.data === shared, m.wrappers)
+
+    scale_shared_by!(m) = (first(m.wrappers).data .*= factor; nothing)
+    @jit scale_shared_by!(m)
+    @test all(==(2), Array(shared))
+    @test all(w -> w.data === shared, m.wrappers)
+    @test all(w -> all(==(2), Array(w.data)), m.wrappers)
+end
