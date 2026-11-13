@@ -580,7 +580,7 @@ function make_api(plugin::P; extensions=()) where {P<:AbstractPlugin}
         #= PJRT_Buffer_DonateWithControlDependency =# @cfunction(pjrt_buffer_donate_with_control_dependency, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_DonateWithControlDependency_Args},)),
         #= PJRT_Event_Create =# @cfunction(pjrt_event_create, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Event_Create_Args},)),
         #= PJRT_Event_Set =# @cfunction(pjrt_event_set, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Event_Set_Args},)),
-        #= PJRT_Device_GetAttributes =# C_NULL,
+        #= PJRT_Device_GetAttributes =# @cfunction(pjrt_device_get_attributes, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Device_GetAttributes_Args},)),
         #= PJRT_Client_Load =# @cfunction(pjrt_client_load, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Client_Load_Args},)),
         #= PJRT_LoadedExecutable_AddressableDeviceLogicalIds =# @cfunction(pjrt_loaded_executable_addressable_device_logical_ids, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_LoadedExecutable_AddressableDeviceLogicalIds_Args},)),
         #= PJRT_Buffer_Bitcast =# @cfunction(pjrt_buffer_bitcast, Ptr{CAPI.PJRT_Error}, (Ptr{CAPI.PJRT_Buffer_Bitcast_Args},)),
