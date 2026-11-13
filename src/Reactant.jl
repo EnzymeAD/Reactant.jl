@@ -286,6 +286,7 @@ include("Enums.jl")
 include("Tracing.jl")
 
 include("integration/MPI.jl")
+include("integration/PyTorch.jl")
 
 include("compiler/Compiler.jl")
 
