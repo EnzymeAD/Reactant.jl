@@ -26,6 +26,7 @@ include("CompilationError.jl")
 include("OptimizationPasses.jl")
 include("Codegen.jl")
 include("Thunk.jl")
+include("CPUKernelLowering.jl")
 
 const DEBUG_PRINT_CODEGEN = Ref(false)
 
@@ -318,13 +319,12 @@ Base.@nospecializeinfer function compile_mlir!(
     cuda_sm_major = 0
     cuda_sm_minor = 0
 
-    if backend == "cpu" || backend == "tpu" || backend == "neuron" || backend == "trainium"
-        kern = "lower-kernel{backend=cpu},canonicalize"
-        if backend == "tpu" || backend == "neuron" || backend == "trainium"
-            jit = "lower-affine,$(OpenMP[] ? "convert-scf-to-openmp" : "convert-scf-to-cf"),convert-polygeist-to-llvm{backend=cpu preserve-xla-funcs=true},lower-jit,symbol-dce,strip-debuginfo"
-        else
-            jit = "lower-affine,$(OpenMP[] ? "convert-scf-to-openmp" : "convert-scf-to-cf"),convert-polygeist-to-llvm{backend=cpu preserve-xla-funcs=true},lower-jit,symbol-dce"
-        end
+    is_cpu_like_backend =
+        backend == "cpu" || backend == "tpu" || backend == "neuron" || backend == "trainium"
+    cpu_has_llvm_func = is_cpu_like_backend && _has_llvm_func(mod)
+    if is_cpu_like_backend
+        kern = "lower-kernel{backend=cpu},symbol-dce,canonicalize"
+        jit = _cpu_jit_passes(backend, false, false)
     elseif backend == "rocm"
         kern = if is_raising
             "lower-kernel{backend=cpu},symbol-dce,canonicalize"
@@ -455,33 +455,34 @@ Base.@nospecializeinfer function compile_mlir!(
     if compile_options.optimization_passes === :all ||
         compile_options.optimization_passes === :after_enzyme
         raise_pass_list = String[kern, raise_passes]
-        run_pass_pipeline!(
+        _run_cpu_aware_pass_pipeline!(
             mod,
-            join(
-                vcat(
-                    String["mark-func-memory-effects", opt_passes],
-                    compile_options.raise_first ? raise_pass_list : String[],
-                    String["enzyme-batch"],
-                    if compile_options.optimization_passes === :after_enzyme
-                        String[]
-                    else
-                        String[opt_passes2]
-                    end,
-                    String[
-                        enzyme_pass,
-                        opt_passes2,
-                        "canonicalize",
-                        "remove-unnecessary-enzyme-ops",
-                        "enzyme-simplify-math",
-                        legalize_chlo_to_stablehlo...,
-                        opt_passes2,
-                    ],
-                    compile_options.raise_first ? String[] : raise_pass_list,
-                    String[lower_enzymexla_passes, jit],
-                ),
-                ",",
+            vcat(
+                String["mark-func-memory-effects", opt_passes],
+                compile_options.raise_first ? raise_pass_list : String[],
+                String["enzyme-batch"],
+                if compile_options.optimization_passes === :after_enzyme
+                    String[]
+                else
+                    String[opt_passes2]
+                end,
+                String[
+                    enzyme_pass,
+                    opt_passes2,
+                    "canonicalize",
+                    "remove-unnecessary-enzyme-ops",
+                    "enzyme-simplify-math",
+                    legalize_chlo_to_stablehlo...,
+                    opt_passes2,
+                ],
+                compile_options.raise_first ? String[] : raise_pass_list,
+                String[lower_enzymexla_passes, jit],
             ),
             compile_options.optimization_passes === :after_enzyme ? "after_enzyme" : "all",
+            backend,
+            kern,
+            jit,
+            cpu_has_llvm_func,
         )
     elseif compile_options.optimization_passes === :before_kernel
         run_pass_pipeline!(
@@ -509,71 +510,73 @@ Base.@nospecializeinfer function compile_mlir!(
             "before_kernel",
         )
     elseif compile_options.optimization_passes === :before_jit
-        run_pass_pipeline!(
+        _run_cpu_aware_pass_pipeline!(
             mod,
-            join(
-                if compile_options.raise_first
-                    [
-                        "mark-func-memory-effects",
-                        opt_passes,
-                        kern,
-                        raise_passes,
-                        "enzyme-batch",
-                        opt_passes2,
-                        enzyme_pass,
-                        opt_passes2,
-                        "canonicalize",
-                        "remove-unnecessary-enzyme-ops",
-                        "enzyme-simplify-math",
-                        legalize_chlo_to_stablehlo...,
-                        opt_passes2,
-                    ]
-                else
-                    [
-                        "mark-func-memory-effects",
-                        opt_passes,
-                        "enzyme-batch",
-                        opt_passes2,
-                        enzyme_pass,
-                        opt_passes2,
-                        "canonicalize",
-                        "remove-unnecessary-enzyme-ops",
-                        "enzyme-simplify-math",
-                        legalize_chlo_to_stablehlo...,
-                        opt_passes2,
-                        kern,
-                        raise_passes,
-                    ]
-                end,
-                ',',
-            ),
+            if compile_options.raise_first
+                [
+                    "mark-func-memory-effects",
+                    opt_passes,
+                    kern,
+                    raise_passes,
+                    "enzyme-batch",
+                    opt_passes2,
+                    enzyme_pass,
+                    opt_passes2,
+                    "canonicalize",
+                    "remove-unnecessary-enzyme-ops",
+                    "enzyme-simplify-math",
+                    legalize_chlo_to_stablehlo...,
+                    opt_passes2,
+                ]
+            else
+                [
+                    "mark-func-memory-effects",
+                    opt_passes,
+                    "enzyme-batch",
+                    opt_passes2,
+                    enzyme_pass,
+                    opt_passes2,
+                    "canonicalize",
+                    "remove-unnecessary-enzyme-ops",
+                    "enzyme-simplify-math",
+                    legalize_chlo_to_stablehlo...,
+                    opt_passes2,
+                    kern,
+                    raise_passes,
+                ]
+            end,
             "before_jit",
+            backend,
+            kern,
+            jit,
+            cpu_has_llvm_func,
         )
     elseif compile_options.optimization_passes === :before_raise
-        run_pass_pipeline!(
+        _run_cpu_aware_pass_pipeline!(
             mod,
-            join(
-                if compile_options.raise_first
-                    ["mark-func-memory-effects", opt_passes]
-                else
-                    [
-                        "mark-func-memory-effects",
-                        opt_passes,
-                        "enzyme-batch",
-                        opt_passes2,
-                        enzyme_pass,
-                        opt_passes2,
-                        "canonicalize",
-                        "remove-unnecessary-enzyme-ops",
-                        "enzyme-simplify-math",
-                        legalize_chlo_to_stablehlo...,
-                        opt_passes2,
-                        kern,
-                    ]
-                end,
-                ',',
-            ),
+            if compile_options.raise_first
+                ["mark-func-memory-effects", opt_passes]
+            else
+                [
+                    "mark-func-memory-effects",
+                    opt_passes,
+                    "enzyme-batch",
+                    opt_passes2,
+                    enzyme_pass,
+                    opt_passes2,
+                    "canonicalize",
+                    "remove-unnecessary-enzyme-ops",
+                    "enzyme-simplify-math",
+                    legalize_chlo_to_stablehlo...,
+                    opt_passes2,
+                    kern,
+                ]
+            end,
             "before_raise",
+            backend,
+            kern,
+            jit,
+            cpu_has_llvm_func,
         )
     elseif compile_options.optimization_passes === :no_enzyme
         run_pass_pipeline!(
@@ -597,69 +600,70 @@ Base.@nospecializeinfer function compile_mlir!(
             "no_enzyme",
         )
     elseif compile_options.optimization_passes === :probprog
-        run_pass_pipeline!(
+        _run_cpu_aware_pass_pipeline!(
             mod,
-            join(
-                if compile_options.raise_first
-                    [
-                        "mark-func-memory-effects",
-                        opt_passes,
-                        kern,
-                        raise_passes,
-                        "enzyme-batch",
-                        opt_passes2,
-                        impulse_pass(),
-                        "lower-impulse-to-stablehlo{backend=$backend}",
-                        "outline-enzyme-regions",
-                        enzyme_pass,
-                        opt_passes2,
-                        "canonicalize",
-                        "remove-unnecessary-enzyme-ops",
-                        "enzyme-simplify-math",
-                        (
-                            if compile_options.legalize_chlo_to_stablehlo
-                                ["func.func(chlo-legalize-to-stablehlo)"]
-                            else
-                                []
-                            end
-                        )...,
-                        opt_passes2,
-                        lower_enzymexla_passes,
-                        "lower-impulse-trace-ops{backend=$backend}",
-                        jit,
-                    ]
-                else
-                    [
-                        "mark-func-memory-effects",
-                        opt_passes,
-                        "enzyme-batch",
-                        opt_passes2,
-                        impulse_pass(),
-                        "lower-impulse-to-stablehlo{backend=$backend}",
-                        "outline-enzyme-regions",
-                        enzyme_pass,
-                        opt_passes2,
-                        "canonicalize",
-                        "remove-unnecessary-enzyme-ops",
-                        "enzyme-simplify-math",
-                        (
-                            if compile_options.legalize_chlo_to_stablehlo
-                                ["func.func(chlo-legalize-to-stablehlo)"]
-                            else
-                                []
-                            end
-                        )...,
-                        opt_passes2,
-                        kern,
-                        raise_passes,
-                        lower_enzymexla_passes,
-                        "lower-impulse-trace-ops{backend=$backend}",
-                        jit,
-                    ]
-                end,
-                ",",
-            ),
+            if compile_options.raise_first
+                [
+                    "mark-func-memory-effects",
+                    opt_passes,
+                    kern,
+                    raise_passes,
+                    "enzyme-batch",
+                    opt_passes2,
+                    impulse_pass(),
+                    "lower-impulse-to-stablehlo{backend=$backend}",
+                    "outline-enzyme-regions",
+                    enzyme_pass,
+                    opt_passes2,
+                    "canonicalize",
+                    "remove-unnecessary-enzyme-ops",
+                    "enzyme-simplify-math",
+                    (
+                        if compile_options.legalize_chlo_to_stablehlo
+                            ["func.func(chlo-legalize-to-stablehlo)"]
+                        else
+                            []
+                        end
+                    )...,
+                    opt_passes2,
+                    lower_enzymexla_passes,
+                    "lower-impulse-trace-ops{backend=$backend}",
+                    jit,
+                ]
+            else
+                [
+                    "mark-func-memory-effects",
+                    opt_passes,
+                    "enzyme-batch",
+                    opt_passes2,
+                    impulse_pass(),
+                    "lower-impulse-to-stablehlo{backend=$backend}",
+                    "outline-enzyme-regions",
+                    enzyme_pass,
+                    opt_passes2,
+                    "canonicalize",
+                    "remove-unnecessary-enzyme-ops",
+                    "enzyme-simplify-math",
+                    (
+                        if compile_options.legalize_chlo_to_stablehlo
+                            ["func.func(chlo-legalize-to-stablehlo)"]
+                        else
+                            []
+                        end
+                    )...,
+                    opt_passes2,
+                    kern,
+                    raise_passes,
+                    lower_enzymexla_passes,
+                    "lower-impulse-trace-ops{backend=$backend}",
+                    jit,
+                ]
+            end,
             "impulse",
+            backend,
+            kern,
+            jit,
+            cpu_has_llvm_func,
         )
     elseif compile_options.optimization_passes === :only_enzyme
         run_pass_pipeline!(
@@ -678,57 +682,61 @@ Base.@nospecializeinfer function compile_mlir!(
             "only_enzyme",
         )
     elseif compile_options.optimization_passes === :noopt
-        run_pass_pipeline!(
+        _run_cpu_aware_pass_pipeline!(
             mod,
-            join(
-                [
+            vcat(
+                String[
                     "mark-func-memory-effects",
                     "enzyme-batch",
                     enzyme_pass,
                     "canonicalize",
                     "remove-unnecessary-enzyme-ops",
                     "enzyme-simplify-math",
-                    lower_enzymexla_passes,
-                    jit,
                 ],
-                ',',
+                cpu_has_llvm_func ? String[kern, raise_passes] : String[],
+                String[lower_enzymexla_passes, jit],
             ),
             "only_enzyme",
+            backend,
+            kern,
+            jit,
+            cpu_has_llvm_func,
         )
     elseif compile_options.optimization_passes === :before_enzyme
-        run_pass_pipeline!(
+        _run_cpu_aware_pass_pipeline!(
             mod,
-            join(
-                if compile_options.raise_first
-                    [
-                        "mark-func-memory-effects",
-                        opt_passes,
-                        kern,
-                        raise_passes,
-                        "enzyme-batch",
-                        opt_passes2,
-                        enzyme_pass,
-                        "canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math",
-                        lower_enzymexla_passes,
-                        jit,
-                    ]
-                else
-                    [
-                        "mark-func-memory-effects",
-                        opt_passes,
-                        "enzyme-batch",
-                        opt_passes2,
-                        enzyme_pass,
-                        "canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math",
-                        kern,
-                        raise_passes,
-                        lower_enzymexla_passes,
-                        jit,
-                    ]
-                end,
-                ',',
-            ),
+            if compile_options.raise_first
+                [
+                    "mark-func-memory-effects",
+                    opt_passes,
+                    kern,
+                    raise_passes,
+                    "enzyme-batch",
+                    opt_passes2,
+                    enzyme_pass,
+                    "canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math",
+                    lower_enzymexla_passes,
+                    jit,
+                ]
+            else
+                [
+                    "mark-func-memory-effects",
+                    opt_passes,
+                    "enzyme-batch",
+                    opt_passes2,
+                    enzyme_pass,
+                    "canonicalize,remove-unnecessary-enzyme-ops,enzyme-simplify-math",
+                    kern,
+                    raise_passes,
+                    lower_enzymexla_passes,
+                    jit,
+                ]
+            end,
             "before_enzyme",
+            backend,
+            kern,
+            jit,
+            cpu_has_llvm_func,
         )
     elseif compile_options.optimization_passes === :canonicalize
         run_pass_pipeline!(mod, "mark-func-memory-effects,canonicalize", "canonicalize")
