@@ -40,6 +40,16 @@ end
         f = @compile identity(x)
         @test f(x) == x
     end
+
+    @testset "XLA client and device" begin
+        client = Reactant.XLA.default_backend()
+        device = Reactant.XLA.default_device(client)
+        x = Reactant.to_rarray(Reactant.TestUtils.construct_test_array(Float64, 4))
+
+        res = @jit ((x, handles) -> (sum(x), handles))(x, (; client, device))
+        @test res[2].client === client
+        @test res[2].device == device
+    end
 end
 
 @testset "world-age" begin
