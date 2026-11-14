@@ -206,6 +206,12 @@ function to_host_buffer!(dst::Ptr{Cvoid}, buffer::HostBuffer)
     return nothing
 end
 
+# the C wrapper checks that `buffer` is not deleted and that the range is within it; `offset` is 0-based
+function Base.unsafe_copyto!(dst::Ptr, buffer::HostBuffer, offset::Integer, nbytes::Integer)
+    Libc.memcpy(dst, buffer.data + offset, nbytes)
+    return dst
+end
+
 isoncpu(::HostBuffer) = true
 
 # `HostBuffer` data is written synchronously before the buffer is handed out, so it is always ready
