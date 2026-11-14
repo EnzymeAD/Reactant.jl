@@ -32,6 +32,8 @@ import Reactant.XLA.PJRT.Plugin:
     addressable_devices,
     addressable_memories,
     attributes,
+    bytes_in_use,
+    clear_memory_stats!,
     codesize,
     compile,
     compile_options,
@@ -51,12 +53,15 @@ import Reactant.XLA.PJRT.Plugin:
     isoncpu,
     kind,
     kind_id,
+    largest_alloc_size,
     local_hardware_id,
     memory,
     memory_layout,
+    nallocs,
     name,
     optimized_program,
     output_eltypes,
+    peak_bytes_in_use,
     pjrt_eltype,
     platform_name,
     platform_version,
@@ -115,17 +120,42 @@ attributes(::HostDeviceDescription) = ()
 
 ## Device
 mutable struct HostDevice <: Device
-    const description::DeviceDescription # TODO or HostDeviceDescription
+    const description::HostDeviceDescription
     const local_hardware_id::Cint
+
+    # TODO revise this if we cache guard the vector
+    # keep it as `Vector{Memory}` instead of `Vector{HostMemory}` to be a pointer of pointers that can be
+    # passed through the C API
     const memories::Vector{Memory}
+
+    # memory stats
+    @atomic bytes_in_use::Int64
+    @atomic peak_bytes_in_use::Int64
+    @atomic nallocs::Int64
+    @atomic largest_alloc_size::Int64
+
+    # `@kwdef` can't set defaults of `@atomic` fields
+    function HostDevice(description, local_hardware_id, memories)
+        return new(description, local_hardware_id, memories, 0, 0, 0, 0)
+    end
 end
 
 description(dev::HostDevice) = dev.description
-isaddressable(dev::HostDevice) = true
+isaddressable(::HostDevice) = true
 local_hardware_id(dev::HostDevice) = dev.local_hardware_id
 addressable_memories(dev::HostDevice) = dev.memories
 default_memory(dev::HostDevice) = dev.memories[1]
-# memory_stats(dev::HostDevice) = 
+
+bytes_in_use(dev::HostDevice) = dev.bytes_in_use
+peak_bytes_in_use(dev::HostDevice) = dev.peak_bytes_in_use
+nallocs(dev::HostDevice) = dev.nallocs
+largest_alloc_size(dev::HostDevice) = dev.largest_alloc_size
+
+function clear_memory_stats!(dev::HostDevice)
+    @atomic dev.peak_bytes_in_use = dev.bytes_in_use
+    @atomic dev.nallocs = 0
+    @atomic dev.largest_alloc_size = 0
+end
 
 ## HostBuffer
 mutable struct HostBuffer <: Buffer
@@ -134,14 +164,16 @@ mutable struct HostBuffer <: Buffer
     const type::CAPI.PJRT_Buffer_Type
     const dims::Vector{Int64}
     const minor_to_major::Vector{Int64}
-    const device::Device
-    const memory::Memory
+    const device::HostDevice
+    const memory::HostMemory
 
     function HostBuffer(args...)
         obj = new(args...)
+        notify_device_of_alloc(obj)
         return Base.finalizer(obj) do x
             if !isdeleted(x)
                 Libc.free(x.data)
+                notify_device_of_free(x)
             end
         end
     end
@@ -151,6 +183,7 @@ function Base.delete!(buffer::HostBuffer)
     if !isdeleted(buffer)
         Libc.free(buffer.data)
         buffer.data = C_NULL
+        notify_device_of_free(buffer)
     end
 end
 
@@ -163,6 +196,16 @@ memory_layout(buffer::HostBuffer) = TiledMemoryLayout(buffer.minor_to_major)
 device(buffer::HostBuffer) = buffer.device
 memory(buffer::HostBuffer) = buffer.memory
 Base.sizeof(buffer::HostBuffer) = Int(buffer.size_in_bytes)
+
+function notify_device_of_alloc(buffer::HostBuffer)
+    siz = sizeof(buffer)
+    in_use = @atomic buffer.device.bytes_in_use += siz
+    @atomic buffer.device.peak_bytes_in_use max in_use
+    @atomic buffer.device.nallocs += 1
+    @atomic buffer.device.largest_alloc_size max siz
+end
+
+notify_device_of_free(buffer::HostBuffer) = @atomic buffer.device.bytes_in_use -= Int64(buffer.size_in_bytes)
 
 function copyto(dev::HostDevice, buffer::HostBuffer)
     if dev === device(buffer)

@@ -8,11 +8,25 @@
 - `local_hardware_id`
 - `addressable_memories`
 - `default_memory`
-- `memory_stats`
-- `clear_memory_stats!`
 - `async_tracking_event` (defaults to `nothing`, i.e. not supported)
 - `poison_execution!`
 - `attributes` (defaults to `()`, i.e. no attributes)
+
+#### Memory stats
+
+- `bytes_in_use`
+- `peak_bytes_in_use` (defaults to `nothing`)
+- `nallocs` (defaults to `nothing`)
+- `largest_alloc_size` (defaults to `nothing`)
+- `bytes_limit` (defaults to `nothing`)
+- `bytes_reserved` (defaults to `nothing`)
+- `peak_bytes_reserved` (defaults to `nothing`)
+- `bytes_reservable_limit` (defaults to `nothing`)
+- `largest_free_block_bytes` (defaults to `nothing`)
+- `pool_bytes` (defaults to `nothing`)
+- `peak_pool_bytes` (defaults to `nothing`)
+- `peak_allocated_bytes` (defaults to `nothing`)
+- `clear_memory_stats!`
 """
 abstract type Device end
 
@@ -118,17 +132,190 @@ default_memory(::Device)
     return ok()
 end
 
-# TODO document and add interface function
+"""
+    bytes_in_use(dev::Device) -> Integer
+
+Return the number of bytes in use on `dev`, for diagnostics. Defaults to throwing an `unimplemented` error, which C
+accepts as memory stats not being supported: implement it to support them.
+
+Backs `PJRT_Device_MemoryStats`, together with the optional stats (e.g. [`peak_bytes_in_use`](@ref)).
+"""
+bytes_in_use(::Device) = throw(unimplemented("`bytes_in_use` is not implemented"))
+
+"""
+    peak_bytes_in_use(dev::Device) -> Union{Nothing,Integer}
+
+Return the peak number of bytes in use on `dev`, or `nothing` if unknown. Defaults to `nothing`.
+
+Backs `PJRT_Device_MemoryStats`, which only calls it if [`bytes_in_use`](@ref) is implemented.
+"""
+peak_bytes_in_use(::Device) = nothing
+
+"""
+    nallocs(dev::Device) -> Union{Nothing,Integer}
+
+Return the number of allocations on `dev`, or `nothing` if unknown. Defaults to `nothing`.
+
+Backs `PJRT_Device_MemoryStats`, which only calls it if [`bytes_in_use`](@ref) is implemented.
+"""
+nallocs(::Device) = nothing
+
+"""
+    largest_alloc_size(dev::Device) -> Union{Nothing,Integer}
+
+Return the size in bytes of the largest single allocation seen on `dev`, or `nothing` if unknown. Defaults to `nothing`.
+
+Backs `PJRT_Device_MemoryStats`, which only calls it if [`bytes_in_use`](@ref) is implemented.
+"""
+largest_alloc_size(::Device) = nothing
+
+"""
+    bytes_limit(dev::Device) -> Union{Nothing,Integer}
+
+Return the most bytes that the user can allocate on `dev`, or `nothing` if unknown. Defaults to `nothing`.
+
+Backs `PJRT_Device_MemoryStats`, which only calls it if [`bytes_in_use`](@ref) is implemented.
+"""
+bytes_limit(::Device) = nothing
+
+"""
+    bytes_reserved(dev::Device) -> Union{Nothing,Integer}
+
+Return the number of bytes reserved on `dev`, or `nothing` if unknown. Defaults to `nothing`.
+
+Backs `PJRT_Device_MemoryStats`, which only calls it if [`bytes_in_use`](@ref) is implemented.
+"""
+bytes_reserved(::Device) = nothing
+
+"""
+    peak_bytes_reserved(dev::Device) -> Union{Nothing,Integer}
+
+Return the peak number of bytes reserved on `dev`, or `nothing` if unknown. Defaults to `nothing`.
+
+Backs `PJRT_Device_MemoryStats`, which only calls it if [`bytes_in_use`](@ref) is implemented.
+"""
+peak_bytes_reserved(::Device) = nothing
+
+"""
+    bytes_reservable_limit(dev::Device) -> Union{Nothing,Integer}
+
+Return the most bytes that can be reserved on `dev`, or `nothing` if unknown. Defaults to `nothing`.
+
+Backs `PJRT_Device_MemoryStats`, which only calls it if [`bytes_in_use`](@ref) is implemented.
+"""
+bytes_reservable_limit(::Device) = nothing
+
+"""
+    largest_free_block_bytes(dev::Device) -> Union{Nothing,Integer}
+
+Return the size in bytes of the largest free block on `dev`, or `nothing` if unknown. Defaults to `nothing`.
+
+Backs `PJRT_Device_MemoryStats`, which only calls it if [`bytes_in_use`](@ref) is implemented.
+"""
+largest_free_block_bytes(::Device) = nothing
+
+"""
+    pool_bytes(dev::Device) -> Union{Nothing,Integer}
+
+Return the number of bytes held by the allocator of `dev`, which may be more than [`bytes_in_use`](@ref) if it keeps a
+pool of memory, or `nothing` if unknown. Defaults to `nothing`.
+
+Backs `PJRT_Device_MemoryStats`, which only calls it if [`bytes_in_use`](@ref) is implemented.
+"""
+pool_bytes(::Device) = nothing
+
+"""
+    peak_pool_bytes(dev::Device) -> Union{Nothing,Integer}
+
+Return the peak number of bytes held by the allocator of `dev` (see [`pool_bytes`](@ref)), or `nothing` if unknown.
+Defaults to `nothing`.
+
+Backs `PJRT_Device_MemoryStats`, which only calls it if [`bytes_in_use`](@ref) is implemented.
+"""
+peak_pool_bytes(::Device) = nothing
+
+"""
+    peak_allocated_bytes(dev::Device) -> Union{Nothing,Integer}
+
+Return the peak number of bytes allocated on `dev`, or `nothing` if unknown. Defaults to `nothing`. C doesn't document
+how it differs from [`peak_bytes_in_use`](@ref).
+
+Backs `PJRT_Device_MemoryStats`, which only calls it if [`bytes_in_use`](@ref) is implemented.
+"""
+peak_allocated_bytes(::Device) = nothing
+
 @pjrt_catch_return function pjrt_device_memory_stats(
     args::Ptr{CAPI.PJRT_Device_MemoryStats_Args}
 )::Ptr{CAPI.PJRT_Error}
-    throw(unimplemented())
+    # like XLA, require every stat but `peak_allocated_bytes`, which was added at the end of the struct later
+    struct_size = unsafe_load(args.struct_size)
+    if struct_size < UInt(args.peak_pool_bytes_is_set) - UInt(args) + sizeof(Bool)
+        msg = "`PJRT_Device_MemoryStats_Args` is too small ($struct_size bytes)"
+        throw(invalid_argument(msg))
+    end
+
+    device = unsafe_pointer_to_objref(Ptr{Device}(unsafe_load(args.device)))::Device
+    unsafe_store!(args.bytes_in_use, bytes_in_use(device)::Integer)
+
+    # C doesn't initialize the `_is_set` flags, so they are always written
+    value = peak_bytes_in_use(device)::Union{Nothing,Integer}
+    unsafe_store!(args.peak_bytes_in_use_is_set, !isnothing(value))
+    isnothing(value) || unsafe_store!(args.peak_bytes_in_use, value)
+
+    value = nallocs(device)::Union{Nothing,Integer}
+    unsafe_store!(args.num_allocs_is_set, !isnothing(value))
+    isnothing(value) || unsafe_store!(args.num_allocs, value)
+
+    value = largest_alloc_size(device)::Union{Nothing,Integer}
+    unsafe_store!(args.largest_alloc_size_is_set, !isnothing(value))
+    isnothing(value) || unsafe_store!(args.largest_alloc_size, value)
+
+    value = bytes_limit(device)::Union{Nothing,Integer}
+    unsafe_store!(args.bytes_limit_is_set, !isnothing(value))
+    isnothing(value) || unsafe_store!(args.bytes_limit, value)
+
+    value = bytes_reserved(device)::Union{Nothing,Integer}
+    unsafe_store!(args.bytes_reserved_is_set, !isnothing(value))
+    isnothing(value) || unsafe_store!(args.bytes_reserved, value)
+
+    value = peak_bytes_reserved(device)::Union{Nothing,Integer}
+    unsafe_store!(args.peak_bytes_reserved_is_set, !isnothing(value))
+    isnothing(value) || unsafe_store!(args.peak_bytes_reserved, value)
+
+    value = bytes_reservable_limit(device)::Union{Nothing,Integer}
+    unsafe_store!(args.bytes_reservable_limit_is_set, !isnothing(value))
+    isnothing(value) || unsafe_store!(args.bytes_reservable_limit, value)
+
+    value = largest_free_block_bytes(device)::Union{Nothing,Integer}
+    unsafe_store!(args.largest_free_block_bytes_is_set, !isnothing(value))
+    isnothing(value) || unsafe_store!(args.largest_free_block_bytes, value)
+
+    value = pool_bytes(device)::Union{Nothing,Integer}
+    unsafe_store!(args.pool_bytes_is_set, !isnothing(value))
+    isnothing(value) || unsafe_store!(args.pool_bytes, value)
+
+    value = peak_pool_bytes(device)::Union{Nothing,Integer}
+    unsafe_store!(args.peak_pool_bytes_is_set, !isnothing(value))
+    isnothing(value) || unsafe_store!(args.peak_pool_bytes, value)
+
+    # older callers pass a struct without `peak_allocated_bytes`
+    struct_size >= UInt(args.peak_allocated_bytes_is_set) - UInt(args) + sizeof(Bool) ||
+        return ok()
+    value = peak_allocated_bytes(device)::Union{Nothing,Integer}
+    unsafe_store!(args.peak_allocated_bytes_is_set, !isnothing(value))
+    isnothing(value) || unsafe_store!(args.peak_allocated_bytes, value)
+
+    return ok()
 end
 
 """
     clear_memory_stats!(dev::Device)
 
-Reset the memory statistics of `dev` (e.g. the peaks reported by `PJRT_Device_MemoryStats`).
+Reset the memory statistics of `dev`.
+
+See also: [`bytes_in_use`](@ref), [`peak_bytes_in_use`](@ref), [`nallocs`](@ref), [`largest_alloc_size`](@ref),
+[`bytes_limit`](@ref), [`bytes_reserved`](@ref), [`peak_bytes_reserved`](@ref), [`bytes_reservable_limit`](@ref),
+[`largest_free_block_bytes`](@ref), [`pool_bytes`](@ref), [`peak_pool_bytes`](@ref), [`peak_allocated_bytes`](@ref).
 
 Backs `PJRT_Device_ClearMemoryStats`.
 """

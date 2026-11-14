@@ -75,6 +75,10 @@ function attributes end
 function bitcast! end
 function buffercount end
 function buffersize end
+function bytes_in_use end
+function bytes_limit end
+function bytes_reservable_limit end
+function bytes_reserved end
 function canonical_shape end
 function clear_memory_stats! end
 function codesize end
@@ -109,6 +113,8 @@ function isdeleted end
 function isoncpu end
 function kind_id end
 function kind end
+function largest_alloc_size end
+function largest_free_block_bytes end
 function load end
 function local_hardware_id end
 function lookup_addressable_device end
@@ -121,6 +127,7 @@ function name end
 function noutputs end
 function npartitions end
 function nreplicas end
+function nallocs end
 function opaque_pointer end
 function optimized_program end
 function output_eltypes end
@@ -128,9 +135,14 @@ function output_memory_kinds end
 function output_pjrt_eltypes end
 function output_sizes end
 function parameter_memory_kinds end
+function peak_allocated_bytes end
+function peak_bytes_in_use end
+function peak_bytes_reserved end
+function peak_pool_bytes end
 function platform_name end
 function platform_version end
 function poison_execution! end
+function pool_bytes end
 function process_index end
 function ready_event end
 function retrieve_buffer! end
