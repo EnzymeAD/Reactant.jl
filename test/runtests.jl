@@ -86,13 +86,10 @@ if BACKEND == "julia-cpu"
         "integration/structured_tensors",
         "integration/blas",
         "integration/factorizations",
+        "core/ops",
         # profiler and allocator statistics are not implemented
         "core/profiling",
         "core/compile",
-        # requires extensions which are not implemented yet
-        "core/ops",
-        "core/array_ops",
-        "nn/nnlib",
     )
         delete!(testsuite, name)
     end
