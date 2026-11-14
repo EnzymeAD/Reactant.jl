@@ -87,9 +87,8 @@ if BACKEND == "julia-cpu"
         "integration/blas",
         "integration/factorizations",
         "core/ops",
-        # profiler and allocator statistics are not implemented
+        # profiler statistics are not implemented
         "core/profiling",
-        "core/compile",
     )
         delete!(testsuite, name)
     end
