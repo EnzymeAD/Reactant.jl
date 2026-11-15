@@ -28,3 +28,4 @@ function extension_type end
 include("MemoryDescriptions.jl")
 include("FFI.jl")
 include("Layouts.jl")
+include("Profiler.jl")

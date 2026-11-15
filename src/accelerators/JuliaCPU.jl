@@ -14,6 +14,7 @@ using Reactant.XLA.PJRT.Plugin:
     LoadedExecutable,
     Memory,
     PluginApi,
+    ProfilerExtension,
     TiledMemoryLayout,
     invalid_argument,
     make_api,
@@ -28,6 +29,7 @@ using Reactant.XLA.PJRT.Plugin:
 import Reactant.XLA.PJRT.Plugin:
     Buffer,
     Client,
+    Profiler,
     addressable_device_logical_ids,
     addressable_devices,
     addressable_memories,
@@ -68,6 +70,8 @@ import Reactant.XLA.PJRT.Plugin:
     process_index,
     ready_event,
     serialize,
+    start!,
+    stop!,
     to_host_buffer!,
     topology_description
 
@@ -1905,6 +1909,30 @@ struct HostPlugin <: AbstractPlugin end
 
 Client(::HostPlugin, ::Dict{String,Any}) = HostClient()
 
+## HostProfiler
+mutable struct HostProfiler <: Profiler
+    const options::Reactant.Proto.tensorflow.ProfileOptions
+end
+
+function Profiler(::HostPlugin, options::Reactant.Proto.tensorflow.ProfileOptions)
+    return HostProfiler(options)
+end
+
+# XLA runs one profiling session at a time, so there is at most one profiler recording the activity of the plugin
+const active_profiler = Ref{Union{Nothing,HostProfiler}}(nothing)
+
+# the profiler is created in every profiling session, but it only records if device tracing is enabled
+function start!(profiler::HostProfiler)
+    profiler.options.device_tracer_level > 0 || return nothing
+    active_profiler[] = profiler
+    return nothing
+end
+
+function stop!(profiler::HostProfiler)
+    active_profiler[] === profiler && (active_profiler[] = nothing)
+    return nothing
+end
+
 const plugin_api = Ref{PluginApi}()
 
 function make_pjrt_client(;
@@ -1939,7 +1967,7 @@ function make_ifrt_client(; kwargs...)
 end
 
 function __init__()
-    plugin_api[] = make_api(HostPlugin())
+    plugin_api[] = make_api(HostPlugin(); extensions=[ProfilerExtension])
 
     Reactant.Accelerators.Registration.register_backend(
         "julia-cpu";
