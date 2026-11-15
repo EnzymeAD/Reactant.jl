@@ -1447,7 +1447,7 @@ function compile(ctx, f, args; kwargs...)
         linear_result_shard_info,
         client,
         resharded_inputs;
-        concrete_args=args,
+        concrete_args=mlir_fn_res.fnwrapped ? (f, args...) : args,
     )
 
     for (i, name) in enumerate(linear_result_shard_info)
