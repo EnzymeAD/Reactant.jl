@@ -2,6 +2,7 @@ using Reactant, Test
 
 const RunningOnCPU = Reactant.XLA.platform_name(Reactant.XLA.default_backend()) == "cpu"
 const RunningOnCUDA = Reactant.XLA.platform_name(Reactant.XLA.default_backend()) == "cuda"
+const RunningOnJuliaCPU = Reactant.XLA.platform_name(Reactant.XLA.default_backend()) == "julia-cpu"
 
 x = Reactant.to_rarray(randn(Float32, 100, 2))
 W = Reactant.to_rarray(randn(Float32, 10, 100))
@@ -30,7 +31,9 @@ linear(x, W, b) = (W * x) .+ b
         end
 
         framework_stats = Reactant.Profiler.get_framework_op_stats(file)
-        @test length(framework_stats) > 0
+        if !RunningOnJuliaCPU
+            @test length(framework_stats) > 0
+        end
 
         metrics = Reactant.Profiler.get_aggregate_metrics(file, 10)
         @test metrics isa Reactant.Proto.tensorflow.profiler.op_profile.Metrics
