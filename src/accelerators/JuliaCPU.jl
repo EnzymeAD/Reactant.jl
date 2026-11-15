@@ -1,4 +1,4 @@
-module Julia
+module JuliaCPU
 
 using Base: unsafe_convert
 using ..Reactant: Reactant
