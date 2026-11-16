@@ -10,6 +10,6 @@ include("TPU.jl")
 include("Metal.jl")
 include("TT.jl")
 include("Trainium.jl")
-include("JuliaCPU.jl")
+include("JuliaCPU/JuliaCPU.jl")
 
 end
