@@ -1,37 +1,37 @@
-mutable struct HostClient <: Client
+mutable struct JuliaClient <: Client
     devices::Vector{Device}
     memories::Vector{Memory}
 end
 
-function HostClient()
+function JuliaClient()
     devs = Vector{Device}(undef, 1)
     mems = Vector{Memory}(undef, 1)
 
-    dev = HostDevice(HostDeviceDescription(), -1, mems)
-    mem = HostMemory(0, "device", devs)
+    dev = JuliaDevice(JuliaDeviceDescription(), -1, mems)
+    mem = JuliaMemory(0, "device", devs)
 
     devs[1] = dev
     mems[1] = mem
 
-    return HostClient(devs, mems)
+    return JuliaClient(devs, mems)
 end
 
-platform_name(::HostClient) = "julia-cpu"
-platform_version(::HostClient) = string(VERSION)
-process_index(::HostClient) = 0
-devices(client::HostClient) = client.devices
-addressable_devices(client::HostClient) = devices(client)
-addressable_memories(client::HostClient) = client.memories
+platform_name(::JuliaClient) = "julia-cpu"
+platform_version(::JuliaClient) = string(VERSION)
+process_index(::JuliaClient) = 0
+devices(client::JuliaClient) = client.devices
+addressable_devices(client::JuliaClient) = devices(client)
+addressable_memories(client::JuliaClient) = client.memories
 
 # XLA tolerates an error here (it only fails if the topology is used later), but not a missing method
-function topology_description(::HostClient)
-    throw(unimplemented("`HostClient` has no topology description yet"))
+function topology_description(::JuliaClient)
+    throw(unimplemented("`JuliaClient` has no topology description yet"))
 end
 
 function Buffer(
-    ::HostClient,
-    dev::HostDevice,
-    mem::HostMemory,
+    ::JuliaClient,
+    dev::JuliaDevice,
+    mem::JuliaMemory,
     data::Ptr,
     _eltype,
     _size,
@@ -77,15 +77,15 @@ function Buffer(
 
     Libc.memcpy(new_data, data, size_in_bytes)
 
-    return HostBuffer(new_data, size_in_bytes, _eltype, _size, minor_to_major, dev, mem)
+    return JuliaBuffer(new_data, size_in_bytes, _eltype, _size, minor_to_major, dev, mem)
 end
 
 # like `Buffer(client, dev, mem, data::Ptr, ...)`, buffers are dense in major-to-minor order and `layout` is not
 # checked
 function Buffer(
-    ::HostClient,
-    dev::HostDevice,
-    mem::HostMemory,
+    ::JuliaClient,
+    dev::JuliaDevice,
+    mem::JuliaMemory,
     ::UndefInitializer,
     _eltype,
     _size,
@@ -96,10 +96,10 @@ function Buffer(
     # `malloc(0)` may return `C_NULL`, which would mark the buffer as deleted
     data = Libc.malloc(max(size_in_bytes, 1))
     data == C_NULL && throw(resource_exhausted())
-    return HostBuffer(data, size_in_bytes, _eltype, _size, minor_to_major, dev, mem)
+    return JuliaBuffer(data, size_in_bytes, _eltype, _size, minor_to_major, dev, mem)
 end
 
-function compile(client::HostClient, code, options)
+function compile(client::JuliaClient, code, options)
     # `code` lives in a context owned by the caller, so only copies of its contents are kept
     main = IR.lookup(IR.SymbolTable(code), "main")
     isnothing(main) && throw(invalid_argument("program has no `main` function"))
@@ -111,9 +111,9 @@ function compile(client::HostClient, code, options)
     name_attr = IR.getattr(IR.Operation(code), "sym_name")
     _name = isnothing(name_attr) ? "main" : String(name_attr)
 
-    exe = HostExecutable(_name, string(code), output_types, options)
+    exe = JuliaExecutable(_name, string(code), output_types, options)
     if nreplicas(exe) * npartitions(exe) != 1
-        throw(unimplemented("`HostClient` only supports single-device executables"))
+        throw(unimplemented("`JuliaClient` only supports single-device executables"))
     end
 
     # run on the device given by the device assignment, or on the first one if there is none
@@ -125,7 +125,7 @@ function compile(client::HostClient, code, options)
         dev_id = only(only(assignment.computation_devices).replica_device_ids)
         idx = findfirst(d -> id(description(d)) == dev_id, client.devices)
         isnothing(idx) &&
-            throw(invalid_argument("device $dev_id is not addressable by `HostClient`"))
+            throw(invalid_argument("device $dev_id is not addressable by `JuliaClient`"))
         client.devices[idx]
     end
 
@@ -163,7 +163,7 @@ function compile(client::HostClient, code, options)
             quote
                 isdeleted(buffers[$i]) &&
                     throw(invalid_argument(string("argument ", $i, " is deleted")))
-                $var = unsafe_wrap(Array, Ptr{$T}((buffers[$i]::HostBuffer).data), $dims)
+                $var = unsafe_wrap(Array, Ptr{$T}((buffers[$i]::JuliaBuffer).data), $dims)
             end,
         )
     end
@@ -190,7 +190,7 @@ function compile(client::HostClient, code, options)
                 minor_to_major = collect(Int64, ndims(out):-1:1)
                 push!(
                     results,
-                    HostBuffer(
+                    JuliaBuffer(
                         data,
                         nbytes,
                         pjrt_eltype(eltype(out)),
@@ -207,7 +207,7 @@ function compile(client::HostClient, code, options)
 
     tag = gensym(:main)
     @eval function execute(
-        loaded_exe::HostLoadedExecutable{$(QuoteNode(tag))},
+        loaded_exe::JuliaLoadedExecutable{$(QuoteNode(tag))},
         arguments::Vector{Vector{Buffer}},
         dev,
         _context,
@@ -217,5 +217,5 @@ function compile(client::HostClient, code, options)
 
     # single-device executables run as replica 0 of partition 0
     logical_ids = [CAPI.PJRT_LogicalDeviceIds(0, 0)]
-    return HostLoadedExecutable{tag}(exe, Device[dev], logical_ids, assignment, false)
+    return JuliaLoadedExecutable{tag}(exe, Device[dev], logical_ids, assignment, false)
 end

@@ -122,7 +122,7 @@ function make_ifrt_client(; kwargs...)
 end
 
 function __init__()
-    plugin_api[] = make_api(HostPlugin(); extensions=[ProfilerExtension])
+    plugin_api[] = make_api(JuliaPlugin(); extensions=[ProfilerExtension])
 
     Reactant.Accelerators.Registration.register_backend(
         "julia-cpu";

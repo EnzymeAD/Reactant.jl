@@ -1,16 +1,16 @@
-mutable struct HostExecutable <: Executable
+mutable struct JuliaExecutable <: Executable
     const name::String
     const program::String
     const output_types::Vector{DataType}
     const options::Reactant.Proto.xla.CompileOptionsProto
 end
 
-name(exe::HostExecutable) = exe.name
-codesize(::HostExecutable) = 0
-fingerprint(::HostExecutable) = throw(unimplemented("`HostExecutable` has no fingerprint"))
-output_eltypes(exe::HostExecutable) = exe.output_types
-optimized_program(exe::HostExecutable) = exe.program
-function serialize(::HostExecutable)
-    throw(unimplemented("serialization of `HostExecutable` is not supported yet"))
+name(exe::JuliaExecutable) = exe.name
+codesize(::JuliaExecutable) = 0
+fingerprint(::JuliaExecutable) = throw(unimplemented("`JuliaExecutable` has no fingerprint"))
+output_eltypes(exe::JuliaExecutable) = exe.output_types
+optimized_program(exe::JuliaExecutable) = exe.program
+function serialize(::JuliaExecutable)
+    throw(unimplemented("serialization of `JuliaExecutable` is not supported yet"))
 end
-compile_options(exe::HostExecutable) = exe.options
+compile_options(exe::JuliaExecutable) = exe.options

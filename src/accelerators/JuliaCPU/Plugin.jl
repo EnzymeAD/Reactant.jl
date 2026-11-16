@@ -1,8 +1,8 @@
-struct HostPlugin <: AbstractPlugin end
+struct JuliaPlugin <: AbstractPlugin end
 
-Client(::HostPlugin, ::Dict{String,Any}) = HostClient()
+Client(::JuliaPlugin, ::Dict{String,Any}) = JuliaClient()
 
-function attributes(::HostPlugin)
+function attributes(::JuliaPlugin)
     callback = @cfunction(IR.print_callback, Cvoid, (API.MlirStringRef, Any))
     current, minimum = map((API.stablehloGetCurrentVersion, API.stablehloGetMinimumVersion)) do getversion
         io = IOBuffer()

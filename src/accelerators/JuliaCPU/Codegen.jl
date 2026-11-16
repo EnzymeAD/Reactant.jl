@@ -207,7 +207,7 @@ function codegen_op!(exprs, op, opname, operands, vars, nvals)
         Tuple{typeof(opval),Tuple,NamedTuple,Tuple,Tuple}
     end
     hasmethod(handle, signature) ||
-        throw(unimplemented("`$opname` is not supported by `HostClient`"))
+        throw(unimplemented("`$opname` is not supported by `JuliaClient`"))
 
     # attributes are decoded here, since the MLIR context doesn't outlive `compile`
     attributes = (;

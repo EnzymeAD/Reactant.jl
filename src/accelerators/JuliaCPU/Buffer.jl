@@ -1,13 +1,13 @@
-mutable struct HostBuffer <: Buffer
+mutable struct JuliaBuffer <: Buffer
     data::Ptr{Cvoid}
     const size_in_bytes::Csize_t
     const type::CAPI.PJRT_Buffer_Type
     const dims::Vector{Int64}
     const minor_to_major::Vector{Int64}
-    const device::HostDevice
-    const memory::HostMemory
+    const device::JuliaDevice
+    const memory::JuliaMemory
 
-    function HostBuffer(args...)
+    function JuliaBuffer(args...)
         obj = new(args...)
         notify_device_of_alloc(obj)
         return Base.finalizer(obj) do x
@@ -19,7 +19,7 @@ mutable struct HostBuffer <: Buffer
     end
 end
 
-function Base.delete!(buffer::HostBuffer)
+function Base.delete!(buffer::JuliaBuffer)
     if !isdeleted(buffer)
         Libc.free(buffer.data)
         buffer.data = C_NULL
@@ -27,17 +27,17 @@ function Base.delete!(buffer::HostBuffer)
     end
 end
 
-isdeleted(buffer::HostBuffer) = buffer.data == C_NULL
+isdeleted(buffer::JuliaBuffer) = buffer.data == C_NULL
 # TODO implement Base.eltype
-pjrt_eltype(buffer::HostBuffer) = buffer.type
-Base.size(buffer::HostBuffer) = Tuple(buffer.dims)
-dynamic_dims(::HostBuffer) = Int[]
-memory_layout(buffer::HostBuffer) = TiledMemoryLayout(buffer.minor_to_major)
-device(buffer::HostBuffer) = buffer.device
-memory(buffer::HostBuffer) = buffer.memory
-Base.sizeof(buffer::HostBuffer) = Int(buffer.size_in_bytes)
+pjrt_eltype(buffer::JuliaBuffer) = buffer.type
+Base.size(buffer::JuliaBuffer) = Tuple(buffer.dims)
+dynamic_dims(::JuliaBuffer) = Int[]
+memory_layout(buffer::JuliaBuffer) = TiledMemoryLayout(buffer.minor_to_major)
+device(buffer::JuliaBuffer) = buffer.device
+memory(buffer::JuliaBuffer) = buffer.memory
+Base.sizeof(buffer::JuliaBuffer) = Int(buffer.size_in_bytes)
 
-function notify_device_of_alloc(buffer::HostBuffer)
+function notify_device_of_alloc(buffer::JuliaBuffer)
     siz = sizeof(buffer)
     in_use = @atomic buffer.device.bytes_in_use += siz
     @atomic buffer.device.peak_bytes_in_use max in_use
@@ -45,16 +45,16 @@ function notify_device_of_alloc(buffer::HostBuffer)
     @atomic buffer.device.largest_alloc_size max siz
 end
 
-notify_device_of_free(buffer::HostBuffer) = @atomic buffer.device.bytes_in_use -= Int64(buffer.size_in_bytes)
+notify_device_of_free(buffer::JuliaBuffer) = @atomic buffer.device.bytes_in_use -= Int64(buffer.size_in_bytes)
 
-function copyto(dev::HostDevice, buffer::HostBuffer)
+function copyto(dev::JuliaDevice, buffer::JuliaBuffer)
     if dev === device(buffer)
-        throw(invalid_argument("HostBuffer is already on HostDevice"))
+        throw(invalid_argument("JuliaBuffer is already on JuliaDevice"))
     end
     new_data = Libc.malloc(buffer.size_in_bytes)
     new_data == C_NULL && throw(resource_exhausted())
     Libc.memcpy(new_data, buffer.data, buffer.size_in_bytes)
-    new_buffer = HostBuffer(
+    new_buffer = JuliaBuffer(
         new_data,
         buffer.size_in_bytes,
         buffer.type,
@@ -66,14 +66,14 @@ function copyto(dev::HostDevice, buffer::HostBuffer)
     return new_buffer
 end
 
-function copyto(mem::HostMemory, buffer::HostBuffer)
+function copyto(mem::JuliaMemory, buffer::JuliaBuffer)
     devs = addressable_devices(mem)
-    isempty(devs) && throw(invalid_argument("HostMemory has no addressable devices"))
+    isempty(devs) && throw(invalid_argument("JuliaMemory has no addressable devices"))
     dev = device(buffer) in devs ? device(buffer) : first(devs)
     new_data = Libc.malloc(buffer.size_in_bytes)
     new_data == C_NULL && throw(resource_exhausted())
     Libc.memcpy(new_data, buffer.data, buffer.size_in_bytes)
-    return HostBuffer(
+    return JuliaBuffer(
         new_data,
         buffer.size_in_bytes,
         buffer.type,
@@ -84,24 +84,24 @@ function copyto(mem::HostMemory, buffer::HostBuffer)
     )
 end
 
-function to_host_buffer!(dst::Ptr{Cvoid}, buffer::HostBuffer)
+function to_host_buffer!(dst::Ptr{Cvoid}, buffer::JuliaBuffer)
     Libc.memcpy(dst, buffer.data, buffer.size_in_bytes)
     return nothing
 end
 
 # the C wrapper checks that `buffer` is not deleted and that the range is within it; `offset` is 0-based
-function Base.unsafe_copyto!(dst::Ptr, buffer::HostBuffer, offset::Integer, nbytes::Integer)
+function Base.unsafe_copyto!(dst::Ptr, buffer::JuliaBuffer, offset::Integer, nbytes::Integer)
     Libc.memcpy(dst, buffer.data + offset, nbytes)
     return dst
 end
 
-isoncpu(::HostBuffer) = true
+isoncpu(::JuliaBuffer) = true
 
-# `HostBuffer` data is written synchronously before the buffer is handed out, so it is always ready
-function ready_event(::HostBuffer)
+# `JuliaBuffer` data is written synchronously before the buffer is handed out, so it is always ready
+function ready_event(::JuliaBuffer)
     event = Event()
     notify(event)
     return event
 end
 
-Base.pointer(buffer::HostBuffer) = buffer.data
+Base.pointer(buffer::JuliaBuffer) = buffer.data

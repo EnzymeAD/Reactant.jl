@@ -1,17 +1,17 @@
-mutable struct HostDeviceDescription <: DeviceDescription
+mutable struct JuliaDeviceDescription <: DeviceDescription
     const id::Cint
     const pid::Cint
 end
 
-function HostDeviceDescription()
+function JuliaDeviceDescription()
     id = 0
     pid = 0
-    return HostDeviceDescription(id, pid)
+    return JuliaDeviceDescription(id, pid)
 end
 
-id(desc::HostDeviceDescription) = desc.id
-process_index(desc::HostDeviceDescription) = desc.pid
-kind(desc::HostDeviceDescription) = "julia-cpu"
-Base.show(io::IO, desc::HostDeviceDescription) = print(io, "julia: id=", desc.id)
-Base.print(io::IO, desc::HostDeviceDescription) = print(io, "JuliaDevice(id=", desc.id, ")")
-attributes(::HostDeviceDescription) = ()
+id(desc::JuliaDeviceDescription) = desc.id
+process_index(desc::JuliaDeviceDescription) = desc.pid
+kind(desc::JuliaDeviceDescription) = "julia-cpu"
+Base.show(io::IO, desc::JuliaDeviceDescription) = print(io, "julia: id=", desc.id)
+Base.print(io::IO, desc::JuliaDeviceDescription) = print(io, "JuliaDevice(id=", desc.id, ")")
+attributes(::JuliaDeviceDescription) = ()
