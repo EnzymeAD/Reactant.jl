@@ -1,42 +1,5 @@
 module Plugin
 
-# When dealing with memory ownership at the Julia FFI boundary, there are two different designs that can be followed:
-# - rely on Julia's GC, which requires to...
-#   - globally mark/root objects
-#   - refer to them via `pointer_from_objref`, `unsafe_pointer_to_objref`
-#   - use `mutable` objects only (immutable objects do not have a stable memory address)
-# - ...or manually allocate/free memory, which requires to...
-#   - use `Libc`
-#   - only work with `isbits` objects (i.e. not mutable nor immutable with mutable fields)
-#
-# After experimenting with both designs, the "globally GC rooted" design was ultimately chosen because...
-# - it's simpler and easier to read
-# - it's easier to extend from the Julia side
-# - safer against memory bugs (as memory is tracked by the GC)
-# - almost no overhead compared to manual allocations (only a dynamic dispatch for offering a Julia interface)
-#
-# This code is designed in such a way that PJRT plugins developed in Julia do not need to interface with the FFI
-# boundary. All interaction with the PJRT FFI should be located here and abstract away through an interface that Julia
-# plugins can implement elsewhere.
-#
-# When extending the following code or implementing the interface, take these points into considerations:
-# - All objects passed through the XLA/PJRT boundary need to be GC rooted (i.e. use `(un)root!`), which requires objects
-#   to be `mutable` in order to have a stable pointer address. Objects are GC rooted/unrooted here and should be
-#   transparent to the user.
-# - Some PJRT objects have a pointer to their vtable as first field (e.g. `PJRT_Error`, `PJRT_Memory`). The vtable can
-#   be shared by all plugins, since its functions dispatch in Julia, so C only sees concrete types defined here that
-#   have that layout (e.g. `Error`, `MemoryShim`), and plugins don't need to reproduce it.
-# - If for some PJRT object, the API requires it to return a string that is auto-generated (not a string literal),
-#   store the string inside the object so that it's correctly freed (owner is the object).
-# - If for some PJRT object, the API requires it to return a list of PJRT objects, cache their pointers in a
-#   `Vector{Ptr{X}}` (e.g. `Ptr{CAPI.PJRT_Device}[pointer_from_objref(dev) for dev in devs]`).
-#   - Don't cache the objects themselves: the values of a `WeakKeyIdDict` are strong references, so if any object in
-#     the list references the key (e.g. a device that references its memories), the key is never collected.
-#   - The pointers don't keep the objects alive, so they must be kept alive elsewhere (e.g. by the client).
-#   - Once the vector is created, DO NOT resize it.
-# - DO NOT use moving GC (e.g. MMTk) as it would break `pointer_from_objref`.
-# - The following objects do not need to be reimplemented on different accelerators: Error, Event.
-
 using Base: unsafe_convert
 using ..Reactant: Reactant, WeakKeyIdDict
 using Reactant.XLA.CAPI: CAPI, csizeof
