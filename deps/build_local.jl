@@ -343,7 +343,6 @@ if parsed_args["test"]
     run(Cmd(Cmd(test_cmd_list); dir=source_dir))
 end
 
-# The library is a target of Enzyme-JAX, Bazel builds it in the directory of that target
 build_dir = joinpath(
     source_dir,
     "bazel-bin",
