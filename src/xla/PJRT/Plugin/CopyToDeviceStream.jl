@@ -161,9 +161,9 @@ AsyncHostToDeviceTransferManager(::Client, ::Memory, ::Vector, ::Vector)
     args::Ptr{CAPI.PJRT_Client_CreateBuffersForAsyncHostToDevice_Args}
 )::Ptr{CAPI.PJRT_Error}
     client = unsafe_pointer_to_objref(unsafe_load(args.client))::Client
-    mem_ptr = Ptr{Memory}(unsafe_load(args.memory))
+    mem_ptr = unsafe_load(args.memory)
     mem_ptr == C_NULL && throw(invalid_argument("No memory has been assigned"))
-    mem = unsafe_pointer_to_objref(mem_ptr)::Memory
+    mem = unsafe_memory(mem_ptr)
 
     c_specs = unsafe_load(args.shape_specs)
     specs = map(1:unsafe_load(args.num_shape_specs)) do i

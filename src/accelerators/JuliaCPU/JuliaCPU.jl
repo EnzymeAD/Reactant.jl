@@ -22,8 +22,7 @@ using Reactant.XLA.PJRT.Plugin:
     nreplicas,
     pjrt_elsize,
     resource_exhausted,
-    unimplemented,
-    vtable_memory
+    unimplemented
 
 # interface functions extended by this plugin
 import Reactant.XLA.PJRT.Plugin:

@@ -1,17 +1,7 @@
 mutable struct HostMemory <: Memory
-    const vtable::Ptr{CAPI.PJRT_Memory_FunctionTable}
     const id::Cint
     const kind::String
     const devices::Vector{Device}
-
-    function HostMemory(id, kind, devices)
-        return new(
-            unsafe_convert(Ptr{CAPI.PJRT_Memory_FunctionTable}, vtable_memory),
-            id,
-            kind,
-            devices,
-        )
-    end
 end
 
 id(mem::HostMemory) = mem.id

@@ -311,8 +311,7 @@ memory(::Buffer)
 )::Ptr{CAPI.PJRT_Error}
     buffer = unsafe_pointer_to_objref(unsafe_load(args.buffer))::Buffer
     mem = memory(buffer)::Memory
-    ptr = Ptr{CAPI.PJRT_Memory}(pointer_from_objref(mem))
-    unsafe_store!(args.memory, ptr)
+    unsafe_store!(args.memory, unsafe_convert(Ptr{CAPI.PJRT_Memory}, mem))
     return ok()
 end
 
@@ -380,7 +379,7 @@ copyto(::Memory, ::Buffer)
     args::Ptr{CAPI.PJRT_Buffer_CopyToMemory_Args}
 )::Ptr{CAPI.PJRT_Error}
     buffer = unsafe_pointer_to_objref(unsafe_load(args.buffer))::Buffer
-    dst_mem = unsafe_pointer_to_objref(unsafe_load(args.dst_memory))::Memory
+    dst_mem = unsafe_memory(unsafe_load(args.dst_memory))
 
     isdeleted(buffer) && throw(invalid_argument("buffer is deleted"))
 

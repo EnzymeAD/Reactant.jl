@@ -1,6 +1,12 @@
 """
     Memory
 
+Represents a memory space of a [`Client`](@ref).
+
+!!! info
+Subtypes must be mutable, since the C wrapper keeps pointers to them, but they have no layout requirements: C never
+sees them directly, only the shim that the C wrapper creates for each of them.
+
 ### Interface
 
 - [`id`](@ref id(::Memory))
@@ -12,16 +18,32 @@
 """
 abstract type Memory end
 
-function checkinterface(T::Type{<:Memory})
-    if !ismutabletype(T)
-        error("$T <: Memory must be a mutable type to be GC rootable")
-    end
+# Wraps a `Memory` into the layout of `PJRT_Memory*`.
+mutable struct MemoryShim
+    const vtable::Ptr{CAPI.PJRT_Memory_FunctionTable}
+    # a pointer instead of a reference, since a reference would make the shim keep its memory alive forever
+    const memory::Ptr{Memory}
 
-    if fieldtype(T, 1) != Ptr{CAPI.PJRT_Memory_FunctionTable}
-        error("First field of $T must be a $(CAPI.PJRT_Memory_FunctionTable)")
+    function MemoryShim(mem::Memory)
+        vtable = unsafe_convert(Ptr{CAPI.PJRT_Memory_FunctionTable}, vtable_memory)
+        return new(vtable, Ptr{Memory}(pointer_from_objref(mem)))
     end
+end
 
-    return nothing
+# The values of a `WeakKeyIdDict` are strong references, so it keeps each shim alive for as long as its memory is,
+# and drops it after the `Memory` is collected
+const memory_shims = WeakKeyIdDict{Memory,MemoryShim}()
+
+# Julia -> C: the pointer that C sees for `mem`, which is the same one on every call
+function Base.unsafe_convert(::Type{Ptr{CAPI.PJRT_Memory}}, mem::Memory)
+    shim = get!(() -> MemoryShim(mem), memory_shims, mem)
+    return Ptr{CAPI.PJRT_Memory}(pointer_from_objref(shim))
+end
+
+# C -> Julia: the `Memory` behind a pointer returned by `unsafe_convert`
+function unsafe_memory(ptr::Ptr{CAPI.PJRT_Memory})
+    shim = unsafe_pointer_to_objref(ptr)::MemoryShim
+    return unsafe_pointer_to_objref(shim.memory)::Memory
 end
 
 """
@@ -36,7 +58,7 @@ id(::Memory)
 @pjrt_catch_return function pjrt_memory_id(
     args::Ptr{CAPI.PJRT_Memory_Id_Args}
 )::Ptr{CAPI.PJRT_Error}
-    memory = unsafe_pointer_to_objref(Ptr{Memory}(unsafe_load(args.memory)))::Memory
+    memory = unsafe_memory(unsafe_load(args.memory))
     unsafe_store!(args.id, id(memory))
     return ok()
 end
@@ -60,7 +82,7 @@ const memory_kind_cache = WeakKeyIdDict{Memory,String}()
 @pjrt_catch_return function pjrt_memory_kind(
     args::Ptr{CAPI.PJRT_Memory_Kind_Args}
 )::Ptr{CAPI.PJRT_Error}
-    memory = unsafe_pointer_to_objref(Ptr{Memory}(unsafe_load(args.memory)))::Memory
+    memory = unsafe_memory(unsafe_load(args.memory))
     str = get!(memory_kind_cache, memory) do
         String(kind(memory))
     end
@@ -82,7 +104,7 @@ kind_id(::Memory)
 @pjrt_catch_return function pjrt_memory_kind_id(
     args::Ptr{CAPI.PJRT_Memory_Kind_Id_Args}
 )::Ptr{CAPI.PJRT_Error}
-    memory = unsafe_pointer_to_objref(Ptr{Memory}(unsafe_load(args.memory)))::Memory
+    memory = unsafe_memory(unsafe_load(args.memory))
     kid = kind_id(memory)::Integer
     unsafe_store!(args.kind_id, kid)
     return ok()
@@ -107,7 +129,7 @@ const memory_debug_string_cache = WeakKeyIdDict{Memory,String}()
 @pjrt_catch_return function pjrt_memory_debug_string(
     args::Ptr{CAPI.PJRT_Memory_DebugString_Args}
 )::Ptr{CAPI.PJRT_Error}
-    memory = unsafe_pointer_to_objref(Ptr{Memory}(unsafe_load(args.memory)))::Memory
+    memory = unsafe_memory(unsafe_load(args.memory))
     str = get!(memory_debug_string_cache, memory) do
         debug_string(memory)::String
     end
@@ -134,7 +156,7 @@ const memory_to_string_cache = WeakKeyIdDict{Memory,String}()
 @pjrt_catch_return function pjrt_memory_to_string(
     args::Ptr{CAPI.PJRT_Memory_ToString_Args}
 )::Ptr{CAPI.PJRT_Error}
-    memory = unsafe_pointer_to_objref(Ptr{Memory}(unsafe_load(args.memory)))::Memory
+    memory = unsafe_memory(unsafe_load(args.memory))
     str = get!(memory_to_string_cache, memory) do
         sprint(print, memory)
     end
@@ -167,7 +189,7 @@ const memory_addressable_devices_cache = WeakKeyIdDict{
 @pjrt_catch_return function pjrt_memory_addressable_by_devices(
     args::Ptr{CAPI.PJRT_Memory_AddressableByDevices_Args}
 )::Ptr{CAPI.PJRT_Error}
-    memory = unsafe_pointer_to_objref(Ptr{Memory}(unsafe_load(args.memory)))::Memory
+    memory = unsafe_memory(unsafe_load(args.memory))
     devs = get!(memory_addressable_devices_cache, memory) do
         Ptr{CAPI.PJRT_Device}[
             pointer_from_objref(dev::Device) for dev in addressable_devices(memory)

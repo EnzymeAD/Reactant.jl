@@ -23,8 +23,9 @@ module Plugin
 # - All objects passed through the XLA/PJRT boundary need to be GC rooted (i.e. use `(un)root!`), which requires objects
 #   to be `mutable` in order to have a stable pointer address. Objects are GC rooted/unrooted here and should be
 #   transparent to the user.
-# - Some Julia objects require as a first field a pointer to their vtable (e.g. Error, Memory, ...). This is required by
-#   the PJRT Plugin API. Keep in mind that it should point to the correct implementation for your plugin.
+# - Some PJRT objects have a pointer to their vtable as first field (e.g. `PJRT_Error`, `PJRT_Memory`). The vtable can
+#   be shared by all plugins, since its functions dispatch in Julia, so C only sees concrete types defined here that
+#   have that layout (e.g. `Error`, `MemoryShim`), and plugins don't need to reproduce it.
 # - If for some PJRT object, the API requires it to return a string that is auto-generated (not a string literal),
 #   store the string inside the object so that it's correctly freed (owner is the object).
 # - If for some PJRT object, the API requires it to return a list of PJRT objects, cache their pointers in a

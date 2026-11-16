@@ -113,7 +113,8 @@ const device_addressable_memories_cache = WeakKeyIdDict{
     device = unsafe_pointer_to_objref(Ptr{Device}(unsafe_load(args.device)))::Device
     mems = get!(device_addressable_memories_cache, device) do
         Ptr{CAPI.PJRT_Memory}[
-            pointer_from_objref(mem::Memory) for mem in addressable_memories(device)
+            unsafe_convert(Ptr{CAPI.PJRT_Memory}, mem::Memory) for
+            mem in addressable_memories(device)
         ]
     end
     unsafe_store!(args.memories, pointer(mems))
@@ -135,7 +136,7 @@ default_memory(::Device)
 )::Ptr{CAPI.PJRT_Error}
     device = unsafe_pointer_to_objref(Ptr{Device}(unsafe_load(args.device)))::Device
     mem = default_memory(device)::Memory
-    unsafe_store!(args.memory, Ptr{CAPI.PJRT_Memory}(pointer_from_objref(mem)))
+    unsafe_store!(args.memory, unsafe_convert(Ptr{CAPI.PJRT_Memory}, mem))
     return ok()
 end
 

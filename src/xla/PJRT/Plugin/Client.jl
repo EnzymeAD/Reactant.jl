@@ -264,7 +264,8 @@ const client_addressable_memories_cache = WeakKeyIdDict{
     client = unsafe_pointer_to_objref(unsafe_load(args.client))::Client
     mems = get!(client_addressable_memories_cache, client) do
         Ptr{CAPI.PJRT_Memory}[
-            pointer_from_objref(mem::Memory) for mem in addressable_memories(client)
+            unsafe_convert(Ptr{CAPI.PJRT_Memory}, mem::Memory) for
+            mem in addressable_memories(client)
         ]
     end
     unsafe_store!(args.addressable_memories, pointer(mems))
@@ -351,14 +352,14 @@ end
     _device_layout = c_device_layout == C_NULL ? nothing : MemoryLayout(c_device_layout)
     _host_buffer_semantics = unsafe_load(args.host_buffer_semantics)
 
-    mem_ptr = Ptr{Memory}(unsafe_load(args.memory))
+    mem_ptr = unsafe_load(args.memory)
     dev_ptr = Ptr{Device}(unsafe_load(args.device))
     if mem_ptr == C_NULL && dev_ptr == C_NULL
         throw(invalid_argument("No device nor memory has been assigned"))
     end
 
     buffer = if mem_ptr != C_NULL
-        mem = unsafe_pointer_to_objref(mem_ptr)::Memory
+        mem = unsafe_memory(mem_ptr)
         Buffer(
             client,
             mem,
@@ -423,14 +424,14 @@ Buffer(::Client, ::Device, ::Memory, ::UndefInitializer, type, dims, layout)
     c_layout = unsafe_load(args.shape_layout)
     layout = c_layout == C_NULL ? nothing : MemoryLayout(c_layout)
 
-    mem_ptr = Ptr{Memory}(unsafe_load(args.memory))
+    mem_ptr = unsafe_load(args.memory)
     dev_ptr = Ptr{Device}(unsafe_load(args.device))
     if mem_ptr == C_NULL && dev_ptr == C_NULL
         throw(invalid_argument("No device nor memory has been assigned"))
     end
 
     buffer = if mem_ptr != C_NULL
-        mem = unsafe_pointer_to_objref(mem_ptr)::Memory
+        mem = unsafe_memory(mem_ptr)
         Buffer(client, mem, undef, _eltype, _size, layout)
     else
         dev = unsafe_pointer_to_objref(dev_ptr)::Device
@@ -647,9 +648,9 @@ Buffer(::Client, ::Memory, ::Error, type, dims, layout)
     args::Ptr{CAPI.PJRT_Client_CreateErrorBuffer_Args}
 )::Ptr{CAPI.PJRT_Error}
     client = unsafe_pointer_to_objref(unsafe_load(args.client))::Client
-    mem_ptr = Ptr{Memory}(unsafe_load(args.memory))
+    mem_ptr = unsafe_load(args.memory)
     mem_ptr == C_NULL && throw(invalid_argument("No memory has been assigned"))
-    mem = unsafe_pointer_to_objref(mem_ptr)::Memory
+    mem = unsafe_memory(mem_ptr)
 
     unsafe_load(args.num_payload) == 0 ||
         throw(unimplemented("error payloads are not supported yet"))
@@ -705,9 +706,9 @@ alias_buffer(::Client, ::Memory, args...)
     args::Ptr{CAPI.PJRT_Client_CreateAliasBuffer_Args}
 )::Ptr{CAPI.PJRT_Error}
     client = unsafe_pointer_to_objref(unsafe_load(args.client))::Client
-    mem_ptr = Ptr{Memory}(unsafe_load(args.memory))
+    mem_ptr = unsafe_load(args.memory)
     mem_ptr == C_NULL && throw(invalid_argument("No memory has been assigned"))
-    mem = unsafe_pointer_to_objref(mem_ptr)::Memory
+    mem = unsafe_memory(mem_ptr)
 
     _eltype = unsafe_load(args.shape_element_type)
     _size = copy(
