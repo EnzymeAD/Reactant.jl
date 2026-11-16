@@ -44,8 +44,6 @@ filter_tests!(testsuite, parsed_args)
 
 delete!(testsuite, "test_helpers")
 
-delete!(testsuite, "plugins/metal") # Currently completely non functional
-
 if Sys.isapple()
     delete!(testsuite, "core/custom_number_types")
 end
@@ -73,6 +71,28 @@ filter!(((k, _),) -> !startswith(k, "probprog"), testsuite)
 if BACKEND == "julia-cpu"
     for name in (
         "core/custom_number_types",
+        "integration/linear_algebra",
+        "integration/linearsolve",
+        # custom calls (Julia callbacks, kernels, Python)
+        "core/sorting",
+        "integration/cuda",
+        "integration/kernelabstractions",
+        "integration/nfft_callback",
+        "integration/enzymejax",
+        # MLIR module contains non-StableHLO ops that are not supported on serialization
+        # "Failed to serialize StableHLO with mixed dialects to plugin version 1.16.3; found unstable op: ..."
+        "integration/structured_tensors",
+        "integration/blas",
+        "integration/factorizations",
+        "core/ops",
+    )
+        delete!(testsuite, name)
+    end
+    filter!(((k, _),) -> !startswith(k, "integration/triton"), testsuite)
+elseif BACKEND == "metal"
+    using Metal
+    Metal.functional() || error("Metal is not functional!")
+    for name in (
         "integration/linear_algebra",
         "integration/linearsolve",
         # custom calls (Julia callbacks, kernels, Python)
@@ -171,6 +191,19 @@ total_jobs = min(
 
 test_worker = custom_test_worker ? tpu_custom_worker_launcher : Returns(nothing)
 
+init_code = if BACKEND == "metal"
+    quote
+        using Reactant
+        using Metal
+        Reactant.set_default_backend("metal")
+    end
+else
+    quote
+        using Reactant
+        $(BACKEND) != "auto" && Reactant.set_default_backend($(BACKEND))
+    end
+end
+
 @testset "Reactant Tests" begin
     withenv(
         "XLA_REACTANT_GPU_MEM_FRACTION" => 1 / (total_jobs + 0.1),
@@ -181,10 +214,7 @@ test_worker = custom_test_worker ? tpu_custom_worker_launcher : Returns(nothing)
             parsed_args;
             testsuite,
             test_worker,
-            init_code=quote
-                using Reactant
-                $(BACKEND) != "auto" && Reactant.set_default_backend($(BACKEND))
-            end,
+            init_code,
         )
     end
 
