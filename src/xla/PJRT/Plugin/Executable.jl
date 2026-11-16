@@ -37,6 +37,7 @@ end
 
 Return a string that identifies `exe` (e.g. the name of the compiled module).
 
+!!! info
 The returned value doesn't need to be owned by `exe`, but it must be the same on every call: the C wrapper calls it at
 most once per `exe` and keeps a copy for as long as `exe` is alive, since C keeps pointers to it.
 
@@ -164,6 +165,7 @@ end
 Return a fingerprint of `exe`. Executables compiled from identical inputs (program, compile options, compiler
 version, ...) must have the same fingerprint. Throw `unimplemented` if not supported.
 
+!!! info
 The returned value doesn't need to be owned by `exe`, but it must be the same on every call: the C wrapper calls it at
 most once per `exe` and keeps a copy for as long as `exe` is alive, since C keeps pointers to it.
 
@@ -198,6 +200,7 @@ Return the cost analysis of `exe` as `name => value` pairs (e.g. `"flops" => 1.0
 Values must be `AbstractString`, `Bool`, `Integer`, `AbstractVector{<:Integer}` or `AbstractFloat`, which C receives as
 `String`, `Bool`, `Int64`, `Vector{Int64}` and `Float32`.
 
+!!! info
 The returned value doesn't need to be owned by `exe`, but it must be the same on every call: the C wrapper calls it at
 most once per `exe` and keeps a copy for as long as `exe` is alive, since C keeps pointers to it.
 
@@ -234,6 +237,7 @@ Return the PJRT element type of each output of `exe`.
 Defaults to `map(pjrt_eltype, output_eltypes(exe))`. Override it if an element type has no Julia equivalent, or if
 `exe` already stores the PJRT element types.
 
+!!! info
 The returned value doesn't need to be owned by `exe`, but it must be the same on every call: the C wrapper calls it at
 most once per `exe` and keeps a copy for as long as `exe` is alive, since C keeps pointers to it.
 
@@ -261,6 +265,7 @@ end
 
 Return the dimensions of each output of `exe`, like `Base.size`.
 
+!!! info
 The returned value doesn't need to be owned by `exe`, but it must be the same on every call: the C wrapper calls it at
 most once per `exe` and keeps a copy for as long as `exe` is alive, since C keeps pointers to it.
 
@@ -293,6 +298,7 @@ end
 
 Return the memory kind of each parameter of `exe` (e.g. `"device"`, `"pinned_host"`).
 
+!!! info
 The returned value doesn't need to be owned by `exe`, but it must be the same on every call: the C wrapper calls it at
 most once per `exe` and keeps a copy for as long as `exe` is alive, since C keeps pointers to it.
 
@@ -323,6 +329,7 @@ end
 
 Return the memory kind of each output of `exe` (e.g. `"device"`, `"pinned_host"`).
 
+!!! info
 The returned value doesn't need to be owned by `exe`, but it must be the same on every call: the C wrapper calls it at
 most once per `exe` and keeps a copy for as long as `exe` is alive, since C keeps pointers to it.
 

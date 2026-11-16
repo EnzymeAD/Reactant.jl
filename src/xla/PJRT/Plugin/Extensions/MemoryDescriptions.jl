@@ -21,6 +21,7 @@ abstract type MemoryDescription end
 Return a platform-dependent string that identifies the kind of memory described by `md` (e.g. `"device"`,
 `"pinned_host"`).
 
+!!! info
 The returned value doesn't need to be owned by `md`, but it must be the same on every call: the C wrapper calls it at
 most once per `md` and keeps a copy for as long as `md` is alive, since C keeps pointers to it.
 
@@ -58,6 +59,7 @@ end
 
 Return the descriptions of all the kinds of memory that the device described by `desc` supports, in any order.
 
+!!! info
 The returned value doesn't need to be owned by `desc`, but it must be the same on every call: the C wrapper calls it at
 most once per `desc` and keeps a copy for as long as `desc` is alive, since C keeps pointers to it. The objects in it
 must be the same ones on every call too, and the same ones that other functions return, since C identifies them by

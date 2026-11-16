@@ -43,6 +43,7 @@ end
 
 Return a string that identifies the platform of `client` (e.g. `"cpu"`, `"gpu"`, `"tpu"`).
 
+!!! info
 The returned value doesn't need to be owned by `client`, but it must be the same on every call: the C wrapper calls it
 at most once per `client` and keeps a copy for as long as `client` is alive, since C keeps pointers to it.
 
@@ -70,6 +71,7 @@ end
 
 Return a string containing the platform version of `client`.
 
+!!! info
 The returned value doesn't need to be owned by `client`, but it must be the same on every call: the C wrapper calls it
 at most once per `client` and keeps a copy for as long as `client` is alive, since C keeps pointers to it.
 
@@ -115,6 +117,7 @@ end
 
 Return all the devices visible to `client`, including those that it cannot address.
 
+!!! info
 The returned value doesn't need to be owned by `client`, but it must be the same on every call: the C wrapper calls it
 at most once per `client` and keeps a copy for as long as `client` is alive, since C keeps pointers to it. The objects
 in it must be the same ones on every call too, and the same ones that other functions return, since C identifies them by
@@ -144,6 +147,7 @@ end
 
 Return the subset of `devices(client)` that `client` can address.
 
+!!! info
 The returned value doesn't need to be owned by `client`, but it must be the same on every call: the C wrapper calls it
 at most once per `client` and keeps a copy for as long as `client` is alive, since C keeps pointers to it. The objects
 in it must be the same ones on every call too, and the same ones that other functions return, since C identifies them by
@@ -228,6 +232,7 @@ end
 
 Return the memories that `client` can address.
 
+!!! info
 The returned value doesn't need to be owned by `client`, but it must be the same on every call: the C wrapper calls it
 at most once per `client` and keeps a copy for as long as `client` is alive, since C keeps pointers to it. The objects
 in it must be the same ones on every call too, and the same ones that other functions return, since C identifies them by
@@ -648,7 +653,7 @@ Buffer(::Client, ::Memory, ::Error, type, dims, layout)
     # `device_layout` was added at the end of the struct, so older callers don't pass it
     has_device_layout =
         unsafe_load(args.struct_size) >=
-        UInt(args.device_layout) - UInt(args) + sizeof(Ptr{Cvoid})
+            UInt(args.device_layout) - UInt(args) + sizeof(Ptr{Cvoid})
     c_layout = has_device_layout ? unsafe_load(args.device_layout) : C_NULL
     layout = c_layout == C_NULL ? nothing : MemoryLayout(c_layout)
 

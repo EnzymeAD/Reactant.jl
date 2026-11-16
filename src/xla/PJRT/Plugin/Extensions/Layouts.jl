@@ -107,6 +107,7 @@ end
 
 Return the [`MemoryLayout`](@ref) of each parameter of `exe`.
 
+!!! info
 The returned value doesn't need to be owned by `exe`, but it must be the same on every call: the C wrapper calls it at
 most once per `exe` and keeps a copy for as long as `exe` is alive, since C keeps pointers to it.
 
@@ -119,6 +120,7 @@ function parameter_memory_layouts end
 
 Return the [`MemoryLayout`](@ref) of each output of `exe`.
 
+!!! info
 The returned value doesn't need to be owned by `exe`, but it must be the same on every call: the C wrapper calls it at
 most once per `exe` and keeps a copy for as long as `exe` is alive, since C keeps pointers to it.
 

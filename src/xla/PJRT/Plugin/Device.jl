@@ -91,6 +91,7 @@ end
 
 Return the memories that `dev` can address.
 
+!!! info
 The returned value doesn't need to be owned by `dev`, but it must be the same on every call: the C wrapper calls it at
 most once per `dev` and keeps a copy for as long as `dev` is alive, since C keeps pointers to it. The objects in it must
 be the same ones on every call too, and the same ones that other functions return, since C identifies them by pointer.

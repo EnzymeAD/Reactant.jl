@@ -28,6 +28,7 @@ abstract type TopologyDescription end
 
 Return a string that identifies the platform of `topology` (e.g. `"cpu"`, `"gpu"`, `"tpu"`).
 
+!!! info
 The returned value doesn't need to be owned by `topology`, but it must be the same on every call: the C wrapper calls it
 at most once per `topology` and keeps a copy for as long as `topology` is alive, since C keeps pointers to it.
 
@@ -55,6 +56,7 @@ end
 
 Return a string containing the platform version of `topology`.
 
+!!! info
 The returned value doesn't need to be owned by `topology`, but it must be the same on every call: the C wrapper calls it
 at most once per `topology` and keeps a copy for as long as `topology` is alive, since C keeps pointers to it.
 
@@ -82,6 +84,7 @@ end
 
 Return the descriptions of all the devices in `topology`, in any order but the same one on every call.
 
+!!! info
 The returned value doesn't need to be owned by `topology`, but it must be the same on every call: the C wrapper calls it
 at most once per `topology` and keeps a copy for as long as `topology` is alive, since C keeps pointers to it. The
 objects in it must be the same ones on every call too, and the same ones that other functions return, since C identifies
@@ -150,6 +153,7 @@ Return the platform-specific attributes of `topology` as `name => value` pairs (
 `AbstractString`, `Bool`, `Integer`, `AbstractVector{<:Integer}` or `AbstractFloat`, which C receives as `String`,
 `Bool`, `Int64`, `Vector{Int64}` and `Float32`.
 
+!!! info
 The returned value doesn't need to be owned by `topology`, but it must be the same on every call: the C wrapper calls it
 at most once per `topology` and keeps a copy for as long as `topology` is alive, since C keeps pointers to it.
 
@@ -231,6 +235,7 @@ end
 Return the kind ids of the memory spaces in `topology` (see `kind_id(::Memory)`). The first one must be the kind id
 of the default memory space.
 
+!!! info
 The returned value doesn't need to be owned by `topology`, but it must be the same on every call: the C wrapper calls it
 at most once per `topology` and keeps a copy for as long as `topology` is alive, since C keeps pointers to it.
 

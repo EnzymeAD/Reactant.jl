@@ -113,6 +113,7 @@ end
 
 Return the dimensions of `buffer`.
 
+!!! info
 The returned value doesn't need to be owned by `buffer`, but it must be the same on every call: the C wrapper calls it
 at most once per `buffer` and keeps a copy for as long as `buffer` is alive, since C keeps pointers to it.
 
@@ -143,6 +144,7 @@ dimensions implemented by padding to a fixed size may be smaller.
 
 Defaults to `Base.size(buffer)`, i.e. no dimension is padded.
 
+!!! info
 The returned value doesn't need to be owned by `buffer`, but it must be the same on every call: the C wrapper calls it
 at most once per `buffer` and keeps a copy for as long as `buffer` is alive, since C keeps pointers to it.
 
@@ -171,6 +173,7 @@ end
 Return the 1-based indices of the dynamically-sized dimensions of `buffer`, or an empty vector if all are static. The
 C wrapper converts them to the 0-based indices that C expects.
 
+!!! info
 The returned value doesn't need to be owned by `buffer`, but it must be the same on every call: the C wrapper calls it
 at most once per `buffer` and keeps a copy for as long as `buffer` is alive, since C keeps pointers to it.
 
@@ -209,6 +212,7 @@ array with `n` dimensions).
 If the plugin advertises [`LayoutsExtension`](@ref), it must return a [`TiledMemoryLayout`](@ref): XLA aborts if the
 layout of a buffer can't be serialized.
 
+!!! info
 The returned value doesn't need to be owned by `buffer`, but it must be the same on every call: the C wrapper calls it
 at most once per `buffer` and keeps a copy for as long as `buffer` is alive, since C keeps pointers to it.
 

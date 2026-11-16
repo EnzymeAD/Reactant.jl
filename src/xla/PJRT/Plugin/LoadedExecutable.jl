@@ -94,6 +94,7 @@ end
 
 Return the devices that `loaded_exe` runs on, in the order used by the argument and output lists of `execute`.
 
+!!! info
 The returned value doesn't need to be owned by `loaded_exe`, but it must be the same on every call: the C wrapper calls
 it at most once per `loaded_exe` and keeps a copy for as long as `loaded_exe` is alive, since C keeps pointers to it.
 The objects in it must be the same ones on every call too, and the same ones that other functions return, since C
@@ -129,6 +130,7 @@ end
 Return the logical (replica, partition) ids, 0-based, of each device in `addressable_devices(loaded_exe)`, in the
 same order.
 
+!!! info
 The returned value doesn't need to be owned by `loaded_exe`, but it must be the same on every call: the C wrapper calls
 it at most once per `loaded_exe` and keeps a copy for as long as `loaded_exe` is alive, since C keeps pointers to it.
 
@@ -251,7 +253,7 @@ execute(::LoadedExecutable, args...)
     )
     has_context =
         options != C_NULL &&
-        unsafe_load(Ptr{Csize_t}(options)) >= offset + sizeof(Ptr{Cvoid})
+            unsafe_load(Ptr{Csize_t}(options)) >= offset + sizeof(Ptr{Cvoid})
     context_ptr = if has_context
         unsafe_load(Ptr{Ptr{CAPI.PJRT_ExecuteContext}}(options + offset))
     else

@@ -46,6 +46,7 @@ end
 
 Return the kind of `mem` (e.g. `"device"`, `"pinned_host"`).
 
+!!! info
 The returned value doesn't need to be owned by `mem`, but it must be the same on every call: the C wrapper calls it at
 most once per `mem` and keeps a copy for as long as `mem` is alive, since C keeps pointers to it.
 
@@ -92,6 +93,7 @@ end
 
 Return a verbose description of `mem` for debugging. Defaults to `Base.show(io, mem)`, i.e. `sprint(show, mem)`.
 
+!!! info
 The returned value doesn't need to be owned by `mem`, but it must be the same on every call: the C wrapper calls it at
 most once per `mem` and keeps a copy for as long as `mem` is alive, since C keeps pointers to it.
 
@@ -146,6 +148,7 @@ end
 
 Return the devices that can address `mem`.
 
+!!! info
 The returned value doesn't need to be owned by `mem`, but it must be the same on every call: the C wrapper calls it at
 most once per `mem` and keeps a copy for as long as `mem` is alive, since C keeps pointers to it. The objects in it must
 be the same ones on every call too, and the same ones that other functions return, since C identifies them by pointer.

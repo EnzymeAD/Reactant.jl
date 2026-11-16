@@ -53,6 +53,7 @@ end
 
 Return a vendor-dependent string that uniquely identifies the kind of device (e.g. `"Tesla V100-SXM2-16GB"`).
 
+!!! info
 The returned value doesn't need to be owned by `desc`, but it must be the same on every call: the C wrapper calls it at
 most once per `desc` and keeps a copy for as long as `desc` is alive, since C keeps pointers to it.
 
@@ -88,6 +89,7 @@ Return the device-specific attributes of the device described by `desc` as `name
 Values must be `AbstractString`, `Bool`, `Integer`, `AbstractVector{<:Integer}` or `AbstractFloat`, which C receives as
 `String`, `Bool`, `Int64`, `Vector{Int64}` and `Float32`.
 
+!!! info
 The returned value doesn't need to be owned by `desc`, but it must be the same on every call: the C wrapper calls it at
 most once per `desc` and keeps a copy for as long as `desc` is alive, since C keeps pointers to it.
 
@@ -116,6 +118,7 @@ end
 Return a verbose description of the device for debugging. Defaults to `Base.show(io, desc)`, i.e.
 `sprint(show, desc)`.
 
+!!! info
 The returned value doesn't need to be owned by `desc`, but it must be the same on every call: the C wrapper calls it at
 most once per `desc` and keeps a copy for as long as `desc` is alive, since C keeps pointers to it.
 
