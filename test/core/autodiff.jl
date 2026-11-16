@@ -889,6 +889,13 @@ function active_plus_primal(x)
     return dx + x
 end
 
+f_two(a, b) = a * b^2
+
+function two_active_same_val(x)
+    ((dx1, dx2),) = Enzyme.autodiff(Reverse, f_two, Active, Active(x), Active(x))
+    return dx1, dx2, x
+end
+
 @testset "Reverse-mode Active traced scalar arguments: Issue #3599" begin
     res_real = @jit Enzyme.autodiff(Reverse, abs2, Active(Reactant.ConcreteRNumber(3.0)))
     @test res_real isa Tuple{Tuple{<:ConcreteRNumber{Float64}}}
@@ -911,11 +918,28 @@ end
     res_keep_primal = @jit active_plus_primal(Reactant.ConcreteRNumber(3.0))
     @test res_keep_primal ≈ 9.0
 
+    # Two Active arguments referencing the same value Active(x), Active(x)
+    x_same = Reactant.ConcreteRNumber(3.0)
+    res_two_same = @jit two_active_same_val(x_same)
+    @test res_two_same[1] ≈ 9.0
+    @test res_two_same[2] ≈ 18.0
+    @test res_two_same[3] ≈ 3.0
+
+    res_two_same_direct = @jit Enzyme.autodiff(
+        Reverse, f_two, Active, Active(x_same), Active(x_same)
+    )
+    @test res_two_same_direct[1][1] ≈ 9.0
+    @test res_two_same_direct[1][2] ≈ 18.0
+
     f_tup(t) = t[1]^2 + 3 * t[2]
     res_tup = @jit Enzyme.autodiff(
         Reverse, f_tup, Active((Reactant.ConcreteRNumber(4.0), Reactant.ConcreteRNumber(5.0)))
     )
     @test only(only(res_tup))[1] ≈ 8.0
     @test only(only(res_tup))[2] ≈ 3.0
+
+    res_tup_same = @jit Enzyme.autodiff(Reverse, f_tup, Active((x_same, x_same)))
+    @test only(only(res_tup_same))[1] ≈ 6.0
+    @test only(only(res_tup_same))[2] ≈ 3.0
 end
 

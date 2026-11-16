@@ -356,15 +356,16 @@ function overload_autodiff(
 end
 
 function overload_autodiff(
-    ::CMode, f::FA, ::Type{A}, args::Vararg{Annotation,Nargs}
+    ::CMode, f::FA, ::Type{A}, raw_args::Vararg{Annotation,Nargs}
 ) where {CMode<:Mode,FA<:Annotation,A<:Annotation,Nargs}
     reverse = CMode <: ReverseMode
 
-    width = Enzyme.same_or_one(1, args...)
+    width = Enzyme.same_or_one(1, raw_args...)
     if width == 0
         throw(ErrorException("Cannot differentiate with a batch size of 0"))
     end
 
+    args = map(a -> a isa Active ? Active(deepcopy(a.val)) : a, raw_args)
     primf = f.val
     primargs = ((v.val for v in args)...,)
 
