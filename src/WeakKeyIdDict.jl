@@ -81,6 +81,10 @@ function _rehash_locked!(d::WeakKeyIdDict, nslots::Int)
     for j in 1:2:length(old)
         isassigned(old, j) || continue
         ref = old[j]::WeakRef
+        v = old[j + 1]
+        # the old table may never be freed (e.g. the one of a `const` dictionary created at precompile time lives in the
+        # package image), so it must not keep the values alive
+        old[j + 1] = nothing
         k = ref.value
         GC.safepoint() # ensure `k` is now gc-rooted
         isnothing(k) && continue
@@ -89,7 +93,7 @@ function _rehash_locked!(d::WeakKeyIdDict, nslots::Int)
             i = _next_slot(ht, i)
         end
         ht[2i - 1] = ref
-        ht[2i] = old[j + 1]
+        ht[2i] = v
         count += 1
     end
     d.ht = ht
