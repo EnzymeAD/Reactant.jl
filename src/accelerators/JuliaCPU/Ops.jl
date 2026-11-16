@@ -191,7 +191,7 @@ function handle(::Val{Symbol("stablehlo.convert")}, (a,), _, (result,))
 end
 
 # like XLA, the mantissa is rounded to nearest with ties to even, then exponents out of range overflow to ±Inf or
-# underflow to ±0 (so denormals are flushed to zero). NaNs are kept, unless no mantissa bits are left to encode them
+# underflow to ±0 (so denormals are flushed to zero). NaNs are kept as they are.
 function handle(::Val{Symbol("stablehlo.reduce_precision")}, (a,), attributes, _)
     exponent_bits, mantissa_bits = attributes.exponent_bits, attributes.mantissa_bits
     return map(a) do x
