@@ -12,7 +12,7 @@ end
 
 @testset "Number" begin
     if length(addressable_devices) ≥ 2
-        mesh = Sharding.Mesh(collect(Int64, 0:(length(addressable_devices)-1)), ("x",))
+        mesh = Sharding.Mesh(collect(Int64, 0:(length(addressable_devices) - 1)), ("x",))
         ConcreteRNumber(2.0; sharding=Sharding.Replicated(mesh))
     end
 end
@@ -31,7 +31,7 @@ end
         data_sharding2 = Sharding.NamedSharding(mesh, (nothing, "x", nothing))
         data_sharding3 = Sharding.NamedSharding(mesh, (nothing, nothing, nothing)) # fully replicated data
 
-        data = reshape(collect(1:(16*4*12)) ./ (16 * 4 * 12), 16, 4, 12)
+        data = reshape(collect(1:(16 * 4 * 12)) ./ (16 * 4 * 12), 16, 4, 12)
 
         cdata = Reactant.to_rarray(data)
         cdata_sharded = Reactant.to_rarray(data; sharding=data_sharding)
@@ -547,7 +547,7 @@ end
         sharding = Sharding.NamedSharding(mesh, (:x, :y))
 
         function shard_groups(x)
-            y = (x'*x)[1:4, :]
+            y = (x' * x)[1:4, :]
             Reactant.Ops.sharding_group(x, y)
             z = y .+ x
             Reactant.Ops.sharding_group(z, y)

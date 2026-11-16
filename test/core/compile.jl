@@ -1,7 +1,8 @@
 using Reactant, Test, Enzyme, InteractiveUtils, FileCheck
 
 const RunningOnTPU = Reactant.XLA.platform_name(Reactant.XLA.default_backend()) == "tpu"
-const RunningOnJuliaCPU = Reactant.XLA.platform_name(Reactant.XLA.default_backend()) == "julia-cpu"
+const RunningOnJuliaCPU =
+    Reactant.XLA.platform_name(Reactant.XLA.default_backend()) == "julia-cpu"
 
 Base.sum(x::NamedTuple{(:a,),Tuple{T}}) where {T<:Reactant.TracedRArray} = (; a=sum(x.a))
 
@@ -480,7 +481,7 @@ end
     mul_comp = @compile x_ra * x_ra
     @test begin
         Reactant.XLA.cost_analysis(mul_comp) isa
-            Reactant.MLIR.API.JLHloCostAnalysisProperties
+        Reactant.MLIR.API.JLHloCostAnalysisProperties
     end broken = RunningOnTPU || RunningOnJuliaCPU
 end
 

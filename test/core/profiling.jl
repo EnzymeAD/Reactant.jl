@@ -2,7 +2,8 @@ using Reactant, Test
 
 const RunningOnCPU = Reactant.XLA.platform_name(Reactant.XLA.default_backend()) == "cpu"
 const RunningOnCUDA = Reactant.XLA.platform_name(Reactant.XLA.default_backend()) == "cuda"
-const RunningOnJuliaCPU = Reactant.XLA.platform_name(Reactant.XLA.default_backend()) == "julia-cpu"
+const RunningOnJuliaCPU =
+    Reactant.XLA.platform_name(Reactant.XLA.default_backend()) == "julia-cpu"
 
 x = Reactant.to_rarray(randn(Float32, 100, 2))
 W = Reactant.to_rarray(randn(Float32, 10, 100))

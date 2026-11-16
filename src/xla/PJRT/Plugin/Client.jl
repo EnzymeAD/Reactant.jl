@@ -669,7 +669,7 @@ Buffer(::Client, ::Memory, ::Error, type, dims, layout)
     # `device_layout` was added at the end of the struct, so older callers don't pass it
     has_device_layout =
         unsafe_load(args.struct_size) >=
-            UInt(args.device_layout) - UInt(args) + sizeof(Ptr{Cvoid})
+        UInt(args.device_layout) - UInt(args) + sizeof(Ptr{Cvoid})
     c_layout = has_device_layout ? unsafe_load(args.device_layout) : C_NULL
     layout = c_layout == C_NULL ? nothing : MemoryLayout(c_layout)
 

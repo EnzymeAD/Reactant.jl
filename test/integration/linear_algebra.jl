@@ -207,7 +207,7 @@ end
     x = Reactant.TestUtils.construct_test_array(Float32, 2, 4)
     x_ra = Reactant.to_rarray(x)
 
-    @testset for k in (-size(x, 1)+1):(size(x, 1)-1)
+    @testset for k in (-size(x, 1) + 1):(size(x, 1) - 1)
         @test @jit(diag(x_ra, k)) ≈ diag(x, k)
     end
 

@@ -45,7 +45,9 @@ function notify_device_of_alloc(buffer::JuliaBuffer)
     @atomic buffer.device.largest_alloc_size max siz
 end
 
-notify_device_of_free(buffer::JuliaBuffer) = @atomic buffer.device.bytes_in_use -= Int64(buffer.size_in_bytes)
+function notify_device_of_free(buffer::JuliaBuffer)
+    @atomic buffer.device.bytes_in_use -= Int64(buffer.size_in_bytes)
+end
 
 function copyto(dev::JuliaDevice, buffer::JuliaBuffer)
     if dev === device(buffer)
@@ -90,7 +92,9 @@ function to_host_buffer!(dst::Ptr{Cvoid}, buffer::JuliaBuffer)
 end
 
 # the C wrapper checks that `buffer` is not deleted and that the range is within it; `offset` is 0-based
-function Base.unsafe_copyto!(dst::Ptr, buffer::JuliaBuffer, offset::Integer, nbytes::Integer)
+function Base.unsafe_copyto!(
+    dst::Ptr, buffer::JuliaBuffer, offset::Integer, nbytes::Integer
+)
     Libc.memcpy(dst, buffer.data + offset, nbytes)
     return dst
 end

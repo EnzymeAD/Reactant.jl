@@ -3,7 +3,8 @@ using LinearAlgebra: BLAS
 
 const RunningOnTPU = Reactant.XLA.platform_name(Reactant.XLA.default_backend()) == "tpu"
 const RunningOnROCm = Reactant.XLA.platform_name(Reactant.XLA.default_backend()) == "rocm"
-const RunningOnJuliaCPU = Reactant.XLA.platform_name(Reactant.XLA.default_backend()) == "julia-cpu"
+const RunningOnJuliaCPU =
+    Reactant.XLA.platform_name(Reactant.XLA.default_backend()) == "julia-cpu"
 
 @testset "Level 1" begin
     @testset "asum" begin

@@ -13,5 +13,7 @@ id(desc::JuliaDeviceDescription) = desc.id
 process_index(desc::JuliaDeviceDescription) = desc.pid
 kind(desc::JuliaDeviceDescription) = "julia-cpu"
 Base.show(io::IO, desc::JuliaDeviceDescription) = print(io, "julia: id=", desc.id)
-Base.print(io::IO, desc::JuliaDeviceDescription) = print(io, "JuliaDevice(id=", desc.id, ")")
+function Base.print(io::IO, desc::JuliaDeviceDescription)
+    return print(io, "JuliaDevice(id=", desc.id, ")")
+end
 attributes(::JuliaDeviceDescription) = ()

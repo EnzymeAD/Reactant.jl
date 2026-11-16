@@ -257,7 +257,7 @@ execute(::LoadedExecutable, args...)
     )
     has_context =
         options != C_NULL &&
-            unsafe_load(Ptr{Csize_t}(options)) >= offset + sizeof(Ptr{Cvoid})
+        unsafe_load(Ptr{Csize_t}(options)) >= offset + sizeof(Ptr{Cvoid})
     context_ptr = if has_context
         unsafe_load(Ptr{Ptr{CAPI.PJRT_ExecuteContext}}(options + offset))
     else

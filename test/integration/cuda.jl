@@ -18,10 +18,10 @@ const RunningOnCUDA = Reactant.XLA.platform_name(Reactant.XLA.default_backend())
 # See JuliaLang/julia#62666 and JuliaLLVM/LLVM.jl#581.
 const BF16IselBroken =
     Sys.ARCH === :x86_64 &&
-        VERSION <= v"1.12.6" &&
-        Sys.islinux() &&
-        isfile("/proc/cpuinfo") &&
-        occursin("avx512_bf16", read("/proc/cpuinfo", String))
+    VERSION <= v"1.12.6" &&
+    Sys.islinux() &&
+    isfile("/proc/cpuinfo") &&
+    occursin("avx512_bf16", read("/proc/cpuinfo", String))
 
 @testset "Promote CuTraced" begin
     TFT = ReactantCUDAExt.CuTracedRNumber{Float64,1}

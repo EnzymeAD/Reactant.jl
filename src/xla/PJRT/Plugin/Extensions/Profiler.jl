@@ -19,20 +19,16 @@ A `PLUGIN_Profiler*` points to a `Profiler`, which is GC rooted from its creatio
 abstract type Profiler end
 
 # profiler errors are `Error`s
-function profiler_error_destroy(
-    args::Ptr{CAPI.PLUGIN_Profiler_Error_Destroy_Args}
-)::Cvoid
+function profiler_error_destroy(args::Ptr{CAPI.PLUGIN_Profiler_Error_Destroy_Args})::Cvoid
     pjrt_error_destroy_obj(Ptr{Error}(unsafe_load(args.error)))
-    return
+    return nothing
 end
 
-function profiler_error_message(
-    args::Ptr{CAPI.PLUGIN_Profiler_Error_Message_Args}
-)::Cvoid
+function profiler_error_message(args::Ptr{CAPI.PLUGIN_Profiler_Error_Message_Args})::Cvoid
     pjrt_error_message_obj(
         Ptr{Error}(unsafe_load(args.error)), args.message, args.message_size
     )
-    return
+    return nothing
 end
 
 function profiler_error_get_code(
@@ -184,7 +180,7 @@ function profiler_consume_result_destroy(
 )::Cvoid
     ptr = unsafe_load(args.consume_result)
     ptr != C_NULL && unroot!(ptr)
-    return
+    return nothing
 end
 
 """

@@ -124,8 +124,9 @@ function compile(client::JuliaClient, code, options)
     else
         dev_id = only(only(assignment.computation_devices).replica_device_ids)
         idx = findfirst(d -> id(description(d)) == dev_id, client.devices)
-        isnothing(idx) &&
+        if isnothing(idx)
             throw(invalid_argument("device $dev_id is not addressable by `JuliaClient`"))
+        end
         client.devices[idx]
     end
 

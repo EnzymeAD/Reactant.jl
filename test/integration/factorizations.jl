@@ -100,11 +100,11 @@ function random_matrix_with_cond(
     # Generate random orthogonal matrices U and V
     U = (
         LinearAlgebra.qr(randn(rows, rows)).Q *
-            Diagonal(sign.(diag(LinearAlgebra.qr(randn(rows, rows)).R)))
+        Diagonal(sign.(diag(LinearAlgebra.qr(randn(rows, rows)).R)))
     )
     V = (
         LinearAlgebra.qr(randn(cols, cols)).Q *
-            Diagonal(sign.(diag(LinearAlgebra.qr(randn(cols, cols)).R)))
+        Diagonal(sign.(diag(LinearAlgebra.qr(randn(cols, cols)).R)))
     )
 
     min_dim = min(rows, cols)
