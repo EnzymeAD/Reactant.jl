@@ -1,4 +1,8 @@
 ## weak key dictionary by object identity
+
+# `Memory` was introduced in Julia 1.11
+const _WeakKeyIdDictTable = @static VERSION >= v"1.11.0-" ? Memory{Any} : Vector{Any}
+
 mutable struct WeakKeyIdDictFinalizer{T}
     const d::T
 end
@@ -19,7 +23,7 @@ Like `IdDict`, it is an open-addressing hash table with linear probing, hashed b
 mutable struct WeakKeyIdDict{K,V} <: AbstractDict{K,V}
     # slot `i` holds the weak reference to its key at `2i - 1` and its value at `2i`. A key that is `#undef` marks a
     # never used slot, which ends a probe sequence; a key whose weak reference is empty marks a deleted or dead entry.
-    ht::Memory{Any}
+    ht::_WeakKeyIdDictTable
     # number of entries, including the dead ones not cleaned up yet
     count::Int
     # number of deleted entries
@@ -29,7 +33,7 @@ mutable struct WeakKeyIdDict{K,V} <: AbstractDict{K,V}
     finalizer::WeakKeyIdDictFinalizer
 
     function WeakKeyIdDict{K,V}() where {K,V}
-        d = new{K,V}(Memory{Any}(undef, 32), 0, 0, ReentrantLock(), false)
+        d = new{K,V}(_WeakKeyIdDictTable(undef, 32), 0, 0, ReentrantLock(), false)
         d.finalizer = WeakKeyIdDictFinalizer(d)
         return d
     end
@@ -54,11 +58,11 @@ Base.unlock(d::WeakKeyIdDict) = unlock(d.lock)
 Base.lock(f, d::WeakKeyIdDict) = lock(f, d.lock)
 Base.trylock(f, d::WeakKeyIdDict) = trylock(f, d.lock)
 
-_nslots(ht::Memory{Any}) = length(ht) >> 1
+_nslots(ht::_WeakKeyIdDictTable) = length(ht) >> 1
 
 # first slot of the probe sequence of `key`; the number of slots is a power of 2
-_first_slot(ht::Memory{Any}, key) = Int(objectid(key) & (_nslots(ht) - 1)) + 1
-_next_slot(ht::Memory{Any}, i::Int) = (i & (_nslots(ht) - 1)) + 1
+_first_slot(ht::_WeakKeyIdDictTable, key) = Int(objectid(key) & (_nslots(ht) - 1)) + 1
+_next_slot(ht::_WeakKeyIdDictTable, i::Int) = (i & (_nslots(ht) - 1)) + 1
 
 # return the slot of `key`, or `0` if it has none
 function _slot_locked(d::WeakKeyIdDict, key)
@@ -76,7 +80,7 @@ end
 # move the live entries to a table of `nslots` slots, dropping the deleted and dead ones
 function _rehash_locked!(d::WeakKeyIdDict, nslots::Int)
     old = d.ht
-    ht = Memory{Any}(undef, 2nslots)
+    ht = _WeakKeyIdDictTable(undef, 2nslots)
     count = 0
     for j in 1:2:length(old)
         isassigned(old, j) || continue
@@ -202,7 +206,7 @@ end
 
 function Base.empty!(d::WeakKeyIdDict)
     @lock d begin
-        d.ht = Memory{Any}(undef, 32)
+        d.ht = _WeakKeyIdDictTable(undef, 32)
         d.count = 0
         d.ndel = 0
     end
