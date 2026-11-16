@@ -75,6 +75,7 @@ genrule(
         "@xla//xla/service:metrics.proto",
         "@xla//xla/service:shaped_slice.proto",
         "@xla//xla/service/cpu:executable.proto",
+        "@xla//xla/service/cpu:onednn_config.proto",
         "@xla//xla/backends/cpu:xnn_fusion_options.proto",
         "@xla//xla/backends/cpu:ynn_fusion_options.proto",
         "@xla//xla/backends/cpu/runtime:thunk.proto",

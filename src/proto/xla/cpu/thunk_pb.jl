@@ -11,13 +11,15 @@ export ReplicaIdThunkProto, var"CollectivePermuteThunkProto.SourceTargetPairProt
 export ResourceProto, SortDirectionOptional, OpParamsProto, XnnFusionThunkProtoImpl
 export CopyThunkProto, FftThunkProto, XnnDotThunkProto, DotThunkProto
 export XnnConvolutionThunkProto, OpBuffersProto, YnnFusionThunkProto
-export var"CustomCallThunkProto.OpBuffers", ConvolutionThunkProto, KernelThunkProto
-export CollectivePermuteThunkProto, ResourceOptional
+export var"CustomCallThunkProto.OpBuffers", OneDnnOpBuffersProto, ConvolutionThunkProto
+export KernelThunkProto, CollectivePermuteThunkProto, ResourceOptional
 export var"ThunkSequenceProto.ResourceUsersProto", SortThunkProto, XnnFusionThunkProto
-export CustomCallThunkProto, OpResourcesProto, var"OutfeedThunkProto.OutfeedResource"
-export var"InfeedThunkProto.InfeedResource", CollectiveThunkProto, OutfeedThunkProto
-export InfeedThunkProto, CallThunkProto, ConditionalThunkProto, ThunkSequenceProto
-export WhileThunkProto, ThunkProto
+export CustomCallThunkProto, OneDnnConvolutionThunkProto, OneDnnLayerNormThunkProto
+export OneDnnMatmulThunkProto, OneDnnSoftmaxThunkProto, OpResourcesProto
+export var"OutfeedThunkProto.OutfeedResource", var"InfeedThunkProto.InfeedResource"
+export OneDnnCustomCallProto, CollectiveThunkProto, OutfeedThunkProto, InfeedThunkProto
+export CallThunkProto, ConditionalThunkProto, ThunkSequenceProto, WhileThunkProto
+export ThunkProto
 abstract type var"##Abstract#CallThunkProto" end
 abstract type var"##Abstract#ThunkProto" end
 abstract type var"##Abstract#ConditionalThunkProto" end
@@ -1105,6 +1107,48 @@ function PB._encoded_size(x::var"CustomCallThunkProto.OpBuffers")
     return encoded_size
 end
 
+struct OneDnnOpBuffersProto
+    arguments_shapes::Vector{ShapeBufferAllocationSliceProto}
+    results_shapes::Vector{ShapeBufferAllocationSliceProto}
+    is_tuple_result::Bool
+end
+PB.default_values(::Type{OneDnnOpBuffersProto}) = (;arguments_shapes = Vector{ShapeBufferAllocationSliceProto}(), results_shapes = Vector{ShapeBufferAllocationSliceProto}(), is_tuple_result = false)
+PB.field_numbers(::Type{OneDnnOpBuffersProto}) = (;arguments_shapes = 1, results_shapes = 2, is_tuple_result = 3)
+
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OneDnnOpBuffersProto}, _endpos::Int=0, _group::Bool=false)
+    arguments_shapes = PB.BufferedVector{ShapeBufferAllocationSliceProto}()
+    results_shapes = PB.BufferedVector{ShapeBufferAllocationSliceProto}()
+    is_tuple_result = false
+    while !PB.message_done(d, _endpos, _group)
+        field_number, wire_type = PB.decode_tag(d)
+        if field_number == 1
+            PB.decode!(d, arguments_shapes)
+        elseif field_number == 2
+            PB.decode!(d, results_shapes)
+        elseif field_number == 3
+            is_tuple_result = PB.decode(d, Bool)
+        else
+            Base.skip(d, wire_type)
+        end
+    end
+    return OneDnnOpBuffersProto(arguments_shapes[], results_shapes[], is_tuple_result)
+end
+
+function PB.encode(e::PB.AbstractProtoEncoder, x::OneDnnOpBuffersProto)
+    initpos = position(e.io)
+    !isempty(x.arguments_shapes) && PB.encode(e, 1, x.arguments_shapes)
+    !isempty(x.results_shapes) && PB.encode(e, 2, x.results_shapes)
+    x.is_tuple_result != false && PB.encode(e, 3, x.is_tuple_result)
+    return position(e.io) - initpos
+end
+function PB._encoded_size(x::OneDnnOpBuffersProto)
+    encoded_size = 0
+    !isempty(x.arguments_shapes) && (encoded_size += PB._encoded_size(x.arguments_shapes, 1))
+    !isempty(x.results_shapes) && (encoded_size += PB._encoded_size(x.results_shapes, 2))
+    x.is_tuple_result != false && (encoded_size += PB._encoded_size(x.is_tuple_result, 3))
+    return encoded_size
+end
+
 struct ConvolutionThunkProto
     dimension_numbers::Union{Nothing,xla.ConvolutionDimensionNumbers}
     window::Union{Nothing,xla.Window}
@@ -1492,6 +1536,150 @@ function PB._encoded_size(x::CustomCallThunkProto)
     return encoded_size
 end
 
+struct OneDnnConvolutionThunkProto
+    config::Union{Nothing,OneDnnConvolutionConfig}
+    op_buffers::Union{Nothing,OneDnnOpBuffersProto}
+end
+PB.default_values(::Type{OneDnnConvolutionThunkProto}) = (;config = nothing, op_buffers = nothing)
+PB.field_numbers(::Type{OneDnnConvolutionThunkProto}) = (;config = 1, op_buffers = 2)
+
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OneDnnConvolutionThunkProto}, _endpos::Int=0, _group::Bool=false)
+    config = Ref{Union{Nothing,OneDnnConvolutionConfig}}(nothing)
+    op_buffers = Ref{Union{Nothing,OneDnnOpBuffersProto}}(nothing)
+    while !PB.message_done(d, _endpos, _group)
+        field_number, wire_type = PB.decode_tag(d)
+        if field_number == 1
+            PB.decode!(d, config)
+        elseif field_number == 2
+            PB.decode!(d, op_buffers)
+        else
+            Base.skip(d, wire_type)
+        end
+    end
+    return OneDnnConvolutionThunkProto(config[], op_buffers[])
+end
+
+function PB.encode(e::PB.AbstractProtoEncoder, x::OneDnnConvolutionThunkProto)
+    initpos = position(e.io)
+    !isnothing(x.config) && PB.encode(e, 1, x.config)
+    !isnothing(x.op_buffers) && PB.encode(e, 2, x.op_buffers)
+    return position(e.io) - initpos
+end
+function PB._encoded_size(x::OneDnnConvolutionThunkProto)
+    encoded_size = 0
+    !isnothing(x.config) && (encoded_size += PB._encoded_size(x.config, 1))
+    !isnothing(x.op_buffers) && (encoded_size += PB._encoded_size(x.op_buffers, 2))
+    return encoded_size
+end
+
+struct OneDnnLayerNormThunkProto
+    config::Union{Nothing,OneDnnNormConfig}
+    op_buffers::Union{Nothing,OneDnnOpBuffersProto}
+end
+PB.default_values(::Type{OneDnnLayerNormThunkProto}) = (;config = nothing, op_buffers = nothing)
+PB.field_numbers(::Type{OneDnnLayerNormThunkProto}) = (;config = 1, op_buffers = 2)
+
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OneDnnLayerNormThunkProto}, _endpos::Int=0, _group::Bool=false)
+    config = Ref{Union{Nothing,OneDnnNormConfig}}(nothing)
+    op_buffers = Ref{Union{Nothing,OneDnnOpBuffersProto}}(nothing)
+    while !PB.message_done(d, _endpos, _group)
+        field_number, wire_type = PB.decode_tag(d)
+        if field_number == 1
+            PB.decode!(d, config)
+        elseif field_number == 2
+            PB.decode!(d, op_buffers)
+        else
+            Base.skip(d, wire_type)
+        end
+    end
+    return OneDnnLayerNormThunkProto(config[], op_buffers[])
+end
+
+function PB.encode(e::PB.AbstractProtoEncoder, x::OneDnnLayerNormThunkProto)
+    initpos = position(e.io)
+    !isnothing(x.config) && PB.encode(e, 1, x.config)
+    !isnothing(x.op_buffers) && PB.encode(e, 2, x.op_buffers)
+    return position(e.io) - initpos
+end
+function PB._encoded_size(x::OneDnnLayerNormThunkProto)
+    encoded_size = 0
+    !isnothing(x.config) && (encoded_size += PB._encoded_size(x.config, 1))
+    !isnothing(x.op_buffers) && (encoded_size += PB._encoded_size(x.op_buffers, 2))
+    return encoded_size
+end
+
+struct OneDnnMatmulThunkProto
+    config::Union{Nothing,OneDnnMatMulConfig}
+    op_buffers::Union{Nothing,OneDnnOpBuffersProto}
+end
+PB.default_values(::Type{OneDnnMatmulThunkProto}) = (;config = nothing, op_buffers = nothing)
+PB.field_numbers(::Type{OneDnnMatmulThunkProto}) = (;config = 1, op_buffers = 2)
+
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OneDnnMatmulThunkProto}, _endpos::Int=0, _group::Bool=false)
+    config = Ref{Union{Nothing,OneDnnMatMulConfig}}(nothing)
+    op_buffers = Ref{Union{Nothing,OneDnnOpBuffersProto}}(nothing)
+    while !PB.message_done(d, _endpos, _group)
+        field_number, wire_type = PB.decode_tag(d)
+        if field_number == 1
+            PB.decode!(d, config)
+        elseif field_number == 2
+            PB.decode!(d, op_buffers)
+        else
+            Base.skip(d, wire_type)
+        end
+    end
+    return OneDnnMatmulThunkProto(config[], op_buffers[])
+end
+
+function PB.encode(e::PB.AbstractProtoEncoder, x::OneDnnMatmulThunkProto)
+    initpos = position(e.io)
+    !isnothing(x.config) && PB.encode(e, 1, x.config)
+    !isnothing(x.op_buffers) && PB.encode(e, 2, x.op_buffers)
+    return position(e.io) - initpos
+end
+function PB._encoded_size(x::OneDnnMatmulThunkProto)
+    encoded_size = 0
+    !isnothing(x.config) && (encoded_size += PB._encoded_size(x.config, 1))
+    !isnothing(x.op_buffers) && (encoded_size += PB._encoded_size(x.op_buffers, 2))
+    return encoded_size
+end
+
+struct OneDnnSoftmaxThunkProto
+    config::Union{Nothing,OneDnnSoftmaxConfig}
+    op_buffers::Union{Nothing,OneDnnOpBuffersProto}
+end
+PB.default_values(::Type{OneDnnSoftmaxThunkProto}) = (;config = nothing, op_buffers = nothing)
+PB.field_numbers(::Type{OneDnnSoftmaxThunkProto}) = (;config = 1, op_buffers = 2)
+
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OneDnnSoftmaxThunkProto}, _endpos::Int=0, _group::Bool=false)
+    config = Ref{Union{Nothing,OneDnnSoftmaxConfig}}(nothing)
+    op_buffers = Ref{Union{Nothing,OneDnnOpBuffersProto}}(nothing)
+    while !PB.message_done(d, _endpos, _group)
+        field_number, wire_type = PB.decode_tag(d)
+        if field_number == 1
+            PB.decode!(d, config)
+        elseif field_number == 2
+            PB.decode!(d, op_buffers)
+        else
+            Base.skip(d, wire_type)
+        end
+    end
+    return OneDnnSoftmaxThunkProto(config[], op_buffers[])
+end
+
+function PB.encode(e::PB.AbstractProtoEncoder, x::OneDnnSoftmaxThunkProto)
+    initpos = position(e.io)
+    !isnothing(x.config) && PB.encode(e, 1, x.config)
+    !isnothing(x.op_buffers) && PB.encode(e, 2, x.op_buffers)
+    return position(e.io) - initpos
+end
+function PB._encoded_size(x::OneDnnSoftmaxThunkProto)
+    encoded_size = 0
+    !isnothing(x.config) && (encoded_size += PB._encoded_size(x.config, 1))
+    !isnothing(x.op_buffers) && (encoded_size += PB._encoded_size(x.op_buffers, 2))
+    return encoded_size
+end
+
 struct OpResourcesProto
     communicator_resource::Union{Nothing,ResourceOptional}
 end
@@ -1591,6 +1779,63 @@ function PB._encoded_size(x::var"InfeedThunkProto.InfeedResource")
     encoded_size = 0
     !isnothing(x.consume_token) && (encoded_size += PB._encoded_size(x.consume_token, 1))
     !isnothing(x.produce_token) && (encoded_size += PB._encoded_size(x.produce_token, 2))
+    return encoded_size
+end
+
+struct OneDnnCustomCallProto
+    impl::Union{Nothing,OneOf{<:Union{OneDnnMatmulThunkProto,OneDnnConvolutionThunkProto,OneDnnSoftmaxThunkProto,OneDnnLayerNormThunkProto}}}
+end
+PB.oneof_field_types(::Type{OneDnnCustomCallProto}) = (;
+    impl = (;onednn_matmul_thunk=OneDnnMatmulThunkProto, onednn_convolution_thunk=OneDnnConvolutionThunkProto, onednn_softmax_thunk=OneDnnSoftmaxThunkProto, onednn_layernorm_thunk=OneDnnLayerNormThunkProto),
+)
+PB.default_values(::Type{OneDnnCustomCallProto}) = (;onednn_matmul_thunk = nothing, onednn_convolution_thunk = nothing, onednn_softmax_thunk = nothing, onednn_layernorm_thunk = nothing)
+PB.field_numbers(::Type{OneDnnCustomCallProto}) = (;onednn_matmul_thunk = 1, onednn_convolution_thunk = 2, onednn_softmax_thunk = 3, onednn_layernorm_thunk = 4)
+
+function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:OneDnnCustomCallProto}, _endpos::Int=0, _group::Bool=false)
+    impl = nothing
+    while !PB.message_done(d, _endpos, _group)
+        field_number, wire_type = PB.decode_tag(d)
+        if field_number == 1
+            impl = OneOf(:onednn_matmul_thunk, PB.decode(d, Ref{OneDnnMatmulThunkProto}))
+        elseif field_number == 2
+            impl = OneOf(:onednn_convolution_thunk, PB.decode(d, Ref{OneDnnConvolutionThunkProto}))
+        elseif field_number == 3
+            impl = OneOf(:onednn_softmax_thunk, PB.decode(d, Ref{OneDnnSoftmaxThunkProto}))
+        elseif field_number == 4
+            impl = OneOf(:onednn_layernorm_thunk, PB.decode(d, Ref{OneDnnLayerNormThunkProto}))
+        else
+            Base.skip(d, wire_type)
+        end
+    end
+    return OneDnnCustomCallProto(impl)
+end
+
+function PB.encode(e::PB.AbstractProtoEncoder, x::OneDnnCustomCallProto)
+    initpos = position(e.io)
+    if isnothing(x.impl);
+    elseif x.impl.name === :onednn_matmul_thunk
+        PB.encode(e, 1, x.impl[]::OneDnnMatmulThunkProto)
+    elseif x.impl.name === :onednn_convolution_thunk
+        PB.encode(e, 2, x.impl[]::OneDnnConvolutionThunkProto)
+    elseif x.impl.name === :onednn_softmax_thunk
+        PB.encode(e, 3, x.impl[]::OneDnnSoftmaxThunkProto)
+    elseif x.impl.name === :onednn_layernorm_thunk
+        PB.encode(e, 4, x.impl[]::OneDnnLayerNormThunkProto)
+    end
+    return position(e.io) - initpos
+end
+function PB._encoded_size(x::OneDnnCustomCallProto)
+    encoded_size = 0
+    if isnothing(x.impl);
+    elseif x.impl.name === :onednn_matmul_thunk
+        encoded_size += PB._encoded_size(x.impl[]::OneDnnMatmulThunkProto, 1)
+    elseif x.impl.name === :onednn_convolution_thunk
+        encoded_size += PB._encoded_size(x.impl[]::OneDnnConvolutionThunkProto, 2)
+    elseif x.impl.name === :onednn_softmax_thunk
+        encoded_size += PB._encoded_size(x.impl[]::OneDnnSoftmaxThunkProto, 3)
+    elseif x.impl.name === :onednn_layernorm_thunk
+        encoded_size += PB._encoded_size(x.impl[]::OneDnnLayerNormThunkProto, 4)
+    end
     return encoded_size
 end
 
@@ -1772,7 +2017,7 @@ end
 struct var"##Stub#ThunkProto" <: var"##Abstract#ThunkProto"
     kind::String
     info::Union{Nothing,InfoProto}
-    impl::Union{Nothing,OneOf{<:Union{var"##Stub#CallThunkProto"{var"##Stub#ThunkSequenceProto"{var"##Stub#ThunkProto"}},var"##Stub#ConditionalThunkProto"{var"##Stub#ThunkSequenceProto"{var"##Stub#ThunkProto"}},SortThunkProto,XnnFusionThunkProto,DotThunkProto,RngGetAndUpdateStateThunkProto,TopKThunkProto,var"##Stub#WhileThunkProto"{var"##Stub#ThunkProto"},KernelThunkProto,CopyThunkProto,FftThunkProto,InfeedThunkProto,OutfeedThunkProto,CustomCallThunkProto,ConvolutionThunkProto,CollectiveThunkProto,PartitionIdThunkProto,ReplicaIdThunkProto,YnnFusionThunkProto,RngSeedThunkProto}}}
+    impl::Union{Nothing,OneOf{<:Union{var"##Stub#CallThunkProto"{var"##Stub#ThunkSequenceProto"{var"##Stub#ThunkProto"}},var"##Stub#ConditionalThunkProto"{var"##Stub#ThunkSequenceProto"{var"##Stub#ThunkProto"}},SortThunkProto,XnnFusionThunkProto,DotThunkProto,RngGetAndUpdateStateThunkProto,TopKThunkProto,var"##Stub#WhileThunkProto"{var"##Stub#ThunkProto"},KernelThunkProto,CopyThunkProto,FftThunkProto,InfeedThunkProto,OutfeedThunkProto,CustomCallThunkProto,ConvolutionThunkProto,CollectiveThunkProto,PartitionIdThunkProto,ReplicaIdThunkProto,YnnFusionThunkProto,RngSeedThunkProto,OneDnnCustomCallProto}}}
 end
 
 const CallThunkProto = var"##Stub#CallThunkProto"{var"##Stub#ThunkSequenceProto"{var"##Stub#ThunkProto"}}
@@ -1914,10 +2159,10 @@ end
 
 const ThunkProto = var"##Stub#ThunkProto"
 PB.oneof_field_types(::Type{ThunkProto}) = (;
-    impl = (;call_thunk=CallThunkProto, conditional_thunk=ConditionalThunkProto, sort_thunk=SortThunkProto, xnn_fusion_thunk=XnnFusionThunkProto, dot_thunk=DotThunkProto, rng_get_and_update_state_thunk=RngGetAndUpdateStateThunkProto, top_k_thunk=TopKThunkProto, while_thunk=WhileThunkProto, kernel_thunk=KernelThunkProto, copy_thunk=CopyThunkProto, fft_thunk=FftThunkProto, infeed_thunk=InfeedThunkProto, outfeed_thunk=OutfeedThunkProto, custom_call_thunk=CustomCallThunkProto, convolution_thunk=ConvolutionThunkProto, collective_thunk=CollectiveThunkProto, partition_id_thunk=PartitionIdThunkProto, replica_id_thunk=ReplicaIdThunkProto, ynn_fusion_thunk=YnnFusionThunkProto, rng_seed_thunk=RngSeedThunkProto),
+    impl = (;call_thunk=CallThunkProto, conditional_thunk=ConditionalThunkProto, sort_thunk=SortThunkProto, xnn_fusion_thunk=XnnFusionThunkProto, dot_thunk=DotThunkProto, rng_get_and_update_state_thunk=RngGetAndUpdateStateThunkProto, top_k_thunk=TopKThunkProto, while_thunk=WhileThunkProto, kernel_thunk=KernelThunkProto, copy_thunk=CopyThunkProto, fft_thunk=FftThunkProto, infeed_thunk=InfeedThunkProto, outfeed_thunk=OutfeedThunkProto, custom_call_thunk=CustomCallThunkProto, convolution_thunk=ConvolutionThunkProto, collective_thunk=CollectiveThunkProto, partition_id_thunk=PartitionIdThunkProto, replica_id_thunk=ReplicaIdThunkProto, ynn_fusion_thunk=YnnFusionThunkProto, rng_seed_thunk=RngSeedThunkProto, onednn_custom_call_thunk=OneDnnCustomCallProto),
 )
-PB.default_values(::Type{ThunkProto}) = (;kind = "", info = nothing, call_thunk = nothing, conditional_thunk = nothing, sort_thunk = nothing, xnn_fusion_thunk = nothing, dot_thunk = nothing, rng_get_and_update_state_thunk = nothing, top_k_thunk = nothing, while_thunk = nothing, kernel_thunk = nothing, copy_thunk = nothing, fft_thunk = nothing, infeed_thunk = nothing, outfeed_thunk = nothing, custom_call_thunk = nothing, convolution_thunk = nothing, collective_thunk = nothing, partition_id_thunk = nothing, replica_id_thunk = nothing, ynn_fusion_thunk = nothing, rng_seed_thunk = nothing)
-PB.field_numbers(::Type{ThunkProto}) = (;kind = 1, info = 2, call_thunk = 3, conditional_thunk = 4, sort_thunk = 5, xnn_fusion_thunk = 6, dot_thunk = 7, rng_get_and_update_state_thunk = 8, top_k_thunk = 9, while_thunk = 10, kernel_thunk = 11, copy_thunk = 12, fft_thunk = 13, infeed_thunk = 14, outfeed_thunk = 15, custom_call_thunk = 16, convolution_thunk = 17, collective_thunk = 18, partition_id_thunk = 19, replica_id_thunk = 20, ynn_fusion_thunk = 21, rng_seed_thunk = 22)
+PB.default_values(::Type{ThunkProto}) = (;kind = "", info = nothing, call_thunk = nothing, conditional_thunk = nothing, sort_thunk = nothing, xnn_fusion_thunk = nothing, dot_thunk = nothing, rng_get_and_update_state_thunk = nothing, top_k_thunk = nothing, while_thunk = nothing, kernel_thunk = nothing, copy_thunk = nothing, fft_thunk = nothing, infeed_thunk = nothing, outfeed_thunk = nothing, custom_call_thunk = nothing, convolution_thunk = nothing, collective_thunk = nothing, partition_id_thunk = nothing, replica_id_thunk = nothing, ynn_fusion_thunk = nothing, rng_seed_thunk = nothing, onednn_custom_call_thunk = nothing)
+PB.field_numbers(::Type{ThunkProto}) = (;kind = 1, info = 2, call_thunk = 3, conditional_thunk = 4, sort_thunk = 5, xnn_fusion_thunk = 6, dot_thunk = 7, rng_get_and_update_state_thunk = 8, top_k_thunk = 9, while_thunk = 10, kernel_thunk = 11, copy_thunk = 12, fft_thunk = 13, infeed_thunk = 14, outfeed_thunk = 15, custom_call_thunk = 16, convolution_thunk = 17, collective_thunk = 18, partition_id_thunk = 19, replica_id_thunk = 20, ynn_fusion_thunk = 21, rng_seed_thunk = 22, onednn_custom_call_thunk = 23)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ThunkProto}, _endpos::Int=0, _group::Bool=false)
     kind = ""
@@ -1969,6 +2214,8 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:ThunkProto}, _endpos::In
             impl = OneOf(:ynn_fusion_thunk, PB.decode(d, Ref{YnnFusionThunkProto}))
         elseif field_number == 22
             impl = OneOf(:rng_seed_thunk, PB.decode(d, Ref{RngSeedThunkProto}))
+        elseif field_number == 23
+            impl = OneOf(:onednn_custom_call_thunk, PB.decode(d, Ref{OneDnnCustomCallProto}))
         else
             Base.skip(d, wire_type)
         end
@@ -2021,6 +2268,8 @@ function PB.encode(e::PB.AbstractProtoEncoder, x::ThunkProto)
         PB.encode(e, 21, x.impl[]::YnnFusionThunkProto)
     elseif x.impl.name === :rng_seed_thunk
         PB.encode(e, 22, x.impl[]::RngSeedThunkProto)
+    elseif x.impl.name === :onednn_custom_call_thunk
+        PB.encode(e, 23, x.impl[]::OneDnnCustomCallProto)
     end
     return position(e.io) - initpos
 end
@@ -2069,6 +2318,8 @@ function PB._encoded_size(x::ThunkProto)
         encoded_size += PB._encoded_size(x.impl[]::YnnFusionThunkProto, 21)
     elseif x.impl.name === :rng_seed_thunk
         encoded_size += PB._encoded_size(x.impl[]::RngSeedThunkProto, 22)
+    elseif x.impl.name === :onednn_custom_call_thunk
+        encoded_size += PB._encoded_size(x.impl[]::OneDnnCustomCallProto, 23)
     end
     return encoded_size
 end
