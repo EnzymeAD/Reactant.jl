@@ -54,7 +54,6 @@ backend doesn't support are skipped (see `test/runtests.jl`).
     `collective_reduce`, `reduce_scatter`, `partition_id`, `replica_id`
   - Host communication: `send`, `recv`, `infeed`, `outfeed`
   - Asynchronous execution: `async_start`, `async_done`
-  - Element-wise: `fma`, `log2`, `reduce_precision`
   - Quantization: `uniform_quantize`, `uniform_dequantize`
   - Other: `custom_call`, `select_and_scatter`
 

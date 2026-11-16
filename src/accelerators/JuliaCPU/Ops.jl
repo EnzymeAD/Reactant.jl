@@ -54,6 +54,7 @@ handle(::Val{Symbol("stablehlo.is_finite")}, (a,), _, _) = map(isfinite, a)
 handle(::Val{Symbol("stablehlo.real")}, (a,), _, _) = map(real, a)
 handle(::Val{Symbol("stablehlo.imag")}, (a,), _, _) = map(imag, a)
 handle(::Val{Symbol("stablehlo.complex")}, (a, b), _, _) = map(complex, a, b)
+handle(::Val{Symbol("stablehlo.fma")}, (a, b, c), _, _) = map(fma, a, b, c)
 function handle(::Val{Symbol("stablehlo.count_leading_zeros")}, (a,), _, _)
     return map(x -> oftype(x, leading_zeros(x)), a)
 end
@@ -86,6 +87,10 @@ end
 
 function handle(::Val{Symbol("stablehlo.log")}, (a,), _, _)
     return map(x -> x isa Real && x < 0 ? oftype(x, NaN) : log(x), a)
+end
+
+function handle(::Val{Symbol("stablehlo.log2")}, (a,), _, _)
+    return map(x -> x isa Real && x < 0 ? oftype(x, NaN) : log2(x), a)
 end
 
 function handle(::Val{Symbol("stablehlo.sqrt")}, (a,), _, _)
@@ -182,6 +187,40 @@ function handle(::Val{Symbol("stablehlo.convert")}, (a,), _, (result,))
         else
             convert(T, x)
         end
+    end
+end
+
+# like XLA, the mantissa is rounded to nearest with ties to even, then exponents out of range overflow to ±Inf or
+# underflow to ±0 (so denormals are flushed to zero). NaNs are kept, unless no mantissa bits are left to encode them
+function handle(::Val{Symbol("stablehlo.reduce_precision")}, (a,), attributes, _)
+    exponent_bits, mantissa_bits = attributes.exponent_bits, attributes.mantissa_bits
+    return map(a) do x
+        T = typeof(x)
+        U = Base.uinttype(T)
+        src_mantissa_bits, src_exponent_bits = Base.significand_bits(T), Base.exponent_bits(T)
+        bits = reinterpret(U, x)
+
+        # adding 0111... (plus 1 if the last kept bit is set) and truncating rounds to nearest with ties to even. a
+        # carry into the exponent is correct, as the truncated mantissa is then 0
+        if mantissa_bits < src_mantissa_bits
+            shift = src_mantissa_bits - mantissa_bits
+            last_bit = one(U) << shift
+            bias = (last_bit >> 1) - one(U) + ((bits & last_bit) >> shift)
+            bits = (bits + bias) & ~(last_bit - one(U))
+        end
+
+        if exponent_bits < src_exponent_bits
+            exponent = bits & Base.exponent_mask(T)
+            src_bias = (1 << (src_exponent_bits - 1)) - 1
+            bias = (1 << (exponent_bits - 1)) - 1
+            if exponent > U(src_bias + bias) << src_mantissa_bits
+                bits = (bits & Base.sign_mask(T)) | Base.exponent_mask(T)
+            elseif exponent <= U(src_bias - bias) << src_mantissa_bits
+                bits &= Base.sign_mask(T)
+            end
+        end
+
+        isnan(x) ? (mantissa_bits > 0 ? x : T(Inf)) : reinterpret(T, bits)
     end
 end
 
