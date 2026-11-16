@@ -11,7 +11,7 @@ Each subtype `E` is a `mutable struct` whose first field is the C struct of the 
 
 ### Interface
 
-- `extension_type`
+- [`extension_type`](@ref)
 - `E(plugin::AbstractPlugin, next::Ptr{CAPI.PJRT_Extension_Base})`: build the C struct, whose `PJRT_Extension_Base`
   has the type of `E` and `next` as the next extension of the chain
 """

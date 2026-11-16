@@ -5,22 +5,22 @@ A compiled program, independent of the devices it runs on. Returned by `executab
 
 ### Interface
 
-- `name`
-- `nreplicas` (defaults to the one in `compile_options`)
-- `npartitions` (defaults to the one in `compile_options`)
-- `noutputs` (defaults to the length of `output_pjrt_eltypes`)
-- `codesize`
-- `fingerprint`
-- `cost_analysis`
-- `output_eltypes`
-- `output_pjrt_eltypes` (defaults to `map(pjrt_eltype, output_eltypes(exe))`)
-- `output_sizes`
-- `parameter_memory_kinds`
-- `output_memory_kinds`
-- `optimized_program`
-- `serialize`
-- `compile_options`
-- `compiled_memory_stats`
+- [`name`](@ref name(::Executable))
+- [`nreplicas`](@ref nreplicas(::Executable))
+- [`npartitions`](@ref npartitions(::Executable))
+- [`noutputs`](@ref noutputs(::Executable))
+- [`codesize`](@ref codesize(::Executable))
+- [`fingerprint`](@ref fingerprint(::Executable))
+- [`cost_analysis`](@ref cost_analysis(::Executable))
+- [`output_eltypes`](@ref output_eltypes(::Executable))
+- [`output_pjrt_eltypes`](@ref output_pjrt_eltypes(::Executable))
+- [`output_sizes`](@ref output_sizes(::Executable))
+- [`parameter_memory_kinds`](@ref parameter_memory_kinds(::Executable))
+- [`output_memory_kinds`](@ref output_memory_kinds(::Executable))
+- [`optimized_program`](@ref optimized_program(::Executable))
+- [`serialize`](@ref serialize(::Executable))
+- [`compile_options`](@ref compile_options(::Executable))
+- [`compiled_memory_stats`](@ref compiled_memory_stats(::Executable))
 """
 abstract type Executable end
 

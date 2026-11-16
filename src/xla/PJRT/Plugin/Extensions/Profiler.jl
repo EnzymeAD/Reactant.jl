@@ -9,12 +9,12 @@ A `PLUGIN_Profiler*` points to a `Profiler`, which is GC rooted from its creatio
 
 ### Interface
 
-- `Profiler(plugin, options)`
+- [`Profiler(plugin, options)`](@ref Profiler(::AbstractPlugin, ::Reactant.Proto.tensorflow.ProfileOptions))
 - [`start!`](@ref)
 - [`stop!`](@ref)
-- [`collect_data`](@ref)
-- [`consume!`](@ref) (optional, defaults to throwing `UNIMPLEMENTED`)
-- [`serialize(::Profiler, data)`](@ref serialize) (required if `consume!` is implemented)
+- [`collect_data`](@ref collect_data(::Profiler))
+- [`consume!`](@ref consume!(::Profiler))
+- [`serialize`](@ref serialize(::Profiler, data)) (required if `consume!` is implemented)
 """
 abstract type Profiler end
 

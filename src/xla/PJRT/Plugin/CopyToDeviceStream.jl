@@ -13,10 +13,10 @@ one to C yet.
 
 ### Interface
 
-- `Base.unsafe_write`
-- `total_bytes`
-- `granulesize`
-- `Base.position`
+- [`Base.unsafe_write`](@ref Base.unsafe_write(::CopyToDeviceStream, ::Ptr{Cvoid}, ::Integer))
+- [`total_bytes`](@ref total_bytes(::CopyToDeviceStream))
+- [`granulesize`](@ref granulesize(::CopyToDeviceStream))
+- [`Base.position`](@ref Base.position(::CopyToDeviceStream))
 """
 abstract type CopyToDeviceStream end
 

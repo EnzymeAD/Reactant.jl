@@ -3,12 +3,12 @@
 
 ### Interface
 
-- `id`
-- `process_index`
-- `kind`
-- `debug_string` (defaults to `Base.show`)
-- `Base.print`
-- `attributes`
+- [`id`](@ref id(::DeviceDescription))
+- [`process_index`](@ref process_index(::DeviceDescription))
+- [`kind`](@ref kind(::DeviceDescription))
+- [`debug_string`](@ref debug_string(::DeviceDescription))
+- [`Base.print`](@ref Base.print(::IO, ::DeviceDescription))
+- [`attributes`](@ref attributes(::DeviceDescription))
 """
 abstract type DeviceDescription end
 

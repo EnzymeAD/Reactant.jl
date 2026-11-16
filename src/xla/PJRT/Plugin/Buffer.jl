@@ -3,29 +3,29 @@
 
 ### Interface
 
-- `Base.delete!`
-- `isdeleted`
-- `Base.eltype`
-- `pjrt_eltype` (defaults to `pjrt_eltype(Base.eltype(buffer))`)
-- `Base.size`
-- `unpadded_size` (defaults to `Base.size`)
-- `dynamic_dims`
-- `memory_layout`
-- `Base.sizeof`
-- `device`
-- `memory`
-- `copyto(::Device, ::Buffer)`
-- `copyto(::Memory, ::Buffer)`
-- `to_host_buffer!`
-- `Base.unsafe_copyto!`
-- `bitcast!`
-- `donate!`
-- `opaque_pointer` (defaults to `Base.pointer`)
-- `incref!`
-- `decref!`
-- `isoncpu`
-- `ready_event`
-- `Base.pointer`
+- [`Base.delete!`](@ref Base.delete!(::Buffer))
+- [`isdeleted`](@ref isdeleted(::Buffer))
+- [`Base.eltype`](@ref Base.eltype(::Buffer))
+- [`pjrt_eltype`](@ref pjrt_eltype(::Buffer))
+- [`Base.size`](@ref Base.size(::Buffer))
+- [`unpadded_size`](@ref unpadded_size(::Buffer))
+- [`dynamic_dims`](@ref dynamic_dims(::Buffer))
+- [`memory_layout`](@ref memory_layout(::Buffer))
+- [`Base.sizeof`](@ref Base.sizeof(::Buffer))
+- [`device`](@ref device(::Buffer))
+- [`memory`](@ref memory(::Buffer))
+- [`copyto(::Device, ::Buffer)`](@ref copyto(::Device, ::Buffer))
+- [`copyto(::Memory, ::Buffer)`](@ref copyto(::Memory, ::Buffer))
+- [`to_host_buffer!`](@ref to_host_buffer!(::Ptr, ::Buffer))
+- [`Base.unsafe_copyto!`](@ref Base.unsafe_copyto!(::Ptr, ::Buffer, ::Integer, ::Integer))
+- [`bitcast!`](@ref bitcast!(::Buffer, args...))
+- [`donate!`](@ref donate!(::Buffer, ::Event))
+- [`opaque_pointer`](@ref opaque_pointer(::Buffer))
+- [`incref!`](@ref incref!(::Buffer))
+- [`decref!`](@ref decref!(::Buffer))
+- [`isoncpu`](@ref isoncpu(::Buffer))
+- [`ready_event`](@ref ready_event(::Buffer))
+- [`Base.pointer`](@ref Base.pointer(::Buffer))
 
 !!! info
 The `Buffer(client, ...)` constructors (see [`Client`](@ref)) return the plugin's own subtype of `Buffer`, chosen by

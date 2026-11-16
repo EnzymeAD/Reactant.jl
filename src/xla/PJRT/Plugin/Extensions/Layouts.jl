@@ -181,7 +181,7 @@ layouts of clients and topologies. Without it, XLA assumes the default row-major
 - [`default_memory_layout(::TopologyDescription)`](@ref default_memory_layout)
 - [`parameter_memory_layouts`](@ref)
 - [`output_memory_layouts`](@ref)
-- [`memory_layout(::Buffer)`](@ref)
+- [`memory_layout`](@ref memory_layout(::Buffer))
 
 !!! warning
 The layouts they return must be [`TiledMemoryLayout`](@ref)s, since `xla::Layout` can't describe strides. XLA aborts if

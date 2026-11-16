@@ -5,13 +5,13 @@ A compiled program loaded on the devices of a `Client`, as returned by `compile`
 
 ### Interface
 
-- `executable`
-- `Base.delete!`
-- `isdeleted`
-- `addressable_devices`
-- `addressable_device_logical_ids`
-- `device_assignment`
-- `execute`
+- [`executable`](@ref executable(::LoadedExecutable))
+- [`Base.delete!`](@ref Base.delete!(::LoadedExecutable))
+- [`isdeleted`](@ref isdeleted(::LoadedExecutable))
+- [`addressable_devices`](@ref addressable_devices(::LoadedExecutable))
+- [`addressable_device_logical_ids`](@ref addressable_device_logical_ids(::LoadedExecutable))
+- [`device_assignment`](@ref device_assignment(::LoadedExecutable))
+- [`execute`](@ref execute(::LoadedExecutable, args...))
 """
 abstract type LoadedExecutable end
 

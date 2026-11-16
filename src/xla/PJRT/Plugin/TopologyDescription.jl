@@ -7,14 +7,14 @@ a `Client`. C gets one from a client with `topology_description`, or without a c
 
 ### Interface
 
-- `platform_name`
-- `platform_version`
-- `device_descriptions`
-- `serialize`
-- `attributes`
-- `fingerprint`
-- `canonical_shape`
-- `memory_space_kind_ids`
+- [`platform_name`](@ref platform_name(::TopologyDescription))
+- [`platform_version`](@ref platform_version(::TopologyDescription))
+- [`device_descriptions`](@ref device_descriptions(::TopologyDescription))
+- [`serialize`](@ref serialize(::TopologyDescription))
+- [`attributes`](@ref attributes(::TopologyDescription))
+- [`fingerprint`](@ref fingerprint(::TopologyDescription))
+- [`canonical_shape`](@ref canonical_shape(::TopologyDescription, ::Integer, args...))
+- [`memory_space_kind_ids`](@ref memory_space_kind_ids(::TopologyDescription))
 
 !!! info
 The `TopologyDescription(plugin, name, options)` and `TopologyDescription(plugin, bytes)` constructors (see

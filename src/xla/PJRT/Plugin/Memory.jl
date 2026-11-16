@@ -3,12 +3,12 @@
 
 ### Interface
 
-- `id`
-- `kind`
-- `kind_id`
-- `debug_string` (defaults to `Base.show`)
-- `Base.print`
-- `addressable_devices`
+- [`id`](@ref id(::Memory))
+- [`kind`](@ref kind(::Memory))
+- [`kind_id`](@ref kind_id(::Memory))
+- [`debug_string`](@ref debug_string(::Memory))
+- [`Base.print`](@ref Base.print(::IO, ::Memory))
+- [`addressable_devices`](@ref addressable_devices(::Memory))
 """
 abstract type Memory end
 

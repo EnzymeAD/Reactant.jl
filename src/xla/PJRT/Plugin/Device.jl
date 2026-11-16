@@ -3,30 +3,30 @@
 
 ### Interface
 
-- `description`
-- `isaddressable`
-- `local_hardware_id`
-- `addressable_memories`
-- `default_memory`
-- `async_tracking_event` (defaults to `nothing`, i.e. not supported)
-- `poison_execution!`
-- `attributes` (defaults to `()`, i.e. no attributes)
+- [`description`](@ref description(::Device))
+- [`isaddressable`](@ref isaddressable(::Device))
+- [`local_hardware_id`](@ref local_hardware_id(::Device))
+- [`addressable_memories`](@ref addressable_memories(::Device))
+- [`default_memory`](@ref default_memory(::Device))
+- [`async_tracking_event`](@ref async_tracking_event(::Device, ::String))
+- [`poison_execution!`](@ref poison_execution!(::Device, ::Int32, ::Error))
+- [`attributes`](@ref attributes(::Device))
 
 #### Memory stats
 
-- `bytes_in_use`
-- `peak_bytes_in_use` (defaults to `nothing`)
-- `nallocs` (defaults to `nothing`)
-- `largest_alloc_size` (defaults to `nothing`)
-- `bytes_limit` (defaults to `nothing`)
-- `bytes_reserved` (defaults to `nothing`)
-- `peak_bytes_reserved` (defaults to `nothing`)
-- `bytes_reservable_limit` (defaults to `nothing`)
-- `largest_free_block_bytes` (defaults to `nothing`)
-- `pool_bytes` (defaults to `nothing`)
-- `peak_pool_bytes` (defaults to `nothing`)
-- `peak_allocated_bytes` (defaults to `nothing`)
-- `clear_memory_stats!`
+- [`bytes_in_use`](@ref bytes_in_use(::Device))
+- [`peak_bytes_in_use`](@ref peak_bytes_in_use(::Device))
+- [`nallocs`](@ref nallocs(::Device))
+- [`largest_alloc_size`](@ref largest_alloc_size(::Device))
+- [`bytes_limit`](@ref bytes_limit(::Device))
+- [`bytes_reserved`](@ref bytes_reserved(::Device))
+- [`peak_bytes_reserved`](@ref peak_bytes_reserved(::Device))
+- [`bytes_reservable_limit`](@ref bytes_reservable_limit(::Device))
+- [`largest_free_block_bytes`](@ref largest_free_block_bytes(::Device))
+- [`pool_bytes`](@ref pool_bytes(::Device))
+- [`peak_pool_bytes`](@ref peak_pool_bytes(::Device))
+- [`peak_allocated_bytes`](@ref peak_allocated_bytes(::Device))
+- [`clear_memory_stats!`](@ref clear_memory_stats!(::Device))
 """
 abstract type Device end
 

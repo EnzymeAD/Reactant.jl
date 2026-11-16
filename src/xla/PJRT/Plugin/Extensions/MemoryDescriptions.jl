@@ -10,8 +10,8 @@ has. XLA uses them to place data in non-default memories when compiling ahead of
 - [`kind_id`](@ref kind_id(::MemoryDescription))
 
 Additionally, [`DeviceDescription`](@ref) must implement:
-- [`memory_descriptions`](@ref)
-- [`default_memory_description`](@ref) (defaults to `nothing`)
+- [`memory_descriptions`](@ref memory_descriptions(::DeviceDescription))
+- [`default_memory_description`](@ref default_memory_description(::DeviceDescription))
 """
 abstract type MemoryDescription end
 

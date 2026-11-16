@@ -11,11 +11,12 @@ It must be stateless: its type `P` must be `Base.issingletontype(P)` with an emp
 
 ### Interface
 
-- `initialize` (defaults to doing nothing)
-- `attributes` (defaults to `()`, i.e. no attributes)
-- `Client(plugin, options)`
-- `TopologyDescription(plugin, name, options)`
-- `TopologyDescription(plugin, bytes)`
+- [`initialize`](@ref initialize(::AbstractPlugin))
+- [`attributes`](@ref attributes(::AbstractPlugin))
+- [`Client(plugin, options)`](@ref Client(::AbstractPlugin, ::Dict{String,Any}))
+- [`TopologyDescription(plugin, name, options)`](@ref TopologyDescription(::AbstractPlugin, ::String,
+  ::Dict{String,Any}))
+- [`TopologyDescription(plugin, bytes)`](@ref TopologyDescription(::AbstractPlugin, ::Vector{UInt8}))
 """
 abstract type AbstractPlugin end
 

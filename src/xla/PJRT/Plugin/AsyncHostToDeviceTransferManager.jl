@@ -13,14 +13,14 @@ they must be done reading the host data by then.
 
 ### Interface
 
-- `buffercount`
-- `device`
-- `retrieve_buffer!`
-- `buffersize`
-- `transfer_data!`
-- `transfer_literal!`
-- `set_buffer_error!`
-- `add_metadata!`
+- [`buffercount`](@ref buffercount(::AsyncHostToDeviceTransferManager))
+- [`device`](@ref device(::AsyncHostToDeviceTransferManager))
+- [`retrieve_buffer!`](@ref retrieve_buffer!(::AsyncHostToDeviceTransferManager, ::Int))
+- [`buffersize`](@ref buffersize(::AsyncHostToDeviceTransferManager, ::Int))
+- [`transfer_data!`](@ref transfer_data!(::AsyncHostToDeviceTransferManager, ::Int, args...))
+- [`transfer_literal!`](@ref transfer_literal!(::AsyncHostToDeviceTransferManager, ::Int, args...))
+- [`set_buffer_error!`](@ref set_buffer_error!(::AsyncHostToDeviceTransferManager, ::Int, ::Error))
+- [`add_metadata!`](@ref add_metadata!(::AsyncHostToDeviceTransferManager, ::Dict{String,String}))
 
 !!! info
 The `AsyncHostToDeviceTransferManager(client, mem, specs, layouts)` constructor (see [`Client`](@ref)) returns the

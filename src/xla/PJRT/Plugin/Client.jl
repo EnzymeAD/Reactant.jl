@@ -3,26 +3,30 @@
 
 ### Interface
 
-- `platform_name`
-- `platform_version`
-- `process_index`
-- `devices`
-- `addressable_devices`
-- `lookup_device` (defaults to a linear search over `devices`)
-- `lookup_addressable_device` (defaults to a linear search over `addressable_devices`)
-- `addressable_memories`
-- `compile`
-- `default_device_assignment`
-- `load`
-- `Buffer(client, dev, mem, data::Ptr, ...)`
-- `Buffer(client, dev, mem, undef, ...)`
-- `Buffer(client, mem, error, ...)`
-- `AsyncHostToDeviceTransferManager(client, mem, specs, layouts)`
-- `alias_buffer`
-- `update_global_process_info!`
-- `dma_map!`
-- `dma_unmap!`
-- `topology_description`
+- [`platform_name`](@ref platform_name(::Client))
+- [`platform_version`](@ref platform_version(::Client))
+- [`process_index`](@ref process_index(::Client))
+- [`devices`](@ref devices(::Client))
+- [`addressable_devices`](@ref addressable_devices(::Client))
+- [`lookup_device`](@ref lookup_device(::Client, ::Integer))
+- [`lookup_addressable_device`](@ref lookup_addressable_device(::Client, ::Integer))
+- [`addressable_memories`](@ref addressable_memories(::Client))
+- [`compile`](@ref compile(::Client, args...))
+- [`default_device_assignment`](@ref default_device_assignment(::Client, ::Integer, ::Integer))
+- [`load(client, bytes::Vector{UInt8}, options)`](@ref load(::Client, ::Vector{UInt8}, ::Any))
+- [`load(client, exe::Executable, options)`](@ref load(::Client, ::Executable, ::Any))
+- [`Buffer(client, dev, mem, data::Ptr, ...)`](@ref Buffer(::Client, ::Device, ::Memory, ::Ptr, type, dims, host_layout,
+  device_layout, host_buffer_semantics))
+- [`Buffer(client, dev, mem, undef, ...)`](@ref Buffer(::Client, ::Device, ::Memory, ::UndefInitializer, type, dims,
+  layout))
+- [`Buffer(client, mem, error, ...)`](@ref Buffer(::Client, ::Memory, ::Error, type, dims, layout))
+- [`AsyncHostToDeviceTransferManager(client, mem, specs, layouts)`](@ref AsyncHostToDeviceTransferManager(::Client,
+  ::Memory, ::Vector, ::Vector))
+- [`alias_buffer`](@ref alias_buffer(::Client, ::Memory, args...))
+- [`update_global_process_info!`](@ref update_global_process_info!(::Client, ::Vector))
+- [`dma_map!`](@ref dma_map!(::Client, ::Ptr{Cvoid}, ::Integer))
+- [`dma_unmap!`](@ref dma_unmap!(::Client, ::Ptr{Cvoid}))
+- [`topology_description`](@ref topology_description(::Client))
 
 !!! info
 The `Client(plugin, options)` constructor (see [`AbstractPlugin`](@ref)) returns the plugin's own subtype of `Client`,
