@@ -276,11 +276,13 @@ struct FlatOpMetricsDb
     total_op_time_ps::UInt64
     idle_time_ps::UInt64
     busy_time_ps::UInt64
+    idle_time_high_confidence_ps::UInt64
+    busy_time_high_confidence_ps::UInt64
     normalized_total_op_time_ps::UInt64
     precision_stats::Union{Nothing,PrecisionStats}
 end
-PB.default_values(::Type{FlatOpMetricsDb}) = (;op_instances = Vector{FlatOpMetrics}(), total_time_ps = zero(UInt64), profile_time_ps = zero(UInt64), total_op_time_ps = zero(UInt64), idle_time_ps = zero(UInt64), busy_time_ps = zero(UInt64), normalized_total_op_time_ps = zero(UInt64), precision_stats = nothing)
-PB.field_numbers(::Type{FlatOpMetricsDb}) = (;op_instances = 1, total_time_ps = 2, profile_time_ps = 3, total_op_time_ps = 4, idle_time_ps = 5, busy_time_ps = 6, normalized_total_op_time_ps = 7, precision_stats = 8)
+PB.default_values(::Type{FlatOpMetricsDb}) = (;op_instances = Vector{FlatOpMetrics}(), total_time_ps = zero(UInt64), profile_time_ps = zero(UInt64), total_op_time_ps = zero(UInt64), idle_time_ps = zero(UInt64), busy_time_ps = zero(UInt64), idle_time_high_confidence_ps = zero(UInt64), busy_time_high_confidence_ps = zero(UInt64), normalized_total_op_time_ps = zero(UInt64), precision_stats = nothing)
+PB.field_numbers(::Type{FlatOpMetricsDb}) = (;op_instances = 1, total_time_ps = 2, profile_time_ps = 3, total_op_time_ps = 4, idle_time_ps = 5, busy_time_ps = 6, idle_time_high_confidence_ps = 9, busy_time_high_confidence_ps = 10, normalized_total_op_time_ps = 7, precision_stats = 8)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:FlatOpMetricsDb}, _endpos::Int=0, _group::Bool=false)
     op_instances = PB.BufferedVector{FlatOpMetrics}()
@@ -289,6 +291,8 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:FlatOpMetricsDb}, _endpo
     total_op_time_ps = zero(UInt64)
     idle_time_ps = zero(UInt64)
     busy_time_ps = zero(UInt64)
+    idle_time_high_confidence_ps = zero(UInt64)
+    busy_time_high_confidence_ps = zero(UInt64)
     normalized_total_op_time_ps = zero(UInt64)
     precision_stats = Ref{Union{Nothing,PrecisionStats}}(nothing)
     while !PB.message_done(d, _endpos, _group)
@@ -305,6 +309,10 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:FlatOpMetricsDb}, _endpo
             idle_time_ps = PB.decode(d, UInt64)
         elseif field_number == 6
             busy_time_ps = PB.decode(d, UInt64)
+        elseif field_number == 9
+            idle_time_high_confidence_ps = PB.decode(d, UInt64)
+        elseif field_number == 10
+            busy_time_high_confidence_ps = PB.decode(d, UInt64)
         elseif field_number == 7
             normalized_total_op_time_ps = PB.decode(d, UInt64)
         elseif field_number == 8
@@ -313,7 +321,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:FlatOpMetricsDb}, _endpo
             Base.skip(d, wire_type)
         end
     end
-    return FlatOpMetricsDb(op_instances[], total_time_ps, profile_time_ps, total_op_time_ps, idle_time_ps, busy_time_ps, normalized_total_op_time_ps, precision_stats[])
+    return FlatOpMetricsDb(op_instances[], total_time_ps, profile_time_ps, total_op_time_ps, idle_time_ps, busy_time_ps, idle_time_high_confidence_ps, busy_time_high_confidence_ps, normalized_total_op_time_ps, precision_stats[])
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::FlatOpMetricsDb)
@@ -324,6 +332,8 @@ function PB.encode(e::PB.AbstractProtoEncoder, x::FlatOpMetricsDb)
     x.total_op_time_ps != zero(UInt64) && PB.encode(e, 4, x.total_op_time_ps)
     x.idle_time_ps != zero(UInt64) && PB.encode(e, 5, x.idle_time_ps)
     x.busy_time_ps != zero(UInt64) && PB.encode(e, 6, x.busy_time_ps)
+    x.idle_time_high_confidence_ps != zero(UInt64) && PB.encode(e, 9, x.idle_time_high_confidence_ps)
+    x.busy_time_high_confidence_ps != zero(UInt64) && PB.encode(e, 10, x.busy_time_high_confidence_ps)
     x.normalized_total_op_time_ps != zero(UInt64) && PB.encode(e, 7, x.normalized_total_op_time_ps)
     !isnothing(x.precision_stats) && PB.encode(e, 8, x.precision_stats)
     return position(e.io) - initpos
@@ -336,6 +346,8 @@ function PB._encoded_size(x::FlatOpMetricsDb)
     x.total_op_time_ps != zero(UInt64) && (encoded_size += PB._encoded_size(x.total_op_time_ps, 4))
     x.idle_time_ps != zero(UInt64) && (encoded_size += PB._encoded_size(x.idle_time_ps, 5))
     x.busy_time_ps != zero(UInt64) && (encoded_size += PB._encoded_size(x.busy_time_ps, 6))
+    x.idle_time_high_confidence_ps != zero(UInt64) && (encoded_size += PB._encoded_size(x.idle_time_high_confidence_ps, 9))
+    x.busy_time_high_confidence_ps != zero(UInt64) && (encoded_size += PB._encoded_size(x.busy_time_high_confidence_ps, 10))
     x.normalized_total_op_time_ps != zero(UInt64) && (encoded_size += PB._encoded_size(x.normalized_total_op_time_ps, 7))
     !isnothing(x.precision_stats) && (encoded_size += PB._encoded_size(x.precision_stats, 8))
     return encoded_size
