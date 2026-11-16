@@ -313,7 +313,9 @@ buffer_from_host_buffer(
 # PJRT may pass only one of `dev` and `mem`, so the other one is filled in
 function buffer_from_host_buffer(client::Client, mem::Memory, data::Ptr, args...)
     # we select the first addressable device from the memory because there is no default
-    return buffer_from_host_buffer(client, first(addressable_devices(mem)), mem, data, args...)
+    return buffer_from_host_buffer(
+        client, first(addressable_devices(mem)), mem, data, args...
+    )
 end
 
 function buffer_from_host_buffer(client::Client, dev::Device, data::Ptr, args...)
