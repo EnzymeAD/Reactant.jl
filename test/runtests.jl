@@ -75,7 +75,6 @@ if BACKEND == "julia-cpu"
         "integration/linear_algebra",
         "integration/linearsolve",
         # custom calls (Julia callbacks, kernels, Python)
-        "core/julia_callback",
         "core/sorting",
         "integration/cuda",
         "integration/kernelabstractions",
