@@ -339,6 +339,33 @@ end
     end
 end
 
+@testset "Bcast!" begin
+    comm = MPI.COMM_WORLD
+    rank = MPI.Comm_rank(comm)
+    root = 0
+
+    for T in DATATYPES
+        @testset "Type: $T" begin
+            # just the root have the real values, others have zeros
+            if rank == root
+                x = ones(T, 5)
+            else
+                x = zeros(T, 5)
+            end
+            # try block catches any invalid combinations we missed above, depending on
+            # mpi implem
+            expected = try
+                MPI.Bcast!(copy(x), root, comm)
+            catch
+                continue
+            end
+
+            result = @jit sync = true MPI.Bcast!(ConcreteRArray(x), root, comm)
+            @test Array(result) == expected
+        end
+    end
+end
+
 # Breaks with fuse-jit{dag=false, adjacent=true}. Turning on dag=true fixes it,
 # but is only a stopgap solution in my mind - the only reason that works is bc 
 # dag fusion runs before adjacent fusion. Also neither fusion pass should be relied on
@@ -418,29 +445,3 @@ end
     MPI.Barrier(comm)
 end
 
-@testset "Bcast!" begin
-    comm = MPI.COMM_WORLD
-    rank = MPI.Comm_rank(comm)
-    root = 0
-
-    for T in DATATYPES
-        @testset "Type: $T" begin
-            # just the root have the real values, others have zeros
-            if rank == root
-                x = ones(T, 5)
-            else
-                x = zeros(T, 5)
-            end
-            # try block catches any invalid combinations we missed above, depending on
-            # mpi implem
-            expected = try
-                MPI.Bcast!(copy(x), root, comm)
-            catch
-                continue
-            end
-
-            result = @jit sync = true MPI.Bcast!(ConcreteRArray(x), root, comm)
-            @test Array(result) == expected
-        end
-    end
-end
