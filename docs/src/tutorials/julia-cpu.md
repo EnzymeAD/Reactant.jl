@@ -19,9 +19,7 @@ This makes it useful for:
 
 ## Selecting the backend
 
-`julia-cpu` is registered with the other backends when Reactant is loaded. It has the same priority as `cpu`, which is
-registered first, so `cpu` stays the default and you have to select `julia-cpu` explicitly. The simplest way is to make
-it the default backend:
+`julia-cpu` is registered with the other backends when Reactant is loaded. The simplest way is to make it the default backend:
 
 ```julia
 using Reactant
@@ -150,7 +148,7 @@ function __init__()
 
     Reactant.Accelerators.Registration.register_backend(
         "julia-cpu";
-        priority=100,
+        priority=50,
         pjrt_initialize_function=make_pjrt_client,
         ifrt_initialize_function=make_ifrt_client,
     )

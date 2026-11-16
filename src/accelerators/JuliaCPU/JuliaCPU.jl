@@ -130,7 +130,7 @@ function __init__()
 
     Reactant.Accelerators.Registration.register_backend(
         "julia-cpu";
-        priority=100,
+        priority=50, # lower than "cpu" so JuliaCPU is never the default over XLA CPU
         pjrt_initialize_function=make_pjrt_client,
         ifrt_initialize_function=make_ifrt_client,
     )
