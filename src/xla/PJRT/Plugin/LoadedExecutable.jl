@@ -95,9 +95,10 @@ end
 Return the devices that `loaded_exe` runs on, in the order used by the argument and output lists of `execute`.
 
 !!! info
-The returned value doesn't need to be owned by `loaded_exe`, but it must be the same on every call: the C wrapper calls
-it at most once per `loaded_exe` and keeps a copy for as long as `loaded_exe` is alive, since C keeps pointers to it.
-The objects in it must be the same ones on every call too, and the same ones that other functions return, since C
+The returned value doesn't need to be owned by `loaded_exe`: the C wrapper calls it at most once per `loaded_exe` and
+keeps a copy of the pointers to its objects for as long as `loaded_exe` is alive, since C borrows that copy. The copy
+doesn't keep the objects alive, so they must be kept alive elsewhere (e.g. by the client) for as long as `loaded_exe`
+is alive. They must also be the same ones on every call, and the same ones that other functions return, since C
 identifies them by pointer.
 
 !!! warning
@@ -108,8 +109,9 @@ Backs `PJRT_LoadedExecutable_AddressableDevices`.
 addressable_devices(::LoadedExecutable)
 
 # C borrows the vector, so it is kept for as long as the executable is alive
+# (it stores pointers instead of objects so that it doesn't leak the executable, see the notes in Plugin.jl)
 const loaded_executable_addressable_devices_cache = WeakKeyIdDict{
-    LoadedExecutable,Vector{Device}
+    LoadedExecutable,Vector{Ptr{CAPI.PJRT_Device}}
 }()
 
 @pjrt_catch_return function pjrt_loaded_executable_addressable_devices(
@@ -117,9 +119,11 @@ const loaded_executable_addressable_devices_cache = WeakKeyIdDict{
 )::Ptr{CAPI.PJRT_Error}
     loaded_exe = unsafe_pointer_to_objref(unsafe_load(args.executable))::LoadedExecutable
     devs = get!(loaded_executable_addressable_devices_cache, loaded_exe) do
-        collect(Device, addressable_devices(loaded_exe))
+        Ptr{CAPI.PJRT_Device}[
+            pointer_from_objref(dev::Device) for dev in addressable_devices(loaded_exe)
+        ]
     end
-    unsafe_store!(args.addressable_devices, Ptr{Ptr{CAPI.PJRT_Device}}(pointer(devs)))
+    unsafe_store!(args.addressable_devices, pointer(devs))
     unsafe_store!(args.num_addressable_devices, length(devs))
     return ok()
 end

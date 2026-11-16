@@ -1,10 +1,6 @@
 mutable struct HostDevice <: Device
     const description::HostDeviceDescription
     const local_hardware_id::Cint
-
-    # TODO revise this if we cache guard the vector
-    # keep it as `Vector{Memory}` instead of `Vector{HostMemory}` to be a pointer of pointers that can be
-    # passed through the C API
     const memories::Vector{Memory}
 
     # memory stats

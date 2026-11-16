@@ -149,26 +149,31 @@ end
 Return the devices that can address `mem`.
 
 !!! info
-The returned value doesn't need to be owned by `mem`, but it must be the same on every call: the C wrapper calls it at
-most once per `mem` and keeps a copy for as long as `mem` is alive, since C keeps pointers to it. The objects in it must
-be the same ones on every call too, and the same ones that other functions return, since C identifies them by pointer.
+The returned value doesn't need to be owned by `mem`: the C wrapper calls it at most once per `mem` and keeps a copy of
+the pointers to its objects for as long as `mem` is alive, since C borrows that copy. The copy doesn't keep the objects
+alive, so they must be kept alive elsewhere (e.g. by the client) for as long as `mem` is alive. They must also be the
+same ones on every call, and the same ones that other functions return, since C identifies them by pointer.
 
 Backs `PJRT_Memory_AddressableByDevices`.
 """
 addressable_devices(::Memory)
 
 # C borrows the vector, so it is kept for as long as the memory is alive
-# (it is a `Vector{Device}`, but `Device` is defined after `Memory`)
-const memory_addressable_devices_cache = WeakKeyIdDict{Memory,Vector}()
+# (it stores pointers instead of objects so that it doesn't leak the memory, see the notes in Plugin.jl)
+const memory_addressable_devices_cache = WeakKeyIdDict{
+    Memory,Vector{Ptr{CAPI.PJRT_Device}}
+}()
 
 @pjrt_catch_return function pjrt_memory_addressable_by_devices(
     args::Ptr{CAPI.PJRT_Memory_AddressableByDevices_Args}
 )::Ptr{CAPI.PJRT_Error}
     memory = unsafe_pointer_to_objref(Ptr{Memory}(unsafe_load(args.memory)))::Memory
     devs = get!(memory_addressable_devices_cache, memory) do
-        collect(Device, addressable_devices(memory))
+        Ptr{CAPI.PJRT_Device}[
+            pointer_from_objref(dev::Device) for dev in addressable_devices(memory)
+        ]
     end
-    unsafe_store!(args.devices, Ptr{Ptr{CAPI.PJRT_Device}}(pointer(devs)))
+    unsafe_store!(args.devices, pointer(devs))
     unsafe_store!(args.num_devices, length(devs))
     return ok()
 end

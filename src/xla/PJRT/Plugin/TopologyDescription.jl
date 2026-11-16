@@ -85,18 +85,20 @@ end
 Return the descriptions of all the devices in `topology`, in any order but the same one on every call.
 
 !!! info
-The returned value doesn't need to be owned by `topology`, but it must be the same on every call: the C wrapper calls it
-at most once per `topology` and keeps a copy for as long as `topology` is alive, since C keeps pointers to it. The
-objects in it must be the same ones on every call too, and the same ones that other functions return, since C identifies
-them by pointer.
+The returned value doesn't need to be owned by `topology`: the C wrapper calls it at most once per `topology` and keeps
+a copy of the pointers to its objects for as long as `topology` is alive, since C borrows that copy. The copy doesn't
+keep the objects alive, so they must be kept alive elsewhere (e.g. by `topology`) for as long as `topology` is alive.
+They must also be the same ones on every call, and the same ones that other functions return, since C identifies them
+by pointer.
 
 Backs `PJRT_TopologyDescription_GetDeviceDescriptions`.
 """
 device_descriptions(::TopologyDescription)
 
 # C borrows the vector, so it is kept for as long as the topology is alive
+# (it stores pointers instead of objects so that it doesn't leak the topology, see the notes in Plugin.jl)
 const device_descriptions_cache = WeakKeyIdDict{
-    TopologyDescription,Vector{DeviceDescription}
+    TopologyDescription,Vector{Ptr{CAPI.PJRT_DeviceDescription}}
 }()
 
 @pjrt_catch_return function pjrt_topology_description_get_device_descriptions(
@@ -104,9 +106,11 @@ const device_descriptions_cache = WeakKeyIdDict{
 )::Ptr{CAPI.PJRT_Error}
     topology = unsafe_pointer_to_objref(unsafe_load(args.topology))::TopologyDescription
     descs = get!(device_descriptions_cache, topology) do
-        collect(DeviceDescription, device_descriptions(topology))
+        Ptr{CAPI.PJRT_DeviceDescription}[
+            pointer_from_objref(d::DeviceDescription) for d in device_descriptions(topology)
+        ]
     end
-    unsafe_store!(args.descriptions, Ptr{Ptr{CAPI.PJRT_DeviceDescription}}(pointer(descs)))
+    unsafe_store!(args.descriptions, pointer(descs))
     unsafe_store!(args.num_descriptions, length(descs))
     return ok()
 end

@@ -122,26 +122,27 @@ end
 Return all the devices visible to `client`, including those that it cannot address.
 
 !!! info
-The returned value doesn't need to be owned by `client`, but it must be the same on every call: the C wrapper calls it
-at most once per `client` and keeps a copy for as long as `client` is alive, since C keeps pointers to it. The objects
-in it must be the same ones on every call too, and the same ones that other functions return, since C identifies them by
-pointer.
+The returned value doesn't need to be owned by `client`: the C wrapper calls it at most once per `client` and keeps a
+copy of the pointers to its objects for as long as `client` is alive, since C borrows that copy. The copy doesn't keep
+the objects alive, so they must be kept alive elsewhere (e.g. by `client`) for as long as `client` is alive. They must
+also be the same ones on every call, and the same ones that other functions return, since C identifies them by pointer.
 
 Backs `PJRT_Client_Devices`.
 """
 devices(::Client)
 
 # C borrows the vector, so it is kept for as long as the client is alive
-const client_devices_cache = WeakKeyIdDict{Client,Vector{Device}}()
+# (it stores pointers instead of objects so that it doesn't leak the client, see the notes in Plugin.jl)
+const client_devices_cache = WeakKeyIdDict{Client,Vector{Ptr{CAPI.PJRT_Device}}}()
 
 @pjrt_catch_return function pjrt_client_devices(
     args::Ptr{CAPI.PJRT_Client_Devices_Args}
 )::Ptr{CAPI.PJRT_Error}
     client = unsafe_pointer_to_objref(unsafe_load(args.client))::Client
     devs = get!(client_devices_cache, client) do
-        collect(Device, devices(client))
+        Ptr{CAPI.PJRT_Device}[pointer_from_objref(dev::Device) for dev in devices(client)]
     end
-    unsafe_store!(args.devices, Ptr{Ptr{CAPI.PJRT_Device}}(pointer(devs)))
+    unsafe_store!(args.devices, pointer(devs))
     unsafe_store!(args.num_devices, length(devs))
     return ok()
 end
@@ -152,26 +153,31 @@ end
 Return the subset of `devices(client)` that `client` can address.
 
 !!! info
-The returned value doesn't need to be owned by `client`, but it must be the same on every call: the C wrapper calls it
-at most once per `client` and keeps a copy for as long as `client` is alive, since C keeps pointers to it. The objects
-in it must be the same ones on every call too, and the same ones that other functions return, since C identifies them by
-pointer.
+The returned value doesn't need to be owned by `client`: the C wrapper calls it at most once per `client` and keeps a
+copy of the pointers to its objects for as long as `client` is alive, since C borrows that copy. The copy doesn't keep
+the objects alive, so they must be kept alive elsewhere (e.g. by `client`) for as long as `client` is alive. They must
+also be the same ones on every call, and the same ones that other functions return, since C identifies them by pointer.
 
 Backs `PJRT_Client_AddressableDevices`.
 """
 addressable_devices(::Client)
 
 # C borrows the vector, so it is kept for as long as the client is alive
-const client_addressable_devices_cache = WeakKeyIdDict{Client,Vector{Device}}()
+# (it stores pointers instead of objects so that it doesn't leak the client, see the notes in Plugin.jl)
+const client_addressable_devices_cache = WeakKeyIdDict{
+    Client,Vector{Ptr{CAPI.PJRT_Device}}
+}()
 
 @pjrt_catch_return function pjrt_client_addressable_devices(
     args::Ptr{CAPI.PJRT_Client_AddressableDevices_Args}
 )::Ptr{CAPI.PJRT_Error}
     client = unsafe_pointer_to_objref(unsafe_load(args.client))::Client
     devs = get!(client_addressable_devices_cache, client) do
-        collect(Device, addressable_devices(client))
+        Ptr{CAPI.PJRT_Device}[
+            pointer_from_objref(dev::Device) for dev in addressable_devices(client)
+        ]
     end
-    unsafe_store!(args.addressable_devices, Ptr{Ptr{CAPI.PJRT_Device}}(pointer(devs)))
+    unsafe_store!(args.addressable_devices, pointer(devs))
     unsafe_store!(args.num_addressable_devices, length(devs))
     return ok()
 end
@@ -237,26 +243,31 @@ end
 Return the memories that `client` can address.
 
 !!! info
-The returned value doesn't need to be owned by `client`, but it must be the same on every call: the C wrapper calls it
-at most once per `client` and keeps a copy for as long as `client` is alive, since C keeps pointers to it. The objects
-in it must be the same ones on every call too, and the same ones that other functions return, since C identifies them by
-pointer.
+The returned value doesn't need to be owned by `client`: the C wrapper calls it at most once per `client` and keeps a
+copy of the pointers to its objects for as long as `client` is alive, since C borrows that copy. The copy doesn't keep
+the objects alive, so they must be kept alive elsewhere (e.g. by `client`) for as long as `client` is alive. They must
+also be the same ones on every call, and the same ones that other functions return, since C identifies them by pointer.
 
 Backs `PJRT_Client_AddressableMemories`.
 """
 addressable_memories(::Client)
 
 # C borrows the vector, so it is kept for as long as the client is alive
-const client_addressable_memories_cache = WeakKeyIdDict{Client,Vector{Memory}}()
+# (it stores pointers instead of objects so that it doesn't leak the client, see the notes in Plugin.jl)
+const client_addressable_memories_cache = WeakKeyIdDict{
+    Client,Vector{Ptr{CAPI.PJRT_Memory}}
+}()
 
 @pjrt_catch_return function pjrt_client_addressable_memories(
     args::Ptr{CAPI.PJRT_Client_AddressableMemories_Args}
 )::Ptr{CAPI.PJRT_Error}
     client = unsafe_pointer_to_objref(unsafe_load(args.client))::Client
     mems = get!(client_addressable_memories_cache, client) do
-        collect(Memory, addressable_memories(client))
+        Ptr{CAPI.PJRT_Memory}[
+            pointer_from_objref(mem::Memory) for mem in addressable_memories(client)
+        ]
     end
-    unsafe_store!(args.addressable_memories, Ptr{Ptr{CAPI.PJRT_Memory}}(pointer(mems)))
+    unsafe_store!(args.addressable_memories, pointer(mems))
     unsafe_store!(args.num_addressable_memories, length(mems))
     return ok()
 end

@@ -27,13 +27,12 @@ module Plugin
 #   the PJRT Plugin API. Keep in mind that it should point to the correct implementation for your plugin.
 # - If for some PJRT object, the API requires it to return a string that is auto-generated (not a string literal),
 #   store the string inside the object so that it's correctly freed (owner is the object).
-# - If for some PJRT object, the API requires it to return a list, store the list as a `Vector{X}` where `X` is an
-#   abstract type.
-#   - The Julia array ABI layout states that an array with abstract eltype is represented as a pointer of pointers
-#     (no inline storage). Check https://docs.julialang.org/en/v1/manual/embedding/#Working-with-Arrays
-#   - The stored pointers are of type `jl_value_t*` which points to the object data (the type tag is stored before that
-#     pointer address). Check https://docs.julialang.org/en/v1/devdocs/object/#Object-layout-(jl_value_t)
-#   - Once the object is created, DO NOT resize the array.
+# - If for some PJRT object, the API requires it to return a list of PJRT objects, cache their pointers in a
+#   `Vector{Ptr{X}}` (e.g. `Ptr{CAPI.PJRT_Device}[pointer_from_objref(dev) for dev in devs]`).
+#   - Don't cache the objects themselves: the values of a `WeakKeyIdDict` are strong references, so if any object in
+#     the list references the key (e.g. a device that references its memories), the key is never collected.
+#   - The pointers don't keep the objects alive, so they must be kept alive elsewhere (e.g. by the client).
+#   - Once the vector is created, DO NOT resize it.
 # - DO NOT use moving GC (e.g. MMTk) as it would break `pointer_from_objref`.
 # - The following objects do not need to be reimplemented on different accelerators: Error, Event.
 

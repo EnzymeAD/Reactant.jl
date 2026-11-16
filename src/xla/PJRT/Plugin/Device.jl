@@ -92,25 +92,31 @@ end
 Return the memories that `dev` can address.
 
 !!! info
-The returned value doesn't need to be owned by `dev`, but it must be the same on every call: the C wrapper calls it at
-most once per `dev` and keeps a copy for as long as `dev` is alive, since C keeps pointers to it. The objects in it must
-be the same ones on every call too, and the same ones that other functions return, since C identifies them by pointer.
+The returned value doesn't need to be owned by `dev`: the C wrapper calls it at most once per `dev` and keeps a copy of
+the pointers to its objects for as long as `dev` is alive, since C borrows that copy. The copy doesn't keep the objects
+alive, so they must be kept alive elsewhere (e.g. by the client) for as long as `dev` is alive. They must also be the
+same ones on every call, and the same ones that other functions return, since C identifies them by pointer.
 
 Backs `PJRT_Device_AddressableMemories`.
 """
 addressable_memories(::Device)
 
 # C borrows the vector, so it is kept for as long as the device is alive
-const device_addressable_memories_cache = WeakKeyIdDict{Device,Vector{Memory}}()
+# (it stores pointers instead of objects so that it doesn't leak the device, see the notes in Plugin.jl)
+const device_addressable_memories_cache = WeakKeyIdDict{
+    Device,Vector{Ptr{CAPI.PJRT_Memory}}
+}()
 
 @pjrt_catch_return function pjrt_device_addressable_memories(
     args::Ptr{CAPI.PJRT_Device_AddressableMemories_Args}
 )::Ptr{CAPI.PJRT_Error}
     device = unsafe_pointer_to_objref(Ptr{Device}(unsafe_load(args.device)))::Device
     mems = get!(device_addressable_memories_cache, device) do
-        collect(Memory, addressable_memories(device))
+        Ptr{CAPI.PJRT_Memory}[
+            pointer_from_objref(mem::Memory) for mem in addressable_memories(device)
+        ]
     end
-    unsafe_store!(args.memories, Ptr{Ptr{CAPI.PJRT_Memory}}(pointer(mems)))
+    unsafe_store!(args.memories, pointer(mems))
     unsafe_store!(args.num_memories, length(mems))
     return ok()
 end

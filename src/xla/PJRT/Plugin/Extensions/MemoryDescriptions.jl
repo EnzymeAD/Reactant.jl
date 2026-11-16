@@ -60,10 +60,10 @@ end
 Return the descriptions of all the kinds of memory that the device described by `desc` supports, in any order.
 
 !!! info
-The returned value doesn't need to be owned by `desc`, but it must be the same on every call: the C wrapper calls it at
-most once per `desc` and keeps a copy for as long as `desc` is alive, since C keeps pointers to it. The objects in it
-must be the same ones on every call too, and the same ones that other functions return, since C identifies them by
-pointer.
+The returned value doesn't need to be owned by `desc`: the C wrapper calls it at most once per `desc` and keeps a copy
+of the pointers to its objects for as long as `desc` is alive, since C borrows that copy. The copy doesn't keep the
+objects alive, so they must be kept alive elsewhere (e.g. by `desc`) for as long as `desc` is alive. They must also be
+the same ones on every call, and the same ones that other functions return, since C identifies them by pointer.
 
 Backs `PJRT_DeviceDescription_MemoryDescriptions`.
 """
@@ -80,8 +80,9 @@ Backs `PJRT_DeviceDescription_MemoryDescriptions`.
 default_memory_description(::DeviceDescription) = nothing
 
 # C borrows the vector, so it is kept for as long as the description is alive
+# (it stores pointers instead of objects so that it doesn't leak the description, see the notes in Plugin.jl)
 const memory_descriptions_cache = WeakKeyIdDict{
-    DeviceDescription,Vector{MemoryDescription}
+    DeviceDescription,Vector{Ptr{CAPI.PJRT_MemoryDescription}}
 }()
 
 @pjrt_catch_return function pjrt_device_description_memory_descriptions(
@@ -89,7 +90,9 @@ const memory_descriptions_cache = WeakKeyIdDict{
 )::Ptr{CAPI.PJRT_Error}
     desc = unsafe_pointer_to_objref(unsafe_load(args.device_description))::DeviceDescription
     mds = get!(memory_descriptions_cache, desc) do
-        collect(MemoryDescription, memory_descriptions(desc))
+        Ptr{CAPI.PJRT_MemoryDescription}[
+            pointer_from_objref(md::MemoryDescription) for md in memory_descriptions(desc)
+        ]
     end
     default = default_memory_description(desc)::Union{Nothing,MemoryDescription}
 
@@ -97,7 +100,7 @@ const memory_descriptions_cache = WeakKeyIdDict{
     default_index = if isnothing(default)
         typemax(Csize_t)
     else
-        i = findfirst(md -> md === default, mds)
+        i = findfirst(==(pointer_from_objref(default)), mds)
         if isnothing(i)
             msg = "`default_memory_description` returned a description that is not in `memory_descriptions`"
             throw(Error(CAPI.PJRT_Error_Code_INTERNAL, msg))
@@ -105,9 +108,7 @@ const memory_descriptions_cache = WeakKeyIdDict{
         i - 1
     end
 
-    unsafe_store!(
-        args.memory_descriptions, Ptr{Ptr{CAPI.PJRT_MemoryDescription}}(pointer(mds))
-    )
+    unsafe_store!(args.memory_descriptions, pointer(mds))
     unsafe_store!(args.num_memory_descriptions, length(mds))
     unsafe_store!(args.default_memory_index, default_index)
     return ok()
