@@ -15,22 +15,21 @@
 - [`default_device_assignment`](@ref default_device_assignment(::Client, ::Integer, ::Integer))
 - [`load(client, bytes::Vector{UInt8}, options)`](@ref load(::Client, ::Vector{UInt8}, ::Any))
 - [`load(client, exe::Executable, options)`](@ref load(::Client, ::Executable, ::Any))
-- [`Buffer(client, dev, mem, data::Ptr, ...)`](@ref Buffer(::Client, ::Device, ::Memory, ::Ptr, type, dims, host_layout,
-  device_layout, host_buffer_semantics))
-- [`Buffer(client, dev, mem, undef, ...)`](@ref Buffer(::Client, ::Device, ::Memory, ::UndefInitializer, type, dims,
-  layout))
-- [`Buffer(client, mem, error, ...)`](@ref Buffer(::Client, ::Memory, ::Error, type, dims, layout))
-- [`AsyncHostToDeviceTransferManager(client, mem, specs, layouts)`](@ref AsyncHostToDeviceTransferManager(::Client,
-  ::Memory, ::Vector, ::Vector))
-- [`alias_buffer`](@ref alias_buffer(::Client, ::Memory, args...))
+- [`buffer_from_host_buffer`](@ref buffer_from_host_buffer(::Client, ::Device, ::Memory, ::Ptr, type, dims,
+  host_layout, device_layout, host_buffer_semantics))
+- [`create_uninitialized_buffer`](@ref create_uninitialized_buffer(::Client, ::Device, ::Memory, type, dims, layout))
+- [`create_error_buffer`](@ref create_error_buffer(::Client, ::Memory, ::Error, type, dims, layout))
+- [`create_buffers_for_async_host_to_device`](@ref create_buffers_for_async_host_to_device(::Client, ::Memory,
+  ::Vector, ::Vector))
+- [`create_alias_buffer`](@ref create_alias_buffer(::Client, ::Memory, args...))
 - [`update_global_process_info!`](@ref update_global_process_info!(::Client, ::Vector))
 - [`dma_map!`](@ref dma_map!(::Client, ::Ptr{Cvoid}, ::Integer))
 - [`dma_unmap!`](@ref dma_unmap!(::Client, ::Ptr{Cvoid}))
 - [`topology_description`](@ref topology_description(::Client))
 
 !!! info
-The `Client(plugin, options)` constructor (see [`AbstractPlugin`](@ref)) returns the plugin's own subtype of `Client`,
-chosen by dispatch on its `plugin` argument.
+`create_client(plugin, options)` (see [`AbstractPlugin`](@ref)) returns the plugin's own subtype of `Client`, chosen by
+dispatch on its `plugin` argument.
 """
 abstract type Client end
 
@@ -274,7 +273,7 @@ const client_addressable_memories_cache = WeakKeyIdDict{
 end
 
 """
-    Buffer(
+    buffer_from_host_buffer(
         client::Client, dev::Device, mem::Memory, data::Ptr, type, dims, host_layout, device_layout,
         host_buffer_semantics,
     ) -> Buffer
@@ -299,7 +298,7 @@ The caller GC-roots the returned buffer.
 
 Backs `PJRT_Client_BufferFromHostBuffer`.
 """
-Buffer(
+buffer_from_host_buffer(
     ::Client,
     ::Device,
     ::Memory,
@@ -311,15 +310,14 @@ Buffer(
     host_buffer_semantics,
 )
 
-# PJRT may pass only one of `dev` and `mem` to `Buffer(client, dev, mem, data::Ptr, ...)` and
-# `Buffer(client, dev, mem, undef, ...)`, so the other one is filled in
-function Buffer(client::Client, mem::Memory, init::Union{UndefInitializer,Ptr}, args...)
+# PJRT may pass only one of `dev` and `mem`, so the other one is filled in
+function buffer_from_host_buffer(client::Client, mem::Memory, data::Ptr, args...)
     # we select the first addressable device from the memory because there is no default
-    return Buffer(client, first(addressable_devices(mem)), mem, init, args...)
+    return buffer_from_host_buffer(client, first(addressable_devices(mem)), mem, data, args...)
 end
 
-function Buffer(client::Client, dev::Device, init::Union{UndefInitializer,Ptr}, args...)
-    return Buffer(client, dev, default_memory(dev), init, args...)
+function buffer_from_host_buffer(client::Client, dev::Device, data::Ptr, args...)
+    return buffer_from_host_buffer(client, dev, default_memory(dev), data, args...)
 end
 
 @pjrt_catch_return function pjrt_client_buffer_from_host_buffer(
@@ -360,7 +358,7 @@ end
 
     buffer = if mem_ptr != C_NULL
         mem = unsafe_memory(mem_ptr)
-        Buffer(
+        buffer_from_host_buffer(
             client,
             mem,
             data,
@@ -372,7 +370,7 @@ end
         )
     else # dev_ptr != C_NULL
         dev = unsafe_pointer_to_objref(dev_ptr)::Device
-        Buffer(
+        buffer_from_host_buffer(
             client,
             dev,
             data,
@@ -396,20 +394,31 @@ end
 end
 
 """
-    Buffer(client::Client, dev::Device, mem::Memory, undef, type, dims, layout) -> Buffer
+    create_uninitialized_buffer(client::Client, dev::Device, mem::Memory, type, dims, layout) -> Buffer
 
 Return a new buffer placed on memory `mem` of device `dev`, with element type `type::CAPI.PJRT_Buffer_Type` and
 dimensions `dims::Vector{Int64}`, whose contents are left uninitialized.
 
 ## Arguments
-- `mem` is always one of `addressable_memories(dev)`, filled in like for `Buffer(client, dev, mem, data::Ptr, ...)`.
+- `mem` is always one of `addressable_memories(dev)`, filled in like for `buffer_from_host_buffer`.
 - `layout::Union{Nothing,MemoryLayout}` is `nothing` for the default layout.
 
 The caller GC-roots the returned buffer.
 
 Backs `PJRT_Client_CreateUninitializedBuffer`.
 """
-Buffer(::Client, ::Device, ::Memory, ::UndefInitializer, type, dims, layout)
+create_uninitialized_buffer(::Client, ::Device, ::Memory, type, dims, layout)
+
+# like for `buffer_from_host_buffer`, the missing one of `dev` and `mem` is filled in
+function create_uninitialized_buffer(client::Client, mem::Memory, type, dims, layout)
+    return create_uninitialized_buffer(
+        client, first(addressable_devices(mem)), mem, type, dims, layout
+    )
+end
+
+function create_uninitialized_buffer(client::Client, dev::Device, type, dims, layout)
+    return create_uninitialized_buffer(client, dev, default_memory(dev), type, dims, layout)
+end
 
 @pjrt_catch_return function pjrt_client_create_uninitialized_buffer(
     args::Ptr{CAPI.PJRT_Client_CreateUninitializedBuffer_Args}
@@ -432,10 +441,10 @@ Buffer(::Client, ::Device, ::Memory, ::UndefInitializer, type, dims, layout)
 
     buffer = if mem_ptr != C_NULL
         mem = unsafe_memory(mem_ptr)
-        Buffer(client, mem, undef, _eltype, _size, layout)
+        create_uninitialized_buffer(client, mem, _eltype, _size, layout)
     else
         dev = unsafe_pointer_to_objref(dev_ptr)::Device
-        Buffer(client, dev, undef, _eltype, _size, layout)
+        create_uninitialized_buffer(client, dev, _eltype, _size, layout)
     end::Buffer
 
     root!(buffer)
@@ -627,7 +636,7 @@ load(::Client, ::Executable, ::Any)
 end
 
 """
-    Buffer(client::Client, mem::Memory, error::Error, type, dims, layout) -> Buffer
+    create_error_buffer(client::Client, mem::Memory, error::Error, type, dims, layout) -> Buffer
 
 Return a new buffer placed on memory `mem`, with element type `type::CAPI.PJRT_Buffer_Type` and dimensions
 `dims::Vector{Int64}`, that carries `error` without allocating any data: executing a program with it as argument must
@@ -642,7 +651,7 @@ Error payloads are not supported yet: if C passes any, `PJRT_Client_CreateErrorB
 
 Backs `PJRT_Client_CreateErrorBuffer`.
 """
-Buffer(::Client, ::Memory, ::Error, type, dims, layout)
+create_error_buffer(::Client, ::Memory, ::Error, type, dims, layout)
 
 @pjrt_catch_return function pjrt_client_create_error_buffer(
     args::Ptr{CAPI.PJRT_Client_CreateErrorBuffer_Args}
@@ -673,19 +682,19 @@ Buffer(::Client, ::Memory, ::Error, type, dims, layout)
     c_layout = has_device_layout ? unsafe_load(args.device_layout) : C_NULL
     layout = c_layout == C_NULL ? nothing : MemoryLayout(c_layout)
 
-    buffer = Buffer(client, mem, error, _eltype, _size, layout)::Buffer
+    buffer = create_error_buffer(client, mem, error, _eltype, _size, layout)::Buffer
     root!(buffer)
     unsafe_store!(args.buffer, Ptr{CAPI.PJRT_Buffer}(pointer_from_objref(buffer)))
     return ok()
 end
 
-# GC-rooted holder of the callable returned by `alias_buffer`, since it may not be mutable
+# GC-rooted holder of the callable returned by `create_alias_buffer`, since it may not be mutable
 mutable struct FulfillAliasBufferCallback
     const fulfill::Any
 end
 
 """
-    alias_buffer(client::Client, mem::Memory, type, dims, layout) -> Tuple{Buffer,Any}
+    create_alias_buffer(client::Client, mem::Memory, type, dims, layout) -> Tuple{Buffer,Any}
 
 Return `(alias, fulfill)`: a new buffer `alias` placed on memory `mem`, with element type `type::CAPI.PJRT_Buffer_Type`
 and dimensions `dims::Vector{Int64}`, which aliases a buffer that is not known yet; and a callable `fulfill`.
@@ -700,7 +709,7 @@ The caller GC-roots `alias`, and keeps `fulfill` alive until it is called.
 
 Backs `PJRT_Client_CreateAliasBuffer`.
 """
-alias_buffer(::Client, ::Memory, args...)
+create_alias_buffer(::Client, ::Memory, args...)
 
 @pjrt_catch_return function pjrt_client_create_alias_buffer(
     args::Ptr{CAPI.PJRT_Client_CreateAliasBuffer_Args}
@@ -719,7 +728,8 @@ alias_buffer(::Client, ::Memory, args...)
     c_layout = unsafe_load(args.shape_layout)
     layout = c_layout == C_NULL ? nothing : MemoryLayout(c_layout)
 
-    alias, fulfill = alias_buffer(client, mem, _eltype, _size, layout)::Tuple{Buffer,Any}
+    alias, fulfill =
+        create_alias_buffer(client, mem, _eltype, _size, layout)::Tuple{Buffer,Any}
     root!(alias)
     cb = root!(FulfillAliasBufferCallback(fulfill))
     unsafe_store!(args.alias_buffer, Ptr{CAPI.PJRT_Buffer}(pointer_from_objref(alias)))

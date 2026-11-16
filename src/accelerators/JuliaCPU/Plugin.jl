@@ -1,6 +1,6 @@
 struct JuliaPlugin <: AbstractPlugin end
 
-Client(::JuliaPlugin, ::Dict{String,Any}) = JuliaClient()
+create_client(::JuliaPlugin, ::Dict{String,Any}) = JuliaClient()
 
 function attributes(::JuliaPlugin)
     callback = @cfunction(IR.print_callback, Cvoid, (API.MlirStringRef, Any))

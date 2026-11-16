@@ -3,7 +3,7 @@
 
 The description of the devices of a platform and how they are connected, used by `compile` to compile programs without
 a `Client`. C gets one from a client with `topology_description`, or without a client through
-`TopologyDescription(plugin, name, options)` and `TopologyDescription(plugin, bytes)`.
+`create_topology_description(plugin, name, options)` and `deserialize_topology_description(plugin, bytes)`.
 
 ### Interface
 
@@ -17,9 +17,8 @@ a `Client`. C gets one from a client with `topology_description`, or without a c
 - [`memory_space_kind_ids`](@ref memory_space_kind_ids(::TopologyDescription))
 
 !!! info
-The `TopologyDescription(plugin, name, options)` and `TopologyDescription(plugin, bytes)` constructors (see
-[`AbstractPlugin`](@ref)) return the plugin's own subtype of `TopologyDescription`, chosen by dispatch on their
-`plugin` argument.
+`create_topology_description` and `deserialize_topology_description` (see [`AbstractPlugin`](@ref)) return the
+plugin's own subtype of `TopologyDescription`, chosen by dispatch on their `plugin` argument.
 """
 abstract type TopologyDescription end
 
@@ -118,7 +117,8 @@ end
 """
     serialize(topology::TopologyDescription) -> Vector{UInt8}
 
-Return a serialization of `topology` that `TopologyDescription(plugin, bytes)` can read back, also used in cache keys.
+Return a serialization of `topology` that `deserialize_topology_description(plugin, bytes)` can read back, also used in
+cache keys.
 
 The returned vector is GC rooted until C calls its deleter, so it must be a new vector that `topology` doesn't hand out
 anywhere else.

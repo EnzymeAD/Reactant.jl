@@ -2,7 +2,7 @@ mutable struct JuliaProfiler <: Profiler
     const options::Reactant.Proto.tensorflow.ProfileOptions
 end
 
-function Profiler(::JuliaPlugin, options::Reactant.Proto.tensorflow.ProfileOptions)
+function create_profiler(::JuliaPlugin, options::Reactant.Proto.tensorflow.ProfileOptions)
     return JuliaProfiler(options)
 end
 

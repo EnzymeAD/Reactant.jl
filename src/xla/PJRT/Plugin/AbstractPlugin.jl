@@ -13,10 +13,9 @@ It must be stateless: its type `P` must be `Base.issingletontype(P)` with an emp
 
 - [`initialize`](@ref initialize(::AbstractPlugin))
 - [`attributes`](@ref attributes(::AbstractPlugin))
-- [`Client(plugin, options)`](@ref Client(::AbstractPlugin, ::Dict{String,Any}))
-- [`TopologyDescription(plugin, name, options)`](@ref TopologyDescription(::AbstractPlugin, ::String,
-  ::Dict{String,Any}))
-- [`TopologyDescription(plugin, bytes)`](@ref TopologyDescription(::AbstractPlugin, ::Vector{UInt8}))
+- [`create_client`](@ref create_client(::AbstractPlugin, ::Dict{String,Any}))
+- [`create_topology_description`](@ref create_topology_description(::AbstractPlugin, ::String, ::Dict{String,Any}))
+- [`deserialize_topology_description`](@ref deserialize_topology_description(::AbstractPlugin, ::Vector{UInt8}))
 """
 abstract type AbstractPlugin end
 
@@ -73,7 +72,7 @@ struct PluginAttributes{P<:AbstractPlugin} end
 end
 
 """
-    Client(plugin::AbstractPlugin, options::Dict{String,Any}) -> Client
+    create_client(plugin::AbstractPlugin, options::Dict{String,Any}) -> Client
 
 Return a new client of `plugin`. `options` holds platform-specific options, whose values are `String`, `Int64`,
 `Vector{Int64}`, `Float32` or `Bool`.
@@ -82,7 +81,7 @@ The caller GC-roots the returned client until `PJRT_Client_Destroy`.
 
 Backs `PJRT_Client_Create`.
 """
-Client(::AbstractPlugin, ::Dict{String,Any})
+create_client(::AbstractPlugin, ::Dict{String,Any})
 
 struct ClientCreate{P<:AbstractPlugin} end
 
@@ -92,13 +91,14 @@ struct ClientCreate{P<:AbstractPlugin} end
     options = unsafe_load_pjrt_named_values(
         unsafe_load(args.create_options), unsafe_load(args.num_options)
     )
-    client = root!(Client(P(), options)::Client)
+    client = root!(create_client(P(), options)::Client)
     unsafe_store!(args.client, Ptr{CAPI.PJRT_Client}(pointer_from_objref(client)))
     return ok()
 end
 
 """
-    TopologyDescription(plugin::AbstractPlugin, name::String, options::Dict{String,Any}) -> TopologyDescription
+    create_topology_description(plugin::AbstractPlugin, name::String, options::Dict{String,Any})
+        -> TopologyDescription
 
 Return a new description of the topology named `name` of the platform of `plugin`, without creating a client.
 `options` holds platform-specific options, whose values are `String`, `Int64`, `Vector{Int64}`, `Float32` or `Bool`.
@@ -107,7 +107,7 @@ The caller GC-roots the returned topology until `PJRT_TopologyDescription_Destro
 
 Backs `PJRT_TopologyDescription_Create`.
 """
-TopologyDescription(::AbstractPlugin, ::String, ::Dict{String,Any})
+create_topology_description(::AbstractPlugin, ::String, ::Dict{String,Any})
 
 struct TopologyDescriptionCreate{P<:AbstractPlugin} end
 
@@ -120,7 +120,7 @@ struct TopologyDescriptionCreate{P<:AbstractPlugin} end
     options = unsafe_load_pjrt_named_values(
         unsafe_load(args.create_options), unsafe_load(args.num_options)
     )
-    topology = TopologyDescription(P(), name, options)::TopologyDescription
+    topology = create_topology_description(P(), name, options)::TopologyDescription
     root!(topology)
     unsafe_store!(
         args.topology, Ptr{CAPI.PJRT_TopologyDescription}(pointer_from_objref(topology))
@@ -129,7 +129,7 @@ struct TopologyDescriptionCreate{P<:AbstractPlugin} end
 end
 
 """
-    TopologyDescription(plugin::AbstractPlugin, bytes::Vector{UInt8}) -> TopologyDescription
+    deserialize_topology_description(plugin::AbstractPlugin, bytes::Vector{UInt8}) -> TopologyDescription
 
 Return the topology description of the platform of `plugin` serialized in `bytes` by `serialize`.
 
@@ -137,7 +137,7 @@ The caller GC-roots the returned topology until `PJRT_TopologyDescription_Destro
 
 Backs `PJRT_TopologyDescription_Deserialize`.
 """
-TopologyDescription(::AbstractPlugin, ::Vector{UInt8})
+deserialize_topology_description(::AbstractPlugin, ::Vector{UInt8})
 
 struct TopologyDescriptionDeserialize{P<:AbstractPlugin} end
 
@@ -149,7 +149,7 @@ struct TopologyDescriptionDeserialize{P<:AbstractPlugin} end
     bytes = copy(
         unsafe_wrap(Vector{UInt8}, bytes_ptr, unsafe_load(args.serialized_topology_size))
     )
-    topology = TopologyDescription(P(), bytes)::TopologyDescription
+    topology = deserialize_topology_description(P(), bytes)::TopologyDescription
     root!(topology)
     unsafe_store!(
         args.topology, Ptr{CAPI.PJRT_TopologyDescription}(pointer_from_objref(topology))

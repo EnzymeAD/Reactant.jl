@@ -7,6 +7,8 @@ using Reactant.XLA: CAPI
 
 using Reactant.XLA.PJRT.Plugin:
     AbstractPlugin,
+    Buffer,
+    Client,
     Device,
     DeviceDescription,
     Event,
@@ -14,6 +16,7 @@ using Reactant.XLA.PJRT.Plugin:
     LoadedExecutable,
     Memory,
     PluginApi,
+    Profiler,
     ProfilerExtension,
     TiledMemoryLayout,
     invalid_argument,
@@ -26,19 +29,20 @@ using Reactant.XLA.PJRT.Plugin:
 
 # interface functions extended by this plugin
 import Reactant.XLA.PJRT.Plugin:
-    Buffer,
-    Client,
-    Profiler,
     addressable_device_logical_ids,
     addressable_devices,
     addressable_memories,
     attributes,
+    buffer_from_host_buffer,
     bytes_in_use,
     clear_memory_stats!,
     codesize,
     compile,
     compile_options,
     copyto,
+    create_client,
+    create_profiler,
+    create_uninitialized_buffer,
     default_memory,
     description,
     device,

@@ -28,8 +28,8 @@
 - [`Base.pointer`](@ref Base.pointer(::Buffer))
 
 !!! info
-The `Buffer(client, ...)` constructors (see [`Client`](@ref)) return the plugin's own subtype of `Buffer`, chosen by
-dispatch on their `client`, `dev` and `mem` arguments.
+The buffer-creating functions of [`Client`](@ref) (e.g. `buffer_from_host_buffer`) return the plugin's own subtype of
+`Buffer`, chosen by dispatch on their `client`, `dev` and `mem` arguments.
 """
 abstract type Buffer end
 

@@ -23,8 +23,8 @@ they must be done reading the host data by then.
 - [`add_metadata!`](@ref add_metadata!(::AsyncHostToDeviceTransferManager, ::Dict{String,String}))
 
 !!! info
-The `AsyncHostToDeviceTransferManager(client, mem, specs, layouts)` constructor (see [`Client`](@ref)) returns the
-plugin's own subtype of `AsyncHostToDeviceTransferManager`, chosen by dispatch on its `client` and `mem` arguments.
+`create_buffers_for_async_host_to_device(client, mem, specs, layouts)` (see [`Client`](@ref)) returns the plugin's own
+subtype of `AsyncHostToDeviceTransferManager`, chosen by dispatch on its `client` and `mem` arguments.
 """
 abstract type AsyncHostToDeviceTransferManager end
 

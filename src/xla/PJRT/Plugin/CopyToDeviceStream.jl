@@ -142,7 +142,7 @@ Base.position(::CopyToDeviceStream)
 end
 
 """
-    AsyncHostToDeviceTransferManager(client::Client, mem::Memory, specs::Vector, layouts::Vector)
+    create_buffers_for_async_host_to_device(client::Client, mem::Memory, specs::Vector, layouts::Vector)
         -> AsyncHostToDeviceTransferManager
 
 Return a new [`AsyncHostToDeviceTransferManager`](@ref) for a set of new buffers placed on memory `mem`, one per
@@ -155,7 +155,7 @@ The caller GC-roots the returned manager.
 
 Backs `PJRT_Client_CreateBuffersForAsyncHostToDevice`.
 """
-AsyncHostToDeviceTransferManager(::Client, ::Memory, ::Vector, ::Vector)
+create_buffers_for_async_host_to_device(::Client, ::Memory, ::Vector, ::Vector)
 
 @pjrt_catch_return function pjrt_client_create_buffers_for_async_host_to_device(
     args::Ptr{CAPI.PJRT_Client_CreateBuffersForAsyncHostToDevice_Args}
@@ -187,7 +187,7 @@ AsyncHostToDeviceTransferManager(::Client, ::Memory, ::Vector, ::Vector)
         layouts[i] = c_layout == C_NULL ? nothing : MemoryLayout(c_layout)
     end
 
-    manager = AsyncHostToDeviceTransferManager(
+    manager = create_buffers_for_async_host_to_device(
         client, mem, specs, layouts
     )::AsyncHostToDeviceTransferManager
     root!(manager)

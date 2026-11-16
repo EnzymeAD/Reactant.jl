@@ -28,7 +28,7 @@ function topology_description(::JuliaClient)
     throw(unimplemented("`JuliaClient` has no topology description yet"))
 end
 
-function Buffer(
+function buffer_from_host_buffer(
     ::JuliaClient,
     dev::JuliaDevice,
     mem::JuliaMemory,
@@ -80,16 +80,9 @@ function Buffer(
     return JuliaBuffer(new_data, size_in_bytes, _eltype, _size, minor_to_major, dev, mem)
 end
 
-# like `Buffer(client, dev, mem, data::Ptr, ...)`, buffers are dense in major-to-minor order and `layout` is not
-# checked
-function Buffer(
-    ::JuliaClient,
-    dev::JuliaDevice,
-    mem::JuliaMemory,
-    ::UndefInitializer,
-    _eltype,
-    _size,
-    _layout,
+# like `buffer_from_host_buffer`, buffers are dense in major-to-minor order and `layout` is not checked
+function create_uninitialized_buffer(
+    ::JuliaClient, dev::JuliaDevice, mem::JuliaMemory, _eltype, _size, _layout
 )
     size_in_bytes = prod(_size; init=pjrt_elsize(_eltype))
     minor_to_major = collect(length(_size):-1:1)

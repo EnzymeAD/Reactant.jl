@@ -9,7 +9,7 @@ A `PLUGIN_Profiler*` points to a `Profiler`, which is GC rooted from its creatio
 
 ### Interface
 
-- [`Profiler(plugin, options)`](@ref Profiler(::AbstractPlugin, ::Reactant.Proto.tensorflow.ProfileOptions))
+- [`create_profiler`](@ref)
 - [`start!`](@ref)
 - [`stop!`](@ref)
 - [`collect_data`](@ref collect_data(::Profiler))
@@ -40,14 +40,14 @@ function profiler_error_get_code(
 end
 
 """
-    Profiler(plugin::AbstractPlugin, options::Reactant.Proto.tensorflow.ProfileOptions) -> Profiler
+    create_profiler(plugin::AbstractPlugin, options::Reactant.Proto.tensorflow.ProfileOptions) -> Profiler
 
 Return a new profiler of `plugin` for a profiling session with `options` (e.g. `options.device_tracer_level`, which is
 `0` if device tracing is disabled).
 
 Backs `PLUGIN_Profiler_Create`.
 """
-Profiler(::AbstractPlugin, ::Reactant.Proto.tensorflow.ProfileOptions)
+function create_profiler end
 
 struct ProfilerCreate{P<:AbstractPlugin} end
 
@@ -60,7 +60,7 @@ struct ProfilerCreate{P<:AbstractPlugin} end
     options = Reactant.ProtoUtils.proto_from_bytes(
         Reactant.Proto.tensorflow.ProfileOptions, bytes
     )
-    profiler = root!(Profiler(P(), options)::Profiler)
+    profiler = root!(create_profiler(P(), options)::Profiler)
     unsafe_store!(args.profiler, Ptr{CAPI.PLUGIN_Profiler}(pointer_from_objref(profiler)))
     return ok()
 end
@@ -218,8 +218,8 @@ end
 Advertises `PJRT_Profiler_Extension`, through which XLA creates a [`Profiler`](@ref) of the plugin in every profiling
 session and adds the data it collects to the session. Pass it to [`make_api`](@ref).
 
-`plugin` must implement `Profiler(plugin, options)`, and its [`Profiler`](@ref)s `start!`, `stop!` and `collect_data`
-(and optionally `consume!` and `serialize`).
+`plugin` must implement `create_profiler(plugin, options)`, and its [`Profiler`](@ref)s `start!`, `stop!` and
+`collect_data` (and optionally `consume!` and `serialize`).
 
 !!! note
 XLA registers the profiler of the plugin when a client is created from its `PJRT_Api`, so profiling sessions started
