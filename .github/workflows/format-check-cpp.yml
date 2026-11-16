@@ -7,11 +7,13 @@ on:
     tags: '*'
     paths:
       - '.github/workflows/format-check-cpp.yml'
+      - '**/*.cc'
       - '**/*.cpp'
       - '**/*.h'
   pull_request:
     paths:
       - '.github/workflows/format-check-cpp.yml'
+      - '**/*.cc'
       - '**/*.cpp'
       - '**/*.h'
 
