@@ -832,6 +832,9 @@ Base.atand(x::TracedRNumber) = rad2deg(atan(x))
 Base.atan(y::TracedRNumber, x::TracedRNumber) = @opcall atan2(y, x)
 Base.atand(y::TracedRNumber, x::TracedRNumber) = rad2deg(atan(y, x))
 
+Base.angle(z::TracedRNumber{<:Complex}) = atan(imag(z), real(z))
+Base.angle(x::TracedRNumber{<:Real}) = atan(zero(x), x)
+
 Base.hypot(x::TracedRNumber{T}, y::TracedRNumber{T}) where {T} = @opcall hypot(x, y)
 Base.hypot(x::TracedRNumber{T}, y) where {T} = Base.hypot(x, Reactant.promote_to(x, y))
 function Base.hypot(x::TracedRNumber{T}, y::Number) where {T}
