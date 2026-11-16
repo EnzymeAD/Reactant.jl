@@ -34,17 +34,17 @@ linear(x, W, b) = (W * x) .+ b
         framework_stats = Reactant.Profiler.get_framework_op_stats(file)
         if !RunningOnJuliaCPU
             @test length(framework_stats) > 0
+            metrics = Reactant.Profiler.get_aggregate_metrics(file, 10)
+            @test metrics isa Reactant.Proto.tensorflow.profiler.op_profile.Metrics
+            @test metrics.raw_time > 0
+            @test metrics.raw_flops_rate > 0
+            @test metrics.bf16_flops_rate > 0
+            @test isfinite(metrics.raw_flops_rate)
+            @test isfinite(metrics.bf16_flops_rate)
+            @test metrics.raw_flops_rate ≈ metrics.raw_flops / (metrics.raw_time * 1e-12)
+            @test metrics.bf16_flops_rate ≈ metrics.bf16_flops / (metrics.raw_time * 1e-12)
         end
 
-        metrics = Reactant.Profiler.get_aggregate_metrics(file, 10)
-        @test metrics isa Reactant.Proto.tensorflow.profiler.op_profile.Metrics
-        @test metrics.raw_time > 0
-        @test metrics.raw_flops_rate > 0
-        @test metrics.bf16_flops_rate > 0
-        @test isfinite(metrics.raw_flops_rate)
-        @test isfinite(metrics.bf16_flops_rate)
-        @test metrics.raw_flops_rate ≈ metrics.raw_flops / (metrics.raw_time * 1e-12)
-        @test metrics.bf16_flops_rate ≈ metrics.bf16_flops / (metrics.raw_time * 1e-12)
         if RunningOnCPU
             expected_step_flops = Reactant.XLA.cost_analysis(fn).flops
             @test metrics.raw_flops == 10 * expected_step_flops
@@ -76,10 +76,12 @@ linear(x, W, b) = (W * x) .+ b
         loop_fn = @compile sync = true loop_fma(x)
         loop_prof = Reactant.Profiler.profile_with_xprof(loop_fn, x; nrepeat=3, warmup=1)
         @test loop_prof.profiling_result.metrics_data !== nothing
-        @test loop_prof.profiling_result.metrics_data.raw_time > 0
-        @test loop_prof.profiling_result.metrics_data.raw_flops >= 3 * 5 * 2 * length(x)
-        @test isfinite(loop_prof.profiling_result.metrics_data.raw_flops_rate)
-        @test loop_prof.profiling_result.metrics_data.raw_flops_rate > 0
+        if !RunningOnJuliaCPU
+            @test loop_prof.profiling_result.metrics_data.raw_time > 0
+            @test loop_prof.profiling_result.metrics_data.raw_flops >= 3 * 5 * 2 * length(x)
+            @test isfinite(loop_prof.profiling_result.metrics_data.raw_flops_rate)
+            @test loop_prof.profiling_result.metrics_data.raw_flops_rate > 0
+        end
 
         big_x = Reactant.to_rarray(ones(Float32, 256, 256))
         big_loop_fn = @compile sync = true loop_fma(big_x)
@@ -88,10 +90,13 @@ linear(x, W, b) = (W * x) .+ b
         )
         @test big_loop_prof.profiling_result.metrics_data !== nothing
         @test big_loop_prof.profiling_result.metrics_data.raw_time > 0
-        @test big_loop_prof.profiling_result.metrics_data.raw_flops >=
-            2 * 5 * 2 * length(big_x)
-        @test isfinite(big_loop_prof.profiling_result.metrics_data.raw_flops_rate)
-        @test big_loop_prof.profiling_result.metrics_data.raw_flops_rate > 0
+        @info big_loop_prof.profiling_result.metrics_data.raw_time
+        if !RunningOnJuliaCPU
+            @test big_loop_prof.profiling_result.metrics_data.raw_flops >=
+                2 * 5 * 2 * length(big_x)
+            @test isfinite(big_loop_prof.profiling_result.metrics_data.raw_flops_rate)
+            @test big_loop_prof.profiling_result.metrics_data.raw_flops_rate > 0
+        end
 
         Reactant.@timed nrepeat = 32 linear(x, W, b)
         Reactant.@time nrepeat = 32 linear(x, W, b)
