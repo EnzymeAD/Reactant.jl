@@ -316,7 +316,7 @@ function PB._encoded_size(x::InfoProto)
     return encoded_size
 end
 
-@enumx var"ResourceProto.Kind" UNKNOWN=0 TOKEN=1 COLLECTIVE_COMMUNICATOR=2
+@enumx var"ResourceProto.Kind" UNKNOWN=0 TOKEN=1 COLLECTIVE_COMMUNICATOR=2 RNG_STATE=3
 
 @enumx SortDirectionProto UNKNOWN=0 ASCENDING=1 DESCENDING=2
 
