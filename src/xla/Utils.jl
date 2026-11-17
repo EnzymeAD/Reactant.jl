@@ -1,3 +1,12 @@
+"""
+    SetLogLevel(level::Integer)
+
+Set the least severe XLA (and other C++ runtime) log messages printed to
+stderr: `0` for INFO, `1` for WARNING (the default), `2` for ERROR and `3` for
+FATAL. It can be called at any time after loading Reactant. The initial level
+can also be chosen by setting the `TF_CPP_MIN_LOG_LEVEL` environment variable
+before loading Reactant.
+"""
 SetLogLevel(x) = MLIR.API.SetLogLevel(x)
 
 struct ReactantInternalError <: Base.Exception

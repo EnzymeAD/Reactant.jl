@@ -50,9 +50,10 @@ struct DeviceCapabilities
     memory_bandwidth::UInt64
     compute_capability::Union{Nothing,GPUComputeCapability}
     device_vendor::String
+    device_name::String
 end
-PB.default_values(::Type{DeviceCapabilities}) = (;clock_rate_in_ghz = zero(Float64), num_cores = zero(UInt32), memory_size_in_bytes = zero(UInt64), memory_bandwidth = zero(UInt64), compute_capability = nothing, device_vendor = "")
-PB.field_numbers(::Type{DeviceCapabilities}) = (;clock_rate_in_ghz = 1, num_cores = 2, memory_size_in_bytes = 3, memory_bandwidth = 4, compute_capability = 5, device_vendor = 6)
+PB.default_values(::Type{DeviceCapabilities}) = (;clock_rate_in_ghz = zero(Float64), num_cores = zero(UInt32), memory_size_in_bytes = zero(UInt64), memory_bandwidth = zero(UInt64), compute_capability = nothing, device_vendor = "", device_name = "")
+PB.field_numbers(::Type{DeviceCapabilities}) = (;clock_rate_in_ghz = 1, num_cores = 2, memory_size_in_bytes = 3, memory_bandwidth = 4, compute_capability = 5, device_vendor = 6, device_name = 7)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:DeviceCapabilities}, _endpos::Int=0, _group::Bool=false)
     clock_rate_in_ghz = zero(Float64)
@@ -61,6 +62,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:DeviceCapabilities}, _en
     memory_bandwidth = zero(UInt64)
     compute_capability = Ref{Union{Nothing,GPUComputeCapability}}(nothing)
     device_vendor = ""
+    device_name = ""
     while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
@@ -75,11 +77,13 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:DeviceCapabilities}, _en
             PB.decode!(d, compute_capability)
         elseif field_number == 6
             device_vendor = PB.decode(d, String)
+        elseif field_number == 7
+            device_name = PB.decode(d, String)
         else
             Base.skip(d, wire_type)
         end
     end
-    return DeviceCapabilities(clock_rate_in_ghz, num_cores, memory_size_in_bytes, memory_bandwidth, compute_capability[], device_vendor)
+    return DeviceCapabilities(clock_rate_in_ghz, num_cores, memory_size_in_bytes, memory_bandwidth, compute_capability[], device_vendor, device_name)
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::DeviceCapabilities)
@@ -90,6 +94,7 @@ function PB.encode(e::PB.AbstractProtoEncoder, x::DeviceCapabilities)
     x.memory_bandwidth != zero(UInt64) && PB.encode(e, 4, x.memory_bandwidth)
     !isnothing(x.compute_capability) && PB.encode(e, 5, x.compute_capability)
     !isempty(x.device_vendor) && PB.encode(e, 6, x.device_vendor)
+    !isempty(x.device_name) && PB.encode(e, 7, x.device_name)
     return position(e.io) - initpos
 end
 function PB._encoded_size(x::DeviceCapabilities)
@@ -100,5 +105,6 @@ function PB._encoded_size(x::DeviceCapabilities)
     x.memory_bandwidth != zero(UInt64) && (encoded_size += PB._encoded_size(x.memory_bandwidth, 4))
     !isnothing(x.compute_capability) && (encoded_size += PB._encoded_size(x.compute_capability, 5))
     !isempty(x.device_vendor) && (encoded_size += PB._encoded_size(x.device_vendor, 6))
+    !isempty(x.device_name) && (encoded_size += PB._encoded_size(x.device_name, 7))
     return encoded_size
 end

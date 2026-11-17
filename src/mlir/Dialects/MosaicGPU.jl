@@ -17,7 +17,8 @@ import ...API
 `alloc_smem`
 
 Allocates a statically shaped SMEM memref that is valid for the duration of
-the enclosing `alloca_scope` operation.
+the parent `alloca_scope` operation. `alloc_smem` must be directly nested in
+the region of an `alloca_scope`.
 
 An optional `alignment` attribute specifies the minimum byte alignment for
 the allocation and must be a positive power of 2.
@@ -532,7 +533,7 @@ Schedules an async copy of the scaling factors from the `source` MemRef
 in SMEM to the `destination` MemRef in TMEM.
 
 The `source` and `destination` MemRefs must have the same element type
-(F8E8M0FNU or F8E4M3FN).
+(F8E8M0FNU, F8E4M3FN, or F8E5M3FNU).
 
 Given a destination shape [M, N], the source shape must be
 [M/128, N/4, 32, 16], and M % 128 == 0 and N % 4 == 0.
@@ -751,6 +752,47 @@ function broadcasted_iota(; result_0::IR.Type, dimension, location=Location())
         attributes,
         results=op_ty_results,
         result_inference=false,
+    )
+end
+
+"""
+`cumulative_reduction`
+
+Cumulatively reduces `source` along `dimension`, combining elements with
+`kind`. The result has the same shape, element type and layout as `source`.
+For integer min/max, `kind` selects signed or unsigned comparison.
+
+If `reverse` is true, the reduction runs from the highest index along
+`dimension` to the lowest, so element i accumulates elements i..n-1 instead
+of 0..i.
+"""
+function cumulative_reduction(
+    source::Value;
+    result=nothing::Union{Nothing,IR.Type},
+    kind,
+    dimension,
+    reverse=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[source,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[
+        NamedAttribute("kind", kind), NamedAttribute("dimension", dimension)
+    ]
+    !isnothing(result) && push!(op_ty_results, result)
+    !isnothing(reverse) && push!(attributes, NamedAttribute("reverse", reverse))
+
+    return create_operation(
+        "mosaic_gpu.cumulative_reduction",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 
@@ -1083,35 +1125,6 @@ function query_cluster_cancel(
 end
 
 """
-`reinterpret_cast`
-
-Casts a memref to a new memref type with a potentially different shape but
-the same total number of elements and the same element type. This is a
-pure reinterpretation of the shape and layout; no data is moved or copied.
-
-Unlike `memref.reinterpret_cast`, this op does not take explicit offsets,
-sizes, or strides. The result type fully determines the reinterpretation.
-"""
-function reinterpret_cast(source::Value; result::IR.Type, location=Location())
-    op_ty_results = IR.Type[result,]
-    operands = Value[source,]
-    owned_regions = Region[]
-    successors = Block[]
-    attributes = NamedAttribute[]
-
-    return create_operation(
-        "mosaic_gpu.reinterpret_cast",
-        location;
-        operands,
-        owned_regions,
-        successors,
-        attributes,
-        results=op_ty_results,
-        result_inference=false,
-    )
-end
-
-"""
 `return_`
 
 The `return` op is a terminator that indicates the end of execution
@@ -1241,11 +1254,15 @@ tcgen05 operations.
 
 if `collective` is `true`, allow signaling on the `barrier` object of
 multiple CTAs within the cluster.
+
+If `commit_a_read_only` is `true`, the `barrier` tracks only the completion of
+SMEM reads of operand A of preceding `tcgen05_mma` operations.
 """
 function tcgen05_commit_arrive(
     barrier::Value,
     predicate=nothing::Union{Nothing,Value};
     collective=nothing,
+    commit_a_read_only=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[]
@@ -1255,6 +1272,8 @@ function tcgen05_commit_arrive(
     attributes = NamedAttribute[]
     !isnothing(predicate) && push!(operands, predicate)
     !isnothing(collective) && push!(attributes, NamedAttribute("collective", collective))
+    !isnothing(commit_a_read_only) &&
+        push!(attributes, NamedAttribute("commit_a_read_only", commit_a_read_only))
 
     return create_operation(
         "mosaic_gpu.tcgen05_commit_arrive",
@@ -1371,6 +1390,10 @@ The number of allocated columns in TMEM can be any power of two in the
 range [32, 512]. If the calculated number of allocated columns is less than
 32 or not a power of two, then it will be rounded up to the nearest power of
 two larger or equal to 32.
+
+On sm_107f, up to 576 columns can be allocated. Allocations of more than 512
+columns are lowered to an exclusive allocation of 576 columns, which must
+be the only TMEM allocation of the kernel.
 
 If `collective` is `true` 2 CTAs will perform the allocation collectively,
 otherwise, only one CTA will perform the allocation.

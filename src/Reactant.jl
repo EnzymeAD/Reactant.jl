@@ -161,6 +161,7 @@ aos_to_soa(x::AnyTracedRArray) = x
 
 function aos_to_soa(x::Array{TracedRNumber{T}}) where {T}
     isa_traced_soa(ancestor(x)) && return x
+    isempty(x) && return similar(TracedRArray{T}, size(x))
     for i in eachindex(x)
         if !isassigned(x, i)
             x[i] = promote_to(TracedRNumber{T}, 0)

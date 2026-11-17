@@ -1,4 +1,4 @@
-name: Format Suggestions
+name: Format Suggestions (Julia)
 
 on:
   push:

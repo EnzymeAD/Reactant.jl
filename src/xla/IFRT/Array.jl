@@ -176,6 +176,7 @@ function XLA.client(buffer::Array)
 end
 
 XLA.synced_buffer(buffer::Array) = buffer
+XLA.unsynced_buffer(buffer::Array) = buffer
 
 function XLA.buffer_on_cpu(::Array)
     return error("IFRT.Array does not support `XLA.buffer_on_cpu`")

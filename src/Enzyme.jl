@@ -279,7 +279,11 @@ function push_acts!(
 )
     TracedUtils.push_val!(ad_inputs, x.val, path)
     if !reverse
-        TracedUtils.push_val!(ad_inputs, call_with_reactant(stack, x.dval), path)
+        if length(x.dval) == 1
+            TracedUtils.push_val!(ad_inputs, only(x.dval), path)
+        else
+            TracedUtils.push_val!(ad_inputs, call_with_reactant(stack, x.dval), path)
+        end
     end
 end
 
@@ -305,6 +309,8 @@ end
 function set_act!(inp, path, reverse, tostore; emptypath=false, width=1)
     x = if inp isa Active
         inp.val
+    elseif width == 1 && inp isa Union{BatchDuplicated,BatchDuplicatedNoNeed}
+        only(inp.dval)
     else
         inp.dval
     end
@@ -397,7 +403,9 @@ function overload_autodiff(
         push_acts!(ad_inputs, arg, a, path[3:end], reverse)
 
         if CMode <: ReverseMode && leaf_act(arg, a, false) == EnzymeActivity.DUPLICATED
-            x = if width == 1
+            x = if width == 1 && arg isa Union{BatchDuplicated,BatchDuplicatedNoNeed}
+                only(arg.dval)
+            elseif width == 1
                 arg.dval
             elseif arg.dval isa AbstractArray
                 arg.dval
@@ -544,9 +552,12 @@ function overload_autodiff(
 
     residx = 1
 
+    batched_ret = A <: Union{BatchDuplicated,BatchDuplicatedNoNeed}
     dresult = if CMode <: ForwardMode && !(A <: Const)
-        if width == 1
+        if width == 1 && !batched_ret
             deepcopy(result)
+        elseif width == 1
+            (deepcopy(result),)
         else
             ntuple(Val(width)) do i
                 Base.@_inline_meta
@@ -571,8 +582,10 @@ function overload_autodiff(
                 end
                 if fwd_inactive_shadow
                     # Non-differentiable leaves have no shadow, use the primal (see above).
-                    if width == 1
+                    if width == 1 && !batched_ret
                         TracedUtils.set!(dresult, path[2:end], tval)
+                    elseif width == 1
+                        TracedUtils.set!(dresult[1], path[2:end], tval)
                     else
                         for i in 1:width
                             TracedUtils.set!(dresult[i], path[2:end], tval)
@@ -582,8 +595,10 @@ function overload_autodiff(
             end
             if fwd_shadow
                 tval = TracedUtils.transpose_val(MLIR.IR.result(res, residx))
-                if width == 1
+                if width == 1 && !batched_ret
                     TracedUtils.set!(dresult, path[2:end], tval)
+                elseif width == 1
+                    TracedUtils.set!(dresult[1], path[2:end], tval)
                 else
                     ttval = TracedRArray(tval)
                     for (i, sl) in enumerate(eachslice(ttval; dims=ndims(ttval)))

@@ -4,6 +4,7 @@ using BFloat16s: BFloat16
 const ReactantCUDAExt = Base.get_extension(Reactant, :ReactantCUDAExt)
 
 const RunningOnTPU = contains(string(Reactant.devices()[1]), "TPU")
+const RunningOnCUDA = contains(string(Reactant.devices()[1]), "CUDA")
 
 # LLVM's X86 backend marks bf16 vector types legal on hosts advertising avx512_bf16 but has
 # no selection patterns for them, so vectorized bf16 code aborts during instruction
@@ -131,6 +132,25 @@ end
 function sin!(x, y)
     @cuda blocks = 1 threads = length(x) sin_kernel!(x, y)
     return nothing
+end
+
+function reshape_kernel!(out, x)
+    xr = reshape(x, 2, 2)
+    @inbounds out[1] = xr[1, 2]
+    return nothing
+end
+
+function reshape!(out, x)
+    @cuda blocks = 1 threads = 1 reshape_kernel!(out, x)
+    return nothing
+end
+
+@testset "Reshape Kernel" begin
+    x = Reactant.to_rarray([1.0, 2.0, 3.0, 4.0])
+    out = Reactant.to_rarray(zeros(Float64, 1))
+
+    @jit reshape!(out, x)
+    @test Array(out) == [3.0]
 end
 
 @testset "Sin Kernel" begin
@@ -361,4 +381,29 @@ end
     r_run!(arr, clock2, params)
 
     @test all(==(10), Array(arr))
+end
+
+const stream_bug_seen = Float32[]
+stream_bug_record(x) = (push!(stream_bug_seen, x); nothing)
+
+function stream_bug_f(A)
+    s = sum(A * A) # long-running producer on XLA's stream
+    Reactant.Ops.julia_callback(stream_bug_record, (), s; has_side_effect=true)
+    return s
+end
+
+# The julia callback must observe the value produced on XLA's stream, rather than racing
+# with the (still running) producer kernel.
+@testset "julia_callback stream ordering" begin
+    if RunningOnCUDA
+        n = 4096
+        A = Reactant.to_rarray(ones(Float32, n, n))
+        fc = @compile sync = true stream_bug_f(A)
+        expected = Float32(n)^3
+        for _ in 1:20
+            s = Float32(fc(A))
+            @test s == expected
+            @test stream_bug_seen[end] == s
+        end
+    end
 end

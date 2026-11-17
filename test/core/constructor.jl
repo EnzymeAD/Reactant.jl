@@ -156,7 +156,37 @@ end
 
     # both runtimes get the methods, only the active one can be constructed here
     for AT in (ConcretePJRTArray, ConcreteIFRTArray)
+        @test hasmethod(AT, Tuple{AbstractArray})
         @test hasmethod(AT{Float32}, Tuple{AbstractArray})
         @test hasmethod(AT{Float32,2}, Tuple{AbstractArray})
+    end
+end
+
+struct MockDeviceArray{T,N} <: AbstractArray{T,N}
+    host::Array{T,N}
+end
+Base.size(a::MockDeviceArray) = size(a.host)
+function Base.getindex(a::MockDeviceArray, I::Int...)
+    Reactant.GPUArraysCore.assertscalar("MockDeviceArray getindex")
+    return a.host[I...]
+end
+function Base.convert(::Type{Array{T,N}}, a::MockDeviceArray{S,N}) where {T,S,N}
+    return convert(Array{T,N}, a.host)
+end
+
+@testset "Non-parametric ConcreteRArray(::AbstractArray)" begin
+    task_local_storage(:ScalarIndexing, Reactant.GPUArraysCore.ScalarDisallowed) do
+        @test ConcreteRArray(reshape(1:6, 2, 3)) isa ConcreteRArray{Int,2}
+        @test Array(ConcreteRArray(reshape(1:6, 2, 3))) == reshape(collect(1:6), 2, 3)
+
+        rb = Adapt.adapt(ConcreteRArray, trues(2, 3))
+        @test rb isa ConcreteRArray{Bool,2}
+        @test Array(rb) == trues(2, 3)
+
+        dev_arr = MockDeviceArray(Float32[1 2; 3 4])
+        rd = ConcreteRArray(dev_arr)
+        @test rd isa ConcreteRArray{Float32,2}
+        @test Array(rd) == Float32[1 2; 3 4]
+        @test Array(Adapt.adapt(ConcreteRArray, dev_arr)) == Float32[1 2; 3 4]
     end
 end
