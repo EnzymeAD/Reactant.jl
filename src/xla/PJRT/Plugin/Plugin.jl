@@ -4,6 +4,7 @@ using Base: unsafe_convert
 using ..Reactant: Reactant, WeakKeyIdDict
 using Reactant.XLA.CAPI: CAPI, csizeof
 using Reactant.MLIR: IR, API
+using BFloat16s: BFloat16
 
 macro pjrt_catch_return(fdef)
     Meta.isexpr(fdef, :function) ||
@@ -213,7 +214,7 @@ pjrt_eltype(::Type{UInt8}) = CAPI.PJRT_Buffer_Type_U8
 pjrt_eltype(::Type{Int16}) = CAPI.PJRT_Buffer_Type_S16
 pjrt_eltype(::Type{UInt16}) = CAPI.PJRT_Buffer_Type_U16
 pjrt_eltype(::Type{Float16}) = CAPI.PJRT_Buffer_Type_F16
-pjrt_eltype(::Type{Core.BFloat16}) = CAPI.PJRT_Buffer_Type_BF16
+pjrt_eltype(::Type{BFloat16}) = CAPI.PJRT_Buffer_Type_BF16
 pjrt_eltype(::Type{Int32}) = CAPI.PJRT_Buffer_Type_S32
 pjrt_eltype(::Type{UInt32}) = CAPI.PJRT_Buffer_Type_U32
 pjrt_eltype(::Type{Float32}) = CAPI.PJRT_Buffer_Type_F32
