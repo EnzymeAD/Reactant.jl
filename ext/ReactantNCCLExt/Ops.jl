@@ -113,4 +113,41 @@ end
     return TracedRArray{T,N}((), IR.result(op), size(buf))
 end
 
+@noinline function group(f; location=mlir_stacktrace("comm.nccl.group", @__FILE__, @__LINE__))
+    block = IR.Block()
+    IR.activate(block)
+    Reactant.Ops.activate_constant_context!(block)
+    res = try
+        Reactant.call_with_reactant(f)
+    finally
+        Reactant.Ops.deactivate_constant_context!(block)
+        IR.deactivate(block)
+    end
+
+    # values captured (and mutated) or returned by `f` that are defined inside the group
+    # must escape through `comm.nccl.yield`
+    seen = Reactant.OrderedIdDict()
+    Reactant.make_tracer(seen, (f, res), (gensym(:nccl_group),), Reactant.NoStopTracedTrack)
+    escaping = [
+        x for x in values(seen) if x isa Union{TracedRArray,TracedRNumber,TracedCommunicator} &&
+        IR.is_op_res(get_mlir_data(x)) &&
+        IR.block(IR.op_owner(get_mlir_data(x))) == block
+    ]
+    if any(x -> x isa TracedCommunicator, escaping)
+        error("NCCL communicators created inside `NCCL.group` cannot be used outside of it")
+    end
+
+    MLIR.IR.@with_block block comm.nccl_yield(IR.Value[get_mlir_data(x) for x in escaping]; location)
+
+    region = IR.Region()
+    push!(region, block)
+    op = comm.nccl_group(; results=IR.Type[IR.type(get_mlir_data(x)) for x in escaping], region, location)
+
+    for (i, x) in enumerate(escaping)
+        set_mlir_data!(x, IR.result(op, i))
+    end
+
+    return res
+end
+
 end # module

@@ -1,7 +1,7 @@
 module ReactantNCCLExt
 
 
-using Reactant: TracedRArray
+using Reactant: TracedRArray, @reactant_overlay
 using Reactant.TracedUtils: set_mlir_data!
 using NCCL: NCCL
 
@@ -55,5 +55,7 @@ end
 function NCCL.Broadcast!(sendrecvbuf::TracedRArray, comm::TracedCommunicator; root::Integer=0, stream=nothing)
     return NCCL.Broadcast!(sendrecvbuf, sendrecvbuf, comm; root, stream)
 end
+
+@reactant_overlay NCCL.group(f) = Ops.group(f)
 
 end # module
