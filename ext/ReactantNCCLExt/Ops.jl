@@ -7,13 +7,12 @@ using Reactant.Ops: mlir_stacktrace, mlir_type
 using NCCL: NCCL
 using ..ReactantNCCLExt: TracedCommunicator
 
-# NOTE map by name: enum values in `#comm.nccl.red_op` do not match the ones in `nccl.h` (min/max are swapped)
-nccl_red_op_name(::typeof(+)) = "ncclSum"
-nccl_red_op_name(::typeof(*)) = "ncclProd"
-nccl_red_op_name(::typeof(min)) = "ncclMin"
-nccl_red_op_name(::typeof(max)) = "ncclMax"
-function nccl_red_op_name(op)
-    op === NCCL.avg && return "ncclAvg"
+nccl_red_op(::typeof(+)) = MLIR.API.ENZYMEXLA_COMM_NCCL_RED_OP_SUM
+nccl_red_op(::typeof(*)) = MLIR.API.ENZYMEXLA_COMM_NCCL_RED_OP_PROD
+nccl_red_op(::typeof(min)) = MLIR.API.ENZYMEXLA_COMM_NCCL_RED_OP_MIN
+nccl_red_op(::typeof(max)) = MLIR.API.ENZYMEXLA_COMM_NCCL_RED_OP_MAX
+function nccl_red_op(op)
+    op === NCCL.avg && return MLIR.API.ENZYMEXLA_COMM_NCCL_RED_OP_AVG
     throw(ArgumentError("Unsupported NCCL reduction operator $op"))
 end
 
@@ -84,7 +83,9 @@ end
     c::TracedCommunicator;
     location=mlir_stacktrace("comm.nccl.all_reduce", @__FILE__, @__LINE__),
 ) where {T,N}
-    reduce_op_attr = parse(IR.Attribute, "#comm.nccl.red_op<$(nccl_red_op_name(reduce_op))>")
+    reduce_op_attr = IR.Attribute(
+        MLIR.API.enzymexlaCommNcclRedOpAttrGet(IR.current_context(), nccl_red_op(reduce_op))
+    )
     op = comm.nccl_all_reduce(
         get_mlir_data(buf),
         get_mlir_data(c);
