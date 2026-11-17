@@ -197,8 +197,8 @@ function handle(::Val{Symbol("stablehlo.reduce_precision")}, (a,), attributes, _
     return map(a) do x
         T = typeof(x)
         U = Base.uinttype(T)
-        src_mantissa_bits = Base.exponent_bits(T)
-        src_exponent_bits = Base.significand_bits(T)
+        src_exponent_bits = Base.exponent_bits(T)
+        src_mantissa_bits = Base.significand_bits(T)
         bits = reinterpret(U, x)
 
         # adding 0111... (plus 1 if the last kept bit is set) and truncating rounds to nearest with ties to even. a
