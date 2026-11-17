@@ -130,7 +130,7 @@ function update_global_process_info! end
 export unimplemented, invalid_argument, resource_exhausted
 
 # GC roots of objects whose pointers are handed to C; objects stay alive until they are unmarked
-const gc_roots = IdSet{Any}()
+const gc_roots = Base.IdSet{Any}()
 const gc_roots_lock = ReentrantLock()
 
 function root!(obj::T) where {T}
