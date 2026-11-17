@@ -8,9 +8,16 @@ using NCCL: NCCL
 include("Types.jl")
 include("Ops.jl")
 
-NCCL.size(comm::TracedCommunicator) = Ops.comm_count(comm)
+NCCL.nranks(comm::TracedCommunicator) = Ops.comm_count(comm)
 
 NCCL.rank(comm::TracedCommunicator) = Ops.comm_user_rank(comm)
+
+# NOTE unlike NCCL.jl, ranks passing `nothing` as color get a (null) `TracedCommunicator` instead of `nothing`
+function NCCL.split(comm::TracedCommunicator, color, key=NCCL.rank(comm); config=nothing)
+    isnothing(config) || throw(ArgumentError("config argument is not supported"))
+    color = isnothing(color) ? NCCL.LibNCCL.NCCL_SPLIT_NOCOLOR : color
+    return Ops.comm_split(comm, color, key)
+end
 
 function NCCL.Send(sendbuf, comm::TracedCommunicator; dest::Integer, stream=nothing)
     isnothing(stream) || throw(ArgumentError("stream argument is not supported"))
