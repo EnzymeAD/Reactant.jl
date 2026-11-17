@@ -1,57 +1,115 @@
-using NCCL
-using Reactant: promote_to
-using Reactant.Ops: mlir_stacktrace, mlir_type
+module Ops
+using Reactant: Reactant, MLIR, TracedRArray, TracedRNumber, promote_to
+using Reactant.TracedUtils: get_mlir_data, set_mlir_data!
 using Reactant.MLIR: IR
 using Reactant.MLIR.Dialects: comm
+using Reactant.Ops: mlir_stacktrace, mlir_type
+using NCCL: NCCL
+using ..ReactantNCCLExt: TracedCommunicator
 
-@noinline function comm_count(communicator::TracedCommunicator; location=mlir_stacktrace("comm.nccl.comm_count", @__FILE__, @__LINE__))
-    count = mlir_type(TracedRArray{Int32,0}, ())
-    res = IR.result(comm.nccl_comm_count(communicator; count, location))
-    return TracedRNumber{Int32}((), res)
+# NOTE map by name: enum values in `#comm.nccl.red_op` do not match the ones in `nccl.h` (min/max are swapped)
+nccl_red_op_name(::typeof(+)) = "ncclSum"
+nccl_red_op_name(::typeof(*)) = "ncclProd"
+nccl_red_op_name(::typeof(min)) = "ncclMin"
+nccl_red_op_name(::typeof(max)) = "ncclMax"
+function nccl_red_op_name(op)
+    op === NCCL.avg && return "ncclAvg"
+    throw(ArgumentError("Unsupported NCCL reduction operator $op"))
 end
 
-@noinline function comm_user_rank(communicator::TracedCommunicator; location=mlir_stacktrace("comm.nccl.comm_user_rank", @__FILE__, @__LINE__))
-    user_rank = mlir_type(TracedRArray{Int32,0}, ())
-    res = IR.result(comm.nccl_comm_user_rank(communicator; user_rank, location))
-    return TracedRNumber{Int32}((), res)
+@noinline function comm_count(
+    c::TracedCommunicator;
+    location=mlir_stacktrace("comm.nccl.comm_count", @__FILE__, @__LINE__),
+)
+    type_count = mlir_type(TracedRArray{Int32,0}, ())
+    op = comm.nccl_comm_count(get_mlir_data(c); count=type_count, location)
+    return TracedRNumber{Int32}((), IR.result(op))
 end
 
-@noinline function comm_split(communicator::TracedCommunicator, color, key; location=mlir_stacktrace("comm.nccl.comm_split", @__FILE__, @__LINE__))
-    comm_type = mlir_type(TracedCommunicator)
+@noinline function comm_user_rank(
+    c::TracedCommunicator;
+    location=mlir_stacktrace("comm.nccl.comm_user_rank", @__FILE__, @__LINE__),
+)
+    type_user_rank = mlir_type(TracedRArray{Int32,0}, ())
+    op = comm.nccl_comm_user_rank(get_mlir_data(c); user_rank=type_user_rank, location)
+    return TracedRNumber{Int32}((), IR.result(op))
+end
+
+@noinline function comm_split(
+    c::TracedCommunicator,
+    color,
+    key;
+    location=mlir_stacktrace("comm.nccl.comm_split", @__FILE__, @__LINE__),
+)
     tcolor = promote_to(TracedRNumber{Int32}, color)
     tkey = promote_to(TracedRNumber{Int32}, key)
-    res = IR.result(comm.nccl_comm_split(communicator, tcolor, tkey; new_comm=comm_type, location))
-    return TracedCommunicator(res)
+    op = comm.nccl_comm_split(
+        get_mlir_data(c),
+        get_mlir_data(tcolor),
+        get_mlir_data(tkey);
+        new_comm=mlir_type(TracedCommunicator),
+        location,
+    )
+    return TracedCommunicator((), IR.result(op))
 end
 
-@noinline function send(buf, peer, communicator::TracedCommunicator, stream; location=mlir_stacktrace("comm.nccl.send", @__FILE__, @__LINE__))
-    tbuf = Reactant.promote_to(TracedRArray, buf)
-    tpeer = Reactant.promote_to(TracedRNumber{Int32}, peer)
-    # TODO check stream is default stream
-    IR.result(comm.nccl_send(tbuf, communicator, tpeer; location))
+@noinline function send(
+    buf::TracedRArray,
+    peer,
+    c::TracedCommunicator;
+    location=mlir_stacktrace("comm.nccl.send", @__FILE__, @__LINE__),
+)
+    tpeer = promote_to(TracedRNumber{Int32}, peer)
+    comm.nccl_send(get_mlir_data(buf), get_mlir_data(tpeer), get_mlir_data(c); location)
     return nothing
 end
 
-@noinline function recv(peer, communicator::TracedCommunicator; location=mlir_stacktrace("comm.nccl.recv", @__FILE__, @__LINE__))
-    tpeer = Reactant.promote_to(TracedRNumber{Int32}, peer)
-    # TODO probably check stream is default stream
-    res = IR.result(comm.nccl_recv(tpeer, communicator; location))
-    # TODO retrieve type and shape from res
-    T = ...
-    N = ...
-    return TracedRArray{,}((), res, ...)
+@noinline function recv!(
+    buf::TracedRArray,
+    peer,
+    c::TracedCommunicator;
+    location=mlir_stacktrace("comm.nccl.recv", @__FILE__, @__LINE__),
+)
+    tpeer = promote_to(TracedRNumber{Int32}, peer)
+    op = comm.nccl_recv(
+        get_mlir_data(tpeer), get_mlir_data(c); recvbuff=mlir_type(buf), location
+    )
+    set_mlir_data!(buf, IR.result(op))
+    return buf
 end
 
-@noinline function all_reduce(buf, reduce_op, communicator::TracedCommunicator; location=mlir_stacktrace("comm.nccl.all_reduce", @__FILE__, @__LINE__))
-    tbuf = Reactant.promote_to(TracedRArray, buf)
-    # TODO convert reduce_op to attribute
-    reduce_op_attr = ...
-    res = IR.result(comm.nccl_all_reduce(tbuf, reduce_op_attr, communicator; location))
-    return TracedRArray{unwrapped_eltype(buf),ndims(buf)}((), res, size(buf))
+@noinline function all_reduce(
+    buf::TracedRArray{T,N},
+    reduce_op,
+    c::TracedCommunicator;
+    location=mlir_stacktrace("comm.nccl.all_reduce", @__FILE__, @__LINE__),
+) where {T,N}
+    reduce_op_attr = parse(IR.Attribute, "#comm.nccl.red_op<$(nccl_red_op_name(reduce_op))>")
+    op = comm.nccl_all_reduce(
+        get_mlir_data(buf),
+        get_mlir_data(c);
+        recvbuf=mlir_type(buf),
+        reduceOp=reduce_op_attr,
+        location,
+    )
+    return TracedRArray{T,N}((), IR.result(op), size(buf))
 end
 
-@noinline function broadcast(buf, root, communicator::TracedCommunicator; location=mlir_stacktrace("comm.nccl.all_reduce", @__FILE__, @__LINE__))
-    tbuf = Reactant.promote_to(TracedRArray, buf)
-    troot = Reactant.promote_to(TracedRNumber, root)
-    res = IR.result(comm.nccl_broadcast(tbuf, troot, communicator; location))
+@noinline function broadcast(
+    buf::TracedRArray{T,N},
+    root,
+    c::TracedCommunicator;
+    location=mlir_stacktrace("comm.nccl.broadcast", @__FILE__, @__LINE__),
+) where {T,N}
+    troot = promote_to(TracedRNumber{Int32}, root)
+    op = comm.nccl_broadcast(
+        get_mlir_data(buf),
+        get_mlir_data(troot),
+        get_mlir_data(c);
+        recvbuff=mlir_type(buf),
+        location,
+    )
+    return TracedRArray{T,N}((), IR.result(op), size(buf))
 end
+
+end # module

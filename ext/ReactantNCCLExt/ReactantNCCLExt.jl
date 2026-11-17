@@ -1,15 +1,52 @@
 module ReactantNCCLExt
 
-using Reactant
-using Reactant: @reactant_overlay, TracedRArray, TracedRNumber
-using NCCL
 
-mutable struct TracedCommunicator
-    handle
-end
+using Reactant: TracedRArray
+using Reactant.TracedUtils: set_mlir_data!
+using NCCL: NCCL
 
-Reactant.Ops.mlir_type(::Type{TracedCommunicator}) = error("to do")
-
+include("Types.jl")
 include("Ops.jl")
 
+NCCL.size(comm::TracedCommunicator) = Ops.comm_count(comm)
+
+NCCL.rank(comm::TracedCommunicator) = Ops.comm_user_rank(comm)
+
+function NCCL.Send(sendbuf, comm::TracedCommunicator; dest::Integer, stream=nothing)
+    isnothing(stream) || throw(ArgumentError("stream argument is not supported"))
+    sendbuf_traced = sendbuf isa TracedRArray ? sendbuf : Reactant.Ops.constant(sendbuf)
+    return Ops.send(sendbuf_traced, dest, comm)
 end
+
+function NCCL.Recv!(recvbuf::TracedRArray, comm::TracedCommunicator; source::Integer, stream=nothing)
+    isnothing(stream) || throw(ArgumentError("stream argument is not supported"))
+    return Ops.recv!(recvbuf, source, comm)
+end
+
+function NCCL.Allreduce!(sendbuf, recvbuf::TracedRArray, op, comm::TracedCommunicator; stream=nothing)
+    isnothing(stream) || throw(ArgumentError("stream argument is not supported"))
+    sendbuf_traced = sendbuf isa TracedRArray ? sendbuf : Reactant.Ops.constant(sendbuf)
+    res = Ops.all_reduce(sendbuf_traced, op, comm)
+    set_mlir_data!(recvbuf, get_mlir_data(res))
+    return recvbuf
+end
+
+function NCCL.Allreduce!(sendrecvbuf::TracedRArray, op, comm::TracedCommunicator; stream=nothing)
+    return NCCL.Allreduce!(sendrecvbuf, sendrecvbuf, op, comm; stream)
+end
+
+function NCCL.Broadcast!(
+    sendbuf, recvbuf::TracedRArray, comm::TracedCommunicator; root::Integer=0, stream=nothing
+)
+    isnothing(stream) || throw(ArgumentError("stream argument is not supported"))
+    sendbuf_traced = sendbuf isa TracedRArray ? sendbuf : Reactant.Ops.constant(sendbuf)
+    res = Ops.broadcast(sendbuf_traced, root, comm)
+    set_mlir_data!(recvbuf, get_mlir_data(res))
+    return recvbuf
+end
+
+function NCCL.Broadcast!(sendrecvbuf::TracedRArray, comm::TracedCommunicator; root::Integer=0, stream=nothing)
+    return NCCL.Broadcast!(sendrecvbuf, sendrecvbuf, comm; root, stream)
+end
+
+end # module
