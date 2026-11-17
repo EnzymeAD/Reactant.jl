@@ -126,6 +126,19 @@ end
         @test @jit(sinc(xz)) ≈ sinc(xz0)
         @test @jit(sinc(xinf)) ≈ sinc(Inf + 1im)
     end
+
+    @testset "angle" begin
+        xc = ComplexF32[1 + 2im, -1 + 2im, -1 - 2im, 1 - 2im, -3 + 0im, 0 + 0im]
+        xc_ra = Reactant.to_rarray(xc)
+        @test @jit(angle.(xc_ra)) ≈ angle.(xc)
+        @test @jit(angle.(xc_ra)) isa ConcreteRArray{Float32,1}
+        @test @jit(angle(ConcreteRNumber(ComplexF64(-1, 0)))) ≈ π
+
+        x = Float32[-2, -0.5, 0, 0.5, 2]
+        x_ra = Reactant.to_rarray(x)
+        @test @jit(angle.(x_ra)) ≈ angle.(x)
+        @test @jit(angle.(x_ra)) isa ConcreteRArray{Float32,1}
+    end
 end
 
 @testset "isfinite" begin

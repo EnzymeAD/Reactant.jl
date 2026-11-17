@@ -1098,18 +1098,24 @@ csizeof(::Type{XLA_FFI_Window_Get_Args}) = Csize_t(72)
 
 csizeof(::Type{XLA_FFI_Collectives_Extension}) = Csize_t(72)
 
-mutable struct XLA_FFI_RecordContext end
-
-mutable struct XLA_FFI_Command end
-
-@cenum XLA_FFI_RecordAction::UInt32 begin
-    XLA_FFI_RecordAction_Create = 0
-    XLA_FFI_RecordAction_Update = 1
-end
+mutable struct XLA_FFI_Kernel end
 
 @cenum XLA_FFI_SourceFormat::UInt32 begin
+    XLA_FFI_SourceFormat_PTX = 0
+    XLA_FFI_SourceFormat_CUBIN = 1
     XLA_FFI_SourceFormat_FUNCTION_PTR = 2
 end
+
+struct XLA_FFI_KernelSpec
+    struct_size::Csize_t
+    extension_start::Ptr{XLA_FFI_InternalExtension}
+    name::XLA_FFI_ByteSpan
+    data::Ptr{Cvoid}
+    size::Csize_t
+    format::XLA_FFI_SourceFormat
+end
+
+csizeof(::Type{XLA_FFI_KernelSpec}) = Csize_t(52)
 
 struct XLA_FFI_Dim3
     x::Int32
@@ -1137,6 +1143,26 @@ end
 struct XLA_FFI_KernelArgs
     args::Ptr{XLA_FFI_KernelArg}
     num_args::Int64
+end
+
+struct XLA_FFI_KernelLaunchParams
+    struct_size::Csize_t
+    extension_start::Ptr{XLA_FFI_InternalExtension}
+    launch_dims::XLA_FFI_LaunchDims
+    shared_mem_bytes::UInt32
+    uses_pdl::Int32
+    args::Ptr{XLA_FFI_KernelArgs}
+end
+
+csizeof(::Type{XLA_FFI_KernelLaunchParams}) = Csize_t(72)
+
+mutable struct XLA_FFI_RecordContext end
+
+mutable struct XLA_FFI_Command end
+
+@cenum XLA_FFI_RecordAction::UInt32 begin
+    XLA_FFI_RecordAction_Create = 0
+    XLA_FFI_RecordAction_Update = 1
 end
 
 struct XLA_FFI_RecordApi
@@ -1178,4 +1204,4 @@ const XLA_FFI_Extension_Record = 128
 
 const XLA_FFI_Extension_Record_MajorVersion = 0
 
-const XLA_FFI_Extension_Record_MinorVersion = 3
+const XLA_FFI_Extension_Record_MinorVersion = 4

@@ -1052,9 +1052,11 @@ The `rnd` attribute specifies the rounding mode (`rn` or `rz`).
 The `relu` attribute, when set, lowers to the \'.relu\' variant of
 the cvt instruction. The `pzo` attribute, when set, lowers to the
 \'.pzo\' variant of the cvt instruction.
+The optional `scale_factor` operand is an i8 `ue8m0` scale.
 """
 function convert_bf16x2_to_f4x2(
-    src::Value;
+    src::Value,
+    scale_factor=nothing::Union{Nothing,Value};
     dst=nothing::Union{Nothing,IR.Type},
     relu=nothing,
     dstTy,
@@ -1067,6 +1069,7 @@ function convert_bf16x2_to_f4x2(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[NamedAttribute("dstTy", dstTy),]
+    !isnothing(scale_factor) && push!(operands, scale_factor)
     !isnothing(dst) && push!(op_ty_results, dst)
     !isnothing(relu) && push!(attributes, NamedAttribute("relu", relu))
     !isnothing(rnd) && push!(attributes, NamedAttribute("rnd", rnd))
@@ -1100,9 +1103,11 @@ The `rnd` attribute specifies the rounding mode (`rn` or `rz`).
 The `relu` attribute, when set, lowers to the \'.relu\' variant of
 the cvt instruction. The `pzo` attribute, when set, lowers to the
 \'.pzo\' variant of the cvt instruction.
+The optional `scale_factor` operand is an i8 `ue8m0` scale.
 """
 function convert_bf16x2_to_f6x2(
-    src::Value;
+    src::Value,
+    scale_factor=nothing::Union{Nothing,Value};
     dst::IR.Type,
     relu=nothing,
     dstTy,
@@ -1115,6 +1120,7 @@ function convert_bf16x2_to_f6x2(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[NamedAttribute("dstTy", dstTy),]
+    !isnothing(scale_factor) && push!(operands, scale_factor)
     !isnothing(relu) && push!(attributes, NamedAttribute("relu", relu))
     !isnothing(rnd) && push!(attributes, NamedAttribute("rnd", rnd))
     !isnothing(pzo) && push!(attributes, NamedAttribute("pzo", pzo))
@@ -1148,12 +1154,15 @@ respectively. Conversions to `f8E4M3FN` and `f8E5M2` support `rn` and `rz`
 rounding. The `relu` attribute, when set, lowers to the \'.relu\' variant of
 the cvt instruction. The `pzo` attribute, when set, lowers to the \'.pzo\'
 variant of the cvt instruction. `pzo` is not supported for conversions to
-`f8E8M0FNU`.
+`f8E8M0FNU` or `f8E5M3FNU`.
+The optional `scale_factor` operand is an i8 `ue8m0` scale.
+Scaled conversions to `f8E5M3FNU` support `rn` and `rz` only.
 
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
 """
 function convert_bf16x2_to_f8x2(
-    src::Value;
+    src::Value,
+    scale_factor=nothing::Union{Nothing,Value};
     dst::IR.Type,
     rnd=nothing,
     sat=nothing,
@@ -1167,6 +1176,7 @@ function convert_bf16x2_to_f8x2(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[NamedAttribute("dstTy", dstTy),]
+    !isnothing(scale_factor) && push!(operands, scale_factor)
     !isnothing(rnd) && push!(attributes, NamedAttribute("rnd", rnd))
     !isnothing(sat) && push!(attributes, NamedAttribute("sat", sat))
     !isnothing(relu) && push!(attributes, NamedAttribute("relu", relu))
@@ -1546,9 +1556,11 @@ The `rnd` attribute specifies the rounding mode (`rn` or `rz`).
 The `relu` attribute, when set, lowers to the \'.relu\' variant of
 the cvt instruction. The `pzo` attribute, when set, lowers to the
 \'.pzo\' variant of the cvt instruction.
+The optional `scale_factor` operand is an i8 `ue8m0` scale.
 """
 function convert_f16x2_to_f4x2(
-    src::Value;
+    src::Value,
+    scale_factor=nothing::Union{Nothing,Value};
     dst=nothing::Union{Nothing,IR.Type},
     relu=nothing,
     dstTy,
@@ -1561,6 +1573,7 @@ function convert_f16x2_to_f4x2(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[NamedAttribute("dstTy", dstTy),]
+    !isnothing(scale_factor) && push!(operands, scale_factor)
     !isnothing(dst) && push!(op_ty_results, dst)
     !isnothing(relu) && push!(attributes, NamedAttribute("relu", relu))
     !isnothing(rnd) && push!(attributes, NamedAttribute("rnd", rnd))
@@ -1594,9 +1607,11 @@ The `rnd` attribute specifies the rounding mode (`rn` or `rz`).
 The `relu` attribute, when set, lowers to the \'.relu\' variant of
 the cvt instruction. The `pzo` attribute, when set, lowers to the
 \'.pzo\' variant of the cvt instruction.
+The optional `scale_factor` operand is an i8 `ue8m0` scale.
 """
 function convert_f16x2_to_f6x2(
-    src::Value;
+    src::Value,
+    scale_factor=nothing::Union{Nothing,Value};
     dst::IR.Type,
     relu=nothing,
     dstTy,
@@ -1609,6 +1624,7 @@ function convert_f16x2_to_f6x2(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[NamedAttribute("dstTy", dstTy),]
+    !isnothing(scale_factor) && push!(operands, scale_factor)
     !isnothing(relu) && push!(attributes, NamedAttribute("relu", relu))
     !isnothing(rnd) && push!(attributes, NamedAttribute("rnd", rnd))
     !isnothing(pzo) && push!(attributes, NamedAttribute("pzo", pzo))
@@ -1638,16 +1654,22 @@ is stored in the upper 8 bits of `dst` and the value converted from the
 second element of `a` is stored in the lower 8 bits of `dst`.
 If `dst` is returned as a vector type, each converted value is stored as an 
 i8 element in the vector.
-The `rnd` attribute specifies the rounding mode (`rn` or `rz`).
+The `rnd` attribute specifies the rounding mode. Conversions to
+`f8E4M3FN` and `f8E5M2` support `rn` and `rz`. Conversions to
+`f8E5M3FNU` also support `rp`, except when a scale factor is present.
 The `relu` attribute, when set, lowers to the \'.relu\' variant of
 the cvt instruction. The `pzo` attribute, when set, lowers to the
-\'.pzo\' variant of the cvt instruction.
+\'.pzo\' variant of the cvt instruction. `relu` and `pzo` are not
+supported for conversions to `f8E5M3FNU`.
+The optional `scale_factor` operand is an i8 `ue8m0` scale.
 
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
 """
 function convert_f16x2_to_f8x2(
-    a::Value;
+    a::Value,
+    scale_factor=nothing::Union{Nothing,Value};
     dst::IR.Type,
+    sat=nothing,
     relu=nothing,
     dstTy,
     rnd=nothing,
@@ -1659,6 +1681,8 @@ function convert_f16x2_to_f8x2(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[NamedAttribute("dstTy", dstTy),]
+    !isnothing(scale_factor) && push!(operands, scale_factor)
+    !isnothing(sat) && push!(attributes, NamedAttribute("sat", sat))
     !isnothing(relu) && push!(attributes, NamedAttribute("relu", relu))
     !isnothing(rnd) && push!(attributes, NamedAttribute("rnd", rnd))
     !isnothing(pzo) && push!(attributes, NamedAttribute("pzo", pzo))
@@ -1689,6 +1713,9 @@ The `relu` attribute clamps negative results to 0.
 
 The `sat` attribute determines saturation behavior.
 
+The `pzo` attribute, when set, lowers to the \'.pzo\' variant of the cvt
+instruction. `pzo` is not supported with the RS rounding mode.
+
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
 """
 function convert_f32x2_to_bf16x2(
@@ -1699,6 +1726,7 @@ function convert_f32x2_to_bf16x2(
     rnd=nothing,
     sat=nothing,
     relu=nothing,
+    pzo=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[dst,]
@@ -1710,6 +1738,7 @@ function convert_f32x2_to_bf16x2(
     !isnothing(rnd) && push!(attributes, NamedAttribute("rnd", rnd))
     !isnothing(sat) && push!(attributes, NamedAttribute("sat", sat))
     !isnothing(relu) && push!(attributes, NamedAttribute("relu", relu))
+    !isnothing(pzo) && push!(attributes, NamedAttribute("pzo", pzo))
 
     return create_operation(
         "nvvm.convert.f32x2.to.bf16x2",
@@ -1735,12 +1764,14 @@ The `rnd` attribute specifies the rounding mode (`rn` or `rz`).
 The `relu` attribute, when set, lowers to the \'.relu\' variant of
 the cvt instruction. The `pzo` attribute, when set, lowers to the
 \'.pzo\' variant of the cvt instruction.
+The optional `scale_factor` operand is an i8 `ue8m0` scale.
 
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
 """
 function convert_f32x2_to_f4x2(
     a::Value,
-    b::Value;
+    b::Value,
+    scale_factor=nothing::Union{Nothing,Value};
     dst=nothing::Union{Nothing,IR.Type},
     relu=nothing,
     dstTy,
@@ -1753,6 +1784,7 @@ function convert_f32x2_to_f4x2(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[NamedAttribute("dstTy", dstTy),]
+    !isnothing(scale_factor) && push!(operands, scale_factor)
     !isnothing(dst) && push!(op_ty_results, dst)
     !isnothing(relu) && push!(attributes, NamedAttribute("relu", relu))
     !isnothing(rnd) && push!(attributes, NamedAttribute("rnd", rnd))
@@ -1786,12 +1818,14 @@ The `rnd` attribute specifies the rounding mode (`rn` or `rz`).
 The `relu` attribute, when set, lowers to the \'.relu\' variant of
 the cvt instruction. The `pzo` attribute, when set, lowers to the
 \'.pzo\' variant of the cvt instruction.
+The optional `scale_factor` operand is an i8 `ue8m0` scale.
 
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
 """
 function convert_f32x2_to_f6x2(
     a::Value,
-    b::Value;
+    b::Value,
+    scale_factor=nothing::Union{Nothing,Value};
     dst::IR.Type,
     relu=nothing,
     dstTy,
@@ -1804,6 +1838,7 @@ function convert_f32x2_to_f6x2(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[NamedAttribute("dstTy", dstTy),]
+    !isnothing(scale_factor) && push!(operands, scale_factor)
     !isnothing(relu) && push!(attributes, NamedAttribute("relu", relu))
     !isnothing(rnd) && push!(attributes, NamedAttribute("rnd", rnd))
     !isnothing(pzo) && push!(attributes, NamedAttribute("pzo", pzo))
@@ -1836,13 +1871,16 @@ Conversions to `f8E4M3FN` and `f8E5M2` support `rn` and `rz` rounding.
 The `relu` attribute, when set, lowers to the \'.relu\' variant of
 the cvt instruction. The `pzo` attribute, when set, lowers to the
 \'.pzo\' variant of the cvt instruction. `pzo` is not supported for
-conversions to `f8E8M0FNU`.
+conversions to `f8E8M0FNU` or `f8E5M3FNU`.
+The optional `scale_factor` operand is an i8 `ue8m0` scale.
+Scaled conversions to `f8E5M3FNU` support `rn` and `rz` only.
 
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
 """
 function convert_f32x2_to_f8x2(
     a::Value,
-    b::Value;
+    b::Value,
+    scale_factor=nothing::Union{Nothing,Value};
     dst::IR.Type,
     rnd=nothing,
     sat=nothing,
@@ -1856,6 +1894,7 @@ function convert_f32x2_to_f8x2(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[NamedAttribute("dstTy", dstTy),]
+    !isnothing(scale_factor) && push!(operands, scale_factor)
     !isnothing(rnd) && push!(attributes, NamedAttribute("rnd", rnd))
     !isnothing(sat) && push!(attributes, NamedAttribute("sat", sat))
     !isnothing(relu) && push!(attributes, NamedAttribute("relu", relu))
@@ -1887,6 +1926,9 @@ The `relu` attribute clamps negative results to 0.
 
 The `sat` attribute determines saturation behavior.
 
+The `pzo` attribute, when set, lowers to the \'.pzo\' variant of the cvt
+instruction. `pzo` is not supported with the RS rounding mode.
+
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cvt)
 """
 function convert_f32x2_to_f16x2(
@@ -1897,6 +1939,7 @@ function convert_f32x2_to_f16x2(
     rnd=nothing,
     sat=nothing,
     relu=nothing,
+    pzo=nothing,
     location=Location(),
 )
     op_ty_results = IR.Type[dst,]
@@ -1908,6 +1951,7 @@ function convert_f32x2_to_f16x2(
     !isnothing(rnd) && push!(attributes, NamedAttribute("rnd", rnd))
     !isnothing(sat) && push!(attributes, NamedAttribute("sat", sat))
     !isnothing(relu) && push!(attributes, NamedAttribute("relu", relu))
+    !isnothing(pzo) && push!(attributes, NamedAttribute("pzo", pzo))
 
     return create_operation(
         "nvvm.convert.f32x2.to.f16x2",
@@ -4587,11 +4631,17 @@ The `nvvm.mbarrier.arrive_drop.expect_tx` operation is similar to the
 `nvvm.mbarrier.arrive.expect_tx` operation except that it performs an
 `arrive_drop` operation instead of only an `arrive` operation.
 
+When `multicastMask` is present, the operation updates the barrier at the
+same shared-memory offset in each CTA selected by the 32-bit mask. The
+`addr` must be in shared::cluster space. Both CTA and cluster scopes are
+supported. Omitting the mask preserves the non-multicast behavior.
+
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-mbarrier-arrive-drop)
 """
 function mbarrier_arrive_drop_expect_tx(
     addr::Value,
-    txcount::Value;
+    txcount::Value,
+    multicastMask=nothing::Union{Nothing,Value};
     res=nothing::Union{Nothing,IR.Type},
     scope=nothing,
     relaxed=nothing,
@@ -4602,6 +4652,7 @@ function mbarrier_arrive_drop_expect_tx(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(multicastMask) && push!(operands, multicastMask)
     !isnothing(res) && push!(op_ty_results, res)
     !isnothing(scope) && push!(attributes, NamedAttribute("scope", scope))
     !isnothing(relaxed) && push!(attributes, NamedAttribute("relaxed", relaxed))
@@ -4660,11 +4711,17 @@ of the expected arrival count applies to all the subsequent phases of the
 *mbarrier object*. The remaining semantics are identical to those of the
 `nvvm.mbarrier.arrive` operation.
 
+When `multicastMask` is present, the operation updates the barrier at the
+same shared-memory offset in each CTA selected by the 32-bit mask. The
+`addr` must be in shared::cluster space. Both CTA and cluster scopes are
+supported. Omitting the mask preserves the non-multicast behavior.
+
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-mbarrier-arrive-drop)
 """
 function mbarrier_arrive_drop(
     addr::Value,
     count=nothing::Union{Nothing,Value};
+    multicastMask=nothing::Union{Nothing,Value},
     res=nothing::Union{Nothing,IR.Type},
     scope=nothing,
     relaxed=nothing,
@@ -4676,6 +4733,11 @@ function mbarrier_arrive_drop(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(count) && push!(operands, count)
+    !isnothing(multicastMask) && push!(operands, multicastMask)
+    push!(
+        attributes,
+        operandsegmentsizes([1, Int(!isnothing(count)), Int(!isnothing(multicastMask))]),
+    )
     !isnothing(res) && push!(op_ty_results, res)
     !isnothing(scope) && push!(attributes, NamedAttribute("scope", scope))
     !isnothing(relaxed) && push!(attributes, NamedAttribute("relaxed", relaxed))
@@ -4722,12 +4784,18 @@ The operation takes the following operands:
 - `predicate`: Optional predicate for conditional execution used only when lowering to
   inline-ptx.
 
+When `multicastMask` is present, the operation updates the barrier at the
+same shared-memory offset in each CTA selected by the 32-bit mask. The
+`addr` must be in shared::cluster space. Both CTA and cluster scopes are
+supported. Omitting the mask preserves the non-multicast behavior.
+
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-mbarrier-arrive-drop)
 """
 function mbarrier_arrive_expect_tx(
     addr::Value,
     txcount::Value,
-    predicate=nothing::Union{Nothing,Value};
+    multicastMask=nothing::Union{Nothing,Value};
+    predicate=nothing::Union{Nothing,Value},
     res=nothing::Union{Nothing,IR.Type},
     scope=nothing,
     relaxed=nothing,
@@ -4738,7 +4806,14 @@ function mbarrier_arrive_expect_tx(
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(multicastMask) && push!(operands, multicastMask)
     !isnothing(predicate) && push!(operands, predicate)
+    push!(
+        attributes,
+        operandsegmentsizes([
+            1, 1, Int(!isnothing(multicastMask)), Int(!isnothing(predicate))
+        ]),
+    )
     !isnothing(res) && push!(op_ty_results, res)
     !isnothing(scope) && push!(attributes, NamedAttribute("scope", scope))
     !isnothing(relaxed) && push!(attributes, NamedAttribute("relaxed", relaxed))
@@ -4837,11 +4912,17 @@ The operation takes the following operands:
 - `relaxed`: When set to true, the `arrive` operation has relaxed memory semantics
   and does not provide any ordering or visibility guarantees.
 
+When `multicastMask` is present, the operation updates the barrier at the
+same shared-memory offset in each CTA selected by the 32-bit mask. The
+`addr` must be in shared::cluster space. Both CTA and cluster scopes are
+supported. Omitting the mask preserves the non-multicast behavior.
+
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-mbarrier-arrive)
 """
 function mbarrier_arrive(
     addr::Value,
     count=nothing::Union{Nothing,Value};
+    multicastMask=nothing::Union{Nothing,Value},
     res=nothing::Union{Nothing,IR.Type},
     scope=nothing,
     relaxed=nothing,
@@ -4853,6 +4934,11 @@ function mbarrier_arrive(
     successors = Block[]
     attributes = NamedAttribute[]
     !isnothing(count) && push!(operands, count)
+    !isnothing(multicastMask) && push!(operands, multicastMask)
+    push!(
+        attributes,
+        operandsegmentsizes([1, Int(!isnothing(count)), Int(!isnothing(multicastMask))]),
+    )
     !isnothing(res) && push!(op_ty_results, res)
     !isnothing(scope) && push!(attributes, NamedAttribute("scope", scope))
     !isnothing(relaxed) && push!(attributes, NamedAttribute("relaxed", relaxed))
@@ -4922,16 +5008,26 @@ current phase. The `scope` specifies the set of threads that can directly
 observe the memory synchronizing effect of the `mbarrier.complete_tx`
 operation. `CTA` and `CLUSTER` are the only allowed values for `scope`.
 
+When `multicastMask` is present, the operation updates the barrier at the
+same shared-memory offset in each CTA selected by the 32-bit mask. The
+`addr` must be in shared::cluster space. Both CTA and cluster scopes are
+supported. Omitting the mask preserves the non-multicast behavior.
+
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-mbarrier-complete-tx)
 """
 function mbarrier_complete_tx(
-    addr::Value, txcount::Value; scope=nothing, location=Location()
+    addr::Value,
+    txcount::Value,
+    multicastMask=nothing::Union{Nothing,Value};
+    scope=nothing,
+    location=Location(),
 )
     op_ty_results = IR.Type[]
     operands = Value[addr, txcount]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(multicastMask) && push!(operands, multicastMask)
     !isnothing(scope) && push!(attributes, NamedAttribute("scope", scope))
 
     return create_operation(
@@ -4955,14 +5051,26 @@ specifies the set of threads that can directly observe the memory
 synchronizing effect of the `mbarrier.expect_tx` operation. `CTA`
 and `CLUSTER` are the only allowed values for `scope`.
 
+When `multicastMask` is present, the operation updates the barrier at the
+same shared-memory offset in each CTA selected by the 32-bit mask. The
+`addr` must be in shared::cluster space. Both CTA and cluster scopes are
+supported. Omitting the mask preserves the non-multicast behavior.
+
 [For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#parallel-synchronization-and-communication-instructions-mbarrier-expect-tx)
 """
-function mbarrier_expect_tx(addr::Value, txcount::Value; scope=nothing, location=Location())
+function mbarrier_expect_tx(
+    addr::Value,
+    txcount::Value,
+    multicastMask=nothing::Union{Nothing,Value};
+    scope=nothing,
+    location=Location(),
+)
     op_ty_results = IR.Type[]
     operands = Value[addr, txcount]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
+    !isnothing(multicastMask) && push!(operands, multicastMask)
     !isnothing(scope) && push!(attributes, NamedAttribute("scope", scope))
 
     return create_operation(
@@ -5817,6 +5925,50 @@ function movmatrix(
 end
 
 """
+`mulf`
+
+The `nvvm.mulf` operation performs floating point multiplication of two 
+floating point operands of the same type.
+
+The rounding mode is specified by the `rnd` attribute, saturation mode by 
+the `sat` attribute, and flush-to-zero by the `ftz` attribute.
+
+For more information, see PTX ISA:
+- [floating point multiplication](https://docs.nvidia.com/cuda/parallel-thread-execution/#floating-point-instructions-mul)
+- [half-precision floating point multiplication](https://docs.nvidia.com/cuda/parallel-thread-execution/#half-precision-floating-point-instructions-mul)
+"""
+function mulf(
+    lhs::Value,
+    rhs::Value;
+    res=nothing::Union{Nothing,IR.Type},
+    rnd=nothing,
+    sat=nothing,
+    ftz=nothing,
+    location=Location(),
+)
+    op_ty_results = IR.Type[]
+    operands = Value[lhs, rhs]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(res) && push!(op_ty_results, res)
+    !isnothing(rnd) && push!(attributes, NamedAttribute("rnd", rnd))
+    !isnothing(sat) && push!(attributes, NamedAttribute("sat", sat))
+    !isnothing(ftz) && push!(attributes, NamedAttribute("ftz", ftz))
+
+    return create_operation(
+        "nvvm.mulf",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
 `nanosleep`
 
 The op suspends the thread for a sleep duration approximately close to the 
@@ -6045,6 +6197,45 @@ function prefetch(
 
     return create_operation(
         "nvvm.prefetch",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=op_ty_results,
+        result_inference=false,
+    )
+end
+
+"""
+`prefetch_valid_addr`
+
+Prefetches data from the address given by `addr` into the cache selected by
+`cacheLevel`. Currently, only L1 is supported and the operation requests a
+prefetch of at least 32 bytes.
+
+The operand must be a global or generic pointer. A generic address must
+refer to the global state space. At least one byte at `addr` must be valid
+and accessible for this access; otherwise, behavior is undefined and the
+instruction may fault.
+
+Examples:
+```mlir
+nvvm.prefetch.valid_addr level = L1, %global_ptr : !llvm.ptr<1>
+nvvm.prefetch.valid_addr level = L1, %generic_ptr : !llvm.ptr
+```
+
+[For more information, see PTX ISA](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-prefetch-prefetchu)
+"""
+function prefetch_valid_addr(addr::Value; cacheLevel, location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[addr,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[NamedAttribute("cacheLevel", cacheLevel),]
+
+    return create_operation(
+        "nvvm.prefetch.valid_addr",
         location;
         operands,
         owned_regions,

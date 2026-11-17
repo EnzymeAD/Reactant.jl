@@ -430,7 +430,7 @@ If `upper_bound` is set, then executing (a lowering of) this operation in an
 environment where the number of thread blocks per cluster along `dimension`
 is greater than `upper_bound` causes undefined behavior.
 
-There is an implicit upper bound of `kMaxClusterDim` (currently 8).
+There is an implicit upper bound of `kMaxClusterDim`.
 """
 function cluster_block_id(;
     result_0=nothing::Union{Nothing,IR.Type},
@@ -474,7 +474,7 @@ If `upper_bound` is set, then executing (a lowering of) this operation in an
 environment where the thread blocks per cluster  is greater than `upper_bound`
 causes undefined behavior.
 
-There is an implicit upper bound of `kMaxClusterDim` (currently 8).
+There is an implicit upper bound of `kMaxClusterDim`.
 """
 function cluster_dim_blocks(;
     result_0=nothing::Union{Nothing,IR.Type},
