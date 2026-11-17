@@ -527,9 +527,7 @@ Base.@nospecializeinfer function compile_mlir!(
                     ],
                     is_kernelad ? String[kernelad_post_enzyme_passes] : String[],
                     String[
-                        "enzyme-simplify-math",
-                        legalize_chlo_to_stablehlo...,
-                        opt_passes2,
+                        "enzyme-simplify-math", legalize_chlo_to_stablehlo..., opt_passes2
                     ],
                     compile_options.raise_first ? String[] : raise_pass_list,
                     String[lower_enzymexla_passes, jit],
@@ -799,11 +797,10 @@ Base.@nospecializeinfer function compile_mlir!(
         run_pass_pipeline!(mod, compile_options.optimization_passes, "custom_pass")
     end
 
-    if is_all &&
-        (
-            compile_options.transpose_propagate === :up ||
-            compile_options.reshape_propagate === :up
-        )
+    if is_all && (
+        compile_options.transpose_propagate === :up ||
+        compile_options.reshape_propagate === :up
+    )
         # We tried propagating reshapes and transposes up. If at this point we are left
         # with them, we propagate them down to minimize the number of Ops in the IR.
         # Since this might enable certain raising, we do push down -> push up -> push down
