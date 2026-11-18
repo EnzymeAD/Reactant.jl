@@ -123,6 +123,9 @@ s = ArgParseSettings()
     "--push-cache"
         help = "Build and store to bazel cache."
         action = :store_true
+    "--test"
+        help = "Build and run the ReactantExtra C++ unit tests."
+        action = :store_true
 end
 #! format: on
 parsed_args = parse_args(ARGS, s)
@@ -326,17 +329,37 @@ end
 
 push!(build_cmd_list, "--copt=-Wno-private-header")
 push!(build_cmd_list, "--color=$(parsed_args["color"])")
-push!(build_cmd_list, ":libReactantExtra.so")
+push!(build_cmd_list, "@enzyme_ad//src/enzyme_ad/jax/ReactantExtra:libReactantExtra.so")
 
 @info "About to run Bazel\n" * join(build_cmd_list, " \\\n  ")
 run(Cmd(Cmd(build_cmd_list); dir=source_dir))
 
+if parsed_args["test"]
+    test_cmd_list = copy(build_cmd_list)
+    test_cmd_list[2] = "test"
+    test_cmd_list[end] = "@enzyme_ad//src/enzyme_ad/jax/ReactantExtra/test:all"
+    push!(test_cmd_list, "--test_output=errors")
+    @info "About to run Bazel tests\n" * join(test_cmd_list, " \\\n  ")
+    run(Cmd(Cmd(test_cmd_list); dir=source_dir))
+end
+
+build_dir = joinpath(
+    source_dir,
+    "bazel-bin",
+    "external",
+    "enzyme_ad",
+    "src",
+    "enzyme_ad",
+    "jax",
+    "ReactantExtra",
+)
+
 # Discover built libraries
-built_libs = filter(readdir(joinpath(source_dir, "bazel-bin"))) do file
+built_libs = filter(readdir(build_dir)) do file
     return endswith(file, "Extra.so") && startswith(file, "lib")
 end
 
-lib_path = joinpath(source_dir, "bazel-bin", only(built_libs))
+lib_path = joinpath(build_dir, only(built_libs))
 isfile(lib_path) || error("Could not find library $lib_path in build directory")
 
 if build_backend isa CUDABackend
@@ -345,11 +368,10 @@ if build_backend isa CUDABackend
         joinpath("bin", "fatbinary"),
         joinpath("nvvm", "libdevice", "libdevice.10.bc"),
     )
-        full_path = joinpath(source_dir, "bazel-bin", "cuda", path)
+        full_path = joinpath(build_dir, "cuda", path)
         if !Base.Filesystem.ispath(full_path)
             source = joinpath(
-                source_dir,
-                "bazel-bin",
+                build_dir,
                 "libReactantExtra.so.runfiles",
                 # libdevice's directory was moved in CUDA 13, before was in same
                 # dir as ptxas and fatbinary

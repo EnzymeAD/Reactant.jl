@@ -74,8 +74,12 @@ function save_results(
     tflops_results = Vector{Dict{String,Union{String,Float64}}}(
         undef, length(results["TFLOP/s"])
     )
+    # Non-finite rates (e.g. 0.0 / 0.0 = NaN on CPU when xprof records zero device time)
+    # cannot be serialized to strict JSON; report them as unknown (-1.0).
     for (i, (k, v)) in enumerate(results["TFLOP/s"])
-        tflops_results[i] = Dict("name" => k, "value" => v, "unit" => "TFLOP/s")
+        tflops_results[i] = Dict(
+            "name" => k, "value" => isfinite(v) ? v : -1.0, "unit" => "TFLOP/s"
+        )
     end
 
     open(benchmark_filepath, "w") do io

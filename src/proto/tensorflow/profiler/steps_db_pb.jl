@@ -429,10 +429,11 @@ struct PerCoreStepInfo
     core_id_to_replica_id_map::Dict{UInt32,UInt32}
     all_reduce_db_per_core::Dict{UInt32,AllReduceDbResult}
     device_memory_transfers::Vector{DeviceMemoryTransfer}
+    flat_hlo_metrics_db::Union{Nothing,FlatOpMetricsDb}
 end
 PB.reserved_fields(::Type{PerCoreStepInfo}) = (names = String[], numbers = Union{Int,UnitRange{Int}}[4])
-PB.default_values(::Type{PerCoreStepInfo}) = (;step_num = zero(UInt32), step_info_per_core = Dict{UInt32,StepInfoResult}(), hlo_metrics_db = nothing, core_id_to_replica_id_map = Dict{UInt32,UInt32}(), all_reduce_db_per_core = Dict{UInt32,AllReduceDbResult}(), device_memory_transfers = Vector{DeviceMemoryTransfer}())
-PB.field_numbers(::Type{PerCoreStepInfo}) = (;step_num = 1, step_info_per_core = 2, hlo_metrics_db = 3, core_id_to_replica_id_map = 5, all_reduce_db_per_core = 6, device_memory_transfers = 7)
+PB.default_values(::Type{PerCoreStepInfo}) = (;step_num = zero(UInt32), step_info_per_core = Dict{UInt32,StepInfoResult}(), hlo_metrics_db = nothing, core_id_to_replica_id_map = Dict{UInt32,UInt32}(), all_reduce_db_per_core = Dict{UInt32,AllReduceDbResult}(), device_memory_transfers = Vector{DeviceMemoryTransfer}(), flat_hlo_metrics_db = nothing)
+PB.field_numbers(::Type{PerCoreStepInfo}) = (;step_num = 1, step_info_per_core = 2, hlo_metrics_db = 3, core_id_to_replica_id_map = 5, all_reduce_db_per_core = 6, device_memory_transfers = 7, flat_hlo_metrics_db = 8)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:PerCoreStepInfo}, _endpos::Int=0, _group::Bool=false)
     step_num = zero(UInt32)
@@ -441,6 +442,7 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:PerCoreStepInfo}, _endpo
     core_id_to_replica_id_map = Dict{UInt32,UInt32}()
     all_reduce_db_per_core = Dict{UInt32,AllReduceDbResult}()
     device_memory_transfers = PB.BufferedVector{DeviceMemoryTransfer}()
+    flat_hlo_metrics_db = Ref{Union{Nothing,FlatOpMetricsDb}}(nothing)
     while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
@@ -455,11 +457,13 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:PerCoreStepInfo}, _endpo
             PB.decode!(d, all_reduce_db_per_core)
         elseif field_number == 7
             PB.decode!(d, device_memory_transfers)
+        elseif field_number == 8
+            PB.decode!(d, flat_hlo_metrics_db)
         else
             Base.skip(d, wire_type)
         end
     end
-    return PerCoreStepInfo(step_num, step_info_per_core, hlo_metrics_db[], core_id_to_replica_id_map, all_reduce_db_per_core, device_memory_transfers[])
+    return PerCoreStepInfo(step_num, step_info_per_core, hlo_metrics_db[], core_id_to_replica_id_map, all_reduce_db_per_core, device_memory_transfers[], flat_hlo_metrics_db[])
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::PerCoreStepInfo)
@@ -470,6 +474,7 @@ function PB.encode(e::PB.AbstractProtoEncoder, x::PerCoreStepInfo)
     !isempty(x.core_id_to_replica_id_map) && PB.encode(e, 5, x.core_id_to_replica_id_map)
     !isempty(x.all_reduce_db_per_core) && PB.encode(e, 6, x.all_reduce_db_per_core)
     !isempty(x.device_memory_transfers) && PB.encode(e, 7, x.device_memory_transfers)
+    !isnothing(x.flat_hlo_metrics_db) && PB.encode(e, 8, x.flat_hlo_metrics_db)
     return position(e.io) - initpos
 end
 function PB._encoded_size(x::PerCoreStepInfo)
@@ -480,6 +485,7 @@ function PB._encoded_size(x::PerCoreStepInfo)
     !isempty(x.core_id_to_replica_id_map) && (encoded_size += PB._encoded_size(x.core_id_to_replica_id_map, 5))
     !isempty(x.all_reduce_db_per_core) && (encoded_size += PB._encoded_size(x.all_reduce_db_per_core, 6))
     !isempty(x.device_memory_transfers) && (encoded_size += PB._encoded_size(x.device_memory_transfers, 7))
+    !isnothing(x.flat_hlo_metrics_db) && (encoded_size += PB._encoded_size(x.flat_hlo_metrics_db, 8))
     return encoded_size
 end
 

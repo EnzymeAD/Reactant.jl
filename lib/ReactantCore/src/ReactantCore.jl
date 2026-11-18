@@ -473,7 +473,9 @@ cond_val(s) = :(@isdefined($s) ? $s : $MissingTracedValue())
 # arguments resolves the binding, which breaks a later top-level assignment of an implicitly
 # imported name (e.g. `π = @jit f(x)` where `f` has a local `π`).
 @noinline Base.@constprop :none function is_global_value(mod::Module, s::Symbol, val)
-    return isdefined(mod, s) && val === getglobal(mod, s)
+    return isdefined(mod, s) &&
+           (val isa Union{Function,Type} || Base.isconst(mod, s)) &&
+           val === getglobal(mod, s)
 end
 
 function flatten_symbols_state!(state::ExpressionExplorer.SymbolsState)
@@ -537,9 +539,7 @@ function trace_while(mod, expr; track_numbers, mincut, checkpointing, first_arg=
         return :(
             if $(Expr(:islocal, s)) && @isdefined($s)
                 $s
-            elseif @isdefined($s) && !(
-                $s isa Union{Function,Type} && $is_global_value($mod, $(QuoteNode(s)), $s)
-            )
+            elseif @isdefined($s) && !$is_global_value($mod, $(QuoteNode(s)), $s)
                 $s
             else
                 nothing

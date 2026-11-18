@@ -311,6 +311,38 @@ function fold_impl!(
 end
 
 # Pooling
+
+# With `ceil_mode` (NNlib ≥ 0.9.53), the last window may run past the padded input: extend
+# the high padding by that overhang.
+function pool_padding(pdims::NNlib.PoolDims)
+    I, K = NNlib.input_size(pdims), NNlib.kernel_size(pdims)
+    S, D = NNlib.stride(pdims), NNlib.dilation(pdims)
+    padding = collect(NNlib.padding(pdims))
+    for (i, o) in enumerate(NNlib.output_size(pdims))
+        n = I[i] + padding[2i - 1] + padding[2i]
+        padding[2i] += max(0, (o - 1) * S[i] + D[i] * (K[i] - 1) + 1 - n)
+    end
+    return Tuple(padding)
+end
+
+# Number of positions of each window inside the input, or inside the padded input with
+# `count_include_pad` (so `ceil_mode` overhangs are never counted).
+function meanpool_divisor(pdims::NNlib.PoolDims, count_include_pad::Bool)
+    I, K = NNlib.input_size(pdims), NNlib.kernel_size(pdims)
+    S, D = NNlib.stride(pdims), NNlib.dilation(pdims)
+    P = NNlib.padding(pdims)
+    counts = map(enumerate(NNlib.output_size(pdims))) do (i, o)
+        lo, hi = count_include_pad ? (1 - P[2i - 1], I[i] + P[2i]) : (1, I[i])
+        return map(1:o) do j
+            start = (j - 1) * S[i] - P[2i - 1] + 1
+            first_k = max(0, cld(lo - start, D[i]))
+            last_k = min(K[i] - 1, fld(hi - start, D[i]))
+            return max(0, last_k - first_k + 1)
+        end
+    end
+    return prod.(Iterators.product(counts...))
+end
+
 function overloaded_maxpool!(
     y::AnyTracedRArray{T,N}, x::AnyTracedRArray{T2,N}, pdims::NNlib.PoolDims;
 ) where {T,T2,N}
@@ -320,7 +352,7 @@ function overloaded_maxpool!(
         init=typemin(T),
         dilation=NNlib.dilation(pdims),
         kernel_size=NNlib.kernel_size(pdims),
-        padding=NNlib.padding(pdims),
+        padding=pool_padding(pdims),
         stride=NNlib.stride(pdims),
     )
     set_mlir_data!(y, get_mlir_data(res))
@@ -328,7 +360,10 @@ function overloaded_maxpool!(
 end
 
 function overloaded_meanpool!(
-    y::AnyTracedRArray{T,N}, x::AnyTracedRArray{T2,N}, pdims::NNlib.PoolDims;
+    y::AnyTracedRArray{T,N},
+    x::AnyTracedRArray{T2,N},
+    pdims::NNlib.PoolDims;
+    count_include_pad::Bool=true,
 ) where {T,T2,N}
     res = reduce_window(
         +,
@@ -336,10 +371,17 @@ function overloaded_meanpool!(
         init=zero(T),
         dilation=NNlib.dilation(pdims),
         kernel_size=NNlib.kernel_size(pdims),
-        padding=NNlib.padding(pdims),
+        padding=pool_padding(pdims),
         stride=NNlib.stride(pdims),
     )
-    set_mlir_data!(y, get_mlir_data(res ./ T(prod(NNlib.kernel_size(pdims)))))
+    # Windows with no input element sum to zero, and NNlib returns zero for them.
+    divisor = max.(meanpool_divisor(pdims, count_include_pad), 1)
+    divisor = if allequal(divisor)
+        T(first(divisor))
+    else
+        Reactant.promote_to(TracedRArray{T,N}, reshape(T.(divisor), size(divisor)..., 1, 1))
+    end
+    set_mlir_data!(y, get_mlir_data(res ./ divisor))
     return y
 end
 

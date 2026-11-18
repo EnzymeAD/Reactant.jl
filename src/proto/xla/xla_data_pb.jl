@@ -625,15 +625,17 @@ struct var"BlockScalingConfig.TensorBlockScalingConfig"
     zero_idx::Int32
     strides::Vector{Int64}
     steps::Vector{Int64}
+    block_sizes::Vector{Int64}
 end
-PB.default_values(::Type{var"BlockScalingConfig.TensorBlockScalingConfig"}) = (;scale_idx = zero(Int32), zero_idx = zero(Int32), strides = Vector{Int64}(), steps = Vector{Int64}())
-PB.field_numbers(::Type{var"BlockScalingConfig.TensorBlockScalingConfig"}) = (;scale_idx = 1, zero_idx = 2, strides = 3, steps = 4)
+PB.default_values(::Type{var"BlockScalingConfig.TensorBlockScalingConfig"}) = (;scale_idx = zero(Int32), zero_idx = zero(Int32), strides = Vector{Int64}(), steps = Vector{Int64}(), block_sizes = Vector{Int64}())
+PB.field_numbers(::Type{var"BlockScalingConfig.TensorBlockScalingConfig"}) = (;scale_idx = 1, zero_idx = 2, strides = 3, steps = 4, block_sizes = 5)
 
 function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"BlockScalingConfig.TensorBlockScalingConfig"}, _endpos::Int=0, _group::Bool=false)
     scale_idx = zero(Int32)
     zero_idx = zero(Int32)
     strides = PB.BufferedVector{Int64}()
     steps = PB.BufferedVector{Int64}()
+    block_sizes = PB.BufferedVector{Int64}()
     while !PB.message_done(d, _endpos, _group)
         field_number, wire_type = PB.decode_tag(d)
         if field_number == 1
@@ -644,11 +646,13 @@ function PB.decode(d::PB.AbstractProtoDecoder, ::Type{<:var"BlockScalingConfig.T
             PB.decode!(d, wire_type, strides)
         elseif field_number == 4
             PB.decode!(d, wire_type, steps)
+        elseif field_number == 5
+            PB.decode!(d, wire_type, block_sizes)
         else
             Base.skip(d, wire_type)
         end
     end
-    return var"BlockScalingConfig.TensorBlockScalingConfig"(scale_idx, zero_idx, strides[], steps[])
+    return var"BlockScalingConfig.TensorBlockScalingConfig"(scale_idx, zero_idx, strides[], steps[], block_sizes[])
 end
 
 function PB.encode(e::PB.AbstractProtoEncoder, x::var"BlockScalingConfig.TensorBlockScalingConfig")
@@ -657,6 +661,7 @@ function PB.encode(e::PB.AbstractProtoEncoder, x::var"BlockScalingConfig.TensorB
     x.zero_idx != zero(Int32) && PB.encode(e, 2, x.zero_idx)
     !isempty(x.strides) && PB.encode(e, 3, x.strides)
     !isempty(x.steps) && PB.encode(e, 4, x.steps)
+    !isempty(x.block_sizes) && PB.encode(e, 5, x.block_sizes)
     return position(e.io) - initpos
 end
 function PB._encoded_size(x::var"BlockScalingConfig.TensorBlockScalingConfig")
@@ -665,6 +670,7 @@ function PB._encoded_size(x::var"BlockScalingConfig.TensorBlockScalingConfig")
     x.zero_idx != zero(Int32) && (encoded_size += PB._encoded_size(x.zero_idx, 2))
     !isempty(x.strides) && (encoded_size += PB._encoded_size(x.strides, 3))
     !isempty(x.steps) && (encoded_size += PB._encoded_size(x.steps, 4))
+    !isempty(x.block_sizes) && (encoded_size += PB._encoded_size(x.block_sizes, 5))
     return encoded_size
 end
 

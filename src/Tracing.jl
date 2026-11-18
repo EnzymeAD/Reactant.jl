@@ -1784,7 +1784,10 @@ Base.@nospecializeinfer function make_tracer(
         return nothing
     end
     RT = Core.Typeof(prev)
-    if RT <: track_numbers && mode != TracedSetPath && mode != TracedTrack
+    if RT <: track_numbers &&
+        RT <: ReactantPrimitive &&
+        mode != TracedSetPath &&
+        mode != TracedTrack
         if mode == ArrayToConcrete
             runtime isa Val{:PJRT} &&
                 return ConcretePJRTNumber(prev; sharding, device, client)
