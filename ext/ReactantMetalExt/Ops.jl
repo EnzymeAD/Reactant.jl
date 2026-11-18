@@ -41,16 +41,27 @@ function reducer(block)
     throw(unimplemented("regions with several ops are not supported by `MetalClient`"))
 end
 
-# element-wise ops that are a node of the graph
+# element-wise unary ops that are a node of the graph
 for (op, selector) in (
     ("abs", :absoluteWithTensor),
+    ("ceil", :ceilWithTensor),
     ("cosine", :cosWithTensor),
+    ("exp2", :exponentBase2WithTensor),
     ("exponential", :exponentWithTensor),
+    ("floor", :floorWithTensor),
+    ("imag", :imaginaryPartOfTensor),
+    ("is_finite", :isFiniteWithTensor),
     ("log", :logarithmWithTensor),
+    ("log2", :logarithmBase2WithTensor),
+    ("logistic", :sigmoidWithTensor),
     ("negate", :negativeWithTensor),
+    ("popcnt", :bitwisePopulationCountWithTensor),
+    ("real", :realPartOfTensor),
+    ("round_nearest_even", :rintWithTensor),
     ("rsqrt", :reciprocalSquareRootWithTensor),
     ("sine", :sinWithTensor),
     ("sqrt", :squareRootWithTensor),
+    ("tan", :tanWithTensor),
     ("tanh", :tanhWithTensor),
 )
     @eval function handle(::Val{Symbol($("stablehlo." * op))}, graph::MPSGraph, (a,), _, _)
@@ -60,8 +71,10 @@ for (op, selector) in (
     end
 end
 
+# element-wise binary ops that are a node of the graph
 for (op, selector) in (
     ("add", :additionWithPrimaryTensor),
+    ("atan2", :atan2WithPrimaryTensor),
     ("divide", :divisionWithPrimaryTensor),
     ("multiply", :multiplicationWithPrimaryTensor),
     ("subtract", :subtractionWithPrimaryTensor),
@@ -75,6 +88,23 @@ for (op, selector) in (
             name:(nil::id{NSString})
         ]::MPSGraphTensor
     end
+end
+
+function handle(::Val{Symbol("stablehlo.complex")}, graph::MPSGraph, (a, b), _, _)
+    return @objc [
+        graph::id{MPSGraph} complexTensorWithRealTensor:(a::id{MPSGraphTensor})
+        imaginaryTensor:(b::id{MPSGraphTensor})
+        name:(nil::id{NSString})
+    ]::MPSGraphTensor
+end
+
+function handle(::Val{Symbol("stablehlo.select")}, graph::MPSGraph, (x, t, f), _, _)
+    return @objc [
+        graph::id{MPSGraph} selectWithPredicateTensor:(x::id{MPSGraphTensor})
+        truePredicateTensor:(t::id{MPSGraphTensor})
+        falsePredicateTensor:(f::id{MPSGraphTensor})
+        name:(nil::id{NSString})
+    ]::MPSGraphTensor
 end
 
 # like in StableHLO, the result is NaN if any operand is. MPSGraph only propagates NaN on floats
@@ -118,12 +148,35 @@ function handle(
     return MPSGraphs.reshapeTensor(graph, constant, convert(MPSShape, result.size))
 end
 
+# the coordinates of MPSGraph are `Int32`
+function handle(::Val{Symbol("stablehlo.iota")}, graph::MPSGraph, _, attributes, (result,))
+    coords = @objc [
+        graph::id{MPSGraph} coordinateAlongAxis:(attributes.iota_dimension::NSInteger)
+        withShape:(convert(MPSShape, result.size)::id{MPSShape})
+        name:(nil::id{NSString})
+    ]::MPSGraphTensor
+    return MPSGraphs.castTensor(graph, coords, result.eltype)
+end
+
+# the shape operands of the dynamic ops are ignored, since the shapes of the results are static (see `tensor_type`)
+function handle(
+    ::Val{Symbol("stablehlo.dynamic_iota")}, graph::MPSGraph, _, attributes, results
+)
+    return handle(Val(Symbol("stablehlo.iota")), graph, (), attributes, results)
+end
+
 function handle(::Val{Symbol("stablehlo.convert")}, graph::MPSGraph, (a,), _, (result,))
     return MPSGraphs.castTensor(graph, a, result.eltype)
 end
 
 function handle(::Val{Symbol("stablehlo.reshape")}, graph::MPSGraph, (a,), _, (result,))
     return MPSGraphs.reshapeTensor(graph, a, convert(MPSShape, result.size))
+end
+
+function handle(
+    ::Val{Symbol("stablehlo.dynamic_reshape")}, graph::MPSGraph, (a, _), attributes, results
+)
+    return handle(Val(Symbol("stablehlo.reshape")), graph, (a,), attributes, results)
 end
 
 function handle(::Val{Symbol("stablehlo.transpose")}, graph::MPSGraph, (a,), attributes, _)
@@ -170,6 +223,18 @@ function handle(
     a = permute(graph, a, sortperm(dims) .- 1)
     a = MPSGraphs.reshapeTensor(graph, a, convert(MPSShape, shape))
     return MPSGraphs.broadcastTensor(graph, a, convert(MPSShape, result.size))
+end
+
+function handle(
+    ::Val{Symbol("stablehlo.dynamic_broadcast_in_dim")},
+    graph::MPSGraph,
+    (a, _),
+    attributes,
+    results,
+)
+    return handle(
+        Val(Symbol("stablehlo.broadcast_in_dim")), graph, (a,), attributes, results
+    )
 end
 
 # the contraction is a product of matrices, whose rows and columns are the free and contracted dimensions
@@ -421,6 +486,71 @@ function handle(
         dn.output_spatial_dimensions
     ]
     return permute(graph, conv, invperm(perm .+ 1) .- 1)
+end
+
+# the padding is only known at run time, so the input is padded by a gather: element `i` of a padded spatial dimension
+# is element `i - low` of the input, or 0 outside of it. Only the elements that the convolution reads are gathered, so
+# the high padding follows from the size of the result, and negative padding is supported too
+function handle(
+    ::Val{Symbol("stablehlo.dynamic_conv")},
+    graph::MPSGraph,
+    (a, kernel, padding),
+    attributes,
+    (result,),
+)
+    dn = attributes.dimension_numbers
+    n = length(dn.input_spatial_dimensions)
+    strides = get(attributes, :window_strides, ones(Int64, n))
+    dilations = get(attributes, :rhs_dilation, ones(Int64, n))
+    padding = MPSGraphs.castTensor(graph, padding, Int32)
+    pad_value = MPSGraphs.constantWithScalar(graph, 0, result.eltype)
+    imin = MPSGraphs.constantWithScalar(graph, 0, Int32)
+    for i in 1:n
+        dim = dn.input_spatial_dimensions[i]
+        window = size(kernel)[dn.kernel_spatial_dimensions[i] + 1]
+        out = result.size[dn.output_spatial_dimensions[i] + 1]
+        shape = collect(Int64, size(a))
+        imax = MPSGraphs.constantWithScalar(graph, shape[dim + 1] - 1, Int32)
+        shape[dim + 1] = (out - 1) * strides[i] + (window - 1) * dilations[i] + 1
+
+        # `padding` has shape (n, 2), so `low` has shape (1, 1)
+        low = handle(
+            Val(Symbol("stablehlo.slice")),
+            graph,
+            (padding,),
+            (; start_indices=[i - 1, 0], limit_indices=[i, 1], strides=[1, 1]),
+            (),
+        )
+        coords = @objc [
+            graph::id{MPSGraph} coordinateAlongAxis:(dim::NSInteger)
+            withShape:(convert(MPSShape, shape)::id{MPSShape})
+            name:(nil::id{NSString})
+        ]::MPSGraphTensor
+        indices = handle(Val(Symbol("stablehlo.subtract")), graph, (coords, low), (;), ())
+        clamped = @objc [
+            graph::id{MPSGraph} clampWithTensor:(indices::id{MPSGraphTensor})
+            minValueTensor:(imin::id{MPSGraphTensor})
+            maxValueTensor:(imax::id{MPSGraphTensor})
+            name:(nil::id{NSString})
+        ]::MPSGraphTensor
+        inside = @objc [
+            graph::id{MPSGraph} equalWithPrimaryTensor:(indices::id{MPSGraphTensor})
+            secondaryTensor:(clamped::id{MPSGraphTensor})
+            name:(nil::id{NSString})
+        ]::MPSGraphTensor
+        gathered = @objc [
+            graph::id{MPSGraph} gatherAlongAxis:(dim::NSInteger)
+            withUpdatesTensor:(a::id{MPSGraphTensor})
+            indicesTensor:(clamped::id{MPSGraphTensor})
+            name:(nil::id{NSString})
+        ]::MPSGraphTensor
+        a = handle(
+            Val(Symbol("stablehlo.select")), graph, (inside, gathered, pad_value), (;), ()
+        )
+    end
+    return handle(
+        Val(Symbol("stablehlo.convolution")), graph, (a, kernel), attributes, (result,)
+    )
 end
 
 # MPSGraph scatters like `tf.scatter_nd`: the last dimension of `indices` holds the index of an element along the
