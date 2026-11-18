@@ -84,7 +84,7 @@ end
     end
 
     @testset "Symmetric - Complex" begin
-        A = ComplexF32[1.0+0im 0.5+0.5im; 0.5-0.5im 1.0+0im]
+        A = ComplexF32[1.0 + 0im 0.5 + 0.5im; 0.5 - 0.5im 1.0 + 0im]
         xsd = Float32[1.0, 1.0]
 
         C = A

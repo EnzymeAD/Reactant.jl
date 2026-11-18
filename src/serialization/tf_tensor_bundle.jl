@@ -225,7 +225,7 @@ function write_sstable(
         fill!(@view(footer[(used_len + 1):40]), 0x00)
         append_fixed64_le!(footer, SSTABLE_MAGIC_NUMBER)
         @assert length(footer) == 48
-        write(io, footer)
+        return write(io, footer)
     end
     return nothing
 end

@@ -446,6 +446,36 @@ function cacheload(
     )
 end
 
+"""
+`math_celu`
+
+Continuously differentiable exponential linear unit (Barron, 2017):
+
+  celu(x) = x                            if x > 0
+          = alpha * (exp(x / alpha) - 1) otherwise
+"""
+function math_celu(
+    input::Value; result=nothing::Union{Nothing,IR.Type}, alpha, location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[input,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[NamedAttribute("alpha", alpha),]
+    !isnothing(result) && push!(op_ty_results, result)
+
+    return create_operation(
+        "enzymexla.math.celu",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
 function comm_region(; result_0::Vector{IR.Type}, body::Region, location=Location())
     op_ty_results = IR.Type[result_0...,]
     operands = Value[]
@@ -477,6 +507,40 @@ function math_cosc(
 
     return create_operation(
         "enzymexla.math.cosc",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
+`math_elu`
+
+Exponential linear unit:
+
+  elu(x) = x                    if x > 0
+         = alpha * (exp(x) - 1) otherwise
+
+Keeping this as a single op (rather than a select over an exponential)
+lets the derivative avoid evaluating exp on the positive branch, where it
+would overflow and poison the gradient with 0 * inf = NaN.
+"""
+function math_elu(
+    input::Value; result=nothing::Union{Nothing,IR.Type}, alpha, location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[input,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[NamedAttribute("alpha", alpha),]
+    !isnothing(result) && push!(op_ty_results, result)
+
+    return create_operation(
+        "enzymexla.math.elu",
         location;
         operands,
         owned_regions,
@@ -1198,13 +1262,19 @@ result `output_tuple_indices[0]` (or the only result, with empty
 `operand_index`. The buffer of an input is read by at most one result.
 
 `operand_attrs` and `result_attrs`, if present, hold one dictionary of
-attributes per input and per result respectively.
+attributes per input and per result respectively. `arg_attrs`, if present,
+holds one dictionary of attributes per block argument, like the argument
+attributes of a function: e.g. `llvm.readonly` states that the block never
+writes the buffer.
+
+The body is an affine scope and an automatic allocation scope, as the body
+of a function is: its arguments are valid affine symbols, and its allocas
+are freed when it exits.
 
 # Example
 
 ```mlir
 %r:2 = \"enzymexla.jit_region\"(%a, %b) <{
-  operand_attrs = [{}, {enzymexla.reverse_operand_index = 0 : i64} ],
   output_operand_aliases = [
     #stablehlo.output_operand_alias<output_tuple_indices = [0],
                                     operand_index = 0,
@@ -1225,6 +1295,7 @@ function jit_region(
     result_0::Vector{IR.Type},
     operand_layouts=nothing,
     operand_attrs=nothing,
+    arg_attrs=nothing,
     result_attrs=nothing,
     output_operand_aliases=nothing,
     xla_side_effect_free=nothing,
@@ -1240,6 +1311,7 @@ function jit_region(
         push!(attributes, NamedAttribute("operand_layouts", operand_layouts))
     !isnothing(operand_attrs) &&
         push!(attributes, NamedAttribute("operand_attrs", operand_attrs))
+    !isnothing(arg_attrs) && push!(attributes, NamedAttribute("arg_attrs", arg_attrs))
     !isnothing(result_attrs) &&
         push!(attributes, NamedAttribute("result_attrs", result_attrs))
     !isnothing(output_operand_aliases) &&
@@ -2222,6 +2294,39 @@ function linalg_svd(
         attributes,
         results=op_ty_results,
         result_inference=false,
+    )
+end
+
+"""
+`math_selu`
+
+Scaled exponential linear unit, with the self-normalizing constants of
+Klambauer et al. (2017):
+
+  selu(x) = lambda * x                    if x > 0
+          = lambda * alpha * (exp(x) - 1) otherwise
+
+where lambda = 1.0507009873554805 and alpha = 1.6732632423543772.
+"""
+function math_selu(
+    input::Value; result=nothing::Union{Nothing,IR.Type}, location=Location()
+)
+    op_ty_results = IR.Type[]
+    operands = Value[input,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(result) && push!(op_ty_results, result)
+
+    return create_operation(
+        "enzymexla.math.selu",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
     )
 end
 

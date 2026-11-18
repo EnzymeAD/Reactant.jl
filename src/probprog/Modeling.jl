@@ -161,7 +161,7 @@ function simulate(rng::AbstractRNG, f::Function, args::Vararg{Any,Nargs}) where 
         process_probprog_function(f, args, "simulate")
     else
         ScopedValues.with(TRACING_TRACE => tt) do
-            process_probprog_function(f, args, "simulate")
+            return process_probprog_function(f, args, "simulate")
         end
     end
 
@@ -272,7 +272,7 @@ function generate(
         process_probprog_function(f, args, "generate")
     else
         ScopedValues.with(TRACING_TRACE => tt) do
-            process_probprog_function(f, args, "generate")
+            return process_probprog_function(f, args, "generate")
         end
     end
 

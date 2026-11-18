@@ -307,7 +307,7 @@ function overloaded_mul!(
             @opcall(
                 multiply(
                     tmp,
-                    @opcall(fill(Reactant.promote_to(TracedRNumber{T}, α), size(tmp)))
+                    @opcall(fill(Reactant.promote_to(TracedRNumber{T}, α), size(tmp))),
                 )
             )
         end

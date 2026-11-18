@@ -140,7 +140,7 @@ function _svd_solve_core(
     return Reactant.with_config(; dot_general_precision=Reactant.PrecisionConfig.HIGHEST) do
         rhs = S .\ (U' * LinearAlgebra._cut_B(B, 1:m))
         rhs = ifelse.(mask, rhs, zero(eltype(rhs)))
-        (Vt[1:length(S), :])' * rhs
+        return (Vt[1:length(S), :])' * rhs
     end
 end
 

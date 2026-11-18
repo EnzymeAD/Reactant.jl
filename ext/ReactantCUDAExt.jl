@@ -9,7 +9,7 @@ using Reactant:
     TracedRNumber,
     ReactantPrecompilationException,
     call_with_native
-using Reactant.Compiler: raising, LLVMFunc, llvm_compiler_cache
+using Reactant.Compiler: raising, kernelad, LLVMFunc, llvm_compiler_cache
 using Reactant.Ops: @opcall
 
 using Enzyme
@@ -56,6 +56,9 @@ struct CuTracedArray{T,N,A,Size} <: DenseArray{T,N}
     function CuTracedArray{T,N,A,Size}(xs::TracedRArray) where {T,N,A,Size}
         Reactant.Compiler.guard_from_gc_for_module(MLIR.IR.current_module(), xs)
         ptr = Base.reinterpret(Core.LLVMPtr{T,CUDA.AS.Global}, Base.pointer_from_objref(xs))
+        return new(ptr)
+    end
+    function CuTracedArray{T,N,A,Size}(ptr::Core.LLVMPtr{T,A}) where {T,N,A,Size}
         return new(ptr)
     end
 end
@@ -306,7 +309,7 @@ Base.zero(::Type{<:CuTracedRNumber{T,A}}) where {T,A} = zero(T)
 
 Base.@nospecializeinfer function Base.promote_rule(
     @nospecialize(a::Type{<:CuTracedRNumber{T}}),
-    @nospecialize(b::Type{<:CuTracedRNumber{T2}})
+    @nospecialize(b::Type{<:CuTracedRNumber{T2}}),
 ) where {T,T2}
     return promote_rule(T, T2)
 end
@@ -341,7 +344,7 @@ end
 
 Base.@nospecializeinfer function Reactant.promote_traced_type(
     @nospecialize(a::Type{<:CuTracedRNumber{T,A}}),
-    @nospecialize(b::Type{<:CuTracedRNumber{T2,A}})
+    @nospecialize(b::Type{<:CuTracedRNumber{T2,A}}),
 ) where {T,T2,A}
     return CuTracedRNumber{Reactant.promote_traced_type(T, T2),A}
 end
@@ -576,15 +579,13 @@ function Base.reinterpret(::Type{T}, a::CuTracedArray{S,N,A}) where {T,S,N,A}
     err === nothing || throw(err)
 
     if sizeof(T) == sizeof(S) # fast case
-        return CuTracedArray{T,N,A}(
-            reinterpret(Core.LLVMPtr{T,A}, a.ptr), size(a), a.maxsize
-        )
+        return derived_array(a, T, size(a))
     end
 
     isize = size(a)
     size1 = div(isize[1] * sizeof(S), sizeof(T))
     osize = tuple(size1, Base.tail(isize)...)
-    return CuTracedArray{T,N,A}(reinterpret(Core.LLVMPtr{T,A}, a.ptr), osize, a.maxsize)
+    return derived_array(a, T, osize)
 end
 
 ## reshape
@@ -600,7 +601,15 @@ function Base.reshape(a::CuTracedArray{T,M,A}, dims::NTuple{N,Int}) where {T,N,M
     if N == M && dims == size(a)
         return a
     end
-    return _derived_array(a, T, dims)
+    return derived_array(a, T, dims)
+end
+
+# A `CuTracedArray` is a pointer and its size in its type, so a reshaped or reinterpreted array is the
+# same pointer under the new element type and size
+@inline function derived_array(
+    a::CuTracedArray{<:Any,<:Any,A}, ::Type{T}, osize::Dims{N}
+) where {T,N,A}
+    return CuTracedArray{T,N,A,osize}(reinterpret(Core.LLVMPtr{T,A}, a.ptr))
 end
 
 struct ReactantKernelAdaptor end
@@ -945,7 +954,7 @@ function compile(job)
         # textual IR: the bitcode reader auto-upgrades constructs whose spelling changed between the
         # two LLVM versions (e.g. `llvm.loop.distribute.enable` metadata), whereas the .ll parser does
         # not, and mismatches there abort the process in the verifier.
-        KernelBitcode(convert(Vector{UInt8}, mod), entryname, dl)
+        return KernelBitcode(convert(Vector{UInt8}, mod), entryname, dl)
     end
 end
 
@@ -1058,7 +1067,7 @@ function mlir_extract_roots_from_value!(
     val::MLIR.IR.Value,
     roots_ptr::MLIR.IR.Value,
     @nospecialize(argty::MLIR.IR.Type),
-    @nospecialize(njlvaluet::MLIR.IR.Type)
+    @nospecialize(njlvaluet::MLIR.IR.Type),
 )
     ctx = MLIR.IR.current_context()
     llvmptr = MLIR.IR.Type(MLIR.API.mlirLLVMPointerTypeGet(ctx, 0))
@@ -1168,19 +1177,17 @@ contain no references to other values, can be used in GPU kernels.
     end
 
     # bad is a path String: a TracedRNumber/TracedRArray was not adapted
-    return error(
-        """
-      GPU kernel argument of type $T contains an unadapted traced value at field: $bad
+    return error("""
+               GPU kernel argument of type $T contains an unadapted traced value at field: $bad
 
-      All TracedRNumber/TracedRArray must have been replaced by their
-      CuTracedRNumber/CuTracedArray counterparts. A surviving traced value means
-      some struct in the hierarchy is missing `Adapt.@adapt_structure`, so its fields
-      were not recursed into during GPU adaptation.
+               All TracedRNumber/TracedRArray must have been replaced by their
+               CuTracedRNumber/CuTracedArray counterparts. A surviving traced value means
+               some struct in the hierarchy is missing `Adapt.@adapt_structure`, so its fields
+               were not recursed into during GPU adaptation.
 
-      Fix: add `Adapt.@adapt_structure <StructName>` to the struct that contains the
-      field at the path above.
-  """
-    )
+               Fix: add `Adapt.@adapt_structure <StructName>` to the struct that contains the
+               field at the path above.
+           """)
 end
 
 # Emit the `ptx_kernelcc` function which takes the buffers as arguments, builds the kernel
@@ -1450,7 +1457,7 @@ Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
     has_cast_float_type =
         bfloat16_compile_type !== BFloat16 && any(values(seen)) do arg
             (arg isa TracedRArray || arg isa TracedRNumber) &&
-                Reactant.unwrapped_eltype(typeof(arg)) === BFloat16
+            Reactant.unwrapped_eltype(typeof(arg)) === BFloat16
         end
 
     wrapper_tys = MLIR.IR.Type[]
@@ -1481,8 +1488,9 @@ Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
         end for a in allargs
     ]
 
-    # See `_to_kernel_buffer`.
-    raised_buffers = raising()
+    # See `_to_kernel_buffer`. Kernels differentiated by `:kernelad` go through the same
+    # affine conversion, so they need the same buffer types.
+    raised_buffers = raising() || kernelad()
 
     # (wrapper argument index, kernel argument index, byte offset): the buffer passed as
     # wrapper argument is stored at that offset of the kernel argument
@@ -1944,7 +1952,9 @@ Reactant.@reactant_overlay function CUDA.cufunction(
 
         config = GPUCompiler.CompilerConfig(
             GPUCompiler.PTXCompilerTarget(; cap=llvm_cap, ptx=llvm_ptx, debuginfo),
-            ReactantCUDACompilerParams(params, raising());
+            # Kernels differentiated by `:kernelad` are converted to affine like raised
+            # ones, so compile them the same way (e.g. without vectorization)
+            ReactantCUDACompilerParams(params, raising() || kernelad());
             kernel,
             name,
             always_inline,
@@ -1972,7 +1982,7 @@ Base.@nospecializeinfer function Reactant.traced_type_inner(
     @nospecialize(mode::Reactant.TraceMode),
     @nospecialize(track_numbers::Type),
     @nospecialize(ndevices),
-    @nospecialize(runtime)
+    @nospecialize(runtime),
 )
     return A
 end
@@ -1983,7 +1993,7 @@ Base.@nospecializeinfer function Reactant.traced_type_inner(
     @nospecialize(mode::Reactant.TraceMode),
     @nospecialize(track_numbers::Type),
     @nospecialize(ndevices),
-    @nospecialize(runtime)
+    @nospecialize(runtime),
 )
     return A
 end
@@ -1994,7 +2004,7 @@ Base.@nospecializeinfer function Reactant.traced_type_inner(
     mode::Reactant.TraceMode,
     @nospecialize(track_numbers::Type),
     @nospecialize(ndevices),
-    @nospecialize(runtime)
+    @nospecialize(runtime),
 )
     T = eltype(A)
     N = ndims(A)
@@ -2019,8 +2029,8 @@ function Reactant.make_tracer(
     @nospecialize(prev::CUDA.CuArray),
     @nospecialize(path),
     mode;
-    @nospecialize(track_numbers::Type = Union{}),
-    @nospecialize(sharding = Reactant.Sharding.NoSharding()),
+    @nospecialize(track_numbers::Type=Union{}),
+    @nospecialize(sharding=Reactant.Sharding.NoSharding()),
     @nospecialize(runtime),
     kwargs...,
 )

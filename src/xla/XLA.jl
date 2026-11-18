@@ -173,7 +173,7 @@ function validate_backend_name(backend::String)
                 https://enzymead.github.io/Reactant.jl/stable/introduction/configuration \
                 for how to force a specific artifact and debug the installation."
     end
-    throw(ArgumentError(msg))
+    return throw(ArgumentError(msg))
 end
 
 function client(backend::String)
@@ -190,7 +190,7 @@ function client(backend::String)
         gpu_backends = normalize_backend_name("gpu")
         if any(b ∉ global_backend_state.attempted_backends for b in gpu_backends)
             with(BACKENDS_TO_INITIALIZE => gpu_backends) do
-                initialize_default_clients!(global_backend_state)
+                return initialize_default_clients!(global_backend_state)
             end
             union!(global_backend_state.attempted_backends, gpu_backends)
             return client("gpu") # Try again
@@ -198,13 +198,11 @@ function client(backend::String)
 
         registered_gpu_backends = filter(in(registered_backend_names()), GPU_BACKEND_NAMES)
         if isempty(registered_gpu_backends)
-            error(
-                "No GPU client found. No GPU backend ($(join(GPU_BACKEND_NAMES, ", "))) \
+            error("No GPU client found. No GPU backend ($(join(GPU_BACKEND_NAMES, ", "))) \
                  is registered in this session, which usually means that `Reactant_jll` \
                  selected an artifact without GPU support. See \
                  https://enzymead.github.io/Reactant.jl/stable/introduction/configuration \
-                 for how to force a specific artifact and debug the installation."
-            )
+                 for how to force a specific artifact and debug the installation.")
         else
             error("No GPU client found. Initialization of the registered GPU backend(s) \
                    ($(join(registered_gpu_backends, ", "))) failed, see the error(s) \
@@ -218,7 +216,7 @@ function client(backend::String)
     )
         backends = normalize_backend_name(backend)
         with(BACKENDS_TO_INITIALIZE => backends) do
-            initialize_default_clients!(global_backend_state)
+            return initialize_default_clients!(global_backend_state)
         end
         union!(global_backend_state.attempted_backends, backends)
     end
@@ -242,7 +240,7 @@ function default_backend()
     )
     if !isempty(remaining)
         with(BACKENDS_TO_INITIALIZE => remaining) do
-            initialize_default_clients!(global_backend_state)
+            return initialize_default_clients!(global_backend_state)
         end
         default_client = global_backend_state.default_client
     end
@@ -269,7 +267,7 @@ end
 
 function set_default_backend(backend::String)
     with(BACKENDS_TO_INITIALIZE => normalize_backend_name(backend)) do
-        global_backend_state.default_client = client(backend)
+        return global_backend_state.default_client = client(backend)
     end
     return nothing
 end
@@ -332,8 +330,9 @@ function __init__()
         end
 
         if haskey(ENV, "REACTANT_VISIBLE_GPU_DEVICES")
-            global_state.local_gpu_device_ids =
-                parse.(Int, split(ENV["REACTANT_VISIBLE_GPU_DEVICES"], ","))
+            global_state.local_gpu_device_ids = parse.(
+                Int, split(ENV["REACTANT_VISIBLE_GPU_DEVICES"], ",")
+            )
             @debug "REACTANT_VISIBLE_GPU_DEVICES: " global_state.local_gpu_device_ids maxlog =
                 1
         end

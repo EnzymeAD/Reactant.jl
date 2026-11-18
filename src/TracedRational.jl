@@ -29,7 +29,7 @@ TracedRational{T}(c::AbstractChar) where {T} = TracedRational{T}(codepoint(c))
 TracedRational(c::AbstractChar) = TracedRational(codepoint(c))
 
 function TracedRational{T}(::Complex) where {T}
-    throw("Currently we dont support complex numbers in rationals")
+    return throw("Currently we dont support complex numbers in rationals")
 end
 TracedRational(::Complex) = throw("Currently we dont support complex numbers in rationals")
 

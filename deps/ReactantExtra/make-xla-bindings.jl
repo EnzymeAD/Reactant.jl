@@ -64,10 +64,10 @@ function bazel_query_header_paths(targets)
     targets = join(targets, ' ')
     cmd = Cmd(
         `$(bazel_cmd) query --output=location --noshow_progress --ui_event_filters=-info "set($(targets))"`;
-        dir=@__DIR__
+        dir=@__DIR__,
     )
     map(eachline(IOBuffer(String(read(cmd))))) do line
-        String(split(line, ':'; limit=2)[1])
+        return String(split(line, ':'; limit=2)[1])
     end
 end
 

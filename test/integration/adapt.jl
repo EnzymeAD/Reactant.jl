@@ -79,3 +79,24 @@ end
         @test Adapt.adapt(to, (collect(1:2), 1:2))[1] isa ConcreteRArray{Int,1}
     end
 end
+
+# https://github.com/EnzymeAD/Reactant.jl/issues/3729
+@testset "fully parameterized array type" begin
+    b = Reactant.to_rarray(ComplexF32[1, 2])
+    T = typeof(b)
+
+    x = T(undef, 0)
+    @test x isa T
+    @test size(x) == (0,)
+    x = T(undef, (3,))
+    @test x isa T
+    @test size(x) == (3,)
+
+    y = Adapt.adapt(T, ComplexF32[3, 4])
+    @test y isa T
+    @test Array(y) == ComplexF32[3, 4]
+
+    z = T(b)
+    @test z isa T
+    @test Array(z) == Array(b)
+end

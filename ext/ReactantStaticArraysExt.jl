@@ -15,7 +15,7 @@ Base.@nospecializeinfer function Reactant.traced_type_inner(
     mode::Reactant.TraceMode,
     @nospecialize(track_numbers::Type),
     @nospecialize(ndevices),
-    @nospecialize(runtime)
+    @nospecialize(runtime),
 ) where {S,T,N,L}
     T_traced = Reactant.traced_type_inner(T, seen, mode, track_numbers, ndevices, runtime)
     return SArray{S,T_traced,N,L}

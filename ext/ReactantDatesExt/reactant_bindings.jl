@@ -27,8 +27,8 @@ for T in (
         @nospecialize(prev::Dates.$T),
         @nospecialize(path),
         mode;
-        @nospecialize(track_numbers::Type = Union{}),
-        @nospecialize(sharding = Reactant.Sharding.NoSharding()),
+        @nospecialize(track_numbers::Type=Union{}),
+        @nospecialize(sharding=Reactant.Sharding.NoSharding()),
         @nospecialize(runtime),
         kwargs...,
     )
@@ -46,7 +46,7 @@ for T in (
         mode::Reactant.TraceMode,
         @nospecialize(track_numbers::Type),
         @nospecialize(ndevices),
-        @nospecialize(runtime)
+        @nospecialize(runtime),
     )
         if mode == Reactant.ArrayToConcrete && Int64 <: track_numbers
             # all Dates types are hard coded to have Int64 fields

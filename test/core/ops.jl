@@ -14,8 +14,8 @@ const RunningOnAppleX86 = Sys.isapple() && Sys.ARCH === :x86_64
     @test [1.0, 1.0] ≈ @jit Ops.abs(x)
 
     x = Reactant.to_rarray(ComplexF32[
-        3.0+4im -3.0+4im
-        3.0-4im -3.0-4im
+        3.0 + 4im -3.0 + 4im
+        3.0 - 4im -3.0 - 4im
     ])
     @test [
         5.0 5.0
@@ -135,9 +135,9 @@ end
 
     x = Reactant.to_rarray(
         ComplexF32[
-            10.0+0.0im 2.0-3.0im 3.0-4.0im
-            2.0+3.0im 5.0+0.0im 3.0-2.0im
-            3.0+4.0im 3.0+2.0im 9.0+0.0im
+            10.0 + 0.0im 2.0 - 3.0im 3.0 - 4.0im
+            2.0 + 3.0im 5.0 + 0.0im 3.0 - 2.0im
+            3.0 + 4.0im 3.0 + 2.0im 9.0 + 0.0im
         ],
     )
     @test cholesky(Array(x)).U ≈ @jit(g1(x))
@@ -685,7 +685,7 @@ end
     x = Reactant.to_rarray([1.0 4.0; 9.0 25.0])
     @test 1 ./ sqrt.(Array(x)) ≈ @jit Ops.rsqrt(x)
 
-    x = Reactant.to_rarray(ComplexF32[1.0+1im 4.0+2im; 9.0+3im 25.0+4im])
+    x = Reactant.to_rarray(ComplexF32[1.0 + 1im 4.0 + 2im; 9.0 + 3im 25.0 + 4im])
     @test 1 ./ sqrt.(Array(x)) ≈ @jit(Ops.rsqrt(x))
 end
 
@@ -1054,20 +1054,18 @@ end
     x_reactant = Reactant.to_rarray(x)
     y_reactant = Reactant.to_rarray(y)
 
-    @test Reactant.@jit(
-        Ops.hlo_call(
-            """
-            module {
-              func.func @main(%arg0: tensor<3xf32>, %arg1: tensor<3xf32>) -> tensor<3xf32> {
-                %0 = stablehlo.add %arg0, %arg1 : tensor<3xf32>
-                return %0 : tensor<3xf32>
-              }
-            }
-            """,
-            x_reactant,
-            y_reactant,
-        )
-    )[1] ≈ x .+ y
+    @test Reactant.@jit(Ops.hlo_call(
+        """
+        module {
+          func.func @main(%arg0: tensor<3xf32>, %arg1: tensor<3xf32>) -> tensor<3xf32> {
+            %0 = stablehlo.add %arg0, %arg1 : tensor<3xf32>
+            return %0 : tensor<3xf32>
+          }
+        }
+        """,
+        x_reactant,
+        y_reactant,
+    ))[1] ≈ x .+ y
 
     @test Float32(
         only(
@@ -1084,7 +1082,7 @@ end
                     Reactant.ConcreteRNumber(2.0f0),
                     Reactant.ConcreteRNumber(2.0f0),
                 )
-            )
+            ),
         ),
     ) == 4.0f0
 

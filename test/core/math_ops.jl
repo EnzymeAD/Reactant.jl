@@ -126,6 +126,19 @@ end
         @test @jit(sinc(xz)) ≈ sinc(xz0)
         @test @jit(sinc(xinf)) ≈ sinc(Inf + 1im)
     end
+
+    @testset "angle" begin
+        xc = ComplexF32[1 + 2im, -1 + 2im, -1 - 2im, 1 - 2im, -3 + 0im, 0 + 0im]
+        xc_ra = Reactant.to_rarray(xc)
+        @test @jit(angle.(xc_ra)) ≈ angle.(xc)
+        @test @jit(angle.(xc_ra)) isa ConcreteRArray{Float32,1}
+        @test @jit(angle(ConcreteRNumber(ComplexF64(-1, 0)))) ≈ π
+
+        x = Float32[-2, -0.5, 0, 0.5, 2]
+        x_ra = Reactant.to_rarray(x)
+        @test @jit(angle.(x_ra)) ≈ angle.(x)
+        @test @jit(angle.(x_ra)) isa ConcreteRArray{Float32,1}
+    end
 end
 
 @testset "isfinite" begin
@@ -161,6 +174,23 @@ end
     @test !Bool(@jit(isinf(ConcreteRNumber(2))))
     @test !Bool(@jit(isinf(ConcreteRNumber(2.0))))
     @test !Bool(@jit(isinf(ConcreteRNumber(true))))
+end
+
+@testset "ceil(T, x) traced" begin
+    for x in (4.2313f0, -2.5f0, 7)
+        for T in (Int32, Int64, Float32, Float64)
+            r = @jit ceil(T, ConcreteRNumber(x))
+            @test r isa ConcreteRNumber{T}
+            @test Float64(r) == Float64(ceil(x))
+        end
+    end
+    # `Int` (Int64) target with a Float32 input, scalar and broadcasted
+    r = @jit ceil(Int, ConcreteRNumber(1.5f0))
+    @test r isa ConcreteRNumber{Int}
+    @test r == 2
+    xs = Float32[1.5, -2.5, 3.0]
+    xs_ra = Reactant.to_rarray(xs)
+    @test Array(@jit(ceil.(Int, xs_ra))) == ceil.(Int, xs)
 end
 
 @testset "isinf/isnan/isfinite on concrete scalars" begin
@@ -234,11 +264,13 @@ end
             @test result_or_error(f, xr) === result_or_error(f, x)
         end
     end
-    for x in (0.0, -0.0, 1.0, -2.5f0, 3, true),
+    for x in (0.0, -0.0, -0.0f0, 1.0, -2.5f0, 3, true),
         xr in (ConcreteRNumber(x), ConcreteRArray(fill(x)))
 
         for f in (isinteger, signbit, iszero, isone)
-            @test f(xr) === f(x)
+            # On TPU, Float64(-0.0) is stored as a pair of Float32 values and
+            # reconstructs on host transfer as Float64(-0.0f0) + Float64(+0.0f0) === +0.0.
+            @test f(xr) === f(x) skip = (RunningOnTPU && x === -0.0 && f === signbit)
         end
     end
 end

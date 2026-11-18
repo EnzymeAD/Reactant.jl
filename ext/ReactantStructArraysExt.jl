@@ -150,7 +150,7 @@ Base.@nospecializeinfer function Reactant.traced_type_inner(
     @nospecialize(mode::TraceMode),
     @nospecialize(track_numbers::Type),
     @nospecialize(sharding),
-    @nospecialize(runtime)
+    @nospecialize(runtime),
 ) where {ET,N,C,I}
     ET_traced = traced_type_inner(
         ET, seen, mode, Union{ReactantPrimitive,track_numbers}, sharding, runtime

@@ -1,4 +1,4 @@
-using Reactant, Test, CUDA, KernelAbstractions
+using Reactant, Test, CUDA, KernelAbstractions, Enzyme
 using Adapt: Adapt
 using BFloat16s: BFloat16
 const ReactantCUDAExt = Base.get_extension(Reactant, :ReactantCUDAExt)
@@ -84,6 +84,28 @@ end
     @test all(Array(B) .≈ (oA .* 100))
 end
 
+function square_sum(x, y)
+    x = copy(x)
+    square!(x, y)
+    return sum(x)
+end
+
+# Reverse-mode AD through the square kernel: d/dx sum(x .* y) = y, d/dy = x
+@testset "Square Kernel AD" begin
+    if !RunningOnTPU
+        oA = collect(Float64, 1:1:64)
+        oB = 100 .* oA
+        A = Reactant.to_rarray(oA)
+        B = Reactant.to_rarray(oB)
+        dA, dB = @jit optimize = :kernelad Enzyme.gradient(Reverse, square_sum, A, B)
+        @test Array(dA) ≈ oB
+        @test Array(dB) ≈ oA
+        @test Array(A) == oA
+    else
+        @warn "Skipping Square Kernel AD test on TPU"
+    end
+end
+
 @static if VERSION >= v"1.12"
     if BF16IselBroken
         @warn "Skipping BF16 kernel tests: this host advertises avx512_bf16 and Julia's \
@@ -132,6 +154,25 @@ end
 function sin!(x, y)
     @cuda blocks = 1 threads = length(x) sin_kernel!(x, y)
     return nothing
+end
+
+function reshape_kernel!(out, x)
+    xr = reshape(x, 2, 2)
+    @inbounds out[1] = xr[1, 2]
+    return nothing
+end
+
+function reshape!(out, x)
+    @cuda blocks = 1 threads = 1 reshape_kernel!(out, x)
+    return nothing
+end
+
+@testset "Reshape Kernel" begin
+    x = Reactant.to_rarray([1.0, 2.0, 3.0, 4.0])
+    out = Reactant.to_rarray(zeros(Float64, 1))
+
+    @jit reshape!(out, x)
+    @test Array(out) == [3.0]
 end
 
 @testset "Sin Kernel" begin

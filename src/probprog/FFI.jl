@@ -78,7 +78,7 @@ function dump(
     end
 
     lock(DUMP_BUFFER_LOCK) do
-        push!(DUMP_BUFFER, (label, value))
+        return push!(DUMP_BUFFER, (label, value))
     end
 
     return nothing
@@ -86,7 +86,7 @@ end
 
 function clear_dump_buffer!()
     lock(DUMP_BUFFER_LOCK) do
-        empty!(DUMP_BUFFER)
+        return empty!(DUMP_BUFFER)
     end
 end
 

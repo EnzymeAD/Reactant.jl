@@ -365,14 +365,11 @@ end
 
 function Base.propertynames(x::XLA_ComputationLayout, private::Bool=false)
     return (
-        :parameter_count,
-        :parameter_layouts,
-        :result_layout,
-        if private
+        :parameter_count, :parameter_layouts, :result_layout, if private
             fieldnames(typeof(x))
         else
             ()
-        end...,
+        end...
     )
 end
 

@@ -122,8 +122,8 @@ f_sincos(x) = map(sin, x) + map(cos, reverse(x))
 function f_sincos_jac(x)
     return [
         cos(x[i]) * (i == j ? 1 : 0) -
-        sin(x[end - i + 1]) * (i == (length(x) - j + 1) ? 1 : 0) for i in 1:length(x),
-        j in 1:length(x)
+        sin(x[end - i + 1]) * (i == (length(x) - j + 1) ? 1 : 0) for
+        i in 1:length(x), j in 1:length(x)
     ]
 end
 
@@ -746,7 +746,7 @@ function batch_fwd(umat, seedmat)
     @assert size(seedmat, 1) == NS
     return only(
         Reactant.Ops.batch([umat, seedmat], [NS]) do uu, vv
-            only(
+            return only(
                 Enzyme.autodiff(
                     Forward, Const(batch_extract_rhs), Duplicated, Duplicated(uu, vv)
                 ),
@@ -757,7 +757,7 @@ end
 
 @testset "Forward mode inside Ops.batch" begin
     N = 10
-    u = reshape(collect(1.0:(N^2)), N, N)
+    u = reshape(collect(1.0:(N ^ 2)), N, N)
     seeds = Float64[i == j ? 1 : 0 for i in 1:N, j in 1:N]
     u_ra = Reactant.to_rarray(u)
     seeds_ra = Reactant.to_rarray(seeds)
@@ -882,4 +882,18 @@ end
         @test Array(only(res).a) ≈ [3.0, 5.0]
         @test Array(only(res).b) == Int32[1, 2]
     end
+end
+
+co_vec_3296(θ, p) = sin.(θ) .* θ[2] .+ p
+jac_vec_3296(θ, p) = Enzyme.jacobian(Forward, Const(co_vec_3296), θ, p)
+
+@testset "width-1 BatchDuplicated in Enzyme.jacobian (#3296)" begin
+    θ_host = [0.3, -0.7]
+    p_host = [0.5]
+    θ = Reactant.to_rarray(θ_host)
+    p = Reactant.to_rarray(p_host)
+    j1, j2 = @allowscalar @jit jac_vec_3296(θ, p)
+    j1_ref, j2_ref = Enzyme.jacobian(Forward, Const(co_vec_3296), θ_host, p_host)
+    @test Array(j1) ≈ j1_ref
+    @test Array(j2) ≈ j2_ref
 end

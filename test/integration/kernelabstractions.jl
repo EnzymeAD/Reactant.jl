@@ -87,7 +87,7 @@ end
         @test Array(y) == ones(Float32, 100, 10)
     end
 
-    @test all(Array(@jit(raise = raise, square(x))) .≈ Array(x) .* Array(x))
+    @test all(Array(@jit(raise=raise, square(x))) .≈ Array(x) .* Array(x))
 end
 
 @testset "KernelAbstractions WENO weights" begin
@@ -123,9 +123,8 @@ end
 
     ir = repr(Reactant.@code_hlo raise = true run_fma!(out, a, b, c))
     @test @filecheck begin
-        @check "%0 = stablehlo.multiply %arg1, %arg2 : tensor<4xf64>"
-        @check_next "%1 = stablehlo.add %0, %arg3 : tensor<4xf64>"
-        @check_next "return %1 : tensor<4xf64>"
+        @check "%0 = stablehlo.fma %arg1, %arg2, %arg3 : tensor<4xf64>"
+        @check_next "return %0 : tensor<4xf64>"
         ir
     end
 end

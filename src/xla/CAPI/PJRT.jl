@@ -527,11 +527,13 @@ end
 
 struct PJRT_Memory
     vtable::Ptr{PJRT_Memory_FunctionTable}
+    local_device_id::Int32
+    memory_kind_id::Int32
 end
 
 csizeof(::Type{PJRT_Memory_FunctionTable}) = Csize_t(40)
 
-csizeof(::Type{PJRT_Memory}) = Csize_t(8)
+csizeof(::Type{PJRT_Memory}) = Csize_t(16)
 
 @cenum PJRT_Buffer_Type::UInt32 begin
     PJRT_Buffer_Type_INVALID = 0
@@ -4557,13 +4559,11 @@ function Base.setproperty!(x::Ptr{PJRT_Buffer_GetMemoryLayout_Args}, f::Symbol, 
 end
 
 function Base.propertynames(x::PJRT_Buffer_GetMemoryLayout_Args, private::Bool=false)
-    return (
-        :struct_size, :extension_start, :buffer, :layout, if private
-            fieldnames(typeof(x))
-        else
-            ()
-        end...
-    )
+    return (:struct_size, :extension_start, :buffer, :layout, if private
+        fieldnames(typeof(x))
+    else
+        ()
+    end...)
 end
 
 csizeof(::Type{PJRT_Buffer_GetMemoryLayout_Args}) = Csize_t(104)
@@ -7487,6 +7487,7 @@ struct PJRT_Gpu_Register_Custom_Call_Args
     handler_initialize::Ptr{Cvoid}
     handler_execute::Ptr{Cvoid}
     traits::UInt32
+    handler_record::Ptr{Cvoid}
     function PJRT_Gpu_Register_Custom_Call_Args(
         function_name,
         function_name_size,
@@ -7496,6 +7497,7 @@ struct PJRT_Gpu_Register_Custom_Call_Args
         handler_initialize,
         handler_execute,
         traits,
+        handler_record,
     )
         return new(
             csizeof(PJRT_Gpu_Register_Custom_Call_Args),
@@ -7507,6 +7509,7 @@ struct PJRT_Gpu_Register_Custom_Call_Args
             handler_initialize,
             handler_execute,
             traits,
+            handler_record,
         )
     end
 end
@@ -7520,6 +7523,7 @@ function Base.getproperty(x::Ptr{PJRT_Gpu_Register_Custom_Call_Args}, f::Symbol)
     f === :handler_initialize && return Ptr{Ptr{Cvoid}}(x + 48)
     f === :handler_execute && return Ptr{Ptr{Cvoid}}(x + 56)
     f === :traits && return Ptr{UInt32}(x + 64)
+    f === :handler_record && return Ptr{Ptr{Cvoid}}(x + 72)
     return getfield(x, f)
 end
 
@@ -7527,7 +7531,7 @@ function Base.setproperty!(x::Ptr{PJRT_Gpu_Register_Custom_Call_Args}, f::Symbol
     return unsafe_store!(getproperty(x, f), v)
 end
 
-csizeof(::Type{PJRT_Gpu_Register_Custom_Call_Args}) = Csize_t(68)
+csizeof(::Type{PJRT_Gpu_Register_Custom_Call_Args}) = Csize_t(80)
 
 # typedef PJRT_Error * PJRT_Gpu_Register_Custom_Call ( PJRT_Gpu_Register_Custom_Call_Args * args )
 const PJRT_Gpu_Register_Custom_Call = Cvoid
@@ -7536,9 +7540,10 @@ struct PJRT_Gpu_Custom_Call
     base::PJRT_Extension_Base
     custom_call::Ptr{PJRT_Gpu_Register_Custom_Call}
     custom_call_handles_traits::Bool
+    custom_call_handles_record::Bool
 end
 
-csizeof(::Type{PJRT_Gpu_Custom_Call}) = Csize_t(33)
+csizeof(::Type{PJRT_Gpu_Custom_Call}) = Csize_t(34)
 
 mutable struct PJRT_Layouts_MemoryLayout end
 
@@ -8696,6 +8701,160 @@ csizeof(::Type{PJRT_Megascale_GetOrCreateRuntimeError_Args}) = Csize_t(104)
 # typedef PJRT_Error * PJRT_Megascale_GetOrCreateRuntimeError ( PJRT_Megascale_GetOrCreateRuntimeError_Args * args )
 const PJRT_Megascale_GetOrCreateRuntimeError = Cvoid
 
+struct PJRT_Megascale_DiscoverSlices_Args
+    struct_size::Csize_t
+    client_context::Ptr{PJRT_Megascale_ClientContext}
+    multi_slice_config::Ptr{PJRT_MultiSlice_Config}
+    function PJRT_Megascale_DiscoverSlices_Args(client_context, multi_slice_config)
+        return new(
+            csizeof(PJRT_Megascale_DiscoverSlices_Args), client_context, multi_slice_config
+        )
+    end
+end
+function Base.getproperty(x::Ptr{PJRT_Megascale_DiscoverSlices_Args}, f::Symbol)
+    f === :struct_size && return Ptr{Csize_t}(x + 0)
+    f === :client_context && return Ptr{Ptr{PJRT_Megascale_ClientContext}}(x + 8)
+    f === :multi_slice_config && return Ptr{Ptr{PJRT_MultiSlice_Config}}(x + 16)
+    return getfield(x, f)
+end
+
+function Base.setproperty!(x::Ptr{PJRT_Megascale_DiscoverSlices_Args}, f::Symbol, v)
+    return unsafe_store!(getproperty(x, f), v)
+end
+
+csizeof(::Type{PJRT_Megascale_DiscoverSlices_Args}) = Csize_t(24)
+
+# typedef PJRT_Error * PJRT_Megascale_DiscoverSlices ( PJRT_Megascale_DiscoverSlices_Args * args )
+const PJRT_Megascale_DiscoverSlices = Cvoid
+
+struct PJRT_Megascale_MultiSliceConfig_GetIncarnationId_Args
+    struct_size::Csize_t
+    config::Ptr{PJRT_MultiSlice_Config}
+    incarnation_id::Int64
+    function PJRT_Megascale_MultiSliceConfig_GetIncarnationId_Args(config, incarnation_id)
+        return new(
+            csizeof(PJRT_Megascale_MultiSliceConfig_GetIncarnationId_Args),
+            config,
+            incarnation_id,
+        )
+    end
+end
+function Base.getproperty(
+    x::Ptr{PJRT_Megascale_MultiSliceConfig_GetIncarnationId_Args}, f::Symbol
+)
+    f === :struct_size && return Ptr{Csize_t}(x + 0)
+    f === :config && return Ptr{Ptr{PJRT_MultiSlice_Config}}(x + 8)
+    f === :incarnation_id && return Ptr{Int64}(x + 16)
+    return getfield(x, f)
+end
+
+function Base.setproperty!(
+    x::Ptr{PJRT_Megascale_MultiSliceConfig_GetIncarnationId_Args}, f::Symbol, v
+)
+    return unsafe_store!(getproperty(x, f), v)
+end
+
+csizeof(::Type{PJRT_Megascale_MultiSliceConfig_GetIncarnationId_Args}) = Csize_t(24)
+
+# typedef PJRT_Error * PJRT_Megascale_MultiSliceConfig_GetIncarnationId ( PJRT_Megascale_MultiSliceConfig_GetIncarnationId_Args * args )
+const PJRT_Megascale_MultiSliceConfig_GetIncarnationId = Cvoid
+
+struct PJRT_Megascale_MultiSliceConfig_GetLocalHostId_Args
+    struct_size::Csize_t
+    config::Ptr{PJRT_MultiSlice_Config}
+    host_id::Int32
+    function PJRT_Megascale_MultiSliceConfig_GetLocalHostId_Args(config, host_id)
+        return new(
+            csizeof(PJRT_Megascale_MultiSliceConfig_GetLocalHostId_Args), config, host_id
+        )
+    end
+end
+function Base.getproperty(
+    x::Ptr{PJRT_Megascale_MultiSliceConfig_GetLocalHostId_Args}, f::Symbol
+)
+    f === :struct_size && return Ptr{Csize_t}(x + 0)
+    f === :config && return Ptr{Ptr{PJRT_MultiSlice_Config}}(x + 8)
+    f === :host_id && return Ptr{Int32}(x + 16)
+    return getfield(x, f)
+end
+
+function Base.setproperty!(
+    x::Ptr{PJRT_Megascale_MultiSliceConfig_GetLocalHostId_Args}, f::Symbol, v
+)
+    return unsafe_store!(getproperty(x, f), v)
+end
+
+csizeof(::Type{PJRT_Megascale_MultiSliceConfig_GetLocalHostId_Args}) = Csize_t(20)
+
+# typedef PJRT_Error * PJRT_Megascale_MultiSliceConfig_GetLocalHostId ( PJRT_Megascale_MultiSliceConfig_GetLocalHostId_Args * args )
+const PJRT_Megascale_MultiSliceConfig_GetLocalHostId = Cvoid
+
+struct PJRT_Megascale_MultiSliceConfig_GetNumHosts_Args
+    struct_size::Csize_t
+    config::Ptr{PJRT_MultiSlice_Config}
+    num_hosts::Int32
+    function PJRT_Megascale_MultiSliceConfig_GetNumHosts_Args(config, num_hosts)
+        return new(
+            csizeof(PJRT_Megascale_MultiSliceConfig_GetNumHosts_Args), config, num_hosts
+        )
+    end
+end
+function Base.getproperty(
+    x::Ptr{PJRT_Megascale_MultiSliceConfig_GetNumHosts_Args}, f::Symbol
+)
+    f === :struct_size && return Ptr{Csize_t}(x + 0)
+    f === :config && return Ptr{Ptr{PJRT_MultiSlice_Config}}(x + 8)
+    f === :num_hosts && return Ptr{Int32}(x + 16)
+    return getfield(x, f)
+end
+
+function Base.setproperty!(
+    x::Ptr{PJRT_Megascale_MultiSliceConfig_GetNumHosts_Args}, f::Symbol, v
+)
+    return unsafe_store!(getproperty(x, f), v)
+end
+
+csizeof(::Type{PJRT_Megascale_MultiSliceConfig_GetNumHosts_Args}) = Csize_t(20)
+
+# typedef PJRT_Error * PJRT_Megascale_MultiSliceConfig_GetNumHosts ( PJRT_Megascale_MultiSliceConfig_GetNumHosts_Args * args )
+const PJRT_Megascale_MultiSliceConfig_GetNumHosts = Cvoid
+
+struct PJRT_Megascale_GlobalBarrier_Args
+    struct_size::Csize_t
+    config::Ptr{PJRT_MultiSlice_Config}
+    barrier_id::Cstring
+    barrier_id_size::Csize_t
+    timeout_in_ms::Int64
+    function PJRT_Megascale_GlobalBarrier_Args(
+        config, barrier_id, barrier_id_size, timeout_in_ms
+    )
+        return new(
+            csizeof(PJRT_Megascale_GlobalBarrier_Args),
+            config,
+            barrier_id,
+            barrier_id_size,
+            timeout_in_ms,
+        )
+    end
+end
+function Base.getproperty(x::Ptr{PJRT_Megascale_GlobalBarrier_Args}, f::Symbol)
+    f === :struct_size && return Ptr{Csize_t}(x + 0)
+    f === :config && return Ptr{Ptr{PJRT_MultiSlice_Config}}(x + 8)
+    f === :barrier_id && return Ptr{Cstring}(x + 16)
+    f === :barrier_id_size && return Ptr{Csize_t}(x + 24)
+    f === :timeout_in_ms && return Ptr{Int64}(x + 32)
+    return getfield(x, f)
+end
+
+function Base.setproperty!(x::Ptr{PJRT_Megascale_GlobalBarrier_Args}, f::Symbol, v)
+    return unsafe_store!(getproperty(x, f), v)
+end
+
+csizeof(::Type{PJRT_Megascale_GlobalBarrier_Args}) = Csize_t(40)
+
+# typedef PJRT_Error * PJRT_Megascale_GlobalBarrier ( PJRT_Megascale_GlobalBarrier_Args * args )
+const PJRT_Megascale_GlobalBarrier = Cvoid
+
 struct PJRT_Megascale_Extension
     base::PJRT_Extension_Base
     create_client_context_from_pjrt_client::Ptr{
@@ -8732,9 +8891,18 @@ struct PJRT_Megascale_Extension
     error_aggregator_active::Ptr{PJRT_Megascale_ErrorAggregator_Active}
     get_interface_addresses_helper::Ptr{PJRT_Megascale_GetInterfaceAddressesHelper}
     get_or_create_runtime_error::Ptr{PJRT_Megascale_GetOrCreateRuntimeError}
+    discover_slices::Ptr{PJRT_Megascale_DiscoverSlices}
+    multi_slice_config_get_incarnation_id::Ptr{
+        PJRT_Megascale_MultiSliceConfig_GetIncarnationId
+    }
+    multi_slice_config_get_local_host_id::Ptr{
+        PJRT_Megascale_MultiSliceConfig_GetLocalHostId
+    }
+    multi_slice_config_get_num_hosts::Ptr{PJRT_Megascale_MultiSliceConfig_GetNumHosts}
+    global_barrier::Ptr{PJRT_Megascale_GlobalBarrier}
 end
 
-csizeof(::Type{PJRT_Megascale_Extension}) = Csize_t(248)
+csizeof(::Type{PJRT_Megascale_Extension}) = Csize_t(288)
 
 mutable struct PJRT_MemoryDescription end
 
@@ -9006,6 +9174,10 @@ end
 
 csizeof(::Type{PJRT_MultiSlice_Extension}) = Csize_t(64)
 
+mutable struct PJRT_Relocatable end
+
+mutable struct PJRT_SerializedRelocatable end
+
 struct PJRT_PhaseCompile_Get_Compiler_Args
     struct_size::Csize_t
     extension_start::Ptr{PJRT_Extension_Base}
@@ -9214,6 +9386,656 @@ csizeof(::Type{PJRT_PhaseCompile_C_Buffers_Destroy_Args}) = Csize_t(40)
 # typedef void PJRT_PhaseCompile_C_Buffers_Destroy ( PJRT_PhaseCompile_C_Buffers_Destroy_Args * args )
 const PJRT_PhaseCompile_C_Buffers_Destroy = Cvoid
 
+struct PJRT_Relocatable_Destroy_Args
+    struct_size::Csize_t
+    extension_start::Ptr{PJRT_Extension_Base}
+    relocatable::Ptr{PJRT_Relocatable}
+    function PJRT_Relocatable_Destroy_Args(extension_start, relocatable)
+        return new(csizeof(PJRT_Relocatable_Destroy_Args), extension_start, relocatable)
+    end
+end
+function Base.getproperty(x::Ptr{PJRT_Relocatable_Destroy_Args}, f::Symbol)
+    f === :struct_size && return Ptr{Csize_t}(x + 0)
+    f === :extension_start && return Ptr{Ptr{PJRT_Extension_Base}}(x + 8)
+    f === :relocatable && return Ptr{Ptr{PJRT_Relocatable}}(x + 16)
+    return getfield(x, f)
+end
+
+function Base.setproperty!(x::Ptr{PJRT_Relocatable_Destroy_Args}, f::Symbol, v)
+    return unsafe_store!(getproperty(x, f), v)
+end
+
+csizeof(::Type{PJRT_Relocatable_Destroy_Args}) = Csize_t(24)
+
+# typedef PJRT_Error * PJRT_Relocatable_Destroy ( PJRT_Relocatable_Destroy_Args * args )
+const PJRT_Relocatable_Destroy = Cvoid
+
+struct PJRT_Relocatable_Name_Args
+    struct_size::Csize_t
+    extension_start::Ptr{PJRT_Extension_Base}
+    relocatable::Ptr{PJRT_Relocatable}
+    relocatable_name::Cstring
+    relocatable_name_size::Csize_t
+    function PJRT_Relocatable_Name_Args(
+        extension_start, relocatable, relocatable_name, relocatable_name_size
+    )
+        return new(
+            csizeof(PJRT_Relocatable_Name_Args),
+            extension_start,
+            relocatable,
+            relocatable_name,
+            relocatable_name_size,
+        )
+    end
+end
+function Base.getproperty(x::Ptr{PJRT_Relocatable_Name_Args}, f::Symbol)
+    f === :struct_size && return Ptr{Csize_t}(x + 0)
+    f === :extension_start && return Ptr{Ptr{PJRT_Extension_Base}}(x + 8)
+    f === :relocatable && return Ptr{Ptr{PJRT_Relocatable}}(x + 16)
+    f === :relocatable_name && return Ptr{Cstring}(x + 24)
+    f === :relocatable_name_size && return Ptr{Csize_t}(x + 32)
+    return getfield(x, f)
+end
+
+function Base.setproperty!(x::Ptr{PJRT_Relocatable_Name_Args}, f::Symbol, v)
+    return unsafe_store!(getproperty(x, f), v)
+end
+
+csizeof(::Type{PJRT_Relocatable_Name_Args}) = Csize_t(40)
+
+# typedef PJRT_Error * PJRT_Relocatable_Name ( PJRT_Relocatable_Name_Args * args )
+const PJRT_Relocatable_Name = Cvoid
+
+struct PJRT_Relocatable_BuildId_Args
+    struct_size::Csize_t
+    extension_start::Ptr{PJRT_Extension_Base}
+    relocatable::Ptr{PJRT_Relocatable}
+    build_id::Cstring
+    build_id_size::Csize_t
+    function PJRT_Relocatable_BuildId_Args(
+        extension_start, relocatable, build_id, build_id_size
+    )
+        return new(
+            csizeof(PJRT_Relocatable_BuildId_Args),
+            extension_start,
+            relocatable,
+            build_id,
+            build_id_size,
+        )
+    end
+end
+function Base.getproperty(x::Ptr{PJRT_Relocatable_BuildId_Args}, f::Symbol)
+    f === :struct_size && return Ptr{Csize_t}(x + 0)
+    f === :extension_start && return Ptr{Ptr{PJRT_Extension_Base}}(x + 8)
+    f === :relocatable && return Ptr{Ptr{PJRT_Relocatable}}(x + 16)
+    f === :build_id && return Ptr{Cstring}(x + 24)
+    f === :build_id_size && return Ptr{Csize_t}(x + 32)
+    return getfield(x, f)
+end
+
+function Base.setproperty!(x::Ptr{PJRT_Relocatable_BuildId_Args}, f::Symbol, v)
+    return unsafe_store!(getproperty(x, f), v)
+end
+
+csizeof(::Type{PJRT_Relocatable_BuildId_Args}) = Csize_t(40)
+
+# typedef PJRT_Error * PJRT_Relocatable_BuildId ( PJRT_Relocatable_BuildId_Args * args )
+const PJRT_Relocatable_BuildId = Cvoid
+
+struct PJRT_Relocatable_CallBackendConfig_Args
+    struct_size::Csize_t
+    extension_start::Ptr{PJRT_Extension_Base}
+    relocatable::Ptr{PJRT_Relocatable}
+    call_backend_config::Cstring
+    call_backend_config_size::Csize_t
+    function PJRT_Relocatable_CallBackendConfig_Args(
+        extension_start, relocatable, call_backend_config, call_backend_config_size
+    )
+        return new(
+            csizeof(PJRT_Relocatable_CallBackendConfig_Args),
+            extension_start,
+            relocatable,
+            call_backend_config,
+            call_backend_config_size,
+        )
+    end
+end
+function Base.getproperty(x::Ptr{PJRT_Relocatable_CallBackendConfig_Args}, f::Symbol)
+    f === :struct_size && return Ptr{Csize_t}(x + 0)
+    f === :extension_start && return Ptr{Ptr{PJRT_Extension_Base}}(x + 8)
+    f === :relocatable && return Ptr{Ptr{PJRT_Relocatable}}(x + 16)
+    f === :call_backend_config && return Ptr{Cstring}(x + 24)
+    f === :call_backend_config_size && return Ptr{Csize_t}(x + 32)
+    return getfield(x, f)
+end
+
+function Base.setproperty!(x::Ptr{PJRT_Relocatable_CallBackendConfig_Args}, f::Symbol, v)
+    return unsafe_store!(getproperty(x, f), v)
+end
+
+csizeof(::Type{PJRT_Relocatable_CallBackendConfig_Args}) = Csize_t(40)
+
+# typedef PJRT_Error * PJRT_Relocatable_CallBackendConfig ( PJRT_Relocatable_CallBackendConfig_Args * args )
+const PJRT_Relocatable_CallBackendConfig = Cvoid
+
+struct PJRT_Relocatable_HasSideEffects_Args
+    struct_size::Csize_t
+    extension_start::Ptr{PJRT_Extension_Base}
+    relocatable::Ptr{PJRT_Relocatable}
+    has_side_effects::Bool
+    function PJRT_Relocatable_HasSideEffects_Args(
+        extension_start, relocatable, has_side_effects
+    )
+        return new(
+            csizeof(PJRT_Relocatable_HasSideEffects_Args),
+            extension_start,
+            relocatable,
+            has_side_effects,
+        )
+    end
+end
+function Base.getproperty(x::Ptr{PJRT_Relocatable_HasSideEffects_Args}, f::Symbol)
+    f === :struct_size && return Ptr{Csize_t}(x + 0)
+    f === :extension_start && return Ptr{Ptr{PJRT_Extension_Base}}(x + 8)
+    f === :relocatable && return Ptr{Ptr{PJRT_Relocatable}}(x + 16)
+    f === :has_side_effects && return Ptr{Bool}(x + 24)
+    return getfield(x, f)
+end
+
+function Base.setproperty!(x::Ptr{PJRT_Relocatable_HasSideEffects_Args}, f::Symbol, v)
+    return unsafe_store!(getproperty(x, f), v)
+end
+
+csizeof(::Type{PJRT_Relocatable_HasSideEffects_Args}) = Csize_t(25)
+
+# typedef PJRT_Error * PJRT_Relocatable_HasSideEffects ( PJRT_Relocatable_HasSideEffects_Args * args )
+const PJRT_Relocatable_HasSideEffects = Cvoid
+
+struct PJRT_Relocatable_Serialize_Args
+    struct_size::Csize_t
+    extension_start::Ptr{PJRT_Extension_Base}
+    relocatable::Ptr{PJRT_Relocatable}
+    serialized_bytes::Cstring
+    serialized_bytes_size::Csize_t
+    serialized_relocatable::Ptr{PJRT_SerializedRelocatable}
+    serialized_relocatable_deleter::Ptr{Cvoid}
+    function PJRT_Relocatable_Serialize_Args(
+        extension_start,
+        relocatable,
+        serialized_bytes,
+        serialized_bytes_size,
+        serialized_relocatable,
+        serialized_relocatable_deleter,
+    )
+        return new(
+            csizeof(PJRT_Relocatable_Serialize_Args),
+            extension_start,
+            relocatable,
+            serialized_bytes,
+            serialized_bytes_size,
+            serialized_relocatable,
+            serialized_relocatable_deleter,
+        )
+    end
+end
+function Base.getproperty(x::Ptr{PJRT_Relocatable_Serialize_Args}, f::Symbol)
+    f === :struct_size && return Ptr{Csize_t}(x + 0)
+    f === :extension_start && return Ptr{Ptr{PJRT_Extension_Base}}(x + 8)
+    f === :relocatable && return Ptr{Ptr{PJRT_Relocatable}}(x + 16)
+    f === :serialized_bytes && return Ptr{Cstring}(x + 24)
+    f === :serialized_bytes_size && return Ptr{Csize_t}(x + 32)
+    f === :serialized_relocatable && return Ptr{Ptr{PJRT_SerializedRelocatable}}(x + 40)
+    f === :serialized_relocatable_deleter && return Ptr{Ptr{Cvoid}}(x + 48)
+    return getfield(x, f)
+end
+
+function Base.setproperty!(x::Ptr{PJRT_Relocatable_Serialize_Args}, f::Symbol, v)
+    return unsafe_store!(getproperty(x, f), v)
+end
+
+csizeof(::Type{PJRT_Relocatable_Serialize_Args}) = Csize_t(56)
+
+# typedef PJRT_Error * PJRT_Relocatable_Serialize ( PJRT_Relocatable_Serialize_Args * args )
+const PJRT_Relocatable_Serialize = Cvoid
+
+struct PJRT_Relocatable_ParameterElementTypes_Args
+    struct_size::Csize_t
+    extension_start::Ptr{PJRT_Extension_Base}
+    relocatable::Ptr{PJRT_Relocatable}
+    parameter_types::Ptr{PJRT_Buffer_Type}
+    num_parameter_types::Csize_t
+    function PJRT_Relocatable_ParameterElementTypes_Args(
+        extension_start, relocatable, parameter_types, num_parameter_types
+    )
+        return new(
+            csizeof(PJRT_Relocatable_ParameterElementTypes_Args),
+            extension_start,
+            relocatable,
+            parameter_types,
+            num_parameter_types,
+        )
+    end
+end
+function Base.getproperty(x::Ptr{PJRT_Relocatable_ParameterElementTypes_Args}, f::Symbol)
+    f === :struct_size && return Ptr{Csize_t}(x + 0)
+    f === :extension_start && return Ptr{Ptr{PJRT_Extension_Base}}(x + 8)
+    f === :relocatable && return Ptr{Ptr{PJRT_Relocatable}}(x + 16)
+    f === :parameter_types && return Ptr{Ptr{PJRT_Buffer_Type}}(x + 24)
+    f === :num_parameter_types && return Ptr{Csize_t}(x + 32)
+    return getfield(x, f)
+end
+
+function Base.setproperty!(
+    x::Ptr{PJRT_Relocatable_ParameterElementTypes_Args}, f::Symbol, v
+)
+    return unsafe_store!(getproperty(x, f), v)
+end
+
+csizeof(::Type{PJRT_Relocatable_ParameterElementTypes_Args}) = Csize_t(40)
+
+# typedef PJRT_Error * PJRT_Relocatable_ParameterElementTypes ( PJRT_Relocatable_ParameterElementTypes_Args * args )
+const PJRT_Relocatable_ParameterElementTypes = Cvoid
+
+struct PJRT_Relocatable_OutputElementTypes_Args
+    struct_size::Csize_t
+    extension_start::Ptr{PJRT_Extension_Base}
+    relocatable::Ptr{PJRT_Relocatable}
+    output_types::Ptr{PJRT_Buffer_Type}
+    num_output_types::Csize_t
+    function PJRT_Relocatable_OutputElementTypes_Args(
+        extension_start, relocatable, output_types, num_output_types
+    )
+        return new(
+            csizeof(PJRT_Relocatable_OutputElementTypes_Args),
+            extension_start,
+            relocatable,
+            output_types,
+            num_output_types,
+        )
+    end
+end
+function Base.getproperty(x::Ptr{PJRT_Relocatable_OutputElementTypes_Args}, f::Symbol)
+    f === :struct_size && return Ptr{Csize_t}(x + 0)
+    f === :extension_start && return Ptr{Ptr{PJRT_Extension_Base}}(x + 8)
+    f === :relocatable && return Ptr{Ptr{PJRT_Relocatable}}(x + 16)
+    f === :output_types && return Ptr{Ptr{PJRT_Buffer_Type}}(x + 24)
+    f === :num_output_types && return Ptr{Csize_t}(x + 32)
+    return getfield(x, f)
+end
+
+function Base.setproperty!(x::Ptr{PJRT_Relocatable_OutputElementTypes_Args}, f::Symbol, v)
+    return unsafe_store!(getproperty(x, f), v)
+end
+
+csizeof(::Type{PJRT_Relocatable_OutputElementTypes_Args}) = Csize_t(40)
+
+# typedef PJRT_Error * PJRT_Relocatable_OutputElementTypes ( PJRT_Relocatable_OutputElementTypes_Args * args )
+const PJRT_Relocatable_OutputElementTypes = Cvoid
+
+struct PJRT_Relocatable_ParameterDimensions_Args
+    struct_size::Csize_t
+    extension_start::Ptr{PJRT_Extension_Base}
+    relocatable::Ptr{PJRT_Relocatable}
+    num_parameters::Csize_t
+    dims::Ptr{Int64}
+    dim_sizes::Ptr{Csize_t}
+    function PJRT_Relocatable_ParameterDimensions_Args(
+        extension_start, relocatable, num_parameters, dims, dim_sizes
+    )
+        return new(
+            csizeof(PJRT_Relocatable_ParameterDimensions_Args),
+            extension_start,
+            relocatable,
+            num_parameters,
+            dims,
+            dim_sizes,
+        )
+    end
+end
+function Base.getproperty(x::Ptr{PJRT_Relocatable_ParameterDimensions_Args}, f::Symbol)
+    f === :struct_size && return Ptr{Csize_t}(x + 0)
+    f === :extension_start && return Ptr{Ptr{PJRT_Extension_Base}}(x + 8)
+    f === :relocatable && return Ptr{Ptr{PJRT_Relocatable}}(x + 16)
+    f === :num_parameters && return Ptr{Csize_t}(x + 24)
+    f === :dims && return Ptr{Ptr{Int64}}(x + 32)
+    f === :dim_sizes && return Ptr{Ptr{Csize_t}}(x + 40)
+    return getfield(x, f)
+end
+
+function Base.setproperty!(x::Ptr{PJRT_Relocatable_ParameterDimensions_Args}, f::Symbol, v)
+    return unsafe_store!(getproperty(x, f), v)
+end
+
+csizeof(::Type{PJRT_Relocatable_ParameterDimensions_Args}) = Csize_t(48)
+
+# typedef PJRT_Error * PJRT_Relocatable_ParameterDimensions ( PJRT_Relocatable_ParameterDimensions_Args * args )
+const PJRT_Relocatable_ParameterDimensions = Cvoid
+
+struct PJRT_Relocatable_OutputDimensions_Args
+    struct_size::Csize_t
+    extension_start::Ptr{PJRT_Extension_Base}
+    relocatable::Ptr{PJRT_Relocatable}
+    num_outputs::Csize_t
+    dims::Ptr{Int64}
+    dim_sizes::Ptr{Csize_t}
+    function PJRT_Relocatable_OutputDimensions_Args(
+        extension_start, relocatable, num_outputs, dims, dim_sizes
+    )
+        return new(
+            csizeof(PJRT_Relocatable_OutputDimensions_Args),
+            extension_start,
+            relocatable,
+            num_outputs,
+            dims,
+            dim_sizes,
+        )
+    end
+end
+function Base.getproperty(x::Ptr{PJRT_Relocatable_OutputDimensions_Args}, f::Symbol)
+    f === :struct_size && return Ptr{Csize_t}(x + 0)
+    f === :extension_start && return Ptr{Ptr{PJRT_Extension_Base}}(x + 8)
+    f === :relocatable && return Ptr{Ptr{PJRT_Relocatable}}(x + 16)
+    f === :num_outputs && return Ptr{Csize_t}(x + 24)
+    f === :dims && return Ptr{Ptr{Int64}}(x + 32)
+    f === :dim_sizes && return Ptr{Ptr{Csize_t}}(x + 40)
+    return getfield(x, f)
+end
+
+function Base.setproperty!(x::Ptr{PJRT_Relocatable_OutputDimensions_Args}, f::Symbol, v)
+    return unsafe_store!(getproperty(x, f), v)
+end
+
+csizeof(::Type{PJRT_Relocatable_OutputDimensions_Args}) = Csize_t(48)
+
+# typedef PJRT_Error * PJRT_Relocatable_OutputDimensions ( PJRT_Relocatable_OutputDimensions_Args * args )
+const PJRT_Relocatable_OutputDimensions = Cvoid
+
+struct PJRT_Relocatable_ParameterLayouts_Args
+    struct_size::Csize_t
+    extension_start::Ptr{PJRT_Extension_Base}
+    relocatable::Ptr{PJRT_Relocatable}
+    num_parameters::Csize_t
+    layouts::Ptr{Ptr{PJRT_Layouts_MemoryLayout}}
+    function PJRT_Relocatable_ParameterLayouts_Args(
+        extension_start, relocatable, num_parameters, layouts
+    )
+        return new(
+            csizeof(PJRT_Relocatable_ParameterLayouts_Args),
+            extension_start,
+            relocatable,
+            num_parameters,
+            layouts,
+        )
+    end
+end
+function Base.getproperty(x::Ptr{PJRT_Relocatable_ParameterLayouts_Args}, f::Symbol)
+    f === :struct_size && return Ptr{Csize_t}(x + 0)
+    f === :extension_start && return Ptr{Ptr{PJRT_Extension_Base}}(x + 8)
+    f === :relocatable && return Ptr{Ptr{PJRT_Relocatable}}(x + 16)
+    f === :num_parameters && return Ptr{Csize_t}(x + 24)
+    f === :layouts && return Ptr{Ptr{Ptr{PJRT_Layouts_MemoryLayout}}}(x + 32)
+    return getfield(x, f)
+end
+
+function Base.setproperty!(x::Ptr{PJRT_Relocatable_ParameterLayouts_Args}, f::Symbol, v)
+    return unsafe_store!(getproperty(x, f), v)
+end
+
+csizeof(::Type{PJRT_Relocatable_ParameterLayouts_Args}) = Csize_t(40)
+
+# typedef PJRT_Error * PJRT_Relocatable_ParameterLayouts ( PJRT_Relocatable_ParameterLayouts_Args * args )
+const PJRT_Relocatable_ParameterLayouts = Cvoid
+
+struct PJRT_Relocatable_OutputLayouts_Args
+    struct_size::Csize_t
+    extension_start::Ptr{PJRT_Extension_Base}
+    relocatable::Ptr{PJRT_Relocatable}
+    num_outputs::Csize_t
+    layouts::Ptr{Ptr{PJRT_Layouts_MemoryLayout}}
+    function PJRT_Relocatable_OutputLayouts_Args(
+        extension_start, relocatable, num_outputs, layouts
+    )
+        return new(
+            csizeof(PJRT_Relocatable_OutputLayouts_Args),
+            extension_start,
+            relocatable,
+            num_outputs,
+            layouts,
+        )
+    end
+end
+function Base.getproperty(x::Ptr{PJRT_Relocatable_OutputLayouts_Args}, f::Symbol)
+    f === :struct_size && return Ptr{Csize_t}(x + 0)
+    f === :extension_start && return Ptr{Ptr{PJRT_Extension_Base}}(x + 8)
+    f === :relocatable && return Ptr{Ptr{PJRT_Relocatable}}(x + 16)
+    f === :num_outputs && return Ptr{Csize_t}(x + 24)
+    f === :layouts && return Ptr{Ptr{Ptr{PJRT_Layouts_MemoryLayout}}}(x + 32)
+    return getfield(x, f)
+end
+
+function Base.setproperty!(x::Ptr{PJRT_Relocatable_OutputLayouts_Args}, f::Symbol, v)
+    return unsafe_store!(getproperty(x, f), v)
+end
+
+csizeof(::Type{PJRT_Relocatable_OutputLayouts_Args}) = Csize_t(40)
+
+# typedef PJRT_Error * PJRT_Relocatable_OutputLayouts ( PJRT_Relocatable_OutputLayouts_Args * args )
+const PJRT_Relocatable_OutputLayouts = Cvoid
+
+struct PJRT_Relocatable_ParameterOutputAliases_Args
+    struct_size::Csize_t
+    extension_start::Ptr{PJRT_Extension_Base}
+    relocatable::Ptr{PJRT_Relocatable}
+    num_aliases::Csize_t
+    parameter_indices::Ptr{Int64}
+    output_indices::Ptr{Int64}
+    function PJRT_Relocatable_ParameterOutputAliases_Args(
+        extension_start, relocatable, num_aliases, parameter_indices, output_indices
+    )
+        return new(
+            csizeof(PJRT_Relocatable_ParameterOutputAliases_Args),
+            extension_start,
+            relocatable,
+            num_aliases,
+            parameter_indices,
+            output_indices,
+        )
+    end
+end
+function Base.getproperty(x::Ptr{PJRT_Relocatable_ParameterOutputAliases_Args}, f::Symbol)
+    f === :struct_size && return Ptr{Csize_t}(x + 0)
+    f === :extension_start && return Ptr{Ptr{PJRT_Extension_Base}}(x + 8)
+    f === :relocatable && return Ptr{Ptr{PJRT_Relocatable}}(x + 16)
+    f === :num_aliases && return Ptr{Csize_t}(x + 24)
+    f === :parameter_indices && return Ptr{Ptr{Int64}}(x + 32)
+    f === :output_indices && return Ptr{Ptr{Int64}}(x + 40)
+    return getfield(x, f)
+end
+
+function Base.setproperty!(
+    x::Ptr{PJRT_Relocatable_ParameterOutputAliases_Args}, f::Symbol, v
+)
+    return unsafe_store!(getproperty(x, f), v)
+end
+
+csizeof(::Type{PJRT_Relocatable_ParameterOutputAliases_Args}) = Csize_t(48)
+
+# typedef PJRT_Error * PJRT_Relocatable_ParameterOutputAliases ( PJRT_Relocatable_ParameterOutputAliases_Args * args )
+const PJRT_Relocatable_ParameterOutputAliases = Cvoid
+
+struct PJRT_PhaseCompile_CompileToRelocatable_Args
+    struct_size::Csize_t
+    extension_start::Ptr{PJRT_Extension_Base}
+    phase_compiler::Ptr{PJRT_PhaseCompiler}
+    topology::Ptr{PJRT_TopologyDescription}
+    program::Ptr{PJRT_Program}
+    compile_options::Cstring
+    compile_options_size::Csize_t
+    name::Cstring
+    name_size::Csize_t
+    is_entrypoint::Bool
+    client::Ptr{PJRT_Client}
+    relocatable::Ptr{PJRT_Relocatable}
+    function PJRT_PhaseCompile_CompileToRelocatable_Args(
+        extension_start,
+        phase_compiler,
+        topology,
+        program,
+        compile_options,
+        compile_options_size,
+        name,
+        name_size,
+        is_entrypoint,
+        client,
+        relocatable,
+    )
+        return new(
+            csizeof(PJRT_PhaseCompile_CompileToRelocatable_Args),
+            extension_start,
+            phase_compiler,
+            topology,
+            program,
+            compile_options,
+            compile_options_size,
+            name,
+            name_size,
+            is_entrypoint,
+            client,
+            relocatable,
+        )
+    end
+end
+function Base.getproperty(x::Ptr{PJRT_PhaseCompile_CompileToRelocatable_Args}, f::Symbol)
+    f === :struct_size && return Ptr{Csize_t}(x + 0)
+    f === :extension_start && return Ptr{Ptr{PJRT_Extension_Base}}(x + 8)
+    f === :phase_compiler && return Ptr{Ptr{PJRT_PhaseCompiler}}(x + 16)
+    f === :topology && return Ptr{Ptr{PJRT_TopologyDescription}}(x + 24)
+    f === :program && return Ptr{Ptr{PJRT_Program}}(x + 32)
+    f === :compile_options && return Ptr{Cstring}(x + 40)
+    f === :compile_options_size && return Ptr{Csize_t}(x + 48)
+    f === :name && return Ptr{Cstring}(x + 56)
+    f === :name_size && return Ptr{Csize_t}(x + 64)
+    f === :is_entrypoint && return Ptr{Bool}(x + 72)
+    f === :client && return Ptr{Ptr{PJRT_Client}}(x + 80)
+    f === :relocatable && return Ptr{Ptr{PJRT_Relocatable}}(x + 88)
+    return getfield(x, f)
+end
+
+function Base.setproperty!(
+    x::Ptr{PJRT_PhaseCompile_CompileToRelocatable_Args}, f::Symbol, v
+)
+    return unsafe_store!(getproperty(x, f), v)
+end
+
+csizeof(::Type{PJRT_PhaseCompile_CompileToRelocatable_Args}) = Csize_t(96)
+
+# typedef PJRT_Error * PJRT_PhaseCompile_CompileToRelocatable ( PJRT_PhaseCompile_CompileToRelocatable_Args * args )
+const PJRT_PhaseCompile_CompileToRelocatable = Cvoid
+
+struct PJRT_PhaseCompile_DeserializeRelocatable_Args
+    struct_size::Csize_t
+    extension_start::Ptr{PJRT_Extension_Base}
+    phase_compiler::Ptr{PJRT_PhaseCompiler}
+    serialized_relocatable::Cstring
+    serialized_relocatable_size::Csize_t
+    relocatable::Ptr{PJRT_Relocatable}
+    function PJRT_PhaseCompile_DeserializeRelocatable_Args(
+        extension_start,
+        phase_compiler,
+        serialized_relocatable,
+        serialized_relocatable_size,
+        relocatable,
+    )
+        return new(
+            csizeof(PJRT_PhaseCompile_DeserializeRelocatable_Args),
+            extension_start,
+            phase_compiler,
+            serialized_relocatable,
+            serialized_relocatable_size,
+            relocatable,
+        )
+    end
+end
+function Base.getproperty(x::Ptr{PJRT_PhaseCompile_DeserializeRelocatable_Args}, f::Symbol)
+    f === :struct_size && return Ptr{Csize_t}(x + 0)
+    f === :extension_start && return Ptr{Ptr{PJRT_Extension_Base}}(x + 8)
+    f === :phase_compiler && return Ptr{Ptr{PJRT_PhaseCompiler}}(x + 16)
+    f === :serialized_relocatable && return Ptr{Cstring}(x + 24)
+    f === :serialized_relocatable_size && return Ptr{Csize_t}(x + 32)
+    f === :relocatable && return Ptr{Ptr{PJRT_Relocatable}}(x + 40)
+    return getfield(x, f)
+end
+
+function Base.setproperty!(
+    x::Ptr{PJRT_PhaseCompile_DeserializeRelocatable_Args}, f::Symbol, v
+)
+    return unsafe_store!(getproperty(x, f), v)
+end
+
+csizeof(::Type{PJRT_PhaseCompile_DeserializeRelocatable_Args}) = Csize_t(48)
+
+# typedef PJRT_Error * PJRT_PhaseCompile_DeserializeRelocatable ( PJRT_PhaseCompile_DeserializeRelocatable_Args * args )
+const PJRT_PhaseCompile_DeserializeRelocatable = Cvoid
+
+struct PJRT_PhaseCompile_LinkRelocatables_Args
+    struct_size::Csize_t
+    extension_start::Ptr{PJRT_Extension_Base}
+    phase_compiler::Ptr{PJRT_PhaseCompiler}
+    topology::Ptr{PJRT_TopologyDescription}
+    compile_options::Cstring
+    compile_options_size::Csize_t
+    entrypoint::Ptr{PJRT_Relocatable}
+    dependencies::Ptr{Ptr{PJRT_Relocatable}}
+    num_dependencies::Csize_t
+    executable::Ptr{PJRT_Executable}
+    function PJRT_PhaseCompile_LinkRelocatables_Args(
+        extension_start,
+        phase_compiler,
+        topology,
+        compile_options,
+        compile_options_size,
+        entrypoint,
+        dependencies,
+        num_dependencies,
+        executable,
+    )
+        return new(
+            csizeof(PJRT_PhaseCompile_LinkRelocatables_Args),
+            extension_start,
+            phase_compiler,
+            topology,
+            compile_options,
+            compile_options_size,
+            entrypoint,
+            dependencies,
+            num_dependencies,
+            executable,
+        )
+    end
+end
+function Base.getproperty(x::Ptr{PJRT_PhaseCompile_LinkRelocatables_Args}, f::Symbol)
+    f === :struct_size && return Ptr{Csize_t}(x + 0)
+    f === :extension_start && return Ptr{Ptr{PJRT_Extension_Base}}(x + 8)
+    f === :phase_compiler && return Ptr{Ptr{PJRT_PhaseCompiler}}(x + 16)
+    f === :topology && return Ptr{Ptr{PJRT_TopologyDescription}}(x + 24)
+    f === :compile_options && return Ptr{Cstring}(x + 32)
+    f === :compile_options_size && return Ptr{Csize_t}(x + 40)
+    f === :entrypoint && return Ptr{Ptr{PJRT_Relocatable}}(x + 48)
+    f === :dependencies && return Ptr{Ptr{Ptr{PJRT_Relocatable}}}(x + 56)
+    f === :num_dependencies && return Ptr{Csize_t}(x + 64)
+    f === :executable && return Ptr{Ptr{PJRT_Executable}}(x + 72)
+    return getfield(x, f)
+end
+
+function Base.setproperty!(x::Ptr{PJRT_PhaseCompile_LinkRelocatables_Args}, f::Symbol, v)
+    return unsafe_store!(getproperty(x, f), v)
+end
+
+csizeof(::Type{PJRT_PhaseCompile_LinkRelocatables_Args}) = Csize_t(80)
+
+# typedef PJRT_Error * PJRT_PhaseCompile_LinkRelocatables ( PJRT_PhaseCompile_LinkRelocatables_Args * args )
+const PJRT_PhaseCompile_LinkRelocatables = Cvoid
+
 struct PJRT_PhaseCompile_Extension
     base::PJRT_Extension_Base
     phase_compile_get_compiler::Ptr{PJRT_PhaseCompile_Get_Compiler}
@@ -9221,9 +10043,25 @@ struct PJRT_PhaseCompile_Extension
     phase_compile_run_phases::Ptr{PJRT_PhaseCompile_Run_Phase}
     phase_compile_get_phase_names::Ptr{PJRT_PhaseCompile_Get_PhaseNames}
     phase_compile_c_buffers_destroy::Ptr{PJRT_PhaseCompile_C_Buffers_Destroy}
+    relocatable_destroy::Ptr{PJRT_Relocatable_Destroy}
+    relocatable_name::Ptr{PJRT_Relocatable_Name}
+    relocatable_build_id::Ptr{PJRT_Relocatable_BuildId}
+    relocatable_call_backend_config::Ptr{PJRT_Relocatable_CallBackendConfig}
+    relocatable_has_side_effects::Ptr{PJRT_Relocatable_HasSideEffects}
+    relocatable_serialize::Ptr{PJRT_Relocatable_Serialize}
+    relocatable_parameter_element_types::Ptr{PJRT_Relocatable_ParameterElementTypes}
+    relocatable_output_element_types::Ptr{PJRT_Relocatable_OutputElementTypes}
+    relocatable_parameter_dimensions::Ptr{PJRT_Relocatable_ParameterDimensions}
+    relocatable_output_dimensions::Ptr{PJRT_Relocatable_OutputDimensions}
+    relocatable_parameter_layouts::Ptr{PJRT_Relocatable_ParameterLayouts}
+    relocatable_output_layouts::Ptr{PJRT_Relocatable_OutputLayouts}
+    relocatable_parameter_output_aliases::Ptr{PJRT_Relocatable_ParameterOutputAliases}
+    phase_compile_compile_to_relocatable::Ptr{PJRT_PhaseCompile_CompileToRelocatable}
+    phase_compile_deserialize_relocatable::Ptr{PJRT_PhaseCompile_DeserializeRelocatable}
+    phase_compile_link_relocatables::Ptr{PJRT_PhaseCompile_LinkRelocatables}
 end
 
-csizeof(::Type{PJRT_PhaseCompile_Extension}) = Csize_t(64)
+csizeof(::Type{PJRT_PhaseCompile_Extension}) = Csize_t(192)
 
 mutable struct PLUGIN_Profiler end
 
@@ -9559,16 +10397,33 @@ struct PJRT_RawBuffer_FunctionTable
     is_mutable::Ptr{Cvoid}
     slice::Ptr{Cvoid}
     schedule_copy_to::Ptr{Cvoid}
-    get_external_dma_info::Ptr{Cvoid}
+    acquire_external_dma_access::Ptr{Cvoid}
 end
 
 struct PJRT_RawBuffer
     vtable::Ptr{PJRT_RawBuffer_FunctionTable}
 end
 
+struct PJRT_ExternalDmaAccess_FunctionTable
+    struct_size::Csize_t
+    extension_start::Ptr{PJRT_Extension_Base}
+    destroy::Ptr{Cvoid}
+    get_event::Ptr{Cvoid}
+    get_info::Ptr{Cvoid}
+end
+
+struct PJRT_ExternalDmaAccess
+    vtable::Ptr{PJRT_ExternalDmaAccess_FunctionTable}
+    access::Ptr{Cvoid}
+end
+
 csizeof(::Type{PJRT_RawBuffer_FunctionTable}) = Csize_t(136)
 
 csizeof(::Type{PJRT_RawBuffer}) = Csize_t(8)
+
+csizeof(::Type{PJRT_ExternalDmaAccess_FunctionTable}) = Csize_t(40)
+
+csizeof(::Type{PJRT_ExternalDmaAccess}) = Csize_t(16)
 
 struct PJRT_RawBuffer_CreateRawAliasOfBuffer_Args
     struct_size::Csize_t
@@ -11530,6 +12385,65 @@ csizeof(::Type{PJRT_TpuTopology_GetDefaultPlatformConfig_Args}) = Csize_t(40)
 # typedef PJRT_Error * PJRT_TpuTopology_GetDefaultPlatformConfig ( PJRT_TpuTopology_GetDefaultPlatformConfig_Args * args )
 const PJRT_TpuTopology_GetDefaultPlatformConfig = Cvoid
 
+struct PJRT_TpuTopology_ComputeSubsliceForDevices_Args
+    struct_size::Csize_t
+    topology::Ptr{PJRT_TopologyDescription}
+    device_ids::Ptr{Int32}
+    num_device_ids::Csize_t
+    max_dims::Csize_t
+    origin::Ptr{Int32}
+    chips_per_host_bounds::Ptr{Int32}
+    host_bounds::Ptr{Int32}
+    num_dims::Csize_t
+    function PJRT_TpuTopology_ComputeSubsliceForDevices_Args(
+        topology,
+        device_ids,
+        num_device_ids,
+        max_dims,
+        origin,
+        chips_per_host_bounds,
+        host_bounds,
+        num_dims,
+    )
+        return new(
+            csizeof(PJRT_TpuTopology_ComputeSubsliceForDevices_Args),
+            topology,
+            device_ids,
+            num_device_ids,
+            max_dims,
+            origin,
+            chips_per_host_bounds,
+            host_bounds,
+            num_dims,
+        )
+    end
+end
+function Base.getproperty(
+    x::Ptr{PJRT_TpuTopology_ComputeSubsliceForDevices_Args}, f::Symbol
+)
+    f === :struct_size && return Ptr{Csize_t}(x + 0)
+    f === :topology && return Ptr{Ptr{PJRT_TopologyDescription}}(x + 8)
+    f === :device_ids && return Ptr{Ptr{Int32}}(x + 16)
+    f === :num_device_ids && return Ptr{Csize_t}(x + 24)
+    f === :max_dims && return Ptr{Csize_t}(x + 32)
+    f === :origin && return Ptr{Ptr{Int32}}(x + 40)
+    f === :chips_per_host_bounds && return Ptr{Ptr{Int32}}(x + 48)
+    f === :host_bounds && return Ptr{Ptr{Int32}}(x + 56)
+    f === :num_dims && return Ptr{Csize_t}(x + 64)
+    return getfield(x, f)
+end
+
+function Base.setproperty!(
+    x::Ptr{PJRT_TpuTopology_ComputeSubsliceForDevices_Args}, f::Symbol, v
+)
+    return unsafe_store!(getproperty(x, f), v)
+end
+
+csizeof(::Type{PJRT_TpuTopology_ComputeSubsliceForDevices_Args}) = Csize_t(72)
+
+# typedef PJRT_Error * PJRT_TpuTopology_ComputeSubsliceForDevices ( PJRT_TpuTopology_ComputeSubsliceForDevices_Args * args )
+const PJRT_TpuTopology_ComputeSubsliceForDevices = Cvoid
+
 struct PJRT_TpuTopology_Extension
     base::PJRT_Extension_Base
     subslice::Ptr{PJRT_TpuTopology_Subslice}
@@ -11569,9 +12483,10 @@ struct PJRT_TpuTopology_Extension
     get_slice_config::Ptr{PJRT_TpuTopology_GetSliceConfig}
     get_slice_configs::Ptr{PJRT_TpuTopology_GetSliceConfigs}
     get_default_platform_config::Ptr{PJRT_TpuTopology_GetDefaultPlatformConfig}
+    compute_subslice_for_devices::Ptr{PJRT_TpuTopology_ComputeSubsliceForDevices}
 end
 
-csizeof(::Type{PJRT_TpuTopology_Extension}) = Csize_t(272)
+csizeof(::Type{PJRT_TpuTopology_Extension}) = Csize_t(280)
 
 struct PJRT_XlaTransform_string
     data::Cstring
@@ -11774,7 +12689,7 @@ csizeof(::Type{PJRT_Xla_Transform_Extension}) = Csize_t(56)
 
 const PJRT_API_MAJOR = 0
 
-const PJRT_API_MINOR = 117
+const PJRT_API_MINOR = 118
 
 const PJRT_API_ABI_VERSION_EXTENSION_VERSION = 1
 
@@ -11786,7 +12701,7 @@ const PJRT_API_CUSTOM_PARTITIONER_EXTENSION_VERSION = 1
 
 const PJRT_API_FFI_EXTENSION_VERSION = 3
 
-const PJRT_API_GPU_EXTENSION_VERSION = 3
+const PJRT_API_GPU_EXTENSION_VERSION = 4
 
 const PJRT_API_LAYOUTS_EXTENSION_VERSION = 4
 
@@ -11796,7 +12711,7 @@ const PJRT_API_MEMORY_DESCRIPTIONS_EXTENSION_VERSION = 1
 
 const PJRT_API_MULTI_SLICE_EXTENSION_VERSION = 1
 
-const PJRT_API_PHASE_COMPILE_EXTENSION_VERSION = 1
+const PJRT_API_PHASE_COMPILE_EXTENSION_VERSION = 2
 
 const PLUGIN_PROFILER_VERSION = 1
 

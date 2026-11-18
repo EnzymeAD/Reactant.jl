@@ -415,7 +415,7 @@ function (sharding::NamedSharding)(
     )
 
     data = ntuple(length(sharding.mesh)) do i
-        XLA.PJRT.AsyncBuffer(
+        return XLA.PJRT.AsyncBuffer(
             client,
             if length(device_to_array_slices[i]) == 0
                 x
@@ -440,7 +440,7 @@ function (sharding::NamedSharding)(client::XLA.PJRT.Client, _, S::Type, dims::Di
 
     data = ntuple(length(sharding.mesh)) do i
         Base.@_inline_meta
-        Base.similar(
+        return Base.similar(
             XLA.PJRT.AsyncBuffer,
             S,
             Dims(length.(device_to_array_slices[i]));
@@ -939,7 +939,7 @@ function HloSharding(sharding::NamedSharding, client::XLA.PJRT.Client, _, x)
     )
 
     data = ntuple(length(hlo_sharding.mesh)) do i
-        XLA.PJRT.AsyncBuffer(
+        return XLA.PJRT.AsyncBuffer(
             client,
             x[device_to_array_slices[i]...],
             XLA.get_device(client, hlo_sharding.mesh.device_ids[i]),
@@ -971,7 +971,7 @@ function (sharding::HloSharding)(
     device_to_array_slices = sharding_to_array_slices(sharding, size(x); client)
 
     data = ntuple(length(sharding.mesh)) do i
-        XLA.PJRT.AsyncBuffer(
+        return XLA.PJRT.AsyncBuffer(
             client,
             x[device_to_array_slices[i]...],
             XLA.get_device(client, sharding.mesh.device_ids[i]),
@@ -985,7 +985,7 @@ function (sharding::HloSharding)(client::XLA.PJRT.Client, ::Nothing, S::Type, di
     device_to_array_slices = sharding_to_array_slices(sharding, dims; client)
 
     data = ntuple(length(sharding.mesh)) do i
-        Base.similar(
+        return Base.similar(
             XLA.PJRT.AsyncBuffer,
             S,
             Dims(length.(device_to_array_slices[i]));

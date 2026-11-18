@@ -337,10 +337,8 @@ function _wait_for_coordinator(
             sleep(coordinator_retry_secs)
         end
     end
-    return error(
-        "Failed to recognize coordinator_address $(coordinator_address) \
-        after $(timeout_in_seconds) seconds. Please check if the address is correct."
-    )
+    return error("Failed to recognize coordinator_address $(coordinator_address) \
+        after $(timeout_in_seconds) seconds. Please check if the address is correct.")
 end
 
 function get_process_count(env::AbstractCloudTPUEnvDetector)

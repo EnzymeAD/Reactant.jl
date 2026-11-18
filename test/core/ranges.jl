@@ -39,5 +39,10 @@ end
 
     r = 0:0.1:1
     r_ra = Reactant.to_rarray(r; track_numbers=Number)
-    @test Reactant.to_number(step(r_ra)) === step(r)
+    # On TPU, Float64 buffers are stored as a pair of Float32 values (48-bit
+    # mantissa), so 0.1 round-trips through a ConcreteRNumber as
+    # 0.09999999999999998 rather than 0.1.
+    RunningOnTPU = contains(string(Reactant.devices()[1]), "TPU")
+    @test Reactant.to_number(step(r_ra)) === Reactant.to_number(ConcreteRNumber(step(r)))
+    @test Reactant.to_number(step(r_ra)) === step(r) skip = RunningOnTPU
 end

@@ -269,12 +269,9 @@ Base.@nospecializeinfer function create_result(
 
         result = Expr(:new, T, elems...)
 
-        push!(
-            resultgen_code,
-            quote
-                $sym = $result
-            end,
-        )
+        push!(resultgen_code, quote
+            $sym = $result
+        end)
         result_cache[tocopy] = sym
     end
 
@@ -300,12 +297,9 @@ Base.@nospecializeinfer function create_result(
 
         result = Meta.quot(tocopy)
 
-        push!(
-            resultgen_code,
-            quote
-                $sym = $result
-            end,
-        )
+        push!(resultgen_code, quote
+            $sym = $result
+        end)
         result_cache[tocopy] = sym
     end
 
@@ -342,12 +336,9 @@ function create_result(
         else
             result = :(ConcretePJRTNumber{$T}($restore))
         end
-        push!(
-            resultgen_code,
-            quote
-                $sym = $result
-            end,
-        )
+        push!(resultgen_code, quote
+            $sym = $result
+        end)
         result_cache[tocopy] = sym
     end
 
@@ -384,12 +375,9 @@ function create_result(
         else
             result = :(ConcreteIFRTNumber{$T}($restore))
         end
-        push!(
-            resultgen_code,
-            quote
-                $sym = $result
-            end,
-        )
+        push!(resultgen_code, quote
+            $sym = $result
+        end)
         result_cache[tocopy] = sym
     end
 
@@ -427,12 +415,9 @@ function create_result(
         else
             result = :(ConcretePJRTArray{$T,$N}($restore, $(tocopy.shape)))
         end
-        push!(
-            resultgen_code,
-            quote
-                $sym = $result
-            end,
-        )
+        push!(resultgen_code, quote
+            $sym = $result
+        end)
         result_cache[tocopy] = sym
     end
 
@@ -486,12 +471,9 @@ function create_result(
         else
             result = :(ConcreteIFRTArray{$T,$N}($(restore), $(tocopy.shape)))
         end
-        push!(
-            resultgen_code,
-            quote
-                $sym = $result
-            end,
-        )
+        push!(resultgen_code, quote
+            $sym = $result
+        end)
         result_cache[tocopy] = sym
     end
 
@@ -554,23 +536,17 @@ function create_result(
         sym = Symbol("result", var_idx[])
         var_idx[] += 1
 
-        push!(
-            resultgen_code,
-            quote
-                $sym = $(Array{T,N})(undef, $(size(tocopy)...,))
-            end,
-        )
+        push!(resultgen_code, quote
+            $sym = $(Array{T,N})(undef, $(size(tocopy)...,))
+        end)
 
         result_cache[tocopy] = sym
 
         for (i, v) in enumerate(tocopy)
             subexpr = create_result(v, append_path(path, i), args...)
-            push!(
-                resultgen_code,
-                quote
-                    @inbounds $sym[$i] = $subexpr
-                end,
-            )
+            push!(resultgen_code, quote
+                @inbounds $sym[$i] = $subexpr
+            end)
         end
     end
 
@@ -668,12 +644,9 @@ function create_result(
         sym = Symbol("result", var_idx[])
         var_idx[] += 1
 
-        push!(
-            resultgen_code,
-            quote
-                $sym = $D()
-            end,
-        )
+        push!(resultgen_code, quote
+            $sym = $D()
+        end)
 
         result_cache[tocopy] = sym
 
@@ -682,12 +655,9 @@ function create_result(
             # symbol keys must be quoted in generated code; otherwise
             # they are interpreted as variable references
             k_expr = k isa Symbol ? QuoteNode(k) : k
-            push!(
-                resultgen_code,
-                quote
-                    @inbounds $sym[$k_expr] = $subexpr
-                end,
-            )
+            push!(resultgen_code, quote
+                @inbounds $sym[$k_expr] = $subexpr
+            end)
         end
     end
 
@@ -697,7 +667,7 @@ function create_result(
 end
 
 function create_result(
-    tocopy::Reactant.XLA.AbstractDevice,
+    tocopy::Union{Reactant.XLA.AbstractClient,Reactant.XLA.AbstractDevice},
     @nospecialize(_path::Tuple),
     _result_stores,
     _path_to_shard_info,
@@ -1311,12 +1281,9 @@ function codegen_unflatten!(
             sym = Symbol("result", var_idx[])
             var_idx[] += 1
 
-            push!(
-                resultgen_code,
-                quote
-                    $sym = $argres.data
-                end,
-            )
+            push!(resultgen_code, quote
+                $sym = $argres.data
+            end)
 
             result_stores[path] = sym
         end
@@ -1504,7 +1471,7 @@ function codegen_xla_call(
     base_symbol_name = is_sharded ? Symbol(:result_buffer_m, ndevices, :_) : :result_buffer_
     concretized_res_names = Symbol[Symbol(base_symbol_name, i) for i in 1:nresults]
     concretized_res_code = map(enumerate(concretized_res_names)) do (i, varname)
-        :($varname = linearized_results[$i])
+        return :($varname = linearized_results[$i])
     end
 
     xla_call_code = if nresults == 0 && is_pure

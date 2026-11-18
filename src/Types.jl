@@ -477,7 +477,7 @@ function InterpolateArray(
                 N_dim, M_dim = final_grid_size[dim], src_size[dim]
                 H = halo[dim]
 
-                [
+                return [
                     begin
                         if I <= H
                             clamp(I, 1, M_dim)
@@ -516,7 +516,7 @@ function InterpolateArray(
                 N_dim, M_dim = final_grid_size[dim], src_size[dim]
                 H = halo[dim]
 
-                [
+                return [
                     begin
                         if I <= H
                             clamp(I, 1, M_dim)
@@ -541,7 +541,7 @@ function InterpolateArray(
                 N_dim, M_dim = final_grid_size[dim], src_size[dim]
                 H = halo[dim]
 
-                [
+                return [
                     begin
                         if I <= H
                             clamp(I, 1, M_dim)
@@ -563,7 +563,7 @@ function InterpolateArray(
 
             dens = ntuple(N) do dim
                 H = halo[dim]
-                2 * max(1, final_grid_size[dim] - 2 * H)
+                return 2 * max(1, final_grid_size[dim] - 2 * H)
             end
             total_den = prod(dens)
 
@@ -572,7 +572,7 @@ function InterpolateArray(
                 N_dim, M_dim = final_grid_size[dim], src_size[dim]
                 H = halo[dim]
 
-                [
+                return [
                     begin
                         if I <= H || I >= N_dim - H + 1
                             0
@@ -597,13 +597,11 @@ function InterpolateArray(
                         dim -> c[dim] == 1 ? lows[dim][I.I[dim]] : highs[dim][I.I[dim]], N
                     )
 
-                    w_int = prod(
-                        ntuple(dim -> if c[dim] == 1
-                            (dens[dim] - rems[dim][I.I[dim]])
-                        else
-                            rems[dim][I.I[dim]]
-                        end, N)
-                    )
+                    w_int = prod(ntuple(dim -> if c[dim] == 1
+                        (dens[dim] - rems[dim][I.I[dim]])
+                    else
+                        rems[dim][I.I[dim]]
+                    end, N))
 
                     sum_val += w_int * local_cpu_array[CartesianIndex(idx)]
                 end
@@ -788,6 +786,31 @@ function ConcreteIFRTArray{T,N}(
     # ToDo: How to use specified device (non-sharded case)?
     sharded_data, shardinfo, padding = sharding(theclient, nothing, dummy_array)
     return ConcreteIFRTArray{T,N}(sharded_data, shape, shardinfo, padding)
+end
+
+for aType in (:ConcretePJRTArray, :ConcreteIFRTArray)
+    @eval begin
+        function $(aType){T,N,P}(::UndefInitializer, shape...; kwargs...) where {T,N,P}
+            return _check_concrete_type(
+                $(aType){T,N,P}, $(aType){T,N}(undef, shape...; kwargs...)
+            )
+        end
+
+        function $(aType){T,N,P}(data::AbstractArray; kwargs...) where {T,N,P}
+            return _check_concrete_type($(aType){T,N,P}, $(aType){T,N}(data; kwargs...))
+        end
+    end
+end
+
+function _check_concrete_type(::Type{A}, x) where {A}
+    x isa A || throw(
+        ArgumentError(
+            "Cannot construct a `$(A)`: the given sharding produces a `$(typeof(x))`. \
+             Use `$(Base.typename(A).wrapper){$(eltype(x)),$(ndims(x))}` or pass a \
+             matching `sharding` keyword."
+        ),
+    )
+    return x
 end
 
 function _select_client_and_device(
