@@ -1262,7 +1262,10 @@ result `output_tuple_indices[0]` (or the only result, with empty
 `operand_index`. The buffer of an input is read by at most one result.
 
 `operand_attrs` and `result_attrs`, if present, hold one dictionary of
-attributes per input and per result respectively.
+attributes per input and per result respectively. `arg_attrs`, if present,
+holds one dictionary of attributes per block argument, like the argument
+attributes of a function: e.g. `llvm.readonly` states that the block never
+writes the buffer.
 
 The body is an affine scope and an automatic allocation scope, as the body
 of a function is: its arguments are valid affine symbols, and its allocas
@@ -1292,6 +1295,7 @@ function jit_region(
     result_0::Vector{IR.Type},
     operand_layouts=nothing,
     operand_attrs=nothing,
+    arg_attrs=nothing,
     result_attrs=nothing,
     output_operand_aliases=nothing,
     xla_side_effect_free=nothing,
@@ -1307,6 +1311,7 @@ function jit_region(
         push!(attributes, NamedAttribute("operand_layouts", operand_layouts))
     !isnothing(operand_attrs) &&
         push!(attributes, NamedAttribute("operand_attrs", operand_attrs))
+    !isnothing(arg_attrs) && push!(attributes, NamedAttribute("arg_attrs", arg_attrs))
     !isnothing(result_attrs) &&
         push!(attributes, NamedAttribute("result_attrs", result_attrs))
     !isnothing(output_operand_aliases) &&
