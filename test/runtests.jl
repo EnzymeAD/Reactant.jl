@@ -90,6 +90,10 @@ if BACKEND == "julia-cpu"
     end
     filter!(((k, _),) -> !startswith(k, "integration/triton"), testsuite)
 elseif BACKEND == "metal"
+    # dependency conflict: Metal.jl v1.0 requires GPUCompiler v2
+    import Pkg
+    pkg"add Metal@1.0"
+
     using Metal
     Metal.functional() || error("Metal is not functional!")
     for name in (
