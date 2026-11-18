@@ -1097,6 +1097,91 @@ function handle(
     )
 end
 
+# MPSGraph only has a Philox generator, whose state is 7 `Int32`: a word that MPSGraph sets to 1, the 128-bit counter
+# and the 64-bit key, from the least significant word. Like in XLA, the 2 or 3 `UInt64` of the StableHLO state are the
+# key and the counter (whose high half is 0 for 2 of them), but the bits differ from those of XLA. The output is drawn
+# as 16-bit integers of `[0, 2^16)`, since wider ranges aren't uniform bits (`[typemin(Int32), 2^31)` only gives
+# `typemin(Int32)`). MPSGraph advances the counter by 256 per integer
+function handle(
+    ::Val{Symbol("stablehlo.rng_bit_generator")},
+    graph::MPSGraph,
+    (state,),
+    attributes,
+    (_, result),
+)
+    algorithm = attributes.rng_algorithm
+    if !(algorithm in (:DEFAULT, :PHILOX))
+        throw(
+            unimplemented(
+                "`stablehlo.rng_bit_generator` with `$algorithm` is not supported by `MetalClient`",
+            ),
+        )
+    end
+    n = only(size(state))
+    if !(n in (2, 3))
+        throw(
+            unimplemented(
+                "`stablehlo.rng_bit_generator` with a state of size $n is not supported by `MetalClient`",
+            ),
+        )
+    end
+
+    function slice(x, start, stop)
+        attributes = (; start_indices=[start], limit_indices=[stop], strides=[1])
+        return handle(Val(Symbol("stablehlo.slice")), graph, (x,), attributes, ())
+    end
+    function concat(xs...)
+        return handle(Val(Symbol("stablehlo.concatenate")), graph, xs, (; dimension=0), ())
+    end
+    function reinterpret_(x, T)
+        @objc [
+            graph::id{MPSGraph} reinterpretCastTensor:(x::id{MPSGraphTensor})
+            toType:(T::MPSDataType)
+            name:(nil::id{NSString})
+        ]::MPSGraphTensor
+    end
+
+    # `words` is `[key; counter]` in `Int32`
+    words = reinterpret_(state, Int32)
+    one_ = MPSGraphs.constantWithScalar(graph, 1, Int32)
+    one_ = MPSGraphs.reshapeTensor(graph, one_, convert(MPSShape, [1]))
+    high = if n == 2
+        zero_ = MPSGraphs.constantWithScalar(graph, 0, Int32)
+        (MPSGraphs.broadcastTensor(graph, zero_, convert(MPSShape, [2])),)
+    else
+        ()
+    end
+    mps_state = concat(one_, slice(words, 2, 2n), high..., slice(words, 0, 2))
+
+    uniform = MPSGraphs.MPSGraphRandomDistributionUniform
+    desc = @objc [
+        MPSGraphRandomOpDescriptor descriptorWithDistribution:(uniform::MPSGraphs.MPSGraphRandomDistribution)
+        dataType:(Int32::MPSDataType)
+    ]::MPSGraphRandomOpDescriptor
+    desc.minInteger = 0
+    desc.maxInteger = 2^16
+    len = prod(result.size)
+    nhalves = cld(len * sizeof(result.eltype), 2)
+    tensors = @objc [
+        graph::id{MPSGraph} randomTensorWithShape:(convert(MPSShape, [nhalves])::id{MPSShape})
+        descriptor:(desc::id{MPSGraphRandomOpDescriptor})
+        stateTensor:(mps_state::id{MPSGraphTensor})
+        name:(nil::id{NSString})
+    ]::id{NSArray}
+    halves, mps_state = map((0, 1)) do i
+        MPSGraphTensor(
+            @objc [tensors::id{NSArray} objectAtIndex:(i::NSUInteger)]::id{MPSGraphTensor}
+        )
+    end
+
+    bits = reinterpret_(MPSGraphs.castTensor(graph, halves, UInt16), result.eltype)
+    # an odd number of bytes leaves one unused
+    isodd(len) && sizeof(result.eltype) == 1 && (bits = slice(bits, 0, len))
+    output = MPSGraphs.reshapeTensor(graph, bits, convert(MPSShape, result.size))
+    new_state = concat(slice(mps_state, 5, 7), slice(mps_state, 1, 2n - 1))
+    return (reinterpret_(new_state, UInt64), output)
+end
+
 # the memory of `attributes.value` is already in the row-major order of the tensor
 function handle(
     ::Val{Symbol("stablehlo.constant")}, graph::MPSGraph, _, attributes, (result,)

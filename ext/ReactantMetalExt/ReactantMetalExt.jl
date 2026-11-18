@@ -79,6 +79,7 @@ using Metal.MPSGraphs:
     MPSGraph,
     MPSGraphConvolution3DOpDescriptor,
     MPSGraphPooling4DOpDescriptor,
+    MPSGraphRandomOpDescriptor,
     MPSGraphTensor,
     MPSGraphTensorData
 using ObjectiveC: @objc, id, nil
