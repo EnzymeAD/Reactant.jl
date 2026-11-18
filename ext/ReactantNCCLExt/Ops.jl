@@ -77,16 +77,16 @@ end
     return buf
 end
 
-@noinline function all_reduce(
+@noinline function allreduce(
     buf::TracedRArray{T,N},
     reduce_op,
     c::TracedCommunicator;
-    location=mlir_stacktrace("comm.nccl.all_reduce", @__FILE__, @__LINE__),
+    location=mlir_stacktrace("comm.nccl.allreduce", @__FILE__, @__LINE__),
 ) where {T,N}
     reduce_op_attr = IR.Attribute(
         MLIR.API.enzymexlaCommNcclRedOpAttrGet(IR.current_context(), nccl_red_op(reduce_op))
     )
-    op = comm.nccl_all_reduce(
+    op = comm.nccl_allreduce(
         get_mlir_data(buf),
         get_mlir_data(c);
         recvbuf=mlir_type(buf),
