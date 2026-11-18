@@ -72,6 +72,7 @@ filter!(((k, _),) -> !startswith(k, "probprog"), testsuite)
 # with a `handle` method, so tests that need anything else are skipped
 if BACKEND == "julia-cpu"
     for name in (
+        "core/custom_number_types",
         "integration/linear_algebra",
         "integration/linearsolve",
         # custom calls (Julia callbacks, kernels, Python)
