@@ -314,7 +314,7 @@ end
 # Host arrays: error instead of recursing. Only needed on the bare plan, since
 # `ScaledPlan` forwards to it (and a `ScaledPlan` method would shadow the traced path).
 function Base.:*(p::AbstractReactantFFTPlan, x::AbstractArray)
-    throw(
+    return throw(
         ArgumentError(
             "Reactant FFT plan $(typeof(p)) can only be applied to traced or concrete " *
             "Reactant arrays, got $(typeof(x)). Convert the input with " *

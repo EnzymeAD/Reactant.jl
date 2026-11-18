@@ -1690,7 +1690,7 @@ function _cpu_analyze_xspace(xspace::Proto.tensorflow.profiler.XSpace, nrepeat::
         icosts = resolve_module_costs(hev)
         icosts === nothing && continue
         mod_obs = get!(observed_ops_by_module, icosts) do
-            Set{String}()
+            return Set{String}()
         end
         push!(mod_obs, hev.op_name)
     end
@@ -1736,7 +1736,7 @@ function _cpu_analyze_xspace(xspace::Proto.tensorflow.profiler.XSpace, nrepeat::
         total_bytes += cost.bytes_accessed
 
         acc = get!(op_accums, hev.op_name) do
-            _CpuOpAccum(hev.op_name, cost.opcode, 0, 0, 0, 0.0, 0)
+            return _CpuOpAccum(hev.op_name, cost.opcode, 0, 0, 0, 0.0, 0)
         end
         acc.occurrences += 1
         acc.time_ps += dur_ps

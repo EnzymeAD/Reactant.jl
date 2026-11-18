@@ -231,7 +231,7 @@ end
 # same affine conversion as when raising, so they must be compiled the same way.
 function activate_kernelad!(is_kernelad::Bool)
     stack = get!(task_local_storage(), :reactant_is_kernelad) do
-        Bool[]
+        return Bool[]
     end::Vector{Bool}
     push!(stack, is_kernelad)
     return nothing
