@@ -800,7 +800,7 @@ function traced_mi(mi)
     # for an alias of each argument type and dominates tracing time for large types.
     Base.sprint(; context=:compact => false) do io
         Base.show_signature_function(io, ft)
-        Base.show_tuple_as_call(
+        return Base.show_tuple_as_call(
             io,
             :function,
             Tuple{arg_types_param...};
@@ -855,7 +855,7 @@ function call_llvm_generator(
     source,
     self,
     ::Type{typeof(call_with_reactant)},
-    @nospecialize(args::Tuple{Vararg{DataType}})
+    @nospecialize(args::Tuple{Vararg{DataType}}),
 )
     RT = nothing
     ensure_return_type = false

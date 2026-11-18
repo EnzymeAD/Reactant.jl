@@ -576,7 +576,7 @@ function Base.similar(
     @assert length(device_to_array_slices) == D
     sdata = ntuple(Val(D)) do i
         Base.@_inline_meta
-        similar(a.data[i], S, Dims(length.(device_to_array_slices[i])))
+        return similar(a.data[i], S, Dims(length.(device_to_array_slices[i])))
     end
     return ConcretePJRTArray{S,length(dims),D}(sdata, dims, a.sharding)
 end
@@ -637,7 +637,7 @@ function Base.copy(bc::Base.Broadcast.Broadcasted{Broadcast.ArrayStyle{ConcreteP
     if all(buffer_on_cpu, bc.args) && all(
         x ->
             !(x isa ConcretePJRTArray) ||
-                (x isa ConcretePJRTArray && !Sharding.is_sharded(x)),
+            (x isa ConcretePJRTArray && !Sharding.is_sharded(x)),
         bc.args,
     )
         ElType = Base.Broadcast.combine_eltypes(bc.f, bc.args)
@@ -889,7 +889,7 @@ function Base.zero(x::ConcreteIFRTArray{T,N}) where {T,N}
 end
 
 function Base.fill!(a::ConcretePJRTArray{<:TracedRNumber}, val::TracedRNumber)
-    throw(MethodError(fill!, (a, val)))
+    return throw(MethodError(fill!, (a, val)))
 end
 
 function Base.fill!(a::ConcretePJRTArray{T,N}, val) where {T,N}
@@ -921,7 +921,7 @@ function Base.fill!(a::ConcreteIFRTArray{T,N}, val) where {T,N}
 end
 
 function Base.fill!(a::ConcreteIFRTArray{<:TracedRNumber}, val::TracedRNumber)
-    throw(MethodError(fill!, (a, val)))
+    return throw(MethodError(fill!, (a, val)))
 end
 
 function Base.fill!(x::UnionAnyConcreteRArray, val)
@@ -933,19 +933,19 @@ end
 function Base.fill!(
     x::Union{ConcreteIFRTArray{<:TracedRNumber},ConcretePJRTArray{<:TracedRNumber}}, val
 )
-    throw(MethodError(fill!, (x, val)))
+    return throw(MethodError(fill!, (x, val)))
 end
 function Base.fill!(
     x::Union{ConcreteIFRTArray{<:TracedRNumber},ConcretePJRTArray{<:TracedRNumber}},
     val::TracedRNumber,
 )
-    throw(MethodError(fill!, (x, val)))
+    return throw(MethodError(fill!, (x, val)))
 end
 function Base.fill!(
     x::Union{AnyConcreteIFRTArray{<:TracedRNumber},AnyConcretePJRTArray{<:TracedRNumber}},
     val,
 )
-    throw(MethodError(fill!, (x, val)))
+    return throw(MethodError(fill!, (x, val)))
 end
 
 function mymapreducedim!(f, op, R, A)

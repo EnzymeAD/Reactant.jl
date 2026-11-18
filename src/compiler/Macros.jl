@@ -81,7 +81,11 @@ macro code_hlo(args...)
         ),
         args...,
     )
-    debug = get(() -> Expr(:kw, :debug, false), options, something(findfirst(opt -> opt.args[1] === :debug, options), -1)).args[2]
+    debug = get(
+        () -> Expr(:kw, :debug, false),
+        options,
+        something(findfirst(opt -> opt.args[1] === :debug, options), -1),
+    ).args[2]
     options = filter(opt -> opt.args[1] !== :debug, options)
     return quote
         $MLIR.IR.@dispose ctx = $Reactant.ReactantContext() begin
@@ -143,7 +147,11 @@ macro code_mhlo(args...)
         ),
         args...,
     )
-    debug = get(() -> Expr(:kw, :debug, false), options, something(findfirst(opt -> opt.args[1] === :debug, options), -1)).args[2]
+    debug = get(
+        () -> Expr(:kw, :debug, false),
+        options,
+        something(findfirst(opt -> opt.args[1] === :debug, options), -1),
+    ).args[2]
     options = filter(opt -> opt.args[1] !== :debug, options)
     return quote
         $MLIR.IR.@dispose ctx = $Reactant.ReactantContext() begin

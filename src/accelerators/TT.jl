@@ -148,7 +148,9 @@ function download_tt_pjrt_plugin_if_needed(dir=nothing)
                     )
                     data_dir = only(filter!(endswith(".data"), readdir(tmp_dir; join=true)))
                     # We need to move the entire `pjrt_plugin_tt` directory to the destination.
-                    mv(joinpath(data_dir, "purelib", "pjrt_plugin_tt"), dir; force=true)
+                    return mv(
+                        joinpath(data_dir, "purelib", "pjrt_plugin_tt"), dir; force=true
+                    )
                 end
             end
         end

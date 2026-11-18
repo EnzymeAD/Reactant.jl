@@ -155,7 +155,7 @@ function EnzymeRules.augmented_primal(
 ) where {RT}
     primargs = ntuple(Val(length(args))) do i
         Base.@_inline_meta
-        args[i].val
+        return args[i].val
     end
 
     primal = if EnzymeCore.needs_primal(config)
@@ -175,7 +175,7 @@ function EnzymeRules.augmented_primal(
         else
             ntuple(Val(EnzymeRules.width(config))) do i
                 Base.@_inline_meta
-                ConcretePJRTArray(
+                return ConcretePJRTArray(
                     zeros(T.val, primargs...);
                     client=XLA.client(uval.val),
                     device=XLA.device(uval.val),
@@ -205,7 +205,7 @@ function EnzymeRules.reverse(
 ) where {RT,N}
     ntuple(Val(N + 2)) do i
         Base.@_inline_meta
-        nothing
+        return nothing
     end
 end
 
@@ -561,7 +561,7 @@ function overload_autodiff(
         else
             ntuple(Val(width)) do i
                 Base.@_inline_meta
-                deepcopy(result)
+                return deepcopy(result)
             end
         end
     else
@@ -605,7 +605,7 @@ function overload_autodiff(
                         TracedUtils.set!(
                             dresult[i],
                             path[2:end],
-                            @allowscalar(TracedUtils.get_mlir_data(sl))
+                            @allowscalar(TracedUtils.get_mlir_data(sl)),
                         )
                     end
                 end

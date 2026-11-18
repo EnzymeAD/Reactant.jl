@@ -647,7 +647,7 @@ Creates a dense elements attribute with the given shaped type from string elemen
 function DenseElementsAttribute(values::AbstractArray{String})
     # Builtin dialect doesn't have string type. If we want to support this,
     # we need to add this in our dialect.
-    throw(MethodError(DenseElementsAttribute, (values,)))
+    return throw(MethodError(DenseElementsAttribute, (values,)))
     # shaped_type = TensorType(collect(Int, size(values)), Type(String))
     # return Attribute(
     #     API.mlirDenseElementsAttrStringGet(

@@ -140,7 +140,7 @@ function dump_mlir(
                 print_pass_pipeline(io, OpPassManager(pm))
                 println(io)
             end
-            show(IOContext(io, :debug => true), op)
+            return show(IOContext(io, :debug => true), op)
         end
         if failed
             @error "Compilation failed, MLIR module written to $(path)"
@@ -379,7 +379,7 @@ function create_external_pass!(
         @cfunction(_pass_destruct, Cvoid, (Any,)),
         @cfunction(_pass_initialize, API.MlirLogicalResult, (API.MlirContext, Any)),
         @cfunction(_pass_clone, Any, (Any,)),
-        @cfunction(_pass_run, Cvoid, (API.MlirOperation, API.MlirExternalPass, Any))
+        @cfunction(_pass_run, Cvoid, (API.MlirOperation, API.MlirExternalPass, Any)),
     )
     pass_handle = manager.passes[passid] = ExternalPassHandle(nothing, pass)
     userdata = Base.pointer_from_objref(pass_handle)

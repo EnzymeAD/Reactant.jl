@@ -156,7 +156,7 @@ end
     @test Array(@jit(mul_const_vec(tall_ra))) ≈ tall * v rtol = 1e-3
 
     # one `dot_general`, not one op per output element
-    hlo = repr(@code_hlo(optimize = false, mul_const_rhs(W_ra)))
+    hlo = repr(@code_hlo(optimize=false, mul_const_rhs(W_ra)))
     @test count("stablehlo.dot_general", hlo) == 1
     @test count("stablehlo.concatenate", hlo) == 0
 

@@ -87,7 +87,7 @@ end
         @test Array(y) == ones(Float32, 100, 10)
     end
 
-    @test all(Array(@jit(raise = raise, square(x))) .≈ Array(x) .* Array(x))
+    @test all(Array(@jit(raise=raise, square(x))) .≈ Array(x) .* Array(x))
 end
 
 @testset "KernelAbstractions WENO weights" begin

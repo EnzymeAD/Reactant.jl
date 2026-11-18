@@ -25,7 +25,7 @@ Base.@nospecializeinfer function Reactant.traced_type_inner(
     mode::Reactant.TraceMode,
     @nospecialize(track_numbers::Type),
     @nospecialize(ndevices),
-    @nospecialize(runtime)
+    @nospecialize(runtime),
 ) where {FT,AT}
     FT2 = Reactant.traced_type_inner(FT, seen, mode, track_numbers, ndevices, runtime)
     AT2 = Reactant.traced_type_inner(AT, seen, mode, track_numbers, ndevices, runtime)
@@ -67,7 +67,7 @@ Base.@nospecializeinfer function Reactant.traced_type_inner(
     mode::Reactant.TraceMode,
     @nospecialize(track_numbers::Type),
     @nospecialize(ndevices),
-    @nospecialize(runtime)
+    @nospecialize(runtime),
 ) where {FT,AT}
     FT2 = Reactant.traced_type_inner(FT, seen, mode, track_numbers, ndevices, runtime)
     AT2 = Reactant.traced_type_inner(AT, seen, mode, track_numbers, ndevices, runtime)

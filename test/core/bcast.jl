@@ -320,12 +320,12 @@ end
     a = Float32[1, 2, 3]
     a_ra = Reactant.to_rarray(a)
 
-    const_bcast_im!(d, y) = (d .= (_ -> im).(y); return nothing)
+    const_bcast_im!(d, y) = (d.=(_ -> im).(y); return nothing)
     dest = Reactant.to_rarray(zeros(ComplexF32, 3))
     @jit const_bcast_im!(dest, a_ra)
     @test Array(dest) == fill(ComplexF32(im), 3)
 
-    const_bcast_view!(d, y) = (view(d, 1:2) .= (_ -> 1im).(view(y, 1:2)); return nothing)
+    const_bcast_view!(d, y) = (view(d, 1:2).=(_ -> 1im).(view(y, 1:2)); return nothing)
     dest = Reactant.to_rarray(zeros(ComplexF32, 3))
     @jit const_bcast_view!(dest, a_ra)
     @test Array(dest) == ComplexF32[1im, 1im, 0]

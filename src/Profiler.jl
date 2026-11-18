@@ -228,7 +228,7 @@ function line_tree(
             TraceNode[],
         )
         while !isempty(stack) &&
-            node.start_ps >= stack[end].start_ps + stack[end].duration_ps
+              node.start_ps >= stack[end].start_ps + stack[end].duration_ps
             pop!(stack)
         end
         push!(isempty(stack) ? roots : stack[end].children, node)
@@ -2312,8 +2312,8 @@ function print_kernel_report(
     hl_top75 = PrettyTables.TextHighlighter(
         (_, i, j) ->
             j in duration_cols &&
-                raw_durations[i, dur_col_to_raw[j]] >= q75 &&
-                raw_durations[i, dur_col_to_raw[j]] < q90,
+            raw_durations[i, dur_col_to_raw[j]] >= q75 &&
+            raw_durations[i, dur_col_to_raw[j]] < q90,
         Crayon(; foreground=:yellow),
     )
 
@@ -2523,8 +2523,8 @@ function print_framework_op_stats(
     hl_top75 = PrettyTables.TextHighlighter(
         (_, i, j) ->
             j in duration_cols &&
-                raw_durations[i, dur_col_to_raw[j]] >= q75 &&
-                raw_durations[i, dur_col_to_raw[j]] < q90,
+            raw_durations[i, dur_col_to_raw[j]] >= q75 &&
+            raw_durations[i, dur_col_to_raw[j]] < q90,
         Crayon(; foreground=:yellow),
     )
 

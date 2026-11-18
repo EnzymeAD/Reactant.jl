@@ -35,14 +35,11 @@ for (name, supertype, julia_type) in
         end
 
         Reactant.TracedUtils.get_mlir_data(x::$traced_type) = x.mlir_data
-        Reactant.TracedUtils.set_mlir_data!(x::$traced_type, data) = (
-            x.mlir_data = data; return x
-        )
+        Reactant.TracedUtils.set_mlir_data!(x::$traced_type, data) =
+            (x.mlir_data=data; return x)
 
         Reactant.TracedUtils.get_paths(x::$traced_type) = x.paths
-        Reactant.TracedUtils.set_paths!(x::$traced_type, paths) = (
-            x.paths = paths; return x
-        )
+        Reactant.TracedUtils.set_paths!(x::$traced_type, paths) = (x.paths=paths; return x)
 
         function Reactant.traced_type_inner(
             T::Type{$julia_type},
@@ -50,7 +47,7 @@ for (name, supertype, julia_type) in
             mode::Reactant.TraceMode,
             @nospecialize(track_numbers::Type),
             @nospecialize(ndevices),
-            @nospecialize(runtime)
+            @nospecialize(runtime),
         )
             if mode == Reactant.ArrayToConcrete
                 return $concrete_type
@@ -65,7 +62,7 @@ for (name, supertype, julia_type) in
             mode::Reactant.TraceMode,
             @nospecialize(track_numbers::Type),
             @nospecialize(ndevices),
-            @nospecialize(runtime)
+            @nospecialize(runtime),
         )
             if mode == Reactant.ConcreteToTraced
                 return $traced_type
@@ -80,7 +77,7 @@ for (name, supertype, julia_type) in
             mode::Reactant.TraceMode,
             @nospecialize(track_numbers::Type),
             @nospecialize(ndevices),
-            @nospecialize(runtime)
+            @nospecialize(runtime),
         )
             if mode == Reactant.TracedToConcrete
                 return $concrete_type
@@ -94,10 +91,10 @@ for (name, supertype, julia_type) in
             @nospecialize(prev::$julia_type),
             @nospecialize(path),
             mode;
-            @nospecialize(sharding = Sharding.NoSharding()),
-            @nospecialize(runtime = nothing),
-            @nospecialize(device = nothing),
-            @nospecialize(client = nothing),
+            @nospecialize(sharding=Sharding.NoSharding()),
+            @nospecialize(runtime=nothing),
+            @nospecialize(device=nothing),
+            @nospecialize(client=nothing),
             kwargs...,
         )
             if Sharding.is_sharded(sharding)
@@ -126,10 +123,10 @@ for (name, supertype, julia_type) in
             @nospecialize(prev::$concrete_type),
             @nospecialize(path),
             mode;
-            @nospecialize(sharding = Sharding.NoSharding()),
-            @nospecialize(runtime = nothing),
-            @nospecialize(device = nothing),
-            @nospecialize(client = nothing),
+            @nospecialize(sharding=Sharding.NoSharding()),
+            @nospecialize(runtime=nothing),
+            @nospecialize(device=nothing),
+            @nospecialize(client=nothing),
             kwargs...,
         )
             if Sharding.is_sharded(sharding)
@@ -162,8 +159,8 @@ for (name, supertype, julia_type) in
             @nospecialize(prev::$traced_type),
             @nospecialize(path),
             mode;
-            @nospecialize(sharding = Sharding.NoSharding()),
-            @nospecialize(runtime = nothing),
+            @nospecialize(sharding=Sharding.NoSharding()),
+            @nospecialize(runtime=nothing),
             kwargs...,
         )
             if Sharding.is_sharded(sharding)
@@ -259,12 +256,9 @@ for (name, supertype, julia_type) in
             delete!(result_stores, path)
 
             result = :($T(ConcretePJRTNumber{Int64}($restore)))
-            push!(
-                resultgen_code,
-                quote
-                    $sym = $result
-                end,
-            )
+            push!(resultgen_code, quote
+                $sym = $result
+            end)
 
             return result_cache[tocopy]
         end

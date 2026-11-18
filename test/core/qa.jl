@@ -9,7 +9,7 @@ function get_all_submodules(base_module::Module)
             push!(mods, obj)
             return true     # descend into submodules
         end
-        false   # but don't descend into anything else (MethodTables, etc.)
+        return false   # but don't descend into anything else (MethodTables, etc.)
     end
     return mods
 end

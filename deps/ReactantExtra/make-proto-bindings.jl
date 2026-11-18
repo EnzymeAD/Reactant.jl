@@ -287,7 +287,7 @@ function stable_topological_sort(entries::Vector{T}, deps::Dict{T,Set{T}}) where
 
     while !isempty(remaining)
         i = findfirst(remaining) do entry
-            all(d -> d in placed || d == entry, get(deps, entry, Set{T}()))
+            return all(d -> d in placed || d == entry, get(deps, entry, Set{T}()))
         end
         if i === nothing
             @warn "Cyclic dependency between generated modules, keeping original order" remaining

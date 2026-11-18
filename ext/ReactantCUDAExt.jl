@@ -309,7 +309,7 @@ Base.zero(::Type{<:CuTracedRNumber{T,A}}) where {T,A} = zero(T)
 
 Base.@nospecializeinfer function Base.promote_rule(
     @nospecialize(a::Type{<:CuTracedRNumber{T}}),
-    @nospecialize(b::Type{<:CuTracedRNumber{T2}})
+    @nospecialize(b::Type{<:CuTracedRNumber{T2}}),
 ) where {T,T2}
     return promote_rule(T, T2)
 end
@@ -344,7 +344,7 @@ end
 
 Base.@nospecializeinfer function Reactant.promote_traced_type(
     @nospecialize(a::Type{<:CuTracedRNumber{T,A}}),
-    @nospecialize(b::Type{<:CuTracedRNumber{T2,A}})
+    @nospecialize(b::Type{<:CuTracedRNumber{T2,A}}),
 ) where {T,T2,A}
     return CuTracedRNumber{Reactant.promote_traced_type(T, T2),A}
 end
@@ -954,7 +954,7 @@ function compile(job)
         # textual IR: the bitcode reader auto-upgrades constructs whose spelling changed between the
         # two LLVM versions (e.g. `llvm.loop.distribute.enable` metadata), whereas the .ll parser does
         # not, and mismatches there abort the process in the verifier.
-        KernelBitcode(convert(Vector{UInt8}, mod), entryname, dl)
+        return KernelBitcode(convert(Vector{UInt8}, mod), entryname, dl)
     end
 end
 
@@ -1067,7 +1067,7 @@ function mlir_extract_roots_from_value!(
     val::MLIR.IR.Value,
     roots_ptr::MLIR.IR.Value,
     @nospecialize(argty::MLIR.IR.Type),
-    @nospecialize(njlvaluet::MLIR.IR.Type)
+    @nospecialize(njlvaluet::MLIR.IR.Type),
 )
     ctx = MLIR.IR.current_context()
     llvmptr = MLIR.IR.Type(MLIR.API.mlirLLVMPointerTypeGet(ctx, 0))
@@ -1177,19 +1177,17 @@ contain no references to other values, can be used in GPU kernels.
     end
 
     # bad is a path String: a TracedRNumber/TracedRArray was not adapted
-    return error(
-        """
-      GPU kernel argument of type $T contains an unadapted traced value at field: $bad
+    return error("""
+               GPU kernel argument of type $T contains an unadapted traced value at field: $bad
 
-      All TracedRNumber/TracedRArray must have been replaced by their
-      CuTracedRNumber/CuTracedArray counterparts. A surviving traced value means
-      some struct in the hierarchy is missing `Adapt.@adapt_structure`, so its fields
-      were not recursed into during GPU adaptation.
+               All TracedRNumber/TracedRArray must have been replaced by their
+               CuTracedRNumber/CuTracedArray counterparts. A surviving traced value means
+               some struct in the hierarchy is missing `Adapt.@adapt_structure`, so its fields
+               were not recursed into during GPU adaptation.
 
-      Fix: add `Adapt.@adapt_structure <StructName>` to the struct that contains the
-      field at the path above.
-  """
-    )
+               Fix: add `Adapt.@adapt_structure <StructName>` to the struct that contains the
+               field at the path above.
+           """)
 end
 
 # Emit the `ptx_kernelcc` function which takes the buffers as arguments, builds the kernel
@@ -1459,7 +1457,7 @@ Reactant.@reactant_overlay function (func::LLVMFunc{F,tt})(
     has_cast_float_type =
         bfloat16_compile_type !== BFloat16 && any(values(seen)) do arg
             (arg isa TracedRArray || arg isa TracedRNumber) &&
-                Reactant.unwrapped_eltype(typeof(arg)) === BFloat16
+            Reactant.unwrapped_eltype(typeof(arg)) === BFloat16
         end
 
     wrapper_tys = MLIR.IR.Type[]
@@ -1984,7 +1982,7 @@ Base.@nospecializeinfer function Reactant.traced_type_inner(
     @nospecialize(mode::Reactant.TraceMode),
     @nospecialize(track_numbers::Type),
     @nospecialize(ndevices),
-    @nospecialize(runtime)
+    @nospecialize(runtime),
 )
     return A
 end
@@ -1995,7 +1993,7 @@ Base.@nospecializeinfer function Reactant.traced_type_inner(
     @nospecialize(mode::Reactant.TraceMode),
     @nospecialize(track_numbers::Type),
     @nospecialize(ndevices),
-    @nospecialize(runtime)
+    @nospecialize(runtime),
 )
     return A
 end
@@ -2006,7 +2004,7 @@ Base.@nospecializeinfer function Reactant.traced_type_inner(
     mode::Reactant.TraceMode,
     @nospecialize(track_numbers::Type),
     @nospecialize(ndevices),
-    @nospecialize(runtime)
+    @nospecialize(runtime),
 )
     T = eltype(A)
     N = ndims(A)
@@ -2031,8 +2029,8 @@ function Reactant.make_tracer(
     @nospecialize(prev::CUDA.CuArray),
     @nospecialize(path),
     mode;
-    @nospecialize(track_numbers::Type = Union{}),
-    @nospecialize(sharding = Reactant.Sharding.NoSharding()),
+    @nospecialize(track_numbers::Type=Union{}),
+    @nospecialize(sharding=Reactant.Sharding.NoSharding()),
     @nospecialize(runtime),
     kwargs...,
 )

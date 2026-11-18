@@ -267,8 +267,8 @@ with open(os.path.join(tmpdir, "num_outs.txt"), "w") as f:
             w1_jl = Float32[0.25 -0.5 1.0; 1.5 0.5 -0.25]
             b1_jl = Int32[1 -2 3 -4 5; 6 -7 8 -9 10]
             c_jl = ComplexF32[
-                1+2im 3-1im 0.5+0im -2+4im 1-1im
-                -1+0.5im 2+2im -3+1im 0-2im 4+0.25im
+                1 + 2im 3 - 1im 0.5 + 0im -2 + 4im 1 - 1im
+                -1 + 0.5im 2 + 2im -3 + 1im 0 - 2im 4 + 0.25im
             ]
             bf_jl = BFloat16[
                 0.5 -1.0 1.5 -2.0 0.25

@@ -41,8 +41,9 @@ typeid(type::Type) = TypeID(API.mlirTypeGetTypeID(type))
 
 Creates a None type in the given context. The type is owned by the context.
 """
-Type(::Core.Type{Nothing}; context::Context=current_context()) =
-    Type(API.mlirNoneTypeGet(context))
+function Type(::Core.Type{Nothing}; context::Context=current_context())
+    return Type(API.mlirNoneTypeGet(context))
+end
 
 """
     mlirTypeIsANone(type)
@@ -154,8 +155,9 @@ Float8E5M2(; context::Context=current_context()) = Type(API.mlirFloat8E5M2TypeGe
 
 Creates an f8E4M3FN type in the given context. The type is owned by the context.
 """
-Float8E4M3FN(; context::Context=current_context()) =
-    Type(API.mlirFloat8E4M3FNTypeGet(context))
+function Float8E4M3FN(; context::Context=current_context())
+    return Type(API.mlirFloat8E4M3FNTypeGet(context))
+end
 
 """
 BFloat16Type(; context=current_context())
@@ -169,8 +171,9 @@ BFloat16Type(; context::Context=current_context()) = Type(API.mlirBF16TypeGet(co
 
 Creates an f16 type in the given context. The type is owned by the context.
 """
-Type(::Core.Type{Float16}; context::Context=current_context()) =
-    Type(API.mlirF16TypeGet(context))
+function Type(::Core.Type{Float16}; context::Context=current_context())
+    return Type(API.mlirF16TypeGet(context))
+end
 
 """
     Type(::Core.Type{BFloat16}; context=current_context())
@@ -186,16 +189,18 @@ end
 
 Creates an f32 type in the given context. The type is owned by the context.
 """
-Type(::Core.Type{Float32}; context::Context=current_context()) =
-    Type(API.mlirF32TypeGet(context))
+function Type(::Core.Type{Float32}; context::Context=current_context())
+    return Type(API.mlirF32TypeGet(context))
+end
 
 """
     Type(Core.Type{Float64}; context=current_context())
 
 Creates a f64 type in the given context. The type is owned by the context.
 """
-Type(::Core.Type{Float64}; context::Context=current_context()) =
-    Type(API.mlirF64TypeGet(context))
+function Type(::Core.Type{Float64}; context::Context=current_context())
+    return Type(API.mlirF64TypeGet(context))
+end
 
 """
     Type(::Core.Type{Reactant.F8E5M2}; context=current_context())
@@ -651,8 +656,9 @@ end
 
 Creates a tuple type that consists of the given list of elemental types. The type is owned by the context.
 """
-Type(elements::Vector{Type}; context::Context=current_context()) =
-    Type(API.mlirTupleTypeGet(context, length(elements), elements))
+function Type(elements::Vector{Type}; context::Context=current_context())
+    return Type(API.mlirTupleTypeGet(context, length(elements), elements))
+end
 function Type(
     @nospecialize(elements::NTuple{N,Type}); context::Context=current_context()
 ) where {N}
@@ -739,8 +745,9 @@ end
 
 Creates an opaque type in the given context associated with the dialect identified by its namespace. The type contains opaque byte data of the specified length (data need not be null-terminated).
 """
-OpaqueType(namespace, data; context::Context=current_context()) =
-    Type(API.mlirOpaqueTypeGet(context, namespace, data))
+function OpaqueType(namespace, data; context::Context=current_context())
+    return Type(API.mlirOpaqueTypeGet(context, namespace, data))
+end
 
 """
     isopaque(type)

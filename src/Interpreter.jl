@@ -42,7 +42,7 @@ function _wrap_call_with_reactant_info(@nospecialize(info::CallInfo))
 end
 
 function _wrap_call_with_reactant_meta(
-    ret::CallMeta, @nospecialize(_interp = nothing), @nospecialize(_sv = nothing)
+    ret::CallMeta, @nospecialize(_interp=nothing), @nospecialize(_sv=nothing)
 )
     info = _wrap_call_with_reactant_info(ret.info)
     @static if VERSION < v"1.11.0-"
@@ -211,11 +211,16 @@ end
             ReactantCacheToken(),
             REACTANT_METHOD_TABLE,
             world,
-            false,            #=forward_rules=#
-            false,            #=reverse_rules=#
-            false,            #=inactive_rules=#
-            false,            #=broadcast_rewrite=#
-            false,            #=within_autodiff_rewrite=#
+            false,
+            #=forward_rules=#
+            false,
+            #=reverse_rules=#
+            false,
+            #=inactive_rules=#
+            false,
+            #=broadcast_rewrite=#
+            false,
+            #=within_autodiff_rewrite=#
             set_reactant_abi, #=handler=#
         )
     end
@@ -229,11 +234,16 @@ else
             REACTANT_CACHE,
             REACTANT_METHOD_TABLE,
             world,
-            false,            #=forward_rules=#
-            false,            #=reverse_rules=#
-            false,            #=inactive_rules=#
-            false,            #=broadcast_rewrite=#
-            false,            #=within_autodiff_rewrite=#
+            false,
+            #=forward_rules=#
+            false,
+            #=reverse_rules=#
+            false,
+            #=inactive_rules=#
+            false,
+            #=broadcast_rewrite=#
+            false,
+            #=within_autodiff_rewrite=#
             set_reactant_abi, #=handler=#
         )
     end
@@ -288,7 +298,7 @@ function primal_return_type_generator(
     self,
     @nospecialize(mode::Type),
     @nospecialize(ft::Type),
-    @nospecialize(tt::Type)
+    @nospecialize(tt::Type),
 )
     @nospecialize
     @assert Base.isType(ft) && Base.isType(tt)

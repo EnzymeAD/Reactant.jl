@@ -26,7 +26,7 @@ Base.@nospecializeinfer function Reactant.traced_type_inner(
     mode::Reactant.TraceMode,
     @nospecialize(track_numbers::Type),
     @nospecialize(ndevices),
-    @nospecialize(runtime)
+    @nospecialize(runtime),
 )
     T2 = Reactant.traced_type_inner(
         A.parameters[3], seen, mode, track_numbers, ndevices, runtime

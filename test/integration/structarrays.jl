@@ -9,7 +9,7 @@ using StructArrays, StaticArrays, Reactant, LinearAlgebra, Test
     # Note that the element type (the NamedTuple) contains ConcreteRNumbers even though track_numbers is not enabled.
     # This is because when the backing arrays are converted to TracedRArrays, their elements will contain TracedRNumbers.
     # In order for the element type to match the backing arrays, we need to use ConcreteRNumbers here as well:
-    @test typeof(x_ra) <: (StructArray{
+    @test typeof(x_ra)<:(StructArray{
         <:NamedTuple{
             (:a, :b, :c),
             <:Tuple{<:ConcreteRNumber{Float64},String,<:ConcreteRNumber{Float32}},
@@ -26,9 +26,7 @@ using StructArrays, StaticArrays, Reactant, LinearAlgebra, Test
         Reactant.make_tracer(Reactant.OrderedIdDict(), x_ra, (), Reactant.ConcreteToTraced)
     ) == StructArray{
         @NamedTuple{
-            a::Reactant.TracedRNumber{Float64},
-            b::String,
-            c::Reactant.TracedRNumber{Float32},
+            a::Reactant.TracedRNumber{Float64},b::String,c::Reactant.TracedRNumber{Float32}
         },
         2,
         @NamedTuple{

@@ -130,7 +130,7 @@ except ImportError:
     # We write this file dynamically to avoid hardcoding machine-specific paths
     if !isfile(reactant_lib_path)
         open(reactant_lib_path, "w") do io
-            write(
+            return write(
                 io,
                 """
 import sys
@@ -542,7 +542,7 @@ function download_trainium_pjrt_plugin_if_needed(dir=nothing)
                 extracted_file = "libefa1-61.0-0.x86_64"
                 cd(efa_extracted_dir) do
                     run(pipeline(`cpio -idmv`; stdin=extracted_file))
-                    rm(extracted_file; force=true)
+                    return rm(extracted_file; force=true)
                 end
 
                 # Also extract libibverbs from SUSE RPM
@@ -557,7 +557,7 @@ function download_trainium_pjrt_plugin_if_needed(dir=nothing)
                 extracted_verbs_file = "libibverbs1-61.0-0.x86_64"
                 cd(efa_extracted_dir) do
                     run(pipeline(`cpio -idmv`; stdin=extracted_verbs_file))
-                    rm(extracted_verbs_file; force=true)
+                    return rm(extracted_verbs_file; force=true)
                 end
 
                 # Clean up the large installer directory

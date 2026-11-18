@@ -212,20 +212,21 @@ end
 # On success: prints any non-remark diagnostics to stderr using the same format.
 function run!(pm::MLIR.IR.PassManager, op, key::String="")
     diagnostics = DiagnosticMessage[]
-    handler =
-        MLIR.IR.attach_diagnostic_handler!(; context=MLIR.IR.current_context()) do diag
-            severity = MLIR.IR.severity(diag)
-            severity > DEBUG_MLIR_DIAGNOSTIC_LEVEL[] && return false
-            push!(
-                diagnostics,
-                DiagnosticMessage(
-                    severity,
-                    _sprint_diagnostic(diag),
-                    _collect_location_frames(MLIR.IR.location(diag)),
-                ),
-            )
-            return true  # consume the diagnostic
-        end
+    handler = MLIR.IR.attach_diagnostic_handler!(;
+        context=MLIR.IR.current_context()
+    ) do diag
+        severity = MLIR.IR.severity(diag)
+        severity > DEBUG_MLIR_DIAGNOSTIC_LEVEL[] && return false
+        push!(
+            diagnostics,
+            DiagnosticMessage(
+                severity,
+                _sprint_diagnostic(diag),
+                _collect_location_frames(MLIR.IR.location(diag)),
+            ),
+        )
+        return true  # consume the diagnostic
+    end
     result = try
         MLIR.IR.run!(pm, op, key)
     catch

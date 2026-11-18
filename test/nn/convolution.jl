@@ -164,8 +164,7 @@ end
 
     if pkgversion(NNlib) ≥ v"0.9.53"
         @testset "ceil_mode $f" for f in (NNlib.meanpool, NNlib.maxpool),
-            window in ((2, 2), (3, 3)),
-            stride in ((2, 2), (3, 2)),
+            window in ((2, 2), (3, 3)), stride in ((2, 2), (3, 2)),
             padding in ((0, 0), (1, 1))
 
             pool_dims = PoolDims(x, window; stride, padding, ceil_mode=true)
@@ -242,8 +241,8 @@ end
         conv_noflip(x, W) = NNlib.conv(x, W; pad=1, flipped=true)
         conv_flip(x, W) = NNlib.conv(x, W; pad=1, flipped=false)
         @test Reactant.compile(conv_noflip, (xx, WW))(xx, WW) ==
-            [0*1+1*2+2*3; 1*1+2*2+3*3; 1*2+2*3+3*0;;;]
+            [0 * 1 + 1 * 2 + 2 * 3; 1 * 1 + 2 * 2 + 3 * 3; 1 * 2 + 2 * 3 + 3 * 0;;;]
         @test Reactant.compile(conv_flip, (xx, WW))(xx, WW) ==
-            [3*0+2*1+1*2; 3*1+2*2+1*3; 3*2+2*3+1*0;;;]
+            [3 * 0 + 2 * 1 + 1 * 2; 3 * 1 + 2 * 2 + 1 * 3; 3 * 2 + 2 * 3 + 1 * 0;;;]
     end
 end

@@ -12,7 +12,7 @@ function mh(
 
     tt = TracedTrace()
     ppf = ScopedValues.with(TRACING_TRACE => tt) do
-        process_probprog_function(f, args, "mh")
+        return process_probprog_function(f, args, "mh")
     end
 
     (;

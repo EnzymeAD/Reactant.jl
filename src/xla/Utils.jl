@@ -20,7 +20,7 @@ function Base.showerror(io::IO, ece::ReactantInternalError)
 end
 
 function reactant_err(msg::Cstring)::Cvoid
-    throw(ReactantInternalError(Base.unsafe_string(msg)))
+    return throw(ReactantInternalError(Base.unsafe_string(msg)))
 end
 
 # https://github.com/openxla/xla/blob/4bfb5c82a427151d6fe5acad8ebe12cee403036a/xla/xla_data.proto#L29

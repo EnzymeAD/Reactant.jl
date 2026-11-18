@@ -152,7 +152,7 @@ function save_inputs_jls(
     output_path::String, inputs::Dict{String,<:Union{AbstractArray,Number}}
 )
     open(output_path, "w") do io
-        serialize(io, inputs)
+        return serialize(io, inputs)
     end
     return output_path
 end

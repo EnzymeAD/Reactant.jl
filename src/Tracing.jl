@@ -47,7 +47,7 @@ for T in (
         @nospecialize(mode::TraceMode),
         @nospecialize(track_numbers::Type),
         @nospecialize(ndevices),
-        @nospecialize(runtime)
+        @nospecialize(runtime),
     )
         return T
     end
@@ -59,7 +59,7 @@ Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(mode::TraceMode),
     @nospecialize(track_numbers::Type),
     @nospecialize(ndevices),
-    @nospecialize(runtime)
+    @nospecialize(runtime),
 )
     if mode == ArrayToConcrete && T <: track_numbers
         if runtime isa Val{:PJRT}
@@ -82,7 +82,7 @@ Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(mode::TraceMode),
     @nospecialize(track_numbers::Type),
     @nospecialize(ndevices),
-    @nospecialize(runtime)
+    @nospecialize(runtime),
 )
     C isa UnionAll || return Complex{
         traced_type_inner(C.parameters[1], seen, mode, track_numbers, ndevices, runtime)
@@ -96,7 +96,7 @@ Base.@nospecializeinfer function traced_tuple_type_inner(
     @nospecialize(mode::TraceMode),
     @nospecialize(track_numbers::Type),
     @nospecialize(ndevices),
-    @nospecialize(runtime)
+    @nospecialize(runtime),
 )
     if T === Tuple
         return T
@@ -126,7 +126,7 @@ Base.@nospecializeinfer function traced_type_inner(
     mode::TraceMode,
     @nospecialize(track_numbers::Type),
     @nospecialize(ndevices),
-    @nospecialize(runtime)
+    @nospecialize(runtime),
 )
     return traced_tuple_type_inner(T, seen, mode, track_numbers, ndevices, runtime)
 end
@@ -137,7 +137,7 @@ Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(mode::TraceMode),
     @nospecialize(track_numbers::Type),
     @nospecialize(ndevices),
-    @nospecialize(runtime)
+    @nospecialize(runtime),
 )
     return Vararg{traced_type_inner(T.T, seen, mode, track_numbers, ndevices, runtime),T.N}
 end
@@ -148,7 +148,7 @@ Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(mode::TraceMode),
     @nospecialize(track_numbers::Type),
     @nospecialize(ndevices),
-    @nospecialize(runtime)
+    @nospecialize(runtime),
 )
     if T.lb === Union{} && T.ub === Any
         return T
@@ -167,7 +167,7 @@ Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(mode::TraceMode),
     @nospecialize(track_numbers::Type),
     @nospecialize(ndevices),
-    @nospecialize(runtime)
+    @nospecialize(runtime),
 )
     N = T.parameters[1]
     V = T.parameters[2]
@@ -197,7 +197,7 @@ Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(mode::TraceMode),
     @nospecialize(track_numbers::Type),
     @nospecialize(ndevices),
-    @nospecialize(runtime)
+    @nospecialize(runtime),
 )
     V = dict_value(T)
     if V === nothing
@@ -227,7 +227,7 @@ Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(mode::TraceMode),
     @nospecialize(track_numbers::Type),
     @nospecialize(ndevices),
-    @nospecialize(runtime)
+    @nospecialize(runtime),
 )
     T = Base.unwrap_unionall(T0).parameters[1]
 
@@ -253,7 +253,7 @@ Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(mode::TraceMode),
     @nospecialize(track_numbers::Type),
     @nospecialize(ndevices),
-    @nospecialize(runtime)
+    @nospecialize(runtime),
 )
     T = Base.unwrap_unionall(T0).parameters[1]
 
@@ -275,7 +275,7 @@ Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(mode::TraceMode),
     @nospecialize(track_numbers::Type),
     @nospecialize(ndevices),
-    @nospecialize(runtime)
+    @nospecialize(runtime),
 )
     if mode == ConcreteToTraced
         A´ = Base.unwrap_unionall(A)
@@ -305,7 +305,7 @@ Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(mode::TraceMode),
     @nospecialize(track_numbers::Type),
     @nospecialize(ndevices),
-    @nospecialize(runtime)
+    @nospecialize(runtime),
 )
     if mode == ConcreteToTraced
         A´ = Base.unwrap_unionall(A)
@@ -335,7 +335,7 @@ Base.@nospecializeinfer function traced_type_inner(
     mode::TraceMode,
     @nospecialize(track_numbers::Type),
     @nospecialize(ndevices),
-    @nospecialize(runtime)
+    @nospecialize(runtime),
 )
     return error("This should not happen")
 end
@@ -346,7 +346,7 @@ Base.@nospecializeinfer function traced_type_inner(
     mode::TraceMode,
     @nospecialize(track_numbers::Type),
     @nospecialize(ndevices),
-    @nospecialize(runtime)
+    @nospecialize(runtime),
 )
     if mode == ConcreteToTraced
         throw("TracedRArray cannot be traced")
@@ -376,7 +376,7 @@ Base.@nospecializeinfer function traced_type_inner(
     mode::TraceMode,
     @nospecialize(track_numbers::Type),
     @nospecialize(ndevices),
-    @nospecialize(runtime)
+    @nospecialize(runtime),
 )
     if mode == ConcreteToTraced
         throw("TracedRNumber cannot be traced")
@@ -408,7 +408,7 @@ Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(mode::TraceMode),
     @nospecialize(track_numbers::Type),
     @nospecialize(ndevices),
-    @nospecialize(runtime)
+    @nospecialize(runtime),
 )
     return A
 end
@@ -419,7 +419,7 @@ Base.@nospecializeinfer function traced_type_inner(
     mode::TraceMode,
     @nospecialize(track_numbers::Type),
     @nospecialize(ndevices),
-    @nospecialize(runtime)
+    @nospecialize(runtime),
 ) where {T}
     if mode == ConcreteToTraced
         return AbstractArray{
@@ -436,7 +436,7 @@ Base.@nospecializeinfer function traced_type_inner(
     mode::TraceMode,
     @nospecialize(track_numbers::Type),
     @nospecialize(ndevices),
-    @nospecialize(runtime)
+    @nospecialize(runtime),
 ) where {N}
     return A
 end
@@ -447,7 +447,7 @@ Base.@nospecializeinfer function traced_type_inner(
     mode::TraceMode,
     @nospecialize(track_numbers::Type),
     @nospecialize(ndevices),
-    @nospecialize(runtime)
+    @nospecialize(runtime),
 ) where {T,N}
     if mode == ConcreteToTraced
         return AbstractArray{
@@ -465,7 +465,7 @@ Base.@nospecializeinfer function traced_type_inner(
     mode::TraceMode,
     @nospecialize(track_numbers::Type),
     @nospecialize(ndevices),
-    @nospecialize(runtime)
+    @nospecialize(runtime),
 ) where {T,N}
     T2 = A.var.ub
     T´ = traced_type_inner(T2, seen, mode, track_numbers, ndevices, runtime)
@@ -480,7 +480,7 @@ Base.@nospecializeinfer function traced_type_inner(
     mode::TraceMode,
     @nospecialize(track_numbers::Type),
     @nospecialize(ndevices),
-    @nospecialize(runtime)
+    @nospecialize(runtime),
 )
     T = eltype(A)
     if A isa UnionAll
@@ -533,7 +533,7 @@ Base.@nospecializeinfer function traced_type_inner(
     mode::TraceMode,
     @nospecialize(track_numbers::Type),
     @nospecialize(ndevices),
-    @nospecialize(runtime)
+    @nospecialize(runtime),
 )
     if mode == ArrayToConcrete
         A´ = A isa UnionAll ? Array{Bool} : Array{Bool,ndims(A)}
@@ -549,7 +549,7 @@ Base.@nospecializeinfer function traced_type_inner(
     mode::TraceMode,
     @nospecialize(track_numbers::Type),
     @nospecialize(ndevices),
-    @nospecialize(runtime)
+    @nospecialize(runtime),
 ) where {T,N,P,I,L}
     P2 = traced_type_inner(P, seen, mode, track_numbers, ndevices, runtime)
     I2 = traced_type_inner(I, seen, mode, track_numbers, ndevices, runtime)
@@ -564,7 +564,7 @@ for P in (Ptr, Core.LLVMPtr, Base.RefValue, Ref)
         @nospecialize(mode::TraceMode),
         @nospecialize(track_numbers::Type),
         @nospecialize(ndevices),
-        @nospecialize(runtime)
+        @nospecialize(runtime),
     )
         return $(P)
     end
@@ -576,7 +576,7 @@ for P in (Ptr, Base.RefValue, Ref)
         @nospecialize(mode::TraceMode),
         @nospecialize(track_numbers::Type),
         @nospecialize(ndevices),
-        @nospecialize(runtime)
+        @nospecialize(runtime),
     ) where {T}
         return $P{
             traced_type_inner(
@@ -592,7 +592,7 @@ Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(mode::TraceMode),
     @nospecialize(track_numbers::Type),
     @nospecialize(ndevices),
-    @nospecialize(runtime)
+    @nospecialize(runtime),
 ) where {T}
     return Core.LLVMPtr{
         traced_type_inner(
@@ -606,7 +606,7 @@ Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(mode::TraceMode),
     @nospecialize(track_numbers::Type),
     @nospecialize(ndevices),
-    @nospecialize(runtime)
+    @nospecialize(runtime),
 ) where {T,A}
     return Core.LLVMPtr{
         traced_type_inner(PT.parameters[1], seen, mode, track_numbers, ndevices, runtime),A
@@ -619,7 +619,7 @@ Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(mode::TraceMode),
     @nospecialize(track_numbers::Type),
     @nospecialize(ndevices),
-    @nospecialize(runtime)
+    @nospecialize(runtime),
 ) where {S}
     return ReactantRNG{traced_type_inner(S, seen, mode, track_numbers, ndevices, runtime)}
 end
@@ -630,7 +630,7 @@ Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(mode::TraceMode),
     @nospecialize(track_numbers::Type),
     @nospecialize(ndevices),
-    @nospecialize(runtime)
+    @nospecialize(runtime),
 )
     if mode == ArrayToConcrete
         return ReactantRNG{
@@ -668,7 +668,7 @@ Base.@nospecializeinfer function traced_type_inner(
     mode::TraceMode,
     @nospecialize(track_numbers::Type),
     @nospecialize(ndevices),
-    @nospecialize(runtime)
+    @nospecialize(runtime),
 )
     if T === Any
         return T
@@ -841,7 +841,7 @@ Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(mode::TraceMode),
     @nospecialize(track_numbers::Type),
     @nospecialize(ndevices),
-    @nospecialize(runtime)
+    @nospecialize(runtime),
 ) where {E,N}
     mode == ConcreteToTraced && return TracedEnum{E}
     if mode == ArrayToConcrete
@@ -857,7 +857,7 @@ Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(mode::TraceMode),
     @nospecialize(track_numbers::Type),
     @nospecialize(ndevices),
-    @nospecialize(runtime)
+    @nospecialize(runtime),
 ) where {E}
     if mode == TracedToConcrete
         N = traced_type_inner(
@@ -881,7 +881,7 @@ Base.@nospecializeinfer function traced_type_inner(
     @nospecialize(mode::TraceMode),
     @nospecialize(track_numbers::Type),
     @nospecialize(ndevices),
-    @nospecialize(runtime)
+    @nospecialize(runtime),
 )
     should_track_enum(T, track_numbers) || return T
     if mode == ArrayToConcrete
@@ -1188,9 +1188,9 @@ Base.@nospecializeinfer function make_tracer_via_immutable_constructor(
     @nospecialize(prev),
     @nospecialize(path),
     mode;
-    @nospecialize(track_numbers::Type = Union{}),
-    @nospecialize(sharding = Sharding.NoSharding()),
-    @nospecialize(runtime = nothing),
+    @nospecialize(track_numbers::Type=Union{}),
+    @nospecialize(sharding=Sharding.NoSharding()),
+    @nospecialize(runtime=nothing),
     kwargs...,
 )
     RT = Core.Typeof(prev)
@@ -1272,9 +1272,9 @@ Base.@nospecializeinfer function make_tracer_unknown(
     @nospecialize(prev),
     @nospecialize(path),
     mode;
-    @nospecialize(track_numbers::Type = Union{}),
-    @nospecialize(sharding = Sharding.NoSharding()),
-    @nospecialize(runtime = nothing),
+    @nospecialize(track_numbers::Type=Union{}),
+    @nospecialize(sharding=Sharding.NoSharding()),
+    @nospecialize(runtime=nothing),
     kwargs...,
 )
     RT = Core.Typeof(prev)
@@ -1443,9 +1443,9 @@ function make_tracer(
     @nospecialize(prev),
     @nospecialize(path),
     mode;
-    @nospecialize(track_numbers::Type = Union{}),
-    @nospecialize(sharding = Sharding.NoSharding()),
-    @nospecialize(runtime = nothing),
+    @nospecialize(track_numbers::Type=Union{}),
+    @nospecialize(sharding=Sharding.NoSharding()),
+    @nospecialize(runtime=nothing),
     kwargs...,
 )
     return make_tracer_unknown(
@@ -1458,7 +1458,7 @@ function make_tracer(
     @nospecialize(prev::Base.RefValue),
     @nospecialize(path),
     mode;
-    @nospecialize(toscalar = false),
+    @nospecialize(toscalar=false),
     kwargs...,
 )
     if toscalar && mode == TracedSetPath
@@ -1473,9 +1473,9 @@ Base.@nospecializeinfer function make_tracer(
     @nospecialize(prev::ConcretePJRTArray{T,N}),
     @nospecialize(path),
     mode;
-    @nospecialize(sharding = Sharding.NoSharding()),
-    @nospecialize(device = nothing),
-    @nospecialize(client = nothing),
+    @nospecialize(sharding=Sharding.NoSharding()),
+    @nospecialize(device=nothing),
+    @nospecialize(client=nothing),
     kwargs...,
 ) where {T,N}
     if mode == TracedToTypes
@@ -1494,9 +1494,9 @@ Base.@nospecializeinfer function make_tracer(
     @nospecialize(prev::ConcreteIFRTArray{T,N}),
     @nospecialize(path),
     mode;
-    @nospecialize(sharding = Sharding.NoSharding()),
-    @nospecialize(device = nothing),
-    @nospecialize(client = nothing),
+    @nospecialize(sharding=Sharding.NoSharding()),
+    @nospecialize(device=nothing),
+    @nospecialize(client=nothing),
     kwargs...,
 ) where {T,N}
     if mode == TracedToTypes
@@ -1515,9 +1515,9 @@ Base.@nospecializeinfer function make_tracer(
     prev::ConcretePJRTNumber{T},
     @nospecialize(path),
     mode;
-    @nospecialize(sharding = Sharding.NoSharding()),
-    @nospecialize(device = nothing),
-    @nospecialize(client = nothing),
+    @nospecialize(sharding=Sharding.NoSharding()),
+    @nospecialize(device=nothing),
+    @nospecialize(client=nothing),
     kwargs...,
 ) where {T}
     if mode == TracedToTypes
@@ -1536,9 +1536,9 @@ Base.@nospecializeinfer function make_tracer(
     @nospecialize(prev::ConcreteIFRTNumber{T}),
     @nospecialize(path),
     mode;
-    @nospecialize(sharding = Sharding.NoSharding()),
-    @nospecialize(device = nothing),
-    @nospecialize(client = nothing),
+    @nospecialize(sharding=Sharding.NoSharding()),
+    @nospecialize(device=nothing),
+    @nospecialize(client=nothing),
     kwargs...,
 ) where {T}
     if mode == TracedToTypes
@@ -1559,8 +1559,8 @@ Base.@nospecializeinfer function make_tracer(
     mode;
     toscalar=false,
     tobatch=nothing,
-    @nospecialize(sharding = Sharding.NoSharding()),
-    @nospecialize(runtime = nothing),
+    @nospecialize(sharding=Sharding.NoSharding()),
+    @nospecialize(runtime=nothing),
     kwargs...,
 ) where {T,N}
     if mode == ConcreteToTraced
@@ -1648,8 +1648,8 @@ Base.@nospecializeinfer function make_tracer(
     mode;
     tobatch=nothing,
     toscalar=false,
-    @nospecialize(sharding = Sharding.NoSharding()),
-    @nospecialize(runtime = nothing),
+    @nospecialize(sharding=Sharding.NoSharding()),
+    @nospecialize(runtime=nothing),
     kwargs...,
 ) where {T}
     if mode == ConcreteToTraced
@@ -1772,11 +1772,11 @@ Base.@nospecializeinfer function make_tracer(
     @nospecialize(prev::Number),
     @nospecialize(path),
     mode;
-    @nospecialize(track_numbers::Type = Union{}),
-    @nospecialize(sharding = Sharding.NoSharding()),
-    @nospecialize(runtime = nothing),
-    @nospecialize(device = nothing),
-    @nospecialize(client = nothing),
+    @nospecialize(track_numbers::Type=Union{}),
+    @nospecialize(sharding=Sharding.NoSharding()),
+    @nospecialize(runtime=nothing),
+    @nospecialize(device=nothing),
+    @nospecialize(client=nothing),
     kwargs...,
 )
     if mode == TracedToTypes
@@ -1847,7 +1847,7 @@ Base.@nospecializeinfer function make_tracer(
     @nospecialize(prev::Complex),
     @nospecialize(path),
     mode;
-    @nospecialize(sharding = Sharding.NoSharding()),
+    @nospecialize(sharding=Sharding.NoSharding()),
     kwargs...,
 )
     Sharding.is_sharded(sharding) && error("Cannot specify sharding for Complex")
@@ -1868,11 +1868,11 @@ Base.@nospecializeinfer function make_tracer(
     @nospecialize(prev::Array),
     @nospecialize(path),
     mode;
-    @nospecialize(track_numbers::Type = Union{}),
-    @nospecialize(sharding = Sharding.NoSharding()),
-    @nospecialize(runtime = nothing),
-    @nospecialize(device = nothing),
-    @nospecialize(client = nothing),
+    @nospecialize(track_numbers::Type=Union{}),
+    @nospecialize(sharding=Sharding.NoSharding()),
+    @nospecialize(runtime=nothing),
+    @nospecialize(device=nothing),
+    @nospecialize(client=nothing),
     kwargs...,
 )
     RT = Core.Typeof(prev)
@@ -1967,11 +1967,11 @@ Base.@nospecializeinfer function make_tracer(
     @nospecialize(prev::Dict{Key,Value}),
     @nospecialize(path),
     mode;
-    @nospecialize(track_numbers::Type = Union{}),
-    @nospecialize(sharding = Sharding.NoSharding()),
-    @nospecialize(runtime = nothing),
-    @nospecialize(device = nothing),
-    @nospecialize(client = nothing),
+    @nospecialize(track_numbers::Type=Union{}),
+    @nospecialize(sharding=Sharding.NoSharding()),
+    @nospecialize(runtime=nothing),
+    @nospecialize(device=nothing),
+    @nospecialize(client=nothing),
     kwargs...,
 ) where {Key,Value}
     RT = Core.Typeof(prev)
@@ -2058,7 +2058,7 @@ Base.@nospecializeinfer function make_tracer(
     @nospecialize(prev::Tuple),
     @nospecialize(path),
     mode;
-    @nospecialize(sharding = Sharding.NoSharding()),
+    @nospecialize(sharding=Sharding.NoSharding()),
     kwargs...,
 )
     RT = Core.Typeof(prev)
@@ -2090,9 +2090,9 @@ Base.@nospecializeinfer function make_tracer(
     @nospecialize(prev::NamedTuple),
     @nospecialize(path),
     mode;
-    @nospecialize(track_numbers::Type = Union{}),
-    @nospecialize(sharding = Sharding.NoSharding()),
-    @nospecialize(runtime = nothing),
+    @nospecialize(track_numbers::Type=Union{}),
+    @nospecialize(sharding=Sharding.NoSharding()),
+    @nospecialize(runtime=nothing),
     kwargs...,
 )
     NT = Core.Typeof(prev)
@@ -2131,7 +2131,7 @@ Base.@nospecializeinfer function make_tracer(
     @nospecialize(prev::Core.Box),
     @nospecialize(path),
     mode;
-    @nospecialize(sharding = Sharding.NoSharding()),
+    @nospecialize(sharding=Sharding.NoSharding()),
     kwargs...,
 )
     prev2 = if isdefined(prev, :contents)
@@ -2174,9 +2174,9 @@ Base.@nospecializeinfer function make_tracer(
     @nospecialize(prev::Sharding.Mesh),
     @nospecialize(path),
     mode;
-    @nospecialize(track_numbers::Type = Union{}),
-    @nospecialize(sharding = Sharding.NoSharding()),
-    @nospecialize(runtime = nothing),
+    @nospecialize(track_numbers::Type=Union{}),
+    @nospecialize(sharding=Sharding.NoSharding()),
+    @nospecialize(runtime=nothing),
     kwargs...,
 )
     return prev
@@ -2267,7 +2267,7 @@ end
     @nospecialize(sharding),
     @nospecialize(runtime),
     @nospecialize(device),
-    @nospecialize(client)
+    @nospecialize(client),
 )
     return make_tracer(
         OrderedIdDict(),
@@ -2289,7 +2289,7 @@ function to_rarray_internal(
     @nospecialize(sharding),
     @nospecialize(runtime),
     @nospecialize(device),
-    @nospecialize(client)
+    @nospecialize(client),
 )
     return error("Cannot convert TracedRArray to ConcreteArray")
 end
@@ -2300,7 +2300,7 @@ end
     @nospecialize(sharding),
     ::Val{:PJRT},
     @nospecialize(device),
-    @nospecialize(client)
+    @nospecialize(client),
 )
     return ConcretePJRTArray(x; sharding, device, client)
 end
@@ -2311,7 +2311,7 @@ end
     @nospecialize(sharding),
     ::Val{:IFRT},
     @nospecialize(device),
-    @nospecialize(client)
+    @nospecialize(client),
 )
     return ConcreteIFRTArray(x; sharding, device, client)
 end
@@ -2322,7 +2322,7 @@ end
     @nospecialize(sharding),
     @nospecialize(runtime),
     @nospecialize(device),
-    @nospecialize(client)
+    @nospecialize(client),
 )
     runtime isa Val{:PJRT} && return ConcretePJRTArray(x; sharding, device, client)
     runtime isa Val{:IFRT} && return ConcreteIFRTArray(x; sharding, device, client)
@@ -2335,7 +2335,7 @@ end
     @nospecialize(sharding),
     runtime,
     @nospecialize(device),
-    @nospecialize(client)
+    @nospecialize(client),
 ) where {T<:Number}
     if reactant_primitive(T) !== nothing
         if runtime isa Val{:PJRT}
@@ -2356,7 +2356,7 @@ end
     @nospecialize(sharding),
     ::Val{:PJRT},
     @nospecialize(device),
-    @nospecialize(client)
+    @nospecialize(client),
 )
     return ConcretePJRTNumber(x; sharding, device, client)
 end
@@ -2367,7 +2367,7 @@ end
     @nospecialize(sharding),
     ::Val{:IFRT},
     @nospecialize(device),
-    @nospecialize(client)
+    @nospecialize(client),
 )
     return ConcreteIFRTNumber(x; sharding, device, client)
 end
@@ -2378,7 +2378,7 @@ end
     @nospecialize(sharding),
     runtime,
     @nospecialize(device),
-    @nospecialize(client)
+    @nospecialize(client),
 )
     if typeof(x) <: track_numbers
         runtime isa Val{:PJRT} && return ConcretePJRTNumber(x; sharding, device, client)
@@ -2394,7 +2394,7 @@ end
     @nospecialize(sharding),
     runtime,
     @nospecialize(device),
-    @nospecialize(client)
+    @nospecialize(client),
 )
     if reactant_primitive(typeof(x)) !== nothing
         runtime isa Val{:PJRT} &&
@@ -2430,7 +2430,7 @@ function make_tracer(
     @nospecialize(prev::UnitRange),
     @nospecialize(path),
     mode;
-    @nospecialize(sharding = Sharding.NoSharding()),
+    @nospecialize(sharding=Sharding.NoSharding()),
     kwargs...,
 )
     Sharding.is_sharded(sharding) && error("Cannot specify sharding for UnitRange")
@@ -2475,7 +2475,7 @@ function make_tracer(
     @nospecialize(prev::StepRangeLen),
     @nospecialize(path),
     mode;
-    @nospecialize(sharding = Sharding.NoSharding()),
+    @nospecialize(sharding=Sharding.NoSharding()),
     kwargs...,
 )
     Sharding.is_sharded(sharding) && error("Cannot specify sharding for StepRangeLen")
@@ -2537,7 +2537,7 @@ function make_tracer(
     @nospecialize(prev::Rational),
     @nospecialize(path),
     mode;
-    @nospecialize(sharding = Sharding.NoSharding()),
+    @nospecialize(sharding=Sharding.NoSharding()),
     kwargs...,
 )
     Sharding.is_sharded(sharding) && error("Cannot specify sharding for Rational")
@@ -2561,7 +2561,7 @@ function make_tracer(
     prev::IOStream,
     @nospecialize(path),
     mode;
-    @nospecialize(sharding = Sharding.NoSharding()),
+    @nospecialize(sharding=Sharding.NoSharding()),
     kwargs...,
 )
     return prev
@@ -2574,11 +2574,11 @@ Base.@nospecializeinfer function make_tracer(
     @nospecialize(prev::Base.Enum),
     @nospecialize(path),
     mode;
-    @nospecialize(track_numbers::Type = Union{}),
-    @nospecialize(sharding = Sharding.NoSharding()),
-    @nospecialize(runtime = nothing),
-    @nospecialize(device = nothing),
-    @nospecialize(client = nothing),
+    @nospecialize(track_numbers::Type=Union{}),
+    @nospecialize(sharding=Sharding.NoSharding()),
+    @nospecialize(runtime=nothing),
+    @nospecialize(device=nothing),
+    @nospecialize(client=nothing),
     kwargs...,
 )
     if mode == TracedToTypes

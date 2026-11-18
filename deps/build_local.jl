@@ -58,7 +58,7 @@ function amdDriverInitialized()::Bool
             # We need to read its state to see if it's 'live'.
             # The `open...do` block ensures the file is closed automatically.
             found = open(initstate_path) do file
-                contains(read(file, String), "live")
+                return contains(read(file, String), "live")
             end
             if found
                 @debug "Detected AMD live driver"

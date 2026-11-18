@@ -82,13 +82,9 @@ function Base.isapprox(
     nans::Bool=false,
     norm::Function=abs,
 ) where {T<:AbstractFloat}
-    return (x == y) |
-           (
-               isfinite(x) &
-               isfinite(y) &
-               (norm(x - y) <= max(atol, rtol * max(norm(x), norm(y))))
-           ) |
-           (nans & isnan(x) & isnan(y))
+    return (x == y) | (
+        isfinite(x) & isfinite(y) & (norm(x - y) <= max(atol, rtol * max(norm(x), norm(y))))
+    ) | (nans & isnan(x) & isnan(y))
 end
 function Base.isapprox(x::Real, y::TracedRNumber{<:AbstractFloat}; kwargs...)
     return isapprox(y, x; kwargs...)
@@ -638,7 +634,7 @@ end
 function Base.ifelse(
     @nospecialize(pred::TracedRNumber{Bool}),
     @nospecialize(x::TracedRNumber{T1}),
-    @nospecialize(y::TracedRNumber{T2})
+    @nospecialize(y::TracedRNumber{T2}),
 ) where {T1,T2}
     @warn "`ifelse` with different element-types in Reactant works by promoting the \
             element-type to the common type. This is semantically different from the \
@@ -654,7 +650,7 @@ end
 function Base.ifelse(
     @nospecialize(pred::TracedRNumber{Bool}),
     @nospecialize(x::TracedRNumber{T}),
-    @nospecialize(y::TracedRNumber{T})
+    @nospecialize(y::TracedRNumber{T}),
 ) where {T}
     return @opcall select(pred, x, y)
 end
@@ -662,11 +658,11 @@ end
 function Base.ifelse(
     @nospecialize(pred::TracedRNumber{Bool}),
     @nospecialize(x::Tuple),
-    @nospecialize(y::Tuple)
+    @nospecialize(y::Tuple),
 )
     @assert length(x) == length(y)
     ntuple(Val(length(x))) do i
-        Base.ifelse(pred, x[i], y[i])
+        return Base.ifelse(pred, x[i], y[i])
     end
 end
 

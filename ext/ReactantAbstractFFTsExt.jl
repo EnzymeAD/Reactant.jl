@@ -17,8 +17,8 @@ function Reactant.make_tracer(
     @nospecialize(prev::AbstractFFTs.Plan{T}),
     @nospecialize(path),
     mode;
-    @nospecialize(track_numbers::Type = Union{}),
-    @nospecialize(sharding = Reactant.Sharding.NoSharding()),
+    @nospecialize(track_numbers::Type=Union{}),
+    @nospecialize(sharding=Reactant.Sharding.NoSharding()),
     @nospecialize(runtime),
     kwargs...,
 ) where {T}
@@ -32,7 +32,7 @@ function Reactant.traced_type_inner(
     mode::Reactant.TraceMode,
     @nospecialize(track_numbers::Type),
     @nospecialize(ndevices),
-    @nospecialize(runtime)
+    @nospecialize(runtime),
 )
     RT = reactant_fftplan_type(T)
     return RT

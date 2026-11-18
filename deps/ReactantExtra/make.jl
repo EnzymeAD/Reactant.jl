@@ -256,7 +256,7 @@ let options = deepcopy(options)
                 println(io, sig)
             end
 
-            println(io, "#endif")
+            return println(io, "#endif")
         end
     end
 

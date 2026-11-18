@@ -38,8 +38,9 @@ nnotes(diagnostic::Diagnostic) = Int(API.mlirDiagnosticGetNumNotes(diagnostic))
 
 Returns the `pos`-th note (1-based) attached to the diagnostic.
 """
-note(diagnostic::Diagnostic, pos) =
-    Diagnostic(API.mlirDiagnosticGetNote(diagnostic, pos - one(pos)))
+function note(diagnostic::Diagnostic, pos)
+    return Diagnostic(API.mlirDiagnosticGetNote(diagnostic, pos - one(pos)))
+end
 
 function Base.show(io::IO, diagnostic::Diagnostic)
     c_print_callback = @cfunction(print_callback, Cvoid, (API.MlirStringRef, Any))
@@ -125,5 +126,6 @@ end
 
 Emits an error diagnostic at the given location through the diagnostics engine.
 """
-emit_error(location::Location, message::AbstractString) =
-    API.mlirEmitError(location, message)
+function emit_error(location::Location, message::AbstractString)
+    return API.mlirEmitError(location, message)
+end

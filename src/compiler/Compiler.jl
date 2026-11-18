@@ -1218,7 +1218,7 @@ Base.@nospecializeinfer function compile_mlir!(
                     $(join((MLIR.IR.argument(fnbody, i) for i in 1:length(in_tys)), ", "))
                     preserved_args = $(preserved_args_idx)
                     $str
-                    """,
+                    """
                 ),
             )
         end
@@ -1613,7 +1613,7 @@ function default_sdycache()
             mesh_attr::MLIR.IR.Attribute,
             mesh_op::MLIR.IR.Operation,
             mesh::Sharding.Mesh,
-        }
+        },
     }()
 end
 
@@ -1638,12 +1638,12 @@ function default_callcache()
             argprefix::Symbol,
             resprefix::Symbol,
             resargprefix::Symbol,
-        }
+        },
     }()
 end
 
 function default_debugcache()
-    return Vector{@NamedTuple{f_name::String, file::String, line::Int64}}(undef, 0)
+    return Vector{@NamedTuple{f_name::String,file::String,line::Int64}}(undef, 0)
 end
 
 struct LLVMFunc{F,tt}

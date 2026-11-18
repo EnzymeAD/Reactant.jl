@@ -295,8 +295,7 @@ end
                                                                                                              (
                 4, 2
             ),
-            is_causal in (false, true),
-            has_bias in (false, true),
+            is_causal in (false, true), has_bias in (false, true),
             has_mask in (false, true)
 
             q = make_attn_array(Float32, 8, 4, 6, 2; seed=1)

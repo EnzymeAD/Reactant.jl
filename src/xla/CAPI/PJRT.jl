@@ -4559,13 +4559,11 @@ function Base.setproperty!(x::Ptr{PJRT_Buffer_GetMemoryLayout_Args}, f::Symbol, 
 end
 
 function Base.propertynames(x::PJRT_Buffer_GetMemoryLayout_Args, private::Bool=false)
-    return (
-        :struct_size, :extension_start, :buffer, :layout, if private
-            fieldnames(typeof(x))
-        else
-            ()
-        end...
-    )
+    return (:struct_size, :extension_start, :buffer, :layout, if private
+        fieldnames(typeof(x))
+    else
+        ()
+    end...)
 end
 
 csizeof(::Type{PJRT_Buffer_GetMemoryLayout_Args}) = Csize_t(104)

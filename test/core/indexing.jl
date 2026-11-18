@@ -309,7 +309,7 @@ end
 
     f = Reactant.TestUtils.construct_test_array(ComplexF32, N, N)
     p = Reactant.TestUtils.construct_test_array(ComplexF32, N * N)
-    I = 1:(N^2)
+    I = 1:(N ^ 2)
     out = Reactant.TestUtils.construct_test_array(ComplexF32, M, M)
 
     fr = Reactant.to_rarray(f)
