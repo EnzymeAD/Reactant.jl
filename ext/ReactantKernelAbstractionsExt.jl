@@ -86,8 +86,8 @@ function KA.launch_config(kernel::KA.Kernel{ReactantBackend}, ndrange, workgroup
 
     iterspace, dynamic =
         if KA.workgroupsize(kernel) <: KA.DynamicSize && workgroupsize === nothing
-            # use ndrange as preliminary workgroupsize for autotuning
-            KA.partition(kernel, ndrange, ndrange)
+            # use ndrange as preliminary workgroupsize for autotuning, at least 1 so empty ranges don't divide by zero
+            KA.partition(kernel, ndrange, max.(ndrange, 1))
         else
             KA.partition(kernel, ndrange, workgroupsize)
         end
