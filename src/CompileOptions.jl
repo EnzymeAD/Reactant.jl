@@ -156,6 +156,12 @@ Fine-grained control over the compilation options for the Reactant compiler.
 
 ## Backend Specific Options
 
+  - `multifloat`: A `MultiFloatOptions` to emulate a float type with several limbs of a
+    smaller one (e.g. `Float64` with pairs of `Float32`) through the
+    `multi-float-conversion` pass, or `nothing` to disable it. If `missing`, the default
+    `MultiFloatOptions()` is used on the Metal backend (which has no `Float64`), and it is
+    disabled on the other backends. (Default: `missing`).
+
 ### Only for CUDA backend
 
   - `cudnn_hlo_optimize`: Run cuDNN specific HLO optimizations. This is only relevant for
@@ -293,7 +299,7 @@ struct CompileOptions
     strip_llvm_debuginfo::Bool
     speculate_partial_ifs::Bool
     strip::Union{Symbol,Vector{String}}
-    multifloat::Union{Nothing,MultiFloatOptions}
+    multifloat::Union{Nothing,Missing,MultiFloatOptions}
 end
 
 function CompileOptions(;
@@ -336,7 +342,7 @@ function CompileOptions(;
     strip::Union{Symbol,Vector{String}}=:all,
     raise_triton_custom_call::Bool=true,
     lower_triton::Bool=true,
-    multifloat::Union{Nothing,MultiFloatOptions}=nothing,
+    multifloat::Union{Nothing,Missing,MultiFloatOptions}=missing,
 )
     optimization_passes isa Bool &&
         (optimization_passes = ifelse(optimization_passes, :all, :none))
