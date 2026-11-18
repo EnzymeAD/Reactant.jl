@@ -1,4 +1,4 @@
-using Reactant, Test, CUDA, KernelAbstractions
+using Reactant, Test, CUDA, KernelAbstractions, Enzyme
 using Adapt: Adapt
 using BFloat16s: BFloat16
 const ReactantCUDAExt = Base.get_extension(Reactant, :ReactantCUDAExt)
@@ -82,6 +82,28 @@ end
     @jit square!(A, B)
     @test all(Array(A) .≈ (oA .* oA .* 100))
     @test all(Array(B) .≈ (oA .* 100))
+end
+
+function square_sum(x, y)
+    x = copy(x)
+    square!(x, y)
+    return sum(x)
+end
+
+# Reverse-mode AD through the square kernel: d/dx sum(x .* y) = y, d/dy = x
+@testset "Square Kernel AD" begin
+    if !RunningOnTPU
+        oA = collect(Float64, 1:1:64)
+        oB = 100 .* oA
+        A = Reactant.to_rarray(oA)
+        B = Reactant.to_rarray(oB)
+        dA, dB = @jit optimize = :kernelad Enzyme.gradient(Reverse, square_sum, A, B)
+        @test Array(dA) ≈ oB
+        @test Array(dB) ≈ oA
+        @test Array(A) == oA
+    else
+        @warn "Skipping Square Kernel AD test on TPU"
+    end
 end
 
 @static if VERSION >= v"1.12"

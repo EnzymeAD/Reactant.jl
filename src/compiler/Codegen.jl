@@ -697,7 +697,7 @@ function create_result(
 end
 
 function create_result(
-    tocopy::Reactant.XLA.AbstractDevice,
+    tocopy::Union{Reactant.XLA.AbstractClient,Reactant.XLA.AbstractDevice},
     @nospecialize(_path::Tuple),
     _result_stores,
     _path_to_shard_info,

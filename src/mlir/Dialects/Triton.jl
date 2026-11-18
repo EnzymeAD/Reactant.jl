@@ -183,6 +183,36 @@ function addptr(ptr::Value, offset::Value; result::IR.Type, location=Location())
 end
 
 """
+`annotate`
+
+Returns its operand unchanged. Attributes on this operation describe
+only its result, allowing compiler hints to be attached independently
+to each result of a multi-result operation, such as a function call.
+When the operand has a single-result defining operation, the hints can
+be folded into that operation. Otherwise, the annotation is preserved
+until lowering to LLVM.
+"""
+function annotate(src::Value; result=nothing::Union{Nothing,IR.Type}, location=Location())
+    op_ty_results = IR.Type[]
+    operands = Value[src,]
+    owned_regions = Region[]
+    successors = Block[]
+    attributes = NamedAttribute[]
+    !isnothing(result) && push!(op_ty_results, result)
+
+    return create_operation(
+        "tt.annotate",
+        location;
+        operands,
+        owned_regions,
+        successors,
+        attributes,
+        results=(length(op_ty_results) == 0 ? nothing : op_ty_results),
+        result_inference=(length(op_ty_results) == 0 ? true : false),
+    )
+end
+
+"""
 `approx_divf`
 
 Divides x by y with approximate accuracy. On NVIDIA, this lowers to
@@ -1373,26 +1403,15 @@ end
 
 reinterpret a tensor to a different shape.
 
-If allow_reorder is set the compiler is free to change the order of
-elements to generate more efficient code.
-
 If efficient_layout is set, this is a hint that the destination layout should be kept for performance reason.
 The compiler is still free to change it for better performance.
 """
-function reshape(
-    src::Value;
-    result::IR.Type,
-    allow_reorder=nothing,
-    efficient_layout=nothing,
-    location=Location(),
-)
+function reshape(src::Value; result::IR.Type, efficient_layout=nothing, location=Location())
     op_ty_results = IR.Type[result,]
     operands = Value[src,]
     owned_regions = Region[]
     successors = Block[]
     attributes = NamedAttribute[]
-    !isnothing(allow_reorder) &&
-        push!(attributes, NamedAttribute("allow_reorder", allow_reorder))
     !isnothing(efficient_layout) &&
         push!(attributes, NamedAttribute("efficient_layout", efficient_layout))
 
