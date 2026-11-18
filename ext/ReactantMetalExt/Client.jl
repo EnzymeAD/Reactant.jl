@@ -109,7 +109,7 @@ function compile(client::MetalClient, code, options)
     # like MLIR tensors, the tensors of the graph are row-major, so dimensions and shapes are not reversed.
     graph = MPSGraph()
     placeholders = MPSGraphTensor[]
-    tensors = @autoreleasepool begin
+    compiled, input_order, output_order = @autoreleasepool begin
         vars = Dict{Ptr{Cvoid},MPSGraphTensor}()
         for (i, input) in enumerate(inputs)
             placeholder = MPSGraphs.placeholderTensor(
@@ -121,15 +121,70 @@ function compile(client::MetalClient, code, options)
 
         # `execute` writes each output into a buffer of its own, so they must be distinct tensors (the same value
         # may be returned twice) and none can be a placeholder
-        MPSGraphTensor[
+        tensors = MPSGraphTensor[
             MPSGraphs.identityWithTensor(graph, tensor) for
             tensor in codegen!(graph, block, vars)
         ]
+
+        # the graph is compiled once for the shapes of the arguments, with the optimization level of
+        # `MPSGraphs.default_exec_desc` (which the handles are tested with)
+        feeds = Dict(
+            placeholder => MPSGraphShapedType(convert(MPSShape, input.size), input.eltype)
+            for (placeholder, input) in zip(placeholders, inputs)
+        )
+        desc = MPSGraphCompilationDescriptor()
+        desc.optimizationLevel = MPSGraphs.MPSGraphOptimizationLevel0
+        ptr = @objc [
+            graph::id{MPSGraph} compileWithDevice:(MPSGraphDevice(dev.mtl)::id{MPSGraphDevice})
+            feeds:(NSDictionary(feeds)::id{NSDictionary})
+            targetTensors:(NSArray(tensors)::id{NSArray})
+            targetOperations:(nil::id{NSArray})
+            compilationDescriptor:(desc::id{MPSGraphCompilationDescriptor})
+        ]::id{MPSGraphExecutable}
+        foreach(release, values(feeds))
+        release(desc)
+        if reinterpret(Ptr{Cvoid}, ptr) == C_NULL
+            throw(
+                Plugin.Error(
+                    CAPI.PJRT_Error_Code_INTERNAL, "MPSGraph failed to compile `$_name`"
+                ),
+            )
+        end
+        # the executable is autoreleased, so it's retained to outlive this pool
+        compiled = MPSGraphExecutable(ptr)
+        retain(compiled)
+
+        # the executable takes the arguments in the order of `feedTensors` and returns the results in the order of
+        # `targetTensors`, as indices into the arguments and results of `@main`
+        input_order = [
+            findfirst(p -> p.ptr == t.ptr, placeholders) for t in compiled.feedTensors
+        ]
+        output_order = [
+            findfirst(o -> o.ptr == t.ptr, tensors) for t in compiled.targetTensors
+        ]
+        if any(isnothing, input_order) ||
+            any(isnothing, output_order) ||
+            length(output_order) != length(tensors)
+            throw(
+                Plugin.Error(
+                    CAPI.PJRT_Error_Code_INTERNAL,
+                    "MPSGraph compiled `$_name` with unknown tensors",
+                ),
+            )
+        end
+        (compiled, Vector{Int}(input_order), Vector{Int}(output_order))
     end
 
     # single-device executables run as replica 0 of partition 0
     logical_ids = [CAPI.PJRT_LogicalDeviceIds(0, 0)]
     return MetalLoadedExecutable(
-        exe, graph, placeholders, tensors, Device[dev], logical_ids, assignment, false
+        exe,
+        compiled,
+        input_order,
+        output_order,
+        Device[dev],
+        logical_ids,
+        assignment,
+        false,
     )
 end

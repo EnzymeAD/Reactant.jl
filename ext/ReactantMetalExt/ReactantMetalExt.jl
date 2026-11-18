@@ -77,9 +77,14 @@ using Metal.MTL: MTLBuffer, MTLDevice
 using Metal.MPS: MPSDataType, MPSShape
 using Metal.MPSGraphs:
     MPSGraph,
+    MPSGraphCompilationDescriptor,
     MPSGraphConvolution3DOpDescriptor,
+    MPSGraphDevice,
+    MPSGraphExecutable,
+    MPSGraphExecutableExecutionDescriptor,
     MPSGraphPooling4DOpDescriptor,
     MPSGraphRandomOpDescriptor,
+    MPSGraphShapedType,
     MPSGraphTensor,
     MPSGraphTensorData
 using ObjectiveC: @objc, id, nil
@@ -92,7 +97,8 @@ using ObjectiveC.Foundation:
     NSNumber,
     NSString,
     NSUInteger,
-    release
+    release,
+    retain
 
 include("Memory.jl")
 include("DeviceDescription.jl")
