@@ -69,9 +69,9 @@ end
     ref::API.MlirDialectRegistry
 end
 
-DialectRegistry() = DialectRegistry(mark_alloc(API.mlirDialectRegistryCreate()))
+DialectRegistry() = mark_alloc(DialectRegistry(API.mlirDialectRegistryCreate()))
 
-dispose(registry::DialectRegistry) = API.mlirDialectRegistryDestroy(registry.ref)
+dispose(registry::DialectRegistry) = mark_dispose(API.mlirDialectRegistryDestroy, registry)
 
 Base.cconvert(::Core.Type{API.MlirDialectRegistry}, registry::DialectRegistry) = registry
 function Base.unsafe_convert(
