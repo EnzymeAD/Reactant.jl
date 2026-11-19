@@ -467,16 +467,15 @@ end
     MPI.Barrier(comm)
 end
 
+# CPU backend: 
+#
 # Should break with CPU backend unless we use dag fusion (but haven't tested this).
-# Breaks with the NCCL backend: legalize-mpi-to-nccl drops the tags, and NCCL matches
-# point-to-point messages between the same pair of ranks by posting order alone. With 2
-# ranks the west and east neighbours are the same rank (a periodic halo exchange), so
-# receives posted west-then-east get paired with the peer's sends posted west-then-east,
-# swapping the two halos. MPI matches by tag, so the CPU backend gets it right.
-# Concretely: each rank posts recvs as (tag, tag + 1) but sends as (tag + 1, tag), so under
-# NCCL recv_west gets the peer's send_west, and the two @tests below fail with recv_west
-# and recv_east swapped. Unlike the Wait version above, this one compiles: the Waitall
-# folds into a single nccl.group
+#
+# NCCL backend: 
+# Each rank posts recvs as (tag, tag + 1) and posts sends as (tag + 1, tag). 
+# But NCCL drops the tags, and thus requires both sides to post recvs and sends 
+# in matching tag order. MPI to NCCL legalization
+# does a stable sort by tag. This test stresses that canonicalization.
 @testset "Isend / Irecv! / Waitall - two-sided exchange with the same peer" begin
     comm = MPI.COMM_WORLD
     rank = MPI.Comm_rank(comm)
