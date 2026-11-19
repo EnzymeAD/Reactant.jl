@@ -11,6 +11,7 @@
 - [Raising](@ref Raising).
 - [Computational kernels](@ref computational-kernels).
 - [Debugging compilation errors](@ref debugging-compilation).
+- [Importing PyTorch models](@ref pytorch-import).
 - [Probabilistic Programming](@ref probprog).
   - [Interface overview](@ref probprog-interface-overview).
   - [Sampling and distributions](@ref probprog-sampling).

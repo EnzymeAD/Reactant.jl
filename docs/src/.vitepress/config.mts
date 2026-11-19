@@ -104,6 +104,7 @@ export default defineConfig({
           { text: "Raising", link: "/tutorials/raising" },
           { text: "Computational kernels", link: "/tutorials/kernels" },
           { text: "Debugging compilation errors", link: "/tutorials/debugging" },
+          { text: "Importing PyTorch models", link: "/tutorials/pytorch" },
           { text: "Probabilistic Programming", link: "/tutorials/probprog/" },
         ],
       },
@@ -198,6 +199,7 @@ export default defineConfig({
           { text: "Raising", link: "/tutorials/raising" },
           { text: "Computational kernels", link: "/tutorials/kernels" },
           { text: "Debugging compilation errors", link: "/tutorials/debugging" },
+          { text: "Importing PyTorch models", link: "/tutorials/pytorch" },
           {
             text: "Probabilistic Programming",
             collapsed: false,
